@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { formatarErroPermissao } from '../utils/permissaoErro';
+import { chaveDoPedido, ehLeitura } from '../utils/chaveDoPedido';
 
 // Função para detectar automaticamente a URL da API
 function getApiBaseURL() {
@@ -61,8 +62,16 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Cache para evitar múltiplas tentativas simultâneas
+// Cache para evitar múltiplas tentativas simultâneas: chave do pedido (`utils/chaveDoPedido`) -> a promessa da repetição em curso.
 const retryCache = new Map();
+
+// Etapa 156 (RN-156.01): quem espera a repeticao de outro recebe a sua copia dos dados (JSON), para nao mexer no objeto da dona.
+function copiaDaResposta(response) {
+  if (!response || response.data === null || typeof response.data !== 'object') return response;
+  const proto = Object.getPrototypeOf(response.data);
+  if (!Array.isArray(response.data) && proto !== Object.prototype && proto !== null) return response; // Blob, ArrayBuffer...
+  return { ...response, data: JSON.parse(JSON.stringify(response.data)) };
+}
 
 // Interceptor para tratar erros de resposta
 api.interceptors.response.use(
@@ -118,33 +127,42 @@ api.interceptors.response.use(
     // Erro 503 - Banco de dados não está pronto
     if (error.response?.status === 503) {
       const retryAfter = error.response.data?.retryAfter || 3;
-      const requestKey = `${error.config.method}-${error.config.url}`;
-      
-      // Evitar múltiplas tentativas simultâneas para a mesma requisição
-      if (retryCache.has(requestKey)) {
+      // Etapa 156 (RN-156.01, C369): a chave da leitura leva os filtros (`params`) — dois pedidos ao mesmo endereco com filtros
+      // diferentes esperam e repetem cada um. Antes era `metodo-url` para todos, e o irmao com outro filtro era recusado na hora.
+      const requestKey = chaveDoPedido(error.config);
+      const emEspera = retryCache.get(requestKey);
+
+      if (emEspera) {
+        if (ehLeitura(error.config)) {
+          // O MESMO pedido de leitura: espera a mesma repeticao (um pedido so ao servidor) e recebe a sua copia dos dados.
+          console.log('⏳ Aguardando banco de dados ficar pronto...');
+          return emEspera.then(copiaDaResposta);
+        }
+        // Gravacao (B1001): como antes — o irmao ao mesmo endereco e recusado na hora (nao se arrisca gravar duas vezes).
         console.log('⏳ Aguardando banco de dados ficar pronto...');
         return Promise.reject(error);
       }
-      
-      retryCache.set(requestKey, true);
-      
+
       console.log(`⏳ Banco de dados ainda não está pronto. Tentando novamente em ${retryAfter} segundos...`);
-      
-      // Aguardar e tentar novamente
-      await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
-      
-      retryCache.delete(requestKey);
-      
-      // Tentar novamente (máximo 3 tentativas)
-      const retryCount = error.config.__retryCount || 0;
-      if (retryCount < 3) {
-        error.config.__retryCount = retryCount + 1;
-        console.log(`🔄 Tentativa ${retryCount + 1} de 3...`);
-        return api.request(error.config);
-      } else {
+
+      const repeticao = (async () => {
+        // Aguardar e tentar novamente
+        await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+        // A chave sai ANTES de repetir: o 503 da propria repeticao abre uma espera nova, nunca cai nesta (que esperaria a si mesma).
+        if (retryCache.get(requestKey) === repeticao) retryCache.delete(requestKey);
+
+        // Tentar novamente (máximo 3 tentativas)
+        const retryCount = error.config.__retryCount || 0;
+        if (retryCount < 3) {
+          error.config.__retryCount = retryCount + 1;
+          console.log(`🔄 Tentativa ${retryCount + 1} de 3...`);
+          return api.request(error.config);
+        }
         console.error('❌ Banco de dados não ficou pronto após 3 tentativas');
-        return Promise.reject(new Error('Banco de dados não está disponível. Tente recarregar a página.'));
-      }
+        throw new Error('Banco de dados não está disponível. Tente recarregar a página.');
+      })();
+      retryCache.set(requestKey, repeticao);
+      return repeticao;
     }
 
     // 401 = não autenticado (token inválido/expirado) -> volta para a tela de login
