@@ -11,6 +11,14 @@ import CalendarioAtividades from './CalendarioAtividades';
 import './Atividades.css';
 import './Loading.css';
 
+// Etapa 159 (RN-159.04, C387): o pedido da lista pelo filtro, igual nos cinco recarregamentos. "todos" -> todos=true; um usuario ->
+// responsavel_id; vazio -> nada (o servidor mostra os do usuario logado). O do Remover lembrete mandava responsavel_id=todos e a lista
+// voltava vazia.
+export function paramsDoFiltro(filtroUsuario) {
+  if (filtroUsuario === 'todos') return { todos: true };
+  return filtroUsuario ? { responsavel_id: filtroUsuario } : {};
+}
+
 const Atividades = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -46,7 +54,7 @@ const Atividades = () => {
         // Se filtroUsuario for "todos", enviar parâmetro todos=true
         // Se filtroUsuario estiver vazio, não enviar parâmetro (backend mostrará apenas do usuário logado)
         // Se filtroUsuario tiver um ID, enviar responsavel_id
-        const params = filtroUsuario === 'todos' ? { todos: true } : filtroUsuario ? { responsavel_id: filtroUsuario } : {};
+        const params = paramsDoFiltro(filtroUsuario);
         const [atividadesRes, usuariosList, clientesRes] = await Promise.all([
           api.get('/atividades', { params }),
           fetchComercialResponsaveis(effectiveUser),
@@ -183,7 +191,7 @@ const Atividades = () => {
       
       // Recarregar atividades
       const [atividadesRes] = await Promise.all([
-        api.get('/atividades', { params: filtroUsuario ? { responsavel_id: filtroUsuario } : {} })
+        api.get('/atividades', { params: paramsDoFiltro(filtroUsuario) })
       ]);
       
       const atividadesOrdenadas = (atividadesRes.data || []).sort((a, b) => {
@@ -319,7 +327,7 @@ const Atividades = () => {
               await api.post('/atividades', dados);
               toast.success('Atividade criada com sucesso!');
               // Recarregar atividades
-              const params = filtroUsuario === 'todos' ? { todos: true } : filtroUsuario ? { responsavel_id: filtroUsuario } : {};
+              const params = paramsDoFiltro(filtroUsuario);
               const atividadesRes = await api.get('/atividades', { params });
               const atividadesOrdenadas = (atividadesRes.data || []).sort((a, b) => {
                 if (!a.data_agendada && !b.data_agendada) return 0;
@@ -340,7 +348,7 @@ const Atividades = () => {
               await api.put(`/atividades/${id}`, dados);
               toast.success('Atividade atualizada com sucesso!');
               // Recarregar atividades
-              const params = filtroUsuario === 'todos' ? { todos: true } : filtroUsuario ? { responsavel_id: filtroUsuario } : {};
+              const params = paramsDoFiltro(filtroUsuario);
               const atividadesRes = await api.get('/atividades', { params });
               const atividadesOrdenadas = (atividadesRes.data || []).sort((a, b) => {
                 if (!a.data_agendada && !b.data_agendada) return 0;
@@ -361,7 +369,7 @@ const Atividades = () => {
               await api.delete(`/atividades/${id}`);
               toast.success('Atividade excluída com sucesso!');
               // Recarregar atividades
-              const params = filtroUsuario === 'todos' ? { todos: true } : filtroUsuario ? { responsavel_id: filtroUsuario } : {};
+              const params = paramsDoFiltro(filtroUsuario);
               const atividadesRes = await api.get('/atividades', { params });
               const atividadesOrdenadas = (atividadesRes.data || []).sort((a, b) => {
                 if (!a.data_agendada && !b.data_agendada) return 0;
