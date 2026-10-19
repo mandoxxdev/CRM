@@ -26,7 +26,8 @@ jest.mock('react-router-dom', () => ({
 
 // o corpo que o GET /api/notificacoes devolve (server/index.js: os lembretes das propostas do usuario)
 const LEMBRETE = {
-  id: 42, tipo: 'lembrete_proposta', titulo: 'Lembrete: E154-0042', mensagem: 'ligar para o cliente', data: '2026-10-19',
+  // Fase 5 r3 C5: o id da notificacao diferente do da proposta — o clique tem de usar o proposta_id
+  id: 7, tipo: 'lembrete_proposta', titulo: 'Lembrete: E154-0042', mensagem: 'ligar para o cliente', data: '2026-10-19',
   prioridade: 'hoje', proposta_id: 42, cliente_nome: 'CLIENTE 154', numero_proposta: 'E154-0042',
 };
 
@@ -49,13 +50,19 @@ afterEach(() => {
   console.log.mockRestore();
 });
 
-// o bloco da rota /comercial no App.js, e as rotas filhas dele
+// o fonte sem comentarios (Fase 5 r3 A2/C6: uma rota comentada, ou o endereco certo num comentario, passava)
+const semComentarios = (src) => src
+  .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+
+// o bloco da rota /comercial no App.js, e as rotas filhas dele: [path, o componente do element]
 function rotasDoComercial() {
-  const app = fs.readFileSync(path.join(__dirname, '..', 'App.js'), 'utf8');
+  const app = semComentarios(fs.readFileSync(path.join(__dirname, '..', 'App.js'), 'utf8'));
   const ini = app.indexOf('path="/comercial"');
   expect(ini).toBeGreaterThan(-1);
   const fim = app.indexOf('</Route>', ini);
-  return [...app.slice(ini, fim).matchAll(/<Route path="([^"]+)"/g)].map((m) => m[1]);
+  return [...app.slice(ini, fim).matchAll(/<Route path="([^"]+)" element=\{<(\w+)/g)].map((m) => [m[1], m[2]]);
 }
 
 test('RN-154.03: o clique no lembrete abre /comercial/propostas/editar/<id>, uma rota montada dentro de /comercial', async () => {
@@ -72,14 +79,15 @@ test('RN-154.03: o clique no lembrete abre /comercial/propostas/editar/<id>, uma
   expect(mockNavigate).toHaveBeenCalledTimes(1);
   const destino = mockNavigate.mock.calls[0][0];
   expect(destino).toBe('/comercial/propostas/editar/42');
-  // e o destino casa uma rota filha de /comercial no App.js (propostas/editar/:id)
+  // e o destino casa uma rota filha de /comercial no App.js (propostas/editar/:id), que desenha o formulario da proposta
   const filho = destino.replace(/^\/comercial\//, '');
-  const casa = rotasDoComercial().some((r) => new RegExp(`^${r.replace(/:[A-Za-z_]\w*/g, '[^/]+')}$`).test(filho));
-  expect(casa).toBe(true);
+  const casam = rotasDoComercial().filter(([r]) => new RegExp(`^${r.replace(/:[A-Za-z_]\w*/g, '[^/]+')}$`).test(filho));
+  expect(casam).toEqual([['propostas/editar/:id', 'PropostaForm']]);
 });
 
 test('RN-154.03 (Fase 2 M-4): o modal de lembrete das Atividades leva ao mesmo endereco', () => {
-  const src = fs.readFileSync(path.join(__dirname, 'Atividades.js'), 'utf8');
-  const navs = [...src.matchAll(/navigate\(`([^`]*propostas\/editar[^`]*)`\)/g)].map((m) => m[1]);
-  expect(navs).toEqual(['/comercial/propostas/editar/${modalLembrete.proposta_id}']);
+  // sem os comentarios, e qualquer forma do argumento (template, concatenacao) — Fase 5 r3 C6
+  const src = semComentarios(fs.readFileSync(path.join(__dirname, 'Atividades.js'), 'utf8'));
+  const navs = [...src.matchAll(/navigate\(([^)]*propostas\/editar[^)]*)\)/g)].map((m) => m[1]);
+  expect(navs).toEqual(['`/comercial/propostas/editar/${modalLembrete.proposta_id}`']);
 });

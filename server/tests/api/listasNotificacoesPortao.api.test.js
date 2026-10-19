@@ -181,6 +181,56 @@ test('[RN-154.01/02, C353, C363] fonte: as 2 listas com o portao dos tres modulo
   assert.strictEqual([...corpo.matchAll(/res\.json\(/g)].length, 2, 'outra resposta no corpo das notificacoes (so o [] antecipado e o array filtrado)');
 });
 
+// ── Fase 5 r3 A1: a premissa da regua (quem chama as listas e o sino, no client), presa ─────────
+// O client inteiro lido como TEXTO (o molde do modulosClienteServidor): todo arquivo com o literal de /clientes, /projetos ou /notificacoes
+// (aspas, crase, `?` ou `${` logo depois — a medicao da Fase 0) e o modulo da moldura de cada um. Um arquivo novo na lista = a regua dos
+// tres modulos (B995) ou o filtro do sino (B996) tem de ser revisto ANTES de a tela nova ir para o ar (senao ela mostra a lista vazia calada).
+const CLIENT_SRC = path.join(SERVER_DIR, '..', 'client', 'src');
+const QUEM_CHAMA = {
+  // o arquivo (relativo a client/src/components) -> [as rotas que ele cita, o modulo da moldura em que a tela e montada (App.js)]
+  'Atividades.js': [['clientes'], 'comercial'], 'ClienteForm.js': [['clientes'], 'comercial'], 'Clientes.js': [['clientes'], 'comercial'],
+  'CustosViagens.js': [['clientes'], 'comercial'], 'ProjetoForm.js': [['clientes', 'projetos'], 'comercial'], 'Projetos.js': [['projetos'], 'comercial'],
+  'OSComercialForm.js': [['projetos'], 'comercial'], 'PropostaForm.js': [['clientes', 'projetos'], 'comercial (nao montado)'],
+  'OportunidadeForm.js': [['clientes'], 'comercial (nao montado)'], 'proposta/GerarPropostaModal.js': [['clientes'], 'comercial (nao montado)'],
+  'proposta/PropostaForm.js': [['clientes'], 'comercial'],
+  'HelpGuide.js': [['clientes'], 'nenhum (o seletor de um passo da ajuda, [href="/clientes"] — nao chama a rota)'],
+  'almoxarifado/MaterialAlmoxarifadoForm.js': [['clientes'], 'almoxarifado'], 'almoxarifado/ReservasAlmoxarifado.js': [['clientes', 'projetos'], 'almoxarifado'],
+  'almoxarifado/MovimentacoesAlmoxarifado.js': [['projetos'], 'almoxarifado'], 'almoxarifado/SobrasAlmoxarifado.js': [['projetos'], 'almoxarifado'],
+  'operacional/OSForm.js': [['clientes', 'projetos'], 'operacional'],
+  'Notificacoes.js': [['notificacoes'], 'comercial (o sino, desenhado so no Dashboard)'],
+};
+test('[RN-154.01/02, B995, B996, Fase 5 r3 A1] o client: quem cita /clientes, /projetos e /notificacoes e a lista medida, cada um na moldura de um dos tres modulos; o sino so e desenhado no painel do Comercial', () => {
+  const achados = {};
+  const andar = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) { andar(p); continue; }
+      if (!/\.(js|jsx|ts|tsx)$/.test(e.name) || /\.test\./.test(e.name)) continue;
+      const src = fs.readFileSync(p, 'utf8');
+      const rotas = [...new Set([...src.matchAll(/['"`]\/(?:api\/)?(clientes|projetos|notificacoes)(?:['"`?]|\$\{)/g)].map((m) => m[1]))].sort();
+      if (rotas.length) achados[path.relative(path.join(CLIENT_SRC, 'components'), p).split(path.sep).join('/')] = rotas;
+    }
+  };
+  andar(CLIENT_SRC);
+  assert.ok(Object.keys(achados).length >= 10, 'a varredura do client nao achou nada (caminho errado?)');
+  assert.deepStrictEqual(achados, Object.fromEntries(Object.entries(QUEM_CHAMA).map(([f, [r]]) => [f, r]).sort(([a], [b]) => (a < b ? -1 : 1))),
+    'um arquivo novo (ou uma rota nova num arquivo) do client cita as listas ou o sino: confira o modulo da moldura dele e reveja a regua (B995/B996)');
+  // as telas montadas que chamam as listas estao todas na moldura de um dos tres modulos
+  const fora = Object.entries(QUEM_CHAMA).filter(([, [r, m]]) => !r.includes('notificacoes') && !/^nenhum|nao montado/.test(m) && !MODULOS_DAS_LISTAS.includes(m));
+  assert.deepStrictEqual(fora, []);
+  // o sino: so o Dashboard (o painel do indice de /comercial) o desenha; o Layout o importa e nao o desenha
+  const desenham = [];
+  const andar2 = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) andar2(p);
+      else if (/\.js$/.test(e.name) && !/\.test\./.test(e.name) && /<Notificacoes[\s/>]/.test(fs.readFileSync(p, 'utf8'))) desenham.push(path.basename(p));
+    }
+  };
+  andar2(CLIENT_SRC);
+  assert.deepStrictEqual(desenham, ['Dashboard.js'], 'o sino passou a ser desenhado em outra tela: reveja o filtro das notificacoes (B996)');
+});
+
 // ── as camadas do Express de verdade (o prefixo das notificacoes; as listas, no teste da 151) ──
 test('[RN-154.02, RN-153.04] as camadas do Express montado: so a das notificacoes atende o prefixo, com o login e o filtro (o mapa inteiro) antes de tudo; nenhum middleware so dela, nenhum app.param', () => {
   const cam = camadas.lerCamadas(pasta);
@@ -218,6 +268,17 @@ test('[RN-154.01/02, C353, C363] quem nenhuma tela das listas admite (so Engenha
   assert.deepStrictEqual([xv[0].titulo, xv[0].prioridade, xv[0].cliente_nome], [`Lembrete: E154-${v.nome}`, 'hoje', 'CLIENTE 154'], JSON.stringify(xv[0]));
   await pausa(300);
   assert.deepStrictEqual(await negados(v.id), [], 'o vendedor tomou acesso negado');
+  // Fase 5 r3 A3: o recorte do usuario tem duas metades — a proposta que outro criou e atribuiu a ele, e a que ele criou e atribuiu a outro
+  const adminId = (await all('SELECT id FROM usuarios WHERE email = ?', [SEED.email]))[0].id;
+  const ins = (resp, criador, num) => run("INSERT INTO propostas (cliente_id, numero_proposta, titulo, status, valor_total, responsavel_id, created_by, created_at, lembrete_data, lembrete_mensagem) VALUES (?, ?, 'cruzada 154', 'rascunho', 1, ?, ?, datetime('now'), DATE('now'), 'cruzada')", [ctx.cliente, num, resp, criador]);
+  const atribuida = (await ins(v.id, adminId, 'E154-ATRIB')).lastID;
+  const criada = (await ins(adminId, v.id, 'E154-CRIADA')).lastID;
+  try {
+    const [s2, x2] = await j('GET', '/notificacoes', v.T);
+    assert.deepStrictEqual([s2, lembretesDe(x2)], [200, [ctx.lembrete.diretaComercial, atribuida, criada].sort((a, b) => a - b)], 'o recorte por responsavel ou criador');
+  } finally {
+    await run('DELETE FROM propostas WHERE id IN (?, ?)', [atribuida, criada]);
+  }
 });
 
 // ── as metades positivas, em fluxo, pela rota (o gesto de cada tela, um depois do outro) ─────
