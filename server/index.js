@@ -3013,7 +3013,7 @@ function checkAnyModulePermission(requiredModules) {
 // passam pelo mesmo portao — o barrado criava o pedido pela API; a tela de Aprovacoes e as que pedem aprovacao estao todas no Comercial.
 const PORTAO_DAS_PROPOSTAS_DESLIGADO = String(process.env.PROPOSTAS_PORTAO_DE_MODULO || '').trim().toLowerCase() === 'desligado';
 if (PORTAO_DAS_PROPOSTAS_DESLIGADO) {
-  console.warn('⚠️ PROPOSTAS_PORTAO_DE_MODULO=desligado: as rotas /api/propostas*, as do modelo da proposta, as das listas de preço e as do modelo de contrato por família NAO exigem o módulo Comercial, e as da ordem de serviço pelo número NAO exigem o Comercial ou o Operacional (só o login).');
+  console.warn('⚠️ PROPOSTAS_PORTAO_DE_MODULO=desligado: as rotas /api/propostas*, as do modelo da proposta, as das listas de preço e as do modelo de contrato por família NAO exigem o módulo Comercial, e as da ordem de serviço pelo número NAO exigem o Comercial ou o Operacional, e as do cadastro de família NAO exigem o Comercial (só o login); a lista de ordens de serviço do Operacional volta à régua antiga do módulo.');
 }
 const portaoDasPropostas = criarPortaoDasPropostas({
   getDb: () => db,
@@ -3033,6 +3033,14 @@ const exigirComercialNoModeloDaProposta = portaoDasPropostas.exigir('comercial',
 // /fabrica/ordens-servico/editar/:id (Operacional). O gerar-pdf busca por HTTP interno so /api/uploads/produtos (estatico, fora do portao).
 // As 3 do modelo de contrato por familia (C341, RN-148.01, B966) usam o exigirComercialNasPropostas: a tela da familia so existe no Comercial.
 const exigirComercialOuOperacionalNaOS = portaoDasPropostas.exigir(['comercial', 'operacional']);
+// Etapa 149 (C343, RN-149.01/02, B971/B972): as 21 rotas do cadastro de familia de produto (/api/familias* e os apelidos GET/POST
+// /familias). As 13 que so as telas do Comercial chamam usam o exigirComercialNasPropostas; as 8 que Configuracoes -> Comercial tambem
+// chama (Template de proposta e Opcoes por familia: todas, :id, variaveis, opcoes) aceitam o caminho de Configuracoes da 147
+// (o Administrativo pela regua da tela + administrador do modulo Comercial). O clonar continua so do administrador (B973).
+const exigirComercialNaFamiliaPorConfiguracoes = portaoDasPropostas.exigir('comercial', { tambemAdminDoModuloCom: { admin: 'comercial', tela: 'administrativo' } });
+// Etapa 149 (C345, RN-149.04/05, B974): a lista de OS do Operacional pela regua da tela da Fabrica (a antiga lia tambem a direta com
+// grupo_id = 0, que a tela nao le). Desligado, volta a regua ANTIGA — nao ao so login: desligar nao abre mais do que havia antes.
+const exigirOperacionalNaListaDeOS = PORTAO_DAS_PROPOSTAS_DESLIGADO ? checkModulePermission('operacional') : portaoDasPropostas.exigir('operacional');
 
 // Etapa 21 (RN-04). Precedencia: variaveis de ambiente `SMTP_*` -> valores abaixo.
 // A regua mora em `services/emailConfig.js` (funcao pura, testada em
@@ -3693,7 +3701,7 @@ app.post('/api/grupos/:id/foto-base64', authenticateToken, (req, res) => {
   }
 });
 
-app.get('/api/familias', authenticateToken, (req, res) => {
+app.get('/api/familias', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   var grupoId = req.query.grupo_id;
   var sql = 'SELECT * FROM familias_produto WHERE ativo = 1';
   var params = [];
@@ -3766,8 +3774,8 @@ function criarOuReativarFamilia(req, res) {
   });
 }
 
-app.post('/api/familias', authenticateToken, criarOuReativarFamilia);
-app.get('/familias', authenticateToken, (req, res) => {
+app.post('/api/familias', authenticateToken, exigirComercialNasPropostas, criarOuReativarFamilia);
+app.get('/familias', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   var grupoId = req.query.grupo_id;
   var sql = 'SELECT * FROM familias_produto WHERE ativo = 1';
   var params = [];
@@ -3781,7 +3789,7 @@ app.get('/familias', authenticateToken, (req, res) => {
     res.json(rows || []);
   });
 });
-app.post('/familias', authenticateToken, criarOuReativarFamilia);
+app.post('/familias', authenticateToken, exigirComercialNasPropostas, criarOuReativarFamilia);
 
 // ========== ROTAS DE USUÁRIOS ==========
 // Etapa 131 (C270): `/api/usuarios/comercial`, `/api/usuarios/filtrar` e `/api/usuarios/por-modulo/:modulo` tambem moram em
@@ -4423,13 +4431,13 @@ app.post('/api/clientes', authenticateToken, (req, res) => {
 // grupo_id). NÃO inclui as apagadas: DELETE /api/familias/:id faz exclusão lógica
 // (ativo = 0), e sem este filtro a família apagada continuava aparecendo nos
 // seletores de configuração — variáveis por família e opções por família.
-app.get('/api/familias/todas', authenticateToken, (req, res) => {
+app.get('/api/familias/todas', authenticateToken, exigirComercialNaFamiliaPorConfiguracoes, (req, res) => {
   db.all('SELECT * FROM familias_produto WHERE ativo = 1 ORDER BY ordem ASC, nome ASC', [], function(err, rows) {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows || []);
   });
 });
-app.get('/api/familias/:id', authenticateToken, (req, res) => {
+app.get('/api/familias/:id', authenticateToken, exigirComercialNaFamiliaPorConfiguracoes, (req, res) => {
   var id = req.params.id;
   db.get('SELECT * FROM familias_produto WHERE id = ?', [id], function(err, row) {
     if (err) return res.status(500).json({ error: err.message });
@@ -4440,7 +4448,7 @@ app.get('/api/familias/:id', authenticateToken, (req, res) => {
     res.json(row);
   });
 });
-app.put('/api/familias/:id', authenticateToken, (req, res) => {
+app.put('/api/familias/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   var id = req.params.id;
   var body = req.body || {};
   var nome = (body.nome || '').trim();
@@ -4497,7 +4505,7 @@ app.put('/api/familias/:id', authenticateToken, (req, res) => {
     });
   });
 });
-app.delete('/api/familias/:id', authenticateToken, (req, res) => {
+app.delete('/api/familias/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   var id = req.params.id;
   db.run('UPDATE familias_produto SET ativo = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [id], function(err) {
     if (err) return res.status(500).json({ error: err.message });
@@ -4659,7 +4667,7 @@ function apagarArquivoDeFamiliaSeOrfao(arquivo, pronto) {
   );
 }
 
-app.post('/api/familias/:id/foto', authenticateToken, uploadFamilia.single('foto'), (req, res) => {
+app.post('/api/familias/:id/foto', authenticateToken, exigirComercialNasPropostas, uploadFamilia.single('foto'), (req, res) => {
   var id = req.params.id;
   if (!req.file || !req.file.filename) return res.status(400).json({ error: 'Nenhuma imagem enviada' });
   var filename = req.file.filename;
@@ -4677,7 +4685,7 @@ app.post('/api/familias/:id/foto', authenticateToken, uploadFamilia.single('foto
 });
 
 // Fallback: upload foto da família em base64 (JSON) quando multipart falha
-app.post('/api/familias/:id/foto-base64', authenticateToken, (req, res) => {
+app.post('/api/familias/:id/foto-base64', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   try {
     var id = req.params.id;
     var b64 = req.body && req.body.foto_base64;
@@ -4727,7 +4735,7 @@ const uploadFamiliaEsquematico = multer({
 });
 
 // GET esquemático: servir imagem da família (evita 404 quando algo solicita essa URL)
-app.get('/api/familias/:id/esquematico', authenticateToken, (req, res) => {
+app.get('/api/familias/:id/esquematico', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   var id = req.params.id;
   db.get('SELECT esquematico FROM familias_produto WHERE id = ?', [id], function(err, row) {
     if (err) return res.status(500).json({ error: err.message });
@@ -4738,7 +4746,7 @@ app.get('/api/familias/:id/esquematico', authenticateToken, (req, res) => {
   });
 });
 
-app.post('/api/familias/:id/esquematico', authenticateToken, uploadFamiliaEsquematico.single('esquematico'), (req, res) => {
+app.post('/api/familias/:id/esquematico', authenticateToken, exigirComercialNasPropostas, uploadFamiliaEsquematico.single('esquematico'), (req, res) => {
   var id = req.params.id;
   if (!req.file || !req.file.filename) return res.status(400).json({ error: 'Nenhuma imagem enviada' });
   var filename = req.file.filename;
@@ -4756,7 +4764,7 @@ app.post('/api/familias/:id/esquematico', authenticateToken, uploadFamiliaEsquem
 });
 
 // Fallback: upload esquemático em base64 (JSON) quando multipart falha (ex.: proxy)
-app.post('/api/familias/:id/esquematico-base64', authenticateToken, (req, res) => {
+app.post('/api/familias/:id/esquematico-base64', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   try {
     var id = req.params.id;
     var b64 = req.body && req.body.esquematico_base64;
@@ -4792,7 +4800,7 @@ app.post('/api/familias/:id/esquematico-base64', authenticateToken, (req, res) =
 
 // ========== VARIÁVEIS POR FAMÍLIA (quais variáveis esta família usa – independente de marcadores/bolinhas) ==========
 // GET: listar variáveis atribuídas a uma família (com dados da variável técnica)
-app.get('/api/familias/:familiaId/variaveis', authenticateToken, (req, res) => {
+app.get('/api/familias/:familiaId/variaveis', authenticateToken, exigirComercialNaFamiliaPorConfiguracoes, (req, res) => {
   var familiaId = req.params.familiaId;
   db.all(
     `SELECT fv.variavel_chave AS chave, fv.ordem, vt.nome, vt.categoria, vt.tipo, vt.opcoes, vt.prefixo, vt.sufixo, vt.fonte_opcoes, vt.grupo_compras_id
@@ -4825,7 +4833,7 @@ app.get('/api/familias/:familiaId/variaveis', authenticateToken, (req, res) => {
 });
 
 // PUT: definir lista de variáveis da família (substitui a lista atual). Body: { variaveis: [ { chave, ordem? }, ... ] }
-app.put('/api/familias/:familiaId/variaveis', authenticateToken, (req, res) => {
+app.put('/api/familias/:familiaId/variaveis', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   var familiaId = req.params.familiaId;
   var body = req.body || {};
   var variaveis = Array.isArray(body.variaveis) ? body.variaveis : [];
@@ -4866,7 +4874,7 @@ app.put('/api/familias/:familiaId/variaveis', authenticateToken, (req, res) => {
 
 // ========== OPÇÕES DE CONFIGURAÇÃO POR FAMÍLIA (valores disponíveis por marcador técnico, por família) ==========
 // GET: listar todas as opções de uma família, agrupadas por variável (para os marcadores dessa família)
-app.get('/api/familias/:familiaId/opcoes-variaveis', authenticateToken, (req, res) => {
+app.get('/api/familias/:familiaId/opcoes-variaveis', authenticateToken, exigirComercialNaFamiliaPorConfiguracoes, (req, res) => {
   var familiaId = req.params.familiaId;
   db.all(
     'SELECT id, familia_id, variavel_chave, valor, ordem FROM familia_variavel_opcoes WHERE familia_id = ? AND ativo = 1 ORDER BY variavel_chave, ordem, valor',
@@ -4886,7 +4894,7 @@ app.get('/api/familias/:familiaId/opcoes-variaveis', authenticateToken, (req, re
 });
 
 // GET: opções por variável vindas dos PRODUTOS cadastrados (valores distintos em especificacoes_tecnicas da família)
-app.get('/api/familias/:familiaId/opcoes-variaveis-from-produtos', authenticateToken, (req, res) => {
+app.get('/api/familias/:familiaId/opcoes-variaveis-from-produtos', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   var familiaId = req.params.familiaId;
   db.get('SELECT id, nome, marcadores_vista FROM familias_produto WHERE id = ?', [familiaId], function(err, familia) {
     if (err) return res.status(500).json({ error: err.message });
@@ -4937,7 +4945,7 @@ app.get('/api/familias/:familiaId/opcoes-variaveis-from-produtos', authenticateT
 });
 
 // GET: opções de uma variável para uma família (para preencher dropdown ao clicar no marcador)
-app.get('/api/familias/:familiaId/variaveis/:variavelChave/opcoes', authenticateToken, (req, res) => {
+app.get('/api/familias/:familiaId/variaveis/:variavelChave/opcoes', authenticateToken, exigirComercialNaFamiliaPorConfiguracoes, (req, res) => {
   var familiaId = req.params.familiaId;
   var variavelChave = req.params.variavelChave;
   db.all(
@@ -4951,7 +4959,7 @@ app.get('/api/familias/:familiaId/variaveis/:variavelChave/opcoes', authenticate
 });
 
 // POST: adicionar opção (valor) para família + variável
-app.post('/api/familias/:familiaId/variaveis/:variavelChave/opcoes', authenticateToken, (req, res) => {
+app.post('/api/familias/:familiaId/variaveis/:variavelChave/opcoes', authenticateToken, exigirComercialNaFamiliaPorConfiguracoes, (req, res) => {
   var familiaId = req.params.familiaId;
   var variavelChave = req.params.variavelChave;
   var valor = (req.body && req.body.valor) ? String(req.body.valor).trim() : '';
@@ -4974,7 +4982,7 @@ app.post('/api/familias/:familiaId/variaveis/:variavelChave/opcoes', authenticat
 });
 
 // PUT: atualizar opção
-app.put('/api/familias/:familiaId/variaveis/:variavelChave/opcoes/:id', authenticateToken, (req, res) => {
+app.put('/api/familias/:familiaId/variaveis/:variavelChave/opcoes/:id', authenticateToken, exigirComercialNaFamiliaPorConfiguracoes, (req, res) => {
   var id = req.params.id;
   var valor = (req.body && req.body.valor) != null ? String(req.body.valor).trim() : null;
   var ordem = req.body && req.body.ordem !== undefined ? parseInt(req.body.ordem, 10) : null;
@@ -4995,7 +5003,7 @@ app.put('/api/familias/:familiaId/variaveis/:variavelChave/opcoes/:id', authenti
 });
 
 // DELETE: remover opção
-app.delete('/api/familias/:familiaId/variaveis/:variavelChave/opcoes/:id', authenticateToken, (req, res) => {
+app.delete('/api/familias/:familiaId/variaveis/:variavelChave/opcoes/:id', authenticateToken, exigirComercialNaFamiliaPorConfiguracoes, (req, res) => {
   var id = req.params.id;
   db.run('UPDATE familia_variavel_opcoes SET ativo = 0 WHERE id = ?', [id], function(err) {
     if (err) return res.status(500).json({ error: err.message });
@@ -20724,7 +20732,7 @@ app.delete('/api/operacional/colaboradores/:id', authenticateToken, checkModuleP
 });
 
 // Ordens de Serviço
-app.get('/api/operacional/ordens-servico', authenticateToken, checkModulePermission('operacional'), (req, res) => {
+app.get('/api/operacional/ordens-servico', authenticateToken, exigirOperacionalNaListaDeOS, (req, res) => {
   const { search, status, prioridade, cliente_id, projeto_id } = req.query;
   
   // Verificar se a tabela os_itens existe
