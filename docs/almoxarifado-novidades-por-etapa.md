@@ -11,12 +11,19 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-18):** **Etapa 148 fechada** (do Comercial/Operacional: **a ordem de serviço aberta pelo
+> **Onde o desenvolvimento está (2026-10-18):** **Etapa 149 fechada** (do Comercial/Operacional: **o cadastro de família de produto e a
+> lista de ordens de serviço da Fábrica pedem o módulo, e a importação da lista de preço só diz "pronto" depois de gravar todas as linhas** —
+> quem a tela barra do Comercial criava, renomeava e apagava família de produto pela integração (e, renomeando, mudava o contrato das
+> propostas novas); agora toma *"Acesso negado ao módulo"*, e quem cadastra família no Comercial ou mexe nas opções por Configurações não
+> perde nada (**C343** resolvido em parte, **C345** resolvido); a lista de preço com uma linha recusada não nasce pela metade (**C341**
+> resolvido); **B971** a **B976**; a consulta **A97** (opcional); os avisos novos **C346** e **C347**); a próxima é a **150** — ver "Onde
+> estamos e o que vem a seguir".
+> *(Antes: **Etapa 148 fechada** (do Comercial/Operacional: **a ordem de serviço aberta pelo
 > número e o modelo de contrato por família pedem o módulo, e as cláusulas de uma proposta que não existe dizem "não encontrada"** — quem a
 > tela barra do Comercial e da Fábrica lia uma OS inteira (com o valor), os itens e o PDF dela pela integração, e trocava o modelo de
 > contrato de uma família; agora toma *"Acesso negado ao módulo"*, e quem abre a OS pelo Comercial ou pela Fábrica não perde nada (**C335**,
 > **C342** resolvidos; **C341** resolvido na parte das rotas); **B965** a **B970**; a consulta **A96** (opcional); os avisos novos **C343** a
-> **C345**); a próxima é a **149** — ver "Onde estamos e o que vem a seguir".
+> **C345**); a próxima era a **149**.)*
 > *(Antes: **Etapa 147 fechada** (das propostas/Comercial: **o modelo da proposta e as listas de
 > preço pedem o Comercial, e as cláusulas da proposta só dizem "pronto" depois de gravar** — quem a tela barra do Comercial alterava o
 > modelo de todas as propostas e as listas de preço pela integração; agora toma *"Acesso negado ao módulo"*, e o administrador do Comercial
@@ -272,7 +279,11 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Noventa e seis itens para rodar em produção ANTES do deploy — noventa e três são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Noventa e sete itens para rodar em produção ANTES do deploy — noventa e quatro são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-18 (Etapa 149) de noventa e seis para noventa e sete**, com a **A97** — quem passa a ser barrado no cadastro de
+família de produto (e se continua nas opções por família por Configurações), e quem perde a lista de ordens de serviço da Fábrica (**C343**,
+**C345**). **Somente leitura, opcional:** no banco medido, ninguém que usa perde.)*
 
 *(**Atualizado em 2026-10-18 (Etapa 148) de noventa e cinco para noventa e seis**, com a **A96** — quem é responsável por alguma ordem de
 serviço e passa a ser barrado nela, e todos os que passam a ser barrados na OS pelo número e no modelo de contrato por família (**C335**,
@@ -3445,6 +3456,62 @@ cliente vazio deixa a proposta assim — **C330**): abra cada uma em **Comercial
 formulário exige o cliente). **Linhas na 2** — o mesmo; o cliente antigo não volta. *(Rodada no banco local, cópia de 09/10: **0** e
 **0**; controle numa cópia com uma proposta sem cliente e outra apontando para o cliente 987654: a 1 achou a primeira e a 2 a segunda.)*
 
+**A97 (NOVA, da Etapa 149 — opcional — quem perde o cadastro de família de produto e a lista de OS da Fábrica).** Desde a Etapa 149 o
+cadastro de família de produto (criar, editar, renomear, apagar, fotos, esquemático, variáveis e opções) exige o **Comercial** pela mesma
+régua da tela das propostas (a da **A93**); as opções por família e a leitura das famílias que **Configurações → Comercial** usa aceitam
+também o administrador do módulo Comercial que tem o **Administrativo**. E a lista de ordens de serviço da Fábrica passa a exigir o
+**Operacional** pela régua da tela, que não conta uma permissão direta gravada com o grupo número **0**. A família não guarda quem a alterou;
+a consulta 1 lista todos os que perdem o cadastro, a 2 quem perde a lista de OS. Somente leitura.
+
+```sql
+-- 1) quem passa a ser barrado no cadastro de família de produto (a régua da tela: sem o Comercial)
+WITH linhas AS (
+  SELECT ug.usuario_id, p.modulo, p.permissao FROM usuarios_grupos ug
+    JOIN grupos_permissoes gp ON gp.id = ug.grupo_id AND gp.ativo = 1
+    JOIN permissoes p ON p.grupo_id = gp.id
+  UNION ALL
+  SELECT p.usuario_id, p.modulo, p.permissao FROM permissoes p WHERE p.usuario_id IS NOT NULL AND p.grupo_id IS NULL
+)
+SELECT u.id, u.nome, u.email,
+  (SELECT GROUP_CONCAT(DISTINCT l.modulo) FROM linhas l WHERE l.usuario_id = u.id AND l.permissao = 1) AS modulos_que_tem,
+  CASE WHEN COALESCE(u.admin_modulos, '') LIKE '%"comercial"%'
+        AND EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id AND l.modulo = 'administrativo' AND l.permissao = 1)
+       THEN 'só o cadastro (as opções por família e o template continuam por Configurações)' ELSE 'o cadastro e as opções por família' END AS perde
+FROM usuarios u
+WHERE u.ativo = 1
+  AND COALESCE(u.is_superadmin, 0) NOT IN (1, '1')
+  AND LOWER(COALESCE(u.role, '')) <> 'admin'
+  AND EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id)
+  AND NOT EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id AND l.modulo = 'comercial' AND l.permissao = 1)
+ORDER BY u.nome;
+
+-- 2) quem perde a lista de ordens de serviço do Operacional: o Operacional só numa permissão direta com o grupo número 0
+WITH linhas AS (
+  SELECT ug.usuario_id, p.modulo, p.permissao FROM usuarios_grupos ug
+    JOIN grupos_permissoes gp ON gp.id = ug.grupo_id AND gp.ativo = 1
+    JOIN permissoes p ON p.grupo_id = gp.id
+  UNION ALL
+  SELECT p.usuario_id, p.modulo, p.permissao FROM permissoes p WHERE p.usuario_id IS NOT NULL AND p.grupo_id IS NULL
+)
+SELECT u.id, u.nome, u.email
+FROM usuarios u
+WHERE u.ativo = 1
+  AND COALESCE(u.is_superadmin, 0) NOT IN (1, '1')
+  AND LOWER(COALESCE(u.role, '')) <> 'admin'
+  AND EXISTS (SELECT 1 FROM permissoes p WHERE p.usuario_id = u.id AND p.grupo_id = 0 AND p.modulo = 'operacional' AND p.permissao = 1)
+  AND NOT EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id AND l.modulo = 'operacional' AND l.permissao = 1)
+ORDER BY u.nome;
+```
+
+**Como ler o resultado:** **a 1** — quem vai tomar *"Acesso negado ao módulo"* ao cadastrar família de produto; a coluna *perde* diz se é
+**só o cadastro** (o administrador do Comercial com o Administrativo continua nas opções por família, por Configurações) ou **o cadastro e as
+opções**. Quem deve cadastrar família: dê-lhe o **Comercial** antes do deploy; os outros podem ficar como estão. **A 2 vazia** — ninguém perde
+a lista de OS. **Linhas na 2** — essas pessoas só tinham o Operacional por uma permissão gravada à mão com o grupo 0 (a tela já não lhes
+mostrava a Fábrica): se devem ver a lista, dê-lhes o **Operacional** pela tela de usuários. *(Rodada no banco local, cópia de 09/10: a 1 com
+os **4** de sempre (ids 7, 8, 12, 15 — "o cadastro e as opções por família"), a 2 **vazia**; controle numa cópia com o 7 ganhando o
+administrador do Comercial e o Administrativo, o 12 o Operacional só no grupo 0 e o 15 o Operacional no grupo 0 e também direto: a 1 marcou o
+7 como "só o cadastro", a 2 achou só o 12.)*
+
 **A96 (NOVA, da Etapa 148 — opcional — quem perde a OS pelo número e o modelo de contrato por família).** Desde a Etapa 148 abrir uma
 ordem de serviço pelo número (a tela de edição da OS, os itens dela, gerar e baixar o PDF) exige o **Comercial ou o Operacional**, e o
 modelo de contrato por família (a lista de modelos no cadastro da família e a troca do modelo) exige o **Comercial** — pela mesma régua da
@@ -3562,7 +3629,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B970; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B976; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -10611,6 +10678,41 @@ só pela integração (sem tela) e não tem o Comercial nem o Operacional toma *
 **B970 (NOVA, da Etapa 148) — a próxima etapa (149).** Ver a "próxima tarefa detalhada" no plano da Etapa 148. As decisões que esperam
 vocês continuam as da **B957** (nada novo).
 
+**B971 (NOVA, da Etapa 149; do Comercial) — o cadastro de família de produto em duas réguas.** As 8 operações que **Configurações →
+Comercial** usa (*Template de proposta* e *Opções por família*: a lista de todas as famílias, uma família, as variáveis dela e as opções das
+variáveis — ler, criar, alterar, apagar) aceitam o **Comercial** pela régua da tela **ou** o administrador do módulo Comercial com o
+**Administrativo** (o caminho da **B958**); as outras 13 (criar, editar, renomear, apagar, fotos, esquemático, trocar as variáveis, a
+lista por grupo e as opções vindas dos produtos), só o **Comercial**. Medido antes: nenhuma tela fora do Comercial e de Configurações lê
+família de produto (o Almoxarifado tem as suas). **Descartado:** (a) só o Comercial nas 21 (trancaria fora quem a tela deixa mexer nas opções
+por Configurações); (b) o caminho de Configurações nas 21 (abriria o cadastro inteiro a quem a tela só deixa mexer nas opções); (c) leitura
+mais larga que a escrita (ninguém fora dessas telas lê); (d) exigir **só** o caminho de Configurações nas 4 escritas das opções (a tela que as
+escreve só existe em Configurações — revisão do código, r1): quem tem o Comercial já cria, renomeia e apaga a família inteira pelo cadastro,
+então tirar-lhe as opções não fecharia nada; (e) fechar junto grupos de produto, produtos e variáveis técnicas (também só o login, outros
+leitores — **C346**, **C347**). **Reversível** (`PROPOSTAS_PORTAO_DE_MODULO=desligado` volta ao só login).
+
+**B972 (NOVA, da Etapa 149) — os dois endereços antigos sem o `/api` (`GET` e `POST /familias`) recebem o mesmo portão do par com
+`/api`.** A **C343** não os contava. **Descartado:** apagá-los (quem configura o endereço da API sem o `/api` perderia o cadastro; não
+medido em produção). **Reversível.**
+
+**B973 (NOVA, da Etapa 149) — clonar família continua só do administrador, sem o portão.** **Descartado:** pôr o portão antes (o
+administrador passa pelos dois, então não muda quem clona — e trocaria a frase *"Apenas administradores podem clonar famílias"* de quem não
+é). **Reversível.**
+
+**B974 (NOVA, da Etapa 149; do Operacional) — a lista de ordens de serviço da Fábrica pela régua da tela; desligado, volta à régua antiga.**
+Com `PROPOSTAS_PORTAO_DE_MODULO=desligado` a lista volta à régua de antes da etapa (a que conta a permissão do grupo 0), **não** ao só
+login. **Descartado:** (a) aceitar também o Comercial (nenhuma tela do Comercial lê esta lista — tem a sua, **B956**); (b) o desligado
+abrindo ao só login (desligar abriria a lista a todo logado, mais do que antes da etapa); (c) alinhar junto o número da próxima OS, os
+itens e a edição/exclusão (régua antiga — **B969**, **C332**: são da criação da OS, **C277**, de vocês). **Reversível.**
+
+**B975 (NOVA, da Etapa 149; do Comercial) — a lista de preço que falha numa linha é desfeita inteira.** As linhas vão em blocos de 100, um
+depois do outro; o bloco que o banco recusa não grava nenhuma linha dele, e as já gravadas e a lista saem. **Descartado:** (a) guardar a lista
+com as linhas que gravaram e avisar (a busca acharia preço de uma lista incompleta sem ninguém saber); (b) transação (a conexão é uma só —
+**B948**); (c) gravar uma linha por vez, como nas propostas (medido na revisão: 2,3 vezes mais lento que antes pela rota; em blocos, 100 000
+linhas em menos de 1 s, contra 7,3 s antes); (d) mudar a tela (a frase chega pelo aviso que já existe). **Reversível.**
+
+**B976 (NOVA, da Etapa 149) — a próxima etapa (150).** Ver a "próxima tarefa detalhada" no plano da Etapa 149. As decisões que esperam
+vocês continuam as da **B957** (nada novo).
+
 **B898 (NOVA, da Etapa 138) — a próxima etapa (139).** Ver a "próxima tarefa detalhada" no plano da Etapa 138. A **B853** (com a
 **C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
@@ -13617,9 +13719,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 340. **NOVO (da revisão da Etapa 147; das propostas) — se a cópia das cláusulas falha e a limpeza também falha, a proposta fica com parte
      das cláusulas.** A frase manda usar o **Resetar cláusulas**; o próximo salvamento avisa e recarrega o preview com as que ficaram, mas
      não completa a cópia. Só acontece com o banco falhando duas vezes seguidas. **O que fazer:** **Resetar cláusulas** e refazer as mudanças.
-341. **✅ RESOLVIDO EM PARTE NA ETAPA 148 (B966)** — a lista de modelos, as cláusulas de um modelo e a troca do modelo da família exigem o
-     Comercial pela régua da tela. **Continua:** a criação de lista de preço grava as linhas sem conferir cada uma; e renomear ou clonar uma
-     família ainda muda o modelo efetivo (**C343**). *(O texto original:)*
+341. **✅ RESOLVIDO NA ETAPA 149 (B975)** — a criação da lista de preço grava as linhas em blocos conferidos e só responde depois do último;
+     a linha recusada desfaz a lista inteira. *(Da Etapa 148:)* **✅ RESOLVIDO EM PARTE NA ETAPA 148 (B966)** — a lista de modelos, as
+     cláusulas de um modelo e a troca do modelo da família exigem o Comercial pela régua da tela. **Continuava:** a criação de lista de preço
+     grava as linhas sem conferir cada uma; e renomear ou clonar uma família ainda muda o modelo efetivo (**C343**). *(O texto original:)*
      **NOVO (da revisão do plano da Etapa 147; do Comercial, anterior a ela; lido no código) — o modelo de contrato por família só pede o
      login** (a lista de modelos, as cláusulas de um modelo e a troca do modelo de uma família — que decide as cláusulas das propostas
      novas dela); e a criação de lista de preço grava as linhas sem conferir cada uma. **O que fazer:** nada pela tela. Candidata da 148.
@@ -13628,7 +13731,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      **NOVO (da revisão da Etapa 147; das propostas, anterior a ela; reproduzido) — copiar ou reordenar as cláusulas de uma proposta que
      não existe** responde erro interno com a mensagem do banco (a cópia; antes nem respondia) ou sucesso (a ordem), em vez de *"não
      encontrada"*. Só pela integração. **O que fazer:** nada.
-343. **NOVO (da Etapa 148; do Comercial, anterior a ela; lido no código e na revisão do plano) — as outras 19 operações de família de
+343. **✅ RESOLVIDO EM PARTE NA ETAPA 149 (B971, B972, B973)** — as 21 operações de família de produto (eram 19 mais os 2 endereços antigos
+     sem o `/api`, que este texto não contava) exigem o Comercial pela régua da tela, as 8 que Configurações usa também pelo caminho de
+     Configurações; renomear uma família passa a exigir o Comercial. **Continua:** a proposta acha o modelo de contrato pelo **nome** da
+     família — quem tem o Comercial e renomeia muda o contrato das propostas novas (é a regra do cadastro, não um furo de acesso).
+     *(O texto original:)*
+     **NOVO (da Etapa 148; do Comercial, anterior a ela; lido no código e na revisão do plano) — as outras 19 operações de família de
      produto só pedem o login** (criar, editar, apagar, fotos, esquemático, variáveis e opções de variáveis; clonar é só do administrador).
      E a proposta acha o modelo de contrato pelo **nome** da família gravado nos itens: renomear uma família muda o contrato das propostas
      novas — sem passar pela troca do modelo, que agora exige o Comercial. **O que
@@ -13637,11 +13745,22 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 344. **NOVO (da revisão do plano da Etapa 148; do Comercial, anterior a ela; lido no código) — o formulário da família salva e engole a
      recusa da troca do modelo de contrato.** Quem perdeu o Comercial no meio da sessão (a tela ainda aberta) vê a família salva e o modelo
      não mudou, sem aviso. **O que fazer:** nada; reabrir a família mostra o modelo gravado.
-345. **NOVO (da revisão da Etapa 148; do Operacional, anterior a ela; reproduzido) — a lista de ordens de serviço do Operacional usa a régua
+345. **✅ RESOLVIDO NA ETAPA 149 (B974)** — a lista de ordens de serviço da Fábrica usa a régua da tela; a permissão gravada com o grupo 0
+     não abre mais a lista. **Continua:** a seleção de OS do Almoxarifado (número, situação e cliente) responde a qualquer logado — é a que a
+     tela do Almoxarifado usa. *(O texto original:)*
+     **NOVO (da revisão da Etapa 148; do Operacional, anterior a ela; reproduzido) — a lista de ordens de serviço do Operacional usa a régua
      antiga e entrega a OS inteira a um perfil que o portão novo barra.** Só com uma permissão do Operacional gravada à mão com o grupo
      número 0 (o sistema não grava assim pela tela): a tela barra a Fábrica, a OS pelo número dá *"Acesso negado"*, mas a lista responde com
      todas as OS, com o valor. A seleção de OS do Almoxarifado (número, situação e cliente, até 300) responde a qualquer logado — é o que a
      tela do Almoxarifado usa. **O que fazer:** nada. Candidata: a régua da tela na lista do Operacional (junto da **C332**).
+346. **NOVO (da Etapa 149; do Comercial, anterior a ela; lido no código) — grupos de produto e produtos só pedem o login.** Os grupos de
+     produto (8 operações, com o endereço antigo sem o `/api`) e os produtos (11: criar, editar, apagar, clonar, imagem, o próximo código,
+     a busca por código…) respondem a qualquer logado — quem a tela barra do Comercial cria e apaga produto pela integração. **O que fazer:**
+     nada pela tela (o cadastro está no Comercial). Candidata: o mesmo portão, medindo antes os leitores fora do Comercial (a OS, o
+     Almoxarifado, a proposta).
+347. **NOVO (da Etapa 149; do Comercial, anterior a ela; lido no código) — as variáveis técnicas só pedem o login.** As 7 operações da aba
+     **Configurações → Comercial → Variáveis técnicas** (a lista, as categorias, as opções, criar, alterar, apagar) respondem a qualquer
+     logado. **O que fazer:** nada pela tela. Candidata junto da **C346**.
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -14973,6 +15092,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(149) Grupos de produto, produtos e variáveis técnicas continuam só com o login** (**C346**, **C347**); o número da próxima OS, os itens e a
+  edição/exclusão da OS continuam com a régua antiga (**B974**, **C332**); a seleção de OS do Almoxarifado responde a qualquer logado.
+- **(149) A importação de uma lista de preço com o banco ocupado**: o servidor desfaz e responde "ocupado"; a tela tenta de novo sozinha até
+  3 vezes e, se continuar ocupado, mostra o aviso genérico *"Erro ao importar a planilha."* (a frase do servidor só aparece nos outros erros).
+  Importar de novo resolve — nada ficou gravado.
+- **(149) Renomear uma família continua mudando o contrato das propostas novas** com itens daquele nome — agora só quem tem o Comercial
+  renomeia (**C343**, a parte que continua).
 - **(148) A criação da OS, o número da próxima, os itens e a edição e a exclusão da OS ficam com a régua de hoje** (**B969**, **C277**,
   **C332**); a lista do Operacional também (**C345**).
 - **(148) As outras operações de família de produto continuam só com o login**, e renomear uma família ainda muda o modelo de contrato
@@ -15962,6 +16088,13 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(149) Nenhum clique foi dado no navegador.** Tudo foi provado pela rota, com o servidor de verdade em pasta vazia (as 22 operações uma a uma
+com 17 perfis de usuário; o cadastro de família inteiro pelo Comercial, as opções por família pelo caminho de Configurações, a lista de OS
+pelo Operacional; a lista de preço com uma linha recusada por uma regra no próprio banco). O que **só o navegador** prova: o roteiro da Etapa
+149 no guia — **Comercial → Produtos → um grupo**: criar, editar (com foto e variáveis) e apagar uma família com um vendedor; **Configurações
+→ Comercial → Opções por família** com o administrador do Comercial que tem o Administrativo; **Fábrica → Ordens de Serviço** e **Fábrica →
+Atividades** (o seletor de OS) com um usuário do Operacional; e **Comercial → Lista de Preços → importar** uma planilha.
 
 **(148) Nenhum clique foi dado no navegador.** Tudo foi provado pela rota, com o servidor de verdade em pasta vazia (as 8 operações uma a
 uma com 15 perfis de usuário; o PDF da OS gerado e baixado por quem tem só o Comercial e por quem tem só o Operacional, com o Chromium de
@@ -30301,9 +30434,87 @@ Operacional ainda entrega a OS (**C345**); o de **sabotagem** fez 27 sabotagens 
 proposta que não existe já era recusado pelo banco) e 3 sobreviveram por falta de cenário (o portão registrando "acesso negado" para quem
 passa, a conferência lendo o número vizinho, a régua do par só pelo comportamento) — viraram cenários.
 
+## Etapa 149 — O cadastro de família de produto e a lista de OS da Fábrica pedem o módulo, e a lista de preço só nasce inteira (2026-10-18)
+
+Dois consertos de **acesso** e um de **gravação**. A família de produto é o que organiza o catálogo do Comercial e decide o modelo de
+contrato das propostas — e o cadastro dela pedia só o login: um usuário só do Almoxarifado, que a tela não deixa entrar no Comercial, criava,
+renomeava, apagava e trocava fotos, variáveis e opções de qualquer família pela integração (e, renomeando, mudava as cláusulas das propostas
+novas). Agora o cadastro pede o **Comercial**; as opções por família, que também se configuram por **Configurações**, aceitam ainda o
+administrador do Comercial que tem o Administrativo — quem usa hoje não perde nada. A lista de ordens de serviço da Fábrica passa a decidir
+como a tela da Fábrica. E a importação da lista de preço deixa de dizer "importada (N itens)" quando o banco recusa uma linha: ou a lista
+nasce com todas as linhas, ou não nasce.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Um usuário só do Almoxarifado criava, renomeava, apagava família de produto e trocava fotos, variáveis e opções pela integração | *"Acesso negado ao módulo"* em cada uma das 21 operações, e a tentativa no log; a foto do barrado nem chega ao servidor (**C343** resolvido em parte, **B971**, **B972**) |
+| O vendedor no **Comercial → Produtos** e o administrador do Comercial em **Configurações → Comercial → Opções por família** | Continuam como antes (**B971**) |
+| Uma permissão do Operacional gravada à mão com o grupo 0 abria a lista de OS da Fábrica pela integração (a tela não) | *"Acesso negado ao módulo"*, como a tela (**C345** resolvido, **B974**) |
+| A lista de preço com uma linha que o banco recusava → *"Lista importada (N itens)"* com linhas a menos | *"Erro ao gravar as linhas da lista de preços (…). A lista não foi criada — importe a planilha de novo."* e nenhuma lista (**C341** resolvido, **B975**) |
+| Uma lista de 100 000 linhas levava 7 s para importar | Menos de 1 s (as linhas vão em blocos) |
+
+### As regras, com o cenário exato
+
+**1. O cadastro de família pede o Comercial (B971, B972 — C343).** Entre com um usuário que tem só a permissão do **Almoxarifado** (por
+permissão direta): a tela não mostra o Comercial. Pela integração, `GET /api/familias`, `POST /api/familias`, `PUT /api/familias/<número>`,
+`DELETE /api/familias/<número>`, a foto, o esquemático, as variáveis, as opções (e os endereços antigos `GET`/`POST /familias`) → **403**
+`{ "error": "Acesso negado ao módulo", "modulo": "comercial" }`, e **Administração → Logs** mostra o acesso negado a *Comercial* (antes:
+**200**, e a família mudava). Com um vendedor (só o **Comercial**): **Comercial → Produtos → um grupo**, **Nova Família**, salvar, editar
+(nome, foto, variáveis), apagar — como sempre. **Clonar** continua só do administrador: os outros recebem *"Apenas administradores podem
+clonar famílias"*.
+
+**2. As opções por família também por Configurações (B971).** Com um usuário que tem o **Administrativo** e é **administrador do módulo
+Comercial** (marcado no cadastro do usuário), sem o Comercial: **Configurações → Comercial → Opções por família** — escolher a família,
+acrescentar e remover uma opção funciona; **Template de proposta** lista as famílias e as variáveis. O mesmo usuário toma *"Acesso negado ao
+módulo"* ao tentar renomear a família ou ler a lista de famílias por grupo pela integração (o cadastro é do Comercial).
+
+**3. A lista de OS da Fábrica (B974 — C345).** Com um usuário do **Operacional**: **Fábrica → Ordens de Serviço** lista as OS e **Fábrica →
+Atividades** mostra as OS em andamento no seletor, como sempre. Pela integração, `GET /api/operacional/ordens-servico` com um usuário que não
+tem o Operacional pela régua da tela → **403** `{ "error": "Acesso negado ao módulo", "modulo": "operacional" }`. Com
+`PROPOSTAS_PORTAO_DE_MODULO=desligado` (a chave da **B946**) o cadastro de família volta a pedir só o login e a lista de OS volta à régua de
+antes — não ao só login.
+
+**4. A lista de preço nasce inteira (B975 — C341).** Em **Comercial → Lista de Preços**, importar uma planilha: *"Lista "<nome>" importada (N
+itens)."*, como sempre. Se o banco recusar uma linha (só se provoca com uma regra no próprio banco), aparece *"Erro ao gravar as linhas da
+lista de preços (<o erro do banco>). A lista não foi criada — importe a planilha de novo."* e nenhuma lista nova aparece. Se nem desfazer
+der certo: *"… A lista "<nome>" ficou incompleta — exclua-a e importe a planilha de novo."* Banco ocupado: a tela tenta de novo sozinha. Pela
+integração, uma linha com um valor que não vira texto → **400** *"A linha <N> da planilha não pôde ser lida (…). A lista não foi criada."*
+(e a coluna: *"A coluna <N> da planilha não pôde ser lida (…). A lista não foi criada."*).
+
+### O que esta etapa NÃO cobre
+
+1. **Grupos de produto, produtos e variáveis técnicas** continuam só com o login (**C346**, **C347**).
+2. **O número da próxima OS, os itens e a edição e a exclusão da OS** ficam com a régua antiga (**B969**, **C332**; quem cria OS é a **C277**).
+3. **Renomear uma família continua mudando o contrato das propostas novas** — agora só quem tem o Comercial renomeia (**C343**).
+4. **O formulário da família não avisa** quando a troca do modelo de contrato é recusada (**C344**).
+5. **Com o banco ocupado na importação**, depois de 3 tentativas a tela mostra o aviso genérico (D (149)).
+
+### O que a revisão encontrou
+
+A **medição** (antes do código) achou os dois endereços antigos sem o `/api` que a C343 não contava, as duas telas de Configurações que leem
+família (o *Template de proposta* e as *Opções por família*) e que, no banco medido, só os mesmos 4 usuários que a tela já barra perdem o
+cadastro (**A97**). A **revisão do plano** (7 achados pequenos) corrigiu uma contagem da C346, a linha ilegível que derrubava a importação
+com a lista já gravada, o banco ocupado na própria lista, a frase com o nome sem os espaços e o aviso do servidor ao subir. A **revisão
+adversarial do código** (três revisores, executando): o de **regra** comparou as 35 chamadas do cadastro antes e depois para quem a tela deixa
+passar (iguais) e mediu a importação pela rota — **2,3 vezes mais lenta** com uma linha por vez; virou blocos de 100 (100 000 linhas em
+0,9 s, contra 7,3 s antes); achou também a frase que culpava a linha quando o defeito era a coluna; o de **permissão** comparou 25 perfis com a
+decisão da tela tirada do código real do client e dezenas de variações de endereço — 0 diferenças; o de **sabotagem** fez 37 sabotagens — 31
+caíram, 6 sobreviveram por falta de cenário (a busca com acento, a busca pelo código e pelo preço, a lista que não sai no desfazer, a lista
+gravada antes do 400, o texto e a hora do aviso do servidor) — viraram cenários. Commits `9f49aa02`, `c98a45be` e `e387a330`.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 149 entregue (2026-10-18):** **o cadastro de família de produto e a lista de OS da Fábrica pedem o módulo, e a lista de preço só
+  nasce inteira** (do Comercial/Operacional). Quem a tela barra do Comercial é barrado nas 21 operações de família; o vendedor e o
+  administrador do Comercial em Configurações não perdem nada (**B971**, **B972**, **B973** — **C343** resolvido em parte); a lista de OS da
+  Fábrica pela régua da tela (**B974** — **C345** resolvido); a lista de preço com uma linha recusada é desfeita inteira e a importação ficou
+  mais rápida (**B975** — **C341** resolvido). Commits `9f49aa02`, `c98a45be` e `e387a330`. **O que é seu:** a consulta **A97** (opcional); os avisos **C346** e **C347**; as
+  decisões **B971 a B975** (reversíveis); as perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **C277**, **C312**, **C314**,
+  **C316**, **C330**); as limitações **(149)** em D e a verificação **(149)** em F. **Próxima: Etapa 150 — ver a "próxima tarefa detalhada" no
+  plano da Etapa 149.**
 
 - **Etapa 148 entregue (2026-10-18):** **a ordem de serviço aberta pelo número e o modelo de contrato por família pedem o módulo, e as
   cláusulas de uma proposta que não existe dizem "não encontrada"** (do Comercial/Operacional). Quem a tela barra do Comercial e da Fábrica é
@@ -30311,8 +30522,8 @@ passa, a conferência lendo o número vizinho, a régua do par só pelo comporta
   inclusive (**B965**, **B966**, **B967** — **C335** resolvido, **C341** na parte das rotas); copiar ou reordenar as cláusulas de uma proposta
   que não existe responde *"Proposta não encontrada"* (**B968** — **C342** resolvido). Commits `d69a5cf6`, `9149c024` e `9dccf0dd`. **O que é seu:** a consulta **A96**
   (opcional); os avisos **C343** a **C345**; as decisões **B965 a B969** (reversíveis); as perguntas de antes (**B949**, **B910**, **B853**, **B924**,
-  **B926**, **C277**, **C312**, **C314**, **C316**, **C330**); as limitações **(148)** em D e a verificação **(148)** em F. **Próxima: Etapa 149 — ver
-  a "próxima tarefa detalhada" no plano da Etapa 148.**
+  **B926**, **C277**, **C312**, **C314**, **C316**, **C330**); as limitações **(148)** em D e a verificação **(148)** em F. *(Próxima, na época:
+  Etapa 149 — entregue acima.)*
 
 - **Etapa 147 entregue (2026-10-18):** **o modelo da proposta e as listas de preço pedem o Comercial, e as cláusulas da proposta só
   dizem "pronto" depois de gravar** (das propostas/Comercial). Quem a tela barra do Comercial é barrado nas 20 operações do modelo e nas 5

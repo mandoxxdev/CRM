@@ -307,6 +307,33 @@ Testes: `tests/api/osModeloContratoPortao.api.test.js` (as 8 pelo fonte e uma a 
 rota para o Comercial e para o Operacional, o desligado, o BUSY), `tests/api/propostaClausulasGrava.api.test.js` (os cenários RN-148.05),
 `tests/api/uploadsProtegidos.api.test.js` (o registro do PDF da OS) e 3 casos novos em `tests/fixtures/portaoComoATela.casos.json`.
 
+### O cadastro de família de produto e a lista de OS do Operacional no portão; a lista de preço em blocos (Etapa 149, C343, C345, C341)
+
+Plano: `docs/superpowers/plans/2026-10-18-almoxarifado-etapa149-o-cadastro-de-familia-e-a-lista-de-os-pelo-modulo.md`. Commits `9f49aa02` (o portão), `c98a45be` (a lista de preço) e `e387a330` (Fase 5: os blocos, a coluna ilegível, as asserções do r3).
+
+- **O cadastro de família** (as **21**: 20 `/api/familias*` + os apelidos `GET`/`POST /familias`; o `POST /:id/clonar` fica de fora, `isAdminUser`
+  — B973): **13** com `exigirComercialNasPropostas` (as que só as telas do `/comercial` chamam — RN-149.01) e **8** com
+  `exigirComercialNaFamiliaPorConfiguracoes = portaoDasPropostas.exigir('comercial', { tambemAdminDoModuloCom: { admin: 'comercial', tela:
+  'administrativo' } })` — `GET /todas`, `GET /:id`, `GET /:familiaId/variaveis`, `GET /:familiaId/opcoes-variaveis` e o CRUD
+  `/:familiaId/variaveis/:variavelChave/opcoes[/:id]`, as que o `ConfigTemplateProposta` embutido e o `OpcoesPorFamilia` de Configurações
+  chamam (RN-149.02, B971). O portão vem antes do multer (foto e esquemático). Recusa: 403 `{ error: 'Acesso negado ao módulo', modulo:
+  'comercial' }`, log `modulo = 'comercial'`. Renomear (`PUT /:id`) passa a exigir o Comercial — o atalho da C343 para mudar o modelo de
+  contrato efetivo fecha; o efeito do nome continua.
+- **A lista de OS do Operacional** (`GET /api/operacional/ordens-servico`): `exigirOperacionalNaListaDeOS = PORTAO_DAS_PROPOSTAS_DESLIGADO ?
+  checkModulePermission('operacional') : portaoDasPropostas.exigir('operacional')` (RN-149.04/05, B974) — a régua da tela da Fábrica; desligado,
+  a régua antiga (não o só login). Recusa: o mesmo 403 de antes (`modulo: 'operacional'`); BUSY → 503 `portao:propostas`.
+- O aviso do boot (desligado) cita o cadastro de família e diz que a lista de OS volta à régua antiga.
+- **A lista de preço** (`POST /api/comercial/listas-precos`, RN-149.06, B975): as colunas e as linhas são lidas **antes** de gravar a lista
+  (400 *"A coluna|linha N da planilha não pôde ser lida (…). A lista não foi criada."*); as linhas vão por `gravarLinhasDaListaEmBlocos` (blocos
+  de `LINHAS_POR_BLOCO_DA_LISTA` = 100, um `INSERT` multi-linha por bloco, em sequência); o bloco que falha → `desfazerListaDePrecosCriada`
+  (as linhas, depois a lista) → 500 *"Erro ao gravar as linhas da lista de preços (<msg>). A lista não foi criada — importe a planilha de
+  novo."*, 503 `listas-precos` no BUSY; o desfazer que falha → *"… A lista "<nome aparado>" ficou incompleta — exclua-a e importe a planilha de
+  novo."* (sem 503). O BUSY ao gravar a lista → 503. Medido pela rota: 100 000 linhas em 0,9 s (antes 7,3 s; uma por uma, 16,5 s).
+
+Testes: `tests/api/familiasListaOsPortao.api.test.js` (as 21 + a lista pelo fonte e uma a uma, 17 perfis contra a decisão da tela, o cadastro
+pelo Comercial, as opções pelo caminho de Configurações, a lista pelo Operacional, o clonar, o desligado, o BUSY) e
+`tests/api/listaPrecosGrava.api.test.js` (o gatilho do SQLite como falha real, em bloco; o BUSY pelo `FALHA_SQL_INJETADA`).
+
 ### A margem de desconto (Etapa 139, C299/C300)
 
 Uma régua só, `lerMargemDesconto` (`server/margemDesconto.js`), em **quatro** portas: `POST /api/propostas`, `PUT /api/propostas/:id`

@@ -259,7 +259,10 @@ As respostas de sucesso não mudam (corpo e status).
    executar.
 3. **Paralelismo:** **0** galhos em paralelo de fato (T1 e T2 dividem o `index.js` — Fase 2 I-2); **0** retrabalho; **1** revisor na Fase 2,
    **3** em paralelo na Fase 5 sob a trava (o r3 numa worktree própria, removida).
-4. **Defeito que escapou:** *(preencher na Etapa 149)*.
+4. **Defeito que escapou** *(preenchido na Etapa 149)*: **0 de código** (a Fase 0 e as revisões da 149 não acharam defeito no que a 148
+   entregou — r1 comparou byte a byte, r2 0 diferenças); **1 de documento/medição**: a **C343** e esta "próxima tarefa" contavam "19 rotas
+   `/api/familias*` só com login" e não viam os dois apelidos sem o `/api` (`GET`/`POST /familias`, o mesmo handler) — achados na Fase 0 da 149
+   (B972). A régua de contagem da 148 casava só o prefixo `/api/familias`.
 
 ## Próxima tarefa detalhada — Etapa 149
 

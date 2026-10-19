@@ -165,6 +165,7 @@ cd server && node tests/api/propostaSalvarGrava.api.test.js       # Etapa 146: c
 cd server && node tests/api/propostaClausulasGrava.api.test.js    # Etapa 147: inicializar e reordenar as cláusulas gravam em sequência, tudo ou nada (C327)
 cd server && node tests/api/propostaModeloPortao.api.test.js      # Etapa 147: o portão no modelo da proposta e nas listas de preço (C319, C329) e o PDF pela rota
 cd server && node tests/api/osModeloContratoPortao.api.test.js    # Etapa 148: o portão na OS pelo número e no modelo de contrato por família (C335, C341) e o PDF da OS pela rota
+cd server && node tests/api/familiasListaOsPortao.api.test.js    # Etapa 149: o portão no cadastro de família (as famílias que o template lê) e na lista de OS (C343, C345)
 ```
 
 Critério: **tudo verde**. Qualquer invariante quebrado bloqueia o merge. *(De julho à Etapa 138 a revisão rodava com dois vermelhos

@@ -197,13 +197,13 @@ Após o login, você verá a **Tela de Seleção de Módulos** com 5 opções:
 ### 3.3 Gestão de Propostas
 
 **Quem pode usar as propostas.** As propostas — lista, criação, edição, preview editável, fotos, cláusulas, PDF, envio, aceite, cópia,
-lembretes —, os pedidos de aprovação de desconto, o template de proposta (veja 3.3.4) e as listas de preço ficam no módulo **Comercial**, e o sistema confere o acesso em **cada operação**,
+lembretes —, os pedidos de aprovação de desconto, o template de proposta (veja 3.3.4), o cadastro de família de produto (veja 3.3.4) e as listas de preço ficam no módulo **Comercial**, e o sistema confere o acesso em **cada operação**,
 inclusive quando ela chega pela integração, com a mesma regra que decide se o Comercial aparece na tela:
 
 - o administrador do sistema e o super administrador entram sempre;
 - quem tem alguma permissão de módulo (dada diretamente ao usuário ou por um grupo **ativo**) entra só se uma delas for a do Comercial;
 - quem não tem permissão nenhuma entra no Comercial;
-- ser administrador de um módulo não basta — vale a permissão do módulo (a única exceção é o template de proposta, veja 3.3.4).
+- ser administrador de um módulo não basta — vale a permissão do módulo (as exceções são o template de proposta e as opções por família, veja 3.3.4).
 
 Quem não pode recebe *"Acesso negado ao módulo"*, e a tentativa fica registrada em **Administração → Logs**. Os arquivos enviados para a
 proposta (fotos, cotação, PDF anexo) são recusados antes de chegar ao servidor. **Exceção:** a ordem de serviço do Operacional busca os
@@ -499,11 +499,25 @@ de modelos e trocar o modelo de uma família exigem o **Comercial** (a regra da 
 A proposta acha o modelo pelo **nome** da família gravado nos itens: renomear uma família muda o modelo que as propostas novas com
 itens daquele nome recebem.
 
+**O cadastro de família de produto.** Criar, editar, renomear e apagar uma família, trocar a foto e o esquemático, escolher as variáveis
+dela e as opções de cada variável exigem o **Comercial** (a regra da seção 3.3) — é em **Comercial → Produtos → um grupo**. As opções por
+família e a leitura das famílias e das variáveis que **Configurações → Comercial** usa (*Opções por família* e *Template de proposta*)
+aceitam também o **administrador do módulo Comercial** que tem acesso ao **Administrativo** — mas só elas: esse usuário não cria, renomeia nem
+apaga família. Os outros recebem *"Acesso negado ao módulo"*, a tentativa fica registrada em **Administração → Logs**, e a foto ou o
+esquemático são recusados antes de chegar ao servidor. **Clonar** uma família é só do administrador do sistema; os outros recebem *"Apenas
+administradores podem clonar famílias"*.
+
 #### 3.3.5 Listas de Preço
 
 Em **Comercial → Lista de Preços** importa-se uma planilha (as colunas viram as colunas da lista), busca-se por qualquer palavra das
 colunas (cada palavra digitada tem de aparecer na linha) e exclui-se a lista. Só quem entra no Comercial usa as listas — os outros
 recebem *"Acesso negado ao módulo"*. Ser administrador do módulo Comercial, sem o acesso ao Comercial, não basta aqui.
+
+A importação é **inteira ou nada**: a lista só aparece com todas as linhas da planilha gravadas. Se o banco recusar uma linha, nenhuma lista
+nova fica e aparece *"Erro ao gravar as linhas da lista de preços (<o erro do banco>). A lista não foi criada — importe a planilha de
+novo."*; se nem desfazer for possível, *"Erro ao gravar as linhas da lista de preços (<o erro>). A lista "<nome>" ficou incompleta — exclua-a e
+importe a planilha de novo."* Com o banco ocupado, a tela tenta de novo sozinha algumas vezes e, se não conseguir, mostra *"Erro ao importar a
+planilha."* — nada fica gravado, e basta importar de novo.
 
 ### 3.4 Gestão de Oportunidades
 
@@ -1014,6 +1028,11 @@ Mapa interativo mostrando todas as máquinas vendidas e suas localizações.
 - Tempo Estimado
 
 #### 6.2.2 Acompanhamento de OS
+
+**Quem vê a lista.** A lista **Fábrica → Ordens de Serviço** (e as OS em andamento oferecidas em **Fábrica → Atividades**) exige o
+**Operacional**, com a mesma regra que decide se a Fábrica aparece na tela: o administrador do sistema e o super administrador entram sempre;
+os outros, só com a permissão do Operacional dada ao usuário ou a um grupo **ativo** dele. Quem não pode recebe *"Acesso negado ao módulo"*
+e a tentativa fica registrada em **Administração → Logs**.
 
 **Quem abre a OS.** Abrir a OS, os itens, gerar e baixar o PDF exige o **Operacional** ou o **Comercial** (a regra da seção 3.7.1). Quem
 tem só o Operacional abre a tela de detalhes da OS (os itens e o PDF) pelo endereço `/fabrica/ordens-servico/editar/<número interno>`; o

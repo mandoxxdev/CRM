@@ -1,17 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-18 (Etapa 148) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-18 (Etapa 149) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147 e 148) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148 e 149) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-18 (Etapa 148 ENTREGUE · próxima: Etapa 149)
+> ## Onde o desenvolvimento está — 2026-10-18 (Etapa 149 ENTREGUE · próxima: Etapa 150)
 >
-> **O desenvolvimento parou aqui: Etapa 148 fechada — 2026-10-18.** A **Etapa 148 (a ordem de serviço aberta pelo número e o modelo de
+> **O desenvolvimento parou aqui: Etapa 149 fechada — 2026-10-18.** A **Etapa 149 (o cadastro de família de produto e a lista de OS da
+> Fábrica pedem o módulo, e a lista de preço só nasce inteira; do Comercial/Operacional, fora do almoxarifado)**: quem a tela barra do
+> Comercial deixa de criar, renomear e apagar família de produto pela integração (*"Acesso negado ao módulo"*); o vendedor e o administrador
+> do Comercial que mexe nas opções por Configurações não perdem nada. A lista de OS da Fábrica decide como a tela. A importação de uma lista
+> de preço com uma linha recusada não deixa a lista pela metade — e ficou mais rápida. Uma consulta nova, opcional (**A97**). **Próxima:
+> Etapa 150** — ver a próxima tarefa no plano da 149.
+>
+> **Etapa 148, 2026-10-18.** A **Etapa 148 (a ordem de serviço aberta pelo número e o modelo de
 > contrato por família pedem o módulo, e as cláusulas de uma proposta que não existe dizem "não encontrada"; do Comercial/Operacional, fora
 > do almoxarifado)**: quem a tela barra do Comercial e da Fábrica deixa de ler a OS pelo número, os itens e o PDF dela e de trocar o modelo
 > de contrato de uma família pela integração (*"Acesso negado ao módulo"*); quem abre a OS pelo Comercial ou pela Fábrica não perde nada,
-> nem o PDF. Uma consulta nova, opcional (**A96**). **Próxima: Etapa 149** — ver a próxima tarefa no plano da 148.
+> nem o PDF. Uma consulta nova, opcional (**A96**). *(Próxima, na época: Etapa 149 — entregue acima.)*
 >
 > **Etapa 147, 2026-10-18.** A **Etapa 147 (o modelo da proposta e as listas de preço pedem o
 > Comercial, e as cláusulas da proposta só dizem "pronto" depois de gravar; das propostas/Comercial, fora do almoxarifado)**: quem a tela
@@ -6669,6 +6676,49 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 149 — O cadastro de família de produto e a lista de OS da Fábrica pedem o módulo, e a lista de preço só nasce inteira (ENTREGUE — 2026-10-18)
+
+**O que mudou, em uma frase:** criar, editar, renomear e apagar família de produto (com fotos, esquemático, variáveis e opções) passa a
+conferir o acesso ao Comercial com a mesma régua da tela — as opções por família também pelo caminho de Configurações —; a lista de OS da
+Fábrica, o acesso ao Operacional como a tela; e a importação de lista de preço só diz "importada" com todas as linhas gravadas.
+
+**O problema que ela resolve.** O cadastro de família só pedia o login: quem a tela não deixa entrar no Comercial criava, renomeava e apagava
+família pela integração — e renomear muda o modelo de contrato das propostas novas. E, quando o banco recusava uma linha da planilha, a lista
+de preço aparecia como *"importada"* com linhas faltando.
+
+| Antes | Agora |
+|---|---|
+| Usuário só do Almoxarifado mexia em família de produto pela integração | *"Acesso negado ao módulo"* em cada operação, e o registro no log |
+| Vendedor em **Comercial → Produtos**; administrador do Comercial em **Configurações → Comercial → Opções por família** | Continuam como antes |
+| Permissão do Operacional gravada à mão com o grupo 0 abria a lista de OS pela integração | *"Acesso negado ao módulo"*, como a tela |
+| Linha recusada na importação → *"importada (N itens)"* com linhas a menos | *"Erro ao gravar as linhas da lista de preços (…). A lista não foi criada — importe a planilha de novo."* |
+| 100 000 linhas importadas em 7 s | Em menos de 1 s |
+
+**Roteiro de teste (10 minutos).**
+
+1. **O vendedor não perde nada.** Com um usuário que tem **só o Comercial**: **Comercial → Produtos**, um grupo, **Nova Família** — salve;
+   edite (nome, foto, variáveis), salve; reabra (está tudo lá); apague. Nenhum *"Acesso negado"*. Numa proposta nova, a seleção de produtos
+   mostra as famílias como sempre.
+2. **Configurações não perde nada.** Com um usuário que tem o **Administrativo** e é **administrador do módulo Comercial** (Administração →
+   usuário → administrador de módulo), sem o Comercial: **Configurações → Comercial → Opções por família** — escolha a família, **Adicionar**
+   uma opção, remova-a; **Template de proposta** — as famílias e as variáveis aparecem. Nenhum *"Acesso negado"*.
+3. **A Fábrica não perde nada.** Com um usuário do **Operacional**: **Fábrica → Ordens de Serviço** lista as OS; **Fábrica → Atividades** →
+   nova atividade mostra as OS em andamento no seletor.
+4. **Quem a tela barra (pela integração).** Com um usuário que só tem o **Almoxarifado**: `GET /api/familias` → **403** `{ "error": "Acesso
+   negado ao módulo", "modulo": "comercial" }`; `GET /api/operacional/ordens-servico` → **403** `{ "error": "Acesso negado ao módulo",
+   "modulo": "operacional" }`; **Administração → Logs** mostra os acessos negados.
+5. **A lista de preço.** **Comercial → Lista de Preços** → importe uma planilha → *"Lista "<nome>" importada (N itens)."*; busque por uma
+   palavra, por um código e por um preço — as linhas aparecem. (A linha recusada pelo banco só se provoca com uma regra no próprio banco; os
+   testes automáticos fazem isso.)
+
+**O que esta etapa NÃO cobre.** Grupos de produto, produtos e variáveis técnicas continuam só com o login (**C346**, **C347**); o número da
+próxima OS, os itens e a edição/exclusão da OS ficam com a régua antiga (**B969**, **C332**, **C277**); renomear uma família continua mudando o
+contrato das propostas novas (agora só quem tem o Comercial — **C343**); com o banco ocupado na importação, depois de 3 tentativas a tela mostra
+o aviso genérico *"Erro ao importar a planilha."* (importar de novo resolve).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor, pela rota) provam, escrito
+para você conferir à mão — em especial os passos 1 a 3 só o navegador mostra.
 
 ## Etapa 148 — A ordem de serviço aberta pelo número e o modelo de contrato por família pedem o módulo, e as cláusulas de uma proposta que não existe dizem "não encontrada" (ENTREGUE — 2026-10-18)
 
