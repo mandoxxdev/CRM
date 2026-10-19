@@ -7,6 +7,13 @@
  *   RN-156.04  (C370) a cidade sem caixa, sem acento e sem espaco nas pontas, e so a do estado informado (a lista tem a UF de cada cidade —
  *              Fase 5 r1 I-1: o raio de 1.000 km da Fase 2 deixava passar o homonimo de estado vizinho).
  *
+ * Etapa 158 (C377) — a coordenada do endereco guardada no cadastro do cliente:
+ *   RN-158.01  com endereco, cidade e estado: a memoria (geo_lat, geo_lon, geo_termo) do termo atual responde sem consultar; senao consulta,
+ *              a boa e gravada (depois de responder, sem mexer no updated_at, so se o endereco ainda e o lido); a falha nao grava
+ *   RN-158.02  a memoria vale so para o termo que a gerou: mudar endereco, cidade ou estado (pelo PUT ou por fora) consulta de novo
+ *   RN-158.03  o contrato nao muda; GET /clientes e /clientes/:id nao mostram as colunas; POST/PUT nao as gravam
+ *   (a migracao e o erro ao gravar: coordenadaGuardadaMigracao.api.test.js)
+ *
  * O Nominatim de verdade NUNCA e chamado: a fronteira HTTP e um servidor local deste processo (o unitario chama o servico direto; a
  * integracao sobe o `index.js` com NOMINATIM_URL apontando para ele).
  *
@@ -46,6 +53,9 @@ const servidorDeMapas = http.createServer((req, res) => {
   // o 429 com um corpo de coordenada: a resposta que nao e 200 nao vale, mesmo parecendo valida
   if (m === '429') { res.writeHead(429, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify([{ lat: '-9', lon: '-9' }])); }
   if (m === 'html') { res.writeHead(200, { 'Content-Type': 'text/html' }); return res.end('<html>nao e json</html>'); }
+  if (m === 'lento') { // Etapa 158 (Fase 2 M6): responde depois de 250 ms (dentro do prazo de 400 do index.js montado)
+    return setTimeout(() => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify([{ lat: fronteira.lat, lon: fronteira.lon }])); }, 250);
+  }
   if (m === 'vazio') { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end('[]'); }
   res.writeHead(200, { 'Content-Type': 'application/json' });
   return res.end(JSON.stringify([{ lat: fronteira.lat, lon: fronteira.lon, display_name: 'X' }]));
@@ -267,12 +277,14 @@ test('[RN-156.03/04, integracao] coordenadas-cliente com o servico pendurado: 20
   assert.ok(ms >= 380 && ms < 3000, `levou ${ms} ms`);
   assert.strictEqual(fronteira.pedidos.length, 1, 'a rota nao chegou ao servico de mapas (o teste nao provaria o prazo)');
   assert.strictEqual(fronteira.pedidos[0].params.q, 'RUA DAS FLORES 10, CAMPINAS, SP, Brasil');
-  fronteira.modo = 'responde'; fronteira.lat = '-22.91'; fronteira.lon = '-47.06';
-  const [s2, x2] = await j('GET', `/custos-viagens/coordenadas-cliente/${ctx.campinas}`);
-  assert.deepStrictEqual([s2, x2.coordenadas], [200, [-22.91, -47.06]]);
+  // Etapa 158: o 429 antes do responde — depois do responde, a coordenada sai da memoria (RN-158.01) e o 429 nem seria consultado
   fronteira.modo = '429';
   const [s3, x3] = await j('GET', `/custos-viagens/coordenadas-cliente/${ctx.campinas}`);
   assert.ok(s3 === 200 && perto(x3.coordenadas, CAMPINAS), JSON.stringify(x3));
+  assert.strictEqual(fronteira.pedidos.length, 2, 'o 429 nao foi consultado');
+  fronteira.modo = 'responde'; fronteira.lat = '-22.91'; fronteira.lon = '-47.06';
+  const [s2, x2] = await j('GET', `/custos-viagens/coordenadas-cliente/${ctx.campinas}`);
+  assert.deepStrictEqual([s2, x2.coordenadas], [200, [-22.91, -47.06]]);
 });
 
 test('[RN-156.04, integracao] os clientes proximos de Campinas (raio 100): o de JUNDIAI sim, o de RIBEIRAO PRETO nao (antes os dois, a 0 km)', async () => {
@@ -335,6 +347,196 @@ test('[Fase 5 r1 I-1, C376, integracao]a rota com o tipo como o servidor o grava
   assert.strictEqual(sl, 200);
   const gravado = lista.find((c) => c.id === criado.id) || lista[0];
   assert.strictEqual(gravado.tipo_viagem, 'IDA_E_VOLTA');
+});
+
+// ── Etapa 158 (C377): a coordenada do endereco guardada no cadastro do cliente ─────────────────────
+function sql(q, p = []) {
+  return new Promise((res, rej) => {
+    const b = new sqlite3.Database(path.join(pasta, 'database.sqlite'));
+    b.configure('busyTimeout', 15000);
+    const metodo = /^\s*select/i.test(q) ? 'all' : 'run';
+    b[metodo](q, p, function feito(e, rows) { const r = metodo === 'all' ? rows : this; b.close(() => (e ? rej(e) : res(r))); });
+  });
+}
+const memoria = async (id) => (await sql('SELECT geo_lat, geo_lon, geo_termo, updated_at FROM clientes WHERE id = ?', [id]))[0];
+async function aguardar(cond, ms = 3000) {
+  const fim = Date.now() + ms;
+  for (;;) {
+    const v = await cond();
+    if (v) return v;
+    if (Date.now() > fim) return v;
+    await pausa(50);
+  }
+}
+const coordDe = (id) => j('GET', `/custos-viagens/coordenadas-cliente/${id}`);
+const criar158 = async (razao, cidade, endereco, estado = 'SP') => {
+  const [s, c] = await j('POST', '/clientes', { razao_social: razao, cidade, estado, endereco });
+  assert.strictEqual(s, 200, JSON.stringify(c));
+  return c.id;
+};
+const JUNDIAI = [-23.1864, -46.8842];
+
+test('[RN-158.01, C377] duas aberturas do mesmo cliente: 1 pedido ao servico de mapas; a memoria gravada com o termo da consulta, sem mexer no updated_at; o contrato igual', async () => {
+  fronteira.modo = 'responde'; fronteira.lat = '-10.1'; fronteira.lon = '-20.2'; fronteira.pedidos = [];
+  const id = await criar158('Memoria 158 A', 'Campinas', 'Rua   Um 1');
+  ctx.memA = id;
+  await sql("UPDATE clientes SET updated_at = '2000-01-01 00:00:00' WHERE id = ?", [id]); // Fase 2 I5: o segundo do cadastro nao serve
+  const [s1, x1] = await coordDe(id);
+  assert.deepStrictEqual([s1, x1], [200, { coordenadas: [-10.1, -20.2], lat: -10.1, lon: -20.2 }]);
+  assert.strictEqual(fronteira.pedidos.length, 1, 'a primeira abertura nao consultou (o teste nao provaria a memoria)');
+  const m = await aguardar(async () => { const x = await memoria(id); return x.geo_termo ? x : null; });
+  assert.ok(m, 'a memoria nao foi gravada');
+  // o termo e o mesmo que foi ao servico (uma funcao so — T4) e os espacos repetidos viram um
+  assert.strictEqual(m.geo_termo, fronteira.pedidos[0].params.q);
+  assert.deepStrictEqual(m, { geo_lat: -10.1, geo_lon: -20.2, geo_termo: 'RUA UM 1, CAMPINAS, SP, Brasil', updated_at: '2000-01-01 00:00:00' });
+  assert.strictEqual(coordenadas.termoDaConsulta('RUA   UM 1', 'CAMPINAS', 'SP'), 'RUA UM 1, CAMPINAS, SP, Brasil');
+  // a segunda: da memoria (o servico agora daria outra)
+  fronteira.lat = '-30'; fronteira.lon = '-40';
+  const [s2, x2] = await coordDe(id);
+  assert.deepStrictEqual([s2, x2], [200, { coordenadas: [-10.1, -20.2], lat: -10.1, lon: -20.2 }]);
+  assert.strictEqual(fronteira.pedidos.length, 1, 'a segunda abertura consultou o servico de mapas de novo');
+});
+
+test('[RN-158.02, C377] a memoria vale so para o endereco que a gerou: o telefone mantem; outro endereco, voltar ao anterior, por fora, outra cidade e outro estado consultam; sem endereco, a cidade sem a memoria', async () => {
+  fronteira.modo = 'responde'; fronteira.lat = '-11'; fronteira.lon = '-21'; fronteira.pedidos = [];
+  const id = await criar158('Memoria 158 B', 'Campinas', 'Rua Um 1');
+  const termoGravado = async (t) => aguardar(async () => (await memoria(id)).geo_termo === t);
+  await coordDe(id);
+  assert.ok(await termoGravado('RUA UM 1, CAMPINAS, SP, Brasil'));
+  const pedidos = () => fronteira.pedidos.length;
+  assert.strictEqual(pedidos(), 1);
+  // outro campo: a memoria fica
+  assert.strictEqual((await j('PUT', `/clientes/${id}`, { telefone: '11 99999-1580' }))[0], 200);
+  assert.deepStrictEqual((await coordDe(id))[1].coordenadas, [-11, -21]);
+  assert.strictEqual(pedidos(), 1, 'mudar o telefone fez consultar de novo');
+  // outro endereco pela rota da tela
+  fronteira.lat = '-12'; fronteira.lon = '-22';
+  assert.strictEqual((await j('PUT', `/clientes/${id}`, { endereco: 'Rua Dois 2' }))[0], 200);
+  assert.deepStrictEqual((await coordDe(id))[1].coordenadas, [-12, -22]);
+  assert.strictEqual(pedidos(), 2, 'o endereco novo nao consultou');
+  assert.strictEqual(fronteira.pedidos[1].params.q, 'RUA DOIS 2, CAMPINAS, SP, Brasil');
+  assert.ok(await termoGravado('RUA DOIS 2, CAMPINAS, SP, Brasil'));
+  assert.deepStrictEqual((await coordDe(id))[1].coordenadas, [-12, -22]);
+  assert.strictEqual(pedidos(), 2, 'o endereco novo, ja gravado, consultou de novo');
+  // voltar ao anterior: so a ultima gravada e lembrada
+  fronteira.lat = '-13'; fronteira.lon = '-23';
+  assert.strictEqual((await j('PUT', `/clientes/${id}`, { endereco: 'Rua Um 1' }))[0], 200);
+  assert.deepStrictEqual((await coordDe(id))[1].coordenadas, [-13, -23]);
+  assert.strictEqual(pedidos(), 3);
+  assert.ok(await termoGravado('RUA UM 1, CAMPINAS, SP, Brasil'));
+  // por fora (sem passar pelo PUT)
+  fronteira.lat = '-14'; fronteira.lon = '-24';
+  await sql("UPDATE clientes SET endereco = 'RUA TRES 3' WHERE id = ?", [id]);
+  assert.deepStrictEqual((await coordDe(id))[1].coordenadas, [-14, -24]);
+  assert.strictEqual(pedidos(), 4, 'o endereco mudado por fora nao consultou');
+  assert.ok(await termoGravado('RUA TRES 3, CAMPINAS, SP, Brasil'));
+  // outra cidade; outro estado
+  fronteira.lat = '-15'; fronteira.lon = '-25';
+  assert.strictEqual((await j('PUT', `/clientes/${id}`, { cidade: 'Jundiai' }))[0], 200);
+  assert.deepStrictEqual((await coordDe(id))[1].coordenadas, [-15, -25]);
+  assert.strictEqual(pedidos(), 5, 'a cidade nova nao consultou');
+  assert.ok(await termoGravado('RUA TRES 3, JUNDIAI, SP, Brasil'));
+  fronteira.lat = '-16'; fronteira.lon = '-26';
+  assert.strictEqual((await j('PUT', `/clientes/${id}`, { estado: 'MG' }))[0], 200);
+  assert.deepStrictEqual((await coordDe(id))[1].coordenadas, [-16, -26]);
+  assert.strictEqual(pedidos(), 6, 'o estado novo nao consultou');
+  assert.ok(await termoGravado('RUA TRES 3, JUNDIAI, MG, Brasil'));
+  // sem endereco (Fase 2 M5): a cidade, sem consultar e sem a memoria antiga
+  assert.strictEqual((await j('PUT', `/clientes/${id}`, { endereco: '', estado: 'SP' }))[0], 200);
+  const [ss, xs] = await coordDe(id);
+  assert.ok(ss === 200 && perto(xs.coordenadas, JUNDIAI), `sem endereco: ${JSON.stringify(xs)} (a memoria seria [-16, -26])`);
+  assert.strictEqual(pedidos(), 6, 'o cliente sem endereco consultou');
+});
+
+test('[RN-158.01, C377] o servico pendurado, 429 e lista vazia: a coordenada da cidade e NADA gravado — a abertura seguinte consulta de novo; respondendo, grava', async () => {
+  const id = await criar158('Memoria 158 C', 'Campinas', 'Rua Quatro 4');
+  for (const modo of ['pendura', '429', 'vazio']) {
+    fronteira.modo = modo; fronteira.pedidos = [];
+    const [s, x] = await coordDe(id);
+    assert.ok(s === 200 && perto(x.coordenadas, CAMPINAS), `${modo}: ${JSON.stringify(x)}`);
+    assert.strictEqual(fronteira.pedidos.length, 1, `${modo}: nao consultou (a memoria de uma falha anterior valeu?)`);
+    await pausa(300);
+    const m = await memoria(id);
+    assert.deepStrictEqual([m.geo_lat, m.geo_lon, m.geo_termo], [null, null, null], `${modo} gravou`);
+  }
+  // a metade positiva: respondendo, grava
+  fronteira.modo = 'responde'; fronteira.lat = '-17'; fronteira.lon = '-27'; fronteira.pedidos = [];
+  assert.deepStrictEqual((await coordDe(id))[1].coordenadas, [-17, -27]);
+  assert.ok(await aguardar(async () => (await memoria(id)).geo_lat === -17), 'a resposta boa nao gravou');
+});
+
+test('[RN-158.01] o cliente sem endereco: nenhum pedido e nada gravado; a memoria invalida (geo_lat texto, geo_lon nulo) nao vale', async () => {
+  fronteira.modo = 'responde'; fronteira.lat = '-18'; fronteira.lon = '-28'; fronteira.pedidos = [];
+  const sem = await criar158('Memoria 158 D sem endereco', 'Jundiai');
+  const [s, x] = await coordDe(sem);
+  assert.ok(s === 200 && perto(x.coordenadas, JUNDIAI), JSON.stringify(x));
+  await pausa(300);
+  assert.strictEqual(fronteira.pedidos.length, 0);
+  assert.strictEqual((await memoria(sem)).geo_termo, null);
+  // Fase 2 M5: a memoria com geo_termo NULL num cliente sem endereco (termo NULL) nao vale (null === null)
+  await sql('UPDATE clientes SET geo_lat = -5, geo_lon = -6, geo_termo = NULL WHERE id = ?', [sem]);
+  const [s5, x5] = await coordDe(sem);
+  assert.ok(s5 === 200 && perto(x5.coordenadas, JUNDIAI), `a memoria sem termo valeu: ${JSON.stringify(x5)}`);
+  // a memoria gravada por fora com lixo
+  const id = await criar158('Memoria 158 D', 'Campinas', 'Rua Cinco 5');
+  const termo = 'RUA CINCO 5, CAMPINAS, SP, Brasil';
+  await sql("UPDATE clientes SET geo_lat = 'abc', geo_lon = -1, geo_termo = ? WHERE id = ?", [termo, id]);
+  assert.deepStrictEqual((await coordDe(id))[1].coordenadas, [-18, -28]);
+  assert.strictEqual(fronteira.pedidos.length, 1, 'a memoria com geo_lat texto valeu');
+  await pausa(300);
+  await sql('UPDATE clientes SET geo_lat = -1, geo_lon = NULL, geo_termo = ? WHERE id = ?', [termo, id]);
+  assert.deepStrictEqual((await coordDe(id))[1].coordenadas, [-18, -28]);
+  assert.strictEqual(fronteira.pedidos.length, 2, 'a memoria com geo_lon nulo valeu');
+  await pausa(300);
+  // a metade positiva: a memoria valida, gravada por fora, vale
+  await sql('UPDATE clientes SET geo_lat = -1.25, geo_lon = -2.75, geo_termo = ? WHERE id = ?', [termo, id]);
+  assert.deepStrictEqual((await coordDe(id))[1].coordenadas, [-1.25, -2.75]);
+  assert.strictEqual(fronteira.pedidos.length, 2);
+});
+
+test('[RN-158.01, Fase 2 M6] a consulta lenta de um endereco que mudou no meio nao grava a coordenada do endereco velho', async () => {
+  const id = await criar158('Memoria 158 E', 'Campinas', 'Rua Seis 6');
+  fronteira.modo = 'lento'; fronteira.lat = '-19'; fronteira.lon = '-29'; fronteira.pedidos = [];
+  const abrindo = coordDe(id);
+  await aguardar(async () => fronteira.pedidos.length === 1, 2000);
+  assert.strictEqual((await j('PUT', `/clientes/${id}`, { endereco: 'Rua Sete 7' }))[0], 200);
+  const [s, x] = await abrindo;
+  assert.deepStrictEqual([s, x.coordenadas], [200, [-19, -29]]);
+  await pausa(400);
+  assert.strictEqual((await memoria(id)).geo_termo, null, 'gravou a coordenada da Rua Seis no cadastro da Rua Sete');
+  // a metade positiva: sem mudar no meio, a lenta grava
+  fronteira.pedidos = [];
+  await coordDe(id);
+  assert.ok(await aguardar(async () => (await memoria(id)).geo_termo === 'RUA SETE 7, CAMPINAS, SP, Brasil'), 'a lenta sem mudanca nao gravou');
+});
+
+test('[RN-158.03, B1008, integracao T4] as listas nao mostram a memoria; o PUT da tela (o objeto do GET + geo_* forjado) e o POST nao a gravam', async () => {
+  const id = ctx.memA;
+  const antes = await memoria(id);
+  assert.strictEqual(antes.geo_termo, 'RUA UM 1, CAMPINAS, SP, Brasil', 'o cenario precisa de um cliente COM memoria');
+  const [sl, lista] = await j('GET', '/clientes');
+  const daLista = lista.find((c) => c.id === id);
+  assert.ok(sl === 200 && daLista && daLista.razao_social === 'MEMORIA 158 A', `${sl} ${JSON.stringify(daLista)}`);
+  const [sg, umCliente] = await j('GET', `/clientes/${id}`);
+  assert.ok(sg === 200 && umCliente.razao_social === 'MEMORIA 158 A' && umCliente.endereco === 'RUA   UM 1', JSON.stringify(umCliente));
+  for (const [onde, obj] of [['lista', daLista], ['um', umCliente]]) {
+    for (const k of ['geo_lat', 'geo_lon', 'geo_termo']) assert.ok(!Object.prototype.hasOwnProperty.call(obj, k), `${onde} mostra ${k}`);
+  }
+  // a tela de Clientes manda de volta o objeto inteiro do GET (ClienteForm): mais um geo_* forjado, o telefone trocado
+  const [sp] = await j('PUT', `/clientes/${id}`, { ...umCliente, telefone: '11 1580-0000', geo_lat: 99, geo_lon: 99, geo_termo: 'FORJADO' });
+  assert.strictEqual(sp, 200);
+  const depois = await memoria(id);
+  assert.deepStrictEqual([depois.geo_lat, depois.geo_lon, depois.geo_termo], [antes.geo_lat, antes.geo_lon, antes.geo_termo], 'o PUT gravou o geo_* do corpo');
+  assert.strictEqual((await sql('SELECT telefone FROM clientes WHERE id = ?', [id]))[0].telefone, '11 1580-0000', 'o PUT nao gravou (o cenario nao provaria nada)');
+  // e a abertura seguinte continua da memoria
+  fronteira.modo = 'responde'; fronteira.pedidos = [];
+  assert.deepStrictEqual((await coordDe(id))[1].coordenadas, [-10.1, -20.2]);
+  assert.strictEqual(fronteira.pedidos.length, 0);
+  // o POST com geo_* no corpo nao grava (a resposta ecoa o corpo — de antes, C)
+  const [sc, c] = await j('POST', '/clientes', { razao_social: 'Memoria 158 F', cidade: 'Campinas', estado: 'SP', endereco: 'Rua Oito 8', geo_lat: 5, geo_lon: 6, geo_termo: 'RUA OITO 8, CAMPINAS, SP, Brasil' });
+  assert.strictEqual(sc, 200);
+  const doPost = await memoria(c.id);
+  assert.deepStrictEqual([doPost.geo_lat, doPost.geo_lon, doPost.geo_termo], [null, null, null], 'o POST gravou o geo_* do corpo');
 });
 
 (async () => {

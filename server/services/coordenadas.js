@@ -16,6 +16,11 @@
  *   caiam no centro do estado). Com o estado conhecido, a cidade so vale se for DESSE estado (a lista tem a UF de cada cidade — Fase 5 r1
  *   I-1: o raio de 1.000 km do centro do estado, da Fase 2, deixava passar o homonimo de estado vizinho, ex. RIO CLARO/RJ -> Rio Claro/SP);
  *   sem estado conhecido, a cidade pelo nome (como antes).
+ *
+ * Etapa 158 — RN-158.01/02 (C377): a coordenada do endereco fica guardada no cadastro do cliente (geo_lat, geo_lon e geo_termo — o termo
+ *   que a gerou). `termoDaConsulta` e a UMA funcao que monta o termo (a consulta e a memoria usam a mesma — mudou o endereco, a cidade ou o
+ *   estado, muda o termo e a memoria deixa de valer); `coordenadaGuardada` diz se a memoria vale para o termo atual (o termo nao nulo, o
+ *   geo_termo texto igual a ele, a latitude e a longitude numeros finitos — Fase 2 M5 e o cenario do lixo gravado por fora).
  */
 const http = require('http');
 const https = require('https');
@@ -417,14 +422,30 @@ function prazoDoNominatimMs() {
   return n > 0 && n <= MAIOR_PRAZO_MS ? n : PRAZO_PADRAO_MS;
 }
 
+// O termo da consulta ao servico de mapas (e da memoria no cadastro): null sem um dos tres — a guarda e por verdade, como sempre foi
+// (um endereco so de espacos consulta — Fase 2 M1); os espacos repetidos viram um e as pontas sao aparadas.
+function termoDaConsulta(endereco, cidade, estado) {
+  if (!endereco || !cidade || !estado) return null;
+  return `${endereco}, ${cidade}, ${estado}, Brasil`.replace(/\s+/g, ' ').trim();
+}
+
+// A coordenada guardada no cadastro do cliente, se ela vale para o termo atual; senao null.
+function coordenadaGuardada(cliente, termo) {
+  if (!cliente || typeof termo !== 'string' || !termo) return null;
+  if (typeof cliente.geo_termo !== 'string' || cliente.geo_termo !== termo) return null;
+  const { geo_lat: lat, geo_lon: lon } = cliente;
+  if (typeof lat !== 'number' || typeof lon !== 'number' || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  return [lat, lon];
+}
+
 // Função para geocodificar endereço completo usando Nominatim (OpenStreetMap)
 async function geocodificarEndereco(endereco, cidade, estado) {
-  if (!endereco || !cidade || !estado) {
+  const termo = termoDaConsulta(endereco, cidade, estado);
+  if (!termo) {
     return null;
   }
   let url;
   try {
-    const termo = `${endereco}, ${cidade}, ${estado}, Brasil`.replace(/\s+/g, ' ').trim();
     url = new URL(urlDoNominatim());
     url.searchParams.set('format', 'json');
     url.searchParams.set('q', termo);
@@ -521,6 +542,8 @@ function obterCoordenadasCidade(cidade, estado) {
 }
 
 module.exports = {
+  termoDaConsulta,
+  coordenadaGuardada,
   geocodificarEndereco,
   obterCoordenadasExatas,
   obterCoordenadasCidade,

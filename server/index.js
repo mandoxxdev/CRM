@@ -213,7 +213,7 @@ const archiver = require('archiver');
 const { decodificarImagemBase64, filtroImagemMulter, multerComLimiteNoErro, tratarArquivoGrandeDemais, tratarErroFormatoImagem } = require('./services/imagemUpload');
 const { tratarErroGlobalApi } = require('./services/errosApi');
 // Etapa 156 (RN-156.03/04, C361, C370, C371): o servico de mapas com prazo e a cidade sem caixa nem acento — os chamadores nao mudam.
-const { obterCoordenadasExatas, obterCoordenadasCidade, normalizarNome } = require('./services/coordenadas');
+const { obterCoordenadasCidade, normalizarNome, termoDaConsulta, coordenadaGuardada, geocodificarEndereco } = require('./services/coordenadas');
 // Etapa 85 (RN-85.02): o MulterError LIMIT_FILE_SIZE nao carrega o limite; o embrulho anexa
 // `err.limiteBytes` (limits.fileSize de quem recusou) para o tratarArquivoGrandeDemais responder
 // 413 "Arquivo grande demais (máximo N MB)". Todo multer deste arquivo e criado por este `multer`.
@@ -1248,7 +1248,21 @@ function initializeDatabase(onReadyCallback) {
     status TEXT DEFAULT 'ativo',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
+  )`, () => {
+    // Etapa 158 (RN-158.04, C377): a coordenada do endereco guardada no cadastro (so memoria — NULL faz a proxima abertura consultar de
+    // novo). ALTER no callback do CREATE, uma depois da outra: no banco novo a tabela ja existe quando elas chegam; no antigo, entram.
+    const colunasGeo = ['geo_lat REAL', 'geo_lon REAL', 'geo_termo TEXT'];
+    const proximaGeo = (i) => {
+      if (i >= colunasGeo.length) return;
+      db.run(`ALTER TABLE clientes ADD COLUMN ${colunasGeo[i]}`, (err) => {
+        if (err && !/duplicate column|already exists/i.test(err.message)) {
+          console.error(`Erro ao adicionar coluna ${colunasGeo[i].split(' ')[0]} em clientes:`, err.message);
+        }
+        proximaGeo(i + 1);
+      });
+    };
+    proximaGeo(0);
+  });
 
   // Configuração de Template de Proposta
   db.run(`CREATE TABLE IF NOT EXISTS proposta_template_config (
@@ -4341,6 +4355,14 @@ app.delete('/api/usuarios/:id', authenticateToken, requireDeleteUsers, async (re
 });
 
 // ========== ROTAS DE CLIENTES ==========
+// Etapa 158 (RN-158.03, B1008): a coordenada guardada do endereco (geo_lat, geo_lon, geo_termo) nao sai nas listas — fica atras do portao
+// do Comercial, como a rota que a produz (coordenadas-cliente). O POST e o PUT ja nao a gravam (colunas explicitas / lista branca).
+function semCoordenadaGuardada(row) {
+  if (!row) return row;
+  const { geo_lat, geo_lon, geo_termo, ...resto } = row; // eslint-disable-line no-unused-vars
+  return resto;
+}
+
 app.get('/api/clientes', authenticateToken, exigirLeitorDasListasDeClientesEProjetos, (req, res) => {
   const { status, search } = req.query;
   let query = 'SELECT * FROM clientes WHERE 1=1';
@@ -4363,7 +4385,7 @@ app.get('/api/clientes', authenticateToken, exigirLeitorDasListasDeClientesEProj
     if (err) {
       return res.status(500).json({ error: err.message });
     }
-    res.json(rows || []);
+    res.json((rows || []).map(semCoordenadaGuardada));
   });
 });
 
@@ -4423,7 +4445,7 @@ app.get('/api/clientes/:id', authenticateToken, exigirComercialNasPropostas, (re
     if (!row) {
       return res.status(404).json({ error: 'Cliente não encontrado' });
     }
-    res.json(row);
+    res.json(semCoordenadaGuardada(row));
   });
 });
 
@@ -15354,25 +15376,48 @@ app.delete('/api/atividades/:id', authenticateToken, exigirComercialNasPropostas
 
 // ========== ROTAS DE CUSTOS DE VIAGENS ==========
 // Rota para obter coordenadas exatas de um cliente
+// Etapa 158 (RN-158.01/02, C377): com endereco, cidade e estado, a coordenada guardada no cadastro para o termo atual responde sem consultar
+// o servico de mapas; senao consulta, e a resposta boa e gravada DEPOIS de responder (Fase 2 I1, B1009 — a abertura nao espera a fila de
+// escrita), sem mexer no updated_at, e so se o endereco ainda e o lido (M6); a falha (prazo, 429, lista vazia) nao grava e cai na cidade,
+// como antes. O erro ao gravar fica no log (I2). `SELECT *` (M2): sem as colunas (a migracao que falhou), funciona sem memoria.
 app.get('/api/custos-viagens/coordenadas-cliente/:cliente_id', authenticateToken, exigirComercialNasPropostas, async (req, res) => {
   const { cliente_id } = req.params;
-  
-  db.get('SELECT endereco, cidade, estado FROM clientes WHERE id = ?', [cliente_id], async (err, cliente) => {
+
+  db.get('SELECT * FROM clientes WHERE id = ?', [cliente_id], async (err, cliente) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
-    
+
     if (!cliente) {
       return res.status(404).json({ error: 'Cliente não encontrado' });
     }
-    
-    // Tentar obter coordenadas exatas
-    const coords = await obterCoordenadasExatas(cliente.endereco, cliente.cidade, cliente.estado);
-    
-    if (coords) {
-      res.json({ coordenadas: coords, lat: coords[0], lon: coords[1] });
-    } else {
-      res.status(500).json({ error: 'Não foi possível obter coordenadas' });
+
+    try {
+      const termo = termoDaConsulta(cliente.endereco, cliente.cidade, cliente.estado);
+      const guardada = coordenadaGuardada(cliente, termo);
+      if (guardada) {
+        return res.json({ coordenadas: guardada, lat: guardada[0], lon: guardada[1] });
+      }
+      const doServico = termo ? await geocodificarEndereco(cliente.endereco, cliente.cidade, cliente.estado) : null;
+      const coords = doServico || obterCoordenadasCidade(cliente.cidade, cliente.estado);
+
+      if (coords) {
+        res.json({ coordenadas: coords, lat: coords[0], lon: coords[1] });
+      } else {
+        res.status(500).json({ error: 'Não foi possível obter coordenadas' });
+      }
+      if (doServico) {
+        db.run(
+          'UPDATE clientes SET geo_lat = ?, geo_lon = ?, geo_termo = ? WHERE id = ? AND endereco IS ? AND cidade IS ? AND estado IS ?',
+          [doServico[0], doServico[1], termo, cliente.id, cliente.endereco, cliente.cidade, cliente.estado],
+          (errGrava) => {
+            if (errGrava) console.error(`[coordenadas] nao gravou a coordenada do cliente ${cliente.id}: ${errGrava.message}`);
+          }
+        );
+      }
+    } catch (e) {
+      console.error(`[coordenadas] erro na coordenada do cliente ${cliente.id}: ${e.message}`);
+      if (!res.headersSent) res.status(500).json({ error: e.message });
     }
   });
 });
