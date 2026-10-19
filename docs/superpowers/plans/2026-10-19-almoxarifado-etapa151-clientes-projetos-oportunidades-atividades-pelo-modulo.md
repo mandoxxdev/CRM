@@ -247,7 +247,12 @@ passa o portão.
    148/149 (fica para a próxima que usar o molde: a régua de todo o servidor desta etapa).
 3. **Paralelismo:** **0** galhos em paralelo de fato (o T3 sabota o `index.js` do T1 — em série, Fase 2 I-1); **0** retrabalho; **1** revisor
    na Fase 2, **3** em paralelo na Fase 5 sob a trava (o r3 numa worktree própria, removida).
-4. **Defeito que escapou:** *(preencher na Etapa 152)*.
+4. **Defeito que escapou:** *(preenchido na Etapa 152)* **0 de código; 0 de documento desta etapa.** A Etapa 152 refez a medição das
+   listas de clientes e projetos ao medir os custos de viagem (a tela de custos lê `GET /api/clientes` e `GET /api/atividades` — a lista
+   aberta e a leitura que a 151 fechou para o Comercial; o vendedor continua lendo as duas) e nada da 151 mudou. **Herdado, achado na 152:** a
+   **A93** (Etapa 145) mandava dar o Comercial pela aba **Administração → Permissões**, que não oferece o Comercial (**C358**) — corrigido. **E
+   a fraqueza da régua do fonte era maior do que esta retro dizia:** a régua de todo o servidor desta etapa ainda é texto — o r3 da 152 achou
+   oito formas de registro que ela não lê (a 152 passou a ler as camadas do Express montado).
 
 ## Próxima tarefa detalhada — Etapa 152
 

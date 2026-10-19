@@ -709,6 +709,19 @@ recebe *"Acesso negado ao módulo"*, a tentativa fica registrada em **Administra
 
 ### 3.8 Custos de Viagens
 
+**Quem pode usar os custos de viagem.** Ver a lista, os cartões do topo e a análise por cliente, lançar, editar, duplicar, aprovar e
+excluir custo de viagem, anexar, baixar e excluir comprovante, e consultar a elegibilidade, os clientes próximos e a rota exigem o
+**Comercial** (a regra da seção 3.3). Quem não pode recebe *"Acesso negado ao módulo"*, a tentativa fica registrada em **Administração →
+Logs**, e o comprovante é recusado antes de chegar ao servidor. O acesso ao Comercial se dá em **Administração → Usuários → editar →
+Módulos de Acesso**.
+
+**Os cartões do topo.** *Total de Viagens*, *Custo Total*, *Custo Médio por Viagem* e *Clientes Visitados* somam **todos** os custos
+lançados no sistema, de qualquer pessoa — os filtros da lista não os mudam. Sem nenhum lançamento, mostram 0 e R$ 0,00.
+
+**Aprovar e excluir.** Qualquer pessoa com o Comercial aprova ou rejeita um custo, inclusive o que ela mesma lançou. Um custo que já foi
+editado, ou que foi lançado com autorização fora das regras de elegibilidade, não pode ser excluído: a tela mostra *"Erro ao deletar custo
+de viagem"*. Ao excluir um custo, exclua antes os comprovantes dele.
+
 #### 3.8.1 Cadastro de Custo de Viagem
 
 **Quando usar:**
@@ -1256,10 +1269,12 @@ código com a mesma regra (o Operacional ou o Comercial).
 - Defina permissões por grupo
 - Vincule usuários aos grupos
 
-**Permissões disponíveis:**
-- Por Módulo (Comercial, Compras, Financeiro, Operacional)
-- Por Funcionalidade (Criar, Editar, Excluir, Visualizar)
-- Por Dados (Próprios, Equipe, Todos)
+**O que a aba Permissões marca.** A aba **Administração → Permissões** monta grupos com uma lista de áreas (*Clientes*, *Propostas*,
+*Projetos*, *Produtos*, *Atividades*, *Custos de Viagens*, *Usuários*, *Relatórios*, *Oportunidades*, *Máquinas Vendidas*,
+*Configurações*) e ações (*Visualizar*, *Criar*, *Editar*, *Excluir*, *Aprovar*). **Essas marcações não abrem nenhum módulo:** nenhuma
+tela e nenhuma operação as lê. O acesso a cada módulo (Comercial, Almoxarifado, Compras, Financeiro, Operacional e os outros) se dá em
+**Administração → Usuários → editar → Módulos de Acesso**. Atenção: quem entra num grupo ativo passa a ser avaliado só pelas permissões de
+módulo que tem — um grupo montado só com as marcações desta aba tira do usuário o Comercial que ele tinha por não ter permissão nenhuma.
 
 #### 7.2.2 Configurar Permissões
 
@@ -1271,11 +1286,7 @@ código com a mesma regra (o Operacional ou o Comercial).
 5. Salve
 6. Vincule usuários ao grupo
 
-**Permissões granulares:**
-- Clientes: Criar, Editar, Excluir, Visualizar
-- Propostas: Criar, Editar, Excluir, Visualizar, Aprovar
-- Financeiro: Criar, Editar, Excluir, Visualizar
-- E assim por diante...
+**As marcações do grupo:** para cada área da lista, as ações *Visualizar*, *Criar*, *Editar*, *Excluir* e *Aprovar* (veja acima: não abrem módulo).
 
 ### 7.3 Configurações
 

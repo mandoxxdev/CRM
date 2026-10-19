@@ -356,6 +356,29 @@ Testes: `tests/api/produtosGruposVariaveisPortao.api.test.js` (as 25 + o clonar 
 caminho montado — e uma a uma, 17 perfis contra a decisão da tela, o catálogo e as variáveis pelo Comercial, as variáveis pelo caminho de
 Configurações, a OS da Fábrica lendo o produto pelo código, o clonar, o desligado com as exclusões, o BUSY).
 
+### Os custos de viagem no portão, e o resumo antes do `/:id` (Etapa 152, C350, C356)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa152-custos-de-viagem-pelo-modulo.md`. Commits `9ddd5dfe`, `0bf06b57` e `cc70ee9e`.
+
+- **As 19 `/api/custos-viagens*`** com `exigirComercialNasPropostas` como 2º middleware (RN-152.01, B986) — `POST /:id/comprovante` com o
+  portão **antes** do multer `uploadComprovante`. Única tela: `/comercial/custos-viagens` (`CustosViagens` — 18 delas; o `GET /:id` não tem
+  chamador, a edição usa a linha da lista — e `PreviewRota`, que só ela abre, no `coordenadas-cliente`). A linha `custos_viagens` da aba
+  antiga **Administração → Permissões** (`Permissoes.js`) não abre nada (C358).
+- **`GET /api/custos-viagens/resumo` registrado antes do `GET /:id`** (RN-152.02, B987, **C356**): registrado depois, o `/:id` o atendia
+  com `id = 'resumo'` → 404 *"Custo de viagem não encontrado"* e a tela escondia os cartões. Num banco vazio as somas e a média saem `null`
+  (a tela usa `|| 0`). O teste prende que nenhum `GET` de um segmento literal fica depois do `/:id`.
+- **De antes, sem mudança:** `DELETE /:id` do custo editado ou autorizado sem regras → 500 `SQLITE_CONSTRAINT: FOREIGN KEY` (o
+  `custos_viagens_historico` e o `logs_autorizacao_viagens` sem `ON DELETE CASCADE` — **C359**, B989); o arquivo do comprovante fica no disco
+  ao apagar o custo (**C360**); `aprovar` sem régua própria (**C357**, B988); `geocodificarEndereco` sem prazo (**C361**); `aprovar` e
+  `DELETE` com id inexistente → 200.
+- O aviso do boot (desligado) acrescenta *"…, e as dos custos de viagem NAO exigem o Comercial (só o login); …"*.
+
+Testes: `tests/api/custosViagensPortao.api.test.js` (as 19 pelo fonte — todos os registros no texto inteiro sem caixa, a régua de todo o
+servidor do helper `tests/helpers/reguaDoFonteDoServidor.js`, o resumo antes do `/:id` — e uma a uma; 15 perfis contra a decisão da tela; a
+viagem inteira pelo vendedor com o resumo conferido contra o banco; o desligado com as 19 para o barrado e para o grupo sem o Comercial; o
+BUSY/500). O helper passou também aos testes das 148/149/150 (a régua sem caixa, o caminho que não é texto literal, o montado fora do
+`index.js`, os arquivos com ponto e `.cjs`/`.mjs`).
+
 ### Clientes, projetos, oportunidades e atividades no portão (Etapa 151, C349)
 
 Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa151-clientes-projetos-oportunidades-atividades-pelo-modulo.md`. Commits `49fdb035` (o portão e o teste) , `fa87c828` (a régua do fonte das 148/149 no texto inteiro) e `615f6a2b` (Fase 5: as listas com filtro, o registro com caminho que não é texto literal, o desligado contra a régua antiga).

@@ -11,11 +11,17 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-19):** **Etapa 151 fechada** (do Comercial: **clientes, projetos, oportunidades e atividades pedem
+> **Onde o desenvolvimento está (2026-10-19):** **Etapa 152 fechada** (do Comercial: **os custos de viagem pedem o Comercial, e o resumo da
+> tela volta a aparecer** — quem a tela barra do Comercial lançava, editava, aprovava e apagava custo de viagem, anexava e baixava
+> comprovante e lia a lista dos clientes próximos e a análise custo × vendas pela integração; agora toma *"Acesso negado ao módulo"* nas 19
+> operações, e o vendedor não perde nada (**C350** resolvido); os quatro cartões do topo da tela, que nunca apareciam, aparecem (**C356**
+> resolvido); **B986** a **B990**; a consulta **A100** (opcional); os avisos novos **C357** a **C361**; a aba antiga de Permissões apontada
+> por engano na **A93** — corrigido); a próxima é a **153** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 151 fechada** (do Comercial: **clientes, projetos, oportunidades e atividades pedem
 > o Comercial** — quem a tela barra do Comercial criava, editava e apagava cliente, projeto, oportunidade e atividade e lia o cadastro do
 > cliente e as atividades pela integração; agora toma *"Acesso negado ao módulo"* nas 18 operações, e o vendedor, o Almoxarifado e a Fábrica
 > — que usam a lista de clientes e a de projetos, abertas — não perdem nada (**C349** resolvido em parte); **B983** a **B985**; a consulta
-> **A99** (opcional); os avisos novos **C353** a **C355**); a próxima é a **152** — ver "Onde estamos e o que vem a seguir".
+> **A99** (opcional); os avisos novos **C353** a **C355**); a próxima era a **152**.)*
 > *(Antes: **Etapa 150 fechada** (do Comercial/Operacional: **grupos de produto, produtos e variáveis
 > técnicas pedem o módulo** — quem a tela barra do Comercial lia o catálogo com preço e criava, editava e apagava produto, grupo e variável
 > técnica pela integração; agora toma *"Acesso negado ao módulo"*, e o vendedor, a Fábrica que abre a OS e o administrador do Comercial que
@@ -288,7 +294,11 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Noventa e nove itens para rodar em produção ANTES do deploy — noventa e seis são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Cem itens para rodar em produção ANTES do deploy — noventa e sete são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-19 (Etapa 152) de noventa e nove para cem**, com a **A100** — quem passa a ser barrado nos custos de viagem, e
+quanto já lançou, aprovou ou anexou (**C350**). **Somente leitura, opcional:** no banco medido, ninguém que usa perde — não há nenhum custo
+de viagem lançado.)*
 
 *(**Atualizado em 2026-10-19 (Etapa 151) de noventa e oito para noventa e nove**, com a **A99** — quem passa a ser barrado nas escritas e
 nas leituras de clientes, projetos, oportunidades e atividades que só o Comercial faz (e se continua nas listas por uma tela do Almoxarifado
@@ -3393,7 +3403,8 @@ contou 2 itens em 2 propostas e a 3 contou 1.)*
 as rotas de proposta exigem o **Comercial** pela mesma régua da tela: quem tem alguma permissão (direta ou de um grupo ativo) e nenhuma do
 Comercial passa a receber *"Acesso negado ao módulo"* nas propostas e nas aprovações de desconto — a tela já não o deixava abrir o Comercial, mas pela integração (ou por um atalho
 salvo) ele ainda criava, gerava e editava proposta. **Rode antes do deploy**: se a consulta 1 trouxer alguém que deve continuar usando
-propostas, dê a ele a permissão do Comercial (**Administração → Permissões**, ou o grupo dele) **antes** de subir — senão ele fica trancado
+propostas, dê a ele a permissão do Comercial (**Administração → Usuários → editar → Módulos de Acesso**, ou o grupo dele — *corrigido na
+Etapa 152: isto dizia "Administração → Permissões"; **estava errado** — aquela aba não oferece o Comercial, veja a **C358***) **antes** de subir — senão ele fica trancado
 fora no primeiro pedido. Somente leitura.
 
 ```sql
@@ -3472,6 +3483,42 @@ WHERE p.cliente_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM clientes c WHERE c.
 cliente vazio deixa a proposta assim — **C330**): abra cada uma em **Comercial → Propostas → Editar**, escolha o cliente e salve (o
 formulário exige o cliente). **Linhas na 2** — o mesmo; o cliente antigo não volta. *(Rodada no banco local, cópia de 09/10: **0** e
 **0**; controle numa cópia com uma proposta sem cliente e outra apontando para o cliente 987654: a 1 achou a primeira e a 2 a segunda.)*
+
+**A100 (NOVA, da Etapa 152 — opcional — quem perde os custos de viagem).** Desde a Etapa 152 as 19 operações dos custos de viagem (a
+lista, o resumo, a análise, lançar, editar, aprovar, duplicar, apagar, os comprovantes, o histórico, os clientes próximos, as coordenadas, a
+rota e a elegibilidade) exigem o **Comercial** pela mesma régua da tela das propostas (a da **A93**). A única tela que as usa é
+**Comercial → Custos de Viagens** — ninguém de outro módulo usa. A consulta lista quem perde e quanto cada um já lançou, aprovou ou anexou.
+Somente leitura.
+
+```sql
+-- quem passa a ser barrado nos custos de viagem (a régua da tela: sem o Comercial) — e quanto já lançou, aprovou ou anexou
+WITH linhas AS (
+  SELECT ug.usuario_id, p.modulo, p.permissao FROM usuarios_grupos ug
+    JOIN grupos_permissoes gp ON gp.id = ug.grupo_id AND gp.ativo = 1
+    JOIN permissoes p ON p.grupo_id = gp.id
+  UNION ALL
+  SELECT p.usuario_id, p.modulo, p.permissao FROM permissoes p WHERE p.usuario_id IS NOT NULL AND p.grupo_id IS NULL
+)
+SELECT u.id, u.nome, u.email,
+  (SELECT GROUP_CONCAT(DISTINCT l.modulo) FROM linhas l WHERE l.usuario_id = u.id AND l.permissao = 1) AS modulos_que_tem,
+  (SELECT COUNT(*) FROM custos_viagens cv WHERE cv.created_by = u.id) AS viagens_lancadas,
+  (SELECT COUNT(*) FROM custos_viagens cv WHERE cv.aprovado_por = u.id) AS viagens_aprovadas_ou_rejeitadas,
+  (SELECT COUNT(*) FROM custos_viagens_anexos a WHERE a.uploaded_by = u.id) AS comprovantes_anexados
+FROM usuarios u
+WHERE u.ativo = 1
+  AND COALESCE(u.is_superadmin, 0) NOT IN (1, '1')
+  AND LOWER(COALESCE(u.role, '')) <> 'admin'
+  AND EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id)
+  AND NOT EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id AND l.modulo = 'comercial' AND l.permissao = 1)
+ORDER BY viagens_lancadas + viagens_aprovadas_ou_rejeitadas + comprovantes_anexados DESC, u.nome;
+```
+
+**Como ler o resultado:** cada linha é alguém que vai tomar *"Acesso negado ao módulo"* nos custos de viagem pela integração (a tela já não
+lhe mostrava o Comercial). Quem tem **viagens_lancadas**, **viagens_aprovadas_ou_rejeitadas** ou **comprovantes_anexados** maior que zero
+usava os custos de viagem por fora da tela: se deve continuar, dê-lhe o **Comercial** antes do deploy (**Administração → Usuários → editar
+→ Módulos de Acesso**). Os de zero podem ficar como estão. *(Rodada no banco local, cópia de 09/10: os **4** de sempre — ids 15, 8, 7 e
+12 —, todos com zero nas três colunas (o banco não tem custo de viagem); controle numa cópia com uma viagem lançada pelo 8, outra aprovada
+pelo 12 e o Comercial dado ao 15: o 15 saiu, o 8 subiu com 1 lançada e o 12 com 1 aprovada.)*
 
 **A99 (NOVA, da Etapa 151 — opcional — quem perde os clientes, os projetos, as oportunidades e as atividades).** Desde a Etapa 151 criar,
 editar e desativar cliente (com o logo), projeto, oportunidade e atividade, abrir o cadastro de um cliente ou de um projeto, o mural de logos,
@@ -3724,7 +3771,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B985; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B990; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -10862,6 +10909,36 @@ apagaria pela integração). **Reversível.**
 **B985 (NOVA, da Etapa 151) — a próxima etapa (152).** Ver a "próxima tarefa detalhada" no plano da Etapa 151 (os custos de viagem, **C350**).
 As decisões que esperam vocês continuam as da **B957** (nada novo).
 
+**B986 (NOVA, da Etapa 152; do Comercial) — os custos de viagem pelo Comercial, leitura e escrita.** As 19 operações exigem o **Comercial**
+pela régua da tela. Medido operação por operação (e de novo pela revisão do plano e pelos dois revisores do código, executando): a única
+tela que as chama é **Comercial → Custos de Viagens** (e a prévia da rota, que só ela abre); nenhuma tela do Financeiro, da Frota, do
+Compras, da Fábrica ou do Almoxarifado, nenhum relatório e nenhuma busca as lê. **Descartado:** (a) separar leitura de escrita como na
+**B983** — não há leitor de fora, e as leituras trazem o que mais importa esconder (os clientes próximos com endereço, a análise custo ×
+vendas, os comprovantes — dado pessoal); (b) a régua antiga do módulo (libera o Comercial a todo usuário sem grupo — no banco medido não
+mudaria nada); (c) aceitar a linha *Custos de Viagens* da aba antiga de **Permissões** — nenhuma tela a aceita (**C358**); (d) uma chave
+própria para desligar — o módulo é o Comercial, e `PROPOSTAS_PORTAO_DE_MODULO=desligado` (a da **B946**) já desliga este portão também.
+**Reversível.**
+
+**B987 (NOVA, da Etapa 152) — o resumo da tela de custos consertado, declarado.** A operação do resumo existia, mas a do custo pelo número
+era registrada antes e a atendia (como se "resumo" fosse o número de um custo) — *"Custo de viagem não encontrado"*, e a tela escondia os
+quatro cartões do topo (**C356**). Passou a ser registrada antes. **Muda o que a tela mostra:** os cartões *Total de Viagens*, *Custo
+Total*, *Custo Médio por Viagem* e *Clientes Visitados* aparecem, com os totais de **todos** os lançamentos (como a lista, que também não
+filtra por quem lançou; os filtros da tela não mudam os cartões). **Descartado:** (a) só registrar e deixar os cartões sumidos — a tela foi
+feita para mostrá-los; (b) tratar "resumo" dentro da operação do custo pelo número (esconde a operação). **Reversível.**
+
+**B988 (NOVA, da Etapa 152) — aprovar um custo de viagem continua sem régua própria (C357).** Quem tem o Comercial aprova ou rejeita
+qualquer custo, inclusive o que ele mesmo lançou. **Espera vocês:** quem aprova reembolso de viagem? Opções: (a) como está; (b) só o
+administrador (ou um perfil novo de aprovador); (c) qualquer um do Comercial, menos quem lançou. **Descartado nesta etapa:** decidir no
+lugar de vocês — é regra de negócio, não acesso a módulo.
+
+**B989 (NOVA, da Etapa 152) — apagar um custo de viagem editado continua falhando (C359).** Um custo que foi editado (tem histórico) ou
+lançado com *autorização sem as regras* (tem log) não se apaga: a tela mostra *"Erro ao deletar custo de viagem"*. **Espera vocês:** (a)
+apagar junto o histórico e o log (a trilha some); (b) não deixar apagar o custo que tem trilha, e a tela dizer por quê; (c) "apagar" vira
+inativar. **Descartado nesta etapa:** apagar em cascata sem perguntar — some a trilha de auditoria, e isso não se desfaz.
+
+**B990 (NOVA, da Etapa 152) — a próxima etapa (153).** Ver a "próxima tarefa detalhada" no plano da Etapa 152. As decisões que esperam
+vocês: as da **B957** e, novas, a **B988** e a **B989**.
+
 **B898 (NOVA, da Etapa 138) — a próxima etapa (139).** Ver a "próxima tarefa detalhada" no plano da Etapa 138. A **B853** (com a
 **C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
@@ -13928,7 +14005,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      pedem o login.** Os clientes (7 operações, com o logo), os projetos (5), as oportunidades (4) e as atividades (4) respondem a qualquer
      logado — quem a tela barra do Comercial lê e altera o cadastro de clientes pela integração. **O que fazer:** nada pela tela. Candidata da
      151 — medindo antes os leitores fora do Comercial (o cliente aparece na OS, no Almoxarifado — materiais de clientes —, na Frota?).
-350. **NOVO (da Etapa 150; do Comercial, anterior a ela; lido no código) — os custos de viagem só pedem o login** (19 operações: lançar,
+350. **✅ RESOLVIDO NA ETAPA 152 (B986)** — as 19 operações exigem o Comercial pela régua da tela. O texto abaixo cita "o resumo" como se
+     respondesse: **estava errado** — ele nunca respondia (**C356**, consertado na mesma etapa). *(O texto original:)*
+     **NOVO (da Etapa 150; do Comercial, anterior a ela; lido no código) — os custos de viagem só pedem o login** (19 operações: lançar,
      editar, aprovar, duplicar, os comprovantes, as análises e o resumo). **O que fazer:** nada pela tela. Candidata depois da **C349**.
 351. **NOVO (da revisão da Etapa 150; do Comercial/Operacional, anterior a ela; reproduzido) — a OS busca o produto pelo código sem
      proteger o código no endereço.** As telas da OS montam o endereço com o código cru: um código com barra (`/`) não acha o produto (era
@@ -13949,6 +14028,31 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      mostram oportunidades e atividades a qualquer logado.** A busca do topo devolve o título e o cliente das oportunidades e das atividades
      (além do que a **C352** já diz), e o painel e o relatório executivo devolvem contagens e soma das oportunidades e o top de clientes, a
      quem a tela barra do Comercial. **O que fazer:** nada. Candidata junto da **C352**.
+356. **✅ RESOLVIDO NA ETAPA 152 (B987) — o resumo da tela de custos de viagem nunca aparecia.** *(Da medição da Etapa 152; anterior a
+     ela; reproduzido.)* Os quatro cartões do topo de **Comercial → Custos de Viagens** (*Total de Viagens*, *Custo Total*, *Custo Médio
+     por Viagem*, *Clientes Visitados*) não apareciam: a operação do resumo era atendida pela do custo pelo número e respondia *"Custo de
+     viagem não encontrado"*, e a tela engolia o erro. Agora aparecem (com os totais de todos os lançamentos).
+357. **NOVO (da Etapa 152; do Comercial, anterior a ela; lido no código) — aprovar um custo de viagem não tem régua própria.** Quem tem o
+     Comercial aprova ou rejeita qualquer custo, inclusive o seu. **O que fazer:** nada pela tela. **Espera vocês (B988).**
+358. **NOVO (da Etapa 152; do núcleo, anterior a ela; lido no código) — a aba Permissões de Administração não dá acesso a módulo.** A aba
+     **Administração → Permissões** monta grupos com uma lista antiga (*Clientes*, *Propostas*, *Projetos*, *Produtos*, *Atividades*,
+     *Custos de Viagens*, *Oportunidades*, *Máquinas Vendidas*…) que **nenhuma** tela e nenhuma operação lê, e **não** oferece o Comercial,
+     o Almoxarifado nem os outros módulos de verdade. Pior: um grupo ativo montado só com elas **tira** de quem entra nele o Comercial (o
+     usuário passa a ter linha, e nenhuma é do Comercial). O acesso a módulo se dá em **Administração → Usuários → editar → Módulos de
+     Acesso**. A **A93** (Etapa 145), o cenário 1 da Etapa 145 e o passo 2 do roteiro dela no guia mandavam usar a aba Permissões — **estava
+     errado**, corrigido nos três lugares. **O que fazer:** dar módulo pelo cadastro do usuário. Candidata: tirar a lista antiga da aba ou trocá-la pelos módulos de
+     verdade (decisão de produto). No banco medido: **0** grupos.
+359. **NOVO (da revisão do plano da Etapa 152; do Comercial, anterior a ela; reproduzido) — apagar um custo de viagem editado falha.** Um
+     custo editado (com histórico) ou lançado com *autorização sem as regras* (com log) não se apaga: *"Erro ao deletar custo de viagem"*
+     na tela (o servidor responde erro de chave estrangeira). O custo nunca editado se apaga. **O que fazer:** em vez de apagar, deixe o
+     custo como está (ou rejeite-o). **Espera vocês (B989).**
+360. **NOVO (da revisão do plano da Etapa 152; anterior a ela; lido no código) — apagar um custo de viagem deixa os comprovantes no
+     disco.** O registro dos anexos some junto, o arquivo não (dado pessoal órfão no servidor). Hoje só acontece com custo nunca editado
+     (**C359**). **O que fazer:** apague os comprovantes antes de apagar o custo. Candidata junto da **B989**.
+361. **NOVO (da revisão do plano da Etapa 152; anterior a ela; lido no código) — as coordenadas de um cliente com endereço consultam um
+     serviço de mapas externo sem prazo.** Na tela de custos e na prévia da rota, o cliente que tem endereço completo é localizado por um
+     serviço da internet; se a rede travar, o pedido fica esperando (a tela não recebe resposta). **O que fazer:** nada. Candidata: um
+     prazo e o recuo pela cidade. Os testes cobrem só o recuo pela cidade (cliente sem endereço).
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -15280,6 +15384,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(152) O resumo da tela de custos de viagem soma todos os lançamentos** — não segue os filtros da tela nem quem lançou (**B987**);
+  aprovar não tem régua própria (**C357**, **B988**); o custo editado não se apaga (**C359**, **B989**) e o apagado deixa os comprovantes
+  no disco (**C360**); as coordenadas do cliente com endereço dependem de um serviço externo sem prazo (**C361**); a aba antiga de
+  Permissões não dá módulo (**C358**).
 - **(151) A lista de clientes e a de projetos continuam abertas a qualquer logado** (**C353**, decisão **B983**) — com as mesmas colunas do
   cadastro, então fechar o cliente e o projeto "pelo número" não esconde dado de quem tem login; os custos de viagem continuam só com o
   login (**C350**); a busca global, o painel e o relatório executivo mostram clientes e oportunidades a qualquer logado (**C352**,
@@ -16284,6 +16392,12 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(152) Nenhum clique foi dado no navegador.** Tudo foi provado pela rota, com o servidor de verdade em pasta vazia (as 19 operações uma a
+uma com 15 perfis de usuário; a viagem inteira do vendedor — escolher o cliente, conferir, lançar, editar, anexar, baixar, duplicar,
+aprovar, a análise e o resumo; o desligado; o banco ocupado); os revisores rodaram o fluxo da tela com 13 usuários que a tela admite e 43
+perfis contra a decisão da tela. O que **só o navegador** prova: o roteiro da Etapa 152 no guia — **Comercial → Custos de Viagens** com um
+vendedor: os quatro cartões do topo aparecem; lançar com dois clientes (a prévia da rota abre ao salvar), editar, anexar e baixar um comprovante, duplicar, aprovar.
 
 **(151) Nenhum clique foi dado no navegador.** Tudo foi provado pela rota, com o servidor de verdade em pasta vazia (as 18 operações uma a
 uma com 14 perfis de usuário; os quatro cadastros inteiros pelo Comercial; as listas — com e sem filtro — pelo Almoxarifado, pelo
@@ -30354,7 +30468,8 @@ em vez de uma frase.
 ### As regras, com o cenário exato
 
 **1. Quem a tela barra do Comercial é barrado nas propostas (B944).** Crie um usuário comum e dê a ele **só** o módulo Almoxarifado
-(**Administração → Permissões**). Entre com ele: o Comercial não aparece (como sempre). Pela integração, com o token
+(**Administração → Usuários → editar → Módulos de Acesso** — *corrigido na Etapa 152: dizia "Administração → Permissões", que **estava
+errado**, **C358***). Entre com ele: o Comercial não aparece (como sempre). Pela integração, com o token
 dele, `GET /api/propostas` → **403** `{ "error": "Acesso negado ao módulo", "modulo": "comercial" }` (antes: **200** com a lista). O mesmo
 em `POST /api/propostas/gerar-automatica`, no preview (`PUT /api/propostas/<id>/variaveis-manuais`) e nas outras 46. Em **Administração →
 Logs** aparece o acesso negado com o módulo *Comercial*. Dê a ele também o **Comercial** e repita: **200**.
@@ -30829,16 +30944,83 @@ régua do fonte: o desligado que voltasse à régua antiga), 6 sobreviveram por 
 operação nova escondida com o caminho num identificador, num router com outro nome ou num arquivo que começa com ponto; a edição do desligado
 sem conferir o gravado) e 2 eram inválidas e foram refeitas — as 6 e a régua antiga viraram cenários. Commits `49fdb035`, `fa87c828` e `615f6a2b`.
 
+## Etapa 152 — Os custos de viagem pedem o Comercial, e o resumo da tela volta a aparecer (2026-10-19)
+
+Um conserto de **acesso** e um de **tela**, nos custos de viagem do Comercial. As 19 operações dos custos de viagem pediam só o login: um
+usuário só do Almoxarifado, que a tela não deixa entrar no Comercial, lançava, editava, aprovava e apagava custo de viagem, anexava e
+baixava comprovante (recibo de hotel, pedágio — dado pessoal) e lia a lista dos clientes próximos com endereço e a análise de custo ×
+vendas pela integração. Agora tudo isso pede o **Comercial** — e quem usa hoje, o vendedor, não perde nada: a medição não achou nenhuma
+tela fora do Comercial que use os custos de viagem. De quebra, os quatro cartões do topo da tela (*Total de Viagens*, *Custo Total*,
+*Custo Médio por Viagem*, *Clientes Visitados*), que nunca apareciam, aparecem.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Um usuário só do Almoxarifado lançava, editava, aprovava, duplicava e apagava custo de viagem pela integração, anexava e baixava comprovante, e lia os clientes próximos, a análise e o resumo | *"Acesso negado ao módulo"* em cada uma das 19 operações, e a tentativa no log; o comprovante do barrado nem chega ao servidor (**C350** resolvido — **B986**) |
+| **Comercial → Custos de Viagens**: os quatro cartões do topo não apareciam (o resumo respondia *"Custo de viagem não encontrado"*) | Os quatro cartões aparecem, com os totais de todos os lançamentos (**C356** resolvido — **B987**) |
+| O vendedor lançando, editando, anexando, duplicando, aprovando e vendo a análise | Continua como antes |
+| A **A93** e o roteiro da Etapa 145 mandavam dar o Comercial pela aba **Administração → Permissões** | Corrigido: o módulo se dá em **Administração → Usuários → editar → Módulos de Acesso** — a aba Permissões não oferece o Comercial (**C358**) |
+
+### As regras, com o cenário exato
+
+**1. Os custos de viagem pedem o Comercial (B986 — C350).** Entre com um usuário que tem só a permissão do **Almoxarifado** (em
+**Administração → Usuários → editar → Módulos de Acesso**): a tela não mostra o Comercial. Pela integração, com o token dele, `GET
+/api/custos-viagens`, `GET /api/custos-viagens/resumo`, `POST /api/custos-viagens`, `POST /api/custos-viagens/<número>/aprovar`, `POST
+/api/custos-viagens/<número>/comprovante` (com um arquivo), `GET /api/custos-viagens/clientes-proximos/<cliente>` → **403** `{ "error":
+"Acesso negado ao módulo", "modulo": "comercial" }`, e **Administração → Logs** mostra o acesso negado a *Comercial* (antes: **200**, e o
+custo era lançado). O mesmo usuário continua lendo a lista de clientes (`GET /api/clientes` → **200**, aberta desde a Etapa 151). Com
+`PROPOSTAS_PORTAO_DE_MODULO=desligado` (a chave da **B946**) as 19 voltam a pedir só o login.
+
+**2. O vendedor não perde nada.** Com um usuário que tem **só o Comercial**: **Comercial → Custos de Viagens → Novo custo** — escolha o
+cliente (a elegibilidade e os clientes próximos aparecem), calcule a rota, salve; edite; anexe um comprovante e baixe-o; duplique;
+aprove; veja a análise por cliente. Nenhum *"Acesso negado"*.
+
+**3. Os cartões do topo aparecem (B987 — C356).** Com o vendedor, abra **Comercial → Custos de Viagens**: em cima, *Total de Viagens*,
+*Custo Total*, *Custo Médio por Viagem* e *Clientes Visitados* (num banco sem lançamento: 0 e R$ 0,00). Lance um custo de R$ 380,00: o
+*Total de Viagens* sobe 1 e o *Custo Total* R$ 380,00. Pela integração, `GET /api/custos-viagens/resumo` → **200** com os totais (antes:
+**404** `{ "error": "Custo de viagem não encontrado" }`). Os cartões somam **todos** os lançamentos — os filtros da tela não os mudam.
+
+### O que esta etapa NÃO cobre
+
+1. **Quem aprova** — qualquer um do Comercial aprova qualquer custo, inclusive o seu (**C357**, **B988** — espera vocês).
+2. **Apagar um custo editado** continua mostrando *"Erro ao deletar custo de viagem"* (**C359**, **B989** — espera vocês); o apagado deixa
+   os comprovantes no disco (**C360**).
+3. **As coordenadas do cliente com endereço** dependem de um serviço de mapas externo sem prazo (**C361**).
+4. **A aba Permissões** de Administração continua com a lista antiga (**C358**).
+
+### O que a revisão encontrou
+
+A **medição** (antes do código) achou uma tela só — **Comercial → Custos de Viagens** — e, no banco medido, os mesmos 4 usuários que a tela
+já barra, nenhum com custo lançado (**A100**); e mediu que o resumo nunca respondia. A **revisão do plano** (1 grave, 2 médios, 6 pequenos)
+refez a medição, confirmou, e achou, executando o fluxo inteiro da tela, que apagar um custo editado falha (**C359**), que o apagado deixa os
+comprovantes no disco (**C360**) e que a localização do cliente com endereço depende de um serviço externo sem prazo (**C361**) — todos de
+antes, registrados. A **revisão adversarial do código** (três revisores, executando): o de **regra** rodou a tela inteira (32 gestos) com 13
+usuários que a tela admite, ligado e desligado — nenhum *"Acesso negado"*, as respostas iguais; o de **permissão** comparou 43 perfis com a
+decisão da tela e 38 variações de endereço — nada vazou, e o barrado não gravou nada; o de **sabotagem** fez 33 sabotagens — 7 caíram e 26 sobreviveram: a prova "pelo texto do programa" não via oito jeitos de esconder
+uma operação nova sem portão (um apelido para o servidor, o verbo numa variável, um verbo incomum, um arquivo sem extensão ou na pasta de
+testes, um caminho com padrão), e os cartões, o desligado e a própria régua tinham asserções frouxas. Virou um cenário que lê **o servidor
+montado de verdade** (só as 19 atendem os custos de viagem, todas com o portão na frente), mais o controle da própria régua e as asserções
+que faltavam — as 22 sobreviventes que a etapa cobre caem agora; as 3 dos testes das etapas 148 a 150 ficam para a próxima. Commits `9ddd5dfe`, `0bf06b57` e `cc70ee9e`.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 152 entregue (2026-10-19):** **os custos de viagem pedem o Comercial, e o resumo da tela volta a aparecer** (do Comercial). Quem a
+  tela barra do Comercial é barrado nas 19 operações dos custos de viagem; o vendedor não perde nada (**B986** — **C350** resolvido); os
+  quatro cartões do topo da tela aparecem (**B987** — **C356** resolvido). Commits `9ddd5dfe`, `0bf06b57` e `cc70ee9e`. **O que é seu:** a consulta **A100**
+  (opcional); as decisões novas **B988** (quem aprova reembolso) e **B989** (apagar o custo editado); os avisos **C357** a **C361**; as
+  decisões **B986** e **B987** (reversíveis); as perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **C277**, **C312**,
+  **C314**, **C316**, **C330**); as limitações **(152)** em D e a verificação **(152)** em F. **Próxima: Etapa 153 — ver a "próxima tarefa
+  detalhada" no plano da Etapa 152.**
 
 - **Etapa 151 entregue (2026-10-19):** **clientes, projetos, oportunidades e atividades pedem o Comercial** (do Comercial). Quem a tela barra
   do Comercial é barrado nas 13 escritas e nas 5 leituras que só o Comercial faz; o vendedor, o Almoxarifado e a Fábrica não perdem nada — a
   lista de clientes e a de projetos continuam abertas (**B983**, **B984** — **C349** resolvido em parte). Commits `49fdb035`, `fa87c828` e
   `615f6a2b`. **O que é seu:** a consulta **A99** (opcional); os avisos **C353** a **C355**; as decisões **B983** e **B984** (reversíveis); as
   perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **C277**, **C312**, **C314**, **C316**, **C330**); as limitações
-  **(151)** em D e a verificação **(151)** em F. **Próxima: Etapa 152 — ver a "próxima tarefa detalhada" no plano da Etapa 151.**
+  **(151)** em D e a verificação **(151)** em F. *(Próxima, na época: Etapa 152 — entregue acima.)*
 
 - **Etapa 150 entregue (2026-10-18):** **grupos de produto, produtos e variáveis técnicas pedem o módulo** (do Comercial/Operacional). Quem a
   tela barra do Comercial é barrado nas 25 operações; o vendedor, a Fábrica que abre a OS e o administrador do Comercial em Configurações não

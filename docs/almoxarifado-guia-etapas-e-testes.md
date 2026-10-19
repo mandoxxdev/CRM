@@ -1,17 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-19 (Etapa 151) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-19 (Etapa 152) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150 e 151) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151 e 152) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-19 (Etapa 151 ENTREGUE · próxima: Etapa 152)
+> ## Onde o desenvolvimento está — 2026-10-19 (Etapa 152 ENTREGUE · próxima: Etapa 153)
 >
-> **O desenvolvimento parou aqui: Etapa 151 fechada — 2026-10-19.** A **Etapa 151 (clientes, projetos, oportunidades e atividades pedem
+> **O desenvolvimento parou aqui: Etapa 152 fechada — 2026-10-19.** A **Etapa 152 (os custos de viagem pedem o Comercial, e o resumo da
+> tela volta a aparecer; do Comercial, fora do almoxarifado)**: quem a tela barra do Comercial deixa de lançar, editar, aprovar e apagar
+> custo de viagem, de anexar e baixar comprovante e de ler os clientes próximos e a análise pela integração (*"Acesso negado ao módulo"*);
+> o vendedor não perde nada, e os quatro cartões do topo de **Comercial → Custos de Viagens**, que nunca apareciam, aparecem. Uma consulta
+> nova, opcional (**A100**); duas decisões novas esperam vocês (**B988**, **B989**). **Próxima: Etapa 153** — ver a próxima tarefa no
+> plano da 152.
+>
+> **Etapa 151, 2026-10-19.** A **Etapa 151 (clientes, projetos, oportunidades e atividades pedem
 > o Comercial; do Comercial, fora do almoxarifado)**: quem a tela barra do Comercial deixa de criar, editar e apagar cliente, projeto,
 > oportunidade e atividade e de abrir o cadastro de um cliente, os logos, as oportunidades e as atividades pela integração (*"Acesso negado
 > ao módulo"*); o vendedor não perde nada, e a lista de clientes e a de projetos continuam abertas a todos — o Almoxarifado e a Fábrica as
-> usam. Uma consulta nova, opcional (**A99**). **Próxima: Etapa 152** — ver a próxima tarefa no plano da 151.
+> usam. Uma consulta nova, opcional (**A99**). *(Próxima, na época: Etapa 152 — entregue acima.)*
 >
 > **Etapa 150, 2026-10-18.** A **Etapa 150 (grupos de produto, produtos e variáveis técnicas
 > pedem o módulo; do Comercial/Operacional, fora do almoxarifado)**: quem a tela barra do Comercial deixa de ler o catálogo com preço e de
@@ -6689,6 +6696,44 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 152 — Os custos de viagem pedem o Comercial, e o resumo da tela volta a aparecer (ENTREGUE — 2026-10-19)
+
+**O que mudou, em uma frase:** tudo o que se faz em **Comercial → Custos de Viagens** (a lista, os cartões, a análise, lançar, editar,
+duplicar, aprovar, apagar, os comprovantes, os clientes próximos, a rota) passa a conferir o acesso ao Comercial com a mesma régua da tela,
+e os quatro cartões do topo da tela, que nunca apareciam, aparecem.
+
+**O problema que ela resolve.** Estas operações só pediam o login: quem a tela não deixa entrar no Comercial lançava e aprovava custo de
+viagem pela integração, baixava os comprovantes (recibos — dado pessoal) e lia a lista dos clientes próximos com endereço. E os cartões do
+topo da tela não apareciam: o servidor confundia o pedido do resumo com o de um custo pelo número.
+
+| Antes | Agora |
+|---|---|
+| Usuário só do Almoxarifado lançava, editava, aprovava e apagava custo de viagem e baixava comprovante pela integração | *"Acesso negado ao módulo"* em cada uma das 19 operações, e o registro no log; o comprovante do barrado nem chega ao servidor |
+| **Comercial → Custos de Viagens** sem os cartões do topo | *Total de Viagens*, *Custo Total*, *Custo Médio por Viagem* e *Clientes Visitados* aparecem (somam todos os lançamentos) |
+| O vendedor lançando, editando, anexando, duplicando, aprovando | Continua como antes |
+
+**Roteiro de teste (10 minutos).**
+
+1. **Os cartões aparecem.** Com um usuário que tem **só o Comercial** (dado em **Administração → Usuários → editar → Módulos de Acesso**):
+   **Comercial → Custos de Viagens** — os quatro cartões estão no topo (num banco sem lançamento, 0 e R$ 0,00).
+2. **O vendedor não perde nada.** Ainda com ele: **Novo custo** — escolha um cliente (aparecem a elegibilidade e os clientes próximos),
+   acrescente um segundo cliente, preencha transporte e alimentação, salve (com dois ou mais clientes a prévia da rota abre). Os cartões sobem (*Total de Viagens* +1, *Custo
+   Total* com o valor). Edite o custo, salve; anexe um comprovante e baixe-o; duplique; aprove; abra a **análise por cliente**. Nenhum
+   *"Acesso negado"*.
+3. **Quem a tela barra (pela integração).** Com um usuário que tem **só o Almoxarifado**: `GET /api/custos-viagens`,
+   `GET /api/custos-viagens/resumo`, `POST /api/custos-viagens` com `{ "data_viagem": "2026-10-20", "destino": "X" }` → **403**
+   `{ "error": "Acesso negado ao módulo", "modulo": "comercial" }`; `GET /api/clientes` → **200** (a lista, aberta desde a 151);
+   **Administração → Logs** mostra os acessos negados a *Comercial*.
+4. **O que continua como era (para não estranhar).** Apague o custo que você **editou** no passo 2: a tela mostra *"Erro ao deletar custo
+   de viagem"* (**C359** — espera a decisão **B989**); apague o **duplicado** (nunca editado): some da lista.
+
+**O que esta etapa NÃO cobre.** Quem aprova reembolso (**C357**, **B988**); apagar o custo editado (**C359**, **B989**) e o comprovante que
+fica no disco ao apagar (**C360**); a localização do cliente com endereço, que depende de um serviço externo sem prazo (**C361**); a aba
+antiga **Administração → Permissões**, que não dá módulo (**C358**).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor, pela rota) provam, escrito
+para você conferir à mão — em especial os passos 1, 2 e 4 só o navegador mostra.
+
 ## Etapa 151 — Clientes, projetos, oportunidades e atividades pedem o Comercial (ENTREGUE — 2026-10-19)
 
 **O que mudou, em uma frase:** criar, editar e apagar cliente (com o logo), projeto, oportunidade e atividade, e abrir o cadastro de um
@@ -6969,8 +7014,9 @@ ambiente do servidor (e reiniciar) desliga a conferência sem novo deploy.
 1. **O vendedor não perde nada (pela tela).** Entre com um vendedor que tem o Comercial. Em **Comercial → Propostas**: abra a lista, uma
    proposta, o formulário (salve), o **Preview editável** (mude um texto, **Salvar**, adicione uma foto, baixe o PDF) e **Comercial →
    Aprovações**. Nenhuma tela mostra *"Acesso negado"*.
-2. **Quem a tela barra é barrado também pela integração.** Crie um usuário comum e dê a ele, em **Administração → Permissões**, só o
-   **Almoxarifado**. Entre com ele: o Comercial não aparece (como sempre). Com o token dele, numa ferramenta de API: `GET /api/propostas` →
+2. **Quem a tela barra é barrado também pela integração.** Crie um usuário comum e dê a ele, em **Administração → Usuários → editar →
+   Módulos de Acesso**, só o **Almoxarifado** *(corrigido na Etapa 152: dizia "Administração → Permissões" — **estava errado**, aquela aba não
+   dá módulo, C358)*. Entre com ele: o Comercial não aparece (como sempre). Com o token dele, numa ferramenta de API: `GET /api/propostas` →
    **403** `{ "error": "Acesso negado ao módulo", "modulo": "comercial" }`; `POST /api/aprovacoes` com `{ "proposta_id": <uma proposta>,
    "valor_desconto": 30 }` → **403** igual. Em **Administração → Logs** aparece o acesso negado, módulo *Comercial*. Dê a ele também o
    **Comercial** e repita: **200**.
