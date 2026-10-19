@@ -7,7 +7,9 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 
 jest.mock('axios', () => jest.requireActual('axios/dist/browser/axios.cjs'));
-jest.mock('./CalendarioAtividades', () => ({ __esModule: true, default: () => null }));
+// o calendario simulado guarda as funcoes que a tela lhe passa (Fase 5 r3 AT01: criar, editar e excluir pelo calendario recarregam tambem)
+const mockCal = { props: null };
+jest.mock('./CalendarioAtividades', () => ({ __esModule: true, default: (p) => { mockCal.props = p; return null; } }));
 // a mesma referencia a cada render (como o contexto de verdade) — um objeto novo por chamada recarregaria sem parar
 const mockAuth = { user: { id: 3, nome: 'Vendedor 159', role: 'admin', email: 'v159@t' }, loading: false };
 jest.mock('../context/AuthContext', () => ({ useAuth: () => mockAuth }));
@@ -43,6 +45,7 @@ beforeEach(() => {
       if (qs.get('todos') === 'true') return ok(lembreteRemovido ? [ATIVIDADE] : [ATIVIDADE, LEMBRETE]);
       return ok([]);
     }
+    if (/\/atividades(\/\d+)?$/.test(caminho) && config.method !== 'get') return ok({ id: 77, message: 'ok' });
     if (caminho.endsWith('/remover-lembrete')) { lembreteRemovido = true; return ok({ message: 'ok' }); }
     if (caminho.endsWith('/usuarios/comercial')) return ok([{ id: 4, nome: 'Outro 159' }]);
     return ok([]);
@@ -93,4 +96,21 @@ test('[RN-159.04, C387] com "Todos", o Remover lembrete recarrega com todos=true
   // a metade positiva: a atividade continua na lista; o lembrete removido saiu
   expect(container.textContent).toContain('VISITA TECNICA 159');
   expect(container.textContent).not.toContain('PROPOSTA 159');
+});
+
+test('[RN-159.04, Fase 5 r3 AT01] com "Todos", criar, editar e excluir pelo calendario recarregam com todos=true', async () => {
+  await act(async () => { root.render(<MemoryRouter><Atividades /></MemoryRouter>); });
+  await esperar(() => container.querySelector('.filters select.filter-select'));
+  await act(async () => { escolher(container.querySelector('.filters select.filter-select'), 'todos'); });
+  await esperar(() => container.textContent.includes('VISITA TECNICA 159'));
+  const cal = [...container.querySelectorAll('button')].find((b) => b.textContent.includes('Calend'));
+  await clicar(cal);
+  await esperar(() => mockCal.props);
+  for (const gesto of [() => mockCal.props.onEventCreate({ titulo: 'X' }), () => mockCal.props.onEventUpdate(11, { titulo: 'Y' }), () => mockCal.props.onEventDelete(11)]) {
+    const n = pedidos.length;
+    await act(async () => { await gesto(); });
+    await esperar(() => pedidos.length > n);
+    expect(pedidos[pedidos.length - 1]).toEqual({ todos: 'true' });
+  }
+  expect(pedidos.some((p) => p.responsavel_id === 'todos')).toBe(false);
 });

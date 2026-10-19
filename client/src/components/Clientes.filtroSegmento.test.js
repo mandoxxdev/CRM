@@ -13,6 +13,7 @@ const api = require('../services/api').default;
 const Clientes = require('./Clientes').default;
 
 const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
+jest.setTimeout(20000); // os cenarios das respostas lentas passam de 3 s
 const COSM = { id: 1, razao_social: 'CLIENTE COSMETICO 159', segmento: 'COSMÉTICOS', status: 'ativo' };
 const QUIM = { id: 2, razao_social: 'CLIENTE QUIMICO 159', segmento: 'QUÍMICO', status: 'ativo' };
 
@@ -97,4 +98,21 @@ test('[RN-159.02] a busca vai aparada; so espacos nao vai', async () => {
   await act(async () => { set.call(input, '   '); input.dispatchEvent(new Event('input', { bubbles: true })); });
   await esperar(() => pedidos.length > n);
   expect(pedidos[pedidos.length - 1]).toEqual({});
+});
+
+test('[RN-159.01, Fase 5 r3 C02] o pedido anterior que termina antes do ultimo nao tira o "carregando" (a lista velha nao reaparece)', async () => {
+  // o Cosméticos responde DEPOIS de o Químico sair (a pausa da tela e de 300 ms) e ANTES de ele responder
+  atrasoPara = (seg) => (seg === 'Cosméticos' ? 900 : seg === 'Químico' ? 2500 : 0);
+  await act(async () => { root.render(<MemoryRouter><Clientes /></MemoryRouter>); });
+  await esperar(() => container.textContent.includes('CLIENTE QUIMICO 159'));
+  const sel = container.querySelector('select.filter-select');
+  await act(async () => { escolher(sel, 'Cosméticos'); });
+  await esperar(() => pedidos.some((p) => p.segmento === 'Cosméticos'));
+  await act(async () => { escolher(sel, 'Químico'); });
+  await esperar(() => pedidos.some((p) => p.segmento === 'Químico'));
+  // a resposta do Cosméticos chega agora; a do Químico ainda nao: a tela continua carregando, sem a lista de antes
+  await act(async () => { await pausa(900); });
+  expect(container.textContent).not.toContain('CLIENTE COSMETICO 159');
+  await esperar(() => container.textContent.includes('CLIENTE QUIMICO 159'));
+  expect(container.textContent).not.toContain('CLIENTE COSMETICO 159');
 });

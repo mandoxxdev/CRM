@@ -13,7 +13,9 @@
 /** As formas distintas do termo aparado: [como veio, MAIUSCULAS, minusculas]. Nao texto, vazio ou so espacos -> []. */
 function formasDoTermo(termo) {
   if (typeof termo !== 'string') return [];
-  const t = termo.trim();
+  // Fase 5 r1 M1: o termo na forma composta (NFC), a do cadastro — o "são" colado de um PDF ou digitado no macOS vem decomposto
+  // ("sa\u0303o") e nao casava com nada
+  const t = termo.normalize('NFC').trim();
   if (!t) return [];
   const formas = [];
   for (const f of [t, t.toUpperCase(), t.toLowerCase()]) if (!formas.includes(f)) formas.push(f);

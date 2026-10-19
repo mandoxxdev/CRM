@@ -87,6 +87,12 @@ const CustosViagens = () => {
   const pedidoDaListaRef = useRef(0);
   // o recarregamento com pausa (a busca, o cliente escolhido e os filtros do navegador) nao roda na montagem — a carga inicial ja pede
   const montouListaRef = useRef(false);
+  // Fase 5 r1 I1: o loadCustos le os filtros e a ordenacao de AGORA — o temporizador da pausa guardava os do momento da tecla, e um filtro
+  // trocado durante os 300 ms (o status, a data, a ordenacao) se perdia no ultimo pedido, o que vale
+  const filtrosRef = useRef(filtros);
+  filtrosRef.current = filtros;
+  const ordenacaoRef = useRef(ordenacao);
+  ordenacaoRef.current = ordenacao;
 
   const [formData, setFormData] = useState({
     cliente_id: '',
@@ -204,6 +210,8 @@ const CustosViagens = () => {
 
   const loadCustos = async () => {
     const meu = ++pedidoDaListaRef.current;
+    const filtros = filtrosRef.current;
+    const ordenacao = ordenacaoRef.current;
     try {
       const params = new URLSearchParams();
       if (filtros.cliente_id) params.append('cliente_id', filtros.cliente_id);

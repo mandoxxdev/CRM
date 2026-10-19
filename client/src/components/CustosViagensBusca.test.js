@@ -24,6 +24,8 @@ const api = require('../services/api').default;
 const CustosViagens = require('./CustosViagens').default;
 
 const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
+// Fase 5 r3 CU02/CU07: o cenario da resposta lenta passa de 3,6 s — o limite de 5 s do jest nao pode ser a assercao da pausa
+jest.setTimeout(20000);
 const CLIENTE = { id: 5, razao_social: 'ACME CAMPINAS', cidade: 'CAMPINAS', estado: 'SP', endereco: null, status: 'ativo' };
 const custo = (id, codigo, km, extra = {}) => ({ id, codigo_visita: codigo, cliente_id: 5, cliente_nome: 'ACME CAMPINAS', data_viagem: '2026-10-20',
   tipo_viagem: 'IDA_E_VOLTA', destino: 'CAMPINAS - SP', destino_cidade: 'CAMPINAS', destino_estado: 'SP', distancia_km: km, total_custo: 100,
@@ -94,7 +96,9 @@ test('[RN-159.03, C386] o texto vai como busca 300 ms depois da ultima tecla, nu
   await digitar(busca(), 'acme ');
   await act(async () => { await pausa(150); });
   expect(pedidosLista.length).toBe(1); // ainda na pausa
-  expect(await esperar(() => pedidosLista.length === 2)).toBe(true);
+  // Fase 5 r3 CU02/CU07: e nao muito depois dela — 300 ms (e nao 700 ou 2000)
+  await act(async () => { await pausa(300); });
+  expect(pedidosLista.length).toBe(2);
   expect(pedidosLista[1]).toEqual({ busca: 'acme' });
   await act(async () => { await pausa(400); });
   expect(pedidosLista.length).toBe(2);
@@ -157,4 +161,34 @@ test('[RN-159.03, Fase 2 I5b] a resposta lenta e a falha lenta do pedido anterio
   expect(await esperar(() => pedidosLista.length > n)).toBe(true);
   await act(async () => { await pausa(1000); });
   expect(texto()).toContain('VIS-0002');
+});
+
+test('[RN-159.03, Fase 5 r1 I1] um filtro trocado durante a pausa vale no pedido da pausa (o temporizador nao usa os filtros de antes)', async () => {
+  respostaDaLista = (p) => ({ data: p.status_aprovacao === 'aprovado' ? [] : TODOS });
+  await montar();
+  await digitar(busca(), 'acme');
+  await act(async () => { await pausa(50); });
+  const status = [...container.querySelectorAll('select.select-moderno')].find((s) => [...s.options].some((o) => o.value === 'aprovado'));
+  const set = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
+  await act(async () => { set.call(status, 'aprovado'); status.dispatchEvent(new Event('change', { bubbles: true })); });
+  await act(async () => { await pausa(600); });
+  const ultimo = pedidosLista[pedidosLista.length - 1];
+  expect(ultimo).toEqual({ busca: 'acme', status_aprovacao: 'aprovado' });
+  expect(texto()).not.toContain('VIS-0002');
+});
+
+test('[RN-159.03, Fase 5 r3 CU05] a distancia minima e o valor minimo e maximo tambem recarregam e filtram', async () => {
+  respostaDaLista = () => ({ data: [custo(1, 'VIS-0001', 50, { total_custo: 100 }), custo(2, 'VIS-0002', 300, { total_custo: 900 })] });
+  await montar();
+  await clicar(botao('Mais Filtros'));
+  const campoDe = (rotulo) => [...container.querySelectorAll('.filtro-avancado-item')].find((g) => g.textContent.includes(rotulo)).querySelector('input');
+  for (const [rotulo, valor, fica, sai] of [['Distância Mínima', '100', 'VIS-0002', 'VIS-0001'], ['Valor Mínimo', '500', 'VIS-0002', 'VIS-0001'], ['Valor Máximo', '500', 'VIS-0001', 'VIS-0002']]) {
+    await clicar(botao('Limpar Filtros'));
+    expect(await esperar(() => texto().includes('VIS-0001') && texto().includes('VIS-0002'))).toBe(true);
+    const n = pedidosLista.length;
+    await digitar(campoDe(rotulo), valor);
+    expect(await esperar(() => pedidosLista.length > n)).toBe(true);
+    expect(await esperar(() => !texto().includes(sai))).toBe(true);
+    expect(texto()).toContain(fica);
+  }
 });

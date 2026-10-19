@@ -4386,14 +4386,15 @@ app.get('/api/clientes', authenticateToken, exigirLeitorDasListasDeClientesEProj
 
   // Etapa 159 (RN-159.01, C384): o filtro Segmento da tela — o servidor nem o lia. O cadastro grava pelo toUpperCase do JavaScript
   // ("COSMÉTICOS") e o UPPER do SQLite nao muda o "é", entao a comparacao e aqui, sem caixa e sem espaco; nao texto = sem filtro
-  const segmentoAlvo = typeof segmento === 'string' ? segmento.trim().toUpperCase() : '';
+  // (Fase 5 r1 M1: os dois lados na forma composta, NFC — o termo decomposto nao casava)
+  const segmentoAlvo = typeof segmento === 'string' ? segmento.normalize('NFC').trim().toUpperCase() : '';
 
   db.all(query, params, (err, rows) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
     let lista = rows || [];
-    if (segmentoAlvo) lista = lista.filter((c) => typeof c.segmento === 'string' && c.segmento.trim().toUpperCase() === segmentoAlvo);
+    if (segmentoAlvo) lista = lista.filter((c) => typeof c.segmento === 'string' && c.segmento.normalize('NFC').trim().toUpperCase() === segmentoAlvo);
     res.json(lista.map(semCoordenadaGuardada));
   });
 });
