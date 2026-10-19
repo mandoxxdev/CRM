@@ -206,7 +206,8 @@ na busca global, hoje veem resultados que não conseguem abrir. **Não há regis
 
 - **C362** — o *Construtor de relatórios* (*Ctrl+R*) e o *Motor de fluxos* (*Ctrl+W*) da moldura chamam as operações com o `/api` duplicado e
   nunca chegam ao servidor; e as operações do servidor são de mentira (devolvem lista vazia e "salvo com sucesso" sem gravar). De antes.
-- **C363** — as notificações do sino (na moldura de todos os módulos) mostram a quem perdeu o Comercial os lembretes das propostas de que é
+- **C363** — as notificações do sino (na moldura de todos os módulos *— **estava errado**, medido na Etapa 154: o `Layout` importa o sino e não
+  o desenha; só o painel do Comercial o mostra*) mostram a quem perdeu o Comercial os lembretes das propostas de que é
   responsável ou criador (número, título, mensagem, cliente); o clique leva a `/propostas/editar/:id` sem o `/comercial` (404). De antes.
   **As aprovações pendentes NÃO saem:** o handler as lê e devolve só os lembretes (`todasNotificacoes = [...notificacoesLembretes]`). *(A
   primeira versão dizia "recortado pelo usuário" — certo para os lembretes; a Fase 2 M-5 o "corrigiu" para "todas as aprovações da
@@ -307,7 +308,9 @@ na busca global, hoje veem resultados que não conseguem abrir. **Não há regis
 3. **Paralelismo:** **1** galho em paralelo de fato (o T4, num agente em worktree própria, enquanto eu rodava os controles do tronco);
    **1** retrabalho (o helper mudou no meio — a Fase 2 I-1 — e o T4 refez a 148/149 com a forma objeto); **1** revisor na Fase 2 (em paralelo
    com o código — divergência), **3** em paralelo na Fase 5 sob a trava.
-4. **Defeito que escapou:** *(preencher na Etapa 154)*.
+4. **Defeito que escapou** *(preenchido na Etapa 154)*: **0** de código; **1** de documento — a **C363** dizia *"o sino (na moldura de todos
+   os módulos)"*: **estava errado** — o `Layout` importa o `Notificacoes` e não o desenha; só o painel do Comercial o mostra (Fase 0 da 154);
+   **1** de prova — o helper das camadas não vê um middleware global registrado por receptor apelidado sem caminho (Fase 5 r3 da 154, R2).
 
 **Retro da 152 — o defeito que escapou (preenchido aqui):** **0** de código; **2** de prova — a leitura das camadas que a 152 escreveu
 inline no `custosViagensPortao` só via as rotas que casavam uma amostra e comparava os middlewares de antes só pelo nome (a Fase 5 r3 da 153,

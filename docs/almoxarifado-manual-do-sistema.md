@@ -1037,6 +1037,13 @@ O cadastro de um usuário (o papel, se é administrador do sistema, os módulos 
 
 As listas que alimentam os seletores de **Responsável** (propostas, projetos, oportunidades, atividades, OS, o filtro do painel inicial) seguem a mesma ideia: quem gerencia usuários recebe o cadastro completo de cada pessoa listada; os outros recebem só o nome, o cargo, o e-mail e se está ativo — é o que os seletores mostram ("Nome - Cargo"). **Quem aparece** em cada seletor não depende disso: são os usuários ativos com acesso ao módulo (direto ou por grupo) e os administradores do sistema; quem não tem o papel de administrador vê só os do próprio setor (sem diferença de maiúsculas e espaços).
 
+As listas de **clientes** e de **projetos** que alimentam os seletores do Almoxarifado — o **Proprietário** do material (2.8), o destino da
+reserva, o projeto da movimentação e da sobra — vêm do cadastro do Comercial e são as mesmas da ordem de serviço da Fábrica. Elas são
+entregues a quem tem acesso a **pelo menos um** de três módulos: **Comercial**, **Almoxarifado** ou **Operacional**, pela mesma regra que
+decide se a pessoa abre as telas desses módulos. Quem não tem nenhum dos três (por exemplo, só o Compras ou só a Engenharia / Projetos)
+recebe *"Acesso negado ao módulo"*, e a tentativa fica registrada como acesso negado a *Comercial ou Almoxarifado ou Operacional*. Nenhuma
+tela de outro módulo usa essas listas.
+
 ### 5.2e Usuário desativado ou excluído
 
 O sistema relê o cadastro de quem está usando a cada ação. Usuário **desativado ou excluído** — mesmo com a sessão ainda aberta — tem a ação seguinte recusada com

@@ -1,18 +1,26 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-19 (Etapa 153) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-19 (Etapa 154) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152 e 153) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153 e 154) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-19 (Etapa 153 ENTREGUE · próxima: Etapa 154)
+> ## Onde o desenvolvimento está — 2026-10-19 (Etapa 154 ENTREGUE · próxima: Etapa 155)
 >
-> **O desenvolvimento parou aqui: Etapa 153 fechada — 2026-10-19.** A **Etapa 153 (o painel, os relatórios e o mapa do Comercial pedem o
+> **O desenvolvimento parou aqui: Etapa 154 fechada — 2026-10-19.** A **Etapa 154 (a lista de clientes e a de projetos pedem um dos
+> módulos que as usam, e o sino só mostra o que se pode abrir; do Comercial, fora do almoxarifado — mas as telas do Almoxarifado usam as
+> listas)**: quem não tem o Comercial, o Almoxarifado nem o Operacional deixa de ler pela integração a lista de clientes (com CNPJ,
+> telefone, e-mail e endereço) e a de projetos (*"Acesso negado ao módulo"*); o vendedor, o Almoxarifado (dono do material, reservas,
+> movimentações, sobras) e a Fábrica (a OS) não perdem nada. O sino do painel do Comercial só entrega os lembretes a quem tem o Comercial, e o
+> clique nele (e no **Ver proposta** do lembrete das Atividades) abre a proposta. Uma consulta nova, opcional (**A102**). **Próxima: Etapa
+> 155** — ver a próxima tarefa no plano da 154.
+>
+> **Etapa 153, 2026-10-19.** A **Etapa 153 (o painel, os relatórios e o mapa do Comercial pedem o
 > Comercial, e a busca do topo só mostra o que cada um pode abrir; do Comercial/núcleo, fora do almoxarifado)**: quem a tela barra do
 > Comercial deixa de ler pela integração o painel do Comercial, os relatórios executivo e de visitas técnicas e o mapa das máquinas
 > vendidas (*"Acesso negado ao módulo"*); o vendedor não perde nada. A busca do topo (*Ctrl+K*), que está em todos os módulos, mostra cada
 > resultado só a quem pode abrir a tela dele — hoje todos são do Comercial, então quem não tem o Comercial vê *"Nenhum resultado
-> encontrado"*. Uma consulta nova, opcional (**A101**). **Próxima: Etapa 154** — ver a próxima tarefa no plano da 153.
+> encontrado"*. Uma consulta nova, opcional (**A101**). *(Próxima, na época: Etapa 154 — entregue acima.)*
 >
 > **Etapa 152, 2026-10-19.** A **Etapa 152 (os custos de viagem pedem o Comercial, e o resumo da
 > tela volta a aparecer; do Comercial, fora do almoxarifado)**: quem a tela barra do Comercial deixa de lançar, editar, aprovar e apagar
@@ -6702,6 +6710,46 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 154 — A lista de clientes e a de projetos pedem um dos módulos que as usam, e o sino só mostra o que se pode abrir (ENTREGUE — 2026-10-19)
+
+**O que mudou, em uma frase:** a lista de clientes e a de projetos passam a pedir o Comercial, o Almoxarifado ou o Operacional (basta um),
+pela mesma régua da tela, e o sino do painel do Comercial só entrega os lembretes a quem tem o Comercial — e o clique nele abre a proposta.
+
+**O problema que ela resolve.** As duas listas só pediam o login: quem só tem o Compras, o Financeiro ou a Engenharia / Projetos — que
+nenhuma tela deixa ver essas listas — lia pela integração todos os clientes com CNPJ, telefone, e-mail e endereço, e todos os projetos. E o
+sino entregava pela integração os lembretes das propostas a quem perdeu o Comercial; o clique numa notificação (e no **Ver proposta** do
+lembrete das Atividades) levava a uma página que não existe.
+
+| Antes | Agora |
+|---|---|
+| Usuário só do Compras lia a lista de clientes e a de projetos pela integração | *"Acesso negado ao módulo"* nas duas, e o registro no log (*Comercial ou Almoxarifado ou Operacional*) |
+| O Almoxarifado (dono do material, reservas, movimentações, sobras) e a Fábrica (a OS) escolhendo cliente e projeto | Continua como antes |
+| Clique numa notificação do sino ou em **Ver proposta** no lembrete das Atividades | Abre **Comercial → Propostas → Editar** da proposta (antes: página inexistente) |
+| Usuário sem o Comercial recebia, pela integração, os lembretes das propostas dele | Lista vazia — sem registro no log |
+
+**Roteiro de teste (10 minutos).**
+
+1. **O Almoxarifado não perde nada.** Com um usuário que tem **só o Almoxarifado** (dado em **Administração → Usuários → editar → Módulos de
+   Acesso**; perfil **Almoxarife** em **Almoxarifado → Configurações → Perfis de Acesso**): **Almoxarifado → Materiais → Novo**, bloco
+   **Propriedade** — o **Proprietário** lista os clientes; escolha um, preencha o resto e salve. **Reservas**, **Movimentações** (nova) e
+   **Sobras**: o seletor de projeto lista os projetos. Nenhum *"Acesso negado"*.
+2. **A Fábrica não perde nada.** Com um usuário que tem **só o Operacional**: **Fábrica → Ordens de Serviço**, abra uma OS — os seletores de
+   cliente e de projeto listam; escolha, salve, reabra (ficaram gravados).
+3. **O sino.** Com um vendedor (**só o Comercial**) responsável por uma proposta com lembrete para hoje (em **Comercial → Propostas →
+   Editar**, o lembrete com a data de hoje): **Comercial** — o sino do painel mostra **1**; abra-o e clique no lembrete: abre a proposta. Em
+   **Comercial → Atividades**, abra o mesmo lembrete e clique **Ver proposta**: abre a proposta.
+4. **Quem nenhum dos três módulos admite (pela integração).** Com um usuário que tem **só o Compras**: `GET /api/clientes` e
+   `GET /api/projetos` → **403** `{ "error": "Acesso negado ao módulo", "modulo": ["comercial", "almoxarifado", "operacional"] }`;
+   **Administração → Logs** mostra os dois acessos negados a *Comercial ou Almoxarifado ou Operacional*. Com uma proposta dele com lembrete
+   para hoje, `GET /api/notificacoes` → **200** `[]`, sem linha nova no log.
+
+**O que esta etapa NÃO cobre.** Com a permissão tirada no meio da sessão, as telas do Almoxarifado mostram o seletor vazio e calado até
+recarregar (**C366**); o seletor de cliente das **Reservas** sai em branco — a tela desenha um campo que o cadastro não tem (**C367**, de
+antes); a criação de OS pela Fábrica num banco novo responde erro a quem não é administrador (**C277**, de antes).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor, pela rota; o clique do sino pela
+tela em jsdom) provam, escrito para você conferir à mão — em especial os passos 1 a 3 só o navegador mostra.
+
 ## Etapa 153 — O painel, os relatórios e o mapa do Comercial pedem o Comercial, e a busca do topo só mostra o que cada um pode abrir (ENTREGUE — 2026-10-19)
 
 **O que mudou, em uma frase:** o painel do Comercial, os relatórios executivo e de visitas técnicas e o mapa de máquinas vendidas passam
@@ -6764,7 +6812,7 @@ topo da tela não apareciam: o servidor confundia o pedido do resumo com o de um
    *"Acesso negado"*.
 3. **Quem a tela barra (pela integração).** Com um usuário que tem **só o Almoxarifado**: `GET /api/custos-viagens`,
    `GET /api/custos-viagens/resumo`, `POST /api/custos-viagens` com `{ "data_viagem": "2026-10-20", "destino": "X" }` → **403**
-   `{ "error": "Acesso negado ao módulo", "modulo": "comercial" }`; `GET /api/clientes` → **200** (a lista, aberta desde a 151);
+   `{ "error": "Acesso negado ao módulo", "modulo": "comercial" }`; `GET /api/clientes` → **200** (a lista — desde a 154, pela régua do Comercial, do Almoxarifado ou do Operacional);
    **Administração → Logs** mostra os acessos negados a *Comercial*.
 4. **O que continua como era (para não estranhar).** Apague o custo que você **editou** no passo 2: a tela mostra *"Erro ao deletar custo
    de viagem"* (**C359** — espera a decisão **B989**); apague o **duplicado** (nunca editado): some da lista.

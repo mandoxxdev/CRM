@@ -356,6 +356,38 @@ Testes: `tests/api/produtosGruposVariaveisPortao.api.test.js` (as 25 + o clonar 
 caminho montado — e uma a uma, 17 perfis contra a decisão da tela, o catálogo e as variáveis pelo Comercial, as variáveis pelo caminho de
 Configurações, a OS da Fábrica lendo o produto pelo código, o clonar, o desligado com as exclusões, o BUSY).
 
+### As listas de clientes e de projetos pelos três módulos que as leem, e as notificações filtradas por tipo (Etapa 154, C353, C363)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa154-listas-de-clientes-e-projetos-e-notificacoes-pelo-modulo.md`. Commits `fa41db01`,
+`a5b9365e` e `073b330c`.
+
+- **`GET /api/clientes` e `GET /api/projetos`** com `exigirLeitorDasListasDeClientesEProjetos` (`portaoDasPropostas.exigir(['comercial',
+  'almoxarifado', 'operacional'])`) como 2º middleware (RN-154.01, B995). Recusa 403 `{ error: 'Acesso negado ao módulo', modulo:
+  ['comercial', 'almoxarifado', 'operacional'] }`, log `comercial|almoxarifado|operacional` / *Comercial ou Almoxarifado ou Operacional*; BUSY
+  → 503 `portao:propostas`. Telas medidas (`client/src`, literal do caminho): Comercial — `Clientes`, `Atividades`, `CustosViagens`,
+  `ProjetoForm`, `proposta/PropostaForm`, `Projetos`, `OSComercialForm` (e `OportunidadeForm`, `GerarPropostaModal`, o `PropostaForm` antigo,
+  não montados); Almoxarifado — `MaterialAlmoxarifadoForm`, `ReservasAlmoxarifado`, `MovimentacoesAlmoxarifado`, `SobrasAlmoxarifado`;
+  Operacional — `operacional/OSForm` (pelo `OrdensServico`). **A RN-151.03 (*"as duas listas continuam só com o login"*) deixou de valer** — era
+  decisão (B983), não erro; a seção da 151 abaixo foi marcada.
+- **`GET /api/notificacoes`** com `filtrarNotificacoesPorModulo` (`filtrarPorModulo(TIPOS_DAS_NOTIFICACOES, { contexto:
+  'portao:notificacoes' })`, `TIPOS_DAS_NOTIFICACOES = { lembrete_proposta: ['comercial'] }`) como 2º middleware (RN-154.02, B996): sem tipo
+  permitido (ou sem o filtro na rota) → `[]` sem consultar e sem log; o array devolvido passa por `podeVer(n.tipo)` objeto a objeto. O sino
+  (`Notificacoes`) é desenhado **só** pelo `Dashboard` (índice de `/comercial`) — o `Layout` o importa e não o desenha (**a C363 dizia "na
+  moldura de todos os módulos": estava errado**).
+- **O clique** (`Notificacoes.js`, `Atividades.js` — RN-154.03): `/comercial/propostas/editar/:id` (era `/propostas/editar/:id`, rota
+  inexistente).
+- **Desligado** (`PROPOSTAS_PORTAO_DE_MODULO=desligado`, B997): as listas voltam ao só login e o sino a todos os tipos; o aviso do boot
+  acrescenta *"…, e as listas de clientes e de projetos NAO exigem o Comercial, o Almoxarifado ou o Operacional (só o login), e as
+  notificações do sino mostram os lembretes das propostas a qualquer logado, …"* logo depois do trecho dos custos de viagem.
+
+Testes: `tests/api/listasNotificacoesPortao.api.test.js` (9: o fonte — o portão com os três módulos, o mapa igual aos tipos das consultas, o
+array filtrado —, o inventário de quem cita `/clientes`, `/projetos` e `/notificacoes` no client (com o módulo da moldura; só o `Dashboard`
+desenha o sino), as camadas do prefixo `/api/notificacoes`, o barrado (Engenharia / Projetos, Compras, Financeiro) com um lembrete dele, o
+recorte por responsável **ou** criador, o Almoxarifado gravando o material com o cliente da lista, a Fábrica salvando a OS com o cliente e o
+projeto das listas, o vendedor seguindo o clique até as leituras da proposta, 19 perfis, o desligado, o BUSY/500); `clientesProjetosPortao`
+(o dono dos prefixos `/api/clientes` e `/api/projetos`: as listas com a cadeia nova nas camadas); `client/src/components/Notificacoes.test.js`
+(o clique e a rota `propostas/editar/:id` → `PropostaForm` no bloco `/comercial` do `App.js`).
+
 ### O painel, os relatórios e o mapa no portão, e a busca global filtrada por tipo (Etapa 153, C355, C352)
 
 Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa153-paineis-relatorios-e-busca-global-pelo-modulo.md`. Commits `09424106`, `654df671` e `b1918f1a`.
@@ -373,7 +405,7 @@ Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa153-paineis-relatori
   verificar permissões"* (o filtro roda antes da conferência do `q`).
 - **De fora, de propósito (B993):** `/api/reports` e `/api/workflows*` (stubs; o client os chama como `/api/api/...` — 404, **C362**),
   `/api/auditoria/*` (a `tentativa-acesso` é do próprio barrado; os `logs` com `canManageUsers`), `/api/notificacoes` (os lembretes das
-  propostas do próprio usuário; as aprovações são lidas e **não** devolvidas — **C363**).
+  propostas do próprio usuário; as aprovações são lidas e **não** devolvidas — **C363**; a Etapa 154 as filtrou por tipo — ver acima).
 - O aviso do boot (desligado) acrescenta *"…, e as dos painéis, dos relatórios e do mapa do Comercial NAO exigem o Comercial (só o login), e a
   busca global mostra todos os tipos de resultado a qualquer logado; …"*.
 
@@ -420,7 +452,9 @@ Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa151-clientes-projeto
   PropostasList, proposta/PropostaForm — e `GET /api/atividades` — Atividades, CustosViagens; com `todos=1` traz os lembretes de todas as
   propostas).
 - **`GET /api/clientes` e `GET /api/projetos` só com o login** (RN-151.03, **C353**): o Almoxarifado (MaterialAlmoxarifadoForm,
-  ReservasAlmoxarifado, MovimentacoesAlmoxarifado, SobrasAlmoxarifado) e a OS da Fábrica (`operacional/OSForm`) as leem.
+  ReservasAlmoxarifado, MovimentacoesAlmoxarifado, SobrasAlmoxarifado) e a OS da Fábrica (`operacional/OSForm`) as leem. *(**Mudou na
+  Etapa 154** — RN-154.01, B995: o `exigirLeitorDasListasDeClientesEProjetos`, o Comercial, o Almoxarifado ou o Operacional. Era decisão
+  — B983 —, não erro.)*
 - **Sem chamador vivo, com o portão:** `DELETE /api/projetos/:id` e as três escritas de oportunidade (`Oportunidades`/`OportunidadeForm` são
   código morto — não há rota `/comercial/oportunidades`; o `OportunidadeForm` chama `GET /api/oportunidades/:id`, que **não existe** — **C354**).
 - O aviso do boot (desligado) só acrescenta *"…, e as dos clientes, dos projetos, das oportunidades e das atividades NAO exigem o Comercial
