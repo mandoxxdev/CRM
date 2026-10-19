@@ -1,12 +1,14 @@
 /**
  * Etapa 151 (Comercial) — clientes (7 rotas), projetos (5), oportunidades (4) e atividades (4): a escrita e a leitura que so o Comercial
- * faz exigem o Comercial pela regua da TELA; as duas listas que outros modulos leem continuam so com o login. Pelo `index.js` de verdade
- * (pasta vazia): C349.
+ * faz exigem o Comercial pela regua da TELA; as duas listas que outros modulos leem passaram, na Etapa 154, a regua da tela de algum dos tres
+ * modulos que as leem (o Comercial, o Almoxarifado ou o Operacional — RN-154.01). Pelo `index.js` de verdade (pasta vazia): C349.
  *
  *   RN-151.01  as 13 escritas passam pelo `exigirComercialNasPropostas` logo depois do login (antes do multer no logo: o arquivo do
  *              barrado nao chega ao disco)
  *   RN-151.02  as 5 leituras que so o Comercial faz (logos, cliente por id, projeto por id, oportunidades, atividades) — o mesmo portao
- *   RN-151.03  GET /api/clientes e GET /api/projetos continuam so com o login (o Almoxarifado e a OS da Fabrica as leem)
+ *   RN-151.03  GET /api/clientes e GET /api/projetos continuavam so com o login (o Almoxarifado e a OS da Fabrica as leem) — mudou na Etapa
+ *              154 (RN-154.01, C353, B995): o `exigirLeitorDasListasDeClientesEProjetos`, o Comercial, o Almoxarifado ou o Operacional pela
+ *              regua da tela; este teste e o dono dos prefixos e prende a cadeia nova (o resto da 154: listasNotificacoesPortao.api.test.js)
  *   RN-151.04  PROPOSTAS_PORTAO_DE_MODULO=desligado: as 18 voltam ao so login
  *
  * Molde: produtosGruposVariaveisPortao.api.test.js (Etapa 150). Plano:
@@ -127,10 +129,10 @@ const LISTAS = [['GET', '/api/clientes'], ['GET', '/api/projetos']];
 const achar = ([m, r]) => (TODOS.find((x) => x.metodo === m && x.rota === r) || { metodo: m, rota: r, resto: '(nao registrada)' });
 const DEZOITO = [...ESCRITAS, ...LEITURAS].map(achar);
 // Etapa 153 (RN-153.04): as mesmas, conferidas nas camadas do Express montado: as 18 com o portao que o cenario do fonte espera; as duas
-// listas abertas de proposito a todo logado (RN-151.03: so o login e o handler) com a cadeia que o despejo da, medida
+// listas com o portao dos tres modulos (Etapa 154, RN-154.01 — ate a 153, so o login e o handler)
 const ROTAS_DAS_CAMADAS = [
   ...DEZOITO.map((r) => ({ metodo: r.metodo, rota: r.rota, cadeia: camadas.cadeiaDoPortao('exigirComercialNasPropostas') })),
-  ...LISTAS.map(([metodo, rota]) => ({ metodo, rota, cadeia: ['authenticateToken', '<anonima>'] })),
+  ...LISTAS.map(([metodo, rota]) => ({ metodo, rota, cadeia: camadas.cadeiaDoPortao('exigirLeitorDasListasDeClientesEProjetos') })),
 ];
 const NEUTRO = '/api/zz-neutro-151';
 const AMOSTRAS_DAS_CAMADAS = camadas.amostrasDasCamadas(ROTAS_DAS_CAMADAS, { neutro: NEUTRO });
@@ -191,7 +193,7 @@ async function logar(u) {
 }
 
 // ── RN-151.01/02/03: a regua pelo fonte ───────────────────────────────────────────────────
-test('[RN-151.01/02/03, C349] fonte: as 18 com o exigirComercialNasPropostas como 2o middleware (antes do multer no logo), as 2 listas so com o login, cada uma registrada uma vez e so no index.js', () => {
+test('[RN-151.01/02/03, RN-154.01, C349] fonte: as 18 com o exigirComercialNasPropostas como 2o middleware (antes do multer no logo), as 2 listas com o portao dos tres modulos, cada uma registrada uma vez e so no index.js', () => {
   assert.deepStrictEqual([...DEZOITO, ...LISTAS.map(achar)].filter((r) => r.resto === '(nao registrada)').map((r) => r.rota), [], 'uma rota sumiu do fonte');
   const esperado = [...ESCRITAS, ...LEITURAS, ...LISTAS].map(([m, r]) => `${m} ${r}`).sort();
   // regua no TEXTO INTEIRO (o \s atravessa a quebra de linha): todo registro (qualquer verbo, use/all/route, qualquer aspa, caminho em
@@ -256,14 +258,15 @@ test('[RN-151.01/02/03, C349] fonte: as 18 com o exigirComercialNasPropostas com
     .map((r) => `${r.metodo} ${r.rota}: ${r.resto.slice(0, 80)}`);
   assert.deepStrictEqual(sem, []);
   assert.ok(achar(['POST', '/api/clientes/:id/logo']).resto.startsWith("authenticateToken, exigirComercialNasPropostas, uploadClienteLogo.single('logo'), "), 'o logo: o multer antes do portao');
-  // RN-151.03: as duas listas exatamente como antes
-  assert.deepStrictEqual(LISTAS.map(achar).map((r) => r.resto), ['authenticateToken, (req, res) => {', 'authenticateToken, (req, res) => {'], 'RN-151.03: uma lista ganhou middleware');
+  // RN-154.01 (era a RN-151.03, so o login): as duas listas com o portao dos tres modulos, e so ele
+  assert.deepStrictEqual(LISTAS.map(achar).map((r) => r.resto), Array(2).fill('authenticateToken, exigirLeitorDasListasDeClientesEProjetos, (req, res) => {'), 'RN-154.01: uma lista sem o portao dos tres modulos (ou com outro middleware)');
+  assert.ok(/\nconst exigirLeitorDasListasDeClientesEProjetos = portaoDasPropostas\.exigir\(\['comercial', 'almoxarifado', 'operacional'\]\);\n/.test(FONTE), 'RN-154.01: o portao das listas com os tres modulos');
   // o logos antes do /:id (senao o /:id atenderia "logos")
   assert.ok(FONTE.indexOf("app.get('/api/clientes/logos'") < FONTE.indexOf("app.get('/api/clientes/:id'"), 'o /logos depois do /:id');
 });
 
 // ── Etapa 153 (RN-153.04): o que a regua do texto nao le (receptor apelidado, app[verbo], .call, search, arquivo fora do index.js) ──
-test('[RN-151.01/02/03, Etapa 153 RN-153.04] as camadas do Express montado: so as 18 e as 2 listas (so o login) atendem os 4 prefixos, cada uma com o login e o portao antes de tudo; nenhum middleware so delas, nenhum app.param', () => {
+test('[RN-151.01/02/03, Etapa 153 RN-153.04, RN-154.01] as camadas do Express montado: so as 18 e as 2 listas (com o portao dos tres modulos) atendem os 4 prefixos, cada uma com o login e o portao antes de tudo; nenhum middleware so delas, nenhum app.param', () => {
   const cam = camadas.lerCamadas(pasta);
   assert.deepStrictEqual(camadas.conferirCamadas(cam, ROTAS_DAS_CAMADAS, { neutro: NEUTRO }), []);
   assert.ok(cam.despacho.length === AMOSTRAS_DAS_CAMADAS.length && cam.despacho.filter((d) => d.atendida).length >= ROTAS_DAS_CAMADAS.length, 'o despejo nao despachou as amostras');
@@ -287,7 +290,7 @@ test('[RN-151.01/02/03, C349] o usuario que a tela barra do Comercial (so a dire
   assert.strictEqual(await retrato(), antes, 'uma rota barrada mudou um cliente, um projeto, uma oportunidade ou uma atividade');
   assert.deepStrictEqual(arquivosDaPasta(), arquivos0, 'o logo do barrado chegou ao disco');
   assert.deepStrictEqual(await negados(b.id), [{ modulo: 'comercial', nome_modulo: 'Comercial', n: 18 }], 'cada 403 registra o acesso negado no log, com o modulo do portao');
-  // a metade positiva: as duas listas (as telas do Almoxarifado as leem) — sem log novo
+  // a metade positiva: as duas listas (as telas do Almoxarifado as leem — o portao dos tres modulos da 154 o admite) — sem log novo
   const [sc, cl] = await j('GET', '/clientes', b.T);
   const [sp, pj] = await j('GET', '/projetos', b.T);
   assert.ok(sc === 200 && cl.some((c) => c.id === ctx.cliente), `lista de clientes: ${sc} ${JSON.stringify(cl).slice(0, 120)}`);
@@ -359,13 +362,19 @@ test('[RN-151.01/02] o Comercial faz o cliente (criar -> logo -> editar -> ler -
   assert.deepStrictEqual(await negados(u.id), [], 'o portao registrou acesso negado para quem passou');
 });
 
-test('[RN-151.03, integracao] o cliente e o projeto criados pelo Comercial aparecem nas listas para o Almoxarifado e para o Operacional, e o Operacional edita a OS da Fabrica com eles — e o mesmo toma 403 no cliente por id, nos logos e nas escritas', async () => {
+test('[RN-151.03, RN-154.01, integracao] o cliente e o projeto criados pelo Comercial aparecem nas listas para o Almoxarifado e para o Operacional (a Engenharia / Projetos toma 403 nelas), e o Operacional edita a OS da Fabrica com eles — e o mesmo toma 403 no cliente por id, nos logos e nas escritas', async () => {
   const c = ctx.u.diretaComercial;
   const [sc, cli] = await j('POST', '/clientes', c.T, { razao_social: 'cliente da os 151' });
   assert.strictEqual(sc, 200, JSON.stringify(cli));
   const [sp, pj] = await j('POST', '/projetos', c.T, { cliente_id: cli.id, nome: 'projeto da os 151', status: 'ativo' });
   assert.strictEqual(sp, 200, JSON.stringify(pj));
-  for (const k of ['soAlmox', 'soOperacional', 'soEngProjetos']) {
+  // Etapa 154 (RN-154.01): so o Almoxarifado e o Operacional — a Engenharia / Projetos (nenhuma tela dela le as listas) passa a tomar 403
+  const NEGADO_LISTAS = { error: 'Acesso negado ao módulo', modulo: ['comercial', 'almoxarifado', 'operacional'] };
+  const eng = ctx.u.soEngProjetos;
+  const [se1, xe1] = await j('GET', '/clientes', eng.T);
+  const [se2, xe2] = await j('GET', `/projetos?cliente_id=${cli.id}`, eng.T);
+  assert.deepStrictEqual([se1, xe1, se2, xe2], [403, NEGADO_LISTAS, 403, NEGADO_LISTAS], 'RN-154.01: a Engenharia / Projetos leu as listas');
+  for (const k of ['soAlmox', 'soOperacional']) {
     const u = ctx.u[k];
     const [s1, l1] = await j('GET', '/clientes', u.T);
     const [s2, l2] = await j('GET', '/projetos', u.T);
@@ -404,12 +413,15 @@ test('[RN-151.03, integracao] o cliente e o projeto criados pelo Comercial apare
 });
 
 // ── por usuario, decide como a tela ───────────────────────────────────────────────────────
-test('[RN-151.01/02/03] por usuario: as 18 decidem como a tela do Comercial; as duas listas respondem a todo logado', async () => {
+test('[RN-151.01/02/03, RN-154.01] por usuario: as 18 decidem como a tela do Comercial; as duas listas, como a tela de algum dos tres modulos', async () => {
   const esperado = {
     semNada: 200, diretaComercial: 200, grupoComercial: 200, grupoVazio: 200, superU: 200, roleAdmin: 200,
     comercialGrupoInativo: 403, comercialPermissao0: 403, comercialGrupo0: 403, soAlmox: 403, soOperacional: 403, soEngProjetos: 403,
     adminComercialComAdministrativo: 403, grupoAlmox: 403,
   };
+  // Etapa 154 (RN-154.01): as listas pelos tres modulos — os que tem o Almoxarifado ou o Operacional passam; a Engenharia / Projetos, o
+  // Comercial com permissao 0 e o Administrativo (sem os tres) nao
+  const listas = { ...esperado, comercialGrupoInativo: 200, comercialGrupo0: 200, soAlmox: 200, soOperacional: 200, grupoAlmox: 200 };
   const linhas = [];
   for (const k of Object.keys(esperado)) {
     const u = ctx.u[k];
@@ -417,6 +429,7 @@ test('[RN-151.01/02/03] por usuario: as 18 decidem como a tela do Comercial; as 
     assert.strictEqual(sg, 200, JSON.stringify(g));
     const quem = { id: u.id, role: u.role, is_superadmin: u.superadmin ? 1 : 0, admin_modulos: u.adminModulos ? JSON.stringify(u.adminModulos) : '[]' };
     const tela = temModuloComoATela(quem, g.permissoes, ['comercial']) ? 200 : 403;
+    const tela3 = temModuloComoATela(quem, g.permissoes, ['comercial', 'almoxarifado', 'operacional']) ? 200 : 403;
     const [s1] = await j('GET', `/clientes/${ctx.cliente}`, u.T);
     const [s2] = await j('GET', '/clientes/logos', u.T);
     const [s3] = await j('GET', `/projetos/${ctx.projeto}`, u.T);
@@ -425,9 +438,9 @@ test('[RN-151.01/02/03] por usuario: as 18 decidem como a tela do Comercial; as 
     const [s6] = await j('PUT', `/atividades/${ctx.atividade}`, u.T, { titulo: 'ATIVIDADE 151', tipo: 'reuniao', prioridade: 'media', status: 'pendente', cliente_id: ctx.cliente });
     const [l1] = await j('GET', '/clientes', u.T);
     const [l2] = await j('GET', '/projetos', u.T);
-    linhas.push([k, s1, s2, s3, s4, s5, s6, l1, l2, tela]);
+    linhas.push([k, s1, s2, s3, s4, s5, s6, l1, l2, tela, tela3]);
   }
-  assert.deepStrictEqual(linhas, Object.entries(esperado).map(([k, v]) => [k, v, v, v, v, v, v, 200, 200, v]));
+  assert.deepStrictEqual(linhas, Object.entries(esperado).map(([k, v]) => [k, v, v, v, v, v, v, listas[k], listas[k], v, listas[k]]));
 });
 
 // ── RN-151.04 e o BUSY: reboots ───────────────────────────────────────────────────────────
@@ -465,6 +478,11 @@ test('[RN-151.04] PROPOSTAS_PORTAO_DE_MODULO=desligado: as 18 abrem ao barrado (
       }
     } finally { Object.assign(ctx, guardados); }
     assert.deepStrictEqual(errados, []);
+    // Etapa 154 (RN-154.04): desligado, as listas voltam ao so login — tambem a quem nenhum dos tres admite
+    await logar(ctx.u.soEngProjetos);
+    const [sl1, xl1] = await j('GET', '/clientes', ctx.u.soEngProjetos.T);
+    const [sl2, xl2] = await j('GET', '/projetos', ctx.u.soEngProjetos.T);
+    assert.ok(sl1 === 200 && xl1.some((x) => x.id === cli.id) && sl2 === 200 && xl2.some((x) => x.id === pj.id), `desligado, as listas a Engenharia / Projetos: ${sl1} ${sl2}`);
     assert.deepStrictEqual([
       (await all('SELECT status FROM clientes WHERE id = ?', [cli.id]))[0].status,
       (await all('SELECT status FROM projetos WHERE id = ?', [pj.id]))[0].status,
@@ -489,10 +507,12 @@ test('[RN-151.04] PROPOSTAS_PORTAO_DE_MODULO=desligado: as 18 abrem ao barrado (
   const [s6, x6] = await j('GET', '/clientes/logos', b.T);
   const [s7, x7] = await j('DELETE', `/atividades/${ctx.atividade}`, b.T);
   const [s8] = await j('GET', '/clientes', b.T);
-  assert.deepStrictEqual([s6, x6, s7, x7, s8], [403, NEGADO_COM, 403, NEGADO_COM, 200]);
+  await logar(ctx.u.soEngProjetos);
+  const [s9] = await j('GET', '/projetos', ctx.u.soEngProjetos.T);
+  assert.deepStrictEqual([s6, x6, s7, x7, s8, s9], [403, NEGADO_COM, 403, NEGADO_COM, 200, 403]);
 });
 
-test('[RN-151.01/02] SQLITE_BUSY ao ler as permissoes: 503 na leitura e na escrita; outro erro: 500; o administrador nem le; as listas nem leem', async () => {
+test('[RN-151.01/02, RN-154.01] SQLITE_BUSY ao ler as permissoes: 503 na leitura, na escrita e nas listas; outro erro: 500; o administrador nem le', async () => {
   const b = ctx.u.soOperacional;
   const FALHA = 'p\\.modulo, p\\.permissao FROM grupos_permissoes';
   await descer();
@@ -504,8 +524,10 @@ test('[RN-151.01/02] SQLITE_BUSY ao ler as permissoes: 503 na leitura e na escri
     const [s2, x2] = await j('POST', '/clientes', b.T, { razao_social: 'BUSY 151' });
     assert.deepStrictEqual([s1, x1, s2, x2], [503, corpo503, 503, corpo503]);
     const [sa] = await j('GET', `/clientes/${ctx.cliente}`, ctx.T);
-    const [sl] = await j('GET', '/clientes', b.T);
-    assert.deepStrictEqual([sa, sl], [200, 200], 'o administrador passa sem ler as linhas; a lista nao passa pelo portao');
+    const [sl, xl] = await j('GET', '/clientes', b.T);
+    const [sla] = await j('GET', '/projetos', ctx.T);
+    // Etapa 154 (RN-154.01): a lista passa pelo portao dos tres modulos — le as linhas (503 ao Operacional); o administrador nao le
+    assert.deepStrictEqual([sa, sl, xl, sla], [200, 503, corpo503, 200], 'o administrador passa sem ler as linhas; a lista le pelo portao');
     await descer();
     ctx.T = await subir({ FALHA_SQL_INJETADA: FALHA, FALHA_SQL_METODOS: 'all' });
     await logar(b);

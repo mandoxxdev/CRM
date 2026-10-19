@@ -143,6 +143,7 @@ const PORTAO_NO_DESPEJO = {
   exigirComercialNaFamiliaPorConfiguracoes: 'portao:comercial+configuracoes',
   exigirOperacionalNaListaDeOS: 'portao:operacional',
   exigirComercialNasVariaveisTecnicas: 'portao:comercial+configuracoes',
+  exigirLeitorDasListasDeClientesEProjetos: 'portao:comercial|almoxarifado|operacional',
 };
 function cadeiaDoPortao(identificador) {
   if (!PORTAO_NO_DESPEJO[identificador]) throw new Error(`cadeiaDoPortao: portao desconhecido ${identificador}`);

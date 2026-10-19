@@ -310,7 +310,7 @@ test('[RN-152.01, C350] o usuario que a tela barra do Comercial (so a direta do 
   assert.strictEqual(await retrato(), antes, 'uma rota barrada mudou um custo, um anexo, o historico, os clientes da viagem ou o log de autorizacao');
   assert.deepStrictEqual(arquivosDaPasta(), arquivos0, 'o comprovante do barrado chegou ao disco');
   assert.deepStrictEqual(await negados(b.id), [{ modulo: 'comercial', nome_modulo: 'Comercial', n: 22 }], 'cada 403 registra o acesso negado no log, com o modulo do portao');
-  // a metade positiva: a lista de clientes (aberta desde a 151 — o Almoxarifado a le) — sem log novo
+  // a metade positiva: a lista de clientes (o Almoxarifado a le — a regua dos tres modulos da 154) — sem log novo
   const [sc, cl] = await j('GET', '/clientes', b.T);
   assert.ok(sc === 200 && cl.some((c) => c.id === ctx.cliente), `lista de clientes: ${sc} ${JSON.stringify(cl).slice(0, 120)}`);
   await pausa(300);
@@ -405,7 +405,7 @@ test('[RN-152.01/02, integracao] o vendedor (so o Comercial) faz a viagem inteir
   assert.deepStrictEqual([s404, x404], [404, { error: 'Custo de viagem não encontrado' }]);
   await pausa(500);
   assert.deepStrictEqual(await negados(u.id), [], 'o portao registrou acesso negado para quem passou');
-  // e o mesmo cliente, pelo Almoxarifado: a lista (aberta) sim; os proximos (com endereco) e a analise nao
+  // e o mesmo cliente, pelo Almoxarifado: a lista (a regua dos tres modulos da 154 admite o Almoxarifado) sim; os proximos (com endereco) e a analise nao
   const b = ctx.u.soAlmox;
   const [s1] = await j('GET', '/clientes', b.T);
   const [s2, x2] = await j('GET', `/custos-viagens/clientes-proximos/${cli.id}`, b.T);

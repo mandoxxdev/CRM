@@ -3013,7 +3013,7 @@ function checkAnyModulePermission(requiredModules) {
 // passam pelo mesmo portao — o barrado criava o pedido pela API; a tela de Aprovacoes e as que pedem aprovacao estao todas no Comercial.
 const PORTAO_DAS_PROPOSTAS_DESLIGADO = String(process.env.PROPOSTAS_PORTAO_DE_MODULO || '').trim().toLowerCase() === 'desligado';
 if (PORTAO_DAS_PROPOSTAS_DESLIGADO) {
-  console.warn('⚠️ PROPOSTAS_PORTAO_DE_MODULO=desligado: as rotas /api/propostas*, as do modelo da proposta, as das listas de preço e as do modelo de contrato por família NAO exigem o módulo Comercial, e as da ordem de serviço pelo número NAO exigem o Comercial ou o Operacional, e as do cadastro de família NAO exigem o Comercial (só o login), e as dos grupos de produto, dos produtos e das variáveis técnicas NAO exigem o Comercial e a do produto pelo código NAO exige o Comercial ou o Operacional (só o login), e as dos clientes, dos projetos, das oportunidades e das atividades NAO exigem o Comercial (só o login), e as dos custos de viagem NAO exigem o Comercial (só o login), e as dos painéis, dos relatórios e do mapa do Comercial NAO exigem o Comercial (só o login), e a busca global mostra todos os tipos de resultado a qualquer logado; a lista de ordens de serviço do Operacional volta à régua antiga do módulo.');
+  console.warn('⚠️ PROPOSTAS_PORTAO_DE_MODULO=desligado: as rotas /api/propostas*, as do modelo da proposta, as das listas de preço e as do modelo de contrato por família NAO exigem o módulo Comercial, e as da ordem de serviço pelo número NAO exigem o Comercial ou o Operacional, e as do cadastro de família NAO exigem o Comercial (só o login), e as dos grupos de produto, dos produtos e das variáveis técnicas NAO exigem o Comercial e a do produto pelo código NAO exige o Comercial ou o Operacional (só o login), e as dos clientes, dos projetos, das oportunidades e das atividades NAO exigem o Comercial (só o login), e as dos custos de viagem NAO exigem o Comercial (só o login), e as listas de clientes e de projetos NAO exigem o Comercial, o Almoxarifado ou o Operacional (só o login), e as notificações do sino mostram os lembretes das propostas a qualquer logado, e as dos painéis, dos relatórios e do mapa do Comercial NAO exigem o Comercial (só o login), e a busca global mostra todos os tipos de resultado a qualquer logado; a lista de ordens de serviço do Operacional volta à régua antiga do módulo.');
 }
 const portaoDasPropostas = criarPortaoDasPropostas({
   getDb: () => db,
@@ -3054,7 +3054,7 @@ const exigirComercialNasVariaveisTecnicas = portaoDasPropostas.exigir('comercial
 // 5 leituras que so as telas do Comercial fazem (os logos, o cliente e o projeto por id, as oportunidades, as atividades) usam o
 // exigirComercialNasPropostas. As duas listas (GET /api/clientes e GET /api/projetos) continuam SO com o login (RN-151.03): o
 // Almoxarifado (material, reservas, movimentacoes, sobras) e a OS da Fabrica (OSForm) as leem — fechar a leitura so onde ninguem de
-// fora do Comercial le (C353).
+// fora do Comercial le (C353). Etapa 154: deixaram de ser so do login — a regua dos tres modulos que as leem (RN-154.01, abaixo).
 // Etapa 153 (C355, RN-153.01, B991): os paineis, os relatorios e o mapa do Comercial (GET /api/dashboard, /historico, /avancado, /vendas,
 // /api/relatorios/executivo, /visitas-tecnicas, /api/mapa/maquinas-vendidas) usam o exigirComercialNasPropostas — so as telas do Comercial
 // os chamam (o Dashboard e o DashboardVendas do indice de /comercial, os Relatorios e as Maquinas Vendidas). Os paineis do Financeiro, do
@@ -3064,6 +3064,16 @@ const exigirComercialNasVariaveisTecnicas = portaoDasPropostas.exigir('comercial
 // entra aqui com o modulo da tela dele (o teste confere que o mapa cobre todo tipo do corpo da busca).
 const TIPOS_DA_BUSCA_GLOBAL = { cliente: ['comercial'], projeto: ['comercial'], proposta: ['comercial'], oportunidade: ['comercial'], atividade: ['comercial'], produto: ['comercial'] };
 const filtrarBuscaGlobalPorModulo = portaoDasPropostas.filtrarPorModulo(TIPOS_DA_BUSCA_GLOBAL, { contexto: 'portao:busca-global' });
+// Etapa 154 (C353, RN-154.01, B995): as duas listas (GET /api/clientes e GET /api/projetos) pela regua da tela de ALGUM dos modulos cujas
+// telas as leem — o Comercial (clientes, projetos, atividades, custos de viagem, a proposta, a OS do Comercial), o Almoxarifado (material,
+// reservas, movimentacoes, sobras) e o Operacional (a OS da Fabrica, OSForm). Medido no client inteiro: nenhuma tela do Compras, do
+// Financeiro, da Frota, da Engenharia ou da Engenharia / Projetos as le. Desligado, voltam ao so login (o de antes da etapa — B997).
+const exigirLeitorDasListasDeClientesEProjetos = portaoDasPropostas.exigir(['comercial', 'almoxarifado', 'operacional']);
+// Etapa 154 (C363, RN-154.02, B996): as notificacoes do sino filtram cada TIPO pelo modulo da tela que ele abre (o lembrete abre a
+// proposta, no Comercial); quem nao tem nenhum recebe [] sem log de acesso negado (o sino recarrega a cada 30 s). Um tipo novo entra aqui
+// com o modulo dele (o teste confere que o mapa e os tipos das consultas do corpo sao os mesmos).
+const TIPOS_DAS_NOTIFICACOES = { lembrete_proposta: ['comercial'] };
+const filtrarNotificacoesPorModulo = portaoDasPropostas.filtrarPorModulo(TIPOS_DAS_NOTIFICACOES, { contexto: 'portao:notificacoes' });
 
 // Etapa 21 (RN-04). Precedencia: variaveis de ambiente `SMTP_*` -> valores abaixo.
 // A regua mora em `services/emailConfig.js` (funcao pura, testada em
@@ -4329,7 +4339,7 @@ app.delete('/api/usuarios/:id', authenticateToken, requireDeleteUsers, async (re
 });
 
 // ========== ROTAS DE CLIENTES ==========
-app.get('/api/clientes', authenticateToken, (req, res) => {
+app.get('/api/clientes', authenticateToken, exigirLeitorDasListasDeClientesEProjetos, (req, res) => {
   const { status, search } = req.query;
   let query = 'SELECT * FROM clientes WHERE 1=1';
   const params = [];
@@ -5359,7 +5369,7 @@ app.delete('/api/clientes/:id', authenticateToken, exigirComercialNasPropostas, 
 });
 
 // ========== ROTAS DE PROJETOS ==========
-app.get('/api/projetos', authenticateToken, (req, res) => {
+app.get('/api/projetos', authenticateToken, exigirLeitorDasListasDeClientesEProjetos, (req, res) => {
   const { cliente_id, status, responsavel_id } = req.query;
   let query = `SELECT p.*, c.razao_social as cliente_nome, u.nome as responsavel_nome
                FROM projetos p
@@ -17876,8 +17886,15 @@ app.get('/api/dashboard/avancado', authenticateToken, exigirComercialNasProposta
 });
 
 // ========== ROTA DE NOTIFICAÇÕES ==========
-app.get('/api/notificacoes', authenticateToken, (req, res) => {
+app.get('/api/notificacoes', authenticateToken, filtrarNotificacoesPorModulo, (req, res) => {
   const userId = req.user.id;
+  // Etapa 154 (RN-154.02): so os tipos que o filtro permitiu (null = todos); sem o filtro (undefined) ou nenhum tipo -> [] sem rodar as
+  // consultas (se o filtro sair da rota, o sino fecha em vez de abrir — o mesmo da busca global)
+  const permitidos = req.tiposPermitidos;
+  const podeVer = (tipo) => permitidos === null || (permitidos instanceof Set && permitidos.has(tipo));
+  if (permitidos !== null && !(permitidos instanceof Set && permitidos.size > 0)) {
+    return res.json([]);
+  }
   
   // Buscar lembretes de propostas do usuário
   db.all(`
@@ -17979,7 +17996,7 @@ app.get('/api/notificacoes', authenticateToken, (req, res) => {
       const todasNotificacoes = [...notificacoesLembretes];
       
       console.log(`✅ Retornando ${todasNotificacoes.length} notificações (${notificacoesLembretes.length} lembretes)`);
-      res.json(todasNotificacoes);
+      res.json(todasNotificacoes.filter((n) => podeVer(n.tipo)));
     });
   });
 });

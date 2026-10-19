@@ -338,7 +338,7 @@ test('[RN-153.01/02, C355, C352] o usuario que a tela barra do Comercial (so a d
   // a metade positiva: o mesmo termo, o administrador ve os seis tipos (o termo casa cada um)
   const [sa, xa] = await j('GET', `/busca-global?q=${TERMO}`, ctx.T);
   assert.deepStrictEqual([sa, tiposDe(xa)], [200, TIPOS], `a busca do administrador: ${JSON.stringify(xa).slice(0, 300)}`);
-  // e a lista de clientes (aberta desde a 151) o barrado le
+  // e a lista de clientes (a regua dos tres modulos da 154 admite o Almoxarifado) o barrado le
   const [sc, cl] = await j('GET', '/clientes', b.T);
   assert.ok(sc === 200 && cl.some((c) => c.id === ctx.cliente), `lista de clientes: ${sc}`);
 });
