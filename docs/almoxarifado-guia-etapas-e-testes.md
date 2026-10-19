@@ -1,19 +1,26 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-19 (Etapa 154) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-19 (Etapa 155) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153 e 154) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154 e 155) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-19 (Etapa 154 ENTREGUE · próxima: Etapa 155)
+> ## Onde o desenvolvimento está — 2026-10-19 (Etapa 155 ENTREGUE · próxima: Etapa 156)
 >
-> **O desenvolvimento parou aqui: Etapa 154 fechada — 2026-10-19.** A **Etapa 154 (a lista de clientes e a de projetos pedem um dos
+> **O desenvolvimento parou aqui: Etapa 155 fechada — 2026-10-19.** A **Etapa 155 (o cliente e a OS das Reservas com nome, a busca do topo
+> que diz por que não busca, e o produto da OS pelo código certo; consertos de tela, sem regra de acesso nova)**: em **Almoxarifado →
+> Reservas**, os seletores de cliente e de OS e a coluna de destino mostram a razão social do cliente e o número da OS (antes: opções em
+> branco e *"OS #42"*); sem o Comercial, o *Ctrl+K* abre a busca dizendo por que não busca; a busca só mostra a resposta do último termo
+> digitado e diz quando não conseguiu buscar; as telas da OS acham o produto cujo código tem barra. Uma consulta nova, opcional (**A103**).
+> **Próxima: Etapa 156** — ver a próxima tarefa no plano da 155.
+>
+> **Etapa 154, 2026-10-19.** A **Etapa 154 (a lista de clientes e a de projetos pedem um dos
 > módulos que as usam, e o sino só mostra o que se pode abrir; do Comercial, fora do almoxarifado — mas as telas do Almoxarifado usam as
 > listas)**: quem não tem o Comercial, o Almoxarifado nem o Operacional deixa de ler pela integração a lista de clientes (com CNPJ,
 > telefone, e-mail e endereço) e a de projetos (*"Acesso negado ao módulo"*); o vendedor, o Almoxarifado (dono do material, reservas,
 > movimentações, sobras) e a Fábrica (a OS) não perdem nada. O sino do painel do Comercial só entrega os lembretes a quem tem o Comercial, e o
-> clique nele (e no **Ver proposta** do lembrete das Atividades) abre a proposta. Uma consulta nova, opcional (**A102**). **Próxima: Etapa
-> 155** — ver a próxima tarefa no plano da 154.
+> clique nele (e no **Ver proposta** do lembrete das Atividades) abre a proposta. Uma consulta nova, opcional (**A102**). *(Próxima, na
+> época: Etapa 155 — entregue acima.)*
 >
 > **Etapa 153, 2026-10-19.** A **Etapa 153 (o painel, os relatórios e o mapa do Comercial pedem o
 > Comercial, e a busca do topo só mostra o que cada um pode abrir; do Comercial/núcleo, fora do almoxarifado)**: quem a tela barra do
@@ -6709,6 +6716,46 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 155 — O cliente e a OS das Reservas com nome, a busca do topo que diz por que não busca, e o produto da OS pelo código certo (ENTREGUE — 2026-10-19)
+
+**O que mudou, em uma frase:** consertos de tela — os seletores das Reservas mostram a razão social do cliente e o número da OS, a busca do
+topo diz a quem não tem o Comercial por que não busca e só mostra a resposta do último termo, e as telas da OS acham o produto cujo código tem
+barra.
+
+**O problema que ela resolve.** Em **Almoxarifado → Reservas**, o seletor de cliente listava os clientes em branco e o de OS dizia *"OS #42"*
+(o número interno) — a tela lia campos que o servidor não manda. Quem não tem o Comercial apertava *Ctrl+K* e toda busca dizia *"Nenhum
+resultado encontrado"*, sem explicar. Digitando rápido com o banco ocupado, a busca podia mostrar o resultado de um termo anterior. E o item
+de OS cujo produto tem código com barra saía sem os dados do produto.
+
+| Antes | Agora |
+|---|---|
+| Reservas: seletor **Cliente** em branco; coluna *"Cliente #3"* | A razão social do cliente (o nome fantasia se ela estiver vazia) |
+| Reservas: seletor **Ordem de Serviço** *"OS #42"*; coluna *"OS #42"* | *"OS-042 — ACME INDUSTRIA LTDA"* no seletor; *"OS-042"* na coluna |
+| *Ctrl+K* sem o Comercial: *"Nenhum resultado encontrado"* a toda busca | A frase *"A busca do topo procura clientes, projetos, propostas, atividades e produtos do Comercial, e você não tem acesso ao Comercial."*, campo desligado |
+| A busca podia mostrar o resultado de um termo anterior | Só a resposta do último termo; a falha diz *"Não foi possível buscar agora. Tente de novo em instantes."* |
+| Item de OS com produto de código com barra: sem os dados do produto | Com os dados do produto |
+
+**Roteiro de teste (10 minutos).**
+
+1. **Os nomes nas Reservas.** Com um cliente cadastrado (**Comercial → Clientes**) e uma OS da Fábrica dele: **Almoxarifado → Reservas →
+   Nova Reserva** — o seletor **Cliente** lista a razão social; o **Ordem de Serviço** lista *"<número da OS> — <cliente>"*. Reserve um
+   material para o cliente (e outro para a OS): a coluna **Origem / Destino** mostra a razão social e o número da OS. Clique **Transferir**
+   numa reserva manual: os mesmos nomes nos seletores, e *"atualmente em <destino>"* com o nome.
+2. **A busca sem o Comercial.** Entre com um usuário **só do Almoxarifado** e aperte **Ctrl+K**: a busca abre com a frase acima e o campo
+   desligado; **Esc** fecha (o **X** e o clique fora também).
+3. **A busca com o Comercial.** Com um vendedor, **Ctrl+K**, digite o começo do nome de um cliente: os resultados aparecem; setas e
+   **Enter** abrem o cliente. Apague até sobrar uma letra: volta *"Digite pelo menos 2 caracteres para buscar"*.
+4. **O produto com barra na OS (pela integração e pela tela).** Com um vendedor, crie pela integração um produto com código *"E155/A"* e
+   especificações técnicas, ponha-o num item de uma proposta e gere a OS dela (**Nova OS** a partir da proposta): o item mostra as
+   especificações. `GET /api/produtos/codigo/E155%2FA` → **200** com o produto.
+
+**O que esta etapa NÃO cobre.** A reserva de uma OS fora das 300 mais recentes continua *"OS #<id>"* na coluna; com o banco ocupado, o
+segundo pedido ao mesmo endereço (em qualquer tela) falha na hora (**C369**, nova); com a permissão tirada no meio da sessão, os seletores do
+Almoxarifado ficam vazios e calados até recarregar (**C366**, de antes).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (as telas em jsdom; o servidor de verdade
+para o corpo das listas e o produto pelo código) provam, escrito para você conferir à mão — os passos 1 a 4 só o navegador mostra.
 
 ## Etapa 154 — A lista de clientes e a de projetos pedem um dos módulos que as usam, e o sino só mostra o que se pode abrir (ENTREGUE — 2026-10-19)
 

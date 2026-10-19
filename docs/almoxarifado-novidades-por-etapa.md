@@ -11,13 +11,19 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-19):** **Etapa 154 fechada** (do Comercial: **a lista de clientes e a de projetos pedem um dos
+> **Onde o desenvolvimento está (2026-10-19):** **Etapa 155 fechada** (consertos de tela, sem regra de acesso nova: **o cliente e a OS das
+> Reservas com nome, a busca do topo que diz por que não busca, e o produto da OS pelo código certo** — o seletor de cliente das Reservas
+> saía em branco (**C367** resolvido) e o de OS com o número interno (**C368**, novo e resolvido); sem o Comercial, a busca do *Ctrl+K* diz por
+> que não busca (**C364** resolvido, **B999**); a busca só mostra a resposta do último termo e diz quando falhou (**C365** resolvido); as
+> telas da OS acham o produto cujo código tem barra (**C351** resolvido); a régua das provas de portão vê o middleware global por apelido;
+> **B999** e **B1000**; a consulta **A103** (opcional); o aviso novo **C369**); a próxima é a **156** — ver "Onde estamos e o que vem a
+> seguir".
+> *(Antes: **Etapa 154 fechada** (do Comercial: **a lista de clientes e a de projetos pedem um dos
 > módulos que as usam, e o sino só mostra o que se pode abrir** — quem não tem o Comercial, o Almoxarifado nem o Operacional lia pela
 > integração a lista de clientes (com CNPJ, telefone, e-mail e endereço) e a de projetos; agora toma *"Acesso negado ao módulo"*, e o
 > vendedor, o Almoxarifado e a Fábrica não perdem nada (**C353** resolvido); o sino só entrega os lembretes a quem tem o Comercial, e o
 > clique nele e no lembrete das Atividades abre a proposta (**C363** resolvido — e o texto dela, *"o sino na moldura de todos os módulos"*,
-> estava errado); **B995** a **B998**; a consulta **A102** (opcional); os avisos novos **C366** e **C367**); a próxima é a **155** — ver
-> "Onde estamos e o que vem a seguir".
+> estava errado); **B995** a **B998**; a consulta **A102** (opcional); os avisos novos **C366** e **C367**); a próxima era a **155**.)*
 > *(Antes: **Etapa 153 fechada** (do Comercial: **o painel, os relatórios e o mapa do Comercial pedem
 > o Comercial, e a busca do topo só mostra o que cada um pode abrir** — quem a tela barra do Comercial lia pela integração o painel (o
 > pipeline de oportunidades, o ranking de clientes), os relatórios executivo e de visitas técnicas (com telefone e e-mail dos clientes) e o
@@ -308,7 +314,10 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Cento e dois itens para rodar em produção ANTES do deploy — noventa e nove são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Cento e três itens para rodar em produção ANTES do deploy — cem são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-19 (Etapa 155) de cento e dois para cento e três**, com a **A103** — os produtos cujo código tem barra, `?`,
+`#`, `%` ou espaço, que as telas da OS passam a achar (**C351**). **Somente leitura, opcional:** no banco medido, nenhum.)*
 
 *(**Atualizado em 2026-10-19 (Etapa 154) de cento e um para cento e dois**, com a **A102** — quem passa a ser barrado na lista de clientes
 e na de projetos pela integração (**C353**). **Somente leitura, opcional:** no banco medido, 1 pessoa (só Engenharia / Projetos), sem
@@ -3505,6 +3514,25 @@ WHERE p.cliente_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM clientes c WHERE c.
 cliente vazio deixa a proposta assim — **C330**): abra cada uma em **Comercial → Propostas → Editar**, escolha o cliente e salve (o
 formulário exige o cliente). **Linhas na 2** — o mesmo; o cliente antigo não volta. *(Rodada no banco local, cópia de 09/10: **0** e
 **0**; controle numa cópia com uma proposta sem cliente e outra apontando para o cliente 987654: a 1 achou a primeira e a 2 a segunda.)*
+
+**A103 (NOVA, da Etapa 155 — opcional — os produtos cujo código mudava o endereço).** Desde a Etapa 155 as três telas da ordem de serviço
+(a OS do Comercial, o detalhe da OS e o preview editável) pedem o produto com o código protegido no endereço. Antes, o item de OS cujo produto
+tem código com barra (`/`), `?`, `#`, `%` ou espaço saía sem os dados do produto. A consulta lista esses produtos e quantos itens de OS e de
+proposta os citam — são os itens que passam a mostrar os dados. Somente leitura.
+
+```sql
+-- os produtos cujo codigo tem um caractere que mudava o endereco, e quantos itens de OS e de proposta os citam
+SELECT p.id, p.codigo, p.nome,
+  (SELECT COUNT(*) FROM os_itens i WHERE i.codigo_produto = p.codigo) AS itens_de_os,
+  (SELECT COUNT(*) FROM proposta_itens pi WHERE pi.codigo_produto = p.codigo) AS itens_de_proposta
+FROM produtos p
+WHERE p.codigo LIKE '%/%' OR p.codigo LIKE '%?%' OR p.codigo LIKE '%#%' OR INSTR(p.codigo, '%') > 0 OR p.codigo LIKE '% %'
+ORDER BY p.codigo;
+```
+
+**Como ler o resultado:** vazio — nada muda para ninguém (os códigos gerados pelo sistema não têm esses caracteres). Cada linha é um produto
+cujos itens de OS passam a mostrar as especificações técnicas nas telas da OS; nada é gravado nem apagado. *(Rodada no banco local, cópia de
+09/10: **0** de 23 produtos; controle numa cópia com um código terminado em `/1` e outro em `%`: os dois apareceram.)*
 
 **A102 (NOVA, da Etapa 154 — opcional — quem perde a lista de clientes e a de projetos pela integração).** Desde a Etapa 154 as duas listas
 exigem o **Comercial**, o **Almoxarifado** ou o **Operacional** (basta um) pela mesma régua da tela (a da **A93**). As únicas telas que as
@@ -11086,6 +11114,25 @@ que eram antes da etapa (só o login), não à régua antiga do módulo. **Desca
 (o seletor de cliente das Reservas — **C367** —, o *Ctrl+K* de quem não tem tipo — **C364** —, a resposta velha da busca — **C365** —, o código
 do produto nas telas da OS — **C351**). As decisões que esperam vocês: as da **B957**, a **B988** e a **B989** (nada novo).
 
+**B999 (NOVA, da Etapa 155; do núcleo/Comercial) — sem o Comercial, a busca do topo abre dizendo por que não busca.** A busca do *Ctrl+K*
+continua abrindo para todos (ela está na moldura de todos os módulos), mas, para quem a régua da tela **não** dá o Comercial (o único módulo
+dos tipos da busca hoje), ela mostra *"A busca do topo procura clientes, projetos, propostas, atividades e produtos do Comercial, e você não
+tem acesso ao Comercial."* com o campo desligado e **não pergunta nada ao servidor**. É a mesma régua da moldura (a que decide se a tela do
+Comercial abre); com as permissões guardadas vencidas, a busca as lê de novo ao abrir; se a leitura falhar, busca como antes (o servidor
+decide). **Descartado:** (a) não abrir a busca — o *Ctrl+K* passaria ao navegador (que abre a busca dele), calado, e ninguém saberia por que;
+(b) esconder o atalho só pelo servidor (já era assim: a lista vazia sem motivo é o que a **C364** registrou); (c) mostrar a frase só depois de
+uma busca vazia — gastaria um pedido por tecla. **Atenção — o interruptor:** com `PROPOSTAS_PORTAO_DE_MODULO=desligado` (a chave da **B946**)
+o servidor volta a devolver os resultados a todos, mas a tela continua dizendo a frase para quem não tem o Comercial — o interruptor deixa de
+ser a volta da busca para essas pessoas (os resultados levam a telas do Comercial, que a moldura barra de qualquer jeito); o aviso que o
+servidor escreve ao subir desligado (*"a busca global mostra todos os tipos de resultado a qualquer logado"*) passa a valer só para a
+integração. A decisão usa o cadastro da pessoa como a tela o releu por último (quem virou administrador no meio da sessão busca — achado da
+revisão). **Reversível:** é
+só da tela (desfazer o commit `287e6157` volta ao *"Nenhum resultado encontrado"*); o conjunto de módulos da busca é uma lista só, conferida
+por teste contra a do servidor.
+
+**B1000 (NOVA, da Etapa 155) — a próxima etapa (156).** Ver a "próxima tarefa detalhada" no plano da Etapa 155. As decisões que esperam
+vocês: as da **B957**, a **B988** e a **B989** (nada novo; a **B999** é reversível).
+
 **B898 (NOVA, da Etapa 138) — a próxima etapa (139).** Ver a "próxima tarefa detalhada" no plano da Etapa 138. A **B853** (com a
 **C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
@@ -14156,7 +14203,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      respondesse: **estava errado** — ele nunca respondia (**C356**, consertado na mesma etapa). *(O texto original:)*
      **NOVO (da Etapa 150; do Comercial, anterior a ela; lido no código) — os custos de viagem só pedem o login** (19 operações: lançar,
      editar, aprovar, duplicar, os comprovantes, as análises e o resumo). **O que fazer:** nada pela tela. Candidata depois da **C349**.
-351. **NOVO (da revisão da Etapa 150; do Comercial/Operacional, anterior a ela; reproduzido) — a OS busca o produto pelo código sem
+351. **✅ RESOLVIDO NA ETAPA 155 (RN-155.04)** — as três telas da OS pedem o produto com o código codificado no endereço (uma função só; um
+     teste prende que nenhuma outra tela monta esse endereço); pela rota, os códigos com `/`, `?`, `#`, `%` e espaço acham o produto deles. No
+     banco medido, nenhum produto tem esses caracteres (**A103**). *(O texto original:)*
+     **NOVO (da revisão da Etapa 150; do Comercial/Operacional, anterior a ela; reproduzido) — a OS busca o produto pelo código sem
      proteger o código no endereço.** As telas da OS montam o endereço com o código cru: um código com barra (`/`) não acha o produto (era
      assim antes), e um com `?` ou `#` cai em outra operação. Nenhum efeito na tela além de o item da OS sair sem os dados do produto. **O
      que fazer:** nada (os códigos gerados pelo sistema não têm esses caracteres). Candidata: codificar o código nas três telas da OS.
@@ -14223,10 +14273,16 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      abre uma página que não existe. As aprovações de desconto pendentes **não** aparecem no sino (o servidor as lê e não as devolve).
      **O que fazer:** ao tirar o Comercial de alguém, passe as propostas dele a outro responsável. Candidata: o mesmo filtro da busca e o
      endereço do clique.
-364. **NOVO (da Etapa 153; decisão B992) — quem não tem o Comercial abre a busca do topo e nunca acha nada.** O *Ctrl+K* continua abrindo
+364. **✅ RESOLVIDO NA ETAPA 155 (B999)** — sem o Comercial, a busca abre dizendo *"A busca do topo procura clientes, projetos, propostas,
+     atividades e produtos do Comercial, e você não tem acesso ao Comercial."*, com o campo desligado, sem pedir nada ao servidor. *(O texto
+     original:)*
+     **NOVO (da Etapa 153; decisão B992) — quem não tem o Comercial abre a busca do topo e nunca acha nada.** O *Ctrl+K* continua abrindo
      a busca (*"Buscar clientes, projetos, propostas..."*) em todos os módulos; sem o Comercial, toda busca diz *"Nenhum resultado
      encontrado"*. **O que fazer:** nada. Candidata: desligar o atalho para quem não tem nenhum tipo (é da tela).
-365. **NOVO (da revisão do plano da Etapa 153; do núcleo, anterior a ela; lido no código) — com o banco ocupado, a busca pode mostrar o
+365. **✅ RESOLVIDO NA ETAPA 155 (RN-155.03)** — a busca só mostra a resposta do último pedido (a de um termo anterior, ou de antes de
+     fechar, é jogada fora) e, quando o pedido falha, diz *"Não foi possível buscar agora. Tente de novo em instantes."*. O pedido irmão
+     recusado na hora pela camada de comunicação ficou registrado à parte (**C369**). *(O texto original:)*
+     **NOVO (da revisão do plano da Etapa 153; do núcleo, anterior a ela; lido no código) — com o banco ocupado, a busca pode mostrar o
      resultado de um termo anterior.** Quando o banco responde "ocupado", a tela repete o pedido até 3 vezes; se a pessoa continuou
      digitando, a resposta atrasada do termo anterior pode aparecer com o termo novo no campo. **O que fazer:** apague e digite de novo.
      Candidata: a busca descartar a resposta velha.
@@ -14235,11 +14291,26 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      engolem a recusa e mostram o seletor vazio, em vez de *"Acesso negado"*, até a pessoa recarregar (aí a tela inteira já não abre). Só
      acontece a quem perdeu o Comercial, o Almoxarifado **e** o Operacional com a tela aberta. **O que fazer:** recarregar. Candidata: as telas
      dizerem o motivo quando a lista volta recusada.
-367. **NOVO (da revisão do plano da Etapa 154; do Almoxarifado, anterior a ela; lido no código) — o seletor de cliente das Reservas mostra as
+367. **✅ RESOLVIDO NA ETAPA 155 (RN-155.01)** — o seletor de cliente (reserva nova e transferência) e a coluna de destino mostram a razão
+     social (o nome fantasia quando ela está vazia); o teste da tela monta o seletor com o corpo real da lista de clientes, conferido pelo teste
+     do servidor. *(O texto original:)*
+     **NOVO (da revisão do plano da Etapa 154; do Almoxarifado, anterior a ela; lido no código) — o seletor de cliente das Reservas mostra as
      opções em branco.** Em **Almoxarifado → Reservas**, o destino *Cliente* da reserva e da transferência lista os clientes sem nome (a tela
      desenha um campo que o cadastro de clientes não tem — tem razão social e nome fantasia), e a coluna da reserva mostra *"Cliente #<número>"*.
      **O que fazer:** escolher pela ordem (a mesma do cadastro, por razão social) ou reservar para a OS ou o projeto do cliente. Candidata
      técnica da tela (próxima etapa).
+368. **✅ NOVO E RESOLVIDO NA ETAPA 155 (RN-155.01; da medição da Etapa 155, do Almoxarifado, anterior a ela; lido no código e no teste) — o
+     seletor de OS das Reservas mostrava o número interno.** Em **Almoxarifado → Reservas**, o seletor **Ordem de Serviço** (reserva nova e
+     transferência) dizia *"OS #42"* em toda opção — a tela lia um campo que a lista de OS do almoxarifado não manda (ela manda o número da OS
+     e o cliente), e o teste da tela usava justamente esse campo inexistente. A coluna de destino dizia *"OS #42"* também. Agora: *"OS-042 —
+     ACME INDUSTRIA LTDA"* no seletor (sem cliente, só o número) e *"OS-042"* na coluna; *"OS #<id>"* só para a OS fora das 300 mais recentes
+     (a lista da tela).
+369. **NOVO (da Etapa 155; do núcleo, anterior a ela; lido no código) — com o banco ocupado, o segundo pedido ao mesmo endereço falha na
+     hora.** Quando o servidor responde "banco ocupado", a camada de comunicação da tela espera e repete o pedido; um **segundo** pedido ao
+     **mesmo endereço** feito enquanto o primeiro espera (com outros filtros — a busca com outro termo, uma lista com outro filtro) é recusado na
+     hora, sem esperar o banco voltar, porque a camada reconhece "o mesmo pedido" pelo endereço sem os filtros. A tela que fez o segundo pedido
+     mostra o erro dela (na busca do topo: *"Não foi possível buscar agora. Tente de novo em instantes."*). **O que fazer:** repetir o gesto
+     (digitar de novo, recarregar a lista). Candidata (do núcleo — muda todas as telas): reconhecer o pedido pelo endereço **com** os filtros.
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -15571,6 +15642,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(155) A busca do topo decide na tela com a régua da moldura** — sem o Comercial ela diz por que não busca (**B999**); com as permissões
+  guardadas vencidas e a leitura delas falhando, ela busca como antes e o servidor decide (falha aberto, de propósito). A lista de OS das
+  Reservas traz as 300 mais recentes: a reserva de uma OS mais antiga continua *"OS #<id>"* na coluna. O segundo pedido ao mesmo endereço com
+  o banco ocupado falha na hora em qualquer tela (**C369**). A prova de portão por texto vê todo middleware global e todo o registrado em
+  toda a API (por qualquer nome); um verbo registrado por apelido com o caminho num nome continua com a prova pelas camadas do servidor
+  montado; as formas que só se escrevem de propósito (o nome montado por pedaços, o comentário no meio da chamada) ficam de fora.
 - **(154) As duas listas dependem de quem as usa hoje** — a régua é "o Comercial, o Almoxarifado ou o Operacional" porque só as telas
   desses três as chamam (**B995**); uma tela nova de outro módulo que use a lista de clientes precisa entrar na régua antes (o teste do
   inventário avisa). Com a permissão tirada no meio da sessão, o seletor fica vazio e calado (**C366**); o seletor de cliente das Reservas
@@ -16589,6 +16666,13 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(155) Nenhum clique foi dado no navegador.** As telas foram provadas pelos testes de tela (jsdom): os seletores das Reservas montados com o
+corpo real da lista de clientes e da de OS (as chaves conferidas pelo teste do servidor de verdade, em pasta vazia), a busca do topo com e sem o
+Comercial, com as permissões vencidas, com respostas fora de ordem, falhando, fechando e reabrindo; o endereço do produto pela função e pela
+rota real, com seis códigos especiais. O que **só o navegador** prova: o roteiro da Etapa 155 no guia — **Almoxarifado → Reservas → Nova
+Reserva** com os nomes nos seletores; o *Ctrl+K* de um usuário só do Almoxarifado (a frase, o **Esc** fechando) e o de um vendedor; e uma OS
+do Comercial gerada de uma proposta com um produto de código com barra.
 
 **(154) Nenhum clique foi dado no navegador.** Tudo foi provado pela rota, com o servidor de verdade em pasta vazia (as duas listas e o
 sino com 19 perfis de usuário; o Almoxarifado gravando o material com o cliente da lista; a Fábrica salvando a OS com o cliente e o projeto
@@ -31338,9 +31422,91 @@ alternativos — nada vazou; o de **sabotagem** fez 15 sabotagens — 9 caíram 
 chama as listas no client (uma tela nova do Compras com a lista passaria), o teste do clique aceitava a rota comentada, e o lembrete da
 proposta atribuída por outro não era testado. Os três viraram teste. Commits `fa41db01`, `a5b9365e` e `073b330c`.
 
+## Etapa 155 — O cliente e a OS das Reservas com nome, a busca do topo que diz por que não busca, e o produto da OS pelo código certo (2026-10-19)
+
+Uma etapa de **consertos de tela**, sem regra de acesso nova. Em **Almoxarifado → Reservas**, o seletor de cliente (da reserva nova e da
+transferência) listava os clientes **em branco** e a coluna de destino dizia *"Cliente #3"*; o seletor de OS da mesma tela mostrava *"OS #42"*
+— o número interno, não o da ordem de serviço. Agora aparecem a razão social do cliente e o número da OS, como nas Movimentações e nas Sobras.
+A **busca do topo** (*Ctrl+K*), que desde a Etapa 153 só mostra o que cada um pode abrir, abria para quem não tem o Comercial e dizia *"Nenhum
+resultado encontrado"* a qualquer busca, sem explicar; agora diz por que não busca. Com o banco ocupado ou com a rede lenta, a busca podia
+mostrar o resultado de um termo **anterior** ao que está no campo; agora só mostra o do último que se digitou, e diz quando não conseguiu
+buscar. E as três telas da ordem de serviço que trazem os dados do produto pelo código passam a achar o produto cujo código tem barra, `?`,
+`#`, `%` ou espaço.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Almoxarifado → Reservas → Nova Reserva** (e **Transferir**): o seletor **Cliente** com as opções em branco | A razão social do cliente (o nome fantasia quando a razão social está vazia) — **C367** resolvido |
+| A coluna **Origem / Destino** de uma reserva para cliente: *"Cliente #3"* | A razão social do cliente |
+| O seletor **Ordem de Serviço** das Reservas: *"OS #42"* em toda opção (o número interno) | O número da OS e o cliente dela (*"OS-042 — ACME INDUSTRIA LTDA"*); sem cliente, só o número — **C368** (novo, resolvido aqui) |
+| A coluna de destino de uma reserva para OS: *"OS #42"* | O número da OS (*"OS-042"*); *"OS #42"* só quando a OS não está entre as 300 mais recentes |
+| Sem o Comercial, o *Ctrl+K* abria a busca e toda busca dizia *"Nenhum resultado encontrado"* | A busca abre dizendo *"A busca do topo procura clientes, projetos, propostas, atividades e produtos do Comercial, e você não tem acesso ao Comercial."*, com o campo desligado — **C364** resolvido, **B999** |
+| Digitando rápido com o banco ocupado, o resultado de um termo anterior podia aparecer com o termo novo no campo | Só aparece a resposta do último termo digitado — **C365** resolvido |
+| A busca que falhava (banco ocupado, rede) dizia *"Nenhum resultado encontrado"* | *"Não foi possível buscar agora. Tente de novo em instantes."* |
+| A OS do Comercial, o detalhe da OS e o preview editável: o item cujo produto tem código com `/`, `?`, `#`, `%` ou espaço saía sem os dados do produto | Os dados do produto aparecem — **C351** resolvido (no banco medido, nenhum produto tem esses caracteres — **A103**) |
+
+### As regras, com o cenário exato
+
+**1. O cliente e a OS das Reservas pelo nome (C367, C368).** Com um cliente cadastrado em **Comercial → Clientes** (razão social *"ACME
+INDUSTRIA LTDA"*) e uma OS da Fábrica para ele: **Almoxarifado → Reservas → Nova Reserva** — o seletor **Cliente** lista *"ACME INDUSTRIA
+LTDA"*; o seletor **Ordem de Serviço** lista *"OS-001 — ACME INDUSTRIA LTDA"* (uma OS sem cliente aparece só com o número). Reserve um
+material para o cliente: a coluna **Origem / Destino** diz *"ACME INDUSTRIA LTDA"*; para a OS, *"OS-001"*. Em **Transferir**, os mesmos
+seletores e o texto *"atualmente em ACME INDUSTRIA LTDA"*. *(Antes: opções do cliente em branco, *"Cliente #3"*, *"OS #1"*.)*
+
+**2. Sem o Comercial, a busca do topo diz por que não busca (C364, B999).** Entre com um usuário **só do Almoxarifado** e aperte **Ctrl+K**: a
+busca abre com o campo desligado e a frase *"A busca do topo procura clientes, projetos, propostas, atividades e produtos do Comercial, e você
+não tem acesso ao Comercial."*; **Esc** (ou o **X**, ou o clique fora) fecha. Nenhum pedido vai ao servidor. Com um vendedor (com o Comercial),
+o *Ctrl+K* busca como sempre. Se as permissões guardadas na tela já venceram (passam 5 minutos), a busca as lê de novo ao abrir — o que se
+digita espera mostrando *"Buscando..."* —; se a leitura falhar, a busca funciona como antes e o servidor decide.
+
+**3. Só a resposta do último termo aparece (C365).** Numa busca aberta, digite *"ab"* e logo *"abc"*: se a resposta de *"ab"* chegar depois da
+de *"abc"* (o banco ocupado faz a tela repetir o pedido), ela é jogada fora — o que fica é a lista de *"abc"*. Apagar até sobrar uma letra
+volta a *"Digite pelo menos 2 caracteres para buscar"* (sem *"Buscando..."* preso); fechar e reabrir não traz resposta de antes. Se a busca
+falhar, a frase é *"Não foi possível buscar agora. Tente de novo em instantes."* — digite de novo.
+
+**4. O produto da OS pelo código certo (C351).** Pela integração, com um vendedor: crie um produto com código *"E155/A"* (`POST /api/produtos`)
+e ponha-o num item de uma proposta; gere a OS da proposta (a tela **Nova OS** do Comercial, a partir da proposta): o item mostra as
+especificações técnicas do produto. *(Antes: o item saía sem elas — o endereço com a barra virava outro.)* Pela integração: `GET
+/api/produtos/codigo/E155%2FA` → **200** com o produto; `GET /api/produtos/codigo/E155/A` (cru) → **404**.
+
+### O que esta etapa NÃO cobre
+
+1. **Uma reserva para uma OS antiga** (fora das 300 mais recentes) continua dizendo *"OS #<número interno>"* na coluna de destino — a lista de
+   OS da tela traz só as 300 mais recentes.
+2. **Com o banco ocupado, dois pedidos ao mesmo endereço com filtros diferentes**, em qualquer tela: o segundo falha na hora, sem esperar o
+   banco voltar (**C369**, nova; da camada de comunicação de todas as telas). Na busca, aparece a frase de falha — basta digitar de novo.
+3. **Com a permissão tirada no meio da sessão**, as telas do Almoxarifado que usam as listas de clientes e de projetos continuam mostrando o
+   seletor vazio, calado (**C366**, de antes).
+
+### O que a revisão encontrou
+
+A **medição** (antes do código) confirmou o seletor de cliente em branco e achou o irmão na mesma tela: o seletor de OS lia um campo que o
+servidor não manda, e o teste da tela usava justamente esse campo (**C368**). A **revisão do plano** (6 médios, 13 pequenos) pegou que a
+medição estava errada num ponto — as permissões guardadas na tela **vencem em 5 minutos** e ninguém as renova, então sem a leitura ao abrir a
+frase da busca sumiria depois de 5 minutos —, e que o **Esc** não fecharia a busca com o campo desligado, que o *"Buscando..."* podia ficar
+preso e que fechar a busca não cancelava o atraso de 300 ms. A **revisão adversarial do código** (três revisores, executando): o de **regra**
+achou que um **Esc** com a ajuda (F1) aberta por cima fechava a ajuda **e** a busca, que a resposta chegando nos 300 ms depois de apagar o
+termo ainda aparecia, e que reabrir a busca podia deixar o campo sem o cursor; o de **permissão** comparou a decisão da tela com a do servidor
+em 44 perfis, ligado e desligado — **0** divergências com o portão ligado — e achou que quem virou administrador no meio da sessão continuava
+vendo a frase até a tela reler o cadastro; os dois acharam que a prova por texto das etapas de portão ainda deixava passar um middleware
+registrado em **toda a API** (`/api`, `/`) por qualquer nome; o de **sabotagem** fez 37 sabotagens — 23 caíram pela asserção certa, 11 acharam
+asserções faltando (a leitura das permissões que chega depois de reabrir, o Esc fechando duas vezes, o erro velho, as setas, a frase) e 3 não
+mudam nada. Tudo virou correção e teste. Commits `d3ef595a`, `287e6157`, `92178609`, `ff02028b` e `96da430a` (a correção da revisão).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 155 entregue (2026-10-19):** **o cliente e a OS das Reservas com nome, a busca do topo que diz por que não busca, e o produto da OS
+  pelo código certo** (consertos de tela, sem regra de acesso nova). Os seletores de cliente e de OS das Reservas mostram a razão social e o
+  número da OS (**C367** resolvido, **C368** novo e resolvido); sem o Comercial, a busca do *Ctrl+K* diz por que não busca (**B999** — **C364**
+  resolvido); a busca só mostra a resposta do último termo e diz quando falhou (**C365** resolvido); as telas da OS acham o produto cujo
+  código tem barra (**C351** resolvido); a prova por texto das etapas de portão vê o middleware global por qualquer nome. Commits `d3ef595a`,
+  `287e6157`, `92178609`, `ff02028b` e `96da430a` (a correção da revisão). **O que é seu:** a consulta **A103** (opcional); o aviso **C369**; a
+  decisão **B999** (reversível); as perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **B988**, **B989**, **C277**, **C312**,
+  **C314**, **C316**, **C330**); as limitações **(155)** em D e a verificação **(155)** em F.
+  **Próxima: Etapa 156 — ver a "próxima tarefa detalhada" no plano da Etapa 155.**
 
 - **Etapa 154 entregue (2026-10-19):** **a lista de clientes e a de projetos pedem um dos módulos que as usam, e o sino só mostra o que se
   pode abrir** (do Comercial). Quem não tem o Comercial, o Almoxarifado nem o Operacional é barrado nas duas listas pela integração; o
@@ -31349,7 +31515,7 @@ proposta atribuída por outro não era testado. Os três viraram teste. Commits 
   `fa41db01`, `a5b9365e` e `073b330c`. **O que é seu:** a consulta **A102** (opcional); os avisos **C366** e **C367**; as decisões **B995** a
   **B997** (reversíveis); as perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **B988**, **B989**, **C277**, **C312**,
   **C314**, **C316**, **C330**); as limitações **(154)** em D e a verificação **(154)** em F.
-  **Próxima: Etapa 155 — ver a "próxima tarefa detalhada" no plano da Etapa 154.**
+  *(Próxima, na época: Etapa 155 — entregue acima.)*
 
 - **Etapa 153 entregue (2026-10-19):** **o painel, os relatórios e o mapa do Comercial pedem o Comercial, e a busca do topo só mostra o
   que cada um pode abrir** (do Comercial/núcleo). Quem a tela barra do Comercial é barrado nas 7 leituras; o vendedor não perde nada

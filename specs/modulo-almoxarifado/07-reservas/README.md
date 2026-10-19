@@ -2,7 +2,8 @@
 
 > **Status:** 🟢 Etapa 4 completa — backend (2026-08-05) e tela (2026-08-06) ·
 > **Spec original:** seção 7
-> **Última atualização:** 2026-10-09 (**Etapa 98** — devolver da caixa à prateleira **não mexe na reserva do item** (B506, C194): com reserva, a `PERDA` do devolvido continua recusando até a reserva ser liberada pelo gesto que já existe (`POST /reservas/:id/liberar`, `liberar_reserva_requisicao`); e o **C190** fica resolvido do lado da entrega: com o disponível do material negativo (bloqueio sobre o reservado já separado, ou a reserva de outra requisição ocupando o físico) a prévia, a fila e o detalhe dizem 0 e a recusa (E190) nomeia a saída — liberar da reserva **desta** requisição só quando isso destrava (reserva do item + disponível > 0), senão liberar **outra** reserva do material ou desbloquear (B509, B513). Range `6e61cb27..b7fc06a0`; ver a seção "Etapa 98" no fim. Continua 🟢.) Antes: 2026-10-09 (**Etapa 97** — a reserva manual (`POST /reservas`) não toma mais o material separado na caixa sem reserva de uma requisição: recusa 400 *"Saldo disponível insuficiente: ⟨n⟩"* com o sufixo que nomeia a requisição (M3); as reservas de requisição (aprovação, chegada, recriação no estorno) ficam na régua de hoje (B492); `criarReserva` roda sob a trava do material. `65dc74b2`; range `eb7cd9d8..3fc39310`. Continua 🟢. Ver o item da Etapa 97 no checklist e a seção no fim.)
+> **Última atualização:** 2026-10-19 (**Etapa 155** — a tela de reservas mostra o cliente pela razão social e a OS pelo número (C367, C368: os seletores liam campos que o servidor não manda; `d3ef595a`). Continua 🟢. Ver a seção da Etapa 155 no fim.)
+> Antes: 2026-10-09 (**Etapa 98** — devolver da caixa à prateleira **não mexe na reserva do item** (B506, C194): com reserva, a `PERDA` do devolvido continua recusando até a reserva ser liberada pelo gesto que já existe (`POST /reservas/:id/liberar`, `liberar_reserva_requisicao`); e o **C190** fica resolvido do lado da entrega: com o disponível do material negativo (bloqueio sobre o reservado já separado, ou a reserva de outra requisição ocupando o físico) a prévia, a fila e o detalhe dizem 0 e a recusa (E190) nomeia a saída — liberar da reserva **desta** requisição só quando isso destrava (reserva do item + disponível > 0), senão liberar **outra** reserva do material ou desbloquear (B509, B513). Range `6e61cb27..b7fc06a0`; ver a seção "Etapa 98" no fim. Continua 🟢.) Antes: 2026-10-09 (**Etapa 97** — a reserva manual (`POST /reservas`) não toma mais o material separado na caixa sem reserva de uma requisição: recusa 400 *"Saldo disponível insuficiente: ⟨n⟩"* com o sufixo que nomeia a requisição (M3); as reservas de requisição (aprovação, chegada, recriação no estorno) ficam na régua de hoje (B492); `criarReserva` roda sob a trava do material. `65dc74b2`; range `eb7cd9d8..3fc39310`. Continua 🟢. Ver o item da Etapa 97 no checklist e a seção no fim.)
 > Antes: 2026-10-09 (**Etapa 96** — a reserva grava arredondado a 6 casas e o claim de `criarReserva` compara com folga de 1e-9: no legado torto (físico `0.9999…`) a aprovação de uma requisição de 1 volta a reservar **1** (*Totalmente Reservada* — fecha a ressalva do `6e0fae83`, C179); o reservado sem reserva `ATIVA` não guarda resíduo abaixo de 0,0001 (Fase 5, R2, `2adcd51c`). Range `604b37b1..2d0bbfe9`. Continua 🟢. Ver o item da Etapa 96 no checklist.)
 > Antes: 2026-10-09 (**Etapa 95** — a aprovação não reserva mais o material que está na caixa sem
 > reserva de outra requisição (**B469**, `9237af2c`; a reserva arredondada a 1e-6, `6e0fae83`): reserva `min(falta,
@@ -514,3 +515,24 @@ material bloqueado).
 
 **Testes:** `entregaDisponivelNegativo.api.test.js` (16), `devolverSeparado.api.test.js` `[98 RN-05]`,
 `devolverSeparadoIntegracao.api.test.js` C3, C3b, C4, C4b. `test:api` 342/342 no último commit da etapa.
+
+## Etapa 155 — o cliente e a OS da tela de reservas pelos campos que o servidor manda (2026-10-19)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa155-correcoes-tecnicas-de-tela.md` (RN-155.01). Só a tela; o serviço não muda.
+
+**O que estava errado (Fase 0):** a tela lia `c.nome` do cliente (o cadastro tem `razao_social` e `nome_fantasia` — opções em branco e
+*"Cliente #<id>"* na coluna, **C367**) e `o.numero || o.codigo` da OS (o `GET /api/almoxarifado/aux/ordens-servico` devolve `numero_os` e
+`cliente_nome` — toda opção *"OS #<id>"*, **C368**). O teste da tela provava o defeito: o mock de `/clientes` era vazio e o da OS trazia um
+`numero` que o servidor não manda. A linha 312 acima (*"criação … transferência entre projetos/OS"*) estava certa no gesto, mas os seletores
+de cliente e de OS nunca mostraram o destino pelo nome.
+
+**Entregue:**
+
+- [x] **O cliente pela razão social, a OS pelo número** — `d3ef595a`: `rotuloCliente` (`razao_social || nome_fantasia || Cliente #id`),
+  `rotuloOS` (`numero_os`, e ` — cliente_nome` só quando há), a coluna *Origem / Destino* pelo `numero_os` da lista (*"OS #<id>"* só fora das
+  300 mais recentes). Os valores das opções continuam o `id`.
+- [x] **O teste pelo corpo real** — `d3ef595a`: os fixtures `client/src/components/almoxarifado/__fixtures__/clienteDoServidor.json` e
+  `osDoAuxDoServidor.json`; `ReservasAlmoxarifado.test.js` **25** (3 novos: os fixtures, a Nova Reserva, a Transferência e a coluna); o
+  `listasNotificacoesPortao` confere que as chaves dos fixtures são as de uma linha do servidor montado (exigindo a linha).
+- [ ] *Fora, de propósito:* a reserva de uma OS antiga (fora das 300 da lista) continua *"OS #<id>"* — a lista da tela é a do aux; mudar o
+  aux é outro assunto (não há reclamação).

@@ -388,6 +388,32 @@ projeto das listas, o vendedor seguindo o clique até as leituras da proposta, 1
 (o dono dos prefixos `/api/clientes` e `/api/projetos`: as listas com a cadeia nova nas camadas); `client/src/components/Notificacoes.test.js`
 (o clique e a rota `propostas/editar/:id` → `PropostaForm` no bloco `/comercial` do `App.js`).
 
+### A busca do topo na tela, o produto da OS pelo código codificado, e a régua do `.use` (Etapa 155, C364, C365, C351)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa155-correcoes-tecnicas-de-tela.md`. **Nenhuma rota muda.**
+
+- **A busca do topo** (`client/src/components/BuscaGlobal.js`, `client/src/utils/buscaGlobalAcesso.js` — RN-155.02/03, B999): decide se busca
+  pela régua da moldura (`podeUsarBuscaGlobal(user, getCachedUserPermissions(user.id))` → `hasModuleAccess` em algum de
+  `MODULOS_DA_BUSCA_GLOBAL = ['comercial']`, os módulos de `TIPOS_DA_BUSCA_GLOBAL`); com o cache frio, `fetchUserPermissions(user.id)` ao abrir
+  (erro → busca, falha aberto); sem acesso, o campo desligado e *"A busca do topo procura clientes, projetos, propostas, atividades e produtos
+  do Comercial, e você não tem acesso ao Comercial."*, sem pedido; o Esc no `window`. Só o último pedido (`pedidoRef`) grava resultado, erro e
+  "carregando"; termo curto, fechar e abrir invalidam; o erro → *"Não foi possível buscar agora. Tente de novo em instantes."*. O filtro do
+  servidor (Etapa 153) continua decidindo. `C364` dizia "candidata: desligar o atalho" — a escolha foi abrir e dizer por quê (B999).
+- **O produto pelo código** (`client/src/utils/produtoPeloCodigo.js` — RN-155.04, C351): `caminhoDoProdutoPeloCodigo(codigo)` =
+  `/produtos/codigo/${encodeURIComponent(String(codigo))}`, usado pelo `OSComercialForm`, `OSDetalhesForm` e `PreviewOSEditavel`; o
+  `GET /api/produtos/codigo/:codigo` lê o parâmetro decodificado uma vez pelo Express.
+- **A régua do texto** (`server/tests/helpers/reguaDoFonteDoServidor.js` — RN-155.05): `\.\s*use\s*\(\s*[^\s'"`)]` acusa todo `.use(` não
+  literal por qualquer receptor (o middleware global por apelido escapava do texto e das camadas); e (Fase 5 r1/r2 A1) o `.use` com um
+  caminho literal que vale para toda a API (`'/'`, `''`, `'*'`, `'/api'`, qualquer aspa e caixa), o `use?.(` e o `.use.bind(` —
+  `REGISTROS_NAO_LITERAIS_MEDIDOS` com o `io.use` do socket e os 5 `app.use('/api', ...)` de hoje. O plano dizia que o `.use` com caminho
+  literal "continua com as camadas": **estava errado** para esses quatro caminhos (rodam no caminho neutro, na mesma posição).
+- **O Esc e o usuário efetivo** (Fase 5): o Esc só fecha a busca teclado dentro dela (ou sem foco) — a ajuda do F1 por cima fecha só ela; a
+  decisão usa `mergeUserPermissions(user, cached?.usuario)` (quente) e `mergeUserPermissions(user, data?.usuario)` (frio).
+
+Testes: `client/src/components/BuscaGlobal.test.js` (27: 9 de antes + 18 da 155), `client/src/utils/produtoPeloCodigo.test.js` (2: a função
+e o inventário), `paineisBuscaGlobalPortao` (o conjunto do client = o do servidor), `produtosGruposVariaveisPortao` (seis códigos especiais
+pela rota real; o cru com barra → 404), `custosViagensPortao` (o controle do helper com as oito formas do `.use`).
+
 ### O painel, os relatórios e o mapa no portão, e a busca global filtrada por tipo (Etapa 153, C355, C352)
 
 Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa153-paineis-relatorios-e-busca-global-pelo-modulo.md`. Commits `09424106`, `654df671` e `b1918f1a`.

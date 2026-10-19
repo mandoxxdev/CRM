@@ -263,7 +263,11 @@ Comercial:** 0. Controle (cópia): dado o Operacional ao 8 e tirado o Almoxarifa
    client" precisa de uma prova que leia o client — a medição por grep vale no dia, não no dia seguinte.
 3. **Paralelismo:** **0** galhos de código em paralelo (o T4, galho, feito em sequência — pequeno demais); **1** revisor na Fase 2 (antes do
    código), **3** em paralelo na Fase 5 sob a trava; **0** retrabalho.
-4. **Defeito que escapou:** *(preencher na Etapa 155)*.
+4. **Defeito que escapou:** *(preenchido na Etapa 155)* **0** de código da 154 (os três revisores da 155 executaram as listas, o sino e o
+   clique de novo — nada); **0** de documento (a C367 estava certa; a medição da 155 achou o irmão dela, o seletor de OS das Reservas — **C368**,
+   de antes, que nenhuma etapa tinha visto); **1** de prova, herdado das 152/153 e usado pela 154: a régua das provas de portão deixava passar,
+   além do middleware global por apelido (o R2 que a 154 nomeou), o `.use` registrado em **toda a API** (`'/api'`, `'/'`, `'*'`, `''`) por
+   qualquer nome — ele roda no caminho neutro das camadas, na mesma posição (Fase 5 r1/r2 A1 da 155; corrigido lá).
 
 **Retro da 153 — o defeito que escapou (preenchido aqui):** **0** de código; **1** de documento — a **C363** dizia *"o sino (na moldura de
 todos os módulos)"*: **estava errado** — o `Layout` importa o `Notificacoes` e não o desenha; só o painel do Comercial o mostra (medido na

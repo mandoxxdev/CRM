@@ -1044,6 +1044,15 @@ decide se a pessoa abre as telas desses módulos. Quem não tem nenhum dos três
 recebe *"Acesso negado ao módulo"*, e a tentativa fica registrada como acesso negado a *Comercial ou Almoxarifado ou Operacional*. Nenhuma
 tela de outro módulo usa essas listas.
 
+A **busca do topo** (**Ctrl+K**, em qualquer módulo) procura clientes, projetos, propostas, atividades e produtos — todos levam a telas do
+**Comercial**, e cada resultado só aparece a quem pode abrir a tela dele. Quem não tem acesso ao Comercial (pela mesma regra que decide se a
+tela do Comercial abre) vê a busca abrir com o campo desligado e a frase *"A busca do topo procura clientes, projetos, propostas, atividades e
+produtos do Comercial, e você não tem acesso ao Comercial."*; **Esc**, o **X** ou o clique fora fecham. Se as permissões que a tela guarda já
+venceram (elas valem 5 minutos), a busca as lê de novo ao abrir e decide quando chegam — se a leitura falhar, ela busca normalmente e o
+servidor só devolve o que a pessoa pode ver. A busca começa com 2 letras (*"Digite pelo menos 2 caracteres para buscar"*), espera a pessoa
+parar de digitar e mostra **só a resposta do último termo** digitado; quando não consegue buscar (banco ocupado, rede), diz *"Não foi
+possível buscar agora. Tente de novo em instantes."* — e, quando busca e não acha, *"Nenhum resultado encontrado"*.
+
 ### 5.2e Usuário desativado ou excluído
 
 O sistema relê o cadastro de quem está usando a cada ação. Usuário **desativado ou excluído** — mesmo com a sessão ainda aberta — tem a ação seguinte recusada com
@@ -2328,6 +2337,12 @@ Os lançamentos que o próprio sistema grava ao criar e ao liberar uma reserva c
 ### 9.5 Transferência de reserva entre projetos
 
 O ícone de setas troca o **destino** da reserva (projeto, OS, referência de OS ou cliente).
+
+**Como o destino aparece na tela** (na coluna **Origem / Destino**, nos seletores da **Nova Reserva** e da transferência): o cliente pela
+**razão social** (o nome fantasia quando a razão social está vazia); a OS pelo **número da OS** — nos seletores seguido do cliente dela
+(*"OS-042 — ACME INDUSTRIA LTDA"*; sem cliente, só o número). Os seletores de OS trazem as 300 ordens de serviço mais recentes; a reserva de
+uma OS mais antiga aparece na coluna como *"OS #⟨número interno⟩"*, e a de um cliente fora da lista, *"Cliente #⟨número interno⟩"*. Quando
+uma reserva tem mais de um destino, a coluna mostra o primeiro na ordem OS, referência de OS, projeto, cliente.
 
 **Nenhum saldo é tocado — de propósito.** A quantidade continua no estoque e continua reservada; muda só para quem o hold aponta. Liberar e reservar de novo seria pior: abriria uma janela em que outra saída poderia levar o material no meio do caminho.
 
