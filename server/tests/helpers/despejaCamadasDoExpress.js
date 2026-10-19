@@ -19,6 +19,8 @@ const AMOSTRAS = JSON.parse(process.env.CAMADAS_AMOSTRAS || '[]');
 const nomeDe = (fn) => {
   if (!fn) return '<sem handler>';
   if (fn.modulosDoPortao) return `portao:${[].concat(fn.modulosDoPortao).join('|')}${fn.caminhoDoPortao ? '+configuracoes' : ''}`;
+  // Etapa 153 (RN-153.02): o filtro por tipo da busca global — `filtro:<tipo>=<modulos>,...` (o mapa inteiro, em ordem)
+  if (fn.tiposDoFiltro) return `filtro:${Object.keys(fn.tiposDoFiltro).sort().map((t) => `${t}=${[].concat(fn.tiposDoFiltro[t]).join('|')}`).join(',')}`;
   return fn.name || '<anonima>';
 };
 

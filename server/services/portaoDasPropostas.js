@@ -81,7 +81,33 @@ function criarPortaoDasPropostas({ getDb, registrar, desligado }) {
     portao.caminhoDoPortao = caminho;
     return portao;
   }
-  return { exigir };
+
+  /**
+   * Etapa 153 (C352/C355, RN-153.02, B992) — o filtro POR TIPO de uma leitura que junta registros de varios modulos (a busca global).
+   * Nao barra a rota: pendura em `req.tiposPermitidos` o conjunto dos tipos cujo modulo a regua da tela aceita (`null` = todos, sem ler
+   * as linhas: desligado, super ou role admin). Quem nao tem tipo nenhum recebe o que o handler devolve para o conjunto vazio — sem log de
+   * acesso negado (a busca dispara a cada tecla). BUSY ao ler as linhas -> 503 com o `contexto`; outro erro -> 500.
+   * `tiposPorModulo`: { tipo: [modulos] } — basta um dos modulos.
+   */
+  function filtrarPorModulo(tiposPorModulo, { contexto = 'portao:filtro' } = {}) {
+    const mapa = {};
+    for (const [tipo, modulos] of Object.entries(tiposPorModulo)) mapa[tipo] = [].concat(modulos);
+    const filtro = (req, res, next) => {
+      if (desligado || bypassModuleRestrictions(req.user)) { req.tiposPermitidos = null; return next(); }
+      getDb().all(SQL_LINHAS_DA_TELA, [req.user.id, req.user.id], (err, linhas) => {
+        if (err) {
+          if (isSqliteBusy(err)) return respondDbError(res, err, contexto);
+          console.error('Erro ao verificar permissões (filtro por módulo):', err);
+          return res.status(500).json({ error: 'Erro ao verificar permissões' });
+        }
+        req.tiposPermitidos = new Set(Object.keys(mapa).filter((tipo) => temModuloComoATela(req.user, linhas, mapa[tipo])));
+        return next();
+      });
+    };
+    filtro.tiposDoFiltro = mapa;
+    return filtro;
+  }
+  return { exigir, filtrarPorModulo };
 }
 
 module.exports = { criarPortaoDasPropostas, temModuloComoATela, passaPeloCaminhoDeConfiguracoes, SQL_LINHAS_DA_TELA };

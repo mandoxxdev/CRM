@@ -3013,7 +3013,7 @@ function checkAnyModulePermission(requiredModules) {
 // passam pelo mesmo portao — o barrado criava o pedido pela API; a tela de Aprovacoes e as que pedem aprovacao estao todas no Comercial.
 const PORTAO_DAS_PROPOSTAS_DESLIGADO = String(process.env.PROPOSTAS_PORTAO_DE_MODULO || '').trim().toLowerCase() === 'desligado';
 if (PORTAO_DAS_PROPOSTAS_DESLIGADO) {
-  console.warn('⚠️ PROPOSTAS_PORTAO_DE_MODULO=desligado: as rotas /api/propostas*, as do modelo da proposta, as das listas de preço e as do modelo de contrato por família NAO exigem o módulo Comercial, e as da ordem de serviço pelo número NAO exigem o Comercial ou o Operacional, e as do cadastro de família NAO exigem o Comercial (só o login), e as dos grupos de produto, dos produtos e das variáveis técnicas NAO exigem o Comercial e a do produto pelo código NAO exige o Comercial ou o Operacional (só o login), e as dos clientes, dos projetos, das oportunidades e das atividades NAO exigem o Comercial (só o login), e as dos custos de viagem NAO exigem o Comercial (só o login); a lista de ordens de serviço do Operacional volta à régua antiga do módulo.');
+  console.warn('⚠️ PROPOSTAS_PORTAO_DE_MODULO=desligado: as rotas /api/propostas*, as do modelo da proposta, as das listas de preço e as do modelo de contrato por família NAO exigem o módulo Comercial, e as da ordem de serviço pelo número NAO exigem o Comercial ou o Operacional, e as do cadastro de família NAO exigem o Comercial (só o login), e as dos grupos de produto, dos produtos e das variáveis técnicas NAO exigem o Comercial e a do produto pelo código NAO exige o Comercial ou o Operacional (só o login), e as dos clientes, dos projetos, das oportunidades e das atividades NAO exigem o Comercial (só o login), e as dos custos de viagem NAO exigem o Comercial (só o login), e as dos painéis, dos relatórios e do mapa do Comercial NAO exigem o Comercial (só o login), e a busca global mostra todos os tipos de resultado a qualquer logado; a lista de ordens de serviço do Operacional volta à régua antiga do módulo.');
 }
 const portaoDasPropostas = criarPortaoDasPropostas({
   getDb: () => db,
@@ -3055,6 +3055,15 @@ const exigirComercialNasVariaveisTecnicas = portaoDasPropostas.exigir('comercial
 // exigirComercialNasPropostas. As duas listas (GET /api/clientes e GET /api/projetos) continuam SO com o login (RN-151.03): o
 // Almoxarifado (material, reservas, movimentacoes, sobras) e a OS da Fabrica (OSForm) as leem — fechar a leitura so onde ninguem de
 // fora do Comercial le (C353).
+// Etapa 153 (C355, RN-153.01, B991): os paineis, os relatorios e o mapa do Comercial (GET /api/dashboard, /historico, /avancado, /vendas,
+// /api/relatorios/executivo, /visitas-tecnicas, /api/mapa/maquinas-vendidas) usam o exigirComercialNasPropostas — so as telas do Comercial
+// os chamam (o Dashboard e o DashboardVendas do indice de /comercial, os Relatorios e as Maquinas Vendidas). Os paineis do Financeiro, do
+// Operacional, do MES, da Frota, da Producao e do Almoxarifado leem outras rotas.
+// Etapa 153 (C352/C355, RN-153.02, B992): a busca global NAO fecha — ela esta na moldura de todos os modulos (Ctrl+K). Filtra cada TIPO de
+// resultado pelo modulo da tela que o resultado abre (todos levam a uma tela do Comercial); quem nao tem nenhum recebe []. Um tipo novo
+// entra aqui com o modulo da tela dele (o teste confere que o mapa cobre todo tipo do corpo da busca).
+const TIPOS_DA_BUSCA_GLOBAL = { cliente: ['comercial'], projeto: ['comercial'], proposta: ['comercial'], oportunidade: ['comercial'], atividade: ['comercial'], produto: ['comercial'] };
+const filtrarBuscaGlobalPorModulo = portaoDasPropostas.filtrarPorModulo(TIPOS_DA_BUSCA_GLOBAL, { contexto: 'portao:busca-global' });
 
 // Etapa 21 (RN-04). Precedencia: variaveis de ambiente `SMTP_*` -> valores abaixo.
 // A regua mora em `services/emailConfig.js` (funcao pura, testada em
@@ -6537,7 +6546,7 @@ app.get('/api/propostas/:id/edicoes-log', authenticateToken, exigirComercialNasP
 });
 
 // ========== ROTAS DE RELATÓRIOS EXECUTIVOS ==========
-app.get('/api/relatorios/executivo', authenticateToken, (req, res) => {
+app.get('/api/relatorios/executivo', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   if (!db) {
     return res.status(500).json({ error: 'Banco de dados não está disponível' });
   }
@@ -7516,7 +7525,7 @@ function calcularValorVisita(cidade, estado) {
 }
 
 // ========== ROTA DE MAPA DE MÁQUINAS VENDIDAS ==========
-app.get('/api/mapa/maquinas-vendidas', authenticateToken, (req, res) => {
+app.get('/api/mapa/maquinas-vendidas', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   if (!db) {
     return res.status(500).json({ error: 'Banco de dados não está disponível' });
   }
@@ -7612,7 +7621,7 @@ app.get('/api/mapa/maquinas-vendidas', authenticateToken, (req, res) => {
 });
 
 // ========== ROTA DE VISITAS TÉCNICAS ==========
-app.get('/api/relatorios/visitas-tecnicas', authenticateToken, (req, res) => {
+app.get('/api/relatorios/visitas-tecnicas', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   if (!db) {
     return res.status(500).json({ error: 'Banco de dados não está disponível' });
   }
@@ -17584,7 +17593,7 @@ app.delete('/api/comercial/listas-precos/:id', authenticateToken, exigirComercia
 });
 
 // ========== ROTAS DE DASHBOARD ==========
-app.get('/api/dashboard', authenticateToken, (req, res) => {
+app.get('/api/dashboard', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const stats = {};
 
   // Total de clientes ativos
@@ -17647,7 +17656,7 @@ app.get('/api/dashboard', authenticateToken, (req, res) => {
   });
 });
 
-app.get('/api/dashboard/historico', authenticateToken, (req, res) => {
+app.get('/api/dashboard/historico', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const historico = [];
 
   // Buscar dados dos últimos 12 meses
@@ -17676,7 +17685,7 @@ app.get('/api/dashboard/historico', authenticateToken, (req, res) => {
 });
 
 // ========== ROTAS DE DASHBOARD AVANÇADO ==========
-app.get('/api/dashboard/avancado', authenticateToken, (req, res) => {
+app.get('/api/dashboard/avancado', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const dados = {
     propostasPorEstado: [],
     volumeBuscaPorRegiao: [],
@@ -18423,7 +18432,7 @@ app.delete('/api/propostas/:id/pdf-anexo', authenticateToken, exigirComercialNas
 });
 
 // ========== ROTA DE DASHBOARD DE VENDAS ==========
-app.get('/api/dashboard/vendas', authenticateToken, (req, res) => {
+app.get('/api/dashboard/vendas', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const dados = {
     funilVendas: [],
     pipeline: {
@@ -19239,7 +19248,7 @@ app.get('/api/propostas/:id/assinaturas', authenticateToken, exigirComercialNasP
 registrarRotasDePermissoes(app, { getDb: () => db, authenticateToken });
 
 // ========== BUSCA GLOBAL ==========
-app.get('/api/busca-global', authenticateToken, (req, res) => {
+app.get('/api/busca-global', authenticateToken, filtrarBuscaGlobalPorModulo, (req, res) => {
   const query = req.query.q || '';
   if (!query || query.length < 2) {
     return res.json([]);
@@ -19247,6 +19256,13 @@ app.get('/api/busca-global', authenticateToken, (req, res) => {
 
   const searchTerm = `%${query}%`;
   const results = [];
+  // Etapa 153 (RN-153.02): so os tipos que o filtro permitiu (null = todos, o filtro disse); sem o filtro (undefined) ou nenhum tipo ->
+  // [] sem rodar as consultas (Fase 2 M-6: se o filtro sair da rota, a busca fecha em vez de abrir)
+  const permitidos = req.tiposPermitidos;
+  const podeVer = (tipo) => permitidos === null || (permitidos instanceof Set && permitidos.has(tipo));
+  if (permitidos !== null && !(permitidos instanceof Set && permitidos.size > 0)) {
+    return res.json([]);
+  }
 
   // Buscar clientes (case-insensitive)
   db.all(
@@ -19256,7 +19272,7 @@ app.get('/api/busca-global', authenticateToken, (req, res) => {
      LIMIT 5`,
     [searchTerm, searchTerm, searchTerm],
     (err, rows) => {
-      if (!err && rows) {
+      if (!err && rows && podeVer('cliente')) {
         results.push(...rows);
       }
 
@@ -19268,7 +19284,7 @@ app.get('/api/busca-global', authenticateToken, (req, res) => {
          LIMIT 5`,
         [searchTerm, searchTerm],
         (err, rows) => {
-          if (!err && rows) {
+          if (!err && rows && podeVer('projeto')) {
             results.push(...rows);
           }
 
@@ -19287,7 +19303,7 @@ app.get('/api/busca-global', authenticateToken, (req, res) => {
              LIMIT 5`,
             [searchTerm, searchTerm, searchTerm, searchTerm],
             (err, rows) => {
-              if (!err && rows) {
+              if (!err && rows && podeVer('proposta')) {
                 results.push(...rows);
               }
 
@@ -19300,7 +19316,7 @@ app.get('/api/busca-global', authenticateToken, (req, res) => {
                  LIMIT 5`,
                 [searchTerm, searchTerm, searchTerm],
                 (err, rows) => {
-                  if (!err && rows) {
+                  if (!err && rows && podeVer('oportunidade')) {
                     results.push(...rows);
                   }
 
@@ -19318,7 +19334,7 @@ app.get('/api/busca-global', authenticateToken, (req, res) => {
                      LIMIT 5`,
                     [searchTerm, searchTerm, searchTerm],
                     (err, rows) => {
-                      if (!err && rows) {
+                      if (!err && rows && podeVer('atividade')) {
                         results.push(...rows);
                       }
 
@@ -19337,7 +19353,7 @@ app.get('/api/busca-global', authenticateToken, (req, res) => {
                          LIMIT 5`,
                         [searchTerm, searchTerm, searchTerm, searchTerm, searchTerm],
                         (err, rows) => {
-                          if (!err && rows) {
+                          if (!err && rows && podeVer('produto')) {
                             results.push(...rows);
                           }
 
