@@ -25,16 +25,20 @@ function formasDoTermo(termo) {
 /**
  * A condicao SQL da busca nas colunas: `(COALESCE(c, '') LIKE ? OR ...)` com um `?` por forma e coluna, e os parametros `%forma%`.
  * Sem termo -> `{ sql: '', params: [] }` (quem chama nao acrescenta nada).
+ *
+ * Etapa 160 (RN-160.04): `{ escapar: true }` escapa \, % e _ em cada forma e acrescenta `ESCAPE '\'` — o termo vale como texto
+ * (o filtro de usuario do historico de movimentacoes ja era assim; sem a opcao, % e _ continuam curingas, como na 159).
  */
-function condicaoDeBusca(colunas, termo) {
+function condicaoDeBusca(colunas, termo, { escapar = false } = {}) {
   const formas = formasDoTermo(termo);
   if (!formas.length) return { sql: '', params: [] };
   const partes = [];
   const params = [];
+  const esc = escapar ? " ESCAPE '\\'" : '';
   for (const c of colunas) {
     for (const f of formas) {
-      partes.push(`COALESCE(${c}, '') LIKE ?`);
-      params.push(`%${f}%`);
+      partes.push(`COALESCE(${c}, '') LIKE ?${esc}`);
+      params.push(`%${escapar ? f.replace(/[\\%_]/g, (x) => `\\${x}`) : f}%`);
     }
   }
   return { sql: `(${partes.join(' OR ')})`, params };

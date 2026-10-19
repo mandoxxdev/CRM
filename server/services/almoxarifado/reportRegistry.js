@@ -147,7 +147,7 @@ const RELATORIOS = {
     exportavel: true,
     nota: 'Mostra as 500 movimentações mais recentes do filtro. Os grupos se sobrepõem: AJUSTE_POSITIVO '
       + 'está em ENTRADA e em AJUSTE, e AJUSTE_NEGATIVO em SAIDA e em AJUSTE — não some grupos. A busca '
-      + 'por usuário ignora maiúsculas só em letras sem acento.',
+      + 'por usuário ignora maiúsculas e minúsculas, mas não o acento.',
     // Fase 2, I5: a query do proprio relatorio ja tem LIMIT 500 (reportService.js) — o export
     // herda esse teto, nunca refaz a query sem limite.
     limite: 500,

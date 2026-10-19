@@ -4,6 +4,7 @@
 
 const { dbRun, dbGet, dbAll } = require('./db');
 const { STATUS_OP, PRIORIDADES, STATUS_MAQUINA, SETORES_GMP } = require('./schema');
+const { condicaoDeBusca } = require('../buscaSemCaixa');
 
 const OP_JOIN = `SELECT o.*, m.codigo as maquina_codigo, m.nome as maquina_nome,
   os.numero_os, c.razao_social as cliente_nome
@@ -12,11 +13,12 @@ const OP_JOIN = `SELECT o.*, m.codigo as maquina_codigo, m.nome as maquina_nome,
   LEFT JOIN ordens_servico os ON o.os_id = os.id
   LEFT JOIN clientes c ON o.cliente_id = c.id`;
 
+// Etapa 160 (RN-160.03, C392): a busca aparada e nas tres formas do termo (a razao social do cliente e gravada em maiusculas; o setor
+// da maquina vem com acento) — a mesma funcao das buscas do Comercial. Nao texto, vazio ou so espacos = sem filtro.
 function buildSearchWhere(fields, search) {
-  if (!search) return { clause: '', params: [] };
-  const term = `%${search}%`;
-  const parts = fields.map((f) => `${f} LIKE ?`);
-  return { clause: ` AND (${parts.join(' OR ')})`, params: fields.map(() => term) };
+  const { sql, params } = condicaoDeBusca(fields, search);
+  if (!sql) return { clause: '', params: [] };
+  return { clause: ` AND ${sql}`, params };
 }
 
 function todayISO() {

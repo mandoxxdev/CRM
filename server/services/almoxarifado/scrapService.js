@@ -17,6 +17,7 @@ const stockService = require('./stockService');
 const ownerRules = require('./ownerRules');
 const lotService = require('./lotService');
 const { disponivelSql } = require('./availabilitySql');
+const { condicaoDeBusca } = require('../buscaSemCaixa');
 
 function erro(msg, status = 400) {
   const e = new Error(msg);
@@ -35,11 +36,11 @@ async function listarSobras(db, filters = {}) {
   // do safeAlter em schema.js), nao pelo material que a sobra representa no catalogo
   // (material_retalho_id, que a Task 3 preenche).
   if (filters.material_id) { sql += ' AND s.material_id = ?'; params.push(filters.material_id); }
-  if (filters.q) {
-    sql += ` AND (s.norma LIKE ? OR s.dimensoes_originais LIKE ? OR s.dimensoes_restantes LIKE ?
-      OR s.material_descricao LIKE ?)`;
-    const like = `%${filters.q}%`;
-    params.push(like, like, like, like);
+  // Etapa 160 (RN-160.04, C393): aparado e nas tres formas do termo
+  const busca = condicaoDeBusca(['s.norma', 's.dimensoes_originais', 's.dimensoes_restantes', 's.material_descricao'], filters.q);
+  if (busca.sql) {
+    sql += ` AND ${busca.sql}`;
+    params.push(...busca.params);
   }
   sql += ' ORDER BY s.created_at DESC';
   return dbAll(db, sql, params);

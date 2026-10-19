@@ -1,6 +1,7 @@
 const { dbRun, dbAll, dbGet } = require('./db');
 const { registrarAuditoriaDoAto } = require('./audit');
 const { STATUS } = require('./toolStateMachine');
+const { condicaoDeBusca } = require('../buscaSemCaixa');
 
 async function criarFerramenta(db, user, data) {
   const r = await dbRun(db, `INSERT INTO ferramentas_almoxarifado
@@ -400,9 +401,11 @@ async function listarFerramentas(db, filters = {}) {
   // caixa de texto desde que a tela existe; a query so nao lia. `busca` casa codigo_patrimonio
   // OU nome (mesmo padrao de outras listagens do modulo); `exige_calibracao` e 0/1 explicito
   // (nao truthy), pra nao confundir "nao filtrar" com "filtrar por 0".
-  if (filters.busca) {
-    sql += ' AND (codigo_patrimonio LIKE ? OR nome LIKE ?)';
-    params.push(`%${filters.busca}%`, `%${filters.busca}%`);
+  // Etapa 160 (RN-160.04, C393): aparado e nas tres formas do termo
+  const busca = condicaoDeBusca(['codigo_patrimonio', 'nome'], filters.busca);
+  if (busca.sql) {
+    sql += ` AND ${busca.sql}`;
+    params.push(...busca.params);
   }
   if (filters.exige_calibracao === '0' || filters.exige_calibracao === '1'
     || filters.exige_calibracao === 0 || filters.exige_calibracao === 1) {
@@ -436,7 +439,9 @@ async function listarEmprestimos(db, filters = {}) {
   // /emprestimos): `colaborador`, nao `colaborador_nome`. A Task 6 e o front (Task 7)
   // constroem contra esse nome — usar outro aqui vira colisao que as proximas tasks teriam
   // de contornar. O match continua sendo contra o colaborador_nome gravado no emprestimo.
-  if (filters.colaborador) { sql += ' AND e.colaborador_nome LIKE ?'; params.push(`%${filters.colaborador}%`); }
+  // Etapa 160 (RN-160.04, C393): aparado e nas tres formas do termo
+  const buscaColab = condicaoDeBusca(['e.colaborador_nome'], filters.colaborador);
+  if (buscaColab.sql) { sql += ` AND ${buscaColab.sql}`; params.push(...buscaColab.params); }
   // vencidos=1 (Task 6, design D6): so EMPRESTADA com data_prevista_devolucao no passado.
   // Empresta sem data prevista (coluna nullable) nunca e vencido — por isso o IS NOT NULL aqui,
   // nao so o date(...) < date('now') sozinho (NULL comparado a qualquer coisa e sempre falso em

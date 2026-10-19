@@ -12,6 +12,7 @@ const multer = multerComLimiteNoErro(require('multer'));
 // Etapa 86 (RN-86.02): recusa do fileFilter com `status = 400` e `mensagemUsuario` — o handler
 // global (services/errosApi.js) responde 400 com ESTE texto (sem isso, 500 generico).
 const { erroComMensagemUsuario } = require('../services/errosApi');
+const { condicaoDeBusca } = require('../services/buscaSemCaixa');
 const { z } = require('zod');
 const alertService = require('../services/almoxarifado/alertService');
 const notificationQueueService = require('../services/almoxarifado/notificationQueueService');
@@ -422,10 +423,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       const params = [];
 
       if (filterClause) sql += ` AND ${filterClause}`;
-      if (search) {
-        sql += ` AND (m.nome LIKE ? OR m.codigo LIKE ? OR m.descricao LIKE ? OR m.fornecedor_principal LIKE ?)`;
-        const s = `%${search}%`;
-        params.push(s, s, s, s);
+      // Etapa 160 (RN-160.04, C393): aparado e nas tres formas — o cadastro grava como digitado ("VÁLVULA" nao casava com "válvula")
+      const busca = condicaoDeBusca(['m.nome', 'm.codigo', 'm.descricao', 'm.fornecedor_principal'], search);
+      if (busca.sql) {
+        sql += ` AND ${busca.sql}`;
+        params.push(...busca.params);
       }
       if (categoria) {
         sql += ` AND m.categoria = ?`;

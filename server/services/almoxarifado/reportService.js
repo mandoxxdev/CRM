@@ -1,4 +1,5 @@
 const { dbAll, dbGet } = require('./db');
+const { condicaoDeBusca } = require('../buscaSemCaixa');
 const { disponivelSql, COLUNAS_RETENCAO } = require('./availabilitySql');
 const { valorEstoqueSql, custoUnitarioSql } = require('./custoSql');
 const { divergenciaRealSql } = require('./divergencia');
@@ -221,7 +222,10 @@ async function relatorioHistoricoMovimentacoes(db, filters = {}) {
     WHERE m.cancelado = 0`;
   const params = [];
   if (filters.material_id) { sql += ' AND m.material_id = ?'; params.push(filters.material_id); }
-  if (filters.tipo) { sql += ' AND m.tipo = ?'; params.push(filters.tipo); }
+  // Etapa 160 (RN-160.04, C393): o tipo e um campo de texto livre na tela — aparado e em maiusculas (o livro grava SAIDA, ENTRADA...);
+  // nao texto, vazio ou so espacos = sem filtro
+  const tipo = typeof filters.tipo === 'string' ? filters.tipo.trim().toUpperCase() : '';
+  if (tipo) { sql += ' AND m.tipo = ?'; params.push(tipo); }
   if (filters.grupo) {
     const g = GRUPOS_MOVIMENTO[String(filters.grupo).toUpperCase()];
     if (!g) {
@@ -235,11 +239,12 @@ async function relatorioHistoricoMovimentacoes(db, filters = {}) {
       params.push(...tipos);
     }
   }
-  if (filters.usuario) {
-    // ESCAPE: % e _ digitados valem como texto, não como curinga.
-    const termo = String(filters.usuario).replace(/[\\%_]/g, (c) => `\\${c}`);
-    sql += " AND m.usuario_nome LIKE ? ESCAPE '\\'";
-    params.push(`%${termo}%`);
+  // Etapa 160 (RN-160.04, C393): o nome e gravado em maiusculas (o cadastro de usuarios) — aparado e nas tres formas do termo, e o
+  // ESCAPE de antes: % e _ digitados valem como texto, não como curinga. Nao texto = sem filtro.
+  const buscaUsuario = condicaoDeBusca(['m.usuario_nome'], filters.usuario, { escapar: true });
+  if (buscaUsuario.sql) {
+    sql += ` AND ${buscaUsuario.sql}`;
+    params.push(...buscaUsuario.params);
   }
   if (filters.centro_custo_id) { sql += ' AND m.centro_custo_id = ?'; params.push(filters.centro_custo_id); }
   // Etapa 66 (T3): filtro pelo id do cadastro, nunca pelo nome — o texto livre com o mesmo nome

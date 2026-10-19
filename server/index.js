@@ -216,6 +216,13 @@ const { tratarErroGlobalApi } = require('./services/errosApi');
 const { obterCoordenadasCidade, normalizarNome, termoDaConsulta, coordenadaGuardada, coordenadaPlausivel, geocodificarEndereco } = require('./services/coordenadas');
 // Etapa 159 (RN-159.02, C385): a busca de texto acha a letra acentuada em qualquer caixa (o LIKE do SQLite so ignora a caixa sem acento)
 const { condicaoDeBusca, formasDoTermo } = require('./services/buscaSemCaixa');
+// Etapa 160 (RN-160.01, C390): o filtro de prioridade das OS — aparado e em maiusculas (o cadastro grava ALTA; a tela manda alta).
+// Nao texto, vazio ou so espacos -> null (sem filtro). Os valores (baixa/normal/alta/urgente) nao tem acento: o UPPER do SQLite basta.
+function prioridadeDoFiltro(x) {
+  if (typeof x !== 'string') return null;
+  const t = x.trim().toUpperCase();
+  return t || null;
+}
 // Etapa 85 (RN-85.02): o MulterError LIMIT_FILE_SIZE nao carrega o limite; o embrulho anexa
 // `err.limiteBytes` (limits.fileSize de quem recusou) para o tratarArquivoGrandeDemais responder
 // 413 "Arquivo grande demais (máximo N MB)". Todo multer deste arquivo e criado por este `multer`.
@@ -20112,10 +20119,11 @@ app.get('/api/operacional/colaboradores', authenticateToken, checkModulePermissi
     FROM colaboradores c WHERE 1=1`;
   const params = [];
 
-  if (search) {
-    query += ' AND (c.nome LIKE ? OR c.matricula LIKE ? OR c.cpf LIKE ?)';
-    const searchTerm = `%${search}%`;
-    params.push(searchTerm, searchTerm, searchTerm);
+  // Etapa 160 (RN-160.03, C392): aparado e nas tres formas (o nome e gravado em maiusculas)
+  const busca = condicaoDeBusca(['c.nome', 'c.matricula', 'c.cpf'], search);
+  if (busca.sql) {
+    query += ' AND ' + busca.sql;
+    params.push(...busca.params);
   }
   if (status) {
     query += ' AND c.status = ?';
@@ -20321,18 +20329,20 @@ app.get('/api/operacional/ordens-servico', authenticateToken, exigirOperacionalN
     
     const params = [];
 
-    if (search) {
-      query += ' AND (os.numero_os LIKE ? OR os.descricao LIKE ?)';
-      const searchTerm = `%${search}%`;
-      params.push(searchTerm, searchTerm);
+    // Etapa 160 (RN-160.03, C392): aparado e nas tres formas (a descricao e gravada em maiusculas)
+    const busca = condicaoDeBusca(['os.numero_os', 'os.descricao'], search);
+    if (busca.sql) {
+      query += ' AND ' + busca.sql;
+      params.push(...busca.params);
     }
     if (status) {
       query += ' AND os.status = ?';
       params.push(status);
     }
-    if (prioridade) {
-      query += ' AND os.prioridade = ?';
-      params.push(prioridade);
+    const prio = prioridadeDoFiltro(prioridade);
+    if (prio) {
+      query += ' AND UPPER(TRIM(os.prioridade)) = ?';
+      params.push(prio);
     }
     if (cliente_id) {
       query += ' AND os.cliente_id = ?';
@@ -20429,9 +20439,11 @@ app.get('/api/comercial/ordens-servico', authenticateToken, exigirComercialNasPr
           query += ' AND os.status = ?';
           params.push(status);
         }
-        if (prioridade) {
-          query += ' AND os.prioridade = ?';
-          params.push(prioridade);
+        // Etapa 160 (RN-160.01, C390): o gravado e ALTA (normalizarMaiusculas), a tela manda alta
+        const prio = prioridadeDoFiltro(prioridade);
+        if (prio) {
+          query += ' AND UPPER(TRIM(os.prioridade)) = ?';
+          params.push(prio);
         }
         if (proposta_id) {
           query += ' AND os.proposta_id = ?';
@@ -21367,9 +21379,9 @@ app.get('/api/operacional/producao/kanban', authenticateToken, checkModulePermis
           ORDER BY s2.created_at DESC, s2.id DESC LIMIT 1
         )
         LEFT JOIN colaboradores c ON sf.colaborador_id = c.id
-        WHERE os.status NOT IN ('concluida', 'cancelada', 'encerrada')
+        WHERE LOWER(TRIM(COALESCE(os.status, ''))) NOT IN ('concluida', 'cancelada', 'encerrada', 'concluido', 'cancelado')
         ORDER BY
-          CASE os.prioridade WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,
+          CASE UPPER(TRIM(os.prioridade)) WHEN 'URGENTE' THEN 0 WHEN 'ALTA' THEN 1 WHEN 'NORMAL' THEN 2 ELSE 3 END,
           os.data_prevista ASC, oi.id ASC
       `, [], (errItens, itens) => {
         if (errItens) {
@@ -22179,10 +22191,11 @@ app.get('/api/operacional/equipamentos', authenticateToken, checkModulePermissio
   let query = 'SELECT * FROM equipamentos WHERE 1=1';
   const params = [];
 
-  if (search) {
-    query += ' AND (nome LIKE ? OR codigo LIKE ? OR modelo LIKE ?)';
-    const searchTerm = `%${search}%`;
-    params.push(searchTerm, searchTerm, searchTerm);
+  // Etapa 160 (RN-160.03, C392): aparado e nas tres formas (nome e modelo gravados em maiusculas)
+  const busca = condicaoDeBusca(['nome', 'codigo', 'modelo'], search);
+  if (busca.sql) {
+    query += ' AND ' + busca.sql;
+    params.push(...busca.params);
   }
   if (status) {
     query += ' AND status = ?';
