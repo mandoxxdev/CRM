@@ -129,6 +129,15 @@ Após o login, você verá a **Tela de Seleção de Módulos** com 5 opções:
 
 ### 3.2 Gestão de Clientes
 
+**Quem pode usar os clientes, os projetos, as oportunidades e as atividades.** Criar, editar e desativar cliente, enviar o logo, abrir o
+cadastro de um cliente, ver o mural de logos (o painel do Comercial e **Máquinas Vendidas**), criar, editar e desativar projeto e abrir um
+projeto, ver as oportunidades e criar, alterar e apagar oportunidade, e ver, criar, alterar e apagar atividade exigem o **Comercial** (a
+regra da seção 3.3: o administrador do sistema e o super administrador entram sempre; quem tem alguma permissão de módulo entra só se uma
+delas for a do Comercial; quem não tem permissão nenhuma entra). Quem não pode recebe *"Acesso negado ao módulo"*, a tentativa fica
+registrada em **Administração → Logs**, e o logo é recusado antes de chegar ao servidor. **Exceção:** a **lista de clientes** e a **lista de
+projetos** respondem a qualquer usuário do sistema — o Almoxarifado as usa no cadastro de material (o cliente dono do material), nas
+reservas, nas movimentações e nas sobras, e a Fábrica no formulário da ordem de serviço (veja 6.2.1).
+
 #### 3.2.1 Lista de Clientes
 
 **Funcionalidades:**
@@ -530,6 +539,10 @@ importe a planilha de novo."* Com o banco ocupado, a tela tenta de novo sozinha 
 planilha."* — nada fica gravado, e basta importar de novo.
 
 ### 3.4 Gestão de Oportunidades
+
+**Onde as oportunidades aparecem hoje.** O menu do Comercial não tem uma tela própria de oportunidades: elas aparecem no formulário da
+proposta (o campo *Oportunidade*, com as **ativas**) e no filtro *Oportunidade* da lista de propostas. Ler, criar, alterar e apagar
+oportunidade exige o **Comercial** (veja 3.2). As subseções abaixo descrevem o funil de vendas planejado para essa tela.
 
 #### 3.4.1 Pipeline de Vendas
 
@@ -1029,6 +1042,9 @@ Mapa interativo mostrando todas as máquinas vendidas e suas localizações.
 - Descrição
 - Data Prevista
 - Responsável
+
+O cliente e o projeto são escolhidos nas listas do cadastro do Comercial, que quem tem o Operacional lê sem precisar do Comercial (veja
+3.2).
 
 **Itens da OS:**
 - Produto a Fabricar

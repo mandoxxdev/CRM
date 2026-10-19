@@ -1,17 +1,23 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-18 (Etapa 150) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-19 (Etapa 151) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149 e 150) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150 e 151) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-18 (Etapa 150 ENTREGUE · próxima: Etapa 151)
+> ## Onde o desenvolvimento está — 2026-10-19 (Etapa 151 ENTREGUE · próxima: Etapa 152)
 >
-> **O desenvolvimento parou aqui: Etapa 150 fechada — 2026-10-18.** A **Etapa 150 (grupos de produto, produtos e variáveis técnicas
+> **O desenvolvimento parou aqui: Etapa 151 fechada — 2026-10-19.** A **Etapa 151 (clientes, projetos, oportunidades e atividades pedem
+> o Comercial; do Comercial, fora do almoxarifado)**: quem a tela barra do Comercial deixa de criar, editar e apagar cliente, projeto,
+> oportunidade e atividade e de abrir o cadastro de um cliente, os logos, as oportunidades e as atividades pela integração (*"Acesso negado
+> ao módulo"*); o vendedor não perde nada, e a lista de clientes e a de projetos continuam abertas a todos — o Almoxarifado e a Fábrica as
+> usam. Uma consulta nova, opcional (**A99**). **Próxima: Etapa 152** — ver a próxima tarefa no plano da 151.
+>
+> **Etapa 150, 2026-10-18.** A **Etapa 150 (grupos de produto, produtos e variáveis técnicas
 > pedem o módulo; do Comercial/Operacional, fora do almoxarifado)**: quem a tela barra do Comercial deixa de ler o catálogo com preço e de
 > criar, editar e apagar produto, grupo e variável técnica pela integração (*"Acesso negado ao módulo"*); o vendedor, a Fábrica que abre a
 > OS e o administrador do Comercial que mexe nas variáveis técnicas por Configurações não perdem nada. Uma consulta nova, opcional
-> (**A98**). **Próxima: Etapa 151** — ver a próxima tarefa no plano da 150.
+> (**A98**). *(Próxima, na época: Etapa 151 — entregue acima.)*
 >
 > **Etapa 149, 2026-10-18.** A **Etapa 149 (o cadastro de família de produto e a lista de OS da
 > Fábrica pedem o módulo, e a lista de preço só nasce inteira; do Comercial/Operacional, fora do almoxarifado)**: quem a tela barra do
@@ -6682,6 +6688,45 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 151 — Clientes, projetos, oportunidades e atividades pedem o Comercial (ENTREGUE — 2026-10-19)
+
+**O que mudou, em uma frase:** criar, editar e apagar cliente (com o logo), projeto, oportunidade e atividade, e abrir o cadastro de um
+cliente, de um projeto, os logos, as oportunidades e as atividades passam a conferir o acesso ao Comercial com a mesma régua da tela — a
+lista de clientes e a de projetos continuam abertas a todos, porque o Almoxarifado e a Fábrica as usam.
+
+**O problema que ela resolve.** Estas operações só pediam o login: quem a tela não deixa entrar no Comercial criava, editava e desativava
+cliente pela integração, lia o cadastro inteiro de um cliente e as atividades — que, pedidas "de todos", trazem os lembretes de todas as
+propostas.
+
+| Antes | Agora |
+|---|---|
+| Usuário só do Almoxarifado criava, editava e apagava cliente, projeto, oportunidade e atividade pela integração | *"Acesso negado ao módulo"* em cada uma das 18 operações, e o registro no log; o logo do barrado nem chega ao servidor |
+| Vendedor em **Comercial → Clientes**, **Projetos**, **Atividades**, o painel, **Máquinas Vendidas**, **Custos de Viagens** e as propostas | Continua como antes |
+| Almoxarifado escolhendo o cliente do material, o projeto da reserva, da movimentação e da sobra | Continua como antes — as duas listas não mudam |
+| Fábrica escolhendo o cliente e o projeto no formulário da OS | Continua como antes |
+
+**Roteiro de teste (10 minutos).**
+
+1. **O vendedor não perde nada.** Com um usuário que tem **só o Comercial**: **Comercial → Clientes → Novo cliente** — preencha, salve,
+   envie um logo; edite (telefone), salve; reabra (está tudo lá); na lista, desative. **Comercial → Projetos → Novo projeto** com esse
+   cliente, salve, edite. **Comercial → Atividades** — crie, edite e apague uma atividade. Abra o **painel do Comercial** e **Máquinas
+   Vendidas** (os logos aparecem) e **Comercial → Propostas** (o filtro *Oportunidade* e o campo da proposta nova). Nenhum *"Acesso negado"*.
+2. **O Almoxarifado não perde nada.** Com um usuário que tem **só o Almoxarifado**: **Almoxarifado → Materiais → Novo material** — a seção
+   *Propriedade* lista os clientes; **Reservas** (nova reserva) lista os projetos e os clientes; **Movimentações** e **Sobras** listam os
+   projetos.
+3. **A Fábrica não perde nada.** Com um usuário do **Operacional** (sem o Comercial): **Fábrica → Ordens de Serviço** → editar uma OS (o
+   lápis) — os seletores de cliente e de projeto vêm preenchidos; troque e salve.
+4. **Quem a tela barra (pela integração).** Com o usuário só do **Almoxarifado**: `GET /api/clientes/<número>`, `GET /api/clientes/logos`,
+   `GET /api/atividades`, `POST /api/clientes` → **403** `{ "error": "Acesso negado ao módulo", "modulo": "comercial" }`;
+   `GET /api/clientes` e `GET /api/projetos` → **200** (as listas); **Administração → Logs** mostra os acessos negados a *Comercial*.
+
+**O que esta etapa NÃO cobre.** A lista de clientes e a de projetos continuam abertas a qualquer logado (**C353** — decisão **B983**); os
+custos de viagem continuam só com o login (**C350**, a próxima); a busca global continua aberta (**C352**); a criação de OS pela Fábrica
+num banco novo continua na régua antiga (**C277**).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor, pela rota) provam, escrito
+para você conferir à mão — em especial os passos 1 a 3 só o navegador mostra.
 
 ## Etapa 150 — Grupos de produto, produtos e variáveis técnicas pedem o módulo (ENTREGUE — 2026-10-18)
 

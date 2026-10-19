@@ -243,7 +243,13 @@ As respostas de sucesso não mudam (corpo e status).
    inteiro).
 3. **Paralelismo:** **0** galhos em paralelo (T1 e T2 dividem o `index.js`/a prova); **0** retrabalho; **1** revisor na Fase 2, **3** em
    paralelo na Fase 5 sob a trava (o r3 numa worktree própria, removida).
-4. **Defeito que escapou:** *(preencher na Etapa 151)*.
+4. **Defeito que escapou** (medido na Etapa 151): **0 de código** (a 151 não achou defeito no portão dos produtos). **1 de
+   documento:** a C349 palpitava "na Frota?" e "materiais de clientes" como leitores — medido: a Frota não lê, e quem lê a lista de clientes no
+   Almoxarifado é o cadastro de material e as reservas (os materiais de clientes têm lista própria); e a próxima tarefa listava `Oportunidades` e
+   `OportunidadeForm` entre os leitores sem dizer que são código morto. **1 fraqueza herdada, maior do que a retro dizia:** a régua do fonte
+   "todo registro no texto inteiro" do `produtosGruposVariaveisPortao` também não vê o caminho que não é texto literal (`app[...]`, o caminho
+   num identificador, um router com outro nome, a caixa diferente, um arquivo que começa com ponto) — achado do r3 da 151 no molde; a régua de
+   todo o servidor da 151 cobre, e levá-la à 150 fica para a 152.
 
 ## Próxima tarefa detalhada — Etapa 151
 

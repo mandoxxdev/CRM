@@ -356,6 +356,28 @@ Testes: `tests/api/produtosGruposVariaveisPortao.api.test.js` (as 25 + o clonar 
 caminho montado — e uma a uma, 17 perfis contra a decisão da tela, o catálogo e as variáveis pelo Comercial, as variáveis pelo caminho de
 Configurações, a OS da Fábrica lendo o produto pelo código, o clonar, o desligado com as exclusões, o BUSY).
 
+### Clientes, projetos, oportunidades e atividades no portão (Etapa 151, C349)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa151-clientes-projetos-oportunidades-atividades-pelo-modulo.md`. Commits `49fdb035` (o portão e o teste) , `fa87c828` (a régua do fonte das 148/149 no texto inteiro) e `615f6a2b` (Fase 5: as listas com filtro, o registro com caminho que não é texto literal, o desligado contra a régua antiga).
+
+- **18 das 20** com `exigirComercialNasPropostas` (RN-151.01/02, B983/B984): as **13 escritas** (`POST`/`PUT`/`DELETE /api/clientes`,
+  `POST /api/clientes/:id/logo` — o portão antes do multer `uploadClienteLogo` —, `POST`/`PUT`/`DELETE` de `/api/projetos`,
+  `/api/oportunidades` e `/api/atividades`) e as **5 leituras que só as telas do `/comercial` fazem** (`GET /api/clientes/logos` — Dashboard,
+  MaquinasVendidas —, `GET /api/clientes/:id` — ClienteForm —, `GET /api/projetos/:id` — ProjetoForm —, `GET /api/oportunidades` —
+  PropostasList, proposta/PropostaForm — e `GET /api/atividades` — Atividades, CustosViagens; com `todos=1` traz os lembretes de todas as
+  propostas).
+- **`GET /api/clientes` e `GET /api/projetos` só com o login** (RN-151.03, **C353**): o Almoxarifado (MaterialAlmoxarifadoForm,
+  ReservasAlmoxarifado, MovimentacoesAlmoxarifado, SobrasAlmoxarifado) e a OS da Fábrica (`operacional/OSForm`) as leem.
+- **Sem chamador vivo, com o portão:** `DELETE /api/projetos/:id` e as três escritas de oportunidade (`Oportunidades`/`OportunidadeForm` são
+  código morto — não há rota `/comercial/oportunidades`; o `OportunidadeForm` chama `GET /api/oportunidades/:id`, que **não existe** — **C354**).
+- O aviso do boot (desligado) só acrescenta *"…, e as dos clientes, dos projetos, das oportunidades e das atividades NAO exigem o Comercial
+  (só o login); …"*.
+
+Testes: `tests/api/clientesProjetosPortao.api.test.js` (as 18 + as 2 listas pelo fonte — todos os registros no texto inteiro, nenhum caminho
+montado, nenhum registro com caminho que não seja texto literal — e uma a uma; 14 perfis contra a decisão da tela; os quatro cadastros inteiros pelo Comercial; o cliente e o projeto criados pelo
+Comercial lidos nas listas pelo Almoxarifado, pelo Operacional e por Engenharia, e a OS editada pela Fábrica com eles; o desligado com as 18;
+o BUSY/500).
+
 ### A margem de desconto (Etapa 139, C299/C300)
 
 Uma régua só, `lerMargemDesconto` (`server/margemDesconto.js`), em **quatro** portas: `POST /api/propostas`, `PUT /api/propostas/:id`

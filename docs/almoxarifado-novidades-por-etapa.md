@@ -11,11 +11,16 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-18):** **Etapa 150 fechada** (do Comercial/Operacional: **grupos de produto, produtos e variáveis
+> **Onde o desenvolvimento está (2026-10-19):** **Etapa 151 fechada** (do Comercial: **clientes, projetos, oportunidades e atividades pedem
+> o Comercial** — quem a tela barra do Comercial criava, editava e apagava cliente, projeto, oportunidade e atividade e lia o cadastro do
+> cliente e as atividades pela integração; agora toma *"Acesso negado ao módulo"* nas 18 operações, e o vendedor, o Almoxarifado e a Fábrica
+> — que usam a lista de clientes e a de projetos, abertas — não perdem nada (**C349** resolvido em parte); **B983** a **B985**; a consulta
+> **A99** (opcional); os avisos novos **C353** a **C355**); a próxima é a **152** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 150 fechada** (do Comercial/Operacional: **grupos de produto, produtos e variáveis
 > técnicas pedem o módulo** — quem a tela barra do Comercial lia o catálogo com preço e criava, editava e apagava produto, grupo e variável
 > técnica pela integração; agora toma *"Acesso negado ao módulo"*, e o vendedor, a Fábrica que abre a OS e o administrador do Comercial que
 > mexe nas variáveis técnicas por Configurações não perdem nada (**C346**, **C347** resolvidos); **B977** a **B982**; a consulta **A98**
-> (opcional); os avisos novos **C348** a **C352**); a próxima é a **151** — ver "Onde estamos e o que vem a seguir".
+> (opcional); os avisos novos **C348** a **C352**); a próxima era a **151**.)*
 > *(Antes: **Etapa 149 fechada** (do Comercial/Operacional: **o cadastro de família de produto e a
 > lista de ordens de serviço da Fábrica pedem o módulo, e a importação da lista de preço só diz "pronto" depois de gravar todas as linhas** —
 > quem a tela barra do Comercial criava, renomeava e apagava família de produto pela integração (e, renomeando, mudava o contrato das
@@ -283,7 +288,11 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Noventa e oito itens para rodar em produção ANTES do deploy — noventa e cinco são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Noventa e nove itens para rodar em produção ANTES do deploy — noventa e seis são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-19 (Etapa 151) de noventa e oito para noventa e nove**, com a **A99** — quem passa a ser barrado nas escritas e
+nas leituras de clientes, projetos, oportunidades e atividades que só o Comercial faz (e se continua nas listas por uma tela do Almoxarifado
+ou da Fábrica) (**C349**). **Somente leitura, opcional:** no banco medido, ninguém que usa perde.)*
 
 *(**Atualizado em 2026-10-18 (Etapa 150) de noventa e sete para noventa e oito**, com a **A98** — quem passa a ser barrado nos grupos de
 produto, nos produtos e nas variáveis técnicas (e se continua no produto pelo código, pela OS da Fábrica, ou nas variáveis técnicas, por
@@ -3464,6 +3473,44 @@ cliente vazio deixa a proposta assim — **C330**): abra cada uma em **Comercial
 formulário exige o cliente). **Linhas na 2** — o mesmo; o cliente antigo não volta. *(Rodada no banco local, cópia de 09/10: **0** e
 **0**; controle numa cópia com uma proposta sem cliente e outra apontando para o cliente 987654: a 1 achou a primeira e a 2 a segunda.)*
 
+**A99 (NOVA, da Etapa 151 — opcional — quem perde os clientes, os projetos, as oportunidades e as atividades).** Desde a Etapa 151 criar,
+editar e desativar cliente (com o logo), projeto, oportunidade e atividade, abrir o cadastro de um cliente ou de um projeto, o mural de logos,
+as oportunidades e as atividades exigem o **Comercial** pela mesma régua da tela das propostas (a da **A93**). A **lista de clientes** e a
+**lista de projetos** continuam abertas a qualquer logado — o Almoxarifado e a Fábrica as usam. O cadastro não guarda quem o alterou; a
+consulta lista todos os que perdem essas operações. Somente leitura.
+
+```sql
+-- quem passa a ser barrado nas escritas e nas leituras de clientes, projetos, oportunidades e atividades (a régua da tela: sem o Comercial)
+WITH linhas AS (
+  SELECT ug.usuario_id, p.modulo, p.permissao FROM usuarios_grupos ug
+    JOIN grupos_permissoes gp ON gp.id = ug.grupo_id AND gp.ativo = 1
+    JOIN permissoes p ON p.grupo_id = gp.id
+  UNION ALL
+  SELECT p.usuario_id, p.modulo, p.permissao FROM permissoes p WHERE p.usuario_id IS NOT NULL AND p.grupo_id IS NULL
+)
+SELECT u.id, u.nome, u.email,
+  (SELECT GROUP_CONCAT(DISTINCT l.modulo) FROM linhas l WHERE l.usuario_id = u.id AND l.permissao = 1) AS modulos_que_tem,
+  'criar, editar e apagar clientes, projetos, oportunidades e atividades; ler o cliente e o projeto pelo id, os logos, as oportunidades e as atividades'
+  || CASE WHEN EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id AND l.modulo IN ('almoxarifado', 'operacional') AND l.permissao = 1)
+       THEN ' (as listas de clientes e de projetos continuam, pelas telas do Almoxarifado ou da OS da Fábrica)'
+       ELSE ' (as listas de clientes e de projetos continuam, só pela API — nenhuma tela dele as lê)' END AS perde
+FROM usuarios u
+WHERE u.ativo = 1
+  AND COALESCE(u.is_superadmin, 0) NOT IN (1, '1')
+  AND LOWER(COALESCE(u.role, '')) <> 'admin'
+  AND EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id)
+  AND NOT EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id AND l.modulo = 'comercial' AND l.permissao = 1)
+ORDER BY u.nome;
+```
+
+**Como ler o resultado:** cada linha é alguém que vai tomar *"Acesso negado ao módulo"* ao criar, editar ou apagar cliente, projeto,
+oportunidade ou atividade pela integração (ou ao abrir um cliente pelo número, os logos, as oportunidades ou as atividades); a coluna *perde*
+diz se a pessoa continua usando as listas por uma tela (Almoxarifado ou OS da Fábrica). Quem deve cadastrar cliente, projeto ou atividade:
+dê-lhe o **Comercial** antes do deploy; os outros podem ficar como estão — a tela já não lhes mostrava o Comercial. *(Rodada no banco local,
+cópia de 09/10: os **4** de sempre — ids 7, 12 e 15 (Almoxarifado: "as listas … continuam, pelas telas do Almoxarifado ou da OS da Fábrica")
+e 8 (Engenharia / Projetos: "… só pela API — nenhuma tela dele as lê"); controle numa cópia com o 8 ganhando o Operacional e o 15 o
+Comercial: o 15 saiu e o 8 passou a "pelas telas do Almoxarifado ou da OS da Fábrica".)*
+
 **A98 (NOVA, da Etapa 150 — opcional — quem perde os grupos de produto, os produtos e as variáveis técnicas).** Desde a Etapa 150 os grupos
 de produto e os produtos (ler o catálogo, criar, editar, apagar, a imagem, o próximo código, a conferência de produto existente) exigem o
 **Comercial** pela mesma régua da tela das propostas (a da **A93**); o produto lido **pelo código** — o que a ordem de serviço faz para cada
@@ -3677,7 +3724,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B982; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B985; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -10793,6 +10840,28 @@ o administrador (mais estreito que a tela, sem uso medido que justifique); (b) a
 **B982 (NOVA, da Etapa 150) — a próxima etapa (151).** Ver a "próxima tarefa detalhada" no plano da Etapa 150. As decisões que esperam
 vocês continuam as da **B957** (nada novo).
 
+**B983 (NOVA, da Etapa 151; do Comercial) — clientes, projetos, oportunidades e atividades: a escrita e a leitura que só o Comercial faz
+pelo Comercial; as duas listas com o login.** As 13 escritas (criar, editar e desativar cliente, o logo; criar, editar e apagar projeto,
+oportunidade e atividade) e as 5 leituras que só as telas do Comercial fazem (o mural de logos — o painel do Comercial e **Máquinas
+Vendidas** —, o cliente pelo número, o projeto pelo número, as oportunidades, as atividades) exigem o **Comercial** pela régua da tela. A
+**lista de clientes** e a **lista de projetos** continuam só com o login: medido rota por rota (e de novo pela revisão do plano), o
+Almoxarifado as lê no cadastro de material, nas reservas, nas movimentações e nas sobras, e a Fábrica no formulário da OS. **Descartado:** (a)
+as listas com a régua dos três módulos que as leem (Comercial **ou** Almoxarifado **ou** Operacional) — no banco medido não tiraria nada de
+ninguém, mas uma tela que a medição não visse trancaria alguém sem aviso (a sua regra: não trancar fora quem usa hoje); fica a **C353**; (b)
+proteger **só** a escrita — as 5 leituras só o Comercial faz, e as atividades pedidas "de todos" traziam os lembretes de todas as propostas;
+(c) a régua antiga do módulo (libera o Comercial a todo usuário sem grupo — no banco medido não mudaria nada). *Achado da revisão:* a lista
+de clientes devolve as mesmas colunas do cliente pelo número (e a de projetos as do projeto pelo número) — enquanto as listas ficarem abertas,
+fechar o "pelo número" **não esconde** dado de quem tem login; protege a escrita, as oportunidades, as atividades e os logos. **Reversível**
+(`PROPOSTAS_PORTAO_DE_MODULO=desligado` volta ao só login).
+
+**B984 (NOVA, da Etapa 151) — as escritas sem tela viva ficam com o portão, não apagadas.** Apagar projeto (a lista de projetos não apaga) e
+criar, editar e apagar oportunidade (as telas de oportunidade não estão no menu — código morto) não têm chamador hoje. **Descartado:** (a)
+apagar as operações (não medido em produção — quem integra por fora perderia sem aviso); (b) deixá-las só com o login (quem a tela barra
+apagaria pela integração). **Reversível.**
+
+**B985 (NOVA, da Etapa 151) — a próxima etapa (152).** Ver a "próxima tarefa detalhada" no plano da Etapa 151 (os custos de viagem, **C350**).
+As decisões que esperam vocês continuam as da **B957** (nada novo).
+
 **B898 (NOVA, da Etapa 138) — a próxima etapa (139).** Ver a "próxima tarefa detalhada" no plano da Etapa 138. A **B853** (com a
 **C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
@@ -13851,7 +13920,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      **Compras** vê o seletor *Grupo de compras* vazio (o erro é engolido); o valor já gravado numa variável é preservado ao editar. **O que
      fazer:** quem configura variável que puxa fornecedores de um grupo precisa do Compras. Candidata: decidir se quem configura o Comercial lê
      os grupos de compras (é acesso do Compras).
-349. **NOVO (da Etapa 150; do Comercial, anterior a ela; lido no código) — clientes, projetos, oportunidades e atividades do Comercial só
+349. **✅ RESOLVIDO EM PARTE NA ETAPA 151 (B983, B984)** — as 13 escritas e as 5 leituras que só o Comercial faz exigem o Comercial; a
+     lista de clientes e a de projetos continuam com o login, porque o Almoxarifado e a Fábrica as leem (**C353**). O palpite "na Frota?"
+     do texto abaixo **estava errado** (medido: a Frota não lê estas operações); os "materiais de clientes" do Almoxarifado têm a sua
+     própria lista — quem lê a lista de clientes é o cadastro de material e as reservas. *(O texto original:)*
+     **NOVO (da Etapa 150; do Comercial, anterior a ela; lido no código) — clientes, projetos, oportunidades e atividades do Comercial só
      pedem o login.** Os clientes (7 operações, com o logo), os projetos (5), as oportunidades (4) e as atividades (4) respondem a qualquer
      logado — quem a tela barra do Comercial lê e altera o cadastro de clientes pela integração. **O que fazer:** nada pela tela. Candidata da
      151 — medindo antes os leitores fora do Comercial (o cliente aparece na OS, no Almoxarifado — materiais de clientes —, na Frota?).
@@ -13864,6 +13937,18 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 352. **NOVO (da revisão da Etapa 150; do núcleo, anterior a ela; reproduzido) — a busca global responde a qualquer logado.** Quem a tela
      barra do Comercial recebe, pela busca do topo, o nome e a família dos produtos (sem preço), a razão social e a cidade dos clientes e o
      título e o cliente das propostas. **O que fazer:** nada. Candidata: filtrar cada tipo de resultado pelo módulo dele (junto da **C349**).
+353. **NOVO (da Etapa 151; do Comercial, decisão B983) — a lista de clientes e a de projetos continuam abertas a qualquer logado.** Quem só
+     tem Compras, Financeiro ou Engenharia lê pela integração a lista de clientes (com CNPJ, telefone, e-mail e endereço — as mesmas colunas
+     do cadastro) e a de projetos. **O que fazer:** nada pela tela. Candidata: a régua dos três módulos que as leem (Comercial, Almoxarifado,
+     Operacional) — no banco medido não tira nada de ninguém.
+354. **NOVO (da Etapa 151; do Comercial, anterior a ela; lido no código) — as telas de oportunidade não estão no menu.** O pipeline e o
+     cadastro de oportunidade existem no código, mas nenhum caminho do menu os abre; e o cadastro, se voltar, abriria a edição vazia (ele
+     pede uma operação "oportunidade pelo número" que não existe). Hoje a oportunidade só aparece na proposta (o campo e o filtro). **O que
+     fazer:** nada. Candidata: decidir se a tela de oportunidades volta (é decisão de produto).
+355. **NOVO (da revisão da Etapa 151; do núcleo/Comercial, anterior a ela; reproduzido) — a busca global, o painel e o relatório executivo
+     mostram oportunidades e atividades a qualquer logado.** A busca do topo devolve o título e o cliente das oportunidades e das atividades
+     (além do que a **C352** já diz), e o painel e o relatório executivo devolvem contagens e soma das oportunidades e o top de clientes, a
+     quem a tela barra do Comercial. **O que fazer:** nada. Candidata junto da **C352**.
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -15195,6 +15280,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(151) A lista de clientes e a de projetos continuam abertas a qualquer logado** (**C353**, decisão **B983**) — com as mesmas colunas do
+  cadastro, então fechar o cliente e o projeto "pelo número" não esconde dado de quem tem login; os custos de viagem continuam só com o
+  login (**C350**); a busca global, o painel e o relatório executivo mostram clientes e oportunidades a qualquer logado (**C352**,
+  **C355**); as telas de oportunidade não estão no menu (**C354**); a criação de OS pela Fábrica num banco novo segue a régua antiga
+  (**C277**).
 - **(150) A busca global continua mostrando produtos a qualquer logado** (o nome e a família, sem preço — **C352**); os clientes, projetos,
   oportunidades, atividades e custos de viagem continuam só com o login (**C349**, **C350**); o seletor de grupo de compras das variáveis
   técnicas segue a régua do Compras (**C348**).
@@ -16194,6 +16284,13 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(151) Nenhum clique foi dado no navegador.** Tudo foi provado pela rota, com o servidor de verdade em pasta vazia (as 18 operações uma a
+uma com 14 perfis de usuário; os quatro cadastros inteiros pelo Comercial; as listas — com e sem filtro — pelo Almoxarifado, pelo
+Operacional e por Engenharia; a OS editada pela Fábrica com o cliente e o projeto escolhidos nelas). O que **só o navegador** prova: o
+roteiro da Etapa 151 no guia — **Comercial → Clientes** (novo com logo, editar, desativar), **Projetos**, **Atividades**, o painel e
+**Máquinas Vendidas** com um vendedor; **Almoxarifado → Materiais → Novo material**, **Reservas**, **Movimentações** e **Sobras** com um
+usuário só do Almoxarifado; e **Fábrica → Ordens de Serviço → editar** com um usuário do Operacional.
 
 **(150) Nenhum clique foi dado no navegador.** Tudo foi provado pela rota, com o servidor de verdade em pasta vazia (as 25 operações uma a
 uma com 17 perfis de usuário; o catálogo inteiro e as variáveis técnicas pelo Comercial, as variáveis pelo caminho de Configurações, a OS da
@@ -30674,16 +30771,81 @@ código sem proteção no endereço (**C351**) e a busca global aberta (**C352**
 caíram, 2 sobreviveram por falta de cenário (um segundo registro escondido na mesma linha do fonte; o desligado que não abrisse a
 exclusão) e 1 era equivalente — viraram cenários. Commits `d74ad876` e `481ee23a`.
 
+## Etapa 151 — Clientes, projetos, oportunidades e atividades pedem o Comercial (2026-10-19)
+
+Um conserto de **acesso**, no coração do cadastro do Comercial. Os clientes, os projetos, as oportunidades e as atividades pediam só o
+login: um usuário só do Almoxarifado, que a tela não deixa entrar no Comercial, criava, editava e desativava cliente pela integração, lia o
+cadastro inteiro de um cliente e as atividades — que, pedidas "de todos", trazem os lembretes de todas as propostas. Agora criar, editar e
+apagar, e as leituras que só o Comercial faz, pedem o **Comercial**; a lista de clientes e a de projetos, que o Almoxarifado e a Fábrica
+usam para escolher o cliente e o projeto, continuam abertas — quem usa hoje não perde nada.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Um usuário só do Almoxarifado criava, editava e apagava cliente, projeto, oportunidade e atividade pela integração, e lia o cliente pelo número, os logos, as oportunidades e as atividades | *"Acesso negado ao módulo"* em cada uma das 18 operações, e a tentativa no log; o logo do barrado nem chega ao servidor (**C349** resolvido em parte — **B983**, **B984**) |
+| O vendedor em **Clientes**, **Projetos**, **Atividades**, no painel, em **Máquinas Vendidas**, **Custos de Viagens** e nas propostas | Continua como antes |
+| O Almoxarifado escolhendo o cliente do material e o projeto da reserva, da movimentação e da sobra | Continua como antes — as duas listas não mudam (**C353**) |
+| A Fábrica escolhendo o cliente e o projeto no formulário da OS | Continua como antes |
+
+### As regras, com o cenário exato
+
+**1. Criar, editar e apagar pedem o Comercial (B983, B984 — C349).** Entre com um usuário que tem só a permissão do **Almoxarifado** (por
+permissão direta): a tela não mostra o Comercial. Pela integração, `POST /api/clientes`, `PUT /api/clientes/<número>`, `DELETE
+/api/clientes/<número>`, o logo (`POST /api/clientes/<número>/logo`), e criar, editar e apagar projeto, oportunidade e atividade → **403**
+`{ "error": "Acesso negado ao módulo", "modulo": "comercial" }`, e **Administração → Logs** mostra o acesso negado a *Comercial* (antes:
+**200**, e o cliente mudava). Com um vendedor (só o **Comercial**): **Comercial → Clientes → Novo cliente** com logo, editar, desativar;
+**Projetos → Novo projeto**; **Atividades** — criar, editar, apagar — como sempre.
+
+**2. As leituras que só o Comercial faz pedem o Comercial (B983).** O mesmo usuário só do Almoxarifado em `GET /api/clientes/<número>`,
+`GET /api/clientes/logos`, `GET /api/projetos/<número>`, `GET /api/oportunidades` e `GET /api/atividades` → **403** (o mesmo corpo). O
+vendedor abre o painel do Comercial e **Máquinas Vendidas** (os logos aparecem), **Comercial → Propostas** (o filtro *Oportunidade*) e
+**Atividades** como sempre.
+
+**3. As listas continuam abertas (B983 — C353).** O usuário só do Almoxarifado em `GET /api/clientes` e `GET /api/projetos` → **200**: na tela,
+**Almoxarifado → Materiais → Novo material** (a seção *Propriedade* lista os clientes), **Reservas**, **Movimentações** e **Sobras** listam como
+antes. Um usuário só do **Operacional**: **Fábrica → Ordens de Serviço** → editar uma OS — os seletores de cliente e de projeto vêm
+preenchidos; trocar e salvar funciona. Com `PROPOSTAS_PORTAO_DE_MODULO=desligado` (a chave da **B946**) as 18 voltam a pedir só o login.
+
+### O que esta etapa NÃO cobre
+
+1. **A lista de clientes e a de projetos** continuam abertas a qualquer logado — com as mesmas colunas do cadastro (**C353**).
+2. **Os custos de viagem** continuam só com o login (**C350** — a próxima etapa).
+3. **A busca global, o painel e o relatório executivo** mostram dados de clientes, oportunidades e atividades a qualquer logado (**C352**,
+   **C355**, de antes).
+4. **As telas de oportunidade** não estão no menu (**C354**, de antes).
+
+### O que a revisão encontrou
+
+A **medição** (antes do código) achou leitores fora do Comercial só nas duas listas (quatro telas do Almoxarifado e a OS da Fábrica) e,
+no banco medido, os mesmos 4 usuários que a tela já barra (**A99**) — três deles continuam com as listas pelas telas do Almoxarifado. A
+**revisão do plano** (1 achado médio, 6 pequenos) refez a medição e confirmou; pediu que a prova da régua do fonte das etapas 148/149 não
+sabotasse o arquivo enquanto o portão era escrito, a frase do aviso congelada e o desligado com as 18. A **revisão adversarial do código**
+(três revisores, executando): o de **regra** rodou o fluxo inteiro das telas (260 chamadas por rodada, 10 usuários) com o portão ligado e
+desligado — ninguém que a tela deixa entrar foi barrado, as respostas iguais; o de **permissão** comparou 30 perfis com a decisão da tela e 52
+variações de endereço — nada vazou; achou que a lista de clientes traz as mesmas colunas do cliente pelo número (registrado na **B983**) e
+que a busca, o painel e o relatório mostram oportunidades (**C355**), de antes; o de **sabotagem** fez 27 sabotagens — 19 caíram (uma só pela
+régua do fonte: o desligado que voltasse à régua antiga), 6 sobreviveram por falta de cenário (a lista com filtro fechada, duas vezes; uma
+operação nova escondida com o caminho num identificador, num router com outro nome ou num arquivo que começa com ponto; a edição do desligado
+sem conferir o gravado) e 2 eram inválidas e foram refeitas — as 6 e a régua antiga viraram cenários. Commits `49fdb035`, `fa87c828` e `615f6a2b`.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 151 entregue (2026-10-19):** **clientes, projetos, oportunidades e atividades pedem o Comercial** (do Comercial). Quem a tela barra
+  do Comercial é barrado nas 13 escritas e nas 5 leituras que só o Comercial faz; o vendedor, o Almoxarifado e a Fábrica não perdem nada — a
+  lista de clientes e a de projetos continuam abertas (**B983**, **B984** — **C349** resolvido em parte). Commits `49fdb035`, `fa87c828` e
+  `615f6a2b`. **O que é seu:** a consulta **A99** (opcional); os avisos **C353** a **C355**; as decisões **B983** e **B984** (reversíveis); as
+  perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **C277**, **C312**, **C314**, **C316**, **C330**); as limitações
+  **(151)** em D e a verificação **(151)** em F. **Próxima: Etapa 152 — ver a "próxima tarefa detalhada" no plano da Etapa 151.**
 
 - **Etapa 150 entregue (2026-10-18):** **grupos de produto, produtos e variáveis técnicas pedem o módulo** (do Comercial/Operacional). Quem a
   tela barra do Comercial é barrado nas 25 operações; o vendedor, a Fábrica que abre a OS e o administrador do Comercial em Configurações não
   perdem nada (**B977** a **B981** — **C346**, **C347** resolvidos). Commits `d74ad876` e `481ee23a`. **O que é seu:** a consulta **A98**
   (opcional); os avisos **C348** a **C352**; as decisões **B977 a B981** (reversíveis); as perguntas de antes (**B949**, **B910**, **B853**,
-  **B924**, **B926**, **C277**, **C312**, **C314**, **C316**, **C330**); as limitações **(150)** em D e a verificação **(150)** em F. **Próxima:
-  Etapa 151 — ver a "próxima tarefa detalhada" no plano da Etapa 150.**
+  **B924**, **B926**, **C277**, **C312**, **C314**, **C316**, **C330**); as limitações **(150)** em D e a verificação **(150)** em F. *(Próxima, na
+  época: Etapa 151 — entregue acima.)*
 
 - **Etapa 149 entregue (2026-10-18):** **o cadastro de família de produto e a lista de OS da Fábrica pedem o módulo, e a lista de preço só
   nasce inteira** (do Comercial/Operacional). Quem a tela barra do Comercial é barrado nas 21 operações de família; o vendedor e o
