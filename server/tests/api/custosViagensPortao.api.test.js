@@ -7,6 +7,7 @@
  *   RN-152.02  GET /api/custos-viagens/resumo registrado antes do GET /:id — responde o resumo (antes: 404 "Custo de viagem nao
  *              encontrado", o /:id atendia com id = 'resumo')
  *   RN-152.03  PROPOSTAS_PORTAO_DE_MODULO=desligado: as 19 voltam ao so login; o aviso do boot as cita
+ *   Etapa 158: RN-158.05 o resumo por tipo sem caixa; RN-158.07 o filtro tipo_viagem da lista
  *
  * Molde: clientesProjetosPortao.api.test.js (Etapa 151). Plano:
  * docs/superpowers/plans/2026-10-19-almoxarifado-etapa152-custos-de-viagem-pelo-modulo.md
@@ -563,6 +564,49 @@ test('[RN-152.01] SQLITE_BUSY ao ler as permissoes: 503 na leitura e na escrita;
     ctx.T = await subir();
   }
   assert.strictEqual(await retrato(), antes, 'com o portao em erro, um custo, um anexo ou o historico mudou');
+});
+
+// ── Etapa 158: o resumo e o filtro por tipo sem caixa (RN-158.05/07), o historico sem trocas falsas (RN-158.06) ──────────
+async function lancar158(u, tipo, transporte, extra = {}) {
+  const [s, x] = await j('POST', '/custos-viagens', u.T, {
+    data_viagem: '2026-10-22', destino: 'campinas - sp', destino_cidade: 'Campinas', destino_estado: 'SP', cliente_id: ctx.cliente,
+    tipo_viagem: tipo, custo_transporte: transporte, ...extra,
+  });
+  assert.ok(s === 200 && Number.isInteger(x.id), `lancar ${tipo}: ${s} ${JSON.stringify(x).slice(0, 200)}`);
+  return x.id;
+}
+
+test('[RN-158.05/07, D (157)] o resumo soma por tipo sem caixa e sem espaco (o IDA_E_VOLTA que a tela grava conta) e o filtro Tipo de viagem da lista filtra', async () => {
+  const u = ctx.u.diretaComercial;
+  const [s0, r0] = await j('GET', '/custos-viagens/resumo', u.T);
+  assert.strictEqual(s0, 200);
+  const ida = await lancar158(u, 'ida', 111);
+  const idaVolta = await lancar158(u, 'ida_e_volta', 222);
+  const voltaLegado = await lancar158(u, 'volta', 333);
+  const outro = await lancar158(u, 'ida', 444);
+  // o que a tela grava (o POST passa o tipo para maiusculas) — senao o cenario nao seria o de producao
+  const gravados = await all(`SELECT id, tipo_viagem FROM custos_viagens WHERE id IN (${[ida, idaVolta, voltaLegado, outro].join(',')}) ORDER BY id`);
+  assert.deepStrictEqual(gravados.map((g) => g.tipo_viagem), ['IDA', 'IDA_E_VOLTA', 'VOLTA', 'IDA']);
+  // o legado em minusculas com espaco, e um tipo que nao e nenhum dos tres
+  await run("UPDATE custos_viagens SET tipo_viagem = ' volta ' WHERE id = ?", [voltaLegado]);
+  await run("UPDATE custos_viagens SET tipo_viagem = 'outro' WHERE id = ?", [outro]);
+  const [s1, r1] = await j('GET', '/custos-viagens/resumo', u.T);
+  assert.strictEqual(s1, 200);
+  const dif = (k) => Math.round(((r1[k] || 0) - (r0[k] || 0)) * 100) / 100;
+  assert.deepStrictEqual([dif('custo_ida'), dif('custo_volta'), dif('custo_ida_volta'), dif('total_custo_geral'), r1.total_viagens - r0.total_viagens],
+    [111, 333, 222, 1110, 4], `o resumo antes ${JSON.stringify(r0)} depois ${JSON.stringify(r1)}`);
+  // o filtro da lista (a tela manda ?tipo_viagem=ida|volta|ida_e_volta)
+  const ids = async (q) => { const [s, l] = await j('GET', `/custos-viagens${q}`, u.T); assert.strictEqual(s, 200, JSON.stringify(l).slice(0, 200)); return l.map((c) => c.id); };
+  const nossos = [ida, idaVolta, voltaLegado, outro];
+  const dosNossos = (lista) => nossos.filter((id) => lista.includes(id));
+  assert.deepStrictEqual(dosNossos(await ids('?tipo_viagem=ida')), [ida], 'o filtro ida');
+  assert.deepStrictEqual(dosNossos(await ids('?tipo_viagem=volta')), [voltaLegado], 'o filtro volta');
+  assert.deepStrictEqual(dosNossos(await ids('?tipo_viagem=ida_e_volta')), [idaVolta], 'o filtro ida_e_volta');
+  assert.deepStrictEqual(dosNossos(await ids('?tipo_viagem=IDA_E_VOLTA')), [idaVolta], 'o filtro em maiusculas');
+  assert.deepStrictEqual(dosNossos(await ids('?tipo_viagem=')), nossos, 'o filtro vazio filtrou');
+  assert.deepStrictEqual(dosNossos(await ids('')), nossos, 'sem filtro');
+  // limpa (nao deixa custos a mais para os cenarios de baixo)
+  for (const id of nossos) assert.strictEqual((await j('DELETE', `/custos-viagens/${id}`, u.T))[0], 200);
 });
 
 (async () => {

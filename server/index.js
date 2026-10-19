@@ -15760,7 +15760,7 @@ app.get('/api/custos-viagens/calcular-rota', authenticateToken, exigirComercialN
 
 // Listar todos os custos de viagens
 app.get('/api/custos-viagens', authenticateToken, exigirComercialNasPropostas, (req, res) => {
-  const { cliente_id, proposta_id, data_inicio, data_fim, codigo_visita, created_by, status_aprovacao, ordenar_por, ordem } = req.query;
+  const { cliente_id, proposta_id, data_inicio, data_fim, codigo_visita, created_by, status_aprovacao, ordenar_por, ordem, tipo_viagem } = req.query;
   
   let query = `
     SELECT 
@@ -15790,11 +15790,17 @@ app.get('/api/custos-viagens', authenticateToken, exigirComercialNasPropostas, (
     params.push(proposta_id);
   }
   
+  // Etapa 158 (RN-158.07, Fase 2 I3): o filtro "Tipo de viagem" da tela — o servidor nem o lia; o tipo sem caixa e sem espaco
+  if (tipo_viagem != null && String(tipo_viagem).trim()) {
+    query += ' AND LOWER(TRIM(cv.tipo_viagem)) = LOWER(TRIM(?))';
+    params.push(String(tipo_viagem));
+  }
+
   if (data_inicio) {
     query += ' AND cv.data_viagem >= ?';
     params.push(data_inicio);
   }
-  
+
   if (data_fim) {
     query += ' AND cv.data_viagem <= ?';
     params.push(data_fim);
@@ -15892,6 +15898,8 @@ app.get('/api/custos-viagens', authenticateToken, exigirComercialNasPropostas, (
 // Etapa 152 (RN-152.02, C356, B987): o resumo registrado ANTES do GET /:id — registrado depois, o /:id o atendia com id = 'resumo'
 // (404 "Custo de viagem nao encontrado") e os quatro cartoes do topo da tela de custos de viagem nunca apareciam.
 // Resumo geral de custos
+// Etapa 158 (RN-158.05, D (157)): o tipo sem caixa e sem espaco — o POST/PUT gravam IDA, VOLTA, IDA_E_VOLTA (normalizarMaiusculas), e a
+// comparacao exata de antes dava 0 nos tres para todo custo da tela.
 app.get('/api/custos-viagens/resumo', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   db.get(`
     SELECT 
@@ -15900,9 +15908,9 @@ app.get('/api/custos-viagens/resumo', authenticateToken, exigirComercialNasPropo
       AVG(total_custo) as custo_medio_viagem,
       COUNT(DISTINCT cliente_id) as clientes_visitados,
       COUNT(DISTINCT proposta_id) as propostas_relacionadas,
-      SUM(CASE WHEN tipo_viagem = 'ida' THEN total_custo ELSE 0 END) as custo_ida,
-      SUM(CASE WHEN tipo_viagem = 'volta' THEN total_custo ELSE 0 END) as custo_volta,
-      SUM(CASE WHEN tipo_viagem = 'ida_e_volta' THEN total_custo ELSE 0 END) as custo_ida_volta
+      SUM(CASE WHEN LOWER(TRIM(tipo_viagem)) = 'ida' THEN total_custo ELSE 0 END) as custo_ida,
+      SUM(CASE WHEN LOWER(TRIM(tipo_viagem)) = 'volta' THEN total_custo ELSE 0 END) as custo_volta,
+      SUM(CASE WHEN LOWER(TRIM(tipo_viagem)) = 'ida_e_volta' THEN total_custo ELSE 0 END) as custo_ida_volta
     FROM custos_viagens
   `, [], (err, row) => {
     if (err) {
