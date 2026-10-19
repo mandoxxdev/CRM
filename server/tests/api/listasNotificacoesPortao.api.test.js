@@ -313,6 +313,23 @@ test('[RN-154.01, integracao com a 149 e a 151] o Almoxarifado escolhe o cliente
   for (const k of ['almoxAdmin', 'soAlmox', 'grupoAlmox', 'soOperacional']) assert.deepStrictEqual(await negados(ctx.u[k].id), [], `${k} tomou acesso negado`);
 });
 
+// Etapa 155 (RN-155.01, C367, C368): o corpo REAL das duas listas que a tela das Reservas desenha. O teste do client monta os seletores com
+// os fixtures client/src/components/almoxarifado/__fixtures__/*.json; aqui, as chaves deles = as de uma linha do servidor montado (a tela lia
+// `c.nome` e `o.numero`, que o servidor nao manda). Depois do cenario acima: a OS-154 ja existe (a rota do aux engole erro em [] — I-6).
+test('[RN-155.01, C367, C368, integracao com o client] o Almoxarifado le os clientes e as OS do aux com as chaves dos fixtures do teste das Reservas: razao_social e nome_fantasia, sem nome; numero_os e cliente_nome, sem numero', async () => {
+  const fixture = (nome) => JSON.parse(fs.readFileSync(path.join(CLIENT_SRC, 'components', 'almoxarifado', '__fixtures__', nome), 'utf8'));
+  const a = ctx.u.almoxAdmin;
+  const [sc, cl] = await j('GET', '/clientes', a.T);
+  const cliente = Array.isArray(cl) && cl.find((c) => c.id === ctx.cliente);
+  assert.ok(sc === 200 && cliente && cliente.razao_social === 'CLIENTE 154', `a lista de clientes sem o do preparo: ${sc} ${JSON.stringify(cl).slice(0, 160)}`);
+  assert.deepStrictEqual(Object.keys(cliente).sort(), Object.keys(fixture('clienteDoServidor.json')).sort(), 'o fixture do cliente nao e o corpo do servidor');
+  assert.ok(!('nome' in cliente), 'o cliente ganhou um campo nome: reveja o rotulo das Reservas');
+  const [so, oss] = await j('GET', '/almoxarifado/aux/ordens-servico', a.T);
+  const os154 = Array.isArray(oss) && oss.find((o) => o.numero_os === 'OS-154');
+  assert.ok(so === 200 && os154 && os154.cliente_nome === 'CLIENTE 154', `o aux sem a OS-154: ${so} ${JSON.stringify(oss).slice(0, 160)}`);
+  assert.deepStrictEqual(Object.keys(os154).sort(), Object.keys(fixture('osDoAuxDoServidor.json')).sort(), 'o fixture da OS nao e o corpo do aux');
+});
+
 test('[RN-154.02, integracao com a 145 e a 149] o vendedor recebe o lembrete e segue o clique ate as leituras da tela da proposta (a proposta, a lista de clientes ativos, as oportunidades, as familias) — e o barrado nao recebe lembrete cuja tela o barraria', async () => {
   const v = ctx.u.diretaComercial;
   const [sn, xn] = await j('GET', '/notificacoes', v.T);

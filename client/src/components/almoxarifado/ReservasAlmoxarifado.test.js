@@ -13,6 +13,11 @@ import { MemoryRouter } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import ReservasAlmoxarifado, { STATUS_DONO_LIBERA_RESERVA } from './ReservasAlmoxarifado';
 import api from '../../services/api';
+// Etapa 155 (RN-155.01): o corpo REAL de GET /api/clientes e de GET /api/almoxarifado/aux/ordens-servico — o teste do servidor
+// (listasNotificacoesPortao) confere que as chaves destes dois arquivos sao as de uma linha do servidor montado. O mock antigo
+// (`/clientes` vazio, a OS com `numero`) provava o defeito: a tela lia campos que o servidor nao manda.
+import CLIENTE_DO_SERVIDOR from './__fixtures__/clienteDoServidor.json';
+import OS_DO_AUX_DO_SERVIDOR from './__fixtures__/osDoAuxDoServidor.json';
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
@@ -80,10 +85,14 @@ const RESERVA_MANUAL_ATIVA = {
 let container;
 let root;
 let reservasDoBanco;
+let clientesDoBanco;
+let ordensDoBanco;
 
 beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
   reservasDoBanco = [RESERVA_PARCIAL];
+  clientesDoBanco = [CLIENTE_DO_SERVIDOR];
+  ordensDoBanco = [OS_DO_AUX_DO_SERVIDOR];
   mockPermissoes = permissoes();
   mockUser = { id: 1, nome: 'Admin' };
   // Implementações aqui, não na fábrica do jest.mock: clearAllMocks apaga implementações e só
@@ -94,8 +103,8 @@ beforeEach(() => {
       return Promise.resolve({ data: [{ id: 10, codigo: 'MAT-1', nome: 'Chapa 3mm', unidade: 'PC', quantidade_disponivel: 20 }] });
     }
     if (url === '/projetos') return Promise.resolve({ data: [{ id: 7, nome: 'Projeto Alfa' }, { id: 8, nome: 'Projeto Beta' }] });
-    if (url === '/almoxarifado/aux/ordens-servico') return Promise.resolve({ data: [{ id: 42, numero: 'OS-42' }] });
-    if (url === '/clientes') return Promise.resolve({ data: [] });
+    if (url === '/almoxarifado/aux/ordens-servico') return Promise.resolve({ data: ordensDoBanco });
+    if (url === '/clientes') return Promise.resolve({ data: clientesDoBanco });
     return Promise.resolve({ data: [] });
   });
   api.post.mockResolvedValue({ data: { success: true } });
@@ -382,5 +391,49 @@ describe('[RN-10] Liberar reserva de requisição — de quem é', () => {
     const modal = modalAberto().textContent;
     expect(modal).toContain('requisição REQ-2026-0007');
     expect(modal).not.toContain('#55');
+  });
+});
+
+// Etapa 155 (RN-155.01, C367, C368): o cliente pela razao social (o nome fantasia quando ela e vazia) e a OS pelo numero (com o cliente,
+// quando ha), nos dois seletores e na coluna de destino — montados com o corpo REAL do servidor (os fixtures, conferidos pelo servidor).
+describe('[RN-155.01] o cliente e a OS pelos campos que o servidor manda', () => {
+  const opcoes = (rotulo) => [...campoPorLabel(rotulo).querySelectorAll('option')].map((o) => [o.value, o.textContent]);
+  async function abrirNovaReserva() {
+    const botao = [...container.querySelectorAll('button')].find((b) => b.textContent.includes('Nova Reserva'));
+    await act(async () => { botao.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+  }
+
+  test('o fixture e o corpo do servidor: sem `nome` no cliente, sem `numero` na OS (o que a tela lia)', () => {
+    expect(Object.keys(CLIENTE_DO_SERVIDOR)).toEqual(expect.arrayContaining(['id', 'razao_social', 'nome_fantasia']));
+    expect(CLIENTE_DO_SERVIDOR).not.toHaveProperty('nome');
+    expect(Object.keys(OS_DO_AUX_DO_SERVIDOR).sort()).toEqual(['cliente_nome', 'id', 'numero_os', 'status']);
+  });
+
+  test('Nova Reserva: o cliente pela razao social, pelo nome fantasia quando ela e vazia; a OS pelo numero, com o cliente so quando ha', async () => {
+    clientesDoBanco = [CLIENTE_DO_SERVIDOR, { ...CLIENTE_DO_SERVIDOR, id: 4, razao_social: '', nome_fantasia: 'BETA' }];
+    ordensDoBanco = [OS_DO_AUX_DO_SERVIDOR, { ...OS_DO_AUX_DO_SERVIDOR, id: 43, numero_os: 'OS-043', cliente_nome: null }];
+    await renderizar();
+    await abrirNovaReserva();
+    expect(opcoes('Cliente')).toEqual([['', '—'], ['3', 'ACME INDUSTRIA LTDA'], ['4', 'BETA']]);
+    expect(opcoes('Ordem de Serviço')).toEqual([['', '—'], ['42', 'OS-042 — ACME INDUSTRIA LTDA'], ['43', 'OS-043']]);
+  });
+
+  test('Transferir: os mesmos rotulos; a coluna e o modal dizem o cliente e o numero da OS da reserva, e "OS #<id>" quando a OS nao esta na lista', async () => {
+    reservasDoBanco = [
+      { ...RESERVA_MANUAL_ATIVA, id: 6, projeto_id: null, cliente_id: 3 },
+      { ...RESERVA_MANUAL_ATIVA, id: 7, projeto_id: null, os_id: 42 },
+      { ...RESERVA_MANUAL_ATIVA, id: 8, projeto_id: null, os_id: 99 },
+      { ...RESERVA_MANUAL_ATIVA, id: 9, projeto_id: null, cliente_id: 77 },
+    ];
+    await renderizar();
+    expect(textoDaLinha(0)).toContain('ACME INDUSTRIA LTDA');
+    expect(textoDaLinha(1)).toContain('OS-042');
+    expect(textoDaLinha(1)).not.toContain('OS #42');
+    expect(textoDaLinha(2)).toContain('OS #99');
+    expect(textoDaLinha(3)).toContain('Cliente #77');
+    await clicarAcao(0, 'Transferir');
+    expect(container.querySelector('.almox-modal').textContent).toContain('atualmente em ACME INDUSTRIA LTDA');
+    expect(opcoes('Cliente')).toEqual([['', '—'], ['3', 'ACME INDUSTRIA LTDA']]);
+    expect(opcoes('Ordem de Serviço')).toEqual([['', '—'], ['42', 'OS-042 — ACME INDUSTRIA LTDA']]);
   });
 });

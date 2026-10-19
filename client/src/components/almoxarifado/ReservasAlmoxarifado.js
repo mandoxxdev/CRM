@@ -135,12 +135,22 @@ const ReservasAlmoxarifado = () => {
   useEffect(() => { loadReservas(); }, [loadReservas]);
 
   const nomeProjeto = (id) => projetos.find((p) => p.id === id)?.nome || (id ? `Projeto #${id}` : null);
-  const nomeCliente = (id) => clientes.find((c) => c.id === id)?.nome || (id ? `Cliente #${id}` : null);
+  // Etapa 155 (RN-155.01, C367): o cadastro de clientes (GET /api/clientes, SELECT * FROM clientes) nao tem `nome` — tem `razao_social`
+  // (NOT NULL, pode ser vazia) e `nome_fantasia`. A tela lia `c.nome`: as opcoes saiam em branco e a coluna dizia "Cliente #<id>".
+  const rotuloCliente = (c) => c.razao_social || c.nome_fantasia || `Cliente #${c.id}`;
+  const nomeCliente = (id) => {
+    const c = clientes.find((x) => x.id === id);
+    return c ? rotuloCliente(c) : (id ? `Cliente #${id}` : null);
+  };
+  // Etapa 155 (RN-155.01, C368): GET /api/almoxarifado/aux/ordens-servico devolve `id, numero_os, status, cliente_nome` — nao ha `numero`
+  // nem `codigo`, e toda opcao saia "OS #<id>" (o numero interno). O molde das irmas (Movimentacoes, Sobras): o numero e o cliente, quando ha.
+  const rotuloOS = (o) => `${o.numero_os || `OS #${o.id}`}${o.cliente_nome ? ` — ${o.cliente_nome}` : ''}`;
+  const numeroDaOS = (id) => ordensServico.find((o) => o.id === id)?.numero_os || `OS #${id}`;
 
   // Destino da reserva na ordem OS > projeto > cliente, a mesma prioridade que o resto do
   // módulo usa para vínculo (ver vinculoLabel em MovimentacoesAlmoxarifado).
   const destinoLabel = (r) => {
-    if (r.os_id) return `OS #${r.os_id}`;
+    if (r.os_id) return numeroDaOS(r.os_id);
     if (r.os_referencia) return `OS ${r.os_referencia}`;
     if (r.projeto_id) return nomeProjeto(r.projeto_id);
     if (r.cliente_id) return nomeCliente(r.cliente_id);
@@ -493,7 +503,7 @@ const ReservasAlmoxarifado = () => {
                       onChange={(e) => setForm((f) => ({ ...f, os_id: e.target.value }))}>
                       <option value="">—</option>
                       {ordensServico.map((o) => (
-                        <option key={o.id} value={o.id}>{o.numero || o.codigo || `OS #${o.id}`}</option>
+                        <option key={o.id} value={o.id}>{rotuloOS(o)}</option>
                       ))}
                     </select>
                   </div>
@@ -502,7 +512,7 @@ const ReservasAlmoxarifado = () => {
                     <select className="almox-form-select" value={form.cliente_id}
                       onChange={(e) => setForm((f) => ({ ...f, cliente_id: e.target.value }))}>
                       <option value="">—</option>
-                      {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                      {clientes.map((c) => <option key={c.id} value={c.id}>{rotuloCliente(c)}</option>)}
                     </select>
                   </div>
                   <div className="almox-field">
@@ -622,7 +632,7 @@ const ReservasAlmoxarifado = () => {
                     onChange={(e) => setTransferirDestino((d) => ({ ...d, os_id: e.target.value }))}>
                     <option value="">—</option>
                     {ordensServico.map((o) => (
-                      <option key={o.id} value={o.id}>{o.numero || o.codigo || `OS #${o.id}`}</option>
+                      <option key={o.id} value={o.id}>{rotuloOS(o)}</option>
                     ))}
                   </select>
                 </div>
@@ -636,7 +646,7 @@ const ReservasAlmoxarifado = () => {
                   <select className="almox-form-select" value={transferirDestino.cliente_id}
                     onChange={(e) => setTransferirDestino((d) => ({ ...d, cliente_id: e.target.value }))}>
                     <option value="">—</option>
-                    {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                    {clientes.map((c) => <option key={c.id} value={c.id}>{rotuloCliente(c)}</option>)}
                   </select>
                 </div>
                 <div className="almox-field almox-form-full">
