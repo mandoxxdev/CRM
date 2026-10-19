@@ -22,6 +22,7 @@ const { spawn } = require('child_process');
 const sqlite3 = require('sqlite3');
 const regua = require('../helpers/reguaDoFonteDoServidor');
 const camadas = require('../helpers/conferirCamadasDoExpress');
+const { nomeDaCamada } = require('../helpers/nomeDaCamada');
 
 const SERVER_DIR = path.join(__dirname, '..', '..');
 const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -224,6 +225,8 @@ test('[RN-153.01/02, C355, C352] fonte: as 7 com o exigirComercialNasPropostas e
   // eslint-disable-next-line no-new-func
   const lido = Function(`return ${mapa[1]}`)();
   assert.deepStrictEqual(Object.keys(lido).sort(), TIPOS, 'o mapa nao cobre todo tipo do corpo');
+  // Fase 5 r3 (familia 3): e os VALORES — todo tipo leva ao Comercial (todo resultado abre uma tela do Comercial)
+  assert.deepStrictEqual(TIPOS.map((t) => [t, lido[t]]), TIPOS.map((t) => [t, ['comercial']]), 'o modulo de um tipo da busca');
   // cada push do corpo passa pelo filtro do tipo dele
   const pushes = [...corpo.matchAll(/results\.push\(/g)].length;
   const filtrados = TIPOS.filter((t) => corpo.includes(`podeVer('${t}')`)).length;
@@ -239,9 +242,11 @@ test('[RN-153.01/02/04] as camadas do Express montado: so as 8 atendem os 4 pref
 
 test('[RN-153.04] o helper das camadas acusa cada defeito que promete ver (sobre camadas sinteticas) e nao acusa as certas', () => {
   const N = '/api/zz-n';
-  const mws = [{ tipo: 'mw', nome: 'a' }, { tipo: 'mw', nome: 'b' }, { tipo: 'mw', nome: 'c' }];
+  // a pilha sintetica: a (0) e b (1) antes das rotas, as rotas em 5 e 6, c (9) depois delas (como os tratadores de erro do index.js)
+  const mws = [{ tipo: 'mw', nome: 'a', idx: 0 }, { tipo: 'mw', nome: 'b', idx: 1 }, { tipo: 'mw', nome: 'c', idx: 9 }];
   const rotas = [{ metodo: 'GET', rota: '/api/x/:id', cadeia: ['authenticateToken', 'portao:comercial'] }, { metodo: 'POST', rota: '/api/x', cadeia: ['authenticateToken', 'portao:comercial'] }];
-  const atendida = (metodo, caminho, rota, handles, antes = mws.slice(0, 2)) => ({ metodo, caminho, atendida: true, out: [...antes, { tipo: 'rota', caminho: rota, handles }] });
+  const IDX = { '/api/x/:id': 5, '/api/x': 6 };
+  const atendida = (metodo, caminho, rota, handles, antes = mws.slice(0, 2)) => ({ metodo, caminho, atendida: true, out: [...antes, { tipo: 'rota', caminho: rota, handles, idx: IDX[rota] !== undefined ? IDX[rota] : 7 }] });
   const base = () => ({
     params: [],
     despacho: [
@@ -252,6 +257,7 @@ test('[RN-153.04] o helper das camadas acusa cada defeito que promete ver (sobre
       { metodo: 'PUT', caminho: '/api/x/zz', atendida: false, out: mws },
     ],
     rotas: ['get /api/x/:id', 'post /api/x'],
+    todas: ['get /api/x/:id', 'post /api/x', 'get /api/xis/:id', 'get /api/outra/:id'],
   });
   const conf = (cam, op = {}) => camadas.conferirCamadas(cam, rotas, { neutro: N, ...op });
   assert.deepStrictEqual(conf(base()), [], 'as camadas certas foram acusadas');
@@ -260,14 +266,21 @@ test('[RN-153.04] o helper das camadas acusa cada defeito que promete ver (sobre
     'sem o portao': [(c) => { c.despacho[1].out[2].handles = ['authenticateToken', 'h']; }, /GET \/api\/x\/:id: authenticateToken, h/],
     'portao em 3o': [(c) => { c.despacho[2].out[2].handles = ['authenticateToken', 'multer', 'portao:comercial', 'h']; }, /POST \/api\/x: authenticateToken, multer/],
     'outro portao': [(c) => { c.despacho[1].out[2].handles = ['authenticateToken', 'portao:operacional', 'h']; }, /portao:operacional/],
-    'middleware so do prefixo': [(c) => { c.despacho[1].out.splice(1, 0, { tipo: 'mw', nome: 'soDoPrefixo' }); }, /GET \/api\/x\/:id: middlewares antes a > soDoPrefixo/],
-    'um router no caminho': [(c) => { c.despacho[1].out.splice(0, 0, { tipo: 'router', nome: 'router', em: '/api' }); }, /router:router@\/api/],
+    'middleware so do prefixo': [(c) => { c.despacho[1].out.splice(1, 0, { tipo: 'mw', nome: 'soDoPrefixo', idx: 1 }); }, /GET \/api\/x\/:id: middlewares antes 0:a > 1:soDoPrefixo/],
+    // Fase 5 r3 (familia 2): o do prefixo com o NOME de um global registrado depois das rotas — so a posicao o denuncia
+    'middleware so do prefixo com o nome de um global posterior': [(c) => { c.despacho[1].out.splice(2, 0, { tipo: 'mw', nome: 'c', idx: 4 }); }, /GET \/api\/x\/:id: middlewares antes 0:a > 1:b > 4:c/],
+    'um router no caminho': [(c) => { c.despacho[1].out.splice(0, 0, { tipo: 'router', nome: 'router', em: '/api', idx: 2 }); }, /router:router@\/api/],
     'um app.param': [(c) => { c.params = ['id']; }, /app\.param: id/],
     'um extra atendido por rota fora da lista': [(c) => { c.despacho[4] = atendida('PUT', '/api/x/zz', '/api/x/:qualquer', ['authenticateToken', 'h']); }, /PUT \/api\/x\/zz: atendido por \/api\/x\/:qualquer, que o teste nao declara/],
     'o extra atendido pela declarada sem o portao (caixa)': [(c) => { c.despacho[3].out[2].handles = ['authenticateToken', 'h']; }, /GET \/API\/X\/9 -> \/api\/x\/:id: authenticateToken, h/],
     'a rota atendida por outra (registrada antes)': [(c) => { c.despacho[1].out[2].caminho = '/api/x/:outro'; }, /GET \/api\/x\/:id: atendida por \/api\/x\/:outro/],
     'a declarada que nao casou amostra nenhuma': [(c) => { c.rotas = ['get /api/x/:id']; }, /declarados que nao casaram nenhuma amostra: post \/api\/x/],
     'o neutro atendido': [(c) => { c.despacho[0].atendida = true; }, /o caminho neutro nao serve de regua/],
+    // Fase 5 r3 (familia 1): a rota montada no prefixo que nenhuma amostra casa, e o caminho que nao e texto
+    'rota montada no prefixo que nenhuma amostra casa': [(c) => { c.todas.push('get,head /api/x/exportar', 'search /API/X.json'); }, /nao declara: get \/api\/x\/exportar; head \/api\/x\/exportar; search \/API\/X\.json/],
+    'rota com caminho em regexp': [(c) => { c.todas.push('get /\\/api\\/y/i'); }, /caminho que nao e texto simples: get \/\\\/api\\\/y\/i/],
+    'rota num router de prefixo em regexp': [(c) => { c.todas.push('post ~^\\/a(b)?\\/?(?=\\/|$)/z'); }, /caminho que nao e texto simples: post ~/],
+    'o despejo sem a lista de todas as rotas': [(c) => { delete c.todas; }, /nao trouxe todas as rotas/],
   };
   const naoAcusou = [];
   for (const [nome, [estraga, re]] of Object.entries(defeitos)) {
@@ -279,11 +292,24 @@ test('[RN-153.04] o helper das camadas acusa cada defeito que promete ver (sobre
   // o medido de outro prefixo passa so quando declarado
   const comOutro = base(); comOutro.rotas.push('get /api/:qualquer');
   assert.ok(conf(comOutro).length === 1 && conf(comOutro, { alemDasRotas: ['get /api/:qualquer'] }).length === 0, 'o alemDasRotas');
+  // Fase 5 r3 (familia 3): a rota de outra etapa no mesmo prefixo ({ metodo, rota, cadeia }) vale no despacho COM A CADEIA DELA
+  const outraEtapa = [{ metodo: 'PUT', rota: '/api/x/:id', cadeia: ['authenticateToken', 'portao:comercial'] }];
+  const comOutraEtapa = (handles) => { const c = base(); c.rotas.push('put /api/x/:id'); c.todas.push('put /api/x/:id'); c.despacho[4] = atendida('PUT', '/api/x/zz', '/api/x/:id', handles); return c; };
+  assert.deepStrictEqual(conf(comOutraEtapa(['authenticateToken', 'portao:comercial', 'h']), { alemDasRotas: outraEtapa }), [], 'a rota de outra etapa com a cadeia certa');
+  const errOutra = conf(comOutraEtapa(['authenticateToken', 'h']), { alemDasRotas: outraEtapa });
+  assert.ok(errOutra.some((e) => /PUT \/api\/x\/zz -> \/api\/x\/:id: authenticateToken, h/.test(e)), `a rota de outra etapa sem o portao passou: ${JSON.stringify(errOutra)}`);
+  assert.ok(conf(comOutraEtapa(['authenticateToken', 'portao:comercial', 'h'])).some((e) => /PUT \/api\/x\/zz: atendido por \/api\/x\/:id, que o teste nao declara/.test(e)), 'sem declarar, a rota de outra etapa passou');
   // as amostras: cada rota instanciada, o neutro, e os extras em seis verbos por prefixo
   const am = camadas.amostrasDasCamadas(rotas, { neutro: N });
   const tem = (m, c) => am.some(([a, b]) => a === m && b === c);
-  assert.ok(tem('GET', '/api/x/9') && tem('POST', '/api/x') && tem('GET', N) && tem('SEARCH', '/api/x/zz-exportar') && tem('PATCH', '/API/X/9') && tem('DELETE', '/api/x/a/b/c/d') && tem('PUT', '/api/x.json'), JSON.stringify(am).slice(0, 300));
+  assert.ok(tem('GET', '/api/x/9') && tem('POST', '/api/x') && tem('GET', N) && tem('SEARCH', '/api/x/zz-exportar') && tem('GET', '/api/x/9/zz-exportar')
+    && tem('PATCH', '/API/X') && tem('PATCH', '/API/X/9') && tem('DELETE', '/api/x/a/b/c/d') && tem('PUT', '/api/x.json'), JSON.stringify(am).slice(0, 300));
   assert.strictEqual(am.length, 2 + 1 + 6 * 6, 'as amostras');
+  // o nome que o despejo da (Fase 5 r3, familia 3): o filtro com o mapa inteiro, os modulos e o caminho de Configuracoes do portao
+  const filtro = () => {}; filtro.tiposDoFiltro = { t: ['a', 'b'], s: ['c'] };
+  const portao = () => {}; portao.modulosDoPortao = ['comercial', 'operacional']; portao.caminhoDoPortao = { admin: 'comercial', tela: 'administrativo' };
+  assert.deepStrictEqual([nomeDaCamada(filtro), nomeDaCamada(portao), nomeDaCamada(function authenticateToken() {}), nomeDaCamada(() => {})],
+    ['filtro:s=c,t=a|b', 'portao:comercial|operacional+configuracoes', 'authenticateToken', '<anonima>']);
 });
 
 // ── RN-153.01/02: pela rota ───────────────────────────────────────────────────────────────
@@ -334,6 +360,8 @@ test('[RN-153.01/02, integracao] o vendedor (so o Comercial) abre o painel (com 
   // a busca e o clique: cada resultado, a leitura que a tela dele faz ao abrir
   const [sb, res] = await j('GET', `/busca-global?q=${TERMO}`, u.T);
   assert.deepStrictEqual([sb, tiposDe(res)], [200, TIPOS]);
+  // Fase 5 r3 (familia 5): a ordem de sempre — clientes, projetos, propostas, oportunidades, atividades, produtos
+  assert.deepStrictEqual([...new Set(res.map((r) => r.type))], ['cliente', 'projeto', 'proposta', 'oportunidade', 'atividade', 'produto'], 'a ordem dos resultados');
   const errados = [];
   for (const r of res) {
     const [s, x] = await j('GET', LEITURA_DO_CLIQUE[r.type](r.id), u.T);
@@ -424,6 +452,11 @@ test('[RN-153.01/02] SQLITE_BUSY ao ler as permissoes: 503 no painel e na busca 
     const [sa] = await j('GET', '/mapa/maquinas-vendidas', ctx.T);
     const [sb, xb] = await j('GET', `/busca-global?q=${TERMO}`, ctx.T);
     assert.deepStrictEqual([sa, sb, tiposDe(xb)], [200, 200, TIPOS], 'o administrador passa sem ler as linhas');
+    // Fase 5 r3 (familia 4): o super (sem o role admin) tambem passa sem ler — na busca e no painel
+    await logar(ctx.u.superU);
+    const [ss1] = await j('GET', '/dashboard', ctx.u.superU.T);
+    const [ss2, xs2] = await j('GET', `/busca-global?q=${TERMO}`, ctx.u.superU.T);
+    assert.deepStrictEqual([ss1, ss2, tiposDe(xs2)], [200, 200, TIPOS], 'o super passa sem ler as linhas');
     await descer();
     ctx.T = await subir({ FALHA_SQL_INJETADA: FALHA, FALHA_SQL_METODOS: 'all' });
     await logar(b);

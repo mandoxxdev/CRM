@@ -20,6 +20,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 const sqlite3 = require('sqlite3');
 const regua = require('../helpers/reguaDoFonteDoServidor');
+const camadas = require('../helpers/conferirCamadasDoExpress');
 
 const SERVER_DIR = path.join(__dirname, '..', '..');
 const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -127,7 +128,8 @@ const achar = ([m, r]) => (TODOS.find((x) => x.metodo === m && x.rota === r) || 
 const DEZENOVE = DEZENOVE_DEF.map(achar);
 // Fase 5 r3 A1/A6: as amostras que o preload despeja — cada uma das 19 instanciada, e caminhos que nenhuma das 19 atende (um registro
 // escondido que os atendesse apareceria em `rotas`), em verbos que a tela nao usa
-const instancia = (rota) => rota.replace(':cliente_id', '7').replace(':anexo_id', '8').replace(':id', '9');
+// Etapa 153: a mesma instancia do helper conferirCamadasDoExpress (todo :param vira 9)
+const instancia = camadas.instanciar;
 const NEUTRO = '/api/zz-neutro-152';
 const EXTRAS = [`${B}/exportar`, `${B}/9/exportar`, `${B}/a/b/c`, `${B}/a/b/c/d`, '/API/CUSTOS-VIAGENS/9', `${B}.json`];
 const AMOSTRAS_DAS_CAMADAS = [
@@ -239,32 +241,14 @@ test('[RN-152.01/02, C350] fonte: as 19 com o exigirComercialNasPropostas como 2
 
 // ── Fase 5 r3 A1/A6: as camadas do Express de verdade ─────────────────────────────────────
 test('[RN-152.01, Fase 5 r3 A1/A6] as camadas do Express montado: so as 19 atendem /api/custos-viagens*, cada uma com o login e o portao do Comercial antes de tudo, nenhum middleware so delas, nenhum app.param', () => {
-  const arq = path.join(pasta, 'camadas.json');
-  assert.ok(fs.existsSync(arq), 'o preload nao despejou as camadas');
-  const cam = JSON.parse(fs.readFileSync(arq, 'utf8'));
-  assert.ok(!cam.erro, `o despejo falhou: ${cam.erro}`);
-  assert.deepStrictEqual(cam.params, [], 'um app.param roda antes do login e do portao de toda rota com aquele parametro');
-  // toda rota (em qualquer verbo, de qualquer arquivo, com qualquer forma de registro) que casa uma amostra e uma das 19
-  assert.deepStrictEqual(cam.rotas, DEZENOVE_DEF.map(([m, r]) => `${m.toLowerCase()} ${r}`).sort(),
-    'uma rota a mais atende um caminho /api/custos-viagens* (registrada por uma forma que a regua do fonte nao le?)');
-  const neutro = cam.despacho.find((d) => d.caminho === NEUTRO);
-  const mwsNeutro = neutro.out.filter((o) => o.tipo === 'mw').map((o) => o.nome);
-  assert.ok(neutro && !neutro.atendida && mwsNeutro.includes('authenticateToken') === false && mwsNeutro.length >= 3, `o caminho neutro: ${JSON.stringify(neutro).slice(0, 300)}`);
-  const errados = [];
-  DEZENOVE_DEF.forEach(([m, r]) => {
-    const d = cam.despacho.find((x) => x.metodo === m && x.caminho === instancia(r));
-    const rota = d && d.out.find((o) => o.tipo === 'rota');
-    if (!d || !d.atendida || !rota || rota.caminho !== r) { errados.push(`${m} ${r}: atendida por ${rota ? rota.caminho : 'ninguem'}`); return; }
-    if (rota.handles[0] !== 'authenticateToken' || rota.handles[1] !== 'portao:comercial') errados.push(`${m} ${r}: ${rota.handles.slice(0, 3).join(', ')}`);
-    // os middlewares que rodam antes sao os de todo pedido (os mesmos, na mesma ordem, do caminho neutro) — nenhum pendurado so no prefixo
-    const mws = d.out.filter((o) => o.tipo !== 'rota').map((o) => (o.tipo === 'mw' ? o.nome : `router:${o.nome}@${o.em}`));
-    if (JSON.stringify(mws) !== JSON.stringify(mwsNeutro.slice(0, mws.length)) || d.out.some((o) => o.tipo === 'router')) errados.push(`${m} ${r}: middlewares ${mws.join(' > ')}`);
-  });
-  assert.deepStrictEqual(errados, []);
-  // os caminhos que nenhuma das 19 atende, em qualquer verbo, nao sao atendidos por ninguem
+  // Etapa 153 (Fase 5 r3): a conferencia saiu para o helper conferirCamadasDoExpress (a mesma das 145-153) — que tambem enumera TODAS as
+  // rotas montadas no prefixo (nao so as que casam uma amostra) e compara os middlewares de antes pela posicao na pilha, nao so pelo nome
+  const cam = camadas.lerCamadas(pasta);
+  const rotas = DEZENOVE_DEF.map(([metodo, rota]) => ({ metodo, rota, cadeia: camadas.cadeiaDoPortao('exigirComercialNasPropostas') }));
+  assert.deepStrictEqual(camadas.conferirCamadas(cam, rotas, { neutro: NEUTRO }), []);
+  // e o que o cenario inline da 152 prendia: os caminhos que nenhuma das 19 atende so sao atendidos pelo /:id (um segmento), pela caixa
   const atendidosAMais = cam.despacho.filter((d) => d.caminho !== NEUTRO && d.atendida && !DEZENOVE_DEF.some(([m, r]) => m === d.metodo && instancia(r) === d.caminho))
     .map((d) => `${d.metodo} ${d.caminho} -> ${d.out.find((o) => o.tipo === 'rota').caminho}`);
-  // (o /:id atende os caminhos de um segmento — /API/CUSTOS-VIAGENS/9 e o mesmo GET /:id: o Express nao diferencia a caixa)
   assert.deepStrictEqual(atendidosAMais.filter((x) => !/^(GET|PUT|DELETE) \/API\/CUSTOS-VIAGENS\/9 -> \/api\/custos-viagens\/:id$/.test(x)
     && !/^(GET|PUT|DELETE) \/api\/custos-viagens\/exportar -> \/api\/custos-viagens\/:id$/.test(x)
     && !/^GET \/api\/custos-viagens\.json -> \/api\/custos-viagens$/.test(x)), [], 'um caminho que nenhuma das 19 atende foi atendido');

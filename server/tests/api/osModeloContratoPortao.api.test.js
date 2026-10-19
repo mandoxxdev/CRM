@@ -126,6 +126,12 @@ const OITO = [...CONTRATO.map((r) => ({ ...r, grupo: 'contrato' })), ...OS.map((
 // Etapa 153 (RN-153.04): as mesmas 8, conferidas nas camadas do Express montado, com o portao que o cenario do fonte espera de cada uma.
 const ROTAS_DAS_CAMADAS = OITO.map((r) => ({ metodo: r.metodo, rota: r.rota, cadeia: camadas.cadeiaDoPortao(r.grupo === 'contrato' ? 'exigirComercialNasPropostas' : 'exigirComercialOuOperacionalNaOS') }));
 const NEUTRO = '/api/zz-neutro-148';
+// Etapa 153 (Fase 5 r3, familia 1): os prefixos de que este teste e DONO na enumeracao de todas as rotas montadas — o /api/familias e da
+// 149 (o familiasListaOsPortao o enumera) e o /api/operacional e de varias etapas; daqui, so os caminhos da 148.
+const PREFIXOS_DO_TESTE = ['/api/clausulas-modelos', '/api/familias/:id/clausulas-modelo', '/api/operacional/ordens-servico', '/api/operacional/os-itens'];
+// Medidos (a enumeracao), de outras etapas nos caminhos da OS: a lista de OS da Fabrica (149, o familiasListaOsPortao a confere) e o numero
+// da proxima OS, a criacao e a gravacao dos itens (a regua antiga do Operacional, B974/C332 — fora do escopo).
+const OUTRAS_DA_OS = ['get /api/operacional/ordens-servico', 'get /api/operacional/ordens-servico/proximo-numero', 'post /api/operacional/ordens-servico', 'post /api/operacional/os-itens'];
 const AMOSTRAS_DAS_CAMADAS = camadas.amostrasDasCamadas(ROTAS_DAS_CAMADAS, { neutro: NEUTRO });
 // Medidos, de OUTRA etapa no mesmo prefixo (Fase 2 I-1 — a forma objeto vale no despacho com a cadeia dela, sem amostra propria):
 // - o prefixo /api/familias e da Etapa 149: os caminhos extras dele (/api/familias/zz-exportar, /API/FAMILIAS, /API/FAMILIAS/9) caem
@@ -246,7 +252,7 @@ test('[RN-148.01/02, C341, C335] fonte: as 3 do modelo de contrato com exigirCom
 // ── Etapa 153 (RN-153.04): o que a regua do texto nao le (receptor apelidado, app[verbo], .call, search, arquivo fora do index.js) ──
 test('[RN-148.01/02, Etapa 153 RN-153.04] as camadas do Express montado: so as 3 do modelo de contrato e as 5 da OS (e, no prefixo das familias, as da 149) atendem os caminhos, cada uma com o login e o portao antes de tudo; nenhum middleware so delas, nenhum app.param', () => {
   const cam = camadas.lerCamadas(pasta);
-  assert.deepStrictEqual(camadas.conferirCamadas(cam, ROTAS_DAS_CAMADAS, { neutro: NEUTRO, alemDasRotas: ALEM_DAS_ROTAS }), []);
+  assert.deepStrictEqual(camadas.conferirCamadas(cam, ROTAS_DAS_CAMADAS, { neutro: NEUTRO, alemDasRotas: [...ALEM_DAS_ROTAS, ...OUTRAS_DA_OS], prefixos: PREFIXOS_DO_TESTE }), []);
   assert.ok(cam.despacho.length === AMOSTRAS_DAS_CAMADAS.length && cam.despacho.filter((d) => d.atendida).length >= ROTAS_DAS_CAMADAS.length, 'o despejo nao despachou as amostras');
 });
 

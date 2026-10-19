@@ -16,13 +16,8 @@ const http = require('http');
 const SAIDA = process.env.CAMADAS_SAIDA;
 const AMOSTRAS = JSON.parse(process.env.CAMADAS_AMOSTRAS || '[]');
 
-const nomeDe = (fn) => {
-  if (!fn) return '<sem handler>';
-  if (fn.modulosDoPortao) return `portao:${[].concat(fn.modulosDoPortao).join('|')}${fn.caminhoDoPortao ? '+configuracoes' : ''}`;
-  // Etapa 153 (RN-153.02): o filtro por tipo da busca global — `filtro:<tipo>=<modulos>,...` (o mapa inteiro, em ordem)
-  if (fn.tiposDoFiltro) return `filtro:${Object.keys(fn.tiposDoFiltro).sort().map((t) => `${t}=${[].concat(fn.tiposDoFiltro[t]).join('|')}`).join(',')}`;
-  return fn.name || '<anonima>';
-};
+// Etapa 153 (Fase 5 r3, familia 3): o nome mora em nomeDaCamada.js (o controle do helper o confere sem carregar este preload).
+const { nomeDaCamada: nomeDe } = require('./nomeDaCamada');
 
 function despachar(router, metodo, caminho, prefixo) {
   const out = [];
@@ -34,18 +29,18 @@ function despachar(router, metodo, caminho, prefixo) {
       if (!layer.route._handles_method(metodo)) continue;
       const m = metodo.toLowerCase();
       const handles = layer.route.stack.filter((l) => !l.method || l.method === m || (m === 'head' && l.method === 'get')).map((l) => nomeDe(l.handle));
-      out.push({ tipo: 'rota', caminho: prefixo + String(layer.route.path), handles });
+      out.push({ tipo: 'rota', caminho: prefixo + String(layer.route.path), handles, idx: router.stack.indexOf(layer) });
       return { out, atendida: true };
     }
     if (layer.handle && Array.isArray(layer.handle.stack)) {
       const sub = caminho.slice(layer.path.length) || '/';
-      out.push({ tipo: 'router', nome: nomeDe(layer.handle), em: layer.path });
+      out.push({ tipo: 'router', nome: nomeDe(layer.handle), em: layer.path, idx: router.stack.indexOf(layer) });
       const r = despachar(layer.handle, metodo, sub, prefixo + layer.path);
       out.push(...r.out);
       if (r.atendida) return { out, atendida: true };
       continue;
     }
-    out.push({ tipo: 'mw', nome: nomeDe(layer.handle) });
+    out.push({ tipo: 'mw', nome: nomeDe(layer.handle), idx: router.stack.indexOf(layer) });
   }
   return { out, atendida: false };
 }
@@ -72,6 +67,22 @@ function rotasQueCasam(router, caminhos, prefixo, acc) {
   return acc;
 }
 
+// O prefixo de um router montado, lido da regexp da camada (o Express 4 nao guarda o texto): '^\/api\/?(?=\/|$)' -> '/api'. O que nao
+// for texto simples sai como '~<regexp>' (o helper trata como suspeito em qualquer prefixo).
+function prefixoDaCamada(layer) {
+  if (layer.regexp && layer.regexp.fast_slash) return '';
+  const src = layer.regexp ? layer.regexp.source : '';
+  const txt = src.replace(/^\^/, '').replace(/\\\/\?\(\?=\\\/\|\$\)$/, '').replace(/\\\//g, '/').replace(/\\-/g, '-').replace(/\\\./g, '.');
+  return /^[\w./-]*$/.test(txt) ? txt : `~${src}`;
+}
+function todasAsRotas(router, prefixo, acc) {
+  for (const layer of router.stack) {
+    if (layer.route) acc.push(`${Object.keys(layer.route.methods).sort().join(',')} ${prefixo}${String(layer.route.path)}`);
+    else if (layer.handle && Array.isArray(layer.handle.stack)) todasAsRotas(layer.handle, prefixo + prefixoDaCamada(layer), acc);
+  }
+  return acc;
+}
+
 function despejar(app) {
   const router = app._router;
   if (!router || !SAIDA) return;
@@ -80,6 +91,7 @@ function despejar(app) {
     params: Object.keys(router.params || {}),
     despacho: AMOSTRAS.map(([metodo, caminho]) => ({ metodo, caminho, ...despachar(router, metodo, caminho, '') })),
     rotas: [...rotasQueCasam(router, caminhos, '', new Set())].sort(),
+    todas: todasAsRotas(router, '', []).sort(),
   };
   fs.writeFileSync(SAIDA, JSON.stringify(res, null, 1));
 }

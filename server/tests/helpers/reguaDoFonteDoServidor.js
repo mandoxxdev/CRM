@@ -59,6 +59,9 @@ function registrosNaoLiterais(caminhosProtegidos, { raiz } = {}) {
     const res = [
       /\b\w+\s*\[\s*["'`](get|post|put|patch|delete|all|use|route)["'`]\s*\]/g,
       /\b(app|router|r|\w*[Rr]outer)\.(get|post|put|patch|delete|all|use|route)\(\s*[^\s'"`[)]/g,
+      // Etapa 153 (Fase 5 r3, familia 1): o registro por `.call`/`.apply` (`app.get.call(app, '/api/...', ...)`), em qualquer receptor (o
+      // `.bind` fica de fora: o servidor faz `db.get.bind(db)` no sqliteConcurrency — a leitura das camadas cobre o registro por bind)
+      /\b\w+\.(get|post|put|patch|delete|all|use|route|search|param)\.(call|apply)\(/g,
     ];
     for (const re of res) for (const m of src.matchAll(re)) achados.push(`${rel}: ${linhaDe(m.index)}`);
     // o caminho montado (concatenado ou em template), em qualquer receptor: passa so quando o trecho fixo do comeco (ate a ultima barra)

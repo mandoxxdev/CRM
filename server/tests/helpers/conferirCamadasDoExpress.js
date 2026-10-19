@@ -19,6 +19,8 @@
  *     - todo caminho atendido entre as amostras (inclusive os extras, em qualquer verbo) e atendido por uma rota declarada, com a cadeia
  *       dela e os mesmos middlewares de antes;
  *     - `cam.rotas` (todo registro que casa alguma amostra, de qualquer arquivo, em qualquer verbo) e exatamente o das declaradas mais
+ *     - toda rota montada do app (`cam.todas`, a pilha inteira) num prefixo do teste (`prefixos`; padrao: os dois primeiros segmentos de
+ *       cada rota declarada) e uma das declaradas ou das `alemDasRotas`; e nenhuma rota tem caminho que nao e texto simples (Fase 5 r3);
  *       `alemDasRotas` (medidas, ditas no teste: `{ metodo, rota, cadeia }` para a rota de outra etapa no mesmo prefixo — vale tambem no
  *       despacho, com a cadeia dela —, ou `'<verbo> <rota>'` para o registro que so casa uma amostra).
  *
@@ -55,7 +57,7 @@ function lerCamadas(pasta) {
   return cam;
 }
 
-function conferirCamadas(cam, rotas, { neutro, alemDasRotas = [] } = {}) {
+function conferirCamadas(cam, rotas, { neutro, alemDasRotas = [], prefixos: prefixosDoTeste = null } = {}) {
   const erros = [];
   if (!cam || !Array.isArray(cam.despacho) || !Array.isArray(cam.rotas)) return ['o despejo nao tem despacho/rotas'];
   if ((cam.params || []).length) erros.push(`app.param: ${cam.params.join(', ')}`);
@@ -70,9 +72,15 @@ function conferirCamadas(cam, rotas, { neutro, alemDasRotas = [] } = {}) {
   // 149): conta como declarada no despacho (com a cadeia dela), mas nao precisa de amostra propria. A string pura so vale para `cam.rotas`.
   const alemObj = alemDasRotas.filter((x) => typeof x === 'object');
   const porChave = new Map([...alemObj, ...rotas].map((r) => [chave(r.metodo, r.rota), r]));
+  // Fase 5 r3 (familia 2): a comparacao e pela POSICAO na pilha (idx), nao so pelo nome — um middleware so do prefixo com o nome de um
+  // global registrado depois das rotas passava. Todo middleware que roda antes da rota tem de ser um que o caminho neutro tambem roda
+  // (mesma posicao, mesmo nome); a rota pode rodar menos (os montados em /api nao rodam no apelido /familias).
+  const idxNeutro = dNeutro.out.filter((o) => o.tipo === 'mw').map((o) => `${o.idx}:${o.nome}`);
   const conferirAntes = (d, rotulo) => {
-    const antes = d.out.filter((o) => o.tipo !== 'rota').map((o) => (o.tipo === 'mw' ? o.nome : `router:${o.nome}@${o.em}`));
-    if (d.out.some((o) => o.tipo === 'router') || JSON.stringify(antes) !== JSON.stringify(mwsNeutro.slice(0, antes.length))) {
+    const rota = d.out.find((o) => o.tipo === 'rota');
+    const antes = d.out.filter((o) => o.tipo !== 'rota').map((o) => (o.tipo === 'mw' ? `${o.idx}:${o.nome}` : `router:${o.nome}@${o.em}`));
+    const igual = rota.idx === undefined ? JSON.stringify(antes) === JSON.stringify(idxNeutro.slice(0, antes.length)) : antes.every((x) => idxNeutro.includes(x));
+    if (d.out.some((o) => o.tipo === 'router') || !igual) {
       erros.push(`${rotulo}: middlewares antes ${antes.join(' > ')}`);
     }
   };
@@ -105,6 +113,22 @@ function conferirCamadas(cam, rotas, { neutro, alemDasRotas = [] } = {}) {
   const faltam = rotas.map((r) => `${r.metodo.toLowerCase()} ${r.rota}`).filter((x) => !rotasDoDespejo.has(x)).sort();
   if (aMais.length) erros.push(`registros a mais que atendem um caminho do prefixo: ${aMais.join('; ')}`);
   if (faltam.length) erros.push(`registros declarados que nao casaram nenhuma amostra: ${faltam.join('; ')}`);
+  // Fase 5 r3 (familia 1): TODA rota montada do app (a pilha inteira, com o prefixo dos routers) cujo caminho comece por um prefixo da
+  // etapa — nao so as que casam uma amostra: `app.get.call(app, '/api/relatorios/exportar', ...)` num caminho literal que nenhuma amostra
+  // casa nascia sem portao. E nenhuma rota com caminho que nao e texto simples (regexp, ou montada num router de prefixo em regexp).
+  if (Array.isArray(cam.todas)) {
+    // os prefixos de que o teste e DONO (padrao: os dois primeiros segmentos de cada rota; quem divide prefixo com outra etapa diz os seus)
+    const prefixos = [...new Set((prefixosDoTeste || rotas.map((r) => prefixoDe(r.rota))).map((p) => p.toLowerCase()))];
+    const doPrefixo = (c) => prefixos.some((p) => c.toLowerCase().startsWith(p) && !/[\w-]/.test(c.charAt(p.length)));
+    const todas = cam.todas.flatMap((x) => { const [ms, ...c] = x.split(' '); return ms.split(',').map((m) => [m, c.join(' ')]); });
+    const foraDaLista = todas.filter(([m, c]) => doPrefixo(c) && !esperadas.has(`${m} ${c}`)).map(([m, c]) => `${m} ${c}`);
+    if (foraDaLista.length) erros.push(`rotas montadas nos prefixos da etapa que o teste nao declara: ${foraDaLista.sort().join('; ')}`);
+    const naoTexto = todas.filter(([m, c]) => !/^[\w/:.*-]*$/.test(c) && !esperadas.has(`${m} ${c}`)).map(([m, c]) => `${m} ${c}`);
+    const naoTextoNaoMedido = naoTexto.filter((x) => !alemDasRotas.includes(x));
+    if (naoTextoNaoMedido.length) erros.push(`rotas montadas com caminho que nao e texto simples: ${naoTextoNaoMedido.sort().join('; ')}`);
+  } else {
+    erros.push('o despejo nao trouxe todas as rotas (preload antigo?)');
+  }
   return erros;
 }
 

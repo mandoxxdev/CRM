@@ -142,6 +142,14 @@ const ROTAS_DAS_CAMADAS = [
   { metodo: LISTA_OS.metodo, rota: LISTA_OS.rota, cadeia: camadas.cadeiaDoPortao('exigirOperacionalNaListaDeOS') },
 ];
 const NEUTRO = '/api/zz-neutro-149';
+// Etapa 153 (Fase 5 r3, familia 1): os prefixos de que este teste e DONO na enumeracao de todas as rotas montadas — do /api/operacional,
+// so o caminho da lista de OS (o resto do Operacional e de outras etapas).
+const PREFIXOS_DO_TESTE = ['/api/familias', '/familias', '/api/operacional/ordens-servico'];
+// Medidos (a enumeracao), de outras etapas nesses prefixos: a OS pelo numero e o modelo de contrato da familia (148, o osModeloContratoPortao
+// os confere) e o numero da proxima OS, a edicao e a exclusao da OS (a regua antiga do Operacional, B974/C332 — fora do escopo).
+const OUTRAS_DOS_PREFIXOS = ['get /api/operacional/ordens-servico/:id', 'get /api/operacional/ordens-servico/:id/itens', 'get /api/operacional/ordens-servico/:id/pdf',
+  'post /api/operacional/ordens-servico/:id/gerar-pdf', 'put /api/familias/:id/clausulas-modelo',
+  'get /api/operacional/ordens-servico/proximo-numero', 'put /api/operacional/ordens-servico/:id', 'delete /api/operacional/ordens-servico/:id'];
 const AMOSTRAS_DAS_CAMADAS = camadas.amostrasDasCamadas(ROTAS_DAS_CAMADAS, { neutro: NEUTRO });
 // medido: o POST do mesmo caminho da lista de OS e a criacao, com outra regua (C277; o cenario do fonte o prende) — authenticateToken e
 // um middleware anonimo; casa a amostra da lista em outro verbo, sem despacho (nenhuma amostra POST nele), entao a cadeia so documenta
@@ -253,7 +261,7 @@ test('[RN-149.01/02/03/04, C343, C345] fonte: as 13 do cadastro com exigirComerc
 // ── Etapa 153 (RN-153.04): o que a regua do texto nao le (receptor apelidado, app[verbo], .call, search, arquivo fora do index.js) ──
 test('[RN-149.01/02/03/04, Etapa 153 RN-153.04] as camadas do Express montado: so as 21 das familias, o clonar (so o login) e a lista de OS atendem os 3 prefixos, cada uma com o login e o portao antes de tudo; nenhum middleware so delas, nenhum app.param', () => {
   const cam = camadas.lerCamadas(pasta);
-  assert.deepStrictEqual(camadas.conferirCamadas(cam, ROTAS_DAS_CAMADAS, { neutro: NEUTRO, alemDasRotas: ALEM_DAS_ROTAS }), []);
+  assert.deepStrictEqual(camadas.conferirCamadas(cam, ROTAS_DAS_CAMADAS, { neutro: NEUTRO, alemDasRotas: [...ALEM_DAS_ROTAS, ...OUTRAS_DOS_PREFIXOS], prefixos: PREFIXOS_DO_TESTE }), []);
   assert.ok(cam.despacho.length === AMOSTRAS_DAS_CAMADAS.length && cam.despacho.filter((d) => d.atendida).length >= ROTAS_DAS_CAMADAS.length, 'o despejo nao despachou as amostras');
 });
 

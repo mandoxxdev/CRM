@@ -140,6 +140,9 @@ const ROTAS_DAS_CAMADAS = [
   { metodo: 'GET', rota: '/api/comercial/ordens-servico', cadeia: camadas.cadeiaDoPortao('exigirComercialNasPropostas') },
 ];
 const NEUTRO = '/api/zz-neutro-145';
+// Etapa 153 (Fase 5 r3, familia 1): os prefixos de que este teste e DONO na enumeracao de todas as rotas montadas — o /api/comercial e
+// dividido com as listas de preco (147); os outros caminhos dele sao de outras etapas.
+const PREFIXOS_DO_TESTE = ['/api/propostas', '/api/aprovacoes', '/api/comercial/ordens-servico'];
 const AMOSTRAS_DAS_CAMADAS = camadas.amostrasDasCamadas(ROTAS_DAS_CAMADAS, { neutro: NEUTRO });
 
 function arquivosDaPasta() {
@@ -233,7 +236,7 @@ test('[RN-145.08] fonte: as 5 rotas /api/aprovacoes tem o portao como 2o middlew
 // ── Etapa 153 (RN-153.04): o que a regua do texto nao le (receptor apelidado, app[verbo], .call, search, arquivo fora do index.js) ──
 test('[RN-145.01/08, RN-146.06, Etapa 153 RN-153.04] as camadas do Express montado: so as 49 das propostas, as 5 de aprovacoes e a lista de OS do Comercial atendem os 3 prefixos, cada uma com o login e o portao antes de tudo; nenhum middleware so delas, nenhum app.param', () => {
   const cam = camadas.lerCamadas(pasta);
-  assert.deepStrictEqual(camadas.conferirCamadas(cam, ROTAS_DAS_CAMADAS, { neutro: NEUTRO }), []);
+  assert.deepStrictEqual(camadas.conferirCamadas(cam, ROTAS_DAS_CAMADAS, { neutro: NEUTRO, prefixos: PREFIXOS_DO_TESTE }), []);
   assert.ok(cam.despacho.length === AMOSTRAS_DAS_CAMADAS.length && cam.despacho.filter((d) => d.atendida).length >= ROTAS_DAS_CAMADAS.length, 'o despejo nao despachou as amostras');
 });
 
