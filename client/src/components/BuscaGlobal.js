@@ -4,6 +4,7 @@ import { FiSearch, FiX, FiUsers, FiBriefcase, FiFileText, FiCalendar, FiPackage,
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { fetchUserPermissions, getCachedUserPermissions } from '../services/permissionsCache';
+import { mergeUserPermissions } from '../utils/systemPermissions';
 import { podeUsarBuscaGlobal, FRASE_BUSCA_SEM_MODULO, FRASE_BUSCA_FALHOU } from '../utils/buscaGlobalAcesso';
 import './BuscaGlobal.css';
 
@@ -21,6 +22,7 @@ const BuscaGlobal = ({ isOpen, onClose }) => {
   // lenta) aparecia com o termo novo no campo.
   const pedidoRef = useRef(0);
   const inputRef = useRef(null);
+  const modalRef = useRef(null);
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -38,11 +40,16 @@ const BuscaGlobal = ({ isOpen, onClose }) => {
     setErro(false);
     setSelectedIndex(0);
     let vivo = true;
-    const decisao = podeUsarBuscaGlobal(user, user?.id ? getCachedUserPermissions(user.id) : null);
+    // o usuario efetivo (o do contexto com o que a leitura das permissoes trouxe): quem virou administrador no meio da sessao busca como o
+    // servidor o deixaria (Fase 5 r2 A2)
+    const cached = user?.id ? getCachedUserPermissions(user.id) : null;
+    const decisao = podeUsarBuscaGlobal(user?.id ? mergeUserPermissions(user, cached?.usuario || {}) : user, cached);
     if (decisao === null) {
       setAcesso('verificando');
       fetchUserPermissions(user.id)
-        .then((data) => { if (vivo) setAcesso(podeUsarBuscaGlobal(user, data || { permissoes: [] }) === false ? 'nao' : 'sim'); })
+        .then((data) => {
+          if (vivo) setAcesso(podeUsarBuscaGlobal(mergeUserPermissions(user, data?.usuario || {}), data || { permissoes: [] }) === false ? 'nao' : 'sim');
+        })
         // a leitura falhou ou esgotou o tempo: falha ABERTO — o servidor filtra (a tela so evita a busca que nunca acha nada)
         .catch(() => { if (vivo) setAcesso('sim'); });
     } else {
@@ -52,10 +59,22 @@ const BuscaGlobal = ({ isOpen, onClose }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
-  // o Esc fecha mesmo com o campo desligado (sem o Comercial o campo nao recebe foco, e o Esc so era ouvido nele — Fase 2 I-2)
+  // o foco no campo quando ele esta ligado (ao reabrir depois de uma abertura sem acesso, o focus() do abrir caia no campo ainda desligado —
+  // Fase 5 r1 A4)
+  useEffect(() => {
+    if (isOpen && acesso !== 'nao') inputRef.current?.focus();
+  }, [isOpen, acesso]);
+
+  // o Esc fecha mesmo com o campo desligado (sem o Comercial o campo nao recebe foco, e o Esc so era ouvido nele — Fase 2 I-2). So o Esc
+  // teclado DENTRO da busca, ou sem foco em lugar nenhum: o Esc de outra janela aberta por cima (a ajuda do F1) fecha so ela (Fase 5 r1 A2).
   useEffect(() => {
     if (!isOpen) return undefined;
-    const aoTeclar = (e) => { if (e.key === 'Escape') onClose(); };
+    const aoTeclar = (e) => {
+      if (e.key !== 'Escape') return;
+      const alvo = e.target;
+      const semFoco = !alvo || alvo === window || alvo === document || alvo === document.body || alvo === document.documentElement;
+      if (semFoco || (modalRef.current && modalRef.current.contains(alvo))) onClose();
+    };
     window.addEventListener('keydown', aoTeclar);
     return () => window.removeEventListener('keydown', aoTeclar);
   }, [isOpen, onClose]);
@@ -63,14 +82,16 @@ const BuscaGlobal = ({ isOpen, onClose }) => {
   useEffect(() => {
     // fechada, ou sem a decisao de acesso, nao pede nada (o atraso de 300 ms de um termo digitado antes de fechar nao dispara — Fase 2 I-4)
     if (!isOpen || acesso !== 'sim') return undefined;
+    // o termo curto descarta o pedido em voo NA HORA (nao depois do atraso): a resposta que chegasse nos 300 ms apareceria com o "Digite
+    // pelo menos 2 caracteres" (Fase 5 r1 A3); e o erro velho sai junto (r3 B8)
+    if (query.trim().length < 2) {
+      descartarPedidoEmVoo();
+      setResults([]);
+      setErro(false);
+      return undefined;
+    }
     const searchTimeout = setTimeout(() => {
-      if (query.trim().length >= 2) {
-        performSearch(query);
-      } else {
-        descartarPedidoEmVoo();
-        setResults([]);
-        setErro(false);
-      }
+      performSearch(query);
     }, 300);
 
     return () => clearTimeout(searchTimeout);
@@ -167,7 +188,7 @@ const BuscaGlobal = ({ isOpen, onClose }) => {
 
   return (
     <div className="busca-global-overlay" onClick={onClose}>
-      <div className="busca-global-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="busca-global-modal" ref={modalRef} onClick={(e) => e.stopPropagation()}>
         <div className="busca-global-header">
           <div className="busca-global-input-wrapper">
             <FiSearch className="busca-global-icon" />

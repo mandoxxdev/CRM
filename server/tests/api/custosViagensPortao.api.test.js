@@ -280,9 +280,19 @@ test('[Fase 5 r3 A5, Etapa 155 RN-155.05] o helper da regua do fonte acusa cada 
     escreve(path.join('u', 'opcional.js'), 'apelido?.use(fn);\n');
     escreve(path.join('u', 'parenteses.js'), '(apelido).use(fn);\n');
     escreve(path.join('u', 'socket.js'), 'io.use(auth);\n');
-    escreve(path.join('u', 'literal.js'), "apelido.use('/x', mw);\napp.use(`/y`, mw);\napp.use( \"/z\", mw);\n");
+    escreve(path.join('u', 'literal.js'), "apelido.use('/x', mw);\napp.use(`/y`, mw);\napp.use( \"/z\", mw);\napp.use('/apix', mw);\napp.use('/api/x', mw);\n");
+    // Fase 5 (r3 G3/G4): o espaco depois do `(` e entre o `.` e o `use`; (r1/r2 A1): o caminho literal que vale para toda a API, em qualquer
+    // aspa e caixa, a chamada opcional e o bind
+    escreve(path.join('u', 'espacos.js'), 'app.use( fn);\napp. use(fn);\n');
+    escreve(path.join('u', 'global.js'), "apelido.use('/api', mw);\napp.use('/', mw);\napp.use(\"\", mw);\napp.use(`*`, mw);\napp.use('/API/', mw);\n");
+    escreve(path.join('u', 'chamada.js'), 'apelido.use?.(fn);\nconst u = app.use.bind(app);\n');
     const achados = regua.registrosNaoLiterais([B], { raiz });
     assert.deepStrictEqual(achados, [
+      `${path.join('u', 'espacos.js')}: app.use( fn);`, `${path.join('u', 'espacos.js')}: app. use(fn);`,
+      `${path.join('u', 'global.js')}: apelido.use('/api', mw);`, `${path.join('u', 'global.js')}: app.use('/', mw);`,
+      `${path.join('u', 'global.js')}: app.use("", mw);`, `${path.join('u', 'global.js')}: app.use(\`*\`, mw);`,
+      `${path.join('u', 'global.js')}: app.use('/API/', mw);`,
+      `${path.join('u', 'chamada.js')}: apelido.use?.(fn);`, `${path.join('u', 'chamada.js')}: const u = app.use.bind(app);`,
       `${path.join('u', 'apelido.js')}: apelido155.use((req, res, next) => next());`,
       `${path.join('u', 'param.js')}: module.exports = (servidor) => { servidor.use(mw); };`,
       `${path.join('u', 'lista.js')}: app.use([a, b]);`,

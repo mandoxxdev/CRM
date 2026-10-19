@@ -380,3 +380,135 @@ describe('[RN-155.03, C365] so a resposta do ultimo pedido aparece', () => {
     expect(container.textContent).toContain('Digite pelo menos 2 caracteres');
   });
 });
+
+// ── Etapa 155, Fase 5 (r1 A2/A3/A4, r2 A2, r3 B2/B6/B7/B8/B10/B11/B12/B14/B17) ────────────────────────────────
+describe('[RN-155.02/03, Fase 5] o Esc, o foco, o usuario efetivo, a leitura velha, o erro velho e as setas', () => {
+  const teclaNoCampo = (key) => act(() => {
+    container.querySelector('.busca-global-input').dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+  });
+
+  it('a frase sem o modulo diz qual modulo falta e por que (r3 B2)', () => {
+    expect(FRASE_BUSCA_SEM_MODULO).toMatch(/Comercial/);
+    expect(FRASE_BUSCA_SEM_MODULO).toMatch(/não tem acesso/);
+  });
+
+  it('o Esc no campo fecha uma vez so; fechada, o Esc nao chama onClose; reabrir nao acumula ouvinte (r3 B10/B14/B17)', () => {
+    const onClose = jest.fn();
+    montar({ onClose });
+    teclaNoCampo('Escape');
+    expect(onClose).toHaveBeenCalledTimes(1);
+    montar({ onClose, isOpen: false });
+    teclarEsc();
+    expect(onClose).toHaveBeenCalledTimes(1);
+    montar({ onClose });
+    teclarEsc();
+    expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it('o Esc de outra janela aberta por cima (a ajuda do F1, com o foco nela) nao fecha a busca; o da busca fecha (r1 A2)', () => {
+    const onClose = jest.fn();
+    montar({ onClose });
+    const ajuda = document.createElement('input');
+    document.body.appendChild(ajuda);
+    try {
+      act(() => { ajuda.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); });
+      expect(onClose).not.toHaveBeenCalled();
+      teclaNoCampo('Escape');
+      expect(onClose).toHaveBeenCalledTimes(1);
+    } finally { ajuda.remove(); }
+  });
+
+  it('reabrir com acesso depois de uma abertura sem acesso poe o foco no campo (r1 A4)', () => {
+    getCachedUserPermissions.mockReturnValue(SO_ALMOXARIFADO);
+    montar();
+    expect(container.querySelector('.busca-global-input').disabled).toBe(true);
+    montar({ isOpen: false });
+    getCachedUserPermissions.mockReturnValue(COM_COMERCIAL);
+    montar();
+    expect(document.activeElement).toBe(container.querySelector('.busca-global-input'));
+  });
+
+  it('o usuario efetivo: a leitura fria que diz que ele virou administrador busca (o servidor o deixaria); o cache quente tambem (r2 A2)', async () => {
+    getCachedUserPermissions.mockReturnValue(null);
+    fetchUserPermissions.mockResolvedValue({ ...SO_ALMOXARIFADO, usuario: { id: 1, role: 'admin' } });
+    montar();
+    await flush();
+    expect(container.textContent).not.toContain(FRASE_BUSCA_SEM_MODULO);
+    await digitar('acme');
+    expect(chamadasDaBusca()).toHaveLength(1);
+    montar({ isOpen: false });
+    getCachedUserPermissions.mockReturnValue({ ...SO_ALMOXARIFADO, usuario: { id: 1, role: 'admin' } });
+    montar();
+    expect(container.textContent).not.toContain(FRASE_BUSCA_SEM_MODULO);
+    // a metade negativa: a mesma leitura sem o papel de administrador
+    montar({ isOpen: false });
+    getCachedUserPermissions.mockReturnValue({ ...SO_ALMOXARIFADO, usuario: { id: 1, role: 'usuario' } });
+    montar();
+    expect(container.textContent).toContain(FRASE_BUSCA_SEM_MODULO);
+  });
+
+  it('a leitura fria de uma abertura anterior, chegando depois de reabrir, nao vence a decisao nova (r3 B6)', async () => {
+    getCachedUserPermissions.mockReturnValue(null);
+    let responder;
+    fetchUserPermissions.mockReturnValue(new Promise((r) => { responder = r; }));
+    montar();
+    montar({ isOpen: false });
+    getCachedUserPermissions.mockReturnValue(SO_ALMOXARIFADO);
+    montar();
+    expect(container.textContent).toContain(FRASE_BUSCA_SEM_MODULO);
+    await act(async () => { responder(COM_COMERCIAL); await Promise.resolve(); });
+    expect(container.textContent).toContain(FRASE_BUSCA_SEM_MODULO);
+    expect(container.querySelector('.busca-global-input').disabled).toBe(true);
+  });
+
+  it('o erro de antes de fechar nao aparece ao reabrir e digitar, nem depois de apagar para uma letra (r3 B7/B8)', async () => {
+    const fila = buscaControlada();
+    montar();
+    digitarSemResolver('ab');
+    await act(async () => { fila[0].reject(new Error('Request failed with status code 503')); });
+    expect(container.textContent).toContain(FRASE_BUSCA_FALHOU);
+    // apagar para uma letra e digitar de novo, ainda no atraso
+    const input = () => container.querySelector('.busca-global-input');
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    const escrever = (t, ms) => {
+      act(() => { setter.call(input(), t); input().dispatchEvent(new Event('input', { bubbles: true })); });
+      act(() => { jest.advanceTimersByTime(ms); });
+    };
+    escrever('a', 10);
+    escrever('abc', 100);
+    expect(container.textContent).not.toContain(FRASE_BUSCA_FALHOU);
+    // de novo o erro; fechar, reabrir e digitar, ainda no atraso
+    act(() => { jest.advanceTimersByTime(300); });
+    await act(async () => { fila[1].reject(new Error('Request failed with status code 503')); });
+    expect(container.textContent).toContain(FRASE_BUSCA_FALHOU);
+    montar({ isOpen: false });
+    montar();
+    escrever('xy', 100);
+    expect(container.textContent).not.toContain(FRASE_BUSCA_FALHOU);
+  });
+
+  it('apagar o termo ANTES dos 300 ms com a resposta chegando nesse meio: ela nao aparece (r1 A3)', async () => {
+    const fila = buscaControlada();
+    montar();
+    digitarSemResolver('ab');
+    const input = container.querySelector('.busca-global-input');
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    act(() => { setter.call(input, 'a'); input.dispatchEvent(new Event('input', { bubbles: true })); });
+    act(() => { jest.advanceTimersByTime(100); });
+    await act(async () => { fila[0].resolve({ data: [linha('RESULTADO QUE CHEGOU NO ATRASO')] }); });
+    expect(container.textContent).not.toContain('RESULTADO QUE CHEGOU NO ATRASO');
+    expect(container.textContent).toContain('Digite pelo menos 2 caracteres');
+  });
+
+  it('as setas e o Enter abrem o resultado escolhido (r3 B11/B12)', async () => {
+    const fila = buscaControlada();
+    montar();
+    digitarSemResolver('acme');
+    await act(async () => {
+      fila[0].resolve({ data: [{ id: 7, title: 'ACME', subtitle: '', type: 'cliente' }, { id: 12, title: 'Proposta 12', subtitle: '', type: 'proposta' }] });
+    });
+    teclaNoCampo('ArrowDown');
+    teclaNoCampo('Enter');
+    expect(mockNavigate).toHaveBeenCalledWith('/comercial/propostas/editar/12');
+  });
+});

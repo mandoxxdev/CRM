@@ -28,9 +28,11 @@ describe('[RN-155.04, C351] caminhoDoProdutoPeloCodigo', () => {
         const p = path.join(d, e.name);
         if (e.isDirectory()) { andar(p); continue; }
         if (!/\.(js|jsx|ts|tsx)$/.test(e.name) || /\.test\./.test(e.name)) continue;
-        const texto = fs.readFileSync(p, 'utf8');
+        // sem os comentarios (um uso so num comentario nao conta — Fase 5 r3 P3), e o caminho em qualquer forma: literal, concatenado ou em
+        // partes (`['', 'produtos', 'codigo', x].join('/')`)
+        const texto = fs.readFileSync(p, 'utf8').replace(/\/\*[\s\S]*?\*\/|(^|[^:])\/\/.*$/gm, '$1');
         const rel = path.relative(src, p).split(path.sep).join('/');
-        if (texto.includes('/produtos/codigo/')) citam.push(rel);
+        if (/produtos\W{0,8}codigo/.test(texto)) citam.push(rel);
         if (/api\.get\(caminhoDoProdutoPeloCodigo\(/.test(texto)) usam.push(rel);
       }
     };

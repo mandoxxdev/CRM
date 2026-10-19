@@ -248,7 +248,9 @@ test('[RN-155.02, C364, B999] o client: os modulos com que a busca decide se bus
   assert.ok(doServidor.length >= 1);
   // a tela decide por essa regua (o cache e, frio, a leitura) — sem os comentarios
   const tela = fs.readFileSync(path.join(SERVER_DIR, '..', 'client', 'src', 'components', 'BuscaGlobal.js'), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
-  assert.ok(tela.includes('podeUsarBuscaGlobal(user, user?.id ? getCachedUserPermissions(user.id) : null)') && tela.includes('fetchUserPermissions(user.id)'), 'a busca nao decide pela regua da tela');
+  assert.ok(tela.includes('const cached = user?.id ? getCachedUserPermissions(user.id) : null;')
+    && tela.includes('podeUsarBuscaGlobal(user?.id ? mergeUserPermissions(user, cached?.usuario || {}) : user, cached)') && tela.includes('fetchUserPermissions(user.id)')
+    && tela.includes('podeUsarBuscaGlobal(mergeUserPermissions(user, data?.usuario || {}), data'), 'a busca nao decide pela regua da tela');
 });
 
 // ── RN-153.04: as camadas do Express de verdade ───────────────────────────────────────────
