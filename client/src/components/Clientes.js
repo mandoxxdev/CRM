@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { toast } from 'react-toastify';
@@ -13,6 +13,9 @@ const Clientes = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterSegmento, setFilterSegmento] = useState('');
+  // Etapa 159 (RN-159.01, Fase 2 I4): so a resposta do ultimo pedido vale — com o segmento filtrando no servidor, a resposta velha
+  // mostraria (e exportaria) a lista do segmento anterior
+  const ultimoPedido = useRef(0);
 
   const segmentos = [
     'Tintas & Vernizes',
@@ -34,18 +37,21 @@ const Clientes = () => {
   }, [search, filterSegmento]);
 
   const loadClientes = async () => {
+    const meu = ++ultimoPedido.current;
     setLoading(true);
     try {
       const params = {};
-      if (search) params.search = search;
+      if (search.trim()) params.search = search.trim();
       if (filterSegmento) params.segmento = filterSegmento;
       
       const response = await api.get('/clientes', { params });
+      if (meu !== ultimoPedido.current) return;
       setClientes(response.data);
     } catch (error) {
+      if (meu !== ultimoPedido.current) return;
       console.error('Erro ao carregar clientes:', error);
     } finally {
-      setLoading(false);
+      if (meu === ultimoPedido.current) setLoading(false);
     }
   };
 

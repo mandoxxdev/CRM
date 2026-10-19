@@ -65,8 +65,9 @@ const OrdensServicoComercial = () => {
       propostas = propostas.filter(proposta => !propostasComOS.has(proposta.id));
       
       // Filtrar por busca se houver
-      if (search) {
-        const searchLower = search.toLowerCase();
+      // Etapa 159 (RN-159.02, Fase 2 I3): o termo aparado, como no servidor — " são " nao esvazia a lista que o servidor devolveu
+      if (search.trim()) {
+        const searchLower = search.trim().toLowerCase();
         propostas = propostas.filter(proposta => 
           proposta.numero_proposta?.toLowerCase().includes(searchLower) ||
           proposta.cliente_nome?.toLowerCase().includes(searchLower) ||
@@ -101,7 +102,7 @@ const OrdensServicoComercial = () => {
       setLoading(true);
       // Usar rota específica do módulo comercial
       const response = await api.get('/comercial/ordens-servico', {
-        params: { search }
+        params: { search: search.trim() }
       });
       let osData = response.data || [];
       
@@ -191,8 +192,8 @@ const OrdensServicoComercial = () => {
   };
 
   const filteredOrdensServico = ordensServico.filter(os => {
-    if (search) {
-      const searchLower = search.toLowerCase();
+    if (search.trim()) {
+      const searchLower = search.trim().toLowerCase();
       return (
         os.numero_os?.toLowerCase().includes(searchLower) ||
         os.cliente_nome?.toLowerCase().includes(searchLower) ||
