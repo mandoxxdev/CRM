@@ -271,7 +271,11 @@ As respostas de sucesso não mudam (corpo e status).
    pesou:** o bench isolado da Fase 0 ("≈ 0,02 ms por linha") — pela rota deu 4× isso; medir pelo caminho de verdade, não por um modelo dele.
 3. **Paralelismo:** **0** galhos em paralelo de fato (T1 e T2 dividem o `index.js`); **0** retrabalho; **1** revisor na Fase 2, **3** em
    paralelo na Fase 5 sob a trava (o r3 numa worktree própria, removida).
-4. **Defeito que escapou:** *(preencher na Etapa 150)*.
+4. **Defeito que escapou:** *(preenchido na Etapa 150)* **0 de código** (a Fase 5 da 150 não achou defeito nas rotas da 149; o r2 conferiu
+   que as leituras de família seguem com o portão). **1 de documento:** a "próxima tarefa" acima listava `BuscaGlobal` e `Layout` entre os
+   leitores de `/api/produtos` — **estava errado** (grep de texto, sem medir): o `Layout` só tem o item de menu e a `BuscaGlobal` chama
+   `/api/busca-global`, que lê a tabela direto. **1 fraqueza herdada:** a régua do fonte do `familiasListaOsPortao` (e do molde da 148) lê só
+   o primeiro registro de cada linha — um segundo registro na mesma linha escapa (r3 da 150, S02); corrigida no teste da 150, não nos antigos.
 
 ## Próxima tarefa detalhada — Etapa 150
 

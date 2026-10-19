@@ -1,18 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-18 (Etapa 149) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-18 (Etapa 150) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148 e 149) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149 e 150) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-18 (Etapa 149 ENTREGUE · próxima: Etapa 150)
+> ## Onde o desenvolvimento está — 2026-10-18 (Etapa 150 ENTREGUE · próxima: Etapa 151)
 >
-> **O desenvolvimento parou aqui: Etapa 149 fechada — 2026-10-18.** A **Etapa 149 (o cadastro de família de produto e a lista de OS da
+> **O desenvolvimento parou aqui: Etapa 150 fechada — 2026-10-18.** A **Etapa 150 (grupos de produto, produtos e variáveis técnicas
+> pedem o módulo; do Comercial/Operacional, fora do almoxarifado)**: quem a tela barra do Comercial deixa de ler o catálogo com preço e de
+> criar, editar e apagar produto, grupo e variável técnica pela integração (*"Acesso negado ao módulo"*); o vendedor, a Fábrica que abre a
+> OS e o administrador do Comercial que mexe nas variáveis técnicas por Configurações não perdem nada. Uma consulta nova, opcional
+> (**A98**). **Próxima: Etapa 151** — ver a próxima tarefa no plano da 150.
+>
+> **Etapa 149, 2026-10-18.** A **Etapa 149 (o cadastro de família de produto e a lista de OS da
 > Fábrica pedem o módulo, e a lista de preço só nasce inteira; do Comercial/Operacional, fora do almoxarifado)**: quem a tela barra do
 > Comercial deixa de criar, renomear e apagar família de produto pela integração (*"Acesso negado ao módulo"*); o vendedor e o administrador
 > do Comercial que mexe nas opções por Configurações não perdem nada. A lista de OS da Fábrica decide como a tela. A importação de uma lista
-> de preço com uma linha recusada não deixa a lista pela metade — e ficou mais rápida. Uma consulta nova, opcional (**A97**). **Próxima:
-> Etapa 150** — ver a próxima tarefa no plano da 149.
+> de preço com uma linha recusada não deixa a lista pela metade — e ficou mais rápida. Uma consulta nova, opcional (**A97**). *(Próxima,
+> na época: Etapa 150 — entregue acima.)*
 >
 > **Etapa 148, 2026-10-18.** A **Etapa 148 (a ordem de serviço aberta pelo número e o modelo de
 > contrato por família pedem o módulo, e as cláusulas de uma proposta que não existe dizem "não encontrada"; do Comercial/Operacional, fora
@@ -6676,6 +6682,47 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 150 — Grupos de produto, produtos e variáveis técnicas pedem o módulo (ENTREGUE — 2026-10-18)
+
+**O que mudou, em uma frase:** ler o catálogo de produtos e criar, editar e apagar produto, grupo de produto e variável técnica passam a
+conferir o acesso ao Comercial com a mesma régua da tela — o produto lido pelo código (o que a OS faz) aceita também o Operacional, e as
+variáveis técnicas também o caminho de Configurações.
+
+**O problema que ela resolve.** O catálogo só pedia o login: quem a tela não deixa entrar no Comercial lia a lista de produtos com o preço e
+criava, editava e apagava produto, grupo e variável técnica pela integração.
+
+| Antes | Agora |
+|---|---|
+| Usuário só do Almoxarifado lia e mexia no catálogo de produtos pela integração | *"Acesso negado ao módulo"* em cada operação, e o registro no log |
+| Vendedor em **Comercial → Produtos** e na proposta | Continua como antes |
+| Fábrica abrindo a OS com itens de produto | Continua como antes |
+| Administrador do Comercial em **Configurações → Comercial → Variáveis técnicas** | Continua como antes |
+
+**Roteiro de teste (10 minutos).**
+
+1. **O vendedor não perde nada.** Com um usuário que tem **só o Comercial**: **Comercial → Produtos**, um grupo, uma família, **Novo
+   produto** — preencha, envie uma imagem, salve; edite, salve; reabra (está tudo lá); apague. Crie e renomeie um grupo com foto. Numa
+   **proposta nova**, a seleção de produtos mostra os produtos e as variáveis como sempre. Nenhum *"Acesso negado"*.
+2. **A Fábrica não perde nada.** Com um usuário do **Operacional** (sem o Comercial): **Fábrica → Ordens de Serviço**, abra (lápis ou
+   detalhe) uma OS com itens de produto — as especificações de cada item aparecem.
+3. **Configurações não perde nada.** Com um usuário que tem o **Administrativo** e é **administrador do módulo Comercial**, sem o
+   Comercial: **Configurações → Comercial → Variáveis técnicas** — crie uma variável, edite-a, desative-a; **Template de proposta** lista as
+   variáveis. Nenhum *"Acesso negado"*. (O seletor *Grupo de compras* fica vazio se o usuário não tem o Compras — **C348**, de antes.)
+4. **Quem a tela barra (pela integração).** Com um usuário que só tem o **Almoxarifado**: `GET /api/produtos` → **403** `{ "error":
+   "Acesso negado ao módulo", "modulo": "comercial" }`; `GET /api/produtos/codigo/<código>` → **403** `{ "error": "Acesso negado ao
+   módulo", "modulo": ["comercial", "operacional"] }`; `GET /api/variaveis-tecnicas` → **403** (Comercial); **Administração → Logs** mostra os
+   acessos negados.
+5. **Clonar.** Como administrador, **Comercial → Produtos** → clonar um produto — o clone aparece; um vendedor recebe *"Apenas
+   administradores podem clonar produtos"*.
+
+**O que esta etapa NÃO cobre.** A busca global continua mostrando o nome e a família dos produtos a qualquer logado (**C352**); clientes,
+projetos, oportunidades, atividades e custos de viagem continuam só com o login (**C349**, **C350**); o seletor de grupo de compras das
+variáveis técnicas segue a régua do Compras (**C348**); a criação da OS pelo Comercial continua dependendo da régua do Operacional
+(**C332**, **C277**).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor, pela rota) provam, escrito
+para você conferir à mão — em especial os passos 1 a 3 só o navegador mostra.
 
 ## Etapa 149 — O cadastro de família de produto e a lista de OS da Fábrica pedem o módulo, e a lista de preço só nasce inteira (ENTREGUE — 2026-10-18)
 

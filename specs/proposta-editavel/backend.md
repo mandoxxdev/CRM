@@ -334,6 +334,28 @@ Testes: `tests/api/familiasListaOsPortao.api.test.js` (as 21 + a lista pelo font
 pelo Comercial, as opções pelo caminho de Configurações, a lista pelo Operacional, o clonar, o desligado, o BUSY) e
 `tests/api/listaPrecosGrava.api.test.js` (o gatilho do SQLite como falha real, em bloco; o BUSY pelo `FALHA_SQL_INJETADA`).
 
+### Grupos de produto, produtos e variáveis técnicas no portão (Etapa 150, C346, C347)
+
+Plano: `docs/superpowers/plans/2026-10-18-almoxarifado-etapa150-grupos-produtos-e-variaveis-pelo-modulo.md`. Commits `d74ad876` (o portão e o teste) e `481ee23a` (Fase 5: as asserções do r3).
+
+- **Grupos de produto** (as **8**: 7 `/api/grupos*` + o apelido `GET /grupos`) e **9** das 11 de **produtos** (`verificar-existente`, `GET`,
+  `proximo-codigo`, `GET /:id`, `POST`, `PUT /:id`, `DELETE /:id`, `zerar-modelo-antigo`, `POST /:id/imagem`) com `exigirComercialNasPropostas`
+  (RN-150.01, B977) — só as telas do `/comercial` as chamam; o portão antes do multer nas duas multipart (`uploadGrupo`, `uploadProduto`).
+- **`GET /api/produtos/codigo/:codigo`** com `exigirComercialOuOperacionalNaOS` (RN-150.02, B978): o `OSDetalhesForm` (montado em
+  `/comercial/ordens-servico/editar/:id` e `/fabrica/ordens-servico/editar/:id`) busca nele cada item. Recusa: 403 `{ error: 'Acesso negado ao
+  módulo', modulo: ['comercial', 'operacional'] }`, log `comercial|operacional`.
+- **`POST /api/produtos/:id/clonar`** sem portão (`isAdminUser`, *"Apenas administradores podem clonar produtos"* — RN-150.03, B980).
+- **Variáveis técnicas** (as **7** `/api/variaveis-tecnicas*`) com `exigirComercialNasVariaveisTecnicas = portaoDasPropostas.exigir('comercial',
+  { tambemAdminDoModuloCom: { admin: 'comercial', tela: 'administrativo' } })` (RN-150.04, B979): o Comercial (ProdutoForm, ModalFamiliaForm,
+  SelecaoProdutosPremium) ou o caminho de Configurações (VariaveisTecnicas, ConfigTemplateProposta embutido), leitura e escrita.
+- O aviso do boot (desligado) só acrescenta a frase dos grupos, produtos, variáveis e do produto pelo código.
+- **A busca global** (`GET /api/busca-global`) lê a tabela `produtos` direto e **não** passa por estas rotas — o plano da 149 a listava como
+  leitora de `/api/produtos`; **estava errado** (só monta o link `/comercial/produtos/editar/:id`). Continua só com o login (**C352**).
+
+Testes: `tests/api/produtosGruposVariaveisPortao.api.test.js` (as 25 + o clonar pelo fonte — todos os registros no texto inteiro, nenhum
+caminho montado — e uma a uma, 17 perfis contra a decisão da tela, o catálogo e as variáveis pelo Comercial, as variáveis pelo caminho de
+Configurações, a OS da Fábrica lendo o produto pelo código, o clonar, o desligado com as exclusões, o BUSY).
+
 ### A margem de desconto (Etapa 139, C299/C300)
 
 Uma régua só, `lerMargemDesconto` (`server/margemDesconto.js`), em **quatro** portas: `POST /api/propostas`, `PUT /api/propostas/:id`

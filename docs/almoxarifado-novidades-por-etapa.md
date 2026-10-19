@@ -11,13 +11,17 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-18):** **Etapa 149 fechada** (do Comercial/Operacional: **o cadastro de família de produto e a
+> **Onde o desenvolvimento está (2026-10-18):** **Etapa 150 fechada** (do Comercial/Operacional: **grupos de produto, produtos e variáveis
+> técnicas pedem o módulo** — quem a tela barra do Comercial lia o catálogo com preço e criava, editava e apagava produto, grupo e variável
+> técnica pela integração; agora toma *"Acesso negado ao módulo"*, e o vendedor, a Fábrica que abre a OS e o administrador do Comercial que
+> mexe nas variáveis técnicas por Configurações não perdem nada (**C346**, **C347** resolvidos); **B977** a **B982**; a consulta **A98**
+> (opcional); os avisos novos **C348** a **C352**); a próxima é a **151** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 149 fechada** (do Comercial/Operacional: **o cadastro de família de produto e a
 > lista de ordens de serviço da Fábrica pedem o módulo, e a importação da lista de preço só diz "pronto" depois de gravar todas as linhas** —
 > quem a tela barra do Comercial criava, renomeava e apagava família de produto pela integração (e, renomeando, mudava o contrato das
 > propostas novas); agora toma *"Acesso negado ao módulo"*, e quem cadastra família no Comercial ou mexe nas opções por Configurações não
 > perde nada (**C343** resolvido em parte, **C345** resolvido); a lista de preço com uma linha recusada não nasce pela metade (**C341**
-> resolvido); **B971** a **B976**; a consulta **A97** (opcional); os avisos novos **C346** e **C347**); a próxima é a **150** — ver "Onde
-> estamos e o que vem a seguir".
+> resolvido); **B971** a **B976**; a consulta **A97** (opcional); os avisos novos **C346** e **C347**); a próxima era a **150**.)*
 > *(Antes: **Etapa 148 fechada** (do Comercial/Operacional: **a ordem de serviço aberta pelo
 > número e o modelo de contrato por família pedem o módulo, e as cláusulas de uma proposta que não existe dizem "não encontrada"** — quem a
 > tela barra do Comercial e da Fábrica lia uma OS inteira (com o valor), os itens e o PDF dela pela integração, e trocava o modelo de
@@ -279,7 +283,11 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Noventa e sete itens para rodar em produção ANTES do deploy — noventa e quatro são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Noventa e oito itens para rodar em produção ANTES do deploy — noventa e cinco são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-18 (Etapa 150) de noventa e sete para noventa e oito**, com a **A98** — quem passa a ser barrado nos grupos de
+produto, nos produtos e nas variáveis técnicas (e se continua no produto pelo código, pela OS da Fábrica, ou nas variáveis técnicas, por
+Configurações) (**C346**, **C347**). **Somente leitura, opcional:** no banco medido, ninguém que usa perde.)*
 
 *(**Atualizado em 2026-10-18 (Etapa 149) de noventa e seis para noventa e sete**, com a **A97** — quem passa a ser barrado no cadastro de
 família de produto (e se continua nas opções por família por Configurações), e quem perde a lista de ordens de serviço da Fábrica (**C343**,
@@ -3456,6 +3464,46 @@ cliente vazio deixa a proposta assim — **C330**): abra cada uma em **Comercial
 formulário exige o cliente). **Linhas na 2** — o mesmo; o cliente antigo não volta. *(Rodada no banco local, cópia de 09/10: **0** e
 **0**; controle numa cópia com uma proposta sem cliente e outra apontando para o cliente 987654: a 1 achou a primeira e a 2 a segunda.)*
 
+**A98 (NOVA, da Etapa 150 — opcional — quem perde os grupos de produto, os produtos e as variáveis técnicas).** Desde a Etapa 150 os grupos
+de produto e os produtos (ler o catálogo, criar, editar, apagar, a imagem, o próximo código, a conferência de produto existente) exigem o
+**Comercial** pela mesma régua da tela das propostas (a da **A93**); o produto lido **pelo código** — o que a ordem de serviço faz para cada
+item — aceita também o **Operacional**; e as variáveis técnicas aceitam também o administrador do módulo Comercial que tem o
+**Administrativo** (a aba *Variáveis técnicas* de **Configurações → Comercial**). O produto não guarda quem o alterou; a consulta lista todos
+os que perdem alguma dessas operações. Somente leitura.
+
+```sql
+-- quem passa a ser barrado nos grupos de produto, nos produtos e nas variáveis técnicas (a régua da tela: sem o Comercial)
+WITH linhas AS (
+  SELECT ug.usuario_id, p.modulo, p.permissao FROM usuarios_grupos ug
+    JOIN grupos_permissoes gp ON gp.id = ug.grupo_id AND gp.ativo = 1
+    JOIN permissoes p ON p.grupo_id = gp.id
+  UNION ALL
+  SELECT p.usuario_id, p.modulo, p.permissao FROM permissoes p WHERE p.usuario_id IS NOT NULL AND p.grupo_id IS NULL
+)
+SELECT u.id, u.nome, u.email,
+  (SELECT GROUP_CONCAT(DISTINCT l.modulo) FROM linhas l WHERE l.usuario_id = u.id AND l.permissao = 1) AS modulos_que_tem,
+  CASE WHEN EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id AND l.modulo = 'operacional' AND l.permissao = 1)
+       THEN 'o catálogo de produtos (o produto pelo código continua, pela OS da Fábrica)' ELSE 'o catálogo de produtos' END
+  || CASE WHEN COALESCE(u.admin_modulos, '') LIKE '%"comercial"%'
+        AND EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id AND l.modulo = 'administrativo' AND l.permissao = 1)
+       THEN '; as variáveis técnicas continuam por Configurações' ELSE ' e as variáveis técnicas' END AS perde
+FROM usuarios u
+WHERE u.ativo = 1
+  AND COALESCE(u.is_superadmin, 0) NOT IN (1, '1')
+  AND LOWER(COALESCE(u.role, '')) <> 'admin'
+  AND EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id)
+  AND NOT EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id AND l.modulo = 'comercial' AND l.permissao = 1)
+ORDER BY u.nome;
+```
+
+**Como ler o resultado:** cada linha é alguém que vai tomar *"Acesso negado ao módulo"* ao ler ou mexer no catálogo de produtos pela
+integração; a coluna *perde* diz se continua lendo **o produto pelo código** (quem tem o Operacional — a OS da Fábrica continua mostrando os
+itens) e se continua nas **variáveis técnicas** por Configurações (o administrador do Comercial com o Administrativo). Quem deve cadastrar
+produto, grupo ou variável técnica: dê-lhe o **Comercial** antes do deploy; os outros podem ficar como estão — a tela já não lhes mostrava o
+Comercial. *(Rodada no banco local, cópia de 09/10: os **4** de sempre (ids 7, 8, 12, 15 — "o catálogo de produtos e as variáveis
+técnicas"); controle numa cópia com o 7 ganhando o administrador do Comercial e o Administrativo, o 12 o Operacional e o 15 o Comercial: o 15
+saiu, o 7 ficou com "as variáveis técnicas continuam por Configurações" e o 12 com "o produto pelo código continua, pela OS da Fábrica".)*
+
 **A97 (NOVA, da Etapa 149 — opcional — quem perde o cadastro de família de produto e a lista de OS da Fábrica).** Desde a Etapa 149 o
 cadastro de família de produto (criar, editar, renomear, apagar, fotos, esquemático, variáveis e opções) exige o **Comercial** pela mesma
 régua da tela das propostas (a da **A93**); as opções por família e a leitura das famílias que **Configurações → Comercial** usa aceitam
@@ -3629,7 +3677,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B976; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B982; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -10713,6 +10761,38 @@ linhas em menos de 1 s, contra 7,3 s antes); (d) mudar a tela (a frase chega pel
 **B976 (NOVA, da Etapa 149) — a próxima etapa (150).** Ver a "próxima tarefa detalhada" no plano da Etapa 149. As decisões que esperam
 vocês continuam as da **B957** (nada novo).
 
+**B977 (NOVA, da Etapa 150; do Comercial) — grupos de produto e produtos pelo Comercial, leitura e escrita juntas.** As 8 operações dos grupos
+de produto (com o endereço antigo `GET /grupos`, sem o `/api`) e 9 das 11 de produtos (a lista, um produto, o próximo código, a conferência de
+produto existente, criar, editar, apagar, a imagem e o "zerar modelo antigo") exigem o **Comercial** pela régua da tela. Medido antes, rota
+por rota: fora o produto pelo código (**B978**), só as telas do Comercial chamam estas operações; a **busca global** lê a tabela de produtos
+direto (não por elas) e **não muda** (o plano da Etapa 149 a listava como leitora — estava errado); Almoxarifado, Compras, Engenharia,
+Fábrica e Financeiro não as chamam. **Descartado:** (a) proteger só a escrita e deixar a leitura com o login (nenhuma tela fora do Comercial
+lê — e a lista aberta manteria o preço de cada produto aberto a quem a tela barra); (b) a régua antiga do módulo (libera o Comercial a todo
+usuário sem grupo — no banco medido não mudaria nada); (c) apagar o endereço antigo `GET /grupos` (como a **B972**). **Reversível**
+(`PROPOSTAS_PORTAO_DE_MODULO=desligado` volta ao só login).
+
+**B978 (NOVA, da Etapa 150; do Comercial/Operacional) — o produto pelo código com a régua da OS: Comercial ou Operacional.** A tela da OS
+(aberta pelo Comercial ou pela Fábrica) busca cada item pelo código do produto. **Descartado:** (a) só o Comercial (a Fábrica deixaria de ver
+os dados e a imagem dos itens na OS); (b) deixar só com o login (quem a tela barra das duas leria o produto inteiro, com preço). Aceitar o
+Comercial **não** faz a criação da OS pelo Comercial funcionar de ponta a ponta — o número da próxima OS e os itens continuam na régua do
+Operacional (**C332**) e a criação é a **C277** (de vocês). **Reversível.**
+
+**B979 (NOVA, da Etapa 150; do Comercial) — as variáveis técnicas com o Comercial ou o caminho de Configurações, leitura e escrita.** As 7
+operações aceitam o **Comercial** pela régua da tela **ou** o administrador do módulo Comercial com o **Administrativo** (o caminho da
+**B958**). **Descartado:** (a) só o Comercial (trancaria fora quem a tela deixa editar pela aba *Variáveis técnicas* de Configurações); (b)
+**só** o caminho de Configurações nas 3 escritas (a tela que escreve só existe lá — mas quem tem o Comercial já mexe no catálogo inteiro, o
+mesmo raciocínio da **B971**); (c) reaproveitar o portão das famílias de Configurações (o mesmo corpo; um nome próprio mantém as provas
+separadas). **Reversível.**
+
+**B980 (NOVA, da Etapa 150) — clonar produto continua só do administrador, sem o portão** (como a **B973**). **Descartado:** pôr o portão antes
+(não muda quem clona e trocaria a frase *"Apenas administradores podem clonar produtos"* de quem não é). **Reversível.**
+
+**B981 (NOVA, da Etapa 150) — o "zerar modelo antigo" dos produtos (nenhuma tela o chama) com o portão do Comercial.** **Descartado:** (a) só
+o administrador (mais estreito que a tela, sem uso medido que justifique); (b) apagar a operação (não medido em produção). **Reversível.**
+
+**B982 (NOVA, da Etapa 150) — a próxima etapa (151).** Ver a "próxima tarefa detalhada" no plano da Etapa 150. As decisões que esperam
+vocês continuam as da **B957** (nada novo).
+
 **B898 (NOVA, da Etapa 138) — a próxima etapa (139).** Ver a "próxima tarefa detalhada" no plano da Etapa 138. A **B853** (com a
 **C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
@@ -13753,14 +13833,37 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      número 0 (o sistema não grava assim pela tela): a tela barra a Fábrica, a OS pelo número dá *"Acesso negado"*, mas a lista responde com
      todas as OS, com o valor. A seleção de OS do Almoxarifado (número, situação e cliente, até 300) responde a qualquer logado — é o que a
      tela do Almoxarifado usa. **O que fazer:** nada. Candidata: a régua da tela na lista do Operacional (junto da **C332**).
-346. **NOVO (da Etapa 149; do Comercial, anterior a ela; lido no código) — grupos de produto e produtos só pedem o login.** Os grupos de
+346. **✅ RESOLVIDO NA ETAPA 150 (B977, B978, B980, B981)** — os grupos de produto e os produtos exigem o Comercial pela régua da tela; o
+     produto pelo código, o Comercial ou o Operacional (a OS da Fábrica continua mostrando os itens); clonar continua do administrador. O
+     texto pedia "medir os leitores fora do Comercial (a OS, o Almoxarifado, a proposta)": medido — só a OS (pelo código) e a proposta (que é
+     do Comercial); o Almoxarifado não lê. *(O texto original:)*
+     **NOVO (da Etapa 149; do Comercial, anterior a ela; lido no código) — grupos de produto e produtos só pedem o login.** Os grupos de
      produto (8 operações, com o endereço antigo sem o `/api`) e os produtos (11: criar, editar, apagar, clonar, imagem, o próximo código,
      a busca por código…) respondem a qualquer logado — quem a tela barra do Comercial cria e apaga produto pela integração. **O que fazer:**
      nada pela tela (o cadastro está no Comercial). Candidata: o mesmo portão, medindo antes os leitores fora do Comercial (a OS, o
      Almoxarifado, a proposta).
-347. **NOVO (da Etapa 149; do Comercial, anterior a ela; lido no código) — as variáveis técnicas só pedem o login.** As 7 operações da aba
+347. **✅ RESOLVIDO NA ETAPA 150 (B979)** — as 7 operações exigem o Comercial ou o caminho de Configurações. *(O texto original:)*
+     **NOVO (da Etapa 149; do Comercial, anterior a ela; lido no código) — as variáveis técnicas só pedem o login.** As 7 operações da aba
      **Configurações → Comercial → Variáveis técnicas** (a lista, as categorias, as opções, criar, alterar, apagar) respondem a qualquer
      logado. **O que fazer:** nada pela tela. Candidata junto da **C346**.
+348. **NOVO (da revisão do plano da Etapa 150; do Comercial/Compras, anterior a ela; lido no código) — a aba Variáveis técnicas lê os grupos
+     de compras pela régua do Compras.** Em **Configurações → Comercial → Variáveis técnicas**, o administrador do Comercial que não tem o
+     **Compras** vê o seletor *Grupo de compras* vazio (o erro é engolido); o valor já gravado numa variável é preservado ao editar. **O que
+     fazer:** quem configura variável que puxa fornecedores de um grupo precisa do Compras. Candidata: decidir se quem configura o Comercial lê
+     os grupos de compras (é acesso do Compras).
+349. **NOVO (da Etapa 150; do Comercial, anterior a ela; lido no código) — clientes, projetos, oportunidades e atividades do Comercial só
+     pedem o login.** Os clientes (7 operações, com o logo), os projetos (5), as oportunidades (4) e as atividades (4) respondem a qualquer
+     logado — quem a tela barra do Comercial lê e altera o cadastro de clientes pela integração. **O que fazer:** nada pela tela. Candidata da
+     151 — medindo antes os leitores fora do Comercial (o cliente aparece na OS, no Almoxarifado — materiais de clientes —, na Frota?).
+350. **NOVO (da Etapa 150; do Comercial, anterior a ela; lido no código) — os custos de viagem só pedem o login** (19 operações: lançar,
+     editar, aprovar, duplicar, os comprovantes, as análises e o resumo). **O que fazer:** nada pela tela. Candidata depois da **C349**.
+351. **NOVO (da revisão da Etapa 150; do Comercial/Operacional, anterior a ela; reproduzido) — a OS busca o produto pelo código sem
+     proteger o código no endereço.** As telas da OS montam o endereço com o código cru: um código com barra (`/`) não acha o produto (era
+     assim antes), e um com `?` ou `#` cai em outra operação. Nenhum efeito na tela além de o item da OS sair sem os dados do produto. **O
+     que fazer:** nada (os códigos gerados pelo sistema não têm esses caracteres). Candidata: codificar o código nas três telas da OS.
+352. **NOVO (da revisão da Etapa 150; do núcleo, anterior a ela; reproduzido) — a busca global responde a qualquer logado.** Quem a tela
+     barra do Comercial recebe, pela busca do topo, o nome e a família dos produtos (sem preço), a razão social e a cidade dos clientes e o
+     título e o cliente das propostas. **O que fazer:** nada. Candidata: filtrar cada tipo de resultado pelo módulo dele (junto da **C349**).
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -15092,7 +15195,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
-- **(149) Grupos de produto, produtos e variáveis técnicas continuam só com o login** (**C346**, **C347**); o número da próxima OS, os itens e a
+- **(150) A busca global continua mostrando produtos a qualquer logado** (o nome e a família, sem preço — **C352**); os clientes, projetos,
+  oportunidades, atividades e custos de viagem continuam só com o login (**C349**, **C350**); o seletor de grupo de compras das variáveis
+  técnicas segue a régua do Compras (**C348**).
+- **(149) Grupos de produto, produtos e variáveis técnicas continuam só com o login** (**C346**, **C347** — resolvidos na Etapa 150); o número da próxima OS, os itens e a
   edição/exclusão da OS continuam com a régua antiga (**B974**, **C332**); a seleção de OS do Almoxarifado responde a qualquer logado.
 - **(149) A importação de uma lista de preço com o banco ocupado**: o servidor desfaz e responde "ocupado"; a tela tenta de novo sozinha até
   3 vezes e, se continuar ocupado, mostra o aviso genérico *"Erro ao importar a planilha."* (a frase do servidor só aparece nos outros erros).
@@ -16088,6 +16194,13 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(150) Nenhum clique foi dado no navegador.** Tudo foi provado pela rota, com o servidor de verdade em pasta vazia (as 25 operações uma a
+uma com 17 perfis de usuário; o catálogo inteiro e as variáveis técnicas pelo Comercial, as variáveis pelo caminho de Configurações, a OS da
+Fábrica lendo o produto pelo código). O que **só o navegador** prova: o roteiro da Etapa 150 no guia — **Comercial → Produtos** (um grupo,
+uma família, **Novo produto** com imagem, editar, clonar como administrador, apagar) com um vendedor; uma **proposta nova** com a seleção de
+produtos; **Configurações → Comercial → Variáveis técnicas** com o administrador do Comercial que tem o Administrativo; e **Fábrica → Ordens
+de Serviço → editar** uma OS com itens de produto, com um usuário do Operacional.
 
 **(149) Nenhum clique foi dado no navegador.** Tudo foi provado pela rota, com o servidor de verdade em pasta vazia (as 22 operações uma a uma
 com 17 perfis de usuário; o cadastro de família inteiro pelo Comercial, as opções por família pelo caminho de Configurações, a lista de OS
@@ -30503,9 +30616,74 @@ decisão da tela tirada do código real do client e dezenas de variações de en
 caíram, 6 sobreviveram por falta de cenário (a busca com acento, a busca pelo código e pelo preço, a lista que não sai no desfazer, a lista
 gravada antes do 400, o texto e a hora do aviso do servidor) — viraram cenários. Commits `9f49aa02`, `c98a45be` e `e387a330`.
 
+## Etapa 150 — Grupos de produto, produtos e variáveis técnicas pedem o módulo (2026-10-18)
+
+Um conserto de **acesso**, o último do catálogo do Comercial. O catálogo de produtos — grupos, produtos com preço, imagens — e as variáveis
+técnicas que descrevem cada produto na proposta pediam só o login: um usuário só do Almoxarifado, que a tela não deixa entrar no Comercial,
+lia a lista de produtos com o preço e criava, editava e apagava produto, grupo e variável técnica pela integração. Agora pedem o
+**Comercial**; a ordem de serviço, que a Fábrica também abre, continua lendo cada item pelo código do produto; e as variáveis técnicas, que
+também se configuram por **Configurações**, aceitam ainda o administrador do Comercial que tem o Administrativo — quem usa hoje não perde
+nada.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Um usuário só do Almoxarifado lia a lista de produtos com o preço e criava, editava e apagava produto, grupo e variável técnica pela integração | *"Acesso negado ao módulo"* em cada uma das 25 operações, e a tentativa no log; a imagem do produto e a foto do grupo do barrado nem chegam ao servidor (**C346**, **C347** resolvidos — **B977**, **B979**) |
+| O vendedor no **Comercial → Produtos** e na proposta | Continua como antes |
+| A Fábrica abrindo a OS (os itens com os dados do produto) | Continua como antes — o produto pelo código aceita o Operacional (**B978**) |
+| O administrador do Comercial em **Configurações → Comercial → Variáveis técnicas** | Continua como antes (**B979**) |
+
+### As regras, com o cenário exato
+
+**1. O catálogo pede o Comercial (B977 — C346).** Entre com um usuário que tem só a permissão do **Almoxarifado** (por permissão direta): a
+tela não mostra o Comercial. Pela integração, `GET /api/produtos`, `GET /api/produtos/<número>`, `POST /api/produtos`, `PUT
+/api/produtos/<número>`, `DELETE /api/produtos/<número>`, a imagem, o próximo código, `GET /api/grupos` (e o endereço antigo `GET /grupos`),
+criar, renomear e apagar grupo, as fotos do grupo → **403** `{ "error": "Acesso negado ao módulo", "modulo": "comercial" }`, e
+**Administração → Logs** mostra o acesso negado a *Comercial* (antes: **200**, e o produto mudava). Com um vendedor (só o **Comercial**):
+**Comercial → Produtos** → um grupo → uma família → **Novo produto** com imagem, editar, apagar — como sempre. **Clonar** produto continua só
+do administrador: os outros recebem *"Apenas administradores podem clonar produtos"* (**B980**).
+
+**2. A OS continua lendo o produto pelo código (B978).** Com um usuário do **Operacional** (sem o Comercial): **Fábrica → Ordens de Serviço**,
+abrir uma OS com itens — os dados de cada produto aparecem, como sempre. Pela integração, o mesmo usuário em `GET /api/produtos` → **403**; em
+`GET /api/produtos/codigo/<código>` → **200**. O usuário só do Almoxarifado no produto pelo código → **403** `{ "error": "Acesso negado ao
+módulo", "modulo": ["comercial", "operacional"] }`.
+
+**3. As variáveis técnicas também por Configurações (B979 — C347).** Com um usuário que tem o **Administrativo** e é **administrador do
+módulo Comercial**, sem o Comercial: **Configurações → Comercial → Variáveis técnicas** — criar, editar e desativar uma variável funciona;
+**Template de proposta** lista as variáveis. O mesmo usuário toma *"Acesso negado ao módulo"* na lista de produtos e nos grupos pela integração
+(o catálogo é do Comercial). Com `PROPOSTAS_PORTAO_DE_MODULO=desligado` (a chave da **B946**) as 25 voltam a pedir só o login.
+
+### O que esta etapa NÃO cobre
+
+1. **A busca global** continua mostrando o nome e a família dos produtos a qualquer logado (sem preço — **C352**).
+2. **Clientes, projetos, oportunidades, atividades e custos de viagem** continuam só com o login (**C349**, **C350** — a próxima etapa).
+3. **O seletor de grupo de compras** das variáveis técnicas segue a régua do Compras (**C348**).
+4. **A criação da OS pelo Comercial** continua dependendo da régua do Operacional no número e nos itens (**C332**, **C277**).
+
+### O que a revisão encontrou
+
+A **medição** (antes do código) achou que a busca global, que o plano da etapa anterior contava como leitora dos produtos, lê o banco direto
+(não muda), que a OS da Fábrica lê o produto pelo código (por isso a régua mais larga só nessa operação) e que, no banco medido, só os mesmos
+4 usuários que a tela já barra perdem o catálogo (**A98**). A **revisão do plano** (6 achados pequenos) acrescentou o corpo literal do
+"banco ocupado", o servidor antigo fora do deploy, o seletor de grupo de compras (**C348**) e a criação da OS que já não fechava pelo
+Comercial. A **revisão adversarial do código** (três revisores, executando): o de **regra** comparou 20 respostas byte a byte com o portão
+ligado e desligado para quem a tela deixa passar (iguais) e mediu a rajada da OS (200 pedidos simultâneos: ≈ 0,3 ms a mais por pedido); o
+de **permissão** comparou 66 perfis com a decisão da tela tirada do código real do client e 58 variações de endereço — 0 diferenças; achou o
+código sem proteção no endereço (**C351**) e a busca global aberta (**C352**), os dois de antes; o de **sabotagem** fez 30 sabotagens — 27
+caíram, 2 sobreviveram por falta de cenário (um segundo registro escondido na mesma linha do fonte; o desligado que não abrisse a
+exclusão) e 1 era equivalente — viraram cenários. Commits `d74ad876` e `481ee23a`.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 150 entregue (2026-10-18):** **grupos de produto, produtos e variáveis técnicas pedem o módulo** (do Comercial/Operacional). Quem a
+  tela barra do Comercial é barrado nas 25 operações; o vendedor, a Fábrica que abre a OS e o administrador do Comercial em Configurações não
+  perdem nada (**B977** a **B981** — **C346**, **C347** resolvidos). Commits `d74ad876` e `481ee23a`. **O que é seu:** a consulta **A98**
+  (opcional); os avisos **C348** a **C352**; as decisões **B977 a B981** (reversíveis); as perguntas de antes (**B949**, **B910**, **B853**,
+  **B924**, **B926**, **C277**, **C312**, **C314**, **C316**, **C330**); as limitações **(150)** em D e a verificação **(150)** em F. **Próxima:
+  Etapa 151 — ver a "próxima tarefa detalhada" no plano da Etapa 150.**
 
 - **Etapa 149 entregue (2026-10-18):** **o cadastro de família de produto e a lista de OS da Fábrica pedem o módulo, e a lista de preço só
   nasce inteira** (do Comercial/Operacional). Quem a tela barra do Comercial é barrado nas 21 operações de família; o vendedor e o
@@ -30513,8 +30691,7 @@ gravada antes do 400, o texto e a hora do aviso do servidor) — viraram cenári
   Fábrica pela régua da tela (**B974** — **C345** resolvido); a lista de preço com uma linha recusada é desfeita inteira e a importação ficou
   mais rápida (**B975** — **C341** resolvido). Commits `9f49aa02`, `c98a45be` e `e387a330`. **O que é seu:** a consulta **A97** (opcional); os avisos **C346** e **C347**; as
   decisões **B971 a B975** (reversíveis); as perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **C277**, **C312**, **C314**,
-  **C316**, **C330**); as limitações **(149)** em D e a verificação **(149)** em F. **Próxima: Etapa 150 — ver a "próxima tarefa detalhada" no
-  plano da Etapa 149.**
+  **C316**, **C330**); as limitações **(149)** em D e a verificação **(149)** em F. *(Próxima, na época: Etapa 150 — entregue acima.)*
 
 - **Etapa 148 entregue (2026-10-18):** **a ordem de serviço aberta pelo número e o modelo de contrato por família pedem o módulo, e as
   cláusulas de uma proposta que não existe dizem "não encontrada"** (do Comercial/Operacional). Quem a tela barra do Comercial e da Fábrica é

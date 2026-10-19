@@ -197,13 +197,13 @@ Após o login, você verá a **Tela de Seleção de Módulos** com 5 opções:
 ### 3.3 Gestão de Propostas
 
 **Quem pode usar as propostas.** As propostas — lista, criação, edição, preview editável, fotos, cláusulas, PDF, envio, aceite, cópia,
-lembretes —, os pedidos de aprovação de desconto, o template de proposta (veja 3.3.4), o cadastro de família de produto (veja 3.3.4) e as listas de preço ficam no módulo **Comercial**, e o sistema confere o acesso em **cada operação**,
+lembretes —, os pedidos de aprovação de desconto, o template de proposta (veja 3.3.4), o cadastro de família de produto, os grupos de produto, os produtos e as variáveis técnicas (veja 3.3.4) e as listas de preço ficam no módulo **Comercial**, e o sistema confere o acesso em **cada operação**,
 inclusive quando ela chega pela integração, com a mesma regra que decide se o Comercial aparece na tela:
 
 - o administrador do sistema e o super administrador entram sempre;
 - quem tem alguma permissão de módulo (dada diretamente ao usuário ou por um grupo **ativo**) entra só se uma delas for a do Comercial;
 - quem não tem permissão nenhuma entra no Comercial;
-- ser administrador de um módulo não basta — vale a permissão do módulo (as exceções são o template de proposta e as opções por família, veja 3.3.4).
+- ser administrador de um módulo não basta — vale a permissão do módulo (as exceções são o template de proposta, as opções por família e as variáveis técnicas, veja 3.3.4).
 
 Quem não pode recebe *"Acesso negado ao módulo"*, e a tentativa fica registrada em **Administração → Logs**. Os arquivos enviados para a
 proposta (fotos, cotação, PDF anexo) são recusados antes de chegar ao servidor. **Exceção:** a ordem de serviço do Operacional busca os
@@ -506,6 +506,16 @@ aceitam também o **administrador do módulo Comercial** que tem acesso ao **Adm
 apaga família. Os outros recebem *"Acesso negado ao módulo"*, a tentativa fica registrada em **Administração → Logs**, e a foto ou o
 esquemático são recusados antes de chegar ao servidor. **Clonar** uma família é só do administrador do sistema; os outros recebem *"Apenas
 administradores podem clonar famílias"*.
+
+**Os grupos de produto, os produtos e as variáveis técnicas.** Ver o catálogo (a lista de produtos com o preço, um produto, os grupos),
+criar, editar e apagar produto e grupo, enviar a imagem do produto e a foto do grupo, e pedir o próximo código exigem o **Comercial** (a
+regra da seção 3.3) — é em **Comercial → Produtos** e na seleção de produtos da proposta. Duas exceções: a ordem de serviço lê cada item
+pelo **código do produto**, e essa leitura aceita também quem tem o **Operacional** (veja 6.2.2); e as **variáveis técnicas** (ler, criar,
+alterar e desativar — a aba **Configurações → Comercial → Variáveis técnicas**) aceitam também o **administrador do módulo Comercial** que
+tem acesso ao **Administrativo**. Os outros recebem *"Acesso negado ao módulo"*, a tentativa fica registrada em **Administração → Logs**, e
+a imagem ou a foto são recusadas antes de chegar ao servidor. **Clonar** um produto é só do administrador do sistema; os outros recebem
+*"Apenas administradores podem clonar produtos"*. A busca do topo da tela mostra o nome e a família dos produtos a qualquer usuário (sem o
+preço).
 
 #### 3.3.5 Listas de Preço
 
@@ -1036,7 +1046,8 @@ e a tentativa fica registrada em **Administração → Logs**.
 
 **Quem abre a OS.** Abrir a OS, os itens, gerar e baixar o PDF exige o **Operacional** ou o **Comercial** (a regra da seção 3.7.1). Quem
 tem só o Operacional abre a tela de detalhes da OS (os itens e o PDF) pelo endereço `/fabrica/ordens-servico/editar/<número interno>`; o
-lápis da lista **Fábrica → Ordens de Serviço** abre o formulário da OS.
+lápis da lista **Fábrica → Ordens de Serviço** abre o formulário da OS. As especificações de cada item vêm do cadastro do produto, lido pelo
+código com a mesma regra (o Operacional ou o Comercial).
 
 **Status:**
 - Aberta
