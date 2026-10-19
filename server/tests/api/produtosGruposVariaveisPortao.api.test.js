@@ -517,6 +517,34 @@ test('[RN-150.01/02/04] SQLITE_BUSY ao ler as permissoes: 503 no catalogo, no pr
   assert.strictEqual((await all('SELECT ativo FROM variaveis_tecnicas WHERE id = ?', [ctx.variavel]))[0].ativo, 1, 'o DELETE com o portao em erro apagou a variavel');
 });
 
+// Etapa 155 (RN-155.04, C351): as tres telas da OS pedem o produto com o codigo codificado (client/src/utils/produtoPeloCodigo.js, com o
+// teste do client que prende a funcao e o inventario). Aqui, a outra metade: pela rota real, o caminho codificado acha o produto de cada
+// codigo com `/`, `?`, `#`, `%` ou espaco — e o `%2F` literal volta ele mesmo (o Express decodifica uma vez so); o caminho cru com barra nao
+// acha (o 404 do Express, sem o produto). `?` e `#` crus nao servem de controle: o fetch os transforma em query e fragmento. No fim, de
+// proposito: os produtos novos nao entram nos retratos dos cenarios de cima.
+test('[RN-155.04, C351, integracao com o client] o produto pelo codigo codificado: /, ?, #, %, espaco e o %2F literal acham o produto deles; o cru com barra toma 404 sem o produto', async () => {
+  const u = ctx.u.diretaComercial;
+  await logar(u);
+  const codigos = ['E155/A', 'E155?B', 'E155#C', 'E155%D', 'E155 E', 'E155%2F'];
+  const ids = {};
+  for (const codigo of codigos) {
+    const [sp, p] = await j('POST', '/produtos', u.T, { codigo, nome: `Produto ${codigo}`, familia: 'FAM155', classificacao_area: 'NAO CLASSIFICADA', preco_base: 1 });
+    assert.strictEqual(sp, 200, `${codigo}: ${JSON.stringify(p)}`);
+    ids[codigo] = p.id;
+  }
+  const gravados = await all(`SELECT codigo FROM produtos WHERE id IN (${codigos.map(() => '?').join(',')}) ORDER BY id`, codigos.map((c) => ids[c]));
+  assert.deepStrictEqual(gravados.map((r) => r.codigo), codigos, 'o codigo nao foi gravado como enviado (o teste nao provaria o caminho)');
+  for (const codigo of codigos) {
+    const [sc, x] = await j('GET', `/produtos/codigo/${encodeURIComponent(codigo)}`, u.T);
+    assert.deepStrictEqual([codigo, sc, x && x.id, x && x.codigo], [codigo, 200, ids[codigo], codigo]);
+  }
+  const [scru, xcru] = await j('GET', '/produtos/codigo/E155/A', u.T);
+  assert.ok(scru === 404 && !(xcru && xcru.id === ids['E155/A']), `o caminho cru com barra: ${scru} ${JSON.stringify(xcru).slice(0, 120)}`);
+  // e o codigo comum, sem caractere especial, igual a antes (codificado = cru)
+  const [sp2, x2] = await j('GET', `/produtos/codigo/${encodeURIComponent(ctx.codigo)}`, u.T);
+  assert.deepStrictEqual([sp2, x2.codigo], [200, ctx.codigo]);
+});
+
 (async () => {
   console.log('\n=== Etapa 150: grupos de produto, produtos e variaveis tecnicas exigem o modulo pela regua da tela (C346, C347) ===\n');
   try {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import { caminhoDoProdutoPeloCodigo } from '../utils/produtoPeloCodigo';
 import { useAuth } from '../context/AuthContext';
 import { getEffectiveUser } from '../services/permissionsCache';
 import { fetchComercialResponsaveis } from '../utils/userFilters';
@@ -113,7 +114,7 @@ const OSComercialForm = ({ proposta: propostaProp, onClose }) => {
         itens.map(async (item) => {
           if (item.codigo_produto) {
             try {
-              const produtoResponse = await api.get(`/produtos/codigo/${item.codigo_produto}`);
+              const produtoResponse = await api.get(caminhoDoProdutoPeloCodigo(item.codigo_produto));
               const produto = produtoResponse.data;
               
               // Parsear especificações técnicas

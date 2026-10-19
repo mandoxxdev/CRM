@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FiX, FiSave, FiFileText, FiEdit2, FiCheck, FiHash, FiTag, FiAlertCircle, FiCalendar, FiDollarSign, FiUser, FiTrendingUp, FiImage } from 'react-icons/fi';
 import api from '../services/api';
+import { caminhoDoProdutoPeloCodigo } from '../utils/produtoPeloCodigo';
 import { toast } from 'react-toastify';
 import './PreviewOSEditavel.css';
 
@@ -20,7 +21,7 @@ const PreviewOSEditavel = ({ proposta, formData, onClose, onConfirm }) => {
         proposta.itens.map(async (item) => {
           if (item.codigo_produto) {
             try {
-              const produtoResponse = await api.get(`/produtos/codigo/${item.codigo_produto}`);
+              const produtoResponse = await api.get(caminhoDoProdutoPeloCodigo(item.codigo_produto));
               const produto = produtoResponse.data;
               
               // Parsear especificações técnicas

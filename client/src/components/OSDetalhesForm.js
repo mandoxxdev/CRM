@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import { caminhoDoProdutoPeloCodigo } from '../utils/produtoPeloCodigo';
 import { toast } from 'react-toastify';
 import { abrirPdfProtegidoNaJanela, LITERAL_ERRO_PDF_OS } from '../utils/baixarArquivoProtegido';
 import { FiX, FiSave, FiFileText, FiHash, FiTag, FiAlertCircle, FiCalendar, FiUser, FiTrendingUp, FiArrowLeft, FiDownload, FiExternalLink } from 'react-icons/fi';
@@ -93,7 +94,7 @@ const OSDetalhesForm = ({ os, onClose, isFromComercial = false }) => {
             
             if (codigoProduto) {
               try {
-                const produtoResponse = await api.get(`/produtos/codigo/${codigoProduto}`);
+                const produtoResponse = await api.get(caminhoDoProdutoPeloCodigo(codigoProduto));
                 const produto = produtoResponse.data;
                 console.log(`Produto encontrado para código ${codigoProduto}:`, produto);
                 
