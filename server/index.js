@@ -3013,7 +3013,7 @@ function checkAnyModulePermission(requiredModules) {
 // passam pelo mesmo portao — o barrado criava o pedido pela API; a tela de Aprovacoes e as que pedem aprovacao estao todas no Comercial.
 const PORTAO_DAS_PROPOSTAS_DESLIGADO = String(process.env.PROPOSTAS_PORTAO_DE_MODULO || '').trim().toLowerCase() === 'desligado';
 if (PORTAO_DAS_PROPOSTAS_DESLIGADO) {
-  console.warn('⚠️ PROPOSTAS_PORTAO_DE_MODULO=desligado: as rotas /api/propostas*, as do modelo da proposta, as das listas de preço e as do modelo de contrato por família NAO exigem o módulo Comercial, e as da ordem de serviço pelo número NAO exigem o Comercial ou o Operacional, e as do cadastro de família NAO exigem o Comercial (só o login); a lista de ordens de serviço do Operacional volta à régua antiga do módulo.');
+  console.warn('⚠️ PROPOSTAS_PORTAO_DE_MODULO=desligado: as rotas /api/propostas*, as do modelo da proposta, as das listas de preço e as do modelo de contrato por família NAO exigem o módulo Comercial, e as da ordem de serviço pelo número NAO exigem o Comercial ou o Operacional, e as do cadastro de família NAO exigem o Comercial (só o login), e as dos grupos de produto, dos produtos e das variáveis técnicas NAO exigem o Comercial e a do produto pelo código NAO exige o Comercial ou o Operacional (só o login); a lista de ordens de serviço do Operacional volta à régua antiga do módulo.');
 }
 const portaoDasPropostas = criarPortaoDasPropostas({
   getDb: () => db,
@@ -3041,6 +3041,13 @@ const exigirComercialNaFamiliaPorConfiguracoes = portaoDasPropostas.exigir('come
 // Etapa 149 (C345, RN-149.04/05, B974): a lista de OS do Operacional pela regua da tela da Fabrica (a antiga lia tambem a direta com
 // grupo_id = 0, que a tela nao le). Desligado, volta a regua ANTIGA — nao ao so login: desligar nao abre mais do que havia antes.
 const exigirOperacionalNaListaDeOS = PORTAO_DAS_PROPOSTAS_DESLIGADO ? checkModulePermission('operacional') : portaoDasPropostas.exigir('operacional');
+// Etapa 150 (C346, RN-150.01/02, B977/B978): as 8 rotas de grupos de produto (/api/grupos* e o apelido GET /grupos) e 9 das 11 de
+// produtos usam o exigirComercialNasPropostas — so as telas do Comercial as chamam (a busca global le a tabela direto, por
+// /api/busca-global). O GET /api/produtos/codigo/:codigo usa o exigirComercialOuOperacionalNaOS: a OS aberta pela Fabrica busca nele
+// os itens. O clonar produto continua so do administrador (B980).
+// Etapa 150 (C347, RN-150.04, B979): as 7 de variaveis tecnicas — o Comercial (ProdutoForm, a familia, a selecao da proposta) OU o
+// caminho de Configuracoes -> Comercial (as abas Variaveis tecnicas e Template de proposta), leitura e escrita.
+const exigirComercialNasVariaveisTecnicas = portaoDasPropostas.exigir('comercial', { tambemAdminDoModuloCom: { admin: 'comercial', tela: 'administrativo' } });
 
 // Etapa 21 (RN-04). Precedencia: variaveis de ambiente `SMTP_*` -> valores abaixo.
 // A regua mora em `services/emailConfig.js` (funcao pura, testada em
@@ -3591,19 +3598,19 @@ app.get('/deploy-version', (req, res) => {
   res.json({ version: 'familias-2026-02', hasFamilias: true });
 });
 // ========== GRUPOS DE PRODUTOS (Masseira, Dispersores, etc.) ==========
-app.get('/api/grupos', authenticateToken, (req, res) => {
+app.get('/api/grupos', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   db.all('SELECT * FROM grupos_produto WHERE ativo = 1 ORDER BY COALESCE(numero, 999) ASC, ordem ASC, nome ASC', [], function(err, rows) {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows || []);
   });
 });
-app.get('/grupos', authenticateToken, (req, res) => {
+app.get('/grupos', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   db.all('SELECT * FROM grupos_produto WHERE ativo = 1 ORDER BY COALESCE(numero, 999) ASC, ordem ASC, nome ASC', [], function(err, rows) {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows || []);
   });
 });
-app.get('/api/grupos/:id', authenticateToken, (req, res) => {
+app.get('/api/grupos/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   var id = req.params.id;
   db.get('SELECT * FROM grupos_produto WHERE id = ? AND ativo = 1', [id], function(err, row) {
     if (err) return res.status(500).json({ error: err.message });
@@ -3611,7 +3618,7 @@ app.get('/api/grupos/:id', authenticateToken, (req, res) => {
     res.json(row);
   });
 });
-app.post('/api/grupos', authenticateToken, (req, res) => {
+app.post('/api/grupos', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   var body = req.body || {};
   var nome = (body.nome || '').trim();
   if (!nome) return res.status(400).json({ error: 'Nome do grupo é obrigatório' });
@@ -3623,7 +3630,7 @@ app.post('/api/grupos', authenticateToken, (req, res) => {
     res.status(201).json({ id: this.lastID, nome: nome, numero: numero, ordem: ordem });
   });
 });
-app.put('/api/grupos/:id', authenticateToken, (req, res) => {
+app.put('/api/grupos/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   var id = req.params.id;
   var body = req.body || {};
   var nome = (body.nome || '').trim();
@@ -3637,7 +3644,7 @@ app.put('/api/grupos/:id', authenticateToken, (req, res) => {
     res.json({ id: id, nome: nome, numero: numero, ordem: ordem });
   });
 });
-app.delete('/api/grupos/:id', authenticateToken, (req, res) => {
+app.delete('/api/grupos/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   var id = req.params.id;
   db.run('UPDATE grupos_produto SET ativo = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [id], function(err) {
     if (err) return res.status(500).json({ error: err.message });
@@ -3646,7 +3653,7 @@ app.delete('/api/grupos/:id', authenticateToken, (req, res) => {
   });
 });
 
-app.post('/api/grupos/:id/foto', authenticateToken, uploadGrupo.single('foto'), (req, res) => {
+app.post('/api/grupos/:id/foto', authenticateToken, exigirComercialNasPropostas, uploadGrupo.single('foto'), (req, res) => {
   var id = req.params.id;
   if (!req.file || !req.file.filename) return res.status(400).json({ error: 'Nenhuma imagem enviada' });
   var filename = req.file.filename;
@@ -3665,7 +3672,7 @@ app.post('/api/grupos/:id/foto', authenticateToken, uploadGrupo.single('foto'), 
   });
 });
 
-app.post('/api/grupos/:id/foto-base64', authenticateToken, (req, res) => {
+app.post('/api/grupos/:id/foto-base64', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   try {
     var id = req.params.id;
     var b64 = req.body && req.body.foto_base64;
@@ -5015,7 +5022,7 @@ app.delete('/api/familias/:familiaId/variaveis/:variavelChave/opcoes/:id', authe
 // ========== VERIFICAR EQUIPAMENTO EXISTENTE (por família + especificações) ==========
 // POST body: { familia: string (nome), especificacoes: { variavel_chave: valor, ... } }
 // Retorna: { existente: boolean, produtos: [...] } — produtos com mesma família e specs compatíveis
-app.post('/api/produtos/verificar-existente', authenticateToken, (req, res) => {
+app.post('/api/produtos/verificar-existente', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   var body = req.body || {};
   var familiaNome = (body.familia || '').trim();
   var especificacoes = body.especificacoes && typeof body.especificacoes === 'object' ? body.especificacoes : {};
@@ -5047,7 +5054,7 @@ app.post('/api/produtos/verificar-existente', authenticateToken, (req, res) => {
 });
 
 // ========== VARIÁVEIS TÉCNICAS (cadastro para marcadores vista frontal / 90+ variáveis) ==========
-app.get('/api/variaveis-tecnicas', authenticateToken, (req, res) => {
+app.get('/api/variaveis-tecnicas', authenticateToken, exigirComercialNasVariaveisTecnicas, (req, res) => {
   var search = (req.query.search || '').trim();
   var categoria = (req.query.categoria || '').trim();
   var ativo = req.query.ativo;
@@ -5081,7 +5088,7 @@ app.get('/api/variaveis-tecnicas', authenticateToken, (req, res) => {
   });
 });
 
-app.get('/api/variaveis-tecnicas/categorias', authenticateToken, (req, res) => {
+app.get('/api/variaveis-tecnicas/categorias', authenticateToken, exigirComercialNasVariaveisTecnicas, (req, res) => {
   db.all('SELECT DISTINCT categoria AS nome FROM variaveis_tecnicas WHERE ativo = 1 AND categoria IS NOT NULL AND TRIM(categoria) != \'\' ORDER BY categoria', [], function(err, rows) {
     if (err) return res.status(500).json({ error: err.message });
     res.json((rows || []).map(function(r) { return r.nome; }));
@@ -5090,7 +5097,7 @@ app.get('/api/variaveis-tecnicas/categorias', authenticateToken, (req, res) => {
 
 // Opções de uma variável: lista manual ou fornecedores do grupo homologado (para dropdown no cadastro de produtos)
 // Para lista_condicional, use ?escolha=ValorDaPrimeiraEscolha para obter as opções da segunda lista (manual ou grupo de fornecedores)
-app.get('/api/variaveis-tecnicas/opcoes/:chave', authenticateToken, (req, res) => {
+app.get('/api/variaveis-tecnicas/opcoes/:chave', authenticateToken, exigirComercialNasVariaveisTecnicas, (req, res) => {
   var chave = (req.params.chave || '').trim();
   var escolha = (req.query.escolha != null && req.query.escolha !== '') ? String(req.query.escolha).trim() : null;
   if (!chave) return res.status(400).json({ error: 'Chave da variável é obrigatória' });
@@ -5131,7 +5138,7 @@ app.get('/api/variaveis-tecnicas/opcoes/:chave', authenticateToken, (req, res) =
   });
 });
 
-app.get('/api/variaveis-tecnicas/:id', authenticateToken, (req, res) => {
+app.get('/api/variaveis-tecnicas/:id', authenticateToken, exigirComercialNasVariaveisTecnicas, (req, res) => {
   var id = req.params.id;
   db.get('SELECT * FROM variaveis_tecnicas WHERE id = ?', [id], function(err, row) {
     if (err) return res.status(500).json({ error: err.message });
@@ -5143,7 +5150,7 @@ app.get('/api/variaveis-tecnicas/:id', authenticateToken, (req, res) => {
   });
 });
 
-app.post('/api/variaveis-tecnicas', authenticateToken, (req, res) => {
+app.post('/api/variaveis-tecnicas', authenticateToken, exigirComercialNasVariaveisTecnicas, (req, res) => {
   var body = req.body || {};
   // CAIXA ALTA sempre, para padronizar o cadastro independente de como foi digitado.
   // Aplicado tambem no servidor (nao so no formulario) para valer em import e em qualquer
@@ -5190,7 +5197,7 @@ app.post('/api/variaveis-tecnicas', authenticateToken, (req, res) => {
     });
 });
 
-app.put('/api/variaveis-tecnicas/:id', authenticateToken, (req, res) => {
+app.put('/api/variaveis-tecnicas/:id', authenticateToken, exigirComercialNasVariaveisTecnicas, (req, res) => {
   var id = req.params.id;
   var body = req.body || {};
   // CAIXA ALTA sempre, para padronizar o cadastro independente de como foi digitado.
@@ -5238,7 +5245,7 @@ app.put('/api/variaveis-tecnicas/:id', authenticateToken, (req, res) => {
     });
 });
 
-app.delete('/api/variaveis-tecnicas/:id', authenticateToken, (req, res) => {
+app.delete('/api/variaveis-tecnicas/:id', authenticateToken, exigirComercialNasVariaveisTecnicas, (req, res) => {
   var id = req.params.id;
   db.run('UPDATE variaveis_tecnicas SET ativo = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [id], function(err) {
     if (err) return res.status(500).json({ error: err.message });
@@ -15010,7 +15017,7 @@ app.use('/api/uploads/grupos-compras', express.static(uploadsGruposComprasDir, {
 app.use('/api/uploads/fornecedores', express.static(uploadsFornecedoresDir, { setHeaders: cabecalhosUploadSeguro }));
 
 // ========== ROTAS DE PRODUTOS ==========
-app.get('/api/produtos', authenticateToken, (req, res) => {
+app.get('/api/produtos', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   var ativo = req.query.ativo;
   var search = req.query.search;
   var familia = req.query.familia;
@@ -15068,7 +15075,7 @@ app.get('/api/produtos', authenticateToken, (req, res) => {
   });
 });
 
-app.get('/api/produtos/proximo-codigo', authenticateToken, (req, res) => {
+app.get('/api/produtos/proximo-codigo', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   // Decodificar parâmetros da URL para lidar com caracteres especiais como "/"
   const nome = req.query.nome ? decodeURIComponent(String(req.query.nome)) : '';
   const familia = req.query.familia ? decodeURIComponent(String(req.query.familia)) : '';
@@ -15381,7 +15388,7 @@ app.get('/api/ncm/:codigo', authenticateToken, (req, res) => {
   });
 });
 
-app.get('/api/produtos/:id', authenticateToken, (req, res) => {
+app.get('/api/produtos/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   var id = req.params.id;
   function fetchRow() {
     db.get('SELECT * FROM produtos WHERE id = ?', [id], function(err, row) {
@@ -15411,7 +15418,7 @@ app.get('/api/produtos/:id', authenticateToken, (req, res) => {
 });
 
 // Buscar produto por código
-app.get('/api/produtos/codigo/:codigo', authenticateToken, (req, res) => {
+app.get('/api/produtos/codigo/:codigo', authenticateToken, exigirComercialOuOperacionalNaOS, (req, res) => {
   const { codigo } = req.params;
   db.get('SELECT * FROM produtos WHERE codigo = ?', [codigo], (err, row) => {
     if (err) {
@@ -15424,7 +15431,7 @@ app.get('/api/produtos/codigo/:codigo', authenticateToken, (req, res) => {
   });
 });
 
-app.post('/api/produtos', authenticateToken, (req, res) => {
+app.post('/api/produtos', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   var body = req.body || {};
   var codigo = body.codigo;
   var nome = body.nome;
@@ -15576,7 +15583,7 @@ app.post('/api/produtos/:id/clonar', authenticateToken, (req, res) => {
   });
 });
 
-app.put('/api/produtos/:id', authenticateToken, (req, res) => {
+app.put('/api/produtos/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   var id = req.params.id;
   var body = req.body || {};
   db.get('SELECT * FROM produtos WHERE id = ?', [id], function(err, row) {
@@ -15643,7 +15650,7 @@ app.put('/api/produtos/:id', authenticateToken, (req, res) => {
   });
 });
 
-app.delete('/api/produtos/:id', authenticateToken, (req, res) => {
+app.delete('/api/produtos/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   db.run('UPDATE produtos SET ativo = 0 WHERE id = ?', [id], (err) => {
     if (err) {
@@ -15670,7 +15677,7 @@ function soTemChavesAntigas(spec) {
   }
   return true;
 }
-app.post('/api/produtos/zerar-modelo-antigo', authenticateToken, (req, res) => {
+app.post('/api/produtos/zerar-modelo-antigo', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   var body = req.body || {};
   var ids = Array.isArray(body.ids) ? body.ids : null;
 
@@ -18094,7 +18101,7 @@ app.get('/logo-gmp.png', (req, res) => {
 });
 
 // Upload de imagem de produto
-app.post('/api/produtos/:id/imagem', authenticateToken, uploadProduto.single('imagem'), async (req, res) => {
+app.post('/api/produtos/:id/imagem', authenticateToken, exigirComercialNasPropostas, uploadProduto.single('imagem'), async (req, res) => {
   const { id } = req.params;
   
   if (!req.file) {
