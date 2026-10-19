@@ -200,6 +200,17 @@ test('[RN-149.01/02/03/04, C343, C345] fonte: as 13 do cadastro com exigirComerc
   const esperado = [...CADASTRO, ...CONFIG, ['POST', '/api/familias/:id/clonar'], ['PUT', '/api/familias/:id/clausulas-modelo']]
     .map(([m, r]) => `${m} ${r}`).sort();
   assert.deepStrictEqual(verboCaminho, esperado, 'registros de familia fora do formato app.<verbo>(\'...\', ...) numa linha so, ou a mais');
+  // Etapa 151 (retro da 150): a regua acima le uma linha por vez e so o 1o registro de cada linha. Esta conta TODOS no texto inteiro (o \s
+  // atravessa a quebra de linha): um segundo registro na mesma linha, um registro em duas linhas ou um caminho em lista aparecem aqui.
+  const reTodos = /\.(get|post|put|patch|delete|all|use|route)\(\s*\[?\s*["'`](\/(?:api\/)?familias(?:\/[^"'`]*)?)["'`]/g;
+  assert.deepStrictEqual([...FONTE.matchAll(reTodos)].map((m) => `${m[1].toUpperCase()} ${m[2]}`).sort(), esperado,
+    'um registro de familia a mais (na mesma linha, em duas linhas ou em lista) escaparia do portao');
+  // a lista de OS: o caminho exato registrado so pelo GET (o portao) e pelo POST (a criacao, outra regua — C277)
+  const reListaOs = /\.(get|post|put|patch|delete|all|use|route)\(\s*\[?\s*["'`](\/api\/operacional\/ordens-servico)["'`]/g;
+  assert.deepStrictEqual([...FONTE.matchAll(reListaOs)].map((m) => `${m[1].toUpperCase()} ${m[2]}`).sort(),
+    ['GET /api/operacional/ordens-servico', 'POST /api/operacional/ordens-servico'], 'um registro a mais da lista de OS escaparia do portao');
+  assert.deepStrictEqual(FONTE.split('\n').filter((l) => /\bapp\.(use|all|get|post|put|patch|delete)\(\s*(["'`][^"'`]*["'`]\s*\+|`[^`]*\$\{)/.test(l)), [],
+    'um registro com o caminho montado escaparia das reguas do fonte');
   // nenhum outro arquivo do servidor registra o caminho inteiro (os routers do Almoxarifado montam /api/almoxarifado/familias — outra tabela)
   const fora = [];
   const varrer = (d) => {

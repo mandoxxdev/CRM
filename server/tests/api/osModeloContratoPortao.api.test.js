@@ -190,6 +190,18 @@ test('[RN-148.01/02, C341, C335] fonte: as 3 do modelo de contrato com exigirCom
     'get /api/operacional/ordens-servico/:id/itens', 'get /api/operacional/ordens-servico/:id/pdf', 'get /api/operacional/os-itens/:os_id',
     'post /api/operacional/ordens-servico/:id/gerar-pdf', 'put /api/operacional/ordens-servico/:id', 'put /api/operacional/os-itens/:id',
   ], `registros da OS fora do formato ou a mais: ${linhasO.join(' | ')}`);
+  // Etapa 151 (retro da 150): as duas reguas acima leem uma linha por vez e so o 1o registro de cada linha. Estas contam TODOS no texto
+  // inteiro (o \s atravessa a quebra de linha): um segundo registro na mesma linha, um registro em duas linhas ou um caminho em lista
+  // aparecem aqui.
+  const reTodosC = /\.(get|post|put|patch|delete|all|use|route)\(\s*\[?\s*["'`](\/api\/(?:clausulas-modelos?|familias\/:\w+\/clausulas-modelo)(?:\/[^"'`]*)?)["'`]/g;
+  assert.deepStrictEqual([...FONTE.matchAll(reTodosC)].map((m) => `${m[1]} ${m[2]}`).sort(),
+    ['get /api/clausulas-modelos', 'get /api/clausulas-modelos/:id/clausulas', 'put /api/familias/:id/clausulas-modelo'],
+    'um registro do modelo de contrato a mais (na mesma linha, em duas linhas ou em lista) escaparia do portao');
+  const reTodosO = /\.(get|post|put|patch|delete|all|use|route)\(\s*\[?\s*["'`](\/api\/operacional\/(?:os-itens\/:\w+|ordens-servico\/:\w+(?:\/(?:itens|pdf|gerar-pdf))?))["'`]/g;
+  assert.deepStrictEqual([...FONTE.matchAll(reTodosO)].map((m) => `${m[1]} ${m[2]}`).sort(), verboCaminho,
+    'um registro da OS a mais (na mesma linha, em duas linhas ou em lista) escaparia do portao');
+  assert.deepStrictEqual(FONTE.split('\n').filter((l) => /\bapp\.(use|all|get|post|put|patch|delete)\(\s*(["'`][^"'`]*["'`]\s*\+|`[^`]*\$\{)/.test(l)), [],
+    'um registro com o caminho montado escaparia das reguas do fonte');
   const fora = [];
   const varrer = (d) => {
     for (const e of fs.readdirSync(d, { withFileTypes: true })) {
