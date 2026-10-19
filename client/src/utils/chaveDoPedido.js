@@ -32,6 +32,7 @@ export function chaveDoPedido(config) {
   if (!LEITURAS.has(metodo)) return `${metodo}-${url}`;
   const pares = paresDosParams(cfg.params)
     .map(([k, v]) => [String(k), typeof v === 'object' ? JSON.stringify(v) : String(v)])
-    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0)));
+    // so pela chave (o sort e estavel): a ordem dos valores repetidos de uma chave vai na URL, e `a=2&a=1` nao e `a=1&a=2` (Fase 5 r3 C4)
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
   return JSON.stringify([metodo, url, pares, cfg.responseType || '']);
 }

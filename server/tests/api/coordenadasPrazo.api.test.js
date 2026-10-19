@@ -4,7 +4,8 @@
  *   RN-156.03  (C361, C371) o pedido ao servico de mapas tem prazo (NOMINATIM_PRAZO_MS, padrao 5000), contado do pedido inteiro; esgotado,
  *              a coordenada sai pela cidade. Resposta nao 200, corpo nao JSON e lista vazia tambem. NOMINATIM_URL troca o endereco. O termo
  *              vai com espacos (sem o `+` literal de antes).
- *   RN-156.04  (C370) a cidade sem caixa, sem acento e sem espaco nas pontas, e so a ate 1.000 km do centro do estado informado.
+ *   RN-156.04  (C370) a cidade sem caixa, sem acento e sem espaco nas pontas, e so a do estado informado (a lista tem a UF de cada cidade —
+ *              Fase 5 r1 I-1: o raio de 1.000 km da Fase 2 deixava passar o homonimo de estado vizinho).
  *
  * O Nominatim de verdade NUNCA e chamado: a fronteira HTTP e um servidor local deste processo (o unitario chama o servico direto; a
  * integracao sobe o `index.js` com NOMINATIM_URL apontando para ele).
@@ -84,6 +85,26 @@ test('[RN-156.03] o servico pendurado: null no prazo (300 ms), nao nos 30 s do c
   assert.strictEqual(v, null);
   assert.ok(ms >= 280 && ms < 1300, `levou ${ms} ms`);
   assert.strictEqual(fronteira.pedidos.length, 1, 'o pedido nao chegou a fronteira (o teste nao provaria nada)');
+  // (Fase 5 r3 S5) o prazo aborta o pedido: a conexao com o servico de mapas nao fica aberta
+  await pausa(150);
+  assert.strictEqual(fronteira.sockets.size, 0, `ficaram ${fronteira.sockets.size} conexoes abertas com o servico de mapas`);
+});
+
+test('[RN-156.03, Fase 5 r3 S6] a consulta que respondeu nao dispara o prazo depois (nenhum aviso de "nao respondeu")', async () => {
+  fronteira.modo = 'responde'; fronteira.lat = '-1.5'; fronteira.lon = '-2.5';
+  const avisos = [];
+  const warn = console.warn;
+  console.warn = (...a) => { avisos.push(a.join(' ')); };
+  try {
+    assert.deepStrictEqual(await geocodificar(), [-1.5, -2.5]);
+    await pausa(450); // passa do prazo de 300 ms
+  } finally { console.warn = warn; }
+  assert.deepStrictEqual(avisos.filter((x) => /nao respondeu/.test(x)), []);
+  // a metade positiva: o pendurado avisa
+  fronteira.modo = 'pendura';
+  console.warn = (...a) => { avisos.push(a.join(' ')); };
+  try { await geocodificar(); } finally { console.warn = warn; }
+  assert.strictEqual(avisos.filter((x) => /nao respondeu em 300 ms/.test(x)).length, 1, JSON.stringify(avisos));
 });
 
 test('[RN-156.03] o prazo e do pedido inteiro: o servidor que pinga um byte a cada 50 ms tambem para no prazo', async () => {
@@ -121,20 +142,37 @@ test('[RN-156.03] as variaveis: o padrao e o Nominatim (lido, nao chamado); praz
   comEnv({ NOMINATIM_URL: 'http://127.0.0.1:9/search' }, () => assert.strictEqual(coordenadas.urlDoNominatim(), 'http://127.0.0.1:9/search'));
   for (const v of [null, '', 'abc', '-5', '0', '1.5']) comEnv({ NOMINATIM_PRAZO_MS: v }, () => assert.strictEqual(coordenadas.prazoDoNominatimMs(), 5000, String(v)));
   comEnv({ NOMINATIM_PRAZO_MS: ' 250 ' }, () => assert.strictEqual(coordenadas.prazoDoNominatimMs(), 250));
+  // (Fase 5 r1 M-1) acima do maior atraso do setTimeout (2^31 - 1) ele dispararia em 1 ms: invalido
+  comEnv({ NOMINATIM_PRAZO_MS: '9999999999' }, () => assert.strictEqual(coordenadas.prazoDoNominatimMs(), 5000));
+  comEnv({ NOMINATIM_PRAZO_MS: '2147483648' }, () => assert.strictEqual(coordenadas.prazoDoNominatimMs(), 5000));
+  comEnv({ NOMINATIM_PRAZO_MS: '2147483647' }, () => assert.strictEqual(coordenadas.prazoDoNominatimMs(), 2147483647));
 });
 
-test('[RN-156.04, C370] a cidade sem caixa, sem acento e sem espaco nas pontas; o homonimo de outro estado fica no centro do estado; sem estado, pelo nome', () => {
+test('[RN-156.04, C370] a cidade sem caixa, sem acento e sem espaco nas pontas; so a do estado informado (o homonimo de outro estado fica no centro do estado); sem estado, pelo nome', () => {
   const c = coordenadas.obterCoordenadasCidade;
   assert.deepStrictEqual(c('CAMPINAS', 'SP'), CAMPINAS);
   assert.deepStrictEqual(c('SAO BERNARDO DO CAMPO', 'SP'), SBC);
   assert.deepStrictEqual(c('RIBEIRÃO PRETO ', 'sp'), [-21.1775, -47.8103]);
   assert.deepStrictEqual(c('São Paulo', 'SP'), [-23.5505, -46.6333]);
-  // o mapa e so por nome: 'Rio Branco' do mapa e a do MT (o literal tem a do AC antes; vale a ultima); 'Santa Maria' e a do RS
-  assert.deepStrictEqual(c('RIO BRANCO', 'AC'), [-8.77, -70.55], 'o cliente do Acre foi para o MT');
+  // a lista tem a UF de cada cidade: 'Rio Branco' esta duas vezes (a capital do AC e a do MT — o objeto de antes guardava so a do MT)
+  assert.deepStrictEqual(c('RIO BRANCO', 'AC'), [-9.9747, -67.81], 'o cliente do Acre nao foi para a capital do Acre');
+  assert.deepStrictEqual(c('rio branco', 'ac'), [-9.9747, -67.81], 'o estado em minusculas');
   assert.deepStrictEqual(c('RIO BRANCO', 'MT'), [-15.25, -58.1167]);
+  // o homonimo de outro estado — longe ou vizinho (Fase 5 r1 I-1) — fica no centro do estado informado
   assert.deepStrictEqual(c('SANTA MARIA', 'RN'), [-5.22, -36.52], 'o cliente do RN foi para o RS');
+  assert.deepStrictEqual(c('SANTA MARIA', 'MS'), [-20.51, -54.54], 'o cliente do MS foi para o RS');
+  assert.deepStrictEqual(c('RIO CLARO', 'RJ'), [-22.90, -43.17], 'o cliente do RJ foi para Rio Claro/SP');
+  assert.deepStrictEqual(c('PAULISTA', 'PB'), [-7.24, -36.78], 'o cliente da PB foi para Paulista/PE');
+  assert.deepStrictEqual(c('ÁGUA BOA', 'MG'), [-18.10, -44.38], 'o cliente de MG foi para Agua Boa/MT');
+  // a cidade legitima mais longe do centro do proprio estado no mapa (Colniza/MT, 700 km) e as capitais longe do centro
+  assert.deepStrictEqual(c('COLNIZA', 'MT'), [-9.4, -60.9167]);
+  assert.deepStrictEqual(c('MANAUS', 'AM'), [-3.1190, -60.0217]);
+  assert.deepStrictEqual(c('BELEM', 'PA'), [-1.4558, -48.5044]);
+  assert.deepStrictEqual(c('CURITIBA', 'PR'), [-25.4284, -49.2733]);
   assert.deepStrictEqual(c('CIDADE QUE NAO HA', 'SP'), CENTRO_SP);
+  assert.deepStrictEqual(c('CIDADE QUE NAO HA', ' sp '), CENTRO_SP, 'o estado com espaco e em minusculas');
   assert.deepStrictEqual(c('Campinas', ''), CAMPINAS);
+  assert.deepStrictEqual(c('Rio Branco', ''), [-15.25, -58.1167], 'sem estado, a ultima com o nome (como o objeto de antes)');
   assert.deepStrictEqual(c('', ''), [-14.235, -51.9253]);
   assert.deepStrictEqual(c(null, undefined), [-14.235, -51.9253]);
 });
@@ -200,6 +238,24 @@ async function descer() {
 }
 const ctx = {};
 const perto = (a, b, tol = 1e-6) => Array.isArray(a) && a.length === 2 && Math.abs(a[0] - b[0]) < tol && Math.abs(a[1] - b[1]) < tol;
+
+test('[RN-156.04, Fase 5 r1 I-1] a lista das cidades: 345 linhas, UF valida, nome+UF sem repeticao, nenhuma a mais de 700 km do centro do proprio estado', () => {
+  const { CIDADES } = coordenadas;
+  assert.strictEqual(CIDADES.length, 345);
+  const ESTADOS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
+  const vistos = new Set();
+  const R = 6371; const rad = (g) => (g * Math.PI) / 180;
+  const km = (a, b) => 2 * R * Math.asin(Math.sqrt(Math.sin(rad(b[0] - a[0]) / 2) ** 2 + Math.cos(rad(a[0])) * Math.cos(rad(b[0])) * Math.sin(rad(b[1] - a[1]) / 2) ** 2));
+  for (const [nome, uf, lat, lon] of CIDADES) {
+    assert.ok(ESTADOS.includes(uf), `${nome}: UF ${uf}`);
+    const chave = `${coordenadas.normalizarNome(nome)}/${uf}`;
+    assert.ok(!vistos.has(chave), `repetida: ${chave}`);
+    vistos.add(chave);
+    const centro = coordenadas.obterCoordenadasCidade('', uf);
+    assert.ok(km([lat, lon], centro) <= 700, `${nome}/${uf} a ${Math.round(km([lat, lon], centro))} km do centro do estado (UF errada?)`);
+    assert.deepStrictEqual(coordenadas.obterCoordenadasCidade(nome.toUpperCase(), uf), [lat, lon], `${nome}/${uf} nao se acha`);
+  }
+});
 
 test('[RN-156.03/04, integracao] coordenadas-cliente com o servico pendurado: 200 com a coordenada de Campinas (nao o centro de SP) em menos de 3 s; respondendo, a dele', async () => {
   fronteira.modo = 'pendura'; fronteira.pedidos = [];

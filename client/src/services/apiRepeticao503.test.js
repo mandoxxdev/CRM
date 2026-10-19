@@ -24,7 +24,9 @@ beforeAll(() => {
   jest.spyOn(console, 'error').mockImplementation(() => {});
   api = require('./api').default;
   api.defaults.adapter = async (config) => {
-    chamadas.push({ metodo: config.method, url: config.url, params: config.params, data: config.data });
+    const h = config.headers || {};
+    const auth = typeof h.get === 'function' ? h.get('Authorization') : h.Authorization;
+    chamadas.push({ metodo: config.method, url: config.url, params: config.params, data: config.data, auth: auth || null });
     return roteiro(config, chamadas.length);
   };
 });
@@ -71,7 +73,57 @@ test('[RN-156.01 b] o mesmo GET duas vezes: o segundo espera a mesma repeticao (
   expect(a.value.data).toEqual({ lista: [{ id: 1 }] });
   expect(b.value.data).toEqual({ lista: [{ id: 1 }] });
   expect(b.value.data).not.toBe(a.value.data); // quem espera nao mexe no objeto da dona
+  // (Fase 5 r3 C1) a copia e funda: mexer no que esperou nao muda o da dona
+  b.value.data.lista[0].id = 99;
+  expect(a.value.data.lista[0].id).toBe(1);
   expect(chamadas).toHaveLength(3);
+});
+
+test('[RN-156.01, Fase 5 r3 C2] o mesmo download (responseType blob) duas vezes com o banco ocupado: os dois recebem o Blob (nao uma copia vazia)', async () => {
+  let n = 0;
+  roteiro = (config) => {
+    n += 1;
+    if (n <= 2) throw ocupado(config);
+    return { status: 200, data: new Blob(['etiqueta']), headers: {}, config };
+  };
+  const [a, b] = await comPrazo(Promise.allSettled([
+    api.get('/almoxarifado/etiquetas/1/pdf', { responseType: 'blob' }),
+    api.get('/almoxarifado/etiquetas/1/pdf', { responseType: 'blob' }),
+  ]));
+  expect([a.status, b.status]).toEqual(['fulfilled', 'fulfilled']);
+  expect(a.value.data).toBeInstanceOf(Blob);
+  expect(b.value.data).toBeInstanceOf(Blob);
+  expect(b.value.data.size).toBe(8);
+  expect(chamadas).toHaveLength(3);
+});
+
+test('[RN-156.01, Fase 5 r2 I-1] a repeticao leva o token de agora: trocado no meio da espera, vai o novo; apagado, vai sem token', async () => {
+  const guardado = localStorage.getItem('token');
+  try {
+    let n = 0;
+    roteiro = (config) => {
+      n += 1;
+      if (n === 1) {
+        localStorage.setItem('token', 'tok-B'); // outro usuario entrou durante a espera
+        throw ocupado(config);
+      }
+      return { status: 200, data: {}, headers: {}, config };
+    };
+    localStorage.setItem('token', 'tok-A');
+    await comPrazo(api.get('/almoxarifado/estoque'));
+    expect(chamadas.map((c) => c.auth)).toEqual(['Bearer tok-A', 'Bearer tok-B']);
+    chamadas = []; n = 0;
+    roteiro = (config) => {
+      n += 1;
+      if (n === 1) { localStorage.removeItem('token'); throw ocupado(config); } // saiu durante a espera
+      return { status: 200, data: {}, headers: {}, config };
+    };
+    localStorage.setItem('token', 'tok-A');
+    await comPrazo(api.get('/almoxarifado/estoque'));
+    expect(chamadas.map((c) => c.auth)).toEqual(['Bearer tok-A', null]);
+  } finally {
+    if (guardado == null) localStorage.removeItem('token'); else localStorage.setItem('token', guardado);
+  }
 });
 
 test('[RN-156.01 c] a ordem das chaves de params nao muda o pedido; undefined e null nao contam', async () => {
@@ -145,6 +197,18 @@ describe('[RN-156.01] chaveDoPedido', () => {
     expect(chaveDoPedido({ url: '/a' })).toBe(chaveDoPedido({ method: 'get', url: '/a' }));
     expect(chaveDoPedido({ method: 'get', url: '/a', params: new URLSearchParams('b=2&a=1') }))
       .toBe(chaveDoPedido({ method: 'get', url: '/a', params: { a: '1', b: '2' } }));
+    // (Fase 5 r3 C6) o filtro objeto conta pelo conteudo, nao vira "[object Object]"
+    expect(chaveDoPedido({ method: 'get', url: '/a', params: { f: { a: 1 } } }))
+      .not.toBe(chaveDoPedido({ method: 'get', url: '/a', params: { f: { b: 2 } } }));
+    // (Fase 5 r3 C4) a ordem dos valores repetidos de uma chave vai na URL: sao pedidos diferentes
+    expect(chaveDoPedido({ method: 'get', url: '/a', params: new URLSearchParams('a=2&a=1') }))
+      .not.toBe(chaveDoPedido({ method: 'get', url: '/a', params: new URLSearchParams('a=1&a=2') }));
+    // (Fase 5 r3 C3) o HEAD e leitura: a chave leva os filtros
+    const { ehLeitura } = require('../utils/chaveDoPedido');
+    expect(ehLeitura({ method: 'head' })).toBe(true);
+    expect(ehLeitura({ method: 'post' })).toBe(false);
+    expect(chaveDoPedido({ method: 'head', url: '/a', params: { q: 1 } }))
+      .not.toBe(chaveDoPedido({ method: 'head', url: '/a', params: { q: 2 } }));
   });
   test('gravacao: a chave de antes (metodo-url), sem filtros nem corpo', () => {
     expect(chaveDoPedido({ method: 'post', url: '/a', data: '{"x":1}' })).toBe('post-/a');

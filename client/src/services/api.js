@@ -155,6 +155,18 @@ api.interceptors.response.use(
         const retryCount = error.config.__retryCount || 0;
         if (retryCount < 3) {
           error.config.__retryCount = retryCount + 1;
+          // Fase 5 r2 I-1: a repeticao leva o token de AGORA — o interceptor do pedido o poe de novo; sem o apagar aqui, quem saiu no meio
+          // da espera repetia com o token velho (o interceptor so escreve quando ha token guardado). Sem token nenhum, a repeticao vai sem
+          // ele (o login, que nao tem token, continua repetindo no banco em inicializacao; a rota protegida responde 401 e leva ao login).
+          if (error.config.headers) {
+            if (typeof error.config.headers.delete === 'function') {
+              error.config.headers.delete('Authorization');
+              error.config.headers.delete('X-Auth-Token');
+            } else {
+              delete error.config.headers.Authorization;
+              delete error.config.headers['X-Auth-Token'];
+            }
+          }
           console.log(`🔄 Tentativa ${retryCount + 1} de 3...`);
           return api.request(error.config);
         }

@@ -19,6 +19,9 @@ describe('[RN-156.02] motivoDaListaRecusada', () => {
   test('o error terminado em ponto nao duplica o ponto', () => {
     expect(motivoDaListaRecusada(comResposta(403, { error: 'Sem o modulo.' }), 'projetos'))
       .toBe('Sem acesso à lista de projetos: Sem o modulo. Recarregue a página para conferir suas permissões.');
+    // (Fase 5 r3 C9) o espaco nas pontas do error tambem sai — sem espaco duplo depois dos dois-pontos
+    expect(motivoDaListaRecusada(comResposta(403, { error: '  Sem o modulo  ' }), 'projetos'))
+      .toBe('Sem acesso à lista de projetos: Sem o modulo. Recarregue a página para conferir suas permissões.');
   });
 
   test('o 403 sem error (corpo vazio, error vazio ou que nao e texto): a frase sem o motivo do servidor', () => {
