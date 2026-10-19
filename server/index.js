@@ -17401,31 +17401,57 @@ app.post('/api/comercial/listas-precos', authenticateToken, exigirComercialNasPr
   if (itens.length === 0) {
     return res.status(400).json({ error: 'A planilha não tem linhas.' });
   }
+  // Etapa 149 (RN-149.06, Fase 2 M-2): as linhas montadas ANTES de gravar a lista — um valor que nao vira texto (so pela integracao; a
+  // tela manda texto) recusa sem deixar lista nenhuma.
+  const nomeLista = String(nome).trim();
+  const linhas = [];
+  for (let k = 0; k < itens.length; k++) {
+    try {
+      const item = itens[k];
+      const busca = colunas.map((c) => item?.[c]).filter((v) => v != null).join(' ').toLowerCase();
+      linhas.push([JSON.stringify(item || {}), busca]);
+    } catch (e) {
+      return res.status(400).json({ error: `A linha ${k + 1} da planilha não pôde ser lida (${e.message}). A lista não foi criada.` });
+    }
+  }
   ensureListaPrecosTables((errTbl) => {
     if (errTbl) return res.status(500).json({ error: errTbl.message });
     db.run(
       `INSERT INTO listas_precos (nome, arquivo_nome, colunas, total_itens, created_by) VALUES (?, ?, ?, ?, ?)`,
-      [String(nome).trim(), arquivo_nome || null, JSON.stringify(colunas), itens.length, req.user.id],
+      [nomeLista, arquivo_nome || null, JSON.stringify(colunas), itens.length, req.user.id],
       function (errIns) {
-        if (errIns) return res.status(500).json({ error: errIns.message });
+        // Fase 2 M-3: o BUSY ao gravar a lista -> 503 (nada ficou; o client repete); outro erro, a mensagem do banco (a de antes).
+        if (errIns) return isSqliteBusy(errIns) ? respondDbError(res, errIns, 'listas-precos') : res.status(500).json({ error: errIns.message });
         const listaId = this.lastID;
-        const stmt = db.prepare(`INSERT INTO listas_precos_itens (lista_id, dados, busca) VALUES (?, ?, ?)`);
-        try {
-          for (const item of itens) {
-            const busca = colunas.map((c) => item?.[c]).filter((v) => v != null).join(' ').toLowerCase();
-            stmt.run(listaId, JSON.stringify(item || {}), busca);
-          }
-          stmt.finalize((errFin) => {
-            if (errFin) return res.status(500).json({ error: errFin.message });
-            res.status(201).json({ id: listaId, total_itens: itens.length });
+        // Etapa 149 (resto da C341, RN-149.06, B975): uma por uma, com o erro de cada uma conferido, e o 201 so depois da ultima. Antes o
+        // statement preparado sem callback perdia a linha que falhava e a rota respondia "importada (N itens)" com linhas a menos. Na falha,
+        // as linhas gravadas e a lista saem (sem transacao — B948: a conexao e uma so).
+        gravarItensEmSequencia(SQL_LINHA_DA_LISTA_DE_PRECOS, linhas.map((l) => [listaId, l[0], l[1]]), (errLinha) => {
+          if (!errLinha) return res.status(201).json({ id: listaId, total_itens: itens.length });
+          desfazerListaDePrecosCriada(listaId, (errDesfazer) => {
+            if (errDesfazer) {
+              console.error('❌ Lista de preços', listaId, ': o desfazer falhou:', errDesfazer.message);
+              return res.status(500).json({ error: `${msgLinhasDaListaNaoGravadas(errLinha.message)}. A lista "${nomeLista}" ficou incompleta — exclua-a e importe a planilha de novo.` });
+            }
+            if (isSqliteBusy(errLinha)) return respondDbError(res, errLinha, 'listas-precos');
+            return res.status(500).json({ error: `${msgLinhasDaListaNaoGravadas(errLinha.message)}. A lista não foi criada — importe a planilha de novo.` });
           });
-        } catch (e) {
-          res.status(500).json({ error: e.message });
-        }
+        }, 'Linhas da lista de preços');
       }
     );
   });
 });
+const SQL_LINHA_DA_LISTA_DE_PRECOS = 'INSERT INTO listas_precos_itens (lista_id, dados, busca) VALUES (?, ?, ?)';
+function msgLinhasDaListaNaoGravadas(detalhe) {
+  return `Erro ao gravar as linhas da lista de preços (${detalhe})`;
+}
+// As linhas e, so com elas fora, a lista. `feito(err)`.
+function desfazerListaDePrecosCriada(listaId, feito) {
+  db.run('DELETE FROM listas_precos_itens WHERE lista_id = ?', [listaId], (errItens) => {
+    if (errItens) return feito(errItens);
+    db.run('DELETE FROM listas_precos WHERE id = ?', [listaId], (errLista) => feito(errLista || null));
+  });
+}
 
 // Listar as listas de preços cadastradas
 app.get('/api/comercial/listas-precos', authenticateToken, exigirComercialNasPropostas, (req, res) => {
