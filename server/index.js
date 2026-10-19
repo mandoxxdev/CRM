@@ -216,6 +216,18 @@ const { tratarErroGlobalApi } = require('./services/errosApi');
 const { obterCoordenadasCidade, normalizarNome, termoDaConsulta, coordenadaGuardada, coordenadaPlausivel, geocodificarEndereco } = require('./services/coordenadas');
 // Etapa 159 (RN-159.02, C385): a busca de texto acha a letra acentuada em qualquer caixa (o LIKE do SQLite so ignora a caixa sem acento)
 const { condicaoDeBusca, formasDoTermo } = require('./services/buscaSemCaixa');
+// Etapa 160 (RN-160.07, C388): o cadastro responde o registro gravado, lido do banco — nao o eco do corpo. A releitura que falha ou
+// nao acha a linha responde o `minimo` ({ id } ou { id, numero_proposta }): o registro ja existe, e um 500 faria a tela cadastrar de
+// novo (B1015). O comentario no SQL e o que o teste usa para injetar a falha so na releitura.
+function responderGravado(res, tabela, id, quem, minimo) {
+  db.get(`SELECT * FROM ${tabela} WHERE id = ? -- releitura d${quem} cadastrad${quem.startsWith('a ') ? 'a' : 'o'}`, [id], (errL, linha) => {
+    if (errL || !linha) {
+      console.error(`Erro ao reler ${quem} cadastrad${quem.startsWith('a ') ? 'a' : 'o'} ${id}: ${errL ? errL.message : 'linha nao encontrada'}`);
+      return res.json(minimo);
+    }
+    res.json(linha);
+  });
+}
 // Etapa 160 (RN-160.01, C390): o filtro de prioridade das OS — aparado e em maiusculas (o cadastro grava ALTA; a tela manda alta).
 // Nao texto, vazio ou so espacos -> null (sem filtro). Os valores (baixa/normal/alta/urgente) nao tem acento: o UPPER do SQLite basta.
 function prioridadeDoFiltro(x) {
@@ -5481,7 +5493,8 @@ app.post('/api/projetos', authenticateToken, exigirComercialNasPropostas, (req, 
       if (err) {
         return res.status(500).json({ error: err.message });
       }
-      res.json({ id: this.lastID, ...req.body });
+      // Etapa 160 (RN-160.07, C388): o gravado, nao o eco do corpo
+      responderGravado(res, 'projetos', this.lastID, 'o projeto', { id: this.lastID });
     }
   );
 });
@@ -7665,7 +7678,9 @@ app.post('/api/propostas', authenticateToken, exigirComercialNasPropostas, (req,
         gravarItensDaPropostaNova(SQL_ITEM_CRIACAO, propostaId, numeroFinal, linhasItens, (erroItens) => {
           if (erroItens) return res.status(500).json({ error: erroItens });
           console.log('✅ Proposta salva com sucesso. ID:', propostaId, 'Número:', numeroFinal);
-          res.json({ id: propostaId, numero_proposta: numeroFinal, ...req.body });
+          // Etapa 160 (RN-160.07, C388; Fase 2 I2): a linha gravada (sem itens) — antes o corpo vinha depois do numero gerado e o
+          // sobrescrevia: com o numero enviado ja existente, a resposta devolvia o repetido, nao o gravado
+          responderGravado(res, 'propostas', propostaId, 'a proposta', { id: propostaId, numero_proposta: numeroFinal });
         });
       }
     );
@@ -15165,7 +15180,8 @@ app.post('/api/oportunidades', authenticateToken, exigirComercialNasPropostas, (
       if (err) {
         return res.status(500).json({ error: err.message });
       }
-      res.json({ id: this.lastID, ...req.body });
+      // Etapa 160 (RN-160.07, C388): o gravado, nao o eco do corpo
+      responderGravado(res, 'oportunidades', this.lastID, 'a oportunidade', { id: this.lastID });
     }
   );
 });
@@ -15358,7 +15374,8 @@ app.post('/api/atividades', authenticateToken, exigirComercialNasPropostas, (req
         console.error('Erro ao criar atividade:', err);
         return res.status(500).json({ error: err.message });
       }
-      res.json({ id: this.lastID, ...req.body });
+      // Etapa 160 (RN-160.07, C388): o gravado, nao o eco do corpo
+      responderGravado(res, 'atividades', this.lastID, 'a atividade', { id: this.lastID });
     }
   );
 });
