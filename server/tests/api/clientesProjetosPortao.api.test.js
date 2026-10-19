@@ -186,22 +186,47 @@ test('[RN-151.01/02/03, C349] fonte: as 18 com o exigirComercialNasPropostas com
   const esperado = [...ESCRITAS, ...LEITURAS, ...LISTAS].map(([m, r]) => `${m} ${r}`).sort();
   // regua no TEXTO INTEIRO (o \s atravessa a quebra de linha): todo registro (qualquer verbo, use/all/route, qualquer aspa, caminho em
   // lista) dos quatro prefixos — um segundo registro na mesma linha, um registro em duas linhas ou um caminho em lista aparecem aqui
-  const reTodos = /\.(get|post|put|patch|delete|all|use|route)\(\s*\[?\s*["'`](\/(?:api\/)?(?:clientes|projetos|oportunidades|atividades)(?:\/[^"'`]*)?)["'`]/g;
+  const reTodos = /\.(get|post|put|patch|delete|all|use|route)\(\s*\[?\s*["'`](\/(?:api\/)?(?:clientes|projetos|oportunidades|atividades)(?:\/[^"'`]*)?)["'`]/gi; // Fase 5 r3 S08: o Express nao diferencia a caixa do caminho
   const todosNoTexto = [...FONTE.matchAll(reTodos)].map((m) => `${m[1].toUpperCase()} ${m[2]}`).sort();
   assert.deepStrictEqual(todosNoTexto, esperado, 'um registro a mais (na mesma linha, em duas linhas ou em lista) escaparia do portao');
   // e nenhum registro com o caminho montado (concatenado ou em template): nenhuma das reguas o leria
   assert.deepStrictEqual(FONTE.split('\n').filter((l) => /\bapp\.(use|all|get|post|put|patch|delete)\(\s*(["'`][^"'`]*["'`]\s*\+|`[^`]*\$\{)/.test(l)), [],
     'um registro com o caminho montado escaparia das reguas do fonte');
   // nenhum outro arquivo do servidor registra estes caminhos (o Almoxarifado monta /api/almoxarifado/materiais-cliente/clientes — outro)
-  const fora = []; const vistos = [];
+  const fora = []; const vistos = []; const naoLiterais = [];
+  // Fase 5 r3 S04b/S05/S06/S09/S24: um registro cujo caminho nao e texto literal (app['post'], o caminho num identificador, uma regex,
+  // um router montado por variavel, um caminho concatenado num router) nao e lido por nenhuma regua acima. Todo registro de app/router do
+  // servidor comeca por um texto literal — fora estes, medidos (middlewares sem caminho e o router dos modulos, sem prefixo).
+  const registrosNaoLiterais = (rel, src) => {
+    const linhas = src.split('\n');
+    const linhaDe = (i) => linhas[src.slice(0, i).split('\n').length - 1].trim();
+    const res = [
+      /\b\w+\s*\[\s*["'`](get|post|put|patch|delete|all|use|route)["'`]\s*\]/g,
+      /\b(app|router|r|\w*[Rr]outer)\.(get|post|put|patch|delete|all|use|route)\(\s*[^\s'"`[)]/g,
+    ];
+    const achados = res.flatMap((re) => [...src.matchAll(re)].map((m) => `${rel}: ${linhaDe(m.index)}`));
+    // o caminho montado (concatenado ou em template) so passa quando o texto literal do comeco ja fixa um 1o segmento que nao e um dos
+    // quatro (os routers de frotas e producao montam `/api/frotas/${base}`, `/api/producao/${base}`)
+    // (qualquer receptor — um router com outro nome, S24 — quando o texto do comeco tem cara de caminho)
+    const reMontado = /\b(\w+)\.(get|post|put|patch|delete|all|use|route)\(\s*(?:["'`](\/[^"'`]*)["'`]\s*\+|`(\/[^`$]*)\$\{)/g;
+    for (const m of src.matchAll(reMontado)) {
+      const seg = /^\/(?:api\/)?([\w-]+)\//i.exec(m[3] !== undefined ? m[3] : m[4]);
+      if (!seg || /^(clientes|projetos|oportunidades|atividades|api)$/i.test(seg[1])) achados.push(`${rel}: ${linhaDe(m.index)}`);
+    }
+    return achados;
+  };
   const varrer = (d) => {
     for (const e of fs.readdirSync(d, { withFileTypes: true })) {
-      if (['node_modules', 'tests', 'data', 'uploads', 'backups'].includes(e.name) || e.name.startsWith('.')) continue;
+      // Fase 5 r3 S25: sem pular o arquivo que comeca com ponto, e com .cjs/.mjs
+      if (['node_modules', 'tests', 'data', 'uploads', 'backups', '.git'].includes(e.name)) continue;
       const p = path.join(d, e.name);
       if (e.isDirectory()) varrer(p);
-      else if (e.name.endsWith('.js') && p !== path.join(SERVER_DIR, 'index.js')) {
+      else if (/\.(c|m)?js$/.test(e.name)) {
         const src = fs.readFileSync(p, 'utf8');
-        vistos.push(path.relative(SERVER_DIR, p));
+        const rel = path.relative(SERVER_DIR, p);
+        naoLiterais.push(...registrosNaoLiterais(rel, src));
+        if (rel === 'index.js') continue;
+        vistos.push(rel);
         if (/["'`]\/api\/(clientes|projetos|oportunidades|atividades)["'`/]/.test(src)
           || /\.(get|post|put|patch|delete|all|use|route)\(\s*\[?\s*["'`]\/(clientes|projetos|oportunidades|atividades)["'`/]/.test(src)) fora.push(path.relative(SERVER_DIR, p));
       }
@@ -209,6 +234,12 @@ test('[RN-151.01/02/03, C349] fonte: as 18 com o exigirComercialNasPropostas com
   };
   varrer(SERVER_DIR);
   assert.deepStrictEqual(fora, [], 'rota registrada fora do index.js escaparia desta regua');
+  assert.deepStrictEqual(naoLiterais.sort(), [
+    'index.js: app.use((req, res, next) => {', "index.js: app.use(cors({ exposedHeaders: ['Content-Disposition'] }));",
+    "index.js: app.use(express.json({ limit: '15mb' }));", 'index.js: app.use(express.static(clientBuildPath, { etag: true, lastModified: true, maxAge: 0 }));',
+    'index.js: app.use(rotasModulos);',
+    `${path.join('services', 'almoxarifado', 'origemRequisicao.js')}: * \`authenticateToken\` faz \`req.user = user\`, SUBSTITUINDO o objeto. Um \`app.use(prefixo, ...,`,
+  ].sort(), 'um registro com o caminho que nao e texto literal escaparia das reguas do fonte');
   assert.ok(vistos.includes(path.join('routes', 'almoxarifado.js')) && vistos.includes(path.join('services', 'portaoDasPropostas.js')), 'a varredura nao enxerga routes/ ou services/');
   assert.ok(!/app\.use\(\s*\[?\s*["'`]\/(api\/)?(clientes|projetos|oportunidades|atividades)["'`/]/.test(FONTE), 'um app.use no prefixo atenderia antes do portao');
   const sem = DEZOITO.filter((r) => !r.resto.startsWith('authenticateToken, exigirComercialNasPropostas, '))
@@ -244,6 +275,10 @@ test('[RN-151.01/02/03, C349] o usuario que a tela barra do Comercial (so a dire
   const [sp, pj] = await j('GET', '/projetos', b.T);
   assert.ok(sc === 200 && cl.some((c) => c.id === ctx.cliente), `lista de clientes: ${sc} ${JSON.stringify(cl).slice(0, 120)}`);
   assert.ok(sp === 200 && pj.some((p) => p.id === ctx.projeto), `lista de projetos: ${sp} ${JSON.stringify(pj).slice(0, 120)}`);
+  const [sc2, cl2] = await j('GET', `/clientes?status=ativo&search=${encodeURIComponent('CLIENTE 151')}`, b.T);
+  const [sp2, pj2] = await j('GET', `/projetos?cliente_id=${ctx.cliente}`, b.T);
+  assert.ok(sc2 === 200 && cl2.some((c) => c.id === ctx.cliente) && sp2 === 200 && pj2.some((p) => p.id === ctx.projeto),
+    `as listas com filtro: ${sc2} ${sp2}`);
   await pausa(300);
   assert.deepStrictEqual(await negados(b.id), [{ modulo: 'comercial', nome_modulo: 'Comercial', n: 18 }], 'as listas registraram acesso negado');
 });
@@ -319,6 +354,14 @@ test('[RN-151.03, integracao] o cliente e o projeto criados pelo Comercial apare
     const [s2, l2] = await j('GET', '/projetos', u.T);
     assert.ok(s1 === 200 && l1.some((x) => x.id === cli.id && x.razao_social === 'CLIENTE DA OS 151'), `${k} clientes: ${s1}`);
     assert.ok(s2 === 200 && l2.some((x) => x.id === pj.id && x.cliente_nome === 'CLIENTE DA OS 151'), `${k} projetos: ${s2}`);
+    // Fase 5 r3 S02/S03: as listas com os filtros que as telas mandam (status, busca, cliente) tambem — nao so a lista pura
+    const [s3, l3] = await j('GET', '/clientes?status=ativo', u.T);
+    const [s4, l4] = await j('GET', `/clientes?search=${encodeURIComponent('DA OS 151')}`, u.T);
+    const [s5, l5] = await j('GET', `/projetos?cliente_id=${cli.id}&status=ativo`, u.T);
+    const [s6, l6] = await j('GET', `/projetos?responsavel_id=&cliente_id=${cli.id}`, u.T);
+    assert.deepStrictEqual([k, s3, s4, s5, s6], [k, 200, 200, 200, 200], `${k}: uma lista com filtro barrou`);
+    assert.ok(l3.some((x) => x.id === cli.id) && l4.length === 1 && l4[0].id === cli.id && l5.length === 1 && l5[0].id === pj.id
+      && l6.some((x) => x.id === pj.id), `${k}: a lista com filtro nao trouxe o registro`);
   }
   const op = ctx.u.soOperacional;
   // a OS nasce pelo administrador (o POST da OS responde 500 a quem nao e administrador num banco novo — C277, de antes); o Operacional a
@@ -348,7 +391,7 @@ test('[RN-151.01/02/03] por usuario: as 18 decidem como a tela do Comercial; as 
   const esperado = {
     semNada: 200, diretaComercial: 200, grupoComercial: 200, grupoVazio: 200, superU: 200, roleAdmin: 200,
     comercialGrupoInativo: 403, comercialPermissao0: 403, comercialGrupo0: 403, soAlmox: 403, soOperacional: 403, soEngProjetos: 403,
-    adminComercialComAdministrativo: 403,
+    adminComercialComAdministrativo: 403, grupoAlmox: 403,
   };
   const linhas = [];
   for (const k of Object.keys(esperado)) {
@@ -378,6 +421,7 @@ test('[RN-151.04] PROPOSTAS_PORTAO_DE_MODULO=desligado: as 18 abrem ao barrado (
   ctx.T = await subir({ PROPOSTAS_PORTAO_DE_MODULO: 'desligado' });
   try {
     await logar(b);
+    await logar(ctx.u.grupoAlmox);
     const log = fs.readFileSync(logArq, 'utf8');
     const aviso = (log.match(/⚠️ PROPOSTAS_PORTAO_DE_MODULO=desligado[^\n]*/) || [''])[0];
     assert.ok(/clientes, dos projetos, das oportunidades e das atividades NAO exigem o Comercial \(só o login\)/.test(aviso)
@@ -395,9 +439,12 @@ test('[RN-151.04] PROPOSTAS_PORTAO_DE_MODULO=desligado: as 18 abrem ao barrado (
     Object.assign(ctx, { cliente: cli.id, projeto: pj.id, oportunidade: op.id, atividade: at.id });
     const errados = [];
     try {
-      for (const r of DEZOITO) {
-        const [s, x] = await chamar(r, b.T);
-        if (s !== 200) errados.push(`${r.metodo} ${r.rota}: ${s} ${JSON.stringify(x).slice(0, 80)}`);
+      // Fase 5 r3 S23: tambem quem a regua ANTIGA barra (um grupo ativo sem o Comercial) — o desligado volta ao so login, nao a ela
+      for (const u of [ctx.u.grupoAlmox, b]) {
+        for (const r of DEZOITO) {
+          const [s, x] = await chamar(r, u.T);
+          if (s !== 200) errados.push(`${u.nome} ${r.metodo} ${r.rota}: ${s} ${JSON.stringify(x).slice(0, 80)}`);
+        }
       }
     } finally { Object.assign(ctx, guardados); }
     assert.deepStrictEqual(errados, []);
@@ -407,6 +454,11 @@ test('[RN-151.04] PROPOSTAS_PORTAO_DE_MODULO=desligado: as 18 abrem ao barrado (
       await all('SELECT id FROM oportunidades WHERE id = ?', [op.id]),
       await all('SELECT id FROM atividades WHERE id = ?', [at.id]),
     ], ['inativo', 'inativo', [], []], 'um DELETE do desligado respondeu 200 sem apagar');
+    // Fase 5 r3 S16: as edicoes do desligado gravaram (nao so responderam 200)
+    assert.deepStrictEqual([
+      /^CRIADO PELO BARRADO [0-9]+$/.test((await all('SELECT razao_social FROM clientes WHERE id = ?', [cli.id]))[0].razao_social),
+      /^PROJETO DO BARRADO [0-9]+$/.test((await all('SELECT nome FROM projetos WHERE id = ?', [pj.id]))[0].nome),
+    ], [true, true], 'um PUT do desligado respondeu 200 sem gravar');
     const logo = (await all('SELECT logo_url FROM clientes WHERE id = ?', [cli.id]))[0].logo_url;
     assert.ok(logo && fs.existsSync(path.join(pasta, 'uploads', 'logos', logo)), 'o logo do desligado nao chegou ao disco');
   } finally {
@@ -414,6 +466,9 @@ test('[RN-151.04] PROPOSTAS_PORTAO_DE_MODULO=desligado: as 18 abrem ao barrado (
     ctx.T = await subir();
   }
   await logar(b);
+  await logar(ctx.u.grupoAlmox);
+  const [sg1, xg1] = await j('GET', '/atividades', ctx.u.grupoAlmox.T);
+  assert.deepStrictEqual([sg1, xg1], [403, NEGADO_COM], 'ligado de novo, o grupo sem o Comercial passou');
   const [s6, x6] = await j('GET', '/clientes/logos', b.T);
   const [s7, x7] = await j('DELETE', `/atividades/${ctx.atividade}`, b.T);
   const [s8] = await j('GET', '/clientes', b.T);
@@ -476,8 +531,8 @@ test('[RN-151.01/02] SQLITE_BUSY ao ler as permissoes: 503 na leitura e na escri
     assert.strictEqual(sa, 200, JSON.stringify(a));
     ctx.atividade = a.id;
     // grupos gravados por fora: 901 ativo com Comercial, 903 ativo sem linha, 905 inativo com Comercial
-    await run("INSERT INTO grupos_permissoes (id, nome, ativo) VALUES (901,'G-com',1),(903,'G-vazio',1),(905,'G-com-inat',0)");
-    await run("INSERT INTO permissoes (grupo_id, modulo, acao, permissao) VALUES (901,'comercial','acesso',1),(905,'comercial','acesso',1)");
+    await run("INSERT INTO grupos_permissoes (id, nome, ativo) VALUES (901,'G-com',1),(903,'G-vazio',1),(905,'G-com-inat',0),(906,'G-almox',1)");
+    await run("INSERT INTO permissoes (grupo_id, modulo, acao, permissao) VALUES (901,'comercial','acesso',1),(905,'comercial','acesso',1),(906,'almoxarifado','acesso',1)");
     ctx.u = {
       semNada: await usuario('semnada'),
       diretaComercial: await usuario('dcom', { diretas: ['comercial'] }),
@@ -492,6 +547,7 @@ test('[RN-151.01/02] SQLITE_BUSY ao ler as permissoes: 503 na leitura e na escri
       soOperacional: await usuario('sop', { diretas: ['operacional'] }),
       soEngProjetos: await usuario('sengp', { diretas: ['engenharia_projetos'] }),
       adminComercialComAdministrativo: await usuario('acadm', { diretas: ['administrativo'], adminModulos: ['comercial'] }),
+      grupoAlmox: await usuario('galm', { grupos: [906] }),
     };
     await run('UPDATE usuarios SET is_superadmin = 1 WHERE id = ?', [ctx.u.superU.id]);
     ctx.u.superU.superadmin = true;
