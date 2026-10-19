@@ -11,12 +11,19 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-19):** **Etapa 152 fechada** (do Comercial: **os custos de viagem pedem o Comercial, e o resumo da
+> **Onde o desenvolvimento está (2026-10-19):** **Etapa 153 fechada** (do Comercial: **o painel, os relatórios e o mapa do Comercial pedem
+> o Comercial, e a busca do topo só mostra o que cada um pode abrir** — quem a tela barra do Comercial lia pela integração o painel (o
+> pipeline de oportunidades, o ranking de clientes), os relatórios executivo e de visitas técnicas (com telefone e e-mail dos clientes) e o
+> mapa das máquinas vendidas; agora toma *"Acesso negado ao módulo"* nas 7 leituras, e o vendedor não perde nada (**C355** resolvido); a busca
+> do topo, que está em todos os módulos, mostra cada resultado só a quem pode abrir a tela dele — sem o Comercial, *"Nenhum resultado
+> encontrado"* (**C352** resolvido); as provas de portão das Etapas 145 a 152 passam a ler o servidor montado; **B991** a **B994**; a
+> consulta **A101** (opcional); os avisos novos **C362** a **C365**); a próxima é a **154** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 152 fechada** (do Comercial: **os custos de viagem pedem o Comercial, e o resumo da
 > tela volta a aparecer** — quem a tela barra do Comercial lançava, editava, aprovava e apagava custo de viagem, anexava e baixava
 > comprovante e lia a lista dos clientes próximos e a análise custo × vendas pela integração; agora toma *"Acesso negado ao módulo"* nas 19
 > operações, e o vendedor não perde nada (**C350** resolvido); os quatro cartões do topo da tela, que nunca apareciam, aparecem (**C356**
 > resolvido); **B986** a **B990**; a consulta **A100** (opcional); os avisos novos **C357** a **C361**; a aba antiga de Permissões apontada
-> por engano na **A93** — corrigido); a próxima é a **153** — ver "Onde estamos e o que vem a seguir".
+> por engano na **A93** — corrigido); a próxima era a **153**.)*
 > *(Antes: **Etapa 151 fechada** (do Comercial: **clientes, projetos, oportunidades e atividades pedem
 > o Comercial** — quem a tela barra do Comercial criava, editava e apagava cliente, projeto, oportunidade e atividade e lia o cadastro do
 > cliente e as atividades pela integração; agora toma *"Acesso negado ao módulo"* nas 18 operações, e o vendedor, o Almoxarifado e a Fábrica
@@ -294,7 +301,11 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Cem itens para rodar em produção ANTES do deploy — noventa e sete são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Cento e um itens para rodar em produção ANTES do deploy — noventa e oito são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-19 (Etapa 153) de cem para cento e um**, com a **A101** — quem passa a ser barrado no painel, nos relatórios e no
+mapa do Comercial e deixa de ver resultados na busca do topo (**C355**, **C352**). **Somente leitura, opcional:** no banco medido, os 4 de
+sempre, nenhum com proposta.)*
 
 *(**Atualizado em 2026-10-19 (Etapa 152) de noventa e nove para cem**, com a **A100** — quem passa a ser barrado nos custos de viagem, e
 quanto já lançou, aprovou ou anexou (**C350**). **Somente leitura, opcional:** no banco medido, ninguém que usa perde — não há nenhum custo
@@ -3484,6 +3495,41 @@ cliente vazio deixa a proposta assim — **C330**): abra cada uma em **Comercial
 formulário exige o cliente). **Linhas na 2** — o mesmo; o cliente antigo não volta. *(Rodada no banco local, cópia de 09/10: **0** e
 **0**; controle numa cópia com uma proposta sem cliente e outra apontando para o cliente 987654: a 1 achou a primeira e a 2 a segunda.)*
 
+**A101 (NOVA, da Etapa 153 — opcional — quem perde o painel, os relatórios, o mapa e os resultados da busca do Comercial).** Desde a Etapa
+153 o painel do Comercial, o histórico, o painel avançado e o de vendas, o relatório executivo, o de visitas técnicas e o mapa de máquinas
+vendidas exigem o **Comercial** pela mesma régua da tela das propostas (a da **A93**), e a busca do topo só mostra a cada um os resultados
+que ele pode abrir (hoje, todos são do Comercial). As únicas telas que usam as 7 leituras são as do Comercial; a busca está em todos os
+módulos. O sistema não guarda quem usou a busca; a consulta lista quem perde, com os módulos que tem e quantas propostas tem como
+responsável ou criador (os lembretes delas continuam no sino — **C363**). Somente leitura.
+
+```sql
+-- quem passa a ser barrado nos painéis, nos relatórios e no mapa do Comercial e deixa de ver resultados na busca global (a régua da tela: sem o Comercial)
+WITH linhas AS (
+  SELECT ug.usuario_id, p.modulo, p.permissao FROM usuarios_grupos ug
+    JOIN grupos_permissoes gp ON gp.id = ug.grupo_id AND gp.ativo = 1
+    JOIN permissoes p ON p.grupo_id = gp.id
+  UNION ALL
+  SELECT p.usuario_id, p.modulo, p.permissao FROM permissoes p WHERE p.usuario_id IS NOT NULL AND p.grupo_id IS NULL
+)
+SELECT u.id, u.nome, u.email,
+  (SELECT GROUP_CONCAT(DISTINCT l.modulo) FROM linhas l WHERE l.usuario_id = u.id AND l.permissao = 1) AS modulos_que_tem,
+  (SELECT COUNT(*) FROM propostas p WHERE p.responsavel_id = u.id OR p.created_by = u.id) AS propostas_dele
+FROM usuarios u
+WHERE u.ativo = 1
+  AND COALESCE(u.is_superadmin, 0) NOT IN (1, '1')
+  AND LOWER(COALESCE(u.role, '')) <> 'admin'
+  AND EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id)
+  AND NOT EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id AND l.modulo = 'comercial' AND l.permissao = 1)
+ORDER BY u.nome;
+```
+
+**Como ler o resultado:** cada linha é alguém que vai tomar *"Acesso negado ao módulo"* no painel, nos relatórios e no mapa do Comercial
+pela integração (a tela já não lhe mostrava o Comercial) e que passa a ver *"Nenhum resultado encontrado"* na busca do topo. Se a pessoa
+precisa encontrar clientes, propostas ou produtos pela busca, dê-lhe o **Comercial** antes do deploy (**Administração → Usuários →
+editar → Módulos de Acesso**). Quem tem **propostas_dele** maior que zero continua vendo no sino os lembretes delas (**C363**): passe as propostas a
+outro responsável, ou dê-lhe o Comercial. *(Rodada no banco local, cópia de 09/10: os **4** de sempre — ids 15, 8, 7 e 12 —, todos com
+zero propostas; controle numa cópia com o Comercial dado ao 15 e uma proposta passada ao 8: o 15 saiu e o 8 subiu com 1.)*
+
 **A100 (NOVA, da Etapa 152 — opcional — quem perde os custos de viagem).** Desde a Etapa 152 as 19 operações dos custos de viagem (a
 lista, o resumo, a análise, lançar, editar, aprovar, duplicar, apagar, os comprovantes, o histórico, os clientes próximos, as coordenadas, a
 rota e a elegibilidade) exigem o **Comercial** pela mesma régua da tela das propostas (a da **A93**). A única tela que as usa é
@@ -3771,7 +3817,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B990; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B994; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -10939,6 +10985,35 @@ inativar. **Descartado nesta etapa:** apagar em cascata sem perguntar — some a
 **B990 (NOVA, da Etapa 152) — a próxima etapa (153).** Ver a "próxima tarefa detalhada" no plano da Etapa 152. As decisões que esperam
 vocês: as da **B957** e, novas, a **B988** e a **B989**.
 
+**B991 (NOVA, da Etapa 153; do Comercial) — o painel, os relatórios e o mapa pelo Comercial.** As 7 leituras (o painel do Comercial, o
+histórico, o painel avançado, o de vendas, o relatório executivo, o de visitas técnicas e o mapa de máquinas vendidas) exigem o
+**Comercial** pela régua da tela. Medido tela por tela (e de novo pela revisão do plano, executando): só as telas do Comercial as chamam —
+**Comercial → Dashboard**, **Relatórios** e **Máquinas Vendidas**; os painéis do Financeiro, da Fábrica, do MES, da Frota, da Produção e do
+Almoxarifado, que aparecem numa busca por "dashboard" e "relatórios", leem **outras** operações. **Descartado:** (a) "algum dos módulos que
+as leem" — só o Comercial as lê; (b) a régua antiga do módulo (libera o Comercial a todo usuário sem grupo — no banco medido não mudaria
+nada); (c) aceitar a linha *Relatórios* que o cadastro de usuário concede (um módulo sem tela) — nenhuma tela a aceita, e aceitá-la abriria
+a integração a quem a tela barra. **Reversível** (`PROPOSTAS_PORTAO_DE_MODULO=desligado`, a chave da **B946**, desliga também este).
+
+**B992 (NOVA, da Etapa 153; do núcleo/Comercial) — a busca global filtra cada resultado pelo módulo da tela que ele abre.** A busca do topo
+está na moldura de todos os módulos (*Ctrl+K*), então **não** foi fechada: cada tipo de resultado (cliente, projeto, proposta,
+oportunidade, atividade, produto) só aparece a quem a tela deixaria abrir o lugar para onde ele leva — hoje, os seis levam a telas do
+Comercial. Quem não tem o Comercial recebe a lista vazia (*"Nenhum resultado encontrado"*), sem linha de acesso negado no log. Um tipo novo
+de outro módulo entra com o módulo dele (o teste confere que todo tipo da busca tem módulo). **Descartado:** (a) fechar a busca inteira
+(recusa a cada tecla, uma linha de acesso negado por tecla, e um tipo futuro de outro módulo preso atrás do Comercial); (b) deixar cliente e
+projeto abertos a todos, como as listas deles (**C353**) — o resultado leva à tela do Comercial, que barra: mostrar o que não se consegue
+abrir é o *"a busca não funciona"*; (c) filtrar só na tela — a integração continuaria entregando a razão social, o título das propostas e
+das oportunidades. **Muda o que a tela mostra:** quem não tem o Comercial (no banco medido, os 4 de sempre — **A101**) passa a ver
+*"Nenhum resultado encontrado"* em qualquer busca. **Reversível:** o mapa dos tipos é uma lista só; desligado, volta tudo.
+
+**B993 (NOVA, da Etapa 153) — o que ficou de fora de propósito.** As operações dos relatórios personalizados e dos fluxos (6, de mentira —
+não leem nem gravam nada, e a tela nem chega a elas, **C362**), as da auditoria (o registro da tentativa negada é chamado pelo próprio
+barrado; a lista dos logs já tem a régua dela) e as notificações do sino (**C363**) **não** ganharam o portão. **Descartado:** pôr o portão
+nos stubs (não protegem dado nenhum); mexer nas notificações nesta etapa (só mostram os lembretes das propostas da própria pessoa — as
+aprovações de desconto não saem do servidor; fica candidata, com o endereço do clique quebrado).
+
+**B994 (NOVA, da Etapa 153) — a próxima etapa (154).** Ver a "próxima tarefa detalhada" no plano da Etapa 153. As decisões que esperam
+vocês: as da **B957**, a **B988** e a **B989** (nada novo).
+
 **B898 (NOVA, da Etapa 138) — a próxima etapa (139).** Ver a "próxima tarefa detalhada" no plano da Etapa 138. A **B853** (com a
 **C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
@@ -14013,7 +14088,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      proteger o código no endereço.** As telas da OS montam o endereço com o código cru: um código com barra (`/`) não acha o produto (era
      assim antes), e um com `?` ou `#` cai em outra operação. Nenhum efeito na tela além de o item da OS sair sem os dados do produto. **O
      que fazer:** nada (os códigos gerados pelo sistema não têm esses caracteres). Candidata: codificar o código nas três telas da OS.
-352. **NOVO (da revisão da Etapa 150; do núcleo, anterior a ela; reproduzido) — a busca global responde a qualquer logado.** Quem a tela
+352. **✅ RESOLVIDO NA ETAPA 153 (B992)** — a busca do topo mostra cada tipo de resultado só a quem pode abrir a tela dele; quem não tem o
+     Comercial recebe *"Nenhum resultado encontrado"*. *(O texto original:)*
+     **NOVO (da revisão da Etapa 150; do núcleo, anterior a ela; reproduzido) — a busca global responde a qualquer logado.** Quem a tela
      barra do Comercial recebe, pela busca do topo, o nome e a família dos produtos (sem preço), a razão social e a cidade dos clientes e o
      título e o cliente das propostas. **O que fazer:** nada. Candidata: filtrar cada tipo de resultado pelo módulo dele (junto da **C349**).
 353. **NOVO (da Etapa 151; do Comercial, decisão B983) — a lista de clientes e a de projetos continuam abertas a qualquer logado.** Quem só
@@ -14024,7 +14101,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      cadastro de oportunidade existem no código, mas nenhum caminho do menu os abre; e o cadastro, se voltar, abriria a edição vazia (ele
      pede uma operação "oportunidade pelo número" que não existe). Hoje a oportunidade só aparece na proposta (o campo e o filtro). **O que
      fazer:** nada. Candidata: decidir se a tela de oportunidades volta (é decisão de produto).
-355. **NOVO (da revisão da Etapa 151; do núcleo/Comercial, anterior a ela; reproduzido) — a busca global, o painel e o relatório executivo
+355. **✅ RESOLVIDO NA ETAPA 153 (B991, B992)** — o painel, o histórico, o painel avançado e o de vendas, os relatórios executivo e de
+     visitas técnicas e o mapa de máquinas vendidas exigem o Comercial; a busca filtra por tipo. O texto abaixo citava só o painel e o
+     relatório executivo: **estava incompleto** — o de visitas técnicas (com telefone e e-mail dos clientes), o painel de vendas e o mapa
+     também respondiam a qualquer logado. *(O texto original:)*
+     **NOVO (da revisão da Etapa 151; do núcleo/Comercial, anterior a ela; reproduzido) — a busca global, o painel e o relatório executivo
      mostram oportunidades e atividades a qualquer logado.** A busca do topo devolve o título e o cliente das oportunidades e das atividades
      (além do que a **C352** já diz), e o painel e o relatório executivo devolvem contagens e soma das oportunidades e o top de clientes, a
      quem a tela barra do Comercial. **O que fazer:** nada. Candidata junto da **C352**.
@@ -14053,6 +14134,24 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      serviço de mapas externo sem prazo.** Na tela de custos e na prévia da rota, o cliente que tem endereço completo é localizado por um
      serviço da internet; se a rede travar, o pedido fica esperando (a tela não recebe resposta). **O que fazer:** nada. Candidata: um
      prazo e o recuo pela cidade. Os testes cobrem só o recuo pela cidade (cliente sem endereço).
+362. **NOVO (da Etapa 153; do núcleo, anterior a ela; reproduzido) — o Construtor de relatórios e o Motor de fluxos não falam com o
+     servidor.** Na moldura de todos os módulos, *Ctrl+R* abre o *Construtor de relatórios* e *Ctrl+W* o *Motor de fluxos*: salvar mostra
+     *"Erro ao salvar relatório"* / *"Erro ao salvar workflow"* (o pedido vai a um endereço que não existe), e as operações do servidor
+     são de mentira — devolvem lista vazia e "salvo com sucesso" sem gravar nada. **O que fazer:** nada (não há dado). Candidata: tirar os
+     atalhos ou fazer as duas ferramentas de verdade — decisão de produto.
+363. **NOVO (da Etapa 153; do Comercial, anterior a ela; reproduzido) — as notificações do sino mostram os lembretes das propostas a
+     quem perdeu o Comercial.** O sino (na moldura de todos os módulos) mostra a cada um os lembretes das propostas de que ele é o
+     responsável ou o criador (número, título, a mensagem do lembrete e o cliente) — mesmo sem o Comercial; e o clique numa notificação
+     abre uma página que não existe. As aprovações de desconto pendentes **não** aparecem no sino (o servidor as lê e não as devolve).
+     **O que fazer:** ao tirar o Comercial de alguém, passe as propostas dele a outro responsável. Candidata: o mesmo filtro da busca e o
+     endereço do clique.
+364. **NOVO (da Etapa 153; decisão B992) — quem não tem o Comercial abre a busca do topo e nunca acha nada.** O *Ctrl+K* continua abrindo
+     a busca (*"Buscar clientes, projetos, propostas..."*) em todos os módulos; sem o Comercial, toda busca diz *"Nenhum resultado
+     encontrado"*. **O que fazer:** nada. Candidata: desligar o atalho para quem não tem nenhum tipo (é da tela).
+365. **NOVO (da revisão do plano da Etapa 153; do núcleo, anterior a ela; lido no código) — com o banco ocupado, a busca pode mostrar o
+     resultado de um termo anterior.** Quando o banco responde "ocupado", a tela repete o pedido até 3 vezes; se a pessoa continuou
+     digitando, a resposta atrasada do termo anterior pode aparecer com o termo novo no campo. **O que fazer:** apague e digite de novo.
+     Candidata: a busca descartar a resposta velha.
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -15384,6 +15483,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(153) A busca do topo é "tudo ou nada" por enquanto** — os seis tipos de resultado levam a telas do Comercial, então quem não tem o
+  Comercial não vê nada e continua abrindo a busca pelo *Ctrl+K* (**C364**, decisão **B992**); as notificações do sino mostram os lembretes
+  das propostas da própria pessoa mesmo sem o Comercial (**C363**); o Construtor de relatórios e o Motor de fluxos não gravam (**C362**); com
+  o banco ocupado a busca pode mostrar o resultado de um termo anterior (**C365**). Na prova "pelo servidor montado", uma operação de outra
+  etapa que divide o endereço é conferida pelo teste da etapa dona dele (**B993**).
 - **(152) O resumo da tela de custos de viagem soma todos os lançamentos** — não segue os filtros da tela nem quem lançou (**B987**);
   aprovar não tem régua própria (**C357**, **B988**); o custo editado não se apaga (**C359**, **B989**) e o apagado deixa os comprovantes
   no disco (**C360**); as coordenadas do cliente com endereço dependem de um serviço externo sem prazo (**C361**); a aba antiga de
@@ -16392,6 +16496,13 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(153) Nenhum clique foi dado no navegador.** Tudo foi provado pela rota, com o servidor de verdade em pasta vazia (as 7 leituras e a
+busca com 15 perfis de usuário; o vendedor abrindo o painel com e sem os filtros, os relatórios, o mapa e cada resultado da busca até a
+leitura da tela dele; o desligado; o banco ocupado); os revisores rodaram 29 gestos com 9 usuários que a tela admite, ligado e desligado, e
+51 perfis contra a decisão da tela. O que **só o navegador** prova: o roteiro da Etapa 153 no guia — com um vendedor, **Comercial →
+Dashboard** (os cartões e o **Filtros**), **Relatórios**, **Máquinas Vendidas** e **Ctrl+K** com o nome de um cliente (aparece e abre); com um
+usuário só do Almoxarifado, **Ctrl+K** com o mesmo nome (*"Nenhum resultado encontrado"*).
 
 **(152) Nenhum clique foi dado no navegador.** Tudo foi provado pela rota, com o servidor de verdade em pasta vazia (as 19 operações uma a
 uma com 15 perfis de usuário; a viagem inteira do vendedor — escolher o cliente, conferir, lançar, editar, anexar, baixar, duplicar,
@@ -31003,17 +31114,88 @@ testes, um caminho com padrão), e os cartões, o desligado e a própria régua 
 montado de verdade** (só as 19 atendem os custos de viagem, todas com o portão na frente), mais o controle da própria régua e as asserções
 que faltavam — as 22 sobreviventes que a etapa cobre caem agora; as 3 dos testes das etapas 148 a 150 ficam para a próxima. Commits `9ddd5dfe`, `0bf06b57` e `cc70ee9e`.
 
+## Etapa 153 — O painel, os relatórios e o mapa do Comercial pedem o Comercial, e a busca global só mostra o que cada um pode abrir (2026-10-19)
+
+Um conserto de **acesso** em duas partes, nas telas de resumo do Comercial e na busca do topo. O painel do Comercial (os números de
+clientes, projetos, oportunidades e propostas, o histórico, o painel avançado e o de vendas), o relatório executivo, o de visitas
+técnicas e o mapa de máquinas vendidas pediam só o login: um usuário só do Almoxarifado, que a tela não deixa entrar no Comercial, lia
+pela integração o valor do pipeline de oportunidades, o ranking dos clientes, o telefone e o e-mail dos clientes com proposta e as
+propostas aprovadas com a localização. Agora tudo isso pede o **Comercial** — e quem usa hoje, o vendedor, não perde nada: a medição não
+achou nenhuma tela fora do Comercial que use essas leituras (os painéis do Financeiro, da Fábrica, do MES, da Frota e do Almoxarifado leem
+outras). A **busca do topo** (*Ctrl+K*) aparece em todos os módulos, então ela **não** foi fechada: cada tipo de resultado passou a ser
+mostrado só a quem pode abrir a tela para onde ele leva. Hoje todos levam a telas do Comercial — quem não tem o Comercial passa a ver
+*"Nenhum resultado encontrado"*, em vez de resultados que, ao clicar, davam *Acesso negado*.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Um usuário só do Almoxarifado lia pela integração o painel do Comercial, o histórico, o painel avançado e o de vendas, o relatório executivo, o de visitas técnicas (com telefone e e-mail dos clientes) e o mapa das máquinas vendidas | *"Acesso negado ao módulo"* em cada uma das 7 leituras, e a tentativa no log (**C355** resolvido — **B991**) |
+| A busca do topo devolvia a qualquer logado clientes, projetos, propostas, oportunidades, atividades e produtos — que, ao clicar, davam *Acesso negado* a quem não tem o Comercial | Cada tipo só aparece a quem pode abrir a tela dele; sem o Comercial, *"Nenhum resultado encontrado"* — sem log de acesso negado (**C352** resolvido — **B992**) |
+| O vendedor no painel, nos relatórios, no mapa e na busca | Continua como antes — os mesmos números e os mesmos resultados |
+
+### As regras, com o cenário exato
+
+**1. O painel, os relatórios e o mapa pedem o Comercial (B991 — C355).** Entre com um usuário que tem só a permissão do
+**Almoxarifado** (em **Administração → Usuários → editar → Módulos de Acesso**): a tela não mostra o Comercial. Pela integração, com o
+token dele, `GET /api/dashboard`, `GET /api/dashboard/avancado?inicio=2026-01-01&fim=2026-12-31`, `GET /api/dashboard/vendas`, `GET
+/api/relatorios/executivo`, `GET /api/relatorios/visitas-tecnicas`, `GET /api/mapa/maquinas-vendidas` → **403** `{ "error": "Acesso negado
+ao módulo", "modulo": "comercial" }`, e **Administração → Logs** mostra o acesso negado a *Comercial* (antes: **200**, com os números).
+Com `PROPOSTAS_PORTAO_DE_MODULO=desligado` (a chave da **B946**) as 7 voltam a pedir só o login.
+
+**2. A busca do topo só mostra o que se pode abrir (B992 — C352).** Com o mesmo usuário, abra qualquer tela do Almoxarifado, aperte
+**Ctrl+K** e digite o nome de um cliente que existe: *"Nenhum resultado encontrado"* (antes: o cliente aparecia e, ao clicar, a tela dizia
+*Acesso negado*). Pela integração, `GET /api/busca-global?q=<o nome>` → **200** `[]`, e **nada** vai para o log (a busca dispara a cada
+tecla). Com um usuário do Comercial, o mesmo termo traz o cliente, o projeto, a proposta, a atividade e o produto, e o clique abre cada um.
+Desligado, a busca volta a mostrar tudo a qualquer logado.
+
+**3. O vendedor não perde nada.** Com um usuário que tem **só o Comercial**: **Comercial → Dashboard** (os cartões, os gráficos, o botão
+**Filtros** com período e vendedor), **Comercial → Relatórios** (o executivo e as visitas técnicas), **Comercial → Máquinas Vendidas** e
+**Ctrl+K**. Nenhum *"Acesso negado"*.
+
+### O que esta etapa NÃO cobre
+
+1. **As notificações do sino** continuam mostrando a quem perdeu o Comercial os lembretes das propostas de que é responsável ou criador,
+   e o clique numa notificação abre uma página que não existe (**C363**, de antes).
+2. **O Construtor de relatórios** (*Ctrl+R*) e o **Motor de fluxos** (*Ctrl+W*) não falam com o servidor — salvar sempre dá erro (**C362**,
+   de antes).
+3. **Quem não tem o Comercial** continua abrindo a busca pelo *Ctrl+K*, que agora nunca acha nada (**C364**).
+4. **Com o banco ocupado**, a busca pode mostrar o resultado de um termo anterior (**C365**, de antes).
+
+### O que a revisão encontrou
+
+A **medição** (antes do código) achou só as telas do Comercial chamando o painel, os relatórios e o mapa — os painéis dos outros módulos
+leem outras operações — e a busca do topo na moldura de todos os módulos, com todo resultado levando a uma tela do Comercial; no banco
+medido, os mesmos 4 usuários que a tela já barra (**A101**). A **revisão do plano** (1 médio, 6 pequenos) refez a medição, confirmou, e achou
+que a busca não tem botão no topo (só o *Ctrl+K*), que com o banco ocupado ela pode mostrar o resultado de um termo anterior (**C365**) e
+que o Construtor de relatórios não fala com o servidor (**C362**). A **revisão adversarial do código** (três revisores, executando): o de
+**regra** rodou o painel, os relatórios, o mapa e 17 variações da busca com 9 usuários que a tela admite, ligado e desligado — as
+respostas iguais, nenhum *"Acesso negado"*; o de **permissão** comparou 51 perfis com a decisão da tela e 1.320 variações de endereço e de
+termo — nada vazou, e achou que o aviso das notificações escrito na revisão do plano estava errado (as aprovações de desconto não saem do
+servidor — **C363** corrigido); o de **sabotagem** fez 35 sabotagens — 26 caíram e 9 sobreviveram: a prova pelo servidor montado só via
+as operações que casavam os endereços de amostra (uma operação nova num endereço literal passava), comparava os passos de antes da
+operação só pelo nome, e o controle da própria régua não cobria três promessas. Virou a leitura de **todas** as operações montadas nos
+endereços de cada etapa, a comparação pela posição e os casos que faltavam — as 9 caem agora (uma delas, pela régua da etapa vizinha). Commits `09424106`, `654df671` e `b1918f1a`.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 153 entregue (2026-10-19):** **o painel, os relatórios e o mapa do Comercial pedem o Comercial, e a busca do topo só mostra o
+  que cada um pode abrir** (do Comercial/núcleo). Quem a tela barra do Comercial é barrado nas 7 leituras; o vendedor não perde nada
+  (**B991** — **C355** resolvido); a busca filtra cada resultado pelo módulo da tela que ele abre (**B992** — **C352** resolvido); as provas de
+  portão das Etapas 145 a 152 leem o servidor montado. Commits `09424106`, `654df671` e `b1918f1a`. **O que é seu:** a consulta **A101** (opcional); os avisos
+  **C362** a **C365**; as decisões **B991** a **B993** (reversíveis); as perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**,
+  **B988**, **B989**, **C277**, **C312**, **C314**, **C316**, **C330**); as limitações **(153)** em D e a verificação **(153)** em F.
+  **Próxima: Etapa 154 — ver a "próxima tarefa detalhada" no plano da Etapa 153.**
 
 - **Etapa 152 entregue (2026-10-19):** **os custos de viagem pedem o Comercial, e o resumo da tela volta a aparecer** (do Comercial). Quem a
   tela barra do Comercial é barrado nas 19 operações dos custos de viagem; o vendedor não perde nada (**B986** — **C350** resolvido); os
   quatro cartões do topo da tela aparecem (**B987** — **C356** resolvido). Commits `9ddd5dfe`, `0bf06b57` e `cc70ee9e`. **O que é seu:** a consulta **A100**
   (opcional); as decisões novas **B988** (quem aprova reembolso) e **B989** (apagar o custo editado); os avisos **C357** a **C361**; as
   decisões **B986** e **B987** (reversíveis); as perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **C277**, **C312**,
-  **C314**, **C316**, **C330**); as limitações **(152)** em D e a verificação **(152)** em F. **Próxima: Etapa 153 — ver a "próxima tarefa
-  detalhada" no plano da Etapa 152.**
+  **C314**, **C316**, **C330**); as limitações **(152)** em D e a verificação **(152)** em F. *(Próxima, na época: Etapa 153 — entregue
+  acima.)*
 
 - **Etapa 151 entregue (2026-10-19):** **clientes, projetos, oportunidades e atividades pedem o Comercial** (do Comercial). Quem a tela barra
   do Comercial é barrado nas 13 escritas e nas 5 leituras que só o Comercial faz; o vendedor, o Almoxarifado e a Fábrica não perdem nada — a

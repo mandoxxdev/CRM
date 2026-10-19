@@ -283,7 +283,10 @@ editor **39/39**; client **143** suítes / **1856** testes; `CI=true build` *Com
    **O que mais pesou:** a régua do fonte, por mais que cresça, é texto — a prova que fecha a família é ler o Express montado.
 3. **Paralelismo:** **0** galhos em paralelo de fato (o T3 em série depois do T1, Fase 2 da 151 I-1); **0** retrabalho; **1** revisor na Fase
    2, **3** em paralelo na Fase 5 sob a trava (o r3 numa worktree própria, removida).
-4. **Defeito que escapou:** *(preencher na Etapa 153)*.
+4. **Defeito que escapou:** *(preenchido na Etapa 153)* **0** de código; **2** de prova — a leitura das camadas escrita inline no
+   `custosViagensPortao` só via as rotas que casavam uma amostra (uma rota nova num caminho literal fora delas passava) e comparava os
+   middlewares de antes só pelo nome (um do prefixo com o nome de um global posterior passava) — achados pela Fase 5 r3 da 153 (famílias 1
+   e 2), reproduzidos no helper extraído dela e corrigidos em `b1918f1a` (o `custosViagensPortao` passou a usar o helper); **0** de documento.
 
 ## Próxima tarefa detalhada — Etapa 153
 

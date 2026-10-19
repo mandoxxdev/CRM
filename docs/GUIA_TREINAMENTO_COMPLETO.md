@@ -101,6 +101,12 @@ Após o login, você verá a **Tela de Seleção de Módulos** com 5 opções:
 
 ### 3.1 Dashboard Comercial
 
+**Quem pode usar o painel, os relatórios e o mapa.** O painel do Comercial (os cartões, o histórico, o painel avançado e o de vendas, com
+o botão **Filtros** de período e de vendedor), os **Relatórios** (o executivo e o de visitas técnicas) e o mapa de **Máquinas Vendidas**
+exigem o **Comercial** (a regra da seção 3.3). Quem não pode recebe *"Acesso negado ao módulo"* e a tentativa fica registrada em
+**Administração → Logs**. Os painéis dos outros módulos (Financeiro, Fábrica, Frota, Almoxarifado) são outros e seguem a regra do módulo
+deles.
+
 **O que você vê:**
 - **6 Cards de Métricas:**
   1. Total de Clientes
@@ -819,12 +825,10 @@ Mapa interativo mostrando todas as máquinas vendidas e suas localizações.
 
 #### 3.10.2 Construtor de Relatórios
 
-**Funcionalidade Premium:**
-- Crie relatórios personalizados
-- Escolha campos, filtros, agrupamentos
-- Configure gráficos
-- Salve como template
-- Agende envio automático
+O atalho `Ctrl + R` abre, em qualquer módulo, o *Construtor de relatórios*: dá para montar a tela arrastando os blocos, mas **o relatório
+não é gravado** — **Salvar** mostra *"Erro ao salvar relatório"*, e **Exportar** mostra *"Funcionalidade de exportação em
+desenvolvimento"*. O mesmo vale para o *Motor de fluxos* (`Ctrl + W`): salvar mostra *"Erro ao salvar workflow"*. Use os relatórios da
+seção 3.10.1, que leem os dados de verdade.
 
 ---
 
@@ -1391,21 +1395,16 @@ módulo que tem — um grupo montado só com as marcações desta aba tira do us
 
 ### 8.1 Busca Global
 
-**Como usar:**
-- Clique na lupa no topo
-- Digite o termo de busca
-- O sistema busca em:
-  - Clientes
-  - Propostas
-  - Projetos
-  - Produtos
-  - Oportunidades
-  - Atividades
+**Como usar:** em qualquer módulo, aperte `Ctrl + K` e digite pelo menos 2 caracteres (com menos, a tela diz *"Digite pelo menos 2
+caracteres para buscar"*). A busca procura, sem diferenciar maiúsculas, nos **clientes** (razão social, nome fantasia, CNPJ), nos
+**projetos** (nome, descrição), nas **propostas** (número, título, cliente), nas **atividades** (título, descrição, tipo) e nos
+**produtos** (nome, código, família, modelo, descrição) — até 5 de cada tipo, 20 no total, nessa ordem. As setas escolhem, **Enter** abre e
+**Esc** fecha. Cada resultado abre a tela dele no Comercial (o cadastro do cliente, do projeto, da proposta ou do produto; a lista de
+atividades). As oportunidades não aparecem na busca (não há tela de oportunidade no menu).
 
-**Resultados:**
-- Agrupados por tipo
-- Com preview das informações
-- Link direto para o registro
+**Quem vê o quê:** cada tipo de resultado só aparece a quem pode abrir a tela para onde ele leva — hoje, todos levam a telas do Comercial,
+então quem não tem o **Comercial** (a regra da seção 3.3) vê *"Nenhum resultado encontrado"* em qualquer busca. Não há registro de acesso
+negado: a busca simplesmente não mostra o que a pessoa não poderia abrir.
 
 ### 8.2 Notificações
 
@@ -1538,7 +1537,8 @@ módulo que tem — um grupo montado só com as marcações desta aba tira do us
 ### 9.2 Produtividade
 
 **Atalhos de Teclado:**
-- `Ctrl + K` - Busca global
+- `Ctrl + K` - Busca global (veja 8.1)
+- `Ctrl + R` / `Ctrl + W` - Construtor de relatórios / Motor de fluxos (não gravam — veja 3.10.2)
 - `Ctrl + N` - Novo registro (contextual)
 - `Esc` - Fechar modal
 - `Enter` - Confirmar ação

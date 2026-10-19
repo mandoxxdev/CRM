@@ -356,6 +356,36 @@ Testes: `tests/api/produtosGruposVariaveisPortao.api.test.js` (as 25 + o clonar 
 caminho montado — e uma a uma, 17 perfis contra a decisão da tela, o catálogo e as variáveis pelo Comercial, as variáveis pelo caminho de
 Configurações, a OS da Fábrica lendo o produto pelo código, o clonar, o desligado com as exclusões, o BUSY).
 
+### O painel, os relatórios e o mapa no portão, e a busca global filtrada por tipo (Etapa 153, C355, C352)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa153-paineis-relatorios-e-busca-global-pelo-modulo.md`. Commits `09424106`, `654df671` e `b1918f1a`.
+
+- **As 7 leituras** — `GET /api/dashboard`, `/api/dashboard/historico`, `/api/dashboard/avancado`, `/api/dashboard/vendas`,
+  `/api/relatorios/executivo`, `/api/relatorios/visitas-tecnicas`, `/api/mapa/maquinas-vendidas` — com `exigirComercialNasPropostas` como 2º
+  middleware (RN-153.01, B991). Telas: o índice de `/comercial` (`Dashboard`, `DashboardVendas`), `/comercial/relatorios` (`Relatorios`),
+  `/comercial/maquinas-vendidas` (`MaquinasVendidas`). Os painéis dos outros módulos leem outras rotas (`/financeiro/dashboard`,
+  `/operacional/dashboard`, `/operacional/dashboard-mes`, `/almoxarifado/*`, `/frotas/*`, `/producao/dashboard`).
+- **`GET /api/busca-global`** com `filtrarBuscaGlobalPorModulo` como 2º middleware (RN-153.02, B992): `portaoDasPropostas.filtrarPorModulo(
+  TIPOS_DA_BUSCA_GLOBAL, { contexto: 'portao:busca-global' })` pendura `req.tiposPermitidos` (`null` = todos: desligado, super ou role
+  admin, sem ler; senão o `Set` dos tipos cujo módulo `temModuloComoATela` aceita sobre `SQL_LINHAS_DA_TELA`); o handler só empurra o tipo
+  permitido (`podeVer`) e, sem tipo nenhum ou sem o filtro na rota, responde `[]` sem consultar. Os seis tipos → `['comercial']` (todo
+  resultado abre uma tela do Comercial). Sem log de acesso negado. BUSY → 503 `context: 'portao:busca-global'`; outro erro → 500 *"Erro ao
+  verificar permissões"* (o filtro roda antes da conferência do `q`).
+- **De fora, de propósito (B993):** `/api/reports` e `/api/workflows*` (stubs; o client os chama como `/api/api/...` — 404, **C362**),
+  `/api/auditoria/*` (a `tentativa-acesso` é do próprio barrado; os `logs` com `canManageUsers`), `/api/notificacoes` (os lembretes das
+  propostas do próprio usuário; as aprovações são lidas e **não** devolvidas — **C363**).
+- O aviso do boot (desligado) acrescenta *"…, e as dos painéis, dos relatórios e do mapa do Comercial NAO exigem o Comercial (só o login), e a
+  busca global mostra todos os tipos de resultado a qualquer logado; …"*.
+
+Testes: `tests/api/paineisBuscaGlobalPortao.api.test.js` (8: o fonte — com o mapa cobrindo chaves e valores de todo tipo do corpo —, as
+camadas do Express, o controle do helper, o barrado, o vendedor seguindo cada resultado até a leitura da tela dele, 15 perfis, o desligado com
+o conteúdo, o BUSY/500 com o administrador e o super). **As camadas do Express montado** passaram a ser conferidas pelo helper
+`tests/helpers/conferirCamadasDoExpress.js` (o preload `despejaCamadasDoExpress.js` despeja o despacho das amostras, as rotas que as casam e
+**todas** as rotas da pilha; `nomeDaCamada.js` dá o nome de cada handler) em todos os testes de portão — 145/146, 147, 148, 149, 150, 151, 152 e
+153: só as rotas da etapa (e as de outra etapa no mesmo prefixo, ditas no teste) atendem os prefixos dela, com o login e o portão na frente,
+os middlewares de antes iguais aos de todo pedido pela posição na pilha, nenhum router, nenhum `app.param`, nenhuma rota com caminho em
+regexp. A régua do texto (`reguaDoFonteDoServidor.js`) passou a acusar também o registro por `.call`/`.apply`.
+
 ### Os custos de viagem no portão, e o resumo antes do `/:id` (Etapa 152, C350, C356)
 
 Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa152-custos-de-viagem-pelo-modulo.md`. Commits `9ddd5dfe`, `0bf06b57` e `cc70ee9e`.
