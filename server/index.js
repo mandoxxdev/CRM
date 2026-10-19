@@ -3013,7 +3013,7 @@ function checkAnyModulePermission(requiredModules) {
 // passam pelo mesmo portao — o barrado criava o pedido pela API; a tela de Aprovacoes e as que pedem aprovacao estao todas no Comercial.
 const PORTAO_DAS_PROPOSTAS_DESLIGADO = String(process.env.PROPOSTAS_PORTAO_DE_MODULO || '').trim().toLowerCase() === 'desligado';
 if (PORTAO_DAS_PROPOSTAS_DESLIGADO) {
-  console.warn('⚠️ PROPOSTAS_PORTAO_DE_MODULO=desligado: as rotas /api/propostas*, as do modelo da proposta, as das listas de preço e as do modelo de contrato por família NAO exigem o módulo Comercial, e as da ordem de serviço pelo número NAO exigem o Comercial ou o Operacional, e as do cadastro de família NAO exigem o Comercial (só o login), e as dos grupos de produto, dos produtos e das variáveis técnicas NAO exigem o Comercial e a do produto pelo código NAO exige o Comercial ou o Operacional (só o login); a lista de ordens de serviço do Operacional volta à régua antiga do módulo.');
+  console.warn('⚠️ PROPOSTAS_PORTAO_DE_MODULO=desligado: as rotas /api/propostas*, as do modelo da proposta, as das listas de preço e as do modelo de contrato por família NAO exigem o módulo Comercial, e as da ordem de serviço pelo número NAO exigem o Comercial ou o Operacional, e as do cadastro de família NAO exigem o Comercial (só o login), e as dos grupos de produto, dos produtos e das variáveis técnicas NAO exigem o Comercial e a do produto pelo código NAO exige o Comercial ou o Operacional (só o login), e as dos clientes, dos projetos, das oportunidades e das atividades NAO exigem o Comercial (só o login); a lista de ordens de serviço do Operacional volta à régua antiga do módulo.');
 }
 const portaoDasPropostas = criarPortaoDasPropostas({
   getDb: () => db,
@@ -3048,6 +3048,11 @@ const exigirOperacionalNaListaDeOS = PORTAO_DAS_PROPOSTAS_DESLIGADO ? checkModul
 // Etapa 150 (C347, RN-150.04, B979): as 7 de variaveis tecnicas — o Comercial (ProdutoForm, a familia, a selecao da proposta) OU o
 // caminho de Configuracoes -> Comercial (as abas Variaveis tecnicas e Template de proposta), leitura e escrita.
 const exigirComercialNasVariaveisTecnicas = portaoDasPropostas.exigir('comercial', { tambemAdminDoModuloCom: { admin: 'comercial', tela: 'administrativo' } });
+// Etapa 151 (C349, RN-151.01/02, B983/B984): clientes, projetos, oportunidades e atividades — as 13 escritas (o logo antes do multer) e as
+// 5 leituras que so as telas do Comercial fazem (os logos, o cliente e o projeto por id, as oportunidades, as atividades) usam o
+// exigirComercialNasPropostas. As duas listas (GET /api/clientes e GET /api/projetos) continuam SO com o login (RN-151.03): o
+// Almoxarifado (material, reservas, movimentacoes, sobras) e a OS da Fabrica (OSForm) as leem — fechar a leitura so onde ninguem de
+// fora do Comercial le (C353).
 
 // Etapa 21 (RN-04). Precedencia: variaveis de ambiente `SMTP_*` -> valores abaixo.
 // A regua mora em `services/emailConfig.js` (funcao pura, testada em
@@ -4340,7 +4345,7 @@ app.get('/api/clientes', authenticateToken, (req, res) => {
 });
 
 // Rota para buscar logos dos clientes (otimizada para muitos registros)
-app.get('/api/clientes/logos', authenticateToken, (req, res) => {
+app.get('/api/clientes/logos', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { page = 1, limit = 100, search } = req.query;
   const offset = (parseInt(page) - 1) * parseInt(limit);
   const limitNum = parseInt(limit);
@@ -4386,7 +4391,7 @@ app.get('/api/clientes/logos', authenticateToken, (req, res) => {
   });
 });
 
-app.get('/api/clientes/:id', authenticateToken, (req, res) => {
+app.get('/api/clientes/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   db.get('SELECT * FROM clientes WHERE id = ?', [id], (err, row) => {
     if (err) {
@@ -4399,7 +4404,7 @@ app.get('/api/clientes/:id', authenticateToken, (req, res) => {
   });
 });
 
-app.post('/api/clientes', authenticateToken, (req, res) => {
+app.post('/api/clientes', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   var body = req.body || {};
   var razao_social = body.razao_social;
   if (!razao_social) {
@@ -5254,7 +5259,7 @@ app.delete('/api/variaveis-tecnicas/:id', authenticateToken, exigirComercialNasV
   });
 });
 
-app.put('/api/clientes/:id', authenticateToken, (req, res) => {
+app.put('/api/clientes/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   var id = req.params.id;
   var body = req.body || {};
   // Etapa 138 — só as colunas que vieram (ausente mantém; presente, inclusive '', grava com a transformação de sempre). Antes,
@@ -5293,7 +5298,7 @@ app.put('/api/clientes/:id', authenticateToken, (req, res) => {
 });
 
 // Rota para upload de logo de cliente
-app.post('/api/clientes/:id/logo', authenticateToken, uploadClienteLogo.single('logo'), (req, res) => {
+app.post('/api/clientes/:id/logo', authenticateToken, exigirComercialNasPropostas, uploadClienteLogo.single('logo'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Nenhum arquivo enviado' });
   }
@@ -5332,7 +5337,7 @@ app.post('/api/clientes/:id/logo', authenticateToken, uploadClienteLogo.single('
   });
 });
 
-app.delete('/api/clientes/:id', authenticateToken, (req, res) => {
+app.delete('/api/clientes/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   db.run('UPDATE clientes SET status = ? WHERE id = ?', ['inativo', id], (err) => {
     if (err) {
@@ -5377,7 +5382,7 @@ app.get('/api/projetos', authenticateToken, (req, res) => {
   });
 });
 
-app.get('/api/projetos/:id', authenticateToken, (req, res) => {
+app.get('/api/projetos/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   db.get('SELECT * FROM projetos WHERE id = ?', [id], (err, row) => {
     if (err) {
@@ -5390,7 +5395,7 @@ app.get('/api/projetos/:id', authenticateToken, (req, res) => {
   });
 });
 
-app.post('/api/projetos', authenticateToken, (req, res) => {
+app.post('/api/projetos', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   normalizarMaiusculas(req.body, ['nome', 'descricao']);
   const { cliente_id, nome, descricao, status, responsavel_id } = req.body;
 
@@ -5410,7 +5415,7 @@ app.post('/api/projetos', authenticateToken, (req, res) => {
   );
 });
 
-app.put('/api/projetos/:id', authenticateToken, (req, res) => {
+app.put('/api/projetos/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   normalizarMaiusculas(req.body, ['nome', 'descricao']);
   const { cliente_id, nome, descricao, status, responsavel_id } = req.body;
@@ -5427,7 +5432,7 @@ app.put('/api/projetos/:id', authenticateToken, (req, res) => {
   );
 });
 
-app.delete('/api/projetos/:id', authenticateToken, (req, res) => {
+app.delete('/api/projetos/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   db.run('UPDATE projetos SET status = ? WHERE id = ?', ['inativo', id], (err) => {
     if (err) {
@@ -15713,7 +15718,7 @@ app.post('/api/produtos/zerar-modelo-antigo', authenticateToken, exigirComercial
 });
 
 // ========== ROTAS DE OPORTUNIDADES ==========
-app.get('/api/oportunidades', authenticateToken, (req, res) => {
+app.get('/api/oportunidades', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { cliente_id, status, responsavel_id } = req.query;
   let query = `SELECT o.*, c.razao_social as cliente_nome, u.nome as responsavel_nome
                FROM oportunidades o
@@ -15747,7 +15752,7 @@ app.get('/api/oportunidades', authenticateToken, (req, res) => {
   });
 });
 
-app.post('/api/oportunidades', authenticateToken, (req, res) => {
+app.post('/api/oportunidades', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   normalizarMaiusculas(req.body, ['titulo', 'descricao', 'etapa']);
   const { cliente_id, projeto_id, titulo, descricao, valor_estimado, probabilidade, etapa, status, responsavel_id } = req.body;
 
@@ -15767,7 +15772,7 @@ app.post('/api/oportunidades', authenticateToken, (req, res) => {
   );
 });
 
-app.put('/api/oportunidades/:id', authenticateToken, (req, res) => {
+app.put('/api/oportunidades/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   normalizarMaiusculas(req.body, ['titulo', 'descricao', 'etapa']);
   const corpo = req.body || {};
@@ -15794,7 +15799,7 @@ app.put('/api/oportunidades/:id', authenticateToken, (req, res) => {
   );
 });
 
-app.delete('/api/oportunidades/:id', authenticateToken, (req, res) => {
+app.delete('/api/oportunidades/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   db.run('DELETE FROM oportunidades WHERE id = ?', [id], (err) => {
     if (err) {
@@ -15805,7 +15810,7 @@ app.delete('/api/oportunidades/:id', authenticateToken, (req, res) => {
 });
 
 // ========== ROTAS DE ATIVIDADES ==========
-app.get('/api/atividades', authenticateToken, (req, res) => {
+app.get('/api/atividades', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { cliente_id, status, responsavel_id, todos } = req.query;
   const userId = req.user.id;
   
@@ -15934,7 +15939,7 @@ app.get('/api/atividades', authenticateToken, (req, res) => {
   });
 });
 
-app.post('/api/atividades', authenticateToken, (req, res) => {
+app.post('/api/atividades', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   normalizarMaiusculas(req.body, ['titulo', 'descricao', 'tipo', 'prioridade']);
   const { cliente_id, projeto_id, titulo, descricao, tipo, data_agendada, prioridade, status, responsavel_id } = req.body;
 
@@ -15960,7 +15965,7 @@ app.post('/api/atividades', authenticateToken, (req, res) => {
   );
 });
 
-app.put('/api/atividades/:id', authenticateToken, (req, res) => {
+app.put('/api/atividades/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   normalizarMaiusculas(req.body, ['titulo', 'descricao', 'tipo', 'prioridade']);
   const { cliente_id, projeto_id, titulo, descricao, tipo, data_agendada, prioridade, status, responsavel_id } = req.body;
@@ -15983,7 +15988,7 @@ app.put('/api/atividades/:id', authenticateToken, (req, res) => {
   );
 });
 
-app.delete('/api/atividades/:id', authenticateToken, (req, res) => {
+app.delete('/api/atividades/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   db.run('DELETE FROM atividades WHERE id = ?', [id], (err) => {
     if (err) {
