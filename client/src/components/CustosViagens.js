@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
 import {
   FiDollarSign, FiMapPin, FiCalendar, FiTrendingUp, FiTrendingDown,
@@ -13,6 +13,15 @@ import {
 import './CustosViagens.css';
 import PreviewRota from './PreviewRota';
 import { valoresDaRota } from '../utils/valoresDaRota';
+
+/**
+ * Etapa 157 (RN-157.01, C372): os sete campos que fazem a rota ser recalculada, numa forma comparavel (o mesmo texto para 5 e '5', null e '').
+ * Uma funcao so — usada no handleEdit (sobre o objeto ja normalizado que vai para o formulario) e no efeito do recalculo.
+ */
+export function assinaturaDaRota(f) {
+  const v = (x) => (x == null ? '' : String(x));
+  return JSON.stringify([f.cliente_id, f.destino_cidade, f.destino_estado, f.tipo_viagem, f.numero_pessoas, f.data_viagem, f.data_volta].map(v));
+}
 
 const CustosViagens = () => {
   const [loading, setLoading] = useState(true);
@@ -66,6 +75,11 @@ const CustosViagens = () => {
   const [itensPorPagina] = useState(20);
   const [mensagemSucesso, setMensagemSucesso] = useState(null);
   const [mensagemErro, setMensagemErro] = useState(null);
+  // RN-157.01 (C372): a edicao guarda a assinatura dos campos da rota gravados; enquanto ela vale, o recalculo so SUGERE
+  const assinaturaGravadaRef = useRef(null);
+  // a resposta de um calculo que nao e o ultimo pedido (ou de antes de fechar o formulario / apagar o cliente) nao toca em nada
+  const pedidoDaRotaRef = useRef(0);
+  const [sugestaoSemAplicar, setSugestaoSemAplicar] = useState(false);
 
   const [formData, setFormData] = useState({
     cliente_id: '',
@@ -115,18 +129,24 @@ const CustosViagens = () => {
 
   // Calcular rota automaticamente quando cliente ou destino mudar
   useEffect(() => {
+    // RN-157.01: qualquer diferenca da assinatura gravada apaga a assinatura — para sempre nesta edicao (voltar o campo nao a traz de volta)
+    const preservarGravados = assinaturaGravadaRef.current !== null && assinaturaGravadaRef.current === assinaturaDaRota(formData);
+    if (!preservarGravados) assinaturaGravadaRef.current = null;
     // Só calcular se tiver cliente selecionado E cidade E estado preenchidos (não vazios)
-    if (formData.cliente_id && 
-        formData.destino_cidade && 
-        formData.destino_cidade.trim() && 
-        formData.destino_estado && 
+    if (formData.cliente_id &&
+        formData.destino_cidade &&
+        formData.destino_cidade.trim() &&
+        formData.destino_estado &&
         formData.destino_estado.trim()) {
-      calcularRota();
+      calcularRota({ aplicar: !preservarGravados });
     } else {
-      // Limpar rota calculada se não tiver dados suficientes
+      // Limpar rota calculada se não tiver dados suficientes (e descartar a resposta de um calculo em curso)
+      pedidoDaRotaRef.current += 1;
       setRotaCalculada(null);
       setCalculandoRota(false);
+      setSugestaoSemAplicar(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.cliente_id, formData.destino_cidade, formData.destino_estado, formData.tipo_viagem, formData.numero_pessoas, formData.data_viagem, formData.data_volta]);
 
   // Carregar dados iniciais (rápido)
@@ -277,18 +297,24 @@ const CustosViagens = () => {
     }
   };
 
-  const calcularRota = async () => {
+  // aplicar: false = so sugerir (a abertura da edicao, RN-157.01): mostra o quadro e a frase, nao abre o modal, nao toca no formulario
+  const calcularRota = async ({ aplicar = true } = {}) => {
+    pedidoDaRotaRef.current += 1;
+    const meuPedido = pedidoDaRotaRef.current;
+    const valeAinda = () => pedidoDaRotaRef.current === meuPedido;
+    if (aplicar) setSugestaoSemAplicar(false);
+
     if (!formData.destino_cidade || !formData.destino_estado) {
       setRotaCalculada(null);
       return;
     }
-    
+
     // Validar se cidade e estado não estão vazios
     if (!formData.destino_cidade.trim() || !formData.destino_estado.trim()) {
       setRotaCalculada(null);
       return;
     }
-    
+
     setCalculandoRota(true);
     try {
       const params = new URLSearchParams({
@@ -301,40 +327,40 @@ const CustosViagens = () => {
         data_viagem: formData.data_viagem || '',
         data_volta: formData.data_volta || ''
       });
-      
+
       const response = await api.get(`/custos-viagens/calcular-rota?${params.toString()}`);
-      
-      // Verificar se a distância mudou significativamente (mais de 10km de diferença)
-      const distanciaMudou = distanciaConfirmada === null || 
-                            Math.abs(response.data.distancia_km - distanciaConfirmada) > 10;
-      
-      // Se requer passagem aérea E (não foi confirmada OU a distância mudou significativamente)
-      if (response.data.requer_passagem_aerea && (!passagemAereaConfirmada || distanciaMudou)) {
-        setRotaPendente(response.data);
-        setMostrarModalPassagemAerea(true);
-        setCalculandoRota(false);
+      if (!valeAinda()) return;
+
+      if (!aplicar) {
+        // RN-157.01 (C372): a abertura da edicao so sugere — os valores gravados ficam; o Aplicar Valores Sugeridos os troca
+        setRotaCalculada(response.data);
+        setSugestaoSemAplicar(true);
         return;
       }
-      
-      // Se já foi confirmada e a distância não mudou muito, usar os dados diretamente
-      if (response.data.requer_passagem_aerea && passagemAereaConfirmada && !distanciaMudou) {
-        // Não mostrar modal novamente, apenas usar os dados
-        response.data.requer_passagem_aerea = true;
+
+      // Verificar se a distância mudou significativamente (mais de 10km de diferença)
+      const distanciaMudou = distanciaConfirmada === null ||
+                            Math.abs(response.data.distancia_km - distanciaConfirmada) > 10;
+
+      // Se requer passagem aérea E (não foi confirmada OU a distância mudou significativamente)
+      if (response.data.requer_passagem_aerea && (!passagemAereaConfirmada || distanciaMudou)) {
+        setRotaCalculada(null);
+        setRotaPendente(response.data);
+        setMostrarModalPassagemAerea(true);
+        return;
       }
-      
+
       setRotaCalculada(response.data);
-      
+
       // Preencher automaticamente os campos (RN-157.02: a mesma funcao da confirmacao da passagem e do Aplicar)
       setFormData(prev => ({ ...prev, ...valoresDaRota(response.data) }));
     } catch (error) {
+      if (!valeAinda()) return;
       console.error('Erro ao calcular rota:', error);
-      // Não mostrar alert - apenas limpar rota calculada
-      // O erro pode ser esperado (cidade não encontrada, usando coordenadas genéricas)
+      // Não mostrar alert - apenas limpar rota calculada (o sistema continua funcionando sem o cálculo automático)
       setRotaCalculada(null);
-      // Não mostrar alert para evitar interrupção do fluxo
-      // O sistema continuará funcionando mesmo sem cálculo automático
     } finally {
-      setCalculandoRota(false);
+      if (valeAinda()) setCalculandoRota(false);
     }
   };
 
@@ -347,6 +373,7 @@ const CustosViagens = () => {
       // Marcar que a passagem aérea foi confirmada para esta distância
       setPassagemAereaConfirmada(true);
       setDistanciaConfirmada(rotaPendente.distancia_km);
+      setSugestaoSemAplicar(false);
       
       // Preencher automaticamente os campos (RN-157.02, C374: com a taxa de embarque, outros 0)
       setFormData(prev => ({ ...prev, ...valoresDaRota(rotaPendente) }));
@@ -973,7 +1000,7 @@ const CustosViagens = () => {
 
   const handleEdit = (custo) => {
     setEditingCusto(custo);
-    setFormData({
+    const gravado = {
       cliente_id: custo.cliente_id || '',
       proposta_id: custo.proposta_id || '',
       proposta_aprovacao_id: custo.proposta_aprovacao_id || '',
@@ -996,7 +1023,13 @@ const CustosViagens = () => {
       custo_outros: custo.custo_outros || '',
       custo_sugerido: custo.custo_sugerido || 0,
       descricao: custo.descricao || ''
-    });
+    };
+    // RN-157.01 (C372): abrir para editar nao troca os valores gravados — a assinatura do objeto que vai para o formulario
+    assinaturaGravadaRef.current = assinaturaDaRota(gravado);
+    pedidoDaRotaRef.current += 1;
+    setSugestaoSemAplicar(false);
+    setRotaCalculada(null);
+    setFormData(gravado);
     // Buscar logs de autorização quando editar
     if (custo.id) {
       buscarLogsAutorizacao(custo.id);
@@ -1038,12 +1071,16 @@ const CustosViagens = () => {
   };
 
   const resetForm = () => {
+    assinaturaGravadaRef.current = null;
+    pedidoDaRotaRef.current += 1;
+    setSugestaoSemAplicar(false);
     setFormData({
       cliente_id: '',
       proposta_id: '',
       proposta_aprovacao_id: '',
       atividade_id: '',
       data_viagem: '',
+      data_volta: '',
       origem: 'Av. Angelo Demarchi 130, Batistini, São Bernardo do Campo',
       origem_cidade: 'São Bernardo do Campo',
       origem_estado: 'SP',
@@ -1059,6 +1096,7 @@ const CustosViagens = () => {
       custo_alimentacao: '',
       custo_outros: '',
       custo_sugerido: 0,
+      requer_passagem_aerea: false,
       descricao: ''
     });
     setRotaCalculada(null);
@@ -1117,6 +1155,12 @@ const CustosViagens = () => {
     if (rotaCalculada) {
       // RN-157.02 (C374): os mesmos campos e valores do preenchimento automatico (antes: sem a taxa de embarque, sem distancia, tempo e sugerido)
       setFormData(prev => ({ ...prev, ...valoresDaRota(rotaCalculada) }));
+      setSugestaoSemAplicar(false);
+      // B1004 (Fase 2 I5): aplicar uma sugestao aerea e a escolha da passagem — a proxima mudanca com a mesma distancia nao pergunta de novo
+      if (rotaCalculada.requer_passagem_aerea) {
+        setPassagemAereaConfirmada(true);
+        setDistanciaConfirmada(rotaCalculada.distancia_km);
+      }
     }
   };
 
@@ -1892,6 +1936,11 @@ const CustosViagens = () => {
                     <button type="button" className="btn-sugestao" onClick={aplicarSugestao}>
                       <FiCheckCircle /> Aplicar Valores Sugeridos
                     </button>
+                    {sugestaoSemAplicar && (
+                      <div className="aviso-sugestao-gravados" role="status">
+                        <FiInfo /> Sugestão recalculada agora — os valores gravados foram mantidos. Clique em Aplicar Valores Sugeridos para usá-la.
+                      </div>
+                    )}
                     {rotaCalculada.requer_passagem_aerea && (
                       <div className="alerta-passagem-aerea">
                         <FiAlertCircle />
