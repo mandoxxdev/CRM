@@ -214,6 +214,8 @@ const { decodificarImagemBase64, filtroImagemMulter, multerComLimiteNoErro, trat
 const { tratarErroGlobalApi } = require('./services/errosApi');
 // Etapa 156 (RN-156.03/04, C361, C370, C371): o servico de mapas com prazo e a cidade sem caixa nem acento — os chamadores nao mudam.
 const { obterCoordenadasCidade, normalizarNome, termoDaConsulta, coordenadaGuardada, coordenadaPlausivel, geocodificarEndereco } = require('./services/coordenadas');
+// Etapa 159 (RN-159.02, C385): a busca de texto acha a letra acentuada em qualquer caixa (o LIKE do SQLite so ignora a caixa sem acento)
+const { condicaoDeBusca, formasDoTermo } = require('./services/buscaSemCaixa');
 // Etapa 85 (RN-85.02): o MulterError LIMIT_FILE_SIZE nao carrega o limite; o embrulho anexa
 // `err.limiteBytes` (limits.fileSize de quem recusou) para o tratarArquivoGrandeDemais responder
 // 413 "Arquivo grande demais (máximo N MB)". Todo multer deste arquivo e criado por este `multer`.
@@ -4364,7 +4366,7 @@ function semCoordenadaGuardada(row) {
 }
 
 app.get('/api/clientes', authenticateToken, exigirLeitorDasListasDeClientesEProjetos, (req, res) => {
-  const { status, search } = req.query;
+  const { status, search, segmento } = req.query;
   let query = 'SELECT * FROM clientes WHERE 1=1';
   const params = [];
 
@@ -4373,19 +4375,26 @@ app.get('/api/clientes', authenticateToken, exigirLeitorDasListasDeClientesEProj
     params.push(status);
   }
 
-  if (search) {
-    query += ' AND (razao_social LIKE ? OR nome_fantasia LIKE ? OR cnpj LIKE ?)';
-    const searchTerm = `%${search}%`;
-    params.push(searchTerm, searchTerm, searchTerm);
+  // Etapa 159 (RN-159.02, C385): o termo aparado, nas tres formas (o cadastro grava em maiusculas com acento)
+  const busca = condicaoDeBusca(['razao_social', 'nome_fantasia', 'cnpj'], search);
+  if (busca.sql) {
+    query += ' AND ' + busca.sql;
+    params.push(...busca.params);
   }
 
   query += ' ORDER BY razao_social';
+
+  // Etapa 159 (RN-159.01, C384): o filtro Segmento da tela — o servidor nem o lia. O cadastro grava pelo toUpperCase do JavaScript
+  // ("COSMÉTICOS") e o UPPER do SQLite nao muda o "é", entao a comparacao e aqui, sem caixa e sem espaco; nao texto = sem filtro
+  const segmentoAlvo = typeof segmento === 'string' ? segmento.trim().toUpperCase() : '';
 
   db.all(query, params, (err, rows) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
-    res.json((rows || []).map(semCoordenadaGuardada));
+    let lista = rows || [];
+    if (segmentoAlvo) lista = lista.filter((c) => typeof c.segmento === 'string' && c.segmento.trim().toUpperCase() === segmentoAlvo);
+    res.json(lista.map(semCoordenadaGuardada));
   });
 });
 
@@ -5559,16 +5568,11 @@ app.get('/api/propostas', authenticateToken, exigirComercialNasPropostas, (req, 
     params.push(responsavel_id, responsavel_id);
   }
 
-  const searchTrim = typeof search === 'string' ? search.trim() : '';
-  if (searchTrim) {
-    const searchTerm = `%${searchTrim}%`;
-    query += ` AND (
-      LOWER(COALESCE(pr.numero_proposta, "")) LIKE LOWER(?) OR
-      LOWER(COALESCE(pr.titulo, "")) LIKE LOWER(?) OR
-      LOWER(COALESCE(c.razao_social, "")) LIKE LOWER(?) OR
-      LOWER(COALESCE(c.nome_fantasia, "")) LIKE LOWER(?)
-    )`;
-    params.push(searchTerm, searchTerm, searchTerm, searchTerm);
+  // Etapa 159 (RN-159.02, C385): o LOWER do SQLite nao muda a letra acentuada ("VÁLVULA" nao achava "válvula") — as tres formas
+  const busca = condicaoDeBusca(['pr.numero_proposta', 'pr.titulo', 'c.razao_social', 'c.nome_fantasia'], search);
+  if (busca.sql) {
+    query += ' AND ' + busca.sql;
+    params.push(...busca.params);
   }
 
   query += ' ORDER BY pr.created_at DESC';
@@ -14413,10 +14417,11 @@ app.get('/api/produtos', authenticateToken, exigirComercialNasPropostas, (req, r
 
   var familiaTrim = (familia != null && String(familia).trim() !== '') ? String(familia).trim() : '';
 
-  if (search) {
-    query += ' AND (nome LIKE ? OR codigo LIKE ? OR descricao LIKE ? OR modelo LIKE ?)';
-    var searchTerm = '%' + search + '%';
-    params.push(searchTerm, searchTerm, searchTerm, searchTerm);
+  // Etapa 159 (RN-159.02, C385, Fase 2 I1): aparado e nas tres formas (os produtos de uma familia mandam a busca)
+  var busca = condicaoDeBusca(['nome', 'codigo', 'descricao', 'modelo'], search);
+  if (busca.sql) {
+    query += ' AND ' + busca.sql;
+    params.push.apply(params, busca.params);
   }
 
   query += ' ORDER BY nome';
@@ -18682,12 +18687,19 @@ registrarRotasDePermissoes(app, { getDb: () => db, authenticateToken });
 
 // ========== BUSCA GLOBAL ==========
 app.get('/api/busca-global', authenticateToken, filtrarBuscaGlobalPorModulo, (req, res) => {
-  const query = req.query.q || '';
+  // Etapa 159 (RN-159.02, C385, Fase 2 I2): o termo aparado (menos de 2 letras = [], como a tela) e nas tres formas — o LOWER do SQLite
+  // nao muda a letra acentuada, entao "são" nao achava o cliente "SÃO …"
+  const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
   if (!query || query.length < 2) {
     return res.json([]);
   }
-
-  const searchTerm = `%${query}%`;
+  const em = (colunas) => condicaoDeBusca(colunas, query);
+  const bCli = em(['razao_social', 'nome_fantasia', 'cnpj']);
+  const bProj = em(['nome', 'descricao']);
+  const bProp = em(['p.numero_proposta', 'p.titulo', 'c.razao_social', 'c.nome_fantasia']);
+  const bOpo = em(['o.titulo', 'c.razao_social', 'c.nome_fantasia']);
+  const bAtv = em(['a.titulo', 'a.descricao', 'a.tipo']);
+  const bProd = em(['nome', 'codigo', 'familia', 'modelo', 'descricao']);
   const results = [];
   // Etapa 153 (RN-153.02): so os tipos que o filtro permitiu (null = todos, o filtro disse); sem o filtro (undefined) ou nenhum tipo ->
   // [] sem rodar as consultas (Fase 2 M-6: se o filtro sair da rota, a busca fecha em vez de abrir)
@@ -18701,9 +18713,9 @@ app.get('/api/busca-global', authenticateToken, filtrarBuscaGlobalPorModulo, (re
   db.all(
     `SELECT id, razao_social as title, cidade || ', ' || estado as subtitle, 'cliente' as type 
      FROM clientes 
-     WHERE LOWER(razao_social) LIKE LOWER(?) OR LOWER(nome_fantasia) LIKE LOWER(?) OR LOWER(cnpj) LIKE LOWER(?)
+     WHERE ${bCli.sql}
      LIMIT 5`,
-    [searchTerm, searchTerm, searchTerm],
+    bCli.params,
     (err, rows) => {
       if (!err && rows && podeVer('cliente')) {
         results.push(...rows);
@@ -18713,9 +18725,9 @@ app.get('/api/busca-global', authenticateToken, filtrarBuscaGlobalPorModulo, (re
       db.all(
         `SELECT id, nome as title, status as subtitle, 'projeto' as type 
          FROM projetos 
-         WHERE LOWER(nome) LIKE LOWER(?) OR LOWER(descricao) LIKE LOWER(?)
+         WHERE ${bProj.sql}
          LIMIT 5`,
-        [searchTerm, searchTerm],
+        bProj.params,
         (err, rows) => {
           if (!err && rows && podeVer('projeto')) {
             results.push(...rows);
@@ -18729,12 +18741,9 @@ app.get('/api/busca-global', authenticateToken, filtrarBuscaGlobalPorModulo, (re
                     'proposta' as type 
              FROM propostas p
              LEFT JOIN clientes c ON p.cliente_id = c.id
-             WHERE LOWER(p.numero_proposta) LIKE LOWER(?) 
-                OR LOWER(p.titulo) LIKE LOWER(?) 
-                OR LOWER(c.razao_social) LIKE LOWER(?) 
-                OR LOWER(c.nome_fantasia) LIKE LOWER(?)
+             WHERE ${bProp.sql}
              LIMIT 5`,
-            [searchTerm, searchTerm, searchTerm, searchTerm],
+            bProp.params,
             (err, rows) => {
               if (!err && rows && podeVer('proposta')) {
                 results.push(...rows);
@@ -18745,9 +18754,9 @@ app.get('/api/busca-global', authenticateToken, filtrarBuscaGlobalPorModulo, (re
                 `SELECT o.id, o.titulo as title, COALESCE(c.razao_social, c.nome_fantasia, 'Cliente não encontrado') as subtitle, 'oportunidade' as type 
                  FROM oportunidades o
                  LEFT JOIN clientes c ON o.cliente_id = c.id
-                 WHERE LOWER(o.titulo) LIKE LOWER(?) OR LOWER(c.razao_social) LIKE LOWER(?) OR LOWER(c.nome_fantasia) LIKE LOWER(?)
+                 WHERE ${bOpo.sql}
                  LIMIT 5`,
-                [searchTerm, searchTerm, searchTerm],
+                bOpo.params,
                 (err, rows) => {
                   if (!err && rows && podeVer('oportunidade')) {
                     results.push(...rows);
@@ -18761,11 +18770,9 @@ app.get('/api/busca-global', authenticateToken, filtrarBuscaGlobalPorModulo, (re
                             'atividade' as type 
                      FROM atividades a
                      LEFT JOIN clientes c ON a.cliente_id = c.id
-                     WHERE LOWER(a.titulo) LIKE LOWER(?) 
-                        OR LOWER(a.descricao) LIKE LOWER(?)
-                        OR LOWER(a.tipo) LIKE LOWER(?)
+                     WHERE ${bAtv.sql}
                      LIMIT 5`,
-                    [searchTerm, searchTerm, searchTerm],
+                    bAtv.params,
                     (err, rows) => {
                       if (!err && rows && podeVer('atividade')) {
                         results.push(...rows);
@@ -18778,13 +18785,9 @@ app.get('/api/busca-global', authenticateToken, filtrarBuscaGlobalPorModulo, (re
                                 COALESCE(familia, 'Geral') as subtitle, 
                                 'produto' as type 
                          FROM produtos 
-                         WHERE LOWER(nome) LIKE LOWER(?) 
-                            OR LOWER(codigo) LIKE LOWER(?) 
-                            OR LOWER(familia) LIKE LOWER(?)
-                            OR LOWER(COALESCE(modelo, '')) LIKE LOWER(?)
-                            OR LOWER(descricao) LIKE LOWER(?)
+                         WHERE ${bProd.sql}
                          LIMIT 5`,
-                        [searchTerm, searchTerm, searchTerm, searchTerm, searchTerm],
+                        bProd.params,
                         (err, rows) => {
                           if (!err && rows && podeVer('produto')) {
                             results.push(...rows);
@@ -20386,10 +20389,11 @@ app.get('/api/comercial/ordens-servico', authenticateToken, exigirComercialNasPr
           WHERE 1=1`; // Mostrar todas as OS (removido filtro de proposta_id e JOIN com projetos)
         const params = [];
 
-        if (search) {
-          query += ' AND (os.numero_os LIKE ? OR os.descricao LIKE ? OR c.razao_social LIKE ? OR prop.numero_proposta LIKE ?)';
-          const searchTerm = `%${search}%`;
-          params.push(searchTerm, searchTerm, searchTerm, searchTerm);
+        // Etapa 159 (RN-159.02, C385): aparado e nas tres formas
+        const busca = condicaoDeBusca(['os.numero_os', 'os.descricao', 'c.razao_social', 'prop.numero_proposta'], search);
+        if (busca.sql) {
+          query += ' AND ' + busca.sql;
+          params.push(...busca.params);
         }
         if (status) {
           query += ' AND os.status = ?';
