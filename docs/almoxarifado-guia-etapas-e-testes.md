@@ -1,18 +1,25 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-19 (Etapa 155) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-19 (Etapa 156) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154 e 155) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155 e 156) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-19 (Etapa 155 ENTREGUE · próxima: Etapa 156)
+> ## Onde o desenvolvimento está — 2026-10-19 (Etapa 156 ENTREGUE · próxima: Etapa 157)
 >
-> **O desenvolvimento parou aqui: Etapa 155 fechada — 2026-10-19.** A **Etapa 155 (o cliente e a OS das Reservas com nome, a busca do topo
+> **O desenvolvimento parou aqui: Etapa 156 fechada — 2026-10-19.** A **Etapa 156 (o pedido repetido com o banco ocupado, a lista
+> recusada que diz o motivo, e o prazo da consulta de endereço; consertos técnicos, sem regra de acesso nova)**: com o banco ocupado, o
+> segundo pedido a uma lista com outro filtro espera e repete (antes falhava na hora); nas telas do Almoxarifado que usam a lista de clientes
+> ou de projetos, a lista recusada diz o motivo sob o seletor; nos **Custos de viagem**, a localização do cliente não espera mais o serviço
+> de mapas para sempre (5 s) e a localização pela cidade acha a cidade do cadastro — **os números de rota, visita e clientes próximos mudam**
+> (**B1002**). Nenhuma consulta nova. **Próxima: Etapa 157** — ver a próxima tarefa no plano da 156.
+>
+> **Etapa 155, 2026-10-19.** A **Etapa 155 (o cliente e a OS das Reservas com nome, a busca do topo
 > que diz por que não busca, e o produto da OS pelo código certo; consertos de tela, sem regra de acesso nova)**: em **Almoxarifado →
 > Reservas**, os seletores de cliente e de OS e a coluna de destino mostram a razão social do cliente e o número da OS (antes: opções em
 > branco e *"OS #42"*); sem o Comercial, o *Ctrl+K* abre a busca dizendo por que não busca; a busca só mostra a resposta do último termo
 > digitado e diz quando não conseguiu buscar; as telas da OS acham o produto cujo código tem barra. Uma consulta nova, opcional (**A103**).
-> **Próxima: Etapa 156** — ver a próxima tarefa no plano da 155.
+> *(Próxima, na época: Etapa 156 — entregue acima.)*
 >
 > **Etapa 154, 2026-10-19.** A **Etapa 154 (a lista de clientes e a de projetos pedem um dos
 > módulos que as usam, e o sino só mostra o que se pode abrir; do Comercial, fora do almoxarifado — mas as telas do Almoxarifado usam as
@@ -6716,6 +6723,50 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 156 — O pedido repetido com o banco ocupado, a lista recusada que diz o motivo, e o prazo da consulta de endereço (ENTREGUE — 2026-10-19)
+
+**O que mudou, em uma frase:** consertos técnicos — com o banco ocupado, cada filtro espera e repete; as telas do Almoxarifado dizem por que
+a lista de clientes ou de projetos veio vazia; e a localização dos clientes nos custos de viagem tem prazo e acha a cidade do cadastro.
+
+**O problema que ela resolve.** Com o banco ocupado, a tela espera e repete o pedido — mas o segundo pedido à mesma lista com outro filtro
+falhava na hora. Quem perdia o acesso com a tela aberta via o seletor de cliente ou de projeto vazio, sem explicação (e, na transferência de
+uma reserva que já tinha projeto, o seletor mostrava *"—"* e gravava o projeto escondido). A localização do cliente com endereço esperava um
+serviço de mapas da internet sem prazo. E a localização pela cidade nunca achava a cidade do cadastro (maiúsculas, sem acento): todo cliente
+ficava no centro do estado — a rota, o valor da visita e os clientes próximos saíam errados.
+
+| Antes | Agora |
+|---|---|
+| Banco ocupado: o segundo pedido com outro filtro falhava na hora | Cada um espera e repete; as gravações continuam como antes (**B1001**) |
+| Lista de clientes/projetos recusada: o seletor vazio, calado | *"Sem acesso à lista de clientes: Acesso negado ao módulo. Recarregue a página para conferir suas permissões."* sob o seletor |
+| Transferir uma reserva com projeto, lista recusada: *"—"* e o projeto escondido gravado | *"Projeto #12 — fora da lista"* marcado; *"—"* limpa |
+| Localização do cliente com endereço: sem prazo | No máximo 5 s; depois, pela cidade |
+| Localização pela cidade: 0 de 53 clientes achavam a cidade | 28 de 53 (sem maiúsculas, sem acento, só a do estado do cliente) |
+| Rota de São Bernardo a um cliente de *CAMPINAS*: 20 km | 104 km — **os números mudam** (**B1002**) |
+
+**Roteiro de teste (10 minutos).**
+
+1. **A lista recusada.** Com um usuário que tem o **Almoxarifado**, abra **Almoxarifado → Reservas**. Noutro navegador, como administrador,
+   tire dele o Comercial, o Almoxarifado e o Operacional. No primeiro, vá a outra tela do Almoxarifado e volte às **Reservas** sem recarregar
+   a página (dentro de 5 minutos) e clique **Nova Reserva**: sob **Cliente**, *"Sem acesso à lista de clientes: Acesso negado ao módulo.
+   Recarregue a página para conferir suas permissões."*; sob **Projeto**, o mesmo com *"projetos"* (e logo abaixo da barra de filtros). Em
+   **Transferir** de uma reserva com projeto: o seletor **Projeto** mostra *"Projeto #<número> — fora da lista"*; escolher *"—"* tira o projeto.
+   Confira também o **Proprietário** do cadastro de material, o **Projeto** das Movimentações e os de **Sobras**. Devolva o acesso: a frase some
+   ao reabrir a tela.
+2. **A cidade do cadastro.** Em **Comercial → Clientes**, cadastre um cliente em *Campinas / SP* e outro em *Rio Claro / RJ*. Em **Comercial →
+   Custos de viagem → Novo**, escolha o de Campinas: a rota sai com cerca de **104 km** (antes ~20). Peça os **clientes próximos** dele: só os
+   que estão de fato a menos de 100 km. Escolha o de Rio Claro / RJ: a rota vai ao centro do RJ (não a Rio Claro de SP).
+3. **O banco ocupado** não se provoca pela tela — está provado pelos testes (o servidor simulado). O que conferir: a tela das Reservas, ao
+   trocar o filtro logo depois de abrir, nunca mostra *"Erro ao carregar reservas"* com o servidor de pé.
+
+**O que esta etapa NÃO cobre.** As gravações com o banco ocupado (o segundo envio continua recusado na hora — **B1001**); as outras listas das
+telas do Almoxarifado (centros de custo, OS, endereços) continuam caladas quando falham; a cidade fora da lista de 345 fica no centro do
+estado; abrir um custo de viagem antigo para editar recalcula e sobrescreve os custos (**C372**, de antes — com a B1002, os novos podem sair
+diferentes dos gravados).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (a camada de comunicação com o axios de
+verdade e o servidor simulado; as telas em jsdom; o servidor de verdade com um serviço de mapas local) provam, escrito para você conferir à
+mão — os passos 1 e 2 só o navegador mostra.
 
 ## Etapa 155 — O cliente e a OS das Reservas com nome, a busca do topo que diz por que não busca, e o produto da OS pelo código certo (ENTREGUE — 2026-10-19)
 

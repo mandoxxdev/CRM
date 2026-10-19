@@ -1,6 +1,6 @@
 # 15 — Retalhos, Sobras e Sucatas
 
-> **Última atualização:** 2026-10-09 (**Etapa 97** — o sucateamento **comum** não leva mais o material separado na caixa sem reserva de uma requisição: a recusa vem **na solicitação** (antes das duas assinaturas), pelo livre de caixa, com a frase do disponível acrescida de *"e o separado na caixa de requisições"* e o sufixo da caixa (M7, `9dbf11c0`); `disponivel_na_solicitacao` passa a gravar o livre de caixa (só auditoria); a compensação do retalho estorna com `compensacao: true` (régua de hoje, `65dc74b2`). O sucateamento ligado à NC (`doBloqueado`) não muda. Range `eb7cd9d8..3fc39310`. Continua 🟢. Ver a seção "Etapa 97" no fim.) Antes: 2026-10-01 (Etapa 69 — o status abaixo).
+> **Última atualização:** 2026-10-19 (**Etapa 156** — os três seletores de projeto da tela de sobras dizem o motivo quando a lista de projetos volta recusada (C366, `75e772cf`). Ver a seção no fim.) Antes: 2026-10-09 (**Etapa 97** — o sucateamento **comum** não leva mais o material separado na caixa sem reserva de uma requisição: a recusa vem **na solicitação** (antes das duas assinaturas), pelo livre de caixa, com a frase do disponível acrescida de *"e o separado na caixa de requisições"* e o sufixo da caixa (M7, `9dbf11c0`); `disponivel_na_solicitacao` passa a gravar o livre de caixa (só auditoria); a compensação do retalho estorna com `compensacao: true` (régua de hoje, `65dc74b2`). O sucateamento ligado à NC (`doBloqueado`) não muda. Range `eb7cd9d8..3fc39310`. Continua 🟢. Ver a seção "Etapa 97" no fim.) Antes: 2026-10-01 (Etapa 69 — o status abaixo).
 > **Status:** 🟢 — **+ Etapa 69 (2026-10-01): o material REPROVADO na inspeção vai para o sucateamento** — a não
 > conformidade decidida Sucatear ganha *Solicitar sucateamento* (`POST /nao-conformidades/:id/solicitar-sucateamento`,
 > gate `movimentar`), o sucateamento ligado à NC (`nao_conformidade_id`) passa pelas mesmas duas assinaturas e a segunda
@@ -226,3 +226,15 @@ servico, em laco de tipos (…, SUCATA): cada um 400 M1+S, nada muda, e A entreg
 entrada como compensacao (opcoes.compensacao) fica na regua de hoje; sem a opcao recusa"*;
 `portasAvulsasCaixaIntegracao.api.test.js` — *"[97 T3 C1]"* (o sucateamento pela rota). `test:api` 338/338 (4163 ✓).
 Continua 🟢.
+
+## Etapa 156 — a lista de projetos recusada diz o motivo (2026-10-19)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa156-repeticao-listas-recusadas-e-prazo-do-mapa.md` (RN-156.02, C366). Só a tela; o servidor não muda.
+
+**O que estava errado:** a tela de sobras trocava a recusa da lista de projetos (**Projeto da saída**, **Projeto de origem** do retalho e da sucata) por uma lista vazia, calada — a quem perdeu o Comercial, o
+Almoxarifado e o Operacional com a tela aberta (o portão das listas, Etapa 154), o seletor só tinha *"—"*, sem dizer por quê.
+
+**Entregue:**
+
+- [x] **O motivo sob os três seletores** — `75e772cf`. Testes: `SobrasAlmoxarifado.test.js` (59). Os seletores começam vazios (não há
+  valor escondido a mostrar). Continua 🟢.

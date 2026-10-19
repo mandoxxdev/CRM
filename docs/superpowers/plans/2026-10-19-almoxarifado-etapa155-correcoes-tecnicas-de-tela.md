@@ -261,7 +261,9 @@ acrescenta). Executadas em sequência por um executor (pequenas demais para work
    no próprio neutro — o `/api` inteiro; e um ouvinte novo no `window` precisa de um teste com outra janela por cima.
 3. **Paralelismo:** **0** galhos de código em paralelo (as quatro tasks em sequência — pequenas); **1** revisor na Fase 2 (antes do código),
    **3** em paralelo na Fase 5 sob a trava (o r3 em worktree própria); **0** retrabalho.
-4. **Defeito que escapou:** *(preencher na Etapa 156)*.
+4. **Defeito que escapou:** **nenhum do código da 155** achado na Etapa 156 (medição, Fase 2 e os três revisores da Fase 5 passaram
+   pelas Reservas, pela busca e pela camada de comunicação). O que a 156 achou é de antes: a cidade do cadastro nunca achada (**C370**), o `+` no
+   endereço (**C371**), o recálculo ao editar um custo (**C372**) e o token velho na repetição do 503 (**C373**). *(Preenchido na Etapa 156.)*
 
 ## Próxima tarefa detalhada — Etapa 156
 

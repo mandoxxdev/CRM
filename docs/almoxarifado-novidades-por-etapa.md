@@ -11,13 +11,19 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-19):** **Etapa 155 fechada** (consertos de tela, sem regra de acesso nova: **o cliente e a OS das
+> **Onde o desenvolvimento está (2026-10-19):** **Etapa 156 fechada** (consertos técnicos, sem regra de acesso nova: **o pedido repetido
+> com o banco ocupado, a lista recusada que diz o motivo, e o prazo da consulta de endereço** — com o banco ocupado, o segundo pedido a uma
+> lista com outro filtro espera e repete em vez de falhar na hora (**C369** resolvido, **B1001**); as telas do Almoxarifado dizem por que a
+> lista de clientes ou de projetos veio vazia (**C366** resolvido); a coordenada do cliente com endereço não espera mais o serviço de mapas
+> para sempre (**C361** resolvido) e a coordenada pela cidade acha a cidade do cadastro (**C370**, novo e resolvido — **os números de rota,
+> visita e clientes próximos mudam**, **B1002**); **B1001** a **B1003**; os avisos novos **C370** a **C373** (três resolvidos aqui, um de
+> antes — **C372**)); a próxima é a **157** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 155 fechada** (consertos de tela, sem regra de acesso nova: **o cliente e a OS das
 > Reservas com nome, a busca do topo que diz por que não busca, e o produto da OS pelo código certo** — o seletor de cliente das Reservas
 > saía em branco (**C367** resolvido) e o de OS com o número interno (**C368**, novo e resolvido); sem o Comercial, a busca do *Ctrl+K* diz por
 > que não busca (**C364** resolvido, **B999**); a busca só mostra a resposta do último termo e diz quando falhou (**C365** resolvido); as
 > telas da OS acham o produto cujo código tem barra (**C351** resolvido); a régua das provas de portão vê o middleware global por apelido;
-> **B999** e **B1000**; a consulta **A103** (opcional); o aviso novo **C369**); a próxima é a **156** — ver "Onde estamos e o que vem a
-> seguir".
+> **B999** e **B1000**; a consulta **A103** (opcional); o aviso novo **C369**); a próxima era a **156**.)*
 > *(Antes: **Etapa 154 fechada** (do Comercial: **a lista de clientes e a de projetos pedem um dos
 > módulos que as usam, e o sino só mostra o que se pode abrir** — quem não tem o Comercial, o Almoxarifado nem o Operacional lia pela
 > integração a lista de clientes (com CNPJ, telefone, e-mail e endereço) e a de projetos; agora toma *"Acesso negado ao módulo"*, e o
@@ -3890,7 +3896,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B998; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B1003; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -11133,6 +11139,37 @@ por teste contra a do servidor.
 **B1000 (NOVA, da Etapa 155) — a próxima etapa (156).** Ver a "próxima tarefa detalhada" no plano da Etapa 155. As decisões que esperam
 vocês: as da **B957**, a **B988** e a **B989** (nada novo; a **B999** é reversível).
 
+**B1001 (NOVA, da Etapa 156; do núcleo) — com o banco ocupado, só as LEITURAS passaram a se reconhecer pelos filtros; as gravações ficaram
+como estavam.** Quando o servidor responde "banco ocupado", a tela espera e repete o pedido (até 3 vezes). Desde a Etapa 156, um segundo
+pedido de **leitura** ao mesmo endereço com **outros filtros** espera e repete por conta própria (antes era recusado na hora — **C369**), e o
+**mesmo** pedido de leitura feito de novo espera a repetição do primeiro (um pedido só ao servidor). **As gravações (salvar, apagar, mudar)
+não mudaram:** o segundo pedido de gravação ao mesmo endereço enquanto o primeiro espera continua recusado na hora. **Por quê:** o servidor
+pode responder "ocupado" depois de já ter gravado parte, e repetir gravação é uma conversa à parte (a camada já repete a primeira desde
+antes — não mexemos). **Descartado:** (a) repetir também a segunda gravação — arriscaria gravar duas vezes; (b) a busca do topo descartar o
+pedido velho e pronto (já faz, desde a 155) — sobrava toda lista com filtro. **Custo declarado:** com o banco ocupado, cada filtro diferente é
+uma fila de até 4 pedidos (antes o segundo desistia). **Na mesma correção** (revisão): a repetição leva o login **de agora** — quem saiu ou
+trocou de usuário no meio da espera não repete mais com o login antigo (**C373**). **Reversível:** é só da tela (os commits `03ecf059` e
+`95fed61a`).
+
+**B1002 (NOVA, da Etapa 156; do Comercial) — a coordenada pela cidade passou a achar a cidade do cadastro, e com isso mudam a distância, o
+custo sugerido da viagem, o valor recomendado da visita e os clientes próximos.** O cadastro de clientes grava a cidade em maiúsculas e sem
+acento (*"SAO BERNARDO DO CAMPO"*) e o sistema procurava a cidade escrita exatamente como na sua lista (*"São Bernardo do Campo"*): **nenhum**
+dos 53 clientes do banco medido achava a cidade, e todos ficavam no **centro do estado** — todo cliente de SP no mesmo ponto (os *clientes
+próximos* de um cliente de SP eram todos os de SP, a 0 km), e a rota e o valor da visita partiam do centro do estado (**C370**). Agora a
+comparação ignora maiúsculas, acento e espaço nas pontas, e a cidade só vale se for **do estado do cadastro** (a lista ganhou o estado de
+cada cidade; o homônimo de outro estado fica no centro do estado, como antes): **28 de 53** clientes passam a ser localizados pela cidade.
+**O que muda nos números** (medido no teste: a rota de São Bernardo a *CAMPINAS* passou de **20 km** para **104 km**; calculados pela fórmula
+do relatório na revisão do plano: o valor recomendado da visita a um cliente de *RIBEIRAO PRETO* de **R$ 104** para **R$ 735** — passa do
+raio de 300 km e entra estadia —, a *CAMPINAS* de R$ 104 para R$ 205, a *SAO BERNARDO DO CAMPO* de R$ 104 para R$ 80). **Atenção:** abrir um
+custo de viagem antigo para editar recalcula a rota e sobrescreve os custos do formulário (isso já era assim — **C372**); agora o recálculo
+sai com a distância certa, diferente da gravada. **Descartado:** (a) deixar como estava — os números estavam errados para todo cliente; (b)
+aceitar a cidade só pelo nome (sem o estado) — o cliente de *RIO BRANCO/AC* iria para Rio Branco do Mato Grosso (achado da revisão do plano);
+(c) aceitar a cidade a até 1.000 km do centro do estado (a primeira versão) — o homônimo de estado vizinho passava (*RIO CLARO/RJ* virava
+Rio Claro/SP; *ÁGUA BOA/MG*, Água Boa/MT a 1.226 km de São Bernardo — achado da revisão do código). **Reversível:** `438ab108` e `95fed61a`; a lista tem as mesmas coordenadas de antes (só ganhou o estado, e o Rio Branco do Acre voltou).
+
+**B1003 (NOVA, da Etapa 156) — a próxima etapa (157).** Ver a "próxima tarefa detalhada" no plano da Etapa 156. As decisões que esperam
+vocês: as da **B957**, a **B988** e a **B989**; a **B1002** pede um olhar (os números mudam — é correção, mas é visível).
+
 **B898 (NOVA, da Etapa 138) — a próxima etapa (139).** Ver a "próxima tarefa detalhada" no plano da Etapa 138. A **B853** (com a
 **C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
@@ -14254,7 +14291,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 360. **NOVO (da revisão do plano da Etapa 152; anterior a ela; lido no código) — apagar um custo de viagem deixa os comprovantes no
      disco.** O registro dos anexos some junto, o arquivo não (dado pessoal órfão no servidor). Hoje só acontece com custo nunca editado
      (**C359**). **O que fazer:** apague os comprovantes antes de apagar o custo. Candidata junto da **B989**.
-361. **NOVO (da revisão do plano da Etapa 152; anterior a ela; lido no código) — as coordenadas de um cliente com endereço consultam um
+361. **✅ RESOLVIDO NA ETAPA 156 (RN-156.03)** — a consulta ao serviço de mapas tem prazo de 5 segundos (o pedido inteiro); esgotado, a
+     coordenada sai pela cidade (que agora acha a cidade do cadastro — **C370**). **O texto original dizia que *"os testes cobrem só o recuo
+     pela cidade"* — estava errado:** o recuo nunca achava a cidade do cadastro (caía sempre no centro do estado, **C370**), e os testes só
+     conferiam que saía *alguma* coordenada. *(O texto original:)*
+     **NOVO (da revisão do plano da Etapa 152; anterior a ela; lido no código) — as coordenadas de um cliente com endereço consultam um
      serviço de mapas externo sem prazo.** Na tela de custos e na prévia da rota, o cliente que tem endereço completo é localizado por um
      serviço da internet; se a rede travar, o pedido fica esperando (a tela não recebe resposta). **O que fazer:** nada. Candidata: um
      prazo e o recuo pela cidade. Os testes cobrem só o recuo pela cidade (cliente sem endereço).
@@ -14286,7 +14327,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      resultado de um termo anterior.** Quando o banco responde "ocupado", a tela repete o pedido até 3 vezes; se a pessoa continuou
      digitando, a resposta atrasada do termo anterior pode aparecer com o termo novo no campo. **O que fazer:** apague e digite de novo.
      Candidata: a busca descartar a resposta velha.
-366. **NOVO (da Etapa 154; de todos os portões desde a 145; lido no código) — com a permissão tirada no meio da sessão, as telas do
+366. **✅ RESOLVIDO NA ETAPA 156 (RN-156.02)** — nas quatro telas, quando a lista volta recusada, cada seletor que ela alimenta diz o
+     motivo logo abaixo: *"Sem acesso à lista de clientes: Acesso negado ao módulo. Recarregue a página para conferir suas permissões."* (ou
+     *"Não foi possível carregar a lista de clientes. Recarregue a página para tentar de novo."* em qualquer outra falha; idem projetos); o
+     seletor que já tinha um valor mostra *"Projeto #12 — fora da lista"* em vez de *"—"*. *(O texto original:)*
+     **NOVO (da Etapa 154; de todos os portões desde a 145; lido no código) — com a permissão tirada no meio da sessão, as telas do
      Almoxarifado mostram a lista de clientes ou de projetos vazia, calada.** O dono do material, as reservas, as movimentações e as sobras
      engolem a recusa e mostram o seletor vazio, em vez de *"Acesso negado"*, até a pessoa recarregar (aí a tela inteira já não abre). Só
      acontece a quem perdeu o Comercial, o Almoxarifado **e** o Operacional com a tela aberta. **O que fazer:** recarregar. Candidata: as telas
@@ -14305,12 +14350,31 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      e o cliente), e o teste da tela usava justamente esse campo inexistente. A coluna de destino dizia *"OS #42"* também. Agora: *"OS-042 —
      ACME INDUSTRIA LTDA"* no seletor (sem cliente, só o número) e *"OS-042"* na coluna; *"OS #<id>"* só para a OS fora das 300 mais recentes
      (a lista da tela).
-369. **NOVO (da Etapa 155; do núcleo, anterior a ela; lido no código) — com o banco ocupado, o segundo pedido ao mesmo endereço falha na
+369. **✅ RESOLVIDO NA ETAPA 156 (RN-156.01, B1001)** — o pedido de leitura é reconhecido pelo endereço **com** os filtros: o segundo, com
+     outros filtros, espera e repete; o mesmo pedido de novo espera a repetição do primeiro. As gravações ficaram como estavam (**B1001**).
+     *(O texto original:)*
+     **NOVO (da Etapa 155; do núcleo, anterior a ela; lido no código) — com o banco ocupado, o segundo pedido ao mesmo endereço falha na
      hora.** Quando o servidor responde "banco ocupado", a camada de comunicação da tela espera e repete o pedido; um **segundo** pedido ao
      **mesmo endereço** feito enquanto o primeiro espera (com outros filtros — a busca com outro termo, uma lista com outro filtro) é recusado na
      hora, sem esperar o banco voltar, porque a camada reconhece "o mesmo pedido" pelo endereço sem os filtros. A tela que fez o segundo pedido
      mostra o erro dela (na busca do topo: *"Não foi possível buscar agora. Tente de novo em instantes."*). **O que fazer:** repetir o gesto
      (digitar de novo, recarregar a lista). Candidata (do núcleo — muda todas as telas): reconhecer o pedido pelo endereço **com** os filtros.
+370. **✅ NOVO E RESOLVIDO NA ETAPA 156 (RN-156.04, B1002; da medição da Etapa 156, do Comercial, anterior a ela; medido no banco) — a
+     coordenada pela cidade nunca achava a cidade do cadastro.** O cadastro grava a cidade em maiúsculas e sem acento; a lista de cidades do
+     sistema compara a grafia exata: **0 de 53** clientes achavam a cidade, todos ficavam no centro do estado (os clientes próximos de um
+     cliente de SP eram todos os de SP, a 0 km; a rota, o valor da visita e os mapas partiam do centro do estado). Agora sem maiúsculas, sem
+     acento e só a do estado do cadastro: **28 de 53**. **Os números mudam — ver B1002.**
+371. **✅ NOVO E RESOLVIDO NA ETAPA 156 (RN-156.03; da medição da Etapa 156, anterior a ela; lido no código) — a consulta do endereço ia
+     com "+" no lugar dos espaços.** O endereço era mandado ao serviço de mapas como *"RUA+DAS+FLORES,+CAMPINAS..."* (o sinal de mais
+     literal). Agora com espaços. O efeito no serviço de mapas **não foi medido** (os testes não o chamam).
+372. **NOVO (da revisão do plano da Etapa 156; do Comercial, anterior a ela; lido no código) — abrir um custo de viagem para editar
+     recalcula a rota e sobrescreve os custos do formulário.** Em **Comercial → Custos de viagem**, abrir um custo gravado para editar
+     (mesmo só para corrigir a descrição) recalcula a rota e troca a distância, o transporte, a hospedagem, a alimentação, os outros custos e
+     o custo sugerido pelos recalculados; salvar grava os novos. Com a **B1002**, os recalculados podem sair diferentes dos gravados. **O que
+     fazer:** ao editar um custo antigo, conferir os valores antes de salvar. Candidata: recalcular só quando o destino mudar (é da tela).
+373. **✅ NOVO E RESOLVIDO NA ETAPA 156 (Fase 5; do núcleo, anterior a ela; reproduzido) — com o banco ocupado, a repetição do pedido ia
+     com o login de quem saiu.** Se a pessoa saísse (ou outra entrasse na mesma aba) enquanto um pedido esperava o banco, a repetição ia
+     com o login antigo. Agora vai com o login de agora (sem login, vai sem — a rota protegida responde que a sessão acabou).
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -15642,6 +15706,16 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(156) As gravações com o banco ocupado continuam como antes** — o segundo pedido de gravação ao mesmo endereço é recusado na hora
+  (**B1001**); só as leituras se reconhecem pelos filtros. Uma tela que troca o filtro rápido e não descarta a resposta velha pode mostrar a
+  do filtro anterior se ela chegar depois (como a busca do topo antes da 155) — de antes, em várias telas; nas Reservas o teste mostrou a
+  ordem certa com o banco ocupado. As **outras** listas das quatro telas do Almoxarifado (centros de custo, OS, endereços, materiais)
+  continuam caladas quando falham — são do próprio módulo, e quem perde o Almoxarifado perde a tela inteira no próximo pedido. A lista de
+  cidades tem 345 cidades (fora dela, o centro do estado, como antes); o cliente de uma cidade que não está na lista, ou cuja grafia no
+  cadastro difere além de maiúsculas e acento (*"S. BERNARDO"*), fica no centro do estado. Os *clientes próximos* chamam de "mesma cidade" a
+  grafia igual sem maiúsculas — *"SÃO PAULO"* e *"SAO PAULO"* ficam no mesmo ponto, a 0 km. O mapa das máquinas vendidas, o mapa do painel e
+  a lista de custos usam a mesma regra nova sem teste próprio. A tela de custos e a prévia da rota têm uma cópia própria da lista de cidades
+  (o recuo dela quando o servidor não responde) com a comparação exata de antes — com o servidor respondendo em até 5 s, ela quase não roda.
 - **(155) A busca do topo decide na tela com a régua da moldura** — sem o Comercial ela diz por que não busca (**B999**); com as permissões
   guardadas vencidas e a leitura delas falhando, ela busca como antes e o servidor decide (falha aberto, de propósito). A lista de OS das
   Reservas traz as 300 mais recentes: a reserva de uma OS mais antiga continua *"OS #<id>"* na coluna. O segundo pedido ao mesmo endereço com
@@ -16666,6 +16740,14 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(156) Nenhum clique foi dado no navegador.** A camada de comunicação foi provada com o axios de verdade e o servidor simulado na
+fronteira (o banco ocupado, filtros diferentes, o mesmo pedido, o login trocado no meio); as quatro telas pelos testes de tela (jsdom), com o
+corpo real da recusa (conferido pelo teste do servidor de verdade) e a tela das Reservas com a camada de comunicação de verdade; o prazo e a
+cidade pelo servidor de verdade em pasta vazia, com um serviço de mapas local (pendurado, pingando, recusando, respondendo) — o serviço de
+mapas de verdade **nunca** foi chamado. O que **só o navegador** prova: o roteiro da Etapa 156 no guia — **Almoxarifado → Reservas** com um
+usuário que perdeu os três módulos com a tela aberta (a frase sob o seletor); e **Comercial → Custos de viagem** com um cliente de Campinas
+(a rota de ~104 km).
 
 **(155) Nenhum clique foi dado no navegador.** As telas foram provadas pelos testes de tela (jsdom): os seletores das Reservas montados com o
 corpo real da lista de clientes e da de OS (as chaves conferidas pelo teste do servidor de verdade, em pasta vazia), a busca do topo com e sem o
@@ -31494,9 +31576,95 @@ registrado em **toda a API** (`/api`, `/`) por qualquer nome; o de **sabotagem**
 asserções faltando (a leitura das permissões que chega depois de reabrir, o Esc fechando duas vezes, o erro velho, as setas, a frase) e 3 não
 mudam nada. Tudo virou correção e teste. Commits `d3ef595a`, `287e6157`, `92178609`, `ff02028b` e `96da430a` (a correção da revisão).
 
+## Etapa 156 — O pedido repetido com o banco ocupado, a lista recusada que diz o motivo, e o prazo da consulta de endereço (2026-10-19)
+
+Uma etapa de **consertos técnicos**, sem regra de acesso nova. Quando o banco está ocupado, a tela espera e repete o pedido; mas um segundo
+pedido à mesma lista com **outro filtro** (outro termo na busca, outro status nas Reservas) falhava na hora, sem esperar — agora cada um
+espera e repete. Nas telas do Almoxarifado que usam a lista de clientes ou a de projetos (o dono do material, as reservas, as movimentações e
+as sobras), quem perdeu o acesso com a tela aberta via o seletor vazio, sem explicação — agora a tela diz por quê, logo abaixo do campo. Na
+tela de **Custos de viagem**, a localização de um cliente com endereço dependia de um serviço de mapas da internet sem prazo: com a rede
+travada, a tela esperava até desistir sozinha — agora espera no máximo 5 segundos e usa a cidade. E a medição achou que a localização **pela
+cidade** nunca achava a cidade do cadastro (o cadastro grava em maiúsculas e sem acento): todo cliente ficava no centro do estado. Agora acha
+— e **os números de distância, custo sugerido, valor recomendado da visita e clientes próximos mudam** para quem é de uma cidade da lista
+(**B1002**).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Com o banco ocupado, o segundo pedido a uma lista com outro filtro falhava na hora (*"Erro ao carregar reservas"*, *"Não foi possível buscar agora..."*) | Cada pedido espera e repete; o mesmo pedido feito de novo espera a repetição do primeiro — **C369** resolvido, **B1001** |
+| As gravações com o banco ocupado: a segunda ao mesmo endereço, recusada na hora | Igual (de propósito — **B1001**) |
+| A repetição ia com o login de quem tinha saído no meio da espera | Vai com o login de agora — **C373** |
+| **Almoxarifado → Reservas / Movimentações / Sobras / cadastro de material**, com a lista de clientes ou de projetos recusada: o seletor vazio, calado | *"Sem acesso à lista de clientes: Acesso negado ao módulo. Recarregue a página para conferir suas permissões."* logo abaixo do seletor (ou *"Não foi possível carregar a lista de clientes. Recarregue a página para tentar de novo."*) — **C366** resolvido |
+| A transferência de uma reserva com projeto (ou o material com dono), com a lista recusada: o seletor mostrava *"—"* e gravava o projeto escondido | O seletor mostra *"Projeto #12 — fora da lista"* (*"Cliente #7 — fora da lista"*), e *"—"* limpa |
+| A localização de um cliente com endereço esperava o serviço de mapas sem prazo | No máximo 5 segundos; depois, pela cidade — **C361** resolvido |
+| A localização pela cidade: **0 de 53** clientes achavam a cidade (todos no centro do estado) | **28 de 53** — sem maiúsculas, sem acento, e só a cidade do estado do cadastro — **C370**, novo e resolvido |
+| A rota de São Bernardo a um cliente de *CAMPINAS*: 20 km | 104 km (**B1002** — os números mudam) |
+| Os *clientes próximos* de um cliente de SP: todos os de SP, a 0 km | Os que estão de fato no raio |
+| O endereço ia ao serviço de mapas com *"+"* no lugar dos espaços | Com espaços — **C371** |
+
+### As regras, com o cenário exato
+
+**1. Com o banco ocupado, cada filtro espera e repete (C369, B1001).** Não dá para provocar o banco ocupado pela tela; está provado pelos
+testes (o servidor simulado responde "ocupado" e depois responde). O que se vê: em **Almoxarifado → Reservas**, trocar o filtro de status
+com o banco ocupado não mostra mais *"Erro ao carregar reservas"* — a tabela espera e mostra a lista do filtro novo. Salvar duas vezes com o
+banco ocupado continua como antes (a segunda é recusada na hora).
+
+**2. A lista recusada diz o motivo (C366).** Com um usuário que tem o **Almoxarifado**, abra **Almoxarifado → Reservas**. Noutro navegador,
+como administrador, tire dele o Comercial, o Almoxarifado e o Operacional. Volte ao primeiro, vá a outra tela do Almoxarifado e volte às
+Reservas **sem recarregar a página** (dentro de 5 minutos), e clique **Nova Reserva**: sob o seletor **Cliente** aparece *"Sem acesso à lista
+de clientes: Acesso negado ao módulo. Recarregue a página para conferir suas permissões."*, e sob **Projeto**, a mesma frase com
+*"projetos"* (também logo abaixo da barra de filtros). Em **Transferir** de uma reserva que já tem projeto, o seletor **Projeto** mostra
+*"Projeto #<número> — fora da lista"*, marcado; escolher *"—"* tira o projeto. O mesmo aparece no cadastro do material (seletor
+**Proprietário**: *"Cliente #<número> — fora da lista"*), nas Movimentações (**Projeto**) e nas Sobras (**Projeto da saída**, **Projeto de
+origem**). Recarregar a página: a tela inteira deixa de abrir (como antes). Com a lista carregada, nenhuma frase aparece.
+
+**3. A localização tem prazo (C361).** Não dá para travar o serviço de mapas pela tela; está provado pelo servidor de verdade com um serviço
+de mapas simulado que não responde: a localização do cliente sai em menos de 3 segundos (o teste usa 0,4 s; em produção, 5 s), pela cidade.
+
+**4. A cidade do cadastro (C370, B1002).** Em **Comercial → Clientes**, cadastre um cliente em *Campinas / SP*. Em **Comercial → Custos de
+viagem → Novo**, escolha o cliente: a rota sai com cerca de **104 km** (antes, cerca de 20 — o centro de SP). Os **clientes próximos** de um
+cliente de Campinas (raio de 100 km) trazem um de *Jundiaí* e não um de *Ribeirão Preto* (antes, os dois, a 0 km). Um cliente de *Rio Claro /
+RJ* fica no centro do RJ (não em Rio Claro de SP); um de *Rio Branco / AC*, em Rio Branco do Acre.
+
+### O que esta etapa NÃO cobre
+
+1. **As gravações com o banco ocupado** continuam como antes (**B1001**).
+2. **As outras listas** das telas do Almoxarifado (centros de custo, OS, endereços) continuam caladas quando falham — são do próprio módulo.
+3. **A lista de cidades tem 345 cidades**; fora dela, o centro do estado (como antes). A cópia da lista que a tela de custos usa quando o
+   servidor não responde continua com a comparação exata.
+4. **Abrir um custo antigo para editar recalcula e sobrescreve os custos** (**C372**, de antes) — com a B1002, os recalculados podem sair
+   diferentes dos gravados.
+
+### O que a revisão encontrou
+
+A **medição** (antes do código) achou dois defeitos novos: a cidade do cadastro nunca era achada (**C370** — 0 de 53) e o endereço ia com
+*"+"* (**C371**). A **revisão do plano** (4 médios, 12 pequenos) mostrou que a medição contou a lista de cidades depois de as repetidas se
+juntarem (570 linhas para 344 nomes, e Rio Branco com duas coordenadas — a do Acre se perdia), que a cidade achada só pelo nome levaria o
+cliente do Acre ao Mato Grosso, que os números visíveis mudam (**B1002**), que o seletor com valor e a lista recusada gravava o escondido, e
+que o teste de integração planejado não provava a repetição. A **revisão adversarial do código** (três revisores, executando): o de **regra**
+achou que o raio de 1.000 km da primeira versão deixava passar o homônimo de estado vizinho (*RIO CLARO/RJ* → Rio Claro/SP; *ÁGUA BOA/MG* →
+Água Boa/MT, a 1.226 km de São Bernardo) — a lista ganhou o estado de cada cidade — e que um prazo enorme na configuração virava 1 ms; o de
+**permissão** não achou nada que vaze (a frase do servidor sai escapada; a rota continua barrando quem não tem o Comercial, sem consultar o
+serviço de mapas) e achou que a repetição ia com o login de quem saiu (**C373**); o de **sabotagem** fez 40 sabotagens — 27 caíram pela asserção
+certa, 10 acharam asserções faltando (a cópia rasa, o download, o filtro objeto, o estado em minúsculas, a conexão que ficava aberta depois
+do prazo, o aviso falso de "não respondeu"), 3 não mudam nada. Tudo virou correção e teste. Commits `75e772cf`, `03ecf059`, `438ab108`,
+`02545473` e `95fed61a` (a correção da revisão).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 156 entregue (2026-10-19):** **o pedido repetido com o banco ocupado, a lista recusada que diz o motivo, e o prazo da consulta
+  de endereço** (consertos técnicos, sem regra de acesso nova). Com o banco ocupado, a leitura com outros filtros espera e repete (**B1001** —
+  **C369** resolvido); as quatro telas do Almoxarifado dizem por que a lista de clientes ou de projetos veio vazia (**C366** resolvido); a
+  consulta de endereço tem prazo de 5 s (**C361** resolvido); a coordenada pela cidade acha a cidade do cadastro e do estado dele (**B1002** —
+  **C370** novo e resolvido; **os números de rota, visita e próximos mudam**); o endereço vai com espaços (**C371**); a repetição leva o login
+  de agora (**C373**). Commits `75e772cf`, `03ecf059`, `438ab108`, `02545473` e `95fed61a` (a correção da revisão). **O que é seu:** a
+  decisão **B1002** (os números mudam — conferir); o aviso **C372** (editar um custo antigo recalcula); as decisões **B1001** (reversível); as
+  perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **B988**, **B989**, **C277**, **C312**, **C314**, **C316**, **C330**); as
+  limitações **(156)** em D e a verificação **(156)** em F.
+  **Próxima: Etapa 157 — ver a "próxima tarefa detalhada" no plano da Etapa 156.**
 
 - **Etapa 155 entregue (2026-10-19):** **o cliente e a OS das Reservas com nome, a busca do topo que diz por que não busca, e o produto da OS
   pelo código certo** (consertos de tela, sem regra de acesso nova). Os seletores de cliente e de OS das Reservas mostram a razão social e o
@@ -31506,7 +31674,7 @@ mudam nada. Tudo virou correção e teste. Commits `d3ef595a`, `287e6157`, `9217
   `287e6157`, `92178609`, `ff02028b` e `96da430a` (a correção da revisão). **O que é seu:** a consulta **A103** (opcional); o aviso **C369**; a
   decisão **B999** (reversível); as perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **B988**, **B989**, **C277**, **C312**,
   **C314**, **C316**, **C330**); as limitações **(155)** em D e a verificação **(155)** em F.
-  **Próxima: Etapa 156 — ver a "próxima tarefa detalhada" no plano da Etapa 155.**
+  *(Próxima, na época: Etapa 156 — entregue acima.)*
 
 - **Etapa 154 entregue (2026-10-19):** **a lista de clientes e a de projetos pedem um dos módulos que as usam, e o sino só mostra o que se
   pode abrir** (do Comercial). Quem não tem o Comercial, o Almoxarifado nem o Operacional é barrado nas duas listas pela integração; o

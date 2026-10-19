@@ -2,7 +2,8 @@
 
 > **Status:** 🟢 Etapa 4 completa — backend (2026-08-05) e tela (2026-08-06) ·
 > **Spec original:** seção 7
-> **Última atualização:** 2026-10-19 (**Etapa 155** — a tela de reservas mostra o cliente pela razão social e a OS pelo número (C367, C368: os seletores liam campos que o servidor não manda; `d3ef595a`). Continua 🟢. Ver a seção da Etapa 155 no fim.)
+> **Última atualização:** 2026-10-19 (**Etapa 156** — a lista de clientes ou de projetos recusada diz o motivo sob os cinco seletores da tela (C366), e a transferência de uma reserva com projeto ou cliente fora da lista mostra *"Projeto #12 — fora da lista"* em vez de gravar o escondido (`75e772cf`); a lista de reservas trocada de filtro com o banco ocupado chega (C369, `03ecf059`, `02545473`). Continua 🟢. Ver a seção da Etapa 156 no fim.)
+> Antes: 2026-10-19 (**Etapa 155** — a tela de reservas mostra o cliente pela razão social e a OS pelo número (C367, C368: os seletores liam campos que o servidor não manda; `d3ef595a`). Continua 🟢. Ver a seção da Etapa 155 no fim.)
 > Antes: 2026-10-09 (**Etapa 98** — devolver da caixa à prateleira **não mexe na reserva do item** (B506, C194): com reserva, a `PERDA` do devolvido continua recusando até a reserva ser liberada pelo gesto que já existe (`POST /reservas/:id/liberar`, `liberar_reserva_requisicao`); e o **C190** fica resolvido do lado da entrega: com o disponível do material negativo (bloqueio sobre o reservado já separado, ou a reserva de outra requisição ocupando o físico) a prévia, a fila e o detalhe dizem 0 e a recusa (E190) nomeia a saída — liberar da reserva **desta** requisição só quando isso destrava (reserva do item + disponível > 0), senão liberar **outra** reserva do material ou desbloquear (B509, B513). Range `6e61cb27..b7fc06a0`; ver a seção "Etapa 98" no fim. Continua 🟢.) Antes: 2026-10-09 (**Etapa 97** — a reserva manual (`POST /reservas`) não toma mais o material separado na caixa sem reserva de uma requisição: recusa 400 *"Saldo disponível insuficiente: ⟨n⟩"* com o sufixo que nomeia a requisição (M3); as reservas de requisição (aprovação, chegada, recriação no estorno) ficam na régua de hoje (B492); `criarReserva` roda sob a trava do material. `65dc74b2`; range `eb7cd9d8..3fc39310`. Continua 🟢. Ver o item da Etapa 97 no checklist e a seção no fim.)
 > Antes: 2026-10-09 (**Etapa 96** — a reserva grava arredondado a 6 casas e o claim de `criarReserva` compara com folga de 1e-9: no legado torto (físico `0.9999…`) a aprovação de uma requisição de 1 volta a reservar **1** (*Totalmente Reservada* — fecha a ressalva do `6e0fae83`, C179); o reservado sem reserva `ATIVA` não guarda resíduo abaixo de 0,0001 (Fase 5, R2, `2adcd51c`). Range `604b37b1..2d0bbfe9`. Continua 🟢. Ver o item da Etapa 96 no checklist.)
 > Antes: 2026-10-09 (**Etapa 95** — a aprovação não reserva mais o material que está na caixa sem
@@ -536,3 +537,24 @@ de cliente e de OS nunca mostraram o destino pelo nome.
   `listasNotificacoesPortao` confere que as chaves dos fixtures são as de uma linha do servidor montado (exigindo a linha).
 - [ ] *Fora, de propósito:* a reserva de uma OS antiga (fora das 300 da lista) continua *"OS #<id>"* — a lista da tela é a do aux; mudar o
   aux é outro assunto (não há reclamação).
+
+## Etapa 156 — a lista recusada diz o motivo; o valor fora da lista aparece (2026-10-19)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa156-repeticao-listas-recusadas-e-prazo-do-mapa.md` (RN-156.02, C366). Só a tela; o servidor não muda.
+
+**O que estava errado:** a tela de reservas trocava a recusa da lista de clientes e a de projetos por uma lista vazia, calada — a quem perdeu o Comercial, o
+Almoxarifado e o Operacional com a tela aberta (o portão das listas, Etapa 154), o seletor só tinha *"—"*, sem dizer por quê.
+
+**Entregue:**
+
+- [x] **O motivo sob os seletores** — `75e772cf`: o erro de `/projetos` e de `/clientes` guardado; `AvisoDaListaRecusada` (a frase de
+  `utils/listaRecusada.js`) sob o filtro de projetos (logo abaixo da barra), o **Projeto** e o **Cliente** da reserva nova e da transferência.
+- [x] **O valor fora da lista** (Fase 2 I3) — `75e772cf`: `OpcaoForaDaLista` nos **Projeto** e **Cliente** da transferência — a reserva
+  com projeto 12 e `/projetos` recusada mostrava *"—"* e o PUT mandava `projeto_id: 12` com a OS nova (dono duplo); escolher *"—"* não
+  disparava troca. Agora a opção *"Projeto #12 — fora da lista"* marcada, e *"—"* limpa.
+- [x] **A lista de reservas com o banco ocupado** (C369) — `03ecf059` (a camada de comunicação), `02545473` (o teste com a camada real):
+  trocar o filtro enquanto o primeiro pedido espera o 503 — as duas respostas chegam e a tabela fica com a do filtro novo.
+- [x] **Testes** — `ReservasAlmoxarifado.test.js` (30), `ReservasListaRecusadaApiReal.test.js` (2, a camada de comunicação real),
+  `listasNotificacoesPortao` (o corpo do 403 = o fixture `recusaDaListaDoServidor.json`).
+- [ ] *Fora, de propósito:* as listas do próprio módulo (estoque, OS do aux) continuam caladas quando falham (quem perde o Almoxarifado perde
+  a tela). A tela não descarta resposta velha da lista de reservas (com o banco de pé, as respostas chegam na ordem; declarado em D (156)).

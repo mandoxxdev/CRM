@@ -112,7 +112,9 @@
   espaços como espaços (*"RUA DAS FLORES 10, CAMPINAS, SP, Brasil"*, sem `+`; espaços repetidos viram um, como antes). Os parâmetros, o `User-Agent` (`GMP-CRM/1.0`) e o resultado (a primeira linha, `lat`/`lon`) não mudam.
 - **RN-156.04 (C370)** — A coordenada pela cidade compara o nome **sem caixa, sem acento e sem espaço nas pontas** (*"SAO BERNARDO DO CAMPO"* =
   *"São Bernardo do Campo"*); sem a cidade no mapa, o centro do estado (o estado também sem caixa); sem os dois, o centro do Brasil — como
-  antes. **A cidade só vale quando fica a até 1.000 km do centro do estado informado** (Fase 2 I1: o mapa é só por nome — *RIO BRANCO/AC*
+  antes. **[Fase 5 r1 I-1: esta regra estava errada — o raio deixava passar o homônimo de estado vizinho (*RIO CLARO/RJ* → Rio Claro/SP,
+  *ÁGUA BOA/MG* → Água Boa/MT). O certo, entregue em `95fed61a`: a lista ganhou a UF de cada cidade, e com o estado conhecido só vale a
+  cidade DESSE estado.]** ~~A cidade só vale quando fica a até 1.000 km do centro do estado informado~~ (Fase 2 I1: o mapa é só por nome — *RIO BRANCO/AC*
   acharia Rio Branco do MT, *SANTA MARIA/RN* a do RS; fora do raio, o centro do estado, como hoje); sem estado conhecido, a cidade pelo nome.
   Vale para todo chamador (os clientes próximos, a rota, o valor da visita do relatório de visitas técnicas, o mapa do painel, o mapa das
   máquinas vendidas, a lista de custos, o recuo da RN-156.03) — **os números mudam** para quem é de cidade do mapa (**B1002**).
@@ -131,7 +133,7 @@
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 (galho — client) — RN-156.01.** `client/src/utils/chaveDoPedido.js`: `chaveDoPedido(config)` — leitura (`get`/`head`):
+- [x] **T1 (`03ecf059`) (galho — client) — RN-156.01.** `client/src/utils/chaveDoPedido.js`: `chaveDoPedido(config)` — leitura (`get`/`head`):
   `metodo url ?params-ordenados responseType` (sem `undefined`/`null`); gravação: `metodo-url` (a de antes). `api.js`: no 503, leitura com a
   chave em espera → espera **a mesma promessa** da repetição e recebe uma cópia dos dados; gravação com a chave em espera → recusa na hora (como antes); a repetição é uma promessa guardada na chave (apagada
   antes de repetir, como antes). Teste `client/src/services/apiRepeticao503.test.js` com o axios real e o adaptador falso: (a) dois GET, filtros
@@ -141,7 +143,7 @@
   (a recursão travada falha legível); `retryAfter: 0.01` (o `0` vira 3 s); (e) dois POST ao mesmo endereço → o segundo recusado na hora com o 503 dele (a metade que **não**
   muda), o primeiro repete; (f) `chaveDoPedido` unitário (`{q:'a', x: undefined, y: null}` = `{q:'a'}`; `''` conta). Controle: a chave sem os
   `params` derruba (a); recusar o mesmo GET derruba (b); apagar a chave depois de repetir derruba (d) pelo prazo.
-- [ ] **T2 (galho — client + teste do servidor) — RN-156.02.** `client/src/utils/listaRecusada.js` (`motivoDaListaRecusada(erro, nome)`);
+- [x] **T2 (`75e772cf`) (galho — client + teste do servidor) — RN-156.02.** `client/src/utils/listaRecusada.js` (`motivoDaListaRecusada(erro, nome)`);
   `components/almoxarifado/AvisoDaListaRecusada.js` (`<small role="alert">`, nada sem motivo); as quatro telas guardam o erro de cada lista e
   desenham o aviso sob os dez seletores; `OpcaoForaDaLista` (a opção do valor atual que não está na lista) no *Proprietário* do Material e nos
   *Projeto*/*Cliente* da transferência. Testes: a função (403 com e sem `error`, 503/Error, 500); em cada uma das quatro telas, a lista
@@ -151,7 +153,7 @@
   `/clientes` recusada → *"Cliente #7 — fora da lista"* marcada, e *GMP* manda `null`. O teste antigo do Material que rejeita com `new
   Error('403')` passa ao fixture. **Servidor:** no `listasNotificacoesPortao` (o cenário dos barrados), o corpo do 403 das duas listas = o fixture.
   Controle: a tela sem guardar o erro derruba a dela; trocar o `error` do fixture derruba o servidor.
-- [ ] **T3 (galho — servidor) — RN-156.03/04.** `server/services/coordenadas.js` com `geocodificarEndereco`, `obterCoordenadasExatas` e
+- [x] **T3 (`438ab108`) (galho — servidor) — RN-156.03/04.** `server/services/coordenadas.js` com `geocodificarEndereco`, `obterCoordenadasExatas` e
   `obterCoordenadasCidade` (o mapa vai junto, uma chave normalizada por cidade); o `index.js` passa a importá-los (nenhum chamador muda).
   Teste `server/tests/api/coordenadasPrazo.api.test.js`: **unitário** contra um servidor HTTP local (nunca o Nominatim): o que pendura → `null`
   no prazo (300 ms; tempo entre o prazo e prazo + 1 s); o que manda o cabeçalho e pinga um byte a cada 50 ms → `null` no prazo (prova que o prazo
@@ -167,7 +169,7 @@
   (distância ≈ 104 km, não a do centro de SP). O `spawn` com `NOMINATIM_PRAZO_MS=400` (o "< 3 s" não cabe nos 5 s do padrão); `subir()` apaga
   `NOMINATIM_URL`/`NOMINATIM_PRAZO_MS` herdadas. Controles: sem o prazo (ou só `req.setTimeout`) derruba o
   pendurado / o pingado; a comparação exata de volta derruba a cidade; sem o raio de 1.000 km derruba o homônimo.
-- [ ] **T4 (integração — cruza T1 e T2, e a bateria) —** `client/src/components/almoxarifado/ReservasListaRecusadaApiReal.test.js`: a tela das
+- [x] **T4 (`02545473`) (integração — cruza T1 e T2, e a bateria) —** `client/src/components/almoxarifado/ReservasListaRecusadaApiReal.test.js`: a tela das
   Reservas com o `api.js` **real** (axios real, adaptador falso na fronteira HTTP): `/clientes` 503 → repete → 403 com o corpo do fixture → a
   frase com *"Acesso negado ao módulo"* sob o seletor; `/projetos` 503 → repete → 200 → as opções; e (Fase 2 I4 — o cruzamento com o T1) a
   lista de reservas (`/almoxarifado/reservas` com `params`) pedida com um filtro e, enquanto espera o 503, com outro → as duas respostas
@@ -189,4 +191,116 @@ novo, teste novo) tocam arquivos e regras disjuntas. T4 depende de T1 e T2. **T2
 
 ## Execução (o que divergiu do plano)
 
-*(preencher)*
+- **T2 num executor em worktree própria** (`CRM-wt-e156-t2`, junções), em paralelo com T1 e T3 aqui; os testes de todos pela trava. O
+  merge foi *fast-forward* (`75e772cf` mantém o hash). **0** retrabalho. Divergências do executor (pequenas, aceitas): o aviso recebe o erro e
+  o nome e chama a função dentro dele (a frase continua montada por uma função só); a `OpcaoForaDaLista` mora no mesmo arquivo do aviso e
+  aparece sempre que o valor não está na lista (recusada ou não — como a RN diz); um cenário a mais (a transferência de uma reserva do cliente
+  7 com `/clientes` recusada: o 7 vai no PUT); no cenário do Projeto #12 a reserva também tem o cliente 3 (a tela recusa transferir sem
+  destino).
+- **Controles positivos (todos caíram pela asserção certa):** **K-T1** a chave sem params → (a) e o unitário; recusar o mesmo GET → (b), (c),
+  (d); apagar a chave só depois de repetir (sem o `delete`) → (d) pelo prazo de 3 s (*"a repeticao nao terminou"*); sem a cópia → (b); sem
+  ordenar → (c) e o unitário; sem o `responseType` → o unitário. Contra o `api.js` da `HEAD` anterior: (a), (b), (c), (d) vermelhos, (e) e
+  (f) verdes (a metade que não muda). **K-T2** (do executor) 12 sabotagens: o `error` do fixture trocado (o servidor), cada tela sem guardar o
+  erro, sem a opção fora da lista (projeto, cliente, material), o aviso sem erro (9 testes), o ponto final, o 403 tratado como falha genérica.
+  **K-T3** sem prazo (×1000) → o pendurado, o pingado e a integração; só `req.setTimeout` (a conexão ociosa) → **só** o pingado (prova que o
+  prazo tem de ser do pedido inteiro); a comparação exata de volta → a cidade, a coordenada da rota (Campinas virava o centro de SP), os
+  próximos (o de Ribeirão Preto entrava a 0 km) e a rota (*"CAMPINAS 20 x Campinas 104"* — o número de antes, medido); sem o raio → o
+  homônimo (*"o cliente do Acre foi para o MT"*); o `+` literal → o pedido e a integração; sem conferir o status → o 429 (o 429 do servidor
+  local devolve um corpo de coordenada de propósito, senão a sabotagem seria invisível). **K-T4** a chave sem params → o cenário (1); a tela
+  sem guardar o erro de `/clientes` → o (2).
+- **Medido de novo na T3:** o relatório de visitas só lista cliente **com proposta** (`HAVING total_propostas > 0`) — o teste grava uma
+  proposta por fora para o cliente de Campinas.
+- **Nenhuma consulta A nova:** nenhuma consulta nova para produção (nada a migrar; o efeito da cidade foi medido na cópia local — 28 de 53).
+
+## Fase 5 — revisão adversarial (três revisores frescos, em paralelo, sob a trava)
+
+- **r1 (regra) — 2 achados reproduzidos.** **I-1 (Important)** o raio de 1.000 km da RN-156.04 deixava passar o homônimo de estado vizinho
+  (sonda `scratchpad/e156/r1/raio.js`: *RIO CLARO/RJ* → Rio Claro/SP, 354 km de erro contra 100 antes; *PAULISTA/PB* → Paulista/PE; *ÁGUA
+  BOA/MG* → Água Boa/MT, 1.133 km — SBC a 1.226 km, passa o limite de 600 km da passagem aérea; *NOVO SANTO ANTÔNIO/PI*). **A RN estava
+  errada** (corrigida à vista acima). **M-1 (Minor)** `NOMINATIM_PRAZO_MS=9999999999` passava na validação e o `setTimeout` disparava em 1
+  ms. Conferido certo: a chave ignora ordem e vazios, a espera não fecha laço (3 GET iguais sempre ocupados rejeitam, 6 chamadas), a cópia
+  sai intacta com a dona mexendo depois, a frase literal, *"—"*/*GMP* limpam, o prazo do pedido inteiro, o termo sem `%2B`, todos os
+  chamadores do `index.js` pelo serviço.
+- **r2 (autorização) — 1 achado reproduzido (de antes) + 1 observação.** **I-1 (Minor, de antes)** com o banco ocupado, quem saía no meio da
+  espera repetia com o token velho (o interceptor só escreve o token quando há um guardado): sonda com `"auth":"Bearer A"` na repetição —
+  **C373**. **O-1** os cabeçalhos próprios não entram na chave (medido: nenhum muda o conteúdo — o único `Cache-Control` leva `params._t`).
+  Conferido certo: troca de login na mesma aba não entrega dado de A a B; o `error` do 403 com `<img onerror>` sai escapado e o 500 não mostra o
+  texto do servidor; a `OpcaoForaDaLista` só mostra o id que a pessoa já tinha; `NOMINATIM_*` só do ambiente, o endereço vai no `q`, sem
+  redirecionamento; o `index.js` montado: só Almoxarifado / só Operacional → 403 nas 4 rotas de coordenadas com 0 pedidos ao mapa, sem token
+  401, com o Comercial 200 e 1 pedido (controle); as 302 linhas de registro do `index.js` idênticas antes e depois.
+- **r3 (sabotagem, worktree própria `CRM-wt-e156-r3`) — 40 sabotagens: 27 caíram pela asserção certa, 13 sobreviveram — 10 de falta de
+  asserção, 3 equivalentes.** As de falta de asserção (todas provadas por sonda verde na produção e vermelha sob a sabotagem): **C1** a cópia
+  rasa; **C2** sem a guarda do Blob (o download que esperou saía `{}`); **C6** o filtro objeto como `String`; **C9** o `error` sem `trim`;
+  **C3** o HEAD fora; **S3/S3b** o estado sem `trim`/sem maiúsculas (*'rio branco','ac'* ia ao MT); **S1b/S1c** o raio não preso (qualquer
+  valor de ~412 a ~1.450 km passava — some com a UF); **S5** sem `req.destroy` (a conexão ficava aberta); **S6** sem `clearTimeout` (aviso
+  falso de "não respondeu"). Equivalentes (mantidos e declarados): **C8** o `delete` condicional da chave, **S4** o `terminar` explícito no
+  relógio (o `destroy` já o dispara no Node 24.18), **C4** o desempate por valor — *achado menor*: fundia `a=2&a=1` com `a=1&a=2`; **tirado**.
+- **Correção da Fase 5 (`95fed61a`):** a lista `CIDADES` com a UF de cada cidade (345 linhas; o Rio Branco do AC volta), só a cidade do
+  estado informado; o teto do prazo (2³¹−1); a repetição apaga `Authorization`/`X-Auth-Token` (o interceptor põe o de agora — sem token, vai
+  sem: descartado não repetir, que quebraria o login no banco em inicialização); a ordenação dos `params` só pela chave. Asserções novas: a
+  cópia funda, o Blob, o token trocado e apagado, o objeto, o HEAD, a ordem dos repetidos, o `error` com espaços, o estado minúsculo e com
+  espaço, os homônimos vizinhos e longe, a cidade legítima longe do centro (Colniza 700 km, Manaus, Belém), a lista (UF válida, nome+UF
+  único, ≤ 700 km, cada uma se acha), a conexão fechada depois do prazo, nenhum aviso depois da resposta, o prazo acima do teto. **Controles
+  (13, todos caíram pelo cenário deles):** **F1** ignorar a UF → o homônimo e a lista; **F2** sem `destroy` → *"ficaram 1 conexoes abertas"*;
+  **F3** sem `clearTimeout` → o aviso falso; **F4** sem teto → *"9999999999 !== 5000"*; **F5/F6** o estado sem maiúsculas / sem `trim`; **G1**
+  cópia rasa → (b); **G2** sem a guarda do Blob → o do download; **G3** objeto como texto, **G4** o desempate de volta, **G6** o HEAD fora → o
+  unitário; **G5** sem apagar o token → o do token; **G7** sem `trim` → a frase. Medido de novo na cópia local: **28 de 53** clientes acham a
+  cidade (os mesmos 28 — todos do próprio estado).
+
+## Suítes (lidas na saída, `scratchpad/e156/bateria-*/`)
+
+- **Antes dos commits `03ecf059`..`02545473` (bateria 1):** `test:api` **477/477** arquivos (o novo `coordenadasPrazo` incluído);
+  `test:almoxarifado` **44/0**; `test:validation`/`safealter`/`sqlite` **4/0, 3/0, 16/0**; revisão obrigatória da proposta **23/23** + editor
+  **39/39**; client **148** suítes / **1911** testes; `CI=true build` *Compiled successfully*. (A T2, antes, no executor: client 146 / 1901,
+  build ok, `listasNotificacoesPortao` 10/0.)
+- **Antes de `95fed61a` (bateria 2, depois da Fase 5 — também a do fechamento; depois só mudaram documentos):** `test:api` **477/477**
+  (`coordenadasPrazo` **11/0**); `test:almoxarifado` **44/0**; **4/0, 3/0, 16/0**; proposta **23/23** + editor **39/39**; client **148** suítes /
+  **1913** testes (`apiRepeticao503` 10, `listaRecusada` 5, `ReservasListaRecusadaApiReal` 2); `CI=true build` *Compiled successfully*.
+
+## Retro (4 números)
+
+1. **Rodadas de correção até verde:** **1** — a Fase 5 (a UF da cidade, o token de agora, o teto do prazo e as 10 asserções). As quatro tasks
+   ficaram verdes na primeira aplicação (com controle positivo cada; a T3 precisou de um ajuste no próprio teste — o relatório de visitas só
+   lista cliente com proposta). Testes antigos mudados: **1** (o do Material que simulava o 403 com `new Error('403')`).
+2. **Achados da revisão:** Fase 2 — **4 Important + 12 Minor, reais** (dois desmentiram a Fase 0: as 570 entradas do mapa e o acento no
+   banco). Fase 5 — r1 **2** reais (1 Important — **a correção da Fase 2 para o homônimo estava errada** —, 1 Minor); r2 **1** real (de antes)
+   + 1 observação; r3 **10** de falta de asserção, todas reais (provadas por sonda) + **3** equivalentes; **0** ruído. **O que mais pesou:** uma
+   régua geográfica "por raio" sem a UF de cada ponto não separa homônimo de vizinho — o dado certo (a UF) era barato e a régua cara.
+3. **Paralelismo:** **1** galho de código em paralelo de fato (a T2 num executor em worktree própria, enquanto T1 e T3 rodavam aqui; *fast
+   forward*, **0** retrabalho); **1** revisor na Fase 2 (antes do código), **3** em paralelo na Fase 5 sob a trava (o r3 em worktree própria).
+4. **Defeito que escapou:** *(preencher na Etapa 157)*.
+
+## Próxima tarefa detalhada — Etapa 157
+
+*(A série desta etapa foi B1001–B1003, C370–C373, nenhuma A — a 157 começa em **B1004**, **C374**, **A104**; confira com `grep -oE` antes.)*
+
+**Escolhida: as sobras técnicas dos custos de viagem, nenhuma do P.O.** (1) **C372** — abrir um custo de viagem para editar recalcula a rota
+e sobrescreve os custos do formulário (`CustosViagens.js`: o `useEffect` que chama `calcularRota()` ao mudar destino/cliente, e
+`calcularRota` grava `custo_transporte`, `custo_hospedagem`, `custo_alimentacao`, `custo_outros`, `distancia_km`, `custo_sugerido` —
+medir as linhas antes): candidata — na edição, recalcular só quando a pessoa **mudar** o destino, o cliente, o tipo ou as datas (a sugestão
+nova aparece sem trocar os valores gravados, ou troca só com um clique); medir se o `useEffect` dispara na abertura pelo `abrirEdicao`.
+Teste de tela (jsdom) com o servidor simulado: abrir um custo gravado com 20 km → salvar sem mexer → o PUT leva os valores gravados. Registrar
+em B o que foi escolhido (reversível). (2) **A cópia da lista de cidades no client** (`CustosViagens.js` ~790-815, `PreviewRota.js` ~101-134
+— o recuo quando o servidor não responde) com a comparação exata: candidata — usar a coordenada que o servidor já devolve, ou a mesma
+normalização (sem a lista duplicada: medir se dá para o client nunca precisar dela). (3) **A "mesma cidade" dos clientes próximos** (`index.js`,
+`clientes-proximos`: `toLowerCase().trim()` sem tirar o acento — *"SÃO PAULO"* e *"SAO PAULO"* a 0 km): usar `normalizarNome` de
+`services/coordenadas.js`; teste no `coordenadasPrazo`.
+**Pontos de atenção:** (1) a **B1002** mudou os números de rota e visita — um teste novo que prenda distância deve usar cidades da lista com a
+UF certa; (2) `services/coordenadas.js` tem a lista `CIDADES` com UF (345) e o teste confere cada linha — cidade nova entra com a UF e ≤ 700
+km do centro do estado; (3) o `coordenadasPrazo` sobe o `index.js` com `NOMINATIM_URL` local — **nunca** sem ela num cenário com endereço;
+(4) a camada de comunicação (`api.js`) agora compartilha a repetição entre leituras iguais — um teste de tela que simula 503 tem de usar
+`retryAfter` pequeno (o `0` vira 3 s).
+
+**Dependem do P.O. — NÃO implemente:** a lista inteira do plano da 152 — **B853**/**C279**, **B808**, **B755**, **B761**/**C239**, **C224**, o
+resto da **C225**, **C228**, **C219**, **C230**, o reparo da **C246** e a **C247**, a tabela de conversões e o grupo acima de família, a régua do
+tempo de recebimento (E2), **C268**, **C269**, **C275**, **C276**, **C277**, **C109**, **C117**/**C118**, **C139**, **C278**; na 05, os itens de
+produto e a **C198**; na 06, a **B11** e a Engenharia; na 21, a valorização por cliente e previsto × realizado; na 22, **B13**, **B101**/G30,
+**G38**; no Compras, D-35, D-37, D-78, D-90, G9/G30, G4, G15, B63, B60, B62, a **C348**; nas propostas, a verificação do dono da proposta (Fase
+12 — também a **C305**), o filtro por permissão do histórico, a **B910**, a **C307**, a Frente B da lentidão, a **C297** (**B924**), a **B926**,
+a **C312**, a **C316**, a régua de quantidade da **C314**, a **B949** e a **C330**; no Operacional, a **C332**; do Comercial, a **C354**, a
+**C357**/**B988**, a **C359**/**B989** (e a **C360** junto), a **C358**; do núcleo, a **C362**. Pendem de Postgres: **C98**, **C110**. **Nada novo
+do P.O. nesta etapa** (a **B1001** e a **B1002** são reversíveis e estão na letra B — a B1002 pede um olhar porque os números mudam).
+
+**O que já está pronto e não precisa reabrir:** a repetição do 503 pelos filtros, com o token de agora (`03ecf059`, `95fed61a`); o aviso da
+lista recusada e a opção fora da lista nas quatro telas (`75e772cf`); o prazo da consulta de endereço e a cidade com UF (`438ab108`,
+`95fed61a`); o teste da tela das Reservas com a camada de comunicação real (`02545473`).

@@ -1044,6 +1044,30 @@ decide se a pessoa abre as telas desses módulos. Quem não tem nenhum dos três
 recebe *"Acesso negado ao módulo"*, e a tentativa fica registrada como acesso negado a *Comercial ou Almoxarifado ou Operacional*. Nenhuma
 tela de outro módulo usa essas listas.
 
+Quando uma dessas listas **volta recusada** — por exemplo, a pessoa perdeu os três módulos com a tela aberta —, cada seletor que ela alimenta
+continua com as opções que não dependem dela (*"—"*, *"GMP (estoque próprio)"*) e mostra o motivo logo abaixo: *"Sem acesso à lista de
+clientes: Acesso negado ao módulo. Recarregue a página para conferir suas permissões."* (com *"projetos"* na lista de projetos; no filtro de
+projetos das Reservas, a frase fica logo abaixo da barra de filtros). Em qualquer outra falha (banco ocupado, rede), a frase é *"Não foi
+possível carregar a lista de clientes. Recarregue a página para tentar de novo."*. Isso **avisa, não bloqueia**: o resto da tela funciona. Um
+seletor que já tem um valor que não está na lista — a transferência de uma reserva que já aponta para um projeto ou cliente, o material que
+já tem dono — mostra esse valor como *"Projeto #⟨número⟩ — fora da lista"* (ou *"Cliente #⟨número⟩ — fora da lista"*), marcado: é ele que vai
+ser gravado se nada mudar, e escolher *"—"* (ou *"GMP (estoque próprio)"*) o tira.
+
+**Banco ocupado.** Quando o servidor responde que o banco está ocupado (ou ainda iniciando), a tela espera o tempo que ele pede e tenta de
+novo, até 3 vezes; depois, desiste com *"Banco de dados não está disponível. Tente recarregar a página."*. Duas leituras ao mesmo endereço
+com **filtros diferentes** (a busca com outro termo, a lista com outro filtro) esperam e repetem **cada uma**; a **mesma** leitura pedida de
+novo enquanto a primeira espera aproveita a repetição dela (o servidor recebe um pedido só). Uma **gravação** (salvar, apagar) pedida de novo
+ao mesmo endereço enquanto a primeira espera é recusada na hora — para não gravar duas vezes. A repetição vai sempre com o login de quem está
+na tela naquele momento.
+
+**A localização dos clientes** do Comercial sai de dois jeitos. O **ponto do cliente no mapa** dos **Custos de viagem** e da prévia da
+rota, para o cliente com endereço completo, vem de um serviço de mapas da internet, que tem **5 segundos** para responder; se ele não
+responder a tempo, responder com erro ou não achar o endereço, vale a **cidade**. A **rota** (a distância e o custo sugerido), os **clientes
+próximos**, o **valor recomendado da visita** e os mapas do Comercial usam sempre a **cidade**: de uma lista de 345 cidades, comparando o nome
+sem diferença de maiúsculas, acento ou espaço nas pontas (*"SAO BERNARDO DO CAMPO"* é *"São Bernardo do Campo"*), e só se a cidade for **do
+estado do cliente** (um cliente de *Rio Claro / RJ* não é localizado em Rio Claro de SP); se a cidade não estiver na lista, vale o **centro do
+estado**; sem cidade nem estado, o centro do Brasil. A distância da rota e da visita é contada a partir de São Bernardo do Campo.
+
 A **busca do topo** (**Ctrl+K**, em qualquer módulo) procura clientes, projetos, propostas, atividades e produtos — todos levam a telas do
 **Comercial**, e cada resultado só aparece a quem pode abrir a tela dele. Quem não tem acesso ao Comercial (pela mesma regra que decide se a
 tela do Comercial abre) vê a busca abrir com o campo desligado e a frase *"A busca do topo procura clientes, projetos, propostas, atividades e

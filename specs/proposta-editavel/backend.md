@@ -388,6 +388,28 @@ projeto das listas, o vendedor seguindo o clique até as leituras da proposta, 1
 (o dono dos prefixos `/api/clientes` e `/api/projetos`: as listas com a cadeia nova nas camadas); `client/src/components/Notificacoes.test.js`
 (o clique e a rota `propostas/editar/:id` → `PropostaForm` no bloco `/comercial` do `App.js`).
 
+### A repetição do 503 com os filtros, e o prazo e a cidade das coordenadas (Etapa 156, C369, C361, C370, C371)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa156-repeticao-listas-recusadas-e-prazo-do-mapa.md`. **Nenhuma rota muda.** Commits `03ecf059`, `438ab108`, `02545473` e a correção da revisão `95fed61a`.
+
+- **A repetição do 503** (`client/src/services/api.js`, `client/src/utils/chaveDoPedido.js` — RN-156.01, C369, B1001): a leitura (GET/HEAD) é
+  reconhecida por método, endereço, `params` (ordenados só pela chave — a ordem dos valores repetidos conta; `undefined`/`null` fora; objeto pelo
+  JSON) e `responseType`; a repetição é uma promessa guardada na chave (sai antes de repetir — o 503 da própria repetição abre outra); o mesmo
+  pedido de novo espera a promessa e recebe uma cópia funda dos dados (o Blob/ArrayBuffer, o mesmo objeto). Gravação: a chave `metodo-url` e o
+  irmão recusado na hora, como antes. A repetição apaga `Authorization`/`X-Auth-Token` do config e o interceptor do pedido põe o token de
+  agora (Fase 5 r2: quem saiu no meio repetia com o token velho — **C373**).
+- **As coordenadas** (`server/services/coordenadas.js` — RN-156.03/04, C361, C370, C371, B1002): as três funções saíram do `index.js` (os
+  chamadores não mudam). `geocodificarEndereco`: prazo `NOMINATIM_PRAZO_MS` (padrão 5000; inválido ou acima de 2³¹−1 → 5000) do pedido
+  inteiro, com `req.destroy`; não 200 / não JSON / vazio → `null`; `NOMINATIM_URL` (http/https; senão o padrão
+  `https://nominatim.openstreetmap.org/search`), lidas a cada consulta; o `q` por `URLSearchParams` (sem o `+` literal). `obterCoordenadasCidade`:
+  a lista `CIDADES` com a UF de cada cidade (345 linhas; o literal antigo tinha 570 entradas para 344 nomes, e o Rio Branco do AC se perdia
+  sob o do MT); nome sem caixa/acento/espaço nas pontas; com o estado conhecido, só a cidade **desse** estado, senão o centro dele; sem estado,
+  a última com o nome. **A primeira versão (um raio de 1.000 km do centro do estado) estava errada** — deixava passar o homônimo de estado
+  vizinho (Fase 5 r1: *RIO CLARO/RJ* → Rio Claro/SP).
+
+Testes: `client/src/services/apiRepeticao503.test.js` (o axios real, o adaptador falso), `server/tests/api/coordenadasPrazo.api.test.js` (o
+serviço contra um servidor de mapas local; o `index.js` montado com `NOMINATIM_URL`), `ReservasListaRecusadaApiReal.test.js`.
+
 ### A busca do topo na tela, o produto da OS pelo código codificado, e a régua do `.use` (Etapa 155, C364, C365, C351)
 
 Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa155-correcoes-tecnicas-de-tela.md`. **Nenhuma rota muda.**

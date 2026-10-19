@@ -2,7 +2,7 @@
 
 > **Status:** 🟢 — **Etapa 8 entregue em 2026-08-12** (`f26b635..5b5eb55`) **+ Etapa 123 (2026-10-16, `c97fe07f`): o dono do material tem de
 > estar em Clientes — `POST`/`PUT /materiais` com dono inexistente → 400 (C216 resolvido; a regra mora na spec 01, seção "Etapa 123")** **+ Etapa 106 (2026-10-15, `d6493a7e..0c8ec372`): o estorno do ajuste exige a mesma permissão do ajuste (C211 resolvido)** **+ Etapa 108 (2026-10-15, `cd7d5118..bc415eb6`): trocar o dono de material com histórico exige a mesma permissão (C213 resolvido)** · **Spec original:** seção 17 (fundamental para industrialização GMP)
-> **Última atualização:** 2026-10-15 (Etapa 108)
+> **Última atualização:** 2026-10-19 (**Etapa 156** — o seletor **Proprietário** do cadastro diz o motivo quando a lista de clientes volta recusada, e o dono que não está na lista aparece como *"Cliente #7 — fora da lista"* (C366, `75e772cf`). Ver a seção no fim.) Antes: 2026-10-15 (Etapa 108)
 >
 > Material de cliente deixou de ser ilha e virou **material normal com dono**
 > (`materiais_almoxarifado.proprietario_cliente_id`, `NULL` = material nosso): ganha lote, série,
@@ -315,3 +315,19 @@ próxima tarefa no plano da Etapa 106.
 - 03 (motor — unificação feita) · 06 (aprovação assíncrona de ajuste, descartada nesta etapa) ·
   12 (devolução para o estoque, não confundir com `DEVOLUCAO_CLIENTE`) · 15 (sobras vinculadas) ·
   19 (e-mails) · 21 (relatórios e valorização por cliente).
+
+## Etapa 156 — o Proprietário com a lista de clientes recusada (2026-10-19)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa156-repeticao-listas-recusadas-e-prazo-do-mapa.md` (RN-156.02, C366). Só a tela; o servidor não muda.
+
+**O que estava errado:** o cadastro de material trocava a recusa da lista de clientes (o seletor **Proprietário**) por uma lista vazia, calada — a quem perdeu o Comercial, o
+Almoxarifado e o Operacional com a tela aberta (o portão das listas, Etapa 154), o seletor só tinha *"—"*, sem dizer por quê.
+
+**Entregue:**
+
+- [x] **O motivo** — `75e772cf`: `MaterialAlmoxarifadoForm` guarda o erro de `/clientes` e desenha a frase sob o **Proprietário**.
+- [x] **O dono fora da lista** (Fase 2 I3) — `75e772cf`: na edição de um material do cliente 7 com a lista recusada, o seletor mostrava *"GMP
+  (estoque próprio)"* com o estado `"7"` (o submit preservava o dono, a tela mostrava outro) e *GMP* não disparava troca; agora *"Cliente #7 —
+  fora da lista"* marcado, e *GMP* manda `null`.
+- [x] **Testes** — `MaterialAlmoxarifadoForm.test.js` (71; o teste antigo que rejeitava `/clientes` com `new Error('403')` — sem
+  `response`, a falha genérica — passou ao fixture do 403 real).
