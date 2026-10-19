@@ -13,6 +13,7 @@ import {
 import './CustosViagens.css';
 import PreviewRota from './PreviewRota';
 import { valoresDaRota } from '../utils/valoresDaRota';
+import { obterCoordenadasDoCliente } from '../utils/coordenadasDoCliente';
 
 /**
  * Etapa 157 (RN-157.01, C372): os sete campos que fazem a rota ser recalculada, numa forma comparavel (o mesmo texto para 5 e '5', null e '').
@@ -80,6 +81,8 @@ const CustosViagens = () => {
   // a resposta de um calculo que nao e o ultimo pedido (ou de antes de fechar o formulario / apagar o cliente) nao toca em nada
   const pedidoDaRotaRef = useRef(0);
   const [sugestaoSemAplicar, setSugestaoSemAplicar] = useState(false);
+  // RN-157.03 (Fase 2 K1): o ultimo cliente escolhido — a resposta (coordenada, elegibilidade, proximos) de outro nao vale
+  const clienteEscolhidoRef = useRef(null);
 
   const [formData, setFormData] = useState({
     cliente_id: '',
@@ -388,6 +391,7 @@ const CustosViagens = () => {
   };
 
   const handleClienteChange = async (clienteId) => {
+    clienteEscolhidoRef.current = clienteId ? String(clienteId) : null;
     if (!clienteId) {
       // Se não houver cliente selecionado, limpar tudo
       setFormData(prev => ({
@@ -436,6 +440,7 @@ const CustosViagens = () => {
     // Buscar coordenadas exatas em background (não bloquear)
     try {
       const coords = await obterCoordenadasCliente(cliente);
+      if (clienteEscolhidoRef.current !== String(clienteId)) return; // RN-157.03: escolheram outro cliente enquanto esperava
       const clienteComCoords = { 
         id: parseInt(clienteId), 
         ...cliente, 
@@ -446,6 +451,7 @@ const CustosViagens = () => {
       setClientesSelecionados([clienteComCoords]);
     } catch (error) {
       console.error('Erro ao obter coordenadas do cliente:', error);
+      if (clienteEscolhidoRef.current !== String(clienteId)) return;
       // Mesmo com erro, adicionar cliente sem coordenadas (será calculado depois)
       setClientesSelecionados([{ 
         id: parseInt(clienteId), 
@@ -470,9 +476,11 @@ const CustosViagens = () => {
     setVerificandoElegibilidade(true);
     try {
       const response = await api.get(`/custos-viagens/verificar-elegibilidade/${clienteId}`);
+      if (clienteEscolhidoRef.current !== String(clienteId)) return;
       setElegibilidade(response.data);
     } catch (error) {
       console.error('Erro ao verificar elegibilidade:', error);
+      if (clienteEscolhidoRef.current !== String(clienteId)) return;
       setElegibilidade(null);
     } finally {
       setVerificandoElegibilidade(false);
@@ -483,6 +491,7 @@ const CustosViagens = () => {
     setCarregandoClientesProximos(true);
     try {
       const response = await api.get(`/custos-viagens/clientes-proximos/${clienteId}?raio_km=100`);
+      if (clienteEscolhidoRef.current !== String(clienteId)) return;
       if (response.data && response.data.length > 0) {
         // Garantir que os clientes retornados já têm coordenadas exatas (vêm do backend)
         const clientesComCoords = response.data.map(cliente => ({
@@ -499,6 +508,7 @@ const CustosViagens = () => {
       }
     } catch (error) {
       console.error('Erro ao buscar clientes próximos:', error);
+      if (clienteEscolhidoRef.current !== String(clienteId)) return;
       setClientesProximos([]);
       setMostrarModalClientesProximos(false);
     } finally {
@@ -550,251 +560,8 @@ const CustosViagens = () => {
     setClientesProximos([]);
   };
 
-  const obterCoordenadasCliente = async (cliente) => {
-    // Se já tem coordenadas, usar
-    if (cliente.coordenadas && Array.isArray(cliente.coordenadas) && cliente.coordenadas.length === 2) {
-      return cliente.coordenadas;
-    }
-    
-    // Se tiver endereço completo, buscar coordenadas exatas do backend
-    if (cliente.endereco && cliente.cidade && cliente.estado && cliente.id) {
-      try {
-        const response = await api.get(`/custos-viagens/coordenadas-cliente/${cliente.id}`);
-        if (response.data && response.data.coordenadas) {
-          return response.data.coordenadas;
-        }
-      } catch (err) {
-        console.warn('Erro ao buscar coordenadas exatas, usando fallback:', err);
-      }
-    }
-    
-    // Coordenadas de principais cidades brasileiras (mesma lógica do backend)
-    const coordenadasCidades = {
-      'São Paulo': [-23.5505, -46.6333],
-      'Rio de Janeiro': [-22.9068, -43.1729],
-      'Brasília': [-15.7942, -47.8822],
-      'Salvador': [-12.9714, -38.5014],
-      'Fortaleza': [-3.7172, -38.5433],
-      'Belo Horizonte': [-19.9167, -43.9345],
-      'Manaus': [-3.1190, -60.0217],
-      'Curitiba': [-25.4284, -49.2733],
-      'Recife': [-8.0476, -34.8770],
-      'Porto Alegre': [-30.0346, -51.2177],
-      'Belém': [-1.4558, -48.5044],
-      'Goiânia': [-16.6864, -49.2643],
-      'Guarulhos': [-23.4538, -46.5331],
-      'Campinas': [-22.9056, -47.0608],
-      'São Luís': [-2.5387, -44.2825],
-      'São Gonçalo': [-22.8269, -43.0539],
-      'Maceió': [-9.5713, -36.7820],
-      'Duque de Caxias': [-22.7856, -43.3047],
-      'Natal': [-5.7945, -35.2110],
-      'Teresina': [-5.0892, -42.8019],
-      'Campo Grande': [-20.4428, -54.6458],
-      'Nova Iguaçu': [-22.7556, -43.4603],
-      'São Bernardo do Campo': [-23.7150, -46.5550],
-      'João Pessoa': [-7.1195, -34.8450],
-      'Santo André': [-23.6669, -46.5322],
-      'Osasco': [-23.5329, -46.7915],
-      'Jaboatão dos Guararapes': [-8.1127, -35.0147],
-      'São José dos Campos': [-23.1791, -45.8872],
-      'Ribeirão Preto': [-21.1775, -47.8103],
-      'Uberlândia': [-18.9128, -48.2755],
-      'Sorocaba': [-23.5015, -47.4526],
-      'Contagem': [-19.9317, -44.0539],
-      'Aracaju': [-10.9091, -37.0677],
-      'Feira de Santana': [-12.2664, -38.9661],
-      'Cuiabá': [-15.6014, -56.0979],
-      'Joinville': [-26.3044, -48.8467],
-      'Juiz de Fora': [-21.7595, -43.3398],
-      'Londrina': [-23.3045, -51.1696],
-      'Aparecida de Goiânia': [-16.8194, -49.2439],
-      'Niterói': [-22.8834, -43.1034],
-      'Ananindeua': [-1.3656, -48.3728],
-      'Porto Velho': [-8.7619, -63.9039],
-      'Serra': [-20.1289, -40.3078],
-      'Caxias do Sul': [-29.1680, -51.1798],
-      'Campos dos Goytacazes': [-21.7523, -41.3304],
-      'Macapá': [0.0349, -51.0694],
-      'Vila Velha': [-20.3297, -40.2925],
-      'Florianópolis': [-27.5954, -48.5480],
-      'Mauá': [-23.6677, -46.4613],
-      'São João de Meriti': [-22.8039, -43.3722],
-      'São José do Rio Preto': [-20.8113, -49.3757],
-      'Mogi das Cruzes': [-23.5229, -46.1880],
-      'Betim': [-19.9678, -44.1977],
-      'Diadema': [-23.6864, -46.6228],
-      'Campina Grande': [-7.2307, -35.8817],
-      'Jundiaí': [-23.1864, -46.8842],
-      'Maringá': [-23.4205, -51.9333],
-      'Montes Claros': [-16.7281, -43.8630],
-      'Carapicuíba': [-23.5235, -46.8407],
-      'Olinda': [-8.0089, -34.8553],
-      'Cariacica': [-20.2639, -40.4164],
-      'Rio Branco': [-9.9747, -67.8100],
-      'Anápolis': [-16.3286, -48.9534],
-      'Bauru': [-22.3147, -49.0606],
-      'Vitória': [-20.3155, -40.3128],
-      'Caucaia': [-3.7327, -38.6610],
-      'Canela': [-29.3658, -50.8139],
-      'Blumenau': [-26.9194, -49.0661],
-      'Franca': [-20.5352, -47.4039],
-      'Ponta Grossa': [-25.0916, -50.1668],
-      'Petrolina': [-9.3887, -40.5007],
-      'Uberaba': [-19.7477, -47.9392],
-      'Paulista': [-7.9340, -34.8684],
-      'Cascavel': [-24.9578, -53.4595],
-      'Praia Grande': [-24.0089, -46.4122],
-      'São José de Ribamar': [-2.5619, -44.0542],
-      'Foz do Iguaçu': [-25.5163, -54.5854],
-      'Várzea Grande': [-15.6458, -56.1325],
-      'Petrópolis': [-22.5050, -43.1786],
-      'Limeira': [-22.5647, -47.4017],
-      'Volta Redonda': [-22.5231, -44.1042],
-      'Governador Valadares': [-18.8548, -41.9559],
-      'Taubaté': [-23.0264, -45.5553],
-      'Imperatriz': [-5.5185, -47.4775],
-      'Gravataí': [-29.9444, -50.9919],
-      'Embu das Artes': [-23.6437, -46.8579],
-      'Viamão': [-30.0811, -51.0234],
-      'São Vicente': [-23.9631, -46.3919],
-      'Taboão da Serra': [-23.6019, -46.7526],
-      'Novo Hamburgo': [-29.6914, -51.1306],
-      'Santa Maria': [-29.6842, -53.8069],
-      'Barueri': [-23.5107, -46.8761],
-      'Guarujá': [-23.9931, -46.2564],
-      'Ribeirão das Neves': [-19.7669, -44.0869],
-      'Sumaré': [-22.8214, -47.2668],
-      'Caruaru': [-8.2842, -35.9699],
-      'Araçatuba': [-21.2087, -50.4325],
-      'Colombo': [-25.2925, -49.2262],
-      'Itaquaquecetuba': [-23.4864, -46.3483],
-      'Americana': [-22.7379, -47.3311],
-      'Araraquara': [-21.7944, -48.1756],
-      'Itaboraí': [-22.7475, -42.8592],
-      'Santa Bárbara d\'Oeste': [-22.7536, -47.4136],
-      'Nova Friburgo': [-22.2819, -42.5303],
-      'Jacareí': [-23.3051, -45.9658],
-      'Arapiraca': [-9.7520, -36.6612],
-      'Barra Mansa': [-22.5444, -44.1714],
-      'São Caetano do Sul': [-23.6231, -46.5512],
-      'Cabo Frio': [-22.8894, -42.0286],
-      'Itabuna': [-14.7874, -39.2781],
-      'Rio Claro': [-22.4103, -47.5604],
-      'Araguaína': [-7.1920, -48.2044],
-      'Passo Fundo': [-28.2628, -52.4067],
-      'Luziânia': [-16.2525, -47.9503],
-      'Paranaguá': [-25.5167, -48.5167],
-      'Dourados': [-22.2208, -54.8058],
-      'Rio Verde': [-17.7979, -50.9278],
-      'Chapecó': [-27.1004, -52.6153],
-      'Criciúma': [-28.6775, -49.3697],
-      'Itajaí': [-26.9103, -48.6626],
-      'Sete Lagoas': [-19.4658, -44.2467],
-      'Divinópolis': [-20.1436, -44.8908],
-      'Macaé': [-22.3708, -41.7869],
-      'São José dos Pinhais': [-25.5347, -49.2056],
-      'Pindamonhangaba': [-22.9246, -45.4613],
-      'Jequié': [-13.8578, -40.0853],
-      'Palmas': [-10.1844, -48.3336],
-      'Teixeira de Freitas': [-17.5350, -39.7419],
-      'Barretos': [-20.5572, -48.5678],
-      'Patos de Minas': [-18.5778, -46.5181],
-      'Alagoinhas': [-12.1356, -38.4192],
-      'Bragança Paulista': [-22.9527, -46.5442],
-      'Parnaíba': [-2.9048, -41.7767],
-      'Poços de Caldas': [-21.7878, -46.5614],
-      'Caxias': [-4.8590, -43.3600],
-      'Valparaíso de Goiás': [-16.0650, -47.9750],
-      'Marília': [-22.2139, -49.9456],
-      'Catanduva': [-21.1378, -48.9728],
-      'Barra do Piraí': [-22.4706, -43.8256],
-      'Bento Gonçalves': [-29.1714, -51.5192],
-      'Araucária': [-25.5858, -49.4047],
-      'Garanhuns': [-8.8828, -36.5028],
-      'Vitória de Santo Antão': [-8.1178, -35.2914],
-      'Itapevi': [-23.5489, -46.9342],
-      'Toledo': [-24.7139, -53.7431],
-      'Guaíba': [-30.1136, -51.3250],
-      'Santos': [-23.9608, -46.3331],
-      'Suzano': [-23.5428, -46.3108],
-      'São Carlos': [-22.0175, -47.8910],
-      'Mogi Guaçu': [-22.3714, -46.9425],
-      'Pouso Alegre': [-22.2306, -45.9356],
-      'Angra dos Reis': [-23.0069, -44.3178],
-      'Eunápolis': [-16.3706, -39.5806],
-      'Salto': [-23.2003, -47.2869],
-      'Ourinhos': [-22.9789, -49.8706],
-      'Parnamirim': [-5.9167, -35.2667],
-      'Poá': [-23.5281, -46.3447],
-      'Cataguases': [-21.3892, -42.6897],
-      'Atibaia': [-23.1169, -46.5503],
-      'Erechim': [-27.6344, -52.2694],
-      'Santa Rita': [-7.1139, -34.9778],
-      'Barbacena': [-21.2214, -43.7736],
-      'Araras': [-22.3572, -47.3842],
-      'Piraquara': [-25.4425, -49.0625],
-      'Abaetetuba': [-1.7217, -48.8789],
-      'Tatuí': [-23.3547, -47.8561],
-      'Birigui': [-21.2889, -50.3400],
-      'Resende': [-22.4689, -44.4469],
-      'Votorantim': [-23.5467, -47.4378],
-      'Caraguatatuba': [-23.6203, -45.4131],
-      'Trindade': [-16.6517, -49.4928],
-      'Votuporanga': [-20.4231, -49.9781],
-      'Tubarão': [-28.4806, -49.0069],
-      'Aracruz': [-19.8200, -40.2739],
-      'Cachoeiro de Itapemirim': [-20.8489, -41.1128],
-      'Rio das Ostras': [-22.5269, -41.9450],
-      'Simões Filho': [-12.7867, -38.4039],
-      'Guaratinguetá': [-22.8164, -45.1925],
-      'Arapongas': [-23.4194, -51.4244],
-      'Cubatão': [-23.8953, -46.4253],
-      'Santa Cruz do Sul': [-29.7178, -52.4258],
-    };
-    
-    // Coordenadas por estado (fallback)
-    const coordenadasEstados = {
-      'AC': [-8.77, -70.55], 'AL': [-9.57, -36.78], 'AP': [1.41, -51.77], 'AM': [-3.47, -65.10],
-      'BA': [-12.96, -38.51], 'CE': [-3.71, -38.54], 'DF': [-15.79, -47.86], 'ES': [-19.19, -40.34],
-      'GO': [-16.64, -49.31], 'MA': [-2.55, -44.30], 'MT': [-12.64, -55.42], 'MS': [-20.51, -54.54],
-      'MG': [-18.10, -44.38], 'PA': [-5.53, -52.33], 'PB': [-7.24, -36.78], 'PR': [-24.89, -51.55],
-      'PE': [-8.28, -35.07], 'PI': [-8.28, -43.68], 'RJ': [-22.90, -43.17], 'RN': [-5.22, -36.52],
-      'RS': [-30.01, -51.22], 'RO': [-11.22, -62.80], 'RR': [1.99, -61.33], 'SC': [-27.33, -49.44],
-      'SP': [-23.55, -46.63], 'SE': [-10.57, -37.38], 'TO': [-10.25, -48.25]
-    };
-    
-    const cidadeKey = cliente.cidade ? cliente.cidade.trim() : '';
-    const estadoKey = cliente.estado ? cliente.estado.trim().toUpperCase() : '';
-    const cidadeLower = cidadeKey.toLowerCase();
-    
-    // Verificar se é SBC (várias variações possíveis) - PRIORIDADE MÁXIMA
-    if (cidadeLower.includes('são bernardo') || cidadeLower.includes('sbc') || 
-        cidadeLower.includes('s. bernardo') || cidadeLower.includes('sao bernardo')) {
-      // Se for SBC, usar coordenadas variadas dentro de SBC para evitar sobreposição
-      const offset = (cliente.id || 0) * 0.002; // Pequeno offset baseado no ID
-      return [-23.7150 + offset, -46.5550 + offset];
-    }
-    
-    // Tentar encontrar pela cidade exata
-    if (cidadeKey && coordenadasCidades[cidadeKey]) {
-      return coordenadasCidades[cidadeKey];
-    }
-    
-    // Fallback para coordenadas do estado (mas não SP se não especificar cidade)
-    if (estadoKey && estadoKey !== 'SP' && coordenadasEstados[estadoKey]) {
-      return coordenadasEstados[estadoKey];
-    }
-    
-    // Se for SP mas não encontrou cidade específica, usar SBC como padrão
-    if (estadoKey === 'SP') {
-      const offset = (cliente.id || 0) * 0.002;
-      return [-23.7150 + offset, -46.5550 + offset];
-    }
-    
-    // Último fallback: SBC (já que a maioria dos clientes é de lá)
-    return [-23.7150, -46.5550];
-  };
+  // RN-157.03 (C375): a coordenada vem do servidor para todo cliente com id; sem resposta, null (sem localizacao) — sem lista de cidades aqui
+  const obterCoordenadasCliente = (cliente) => obterCoordenadasDoCliente(cliente);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1072,6 +839,7 @@ const CustosViagens = () => {
 
   const resetForm = () => {
     assinaturaGravadaRef.current = null;
+    clienteEscolhidoRef.current = null;
     pedidoDaRotaRef.current += 1;
     setSugestaoSemAplicar(false);
     setFormData({

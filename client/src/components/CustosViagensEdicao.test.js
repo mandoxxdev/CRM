@@ -57,7 +57,7 @@ function aereo(km, pessoas) {
     custo_sugerido: d.custo_passagem_aerea + d.custo_taxa_embarque + d.custo_alimentacao + d.custo_hospedagem };
 }
 
-let custos; let rotaPara; let atrasoDaRota; let coordPara; let atrasoDaCoord; let pedidos; let corpos;
+let proximosPara; let custos; let rotaPara; let atrasoDaRota; let coordPara; let atrasoDaCoord; let pedidos; let corpos;
 const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
 function resposta(config, status, data) {
   if (status >= 400) {
@@ -82,6 +82,7 @@ beforeEach(() => {
   atrasoDaCoord = () => 0;
   pedidos = [];
   corpos = [];
+  proximosPara = () => [];
   api.defaults.adapter = async (config) => {
     const [caminho, consulta] = config.url.split('?');
     const q = new URLSearchParams(consulta || '');
@@ -106,7 +107,7 @@ beforeEach(() => {
     }
     m = caminho.match(/^\/custos-viagens\/verificar-elegibilidade\/(\d+)$/);
     if (m) return resposta(config, 200, { todas_obrigatorias_atendidas: true, regras: {}, cliente_id: Number(m[1]) });
-    if (/^\/custos-viagens\/clientes-proximos\//.test(caminho)) return resposta(config, 200, []);
+    if (/^\/custos-viagens\/clientes-proximos\//.test(caminho)) return resposta(config, 200, proximosPara(caminho.split('/').pop()));
     if (config.method === 'put' || config.method === 'post') return resposta(config, 200, { message: 'ok', id: 99 });
     if (caminho === '/custos-viagens/analise/cliente') return resposta(config, 200, []);
     return resposta(config, 200, []);
@@ -288,4 +289,49 @@ test('[RN-157.01/02, B1004] (g) na edicao, Aplicar uma sugestao aerea: passagem 
   const corpo = await atualizar();
   expect(n(corpo.custo_transporte)).toBe(875);
   expect([corpo.distancia_km, corpo.custo_sugerido]).toEqual([700, aereo(700, 1).custo_sugerido]);
+});
+
+// ── T5 (integracao — cruza a T2 e a T3) ─────────────────────────────────────────────────────────────────────────────────────────
+async function salvarNovo() {
+  const form = container.querySelector('form.custo-form');
+  await act(async () => { form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+  expect(await esperar(() => corpos.some((c) => c.metodo === 'POST' && c.url === '/custos-viagens'))).toBe(true);
+  return corpos.find((c) => c.metodo === 'POST' && c.url === '/custos-viagens').corpo;
+}
+
+test('[RN-157.03, C375, Fase 2 K1] no Novo: o cliente sem endereco pergunta a coordenada ao servidor; escolher A (lento) e logo B: vale B', async () => {
+  atrasoDaCoord = (id) => (id === '5' ? 300 : 0);
+  await montar();
+  await clicar(container.querySelector('.btn-premium'));
+  await digitar(campo('Cliente *'), '5');
+  await digitar(campo('Cliente *'), '6');
+  await act(async () => { await pausa(450); });
+  expect(pedidos).toContain('GET /custos-viagens/coordenadas-cliente/5'); // antes: sem endereco, nenhum pedido (a lista do client)
+  expect(pedidos).toContain('GET /custos-viagens/coordenadas-cliente/6');
+  expect(pedidos).toContain('GET /custos-viagens/verificar-elegibilidade/6');
+  expect(pedidos).not.toContain('GET /custos-viagens/verificar-elegibilidade/5'); // a resposta de A chegou depois e nao disparou nada
+  expect(pedidos.filter((p) => p.startsWith('GET /custos-viagens/clientes-proximos/5'))).toEqual([]);
+  const corpo = await salvarNovo();
+  expect(String(corpo.cliente_id)).toBe('6');
+  expect(corpo.clientes_viagem).toEqual([{ id: 6, ordem: 1, distancia_km: null }]);
+});
+
+test('[RN-157.03, integracao T2+T3] escolher um cliente sem endereco, adicionar um proximo e Salvar: a Preview com os dois nas coordenadas do servidor', async () => {
+  const PROXIMO = { id: 8, razao_social: 'Vizinho Valinhos', cidade: 'VALINHOS', estado: 'SP', endereco: null, distancia_km: 12,
+    coordenadas: [-22.9706, -46.9958], lat: -22.9706, lon: -46.9958 };
+  proximosPara = (id) => (id === '5' ? [PROXIMO] : []);
+  await montar();
+  await clicar(container.querySelector('.btn-premium'));
+  await digitar(campo('Cliente *'), '5');
+  expect(await esperar(() => !!botao('Adicionar'))).toBe(true);
+  await clicar(botao('Adicionar'));
+  expect(await esperar(() => texto().includes('Continuar com 2 cliente(s)'))).toBe(true);
+  await clicar(botao('Continuar com 2 cliente(s)'));
+  const corpo = await salvarNovo();
+  expect(corpo.clientes_viagem.map((c) => c.id)).toEqual([5, 8]);
+  expect(await esperar(() => container.querySelectorAll('[data-marcador]').length === 3)).toBe(true);
+  const pos = [...container.querySelectorAll('[data-marcador]')].map((m) => JSON.parse(m.getAttribute('data-marcador')));
+  expect(pos).toEqual([[-23.715, -46.555], [-22.9056, -47.0608], PROXIMO.coordenadas]);
+  expect(texto()).toContain('Total: 3 ponto(s) na rota');
+  expect(texto()).not.toContain('(sem localização no mapa)');
 });

@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet'
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { FiMapPin, FiX, FiNavigation } from 'react-icons/fi';
-import api from '../services/api';
+import { coordenadaValida, obterCoordenadasDoCliente } from '../utils/coordenadasDoCliente';
 
 // Criar ícones customizados mais bonitos
 const createCustomIcon = (color, iconText) => {
@@ -44,101 +44,48 @@ const PreviewRota = ({ origem, clientes, onClose }) => {
   const mapRef = useRef(null);
   const [clientesComCoords, setClientesComCoords] = useState([]);
   
-  // Buscar coordenadas exatas de todos os clientes quando o componente montar
+  // Buscar as coordenadas de todos os clientes quando o componente montar (RN-157.03: do servidor; sem resposta, sem localizacao)
   useEffect(() => {
-    const buscarCoordenadasExatas = async () => {
+    let vivo = true;
+    const buscarCoordenadas = async () => {
       if (!clientes || clientes.length === 0) {
         setClientesComCoords([]);
         return;
       }
-      
       const clientesComCoordenadas = await Promise.all(
-        clientes.map(async (cliente) => {
-          // Se já tem coordenadas, usar
-          if (cliente.coordenadas && Array.isArray(cliente.coordenadas) && cliente.coordenadas.length === 2) {
-            return { ...cliente, coordenadas: cliente.coordenadas };
-          }
-          
-          // Se tiver endereço completo, buscar coordenadas exatas do backend
-          if (cliente.endereco && cliente.cidade && cliente.estado && cliente.id) {
-            try {
-              const response = await api.get(`/custos-viagens/coordenadas-cliente/${cliente.id}`);
-              if (response.data && response.data.coordenadas) {
-                return { ...cliente, coordenadas: response.data.coordenadas };
-              }
-            } catch (err) {
-              console.warn('Erro ao buscar coordenadas exatas, usando fallback:', err);
-            }
-          }
-          
-          // Fallback para coordenadas aproximadas
-          return { ...cliente, coordenadas: obterCoordenadas(cliente) };
-        })
+        clientes.map(async (cliente) => ({ ...cliente, coordenadas: await obterCoordenadasDoCliente(cliente) }))
       );
-      
-      setClientesComCoords(clientesComCoordenadas);
+      if (vivo) setClientesComCoords(clientesComCoordenadas);
     };
-    
-    buscarCoordenadasExatas();
+    buscarCoordenadas();
+    return () => { vivo = false; };
   }, [clientes]);
+
+  // so os localizados entram no mapa, na rota e no total (a legenda mostra todos, na ordem da viagem)
+  const localizados = (clientesComCoords || []).filter((c) => coordenadaValida(c.coordenadas));
 
   // Calcular centro do mapa baseado em todos os pontos
   const calcularCentro = () => {
-    if (!origem || !clientesComCoords || clientesComCoords.length === 0) {
+    if (!origem || localizados.length === 0) {
       return [-23.7150, -46.5550]; // Coordenadas padrão SBC
     }
 
-    const pontos = [origem, ...clientesComCoords.map(c => c.coordenadas || obterCoordenadas(c))];
+    const pontos = [origem, ...localizados.map(c => c.coordenadas)];
     const lats = pontos.map(p => p[0]);
     const lons = pontos.map(p => p[1]);
-    
+
     return [
       (Math.min(...lats) + Math.max(...lats)) / 2,
       (Math.min(...lons) + Math.max(...lons)) / 2
     ];
   };
 
-  const obterCoordenadas = (cliente) => {
-    // Se já tem coordenadas, usar
-    if (cliente.coordenadas && Array.isArray(cliente.coordenadas) && cliente.coordenadas.length === 2) {
-      return cliente.coordenadas;
-    }
-    
-    const cidadeLower = cliente.cidade ? cliente.cidade.toLowerCase() : '';
-    
-    // Verificar se é SBC (várias variações possíveis) - PRIORIDADE MÁXIMA
-    if (cidadeLower.includes('são bernardo') || cidadeLower.includes('sbc') || 
-        cidadeLower.includes('s. bernardo') || cidadeLower.includes('sao bernardo')) {
-      // Se for SBC, usar coordenadas variadas dentro de SBC para evitar sobreposição
-      const offset = (cliente.id || 0) * 0.002; // Pequeno offset baseado no ID
-      return [-23.7150 + offset, -46.5550 + offset];
-    }
-    
-    // Coordenadas básicas
-    const coordenadasCidades = {
-      'São Bernardo do Campo': [-23.7150, -46.5550],
-      'São Paulo': [-23.5505, -46.6333],
-      'Rio de Janeiro': [-22.9068, -43.1729],
-      'Duque de Caxias': [-22.7856, -43.3047],
-    };
-    
-    const cidadeKey = cliente.cidade ? cliente.cidade.trim() : '';
-    
-    // Se for SP mas não encontrou cidade específica, usar SBC como padrão
-    if (cliente.estado && cliente.estado.toUpperCase() === 'SP' && !coordenadasCidades[cidadeKey]) {
-      const offset = (cliente.id || 0) * 0.002;
-      return [-23.7150 + offset, -46.5550 + offset];
-    }
-    
-    return coordenadasCidades[cidadeKey] || [-23.7150, -46.5550]; // Fallback para SBC
-  };
-
   const centro = calcularCentro();
   // Ajustar zoom baseado na distância entre os pontos
   const calcularZoom = () => {
-    if (!origem || !clientesComCoords || clientesComCoords.length === 0) return 13;
-    
-    const pontos = [origem, ...clientesComCoords.map(c => c.coordenadas || obterCoordenadas(c))];
+    if (!origem || localizados.length === 0) return 13;
+
+    const pontos = [origem, ...localizados.map(c => c.coordenadas)];
     const lats = pontos.map(p => p[0]);
     const lons = pontos.map(p => p[1]);
     
@@ -169,15 +116,10 @@ const PreviewRota = ({ origem, clientes, onClose }) => {
 
   // Otimizar rota usando algoritmo Nearest Neighbor (vizinho mais próximo)
   const otimizarRota = () => {
-    if (!origem || !clientesComCoords || clientesComCoords.length === 0) return { pontos: [origem], distanciaTotal: 0 };
-    
-    // Usar coordenadas já obtidas (exatas ou aproximadas)
-    const clientesComCoordsFiltrados = clientesComCoords
-      .map(cliente => ({
-        ...cliente,
-        coords: cliente.coordenadas || obterCoordenadas(cliente)
-      }))
-      .filter(c => c.coords);
+    if (!origem || localizados.length === 0) return { pontos: [origem], distanciaTotal: 0 };
+
+    // Só os clientes com localização
+    const clientesComCoordsFiltrados = localizados.map(cliente => ({ ...cliente, coords: cliente.coordenadas }));
     
     if (clientesComCoordsFiltrados.length === 0) return { pontos: [origem], distanciaTotal: 0 };
     
@@ -275,8 +217,8 @@ const PreviewRota = ({ origem, clientes, onClose }) => {
 
               {/* Marcadores dos clientes */}
               {clientesComCoords && clientesComCoords.map((cliente, index) => {
-                const coords = cliente.coordenadas || obterCoordenadas(cliente);
-                if (!coords) return null;
+                const coords = cliente.coordenadas;
+                if (!coordenadaValida(coords)) return null;
                 
                 return (
                   <Marker key={cliente.id || index} position={coords} icon={clienteIcon}>
@@ -377,7 +319,10 @@ const PreviewRota = ({ origem, clientes, onClose }) => {
                   <div style={{ flex: 1 }}>
                     <span style={{ fontWeight: 500 }}>
                       {index + 1}. {cliente.razao_social}
-                      {cliente.distancia_km && <span style={{ fontSize: '0.8rem', color: '#64748b', marginLeft: '0.5rem' }}>({cliente.distancia_km} km)</span>}
+                      {!coordenadaValida(cliente.coordenadas) && (
+                        <span style={{ fontSize: '0.8rem', color: '#b45309', marginLeft: '0.5rem' }}>(sem localização no mapa)</span>
+                      )}
+{cliente.distancia_km && <span style={{ fontSize: '0.8rem', color: '#64748b', marginLeft: '0.5rem' }}>({cliente.distancia_km} km)</span>}
                     </span>
                     {cliente.endereco && (
                       <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.25rem' }}>
@@ -403,7 +348,7 @@ const PreviewRota = ({ origem, clientes, onClose }) => {
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%' }}>
                 <FiMapPin style={{ color: '#ff9800' }} />
-                <span>Total: {clientesComCoords ? clientesComCoords.length + 1 : 1} ponto(s) na rota</span>
+                <span>Total: {localizados.length + 1} ponto(s) na rota</span>
               </div>
               {rotaOtimizada.distanciaTotal > 0 && (
                 <div style={{ 
