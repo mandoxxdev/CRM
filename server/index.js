@@ -3013,7 +3013,7 @@ function checkAnyModulePermission(requiredModules) {
 // passam pelo mesmo portao — o barrado criava o pedido pela API; a tela de Aprovacoes e as que pedem aprovacao estao todas no Comercial.
 const PORTAO_DAS_PROPOSTAS_DESLIGADO = String(process.env.PROPOSTAS_PORTAO_DE_MODULO || '').trim().toLowerCase() === 'desligado';
 if (PORTAO_DAS_PROPOSTAS_DESLIGADO) {
-  console.warn('⚠️ PROPOSTAS_PORTAO_DE_MODULO=desligado: as rotas /api/propostas*, as do modelo da proposta, as das listas de preço e as do modelo de contrato por família NAO exigem o módulo Comercial, e as da ordem de serviço pelo número NAO exigem o Comercial ou o Operacional, e as do cadastro de família NAO exigem o Comercial (só o login), e as dos grupos de produto, dos produtos e das variáveis técnicas NAO exigem o Comercial e a do produto pelo código NAO exige o Comercial ou o Operacional (só o login), e as dos clientes, dos projetos, das oportunidades e das atividades NAO exigem o Comercial (só o login); a lista de ordens de serviço do Operacional volta à régua antiga do módulo.');
+  console.warn('⚠️ PROPOSTAS_PORTAO_DE_MODULO=desligado: as rotas /api/propostas*, as do modelo da proposta, as das listas de preço e as do modelo de contrato por família NAO exigem o módulo Comercial, e as da ordem de serviço pelo número NAO exigem o Comercial ou o Operacional, e as do cadastro de família NAO exigem o Comercial (só o login), e as dos grupos de produto, dos produtos e das variáveis técnicas NAO exigem o Comercial e a do produto pelo código NAO exige o Comercial ou o Operacional (só o login), e as dos clientes, dos projetos, das oportunidades e das atividades NAO exigem o Comercial (só o login), e as dos custos de viagem NAO exigem o Comercial (só o login); a lista de ordens de serviço do Operacional volta à régua antiga do módulo.');
 }
 const portaoDasPropostas = criarPortaoDasPropostas({
   getDb: () => db,
@@ -3021,6 +3021,8 @@ const portaoDasPropostas = criarPortaoDasPropostas({
   desligado: PORTAO_DAS_PROPOSTAS_DESLIGADO,
 });
 const exigirComercialNasPropostas = portaoDasPropostas.exigir('comercial');
+// Etapa 152 (C350, RN-152.01, B986): as 19 rotas /api/custos-viagens* tambem — a unica tela que as chama e /comercial/custos-viagens
+// (CustosViagens e o PreviewRota que so ela abre). No comprovante, antes do multer: o arquivo do barrado nao chega ao disco.
 const exigirComercialOuOperacionalNaProposta = portaoDasPropostas.exigir(['comercial', 'operacional']);
 // Etapa 147 (C319, RN-147.01, B958/B959): as 20 rotas do modelo da proposta (/api/proposta-template*, /api/proposta-blocos*,
 // /api/proposta-texto-biblioteca*) — o Comercial pela regua da tela OU o outro caminho por onde a tela abre o modelo: Configuracoes ->
@@ -16000,7 +16002,7 @@ app.delete('/api/atividades/:id', authenticateToken, exigirComercialNasPropostas
 
 // ========== ROTAS DE CUSTOS DE VIAGENS ==========
 // Rota para obter coordenadas exatas de um cliente
-app.get('/api/custos-viagens/coordenadas-cliente/:cliente_id', authenticateToken, async (req, res) => {
+app.get('/api/custos-viagens/coordenadas-cliente/:cliente_id', authenticateToken, exigirComercialNasPropostas, async (req, res) => {
   const { cliente_id } = req.params;
   
   db.get('SELECT endereco, cidade, estado FROM clientes WHERE id = ?', [cliente_id], async (err, cliente) => {
@@ -16024,7 +16026,7 @@ app.get('/api/custos-viagens/coordenadas-cliente/:cliente_id', authenticateToken
 });
 
 // Buscar clientes próximos a um cliente específico
-app.get('/api/custos-viagens/clientes-proximos/:cliente_id', authenticateToken, (req, res) => {
+app.get('/api/custos-viagens/clientes-proximos/:cliente_id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { cliente_id } = req.params;
   const { raio_km = 100 } = req.query; // Raio padrão de 100km
   
@@ -16105,7 +16107,7 @@ app.get('/api/custos-viagens/clientes-proximos/:cliente_id', authenticateToken, 
 });
 
 // Calcular rota e distância entre origem e destino
-app.get('/api/custos-viagens/calcular-rota', authenticateToken, (req, res) => {
+app.get('/api/custos-viagens/calcular-rota', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { origem_cidade, origem_estado, destino_cidade, destino_estado, tipo_viagem, numero_pessoas, data_viagem, data_volta } = req.query;
   
   if (!destino_cidade || !destino_estado) {
@@ -16358,7 +16360,7 @@ app.get('/api/custos-viagens/calcular-rota', authenticateToken, (req, res) => {
 });
 
 // Listar todos os custos de viagens
-app.get('/api/custos-viagens', authenticateToken, (req, res) => {
+app.get('/api/custos-viagens', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { cliente_id, proposta_id, data_inicio, data_fim, codigo_visita, created_by, status_aprovacao, ordenar_por, ordem } = req.query;
   
   let query = `
@@ -16488,8 +16490,31 @@ app.get('/api/custos-viagens', authenticateToken, (req, res) => {
   });
 });
 
+// Etapa 152 (RN-152.02, C356, B987): o resumo registrado ANTES do GET /:id — registrado depois, o /:id o atendia com id = 'resumo'
+// (404 "Custo de viagem nao encontrado") e os quatro cartoes do topo da tela de custos de viagem nunca apareciam.
+// Resumo geral de custos
+app.get('/api/custos-viagens/resumo', authenticateToken, exigirComercialNasPropostas, (req, res) => {
+  db.get(`
+    SELECT 
+      COUNT(*) as total_viagens,
+      SUM(total_custo) as total_custo_geral,
+      AVG(total_custo) as custo_medio_viagem,
+      COUNT(DISTINCT cliente_id) as clientes_visitados,
+      COUNT(DISTINCT proposta_id) as propostas_relacionadas,
+      SUM(CASE WHEN tipo_viagem = 'ida' THEN total_custo ELSE 0 END) as custo_ida,
+      SUM(CASE WHEN tipo_viagem = 'volta' THEN total_custo ELSE 0 END) as custo_volta,
+      SUM(CASE WHEN tipo_viagem = 'ida_e_volta' THEN total_custo ELSE 0 END) as custo_ida_volta
+    FROM custos_viagens
+  `, [], (err, row) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(row || {});
+  });
+});
+
 // Obter custo de viagem específico
-app.get('/api/custos-viagens/:id', authenticateToken, (req, res) => {
+app.get('/api/custos-viagens/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   
   db.get(`
@@ -16518,7 +16543,7 @@ app.get('/api/custos-viagens/:id', authenticateToken, (req, res) => {
 });
 
 // Verificar regras de elegibilidade para viagem
-app.get('/api/custos-viagens/verificar-elegibilidade/:cliente_id', authenticateToken, (req, res) => {
+app.get('/api/custos-viagens/verificar-elegibilidade/:cliente_id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { cliente_id } = req.params;
   
   db.get(`
@@ -16616,7 +16641,7 @@ app.get('/api/custos-viagens/verificar-elegibilidade/:cliente_id', authenticateT
 });
 
 // Criar novo custo de viagem
-app.post('/api/custos-viagens', authenticateToken, (req, res) => {
+app.post('/api/custos-viagens', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   normalizarMaiusculas(req.body, ['origem', 'origem_cidade', 'origem_estado', 'destino', 'destino_cidade', 'destino_estado', 'tipo_viagem', 'descricao', 'motivo_autorizacao']);
   const {
     cliente_id,
@@ -16774,7 +16799,7 @@ app.post('/api/custos-viagens', authenticateToken, (req, res) => {
 });
 
 // Atualizar custo de viagem
-app.put('/api/custos-viagens/:id', authenticateToken, (req, res) => {
+app.put('/api/custos-viagens/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   const userId = req.user.id;
   normalizarMaiusculas(req.body, ['origem', 'origem_cidade', 'origem_estado', 'destino', 'destino_cidade', 'destino_estado', 'tipo_viagem', 'descricao']);
@@ -16927,7 +16952,7 @@ app.put('/api/custos-viagens/:id', authenticateToken, (req, res) => {
 });
 
 // Aprovar/Rejeitar custo de viagem
-app.post('/api/custos-viagens/:id/aprovar', authenticateToken, (req, res) => {
+app.post('/api/custos-viagens/:id/aprovar', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   const { aprovado, motivo } = req.body;
   const userId = req.user.id;
@@ -16953,7 +16978,7 @@ app.post('/api/custos-viagens/:id/aprovar', authenticateToken, (req, res) => {
 });
 
 // Buscar logs de autorização de uma viagem
-app.get('/api/custos-viagens/:id/logs-autorizacao', authenticateToken, (req, res) => {
+app.get('/api/custos-viagens/:id/logs-autorizacao', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   
   db.all(
@@ -16984,7 +17009,7 @@ app.get('/api/custos-viagens/:id/logs-autorizacao', authenticateToken, (req, res
 });
 
 // Duplicar custo de viagem
-app.post('/api/custos-viagens/:id/duplicar', authenticateToken, (req, res) => {
+app.post('/api/custos-viagens/:id/duplicar', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   const userId = req.user.id;
   
@@ -17074,7 +17099,7 @@ app.post('/api/custos-viagens/:id/duplicar', authenticateToken, (req, res) => {
 // GET /api/custos-viagens/:id/comprovante/:anexo_id.
 
 // Upload de comprovante
-app.post('/api/custos-viagens/:id/comprovante', authenticateToken, uploadComprovante.single('arquivo'), (req, res) => {
+app.post('/api/custos-viagens/:id/comprovante', authenticateToken, exigirComercialNasPropostas, uploadComprovante.single('arquivo'), (req, res) => {
   const { id } = req.params;
   const { tipo_comprovante, descricao } = req.body;
   const userId = req.user.id;
@@ -17136,7 +17161,7 @@ app.post('/api/custos-viagens/:id/comprovante', authenticateToken, uploadComprov
 });
 
 // Listar comprovantes de uma viagem
-app.get('/api/custos-viagens/:id/comprovantes', authenticateToken, (req, res) => {
+app.get('/api/custos-viagens/:id/comprovantes', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   
   db.all(
@@ -17158,7 +17183,7 @@ app.get('/api/custos-viagens/:id/comprovantes', authenticateToken, (req, res) =>
 });
 
 // Download de comprovante
-app.get('/api/custos-viagens/:id/comprovante/:anexo_id', authenticateToken, (req, res) => {
+app.get('/api/custos-viagens/:id/comprovante/:anexo_id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id, anexo_id } = req.params;
   
   db.get('SELECT * FROM custos_viagens_anexos WHERE id = ? AND custo_viagem_id = ?', [anexo_id, id], (err, anexo) => {
@@ -17191,7 +17216,7 @@ app.get('/api/custos-viagens/:id/comprovante/:anexo_id', authenticateToken, (req
 });
 
 // Deletar comprovante
-app.delete('/api/custos-viagens/:id/comprovante/:anexo_id', authenticateToken, (req, res) => {
+app.delete('/api/custos-viagens/:id/comprovante/:anexo_id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id, anexo_id } = req.params;
   
   db.get('SELECT * FROM custos_viagens_anexos WHERE id = ? AND custo_viagem_id = ?', [anexo_id, id], (err, anexo) => {
@@ -17223,7 +17248,7 @@ app.delete('/api/custos-viagens/:id/comprovante/:anexo_id', authenticateToken, (
 
 // ========== ROTAS DE HISTÓRICO DE VIAGENS ==========
 // Buscar histórico de alterações de uma viagem
-app.get('/api/custos-viagens/:id/historico', authenticateToken, (req, res) => {
+app.get('/api/custos-viagens/:id/historico', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   
   db.all(
@@ -17254,7 +17279,7 @@ app.get('/api/custos-viagens/:id/historico', authenticateToken, (req, res) => {
 });
 
 // Deletar custo de viagem
-app.delete('/api/custos-viagens/:id', authenticateToken, (req, res) => {
+app.delete('/api/custos-viagens/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   db.run('DELETE FROM custos_viagens WHERE id = ?', [id], (err) => {
     if (err) {
@@ -17265,7 +17290,7 @@ app.delete('/api/custos-viagens/:id', authenticateToken, (req, res) => {
 });
 
 // Análise de custos por cliente (OTIMIZADA)
-app.get('/api/custos-viagens/analise/cliente', authenticateToken, (req, res) => {
+app.get('/api/custos-viagens/analise/cliente', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   // Query otimizada - usar subqueries ao invés de múltiplos JOINs complexos
   db.all(`
     SELECT 
@@ -17349,27 +17374,6 @@ app.get('/api/custos-viagens/analise/cliente', authenticateToken, (req, res) => 
     });
     
     res.json(analise);
-  });
-});
-
-// Resumo geral de custos
-app.get('/api/custos-viagens/resumo', authenticateToken, (req, res) => {
-  db.get(`
-    SELECT 
-      COUNT(*) as total_viagens,
-      SUM(total_custo) as total_custo_geral,
-      AVG(total_custo) as custo_medio_viagem,
-      COUNT(DISTINCT cliente_id) as clientes_visitados,
-      COUNT(DISTINCT proposta_id) as propostas_relacionadas,
-      SUM(CASE WHEN tipo_viagem = 'ida' THEN total_custo ELSE 0 END) as custo_ida,
-      SUM(CASE WHEN tipo_viagem = 'volta' THEN total_custo ELSE 0 END) as custo_volta,
-      SUM(CASE WHEN tipo_viagem = 'ida_e_volta' THEN total_custo ELSE 0 END) as custo_ida_volta
-    FROM custos_viagens
-  `, [], (err, row) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    res.json(row || {});
   });
 });
 
