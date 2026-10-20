@@ -7,6 +7,7 @@
  */
 
 const crypto = require('crypto');
+const diaLocal = require('./services/diaLocal');
 
 // --- Tipos de bloco ---
 const BLOCK_TYPE_TECNICO = 'tecnico';
@@ -62,12 +63,19 @@ function prepareCompositionData(proposta, itens, totais, biblioteca = {}) {
   };
 
   const fmtMoney = (v) => (v != null && v !== '' ? Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00');
-  const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('pt-BR') : '');
+  // Etapa 166 (RN-166.07, B1063, C415): a data da proposta no texto = a Data de Emissao da capa, como esta. A emissao ja chega
+  // 'DD/MM/AAAA' (o /premium e o /pdf, B1057); antes ela era relida com `new Date`, que a toma por MM/DD/AAAA — dia <= 12 saia com dia e
+  // mes trocados, dia > 12 saia "Invalid Date" — e, vazia, caia no `created_at` UTC lido como hora local. Outro formato: o dia de
+  // Brasilia pelo `dataDoBancoBR` (a mesma funcao da capa); nada legivel: ''.
+  const dataDaProposta = (emissao, criada) => {
+    if (typeof emissao === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(emissao.trim())) return emissao.trim();
+    return diaLocal.dataDoBancoBR(emissao) || diaLocal.dataDoBancoBR(criada);
+  };
 
   const displayFields = {
     proposal: {
       number: proposta?.numero_proposta || '',
-      date: fmtDate(totais?.dataEmissao || proposta?.created_at),
+      date: dataDaProposta(totais?.dataEmissao, proposta?.created_at),
       revision: proposta?.revisao != null ? `R${String(proposta.revisao).padStart(2, '0')}` : 'R00',
       title: proposta?.titulo || ''
     },

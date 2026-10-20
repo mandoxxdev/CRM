@@ -47,7 +47,8 @@ function carregarFuncaoReal() {
   if (fim < 0) throw new Error('fim da funcao nao encontrado');
   const corpo = fonte.slice(inicio, fim + 2);
   // eslint-disable-next-line no-new-func
-  return new Function(corpo + '\nreturn filtroDashboardSql;')();
+  // Etapa 166 (B1061): a funcao usa o `diaLocal` (o modificador do fuso) — injetado aqui, o modulo de verdade
+  return new Function('diaLocal', corpo + '\nreturn filtroDashboardSql;')(require('../services/diaLocal'));
 }
 const filtroDashboardSql = carregarFuncaoReal();
 const req = (query) => ({ query });
@@ -57,10 +58,10 @@ t('sem nada preenchido, nao filtra nada',
   () => assert.strictEqual(filtroDashboardSql(req({}), 'p'), ''));
 t('so inicio', () => assert.strictEqual(
   filtroDashboardSql(req({ inicio: '2026-01-01' }), 'p'),
-  " AND date(p.created_at) >= '2026-01-01'"));
+  " AND date(p.created_at, '-180 minutes') >= '2026-01-01'"));
 t('periodo completo + usuario', () => assert.strictEqual(
   filtroDashboardSql(req({ inicio: '2026-01-01', fim: '2026-03-31', usuario: '7' }), 'p'),
-  " AND date(p.created_at) >= '2026-01-01' AND date(p.created_at) <= '2026-03-31'"
+  " AND date(p.created_at, '-180 minutes') >= '2026-01-01' AND date(p.created_at, '-180 minutes') <= '2026-03-31'"
   + ' AND p.responsavel_id = 7'));
 t('sem alias, sem prefixo de tabela', () => assert.strictEqual(
   filtroDashboardSql(req({ usuario: '3' })), ' AND responsavel_id = 3'));
@@ -108,6 +109,8 @@ const get = (sql, p = []) => new Promise((res, rej) => db.get(sql, p, (e, r) => 
   await add(2000, 1, '2026-02-20 10:00:00');
   await add(4000, 2, '2026-02-25 10:00:00');
   await add(8000, 2, '2025-12-31 10:00:00');
+  // Etapa 166 (B1061): criada as 22h30 de 28/02 em Brasilia (01:30 UTC de 01/03) — e de fevereiro no filtro, que e em dias de Brasilia
+  await add(16000, 3, '2026-03-01 01:30:00');
 
   const somar = (q) => get(
     `SELECT COALESCE(SUM(valor_total), 0) AS total FROM propostas
@@ -115,10 +118,12 @@ const get = (sql, p = []) => new Promise((res, rej) => db.get(sql, p, (e, r) => 
 
   console.log('\n[o filtro recorta de verdade]');
   const tudo = await somar({});
-  t('sem filtro soma tudo (15000)', () => assert.strictEqual(tudo.total, 15000));
+  t('sem filtro soma tudo (31000)', () => assert.strictEqual(tudo.total, 31000));
 
   const fev = await somar({ inicio: '2026-02-01', fim: '2026-02-28' });
-  t('so fevereiro/2026 (2000 + 4000)', () => assert.strictEqual(fev.total, 6000));
+  t('so fevereiro/2026 (2000 + 4000 + 16000 das 22h30 de 28/02 em Brasilia)', () => assert.strictEqual(fev.total, 22000));
+  const marco = await somar({ inicio: '2026-03-01', fim: '2026-03-31' });
+  t('marco/2026 nao leva a das 22h30 de 28/02 (0)', () => assert.strictEqual(marco.total, 0));
 
   const user1 = await somar({ usuario: '1' });
   t('so o responsavel 1 (1000 + 2000)', () => assert.strictEqual(user1.total, 3000));
@@ -127,12 +132,12 @@ const get = (sql, p = []) => new Promise((res, rej) => db.get(sql, p, (e, r) => 
   t('fevereiro E responsavel 2 (4000)', () => assert.strictEqual(combinado.total, 4000));
 
   const ano = await somar({ inicio: '2026-01-01' });
-  t('de 2026 em diante exclui a de dezembro (7000)', () => assert.strictEqual(ano.total, 7000));
+  t('de 2026 em diante exclui a de dezembro (23000)', () => assert.strictEqual(ano.total, 23000));
 
   console.log('\n[injecao contra o banco de verdade]');
   const atacado = await somar({ inicio: "2026-01-01'; DROP TABLE propostas; --", usuario: '1 OR 1=1' });
   t('payload nao filtra nem quebra: a soma volta cheia',
-    () => assert.strictEqual(atacado.total, 15000));
+    () => assert.strictEqual(atacado.total, 31000));
   const viva = await get("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name='propostas'");
   t('a tabela propostas continua existindo', () => assert.strictEqual(viva.n, 1));
 

@@ -555,9 +555,13 @@ function filtroDashboardSql(req, alias) {
   const inicio = soData(q.inicio);
   const fim = soData(q.fim);
   const usuario = soInteiro(q.usuario);
+  // Etapa 166 (RN-166.05, B1061): o De/Ate e escrito em dias de Brasilia e o `created_at` e instante UTC — o dia vem com o modificador do
+  // fuso (antes `date(created_at)`, o dia UTC: a proposta das 22h do dia `fim` ficava fora). O modificador e gerado pelo servidor
+  // (`'-180 minutes'`, de um numero arredondado), interpolado como o resto desta funcao, que monta SQL inline por desenho.
+  const mod = diaLocal.modificadorDoFuso();
   let sql = '';
-  if (inicio) sql += ` AND date(${prefixo}created_at) >= '${inicio}'`;
-  if (fim) sql += ` AND date(${prefixo}created_at) <= '${fim}'`;
+  if (inicio) sql += ` AND date(${prefixo}created_at, '${mod}') >= '${inicio}'`;
+  if (fim) sql += ` AND date(${prefixo}created_at, '${mod}') <= '${fim}'`;
   if (usuario) sql += ` AND ${prefixo}responsavel_id = ${usuario}`;
   return sql;
 }
@@ -6681,17 +6685,21 @@ app.get('/api/relatorios/executivo', authenticateToken, exigirComercialNasPropos
   });
 
   // Gráfico: Evolução de propostas (últimos 6 meses)
+  // Etapa 166 (RN-166.01, B1060): o mes e a janela no calendario de Brasilia (antes o mes UTC: a proposta das 21h a meia-noite do ultimo
+  // dia do mes contava no seguinte; e a borda `created_at >= date('now', ...)` comparava texto com o dia UTC). Os `?`: [mod, mod, hoje].
+  const modExecutivo = diaLocal.modificadorDoFuso();
+  const hojeExecutivo = diaLocal.hojeLocalISO();
   db.all(`
     SELECT 
-      strftime('%Y-%m', created_at) as mes,
+      strftime('%Y-%m', created_at, ?) as mes,
       COUNT(*) as total,
       SUM(CASE WHEN status = 'aprovada' THEN valor_total ELSE 0 END) as valor_aprovado
     FROM propostas
-    WHERE created_at >= date('now', '-6 months')
+    WHERE date(created_at, ?) >= date(?, '-6 months')
       AND ${SQL_PROPOSTA_ATIVA}
     GROUP BY mes
     ORDER BY mes
-  `, [], (err, rows) => {
+  `, [modExecutivo, modExecutivo, hojeExecutivo], (err, rows) => {
     if (!err) dados.graficos.evolucaoPropostas = rows || [];
     checkComplete();
   });
@@ -6755,10 +6763,10 @@ app.get('/api/relatorios/executivo', authenticateToken, exigirComercialNasPropos
     LEFT JOIN propostas p ON c.id = p.cliente_id AND (p.ativo IS NULL OR p.ativo = 1)
     WHERE c.status = 'ativo'
     GROUP BY c.id
-    HAVING ultima_proposta IS NULL OR date(ultima_proposta) < date('now', '-90 days')
+    HAVING ultima_proposta IS NULL OR date(ultima_proposta, ?) < date(?, '-90 days')
     ORDER BY total_propostas_historico DESC, ultima_proposta DESC
     LIMIT 20
-  `, [], (err, rows) => {
+  `, [modExecutivo, hojeExecutivo], (err, rows) => { // Etapa 166 (RN-166.02, B1060): o dia de Brasilia da ultima proposta e o hoje de Brasilia
     if (!err) dados.insights.clientesParaVisitar = rows || [];
     checkComplete();
   });
@@ -7047,14 +7055,14 @@ app.get('/api/relatorios/visitas-tecnicas', authenticateToken, exigirComercialNa
       END as taxa_conversao,
       SUM(CASE WHEN p.status = 'aprovada' THEN p.valor_total ELSE 0 END) as valor_total_aprovado,
       MAX(p.created_at) as ultima_proposta_data,
-      COUNT(DISTINCT CASE WHEN p.created_at >= date('now', '-90 days') THEN p.id END) as propostas_ultimos_90_dias
+      COUNT(DISTINCT CASE WHEN date(p.created_at, ?) >= date(?, '-90 days') THEN p.id END) as propostas_ultimos_90_dias
     FROM clientes c
     LEFT JOIN propostas p ON c.id = p.cliente_id AND (p.ativo IS NULL OR p.ativo = 1)
     WHERE c.status = 'ativo'
     GROUP BY c.id
     HAVING total_propostas > 0
     ORDER BY valor_total_aprovado DESC, taxa_conversao DESC
-  `, [], (err, rows) => {
+  `, [diaLocal.modificadorDoFuso(), diaLocal.hojeLocalISO()], (err, rows) => { // Etapa 166 (RN-166.03, B1060): antes texto contra o dia UTC
     if (err) {
       console.error('Erro ao buscar dados para visitas técnicas:', err);
       return res.status(500).json({ error: err.message });
@@ -17130,9 +17138,12 @@ app.get('/api/dashboard/historico', authenticateToken, exigirComercialNasPropost
   const historico = [];
 
   // Buscar dados dos últimos 12 meses
+  // Etapa 166 (RN-166.04, B1060): o mes (so a coluna `mes`) e a janela no calendario de Brasilia; os tres CASE abaixo comparam o mes
+  // consigo mesmo (sempre verdadeiro — C417) e ficam como estao. Os `?`: [mod, mod, hoje].
+  const modHistorico = diaLocal.modificadorDoFuso();
   db.all(`
     SELECT 
-      strftime('%Y-%m', created_at) as mes,
+      strftime('%Y-%m', created_at, ?) as mes,
       COUNT(DISTINCT CASE WHEN strftime('%Y-%m', created_at) = strftime('%Y-%m', created_at) THEN id END) as clientes,
       COUNT(DISTINCT CASE WHEN strftime('%Y-%m', created_at) = strftime('%Y-%m', created_at) THEN id END) as projetos,
       COUNT(DISTINCT CASE WHEN strftime('%Y-%m', created_at) = strftime('%Y-%m', created_at) AND status = 'aprovada' THEN id END) as propostas_aprovadas
@@ -17143,10 +17154,10 @@ app.get('/api/dashboard/historico', authenticateToken, exigirComercialNasPropost
       UNION ALL
       SELECT created_at, id, 'proposta' as tipo, status FROM propostas WHERE ${SQL_PROPOSTA_ATIVA}
     )
-    WHERE created_at >= date('now', '-12 months')
+    WHERE date(created_at, ?) >= date(?, '-12 months')
     GROUP BY mes
     ORDER BY mes
-  `, [], (err, rows) => {
+  `, [modHistorico, modHistorico, diaLocal.hojeLocalISO()], (err, rows) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
