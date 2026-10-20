@@ -11,14 +11,22 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-20):** **Etapa 166 fechada** (consertos técnicos no Comercial, sem regra de acesso nova e sem
+> **Onde o desenvolvimento está (2026-10-20):** **Etapa 167 fechada** (consertos técnicos no Comercial, sem regra de acesso nova e sem
+> mudar valor gravado; **o marcador que sobrevive ao Salvar do preview editável e a *Atividade Recente* da viagem no dia de Brasília** —
+> salvar pelo preview não troca mais o marcador da cláusula (`{{proposal.date}}`, o número, o nome do cliente) pelo valor escrito: o que o
+> usuário não mexeu volta a ser o marcador (**B1065**); a regra *Atividade Recente* de **Custos de Viagem** conta os 90 dias em dias de
+> calendário de Brasília, igual às Visitas Técnicas (**B1066**); as cláusulas já congeladas não são reescritas (**B1067**) — **C416** e
+> **C418** resolvidos; os avisos novos **C419** (os limites) e **C420** (o marcador que lê dado interno — de antes); a consulta **A105**
+> (opcional)); a próxima é a **168** — ver
+> "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 166 fechada** (consertos técnicos no Comercial, sem regra de acesso nova e sem
 > mudar valor gravado; **os relatórios por mês, o filtro de período do painel e a data no texto da proposta no dia de Brasília** — a
 > *Evolução de Propostas* e os *Clientes que Precisam de Visita* do Relatório Executivo, a *atividade recente* das Visitas Técnicas e as
 > *Tendências Mensais* do painel contam o mês e a janela pelo calendário de Brasília (**B1060**); o filtro *De*/*Até* do painel e os atalhos
 > *Este mês*/*Últimos 3 meses*/*Este ano* contam o dia de Brasília (**B1061**); a *Última Proposta* dos Relatórios e os nomes dos arquivos
 > baixados no dia local (**B1062**); **o marcador da data no texto da proposta sai igual à data de emissão da capa** (**B1063** — muda o
 > texto impresso das cláusulas que usam o marcador) — **C413** e **C415** resolvidos; os avisos novos **C416**, **C417** e **C418**; a
-> consulta **A104** (opcional)); a próxima é a **167** — ver "Onde estamos e o que vem a seguir".
+> consulta **A104** (opcional)); a próxima era a **167**.)*
 > *(Antes: **Etapa 165 fechada** (consertos técnicos no Comercial, sem regra de acesso nova e sem
 > mudar valor gravado antes; **os lembretes, a validade, as datas gravadas e a data de emissão das propostas no dia de Brasília** — o sino, as
 > Atividades e o painel classificam o lembrete pelo dia de Brasília (**B1054**); a previsão de fechamento mostra a proposta que vale até hoje e
@@ -392,7 +400,10 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Cento e quatro itens para rodar em produção ANTES do deploy — cento e um são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Cento e cinco itens para rodar em produção ANTES do deploy — cento e dois são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-20 (Etapa 167) de cento e quatro para cento e cinco**, com a **A105** — as cláusulas de proposta que podem ter
+guardado a data escrita no lugar do marcador (candidatas; **C418**/**B1067**). **Somente leitura, opcional:** no banco medido, nenhuma.)*
 
 *(**Atualizado em 2026-10-20 (Etapa 166) de cento e três para cento e quatro**, com a **A104** — as cláusulas de proposta que usam o
 marcador da data (o texto que passa a sair certo) e as que já guardaram *Invalid Date* (**C418**). **Somente leitura, opcional:** no banco
@@ -3997,12 +4008,45 @@ corrija a data escrita na cláusula (ou volte a pôr o marcador) e salve. A data
 encontrável por consulta — fica gravada como uma data comum. *(Rodada no banco local, cópia de 09/10: **0** e **0**; controle numa cópia
 com uma cláusula com o marcador e outra com *Invalid Date* na proposta 3: a 1 achou a primeira e a 2 a segunda.)*
 
+**A105 (NOVA, da Etapa 167 — opcional — as cláusulas que podem ter guardado a data escrita no lugar do marcador).** Até a Etapa 167, salvar
+pelo **Preview** editável trocava o marcador da cláusula pelo valor impresso — a data ficava congelada no texto (**C418**). Desde a 167 o
+marcador sobrevive, mas a cláusula que já foi salva assim **não volta sozinha**, e o sistema não reescreve nada (**B1067**: não há como
+distinguir a data que alguém escreveu à mão da que o editor congelou). A consulta lista as **candidatas**: as cláusulas ativas cujo título ou
+texto contém a data de emissão da própria proposta, em qualquer das formas que o marcador já imprimiu (o dia de Brasília e o dia universal da
+criação — antes da Etapa 165 a proposta criada à noite imprimia o dia seguinte —, cada um também com dia e mês trocados nos dias 1 a 12).
+*Invalid Date* é a **A104**. Os outros marcadores congelados (o número da proposta, o nome do cliente) **não** são procurados. Somente
+leitura.
+
+```sql
+-- as clausulas que contem a data de emissao da propria proposta (candidatas a marcador congelado)
+SELECT pc.proposta_id, p.numero_proposta, pc.id, pc.titulo
+FROM proposta_clausulas pc JOIN propostas p ON p.id = pc.proposta_id
+WHERE pc.ativo = 1 AND EXISTS (
+  SELECT 1 FROM (
+    SELECT strftime('%d/%m/%Y', p.created_at, '-180 minutes') AS d
+    UNION ALL SELECT strftime('%d/%m/%Y', p.created_at)
+    UNION ALL SELECT strftime('%m/%d/%Y', p.created_at, '-180 minutes')
+      WHERE CAST(strftime('%d', p.created_at, '-180 minutes') AS INTEGER) <= 12
+    UNION ALL SELECT strftime('%m/%d/%Y', p.created_at)
+      WHERE CAST(strftime('%d', p.created_at) AS INTEGER) <= 12
+  ) f
+  WHERE f.d IS NOT NULL AND (instr(pc.conteudo, f.d) > 0 OR instr(pc.titulo, f.d) > 0)
+)
+ORDER BY pc.proposta_id, pc.id;
+```
+
+**Como ler o resultado:** **vazia** — nada a fazer. **Com linhas** — abra cada proposta no **Preview**, olhe a cláusula: se a data escrita é a
+de emissão e devia acompanhar a proposta, apague-a, digite `{{proposal.date}}` no lugar e salve (desde a 167 o marcador fica); se a data foi
+escrita de propósito, deixe como está. *(Rodada no banco local, cópia de 09/10: **0** linhas; controle numa cópia com três cláusulas
+plantadas na proposta 3 — uma com a data de emissão de Brasília, uma com dia e mês trocados e uma com *31/12/1999*: a consulta achou as duas
+primeiras e não a terceira.)*
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B1064; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B1068; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -11695,6 +11739,37 @@ de proposta antiga cuja cláusula ainda guarda o marcador. **Não conserta** a c
 aparecer — ela guardou o texto resolvido (**C418**; a **A104** conta essas cláusulas). Nenhum texto padrão usa o marcador. **Descartado:**
 recalcular a data pela criação a cada vez (a capa e o texto poderiam divergir). **Reversível:** `f7246f0e`, `a69b4e74` e `89569d20` (a correção da revisão).
 
+**B1065 (NOVA, da Etapa 167; das propostas) — o Salvar do preview editável devolve o marcador ao texto gravado (C418).** **Escolhido:** o
+servidor continua entregando o preview com os marcadores já resolvidos (o preview é o documento); ao **Salvar**, o editor compara três
+versões de cada cláusula — a gravada (com o marcador), a que a tela recebeu e a que vai salvar — e põe de volta o marcador cujo valor o
+usuário não mexeu. **Muda:** salvar pelo preview **sem mexer** numa cláusula que usa um marcador não a regrava mais (antes: gravava a data,
+o número ou o nome escrito no lugar do marcador); mexer **em outro trecho** dela grava o texto novo **com o marcador**; mexer **no próprio
+valor** (apagar ou reescrever a data impressa) grava o que o usuário escreveu, sem o marcador. Vale para o título e o texto, e no primeiro
+salvamento de uma proposta (que copia as cláusulas do modelo). **Descartado:** marcar o valor no documento com uma etiqueta invisível (muda
+como o documento é dividido em páginas — o parágrafo deixaria de se dividir e, com um valor longo, o texto em volta sumiria da página do
+preview); entregar o marcador cru no preview (o preview mostraria `{{proposal.date}}` e paginaria diferente do PDF); comparar só "o texto
+resolvido do gravado = o da tela" (a primeira edição em qualquer trecho da cláusula congelaria o marcador de novo). Limites: **C419**.
+**Reversível:** `07bb9894`, `5fc7ea5f` e `1b3718ce` (a correção da revisão).
+
+**B1066 (NOVA, da Etapa 167; do Comercial) — a *Atividade Recente* da viagem em dias de calendário de Brasília (C416).** **Escolhido:** em
+**Custos de Viagem**, a regra recomendada *Atividade Recente* conta os dias de calendário de Brasília entre hoje e o dia em que a última
+proposta ativa do cliente foi criada, e passa com **90 ou menos** — a mesma régua da *atividade recente* das **Visitas Técnicas**. **Muda
+(perto da borda e das 21h à meia-noite):** a proposta criada às 22h30 de 91 dias atrás deixa de contar como recente (antes contava — eram
+90 períodos de 24 h, lidos com a hora 3 h adiantada); o *"Última proposta há N dias"* conta dias de calendário (a proposta das 23h de 89 dias
+atrás mostra 89, antes 88; a de hoje à noite mostra 0, antes *-1*); uma proposta com data de criação ilegível não esconde mais as outras (antes
+a regra saía *não atendida* mesmo com proposta recente). Não muda: as regras obrigatórias e o *pode registrar*. **Descartado:** só ler a hora
+certa e manter os períodos de 24 h (continuaria discordando das Visitas Técnicas na borda). **Reversível:** `07bb9894`, `5fc7ea5f` e `1b3718ce` (a correção da revisão).
+
+**B1067 (NOVA, da Etapa 167; das propostas) — as cláusulas que já guardaram o valor escrito no lugar do marcador NÃO são reescritas.**
+**Escolhido:** nada muda no banco; a **A105** lista as candidatas (a data de emissão da própria proposta escrita no texto) e quem decide é
+você, cláusula por cláusula, pelo próprio preview. **Descartado:** trocar em massa a data pelo marcador (reescreveria as datas escritas de
+propósito — não há como distinguir uma da outra).
+
+**B1068 (NOVA, da Etapa 167) — a próxima etapa (168).** Ver a "próxima tarefa detalhada" no plano da Etapa 167. As decisões que esperam
+vocês: as da **B957**, a **B988** e a **B989**; a **B1002** continua pedindo um olhar; a **B1013** (o acento nas buscas); a **C398**; a
+**C408**; a **C411** e a **C412**; a **B1057** (a data de emissão reimpressa); a **B1063** (o texto impresso das cláusulas com o marcador);
+a **C417** (o que o gráfico *Tendências Mensais* conta); a **C420** (restringir o `{{raw.…}}` — muda o que o marcador aceita); a **B1065** a **B1067** são reversíveis.
+
 **B1064 (NOVA, da Etapa 166) — a próxima etapa (167).** Ver a "próxima tarefa detalhada" no plano da Etapa 166. As decisões que esperam
 vocês: as da **B957**, a **B988** e a **B989**; a **B1002** continua pedindo um olhar; a **B1013** (o acento nas buscas); a **C398**; a
 **C408**; a **C411** e a **C412**; a **B1057** (a data de emissão reimpressa); **a B1063** (o texto impresso das cláusulas com o marcador);
@@ -15138,7 +15213,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      editável guardou o texto quebrado e não se conserta sozinha — **C418**. O texto abaixo fica como registro.)* Quem escreve uma cláusula usando o marcador da data da proposta (`{{proposal.date}}`) recebe uma data errada: a data de
      emissão é relida no formato americano (*05/10/2026* sai *10/05/2026*) ou sai *Invalid Date* (*20/10/2026*). Nenhum texto padrão usa o
      marcador. **O que fazer:** não usar o marcador; escrever a data à mão. Consertar é uma etapa própria (muda o texto do documento).
-416. **NOVO (da medição da Etapa 166; do Comercial, anterior a ela; lido no código) — a *atividade recente* da elegibilidade de viagem.**
+416. **✅ RESOLVIDO NA ETAPA 167 (B1066; `07bb9894`, `5fc7ea5f` e `1b3718ce` (a correção da revisão)) — NOVO (da medição da Etapa 166; do Comercial, anterior a ela; lido no código) — a *atividade recente* da elegibilidade de viagem.**
+     *(A regra conta os dias de calendário de Brasília e concorda com as Visitas Técnicas. O texto abaixo fica como registro.)*
      Em **Custos de Viagem**, a regra *Atividade Recente* (propostas nos últimos 90 dias) lê a hora de criação da última proposta como se
      fosse a de Brasília (3 h de diferença) e conta períodos de 24 h, não dias de calendário: perto da borda dos 90 dias, ela pode discordar
      da *atividade recente* das Visitas Técnicas para o mesmo cliente. **O que fazer:** nada no dia a dia (é critério recomendado, não
@@ -15148,11 +15224,32 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      propostas criados no mês (com os números repetidos entre as três tabelas contados uma vez); e a série chamada *receita* é a **contagem**
      de propostas aprovadas no mês, não o valor. **O que fazer:** não ler essas linhas como número de clientes, de projetos ou valor. O que o
      gráfico deve mostrar é pergunta de produto.
-418. **NOVO (da revisão do plano da Etapa 166; das propostas, anterior a ela; lido no código) — o preview editável grava o marcador já
+418. **✅ RESOLVIDO NA ETAPA 167 (B1065; `07bb9894`, `5fc7ea5f` e `1b3718ce` (a correção da revisão)) — NOVO (da revisão do plano da Etapa 166; das propostas, anterior a ela; lido no código) — o preview editável grava o marcador já
      resolvido.** Ao abrir o **Preview** editável, a cláusula que usa o marcador da data já chega com a data no lugar; ao **Salvar**, o
      editor compara o texto com o gravado, acha diferença e grava a data escrita — o marcador some daquela cláusula, e a data fica congelada
      (antes da Etapa 166, congelada como *Invalid Date* ou com dia e mês trocados). **O que fazer:** depois de salvar pelo preview, conferir a
      data escrita na cláusula; a **A104** acha as que guardaram *Invalid Date*. Manter o marcador vivo no editor é uma etapa própria.
+     *(Resolvido: salvar pelo preview mantém o marcador que o usuário não mexeu — e não era só a data: valia para todo marcador simples, e
+     também no primeiro salvamento, que copia o modelo. A cláusula já congelada não volta sozinha — **A105**/**A104**, **B1067**. Os limites
+     que sobraram: **C419**.)*
+419. **NOVO (da Etapa 167; das propostas) — os limites do marcador que sobrevive ao Salvar.** Em quatro casos o **Salvar** do preview ainda
+     grava o valor escrito no lugar do marcador (o mesmo que acontecia antes em todos): (1) o marcador de **bloco** (`{{#if …}}…{{/if}}`,
+     `{{#each …}}`) numa cláusula que o usuário **editou** (intocada, ela fica como está); (2) o marcador cujo valor fica **entre duas edições
+     separadas** da mesma cláusula (o editor considera mexido tudo o que vai da primeira à última); (3) dois marcadores cujo texto se confunde
+     com o vizinho (dois nomes iguais lado a lado — não dá para saber onde um termina); (4) a cláusula de **um parágrafo só** que o preview
+     divide entre duas páginas: ao editá-la, o ponto da divisão conta como uma edição (e vira quebra de parágrafo, como antes). E o marcador
+     restaurado mostra o valor do **próximo** documento: trocar a Razão Social no cabeçalho no mesmo **Salvar** faz o `{{client.name}}` da
+     cláusula mostrar o nome novo. **O que fazer:** depois de salvar uma cláusula com marcador num desses casos, conferir o texto; a **A105** e a
+     **A104** acham as que congelaram a data.
+420. **NOVO (da revisão de autorização da Etapa 167; das propostas, anterior a ela; reproduzido por sonda) — um marcador pode imprimir dado
+     interno da proposta.** Além dos marcadores de exibição (`{{proposal.date}}`, `{{client.name}}`…), o texto da cláusula aceita
+     `{{raw.…}}`, que lê os campos **crus** da proposta e dos itens — inclusive os internos (margem, custo): quem tem o Comercial e escreve
+     `{{raw.proposal.margem_lucro}}` numa cláusula vê o número no documento do cliente. E um marcador gravado **dentro de um cadastro** (o
+     nome fantasia do cliente com `{{raw.…}}`) sai literal no preview, mas, até a Etapa 167, o **Salvar** pelo preview gravava esse texto e a
+     impressão seguinte o resolvia. A 167 fechou esse segundo caminho na cláusula não mexida (o marcador volta a ser `{{client.name}}`); o
+     primeiro continua — escrever o marcador é escolha de quem escreve. **O que fazer:** nada no dia a dia (só quem tem o Comercial escreve
+     cláusulas e cadastros). Restringir `raw` a uma lista de campos, ou escapar `{{` nos valores, é decisão de produto (muda o que o marcador
+     aceita) — fica para uma etapa própria.
 ### D. Limitações declaradas— são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -16484,6 +16581,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(167) O marcador que sobrevive ao Salvar e a atividade recente da viagem, o que ficou de fora.** Os quatro limites da **C419** (o marcador
+  de bloco, o valor entre duas edições, os valores que se confundem com o vizinho, o parágrafo dividido entre páginas). As cláusulas já
+  congeladas não são reescritas (**B1067**; a **A105** as lista). A *atividade recente* da viagem continua sendo critério **recomendado** — não
+  bloqueia o registro. O documento da proposta, o servidor da proposta e a paginação não mudaram. Nenhuma porta de permissão mudou; nenhum
+  valor gravado mudou por conta própria (só o que o usuário salva).
 - **(166) Os relatórios por mês e a data no texto da proposta, o que ficou de fora.** A *atividade recente* da elegibilidade de viagem
   (**C416**); o que o gráfico *Tendências Mensais* conta (**C417**); o preview editável que congela o marcador (**C418**). A janela dos
   relatórios continua começando no mesmo dia de meses atrás, não no dia 1. O atalho do painel usa o dia do computador (num fuso a oeste de
@@ -17584,6 +17686,14 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(167) Nenhum clique foi dado no navegador.** O editor foi provado em jsdom com a tela de verdade (o editor da proposta montado, o
+documento gerado pelo gerador real do servidor e escrito no quadro do preview, o paginador rodando, a digitação na página gerada e o botão
+**Salvar**); a rota de Custos de Viagem pelo servidor de verdade em pasta vazia, no fuso de Brasília e com o relógio adiantado para as 22h.
+Vale conferir à mão: **a qualquer hora**, numa proposta com uma cláusula `Emitida em {{proposal.date}}`, abra o **Preview**, edite **outra**
+cláusula e salve; recarregue e edite a do marcador (acrescente uma palavra no fim) e salve; recarregue: o texto continua com a data da capa,
+e numa proposta copiada (ou depois de trocar a data de emissão) a data acompanha. Em **Custos de Viagem → Novo**, escolha um cliente: o
+cartão *Atividade Recente* mostra *"Última proposta há N dias"* em dias de calendário.
 
 **(166) Nenhum clique foi dado no navegador, e a regra das 21h só foi provada com o relógio adiantado.** As rotas foram provadas pelo
 servidor de verdade (em pasta vazia, no fuso universal e com o relógio adiantado para as 22h de Brasília do último dia do mês seguinte); o
@@ -33269,9 +33379,64 @@ o texto diz *"Emitida em <a data de emissão da capa>"*.
   que congela o marcador ao salvar (**C418**; a **A104** acha as cláusulas que já guardaram *Invalid Date*).
 - Nenhuma porta de permissão mudou; nenhum valor gravado mudou; o documento da proposta só mudou no texto do marcador.
 
+## Etapa 167 — O marcador que sobrevive ao Salvar do preview e a atividade recente da viagem no dia de Brasília (2026-10-20)
+
+Uma etapa de **consertos técnicos** nas propostas e no Comercial, sem regra de acesso nova. Quem escrevia uma cláusula com um marcador —
+`{{proposal.date}}` para a data de emissão, ou o número da proposta, ou o nome do cliente — via o valor certo no **Preview** editável; mas,
+ao **Salvar** qualquer coisa pelo preview, o sistema trocava o marcador pelo valor escrito: a data ficava **congelada** no texto, e a
+proposta copiada ou reemitida continuava com a data velha. Agora o marcador que o usuário não mexeu sobrevive ao Salvar. E, em **Custos de
+Viagem**, a regra *Atividade Recente* contava 90 períodos de 24 horas com a hora 3 h adiantada — perto da borda, discordava das **Visitas
+Técnicas** para o mesmo cliente, e a proposta criada hoje à noite aparecia como *"há -1 dias"*. Agora conta dias de calendário de Brasília,
+igual às Visitas Técnicas.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Cláusula *"Emitida em {{proposal.date}}"*; editar **outra** cláusula no preview e **Salvar**: a cláusula passava a dizer *"Emitida em 20/10/2026"* para sempre | Continua com o marcador; a data acompanha a emissão — **B1065** |
+| Acrescentar uma palavra **na própria** cláusula do marcador e salvar: o marcador sumia | O marcador fica; a palavra nova é gravada — **B1065** |
+| Apagar a data impressa e digitar outra | Grava o que foi digitado (como antes) — **B1065** |
+| Primeiro salvamento de uma proposta cujo modelo de cláusulas usa um marcador: o marcador sumia de todas as cláusulas do modelo | Fica nas que o usuário não mexeu — **B1065** |
+| Custos de Viagem, cliente com a última proposta criada às 22h30 de 91 dias atrás: *Atividade Recente* atendida | Não atendida (91 dias), igual às Visitas Técnicas — **B1066** |
+| Cliente com proposta criada hoje à noite: *"Última proposta há -1 dias"* | *"Última proposta há 0 dias"* — **B1066** |
+| Cliente com uma proposta de data ilegível e uma de 10 dias atrás: *Atividade Recente* não atendida | Atendida, *"há 10 dias"* — **B1066** |
+
+### As regras, com o cenário exato
+
+**1. O marcador que sobrevive ao Salvar (B1065).** Abra uma proposta no **Preview** editável que tenha uma cláusula com o texto
+`Emitida em {{proposal.date}}, válida por 30 dias.` (o preview mostra *"Emitida em <a data de emissão da capa>, válida por 30 dias."*).
+(a) Edite **outra** cláusula e clique **Salvar**: a cláusula do marcador não é regravada. (b) Acrescente *" corridos"* depois de *"30 dias"*
+na própria cláusula e salve: o texto gravado é `Emitida em {{proposal.date}}, válida por 30 dias corridos.` — a data continua acompanhando
+a emissão. (c) Troque a data impressa por outra (*21/10/2026*) e salve: grava *"Emitida em 21/10/2026, …"*, sem o marcador — foi o que o
+usuário escreveu. Vale para qualquer marcador simples `{{…}}`, no título e no texto da cláusula.
+
+**2. Os limites (C419).** O marcador de bloco (`{{#if}}`) numa cláusula editada, o valor entre duas edições separadas da mesma cláusula,
+dois valores que se confundem com o vizinho e a cláusula de um parágrafo só dividida entre páginas continuam gravando o valor escrito.
+
+**3. A atividade recente da viagem (B1066).** Em **Custos de Viagem**, ao escolher o cliente, o cartão *Atividade Recente* (recomendada)
+aparece atendido quando a última proposta ativa do cliente foi criada há **90 dias de calendário ou menos** (pelo dia de Brasília), com
+*"Última proposta há N dias"*. É a mesma régua da regra *"Cliente teve propostas nos últimos 90 dias"* das **Visitas Técnicas**: para o mesmo
+cliente as duas dizem a mesma coisa. Não bloqueia o registro da viagem.
+
+### O que esta etapa NÃO cobre
+
+- Os quatro limites da **C419**; as cláusulas que já congelaram a data não voltam sozinhas (**B1067** — a **A105** as lista, a **A104** as
+  com *Invalid Date*).
+- O documento da proposta, o gerador e a paginação não mudaram (a revisão obrigatória da proposta passou inteira). Nenhuma porta de
+  permissão mudou; nenhum valor gravado mudou por conta própria.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 167 entregue (2026-10-20):** **o marcador que sobrevive ao Salvar do preview editável e a *Atividade Recente* da viagem no dia de
+  Brasília** (consertos técnicos nas propostas e no Comercial, sem regra de acesso nova). Salvar pelo preview mantém o marcador que o
+  usuário não mexeu (**B1065** — **C418**); a *Atividade Recente* de Custos de Viagem conta dias de calendário de Brasília, igual às Visitas
+  Técnicas (**B1066** — **C416**); as cláusulas já congeladas não são reescritas (**B1067**). Commits `07bb9894`, `5fc7ea5f` e `1b3718ce` (a correção da revisão). **O que é seu:** as decisões
+  **B1065** a **B1067** (reversíveis); a consulta **A105** (opcional); os avisos novos **C419** e **C420** (o `{{raw.…}}` — produto); as perguntas de antes (**B949**, **B910**,
+  **B853**, **B924**, **B926**, **B988**, **B989**, **B1013**, **B1057**, **B1063**, **C277**, **C312**, **C314**, **C316**, **C330**, **C398**,
+  **C408**, **C411**, **C412**, **C417**); as limitações **(167)** em D e a verificação **(167)** em F. **Próxima: Etapa 168 — ver a "próxima
+  tarefa detalhada" no plano da Etapa 167.**
 
 - **Etapa 166 entregue (2026-10-20):** **os relatórios por mês, o filtro do painel e a data no texto da proposta no dia de Brasília**
   (consertos técnicos no Comercial, sem regra de acesso nova e sem mudar valor gravado). A *Evolução de Propostas*, os *Clientes que
@@ -33281,7 +33446,7 @@ o texto diz *"Emitida em <a data de emissão da capa>"*.
   Commits `f7246f0e`, `a69b4e74` e `89569d20` (a correção da revisão). **O que é seu:** as decisões **B1060** a **B1063** (reversíveis — **a B1063 pede um olhar**); a consulta **A104** (opcional);
   os avisos novos **C416**, **C417** (produto) e **C418**; as perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **B988**,
   **B989**, **B1013**, **C277**, **C312**, **C314**, **C316**, **C330**, **C398**, **C408**, **C411**, **C412**); as limitações **(166)** em D e a
-  verificação **(166)** em F. **Próxima: Etapa 167 — ver a "próxima tarefa detalhada" no plano da Etapa 166.**
+  verificação **(166)** em F. *(Próxima, na época: Etapa 167 — entregue acima.)*
 
 - **Etapa 165 entregue (2026-10-20):** **os lembretes, a validade e a data de emissão das propostas no dia de Brasília** (consertos técnicos
   no Comercial, sem regra de acesso nova e sem mudar data já gravada). O sino, as Atividades e o painel classificam o lembrete pelo dia de

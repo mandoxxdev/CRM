@@ -288,7 +288,12 @@ nos dois jeitos; não mudam. `coordenadasPrazo.api.test.js:305` — as visitas p
 3. **Paralelismo:** **0** galhos de código em paralelo (a T2 dependia da T1 — M9); **1** revisor na Fase 2, **3** em paralelo na Fase 5 (o r3
    na worktree própria, 30 sabotagens; o r2 numa worktree temporária da base) — **0** incidente de trava, **0** retrabalho; **1** vermelho
    intermitente de ambiente na bateria 2 (`superPadraoNoBoot`, *SQLITE_READONLY*).
-4. **Defeito que escapou:** *(preencher na Etapa 167)*.
+4. **Defeito que escapou:** **0** defeito de produção achado depois do fechamento. **Duas afirmações incompletas, achadas pela Etapa
+   167:** (1) a **C418** e a armadilha 22 falavam só da data — o congelamento valia para **todo** marcador simples e também no primeiro
+   salvamento (o ramo que copia o modelo); (2) a "próxima tarefa" sugeria, como primeiro caminho, o motor marcar o valor com
+   `<span data-marcador>` — **mexeria na paginação** (o `splitTextLeaf` escolhe a folha pelo elemento sem filhos: o parágrafo deixaria de se
+   dividir e, com valor ≥ 40 caracteres, o texto em volta sumiria da página). A sugestão já mandava "decidir pela Fase 0 qual não mexe na
+   paginação" — e a Fase 0 da 167 descartou os dois caminhos sugeridos.
 
 ## Próxima tarefa detalhada — Etapa 167
 

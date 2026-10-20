@@ -130,9 +130,22 @@
     (`propostaCompositionEngine.js`) usa a `totais.dataEmissao` quando ela já é `DD/MM/AAAA` (o que o `/premium` e o `/pdf` mandam); senão o
     `diaLocal.dataDoBancoBR` dela e depois o do `created_at`; nada legível → `''`. **Nunca volte a `new Date(dataEmissao)`**: o `Date` lê
     `DD/MM/AAAA` como `MM/DD/AAAA` — dia ≤ 12 troca dia e mês, dia > 12 sai *Invalid Date*. A mudança altera o **texto impresso** das cláusulas
-    que usam o marcador, também na reimpressão (letra B). **Limite (C418):** o preview editável recebe a cláusula já resolvida e o *Salvar*
-    grava a data escrita no lugar do marcador. Testes: `tests/api/relatoriosPorMesDoComercialNoDiaLocal.api.test.js` (o unitário em UTC-3 e a
+    que usam o marcador, também na reimpressão (letra B). **Limite (C418) — RESOLVIDO na Etapa 167, ver a armadilha 23** *(este item dizia
+    "o *Salvar* grava a data escrita no lugar do marcador" e era só a data — **estava incompleto**: valia para todo marcador simples, e também
+    no primeiro salvamento, que copia o modelo)*. Testes: `tests/api/relatoriosPorMesDoComercialNoDiaLocal.api.test.js` (o unitário em UTC-3 e a
     cláusula escrita pela rota no `/premium`, igual à capa).
+
+23. **O servidor resolve os marcadores no documento INTEIRO, inclusive no `#proposalSource` que o editor lê; quem devolve o marcador no
+    *Salvar* é o editor** (Etapa 167, B1065, C418). `restaurarMarcadores` (`clausulasInlineEditor.js`) reconcilia a cláusula gravada (com o
+    marcador), a inicial (o texto do `#proposalSource` capturado a **cada** `onLoad` do iframe — `textosIniciaisRef`) e a atual: o marcador cujo
+    valor ficou inteiro no prefixo ou no sufixo comum de inicial × atual volta; a intocada volta exatamente ao gravado (sem `PUT`). **Nunca
+    marque o valor no HTML** (`<span data-marcador>`): o `splitTextLeaf` do paginador escolhe como folha o elemento **sem filhos elemento** —
+    o `<p>` com um `<span>` deixa de se dividir entre páginas (I6) e, com o valor ≥ 40 caracteres, o `<span>` vira a folha e o texto do
+    parágrafo em volta some da página (I1). **Nunca troque a busca linear por regex com um `(.*?)` por marcador**: com o gravado que não casa,
+    o retrocesso trava a aba no *Salvar* (Fase 2 da 167: 5 marcadores × 1.000 caracteres > 100 s). Os limites (bloco, duas edições, divisão
+    ambígua, parágrafo dividido entre páginas) estão na **C419**. Testes: `client/src/components/proposta/marcadorVivoNoPreview.test.js` (o
+    unitário e o fluxo inteiro no jsdom — o editor montado, o HTML do **template real** do servidor escrito no `contentDocument` do iframe,
+    que roda o paginador; o `api` simulado só na fronteira HTTP).
 
 ## Como rodar a validação (obrigatório antes de merge)
 
@@ -169,6 +182,7 @@ node tests/propostaCustomizacoes.test.js
 
 # Client (jsdom)
 cd ../client && CI=true npx react-scripts test src/components/proposta/clausulasInlineEditor.test.js --watchAll=false
+cd ../client && CI=true npx react-scripts test src/components/proposta/marcadorVivoNoPreview.test.js --watchAll=false   # Etapa 167: o marcador que sobrevive ao Salvar (armadilha 23)
 ```
 
 E pela rota (o `index.js` real, em pasta vazia — entra no `npm run test:api`):

@@ -1,19 +1,26 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-20 (Etapa 166) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-20 (Etapa 167) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165 e 166) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166 e 167) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-20 (Etapa 166 ENTREGUE · próxima: Etapa 167)
+> ## Onde o desenvolvimento está — 2026-10-20 (Etapa 167 ENTREGUE · próxima: Etapa 168)
 >
-> **O desenvolvimento parou aqui: Etapa 166 fechada — 2026-10-20.** A **Etapa 166 (os relatórios por mês, o filtro do painel e a data no
+> **O desenvolvimento parou aqui: Etapa 167 fechada — 2026-10-20.** A **Etapa 167 (o marcador que sobrevive ao Salvar do preview editável
+> e a *Atividade Recente* da viagem no dia de Brasília; consertos técnicos nas propostas e no Comercial, sem regra de acesso nova)**: salvar
+> pelo **Preview** não troca mais o marcador de uma cláusula (`{{proposal.date}}`, o número, o nome do cliente) pelo valor escrito — o que
+> o usuário não mexeu continua marcador, e a data acompanha a emissão; em **Custos de Viagem**, a regra *Atividade Recente* conta dias de
+> calendário de Brasília e concorda com as Visitas Técnicas. Uma consulta opcional antes do deploy (**A105**: as cláusulas que já congelaram
+> a data). **Próxima: Etapa 168** — ver a próxima tarefa no plano da 167.
+>
+> **Etapa 166, 2026-10-20.** A **Etapa 166 (os relatórios por mês, o filtro do painel e a data no
 > texto da proposta no dia de Brasília; consertos técnicos no Comercial, sem regra de acesso nova e sem mudar valor gravado)**: a proposta
 > criada às 22h do último dia do mês conta nesse mês na *Evolução de Propostas* dos Relatórios e nas *Tendências Mensais* do painel; os
 > *Clientes que Precisam de Visita* e a *atividade recente* das Visitas Técnicas contam os 90 dias pelo dia de Brasília; à noite, o atalho
 > *Este mês* do painel põe *Até* = hoje e o painel filtrado conta a proposta das 22h; a *Última Proposta* e os nomes dos arquivos baixados
 > saem com o dia certo; e o marcador `{{proposal.date}}` numa cláusula sai igual à data de emissão da capa (**muda o texto impresso** — B1063).
-> Uma consulta opcional antes do deploy (**A104**). **Próxima: Etapa 167** — ver a próxima tarefa no plano da 166.
+> Uma consulta opcional antes do deploy (**A104**). **Próxima: Etapa 167** — ver a próxima tarefa no plano da 166. *(Próxima, na época: Etapa 167 — entregue acima.)*
 >
 > **Etapa 165, 2026-10-20.** A **Etapa 165 (os lembretes, a validade e a data de emissão das
 > propostas no dia de Brasília; consertos técnicos no Comercial, sem regra de acesso nova e sem mudar data já gravada)**: à noite (depois das
@@ -6805,6 +6812,49 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 167 — O marcador que sobrevive ao Salvar do preview e a atividade recente da viagem no dia de Brasília (ENTREGUE — 2026-10-20)
+
+**O que mudou, em uma frase:** salvar pelo preview editável mantém os marcadores das cláusulas que o usuário não mexeu, e a *Atividade
+Recente* de Custos de Viagem conta dias de calendário de Brasília.
+
+**O problema que ela resolve.** (1) O **Preview** editável recebe as cláusulas com os marcadores já trocados pelo valor (a data, o número, o
+nome); ao **Salvar** qualquer coisa, o sistema gravava esse valor no lugar do marcador — a data ficava congelada no texto. (2) Em **Custos
+de Viagem**, a regra *Atividade Recente* contava 90 períodos de 24 h com a hora 3 h adiantada: perto da borda discordava das Visitas
+Técnicas, e a proposta de hoje à noite aparecia *"há -1 dias"*.
+
+| Antes | Agora |
+|---|---|
+| Cláusula *"Emitida em {{proposal.date}}"*; editar outra cláusula e **Salvar**: a data ficava escrita para sempre | O marcador fica |
+| Acrescentar uma palavra na própria cláusula do marcador e salvar: o marcador sumia | O marcador fica; a palavra é gravada |
+| Reescrever a data impressa | Grava a data digitada (como antes) |
+| Custos de Viagem, última proposta às 22h30 de 91 dias atrás: *Atividade Recente* atendida | Não atendida, igual às Visitas Técnicas |
+| Proposta criada hoje à noite: *"Última proposta há -1 dias"* | *"há 0 dias"* |
+
+**Roteiro de teste (10 minutos, a qualquer hora).**
+
+1. **O marcador que fica.** Faça login com um usuário do Comercial. Abra uma proposta, abra o **Preview**, inclua uma cláusula com o texto
+   `Emitida em {{proposal.date}}, válida por 30 dias.` e salve. Recarregue: a cláusula mostra a data da capa.
+2. **Editar outra cláusula.** No mesmo preview, edite **outra** cláusula (troque uma palavra) e salve. Recarregue: a cláusula do
+   marcador continua mostrando a data da capa. *(Na tela, no mesmo dia, o antes e o agora parecem iguais — o valor é o mesmo. A diferença é o
+   que fica gravado: antes, a data escrita; agora, o marcador. Para conferir, rode a **A105** numa cópia do banco depois de salvar: a
+   cláusula não aparece nela — antes aparecia.)*
+3. **Editar a própria cláusula.** Acrescente *" corridos"* depois de *"30 dias"* e salve; recarregue: o texto diz *"Emitida em <a data da
+   capa>, válida por 30 dias corridos."* e continua acompanhando a emissão.
+4. **Reescrever a data.** Troque a data impressa por *01/01/2027* e salve; recarregue: a cláusula diz *01/01/2027* — fixa, porque foi o que
+   você escreveu.
+5. **A atividade recente da viagem.** Em **Custos de Viagem → Novo**, escolha um cliente com proposta recente: o cartão *Atividade Recente*
+   aparece atendido com *"Última proposta há N dias"* (dias de calendário). Em **Relatórios → Visitas Técnicas**, o mesmo cliente tem a regra
+   *"Cliente teve propostas nos últimos 90 dias"* com o mesmo resultado.
+
+**O que esta etapa NÃO cobre.** Os limites da **C419** (o marcador de bloco `{{#if}}` numa cláusula editada, o valor entre duas edições
+separadas, valores que se confundem com o vizinho, a cláusula de um parágrafo dividida entre páginas); as cláusulas que já congelaram a data
+não voltam sozinhas (**B1067** — a **A105** as lista); o marcador `{{raw.…}}` que lê campo interno (**C420**, de antes — produto). O
+documento, o gerador e a paginação não mudaram. Nenhuma porta de permissão mudou.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos provam (o editor montado em jsdom com o
+documento gerado pelo gerador real do servidor e a digitação na página gerada; a rota de Custos de Viagem pelo servidor de verdade, no fuso
+de Brasília com o relógio adiantado para as 22h), escrito para você conferir à mão. Commits `07bb9894`, `5fc7ea5f` e `1b3718ce` (a correção da revisão).
+
 ## Etapa 166 — Os relatórios por mês, o filtro do painel e a data no texto da proposta no dia de Brasília (ENTREGUE — 2026-10-20)
 
 **O que mudou, em uma frase:** no Comercial, os relatórios por mês, as janelas de 90 dias e o filtro de período do painel contam o
@@ -6828,7 +6878,7 @@ mês trocados (dias 1 a 12).
 
 1. **O marcador.** Faça login com um usuário do Comercial. Abra uma proposta, abra o **Preview**, inclua uma cláusula com o texto
    `Emitida em {{proposal.date}}` e salve; recarregue o preview: a cláusula diz *"Emitida em <a Data de Emissão da capa>"*. (Ao salvar de
-   novo pelo preview, a data fica escrita no lugar do marcador — C418.)
+   novo pelo preview, a data ficava escrita no lugar do marcador — C418, **resolvido na Etapa 167**.)
 2. **Os atalhos.** No painel do **Comercial**, clique **Filtros** → **Este mês**: *De* = dia 1 do mês, *Até* = hoje. **Últimos 3 meses**: *De*
    = dia 1 de dois meses atrás. **Este ano**: *De* = 1º de janeiro.
 3. **Os relatórios.** Em **Comercial → Relatórios**, a *Evolução de Propostas (Últimos 6 Meses)* mostra os meses com propostas; em *Clientes

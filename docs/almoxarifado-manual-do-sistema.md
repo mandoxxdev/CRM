@@ -7042,12 +7042,20 @@ O sistema guarda o instante de cada registro no horário universal (três horas 
     atalhos preenchem *Até* com hoje (o dia do computador) e *De* com o dia 1 do mês (*Este mês*), o dia 1 de dois meses antes (*Últimos 3
     meses*) ou 1º de janeiro (*Este ano*). Os gráficos *Tendências Mensais* e a aba *Vendas* não usam o filtro;
   - o marcador `{{proposal.date}}`, escrito numa cláusula da proposta, sai com a mesma data da *Data de Emissão* da capa, em
-    *DD/MM/AAAA*. O preview editável mostra a cláusula já com a data no lugar do marcador; salvar pelo preview grava a data escrita (o
-    marcador deixa de existir naquela cláusula);
+    *DD/MM/AAAA*. O preview editável mostra a cláusula já com a data no lugar do marcador; ao **Salvar**, o marcador continua gravado na
+    cláusula enquanto o usuário não mexer no valor impresso (vale para qualquer marcador `{{…}}`, no título e no texto): editar outra
+    cláusula não regrava a do marcador; editar outro trecho da própria cláusula grava o texto novo com o marcador; reescrever ou apagar o
+    valor impresso grava o que foi digitado, sem o marcador. Continuam gravando o valor escrito: o marcador de bloco (`{{#if …}}`,
+    `{{#each …}}`) numa cláusula editada; o valor que fica entre duas edições separadas da mesma cláusula; dois valores lado a lado que se
+    confundem com o texto vizinho; e, na cláusula de um parágrafo só que o preview divide entre páginas, o valor entre a edição e o ponto da
+    divisão;
   - os arquivos baixados (o PDF dos Relatórios e o PNG de um gráfico ampliado) levam no nome a data de hoje, do computador.
+  - em **Custos de Viagem**, a regra recomendada *Atividade Recente* (ao escolher o cliente) conta os dias de calendário de Brasília entre
+    hoje e o dia em que a última proposta **ativa** do cliente foi criada: com **90 ou menos** ela aparece atendida, com *"Última proposta há N
+    dias"* (hoje = 0). É a mesma régua da regra *"Cliente teve propostas nos últimos 90 dias"* das **Visitas Técnicas** — para o mesmo
+    cliente as duas concordam. Uma proposta com data de criação ilegível não conta. A regra não bloqueia o registro.
 - **Ainda pelo horário universal:** os indicadores do painel antigo do Operacional (OEE, manutenção e inspeções do dia), que nenhum menu
-  abre; e, no Comercial, a regra *Atividade Recente* da elegibilidade de viagem (**Custos de Viagem**), que conta 90 períodos de 24 horas
-  a partir da hora de criação da última proposta.
+  abre.
 - O deslocamento usado é o atual do horário de Brasília (três horas, sem horário de verão).
 
 ### 22.6 A lista mostra o último filtro pedido
