@@ -22342,13 +22342,16 @@ app.get('/api/auditoria/logs', authenticateToken, (req, res) => {
     query += ' AND modulo = ?';
     params.push(modulo);
   }
+  // Etapa 168 (RN-168.03, B1070): o dia de BRASILIA do log (o `DATE(created_at)` era o dia UTC: o log das 21h a meia-noite caia no filtro
+  // do dia seguinte, e a tela, que agora mostra a hora de Brasilia, o mostraria num dia e o filtro o acharia em outro). O par (mod, data)
+  // so entra quando a data veio — `?` posicional, na ordem do SQL.
   if (data_inicio) {
-    query += ' AND DATE(created_at) >= ?';
-    params.push(data_inicio);
+    query += ' AND date(created_at, ?) >= ?';
+    params.push(diaLocal.modificadorDoFuso(), data_inicio);
   }
   if (data_fim) {
-    query += ' AND DATE(created_at) <= ?';
-    params.push(data_fim);
+    query += ' AND date(created_at, ?) <= ?';
+    params.push(diaLocal.modificadorDoFuso(), data_fim);
   }
 
   query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
