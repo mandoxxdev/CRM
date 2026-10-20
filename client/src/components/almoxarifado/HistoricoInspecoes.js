@@ -5,6 +5,7 @@ import { FiChevronDown, FiChevronUp } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
 import { formatarFaixa } from './faixaTolerancia';
 import AnexosDocumento from './AnexosDocumento';
+import useUltimoPedido from '../../hooks/useUltimoPedido';
 import './Almoxarifado.css';
 
 /**
@@ -58,23 +59,28 @@ const HistoricoInspecoes = ({ materialFilter }) => {
   const [medidasPorId, setMedidasPorId] = useState({}); // cache: { [inspecaoId]: medidas[] }
   const [carregandoMedidas, setCarregandoMedidas] = useState({});
 
+  // Etapa 161 (RN-161.02, C396): trocar o filtro de material com a lista em voo — so a resposta do ultimo pedido mexe na tela
+  const novoPedidoLista = useUltimoPedido();
   const loadHistorico = useCallback(async () => {
+    const ehUltimo = novoPedidoLista();
     setLoading(true);
     setErro(null);
     try {
       const params = {};
       if (materialFilter) params.material_id = materialFilter;
       const res = await api.get('/almoxarifado/inspecoes/historico', { params });
+      if (!ehUltimo()) return;
       setHistorico(res.data || []);
     } catch (err) {
+      if (!ehUltimo()) return;
       const msg = err.response?.data?.error || 'Erro ao carregar histórico de inspeções';
       toast.error(msg);
       setHistorico([]);
       setErro(msg);
     } finally {
-      setLoading(false);
+      if (ehUltimo()) setLoading(false);
     }
-  }, [materialFilter]);
+  }, [materialFilter, novoPedidoLista]);
 
   useEffect(() => { loadHistorico(); }, [loadHistorico]);
 

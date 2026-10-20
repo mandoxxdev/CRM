@@ -24,6 +24,7 @@ import {
   FiAlertTriangle, FiClock, FiTruck, FiCheckCircle, FiFilter, FiMap, FiTrash2, FiDollarSign,
   FiSend, FiArchive, FiShoppingCart, FiUserCheck, FiBox, FiEdit3, FiCopy, FiCheckSquare, FiCornerUpLeft
 } from 'react-icons/fi';
+import useUltimoPedido from '../../hooks/useUltimoPedido';
 import './Almoxarifado.css';
 
 const STATUS_INFO = {
@@ -271,6 +272,8 @@ const RequisicoesList = () => {
 
   const [requisicoes, setRequisicoes] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Etapa 161 (RN-161.02, C396): a troca de filtro e as ~20 acoes que recarregam podem cruzar pedidos — so o ultimo mexe na lista
+  const novoPedidoLista = useUltimoPedido();
   const [filtroStatus, setFiltroStatus] = useState(searchParams.get('status') || '');
   const [filtroTipo, setFiltroTipo] = useState(searchParams.get('tipo') || '');
   const [filtroAprovacoesValor, setFiltroAprovacoesValor] = useState(
@@ -555,7 +558,9 @@ const RequisicoesList = () => {
     setQuantidadesSeparacao(quantidadesIniciaisSeparacao(data.itens));
   }, []);
 
+  // O descarte e `return` (nunca throw): os chamadores com `await` continuam recebendo uma promessa que resolve.
   const loadRequisicoes = async () => {
+    const ehUltimo = novoPedidoLista();
     setLoading(true);
     try {
       const params = {};
@@ -572,11 +577,13 @@ const RequisicoesList = () => {
         if (!filtroMinha && ctx.setor) params.setor = ctx.setor;
       }
       const res = await api.get(apiPrefix, { params });
+      if (!ehUltimo()) return;
       setRequisicoes(res.data);
     } catch {
+      if (!ehUltimo()) return;
       toast.error('Erro ao carregar requisições');
     } finally {
-      setLoading(false);
+      if (ehUltimo()) setLoading(false);
     }
   };
 

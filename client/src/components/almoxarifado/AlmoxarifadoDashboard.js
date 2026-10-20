@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { canConfigureAlmox } from '../../utils/systemPermissions';
 import { getEffectiveUser } from '../../services/permissionsCache';
 import api from '../../services/api';
+import useUltimoPedido from '../../hooks/useUltimoPedido';
 import { FiPackage, FiAlertTriangle, FiDollarSign, FiActivity, FiArrowRight, FiRefreshCw, FiClock, FiAlertOctagon, FiFileText, FiCheckCircle, FiLayers, FiClipboard, FiMap, FiSettings, FiTruck, FiTrendingUp } from 'react-icons/fi';
 import './Almoxarifado.css';
 
@@ -90,16 +91,20 @@ const AlmoxarifadoDashboard = () => {
     loadIndicadores();
   }, [loadIndicadores]);
 
+  // Etapa 161 (RN-161.02, C396): trocar o periodo com os dois relatorios em voo — so a resposta do ultimo periodo pedido mexe no painel
+  const novoPedidoRelatorios = useUltimoPedido();
   const loadRelatorios = useCallback(async (dias) => {
+    const ehUltimo = novoPedidoRelatorios();
     const { data_inicio, data_fim } = getPeriodDates(dias);
     const params = { data_inicio, data_fim };
     const [consumoRes, materiaisRes] = await Promise.all([
       api.get('/almoxarifado/relatorios/consumo-os', { params }).catch(() => ({ data: [] })),
       api.get('/almoxarifado/relatorios/materiais-mais-consumidos', { params }).catch(() => ({ data: [] })),
     ]);
+    if (!ehUltimo()) return;
     setConsumoOs(aggregateConsumoPorOS(consumoRes.data));
     setMateriaisConsumidos(materiaisRes.data || []);
-  }, []);
+  }, [novoPedidoRelatorios]);
 
   const loadDashboard = async () => {
     setLoading(true);

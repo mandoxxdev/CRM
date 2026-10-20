@@ -12,6 +12,7 @@ import { justificativaDiferente } from '../../utils/justificativaMovimentacao';
 import CampoCodigoLido from './CampoCodigoLido';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import AvisoDaListaRecusada from './AvisoDaListaRecusada';
+import useUltimoPedido from '../../hooks/useUltimoPedido';
 import './Almoxarifado.css';
 
 // SUCATA e PERDA foram isentos da guarda de vencimento na Task 3 (Etapa 6) justamente para que
@@ -148,6 +149,8 @@ const MovimentacoesAlmoxarifado = () => {
   const [movimentacoes, setMovimentacoes] = useState([]);
   const [materiais, setMateriais] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Etapa 161 (RN-161.02, C396): a abertura e a troca de filtro disparam pedidos que podem se cruzar — so o ultimo mexe na lista
+  const novoPedidoLista = useUltimoPedido();
   const [tipoFilter, setTipoFilter] = useState('');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
@@ -487,6 +490,7 @@ const MovimentacoesAlmoxarifado = () => {
   };
 
   const loadMovimentacoes = async () => {
+    const ehUltimo = novoPedidoLista();
     setLoading(true);
     try {
       const params = { limit: 200 };
@@ -494,11 +498,13 @@ const MovimentacoesAlmoxarifado = () => {
       if (dataInicio) params.data_inicio = dataInicio;
       if (dataFim) params.data_fim = dataFim;
       const res = await api.get('/almoxarifado/movimentacoes', { params });
+      if (!ehUltimo()) return;
       setMovimentacoes(res.data);
     } catch {
+      if (!ehUltimo()) return;
       toast.error('Erro ao carregar movimentações');
     } finally {
-      setLoading(false);
+      if (ehUltimo()) setLoading(false);
     }
   };
 

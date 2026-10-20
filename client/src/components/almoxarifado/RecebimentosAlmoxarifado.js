@@ -21,6 +21,7 @@ import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import { montarEtiquetasDoRecebimento } from '../../utils/etiquetasPdf';
 import { quantidadeQueEntra } from '../../utils/quantidadeQueEntra';
 import { formatDateBR } from '../../utils/formatDate';
+import useUltimoPedido from '../../hooks/useUltimoPedido';
 import './Almoxarifado.css';
 
 const STATUS_INFO = {
@@ -179,6 +180,8 @@ const RecebimentosAlmoxarifado = () => {
   const [pedidos, setPedidos] = useState([]);
   const [fornecedores, setFornecedores] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Etapa 161 (RN-161.02, C396): trocar o filtro com a lista em voo — so a resposta do ultimo pedido mexe na tela
+  const novoPedidoLista = useUltimoPedido();
   // Etapa 35 (RN-04/RN-05): falha de carga NAO pode virar estado vazio. "Nenhum recebimento
   // registrado" e indistinguivel de "nao ha recebimento", e o toast some em segundos — no teste
   // ele e mockado, no navegador o operador ja saiu da tela. Mesma regua que a Etapa 29 aplicou em
@@ -277,6 +280,7 @@ const RecebimentosAlmoxarifado = () => {
   });
 
   const loadRecebimentos = useCallback(async () => {
+    const ehUltimo = novoPedidoLista();
     setLoading(true);
     setErro(null);
     try {
@@ -284,8 +288,10 @@ const RecebimentosAlmoxarifado = () => {
       if (filtroStatus) params.status = filtroStatus;
       if (filtroEtapa) params.etapa = filtroEtapa;
       const res = await api.get('/almoxarifado/recebimentos', { params });
+      if (!ehUltimo()) return;
       setRecebimentos(res.data || []);
     } catch (err) {
+      if (!ehUltimo()) return;
       const msg = err.response?.data?.error || 'Erro ao carregar recebimentos';
       toast.error(msg);
       // Zerar a lista e marcar o erro andam juntos: sem o `setRecebimentos([])`, um refresh que
@@ -293,9 +299,9 @@ const RecebimentosAlmoxarifado = () => {
       setRecebimentos([]);
       setErro(msg);
     } finally {
-      setLoading(false);
+      if (ehUltimo()) setLoading(false);
     }
-  }, [filtroStatus, filtroEtapa]);
+  }, [filtroStatus, filtroEtapa, novoPedidoLista]);
 
   useEffect(() => {
     loadRecebimentos();

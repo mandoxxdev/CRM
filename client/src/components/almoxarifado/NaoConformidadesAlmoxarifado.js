@@ -9,6 +9,7 @@ import { SkeletonTable } from '../SkeletonLoader';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import { formatarErroPermissao } from '../../utils/permissaoErro';
 import AnexosDocumento from './AnexosDocumento';
+import useUltimoPedido from '../../hooks/useUltimoPedido';
 import './Almoxarifado.css';
 
 /**
@@ -291,7 +292,10 @@ const NaoConformidadesAlmoxarifado = () => {
   const [cancelamentoTarget, setCancelamentoTarget] = useState(null);
   const [cancelamentoMotivo, setCancelamentoMotivo] = useState('');
 
+  // Etapa 161 (RN-161.02, C396): a troca de filtro e a recarga das acoes podem cruzar pedidos — so o ultimo mexe na tela
+  const novoPedidoLista = useUltimoPedido();
   const carregar = useCallback(async () => {
+    const ehUltimo = novoPedidoLista();
     setLoading(true);
     setErro(null);
     try {
@@ -301,8 +305,10 @@ const NaoConformidadesAlmoxarifado = () => {
       if (origemFiltro) params.origem = origemFiltro;
       if (execucaoFiltro) params.execucao = execucaoFiltro;
       const res = await api.get(ROTA, { params });
+      if (!ehUltimo()) return;
       setItens(res.data?.itens || []);
     } catch (err) {
+      if (!ehUltimo()) return;
       // Regra 2: NÃO grava [] aqui — seria o mesmo shape de "nenhuma não conformidade".
       // ⚠️ MEDIDO na sabotagem desta task: tirar esta linha sozinha NÃO derruba teste nenhum,
       // porque quem esconde a lista velha é a PRECEDÊNCIA do `erro ?` no render abaixo. Ela fica
@@ -315,9 +321,9 @@ const NaoConformidadesAlmoxarifado = () => {
       setErro(mensagem);
       toast.error(mensagem);
     } finally {
-      setLoading(false);
+      if (ehUltimo()) setLoading(false);
     }
-  }, [statusFiltro, origemFiltro, execucaoFiltro]);
+  }, [statusFiltro, origemFiltro, execucaoFiltro, novoPedidoLista]);
 
   useEffect(() => { carregar(); }, [carregar, recarga]);
 

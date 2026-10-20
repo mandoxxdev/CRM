@@ -6,6 +6,7 @@ import { SkeletonTable } from '../SkeletonLoader';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import HistoricoInspecoes from './HistoricoInspecoes';
 import { formatarFaixa } from './faixaTolerancia';
+import useUltimoPedido from '../../hooks/useUltimoPedido';
 import './Almoxarifado.css';
 
 /**
@@ -140,19 +141,24 @@ const InspecoesAlmoxarifado = () => {
   const [ajusteForm, setAjusteForm] = useState({ material_id: '', quantidade: '', justificativa: '' });
   const [ajusteSaving, setAjusteSaving] = useState(false);
 
+  // Etapa 161 (RN-161.02, C396): trocar o filtro de material com a lista em voo — so a resposta do ultimo pedido mexe na tela
+  const novoPedidoLista = useUltimoPedido();
   const loadPendentes = useCallback(async () => {
+    const ehUltimo = novoPedidoLista();
     setLoading(true);
     try {
       const params = {};
       if (materialFilter) params.material_id = materialFilter;
       const res = await api.get('/almoxarifado/inspecoes/pendentes', { params });
+      if (!ehUltimo()) return;
       setPendentes(res.data || []);
     } catch {
+      if (!ehUltimo()) return;
       toast.error('Erro ao carregar inspeções pendentes');
     } finally {
-      setLoading(false);
+      if (ehUltimo()) setLoading(false);
     }
-  }, [materialFilter]);
+  }, [materialFilter, novoPedidoLista]);
 
   const loadMateriais = useCallback(async () => {
     // `/estoque`, não `/materiais`: é quem já traz `quantidade_bloqueada` — o filtro e o modal

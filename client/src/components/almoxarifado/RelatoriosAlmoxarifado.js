@@ -3,6 +3,7 @@ import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { FiBarChart2, FiRefreshCw, FiAlertTriangle, FiDownload } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
+import useUltimoPedido from '../../hooks/useUltimoPedido';
 import './Almoxarifado.css';
 
 /**
@@ -215,7 +216,10 @@ const RelatoriosAlmoxarifado = () => {
   const [dadosRelatorio, setDadosRelatorio] = useState(null);
   const [loadingConsulta, setLoadingConsulta] = useState(false);
   const [erroConsulta, setErroConsulta] = useState(null);
-  const [ultimaConsultaParams, setUltimaConsultaParams] = useState(null); // querystring da última consulta OK
+  // Etapa 161 (RN-161.03, C396): o TIPO e a querystring da ultima consulta OK — a exportacao usa os dois, e so se o tipo for o do
+  // relatorio aberto (antes guardava so os params: a resposta de A chegando sob B fazia o export de B levar os params de A).
+  const [ultimaConsulta, setUltimaConsulta] = useState(null); // { tipo, params }
+  const novoPedidoConsulta = useUltimoPedido();
   const [exportando, setExportando] = useState(false);
 
   const carregarLista = useCallback(() => {
@@ -290,7 +294,11 @@ const RelatoriosAlmoxarifado = () => {
     setAvisoObrigatorios(null);
     setDadosRelatorio(null);
     setErroConsulta(null);
-    setUltimaConsultaParams(null);
+    setUltimaConsulta(null);
+    // Etapa 161 (RN-161.03): a consulta do relatorio anterior em voo deixa de valer (a resposta e o erro dela sao descartados) e o
+    // Consultar do novo volta a valer na hora (antes ficava "Consultando..." ate A responder).
+    novoPedidoConsulta();
+    setLoadingConsulta(false);
   };
 
   const handleConsultar = async () => {
@@ -312,39 +320,45 @@ const RelatoriosAlmoxarifado = () => {
       const v = valoresParams[p.nome];
       if (v !== undefined && v !== null && String(v).trim() !== '') paramsPreenchidos[p.nome] = v;
     });
+    const tipoConsultado = entradaSelecionada.tipo;
+    const ehUltimo = novoPedidoConsulta();
     setLoadingConsulta(true);
     setErroConsulta(null);
     try {
-      const res = await api.get(`/almoxarifado/relatorios/${entradaSelecionada.tipo}`, { params: paramsPreenchidos });
+      const res = await api.get(`/almoxarifado/relatorios/${tipoConsultado}`, { params: paramsPreenchidos });
+      if (!ehUltimo()) return;
       setDadosRelatorio(res.data);
-      setUltimaConsultaParams(paramsPreenchidos);
+      setUltimaConsulta({ tipo: tipoConsultado, params: paramsPreenchidos });
     } catch (err) {
+      if (!ehUltimo()) return;
       // Mesma lição das outras telas: 403/rede NUNCA vira resultado vazio.
       setDadosRelatorio(null);
-      setUltimaConsultaParams(null);
+      setUltimaConsulta(null);
       const mensagem = err.response?.data?.error || 'Não foi possível consultar o relatório';
       setErroConsulta({ status: err.response?.status, mensagem });
       toast.error(mensagem);
     } finally {
-      setLoadingConsulta(false);
+      if (ehUltimo()) setLoadingConsulta(false);
     }
   };
 
+  const consultaDoAberto = ultimaConsulta && entradaSelecionada && ultimaConsulta.tipo === entradaSelecionada.tipo ? ultimaConsulta : null;
+
   const handleExportar = async () => {
-    if (exportando || !entradaSelecionada || ultimaConsultaParams === null) return;
+    if (exportando || !consultaDoAberto) return;
     setExportando(true);
     try {
       // MESMA querystring da última consulta bem-sucedida — nunca os valores "ao vivo" dos
       // inputs (o usuário pode ter mudado um campo sem clicar Consultar de novo).
-      const response = await api.get(`/almoxarifado/relatorios/${entradaSelecionada.tipo}/export`, {
-        params: ultimaConsultaParams,
+      const response = await api.get(`/almoxarifado/relatorios/${consultaDoAberto.tipo}/export`, {
+        params: consultaDoAberto.params,
         responseType: 'blob',
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
       const data = new Date().toISOString().slice(0, 10);
-      link.setAttribute('download', `${entradaSelecionada.tipo}-${data}.xlsx`);
+      link.setAttribute('download', `${consultaDoAberto.tipo}-${data}.xlsx`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -375,7 +389,7 @@ const RelatoriosAlmoxarifado = () => {
   // mas o registro não impede de existir amanhã). Array.isArray fica só como guarda extra
   // (defesa em profundidade: nunca oferece download de algo que a última consulta não trouxe
   // como tabela, mesmo que `exportavel` diga true).
-  const podeExportar = !!entradaSelecionada?.exportavel && Array.isArray(dadosRelatorio) && ultimaConsultaParams !== null;
+  const podeExportar = !!entradaSelecionada?.exportavel && Array.isArray(dadosRelatorio) && consultaDoAberto !== null;
   // Fonte é o campo `limite` da lista — sem tabela local duplicando reportRegistry.js.
   const limiteDoTipo = entradaSelecionada?.limite;
   const atingiuLimite = Array.isArray(dadosRelatorio) && !!limiteDoTipo && dadosRelatorio.length === limiteDoTipo;

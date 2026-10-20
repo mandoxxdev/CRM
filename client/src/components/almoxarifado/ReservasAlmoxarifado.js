@@ -7,6 +7,7 @@ import ExtratoMaterialModal from './ExtratoMaterialModal';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import { useAuth } from '../../context/AuthContext';
 import AvisoDaListaRecusada, { OpcaoForaDaLista } from './AvisoDaListaRecusada';
+import useUltimoPedido from '../../hooks/useUltimoPedido';
 import './Almoxarifado.css';
 
 /**
@@ -98,8 +99,11 @@ const ReservasAlmoxarifado = () => {
 
   const [acaoSaving, setAcaoSaving] = useState(false);
   const [extratoMaterialId, setExtratoMaterialId] = useState(null);
+  const novoPedidoLista = useUltimoPedido();
 
   const loadReservas = useCallback(async () => {
+    // Etapa 161 (RN-161.02, C396): so a resposta do ultimo pedido mexe na lista (a troca de filtro e as 5 acoes que recarregam)
+    const ehUltimo = novoPedidoLista();
     setLoading(true);
     try {
       const params = {};
@@ -107,13 +111,15 @@ const ReservasAlmoxarifado = () => {
       if (materialFilter) params.material_id = materialFilter;
       if (projetoFilter) params.projeto_id = projetoFilter;
       const res = await api.get('/almoxarifado/reservas', { params });
+      if (!ehUltimo()) return;
       setReservas(res.data || []);
     } catch {
+      if (!ehUltimo()) return;
       toast.error('Erro ao carregar reservas');
     } finally {
-      setLoading(false);
+      if (ehUltimo()) setLoading(false);
     }
-  }, [statusFilter, materialFilter, projetoFilter]);
+  }, [statusFilter, materialFilter, projetoFilter, novoPedidoLista]);
 
   useEffect(() => {
     (async () => {
