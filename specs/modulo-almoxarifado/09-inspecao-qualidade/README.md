@@ -700,3 +700,11 @@ Plano: `docs/superpowers/plans/2026-10-09-almoxarifado-etapa98-devolver-da-caixa
 
 **Fica de fora:** o bloqueio de qualidade avisar, no ato, que vai prender uma requisição separada — não pedido; a A49 acha
 o legado.
+
+## Etapa 161 — as listas que mostravam o filtro anterior (2026-10-19)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa161-respostas-velhas-e-o-dia-local.md`. Consertos técnicos, sem regra de acesso nova e sem mexer em saldo; o status da feature não muda.
+
+- [x] **RN-161.02 (C396)** — as Inspeções pendentes, o Histórico de inspeções e as Não conformidades: só a resposta do último pedido mexe na lista (a de um filtro anterior que chega depois, o erro dela e o fim do *carregando* dela são descartados; quem chama com `await` continua recebendo uma promessa que resolve) — `f2a10ffe`.
+- [x] **Fase 5 (r1, resíduo de antes)** — a data das Inspeções pendentes (a entrada = o `created_at` do recebimento) e do Histórico (`data_inspecao`, `CURRENT_TIMESTAMP`) pelo leitor de instante (era lida como hora local: à noite, o dia de amanhã) — `84353119`.
+- [ ] **Os dias em espera** (`InspecoesAlmoxarifado.js:109`, `new Date(created_at)` — 3 h de erro) — **fica (C405)**, candidato da 162.

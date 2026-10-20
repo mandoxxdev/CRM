@@ -11,13 +11,21 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-19):** **Etapa 160 fechada** (consertos técnicos na Fábrica e no Almoxarifado, sem regra de
+> **Onde o desenvolvimento está (2026-10-19):** **Etapa 161 fechada** (consertos técnicos na Fábrica e no Almoxarifado, sem regra de
+> acesso nova e sem mexer em saldo: **as listas que mostravam o resultado de um filtro anterior, o dia que virava às 21h e os seletores
+> incompletos** — treze listas e os Relatórios só mostram a resposta do último pedido (**C396** resolvido); o dia da Fábrica e o filtro das
+> Movimentações são o de Brasília, a hora mostrada também, e os formulários abertos à noite vêm com a data de hoje (**C397** resolvido,
+> **B1025**, **B1026**, **B1028**); a data da Presença e das Horas extras não aparece mais um dia antes (**C402**, novo e resolvido); o *Setor*
+> dos Colaboradores, o *Evento* das Notificações, o fornecedor do Recebimento e da Remessa, o usuário da Auditoria e o QR da etiqueta
+> (**C399**, **C400**, o técnico, **B1029** a **B1031**); **B1025** a **B1032**; os avisos novos **C401** (os relatórios do Almoxarifado no dia UTC,
+> **B1027**), **C403** (os indicadores do Operacional), **C404** (a expiração das reservas) e **C405**); a próxima é a **162** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 160 fechada** (consertos técnicos na Fábrica e no Almoxarifado, sem regra de
 > acesso nova e sem mexer em saldo: **os filtros e as buscas que não casavam** — o filtro *Prioridade* das OS filtra e o kanban tira as
 > concluídas e ordena pela prioridade (**C390**, **C391**, novos e resolvidos, **B1018**); as buscas da Fábrica e do Almoxarifado acham a letra
 > acentuada em qualquer caixa (**C392**, **C393**, novos e resolvidos, **B1019**, **B1020**); o painel, as paradas e a busca das atividades da
 > Fábrica (**C394**, **B1021**) e os filtros do navegador do Almoxarifado (**C395**) funcionam; os cadastros pela integração respondem o
 > gravado (**C388** resolvido, **B1022**) e o seletor *Segmento* mostra o gravado (**C389** resolvido, **B1023**); **B1018** a **B1024**; os avisos
-> novos **C396** a **C400** (de antes)); a próxima é a **161** — ver "Onde estamos e o que vem a seguir".
+> novos **C396** a **C400** (de antes)); a próxima era a **161**.)*
 > *(Antes: **Etapa 159 fechada** (consertos técnicos no Comercial, sem regra de acesso nova: **os
 > filtros e as buscas que não filtravam** — o filtro *Segmento* da lista de clientes filtra (**C384**, novo e resolvido, **B1012**); as buscas de
 > texto acham a letra acentuada em qualquer caixa (*"são"* acha *"SÃO"* — **C385**, novo e resolvido, **B1013**); a busca dos custos de viagem
@@ -3922,7 +3930,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B1024; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B1032; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -11342,6 +11350,56 @@ coisa. Salvar sem mexer grava o mesmo. **Reversível:** `a0268282`, `93c1dace`.
 vocês: as da **B957**, a **B988** e a **B989**; a **B1002** continua pedindo um olhar; a **B1013** (agora também nas buscas da Fábrica e do
 Almoxarifado); a **C398** (o filtro *Status* dos Materiais); a **B1018** a **B1023** são reversíveis.
 
+**B1025 (NOVA, da Etapa 161; da Fábrica e do Almoxarifado) — o dia da Fábrica e o filtro de data das Movimentações passam a ser o de
+Brasília.** O sistema guarda as horas no padrão universal (UTC, 3 h à frente) e tirava o *dia* dali sem converter (**C397**). **Escolhido:** o
+dia de um registro com hora (apontamento, parada, ordem de produção, movimentação) é o de Brasília (o fuso fixo do negócio, o mesmo da
+Auditoria); o registro que guarda só a data (a presença, o prazo da OP) é comparado com o *hoje* de Brasília. **Os números mudam:** entre
+21h e meia-noite, o que entrava no dia seguinte passa a entrar no dia certo — nos **Relatórios da produção** (por dia, eficiência,
+paradas), nos filtros de data de **Apontamentos** e **Paradas**, no **Painel da produção** (*produção hoje*, *paradas hoje*, *atrasadas*,
+*concluídas no mês*, a disponibilidade), no *presente hoje* e no *status* dos **Colaboradores**, e no filtro *De*/*Até* da lista das
+**Movimentações**. **Descartado:** o *localtime* do banco (segue o fuso do servidor, que pode não estar configurado); gravar em hora local
+(mudaria o banco inteiro). **Limite:** o deslocamento é o de agora, aplicado a todos os registros — o Brasil não tem horário de verão desde
+2019. **Reversível:** `6885caf9`.
+
+**B1026 (NOVA, da Etapa 161; do Almoxarifado) — a hora mostrada passa a ser a de Brasília.** A lista e o estorno das **Movimentações**, o
+**Extrato do material**, o **painel** (últimas movimentações, requisições abertas), **Recebimentos**, **Requisições**, as **Inspeções**
+(pendentes e histórico) e as **Devoluções** mostravam a hora
+universal como se fosse a local — 3 h adiantada (o ato das 22h30 de 19/10 aparecia *20/10 01:30*). Junto do filtro (**B1025**): consertar
+só um deixaria a movimentação aparecer *19/10 22:30* e sair do filtro do dia 19. **Descartado:** consertar só a lista. **Reversível:**
+`db960831`.
+
+**B1027 (NOVA, da Etapa 161; do Almoxarifado) — os relatórios e o painel do Almoxarifado continuam no dia universal (C401).** **Escolhido:**
+esta etapa conserta a lista das Movimentações (o item nomeado) e deixa os 9 relatórios (*Consumo por O.S.*, *Histórico de movimentações*,
+*Ajustes por motivo*, *Perdas por motivo*, *Materiais mais consumidos*, *Consumo por período*, *Sucata (financeiro)*, *Custo por projeto*,
+*Qualidade de fornecedores*) e o painel (*movimentações hoje*, o gráfico de 7 dias) para uma etapa própria. **Consequência:** entre 21h e
+meia-noite, o mesmo período pode dar movimentações diferentes na lista e no *Histórico de movimentações*. **Descartado:** mudar os 9 agora
+(cerca de 17 arquivos de teste, vários calculando o *hoje* no padrão universal). **A pergunta para vocês:** os relatórios devem seguir o dia
+de Brasília (o natural) — confirma? **Reversível:** é a ausência de mudança.
+
+**B1028 (NOVA, da Etapa 161; da Fábrica) — as datas padrão dos formulários da Fábrica são o dia e a hora de agora.** A presença, a hora
+extra, a abertura da OS (também a criada pelo Comercial), a data planejada da OP e o início da atividade vinham, depois das 21h, com o dia de
+amanhã (a atividade com a hora 3 h adiantada) — e eram **gravados** se a pessoa não mexesse; editar a atividade mostrava a hora 3 h
+adiantada. A OP criada pela integração sem data planejada também recebia o dia universal. **Descartado:** consertar só os filtros (a presença
+lançada às 22h ia para o dia seguinte). **Reversível:** `e0912a6d`, `6885caf9`.
+
+**B1029 (NOVA, da Etapa 161; do Almoxarifado) — o seletor Evento das Notificações ganha os alertas, por uma rota nova.** `GET
+/api/almoxarifado/notificacoes/eventos` devolve os alertas que o sistema conhece (a chave e o título), com a mesma permissão da lista
+(*gerenciar notificações*); a tela soma aos 10 de antes; se a rota falhar, ficam os 10. **Descartado:** copiar os alertas na tela (ficaria
+desatualizada quando entrar um alerta novo); usar a central de Alertas (outra permissão). **Reversível:** `6885caf9`, `3acfec05`.
+
+**B1030 (NOVA, da Etapa 161; do Almoxarifado) — o usuário renomeado aparece uma vez nas opções da Auditoria, com o nome mais recente da
+trilha.** **Descartado:** o nome atual do cadastro de usuários (o usuário apagado sumiria das opções). **Reversível:** `6885caf9`.
+
+**B1031 (NOVA, da Etapa 161; do Almoxarifado) — a busca de fornecedores do Recebimento e das Remessas alcança todos os fornecedores
+ativos** (antes, os 50 primeiros). A permissão é a de antes — quem abre o módulo Almoxarifado (qualquer perfil, inclusive o de chão de
+fábrica e o de consulta) —, e o que sai é só o nome, o nome fantasia e o CNPJ. A busca pelo servidor já existia para a integração; o que
+muda é a tela usá-la. **Descartado:** exigir um perfil para a busca (mudaria quem abre o formulário — é regra de autorização, não desta
+etapa). **Reversível:** `6885caf9`, `3acfec05`.
+
+**B1032 (NOVA, da Etapa 161) — a próxima etapa (162).** Ver a "próxima tarefa detalhada" no plano da Etapa 161. As decisões que esperam
+vocês: as da **B957**, a **B988** e a **B989**; a **B1002** continua pedindo um olhar; a **B1013** (o acento nas buscas); a **C398** (o filtro
+*Status* dos Materiais); a **B1027** (os relatórios do Almoxarifado no dia de Brasília); a **B1025** a **B1031** são reversíveis.
+
 **B898 (NOVA, da Etapa 138) — a próxima etapa (139).** Ver a "próxima tarefa detalhada" no plano da Etapa 138. A **B853** (com a
 **C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
@@ -14649,30 +14707,63 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      código) — os filtros do navegador do Almoxarifado não aparavam e travavam com material sem nome.** O seletor de material da Nova
      requisição e do Novo recebimento, e os filtros dos Estoques mínimos, da Liberação por valor, dos Perfis de acesso e das Regras de
      aprovação. E a lista de Materiais podia mostrar o resultado de um texto anterior. Agora aparam, não travam, e a lista mostra só o último.
-396. **NOVO (da medição da Etapa 160; da Fábrica e do Almoxarifado, anterior a ela; lido no código) — outras listas podem mostrar a resposta
-     de um pedido anterior.** Trocar um filtro depressa nas OPs, Máquinas, Colaboradores, Equipamentos, Relatórios da produção (ao trocar de
+396. **✅ RESOLVIDO NA ETAPA 161 (RN-161.01 a .03; `86242381`, `e0912a6d`, `f2a10ffe`) — NOVO (da medição da Etapa 160; da Fábrica e do Almoxarifado,
+     anterior a ela; lido no código) — outras listas podem mostrar a resposta de um pedido anterior.** *(As treze listas, o painel e os
+     Relatórios só mostram a resposta do último pedido — também a Presença, as Atividades e as Horas extras, que este item não nomeava. O texto
+     abaixo fica como registro.)* Trocar um filtro depressa nas OPs, Máquinas, Colaboradores, Equipamentos, Relatórios da produção (ao trocar de
      aba), Movimentações, Requisições, Recebimentos, Reservas, Inspeções, Não conformidades, no painel do almoxarifado (ao trocar o período) e
      nos Relatórios (ao trocar de relatório com a consulta em andamento — a exportação sai com o relatório novo e os parâmetros do antigo):
      se a resposta do pedido anterior chegar por último, a tela a mostra com o filtro novo escolhido. **O que fazer:** depois de trocar o
      filtro, esperar a lista recarregar; nos Relatórios, consultar de novo antes de exportar. Candidata: a Etapa 161.
-397. **NOVO (da medição da Etapa 160; da Fábrica e do Almoxarifado, anterior a ela; lido no código) — datas pelo dia em UTC.** A data
+397. **✅ RESOLVIDO NA ETAPA 161 (RN-161.04 a .06, B1025, B1026, B1028; `6885caf9`, `e0912a6d`, `db960831`) — NOVO (da medição da Etapa 160; da
+     Fábrica e do Almoxarifado, anterior a ela; lido no código) — datas pelo dia em UTC.** *(O dia da Fábrica, o filtro das Movimentações, a
+     hora mostrada e as datas padrão dos formulários são os de Brasília. **Ficam no dia universal:** os relatórios e o painel do Almoxarifado
+     (**C401**) e os indicadores do Operacional (**C403**). O texto abaixo fica como registro.)* A data
      padrão da Presença e dos Relatórios da produção, os apontamentos e paradas *por dia*, e o filtro de data das Movimentações seguem o dia
      em UTC: depois das 21h (horário de Brasília) o dia é o de amanhã. **O que fazer:** à noite, conferir a data dos filtros. Candidata: a
      Etapa 161 (se mudar o que entra num dia, é decisão — B).
 398. **NOVO (da medição da Etapa 160; do Almoxarifado, anterior a ela; lido no código) — o filtro "Status" dos Materiais e o selo não usam
      a mesma régua.** *"OK"* lista material com o selo *"Baixo"* (o filtro: acima do mínimo; o selo: até 1,5 × o mínimo) e *"Crítico"* lista os
      *"Zerado"*; não há opção *"Baixo"*. **O que fazer:** decidir a régua (é de negócio — do P.O.).
-399. **NOVO (da medição da Etapa 160; do Almoxarifado e da Fábrica, anterior a ela; lido no código) — seletores incompletos.** O *Tipo* das
+399. **✅ RESOLVIDO EM PARTE NA ETAPA 161 (RN-161.07 a .09; `6885caf9`, `e0912a6d`, `3acfec05`) — NOVO (da medição da Etapa 160; do Almoxarifado e
+     da Fábrica, anterior a ela; lido no código) — seletores incompletos.** *(O Evento das Notificações (B1029), os fornecedores do Recebimento —
+     e das Remessas (B1031) — e o Setor dos Colaboradores estão resolvidos. **Ficam, do P.O.:** os tipos do Tipo das Movimentações e o material
+     de cliente nas Reservas/Inspeções.)* O *Tipo* das
      Movimentações não oferece entrada por compra, entrada por devolução, reserva, bloqueio, quarentena e remessa a terceiro; o *Evento* das
      Notificações não tem os 15 alertas; o de fornecedores do Novo recebimento mostra só os 50 primeiros (há a digitação manual); os de
      material das Reservas e Inspeções não têm material de cliente; o *Setor* dos Colaboradores mostra só os setores da lista já filtrada.
      **O que fazer:** para os ausentes, usar *"Todos"*; os tipos das Movimentações e o material de cliente nas Reservas/Inspeções são
      decisão (B). Candidata: a Etapa 161 (o resto).
-400. **NOVO (da medição e da revisão do plano da Etapa 160; anterior a ela; lido no código) — sobras menores.** O QR da etiqueta põe o
+400. **✅ RESOLVIDO EM PARTE NA ETAPA 161 (RN-161.07, .10 a .12; `6885caf9`, `e0912a6d`, `3acfec05`) — NOVO (da medição e da revisão do plano da
+     Etapa 160; anterior a ela; lido no código) — sobras menores.** *(O QR, a Auditoria, os Recebimentos e o Trabalho dos Colaboradores estão
+     resolvidos. **Ficam:** a busca das OPs sem a descrição da OS (acrescentar coluna muda o resultado — B) e o painel operacional antigo que
+     nenhum menu abre.)* O QR da etiqueta põe o
      código na busca dos Materiais (*"MAT-001"* lista também *"MAT-0010"*); as opções de usuário da Auditoria repetem um usuário renomeado; os
      Recebimentos recarregam materiais, pedidos e fornecedores a cada troca de filtro; a busca das Ordens de Produção não olha a descrição da
      OS; o filtro *Trabalho* dos Colaboradores recarrega do servidor à toa; o painel operacional antigo (que nenhum menu abre) tem o mesmo
      defeito da prioridade. **O que fazer:** nada no dia a dia.
+401. **NOVO (da medição da Etapa 161; do Almoxarifado, anterior a ela; lido no código) — os relatórios e o painel do Almoxarifado contam o
+     dia pelo padrão universal.** *Consumo por O.S.*, *Histórico de movimentações*, *Ajustes por motivo*, *Perdas por motivo*, *Materiais mais
+     consumidos*, *Consumo por período*, *Sucata (financeiro)*, *Custo por projeto*, *Qualidade de fornecedores* e o painel (*movimentações
+     hoje*, o gráfico de 7 dias): depois das 21h, o dia é o de amanhã. Desde a Etapa 161 a lista das Movimentações já filtra pelo dia de
+     Brasília, então o mesmo período pode diferir entre a lista e o *Histórico* nas movimentações feitas entre 21h e meia-noite. **O que
+     fazer:** para o período exato, usar a lista das Movimentações. Decisão: **B1027**.
+402. **✅ NOVO E RESOLVIDO NA ETAPA 161 (`6d84c427`; achado ao rodar os testes da etapa, da Fábrica, anterior a ela; reproduzido) — a coluna Data
+     da Presença e das Horas extras mostrava o dia anterior.** A presença de 19/10 aparecia *"18/10/2026"* (a data pura lida como meia-noite
+     universal). Agora mostra o dia gravado; o filtro já estava certo.
+403. **NOVO (da medição da Etapa 161; da Fábrica/Operacional, anterior a ela; lido no código) — os indicadores do Operacional contam o "hoje"
+     pelo padrão universal.** Os indicadores de OEE, manutenção (preventivas e corretivas do dia, próximas 7 dias), inspeções do dia e as
+     atividades/OS concluídas hoje do Operacional comparam com o dia universal. **O que fazer:** à noite, ler esses números como os do dia
+     seguinte. Candidata a uma etapa futura (medir quais telas montam esses indicadores antes).
+404. **NOVO (da revisão da Etapa 161; do Almoxarifado, anterior a ela; lido no código) — a expiração automática das reservas e o alerta de
+     reserva parada contam o dia pelo padrão universal.** Entre 21h e meia-noite, a rotina de expiração considera vencida a reserva que
+     vence **hoje** (o dia universal já é amanhã) e a libera três horas antes; a tela de Reservas, desde a Etapa 161, mostra o selo *vencida*
+     pelo dia de Brasília. A data de expiração padrão calculada pelo sistema também sai do dia universal. **O que fazer:** nada no dia a dia;
+     a reserva que precisa durar o dia inteiro pode ser marcada para o dia seguinte. Não foi mexido: é uma porta que solta reserva (regra de
+     saldo) — candidata a etapa própria.
+405. **NOVO (da revisão da Etapa 161; do Almoxarifado, anterior a ela; lido no código) — os "dias em espera" das Inspeções pendentes contam
+     com três horas de erro** (a hora do recebimento lida como local). Perto da virada do dia, a contagem pode mostrar um dia a mais ou a
+     menos. **O que fazer:** nada.
 ### D. Limitações declaradas— são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -16004,6 +16095,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(161) As respostas velhas e o dia local, o que ficou de fora.** Os relatórios e o painel do Almoxarifado no dia universal (**C401**,
+  **B1027**); os indicadores do Operacional (**C403**); os tipos do filtro das Movimentações e o material de cliente nas Reservas/Inspeções
+  (do P.O.); a expiração automática das reservas pelo dia universal (**C404**); os dias em espera das inspeções (**C405**); a busca de
+  fornecedores mostra até 50 por busca; o QR some ao editar o material e não acha o inativo; a lista de pedidos pendentes
+  do Recebimento só atualiza ao reabrir a tela. O deslocamento do fuso é o de agora para todos os registros (sem horário de verão desde 2019).
+  Nenhuma porta de saldo, permissão ou trava mudou.
 - **(160) Os filtros e as buscas da Fábrica e do Almoxarifado, o que ficou de fora.** O acento continua contando nas buscas (*"joao"* não
   acha *"JOÃO"* — **B1013**, **B1019**). As outras listas que podem mostrar a resposta de um pedido anterior (**C396**), as datas em UTC
   (**C397**), o filtro *Status* dos Materiais (**C398**, do P.O.), os seletores incompletos (**C399**) e as sobras menores (**C400**) ficam
@@ -17067,6 +17164,14 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(161) Nenhum clique foi dado no navegador.** As rotas foram provadas pelo servidor de verdade (em pasta vazia, no fuso universal e com o
+relógio adiantado para as 22h de Brasília de daqui a dois dias, de modo que o dia de Brasília, o universal e o do banco sejam três dias
+diferentes); as telas em jsdom com a comunicação simulada (respostas lentas e falhas do pedido anterior). Vale conferir à mão, **depois das
+21h**: um apontamento em **Fábrica → Apontamentos** e a aba *Produção* dos **Relatórios** com o período de hoje; a **Presença** (o filtro
+abre em hoje) e um colaborador presente em **Colaboradores** (*"Disponível"*); uma movimentação em **Almoxarifado → Movimentações** (a hora
+e o filtro do dia); trocar de relatório com a consulta em andamento em **Relatórios**; o campo *"Buscar fornecedor (nome ou CNPJ)..."* no
+**Novo recebimento**; e o seletor *Evento* das **Notificações**.
 
 **(160) Nenhum clique foi dado no navegador.** As rotas foram provadas pelo servidor de verdade (em pasta vazia, com cadastros gravados
 pela rota — em maiúsculas — e antigos em minúsculas e com espaço gravados por fora, contados contra o banco, e um segundo boot com a
@@ -32342,9 +32447,119 @@ mostra; nenhuma injeção; nenhum portão mudou); o de **sabotagem** fez 134 sab
 gravada com espaço, o seletor do recebimento e os filtros das Configurações sem teste, a falha do pedido anterior) e todas ganharam o
 cenário que as derruba. Commits `eaf682e9`, `59e3972c`, `a0268282`, `d5cd52ea`, `93c1dace` e `ff3e7d78` (a correção da revisão).
 
+## Etapa 161 — As listas que mostravam o resultado de um filtro anterior, o dia que virava às 21h, e os seletores incompletos (2026-10-19)
+
+Uma etapa de **consertos técnicos** na Fábrica e no Almoxarifado, sem regra de acesso nova e sem mexer em saldo. Três famílias de
+defeito, todas de antes. **(1) A lista que mostra o filtro velho:** em treze listas, trocar o filtro depressa (ou excluir um item logo
+depois de filtrar) deixava dois pedidos em voo, e o que chegasse por último — às vezes o do filtro anterior — trocava a lista; o aviso de
+erro de um pedido que ninguém mais esperava aparecia, e o *carregando* sumia antes da hora. Nos **Relatórios** do Almoxarifado era pior:
+trocar de relatório com a consulta em andamento mostrava as linhas do relatório anterior com as colunas do novo, e o **Exportar XLSX**
+baixava o relatório novo com os filtros do antigo. **(2) O dia que vira às 21h:** o sistema guarda as horas no padrão universal (3 h à
+frente de Brasília) e várias telas tiravam o *dia* dali sem converter — das 21h à meia-noite, o apontamento, a parada, a movimentação e a
+presença caíam no dia **seguinte**; o colaborador presente aparecia *"ausente"* depois das 21h; os formulários da Fábrica abertos à noite
+vinham com a data de amanhã (e a gravavam); e várias telas do Almoxarifado mostravam a hora 3 h adiantada. **(3) Os seletores
+incompletos:** o *Setor* dos Colaboradores encolhia ao filtrar; o *Evento* das Notificações não tinha os alertas; o seletor de
+fornecedores do Recebimento e das Remessas só tinha os 50 primeiros; o usuário renomeado aparecia duas vezes na Auditoria; o QR da etiqueta
+mostrava também os materiais de código parecido.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Fábrica** (Ordens de produção, Máquinas, Colaboradores, Equipamentos, Presença, Atividades, Horas extras) e **Almoxarifado** (Movimentações, Requisições, Recebimentos, Reservas, Inspeções, Não conformidades, o painel ao trocar o período), trocar o filtro depressa: a lista podia ficar com o resultado do filtro anterior, com um aviso de erro velho | Só o resultado do último filtro; o aviso e o *carregando* também só do último — **C396** resolvido |
+| **Relatórios da produção**, trocar de aba: a aba nova desenhava, por um instante, os números da anterior | Começa vazia e mostra só os seus — **C396** |
+| **Almoxarifado → Relatórios**, consultar um relatório e trocar para outro antes de responder: as linhas do primeiro com as colunas do segundo; **Exportar XLSX** baixava o segundo com os filtros do primeiro | O primeiro é descartado, o **Consultar** do segundo vale na hora, e a exportação usa os filtros da consulta do relatório aberto — **C396** |
+| Um apontamento ou uma parada às **22h30** de 19/10: nos **Relatórios da produção** e nos filtros de data entrava no dia **20** | Entra no dia 19 — **C397** resolvido (**B1025**) |
+| **Painel da produção** depois das 21h: *produção de hoje*, *paradas de hoje*, *atrasadas*, *concluídas no mês* e a disponibilidade contavam pelo dia de amanhã | Pelo dia de Brasília — **C397** (**B1025**) |
+| **Colaboradores** depois das 21h: o presente de hoje aparecia *"Ausente"* | *"Disponível"*/*"Parado"* — **C397** (**B1025**) |
+| **Almoxarifado → Movimentações**, a movimentação das 22h30 de 19/10: aparecia *"20/10 01:30"* e saía do filtro do dia 19 | Aparece *"19/10 22:30"* e entra no dia 19 — **C397** (**B1025**, **B1026**) |
+| **Extrato do material**, **painel** (últimas movimentações, requisições abertas), **Recebimentos**, **Requisições**, **Inspeções**, **Devoluções**: a hora (ou o dia) 3 h adiantada | A de Brasília — **C397** (**B1026**) |
+| **Reservas**, à noite, a reserva que vence hoje: aparecia *vencida* | Só no dia seguinte — **C397** (a expiração automática continua pelo dia universal — **C404**) |
+| **Presença**, **Hora extra**, **Nova OS** (também a aberta pelo Comercial), **Nova OP**, **Nova atividade** abertos depois das 21h: a data de amanhã (a atividade com a hora 3 h adiantada); editar a atividade mostrava a hora 3 h adiantada | O dia e a hora de agora — **C397** (**B1028**) |
+| **Presença** e **Horas extras**, a coluna *Data*: mostrava o dia **anterior** ao gravado (19/10 aparecia 18/10) | O dia gravado — **C402**, novo e resolvido |
+| **Colaboradores**, escolher um *Setor*: os outros setores sumiam do seletor; mudar o *Trabalho* recarregava a lista | Os setores continuam todos; o *Trabalho* filtra sem recarregar — **C399**/**C400** |
+| **Notificações**, o seletor *Evento*: só 10 tipos (os alertas — *"Calibração vencendo"*, *"Não conformidade aberta"*… — não filtravam) | Os 10 e os alertas do sistema — **C399** (**B1029**) |
+| **Novo recebimento** / **Nova remessa a terceiro**, o fornecedor: só os 50 primeiros em ordem alfabética | O campo *"Buscar fornecedor (nome ou CNPJ)..."* (*"Buscar terceiro (nome ou CNPJ)..."*) procura em todos — **C399** (**B1031**) |
+| **Auditoria**, o seletor de usuário: quem mudou de nome aparecia duas vezes | Uma vez, com o nome mais recente — **C400** (**B1030**) |
+| Ler o **QR da etiqueta** do *MAT-001*: a lista mostrava também o *MAT-0010* | Só o material da etiqueta — **C400** |
+| **Recebimentos**, trocar o filtro: recarregava materiais, pedidos e fornecedores | Só a lista — **C400** |
+
+### As regras, com o cenário exato
+
+**1. Só vale o último pedido (C396).** Em **Almoxarifado → Reservas**, troque o *Status* de *"Ativa"* para *"Todos"* e logo para
+*"Liberada"*: a lista termina com as liberadas, mesmo que a resposta de *"Todos"* demore mais. O mesmo nas outras doze listas (Fábrica:
+Ordens de produção, Máquinas, Colaboradores, Equipamentos, Presença, Atividades, Horas extras; Almoxarifado: Movimentações, Requisições,
+Recebimentos, Inspeções — pendentes e histórico —, Não conformidades) e no painel do Almoxarifado ao trocar *30*/*90 dias*. Se o pedido
+anterior falhar depois de o último ter começado, nenhuma mensagem de erro aparece. Nenhuma mensagem nova.
+
+**2. Os Relatórios ao trocar (C396).** Em **Almoxarifado → Relatórios**, escolha *Histórico de movimentações*, preencha o período e clique
+**Consultar**; antes de responder, clique em outro relatório: a tela do novo fica vazia, com **Consultar** liberado (não *"Consultando..."*),
+e a resposta do primeiro não aparece. Consulte o novo e clique **Exportar XLSX**: o arquivo é o do novo, com os filtros dele, e o nome leva
+o dia de hoje (também depois das 21h). Nos **Relatórios da produção**, trocar de aba mostra a aba nova vazia até os números dela chegarem.
+
+**3. O dia de Brasília (C397, B1025).** Depois das 21h, em **Fábrica → Apontamentos**, inicie e finalize um apontamento; em **Fábrica →
+Relatórios**, aba *Produção*, com o período de hoje: ele aparece na linha de **hoje** (antes, na de amanhã — e nem entrava no período).
+No **Painel da produção**, *Produção hoje* e *Paradas hoje* o contam. Em **Fábrica → Presença**, o filtro abre no dia de hoje; lance a
+presença de um colaborador como *"Presente"* (a data já vem com hoje); em **Colaboradores** ele aparece *"Disponível"* (antes,
+*"Ausente"*). Em **Almoxarifado → Movimentações**, uma movimentação feita às 22h30 aparece com *"22:30"* e com a data de hoje, e o filtro
+*De*/*Até* com a data de hoje a mostra. **Fica como estava (B1027):** os relatórios do Almoxarifado (*Histórico de movimentações*, *Consumo
+por período* etc.) e o painel do Almoxarifado ainda contam o dia pelo padrão universal — a movimentação das 22h30 aparece no *Histórico de
+movimentações* do dia seguinte (**C401**).
+
+**4. As datas padrão dos formulários (C397, B1028).** Depois das 21h, abra **Fábrica → Presença → Nova**, **Horas extras → Nova**, **Ordens
+de serviço → Nova** (e a OS criada pelo Comercial a partir de uma proposta), **Ordens de produção → Nova** e **Atividades → Nova**: a data é
+a de hoje, e a atividade vem com a hora de agora. Editar uma atividade mostra a hora em que ela foi lançada.
+
+**5. As datas da Presença e das Horas extras (C402).** Lance uma presença para 19/10: a coluna *Data* mostra *"19/10/2026"* (antes,
+*"18/10/2026"*).
+
+**6. O Setor e o Trabalho dos Colaboradores (C399, C400).** Em **Fábrica → Colaboradores**, escolha um *Setor*: o seletor continua com
+todos os setores que a tela já mostrou. Mude o *Trabalho* (*"Trabalhando"*, *"Disponível"*…): a lista filtra na hora, sem recarregar.
+
+**7. O Evento das Notificações (C399, B1029).** Em **Almoxarifado → Notificações**, o seletor *Evento* tem, além dos 10 de antes, os
+alertas do sistema (*"Calibração vencendo"*, *"Estoque sem consumo"*, *"Não conformidade aberta"*…); escolha um e a lista mostra só as
+notificações dele. A lista de eventos tem a mesma permissão da lista de notificações (*gerenciar
+notificações*); quem não a tem recebe do servidor *"Sem permissão para esta operação"*, como na lista.
+
+**8. O fornecedor do recebimento e o terceiro da remessa (C399, B1031).** Em **Almoxarifado → Recebimentos → Novo**, digite no campo
+*"Buscar fornecedor (nome ou CNPJ)..."* parte do nome (com ou sem acento na mesma grafia, em qualquer caixa) ou do CNPJ: o seletor ao lado
+passa a ter os fornecedores ativos que casam (até 50), mesmo os que vinham depois dos 50 primeiros. *%* e *_* valem como texto. O que se
+grava não muda. O mesmo em **Remessas a terceiros → Nova** (*"Buscar terceiro (nome ou CNPJ)..."*); o terceiro já escolhido continua no
+seletor.
+
+**9. A Auditoria (C400, B1030).** Em **Almoxarifado → Auditoria**, um usuário que mudou de nome aparece uma vez no seletor *Usuário*, com
+o nome mais recente da trilha; filtrar por ele mostra os atos com os dois nomes.
+
+**10. O QR da etiqueta (C400).** Imprima a etiqueta do material *MAT-001* e leia o QR com o **Scanner** (com um *MAT-0010* cadastrado): a
+lista mostra só o *MAT-001*, com o código na busca. Mexer na busca ou clicar **Limpar filtros** mostra a lista normal.
+
+**11. Os Recebimentos (C400).** Trocar o filtro *Status* ou *Etapa* recarrega só a lista. A lista de pedidos pendentes do formulário de
+recebimento carrega ao abrir a tela (recarregue a página para atualizá-la).
+
+### O que esta etapa NÃO cobre
+
+- Os relatórios e o painel do Almoxarifado continuam contando o dia pelo padrão universal (**C401**, **B1027** — etapa própria).
+- Os indicadores do Operacional (OEE, manutenção preventiva/corretiva do dia, inspeções do dia) continuam pelo dia universal (**C403**).
+- Os tipos do filtro *Tipo* das Movimentações e os seletores de material das Reservas/Inspeções com o material de cliente (**C399** — do
+  P.O.); o filtro *Status* dos Materiais (**C398** — do P.O.); ignorar o acento nas buscas (**B1013**).
+- O seletor de fornecedores mostra até 50 resultados por busca; o fornecedor inativo não aparece (como antes).
+- Nenhuma porta de saldo, permissão ou trava mudou.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 161 entregue (2026-10-19):** **as listas que mostravam o resultado de um filtro anterior, o dia que virava às 21h e os seletores
+  incompletos** (consertos técnicos, sem regra de acesso nova e sem mexer em saldo). Treze listas e os Relatórios só mostram a resposta do
+  último pedido (**C396**); o dia da Fábrica e o filtro das Movimentações são o de Brasília (**B1025**), a hora mostrada também (**B1026**), e
+  os formulários abertos à noite vêm com a data de hoje (**B1028** — **C397**); a data da Presença e das Horas extras não aparece mais um dia
+  antes (**C402**); o *Setor*, o *Evento* das Notificações (**B1029**), o fornecedor além dos 50 (**B1031**), o usuário da Auditoria (**B1030**) e o
+  QR (**C399**, **C400**). Commits `86242381`, `e0912a6d`, `6885caf9`, `f2a10ffe`, `db960831`, `3acfec05`, `6d84c427` e `84353119` (a correção da revisão). **O que é
+  seu:** a **B1027** (os relatórios do Almoxarifado no dia de Brasília — uma pergunta); as decisões **B1025**, **B1026**, **B1028** a **B1031**
+  (reversíveis); os avisos **C401** e **C403**; as perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **B988**, **B989**, **B1013**,
+  **C277**, **C312**, **C314**, **C316**, **C330**, **C398**); as limitações **(161)** em D e a verificação **(161)** em F. Nenhuma consulta nova
+  antes do deploy.
+  **Próxima: Etapa 162 — ver a "próxima tarefa detalhada" no plano da Etapa 161.**
 
 - **Etapa 160 entregue (2026-10-19):** **os filtros e as buscas da Fábrica e do Almoxarifado que não casavam, e os cadastros que respondem o
   gravado** (consertos técnicos, sem regra de acesso nova e sem mexer em saldo). O filtro *Prioridade* das OS filtra e o kanban tira as
@@ -32356,7 +32571,7 @@ cenário que as derruba. Commits `eaf682e9`, `59e3972c`, `a0268282`, `d5cd52ea`,
   antes — a **C398** é régua sua); as perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **B988**, **B989**, **B1013**, **C277**,
   **C312**, **C314**, **C316**, **C330**); a **B1002** (os números mudam); as limitações **(160)** em D e a verificação **(160)** em F. Nenhuma
   consulta nova antes do deploy.
-  **Próxima: Etapa 161 — ver a "próxima tarefa detalhada" no plano da Etapa 160.**
+  **Próxima era a Etapa 161.**
 
 - **Etapa 159 entregue (2026-10-19):** **os filtros e as buscas do Comercial que não filtravam, a busca com letra acentuada, e o cadastro
   que responde o gravado** (consertos técnicos no Comercial, sem regra de acesso nova). O filtro *Segmento* dos clientes filtra (**B1012** —

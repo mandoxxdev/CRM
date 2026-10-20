@@ -134,7 +134,9 @@ mesmo portão da lista que a consome.
 - **B1030 — o nome do usuário nas opções da Auditoria é o da linha mais recente da trilha.** **Descartado:** o nome atual do cadastro de
   usuários (outra tabela; o usuário apagado sumiria das opções).
 - **B1031 — a busca de fornecedores do Recebimento e das Remessas alcança todos os fornecedores ativos** (antes, os 50 primeiros). O
-  portão da rota é só o login (de antes): quem abre o Recebimento passa a achar qualquer fornecedor ativo pelo nome ou CNPJ. **Descartado:**
+  portão da rota é o login **mais o acesso ao módulo** (o `app.use` do prefixo — *esta frase dizia "só o login"; **estava errada**, Fase 5 r2*),
+  de antes: quem abre o Recebimento (qualquer perfil, inclusive PRODUÇÃO e CONSULTA) passa a achar qualquer fornecedor ativo pelo nome ou CNPJ
+  (só id, razão social, nome fantasia e CNPJ). **Descartado:**
   pôr portão de perfil na rota (mudaria quem abre o formulário — é regra de autorização, não desta etapa).
 - **B1032 — a próxima etapa (162).**
 
@@ -199,22 +201,23 @@ mesmo portão da lista que a consome.
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 (tronco, navegador)** — `useUltimoPedido` + `dataLocal.js`, com testes (o controle positivo: o contador sem o incremento; o
+- [x] **T1 (tronco, navegador)** — `86242381`. — `useUltimoPedido` + `dataLocal.js`, com testes (o controle positivo: o contador sem o incremento; o
   `hojeLocalISO` pelo `toISOString`). O teste de `dataLocal` declara o fuso: guarda que derruba se o processo estiver em UTC (o cenário
   23h30 local só prova algo fora de UTC).
-- [ ] **T2 (tronco, servidor)** — `diaLocal.js` + exportar `offsetMinutos`.
-- [ ] **T3 (servidor, depois de T2)** — RN-161.04 (`producaoService.js`, `index.js` do *presente hoje*), RN-161.06 (servidor), RN-161.09
+- [x] **T2 (tronco, servidor)** — `6885caf9` (junto da T3: o utilitário só tem teste pela rota). — `diaLocal.js` + exportar `offsetMinutos`.
+- [x] **T3 (servidor, depois de T2)** — `6885caf9`. — RN-161.04 (`producaoService.js`, `index.js` do *presente hoje*), RN-161.06 (servidor), RN-161.09
   (servidor), RN-161.10, a rota da RN-161.08. Teste `server/tests/api/respostasVelhasEDiaLocal.api.test.js` pelo `index.js` real (molde:
   `filtrosDaFabricaEAlmoxarifado.api.test.js`), com o processo filho em `TZ=UTC` (prova que a régua não depende do `TZ`) e com um *preload* que
   adianta o relógio do JavaScript em 2 dias (Fase 2 I2): o *hoje* novo vem do JS, o antigo vinha do `date('now')` do SQLite — divergem a
   qualquer hora. Cada cenário de instante tem a metade positiva (o das 22h entra no dia local) e a negativa (o das 01h30 do dia local
   seguinte, mesmo dia UTC, não entra).
-- [ ] **T4 (galho, navegador da Fábrica — worktree própria)** — RN-161.01, RN-161.05, RN-161.07. Arquivo de teste novo
+- [x] **T4 (galho, navegador da Fábrica — worktree própria)** — `e0912a6d` (integrada por cherry-pick). — RN-161.01, RN-161.05, RN-161.07. Arquivo de teste novo
   `client/src/components/operacional/Etapa161Fabrica.test.js`; cada lista com o cenário da resposta lenta **e** o da falha do pedido
   anterior (a lição do r3 da 160).
-- [ ] **T5 (galho, navegador do Almoxarifado — worktree própria)** — RN-161.02, RN-161.03, RN-161.06 (a hora), RN-161.08 (tela, contra o
+- [x] **T5 (galho, navegador do Almoxarifado — worktree própria)** — `f2a10ffe`, `db960831`, `3acfec05` (integradas por cherry-pick). — RN-161.02, RN-161.03, RN-161.06 (a hora), RN-161.08 (tela, contra o
   contrato), RN-161.09 (tela), RN-161.11, RN-161.12. Arquivo de teste novo `client/src/components/almoxarifado/Etapa161Almoxarifado.test.js`.
-- [ ] **T6 (integração, cruza galhos)** — no teste do servidor: a movimentação das 22h30 de 19/10 (gravada `2026-10-20 01:30:00`) entra no
+- [x] **T6 (integração, cruza galhos)** — `6885caf9` (no teste do servidor).
+- [x] **Fase 4** — `6d84c427` (C402, o achado da T4). **Fase 5** — `84353119` (as asserções e os resíduos; ver abaixo). — no teste do servidor: a movimentação das 22h30 de 19/10 (gravada `2026-10-20 01:30:00`) entra no
   filtro do dia 19 **pela rota**, e o mesmo `created_at` formatado pela regra da tela (o `Z`) dá 19/10 22:30; e o apontamento das 22h30
   entra no `porDia` do dia 19 **pelo relatório** e na lista filtrada pelo dia 19 **pela rota de apontamentos**.
 
@@ -228,3 +231,120 @@ condutor, na worktree da etapa, sob a trava de máquina.
 3. O deslocamento do fuso **só** em coluna de instante; coluna só de data compara com o hoje local.
 4. Quem chama a função de carga com `await` (Requisições, Recebimentos) não pode passar a receber erro.
 5. Nenhuma porta de saldo, permissão ou trava muda.
+
+## Execução — o que divergiu do plano
+
+- **T2 foi junto da T3** (`6885caf9`): o `diaLocal.js` só tem prova pela rota (e, depois da Fase 5, pelo teste direto do utilitário no mesmo
+  arquivo).
+- **O teste do servidor achou duas fraquezas dele mesmo na primeira rodada de sabotagem** (26 sabotagens, K12 sobreviveu): as datas fixas
+  dos cenários (19–20/10/2026) coincidiam com o *hoje* real — a parada das 22h30 de 19/10 caía no `date('now')` do SQLite; e o cenário do
+  painel dependia da máquina do cenário anterior (caía em cascata sem chegar às próprias asserções). As datas fixas foram para 2025-03 e o
+  painel ganhou máquina própria; as 29 sabotagens caíram depois.
+- **A T4 achou um defeito novo da família** (C402): a coluna *Data* da Presença e das Horas extras mostrava o dia anterior (a data pura
+  lida como meia-noite UTC) — consertado na Fase 4 (`6d84c427`).
+- **A T5 criou dois módulos de tela que o plano não previa** (`instanteDoBanco.js` com o `formatarInstanteDoBanco`, e o
+  `useBuscaFornecedores.js`), dentro de `components/almoxarifado` (o galho não podia tocar `utils`); e formatou também colunas de
+  Requisições e do Extrato que o plano não listava (todas conferidas como `CURRENT_TIMESTAMP`/`datetime('now')`). Nos Recebimentos, os
+  pedidos pendentes passaram a carregar separados dos fornecedores (antes, a falha de um derrubava o outro).
+- **A frase "as telas irmãs já acrescentam o `Z`" estava errada** (Fase 2 I1) e **a B1031 dizia "o portão é só o login" — estava errada**
+  (Fase 5 r2: é o login mais o acesso ao módulo, pelo `app.use` do prefixo) — as duas corrigidas no texto, dizendo que estavam.
+- **Os dois commits intermediários da T5** (`f2a10ffe`, `db960831`) foram montados com versões intermediárias dos arquivos para ficar um
+  assunto por commit; só o estado final rodou a suíte (declarado pelo executor).
+
+## Fase 5 — revisão adversarial (três revisores frescos, em paralelo, sob a trava)
+
+- **r1 (regra) — 0 achados.** Sonda do serviço da produção com o relógio fixo às 22h45 de Brasília (a data planejada gravada, o período
+  padrão, o `porDia`, a lista, o painel); o `diaLocal` nas viradas; as opções da Auditoria no SQL. Conferido certo: todo `setX` das listas
+  pela guarda; o descarte é `return`; cada coluna pela forma como é gravada; os formulários; o leitor de instante só em
+  `CURRENT_TIMESTAMP`. **Resíduos de antes** (fora das RN, sem regressão): a data das Inspeções (pendentes e histórico) e das Devoluções
+  lida como hora local, e o *hoje* das Reservas pelo `toISOString` — **consertados na correção da Fase 5**. Medida (não achado): as opções
+  da Auditoria custam 267 ms contra 15 ms com 300 mil linhas.
+- **r2 (autorização) — 0 achados.** O `index.js` real em pasta vazia no HEAD e na base `256f4f05`, onze colunas de usuário (sem token, sem
+  nada, só Comercial, só Operacional, só Almoxarifado, os cinco perfis, admin): fora a rota nova (404 → o portão da lista), as respostas
+  401/403/200 são idênticas. A busca de fornecedores expõe só id, razão social, nome fantasia e CNPJ de ativo; injeção (`') OR 1=1--`,
+  arrays e objetos do `qs`, 7 mil e 50 mil caracteres, `%`, `_`, `\`) sem efeito; nenhum valor do usuário cai na posição do modificador do
+  SQLite (`+1 day`, `localtime`, `unixepoch` em `data_inicio`/`data_fim` nas seis rotas, com controle positivo). **Correção de texto:** a
+  B1031.
+- **r3 (sabotagem, worktree própria `CRM-wt-e161-r3`) — 46 sabotagens (22 servidor, 24 telas): 27 caíram pela asserção certa; 13
+  sobreviveram por falta de asserção; 6 equivalentes ou inalcançáveis (provados: C02, C05 no V8, C11, C13, C14; C04 e C06 pelo `NOT NULL`
+  das colunas).** As faltas: o painel com a massa que não distinguia as duas réguas (S05, S08 — as paradas de 1 min coincidiam), a data
+  planejada da OP criada (S02), o `porMaquina` (S10), a virada do mês (S13), o nome fantasia (S25); nas telas, a aba já aberta (C01), o
+  *Limpar filtros* do QR (C07), a busca duplicada de fornecedores (C08), a Remessa sem formulário (C09), o texto que fica ao fechar (C10), o
+  evento sem rótulo (C12), o vazio (C17), o *Consumo por O.S.* (C19), o terceiro duplicado (C27), o subtítulo e o vazio do QR (C30, C31).
+- **Correção da Fase 5 (`84353119`):** as asserções de todos os sobreviventes e os resíduos do r1. **Controles da correção (todos caíram pelo
+  cenário deles):** F01–F06 no servidor (as sabotagens S02, S05, S08, S10, S13, S25 reaplicadas) e 16 nas telas (C01, C07, C08, C09, C10,
+  C12, C17, C19, C27, C30, C31, C16/C32 nas Requisições — nos Recebimentos não há chamador com `await` —, e os quatro resíduos). **Achados
+  novos, de antes, registrados:** a expiração automática das reservas e o alerta de reserva parada pelo dia UTC (**C404** — porta que solta
+  reserva: não mexida) e os *dias em espera* das Inspeções com 3 h de erro (**C405**).
+
+## Suítes (lidas na saída, `scratchpad/e161/`)
+
+- **Base (antes de qualquer código, `base-api.log`, às ~21h40 locais):** `test:api` **480/480**.
+- **Antes de `86242381` (T1):** client **162** suítes / **2005** testes.
+- **Antes de `6885caf9` (T3, `t3-*.log`, às ~22h10 — dentro da janela em que o dia UTC já é amanhã):** `test:api` **481/481**
+  (`respostasVelhasEDiaLocal` **9/0**); `test:almoxarifado` **44/0**; `test:validation`/`safealter`/`sqlite` **4/0, 3/0, 16/0**.
+- **Bateria 1 — antes de `6d84c427` (com a T4 e a T5 integradas, `b1-*.log`):** client **164** suítes / **2070** testes; `CI=true build`
+  *Compiled successfully*; revisão obrigatória da proposta **23/23** scripts (invariantes: *"TODOS OS INVARIANTES OK"*) + editor **39/39**.
+- **Bateria 2 — antes de `84353119` (depois da Fase 5 — também a do fechamento; depois só mudaram documentos, `b2-*.log`):** `test:api`
+  ****481/481** arquivos** (`respostasVelhasEDiaLocal` **10/0**); `test:almoxarifado` **44/0**; `test:validation`/`safealter`/`sqlite` **4/0, 3/0, 16/0**;
+  client **164** suítes / **2086** testes; `CI=true build` *Compiled successfully*; revisão obrigatória da proposta **23/23** + editor
+  **39/39** (só documentos e telas do Almoxarifado/Fábrica mudaram depois da bateria 1 — a proposta não foi tocada; rodada de novo no
+  fechamento: ****23/23** + editor **39/39****).
+
+## Retro (4 números)
+
+1. **Rodadas de correção até verde:** **1** — a Fase 5 (as asserções e os resíduos). As tasks ficaram verdes na primeira aplicação; o teste
+   do servidor teve uma rodada interna de ajuste antes do commit (as datas fixas e o painel em cascata, achados pela própria sabotagem).
+   Testes antigos mudados: **0**.
+2. **Achados da revisão:** Fase 2 — **0 Critical + 4 Important + 11 Minor**, todos reais (o mais caro: a afirmação errada de que as telas
+   irmãs já mostravam a hora certa — com só a lista consertada, a mesma movimentação apareceria com duas horas diferentes; e o teste do
+   *hoje* que passaria vazio fora das 21h–24h). Fase 5 — r1 **0** (2 resíduos de antes, consertados); r2 **0** (1 correção de texto); r3
+   **13** faltas de asserção reais + **6** equivalentes/inalcançáveis provados; **0** ruído. **O que mais pesou:** a massa de teste do painel
+   com valores iguais nas duas réguas (a contagem coincidia) — o mesmo princípio de "sabote a posição", agora na **massa**: o cenário tem de
+   ter números diferentes de cada lado da régua.
+3. **Paralelismo:** **2** galhos de código em paralelo de fato (T4 Fábrica e T5 Almoxarifado, worktrees próprias) enquanto o condutor fazia o
+   servidor — **0** retrabalho entre eles (nenhum arquivo em comum; o contrato da rota nova congelado bastou para a T5 testar contra o
+   mock); **3** leitores na Fase 0, **1** revisor na Fase 2, **3** revisores em paralelo na Fase 5 e **1** executor da correção da Fase 5 em
+   paralelo com o condutor (navegador × servidor) — **0** incidente de trava.
+4. **Defeito que escapou:** *(preencher na Etapa 162)*.
+
+## Próxima tarefa detalhada — Etapa 162
+
+*(A série desta etapa foi B1025–B1032, C396 e C397 resolvidos, C399 e C400 resolvidos em parte, C401–C405 novos (C402 resolvido), nenhuma
+A — a 162 começa em **B1033**, **C406**, **A104**; confira com `grep -oE` antes.)*
+
+**Escolhida: o dia de Brasília no resto do Almoxarifado e do Operacional — C401 (os 9 relatórios e o painel do Almoxarifado), C403 (os
+indicadores do Operacional), C405 (os dias em espera) — e medir a C404 antes de decidir.** (1) **C401** — `reportService.js` (as nove
+funções com `DATE(x.created_at) >= ?`, a `DATE(r.data_recebimento)` da qualidade de fornecedores, a `DATE(s.destino_registrado_em)` da
+sucata) e o painel (`routes/almoxarifado.js:500`, `:522` — *movimentações hoje*, o gráfico de 7 dias) pelo `diaLocal`
+(`date(col, modificadorDoFuso())` em coluna de instante; o *hoje* pelo `hojeLocalISO`). **Medir antes** os ~17 arquivos de teste que tocam
+esses relatórios — vários calculam *hoje* em UTC (medido nesta etapa: 9 arquivos com `toISOString().slice(0,10)`/`date('now')`) e passariam
+a falhar só entre 21h e meia-noite: cada um precisa do *hoje* pela mesma régua, ou do relógio adiantado (`tests/helpers/relogioAdiantado.js`).
+Os números dos relatórios mudam (**B** — é a pergunta da **B1027**; o caminho reversível é mudar e registrar). Os *Indicadores*
+(`relatorioIndicadores`, `datetime('now','-N days')`) são janela relativa — medir se mudam. (2) **C403** — os `date('now')` do Operacional
+em `index.js` (OEE, manutenção preventiva/corretiva, inspeções do dia, atividades/OS concluídas hoje, `:21857`…`:22173`): **medir antes quais
+rotas o `App.js` monta** (o painel operacional antigo não é montado — C400) e a forma de cada coluna (instante × só data). (3) **C405** — o
+`diasEmEspera` de `InspecoesAlmoxarifado.js:109` pelo `lerInstanteDoBanco`. (4) **C404** — a expiração automática das reservas
+(`reservationService.js:139`, `date(expira_em) < date('now')`), o alerta de reserva parada (`alertRegistry.js:564`) e o padrão do
+`expira_em` (`stockService.js:3688`): **só medir e decidir** — a expiração solta reserva (não distribui, então não pega a trava — CLAUDE.md,
+B441), e trocar a régua do dia é seguro só se nada mais muda; se for implementar, a régua da data e mais nada, com o teste da expiração às
+22h (relógio adiantado). **Pontos de atenção:** (1) a trava de máquina (um `test:api` por vez); (2) o modificador **só** em coluna de
+instante; (3) a massa de teste com valores **diferentes** de cada lado da régua (a lição do r3 desta etapa); (4) nenhuma porta de saldo,
+permissão ou trava muda, salvo a régua da data da C404 se decidida.
+
+**Dependem do P.O. — NÃO implemente:** a lista inteira do plano da 152 — **B853**/**C279**, **B808**, **B755**, **B761**/**C239**, **C224**, o
+resto da **C225**, **C228**, **C219**, **C230**, o reparo da **C246** e a **C247**, a tabela de conversões e o grupo acima de família, a régua do
+tempo de recebimento (E2), **C268**, **C269**, **C275**, **C276**, **C277**, **C109**, **C117**/**C118**, **C139**, **C278**; na 05, os itens de
+produto e a **C198**; na 06, a **B11** e a Engenharia; na 21, a valorização por cliente e previsto × realizado; na 22, **B13**, **B101**/G30,
+**G38**; no Compras, D-35, D-37, D-78, D-90, G9/G30, G4, G15, B63, B60, B62, a **C348**; nas propostas, a verificação do dono da proposta (Fase
+12 — também a **C305**), o filtro por permissão do histórico, a **B910**, a **C307**, a Frente B da lentidão, a **C297** (**B924**), a **B926**,
+a **C312**, a **C316**, a régua de quantidade da **C314**, a **B949** e a **C330**; no Operacional, a **C332**; do Comercial, a **C354**, a
+**C357**/**B988**, a **C359**/**B989** (e a **C360** junto), a **C358**, a **C383**, ignorar também o acento nas buscas (**B1013**, **B1019**) e o
+resto da **C382** (**B1016**); do núcleo, a **C362**; da 160, o filtro *Status* dos Materiais (**C398**) e os tipos do filtro das Movimentações e
+o material de cliente nos seletores das Reservas/Inspeções (**C399**); da C400, acrescentar a descrição da OS à busca das OPs (muda o
+resultado). Pendem de Postgres: **C98**, **C110**.
+
+**O que já está pronto e não precisa reabrir:** o `useUltimoPedido` e o `dataLocal.js` do navegador (`86242381`); o `diaLocal.js` do
+servidor, o dia da Fábrica, o filtro das Movimentações, a rota de eventos, a busca de fornecedores e as opções da Auditoria (`6885caf9`); as
+telas da Fábrica (`e0912a6d`, `6d84c427`); as do Almoxarifado (`f2a10ffe`, `db960831`, `3acfec05`); as asserções da Fase 5 e os resíduos
+(`84353119`).

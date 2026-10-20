@@ -446,3 +446,9 @@ o mesmo caso por outra via (B779, B780).
 
 Continua 🟢. Testes: `devolucaoDoQueVoltou.api.test.js` (15), `oQueJaVoltouIntegracao.api.test.js` (i, ii),
 `auditoriaDoAtoSucata.api.test.js` (RN-13h, RN-13j, RN-13k), `DevolucoesAlmoxarifado.test.js` (C253).
+
+## Etapa 161 — a data mostrada (2026-10-19)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa161-respostas-velhas-e-o-dia-local.md`. Consertos técnicos, sem regra de acesso nova e sem mexer em saldo; o status da feature não muda.
+
+- [x] **Fase 5 (r1, resíduo de antes, C397)** — a data da lista, das opções de saída de origem e dos anexos (o `created_at` da devolução e o da movimentação, `CURRENT_TIMESTAMP`) pelo leitor de instante — era lida como hora local (à noite, o dia de amanhã) — `84353119`.

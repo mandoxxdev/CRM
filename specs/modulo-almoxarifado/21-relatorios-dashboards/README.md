@@ -183,4 +183,14 @@ Almoxarifado (nenhuma rota ignora uma chave que a tela manda; o defeito estava n
 
 - [x] **RN-160.04 (C393, B1020)** — `usuario` pela `condicaoDeBusca(..., { escapar: true })` (`\`, `%` e `_` continuam texto); `tipo` aparado e em maiúsculas, não texto = sem filtro — `eaf682e9`.
 - [x] **A nota do registro** — dizia *"ignora maiúsculas só em letras sem acento"*; passa a dizer *"ignora maiúsculas e minúsculas, mas não o acento (um nome antigo com letras acentuadas maiúsculas e minúsculas misturadas só é achado com a mesma grafia)."* — `eaf682e9`, o limite na Fase 5 (r1-2, `ff3e7d78`).
-- [ ] **Os Relatórios ao trocar de relatório com a consulta em andamento** (a exportação com o tipo novo e os parâmetros do antigo) — fica (C396, candidato da Etapa 161).
+- [x] **Os Relatórios ao trocar de relatório com a consulta em andamento** (a exportação com o tipo novo e os parâmetros do antigo) — resolvido na Etapa 161 (C396, `f2a10ffe` — ver a seção abaixo).
+
+## Etapa 161 — os Relatórios ao trocar de relatório, o painel ao trocar o período, e o dia (2026-10-19)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa161-respostas-velhas-e-o-dia-local.md`. Consertos técnicos, sem regra de acesso nova e sem mexer em saldo; o status da feature não muda.
+
+- [x] **RN-161.03 (C396)** — trocar de relatório invalida a consulta em voo: a resposta e o erro dela são descartados, o *Consultar* do novo vale na hora, e a exportação usa o tipo e os parâmetros da última consulta bem-sucedida do relatório aberto — `f2a10ffe`. (O "lembrar o tipo da última consulta" é uma segunda trava que nenhum teste derruba sozinha: trocar de relatório já zera a última consulta — declarado.)
+- [x] **RN-161.06** — o nome do arquivo exportado leva o dia local (`toISOString` dava o de amanhã depois das 21h) — `db960831`.
+- [x] **RN-161.02 (C396)** — o painel do Almoxarifado ao trocar o período (*Consumo por O.S.*, *Materiais mais consumidos*): só a resposta do último pedido mexe na lista (a de um filtro anterior que chega depois, o erro dela e o fim do *carregando* dela são descartados; quem chama com `await` continua recebendo uma promessa que resolve) — `f2a10ffe`.
+- [x] **RN-161.06 (C397)** — as últimas movimentações e as requisições abertas do painel na hora de Brasília — `db960831`.
+- [ ] **Os relatórios e o painel no dia de Brasília** — **ficam no dia UTC (C401, B1027)**: *Consumo por O.S.*, *Histórico de movimentações*, *Ajustes por motivo*, *Perdas por motivo*, *Materiais mais consumidos*, *Consumo por período*, *Sucata (financeiro)*, *Custo por projeto*, *Qualidade de fornecedores* (`reportService.js`, `DATE(created_at)`) e o painel (*movimentações hoje*, o gráfico de 7 dias). A lista das Movimentações já filtra pelo dia de Brasília — entre 21h e meia-noite, o mesmo período pode diferir entre a lista e o *Histórico*. Etapa própria (9 relatórios, ~17 arquivos de teste, vários calculando *hoje* em UTC).

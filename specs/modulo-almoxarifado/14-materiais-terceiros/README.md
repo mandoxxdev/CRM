@@ -513,3 +513,9 @@ byte a de hoje"*, *"[97 RN-01] reserva manual 4 (M3), REMESSA_TERCEIRO 4 (M2), b
 muda; A entrega 4"*, *"[97 I-4] (Fase 2) estorno de entrada como compensacao (opcoes.compensacao) fica na regua de hoje;
 sem a opcao recusa"*; `portasAvulsasCaixaIntegracao.api.test.js` — *"[97 T3 C1]"* (a remessa pela rota). `test:api`
 338/338 (4163 ✓). Continua 🟢.
+
+## Etapa 161 — o terceiro além dos 50 primeiros (2026-10-19)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa161-respostas-velhas-e-o-dia-local.md`. Consertos técnicos, sem regra de acesso nova e sem mexer em saldo; o status da feature não muda.
+
+- [x] **RN-161.09 (C399, B1031)** — a *Nova remessa*: o campo *"Buscar terceiro (nome ou CNPJ)..."* procura no servidor (a mesma rota do Recebimento) em vez dos 50 primeiros fixos; o terceiro já escolhido continua nas opções (a remessa grava o `fornecedor_id`) — `6885caf9`, `3acfec05`.

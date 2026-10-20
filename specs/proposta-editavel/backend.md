@@ -414,8 +414,10 @@ nas features `01`, `04`, `06`, `08`, `15`, `16`, `21` e `23` do mapa do almoxari
   r3 S44): fica, declarado.
 - [x] **RN-160.08 (C389, B1023)** — o *Segmento* do formulário do cliente pela `opcaoQueCasa`; o desconhecido como opção a mais; o vazio
   em *"Selecione..."* — `93c1dace`.
-- [ ] **Fora (de antes, registrados):** as outras listas sem descarte da resposta velha (C396), as datas em UTC (C397), os seletores
-  incompletos (C399), as sobras menores (C400) — candidatos da Etapa 161; ignorar o acento (B1013) — do P.O.
+- [x] **Fora (de antes, registrados):** as outras listas sem descarte da resposta velha (C396), as datas em UTC (C397), os seletores
+  incompletos (C399), as sobras menores (C400) — **resolvidos na Etapa 161** (o técnico; os da Fábrica em `e0912a6d`, `6885caf9`,
+  `6d84c427`; ver o plano da 161) — menos os relatórios do Almoxarifado no dia UTC (C401), os indicadores do Operacional (C403) e os da
+  régua do P.O. (os tipos das Movimentações, o material de cliente nas Reservas/Inspeções); ignorar o acento (B1013) — do P.O.
 
 ### Os filtros e as buscas do Comercial, a busca com letra acentuada e o cadastro que responde o gravado (Etapa 159, C381, C382, C384–C387)
 

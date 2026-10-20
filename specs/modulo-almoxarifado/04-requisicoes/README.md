@@ -429,3 +429,10 @@ Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa160-filtros-da-fabri
 Almoxarifado (nenhuma rota ignora uma chave que a tela manda; o defeito estava na comparação).
 
 - [x] **RN-160.06 (C395)** — o seletor *"Buscar material por nome ou código..."* pela `casaBusca` (nome, código) — `d5cd52ea`, asserções `ff3e7d78`.
+
+## Etapa 161 — a lista que mostrava o filtro anterior e a hora (2026-10-19)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa161-respostas-velhas-e-o-dia-local.md`. Consertos técnicos, sem regra de acesso nova e sem mexer em saldo; o status da feature não muda.
+
+- [x] **RN-161.02 (C396)** — a lista de Requisições (as duas rotas — `requisicoes` e `requisicoes-material`; os ~20 chamadores com `await`): só a resposta do último pedido mexe na lista (a de um filtro anterior que chega depois, o erro dela e o fim do *carregando* dela são descartados; quem chama com `await` continua recebendo uma promessa que resolve) — `f2a10ffe`.
+- [x] **RN-161.06 (C397)** — as datas da lista e do detalhe (criação, recebimento confirmado, conferência, separação) na hora de Brasília — `db960831`.

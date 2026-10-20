@@ -558,3 +558,11 @@ Almoxarifado e o Operacional com a tela aberta (o portão das listas, Etapa 154)
   `listasNotificacoesPortao` (o corpo do 403 = o fixture `recusaDaListaDoServidor.json`).
 - [ ] *Fora, de propósito:* as listas do próprio módulo (estoque, OS do aux) continuam caladas quando falham (quem perde o Almoxarifado perde
   a tela). A tela não descarta resposta velha da lista de reservas (com o banco de pé, as respostas chegam na ordem; declarado em D (156)).
+
+## Etapa 161 — a lista que mostrava o filtro anterior (2026-10-19)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa161-respostas-velhas-e-o-dia-local.md`. Consertos técnicos, sem regra de acesso nova e sem mexer em saldo; o status da feature não muda.
+
+- [x] **RN-161.02 (C396)** — a lista de Reservas: só a resposta do último pedido mexe na lista (a de um filtro anterior que chega depois, o erro dela e o fim do *carregando* dela são descartados; quem chama com `await` continua recebendo uma promessa que resolve) — `f2a10ffe`.
+- [x] **Fase 5 (r1, resíduo de antes)** — o selo *vencida* compara o `expira_em` (só a data) com o hoje **local** (era o `toISOString`: à noite, a reserva que vence hoje aparecia vencida) — `84353119`.
+- [ ] **A expiração automática e o alerta de reserva parada pelo dia UTC** (`reservationService.js:139`, `alertRegistry.js:564`; o padrão do `expira_em` em `stockService.js:3688`) — **fica (C404)**: é porta que solta reserva; a 162 mede e decide (ver o plano da 161).

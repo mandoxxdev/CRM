@@ -70,3 +70,9 @@ E-mail imediato em TODA entrada e saída confirmada, com conteúdo mínimo da sp
 ## Dependências
 
 - 03 (gancho pós-commit da movimentação) · consumida por quase todas as features.
+
+## Etapa 161 — o Evento das Notificações com os alertas (2026-10-19)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa161-respostas-velhas-e-o-dia-local.md`. Consertos técnicos, sem regra de acesso nova e sem mexer em saldo; o status da feature não muda.
+
+- [x] **RN-161.08 (C399, B1029)** — o seletor *Evento* soma aos 10 fixos as chaves do registro de alertas pela rota nova `GET /almoxarifado/notificacoes/eventos` (`[{ evento, rotulo }]`, portão `gerenciar_notificacoes` — o da lista); se a rota falhar, ficam os 10 (falha aberta) — `6885caf9`, `3acfec05`. O comentário da coluna `evento` em `schema.js` (8 eventos) continua desatualizado (não é contrato).

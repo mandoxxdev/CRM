@@ -923,3 +923,10 @@ Almoxarifado e o Operacional com a tela aberta (o portão das listas, Etapa 154)
 **Entregue:**
 
 - [x] **O motivo sob o Projeto** — `75e772cf`. Testes: `MovimentacoesAlmoxarifado.test.js` (60). O motor não muda. Continua 🟢.
+
+## Etapa 161 — a lista de Movimentações: o último filtro, o dia e a hora de Brasília (2026-10-19)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa161-respostas-velhas-e-o-dia-local.md`. Consertos técnicos, sem regra de acesso nova e sem mexer em saldo; o status da feature não muda.
+
+- [x] **RN-161.02 (C396)** — a lista de Movimentações: só a resposta do último pedido mexe na lista (a de um filtro anterior que chega depois, o erro dela e o fim do *carregando* dela são descartados; quem chama com `await` continua recebendo uma promessa que resolve) — `f2a10ffe`.
+- [x] **RN-161.06 (C397, B1025, B1026)** — `GET /almoxarifado/movimentacoes?data_inicio&data_fim` compara o dia de Brasília do `created_at` (`DATE(m.created_at, '-180 minutes')`, `services/diaLocal.js`); a lista, o modal de estorno e o Extrato do material mostram a hora de Brasília — `6885caf9`, `db960831`. Nenhuma porta do motor mudou.

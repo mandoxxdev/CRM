@@ -307,7 +307,9 @@ worktree não se pagaria (um arquivo de teste de servidor compartilhado; a trava
    mudadas sem teste dedicado, o que o condutor tinha medido mas não fechado.
 3. **Paralelismo:** **0** galhos de código em paralelo (o plano decidiu assim); **3** leitores em paralelo na Fase 0, **1** revisor na Fase
    2 (antes do código), **3** em paralelo na Fase 5 sob a trava (o r3 em worktree própria) — **0** incidente de trava.
-4. **Defeito que escapou:** *(preencher na Etapa 161)*.
+4. **Defeito que escapou:** **0** (preenchido na Etapa 161). Nada do que a 160 entregou voltou como defeito: a 161 reusou o molde
+   do contador das OS e dos Materiais em treze listas, e as três revisões da Fase 5 da 161 (regra, autorização, sabotagem) e os testes não
+   acharam falha no código da 160. Os achados novos da 161 (C402, C404, C405) são de antes da 160.
 
 ## Próxima tarefa detalhada — Etapa 161
 

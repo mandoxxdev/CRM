@@ -957,7 +957,7 @@ Na etiqueta de material, lote, série ou retalho **não** vão para o papel: for
 | Retalho | a tela **Sobras e Retalhos**, com a linha daquele retalho **destacada** |
 | Posição (localização) | o **Mapa de Áreas**, com aquela posição selecionada — e o aviso de etiqueta desatualizada quando o código impresso não é mais o da posição (seção 3.7) |
 
-Há dois jeitos de ler o QR. Pelo aplicativo de câmera do celular, ele abre o navegador nesse endereço — como dado de estoque exige sessão, quem não estiver logado cai na tela de login; faça o login e escaneie de novo. Ou, já dentro do sistema, pela tela **Scanner** (seção 4.9), que lê a etiqueta e abre o item sem sair do módulo. Não é preciso aplicativo nem coletor: o leitor é a câmera do próprio celular.
+Há dois jeitos de ler o QR. Pelo aplicativo de câmera do celular, ele abre o navegador nesse endereço — como dado de estoque exige sessão, quem não estiver logado cai na tela de login; faça o login e escaneie de novo. Ou, já dentro do sistema, pela tela **Scanner** (seção 4.9), que lê a etiqueta e abre o item sem sair do módulo. Não é preciso aplicativo nem coletor: o leitor é a câmera do próprio celular. A etiqueta de **material** abre a lista de Materiais com o código na busca e **só aquele material** — outro material cujo código comece igual (*MAT-0010* para a etiqueta do *MAT-001*) não aparece; mexer na busca ou clicar **Limpar filtros** volta à lista normal. Material inativo não é achado pela etiqueta, e editar o material volta à lista sem esse filtro.
 
 **Onde ficam os botões de etiqueta** (ícone de etiqueta):
 
@@ -1172,6 +1172,19 @@ os números de agora, e a primeira abertura depois de qualquer registro da produ
 **Paradas**, o quadro *"Paradas em andamento"* mostra todas as paradas abertas; o histórico abaixo mostra as mais recentes. Nas
 **Atividades** e nas **Horas Extras** da Fábrica, a caixa de busca filtra a lista já carregada — o colaborador, o tipo, a descrição e a OS
 nas atividades; o colaborador e o tipo nas horas extras —, com a mesma regra de maiúsculas, sem pedir a lista de novo.
+
+**O último filtro vale, e o dia é o de Brasília, na Fábrica.** Nas listas da Fábrica — Ordens de Serviço, Ordens de Produção, Máquinas,
+Colaboradores (também na recarga automática a cada 30 segundos), Equipamentos, Presença, Atividades e Horas Extras — trocar os filtros
+depressa mostra só a resposta do último pedido; a de um filtro anterior que chegue depois, o aviso de erro dela e o fim do *carregando*
+dela não aparecem. Nos **Relatórios da produção**, trocar de aba mostra a aba nova vazia até os números dela chegarem. Os dias da Fábrica
+são os do horário de Brasília (seção 22.5): os filtros de data de Apontamentos e Paradas, os três relatórios (o padrão é do dia 1 do mês
+até hoje; a coluna *dia* da Produção), o **Painel da produção** (*produção hoje*, *paradas hoje*, as OPs *atrasadas* — prazo antes de
+hoje —, as *concluídas no mês* e a disponibilidade de hoje) e o *presente hoje* dos **Colaboradores** (a presença lançada para hoje deixa o
+colaborador *"Disponível"* ou *"Parado"*; sem ela, *"Ausente"*). Os formulários de **Presença**, **Hora extra**, **Ordem de serviço**
+(também a aberta pelo Comercial a partir de uma proposta), **Ordem de produção** e **Atividade** vêm com a data de hoje (a atividade, com a
+hora de agora), e a ordem de produção criada sem data planejada recebe a de hoje. A coluna *Data* da Presença e das Horas Extras mostra o
+dia lançado. Em **Colaboradores**, o seletor *Setor* oferece todos os setores que a tela já mostrou (não encolhe ao filtrar), e o filtro
+*Trabalho* filtra a lista na tela, sem pedir de novo.
 
 ### 5.2e Usuário desativado ou excluído
 
@@ -1414,7 +1427,7 @@ Duas notas de comportamento que evitam mal-entendido:
 |---|---|
 | **Entidade** | O tipo de coisa que foi tocada — material, conferência, configuração, lote, requisição, e assim por diante |
 | **Ação** | O que foi feito — Criação, Edição, Exclusão, e os demais atos |
-| **Usuário** | Quem fez |
+| **Usuário** | Quem fez — uma opção por pessoa, com o nome que ela tinha no ato mais recente da trilha (quem mudou de nome aparece uma vez; filtrar por ela traz os atos com os dois nomes) |
 | **Período** | Data inicial e data final |
 
 As três primeiras listas **não são fixas**: elas são montadas a partir do que existe de fato no histórico. Um tipo de registro que ainda não aconteceu não aparece como opção — e um tipo novo aparece sozinho assim que a primeira linha dele for gravada.
@@ -3381,6 +3394,17 @@ recebido em 0,1 e depois 0,2 aceita a segunda nota (o saldo calculado seria 0,19
 **Material que chega fora do pedido.** Um item cujo material **não está** no pedido não tem saldo contra o que ser medido, e por isso **não** é barrado nem avisado. Pela tela isso não se produz — ela oferece apenas as linhas do próprio pedido.
 
 **Duas réguas, dois momentos.** O limite do **saldo do pedido** vale quando o recebimento é **criado**. Já o campo **"Qtd. conferida"** do painel de detalhe (14.2b) compara a contagem física com a **quantidade esperada daquele documento**. São medidas diferentes, em momentos diferentes, e cada uma tem a sua mensagem.
+
+### 14.1d Escolher o fornecedor do recebimento — e o terceiro da remessa
+
+No formulário do recebimento, o campo *"Buscar fornecedor (nome ou CNPJ)..."* procura entre **todos** os fornecedores ativos: depois de
+uma pausa na digitação, o seletor ao lado passa a ter os que casam com o texto na razão social, no nome fantasia ou no CNPJ (até 50,
+em ordem de razão social); com o campo vazio, os 50 primeiros. A busca ignora os espaços das pontas e as maiúsculas e minúsculas (também
+as acentuadas); o acento conta; *%* e *_* valem como texto. Só a resposta da última busca muda o seletor; se a busca falhar, o seletor
+fica como estava. Escolher o fornecedor copia o nome e o CNPJ para o recebimento, como antes. A **Nova remessa** a terceiro (seção 17) tem
+o mesmo campo — *"Buscar terceiro (nome ou CNPJ)..."* —, e o terceiro já escolhido continua no seletor mesmo que uma busca seguinte não o
+traga. Fornecedor inativo não aparece. Trocar o filtro da lista de recebimentos recarrega só a lista; os materiais, os pedidos de compra
+pendentes e os fornecedores do formulário são carregados ao abrir a tela.
 
 ### 14.2 O caminho do recebimento até o estoque
 
@@ -6411,7 +6435,9 @@ depois de um reenvio manual.
 Em **Almoxarifado → Notificações** (perfis Gestor e Administrador; os demais recebem a recusa
 de permissão — a tela mostra o motivo, nunca uma lista vazia): três cartões com o total de
 **pendentes, enviadas e falhas** do conjunto inteiro, filtros por status e por evento (os avisos de recebimento
-aparecem no filtro como **"Entrada de recebimento"** e **"Aviso ao requisitante"**), e cada
+aparecem no filtro como **"Entrada de recebimento"** e **"Aviso ao requisitante"**; o filtro de evento oferece também os alertas do
+sistema — *"Calibração vencendo"*, *"Estoque sem consumo"*, *"Não conformidade aberta"* e os demais da central de Alertas, com o título
+deles), e cada
 linha com destinatários, tentativas, o motivo literal da última falha e as datas de criação e
 envio. Filtro de status inválido pela API responde:
 
@@ -6942,6 +6968,32 @@ Note que **peças e sobras entram os dois** no peso que voltou: o rendimento med
 **Peso zero conta como não cadastrado** — peso zero não existe fisicamente, e tratá-lo como válido daria "rendimento 0%" com cara de resultado.
 
 **Rendimento acima de 100% é calculado e mostrado, não recusado.** Ver "116%" na tela é o que faz alguém ir conferir o cadastro de peso; recusar esconderia a divergência. O rendimento nunca é validado contra um mínimo e nunca impede a operação.
+
+
+### 22.5 O dia e a hora de um registro
+
+O sistema guarda o instante de cada registro no horário universal (três horas à frente de Brasília) e o mostra e conta assim:
+
+- **A hora mostrada** nas Movimentações (lista e estorno), no Extrato do material, no Dashboard (últimas movimentações e requisições
+  abertas), nos Recebimentos, nas Requisições, na Auditoria e nas Notificações é a de **Brasília**.
+- **O dia** de um registro é o de Brasília no filtro *De*/*Até* da lista de **Movimentações** e em toda a **Fábrica** (seção da Fábrica,
+  acima): uma movimentação ou um apontamento às 22h30 de 19/10 entra no dia 19.
+- Um registro que guarda **só a data** (a presença, o prazo de uma ordem de produção) é comparado com o *hoje* de Brasília.
+- **Os relatórios do Almoxarifado** (seção 21d: *Consumo por O.S.*, *Histórico de movimentações*, *Ajustes por motivo*, *Perdas por
+  motivo*, *Materiais mais consumidos*, *Consumo por período*, *Sucata (financeiro)*, *Custo por projeto*, *Qualidade de fornecedores*) e o
+  **Dashboard** (*movimentações hoje* e o gráfico dos últimos 7 dias) contam o dia pelo **horário universal**: um registro feito entre 21h e
+  meia-noite entra no dia seguinte. Por isso, para um período, a lista das Movimentações e o *Histórico de movimentações* podem diferir nos
+  registros desse horário. O mesmo vale para os indicadores do Operacional (OEE, manutenção e inspeções do dia).
+- O deslocamento usado é o atual do horário de Brasília (três horas, sem horário de verão).
+
+### 22.6 A lista mostra o último filtro pedido
+
+Nas listas que buscam no servidor a cada troca de filtro — no Almoxarifado, Movimentações, Requisições, Recebimentos, Reservas, Inspeções
+(pendentes e histórico), Não conformidades, Materiais e o Dashboard ao trocar o período; e as listas da Fábrica —, só a resposta do
+**último** pedido muda a tela: a de um filtro anterior que chegue depois, o aviso de erro dela e o fim do *carregando* dela são ignorados.
+Nos **Relatórios** (seção 21d), clicar em outro relatório com uma consulta em andamento descarta a consulta: o relatório novo abre vazio, com
+**Consultar** liberado, e **Exportar XLSX** exporta o relatório aberto com os filtros da última consulta dele (o nome do arquivo leva a data
+de hoje).
 
 ---
 

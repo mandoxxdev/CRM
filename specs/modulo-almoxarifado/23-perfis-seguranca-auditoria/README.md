@@ -1390,4 +1390,10 @@ Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa160-filtros-da-fabri
 Almoxarifado (nenhuma rota ignora uma chave que a tela manda; o defeito estava na comparação).
 
 - [x] **RN-160.06 (C395)** — *"Buscar por nome ou e-mail..."* dos Perfis de acesso pela `casaBusca` — `d5cd52ea`, teste `ff3e7d78`.
-- [ ] **As opções de usuário da Auditoria repetindo o renomeado** — fica (C400).
+- [x] **As opções de usuário da Auditoria repetindo o renomeado** — resolvido na Etapa 161 (C400, `6885caf9` — ver a seção abaixo).
+
+## Etapa 161 — o usuário renomeado nas opções da Auditoria (2026-10-19)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa161-respostas-velhas-e-o-dia-local.md`. Consertos técnicos, sem regra de acesso nova e sem mexer em saldo; o status da feature não muda.
+
+- [x] **RN-161.10 (C400, B1030)** — `GET /almoxarifado/auditoria/opcoes`: um usuário por `usuario_id`, com o nome da linha mais recente da trilha (era `SELECT DISTINCT usuario_id, usuario_nome` — o renomeado aparecia duas vezes, com a mesma `key` no React). Portão `configurar` inalterado — `6885caf9`.

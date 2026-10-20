@@ -1,20 +1,30 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-19 (Etapa 160) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-19 (Etapa 161) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159 e 160) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160 e 161) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-19 (Etapa 160 ENTREGUE · próxima: Etapa 161)
+> ## Onde o desenvolvimento está — 2026-10-19 (Etapa 161 ENTREGUE · próxima: Etapa 162)
 >
-> **O desenvolvimento parou aqui: Etapa 160 fechada — 2026-10-19.** A **Etapa 160 (os filtros e as buscas da Fábrica e do Almoxarifado que
+> **O desenvolvimento parou aqui: Etapa 161 fechada — 2026-10-19.** A **Etapa 161 (as listas que mostravam o resultado de um filtro
+> anterior, o dia que virava às 21h e os seletores incompletos; consertos técnicos, sem regra de acesso nova e sem mexer em saldo)**: treze
+> listas da Fábrica e do Almoxarifado e os Relatórios só mostram a resposta do último pedido (trocar de relatório com a consulta em andamento
+> não exporta mais o relatório novo com os filtros do antigo); o dia da Fábrica (relatórios, painel, filtros, *presente hoje*) e o filtro
+> de data das Movimentações são o de Brasília, a hora mostrada no Almoxarifado também, e os formulários da Fábrica abertos à noite vêm com
+> a data de hoje; a coluna *Data* da Presença e das Horas extras mostra o dia gravado; o *Setor* dos Colaboradores não encolhe, o *Evento*
+> das Notificações tem os alertas, o fornecedor do Recebimento e da Remessa é procurado em todos, o usuário renomeado aparece uma vez na
+> Auditoria e o QR mostra só o material da etiqueta. Os relatórios do Almoxarifado continuam no dia universal (**B1027**). Nenhuma consulta
+> nova antes do deploy. **Próxima: Etapa 162** — ver a próxima tarefa no plano da 161.
+>
+> **Etapa 160, 2026-10-19.** A **Etapa 160 (os filtros e as buscas da Fábrica e do Almoxarifado que
 > não casavam, e os cadastros que respondem o gravado; consertos técnicos, sem regra de acesso nova e sem mexer em saldo)**: na Fábrica, o
 > filtro *Prioridade* das ordens de serviço filtra, o kanban tira as OS concluídas e canceladas e ordena pela prioridade, as buscas acham
 > *"joão"* no cadastro gravado como *"JOÃO"*, o painel da produção mostra os números de agora e as paradas em andamento aparecem todas, e a
 > busca das Atividades e das Horas extras filtra; no Almoxarifado, as buscas de materiais, retalhos, ferramentas, empréstimos e do
 > Histórico de movimentações acham a letra acentuada em qualquer caixa e os filtros do navegador aparam; os cadastros pela integração
-> respondem o gravado e o seletor *Segmento* do cliente mostra o gravado. Nenhuma consulta nova antes do deploy. **Próxima: Etapa 161** — ver
-> a próxima tarefa no plano da 160.
+> respondem o gravado e o seletor *Segmento* do cliente mostra o gravado. Nenhuma consulta nova antes do deploy. *(Próxima, na época: Etapa
+> 161 — entregue acima.)*
 >
 > **Etapa 159, 2026-10-19.** A **Etapa 159 (os filtros e as buscas do Comercial que não
 > filtravam, a busca com letra acentuada, e o cadastro que responde o gravado; consertos técnicos no Comercial, sem regra de acesso nova)**:
@@ -6754,6 +6764,63 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 161 — As listas que mostravam o resultado de um filtro anterior, o dia que virava às 21h, e os seletores incompletos (ENTREGUE — 2026-10-19)
+
+**O que mudou, em uma frase:** trocar um filtro depressa não deixa mais a lista com o resultado do filtro anterior; à noite (depois das
+21h), o dia da Fábrica e das Movimentações deixa de ser o de amanhã; e cinco seletores passam a mostrar tudo o que deviam.
+
+**O problema que ela resolve.** (1) Em treze listas, dois pedidos podiam estar em voo ao trocar o filtro, e o que chegasse por último — às
+vezes o do filtro velho — trocava a lista; nos **Relatórios**, trocar de relatório com a consulta em andamento mostrava as linhas do
+primeiro com as colunas do segundo, e a exportação misturava os dois. (2) O sistema guarda a hora no padrão universal (3 h à frente de
+Brasília) e várias telas tiravam o *dia* dali sem converter: das 21h à meia-noite, o apontamento, a parada, a movimentação e a presença
+caíam no dia seguinte, o colaborador presente aparecia *"Ausente"*, os formulários vinham com a data de amanhã e o Almoxarifado mostrava a
+hora 3 h adiantada. (3) Os seletores de *Setor*, *Evento*, fornecedor, usuário da Auditoria e o QR da etiqueta mostravam de menos ou de mais.
+
+| Antes | Agora |
+|---|---|
+| Trocar o filtro depressa (Reservas, Movimentações, Requisições, OPs, Colaboradores…): a lista podia ficar com o filtro anterior | Só o último |
+| **Relatórios**: trocar de relatório com a consulta em andamento — linhas de um, colunas do outro; o XLSX misturava | O primeiro é descartado; o XLSX é o do relatório aberto |
+| Apontamento às 22h30: nos Relatórios da produção, no dia de amanhã | No dia de hoje |
+| **Colaboradores** depois das 21h: o presente aparecia *"Ausente"* | *"Disponível"* |
+| **Movimentações**, a das 22h30: *"20/10 01:30"*, fora do filtro do dia | *"19/10 22:30"*, no filtro do dia |
+| **Presença**, **Hora extra**, **Nova OS/OP/atividade** depois das 21h: a data de amanhã | A de hoje |
+| **Presença** e **Horas extras**, coluna *Data*: o dia anterior ao gravado | O dia gravado |
+| **Colaboradores**, escolher um *Setor*: os outros sumiam | Continuam |
+| **Notificações**, *Evento*: sem os alertas | Com os alertas |
+| **Novo recebimento**/**Nova remessa**: só os 50 primeiros fornecedores | Campo de busca que procura em todos |
+| **Auditoria**: o usuário renomeado duas vezes | Uma vez |
+| QR do *MAT-001*: aparecia também o *MAT-0010* | Só o *MAT-001* |
+
+**Roteiro de teste (10 minutos — de preferência depois das 21h).**
+
+1. **O último filtro.** Faça login, abra **Almoxarifado → Reservas** e troque o *Status* três vezes seguidas, terminando em *"Liberada"*: a
+   lista termina com as liberadas. Faça o mesmo nas **Movimentações** (o *Tipo*) e em **Fábrica → Ordens de Produção** (digitando na busca).
+2. **Os Relatórios.** Em **Almoxarifado → Relatórios**, escolha *Histórico de movimentações*, ponha um período longo e clique **Consultar**;
+   antes de responder, clique em *Consumo por período*: a tela dele fica vazia e o **Consultar** liberado. Consulte e clique **Exportar
+   XLSX**: o arquivo é o de *Consumo por período*, com a data de hoje no nome.
+3. **O dia da Fábrica (depois das 21h).** Em **Fábrica → Apontamentos**, inicie e finalize um apontamento. Em **Fábrica → Relatórios**, aba
+   *Produção* (o período já abre no mês de hoje): ele está na linha de hoje. No **Painel da produção** (botão **Atualizar**), *Produção hoje*
+   o conta.
+4. **A presença.** Em **Fábrica → Presença**, o filtro abre na data de hoje. Clique em nova presença: a data já vem com hoje; lance um
+   colaborador como presente. A coluna *Data* mostra hoje (não ontem). Em **Fábrica → Colaboradores**, ele aparece *"Disponível"*.
+5. **As Movimentações.** Em **Almoxarifado → Movimentações**, lance uma entrada: a hora mostrada é a do relógio. Filtre *De*/*Até* com a
+   data de hoje: ela aparece. Abra o **Extrato** do material: a mesma hora.
+6. **Os seletores.** Em **Fábrica → Colaboradores**, escolha um *Setor*: o seletor continua com todos. Em **Almoxarifado → Notificações**, o
+   *Evento* tem *"Calibração vencendo"*, *"Não conformidade aberta"* e os outros alertas. Em **Recebimentos → Novo**, digite parte do nome de
+   um fornecedor no campo *"Buscar fornecedor (nome ou CNPJ)..."*: o seletor ao lado mostra só os que casam. Em **Auditoria**, o seletor de
+   usuário não repete ninguém.
+7. **O QR.** Com *MAT-001* e *MAT-0010* cadastrados, leia o QR da etiqueta do *MAT-001* no **Scanner**: só ele aparece. Clique **Limpar
+   filtros**: os dois aparecem.
+
+**O que esta etapa NÃO cobre.** Os relatórios e o painel do Almoxarifado continuam contando o dia pelo padrão universal (à noite, o
+*Histórico de movimentações* põe a movimentação das 22h30 no dia seguinte — **B1027**, **C401**); os indicadores do Operacional (OEE,
+manutenção do dia) idem (**C403**). Os tipos do filtro *Tipo* das Movimentações e o material de cliente nas Reservas/Inspeções são régua do
+P.O.; o filtro *Status* dos Materiais também (**C398**). O acento continua contando nas buscas.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (o servidor de verdade em pasta vazia, com o
+relógio adiantado para as 22h de Brasília; as telas em jsdom com respostas lentas e falhas do pedido anterior) provam, escrito para você
+conferir à mão. Commits `86242381`, `e0912a6d`, `6885caf9`, `f2a10ffe`, `db960831`, `3acfec05`, `6d84c427` e `84353119` (a correção da revisão).
 
 ## Etapa 160 — Os filtros e as buscas da Fábrica e do Almoxarifado que não casavam, e os cadastros que respondem o gravado (ENTREGUE — 2026-10-19)
 

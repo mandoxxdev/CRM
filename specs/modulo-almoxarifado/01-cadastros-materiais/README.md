@@ -589,3 +589,9 @@ Almoxarifado (nenhuma rota ignora uma chave que a tela manda; o defeito estava n
 - [x] **RN-160.04 (C393, B1019)** — `GET /api/almoxarifado/materiais?search=` pela `condicaoDeBusca` (nome, código, descrição, fornecedor — as colunas de antes); não texto/só espaços = sem filtro — `eaf682e9`.
 - [x] **RN-160.06 (C395)** — a lista de Materiais descarta a resposta (e a falha) de um pedido que não é o último; o filtro *"Filtrar materiais..."* dos Estoques mínimos pela `casaBusca` — `d5cd52ea`, asserções da Fase 5 `ff3e7d78`.
 - [ ] **O filtro *Status* (*"OK"* × o selo *"Baixo"*)** — fica: é régua de negócio (C398, do P.O.).
+
+## Etapa 161 — o QR da etiqueta abre só aquele material (2026-10-19)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa161-respostas-velhas-e-o-dia-local.md`. Consertos técnicos, sem regra de acesso nova e sem mexer em saldo; o status da feature não muda.
+
+- [x] **RN-161.11 (C400)** — o QR (`?material_id=`) mostra só o material da etiqueta (o código continua na busca, e um filtro por id corta o *MAT-0010* que a busca parcial de *MAT-001* traria); soma com os outros filtros; mexer na busca ou *Limpar filtros* solta; editar o material volta sem o filtro; o inativo não é achado (de antes) — `3acfec05`.

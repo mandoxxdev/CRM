@@ -1137,4 +1137,13 @@ Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa160-filtros-da-fabri
 Almoxarifado (nenhuma rota ignora uma chave que a tela manda; o defeito estava na comparação).
 
 - [x] **RN-160.06 (C395)** — *"Buscar material..."* do Novo recebimento pela `casaBusca` (nome, código) — `d5cd52ea`; o teste dedicado entrou na Fase 5 (`ff3e7d78`: o r3 provou que tirar o filtro inteiro deixava os 47 testes da tela verdes).
-- [ ] **O seletor de fornecedores cortado em 50 e o recarregar a cada filtro** — ficam (C399, C400; candidatos da Etapa 161).
+- [x] **O seletor de fornecedores cortado em 50 e o recarregar a cada filtro** — resolvidos na Etapa 161 (C399, C400; `6885caf9`, `3acfec05` — ver a seção abaixo).
+
+## Etapa 161 — a lista que mostrava o filtro anterior, a hora, o fornecedor além dos 50 (2026-10-19)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa161-respostas-velhas-e-o-dia-local.md`. Consertos técnicos, sem regra de acesso nova e sem mexer em saldo; o status da feature não muda.
+
+- [x] **RN-161.02 (C396)** — a lista de Recebimentos: só a resposta do último pedido mexe na lista (a de um filtro anterior que chega depois, o erro dela e o fim do *carregando* dela são descartados; quem chama com `await` continua recebendo uma promessa que resolve) — `f2a10ffe`.
+- [x] **RN-161.06 (C397)** — a data da lista e do detalhe na hora de Brasília (o `created_at` é `CURRENT_TIMESTAMP`, UTC sem fuso; era lido como hora local, 3 h adiantada) — `db960831`.
+- [x] **RN-161.09 (C399)** — o campo *"Buscar fornecedor (nome ou CNPJ)..."* procura no servidor (`GET /almoxarifado/recebimentos-aux/fornecedores?search=`, a `condicaoDeBusca` com `escapar`; até 50) em vez dos 50 primeiros fixos; só a última busca vale; a que falha mantém as opções. O que se grava (nome e CNPJ) não muda — `6885caf9`, `3acfec05`.
+- [x] **RN-161.12 (C400)** — trocar o filtro recarrega só a lista; materiais, pedidos e fornecedores carregam na abertura (a lista de pedidos pendentes deixa de se atualizar com o filtro — declarado) — `3acfec05`.
