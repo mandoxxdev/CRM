@@ -115,7 +115,9 @@ describe('[RN-167.01] restaurarMarcadores', () => {
 });
 
 // ── o fluxo inteiro ─────────────────────────────────────────────────────────────────────────
-process.env.CRM_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'e167-cli-'));
+const PASTA_DE_DADOS = fs.mkdtempSync(path.join(os.tmpdir(), 'e167-cli-')); // o config/paths do servidor cria as pastas de upload aqui
+process.env.CRM_DATA_DIR = PASTA_DE_DADOS;
+afterAll(() => { try { fs.rmSync(PASTA_DE_DADOS, { recursive: true, force: true }); } catch (e) { /* o Windows segura as vezes */ } });
 const { gerarHTMLPropostaPremiumV2 } = require('../../../../server/templates/propostaPremiumV2');
 
 const PROPOSTA = { id: 7, numero_proposta: 'P-167', titulo: 'T', cliente_nome: 'ACME', created_at: '2026-10-20 12:00:00' };
