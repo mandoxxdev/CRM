@@ -18,6 +18,7 @@ import { MemoryRouter } from 'react-router-dom';
 import api from '../services/api';
 import Dashboard from './Dashboard';
 import Relatorios from './Relatorios';
+import ModalGrafico from './ModalGrafico';
 
 jest.mock('../services/api', () => ({
   __esModule: true,
@@ -26,12 +27,30 @@ jest.mock('../services/api', () => ({
 const mockAuth = { user: { id: 7, nome: 'Vend 166', role: 'admin', email: 'v166@t' }, loading: false };
 jest.mock('../context/AuthContext', () => ({ useAuth: () => mockAuth }));
 jest.mock('react-toastify', () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn(), warning: jest.fn() } }));
-jest.mock('recharts', () => new Proxy({ __esModule: true }, { get: (alvo, nome) => (nome in alvo ? alvo[nome] : (p) => (p && p.children ? p.children : null)) }));
+// o BarChart desenha um <svg> (o caminho 1 do PNG do modal de grafico, que serializa o SVG); o resto devolve os filhos
+jest.mock('recharts', () => new Proxy({ __esModule: true }, {
+  get: (alvo, nome) => (nome in alvo ? alvo[nome]
+    : nome === 'BarChart' ? () => require('react').createElement('svg', { width: 10, height: 10 })
+      : (p) => (p && p.children ? p.children : null)),
+}));
+// o caminho 2 do PNG (sem SVG): o html2canvas falso devolve um canvas que entrega um blob
+jest.mock('html2canvas', () => jest.fn(() => Promise.resolve({ toBlob: (cb) => cb(new Blob(['png'])) })));
 jest.mock('./MapaClientes', () => () => null);
 jest.mock('./ReportBuilder', () => () => null);
 jest.mock('./WorkflowEngine', () => () => null);
 // o jsPDF toca no canvas ao carregar (o jsdom nao tem) — o PDF nao e exercitado aqui (a guarda no fonte cobre a celula dele)
-jest.mock('jspdf', () => function JsPdfFalso() { return {}; });
+// o jsPDF falso guarda o nome do arquivo salvo e as tabelas (Fase 5 r3 C07: provar o PDF pelo comportamento, nao so pelo fonte)
+const mockPdf = { saves: [], tabelas: [] };
+jest.mock('jspdf', () => function JsPdfFalso() {
+  const doc = {
+    internal: { pageSize: { getWidth: () => 210, getHeight: () => 297 }, getNumberOfPages: () => 1 },
+    lastAutoTable: { finalY: 20 },
+    save: (n) => { mockPdf.saves.push(n); },
+    autoTable: (o) => { mockPdf.tabelas.push(o); },
+    splitTextToSize: (t) => [String(t)],
+  };
+  return new Proxy(doc, { get: (alvo, p) => (p in alvo ? alvo[p] : () => undefined) });
+});
 jest.mock('jspdf-autotable', () => ({}));
 
 const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -126,6 +145,91 @@ test('[RN-166.06, B1062] Relatorios: a Ultima Proposta no dia de Brasilia; sem p
   expect(celula('CLI NUNCA')).toBe('Nunca');
   expect(celula('CLI LIXO')).toBe('-');
   expect(celula('CLI TARDE')).toBe('31/10/2026');
+});
+
+/** abre um atalho no painel e devolve os params da ultima chamada a /dashboard que o reflete */
+async function atalho(rotulo, inicioEsperado) {
+  await clicar([...container.querySelectorAll('.dashboard-filtros-atalhos button')].find((b) => b.textContent === rotulo));
+  const ultima = () => { const c = api.get.mock.calls.filter(([u]) => u === '/dashboard'); return c.length ? (c[c.length - 1][1] || {}).params : null; };
+  await esperar(() => { const p = ultima(); return p && p.inicio === inicioEsperado; }).catch(() => {});
+  return ultima();
+}
+async function abrirFiltros() {
+  respostas['/dashboard'] = {};
+  await act(async () => { root.render(<MemoryRouter><Dashboard /></MemoryRouter>); });
+  await esperar(() => container.querySelector('.dashboard-filtros .btn-filter'));
+  await clicar(container.querySelector('.dashboard-filtros .btn-filter'));
+}
+
+test('[Fase 5 r3 C04] Este ano as 22h30 de 31/12: o ano local (o UTC ja e o seguinte)', async () => {
+  relogio(2026, 11, 31, 22, 30);
+  await abrirFiltros();
+  expect(await atalho('Este ano', '2026-01-01')).toEqual({ inicio: '2026-01-01', fim: '2026-12-31' });
+});
+
+test('[Fase 5 r3 C12] Ultimos 3 meses em janeiro: vira o ano', async () => {
+  relogio(2027, 0, 15, 10, 0);
+  await abrirFiltros();
+  expect(await atalho('Últimos 3 meses', '2026-11-01')).toEqual({ inicio: '2026-11-01', fim: '2027-01-15' });
+});
+
+test('[RN-166.06, B1062, Fase 5 r3 C07] o PDF dos Relatorios as 22h30 de 31/10: o nome com o dia local e a Ultima Proposta no dia de Brasilia', async () => {
+  relogio(2026, 9, 31, 22, 30);
+  mockPdf.saves.length = 0; mockPdf.tabelas.length = 0;
+  respostas['/relatorios/executivo'] = {
+    kpis: {}, graficos: {}, recomendacoes: [],
+    insights: { clientesParaVisitar: [
+      { id: 1, razao_social: 'CLI 22H30', cidade: 'C', estado: 'SP', ultima_proposta: '2026-11-01 01:30:00', total_propostas_historico: 2 },
+      { id: 2, razao_social: 'CLI NUNCA', cidade: 'C', estado: 'SP', ultima_proposta: null, total_propostas_historico: 0 },
+      { id: 3, razao_social: 'CLI LIXO', cidade: 'C', estado: 'SP', ultima_proposta: 'lixo', total_propostas_historico: 1 },
+    ] },
+  };
+  respostas['/relatorios/visitas-tecnicas'] = { elegiveis: [], naoElegiveis: [], total: 0, totalElegiveis: 0, totalNaoElegiveis: 0 };
+  await act(async () => { root.render(<MemoryRouter><Relatorios /></MemoryRouter>); });
+  await esperar(() => [...container.querySelectorAll('button')].some((b) => b.textContent.includes('Exportar PDF')));
+  await clicar([...container.querySelectorAll('button')].find((b) => b.textContent.includes('Exportar PDF')));
+  await esperar(() => mockPdf.saves.length > 0);
+  expect(mockPdf.saves).toEqual(['Relatorios_GMP_2026-10-31.pdf']);
+  const tabela = mockPdf.tabelas.find((t) => (t.body || []).some((l) => l[0] === 'CLI 22H30'));
+  expect(tabela && tabela.body.map((l) => l[2])).toEqual(['31/10/2026', 'Nunca', '-']);
+});
+
+describe('[B1062, Fase 5 r3 C07] o PNG do modal de grafico as 22h30 de 31/10: o nome com o dia local nos dois caminhos', () => {
+  let baixados; let clickOrig; let ctxOrig; let blobOrig; let imageOrig;
+  beforeEach(() => {
+    baixados = [];
+    clickOrig = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function capturar() { baixados.push(this.download); };
+    global.URL.createObjectURL = () => 'blob:falso';
+    global.URL.revokeObjectURL = () => {};
+    ctxOrig = HTMLCanvasElement.prototype.getContext;
+    blobOrig = HTMLCanvasElement.prototype.toBlob;
+    HTMLCanvasElement.prototype.getContext = () => ({ fillRect() {}, drawImage() {} });
+    HTMLCanvasElement.prototype.toBlob = function blob(cb) { cb(new Blob(['png'])); };
+    imageOrig = global.Image;
+    global.Image = class { set src(v) { setTimeout(() => this.onload && this.onload(), 0); } };
+    // o CRA liga o resetMocks: a implementacao do mock volta a cada teste
+    require('html2canvas').mockImplementation(() => Promise.resolve({ toBlob: (cb) => cb(new Blob(['png'])) }));
+  });
+  afterEach(() => {
+    HTMLAnchorElement.prototype.click = clickOrig;
+    HTMLCanvasElement.prototype.getContext = ctxOrig;
+    HTMLCanvasElement.prototype.toBlob = blobOrig;
+    global.Image = imageOrig;
+  });
+  for (const [caminho, tipo] of [['1 (o SVG do grafico)', 'bar'], ['2 (html2canvas, sem SVG)', 'pie']]) {
+    test(`caminho ${caminho}`, async () => {
+      relogio(2026, 9, 31, 22, 30);
+      await act(async () => {
+        root.render(<ModalGrafico isOpen onClose={() => {}} titulo="Evolucao" descricao="" tipoGrafico={tipo} dados={[{ name: 'a', value: 1 }]} cores={['#000']} />);
+      });
+      const botao = document.querySelector('button[title="Exportar gráfico como PNG"]');
+      expect(botao).toBeTruthy();
+      await clicar(botao);
+      await esperar(() => baixados.length > 0, 5000);
+      expect(baixados).toEqual(['Evolucao_2026-10-31.png']);
+    });
+  }
 });
 
 test('[RN-166.06, B1062] no fonte (sem comentarios): a Ultima Proposta do PDF pela mesma funcao, e os nomes dos arquivos sem o dia UTC', () => {

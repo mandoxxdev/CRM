@@ -161,6 +161,11 @@ test('[RN-166.07, B1063] {{proposal.date}}: a emissao DD/MM/AAAA como esta; sena
   assert.strictEqual(data({ created_at: '2026-12-01 01:00:00' }, undefined), '30/11/2026', 'sem totais: o created_at');
   assert.strictEqual(data({}, { dataEmissao: '2026-11-05' }), '05/11/2026', 'a emissao em outro formato: pelo dataDoBancoBR');
   assert.strictEqual(data({ created_at: '2026-12-01 01:00:00' }, { dataEmissao: '2026-12-01 01:00:00' }), '30/11/2026', 'a emissao como instante do banco');
+  // Fase 5 r3 N15-N18: o contrato da funcao, nao so o caminho da rota (que so manda DD/MM/AAAA ou '')
+  assert.strictEqual(data({}, { dataEmissao: 'x20/10/2026' }), '', 'o DD/MM/AAAA inteiro, ancorado (nao um pedaco do texto)');
+  assert.strictEqual(data({}, { dataEmissao: ' 20/10/2026 ' }), '20/10/2026', 'aparado');
+  assert.strictEqual(data({ created_at: '2026-10-01 12:00:00' }, { dataEmissao: '2026-11-05' }), '05/11/2026', 'a emissao vence o created_at');
+  assert.strictEqual(data({ created_at: '2026-12-01 01:00:00' }, { dataEmissao: 'lixo' }), '30/11/2026', 'a emissao ilegivel cai no created_at');
   for (const [p, t] of [[{}, {}], [{ created_at: 'lixo' }, { dataEmissao: '' }], [{ created_at: null }, { dataEmissao: 'lixo' }], [{}, { dataEmissao: '31/02' }]]) {
     assert.strictEqual(data(p, t), '', `${JSON.stringify([p, t])} -> vazio (antes "Invalid Date")`);
   }
@@ -217,6 +222,7 @@ test('[RN-166.01, B1060] Relatorio Executivo, Evolucao de Propostas: a janela de
   assert.ok(!m[mes(AMANHA)], `nenhuma linha no mes de HOJE+1 (o mes UTC de E1): ${JSON.stringify(ev)}`);
   assert.deepStrictEqual(m[mes(ctx.I6)] && [m[mes(ctx.I6)].total, m[mes(ctx.I6)].valor_aprovado], [1, 300], `o mes da borda (${ctx.I6}): so E3`);
   assert.deepStrictEqual(ev.filter((x) => !x.mes || x.mes < mes(ctx.I6)), [], `nenhuma linha antes do mes de ${ctx.I6} (E4, E5 fora)`);
+  assert.strictEqual(new Set(ev.map((x) => x.mes)).size, ev.length, `um mes por linha (o GROUP BY pelo mes de Brasilia — Fase 5 r3 N08): ${JSON.stringify(ev)}`);
   assert.deepStrictEqual([soma(ev, 'total'), soma(ev, 'valor_aprovado')], [8, 1300], `as somas (E1, E2, F1, G1, E3, V1, V2, V3; aprovadas E1+E3): ${JSON.stringify(ev)}`);
 });
 
@@ -250,6 +256,7 @@ test('[RN-166.04, B1060] Tendencias Mensais do painel: 12 meses e o mes de Brasi
   assert.ok(!m[mes(AMANHA)], `nenhuma linha no mes de HOJE+1: ${JSON.stringify(h)}`);
   assert.strictEqual(m[mes(ctx.I12)] && m[mes(ctx.I12)].propostas_aprovadas, 1, `o mes da borda (${ctx.I12}): so H3`);
   assert.deepStrictEqual(h.filter((x) => !x.mes || x.mes < mes(ctx.I12)), [], `nenhuma linha antes do mes de ${ctx.I12} (H4, H5 fora)`);
+  assert.strictEqual(new Set(h.map((x) => x.mes)).size, h.length, `um mes por linha (o GROUP BY pelo mes de Brasilia — Fase 5 r3 N09): ${JSON.stringify(h)}`);
   assert.strictEqual(soma(h, 'propostas_aprovadas'), 5, `a soma das aprovadas (E1, E3, E4, E5, H3): ${JSON.stringify(h)}`);
 });
 
