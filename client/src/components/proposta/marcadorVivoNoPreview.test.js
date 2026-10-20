@@ -136,16 +136,15 @@ const MODELO = [
 const htmlDo = (clausulas) => gerarHTMLPropostaPremiumV2(PROPOSTA, [], TOTAIS, { clausulas_custom: clausulas }, 'http://127.0.0.1:9', false, true, {});
 
 let container; let root;
-function servidor({ isDefault }) {
-  const html = htmlDo(isDefault ? MODELO : GRAVADAS);
+// o servidor simulado guarda o estado: o PUT de uma clausula muda o que o GET seguinte (e o HTML seguinte) devolvem
+function servidor({ isDefault, gravadas = GRAVADAS }) {
+  const estado = servidor.estado = { linhas: gravadas.map((c) => ({ ...c })) };
+  const linhasDoModelo = () => MODELO.map((c, i) => ({ id: 100 + i, titulo: `${c.numero} ${c.titulo}`, conteudo: c.conteudo, ordem: i }));
   api.get.mockImplementation((url) => {
-    if (url === '/propostas/7/premium?embed=1') return Promise.resolve({ data: html });
+    const usaModelo = isDefault && !servidor.inicializado;
+    if (url === '/propostas/7/premium?embed=1') return Promise.resolve({ data: htmlDo(usaModelo ? MODELO : (isDefault ? linhasDoModelo() : estado.linhas)) });
     if (url === '/propostas/7/clausulas') {
-      if (!isDefault || servidor.inicializado) {
-        // depois do inicializar: as copias do modelo, com o marcador (o servidor copia `${numero} ${titulo}`)
-        const linhas = isDefault ? MODELO.map((c, i) => ({ id: 100 + i, titulo: `${c.numero} ${c.titulo}`, conteudo: c.conteudo, ordem: i })) : GRAVADAS;
-        return Promise.resolve({ data: { clausulas: linhas, isDefault: false } });
-      }
+      if (!usaModelo) return Promise.resolve({ data: { clausulas: isDefault ? linhasDoModelo() : estado.linhas, isDefault: false } });
       return Promise.resolve({ data: { clausulas: MODELO, isDefault: true, modelo_id: 3 } });
     }
     return Promise.resolve({ data: [] });
@@ -154,9 +153,14 @@ function servidor({ isDefault }) {
     if (url === '/propostas/7/clausulas/inicializar') { servidor.inicializado = true; return Promise.resolve({ data: { ok: true, total: MODELO.length } }); }
     return Promise.resolve({ data: { id: 999 } });
   });
-  api.put.mockResolvedValue({ data: { ok: true } });
+  api.put.mockImplementation((url, corpo) => {
+    const m = /\/propostas\/7\/clausulas\/(\d+)$/.exec(url);
+    const linha = m && estado.linhas.find((c) => String(c.id) === m[1]);
+    if (linha) Object.assign(linha, { titulo: corpo.titulo, conteudo: corpo.conteudo });
+    return Promise.resolve({ data: { ok: true } });
+  });
   api.delete.mockResolvedValue({ data: { ok: true } });
-  return html;
+  return htmlDo(isDefault ? MODELO : estado.linhas);
 }
 const espera = async (n = 10) => { for (let k = 0; k < n; k++) await act(async () => { await new Promise((r) => setTimeout(r, 5)); }); };
 
@@ -183,6 +187,10 @@ async function abrir(html) {
     );
   });
   await espera();
+  return carregar(html);
+}
+/** escreve no iframe (o atual — o editor o recria a cada carregamento) o HTML que o servidor entregou e dispara o load */
+async function carregar(html) {
   const iframe = container.querySelector('iframe.ppe-iframe');
   expect(iframe).toBeTruthy();
   const doc = iframe.contentDocument;
@@ -260,5 +268,36 @@ test('[RN-167.02, F4] ramo isDefault (o modelo com o marcador): editar outra -> 
   expect(putDe(102)).toHaveLength(1);
   expect(putDe(102)[0][1].conteudo).toBe('Prazo de entrega em 30 dias.');
   expect(putDe(101)).toEqual([]); // a do marcador, copiada do modelo com o marcador, nao e regravada
+  expect(JSON.stringify(puts())).not.toContain('20/10/2026');
+});
+
+// ── Fase 5 (r3): as lacunas que a sabotagem achou ─────────────────────────────────────────────────
+test('[RN-167.01, r3 C18] apagar um caractere repetido no fim: o ponto apagado nao volta', () => {
+  expect(R('Emitida em {{proposal.date}}, valida por 30 dias..', 'Emitida em 20/10/2026, valida por 30 dias..', 'Emitida em 20/10/2026, valida por 30 dias.'))
+    .toBe('Emitida em {{proposal.date}}, valida por 30 dias.');
+});
+
+test('[RN-167.02, r3 C06] a gravada que o htmlParaTexto muda (uma quebra no fim): a comparacao e no mesmo formato', async () => {
+  const gravadas = GRAVADAS.map((c) => (c.id === 12 ? { ...c, conteudo: `${G}\n` } : c));
+  const doc = await abrir(servidor({ isDefault: false, gravadas }));
+  await digitar(doc, '12', 'conteudo', (h) => h.replace('30 dias.', '30 dias corridos.'));
+  await salvar();
+  expect(putDe(12)).toHaveLength(1);
+  expect(putDe(12)[0][1].conteudo).toBe('Emitida em {{proposal.date}}, valida por 30 dias corridos.');
+});
+
+test('[RN-167.02, r3 C01 / Fase 2 M4] dois Salvar seguidos: o texto inicial e recapturado a cada carregamento', async () => {
+  const doc = await abrir(servidor({ isDefault: false }));
+  await digitar(doc, '12', 'conteudo', (h) => h.replace('30 dias.', '30 dias corridos.'));
+  await salvar();
+  expect(putDe(12)).toHaveLength(1);
+  expect(servidor.estado.linhas.find((c) => c.id === 12).conteudo).toBe('Emitida em {{proposal.date}}, valida por 30 dias corridos.');
+  // o editor recarregou (GET do HTML novo): escreve-o no iframe de agora e dispara o load
+  const doc2 = await carregar(htmlDo(servidor.estado.linhas));
+  expect(doc2.getElementById('proposalSource').textContent).toContain('30 dias corridos.'); // metade positiva: o HTML novo
+  await digitar(doc2, '13', 'conteudo', (h) => h.replace('a combinar', 'em 30 dias'));
+  await salvar();
+  expect(putDe(13)).toHaveLength(1);
+  expect(putDe(12)).toHaveLength(1); // so o do primeiro Salvar (com o inicial velho, a 12 seria regravada com a data)
   expect(JSON.stringify(puts())).not.toContain('20/10/2026');
 });

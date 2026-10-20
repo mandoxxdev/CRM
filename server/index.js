@@ -16005,13 +16005,12 @@ app.get('/api/custos-viagens/verificar-elegibilidade/:cliente_id', authenticateT
       COUNT(DISTINCT CASE WHEN p.status IN ('aprovada', 'rejeitada', 'enviada') THEN p.id END) as propostas_processadas,
       COUNT(DISTINCT CASE WHEN p.status = 'aprovada' THEN p.id END) as propostas_aprovadas,
       SUM(CASE WHEN p.status = 'aprovada' THEN p.valor_total ELSE 0 END) as valor_total_aprovado,
-      MAX(date(p.created_at, ?)) as ultimo_dia_local,
       CAST(julianday(?) - julianday(MAX(date(p.created_at, ?))) AS INTEGER) as dias_desde_ultima
     FROM clientes c
     LEFT JOIN propostas p ON c.id = p.cliente_id AND (p.ativo IS NULL OR p.ativo = 1)
     WHERE c.id = ?
     GROUP BY c.id
-  `, [modViagem, hojeViagem, modViagem, cliente_id], (err, cliente) => {
+  `, [hojeViagem, modViagem, cliente_id], (err, cliente) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }

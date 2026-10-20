@@ -126,9 +126,9 @@ async function inserir(tabela, campos) {
   const k = Object.keys(dados);
   return (await run(`INSERT INTO ${tabela} (${k.join(', ')}) VALUES (${k.map(() => '?').join(', ')})`, Object.values(dados))).lastID;
 }
-const proposta = (cliente, criado) => inserir('propostas', {
+const proposta = (cliente, criado, extra) => inserir('propostas', {
   cliente_id: cliente, numero_proposta: `E167-${++ctx.n}`, titulo: `PROPOSTA 167 ${ctx.n}`, status: 'enviada', valor_total: 1,
-  responsavel_id: ctx.admin, created_by: ctx.admin, created_at: criado,
+  responsavel_id: ctx.admin, created_by: ctx.admin, created_at: criado, ...extra,
 });
 
 // [cliente, as ultimas propostas (created_at no banco), { atendida, dias } esperados] — preenchido na massa (o I90 vem do SQLite)
@@ -157,10 +157,13 @@ test('massa: um cliente por borda (created_at escolhido, por fora)', async () =>
     K5: [['lixo'], { atendida: false, dias: null }],
     K6: [[banco(HOJE, 22, 30)], { atendida: true, dias: 0 }], // antes -1 (Math.floor de -0,15 dia)
     K7: [['lixo', banco(somaDias(HOJE, -10), 12, 0)], { atendida: true, dias: 10 }], // antes false/null: o 'lixo' vencia o MAX de texto
+    // Fase 5 r3 S05/S12: a ULTIMA (o MAX, nao o MIN) e so a ATIVA
+    K8: [[banco(somaDias(HOJE, -200), 12, 0), banco(somaDias(HOJE, -10), 12, 0)], { atendida: true, dias: 10 }],
+    K9: [[banco(somaDias(HOJE, -200), 12, 0), [banco(somaDias(HOJE, -5), 12, 0), { ativo: 0 }]], { atendida: false, dias: 200 }],
   };
   for (const [k, [criados, esperado]] of Object.entries(def)) {
     const id = await cli(`CLIENTE ${k} 167`);
-    for (const c of criados) await proposta(id, c);
+    for (const c of criados) await (Array.isArray(c) ? proposta(id, c[0], c[1]) : proposta(id, c));
     CASOS[k] = { id, esperado };
   }
 });
@@ -200,7 +203,7 @@ test('[T3] a elegibilidade de viagem concorda com a atividade recente das Visita
   }
   assert.deepStrictEqual(viagem, visitas, 'as duas reguas da atividade recente');
   // metade positiva: os dois lados existem (nao e igualdade de dois vazios)
-  assert.deepStrictEqual(Object.values(visitas).sort(), [false, false, true, true, true, true, true]);
+  assert.deepStrictEqual(Object.values(visitas).sort(), [false, false, false, true, true, true, true, true, true]);
 });
 
 (async () => {
