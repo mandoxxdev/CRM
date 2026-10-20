@@ -21566,8 +21566,22 @@ app.put('/api/operacional/atividades-colaboradores/:id', authenticateToken, chec
       return res.status(404).json({ error: 'Atividade não encontrada' });
     }
 
-    db.run(`UPDATE atividades_colaboradores SET tipo_atividade = ?, descricao = ?, status = ?, data_fim = ?, horas_reais = ?, observacoes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-      [tipo_atividade, descricao || null, status || 'em_andamento', data_fim || null, horas_reais || null, observacoes || null, id],
+    // Etapa 163 (RN-163.01, C407): grava SO o campo que veio no corpo. Antes as seis colunas eram sempre gravadas — o corpo do
+    // formulario de edicao (sem status/data_fim/horas_reais) reabria a atividade concluida e apagava o fim e as horas, e o PUT so com
+    // { status } dava 500 (tipo_atividade NOT NULL). O campo PRESENTE segue a regra de antes (vazio = nulo; status vazio = em_andamento;
+    // tipo_atividade como veio — o null presente continua recusado pela coluna). A regua de presenca e a das propostas
+    // (`montarSetParcial`, atualizacaoParcial.js): chave ausente nem entra no UPDATE.
+    const parcial = montarSetParcial(req.body, {
+      tipo_atividade: (v) => v,
+      descricao: (v) => v || null,
+      status: (v) => v || 'em_andamento',
+      data_fim: (v) => v || null,
+      horas_reais: (v) => v || null,
+      observacoes: (v) => v || null,
+    });
+    const sets = [parcial.sql, 'updated_at = CURRENT_TIMESTAMP'].filter(Boolean).join(', ');
+    db.run(`UPDATE atividades_colaboradores SET ${sets} WHERE id = ?`,
+      [...parcial.params, id],
       function(err) {
         if (err) {
           return res.status(500).json({ error: err.message });
