@@ -3,7 +3,7 @@ import {
   FiSearch, FiPlus, FiUsers, FiSend, FiArrowLeft, FiMessageCircle, FiCheck,
   FiImage, FiX
 } from 'react-icons/fi';
-import { format, isToday, isYesterday, parseISO, isSameDay } from 'date-fns';
+import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -12,37 +12,46 @@ import { applyVisibleUsersFilter } from '../../utils/userFilters';
 import {
   connectChatSocket, joinConversa, leaveConversa, emitTyping, resolveMediaUrl
 } from '../../services/chatSocket';
+import { lerInstanteDoBanco } from '../../utils/dataLocal';
 import './Chat.css';
 
+// Etapa 170 (RN-170.01, B1079): o `created_at` do Chat e o `CURRENT_TIMESTAMP` do SQLite ('AAAA-MM-DD HH:MM:SS' em UTC, sem fuso) — o
+// `parseISO(v.replace(' ', 'T'))` o lia como hora LOCAL: 3 h adiantada e, das 21h a meia-noite, o dia de amanha (a mensagem de hoje saia
+// com a data, e o separador com a data de amanha em vez de *Hoje*). `lerInstanteDoBanco` le como UTC (ISO sem `Z` continua local). Valor
+// ilegivel -> sem texto (antes o `format(Invalid Date)` lancava RangeError e a tela do Chat caia inteira).
 function formatMessageTime(dateStr) {
-  if (!dateStr) return '';
-  const d = parseISO(dateStr.replace(' ', 'T'));
+  const d = lerInstanteDoBanco(dateStr);
+  if (!d) return '';
   if (isToday(d)) return format(d, 'HH:mm');
   if (isYesterday(d)) return 'Ontem';
   return format(d, 'dd/MM/yy', { locale: ptBR });
 }
 
 function formatListTime(dateStr) {
-  if (!dateStr) return '';
-  const d = parseISO(dateStr.replace(' ', 'T'));
+  const d = lerInstanteDoBanco(dateStr);
+  if (!d) return '';
   if (isToday(d)) return format(d, 'HH:mm');
   if (isYesterday(d)) return 'Ontem';
   return format(d, 'dd/MM', { locale: ptBR });
 }
 
 function formatDateSeparator(dateStr) {
-  if (!dateStr) return '';
-  const d = parseISO(dateStr.replace(' ', 'T'));
+  const d = lerInstanteDoBanco(dateStr);
+  if (!d) return '';
   if (isToday(d)) return 'Hoje';
   if (isYesterday(d)) return 'Ontem';
   return format(d, 'dd/MM/yyyy', { locale: ptBR });
 }
 
+// A mensagem ilegivel nao tem separador; a seguinte compara o dia com a ULTIMA anterior legivel (Etapa 170, Fase 2 M3) — sem nenhuma, mostra.
 function showDateSeparator(mensagens, index) {
-  if (index === 0) return true;
-  const curr = parseISO(mensagens[index].created_at.replace(' ', 'T'));
-  const prev = parseISO(mensagens[index - 1].created_at.replace(' ', 'T'));
-  return !isSameDay(curr, prev);
+  const curr = lerInstanteDoBanco(mensagens[index].created_at);
+  if (!curr) return false;
+  for (let i = index - 1; i >= 0; i -= 1) {
+    const prev = lerInstanteDoBanco(mensagens[i].created_at);
+    if (prev) return !isSameDay(curr, prev);
+  }
+  return true;
 }
 
 function getInitials(name) {
