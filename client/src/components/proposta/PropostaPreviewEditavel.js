@@ -19,6 +19,8 @@ import {
   renumerarClausulas,
   ehClausulaNovaVazia,
   descartarClausulasNovasVazias,
+  lerTextosIniciaisDasClausulas,
+  restaurarMarcadoresNaLista,
 } from './clausulasInlineEditor';
 import { nomeArquivoPdfProposta } from '../../utils/nomeArquivoPdf';
 import { aplicarMascaraNoNoEditavel } from '../../utils/telefoneContentEditable';
@@ -84,6 +86,9 @@ function ajustarEscalaCelular(doc) {
 export default function PropostaPreviewEditavel() {
   const { id } = useParams();
   const iframeRef = useRef(null);
+  // Etapa 167 (RN-167.02, B1065): o texto de cada cláusula como a tela o recebeu (o servidor já resolveu os marcadores). Sobrescrito a
+  // cada load do iframe (Fase 2 M4: o primeiro load pode ser o do about:blank).
+  const textosIniciaisRef = useRef(new Map());
 
   const [html, setHtml] = useState('');
   // Celular: a folha de acoes que substitui a parede de seis botoes.
@@ -1277,6 +1282,21 @@ export default function PropostaPreviewEditavel() {
       // "5.x ", então o filtro antigo `titulo || conteudo` nunca a descartava).
       .filter((c) => (c.titulo || c.conteudo) && !ehClausulaNovaVazia(c));
 
+    // Etapa 167 (RN-167.02, B1065, C418): o servidor entrega o texto com os marcadores já resolvidos; o que o usuário não mexeu volta a
+    // ser o marcador, senão o Salvar gravava a data (o número, o nome) escrita no lugar dele. A chave é a mesma do template: o id da
+    // cláusula gravada, ou default-<numero> do modelo (a mesma que o ramo abaixo usa para relacionar as recém-copiadas).
+    const gravadosPorKey = new Map();
+    snapshotOriginal.forEach((c) => {
+      if (!c) return;
+      const key = clausulasIsDefault ? (c.numero ? `default-${c.numero}` : null) : (c.id != null ? String(c.id) : null);
+      if (!key || gravadosPorKey.has(key)) return;
+      gravadosPorKey.set(key, {
+        titulo: clausulasIsDefault ? `${c.numero} ${c.titulo}` : c.titulo,
+        conteudo: htmlParaTexto(c.conteudo),
+      });
+    });
+    listaAtual = restaurarMarcadoresNaLista(listaAtual, textosIniciaisRef.current, gravadosPorKey);
+
     if (clausulasIsDefault) {
       const houveMudanca = listaAtual.length !== snapshotOriginal.length
         || listaAtual.some((c, i) => {
@@ -1608,6 +1628,7 @@ export default function PropostaPreviewEditavel() {
             onLoad={() => {
               const doc = iframeRef.current?.contentDocument;
               if (doc) {
+                textosIniciaisRef.current = lerTextosIniciaisDasClausulas(doc);
                 injetarAtributosEdicao(doc);
                 ativarEdicaoClausulas(doc);
                 observarRepaginacoesClausulas(doc);
