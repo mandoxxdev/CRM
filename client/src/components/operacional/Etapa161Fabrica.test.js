@@ -344,3 +344,21 @@ describe('[C402] a coluna Data (so o dia) da Presenca e das Horas extras mostra 
     expect(container.textContent).not.toContain('18/10/2026');
   });
 });
+
+describe('[RN-161.01, C01 da sabotagem r3] os Relatorios da producao: clicar na aba ja aberta', () => {
+  const aba = (rotulo) => [...container.querySelectorAll('button')].find((b) => b.textContent === rotulo);
+  test('[RN-161.01] clicar na aba que ja esta aberta mantem os dados (nao zera nem pede de novo)', async () => {
+    api.get.mockImplementation(async (url) => {
+      if (url === '/producao/relatorios/producao') return { data: { porDia: [{ dia: 'MARCA-ABERTA-161', produzido: 1, refugo: 0, apontamentos: 1 }], porOp: [] } };
+      return { data: {} };
+    });
+    await montar(<RelatoriosProducao />);
+    await esperar(() => texto().includes('MARCA-ABERTA-161'));
+    const n0 = api.get.mock.calls.length;
+    await act(async () => { aba('Produção').click(); });
+    for (let i = 0; i < 4; i++) await act(async () => { await pausa(10); });
+    expect(texto()).toContain('MARCA-ABERTA-161');
+    expect(texto()).not.toContain('Sem dados para o período');
+    expect(api.get.mock.calls.length).toBe(n0);
+  });
+});

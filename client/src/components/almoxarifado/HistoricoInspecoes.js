@@ -6,6 +6,7 @@ import { SkeletonTable } from '../SkeletonLoader';
 import { formatarFaixa } from './faixaTolerancia';
 import AnexosDocumento from './AnexosDocumento';
 import useUltimoPedido from '../../hooks/useUltimoPedido';
+import { formatarInstanteDoBanco } from './instanteDoBanco';
 import './Almoxarifado.css';
 
 /**
@@ -40,7 +41,9 @@ const FLAGS_CURTAS = [
   { key: 'material_incorreto', label: 'Material', title: 'Material incorreto' },
 ];
 
-const formatDataHora = (d) => (d ? new Date(d).toLocaleDateString('pt-BR') : '—');
+// Etapa 161 (C397, residuo do r1): `data_inspecao` e um CURRENT_TIMESTAMP (UTC, sem fuso) — o `new Date(texto)` o lia como hora local
+// e, das 21h a meia-noite, o ato de hoje aparecia com o dia de amanha. So a data, como antes.
+const formatDataHora = (d) => formatarInstanteDoBanco(d);
 
 // A fórmula da faixa mora em `faixaTolerancia.js`: ela estava duplicada aqui e no modal de
 // decisão, e a revisão adversarial da Etapa 29 mediu as duas cópias divergindo. Reexportado

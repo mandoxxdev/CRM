@@ -27,6 +27,7 @@ import NotificacoesAlmoxarifado from './NotificacoesAlmoxarifado';
 import RemessasTerceirosAlmoxarifado from './RemessasTerceirosAlmoxarifado';
 import MateriaisAlmoxarifado from './MateriaisAlmoxarifado';
 import ExtratoMaterialModal from './ExtratoMaterialModal';
+import DevolucoesAlmoxarifado from './DevolucoesAlmoxarifado';
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
@@ -233,7 +234,18 @@ describe('[RN-161.02, C396] Painel do Almoxarifado — trocar o periodo', () => 
   const MAIS = (marca) => [{ material_id: 1, nome: marca, codigo: 'MAT-A', total_consumido: 3, unidade: 'UN' }];
   function mockPainel(modo) {
     let n = 0;
+    let nOs = 0;
     api.get.mockImplementation(async (url) => {
+      // C19 (sabotagem r3): o Consumo por O.S. vem no mesmo Promise.all — o anterior lento tambem nao pode troca-lo
+      if (url === '/almoxarifado/relatorios/consumo-os') {
+        nOs += 1;
+        if (nOs === 1) return { data: [{ os_id: 'OS-ABERTURA-161', total_consumido: 1 }] };
+        if (nOs === 2) {
+          if (modo === 'lento') { await pausa(600); return { data: [{ os_id: 'OS-VELHA-161', total_consumido: 9 }] }; }
+          await pausa(600); throw falhaHttp('o anterior caiu');
+        }
+        return { data: [{ os_id: 'OS-ULTIMA-161', total_consumido: 2 }] };
+      }
       if (url === '/almoxarifado/relatorios/materiais-mais-consumidos') {
         n += 1;
         if (n === 1) return { data: MAIS('ABERTURA-161') };
@@ -255,15 +267,19 @@ describe('[RN-161.02, C396] Painel do Almoxarifado — trocar o periodo', () => 
     await montar(<AlmoxarifadoDashboard />, '/almoxarifado');
     await esperar(20);
     expect(texto()).toContain('ABERTURA-161');
+    expect(texto()).toContain('OS-ABERTURA-161');
     const [vA, vB] = doisValores(selectPeriodo());
     await escolher(selectPeriodo(), vA);
     await esperar(50);
     await escolher(selectPeriodo(), vB || '30');
     await esperar(50);
     expect(texto()).toContain('RESPOSTA-ULTIMA-161');
+    expect(texto()).toContain('OS-ULTIMA-161');
     await esperar(650);
     expect(texto()).toContain('RESPOSTA-ULTIMA-161');
     expect(texto()).not.toContain('RESPOSTA-VELHA-161');
+    expect(texto()).toContain('OS-ULTIMA-161'); // C19: o Consumo por O.S. tambem e o do ultimo periodo
+    expect(texto()).not.toContain('OS-VELHA-161');
   });
 });
 
@@ -660,5 +676,270 @@ describe('[RN-161.12, C400] Recebimentos: trocar o filtro recarrega so a lista',
     expect(conta('/almoxarifado/materiais')).toBe(1);
     expect(conta('/almoxarifado/recebimentos-aux/pedidos-compra')).toBe(1);
     expect(conta(URL_FORN)).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Fase 5 (sabotagem r3) — as assercoes que faltavam (C07..C32) e os residuos de exibicao do r1 (C397).
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+describe('[RN-161.11, C07/C30/C31] Materiais: o QR — Limpar filtros, o subtitulo e o estado vazio', () => {
+  const MATS = [
+    { id: 1, codigo: 'MAT-001', nome: 'O DO QR', quantidade_atual: 1, quantidade_minima: 0, ativo: 1 },
+    { id: 2, codigo: 'MAT-0010', nome: 'O PARECIDO', quantidade_atual: 1, quantidade_minima: 0, ativo: 1 },
+  ];
+  beforeEach(() => {
+    api.get.mockImplementation(async (url, c) => {
+      if (url === '/almoxarifado/materiais') {
+        const st = c && c.params && c.params.status;
+        return { data: st === 'inativo' ? [MATS[1]] : MATS };
+      }
+      return { data: [] };
+    });
+  });
+  const abrirPeloQr = async () => {
+    await montar(<MateriaisAlmoxarifado />, '/almoxarifado/materiais?material_id=1');
+    await esperar(350);
+    await esperar(350);
+  };
+  const subtitulo = () => container.querySelector('.almox-page p').textContent;
+  test('[C30] o subtitulo conta o que aparece: "1 material" (e nao os 2 que o servidor devolveu)', async () => {
+    await abrirPeloQr();
+    expect(texto()).not.toContain('O PARECIDO');
+    expect(subtitulo()).toBe('1 material');
+  });
+  test('[C07] Limpar filtros solta o QR: o MAT-0010 volta', async () => {
+    await abrirPeloQr();
+    expect(texto()).not.toContain('O PARECIDO');
+    await clicar(botao('Limpar filtros'));
+    await esperar(350);
+    expect(container.querySelector('.almox-search-input').value).toBe('');
+    expect(texto()).toContain('O PARECIDO');
+    expect(texto()).toContain('O DO QR');
+  });
+  test('[C31] o QR com o material fora da lista (outro filtro) mostra o estado vazio, nao uma tabela vazia', async () => {
+    await abrirPeloQr();
+    const selStatus = [...container.querySelectorAll('select')].find((s) => [...s.options].some((o) => o.value === 'inativo'));
+    await escolher(selStatus, 'inativo');
+    await esperar(350);
+    expect(api.get.mock.calls.some(([u, c]) => u === '/almoxarifado/materiais' && c && c.params && c.params.status === 'inativo')).toBe(true);
+    expect(texto()).not.toContain('O PARECIDO'); // o servidor devolveu so o MAT-0010; o filtro do QR o corta
+    expect(texto()).toContain('Nenhum material encontrado');
+    expect(container.querySelector('table.almox-table')).toBeNull();
+    expect(subtitulo()).toBe('0 materiais');
+  });
+});
+
+describe('[RN-161.09, C08/C09/C10/C27] a busca de fornecedores: pedidos e opcoes', () => {
+  function mockRemessas() {
+    api.get.mockImplementation(async (url, c) => {
+      if (url === URL_FORN) {
+        const s = c && c.params ? c.params.search : undefined;
+        if (s === '') return { data: [{ id: 1, razao_social: 'AAA PRIMEIRO', cnpj: '' }] };
+        if (s === 'galv' || s === 'galvan') return { data: [{ id: 51, razao_social: 'GALVANIZADORA 51', cnpj: '51.000' }] };
+        return { data: [] };
+      }
+      return { data: [] };
+    });
+  }
+  const modalR = () => container.querySelector('.almox-modal');
+  const buscaR = () => modalR().querySelector('input[aria-label="Buscar terceiro"]');
+  const selR = () => [...modalR().querySelectorAll('select')].find((s) => [...s.options].some((o) => o.textContent === 'Não cadastrado / digitar abaixo'));
+
+  test('[C08] Recebimento: 400 ms depois de abrir saiu UM pedido de fornecedores so', async () => {
+    api.get.mockImplementation(async () => ({ data: [] }));
+    await montar(<RecebimentosAlmoxarifado />);
+    await esperar(400);
+    expect(fornCalls()).toEqual(['']);
+  });
+  test('[C09] Remessas: abrir a tela sem o formulario "nova" nao pede fornecedores', async () => {
+    mockRemessas();
+    await montar(<RemessasTerceirosAlmoxarifado />);
+    await esperar(400);
+    expect(fornCalls()).toEqual([]);
+    await clicar(botao('Nova remessa')); // metade positiva: com o formulario aberto, pede
+    expect(fornCalls()).toEqual(['']);
+  });
+  test('[C10] Remessas: a busca digitada some ao fechar; a reabertura pede com search vazio', async () => {
+    mockRemessas();
+    await montar(<RemessasTerceirosAlmoxarifado />);
+    await clicar(botao('Nova remessa'));
+    await digitar(buscaR(), 'galv');
+    await esperar(350);
+    expect(fornCalls()).toEqual(['', 'galv']);
+    await clicar(modalR().querySelector('.almox-modal-close'));
+    expect(modalR()).toBeNull();
+    await clicar(botao('Nova remessa'));
+    await esperar(350);
+    expect(buscaR().value).toBe('');
+    expect(fornCalls()).toEqual(['', 'galv', '']);
+  });
+  test('[C27] Remessas: o terceiro escolhido que volta numa nova busca aparece UMA vez no select', async () => {
+    mockRemessas();
+    await montar(<RemessasTerceirosAlmoxarifado />);
+    await clicar(botao('Nova remessa'));
+    await digitar(buscaR(), 'galv');
+    await esperar(350);
+    await escolher(selR(), '51');
+    await digitar(buscaR(), 'galvan');
+    await esperar(350);
+    expect(fornCalls()).toEqual(['', 'galv', 'galvan']);
+    expect([...selR().options].filter((o) => o.value === '51').length).toBe(1);
+    expect(selR().value).toBe('51');
+  });
+});
+
+describe('[RN-161.08, C12] Notificacoes: o evento do registro sem rotulo', () => {
+  test('aparece pela chave', async () => {
+    api.get.mockImplementation(async (url) => {
+      if (url === '/almoxarifado/notificacoes/eventos') return { data: [{ evento: 'SEM_ROTULO_161' }, { evento: 'COM_ROTULO_VAZIO_161', rotulo: '' }] };
+      return { data: { itens: [], resumo: { pendentes: 0, enviadas: 0, falhas: 0 } } };
+    });
+    await montar(<NotificacoesAlmoxarifado />, '/almoxarifado/notificacoes');
+    const op = (v) => [...container.querySelector('#notif-filtro-evento').options].find((o) => o.value === v);
+    expect(op('SEM_ROTULO_161').textContent).toBe('SEM_ROTULO_161');
+    expect(op('COM_ROTULO_VAZIO_161').textContent).toBe('COM_ROTULO_VAZIO_161');
+  });
+});
+
+describe('[RN-161.06, C17] o created_at vazio aparece "—"', () => {
+  test('Recebimentos: a coluna Data', async () => {
+    api.get.mockImplementation(async (url) => {
+      if (url === '/almoxarifado/recebimentos') return { data: [{ id: 9, numero: 'REC-SEM-DATA', nota_fiscal: 'NF1', pedido_compra_numero: 'PC1', fornecedor_nome: 'F', status: 'PENDENTE', created_at: null }] };
+      return { data: [] };
+    });
+    await montar(<RecebimentosAlmoxarifado />);
+    const linha = [...container.querySelectorAll('tbody tr')].find((tr) => tr.textContent.includes('REC-SEM-DATA'));
+    expect(linha.lastElementChild.textContent).toBe('—');
+  });
+  test('Requisicoes: a coluna Data', async () => {
+    api.get.mockImplementation(async (url) => {
+      if (url === '/almoxarifado/requisicoes') {
+        return { data: [{ id: 55, numero: 'REQ-SEM-DATA', status: 'PENDENTE', urgencia: 'NORMAL', solicitante_id: 1, solicitante_nome: 'Fulano', total_itens: 1, valor_total: 0, created_at: null }] };
+      }
+      return { data: [] };
+    });
+    await montar(<RequisicoesList />, '/almoxarifado/requisicoes');
+    const linha = [...container.querySelectorAll('tbody tr')].find((tr) => tr.textContent.includes('REQ-SEM-DATA'));
+    const ths = [...container.querySelectorAll('thead th')].map((th) => th.textContent);
+    expect(ths).toContain('Data');
+    expect(linha.children[ths.indexOf('Data')].textContent).toBe('—');
+  });
+});
+
+describe('[RN-161.02, C16/C32] Requisicoes: quem espera (await) a recarga descartada recebe promessa que resolve', () => {
+  test('aprovar com a recarga lenta e trocar o filtro no meio: sem "Erro ao aprovar"', async () => {
+    let lentoProximo = false;
+    let lentoSaiu = false;
+    const req = (numero, status) => ({ id: 55, numero, status, urgencia: 'NORMAL', solicitante_id: 1, solicitante_nome: 'Fulano', total_itens: 1, valor_total: 0, created_at: BANCO });
+    api.get.mockImplementation(async (url, c) => {
+      if (url === '/almoxarifado/requisicoes') {
+        const st = c && c.params && c.params.status;
+        if (!st && lentoProximo) {
+          lentoProximo = false;
+          lentoSaiu = true;
+          await pausa(600);
+          return { data: [req('REQ-VELHA-161', 'APROVADA')] };
+        }
+        return { data: [req(st ? 'REQ-ULTIMA-161' : 'REQ-161', 'PENDENTE')] };
+      }
+      if (url === '/almoxarifado/requisicoes/55') {
+        return { data: { ...req('REQ-161', 'PENDENTE'), tipo: 'CONSUMO', itens: [] } };
+      }
+      return { data: [] };
+    });
+    api.put.mockResolvedValue({ data: {} });
+    toast.success.mockClear();
+    await montar(<RequisicoesList />, '/almoxarifado/requisicoes');
+    await clicar([...container.querySelectorAll('tbody tr')].find((tr) => tr.textContent.includes('REQ-161')));
+    await esperar(20);
+    lentoProximo = true;
+    await clicar(botao('Só Aprovar'));
+    await esperar(50);
+    expect(api.put).toHaveBeenCalledWith('/almoxarifado/requisicoes/55/aprovar');
+    expect(lentoSaiu).toBe(true); // a recarga do aprovar esta em voo (lenta)
+    const sel = [...container.querySelectorAll('select.almox-select')].find((s) => [...s.options].some((o) => o.textContent === 'Todos os status'));
+    await escolher(sel, doisValores(sel)[0]); // a recarga nova; a do aprovar vira descartada
+    await esperar(700);
+    expect(texto()).toContain('REQ-ULTIMA-161');
+    expect(texto()).not.toContain('REQ-VELHA-161');
+    expect(toast.success).toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+});
+
+describe('[C397, residuos do r1] Inspecoes e Devolucoes: o dia mostrado e o local (CURRENT_TIMESTAMP lido como UTC)', () => {
+  const DIA_CERTO = INSTANTE.toLocaleDateString('pt-BR'); // 19/10/2026 em UTC-3
+  const DIA_ERRADO = new Date('2026-10-20T01:30:00').toLocaleDateString('pt-BR'); // 20/10/2026 (o texto lido como hora local)
+  beforeEach(() => {
+    expect(new Date().getTimezoneOffset()).toBeGreaterThan(0); // guarda: em UTC (ou a leste) o certo e o errado coincidem
+    expect(DIA_CERTO).not.toBe(DIA_ERRADO);
+  });
+  test('Inspecoes pendentes: a data de entrada', async () => {
+    api.get.mockImplementation(async (url) => {
+      if (url === '/almoxarifado/inspecoes/pendentes') {
+        return { data: [{ item_id: 3, id: 3, material_id: 1, material_nome: 'MAT INSP', material_codigo: 'MAT-A', quantidade_retida: 1, recebimento_numero: 'REC-1', data_entrada: BANCO }] };
+      }
+      return { data: [] };
+    });
+    await montar(<InspecoesAlmoxarifado />);
+    const linha = [...container.querySelectorAll('tbody tr')].find((tr) => tr.textContent.includes('MAT INSP'));
+    expect(linha.textContent).toContain(DIA_CERTO);
+    expect(linha.textContent).not.toContain(DIA_ERRADO);
+  });
+  test('Inspecoes, aba Historico: a data da inspecao', async () => {
+    api.get.mockImplementation(async (url) => {
+      if (url === '/almoxarifado/inspecoes/historico') {
+        return { data: [{ id: 3, material_id: 1, material_nome: 'MAT HIST', material_codigo: 'MAT-A', decisao: 'APROVADO', data_inspecao: BANCO, medidas_total: 0, medidas_nao_conformes: 0 }] };
+      }
+      return { data: [] };
+    });
+    await montar(<InspecoesAlmoxarifado />);
+    await clicar(botao('Histórico'));
+    await esperar(20);
+    const linha = container.querySelector('[data-testid="historico-linha-3"]');
+    expect(linha.textContent).toContain(DIA_CERTO);
+    expect(linha.textContent).not.toContain(DIA_ERRADO);
+  });
+  test('Devolucoes: a data da lista', async () => {
+    api.get.mockImplementation(async (url) => {
+      if (url === '/almoxarifado/devolucoes') {
+        return { data: [{ id: 4, material_id: 1, material_codigo: 'MAT-A', material_nome: 'MAT DEV', quantidade: 1, motivo: 'SOBRA', destino: 'ESTOQUE', created_at: BANCO }] };
+      }
+      return { data: [] };
+    });
+    await montar(<DevolucoesAlmoxarifado />);
+    const linha = [...container.querySelectorAll('tbody tr')].find((tr) => tr.textContent.includes('MAT DEV'));
+    expect(linha.firstElementChild.textContent).toBe(DIA_CERTO);
+  });
+});
+
+describe('[C397, residuo do r1] Reservas: a "vencida" compara expira_em (so data) com o hoje LOCAL', () => {
+  test('as 23h30 locais de 19/10: a que expira em 19/10 nao esta vencida; a de 18/10 esta', async () => {
+    const RealDate = Date;
+    const FIXO = new RealDate(2026, 9, 19, 23, 30, 0).getTime();
+    expect(new RealDate(FIXO).toISOString().slice(0, 10)).toBe('2026-10-20'); // guarda: o dia UTC daquele instante e o de amanha
+    api.get.mockImplementation(async (url) => {
+      if (url === '/almoxarifado/reservas') {
+        return { data: [
+          { id: 4, material_id: 1, material_nome: 'RES HOJE', material_codigo: 'MAT-A', quantidade: 1, status: 'ATIVA', expira_em: '2026-10-19', created_at: BANCO },
+          { id: 5, material_id: 1, material_nome: 'RES ONTEM', material_codigo: 'MAT-A', quantidade: 1, status: 'ATIVA', expira_em: '2026-10-18', created_at: BANCO },
+        ] };
+      }
+      return { data: [] };
+    });
+    global.Date = class extends RealDate {
+      constructor(...a) { if (a.length) super(...a); else super(FIXO); }
+      static now() { return FIXO; }
+    };
+    try {
+      await montar(<ReservasAlmoxarifado />);
+      const linha = (nome) => [...container.querySelectorAll('tbody tr')].find((t) => t.textContent.includes(nome));
+      expect(linha('RES ONTEM').textContent).toContain('VENCIDA'); // metade positiva: a vencida e marcada
+      expect(linha('RES HOJE').textContent).toContain('Expira: 19/10/2026');
+      expect(linha('RES HOJE').textContent).not.toContain('VENCIDA');
+    } finally {
+      global.Date = RealDate;
+    }
   });
 });

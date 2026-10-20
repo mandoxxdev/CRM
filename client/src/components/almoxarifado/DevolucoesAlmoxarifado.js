@@ -5,6 +5,7 @@ import { FiCornerUpLeft, FiPaperclip, FiRefreshCw } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
 import AnexosModal from './AnexosModal';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
+import { formatarInstanteDoBanco } from './instanteDoBanco';
 import './Almoxarifado.css';
 
 /**
@@ -58,7 +59,9 @@ const FORM_VAZIO = {
   condicao: '', destino: 'ESTOQUE', observacoes: '', lote_id: '', series: [], seriesTexto: '',
 };
 
-const formatData = (d) => (d ? new Date(d).toLocaleDateString('pt-BR') : '—');
+// Etapa 161 (C397, residuo do r1): o `created_at` da devolucao e o da saida de origem (movimentacao) e um CURRENT_TIMESTAMP (UTC, sem fuso) — o `new Date(texto)` o lia como hora local
+// e, das 21h a meia-noite, o ato de hoje aparecia com o dia de amanha. So a data, como antes.
+const formatData = (d) => formatarInstanteDoBanco(d);
 
 const DevolucoesAlmoxarifado = () => {
   const { bloquearSeNaoPode } = useAlmoxPermissoes();

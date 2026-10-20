@@ -8,6 +8,7 @@ import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import { useAuth } from '../../context/AuthContext';
 import AvisoDaListaRecusada, { OpcaoForaDaLista } from './AvisoDaListaRecusada';
 import useUltimoPedido from '../../hooks/useUltimoPedido';
+import { hojeLocalISO } from '../../utils/dataLocal';
 import './Almoxarifado.css';
 
 /**
@@ -47,7 +48,9 @@ const FORM_VAZIO = {
   observacoes: '',
 };
 
-const hoje = () => new Date().toISOString().slice(0, 10);
+// Etapa 161 (C397, residuo do r1): `expira_em` e coluna SO de data (o `type="date"` do formulario — o ultimo dia valido do hold);
+// a "vencida" compara com o hoje LOCAL. O `toISOString` dava o dia UTC: das 21h a meia-noite a reserva que vence hoje ja aparecia vencida.
+const hoje = () => hojeLocalISO();
 
 // Número da requisição (REQ-…) quando o GET /reservas o trouxe (Etapa 77); senão o id, como
 // antes. Mostrar o id fazia o usuário procurar "#55" numa tela que lista por número.

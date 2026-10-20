@@ -27,6 +27,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 const sqlite3 = require('sqlite3');
 const { ALERT_REGISTRY } = require('../../services/almoxarifado/alertRegistry');
+const diaLocal = require('../../services/diaLocal');
 
 const SERVER_DIR = path.join(__dirname, '..', '..');
 const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -133,6 +134,19 @@ async function inserir(tabela, campos) {
   return (await run(`INSERT INTO ${tabela} (${k.join(', ')}) VALUES (${k.map(() => '?').join(', ')})`, Object.values(dados))).lastID;
 }
 
+// ── o utilitario, direto (Fase 5 r3 S13: a virada do mes so aparece as 22h do ultimo dia — aqui com o instante fixo) ───────────
+test('[RN-161.04, Fase 5 r3 S13] diaLocal: o hoje, o inicio do mes e o modificador de Brasilia nas viradas (o ultimo dia do mes as 22h)', () => {
+  const as22do31 = new Date('2026-11-01T01:00:00Z'); // 31/10 22:00 em Brasilia
+  assert.strictEqual(diaLocal.hojeLocalISO(as22do31), '2026-10-31');
+  assert.strictEqual(diaLocal.inicioDoMesLocalISO(as22do31), '2026-10-01');
+  assert.strictEqual(diaLocal.inicioDoMesLocalISO(new Date('2026-11-01T03:00:00Z')), '2026-11-01'); // 01/11 00:00
+  assert.strictEqual(diaLocal.hojeLocalISO(new Date('2026-10-20T02:59:59Z')), '2026-10-19');
+  assert.strictEqual(diaLocal.hojeLocalISO(new Date('2026-10-20T03:00:00Z')), '2026-10-20');
+  assert.strictEqual(diaLocal.modificadorDoFuso(as22do31), '-180 minutes');
+  // o de Compras delega (a mesma resposta)
+  assert.strictEqual(require('../../services/compras/pedidoCompraService').hojeLocalISO(as22do31), '2026-10-31');
+});
+
 // ── a guarda do relogio ─────────────────────────────────────────────────────────────────────────────────────────────────
 test('[guarda] o filho esta adiantado para as 22h de Brasilia de daqui a dois dias, e o SQLite nao (senao os cenarios do hoje nao provam nada)', async () => {
   const [[{ agora }]] = [await all("SELECT date('now') AS agora")];
@@ -202,6 +216,7 @@ test('[RN-161.04, C397, T6] apontamentos e paradas ?data_inicio/?data_fim e os r
   assert.deepStrictEqual(rp19.porOp.map((o) => o.numero_op).filter((n) => /OP-161/.test(n)), ['OP-161-DIA'], 'as OPs do dia 19');
   const [, rpa] = await j('GET', `/producao/relatorios/paradas?${dia19}`);
   assert.deepStrictEqual(rpa.porMotivo.filter((m) => /161/.test(m.motivo)).map((m) => [m.motivo, m.minutos]), [['motivo 161 noite', 10]], 'paradas por motivo');
+  assert.deepStrictEqual(rpa.porMaquina.filter((m) => m.codigo === 'MQ-161').map((m) => [m.codigo, m.ocorrencias, m.minutos]), [['MQ-161', 1, 10]], 'paradas por maquina (Fase 5 r3 S10)');
   const [, ref] = await j('GET', `/producao/relatorios/eficiencia?${dia19}`);
   assert.deepStrictEqual(ref.ops.map((o) => o.numero_op).filter((n) => /OP-161/.test(n)), ['OP-161-DIA'], 'eficiencia do dia 19');
   const [, ref18] = await j('GET', `/producao/relatorios/eficiencia?${q({ data_inicio: '2025-03-18', data_fim: '2025-03-18' })}`);
@@ -225,10 +240,13 @@ test('[RN-161.04, C397] o painel da producao: paradas/producao de hoje, atrasada
   await ap(brt(HOJE, 9, 0), 5); //                    hoje 09:00
   await ap(brt(somaDias(HOJE, 1), 1, 30), 1000); //   amanha 01:30 — o MESMO dia UTC do das 22:30
   await ap(brt(somaDias(HOJE, -1), 23, 0), 2000); //  ontem 23:00 — o dia UTC de hoje
-  const pa = (data_inicio) => inserir('producao_paradas', { maquina_id: maq, data_inicio, data_fim: data_inicio, motivo_texto: 'painel 161', duracao_minutos: 1 });
+  // Fase 5 r3 S05/S08: a massa distingue as duas reguas — no dia UTC de hoje caem as duas de ontem a noite (2 paradas, 6 min); no de
+  // Brasilia, so a de hoje 22:30 (1 parada, 1 min). Com as tres de 1 min, as contagens coincidiam e a sabotagem passava.
+  const pa = (data_inicio, duracao_minutos = 1) => inserir('producao_paradas', { maquina_id: maq, data_inicio, data_fim: data_inicio, motivo_texto: 'painel 161', duracao_minutos });
   await pa(brt(HOJE, 22, 30));
   await pa(brt(somaDias(HOJE, 1), 1, 30));
-  await pa(brt(somaDias(HOJE, -1), 23, 0));
+  await pa(brt(somaDias(HOJE, -1), 23, 0), 5);
+  await pa(brt(somaDias(HOJE, -1), 22, 0));
   // atrasada: o prazo (so a data) de ontem; a do prazo de hoje nao
   await inserir('producao_ops', { numero_op: 'OP-161-ATR', produto_descricao: 'p', quantidade_planejada: 1, status: 'liberada', ativo: 1, data_prevista_fim: somaDias(HOJE, -1) });
   await inserir('producao_ops', { numero_op: 'OP-161-PRAZO-HOJE', produto_descricao: 'p', quantidade_planejada: 1, status: 'liberada', ativo: 1, data_prevista_fim: HOJE });
@@ -247,6 +265,11 @@ test('[RN-161.04, C397] o painel da producao: paradas/producao de hoje, atrasada
   assert.strictEqual(d.kpis.disponibilidade, Math.round((60 / 61) * 1000) / 10, 'disponibilidade');
   // as paradas recentes: as abertas ou as de hoje — das tres do painel, so a das 22:30 de hoje
   assert.deepStrictEqual(d.paradasRecentes.filter((p) => p.motivo_texto === 'painel 161').map((p) => p.data_inicio), [brt(HOJE, 22, 30)], 'paradas recentes');
+  // S02: a OP criada sem data planejada grava o hoje de Brasilia (o dia UTC do filho ja e amanha)
+  const [so, op] = await j('POST', '/producao/ops', { produto_descricao: 'op sem data 161', quantidade_planejada: 1 });
+  assert.ok(so === 200 || so === 201, `POST /producao/ops: ${so} ${JSON.stringify(op)}`);
+  const [gravada] = await all("SELECT data_planejada FROM producao_ops WHERE produto_descricao = 'op sem data 161'");
+  assert.strictEqual(gravada && gravada.data_planejada, HOJE, 'a data planejada padrao (Fase 5 r3 S02)');
 });
 
 test('[RN-161.04, C397] colaboradores: presente_hoje e status_trabalho pela presenca do hoje de Brasilia (a de ontem nao conta)', async () => {
@@ -268,6 +291,7 @@ test('[RN-161.09, C399] GET /recebimentos-aux/fornecedores?search=: procura alem
   const porc = await inserir('fornecedores', { razao_social: 'ZZ 50% OFF 161', status: 'ativo' });
   const cinq = await inserir('fornecedores', { razao_social: 'ZZ 500 OFF 161', status: 'ativo' });
   const inativo = await inserir('fornecedores', { razao_social: 'ZÉLIA INATIVA 161', status: 'inativo' });
+  const fantasia = await inserir('fornecedores', { razao_social: 'XPTO COMERCIAL 161', nome_fantasia: 'Ferrovia Única', status: 'ativo' });
   const busca = async (search) => {
     const [s, l] = await j('GET', `/almoxarifado/recebimentos-aux/fornecedores?${q(search === undefined ? {} : { search })}`);
     assert.strictEqual(s, 200, JSON.stringify(l));
@@ -277,6 +301,7 @@ test('[RN-161.09, C399] GET /recebimentos-aux/fornecedores?search=: procura alem
   assert.strictEqual(sem.length, 50, 'sem busca: os 50 primeiros');
   assert.ok(!ids(sem).includes(zelia), 'a Zelia nao esta nos 50 primeiros (o cenario nao provaria a busca)');
   for (const t of ['zélia', 'ZÉLIA', '  Zélia  ', '11.161', 'ferragens']) mesmos(ids(await busca(t)), [zelia], `busca "${t}"`);
+  mesmos(ids(await busca('ferrovia única')), [fantasia], 'so pelo nome fantasia (Fase 5 r3 S25)');
   mesmos(ids(await busca('50%')), [porc], 'o % e texto');
   mesmos(ids(await busca('5_0')), [], 'o _ e texto');
   assert.strictEqual((await busca('   ')).length, 50, 'so espacos = sem filtro');

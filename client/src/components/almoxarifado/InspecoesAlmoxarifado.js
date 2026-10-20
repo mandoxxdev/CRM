@@ -7,6 +7,7 @@ import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import HistoricoInspecoes from './HistoricoInspecoes';
 import { formatarFaixa } from './faixaTolerancia';
 import useUltimoPedido from '../../hooks/useUltimoPedido';
+import { formatarInstanteDoBanco } from './instanteDoBanco';
 import './Almoxarifado.css';
 
 /**
@@ -58,7 +59,9 @@ const FORM_DECISAO_VAZIO = {
   dano_fisico: false, material_incorreto: false,
 };
 
-const formatDataHora = (d) => (d ? new Date(d).toLocaleDateString('pt-BR') : '—');
+// Etapa 161 (C397, residuo do r1): `data_entrada` (o `created_at` do recebimento) e um CURRENT_TIMESTAMP (UTC, sem fuso) — o `new Date(texto)` o lia como hora local
+// e, das 21h a meia-noite, o ato de hoje aparecia com o dia de amanha. So a data, como antes.
+const formatDataHora = (d) => formatarInstanteDoBanco(d);
 
 /*
  * Etapa 29 — faixa de tolerância exibida no modal.
