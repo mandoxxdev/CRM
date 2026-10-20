@@ -252,7 +252,7 @@ const DashboardVendas = () => {
                         <FiClock /> {proposta.dias_restantes} dias restantes
                       </span>
                       <span>
-                        <FiFileText /> Validade: {formatarDataDoBanco(proposta.validade)}
+                        <FiFileText /> Validade: {formatarDataDoBanco(proposta.validade, '-', { soData: true })}
                       </span>
                       {proposta.responsavel_nome && (
                         <span>Responsável: {proposta.responsavel_nome}</span>

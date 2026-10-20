@@ -27,8 +27,8 @@ export function paramsDoFiltro(filtroUsuario) {
 export function ordenarAtividades(lista, { vencidosPrimeiro = false } = {}, agora = new Date()) {
   const hoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
   return [...(lista || [])].sort((a, b) => {
-    const dataA = lerDataDoBanco(a.data_agendada);
-    const dataB = lerDataDoBanco(b.data_agendada);
+    const dataA = lerDataDoBanco(a.data_agendada, { soData: a.tipo === 'lembrete' });
+    const dataB = lerDataDoBanco(b.data_agendada, { soData: b.tipo === 'lembrete' });
     if (!dataA && !dataB) return 0;
     if (!dataA) return 1;
     if (!dataB) return -1;
@@ -461,7 +461,7 @@ const Atividades = () => {
                   {atividade.data_agendada && (
                     <span>
                       {atividade.tipo === 'lembrete' ? 'Lembrete para: ' : 'Agendada: '}
-                      {formatarDataDoBanco(atividade.data_agendada)}
+                      {formatarDataDoBanco(atividade.data_agendada, '-', { soData: atividade.tipo === 'lembrete' })}
                     </span>
                   )}
                   <span className={`prioridade-badge ${atividade.prioridade}`}>
@@ -497,7 +497,7 @@ const Atividades = () => {
                 <p><strong>Proposta:</strong> {modalLembrete.numero_proposta}</p>
                 <p><strong>Título:</strong> {modalLembrete.titulo.replace('Lembrete: ', '')}</p>
                 {modalLembrete.data_agendada && (
-                  <p><strong>Data do Lembrete:</strong> {formatarDataDoBanco(modalLembrete.data_agendada)}</p>
+                  <p><strong>Data do Lembrete:</strong> {formatarDataDoBanco(modalLembrete.data_agendada, '-', { soData: true })}</p>
                 )}
                 {modalLembrete.descricao && (
                   <div className="modal-lembrete-mensagem">

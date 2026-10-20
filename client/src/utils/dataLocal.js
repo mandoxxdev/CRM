@@ -44,10 +44,12 @@ export function lerInstanteDoBanco(valor) {
  *   - `'AAAA-MM-DD HH:MM:SS'` do banco (UTC sem fuso) -> o instante UTC (`lerInstanteDoBanco`);
  *   - ISO com `T` (o calendario grava com `Z`) -> como esta;
  *   - vazio, nao texto, invalido -> `null`.
+ * Com `soData` (coluna SO de data: o lembrete, a validade), o prefixo `AAAA-MM-DD` vale sozinho, mesmo com hora gravada pela API
+ * (`'2026-11-30 01:00:00'` e o dia 30, como no servidor, que le o prefixo — Fase 5 r1 M1).
  */
-export function lerDataDoBanco(valor) {
+export function lerDataDoBanco(valor, { soData = false } = {}) {
   if (typeof valor === 'string') {
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(valor.trim());
+    const m = (soData ? /^(\d{4})-(\d{2})-(\d{2})(?:[ T]|$)/ : /^(\d{4})-(\d{2})-(\d{2})$/).exec(valor.trim());
     if (m) {
       const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
       return d.getFullYear() === Number(m[1]) && d.getMonth() === Number(m[2]) - 1 && d.getDate() === Number(m[3]) ? d : null;
@@ -57,7 +59,7 @@ export function lerDataDoBanco(valor) {
 }
 
 /** `DD/MM/AAAA` da data do banco no dia local (`lerDataDoBanco`); vazio ou ilegivel -> `vazio`. */
-export function formatarDataDoBanco(valor, vazio = '-') {
-  const d = lerDataDoBanco(valor);
+export function formatarDataDoBanco(valor, vazio = '-', opcoes = {}) {
+  const d = lerDataDoBanco(valor, opcoes);
   return d ? `${dois(d.getDate())}/${dois(d.getMonth() + 1)}/${d.getFullYear()}` : vazio;
 }

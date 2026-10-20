@@ -91,6 +91,7 @@ function somarDiasISO(dia, n) {
  *   - ISO com `T` (com `Z`/deslocamento: o instante; sem: a hora do processo, o `new Date` de sempre) -> o dia de Brasilia;
  *   - data impossivel, ano < 1900, vazio, nulo, nao texto, lixo -> `''` (Fase 2 M11).
  */
+const RE_INSTANTE_DO_BANCO_LIVRE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
 function dataDoBancoBR(valor) {
   if (typeof valor !== 'string') return '';
   const v = valor.trim();
@@ -100,9 +101,10 @@ function dataDoBancoBR(valor) {
     return ok && Number(v.slice(0, 4)) >= 1900 ? br(v) : '';
   }
   let d = null;
-  if (RE_INSTANTE_DO_BANCO.test(v)) {
+  if (RE_INSTANTE_DO_BANCO_LIVRE.test(v)) {
+    // Fase 5 r1 M2: tambem sem os segundos e com a fracao ('AAAA-MM-DD HH:MM', '…:SS.mmm' — como a tela le); a data impossivel nao rola
     d = new Date(`${v.replace(' ', 'T')}Z`);
-    if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 19).replace('T', ' ') !== v) return '';
+    if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 16) !== v.slice(0, 16).replace(' ', 'T')) return '';
   } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v)) {
     d = new Date(v);
     // a data impossivel com T: o V8 rola ('2026-02-30T10:00Z' -> marco); o prefixo tem de ser um dia de verdade
@@ -110,8 +112,8 @@ function dataDoBancoBR(valor) {
   } else {
     return '';
   }
-  if (d.getUTCFullYear() < 1900) return '';
-  return br(hojeLocalISO(d));
+  const dia = hojeLocalISO(d);
+  return Number(dia.slice(0, 4)) >= 1900 ? br(dia) : ''; // Fase 5 r1 M3: o ano de Brasilia, nao o UTC
 }
 
 module.exports = {

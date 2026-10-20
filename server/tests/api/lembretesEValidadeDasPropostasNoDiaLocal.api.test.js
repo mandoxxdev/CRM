@@ -355,6 +355,72 @@ test('[T3] o que se grava pelas rotas, lido pelas leituras: a gerada na previsao
   assert.strictEqual(porId(painel.cotacoesComLembrete, 'lembrete_vencido')[id], 1, 'no painel');
 });
 
+// ── Fase 5 (r1 e r3): as asserções que faltavam — cada uma nomeia a sabotagem (r3) ou o achado (r1) que ela derruba ──
+test('[Fase 5 r3 R14] somarDiasISO: resultado alem do ano 9999 = null', () => {
+  assert.strictEqual(diaLocal.somarDiasISO('2026-10-20', 3000000), null, String(diaLocal.somarDiasISO('2026-10-20', 3000000)));
+});
+test('[Fase 5 r3 R15] dataDoBancoBR: 1900-01-01 (a borda) ainda formata', () => {
+  assert.strictEqual(diaLocal.dataDoBancoBR('1900-01-01'), '01/01/1900');
+});
+test('[Fase 5 r3 R16] dataDoBancoBR: o instante antes de 1900 = vazio', () => {
+  assert.strictEqual(diaLocal.dataDoBancoBR('1899-12-31 10:00:00'), '', diaLocal.dataDoBancoBR('1899-12-31 10:00:00'));
+});
+test('[Fase 5 r3 R23] dataDoBancoBR: ISO com T sem fuso = a hora do processo (o new Date de sempre)', () => {
+  assert.strictEqual(diaLocal.dataDoBancoBR('2026-12-01T01:00'), '01/12/2026');
+});
+test('[Fase 5 r3 R02] o sino: a ordem (vencido, hoje, futuros pela data)', async () => {
+  const [, lista] = await j('GET', '/notificacoes');
+  const ids = new Set(Object.values(ctx.l));
+  const l = ctx.l;
+  assert.deepStrictEqual(lista.map((x) => x.proposta_id).filter((id) => ids.has(id)), [l.ontem, l.hoje, l.amanha, l.d7]);
+});
+test('[Fase 5 r3 R05] as Atividades filtradas por responsavel_id (o filtro da tela): a mesma prioridade', async () => {
+  const [s, lista] = await j('GET', `/atividades?responsavel_id=${ctx.admin}`);
+  assert.strictEqual(s, 200, JSON.stringify(lista).slice(0, 200));
+  const p = porId(lista.filter((x) => x.tipo === 'lembrete'), 'prioridade', 'proposta_id');
+  const l = ctx.l;
+  assert.deepStrictEqual([p[l.ontem], p[l.hoje], p[l.amanha], p[l.d7], p[l.d8]], ['alta', 'alta', 'media', 'media', 'media'], JSON.stringify(p));
+  assert.ok(!(l.alheio in p));
+});
+test('[Fase 5 r3 R04] o lembrete com hora gravada (HOJE 10:00): hoje no sino, alta nas Atividades, vencido no painel', async () => {
+  const id = await proposta({ lembrete_data: `${HOJE} 10:00:00`, lembrete_mensagem: 'COM HORA' });
+  const [, sino] = await j('GET', '/notificacoes');
+  assert.strictEqual(porId(sino, 'prioridade', 'proposta_id')[id], 'hoje', 'no sino');
+  const [, ativ] = await j('GET', '/atividades');
+  assert.strictEqual(porId(ativ.filter((a) => a.tipo === 'lembrete'), 'prioridade', 'proposta_id')[id], 'alta', 'nas Atividades');
+  const [, painel] = await j('GET', '/dashboard/avancado');
+  assert.strictEqual(porId(painel.cotacoesComLembrete, 'lembrete_vencido')[id], 1, 'no painel');
+});
+test('[Fase 5 r3 R09] a previsao: probabilidade 0 gravada vale 0 (nao o degrau)', async () => {
+  const id = await proposta({ status: 'enviada', validade: D(2), probabilidade: 0 });
+  const [, vendas] = await j('GET', '/dashboard/vendas');
+  const item = vendas.pipeline.previsaoFechamento.find((x) => x.id === id);
+  assert.deepStrictEqual(item && item.probabilidade, 0, JSON.stringify(item));
+});
+test('[Fase 5 r3 R12] a geracao automatica: validade_dias 7.5 e "10 dias" lidos como parseInt', async () => {
+  for (const [vd, esperado] of [['7.5', D(7)], [7.5, D(7)], ['10 dias', D(10)]]) {
+    const [s, x] = await j('POST', '/propostas/gerar-automatica', { cliente_id: ctx.cliente, produtos: [{ id: ctx.produto }], validade_dias: vd });
+    assert.strictEqual(s, 200, JSON.stringify(x));
+    const p = await linha(x.id);
+    assert.deepStrictEqual([p.validade, p.expira_em], [esperado, esperado], JSON.stringify(vd));
+  }
+});
+test('[Fase 5 r3 R17] a migracao aceita->aprovada na subida: data_fechamento = o hoje de Brasilia', async () => {
+  const id = await proposta({ status: 'aceita' });
+  await descer();
+  ctx.T = await subir();
+  let p = null;
+  for (let i = 0; i < 100; i++) { p = await linha(id); if (p.status === 'aprovada') break; await pausa(100); }
+  assert.deepStrictEqual([p.status, p.data_fechamento], ['aprovada', HOJE]);
+});
+
+test('[Fase 5 r1 M2/M3] dataDoBancoBR: o instante sem segundos e com fracao; o corte de 1900 pelo ano de Brasilia', () => {
+  assert.strictEqual(diaLocal.dataDoBancoBR('2026-12-01 01:00'), '30/11/2026');
+  assert.strictEqual(diaLocal.dataDoBancoBR('2026-12-01 01:00:00.123'), '30/11/2026');
+  assert.strictEqual(diaLocal.dataDoBancoBR('2026-02-30 10:00'), '');
+  assert.strictEqual(diaLocal.dataDoBancoBR('1900-01-01 02:00:00'), '', 'em Brasilia ainda e 1899');
+});
+
 (async () => {
   console.log(`\n▶ Etapa 165 — lembretes e validade das propostas no dia de Brasilia (HOJE ${HOJE}, o filho as 22h)\n`);
   pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'e165-'));

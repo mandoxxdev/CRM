@@ -172,7 +172,7 @@ const Notificacoes = () => {
                       <span>{notificacao.cliente_nome}</span>
                       {notificacao.data && (
                         <span>
-                          {formatarDataDoBanco(notificacao.data)}
+                          {formatarDataDoBanco(notificacao.data, '-', { soData: true })}
                         </span>
                       )}
                     </div>

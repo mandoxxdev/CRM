@@ -1400,7 +1400,7 @@ const Dashboard = () => {
                           <td>{item.numero_proposta}</td>
                           <td>{item.razao_social}</td>
                           <td>{item.titulo}</td>
-                          <td>{formatarDataDoBanco(item.lembrete_data)}</td>
+                          <td>{formatarDataDoBanco(item.lembrete_data, '-', { soData: true })}</td>
                           <td>{item.lembrete_mensagem || '-'}</td>
                           <td>
                             <span className={`status-badge ${item.status}`}>{item.status}</span>

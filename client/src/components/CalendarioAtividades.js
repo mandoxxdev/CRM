@@ -33,10 +33,10 @@ const CalendarioAtividades = ({ atividades, onSelectEvent, view, onViewChange, d
         }
         return true;
       })
-      .filter(atividade => lerDataDoBanco(atividade.data_agendada)) // Apenas atividades com data (legivel — Etapa 165: a ilegivel derrubava o calendario)
+      .filter(atividade => lerDataDoBanco(atividade.data_agendada, { soData: atividade.tipo === 'lembrete' })) // Apenas atividades com data (legivel — Etapa 165: a ilegivel derrubava o calendario)
       .map(atividade => {
         // Etapa 165 (RN-165.07, B1058): a data so de data no dia gravado (antes `new Date('AAAA-MM-DD')` = 21h da vespera: o lembrete ia para o dia anterior)
-        const dataInicio = lerDataDoBanco(atividade.data_agendada);
+        const dataInicio = lerDataDoBanco(atividade.data_agendada, { soData: atividade.tipo === 'lembrete' });
         // Se não tiver hora, definir como 9h da manhã
         if (!atividade.data_agendada.includes('T') || atividade.data_agendada.split('T')[1]?.length <= 1) {
           dataInicio.setHours(9, 0, 0, 0);
