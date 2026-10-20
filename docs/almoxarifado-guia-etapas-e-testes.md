@@ -1,18 +1,25 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-20 (Etapa 167) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-20 (Etapa 168) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166 e 167) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167 e 168) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-20 (Etapa 167 ENTREGUE · próxima: Etapa 168)
+> ## Onde o desenvolvimento está — 2026-10-20 (Etapa 168 ENTREGUE · próxima: Etapa 169)
 >
-> **O desenvolvimento parou aqui: Etapa 167 fechada — 2026-10-20.** A **Etapa 167 (o marcador que sobrevive ao Salvar do preview editável
+> **O desenvolvimento parou aqui: Etapa 168 fechada — 2026-10-20.** A **Etapa 168 (a hora de criação no relógio de Brasília no núcleo, em
+> Custos de Viagem e nas Solicitações de Compra; consertos técnicos, sem regra de acesso nova e sem mudar valor gravado)**: o *Cadastrado em*
+> de Clientes e de Usuários, a *Data/Hora* dos Logs, a autorização, o comprovante e o histórico de Custos de Viagem, as Minhas Solicitações
+> de Compra e a data do modelo salvo da proposta mostram a hora de Brasília (antes, 3 h adiantada — das 21h à meia-noite, o dia seguinte); a
+> coluna *Data* da lista de Custos de Viagem mostra o dia cadastrado (antes, a véspera); o filtro de datas dos Logs conta o dia de Brasília.
+> Nenhuma consulta antes do deploy. **Próxima: Etapa 169** — ver a próxima tarefa no plano da 168 (as outras telas da **C421**).
+>
+> **Etapa 167, 2026-10-20.** A **Etapa 167 (o marcador que sobrevive ao Salvar do preview editável
 > e a *Atividade Recente* da viagem no dia de Brasília; consertos técnicos nas propostas e no Comercial, sem regra de acesso nova)**: salvar
 > pelo **Preview** não troca mais o marcador de uma cláusula (`{{proposal.date}}`, o número, o nome do cliente) pelo valor escrito — o que
 > o usuário não mexeu continua marcador, e a data acompanha a emissão; em **Custos de Viagem**, a regra *Atividade Recente* conta dias de
 > calendário de Brasília e concorda com as Visitas Técnicas. Uma consulta opcional antes do deploy (**A105**: as cláusulas que já congelaram
-> a data). **Próxima: Etapa 168** — ver a próxima tarefa no plano da 167.
+> a data). **Próxima: Etapa 168** — ver a próxima tarefa no plano da 167. *(Próxima, na época: Etapa 168 — entregue acima.)*
 >
 > **Etapa 166, 2026-10-20.** A **Etapa 166 (os relatórios por mês, o filtro do painel e a data no
 > texto da proposta no dia de Brasília; consertos técnicos no Comercial, sem regra de acesso nova e sem mudar valor gravado)**: a proposta
@@ -6811,6 +6818,48 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 168 — A hora de criação no relógio de Brasília no núcleo, em Custos de Viagem e nas Solicitações de Compra (ENTREGUE — 2026-10-20)
+
+**O que mudou, em uma frase:** a hora em que cada cliente, usuário, log, comprovante, alteração, autorização, solicitação de compra e modelo
+de proposta foi criado aparece no relógio de Brasília, e a data da viagem na lista de Custos de Viagem aparece no dia cadastrado.
+
+**O problema que ela resolve.** O sistema guarda a hora no horário universal; estas telas a mostravam como se fosse a de Brasília — 3 h
+adiantada, e das 21h à meia-noite com a data de amanhã. O filtro de datas dos Logs também contava o dia universal: o registro das 22h30
+só aparecia filtrando o dia seguinte. E a lista de Custos de Viagem mostrava a viagem do dia 20 como *19/10/2026*, o dia inteiro.
+
+| Antes | Agora |
+|---|---|
+| Cliente cadastrado às 22h30 de 20/10, na planilha: *21/10/2026* | *20/10/2026* |
+| Usuário criado às 22h30 de 20/10, na lista e na planilha: *21/10/2026* | *20/10/2026* |
+| Log das 22h30m05s de 20/10: *21/10/2026, 01:30:05* | *20/10/2026, 22:30:05* |
+| Logs, filtro 20/10 a 20/10: o log das 22h30 de 20/10 fora | Dentro |
+| Custos de Viagem, viagem de 20/10: coluna *Data* *19/10/2026* | *20/10/2026* |
+| Comprovante, histórico e autorização da viagem: hora 3 h adiantada | Hora de Brasília |
+| Minhas Solicitações de Compra, criada às 22h30: *21/10/2026, 01:30:05* | *20/10/2026, 22:30:05* |
+| Editor do modelo da proposta → *Carregar Template*: modelo salvo às 22h de 20/10 com *21/10/2026* | *20/10/2026* |
+
+**Roteiro de teste (10 minutos — os passos 1 a 4 depois das 21h; o 5 a qualquer hora).**
+
+1. **Clientes.** Faça login com um usuário do Comercial. Em **Comercial → Clientes**, cadastre um cliente e clique **Exportar para Excel**:
+   na planilha, o *Cadastrado em* do cliente novo é **hoje**.
+2. **Usuários e Logs.** Com um administrador, em **Administração → Usuários**, crie um usuário: a coluna de cadastro mostra **hoje**. Na aba
+   **Logs**, a *Data/Hora* do registro mais recente é a hora do relógio (*DD/MM/AAAA, HH:MM:SS*); escolha *Data início* e *Data fim* = hoje:
+   o registro de agora aparece. Clique **Exportar Excel**: a coluna *Data/Hora* é a mesma da tela.
+3. **Custos de Viagem.** Em **Comercial → Custos de Viagem**, numa viagem, clique **Comprovantes** e envie um arquivo: *"Enviado por <você>
+   em <agora>"*. Edite a viagem (troque um valor) e salve; clique **Histórico**: a *Alteração* mais recente tem a hora de agora.
+4. **Minhas Solicitações e o modelo da proposta.** Crie uma solicitação de compra e abra **Minhas Solicitações**: a *Data* é a de agora. No
+   editor do modelo da proposta, **Salvar Template** e depois **Carregar Template**: o modelo mostra a data de hoje.
+5. **A data da viagem (a qualquer hora).** Na lista de **Custos de Viagem**, a coluna *Data* de cada viagem é o mesmo dia do campo *Data da
+   Viagem* ao editar — e o filtro *Data Início*/*Data Fim* desse dia a encontra.
+
+**O que esta etapa NÃO cobre.** As outras telas que ainda leem a data no fuso universal — medidas, linha a linha, na **C421** (as Aprovações,
+as OS, as Tarefas, o Chat, partes de Compras e do Almoxarifado) — são a próxima etapa; o limite de linhas inválido na consulta dos Logs pela
+integração (**C422**, de antes). Nenhuma porta de permissão mudou; nenhum valor gravado mudou; o documento da proposta não mudou.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos provam (as seis telas montadas em jsdom,
+no fuso de Brasília, do clique até o texto; o filtro dos Logs pelo servidor de verdade em pasta vazia), escrito para você conferir à mão.
+Commits `4d8df969`, `df13f98a`, `6e1011f3` e `e3dca5a6` (a correção da revisão).
 
 ## Etapa 167 — O marcador que sobrevive ao Salvar do preview e a atividade recente da viagem no dia de Brasília (ENTREGUE — 2026-10-20)
 

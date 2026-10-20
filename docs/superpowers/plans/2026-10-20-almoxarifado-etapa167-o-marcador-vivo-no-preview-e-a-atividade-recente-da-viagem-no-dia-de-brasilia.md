@@ -292,7 +292,11 @@ pelo condutor ou em paralelo em worktrees; o `test:api` serializado pela trava d
 3. **Paralelismo:** **0** galhos de código em paralelo (dois galhos pequenos feitos em sequência pelo condutor); **1** revisor na Fase 2, **3**
    em paralelo na Fase 5 (o r3 na worktree própria, 45 sabotagens; o r2 numa worktree temporária da base) — **0** incidente de trava, **0**
    retrabalho.
-4. **Defeito que escapou:** *(preencher na Etapa 168)*.
+4. **Defeito que escapou:** *(preenchido na Etapa 168)* **0 de código** — nenhum defeito do que a 167 entregou apareceu na 168 (a 168
+   não reabriu o editor nem a elegibilidade; os testes da 167, a revisão da proposta 23 + 39 e o `test:api` passaram nas baterias da 168). **1 de
+   documento:** a próxima tarefa que a 167 escreveu estava **incompleta** — nomeava nove linhas em cinco telas e deixava de fora a data do modelo
+   salvo da proposta, a coluna *Data* da lista de Custos de Viagem (a véspera) e o filtro de datas dos Logs (o gesto seguinte); a Fase 0 e a
+   Fase 2 da 168 os acharam. Ela própria avisava "medido por `grep`, não a fundo".
 
 ## Próxima tarefa detalhada — Etapa 168
 

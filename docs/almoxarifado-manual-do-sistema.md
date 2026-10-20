@@ -7054,8 +7054,23 @@ O sistema guarda o instante de cada registro no horário universal (três horas 
     hoje e o dia em que a última proposta **ativa** do cliente foi criada: com **90 ou menos** ela aparece atendida, com *"Última proposta há N
     dias"* (hoje = 0). É a mesma régua da regra *"Cliente teve propostas nos últimos 90 dias"* das **Visitas Técnicas** — para o mesmo
     cliente as duas concordam. Uma proposta com data de criação ilegível não conta. A regra não bloqueia o registro.
-- **Ainda pelo horário universal:** os indicadores do painel antigo do Operacional (OEE, manutenção e inspeções do dia), que nenhum menu
-  abre.
+- **A hora de criação no núcleo, em Custos de Viagem e nas Solicitações de Compra** aparece na hora de **Brasília**, no formato de cada tela:
+  o *Cadastrado em* da planilha de **Clientes** e da lista e da planilha de **Usuários** (*DD/MM/AAAA*); a *Data/Hora* da tabela e da
+  planilha dos **Logs** (*DD/MM/AAAA, HH:MM:SS*); em **Custos de Viagem**, a *Autorização #n* (no **Editar**, *DD/MM/AAAA, HH:MM*), o
+  *Enviado por … em* dos **Comprovantes** e a *Alteração #n* do **Histórico** (*DD/MM/AAAA, HH:MM:SS*); a *Data* das **Minhas Solicitações de
+  Compra** (*DD/MM/AAAA, HH:MM:SS*); e a data da última alteração de cada modelo em *Templates Salvos* (editor do modelo da proposta,
+  **Carregar Template**). O registro sem data aparece *—* na tela e vazio na planilha; um valor que não é data aparece como foi gravado.
+  A coluna *Data* da lista de **Custos de Viagem** mostra o dia da viagem como foi cadastrado — o mesmo dia em que o filtro *Data
+  Início*/*Data Fim* a encontra.
+- **O filtro *Data início*/*Data fim* dos Logs** (Administração → Logs) escolhe os registros pelo dia de **Brasília** em que aconteceram, os
+  dois dias incluídos: o registro das 22h30 de 20/10 entra no filtro de 20/10.
+- **Ainda pelo horário universal** (a data pode sair um dia adiantada das 21h à meia-noite, ou a hora 3 h adiantada; nas datas sem hora,
+  um dia antes): os indicadores do painel antigo do Operacional (OEE, manutenção e inspeções do dia), que nenhum menu abre; as
+  **Aprovações** do Comercial (a hora sai 6 h antes); a lista e o detalhe das **OS** (Comercial, Operacional e o quadro da Produção — a
+  abertura e a previsão um dia antes; a contagem de OS *vencidas* do Comercial também); as **Tarefas** (o prazo um dia antes; a criação); o
+  **Chat** (a hora das mensagens, *Hoje*/*Ontem*); em **Compras**, a data da planilha salva do fornecedor e o *Cadastrado em* da planilha de
+  fornecedores; no **Almoxarifado**, a data do certificado do lote, a data dos anexos e a da retirada da ferramenta; e o *gerado em* dos PDFs
+  de remessa a terceiro e de posição do cliente.
 - O deslocamento usado é o atual do horário de Brasília (três horas, sem horário de verão).
 
 ### 22.6 A lista mostra o último filtro pedido

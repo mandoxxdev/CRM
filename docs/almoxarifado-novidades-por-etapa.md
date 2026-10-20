@@ -11,14 +11,21 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-20):** **Etapa 167 fechada** (consertos técnicos no Comercial, sem regra de acesso nova e sem
+> **Onde o desenvolvimento está (2026-10-20):** **Etapa 168 fechada** (consertos técnicos no núcleo, no Comercial e nas Solicitações de
+> Compra, sem regra de acesso nova e sem mudar valor gravado; **a hora de criação no relógio de Brasília** — o *Cadastrado em* de Clientes e
+> de Usuários, a *Data/Hora* dos Logs, a autorização, o comprovante e o histórico de **Custos de Viagem**, as **Minhas Solicitações de
+> Compra** e a data do modelo salvo da proposta mostram a hora de Brasília (antes, 3 h adiantada: das 21h à meia-noite, o dia seguinte) e a
+> coluna *Data* da lista de Custos de Viagem mostra o dia gravado (antes, a véspera) — **B1069**; o filtro de datas dos Logs conta o dia de
+> Brasília (**B1070**); os avisos novos **C421** (as outras telas que ainda leem a data no fuso universal — medidas, a próxima etapa) e
+> **C422** (o *limit* inválido dos Logs — de antes)); a próxima é a **169** — ver
+> "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 167 fechada** (consertos técnicos no Comercial, sem regra de acesso nova e sem
 > mudar valor gravado; **o marcador que sobrevive ao Salvar do preview editável e a *Atividade Recente* da viagem no dia de Brasília** —
 > salvar pelo preview não troca mais o marcador da cláusula (`{{proposal.date}}`, o número, o nome do cliente) pelo valor escrito: o que o
 > usuário não mexeu volta a ser o marcador (**B1065**); a regra *Atividade Recente* de **Custos de Viagem** conta os 90 dias em dias de
 > calendário de Brasília, igual às Visitas Técnicas (**B1066**); as cláusulas já congeladas não são reescritas (**B1067**) — **C416** e
 > **C418** resolvidos; os avisos novos **C419** (os limites) e **C420** (o marcador que lê dado interno — de antes); a consulta **A105**
-> (opcional)); a próxima é a **168** — ver
-> "Onde estamos e o que vem a seguir".
+> (opcional)); a próxima era a **168**.)*
 > *(Antes: **Etapa 166 fechada** (consertos técnicos no Comercial, sem regra de acesso nova e sem
 > mudar valor gravado; **os relatórios por mês, o filtro de período do painel e a data no texto da proposta no dia de Brasília** — a
 > *Evolução de Propostas* e os *Clientes que Precisam de Visita* do Relatório Executivo, a *atividade recente* das Visitas Técnicas e as
@@ -4046,7 +4053,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B1068; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B1072; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -11770,6 +11777,34 @@ vocês: as da **B957**, a **B988** e a **B989**; a **B1002** continua pedindo um
 **C408**; a **C411** e a **C412**; a **B1057** (a data de emissão reimpressa); a **B1063** (o texto impresso das cláusulas com o marcador);
 a **C417** (o que o gráfico *Tendências Mensais* conta); a **C420** (restringir o `{{raw.…}}` — muda o que o marcador aceita); a **B1065** a **B1067** são reversíveis.
 
+**B1069 (NOVA, da Etapa 168; do núcleo, do Comercial e de Compras) — a hora de criação no relógio de Brasília, e a data da viagem no dia
+gravado.** **Escolhido:** onze exibições passam a ler o instante gravado (o banco o guarda no horário universal, sem fuso) como horário
+universal e a mostrá-lo no relógio de Brasília, **no mesmo formato de antes de cada tela** (com ou sem a hora, com ou sem os segundos): o
+*Cadastrado em* da planilha de **Clientes**; o *Cadastrado em* da lista e da planilha de **Usuários**; a *Data/Hora* da tabela e da planilha
+dos **Logs**; a *Autorização #n* (no **Editar**), o *Enviado por … em* dos **Comprovantes** e a *Alteração #n* do **Histórico** de **Custos de
+Viagem**; a *Data* das **Minhas Solicitações de Compra**; a data dos *Templates Salvos* do editor do modelo da proposta (a da última
+alteração). **Muda:** das 21h à meia-noite a data é a do próprio dia (antes, a do dia seguinte); a hora, 3 h a menos que antes (era 3 h
+adiantada). A coluna *Data* da lista de **Custos de Viagem** mostra o dia gravado (antes, a **véspera**, o dia inteiro — o filtro *Data
+Início*/*Data Fim* da mesma tela já achava a viagem no dia certo). O registro sem data aparece *"—"* na tela (antes *31/12/1969* na lista de
+Usuários e *Invalid Date* nos Logs) e vazio na planilha; o valor ilegível aparece como gravado (antes *Invalid Date*). **Descartado:** trocar o
+formato (ex.: *dd/mm/aaaa hh:mm* em todas — mudaria o texto de cada tela sem pedido); converter no servidor (mudaria o que as rotas
+respondem para todos os consumidores). **Reversível:** `df13f98a` e `e3dca5a6` (a correção da revisão).
+
+**B1070 (NOVA, da Etapa 168; do núcleo) — o filtro de datas dos Logs no dia de Brasília.** **Escolhido:** a *Data início* e a *Data fim* da
+tela de **Logs** escolhem os registros pelo dia de Brasília em que aconteceram. **Muda:** o registro das 21h à meia-noite entra no filtro do
+próprio dia (antes, no do dia seguinte — e, com a tela mostrando agora a hora de Brasília, a linha apareceria com um dia e só seria achada
+filtrando o outro). A ordem, o limite de linhas e a resposta não mudam; data inválida continua sem resultado. **Descartado:** consertar só a
+exibição. **Reversível:** `6e1011f3`.
+
+**B1071 (NOVA, da Etapa 168; técnica) — uma ferramenta só para mostrar o instante gravado.** **Escolhido:** a mesma que o Almoxarifado já
+usava desde a Etapa 161, agora no lugar comum do sistema (o Almoxarifado continua usando-a, sem mudança). **Descartado:** uma terceira
+ferramenta. **Reversível:** `4d8df969`.
+
+**B1072 (NOVA, da Etapa 168) — a próxima etapa (169).** Ver a "próxima tarefa detalhada" no plano da Etapa 168 — as datas da **C421** no
+Comercial, no Operacional e nas Tarefas. As decisões que esperam vocês: as da **B957**, a **B988** e a **B989**; a **B1002** continua pedindo
+um olhar; a **B1013** (o acento nas buscas); a **C398**; a **C408**; a **C411** e a **C412**; a **B1057** (a data de emissão reimpressa); a
+**B1063** (o texto impresso das cláusulas com o marcador); a **C417**; a **C420**; a **B1069** e a **B1070** são reversíveis.
+
 **B1064 (NOVA, da Etapa 166) — a próxima etapa (167).** Ver a "próxima tarefa detalhada" no plano da Etapa 166. As decisões que esperam
 vocês: as da **B957**, a **B988** e a **B989**; a **B1002** continua pedindo um olhar; a **B1013** (o acento nas buscas); a **C398**; a
 **C408**; a **C411** e a **C412**; a **B1057** (a data de emissão reimpressa); **a B1063** (o texto impresso das cláusulas com o marcador);
@@ -15250,6 +15285,21 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      primeiro continua — escrever o marcador é escolha de quem escreve. **O que fazer:** nada no dia a dia (só quem tem o Comercial escreve
      cláusulas e cadastros). Restringir `raw` a uma lista de campos, ou escapar `{{` nos valores, é decisão de produto (muda o que o marcador
      aceita) — fica para uma etapa própria.
+421. **NOVO (da medição da Etapa 168; de vários módulos, anterior a ela; lido no código, linha a linha) — as outras telas que ainda leem a
+     data no fuso universal.** A Etapa 168 consertou a hora de criação no núcleo, em Custos de Viagem e nas Solicitações de Compra e mediu o
+     resto do sistema. Ainda mostram a data errada: no **Comercial**, as **Aprovações** (a hora sai **6 h atrasada** — o horário é convertido
+     duas vezes), a lista de **OS do Comercial** (a abertura e a previsão na **véspera**; a data de aprovação no dia seguinte das 21h à
+     meia-noite; a contagem de *vencidas* conta a OS um dia antes) e o preview da OS (véspera); no **Operacional** e na **Fábrica**, a lista e o
+     detalhe das OS e o quadro da Produção (a abertura e a previsão na véspera); nas **Tarefas**, o prazo (véspera) e a criação (o dia seguinte
+     à noite; a hora 3 h adiantada); no **Chat**, a hora das mensagens (3 h adiantada) e o *Hoje*/*Ontem* e o separador do dia à noite; em
+     **Compras**, a data da planilha salva do fornecedor (depois de recarregar) e o *Cadastrado em* da planilha de fornecedores (o dia
+     seguinte à noite); no **Almoxarifado**, a data do certificado do lote, a data dos anexos, a data de retirada da ferramenta (o dia seguinte
+     à noite) e o *gerado em* dos PDFs de remessa e de posição do cliente (o dia seguinte das 21h à meia-noite). **O que fazer:** à noite,
+     conferir a data dessas telas com o calendário. É a próxima etapa (169 e seguintes).
+422. **NOVO (da revisão de autorização da Etapa 168; dos Logs, anterior a ela; reproduzido por sonda) — o limite de linhas inválido nos
+     Logs.** A consulta dos logs pela integração com `limit=abc` (ou um número gigante) responde erro 500 com a mensagem crua do banco; com
+     `limit=-1`, sem limite. Só um administrador alcança (a tela sempre manda 100). **O que fazer:** nada no dia a dia. Validar o limite é
+     uma etapa própria.
 ### D. Limitações declaradas— são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -16581,6 +16631,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(168) A hora de criação no relógio de Brasília, o que ficou de fora.** As outras telas medidas que ainda leem a data no fuso universal
+  (**C421**). O formato de cada tela não mudou (de propósito — **B1069**). A data de uma viagem gravada com hora (só por integração) conta pelo
+  dia escrito nela. Os Logs com limite inválido pela integração (**C422**). Nenhuma porta de permissão mudou; nenhum valor gravado mudou.
 - **(167) O marcador que sobrevive ao Salvar e a atividade recente da viagem, o que ficou de fora.** Os quatro limites da **C419** (o marcador
   de bloco, o valor entre duas edições, os valores que se confundem com o vizinho, o parágrafo dividido entre páginas). As cláusulas já
   congeladas não são reescritas (**B1067**; a **A105** as lista). A *atividade recente* da viagem continua sendo critério **recomendado** — não
@@ -17686,6 +17739,12 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(168) Nenhum clique foi dado no navegador.** As seis telas foram provadas em jsdom com a tela de verdade (só a resposta do servidor
+simulada), no fuso de Brasília, do gesto até o texto (abrir, clicar *Comprovantes*/*Histórico*/*Editar*/*Carregar Template*, exportar a
+planilha, filtrar os Logs); o filtro dos Logs pelo servidor de verdade em pasta vazia. Vale conferir à mão, **depois das 21h**: cadastre um
+cliente e exporte a lista (o *Cadastrado em* é hoje); em **Administração → Logs**, filtre hoje a hoje (o registro de agora aparece, com a hora
+do relógio); e, a qualquer hora, a coluna *Data* da lista de Custos de Viagem bate com a data do cadastro da viagem.
 
 **(167) Nenhum clique foi dado no navegador.** O editor foi provado em jsdom com a tela de verdade (o editor da proposta montado, o
 documento gerado pelo gerador real do servidor e escrito no quadro do preview, o paginador rodando, a digitação na página gerada e o botão
@@ -33425,9 +33484,60 @@ cliente as duas dizem a mesma coisa. Não bloqueia o registro da viagem.
 - O documento da proposta, o gerador e a paginação não mudaram (a revisão obrigatória da proposta passou inteira). Nenhuma porta de
   permissão mudou; nenhum valor gravado mudou por conta própria.
 
+## Etapa 168 — A hora de criação no relógio de Brasília no núcleo, em Custos de Viagem e nas Solicitações de Compra (2026-10-20)
+
+Uma etapa de **consertos técnicos**, sem regra de acesso nova e sem mudar nada gravado. O sistema guarda a hora em que cada coisa foi criada
+no horário universal; várias telas a mostravam como se fosse a hora de Brasília — **3 horas adiantada**. Das 21h à meia-noite, isso mudava
+até o dia: o cliente cadastrado às 22h30 aparecia como cadastrado amanhã; o registro de acesso negado das 23h dos **Logs** aparecia com a
+data do dia seguinte e só era achado filtrando o dia seguinte. E a lista de **Custos de Viagem** mostrava a data da viagem **um dia antes**, o
+dia inteiro. Agora a hora é a do relógio de Brasília, no mesmo formato de antes de cada tela.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Clientes → Exportar**, cliente cadastrado às 22h30 de 20/10: *Cadastrado em 21/10/2026* | *20/10/2026* — **B1069** |
+| **Usuários**, usuário criado às 22h30 de 20/10: *21/10/2026* na lista e na planilha | *20/10/2026* — **B1069** |
+| **Usuários**, usuário sem data de cadastro: *31/12/1969* | *—* — **B1069** |
+| **Logs**, registro das 22h30m05s de 20/10: *21/10/2026, 01:30:05* | *20/10/2026, 22:30:05* (na tabela e na planilha) — **B1069** |
+| **Logs**, filtro *20/10 a 20/10*: o registro das 22h30 de 20/10 **não** aparecia (aparecia no filtro de 21/10) | Aparece no de 20/10 — **B1070** |
+| **Custos de Viagem**, viagem do dia 20/10: a coluna *Data* dizia *19/10/2026* | *20/10/2026* — **B1069** |
+| **Custos de Viagem → Comprovantes / Histórico / Editar**: o envio, a alteração e a autorização com a hora 3 h adiantada | A hora de Brasília — **B1069** |
+| **Minhas Solicitações de Compra**, criada às 22h30 de 20/10: *21/10/2026, 01:30:05* | *20/10/2026, 22:30:05* — **B1069** |
+| Editor do modelo da proposta → **Carregar Template**, modelo salvo às 22h de 20/10: *21/10/2026* | *20/10/2026* — **B1069** |
+
+### As regras, com o cenário exato
+
+**1. A hora de criação no relógio de Brasília (B1069).** À noite (depois das 21h), cadastre um cliente em **Comercial → Clientes** e clique
+**Exportar para Excel**: a coluna *Cadastrado em* traz a data de hoje. Em **Administração → Usuários**, crie um usuário: a coluna de cadastro
+mostra hoje. Em **Administração → Logs**, a *Data/Hora* do registro mais recente é a do relógio (formato *DD/MM/AAAA, HH:MM:SS*). Em
+**Compras → Minhas Solicitações**, a *Data* da solicitação criada agora é a de agora. Em **Custos de Viagem**, abra **Comprovantes** de uma
+viagem com comprovante: *"Enviado por <nome> em <data e hora de Brasília>"*. Qualquer hora do dia: a coluna *Data* da lista de Custos de
+Viagem mostra o mesmo dia escrito no cadastro da viagem.
+
+**2. O filtro de datas dos Logs (B1070).** Em **Administração → Logs**, escolha *Data início* e *Data fim* iguais a hoje: aparecem os registros
+de hoje pelo relógio de Brasília, inclusive os das 21h à meia-noite; os de ontem à noite não.
+
+### O que esta etapa NÃO cobre
+
+- As outras telas que ainda leem a data no fuso universal — medidas, linha a linha: **C421** (as Aprovações, as OS, as Tarefas, o Chat,
+  partes de Compras e do Almoxarifado). São a próxima etapa.
+- O limite de linhas inválido na consulta dos logs pela integração (**C422**, de antes).
+- Nenhuma porta de permissão mudou; nenhum valor gravado mudou; o documento da proposta não mudou (a revisão obrigatória da proposta passou
+  inteira).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 168 entregue (2026-10-20):** **a hora de criação no relógio de Brasília** no núcleo (Clientes, Usuários, Logs), em Custos de
+  Viagem, nas Minhas Solicitações de Compra e no modelo salvo da proposta, e a data da viagem no dia gravado (**B1069**); o filtro de datas dos
+  Logs no dia de Brasília (**B1070**). Consertos técnicos, sem regra de acesso nova e sem mudar valor gravado. Commits `4d8df969`,
+  `df13f98a`, `6e1011f3` e `e3dca5a6` (a correção da revisão). **O que é seu:** as decisões **B1069** e **B1070** (reversíveis); os avisos
+  novos **C421** (as outras telas — a próxima etapa) e **C422** (de antes); as perguntas de antes (**B949**, **B910**, **B853**, **B924**,
+  **B926**, **B988**, **B989**, **B1013**, **B1057**, **B1063**, **C277**, **C312**, **C314**, **C316**, **C330**, **C398**, **C408**, **C411**,
+  **C412**, **C417**, **C420**); as limitações **(168)** em D e a verificação **(168)** em F. **Próxima: Etapa 169 — ver a "próxima tarefa
+  detalhada" no plano da Etapa 168.**
 
 - **Etapa 167 entregue (2026-10-20):** **o marcador que sobrevive ao Salvar do preview editável e a *Atividade Recente* da viagem no dia de
   Brasília** (consertos técnicos nas propostas e no Comercial, sem regra de acesso nova). Salvar pelo preview mantém o marcador que o
@@ -33436,7 +33546,7 @@ cliente as duas dizem a mesma coisa. Não bloqueia o registro da viagem.
   **B1065** a **B1067** (reversíveis); a consulta **A105** (opcional); os avisos novos **C419** e **C420** (o `{{raw.…}}` — produto); as perguntas de antes (**B949**, **B910**,
   **B853**, **B924**, **B926**, **B988**, **B989**, **B1013**, **B1057**, **B1063**, **C277**, **C312**, **C314**, **C316**, **C330**, **C398**,
   **C408**, **C411**, **C412**, **C417**); as limitações **(167)** em D e a verificação **(167)** em F. **Próxima: Etapa 168 — ver a "próxima
-  tarefa detalhada" no plano da Etapa 167.**
+  tarefa detalhada" no plano da Etapa 167.** *(Feita: a 168.)*
 
 - **Etapa 166 entregue (2026-10-20):** **os relatórios por mês, o filtro do painel e a data no texto da proposta no dia de Brasília**
   (consertos técnicos no Comercial, sem regra de acesso nova e sem mudar valor gravado). A *Evolução de Propostas*, os *Clientes que
