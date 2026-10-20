@@ -160,6 +160,14 @@ test('[RN-162.09] diaLocal.instanteDoBancoNoFuso: o formato do banco na hora de 
   assert.strictEqual(diaLocal.instanteDoBancoNoFuso(7), 7);
   assert.strictEqual(diaLocal.instanteDoBancoNoFuso(null), null);
   assert.strictEqual(diaLocal.instanteDoBancoNoFuso('texto 2025-03-20 01:30:00'), 'texto 2025-03-20 01:30:00');
+  // Fase 5 r1/r2: a data impossivel e o ano antigo voltam como estao (antes, 2025-02-30 virava 2025-03-02 07:00:00)
+  assert.strictEqual(diaLocal.instanteDoBancoNoFuso('2025-02-30 10:00:00'), '2025-02-30 10:00:00');
+  assert.strictEqual(diaLocal.instanteDoBancoNoFuso('2025-03-20 24:00:00'), '2025-03-20 24:00:00');
+  assert.strictEqual(diaLocal.instanteDoBancoNoFuso('0000-01-01 00:00:00'), '0000-01-01 00:00:00');
+  // Fase 5 r3 (D1): a leitura como UTC (o `Z`) so e provada num processo FORA de UTC — o filho sobe em TZ=UTC, onde ler o texto como hora
+  // local da o mesmo. Este processo e o da maquina (UTC-3); em UTC o teste derruba em vez de passar vazio.
+  assert.ok(new Date(2025, 2, 20).getTimezoneOffset() > 0, 'este processo esta em UTC (ou a leste): o cenario do Z nao prova nada aqui');
+  assert.strictEqual(new Date('2025-03-20T01:30:00').getHours(), 1, 'a metade positiva: sem o Z, o texto e lido como hora local');
 });
 
 // ── a guarda do relogio ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -265,21 +273,22 @@ test('[RN-162.03, RN-162.09, B1039, T4] export do historico: o nome com o hoje d
 });
 
 // ── RN-162.02: o painel ───────────────────────────────────────────────────────────────────────────────────────────────────
-test('[RN-162.02, C401] painel: movimentacoesHoje = as do hoje de Brasilia (2); o grafico pelo dia de Brasilia, com a borda dos 7 dias', async () => {
+test('[RN-162.02, C401] painel: movimentacoesHoje = as do hoje de Brasilia (3, o dia UTC teria 2); o grafico pelo dia de Brasilia, com a borda dos 7 dias', async () => {
   const mat = await inserir('materiais_almoxarifado', { codigo: 'MAT-162-PAINEL', nome: 'painel 162' });
   const mov = (created_at) => inserir('movimentacoes_almoxarifado', { material_id: mat, tipo: 'ENTRADA', quantidade: 1, cancelado: 0, created_at });
   await mov(gravado(HOJE, 21, 30)); //            hoje 21h30 — o dia UTC ja e amanha
+  await mov(gravado(HOJE, 22, 0)); //             hoje 22h — idem (Fase 5 r3 S1: Brasilia 3 x dia UTC 2, os numeros nao colidem)
   await mov(gravado(HOJE, 0, 30)); //             hoje 00h30 — o dia UTC ainda e hoje
   await mov(gravado(somaDias(HOJE, -1), 23, 0)); //  ontem 23h — o dia UTC e hoje
   await mov(gravado(somaDias(HOJE, -7), 0, 30)); //  ha 7 dias, 00h30 — dentro
   await mov(gravado(somaDias(HOJE, -8), 23, 0)); //  ha 8 dias, 23h — fora (o dia UTC e o de ha 7)
   const [s, p] = await j('GET', '/almoxarifado/dashboard');
   assert.strictEqual(s, 200, JSON.stringify(p));
-  assert.strictEqual(p.movimentacoesHoje, 2, `movimentacoesHoje: ${p.movimentacoesHoje}`);
+  assert.strictEqual(p.movimentacoesHoje, 3, `movimentacoesHoje: ${p.movimentacoesHoje}`);
   const g = p.graficoMovimentacoes;
   assert.ok(Array.isArray(g), JSON.stringify(g));
   const doDia = (dia) => soma(g, 'total', (x) => x.dia === dia);
-  assert.strictEqual(doDia(HOJE), 2, `hoje: ${JSON.stringify(g)}`);
+  assert.strictEqual(doDia(HOJE), 3, `hoje: ${JSON.stringify(g)}`);
   assert.strictEqual(doDia(somaDias(HOJE, -1)), 1, `ontem: ${JSON.stringify(g)}`);
   assert.strictEqual(doDia(somaDias(HOJE, -7)), 1, `ha 7 dias: ${JSON.stringify(g)}`);
   assert.strictEqual(doDia(somaDias(HOJE, -8)), 0, `ha 8 dias fica fora: ${JSON.stringify(g)}`);
@@ -288,20 +297,36 @@ test('[RN-162.02, C401] painel: movimentacoesHoje = as do hoje de Brasilia (2); 
 
 // ── RN-162.04: os indicadores ─────────────────────────────────────────────────────────────────────────────────────────────
 test('[RN-162.04, B1037] indicadores: a entrega as 22h do dia do prazo e no prazo; o prazo de hoje sem entrega fica em aberto no dia', async () => {
-  const ler = async () => {
-    const [s, r] = await j('GET', '/almoxarifado/relatorios/indicadores');
+  const ler = async (qs = '') => {
+    const [s, r] = await j('GET', `/almoxarifado/relatorios/indicadores${qs}`);
     assert.strictEqual(s, 200, JSON.stringify(r));
     return r.requisicoes_no_prazo;
   };
   const antes = await ler();
+  const antes5 = await ler('?janela_dias=5');
+  const req = (numero, status, data_necessidade, data_entrega) => inserir('requisicoes_almoxarifado',
+    { numero, status, ativo: 1, data_necessidade, ...(data_entrega ? { data_entrega } : {}) });
   const prazo = somaDias(HOJE, -3);
-  await inserir('requisicoes_almoxarifado', { numero: 'REQ-162-NP', status: 'ENTREGUE', ativo: 1, data_necessidade: prazo,
-    data_entrega: gravado(prazo, 22, 0) }); // gravada no dia UTC seguinte ao prazo
-  await inserir('requisicoes_almoxarifado', { numero: 'REQ-162-AB', status: 'APROVADO', ativo: 1, data_necessidade: HOJE });
+  await req('REQ-162-NP', 'ENTREGUE', prazo, gravado(prazo, 22, 0)); // gravada no dia UTC seguinte ao prazo: no prazo
+  await req('REQ-162-AB', 'APROVADO', HOJE); //                       prazo hoje sem entrega: em aberto no dia
+  // Fase 5 r3 S2 (o teto da janela): o prazo HOJE entregue hoje as 21h30 (dia UTC = amanha) entra; o prazo AMANHA nao entra, entregue ou nao
+  await req('REQ-162-HH', 'ENTREGUE', HOJE, gravado(HOJE, 21, 30));
+  await req('REQ-162-AM', 'APROVADO', somaDias(HOJE, 1));
+  await req('REQ-162-AE', 'ENTREGUE', somaDias(HOJE, 1), gravado(HOJE, 10, 0));
+  // Fase 5 r3 S3 (o piso da janela, com janela_dias=5): o prazo HOJE-5 entra, o HOJE-6 nao
+  await req('REQ-162-P5', 'ENTREGUE', somaDias(HOJE, -5), gravado(somaDias(HOJE, -5), 10, 0));
+  await req('REQ-162-P6', 'ENTREGUE', somaDias(HOJE, -6), gravado(somaDias(HOJE, -6), 10, 0));
   const depois = await ler();
-  assert.strictEqual(depois.no_prazo - antes.no_prazo, 1, `no_prazo: ${JSON.stringify({ antes, depois })}`);
-  assert.strictEqual(depois.consideradas - antes.consideradas, 1, `consideradas (o de hoje sem entrega nao entra): ${JSON.stringify({ antes, depois })}`);
-  assert.strictEqual(depois.em_aberto_no_dia - antes.em_aberto_no_dia, 1, `em_aberto_no_dia: ${JSON.stringify({ antes, depois })}`);
+  const depois5 = await ler('?janela_dias=5');
+  const d = (campo, a = antes, b = depois) => b[campo] - a[campo];
+  const ctxt = JSON.stringify({ antes, depois, antes5, depois5 });
+  // janela padrao: NP, HH, P5 e P6 no prazo; AB em aberto no dia; AM e AE fora (prazo amanha)
+  assert.strictEqual(d('no_prazo'), 4, `no_prazo: ${ctxt}`);
+  assert.strictEqual(d('consideradas'), 4, `consideradas (o de hoje sem entrega e os de amanha nao entram): ${ctxt}`);
+  assert.strictEqual(d('em_aberto_no_dia'), 1, `em_aberto_no_dia (o de amanha nao): ${ctxt}`);
+  // janela de 5 dias: NP, HH e P5; o P6 fica fora do piso
+  assert.strictEqual(d('no_prazo', antes5, depois5), 3, `no_prazo, janela 5: ${ctxt}`);
+  assert.strictEqual(d('consideradas', antes5, depois5), 3, `consideradas, janela 5: ${ctxt}`);
 });
 
 // ── RN-162.07: os alertas ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -334,14 +359,23 @@ test('[RN-162.05, C404, B1035, T4] processar-expiracao: a que vence hoje fica AT
   const rOntem = await inserir('reservas_material_almoxarifado', { material_id: mat, quantidade: 2, quantidade_utilizada: 0, status: 'ATIVA', expira_em: somaDias(HOJE, -1) });
   const status = async (id) => (await all('SELECT status FROM reservas_material_almoxarifado WHERE id = ?', [id]))[0].status;
   const reservado = async () => Number((await all('SELECT quantidade_reservada AS q FROM materiais_almoxarifado WHERE id = ?', [mat]))[0].q);
-  const [s, r] = await j('POST', '/almoxarifado/reservas/processar-expiracao', {});
+  // Fase 5 r3 S4: `referencia: ''` continua sendo "hoje" (o `||` de proposito — com `??` nada expiraria)
+  const [s, r] = await j('POST', '/almoxarifado/reservas/processar-expiracao', { referencia: '' });
   assert.strictEqual(s, 200, JSON.stringify(r));
-  assert.strictEqual(await status(rOntem), 'EXPIRADA', 'a vencida ontem expira');
+  assert.strictEqual(await status(rOntem), 'EXPIRADA', 'a vencida ontem expira (referencia vazia = hoje)');
   assert.strictEqual(await status(rHoje), 'ATIVA', 'a que vence hoje continua ativa ate a meia-noite de Brasilia');
   assert.strictEqual(await reservado(), 2, 'o reservado da expirada voltou ao livre');
   // a do alerta tambem (a mesma regua nas duas portas)
   assert.strictEqual(await status(ctx.alertas.resOntem), 'EXPIRADA');
   assert.strictEqual(await status(ctx.alertas.resHoje), 'ATIVA');
+  // o corpo vazio (o botao da tela) tambem e "hoje"
+  const rOntem2 = await inserir('reservas_material_almoxarifado', { material_id: mat, quantidade: 1, quantidade_utilizada: 0, status: 'ATIVA', expira_em: somaDias(HOJE, -1) });
+  await run('UPDATE materiais_almoxarifado SET quantidade_reservada = quantidade_reservada + 1 WHERE id = ?', [mat]);
+  const [s1, r1] = await j('POST', '/almoxarifado/reservas/processar-expiracao', {});
+  assert.strictEqual(s1, 200, JSON.stringify(r1));
+  assert.strictEqual(await status(rOntem2), 'EXPIRADA', 'corpo vazio: a vencida ontem expira');
+  assert.strictEqual(await status(rHoje), 'ATIVA', 'corpo vazio: a de hoje fica');
+  assert.strictEqual(await reservado(), 2);
   // o `referencia` (reprocessamento) manda: com amanha, a de hoje expira
   const [s2, r2] = await j('POST', '/almoxarifado/reservas/processar-expiracao', { referencia: somaDias(HOJE, 1) });
   assert.strictEqual(s2, 200, JSON.stringify(r2));

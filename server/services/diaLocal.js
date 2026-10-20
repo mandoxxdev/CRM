@@ -38,13 +38,15 @@ function modificadorDoFuso(agora = new Date()) {
 /**
  * Etapa 162 (RN-162.09, B1039): o valor no formato do banco (`'AAAA-MM-DD HH:MM:SS'`, o `CURRENT_TIMESTAMP` em UTC) na hora de Brasilia,
  * no MESMO formato — a regua da tela dos Relatorios (`formatCelula` le esse formato como UTC). Qualquer outro valor (so data, ISO com
- * `Z`, numero, texto, nulo) volta como esta.
+ * `Z`, numero, texto, nulo) volta como esta — e tambem a data impossivel (`2025-02-30 10:00:00`, que o V8 rolaria para marco) e o ano
+ * antes de 1900 (o fuso historico do Intl da segundos tortos): Fase 5 r1/r2. Limite declarado: o texto livre (motivo, justificativa)
+ * digitado exatamente nesse formato tambem e convertido — como na tela.
  */
 const RE_INSTANTE_DO_BANCO = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
 function instanteDoBancoNoFuso(valor) {
   if (typeof valor !== 'string' || !RE_INSTANTE_DO_BANCO.test(valor)) return valor;
   const d = new Date(`${valor.replace(' ', 'T')}Z`);
-  if (Number.isNaN(d.getTime())) return valor;
+  if (Number.isNaN(d.getTime()) || d.getUTCFullYear() < 1900 || d.toISOString().slice(0, 19).replace('T', ' ') !== valor) return valor;
   return new Intl.DateTimeFormat('sv-SE', {
     timeZone: fuso().FUSO_PADRAO, year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',

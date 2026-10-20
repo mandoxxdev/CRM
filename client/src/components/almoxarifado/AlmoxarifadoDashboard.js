@@ -6,6 +6,7 @@ import { getEffectiveUser } from '../../services/permissionsCache';
 import api from '../../services/api';
 import useUltimoPedido from '../../hooks/useUltimoPedido';
 import { formatarInstanteDoBanco } from './instanteDoBanco';
+import { hojeLocalISO } from '../../utils/dataLocal';
 import { FiPackage, FiAlertTriangle, FiDollarSign, FiActivity, FiArrowRight, FiRefreshCw, FiClock, FiAlertOctagon, FiFileText, FiCheckCircle, FiLayers, FiClipboard, FiMap, FiSettings, FiTruck, FiTrendingUp } from 'react-icons/fi';
 import './Almoxarifado.css';
 
@@ -16,13 +17,15 @@ const STATUS_REQ = {
   PARCIALMENTE_ATENDIDA: 'Parcialmente Atendida',
 };
 
-const getPeriodDates = (days) => {
-  const fim = new Date();
-  const inicio = new Date();
-  inicio.setDate(inicio.getDate() - days);
+// Etapa 162 (Fase 5 r1, RN-162.01): o periodo no dia LOCAL — o servidor passou a ler data_inicio/data_fim como dias de Brasilia, e o
+// toISOString (dia UTC) mandava, das 21h a meia-noite, [hoje-6, amanha]: o quadro perdia o dia mais antigo que o grafico mostra. A
+// subtracao e sobre o AAAA-MM-DD (Date.UTC), nunca sobre o relogio local.
+const getPeriodDates = (days, agora = new Date()) => {
+  const fim = hojeLocalISO(agora);
+  const [a, m, d] = fim.split('-').map(Number);
   return {
-    data_inicio: inicio.toISOString().slice(0, 10),
-    data_fim: fim.toISOString().slice(0, 10),
+    data_inicio: new Date(Date.UTC(a, m - 1, d - days)).toISOString().slice(0, 10),
+    data_fim: fim,
   };
 };
 

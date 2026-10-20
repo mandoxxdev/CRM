@@ -5,12 +5,16 @@
  *
  * DEPENDE DO FUSO: so prova algo a OESTE de UTC (a maquina deste projeto e UTC-3). A guarda derruba em UTC e a leste, onde o certo e o
  * errado coincidem (a leste, o decorrido errado sai MAIOR e continua 1 dia — Fase 2 da 162). O relogio e fixo (Date.now).
+ *
+ * Fase 5 r1 (RN-162.01): o painel manda o periodo dos quadros de consumo no dia LOCAL (o servidor le data_inicio/data_fim como dias de
+ * Brasilia). O relogio inteiro (o `new Date()` sem argumento) fica nas 22h45 de 20/10 em Brasilia — onde o dia UTC ja e 21/10.
  */
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import api from '../../services/api';
 import InspecoesAlmoxarifado from './InspecoesAlmoxarifado';
+import AlmoxarifadoDashboard from './AlmoxarifadoDashboard';
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
@@ -71,4 +75,28 @@ test('[RN-162.08, C405] dias em espera: 24h30 atras = "há 1 dia", 48h30 = "há 
   expect(linha('MAT 23H30')).toContain('hoje');
   expect(linha('MAT 23H30')).not.toContain('há ');
   expect(linha('MAT SEM DATA')).not.toMatch(/hoje|há \d/);
+});
+
+describe('[Fase 5 r1, RN-162.01] o painel pede o periodo dos quadros de consumo no dia local', () => {
+  const Real = Date;
+  const FIXO = Real.parse('2026-10-21T01:45:00Z'); // 20/10 22:45 em Brasilia; o dia UTC ja e 21/10
+  beforeEach(() => {
+    class Fixo extends Real {
+      constructor(...args) { if (args.length === 0) super(FIXO); else super(...args); }
+      static now() { return FIXO; }
+    }
+    global.Date = Fixo;
+  });
+  afterEach(() => { global.Date = Real; });
+  test('consumo-os e materiais-mais-consumidos: os 30 dias ate HOJE local (20/10), nao ate amanha UTC', async () => {
+    expect(new Date().toISOString().slice(0, 10)).toBe('2026-10-21'); // a guarda: o dia UTC e outro
+    api.get.mockImplementation(async () => ({ data: [] }));
+    await act(async () => { root.render(<MemoryRouter initialEntries={['/almoxarifado']}><AlmoxarifadoDashboard /></MemoryRouter>); });
+    for (let i = 0; i < 6; i++) await act(async () => { await pausa(0); });
+    for (const url of ['/almoxarifado/relatorios/consumo-os', '/almoxarifado/relatorios/materiais-mais-consumidos']) {
+      const chamada = api.get.mock.calls.find((c) => c[0] === url);
+      expect(chamada).toBeTruthy();
+      expect(chamada[1].params).toEqual({ data_inicio: '2026-09-20', data_fim: '2026-10-20' });
+    }
+  });
 });
