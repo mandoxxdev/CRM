@@ -271,7 +271,7 @@ const PreviewOSEditavel = ({ proposta, formData, onClose, onConfirm }) => {
                   </div>
                   <div className="info-item-content">
                     <span className="info-item-label">Prioridade</span>
-                    <span className={`info-item-value info-item-badge info-item-priority-${formData.prioridade}`}>
+                    <span className={`info-item-value info-item-badge info-item-priority-${String(formData.prioridade || 'normal').trim().toLowerCase()}`}>
                       {formData.prioridade}
                     </span>
                   </div>

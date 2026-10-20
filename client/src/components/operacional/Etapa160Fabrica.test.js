@@ -14,6 +14,7 @@ import AtividadesColaboradores from './AtividadesColaboradores';
 import HorasExtras from './HorasExtras';
 import OrdensServico from './OrdensServico';
 import OSForm from './OSForm';
+import OSDetalhesForm from '../OSDetalhesForm';
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
@@ -91,6 +92,30 @@ describe('[RN-160.05, C394] o painel da producao', () => {
     api.get.mockImplementation(() => Promise.resolve({ data: { quem: 'nova' } }));
     expect(await fetchProducaoDashboard()).toEqual({ quem: 'ultima' }); // o cache guardou a da ultima, nao a velha
   });
+
+  test('a busca forcada que falha deixa a proxima forcar de novo (Fase 5 r3 C04)', async () => {
+    const pedidos = [];
+    api.get.mockImplementationOnce((url, cfg) => { pedidos.push(cfg && cfg.params); return Promise.reject(new Error('caiu')); });
+    await expect(fetchProducaoDashboard({ force: true })).rejects.toThrow('caiu');
+    api.get.mockImplementation((url, cfg) => { pedidos.push(cfg && cfg.params); return Promise.resolve({ data: { ok: 1 } }); });
+    await fetchProducaoDashboard();
+    expect(pedidos).toEqual([{ refresh: '1' }, { refresh: '1' }]);
+    await fetchProducaoDashboard({ force: true }); // e a marca e consumida: a seguinte, normal, vem do cache
+    const n = pedidos.length;
+    await fetchProducaoDashboard();
+    expect(pedidos.length).toBe(n);
+  });
+
+  test('a busca anterior que FALHA depois de a ultima comecar nao lanca: devolve a da ultima (Fase 5 r3 C06)', async () => {
+    const pend = [];
+    api.get.mockImplementation(() => new Promise((res, rej) => pend.push({ res, rej })));
+    const p1 = fetchProducaoDashboard({ force: true });
+    const p2 = fetchProducaoDashboard({ force: true });
+    pend[0].rej(new Error('a velha caiu'));
+    pend[1].res({ data: { quem: 'ultima-c06' } });
+    expect(await p1).toEqual({ quem: 'ultima-c06' });
+    expect(await p2).toEqual({ quem: 'ultima-c06' });
+  });
 });
 
 test('[RN-160.05, C394] Paradas: as em andamento vem do pedido em_andamento=1, mesmo fora do historico (as 500 ultimas)', async () => {
@@ -134,6 +159,9 @@ describe('[RN-160.05, C394] a busca das atividades e das horas extras filtra no 
     await digitar(input, 'os-160');
     expect(linhas().length).toBe(1);
     expect(linhas()[0]).toContain('PEDRO');
+    await digitar(input, 'manutencao'); // Fase 5 r3 C12: sem cedilha, so o tipo casa
+    expect(linhas().length).toBe(1);
+    expect(linhas()[0]).toContain('MARIA');
     await digitar(input, 'nada160');
     expect(container.textContent).toContain('Nenhuma atividade encontrada');
     expect(api.get.mock.calls.length).toBe(n0);
@@ -156,6 +184,8 @@ describe('[RN-160.05, C394] a busca das atividades e das horas extras filtra no 
     await digitar(input, 'FERIADO');
     expect(linhas().length).toBe(1);
     expect(linhas()[0]).toContain('MARIA ÂNGELA');
+    await digitar(input, 'nada160'); // Fase 5 r3 C21
+    expect(container.textContent).toContain('Nenhuma hora extra encontrada');
     expect(api.get.mock.calls.length).toBe(n0);
   });
 });
@@ -202,9 +232,54 @@ describe('[RN-160.08, Fase 2 I1] a edicao da OS: o gravado em maiusculas escolhe
     expect(tipo.options.length).toBe(4); // nenhuma opcao a mais quando casa
   });
   test('o gravado que nao casa com nenhuma opcao aparece como opcao a mais, selecionada', async () => {
-    await montar(<OSForm os={{ ...OS, prioridade: 'MEDIA' }} onClose={() => {}} />);
+    await montar(<OSForm os={{ ...OS, prioridade: 'MEDIA', tipo_os: 'SOLDAGEM' }} onClose={() => {}} />);
     const prio = selectDe('urgente');
     expect(prio.value).toBe('MEDIA');
     expect(prio.options.length).toBe(5);
+    const tipo = selectDe('fabricacao'); // Fase 5 r3 C30
+    expect(tipo.value).toBe('SOLDAGEM');
+    expect(tipo.options.length).toBe(5);
+  });
+});
+
+test('[RN-160.01, Fase 5 r1-1] a ficha da OS (a rota de edicao monta o OSDetalhesForm): o selo do gravado ALTA usa a classe em minusculas', async () => {
+  api.get.mockResolvedValue({ data: [] });
+  await montar(<OSDetalhesForm os={{ id: 5, numero_os: 'OS-160-5', prioridade: 'ALTA', tipo_os: 'MANUTENCAO', status: 'pendente' }} onClose={() => {}} />);
+  const selo = container.querySelector('[class*="info-item-priority-"]');
+  expect(selo).toBeTruthy();
+  expect(selo.className).toContain('info-item-priority-alta');
+  expect(selo.className).not.toContain('info-item-priority-ALTA');
+  expect(selo.textContent).toBe('ALTA');
+});
+
+describe('[RN-160.01, Fase 5 r3 C25/C26] a lista das OS e o pedido que nao e o ultimo', () => {
+  const OS1 = { id: 1, numero_os: 'OS-UM-160', prioridade: 'NORMAL', status: 'pendente' };
+  const trocar = async (sel, valor) => {
+    const set = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
+    await act(async () => { set.call(sel, valor); sel.dispatchEvent(new Event('change', { bubbles: true })); });
+  };
+  test('a falha do pedido anterior que chega depois nao mostra o erro; o carregando so sai com o ultimo', async () => {
+    const { toast } = require('react-toastify');
+    toast.error.mockClear();
+    let n = 0;
+    api.get.mockImplementation(async (url, cfg) => {
+      n += 1;
+      const p = (cfg && cfg.params) || {};
+      if (n === 1) return { data: [OS1] }; // a abertura
+      if (p.prioridade === 'baixa') { await pausa(100); throw new Error('o velho caiu'); } // o anterior: rapido e falha
+      await pausa(400); return { data: [OS1] }; // o ultimo: lento
+    });
+    await montar(<OrdensServico />);
+    await esperar(() => container.textContent.includes('OS-UM-160'));
+    const sel = [...container.querySelectorAll('select')].find((s) => [...s.options].some((o) => o.value === 'alta'));
+    await trocar(sel, 'baixa');
+    await trocar(sel, 'alta');
+    await act(async () => { await pausa(200); }); // o anterior ja falhou; o ultimo ainda nao respondeu
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(container.querySelector('.skeleton-table')).toBeTruthy();
+    await act(async () => { await pausa(400); });
+    expect(container.querySelector('.skeleton-table')).toBeFalsy();
+    expect(container.textContent).toContain('OS-UM-160');
+    expect(toast.error).not.toHaveBeenCalled();
   });
 });

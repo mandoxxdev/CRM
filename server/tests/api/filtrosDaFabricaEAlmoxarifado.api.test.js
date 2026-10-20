@@ -181,10 +181,16 @@ test('[RN-160.03, C392] GET /operacional/ordens-servico?search: o numero e a des
 });
 
 test('[RN-160.01, C390] ?prioridade= nas duas rotas das OS: "alta", "ALTA" e " Alta " acham o gravado ALTA e o legado alta, e so eles; vazio e nao texto = todas', async () => {
-  const cen = [ctx.os1, ctx.os2, ctx.os3, ctx.os4];
+  // Fase 5 r3 S24: o cadastro nao apara (normalizarMaiusculas) — " alta " pela rota grava " ALTA "; e um legado " ALTA " por fora
+  const [s5, os5] = await j('POST', '/operacional/ordens-servico', { numero_os: 'OS-160-5', tipo_os: 'reparo', data_abertura: '2026-10-19', descricao: 'com espaco 160', prioridade: ' alta ' });
+  assert.strictEqual(s5, 200, JSON.stringify(os5));
+  assert.strictEqual((await all('SELECT prioridade FROM ordens_servico WHERE id = ?', [os5.id]))[0].prioridade, ' ALTA ', 'o cadastro aparou (o cenario nao provaria o TRIM da coluna)');
+  const os6 = await inserir('ordens_servico', { numero_os: 'OS-160-6', tipo_os: 'REPARO', data_abertura: '2026-10-19', descricao: 'legado espaco 160', prioridade: ' alta' });
+  const altas = [ctx.os1, ctx.os2, os5.id, os6];
+  const cen = [ctx.os1, ctx.os2, ctx.os3, ctx.os4, os5.id, os6];
   assert.strictEqual((await all('SELECT prioridade FROM ordens_servico WHERE id = ?', [ctx.os4]))[0].prioridade, 'normal', 'o padrao do banco sem prioridade');
   for (const url of ['/operacional/ordens-servico', '/comercial/ordens-servico']) {
-    await confere(url, 'prioridade', [['alta', [ctx.os1, ctx.os2]], ['ALTA', [ctx.os1, ctx.os2]], [' Alta ', [ctx.os1, ctx.os2]],
+    await confere(url, 'prioridade', [['alta', altas], ['ALTA', altas], [' Alta ', altas],
       ['normal', [ctx.os3, ctx.os4]], ['urgente', []], ['', cen], ['   ', cen]], cen);
     const [, arr] = await j('GET', `${url}?prioridade[]=alta`);
     mesmos(ids(arr).filter((id) => cen.includes(id)), cen, `${url}: a prioridade nao texto filtrou`);
@@ -203,6 +209,7 @@ test('[RN-160.02, C391] o kanban: concluido, cancelado, concluida, cancelada e e
   await mk('normal', 'em_andamento', 'normal');
   await mk('alta', 'em_andamento', 'ALTA');
   await mk('altaMin', 'pendente', 'alta');
+  await mk('altaEsp', 'pendente', ' ALTA '); // Fase 5 r3 S23b: o gravado com espaco (o cadastro nao apara) fica entre as altas
   await mk('urgente', null, 'URGENTE');
   for (const st of ['concluido', 'cancelado', 'concluida', 'cancelada', 'encerrada', 'CONCLUIDO', ' cancelado ']) await mk(`fora-${st.trim()}-${st.length}`, st, 'URGENTE');
   assert.strictEqual((await all('SELECT status FROM ordens_servico WHERE id = ?', [os.urgente]))[0].status, null, 'o status nulo nao ficou nulo');
@@ -210,7 +217,7 @@ test('[RN-160.02, C391] o kanban: concluido, cancelado, concluida, cancelada e e
   assert.strictEqual(s, 200, JSON.stringify(k).slice(0, 200));
   const nossos = Object.values(os);
   const ordem = k.itens.map((i) => i.os_id).filter((id) => nossos.includes(id));
-  const esperado = [os.urgente, os.alta, os.altaMin, os.normal, os.baixa];
+  const esperado = [os.urgente, os.alta, os.altaMin, os.altaEsp, os.normal, os.baixa];
   assert.deepStrictEqual(ordem, esperado, `a ordem/quem entra no kanban: ${JSON.stringify(ordem)} (esperado ${JSON.stringify(esperado)})`);
 });
 
@@ -331,9 +338,12 @@ test('[RN-160.04, C393] o relatorio Historico de movimentacoes: o usuario com ac
   const m3 = await mv({ tipo: 'ENTRADA', usuario_nome: 'MARIAXSILVA 160' });
   const m4 = await mv({ tipo: 'SAIDA', usuario_nome: 'ana 100% 160' });
   const m5 = await mv({ tipo: 'SAIDA', usuario_nome: 'ana 100x 160' });
-  const cen = [m1, m2, m3, m4, m5];
+  // Fase 5 r3 S26: a barra invertida tambem e texto pela rota (sem escapa-la, "\p" vira "p" no ESCAPE e nao acha "C:\PASTA")
+  const m6 = await mv({ tipo: 'AJUSTE_POSITIVO', usuario_nome: 'C:\\PASTA 160' });
+  const m7 = await mv({ tipo: 'AJUSTE_POSITIVO', usuario_nome: 'C:PASTA 160' });
+  const cen = [m1, m2, m3, m4, m5, m6, m7];
   const url = '/almoxarifado/relatorios/historico-movimentacoes';
-  await confere(url, 'usuario', [['joão', [m1]], [' João Operador ', [m1]], ['maria_silva', [m2]], ['100%', [m4]], ['160', cen]], cen);
+  await confere(url, 'usuario', [['joão', [m1]], [' João Operador ', [m1]], ['maria_silva', [m2]], ['100%', [m4]], ['c:\\pasta', [m6]], ['160', cen]], cen);
   await confere(url, 'tipo', [[' saida ', [m1, m4, m5]], ['Entrada', [m2, m3]], ['', cen], ['   ', cen]], cen);
   const [, arr] = await j('GET', `${url}?tipo[]=SAIDA`);
   mesmos(ids(arr).filter((id) => cen.includes(id)), cen, 'o tipo nao texto filtrou');
@@ -341,7 +351,7 @@ test('[RN-160.04, C393] o relatorio Historico de movimentacoes: o usuario com ac
   const [sr, reg] = await j('GET', '/almoxarifado/relatorios');
   assert.strictEqual(sr, 200);
   const h = reg.relatorios.find((r) => r.tipo === 'historico-movimentacoes');
-  assert.ok(/A busca por usuário ignora maiúsculas e minúsculas, mas não o acento\./.test(h.nota), `a nota: ${h.nota}`);
+  assert.ok(/A busca por usuário ignora maiúsculas e minúsculas, mas não o acento \(um nome antigo com letras acentuadas maiúsculas e minúsculas misturadas só é achado com a mesma grafia\)\./.test(h.nota), `a nota: ${h.nota}`);
   assert.ok(!/só em letras sem acento/.test(h.nota), 'a nota velha continua');
 });
 

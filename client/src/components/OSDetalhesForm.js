@@ -487,7 +487,7 @@ const OSDetalhesForm = ({ os, onClose, isFromComercial = false }) => {
                   </div>
                   <div className="info-item-content">
                     <span className="info-item-label">Prioridade</span>
-                    <span className={`info-item-value info-item-badge info-item-priority-${os.prioridade || 'normal'}`}>
+                    <span className={`info-item-value info-item-badge info-item-priority-${String(os.prioridade || 'normal').trim().toLowerCase()}`}>
                       {os.prioridade || 'Normal'}
                     </span>
                   </div>
