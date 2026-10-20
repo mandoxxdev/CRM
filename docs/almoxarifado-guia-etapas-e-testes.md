@@ -1,18 +1,25 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-20 (Etapa 168) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-20 (Etapa 169) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167 e 168) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168 e 169) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-20 (Etapa 168 ENTREGUE · próxima: Etapa 169)
+> ## Onde o desenvolvimento está — 2026-10-20 (Etapa 169 ENTREGUE · próxima: Etapa 170)
 >
-> **O desenvolvimento parou aqui: Etapa 168 fechada — 2026-10-20.** A **Etapa 168 (a hora de criação no relógio de Brasília no núcleo, em
+> **O desenvolvimento parou aqui: Etapa 169 fechada — 2026-10-20.** A **Etapa 169 (as datas das Aprovações, das Ordens de Serviço e das
+> Tarefas no dia de Brasília; consertos técnicos, sem regra de acesso nova e sem mudar valor gravado)**: as **Aprovações** mostram a hora de
+> Brasília (antes, 3 h atrasada); a abertura e a previsão da **OS** aparecem no dia cadastrado (no cartão e no *Ver Detalhes* do Comercial, na
+> lista da Fábrica, no *Ver Preview*, no quadro da Produção e no PDF gerado — antes, a véspera); **a OS só é vencida depois do dia previsto**
+> (antes, a de hoje já contava — o cartão *Vencidas* pode cair); nas **Tarefas**, o prazo no dia cadastrado e a criação na hora de Brasília.
+> Nenhuma consulta antes do deploy. **Próxima: Etapa 170** — ver a próxima tarefa no plano da 169 (o resto da **C421** e a **C422**).
+>
+> **Etapa 168, 2026-10-20.** A **Etapa 168 (a hora de criação no relógio de Brasília no núcleo, em
 > Custos de Viagem e nas Solicitações de Compra; consertos técnicos, sem regra de acesso nova e sem mudar valor gravado)**: o *Cadastrado em*
 > de Clientes e de Usuários, a *Data/Hora* dos Logs, a autorização, o comprovante e o histórico de Custos de Viagem, as Minhas Solicitações
 > de Compra e a data do modelo salvo da proposta mostram a hora de Brasília (antes, 3 h adiantada — das 21h à meia-noite, o dia seguinte); a
 > coluna *Data* da lista de Custos de Viagem mostra o dia cadastrado (antes, a véspera); o filtro de datas dos Logs conta o dia de Brasília.
-> Nenhuma consulta antes do deploy. **Próxima: Etapa 169** — ver a próxima tarefa no plano da 168 (as outras telas da **C421**).
+> Nenhuma consulta antes do deploy. **Próxima: Etapa 169** — ver a próxima tarefa no plano da 168 (as outras telas da **C421**). *(Próxima, na época: Etapa 169 — entregue acima.)*
 >
 > **Etapa 167, 2026-10-20.** A **Etapa 167 (o marcador que sobrevive ao Salvar do preview editável
 > e a *Atividade Recente* da viagem no dia de Brasília; consertos técnicos nas propostas e no Comercial, sem regra de acesso nova)**: salvar
@@ -6818,6 +6825,50 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 169 — As datas das Aprovações, das Ordens de Serviço e das Tarefas no dia de Brasília (ENTREGUE — 2026-10-20)
+
+**O que mudou, em uma frase:** as Aprovações mostram a hora de Brasília, as Ordens de Serviço (telas, quadro da Produção e PDF) e o prazo das
+Tarefas mostram o dia cadastrado, a OS só é *vencida* depois do dia previsto, e a criação das Tarefas aparece na hora de Brasília.
+
+**O problema que ela resolve.** As Aprovações convertiam a hora duas vezes e a mostravam 3 h atrasada. As datas sem hora (a abertura e a
+previsão da OS, o prazo da tarefa) eram lidas como meia-noite do horário universal — no Brasil, 21h da véspera: apareciam um dia antes, o dia
+inteiro, e a OS prevista para hoje já contava como vencida (o ⚠️ marcava até a de amanhã depois das 21h). A criação das Tarefas aparecia 3 h
+adiantada.
+
+| Antes | Agora |
+|---|---|
+| Aprovações, pedido das 22h30 de 20/10: *20/10/2026 às 19:30* | *20/10/2026 às 22:30* |
+| OS aberta e prevista para 20/10 (cartão, lista da Fábrica, Ver Detalhes, Ver Preview, Quadro de Produção, PDF): *19/10/2026* | *20/10/2026* |
+| OS prevista para hoje: no cartão *Vencidas*, no filtro e com ⚠️ | Só a partir de amanhã |
+| Às 22h30, OS prevista para amanhã: ⚠️ | Sem ⚠️ |
+| Propostas Aprovadas, alterada às 22h30 de 20/10: *Data Aprovação 21/10/2026* | *20/10/2026* |
+| Tarefa com prazo 20/10: *19/10/2026* | *20/10/2026* |
+| Tarefa criada às 22h30 de 20/10: *Criada 21/10/2026*, *Criada em: 21/10/2026, 01:30* | *Criada 20/10/2026*, *Criada em: 20/10/2026, 22:30* |
+
+**Roteiro de teste (10 minutos — o passo 1 a qualquer hora; o 2 e o 3 a qualquer hora; o 4 depois das 21h).**
+
+1. **Aprovações.** Faça login com um vendedor e, numa proposta, peça um desconto. Em **Comercial → Aprovações**, a *Data* do pedido é a hora
+   do relógio (*DD/MM/AAAA às HH:MM*); **Ver detalhes**: a *Data da Solicitação* é a mesma. Com outro usuário que decide, aprove: *"Aprovado
+   Por <nome> em <agora>"*.
+2. **As datas da OS.** Em **Comercial → Ordens de Serviço → Propostas Aprovadas**, **Criar OS** numa proposta com itens: deixe a abertura
+   (hoje), escolha a *Data Prevista* e clique **Ver Preview** — as duas datas são as escolhidas. Crie a OS. Na aba **Ordens de Serviço**, o
+   cartão mostra as mesmas datas; **Ver Detalhes** também; em **Fábrica → Ordens de Serviço** a lista também; no **Quadro de Produção**, o
+   cartão do item mostra a prevista. **Ver Detalhes → Gerar PDF**: o PDF traz a abertura e a entrega prevista no mesmo dia.
+3. **A OS vencida.** Edite três OS (Fábrica → Ordens de Serviço → **Editar**) com a *Data Prevista* ontem, hoje e amanhã. Na aba **Ordens de
+   Serviço** do Comercial: o cartão *Vencidas* conta **1**, o filtro **Vencidas** mostra só a de ontem, e só ela tem o ⚠️.
+4. **Tarefas (depois das 21h).** Em **Tarefas**, crie uma tarefa com prazo para hoje: o cartão mostra a data de hoje e *Criada <hoje>*;
+   clique no cartão: *Criada em: <hoje>, <hora do relógio>*.
+
+**O que esta etapa NÃO cobre.** O *Data Entrega*/*Data Conferência* do formulário da OS não são gravados (**C423**, de antes); a OS cancelada
+conta como vencida (**C424**) e a *Data Aprovação* é a da última alteração (**C425**) — perguntas de produto; o PDF já guardado de uma OS só
+muda ao **Gerar PDF** de novo; o resto da **C421** (o Chat, partes de Compras e do Almoxarifado, os PDFs de remessa e de posição do
+cliente). Nenhuma porta de permissão mudou; nenhum valor gravado mudou; nenhuma consulta do servidor mudou; o documento da proposta não mudou.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos provam (as sete telas montadas em jsdom, no
+fuso de Brasília e com o relógio parado às 22h30, do clique até o texto; o formatador do PDF extraído do servidor de verdade e rodado em três
+fusos), escrito para você conferir à mão.
+Commits `1e8fa390`, `1537b0d6`, `009b560e`, `c8b14a86`, `d380d53c` e `ddab7b70` (a correção da revisão).
 
 ## Etapa 168 — A hora de criação no relógio de Brasília no núcleo, em Custos de Viagem e nas Solicitações de Compra (ENTREGUE — 2026-10-20)
 

@@ -240,7 +240,11 @@ paginação foi tocado.
    `updated_at`) — a sabotagem por linha do condutor não a achava porque revertia a linha inteira.
 3. **Paralelismo:** **0** galhos de código em paralelo (T1–T3 pequenas, em sequência); **1** agente de varredura (Explore) em paralelo com a
    Fase 0 e o revisor da Fase 2; **3** revisores em paralelo na Fase 5 (o r3 na worktree própria) — **0** incidente de trava, **0** retrabalho.
-4. **Defeito que escapou:** *(preencher na Etapa 169)*.
+4. **Defeito que escapou:** *(preenchido na Etapa 169)* **0 de código** nas onze exibições e no filtro desta etapa (a Fase 5 da 169 rodou
+   as suítes vizinhas — 114/114 — e nada da 168 caiu). **1 de documento:** a "próxima tarefa" e a **C421** diziam que as Aprovações saíam
+   **6 h** atrasadas — eram **3 h** (a lista do Explore não foi conferida em Node); e faltava o PDF da OS. **E 1 de antes, achado na 169:** o
+   `formatarDataDoBanco` com `soData` (a data da viagem desta etapa, o lembrete e a validade da 165) lia o texto que não começa por
+   `AAAA-MM-DD` pelo `new Date` leniente (`'2026-10'` → 30/09) — só por integração; corrigido em `ddab7b70`.
 
 ## Próxima tarefa detalhada — Etapa 169
 

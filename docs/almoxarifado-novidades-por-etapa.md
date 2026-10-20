@@ -11,14 +11,21 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-20):** **Etapa 168 fechada** (consertos técnicos no núcleo, no Comercial e nas Solicitações de
+> **Onde o desenvolvimento está (2026-10-20):** **Etapa 169 fechada** (consertos técnicos no Comercial, na Fábrica e nas Tarefas, sem regra
+> de acesso nova e sem mudar valor gravado; **as datas das Aprovações, das Ordens de Serviço e das Tarefas no dia de Brasília** — as
+> **Aprovações** mostram a hora de Brasília (antes, 3 h atrasada — **B1073**); a abertura e a previsão da **OS** aparecem no dia cadastrado no
+> cartão e no detalhe do Comercial, na lista da Fábrica, na prévia, no quadro da Produção (**B1074**) e no PDF da OS (**B1077**) — antes, a
+> véspera; **a OS só é *vencida* depois do dia previsto** (antes, a de hoje já contava — **B1075**, o cartão *Vencidas* pode cair); nas
+> **Tarefas**, o prazo no dia cadastrado e a criação na hora de Brasília (**B1076**); a **C421** em parte resolvida (e corrigida: eram 3 h, não
+> 6 h); os avisos novos **C423** (quatro datas do formulário da OS que não são gravadas — de antes), **C424** e **C425** (perguntas de produto));
+> a próxima é a **170** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 168 fechada** (consertos técnicos no núcleo, no Comercial e nas Solicitações de
 > Compra, sem regra de acesso nova e sem mudar valor gravado; **a hora de criação no relógio de Brasília** — o *Cadastrado em* de Clientes e
 > de Usuários, a *Data/Hora* dos Logs, a autorização, o comprovante e o histórico de **Custos de Viagem**, as **Minhas Solicitações de
 > Compra** e a data do modelo salvo da proposta mostram a hora de Brasília (antes, 3 h adiantada: das 21h à meia-noite, o dia seguinte) e a
 > coluna *Data* da lista de Custos de Viagem mostra o dia gravado (antes, a véspera) — **B1069**; o filtro de datas dos Logs conta o dia de
 > Brasília (**B1070**); os avisos novos **C421** (as outras telas que ainda leem a data no fuso universal — medidas, a próxima etapa) e
-> **C422** (o *limit* inválido dos Logs — de antes)); a próxima é a **169** — ver
-> "Onde estamos e o que vem a seguir".
+> **C422** (o *limit* inválido dos Logs — de antes)); a próxima era a **169**.)*
 > *(Antes: **Etapa 167 fechada** (consertos técnicos no Comercial, sem regra de acesso nova e sem
 > mudar valor gravado; **o marcador que sobrevive ao Salvar do preview editável e a *Atividade Recente* da viagem no dia de Brasília** —
 > salvar pelo preview não troca mais o marcador da cláusula (`{{proposal.date}}`, o número, o nome do cliente) pelo valor escrito: o que o
@@ -4053,7 +4060,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B1072; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B1078; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -11805,6 +11812,49 @@ Comercial, no Operacional e nas Tarefas. As decisões que esperam vocês: as da 
 um olhar; a **B1013** (o acento nas buscas); a **C398**; a **C408**; a **C411** e a **C412**; a **B1057** (a data de emissão reimpressa); a
 **B1063** (o texto impresso das cláusulas com o marcador); a **C417**; a **C420**; a **B1069** e a **B1070** são reversíveis.
 
+**B1073 (NOVA, da Etapa 169; do Comercial) — as Aprovações na hora de Brasília.** **Escolhido:** a *Data* da lista de **Aprovações**, a
+*Data da Solicitação* do detalhe e a data da decisão (*Aprovado Por … em …*, *Data da Rejeição*) mostram o instante gravado no relógio de
+Brasília, no mesmo formato de antes (*DD/MM/AAAA às HH:MM*). **Muda:** a hora fica **3 h mais tarde** que antes (era 3 h atrasada — a tela
+convertia o horário duas vezes); da meia-noite às 3h, o dia certo em vez da véspera. O valor ilegível aparece como gravado (antes *-*); vazio
+continua *-*. *(A C421 dizia "6 h atrasada"; estava errado — são 3 h; as 6 h eram a distância para as telas que mostravam a hora 3 h
+adiantada.)* **Descartado:** trocar o formato da tela. **Reversível:** `1e8fa390`.
+
+**B1074 (NOVA, da Etapa 169; do Comercial e da Fábrica) — as datas da OS no dia cadastrado.** **Escolhido:** a *Data Abertura* e a *Data
+Prevista* do cartão das **Ordens de Serviço** do Comercial, da lista da **Fábrica**, do **Ver Detalhes** da OS, da prévia ao criar (**Ver
+Preview**) e do cartão do **Quadro de Produção** mostram o dia cadastrado; a *Data Aprovação* da aba **Propostas Aprovadas** mostra o dia de
+Brasília. **Muda:** o dia certo em vez da **véspera**, o dia inteiro (a *Data Aprovação*: das 21h à meia-noite, o dia certo em vez do
+seguinte); sem abertura, a prévia mostra *-* (antes *Invalid Date*); a data ilegível de uma OS aparece *-* (antes *Invalid Date*); a *Data
+Aprovação* ilegível aparece como gravada. **Descartado:** trocar o formato. **Reversível:** `1537b0d6`.
+
+**B1075 (NOVA, da Etapa 169; do Comercial) — a OS vencida é a que tem a data prevista antes de hoje.** **Escolhido:** uma régua só para o
+cartão *Vencidas*, o filtro **Vencidas** e o ⚠️ do cartão: a data prevista é **anterior** ao dia de hoje (Brasília) e a OS não está
+concluída. **Muda:** a OS prevista para hoje **deixa de contar** como vencida no próprio dia (antes contava o dia inteiro; o ⚠️ marcava até a
+de amanhã depois das 21h) e passa a contar a partir de amanhã — **o número do cartão *Vencidas* pode cair**. Sem data prevista (ou com a data
+ilegível) nunca é vencida (como antes); a cancelada continua contando (**C424**). **Descartado:** contar a OS como vencida no próprio dia
+previsto (a data prevista é o último dia no prazo); levar a contagem para o servidor (ele não tem uma — mudaria o que a rota responde).
+**Reversível:** `1537b0d6`.
+
+**B1076 (NOVA, da Etapa 169; das Tarefas) — as datas das Tarefas no dia e na hora de Brasília.** **Escolhido:** o prazo do cartão no dia
+cadastrado; o *Criada* do cartão e o *Criada em* do formulário no dia e na hora de Brasília; o *Resolvida* não muda (já estava certo).
+**Muda:** o prazo, o dia certo em vez da véspera; a criação, das 21h à meia-noite o dia certo em vez do seguinte e a hora 3 h a menos (era 3 h
+adiantada). Um prazo gravado com hora pela integração mostra o dia escrito nele (como o campo do formulário já mostrava); o prazo ilegível
+continua mostrando os 10 primeiros caracteres; a criação ilegível aparece inteira também no cartão. **Descartado:** trocar o formato.
+**Reversível:** `009b560e`; o prazo ilegível pela integração em `ddab7b70`.
+
+**B1077 (NOVA, da Etapa 169; da Fábrica e do Comercial) — o PDF da OS no dia cadastrado.** **Escolhido:** as datas impressas no PDF da OS (a
+abertura, a entrega prevista e a data do rodapé de conferência) pelo calendário de Brasília, sem depender do fuso do servidor. **Muda:** o
+dia certo em vez da **véspera** (o servidor de produção roda no fuso de Brasília) — **só nos PDFs gerados daqui em diante** (*Gerar PDF*, ou
+ao criar a OS); o PDF já salvo continua como foi gerado. Vazio ou ilegível continua em branco. Uma data gravada como número pela integração
+passa a sair em branco (antes, formatada — a tela nunca grava número; Fase 5 r2). **Descartado:** depender do fuso do processo. **Reversível:**
+`c8b14a86`.
+
+**B1078 (NOVA, da Etapa 169) — a próxima etapa (170).** Ver a "próxima tarefa detalhada" no plano da Etapa 169 — o resto da **C421** (o Chat,
+Compras, o Almoxarifado, os PDFs de remessa e de posição do cliente) e a **C422**. As decisões que esperam vocês: as da **B957**, a **B988** e a
+**B989**; a **B1002** continua pedindo um olhar; a **B1013** (o acento nas buscas); a **C398**; a **C408**; a **C411** e a **C412**; a **B1057**
+(a data de emissão reimpressa); a **B1063** (o texto impresso das cláusulas com o marcador); a **C417**; a **C420**; as novas **C424** (a OS
+cancelada como vencida) e **C425** (o que a *Data Aprovação* mostra); a **B1073** a **B1077** são reversíveis — **a B1075 muda um número que
+alguém pode acompanhar** (o cartão *Vencidas*).
+
 **B1064 (NOVA, da Etapa 166) — a próxima etapa (167).** Ver a "próxima tarefa detalhada" no plano da Etapa 166. As decisões que esperam
 vocês: as da **B957**, a **B988** e a **B989**; a **B1002** continua pedindo um olhar; a **B1013** (o acento nas buscas); a **C398**; a
 **C408**; a **C411** e a **C412**; a **B1057** (a data de emissão reimpressa); **a B1063** (o texto impresso das cláusulas com o marcador);
@@ -15285,21 +15335,38 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      primeiro continua — escrever o marcador é escolha de quem escreve. **O que fazer:** nada no dia a dia (só quem tem o Comercial escreve
      cláusulas e cadastros). Restringir `raw` a uma lista de campos, ou escapar `{{` nos valores, é decisão de produto (muda o que o marcador
      aceita) — fica para uma etapa própria.
-421. **NOVO (da medição da Etapa 168; de vários módulos, anterior a ela; lido no código, linha a linha) — as outras telas que ainda leem a
+421. **PARTE RESOLVIDA NA ETAPA 169 (B1073 a B1077; `1e8fa390`, `1537b0d6`, `009b560e`, `c8b14a86`) — NOVO (da medição da Etapa 168; de vários módulos, anterior a ela; lido no código, linha a linha) — as outras telas que ainda leem a
      data no fuso universal.** A Etapa 168 consertou a hora de criação no núcleo, em Custos de Viagem e nas Solicitações de Compra e mediu o
      resto do sistema. Ainda mostram a data errada: no **Comercial**, as **Aprovações** (a hora sai **6 h atrasada** — o horário é convertido
-     duas vezes), a lista de **OS do Comercial** (a abertura e a previsão na **véspera**; a data de aprovação no dia seguinte das 21h à
+     duas vezes; *isto dizia 6 h; **estava errado**: são **3 h** atrasada — as 6 h eram a distância para as telas que mostravam a hora 3 h
+     adiantada, medido na Etapa 169*), a lista de **OS do Comercial** (a abertura e a previsão na **véspera**; a data de aprovação no dia seguinte das 21h à
      meia-noite; a contagem de *vencidas* conta a OS um dia antes) e o preview da OS (véspera); no **Operacional** e na **Fábrica**, a lista e o
      detalhe das OS e o quadro da Produção (a abertura e a previsão na véspera); nas **Tarefas**, o prazo (véspera) e a criação (o dia seguinte
      à noite; a hora 3 h adiantada); no **Chat**, a hora das mensagens (3 h adiantada) e o *Hoje*/*Ontem* e o separador do dia à noite; em
      **Compras**, a data da planilha salva do fornecedor (depois de recarregar) e o *Cadastrado em* da planilha de fornecedores (o dia
      seguinte à noite); no **Almoxarifado**, a data do certificado do lote, a data dos anexos, a data de retirada da ferramenta (o dia seguinte
      à noite) e o *gerado em* dos PDFs de remessa e de posição do cliente (o dia seguinte das 21h à meia-noite). **O que fazer:** à noite,
-     conferir a data dessas telas com o calendário. É a próxima etapa (169 e seguintes).
+     conferir a data dessas telas com o calendário. É a próxima etapa (169 e seguintes). *(Resolvido na Etapa 169: as Aprovações, as OS do
+     Comercial e da Fábrica, a prévia, o quadro da Produção, a contagem de vencidas e as Tarefas — e o PDF da OS, que esta lista não nomeava.
+     Continuam: o Chat, Compras, o Almoxarifado e os PDFs de remessa e de posição do cliente — a Etapa 170.)*
 422. **NOVO (da revisão de autorização da Etapa 168; dos Logs, anterior a ela; reproduzido por sonda) — o limite de linhas inválido nos
      Logs.** A consulta dos logs pela integração com `limit=abc` (ou um número gigante) responde erro 500 com a mensagem crua do banco; com
      `limit=-1`, sem limite. Só um administrador alcança (a tela sempre manda 100). **O que fazer:** nada no dia a dia. Validar o limite é
      uma etapa própria.
+423. **NOVO (da revisão do plano da Etapa 169; da Fábrica e do Comercial, anterior a ela; lido no código) — quatro datas do formulário da
+     OS não são gravadas.** No **Editar** da OS (Fábrica), os campos *Data Entrega*, *Data Conferência*, a data de entrada do pedido e a da ordem
+     de produção aceitam o valor e o **Salvar** responde *"OS atualizada com sucesso"* — mas o servidor não grava essas quatro: ao reabrir, os
+     campos estão vazios. No PDF da OS, por isso, a *entrega prevista* impressa é sempre a data prevista, e a data do rodapé de conferência é
+     sempre o dia em que o PDF foi gerado. **O que fazer:** não contar com esses campos; usar a *Data Prevista*. Gravá-los é uma etapa própria
+     (muda o que a rota de salvar a OS aceita).
+424. **NOVO (da medição da Etapa 169; do Comercial, anterior a ela) — a OS cancelada conta como vencida.** O cartão *Vencidas*, o filtro
+     **Vencidas** e o ⚠️ das **Ordens de Serviço** do Comercial só deixam de fora a OS **concluída**: a cancelada com a data prevista passada
+     conta como vencida. **O que fazer:** ao ler o cartão *Vencidas*, descontar as canceladas. Tirá-las da conta é pergunta de produto.
+425. **NOVO (da revisão do plano da Etapa 169; do Comercial, anterior a ela; lido no código) — a *Data Aprovação* das Propostas Aprovadas é a
+     da última alteração.** Na aba **Propostas Aprovadas** das **Ordens de Serviço**, a coluna *Data Aprovação* mostra o dia da **última
+     alteração** da proposta (qualquer edição depois da aprovação muda a data), não o da aprovação — a proposta não guarda a hora da
+     aprovação; guarda o dia de fechamento. **O que fazer:** não ler essa coluna como a data da aprovação. Mostrar o dia de fechamento é
+     pergunta de produto.
 ### D. Limitações declaradas— são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -16631,6 +16698,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(169) As datas das Aprovações, das OS e das Tarefas, o que ficou de fora.** O resto da **C421** (o Chat, Compras, o Almoxarifado, os
+  PDFs de remessa e de posição do cliente). O PDF já guardado de uma OS só muda ao gerar de novo. Quatro datas do formulário da OS não são
+  gravadas (**C423**, de antes). A OS cancelada como vencida (**C424**) e o que a *Data Aprovação* mostra (**C425**) ficam para o produto. Uma
+  data impossível com hora gravada pela integração (*30/02* com hora) ainda é lida rolando para março nas Aprovações e na criação das Tarefas
+  (o banco nunca grava assim — Fase 5 r1). Nenhuma porta de permissão mudou; nenhum valor gravado mudou; nenhuma consulta do servidor mudou.
 - **(168) A hora de criação no relógio de Brasília, o que ficou de fora.** As outras telas medidas que ainda leem a data no fuso universal
   (**C421**). O formato de cada tela não mudou (de propósito — **B1069**). A data de uma viagem gravada com hora (só por integração) conta pelo
   dia escrito nela. Os Logs com limite inválido pela integração (**C422**). Nenhuma porta de permissão mudou; nenhum valor gravado mudou.
@@ -17739,6 +17811,12 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(169) Nenhum clique foi dado no navegador.** As sete telas foram provadas em jsdom com a tela de verdade (só a resposta do servidor
+simulada), no fuso de Brasília e com o relógio parado às 22h30, do gesto até o texto (abrir o detalhe da aprovação, a aba das OS, o filtro
+*Vencidas*, *Ver Preview*, abrir a tarefa); o formatador do PDF da OS extraído do servidor de verdade e rodado em três fusos. **O PDF não foi
+aberto.** Vale conferir à mão: numa OS prevista para hoje, **Ver Detalhes → Gerar PDF** (a entrega prevista é hoje, não ontem); na aba das OS,
+o cartão *Vencidas* não conta a de hoje; e, depois das 21h, uma tarefa criada agora diz *Criada <hoje>*.
 
 **(168) Nenhum clique foi dado no navegador.** As seis telas foram provadas em jsdom com a tela de verdade (só a resposta do servidor
 simulada), no fuso de Brasília, do gesto até o texto (abrir, clicar *Comprovantes*/*Histórico*/*Editar*/*Carregar Template*, exportar a
@@ -33526,9 +33604,79 @@ de hoje pelo relógio de Brasília, inclusive os das 21h à meia-noite; os de on
 - Nenhuma porta de permissão mudou; nenhum valor gravado mudou; o documento da proposta não mudou (a revisão obrigatória da proposta passou
   inteira).
 
+## Etapa 169 — As datas das Aprovações, das Ordens de Serviço e das Tarefas no dia de Brasília (2026-10-20)
+
+Uma etapa de **consertos técnicos**, sem regra de acesso nova e sem mudar nada gravado. Três telas do dia a dia do Comercial, da Fábrica e
+das Tarefas mostravam a data errada. As **Ordens de Serviço** (a lista do Comercial e a da Fábrica, os detalhes, a prévia ao criar, o quadro
+da Produção e o PDF da OS) mostravam a abertura e a data prevista **um dia antes**, o dia inteiro — e a OS prevista para **hoje** já
+aparecia como **vencida** (no contador *Vencidas*, no filtro e no ⚠️ do cartão, que marcava até a de amanhã depois das 21h). As
+**Aprovações** mostravam a hora do pedido de desconto e da decisão **3 horas atrasada**. E nas **Tarefas** o prazo aparecia um dia antes e a
+hora de criação 3 horas adiantada (das 21h à meia-noite, com a data de amanhã). Agora cada data é a do calendário e do relógio de Brasília,
+no mesmo formato de antes de cada tela.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Comercial → Aprovações**, pedido feito às 22h30 de 20/10: *20/10/2026 às 19:30* (na lista e no detalhe) | *20/10/2026 às 22:30* — **B1073** |
+| **Aprovações**, aprovado à 01h30 de 21/10: *Aprovado Por … em 20/10/2026 às 22:30* | *… em 21/10/2026 às 01:30* — **B1073** |
+| **Comercial → Ordens de Serviço**, OS aberta e prevista para 20/10: cartão com *19/10/2026* | *20/10/2026* — **B1074** |
+| **Ordens de Serviço**, OS prevista para hoje: contada em *Vencidas*, no filtro *Vencidas* e com ⚠️ | Não é vencida hoje; passa a ser amanhã — **B1075** |
+| **Ordens de Serviço**, às 22h30, OS prevista para amanhã: cartão com ⚠️ | Sem ⚠️ — **B1075** |
+| **Ordens de Serviço → Propostas Aprovadas**, proposta alterada às 22h30 de 20/10: *Data Aprovação 21/10/2026* | *20/10/2026* — **B1074** |
+| **Fábrica → Ordens de Serviço** (a lista) e **Comercial → Ordens de Serviço → Ver Detalhes**: abertura e prevista na véspera | O dia cadastrado — **B1074** |
+| **Criar OS → Ver Preview**: a abertura de hoje como *ontem* (sem abertura: *Invalid Date*) | Hoje (sem abertura: *-*) — **B1074** |
+| **Fábrica → Quadro de Produção**: o prazo do cartão na véspera | O dia cadastrado — **B1074** |
+| **PDF da OS** (*Gerar PDF*): abertura, entrega prevista e data na véspera | O dia cadastrado — **B1077** |
+| **Tarefas**, prazo 20/10: *19/10/2026* no cartão | *20/10/2026* — **B1076** |
+| **Tarefas**, criada às 22h30 de 20/10: *Criada 21/10/2026*; ao abrir, *Criada em: 21/10/2026, 01:30* | *Criada 20/10/2026*; *Criada em: 20/10/2026, 22:30* — **B1076** |
+
+### As regras, com o cenário exato
+
+**1. As Aprovações na hora de Brasília (B1073).** Com um vendedor, peça um desconto numa proposta (**Comercial → Propostas → Solicitar
+aprovação**). Em **Comercial → Aprovações**, a coluna *Data* do pedido é a hora do relógio, no formato *DD/MM/AAAA às HH:MM*; clique **Ver
+detalhes**: a *Data da Solicitação* é a mesma. Aprove (ou rejeite) com outro usuário: *"Aprovado Por <nome> em <data e hora de agora>"* (ou
+*Data da Rejeição*: a de agora).
+
+**2. As datas da OS no dia cadastrado (B1074).** Em **Comercial → Ordens de Serviço → Propostas Aprovadas**, clique **Criar OS** numa proposta
+com itens; deixe a *Data de Abertura* (hoje), escolha uma *Data Prevista* e clique **Ver Preview**: as duas datas aparecem como escolhidas.
+Crie a OS. Na aba **Ordens de Serviço**, o cartão mostra a mesma *Data Abertura* e *Data Prevista*; em **Fábrica → Ordens de Serviço**, a
+lista mostra as mesmas; no cartão do Comercial, **Ver Detalhes** mostra as mesmas; no **Quadro de Produção**, o cartão do item mostra a prevista.
+
+**3. A OS vencida (B1075).** Uma OS **vencida** é a que tem a data prevista **anterior a hoje** e não está concluída. Crie (ou edite) três OS
+com a prevista **ontem**, **hoje** e **amanhã**: na aba **Ordens de Serviço**, o cartão *Vencidas* conta **1**; o filtro **Vencidas** mostra
+só a de ontem; só ela tem o ⚠️ e o destaque. Amanhã, a de hoje passa a contar. A OS sem data prevista nunca é vencida; a concluída também não;
+a **cancelada** continua contando como vencida (como antes — **C424**).
+
+**4. As Tarefas (B1076).** Em **Tarefas**, crie uma tarefa com prazo para hoje: o cartão mostra a data de hoje. Depois das 21h: o cartão diz
+*Criada <hoje>*; clique no cartão: *Criada em: <hoje>, <hora do relógio>*.
+
+**5. O PDF da OS (B1077).** Numa OS, **Editar → Gerar PDF**: o cabeçalho e o quadro de datas trazem a abertura e a entrega prevista no dia
+cadastrado. Vale para o PDF gerado daqui em diante — o PDF já salvo de uma OS (o **Ver PDF**) continua como foi gerado até ser gerado de
+novo.
+
+### O que esta etapa NÃO cobre
+
+- O *Data Entrega*, o *Data Conferência* (e a entrada do pedido e a ordem de produção) do formulário da OS **não são gravados** ao salvar —
+  de antes (**C423**); no PDF, a entrega impressa é sempre a prevista e a data da conferência é o dia da geração.
+- A OS **cancelada** conta como vencida (**C424**, de antes — pergunta de produto); a *Data Aprovação* da aba *Propostas Aprovadas* é a data
+  da última alteração da proposta, não a da aprovação (**C425**, de antes — pergunta de produto).
+- O resto da **C421** (o Chat, partes de Compras e do Almoxarifado, os PDFs de remessa e de posição do cliente) — a próxima etapa.
+- Nenhuma porta de permissão mudou; nenhum valor gravado mudou; nenhuma consulta do servidor mudou; o documento da proposta não mudou (a
+  revisão obrigatória da proposta passou inteira).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 169 entregue (2026-10-20):** **as datas das Aprovações, das Ordens de Serviço e das Tarefas no dia de Brasília** — as Aprovações na
+  hora de Brasília (**B1073**); as datas da OS no dia cadastrado, nas telas (**B1074**) e no PDF (**B1077**); a OS vencida só depois do dia
+  previsto (**B1075**); o prazo e a criação das Tarefas (**B1076**). Consertos técnicos, sem regra de acesso nova e sem mudar valor gravado.
+  Commits `1e8fa390`, `1537b0d6`, `009b560e`, `c8b14a86`, `d380d53c` (o teste de integração) e `ddab7b70` (a correção da revisão). **O que é
+  seu:** as decisões **B1073** a **B1077** (reversíveis — **a B1075 muda o número do cartão *Vencidas***); os avisos novos **C423** (de antes),
+  **C424** e **C425** (perguntas de produto); as perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **B988**, **B989**,
+  **B1013**, **B1057**, **B1063**, **C277**, **C312**, **C314**, **C316**, **C330**, **C398**, **C408**, **C411**, **C412**, **C417**, **C420**); as
+  limitações **(169)** em D e a verificação **(169)** em F. **Próxima: Etapa 170 — ver a "próxima tarefa detalhada" no plano da Etapa 169.**
 
 - **Etapa 168 entregue (2026-10-20):** **a hora de criação no relógio de Brasília** no núcleo (Clientes, Usuários, Logs), em Custos de
   Viagem, nas Minhas Solicitações de Compra e no modelo salvo da proposta, e a data da viagem no dia gravado (**B1069**); o filtro de datas dos
@@ -33537,7 +33685,7 @@ de hoje pelo relógio de Brasília, inclusive os das 21h à meia-noite; os de on
   novos **C421** (as outras telas — a próxima etapa) e **C422** (de antes); as perguntas de antes (**B949**, **B910**, **B853**, **B924**,
   **B926**, **B988**, **B989**, **B1013**, **B1057**, **B1063**, **C277**, **C312**, **C314**, **C316**, **C330**, **C398**, **C408**, **C411**,
   **C412**, **C417**, **C420**); as limitações **(168)** em D e a verificação **(168)** em F. **Próxima: Etapa 169 — ver a "próxima tarefa
-  detalhada" no plano da Etapa 168.**
+  detalhada" no plano da Etapa 168.** *(Feita: a 169.)*
 
 - **Etapa 167 entregue (2026-10-20):** **o marcador que sobrevive ao Salvar do preview editável e a *Atividade Recente* da viagem no dia de
   Brasília** (consertos técnicos nas propostas e no Comercial, sem regra de acesso nova). Salvar pelo preview mantém o marcador que o

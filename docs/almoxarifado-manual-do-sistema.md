@@ -7064,10 +7064,22 @@ O sistema guarda o instante de cada registro no horário universal (três horas 
   Início*/*Data Fim* a encontra.
 - **O filtro *Data início*/*Data fim* dos Logs** (Administração → Logs) escolhe os registros pelo dia de **Brasília** em que aconteceram, os
   dois dias incluídos: o registro das 22h30 de 20/10 entra no filtro de 20/10.
+- **As Aprovações, as Ordens de Serviço e as Tarefas** mostram as datas no calendário e no relógio de **Brasília**:
+  - em **Comercial → Aprovações**, a *Data* da lista, a *Data da Solicitação* do detalhe e a data da decisão (*Aprovado Por … em …*, *Data da
+    Rejeição*) são a hora de Brasília, em *DD/MM/AAAA às HH:MM*; sem data, *-*; um valor que não é data aparece como foi gravado;
+  - a *Data Abertura* e a *Data Prevista* da OS aparecem no dia cadastrado (*DD/MM/AAAA*) no cartão das **Ordens de Serviço** do Comercial e no
+    **Ver Detalhes**, na lista de **Fábrica → Ordens de Serviço**, na prévia ao criar a OS (**Ver Preview**) e no cartão do **Quadro de
+    Produção**; sem data (ou com um valor que não é data), *-*. Na aba **Propostas Aprovadas**, a *Data Aprovação* é o dia de Brasília da
+    última alteração da proposta;
+  - uma OS é **vencida** quando a *Data Prevista* é **anterior a hoje** (o dia de Brasília) e a OS não está concluída: no dia previsto ela
+    ainda está no prazo; no dia seguinte, vence. É a mesma régua do cartão *Vencidas*, do filtro **Vencidas** e do ⚠️ com o destaque do
+    cartão. A OS sem data prevista nunca é vencida; a cancelada com a data passada conta como vencida;
+  - o **PDF da OS** imprime a abertura e a entrega prevista no dia cadastrado, e a data do rodapé de conferência é o dia de Brasília em que o
+    PDF foi gerado; o PDF já guardado de uma OS mostra as datas de quando foi gerado (**Gerar PDF** gera de novo);
+  - nas **Tarefas**, o prazo do cartão aparece no dia cadastrado (o mesmo do campo *Prazo* ao abrir a tarefa); *Criada* (no cartão) e *Criada
+    em* (ao abrir) são o dia e a hora de Brasília em que a tarefa foi criada, e *Resolvida* a hora em que foi concluída.
 - **Ainda pelo horário universal** (a data pode sair um dia adiantada das 21h à meia-noite, ou a hora 3 h adiantada; nas datas sem hora,
-  um dia antes): os indicadores do painel antigo do Operacional (OEE, manutenção e inspeções do dia), que nenhum menu abre; as
-  **Aprovações** do Comercial (a hora sai 6 h antes); a lista e o detalhe das **OS** (Comercial, Operacional e o quadro da Produção — a
-  abertura e a previsão um dia antes; a contagem de OS *vencidas* do Comercial também); as **Tarefas** (o prazo um dia antes; a criação); o
+  um dia antes): os indicadores do painel antigo do Operacional (OEE, manutenção e inspeções do dia), que nenhum menu abre; o
   **Chat** (a hora das mensagens, *Hoje*/*Ontem*); em **Compras**, a data da planilha salva do fornecedor e o *Cadastrado em* da planilha de
   fornecedores; no **Almoxarifado**, a data do certificado do lote, a data dos anexos e a da retirada da ferramenta; e o *gerado em* dos PDFs
   de remessa a terceiro e de posição do cliente.
