@@ -161,7 +161,25 @@ test('[RN-164.05, B1047] diasAte: a data menos o hoje de Brasilia em dias, sem d
   assert.strictEqual(frotasService.diasAte(null, '2026-11-30'), null);
   assert.strictEqual(frotasService.diasAte('', '2026-11-30'), null);
   assert.strictEqual(frotasService.diasAte('lixo', '2026-11-30'), null);
-  assert.strictEqual(frotasService.diasAte('2026-02-30', '2026-11-30'), null, 'data impossivel = nula (como antes)');
+  // Fase 5 r1: a data impossivel e o ano < 100 rolam como o `new Date` da conta antiga (antes desta correcao saiam nulos e o alerta perdia a cor)
+  assert.strictEqual(frotasService.diasAte('2026-02-30', '2026-02-28'), 2, 'a data impossivel rola para 02/03, como antes');
+  assert.ok(frotasService.diasAte('0026-12-31', '2026-12-31') < -700000, 'o ano 0026 (digitado "26") e muito vencido, nao nulo');
+  assert.strictEqual(frotasService.diasAte('2026-12-01 10:00:00', '2026-11-30'), 1, 'Fase 5 r3 G16: com hora, o prefixo da data');
+});
+
+test('[RN-164.05, Fase 5 r3 G18] diasAte sem o 2o argumento: o hoje de Brasilia mesmo as 22h (o relogio deste processo parado)', () => {
+  const Real = Date;
+  const as22 = brt('2026-11-30', 22, 0);
+  class Parado extends Real {
+    constructor(...a) { if (a.length === 0) super(as22); else super(...a); }
+    static now() { return as22; }
+  }
+  global.Date = Parado;
+  try {
+    assert.strictEqual(new Date().toISOString().slice(0, 10), '2026-12-01', 'guarda: o dia UTC ja e o de amanha');
+    assert.strictEqual(frotasService.diasAte('2026-11-30'), 0);
+    assert.strictEqual(frotasService.diasAte('2026-12-01'), 1);
+  } finally { global.Date = Real; }
 });
 
 test('[RN-164.08, B1049] inicioDoPeriodoLocalISO: o mes, o trimestre e o ano de Brasilia nas viradas (as 22h do ultimo dia)', () => {
@@ -209,10 +227,14 @@ test('massa de Frotas (por fora, depois do schema do modulo)', async () => {
   const seg = (venc, extra = {}) => inserir('frotas_documentos', { veiculo_id: vSeg, tipo: 'seguro', descricao: 'APOLICE E164', data_vencimento: venc, alerta_dias_antes: null, status: 'ativo', ...extra });
   ctx.seg = { s30: await seg(D(30)), s31: await seg(D(31)), sIpva: await seg(HOJE, { tipo: 'ipva' }), sOutra: await seg(HOJE, { descricao: 'OUTRA' }) };
   const mot = (validade) => inserir('frotas_motoristas', { nome: `MOT ${validade}`, cnh_validade: validade, status: 'ativo', ativo: 1 });
-  ctx.mot = { m30: await mot(D(30)), m31: await mot(D(31)), m0: await mot(HOJE) };
+  ctx.mot = { m30: await mot(D(30)), m31: await mot(D(31)), m0: await mot(HOJE), m1: await mot(ONTEM),
+    mInativo: await inserir('frotas_motoristas', { nome: 'MOT INATIVO', cnh_validade: HOJE, status: 'ativo', ativo: 0 }),
+    mSituacaoInativa: await inserir('frotas_motoristas', { nome: 'MOT SITUACAO INATIVA', cnh_validade: HOJE, status: 'inativo', ativo: 1 }) };
   // revisoes: um veiculo por borda, sem a regua de km (Fase 2 I2)
   const rev = async (data) => inserir('frotas_manutencoes', { veiculo_id: await veiculo(), descricao: `REV ${data}`, proxima_revisao_data: data, proxima_revisao_km: null, data_manutencao: '2020-01-01', custo: 0 });
   ctx.rev = { r0: await rev(HOJE), r1: await rev(ONTEM), r15: await rev(D(15)), r16: await rev(D(16)) };
+  const revKm = async (prox) => inserir('frotas_manutencoes', { veiculo_id: await veiculo({ km_atual: 1000 }), descricao: `KM ${prox}`, proxima_revisao_data: null, proxima_revisao_km: prox, data_manutencao: '2020-01-01', custo: 0 });
+  ctx.km = { k1500: await revKm(1500), k1501: await revKm(1501), k1000: await revKm(1000) };
   const multa = (venc, st = 'pendente') => inserir('frotas_multas', { veiculo_id: vDoc, data_vencimento: venc, status_pagamento: st, valor: 1, descricao: `MULTA ${venc}` });
   ctx.multa = { mu15: await multa(D(15)), mu16: await multa(D(16)), muPago: await multa(HOJE, 'pago') };
   // consumo baixo: um veiculo so com HOJE-60 (alerta) e outro so com HOJE-61 (nao)
@@ -251,6 +273,14 @@ test('[RN-164.02, RN-164.03, RN-164.05, B1046] CNH (+30), revisao (+15), multa p
   assert.strictEqual(alerta(lista, 'cnh', ctx.mot.m30).dias_restantes, 30);
   assert.strictEqual(alerta(lista, 'cnh', ctx.mot.m0).dias_restantes, 0);
   assert.strictEqual(alerta(lista, 'cnh', ctx.mot.m0).severidade, 'alto', 'a CNH de hoje nao e critica');
+  assert.deepStrictEqual([alerta(lista, 'cnh', ctx.mot.m1).dias_restantes, alerta(lista, 'cnh', ctx.mot.m1).severidade], [-1, 'critico'], 'Fase 5 r3 G05: a CNH de ontem e critica');
+  assert.ok(!alerta(lista, 'cnh', ctx.mot.mInativo), 'Fase 5 r3 G11: motorista desativado nao entra');
+  assert.ok(!alerta(lista, 'cnh', ctx.mot.mSituacaoInativa), 'Fase 5 r3 G11: motorista com situacao inativo nao entra');
+  // Fase 5 r3 G07-G09: a regua de km (de antes): km_atual >= prox - 500 entra; kmRestante <= 0 e critico
+  assert.ok(alerta(lista, 'manutencao', ctx.km.k1500), 'km: 1000 >= 1500 - 500 entra');
+  assert.ok(!alerta(lista, 'manutencao', ctx.km.k1501), 'km: 1000 < 1501 - 500 nao entra');
+  assert.deepStrictEqual([alerta(lista, 'manutencao', ctx.km.k1500).km_restante, alerta(lista, 'manutencao', ctx.km.k1500).severidade], [500, 'medio']);
+  assert.deepStrictEqual([alerta(lista, 'manutencao', ctx.km.k1000).km_restante, alerta(lista, 'manutencao', ctx.km.k1000).severidade], [0, 'critico']);
   const r = ctx.rev;
   for (const k of ['r0', 'r1', 'r15']) assert.ok(alerta(lista, 'manutencao', r[k]), `revisao ${k} entra`);
   assert.ok(!alerta(lista, 'manutencao', r.r16), 'revisao de HOJE+16 nao entra');
@@ -280,13 +310,24 @@ test('[RN-164.04, T4, B1046] o painel: combustivel do mes, checklists de hoje, m
   assert.strictEqual(s, 200);
   assert.strictEqual(p.custoCombustivelMes, 333, 'o mes de HOJE (111 + 222), nem o de HOJE+1 (4000) nem o real (50000)');
   assert.strictEqual(p.checklistsHoje, 2, 'os dois de HOJE (nem o de HOJE+1 nem o de ontem)');
-  assert.strictEqual(p.manutencoesVencidas, 1, 'so o veiculo da revisao de ontem (a de hoje nao venceu)');
+  assert.strictEqual(p.manutencoesVencidas, 2, 'o veiculo da revisao de ontem (a de hoje nao venceu) e o do km ja alcancado (1000 >= 1000)');
   const [, lista] = await j('GET', '/frotas/alertas');
   assert.strictEqual(p.alertasCount, lista.length, 'o painel conta os mesmos alertas da rota');
-  const d0 = (p.alertas || []).find((a) => a.tipo === 'documento' && a.referencia_id === ctx.doc.d0) || alerta(lista, 'documento', ctx.doc.d0);
-  assert.strictEqual(d0.dias_restantes, 0);
+  // Fase 5 r3 G26: os 15 do painel sao os 15 primeiros da rota (os mesmos dias e cores), sem cair na lista da rota
+  assert.deepStrictEqual(p.alertas, lista.slice(0, 15), 'os alertas do painel = os da rota');
+  assert.deepStrictEqual([alerta(lista, 'documento', ctx.doc.d0).dias_restantes, alerta(lista, 'documento', ctx.doc.d0).severidade], [0, 'alto']);
   const [, venc] = await j('GET', '/frotas/documentos?vencendo=1');
   assert.ok(ids(venc).includes(ctx.doc.d0), 'T4: o documento de HOJE na lista vencendo, no alerta (0, alto) e no painel');
+});
+
+test('[Fase 2 M11, Fase 5 r3 G28] o painel de Frotas: sem refresh o cache de 30 s responde; com refresh=1, o numero novo', async () => {
+  const [, a] = await j('GET', '/frotas/dashboard?refresh=1');
+  assert.strictEqual(a.checklistsHoje, 2);
+  await inserir('frotas_checklists', { veiculo_id: await veiculo(), data_checklist: HOJE });
+  const [, b] = await j('GET', '/frotas/dashboard');
+  assert.strictEqual(b.checklistsHoje, 2, 'sem refresh: o cache');
+  const [, c] = await j('GET', '/frotas/dashboard?refresh=1');
+  assert.strictEqual(c.checklistsHoje, 3, 'com refresh=1: o novo');
 });
 
 test('[RN-164.06, B1048] a manutencao sem data grava o hoje de Brasilia', async () => {
@@ -318,11 +359,17 @@ test('massa do Financeiro (por fora)', async () => {
   ctx.cp = {
     hoje: await cp(HOJE, 1), ontem: await cp(ONTEM, 1), amanha: await cp(AMANHA, 1),
     pPrimeiro: await cp(PRIMEIRO, 1, 'pendente', 'E164 PERP'), pVespera: await cp(VESPERA_DO_MES, 1, 'pendente', 'E164 PERP'),
-    pPrimeiroPago: await cp(PRIMEIRO, 1, 'pago', 'E164 PERP'),
+    pPrimeiroPago: await cp(PRIMEIRO, 1, 'pago', 'E164 PERP'), parcialOntem: await cp(ONTEM, 1, 'parcial'),
+    tPrimeiro: await cp(TRI, 1, 'pago', 'E164 TRIP'), tVespera: await cp(somaDias(TRI, -1), 1, 'pago', 'E164 TRIP'),
+    aPrimeiro: await cp(JAN, 1, 'pago', 'E164 ANOP'), aVespera: await cp(somaDias(JAN, -1), 1, 'pago', 'E164 ANOP'),
   };
   ctx.fc = {
     primeiro: await inserir('fluxo_caixa', { data: PRIMEIRO, descricao: 'E164 FC', tipo: 'entrada', valor: 1 }),
     vespera: await inserir('fluxo_caixa', { data: VESPERA_DO_MES, descricao: 'E164 FC', tipo: 'entrada', valor: 1 }),
+    tVespera: await inserir('fluxo_caixa', { data: somaDias(TRI, -1), descricao: 'E164 FCT', tipo: 'entrada', valor: 1 }),
+    aVespera: await inserir('fluxo_caixa', { data: somaDias(JAN, -1), descricao: 'E164 FCA', tipo: 'entrada', valor: 1 }),
+    tPrimeiro: await inserir('fluxo_caixa', { data: TRI, descricao: 'E164 FCT', tipo: 'entrada', valor: 1 }),
+    aPrimeiro: await inserir('fluxo_caixa', { data: JAN, descricao: 'E164 FCA', tipo: 'entrada', valor: 1 }),
   };
 });
 
@@ -332,7 +379,7 @@ test('[RN-164.07, B1049] o painel: vencidas = pendente/parcial antes de hoje (re
   const [{ n: vr }] = await all("SELECT COUNT(*) n FROM contas_receber WHERE status IN ('pendente','parcial') AND data_vencimento < ?", [HOJE]);
   const [{ n: vp }] = await all("SELECT COUNT(*) n FROM contas_pagar WHERE status IN ('pendente','parcial') AND data_vencimento < ?", [HOJE]);
   assert.strictEqual(vr, 4, 'a massa: ontem, anteontem, o primeiro do mes e a vespera do mes'); // HOJE e o ultimo dia: o primeiro e anterior
-  assert.strictEqual(vp, 3, 'a massa: ontem, o primeiro do mes e a vespera do mes');
+  assert.strictEqual(vp, 4, 'a massa: ontem, a parcial de ontem (Fase 5 r3 M03), o primeiro do mes e a vespera do mes');
   assert.strictEqual(p.contasReceber.vencidas, vr, 'receber: a de hoje nao conta vencida');
   assert.strictEqual(p.contasPagar.vencidas, vp, 'pagar: a de hoje nao conta vencida');
   const receita = (mesNum) => p.chartReceitasDespesas[mesNum - 1].receita;
@@ -353,6 +400,8 @@ test('[RN-164.07, B1049] o painel sem mes/ano: os de Brasilia (antes mes: null),
   assert.strictEqual(p2.mes, NUM_MES);
   const [, p3] = await j('GET', '/financeiro/dashboard?mes=3&ano=2020');
   assert.deepStrictEqual([p3.mes, p3.ano], [3, 2020], 'o mes e o ano mandados continuam os que valem');
+  const [s4, p4] = await j('GET', '/financeiro/dashboard?mes=13&ano=' + ANO);
+  assert.deepStrictEqual([s4, p4.mes], [200, 13], 'Fase 5 r3 M07: mes=13 continua passando como veio (sem 400 — o contrato nao mudou)');
 });
 
 test('[RN-164.08, B1049] ?periodo=mes nas tres listas: desde o dia 1 do mes de Brasilia, combinado com status e busca', async () => {
@@ -374,6 +423,28 @@ test('[RN-164.08, B1049, Fase 2 M5] ?periodo=trimestre e ?periodo=ano pela rota:
   mesmos(ids(t), [ctx.cr.tPrimeiro], `trimestre desde ${TRI}`);
   const [, a] = await j('GET', '/financeiro/contas-receber?' + q({ periodo: 'ano', search: 'E164 ANO' }));
   mesmos(ids(a), [ctx.cr.aPrimeiro], `ano desde ${JAN}`);
+  // Fase 5 r3 M10/M11: as outras duas listas
+  const [, tp] = await j('GET', '/financeiro/contas-pagar?' + q({ periodo: 'trimestre', search: 'E164 TRIP' }));
+  mesmos(ids(tp), [ctx.cp.tPrimeiro], 'pagar: trimestre');
+  const [, ap] = await j('GET', '/financeiro/contas-pagar?' + q({ periodo: 'ano', search: 'E164 ANOP' }));
+  mesmos(ids(ap), [ctx.cp.aPrimeiro], 'pagar: ano');
+  const [, tf] = await j('GET', '/financeiro/fluxo-caixa?periodo=trimestre');
+  assert.ok(ids(tf).includes(ctx.fc.tPrimeiro) && !ids(tf).includes(ctx.fc.tVespera), 'fluxo: trimestre');
+  const [, af] = await j('GET', '/financeiro/fluxo-caixa?periodo=ano');
+  assert.ok(!ids(af).includes(ctx.fc.aVespera) && ids(af).includes(ctx.fc.tPrimeiro) && ids(af).includes(ctx.fc.aPrimeiro), 'fluxo: ano (desde 1o de janeiro)');
+  if (TRI !== JAN) assert.ok(!ids(tf).includes(ctx.fc.aPrimeiro), 'fluxo: o trimestre nao comeca em janeiro (Fase 5 r3 M11)');
+});
+
+test('[Fase 5 r2, B1052] o painel do Financeiro responde depois das NOVE consultas: nenhum numero nulo em 40 chamadas', async () => {
+  const campos = (p) => [p.receitaMensal, p.despesasMensal, p.lucroLiquido, p.lucroVariacao, p.receitaVariacao, p.despesasVariacao,
+    p.contasReceber.total, p.contasReceber.count, p.contasReceber.vencidas, p.contasPagar.total, p.contasPagar.count, p.contasPagar.vencidas,
+    p.saldoBancario];
+  for (let i = 0; i < 40; i++) {
+    const [s, p] = await j('GET', '/financeiro/dashboard?' + q({ mes: String(NUM_MES), ano: String(ANO) }));
+    assert.strictEqual(s, 200);
+    const c = campos(p);
+    assert.ok(c.every((x) => typeof x === 'number' && Number.isFinite(x)), `chamada ${i}: ${JSON.stringify(c)}`);
+  }
 });
 
 (async () => {

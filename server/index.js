@@ -19932,7 +19932,8 @@ app.get('/api/financeiro/dashboard', authenticateToken, checkModulePermission('f
   const fimMesAnt = `${anoAnterior}-${String(mesAnterior).padStart(2, '0')}-${String(new Date(anoAnterior, mesAnterior, 0).getDate()).padStart(2, '0')}`;
 
   const runQueries = (cb) => {
-    let pending = 8;
+    // Etapa 164 (Fase 5 r2, B1052): sao NOVE consultas abaixo; com 8, a resposta saia antes da ultima e o lucro (ou outro numero) vinha nulo
+    let pending = 9;
     const result = {};
     const done = () => {
       pending--;

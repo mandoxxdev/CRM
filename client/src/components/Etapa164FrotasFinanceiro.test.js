@@ -70,6 +70,18 @@ describe('[Fase 2 M11] o Atualizar do painel de Frotas manda refresh=1', () => {
     await fetchFrotasDashboard(); // dentro do cache do cliente: nao chama
     expect(api.get).toHaveBeenCalledTimes(1);
   });
+  test('[Fase 5 r3 C02] sem force e com o cache vazio: a chamada vai SEM o refresh', async () => {
+    let isolado; let apiIsolado;
+    jest.isolateModules(() => {
+      isolado = require('../utils/frotasApi');
+      apiIsolado = require('../services/api').default;
+    });
+    apiIsolado.get.mockReset();
+    apiIsolado.get.mockResolvedValue({ data: { alertas: [] } });
+    await isolado.fetchFrotasDashboard();
+    expect(apiIsolado.get).toHaveBeenCalledTimes(1);
+    expect(apiIsolado.get.mock.calls[0]).toEqual(['/frotas/dashboard']);
+  });
 });
 
 describe('[RN-164.09, B1050] o Financeiro mostra a data sem hora no dia gravado', () => {

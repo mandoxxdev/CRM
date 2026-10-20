@@ -26,11 +26,11 @@ function diasAte(dateStr, hoje = hojeLocalISO()) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dateStr));
   const h = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(hoje));
   if (m && h) {
-    const a = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-    const b = Date.UTC(Number(h[1]), Number(h[2]) - 1, Number(h[3]));
-    // data impossivel (2026-02-30): nula, como a conta antiga (o `new Date` dela tambem a recusava)
-    if (new Date(a).toISOString().slice(0, 10) !== m[0] || new Date(b).toISOString().slice(0, 10) !== h[0]) return null;
-    return Math.round((a - b) / 86400000);
+    // `setUTCFullYear` (nao `Date.UTC`, que le os anos 0-99 como 1900+): o ano 0026 que o navegador grava quando se digita "26" e a data
+    // impossivel (2026-02-30 -> 02/03) rolam como o `new Date` da conta antiga rolava (Fase 5 r1: a versao anterior devolvia nulo, e o
+    // alerta que o SQL inclui saia sem dias e sem a cor critica). Instante com hora/fuso usa o prefixo AAAA-MM-DD (o mesmo dia do `date()`).
+    const dia = (x) => new Date(0).setUTCFullYear(Number(x[1]), Number(x[2]) - 1, Number(x[3]));
+    return Math.round((dia(m) - dia(h)) / 86400000);
   }
   const d = new Date(dateStr);
   if (Number.isNaN(d.getTime())) return null;
