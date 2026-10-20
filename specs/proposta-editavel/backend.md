@@ -388,6 +388,35 @@ projeto das listas, o vendedor seguindo o clique até as leituras da proposta, 1
 (o dono dos prefixos `/api/clientes` e `/api/projetos`: as listas com a cadeia nova nas camadas); `client/src/components/Notificacoes.test.js`
 (o clique e a rota `propostas/editar/:id` → `PropostaForm` no bloco `/comercial` do `App.js`).
 
+### Os filtros e as buscas da Fábrica, os cadastros que respondem o gravado e o segmento do cliente (Etapa 160, C388–C392, C394)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa160-filtros-da-fabrica-e-do-almoxarifado.md`. Commits `eaf682e9`, `59e3972c`,
+`a0268282`, `d5cd52ea`, `93c1dace` e `ff3e7d78` (a correção da revisão). Status: entregue; nenhuma rota nova, nenhuma coluna nova; a resposta
+dos `POST` de projetos, oportunidades, atividades e propostas passa a ser o registro gravado. (As listas do Almoxarifado da mesma etapa estão
+nas features `01`, `04`, `06`, `08`, `15`, `16`, `21` e `23` do mapa do almoxarifado.)
+
+- [x] **RN-160.01 (C390, B1018)** — `GET /api/operacional/ordens-servico?prioridade=` e `GET /api/comercial/ordens-servico?prioridade=`:
+  `UPPER(TRIM(os.prioridade))` contra o valor aparado e em maiúsculas (`prioridadeDoFiltro`); não texto/vazio = sem filtro — `eaf682e9`
+  (o gravado com espaço, Fase 5 `ff3e7d78`). A lista das OS da Fábrica descarta a resposta de um pedido que não é o último e o selo usa a
+  classe em minúsculas; o formulário de edição da lista escolhe a opção do tipo e da prioridade gravados (`opcaoQueCasa`); a ficha da OS
+  (`OSDetalhesForm`, a tela que a rota de edição monta) e a prévia da OS do Comercial com o selo em minúsculas — `a0268282`, `ff3e7d78`.
+- [x] **RN-160.02 (C391, B1018)** — o kanban (`GET /api/operacional/producao/kanban`) deixa de fora o status (sem caixa, aparado, o nulo
+  como vazio) `concluida`, `cancelada`, `encerrada`, `concluido`, `cancelado`; a ordem por `UPPER(TRIM(prioridade))` — `eaf682e9`.
+- [x] **RN-160.03 (C392, B1019)** — as buscas de `GET /api/operacional/ordens-servico`, `/colaboradores`, `/equipamentos` e o
+  `buildSearchWhere` da produção (OPs, máquinas, roteiros) pela `condicaoDeBusca` (as colunas de antes) — `eaf682e9`.
+- [x] **RN-160.05 (C394, B1021)** — o painel da produção com `refresh=1` no Atualizar e depois de cada invalidação (só a resposta da última
+  busca grava o cache); as paradas em andamento do pedido `em_andamento=1`; a busca das Atividades dos colaboradores e das Horas extras no
+  navegador — `a0268282`, `ff3e7d78`.
+- [x] **RN-160.07 (C388, B1022)** — `POST /api/projetos`, `/oportunidades`, `/atividades`, `/propostas` respondem a linha relida
+  (`responderGravado`; a proposta sem itens e com o número **gravado** — antes o corpo sobrescrevia o número gerado); a releitura que falha
+  → `200 { id }` (`{ id, numero_proposta }`) e o log `Erro ao reler <o projeto|a oportunidade|a atividade|a proposta> cadastrad<o|a> <id>:
+  <mensagem>` — `59e3972c`. O ramo da releitura que não acha a linha é inalcançável pela suíte (a mesma conexão acabou de gravá-la — Fase 5
+  r3 S44): fica, declarado.
+- [x] **RN-160.08 (C389, B1023)** — o *Segmento* do formulário do cliente pela `opcaoQueCasa`; o desconhecido como opção a mais; o vazio
+  em *"Selecione..."* — `93c1dace`.
+- [ ] **Fora (de antes, registrados):** as outras listas sem descarte da resposta velha (C396), as datas em UTC (C397), os seletores
+  incompletos (C399), as sobras menores (C400) — candidatos da Etapa 161; ignorar o acento (B1013) — do P.O.
+
 ### Os filtros e as buscas do Comercial, a busca com letra acentuada e o cadastro que responde o gravado (Etapa 159, C381, C382, C384–C387)
 
 Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa159-filtros-do-comercial-que-o-servidor-ignorava.md`. Commits `531f3576`, `68869661`, `303841a2`, `6bc42a36`, `650b8395` e `49909fa2` (a correção da revisão).

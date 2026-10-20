@@ -141,7 +141,9 @@ Almoxarifado usava `condicaoDeBusca`.** Nenhuma porta que mexe em saldo entra (t
   hoje (`\`, `%` e `_` continuam texto, como já eram — `condicaoDeBusca(colunas, termo, { escapar: true })` escapa os três em cada forma e
   acrescenta `ESCAPE '\'`); o `tipo` aparado e em maiúsculas (*"saida "* = `SAIDA`), vazio, só de espaços ou não texto = sem filtro (Fase 2
   M3); a nota do relatório deixa de dizer *"ignora maiúsculas só em letras sem acento"* e passa a dizer
-  o que vale (*"A busca por usuário ignora maiúsculas e minúsculas, mas não o acento."*).
+  o que vale (*"A busca por usuário ignora maiúsculas e minúsculas, mas não o acento."*). *(Esta frase da nota **estava errada** — prometia
+  demais (Fase 5 r1-2): o nome antigo com letras acentuadas de caixas diferentes só é achado com a mesma grafia. A nota entregue acrescenta
+  *"(um nome antigo com letras acentuadas maiúsculas e minúsculas misturadas só é achado com a mesma grafia)"*.)*
 - **RN-160.05 (C394 e a tela das OS)** — Fábrica, telas: o *Atualizar* do painel da produção pede `GET /producao/dashboard?refresh=1`; a
   invalidação do cache do navegador (`invalidateProducaoDashboardCache`, chamada depois de cada ação da produção) marca que a **próxima**
   busca vai com `refresh=1` (Fase 2 I3); a abertura sem ação antes continua sem (o cache de 45 s do navegador e o de 30 s do servidor
@@ -189,30 +191,30 @@ Almoxarifado usava `condicaoDeBusca`.** Nenhuma porta que mexe em saldo entra (t
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 (tronco — servidor) — RN-160.01, .02, .03 e o `escapar` da RN-160.04.** `buscaSemCaixa.condicaoDeBusca(colunas, termo,
+- [x] **T1 (`eaf682e9`; o teste em `59e3972c`) (tronco — servidor) — RN-160.01, .02, .03 e o `escapar` da RN-160.04.** `buscaSemCaixa.condicaoDeBusca(colunas, termo,
   { escapar })`; as rotas da Fábrica no `index.js`; o `buildSearchWhere` da produção. Teste: arquivo novo
   `server/tests/api/filtrosDaFabricaEAlmoxarifado.api.test.js` (o `index.js` montado numa pasta vazia, molde `filtrosDoComercial`): cada
   coluna de cada busca com o seu caso (o gravado pela rota em maiúsculas **e** o legado em minúsculas por fora, contados contra o banco — a
   lição do r3 da 159); `"   "` e `search[]=x` = a lista inteira; a prioridade (pela rota: OS com *"alta"* → `ALTA`; um legado `alta` por
   fora; `prioridade=alta`, `ALTA`, `" Alta "` acham os dois e só eles; vazio = todas) nas duas rotas das OS; o kanban (OS `concluido`,
   `cancelado`, `concluida` fora; `em_andamento` dentro; a ordem URGENTE → ALTA → NORMAL → BAIXA).
-- [ ] **T2 (galho — servidor) — RN-160.04.** As quatro buscas do Almoxarifado e o relatório (o `usuario` com acento e com `%` literal; o
+- [x] **T2 (`eaf682e9`; o teste em `59e3972c`) (galho — servidor) — RN-160.04.** As quatro buscas do Almoxarifado e o relatório (o `usuario` com acento e com `%` literal; o
   `tipo` *" saida "*). Teste no mesmo arquivo.
-- [ ] **T3 (galho — servidor) — RN-160.07.** Os quatro `POST`. Teste no mesmo arquivo: cada `POST` com um campo inventado → a resposta tem as
+- [x] **T3 (`59e3972c`) (galho — servidor) — RN-160.07.** Os quatro `POST`. Teste no mesmo arquivo: cada `POST` com um campo inventado → a resposta tem as
   chaves do `PRAGMA table_info` e os padrões do banco (`status` etc.), sem o campo inventado; um **segundo boot** com `FALHA_SQL_INJETADA`
   casando só cada releitura → `200 { id }` (`{ id, numero_proposta }`), o registro no banco e a linha de log; e o `POST /propostas` com um
   `numero_proposta` já existente → a resposta traz o número **gravado** (o do banco), diferente do enviado (Fase 2 I2).
-- [ ] **T4 (tronco — tela) — as duas funções do client.** `client/src/utils/buscaNoNavegador.js` (`normalizarBusca`, `casaBusca`) e
+- [x] **T4 (`a0268282`) (tronco — tela) — as duas funções do client.** `client/src/utils/buscaNoNavegador.js` (`normalizarBusca`, `casaBusca`) e
   `client/src/utils/opcaoDoSelect.js` (`opcaoQueCasa`), com testes unitários (Fase 2 I4).
-- [ ] **T5 (galho — tela) — RN-160.05 e a tela/edição das OS da RN-160.01/.08.** `client/src/utils/producaoApi.js`, `ParadasProducao.js`,
+- [x] **T5 (`a0268282`) (galho — tela) — RN-160.05 e a tela/edição das OS da RN-160.01/.08.** `client/src/utils/producaoApi.js`, `ParadasProducao.js`,
   `AtividadesColaboradores.js`, `HorasExtras.js`, `OrdensServico.js`, `OSForm.js`; testes novos no client (o `api` com adaptador falso na
   fronteira HTTP).
-- [ ] **T6 (galho — tela) — RN-160.06.** Os sete usos (`RequisicaoForm`, `RecebimentosAlmoxarifado`, `ConfiguracoesAlmoxarifado` ×3,
+- [x] **T6 (`d5cd52ea`) (galho — tela) — RN-160.06.** Os sete usos (`RequisicaoForm`, `RecebimentosAlmoxarifado`, `ConfiguracoesAlmoxarifado` ×3,
   `TabRegrasAprovacao`) e o contador dos `MateriaisAlmoxarifado`; testes novos (o seletor da requisição com *"abc "*, *"  "* e um material
   sem nome; um dos filtros das Configurações; a resposta lenta dos Materiais).
-- [ ] **T7 (galho — tela) — RN-160.08.** `ClienteForm.js`; teste novo (o gravado *"COSMÉTICOS"* mostra *"Cosméticos"*; o desconhecido
+- [x] **T7 (`93c1dace`) (galho — tela) — RN-160.08.** `ClienteForm.js`; teste novo (o gravado *"COSMÉTICOS"* mostra *"Cosméticos"*; o desconhecido
   aparece; o vazio mostra *"Selecione..."*; salvar sem mexer manda o segmento).
-- [ ] **T8 (integração — cruza T1, T2, T3) — pelas rotas, no `index.js` montado.** O fluxo: `POST /operacional/colaboradores` com *"joão da
+- [x] **T8 (`59e3972c`, no `filtrosDaFabricaEAlmoxarifado`) (integração — cruza T1, T2, T3) — pelas rotas, no `index.js` montado.** O fluxo: `POST /operacional/colaboradores` com *"joão da
   silva"* → `GET /operacional/colaboradores?search=joão` acha; `POST /operacional/ordens-servico` com prioridade *"alta"* e status
   `em_andamento` (e um item) → `GET ?prioridade=alta` acha e o kanban a mostra antes da *"normal"*; `PUT` para `concluido` → o kanban não a
   mostra; `POST /projetos` → a resposta é o gravado → `GET /projetos/:id` dá as mesmas chaves e valores. E o serviço direto:
@@ -240,16 +242,109 @@ worktree não se pagaria (um arquivo de teste de servidor compartilhado; a trava
 
 ## Execução (o que divergiu do plano)
 
-*(preencher)*
+- **Tudo em sequência, aqui** (como o plano previa): T1 → T2 → T3 (servidor, um arquivo de teste), T4 → T5 → T6 → T7 (telas), T8 no arquivo
+  do servidor. **0** retrabalho entre tasks. Os testes do servidor foram escritos antes do código: `filtrosDaFabricaEAlmoxarifado` **0/15**
+  antes (cada busca *"[] em vez de [id]"*, a prioridade, o kanban *"[8,6,5,7,10,11,15,16]"*, as chaves das respostas com
+  *"campo_inventado_160"*, a releitura com `{"id":2,"nome":"RELEITURA 160"}`), **15/0** depois.
+- **Divergências:** (1) o `index.js` mexe na busca/prioridade/kanban **e** na C388 — dividido em dois commits por assunto (`eaf682e9` sem a
+  C388, gerado por script a partir do arquivo final; `59e3972c` com ela e o teste), sem estado intermediário rodado (o teste do servidor
+  entra no segundo); (2) a rota de edição da OS (`/fabrica/ordens-servico/editar/:id`) monta o **`OSDetalhesForm`** (a ficha), não o
+  `OSForm` — o `OSForm` é o formulário que a lista abre no lugar. A Fase 2 I1 mirou o `OSForm` (os selects); a ficha tinha o selo da
+  prioridade com o mesmo defeito (Fase 5 r1-1) — corrigido na Fase 5; (3) o `fetchModuleUsers` e o `useAuth` simulados no teste da Fábrica;
+  as abas das Configurações testadas pela tela inteira com `?tab=` (as abas não são exportadas).
+- **Controles positivos (todos caíram pela asserção certa):** servidor K1–K19 (o `escapar`, cada coluna tirada, a prioridade sem
+  maiúsculas e sem `UPPER(TRIM)` na rota do Comercial, o kanban sem `concluido`/`cancelado`, com o `CASE` em minúsculas e sem o `COALESCE`, o
+  `buildSearchWhere` de volta ao `LIKE` cru, o tipo do relatório sem maiúsculas, a nota velha, a resposta = o mínimo, o eco da proposta, a
+  releitura = 500); telas C1–C18 (as duas funções, o `refresh`, a invalidação, a resposta velha do painel, as paradas, as colunas das
+  atividades/horas, o recarregar ao digitar, o contador e o selo das OS, as opções da OS e do segmento, o seletor da requisição, as regras,
+  o contador dos Materiais). **C19/C20** (o seletor do recebimento e o filtro dos estoques mínimos) — inconclusivos na primeira rodada (a saída
+  do jest passou do limite do coletor) e confirmados como **sem teste** pelo r3: ganharam teste na Fase 5.
 
-## Fase 5 — revisão adversarial
+## Fase 5 — revisão adversarial (três revisores frescos, em paralelo, sob a trava)
 
-*(preencher)*
+- **r1 (regra) — 0 Critical, 0 Important, 2 Minor, reproduzidos.** **r1-1** a ficha da OS (`OSDetalhesForm.js:490`, a que a rota de edição
+  monta) e a prévia da OS do Comercial (`PreviewOSEditavel.js:274`) montavam o selo com o gravado `ALTA` (`info-item-priority-ALTA`; o CSS só
+  tem as minúsculas) — o selo sem cor. **r1-2** a nota nova do relatório (*"ignora maiúsculas e minúsculas, mas não o acento"*) prometia
+  demais: o nome antigo com letras acentuadas de caixas diferentes (*"Ângela Gonçalves"*) só é achado com a mesma grafia (B1013). Conferido
+  certo: cada RN, o `escapar` (`50%`, `a_b`, `c\d`), o kanban (`' Concluido '`, `CANCELADO`, o status nulo/vazio, a ordem), os outros
+  chamadores, as duas telas da proposta lendo `id`/`numero_proposta`, abrir/salvar a OS sem mexer, o cache do painel, as paradas ao
+  iniciar/encerrar, os contadores.
+- **r2 (autorização) — 0 achados.** Sonda no `index.js` montado com quatro usuários (só Comercial, só Operacional, só Almoxarifado, sem
+  nenhuma permissão): a resposta nova dos quatro cadastros não tem chave que o GET correspondente não mostre (controle positivo com uma chave
+  inventada); nenhuma injeção (`') OR 1=1--`, `UNION`, arrays/objetos do `qs`, 50 mil caracteres) nas 13 combinações de rota e chave; nenhum
+  portão mudou (tabela 403/200 executada). De antes (não da etapa): o usuário sem nenhuma linha de permissão entra no Comercial (o desenho do
+  portão, já visto na 158/159); a busca das OPs pela razão social do cliente já existia.
+- **r3 (sabotagem, worktree própria `CRM-wt-e160-r3`) — 134 sabotagens (73 servidor, 61 telas): 112 caíram pela asserção certa; 20 sobreviveram
+  por falta de asserção; 1 inalcançável (S44 — a releitura que não acha a linha recém-gravada pela mesma conexão: o ramo fica, a suíte não o
+  protege); 1 quase equivalente (C10/C24).** As faltas: a prioridade gravada com espaço (`normalizarMaiusculas` não apara: *" alta "* grava
+  *" ALTA "*) nas duas rotas e no kanban (S24, S24b, S23b); a barra invertida pela rota do relatório (S26); a busca forçada que falha
+  remarcar (C04) e a anterior que falha devolver a última (C06); a coluna *tipo* das atividades (C12); a lista vazia das horas extras (C21); o
+  tipo desconhecido na OS (C30); a régua das 2 letras na posição (C45); o e-mail nas regras (C51); **o seletor do recebimento sem teste
+  nenhum** (C46/C47) e **os filtros das Configurações** (C48b, C49, C50); a falha e o *carregando* do pedido anterior nas OS e nos Materiais
+  (C25, C26, C54, C55).
+- **Correção da Fase 5 (`ff3e7d78`):** o selo em minúsculas na ficha e na prévia da OS (r1-1); a nota do relatório com o limite (r1-2); e as
+  asserções de todos os sobreviventes. **Controles da correção (todos caíram pelo cenário deles):** F01–F05 no servidor (a prioridade sem
+  `TRIM` em cada rota, o `CASE` sem `TRIM`, o escape sem a barra, a nota) e G01–G17 nas telas (cada sobrevivente do r3 reaplicado, e o selo
+  da ficha).
 
-## Suítes
+## Suítes (lidas na saída, `scratchpad/e160/`)
 
-*(preencher)*
+- **Base (antes de qualquer código, `base-api.log`):** `test:api` **479/479**.
+- **Bateria 1 — antes dos commits `eaf682e9`..`93c1dace` (`b1-*.log`):** `test:api` **480/480** arquivos (`filtrosDaFabricaEAlmoxarifado`
+  **15/0**); `test:almoxarifado` **44/0**; `test:validation`/`safealter`/`sqlite` **4/0, 3/0, 16/0**; revisão obrigatória da proposta
+  **23/23** + editor **39/39**; client **160** suítes / **1990** testes; `CI=true build` *Compiled successfully*.
+- **Bateria 2 — antes de `ff3e7d78` (depois da Fase 5 — também a do fechamento; depois só mudaram documentos, `b2-*.log`):** `test:api` **480/480** arquivos (`filtrosDaFabricaEAlmoxarifado` **15/0**); `test:almoxarifado` **44/0**; `test:validation`/`safealter`/`sqlite` **4/0, 3/0, 16/0**; revisão obrigatória da proposta **23/23** + editor **39/39**; client **160** suítes / **1999** testes; `CI=true build` *Compiled successfully*.
 
 ## Retro (4 números)
 
-*(preencher)*
+1. **Rodadas de correção até verde:** **1** — a Fase 5 (o selo da ficha, a nota e as asserções). As oito tasks ficaram verdes na primeira
+   aplicação, com controle positivo cada. Testes antigos mudados: **0**.
+2. **Achados da revisão:** Fase 2 — **0 Critical + 6 Important + 9 Minor**, todos reais (nenhum ruído; o mais caro: o gesto seguinte ao
+   filtro da prioridade — a edição da OS — repetia a C389, e a resposta da proposta devolvia o número repetido). Fase 5 — r1 **2** reais
+   (Minor); r2 **0**; r3 **20** faltas de asserção reais + **1** inalcançável + **1** quase equivalente; **0** ruído. **O que mais pesou:** a
+   Fase 2 apontou a edição da OS pelo `OSForm`, mas a rota de edição monta outra tela (a ficha) — a mesma lição da 159 I1 (medir pelo
+   componente que a rota monta), agora num gesto **depois** do filtro; e duas telas novas (o recebimento, as abas das Configurações) foram
+   mudadas sem teste dedicado, o que o condutor tinha medido mas não fechado.
+3. **Paralelismo:** **0** galhos de código em paralelo (o plano decidiu assim); **3** leitores em paralelo na Fase 0, **1** revisor na Fase
+   2 (antes do código), **3** em paralelo na Fase 5 sob a trava (o r3 em worktree própria) — **0** incidente de trava.
+4. **Defeito que escapou:** *(preencher na Etapa 161)*.
+
+## Próxima tarefa detalhada — Etapa 161
+
+*(A série desta etapa foi B1018–B1024, C388 e C389 resolvidos, C390–C395 novos e resolvidos, C396–C400 novos (de antes, observados), nenhuma
+A — a 161 começa em **B1025**, **C401**, **A104**; confira com `grep -oE` antes.)*
+
+**Escolhida: as sobras técnicas que a medição desta etapa registrou e não consertou — C396 (as listas que mostram a resposta de um pedido
+que não é o último), C397 (as datas em UTC) e o que da C399/C400 não é regra — medir antes, nenhuma regra do P.O.** (1) **C396** — o
+contador de pedido (o molde: `OrdensServico.js` e `MateriaisAlmoxarifado.js` desta etapa — o contador dentro da função que carrega, que o
+excluir/inativar também chama; a falha e o *carregando* do pedido anterior também não valem) nas listas da Fábrica (OPs, máquinas,
+colaboradores, equipamentos, os relatórios da produção ao trocar de aba) e do Almoxarifado (movimentações, requisições, recebimentos,
+reservas, inspeções, não conformidades, o painel ao trocar o período, os Relatórios ao trocar de relatório com a consulta em andamento — e a
+exportação, que hoje sai com o tipo novo e os parâmetros do antigo). (2) **C397** — a data padrão da Presença e dos Relatórios da produção
+pelo dia **local** (não `toISOString`); o filtro de data das Movimentações e o *por dia* dos apontamentos/paradas: medir antes como o
+`created_at` é gravado (UTC) e como a tela o mostra — se a correção mudar o que entra num dia, é **B** (os números mudam). (3) Da **C399/C400**,
+o que é técnico: o *Setor* dos Colaboradores das opções da lista inteira (não da filtrada); o *Evento* das Notificações das chaves que a fila
+conhece (o `ALERT_REGISTRY` + os 10 de hoje); o seletor de fornecedores do recebimento com a busca do servidor (`search` já existe) em vez
+do corte em 50; as opções de usuário da Auditoria sem repetir o renomeado; o QR da etiqueta abrindo o material pelo código exato; os
+Recebimentos sem recarregar materiais/pedidos/fornecedores a cada filtro. **Fica para o P.O.:** os tipos que o filtro *Tipo* das
+Movimentações deve oferecer (*"Entrada"* incluir *ENTRADA_COMPRA*? — é o agrupamento, régua de negócio) e os selects de material das
+Reservas/Inspeções com o material de cliente (B — muda o que aparece). **Pontos de atenção:** (1) a trava de máquina (um `test:api` por vez);
+(2) medir pelo componente que a rota monta (a lição da 159 I1 e da 160 r1-1: a edição da OS é a ficha); (3) cada lista com o teste da
+resposta lenta **e** da falha do pedido anterior (a lição do r3 desta etapa); (4) nenhuma porta de saldo, permissão ou trava muda.
+
+**Dependem do P.O. — NÃO implemente:** a lista inteira do plano da 152 — **B853**/**C279**, **B808**, **B755**, **B761**/**C239**, **C224**, o
+resto da **C225**, **C228**, **C219**, **C230**, o reparo da **C246** e a **C247**, a tabela de conversões e o grupo acima de família, a régua do
+tempo de recebimento (E2), **C268**, **C269**, **C275**, **C276**, **C277**, **C109**, **C117**/**C118**, **C139**, **C278**; na 05, os itens de
+produto e a **C198**; na 06, a **B11** e a Engenharia; na 21, a valorização por cliente e previsto × realizado; na 22, **B13**, **B101**/G30,
+**G38**; no Compras, D-35, D-37, D-78, D-90, G9/G30, G4, G15, B63, B60, B62, a **C348**; nas propostas, a verificação do dono da proposta (Fase
+12 — também a **C305**), o filtro por permissão do histórico, a **B910**, a **C307**, a Frente B da lentidão, a **C297** (**B924**), a **B926**,
+a **C312**, a **C316**, a régua de quantidade da **C314**, a **B949** e a **C330**; no Operacional, a **C332**; do Comercial, a **C354**, a
+**C357**/**B988**, a **C359**/**B989** (e a **C360** junto), a **C358**, a **C383**, ignorar também o acento nas buscas (**B1013** — agora
+também nas da Fábrica e do Almoxarifado, **B1019**) e o resto da **C382** (**B1016**); do núcleo, a **C362**; **novo desta etapa:** o filtro
+*Status* dos Materiais (*"OK"* × *"Baixo"*, **C398**) e os tipos do filtro das Movimentações (**C399**). Pendem de Postgres: **C98**, **C110**.
+
+**O que já está pronto e não precisa reabrir:** as buscas da Fábrica e do Almoxarifado pela `condicaoDeBusca` (com o `escapar`), a prioridade
+das OS e o kanban (`eaf682e9`); os quatro cadastros que respondem o gravado (`59e3972c`); as duas funções do client (`casaBusca`,
+`opcaoQueCasa`), o painel da produção, as paradas, a busca das atividades/horas, a lista e a edição das OS (`a0268282`); os filtros do
+navegador do Almoxarifado e o contador dos Materiais (`d5cd52ea`); o segmento do cliente (`93c1dace`); o selo da ficha da OS e as asserções
+da Fase 5 (`ff3e7d78`).

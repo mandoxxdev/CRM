@@ -1,19 +1,27 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-19 (Etapa 159) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-19 (Etapa 160) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158 e 159) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159 e 160) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-19 (Etapa 159 ENTREGUE · próxima: Etapa 160)
+> ## Onde o desenvolvimento está — 2026-10-19 (Etapa 160 ENTREGUE · próxima: Etapa 161)
 >
-> **O desenvolvimento parou aqui: Etapa 159 fechada — 2026-10-19.** A **Etapa 159 (os filtros e as buscas do Comercial que não
+> **O desenvolvimento parou aqui: Etapa 160 fechada — 2026-10-19.** A **Etapa 160 (os filtros e as buscas da Fábrica e do Almoxarifado que
+> não casavam, e os cadastros que respondem o gravado; consertos técnicos, sem regra de acesso nova e sem mexer em saldo)**: na Fábrica, o
+> filtro *Prioridade* das ordens de serviço filtra, o kanban tira as OS concluídas e canceladas e ordena pela prioridade, as buscas acham
+> *"joão"* no cadastro gravado como *"JOÃO"*, o painel da produção mostra os números de agora e as paradas em andamento aparecem todas, e a
+> busca das Atividades e das Horas extras filtra; no Almoxarifado, as buscas de materiais, retalhos, ferramentas, empréstimos e do
+> Histórico de movimentações acham a letra acentuada em qualquer caixa e os filtros do navegador aparam; os cadastros pela integração
+> respondem o gravado e o seletor *Segmento* do cliente mostra o gravado. Nenhuma consulta nova antes do deploy. **Próxima: Etapa 161** — ver
+> a próxima tarefa no plano da 160.
+>
+> **Etapa 159, 2026-10-19.** A **Etapa 159 (os filtros e as buscas do Comercial que não
 > filtravam, a busca com letra acentuada, e o cadastro que responde o gravado; consertos técnicos no Comercial, sem regra de acesso nova)**:
 > o filtro *Segmento* da lista de clientes filtra; as buscas de clientes, propostas, OS, produtos e do Ctrl+K acham *"são"* no cadastro
 > gravado como *"SÃO"*; a busca dos **Custos de viagem** recarrega enquanto se digita e procura o código, os clientes e o destino (e os filtros
 > de distância e valor recarregam); o **Remover Lembrete** das Atividades com *"Todos"* não esvazia a lista; o cadastro de cliente pela
-> integração responde o que ficou gravado. Nenhuma consulta nova antes do deploy. **Próxima: Etapa 160** — ver a próxima tarefa no plano da
-> 159.
+> integração responde o que ficou gravado. Nenhuma consulta nova antes do deploy. *(Próxima, na época: Etapa 160 — entregue acima.)*
 >
 > **Etapa 158, 2026-10-19.** A **Etapa 158 (o ponto do endereço guardado no cadastro do cliente, e
 > o resumo, o filtro e o histórico dos custos de viagem contando certo; consertos técnicos nos Custos de viagem do Comercial, sem regra de
@@ -6746,6 +6754,56 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 160 — Os filtros e as buscas da Fábrica e do Almoxarifado que não casavam, e os cadastros que respondem o gravado (ENTREGUE — 2026-10-19)
+
+**O que mudou, em uma frase:** na Fábrica, o filtro **Prioridade** das ordens de serviço filtra, o **kanban** tira as OS concluídas e põe as
+urgentes primeiro, as buscas acham *"joão"* no cadastro gravado como *"JOÃO"*, o **painel** mostra os números de agora e as **paradas em
+andamento** aparecem todas; no Almoxarifado, as buscas acham a letra acentuada em qualquer caixa e os filtros não se perdem num espaço no fim.
+
+**O problema que ela resolve.** O cadastro grava muitos nomes em maiúsculas e o banco só ignora a caixa das letras sem acento — buscar
+*"joão"*, *"manutenção"* ou *"válvula"* não achava nada; um espaço no fim do termo zerava a lista. O filtro de prioridade comparava *"alta"*
+(o que a tela manda) com *"ALTA"* (o que o cadastro grava) e nunca casava. Algumas telas pediam ao servidor e não usavam a resposta (o
+painel, as paradas) ou tinham uma caixa de busca que não fazia nada (atividades, horas extras).
+
+| Antes | Agora |
+|---|---|
+| **Fábrica → Ordens de Serviço**, *"Alta"*: lista vazia | Só as de prioridade alta |
+| **Fábrica → Produção**: a OS concluída continuava no quadro | Sai; a urgente vem primeiro |
+| Buscar *"joão"*, *"manutenção"*, *"hidráulica"* (colaboradores, OS, equipamentos, OPs, máquinas): nada | Acha |
+| Buscar *"válvula"* (materiais, retalhos, ferramentas, empréstimos) e o usuário *"joão"* no Histórico de movimentações: nada | Acha |
+| Painel da produção depois de registrar uma parada: o número velho | O de agora |
+| A parada aberta mais antiga: sumia de *"Paradas em andamento"* | Aparece |
+| Busca das **Atividades** e das **Horas extras**: não filtrava | Filtra |
+| Editar uma OS de prioridade alta: o seletor em *"Baixa"* | Em *"Alta"* |
+| Editar um cliente *"Cosméticos"*: *"Selecione..."* | *"Cosméticos"* |
+
+**Roteiro de teste (5 minutos).**
+
+1. **A prioridade.** Em **Fábrica → Ordens de Serviço**, crie uma OS com prioridade *"Alta"* e outra *"Normal"*. Escolha *"Alta"* no
+   seletor *"Todas as prioridades"*: só a alta aparece, com o selo colorido. Clique no lápis dela: o seletor de prioridade mostra *"Alta"*.
+2. **O kanban.** Em **Fábrica → Produção**, com itens das duas OS: a alta vem antes da normal. Edite a alta e mude o status para
+   *"Concluído"*: ela sai do quadro.
+3. **As buscas da Fábrica.** Cadastre o colaborador *"joão da silva"*. Em **Colaboradores**, digite *"joão"* e depois *" joão "* (com
+   espaços): ele aparece. Faça o mesmo em **Ordens de Serviço** (uma palavra acentuada da descrição) e em **Equipamentos**. Digite *"joao"*
+   sem til: não acha (o acento conta).
+4. **O painel e as paradas.** Em **Fábrica → Paradas**, inicie uma parada; volte ao **Painel**: ela já conta. Volte a **Paradas**: ela
+   está em *"Paradas em andamento"*, com **Encerrar parada**.
+5. **Atividades e horas extras.** Em **Fábrica → Atividades**, digite o nome de um colaborador: só as dele ficam. Idem em **Horas Extras**.
+6. **O Almoxarifado.** Em **Almoxarifado → Materiais**, com um material cadastrado como *"VÁLVULA ESFERA"*, digite *"válvula"*: ele
+   aparece. Em **Requisições → Nova**, **Adicionar Material**, digite *" parafuso "*: as sugestões mostram o parafuso. Em **Relatórios →
+   Histórico de movimentações**, ponha *"saida"* no tipo: as saídas aparecem.
+7. **O segmento.** Em **Comercial → Clientes**, edite um cliente de segmento *"Cosméticos"*: o seletor mostra *"Cosméticos"*.
+
+**O que esta etapa NÃO cobre.** O acento continua contando nas buscas. Outras listas ainda podem mostrar a resposta de um filtro anterior se
+trocadas muito depressa (OPs, máquinas, movimentações, requisições, recebimentos, reservas, inspeções, não conformidades, relatórios); as
+datas padrão de Presença e Relatórios da produção e o filtro de data das Movimentações seguem o dia em UTC (à noite, o dia de amanhã). O
+filtro *Status* dos Materiais (*"OK"* mostra material com selo *"Baixo"*) é régua do P.O. Os seletores de tipo das Movimentações, de evento
+das Notificações e de fornecedor do recebimento estão incompletos (de antes).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (o servidor de verdade em pasta vazia, com
+cadastros gravados pela rota e antigos em minúsculas e com espaço; as telas em jsdom) provam, escrito para você conferir à mão. Commits
+`eaf682e9`, `59e3972c`, `a0268282`, `d5cd52ea`, `93c1dace` e `ff3e7d78` (a correção da revisão).
 
 ## Etapa 159 — Os filtros e as buscas do Comercial que não filtravam, a busca com letra acentuada, e o cadastro que responde o gravado (ENTREGUE — 2026-10-19)
 

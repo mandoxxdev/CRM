@@ -1,5 +1,7 @@
 # 16 — Ferramentas e Equipamentos de Medição
 
+> **+ Etapa 160 (2026-10-19, `eaf682e9`): a busca das ferramentas (`busca`) e dos empréstimos (`colaborador`) acha a letra acentuada em qualquer caixa e aparada (C393, B1019)** — ver a seção "Etapa 160", no fim.
+
 > **Status:** 🟢 — cadastro, empréstimo com claim, calibração com vencimento que bloqueia,
 > manutenção, avaria/perda com foto, bloqueio e tela própria completos e testados · **Spec
 > original:** seção 20 · **Design da etapa:**
@@ -121,3 +123,10 @@ numeradas" e tabela "Contratos de API").
 
 - 20 (alertas de devolução/calibração) · 09 (instrumento na inspeção) · 19 (e-mails, para o
   lembrete de devolução ganhar canal).
+
+## Etapa 160 — os filtros e as buscas que não casavam (2026-10-19)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa160-filtros-da-fabrica-e-do-almoxarifado.md`. Consertos técnicos, sem regra de acesso nova e sem mexer em saldo: a medição chave por chave das telas do
+Almoxarifado (nenhuma rota ignora uma chave que a tela manda; o defeito estava na comparação).
+
+- [x] **RN-160.04 (C393, B1019)** — `listarFerramentas` (patrimônio, nome) e `listarEmprestimos` (colaborador) pela `condicaoDeBusca` — `eaf682e9`.

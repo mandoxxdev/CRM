@@ -11,13 +11,19 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-19):** **Etapa 159 fechada** (consertos técnicos no Comercial, sem regra de acesso nova: **os
+> **Onde o desenvolvimento está (2026-10-19):** **Etapa 160 fechada** (consertos técnicos na Fábrica e no Almoxarifado, sem regra de
+> acesso nova e sem mexer em saldo: **os filtros e as buscas que não casavam** — o filtro *Prioridade* das OS filtra e o kanban tira as
+> concluídas e ordena pela prioridade (**C390**, **C391**, novos e resolvidos, **B1018**); as buscas da Fábrica e do Almoxarifado acham a letra
+> acentuada em qualquer caixa (**C392**, **C393**, novos e resolvidos, **B1019**, **B1020**); o painel, as paradas e a busca das atividades da
+> Fábrica (**C394**, **B1021**) e os filtros do navegador do Almoxarifado (**C395**) funcionam; os cadastros pela integração respondem o
+> gravado (**C388** resolvido, **B1022**) e o seletor *Segmento* mostra o gravado (**C389** resolvido, **B1023**); **B1018** a **B1024**; os avisos
+> novos **C396** a **C400** (de antes)); a próxima é a **161** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 159 fechada** (consertos técnicos no Comercial, sem regra de acesso nova: **os
 > filtros e as buscas que não filtravam** — o filtro *Segmento* da lista de clientes filtra (**C384**, novo e resolvido, **B1012**); as buscas de
 > texto acham a letra acentuada em qualquer caixa (*"são"* acha *"SÃO"* — **C385**, novo e resolvido, **B1013**); a busca dos custos de viagem
 > recarrega e procura o código, os clientes e o destino (**C386**, novo e resolvido, **B1014**); o *Remover Lembrete* das Atividades não esvazia a
 > lista (**C387**, novo e resolvido); o cadastro de cliente responde o gravado (**C381** resolvido, **B1015**); o custo sem tipo grava
-> *IDA_E_VOLTA* (**C382** em parte, **B1016**); **B1012** a **B1017**; os avisos novos **C388** e **C389** (de antes)); a próxima é a **160** — ver
-> "Onde estamos e o que vem a seguir".
+> *IDA_E_VOLTA* (**C382** em parte, **B1016**); **B1012** a **B1017**; os avisos novos **C388** e **C389** (de antes)); a próxima era a **160**.)*
 > *(Antes: **Etapa 158 fechada** (consertos técnicos nos **Custos de viagem** do Comercial, sem regra
 > de acesso nova: **o ponto do mapa do endereço do cliente fica guardado no cadastro** — a localização não consulta mais o serviço de mapas
 > da internet a cada abertura, só quando o endereço muda (**C377** resolvido, **B1008**, **B1009**); o filtro *Tipo de viagem* da lista
@@ -3916,7 +3922,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B1017; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B1024; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -11291,6 +11297,51 @@ escondê-las do histórico seria uma regra nova. **Também fica:** a edição pe
 vocês: as da **B957**, a **B988** e a **B989**; a **B1002** continua pedindo um olhar; a **B1012** a **B1016** são reversíveis (a **B1013**
 pergunta se o acento deve contar).
 
+**B1018 (NOVA, da Etapa 160; da Fábrica) — o filtro Prioridade das OS passa a filtrar, e o kanban tira as concluídas e ordena pela
+prioridade.** A tela mandava *"alta"* e o cadastro grava *"ALTA"*: o filtro nunca casava (**C390**). Agora compara sem diferença de
+maiúsculas nem de espaço nas pontas, nas OS da Fábrica e nas do Comercial. No kanban (**C391**), a OS com status *"concluido"* ou
+*"cancelado"* (o que o formulário grava) sai do quadro, como já saíam *"concluida"*, *"cancelada"* e *"encerrada"*; a OS sem status passa a
+aparecer; a ordem passa a ser Urgente, Alta, Normal, o resto. **Os números mudam:** a lista filtrada por prioridade passa a ter as OS; o
+quadro do kanban perde as concluídas/canceladas e muda de ordem. **Descartado:** gravar a prioridade em minúsculas (mudaria o que o banco
+guarda e todos os relatórios). **Reversível:** `eaf682e9`.
+
+**B1019 (NOVA, da Etapa 160; da Fábrica e do Almoxarifado) — as buscas de texto da Fábrica e do Almoxarifado acham a letra acentuada em
+qualquer caixa, mas o acento conta.** Ordens de serviço, colaboradores, equipamentos, ordens de produção, máquinas, roteiros, materiais,
+retalhos, ferramentas e empréstimos passam a procurar como as do Comercial desde a 159 (**B1013**): o texto aparado, em maiúsculas e em
+minúsculas (**C392**, **C393**). As colunas procuradas não mudaram. **Os números mudam:** mais resultados com letra acentuada; o texto só de
+espaços deixa de esvaziar a lista; o texto com espaço no fim passa a achar. **Descartado:** ignorar o acento (a mesma pergunta da **B1013**,
+que continua com vocês); acrescentar colunas às buscas (a das OPs não procura a descrição da OS — **C400**). **Reversível:** `eaf682e9`.
+
+**B1020 (NOVA, da Etapa 160; do Almoxarifado) — o relatório Histórico de movimentações: o usuário sem caixa e o tipo em maiúsculas.** O
+campo *Usuário* procura com as formas da **B1019** e mantém *%* e *_* como texto (como já era); o *Tipo de movimento*, um campo de texto
+livre, vale aparado e em maiúsculas (*"saida"* = *SAIDA*), e o tipo que não é texto (pela integração) não filtra. A nota do relatório diz a
+regra nova, com o limite do nome antigo misturado. **Os números mudam:** o relatório e a exportação com usuário acentuado ou tipo em
+minúsculas passam a ter linhas. **Descartado:** trocar o campo de tipo por uma lista (é tela nova; os tipos que a lista ofereceria são
+régua — **C399**). **Reversível:** `eaf682e9`, `ff3e7d78`.
+
+**B1021 (NOVA, da Etapa 160; da Fábrica) — a busca das Atividades dos colaboradores e das Horas extras filtra no navegador.** A caixa
+*Buscar* só recarregava a mesma lista a cada tecla (**C394**). Agora filtra a lista já carregada nas colunas mostradas (colaborador, tipo,
+descrição e OS; colaborador e tipo), sem pedir de novo. **Descartado:** um parâmetro novo de busca no servidor — as duas listas vêm
+inteiras e a tela não pagina, então o filtro do navegador acha o mesmo sem rota nova. **Reversível:** `a0268282`.
+
+**B1022 (NOVA, da Etapa 160; do Comercial) — os cadastros de projeto, oportunidade, atividade e proposta respondem o gravado.** Como o de
+cliente desde a 159 (**B1015**): a resposta é o registro relido do banco; a da proposta é a linha da proposta, **sem os itens** (quem
+precisar deles lê a proposta). **Muda o que a tela mostra num caso:** o *POST* da proposta devolvia o número enviado por cima do gerado —
+com o número enviado já existente, a proposta era gravada com o próximo livre e a tela guardava o repetido (e o mandava no próximo
+salvamento); agora a tela recebe o número gravado (**C388**). A releitura que falha responde só o número (e o da proposta), com o erro no
+registro do servidor — **não** um erro. **Descartado:** responder os itens junto (nenhuma tela os lê da resposta); responder erro quando a
+releitura falha. **Reversível:** `59e3972c`.
+
+**B1023 (NOVA, da Etapa 160; do Comercial e da Fábrica) — o seletor mostra a opção que casa com o gravado em maiúsculas.** O segmento do
+cliente (*"COSMÉTICOS"* → *"Cosméticos"*, **C389**) e o tipo e a prioridade da OS no formulário de edição da lista (*"ALTA"* → *"Alta"*,
+*"MANUTENCAO"* → *"Manutenção"*). **Escolhido:** o gravado que não casa com nenhuma opção aparece como uma opção a mais, com o texto gravado,
+selecionada. **Descartado:** mostrar *"Selecione..."* ou a primeira opção — esconde o que está gravado, e quem "corrige" o campo grava outra
+coisa. Salvar sem mexer grava o mesmo. **Reversível:** `a0268282`, `93c1dace`.
+
+**B1024 (NOVA, da Etapa 160) — a próxima etapa (161).** Ver a "próxima tarefa detalhada" no plano da Etapa 160. As decisões que esperam
+vocês: as da **B957**, a **B988** e a **B989**; a **B1002** continua pedindo um olhar; a **B1013** (agora também nas buscas da Fábrica e do
+Almoxarifado); a **C398** (o filtro *Status* dos Materiais); a **B1018** a **B1023** são reversíveis.
+
 **B898 (NOVA, da Etapa 138) — a próxima etapa (139).** Ver a "próxima tarefa detalhada" no plano da Etapa 138. A **B853** (com a
 **C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
@@ -14561,15 +14612,67 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 387. **✅ NOVO E RESOLVIDO NA ETAPA 159 (RN-159.04; da medição da Etapa 159, do Comercial, anterior a ela; lido no código) — remover um
      lembrete com o filtro "Todos os responsáveis" esvaziava a lista das Atividades.** O recarregamento depois do **Remover Lembrete** pedia
      as atividades de um responsável chamado *"todos"*; a lista ficava vazia até trocar o filtro. Agora recarrega com as de todos.
-388. **NOVO (da medição da Etapa 159; do Comercial, anterior a ela; lido no código) — os cadastros de projeto, proposta, oportunidade e
+388. **✅ RESOLVIDO NA ETAPA 160 (RN-160.07, B1022)** — os quatro cadastros respondem o registro gravado (a proposta, o número que o
+     sistema gravou). *O texto original, de antes da correção:* **NOVO (da medição da Etapa 159; do Comercial, anterior a ela; lido no código) — os cadastros de projeto, proposta, oportunidade e
      atividade pela integração respondem o que foi mandado.** Como o de cliente fazia antes da Etapa 159 (**C381**): a resposta repete o
      pedido, inclusive campos que não foram gravados. **O que fazer:** nada — as telas usam só o número; quem integrar pela API deve ler o
      registro de novo.
-389. **NOVO (da medição da Etapa 159; do Comercial, anterior a ela; lido no código) — o seletor Segmento do formulário do cliente mostra
+389. **✅ RESOLVIDO NA ETAPA 160 (RN-160.08, B1023)** — o seletor mostra a opção do segmento gravado. *O texto original, de antes da
+     correção:* **NOVO (da medição da Etapa 159; do Comercial, anterior a ela; lido no código) — o seletor Segmento do formulário do cliente mostra
      "Selecione..." ao editar um cliente com segmento.** O cadastro grava o segmento em maiúsculas (*"COSMÉTICOS"*) e as opções do seletor
      estão em minúsculas (*"Cosméticos"*): nenhuma casa, e o seletor aparece vazio. Salvar sem mexer **não** apaga o segmento (o valor
      gravado vai de volta); escolher uma opção grava a nova. **O que fazer:** ao editar, conferir o segmento só se for trocá-lo. Candidata:
      casar a opção sem diferença de maiúsculas (é da tela).
+390. **✅ NOVO E RESOLVIDO NA ETAPA 160 (RN-160.01, B1018; da medição da Etapa 160, da Fábrica e do Comercial, anterior a ela; lido no
+     código) — o filtro "Prioridade" das ordens de serviço nunca casava.** A tela mandava *"alta"* e o cadastro grava *"ALTA"*: escolher
+     qualquer prioridade esvaziava a lista (nas OS da Fábrica e nas do Comercial). E o gesto seguinte: editar a OS pelo formulário da lista
+     mostrava *"Baixa"* para o gravado *"ALTA"* (e *"Fabricação"* para *"MANUTENCAO"*), e o selo da prioridade ficava sem cor. Agora filtra,
+     o formulário mostra a opção gravada e o selo tem a cor.
+391. **✅ NOVO E RESOLVIDO NA ETAPA 160 (RN-160.02, B1018; da medição da Etapa 160, da Fábrica, anterior a ela; lido no código) — o kanban
+     da produção mostrava as OS concluídas e canceladas e não ordenava pela prioridade.** O quadro tirava *"concluida"*/*"cancelada"*, mas o
+     formulário grava *"concluido"*/*"cancelado"*; e comparava a prioridade em minúsculas com o gravado em maiúsculas (tudo caía no fim).
+     Agora a OS concluída ou cancelada sai, e a ordem é Urgente, Alta, Normal, o resto.
+392. **✅ NOVO E RESOLVIDO NA ETAPA 160 (RN-160.03, B1019; da medição da Etapa 160, da Fábrica, anterior a ela; medido no banco) — as
+     buscas da Fábrica não achavam a letra acentuada nem aparavam o termo.** Ordens de serviço, colaboradores, equipamentos, ordens de
+     produção, máquinas e roteiros: *"joão"* não achava *"JOÃO"*, e *"joão "* (espaço no fim) não achava nada. Agora acham (o acento continua
+     contando — **B1013**).
+393. **✅ NOVO E RESOLVIDO NA ETAPA 160 (RN-160.04, B1019, B1020; da medição da Etapa 160, do Almoxarifado, anterior a ela; medido no
+     banco) — as buscas do Almoxarifado, idem, e o tipo do Histórico de movimentações exato.** Materiais, retalhos, ferramentas, empréstimos
+     e o usuário do relatório *Histórico de movimentações*; o *Tipo de movimento* do relatório (texto livre) comparava exato: *"saida"*
+     não achava nada. Agora acham.
+394. **✅ NOVO E RESOLVIDO NA ETAPA 160 (RN-160.05, B1021; da medição da Etapa 160, da Fábrica, anterior a ela; lido no código) — três
+     telas da Fábrica pediam e não usavam.** O **Atualizar** do painel da produção (e a abertura depois de uma ação) mostrava os números
+     de até 30 s atrás; as **paradas em andamento** saíam das 500 últimas do histórico (a aberta mais antiga sumia e não dava para encerrar);
+     a caixa **Buscar** das Atividades dos colaboradores e das Horas extras não filtrava nada. Agora o painel pede os números de agora, as
+     paradas abertas aparecem todas e a busca filtra.
+395. **✅ NOVO E RESOLVIDO NA ETAPA 160 (RN-160.06; da medição e da revisão do plano da Etapa 160, do Almoxarifado, anterior a ela; lido no
+     código) — os filtros do navegador do Almoxarifado não aparavam e travavam com material sem nome.** O seletor de material da Nova
+     requisição e do Novo recebimento, e os filtros dos Estoques mínimos, da Liberação por valor, dos Perfis de acesso e das Regras de
+     aprovação. E a lista de Materiais podia mostrar o resultado de um texto anterior. Agora aparam, não travam, e a lista mostra só o último.
+396. **NOVO (da medição da Etapa 160; da Fábrica e do Almoxarifado, anterior a ela; lido no código) — outras listas podem mostrar a resposta
+     de um pedido anterior.** Trocar um filtro depressa nas OPs, Máquinas, Colaboradores, Equipamentos, Relatórios da produção (ao trocar de
+     aba), Movimentações, Requisições, Recebimentos, Reservas, Inspeções, Não conformidades, no painel do almoxarifado (ao trocar o período) e
+     nos Relatórios (ao trocar de relatório com a consulta em andamento — a exportação sai com o relatório novo e os parâmetros do antigo):
+     se a resposta do pedido anterior chegar por último, a tela a mostra com o filtro novo escolhido. **O que fazer:** depois de trocar o
+     filtro, esperar a lista recarregar; nos Relatórios, consultar de novo antes de exportar. Candidata: a Etapa 161.
+397. **NOVO (da medição da Etapa 160; da Fábrica e do Almoxarifado, anterior a ela; lido no código) — datas pelo dia em UTC.** A data
+     padrão da Presença e dos Relatórios da produção, os apontamentos e paradas *por dia*, e o filtro de data das Movimentações seguem o dia
+     em UTC: depois das 21h (horário de Brasília) o dia é o de amanhã. **O que fazer:** à noite, conferir a data dos filtros. Candidata: a
+     Etapa 161 (se mudar o que entra num dia, é decisão — B).
+398. **NOVO (da medição da Etapa 160; do Almoxarifado, anterior a ela; lido no código) — o filtro "Status" dos Materiais e o selo não usam
+     a mesma régua.** *"OK"* lista material com o selo *"Baixo"* (o filtro: acima do mínimo; o selo: até 1,5 × o mínimo) e *"Crítico"* lista os
+     *"Zerado"*; não há opção *"Baixo"*. **O que fazer:** decidir a régua (é de negócio — do P.O.).
+399. **NOVO (da medição da Etapa 160; do Almoxarifado e da Fábrica, anterior a ela; lido no código) — seletores incompletos.** O *Tipo* das
+     Movimentações não oferece entrada por compra, entrada por devolução, reserva, bloqueio, quarentena e remessa a terceiro; o *Evento* das
+     Notificações não tem os 15 alertas; o de fornecedores do Novo recebimento mostra só os 50 primeiros (há a digitação manual); os de
+     material das Reservas e Inspeções não têm material de cliente; o *Setor* dos Colaboradores mostra só os setores da lista já filtrada.
+     **O que fazer:** para os ausentes, usar *"Todos"*; os tipos das Movimentações e o material de cliente nas Reservas/Inspeções são
+     decisão (B). Candidata: a Etapa 161 (o resto).
+400. **NOVO (da medição e da revisão do plano da Etapa 160; anterior a ela; lido no código) — sobras menores.** O QR da etiqueta põe o
+     código na busca dos Materiais (*"MAT-001"* lista também *"MAT-0010"*); as opções de usuário da Auditoria repetem um usuário renomeado; os
+     Recebimentos recarregam materiais, pedidos e fornecedores a cada troca de filtro; a busca das Ordens de Produção não olha a descrição da
+     OS; o filtro *Trabalho* dos Colaboradores recarrega do servidor à toa; o painel operacional antigo (que nenhum menu abre) tem o mesmo
+     defeito da prioridade. **O que fazer:** nada no dia a dia.
 ### D. Limitações declaradas— são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -15901,6 +16004,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(160) Os filtros e as buscas da Fábrica e do Almoxarifado, o que ficou de fora.** O acento continua contando nas buscas (*"joao"* não
+  acha *"JOÃO"* — **B1013**, **B1019**). As outras listas que podem mostrar a resposta de um pedido anterior (**C396**), as datas em UTC
+  (**C397**), o filtro *Status* dos Materiais (**C398**, do P.O.), os seletores incompletos (**C399**) e as sobras menores (**C400**) ficam
+  registrados. A resposta da proposta pela integração vem sem os itens (**B1022**). Nenhuma porta de saldo, permissão ou trava mudou.
 - **(159) As buscas e os filtros do Comercial, o que ficou de fora.** O acento conta nas buscas (*"sao"* não acha *"SÃO"*) e um cadastro
   antigo com letras acentuadas maiúsculas e minúsculas misturadas só é achado com a mesma grafia (**B1013**); *%* e *_* continuam curingas.
   A busca dos custos espera 300 ms depois da última tecla (também para a sugestão escolhida e os filtros de distância e valor). Os outros
@@ -16960,6 +17067,13 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(160) Nenhum clique foi dado no navegador.** As rotas foram provadas pelo servidor de verdade (em pasta vazia, com cadastros gravados
+pela rota — em maiúsculas — e antigos em minúsculas e com espaço gravados por fora, contados contra o banco, e um segundo boot com a
+releitura dos quatro cadastros falhando); as telas em jsdom com a comunicação simulada. Vale conferir à mão: **Fábrica → Ordens de
+Serviço**, o filtro *"Alta"* (e o lápis de uma OS alta: o seletor em *"Alta"*); **Fábrica → Produção**, uma OS mudada para *"Concluído"*
+(sai do quadro); *"joão"* em **Colaboradores**; *"válvula"* em **Almoxarifado → Materiais**; o **Atualizar** do painel da produção depois
+de registrar uma parada; a busca das **Atividades** da Fábrica; e um cliente de segmento *"Cosméticos"* aberto para editar.
 
 **(159) Nenhum clique foi dado no navegador.** As rotas foram provadas pelo servidor de verdade (em pasta vazia, com cadastros gravados
 pela rota — em maiúsculas — e antigos em minúsculas gravados por fora, contados contra o banco, e um segundo boot com a releitura do
@@ -32123,9 +32237,126 @@ busca abre dado novo; nenhuma injeção); o de **sabotagem** fez 39 sabotagens �
 cada busca, cada tipo da busca do topo, o aparar na edição do custo, os outros recarregamentos das Atividades, a aba Propostas das OS) e
 todas ganharam o cenário que as derruba. Commits `531f3576`, `68869661`, `303841a2`, `6bc42a36`, `650b8395` e `49909fa2` (a correção da revisão).
 
+## Etapa 160 — Os filtros e as buscas da Fábrica e do Almoxarifado que não casavam, e os cadastros que respondem o gravado (2026-10-19)
+
+Uma etapa de **consertos técnicos** na Fábrica (o Operacional) e no Almoxarifado, sem regra de acesso nova e sem mexer em saldo. A Etapa 159
+mediu, chave por chave, as telas do Comercial; esta fez o mesmo nas telas da Fábrica e nas listas do Almoxarifado. No Almoxarifado nenhuma
+tela manda um filtro que o servidor ignore — o defeito está na comparação: o cadastro grava muitos nomes em maiúsculas (*"JOÃO DA SILVA"*,
+*"PRENSA HIDRÁULICA"*) e o banco só ignora a caixa das letras **sem** acento, então buscar *"joão"* ou *"hidráulica"* não achava nada; e um
+espaço no fim do termo zerava a lista. Na Fábrica apareceu um filtro que **nunca** funcionou: a **Prioridade** das ordens de serviço (a tela
+manda *"alta"*, o cadastro grava *"ALTA"*); o **kanban da produção** mostrava as OS concluídas e canceladas e não ordenava pela prioridade; o
+**Atualizar** do painel da produção mostrava os números de até 30 segundos atrás; as **paradas em andamento** mais antigas sumiam do quadro;
+e a caixa **Buscar** das Atividades dos colaboradores e das Horas extras não fazia nada. E duas sobras da 159: os cadastros de projeto,
+proposta, oportunidade e atividade pela integração respondiam o que foi mandado, e o seletor **Segmento** do cliente aparecia vazio ao editar.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Fábrica → Ordens de Serviço**, *"Todas as prioridades"* → *"Alta"*: a lista ficava **vazia** | Só as de prioridade alta — **C390**, novo e resolvido (**B1018**) |
+| **Fábrica → Produção (kanban)**: a OS marcada *"Concluído"* ou *"Cancelado"* continuava no quadro; a urgente não vinha primeiro | Sai do quadro; a ordem é Urgente, Alta, Normal, o resto — **C391**, novo e resolvido (**B1018**) |
+| Buscar *"joão"* em **Colaboradores**, *"manutenção"* nas **Ordens de Serviço**, *"hidráulica"* em **Equipamentos**, *"são josé"* nas **Ordens de Produção**: nada | Acha o gravado em maiúsculas e o antigo em minúsculas; os espaços das pontas não contam — **C392**, novo e resolvido (**B1019**) |
+| Buscar *"válvula"* em **Almoxarifado → Materiais** (cadastro digitado *"VÁLVULA"*), nos **Retalhos**, nas **Ferramentas** e nos **Empréstimos**: nada | Acha — **C393**, novo e resolvido (**B1019**) |
+| **Relatórios → Histórico de movimentações**, usuário *"joão"*: nada; tipo *"saida"*: nada | Acha o *"JOÃO"*; o tipo vale sem diferença de maiúsculas — **C393** (**B1020**) |
+| **Painel da produção**, **Atualizar** (ou abrir depois de registrar uma parada): os números de até 30 s atrás | Os de agora — **C394**, novo e resolvido |
+| **Paradas**, uma parada aberta há muito tempo (mais de 500 paradas depois dela): sumia de *"Paradas em andamento"* | Aparece — **C394** |
+| **Atividades** e **Horas extras** da Fábrica, digitar na busca: a lista não mudava | Filtra pelo colaborador, tipo, descrição e OS (**B1021**) — **C394** |
+| **Editar uma OS** (o formulário da lista) gravada com prioridade alta: o seletor mostrava *"Baixa"*; o selo da lista e da ficha ficava sem cor | Mostra *"Alta"* (e o tipo certo); o selo com a cor — **C390** (**B1023**) |
+| **Nova requisição** / **Novo recebimento**, buscar *" parafuso "* (com espaço): nada; um material sem nome travava a busca | Acha; não trava — **C395**, novo e resolvido |
+| **Configurações** (Estoques mínimos, Liberação por valor, Perfis de acesso) e **Regras de aprovação**, buscar *" ana"*: nada | Acha — **C395** |
+| **Materiais**, digitar depressa: a lista podia mostrar o resultado do texto anterior | Só o do último texto — **C395** |
+| Cadastrar projeto, oportunidade, atividade ou proposta **pela integração**: a resposta repetia o pedido | A resposta é o registro gravado; a proposta com o número que o sistema gravou — **C388** resolvido (**B1022**) |
+| **Comercial → Clientes**, editar um cliente de segmento *"COSMÉTICOS"*: o seletor mostrava *"Selecione..."* | Mostra *"Cosméticos"* — **C389** resolvido (**B1023**) |
+
+### As regras, com o cenário exato
+
+**1. O filtro Prioridade das ordens de serviço (C390, B1018).** Em **Fábrica → Ordens de Serviço**, cadastre uma OS com prioridade *"Alta"*
+(o sistema grava *"ALTA"*). No seletor *"Todas as prioridades"*, escolha *"Alta"*: ela aparece (antes, a lista ficava vazia). Vale também para
+a lista de OS do Comercial e para as OS antigas gravadas em minúsculas ou com espaço. Combina com a busca e o status. Trocar de prioridade
+depressa mostra só a resposta da última. O selo da prioridade na lista e na ficha da OS aparece com a cor. Abrir a OS para editar (o lápis
+da lista) mostra *"Alta"* no seletor e o tipo certo (*"Manutenção"* para o gravado *"MANUTENCAO"*); salvar sem mexer grava o mesmo. Nenhuma
+mensagem nova.
+
+**2. O kanban da produção (C391, B1018).** Em **Fábrica → Produção**, uma OS com prioridade *"Urgente"* aparece antes da *"Alta"*, que vem
+antes da *"Normal"*. Edite uma OS do quadro e mude o status para *"Concluído"* (ou *"Cancelado"*): ela sai do quadro. Uma OS sem status
+(gravada pela integração) aparece.
+
+**3. As buscas da Fábrica (C392, B1019).** Cadastre o colaborador *"joão da silva"* (o sistema grava *"JOÃO DA SILVA"*): em **Fábrica →
+Colaboradores**, *"joão"*, *"João"*, *"JOÃO"* e *" joão "* o acham. O mesmo para as **Ordens de Serviço** (número e descrição), os
+**Equipamentos** (nome, código e modelo), as **Ordens de Produção** (número, produto, código do produto, número da OS e cliente) e as
+**Máquinas** (código, nome, setor e centro de trabalho — *"MANUTENÇÃO"* acha o setor *"Manutenção"*). **O acento conta:** *"joao"* não acha
+*"JOÃO"*. Uma busca só de espaços não filtra.
+
+**4. As buscas do Almoxarifado (C393, B1019, B1020).** Em **Almoxarifado → Materiais**, um material cadastrado como *"VÁLVULA ESFERA"* é
+achado por *"válvula"* (nome, código, descrição e fornecedor). O mesmo nos **Retalhos** (norma, dimensões, descrição), nas **Ferramentas**
+(patrimônio e nome) e nos **Empréstimos** (colaborador). Em **Relatórios → Histórico de movimentações**, o campo *Usuário* com *"joão"* acha
+as movimentações do *"JOÃO OPERADOR"*; *%* e *_* continuam valendo como texto (*"100%"* acha só *"100%"*). O campo *Tipo de movimento* com
+*"saida"* ou *" Saida "* acha as saídas. A nota do relatório diz: *"A busca por usuário ignora maiúsculas e minúsculas, mas não o acento (um
+nome antigo com letras acentuadas maiúsculas e minúsculas misturadas só é achado com a mesma grafia)."*
+
+**5. O painel e as paradas da produção (C394).** Em **Fábrica → Painel**, registre uma parada em **Paradas** e volte ao painel: os números
+já a contam (antes, até 30 s depois). O botão **Atualizar** do painel pede os números de agora. Em **Paradas**, o quadro *"Paradas em
+andamento"* mostra todas as abertas, inclusive uma antiga (antes, só as que estavam entre as 500 últimas do histórico), e cada uma tem o
+**Encerrar parada**.
+
+**6. A busca das Atividades e das Horas extras (C394, B1021).** Em **Fábrica → Atividades**, digite *" joão "*: só as atividades do João
+ficam na lista (vale o colaborador, o tipo, a descrição e a OS); em **Horas extras**, o colaborador e o tipo. A lista não é pedida de novo a
+cada tecla. Sem par: *"Nenhuma atividade encontrada"* / *"Nenhuma hora extra encontrada"*.
+
+**7. Os filtros do navegador do Almoxarifado (C395).** Em **Nova requisição**, **Adicionar Material**, digite *" parafuso "*: as sugestões
+mostram o parafuso; um material sem nome cadastrado não trava a busca (aparece pelo código). Abaixo de 2 letras (sem contar os espaços),
+nenhuma sugestão. O mesmo no **Novo Recebimento** (*"Buscar material..."*). Em **Configurações → Estoques Mínimos** (*"Filtrar materiais..."*),
+**Liberação por Valor** e **Perfis de Acesso** (*"Buscar usuário..."*, *"Buscar por nome ou e-mail..."*) e em **Regras de Aprovação**, *" ana"*
+acha a Ana. Em **Materiais**, digitar depressa mostra só o resultado do último texto, e um erro de um pedido anterior não aparece.
+
+**8. Os cadastros pela integração respondem o gravado (C388, B1022).** Pela integração, `POST /api/projetos` com *"nome": "projeto ação"*
+responde o projeto gravado (*"PROJETO AÇÃO"*, o status *"ativo"*, as datas), sem os campos que não são do cadastro — o mesmo para
+oportunidades, atividades e propostas (a proposta sem os itens). **A proposta passa a responder o número que o sistema gravou:** mandando um
+número que já existe, o sistema grava o próximo livre e a resposta agora traz esse (antes, o repetido). Se a releitura falhar depois de
+gravar, a resposta é só o número do registro (e o da proposta), e o registro do servidor guarda *"Erro ao reler o projeto cadastrado
+⟨número⟩: …"* (ou *a oportunidade cadastrada*, *a atividade cadastrada*, *a proposta cadastrada*).
+
+**9. O seletor Segmento do cliente (C389, B1023).** Em **Comercial → Clientes**, edite um cliente de segmento *"Cosméticos"* (gravado
+*"COSMÉTICOS"*): o seletor mostra *"Cosméticos"* (antes, *"Selecione..."*). Um segmento antigo que não é nenhuma das opções aparece como uma
+opção a mais, com o texto gravado. Cliente sem segmento: *"Selecione..."*. Salvar sem mexer grava o mesmo segmento.
+
+### O que esta etapa NÃO cobre
+
+1. **O acento continua contando** em todas as buscas (**B1013**, **B1019**).
+2. **As outras listas** da Fábrica e do Almoxarifado ainda podem mostrar a resposta de um pedido anterior ao trocar o filtro depressa
+   (**C396**, de antes); as datas padrão e o filtro de data das Movimentações seguem o dia em UTC (**C397**, de antes).
+3. **O filtro Status dos Materiais** (*"OK"* mostra material com selo *"Baixo"*) é régua de negócio (**C398**, de antes — do P.O.).
+4. **Selects incompletos** (os tipos das Movimentações, os eventos das Notificações, os fornecedores do recebimento cortados em 50, o material
+   de cliente nas Reservas/Inspeções, o setor dos Colaboradores) e as **sobras menores** (o QR da etiqueta, as opções da Auditoria, a busca das
+   OPs sem a descrição da OS) ficam registrados (**C399**, **C400**, de antes).
+
+### O que a revisão encontrou
+
+A **medição** (três leitores em paralelo, cada chave de cada tela conferida na rota que a atende) achou o filtro de prioridade, o kanban, as
+buscas, o painel, as paradas e a busca das atividades. A **revisão do plano** (0 grave, 6 médios, 9 pequenos) achou que o gesto seguinte ao
+filtro de prioridade — editar a OS — mostrava a opção errada; que a resposta da proposta devolvia o número repetido; que o painel abria com
+os números velhos depois de cada ação; e mais duas abas das Configurações com o filtro que não aparava — tudo entrou. A **revisão adversarial
+do código** (três revisores, executando): o de **regra** achou o selo da prioridade sem cor na ficha da OS (a tela que a rota de edição abre)
+e que a nota do relatório prometia demais; o de **permissão** não achou nada que vaze (a resposta nova dos cadastros tem só o que a ficha já
+mostra; nenhuma injeção; nenhum portão mudou); o de **sabotagem** fez 134 sabotagens — 20 sobreviveram por falta de asserção (a prioridade
+gravada com espaço, o seletor do recebimento e os filtros das Configurações sem teste, a falha do pedido anterior) e todas ganharam o
+cenário que as derruba. Commits `eaf682e9`, `59e3972c`, `a0268282`, `d5cd52ea`, `93c1dace` e `ff3e7d78` (a correção da revisão).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 160 entregue (2026-10-19):** **os filtros e as buscas da Fábrica e do Almoxarifado que não casavam, e os cadastros que respondem o
+  gravado** (consertos técnicos, sem regra de acesso nova e sem mexer em saldo). O filtro *Prioridade* das OS filtra e o kanban tira as
+  concluídas e ordena pela prioridade (**B1018** — **C390**, **C391**); as buscas da Fábrica e do Almoxarifado acham *"joão"* no gravado
+  *"JOÃO"* (**B1019**, **B1020** — **C392**, **C393**); o painel da produção, as paradas e a busca das atividades e horas extras funcionam
+  (**B1021** — **C394**); os filtros do navegador do Almoxarifado aparam (**C395**); os cadastros pela integração respondem o gravado
+  (**B1022** — **C388**) e o seletor *Segmento* mostra o gravado (**B1023** — **C389**). Commits `eaf682e9`, `59e3972c`, `a0268282`, `d5cd52ea`,
+  `93c1dace` e `ff3e7d78` (a correção da revisão). **O que é seu:** as decisões **B1018** a **B1023** (reversíveis); os avisos **C396** a **C400** (de
+  antes — a **C398** é régua sua); as perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **B988**, **B989**, **B1013**, **C277**,
+  **C312**, **C314**, **C316**, **C330**); a **B1002** (os números mudam); as limitações **(160)** em D e a verificação **(160)** em F. Nenhuma
+  consulta nova antes do deploy.
+  **Próxima: Etapa 161 — ver a "próxima tarefa detalhada" no plano da Etapa 160.**
 
 - **Etapa 159 entregue (2026-10-19):** **os filtros e as buscas do Comercial que não filtravam, a busca com letra acentuada, e o cadastro
   que responde o gravado** (consertos técnicos no Comercial, sem regra de acesso nova). O filtro *Segmento* dos clientes filtra (**B1012** —
@@ -32135,7 +32366,7 @@ todas ganharam o cenário que as derruba. Commits `531f3576`, `68869661`, `30384
   seu:** as decisões **B1012** a **B1016** (reversíveis; a **B1013** pergunta se o acento deve contar); os avisos **C388** e **C389** (de antes);
   as perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **B988**, **B989**, **C277**, **C312**, **C314**, **C316**, **C330**); a
   **B1002** (os números mudam); as limitações **(159)** em D e a verificação **(159)** em F. Nenhuma consulta nova antes do deploy.
-  **Próxima: Etapa 160 — ver a "próxima tarefa detalhada" no plano da Etapa 159.**
+  *(Próxima, na época: Etapa 160 — entregue acima.)*
 
 - **Etapa 158 entregue (2026-10-19):** **o ponto do mapa do endereço guardado no cadastro do cliente, e o resumo, o filtro e o histórico
   dos custos de viagem contando certo** (consertos técnicos nos Custos de viagem, sem regra de acesso nova). A localização do cliente com

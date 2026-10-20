@@ -1,5 +1,7 @@
 # 01 — Cadastros de Materiais
 
+> **+ Etapa 160 (2026-10-19, `eaf682e9`, `d5cd52ea`, Fase 5 `ff3e7d78`): a busca da lista de Materiais acha a letra acentuada em qualquer caixa e aparada (C393, B1019), a lista mostra só a resposta do último pedido, e o filtro dos Estoques mínimos apara e não trava com material sem nome (C395)** — ver a seção "Etapa 160", no fim; o status não muda.
+
 > **Status:** 🟡 — **continua 🟡. Etapa 126 (`6a1ecee0..11a12cad`): o *Editar* da aba Famílias manda o nome, o tipo de uso e a descrição
 > que leu (`campos_lidos`) e o salvar que desfaria a mudança de outro administrador é recusado nomeando os campos (D (125), B815,
 > B816); as outras abas de Configurações seguem a regra do servidor (C261, na feature 23)** — ver a seção "Etapa 126", no fim. Não
@@ -578,3 +580,12 @@ Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa126-configuracoes-qu
   o grupo acima de família (do P.O.).
 
 **A seção "Etapa 125" acima marca o *Editar* da aba Famílias como fora** — fechado aqui.
+
+## Etapa 160 — os filtros e as buscas que não casavam (2026-10-19)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa160-filtros-da-fabrica-e-do-almoxarifado.md`. Consertos técnicos, sem regra de acesso nova e sem mexer em saldo: a medição chave por chave das telas do
+Almoxarifado (nenhuma rota ignora uma chave que a tela manda; o defeito estava na comparação).
+
+- [x] **RN-160.04 (C393, B1019)** — `GET /api/almoxarifado/materiais?search=` pela `condicaoDeBusca` (nome, código, descrição, fornecedor — as colunas de antes); não texto/só espaços = sem filtro — `eaf682e9`.
+- [x] **RN-160.06 (C395)** — a lista de Materiais descarta a resposta (e a falha) de um pedido que não é o último; o filtro *"Filtrar materiais..."* dos Estoques mínimos pela `casaBusca` — `d5cd52ea`, asserções da Fase 5 `ff3e7d78`.
+- [ ] **O filtro *Status* (*"OK"* × o selo *"Baixo"*)** — fica: é régua de negócio (C398, do P.O.).

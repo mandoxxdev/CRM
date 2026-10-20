@@ -1,5 +1,7 @@
 # 04 — Requisições de Materiais
 
+> **+ Etapa 160 (2026-10-19, `d5cd52ea`): o seletor de material da Nova requisição apara o termo, mede o mínimo de 2 letras no aparado e não trava com material sem nome (C395)** — ver a seção "Etapa 160", no fim.
+
 > **Status:** 🟢 — Etapa 3 entregue (2026-08-05); ciclo ponta a ponta rascunho→entrega→confirmação→encerramento · **Spec original:** seção 5
 > **Etapa 114 (2026-10-15, plano `48277da8`, T1 `a113a657`, T2 `52435e81`, Fase 5 `071f6c7b`) — a requisição com item pendente de material inativo não é aprovada, enviada nem separada (C229).** `/aprovar` e a aprovação automática recusam dentro da seção da trava, antes de reservar (400 E1; a automática deixa PENDENTE); `/aprovar-valor` recusa na condição do `UPDATE` de `aprovarValor`, só na primeira aprovação (E1v); `/enviar` recusa (E2); a separação recusa a linha do item inativo (E3); o detalhe e a fila dizem 0 de separável/entregável. Ver a seção da Etapa 114 no fim.
 > **Etapa 102 (2026-10-15, plano `5ae9ced3`, T1 `99043a57`, T3 `5746553b`, T4 `f18cae5d`) — material na caixa não se encerra, em status nenhum.** `PUT /api/almoxarifado/requisicoes/:id/encerrar` usa `recusaEncerrar(status, itens)` (`requisitionStateMachine.js`): todo status de `STATUS_COM_CAIXA` com caixa (régua da B524) → 400 E1, também na nova tentativa do compare-and-set; a *Entregue* encerra sempre (não retém caixa). A tela mostra a frase E1 no lugar do botão na *Parcialmente Atendida* com caixa (`podeEncerrar`). O sufixo da recusa de saldo por caixa perde *"entregue o que existe e encerre a requisição"* (B701). C204 resolvido.
@@ -420,3 +422,10 @@ Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa124-a-familia-que-o-
 fazia isso até a Etapa 124 (a aba Famílias só mostrava as ativas). E a subfamília inativa dava o mesmo beco, que ela não citava.
 
 **Status:** continua 🟢 — fecha a C231.
+
+## Etapa 160 — os filtros e as buscas que não casavam (2026-10-19)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa160-filtros-da-fabrica-e-do-almoxarifado.md`. Consertos técnicos, sem regra de acesso nova e sem mexer em saldo: a medição chave por chave das telas do
+Almoxarifado (nenhuma rota ignora uma chave que a tela manda; o defeito estava na comparação).
+
+- [x] **RN-160.06 (C395)** — o seletor *"Buscar material por nome ou código..."* pela `casaBusca` (nome, código) — `d5cd52ea`, asserções `ff3e7d78`.

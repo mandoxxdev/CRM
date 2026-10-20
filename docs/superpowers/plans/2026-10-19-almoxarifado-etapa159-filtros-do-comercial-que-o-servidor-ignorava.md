@@ -261,7 +261,10 @@ em worktree não se pagaria (um arquivo de teste de servidor compartilhado; a tr
    pausa junto com outro filtro; e dois controles positivos do condutor (C6, C02) passaram por um acaso da fixture.
 3. **Paralelismo:** **0** galhos de código em paralelo (cinco tasks pequenas — o plano decidiu assim); **1** revisor na Fase 2 (antes do
    código), **3** em paralelo na Fase 5 sob a trava (o r3 em worktree própria) — **0** incidente de trava.
-4. **Defeito que escapou:** *(preencher na Etapa 160)*.
+4. **Defeito que escapou:** **0** no que a 159 entregou (medido na Etapa 160: as cinco buscas, o segmento, a busca dos custos, as
+   Atividades e o cadastro do cliente não foram reabertos; a `condicaoDeBusca` foi reusada em mais onze rotas sem mudar o contrato dela — só
+   ganhou o `{ escapar }`, opcional). A régua da 159, aplicada fora do Comercial, achou o filtro de prioridade das OS que nunca casava
+   também na rota das OS **do Comercial** (C390) — de antes, não da 159 (ela não mexeu na prioridade).
 
 ## Próxima tarefa detalhada — Etapa 160
 

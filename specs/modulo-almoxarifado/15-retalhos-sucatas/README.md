@@ -1,5 +1,7 @@
 # 15 — Retalhos, Sobras e Sucatas
 
+> **+ Etapa 160 (2026-10-19, `eaf682e9`): a busca `q` da lista de retalhos acha a letra acentuada em qualquer caixa e aparada (C393, B1019)** — ver a seção "Etapa 160", no fim.
+
 > **Última atualização:** 2026-10-19 (**Etapa 156** — os três seletores de projeto da tela de sobras dizem o motivo quando a lista de projetos volta recusada (C366, `75e772cf`). Ver a seção no fim.) Antes: 2026-10-09 (**Etapa 97** — o sucateamento **comum** não leva mais o material separado na caixa sem reserva de uma requisição: a recusa vem **na solicitação** (antes das duas assinaturas), pelo livre de caixa, com a frase do disponível acrescida de *"e o separado na caixa de requisições"* e o sufixo da caixa (M7, `9dbf11c0`); `disponivel_na_solicitacao` passa a gravar o livre de caixa (só auditoria); a compensação do retalho estorna com `compensacao: true` (régua de hoje, `65dc74b2`). O sucateamento ligado à NC (`doBloqueado`) não muda. Range `eb7cd9d8..3fc39310`. Continua 🟢. Ver a seção "Etapa 97" no fim.) Antes: 2026-10-01 (Etapa 69 — o status abaixo).
 > **Status:** 🟢 — **+ Etapa 69 (2026-10-01): o material REPROVADO na inspeção vai para o sucateamento** — a não
 > conformidade decidida Sucatear ganha *Solicitar sucateamento* (`POST /nao-conformidades/:id/solicitar-sucateamento`,
@@ -238,3 +240,10 @@ Almoxarifado e o Operacional com a tela aberta (o portão das listas, Etapa 154)
 
 - [x] **O motivo sob os três seletores** — `75e772cf`. Testes: `SobrasAlmoxarifado.test.js` (59). Os seletores começam vazios (não há
   valor escondido a mostrar). Continua 🟢.
+
+## Etapa 160 — os filtros e as buscas que não casavam (2026-10-19)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa160-filtros-da-fabrica-e-do-almoxarifado.md`. Consertos técnicos, sem regra de acesso nova e sem mexer em saldo: a medição chave por chave das telas do
+Almoxarifado (nenhuma rota ignora uma chave que a tela manda; o defeito estava na comparação).
+
+- [x] **RN-160.04 (C393, B1019)** — `listarSobras` pela `condicaoDeBusca` (norma, dimensões originais e restantes, descrição — as colunas de antes) — `eaf682e9`.

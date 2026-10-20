@@ -1,5 +1,7 @@
 # 06 — Motor de Aprovações
 
+> **+ Etapa 160 (2026-10-19, `d5cd52ea`): os filtros de usuário das Regras de aprovação e da Liberação por valor aparam (C395)** — ver a seção "Etapa 160", no fim.
+
 > **Status:** 🟡 — segregação/emergencial/rejeição justificada/auditoria entregues (Etapa 3, 2026-08-05); **regras configuráveis com N aprovações, avaliador no envio, gate nas duas lanes, lembrete por pendência e as duas telas entregues na Etapa 47 (2026-09-30)**. **Etapa 48 (2026-09-30): urgência e material de cliente como critério, urgência como lista fechada, e a fila da lane simples.** Falta para 🟢: **material fora da lista técnica** (depende da feature 22, que não existe) e **dupla aprovação de ajuste** (espera a decisão **B11**) — nenhum dos dois cabe numa etapa sem essas dependências · **Spec original:** seção 6
 > **Última atualização:** 2026-10-09 (**Etapa 94** — a alçada de valor (liberação por valor) vale até o começo da
 > separação: só é reavaliada — e só bloqueia e grava *Aguardando aprovação de valor* — numa requisição em status
@@ -192,3 +194,10 @@ Testes: `aprovacaoQueFalhaAoGravar.api.test.js`, `estadoForaDaAuditoriaFase5.api
 ## Dependências
 
 - 04 (máquina de estados da requisição — Etapa 3 entregue) · consumidores: 13, 15, 17.
+
+## Etapa 160 — os filtros e as buscas que não casavam (2026-10-19)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa160-filtros-da-fabrica-e-do-almoxarifado.md`. Consertos técnicos, sem regra de acesso nova e sem mexer em saldo: a medição chave por chave das telas do
+Almoxarifado (nenhuma rota ignora uma chave que a tela manda; o defeito estava na comparação).
+
+- [x] **RN-160.06 (C395)** — *"Buscar usuário..."* das Regras de aprovação e da Liberação por valor pela `casaBusca` (nome, e-mail); antes testava o termo aparado e comparava sem aparar — `d5cd52ea`, asserções `ff3e7d78`. Nenhuma regra de aprovação mudou.

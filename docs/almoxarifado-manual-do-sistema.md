@@ -489,6 +489,20 @@ O "Inativar" e o "Reativar" ficam no histórico do cadastro (2.9): o primeiro co
 
 ---
 
+### 2.12 A lista de materiais e as buscas do módulo
+
+A busca da lista de **Materiais** (*"Buscar por nome, código ou fornecedor..."*) procura o texto no nome, no código, na descrição e no
+fornecedor principal. Como as demais buscas de texto do módulo — a dos **Retalhos** (norma, dimensões e descrição), a das **Ferramentas**
+(patrimônio e nome), a dos **Empréstimos** (o colaborador) e a do usuário do **Histórico de movimentações** (21d) —, ela ignora os espaços
+das pontas e acha o texto em qualquer combinação de maiúsculas e minúsculas, **inclusive nas letras acentuadas** (*"válvula"* acha
+*"VÁLVULA ESFERA"*); **o acento conta** (*"valvula"* não acha *"VÁLVULA"*), e um nome antigo com letras acentuadas maiúsculas e minúsculas
+misturadas só é achado com a mesma grafia. Uma busca só de espaços não filtra. Na lista de Materiais, a busca espera a pessoa parar de
+digitar e mostra só a resposta do último texto (a de um texto anterior que chegue depois, e o erro dela, não aparecem). Os seletores de
+material da **Nova requisição** (*"Buscar material por nome ou código..."*) e do **Novo recebimento** (*"Buscar material..."*) procuram no
+nome e no código da lista carregada, com a mesma regra, a partir de **2 letras** sem contar os espaços; abaixo disso não sugerem nada. Os
+filtros de **Configurações → Estoques Mínimos** (*"Filtrar materiais..."*, nome e código), **Liberação por Valor** (*"Buscar usuário..."*),
+**Perfis de Acesso** (*"Buscar por nome ou e-mail..."*) e o dos aprovadores das **Regras de Aprovação** (nome e e-mail) seguem a mesma regra.
+
 ## 3. Localizações e endereçamento
 
 ### 3.1 A regra de negócio que define tudo: almoxarifado é área física, não filial
@@ -1136,7 +1150,28 @@ mostra só os clientes daquele segmento — comparado sem diferença de maiúscu
 com a busca de texto, se houver; *"Todos os segmentos"* mostra todos, e o **Exportar Excel** exporta a lista como está na tela. Cliente sem
 segmento só aparece em *"Todos os segmentos"*. Ao trocar o filtro ou a busca depressa, a lista mostra só a resposta do último pedido. Nas
 **Atividades**, o filtro *"Todos os responsáveis"* continua valendo depois de **Remover Lembrete**: a lista recarrega com as atividades e os
-lembretes de todos. Ao cadastrar um cliente, a tela recebe o cadastro como ficou gravado (em maiúsculas).
+lembretes de todos. Ao cadastrar um cliente, um projeto, uma oportunidade, uma atividade ou uma proposta, a resposta é o registro como
+ficou gravado (em maiúsculas, com os valores padrão que o sistema pôs); a da proposta traz o número que o sistema gravou — se o número
+mandado já existir, o sistema grava o próximo livre e é esse que volta — e não traz os itens. Ao abrir um cliente para editar, o seletor
+**Segmento** mostra a opção do segmento gravado, sem diferença de maiúsculas (*"COSMÉTICOS"* aparece como *"Cosméticos"*); um segmento
+antigo que não é nenhuma das opções aparece como uma opção a mais, com o texto gravado; o cliente sem segmento mostra *"Selecione..."*.
+Salvar sem mexer grava o mesmo segmento.
+
+**As buscas e os filtros da Fábrica.** As buscas de texto da Fábrica seguem a mesma regra das do Comercial (os espaços das pontas não
+contam; maiúsculas e minúsculas, inclusive acentuadas, são equivalentes; **o acento conta**; uma busca só de espaços não filtra): a das
+**Ordens de Serviço** (número e descrição), a dos **Colaboradores** (nome, matrícula e CPF), a dos **Equipamentos** (nome, código e
+modelo), a das **Ordens de Produção** (número, descrição e código do produto, número da OS e razão social do cliente) e a das **Máquinas**
+(código, nome, setor e centro de trabalho). O filtro **Prioridade** das Ordens de Serviço (e o das OS do Comercial) mostra as OS daquela
+prioridade, comparada sem diferença de maiúsculas nem de espaço nas pontas; ao trocar os filtros depressa, a lista mostra só a resposta do
+último pedido. Ao abrir uma OS para editar pelo lápis da lista, os seletores **Tipo** e **Prioridade** mostram a opção gravada (o sistema
+grava *"ALTA"*, *"MANUTENCAO"*; a tela mostra *"Alta"*, *"Manutenção"*); um valor antigo que não é nenhuma das opções aparece como uma opção
+a mais. O **kanban da Produção** mostra os itens das OS que não estão concluídas, canceladas nem encerradas (o status comparado sem
+diferença de maiúsculas; a OS sem status aparece), na ordem: prioridade **Urgente**, **Alta**, **Normal**, as demais; dentro dela, a data
+prevista e o item. O **Painel da produção** guarda os números por 30 segundos no servidor (e 45 no navegador); o botão **Atualizar** pede
+os números de agora, e a primeira abertura depois de qualquer registro da produção (uma parada, um apontamento, uma OP) também. Em
+**Paradas**, o quadro *"Paradas em andamento"* mostra todas as paradas abertas; o histórico abaixo mostra as mais recentes. Nas
+**Atividades** e nas **Horas Extras** da Fábrica, a caixa de busca filtra a lista já carregada — o colaborador, o tipo, a descrição e a OS
+nas atividades; o colaborador e o tipo nas horas extras —, com a mesma regra de maiúsculas, sem pedir a lista de novo.
 
 ### 5.2e Usuário desativado ou excluído
 
@@ -6520,16 +6555,17 @@ Estoque atual, que só lista o estoque próprio porque soma valor.
 
 ### Histórico de movimentações — filtros por grupo, usuário e centro de custo
 
-Além de material, tipo exato e período, o **Histórico de movimentações** (grupo Movimentações) filtra
-por:
+Além de material, tipo (o código do tipo, sem diferença de maiúsculas nem de espaço nas pontas — *saida* vale *SAIDA*) e período, o
+**Histórico de movimentações** (grupo Movimentações) filtra por:
 
 - **Grupo (ENTRADA, SAIDA, AJUSTE, DEVOLUCAO ou TRANSFERENCIA)** — traz todos os tipos daquele grupo
   (ENTRADA pega entrada de compra, manual, por devolução, retalho etc.; aceita minúsculas). Os grupos
   **se sobrepõem**: o ajuste positivo está em ENTRADA e em AJUSTE, e o negativo em SAIDA e em AJUSTE —
   não some grupos. Outra palavra é recusada:
   *"Grupo de movimento inválido: COMPRAS (use ENTRADA, SAIDA, AJUSTE, DEVOLUCAO ou TRANSFERENCIA)"*.
-- **Usuário (parte do nome)** — um `%` ou `_` digitado vale como letra. Maiúsculas e minúsculas são
-  equivalentes só em letras sem acento.
+- **Usuário (parte do nome)** — um `%`, `_` ou `\` digitado vale como letra. Os espaços das pontas não contam e maiúsculas e minúsculas
+  são equivalentes, inclusive nas letras acentuadas (*"joão"* acha *"JOÃO"*); o acento conta, e um nome antigo com letras acentuadas
+  maiúsculas e minúsculas misturadas só é achado com a mesma grafia.
 - **Centro de custo (id)** — o número do centro de custo.
 - **Motivo (cadastro)** — uma lista com *"Todos"* e os motivos cadastrados (6.4b), inclusive os desativados, marcados
   *"(desativado)"*. Traz só as movimentações gravadas **escolhendo aquele motivo da lista** — também as feitas antes de

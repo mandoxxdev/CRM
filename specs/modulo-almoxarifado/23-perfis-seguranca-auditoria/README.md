@@ -1,5 +1,7 @@
 # 23 — Perfis, Segurança e Auditoria
 
+> **+ Etapa 160 (2026-10-19, `d5cd52ea`, Fase 5 `ff3e7d78`): o filtro da aba Perfis de acesso apara e não trava com e-mail nulo (C395)** — ver a seção "Etapa 160", no fim. Nenhuma permissão mudou.
+
 > **Status:** 🟡-forte (**Etapa 25, `6209037..9027c36`: a perna *Segurança* FECHA como
 > funcionalidade** — a movimentação passou a registrar **dispositivo** (`ip`, `ip_proxy`,
 > `user_agent`, com `x-forwarded-for` tratado, alcançando os 28 call sites **e** o estorno do
@@ -1381,3 +1383,11 @@ ticks que ele propunha engolia, no ROLLBACK, a escrita de `db.prepare` que entra
 Testes: `usuarioExclusaoCorrida.api.test.js` (21 — o `index.js` real em pasta vazia, corridas com `Promise.all`, gatilhos de ordem no
 arquivo do teste), `sqliteConcurrency.test.js` (+6, RN-04); o `chatSocketInativoNoServidor` (o cenário estático do `DELETE`) passou a
 ancorar no `execEmTransacao` e no motivo `OK`.
+
+## Etapa 160 — os filtros e as buscas que não casavam (2026-10-19)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa160-filtros-da-fabrica-e-do-almoxarifado.md`. Consertos técnicos, sem regra de acesso nova e sem mexer em saldo: a medição chave por chave das telas do
+Almoxarifado (nenhuma rota ignora uma chave que a tela manda; o defeito estava na comparação).
+
+- [x] **RN-160.06 (C395)** — *"Buscar por nome ou e-mail..."* dos Perfis de acesso pela `casaBusca` — `d5cd52ea`, teste `ff3e7d78`.
+- [ ] **As opções de usuário da Auditoria repetindo o renomeado** — fica (C400).
