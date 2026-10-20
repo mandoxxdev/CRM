@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx';
 import api from '../services/api';
 import { toast } from 'react-toastify';
 import { FiArrowLeft, FiUpload, FiEye, FiSearch } from 'react-icons/fi';
+import { formatarInstanteDoBanco, COM_SEGUNDOS } from '../utils/dataLocal';
 import './Compras.css';
 import './Loading.css';
 
@@ -289,7 +290,7 @@ const ItensFornecedor = () => {
                 <h2 style={{ margin: 0 }}>Planilha – {planilhaSalva.nome}</h2>
                 {planilhaSalva.atualizado_em && (
                   <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
-                    Salva em {new Date(planilhaSalva.atualizado_em).toLocaleString('pt-BR')}
+                    Salva em {formatarInstanteDoBanco(planilhaSalva.atualizado_em, COM_SEGUNDOS)}
                   </p>
                 )}
               </div>
@@ -414,7 +415,7 @@ const ItensFornecedor = () => {
                   <h3 style={{ margin: 0, fontSize: 18 }}>{planilhaSalva.nome}</h3>
                   {planilhaSalva.atualizado_em && (
                     <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
-                      Salva em {new Date(planilhaSalva.atualizado_em).toLocaleString('pt-BR')}
+                      Salva em {formatarInstanteDoBanco(planilhaSalva.atualizado_em, COM_SEGUNDOS)}
                     </p>
                   )}
                 </div>

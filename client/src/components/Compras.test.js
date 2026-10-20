@@ -91,6 +91,10 @@ const PEDIDO_419_NO_PRAZO = {
 //
 // A segunda linha (`21:40`) e de proposito: as 21:40 locais o instante UTC ja e o DIA SEGUINTE,
 // entao ela e a que separa "cortar 10 caracteres" de "converter fuso".
+// **Etapa 170 (B1080): a premissa acima estava errada** — o `created_at` gravado JA E UTC
+// (`CURRENT_TIMESTAMP`): '2026-09-10 21:40:00' sao 18h40 de Brasilia, o mesmo dia, e as duas regras
+// concordam aqui. O caso que as separa e o das 0h-3h UTC (21h-meia-noite em Brasilia), coberto em
+// `datasDoChatDeComprasEDoAlmoxarifadoNoDiaLocal.test.js` — e "cortar" era o ERRADO.
 const FORNECEDORES_E39 = [
   { id: 355, razao_social: 'Parafusos Sul', status: 'ativo', created_at: '2026-09-16 10:33:00' },
   { id: 312, razao_social: 'Aços Vale Ltda', status: 'ativo', created_at: '2026-09-10 21:40:00' },
@@ -246,7 +250,9 @@ test('(b) previsao null e data vazia mostram "-", e o valor com hora vira DD/MM/
   expect(cels[4].textContent).toBe('-'); // previsao_entrega: null
 
   // METADE POSITIVA, no MESMO cenario: `created_at` tem HORA, e `formatDate` tem de cortar os 10
-  // primeiros caracteres — sem converter fuso. A tabela de fornecedores NAO renderiza
+  // primeiros caracteres — sem converter fuso. (Etapa 170, B1080: estava errado — o `created_at` e
+  // UTC e a coluna passou a sair no dia de Brasilia do instante; as duas linhas abaixo dao o mesmo
+  // dia nas duas regras, por isso a asercao nao mudou.) A tabela de fornecedores NAO renderiza
   // `created_at` (medido: as colunas sao Razão Social/CNPJ/Contato/Email/Telefone/Status/Ações);
   // a UNICA chamada de `formatDate` com DATETIME nesta tela e a coluna 'Cadastrado em' da
   // EXPORTACAO (`Compras.js`, `handleExportExcel`). Por isso a metade positiva exporta.
@@ -258,6 +264,7 @@ test('(b) previsao null e data vazia mostram "-", e o valor com hora vira DD/MM/
   expect(linhas).toHaveLength(2);
   expect(linhas[0]['Cadastrado em']).toBe('16/09/2026'); // '2026-09-16 10:33:00'
   // 21:40 locais ja e 2026-09-11 em UTC: esta linha separa "cortar 10 caracteres" de "converter fuso".
+  // (Etapa 170: errado — o valor JA E UTC, 18h40 de Brasilia; nao separa. Ver o comentario de FORNECEDORES_E39.)
   expect(linhas[1]['Cadastrado em']).toBe('10/09/2026'); // '2026-09-10 21:40:00'
 }, 10000);
 

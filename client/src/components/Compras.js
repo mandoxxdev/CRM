@@ -8,6 +8,7 @@ import {
   FiFilter, FiCalendar, FiTrendingUp, FiTrendingDown, FiPrinter
 } from 'react-icons/fi';
 import { exportToExcel } from '../utils/exportExcel';
+import { formatarDataDoBanco } from '../utils/dataLocal';
 import { baixarDocumentoPedido } from '../utils/baixarDocumentoPedido';
 import { SkeletonTable } from './SkeletonLoader';
 import './Compras.css';
@@ -135,7 +136,11 @@ const Compras = () => {
    * `new Date(str)`. NAO use `{ timeZone: 'America/Sao_Paulo' }`: acerta hoje e finge que uma
    * data-only tem fuso.
    *
-   * Valor com hora (`created_at`, `'2026-09-16 10:33:00'`) -> os 10 primeiros caracteres.
+   * Valor com hora (`created_at`, `'2026-09-16 10:33:00'`) -> os 10 primeiros caracteres. **Etapa 170 (B1080): isto estava
+   * errado para o `created_at`** — ele e o `CURRENT_TIMESTAMP` do SQLite, em UTC, e cortar da o dia UTC (das 21h a meia-noite, o de
+   * amanha). A coluna 'Cadastrado em' da exportacao (o unico valor com hora que passava aqui) usa agora `formatarDataDoBanco` (o dia
+   * de Brasilia do instante). Para as colunas SO de data (pedido, previsao, cotacao, validade) esta funcao continua valendo, sem
+   * `new Date`.
    * Valor que nao casa `AAAA-MM-DD` -> devolvido COMO VEIO, sem `new Date`.
    */
   const formatDate = (date) => {
@@ -297,7 +302,9 @@ const Compras = () => {
             'Telefone': f.telefone || '',
             'Telefone vendedor': f.telefone_vendedor || '',
             'Status': f.status || '',
-            'Cadastrado em': formatDate(f.created_at)
+            // Etapa 170 (RN-170.02, B1080): o created_at e o CURRENT_TIMESTAMP (UTC) — o dia de Brasilia do instante, nao os 10
+            // primeiros caracteres (o dia UTC: das 21h a meia-noite, o seguinte). Vazio/ilegivel: o que o formatDate ja devolvia.
+            'Cadastrado em': formatarDataDoBanco(f.created_at, formatDate(f.created_at))
           }));
           nomeArquivo = 'fornecedores';
           break;
