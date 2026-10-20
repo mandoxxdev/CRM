@@ -13063,16 +13063,18 @@ function gerarHTMLOS(os, osItens = []) {
         .replace(/'/g, '&#39;');
     };
 
-    // Função auxiliar para formatar datas
+    // Etapa 169 (RN-169.05, B1077): a data no dia de Brasilia pela regua FUSO_PADRAO, nao pelo TZ do processo. Antes era
+    // `new Date(v).toLocaleDateString`: o 'AAAA-MM-DD' era a meia-noite UTC — com o TZ=America/Sao_Paulo do Dockerfile, a VESPERA no PDF.
+    // Texto -> `dataDoBancoBR` (so data reformatada; instante no dia de Brasilia; ilegivel -> ''); Date (o "hoje" da conferencia) -> o dia de
+    // Brasilia daquele instante (Fase 2 M1: `dataDoBancoBR` so aceita texto).
     const formatDate = (date) => {
       if (!date) return '';
-      try {
-        const d = new Date(date);
-        if (isNaN(d.getTime())) return '';
-        return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      } catch (e) {
-        return '';
+      if (date instanceof Date) {
+        if (Number.isNaN(date.getTime())) return '';
+        const dia = diaLocal.hojeLocalISO(date);
+        return `${dia.slice(8, 10)}/${dia.slice(5, 7)}/${dia.slice(0, 4)}`;
       }
+      return diaLocal.dataDoBancoBR(date);
     };
 
     // Logo GMP e base URL para imagens
