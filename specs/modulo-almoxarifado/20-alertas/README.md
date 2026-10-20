@@ -1,5 +1,7 @@
 # 20 — Alertas Operacionais
 
+> **+ Etapa 163 (2026-10-20, `6502c690`, Fase 5 `407ddfcc`): o mês e a semana das chaves dos avisos no calendário de Brasília (C406, B1044)** — ver a seção "Etapa 163", no fim. O status não muda.
+
 > **Status:** 🟢 no que é viável hoje — **20 de 21 alertas** do checklist original, **mais um que a spec não previa**: a **Etapa 46** acrescentou `NAO_CONFORMIDADE_EXECUCAO_PENDENTE` (a **15ª entrada do registro**), que nasceu do fluxo criado pelas Etapas 45/46 e entrou no checklist abaixo como item novo, pela regra que este próprio checklist manda ("cada alerta novo entra … incluir o alerta no checklist") (Etapa 16 somou 7 pela varredura, Etapa 17 somou 4 no ato/vigília, **Etapa 39 somou 1 — o primeiro que lê tabela CORE**, a **Etapa 42 somou o 19o** (`PEDIDO_COMPRA_PARCIAL`, que fechou a lacuna mais antiga desta lista) e a **Etapa 43 somou o 20o**, `NAO_CONFORMIDADE_ABERTA` — documento de nao conformidade sem decisao, o primeiro alerta que cobra um ATO HUMANO sobre um documento que o proprio sistema abriu; 2 itens SAÍRAM do checklist dizendo por quê — ver abaixo), **central no front entregue** e o motor único em duas parcelas (`alertRegistry` + modo evento com `dispararAlertaRegistrado`). **Restam só os 3 com lacuna nas features donas** — nenhum deles é bloqueio deste arquivo. · **Spec original:** seção 26
 > **Última atualização:** 2026-09-30 (**Etapa 46: a 15ª entrada do registro, `NAO_CONFORMIDADE_EXECUCAO_PENDENTE`** — ver o parágrafo dela acima e o item novo no checklist; e o comentário da `NAO_CONFORMIDADE_ABERTA` corrigido à vista, porque ele dizia que "NC decidida sai da condição sozinha", verdade na 43 e vencida na 45). Antes: 2026-09-28 (Etapa 43: a entrada **`NAO_CONFORMIDADE_ABERTA`** — `9b6f205`, com SQL proprio (`listarNaoConformidadesParadas`) em vez de reusar `listarNaoConformidades`, que clampa em 100 e faria a varredura diaria ignorar a 101a NC parada em silencio; e o cartao `DIVERGENCIA_RECEBIMENTO` passou a EXCLUIR item que ja tem NC, virando a rede de seguranca do gancho nao fatal — a exclusao mora no `listar` da ENTRADA, nunca na funcao compartilhada, porque a Fase 2 mediu que mexer nela silencia o cenario A1 da Etapa 17. Design e plano: `docs/superpowers/{specs,plans}/2026-09-28-almoxarifado-etapa43-nao-conformidade-numerada*`. Antes — Etapa 42: a entrada **`PEDIDO_COMPRA_PARCIAL`** — a fonte `dcda360`, a entrada e o cartao no range da etapa; design `docs/superpowers/specs/2026-09-27-almoxarifado-etapa42-recebimento-fecha-pedido-design.md`, plano `docs/superpowers/plans/2026-09-27-almoxarifado-etapa42-recebimento-fecha-pedido.md`. Antes — Etapa 39: a entrada **`PEDIDO_COMPRA_ATRASADO`** — `ddbc18f`, `33031ac`, `8f3db94`, dentro do range `39ea9d2..19ebf7d`; design `docs/superpowers/specs/2026-09-16-crm-etapa39-pedido-acompanhado-design.md`, plano `docs/superpowers/plans/2026-09-16-crm-etapa39-pedido-acompanhado.md`. Antes — Etapa 17: modo evento + 4 alertas — `d65d81b..e51ca79`; design `docs/superpowers/specs/2026-08-28-almoxarifado-etapa17-alertas-evento-design.md`, plano `docs/superpowers/plans/2026-08-28-almoxarifado-etapa17-alertas-evento.md`. Antes — Etapa 16: registro + varredura + central — `6bed5e2..ed5f032`; design `docs/superpowers/specs/2026-08-28-almoxarifado-etapa16-alertas-design.md`, plano `docs/superpowers/plans/2026-08-28-almoxarifado-etapa16-alertas.md`)
 > **Etapa 46 (2026-09-30, `950c2f5` + `5a975a0`) — a 21ª entrada do registro, e ela cobra um ATO
@@ -173,3 +175,15 @@ Todos os alertas preventivos da spec, com motor único (verificação periódica
 ## Dependências
 
 - 19 (canal de envio) · cada alerta depende da sua feature dona.
+
+## Etapa 163 — as chaves e as datas dos avisos no calendário de Brasília (2026-10-20)
+
+Plano: `docs/superpowers/plans/2026-10-20-almoxarifado-etapa163-a-atividade-editada-e-as-validades-no-dia-de-brasilia.md`. Consertos técnicos, sem regra de acesso nova; o status da feature não muda.
+
+- [x] **RN-163.09 (C406, B1044)** — a chave mensal de *Estoque sem consumo*, *Estoque excessivo* e *Lote sem certificado* (`mesAtual`) usa o mês
+  de Brasília, e a semanal de *Material sem endereço* (`semanaIso`) a semana ISO do dia de Brasília — no último dia do mês (no domingo), das
+  21h, o aviso do período seguinte não sai mais 3 h antes. As duas funções exportadas para o teste — `6502c690`.
+- [x] **Calibração vencendo, Lote vencendo, Remessa vencida e o lembrete de ferramenta** — as réguas das features 16, 10 e 14 (RN-163.04, .05,
+  .07, .08) — `6502c690`.
+
+Continua 🟢.

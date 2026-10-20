@@ -267,7 +267,11 @@ regra do CLAUDE.md (B441) **não** pega a trava, e esta etapa não muda isso.
    (teto e piso) que nenhuma massa tocava.
 3. **Paralelismo:** **0** galhos de código em paralelo (a T3 era uma função — o condutor fez); **3** leitores na Fase 0, **1** revisor na Fase
    2, **3** revisores em paralelo na Fase 5 (o r3 na worktree própria, 82 rodadas sob a trava) — **0** incidente de trava, **0** retrabalho.
-4. **Defeito que escapou:** *(preencher na Etapa 163)*.
+4. **Defeito que escapou:** **0 de código** até o fechamento da Etapa 163 (que mexeu nas réguas vizinhas — as validades — e cujos três
+   revisores da Fase 5 não acharam defeito nas réguas da 162). **1 de medição:** a C406 desta etapa listava *"o vencimento da conta a pagar sem
+   data de entrada"* como defeito vivo — **estava errado**: o padrão é inalcançável (o processamento recusa a nota sem data de entrada antes,
+   `receiptService.js:1387`/`:1946`); e a C407 descrevia um gesto de tela (*"o formulário de edição não manda"*) que não existe — a tela de
+   Atividades não abre a edição (Fase 0 da 163).
 
 ## Próxima tarefa detalhada — Etapa 163
 

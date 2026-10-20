@@ -775,7 +775,7 @@ As recusas dizem qual é o problema:
 
 Mudar a situação é feito em **Almoxarifado → Lotes e Séries**, botão **Mudar status** da linha. A **justificativa é obrigatória** — sem ela o botão Confirmar não habilita, e o servidor recusa com *"justificativa obrigatoria para mudar o status do lote"*. Toda mudança fica na auditoria, com o valor anterior, o novo e o motivo.
 
-Repare que **"Vencido" não é uma situação**. Vencimento é calculado na hora da leitura, comparando a data de validade com a data de hoje — e é um eixo independente da situação. Um lote pode estar Ativo e vencido, ou Bloqueado e vencido, ao mesmo tempo.
+Repare que **"Vencido" não é uma situação**. Vencimento é calculado na hora da leitura, comparando a data de validade com a data de hoje — o dia do horário de Brasília: o lote fica vencido a partir do dia **seguinte** ao da validade, então o lote que vence hoje ainda sai até a meia-noite — e é um eixo independente da situação. Um lote pode estar Ativo e vencido, ou Bloqueado e vencido, ao mesmo tempo.
 
 ### 4.3 Validade, material vencido e liberação de vencimento
 
@@ -1183,7 +1183,9 @@ hoje —, as *concluídas no mês* e a disponibilidade de hoje) e o *presente ho
 colaborador *"Disponível"* ou *"Parado"*; sem ela, *"Ausente"*). Os formulários de **Presença**, **Hora extra**, **Ordem de serviço**
 (também a aberta pelo Comercial a partir de uma proposta), **Ordem de produção** e **Atividade** vêm com a data de hoje (a atividade, com a
 hora de agora), e a ordem de produção criada sem data planejada recebe a de hoje. A coluna *Data* da Presença e das Horas Extras mostra o
-dia lançado. Em **Colaboradores**, o seletor *Setor* oferece todos os setores que a tela já mostrou (não encolhe ao filtrar), e o filtro
+dia lançado. Em **Atividades**, o botão **Finalizar** conclui a atividade com a hora de agora; não há edição de atividade pela tela, e salvar
+uma atividade (pelas integrações) muda só os campos enviados — a concluída não volta a *em andamento* nem perde o fim e as horas reais.
+Em **Colaboradores**, o seletor *Setor* oferece todos os setores que a tela já mostrou (não encolhe ao filtrar), e o filtro
 *Trabalho* filtra a lista na tela, sem pedir de novo.
 
 ### 5.2e Usuário desativado ou excluído
@@ -5555,6 +5557,8 @@ A remessa com **prazo previsto de retorno** já vencido e material ainda lá for
 
 > *"O prazo combinado com o terceiro já passou e ainda há material lá fora"*
 
+Vencida é a remessa **enviada** (ou com retorno parcial) cujo prazo é **anterior a hoje** — o dia do horário de Brasília: a de prazo hoje só fica vencida no dia seguinte. A mesma régua vale para o filtro de vencidas e para o aviso por e-mail.
+
 ### 17.10 Anexos do item da remessa
 
 Abrindo uma remessa, **cada linha da tabela de itens** tem um ícone de **clipe** (*"Anexos e documentos deste item"*), que abre a janela **Anexos do item da remessa**, identificada pelo material daquele item. É onde fica o **certificado do serviço** — galvanização, pintura, tratamento térmico — e o laudo que volta com a peça.
@@ -5988,7 +5992,7 @@ campo único "última calibração" na ferramenta: a validade é sempre lida do 
 recente**.
 
 Uma ferramenta que exige calibração só empresta se a calibração mais recente ainda estiver
-**dentro da validade**. Sem nenhum registro, ou com a validade já passada, o empréstimo é
+**dentro da validade** — até o fim do próprio dia da validade, no horário de Brasília (a mesma régua vale para a medição na inspeção). Sem nenhum registro, ou com a validade já passada, o empréstimo é
 recusado:
 > `Ferramenta com calibração vencida ou sem calibração registrada`
 
@@ -5998,8 +6002,10 @@ se não for, o registro é recusado:
 > `Data de validade deve ser posterior à data de calibração`
 
 O **painel de calibrações** (aba Calibrações) lista as ferramentas que exigem calibração,
-separadas em **vencidas** e **a vencer** (dentro do prazo configurável, 30 dias por padrão). Uma
-ferramenta que nunca foi calibrada aparece na lista de vencidas.
+separadas em **vencidas** e **a vencer** (dentro do prazo configurável, 30 dias por padrão), com os dias que faltam contados a partir de hoje
+(a que vence hoje aparece em *a vencer* com 0 dia; a de ontem, em *vencidas* com −1). Uma
+ferramenta que nunca foi calibrada aparece na lista de vencidas. Um empréstimo fica **vencido** a partir do dia seguinte ao da devolução
+prevista.
 
 ### 21.4 Avaria e perda
 
@@ -6297,7 +6303,7 @@ falha do servidor de e-mail nunca trava uma movimentação, uma devolução ou u
   em Configurações; ela vem desligada de fábrica. O e-mail traz tipo, número, data/hora,
   usuário, material, quantidade, **saldo anterior e posterior**, lote e séries quando houver,
   projeto/OS/cliente, motivo, justificativa e um link direto para o livro de movimentações.
-- **Ferramenta com devolução vencida** — um lembrete por dia, por empréstimo vencido.
+- **Ferramenta com devolução vencida** — um lembrete por dia (o dia do horário de Brasília), por empréstimo vencido.
 - **Solicitações de compra geradas** pela tela de Reposição — um único e-mail-resumo por
   geração, listando materiais e quantidades.
 - **Devolução que ficou parcial** — quando parte de uma devolução grava e o restante é
@@ -6308,7 +6314,7 @@ falha do servidor de e-mail nunca trava uma movimentação, uma devolução ou u
   inativo e material de cliente não geram esse aviso. A régua é o **saldo físico**: material
   totalmente reservado ainda está na prateleira e não conta como zerado.
 - **Lote vencendo** — varredura diária dos lotes ativos com saldo cuja validade está dentro da
-  janela configurada (30 dias de fábrica), **incluindo lotes já vencidos com saldo**. Um aviso
+  janela configurada (30 dias de fábrica, contados de hoje), **incluindo lotes já vencidos com saldo**. Um aviso
   por validade: mudou a validade do lote, pode avisar de novo; no mesmo dia seguinte, não.
   Lote cujo vencimento foi **liberado** por decisão registrada não entra.
 - **Remessa a terceiro vencida** — varredura diária pela mesma régua da tela de remessas.
@@ -6528,7 +6534,7 @@ Um detalhe que o operador precisa entender: a janela de eventos olha a **última
 
 **Uma nota de operação que vale saber antes de receber o aviso.** Quem vê a central — e recebe o e-mail de *Execução pendente* — é quem **executa** (Administrador, Almoxarife, Gestor e Compras); quem **cancela** o documento é a **Qualidade**, que não vê a central. É exatamente por isso que o texto do aviso **diz o caminho** em vez de só cobrar: sem essa linha, o único destinatário do aviso seria alguém sem nenhuma porta de saída para o documento — a execução recusada e o cancelamento fora do seu perfil. Na prática: Compras recebe o aviso, vê que a execução é impossível e pede à Qualidade que cancele o documento com o motivo.
 
-**E-mail: um aviso por situação, não um por dia.** A varredura roda diariamente, mas cada situação gera um único e-mail: calibração avisa uma vez por validade; requisição atrasada e reserva parada, uma vez cada; sem consumo e excessivo re-lembram no máximo uma vez por mês enquanto persistirem; materiais sem endereço é um resumo semanal com a contagem, e lotes sem certificado um resumo mensal. Nos avisos de ato, cada fato avisa uma vez: uma inspeção reprovada, uma conferência concluída, e — no caso da quantidade recebida — cada valor divergente diferente. Corrigir a quantidade e errar de novo com outro número é fato novo e avisa outra vez; salvar o mesmo número duas vezes, não. Os avisos saem para a mesma lista de e-mails dos alertas de estoque, e o interruptor geral de e-mail dos alertas desliga todos — a central, por ser leitura ao vivo, continua funcionando mesmo com o e-mail desligado.
+**E-mail: um aviso por situação, não um por dia.** A varredura roda diariamente, mas cada situação gera um único e-mail: calibração avisa uma vez por validade; requisição atrasada e reserva parada, uma vez cada; sem consumo e excessivo re-lembram no máximo uma vez por mês enquanto persistirem; materiais sem endereço é um resumo semanal com a contagem, e lotes sem certificado um resumo mensal (o mês e a semana são os do calendário de Brasília: no último dia do mês, à noite, o aviso ainda é o do mês corrente). Nos avisos de ato, cada fato avisa uma vez: uma inspeção reprovada, uma conferência concluída, e — no caso da quantidade recebida — cada valor divergente diferente. Corrigir a quantidade e errar de novo com outro número é fato novo e avisa outra vez; salvar o mesmo número duas vezes, não. Os avisos saem para a mesma lista de e-mails dos alertas de estoque, e o interruptor geral de e-mail dos alertas desliga todos — a central, por ser leitura ao vivo, continua funcionando mesmo com o e-mail desligado.
 
 **Quem vê.** A central é dos perfis Administrador, Almoxarife, Gestor e Compras (ela expõe quantidades exatas e valor parado em reais). Perfil sem a permissão vê o painel *"Dados indisponíveis no momento"* — nunca uma central vazia.
 

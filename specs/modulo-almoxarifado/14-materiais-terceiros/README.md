@@ -1,5 +1,7 @@
 # 14 — Materiais Enviados a Terceiros
 
+> **+ Etapa 163 (2026-10-20, `6502c690`, Fase 5 `407ddfcc`): a remessa vencida pelo dia de Brasília (o selo, o filtro, a /vencidas e o aviso — C406, B1043)** — ver a seção "Etapa 163", no fim. O status não muda.
+
 > **Status:** 🟢 **completa** — a feature fecha com as **duas metades**:
 > **Etapa 8b** (`0a01124..b176212`, 2026-08-12) — remessa e retorno do **MESMO** material, o que
 > volta é o que saiu (galvanizar, pintar, tratar); e **Etapa 8c** (`753d23b..61c6f52`, 2026-08-13) —
@@ -519,3 +521,14 @@ sem a opcao recusa"*; `portasAvulsasCaixaIntegracao.api.test.js` — *"[97 T3 C1
 Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa161-respostas-velhas-e-o-dia-local.md`. Consertos técnicos, sem regra de acesso nova e sem mexer em saldo; o status da feature não muda.
 
 - [x] **RN-161.09 (C399, B1031)** — a *Nova remessa*: o campo *"Buscar terceiro (nome ou CNPJ)..."* procura no servidor (a mesma rota do Recebimento) em vez dos 50 primeiros fixos; o terceiro já escolhido continua nas opções (a remessa grava o `fornecedor_id`) — `6885caf9`, `3acfec05`.
+
+## Etapa 163 — o prazo da remessa no dia de Brasília (2026-10-20)
+
+Plano: `docs/superpowers/plans/2026-10-20-almoxarifado-etapa163-a-atividade-editada-e-as-validades-no-dia-de-brasilia.md`. Consertos técnicos, sem regra de acesso nova e sem mexer em saldo; o status da feature não muda.
+
+- [x] **RN-163.08 (C406, B1043)** — remessa vencida = `ENVIADA`/`RETORNO_PARCIAL` com `prazo_previsto` **anterior** ao dia de referência (o
+  `referencia` da query, ou o hoje de Brasília — era `COALESCE(?, 'now')`, o dia UTC): o selo `vencida` da lista, o filtro `vencidas=1`, a rota
+  `/remessas-terceiros/vencidas` (a resposta continua com `referencia: <o da query> || null`) e o aviso *Remessa vencida*; o dia lido uma vez
+  para o selo e o filtro — `6502c690`.
+
+Continua 🟢.

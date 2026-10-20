@@ -1,5 +1,7 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 163 (2026-10-20, `6502c690`, Fase 5 `407ddfcc`): o lote vencido pelo dia de Brasília (a lista, a saída, a separação, a liberação e o aviso de vencendo — C406, B1042; porta de saldo só na data)** — ver a seção "Etapa 163", no fim. O status não muda.
+
 > **Status:** 🟢 — **as três partes da feature estão entregues**: lote (Etapa 6, 2026-08-09), série
 > (Etapa 6b, 2026-08-11) e etiquetas com QR (Etapa 6c, 2026-08-11). A feature 10 fica completa
 > **exceto pelas pendências declaradas** nas três etapas (ver as seções de pendências, mais abaixo
@@ -436,7 +438,9 @@ lote para decidir nada.
 
   > ⚠️ **Correção (2026-08-09): `VENCIDO` não é status.** Esta linha pedia
   > `ativo/bloqueado/reprovado/vencido`. Vencimento é **derivado** de `data_validade <
-  > date('now')`, calculado na leitura. Gravar `VENCIDO` exigiria um cron para virar o status à
+  > date('now')`, calculado na leitura. *(Etapa 163: o "hoje" desta régua **não** era o `date('now')` do banco — o `isVencido` usava
+  > o `toISOString`, o dia UTC, e por isso o lote que vence hoje já não saía das 21h à meia-noite (C406). Desde `6502c690` é o hoje de
+  > Brasília — `diaLocal.hojeLocalISO()`. A frase acima fica como registro da decisão "derivado, não status", que continua valendo.)* Gravar `VENCIDO` exigiria um cron para virar o status à
   > meia-noite e criaria um estado que diverge da data toda vez que o cron falhasse — mais uma
   > coluna mentindo, que é o problema que esta spec inteira documenta. Derivado não diverge.
   > **Implementado assim** (`lotService.isVencido`), e o teste `vencido e derivado da data, nao e
@@ -950,5 +954,21 @@ Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa120-o-lancamento-que
   reentraram no estoque — a devolucao ja repos o material"*) e pela exclusão da requisição (C251, `051094a3`, spec 04).
 - [ ] **Fora (declarado):** reativação antes da etapa (sem a coluna — **A68**); a Entrada de volta estornada com a série desligada
   faz a saída recusar (RN-08b; a C225 deixa as séries *Em estoque* com o físico 0 — caminho: Ajuste).
+
+Continua 🟢.
+
+## Etapa 163 — a validade do lote no dia de Brasília (2026-10-20)
+
+Plano: `docs/superpowers/plans/2026-10-20-almoxarifado-etapa163-a-atividade-editada-e-as-validades-no-dia-de-brasilia.md`. Consertos técnicos, sem regra de acesso nova; **porta de saldo tocada só na régua da data** (a saída e a separação recusam lote
+vencido — as guardas, a ordem delas, as literais e a trava ficam). O status da feature não muda.
+
+- [x] **RN-163.06 (C406, B1042)** — o padrão do `hoje` do `isVencido` e da lista de lotes (`GET /materiais/:id/lotes`: `vencido`/`elegivel`) é o
+  dia de Brasília: o lote que vence hoje **sai** até a meia-noite e ainda não tem vencimento para liberar (*"Lote nao esta vencido; nao ha
+  vencimento para liberar"*); o de ontem é recusado na saída com a literal de sempre — `6502c690` (Fase 5: `407ddfcc`).
+- [x] **RN-163.07 (C406, B1042)** — o aviso *Lote vencendo*: `data_validade <= hoje de Brasília + alerta_lote_vencendo_dias` (sem piso) — `6502c690`.
+- [x] **T4** — o mesmo lote de validade hoje: elegível, sai, a liberação recusa; o de ontem: vencido, a saída recusa, liberado sai
+  (`validadesNoDiaLocal.api.test.js`) — `6502c690`.
+- [ ] **Fora (declarado):** a separação da requisição com lote usa o mesmo `isVencido` (`requisitionService.js:950`) e não tem cenário próprio às
+  22h — provada pela mesma função.
 
 Continua 🟢.

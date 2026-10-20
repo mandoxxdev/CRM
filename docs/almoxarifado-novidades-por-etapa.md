@@ -11,13 +11,19 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-20):** **Etapa 162 fechada** (consertos técnicos no Almoxarifado, sem regra de acesso nova e sem
+> **Onde o desenvolvimento está (2026-10-20):** **Etapa 163 fechada** (consertos técnicos no Operacional e no Almoxarifado, sem regra de
+> acesso nova; **a atividade editada e as validades no dia de Brasília** — o PUT de uma atividade de colaborador grava só o que veio (não
+> reabre a concluída nem apaga o fim e as horas — **C407** resolvido, **B1040**); a calibração, o empréstimo, o lote, a remessa e as chaves dos
+> avisos mensais e semanais contam o dia de Brasília (**C406** resolvido, **B1041** a **B1044** — o lote que vence hoje sai até a meia-noite: a
+> porta de saldo só mudou na data); os avisos novos **C408** (a edição de atividade não tem tela e ignora OS/início) e **C409** (a mesma régua
+> de data em Frotas e no Financeiro)); a próxima é a **164** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 162 fechada** (consertos técnicos no Almoxarifado, sem regra de acesso nova e sem
 > mexer em saldo: **o dia de Brasília nos relatórios, no painel, nos indicadores, nos alertas e nas reservas** — os nove relatórios e o
 > painel contam o dia de Brasília e a planilha mostra a hora de Brasília (**C401** resolvido, **B1033**, **B1039**); o indicador *no prazo* e o
 > alerta *Requisição atrasada* também (**B1037**); a reserva que vence hoje não é mais liberada à noite e a criada à noite não ganha um dia
 > (**C404** resolvido, **B1035**); os dias em espera das Inspeções (**C405** resolvido, **B1036**); os indicadores do Operacional medidos e não
 > mexidos — a tela não é montada (**C403**, **B1034**); **B1033** a **B1039**; os avisos novos **C406** (as outras datas no dia universal) e
-> **C407** (editar uma atividade apaga o fim)); a próxima é a **163** — ver "Onde estamos e o que vem a seguir".
+> **C407** (editar uma atividade apaga o fim)); a próxima era a **163**.)*
 > *(Antes: **Etapa 161 fechada** (consertos técnicos na Fábrica e no Almoxarifado, sem regra de
 > acesso nova e sem mexer em saldo: **as listas que mostravam o resultado de um filtro anterior, o dia que virava às 21h e os seletores
 > incompletos** — treze listas e os Relatórios só mostram a resposta do último pedido (**C396** resolvido); o dia da Fábrica e o filtro das
@@ -3937,7 +3943,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B1039; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B1045; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -11451,6 +11457,49 @@ dia de Brasília, a linha pareceria fora do período pedido. **Escolhido:** a pl
 vocês: as da **B957**, a **B988** e a **B989**; a **B1002** continua pedindo um olhar; a **B1013** (o acento nas buscas); a **C398** (o filtro
 *Status* dos Materiais); a **B1033** a **B1037** e a **B1039** são reversíveis (a **B1027** foi respondida pela **B1033**).
 
+**B1040 (NOVA, da Etapa 163; do Operacional) — salvar uma atividade de colaborador grava só o que foi enviado (C407).** **Escolhido:** cada
+campo da atividade (tipo, descrição, status, fim, horas reais, observações) só muda se vier no pedido; o que vier vazio continua zerando
+(e o status vazio continua *em andamento*), como antes. **Muda:** salvar uma atividade concluída sem mandar o status, o fim e as horas não a
+reabre mais nem apaga o fim e as horas; concluir mandando só o status deixa de dar erro. **Medido:** a tela de Atividades **não tem** botão
+de editar — o formulário de edição existe, mas nenhum gesto o abre; o *Finalizar* sempre mandou a linha inteira. O defeito era do servidor,
+para qualquer integração que mande parte dos campos. **Descartado:** fazer o formulário mandar os três campos (outro chamador parcial
+continuaria apagando); ligar um botão *Editar* e passar a gravar a OS, o início e as horas previstas (é produto — **C408**). **Reversível:**
+`7bca3f13`.
+
+**B1041 (NOVA, da Etapa 163; do Almoxarifado) — a calibração e o empréstimo de ferramentas no dia de Brasília (C406).** **Escolhido:** a
+calibração vale até o fim do dia da validade em Brasília (o empréstimo, a medição na inspeção e o selo da lista); o painel de calibrações e o
+alerta *Calibração vencendo* contam os dias a partir de hoje de Brasília; o empréstimo só fica atrasado (o filtro *vencidos*, o lembrete por
+e-mail e os dias de atraso) no dia seguinte ao previsto. A chave diária do lembrete passa ao dia de Brasília **junto** com o filtro. **Os
+números mudam:** das 21h à meia-noite, a calibração que vale até hoje continua emprestando e medindo; o painel conta um dia a mais; o
+empréstimo que volta hoje não é atrasado. **No dia do deploy:** só se a varredura anterior tiver rodado depois das 21h, o lembrete do dia
+seguinte pode sair um a menos (uma vez). **Descartado:** só a calibração (o painel diria *vencida* da que ainda empresta). **Reversível:**
+`6502c690`.
+
+**B1042 (NOVA, da Etapa 163; do Almoxarifado) — a validade do lote no dia de Brasília (C406; porta de saldo, só na data).** **Escolhido:** o
+lote só fica vencido no dia seguinte ao da validade, em Brasília — na saída para consumo, na separação da requisição, na liberação do
+vencimento, no selo *vencido*/*elegível* da lista de lotes e no aviso *Lote vencendo* (o teto da janela conta de hoje de Brasília). Nada
+mais muda na saída: a situação continua verificada antes, as mensagens são as mesmas, as baixas de descarte continuam isentas, e a trava por
+material não muda. **Os números mudam:** das 21h à meia-noite, o lote que vence hoje **ainda sai** para consumo (e não pode ter o vencimento
+liberado, porque não está vencido); o aviso de vencendo anda um dia no teto. **Descartado:** não mexer (a lista de lotes e a saída
+discordariam da tela); guardar a validade com hora (mudaria o formulário). **Reversível:** `6502c690`.
+
+**B1043 (NOVA, da Etapa 163; do Almoxarifado) — o prazo da remessa a terceiro no dia de Brasília (C406).** **Escolhido:** a remessa só fica
+*Vencida* no dia seguinte ao prazo — no selo da lista, no filtro, na consulta de vencidas e no aviso por e-mail; a data de referência
+informada na consulta continua valendo. **Muda:** a remessa de prazo hoje não aparece vencida das 21h à meia-noite. **Descartado:** deixar.
+**Reversível:** `6502c690`.
+
+**B1044 (NOVA, da Etapa 163; do Almoxarifado) — o mês e a semana dos avisos no calendário de Brasília, e a conta a pagar.** **Escolhido:** os
+avisos mensais (*Estoque sem consumo*, *Estoque excessivo*, *Lote sem certificado*) contam o mês de Brasília e o semanal (*Material sem
+endereço*) a semana de Brasília. **Muda:** no último dia do mês (no domingo), das 21h à meia-noite, o aviso do mês (da semana) seguinte não
+sai mais 3 h antes. (O plano chegou a dizer "um aviso a mais na virada"; estava errado — a revisão do plano corrigiu: é o mesmo aviso,
+adiantado.) E o vencimento padrão da conta a pagar gerada pelo recebimento passa ao dia de Brasília — **sem efeito hoje**: o processamento da
+nota já recusa a nota sem data de entrada (*"Preencha antes de processar: ... data de entrada da nota ..."*), então esse padrão nunca é
+usado; ficou na forma segura. **Descartado:** apagar o padrão. **Reversível:** `6502c690`.
+
+**B1045 (NOVA, da Etapa 163) — a próxima etapa (164).** Ver a "próxima tarefa detalhada" no plano da Etapa 163. As decisões que esperam
+vocês: as da **B957**, a **B988** e a **B989**; a **B1002** continua pedindo um olhar; a **B1013** (o acento nas buscas); a **C398** (o filtro
+*Status* dos Materiais); a **C408** (ligar a edição de atividades — o que ela grava); a **B1040** a **B1044** são reversíveis.
+
 **B898 (NOVA, da Etapa 138) — a próxima etapa (139).** Ver a "próxima tarefa detalhada" no plano da Etapa 138. A **B853** (com a
 **C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
@@ -14822,17 +14871,34 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 405. **✅ RESOLVIDO NA ETAPA 162 (RN-162.08, B1036; `d5c430b4`) — NOVO (da revisão da Etapa 161; do Almoxarifado, anterior a ela; lido no código) — os
      "dias em espera" das Inspeções pendentes contam com três horas de erro** (a hora do recebimento lida como local). Perto da virada do dia, a
      contagem pode mostrar um dia a mais ou a menos. **O que fazer:** nada. *(Contam da hora real do recebimento, em blocos de 24 h.)*
-406. **NOVO (da medição da Etapa 162; do Almoxarifado, anterior a ela; lido no código) — outras datas sem hora ainda são comparadas com o
-     dia universal.** O vencimento do empréstimo de ferramenta e a validade da calibração (as emprestadas vencidas, o lembrete, os dias
+406. **✅ RESOLVIDO NA ETAPA 163 (RN-163.03 a .09, B1041 a B1044; `6502c690`, `407ddfcc`) — NOVO (da medição da Etapa 162; do Almoxarifado, anterior a
+     ela; lido no código) — outras datas sem hora ainda são comparadas com o dia universal.** *(A calibração, o empréstimo, o lote, a remessa e
+     as chaves dos avisos contam o dia de Brasília. **O vencimento da conta a pagar sem data de entrada estava errado nesta lista:** esse caso
+     não acontece — o processamento recusa a nota sem data de entrada antes de gerar a conta. O mesmo tipo de régua continua em Frotas e no
+     Financeiro — **C409**. O texto abaixo fica como registro.)* O vencimento do empréstimo de ferramenta e a validade da calibração (as emprestadas vencidas, o lembrete, os dias
      para vencer, a calibração vigente exigida na inspeção), a validade de lote (o selo *vencido* do lote e o aviso de lote vencendo), o prazo
      da remessa a terceiro (o aviso de remessa atrasada), o mês do alerta mensal e o vencimento da conta a pagar gerada pelo recebimento quando a
      nota não tem data de entrada: entre 21h e meia-noite, o "hoje"
      é o de amanhã. **O que fazer:** à noite, ler esses avisos como os do dia seguinte. Candidata a uma etapa futura.
-407. **NOVO (da medição da Etapa 162; da Fábrica, anterior a ela; lido no código, não reproduzido) — editar uma atividade de colaborador apaga
-     o fim, as horas reais e volta o status para *"Em andamento"*.** O formulário de edição não manda esses três campos e o servidor grava o
+407. **✅ RESOLVIDO NA ETAPA 163 (RN-163.01, B1040; `7bca3f13`) — NOVO (da medição da Etapa 162; da Fábrica, anterior a ela; reproduzido
+     pela rota na Etapa 163) — editar uma atividade de colaborador apaga o fim, as horas reais e volta o status para *"Em andamento"*.** *(O
+     servidor grava só o que vier. **Isto dizia "o formulário de edição não manda esses três campos" como se o gesto existisse; estava
+     incompleto:** a tela de Atividades não tem botão de editar — o defeito valia para qualquer pedido com parte dos campos, e concluir mandando
+     só o status dava erro. O texto abaixo fica como registro.)* O formulário de edição não manda esses três campos e o servidor grava o
      que não veio como vazio (o status, como *"em andamento"*). Uma atividade concluída e editada (para corrigir a descrição, por exemplo) volta
      a aparecer em andamento, sem a hora de fim. **O que fazer:** não editar atividade concluída; se precisar, concluir de novo. Candidata a
      uma etapa futura.
+408. **NOVO (da medição da Etapa 163; da Fábrica, anterior a ela; lido no código) — a edição de atividade de colaborador não tem tela, e o
+     servidor ignora parte do que ela mandaria.** O formulário *Editar Atividade* existe, mas nenhum botão da lista de Atividades o abre (só
+     *Nova Atividade* e *Finalizar*). E o servidor, ao salvar uma atividade, **não grava** a OS, o item, o início, as horas previstas nem o
+     colaborador — responde *"Atividade atualizada com sucesso"* sem mudá-los; reabrir uma atividade (status *em andamento*) não marca o
+     colaborador como ocupado de novo; o *Finalizar* grava a hora de fim no padrão universal (o início é a hora de Brasília digitada) e as
+     horas reais nunca são calculadas. **O que fazer:** nada no dia a dia — nenhuma tela mostra o fim nem as horas reais. Ligar a edição e
+     decidir o que ela grava é pergunta de produto.
+409. **NOVO (da revisão do plano da Etapa 163; de Frotas e do Financeiro, anteriores a ela; lido no código, não medido a fundo) — a mesma régua
+     de data no dia universal fora do Almoxarifado.** Os vencimentos de Frotas (documentos, manutenções, multas) e do Financeiro ainda
+     comparam a data sem hora com o dia universal: das 21h à meia-noite, o que vence hoje já aparece vencido. **O que fazer:** à noite, ler
+     esses vencimentos como os do dia seguinte. Candidata a uma etapa futura (medir as telas antes).
 ### D. Limitações declaradas— são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -16164,6 +16230,14 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(163) A atividade editada e as validades, o que ficou de fora.** A edição de atividade continua sem tela, e o servidor continua sem
+  gravar a OS, o início, as horas previstas e o colaborador (**C408**); reabrir uma atividade não marca o colaborador ocupado; o fim gravado
+  pelo *Finalizar* continua no padrão universal. As réguas de data de Frotas e do Financeiro (**C409**). A separação da requisição com lote
+  usa a mesma régua da saída e não tem cenário próprio às 22h. Ficam como estavam (achados da revisão, de antes da etapa): as horas reais
+  iguais a 0 enviadas como número são gravadas vazias; a data de referência da consulta de remessas vencidas não é conferida (um texto que não
+  é data, ou um 29 de fevereiro inexistente, muda o resultado sem erro); uma validade gravada fora do formato AAAA-MM-DD (dados antigos)
+  é lida de jeitos diferentes pelo lote e pelas outras réguas. O deslocamento do fuso é o de agora (sem horário de verão desde 2019). Nenhuma
+  porta de permissão mudou; a saída de lote mudou só na data.
 - **(162) O dia de Brasília nos relatórios e nas reservas, o que ficou de fora.** Os indicadores do Operacional (**C403**, **B1034** — o
   painel não é montado); as outras datas sem hora no dia universal (ferramentas, calibração, lotes, remessas — **C406**); os dias em espera em
   blocos de 24 h (**B1036**); o deslocamento do fuso é o de agora para todos os registros (sem horário de verão desde 2019). A expiração
@@ -17237,6 +17311,14 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(163) Nenhum clique foi dado no navegador, e a regra das 21h só foi provada com o relógio adiantado.** As rotas foram provadas no próprio
+processo de teste (no fuso universal e com o relógio adiantado para as 22h de Brasília do último dia do mês seguinte, de modo que o dia de
+Brasília, o universal e o do banco sejam três dias e dois meses diferentes) e a atividade pelo servidor de verdade em pasta vazia. Os seis
+testes antigos mudados rodaram também com o relógio adiantado para as 22h30, verdes; em dois deles (o da calibração e o da medição) a versão
+de antes também passa nesse relógio, porque dependem da data do banco, que não se adianta — a mudança deles foi lida, não provada às 22h. Vale conferir à mão, **depois das 21h**: em **Almoxarifado → Ferramentas**, uma
+ferramenta com calibração válida até hoje empresta; em **Lotes e Séries**, um lote que vence hoje aparece sem o selo *vencido* e sai numa
+**Movimentação** de saída; uma remessa com prazo hoje não aparece *Vencida* em **Remessas a terceiros**.
 
 **(162) Nenhum clique foi dado no navegador, e a regra das 21h só foi provada com o relógio adiantado.** As rotas foram provadas pelo
 servidor de verdade (em pasta vazia, no fuso universal e com o relógio adiantado para as 22h de Brasília de daqui a dois dias); a tela das
@@ -32689,9 +32771,70 @@ ela vence em 29/10 (antes, 30/10).
   administrador) continua no dia universal.
 - Nenhuma porta de saldo, permissão ou trava mudou; a expiração continua sem redistribuir o liberado.
 
+## Etapa 163 — A atividade editada e as validades no dia de Brasília (2026-10-20)
+
+Uma etapa de **consertos técnicos** no Operacional e no Almoxarifado, sem regra de acesso nova. **A atividade:** salvar uma atividade de
+colaborador concluída sem mandar o status, o fim e as horas a reabria e apagava o fim e as horas — e concluir mandando só o status dava erro.
+Agora o sistema grava só o que foi enviado. **As validades:** a calibração das ferramentas, a devolução do empréstimo, a validade do lote e o
+prazo da remessa a terceiro são datas sem hora, e o sistema as comparava com o dia universal (3 h à frente de Brasília): das 21h à
+meia-noite, o que vence **hoje** já era tratado como vencido — a ferramenta calibrada até hoje não emprestava nem media, o lote que vence hoje
+não saía para consumo, o empréstimo e a remessa de hoje apareciam atrasados. Agora tudo isso conta o dia de Brasília.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Atividade concluída salva sem mandar status/fim/horas: voltava a *em andamento*, sem o fim e as horas | Continua concluída, com o fim e as horas — **C407** resolvido (**B1040**) |
+| Concluir uma atividade mandando só o status: erro | Conclui e libera o colaborador — **B1040** |
+| **Ferramentas**, às 22h, calibração válida até hoje: *"Ferramenta com calibração vencida ou sem calibração registrada"* no empréstimo e na medição da inspeção | Empresta e mede até a meia-noite — **C406** (**B1041**) |
+| **Painel de calibrações** às 22h: a que vence hoje aparecia *vencida* (−1 dia) | *A vencer*, 0 dia — **B1041** |
+| **Empréstimos vencidos** e o lembrete por e-mail às 22h: o que volta hoje já era atrasado | Só no dia seguinte — **B1041** |
+| **Lote** que vence hoje, às 22h: *vencido* na lista e recusado na saída para consumo | *Elegível*, sai até a meia-noite — **B1042** |
+| **Remessa a terceiro** de prazo hoje, às 22h: selo *Vencida* e aviso | Só no dia seguinte — **B1043** |
+| Avisos mensais e semanais no último dia do mês (no domingo), às 22h: já o do período seguinte | O do período corrente — **B1044** |
+
+### As regras, com o cenário exato
+
+**1. A atividade salva sem os campos de conclusão (C407, B1040).** Pela integração (a tela não tem edição — **C408**): conclua uma atividade
+com fim e horas reais; depois salve a mesma atividade mandando só a descrição nova. Ela continua *concluida*, com o mesmo fim e as mesmas
+horas; a resposta é *"Atividade atualizada com sucesso"*. Mandar o fim vazio continua apagando o fim. Uma atividade que não existe:
+*"Atividade não encontrada"*.
+
+**2. A calibração que vale até hoje (B1041).** Depois das 21h, em **Almoxarifado → Ferramentas**, uma ferramenta que exige calibração, com a
+validade da última calibração = hoje: **Emprestar** funciona e o selo da lista diz calibração vigente. Com a validade = ontem, o empréstimo é
+recusado com *"Ferramenta com calibração vencida ou sem calibração registrada"*, e a medição na inspeção com o mesmo texto seguido do nome do
+instrumento entre parênteses. No **painel de calibrações**, a de hoje aparece em *a vencer* com 0 dia; a de ontem, em *vencidas* com −1.
+
+**3. O empréstimo que volta hoje (B1041).** Um empréstimo com devolução prevista = hoje não aparece em *vencidos* nem recebe o lembrete por
+e-mail até a meia-noite; o de ontem aparece, com 1 dia de atraso.
+
+**4. O lote que vence hoje (B1042).** Em **Lotes e Séries**, um lote com validade = hoje aparece sem o selo *vencido*; uma **saída** desse lote
+em **Movimentações** passa. **Liberar vencimento** dele é recusado com *"Lote nao esta vencido; nao ha vencimento para liberar"*. Um lote com
+validade = ontem é recusado na saída com *"Lote L-… vencido em AAAA-MM-DD nao pode sair para consumo. Libere o vencimento do lote (PUT
+/api/almoxarifado/lotes/:id/liberar-vencimento) com justificativa, ou baixe por SUCATA/PERDA ou corrija por AJUSTE."*; liberado o vencimento
+(com justificativa), sai.
+
+**5. A remessa de prazo hoje (B1043).** Em **Remessas a terceiros**, uma remessa enviada com prazo = hoje não tem o selo *Vencida* até a
+meia-noite; a de ontem tem, e entra no aviso por e-mail.
+
+### O que esta etapa NÃO cobre
+
+- A edição de atividade continua sem tela, e o servidor não grava a OS, o início, as horas previstas nem o colaborador (**C408**).
+- As réguas de data de Frotas e do Financeiro (**C409**).
+- Nenhuma porta de permissão mudou; a saída e a separação de lote mudaram só na data (as guardas, as mensagens e a trava são as de antes).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 163 entregue (2026-10-20):** **a atividade editada e as validades no dia de Brasília** (consertos técnicos no Operacional e no
+  Almoxarifado, sem regra de acesso nova). Salvar uma atividade grava só o que veio (**B1040** — **C407**); a calibração, o empréstimo, o lote,
+  a remessa e as chaves dos avisos contam o dia de Brasília (**B1041** a **B1044** — **C406**; o lote que vence hoje sai até a meia-noite — a
+  saída mudou só na data). Commits `7bca3f13`, `6502c690` e `407ddfcc` (a correção da revisão). **O que é seu:** as decisões **B1040** a **B1044** (reversíveis); os avisos novos **C408** (a
+  edição de atividade — produto) e **C409** (Frotas e Financeiro); as perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**,
+  **B988**, **B989**, **B1013**, **C277**, **C312**, **C314**, **C316**, **C330**, **C398**); as limitações **(163)** em D e a verificação
+  **(163)** em F. Nenhuma consulta nova antes do deploy.
+  **Próxima: Etapa 164 — ver a "próxima tarefa detalhada" no plano da Etapa 163.**
 
 - **Etapa 162 entregue (2026-10-20):** **o dia de Brasília nos relatórios, no painel, nos indicadores, nos alertas e nas reservas** (consertos
   técnicos no Almoxarifado, sem regra de acesso nova e sem mexer em saldo). Os nove relatórios, o painel e a planilha contam o dia (e a hora) de
@@ -32702,7 +32845,7 @@ ela vence em 29/10 (antes, 30/10).
   meia-noite); os avisos novos **C406** e **C407**; as perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **B988**, **B989**,
   **B1013**, **C277**, **C312**, **C314**, **C316**, **C330**, **C398**); as limitações **(162)** em D e a verificação **(162)** em F. Nenhuma
   consulta nova antes do deploy.
-  **Próxima: Etapa 163 — ver a "próxima tarefa detalhada" no plano da Etapa 162.**
+  *(Próxima, na época: Etapa 163 — entregue acima.)*
 
 - **Etapa 161 entregue (2026-10-19):** **as listas que mostravam o resultado de um filtro anterior, o dia que virava às 21h e os seletores
   incompletos** (consertos técnicos, sem regra de acesso nova e sem mexer em saldo). Treze listas e os Relatórios só mostram a resposta do

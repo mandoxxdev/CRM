@@ -1,5 +1,7 @@
 # 16 — Ferramentas e Equipamentos de Medição
 
+> **+ Etapa 163 (2026-10-20, `6502c690`, Fase 5 `407ddfcc`): a calibração vigente, o painel, os empréstimos vencidos e o lembrete pelo dia de Brasília (C406, B1041)** — ver a seção "Etapa 163", no fim. O status não muda.
+
 > **+ Etapa 160 (2026-10-19, `eaf682e9`): a busca das ferramentas (`busca`) e dos empréstimos (`colaborador`) acha a letra acentuada em qualquer caixa e aparada (C393, B1019)** — ver a seção "Etapa 160", no fim.
 
 > **Status:** 🟢 — cadastro, empréstimo com claim, calibração com vencimento que bloqueia,
@@ -130,3 +132,17 @@ Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa160-filtros-da-fabri
 Almoxarifado (nenhuma rota ignora uma chave que a tela manda; o defeito estava na comparação).
 
 - [x] **RN-160.04 (C393, B1019)** — `listarFerramentas` (patrimônio, nome) e `listarEmprestimos` (colaborador) pela `condicaoDeBusca` — `eaf682e9`.
+
+## Etapa 163 — a calibração e o empréstimo no dia de Brasília (2026-10-20)
+
+Plano: `docs/superpowers/plans/2026-10-20-almoxarifado-etapa163-a-atividade-editada-e-as-validades-no-dia-de-brasilia.md`. Consertos técnicos, sem regra de acesso nova e sem mexer em saldo; o status da feature não muda.
+
+- [x] **RN-163.03 (C406, B1041)** — calibração vigente = `data_validade >= hoje de Brasília` (era `date('now')`, o dia UTC): o empréstimo
+  (*"Ferramenta com calibração vencida ou sem calibração registrada"*), a medição na inspeção (a mesma frase com o nome do instrumento entre
+  parênteses) e o selo `calibracao_vigente` da lista. A calibração que vale até hoje empresta e mede até a meia-noite — `6502c690` (Fase 5: `407ddfcc`).
+- [x] **RN-163.04 (C406, B1041)** — `dias_restantes` do painel (`GET /calibracoes/painel`) e do alerta *Calibração vencendo* contra o hoje de
+  Brasília (a de hoje = 0, *a vencer*) — `6502c690`.
+- [x] **RN-163.05 (C406, B1041)** — empréstimo vencido = `EMPRESTADA` com devolução prevista **anterior** ao hoje de Brasília (`vencidos=1`, o
+  `dias_vencido` e o lembrete por e-mail); a chave diária do lembrete leva o mesmo dia, passado ao filtro — `6502c690`.
+
+Continua 🟢.
