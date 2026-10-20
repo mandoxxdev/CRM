@@ -4,7 +4,10 @@
  * DEPENDE DO FUSO: o cenario das 23h30 so prova algo fora de UTC (em UTC o dia local e o UTC coincidem e a versao errada passaria).
  * A maquina deste projeto e UTC-3; a guarda abaixo DERRUBA o arquivo num processo em UTC em vez de deixa-lo verde provando nada.
  */
-import { hojeLocalISO, inicioDoMesLocalISO, agoraLocalParaInput, lerInstanteDoBanco, formatarInstanteDoBanco, COM_SEGUNDOS } from './dataLocal';
+import {
+  hojeLocalISO, inicioDoMesLocalISO, agoraLocalParaInput, lerInstanteDoBanco, formatarInstanteDoBanco, COM_SEGUNDOS, lerDataDoBanco,
+  formatarDataDoBanco,
+} from './dataLocal';
 // Etapa 168 (RN-168.04, B1071): o do Almoxarifado reexporta o daqui
 import formatarDoAlmox, { formatarInstanteDoBanco as formatarDoAlmoxNomeado } from '../components/almoxarifado/instanteDoBanco';
 
@@ -70,4 +73,17 @@ test('[RN-168.02] vazio -> o vazio pedido; ilegivel -> o texto gravado', () => {
 test('[RN-168.04] o do Almoxarifado e a mesma funcao', () => {
   expect(formatarDoAlmox).toBe(formatarInstanteDoBanco);
   expect(formatarDoAlmoxNomeado).toBe(formatarInstanteDoBanco);
+});
+
+test('[Etapa 169, Fase 5 r1 M1] soData: o texto que nao comeca por AAAA-MM-DD e ilegivel (o new Date leniente lia a vespera)', () => {
+  for (const v of ['2026-10', '2026', 'sexta 10', '20/10/2026', 'lixo']) {
+    expect(lerDataDoBanco(v, { soData: true })).toBeNull();
+    expect(formatarDataDoBanco(v, '-', { soData: true })).toBe('-');
+  }
+  // metade positiva: o prefixo continua valendo, com e sem hora
+  expect(formatarDataDoBanco('2026-10-20', '-', { soData: true })).toBe('20/10/2026');
+  expect(formatarDataDoBanco('2026-10-20T02:00:00.000Z', '-', { soData: true })).toBe('20/10/2026');
+  expect(formatarDataDoBanco('2026-10-20 23:00:00', '-', { soData: true })).toBe('20/10/2026');
+  // sem soData nada muda: o instante do banco continua lido como UTC
+  expect(formatarDataDoBanco('2026-10-21 01:30:00', '-')).toBe('20/10/2026');
 });

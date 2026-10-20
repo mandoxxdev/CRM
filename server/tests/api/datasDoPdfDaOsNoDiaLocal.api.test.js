@@ -59,8 +59,10 @@ test('guarda: o processo esta em America/Sao_Paulo (a meia-noite UTC de 20/10 e 
 
 test('fiacao: o index.js usa o diaLocal de services/ e o PDF passa a abertura, a previsao e a conferencia pelo formatDate', () => {
   assert.ok(/^const diaLocal = require\('\.\/services\/diaLocal'\);$/m.test(fonte), "o require do diaLocal no index.js mudou");
-  assert.ok(corpo.includes('${formatDate(os.data_abertura || os.data_entrada_pedido)}'), 'a abertura nao passa pelo formatDate');
-  assert.ok(corpo.includes('${formatDate(os.data_prevista)}'), 'a previsao nao passa pelo formatDate');
+  // Fase 5 r3 P6: contadas — a abertura e a previsao aparecem duas vezes no HTML (o cabecalho e o quadro); includes aceitava uma so
+  const vezes = (t) => corpo.split(t).length - 1;
+  assert.strictEqual(vezes('${formatDate(os.data_abertura || os.data_entrada_pedido)}'), 2, 'a abertura nao passa pelo formatDate nas duas');
+  assert.strictEqual(vezes('${formatDate(os.data_prevista)}'), 1, 'a previsao do quadro nao passa pelo formatDate');
   assert.ok(corpo.includes('${formatDate(os.data_entrega || os.data_prevista)}'), 'a entrega prevista nao passa pelo formatDate');
   assert.ok(corpo.includes('${formatDate(os.data_conferencia) || formatDate(new Date())}'), 'a data da conferencia nao passa pelo formatDate');
 });

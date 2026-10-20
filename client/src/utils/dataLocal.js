@@ -46,6 +46,7 @@ export function lerInstanteDoBanco(valor) {
  *   - vazio, nao texto, invalido -> `null`.
  * Com `soData` (coluna SO de data: o lembrete, a validade), o prefixo `AAAA-MM-DD` vale sozinho, mesmo com hora gravada pela API
  * (`'2026-11-30 01:00:00'` e o dia 30, como no servidor, que le o prefixo — Fase 5 r1 M1).
+ * Com `soData`, o texto que nao comeca por `AAAA-MM-DD` e ilegivel (`null`) — Etapa 169, Fase 5 r1 M1.
  */
 export function lerDataDoBanco(valor, { soData = false } = {}) {
   if (typeof valor === 'string') {
@@ -54,6 +55,9 @@ export function lerDataDoBanco(valor, { soData = false } = {}) {
       const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
       return d.getFullYear() === Number(m[1]) && d.getMonth() === Number(m[2]) - 1 && d.getDate() === Number(m[3]) ? d : null;
     }
+    // Etapa 169 (Fase 5 r1 M1): coluna SO de data cujo texto nao comeca por AAAA-MM-DD e ilegivel — o new Date leniente do V8 lia
+    // '2026-10' como a meia-noite UTC de 01/10 (a vespera, 30/09) e 'sexta 10' como 01/10/2001.
+    if (soData) return null;
   }
   return lerInstanteDoBanco(valor);
 }

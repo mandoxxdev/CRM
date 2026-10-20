@@ -68,6 +68,9 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   global.Date = DataFixa;
+  // Fase 5 r3 R28: o relogio parado TEM de valer em cada cenario (sem ele a suite passava de dia provando nada da janela das 21h)
+  expect(Date.now()).toBe(AGORA.getTime());
+  expect(new Date().getHours()).toBe(22);
 });
 afterEach(() => {
   global.Date = RealDate;
@@ -150,6 +153,8 @@ test('[RN-169.03] a regra da OS vencida: a prevista ANTES de hoje (o dia local),
   expect(OS_COMERCIAL.map((os) => osVencida(os, agora))).toEqual([true, false, false, false, false]);
   expect(osVencida({ status: 'pendente', data_prevista: 'lixo' }, agora)).toBe(false);
   expect(osVencida({ status: 'pendente', data_prevista: '2026-10-20 23:00:00' }, agora)).toBe(false); // o prefixo vale
+  // Fase 5 r3 R5: com hora ANTES das 3h UTC o instante seria 19/10 (vencida) — so o prefixo (soData) diz 20/10
+  expect(osVencida({ status: 'pendente', data_prevista: '2026-10-20 01:00:00' }, agora)).toBe(false);
   expect(osVencida({ status: 'pendente', data_prevista: '2026-10-20' }, new RealDate(2026, 9, 21, 0, 0))).toBe(true); // a meia-noite vira
   expect(osVencida({ status: 'cancelado', data_prevista: '2026-10-19' }, agora)).toBe(true); // C424: inalterado
 });
@@ -189,13 +194,16 @@ test('[RN-169.02] OS do Comercial: a Data Aprovacao da aba Propostas Aprovadas n
   respostas['/propostas'] = [
     { id: 21, numero_proposta: 'PROP-169-APROV', cliente_nome: 'C', status: 'aprovada', valor_total: 10, updated_at: BANCO },
     { id: 22, numero_proposta: 'PROP-169-LIXO', cliente_nome: 'C', status: 'aprovada', valor_total: 10, updated_at: 'lixo' },
+    { id: 23, numero_proposta: 'PROP-169-SEMDATA', cliente_nome: 'C', status: 'aprovada', valor_total: 10, updated_at: null }, // r3 R11
   ];
   respostas['/propostas/21'] = { itens: [] };
   respostas['/propostas/22'] = { itens: [] };
+  respostas['/propostas/23'] = { itens: [] };
   await montar(<OrdensServicoComercial />, '/comercial/ordens-servico');
   await esperar(() => !!linhaDe('PROP-169-APROV'));
   expect(celulas(linhaDe('PROP-169-APROV'))[3]).toBe('20/10/2026');
   expect(celulas(linhaDe('PROP-169-LIXO'))[3]).toBe('lixo');
+  expect(celulas(linhaDe('PROP-169-SEMDATA'))[3]).toBe('-');
 });
 
 test('[RN-169.02] OS do Operacional: a Abertura e a Prevista da lista no dia gravado (antes a vespera)', async () => {
@@ -211,7 +219,11 @@ test('[RN-169.02] OS do Operacional: a Abertura e a Prevista da lista no dia gra
   expect(c).toContain('20/10/2026');
   expect(c).toContain('21/10/2026');
   expect(c).not.toContain('19/10/2026');
-  expect(celulas(linhaDe('OS-169-FAB-SEM'))).toContain('-');
+  // Fase 5 r3 R15: a celula exata da Prevista (o '-' de outra coluna satisfazia o toContain)
+  const colPrevista = [...container.querySelectorAll('thead th')].findIndex((th) => /Prevista/.test(th.textContent));
+  expect(colPrevista).toBeGreaterThan(-1);
+  expect(celulas(linhaDe('OS-169-FAB'))[colPrevista]).toBe('21/10/2026');
+  expect(celulas(linhaDe('OS-169-FAB-SEM'))[colPrevista]).toBe('-');
 });
 
 test('[RN-169.02] Detalhes da OS (Editar): a Data Abertura e a Data Prevista no dia gravado (antes a vespera)', async () => {
@@ -255,6 +267,23 @@ test('[RN-169.02] a previa ao criar a OS (Ver Preview): a abertura de hoje e a p
   expect(valor('Data Prevista')).toBe('21/10/2026'); // antes 20/10/2026
 });
 
+test('[RN-169.02, Fase 5 r3 R19] a previa com a abertura apagada mostra "-" (antes Invalid Date)', async () => {
+  const proposta = { id: 32, numero_proposta: 'PROP-169-PREV2', cliente_id: 1, cliente_nome: 'C', valor_total: 10,
+    itens: [{ id: 1, descricao: 'ITEM 169', quantidade: 1, valor_unitario: 10, valor_total: 10 }] };
+  await montar(<OSComercialForm proposta={proposta} onClose={() => {}} />, '/comercial/ordens-servico/nova/32');
+  await esperar(() => [...container.querySelectorAll('label')].some((l) => /Data de Abertura/.test(l.textContent)));
+  const abertura = [...container.querySelectorAll('label')].find((l) => /Data de Abertura/.test(l.textContent)).parentElement.querySelector('input');
+  expect(abertura.value).toBe('2026-10-20'); // metade positiva: o hoje local antes de apagar
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(abertura, '');
+    abertura.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await clicar([...container.querySelectorAll('button')].find((b) => /Ver Preview/.test(b.textContent)));
+  await esperar(() => [...container.querySelectorAll('.info-item-label')].some((l) => l.textContent === 'Data Abertura'));
+  const item = [...container.querySelectorAll('.info-item-content')].find((d) => d.querySelector('.info-item-label')?.textContent === 'Data Abertura');
+  expect(item.querySelector('.info-item-value').textContent.trim()).toBe('-');
+});
+
 test('[RN-169.02] o quadro da Producao: o prazo do cartao no dia gravado (antes a vespera)', async () => {
   respostas['/operacional/producao/kanban'] = {
     etapas: ['CORTE'], colaboradores: [],
@@ -275,6 +304,7 @@ test('[RN-169.04] Tarefas: o prazo e o Criada do cartao; o Criada em e o Resolvi
       { id: 2, titulo: 'TAREFA 169 FEITA', status: 'concluido', prioridade: 'media', prazo: '2026-10-20T02:00:00.000Z', created_at: BANCO,
         data_conclusao: '2026-10-21T01:30:05.000Z' },
       { id: 3, titulo: 'TAREFA 169 PRAZO LIXO', status: 'a_fazer', prioridade: 'media', prazo: 'amanha cedo talvez', created_at: null },
+      { id: 4, titulo: 'TAREFA 169 CRIACAO LIXO', status: 'a_fazer', prioridade: 'media', prazo: '2026-10', created_at: 'registro antigo xyz' },
     ],
   };
   await montar(<TodolistBoard />);
@@ -288,6 +318,10 @@ test('[RN-169.04] Tarefas: o prazo e o Criada do cartao; o Criada em e o Resolvi
   expect(datas('TAREFA 169 FEITA')).toEqual(['Criada 20/10/2026', 'Resolvida 20/10/2026, 22:30']);
   expect(meta('TAREFA 169 PRAZO LIXO')).toEqual(['Sem responsável', 'amanha ced']);
   expect(datas('TAREFA 169 PRAZO LIXO')).toEqual(['Criada']);
+  // Fase 5 r3 R25: a criacao ilegivel aparece inteira no cartao (antes os 10 primeiros caracteres); r1 M1: o prazo '2026-10' e ilegivel
+  // (antes o new Date leniente dava 30/09/2026) — aparece como gravado
+  expect(datas('TAREFA 169 CRIACAO LIXO')).toEqual(['Criada registro antigo xyz']);
+  expect(meta('TAREFA 169 CRIACAO LIXO')).toEqual(['Sem responsável', '2026-10']);
   // o gesto seguinte: abrir a tarefa — o Criada em e o prazo do formulario
   await clicar(cartao('TAREFA 169 FEITA'));
   await esperar(() => container.textContent.includes('Criada em:'));
