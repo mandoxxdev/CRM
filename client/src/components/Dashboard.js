@@ -16,7 +16,7 @@ import {
 } from 'recharts';
 // Etapa 165 (RN-165.07, B1058): a data do lembrete no dia gravado e o mes do grafico de evolucao no mes certo (antes, lidos como meia-noite
 // UTC: a vespera — e o mes anterior)
-import { formatarDataDoBanco, lerDataDoBanco } from '../utils/dataLocal';
+import { formatarDataDoBanco, lerDataDoBanco, hojeLocalISO } from '../utils/dataLocal';
 import './Dashboard.css';
 
 /** Etapa 165 (B1058): o rotulo curto do mes `AAAA-MM` do historico ("out."); ilegivel -> `null`. Antes `new Date('AAAA-MM-01')`: o mes anterior. */
@@ -27,7 +27,9 @@ export function rotuloDoMesDoHistorico(mes) {
 
 // Atalhos de periodo. Devolvem sempre o PAR completo (inicio e fim) para nao deixar um
 // intervalo pela metade quando o usuario pula de um atalho para outro.
-const iso = (d) => d.toISOString().split('T')[0];
+// Etapa 166 (RN-166.05, B1061): o dia LOCAL (antes `toISOString`, o dia UTC: das 21h a meia-noite o *Ate* saia amanha). O servidor
+// compara o filtro com o dia de Brasilia do `created_at` (`filtroDashboardSql`).
+const iso = (d) => hojeLocalISO(d);
 const ATALHOS_PERIODO = [
   {
     rotulo: 'Este mês',

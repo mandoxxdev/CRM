@@ -16,6 +16,8 @@ import {
 } from 'recharts';
 import MapaClientes from './MapaClientes';
 import ModalGrafico from './ModalGrafico';
+// Etapa 166 (RN-166.06, B1062): a Ultima Proposta (instante UTC do banco) no dia de Brasilia e o nome do PDF com o dia local
+import { formatarDataDoBanco, hojeLocalISO } from '../utils/dataLocal';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import './Relatorios.css';
@@ -336,7 +338,7 @@ const Relatorios = () => {
           cliente.razao_social || '-',
           cliente.cidade && cliente.estado ? `${cliente.cidade}, ${cliente.estado}` : '-',
           cliente.ultima_proposta 
-            ? new Date(cliente.ultima_proposta).toLocaleDateString('pt-BR')
+            ? formatarDataDoBanco(cliente.ultima_proposta)
             : 'Nunca',
           cliente.total_propostas_historico || 0
         ]);
@@ -559,7 +561,7 @@ const Relatorios = () => {
       }
 
       // Salvar PDF
-      const fileName = `Relatorios_GMP_${new Date().toISOString().split('T')[0]}.pdf`;
+      const fileName = `Relatorios_GMP_${hojeLocalISO()}.pdf`;
       doc.save(fileName);
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);
@@ -920,7 +922,7 @@ const Relatorios = () => {
                     <td>{cliente.cidade}, {cliente.estado}</td>
                     <td>
                       {cliente.ultima_proposta
-                        ? new Date(cliente.ultima_proposta).toLocaleDateString('pt-BR')
+                        ? formatarDataDoBanco(cliente.ultima_proposta)
                         : 'Nunca'}
                     </td>
                     <td>{cliente.total_propostas_historico || 0} propostas</td>

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { FiX, FiMaximize2, FiDownload, FiRefreshCw } from 'react-icons/fi';
 import html2canvas from 'html2canvas';
+// Etapa 166 (B1062): o dia local no nome do PNG (antes `toISOString`, o dia UTC: das 21h, o de amanha)
+import { hojeLocalISO } from '../utils/dataLocal';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area,
@@ -376,7 +378,7 @@ const ModalGrafico = ({ isOpen, onClose, titulo, descricao, tipoGrafico, dados, 
               
               const url = URL.createObjectURL(blob);
               const link = document.createElement('a');
-              const fileName = `${titulo.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.png`;
+              const fileName = `${titulo.replace(/[^a-z0-9]/gi, '_')}_${hojeLocalISO()}.png`;
               
               link.download = fileName;
               link.href = url;
@@ -441,7 +443,7 @@ const ModalGrafico = ({ isOpen, onClose, titulo, descricao, tipoGrafico, dados, 
         
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
-        const fileName = `${titulo.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.png`;
+        const fileName = `${titulo.replace(/[^a-z0-9]/gi, '_')}_${hojeLocalISO()}.png`;
         
         link.download = fileName;
         link.href = url;
