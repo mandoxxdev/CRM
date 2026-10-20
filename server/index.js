@@ -19816,19 +19816,11 @@ app.get('/api/financeiro/contas-pagar', authenticateToken, checkModulePermission
     params.push(status);
   }
   if (periodo && periodo !== 'todos') {
-    const now = new Date();
-    let startDate;
-    if (periodo === 'mes') {
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-    } else if (periodo === 'trimestre') {
-      const quarter = Math.floor(now.getMonth() / 3);
-      startDate = new Date(now.getFullYear(), quarter * 3, 1);
-    } else if (periodo === 'ano') {
-      startDate = new Date(now.getFullYear(), 0, 1);
-    }
-    if (startDate) {
+    // Etapa 164 (RN-164.08, B1049): o inicio do periodo no calendario de Brasilia (antes, o TZ do processo)
+    const inicio = diaLocal.inicioDoPeriodoLocalISO(periodo);
+    if (inicio) {
       query += ' AND data_vencimento >= ?';
-      params.push(startDate.toISOString().split('T')[0]);
+      params.push(inicio);
     }
   }
 
@@ -19858,19 +19850,11 @@ app.get('/api/financeiro/contas-receber', authenticateToken, checkModulePermissi
     params.push(status);
   }
   if (periodo && periodo !== 'todos') {
-    const now = new Date();
-    let startDate;
-    if (periodo === 'mes') {
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-    } else if (periodo === 'trimestre') {
-      const quarter = Math.floor(now.getMonth() / 3);
-      startDate = new Date(now.getFullYear(), quarter * 3, 1);
-    } else if (periodo === 'ano') {
-      startDate = new Date(now.getFullYear(), 0, 1);
-    }
-    if (startDate) {
+    // Etapa 164 (RN-164.08, B1049): o inicio do periodo no calendario de Brasilia (antes, o TZ do processo)
+    const inicio = diaLocal.inicioDoPeriodoLocalISO(periodo);
+    if (inicio) {
       query += ' AND data_vencimento >= ?';
-      params.push(startDate.toISOString().split('T')[0]);
+      params.push(inicio);
     }
   }
 
@@ -19891,19 +19875,11 @@ app.get('/api/financeiro/fluxo-caixa', authenticateToken, checkModulePermission(
   const params = [];
 
   if (periodo && periodo !== 'todos') {
-    const now = new Date();
-    let startDate;
-    if (periodo === 'mes') {
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-    } else if (periodo === 'trimestre') {
-      const quarter = Math.floor(now.getMonth() / 3);
-      startDate = new Date(now.getFullYear(), quarter * 3, 1);
-    } else if (periodo === 'ano') {
-      startDate = new Date(now.getFullYear(), 0, 1);
-    }
-    if (startDate) {
+    // Etapa 164 (RN-164.08, B1049): o inicio do periodo no calendario de Brasilia (antes, o TZ do processo)
+    const inicio = diaLocal.inicioDoPeriodoLocalISO(periodo);
+    if (inicio) {
       query += ' AND data >= ?';
-      params.push(startDate.toISOString().split('T')[0]);
+      params.push(inicio);
     }
   }
 
@@ -19941,8 +19917,12 @@ app.get('/api/financeiro/bancos', authenticateToken, checkModulePermission('fina
 
 // Dashboard financeiro - métricas e dados para gráficos
 app.get('/api/financeiro/dashboard', authenticateToken, checkModulePermission('financeiro'), (req, res) => {
-  const ano = parseInt(req.query.ano) || new Date().getFullYear();
-  const mes = parseInt(req.query.mes) !== undefined ? parseInt(req.query.mes) : new Date().getMonth() + 1;
+  // Etapa 164 (RN-164.07, B1049): o hoje, o mes e o ano padrao de Brasilia — lidos UMA vez. O `mes` ausente ou nao numerico vale o
+  // padrao (antes `parseInt(...) !== undefined` era sempre verdadeiro: mes = NaN e o padrao nunca valia).
+  const hoje = diaLocal.hojeLocalISO();
+  const ano = parseInt(req.query.ano) || Number(hoje.slice(0, 4));
+  const mesQuery = parseInt(req.query.mes);
+  const mes = Number.isNaN(mesQuery) ? Number(hoje.slice(5, 7)) : mesQuery;
   const inicioMes = `${ano}-${String(mes).padStart(2, '0')}-01`;
   const ultimoDia = new Date(ano, mes, 0).getDate();
   const fimMes = `${ano}-${String(mes).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`;
@@ -19950,7 +19930,6 @@ app.get('/api/financeiro/dashboard', authenticateToken, checkModulePermission('f
   const anoAnterior = mes === 1 ? ano - 1 : ano;
   const inicioMesAnt = `${anoAnterior}-${String(mesAnterior).padStart(2, '0')}-01`;
   const fimMesAnt = `${anoAnterior}-${String(mesAnterior).padStart(2, '0')}-${String(new Date(anoAnterior, mesAnterior, 0).getDate()).padStart(2, '0')}`;
-  const hoje = new Date().toISOString().split('T')[0];
 
   const runQueries = (cb) => {
     let pending = 8;
@@ -20024,9 +20003,9 @@ app.get('/api/financeiro/dashboard', authenticateToken, checkModulePermission('f
 
     db.all(
       `SELECT strftime('%m', data_vencimento) as mes, strftime('%Y', data_vencimento) as ano,
-        SUM(CASE WHEN status = 'recebido' OR (status IN ('pendente','parcial') AND data_vencimento <= date('now')) THEN valor ELSE 0 END) as receita
+        SUM(CASE WHEN status = 'recebido' OR (status IN ('pendente','parcial') AND data_vencimento <= ?) THEN valor ELSE 0 END) as receita
        FROM contas_receber WHERE strftime('%Y', data_vencimento) = ? GROUP BY mes, ano`,
-      [String(ano)],
+      [hoje, String(ano)],
       (err, rowsReceita) => {
         db.all(
           `SELECT strftime('%m', data_vencimento) as mes, strftime('%Y', data_vencimento) as ano, SUM(valor) as despesa

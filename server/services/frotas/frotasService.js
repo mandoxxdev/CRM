@@ -3,6 +3,7 @@
  */
 
 const { dbRun, dbGet, dbAll } = require('./db');
+const { hojeLocalISO } = require('../diaLocal');
 
 const VEICULO_JOIN = `SELECT v.*, t.nome as tipo_nome, t.categoria as tipo_categoria,
   mot.nome as motorista_nome
@@ -14,8 +15,23 @@ function normalizePlaca(placa) {
   return String(placa || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
-function daysUntil(dateStr) {
+/**
+ * Etapa 164 (RN-164.05, B1047, C409): os dias de `data` (coluna so de data, 'AAAA-MM-DD') ate o `hoje` de Brasilia, em dias de
+ * calendario — independente do TZ do processo. A conta antiga (`new Date('AAAA-MM-DD')` = meia-noite UTC, com `setHours(0)` LOCAL) dava
+ * um dia a menos o dia inteiro em TZ=America/Sao_Paulo (o de producao): o vencimento de hoje saia "Vencido ha 1 dia(s)" e critico.
+ * Texto que nao comeca por 'AAAA-MM-DD' (legado) cai na conta antiga, com o mesmo resultado de antes.
+ */
+function diasAte(dateStr, hoje = hojeLocalISO()) {
   if (!dateStr) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dateStr));
+  const h = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(hoje));
+  if (m && h) {
+    const a = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    const b = Date.UTC(Number(h[1]), Number(h[2]) - 1, Number(h[3]));
+    // data impossivel (2026-02-30): nula, como a conta antiga (o `new Date` dela tambem a recusava)
+    if (new Date(a).toISOString().slice(0, 10) !== m[0] || new Date(b).toISOString().slice(0, 10) !== h[0]) return null;
+    return Math.round((a - b) / 86400000);
+  }
   const d = new Date(dateStr);
   if (Number.isNaN(d.getTime())) return null;
   const today = new Date();
@@ -247,7 +263,7 @@ async function createManutencao(db, user, data) {
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
     data.veiculo_id, data.tipo || 'preventiva', data.descricao, data.oficina || null,
     Number(data.custo) || 0, data.pecas_descricao || null, data.km_manutencao != null ? Number(data.km_manutencao) : null,
-    data.data_manutencao || new Date().toISOString().slice(0, 10),
+    data.data_manutencao || hojeLocalISO(), // Etapa 164 (RN-164.06, B1048): o dia de Brasilia, nao o UTC
     data.proxima_revisao_km != null ? Number(data.proxima_revisao_km) : null,
     data.proxima_revisao_data || null, data.status || 'concluida',
     user?.id || null, user?.nome || user?.name || null, data.observacoes || null,
@@ -453,8 +469,10 @@ async function listDocumentos(db, { search, veiculo_id, tipo, vencendo } = {}) {
   if (veiculo_id) { sql += ' AND d.veiculo_id = ?'; params.push(veiculo_id); }
   if (tipo) { sql += ' AND d.tipo = ?'; params.push(tipo); }
   if (vencendo === '1' || vencendo === 'true') {
+    // Etapa 164 (RN-164.01, B1046): o teto conta do hoje de Brasilia (parametro, coluna so de data — sem modificador)
     sql += ` AND d.data_vencimento IS NOT NULL
-      AND date(d.data_vencimento) <= date('now', '+' || COALESCE(d.alerta_dias_antes, 30) || ' days')`;
+      AND date(d.data_vencimento) <= date(?, '+' || COALESCE(d.alerta_dias_antes, 30) || ' days')`;
+    params.push(hojeLocalISO());
   }
   const s = buildSearchWhere(['d.descricao', 'v.placa', 'd.numero_documento'], search);
   sql += s.clause;
@@ -637,16 +655,21 @@ async function deleteChecklist(db, id) {
 
 // ── Dashboard e alertas ──────────────────────────────────────────────────────
 
-async function getAlertas(db) {
+/**
+ * Etapa 164 (RN-164.01 a .05, B1046, C409): todas as reguas contam do `hoje` de Brasilia, lido UMA vez (o painel passa o dele) e como
+ * parametro — as colunas sao so de data (`type="date"`), entao sem modificador de fuso. Antes, `date('now')` = o dia UTC: das 21h a
+ * meia-noite, o de amanha.
+ */
+async function getAlertas(db, hoje = hojeLocalISO()) {
   const alertas = [];
 
   const docs = await dbAll(db, `SELECT d.*, v.placa FROM frotas_documentos d
     JOIN frotas_veiculos v ON d.veiculo_id = v.id
     WHERE d.data_vencimento IS NOT NULL
-    AND date(d.data_vencimento) <= date('now', '+' || COALESCE(d.alerta_dias_antes, 30) || ' days')
-    AND d.status = 'ativo' ORDER BY d.data_vencimento`);
+    AND date(d.data_vencimento) <= date(?, '+' || COALESCE(d.alerta_dias_antes, 30) || ' days')
+    AND d.status = 'ativo' ORDER BY d.data_vencimento`, [hoje]);
   docs.forEach((d) => {
-    const dias = daysUntil(d.data_vencimento);
+    const dias = diasAte(d.data_vencimento, hoje);
     alertas.push({
       tipo: 'documento',
       severidade: dias != null && dias < 0 ? 'critico' : dias != null && dias <= 7 ? 'alto' : 'medio',
@@ -661,9 +684,9 @@ async function getAlertas(db) {
 
   const motoristas = await dbAll(db, `SELECT * FROM frotas_motoristas
     WHERE ativo = 1 AND status = 'ativo' AND cnh_validade IS NOT NULL
-    AND date(cnh_validade) <= date('now', '+30 days') ORDER BY cnh_validade`);
+    AND date(cnh_validade) <= date(?, '+30 days') ORDER BY cnh_validade`, [hoje]);
   motoristas.forEach((m) => {
-    const dias = daysUntil(m.cnh_validade);
+    const dias = diasAte(m.cnh_validade, hoje);
     alertas.push({
       tipo: 'cnh',
       severidade: dias != null && dias < 0 ? 'critico' : 'alto',
@@ -677,11 +700,11 @@ async function getAlertas(db) {
 
   const manutencoes = await dbAll(db, `SELECT m.*, v.placa, v.km_atual FROM frotas_manutencoes m
     JOIN frotas_veiculos v ON m.veiculo_id = v.id
-    WHERE (m.proxima_revisao_data IS NOT NULL AND date(m.proxima_revisao_data) <= date('now', '+15 days'))
+    WHERE (m.proxima_revisao_data IS NOT NULL AND date(m.proxima_revisao_data) <= date(?, '+15 days'))
        OR (m.proxima_revisao_km IS NOT NULL AND v.km_atual >= m.proxima_revisao_km - 500)
-    ORDER BY m.proxima_revisao_data`);
+    ORDER BY m.proxima_revisao_data`, [hoje]);
   manutencoes.forEach((m) => {
-    const dias = daysUntil(m.proxima_revisao_data);
+    const dias = diasAte(m.proxima_revisao_data, hoje);
     const kmRestante = m.proxima_revisao_km != null ? m.proxima_revisao_km - (m.km_atual || 0) : null;
     alertas.push({
       tipo: 'manutencao',
@@ -699,7 +722,7 @@ async function getAlertas(db) {
   const multas = await dbAll(db, `SELECT mu.*, v.placa FROM frotas_multas mu
     JOIN frotas_veiculos v ON mu.veiculo_id = v.id
     WHERE mu.status_pagamento = 'pendente' AND mu.data_vencimento IS NOT NULL
-    AND date(mu.data_vencimento) <= date('now', '+15 days')`);
+    AND date(mu.data_vencimento) <= date(?, '+15 days')`, [hoje]);
   multas.forEach((mu) => {
     alertas.push({
       tipo: 'multa',
@@ -707,7 +730,7 @@ async function getAlertas(db) {
       titulo: `Multa pendente — ${mu.placa}`,
       descricao: mu.descricao || mu.numero_auto,
       data: mu.data_vencimento,
-      dias_restantes: daysUntil(mu.data_vencimento),
+      dias_restantes: diasAte(mu.data_vencimento, hoje),
       referencia_id: mu.id,
       veiculo_id: mu.veiculo_id,
     });
@@ -718,9 +741,9 @@ async function getAlertas(db) {
     FROM frotas_abastecimentos a
     JOIN frotas_veiculos v ON a.veiculo_id = v.id
     WHERE a.consumo_medio IS NOT NULL AND v.ativo = 1
-    AND a.data_abastecimento >= date('now', '-60 days')
+    AND a.data_abastecimento >= date(?, '-60 days')
     GROUP BY v.id
-    HAVING v.consumo_medio_esperado IS NOT NULL AND consumo_recente < v.consumo_medio_esperado * 0.7`);
+    HAVING v.consumo_medio_esperado IS NOT NULL AND consumo_recente < v.consumo_medio_esperado * 0.7`, [hoje]);
   consumoAnomalo.forEach((c) => {
     alertas.push({
       tipo: 'consumo',
@@ -739,6 +762,7 @@ async function getAlertas(db) {
 }
 
 async function getDashboard(db) {
+  const hoje = hojeLocalISO(); // Etapa 164 (RN-164.04, B1046): um hoje so para os cartoes e os alertas
   const [veiculoStats, custos, counters, manutencoesVencidas, alertas, ultimosAbastecimentos] = await Promise.all([
     dbGet(db, `SELECT
       SUM(CASE WHEN status = 'ativo' THEN 1 ELSE 0 END) as veiculosAtivos,
@@ -754,16 +778,16 @@ async function getDashboard(db) {
       COALESCE((SELECT SUM(valor) FROM frotas_documentos), 0) as documentos`),
     dbGet(db, `SELECT
       (SELECT COALESCE(SUM(valor_total), 0) FROM frotas_abastecimentos
-        WHERE strftime('%Y-%m', data_abastecimento) = strftime('%Y-%m', 'now')) as custoCombustivelMes,
+        WHERE strftime('%Y-%m', data_abastecimento) = ?) as custoCombustivelMes,
       (SELECT COUNT(*) FROM frotas_manutencoes WHERE status IN ('agendada','em_andamento')) as osAbertas,
       (SELECT COUNT(*) FROM frotas_viagens WHERE status IN ('solicitada','aprovada','em_andamento')) as viagensAbertas,
-      (SELECT COUNT(*) FROM frotas_checklists WHERE date(data_checklist) = date('now')) as checklistsHoje`),
+      (SELECT COUNT(*) FROM frotas_checklists WHERE date(data_checklist) = ?) as checklistsHoje`, [hoje.slice(0, 7), hoje]),
     dbGet(db, `SELECT COUNT(DISTINCT m.veiculo_id) as total
       FROM frotas_manutencoes m
       JOIN frotas_veiculos v ON m.veiculo_id = v.id
-      WHERE (m.proxima_revisao_data IS NOT NULL AND date(m.proxima_revisao_data) < date('now'))
-         OR (m.proxima_revisao_km IS NOT NULL AND v.km_atual >= m.proxima_revisao_km)`),
-    getAlertas(db),
+      WHERE (m.proxima_revisao_data IS NOT NULL AND date(m.proxima_revisao_data) < ?)
+         OR (m.proxima_revisao_km IS NOT NULL AND v.km_atual >= m.proxima_revisao_km)`, [hoje]),
+    getAlertas(db, hoje),
     dbAll(db, `SELECT a.*, v.placa FROM frotas_abastecimentos a
       JOIN frotas_veiculos v ON a.veiculo_id = v.id ORDER BY a.data_abastecimento DESC LIMIT 5`),
   ]);
@@ -857,6 +881,6 @@ module.exports = {
   listDocumentos, createDocumento, updateDocumento, deleteDocumento,
   listViagens, createViagem, updateViagem, aprovarViagem, deleteViagem,
   listChecklists, createChecklist, deleteChecklist,
-  getDashboard, getAlertas,
+  getDashboard, getAlertas, diasAte,
   relatorioCustosPorVeiculo, relatorioConsumo,
 };

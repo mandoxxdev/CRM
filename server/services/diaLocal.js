@@ -29,6 +29,20 @@ function inicioDoMesLocalISO(agora = new Date()) {
   return `${hojeLocalISO(agora).slice(0, 7)}-01`;
 }
 
+/**
+ * Etapa 164 (RN-164.08, B1049): o inicio do *Periodo* das listas do Financeiro no calendario de Brasilia — 'mes' = dia 1 do mes,
+ * 'trimestre' = dia 1 do trimestre, 'ano' = 1o de janeiro; qualquer outro valor = `null` (sem corte). Antes saia do `TZ` do processo.
+ */
+function inicioDoPeriodoLocalISO(periodo, agora = new Date()) {
+  const hoje = hojeLocalISO(agora);
+  const ano = hoje.slice(0, 4);
+  const mes = Number(hoje.slice(5, 7));
+  if (periodo === 'mes') return `${hoje.slice(0, 7)}-01`;
+  if (periodo === 'trimestre') return `${ano}-${String(Math.floor((mes - 1) / 3) * 3 + 1).padStart(2, '0')}-01`;
+  if (periodo === 'ano') return `${ano}-01-01`;
+  return null;
+}
+
 /** O modificador do SQLite que leva um instante UTC ao relogio de Brasilia: `'-180 minutes'`. */
 function modificadorDoFuso(agora = new Date()) {
   const { offsetMinutos, FUSO_PADRAO } = fuso();
@@ -53,4 +67,4 @@ function instanteDoBancoNoFuso(valor) {
   }).format(d);
 }
 
-module.exports = { hojeLocalISO, inicioDoMesLocalISO, modificadorDoFuso, instanteDoBancoNoFuso };
+module.exports = { hojeLocalISO, inicioDoMesLocalISO, inicioDoPeriodoLocalISO, modificadorDoFuso, instanteDoBancoNoFuso };
