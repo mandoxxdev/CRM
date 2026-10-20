@@ -28,6 +28,7 @@ const STATUS_OPCOES = [
 // Etapa 70) — não é uma varredura
 // dinâmica porque a fila não expõe um endpoint de "eventos distintos"; o filtro é por igualdade
 // exata contra o que a rota aceita em `?evento=`.
+// Etapa 161: estes 10 continuam fixos; as chaves do registro de alertas chegam por `GET /notificacoes/eventos` (`juntarEventos`).
 const EVENTO_OPCOES = [
   { value: '', label: 'Todos os eventos' },
   { value: 'MOVIMENTACAO', label: 'Movimentação' },
@@ -44,6 +45,23 @@ const EVENTO_OPCOES = [
   { value: 'RECEBIMENTO_ENTRADA', label: 'Entrada de recebimento' },
   { value: 'RECEBIMENTO_ENTRADA_REQUISITANTE', label: 'Aviso ao requisitante' },
 ];
+
+// Etapa 161 (RN-161.08, C399): a fila tambem grava as chaves do registro de alertas (`evento: entrada.chave`) — antes impossiveis de
+// filtrar. As opcoes = os 10 fixos acima + o que `GET /almoxarifado/notificacoes/eventos` devolve (`[{ evento, rotulo }]`, na ordem do
+// registro; o que ja esta nos 10 nao repete). Se a rota falhar (ou devolver outra forma), ficam os 10 — falha aberta, sem aviso: e so a
+// lista de opcoes.
+export const juntarEventos = (fixos, doRegistro) => {
+  if (!Array.isArray(doRegistro)) return fixos;
+  const vistos = new Set(fixos.map((ev) => ev.value));
+  const extras = [];
+  doRegistro.forEach((e) => {
+    const chave = e && typeof e.evento === 'string' ? e.evento : '';
+    if (!chave || vistos.has(chave)) return;
+    vistos.add(chave);
+    extras.push({ value: chave, label: e.rotulo || chave });
+  });
+  return extras.length ? [...fixos, ...extras] : fixos;
+};
 
 const STATUS_BADGE_CLASS = { PENDENTE: 'almox-badge-baixo', ENVIADO: 'almox-badge-ok', FALHA: 'almox-badge-critico' };
 
@@ -120,6 +138,16 @@ const NotificacoesAlmoxarifado = () => {
   const [filtroEvento, setFiltroEvento] = useState('');
   const [reenviando, setReenviando] = useState(null); // id em voo
   const [processando, setProcessando] = useState(false);
+  const [eventoOpcoes, setEventoOpcoes] = useState(EVENTO_OPCOES);
+
+  // Etapa 161 (RN-161.08): os eventos do registro, uma vez na abertura
+  useEffect(() => {
+    let cancelado = false;
+    api.get('/almoxarifado/notificacoes/eventos')
+      .then((r) => { if (!cancelado) setEventoOpcoes(juntarEventos(EVENTO_OPCOES, r && r.data)); })
+      .catch(() => { /* falha aberta: ficam os 10 */ });
+    return () => { cancelado = true; };
+  }, []);
 
   const carregar = useCallback(() => {
     let cancelado = false;
@@ -254,7 +282,7 @@ const NotificacoesAlmoxarifado = () => {
               value={filtroEvento}
               onChange={(e) => setFiltroEvento(e.target.value)}
             >
-              {EVENTO_OPCOES.map((ev) => <option key={ev.value} value={ev.value}>{ev.label}</option>)}
+              {eventoOpcoes.map((ev) => <option key={ev.value} value={ev.value}>{ev.label}</option>)}
             </select>
           </div>
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import api from '../../services/api';
 import { familiaDoNovoMaterial } from '../../utils/familiaDoNovoMaterial';
 import { toast } from 'react-toastify';
@@ -8,6 +8,7 @@ import AnexosModal from './AnexosModal';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import { gerarRemessaPDF } from '../../utils/remessaPdf';
 import SeloProprietario, { nomeDoDono, DONO_SEM_NOME } from './SeloProprietario';
+import useBuscaFornecedores from './useBuscaFornecedores';
 import './Almoxarifado.css';
 
 /**
@@ -99,7 +100,6 @@ const RemessasTerceirosAlmoxarifado = () => {
 
   // Formulario de criacao
   const [materiais, setMateriais] = useState([]);
-  const [fornecedores, setFornecedores] = useState([]);
   const [novoItem, setNovoItem] = useState({ material_id: '', quantidade: '', peso: '' });
   const [itensNovos, setItensNovos] = useState([]);
 
@@ -122,6 +122,13 @@ const RemessasTerceirosAlmoxarifado = () => {
   }, [filtroStatus, reloadToken]);
 
   const modalTipo = modal?.tipo || null;
+  // Etapa 161 (RN-161.09, C399): o seletor de terceiros procura no servidor (antes: os 50 primeiros, uma vez por abertura). So com o
+  // formulario "nova" aberto; o terceiro ja escolhido continua nas opcoes mesmo fora do resultado (a remessa grava o fornecedor_id).
+  const fornecedorEscolhidoRef = useRef('');
+  fornecedorEscolhidoRef.current = String(form.fornecedor_id || '');
+  const {
+    fornecedores, busca: buscaFornecedor, setBusca: setBuscaFornecedor,
+  } = useBuscaFornecedores({ ativo: modalTipo === 'nova', manter: (f) => String(f.id) === fornecedorEscolhidoRef.current });
 
   // Materiais e terceiros so sao buscados quando o formulario que precisa deles abre: sao duas
   // listas grandes que nenhuma outra parte da tela usa. Guarda `cancelado` no molde de
@@ -131,19 +138,14 @@ const RemessasTerceirosAlmoxarifado = () => {
   // Etapa 8c: `transformacao` ENTROU nesta guarda. Sem isso o `<select>` de material do resultado
   // nasceria vazio para sempre e `adicionarResultado` nunca acharia o material — a tela inteira
   // seria inalcancavel, com a rota do servidor pronta e sem consumidor. Fornecedor continua so no
-  // `nova`: a transformacao nao escolhe terceiro, ela usa o da remessa que ja existe.
+  // `nova`: a transformacao nao escolhe terceiro, ela usa o da remessa que ja existe. Etapa 161: os terceiros sairam daqui
+  // (`useBuscaFornecedores`, acima).
   useEffect(() => {
     if (modalTipo !== 'nova' && modalTipo !== 'transformacao') return undefined;
     let cancelado = false;
-    Promise.all([
-      api.get('/almoxarifado/materiais').catch(() => ({ data: [] })),
-      modalTipo === 'nova'
-        ? api.get('/almoxarifado/recebimentos-aux/fornecedores').catch(() => ({ data: [] }))
-        : Promise.resolve(null),
-    ]).then(([m, f]) => {
+    api.get('/almoxarifado/materiais').catch(() => ({ data: [] })).then((m) => {
       if (cancelado) return;
       setMateriais(Array.isArray(m.data) ? m.data : []);
-      if (f) setFornecedores(Array.isArray(f.data) ? f.data : []);
     });
     return () => { cancelado = true; };
   }, [modalTipo]);
@@ -686,6 +688,9 @@ const RemessasTerceirosAlmoxarifado = () => {
                 <>
                   <div className="almox-field">
                     <label className="almox-label">Terceiro cadastrado (Compras)</label>
+                    <input className="almox-input" style={{ marginBottom: 6 }} value={buscaFornecedor}
+                      onChange={(e) => setBuscaFornecedor(e.target.value)}
+                      placeholder="Buscar terceiro (nome ou CNPJ)..." aria-label="Buscar terceiro" />
                     <select className="almox-form-select" value={form.fornecedor_id || ''}
                       onChange={(e) => {
                         const f = fornecedores.find((x) => String(x.id) === String(e.target.value));

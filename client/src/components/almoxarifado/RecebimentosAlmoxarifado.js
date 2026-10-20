@@ -23,6 +23,7 @@ import { quantidadeQueEntra } from '../../utils/quantidadeQueEntra';
 import { formatDateBR } from '../../utils/formatDate';
 import useUltimoPedido from '../../hooks/useUltimoPedido';
 import { formatarInstanteDoBanco } from './instanteDoBanco';
+import useBuscaFornecedores from './useBuscaFornecedores';
 import './Almoxarifado.css';
 
 const STATUS_INFO = {
@@ -179,7 +180,8 @@ const RecebimentosAlmoxarifado = () => {
   const [recebimentos, setRecebimentos] = useState([]);
   const [materiais, setMateriais] = useState([]);
   const [pedidos, setPedidos] = useState([]);
-  const [fornecedores, setFornecedores] = useState([]);
+  // Etapa 161 (RN-161.09, C399): o seletor de fornecedores procura no servidor (antes: os 50 primeiros, carregados uma vez)
+  const { fornecedores, busca: buscaFornecedor, setBusca: setBuscaFornecedor } = useBuscaFornecedores();
   const [loading, setLoading] = useState(true);
   // Etapa 161 (RN-161.02, C396): trocar o filtro com a lista em voo — so a resposta do ultimo pedido mexe na tela
   const novoPedidoLista = useUltimoPedido();
@@ -304,11 +306,17 @@ const RecebimentosAlmoxarifado = () => {
     }
   }, [filtroStatus, filtroEtapa, novoPedidoLista]);
 
+  // Etapa 161 (RN-161.12, C400): trocar o filtro recarrega SO a lista. Era um efeito so — cada troca pedia de novo os materiais, os
+  // pedidos pendentes e os fornecedores (4 GETs). Materiais e pedidos carregam na abertura (os fornecedores, pela busca); a lista de
+  // pedidos pendentes nao se atualiza mais ao trocar o filtro (recarregar a pagina atualiza — declarado na RN).
   useEffect(() => {
     loadRecebimentos();
+  }, [loadRecebimentos]);
+
+  useEffect(() => {
     loadMateriais();
     loadAuxiliares();
-  }, [loadRecebimentos]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadMateriais = async () => {
     setErroMateriais(null);
@@ -322,17 +330,14 @@ const RecebimentosAlmoxarifado = () => {
 
   const loadAuxiliares = async () => {
     try {
-      const [pRes, fRes] = await Promise.all([
-        // Etapa 37 (RN-24): `pendentes=1` é o filtro que a T4 criou, e ele roda no SQL ANTES do
-        // `LIMIT 50` — sem ele, um banco com 50 pedidos quitados mais novos deixaria o `<select>`
-        // sem o pedido que o operador precisa receber. A lista continua podendo envelhecer (ela é
-        // carregada na montagem da tela), e é por isso que escolher um pedido sem saldo tem de
-        // avisar em vez de oferecer um bloco de itens vazio.
-        api.get('/almoxarifado/recebimentos-aux/pedidos-compra', { params: { pendentes: 1 } }),
-        api.get('/almoxarifado/recebimentos-aux/fornecedores'),
-      ]);
+      // Etapa 37 (RN-24): `pendentes=1` é o filtro que a T4 criou, e ele roda no SQL ANTES do
+      // `LIMIT 50` — sem ele, um banco com 50 pedidos quitados mais novos deixaria o `<select>`
+      // sem o pedido que o operador precisa receber. A lista continua podendo envelhecer (ela é
+      // carregada na montagem da tela), e é por isso que escolher um pedido sem saldo tem de
+      // avisar em vez de oferecer um bloco de itens vazio.
+      // Etapa 161 (RN-161.09): os fornecedores sairam daqui — vem do `useBuscaFornecedores` (busca no servidor).
+      const pRes = await api.get('/almoxarifado/recebimentos-aux/pedidos-compra', { params: { pendentes: 1 } });
       setPedidos(pRes.data || []);
-      setFornecedores(fRes.data || []);
     } catch {
       // Tolerado de propósito (Etapa 35, decisão 5): pedidos de compra e fornecedores alimentam
       // dois `<select>` OPCIONAIS, e os dois têm entrada manual ao lado — o recebimento pode ser
@@ -1397,6 +1402,10 @@ const RecebimentosAlmoxarifado = () => {
                     </div>
                     <div className="almox-field">
                       <label className="almox-label">Fornecedor</label>
+                      {/* Etapa 161 (RN-161.09): o texto procura no servidor e alimenta o select (o que grava continua nome + CNPJ) */}
+                      <input className="almox-input" style={{ marginBottom: 6 }} value={buscaFornecedor}
+                        onChange={(e) => setBuscaFornecedor(e.target.value)}
+                        placeholder="Buscar fornecedor (nome ou CNPJ)..." aria-label="Buscar fornecedor" />
                       <select className="almox-select" value="" onChange={(e) => selecionarFornecedor(e.target.value)}>
                         <option value="">Digite ou selecione...</option>
                         {fornecedores.map((f) => (

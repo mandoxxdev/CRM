@@ -469,3 +469,196 @@ describe('[RN-161.06, C397] a hora mostrada e a local (o created_at e UTC sem fu
   });
 });
 
+// ---------------------------------------------------------------------------------------------------------------------------------
+// RN-161.08 — os eventos das Notificacoes.
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+describe('[RN-161.08, C399] Notificacoes: o Evento = os 10 fixos + os da rota de eventos', () => {
+  const VAZIA = { itens: [], resumo: { pendentes: 0, enviadas: 0, falhas: 0 } };
+  const selectEvento = () => container.querySelector('#notif-filtro-evento');
+  test('os do registro entram depois dos 10, sem repetir; escolher um filtra por ele', async () => {
+    api.get.mockImplementation(async (url) => {
+      if (url === '/almoxarifado/notificacoes/eventos') {
+        return { data: [
+          { evento: 'ESTOQUE_ZERADO', rotulo: 'repetido (ja esta nos 10)' },
+          { evento: 'ESTOQUE_MINIMO_161', rotulo: 'Estoque abaixo do minimo' },
+          { evento: 'REQUISICAO_PARADA_161', rotulo: 'Requisicao parada' },
+        ] };
+      }
+      return { data: VAZIA };
+    });
+    await montar(<NotificacoesAlmoxarifado />, '/almoxarifado/notificacoes');
+    const valores = [...selectEvento().options].map((o) => o.value);
+    expect(valores.length).toBe(13);
+    expect(valores.slice(-2)).toEqual(['ESTOQUE_MINIMO_161', 'REQUISICAO_PARADA_161']);
+    expect(valores.filter((v) => v === 'ESTOQUE_ZERADO').length).toBe(1);
+    expect(texto()).not.toContain('repetido (ja esta nos 10)');
+    expect([...selectEvento().options].find((o) => o.value === 'ESTOQUE_MINIMO_161').textContent).toBe('Estoque abaixo do minimo');
+    expect(api.get.mock.calls.filter(([u]) => u === '/almoxarifado/notificacoes/eventos').length).toBe(1);
+    api.get.mockClear();
+    await escolher(selectEvento(), 'ESTOQUE_MINIMO_161');
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/notificacoes', { params: { evento: 'ESTOQUE_MINIMO_161' } });
+  });
+
+  test('a rota de eventos falha: ficam os 10, sem aviso', async () => {
+    api.get.mockImplementation(async (url) => {
+      if (url === '/almoxarifado/notificacoes/eventos') throw falhaHttp('nao existe');
+      return { data: VAZIA };
+    });
+    await montar(<NotificacoesAlmoxarifado />, '/almoxarifado/notificacoes');
+    expect([...selectEvento().options].length).toBe(11); // "Todos" + os 10
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(texto()).not.toContain('Dados indisponíveis');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// RN-161.09 — a busca de fornecedores no servidor.
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+const URL_FORN = '/almoxarifado/recebimentos-aux/fornecedores';
+const fornCalls = () => api.get.mock.calls.filter(([u]) => u === URL_FORN).map(([, c]) => c && c.params && c.params.search);
+
+describe('[RN-161.09, C399] Recebimento: o seletor de fornecedores procura no servidor', () => {
+  const PRIMEIROS = [{ id: 1, razao_social: 'AAA PRIMEIRO', cnpj: '11' }];
+  function mockForn({ lentoA = false, falha = false } = {}) {
+    api.get.mockImplementation(async (url, c) => {
+      if (url === URL_FORN) {
+        const s = c && c.params ? c.params.search : undefined;
+        if (s === '') return { data: PRIMEIROS };
+        if (falha) throw falhaHttp('caiu');
+        if (s === 'zed' && lentoA) { await pausa(600); return { data: [{ id: 7, razao_social: 'RESPOSTA VELHA', cnpj: '77' }] }; }
+        if (s === 'zeta' || s === 'zed') return { data: [{ id: 51, razao_social: 'ZETA FORNECEDOR 51', cnpj: '51.000' }] };
+        return { data: [] };
+      }
+      return { data: [] };
+    });
+  }
+  const abrirNovo = async () => { await clicar(botao('Novo Recebimento')); };
+  const modal = () => container.querySelector('.almox-modal');
+  const buscaInput = () => modal().querySelector('input[aria-label="Buscar fornecedor"]');
+  const selectForn = () => [...modal().querySelectorAll('select')].find((s) => [...s.options].some((o) => o.textContent === 'Digite ou selecione...'));
+  const opcoes = () => [...selectForn().options].map((o) => o.textContent);
+
+  test('a abertura pede os primeiros (search vazio); digitar procura 300 ms depois da ultima tecla; escolher grava nome e CNPJ', async () => {
+    mockForn();
+    await montar(<RecebimentosAlmoxarifado />);
+    expect(fornCalls()).toEqual(['']);
+    await abrirNovo();
+    expect(opcoes()).toContain('AAA PRIMEIRO — 11');
+    await digitar(buscaInput(), 'ze');
+    await digitar(buscaInput(), 'zeta');
+    await esperar(100);
+    expect(fornCalls()).toEqual(['']); // ainda na pausa
+    await esperar(300);
+    expect(fornCalls()).toEqual(['', 'zeta']); // so a ultima tecla
+    expect(opcoes()).toContain('ZETA FORNECEDOR 51 — 51.000');
+    await escolher(selectForn(), '51');
+    expect(modal().querySelector('input[placeholder="Nome do fornecedor"]').value).toBe('ZETA FORNECEDOR 51');
+    expect(modal().querySelector('input[placeholder="00.000.000/0000-00"]').value).toBe('51.000');
+  });
+
+  test('so a resposta da ultima busca vale; a busca que falha deixa as opcoes como estavam', async () => {
+    mockForn({ lentoA: true });
+    await montar(<RecebimentosAlmoxarifado />);
+    await abrirNovo();
+    await digitar(buscaInput(), 'zed');
+    await esperar(350); // sai "zed" (lento)
+    await digitar(buscaInput(), 'zeta');
+    await esperar(350); // sai "zeta" (rapido)
+    expect(opcoes()).toContain('ZETA FORNECEDOR 51 — 51.000');
+    await esperar(650);
+    expect(opcoes()).not.toContain('RESPOSTA VELHA — 77');
+    expect(opcoes()).toContain('ZETA FORNECEDOR 51 — 51.000');
+    mockForn({ falha: true });
+    await digitar(buscaInput(), 'qualquer');
+    await esperar(350);
+    expect(fornCalls()).toContain('qualquer');
+    expect(opcoes()).toContain('ZETA FORNECEDOR 51 — 51.000');
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+});
+
+describe('[RN-161.09, C399] Remessas a terceiros: o seletor de terceiros procura no servidor', () => {
+  test('a busca acha o terceiro fora dos primeiros; o escolhido continua nas opcoes depois de outra busca', async () => {
+    api.get.mockImplementation(async (url, c) => {
+      if (url === URL_FORN) {
+        const s = c && c.params ? c.params.search : undefined;
+        if (s === '') return { data: [{ id: 1, razao_social: 'AAA PRIMEIRO', cnpj: '' }] };
+        if (s === 'galv') return { data: [{ id: 51, razao_social: 'GALVANIZADORA 51', cnpj: '51.000' }] };
+        return { data: [] };
+      }
+      return { data: [] };
+    });
+    await montar(<RemessasTerceirosAlmoxarifado />);
+    await clicar(botao('Nova remessa'));
+    expect(fornCalls()).toEqual(['']);
+    const modal = container.querySelector('.almox-modal');
+    const sel = () => [...modal.querySelectorAll('select')].find((s) => [...s.options].some((o) => o.textContent === 'Não cadastrado / digitar abaixo'));
+    const busca = modal.querySelector('input[aria-label="Buscar terceiro"]');
+    await digitar(busca, 'galv');
+    await esperar(350);
+    expect(fornCalls()).toEqual(['', 'galv']);
+    expect([...sel().options].map((o) => o.textContent)).toContain('GALVANIZADORA 51 — 51.000');
+    await escolher(sel(), '51');
+    expect(modal.querySelector('input[placeholder="Galvanizadora Sul LTDA"]').value).toBe('GALVANIZADORA 51');
+    await digitar(busca, 'nada');
+    await esperar(350);
+    expect(fornCalls()).toContain('nada');
+    expect(sel().value).toBe('51'); // a remessa grava o fornecedor_id: o escolhido nao some do select
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// RN-161.11 — o QR.
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+describe('[RN-161.11, C400] Materiais: o QR mostra so aquele material', () => {
+  test('MAT-001 pelo QR nao lista MAT-0010; mexer na busca solta o filtro', async () => {
+    const MATS = [
+      { id: 1, codigo: 'MAT-001', nome: 'O DO QR', quantidade_atual: 1, quantidade_minima: 0, ativo: 1 },
+      { id: 2, codigo: 'MAT-0010', nome: 'O PARECIDO', quantidade_atual: 1, quantidade_minima: 0, ativo: 1 },
+    ];
+    api.get.mockImplementation(async (url) => {
+      if (url === '/almoxarifado/materiais') return { data: MATS };
+      return { data: [] };
+    });
+    await montar(<MateriaisAlmoxarifado />, '/almoxarifado/materiais?material_id=1');
+    await esperar(350);
+    await esperar(350);
+    const linhas = () => [...container.querySelectorAll('tbody tr')].map((tr) => tr.textContent);
+    expect(linhas().length).toBe(1);
+    expect(linhas()[0]).toContain('O DO QR');
+    expect(texto()).not.toContain('O PARECIDO');
+    expect(container.querySelector('.almox-search-input').value).toBe('MAT-001');
+    await digitar(container.querySelector('.almox-search-input'), 'MAT-00');
+    await esperar(350);
+    expect(texto()).toContain('O PARECIDO');
+    expect(texto()).toContain('O DO QR');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// RN-161.12 — Recebimentos: trocar o filtro recarrega so a lista.
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+describe('[RN-161.12, C400] Recebimentos: trocar o filtro recarrega so a lista', () => {
+  test('materiais, pedidos e fornecedores so na abertura; a lista a cada troca', async () => {
+    api.get.mockImplementation(async () => ({ data: [] }));
+    await montar(<RecebimentosAlmoxarifado />);
+    const conta = (u) => api.get.mock.calls.filter(([x]) => x === u).length;
+    expect(conta('/almoxarifado/recebimentos')).toBe(1);
+    expect(conta('/almoxarifado/materiais')).toBe(1);
+    expect(conta('/almoxarifado/recebimentos-aux/pedidos-compra')).toBe(1);
+    expect(conta(URL_FORN)).toBe(1);
+    const sel = [...container.querySelectorAll('select.almox-select')].find((s) => [...s.options].some((o) => o.textContent === 'Todos os status'));
+    const [v1, v2] = doisValores(sel);
+    await escolher(sel, v1);
+    await escolher(sel, v2);
+    await esperar(20);
+    expect(conta('/almoxarifado/recebimentos')).toBe(3);
+    expect(conta('/almoxarifado/materiais')).toBe(1);
+    expect(conta('/almoxarifado/recebimentos-aux/pedidos-compra')).toBe(1);
+    expect(conta(URL_FORN)).toBe(1);
+  });
+});

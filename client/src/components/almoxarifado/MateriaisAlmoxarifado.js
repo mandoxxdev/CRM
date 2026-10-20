@@ -55,6 +55,10 @@ const MateriaisAlmoxarifado = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const materialIdAplicado = useRef(false);
+  // Etapa 161 (RN-161.11, C400): o QR (`?material_id=`) mostra SO aquele material. Antes punha so o codigo na busca — que e parcial:
+  // `MAT-001` listava tambem `MAT-0010`. O codigo continua na busca (estreita o pedido ao servidor); o filtro por id corta o resto e
+  // soma com os outros filtros. Mexer na busca (ou Limpar filtros) solta.
+  const [qrMaterialId, setQrMaterialId] = useState(null);
 
   useEffect(() => {
     const s = searchParams.get('status');
@@ -71,6 +75,7 @@ const MateriaisAlmoxarifado = () => {
       const material = materiais.find(m => m.id === parseInt(material_id));
       if (material) {
         setSearch(material.codigo);
+        setQrMaterialId(material.id);
         materialIdAplicado.current = true;
       }
     }
@@ -213,11 +218,13 @@ const MateriaisAlmoxarifado = () => {
     return Math.min(100, (m.quantidade_atual / m.quantidade_maxima) * 100);
   };
 
+  const materiaisVisiveis = qrMaterialId === null ? materiais : materiais.filter((m) => m.id === qrMaterialId);
+
   return (
     <div className="almox-page">
       <AlmoxPageHeader
         title="Materiais do Almoxarifado"
-        subtitle={`${materiais.length} ${materiais.length === 1 ? 'material' : 'materiais'}`}
+        subtitle={`${materiaisVisiveis.length} ${materiaisVisiveis.length === 1 ? 'material' : 'materiais'}`}
         breadcrumbs={[{ label: 'Materiais' }]}
         actions={
           <>
@@ -247,7 +254,7 @@ const MateriaisAlmoxarifado = () => {
             className="almox-search-input"
             placeholder="Buscar por nome, código ou fornecedor..."
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => { setSearch(e.target.value); setQrMaterialId(null); }}
           />
         </div>
         <select className="almox-select" value={categoria} onChange={e => setCategoria(e.target.value)}>
@@ -271,7 +278,7 @@ const MateriaisAlmoxarifado = () => {
           <option value="inativo">Inativos</option>
         </select>
         {(search || categoria || familiaFilter || statusFilter) && (
-          <button className="btn-almox-secondary" onClick={() => { setSearch(''); setCategoria(''); setFamiliaFilter(''); setStatusFilter(''); }}>
+          <button className="btn-almox-secondary" onClick={() => { setSearch(''); setQrMaterialId(null); setCategoria(''); setFamiliaFilter(''); setStatusFilter(''); }}>
             Limpar filtros
           </button>
         )}
@@ -281,7 +288,7 @@ const MateriaisAlmoxarifado = () => {
       <div className="almox-table-container">
         {loading ? (
           <SkeletonTable rows={8} columns={7} />
-        ) : materiais.length === 0 ? (
+        ) : materiaisVisiveis.length === 0 ? (
           <div className="almox-empty">
             <FiPackage size={48} style={{ opacity: 0.3, display: 'block', margin: '0 auto 12px' }} />
             <p>Nenhum material encontrado</p>
@@ -302,7 +309,7 @@ const MateriaisAlmoxarifado = () => {
               </tr>
             </thead>
             <tbody>
-              {materiais.map(m => {
+              {materiaisVisiveis.map(m => {
                 const status = getStatus(m);
                 const pct = getPct(m);
                 return (
