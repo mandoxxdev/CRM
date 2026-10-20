@@ -255,6 +255,20 @@ test('[RN-170.01] Chat: a mensagem ilegivel nao derruba a tela (antes RangeError
   expect(separadores()).not.toContain('');
 });
 
+test('[RN-170.01, Fase 5 r3] Chat: a ilegivel entre duas de hoje nao abre um segundo *Hoje* (compara com a ultima legivel)', async () => {
+  rotasDoChat({
+    conversas: [{ id: 1, tipo: 'direta', titulo: 'Bia', nao_lidas: 0, updated_at: '2026-10-20 14:00:00', ultima_mensagem: null }],
+    mensagens: [
+      MSG(40, '2026-10-20 14:00:00', 'HOJE-TARDE'),
+      MSG(41, 'lixo', 'ILEGIVEL'),
+      MSG(42, '2026-10-21 01:30:00', 'HOJE-NOITE'),
+    ],
+  });
+  await abrirConversa();
+  // comparar so com a imediatamente anterior (ou tratar a anterior ilegivel como "outro dia") poria um segundo [Hoje] antes da HOJE-NOITE
+  expect(sequencia()).toEqual(['[Hoje]', 'HOJE-TARDE', 'ILEGIVEL', 'HOJE-NOITE']);
+});
+
 // ── Compras ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 const PLANILHA = { nome: 'precos.xlsx', linhas: [['Codigo', 'Preco'], ['A1', '10']] };
 

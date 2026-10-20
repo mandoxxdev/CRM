@@ -192,6 +192,31 @@ test('[RN-170.05] offset invalido -> 400 com a mensagem literal', async () => {
   }
 });
 
+test('[RN-170.05, Fase 5 r3] a recusa para ali: nenhuma consulta roda depois do 400 (o log do servidor nao registra erro de logs)', async () => {
+  await pausa(800); // as consultas que um 400 sem `return` disparariam terminam aqui
+  const log = fs.readFileSync(logArq, 'utf8');
+  assert.ok(!/Erro ao buscar logs|ERR_HTTP_HEADERS_SENT|SQLITE_MISMATCH/.test(log),
+    `o servidor rodou a consulta depois do 400: ${(log.match(/.*(Erro ao buscar logs|ERR_HTTP_HEADERS_SENT|SQLITE_MISMATCH).*/) || [''])[0]}`);
+  // metade positiva: o log do filho e lido de verdade (o boot escreve nele)
+  assert.ok(/Banco de dados totalmente inicializado/.test(log), 'o log do filho nao foi lido');
+});
+
+test('[RN-170.05, Fase 5 r3] o padrao sem limit e 100 linhas: 101 logs -> 100; limit=101 -> 101', async () => {
+  const MOD100 = 'e170cem';
+  await run('BEGIN');
+  for (let i = 0; i < 101; i += 1) {
+    await run(`INSERT INTO logs_auditoria (usuario_id, usuario_nome, usuario_email, tipo, modulo, nome_modulo, created_at)
+               VALUES (1, 'E170', 'e170@t', 'tipo_c', ?, ?, '2026-10-20 12:00:00')`, [MOD100, `C${i}`]);
+  }
+  await run('COMMIT');
+  const [s1, r1] = await cru('GET', `/api/auditoria/logs?modulo=${MOD100}`, ctx.T);
+  assert.strictEqual(s1, 200);
+  assert.strictEqual(r1.length, 100);
+  const [s2, r2] = await cru('GET', `/api/auditoria/logs?modulo=${MOD100}&limit=101`, ctx.T);
+  assert.strictEqual(s2, 200);
+  assert.strictEqual(r2.length, 101);
+});
+
 test('[RN-170.05] o portao vem antes: quem nao gerencia usuarios toma 403 mesmo com limit invalido; sem token 401', async () => {
   const email = 'e170comum@t.com';
   const [sc, c] = await cru('POST', '/api/usuarios', ctx.T, { nome: 'E170 Comum', email, senha: 'Senha!170', cargo: 'C', setor: '' });

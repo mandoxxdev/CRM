@@ -143,6 +143,9 @@ describe('[RN-170.04] as datas da remessa no dia de Brasilia', () => {
     expect(doc.geradoEm).toBe('20/10/2026');
     // metade positiva: de dia o dia e o mesmo nas duas leituras
     expect(montarRemessaPDF({ remessa: REMESSA, itens: ITENS, geradoEm: '2026-10-20T15:00:00.000Z' }).geradoEm).toBe('20/10/2026');
+    // Fase 5 r3: um instante longe de hoje — o documento usa o geradoEm recebido, nao o relogio (sem isto, ignorar o geradoEm passava no
+    // dia em que o teste foi escrito)
+    expect(montarRemessaPDF({ remessa: REMESSA, itens: ITENS, geradoEm: '2026-08-12T15:00:00.000Z' }).geradoEm).toBe('12/08/2026');
   });
 
   test('o prazo (coluna so de data) e o dia gravado, com ou sem hora; ilegivel -> sem prazo', () => {
