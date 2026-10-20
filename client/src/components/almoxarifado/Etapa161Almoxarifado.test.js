@@ -329,4 +329,143 @@ describe('[RN-161.03, C396] Relatorios: trocar de relatorio invalida a consulta 
     await clicar(botao('Consultar')); // metade positiva: B consulta e mostra
     expect(texto()).toContain('LINHA-DE-B-161');
   });
+
+  test('[RN-161.06, C397] o nome do arquivo exportado leva o dia LOCAL (23h30 de 19/10 -> 2026-10-19)', async () => {
+    expect(new Date().getTimezoneOffset()).not.toBe(0); // guarda: em UTC este cenario nao prova nada
+    mockRelatorios('lento');
+    await montar(<RelatoriosAlmoxarifado />, '/almoxarifado/relatorios');
+    await abrir('materiais-mais-consumidos');
+    await clicar(botao('Consultar'));
+    const RealDate = Date;
+    const FIXO = new RealDate(2026, 9, 19, 23, 30, 0).getTime(); // 23h30 LOCAIS de 19/10
+    const iso = new RealDate(FIXO).toISOString().slice(0, 10);
+    const spy = jest.spyOn(window.HTMLAnchorElement.prototype, 'setAttribute');
+    global.Date = class extends RealDate {
+      constructor(...a) { if (a.length) super(...a); else super(FIXO); }
+      static now() { return FIXO; }
+    };
+    try {
+      await clicar(botao('Exportar XLSX'));
+    } finally {
+      global.Date = RealDate;
+    }
+    const download = spy.mock.calls.find(([a]) => a === 'download');
+    spy.mockRestore();
+    expect(download[1]).toBe('materiais-mais-consumidos-2026-10-19.xlsx');
+    // a metade que mostra a diferenca: o dia UTC daquele instante e outro (so fora de UTC)
+    expect(iso).not.toBe('2026-10-19');
+  });
 });
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// RN-161.06 — a hora local do created_at.
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+const BANCO = '2026-10-20 01:30:00'; // o ato das 22h30 de 19/10 em Brasilia, gravado pelo CURRENT_TIMESTAMP
+const INSTANTE = new Date(Date.UTC(2026, 9, 20, 1, 30, 0));
+const certo = (opcoes) => INSTANTE.toLocaleDateString('pt-BR', opcoes);
+const errado = (opcoes) => new Date('2026-10-20T01:30:00').toLocaleDateString('pt-BR', opcoes); // o texto lido como hora local
+const DMYHM4 = { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' };
+const DMYHM2 = { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' };
+
+describe('[RN-161.06, C397] a hora mostrada e a local (o created_at e UTC sem fuso)', () => {
+  beforeEach(() => {
+    expect(new Date().getTimezoneOffset()).not.toBe(0); // guarda: em TZ UTC o certo e o errado coincidem
+    expect(certo(DMYHM4)).not.toBe(errado(DMYHM4));
+  });
+
+  test('Movimentacoes: a lista e o modal de estorno; o valor invalido aparece cru', async () => {
+    api.get.mockImplementation(async (url) => {
+      if (url === '/almoxarifado/movimentacoes') {
+        return { data: [
+          { id: 7, tipo: 'ENTRADA', material_id: 1, material_nome: 'MAT HORA', quantidade: 2, unidade: 'UN', created_at: BANCO, saldo_anterior: 0, saldo_posterior: 2 },
+          { id: 8, tipo: 'ENTRADA', material_id: 1, material_nome: 'MAT LIXO', quantidade: 1, unidade: 'UN', created_at: 'data estragada', saldo_anterior: 2, saldo_posterior: 3 },
+        ] };
+      }
+      return { data: [] };
+    });
+    await montar(<MovimentacoesAlmoxarifado />, '/almoxarifado/movimentacoes');
+    await esperar(350);
+    const linha = [...container.querySelectorAll('tbody tr')].find((tr) => tr.textContent.includes('MAT HORA'));
+    expect(linha.textContent).toContain(certo(DMYHM4));
+    expect(linha.textContent).not.toContain(errado(DMYHM4));
+    const lixo = [...container.querySelectorAll('tbody tr')].find((tr) => tr.textContent.includes('MAT LIXO'));
+    expect(lixo.textContent).toContain('data estragada');
+    await clicar(linha.querySelector('button.almox-btn-icon.danger'));
+    const modal = [...container.querySelectorAll('.almox-modal')].find((m) => m.textContent.includes('Estornar'));
+    expect(modal.textContent).toContain(`em ${certo(DMYHM4)}`);
+    expect(modal.textContent).not.toContain(errado(DMYHM4));
+  });
+
+  test('Extrato do material', async () => {
+    api.get.mockImplementation(async (url) => {
+      if (url === '/almoxarifado/materiais/1/extrato') {
+        return { data: { material: { id: 1, codigo: 'MAT-A', nome: 'Material A', unidade: 'UN' }, movimentacoes: [
+          { id: 7, tipo: 'ENTRADA', quantidade: 2, saldo_anterior: 0, saldo_posterior: 2, created_at: BANCO },
+        ], reservas: [] } };
+      }
+      return { data: [] };
+    });
+    await montar(<ExtratoMaterialModal materialId={1} onClose={() => {}} />);
+    await esperar(20);
+    expect(texto()).toContain(certo(DMYHM4));
+    expect(texto()).not.toContain(errado(DMYHM4));
+  });
+
+  test('Painel: as ultimas movimentacoes e as requisicoes abertas', async () => {
+    const DMHM = { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' };
+    const DM = { day: '2-digit', month: '2-digit' };
+    api.get.mockImplementation(async (url) => {
+      if (url === '/almoxarifado/dashboard') {
+        return { data: { ultimasMovimentacoes: [{ id: 1, tipo: 'ENTRADA', material_nome: 'MAT PAINEL', usuario_nome: 'Ana', quantidade: 1, unidade: 'UN', created_at: BANCO }] } };
+      }
+      if (url === '/almoxarifado/dashboard/requisicoes') {
+        return { data: { requisicoesPendentes: 1, abertas: [{ id: 5, numero: 'REQ-PAINEL', status: 'PENDENTE', urgencia: 'NORMAL', solicitante_nome: 'Bia', total_itens: 1, created_at: BANCO }] } };
+      }
+      if (url === '/almoxarifado/relatorios/indicadores') throw falhaHttp('x');
+      return { data: [] };
+    });
+    await montar(<AlmoxarifadoDashboard />, '/almoxarifado');
+    await esperar(20);
+    const mov = [...container.querySelectorAll('.almox-mov-item')].find((d) => d.textContent.includes('MAT PAINEL'));
+    expect(mov.textContent).toContain(`Ana · ${certo(DMHM)}`);
+    expect(mov.textContent).not.toContain(errado(DMHM));
+    const req = [...container.querySelectorAll('a')].find((a) => a.textContent.includes('REQ-PAINEL'));
+    expect(req).toBeTruthy();
+    expect(req.textContent).toContain(certo(DM)); // 19/10 (o dia local), nao 20/10
+    expect(req.textContent).not.toContain(errado(DM));
+  });
+
+  test('Recebimentos: a coluna da data', async () => {
+    api.get.mockImplementation(async (url) => {
+      if (url === '/almoxarifado/recebimentos') return { data: [{ id: 9, numero: 'REC-HORA', status: 'PENDENTE', created_at: BANCO }] };
+      return { data: [] };
+    });
+    await montar(<RecebimentosAlmoxarifado />);
+    const linha = [...container.querySelectorAll('tbody tr')].find((tr) => tr.textContent.includes('REC-HORA'));
+    expect(linha.textContent).toContain(certo(DMYHM2));
+    expect(linha.textContent).not.toContain(errado(DMYHM2));
+  });
+
+  test('Requisicoes: a lista e o detalhe', async () => {
+    api.get.mockImplementation(async (url) => {
+      if (url === '/almoxarifado/requisicoes') {
+        return { data: [{ id: 55, numero: 'REQ-HORA', status: 'PENDENTE', urgencia: 'NORMAL', solicitante_id: 1, solicitante_nome: 'Fulano', total_itens: 1, valor_total: 0, created_at: BANCO }] };
+      }
+      if (url === '/almoxarifado/requisicoes/55') {
+        return { data: { id: 55, numero: 'REQ-HORA', status: 'PENDENTE', tipo: 'CONSUMO', urgencia: 'NORMAL', solicitante_id: 1, solicitante_nome: 'Fulano', created_at: BANCO, itens: [] } };
+      }
+      return { data: [] };
+    });
+    await montar(<RequisicoesList />, '/almoxarifado/requisicoes');
+    const linha = [...container.querySelectorAll('tbody tr')].find((tr) => tr.textContent.includes('REQ-HORA'));
+    expect(linha.textContent).toContain(certo(DMYHM2));
+    expect(linha.textContent).not.toContain(errado(DMYHM2));
+    await clicar(linha);
+    await esperar(20);
+    const ocorrencias = texto().split(certo(DMYHM2)).length - 1;
+    expect(ocorrencias).toBeGreaterThanOrEqual(2); // a linha e o "Data" do detalhe
+    expect(texto()).not.toContain(errado(DMYHM2));
+  });
+});
+

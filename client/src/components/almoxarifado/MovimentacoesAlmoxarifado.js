@@ -13,6 +13,7 @@ import CampoCodigoLido from './CampoCodigoLido';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import AvisoDaListaRecusada from './AvisoDaListaRecusada';
 import useUltimoPedido from '../../hooks/useUltimoPedido';
+import { formatarInstanteDoBanco } from './instanteDoBanco';
 import './Almoxarifado.css';
 
 // SUCATA e PERDA foram isentos da guarda de vencimento na Task 3 (Etapa 6) justamente para que
@@ -691,7 +692,8 @@ const MovimentacoesAlmoxarifado = () => {
     return null;
   };
 
-  const formatDate = (d) => new Date(d).toLocaleDateString('pt-BR', {
+  // Etapa 161 (RN-161.06, C397): o created_at e UTC sem fuso — lido como UTC, mostrado na hora local (a lista e o modal de estorno)
+  const formatDate = (d) => formatarInstanteDoBanco(d, {
     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
   });
 

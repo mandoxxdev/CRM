@@ -22,6 +22,7 @@ import { montarEtiquetasDoRecebimento } from '../../utils/etiquetasPdf';
 import { quantidadeQueEntra } from '../../utils/quantidadeQueEntra';
 import { formatDateBR } from '../../utils/formatDate';
 import useUltimoPedido from '../../hooks/useUltimoPedido';
+import { formatarInstanteDoBanco } from './instanteDoBanco';
 import './Almoxarifado.css';
 
 const STATUS_INFO = {
@@ -947,9 +948,8 @@ const RecebimentosAlmoxarifado = () => {
     return recebida > Number(item.quantidade_esperada);
   });
 
-  const formatDate = (d) => d
-    ? new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
-    : '—';
+  // Etapa 161 (RN-161.06, C397): o created_at e UTC sem fuso — mostrado na hora local
+  const formatDate = (d) => formatarInstanteDoBanco(d, { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
 
   const formatMoney = (v) => (v != null && v !== '' ? Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—');
 

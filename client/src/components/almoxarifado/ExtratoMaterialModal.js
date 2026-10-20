@@ -8,6 +8,7 @@ import { SkeletonTable } from '../SkeletonLoader';
 import { prefixarAlmoxarifado } from '../../utils/localizacaoLabel';
 import { justificativaDiferente } from '../../utils/justificativaMovimentacao';
 import SeloProprietario from './SeloProprietario';
+import { formatarInstanteDoBanco } from './instanteDoBanco';
 import './Almoxarifado.css';
 
 // Tipos de movimento cobrem os 20 valores do motor v2 (ver stockService); mapeamos por
@@ -37,9 +38,10 @@ const tipoBadgeCls = (tipo) => {
 // nunca de uma suposição por tipo.
 const deltaSaldo = (m) => (m.saldo_posterior ?? 0) - (m.saldo_anterior ?? 0);
 
-const formatDate = (d) => (d ? new Date(d).toLocaleDateString('pt-BR', {
+// Etapa 161 (RN-161.06, C397): o created_at e UTC sem fuso — lido como UTC, mostrado na hora local (a mesma da lista das Movimentacoes)
+const formatDate = (d) => formatarInstanteDoBanco(d, {
   day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
-}) : '—');
+});
 
 // Campos DATE puros (data_necessidade, expira_em). O T12:00 evita o clássico "um dia a
 // menos": `new Date('2026-08-10')` é meia-noite UTC, que em UTC-3 cai no dia 09.

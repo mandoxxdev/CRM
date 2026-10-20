@@ -5,6 +5,7 @@ import { canConfigureAlmox } from '../../utils/systemPermissions';
 import { getEffectiveUser } from '../../services/permissionsCache';
 import api from '../../services/api';
 import useUltimoPedido from '../../hooks/useUltimoPedido';
+import { formatarInstanteDoBanco } from './instanteDoBanco';
 import { FiPackage, FiAlertTriangle, FiDollarSign, FiActivity, FiArrowRight, FiRefreshCw, FiClock, FiAlertOctagon, FiFileText, FiCheckCircle, FiLayers, FiClipboard, FiMap, FiSettings, FiTruck, FiTrendingUp } from 'react-icons/fi';
 import './Almoxarifado.css';
 
@@ -537,7 +538,7 @@ const AlmoxarifadoDashboard = () => {
                       </div>
                     </div>
                     <div className="almox-mov-qtd" style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>
-                      {new Date(r.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                      {formatarInstanteDoBanco(r.created_at, { day: '2-digit', month: '2-digit' })}
                     </div>
                   </Link>
                 ))
@@ -566,7 +567,7 @@ const AlmoxarifadoDashboard = () => {
                   <div className="almox-mov-info">
                     <div className="almox-mov-nome">{m.material_nome}</div>
                     <div className="almox-mov-meta">
-                      {m.usuario_nome} · {new Date(m.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      {m.usuario_nome} · {formatarInstanteDoBanco(m.created_at, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </div>
                   <div className="almox-mov-qtd" style={{ color: m.tipo === 'SAIDA' ? 'var(--gmp-error)' : 'var(--gmp-success)' }}>

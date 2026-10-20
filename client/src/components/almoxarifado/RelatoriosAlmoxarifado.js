@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import { FiBarChart2, FiRefreshCw, FiAlertTriangle, FiDownload } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
 import useUltimoPedido from '../../hooks/useUltimoPedido';
+import { hojeLocalISO } from '../../utils/dataLocal';
 import './Almoxarifado.css';
 
 /**
@@ -357,7 +358,7 @@ const RelatoriosAlmoxarifado = () => {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      const data = new Date().toISOString().slice(0, 10);
+      const data = hojeLocalISO(); // Etapa 161 (RN-161.06): o dia local (o toISOString dava o de amanha depois das 21h)
       link.setAttribute('download', `${consultaDoAberto.tipo}-${data}.xlsx`);
       document.body.appendChild(link);
       link.click();

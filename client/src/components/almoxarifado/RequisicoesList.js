@@ -25,6 +25,7 @@ import {
   FiSend, FiArchive, FiShoppingCart, FiUserCheck, FiBox, FiEdit3, FiCopy, FiCheckSquare, FiCornerUpLeft
 } from 'react-icons/fi';
 import useUltimoPedido from '../../hooks/useUltimoPedido';
+import { formatarInstanteDoBanco } from './instanteDoBanco';
 import './Almoxarifado.css';
 
 const STATUS_INFO = {
@@ -1293,7 +1294,8 @@ const RequisicoesList = () => {
     }
   };
 
-  const formatDate = (d) => d ? new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+  // Etapa 161 (RN-161.06, C397): as datas daqui sao todas CURRENT_TIMESTAMP/datetime('now') (UTC sem fuso) — mostradas na hora local
+  const formatDate = (d) => formatarInstanteDoBanco(d, { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
 
   // Etapa 28 (C6). `separacoes`/`conferencia`/`conferencia_obrigatoria` só vêm do
   // GET /almoxarifado/requisicoes/:id — no modo não-warehouse (/requisicoes-material/:id)
