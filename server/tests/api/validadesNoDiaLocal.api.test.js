@@ -38,6 +38,8 @@ const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 const diaLocal = require('../../services/diaLocal');
 const toolReminderService = require('../../services/almoxarifado/toolReminderService');
+const lotService = require('../../services/almoxarifado/lotService');
+const thirdPartyService = require('../../services/almoxarifado/thirdPartyService');
 const queueService = require('../../services/almoxarifado/notificationQueueService');
 const receiptService = require('../../services/almoxarifado/receiptService');
 const alertRegistry = require('../../services/almoxarifado/alertRegistry');
@@ -125,6 +127,12 @@ async function novoEmprestimo(db, prevista) {
     assert.strictEqual(em(r.body.a_vencer, f0), 0, 'a de HOJE');
     assert.strictEqual(em(r.body.vencidas, fm1), -1, 'a de ONTEM');
     assert.strictEqual(em(r.body.a_vencer, f5), 5, 'a de HOJE+5');
+    // Fase 5 r3 (B07): a borda da janela — HOJE+30 com dias=30 esta dentro; HOJE+31 fora
+    const f30 = await novaFerramenta(db, somaDias(HOJE, 30));
+    const f31 = await novaFerramenta(db, somaDias(HOJE, 31));
+    const r30 = await http('get', '/api/almoxarifado/calibracoes/painel?dias=30');
+    assert.strictEqual(em(r30.body.a_vencer, f30), 30, 'a de HOJE+30 com dias=30');
+    assert.ok(![...r30.body.a_vencer, ...r30.body.vencidas].some((x) => x.id === f31), 'a de HOJE+31 entrou com dias=30');
     assert.ok(!r.body.vencidas.some((x) => x.id === f0), 'a de HOJE entre as vencidas');
   });
 
@@ -163,12 +171,17 @@ async function novoEmprestimo(db, prevista) {
     const vistos = ids(r.body);
     assert.ok(vistos.includes(eOntem) && vistos.includes(e3), 'o de ONTEM e o de HOJE-3 tem de estar vencidos');
     assert.ok(!vistos.includes(eHoje), 'o que volta HOJE saiu vencido');
+    // Fase 5 r3 (B03): com outro filtro junto, o parametro do hoje continua na posicao dele
+    const comb = await http('get', '/api/almoxarifado/emprestimos?status=EMPRESTADA&colaborador=Fulano&vencidos=1');
+    assert.strictEqual(comb.status, 200, JSON.stringify(comb.body));
+    assert.ok(ids(comb.body).includes(eOntem) && !ids(comb.body).includes(eHoje), 'vencidos com status e colaborador');
     const lista = await toolReminderService.listarEmprestimosVencidos(db);
     const dias = (id) => (lista.find((x) => x.id === id) || {}).dias_vencido;
     assert.deepStrictEqual([dias(eOntem), dias(e3), dias(eHoje)], [1, 3, undefined], 'dias_vencido (Fase 2 M3)');
     // o hoje passado explicito manda (a varredura passa o mesmo da chave — Fase 2 I3)
     const comOntem = await toolReminderService.listarEmprestimosVencidos(db, ONTEM);
     assert.ok(!ids(comOntem).includes(eOntem) && ids(comOntem).includes(e3), 'o hojeISO explicito nao foi usado');
+    assert.strictEqual((comOntem.find((x) => x.id === e3) || {}).dias_vencido, 2, 'o dias_vencido com o hojeISO explicito (Fase 5 r3 R04)');
   });
 
   await test('[RN-163.05, B1041] o lembrete: a chave e ferramenta-lembrete-<id>-<HOJE>, so para os vencidos de Brasilia', async () => {
@@ -222,6 +235,9 @@ async function novoEmprestimo(db, prevista) {
     assert.strictEqual(s3.status, 201, `liberado, o de ONTEM nao saiu: ${JSON.stringify(s3.body)}`);
     const saldo = async (loteId) => (await dbGet(db, 'SELECT COALESCE(SUM(quantidade),0) AS q FROM estoque_saldo_almoxarifado WHERE lote_id = ?', [loteId])).q;
     assert.deepStrictEqual([await saldo(lHoje), await saldo(lOntem)], [7, 8], 'o saldo dos dois lotes');
+    // Fase 5 r3 (L02): o hoje passado manda sobre o padrao
+    assert.strictEqual(lotService.isVencido({ data_validade: HOJE }, AMANHA), true, 'isVencido com o hoje passado');
+    assert.strictEqual(lotService.isVencido({ data_validade: HOJE }), false, 'isVencido com o padrao');
   });
 
   await test('[RN-163.07, B1042] o aviso Lote vencendo com N = 10: HOJE+10 entra, HOJE+11 nao', async () => {
@@ -263,6 +279,19 @@ async function novoEmprestimo(db, prevista) {
     assert.ok(ids(vazia.body.remessas).includes(rOntem) && !ids(vazia.body.remessas).includes(rHoje), 'a referencia vazia e o hoje');
     const amanha = await http('get', `/api/almoxarifado/remessas-terceiros/vencidas?referencia=${AMANHA}`);
     assert.ok(ids(amanha.body.remessas).includes(rHoje), 'a referencia explicita nao foi usada');
+    // Fase 5 r3 (T03): o selo tambem usa a referencia
+    assert.strictEqual(amanha.body.remessas.find((r) => r.id === rHoje).vencida, 1, 'o selo ignorou a referencia');
+    // Fase 5 r3 (T06): com outros filtros, os dois parametros do dia continuam na posicao deles
+    const combo = await http('get', `/api/almoxarifado/remessas-terceiros?status=ENVIADA&vencidas=1&referencia=${HOJE}`);
+    assert.ok(ids(combo.body).includes(rOntem) && !ids(combo.body).includes(rHoje), 'vencidas com status e referencia');
+    // Fase 5 r3 (T05): pelo servico, a referencia vazia e o hoje
+    const pelaFuncao = await thirdPartyService.listarRemessas(db, { vencidas: '1', referencia: '' });
+    assert.ok(ids(pelaFuncao).includes(rOntem) && !ids(pelaFuncao).includes(rHoje), 'o servico com referencia vazia');
+    // Fase 5 r3 (T07): encerrada com prazo vencido nao e vencida (nao ha nada la fora)
+    const rEnc = (await dbRun(db, `INSERT INTO remessas_terceiro_almoxarifado (numero, fornecedor_nome, prazo_previsto, status)
+      VALUES (?, 'Galvanizadora 163', ?, 'ENCERRADA')`, [`REM-163-${++seq}`, ONTEM])).lastID;
+    const lista2 = await http('get', '/api/almoxarifado/remessas-terceiros');
+    assert.strictEqual(lista2.body.find((r) => r.id === rEnc).vencida, 0, 'a encerrada saiu vencida');
     assert.strictEqual(amanha.body.referencia, AMANHA);
     const filtro = await http('get', '/api/almoxarifado/remessas-terceiros?vencidas=1');
     assert.ok(ids(filtro.body).includes(rOntem) && !ids(filtro.body).includes(rHoje), 'o filtro vencidas=1 da lista');
@@ -284,8 +313,11 @@ async function novoEmprestimo(db, prevista) {
     // a semana: domingo 2026-11-01 as 22h de Brasilia (UTC: segunda 02/11 01h) ainda e a semana 44 (a de segunda 26/10); a segunda 00h30 e a 45
     assert.strictEqual(alertRegistry.semanaIso(new Date('2026-11-02T01:00:00Z')), '2026-W44');
     assert.strictEqual(alertRegistry.semanaIso(new Date('2026-11-02T03:30:00Z')), '2026-W45');
-    // a virada do ano ISO continua: quinta 31/12/2026 23h de Brasilia = 2026-W53; sexta 01/01/2027 = 2026-W53 (o ano ISO do meio da semana)
+    // a virada do ano ISO continua: quinta 31/12/2026 23h de Brasilia (2027-01-01T02:00Z) = 2026-W53; sexta 01/01/2027 12h de Brasilia
+    // (2027-01-01T15:00Z) tambem = 2026-W53 — o ano ISO do meio da semana, nao o civil (Fase 5 r3 G03/G04: a sexta nao estava no teste)
     assert.strictEqual(alertRegistry.semanaIso(new Date('2027-01-01T02:00:00Z')), '2026-W53');
+    assert.strictEqual(alertRegistry.semanaIso(new Date('2027-01-01T15:00:00Z')), '2026-W53');
+    assert.strictEqual(alertRegistry.semanaIso(new Date('2027-01-03T15:00:00Z')), '2026-W53', 'o domingo 03/01/2027');
     assert.strictEqual(alertRegistry.semanaIso(new Date('2027-01-04T12:00:00Z')), '2027-W01');
     assert.strictEqual(entrada('MATERIAL_SEM_ENDERECO').dedupeChave({}), `sem-endereco-${alertRegistry.semanaIso()}`);
     assert.strictEqual(alertRegistry.mesAtual(new Date('2026-11-01T02:30:00Z')), '2026-10', 'as 23h30 de 31/10 ainda e outubro');

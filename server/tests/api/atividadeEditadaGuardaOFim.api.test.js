@@ -97,6 +97,8 @@ function abrirCru() {
   banco.configure('busyTimeout', 15000);
 }
 const all = (sql, p = []) => new Promise((res, rej) => banco.all(sql, p, (e, r) => (e ? rej(e) : res(r))));
+// escrita por fora so para PREPARAR estado que a rota nao da (Fase 5 r3: o updated_at antigo, o colaborador ocupado a mao)
+const run = (sql, p = []) => new Promise((res, rej) => banco.run(sql, p, (e) => (e ? rej(e) : res())));
 const linha = async (id) => (await all('SELECT * FROM atividades_colaboradores WHERE id = ?', [id]))[0];
 // o POST e o PUT respondem ANTES do UPDATE de colaboradores (index.js: o db.run da disponibilidade nao e esperado) — le depois de assentar:
 // espera ate 3 s pelo valor pedido e devolve o que houver (a assercao compara)
@@ -196,6 +198,9 @@ test('[RN-163.01, C407] o campo presente ainda grava: vazio zera o fim, as horas
   assert.deepStrictEqual([l.status, l.data_fim, l.horas_reais, l.descricao], ['em_andamento', null, null, null]);
   assert.strictEqual(l.observacoes, 'obs inicial', 'o ausente continua');
   assert.strictEqual(l.tipo_atividade, 'solda', 'o ausente continua');
+  // Fase 5 r3 (A05): observacoes presente e vazia tambem zera
+  await j('PUT', `/operacional/atividades-colaboradores/${id}`, { observacoes: '' });
+  assert.strictEqual((await linha(id)).observacoes, null, 'observacoes vazia nao zerou');
   // tipo_atividade presente: '' grava (como antes); null presente continua recusado pela coluna NOT NULL (como antes — Fase 2 M6)
   const [sv, rv] = await j('PUT', `/operacional/atividades-colaboradores/${id}`, { tipo_atividade: '' });
   assert.strictEqual(sv, 200, JSON.stringify(rv));
@@ -209,6 +214,7 @@ test('[RN-163.01, C407] o campo presente ainda grava: vazio zera o fim, as horas
 test('[RN-163.01] o corpo sem nenhum dos seis campos: 200 e so o updated_at muda', async () => {
   const colab = await novoColaborador();
   const id = await novaAtividade(colab);
+  await run("UPDATE atividades_colaboradores SET updated_at = '2000-01-01 00:00:00' WHERE id = ?", [id]); // Fase 5 r3 (A19)
   const antes = await linha(id);
   const [s, r] = await j('PUT', `/operacional/atividades-colaboradores/${id}`, { colaborador_id: 999, os_id: 5, data_inicio: '2001-01-01T00:00' });
   assert.strictEqual(s, 200, JSON.stringify(r));
@@ -216,13 +222,39 @@ test('[RN-163.01] o corpo sem nenhum dos seis campos: 200 e so o updated_at muda
   const { updated_at: ua, ...restoAntes } = antes;
   const { updated_at: ub, ...restoDepois } = depois;
   assert.deepStrictEqual(restoDepois, restoAntes, 'o PUT mudou coluna que nao grava (C408: OS, inicio e colaborador continuam ignorados)');
-  assert.ok(ua !== undefined && ub !== undefined);
+  assert.strictEqual(ua, '2000-01-01 00:00:00', 'preparo');
+  assert.ok(ub > ua, `o updated_at nao mudou: ${ub}`);
+});
+
+test('[RN-163.02] so concluida/cancelada no corpo recalcula a disponibilidade: editar sem status ou com outro status nao libera', async () => {
+  // Fase 5 r3 (D03, D04): o colaborador ocupado a mao, com a unica atividade ja concluida — editar a descricao nao o libera
+  const colab = await novoColaborador();
+  const id = await novaAtividade(colab);
+  await j('PUT', `/operacional/atividades-colaboradores/${id}`, { status: 'concluida' });
+  assert.strictEqual(await disponivel(colab, 1), 1, 'preparo: concluida libera');
+  await run('UPDATE colaboradores SET disponivel = 0 WHERE id = ?', [colab]);
+  await j('PUT', `/operacional/atividades-colaboradores/${id}`, { descricao: 'so a descricao' });
+  await pausa(500);
+  assert.strictEqual(await lerDisponivel(colab), 0, 'editar sem status recalculou a disponibilidade');
+  // atividade unica em andamento, status que nao e concluida/cancelada: nao libera
+  const colab2 = await novoColaborador();
+  const id2 = await novaAtividade(colab2);
+  assert.strictEqual(await disponivel(colab2, 0), 0, 'preparo: o POST ocupa');
+  await j('PUT', `/operacional/atividades-colaboradores/${id2}`, { status: 'pausada' });
+  await pausa(500);
+  assert.strictEqual(await lerDisponivel(colab2), 0, 'um status qualquer liberou o colaborador');
+  assert.strictEqual((await linha(id2)).status, 'pausada', 'a metade positiva: o status gravou');
 });
 
 test('[RN-163.02] cancelar com outra em andamento nao libera o colaborador; cancelar a ultima libera', async () => {
+  // Fase 5 r3 (D07): o id da atividade nao pode coincidir com o do colaborador (a contagem e por colaborador)
+  await novoColaborador(); await novoColaborador(); await novoColaborador();
   const colab = await novoColaborador();
   const a = await novaAtividade(colab);
   const b = await novaAtividade(colab, { tipo_atividade: 'pintura' });
+  assert.ok(a !== colab && b !== colab, `ids coincidem (atividades ${a}, ${b}; colaborador ${colab})`);
+  const outro = await novoColaborador();
+  await novaAtividade(outro); // a de outro colaborador em andamento nao segura este
   await j('PUT', `/operacional/atividades-colaboradores/${a}`, { status: 'cancelada' });
   assert.strictEqual(await disponivel(colab, 0), 0, 'ainda tem a b em andamento');
   assert.strictEqual((await linha(a)).tipo_atividade, 'solda');
