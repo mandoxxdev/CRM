@@ -6,6 +6,7 @@ import { FiPlus, FiSearch, FiEdit, FiTrash2, FiFilter, FiEye } from 'react-icons
 import { SkeletonTable } from '../SkeletonLoader';
 import OSForm from './OSForm';
 import './Operacional.css';
+import { formatarDataDoBanco } from '../../utils/dataLocal';
 
 const OrdensServico = () => {
   const navigate = useNavigate();
@@ -70,10 +71,8 @@ const OrdensServico = () => {
     loadOS();
   };
 
-  const formatDate = (date) => {
-    if (!date) return '-';
-    return new Date(date).toLocaleDateString('pt-BR');
-  };
+  // Etapa 169 (RN-169.02, B1074): abertura e previsao sao so data — o dia gravado (antes a vespera)
+  const formatDate = (date) => formatarDataDoBanco(date, '-', { soData: true });
 
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('pt-BR', {

@@ -4,6 +4,7 @@ import api from '../services/api';
 import { caminhoDoProdutoPeloCodigo } from '../utils/produtoPeloCodigo';
 import { toast } from 'react-toastify';
 import './PreviewOSEditavel.css';
+import { formatarDataDoBanco } from '../utils/dataLocal';
 
 const PreviewOSEditavel = ({ proposta, formData, onClose, onConfirm }) => {
   const [itensEditaveis, setItensEditaveis] = useState([]);
@@ -282,7 +283,8 @@ const PreviewOSEditavel = ({ proposta, formData, onClose, onConfirm }) => {
                   </div>
                   <div className="info-item-content">
                     <span className="info-item-label">Data Abertura</span>
-                    <span className="info-item-value">{new Date(formData.data_abertura).toLocaleDateString('pt-BR')}</span>
+                    {/* Etapa 169 (RN-169.02, B1074): o 'AAAA-MM-DD' do formulario no dia gravado (antes a vespera; vazio, Invalid Date) */}
+                    <span className="info-item-value">{formatarDataDoBanco(formData.data_abertura, '-', { soData: true })}</span>
                   </div>
                 </div>
                 {formData.data_prevista && (
@@ -292,7 +294,7 @@ const PreviewOSEditavel = ({ proposta, formData, onClose, onConfirm }) => {
                     </div>
                     <div className="info-item-content">
                       <span className="info-item-label">Data Prevista</span>
-                      <span className="info-item-value">{new Date(formData.data_prevista).toLocaleDateString('pt-BR')}</span>
+                      <span className="info-item-value">{formatarDataDoBanco(formData.data_prevista, '-', { soData: true })}</span>
                     </div>
                   </div>
                 )}

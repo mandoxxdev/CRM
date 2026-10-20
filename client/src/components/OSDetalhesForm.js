@@ -7,6 +7,7 @@ import { abrirPdfProtegidoNaJanela, LITERAL_ERRO_PDF_OS } from '../utils/baixarA
 import { FiX, FiSave, FiFileText, FiHash, FiTag, FiAlertCircle, FiCalendar, FiUser, FiTrendingUp, FiArrowLeft, FiDownload, FiExternalLink } from 'react-icons/fi';
 import './PreviewOSEditavel.css';
 import './OSDetalhesForm.css';
+import { formatarDataDoBanco } from '../utils/dataLocal';
 
 const OSDetalhesForm = ({ os, onClose, isFromComercial = false }) => {
   const navigate = useNavigate();
@@ -499,7 +500,8 @@ const OSDetalhesForm = ({ os, onClose, isFromComercial = false }) => {
                   <div className="info-item-content">
                     <span className="info-item-label">Data Abertura</span>
                     <span className="info-item-value">
-                      {os.data_abertura ? new Date(os.data_abertura).toLocaleDateString('pt-BR') : '-'}
+                      {/* Etapa 169 (RN-169.02, B1074): so data — o dia gravado (antes a vespera) */}
+                      {formatarDataDoBanco(os.data_abertura, '-', { soData: true })}
                     </span>
                   </div>
                 </div>
@@ -511,7 +513,7 @@ const OSDetalhesForm = ({ os, onClose, isFromComercial = false }) => {
                     <div className="info-item-content">
                       <span className="info-item-label">Data Prevista</span>
                       <span className="info-item-value">
-                        {new Date(os.data_prevista).toLocaleDateString('pt-BR')}
+                        {formatarDataDoBanco(os.data_prevista, '-', { soData: true })}
                       </span>
                     </div>
                   </div>

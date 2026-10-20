@@ -10,6 +10,19 @@ import {
 import { SkeletonTable } from './SkeletonLoader';
 import Tabs from './ui/Tabs';
 import './OrdensServicoComercial.css';
+import { formatarDataDoBanco, formatarInstanteDoBanco, lerDataDoBanco, hojeLocalISO } from '../utils/dataLocal';
+
+/**
+ * Etapa 169 (RN-169.03, B1075): a OS VENCIDA e a que tem a data prevista ANTES de hoje (o dia local) e nao esta concluida — a regua unica
+ * do contador, do filtro *Vencidas* e do aviso do cartao. Antes o contador e o filtro liam o `'AAAA-MM-DD'` como meia-noite UTC (a vespera)
+ * e contavam a OS prevista para hoje o dia inteiro; o cartao comparava esse instante com o relogio (vencida desde as 21h da vespera).
+ * Prevista vazia ou ilegivel -> nao vencida (como antes).
+ */
+export function osVencida(os, agora = new Date()) {
+  if (!os || os.status === 'concluido') return false;
+  const prevista = lerDataDoBanco(os.data_prevista, { soData: true });
+  return !!prevista && hojeLocalISO(prevista) < hojeLocalISO(agora);
+}
 
 const OrdensServicoComercial = () => {
   const navigate = useNavigate();
@@ -109,14 +122,8 @@ const OrdensServicoComercial = () => {
       // Filtrar por status se necessário
       if (osStatusFilter !== 'todas') {
         if (osStatusFilter === 'vencidas') {
-          const hoje = new Date();
-          hoje.setHours(0, 0, 0, 0);
-          osData = osData.filter(os => {
-            if (!os.data_prevista) return false;
-            const dataPrevista = new Date(os.data_prevista);
-            dataPrevista.setHours(0, 0, 0, 0);
-            return dataPrevista < hoje && os.status !== 'concluido';
-          });
+          const agora = new Date();
+          osData = osData.filter(os => osVencida(os, agora));
         } else {
           osData = osData.filter(os => os.status === osStatusFilter);
         }
@@ -142,10 +149,8 @@ const OrdensServicoComercial = () => {
     navigate(`/comercial/ordens-servico/nova/${proposta.id}`);
   };
 
-  const formatDate = (date) => {
-    if (!date) return '-';
-    return new Date(date).toLocaleDateString('pt-BR');
-  };
+  // Etapa 169 (RN-169.02, B1074): a abertura e a previsao sao so data ('AAAA-MM-DD') — o dia gravado (antes a vespera, o dia inteiro)
+  const formatDate = (date) => formatarDataDoBanco(date, '-', { soData: true });
 
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -181,14 +186,7 @@ const OrdensServicoComercial = () => {
     pendentes: ordensServico.filter(os => os.status === 'pendente').length,
     em_andamento: ordensServico.filter(os => os.status === 'em_andamento').length,
     concluidas: ordensServico.filter(os => os.status === 'concluido').length,
-    vencidas: ordensServico.filter(os => {
-      if (!os.data_prevista) return false;
-      const hoje = new Date();
-      hoje.setHours(0, 0, 0, 0);
-      const dataPrevista = new Date(os.data_prevista);
-      dataPrevista.setHours(0, 0, 0, 0);
-      return dataPrevista < hoje && os.status !== 'concluido';
-    }).length
+    vencidas: ordensServico.filter(os => osVencida(os)).length
   };
 
   const filteredOrdensServico = ordensServico.filter(os => {
@@ -356,7 +354,8 @@ const OrdensServicoComercial = () => {
                         <td><strong>{proposta.numero_proposta}</strong></td>
                         <td>{proposta.cliente_nome || '-'}</td>
                         <td className="currency-cell">{formatCurrency(proposta.valor_total)}</td>
-                        <td>{formatDate(proposta.data_aprovacao || proposta.updated_at)}</td>
+                        {/* Etapa 169 (RN-169.02, B1074): o updated_at e instante (CURRENT_TIMESTAMP, UTC) — o dia local (antes o seguinte, das 21h a meia-noite) */}
+                        <td>{formatarInstanteDoBanco(proposta.data_aprovacao || proposta.updated_at, undefined, '-')}</td>
                         <td>
                           <span className="status-badge status-aprovada">
                             Aprovada
@@ -414,7 +413,7 @@ const OrdensServicoComercial = () => {
               filteredOrdensServico.map((os) => {
                 const statusInfo = getStatusInfo(os.status);
                 const StatusIcon = statusInfo.icon;
-                const isVencida = os.data_prevista && new Date(os.data_prevista) < new Date() && os.status !== 'concluido';
+                const isVencida = osVencida(os);
                 const progresso = os.total_itens > 0 
                   ? Math.round((os.itens_concluidos / os.total_itens) * 100) 
                   : 0;

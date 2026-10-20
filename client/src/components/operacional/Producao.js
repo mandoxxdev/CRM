@@ -5,6 +5,7 @@ import {
   FiRefreshCw, FiSearch, FiClock, FiCheckCircle, FiUser, FiPackage, FiAlertTriangle, FiX,
 } from 'react-icons/fi';
 import './Producao.css';
+import { formatarDataDoBanco } from '../../utils/dataLocal';
 
 const COL_INICIAR = 'A iniciar';
 const COL_CONCLUIDO = 'Concluído';
@@ -208,7 +209,8 @@ export default function Producao() {
                       {item.cliente && <div className="producao-card-cliente">{item.cliente}</div>}
                       <div className="producao-card-meta">
                         <span><FiPackage /> {item.quantidade} {item.unidade || 'un'}</span>
-                        {item.data_prevista && <span><FiClock /> {new Date(item.data_prevista).toLocaleDateString('pt-BR')}</span>}
+                        {/* Etapa 169 (RN-169.02, B1074): o prazo da OS e so data — o dia gravado (antes a vespera) */}
+                        {item.data_prevista && <span><FiClock /> {formatarDataDoBanco(item.data_prevista, '-', { soData: true })}</span>}
                       </div>
                       {coluna !== COL_INICIAR && coluna !== COL_CONCLUIDO && (
                         <div className="producao-card-progress">
