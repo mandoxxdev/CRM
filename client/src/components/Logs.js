@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/api';
+import { formatarInstanteDoBanco, COM_SEGUNDOS } from '../utils/dataLocal'; // Etapa 168 (RN-168.01/02, B1069): a hora do log no relogio de Brasilia
 import { FiAlertTriangle, FiShield, FiFilter, FiDownload, FiRefreshCw } from 'react-icons/fi';
 import { exportToExcel } from '../utils/exportExcel';
 import { MODULOS_ORDEM, NOMES_MODULO } from '../constants/modulosMeta';
@@ -47,7 +48,7 @@ const Logs = () => {
   const handleExportExcel = () => {
     const dadosExport = logs.map(log => ({
       'ID': log.id,
-      'Data/Hora': new Date(log.created_at).toLocaleString('pt-BR'),
+      'Data/Hora': formatarInstanteDoBanco(log.created_at, COM_SEGUNDOS, ''),
       'Usuário': log.usuario_nome || 'N/A',
       'Email': log.usuario_email || 'N/A',
       'Tipo': log.tipo || 'N/A',
@@ -191,14 +192,7 @@ const Logs = () => {
                 {logs.map(log => (
                   <tr key={log.id}>
                     <td>
-                      {new Date(log.created_at).toLocaleString('pt-BR', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit'
-                      })}
+                      {formatarInstanteDoBanco(log.created_at, COM_SEGUNDOS)}
                     </td>
                     <td>
                       <div className="log-user-info">

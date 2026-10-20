@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
+import { formatarInstanteDoBanco } from '../utils/dataLocal'; // Etapa 168 (RN-168.01/02, B1069): o cadastro no relogio de Brasilia
 import { useAuth } from '../context/AuthContext';
 import { canDeleteUsers, canManageUsers, parseAdminModulos } from '../utils/systemPermissions';
 import { MODULOS_META, modulosDoUsuario } from '../constants/modulosMeta';
@@ -137,7 +138,7 @@ const Usuarios = ({ deferMs = 200 }) => {
               ? `Usuário (+ admin: ${parseAdminModulos(usuario.admin_modulos).join(', ')})`
               : 'Usuário',
         'Status': usuario.ativo ? 'Ativo' : 'Inativo',
-        'Cadastrado em': usuario.created_at ? new Date(usuario.created_at).toLocaleDateString('pt-BR') : ''
+        'Cadastrado em': formatarInstanteDoBanco(usuario.created_at, undefined, '')
       }));
       
       exportToExcel(dadosExport, 'usuarios', 'Usuários');
@@ -289,7 +290,7 @@ const Usuarios = ({ deferMs = 200 }) => {
                     </span>
                   </td>
                   <td>
-                    {new Date(usuario.created_at).toLocaleDateString('pt-BR')}
+                    {formatarInstanteDoBanco(usuario.created_at)}
                   </td>
                   <td>
                     <div className="action-buttons">

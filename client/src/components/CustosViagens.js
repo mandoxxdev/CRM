@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
+// Etapa 168 (RN-168.01/02/05, B1069): os instantes no relogio de Brasilia e a data da viagem no dia gravado (antes a vespera)
+import { formatarInstanteDoBanco, formatarDataDoBanco, COM_SEGUNDOS } from '../utils/dataLocal';
 import {
   FiDollarSign, FiMapPin, FiCalendar, FiTrendingUp, FiTrendingDown,
   FiCheckCircle, FiX, FiAlertCircle, FiPlus, FiEdit, FiTrash2,
@@ -1352,7 +1354,7 @@ const CustosViagens = () => {
                         {custo.codigo_visita || '-'}
                       </span>
                     </td>
-                    <td>{new Date(custo.data_viagem).toLocaleDateString('pt-BR')}</td>
+                    <td>{formatarDataDoBanco(custo.data_viagem, '—')}</td>
                     <td>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                         {custo.cliente_nome && (
@@ -1975,7 +1977,7 @@ const CustosViagens = () => {
                               <FiShield /> Autorização #{logsAutorizacao.length - index}
                             </strong>
                             <span className="log-date">
-                              {new Date(log.created_at).toLocaleString('pt-BR', {
+                              {formatarInstanteDoBanco(log.created_at, {
                                 day: '2-digit',
                                 month: '2-digit',
                                 year: 'numeric',
@@ -2359,7 +2361,7 @@ const CustosViagens = () => {
                           {comprovante.tipo_comprovante} • {(comprovante.tamanho / 1024).toFixed(2)} KB
                         </small>
                         <small>
-                          Enviado por {comprovante.uploaded_by_nome} em {new Date(comprovante.created_at).toLocaleString('pt-BR')}
+                          Enviado por {comprovante.uploaded_by_nome} em {formatarInstanteDoBanco(comprovante.created_at, COM_SEGUNDOS)}
                         </small>
                       </div>
                       <div className="comprovante-actions">
@@ -2410,7 +2412,7 @@ const CustosViagens = () => {
                         <div>
                           <strong>Alteração #{historico.length - historico.indexOf(item)}</strong>
                           <small>
-                            {new Date(item.created_at).toLocaleString('pt-BR')}
+                            {formatarInstanteDoBanco(item.created_at, COM_SEGUNDOS)}
                           </small>
                         </div>
                         <div>

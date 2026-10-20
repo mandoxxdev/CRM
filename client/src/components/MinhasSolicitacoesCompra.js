@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
+import { formatarInstanteDoBanco, COM_SEGUNDOS } from '../utils/dataLocal'; // Etapa 168 (RN-168.01, B1069): a criacao no relogio de Brasilia
 import { toast } from 'react-toastify';
 import './MinhasSolicitacoesCompra.css';
 
@@ -59,7 +60,7 @@ export default function MinhasSolicitacoesCompra() {
                 <div>{r.setor}</div>
                 <div><span className={`msc-status ${r.status}`}>{label(r.status)}</span></div>
                 <div className="msc-muted">{r.decisor_nome ? `por ${r.decisor_nome}` : '—'}</div>
-                <div className="msc-muted">{r.created_at ? new Date(r.created_at).toLocaleString('pt-BR') : '—'}</div>
+                <div className="msc-muted">{formatarInstanteDoBanco(r.created_at, COM_SEGUNDOS)}</div>
               </div>
             ))}
             {!rows.length ? <div className="msc-muted">Nenhuma solicitação ainda.</div> : null}

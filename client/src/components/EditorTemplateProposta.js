@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { formatarInstanteDoBanco } from '../utils/dataLocal'; // Etapa 168 (RN-168.01, B1069): a data do modelo salvo no dia de Brasilia
 import { FiSave, FiX, FiSettings, FiPlus, FiTrash2, FiMove, FiEye, FiEdit2, FiDownload, FiRotateCcw, FiFolder } from 'react-icons/fi';
 import './EditorTemplateProposta.css';
 
@@ -738,7 +739,7 @@ const EditorTemplateProposta = () => {
                     {template.is_padrao === 1 && <span style={{ marginLeft: '8px', fontSize: '11px', color: 'var(--gmp-primary)' }}>(Padrão)</span>}
                   </div>
                   <div className="template-item-meta">
-                    {template.familia} • {new Date(template.updated_at).toLocaleDateString('pt-BR')}
+                    {template.familia} • {formatarInstanteDoBanco(template.updated_at)}
                   </div>
                 </div>
               ))

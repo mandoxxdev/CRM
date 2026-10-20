@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
+import { formatarInstanteDoBanco } from '../utils/dataLocal'; // Etapa 168 (RN-168.01, B1069): o cadastro no relogio de Brasilia
 import { toast } from 'react-toastify';
 import { FiPlus, FiSearch, FiEdit, FiTrash2, FiEye, FiDownload, FiUsers } from 'react-icons/fi';
 import { exportToExcel } from '../utils/exportExcel';
@@ -77,7 +78,7 @@ const Clientes = () => {
         'Email': cliente.email || '',
         'Telefone': cliente.telefone || '',
         'Status': cliente.status === 'ativo' ? 'Ativo' : 'Inativo',
-        'Cadastrado em': cliente.created_at ? new Date(cliente.created_at).toLocaleDateString('pt-BR') : ''
+        'Cadastrado em': formatarInstanteDoBanco(cliente.created_at, undefined, '')
       }));
       
       exportToExcel(dadosExport, 'clientes', 'Clientes');
