@@ -19,7 +19,8 @@ export async function fetchFrotasDashboard({ force = false } = {}) {
     return dashboardInflight.current;
   }
 
-  const promise = api.get('/frotas/dashboard')
+  // Etapa 164 (Fase 2 M11): o "Atualizar" (force) fura tambem o cache de 30 s do servidor — sem isso o cartao seguia velho.
+  const promise = (force ? api.get('/frotas/dashboard', { params: { refresh: 1 } }) : api.get('/frotas/dashboard'))
     .then(({ data }) => {
       dashboardCache.at = Date.now();
       dashboardCache.data = data;

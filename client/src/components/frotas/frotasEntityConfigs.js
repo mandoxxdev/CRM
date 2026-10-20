@@ -2,6 +2,9 @@
  * Configurações de entidades CRUD do módulo Frotas
  */
 
+import { hojeLocalISO } from '../../utils/dataLocal';
+
+// Etapa 164 (RN-164.06, B1048): as datas padrao dos formularios sao o dia LOCAL (antes o toISOString, o dia UTC: das 21h, amanha)
 const fmtBrl = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
 export const ENTITY_CONFIGS = {
@@ -136,7 +139,7 @@ export const ENTITY_CONFIGS = {
     needsVeiculos: true,
     getDefaultForm: () => ({
       veiculo_id: '', tipo: 'preventiva', descricao: '', oficina: '', custo: 0,
-      km_manutencao: '', data_manutencao: new Date().toISOString().slice(0, 10),
+      km_manutencao: '', data_manutencao: hojeLocalISO(),
       proxima_revisao_km: '', proxima_revisao_data: '', status: 'concluida', requisicao_almox_id: '', observacoes: '',
     }),
     formFields: (meta, form, setForm, veiculos) => [
@@ -175,7 +178,7 @@ export const ENTITY_CONFIGS = {
     needsVeiculos: true,
     needsMotoristas: true,
     getDefaultForm: () => ({
-      veiculo_id: '', motorista_id: '', data_abastecimento: new Date().toISOString().slice(0, 10),
+      veiculo_id: '', motorista_id: '', data_abastecimento: hojeLocalISO(),
       litros: '', valor_total: '', posto: '', km_abastecimento: '', combustivel_tipo: 'diesel', observacoes: '',
     }),
     formFields: (meta, form, setForm, veiculos, motoristas) => [
@@ -337,7 +340,7 @@ export const ENTITY_CONFIGS = {
     needsVeiculos: true,
     needsMotoristas: true,
     getDefaultForm: () => ({
-      veiculo_id: '', motorista_id: '', data_checklist: new Date().toISOString().slice(0, 10),
+      veiculo_id: '', motorista_id: '', data_checklist: hojeLocalISO(),
       pneus_ok: 1, oleo_ok: 1, luzes_ok: 1, freios_ok: 1, extintor_ok: 1, documentos_ok: 1, limpeza_ok: 1,
       observacoes: '',
     }),

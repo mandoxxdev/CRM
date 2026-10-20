@@ -12,6 +12,7 @@ import {
   FiFilter, FiCalendar, FiBarChart2, FiArrowDown, FiArrowUp, FiGrid
 } from 'react-icons/fi';
 import { exportToExcel } from '../utils/exportExcel';
+import { formatDateBR } from '../utils/formatDate';
 import { SkeletonTable } from './SkeletonLoader';
 import './Financeiro.css';
 import './Loading.css';
@@ -120,9 +121,11 @@ const Financeiro = () => {
     }).format(value || 0);
   };
 
+  // Etapa 164 (RN-164.09, B1050): a data sem hora (AAAA-MM-DD) e lida como LOCAL — o `new Date('AAAA-MM-DD')` e a meia-noite UTC, e no
+  // Brasil o toLocaleDateString mostrava a vespera. Vazio continua `-`.
   const formatDate = (date) => {
     if (!date) return '-';
-    return new Date(date).toLocaleDateString('pt-BR');
+    return formatDateBR(date);
   };
 
   const getStatusColor = (status) => {

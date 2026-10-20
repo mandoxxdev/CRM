@@ -182,6 +182,22 @@ describe('gerarEtiquetasPDF', () => {
     expect(doc.save).toHaveBeenCalledWith(expect.stringMatching(/^etiquetas-\d{4}-\d{2}-\d{2}\.pdf$/));
   });
 
+  test('[Etapa 164, B1051] o nome do arquivo leva o dia LOCAL (as 22h30 de 19/10 em UTC-3 o dia UTC ja e 20/10)', async () => {
+    const RealDate = Date;
+    const as2230 = new RealDate(2026, 9, 19, 22, 30);
+    expect(as2230.toISOString().slice(0, 10)).toBe('2026-10-20'); // guarda: fora de UTC, senao o cenario nao prova nada
+    class Parado extends RealDate {
+      constructor(...args) { if (args.length === 0) super(as2230.getTime()); else super(...args); }
+      static now() { return as2230.getTime(); }
+    }
+    global.Date = Parado;
+    try {
+      await gerarEtiquetasPDF({ formato: 'A4_GRADE', etiquetas: [{ codigo: 'M', nome: 'x', linhaControle: '', qrUrl: 'u' }] });
+    } finally { global.Date = RealDate; }
+    const doc = require('jspdf').default.__instancias.at(-1);
+    expect(doc.save).toHaveBeenCalledWith('etiquetas-2026-10-19.pdf');
+  });
+
   test('copias multiplica as etiquetas; termica cria 1 pagina por etiqueta', async () => {
     await gerarEtiquetasPDF({ formato: 'TERMICA_100x50', etiquetas: [{ codigo: 'M', nome: 'x', linhaControle: 'SN: 1', qrUrl: 'u' }], copias: 3 });
     const doc = require('jspdf').default.__instancias.at(-1);

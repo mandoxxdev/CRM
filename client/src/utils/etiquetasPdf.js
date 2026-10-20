@@ -4,6 +4,7 @@
 import jsPDF from 'jspdf';
 import QRCode from 'qrcode';
 import { quantidadeQueEntra } from './quantidadeQueEntra';
+import { hojeLocalISO } from './dataLocal';
 
 export const FORMATOS_ETIQUETA = {
   A4_GRADE: {
@@ -173,6 +174,6 @@ export async function gerarEtiquetasPDF({ formato, etiquetas, copias = 1 }) {
     }
   });
 
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = hojeLocalISO(); // Etapa 164 (B1051): o dia local no nome do arquivo (antes o UTC)
   doc.save(`etiquetas-${hoje}.pdf`);
 }
