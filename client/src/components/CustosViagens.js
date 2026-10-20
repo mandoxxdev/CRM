@@ -1354,7 +1354,7 @@ const CustosViagens = () => {
                         {custo.codigo_visita || '-'}
                       </span>
                     </td>
-                    <td>{formatarDataDoBanco(custo.data_viagem, '—')}</td>
+                    <td>{formatarDataDoBanco(custo.data_viagem, '—', { soData: true })}</td>
                     <td>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                         {custo.cliente_nome && (

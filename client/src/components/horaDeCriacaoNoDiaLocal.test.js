@@ -112,6 +112,8 @@ test('[RN-168.01/02] Usuarios: o Cadastrado em da lista e da planilha; sem data,
   const linha = (nome) => [...container.querySelectorAll('tr')].find((tr) => tr.textContent.includes(nome));
   expect(linha('USUARIO 168 NOITE').textContent).toContain('20/10/2026');
   expect(linha('USUARIO 168 NOITE').textContent).not.toContain('21/10/2026');
+  // Fase 5 r3 S42: a celula Cadastrado em e exatamente a data (sem a hora)
+  expect([...linha('USUARIO 168 NOITE').querySelectorAll('td')].map((td) => td.textContent.trim())).toContain('20/10/2026');
   expect(linha('USUARIO 168 SEM DATA').textContent).toContain('—');
   expect(linha('USUARIO 168 SEM DATA').textContent).not.toContain('1969');
   await clicar(container.querySelector('button[title="Exportar para Excel (Ctrl+E)"]'));
@@ -122,6 +124,7 @@ test('[RN-168.01/02/03] Logs: a Data/Hora na tabela e na planilha; o filtro do d
   respostas['/auditoria/logs'] = [
     { id: 1, usuario_nome: 'LOG 168 NOITE', tipo: 'acesso_negado', modulo: 'comercial', created_at: BANCO },
     { id: 2, usuario_nome: 'LOG 168 ILEGIVEL', tipo: 'login', modulo: 'comercial', created_at: 'lixo' },
+    { id: 3, usuario_nome: 'LOG 168 SEM DATA', tipo: 'login', modulo: 'comercial', created_at: null }, // Fase 5 r3 S39
   ];
   await montar(<Logs />);
   await esperar(() => container.textContent.includes('LOG 168 NOITE'));
@@ -131,7 +134,8 @@ test('[RN-168.01/02/03] Logs: a Data/Hora na tabela e na planilha; o filtro do d
   expect(linha('LOG 168 ILEGIVEL').textContent).toContain('lixo'); // antes Invalid Date
   expect(linha('LOG 168 ILEGIVEL').textContent).not.toContain('Invalid Date');
   await clicar(container.querySelector('button[title="Exportar Excel"]'));
-  expect(exportado().map((l) => l['Data/Hora'])).toEqual([CERTO, 'lixo']);
+  expect(linha('LOG 168 SEM DATA').querySelector('td').textContent).toBe('—');
+  expect(exportado().map((l) => l['Data/Hora'])).toEqual([CERTO, 'lixo', '']);
   // o gesto seguinte: filtrar o dia 20 (o dia que a linha mostra) — a rota real (T3) devolve o log das 22h30 nesse dia
   respostas['/auditoria/logs'] = [{ id: 1, usuario_nome: 'LOG 168 NOITE', tipo: 'acesso_negado', modulo: 'comercial', created_at: BANCO }];
   const [ini, fim] = container.querySelectorAll('input[type="date"]');
@@ -149,7 +153,10 @@ test('[RN-168.01/02/03] Logs: a Data/Hora na tabela e na planilha; o filtro do d
 
 test('[RN-168.01/05] Custos de Viagem: a Data da lista no dia gravado; o comprovante, o historico e a autorizacao no relogio de Brasilia', async () => {
   respostas['/custos-viagens'] = [{ id: 31, codigo_visita: 'V-168', cliente_id: 5, cliente_nome: 'CLIENTE VIAGEM 168', data_viagem: '2026-10-20',
-    destino: 'CAMPINAS - SP', total_custo: 80, status_aprovacao: 'pendente' }];
+    destino: 'CAMPINAS - SP', total_custo: 80, status_aprovacao: 'pendente' },
+    // Fase 5 r1 M1: a data com hora (so de um cliente de API externo) vale pelo prefixo — antes do soData sairia 19/10
+    { id: 32, codigo_visita: 'V-168H', cliente_id: 5, cliente_nome: 'CLIENTE VIAGEM 168', data_viagem: '2026-10-21 00:00:00',
+      destino: 'CAMPINAS - SP', total_custo: 80, status_aprovacao: 'pendente' }];
   respostas['/custos-viagens/resumo'] = {};
   respostas['/custos-viagens/31/comprovantes'] = [{ id: 1, nome_original: 'nota168.pdf', tipo_comprovante: 'nota', tamanho: 2048,
     uploaded_by_nome: 'QUEM ENVIOU 168', created_at: BANCO }];
@@ -162,6 +169,9 @@ test('[RN-168.01/05] Custos de Viagem: a Data da lista no dia gravado; o comprov
   const linha = [...container.querySelectorAll('tr')].find((tr) => tr.textContent.includes('V-168'));
   expect(linha.textContent).toContain('20/10/2026'); // antes 19/10/2026 (a vespera)
   expect(linha.textContent).not.toContain('19/10/2026');
+  const comHora = [...container.querySelectorAll('tr')].find((tr) => tr.textContent.includes('V-168H'));
+  expect(comHora.textContent).toContain('21/10/2026');
+  expect(comHora.textContent).not.toContain('20/10/2026');
 
   await clicar(container.querySelector('button[title="Comprovantes"]'));
   await esperar(() => container.textContent.includes('QUEM ENVIOU 168'));
@@ -189,12 +199,15 @@ test('[RN-168.01] Minhas Solicitacoes de Compra: a criacao no relogio de Brasili
   await esperar(() => container.textContent.includes('#2'));
   expect(container.textContent).toContain(CERTO);
   expect(container.textContent).not.toContain(ERRADO);
-  expect([...container.querySelectorAll('.msc-muted')].map((d) => d.textContent)).toContain('—');
+  // Fase 5 r3 S36: a celula Data de cada linha (o '—' da Decisao nao conta)
+  const data = (id) => [...container.querySelectorAll('.msc-row')].find((r) => r.textContent.includes(id)).lastElementChild.textContent;
+  expect(data('#1')).toBe(CERTO);
+  expect(data('#2')).toBe('—');
 });
 
 test('[RN-168.01] o editor do modelo da proposta: a data do modelo salvo no dia de Brasilia', async () => {
-  respostasAxios['/api/proposta-template/list'] = [{ id: 1, nome_template: 'MODELO 168', familia: 'ESTRUTURA', is_padrao: 0, created_at: BANCO,
-    updated_at: BANCO }];
+  respostasAxios['/api/proposta-template/list'] = [{ id: 1, nome_template: 'MODELO 168', familia: 'ESTRUTURA', is_padrao: 0,
+    created_at: '2026-09-01 12:00:00', updated_at: BANCO }]; // Fase 5 r3 S41: a data e a da ultima alteracao
   await montar(<EditorTemplateProposta />);
   await esperar(() => axios.get.mock.calls.some(([u]) => String(u).startsWith('/api/proposta-template/list')));
   const botao = [...container.querySelectorAll('button')].find((b) => b.textContent.includes('Carregar Template'));
@@ -203,4 +216,5 @@ test('[RN-168.01] o editor do modelo da proposta: a data do modelo salvo no dia 
   const meta = container.querySelector('.template-item-meta');
   expect(meta.textContent).toContain('20/10/2026'); // antes 21/10/2026
   expect(meta.textContent).not.toContain('21/10/2026');
+  expect(meta.textContent).toBe('ESTRUTURA • 20/10/2026'); // Fase 5 r3 S43: sem a hora; S41: nao o 01/09/2026 da criacao
 });
