@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../services/api';
+import { lerInstanteDoBanco } from '../../utils/dataLocal';
 import './HistoricoEdicoes.css';
 
 // Keys for campo (contact field changes) and tipo (clause event types)
@@ -22,9 +23,11 @@ const LABELS = {
   item_removido: 'Produto removido',
 };
 
+// Etapa 165 (RN-165.07, B1058): o `'AAAA-MM-DD HH:MM:SS'` do banco lido como UTC (antes como hora local: +3 h)
 function formatarData(str) {
   if (!str) return '—';
-  const d = new Date(str);
+  const d = lerInstanteDoBanco(str);
+  if (!d) return '—';
   return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 

@@ -36,3 +36,28 @@ export function lerInstanteDoBanco(valor) {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? null : d;
 }
+
+/**
+ * Etapa 165 (RN-165.07, B1058) — a data que o banco guarda, como `Date`, para EXIBIR e ORDENAR. `new Date('AAAA-MM-DD')` e a meia-noite
+ * UTC: no Brasil, 21h da VESPERA — era o que o sino, as Atividades, o calendario e os paineis do Comercial mostravam, o dia inteiro.
+ *   - so data `'AAAA-MM-DD'` (o lembrete, a validade, a atividade de aprovacao) -> meia-noite LOCAL do dia gravado (data impossivel -> null);
+ *   - `'AAAA-MM-DD HH:MM:SS'` do banco (UTC sem fuso) -> o instante UTC (`lerInstanteDoBanco`);
+ *   - ISO com `T` (o calendario grava com `Z`) -> como esta;
+ *   - vazio, nao texto, invalido -> `null`.
+ */
+export function lerDataDoBanco(valor) {
+  if (typeof valor === 'string') {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(valor.trim());
+    if (m) {
+      const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+      return d.getFullYear() === Number(m[1]) && d.getMonth() === Number(m[2]) - 1 && d.getDate() === Number(m[3]) ? d : null;
+    }
+  }
+  return lerInstanteDoBanco(valor);
+}
+
+/** `DD/MM/AAAA` da data do banco no dia local (`lerDataDoBanco`); vazio ou ilegivel -> `vazio`. */
+export function formatarDataDoBanco(valor, vazio = '-') {
+  const d = lerDataDoBanco(valor);
+  return d ? `${dois(d.getDate())}/${dois(d.getMonth() + 1)}/${d.getFullYear()}` : vazio;
+}

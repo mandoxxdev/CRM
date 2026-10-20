@@ -20,6 +20,7 @@ import { nomeArquivoPdfProposta } from '../../utils/nomeArquivoPdf';
 import { formatarMoedaBR, digitadoParaValor } from '../../utils/moeda';
 import { lerAcessoriosParaEdicao, totalAcessoriosDosItens } from '../../utils/acessoriosItem';
 import { montarPayloadProposta } from './payloadProposta';
+import { hojeLocalISO } from '../../utils/dataLocal';
 import './PropostaForm.css';
 
 const TIPOS = [
@@ -333,8 +334,9 @@ export default function PropostaForm() {
       ...f,
       status,
       motivo_nao_venda: STATUS_EXIGE_MOTIVO.includes(status) ? f.motivo_nao_venda : '',
+      // Etapa 165 (RN-165.05, B1056): o dia local (antes o UTC: das 21h a meia-noite o campo vinha com amanha — e era o que se gravava)
       data_fechamento: ['aprovada', 'rejeitada'].includes(status) && !f.data_fechamento
-        ? new Date().toISOString().split('T')[0]
+        ? hojeLocalISO()
         : f.data_fechamento
     }));
   };

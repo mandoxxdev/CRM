@@ -4,6 +4,7 @@ import { format, parse, startOfWeek, getDay } from 'date-fns';
 import ptBR from 'date-fns/locale/pt-BR';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import { FiCalendar, FiList, FiPlus, FiX, FiUser, FiEdit, FiTrash2 } from 'react-icons/fi';
+import { lerDataDoBanco } from '../utils/dataLocal';
 import './CalendarioAtividades.css';
 
 const locales = {
@@ -32,9 +33,10 @@ const CalendarioAtividades = ({ atividades, onSelectEvent, view, onViewChange, d
         }
         return true;
       })
-      .filter(atividade => atividade.data_agendada) // Apenas atividades com data
+      .filter(atividade => lerDataDoBanco(atividade.data_agendada)) // Apenas atividades com data (legivel — Etapa 165: a ilegivel derrubava o calendario)
       .map(atividade => {
-        const dataInicio = new Date(atividade.data_agendada);
+        // Etapa 165 (RN-165.07, B1058): a data so de data no dia gravado (antes `new Date('AAAA-MM-DD')` = 21h da vespera: o lembrete ia para o dia anterior)
+        const dataInicio = lerDataDoBanco(atividade.data_agendada);
         // Se não tiver hora, definir como 9h da manhã
         if (!atividade.data_agendada.includes('T') || atividade.data_agendada.split('T')[1]?.length <= 1) {
           dataInicio.setHours(9, 0, 0, 0);

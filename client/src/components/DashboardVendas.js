@@ -8,7 +8,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, 
   ResponsiveContainer, Cell, LabelList
 } from 'recharts';
-import { format } from 'date-fns';
+import { formatarDataDoBanco } from '../utils/dataLocal'; // Etapa 165 (B1058): a validade no dia gravado (antes a vespera)
 import './DashboardVendas.css';
 
 const DashboardVendas = () => {
@@ -252,7 +252,7 @@ const DashboardVendas = () => {
                         <FiClock /> {proposta.dias_restantes} dias restantes
                       </span>
                       <span>
-                        <FiFileText /> Validade: {format(new Date(proposta.validade), 'dd/MM/yyyy')}
+                        <FiFileText /> Validade: {formatarDataDoBanco(proposta.validade)}
                       </span>
                       {proposta.responsavel_nome && (
                         <span>Responsável: {proposta.responsavel_nome}</span>

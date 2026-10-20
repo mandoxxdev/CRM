@@ -6,7 +6,7 @@ import { getEffectiveUser } from '../services/permissionsCache';
 import { fetchComercialResponsaveis } from '../utils/userFilters';
 import { toast } from 'react-toastify';
 import { FiFilter, FiX, FiAlertCircle, FiClock, FiCalendar, FiList, FiSearch } from 'react-icons/fi';
-import { format } from 'date-fns';
+import { formatarDataDoBanco, lerDataDoBanco } from '../utils/dataLocal';
 import CalendarioAtividades from './CalendarioAtividades';
 import './Atividades.css';
 import './Loading.css';
@@ -17,6 +17,29 @@ import './Loading.css';
 export function paramsDoFiltro(filtroUsuario) {
   if (filtroUsuario === 'todos') return { todos: true };
   return filtroUsuario ? { responsavel_id: filtroUsuario } : {};
+}
+
+/**
+ * Etapa 165 (RN-165.07, B1058): a ordem da lista — com `vencidosPrimeiro`, os de data antes da meia-noite local de hoje primeiro; depois a
+ * data; sem data (ou ilegivel) no fim. A data pelo `lerDataDoBanco`: so data = meia-noite LOCAL (antes `new Date('AAAA-MM-DD')`, a meia-noite
+ * UTC = 21h da vespera, e a atividade de hoje as 22h — ISO com Z — ficava depois do lembrete de amanha); o lembrete ilegivel derrubava a pagina.
+ */
+export function ordenarAtividades(lista, { vencidosPrimeiro = false } = {}, agora = new Date()) {
+  const hoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+  return [...(lista || [])].sort((a, b) => {
+    const dataA = lerDataDoBanco(a.data_agendada);
+    const dataB = lerDataDoBanco(b.data_agendada);
+    if (!dataA && !dataB) return 0;
+    if (!dataA) return 1;
+    if (!dataB) return -1;
+    if (vencidosPrimeiro) {
+      const aVencido = dataA < hoje;
+      const bVencido = dataB < hoje;
+      if (aVencido && !bVencido) return -1;
+      if (!aVencido && bVencido) return 1;
+    }
+    return dataA - dataB;
+  });
 }
 
 const Atividades = () => {
@@ -61,25 +84,7 @@ const Atividades = () => {
           api.get('/clientes')
         ]);
         // Ordenar atividades: lembretes vencidos primeiro, depois por data
-        const atividadesOrdenadas = (atividadesRes.data || []).sort((a, b) => {
-          if (!a.data_agendada && !b.data_agendada) return 0;
-          if (!a.data_agendada) return 1;
-          if (!b.data_agendada) return -1;
-          
-          const dataA = new Date(a.data_agendada);
-          const dataB = new Date(b.data_agendada);
-          const hoje = new Date();
-          hoje.setHours(0, 0, 0, 0);
-          
-          // Lembretes vencidos primeiro
-          const aVencido = dataA < hoje;
-          const bVencido = dataB < hoje;
-          if (aVencido && !bVencido) return -1;
-          if (!aVencido && bVencido) return 1;
-          
-          // Depois ordenar por data (mais próximos primeiro)
-          return dataA - dataB;
-        });
+        const atividadesOrdenadas = ordenarAtividades(atividadesRes.data, { vencidosPrimeiro: true });
         
         setAtividades(atividadesOrdenadas);
         setUsuarios(usuariosList);
@@ -194,23 +199,7 @@ const Atividades = () => {
         api.get('/atividades', { params: paramsDoFiltro(filtroUsuario) })
       ]);
       
-      const atividadesOrdenadas = (atividadesRes.data || []).sort((a, b) => {
-        if (!a.data_agendada && !b.data_agendada) return 0;
-        if (!a.data_agendada) return 1;
-        if (!b.data_agendada) return -1;
-        
-        const dataA = new Date(a.data_agendada);
-        const dataB = new Date(b.data_agendada);
-        const hoje = new Date();
-        hoje.setHours(0, 0, 0, 0);
-        
-        const aVencido = dataA < hoje;
-        const bVencido = dataB < hoje;
-        if (aVencido && !bVencido) return -1;
-        if (!aVencido && bVencido) return 1;
-        
-        return dataA - dataB;
-      });
+      const atividadesOrdenadas = ordenarAtividades(atividadesRes.data, { vencidosPrimeiro: true });
       
       setAtividades(atividadesOrdenadas);
       handleFecharModal();
@@ -329,14 +318,7 @@ const Atividades = () => {
               // Recarregar atividades
               const params = paramsDoFiltro(filtroUsuario);
               const atividadesRes = await api.get('/atividades', { params });
-              const atividadesOrdenadas = (atividadesRes.data || []).sort((a, b) => {
-                if (!a.data_agendada && !b.data_agendada) return 0;
-                if (!a.data_agendada) return 1;
-                if (!b.data_agendada) return -1;
-                const dataA = new Date(a.data_agendada);
-                const dataB = new Date(b.data_agendada);
-                return dataA - dataB;
-              });
+              const atividadesOrdenadas = ordenarAtividades(atividadesRes.data);
               setAtividades(atividadesOrdenadas);
             } catch (error) {
               console.error('Erro ao criar atividade:', error);
@@ -350,14 +332,7 @@ const Atividades = () => {
               // Recarregar atividades
               const params = paramsDoFiltro(filtroUsuario);
               const atividadesRes = await api.get('/atividades', { params });
-              const atividadesOrdenadas = (atividadesRes.data || []).sort((a, b) => {
-                if (!a.data_agendada && !b.data_agendada) return 0;
-                if (!a.data_agendada) return 1;
-                if (!b.data_agendada) return -1;
-                const dataA = new Date(a.data_agendada);
-                const dataB = new Date(b.data_agendada);
-                return dataA - dataB;
-              });
+              const atividadesOrdenadas = ordenarAtividades(atividadesRes.data);
               setAtividades(atividadesOrdenadas);
             } catch (error) {
               console.error('Erro ao atualizar atividade:', error);
@@ -371,14 +346,7 @@ const Atividades = () => {
               // Recarregar atividades
               const params = paramsDoFiltro(filtroUsuario);
               const atividadesRes = await api.get('/atividades', { params });
-              const atividadesOrdenadas = (atividadesRes.data || []).sort((a, b) => {
-                if (!a.data_agendada && !b.data_agendada) return 0;
-                if (!a.data_agendada) return 1;
-                if (!b.data_agendada) return -1;
-                const dataA = new Date(a.data_agendada);
-                const dataB = new Date(b.data_agendada);
-                return dataA - dataB;
-              });
+              const atividadesOrdenadas = ordenarAtividades(atividadesRes.data);
               setAtividades(atividadesOrdenadas);
             } catch (error) {
               console.error('Erro ao excluir atividade:', error);
@@ -493,7 +461,7 @@ const Atividades = () => {
                   {atividade.data_agendada && (
                     <span>
                       {atividade.tipo === 'lembrete' ? 'Lembrete para: ' : 'Agendada: '}
-                      {format(new Date(atividade.data_agendada), 'dd/MM/yyyy')}
+                      {formatarDataDoBanco(atividade.data_agendada)}
                     </span>
                   )}
                   <span className={`prioridade-badge ${atividade.prioridade}`}>
@@ -529,7 +497,7 @@ const Atividades = () => {
                 <p><strong>Proposta:</strong> {modalLembrete.numero_proposta}</p>
                 <p><strong>Título:</strong> {modalLembrete.titulo.replace('Lembrete: ', '')}</p>
                 {modalLembrete.data_agendada && (
-                  <p><strong>Data do Lembrete:</strong> {format(new Date(modalLembrete.data_agendada), 'dd/MM/yyyy')}</p>
+                  <p><strong>Data do Lembrete:</strong> {formatarDataDoBanco(modalLembrete.data_agendada)}</p>
                 )}
                 {modalLembrete.descricao && (
                   <div className="modal-lembrete-mensagem">

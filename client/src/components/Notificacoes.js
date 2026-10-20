@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { FiBell, FiX, FiFileText, FiAlertCircle } from 'react-icons/fi';
-import { format } from 'date-fns';
+import { formatarDataDoBanco } from '../utils/dataLocal'; // Etapa 165 (B1058): a data do lembrete no dia gravado (antes a vespera)
 import './Notificacoes.css';
 
 const Notificacoes = () => {
@@ -172,7 +172,7 @@ const Notificacoes = () => {
                       <span>{notificacao.cliente_nome}</span>
                       {notificacao.data && (
                         <span>
-                          {format(new Date(notificacao.data), 'dd/MM/yyyy')}
+                          {formatarDataDoBanco(notificacao.data)}
                         </span>
                       )}
                     </div>

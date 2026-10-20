@@ -23,7 +23,13 @@ export function formatDateBR(value, pattern = 'dd/MM/yyyy') {
   }
 }
 
+// Etapa 165 (RN-165.07, B1058): o `'AAAA-MM-DD HH:MM:SS'` do banco (o CURRENT_TIMESTAMP, UTC sem fuso) e lido como UTC — o `parseISO` o
+// lia como hora local: *Criada em*, *Enviada em* e o historico das propostas saiam 3 h adiantados (das 21h, no dia seguinte).
+const RE_INSTANTE_DO_BANCO = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
 export function formatDateTimeBR(value) {
+  if (typeof value === 'string' && RE_INSTANTE_DO_BANCO.test(value.trim())) {
+    return formatDateBR(new Date(`${value.trim().replace(' ', 'T')}Z`), 'dd/MM/yyyy HH:mm');
+  }
   return formatDateBR(value, 'dd/MM/yyyy HH:mm');
 }
 

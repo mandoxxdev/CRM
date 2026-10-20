@@ -14,7 +14,16 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, 
   AreaChart, Area, ComposedChart, Line, LabelList
 } from 'recharts';
+// Etapa 165 (RN-165.07, B1058): a data do lembrete no dia gravado e o mes do grafico de evolucao no mes certo (antes, lidos como meia-noite
+// UTC: a vespera — e o mes anterior)
+import { formatarDataDoBanco, lerDataDoBanco } from '../utils/dataLocal';
 import './Dashboard.css';
+
+/** Etapa 165 (B1058): o rotulo curto do mes `AAAA-MM` do historico ("out."); ilegivel -> `null`. Antes `new Date('AAAA-MM-01')`: o mes anterior. */
+export function rotuloDoMesDoHistorico(mes) {
+  const d = typeof mes === 'string' ? lerDataDoBanco(`${mes}-01`) : null;
+  return d ? d.toLocaleString('pt-BR', { month: 'short' }) : null;
+}
 
 // Atalhos de periodo. Devolvem sempre o PAR completo (inicio e fim) para nao deixar um
 // intervalo pela metade quando o usuario pula de um atalho para outro.
@@ -195,7 +204,7 @@ const Dashboard = () => {
         });
         // Formatar histórico para o formato esperado pelos gráficos
         const historicoFormatado = (historicoRes.data || []).map(item => ({
-          name: item.mes ? new Date(item.mes + '-01').toLocaleString('pt-BR', { month: 'short' }) : item.name || 'Sem data',
+          name: rotuloDoMesDoHistorico(item.mes) || item.name || 'Sem data',
           clientes: item.clientes || 0,
           projetos: item.projetos || 0,
           receita: item.receita || item.propostas_aprovadas || item.valor_total || 0
@@ -1391,7 +1400,7 @@ const Dashboard = () => {
                           <td>{item.numero_proposta}</td>
                           <td>{item.razao_social}</td>
                           <td>{item.titulo}</td>
-                          <td>{item.lembrete_data ? new Date(item.lembrete_data).toLocaleDateString('pt-BR') : '-'}</td>
+                          <td>{formatarDataDoBanco(item.lembrete_data)}</td>
                           <td>{item.lembrete_mensagem || '-'}</td>
                           <td>
                             <span className={`status-badge ${item.status}`}>{item.status}</span>
