@@ -5,6 +5,7 @@ import { toast } from 'react-toastify';
 import { FiPlus, FiSearch, FiEdit, FiTrash2, FiX } from 'react-icons/fi';
 import ProducaoPageHeader from './ProducaoPageHeader';
 import './Producao.css';
+import useUltimoPedido from '../../hooks/useUltimoPedido';
 
 const defaultForm = (meta) => ({
   codigo: '', nome: '', setor: meta?.setores?.[0] || '', tipo: 'maquina',
@@ -21,21 +22,27 @@ const MaquinasProducao = () => {
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
 
+  // Etapa 161 (RN-161.01, C396): so o ULTIMO pedido mexe na lista — a resposta, o erro e o fim do carregando de um pedido anterior (a
+  // busca velha; tambem quem recarrega depois de salvar ou excluir) sao descartados
+  const novoPedido = useUltimoPedido();
   const load = useCallback(async () => {
+    const ehUltimo = novoPedido();
     setLoading(true);
     try {
       const [m, res] = await Promise.all([
         fetchProducaoMeta(),
         api.get('/producao/maquinas', { params: search ? { search } : {} }),
       ]);
+      if (!ehUltimo()) return;
       setMeta(m);
       setRows(res.data || []);
     } catch (e) {
+      if (!ehUltimo()) return;
       toast.error(e.response?.data?.error || 'Erro ao carregar máquinas');
     } finally {
-      setLoading(false);
+      if (ehUltimo()) setLoading(false);
     }
-  }, [search]);
+  }, [search, novoPedido]);
 
   useEffect(() => { load(); }, [load]);
 

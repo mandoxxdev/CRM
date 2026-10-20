@@ -6,6 +6,7 @@ import { toast } from 'react-toastify';
 import { FiPlus, FiSearch, FiEdit, FiTrash2, FiPlay, FiCheck } from 'react-icons/fi';
 import ProducaoPageHeader from './ProducaoPageHeader';
 import './Producao.css';
+import useUltimoPedido from '../../hooks/useUltimoPedido';
 
 const OrdensProducao = () => {
   const navigate = useNavigate();
@@ -15,7 +16,11 @@ const OrdensProducao = () => {
   const [search, setSearch] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('');
 
+  // Etapa 161 (RN-161.01, C396): so o ULTIMO pedido mexe na lista — a resposta, o erro e o fim do carregando de um pedido anterior (o
+  // filtro velho; tambem quem recarrega depois de mudar o status ou excluir) sao descartados
+  const novoPedido = useUltimoPedido();
   const load = useCallback(async () => {
+    const ehUltimo = novoPedido();
     setLoading(true);
     try {
       const params = {};
@@ -25,14 +30,16 @@ const OrdensProducao = () => {
         api.get('/producao/ops', { params }),
         fetchProducaoMeta().catch(() => null),
       ]);
+      if (!ehUltimo()) return;
       setRows(res.data || []);
       setMeta(m);
     } catch (e) {
+      if (!ehUltimo()) return;
       toast.error(e.response?.data?.error || 'Erro ao carregar OPs');
     } finally {
-      setLoading(false);
+      if (ehUltimo()) setLoading(false);
     }
-  }, [search, filtroStatus]);
+  }, [search, filtroStatus, novoPedido]);
 
   useEffect(() => { load(); }, [load]);
 

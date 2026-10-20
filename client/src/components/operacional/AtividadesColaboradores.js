@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
+import useUltimoPedido from '../../hooks/useUltimoPedido';
 import { toast } from 'react-toastify';
 import { FiPlus, FiSearch, FiFilter, FiPlay, FiCheckCircle, FiClock } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
@@ -22,18 +23,24 @@ const AtividadesColaboradores = () => {
   // Etapa 160 (RN-160.05, C394): a busca filtra no navegador (abaixo) — digitar nao recarrega a lista
   }, [filterStatus]);
 
+  // Etapa 161 (RN-161.01, C396): so o ULTIMO pedido mexe na lista — a resposta, o erro (o aviso) e o fim do carregando de um pedido
+  // anterior (o filtro velho; tambem o intervalo de 30 s e o finalizar) sao descartados; o descarte e return, nunca erro
+  const novoPedido = useUltimoPedido();
   const loadAtividades = async () => {
+    const ehUltimo = novoPedido();
     try {
       setLoading(true);
       const response = await api.get('/operacional/atividades-colaboradores', {
         params: { status: filterStatus || undefined }
       });
+      if (!ehUltimo()) return;
       setAtividades(response.data || []);
     } catch (error) {
+      if (!ehUltimo()) return;
       console.error('Erro ao carregar atividades:', error);
       toast.error('Erro ao carregar atividades');
     } finally {
-      setLoading(false);
+      if (ehUltimo()) setLoading(false);
     }
   };
 

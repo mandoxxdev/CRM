@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import { hojeLocalISO } from '../utils/dataLocal';
 import { caminhoDoProdutoPeloCodigo } from '../utils/produtoPeloCodigo';
 import { useAuth } from '../context/AuthContext';
 import { getEffectiveUser } from '../services/permissionsCache';
@@ -25,7 +26,8 @@ const OSComercialForm = ({ proposta: propostaProp, onClose }) => {
     tipo_os: 'fabricacao',
     prioridade: 'normal',
     status: 'pendente',
-    data_abertura: new Date().toISOString().split('T')[0],
+    // Etapa 161 (RN-161.05, C397): o dia LOCAL — o toISOString dava o dia UTC (depois das 21h, o de amanha), gravado se ninguem mexe
+    data_abertura: hojeLocalISO(),
     data_prevista: '',
     descricao: '',
     observacoes: '',

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import api from '../../services/api';
+import { hojeLocalISO } from '../../utils/dataLocal';
 import { fetchProducaoMeta, STATUS_OP_LABELS, statusOpClass, invalidateProducaoDashboardCache } from '../../utils/producaoApi';
 import { toast } from 'react-toastify';
 import { FiSave, FiArrowLeft } from 'react-icons/fi';
@@ -14,7 +15,8 @@ const defaultForm = () => ({
   quantidade_planejada: 1,
   prioridade: 'normal',
   status: 'planejada',
-  data_planejada: new Date().toISOString().slice(0, 10),
+  // Etapa 161 (RN-161.05, C397): o dia LOCAL — o toISOString dava o dia UTC (depois das 21h, o de amanha), gravado se ninguem mexe
+  data_planejada: hojeLocalISO(),
   data_prevista_fim: '',
   maquina_id: '',
   os_id: '',

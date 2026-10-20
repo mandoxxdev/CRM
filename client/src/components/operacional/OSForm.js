@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
+import { hojeLocalISO } from '../../utils/dataLocal';
 import { useAuth } from '../../context/AuthContext';
 import { getEffectiveUser } from '../../services/permissionsCache';
 import { fetchModuleUsers } from '../../utils/userFilters';
@@ -26,7 +27,8 @@ const OSForm = ({ os, onClose }) => {
     tipo_os: 'fabricacao',
     prioridade: 'normal',
     status: 'pendente',
-    data_abertura: new Date().toISOString().split('T')[0],
+    // Etapa 161 (RN-161.05, C397): o dia LOCAL — o toISOString dava o dia UTC (depois das 21h, o de amanha), gravado se ninguem mexe
+    data_abertura: hojeLocalISO(),
     data_prevista: '',
     data_entrada_pedido: '',
     data_entrega: '',
@@ -168,7 +170,7 @@ const OSForm = ({ os, onClose }) => {
         tipo_os: opcaoQueCasa(os.tipo_os, TIPOS_OS) || 'fabricacao',
         prioridade: opcaoQueCasa(os.prioridade, PRIORIDADES_OS) || 'normal',
         status: os.status || 'pendente',
-        data_abertura: os.data_abertura ? os.data_abertura.split('T')[0] : new Date().toISOString().split('T')[0],
+        data_abertura: os.data_abertura ? os.data_abertura.split('T')[0] : hojeLocalISO(),
         data_prevista: os.data_prevista ? os.data_prevista.split('T')[0] : '',
         data_entrada_pedido: os.data_entrada_pedido ? os.data_entrada_pedido.split('T')[0] : '',
         data_entrega: os.data_entrega ? os.data_entrega.split('T')[0] : '',

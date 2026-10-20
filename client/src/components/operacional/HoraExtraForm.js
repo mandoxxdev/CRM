@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
+import { hojeLocalISO } from '../../utils/dataLocal';
 import { toast } from 'react-toastify';
 import { FiX, FiSave } from 'react-icons/fi';
 import './Operacional.css';
@@ -7,7 +8,8 @@ import './Operacional.css';
 const HoraExtraForm = ({ horaExtra, onClose }) => {
   const [formData, setFormData] = useState({
     colaborador_id: '',
-    data: new Date().toISOString().split('T')[0],
+    // Etapa 161 (RN-161.05, C397): o dia LOCAL — o toISOString dava o dia UTC (depois das 21h, o de amanha), gravado se ninguem mexe
+    data: hojeLocalISO(),
     horas_extras: '',
     tipo_hora_extra: 'normal',
     motivo: '',
@@ -22,7 +24,7 @@ const HoraExtraForm = ({ horaExtra, onClose }) => {
     if (horaExtra) {
       setFormData({
         colaborador_id: horaExtra.colaborador_id || '',
-        data: horaExtra.data ? horaExtra.data.split('T')[0] : new Date().toISOString().split('T')[0],
+        data: horaExtra.data ? horaExtra.data.split('T')[0] : hojeLocalISO(),
         horas_extras: horaExtra.horas_extras || '',
         tipo_hora_extra: horaExtra.tipo_hora_extra || 'normal',
         motivo: horaExtra.motivo || '',

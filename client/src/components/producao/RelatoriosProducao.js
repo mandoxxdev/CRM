@@ -4,20 +4,23 @@ import { toast } from 'react-toastify';
 import { FiRefreshCw } from 'react-icons/fi';
 import ProducaoPageHeader from './ProducaoPageHeader';
 import './Producao.css';
-
-const mesInicio = () => {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
-};
+import { hojeLocalISO, inicioDoMesLocalISO } from '../../utils/dataLocal';
+import useUltimoPedido from '../../hooks/useUltimoPedido';
 
 const RelatoriosProducao = () => {
-  const [dataInicio, setDataInicio] = useState(mesInicio());
-  const [dataFim, setDataFim] = useState(new Date().toISOString().slice(0, 10));
+  // Etapa 161 (RN-161.05, C397): o periodo padrao e o do mes LOCAL — o toISOString dava o fim no dia UTC (depois das 21h, amanha) e o
+  // inicio so dava certo por acaso (meia-noite local em UTC-3 ainda e o mesmo dia em UTC)
+  const [dataInicio, setDataInicio] = useState(() => inicioDoMesLocalISO());
+  const [dataFim, setDataFim] = useState(() => hojeLocalISO());
   const [aba, setAba] = useState('producao');
   const [dados, setDados] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  // Etapa 161 (RN-161.01, C396): as tres abas guardam a resposta num estado so — so o ULTIMO pedido mexe na tela (a resposta, o erro e o
+  // fim do carregando de um pedido anterior sao descartados); senao a resposta da aba velha seria desenhada pela nova
+  const novoPedido = useUltimoPedido();
   const load = useCallback(async () => {
+    const ehUltimo = novoPedido();
     setLoading(true);
     try {
       const params = { data_inicio: dataInicio, data_fim: dataFim };
@@ -27,14 +30,24 @@ const RelatoriosProducao = () => {
         paradas: '/producao/relatorios/paradas',
       };
       const { data } = await api.get(endpoints[aba], { params });
+      if (!ehUltimo()) return;
       setDados(data);
     } catch (e) {
+      if (!ehUltimo()) return;
       toast.error(e.response?.data?.error || 'Erro ao carregar relatório');
       setDados(null);
     } finally {
-      setLoading(false);
+      if (ehUltimo()) setLoading(false);
     }
-  }, [aba, dataInicio, dataFim]);
+  }, [aba, dataInicio, dataFim, novoPedido]);
+
+  // A troca de aba invalida o que esta em voo e ZERA os dados: ate o pedido da aba nova chegar, ela nao desenha a resposta da anterior
+  const trocarAba = (nova) => {
+    if (nova === aba) return;
+    novoPedido();
+    setDados(null);
+    setAba(nova);
+  };
 
   useEffect(() => { load(); }, [load]);
 
@@ -64,7 +77,7 @@ const RelatoriosProducao = () => {
               key={t.id}
               type="button"
               className={`producao-btn producao-btn-sm ${aba === t.id ? 'producao-btn-primary' : 'producao-btn-secondary'}`}
-              onClick={() => setAba(t.id)}
+              onClick={() => trocarAba(t.id)}
             >
               {t.label}
             </button>

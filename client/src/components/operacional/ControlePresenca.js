@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
+import useUltimoPedido from '../../hooks/useUltimoPedido';
+import { hojeLocalISO } from '../../utils/dataLocal';
 import { toast } from 'react-toastify';
 import { FiSearch, FiCalendar, FiClock } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
@@ -9,8 +11,9 @@ import './Operacional.css';
 const ControlePresenca = () => {
   const [presencas, setPresencas] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [dataInicio, setDataInicio] = useState(new Date().toISOString().split('T')[0]);
-  const [dataFim, setDataFim] = useState(new Date().toISOString().split('T')[0]);
+  // Etapa 161 (RN-161.05, C397): o filtro padrao e o hoje LOCAL — o toISOString dava o dia UTC (depois das 21h, o de amanha)
+  const [dataInicio, setDataInicio] = useState(hojeLocalISO());
+  const [dataFim, setDataFim] = useState(hojeLocalISO());
   const [showForm, setShowForm] = useState(false);
   const [selectedPresenca, setSelectedPresenca] = useState(null);
 
@@ -18,18 +21,24 @@ const ControlePresenca = () => {
     loadPresencas();
   }, [dataInicio, dataFim]);
 
+  // Etapa 161 (RN-161.01, C396): so o ULTIMO pedido mexe na lista — a resposta, o erro (o aviso) e o fim do carregando de um pedido
+  // anterior (o periodo velho; tambem quem recarrega depois de registrar) sao descartados; o descarte e return, nunca erro
+  const novoPedido = useUltimoPedido();
   const loadPresencas = async () => {
+    const ehUltimo = novoPedido();
     try {
       setLoading(true);
       const response = await api.get('/operacional/controle-presenca', {
         params: { data_inicio: dataInicio, data_fim: dataFim }
       });
+      if (!ehUltimo()) return;
       setPresencas(response.data || []);
     } catch (error) {
+      if (!ehUltimo()) return;
       console.error('Erro ao carregar presenças:', error);
       toast.error('Erro ao carregar presenças');
     } finally {
-      setLoading(false);
+      if (ehUltimo()) setLoading(false);
     }
   };
 

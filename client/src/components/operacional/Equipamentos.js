@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
+import useUltimoPedido from '../../hooks/useUltimoPedido';
 import { toast } from 'react-toastify';
 import { FiPlus, FiSearch, FiEdit, FiTrash2, FiFilter } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
@@ -18,18 +19,24 @@ const Equipamentos = () => {
     loadEquipamentos();
   }, [search, filterStatus]);
 
+  // Etapa 161 (RN-161.01, C396): so o ULTIMO pedido mexe na lista — a resposta, o erro (o aviso) e o fim do carregando de um pedido
+  // anterior (o filtro velho; tambem quem recarrega depois de excluir ou salvar) sao descartados; o descarte e return, nunca erro
+  const novoPedido = useUltimoPedido();
   const loadEquipamentos = async () => {
+    const ehUltimo = novoPedido();
     try {
       setLoading(true);
       const response = await api.get('/operacional/equipamentos', {
         params: { search, status: filterStatus }
       });
+      if (!ehUltimo()) return;
       setEquipamentos(response.data || []);
     } catch (error) {
+      if (!ehUltimo()) return;
       console.error('Erro ao carregar equipamentos:', error);
       toast.error('Erro ao carregar equipamentos');
     } finally {
-      setLoading(false);
+      if (ehUltimo()) setLoading(false);
     }
   };
 

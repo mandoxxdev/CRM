@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
+import useUltimoPedido from '../../hooks/useUltimoPedido';
 import { toast } from 'react-toastify';
 import { FiPlus, FiSearch, FiCheckCircle, FiXCircle, FiFilter } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
@@ -20,18 +21,24 @@ const HorasExtras = () => {
   // Etapa 160 (RN-160.05, C394): a busca filtra no navegador (abaixo) — digitar nao recarrega a lista
   }, [filterStatus]);
 
+  // Etapa 161 (RN-161.01, C396): so o ULTIMO pedido mexe na lista — a resposta, o erro (o aviso) e o fim do carregando de um pedido
+  // anterior (o filtro velho; tambem quem recarrega depois de aprovar ou salvar) sao descartados; o descarte e return, nunca erro
+  const novoPedido = useUltimoPedido();
   const loadHorasExtras = async () => {
+    const ehUltimo = novoPedido();
     try {
       setLoading(true);
       const response = await api.get('/operacional/horas-extras', {
         params: { status: filterStatus || undefined }
       });
+      if (!ehUltimo()) return;
       setHorasExtras(response.data || []);
     } catch (error) {
+      if (!ehUltimo()) return;
       console.error('Erro ao carregar horas extras:', error);
       toast.error('Erro ao carregar horas extras');
     } finally {
-      setLoading(false);
+      if (ehUltimo()) setLoading(false);
     }
   };
 

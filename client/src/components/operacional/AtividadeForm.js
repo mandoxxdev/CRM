@@ -3,6 +3,20 @@ import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { FiX, FiSave } from 'react-icons/fi';
 import './Operacional.css';
+import { agoraLocalParaInput } from '../../utils/dataLocal';
+
+// Etapa 161 (RN-161.05, C397): `atividades_colaboradores.data_inicio` e gravado como o TEXTO do datetime-local que esta tela manda
+// (`AAAA-MM-DDTHH:MM`, hora local, sem `Z` — o POST grava o valor como veio; o PUT nem o altera). O antigo
+// `new Date(gravado).toISOString().slice(0, 16)` lia esse texto como hora local e o devolvia em UTC: a edicao mostrava a hora 3 h
+// adiantada. O texto nessa forma (ou com espaco no lugar do `T`, com ou sem segundos) e mostrado como esta; so um gravado com fuso
+// (`Z`/deslocamento) passa pelo `Date` e sai na hora local.
+const paraInputLocal = (gravado) => {
+  if (!gravado) return agoraLocalParaInput();
+  const s = String(gravado).trim();
+  if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(s)) return s.slice(0, 16).replace(' ', 'T');
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? agoraLocalParaInput() : agoraLocalParaInput(d);
+};
 
 const AtividadeForm = ({ atividade, onClose }) => {
   const [formData, setFormData] = useState({
@@ -11,7 +25,8 @@ const AtividadeForm = ({ atividade, onClose }) => {
     item_id: '',
     tipo_atividade: '',
     descricao: '',
-    data_inicio: new Date().toISOString().slice(0, 16),
+    // Etapa 161 (RN-161.05, C397): o agora LOCAL (o toISOString punha a hora UTC no datetime-local — 3 h adiantada)
+    data_inicio: agoraLocalParaInput(),
     horas_previstas: '',
     observacoes: ''
   });
@@ -29,7 +44,7 @@ const AtividadeForm = ({ atividade, onClose }) => {
         item_id: atividade.item_id || '',
         tipo_atividade: atividade.tipo_atividade || '',
         descricao: atividade.descricao || '',
-        data_inicio: atividade.data_inicio ? new Date(atividade.data_inicio).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16),
+        data_inicio: paraInputLocal(atividade.data_inicio),
         horas_previstas: atividade.horas_previstas || '',
         observacoes: atividade.observacoes || ''
       });

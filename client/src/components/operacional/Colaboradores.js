@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
+import useUltimoPedido from '../../hooks/useUltimoPedido';
 import { toast } from 'react-toastify';
 import { 
   FiPlus, FiSearch, FiEdit, FiTrash2, FiFilter, 
@@ -21,25 +22,40 @@ const Colaboradores = () => {
   const [viewMode, setViewMode] = useState('cards'); // 'cards' ou 'table'
   const [showForm, setShowForm] = useState(false);
   const [selectedColaborador, setSelectedColaborador] = useState(null);
+  // Etapa 161 (RN-161.07, C399): as opcoes do Setor sao TODOS os setores que a tela ja recebeu — saiam da lista ja filtrada, entao
+  // escolher um setor sumia com os outros. So cresce: nao encolhe com o filtro
+  const [setoresVistos, setSetoresVistos] = useState([]);
 
   useEffect(() => {
     loadColaboradores();
     const interval = setInterval(loadColaboradores, 30000); // Atualizar a cada 30s
     return () => clearInterval(interval);
-  }, [search, filterStatus, filterSetor, filterTrabalho]);
+  // Etapa 161 (RN-161.07, C400): o Trabalho filtra no navegador (filteredColaboradores) — nao recarrega do servidor
+  }, [search, filterStatus, filterSetor]);
 
+  // Etapa 161 (RN-161.01, C396): so o ULTIMO pedido mexe na lista — a resposta, o erro (o aviso) e o fim do carregando de um pedido
+  // anterior (o filtro velho; tambem o intervalo de 30 s, o excluir e a disponibilidade) sao descartados; o descarte e return, nunca erro
+  const novoPedido = useUltimoPedido();
   const loadColaboradores = async () => {
+    const ehUltimo = novoPedido();
     try {
       setLoading(true);
       const response = await api.get('/operacional/colaboradores', {
         params: { search, status: filterStatus, setor: filterSetor }
       });
-      setColaboradores(response.data || []);
+      if (!ehUltimo()) return;
+      const lista = response.data || [];
+      setColaboradores(lista);
+      setSetoresVistos((antes) => {
+        const novos = lista.map((c) => c.setor).filter((s) => s && !antes.includes(s));
+        return novos.length ? [...antes, ...new Set(novos)] : antes;
+      });
     } catch (error) {
+      if (!ehUltimo()) return;
       console.error('Erro ao carregar colaboradores:', error);
       toast.error('Erro ao carregar colaboradores');
     } finally {
-      setLoading(false);
+      if (ehUltimo()) setLoading(false);
     }
   };
 
@@ -167,7 +183,7 @@ const Colaboradores = () => {
             className="filter-select"
           >
             <option value="">Todos os setores</option>
-            {[...new Set(colaboradores.map(c => c.setor).filter(Boolean))].map(setor => (
+            {setoresVistos.map(setor => (
               <option key={setor} value={setor}>{setor}</option>
             ))}
           </select>
