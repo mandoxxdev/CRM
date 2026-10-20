@@ -63,3 +63,27 @@ export function formatarDataDoBanco(valor, vazio = '-', opcoes = {}) {
   const d = lerDataDoBanco(valor, opcoes);
   return d ? `${dois(d.getDate())}/${dois(d.getMonth() + 1)}/${d.getFullYear()}` : vazio;
 }
+
+/**
+ * Etapa 161 (RN-161.06, C397) — o `created_at` (e os outros `CURRENT_TIMESTAMP`/`datetime('now')`) mostrado na hora LOCAL.
+ * Etapa 168 (RN-168.04, B1071): mudou-se do `components/almoxarifado/instanteDoBanco.js` (que o reexporta) — o nucleo, Custos de Viagem e
+ * as Solicitacoes de Compra tambem o usam.
+ *
+ * O banco grava `'AAAA-MM-DD HH:MM:SS'` em UTC e sem fuso; `new Date(texto)` o lia como hora local (3 h adiantada no Brasil: o ato das
+ * 22h30 de 19/10 aparecia 20/10 01:30). `lerInstanteDoBanco` le como UTC; ISO com `Z` continua como esta. Vazio -> `vazio`; valor que
+ * nao vira data aparece CRU (nao some — como a Auditoria). As `opcoes` sao as do `toLocaleDateString` de cada tela (com ou sem hora).
+ */
+export function formatarInstanteDoBanco(valor, opcoes, vazio = '—') {
+  if (valor === null || valor === undefined || valor === '') return vazio;
+  const d = lerInstanteDoBanco(valor);
+  if (!d) return String(valor);
+  return d.toLocaleDateString('pt-BR', opcoes);
+}
+
+/**
+ * Etapa 168 (RN-168.01, Fase 2 I2): as opcoes que reproduzem o `toLocaleString('pt-BR')` sem opcoes (*DD/MM/AAAA, HH:MM:SS*) — cada uma
+ * por extenso: com `'numeric'` o 05/01 08:04:05 sairia *5/01/2026, 8:04:05*.
+ */
+export const COM_SEGUNDOS = Object.freeze({
+  day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit',
+});
