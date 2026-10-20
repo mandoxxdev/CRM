@@ -1,13 +1,22 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-19 (Etapa 161) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-20 (Etapa 162) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160 e 161) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161 e 162) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-19 (Etapa 161 ENTREGUE · próxima: Etapa 162)
+> ## Onde o desenvolvimento está — 2026-10-20 (Etapa 162 ENTREGUE · próxima: Etapa 163)
 >
-> **O desenvolvimento parou aqui: Etapa 161 fechada — 2026-10-19.** A **Etapa 161 (as listas que mostravam o resultado de um filtro
+> **O desenvolvimento parou aqui: Etapa 162 fechada — 2026-10-20.** A **Etapa 162 (o dia de Brasília nos relatórios, no painel, nos
+> indicadores, nos alertas e nas reservas do Almoxarifado; consertos técnicos, sem regra de acesso nova e sem mexer em saldo)**: os nove
+> relatórios, o cartão *Movimentações Hoje* e o gráfico do painel contam o dia de Brasília (a movimentação das 22h30 entra no dia em que foi
+> feita, como na lista das Movimentações), e a planilha exportada mostra a hora da tela; o indicador *requisições no prazo* e o alerta
+> *Requisição atrasada* também; a reserva que vence hoje não é mais liberada pela rotina de expiração entre 21h e meia-noite, e a criada à
+> noite não ganha um dia a mais; os *dias em espera* das Inspeções contam da hora real do recebimento; os quadros de consumo do painel pedem
+> o período do dia local. Os indicadores do Operacional foram medidos e não mexidos (o painel deles não é montado — **B1034**). Nenhuma
+> consulta nova antes do deploy. **Próxima: Etapa 163** — ver a próxima tarefa no plano da 162.
+>
+> **Etapa 161, 2026-10-19.** A **Etapa 161 (as listas que mostravam o resultado de um filtro
 > anterior, o dia que virava às 21h e os seletores incompletos; consertos técnicos, sem regra de acesso nova e sem mexer em saldo)**: treze
 > listas da Fábrica e do Almoxarifado e os Relatórios só mostram a resposta do último pedido (trocar de relatório com a consulta em andamento
 > não exporta mais o relatório novo com os filtros do antigo); o dia da Fábrica (relatórios, painel, filtros, *presente hoje*) e o filtro
@@ -15,7 +24,7 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > a data de hoje; a coluna *Data* da Presença e das Horas extras mostra o dia gravado; o *Setor* dos Colaboradores não encolhe, o *Evento*
 > das Notificações tem os alertas, o fornecedor do Recebimento e da Remessa é procurado em todos, o usuário renomeado aparece uma vez na
 > Auditoria e o QR mostra só o material da etiqueta. Os relatórios do Almoxarifado continuam no dia universal (**B1027**). Nenhuma consulta
-> nova antes do deploy. **Próxima: Etapa 162** — ver a próxima tarefa no plano da 161.
+> nova antes do deploy. *(Próxima, na época: Etapa 162 — entregue acima.)*
 >
 > **Etapa 160, 2026-10-19.** A **Etapa 160 (os filtros e as buscas da Fábrica e do Almoxarifado que
 > não casavam, e os cadastros que respondem o gravado; consertos técnicos, sem regra de acesso nova e sem mexer em saldo)**: na Fábrica, o
@@ -6764,6 +6773,54 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 162 — O dia de Brasília nos relatórios, no painel, nos indicadores, nos alertas e nas reservas (ENTREGUE — 2026-10-20)
+
+**O que mudou, em uma frase:** à noite (depois das 21h), os relatórios, o painel, o indicador de prazo e os alertas do Almoxarifado deixam de
+contar o dia de amanhã, e a reserva que vence hoje não é mais liberada antes da meia-noite.
+
+**O problema que ela resolve.** O sistema guarda a hora no padrão universal (3 h à frente de Brasília). Desde a Etapa 161 a lista das
+Movimentações já contava o dia de Brasília, mas os relatórios não: das 21h à meia-noite, a mesma movimentação aparecia hoje na lista e amanhã
+no *Histórico de movimentações*, e o cartão *Movimentações Hoje* contava as de amanhã. O indicador *no prazo* dava atrasada a entrega feita à
+noite no dia do prazo. A rotina de expiração liberava a reserva que vence hoje se rodasse depois das 21h (a tela de Reservas, desde a 161, só
+a mostrava vencida no dia seguinte), e a reserva criada à noite ganhava um dia a mais de validade. Nas Inspeções, o *"há N dias"* contava 3 h a
+menos.
+
+| Antes | Agora |
+|---|---|
+| **Relatórios** (*Histórico de movimentações*, *Consumo por período*, *Custo por projeto*, *Sucata*…), a movimentação das 22h30 de 19/10: no período de **20/10** | No de **19/10** — o mesmo da lista das Movimentações |
+| **Exportar XLSX**: a coluna *Data* com a hora universal (*"2026-10-20 01:30:00"*) e, à noite, o nome com a data de amanhã | A hora da tela (*"2026-10-19 22:30:00"*) e a data de hoje no nome |
+| **Painel**, *Movimentações Hoje* depois das 21h: as de amanhã | As de hoje |
+| **Painel**, quadros *Consumo por O.S.* e *Materiais mais consumidos* depois das 21h: o período andava um dia | Os últimos 30 dias até hoje |
+| Indicador *requisições no prazo*: a entrega às 22h do dia do prazo contava **atrasada** | Conta **no prazo** |
+| Alerta *Requisição atrasada*: a de prazo hoje aparecia atrasada desde as 21h | Só no dia seguinte |
+| **Reservas → Processar expiração** depois das 21h: a reserva que vence hoje era liberada | Fica *Ativa* até a meia-noite |
+| Reserva criada às 22h com validade de 10 dias: vencia em 11 | Em 10 |
+| **Inspeções**, recebimento de 24h30 atrás: *"hoje"* | *"há 1 dia"* |
+
+**Roteiro de teste (10 minutos — de preferência depois das 21h).**
+
+1. **O Histórico e a lista.** Faça login, abra **Almoxarifado → Movimentações** e lance uma entrada. Em **Almoxarifado → Relatórios**, escolha
+   *Histórico de movimentações*, ponha *De* e *Até* com a data de hoje e clique **Consultar**: a entrada está lá (antes, depois das 21h, só no
+   dia seguinte). Filtre a lista das **Movimentações** com a mesma data: a mesma entrada.
+2. **A planilha.** No *Histórico*, clique **Exportar XLSX**: o nome do arquivo termina com a data de hoje (*historico-movimentacoes-AAAA-MM-DD.xlsx*) e a coluna *Data*
+   tem a mesma hora que a tela mostra.
+3. **O painel.** Abra o **painel do Almoxarifado**: o cartão *Movimentações Hoje* conta a entrada.
+4. **A reserva que vence hoje.** Em **Almoxarifado → Reservas**, crie uma reserva com *Expira em* = hoje. Clique **Processar expiração**: ela
+   continua *Ativa*. (Uma reserva com *Expira em* = ontem é liberada.)
+5. **A validade padrão.** Se a configuração *validade da reserva* estiver ligada (por exemplo, 10 dias), crie uma reserva sem *Expira em*: ela
+   vence daqui a 10 dias contados de hoje (também à noite).
+6. **As Inspeções.** Em **Almoxarifado → Inspeções**, um recebimento feito há mais de 24 h (e menos de 48 h) mostra *"há 1 dia"*; um de menos de 24 h, *"hoje"*.
+
+**O que esta etapa NÃO cobre.** Os indicadores do Operacional (OEE, manutenção do dia, inspeções do dia) não foram mexidos: estão num painel
+antigo que nenhum menu abre, e parte das tabelas nunca recebe dado (**C403**, **B1034**). Outras datas sem hora ainda comparam com o dia
+universal à noite: o vencimento do empréstimo e a validade da calibração das ferramentas, a validade do lote, o prazo da remessa a terceiro
+(**C406**). Editar uma atividade de colaborador apaga o fim e as horas reais (**C407**, de antes — candidata à Etapa 163). Os *dias em espera*
+continuam em blocos de 24 h (**B1036**).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (o servidor de verdade em pasta vazia, com o
+relógio adiantado para as 22h de Brasília; as telas em jsdom com o relógio fixo) provam, escrito para você conferir à mão. Commits `e2d2306c`,
+`d5c430b4` e `e1ac2cfa` (a correção da revisão).
 
 ## Etapa 161 — As listas que mostravam o resultado de um filtro anterior, o dia que virava às 21h, e os seletores incompletos (ENTREGUE — 2026-10-19)
 

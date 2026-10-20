@@ -11,14 +11,21 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-19):** **Etapa 161 fechada** (consertos técnicos na Fábrica e no Almoxarifado, sem regra de
+> **Onde o desenvolvimento está (2026-10-20):** **Etapa 162 fechada** (consertos técnicos no Almoxarifado, sem regra de acesso nova e sem
+> mexer em saldo: **o dia de Brasília nos relatórios, no painel, nos indicadores, nos alertas e nas reservas** — os nove relatórios e o
+> painel contam o dia de Brasília e a planilha mostra a hora de Brasília (**C401** resolvido, **B1033**, **B1039**); o indicador *no prazo* e o
+> alerta *Requisição atrasada* também (**B1037**); a reserva que vence hoje não é mais liberada à noite e a criada à noite não ganha um dia
+> (**C404** resolvido, **B1035**); os dias em espera das Inspeções (**C405** resolvido, **B1036**); os indicadores do Operacional medidos e não
+> mexidos — a tela não é montada (**C403**, **B1034**); **B1033** a **B1039**; os avisos novos **C406** (as outras datas no dia universal) e
+> **C407** (editar uma atividade apaga o fim)); a próxima é a **163** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 161 fechada** (consertos técnicos na Fábrica e no Almoxarifado, sem regra de
 > acesso nova e sem mexer em saldo: **as listas que mostravam o resultado de um filtro anterior, o dia que virava às 21h e os seletores
 > incompletos** — treze listas e os Relatórios só mostram a resposta do último pedido (**C396** resolvido); o dia da Fábrica e o filtro das
 > Movimentações são o de Brasília, a hora mostrada também, e os formulários abertos à noite vêm com a data de hoje (**C397** resolvido,
 > **B1025**, **B1026**, **B1028**); a data da Presença e das Horas extras não aparece mais um dia antes (**C402**, novo e resolvido); o *Setor*
 > dos Colaboradores, o *Evento* das Notificações, o fornecedor do Recebimento e da Remessa, o usuário da Auditoria e o QR da etiqueta
 > (**C399**, **C400**, o técnico, **B1029** a **B1031**); **B1025** a **B1032**; os avisos novos **C401** (os relatórios do Almoxarifado no dia UTC,
-> **B1027**), **C403** (os indicadores do Operacional), **C404** (a expiração das reservas) e **C405**); a próxima é a **162** — ver "Onde estamos e o que vem a seguir".
+> **B1027**), **C403** (os indicadores do Operacional), **C404** (a expiração das reservas) e **C405**); a próxima era a **162**.)*
 > *(Antes: **Etapa 160 fechada** (consertos técnicos na Fábrica e no Almoxarifado, sem regra de
 > acesso nova e sem mexer em saldo: **os filtros e as buscas que não casavam** — o filtro *Prioridade* das OS filtra e o kanban tira as
 > concluídas e ordena pela prioridade (**C390**, **C391**, novos e resolvidos, **B1018**); as buscas da Fábrica e do Almoxarifado acham a letra
@@ -3930,7 +3937,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B1032; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B1039; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -11368,7 +11375,8 @@ universal como se fosse a local — 3 h adiantada (o ato das 22h30 de 19/10 apar
 só um deixaria a movimentação aparecer *19/10 22:30* e sair do filtro do dia 19. **Descartado:** consertar só a lista. **Reversível:**
 `db960831`.
 
-**B1027 (NOVA, da Etapa 161; do Almoxarifado) — os relatórios e o painel do Almoxarifado continuam no dia universal (C401).** **Escolhido:**
+**B1027 (NOVA, da Etapa 161; do Almoxarifado; ✅ RESPONDIDA NA ETAPA 162 pela B1033 — os relatórios e o painel passaram ao dia de Brasília; o texto
+abaixo fica como registro) — os relatórios e o painel do Almoxarifado continuam no dia universal (C401).** **Escolhido:**
 esta etapa conserta a lista das Movimentações (o item nomeado) e deixa os 9 relatórios (*Consumo por O.S.*, *Histórico de movimentações*,
 *Ajustes por motivo*, *Perdas por motivo*, *Materiais mais consumidos*, *Consumo por período*, *Sucata (financeiro)*, *Custo por projeto*,
 *Qualidade de fornecedores*) e o painel (*movimentações hoje*, o gráfico de 7 dias) para uma etapa própria. **Consequência:** entre 21h e
@@ -11399,6 +11407,49 @@ etapa). **Reversível:** `6885caf9`, `3acfec05`.
 **B1032 (NOVA, da Etapa 161) — a próxima etapa (162).** Ver a "próxima tarefa detalhada" no plano da Etapa 161. As decisões que esperam
 vocês: as da **B957**, a **B988** e a **B989**; a **B1002** continua pedindo um olhar; a **B1013** (o acento nas buscas); a **C398** (o filtro
 *Status* dos Materiais); a **B1027** (os relatórios do Almoxarifado no dia de Brasília); a **B1025** a **B1031** são reversíveis.
+
+**B1033 (NOVA, da Etapa 162; do Almoxarifado) — os relatórios e o painel do Almoxarifado passam ao dia de Brasília (responde a B1027 pelo
+caminho reversível).** **Escolhido:** os nove relatórios (*Consumo por O.S.*, *Histórico de movimentações*, *Ajustes por motivo*, *Perdas por
+motivo*, *Materiais mais consumidos*, *Consumo por período*, *Sucata (financeiro)* — a sucata lançada e a vendida —, *Custo por projeto*,
+*Qualidade de fornecedores*), o cartão *Movimentações Hoje* e o gráfico de 7 dias do painel contam o dia de Brasília; o nome do arquivo
+exportado leva o dia de Brasília. **Os números mudam:** a movimentação (o recebimento, a sucata vendida) feita entre 21h e meia-noite passa a
+entrar no dia em que foi feita — e o *Histórico de movimentações* volta a bater com a lista das Movimentações. **Descartado:** manter o dia
+universal (a pergunta da B1027 — a lista e o Histórico continuariam divergindo); o *localtime* do banco (segue o fuso do servidor).
+**Reversível:** `e2d2306c`.
+
+**B1034 (NOVA, da Etapa 162; do Operacional) — os indicadores do Operacional (C403) não mudam.** Medido: todos estão num painel antigo
+(*Dashboard MES*) que **nenhum menu abre**; quatro das tabelas que ele lê (OEE, alarmes, controle de qualidade, manutenção preventiva) nunca
+recebem dado; e a consulta da manutenção pede colunas que não existem (o número sai zerado). Mudar a régua seria mudança sem prova possível.
+**Descartado:** consertar às cegas. **Reversível:** é a ausência de mudança.
+
+**B1035 (NOVA, da Etapa 162; do Almoxarifado) — a expiração automática, o vencimento padrão e o alerta *Reserva parada* passam ao dia de
+Brasília (C404).** **Escolhido:** a régua da data e mais nada — a rotina de expiração (o botão *Processar expiração* e a chamada agendada)
+expira a reserva cujo vencimento é **anterior** a hoje de Brasília (ou à data de referência, quando informada); o vencimento padrão é hoje de
+Brasília + os dias configurados; o alerta *Reserva parada* considera vencida a mesma reserva. A expiração continua devolvendo o reservado
+ao livre **sem** distribuí-lo para quem espera, e o recálculo das requisições donas é o de antes. **Os números mudam:** a reserva que vence
+hoje não é mais liberada se a rotina rodar entre 21h e meia-noite; a criada nesse horário não ganha um dia a mais. **Descartado:** não
+mexer (a tela e a rotina discordariam sobre a mesma reserva); guardar o vencimento com hora (mudaria o formulário). **Reversível:** `e2d2306c`.
+
+**B1036 (NOVA, da Etapa 162; do Almoxarifado) — os dias em espera das Inspeções continuam em blocos de 24 h (C405).** **Escolhido:** só
+ler a hora do recebimento certa. **Consequência:** o recebimento de ontem às 10h, visto hoje às 9h, mostra a data de ontem e *"hoje"* logo
+abaixo (menos de 24 h). **Descartado:** contar dias de calendário (*"ontem"* = 1 dia mesmo com 2 h) — é mudança de régua, não de fuso; se
+vocês preferirem, é uma linha. **Reversível:** `d5c430b4`.
+
+**B1037 (NOVA, da Etapa 162; do Almoxarifado) — o indicador *requisições no prazo* e o alerta *Requisição atrasada* passam ao dia de
+Brasília.** O prazo (só a data) é comparado com hoje de Brasília e a entrega pelo dia de Brasília em que aconteceu. **Os números mudam:** a
+entrega feita entre 21h e meia-noite do dia do prazo passa a contar *no prazo* (contava atrasada, a qualquer hora em que o indicador fosse
+lido); a requisição de prazo hoje fica *em aberto no dia* até a meia-noite, e o alerta só a dá atrasada no dia seguinte. As janelas em dias
+corridos dos outros indicadores (giro, rupturas, ajustes, tempo de recebimento) não mudam — medem horas, não dias. **Descartado:** deixar.
+**Reversível:** `e2d2306c`.
+
+**B1039 (NOVA, da Etapa 162; do Almoxarifado) — a planilha exportada dos Relatórios mostra a hora de Brasília.** A data com hora na planilha
+saía no padrão universal (*"2026-10-20 01:30:00"* para o ato das 22h30 de 19/10), enquanto a tela mostrava *19/10 22:30* — com o filtro no
+dia de Brasília, a linha pareceria fora do período pedido. **Escolhido:** a planilha sai com a mesma hora da tela, no mesmo formato
+(*"2026-10-19 22:30:00"*). As datas sem hora, os números e os textos saem como antes. **Descartado:** deixar e avisar. **Reversível:** `e2d2306c`.
+
+**B1038 (NOVA, da Etapa 162) — a próxima etapa (163).** Ver a "próxima tarefa detalhada" no plano da Etapa 162. As decisões que esperam
+vocês: as da **B957**, a **B988** e a **B989**; a **B1002** continua pedindo um olhar; a **B1013** (o acento nas buscas); a **C398** (o filtro
+*Status* dos Materiais); a **B1033** a **B1037** e a **B1039** são reversíveis (a **B1027** foi respondida pela **B1033**).
 
 **B898 (NOVA, da Etapa 138) — a próxima etapa (139).** Ver a "próxima tarefa detalhada" no plano da Etapa 138. A **B853** (com a
 **C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
@@ -14742,8 +14793,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      Recebimentos recarregam materiais, pedidos e fornecedores a cada troca de filtro; a busca das Ordens de Produção não olha a descrição da
      OS; o filtro *Trabalho* dos Colaboradores recarrega do servidor à toa; o painel operacional antigo (que nenhum menu abre) tem o mesmo
      defeito da prioridade. **O que fazer:** nada no dia a dia.
-401. **NOVO (da medição da Etapa 161; do Almoxarifado, anterior a ela; lido no código) — os relatórios e o painel do Almoxarifado contam o
-     dia pelo padrão universal.** *Consumo por O.S.*, *Histórico de movimentações*, *Ajustes por motivo*, *Perdas por motivo*, *Materiais mais
+401. **✅ RESOLVIDO NA ETAPA 162 (RN-162.01 a .03, B1033, B1039; `e2d2306c`) — NOVO (da medição da Etapa 161; do Almoxarifado, anterior a ela; lido no
+     código) — os relatórios e o painel do Almoxarifado contam o dia pelo padrão universal.** *(Os nove relatórios, o cartão *Movimentações
+     Hoje*, o gráfico e o nome do arquivo exportado contam o dia de Brasília, e a planilha mostra a hora de Brasília. O texto abaixo fica como
+     registro.)* *Consumo por O.S.*, *Histórico de movimentações*, *Ajustes por motivo*, *Perdas por motivo*, *Materiais mais
      consumidos*, *Consumo por período*, *Sucata (financeiro)*, *Custo por projeto*, *Qualidade de fornecedores* e o painel (*movimentações
      hoje*, o gráfico de 7 dias): depois das 21h, o dia é o de amanhã. Desde a Etapa 161 a lista das Movimentações já filtra pelo dia de
      Brasília, então o mesmo período pode diferir entre a lista e o *Histórico* nas movimentações feitas entre 21h e meia-noite. **O que
@@ -14751,19 +14804,35 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 402. **✅ NOVO E RESOLVIDO NA ETAPA 161 (`6d84c427`; achado ao rodar os testes da etapa, da Fábrica, anterior a ela; reproduzido) — a coluna Data
      da Presença e das Horas extras mostrava o dia anterior.** A presença de 19/10 aparecia *"18/10/2026"* (a data pura lida como meia-noite
      universal). Agora mostra o dia gravado; o filtro já estava certo.
-403. **NOVO (da medição da Etapa 161; da Fábrica/Operacional, anterior a ela; lido no código) — os indicadores do Operacional contam o "hoje"
-     pelo padrão universal.** Os indicadores de OEE, manutenção (preventivas e corretivas do dia, próximas 7 dias), inspeções do dia e as
+403. **NOVO (da medição da Etapa 161; da Fábrica/Operacional, anterior a ela; lido no código; **medido de novo na Etapa 162 — B1034**) — os
+     indicadores do Operacional contam o "hoje" pelo padrão universal.** *(Medido na 162: estão todos num painel antigo, o *Dashboard MES*,
+     que **nenhum menu abre** — nenhuma tela que se usa mostra esses números; quatro das tabelas que ele lê nunca recebem dado, e a contagem da
+     manutenção sai zerada porque a consulta pede colunas que não existem. Não foi mexido. Se o painel for ligado a um menu, é preciso
+     consertar as duas coisas antes. O texto abaixo fica como registro.)* Os indicadores de OEE, manutenção (preventivas e corretivas do dia, próximas 7 dias), inspeções do dia e as
      atividades/OS concluídas hoje do Operacional comparam com o dia universal. **O que fazer:** à noite, ler esses números como os do dia
      seguinte. Candidata a uma etapa futura (medir quais telas montam esses indicadores antes).
-404. **NOVO (da revisão da Etapa 161; do Almoxarifado, anterior a ela; lido no código) — a expiração automática das reservas e o alerta de
-     reserva parada contam o dia pelo padrão universal.** Entre 21h e meia-noite, a rotina de expiração considera vencida a reserva que
+404. **✅ RESOLVIDO NA ETAPA 162 (RN-162.05 a .07, B1035; `e2d2306c`) — NOVO (da revisão da Etapa 161; do Almoxarifado, anterior a ela; lido no código)
+     — a expiração automática das reservas e o alerta de reserva parada contam o dia pelo padrão universal.** *(A rotina, o vencimento padrão e o
+     alerta contam o dia de Brasília: a reserva que vence hoje fica ativa até a meia-noite. A expiração continua sem redistribuir o liberado. O
+     texto abaixo fica como registro.)* Entre 21h e meia-noite, a rotina de expiração considera vencida a reserva que
      vence **hoje** (o dia universal já é amanhã) e a libera três horas antes; a tela de Reservas, desde a Etapa 161, mostra o selo *vencida*
      pelo dia de Brasília. A data de expiração padrão calculada pelo sistema também sai do dia universal. **O que fazer:** nada no dia a dia;
      a reserva que precisa durar o dia inteiro pode ser marcada para o dia seguinte. Não foi mexido: é uma porta que solta reserva (regra de
      saldo) — candidata a etapa própria.
-405. **NOVO (da revisão da Etapa 161; do Almoxarifado, anterior a ela; lido no código) — os "dias em espera" das Inspeções pendentes contam
-     com três horas de erro** (a hora do recebimento lida como local). Perto da virada do dia, a contagem pode mostrar um dia a mais ou a
-     menos. **O que fazer:** nada.
+405. **✅ RESOLVIDO NA ETAPA 162 (RN-162.08, B1036; `d5c430b4`) — NOVO (da revisão da Etapa 161; do Almoxarifado, anterior a ela; lido no código) — os
+     "dias em espera" das Inspeções pendentes contam com três horas de erro** (a hora do recebimento lida como local). Perto da virada do dia, a
+     contagem pode mostrar um dia a mais ou a menos. **O que fazer:** nada. *(Contam da hora real do recebimento, em blocos de 24 h.)*
+406. **NOVO (da medição da Etapa 162; do Almoxarifado, anterior a ela; lido no código) — outras datas sem hora ainda são comparadas com o
+     dia universal.** O vencimento do empréstimo de ferramenta e a validade da calibração (as emprestadas vencidas, o lembrete, os dias
+     para vencer, a calibração vigente exigida na inspeção), a validade de lote (o selo *vencido* do lote e o aviso de lote vencendo), o prazo
+     da remessa a terceiro (o aviso de remessa atrasada), o mês do alerta mensal e o vencimento da conta a pagar gerada pelo recebimento quando a
+     nota não tem data de entrada: entre 21h e meia-noite, o "hoje"
+     é o de amanhã. **O que fazer:** à noite, ler esses avisos como os do dia seguinte. Candidata a uma etapa futura.
+407. **NOVO (da medição da Etapa 162; da Fábrica, anterior a ela; lido no código, não reproduzido) — editar uma atividade de colaborador apaga
+     o fim, as horas reais e volta o status para *"Em andamento"*.** O formulário de edição não manda esses três campos e o servidor grava o
+     que não veio como vazio (o status, como *"em andamento"*). Uma atividade concluída e editada (para corrigir a descrição, por exemplo) volta
+     a aparecer em andamento, sem a hora de fim. **O que fazer:** não editar atividade concluída; se precisar, concluir de novo. Candidata a
+     uma etapa futura.
 ### D. Limitações declaradas— são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -16095,6 +16164,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(162) O dia de Brasília nos relatórios e nas reservas, o que ficou de fora.** Os indicadores do Operacional (**C403**, **B1034** — o
+  painel não é montado); as outras datas sem hora no dia universal (ferramentas, calibração, lotes, remessas — **C406**); os dias em espera em
+  blocos de 24 h (**B1036**); o deslocamento do fuso é o de agora para todos os registros (sem horário de verão desde 2019). A expiração
+  continua sem redistribuir o liberado para quem espera (como antes). Nenhuma porta de saldo, permissão ou trava mudou.
 - **(161) As respostas velhas e o dia local, o que ficou de fora.** Os relatórios e o painel do Almoxarifado no dia universal (**C401**,
   **B1027**); os indicadores do Operacional (**C403**); os tipos do filtro das Movimentações e o material de cliente nas Reservas/Inspeções
   (do P.O.); a expiração automática das reservas pelo dia universal (**C404**); os dias em espera das inspeções (**C405**); a busca de
@@ -17164,6 +17237,14 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(162) Nenhum clique foi dado no navegador, e a regra das 21h só foi provada com o relógio adiantado.** As rotas foram provadas pelo
+servidor de verdade (em pasta vazia, no fuso universal e com o relógio adiantado para as 22h de Brasília de daqui a dois dias); a tela das
+Inspeções em jsdom com o relógio fixo. Os doze testes antigos que passaram a calcular o "hoje" de Brasília rodaram fora da janela das 21h
+(perto da meia-noite e de madrugada) — a mudança deles foi lida, não rodada às 22h. Vale conferir à mão, **depois das 21h**: uma movimentação
+em **Almoxarifado → Movimentações** e o *Histórico de movimentações* com o período de hoje em **Relatórios** (a mesma linha nos dois, e a
+planilha com a hora da tela); o cartão *Movimentações Hoje* do painel; uma reserva que vence hoje e o botão *Processar expiração* (ela fica
+*Ativa*).
 
 **(161) Nenhum clique foi dado no navegador.** As rotas foram provadas pelo servidor de verdade (em pasta vazia, no fuso universal e com o
 relógio adiantado para as 22h de Brasília de daqui a dois dias, de modo que o dia de Brasília, o universal e o do banco sejam três dias
@@ -32545,9 +32626,83 @@ recebimento carrega ao abrir a tela (recarregue a página para atualizá-la).
 - O seletor de fornecedores mostra até 50 resultados por busca; o fornecedor inativo não aparece (como antes).
 - Nenhuma porta de saldo, permissão ou trava mudou.
 
+## Etapa 162 — O dia de Brasília nos relatórios, no painel, nos indicadores, nos alertas e nas reservas (2026-10-20)
+
+Uma etapa de **consertos técnicos** no Almoxarifado, sem regra de acesso nova e sem mexer em saldo. O sistema guarda a hora de cada registro
+no padrão universal (3 h à frente de Brasília). Desde a etapa anterior a lista das Movimentações já contava o dia de Brasília — mas os
+**relatórios** e o **painel** não: das 21h à meia-noite, a mesma movimentação aparecia *hoje* na lista e *amanhã* no *Histórico de
+movimentações*, o cartão *Movimentações Hoje* contava as de amanhã, e a planilha exportada trazia a hora universal. O indicador *requisições
+no prazo* dava **atrasada** a entrega feita à noite no próprio dia do prazo. E a **rotina de expiração das reservas**, rodada depois das 21h,
+liberava a reserva que ainda vencia **hoje** — enquanto a tela de Reservas a mostrava válida —, e a reserva criada à noite ganhava um dia a
+mais de validade. Nas **Inspeções**, o *"há N dias"* contava 3 h a menos. Agora tudo isso conta o dia de Brasília.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Relatórios** (os nove com período: *Consumo por O.S.*, *Histórico de movimentações*, *Ajustes por motivo*, *Perdas por motivo*, *Materiais mais consumidos*, *Consumo por período*, *Sucata (financeiro)*, *Custo por projeto*, *Qualidade de fornecedores*), o lançamento das 22h30 de 19/10: entrava no período de **20/10** | Entra no de **19/10** — o mesmo da lista das Movimentações — **C401** resolvido (**B1033**) |
+| **Exportar XLSX**: a coluna de data com a hora universal (*"2026-10-20 01:30:00"*), e à noite o nome com a data de amanhã | A hora da tela (*"2026-10-19 22:30:00"*) e a data de hoje no nome — **B1033**, **B1039** |
+| **Painel do Almoxarifado**, depois das 21h: *Movimentações Hoje* contava as de amanhã; os quadros *Consumo por O.S.* e *Materiais mais consumidos* perdiam o dia mais antigo do período | Os de hoje; os últimos 30 (ou 90) dias até hoje — **C401** |
+| Indicador *requisições no prazo*: a entrega completa às 22h do dia do prazo contava **fora do prazo**; à noite, a de prazo hoje ainda aberta já contava atrasada | Conta **no prazo**; a de prazo hoje fica *em aberto no dia* até a meia-noite — **B1037** |
+| Alertas *Requisição atrasada* e *Reserva parada*: a de prazo (ou vencimento) hoje aparecia desde as 21h | Só no dia seguinte — **B1035**, **B1037** |
+| **Reservas → Processar expiração** depois das 21h: a reserva que vence hoje era liberada | Continua *Ativa* até a meia-noite — **C404** resolvido (**B1035**) |
+| Reserva criada às 22h, com a validade padrão de 10 dias: vencia em 11 | Em 10 — **B1035** |
+| **Inspeções pendentes**, o recebimento de 24h30 atrás: *"hoje"* | *"há 1 dia"* — **C405** resolvido (**B1036**) |
+
+### As regras, com o cenário exato
+
+**1. Os relatórios no dia de Brasília (C401, B1033).** Depois das 21h, em **Almoxarifado → Movimentações**, lance uma entrada. Em
+**Almoxarifado → Relatórios**, escolha *Histórico de movimentações*, preencha *De* e *Até* com a data de hoje e clique **Consultar**: a entrada
+aparece (antes, só no período de amanhã). A lista das **Movimentações** com o mesmo período mostra a mesma entrada. Vale para os nove relatórios
+com período — na *Sucata (financeiro)*, para a sucata lançada e para a vendida. Nenhuma mensagem nova.
+
+**2. A planilha (B1033, B1039).** No *Histórico de movimentações* consultado acima, clique **Exportar XLSX**: o arquivo chama
+*historico-movimentacoes-* seguido da data de hoje, e a coluna *Data* traz a mesma hora da tela (*"2026-10-19 22:30:00"*, não *"2026-10-20
+01:30:00"*). Datas sem hora, números e textos saem como antes.
+
+**3. O painel (C401).** Abra o **painel do Almoxarifado** depois das 21h: o cartão *Movimentações Hoje* conta a entrada lançada agora (e não as
+de amanhã). Os quadros *Consumo por O.S.* e *Materiais mais consumidos* mostram os últimos 30 dias (ou 90, no seletor) até hoje.
+
+**4. O indicador de prazo e o alerta (B1037).** Crie uma requisição com *Data de necessidade* = hoje e entregue-a por completo às 22h: no
+indicador **Requisições no prazo** (Relatórios → *Indicadores*, ou o cartão do painel) ela conta **no prazo**. Uma requisição com prazo hoje
+ainda não entregue não aparece no alerta *Requisição atrasada* (Alertas → central) até a meia-noite; no dia seguinte, aparece.
+
+**5. A reserva que vence hoje (C404, B1035).** Em **Almoxarifado → Reservas**, crie uma reserva com *Expira em* = hoje. Depois das 21h, clique
+**Processar expiração** (administrador): ela continua *Ativa* e o disponível do material não muda. Uma reserva com *Expira em* = ontem é
+liberada (*Expirada*) e o reservado volta ao livre — **sem** ir para quem espera (como antes). O alerta *Reserva parada* mostra a de ontem e não
+a de hoje.
+
+**6. A validade padrão (B1035).** Com a configuração de dias de validade de reserva em 10, crie às 22h de 19/10 uma reserva sem *Expira em*:
+ela vence em 29/10 (antes, 30/10).
+
+**7. Os dias em espera (C405, B1036).** Em **Almoxarifado → Inspeções**, um recebimento feito há mais de 24 h mostra *"há 1 dia"*; um de menos de
+24 h, *"hoje"* — também quando a data mostrada logo acima é a de ontem (a conta é em blocos de 24 h).
+
+### O que esta etapa NÃO cobre
+
+- Os indicadores do Operacional (OEE, manutenção e inspeções do dia): estão num painel antigo que nenhum menu abre, e parte das tabelas nunca
+  recebe dado — medidos e não mexidos (**C403**, **B1034**).
+- Outras datas sem hora ainda comparadas com o dia universal à noite: o vencimento do empréstimo e a validade da calibração das ferramentas, a
+  validade do lote, o prazo da remessa a terceiro, o mês do alerta mensal e o vencimento da conta a pagar sem data de entrada (**C406**).
+- Editar uma atividade de colaborador apaga o fim e as horas reais (**C407**, de antes, achado nesta medição — candidata à Etapa 163).
+- Os dias em espera continuam em blocos de 24 h (**B1036**). A *referência* explícita *"now"* da rotina de expiração (só pela API, só o
+  administrador) continua no dia universal.
+- Nenhuma porta de saldo, permissão ou trava mudou; a expiração continua sem redistribuir o liberado.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 162 entregue (2026-10-20):** **o dia de Brasília nos relatórios, no painel, nos indicadores, nos alertas e nas reservas** (consertos
+  técnicos no Almoxarifado, sem regra de acesso nova e sem mexer em saldo). Os nove relatórios, o painel e a planilha contam o dia (e a hora) de
+  Brasília (**B1033**, **B1039** — **C401**); o indicador *no prazo* e o alerta *Requisição atrasada* também (**B1037**); a expiração, a
+  validade padrão e o alerta *Reserva parada* (**B1035** — **C404**); os dias em espera das Inspeções (**B1036** — **C405**); os indicadores do
+  Operacional medidos e não mexidos (**B1034** — **C403**). Commits `e2d2306c`, `d5c430b4` e `e1ac2cfa` (a correção da revisão). **O que é seu:** as
+  decisões **B1033** a **B1037** e **B1039** (reversíveis; a **B1027** foi respondida pela **B1033** — os números dos relatórios mudam entre 21h e
+  meia-noite); os avisos novos **C406** e **C407**; as perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **B988**, **B989**,
+  **B1013**, **C277**, **C312**, **C314**, **C316**, **C330**, **C398**); as limitações **(162)** em D e a verificação **(162)** em F. Nenhuma
+  consulta nova antes do deploy.
+  **Próxima: Etapa 163 — ver a "próxima tarefa detalhada" no plano da Etapa 162.**
 
 - **Etapa 161 entregue (2026-10-19):** **as listas que mostravam o resultado de um filtro anterior, o dia que virava às 21h e os seletores
   incompletos** (consertos técnicos, sem regra de acesso nova e sem mexer em saldo). Treze listas e os Relatórios só mostram a resposta do
@@ -32559,7 +32714,7 @@ recebimento carrega ao abrir a tela (recarregue a página para atualizá-la).
   (reversíveis); os avisos **C401** e **C403**; as perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **B988**, **B989**, **B1013**,
   **C277**, **C312**, **C314**, **C316**, **C330**, **C398**); as limitações **(161)** em D e a verificação **(161)** em F. Nenhuma consulta nova
   antes do deploy.
-  **Próxima: Etapa 162 — ver a "próxima tarefa detalhada" no plano da Etapa 161.**
+  *(Próxima, na época: Etapa 162 — entregue acima.)*
 
 - **Etapa 160 entregue (2026-10-19):** **os filtros e as buscas da Fábrica e do Almoxarifado que não casavam, e os cadastros que respondem o
   gravado** (consertos técnicos, sem regra de acesso nova e sem mexer em saldo). O filtro *Prioridade* das OS filtra e o kanban tira as

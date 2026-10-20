@@ -565,4 +565,18 @@ Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa161-respostas-velhas
 
 - [x] **RN-161.02 (C396)** — a lista de Reservas: só a resposta do último pedido mexe na lista (a de um filtro anterior que chega depois, o erro dela e o fim do *carregando* dela são descartados; quem chama com `await` continua recebendo uma promessa que resolve) — `f2a10ffe`.
 - [x] **Fase 5 (r1, resíduo de antes)** — o selo *vencida* compara o `expira_em` (só a data) com o hoje **local** (era o `toISOString`: à noite, a reserva que vence hoje aparecia vencida) — `84353119`.
-- [ ] **A expiração automática e o alerta de reserva parada pelo dia UTC** (`reservationService.js:139`, `alertRegistry.js:564`; o padrão do `expira_em` em `stockService.js:3688`) — **fica (C404)**: é porta que solta reserva; a 162 mede e decide (ver o plano da 161).
+- [x] **A expiração automática e o alerta de reserva parada pelo dia UTC** — resolvido na Etapa 162 (C404, B1035, `e2d2306c` — ver a seção abaixo). *Registro:* (`reservationService.js:139`, `alertRegistry.js:564`; o padrão do `expira_em` em `stockService.js:3688`) — **fica (C404)**: é porta que solta reserva; a 162 mede e decide (ver o plano da 161).
+
+## Etapa 162 — a expiração, o vencimento padrão e o alerta no dia de Brasília (2026-10-20)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa162-o-dia-de-brasilia-nos-relatorios-e-nas-reservas.md`. Sem regra de acesso nova; a expiração continua soltando **sem** distribuir e **sem** a trava (CLAUDE.md, B441) — só a régua da
+data mudou. O status da feature não muda.
+
+- [x] **RN-162.05 (C404, B1035)** — `processarExpiracao`: `date(expira_em) < date(?)` com `options.referencia || diaLocal.hojeLocalISO()` (era
+  `date(COALESCE(?, 'now'))`, o dia UTC: das 21h a meia-noite a reserva que vence hoje era liberada). O `''`, o `0` e o corpo vazio continuam
+  "hoje"; texto inválido continua não expirando nada — `e2d2306c` (a `referencia` vazia presa na Fase 5, `e1ac2cfa`).
+- [x] **RN-162.06** — o `expira_em` padrão: hoje de Brasília + `reserva_dias_validade` dias de calendário (era agora + N × 24 h pelo dia UTC — a
+  criada às 22h ganhava um dia) — `e2d2306c`.
+- [x] **RN-162.07** — o alerta *Reserva parada*: `date(expira_em) < ?` com o hoje de Brasília (o tempo parado, instante × instante, não muda) —
+  `e2d2306c`.
+- [ ] **O `referencia: 'now'` explícito** continua sendo o dia UTC (só o administrador chama a rota; a tela manda `{}`) — declarado (Fase 5 r2).

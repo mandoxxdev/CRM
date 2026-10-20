@@ -2534,7 +2534,11 @@ Liberar uma reserva **manual** (criada na própria tela **Reservas**, sem requis
 A expiração é **opcional** e roda por acionamento — o botão **Processar expiração**, restrito ao administrador.
 
 - Uma reserva só expira se tiver **data de validade**. Ela vem de um valor informado na criação da reserva ou é calculada a partir da configuração de dias de validade de reserva. **Sem nenhum dos dois, a reserva nunca expira.**
-- O vencimento é **no dia seguinte** à data: a data gravada é o último dia válido do hold.
+- O vencimento é **no dia seguinte** à data: a data gravada é o último dia válido do hold. O "hoje" é o do **horário de Brasília**: a
+  reserva que vence hoje continua ativa até a meia-noite, mesmo que a expiração seja processada às 23h.
+- A validade calculada pela configuração conta os dias **a partir de hoje** (Brasília): com 10 dias, a reserva criada em 19/10 — de
+  manhã ou às 23h — vale até 29/10.
+- **O liberado não vai sozinho para quem esperava** (como na liberação à mão, 9.6): o saldo volta ao disponível solto.
 - Ao expirar, o saldo volta ao disponível e a reserva fica **EXPIRADA** — e não *Liberada*. "Venceu sozinha" e "alguém soltou" são fatos diferentes no relatório.
 - O processamento é seguro para repetir: rodar duas vezes não devolve saldo em dobro, e uma reserva problemática não interrompe o processamento das demais.
 - Como na liberação à mão (9.6), a expiração **atualiza o status** da requisição dona da reserva, com a mesma tabela: a requisição **Totalmente Reservada** cuja reserva venceu volta a **Aprovado**; se só uma de duas reservas venceu, fica **Parcialmente Reservada**. O recálculo é feito **uma vez por requisição**, depois de todo o processamento, só para as reservas que de fato venceram — a que falhou ao vencer continua ativa e a requisição dela não muda.
@@ -6507,8 +6511,8 @@ A tela **Almoxarifado → Alertas** reúne, num lugar só, as condições que o 
 | Estoque excessivo | material próprio com quantidade atual acima da quantidade máxima cadastrada (quando há máxima) |
 | Quarentena parada | item de recebimento com quantidade retida em inspeção cujo recebimento é mais velho que a janela configurada. **Atenção:** o relógio é a data do recebimento — uma nota que demorou a ser processada dispara o alerta logo no início da quarentena real |
 | Materiais sem endereço | material ativo sem localização padrão e sem nenhum saldo endereçado — **material de cliente conta**, porque endereçá-lo é trabalho do almoxarife (mesma régua do relatório de mesmo nome) |
-| Requisição atrasada | requisição ativa, em qualquer status em que ainda possa ser atendida, com a data de necessidade no passado — só entra quem **preencheu** a data de necessidade |
-| Reserva parada | reserva ativa criada há mais dias que a janela configurada, ou com a data de expiração vencida |
+| Requisição atrasada | requisição ativa, em qualquer status em que ainda possa ser atendida, com a data de necessidade **anterior a hoje** (horário de Brasília: a de prazo hoje só aparece no dia seguinte) — só entra quem **preencheu** a data de necessidade |
+| Reserva parada | reserva ativa criada há mais dias que a janela configurada, ou com a data de expiração **anterior a hoje** (horário de Brasília — a mesma régua da expiração, 9.7) |
 | Material reprovado | inspeção de recebimento com quantidade reprovada, dentro da janela de eventos, **e cujo material ainda não saiu de fato para o fornecedor**. A inspeção some do cartão quando alguém registra a execução de uma não conformidade decidida *Devolver ao fornecedor* **e a baixa acontece** (15b.4-ter) — o cartão mede material movido, não intenção registrada. Se a execução foi registrada **sem mover saldo** (qualquer uma das frases que terminam em "sem mover saldo"), a linha **continua** aqui, porque o material continua no galpão |
 | Divergência de recebimento | item cuja quantidade recebida difere da esperada, dentro da janela de eventos, **e que ainda não virou não conformidade** (15b.7). **Quem produz esse número é o campo "Qtd. conferida"** do painel do recebimento (14.2b) — digitar uma quantidade diferente da esperada e salvar a conferência é o gesto que cria a divergência; a entrada fiscal, quando altera a quantidade, também. Como a não conformidade nasce no mesmo instante, este cartão tende a ficar **vazio** na operação normal: ver item aqui significa que o documento **não foi aberto** |
 | Não conformidade aberta | documento de não conformidade (15b) ainda **sem decisão** há mais dias que o configurado (padrão 7) — uma linha por documento, com número, material, tipo, origem, dias parado e recebimento. Decidir tira a linha, sem nenhum gesto extra, e o mesmo vale para o documento que a reconferência cancela sozinha |
@@ -6544,7 +6548,8 @@ permissão de um relatório simplesmente não o vê no menu; forçar o endereço
   movimentações e Divergências de inventário mostram no máximo 500 linhas; Materiais mais
   consumidos, os 10 maiores).
 - **Exportar XLSX**: disponível nos relatórios tabulares; a planilha traz exatamente as
-  colunas da tela, com os mesmos rótulos, e baixa como `<relatório>-<data>.xlsx`. Relatórios
+  colunas da tela, com os mesmos rótulos, e baixa como `<relatório>-<data>.xlsx` (a data de hoje no horário de Brasília). As
+  datas com hora saem no **horário de Brasília**, como na tela (*"2026-10-19 22:30:00"* para o lançamento das 22h30 de 19/10). Relatórios
   de composição (Sucata — financeiro, Posição por cliente, Indicadores) não têm exportação:
   "Relatório sem exportação tabular".
 - **Números de consumo podem diferir entre relatórios, por régua declarada**: os relatórios
@@ -6625,9 +6630,8 @@ regras, que o rodapé do próprio relatório também declara:
 - Materiais de clientes ficam fora (o patrimônio é deles), e movimentação sem projeto também —
   o total geral de consumo do estoque é o indicador de **giro**, que usa a mesma régua mas
   sem o recorte por projeto.
-- As datas do filtro comparam o **dia em horário universal (UTC)** — padrão de todos os
-  relatórios de consumo; um lançamento feito entre 21h e meia-noite (horário de Brasília) cai
-  no dia seguinte do filtro.
+- As datas do filtro comparam o **dia no horário de Brasília** — padrão de todos os
+  relatórios: um lançamento feito às 22h30 de 19/10 entra no dia 19.
 
 ### Indicadores gerenciais
 
@@ -6660,8 +6664,8 @@ três blocos de requisição e o de ajustes pelo nome técnico do campo (*requis
   acabou) — aparece à parte, em *em_aberto_no_dia*. A requisição sem data de necessidade, ou com
   data fora do formato *AAAA-MM-DD* (as antigas), também não entra — as criadas na janela são
   contadas à parte, em *sem_data_valida*. Rascunho, rejeitada, cancelada e excluída ficam fora de tudo. **As datas
-  comparam o dia em horário universal (UTC):** uma entrega completa feita das 21h à meia-noite
-  de Brasília no dia do prazo já cai no dia seguinte e conta **fora do prazo**. Sem nenhuma
+  comparam o dia no horário de Brasília:** "hoje" é o de Brasília, e uma entrega completa feita
+  às 22h do dia do prazo conta **no prazo**. Sem nenhuma
   requisição para medir, o percentual fica vazio (*—*), nunca 0%.
 - **Requisições integrais** (*requisicoes_integrais*): das requisições **finalizadas** na
   janela — entregues por completo ou encerradas —, **integral** é a que teve todos os itens
@@ -6719,7 +6723,7 @@ diferentes) e **Último em**, do maior número de ajustes para o menor:
   o texto digitado seja igual ao nome de um motivo** da lista.
 
 Mesma régua do bloco **Ajustes** dos indicadores: os quatro tipos de ajuste, sem os estornados,
-materiais de clientes fora, material inativado conta; as datas comparam o dia em UTC. O total bate
+materiais de clientes fora, material inativado conta; as datas comparam o dia no horário de Brasília. O total bate
 com o bloco Ajustes e com o **Histórico de movimentações** filtrado pelo grupo AJUSTE **só no mesmo
 recorte** — os indicadores contam uma janela móvel até agora, e o histórico mostra só as 500 linhas
 mais recentes e inclui materiais de clientes. Material inválido no filtro (pela API) é recusado com
@@ -6745,13 +6749,13 @@ ainda não há média — e não o da época da perda: o livro não guarda o cus
 de um período fechado muda quando chega nota nova (a mesma régua do **Custo por projeto** e da **Sucata —
 financeiro**). A quantidade não é somada (cada material tem sua unidade). Ficam fora: as perdas estornadas, a
 **sucata** (relatório próprio), os ajustes negativos e os materiais de **clientes**; material inativado conta.
-As datas comparam o dia em UTC. Material inválido no filtro (pela API) é recusado com *"Parâmetro
+As datas comparam o dia no horário de Brasília. Material inválido no filtro (pela API) é recusado com *"Parâmetro
 "material_id" deve ser um número inteiro positivo"*.
 
 ### Qualidade por fornecedor
 
 No grupo **Gestão**, visível para todo perfil com acesso ao módulo, com filtros opcionais **Data
-início** e **Data fim** (sobre a data do recebimento, dia em UTC; data inválida devolve a lista
+início** e **Data fim** (sobre a data do recebimento, dia no horário de Brasília; data inválida devolve a lista
 vazia). Uma linha por fornecedor:
 
 | Coluna | O que conta |
@@ -6980,10 +6984,18 @@ O sistema guarda o instante de cada registro no horário universal (três horas 
   acima): uma movimentação ou um apontamento às 22h30 de 19/10 entra no dia 19.
 - Um registro que guarda **só a data** (a presença, o prazo de uma ordem de produção) é comparado com o *hoje* de Brasília.
 - **Os relatórios do Almoxarifado** (seção 21d: *Consumo por O.S.*, *Histórico de movimentações*, *Ajustes por motivo*, *Perdas por
-  motivo*, *Materiais mais consumidos*, *Consumo por período*, *Sucata (financeiro)*, *Custo por projeto*, *Qualidade de fornecedores*) e o
-  **Dashboard** (*movimentações hoje* e o gráfico dos últimos 7 dias) contam o dia pelo **horário universal**: um registro feito entre 21h e
-  meia-noite entra no dia seguinte. Por isso, para um período, a lista das Movimentações e o *Histórico de movimentações* podem diferir nos
-  registros desse horário. O mesmo vale para os indicadores do Operacional (OEE, manutenção e inspeções do dia).
+  motivo*, *Materiais mais consumidos*, *Consumo por período*, *Sucata (financeiro)* — o lançamento e a venda —, *Custo por projeto*,
+  *Qualidade de fornecedores*), a planilha exportada, o indicador *Requisições no prazo* e o **Dashboard** (*Movimentações Hoje*, o gráfico
+  dos últimos 7 dias e o período dos quadros de consumo) também contam o dia de **Brasília**: a lista das Movimentações e o *Histórico de
+  movimentações* dão as mesmas linhas para o mesmo período.
+- **As reservas e os alertas:** a expiração (9.7), a validade calculada e os alertas *Reserva parada* e *Requisição atrasada* comparam a
+  data com o *hoje* de Brasília.
+- **Os dias em espera** das Inspeções pendentes (*"hoje"*, *"há N dias"*) contam da hora real do recebimento, em blocos de 24 horas: *"há 1
+  dia"* a partir de 24 h, *"hoje"* antes — o recebimento de ontem às 10h, visto hoje às 9h, ainda mostra *"hoje"*.
+- **Ainda pelo horário universal:** as datas sem hora das ferramentas (vencimento do empréstimo, validade da calibração), a validade do
+  lote, o prazo da remessa a terceiro e o vencimento da conta a pagar gerada pelo recebimento quando a nota não tem data de entrada — entre
+  21h e meia-noite, o "hoje" delas é o de amanhã. Os indicadores do painel antigo do Operacional (OEE, manutenção e inspeções do dia), que
+  nenhum menu abre, também.
 - O deslocamento usado é o atual do horário de Brasília (três horas, sem horário de verão).
 
 ### 22.6 A lista mostra o último filtro pedido

@@ -306,7 +306,12 @@ condutor, na worktree da etapa, sob a trava de máquina.
    servidor — **0** retrabalho entre eles (nenhum arquivo em comum; o contrato da rota nova congelado bastou para a T5 testar contra o
    mock); **3** leitores na Fase 0, **1** revisor na Fase 2, **3** revisores em paralelo na Fase 5 e **1** executor da correção da Fase 5 em
    paralelo com o condutor (navegador × servidor) — **0** incidente de trava.
-4. **Defeito que escapou:** *(preencher na Etapa 162)*.
+4. **Defeito que escapou** *(preenchido na Etapa 162)*: **0** defeitos de código da 161 achados depois do fechamento; **2 furos de
+   medição**: (1) a varredura do navegador da Fase 0 listou os *hoje* em UTC da Fábrica e deixou de fora o `getPeriodDates` do painel do
+   Almoxarifado (o `toISOString` no período dos quadros de consumo) — inofensivo enquanto o servidor contava o dia UTC, passou a valer quando a
+   162 levou os relatórios ao dia de Brasília (achado pelo r1 da Fase 5 da 162, consertado em `e1ac2cfa`); (2) a contagem de testes que calculam
+   *hoje* em UTC ("9 arquivos") estava incompleta para o que a 162 mudou — eram 12 (os alertas e o segundo arquivo dos indicadores, Fase 2 I1
+   da 162).
 
 ## Próxima tarefa detalhada — Etapa 162
 

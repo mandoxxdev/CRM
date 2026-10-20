@@ -707,4 +707,11 @@ Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa161-respostas-velhas
 
 - [x] **RN-161.02 (C396)** — as Inspeções pendentes, o Histórico de inspeções e as Não conformidades: só a resposta do último pedido mexe na lista (a de um filtro anterior que chega depois, o erro dela e o fim do *carregando* dela são descartados; quem chama com `await` continua recebendo uma promessa que resolve) — `f2a10ffe`.
 - [x] **Fase 5 (r1, resíduo de antes)** — a data das Inspeções pendentes (a entrada = o `created_at` do recebimento) e do Histórico (`data_inspecao`, `CURRENT_TIMESTAMP`) pelo leitor de instante (era lida como hora local: à noite, o dia de amanhã) — `84353119`.
-- [ ] **Os dias em espera** (`InspecoesAlmoxarifado.js:109`, `new Date(created_at)` — 3 h de erro) — **fica (C405)**, candidato da 162.
+- [x] **Os dias em espera** (`InspecoesAlmoxarifado.js:109`, `new Date(created_at)` — 3 h de erro) — resolvido na Etapa 162 (C405, `d5c430b4` — ver a seção abaixo).
+
+## Etapa 162 — os dias em espera (2026-10-20)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa162-o-dia-de-brasilia-nos-relatorios-e-nas-reservas.md`. O status da feature não muda.
+
+- [x] **RN-162.08 (C405, B1036)** — os *dias em espera* das Inspeções pendentes pelo `lerInstanteDoBanco` (o `created_at` lido como UTC), em blocos
+  de 24 h (descartado: dias de calendário — mudança de régua, não de fuso) — `d5c430b4`.
