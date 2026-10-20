@@ -324,3 +324,23 @@ describe('[RN-161.07, C399/C400] os Colaboradores: o Setor e o Trabalho', () => 
     expect(texto()).not.toContain('BETO-161');
   });
 });
+
+describe('[C402] a coluna Data (so o dia) da Presenca e das Horas extras mostra o dia gravado', () => {
+  test('guarda: fora de UTC (em UTC-3 o new Date("2026-10-19") e 18/10)', () => {
+    expect(new Date(2026, 9, 19).getTimezoneOffset()).toBeGreaterThan(0);
+  });
+  test('[C402] Presenca gravada em 2026-10-19 aparece 19/10/2026 (e nao 18/10/2026)', async () => {
+    api.get.mockResolvedValue({ data: [{ id: 1, colaborador_nome: 'ANA-161', data: '2026-10-19', status: 'presente' }] });
+    await montar(<ControlePresenca />);
+    await esperar(() => container.textContent.includes('ANA-161'));
+    expect(container.textContent).toContain('19/10/2026');
+    expect(container.textContent).not.toContain('18/10/2026');
+  });
+  test('[C402] Hora extra de 2026-10-19 aparece 19/10/2026 (e nao 18/10/2026)', async () => {
+    api.get.mockResolvedValue({ data: [{ id: 1, colaborador_nome: 'ANA-161', data: '2026-10-19', status: 'pendente', horas: 2 }] });
+    await montar(<HorasExtras />);
+    await esperar(() => container.textContent.includes('ANA-161'));
+    expect(container.textContent).toContain('19/10/2026');
+    expect(container.textContent).not.toContain('18/10/2026');
+  });
+});

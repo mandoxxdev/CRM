@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
 import useUltimoPedido from '../../hooks/useUltimoPedido';
 import { hojeLocalISO } from '../../utils/dataLocal';
+// Etapa 161 (C402): a coluna Data e so o dia ('2026-10-19'): new Date() a lia como meia-noite UTC e mostrava 18/10 no Brasil
+import { formatDateBR } from '../../utils/formatDate';
 import { toast } from 'react-toastify';
 import { FiSearch, FiCalendar, FiClock } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
@@ -94,7 +96,7 @@ const ControlePresenca = () => {
                 presencas.map((presenca) => (
                   <tr key={presenca.id}>
                     <td><strong>{presenca.colaborador_nome}</strong></td>
-                    <td>{new Date(presenca.data).toLocaleDateString('pt-BR')}</td>
+                    <td>{formatDateBR(presenca.data)}</td>
                     <td>{formatTime(presenca.hora_entrada)}</td>
                     <td>{formatTime(presenca.hora_saida_almoco)}</td>
                     <td>{formatTime(presenca.hora_entrada_almoco)}</td>

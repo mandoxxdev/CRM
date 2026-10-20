@@ -6,6 +6,8 @@ import { FiPlus, FiSearch, FiCheckCircle, FiXCircle, FiFilter } from 'react-icon
 import { SkeletonTable } from '../SkeletonLoader';
 import HoraExtraForm from './HoraExtraForm';
 import { casaBusca } from '../../utils/buscaNoNavegador';
+// Etapa 161 (C402): a coluna Data e so o dia ('2026-10-19'): new Date() a lia como meia-noite UTC e mostrava 18/10 no Brasil
+import { formatDateBR } from '../../utils/formatDate';
 import './Operacional.css';
 
 const HorasExtras = () => {
@@ -106,7 +108,7 @@ const HorasExtras = () => {
                 visiveis.map((he) => (
                   <tr key={he.id}>
                     <td><strong>{he.colaborador_nome}</strong></td>
-                    <td>{new Date(he.data).toLocaleDateString('pt-BR')}</td>
+                    <td>{formatDateBR(he.data)}</td>
                     <td>{he.horas_extras}h</td>
                     <td>{he.tipo_hora_extra}</td>
                     <td>{formatCurrency(he.valor_total)}</td>
