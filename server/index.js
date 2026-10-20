@@ -15995,6 +15995,8 @@ app.get('/api/custos-viagens/:id', authenticateToken, exigirComercialNasProposta
 // Verificar regras de elegibilidade para viagem
 app.get('/api/custos-viagens/verificar-elegibilidade/:cliente_id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { cliente_id } = req.params;
+  const modViagem = diaLocal.modificadorDoFuso(); // Etapa 167 (RN-167.04): lidos uma vez, como ? posicional
+  const hojeViagem = diaLocal.hojeLocalISO();
   
   db.get(`
     SELECT 
@@ -16003,12 +16005,13 @@ app.get('/api/custos-viagens/verificar-elegibilidade/:cliente_id', authenticateT
       COUNT(DISTINCT CASE WHEN p.status IN ('aprovada', 'rejeitada', 'enviada') THEN p.id END) as propostas_processadas,
       COUNT(DISTINCT CASE WHEN p.status = 'aprovada' THEN p.id END) as propostas_aprovadas,
       SUM(CASE WHEN p.status = 'aprovada' THEN p.valor_total ELSE 0 END) as valor_total_aprovado,
-      MAX(p.created_at) as ultima_proposta_data
+      MAX(date(p.created_at, ?)) as ultimo_dia_local,
+      CAST(julianday(?) - julianday(MAX(date(p.created_at, ?))) AS INTEGER) as dias_desde_ultima
     FROM clientes c
     LEFT JOIN propostas p ON c.id = p.cliente_id AND (p.ativo IS NULL OR p.ativo = 1)
     WHERE c.id = ?
     GROUP BY c.id
-  `, [cliente_id], (err, cliente) => {
+  `, [modViagem, hojeViagem, modViagem, cliente_id], (err, cliente) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -16023,11 +16026,10 @@ app.get('/api/custos-viagens/verificar-elegibilidade/:cliente_id', authenticateT
       : 0;
     
     // Verificar atividade recente (últimos 90 dias)
-    const ultimaProposta = cliente.ultima_proposta_data ? new Date(cliente.ultima_proposta_data) : null;
-    const hoje = new Date();
-    const diasDesdeUltimaProposta = ultimaProposta 
-      ? Math.floor((hoje - ultimaProposta) / (1000 * 60 * 60 * 24))
-      : null;
+    // Etapa 167 (RN-167.04, B1066, C416): dias de CALENDARIO de Brasilia entre hoje e o dia da ultima proposta ativa — a mesma regua das
+    // Visitas Tecnicas (RN-166.03). Antes: new Date(MAX(created_at)) lia o instante UTC como hora local (3 h depois em producao) e contava
+    // periodos de 24 h; e o MAX de texto deixava um created_at ilegivel vencer as datas validas. O ilegivel agora fica fora do MAX.
+    const diasDesdeUltimaProposta = Number.isInteger(cliente.dias_desde_ultima) ? cliente.dias_desde_ultima : null;
     const atividadeRecente = diasDesdeUltimaProposta !== null && diasDesdeUltimaProposta <= 90;
     
     // Verificar regras
