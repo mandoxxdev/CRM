@@ -2,6 +2,7 @@ const { dbRun, dbAll, dbGet } = require('./db');
 const { registrarAuditoriaDoAto } = require('./audit');
 const { STATUS } = require('./toolStateMachine');
 const { condicaoDeBusca } = require('../buscaSemCaixa');
+const diaLocal = require('../diaLocal');
 
 async function criarFerramenta(db, user, data) {
   const r = await dbRun(db, `INSERT INTO ferramentas_almoxarifado
@@ -57,10 +58,12 @@ async function atualizarFerramenta(db, user, id, data) {
  * emprestarFerramenta (RN-03) e por listarFerramentas (calibracao_vigente); Task 3 e 8 tambem
  * reusam — nao duplicar esta consulta em outro lugar.
  */
+// Etapa 163 (RN-163.03, C406, B1041): o hoje de Brasilia (`data_validade` e coluna so de data — sem modificador). Era o `date('now')`
+// (o dia UTC): das 21h a meia-noite, a calibracao que vale ate hoje ja era vencida (o emprestimo e a medicao recusados).
 async function calibracaoVigente(db, ferramentaId) {
   return dbGet(db, `SELECT * FROM calibracoes_ferramenta_almoxarifado
-    WHERE ferramenta_id = ? AND date(data_validade) >= date('now')
-    ORDER BY date(data_validade) DESC LIMIT 1`, [ferramentaId]);
+    WHERE ferramenta_id = ? AND date(data_validade) >= ?
+    ORDER BY date(data_validade) DESC LIMIT 1`, [ferramentaId, diaLocal.hojeLocalISO()]);
 }
 
 async function emprestarFerramenta(db, user, ferramentaId, data) {
@@ -444,10 +447,12 @@ async function listarEmprestimos(db, filters = {}) {
   if (buscaColab.sql) { sql += ` AND ${buscaColab.sql}`; params.push(...buscaColab.params); }
   // vencidos=1 (Task 6, design D6): so EMPRESTADA com data_prevista_devolucao no passado.
   // Empresta sem data prevista (coluna nullable) nunca e vencido — por isso o IS NOT NULL aqui,
-  // nao so o date(...) < date('now') sozinho (NULL comparado a qualquer coisa e sempre falso em
+  // nao so o date(...) < hoje sozinho (NULL comparado a qualquer coisa e sempre falso em
   // SQL, mas deixar explicito documenta a regra em vez de depender do comportamento implicito).
+  // Etapa 163 (RN-163.05, C406): o hoje de Brasilia (era o `date('now')`, o dia UTC — o de hoje ja vencido das 21h).
   if (filters.vencidos) {
-    sql += " AND e.status = 'EMPRESTADA' AND e.data_prevista_devolucao IS NOT NULL AND date(e.data_prevista_devolucao) < date('now')";
+    sql += " AND e.status = 'EMPRESTADA' AND e.data_prevista_devolucao IS NOT NULL AND date(e.data_prevista_devolucao) < ?";
+    params.push(diaLocal.hojeLocalISO());
   }
   sql += ' ORDER BY e.data_retirada DESC';
   return dbAll(db, sql, params);
@@ -506,10 +511,11 @@ async function listarCalibracoes(db, ferramentaId) {
  * as colunas de `c` todas NULL, em vez de sumir da consulta.
  */
 async function painelCalibracoes(db, dias = 30) {
+  // Etapa 163 (RN-163.04, C406): os dias restantes contra o hoje de Brasilia (era o `date('now')` — um dia a menos das 21h)
   const rows = await dbAll(db, `
     SELECT f.id, f.codigo_patrimonio, f.nome, c.data_validade,
       CASE WHEN c.data_validade IS NULL THEN NULL
-        ELSE CAST(julianday(date(c.data_validade)) - julianday(date('now')) AS INTEGER)
+        ELSE CAST(julianday(date(c.data_validade)) - julianday(?) AS INTEGER)
       END AS dias_restantes
     FROM ferramentas_almoxarifado f
     LEFT JOIN calibracoes_ferramenta_almoxarifado c ON c.ferramenta_id = f.id
@@ -518,7 +524,7 @@ async function painelCalibracoes(db, dias = 30) {
         WHERE c2.ferramenta_id = f.id
       )
     WHERE f.exige_calibracao = 1 AND f.ativo = 1
-    ORDER BY c.data_validade ASC`);
+    ORDER BY c.data_validade ASC`, [diaLocal.hojeLocalISO()]);
 
   const vencidas = [];
   const a_vencer = [];

@@ -1325,7 +1325,7 @@ async function initSchemaUmaExecucao(db) {
   // nasceu na forma nova.
 
   // ── Lotes (Etapa 6) ──
-  // `VENCIDO` NAO e status: vencimento e derivado de data_validade < date('now'), calculado na
+  // `VENCIDO` NAO e status: vencimento e derivado de data_validade < hoje de Brasilia (lotService.isVencido), calculado na
   // leitura. Gravar exigiria um cron para virar o status a meia-noite e criaria um estado que
   // diverge da data quando o cron falhasse — mais uma coluna mentindo. Derivado nao diverge.
   await dbRun(db, `CREATE TABLE IF NOT EXISTS lotes_almoxarifado (

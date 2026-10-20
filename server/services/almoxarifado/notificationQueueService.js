@@ -16,6 +16,7 @@ const { registrarAuditoriaDoAto } = require('./audit');
 const movementTypes = require('./movementTypes');
 // toolReminderService so requer `./db` — sem ciclo, top-level seguro (Etapa 12, Task 3).
 const toolReminderService = require('./toolReminderService');
+const diaLocal = require('../diaLocal');
 // thirdPartyService NAO pode vir para o topo: ele requer `./stockService`, que por sua vez requer
 // ESTE arquivo no topo dele (Task 2). Um require de topo aqui fecharia o ciclo
 // notificationQueueService -> thirdPartyService -> stockService -> notificationQueueService, e o
@@ -430,18 +431,17 @@ async function suprimirNotificacaoMovimentacao(db, movimentacaoId) {
  * RN-06: lembrete de ferramenta vencida. Fonte unica —
  * `toolReminderService.listarEmprestimosVencidos` (funcao pura da 9b, ja confirmada pela Fase 2:
  * devolve `e.*` + `ferramenta_nome`/`codigo_patrimonio`/`dias_vencido`). Dedupe
- * `ferramenta-lembrete-<emprestimo_id>-<hoje>` — UM POR DIA, nao um por execucao do job; `hoje`
- * em UTC (`toISOString().slice(0,10)`) para casar com o `date('now')` do SQL do proprio
- * `listarEmprestimosVencidos` (data local duplicaria o lembrete na janela 21h-meia-noite, achado
- * verificado pela Fase 2).
+ * `ferramenta-lembrete-<emprestimo_id>-<hoje>` — UM POR DIA, nao um por execucao do job. Etapa 163 (RN-163.05, B1041): `hoje` e o
+ * dia de Brasilia, e o MESMO valor vai ao filtro de `listarEmprestimosVencidos` (era o UTC dos dois lados, de proposito, para casarem —
+ * agora casam no dia local; as duas reguas continuam andando juntas, lidas uma vez so).
  */
 async function varrerLembretesFerramenta(db) {
   const alertService = require('./alertService');
   // Revisao da Task 3 (I1): o destino e alertas_estoque_emails — o toggle "Notificar por
   // e-mail" da tela de Alertas governa (ver alertService.alertasEmailLigado).
   if (!(await alertService.alertasEmailLigado(db))) return { total: 0, enfileiradas: 0, motivo: 'email desligado' };
-  const emprestimos = await toolReminderService.listarEmprestimosVencidos(db);
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = diaLocal.hojeLocalISO();
+  const emprestimos = await toolReminderService.listarEmprestimosVencidos(db, hoje);
   const destinatarios = alertService.parseList(await alertService.getConfigValue(db, 'alertas_estoque_emails'));
 
   let enfileiradas = 0;
@@ -489,7 +489,7 @@ async function varrerLotesVencendo(db) {
   // recebido vencido/curto, ou cuja janela passou com o processo fora do ar), e ele nunca mais
   // alertava. Incluir vencidos nao spamma: o dedupe por <lote_id>-<data_validade> garante UM
   // aviso por validade, nao um por dia. 'ATIVO' e o literal de lotService.STATUS_LOTE (fonte
-  // dos status; so ATIVO participa — M8).
+  // dos status; so ATIVO participa — M8). Etapa 163 (RN-163.07, B1042): o teto conta do hoje de Brasilia (era `date('now')`).
   const lotes = await dbAll(db, `
     SELECT l.*, m.codigo AS material_codigo, m.nome AS material_nome, m.unidade AS material_unidade,
       COALESCE((SELECT SUM(s.quantidade) FROM estoque_saldo_almoxarifado s WHERE s.lote_id = l.id), 0) AS saldo
@@ -497,8 +497,8 @@ async function varrerLotesVencendo(db) {
     JOIN materiais_almoxarifado m ON m.id = l.material_id
     WHERE l.status = 'ATIVO'
       AND l.data_validade IS NOT NULL
-      AND date(l.data_validade) <= date('now', '+' || ? || ' days')
-      AND l.vencimento_liberado_em IS NULL`, [dias]);
+      AND date(l.data_validade) <= date(?, '+' || ? || ' days')
+      AND l.vencimento_liberado_em IS NULL`, [diaLocal.hojeLocalISO(), dias]);
 
   const lotesComSaldo = lotes.filter((l) => Number(l.saldo) > 0);
   const destinatarios = alertService.parseList(await alertService.getConfigValue(db, 'alertas_estoque_emails'));
@@ -528,7 +528,7 @@ async function varrerLotesVencendo(db) {
 /**
  * RN-07: remessa a terceiro vencida. A rota `/remessas-terceiros/vencidas` so DELEGA — a fonte
  * UNICA e `thirdPartyService.listarRemessas(db, { vencidas: '1' })` (thirdPartyService.js:322),
- * que ja filtra `status IN ('ENVIADA','RETORNO_PARCIAL') AND date(prazo_previsto) < date('now')`.
+ * que ja filtra `status IN ('ENVIADA','RETORNO_PARCIAL') AND date(prazo_previsto) < <hoje de Brasilia>` (Etapa 163, RN-163.08).
  * Nada a extrair, nada a refatorar. A coluna e `prazo_previsto` (nao `data_prevista`). Dedupe
  * `remessa-vencida-<remessa_id>-<prazo_previsto>`.
  */

@@ -9,6 +9,7 @@ const path = require('path');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbAll, dbGet } = require('../../services/almoxarifado/db');
+const diaLocal = require('../../services/diaLocal'); // Etapa 163 (C406): o hoje das validades e o dia de Brasilia
 
 const PRODUCAO_FALLBACK = { id: 50, nome: 'Chão de Fábrica', role: 'usuario', email: 'prod@test.com' };
 
@@ -127,12 +128,14 @@ async function novaFerramenta(db, extra = {}) {
     // ferramenta que nao exige calibracao NAO deve aparecer, mesmo com calibracao vencida
     const naoExige = await novaFerramenta(db, { exige_calibracao: 0 });
 
+    // Etapa 163 (RN-163.04): a validade relativa ao hoje de Brasilia (era date('now'), o dia UTC — das 21h a "ontem" ja era hoje)
+    const hoje = diaLocal.hojeLocalISO();
     await dbRun(db, `INSERT INTO calibracoes_ferramenta_almoxarifado
-      (ferramenta_id, data_calibracao, data_validade) VALUES (?, date('now','-2 years'), date('now','-1 day'))`, [vencida]);
+      (ferramenta_id, data_calibracao, data_validade) VALUES (?, date(?,'-2 years'), date(?,'-1 day'))`, [vencida, hoje, hoje]);
     await dbRun(db, `INSERT INTO calibracoes_ferramenta_almoxarifado
-      (ferramenta_id, data_calibracao, data_validade) VALUES (?, date('now','-1 year'), date('now','+10 days'))`, [aVencer]);
+      (ferramenta_id, data_calibracao, data_validade) VALUES (?, date(?,'-1 year'), date(?,'+10 days'))`, [aVencer, hoje, hoje]);
     await dbRun(db, `INSERT INTO calibracoes_ferramenta_almoxarifado
-      (ferramenta_id, data_calibracao, data_validade) VALUES (?, date('now','-2 years'), date('now','-1 day'))`, [naoExige]);
+      (ferramenta_id, data_calibracao, data_validade) VALUES (?, date(?,'-2 years'), date(?,'-1 day'))`, [naoExige, hoje, hoje]);
 
     const r30 = await request(app).get('/api/almoxarifado/calibracoes/painel?dias=30').expect(200);
     const vencidasIds30 = r30.body.vencidas.map(i => i.id);
@@ -159,7 +162,7 @@ async function novaFerramenta(db, extra = {}) {
     const { app, db, close } = await createTestApp();
     const venceHoje = await novaFerramenta(db, { exige_calibracao: 1 });
     await dbRun(db, `INSERT INTO calibracoes_ferramenta_almoxarifado
-      (ferramenta_id, data_calibracao, data_validade) VALUES (?, date('now','-1 year'), date('now'))`, [venceHoje]);
+      (ferramenta_id, data_calibracao, data_validade) VALUES (?, date(?,'-1 year'), ?)`, [venceHoje, diaLocal.hojeLocalISO(), diaLocal.hojeLocalISO()]); // Etapa 163: o hoje de Brasilia
 
     const r = await request(app).get('/api/almoxarifado/calibracoes/painel?dias=30').expect(200);
     const item = r.body.a_vencer.find(i => i.id === venceHoje);

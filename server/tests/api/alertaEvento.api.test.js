@@ -28,7 +28,7 @@ function hashDedupe(evento, dedupeChave) {
   return crypto.createHash('sha256').update(`${evento}|${dedupeChave}`).digest('hex');
 }
 
-const mesAtual = () => new Date().toISOString().slice(0, 7); // AAAA-MM (UTC, como o registro)
+const mesAtual = () => require('../../services/diaLocal').hojeLocalISO().slice(0, 7); // AAAA-MM de Brasilia, como o registro (Etapa 163, RN-163.09)
 
 async function setConfig(db, chave, valor) {
   await dbRun(db, `UPDATE configuracoes_almoxarifado SET valor = ? WHERE chave = ?`, [valor, chave]);

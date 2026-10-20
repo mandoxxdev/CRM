@@ -24,7 +24,7 @@ const alertRegistry = require('./alertRegistry');
 // Etapa 27, Task 3. `toleranciaInspecao` e funcao pura (sem db, sem ciclo). `calibracaoVigente`
 // vem de `toolService` por require direto — verificado que nao ha ciclo: toolService so carrega
 // db/audit/toolStateMachine, e nenhum deles chega aqui. Reusar a consulta em vez de copiar o
-// `date(data_validade) >= date('now')` foi decisao explicita da Etapa 9b ("nao duplicar esta
+// `date(data_validade) >= <hoje de Brasilia>` (Etapa 163; era `date('now')`) foi decisao explicita da Etapa 9b ("nao duplicar esta
 // consulta em outro lugar", toolService.js:55): duas definicoes de "calibracao vigente" e como
 // ter duas reguas para o mesmo fato.
 const { avaliarMedida, paraNumeroFinito } = require('./toleranciaInspecao');

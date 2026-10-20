@@ -27,6 +27,7 @@
 const assert = require('assert');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
+const diaLocal = require('../../services/diaLocal'); // Etapa 163 (C406): o hoje das validades e o dia de Brasilia
 const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 const stockService = require('../../services/almoxarifado/stockService');
 const receiptService = require('../../services/almoxarifado/receiptService');
@@ -110,12 +111,12 @@ async function novaFerramenta(db, { exige_calibracao = 0, ativo = 1, nome = 'Paq
 }
 
 // `vigente = false` grava uma calibracao JA VENCIDA de proposito: calibracaoVigente filtra por
-// `date(data_validade) >= date('now')`, entao os dois casos que a mensagem literal cobre
+// `date(data_validade) >= <hoje de Brasilia>` (Etapa 163; era date('now')), entao os dois casos que a mensagem literal cobre
 // ("vencida" e "sem calibracao registrada") tem de ser exercitados.
 const calibrar = (db, ferramentaId, vigente = true) => dbRun(db,
   `INSERT INTO calibracoes_ferramenta_almoxarifado (ferramenta_id, data_calibracao, data_validade)
-   VALUES (?, date('now','-30 days'), date('now', ?))`,
-  [ferramentaId, vigente ? '+180 days' : '-1 days']);
+   VALUES (?, date(?,'-30 days'), date(?, ?))`,
+  [ferramentaId, diaLocal.hojeLocalISO(), diaLocal.hojeLocalISO(), vigente ? '+180 days' : '-1 days']);
 
 const inspecoesDoItem = (db, itemId) => dbAll(db,
   'SELECT * FROM inspecoes_recebimento_almoxarifado WHERE recebimento_item_id = ?', [itemId]);

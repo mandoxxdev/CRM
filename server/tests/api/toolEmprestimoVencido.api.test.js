@@ -2,7 +2,7 @@
  * Etapa 9b, Task 6 — Devolucao vencida: filtro `GET /emprestimos?vencidos=1` (design D6) e a
  * funcao pura `toolReminderService.listarEmprestimosVencidos(db)` que a alimenta.
  *
- * Contrato: so emprestimo com status EMPRESTADA e data_prevista_devolucao < date('now') e
+ * Contrato: so emprestimo com status EMPRESTADA e data_prevista_devolucao < hoje de Brasilia (Etapa 163; era date('now')) e
  * vencido. Sem data prevista NUNCA e vencido (coluna nullable, RN nao se aplica). Devolvido
  * (mesmo com a data no passado) tambem nao conta — a comparacao e so contra emprestimo aberto.
  *
@@ -13,6 +13,7 @@ const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
 const { dbRun } = require('../../services/almoxarifado/db');
 const toolReminderService = require('../../services/almoxarifado/toolReminderService');
+const diaLocal = require('../../services/diaLocal'); // Etapa 163 (C406): o hoje das validades e o dia de Brasilia
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -29,17 +30,10 @@ async function novaFerramenta(db, extra = {}) {
   return r.lastID;
 }
 
-function isoOntem() {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0, 10);
-}
-
-function isoAmanha() {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().slice(0, 10);
-}
+// Etapa 163 (RN-163.05): ontem e amanha do dia de Brasilia (era setDate local + toISOString UTC — das 21h, o "ontem" ja era o hoje local)
+const doHojeLocal = (n) => { const [a, m, d] = diaLocal.hojeLocalISO().split('-').map(Number); return new Date(Date.UTC(a, m - 1, d + n)).toISOString().slice(0, 10); };
+function isoOntem() { return doHojeLocal(-1); }
+function isoAmanha() { return doHojeLocal(1); }
 
 (async () => {
   await test('vencidos=1 traz so o emprestimo com data_prevista_devolucao no passado e ainda EMPRESTADA', async () => {

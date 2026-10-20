@@ -12,16 +12,22 @@
  * data prevista tenha ficado no passado — o que importa e se ele ainda esta aberto hoje.
  */
 const { dbAll } = require('./db');
+const diaLocal = require('../diaLocal');
 
-async function listarEmprestimosVencidos(db) {
+/**
+ * Etapa 163 (RN-163.05, C406, B1041): "hoje" e o dia de Brasilia (`hojeISO`, `AAAA-MM-DD`; padrao `diaLocal.hojeLocalISO()`), nao o
+ * `date('now')` do SQLite (o dia UTC: das 21h a meia-noite, o emprestimo que volta hoje ja era vencido). Quem monta a chave do lembrete
+ * passa o MESMO `hojeISO` que usa na chave (Fase 2 I3) — uma leitura do relogio por varredura.
+ */
+async function listarEmprestimosVencidos(db, hojeISO = diaLocal.hojeLocalISO()) {
   return dbAll(db, `SELECT e.*, f.nome as ferramenta_nome, f.codigo_patrimonio,
-      CAST(julianday(date('now')) - julianday(date(e.data_prevista_devolucao)) AS INTEGER) AS dias_vencido
+      CAST(julianday(?) - julianday(date(e.data_prevista_devolucao)) AS INTEGER) AS dias_vencido
     FROM emprestimos_ferramenta_almoxarifado e
     JOIN ferramentas_almoxarifado f ON e.ferramenta_id = f.id
     WHERE e.status = 'EMPRESTADA'
       AND e.data_prevista_devolucao IS NOT NULL
-      AND date(e.data_prevista_devolucao) < date('now')
-    ORDER BY e.data_prevista_devolucao ASC`);
+      AND date(e.data_prevista_devolucao) < ?
+    ORDER BY e.data_prevista_devolucao ASC`, [hojeISO, hojeISO]);
 }
 
 module.exports = { listarEmprestimosVencidos };

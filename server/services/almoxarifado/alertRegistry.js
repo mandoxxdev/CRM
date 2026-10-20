@@ -72,14 +72,21 @@ async function listarMateriaisSemEndereco(db) {
   `);
 }
 
-/** AAAA-MM em UTC — casa com o toISOString dos testes e com o date('now') UTC do SQLite. */
-function mesAtual() {
-  return new Date().toISOString().slice(0, 7);
+/**
+ * AAAA-MM do mes de Brasilia. Etapa 163 (RN-163.09, B1044): era o mes UTC (`toISOString`) — no ultimo dia do mes, das 21h, a chave ja era
+ * a do mes seguinte e o aviso do mes seguinte saia 3 h antes.
+ */
+function mesAtual(agora = new Date()) {
+  return diaLocal.hojeLocalISO(agora).slice(0, 7);
 }
 
-/** Semana ISO-8601 em UTC (o ano e o ISO do meio da semana, nao o civil — virada de ano). */
+/**
+ * Semana ISO-8601 do dia de Brasilia (o ano e o ISO do meio da semana, nao o civil — virada de ano). Etapa 163 (RN-163.09, B1044): era a
+ * do dia UTC — no domingo, das 21h, ja a da semana seguinte. A aritmetica continua em UTC sobre o DIA local (`Date.UTC` do AAAA-MM-DD).
+ */
 function semanaIso(agora = new Date()) {
-  const d = new Date(Date.UTC(agora.getUTCFullYear(), agora.getUTCMonth(), agora.getUTCDate()));
+  const [ano, mes, dia] = diaLocal.hojeLocalISO(agora).split('-').map(Number);
+  const d = new Date(Date.UTC(ano, mes - 1, dia));
   const diaSemana = d.getUTCDay() || 7;
   d.setUTCDate(d.getUTCDate() + 4 - diaSemana);
   const inicioAno = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
@@ -1075,4 +1082,8 @@ module.exports = {
   listarNaoConformidadesParadas,
   // Etapa 46 (T3): idem, para a 15a entrada — a regua de "execucao pendente" medida direto.
   listarNaoConformidadesExecucaoPendente,
+  // Etapa 163 (RN-163.09): exportadas para o teste medir o mes e a semana de Brasilia num instante fixo (a semana so difere da UTC no
+  // domingo das 21h, que o relogio da suite nao garante).
+  mesAtual,
+  semanaIso,
 };

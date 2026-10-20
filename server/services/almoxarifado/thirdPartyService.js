@@ -23,6 +23,7 @@ const sm = require('./thirdPartyStateMachine');
 const { inserirComNumeroUnico } = require('./numeroDoc');
 // Etapa 96 (C176): a regra unica de quantidade — namespace, porque este arquivo tem `const qtd` local (Fase 2, I3).
 const Q = require('./quantidade');
+const diaLocal = require('../diaLocal');
 
 const DESTINOS_ENCERRAMENTO = ['PERDA_NO_TERCEIRO', 'CONSUMIDO_NO_PROCESSO'];
 /** destino do encerramento -> tipo de movimento que o executa (Task 4). */
@@ -328,20 +329,23 @@ async function getRemessa(db, id) {
  * So remessa que ainda tem material la fora pode estar vencida: encerrada/cancelada nao atrasa.
  */
 async function listarRemessas(db, filtros = {}) {
+  // Etapa 163 (RN-163.08, C406, B1043): o dia de referencia e o `referencia` ou o hoje de Brasilia (era `COALESCE(?, 'now')` — o dia UTC:
+  // a remessa de prazo hoje ja era vencida das 21h). Lido UMA vez para o selo e para o filtro (Fase 2 I3).
+  const referencia = filtros.referencia || diaLocal.hojeLocalISO();
   let sql = `SELECT r.*,
       (SELECT COUNT(*) FROM itens_remessa_terceiro_almoxarifado i WHERE i.remessa_id = r.id) AS itens_total,
       CASE WHEN r.prazo_previsto IS NOT NULL
              AND r.status IN ('ENVIADA','RETORNO_PARCIAL')
-             AND date(r.prazo_previsto) < date(COALESCE(?, 'now'))
+             AND date(r.prazo_previsto) < date(?)
            THEN 1 ELSE 0 END AS vencida
     FROM remessas_terceiro_almoxarifado r WHERE 1=1`;
-  const params = [filtros.referencia || null];
+  const params = [referencia];
   if (filtros.status) { sql += ' AND r.status = ?'; params.push(filtros.status); }
   if (filtros.fornecedor_id) { sql += ' AND r.fornecedor_id = ?'; params.push(Number(filtros.fornecedor_id)); }
   if (String(filtros.vencidas) === '1') {
     sql += " AND r.prazo_previsto IS NOT NULL AND r.status IN ('ENVIADA','RETORNO_PARCIAL')"
-      + " AND date(r.prazo_previsto) < date(COALESCE(?, 'now'))";
-    params.push(filtros.referencia || null);
+      + ' AND date(r.prazo_previsto) < date(?)';
+    params.push(referencia);
   }
   sql += ' ORDER BY r.created_at DESC, r.id DESC';
   return dbAll(db, sql, params);

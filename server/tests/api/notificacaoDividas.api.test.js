@@ -13,6 +13,7 @@ const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 const lotService = require('../../services/almoxarifado/lotService');
 const queueService = require('../../services/almoxarifado/notificationQueueService');
+const diaLocal = require('../../services/diaLocal'); // Etapa 163 (C406): o hoje das validades e o dia de Brasilia
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -45,8 +46,8 @@ async function criarFerramentaVencida(db, { diasVencido = 3 } = {}) {
     VALUES (?, ?, 1)`, [`FERR-${seq}`, `Ferramenta ${seq}`]);
   const e = await dbRun(db, `INSERT INTO emprestimos_ferramenta_almoxarifado
     (ferramenta_id, colaborador_nome, data_retirada, data_prevista_devolucao, status)
-    VALUES (?, ?, datetime('now', '-10 days'), datetime('now', '-' || ? || ' days'), 'EMPRESTADA')`,
-    [f.lastID, `Colaborador ${seq}`, diasVencido]);
+    VALUES (?, ?, datetime('now', '-10 days'), date(?, '-' || ? || ' days'), 'EMPRESTADA')`,
+    [f.lastID, `Colaborador ${seq}`, diaLocal.hojeLocalISO(), diasVencido]); // Etapa 163: N dias antes do hoje de Brasilia (era o instante UTC)
   return { ferramentaId: f.lastID, emprestimoId: e.lastID };
 }
 
@@ -95,7 +96,7 @@ async function criarLoteAtivo(db, materialId, over = {}) {
     // sair da chave da producao (sabotagem: `ferramenta-lembrete-<id>` sem data), a chave gerada
     // diverge da pre-inserida e um SEGUNDO aviso nasce — e o teste cai.
     const { emprestimoId } = await criarFerramentaVencida(db, { diasVencido: 1 });
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = diaLocal.hojeLocalISO(); // Etapa 163 (RN-163.05): a chave do lembrete leva o dia de Brasilia
     const pre = await queueService.enfileirar(db, {
       evento: 'FERRAMENTA_LEMBRETE',
       dedupe_chave: `ferramenta-lembrete-${emprestimoId}-${hoje}`,

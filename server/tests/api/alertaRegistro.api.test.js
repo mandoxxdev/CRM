@@ -42,7 +42,7 @@ function diasAtrasLocal(n) {
 function diasAFrente(n) {
   return new Date(Date.now() + n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
-const mesAtual = () => new Date().toISOString().slice(0, 7); // AAAA-MM (UTC, como o registro)
+const mesAtual = () => require('../../services/diaLocal').hojeLocalISO().slice(0, 7); // AAAA-MM de Brasilia, como o registro (Etapa 163, RN-163.09)
 
 async function setConfig(db, chave, valor) {
   await dbRun(db, `UPDATE configuracoes_almoxarifado SET valor = ? WHERE chave = ?`, [valor, chave]);

@@ -10,6 +10,7 @@
  * duas vezes. O rastro vai para auditoria_log_almoxarifado com entidade = 'lote'.
  */
 const { dbRun, dbGet, dbAll } = require('./db');
+const diaLocal = require('../diaLocal');
 // Etapa 33: a URL do certificado passa a ser MINADA pelo servidor, no ponto unico do modulo.
 const { materialPhotoUrl } = require('./materialPhoto');
 const { registrarAuditoria, registrarAuditoriaDoAto } = require('./audit');
@@ -20,10 +21,14 @@ function erro(msg, status = 400) {
   return Object.assign(new Error(msg), { status });
 }
 
-/** Vencimento e SEMPRE derivado — ver a nota no CREATE TABLE. */
+/**
+ * Vencimento e SEMPRE derivado — ver a nota no CREATE TABLE. Etapa 163 (RN-163.06, C406, B1042): o padrao do `hoje` e o dia de Brasilia
+ * (era o `toISOString`, o dia UTC — das 21h a meia-noite o lote que vence hoje ja nao saia). E porta de saldo (a saida do motor e a
+ * separacao recusam lote vencido): so a data mudou — as guardas, a ordem delas e a trava ficam como estavam.
+ */
 function isVencido(lote, hojeISO) {
   if (!lote || !lote.data_validade) return false;
-  const hoje = hojeISO || new Date().toISOString().slice(0, 10);
+  const hoje = hojeISO || diaLocal.hojeLocalISO();
   return String(lote.data_validade).slice(0, 10) < hoje;
 }
 
@@ -213,7 +218,7 @@ async function listarLotesDoMaterial(db, materialId, { apenasComSaldo = false } 
     FROM lotes_almoxarifado l
     WHERE l.material_id = ?`, [materialId]);
 
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = diaLocal.hojeLocalISO(); // Etapa 163 (RN-163.06): a mesma regua do isVencido, lida uma vez para a lista toda
   const comFlags = linhas
     .map((l) => {
       const vencido = isVencido(l, hoje);

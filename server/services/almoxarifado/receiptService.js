@@ -1848,7 +1848,9 @@ async function gerarContaPagar(db, rec) {
     descricao,
     rec.fornecedor_nome || rec.fornecedor_cnpj || 'Fornecedor',
     rec.valor_total_nota,
-    rec.data_entrada_nf || new Date().toISOString().split('T')[0],
+    // Etapa 163 (B1044): o padrao no dia de Brasilia (era o UTC). INALCANCAVEL hoje — validarDadosProcessamento recusa o
+    // processamento sem data_entrada_nf antes de chegar aqui; mantido na forma segura e declarado (nenhum teste o alcanca).
+    rec.data_entrada_nf || require('../diaLocal').hojeLocalISO(),
     'pendente',
     'Material/Compras',
     [
