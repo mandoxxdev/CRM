@@ -17,6 +17,7 @@ const [TIPO_NOTA_FISCAL, TIPO_PEDIDO_COMPRA] = TIPOS_RECEBIMENTO;
 const { registrarAuditoria, registrarAuditoriaDoAto } = require('./audit');
 // Etapa 96 (C176): a regra unica de quantidade (namespace — Fase 2, I3).
 const Q = require('./quantidade');
+const { condicaoDeBusca } = require('../buscaSemCaixa');
 // (Etapa 42, onda de correcao) O epsilon vem de `divergencia.js`, que existe desde a Etapa 10b como
 // dono unico de "isto e zero para efeito pratico" — reescrever o literal aqui seria a segunda
 // definicao, e a divergencia entre as duas apareceria na primeira edicao de uma delas.
@@ -2883,9 +2884,12 @@ async function listarFornecedoresAux(db, { search } = {}) {
 
   let sql = 'SELECT id, razao_social, nome_fantasia, cnpj FROM fornecedores WHERE status = ?';
   const params = ['ativo'];
-  if (search) {
-    sql += ' AND (razao_social LIKE ? OR nome_fantasia LIKE ? OR cnpj LIKE ?)';
-    params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+  // Etapa 161 (RN-161.09, C399): a tela passa a procurar aqui (antes ficava nos 50 primeiros). O termo aparado e sem caixa, `%`/`_` como
+  // texto (a `condicaoDeBusca` com `escapar`); vazio, so espacos ou nao texto = sem filtro. Antes: `LIKE` cru.
+  const busca = condicaoDeBusca(['razao_social', 'nome_fantasia', 'cnpj'], search, { escapar: true });
+  if (busca.sql) {
+    sql += ` AND ${busca.sql}`;
+    params.push(...busca.params);
   }
   sql += ' ORDER BY razao_social LIMIT 50';
   return dbAll(db, sql, params);

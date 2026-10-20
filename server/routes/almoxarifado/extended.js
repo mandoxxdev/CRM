@@ -2058,6 +2058,18 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
   // ── Notificacoes (Etapa 12, Task 1) — RN-01/02/03/08/09 do design. Gate proprio
   // (`gerenciar_notificacoes`, D7): reenviar e drenar a fila e operacao administrativa, COMPRAS
   // fica fora de proposito (mesmo criterio de gerenciar_reposicao/D9 na Etapa 11).
+  // Etapa 161 (RN-161.08, C399, B1029): os eventos que a fila conhece alem dos 10 fixos da tela — as chaves do registro de alertas
+  // (`evento: entrada.chave` na varredura e no disparo no ato). Mesmo portao da lista que consome. Registrada ANTES da lista (nao ha
+  // `/notificacoes/:id` GET). O 500 e inalcancavel: o registro e constante em memoria.
+  app.get('/api/almoxarifado/notificacoes/eventos', auth, requirePermission('gerenciar_notificacoes'), (req, res) => {
+    try {
+      res.json(alertRegistry.ALERT_REGISTRY.map((e) => ({ evento: e.chave, rotulo: e.titulo })));
+    } catch (e) {
+      console.error('Erro ao listar os eventos das notificacoes:', e);
+      res.status(500).json({ error: 'Erro ao listar os eventos' });
+    }
+  });
+
   app.get('/api/almoxarifado/notificacoes', auth, requirePermission('gerenciar_notificacoes'), async (req, res) => {
     try {
       const { status, evento } = req.query;
@@ -2231,8 +2243,12 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
                    WHERE acao IS NOT NULL AND acao <> '' ORDER BY acao`),
         // `usuario_id` e NULL-avel (ha atos sem `req.user`): sem o filtro, o select da tela
         // ganharia uma opcao `{ id: null }` que nao filtra nada.
-        dbAll(db, `SELECT DISTINCT usuario_id, usuario_nome FROM auditoria_log_almoxarifado
-                   WHERE usuario_id IS NOT NULL ORDER BY usuario_nome, usuario_id`),
+        // Etapa 161 (RN-161.10, C400, B1030): o nome e retrato de cada linha — o usuario renomeado aparecia duas vezes (a mesma `key` na
+        // tela, e o filtro manda o id: as duas davam o mesmo resultado). Uma opcao por id, com o nome da linha mais recente dele.
+        dbAll(db, `SELECT a.usuario_id, a.usuario_nome FROM auditoria_log_almoxarifado a
+                   WHERE a.usuario_id IS NOT NULL
+                     AND a.id = (SELECT MAX(b.id) FROM auditoria_log_almoxarifado b WHERE b.usuario_id = a.usuario_id)
+                   ORDER BY a.usuario_nome, a.usuario_id`),
       ]);
 
       // RN-06: sinonimo nao divide a lista — `CRIACAO` e `CRIAR` viram UMA opcao "Criação" com

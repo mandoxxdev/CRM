@@ -124,4 +124,4 @@ function janelaUtc(dataInicio, dataFim, zona = FUSO_PADRAO) {
   return { de, ate };
 }
 
-module.exports = { validarData, janelaUtc, FUSO_PADRAO };
+module.exports = { validarData, janelaUtc, FUSO_PADRAO, offsetMinutos };

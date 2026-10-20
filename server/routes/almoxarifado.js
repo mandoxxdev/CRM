@@ -13,6 +13,7 @@ const multer = multerComLimiteNoErro(require('multer'));
 // global (services/errosApi.js) responde 400 com ESTE texto (sem isso, 500 generico).
 const { erroComMensagemUsuario } = require('../services/errosApi');
 const { condicaoDeBusca } = require('../services/buscaSemCaixa');
+const diaLocal = require('../services/diaLocal');
 const { z } = require('zod');
 const alertService = require('../services/almoxarifado/alertService');
 const notificationQueueService = require('../services/almoxarifado/notificationQueueService');
@@ -1250,8 +1251,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
     if (material_id) { sql += ` AND m.material_id = ?`; params.push(material_id); }
     if (tipo) { sql += ` AND m.tipo = ?`; params.push(tipo); }
-    if (data_inicio) { sql += ` AND DATE(m.created_at) >= ?`; params.push(data_inicio); }
-    if (data_fim) { sql += ` AND DATE(m.created_at) <= ?`; params.push(data_fim); }
+    // Etapa 161 (RN-161.06, C397, B1025): o dia de Brasilia do `created_at` (CURRENT_TIMESTAMP, UTC) — antes o dia UTC, e o ato das
+    // 22h30 entrava no filtro do dia seguinte. Os relatorios e o painel do almoxarifado continuam no dia UTC (C401, B1027).
+    if (data_inicio) { sql += ` AND DATE(m.created_at, ?) >= ?`; params.push(diaLocal.modificadorDoFuso(), data_inicio); }
+    if (data_fim) { sql += ` AND DATE(m.created_at, ?) <= ?`; params.push(diaLocal.modificadorDoFuso(), data_fim); }
     if (os_id) { sql += ` AND m.os_id = ?`; params.push(os_id); }
     if (projeto_id) { sql += ` AND m.projeto_id = ?`; params.push(projeto_id); }
     if (centro_custo_id) { sql += ` AND m.centro_custo_id = ?`; params.push(centro_custo_id); }

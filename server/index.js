@@ -216,6 +216,8 @@ const { tratarErroGlobalApi } = require('./services/errosApi');
 const { obterCoordenadasCidade, normalizarNome, termoDaConsulta, coordenadaGuardada, coordenadaPlausivel, geocodificarEndereco } = require('./services/coordenadas');
 // Etapa 159 (RN-159.02, C385): a busca de texto acha a letra acentuada em qualquer caixa (o LIKE do SQLite so ignora a caixa sem acento)
 const { condicaoDeBusca, formasDoTermo } = require('./services/buscaSemCaixa');
+// Etapa 161 (RN-161.04, C397): `controle_presenca.data` guarda SO a data do dia local; o "hoje" e o de Brasilia, nao o `date('now')` UTC
+const diaLocal = require('./services/diaLocal');
 // Etapa 160 (RN-160.07, C388): o cadastro responde o registro gravado, lido do banco — nao o eco do corpo. A releitura que falha ou
 // nao acha a linha responde o `minimo` ({ id } ou { id, numero_proposta }): o registro ja existe, e um 500 faria a tela cadastrar de
 // novo (B1015). O comentario no SQL e o que o teste usa para injetar a falha so na releitura.
@@ -20132,9 +20134,9 @@ app.get('/api/operacional/colaboradores', authenticateToken, checkModulePermissi
   const { search, status, setor, disponivel } = req.query;
   let query = `SELECT c.*, 
     (SELECT COUNT(*) FROM atividades_colaboradores ac WHERE ac.colaborador_id = c.id AND ac.status = 'em_andamento') as atividades_ativas,
-    (SELECT COUNT(*) FROM controle_presenca cp WHERE cp.colaborador_id = c.id AND cp.data = date('now') AND cp.status = 'presente') as presente_hoje
+    (SELECT COUNT(*) FROM controle_presenca cp WHERE cp.colaborador_id = c.id AND cp.data = ? AND cp.status = 'presente') as presente_hoje
     FROM colaboradores c WHERE 1=1`;
-  const params = [];
+  const params = [diaLocal.hojeLocalISO()]; // o `?` do presente_hoje (Etapa 161)
 
   // Etapa 160 (RN-160.03, C392): aparado e nas tres formas (o nome e gravado em maiusculas)
   const busca = condicaoDeBusca(['c.nome', 'c.matricula', 'c.cpf'], search);
@@ -20220,8 +20222,8 @@ app.get('/api/operacional/colaboradores', authenticateToken, checkModulePermissi
         } else {
           // Verificar se está presente hoje
           db.get(`SELECT * FROM controle_presenca 
-            WHERE colaborador_id = ? AND data = date('now') AND status = 'presente'`, 
-            [colab.id], (err3, presenca) => {
+            WHERE colaborador_id = ? AND data = ? AND status = 'presente'`, 
+            [colab.id, diaLocal.hojeLocalISO()], (err3, presenca) => {
               if (!err3 && presenca) {
                 colab.status_trabalho = colab.disponivel ? 'disponivel' : 'parado';
               } else {

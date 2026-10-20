@@ -5,6 +5,10 @@
 const { dbRun, dbGet, dbAll } = require('./db');
 const { STATUS_OP, PRIORIDADES, STATUS_MAQUINA, SETORES_GMP } = require('./schema');
 const { condicaoDeBusca } = require('../buscaSemCaixa');
+// Etapa 161 (RN-161.04, C397): o dia da Fabrica e o de Brasilia. `data_inicio`/`data_fim` de apontamentos, paradas e OPs sao instantes
+// ISO UTC (`toISOString()`) e `created_at` e o CURRENT_TIMESTAMP (UTC): o dia deles e `date(col, MOD)`. A `data_prevista_fim` e a
+// `data_planejada` guardam SO a data (input type=date) — comparam com o hoje local, SEM o modificador (ver services/diaLocal.js).
+const diaLocal = require('../diaLocal');
 
 const OP_JOIN = `SELECT o.*, m.codigo as maquina_codigo, m.nome as maquina_nome,
   os.numero_os, c.razao_social as cliente_nome
@@ -22,7 +26,8 @@ function buildSearchWhere(fields, search) {
 }
 
 function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  // Etapa 161: era `toISOString().slice(0, 10)` — das 21h a meia-noite, o dia de amanha (tambem o padrao da data planejada gravada)
+  return diaLocal.hojeLocalISO();
 }
 
 async function gerarNumeroOp(db) {
@@ -62,6 +67,7 @@ async function getMeta(db) {
 
 async function getDashboard(db) {
   const hoje = todayISO();
+  const MOD = diaLocal.modificadorDoFuso();
   const [
     opsAbertas, opsProducao, opsAtrasadas, opsConcluidasMes,
     maquinasUso, maquinasParada, paradasHoje, apontamentosHoje,
@@ -70,21 +76,21 @@ async function getDashboard(db) {
     dbGet(db, `SELECT COUNT(*) as total FROM producao_ops WHERE ativo = 1 AND status IN ('planejada','liberada','em_producao')`),
     dbGet(db, `SELECT COUNT(*) as total FROM producao_ops WHERE ativo = 1 AND status = 'em_producao'`),
     dbGet(db, `SELECT COUNT(*) as total FROM producao_ops WHERE ativo = 1 AND status IN ('planejada','liberada','em_producao')
-      AND data_prevista_fim IS NOT NULL AND date(data_prevista_fim) < date('now')`),
+      AND data_prevista_fim IS NOT NULL AND date(data_prevista_fim) < date(?)`, [hoje]),
     dbGet(db, `SELECT COUNT(*) as total FROM producao_ops WHERE ativo = 1 AND status = 'concluida'
-      AND strftime('%Y-%m', data_fim) = strftime('%Y-%m', 'now')`),
+      AND strftime('%Y-%m', data_fim, ?) = ?`, [MOD, hoje.slice(0, 7)]),
     dbGet(db, `SELECT COUNT(*) as total FROM producao_maquinas WHERE ativo = 1 AND status = 'em_producao'`),
     dbGet(db, `SELECT COUNT(*) as total FROM producao_maquinas WHERE ativo = 1 AND status = 'parada'`),
-    dbGet(db, `SELECT COUNT(*) as total FROM producao_paradas WHERE date(data_inicio) = date('now')`),
-    dbGet(db, `SELECT COALESCE(SUM(quantidade_produzida),0) as total FROM producao_apontamentos WHERE date(data_inicio) = date('now')`),
+    dbGet(db, `SELECT COUNT(*) as total FROM producao_paradas WHERE date(data_inicio, ?) = ?`, [MOD, hoje]),
+    dbGet(db, `SELECT COALESCE(SUM(quantidade_produzida),0) as total FROM producao_apontamentos WHERE date(data_inicio, ?) = ?`, [MOD, hoje]),
     dbAll(db, `${OP_JOIN} WHERE o.ativo = 1 AND o.status IN ('planejada','liberada','em_producao')
       ORDER BY CASE o.prioridade WHEN 'urgente' THEN 1 WHEN 'alta' THEN 2 WHEN 'normal' THEN 3 ELSE 4 END, o.data_prevista_fim LIMIT 8`),
     dbAll(db, `SELECT p.*, m.codigo as maquina_codigo, m.nome as maquina_nome, mp.descricao as motivo_descricao
       FROM producao_paradas p
       LEFT JOIN producao_maquinas m ON p.maquina_id = m.id
       LEFT JOIN producao_motivos_parada mp ON p.motivo_id = mp.id
-      WHERE p.data_fim IS NULL OR date(p.data_inicio) = date('now')
-      ORDER BY p.data_inicio DESC LIMIT 8`),
+      WHERE p.data_fim IS NULL OR date(p.data_inicio, ?) = ?
+      ORDER BY p.data_inicio DESC LIMIT 8`, [MOD, hoje]),
     dbAll(db, `SELECT id, codigo, nome, setor, status FROM producao_maquinas WHERE ativo = 1 ORDER BY codigo`),
   ]);
 
@@ -97,10 +103,10 @@ async function getDashboard(db) {
   const produzido = Number(totalProduzido?.t) || 0;
   const eficiencia = planejado > 0 ? Math.min(100, Math.round((produzido / planejado) * 1000) / 10) : 0;
 
-  const paradasMin = await dbGet(db, `SELECT COALESCE(SUM(duracao_minutos),0) as t FROM producao_paradas WHERE date(data_inicio) = date('now')`);
+  const paradasMin = await dbGet(db, `SELECT COALESCE(SUM(duracao_minutos),0) as t FROM producao_paradas WHERE date(data_inicio, ?) = ?`, [MOD, hoje]);
   const apontMin = await dbGet(db, `SELECT COALESCE(SUM(
     CASE WHEN data_fim IS NOT NULL THEN (julianday(data_fim) - julianday(data_inicio)) * 24 * 60 ELSE 0 END
-  ),0) as t FROM producao_apontamentos WHERE date(data_inicio) = date('now')`);
+  ),0) as t FROM producao_apontamentos WHERE date(data_inicio, ?) = ?`, [MOD, hoje]);
 
   const tempoParada = Number(paradasMin?.t) || 0;
   const tempoProducao = Number(apontMin?.t) || 0;
@@ -347,8 +353,8 @@ async function listApontamentos(db, { op_id, maquina_id, data_inicio, data_fim, 
   const params = [];
   if (op_id) { sql += ' AND a.op_id = ?'; params.push(op_id); }
   if (maquina_id) { sql += ' AND a.maquina_id = ?'; params.push(maquina_id); }
-  if (data_inicio) { sql += ' AND date(a.data_inicio) >= date(?)'; params.push(data_inicio); }
-  if (data_fim) { sql += ' AND date(a.data_inicio) <= date(?)'; params.push(data_fim); }
+  if (data_inicio) { sql += ' AND date(a.data_inicio, ?) >= date(?)'; params.push(diaLocal.modificadorDoFuso(), data_inicio); }
+  if (data_fim) { sql += ' AND date(a.data_inicio, ?) <= date(?)'; params.push(diaLocal.modificadorDoFuso(), data_fim); }
   if (em_andamento === '1' || em_andamento === true) { sql += ' AND a.data_fim IS NULL'; }
   sql += ' ORDER BY a.data_inicio DESC LIMIT 500';
   return dbAll(db, sql, params);
@@ -434,8 +440,8 @@ async function listParadas(db, { maquina_id, data_inicio, data_fim, em_andamento
     WHERE 1=1`;
   const params = [];
   if (maquina_id) { sql += ' AND p.maquina_id = ?'; params.push(maquina_id); }
-  if (data_inicio) { sql += ' AND date(p.data_inicio) >= date(?)'; params.push(data_inicio); }
-  if (data_fim) { sql += ' AND date(p.data_inicio) <= date(?)'; params.push(data_fim); }
+  if (data_inicio) { sql += ' AND date(p.data_inicio, ?) >= date(?)'; params.push(diaLocal.modificadorDoFuso(), data_inicio); }
+  if (data_fim) { sql += ' AND date(p.data_inicio, ?) <= date(?)'; params.push(diaLocal.modificadorDoFuso(), data_fim); }
   if (em_andamento === '1' || em_andamento === true) { sql += ' AND p.data_fim IS NULL'; }
   sql += ' ORDER BY p.data_inicio DESC LIMIT 500';
   return dbAll(db, sql, params);
@@ -589,46 +595,49 @@ async function deleteMotivoParada(db, id) {
 // ── Relatórios ───────────────────────────────────────────────────────────────
 
 async function relatorioProducaoPeriodo(db, { data_inicio, data_fim } = {}) {
-  const di = data_inicio || new Date(new Date().setDate(1)).toISOString().slice(0, 10);
+  const di = data_inicio || diaLocal.inicioDoMesLocalISO();
+  const MOD = diaLocal.modificadorDoFuso();
   const df = data_fim || todayISO();
-  const porDia = await dbAll(db, `SELECT date(data_inicio) as dia,
+  const porDia = await dbAll(db, `SELECT date(data_inicio, ?) as dia,
     SUM(quantidade_produzida) as produzido, SUM(quantidade_refugo) as refugo, COUNT(*) as apontamentos
-    FROM producao_apontamentos WHERE date(data_inicio) BETWEEN date(?) AND date(?)
-    GROUP BY date(data_inicio) ORDER BY dia`, [di, df]);
+    FROM producao_apontamentos WHERE date(data_inicio, ?) BETWEEN date(?) AND date(?)
+    GROUP BY dia ORDER BY dia`, [MOD, MOD, di, df]);
   const porOp = await dbAll(db, `SELECT o.numero_op, o.produto_descricao, o.quantidade_planejada, o.quantidade_produzida, o.quantidade_refugo, o.status
     FROM producao_ops o WHERE o.ativo = 1 AND (
-      date(o.data_inicio) BETWEEN date(?) AND date(?)
-      OR date(o.created_at) BETWEEN date(?) AND date(?)
-    ) ORDER BY o.numero_op`, [di, df, di, df]);
+      date(o.data_inicio, ?) BETWEEN date(?) AND date(?)
+      OR date(o.created_at, ?) BETWEEN date(?) AND date(?)
+    ) ORDER BY o.numero_op`, [MOD, di, df, MOD, di, df]);
   return { periodo: { data_inicio: di, data_fim: df }, porDia, porOp };
 }
 
 async function relatorioEficiencia(db, { data_inicio, data_fim } = {}) {
-  const di = data_inicio || new Date(new Date().setDate(1)).toISOString().slice(0, 10);
+  const di = data_inicio || diaLocal.inicioDoMesLocalISO();
+  const MOD = diaLocal.modificadorDoFuso();
   const df = data_fim || todayISO();
   const ops = await dbAll(db, `SELECT numero_op, produto_descricao, quantidade_planejada, quantidade_produzida, quantidade_refugo, status,
     CASE WHEN quantidade_planejada > 0 THEN ROUND(quantidade_produzida * 100.0 / quantidade_planejada, 1) ELSE 0 END as eficiencia_pct
     FROM producao_ops WHERE ativo = 1 AND status IN ('em_producao','concluida')
-    AND date(COALESCE(data_inicio, created_at)) BETWEEN date(?) AND date(?)
-    ORDER BY eficiencia_pct DESC`, [di, df]);
+    AND date(COALESCE(data_inicio, created_at), ?) BETWEEN date(?) AND date(?)
+    ORDER BY eficiencia_pct DESC`, [MOD, di, df]);
   const media = ops.length ? Math.round(ops.reduce((s, o) => s + (o.eficiencia_pct || 0), 0) / ops.length * 10) / 10 : 0;
   return { periodo: { data_inicio: di, data_fim: df }, ops, mediaEficiencia: media };
 }
 
 async function relatorioParadas(db, { data_inicio, data_fim } = {}) {
-  const di = data_inicio || new Date(new Date().setDate(1)).toISOString().slice(0, 10);
+  const di = data_inicio || diaLocal.inicioDoMesLocalISO();
+  const MOD = diaLocal.modificadorDoFuso();
   const df = data_fim || todayISO();
   const porMotivo = await dbAll(db, `SELECT COALESCE(mp.descricao, p.motivo_texto, 'Sem motivo') as motivo,
     COUNT(*) as ocorrencias, SUM(COALESCE(p.duracao_minutos,0)) as minutos
     FROM producao_paradas p
     LEFT JOIN producao_motivos_parada mp ON p.motivo_id = mp.id
-    WHERE date(p.data_inicio) BETWEEN date(?) AND date(?)
-    GROUP BY motivo ORDER BY minutos DESC`, [di, df]);
+    WHERE date(p.data_inicio, ?) BETWEEN date(?) AND date(?)
+    GROUP BY motivo ORDER BY minutos DESC`, [MOD, di, df]);
   const porMaquina = await dbAll(db, `SELECT m.codigo, m.nome, COUNT(*) as ocorrencias, SUM(COALESCE(p.duracao_minutos,0)) as minutos
     FROM producao_paradas p
     JOIN producao_maquinas m ON p.maquina_id = m.id
-    WHERE date(p.data_inicio) BETWEEN date(?) AND date(?)
-    GROUP BY m.id ORDER BY minutos DESC`, [di, df]);
+    WHERE date(p.data_inicio, ?) BETWEEN date(?) AND date(?)
+    GROUP BY m.id ORDER BY minutos DESC`, [MOD, di, df]);
   return { periodo: { data_inicio: di, data_fim: df }, porMotivo, porMaquina };
 }
 

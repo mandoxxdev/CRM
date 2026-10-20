@@ -982,11 +982,10 @@ const avisoEncargoDivergente = (rotulo) => `${rotulo} diferente do da primeira l
  * NAO fecha (`auditFiltros` nao requer nada), mas o require de topo e que congelaria a ordem de
  * carga entre os dois modulos. O custo do lazy e o cache do `require`, ou seja, nenhum.
  */
+// Etapa 161: a implementacao mudou de casa para `services/diaLocal.js` (o dia local da Fabrica e das Movimentacoes usa a mesma);
+// esta delega, sem segunda copia. Mesmo comportamento.
 function hojeLocalISO(agora = new Date()) {
-  const { FUSO_PADRAO } = require('../almoxarifado/auditFiltros');
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: FUSO_PADRAO, year: 'numeric', month: '2-digit', day: '2-digit',
-  }).format(agora);
+  return require('../diaLocal').hojeLocalISO(agora);
 }
 
 /** `AAAA-MM-DD` -> instante UTC de meia-noite, para subtrair data-only de data-only. */
