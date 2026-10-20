@@ -160,13 +160,57 @@ test('[RN-168.03, Fase 2 M2] data invalida: 200 e lista vazia (inalterado)', asy
   assert.deepStrictEqual(nomes(await filtro('data_fim=lixo')), ['L1', 'L2', 'L3', 'L4', 'L5']); // 'AAAA-…' <= 'lixo' (texto) — como antes
 });
 
+// ── Etapa 170 (RN-170.05, B1083, C422): limit/offset presentes tem de ser texto so de digitos — 400 com a mensagem literal ──────────────
+const L_LIMIT = { error: 'limit inválido. Use um número inteiro maior ou igual a zero.' };
+const L_OFFSET = { error: 'offset inválido. Use um número inteiro maior ou igual a zero.' };
+const cruLogs = (q, tok = ctx.T) => cru('GET', `/api/auditoria/logs?modulo=${MOD}&${q}`, tok);
+
+test('[RN-170.05] limit/offset validos: o limite, o deslocamento, o zero, o 05 e o padrao (inalterados)', async () => {
+  const ordem = (await filtro('')).map((r) => r.nome_modulo);
+  assert.deepStrictEqual(ordem, ['L5', 'L4', 'L1', 'L2', 'L3']); // sem limit: o padrao (100) cobre os cinco
+  assert.deepStrictEqual((await filtro('limit=2')).map((r) => r.nome_modulo), ['L5', 'L4']);
+  assert.deepStrictEqual((await filtro('limit=1&offset=1')).map((r) => r.nome_modulo), ['L4']);
+  assert.deepStrictEqual((await filtro('offset=3')).map((r) => r.nome_modulo), ['L2', 'L3']);
+  assert.deepStrictEqual(await filtro('limit=0'), []);
+  assert.deepStrictEqual((await filtro('limit=03')).map((r) => r.nome_modulo), ['L5', 'L4', 'L1']); // so digitos: aceito
+  assert.deepStrictEqual((await filtro('limit=9007199254740991')).length, 5); // MAX_SAFE_INTEGER: aceito
+});
+
+test('[RN-170.05] limit invalido -> 400 com a mensagem literal (antes 500 do SQLite, ou sem limite, ou o parseInt)', async () => {
+  for (const q of ['limit=abc', 'limit=-1', 'limit=10abc', 'limit=1.5', 'limit=', 'limit', 'limit=%2B5', 'limit=+5', 'limit=%205',
+    'limit[]=5', 'limit[a]=1', 'limit=1&limit=2', 'limit=1&limit[a]=2', 'limit=9007199254740992', 'limit=99999999999999999999',
+    'limit=abc&offset=abc']) {
+    const [s, r] = await cruLogs(q);
+    assert.deepStrictEqual([s, r], [400, L_LIMIT], q);
+  }
+});
+
+test('[RN-170.05] offset invalido -> 400 com a mensagem literal', async () => {
+  for (const q of ['offset=abc', 'offset=-1', 'offset=2x', 'offset=', 'offset[]=1', 'offset=1&offset=2', 'limit=2&offset=-1']) {
+    const [s, r] = await cruLogs(q);
+    assert.deepStrictEqual([s, r], [400, L_OFFSET], q);
+  }
+});
+
+test('[RN-170.05] o portao vem antes: quem nao gerencia usuarios toma 403 mesmo com limit invalido; sem token 401', async () => {
+  const email = 'e170comum@t.com';
+  const [sc, c] = await cru('POST', '/api/usuarios', ctx.T, { nome: 'E170 Comum', email, senha: 'Senha!170', cargo: 'C', setor: '' });
+  assert.ok([200, 201].includes(sc), `criar usuario: ${sc} ${JSON.stringify(c)}`);
+  const [sl, l] = await cru('POST', '/api/auth/login', null, { email, senha: 'Senha!170' });
+  assert.strictEqual(sl, 200, `login: ${JSON.stringify(l)}`);
+  const [s, r] = await cruLogs('limit=abc', l.token);
+  assert.deepStrictEqual([s, r], [403, { error: 'Acesso negado. Apenas administradores podem visualizar logs.' }]);
+  const [s2] = await cru('GET', `/api/auditoria/logs?limit=abc`, null);
+  assert.strictEqual(s2, 401);
+});
+
 test('o portao nao muda: sem token 401', async () => {
   const [s] = await cru('GET', `/api/auditoria/logs?modulo=${MOD}&data_inicio=2026-10-20`, null);
   assert.strictEqual(s, 401);
 });
 
 (async () => {
-  console.log('\n▶ Etapa 168 — o filtro dos logs no dia de Brasilia (o filho em TZ=UTC)\n');
+  console.log('\n▶ Etapas 168 e 170 — o filtro dos logs no dia de Brasilia (o filho em TZ=UTC) e o limit/offset validados\n');
   pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'e168-'));
   try {
     ctx.T = await subir();

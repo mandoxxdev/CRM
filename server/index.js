@@ -22332,7 +22332,19 @@ app.get('/api/auditoria/logs', authenticateToken, (req, res) => {
     return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem visualizar logs.' });
   }
 
-  const { tipo, modulo, data_inicio, data_fim, limit = 100, offset = 0 } = req.query;
+  const { tipo, modulo, data_inicio, data_fim } = req.query;
+  // Etapa 170 (RN-170.05, B1083, C422): `limit`/`offset` presentes tem de ser texto so de digitos (inteiro >= 0, ate MAX_SAFE_INTEGER).
+  // Antes o `parseInt` ia direto ao SQL: 'abc' -> NaN -> 500 com a mensagem do SQLite; '-1' -> sem limite (a tabela inteira); '10abc' -> 10.
+  // `typeof` antes da regex: o Express "extended" entrega `limit[]=5` como ['5'], e o `test` converteria a lista em texto (Fase 2 I1).
+  const inteiroDaConsulta = (v, padrao) => {
+    if (v === undefined) return padrao;
+    if (typeof v !== 'string' || !/^\d+$/.test(v) || Number(v) > Number.MAX_SAFE_INTEGER) return null;
+    return Number(v);
+  };
+  const limit = inteiroDaConsulta(req.query.limit, 100);
+  if (limit === null) return res.status(400).json({ error: 'limit inválido. Use um número inteiro maior ou igual a zero.' });
+  const offset = inteiroDaConsulta(req.query.offset, 0);
+  if (offset === null) return res.status(400).json({ error: 'offset inválido. Use um número inteiro maior ou igual a zero.' });
   let query = 'SELECT * FROM logs_auditoria WHERE 1=1';
   const params = [];
 
@@ -22357,7 +22369,7 @@ app.get('/api/auditoria/logs', authenticateToken, (req, res) => {
   }
 
   query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-  params.push(parseInt(limit), parseInt(offset));
+  params.push(limit, offset);
 
   db.all(query, params, (err, rows) => {
     if (err) {
