@@ -6,6 +6,7 @@ import {
   FiAlertTriangle, FiX, FiTrash2, FiEdit2, FiCalendar,
 } from 'react-icons/fi';
 import './Todolist.css';
+import { formatarDataDoBanco, formatarInstanteDoBanco } from '../../utils/dataLocal';
 
 const COLUNAS = [
   { id: 'a_fazer', nome: 'A Fazer', classe: 'a-fazer' },
@@ -38,21 +39,29 @@ function prioridadeClasse(p) {
   return 'media';
 }
 
-function formatDate(value) {
+/**
+ * Etapa 169 (RN-169.04, B1076) — as datas da tarefa no dia e na hora locais.
+ * O prazo e so data (`'AAAA-MM-DD'` do formulario): `new Date(texto)` era a meia-noite UTC — a VESPERA. O prefixo vale (`soData`), como no
+ * formulario (`toDateInput`); ilegivel -> os 10 primeiros caracteres (como antes).
+ */
+function formatPrazo(value) {
   if (!value) return null;
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value).slice(0, 10);
-  return d.toLocaleDateString('pt-BR');
+  return formatarDataDoBanco(value, String(value).slice(0, 10), { soData: true });
+}
+
+/**
+ * O `created_at` e `CURRENT_TIMESTAMP` (UTC sem fuso): `new Date(texto)` o lia como hora local (das 21h a meia-noite, o dia seguinte; a hora
+ * 3 h adiantada). O `data_conclusao` e ISO com `Z` e continua como era. Vazio -> null; ilegivel -> o texto gravado.
+ */
+function formatDate(value) {
+  return formatarInstanteDoBanco(value, undefined, null);
 }
 
 function formatDateTime(value) {
-  if (!value) return null;
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleString('pt-BR', {
+  return formatarInstanteDoBanco(value, {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
-  });
+  }, null);
 }
 
 function toDateInput(value) {
@@ -320,7 +329,7 @@ export default function TodolistBoard() {
                           <span className="muted"><FiUser /> Sem responsável</span>
                         )}
                         {tarefa.prazo ? (
-                          <span><FiCalendar /> {formatDate(tarefa.prazo)}</span>
+                          <span><FiCalendar /> {formatPrazo(tarefa.prazo)}</span>
                         ) : null}
                       </div>
                       <div className="todolist-card-datas">
