@@ -125,11 +125,13 @@ function binaryParser(res, callback) {
     assert.strictEqual(ls[0].materiais, 1);
   });
 
-  await test('[RN-14] periodo pelo DIA em UTC e material_id validado (400 com a literal)', async () => {
+  // Etapa 162 (RN-162.01, C401): a fronteira do dia e a meia-noite DE BRASILIA (03:00 UTC) — eram 23:59:59/00:00:00 UTC, que agora
+  // caem os dois no dia 10 de Brasilia (21h e 20h59). O teste antigo mudou: a borda continua a 1 s, do lado certo.
+  await test('[RN-14] periodo pelo DIA de Brasilia e material_id validado (400 com a literal)', async () => {
     const MOT = await motivo('Periodo E129');
     const m = await material({ unitario: 1 });
-    await mov(m, 'PERDA', 1, { motivoId: MOT, createdAt: '2026-01-10 23:59:59' });
-    await mov(m, 'PERDA', 2, { motivoId: MOT, createdAt: '2026-01-11 00:00:00' });
+    await mov(m, 'PERDA', 1, { motivoId: MOT, createdAt: '2026-01-11 02:59:59' }); // 10/01 23:59:59 em Brasilia
+    await mov(m, 'PERDA', 2, { motivoId: MOT, createdAt: '2026-01-11 03:00:00' }); // 11/01 00:00:00 em Brasilia
     const val = async (qs) => (linhaDo(await rel(qs), 'PERDA', 'Periodo E129')[0] || { valor: 0 }).valor;
     assert.strictEqual(await val('?data_inicio=2026-01-11&data_fim=2026-01-11'), 2);
     assert.strictEqual(await val('?data_inicio=2026-01-10&data_fim=2026-01-10'), 1);

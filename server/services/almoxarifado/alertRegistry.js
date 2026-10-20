@@ -18,6 +18,9 @@ const { dbAll, dbGet } = require('./db');
 const { TRANSICOES } = require('./requisitionStateMachine');
 // divergencia.js so exporta constantes/formula (sem require de servicos) — top-level seguro.
 const { divergenciaRealSql } = require('./divergencia');
+// Etapa 162 (RN-162.07, C404, B1035, B1037): o prazo da requisicao e o vencimento da reserva sao colunas SO de data — comparadas com o
+// hoje de Brasilia (era `date('now')`, o dia UTC: das 21h a meia-noite, atrasada/vencida 3 h antes). As outras janelas (N x 24 h) ficam.
+const diaLocal = require('../diaLocal');
 
 /**
  * Status em que uma requisicao pode estar ATRASADA — DERIVADO da maquina de estados, nunca
@@ -535,10 +538,10 @@ const ALERT_REGISTRY = Object.freeze([
       return dbAll(db, `
         SELECT r.* FROM requisicoes_almoxarifado r
         WHERE r.data_necessidade IS NOT NULL
-          AND date(r.data_necessidade) < date('now')
+          AND date(r.data_necessidade) < ?
           AND COALESCE(r.ativo, 1) = 1
           AND r.status IN (${placeholders})
-        ORDER BY r.data_necessidade ASC`, STATUS_REQUISICAO_ATRASAVEL);
+        ORDER BY r.data_necessidade ASC`, [diaLocal.hojeLocalISO(), ...STATUS_REQUISICAO_ATRASAVEL]);
     },
     dedupeChave: (linha) => `req-atrasada-${linha.id}`,
     payload: (linha) => ({ requisicao_id: linha.id }),
@@ -561,8 +564,8 @@ const ALERT_REGISTRY = Object.freeze([
       JOIN materiais_almoxarifado m ON m.id = res.material_id
       WHERE res.status = 'ATIVA'
         AND (julianday('now') - julianday(res.created_at) > ?
-             OR date(res.expira_em) < date('now'))
-      ORDER BY res.created_at ASC`, [dias]),
+             OR date(res.expira_em) < ?)
+      ORDER BY res.created_at ASC`, [dias, diaLocal.hojeLocalISO()]),
     dedupeChave: (linha) => `reserva-parada-${linha.id}`,
     payload: (linha) => ({ reserva_id: linha.id }),
     assunto: (linha) => `[Almoxarifado] Reserva parada — #${linha.id} (${linha.material_codigo})`,

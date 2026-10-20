@@ -101,8 +101,11 @@ function helpers(app, db, setUser) {
   console.log('\n=== Etapa 67 Task 2: relatorio ajustes-por-motivo ===\n');
   const { app, db, close, setUser } = await createTestApp({ user: { ...ADMIN } });
   const { ok, material, motivo, rel, ajusteInventario } = helpers(app, db, setUser);
-  const HOJE = (await dbGet(db, "SELECT date('now') AS d")).d;
-  const ONTEM = (await dbGet(db, "SELECT date('now', '-1 days') AS d")).d;
+  // Etapa 162 (RN-162.01, C401): o relatorio filtra pelo dia de Brasilia — o "hoje" do teste tambem (era o `date('now')` do SQLite, o
+  // dia UTC: entre 21h e meia-noite o teste passaria a falhar)
+  const diaLocal = require('../../services/diaLocal');
+  const HOJE = diaLocal.hojeLocalISO();
+  const ONTEM = (await dbGet(db, "SELECT date(?, '-1 days') AS d", [HOJE])).d;
 
   // ══════════════ registro e lista ══════════════
   await test('[RN-11] registro: titulo, categoria, gate null, exportavel, params e colunas do contrato', async () => {
@@ -235,7 +238,7 @@ function helpers(app, db, setUser) {
   });
 
   // ══════════════ filtros ══════════════
-  await test('[filtros] periodo pelo DIA (UTC) e material: hoje inclui, ontem exclui; outro material nao entra', async () => {
+  await test('[filtros] periodo pelo DIA (de Brasilia desde a Etapa 162) e material: hoje inclui, ontem exclui; outro material nao entra', async () => {
     const hoje = await rel(`?material_id=${mA}&data_inicio=${HOJE}&data_fim=${HOJE}`);
     assert.strictEqual(hoje.reduce((s, l) => s + l.ajustes, 0), 4, JSON.stringify(hoje));
     assert.deepStrictEqual(await rel(`?material_id=${mA}&data_fim=${ONTEM}`), []);
@@ -278,7 +281,7 @@ function helpers(app, db, setUser) {
     const b = await createTestApp({ user: { ...ADMIN } });
     try {
       const h = helpers(b.app, b.db, b.setUser);
-      const hoje = (await dbGet(b.db, "SELECT date('now') AS d")).d;
+      const hoje = require('../../services/diaLocal').hojeLocalISO(); // Etapa 162: o dia de Brasilia (era o UTC)
       const p1 = await h.material();
       const p2 = await h.material();
       const cli = (await dbRun(b.db, "INSERT INTO clientes (razao_social) VALUES ('Cliente RN07')")).lastID;

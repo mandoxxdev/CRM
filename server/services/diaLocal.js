@@ -35,4 +35,20 @@ function modificadorDoFuso(agora = new Date()) {
   return `${Math.round(offsetMinutos(FUSO_PADRAO, agora))} minutes`;
 }
 
-module.exports = { hojeLocalISO, inicioDoMesLocalISO, modificadorDoFuso };
+/**
+ * Etapa 162 (RN-162.09, B1039): o valor no formato do banco (`'AAAA-MM-DD HH:MM:SS'`, o `CURRENT_TIMESTAMP` em UTC) na hora de Brasilia,
+ * no MESMO formato — a regua da tela dos Relatorios (`formatCelula` le esse formato como UTC). Qualquer outro valor (so data, ISO com
+ * `Z`, numero, texto, nulo) volta como esta.
+ */
+const RE_INSTANTE_DO_BANCO = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+function instanteDoBancoNoFuso(valor) {
+  if (typeof valor !== 'string' || !RE_INSTANTE_DO_BANCO.test(valor)) return valor;
+  const d = new Date(`${valor.replace(' ', 'T')}Z`);
+  if (Number.isNaN(d.getTime())) return valor;
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone: fuso().FUSO_PADRAO, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+  }).format(d);
+}
+
+module.exports = { hojeLocalISO, inicioDoMesLocalISO, modificadorDoFuso, instanteDoBancoNoFuso };

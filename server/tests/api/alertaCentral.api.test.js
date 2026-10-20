@@ -37,6 +37,13 @@ async function setConfig(db, chave, valor) {
 function diasAtras(n) {
   return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
+// Etapa 162 (RN-162.07): o prazo da requisicao e o vencimento da reserva sao comparados com o hoje DE BRASILIA — o "ontem" deles tambem
+// (o `diasAtras` UTC, entre 21h e meia-noite, ja e o hoje de Brasilia, e o alerta deixaria de sair). As outras datas (validade da
+// calibracao, C406) continuam pelo dia UTC.
+function diasAtrasLocal(n) {
+  const [a, m, d] = require('../../services/diaLocal').hojeLocalISO().split('-').map(Number);
+  return new Date(Date.UTC(a, m - 1, d - n)).toISOString().slice(0, 10);
+}
 
 let seq = 0;
 async function novoMaterial(db) {
@@ -53,7 +60,7 @@ async function novaRequisicaoAtrasada(db) {
   await dbRun(db, `INSERT INTO requisicoes_almoxarifado
       (numero, solicitante_id, solicitante_nome, status, data_necessidade, ativo)
      VALUES (?,?,?,?,?,1)`,
-    [`REQ-ALC-${seqR}`, 1, 'Solicitante Central', 'APROVADO', diasAtras(1)]);
+    [`REQ-ALC-${seqR}`, 1, 'Solicitante Central', 'APROVADO', diasAtrasLocal(1)]);
 }
 
 async function novaReservaParada(db, materialId, idadeDias) {

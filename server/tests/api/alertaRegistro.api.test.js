@@ -32,6 +32,13 @@ function hashDedupe(evento, dedupeChave) {
 function diasAtras(n) {
   return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
+// Etapa 162 (RN-162.07): o prazo da requisicao e o vencimento da reserva sao comparados com o hoje DE BRASILIA — o "ontem" deles tambem
+// (o `diasAtras` UTC, entre 21h e meia-noite, ja e o hoje de Brasilia, e o alerta deixaria de sair). As outras datas (validade da
+// calibracao, C406) continuam pelo dia UTC.
+function diasAtrasLocal(n) {
+  const [a, m, d] = require('../../services/diaLocal').hojeLocalISO().split('-').map(Number);
+  return new Date(Date.UTC(a, m - 1, d - n)).toISOString().slice(0, 10);
+}
 function diasAFrente(n) {
   return new Date(Date.now() + n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
@@ -152,11 +159,11 @@ function resultadoDe(resultados, chave) {
 
   // ── Cenario 2: REQUISICAO_ATRASADA — status derivado da maquina ─────────────────────────────
   await test('2. requisicao atrasada em APROVADO e AGUARDANDO_COMPRA enfileira; SEGUNDA requisicao ENTREGUE atrasada NAO', async () => {
-    const idAprovado = await novaRequisicao(db, { status: 'APROVADO', data_necessidade: diasAtras(1) });
-    const idCompra = await novaRequisicao(db, { status: 'AGUARDANDO_COMPRA', data_necessidade: diasAtras(3) });
+    const idAprovado = await novaRequisicao(db, { status: 'APROVADO', data_necessidade: diasAtrasLocal(1) });
+    const idCompra = await novaRequisicao(db, { status: 'AGUARDANDO_COMPRA', data_necessidade: diasAtrasLocal(3) });
     // Achado da revisao: o negativo tem de ser uma requisicao NOVA e distinta — reusar a mesma
     // seria falso-verde (o dedupe req-atrasada-<id> mascararia o filtro de status).
-    const idEntregue = await novaRequisicao(db, { status: 'ENTREGUE', data_necessidade: diasAtras(5) });
+    const idEntregue = await novaRequisicao(db, { status: 'ENTREGUE', data_necessidade: diasAtrasLocal(5) });
 
     await queueService.varrerAlertasRegistrados(db);
     assert.strictEqual((await filaPorHash(db, hashDedupe('REQUISICAO_ATRASADA', `req-atrasada-${idAprovado}`))).length, 1, 'APROVADO atrasada tinha de enfileirar');
@@ -189,7 +196,7 @@ function resultadoDe(resultados, chave) {
     assert.strictEqual((await filaPorEvento(db, 'RESERVA_PARADA')).length, antes, '2a varredura nao pode criar linha nova de RESERVA_PARADA');
 
     // expira_em vencida tambem conta, mesmo com created_at recente.
-    const idExpirada = await novaReserva(db, mat.id, { idade_dias: 2, expira_em: diasAtras(1) });
+    const idExpirada = await novaReserva(db, mat.id, { idade_dias: 2, expira_em: diasAtrasLocal(1) });
     await queueService.varrerAlertasRegistrados(db);
     assert.strictEqual((await filaPorHash(db, hashDedupe('RESERVA_PARADA', `reserva-parada-${idExpirada}`))).length, 1, 'reserva com expira_em vencida tinha de enfileirar');
   });

@@ -11,6 +11,8 @@ const multer = multerComLimiteNoErro(require('multer'));
 // global (services/errosApi.js) responde 400 com ESTE texto (sem isso, 500 generico).
 const { erroComMensagemUsuario } = require('../../services/errosApi');
 const XLSX = require('xlsx');
+// Etapa 162 (RN-162.03/.09): o dia e a hora de Brasilia no export
+const diaLocal = require('../../services/diaLocal');
 const { canConfigureAlmox, isSystemAdmin } = require('../../services/systemPermissions');
 const { initSchema, TIPOS_MATERIAL_ENUM, TIPOS_LOCALIZACAO, AREAS_ESPECIAIS, SETORES_REQUISICAO } = require('../../services/almoxarifado/schema');
 const { requirePermission, can, getPerfilFromUser, ACAO_PERFIS, PERFIS } = require('../../services/almoxarifado/permissions');
@@ -2437,13 +2439,16 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       // singleton ficaria corrompido (e a rota de lista passaria a servir as colunas vazadas) ate
       // o processo reiniciar (Fase 2, C3, medido). Por isso sempre um `.map()` NOVO aqui.
       const colunas = entrada.colunas;
-      const linhas = dados.map((r) => Object.fromEntries(colunas.map((c) => [c.rotulo, r[c.chave]])));
+      // Etapa 162 (RN-162.09, B1039): o instante do banco sai na hora de Brasilia (a mesma regua da tela) — com o filtro no dia de
+      // Brasilia, a movimentacao das 22h30 de 19/10 aparecia `2026-10-20 01:30:00` na planilha, fora do periodo pedido
+      const linhas = dados.map((r) => Object.fromEntries(colunas.map((c) => [c.rotulo, diaLocal.instanteDoBancoNoFuso(r[c.chave])])));
       const planilha = XLSX.utils.json_to_sheet(linhas, { header: colunas.map((c) => c.rotulo) });
       const livro = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(livro, planilha, 'Relatório');
       const buffer = XLSX.write(livro, { type: 'buffer', bookType: 'xlsx' });
 
-      const data = new Date().toISOString().slice(0, 10);
+      // Etapa 162 (RN-162.03, B1033): o dia de Brasilia no nome (era o UTC — das 21h a meia-noite, o de amanha)
+      const data = diaLocal.hojeLocalISO();
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename="${req.params.tipo}-${data}.xlsx"`);
       res.send(buffer);

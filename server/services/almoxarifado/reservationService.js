@@ -10,6 +10,7 @@ const { registrarAuditoria, registrarAuditoriaDoAto } = require('./audit');
 const stockService = require('./stockService');
 const { can } = require('./permissions');
 const { STATUS_CANCELAVEIS_SEM_CONDICAO } = require('./requisitionStateMachine');
+const diaLocal = require('../diaLocal');
 
 const CAMPOS_DONO = ['projeto_id', 'os_id', 'os_referencia', 'cliente_id'];
 
@@ -131,12 +132,16 @@ async function transferirReserva(db, user, reservaId, data = {}) {
  * a segunda rodada não encontra mais a reserva e nada é descontado duas vezes.
  */
 async function processarExpiracao(db, user, options = {}) {
-  const referencia = options.referencia || null; // data alternativa (testes/reprocessamento)
+  // Etapa 162 (RN-162.05, C404, B1035): o dia de referencia e o HOJE DE BRASILIA (`expira_em` e coluna so de data, sem modificador) —
+  // era `date(COALESCE(?, 'now'))`, o dia UTC: das 21h a meia-noite a reserva que vence HOJE ja era expirada (e liberada) 3 h antes.
+  // `||` de proposito (Fase 2 M2): '' / 0 / ausente continuam sendo "hoje"; texto invalido continua nao expirando nada (date() nulo).
+  // So a regua da data muda: a expiracao continua soltando SEM distribuir e SEM pegar a trava (CLAUDE.md, B441).
+  const referencia = options.referencia || diaLocal.hojeLocalISO(); // data alternativa (testes/reprocessamento)
   const vencidas = await dbAll(db, `SELECT id, material_id, quantidade, quantidade_utilizada,
       projeto_id, os_id, os_referencia, expira_em
     FROM reservas_material_almoxarifado
     WHERE status = 'ATIVA' AND expira_em IS NOT NULL
-      AND date(expira_em) < date(COALESCE(?, 'now'))
+      AND date(expira_em) < date(?)
     ORDER BY id`, [referencia]);
 
   const liberadas = [];

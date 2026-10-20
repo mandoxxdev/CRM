@@ -39,6 +39,7 @@ const seriesService = require('./seriesService');
 const notificationQueueService = require('./notificationQueueService');
 // Etapa 91 (Fase 5, F3): a trava nao requer nada do app — sem ciclo. Pelo objeto (os testes a espiam).
 const trava = require('./travaPorMaterial');
+const diaLocal = require('../diaLocal');
 
 async function getConfig(db, chave) {
   const row = await dbGet(db, 'SELECT valor FROM configuracoes_almoxarifado WHERE chave = ?', [chave]);
@@ -3684,8 +3685,10 @@ async function criarReservaSemTrava(db, user, data, opcoes = {}) {
   if (!expiraEm) {
     const dias = parseInt(await getConfig(db, 'reserva_dias_validade'), 10);
     if (Number.isFinite(dias) && dias > 0) {
-      const d = new Date(Date.now() + dias * 24 * 60 * 60 * 1000);
-      expiraEm = d.toISOString().slice(0, 10);
+      // Etapa 162 (RN-162.06, C404, B1035): hoje de Brasilia + N dias de calendario (era o dia UTC de agora + N x 24 h — a reserva
+      // criada entre 21h e meia-noite ganhava um dia a mais). Soma pelo Date.UTC sobre o AAAA-MM-DD, nunca new Date(texto) local.
+      const [a, m, dd] = diaLocal.hojeLocalISO().split('-').map(Number);
+      expiraEm = new Date(Date.UTC(a, m - 1, dd + dias)).toISOString().slice(0, 10);
     }
   }
 

@@ -1,5 +1,8 @@
 const { dbAll, dbGet } = require('./db');
 const { condicaoDeBusca } = require('../buscaSemCaixa');
+// Etapa 162 (RN-162.01/.04, C401, B1033, B1037): o dia de Brasilia — `DATE(instante, ?)` com o modificador do fuso; coluna so de data
+// compara com o hojeLocalISO, sem modificador. Os dois sempre como parametro em linha (sem CTE: a varredura do registro so captura SELECT).
+const diaLocal = require('../diaLocal');
 const { disponivelSql, COLUNAS_RETENCAO } = require('./availabilitySql');
 const { valorEstoqueSql, custoUnitarioSql } = require('./custoSql');
 const { divergenciaRealSql } = require('./divergencia');
@@ -151,8 +154,8 @@ async function relatorioConsumoPorOS(db, osId, dataInicio, dataFim) {
     WHERE m.tipo IN ('SAIDA','SAIDA_PRODUCAO','SAIDA_MONTAGEM','SAIDA_ASSISTENCIA') AND m.cancelado = 0`;
   const params = [];
   if (osId) { sql += ' AND m.os_id = ?'; params.push(osId); }
-  if (dataInicio) { sql += ' AND DATE(m.created_at) >= ?'; params.push(dataInicio); }
-  if (dataFim) { sql += ' AND DATE(m.created_at) <= ?'; params.push(dataFim); }
+  if (dataInicio) { sql += ' AND DATE(m.created_at, ?) >= ?'; params.push(diaLocal.modificadorDoFuso(), dataInicio); }
+  if (dataFim) { sql += ' AND DATE(m.created_at, ?) <= ?'; params.push(diaLocal.modificadorDoFuso(), dataFim); }
   sql += ' GROUP BY m.material_id, m.os_id ORDER BY total_consumido DESC';
   return dbAll(db, sql, params);
 }
@@ -257,8 +260,8 @@ async function relatorioHistoricoMovimentacoes(db, filters = {}) {
     sql += ' AND m.motivo_id = ?';
     params.push(Number(motivoBruto));
   }
-  if (filters.data_inicio) { sql += ' AND DATE(m.created_at) >= ?'; params.push(filters.data_inicio); }
-  if (filters.data_fim) { sql += ' AND DATE(m.created_at) <= ?'; params.push(filters.data_fim); }
+  if (filters.data_inicio) { sql += ' AND DATE(m.created_at, ?) >= ?'; params.push(diaLocal.modificadorDoFuso(), filters.data_inicio); }
+  if (filters.data_fim) { sql += ' AND DATE(m.created_at, ?) <= ?'; params.push(diaLocal.modificadorDoFuso(), filters.data_fim); }
   sql += ' ORDER BY m.created_at DESC LIMIT 500';
   return dbAll(db, sql, params);
 }
@@ -276,7 +279,7 @@ async function relatorioHistoricoMovimentacoes(db, filters = {}) {
  *   - o resto -> origem 'Texto livre', motivo 'Sem motivo do cadastro', mesmo que o texto digitado
  *     seja igual ao nome de um motivo (agrupar por texto juntaria coisas que o cadastro separa).
  * Conta LANCAMENTOS e materiais distintos, nunca soma quantidade (unidades diferentes; o AJUSTE
- * grava o saldo final). Datas pelo DIA (UTC), sem validacao — mesmo molde do historico (data
+ * grava o saldo final). Datas pelo DIA (de Brasilia desde a Etapa 162 — era o UTC), sem validacao — mesmo molde do historico (data
  * invalida devolve vazio). Sem CTE: a varredura do registro so captura SELECT.
  */
 async function relatorioAjustesPorMotivo(db, filters = {}) {
@@ -290,8 +293,8 @@ async function relatorioAjustesPorMotivo(db, filters = {}) {
     filtro += ' AND mv.material_id = ?';
     params.push(Number(materialBruto));
   }
-  if (filters.data_inicio) { filtro += ' AND DATE(mv.created_at) >= ?'; params.push(filters.data_inicio); }
-  if (filters.data_fim) { filtro += ' AND DATE(mv.created_at) <= ?'; params.push(filters.data_fim); }
+  if (filters.data_inicio) { filtro += ' AND DATE(mv.created_at, ?) >= ?'; params.push(diaLocal.modificadorDoFuso(), filters.data_inicio); }
+  if (filters.data_fim) { filtro += ' AND DATE(mv.created_at, ?) <= ?'; params.push(diaLocal.modificadorDoFuso(), filters.data_fim); }
   const rows = await dbAll(db, `
     SELECT
       CASE WHEN mv.motivo_id IS NOT NULL THEN 'Cadastro'
@@ -322,7 +325,7 @@ async function relatorioAjustesPorMotivo(db, filters = {}) {
  * "(desativado)", "Motivo #id"; sem cadastro, junto em "Sem motivo do cadastro"). O valor e pelo custo ATUAL
  * (`custoUnitarioSql`, fonte unica), retroativo — o livro nao guarda custo por movimento, como `custo-por-projeto` e
  * `sucata-financeiro` declaram. Quantidade NAO e somada (cada material tem sua unidade). Material de cliente fora (patrimonio
- * alheio); material inativado conta (fato do livro). Datas pelo DIA em UTC.
+ * alheio); material inativado conta (fato do livro). Datas pelo DIA de Brasilia (Etapa 162; era o UTC).
  */
 async function relatorioPerdasPorMotivo(db, filters = {}) {
   const params = [];
@@ -335,8 +338,8 @@ async function relatorioPerdasPorMotivo(db, filters = {}) {
     filtro += ' AND mv.material_id = ?';
     params.push(Number(materialBruto));
   }
-  if (filters.data_inicio) { filtro += ' AND DATE(mv.created_at) >= ?'; params.push(filters.data_inicio); }
-  if (filters.data_fim) { filtro += ' AND DATE(mv.created_at) <= ?'; params.push(filters.data_fim); }
+  if (filters.data_inicio) { filtro += ' AND DATE(mv.created_at, ?) >= ?'; params.push(diaLocal.modificadorDoFuso(), filters.data_inicio); }
+  if (filters.data_fim) { filtro += ' AND DATE(mv.created_at, ?) <= ?'; params.push(diaLocal.modificadorDoFuso(), filters.data_fim); }
   const rows = await dbAll(db, `
     SELECT
       mv.tipo AS tipo,
@@ -417,8 +420,8 @@ function chaveFornecedorSql(r = 'r') {
 async function relatorioQualidadeFornecedores(db, filters = {}) {
   const params = [];
   let filtro = '';
-  if (filters.data_inicio) { filtro += ' AND DATE(r.data_recebimento) >= ?'; params.push(filters.data_inicio); }
-  if (filters.data_fim) { filtro += ' AND DATE(r.data_recebimento) <= ?'; params.push(filters.data_fim); }
+  if (filters.data_inicio) { filtro += ' AND DATE(r.data_recebimento, ?) >= ?'; params.push(diaLocal.modificadorDoFuso(), filters.data_inicio); }
+  if (filters.data_fim) { filtro += ' AND DATE(r.data_recebimento, ?) <= ?'; params.push(diaLocal.modificadorDoFuso(), filters.data_fim); }
   const cnpj = cnpjNormalizadoSql('r');
   const rows = await dbAll(db, `
     SELECT
@@ -503,8 +506,8 @@ async function relatorioMateriaisMaisConsumidos(db, dataInicio, dataFim) {
     JOIN materiais_almoxarifado ma ON m.material_id = ma.id
     WHERE m.tipo IN ('SAIDA','SAIDA_PRODUCAO','SAIDA_MONTAGEM','SAIDA_ASSISTENCIA') AND m.cancelado = 0`;
   const params = [];
-  if (dataInicio) { sql += ' AND DATE(m.created_at) >= ?'; params.push(dataInicio); }
-  if (dataFim) { sql += ' AND DATE(m.created_at) <= ?'; params.push(dataFim); }
+  if (dataInicio) { sql += ' AND DATE(m.created_at, ?) >= ?'; params.push(diaLocal.modificadorDoFuso(), dataInicio); }
+  if (dataFim) { sql += ' AND DATE(m.created_at, ?) <= ?'; params.push(diaLocal.modificadorDoFuso(), dataFim); }
   sql += ' GROUP BY ma.id ORDER BY total_consumido DESC LIMIT 10';
   return dbAll(db, sql, params);
 }
@@ -515,8 +518,8 @@ async function relatorioConsumoPeriodo(db, dataInicio, dataFim, projetoId, clien
     JOIN materiais_almoxarifado ma ON m.material_id = ma.id
     WHERE m.tipo LIKE 'SAIDA%' AND m.cancelado = 0`;
   const params = [];
-  if (dataInicio) { sql += ' AND DATE(m.created_at) >= ?'; params.push(dataInicio); }
-  if (dataFim) { sql += ' AND DATE(m.created_at) <= ?'; params.push(dataFim); }
+  if (dataInicio) { sql += ' AND DATE(m.created_at, ?) >= ?'; params.push(diaLocal.modificadorDoFuso(), dataInicio); }
+  if (dataFim) { sql += ' AND DATE(m.created_at, ?) <= ?'; params.push(diaLocal.modificadorDoFuso(), dataFim); }
   if (projetoId) { sql += ' AND m.projeto_id = ?'; params.push(projetoId); }
   if (clienteId) { sql += ' AND m.cliente_id = ?'; params.push(clienteId); }
   sql += ' GROUP BY ma.id, m.projeto_id, m.cliente_id ORDER BY total DESC';
@@ -612,8 +615,8 @@ async function relatorioSucataFinanceiro(db, { de, ate } = {}) {
     LEFT JOIN sucateamentos_almoxarifado s ON s.movimentacao_sucata_id = m.id
     WHERE m.tipo = 'SUCATA' AND m.cancelado = 0`;
   const paramsMov = [];
-  if (de) { sqlMov += ' AND DATE(m.created_at) >= ?'; paramsMov.push(de); }
-  if (ate) { sqlMov += ' AND DATE(m.created_at) <= ?'; paramsMov.push(ate); }
+  if (de) { sqlMov += ' AND DATE(m.created_at, ?) >= ?'; paramsMov.push(diaLocal.modificadorDoFuso(), de); }
+  if (ate) { sqlMov += ' AND DATE(m.created_at, ?) <= ?'; paramsMov.push(diaLocal.modificadorDoFuso(), ate); }
   sqlMov += ' ORDER BY m.created_at DESC';
   const movimentacoes = await dbAll(db, sqlMov, paramsMov);
 
@@ -623,8 +626,8 @@ async function relatorioSucataFinanceiro(db, { de, ate } = {}) {
     JOIN materiais_almoxarifado ma ON ma.id = s.material_id
     WHERE s.status = 'VENDIDA'`;
   const paramsVendas = [];
-  if (de) { sqlVendas += ' AND DATE(s.destino_registrado_em) >= ?'; paramsVendas.push(de); }
-  if (ate) { sqlVendas += ' AND DATE(s.destino_registrado_em) <= ?'; paramsVendas.push(ate); }
+  if (de) { sqlVendas += ' AND DATE(s.destino_registrado_em, ?) >= ?'; paramsVendas.push(diaLocal.modificadorDoFuso(), de); }
+  if (ate) { sqlVendas += ' AND DATE(s.destino_registrado_em, ?) <= ?'; paramsVendas.push(diaLocal.modificadorDoFuso(), ate); }
   sqlVendas += ' ORDER BY s.destino_registrado_em DESC';
   const vendas = await dbAll(db, sqlVendas, paramsVendas);
 
@@ -811,26 +814,31 @@ async function relatorioIndicadores(db, query = {}) {
   const mediaHoras = totalConsideradas > 0 ? Number((atendimento.media_horas || 0).toFixed(2)) : 0;
 
   // ── Etapa 67 (RN-01/RN-02, D1-D3): requisicoes NO PRAZO. Ancora no PRAZO (date da ──
-  // data_necessidade) dentro de [hoje - janela, hoje], dia UTC como o alerta REQUISICAO_ATRASADA.
+  // data_necessidade) dentro de [hoje - janela, hoje], dia de Brasilia como o alerta REQUISICAO_ATRASADA (Etapa 162; era o UTC).
   // No prazo = entrega COMPLETA (data_entrega so existe nela) ate o dia do prazo. Prazo de hoje
   // ainda sem entrega fica fora do denominador (o dia nao acabou) e e contado em
   // em_aberto_no_dia. Sem prazo legivel por date() (NULL, '', DD/MM/AAAA legado): fora, contado
   // em sem_data_valida entre as CRIADAS na janela. Tabela derivada no FROM, nao CTE (a varredura
   // do registro so captura SELECT).
+  // Etapa 162 (RN-162.04, B1037): o "hoje" e o de Brasilia (`hoje`, do JS — o prazo e coluna SO de data, sem modificador) e o dia da
+  // entrega e o dia de Brasilia do instante (`date(data_entrega, mod)`). Era `date('now')` e `date(r.data_entrega)` (dia UTC): das 21h a
+  // meia-noite a janela andava um dia, e a entrega feita entre 21h e 24h do dia do prazo contava atrasada. A janela do `sem_data_valida`
+  // (N x 24 h, instante contra instante) nao muda. Ordem dos binds = ordem dos `?` no texto (um a menos zera em silencio — Fase 2 M1).
+  const hoje = diaLocal.hojeLocalISO();
   const noPrazo = await dbGet(db, `
     SELECT
-      COALESCE(SUM(CASE WHEN x.dn >= date('now', '-' || ? || ' days') AND x.dn <= date('now')
-                         AND NOT (x.dn = date('now') AND x.de IS NULL) THEN 1 ELSE 0 END), 0) AS consideradas,
-      COALESCE(SUM(CASE WHEN x.dn >= date('now', '-' || ? || ' days') AND x.dn <= date('now')
+      COALESCE(SUM(CASE WHEN x.dn >= date(?, '-' || ? || ' days') AND x.dn <= ?
+                         AND NOT (x.dn = ? AND x.de IS NULL) THEN 1 ELSE 0 END), 0) AS consideradas,
+      COALESCE(SUM(CASE WHEN x.dn >= date(?, '-' || ? || ' days') AND x.dn <= ?
                          AND x.de IS NOT NULL AND x.de <= x.dn THEN 1 ELSE 0 END), 0) AS no_prazo,
-      COALESCE(SUM(CASE WHEN x.dn = date('now') AND x.de IS NULL THEN 1 ELSE 0 END), 0) AS em_aberto_no_dia,
+      COALESCE(SUM(CASE WHEN x.dn = ? AND x.de IS NULL THEN 1 ELSE 0 END), 0) AS em_aberto_no_dia,
       COALESCE(SUM(CASE WHEN x.dn IS NULL AND x.created_at >= datetime('now', '-' || ? || ' days')
                          THEN 1 ELSE 0 END), 0) AS sem_data_valida
     FROM (
-      SELECT date(r.data_necessidade) AS dn, date(r.data_entrega) AS de, r.created_at
+      SELECT date(r.data_necessidade) AS dn, date(r.data_entrega, ?) AS de, r.created_at
       FROM requisicoes_almoxarifado r
       WHERE ${REQUISICAO_VIVA_SQL('r')}
-    ) x`, [janela, janela, janela]);
+    ) x`, [hoje, janela, hoje, hoje, hoje, janela, hoje, hoje, janela, diaLocal.modificadorDoFuso()]);
   const npConsideradas = Number(noPrazo.consideradas) || 0;
   const npNoPrazo = Number(noPrazo.no_prazo) || 0;
 
@@ -978,8 +986,8 @@ async function relatorioCustoProjeto(db, dataInicio, dataFim) {
   // blocos: `consumido`/`devolvido` sao UM bloco so (SAIDA+DEVOLUCAO consecutivos), nao dois.
   const blocoSaidaDevolucao = [...TIPOS_SAIDA, ...TIPOS_DEVOLUCAO];
   const params = [...blocoSaidaDevolucao, ...blocoSaidaDevolucao, ...blocoSaidaDevolucao];
-  if (dataInicio) { sql += ' AND DATE(mv.created_at) >= ?'; params.push(dataInicio); }
-  if (dataFim) { sql += ' AND DATE(mv.created_at) <= ?'; params.push(dataFim); }
+  if (dataInicio) { sql += ' AND DATE(mv.created_at, ?) >= ?'; params.push(diaLocal.modificadorDoFuso(), dataInicio); }
+  if (dataFim) { sql += ' AND DATE(mv.created_at, ?) <= ?'; params.push(diaLocal.modificadorDoFuso(), dataFim); }
   sql += ' GROUP BY mv.projeto_id, p.nome ORDER BY mv.projeto_id';
 
   const rows = await dbAll(db, sql, params);

@@ -219,7 +219,8 @@ function getBinary(req) {
     assert.strictEqual(exportRes.status, 200, 'export deveria responder 200');
     assert.strictEqual(exportRes.headers['content-type'],
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', JSON.stringify(exportRes.headers));
-    const hoje = new Date().toISOString().slice(0, 10);
+    // Etapa 162 (RN-162.03): o nome leva o dia de Brasilia (era o toISOString, o dia UTC)
+    const hoje = require('../../services/diaLocal').hojeLocalISO();
     assert.strictEqual(exportRes.headers['content-disposition'],
       `attachment; filename="estoque-atual-${hoje}.xlsx"`, JSON.stringify(exportRes.headers));
 

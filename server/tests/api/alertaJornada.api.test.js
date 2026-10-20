@@ -35,6 +35,13 @@ function hashDedupe(evento, dedupeChave) {
 function diasAtras(n) {
   return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
+// Etapa 162 (RN-162.07): o prazo da requisicao e o vencimento da reserva sao comparados com o hoje DE BRASILIA — o "ontem" deles tambem
+// (o `diasAtras` UTC, entre 21h e meia-noite, ja e o hoje de Brasilia, e o alerta deixaria de sair). As outras datas (validade da
+// calibracao, C406) continuam pelo dia UTC.
+function diasAtrasLocal(n) {
+  const [a, m, d] = require('../../services/diaLocal').hojeLocalISO().split('-').map(Number);
+  return new Date(Date.UTC(a, m - 1, d - n)).toISOString().slice(0, 10);
+}
 
 async function filaCount(db, evento) {
   const row = await dbGet(db,
@@ -91,7 +98,7 @@ const EVENTOS_DA_JORNADA = ['CALIBRACAO_VENCENDO', 'REQUISICAO_ATRASADA', 'RESER
     materialReqId = mat.lastID;
     const req = await dbRun(db, `INSERT INTO requisicoes_almoxarifado
         (numero, solicitante_id, solicitante_nome, status, data_necessidade, ativo)
-       VALUES ('REQ-JOR-1', 1, 'Solicitante Jornada', 'APROVADO', ?, 1)`, [diasAtras(1)]);
+       VALUES ('REQ-JOR-1', 1, 'Solicitante Jornada', 'APROVADO', ?, 1)`, [diasAtrasLocal(1)]);
     reqId = req.lastID;
     const item = await dbRun(db, `INSERT INTO itens_requisicao_almoxarifado
         (requisicao_id, material_id, quantidade_solicitada, quantidade_separada, quantidade_entregue, quantidade_atendida)

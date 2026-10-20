@@ -24,7 +24,8 @@
  *      por NF avulsa (sem fornecedor_id, CNPJ pontuado, outro nome) agrupa na MESMA linha.
  *  (4) as duas chaves novas aparecem na lista como exportaveis e o export XLSX responde.
  *
- * "Hoje" vem do SQLite (`date('now')`): a regua dos relatorios e o dia UTC.
+ * "Hoje" e o dia de Brasilia (`diaLocal.hojeLocalISO`): desde a Etapa 162 a regua dos relatorios e dos indicadores e o dia de Brasilia
+ * (antes vinha do SQLite, `date('now')`, o dia UTC — e o teste passaria a falhar entre 21h e meia-noite).
  *
  * Executar: cd server && node tests/api/indicadoresSpec27Integracao.api.test.js
  */
@@ -33,6 +34,7 @@ const request = require('supertest');
 const XLSX = require('xlsx');
 const { createTestApp } = require('../helpers/testApp');
 const { dbGet, dbRun } = require('../../services/almoxarifado/db');
+const diaLocal = require('../../services/diaLocal');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -58,17 +60,18 @@ let seq = 0;
 (async () => {
   console.log('\n=== Etapa 67 Task 5: indicadores da spec 27 ponta a ponta (rotas) ===\n');
   const { app, db, close, setUser } = await createTestApp({ user: { ...ADMIN } });
-  const dia = async (n) => (await dbGet(db, 'SELECT date(\'now\', ?) AS d', [`${-n} days`])).d;
+  const dia = async (n) => (await dbGet(db, 'SELECT date(?, ?) AS d', [diaLocal.hojeLocalISO(), `${-n} days`])).d;
   // Etapa 73 (T0, G80 causa 1): HOJE/ONTEM eram lidos UMA vez aqui; a rodada que atravessava a
   // meia-noite UTC derrubava 7 de 8 cenarios (sonda73-g80-virada.js). Agora cada cenario le os seus
   // na entrada (`datas()`), e nao existe mais HOJE/ONTEM neste escopo — esquecer de ler e ReferenceError.
   const datas = async () => ({ HOJE: await dia(0), ONTEM: await dia(1) });
   /** A cadeia [1 parcial] -> [1 completar] -> [1 C89] usa a mesma A com prazo "hoje": se faltar menos
-   *  de `margem` segundos para a meia-noite UTC, espera a virada antes de montar A. */
+   *  de `margem` segundos para a meia-noite DE BRASILIA (Etapa 162; era a UTC), espera a virada antes de montar A. */
   const esperarViradaSePerto = async (margem = 30) => {
-    const { s } = await dbGet(db, "SELECT (julianday(date('now','+1 day')) - julianday('now')) * 86400 AS s");
+    const off = parseInt(diaLocal.modificadorDoFuso(), 10) * 60; // -10800 s
+    const s = 86400 - ((((Date.now() / 1000 + off) % 86400) + 86400) % 86400);
     if (s < margem) {
-      console.log(`  (faltam ${s.toFixed(1)} s para a meia-noite UTC: esperando a virada)`);
+      console.log(`  (faltam ${s.toFixed(1)} s para a meia-noite de Brasilia: esperando a virada)`);
       await new Promise((r) => { setTimeout(r, Math.ceil(s + 1) * 1000); });
     }
   };

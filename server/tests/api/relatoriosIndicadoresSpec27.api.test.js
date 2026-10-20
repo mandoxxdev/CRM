@@ -45,7 +45,8 @@ let seq = 0;
   console.log('\n=== Etapa 67 Task 1: indicadores da spec 27 (no prazo, integrais, ajustes) + C89 + M-1 ===\n');
   const { app, db, close, setUser } = await createTestApp({ user: { ...ADMIN } });
 
-  const dia = async (n) => (await dbGet(db, `SELECT date('now', ?) AS d`, [`${-n} days`])).d;
+  // Etapa 162 (RN-162.04, B1037): o hoje dos indicadores e o de Brasilia (era o `date('now')` UTC — entre 21h e meia-noite o teste falharia)
+  const dia = async (n) => (await dbGet(db, 'SELECT date(?, ?) AS d', [require('../../services/diaLocal').hojeLocalISO(), `${-n} days`])).d;
   const HOJE = await dia(0);
 
   const loc = async () => {

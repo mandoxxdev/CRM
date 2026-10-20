@@ -25,7 +25,9 @@ const LEDGER = 'backfill_conferencia_finalizada_em';
 
 (async () => {
   const { app, db, setUser, close } = await createTestApp({ user: SUPER });
-  const HOJE = (await dbGet(db, "SELECT date('now') AS d")).d;
+  // Etapa 162 (RN-162.01, C401): o relatorio filtra pelo dia de Brasilia — o "hoje" do teste tambem (era o `date('now')` do SQLite, o
+  // dia UTC: entre 21h e meia-noite o teste passaria a falhar)
+  const HOJE = require('../../services/diaLocal').hojeLocalISO();
 
   async function comAuditoriaFalhando(entidade, acao, fn) {
     const original = db.run;

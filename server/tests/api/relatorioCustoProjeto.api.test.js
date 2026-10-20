@@ -292,10 +292,10 @@ function getBinary(req) {
   await test('(I-2a, revisao) bordas de data INCLUSIVAS: saida exatamente em data_inicio e em data_fim entram', async () => {
     const proj = await novoProjeto(db, 'Projeto Bordas');
     const mat = await novoMaterial(db, { custo_medio: 1, custo_unitario: 9 });
-    await movimento(db, mat, 'SAIDA', 3, proj, { createdAt: '2026-03-01 00:00:00' }); // = data_inicio
-    await movimento(db, mat, 'SAIDA', 5, proj, { createdAt: '2026-03-10 23:59:59' }); // = data_fim
-    await movimento(db, mat, 'SAIDA', 70, proj, { createdAt: '2026-02-28 23:59:59' }); // vespera: fora
-    await movimento(db, mat, 'SAIDA', 90, proj, { createdAt: '2026-03-11 00:00:00' }); // dia seguinte: fora
+    await movimento(db, mat, 'SAIDA', 3, proj, { createdAt: '2026-03-01 03:00:00' }); // = data_inicio (01/03 00:00 de Brasilia — Etapa 162: era a meia-noite UTC)
+    await movimento(db, mat, 'SAIDA', 5, proj, { createdAt: '2026-03-11 02:59:59' }); // = data_fim (10/03 23:59:59 de Brasilia)
+    await movimento(db, mat, 'SAIDA', 70, proj, { createdAt: '2026-03-01 02:59:59' }); // vespera: fora (28/02 23:59:59 de Brasilia)
+    await movimento(db, mat, 'SAIDA', 90, proj, { createdAt: '2026-03-11 03:00:00' }); // dia seguinte: fora (11/03 00:00 de Brasilia)
 
     const linha = (await relatorio(app, '?data_inicio=2026-03-01&data_fim=2026-03-10')).body
       .find((r) => r.projeto_id === proj);

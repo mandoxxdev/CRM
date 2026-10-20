@@ -60,8 +60,10 @@ let seq = 0;
 (async () => {
   console.log('\n=== Etapa 67 Task 3: relatorio qualidade-fornecedores ===\n');
   const { app, db, close, setUser } = await createTestApp({ user: { ...ADMIN } });
-  const HOJE = (await dbGet(db, "SELECT date('now') AS d")).d;
-  const ONTEM = (await dbGet(db, "SELECT date('now', '-1 days') AS d")).d;
+  // Etapa 162 (RN-162.01, C401): o relatorio filtra pelo dia de Brasilia — o "hoje" do teste tambem (era o `date('now')` do SQLite, o
+  // dia UTC: entre 21h e meia-noite o teste passaria a falhar)
+  const HOJE = require('../../services/diaLocal').hojeLocalISO();
+  const ONTEM = (await dbGet(db, "SELECT date(?, '-1 days') AS d", [HOJE])).d;
   await dbRun(db, `INSERT INTO configuracoes_almoxarifado (chave, valor) VALUES ('inspecao_material_critico','1')
     ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor`);
   const clienteId = (await dbRun(db, "INSERT INTO clientes (razao_social) VALUES ('Cliente E67T3')")).lastID;

@@ -498,7 +498,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
             if (err4) return res.status(500).json({ error: err4.message });
             stats.valorTotalEstoque = row4.total;
 
-            db.get(`SELECT COUNT(*) as total FROM movimentacoes_almoxarifado WHERE DATE(created_at) = DATE('now')`, [], (err5, row5) => {
+            // Etapa 162 (RN-162.02, C401, B1033): o hoje de Brasilia — era `DATE(created_at) = DATE('now')`, o dia UTC (das 21h a meia-noite contava o
+            // dia de amanha)
+            db.get(`SELECT COUNT(*) as total FROM movimentacoes_almoxarifado WHERE DATE(created_at, ?) = ?`, [diaLocal.modificadorDoFuso(), diaLocal.hojeLocalISO()], (err5, row5) => {
               if (err5) return res.status(500).json({ error: err5.message });
               stats.movimentacoesHoje = row5.total;
 
@@ -520,10 +522,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                   stats.ultimasMovimentacoes = ultimas;
 
                   // Movimentações por dia (últimos 7 dias)
-                  db.all(`SELECT DATE(created_at) as dia, COUNT(*) as total, tipo
+                  // Etapa 162 (RN-162.02): o dia de Brasilia, os 7 dias anteriores mais hoje (o mesmo alcance de antes, em dias locais)
+                  db.all(`SELECT DATE(created_at, ?) as dia, COUNT(*) as total, tipo
                           FROM movimentacoes_almoxarifado
-                          WHERE created_at >= DATE('now', '-7 days')
-                          GROUP BY dia, tipo ORDER BY dia`, [], (err8, grafico) => {
+                          WHERE DATE(created_at, ?) >= date(?, '-7 days')
+                          GROUP BY dia, tipo ORDER BY dia`, [diaLocal.modificadorDoFuso(), diaLocal.modificadorDoFuso(), diaLocal.hojeLocalISO()], (err8, grafico) => {
                     if (err8) return res.status(500).json({ error: err8.message });
                     stats.graficoMovimentacoes = grafico;
                     res.json(stats);
@@ -2146,9 +2149,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     db.all(`SELECT m.*, ma.nome as material_nome, ma.codigo as material_codigo, ma.unidade, ma.categoria
             FROM movimentacoes_almoxarifado m
             JOIN materiais_almoxarifado ma ON m.material_id = ma.id
-            WHERE DATE(m.created_at) BETWEEN ? AND ?
+            WHERE DATE(m.created_at, ?) BETWEEN ? AND ?
             ORDER BY m.created_at DESC`,
-      [data_inicio, data_fim], (err, rows) => {
+      // Etapa 162 (RN-162.01, B1033): o dia de Brasilia (rota sem consumidor no navegador — mudada pela regua unica)
+      [diaLocal.modificadorDoFuso(), data_inicio, data_fim], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
       });

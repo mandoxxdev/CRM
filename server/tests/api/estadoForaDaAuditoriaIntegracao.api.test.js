@@ -38,7 +38,9 @@ const API = '/api/almoxarifado';
   )`);
   await dbRun(db, `INSERT INTO configuracoes_almoxarifado (chave, valor) VALUES ('liberacao_valor_ativo','0')
     ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor`);
-  const HOJE = (await dbGet(db, "SELECT date('now') AS d")).d;
+  // Etapa 162 (RN-162.01, C401): o relatorio filtra pelo dia de Brasilia — o "hoje" do teste tambem (era o `date('now')` do SQLite, o
+  // dia UTC: entre 21h e meia-noite o teste passaria a falhar)
+  const HOJE = require('../../services/diaLocal').hojeLocalISO();
 
   /** O comando que casa `pred` falha uma vez (gancho em `db.run`). */
   async function comFalha(pred, fn, rotulo) {
