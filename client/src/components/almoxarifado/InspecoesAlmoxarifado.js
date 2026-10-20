@@ -8,6 +8,7 @@ import HistoricoInspecoes from './HistoricoInspecoes';
 import { formatarFaixa } from './faixaTolerancia';
 import useUltimoPedido from '../../hooks/useUltimoPedido';
 import { formatarInstanteDoBanco } from './instanteDoBanco';
+import { lerInstanteDoBanco } from '../../utils/dataLocal';
 import './Almoxarifado.css';
 
 /**
@@ -109,9 +110,12 @@ const TEXTO_AJUDA_MEDIDAS = 'Com medidas preenchidas, a divergência dimensional
 
 // `data_entrada` vem de `recebimentos_material_almoxarifado.created_at`, sempre timestamp
 // completo (não a data "meio-dia local" que outras telas do módulo usam para campos DATE puro).
+// Etapa 162 (RN-162.08, C405): o texto do banco ('AAAA-MM-DD HH:MM:SS', UTC sem fuso) lido como UTC — o `new Date(d)` o lia como hora
+// local, 3 h depois do real, e o recebimento de 24h30 atras aparecia "hoje". Blocos de 24 h (B1036): a regua nao mudou, so o fuso.
 const diasEmEspera = (d) => {
-  if (!d) return null;
-  return Math.max(0, Math.floor((Date.now() - new Date(d).getTime()) / 86400000));
+  const t = lerInstanteDoBanco(d);
+  if (!t) return null;
+  return Math.max(0, Math.floor((Date.now() - t.getTime()) / 86400000));
 };
 
 const InspecoesAlmoxarifado = () => {
