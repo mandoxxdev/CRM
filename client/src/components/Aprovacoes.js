@@ -9,6 +9,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { lerInstanteDoBanco } from '../utils/dataLocal';
 import { SkeletonTable } from './SkeletonLoader';
 import { aprovacaoValeParaProposta } from '../utils/aprovacaoDescontoVale';
 import './Aprovacoes.css';
@@ -265,50 +266,14 @@ const Aprovacoes = () => {
     }).format(value || 0);
   };
 
+  // Etapa 169 (RN-169.01, B1073): o `created_at`/`aprovado_em` (`CURRENT_TIMESTAMP`, UTC sem fuso) lido como UTC e mostrado na hora local.
+  // Antes a conversao era feita duas vezes (lido como UTC E menos 3 h a mao): a hora saia 3 h atrasada (das 0h as 3h, a vespera).
+  // Vazio -> '-'; ilegivel -> o texto gravado (antes '-').
   const formatDate = (dateString) => {
     if (!dateString) return '-';
-    try {
-      // SQLite retorna datas no formato "YYYY-MM-DD HH:MM:SS" sem timezone
-      // O CURRENT_TIMESTAMP do SQLite geralmente salva em UTC
-      // Precisamos converter de UTC para o horário do Brasil (UTC-3)
-      
-      let date;
-      
-      // Se não tem 'T' nem 'Z', é formato SQLite (YYYY-MM-DD HH:MM:SS)
-      if (dateString && !dateString.includes('T') && !dateString.includes('Z')) {
-        // Formato SQLite: "2026-01-09 18:37:00"
-        // Assumir que está em UTC e converter para horário do Brasil (UTC-3)
-        // Criar a data como UTC primeiro
-        const [datePart, timePart] = dateString.split(' ');
-        const [year, month, day] = datePart.split('-');
-        const [hour, minute, second = '00'] = (timePart || '00:00:00').split(':');
-        
-        // Criar Date object em UTC
-        date = new Date(Date.UTC(
-          parseInt(year),
-          parseInt(month) - 1, // meses são 0-indexed
-          parseInt(day),
-          parseInt(hour),
-          parseInt(minute),
-          parseInt(second || '0')
-        ));
-        
-        // Converter para horário do Brasil (UTC-3) - subtrair 3 horas
-        date = new Date(date.getTime() - (3 * 60 * 60 * 1000));
-      } else {
-        // Formato ISO com timezone
-        date = new Date(dateString);
-        // Se tem 'Z' ou está em UTC, converter para horário do Brasil
-        if (dateString.includes('Z') || dateString.endsWith('+00:00')) {
-          date = new Date(date.getTime() - (3 * 60 * 60 * 1000));
-        }
-      }
-      
-      return format(date, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
-    } catch (error) {
-      console.error('Erro ao formatar data:', error, dateString);
-      return '-';
-    }
+    const date = lerInstanteDoBanco(dateString);
+    if (!date) return String(dateString);
+    return format(date, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
   };
 
   const aprovaçõesPendentes = aprovacoes.filter(a => a.status === 'pendente').length;
