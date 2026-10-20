@@ -8,13 +8,13 @@
 // que importa.
 
 import jsPDF from 'jspdf';
+import { formatarDataDoBanco, hojeLocalISO, lerInstanteDoBanco } from './dataLocal';
 
 const num = (v) => String(Number(v || 0));
 
-const formatDataBR = (iso) => {
-  const d = iso ? new Date(iso) : new Date();
-  return d.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
-};
+// Etapa 170 (RN-170.04, B1082): o *Gerado em* no dia LOCAL de quem gera (o `{ timeZone: 'UTC' }` imprimia o dia UTC — das 21h a
+// meia-noite, o de amanha); vazio ou ilegivel -> hoje (antes, ilegivel imprimia *Invalid Date*).
+const formatDataBR = (instante) => formatarDataDoBanco(hojeLocalISO(lerInstanteDoBanco(instante) || new Date()));
 
 /** Descritor do documento — a moeda entre a tela, o teste e o renderizador. */
 export function montarPosicaoClientePDF({ cliente, itens = [], aplicacoes = [], geradoEm } = {}) {

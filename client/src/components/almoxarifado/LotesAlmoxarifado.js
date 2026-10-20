@@ -12,6 +12,7 @@ import { montarEtiquetaLote, montarEtiquetaSerie } from '../../utils/etiquetasPd
 // por origem histórica, não por restrição. Antes do review final da Etapa 6 o certificado era
 // gravado e nunca visualizável: a tela só o lia como booleano ("Certificado anexado").
 import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
+import { formatarInstanteDoBanco } from '../../utils/dataLocal';
 import './Almoxarifado.css';
 
 /**
@@ -461,7 +462,9 @@ const LotesAlmoxarifado = () => {
                             title="Abrir o certificado do fornecedor">
                             Ver certificado
                           </a>
-                          {l.certificado_em ? ` (anexado em ${new Date(l.certificado_em).toLocaleDateString('pt-BR')})` : ''}
+                          {/* Etapa 170 (RN-170.03, B1081): certificado_em e o CURRENT_TIMESTAMP (UTC) — o dia de Brasilia (antes
+                              lido como hora local: das 21h a meia-noite, o dia de amanha; ilegivel, *Invalid Date*). */}
+                          {l.certificado_em ? ` (anexado em ${formatarInstanteDoBanco(l.certificado_em, undefined, '')})` : ''}
                         </div>
                       )}
                     </td>

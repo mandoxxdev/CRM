@@ -8,6 +8,14 @@ import {
 import { SkeletonTable } from '../SkeletonLoader';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import { formatLocalizacaoLabel } from '../../utils/localizacaoLabel';
+import { hojeLocalISO, lerDataDoBanco } from '../../utils/dataLocal';
+
+// Etapa 170 (RN-170.03, B1081): a *Retirada* e o CURRENT_TIMESTAMP (UTC) — os 10 primeiros caracteres eram o dia UTC (das 21h a
+// meia-noite, o de amanha). O dia de Brasilia, no formato da tela (AAAA-MM-DD); so data -> o mesmo texto; ilegivel -> o corte de antes.
+function diaDaRetirada(valor) {
+  const d = lerDataDoBanco(valor);
+  return d ? hojeLocalISO(d) : String(valor).slice(0, 10);
+}
 import './Almoxarifado.css';
 
 /**
@@ -599,7 +607,7 @@ const FerramentasAlmoxarifado = () => {
                       <tr key={e.id}>
                         <td>{e.codigo_patrimonio} — {e.ferramenta_nome}</td>
                         <td>{e.colaborador_nome}{e.setor ? ` (${e.setor})` : ''}</td>
-                        <td>{e.data_retirada ? String(e.data_retirada).slice(0, 10) : '—'}</td>
+                        <td>{e.data_retirada ? diaDaRetirada(e.data_retirada) : '—'}</td>
                         <td>{e.data_prevista_devolucao ? String(e.data_prevista_devolucao).slice(0, 10) : '—'}</td>
                         <td>
                           <span className={`almox-badge almox-badge-${e.status === 'DEVOLVIDA' ? 'ok' : 'ajuste'}`}>

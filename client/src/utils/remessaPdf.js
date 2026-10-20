@@ -8,16 +8,16 @@
 // justamente porque o documento nomeia o dono — e a declaracao de encerramento, abaixo.
 
 import jsPDF from 'jspdf';
+import { formatarDataDoBanco, hojeLocalISO, lerInstanteDoBanco } from './dataLocal';
 
 const num = (v) => String(Number(v || 0));
 const ou = (v, alt = '—') => (v === null || v === undefined || v === '' ? alt : String(v));
 
-const formatDataBR = (iso) => {
-  if (!iso) return null;
-  const d = new Date(String(iso).length === 10 ? `${iso}T00:00:00Z` : iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
-};
+// Etapa 170 (RN-170.04, B1082): o `{ timeZone: 'UTC' }` imprimia o dia UTC — o *Gerado em* (o `toISOString()` de quem clica) saia com o
+// dia de amanha das 21h a meia-noite. Agora: o prazo (coluna SO de data) no dia gravado; o *Gerado em* no dia LOCAL de quem gera (o
+// fuso do navegador, como o resto do cliente); `geradoEm` vazio ou ilegivel -> hoje.
+const formatPrazo = (valor) => formatarDataDoBanco(valor, null, { soData: true });
+const formatGeradoEm = (instante) => formatarDataDoBanco(hojeLocalISO(lerInstanteDoBanco(instante) || new Date()));
 
 /**
  * Destinos de encerramento (thirdPartyService.DESTINOS_ENCERRAMENTO) em linguagem de papel.
@@ -63,11 +63,11 @@ export function montarRemessaPDF({ remessa = {}, itens = [], geradoEm } = {}) {
     proprietario: remessa.proprietario_cliente_id
       ? `Material de propriedade de ${remessa.proprietario_cliente_nome || `cliente #${remessa.proprietario_cliente_id}`}`
       : null,
-    prazo: formatDataBR(remessa.prazo_previsto) || 'sem prazo definido',
+    prazo: formatPrazo(remessa.prazo_previsto) || 'sem prazo definido',
     status: remessa.status || 'ABERTA',
     encerramento: frasePreEncerramento(remessa),
     observacoes: remessa.observacoes || null,
-    geradoEm: formatDataBR(geradoEm) || formatDataBR(new Date().toISOString()),
+    geradoEm: formatGeradoEm(geradoEm),
     cabecalhoItens: ['Código', 'Material', 'Un.', 'Qtde', 'Peso (kg)'],
     linhasItens: lista.map((i) => [
       ou(i.material_codigo), ou(i.material_nome), ou(i.unidade),

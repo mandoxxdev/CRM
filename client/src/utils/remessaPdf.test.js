@@ -129,3 +129,32 @@ describe('montarRemessaPDF', () => {
     expect(doc.encerramento).toBeNull();
   });
 });
+
+// Etapa 170 (RN-170.04, B1082) — o *Gerado em* no dia LOCAL de quem gera e o prazo no dia gravado. DEPENDE DO FUSO: o
+// `client/jest.globalSetup.js` fixa America/Sao_Paulo; a guarda derruba o cenario fora dele (num processo em UTC o dia UTC e o local
+// coincidem e o teste passaria provando nada).
+describe('[RN-170.04] as datas da remessa no dia de Brasilia', () => {
+  test('guarda: o fuso e o de Brasilia', () => {
+    expect(new Date('2026-10-21T01:30:00.000Z').getDate()).toBe(20);
+  });
+
+  test('gerado as 22h30 de 20/10 (01h30 de 21/10 em UTC) sai 20/10/2026, nao 21/10', () => {
+    const doc = montarRemessaPDF({ remessa: REMESSA, itens: ITENS, geradoEm: '2026-10-21T01:30:00.000Z' });
+    expect(doc.geradoEm).toBe('20/10/2026');
+    // metade positiva: de dia o dia e o mesmo nas duas leituras
+    expect(montarRemessaPDF({ remessa: REMESSA, itens: ITENS, geradoEm: '2026-10-20T15:00:00.000Z' }).geradoEm).toBe('20/10/2026');
+  });
+
+  test('o prazo (coluna so de data) e o dia gravado, com ou sem hora; ilegivel -> sem prazo', () => {
+    expect(montarRemessaPDF({ remessa: { ...REMESSA, prazo_previsto: '2026-09-30' }, itens: ITENS }).prazo).toBe('30/09/2026');
+    expect(montarRemessaPDF({ remessa: { ...REMESSA, prazo_previsto: '2026-09-30 01:00:00' }, itens: ITENS }).prazo).toBe('30/09/2026');
+    expect(montarRemessaPDF({ remessa: { ...REMESSA, prazo_previsto: 'lixo' }, itens: ITENS }).prazo).toBe('sem prazo definido');
+  });
+
+  test('geradoEm vazio ou ilegivel -> o dia de hoje (local)', () => {
+    const hoje = new Date();
+    const esperado = `${String(hoje.getDate()).padStart(2, '0')}/${String(hoje.getMonth() + 1).padStart(2, '0')}/${hoje.getFullYear()}`;
+    expect(montarRemessaPDF({ remessa: REMESSA, itens: ITENS }).geradoEm).toBe(esperado);
+    expect(montarRemessaPDF({ remessa: REMESSA, itens: ITENS, geradoEm: 'lixo' }).geradoEm).toBe(esperado);
+  });
+});

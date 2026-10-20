@@ -3,6 +3,7 @@ import { FiDownload, FiPaperclip, FiTrash2, FiUploadCloud } from 'react-icons/fi
 import { toast } from 'react-toastify';
 import api from '../../services/api';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
+import { formatarInstanteDoBanco } from '../../utils/dataLocal';
 import './Almoxarifado.css';
 
 /**
@@ -68,11 +69,10 @@ function formatarTamanho(bytes) {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// Etapa 170 (RN-170.03, B1081): o created_at do anexo e o CURRENT_TIMESTAMP (UTC, sem fuso) — o `replace(' ', 'T')` sem `Z` o lia como
+// hora local (das 21h a meia-noite, o dia de amanha). Vazio -> '' (sai da lista); ilegivel -> o texto gravado (como antes).
 function formatarData(valor) {
-  if (!valor) return '';
-  const d = new Date(String(valor).replace(' ', 'T'));
-  if (Number.isNaN(d.getTime())) return String(valor);
-  return d.toLocaleDateString('pt-BR');
+  return formatarInstanteDoBanco(valor, undefined, '');
 }
 
 /**

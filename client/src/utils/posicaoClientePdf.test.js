@@ -82,3 +82,17 @@ test('aplicacao sem OS e sem projeto nao vira linha em branco', () => {
   });
   expect(doc.linhasAplicacoes).toEqual([]);
 });
+
+// Etapa 170 (RN-170.04, B1082) — o *Gerado em* no dia LOCAL de quem gera. DEPENDE DO FUSO (o `jest.globalSetup.js` fixa
+// America/Sao_Paulo); a guarda derruba fora dele.
+test('[RN-170.04] guarda: o fuso e o de Brasilia', () => {
+  expect(new Date('2026-10-21T01:30:00.000Z').getDate()).toBe(20);
+});
+
+test('[RN-170.04] gerado as 22h30 de 20/10 (01h30 de 21/10 em UTC) sai 20/10/2026, nao 21/10; ilegivel -> hoje', () => {
+  expect(montarPosicaoClientePDF({ cliente: CLIENTE, itens: ITENS, geradoEm: '2026-10-21T01:30:00.000Z' }).geradoEm).toBe('20/10/2026');
+  const hoje = new Date();
+  const esperado = `${String(hoje.getDate()).padStart(2, '0')}/${String(hoje.getMonth() + 1).padStart(2, '0')}/${hoje.getFullYear()}`;
+  expect(montarPosicaoClientePDF({ cliente: CLIENTE, itens: ITENS, geradoEm: 'lixo' }).geradoEm).toBe(esperado); // antes *Invalid Date*
+  expect(montarPosicaoClientePDF({ cliente: CLIENTE, itens: ITENS }).geradoEm).toBe(esperado);
+});
