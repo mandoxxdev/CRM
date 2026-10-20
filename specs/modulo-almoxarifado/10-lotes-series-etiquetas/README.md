@@ -1,5 +1,6 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 164 (2026-10-20, `350eaed8`): o nome do PDF de etiquetas no dia local (B1051, cosmético)** — ver a seção "Etapa 164", no fim.
 > **+ Etapa 163 (2026-10-20, `6502c690`, Fase 5 `407ddfcc`): o lote vencido pelo dia de Brasília (a lista, a saída, a separação, a liberação e o aviso de vencendo — C406, B1042; porta de saldo só na data)** — ver a seção "Etapa 163", no fim. O status não muda.
 
 > **Status:** 🟢 — **as três partes da feature estão entregues**: lote (Etapa 6, 2026-08-09), série
@@ -972,3 +973,13 @@ vencido — as guardas, a ordem delas, as literais e a trava ficam). O status da
   22h — provada pela mesma função.
 
 Continua 🟢.
+
+## Etapa 164 — o nome do PDF de etiquetas no dia local (2026-10-20)
+
+Plano: `docs/superpowers/plans/2026-10-20-almoxarifado-etapa164-os-vencimentos-de-frotas-e-do-financeiro-no-dia-de-brasilia.md` (a etapa é de
+Frotas e do Financeiro — C409; isto entrou de passagem, achado do r1 da 163).
+
+- [x] **B1051** — `etiquetas-AAAA-MM-DD.pdf` com o `hojeLocalISO()` do navegador (`client/src/utils/etiquetasPdf.js`), não o dia UTC (das 21h,
+  o arquivo saía com a data de amanhã) — `350eaed8`. Teste: `client/src/utils/etiquetasPdf.test.js` com o relógio parado às 22h30 (guarda de
+  fuso); controle positivo: a volta ao `toISOString` derruba o cenário.
+- Nada mais da feature 10 mudou: nenhuma regra de lote, série ou etiqueta; o status continua 🟢.

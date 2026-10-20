@@ -1,18 +1,26 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-20 (Etapa 163) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-20 (Etapa 164) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162 e 163) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163 e 164) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-20 (Etapa 163 ENTREGUE · próxima: Etapa 164)
+> ## Onde o desenvolvimento está — 2026-10-20 (Etapa 164 ENTREGUE · próxima: Etapa 165)
 >
-> **O desenvolvimento parou aqui: Etapa 163 fechada — 2026-10-20.** A **Etapa 163 (a atividade editada e as validades no dia de Brasília;
+> **O desenvolvimento parou aqui: Etapa 164 fechada — 2026-10-20.** A **Etapa 164 (os vencimentos de Frotas e do Financeiro no dia de
+> Brasília; consertos técnicos, sem regra de acesso nova e sem mexer em dinheiro gravado)**: no painel de Frotas, o documento (a CNH, a
+> revisão) que vence hoje aparece *"0 dia(s) restantes"* — não mais *"Vencido há 1 dia(s)"* em vermelho, o dia inteiro —, e à noite os
+> alertas, a lista de documentos vencendo e os cartões (*Checklists hoje*, *Manutenção vencida*, *Combustível no mês*) olham o dia de hoje;
+> os formulários de Frotas abrem com a data de hoje; a tela do Financeiro mostra as datas no dia gravado (não na véspera), o painel não
+> conta como vencida a conta que vence hoje, e o *Lucro Líquido* não some mais. Nenhuma consulta nova antes do deploy. **Próxima: Etapa
+> 165** — ver a próxima tarefa no plano da 164.
+>
+> **Etapa 163, 2026-10-20.** A **Etapa 163 (a atividade editada e as validades no dia de Brasília;
 > consertos técnicos no Operacional e no Almoxarifado, sem regra de acesso nova)**: salvar uma atividade de colaborador grava só o que foi
 > enviado — a concluída não volta a *em andamento* nem perde o fim e as horas; à noite (depois das 21h), a ferramenta calibrada até hoje
 > empresta e mede, o empréstimo e a remessa de hoje não aparecem atrasados, o lote que vence hoje sai para consumo (a saída mudou só na
 > data), e os avisos mensais e semanais não adiantam o período seguinte. Nenhuma consulta nova antes do deploy. **Próxima: Etapa 164** — ver
-> a próxima tarefa no plano da 163.
+> a próxima tarefa no plano da 163. *(Próxima, na época: Etapa 164 — entregue acima.)*
 >
 > **Etapa 162, 2026-10-20.** A **Etapa 162 (o dia de Brasília nos relatórios, no painel, nos
 > indicadores, nos alertas e nas reservas do Almoxarifado; consertos técnicos, sem regra de acesso nova e sem mexer em saldo)**: os nove
@@ -6780,6 +6788,44 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 164 — Os vencimentos de Frotas e do Financeiro no dia de Brasília (ENTREGUE — 2026-10-20)
+
+**O que mudou, em uma frase:** em Frotas, o que vence hoje não aparece mais vencido (nem à noite, nem — nos dias restantes — o dia inteiro),
+e no Financeiro as datas aparecem no dia gravado, não na véspera.
+
+**O problema que ela resolve.** (1) Os dias restantes dos alertas de Frotas saíam sempre **um a menos**: o documento que vence hoje
+aparecia *"Vencido há 1 dia(s)"*, crítico. (2) Das 21h à meia-noite, os alertas, a lista de documentos vencendo e os cartões do painel de
+Frotas olhavam o dia de amanhã, e os formulários abriam com a data de amanhã. (3) A tela do Financeiro mostrava a véspera de toda data, e
+o painel contava como vencida, à noite, a conta que vence hoje; e o *Lucro Líquido* sumia de vez em quando.
+
+| Antes | Agora |
+|---|---|
+| **Frotas → Painel**, documento que vence hoje: *"Vencido há 1 dia(s)"*, vermelho | *"0 dia(s) restantes"* |
+| Às 22h, *Checklists hoje* ≈ 0 e a revisão de hoje em *Manutenção vencida* | Os checklists de hoje; a revisão de hoje não venceu |
+| *Nova Manutenção* / *Novo Abastecimento* / *Novo Checklist* às 22h: data de amanhã | Data de hoje |
+| **Financeiro → Contas a pagar**, vencimento 20/10: *19/10/2026* (e na planilha) | *20/10/2026* |
+| **Financeiro → Painel** às 22h: a conta de hoje em *vencidas* | Não conta |
+
+**Roteiro de teste (10 minutos — os passos 1 a 3 a qualquer hora; 4 e 5 depois das 21h).**
+
+1. **Os dias restantes.** Faça login, abra **Frotas → Seguros e Documentos** e cadastre um documento *ativo* com *Data vencimento* = hoje.
+   Abra **Frotas → Painel** e clique **Atualizar**: em *Alertas e vencimentos*, ele aparece *"0 dia(s) restantes"*. Mude o vencimento para
+   ontem: *"Vencido há 1 dia(s)"*. Para daqui a 8 dias: *"8 dia(s) restantes"*.
+2. **O teto do alerta.** Um documento com *Alertar (dias antes)* = 10 e vencimento daqui a 10 dias aparece no painel; daqui a 11, não.
+3. **As datas do Financeiro.** Em **Financeiro → Contas a pagar**, uma conta (gerada por um recebimento de nota) com vencimento conhecido
+   aparece com essa data exata; **Exportar Excel** leva a mesma data.
+4. **Os formulários à noite.** Depois das 21h, abra *Nova Manutenção*, *Novo Abastecimento* e *Novo Checklist*: a data vem com hoje.
+5. **O painel à noite.** Depois das 21h, no **Financeiro → Painel**, a conta pendente que vence hoje não conta em *"N vencidas"*; a de ontem
+   conta. Em **Frotas → Painel**, um checklist com a data de hoje conta em *Checklists hoje*.
+
+**O que esta etapa NÃO cobre.** Os lembretes e a validade das propostas do Comercial (**C410** — a próxima). A lista do Financeiro não marca
+as vencidas — o cartão *Vencido* da lista e o filtro *Vencido* ficam vazios (**C411**, produto). A revisão antiga de Frotas continua
+alertando depois da nova (**C412**, produto). Nenhuma porta de permissão mudou; nenhum valor de dinheiro gravado mudou.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (as rotas pelo servidor de verdade no fuso
+universal com o relógio adiantado para as 22h de Brasília; as telas em jsdom com o relógio parado às 22h30) provam, escrito para você conferir
+à mão. Commits `0f879884`, `350eaed8` e `fa064023` (a correção da revisão).
 
 ## Etapa 163 — A atividade editada e as validades no dia de Brasília (ENTREGUE — 2026-10-20)
 

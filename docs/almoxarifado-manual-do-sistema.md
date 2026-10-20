@@ -930,7 +930,7 @@ O sistema gera um **PDF de etiquetas** para imprimir e colar na prateleira, na c
 | **Folha A4 (10 etiquetas por página)** | grade de 2 colunas por 5 linhas, etiquetas de 99 × 57 mm, cada uma com borda pontilhada de recorte — para folha adesiva comum |
 | **Térmica 100×50 mm (1 por página)** | uma etiqueta por página, para rolo de impressora térmica |
 
-O formato escolhido fica **lembrado** para a próxima vez (por navegador). O arquivo baixado se chama `etiquetas-AAAA-MM-DD.pdf`.
+O formato escolhido fica **lembrado** para a próxima vez (por navegador). O arquivo baixado se chama `etiquetas-AAAA-MM-DD.pdf`, com a data de hoje do computador de quem gera.
 
 **O que vai impresso — e o que não vai.** A etiqueta é deliberadamente enxuta:
 
@@ -6998,10 +6998,24 @@ O sistema guarda o instante de cada registro no horário universal (três horas 
   data com o *hoje* de Brasília.
 - **Os dias em espera** das Inspeções pendentes (*"hoje"*, *"há N dias"*) contam da hora real do recebimento, em blocos de 24 horas: *"há 1
   dia"* a partir de 24 h, *"hoje"* antes — o recebimento de ontem às 10h, visto hoje às 9h, ainda mostra *"hoje"*.
-- **Ainda pelo horário universal:** as datas sem hora das ferramentas (vencimento do empréstimo, validade da calibração), a validade do
-  lote, o prazo da remessa a terceiro e o vencimento da conta a pagar gerada pelo recebimento quando a nota não tem data de entrada — entre
-  21h e meia-noite, o "hoje" delas é o de amanhã. Os indicadores do painel antigo do Operacional (OEE, manutenção e inspeções do dia), que
-  nenhum menu abre, também.
+- **As datas sem hora do Almoxarifado** — o vencimento do empréstimo e a validade da calibração das ferramentas (seção 21), a validade do
+  lote (seção 4), o prazo da remessa a terceiro (seção 17) e o vencimento padrão da conta a pagar gerada pelo recebimento — comparam com o
+  *hoje* de Brasília: o que vence hoje só fica vencido no dia seguinte. As chaves dos avisos mensais e semanais (21c-bis) usam o mês e a
+  semana de Brasília.
+- **Fora do Almoxarifado, Frotas e o Financeiro** também contam o dia de Brasília: em **Frotas**, os alertas de documento (vencimento até
+  hoje + os dias de antecedência do documento, 30 se não informado), de CNH (até hoje + 30, só motorista ativo), de revisão (até hoje + 15, ou
+  o km atual a 500 km da revisão) e de multa pendente (até hoje + 15), o consumo baixo (a média dos abastecimentos desde hoje − 60 abaixo de
+  70% do esperado), a lista de documentos *vencendo* e os cartões *Combustível no mês*, *Checklists hoje* e *Manutenção vencida* (revisão
+  marcada para antes de hoje, ou o km já alcançado). Os **dias restantes** de cada alerta são a data menos hoje, em dias de calendário (hoje =
+  *"0 dia(s) restantes"*; ontem = *"Vencido há 1 dia(s)"*), e a cor sai deles: documento vencido é crítico, até 7 dias é alto, acima disso
+  médio; CNH vencida é crítica, senão alta; revisão vencida (ou com o km alcançado) é crítica, senão média. Os formulários *Nova Manutenção*,
+  *Novo Abastecimento* e *Novo Checklist* abrem com a data de hoje. No **Financeiro**, as *vencidas* dos cartões *Contas a receber* e *Contas
+  a pagar* do painel são as pendentes ou parciais com vencimento **antes** de hoje; a receita do gráfico soma as recebidas e as pendentes com
+  vencimento até hoje; o *Período* *Este Mês*, *Este Trimestre* e *Este Ano* das listas começa no dia 1 do mês, do trimestre e do ano de
+  Brasília; e as datas (vencimento, pagamento, recebimento, fluxo de caixa) aparecem no dia gravado, na tela e na planilha.
+- **Ainda pelo horário universal:** os indicadores do painel antigo do Operacional (OEE, manutenção e inspeções do dia), que nenhum menu
+  abre; e, no Comercial, a prioridade dos lembretes das propostas e as propostas *a vencer* do painel de vendas — entre 21h e meia-noite, o
+  "hoje" delas é o de amanhã.
 - O deslocamento usado é o atual do horário de Brasília (três horas, sem horário de verão).
 
 ### 22.6 A lista mostra o último filtro pedido

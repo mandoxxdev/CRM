@@ -11,12 +11,20 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-20):** **Etapa 163 fechada** (consertos técnicos no Operacional e no Almoxarifado, sem regra de
+> **Onde o desenvolvimento está (2026-10-20):** **Etapa 164 fechada** (consertos técnicos em Frotas e no Financeiro, sem regra de acesso
+> nova e sem mexer em dinheiro gravado; **os vencimentos de Frotas e do Financeiro no dia de Brasília** — os alertas, a lista de documentos
+> vencendo e os cartões do painel de Frotas contam o dia de Brasília (**B1046**), os dias restantes deixam de sair um a menos o dia inteiro (o
+> documento que vence hoje não aparece mais *"Vencido há 1 dia(s)"* e crítico — **B1047**), os formulários de Frotas abrem com a data de hoje
+> (**B1048**), o painel e o *Período* do Financeiro contam o calendário de Brasília (**B1049**), as datas da tela do Financeiro aparecem no dia
+> gravado, não na véspera (**B1050**), e o lucro do painel do Financeiro não some mais (**B1052**) — **C409** resolvido; os avisos novos **C410**
+> (os lembretes e a validade das propostas), **C411** (a lista do Financeiro não marca as vencidas) e **C412** (a revisão antiga continua
+> alertando)); a próxima é a **165** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 163 fechada** (consertos técnicos no Operacional e no Almoxarifado, sem regra de
 > acesso nova; **a atividade editada e as validades no dia de Brasília** — o PUT de uma atividade de colaborador grava só o que veio (não
 > reabre a concluída nem apaga o fim e as horas — **C407** resolvido, **B1040**); a calibração, o empréstimo, o lote, a remessa e as chaves dos
 > avisos mensais e semanais contam o dia de Brasília (**C406** resolvido, **B1041** a **B1044** — o lote que vence hoje sai até a meia-noite: a
 > porta de saldo só mudou na data); os avisos novos **C408** (a edição de atividade não tem tela e ignora OS/início) e **C409** (a mesma régua
-> de data em Frotas e no Financeiro)); a próxima é a **164** — ver "Onde estamos e o que vem a seguir".
+> de data em Frotas e no Financeiro)); a próxima era a **164**.)*
 > *(Antes: **Etapa 162 fechada** (consertos técnicos no Almoxarifado, sem regra de acesso nova e sem
 > mexer em saldo: **o dia de Brasília nos relatórios, no painel, nos indicadores, nos alertas e nas reservas** — os nove relatórios e o
 > painel contam o dia de Brasília e a planilha mostra a hora de Brasília (**C401** resolvido, **B1033**, **B1039**); o indicador *no prazo* e o
@@ -3943,7 +3951,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B1045; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B1053; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -11500,6 +11508,57 @@ usado; ficou na forma segura. **Descartado:** apagar o padrão. **Reversível:**
 vocês: as da **B957**, a **B988** e a **B989**; a **B1002** continua pedindo um olhar; a **B1013** (o acento nas buscas); a **C398** (o filtro
 *Status* dos Materiais); a **C408** (ligar a edição de atividades — o que ela grava); a **B1040** a **B1044** são reversíveis.
 
+**B1046 (NOVA, da Etapa 164; de Frotas) — os alertas, a lista de documentos vencendo e o painel de Frotas no dia de Brasília (C409).**
+**Escolhido:** os alertas de **documento** (o teto é hoje + os dias de antecedência do documento, 30 se não informado), de **CNH** (hoje + 30),
+de **revisão** (hoje + 15) e de **multa** pendente (hoje + 15), o **consumo baixo** (os abastecimentos desde hoje − 60), a lista de documentos
+*vencendo* e os cartões **Combustível no mês**, **Checklists hoje** e **Manutenção vencida** contam o dia de Brasília; o painel lê o "hoje" uma
+vez e o passa aos alertas. **Os números mudam das 21h à meia-noite:** cada teto anda um dia para trás (o documento que vence daqui a 31 dias,
+com 30 de antecedência, sai da lista até a meia-noite); a janela do consumo ganha o dia de hoje − 60; no último dia do mês, o *Combustível no
+mês* é o do mês (antes, R$ 0 do mês seguinte); os *Checklists hoje* contam os de hoje (antes, os de amanhã — quase sempre 0); a revisão
+marcada para hoje deixa de contar como *Manutenção vencida*. **Descartado:** só os alertas (o cartão e a lista discordariam do mesmo dia).
+**Reversível:** `0f879884`.
+
+**B1047 (NOVA, da Etapa 164; de Frotas) — os dias restantes dos alertas de Frotas contados certo, o dia inteiro.** **Escolhido:** os dias
+restantes (e a cor do alerta, que sai deles) são a data menos o hoje de Brasília, em dias de calendário. **Muda o dia inteiro, não só à
+noite:** a conta antiga lia a data como meia-noite do horário universal e zerava a hora no horário de Brasília — **sempre um dia a menos**.
+Agora: o documento, a CNH ou a revisão que vence **hoje** sai *"0 dia(s) restantes"* e **alto** (antes *"Vencido há 1 dia(s)"* e
+**crítico**); o que vence daqui a 8 dias sai 8 e **médio** (antes 7 e alto); o vencido ontem sai *"Vencido há 1 dia(s)"* (antes 2). Uma data
+gravada fora do padrão (dados antigos, um ano "0026" digitado pela metade) é contada como antes. **Descartado:** corrigir só a janela das 21h
+(o erro do dia inteiro é o mais visível). **Reversível:** `0f879884`, `fa064023`.
+
+**B1048 (NOVA, da Etapa 164; de Frotas) — a data padrão dos formulários de Frotas no dia de hoje.** **Escolhido:** *Nova Manutenção*,
+*Novo Abastecimento* e *Novo Checklist* abrem com a data de hoje do computador de quem usa; a manutenção cadastrada pela integração sem
+data grava o hoje de Brasília. **Muda:** das 21h à meia-noite, o formulário abria com **amanhã** — e era o que se gravava se ninguém mexesse.
+**Descartado:** tirar o padrão (muda o formulário — produto). **Reversível:** `350eaed8`, `0f879884`.
+
+**B1049 (NOVA, da Etapa 164; do Financeiro) — o painel e o filtro de período do Financeiro no calendário de Brasília (só a data; nada de
+dinheiro).** **Escolhido:** as *vencidas* dos cartões **Contas a receber** e **Contas a pagar** (pendente ou parcial com vencimento antes de
+hoje) e a receita do gráfico (recebidas + pendentes com vencimento até hoje) usam o mesmo hoje de Brasília; o mês e o ano padrão do painel
+são os de Brasília — e o painel chamado sem mês passa a mostrar o mês corrente (antes vinha com as métricas do mês zeradas; a tela sempre
+manda o mês, então nada muda nela); o *Período* (*Este Mês*, *Este Trimestre*, *Este Ano*) das três listas começa no dia 1 do calendário de
+Brasília. **Os números mudam das 21h à meia-noite:** a conta que vence hoje deixa de contar *vencida*; a pendente de amanhã deixa de somar na
+receita do gráfico. O *Período*, em produção (o fuso do servidor é fixado), não muda — só mudaria se o servidor subisse sem o fuso.
+**Nenhum valor gravado, nenhuma baixa e nenhum pagamento muda.** **Descartado:** só o "hoje" (o gráfico e o cartão discordariam); recusar
+o mês fora de 1 a 12 com erro (muda o contrato — o mês 13 continua aceito como antes). **Reversível:** `0f879884`.
+
+**B1050 (NOVA, da Etapa 164; do Financeiro) — as datas da tela do Financeiro no dia gravado.** **Escolhido:** o vencimento, o pagamento, o
+recebimento e a data do fluxo de caixa aparecem no dia que está gravado, na tela e na planilha do **Exportar Excel**; vazio continua *-*.
+**Muda o dia inteiro:** no Brasil, a tela mostrava **a véspera** (a conta que vence em 20/10 aparecia *19/10/2026*). Um valor gravado fora do
+padrão passa a aparecer *—* (antes *Invalid Date*). **Descartado:** formatar no servidor (muda o contrato das listas). **Reversível:**
+`350eaed8`.
+
+**B1051 (NOVA, da Etapa 164; do Almoxarifado) — o nome do PDF de etiquetas no dia de hoje.** O arquivo *etiquetas-AAAA-MM-DD.pdf* leva a
+data do computador de quem gera (antes o dia universal: das 21h, a data de amanhã). Cosmético. **Reversível:** `350eaed8`.
+
+**B1052 (NOVA, da Etapa 164; do Financeiro; achado da revisão) — o painel do Financeiro espera todas as consultas.** O painel respondia
+antes de terminar a última das nove consultas: de vez em quando um número (o **Lucro Líquido**, na reprodução) vinha vazio. Agora espera as
+nove. Leitura só. **Descartado:** reescrever o painel (mais mudança, o mesmo efeito). **Reversível:** `fa064023`.
+
+**B1053 (NOVA, da Etapa 164) — a próxima etapa (165).** Ver a "próxima tarefa detalhada" no plano da Etapa 164 (o dia de Brasília nos
+lembretes e na validade das propostas — **C410**). As decisões que esperam vocês: as da **B957**, a **B988** e a **B989**; a **B1002** continua
+pedindo um olhar; a **B1013** (o acento nas buscas); a **C398** (o filtro *Status* dos Materiais); a **C408** (a edição de atividades); a
+**C411** (marcar as vencidas na lista do Financeiro) e a **C412** (qual revisão de Frotas vale); a **B1046** a **B1052** são reversíveis.
+
 **B898 (NOVA, da Etapa 138) — a próxima etapa (139).** Ver a "próxima tarefa detalhada" no plano da Etapa 138. A **B853** (com a
 **C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
@@ -14895,10 +14954,27 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      colaborador como ocupado de novo; o *Finalizar* grava a hora de fim no padrão universal (o início é a hora de Brasília digitada) e as
      horas reais nunca são calculadas. **O que fazer:** nada no dia a dia — nenhuma tela mostra o fim nem as horas reais. Ligar a edição e
      decidir o que ela grava é pergunta de produto.
-409. **NOVO (da revisão do plano da Etapa 163; de Frotas e do Financeiro, anteriores a ela; lido no código, não medido a fundo) — a mesma régua
-     de data no dia universal fora do Almoxarifado.** Os vencimentos de Frotas (documentos, manutenções, multas) e do Financeiro ainda
+409. **✅ RESOLVIDO NA ETAPA 164 (B1046 a B1050; `0f879884`, `350eaed8`, `fa064023`) — NOVO (da revisão do plano da Etapa 163; de Frotas e do
+     Financeiro, anteriores a ela; lido no código, não medido a fundo) — a mesma régua de data no dia universal fora do Almoxarifado.** *(Os
+     alertas, a lista e o painel de Frotas e o painel e o período do Financeiro contam o dia de Brasília. **Isto dizia só "das 21h à
+     meia-noite"; estava incompleto:** a medição da 164 achou dois erros **do dia inteiro** — os dias restantes dos alertas de Frotas saíam um
+     a menos, e a tela do Financeiro mostrava a véspera de toda data — e citava o Financeiro só pelo gráfico do painel, quando eram o painel, os
+     cartões de vencidas e o filtro de período. O texto abaixo fica como registro.)* Os vencimentos de Frotas (documentos, manutenções, multas) e do Financeiro ainda
      comparam a data sem hora com o dia universal: das 21h à meia-noite, o que vence hoje já aparece vencido. **O que fazer:** à noite, ler
      esses vencimentos como os do dia seguinte. Candidata a uma etapa futura (medir as telas antes).
+410. **NOVO (da medição da Etapa 164; do Comercial, anterior a ela; lido no código, não medido a fundo) — os lembretes e a validade das
+     propostas no dia universal.** A prioridade do lembrete de proposta no sino de notificações (*vencido*/*hoje*) e as propostas *a vencer*
+     do painel de vendas comparam com o dia universal: das 21h à meia-noite, o lembrete de hoje já aparece *vencido*. E a data do lembrete no
+     painel aparece na véspera, o dia inteiro (a mesma conta da tela do Financeiro antes desta etapa). **O que fazer:** à noite, ler esses
+     lembretes como os do dia seguinte. Candidata à Etapa 165.
+411. **NOVO (da revisão do plano da Etapa 164; do Financeiro, anterior a ela; lido no código) — a lista do Financeiro não marca as contas
+     vencidas.** O painel conta *N vencidas* pela data; mas nas listas de **Contas a pagar** e **Contas a receber** o cartão *Vencido* soma
+     R$ 0,00 e o filtro de status *Vencido* volta vazio, porque nenhuma parte do sistema grava a situação *vencido* (o recebimento grava
+     *pendente*). **O que fazer:** para achar as vencidas, ordenar a lista pelo vencimento. Marcar as vencidas na lista é pergunta de produto.
+412. **NOVO (da revisão do plano da Etapa 164; de Frotas, anterior a ela; lido no código) — a revisão antiga continua alertando.** O alerta de
+     revisão e o cartão *Manutenção vencida* leem **todas** as manutenções com próxima revisão marcada, sem olhar se já houve uma revisão mais
+     nova para o mesmo veículo: registrada a revisão nova, a antiga continua no alerta (e crítica, se a data passou). **O que fazer:** apagar a
+     data de próxima revisão da manutenção antiga ao registrar a nova. Qual revisão vale é pergunta de produto.
 ### D. Limitações declaradas— são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -16230,6 +16306,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(164) Os vencimentos de Frotas e do Financeiro, o que ficou de fora.** Os lembretes e a validade das propostas (**C410**); a situação
+  *vencido* na lista do Financeiro (**C411**); a revisão antiga que continua alertando (**C412**). O mês fora de 1 a 12 no painel do Financeiro
+  continua aceito como antes (o 13 dá um painel vazio). Uma data gravada com hora e fuso (só possível pela integração) é contada pelo dia que
+  está escrito nela, no horário universal — como o banco a conta. O ano padrão do painel do Financeiro foi lido no código, não provado na
+  virada do ano. O deslocamento do fuso é o de agora (sem horário de verão desde 2019). Nenhuma porta de permissão mudou; nenhum valor de
+  dinheiro gravado mudou.
 - **(163) A atividade editada e as validades, o que ficou de fora.** A edição de atividade continua sem tela, e o servidor continua sem
   gravar a OS, o início, as horas previstas e o colaborador (**C408**); reabrir uma atividade não marca o colaborador ocupado; o fim gravado
   pelo *Finalizar* continua no padrão universal. As réguas de data de Frotas e do Financeiro (**C409**). A separação da requisição com lote
@@ -17311,6 +17393,13 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(164) Nenhum clique foi dado no navegador, e a regra das 21h só foi provada com o relógio adiantado.** As rotas foram provadas pelo
+servidor de verdade (em pasta vazia, no fuso universal e com o relógio adiantado para as 22h de Brasília do último dia do mês seguinte, de modo
+que o dia de Brasília, o universal e o do banco caiam em três meses diferentes); as telas em jsdom no fuso de Brasília com o relógio parado às
+22h30. Vale conferir à mão: **a qualquer hora**, em **Financeiro → Contas a pagar**, uma conta que vence hoje mostra a data de hoje (não a de
+ontem); em **Frotas → Painel**, um documento que vence hoje aparece *"0 dia(s) restantes"*, não *"Vencido há 1 dia(s)"*. **Depois das 21h:**
+*Nova Manutenção* abre com a data de hoje; a conta que vence hoje não conta nas *vencidas* do painel do Financeiro.
 
 **(163) Nenhum clique foi dado no navegador, e a regra das 21h só foi provada com o relógio adiantado.** As rotas foram provadas no próprio
 processo de teste (no fuso universal e com o relógio adiantado para as 22h de Brasília do último dia do mês seguinte, de modo que o dia de
@@ -32823,9 +32912,71 @@ meia-noite; a de ontem tem, e entra no aviso por e-mail.
 - As réguas de data de Frotas e do Financeiro (**C409**).
 - Nenhuma porta de permissão mudou; a saída e a separação de lote mudaram só na data (as guardas, as mensagens e a trava são as de antes).
 
+## Etapa 164 — Os vencimentos de Frotas e do Financeiro no dia de Brasília (2026-10-20)
+
+Uma etapa de **consertos técnicos** em Frotas e no Financeiro, sem regra de acesso nova e sem mexer em dinheiro gravado. **Frotas:** os
+vencimentos (documentos, CNH, revisões, multas) são datas sem hora, e o sistema os comparava com o dia universal (3 h à frente de Brasília):
+das 21h à meia-noite, os alertas, a lista de documentos vencendo e os cartões do painel já olhavam o dia de amanhã. E, **o dia inteiro**, os
+dias restantes saíam um a menos: o documento que vence hoje aparecia *"Vencido há 1 dia(s)"*, em vermelho. **Financeiro:** a tela mostrava a
+**véspera** de toda data (vencimento, pagamento, recebimento, fluxo de caixa) — na lista e na planilha —, e o painel contava como vencida, às
+22h, a conta que vence hoje. Agora tudo conta o dia de Brasília, e a tela mostra o dia gravado.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Frotas → Painel**, documento/CNH/revisão que vence hoje: *"Vencido há 1 dia(s)"*, crítico (o dia inteiro) | *"0 dia(s) restantes"*, alto — **B1047** |
+| Documento que vence daqui a 8 dias: *"7 dia(s) restantes"*, alto | *"8 dia(s) restantes"*, médio — **B1047** |
+| Às 22h, os alertas e a lista *vencendo* já incluíam o dia seguinte ao teto | O teto é o de hoje — **B1046** |
+| Às 22h, *Checklists hoje* contava os de amanhã (≈ 0); *Manutenção vencida* contava a revisão de hoje | Os de hoje; a de hoje não venceu — **B1046** |
+| No último dia do mês, às 22h, *Combustível no mês* = R$ 0 (o mês seguinte) | O do mês — **B1046** |
+| *Nova Manutenção*, *Novo Abastecimento*, *Novo Checklist* às 22h: abriam com amanhã | Abrem com hoje — **B1048** |
+| **Financeiro**, a conta que vence em 20/10 aparecia *19/10/2026* (tela e planilha, o dia inteiro) | *20/10/2026* — **B1050** |
+| Painel do Financeiro às 22h: a conta que vence hoje contava em *vencidas*; a pendente de amanhã somava na receita do gráfico | Não conta; não soma — **B1049** |
+| Painel do Financeiro: o *Lucro Líquido* vinha vazio de vez em quando | Sempre preenchido — **B1052** |
+| PDF de etiquetas gerado às 22h: *etiquetas-<amanhã>.pdf* | *etiquetas-<hoje>.pdf* — **B1051** |
+
+### As regras, com o cenário exato
+
+**1. Os dias restantes (B1047).** Em **Frotas → Seguros e Documentos**, cadastre um documento *ativo* com *Data vencimento* = hoje. No
+**Painel** de Frotas, em *Alertas e vencimentos*, ele aparece com *"0 dia(s) restantes"*. Com vencimento = ontem: *"Vencido há 1 dia(s)"*,
+crítico. Com vencimento daqui a 8 dias: *"8 dia(s) restantes"*, médio; daqui a 7: *"7 dia(s) restantes"*, alto. A CNH que vence hoje é *alta*
+(a de ontem, crítica); a revisão de hoje é *média* (a de ontem, crítica).
+
+**2. O teto dos alertas (B1046).** Um documento com *Alertar (dias antes)* = 10 e vencimento daqui a 10 dias aparece no painel; daqui a 11,
+não. Sem o campo, vale 30. CNH: até daqui a 30 dias; revisão e multa pendente: até daqui a 15. Depois das 21h, o mesmo vale (antes o teto
+andava um dia).
+
+**3. Os cartões do painel de Frotas (B1046).** *Checklists hoje* conta os checklists com a data de hoje; *Manutenção vencida* conta os veículos
+com revisão marcada para antes de hoje (ou com o km já alcançado); *Combustível no mês* soma os abastecimentos do mês corrente. O botão
+**Atualizar** busca os números de agora (antes podia trazer os de até 30 s atrás).
+
+**4. As datas do Financeiro (B1050).** Em **Financeiro → Contas a pagar**, a conta com vencimento 20/10/2026 aparece *20/10/2026*; o
+pagamento vazio aparece *-*. **Exportar Excel** leva as mesmas datas.
+
+**5. O painel do Financeiro (B1049).** Em **Financeiro → Painel**, os cartões *CONTAS A RECEBER* e *CONTAS A PAGAR* dizem *"N contas | N
+vencidas"*: vencida é a pendente ou parcial com vencimento **antes** de hoje — a de hoje não conta, nem às 22h. O *Período* *Este Mês* das
+listas começa no dia 1 do mês corrente.
+
+### O que esta etapa NÃO cobre
+
+- Os lembretes e a validade das propostas do Comercial (**C410** — próxima etapa).
+- A lista do Financeiro não marca as vencidas (**C411**) e a revisão antiga de Frotas continua alertando (**C412**) — produto.
+- Nenhuma porta de permissão mudou; nenhum valor de dinheiro gravado, baixa ou pagamento mudou.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 164 entregue (2026-10-20):** **os vencimentos de Frotas e do Financeiro no dia de Brasília** (consertos técnicos, sem regra de
+  acesso nova e sem mexer em dinheiro gravado). Os alertas, a lista e o painel de Frotas contam o dia de Brasília (**B1046**) e os dias
+  restantes deixam de sair um a menos (**B1047**); os formulários de Frotas abrem com hoje (**B1048**); o painel e o período do Financeiro no
+  calendário de Brasília (**B1049**), as datas da tela no dia gravado (**B1050**) e o lucro do painel que não some mais (**B1052**) — **C409**
+  resolvido. Commits `0f879884`, `350eaed8` e `fa064023` (a correção da revisão). **O que é seu:** as decisões **B1046** a **B1052**
+  (reversíveis); os avisos novos **C410** (propostas — a próxima), **C411** e **C412** (produto); as perguntas de antes (**B949**, **B910**,
+  **B853**, **B924**, **B926**, **B988**, **B989**, **B1013**, **C277**, **C312**, **C314**, **C316**, **C330**, **C398**, **C408**); as limitações
+  **(164)** em D e a verificação **(164)** em F. Nenhuma consulta nova antes do deploy.
+  **Próxima: Etapa 165 — ver a "próxima tarefa detalhada" no plano da Etapa 164.**
 
 - **Etapa 163 entregue (2026-10-20):** **a atividade editada e as validades no dia de Brasília** (consertos técnicos no Operacional e no
   Almoxarifado, sem regra de acesso nova). Salvar uma atividade grava só o que veio (**B1040** — **C407**); a calibração, o empréstimo, o lote,
@@ -32834,7 +32985,7 @@ meia-noite; a de ontem tem, e entra no aviso por e-mail.
   edição de atividade — produto) e **C409** (Frotas e Financeiro); as perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**,
   **B988**, **B989**, **B1013**, **C277**, **C312**, **C314**, **C316**, **C330**, **C398**); as limitações **(163)** em D e a verificação
   **(163)** em F. Nenhuma consulta nova antes do deploy.
-  **Próxima: Etapa 164 — ver a "próxima tarefa detalhada" no plano da Etapa 163.**
+  *(Próxima, na época: Etapa 164 — entregue acima.)*
 
 - **Etapa 162 entregue (2026-10-20):** **o dia de Brasília nos relatórios, no painel, nos indicadores, nos alertas e nas reservas** (consertos
   técnicos no Almoxarifado, sem regra de acesso nova e sem mexer em saldo). Os nove relatórios, o painel e a planilha contam o dia (e a hora) de

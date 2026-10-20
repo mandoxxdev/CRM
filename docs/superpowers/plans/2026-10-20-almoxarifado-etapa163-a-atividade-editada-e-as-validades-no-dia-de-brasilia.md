@@ -288,7 +288,13 @@ dias; o vencendo sem piso inclui o `validadeOntem` de qualquer jeito) e `alertaR
 3. **Paralelismo:** **0** galhos de código em paralelo (o condutor fez T1 e T2 em sequência); **1** revisor na Fase 2, **3** revisores em
    paralelo na Fase 5 (o r3 na worktree própria, 73 sabotagens + 15 de controle) — **0** incidente de trava (os revisores rodaram arquivos
    isolados), **0** retrabalho.
-4. **Defeito que escapou:** *(preencher na Etapa 164)*.
+4. **Defeito que escapou:** **2, ambos de documentação/teste, nenhum de produção** (achados na Etapa 164). (a) **O manual não foi
+   enxertado inteiro:** a seção 22.5 (*O dia e a hora de um registro*) continuou dizendo que as datas sem hora das ferramentas, a validade do
+   lote, o prazo da remessa e a conta a pagar contavam o dia universal — o que a 163 tinha acabado de mudar (as seções 4, 17 e 21 foram
+   atualizadas, a 22.5 não). Corrigido no fechamento da 164. (b) **O teste `validadesNoDiaLocal` tem um buraco de 3 h por mês** (Fase 2 I1 da
+   164): o HOJE sai do mês de Brasília real, e das 21h à meia-noite do último dia de cada mês o `date('now')` (UTC) cai no mesmo mês de HOJE —
+   uma sabotagem de mês por `date('now')` passaria vazia nessa janela. As chaves de mês da 163 são provadas pela `dedupeChave` com instante
+   fixo, então o risco é baixo; registrado, não mexido (a 164 calcula HOJE do mês UTC real).
 
 ## Próxima tarefa detalhada — Etapa 164
 
