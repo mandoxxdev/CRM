@@ -263,7 +263,7 @@ test('[RN-05a] o motivo da nao venda pelo efetivo', async () => {
   assert.strictEqual((await linhaP(id2)).status, 'rascunho');
   // a metade positiva: status e motivo juntos passam, e o motivo e gravado
   await soMudou(id2, { status: 'rejeitada', motivo_nao_venda: 'prazo' }, { status: ['rascunho', 'rejeitada'], motivo_nao_venda: [null, 'PRAZO'],
-    data_fechamento: [null, new Date().toISOString().split('T')[0]] });
+    data_fechamento: [null, require('../../services/diaLocal').hojeLocalISO()] }); // Etapa 165: o dia de Brasilia (B1056)
 });
 
 test('[RN-05b] o desconto acima de 5% pela margem gravada: so o status nao fura a aprovacao', async () => {
@@ -283,7 +283,7 @@ test('[RN-05b] o desconto acima de 5% pela margem gravada: so o status nao fura 
 });
 
 test('[RN-05c] a data de fechamento automatica pelo efetivo', async () => {
-  const hoje = new Date().toISOString().split('T')[0];
+  const hoje = require('../../services/diaLocal').hojeLocalISO(); // Etapa 165: o dia de Brasilia (B1056)
   const id = await novaProposta();
   await soMudou(id, { status: 'aprovada' }, { status: ['rascunho', 'aprovada'], data_fechamento: [null, hoje] });
   await run("UPDATE propostas SET data_fechamento = '2026-01-02' WHERE id = ?", [id]);
@@ -459,7 +459,7 @@ test('[RN-15] o numero, a revisao e o responsavel so entram na gravacao quando m
 });
 
 // ── Fase 5, revisor de sabotagem (r3): cada cenario nomeia as sabotagens sobreviventes que ele derruba ──
-const hoje = () => new Date().toISOString().split('T')[0];
+const hoje = () => require('../../services/diaLocal').hojeLocalISO(); // Etapa 165: o dia de Brasilia (B1056)
 test('[X01 P03,P18] rejeitada com motivo: PUT {status: rejeitada} sem motivo -> 200 e o motivo gravado fica', async () => {
   const id = await novaProposta();
   await run("UPDATE propostas SET status = 'rejeitada', motivo_nao_venda = 'CARO', data_fechamento = '2026-01-02' WHERE id = ?", [id]);

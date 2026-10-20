@@ -67,4 +67,53 @@ function instanteDoBancoNoFuso(valor) {
   }).format(d);
 }
 
-module.exports = { hojeLocalISO, inicioDoMesLocalISO, inicioDoPeriodoLocalISO, modificadorDoFuso, instanteDoBancoNoFuso };
+/**
+ * Etapa 165 (RN-165.05, B1056): `'AAAA-MM-DD'` + `n` dias de calendario (`Date.UTC`, sem o `TZ` do processo). `n` que nao e inteiro
+ * finito, dia que nao e `AAAA-MM-DD` valido ou resultado fora do calendario (ano < 1 ou > 9999) -> `null`.
+ */
+const RE_SO_DATA = /^(\d{4})-(\d{2})-(\d{2})$/;
+function somarDiasISO(dia, n) {
+  const m = typeof dia === 'string' ? RE_SO_DATA.exec(dia) : null;
+  if (!m || !Number.isInteger(n)) return null;
+  const base = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  if (Number.isNaN(base.getTime()) || base.toISOString().slice(0, 10) !== dia) return null;
+  const d = new Date(base.getTime() + n * 86400000);
+  if (Number.isNaN(d.getTime()) || d.getUTCFullYear() < 1 || d.getUTCFullYear() > 9999) return null;
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Etapa 165 (RN-165.06, B1057): a data do banco como `'DD/MM/AAAA'` no dia de Brasilia — a capa do documento da proposta. Antes era
+ * `new Date(v).toLocaleDateString('pt-BR')`: o `'AAAA-MM-DD HH:MM:SS'` UTC lido como hora LOCAL (a proposta criada das 21h a meia-noite
+ * imprimia o dia seguinte) e o `'AAAA-MM-DD'` como meia-noite UTC (a vespera em UTC-3).
+ *   - `'AAAA-MM-DD'` valido -> so reformatado (sem fuso);
+ *   - `'AAAA-MM-DD HH:MM:SS'` valido (o `CURRENT_TIMESTAMP`, UTC) -> o dia de Brasilia;
+ *   - ISO com `T` (com `Z`/deslocamento: o instante; sem: a hora do processo, o `new Date` de sempre) -> o dia de Brasilia;
+ *   - data impossivel, ano < 1900, vazio, nulo, nao texto, lixo -> `''` (Fase 2 M11).
+ */
+function dataDoBancoBR(valor) {
+  if (typeof valor !== 'string') return '';
+  const v = valor.trim();
+  const br = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+  if (RE_SO_DATA.test(v)) {
+    const ok = somarDiasISO(v, 0);
+    return ok && Number(v.slice(0, 4)) >= 1900 ? br(v) : '';
+  }
+  let d = null;
+  if (RE_INSTANTE_DO_BANCO.test(v)) {
+    d = new Date(`${v.replace(' ', 'T')}Z`);
+    if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 19).replace('T', ' ') !== v) return '';
+  } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v)) {
+    d = new Date(v);
+    // a data impossivel com T: o V8 rola ('2026-02-30T10:00Z' -> marco); o prefixo tem de ser um dia de verdade
+    if (Number.isNaN(d.getTime()) || !somarDiasISO(v.slice(0, 10), 0)) return '';
+  } else {
+    return '';
+  }
+  if (d.getUTCFullYear() < 1900) return '';
+  return br(hojeLocalISO(d));
+}
+
+module.exports = {
+  hojeLocalISO, inicioDoMesLocalISO, inicioDoPeriodoLocalISO, modificadorDoFuso, instanteDoBancoNoFuso, somarDiasISO, dataDoBancoBR,
+};

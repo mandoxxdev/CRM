@@ -117,6 +117,8 @@ const run = (sql, p = []) => new Promise((res, rej) => banco.run(sql, p, functio
 const all = (sql, p = []) => new Promise((res, rej) => banco.all(sql, p, (e, r) => (e ? rej(e) : res(r))));
 const ctx = { n: 0, lembrete: {} };
 const { temModuloComoATela } = require('../../services/portaoDasPropostas');
+// Etapa 165 (B1054): o lembrete "de hoje" e o do dia de Brasilia — o sino deixou de comparar com o DATE('now') do SQLite (o dia UTC)
+const HOJE_BRT = () => require('../../services/diaLocal').hojeLocalISO();
 
 const NEGADO_LISTAS = { error: 'Acesso negado ao módulo', modulo: MODULOS_DAS_LISTAS };
 const LOG_LISTAS = (n) => [{ modulo: 'comercial|almoxarifado|operacional', nome_modulo: 'Comercial ou Almoxarifado ou Operacional', n }];
@@ -259,7 +261,7 @@ test('[RN-154.01/02, C353, C363] quem nenhuma tela das listas admite (so Engenha
     const log = await negados(b.id);
     if (JSON.stringify(log) !== JSON.stringify(LOG_LISTAS(CHAMADAS_DAS_LISTAS().length))) errados.push(`${k} log: ${JSON.stringify(log)}`);
     // o lembrete dele existe no banco (a metade que prova que o [] escondeu alguma coisa)
-    const tem = await all("SELECT id FROM propostas WHERE id = ? AND responsavel_id = ? AND DATE(lembrete_data) = DATE('now')", [ctx.lembrete[k], b.id]);
+    const tem = await all("SELECT id FROM propostas WHERE id = ? AND responsavel_id = ? AND DATE(lembrete_data) = ?", [ctx.lembrete[k], b.id, HOJE_BRT()]);
     if (tem.length !== 1) errados.push(`${k}: o preparo nao tem o lembrete dele`);
   }
   assert.deepStrictEqual(errados, []);
@@ -274,7 +276,7 @@ test('[RN-154.01/02, C353, C363] quem nenhuma tela das listas admite (so Engenha
   assert.deepStrictEqual(await negados(v.id), [], 'o vendedor tomou acesso negado');
   // Fase 5 r3 A3: o recorte do usuario tem duas metades — a proposta que outro criou e atribuiu a ele, e a que ele criou e atribuiu a outro
   const adminId = (await all('SELECT id FROM usuarios WHERE email = ?', [SEED.email]))[0].id;
-  const ins = (resp, criador, num) => run("INSERT INTO propostas (cliente_id, numero_proposta, titulo, status, valor_total, responsavel_id, created_by, created_at, lembrete_data, lembrete_mensagem) VALUES (?, ?, 'cruzada 154', 'rascunho', 1, ?, ?, datetime('now'), DATE('now'), 'cruzada')", [ctx.cliente, num, resp, criador]);
+  const ins = (resp, criador, num) => run("INSERT INTO propostas (cliente_id, numero_proposta, titulo, status, valor_total, responsavel_id, created_by, created_at, lembrete_data, lembrete_mensagem) VALUES (?, ?, 'cruzada 154', 'rascunho', 1, ?, ?, datetime('now'), ?, 'cruzada')", [ctx.cliente, num, resp, criador, HOJE_BRT()]);
   const atribuida = (await ins(v.id, adminId, 'E154-ATRIB')).lastID;
   const criada = (await ins(adminId, v.id, 'E154-CRIADA')).lastID;
   try {
@@ -496,8 +498,8 @@ test('[RN-154.01/02] SQLITE_BUSY ao ler as permissoes: 503 nas listas (portao:pr
     assert.strictEqual((await all('SELECT is_superadmin FROM usuarios WHERE id = ?', [ctx.u.roleAdmin.id]))[0].is_superadmin, 0, 'o role admin do cenario nao pode ser super');
     // cada um com uma proposta dele com lembrete para hoje (por fora: o formulario da proposta nao e o assunto)
     for (const [k, u] of Object.entries(ctx.u)) {
-      const r = await run("INSERT INTO propostas (cliente_id, numero_proposta, titulo, status, valor_total, responsavel_id, created_by, created_at, lembrete_data, lembrete_mensagem) VALUES (?, ?, ?, 'rascunho', 1540, ?, ?, datetime('now'), DATE('now'), ?)",
-        [ctx.cliente, `E154-${u.nome}`, `Proposta 154 de ${u.nome}`, u.id, u.id, `ligar para o cliente (${u.nome})`]);
+      const r = await run("INSERT INTO propostas (cliente_id, numero_proposta, titulo, status, valor_total, responsavel_id, created_by, created_at, lembrete_data, lembrete_mensagem) VALUES (?, ?, ?, 'rascunho', 1540, ?, ?, datetime('now'), ?, ?)",
+        [ctx.cliente, `E154-${u.nome}`, `Proposta 154 de ${u.nome}`, u.id, u.id, HOJE_BRT(), `ligar para o cliente (${u.nome})`]);
       ctx.lembrete[k] = r.lastID;
     }
     for (const u of Object.values(ctx.u)) await logar(u);

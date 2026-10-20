@@ -32,7 +32,7 @@ function migrarAceitaParaAprovada() {
     if (err && /no such table/i.test(String(err.message))) return;
     if (err) return console.error('❌ Erro ao migrar propostas aceitas:', err.message);
     if (!linhas || !linhas.length) return;
-    const hoje = new Date().toISOString().split('T')[0];
+    const hoje = diaLocal.hojeLocalISO(); // Etapa 165 (RN-165.05, B1056): o dia de Brasilia (antes o UTC: das 21h, amanha)
     db.run(
       `UPDATE propostas SET status = 'aprovada', data_fechamento = COALESCE(data_fechamento, ?),
          updated_at = CURRENT_TIMESTAMP WHERE status = 'aceita'`,
@@ -7524,7 +7524,7 @@ app.post('/api/propostas', authenticateToken, exigirComercialNasPropostas, (req,
 
   let dataFechamentoFinal = data_fechamento || null;
   if (!dataFechamentoFinal && (status === 'aprovada' || status === 'rejeitada')) {
-    dataFechamentoFinal = new Date().toISOString().split('T')[0];
+    dataFechamentoFinal = diaLocal.hojeLocalISO(); // Etapa 165 (RN-165.05, B1056): o dia de Brasilia (antes o UTC)
   }
   const probabilidadeFinal = probabilidade != null && probabilidade !== '' ? parseInt(probabilidade, 10) : 50;
 
@@ -7817,7 +7817,7 @@ app.put('/api/propostas/:id', authenticateToken, exigirComercialNasPropostas, (r
     // Data de fechamento: ausente mantém a gravada; vazia com o status efetivo aprovada/rejeitada vira hoje (o de sempre).
     let dataFechamentoFinal = (tem('data_fechamento') ? data_fechamento : propostaAtual.data_fechamento) || null;
     if (!dataFechamentoFinal && (tem('status') || tem('data_fechamento')) && (statusEf === 'aprovada' || statusEf === 'rejeitada')) {
-      dataFechamentoFinal = new Date().toISOString().split('T')[0];
+      dataFechamentoFinal = diaLocal.hojeLocalISO(); // Etapa 165 (RN-165.05, B1056): o dia de Brasilia (antes o UTC)
     }
     const gravarDataFechamento = tem('data_fechamento') || dataFechamentoFinal !== (propostaAtual.data_fechamento || null);
 
@@ -8478,7 +8478,7 @@ app.post('/api/propostas/:id/aceitar', authenticateToken, exigirComercialNasProp
       // data_fechamento acompanha, do mesmo jeito que o PUT ja faz ao mudar para aprovada.
       // COALESCE para nao sobrescrever uma data que alguem tenha informado a mao.
       `UPDATE propostas SET status = 'aprovada', data_fechamento = COALESCE(data_fechamento, ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-      [new Date().toISOString().split('T')[0], id],
+      [diaLocal.hojeLocalISO(), id], // Etapa 165 (RN-165.05, B1056): o dia de Brasilia (antes o UTC)
       (errUpdate) => {
         if (errUpdate) return res.status(500).json({ error: errUpdate.message });
         registrarStatusProposta(id, statusAnterior, 'aprovada', userId, observacao || 'Proposta aprovada', () => {});
@@ -8856,11 +8856,14 @@ app.post('/api/propostas/gerar-automatica', authenticateToken, exigirComercialNa
       }
 
       // Validade: usar data enviada ou calcular a partir de validade_dias
+      // Etapa 165 (RN-165.05, B1056): hoje de Brasilia + N dias de calendario (antes `setDate` no TZ do processo e `toISOString`: das
+      // 21h, hoje + N + 1). N lido como antes (`parseInt || 15`, o negativo vale); fora de +-36 500 dias -> 15 (antes o `toISOString`
+      // lancava dentro deste callback e a requisicao ficava sem resposta — Fase 2 I4).
       let validadeFinal = outrosDados.validade || null;
       if (!validadeFinal && outrosDados.validade_dias) {
-        const d = new Date();
-        d.setDate(d.getDate() + (parseInt(outrosDados.validade_dias, 10) || 15));
-        validadeFinal = d.toISOString().split('T')[0];
+        let nDias = parseInt(outrosDados.validade_dias, 10) || 15;
+        if (Math.abs(nDias) > 36500) nDias = 15;
+        validadeFinal = diaLocal.somarDiasISO(diaLocal.hojeLocalISO(), nDias);
       }
 
       const oportunidadeIdFinal = outrosDados.oportunidade_id != null && outrosDados.oportunidade_id !== '' ? parseInt(outrosDados.oportunidade_id, 10) : null;
@@ -9171,23 +9174,10 @@ app.get('/api/propostas/:id/premium', authenticateToken, exigirComercialNasPropo
         const total = totalDoDocumento(itensArray, proposta.valor_total);
         
         // Formatar data
-        let dataEmissao = '';
-        try {
-          if (proposta.created_at) {
-            dataEmissao = new Date(proposta.created_at).toLocaleDateString('pt-BR');
-          }
-        } catch (e) {
-          console.error('Erro ao formatar data de emissão:', e);
-        }
-        
-        let dataValidade = '';
-        try {
-          if (proposta.validade) {
-            dataValidade = new Date(proposta.validade).toLocaleDateString('pt-BR');
-          }
-        } catch (e) {
-          console.error('Erro ao formatar data de validade:', e);
-        }
+        // Etapa 165 (RN-165.06, B1057): a emissao no dia de Brasilia do instante de criacao (antes o `created_at` UTC lido como hora
+        // local: a proposta criada das 21h a meia-noite imprimia o dia seguinte); a validade (nao impressa) sem fuso.
+        const dataEmissao = diaLocal.dataDoBancoBR(proposta.created_at);
+        const dataValidade = diaLocal.dataDoBancoBR(proposta.validade);
         
         // Validar dados antes de gerar HTML
         if (!proposta.numero_proposta) {
@@ -9465,12 +9455,9 @@ app.get('/api/propostas/:id/pdf', authenticateToken, exigirComercialNasPropostas
     }, 0);
     const total = totalDoDocumento(itensArray, proposta.valor_total);
     
-    let dataEmissao = '';
-    let dataValidade = '';
-    try {
-      if (proposta.created_at) dataEmissao = new Date(proposta.created_at).toLocaleDateString('pt-BR');
-      if (proposta.data_validade) dataValidade = new Date(proposta.data_validade).toLocaleDateString('pt-BR');
-    } catch (e) {}
+    // Etapa 165 (RN-165.06, B1057): a mesma conta do /premium (a coluna `data_validade` nao existe em `propostas` — era sempre vazio)
+    const dataEmissao = diaLocal.dataDoBancoBR(proposta.created_at);
+    const dataValidade = diaLocal.dataDoBancoBR(proposta.validade);
     const totais = { subtotal, icms, ipi, total, dataEmissao, dataValidade };
     
     const familiaTemplateCandidate = proposta.familia_produto || (itens && itens[0] && itens[0].familia_produto) || null;
@@ -14108,7 +14095,7 @@ app.post('/api/aprovacoes', authenticateToken, exigirComercialNasPropostas, (req
                       tituloAtividade,
                       descricaoAtividade,
                       'aprovacao_desconto',
-                      new Date().toISOString().split('T')[0],
+                      diaLocal.hojeLocalISO(), // Etapa 165 (RN-165.05, B1056): o dia de Brasilia (antes o UTC)
                       'alta',
                       'pendente',
                       aprovador.id,
@@ -15284,15 +15271,10 @@ app.get('/api/atividades', authenticateToken, exigirComercialNasPropostas, (req,
         'lembrete' as tipo,
         'lembrete' as origem,
         CASE
-          WHEN DATE(pr.lembrete_data) < DATE('now') THEN 'alta'
-          WHEN DATE(pr.lembrete_data) = DATE('now') THEN 'alta'
+          WHEN DATE(pr.lembrete_data) <= ? THEN 'alta'
           ELSE 'media'
         END as prioridade,
-        CASE
-          WHEN DATE(pr.lembrete_data) < DATE('now') THEN 'pendente'
-          WHEN DATE(pr.lembrete_data) = DATE('now') THEN 'pendente'
-          ELSE 'pendente'
-        END as status_lembrete
+        'pendente' as status_lembrete
       FROM propostas pr
       LEFT JOIN clientes c ON pr.cliente_id = c.id
       LEFT JOIN usuarios u ON pr.responsavel_id = u.id
@@ -15301,15 +15283,16 @@ app.get('/api/atividades', authenticateToken, exigirComercialNasPropostas, (req,
 
     // Se "todos" foi solicitado, buscar lembretes de todos os usuários
     // Caso contrário, se há responsavel_id, filtrar por ele, senão filtrar pelo usuário logado
-    let lembreteParams = [];
+    // Etapa 165 (RN-165.02, B1054): o 1o `?` e o hoje de Brasilia (coluna so de data — sem modificador); antes `DATE('now')`, o dia UTC
+    const lembreteParams = [diaLocal.hojeLocalISO()];
     if (todos) {
       // Buscar todos os lembretes (sem filtro de usuário) - não adiciona nada à query
     } else if (responsavel_id) {
       lembreteQuery += ' AND (pr.responsavel_id = ? OR pr.created_by = ?)';
-      lembreteParams = [responsavel_id, responsavel_id];
+      lembreteParams.push(responsavel_id, responsavel_id);
     } else {
       lembreteQuery += ' AND (pr.responsavel_id = ? OR pr.created_by = ?)';
-      lembreteParams = [userId, userId];
+      lembreteParams.push(userId, userId);
     }
 
     db.all(lembreteQuery, lembreteParams, (err, lembretesRows) => {
@@ -17348,7 +17331,7 @@ app.get('/api/dashboard/avancado', authenticateToken, exigirComercialNasProposta
       pr.lembrete_mensagem,
       pr.status,
       CASE 
-        WHEN pr.lembrete_data IS NOT NULL AND DATE(pr.lembrete_data) <= DATE('now') THEN 1
+        WHEN pr.lembrete_data IS NOT NULL AND DATE(pr.lembrete_data) <= ? THEN 1
         ELSE 0
       END as lembrete_vencido
     FROM propostas pr
@@ -17356,7 +17339,7 @@ app.get('/api/dashboard/avancado', authenticateToken, exigirComercialNasProposta
     WHERE pr.lembrete_data IS NOT NULL
       AND (pr.responsavel_id = ? OR pr.created_by = ?)
     ORDER BY pr.lembrete_data ASC
-  `, [userId, userId], (err, rows) => {
+  `, [diaLocal.hojeLocalISO(), userId, userId], (err, rows) => { // Etapa 165 (RN-165.03, B1054): o hoje de Brasilia (antes DATE('now'), o dia UTC)
     if (!err) dados.cotacoesComLembrete = rows || [];
     checkComplete();
   });
@@ -17374,6 +17357,8 @@ app.get('/api/notificacoes', authenticateToken, filtrarNotificacoesPorModulo, (r
   }
   
   // Buscar lembretes de propostas do usuário
+  // Etapa 165 (RN-165.01, B1054): o hoje de Brasilia, lido uma vez (antes DATE('now'), o dia UTC); coluna so de data, sem modificador
+  const hoje = diaLocal.hojeLocalISO();
   db.all(`
     SELECT 
       pr.id,
@@ -17385,23 +17370,23 @@ app.get('/api/notificacoes', authenticateToken, filtrarNotificacoesPorModulo, (r
       pr.lembrete_mensagem,
       'lembrete_proposta' as tipo,
       CASE
-        WHEN pr.lembrete_data IS NOT NULL AND DATE(pr.lembrete_data) < DATE('now') THEN 'vencido'
-        WHEN pr.lembrete_data IS NOT NULL AND DATE(pr.lembrete_data) = DATE('now') THEN 'hoje'
+        WHEN pr.lembrete_data IS NOT NULL AND DATE(pr.lembrete_data) < ? THEN 'vencido'
+        WHEN pr.lembrete_data IS NOT NULL AND DATE(pr.lembrete_data) = ? THEN 'hoje'
         ELSE 'futuro'
       END as prioridade
     FROM propostas pr
     LEFT JOIN clientes c ON pr.cliente_id = c.id
     WHERE pr.lembrete_data IS NOT NULL
       AND (pr.responsavel_id = ? OR pr.created_by = ?)
-      AND DATE(pr.lembrete_data) <= DATE('now', '+7 days')
-    ORDER BY 
-      CASE 
-        WHEN DATE(pr.lembrete_data) < DATE('now') THEN 1
-        WHEN DATE(pr.lembrete_data) = DATE('now') THEN 2
+      AND DATE(pr.lembrete_data) <= date(?, '+7 days')
+    ORDER BY
+      CASE
+        WHEN DATE(pr.lembrete_data) < ? THEN 1
+        WHEN DATE(pr.lembrete_data) = ? THEN 2
         ELSE 3
       END,
       pr.lembrete_data ASC
-  `, [userId, userId], (err, rows) => {
+  `, [hoje, hoje, userId, userId, hoje, hoje, hoje], (err, rows) => {
     if (err) {
       console.error('❌ Erro ao buscar notificações:', err);
       return res.status(500).json({ error: err.message });
@@ -18047,6 +18032,7 @@ app.get('/api/dashboard/vendas', authenticateToken, exigirComercialNasPropostas,
   });
 
   // 4. Previsão de fechamento - Propostas enviadas com validade próxima
+  const hojePrevisao = diaLocal.hojeLocalISO(); // Etapa 165 (RN-165.04): lido uma vez
   db.all(`
     SELECT 
       p.id,
@@ -18058,17 +18044,20 @@ app.get('/api/dashboard/vendas', authenticateToken, exigirComercialNasPropostas,
       p.probabilidade,
       c.razao_social as cliente_nome,
       u.nome as responsavel_nome,
-      julianday(p.validade) - julianday('now') as dias_restantes
+      julianday(date(p.validade)) - julianday(?) as dias_restantes
     FROM propostas p
     LEFT JOIN clientes c ON p.cliente_id = c.id
     LEFT JOIN usuarios u ON p.responsavel_id = u.id
-    WHERE p.status = 'enviada' 
+    WHERE p.status = 'enviada'
       AND ${sqlPropostaAtivaAlias('p')}
       AND p.validade IS NOT NULL
-      AND julianday(p.validade) >= julianday('now')
+      AND julianday(p.validade) >= julianday(?)
     ORDER BY p.validade ASC
     LIMIT 20
-  `, [], (err, rows) => {
+  `, [hojePrevisao, hojePrevisao], (err, rows) => {
+    // Etapa 165 (RN-165.04, B1055): dias de calendario ate a validade contra o hoje de Brasilia (antes `julianday('now')`: fracionario —
+    // um a menos das 9h a meia-noite — e a proposta que vale ate hoje sumia desde as 21h da vespera). Por `julianday`, nao por texto: a
+    // validade em texto livre continua fora (Fase 2 I5).
     if (!err) {
       dados.pipeline.previsaoFechamento = (rows || []).map(row => ({
         id: row.id,
