@@ -1,19 +1,27 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-20 (Etapa 164) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-20 (Etapa 165) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163 e 164) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164 e 165) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-20 (Etapa 164 ENTREGUE · próxima: Etapa 165)
+> ## Onde o desenvolvimento está — 2026-10-20 (Etapa 165 ENTREGUE · próxima: Etapa 166)
 >
-> **O desenvolvimento parou aqui: Etapa 164 fechada — 2026-10-20.** A **Etapa 164 (os vencimentos de Frotas e do Financeiro no dia de
+> **O desenvolvimento parou aqui: Etapa 165 fechada — 2026-10-20.** A **Etapa 165 (os lembretes, a validade e a data de emissão das
+> propostas no dia de Brasília; consertos técnicos no Comercial, sem regra de acesso nova e sem mudar data já gravada)**: à noite (depois das
+> 21h) o sino não mostra mais como *Vencido* o lembrete de hoje nem como *Hoje* o de amanhã, e as datas que a proposta grava (o fechamento, a
+> validade do *Gerar proposta*, a atividade de aprovação) são as de hoje; a proposta criada à noite imprime a data de emissão do dia em que foi
+> criada (**muda a reimpressão** das antigas criadas à noite — B1057); o dia inteiro, a *Previsão de Fechamento* mostra a proposta que vale
+> até hoje e conta os dias certos, e as telas mostram o lembrete e a validade no dia gravado (no calendário, no dia certo) e a hora de criação
+> no relógio de Brasília. Nenhuma consulta nova antes do deploy. **Próxima: Etapa 166** — ver a próxima tarefa no plano da 165.
+>
+> **Etapa 164, 2026-10-20.** A **Etapa 164 (os vencimentos de Frotas e do Financeiro no dia de
 > Brasília; consertos técnicos, sem regra de acesso nova e sem mexer em dinheiro gravado)**: no painel de Frotas, o documento (a CNH, a
 > revisão) que vence hoje aparece *"0 dia(s) restantes"* — não mais *"Vencido há 1 dia(s)"* em vermelho, o dia inteiro —, e à noite os
 > alertas, a lista de documentos vencendo e os cartões (*Checklists hoje*, *Manutenção vencida*, *Combustível no mês*) olham o dia de hoje;
 > os formulários de Frotas abrem com a data de hoje; a tela do Financeiro mostra as datas no dia gravado (não na véspera), o painel não
 > conta como vencida a conta que vence hoje, e o *Lucro Líquido* não some mais. Nenhuma consulta nova antes do deploy. **Próxima: Etapa
-> 165** — ver a próxima tarefa no plano da 164.
+> 165** — ver a próxima tarefa no plano da 164. *(Próxima, na época: Etapa 165 — entregue acima.)*
 >
 > **Etapa 163, 2026-10-20.** A **Etapa 163 (a atividade editada e as validades no dia de Brasília;
 > consertos técnicos no Operacional e no Almoxarifado, sem regra de acesso nova)**: salvar uma atividade de colaborador grava só o que foi
@@ -6788,6 +6796,48 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 165 — Os lembretes, a validade e a data de emissão das propostas no dia de Brasília (ENTREGUE — 2026-10-20)
+
+**O que mudou, em uma frase:** no Comercial, o lembrete e a validade da proposta contam o dia de Brasília e aparecem no dia gravado (não na
+véspera), e a capa do documento imprime a data de emissão do dia em que a proposta foi criada.
+
+**O problema que ela resolve.** (1) Das 21h à meia-noite, o sino mostrava o lembrete de hoje como *Vencido* e o de amanhã como *Hoje*; as
+datas que a proposta grava saíam com amanhã; e a proposta criada nesse horário imprimia a data de emissão do dia seguinte. (2) O dia
+inteiro, a *Previsão de Fechamento* escondia a proposta que vale até hoje e contava um dia a menos; as telas mostravam a véspera de todo
+lembrete e validade (no calendário, no dia anterior; no gráfico *Tendências Mensais*, o mês anterior); e *Criada em* e *Enviada em* saíam 3 h
+adiantados.
+
+| Antes | Agora |
+|---|---|
+| Às 22h, no sino: o lembrete de hoje em *Vencido*, o de amanhã em *Hoje* | Hoje em *Hoje*; amanhã em *Próximos 7 dias* |
+| *Previsão de Fechamento*: a proposta que vale até hoje não aparecia; a de amanhã dizia *"0 dias restantes"* | A de hoje com *0*; a de amanhã com *1* |
+| Às 22h, a *Data de fechamento* preenchida ao marcar ganha/perdida: amanhã | Hoje |
+| Proposta criada às 22h: a capa dizia a data de emissão do dia seguinte | O dia da criação |
+| Lembrete de 20/10 nas Atividades e no painel: *19/10/2026*; no calendário, no dia 19 | *20/10/2026*; no dia 20 |
+| Detalhe da proposta: *Criada em* 3 h adiantado | A hora de Brasília |
+
+**Roteiro de teste (10 minutos — os passos 1 a 4 a qualquer hora; 5 e 6 depois das 21h).**
+
+1. **A previsão.** Faça login com um usuário do Comercial. Gere uma proposta pelo **Gerar proposta** com *Validade (dias)* = 1 e envie-a.
+   No painel do **Comercial**, aba **Vendas**, em *Previsão de Fechamento*, ela aparece com *"1 dias restantes"*, *Urgente* e *"Validade:
+   <amanhã>"* — a qualquer hora do dia. No dia seguinte, a mesma proposta aparece com *"0 dias restantes"* (antes ela sumia da lista).
+2. **O lembrete nas telas.** Abra uma proposta sua, ponha um lembrete para hoje e salve. Em **Comercial → Atividades**, o cartão diz
+   *"Lembrete para: <hoje>"*; clique nele: a janela diz *"Data do Lembrete: <hoje>"*. Mude para **Calendário**: o lembrete está no dia de hoje.
+   No painel do Comercial, a tabela de lembretes mostra a data de hoje.
+3. **O sino.** No painel do Comercial, o sino mostra o lembrete de hoje em *Hoje*, contando no número vermelho; um de ontem, em *Vencido*.
+4. **A hora da proposta.** No detalhe de uma proposta, *Criada em* mostra a hora de Brasília em que ela foi criada.
+5. **À noite, o sino e o fechamento.** Depois das 21h, o lembrete de hoje continua em *Hoje* (não em *Vencido*) e o de amanhã não conta no
+   número do sino. Abra uma proposta, troque o *Status* para *Aprovada (ganha)*: a *Data de fechamento* vem com hoje.
+6. **À noite, a data de emissão.** Depois das 21h, crie uma proposta e abra o **Preview**: a capa diz *"Data de Emissão: <hoje>"*.
+
+**O que esta etapa NÃO cobre.** As janelas por mês dos relatórios do Comercial (**C413**); o código sem uso que ainda mostraria a véspera
+(**C414**); o marcador da data no texto da proposta (**C415**). O lembrete de hoje continua *Vencido* no painel e *Hoje* no sino (de antes —
+produto). Nenhuma porta de permissão mudou; nenhuma data já gravada mudou; o documento só mudou na data de emissão.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (as rotas pelo servidor de verdade no fuso
+universal com o relógio adiantado para as 22h de Brasília, o preview e o PDF gerados de verdade; as telas em jsdom com o relógio parado às
+22h30) provam, escrito para você conferir à mão. Commits `5cdaec48`, `0431c949` e `4155d11d` (a correção da revisão).
 
 ## Etapa 164 — Os vencimentos de Frotas e do Financeiro no dia de Brasília (ENTREGUE — 2026-10-20)
 

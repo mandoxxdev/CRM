@@ -7013,9 +7013,28 @@ O sistema guarda o instante de cada registro no horário universal (três horas 
   a pagar* do painel são as pendentes ou parciais com vencimento **antes** de hoje; a receita do gráfico soma as recebidas e as pendentes com
   vencimento até hoje; o *Período* *Este Mês*, *Este Trimestre* e *Este Ano* das listas começa no dia 1 do mês, do trimestre e do ano de
   Brasília; e as datas (vencimento, pagamento, recebimento, fluxo de caixa) aparecem no dia gravado, na tela e na planilha.
+- **No Comercial,** o lembrete e a validade da proposta são datas sem hora e contam o *hoje* de Brasília:
+  - no **sino** do painel do Comercial, o lembrete de antes de hoje sai *Vencido*, o de hoje sai *Hoje* (os dois contam no número vermelho)
+    e os de amanhã até hoje + 7 saem *Próximos 7 dias*; os de depois não aparecem. A lista vem na ordem da data;
+  - nas **Atividades**, o lembrete até hoje tem prioridade *ALTA* e os outros *MEDIA*; na tabela de lembretes do painel, o lembrete até hoje
+    (inclusive o de hoje) sai *⚠️ Vencido*, os outros *✓ OK*;
+  - a **Previsão de Fechamento** (painel do Comercial, aba Vendas) mostra até 20 propostas *enviadas* com validade a partir de hoje, na
+    ordem da validade; os *"N dias restantes"* são a validade menos hoje, em dias de calendário (hoje = 0), e o selo é *Urgente* até 7 dias,
+    *Atenção* até 15 e *Normal* acima. A probabilidade é a gravada na proposta; sem ela, 80% (até 7 dias), 60% (até 15) ou 40%;
+  - as datas que a proposta grava sozinha são as de hoje: a *Data de fechamento* preenchida ao marcar a proposta como *Aprovada (ganha)* ou
+    *Perdida / Rejeitada* (no formulário, ao salvar sem data e no *Aceitar*); a validade do **Gerar proposta** (hoje + os dias de *Validade
+    (dias)*: o número é lido até a primeira casa não numérica — *7,9* vale 7 —, zero ou texto sem número valem 15, o campo vazio deixa a proposta sem validade, e mais de 36 500 dias valem
+    15); e a data da atividade *Aprovação de Desconto* do aprovador;
+  - a **Data de Emissão** impressa na capa do documento da proposta (preview e PDF) é o dia, em Brasília, em que a proposta foi criada — a
+    proposta criada às 22h sai com a data desse dia, em qualquer reimpressão. A validade não é impressa no documento;
+  - as telas mostram o lembrete e a validade no dia gravado (o sino, as Atividades — cartão, janela do lembrete e calendário, onde o lembrete
+    fica no dia dele às 9h —, a tabela de lembretes, a previsão), o mês certo no gráfico *Tendências Mensais*, e a *Criada em*, a *Enviada em*
+    e os históricos da proposta na hora de Brasília. Um lembrete com data ilegível aparece *-*, vai para o fim da lista e não entra no
+    calendário.
 - **Ainda pelo horário universal:** os indicadores do painel antigo do Operacional (OEE, manutenção e inspeções do dia), que nenhum menu
-  abre; e, no Comercial, a prioridade dos lembretes das propostas e as propostas *a vencer* do painel de vendas — entre 21h e meia-noite, o
-  "hoje" delas é o de amanhã.
+  abre; e, no Comercial, as janelas por mês dos relatórios (a evolução de 6 meses e os clientes sem proposta há 90 dias do *Relatório
+  Executivo*, as propostas dos últimos 90 dias das *Visitas Técnicas*, o histórico de 12 meses do painel): a proposta criada entre 21h e
+  meia-noite do último dia do mês conta no mês seguinte.
 - O deslocamento usado é o atual do horário de Brasília (três horas, sem horário de verão).
 
 ### 22.6 A lista mostra o último filtro pedido

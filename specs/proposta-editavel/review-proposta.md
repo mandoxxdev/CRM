@@ -115,6 +115,16 @@
     e `[{ descricao: {} }]` faziam o `PUT` nunca responder; e o histórico de itens
     (`diffItensParaLog`) pareia pelo mesmo `parearItens` da armadilha 19.
 
+21. **A Data de Emissão da capa é o dia de Brasília do `created_at`** (Etapa 165, B1057). O `/premium` e o `/pdf` montam
+    `totais.dataEmissao` (e a `dataValidade`, que o template **não imprime**) por `diaLocal.dataDoBancoBR` — uma função só para as
+    duas rotas. **Nunca volte a `new Date(created_at).toLocaleDateString('pt-BR')`**: o `CURRENT_TIMESTAMP` é UTC sem fuso e o
+    `new Date` o lê como hora **local** — a proposta criada das 21h à meia-noite imprimia o dia seguinte. A data impressa mudou para essas
+    propostas, **inclusive na reimpressão** (o PDF é sempre regerado, `sempreRegenerarParaPdf`); a revisão desta etapa registrou isso na
+    letra B. O `/pdf` lia `proposta.data_validade`, coluna que não existe em `propostas` — agora lê `validade` (continua não impressa). O
+    marcador `{{proposal.date}}` relê a emissão `DD/MM/AAAA` com `new Date` e a troca (C415, de antes — não mexido). Testes:
+    `tests/api/lembretesEValidadeDasPropostasNoDiaLocal.api.test.js` (o preview e o retrato gravado pelo `/pdf`, com o relógio nas 22h de
+    Brasília, e uma guarda no fonte de que as duas rotas usam a função).
+
 ## Como rodar a validação (obrigatório antes de merge)
 
 ```bash
@@ -168,6 +178,7 @@ cd server && node tests/api/osModeloContratoPortao.api.test.js    # Etapa 148: o
 cd server && node tests/api/familiasListaOsPortao.api.test.js    # Etapa 149: o portão no cadastro de família (as famílias que o template lê) e na lista de OS (C343, C345)
 cd server && node tests/api/produtosGruposVariaveisPortao.api.test.js  # Etapa 150: o portão nos produtos e nas variáveis técnicas que a proposta lê (C346, C347)
 cd server && node tests/api/clientesProjetosPortao.api.test.js   # Etapa 151: o portão nos clientes, projetos e oportunidades que a proposta lê (C349)
+cd server && node tests/api/lembretesEValidadeDasPropostasNoDiaLocal.api.test.js  # Etapa 165: a Data de Emissão da capa no dia de Brasília (B1057, armadilha 21)
 ```
 
 Critério: **tudo verde**. Qualquer invariante quebrado bloqueia o merge. *(De julho à Etapa 138 a revisão rodava com dois vermelhos

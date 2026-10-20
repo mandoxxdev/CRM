@@ -292,7 +292,11 @@ datas fixas (`2025-01-01`, `2025-06-01`) e só confere `totalVeiculos`/`custoTot
    por coincidência de ids" da 163) e as réguas antigas vizinhas (km, situação) sem massa.
 3. **Paralelismo:** **0** galhos de código em paralelo; **1** revisor na Fase 2, **3** em paralelo na Fase 5 (o r3 na worktree própria, 48
    sabotagens) — **0** incidente de trava, **0** retrabalho.
-4. **Defeito que escapou:** *(preencher na Etapa 165)*.
+4. **Defeito que escapou:** *(preenchido na Etapa 165)* **nenhum de código** — a 165 não achou régua de Frotas ou do Financeiro errada.
+   **Escapou na medição:** o aviso **C410**, escrito por esta etapa "de passagem", estava **incompleto** — falava só da janela das 21h e da
+   véspera no painel; a 165 achou a previsão de fechamento errada **o dia inteiro**, as datas **gravadas** no dia universal e a **data de
+   emissão impressa** no documento da proposta. O "medido de passagem, não a fundo" estava declarado; a lição é não estimar o efeito ("das 21h")
+   de uma régua que não foi lida linha a linha.
 
 ## Próxima tarefa detalhada — Etapa 165
 

@@ -11,14 +11,23 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-20):** **Etapa 164 fechada** (consertos técnicos em Frotas e no Financeiro, sem regra de acesso
+> **Onde o desenvolvimento está (2026-10-20):** **Etapa 165 fechada** (consertos técnicos no Comercial, sem regra de acesso nova e sem
+> mudar valor gravado antes; **os lembretes, a validade, as datas gravadas e a data de emissão das propostas no dia de Brasília** — o sino, as
+> Atividades e o painel classificam o lembrete pelo dia de Brasília (**B1054**); a previsão de fechamento mostra a proposta que vale até hoje e
+> conta os dias de calendário (**B1055**, o dia inteiro); a data de fechamento, a validade gerada e a atividade de aprovação gravam o dia de
+> Brasília (**B1056**); **a capa do documento da proposta imprime a data de emissão do dia em que ela foi criada** (**B1057** — muda a data
+> impressa das propostas criadas das 21h à meia-noite, inclusive na reimpressão); as telas do Comercial mostram o lembrete e a validade no dia
+> gravado, não na véspera, e a hora de criação/envio no relógio de Brasília (**B1058**) — **C410** resolvido; os avisos novos **C413** (as
+> janelas por mês dos relatórios do Comercial), **C414** (código sem uso com a véspera) e **C415** (o marcador da data no texto da
+> proposta)); a próxima é a **166** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 164 fechada** (consertos técnicos em Frotas e no Financeiro, sem regra de acesso
 > nova e sem mexer em dinheiro gravado; **os vencimentos de Frotas e do Financeiro no dia de Brasília** — os alertas, a lista de documentos
 > vencendo e os cartões do painel de Frotas contam o dia de Brasília (**B1046**), os dias restantes deixam de sair um a menos o dia inteiro (o
 > documento que vence hoje não aparece mais *"Vencido há 1 dia(s)"* e crítico — **B1047**), os formulários de Frotas abrem com a data de hoje
 > (**B1048**), o painel e o *Período* do Financeiro contam o calendário de Brasília (**B1049**), as datas da tela do Financeiro aparecem no dia
 > gravado, não na véspera (**B1050**), e o lucro do painel do Financeiro não some mais (**B1052**) — **C409** resolvido; os avisos novos **C410**
 > (os lembretes e a validade das propostas), **C411** (a lista do Financeiro não marca as vencidas) e **C412** (a revisão antiga continua
-> alertando)); a próxima é a **165** — ver "Onde estamos e o que vem a seguir".
+> alertando)); a próxima era a **165**.)*
 > *(Antes: **Etapa 163 fechada** (consertos técnicos no Operacional e no Almoxarifado, sem regra de
 > acesso nova; **a atividade editada e as validades no dia de Brasília** — o PUT de uma atividade de colaborador grava só o que veio (não
 > reabre a concluída nem apaga o fim e as horas — **C407** resolvido, **B1040**); a calibração, o empréstimo, o lote, a remessa e as chaves dos
@@ -3951,7 +3960,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B1053; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B1059; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -11559,6 +11568,56 @@ lembretes e na validade das propostas — **C410**). As decisões que esperam vo
 pedindo um olhar; a **B1013** (o acento nas buscas); a **C398** (o filtro *Status* dos Materiais); a **C408** (a edição de atividades); a
 **C411** (marcar as vencidas na lista do Financeiro) e a **C412** (qual revisão de Frotas vale); a **B1046** a **B1052** são reversíveis.
 
+**B1054 (NOVA, da Etapa 165; do Comercial) — os lembretes das propostas no dia de Brasília (o sino, as Atividades e o painel).**
+**Escolhido:** a prioridade do lembrete no sino (*Vencido* = antes de hoje, *Hoje* = hoje, *Próximos 7 dias* = até hoje + 7), nas
+**Atividades** (*ALTA* = até hoje, senão *MEDIA*) e na tabela de lembretes do **painel** (o alerta *Vencido* = até hoje) comparam com o hoje de
+Brasília. **Muda das 21h à meia-noite:** o lembrete de hoje volta a sair *Hoje* no sino (antes *Vencido*); o de amanhã sai *Próximos 7 dias* e
+deixa de contar no número vermelho do sino (antes *Hoje*); o de daqui a 8 dias sai do sino; nas Atividades o lembrete de amanhã sai *MEDIA*
+(antes *ALTA*, com a borda grossa no calendário); no painel, o de amanhã deixa de sair vencido. **Não muda (de antes, produto):** as telas
+já discordavam sobre o lembrete de **hoje** — o painel o marca *Vencido*, o sino diz *Hoje*, as estatísticas das Atividades dizem *Prestes a
+vencer*. **Descartado:** só o sino (as três telas leriam dias diferentes para o mesmo lembrete). **Reversível:** `5cdaec48`.
+
+**B1055 (NOVA, da Etapa 165; do Comercial) — a previsão de fechamento do painel de vendas no calendário de Brasília, o dia inteiro.**
+**Escolhido:** a lista *Previsão de Fechamento* mostra as propostas enviadas com validade **a partir de hoje**, e os *"N dias restantes"* são
+dias de calendário até a validade. **Muda o dia inteiro, não só à noite:** a conta antiga usava o instante de agora contra a meia-noite
+universal da validade — a proposta que vale até **hoje** sumia da lista desde as **21h da véspera** (nunca aparecia no próprio dia), e das
+9h à meia-noite os dias restantes saíam **um a menos** (a que vale até amanhã dizia *0 dias*). Agora a de hoje aparece com *"0 dias
+restantes"* e *Urgente*; a de amanhã, *1*. A probabilidade padrão (só para a proposta sem probabilidade gravada — o formulário grava 50, então
+quase nunca) usa o mesmo número. Uma validade em texto livre (dado antigo) continua fora da lista. **Descartado:** corrigir só a janela das
+21h. **Reversível:** `5cdaec48`.
+
+**B1056 (NOVA, da Etapa 165; do Comercial) — as datas que as propostas gravam, no dia de Brasília.** **Escolhido:** a *Data de fechamento*
+preenchida ao marcar a proposta como ganha ou perdida (no formulário, no salvamento sem data, no *Aceitar* e na conversão das antigas
+*aceitas* ao subir o sistema), a validade da proposta do **Gerar proposta** (hoje + os dias de validade, em dias de calendário) e a data da
+atividade *Aprovação de Desconto* do aprovador são o dia de Brasília. Os dias de validade são lidos como antes (*7,9* vale 7; *0* ou
+texto sem número valem 15; o campo vazio deixa sem validade; o negativo continua valendo — validade no passado) e um número absurdo (mais de 100 anos) vale 15. **Muda das 21h à
+meia-noite:** grava hoje (antes amanhã); a validade gerada é hoje + N (antes hoje + N + 1); e o número absurdo, que deixava o *Gerar
+proposta* **sem resposta**, gera a proposta com 15 dias. **Nenhuma data já gravada muda.** **Descartado:** recusar o número absurdo com erro
+(recusa nova); corrigir as datas antigas (não dá para saber se foram gravadas depois das 21h). **Reversível:** `5cdaec48`, `0431c949`.
+
+**B1057 (NOVA, da Etapa 165; do Comercial) — a data de emissão do documento da proposta no dia de Brasília. MUDA A DATA IMPRESSA.**
+**Escolhido:** a *Data de Emissão* da capa (no **Preview** e no **PDF**) é o dia, em Brasília, em que a proposta foi criada. **Muda:** a conta
+antiga lia a hora de criação (guardada no horário universal) como se fosse a de Brasília: a proposta **criada das 21h à meia-noite**
+imprimia o **dia seguinte**. Agora imprime o dia da criação — **e isso vale também para reimprimir uma proposta antiga**: o PDF regerado de uma
+proposta criada às 22h sai com a data de emissão **um dia antes** da que foi enviada ao cliente. As criadas das 0h às 21h não mudam. Uma data
+de criação ilegível imprime *—* (antes *Invalid Date*). A validade **não** é impressa no documento (como antes). **Descartado:** congelar a
+data das propostas já enviadas (exigiria guardar a emissão — mudança de produto e de banco); imprimir a validade (produto). **Reversível:**
+`5cdaec48`, `4155d11d`.
+
+**B1058 (NOVA, da Etapa 165; do Comercial) — as datas das telas do Comercial no dia gravado e as horas no relógio de Brasília.**
+**Escolhido:** o lembrete (no sino, nas **Atividades** — cartão, janela do lembrete e calendário —, e na tabela de lembretes do painel), a
+validade da *Previsão de Fechamento*, a atividade de aprovação e o mês do gráfico *Tendências Mensais* aparecem no dia (e no mês) gravado; a
+*Criada em*, a *Enviada em* e os dois históricos da proposta mostram a hora de Brasília. **Muda o dia inteiro:** no Brasil, essas telas
+mostravam **a véspera** (e o gráfico, o **mês anterior**: outubro aparecia *set.*); no calendário, o lembrete ia para o **dia anterior** e o de
+hoje saía escuro, como vencido; a hora de criação e de envio saía **3 h adiantada** (das 21h à meia-noite, no dia seguinte). Um lembrete com
+data ilegível deixa de derrubar a página das Atividades (aparece *-*, vai para o fim e sai do calendário). **Descartado:** formatar no
+servidor (muda o formato de várias respostas). **Reversível:** `0431c949`, `4155d11d`.
+
+**B1059 (NOVA, da Etapa 165) — a próxima etapa (166).** Ver a "próxima tarefa detalhada" no plano da Etapa 165. As decisões que esperam
+vocês: as da **B957**, a **B988** e a **B989**; a **B1002** continua pedindo um olhar; a **B1013** (o acento nas buscas); a **C398**; a
+**C408**; a **C411** e a **C412**; **a B1057 em especial** (a data de emissão reimpressa muda para as propostas criadas à noite); a **B1054** a
+**B1058** são reversíveis.
+
 **B898 (NOVA, da Etapa 138) — a próxima etapa (139).** Ver a "próxima tarefa detalhada" no plano da Etapa 138. A **B853** (com a
 **C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
@@ -14962,8 +15021,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      cartões de vencidas e o filtro de período. O texto abaixo fica como registro.)* Os vencimentos de Frotas (documentos, manutenções, multas) e do Financeiro ainda
      comparam a data sem hora com o dia universal: das 21h à meia-noite, o que vence hoje já aparece vencido. **O que fazer:** à noite, ler
      esses vencimentos como os do dia seguinte. Candidata a uma etapa futura (medir as telas antes).
-410. **NOVO (da medição da Etapa 164; do Comercial, anterior a ela; lido no código, não medido a fundo) — os lembretes e a validade das
-     propostas no dia universal.** A prioridade do lembrete de proposta no sino de notificações (*vencido*/*hoje*) e as propostas *a vencer*
+410. **✅ RESOLVIDO NA ETAPA 165 (B1054 a B1058; `5cdaec48`, `0431c949`, `4155d11d`) — NOVO (da medição da Etapa 164; do Comercial,
+     anterior a ela; lido no código, não medido a fundo) — os lembretes e a validade das propostas no dia universal.** *(O sino, as
+     Atividades, o painel e a previsão contam o dia de Brasília, e as telas mostram o dia gravado. **Isto estava incompleto:** falava só da
+     janela das 21h e da véspera no painel; a medição da 165 achou a previsão de fechamento errada **o dia inteiro** (a proposta que vale até
+     hoje sumia, e os dias restantes saíam um a menos), as datas **gravadas** no dia universal (o fechamento, a validade gerada, a atividade de
+     aprovação), a **data de emissão impressa** no documento (o dia seguinte para a proposta criada à noite) e a véspera em mais seis telas. O
+     texto abaixo fica como registro.)* A prioridade do lembrete de proposta no sino de notificações (*vencido*/*hoje*) e as propostas *a vencer*
      do painel de vendas comparam com o dia universal: das 21h à meia-noite, o lembrete de hoje já aparece *vencido*. E a data do lembrete no
      painel aparece na véspera, o dia inteiro (a mesma conta da tela do Financeiro antes desta etapa). **O que fazer:** à noite, ler esses
      lembretes como os do dia seguinte. Candidata à Etapa 165.
@@ -14975,6 +15039,19 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      revisão e o cartão *Manutenção vencida* leem **todas** as manutenções com próxima revisão marcada, sem olhar se já houve uma revisão mais
      nova para o mesmo veículo: registrada a revisão nova, a antiga continua no alerta (e crítica, se a data passou). **O que fazer:** apagar a
      data de próxima revisão da manutenção antiga ao registrar a nova. Qual revisão vale é pergunta de produto.
+413. **NOVO (da medição da Etapa 165; do Comercial, anterior a ela; lido no código) — as janelas por mês dos relatórios do Comercial no
+     horário universal.** A evolução dos últimos 6 meses e os clientes sem proposta há 90 dias do **Relatório Executivo**, as propostas dos
+     últimos 90 dias das **Visitas Técnicas**, o histórico de 12 meses do painel e os atalhos de período do painel contam pelo horário
+     universal: a proposta criada das 21h à meia-noite do último dia do mês conta no mês seguinte, e a borda das janelas anda 3 h. **O que
+     fazer:** nada no dia a dia (o efeito é de uma noite por mês). Candidata a uma etapa futura (muda o desenho dos gráficos por mês).
+414. **NOVO (da medição da Etapa 165; do Comercial, anterior a ela; lido no código) — código sem uso que ainda mostra a véspera.** Uma tela
+     antiga de propostas, um formulário antigo de proposta, um gerador de PDF do navegador e um modelo antigo do documento continuam no
+     código, sem nenhum menu ou chamada que os abra, e leem a data como antes (a véspera). **O que fazer:** nada — se algum for religado,
+     trocar antes a leitura da data.
+415. **NOVO (da revisão do plano da Etapa 165; do Comercial, anterior a ela; reproduzido por sonda) — o marcador da data no texto da
+     proposta.** Quem escreve uma cláusula usando o marcador da data da proposta (`{{proposal.date}}`) recebe uma data errada: a data de
+     emissão é relida no formato americano (*05/10/2026* sai *10/05/2026*) ou sai *Invalid Date* (*20/10/2026*). Nenhum texto padrão usa o
+     marcador. **O que fazer:** não usar o marcador; escrever a data à mão. Consertar é uma etapa própria (muda o texto do documento).
 ### D. Limitações declaradas— são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -16306,6 +16383,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(165) Os lembretes e a validade das propostas, o que ficou de fora.** As janelas por mês dos relatórios do Comercial (**C413**); o
+  código sem uso (**C414**); o marcador da data no texto da proposta (**C415**). A ordem do sino e a ordem *vencidos primeiro* das Atividades
+  não mudaram de efeito (a ordem pela data já as dava — declarado). As telas continuam discordando sobre o lembrete de hoje (*Vencido* no
+  painel, *Hoje* no sino — produto). O tempo médio de fechamento do painel de vendas compara a data de fechamento (sem hora) com o instante de
+  criação — um viés de meio dia, de antes; a data de fechamento gravada das 21h à meia-noite passa a contar um dia a menos nele. O lembrete
+  gravado com hora (só pela integração) conta pelo dia escrito nele. A data de emissão já impressa em PDFs enviados não é congelada (**B1057**).
+  Nenhuma porta de permissão mudou; nenhum valor gravado antes mudou.
 - **(164) Os vencimentos de Frotas e do Financeiro, o que ficou de fora.** Os lembretes e a validade das propostas (**C410**); a situação
   *vencido* na lista do Financeiro (**C411**); a revisão antiga que continua alertando (**C412**). O mês fora de 1 a 12 no painel do Financeiro
   continua aceito como antes (o 13 dá um painel vazio). Uma data gravada com hora e fuso (só possível pela integração) é contada pelo dia que
@@ -17393,6 +17477,14 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(165) Nenhum clique foi dado no navegador, e a regra das 21h só foi provada com o relógio adiantado.** As rotas foram provadas pelo
+servidor de verdade (em pasta vazia, no fuso universal e com o relógio adiantado para as 22h de Brasília do último dia do mês seguinte); o
+documento da proposta, pelo preview e pelo PDF gerados de verdade (a capa lida no documento); as telas, em jsdom no fuso de Brasília com o
+relógio parado às 22h30. Vale conferir à mão: **a qualquer hora**, no painel do **Comercial → Vendas**, uma proposta enviada com validade
+**hoje** aparece em *Previsão de Fechamento* com *"0 dias restantes"*; nas **Atividades**, um lembrete de hoje aparece *"Lembrete para:
+<hoje>"* e, no **Calendário**, no dia de hoje (não no de ontem); no detalhe da proposta, *Criada em* mostra a hora de Brasília. **Depois das
+21h:** no sino, o lembrete de hoje está em *Hoje* (não em *Vencido*); uma proposta criada agora sai com a data de emissão de hoje no preview.
 
 **(164) Nenhum clique foi dado no navegador, e a regra das 21h só foi provada com o relógio adiantado.** As rotas foram provadas pelo
 servidor de verdade (em pasta vazia, no fuso universal e com o relógio adiantado para as 22h de Brasília do último dia do mês seguinte, de modo
@@ -32964,9 +33056,69 @@ listas começa no dia 1 do mês corrente.
 - A lista do Financeiro não marca as vencidas (**C411**) e a revisão antiga de Frotas continua alertando (**C412**) — produto.
 - Nenhuma porta de permissão mudou; nenhum valor de dinheiro gravado, baixa ou pagamento mudou.
 
+## Etapa 165 — Os lembretes, a validade e a data de emissão das propostas no dia de Brasília (2026-10-20)
+
+Uma etapa de **consertos técnicos** no Comercial, sem regra de acesso nova e sem mudar nenhuma data já gravada. O lembrete e a validade da
+proposta são datas sem hora, e o sistema as comparava com o dia universal (3 h à frente de Brasília): **das 21h à meia-noite**, o sino já
+mostrava como *Vencido* o lembrete de hoje e como *Hoje* o de amanhã, as datas gravadas (o fechamento, a validade gerada, a atividade de
+aprovação) saíam com amanhã, e a proposta criada à noite imprimia **a data de emissão do dia seguinte** no documento. E, **o dia inteiro**, a
+*Previsão de Fechamento* escondia a proposta que vale até hoje e contava um dia a menos, as telas mostravam a **véspera** de todo lembrete e
+validade (no calendário, o lembrete ia para o dia anterior; no gráfico, o mês anterior), e a hora de criação e de envio da proposta saía 3 h
+adiantada. Agora tudo conta o dia de Brasília e mostra o dia gravado.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Às 22h, no sino: o lembrete de hoje em *Vencido*, o de amanhã em *Hoje* (contando no número vermelho) | Hoje em *Hoje*; amanhã em *Próximos 7 dias* — **B1054** |
+| Às 22h, nas Atividades: o lembrete de amanhã *ALTA*; no painel, *Vencido* | *MEDIA*; não vencido — **B1054** |
+| *Previsão de Fechamento*: a proposta que vale até hoje não aparecia (desde as 21h da véspera); a de amanhã dizia *"0 dias restantes"* (das 9h à meia-noite) | A de hoje aparece com *0* e *Urgente*; a de amanhã, *1* — **B1055** |
+| Às 22h, marcar a proposta como ganha/perdida, *Aceitar* ou *Gerar proposta* gravava a data de amanhã (e a validade gerada, hoje + N + 1) | Hoje (e hoje + N) — **B1056** |
+| *Gerar proposta* com um número absurdo de dias de validade: ficava sem resposta | Gera com 15 dias — **B1056** |
+| Proposta criada às 22h: a capa do documento dizia a data de emissão do dia seguinte (em toda reimpressão) | O dia em que foi criada — **B1057** |
+| O lembrete de 20/10 aparecia *19/10/2026* no sino, nas Atividades e no painel; a validade da previsão também; no calendário, no dia 19 | *20/10/2026*; no calendário, no dia 20 — **B1058** |
+| *Tendências Mensais*: outubro rotulado *set.* | *out.* — **B1058** |
+| Detalhe da proposta: *Criada em* e *Enviada em* 3 h adiantados (às 22h, o dia seguinte) | A hora de Brasília — **B1058** |
+| Um lembrete com data ilegível derrubava a página das Atividades | Aparece *-*, vai para o fim e sai do calendário — **B1058** |
+
+### As regras, com o cenário exato
+
+**1. O sino (B1054).** No **Comercial**, abra uma proposta sua e ponha um lembrete para **hoje**. No sino do painel do Comercial, ele aparece
+com o rótulo *Hoje* e conta no número vermelho; com lembrete para ontem, *Vencido* (com o ícone de alerta); para amanhã até daqui a 7 dias,
+*Próximos 7 dias* (sem contar no número); daqui a 8 dias, não aparece. Às 22h vale o mesmo.
+
+**2. As Atividades e o painel (B1054, B1058).** Em **Comercial → Atividades**, o lembrete de hoje aparece *"Lembrete para: <hoje>"* com o selo
+*ALTA*; o de amanhã, *MEDIA*. No calendário, o lembrete fica no dia dele, às 9h. Na tabela de lembretes do painel, o de hoje e o de ontem
+aparecem com *⚠️ Vencido* (como antes — é o painel que chama o de hoje de vencido).
+
+**3. A previsão de fechamento (B1055).** No painel do Comercial, aba **Vendas**, uma proposta *enviada* com validade hoje aparece em
+*Previsão de Fechamento* com *"0 dias restantes"*, *Urgente* e *"Validade: <hoje>"*; com validade daqui a 8 dias, *"8 dias restantes"* e
+*Atenção*; daqui a 16, *Normal*. A de ontem não aparece.
+
+**4. As datas gravadas (B1056).** Às 22h, abra uma proposta, troque o *Status* para *Aprovada (ganha)* (ou *Perdida / Rejeitada*): o campo *Data de fechamento*
+se preenche com **hoje**. No **Gerar proposta** com *Validade (dias)* = 15, a proposta nasce com validade daqui a 15 dias.
+
+**5. A data de emissão (B1057).** Crie uma proposta às 22h e abra o **Preview**: a capa diz *"Data de Emissão: <hoje>"* — e o PDF, o mesmo.
+
+### O que esta etapa NÃO cobre
+
+- As janelas por mês dos relatórios do Comercial (**C413**), o código sem uso (**C414**) e o marcador da data no texto da proposta (**C415**).
+- O lembrete de hoje continua *Vencido* no painel e *Hoje* no sino (de antes — produto).
+- Nenhuma porta de permissão mudou; nenhuma data já gravada mudou; o documento da proposta só mudou na data de emissão.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 165 entregue (2026-10-20):** **os lembretes, a validade e a data de emissão das propostas no dia de Brasília** (consertos técnicos
+  no Comercial, sem regra de acesso nova e sem mudar data já gravada). O sino, as Atividades e o painel classificam o lembrete pelo dia de
+  Brasília (**B1054**); a previsão de fechamento mostra a de hoje e conta dias de calendário (**B1055**); as datas gravadas no dia de Brasília
+  (**B1056**); a data de emissão impressa é a do dia da criação (**B1057** — muda a reimpressão das criadas à noite); as telas no dia gravado e
+  na hora de Brasília (**B1058**) — **C410** resolvido. Commits `5cdaec48`, `0431c949` e `4155d11d` (a correção da revisão). **O que é seu:** as
+  decisões **B1054** a **B1058** (reversíveis — **a B1057 pede um olhar**); os avisos novos **C413**, **C414** e **C415**; as perguntas de
+  antes (**B949**, **B910**, **B853**, **B924**, **B926**, **B988**, **B989**, **B1013**, **C277**, **C312**, **C314**, **C316**, **C330**,
+  **C398**, **C408**, **C411**, **C412**); as limitações **(165)** em D e a verificação **(165)** em F. Nenhuma consulta nova antes do deploy.
+  **Próxima: Etapa 166 — ver a "próxima tarefa detalhada" no plano da Etapa 165.**
 
 - **Etapa 164 entregue (2026-10-20):** **os vencimentos de Frotas e do Financeiro no dia de Brasília** (consertos técnicos, sem regra de
   acesso nova e sem mexer em dinheiro gravado). Os alertas, a lista e o painel de Frotas contam o dia de Brasília (**B1046**) e os dias
@@ -32976,7 +33128,7 @@ listas começa no dia 1 do mês corrente.
   (reversíveis); os avisos novos **C410** (propostas — a próxima), **C411** e **C412** (produto); as perguntas de antes (**B949**, **B910**,
   **B853**, **B924**, **B926**, **B988**, **B989**, **B1013**, **C277**, **C312**, **C314**, **C316**, **C330**, **C398**, **C408**); as limitações
   **(164)** em D e a verificação **(164)** em F. Nenhuma consulta nova antes do deploy.
-  **Próxima: Etapa 165 — ver a "próxima tarefa detalhada" no plano da Etapa 164.**
+  *(Próxima, na época: Etapa 165 — entregue acima.)*
 
 - **Etapa 163 entregue (2026-10-20):** **a atividade editada e as validades no dia de Brasília** (consertos técnicos no Operacional e no
   Almoxarifado, sem regra de acesso nova). Salvar uma atividade grava só o que veio (**B1040** — **C407**); a calibração, o empréstimo, o lote,
