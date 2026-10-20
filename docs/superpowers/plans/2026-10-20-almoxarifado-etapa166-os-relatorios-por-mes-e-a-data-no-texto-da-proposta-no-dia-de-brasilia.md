@@ -140,7 +140,7 @@ nos dois jeitos; não mudam. `coordenadasPrazo.api.test.js:305` — as visitas p
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 (tronco, servidor) — as réguas (RN-166.01 a .05) e o marcador (RN-166.07).** `index.js` e `propostaCompositionEngine.js`.
+- [x] **T1 (tronco, servidor) — as réguas (RN-166.01 a .05) e o marcador (RN-166.07).** — `f7246f0e` (Fase 5: `89569d20`). `index.js` e `propostaCompositionEngine.js`.
   Teste novo `server/tests/api/relatoriosPorMesDoComercialNoDiaLocal.api.test.js` pelo `index.js` real em pasta vazia (o molde da 165:
   filho com `TZ=UTC` e `relogioAdiantado` nas **22h de Brasília do último dia do mês seguinte ao mês UTC real**, pulando dezembro; HOJE
   (Brasília), HOJE+1 (o dia UTC do JS, e o 1º do mês seguinte) e o `date('now')` do SQLite (o real, semanas antes) são três dias
@@ -180,7 +180,7 @@ nos dois jeitos; não mudam. `coordenadasPrazo.api.test.js:305` — as visitas p
   `05/<mês>/<ano>` (e não `<mês>/05`) no texto, **igual** à *Data de Emissão* da capa do mesmo HTML. `tests/filtroDashboard.test.js` passa
   a injetar o `diaLocal` no `new Function` e a esperar o modificador; entra na bateria (`node tests/filtroDashboard.test.js` — fora dos
   `npm run`, Fase 2 M8) com controle positivo.
-- [ ] **T2 (galho, navegador) — os atalhos (RN-166.05) e a *Última Proposta* (RN-166.06).** `Dashboard.js` (`ATALHOS_PERIODO` com
+- [x] **T2 (galho, navegador) — os atalhos (RN-166.05) e a *Última Proposta* (RN-166.06).** — `a69b4e74` (Fase 5: `89569d20`). `Dashboard.js` (`ATALHOS_PERIODO` com
   `hojeLocalISO`), `Relatorios.js` (`formatarDataDoBanco` nas duas *Última Proposta*; o nome do arquivo com `hojeLocalISO`), `ModalGrafico.js` (o nome do PNG
   com `hojeLocalISO`, Fase 2 M7). **Só entra depois da T1** (Fase 2 M9: o *Até* = hoje com o servidor no dia UTC é a regressão que o B1061
   descarta). Teste novo
@@ -192,7 +192,7 @@ nos dois jeitos; não mudam. `coordenadasPrazo.api.test.js:305` — as visitas p
   `31/10/2026`, *Nunca* e `-`. O PDF dos *Relatórios* (jsPDF) **não** é exercitado — a mesma função nas duas células (guarda no fonte: o
   `toLocaleDateString` sobre `ultima_proposta` não volta, e nenhum `toISOString` no `Relatorios.js` nem no `ModalGrafico.js` — os nomes dos
   arquivos). Molde: `datasDoComercialNoDiaLocal.test.js`.
-- [ ] **T3 (integração — cruza as réguas novas; mora no arquivo da T1):** o **mesmo** E1 (criado às 22h30 de HOJE) é lido no mês de HOJE pela
+- [x] **T3 (integração — cruza as réguas novas; mora no arquivo da T1):** — `f7246f0e`. o **mesmo** E1 (criado às 22h30 de HOJE) é lido no mês de HOJE pela
   evolução do Relatório Executivo, pelas Tendências Mensais e pelo painel filtrado em HOJE; e o `/premium` dele imprime a mesma data na
   capa e no texto da cláusula escrita pela rota — cada asserção na fonte dela, sem atalho.
 
@@ -219,3 +219,120 @@ nos dois jeitos; não mudam. `coordenadasPrazo.api.test.js:305` — as visitas p
 - **C417 (novo)** — as colunas `clientes`/`projetos` das *Tendências Mensais* contam ids misturados das três tabelas (o mesmo número nas
   duas), e o painel chama de *receita* a contagem de aprovadas.
 - Tudo o que depende do P.O. (a lista do fim do plano da 165).
+
+## Execução — o que divergiu do plano
+
+- **Reproduzido antes do conserto:** o teste novo do servidor contra o `index.js` de `ddfae1ce`: **7 de 9** cenários caem (os 2 verdes: a
+  guarda e a massa). Depois do conserto: 9/9. No cliente, com os três arquivos de `ddfae1ce`: **3 de 5** caem (a guarda e o controle das 0h30
+  passam nos dois, de propósito — às 0h30 o dia UTC e o local coincidem).
+- **O `heredoc` do Bash desta máquina come a contrabarra:** o primeiro script que escreveu o `dataDaProposta` deixou `/^d{2}/d{2}/d{4}$/`
+  (a mesma família do bug que o `filtroDashboard.test.js` documenta). Achado na hora pelo `grep` e corrigido com o Edit; os scripts
+  seguintes foram gravados com o Write. Nenhum commit levou a regex quebrada.
+- **Controle positivo da T1 (`scratchpad/e166/sabota.js`, `sabota-t1.txt`):** 22 sabotagens — o `strftime` sem o modificador, o WHERE
+  texto contra texto, o `date('now')` e o hoje UTC, em cada uma das quatro consultas; o `<=` do *visitar*; o filtro sem o modificador, só
+  num ramo e só no fim; o marcador com a conta antiga, o `created_at` lido como local, sem o ramo `DD/MM/AAAA` e sem o fallback —
+  **22/22 caíram pela asserção do cenário delas**, md5 restaurado. As S20–S22 (o marcador) caem só no unitário: a rota manda sempre
+  `DD/MM/AAAA`, e por ela o fallback é equivalente.
+- **Paralelismo 0** (a T2 era galho, mas tinha de entrar **depois** da T1 — Fase 2 M9; o condutor fez em sequência). **Testes antigos
+  mudados: 1** (`tests/filtroDashboard.test.js`: o `new Function` recebe o `diaLocal`, as strings ganham o modificador e a borda das 22h30
+  de 28/02 entra na soma).
+
+## Fase 5 — revisão adversarial (três revisores frescos, em paralelo)
+
+- **r1 (regra) — 0 Critical/Important; 2 Minor reproduzidos, declarados (sem código).** (M1) num navegador com fuso **a oeste** de
+  Brasília (Rio Branco, Manaus), das 23h (22h) à meia-noite local o atalho põe o dia local, que já é o de ontem em Brasília: a proposta
+  criada logo depois da meia-noite de Brasília fica fora até a meia-noite local (sonda `e166-r1/p3.js`) — limite na **B1061** (as telas
+  usam o dia do computador desde a 161). (M2) o `dataDaProposta` devolve como está uma emissão `'31/02/2026'` — inalcançável (a capa já
+  valida pelo `dataDoBancoBR`) — declarado em D (166). **Sem defeito:** a conta e a ordem dos `?` nas quatro consultas, o filtro com e sem
+  alias e com só um lado, os formatos de `created_at`, o fim de mês normalizado, o marcador em todos os formatos em UTC e em UTC-3.
+- **r2 (autorização) — 0 achados.** As 8 rotas com a mesma cadeia de middleware; 4 perfis × as rotas, HEAD × `ddfae1ce` pelo `index.js` real:
+  **61 combinações com o mesmo código HTTP** e os mesmos corpos (fora a ordem das chaves); o modificador interpolado na `filtroDashboardSql`
+  só pode ser `'<inteiro> minutes'` (varrido de 1900 a 2100: `-186`, `-180`, `-120`); os payloads de injeção dão o mesmo resultado nas duas
+  versões; o marcador só sai `DD/MM/AAAA` ou vazio (200 mil textos aleatórios).
+- **r3 (sabotagem, worktree própria `CRM-wt-e166-r3`) — 30 sabotagens novas: 22 caíram, 8 sobreviveram (todas falta de asserção).** N09
+  (as Tendências agrupadas pelo mês UTC com o rótulo de Brasília: o mesmo mês duas vezes no gráfico — e a N08, a mesma na Evolução, só caía
+  por acaso), N15–N18 (o contrato do marcador solto: âncoras, `trim`, a ordem emissão/`created_at`), C04 (*Este ano* às 22h30 de 31/12),
+  C12 (*Últimos 3 meses* em janeiro), C07 (os nomes do PNG e do PDF só provados pelo texto do fonte). A N06 (`'-3 hours'` literal) é
+  equivalente no banco (o Brasil sem horário de verão) e cai no unitário de string.
+- **Correção da Fase 5 (`89569d20`, só testes):** "um mês por linha" nas Tendências e na Evolução; quatro casos do marcador; os atalhos em
+  31/12 e em janeiro; o PNG pelo comportamento nos dois caminhos do modal (o SVG e o `html2canvas`) e o PDF dos Relatórios pelo jsPDF falso
+  (o nome salvo e a coluna *Última Proposta*). **Controles:** S23–S28 (as sobreviventes do servidor) **6/6 caem** (a S24 cai por uma asserção
+  anterior — a "um mês por linha" da Evolução é a mesma forma da que derruba a S23); no cliente K01–K06 **6/6 caem** (`sabota-cli.txt`), e a
+  reversão dos três arquivos derruba **7 de 10**.
+- **Fora do escopo, registrado pelo r3:** o modelo antigo do documento (`index.js` ~`:11777`, sem chamador) ainda lê a emissão vazia com
+  `new Date(created_at)` — é a **C414**.
+
+## Suítes (lidas na saída, `scratchpad/e166/`)
+
+- **Base (antes de qualquer código, `base-api.log`):** `test:api` **486/486**.
+- **Bateria 1 — antes de `f7246f0e`/`a69b4e74` (`b1-*.log`):** `test:api` **487/487** arquivos (`relatoriosPorMesDoComercialNoDiaLocal` **9/0**);
+  `test:almoxarifado` **44/0**; `test:validation`/`safealter`/`sqlite` **4/0, 3/0, 16/0**; `filtroDashboard.test.js` **27/27**; client **168**
+  suítes / **2117** testes; `CI=true build` *Compiled successfully*; revisão obrigatória da proposta **23/23** scripts com saída 0 (*"TODOS OS
+  INVARIANTES OK"*) + editor **39/39**.
+- **Bateria 2 — antes de `89569d20` (`b2-*.log`):** `test:api` **486/487** — o vermelho foi o `superPadraoNoBoot.api.test.js` (3 cenários
+  com *SQLITE_READONLY: attempt to write a readonly database* no reinício do filho; o arquivo não é tocado pela etapa, passou na bateria 1 e
+  **14/14 sozinho** logo depois, sob a trava — intermitente de ambiente); `relatoriosPorMesDoComercialNoDiaLocal` **9/0**; `test:almoxarifado`
+  **44/0**; `test:validation`/`safealter`/`sqlite` **4/0, 3/0, 16/0**; `filtroDashboard.test.js` **27/27**; client **168** suítes / **2122**
+  testes; `CI=true build` *Compiled successfully*; proposta **23/23** + editor **39/39**.
+- **Bateria 3 — o fechamento, depois de `89569d20` (`b3-*.log`; depois dela só mudaram documentos):** `test:api` **487/487** arquivos (`relatoriosPorMesDoComercialNoDiaLocal` **9/0**, `superPadraoNoBoot` **14/0**); `test:almoxarifado` **44/0**; `test:validation`/`safealter`/`sqlite` **4/0, 3/0, 16/0**; `filtroDashboard.test.js` **27/27**; client **168** suítes / **2122** testes; `CI=true build` *Compiled successfully*; revisão obrigatória da proposta **23/23** scripts com saída 0 (*"TODOS OS INVARIANTES OK"*) + editor **39/39**.
+
+## Retro (4 números)
+
+1. **Rodadas de correção até verde:** **1** — a Fase 5 (só asserções; nenhum defeito de produção). As tasks ficaram verdes na primeira
+   aplicação depois de um tropeço de harness (o `heredoc` que comeu a contrabarra da regex). **Testes antigos mudados: 1.**
+2. **Achados da revisão:** Fase 2 — **0 Critical + 4 Important + 5 Minor**, todos reais (o mais caro: a conta dos `?` — com um a menos o
+   gráfico sairia **vazio em silêncio**; e a bomba-relógio do fim de mês normalizado, que deixaria o teste vazio em fevereiro, abril e
+   setembro). Fase 5 — r1 **2** reais (declarados); r2 **0**; r3 **8** faltas de asserção reais + 1 equivalente; **0** ruído. **O que mais
+   pesou:** de novo **a prova pelo texto em vez do comportamento** (os nomes dos arquivos) e **a asserção por mapa que esconde duplicata**
+   (o `porMes`).
+3. **Paralelismo:** **0** galhos de código em paralelo (a T2 dependia da T1 — M9); **1** revisor na Fase 2, **3** em paralelo na Fase 5 (o r3
+   na worktree própria, 30 sabotagens; o r2 numa worktree temporária da base) — **0** incidente de trava, **0** retrabalho; **1** vermelho
+   intermitente de ambiente na bateria 2 (`superPadraoNoBoot`, *SQLITE_READONLY*).
+4. **Defeito que escapou:** *(preencher na Etapa 167)*.
+
+## Próxima tarefa detalhada — Etapa 167
+
+*(A série desta etapa foi B1060–B1064, C413 e C415 resolvidos, C416, C417 e C418 novos, A104 — a 167 começa em **B1065**, **C419**, **A105**;
+confira com `grep -oE` antes.)*
+
+**Escolhida: o preview editável que congela o marcador da data (C418) e a *atividade recente* da elegibilidade de viagem (C416).** Medido
+nesta etapa (não a fundo — Fase 2 I4): o `/premium?embed=1` entrega a cláusula com o `{{proposal.date}}` já resolvido, inclusive no
+`#proposalSource`; no *Salvar*, `lerClausulasDoSource` (`client/src/components/proposta/clausulasInlineEditor.js` ~`:60`) lê o texto
+resolvido, o `diffClausulas` (~`:176`) o compara com o `GET /api/propostas/:id/clausulas` (que ainda tem o marcador), acha a cláusula
+"alterada" e o `PUT` grava a data literal (`PropostaPreviewEditavel.js` ~`:1273-1325`). Caminho reversível a medir: o motor marcar o valor
+resolvido (`<span data-marcador="proposal.date">…</span>`) e o editor devolver o marcador ao ler a fonte — **ou** o servidor resolver o
+marcador só no documento final e o `embed=1` entregar o texto cru; decidir pela Fase 0 (qual dos dois não mexe na paginação — **a revisão
+obrigatória da proposta, 23 + editor 39, é critério**, e o editor 39 é o `clausulasInlineEditor.test.js`). **C416:** `GET
+/api/custos-viagens/verificar-elegibilidade/:cliente_id` (`index.js` ~`:16018`) — `new Date(MAX(created_at))` lê o instante UTC como hora
+local e conta `Math.floor` de períodos de 24 h `<= 90`; passar a dias de calendário de Brasília (`date(created_at, mod) >= date(hoje,
+'-90 days')`, o mesmo da RN-166.03) para concordar com as Visitas Técnicas; quem lê: `CustosViagens.js` (o selo da regra e os `dias`).
+**Teste:** o molde desta (`relatoriosPorMesDoComercialNoDiaLocal` — filho em TZ=UTC com o relógio nas 22h de Brasília do último dia do mês;
+bordas pelo SQLite; um registro por borda; **o comportamento, não o texto do fonte**); para a C418, o fluxo inteiro no jsdom: o preview com
+a cláusula resolvida → *Salvar* → o `PUT` leva o marcador, não a data. **Pontos de atenção:** (1) a trava de máquina; (2) `?` posicional; (3)
+nenhuma porta de permissão muda; (4) a revisão obrigatória da proposta; (5) o `heredoc` do Bash come contrabarra — scripts com regex pelo
+Write.
+
+**Dependem do P.O. — NÃO implemente:** a lista inteira do plano da 152 — **B853**/**C279**, **B808**, **B755**, **B761**/**C239**, **C224**, o
+resto da **C225**, **C228**, **C219**, **C230**, o reparo da **C246** e a **C247**, a tabela de conversões e o grupo acima de família, a régua do
+tempo de recebimento (E2), **C268**, **C269**, **C275**, **C276**, **C277**, **C109**, **C117**/**C118**, **C139**, **C278**; na 05, os itens de
+produto e a **C198**; na 06, a **B11** e a Engenharia; na 21, a valorização por cliente e previsto × realizado; na 22, **B13**, **B101**/G30,
+**G38**; no Compras, D-35, D-37, D-78, D-90, G9/G30, G4, G15, B63, B60, B62, a **C348**; nas propostas, a verificação do dono da proposta (Fase
+12 — também a **C305**), o filtro por permissão do histórico, a **B910**, a **C307**, a Frente B da lentidão, a **C297** (**B924**), a **B926**,
+a **C312**, a **C316**, a régua de quantidade da **C314**, a **B949** e a **C330**; no Operacional, a **C332**, ligar o painel antigo (*Dashboard
+MES*, **C403** — se for ligado a um menu, consertar antes a régua do dia e a consulta da manutenção) e **ligar a edição de atividades e decidir
+o que ela grava** (**C408**); do Comercial, a **C354**, a **C357**/**B988**, a **C359**/**B989** (e a **C360** junto), a **C358**, a **C383**,
+ignorar também o acento nas buscas (**B1013**, **B1019**) e o resto da **C382** (**B1016**); do núcleo, a **C362**; da 160, o filtro *Status* dos
+Materiais (**C398**) e os tipos do filtro das Movimentações e o material de cliente nos seletores das Reservas/Inspeções (**C399**); da C400,
+acrescentar a descrição da OS à busca das OPs (muda o resultado); da 162, contar os *dias em espera* em dias de calendário (**B1036** — é
+régua); da 163 (r1), validar o `referencia` das remessas como `AAAA-MM-DD` com 400 (muda o contrato da rota) e o `horas_reais: 0` gravado
+como nulo (é régua de presença); da 164, marcar as contas vencidas na lista do Financeiro (**C411**), as revisões antigas que continuam
+alertando em Frotas (**C412**) e validar o `mes` fora de 1–12 do painel do Financeiro com 400 (muda o contrato); da 165, congelar a data de
+emissão das propostas já enviadas (**B1057** — exige guardar a emissão), imprimir a validade no documento, unificar *hoje* × *vencido* do
+lembrete entre o painel, o sino e as Atividades e recusar com 400 o `validade_dias` fora de faixa (recusa nova); **desta etapa**, o que o
+gráfico *Tendências Mensais* deve contar (**C417** — as colunas *clientes*/*projetos* e a *receita*), começar as janelas dos relatórios no
+dia 1 do mês (muda a janela) e calcular os atalhos do painel no fuso de Brasília em vez do dia do computador (**B1061**, limite do r1).
+Pendem de Postgres: **C98**, **C110**.
+
+**O que já está pronto e não precisa reabrir:** o `diaLocal.js` (`hojeLocalISO`, `inicioDoMesLocalISO`, `inicioDoPeriodoLocalISO`,
+`modificadorDoFuso`, `instanteDoBancoNoFuso`, `somarDiasISO`, `dataDoBancoBR`) e o `dataLocal.js` do navegador; as réguas dos relatórios por
+mês, do filtro do painel e do marcador (`f7246f0e`, `a69b4e74`, `89569d20`).

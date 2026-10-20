@@ -7030,11 +7030,24 @@ O sistema guarda o instante de cada registro no horário universal (três horas 
   - as telas mostram o lembrete e a validade no dia gravado (o sino, as Atividades — cartão, janela do lembrete e calendário, onde o lembrete
     fica no dia dele às 9h —, a tabela de lembretes, a previsão), o mês certo no gráfico *Tendências Mensais*, e a *Criada em*, a *Enviada em*
     e os históricos da proposta na hora de Brasília. Um lembrete com data ilegível aparece *-*, vai para o fim da lista e não entra no
-    calendário.
+    calendário;
+  - os **relatórios por mês** contam o dia e o mês de Brasília em que a proposta foi criada: a *Evolução de Propostas (Últimos 6 Meses)*
+    dos **Relatórios** agrupa pelo mês de criação as propostas criadas a partir do mesmo dia de 6 meses atrás (a primeira barra é parcial);
+    *Clientes que Precisam de Visita* lista os clientes ativos sem proposta (*Última Proposta*: *Nunca*) ou cuja última proposta foi
+    criada **antes** de hoje − 90 dias (até 20, os de mais propostas primeiro); nas **Visitas Técnicas**, a regra recomendada *"Cliente teve
+    propostas nos últimos 90 dias"* passa quando o cliente tem proposta criada **a partir** de hoje − 90 dias (ela pesa na pontuação e,
+    com ela, na prioridade *Alta*/*Média*/*Baixa*); e o gráfico *Tendências Mensais* do painel agrupa pelo mês de criação os últimos 12
+    meses. A proposta criada às 22h do último dia do mês conta nesse mês. A *Última Proposta* aparece no dia de Brasília (ilegível: *-*);
+  - o **filtro do painel** (*Filtros* → *De*/*Até*) compara com o dia de Brasília em que a proposta foi criada, os dois dias incluídos; os
+    atalhos preenchem *Até* com hoje (o dia do computador) e *De* com o dia 1 do mês (*Este mês*), o dia 1 de dois meses antes (*Últimos 3
+    meses*) ou 1º de janeiro (*Este ano*). Os gráficos *Tendências Mensais* e a aba *Vendas* não usam o filtro;
+  - o marcador `{{proposal.date}}`, escrito numa cláusula da proposta, sai com a mesma data da *Data de Emissão* da capa, em
+    *DD/MM/AAAA*. O preview editável mostra a cláusula já com a data no lugar do marcador; salvar pelo preview grava a data escrita (o
+    marcador deixa de existir naquela cláusula);
+  - os arquivos baixados (o PDF dos Relatórios e o PNG de um gráfico ampliado) levam no nome a data de hoje, do computador.
 - **Ainda pelo horário universal:** os indicadores do painel antigo do Operacional (OEE, manutenção e inspeções do dia), que nenhum menu
-  abre; e, no Comercial, as janelas por mês dos relatórios (a evolução de 6 meses e os clientes sem proposta há 90 dias do *Relatório
-  Executivo*, as propostas dos últimos 90 dias das *Visitas Técnicas*, o histórico de 12 meses do painel): a proposta criada entre 21h e
-  meia-noite do último dia do mês conta no mês seguinte.
+  abre; e, no Comercial, a regra *Atividade Recente* da elegibilidade de viagem (**Custos de Viagem**), que conta 90 períodos de 24 horas
+  a partir da hora de criação da última proposta.
 - O deslocamento usado é o atual do horário de Brasília (três horas, sem horário de verão).
 
 ### 22.6 A lista mostra o último filtro pedido

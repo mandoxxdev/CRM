@@ -1,19 +1,27 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-20 (Etapa 165) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-20 (Etapa 166) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164 e 165) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165 e 166) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-20 (Etapa 165 ENTREGUE · próxima: Etapa 166)
+> ## Onde o desenvolvimento está — 2026-10-20 (Etapa 166 ENTREGUE · próxima: Etapa 167)
 >
-> **O desenvolvimento parou aqui: Etapa 165 fechada — 2026-10-20.** A **Etapa 165 (os lembretes, a validade e a data de emissão das
+> **O desenvolvimento parou aqui: Etapa 166 fechada — 2026-10-20.** A **Etapa 166 (os relatórios por mês, o filtro do painel e a data no
+> texto da proposta no dia de Brasília; consertos técnicos no Comercial, sem regra de acesso nova e sem mudar valor gravado)**: a proposta
+> criada às 22h do último dia do mês conta nesse mês na *Evolução de Propostas* dos Relatórios e nas *Tendências Mensais* do painel; os
+> *Clientes que Precisam de Visita* e a *atividade recente* das Visitas Técnicas contam os 90 dias pelo dia de Brasília; à noite, o atalho
+> *Este mês* do painel põe *Até* = hoje e o painel filtrado conta a proposta das 22h; a *Última Proposta* e os nomes dos arquivos baixados
+> saem com o dia certo; e o marcador `{{proposal.date}}` numa cláusula sai igual à data de emissão da capa (**muda o texto impresso** — B1063).
+> Uma consulta opcional antes do deploy (**A104**). **Próxima: Etapa 167** — ver a próxima tarefa no plano da 166.
+>
+> **Etapa 165, 2026-10-20.** A **Etapa 165 (os lembretes, a validade e a data de emissão das
 > propostas no dia de Brasília; consertos técnicos no Comercial, sem regra de acesso nova e sem mudar data já gravada)**: à noite (depois das
 > 21h) o sino não mostra mais como *Vencido* o lembrete de hoje nem como *Hoje* o de amanhã, e as datas que a proposta grava (o fechamento, a
 > validade do *Gerar proposta*, a atividade de aprovação) são as de hoje; a proposta criada à noite imprime a data de emissão do dia em que foi
 > criada (**muda a reimpressão** das antigas criadas à noite — B1057); o dia inteiro, a *Previsão de Fechamento* mostra a proposta que vale
 > até hoje e conta os dias certos, e as telas mostram o lembrete e a validade no dia gravado (no calendário, no dia certo) e a hora de criação
-> no relógio de Brasília. Nenhuma consulta nova antes do deploy. **Próxima: Etapa 166** — ver a próxima tarefa no plano da 165.
+> no relógio de Brasília. Nenhuma consulta nova antes do deploy. **Próxima: Etapa 166** — ver a próxima tarefa no plano da 165. *(Próxima, na época: Etapa 166 — entregue acima.)*
 >
 > **Etapa 164, 2026-10-20.** A **Etapa 164 (os vencimentos de Frotas e do Financeiro no dia de
 > Brasília; consertos técnicos, sem regra de acesso nova e sem mexer em dinheiro gravado)**: no painel de Frotas, o documento (a CNH, a
@@ -6796,6 +6804,47 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 166 — Os relatórios por mês, o filtro do painel e a data no texto da proposta no dia de Brasília (ENTREGUE — 2026-10-20)
+
+**O que mudou, em uma frase:** no Comercial, os relatórios por mês, as janelas de 90 dias e o filtro de período do painel contam o
+calendário de Brasília, e o marcador da data no texto da proposta sai igual à data de emissão da capa.
+
+**O problema que ela resolve.** (1) A proposta criada das 21h à meia-noite do último dia do mês contava no mês seguinte na *Evolução de
+Propostas* e nas *Tendências Mensais*, e a borda dos 90 dias e dos 6/12 meses andava 3 h. (2) À noite, o atalho *Este mês* do painel punha
+*Até* = amanhã, e o painel filtrado deixava de fora a proposta das 22h do dia *Até*. (3) A *Última Proposta* dos Relatórios mostrava o dia
+seguinte para a proposta criada à noite. (4) O marcador `{{proposal.date}}` numa cláusula saía *Invalid Date* (dias 13 a 31) ou com dia e
+mês trocados (dias 1 a 12).
+
+| Antes | Agora |
+|---|---|
+| Proposta criada às 22h de 31/10: em novembro na *Evolução de Propostas* e nas *Tendências Mensais* | Em outubro |
+| Às 22h, *Filtros* → *Este mês*: *Até* = amanhã | *Até* = hoje |
+| Painel filtrado em hoje: a proposta das 22h de hoje fora | Dentro |
+| *Última Proposta* da proposta criada às 22h: o dia seguinte | O dia da criação |
+| Cláusula com `{{proposal.date}}`: *Invalid Date* ou *11/05/2026* | A data da capa |
+
+**Roteiro de teste (10 minutos — os passos 1 a 3 a qualquer hora; 4 e 5 depois das 21h, de preferência no último dia do mês).**
+
+1. **O marcador.** Faça login com um usuário do Comercial. Abra uma proposta, abra o **Preview**, inclua uma cláusula com o texto
+   `Emitida em {{proposal.date}}` e salve; recarregue o preview: a cláusula diz *"Emitida em <a Data de Emissão da capa>"*. (Ao salvar de
+   novo pelo preview, a data fica escrita no lugar do marcador — C418.)
+2. **Os atalhos.** No painel do **Comercial**, clique **Filtros** → **Este mês**: *De* = dia 1 do mês, *Até* = hoje. **Últimos 3 meses**: *De*
+   = dia 1 de dois meses atrás. **Este ano**: *De* = 1º de janeiro.
+3. **Os relatórios.** Em **Comercial → Relatórios**, a *Evolução de Propostas (Últimos 6 Meses)* mostra os meses com propostas; em *Clientes
+   que Precisam de Visita*, a coluna *Última Proposta* mostra a data da última proposta de cada cliente (ou *Nunca*).
+4. **À noite, o filtro.** Depois das 21h, crie uma proposta. No painel, **Filtros** → **Este mês**: *Até* é hoje, e a proposta conta nos
+   cartões do painel.
+5. **À noite no último dia do mês, o mês.** Depois das 21h do último dia do mês, crie uma proposta: em **Relatórios**, ela conta na barra
+   deste mês da *Evolução de Propostas*; no painel, no mês de hoje das *Tendências Mensais*.
+
+**O que esta etapa NÃO cobre.** A *atividade recente* da elegibilidade de viagem (**C416**); o que o gráfico *Tendências Mensais* conta
+(**C417**); o preview editável que grava a data no lugar do marcador ao salvar (**C418** — a **A104** acha as cláusulas com *Invalid Date*).
+Nenhuma porta de permissão mudou; nenhum valor gravado mudou; o documento só mudou no texto do marcador.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (as rotas pelo servidor de verdade no fuso
+universal com o relógio adiantado para as 22h de Brasília do último dia do mês, o preview gerado de verdade; as telas em jsdom com o relógio
+parado) provam, escrito para você conferir à mão. Commits `f7246f0e`, `a69b4e74` e `89569d20` (a correção da revisão).
 
 ## Etapa 165 — Os lembretes, a validade e a data de emissão das propostas no dia de Brasília (ENTREGUE — 2026-10-20)
 

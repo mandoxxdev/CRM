@@ -11,7 +11,15 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-20):** **Etapa 165 fechada** (consertos técnicos no Comercial, sem regra de acesso nova e sem
+> **Onde o desenvolvimento está (2026-10-20):** **Etapa 166 fechada** (consertos técnicos no Comercial, sem regra de acesso nova e sem
+> mudar valor gravado; **os relatórios por mês, o filtro de período do painel e a data no texto da proposta no dia de Brasília** — a
+> *Evolução de Propostas* e os *Clientes que Precisam de Visita* do Relatório Executivo, a *atividade recente* das Visitas Técnicas e as
+> *Tendências Mensais* do painel contam o mês e a janela pelo calendário de Brasília (**B1060**); o filtro *De*/*Até* do painel e os atalhos
+> *Este mês*/*Últimos 3 meses*/*Este ano* contam o dia de Brasília (**B1061**); a *Última Proposta* dos Relatórios e os nomes dos arquivos
+> baixados no dia local (**B1062**); **o marcador da data no texto da proposta sai igual à data de emissão da capa** (**B1063** — muda o
+> texto impresso das cláusulas que usam o marcador) — **C413** e **C415** resolvidos; os avisos novos **C416**, **C417** e **C418**; a
+> consulta **A104** (opcional)); a próxima é a **167** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 165 fechada** (consertos técnicos no Comercial, sem regra de acesso nova e sem
 > mudar valor gravado antes; **os lembretes, a validade, as datas gravadas e a data de emissão das propostas no dia de Brasília** — o sino, as
 > Atividades e o painel classificam o lembrete pelo dia de Brasília (**B1054**); a previsão de fechamento mostra a proposta que vale até hoje e
 > conta os dias de calendário (**B1055**, o dia inteiro); a data de fechamento, a validade gerada e a atividade de aprovação gravam o dia de
@@ -19,7 +27,7 @@
 > impressa das propostas criadas das 21h à meia-noite, inclusive na reimpressão); as telas do Comercial mostram o lembrete e a validade no dia
 > gravado, não na véspera, e a hora de criação/envio no relógio de Brasília (**B1058**) — **C410** resolvido; os avisos novos **C413** (as
 > janelas por mês dos relatórios do Comercial), **C414** (código sem uso com a véspera) e **C415** (o marcador da data no texto da
-> proposta)); a próxima é a **166** — ver "Onde estamos e o que vem a seguir".
+> proposta)); a próxima era a **166**.)*
 > *(Antes: **Etapa 164 fechada** (consertos técnicos em Frotas e no Financeiro, sem regra de acesso
 > nova e sem mexer em dinheiro gravado; **os vencimentos de Frotas e do Financeiro no dia de Brasília** — os alertas, a lista de documentos
 > vencendo e os cartões do painel de Frotas contam o dia de Brasília (**B1046**), os dias restantes deixam de sair um a menos o dia inteiro (o
@@ -384,7 +392,11 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Cento e três itens para rodar em produção ANTES do deploy — cem são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Cento e quatro itens para rodar em produção ANTES do deploy — cento e um são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-20 (Etapa 166) de cento e três para cento e quatro**, com a **A104** — as cláusulas de proposta que usam o
+marcador da data (o texto que passa a sair certo) e as que já guardaram *Invalid Date* (**C418**). **Somente leitura, opcional:** no banco
+medido, nenhuma.)*
 
 *(**Atualizado em 2026-10-19 (Etapa 155) de cento e dois para cento e três**, com a **A103** — os produtos cujo código tem barra, `?`,
 `#`, `%` ou espaço, que as telas da OS passam a achar (**C351**). **Somente leitura, opcional:** no banco medido, nenhum.)*
@@ -3955,12 +3967,42 @@ de sempre — os usuários com permissões só de Compras, Almoxarifado ou Engen
 com uma lista criada por um desses usuários, outra por um usuário com o Comercial, e um terceiro promovido a administrador do Comercial
 com o Administrativo: a 1 achou só o primeiro; a 2 marcou o terceiro como "só as listas".)*
 
+**A104 (NOVA, da Etapa 166 — opcional — as cláusulas que usam o marcador da data da proposta).** Desde a Etapa 166 o marcador da data no
+texto da proposta (`{{proposal.date}}`) sai igual à data de emissão da capa; antes saía com dia e mês trocados (dias 1 a 12) ou *Invalid
+Date* (dias 13 a 31). A consulta **1** lista as cláusulas (de proposta e de modelo) que ainda guardam o marcador — o texto delas muda no
+próximo preview ou PDF. A **2** lista as cláusulas de proposta que já guardaram *Invalid Date* no lugar do marcador (o preview editável
+grava o texto já resolvido ao salvar — **C418**): essas não se consertam sozinhas. Somente leitura.
+
+```sql
+-- 1: as clausulas que guardam o marcador da data (o texto delas muda com a Etapa 166)
+SELECT 'proposta' AS onde, pc.proposta_id AS dono, p.numero_proposta, pc.id, pc.titulo
+FROM proposta_clausulas pc LEFT JOIN propostas p ON p.id = pc.proposta_id
+WHERE pc.ativo = 1 AND pc.conteudo LIKE '%{{proposal.date}}%'
+UNION ALL
+SELECT 'modelo', ci.modelo_id, NULL, ci.id, ci.titulo
+FROM clausulas_modelo_itens ci
+WHERE ci.conteudo LIKE '%{{proposal.date}}%'
+ORDER BY 1, 2;
+
+-- 2: as clausulas de proposta que ja guardaram a data quebrada no lugar do marcador
+SELECT pc.proposta_id, p.numero_proposta, pc.id, pc.titulo
+FROM proposta_clausulas pc LEFT JOIN propostas p ON p.id = pc.proposta_id
+WHERE pc.ativo = 1 AND pc.conteudo LIKE '%Invalid Date%'
+ORDER BY pc.proposta_id;
+```
+
+**Como ler o resultado:** **as duas vazias** — nada a fazer. **Linhas na 1** — essas propostas passam a imprimir a data de emissão
+certa no texto (avise quem as enviou, se o texto antigo já saiu para o cliente). **Linhas na 2** — abra cada proposta no **Preview**,
+corrija a data escrita na cláusula (ou volte a pôr o marcador) e salve. A data com dia e mês **trocados** (dias 1 a 12) não é
+encontrável por consulta — fica gravada como uma data comum. *(Rodada no banco local, cópia de 09/10: **0** e **0**; controle numa cópia
+com uma cláusula com o marcador e outra com *Invalid Date* na proposta 3: a 1 achou a primeira e a 2 a segunda.)*
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B1059; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B1064; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -11618,6 +11660,46 @@ vocês: as da **B957**, a **B988** e a **B989**; a **B1002** continua pedindo um
 **C408**; a **C411** e a **C412**; **a B1057 em especial** (a data de emissão reimpressa muda para as propostas criadas à noite); a **B1054** a
 **B1058** são reversíveis.
 
+**B1060 (NOVA, da Etapa 166; do Comercial) — os relatórios por mês do Comercial no calendário de Brasília.** **Escolhido:** a *Evolução de
+Propostas (Últimos 6 Meses)* e os *Clientes que Precisam de Visita* do **Relatório Executivo**, a *atividade recente* (propostas nos últimos
+90 dias) das **Visitas Técnicas** e as *Tendências Mensais* do painel contam o mês e o dia da criação da proposta pelo calendário de
+Brasília, e a janela começa no dia de Brasília de 6 meses, 90 dias ou 12 meses atrás. **Muda (das 21h à meia-noite e nas bordas):** a
+proposta criada das 21h à meia-noite do **último dia do mês** passa a contar no mês em que foi criada (antes, no seguinte) — nos dois
+gráficos; a proposta das 21h da véspera da borda da janela sai dela; o cliente cuja última proposta foi criada às 22h de 91 dias atrás entra
+em *Clientes que Precisam de Visita* e perde a *atividade recente* nas Visitas Técnicas (a prioridade dele pode cair de *Alta* para *Média*,
+ou de *Média* para *Baixa*). Uma data de criação ilegível (só possível por integração) sai das contas (antes entrava). **Não muda:** a
+janela continua começando no **mesmo dia** de 6/12 meses atrás, não no dia 1 (a primeira barra é parcial, como antes). **Descartado:**
+comparar por texto (a proposta das 22h da véspera continuaria entrando); começar a janela no dia 1 (produto). **Reversível:** `f7246f0e`, `a69b4e74` e `89569d20` (a correção da revisão).
+
+**B1061 (NOVA, da Etapa 166; do Comercial) — o filtro de período do painel no dia de Brasília.** **Escolhido:** no painel do Comercial,
+*Filtros* → *De*/*Até* compara com o dia de Brasília da criação da proposta, e os atalhos *Este mês*, *Últimos 3 meses* e *Este ano*
+preenchem *Até* com **hoje** (o dia do computador de quem usa). **Muda (das 21h à meia-noite):** o atalho mostra *Até* = hoje (antes,
+amanhã — no último dia do mês, o dia 1 do mês seguinte); a proposta criada às 22h do dia *Até* entra no painel filtrado e a das 22h da
+véspera do *De* sai. **Limite (Fase 5):** num computador com fuso **a oeste** de Brasília (Acre, Amazonas), das 23h (ou 22h) à meia-noite
+local o atalho põe o dia local, que já é o de ontem em Brasília: a proposta criada logo depois da meia-noite de Brasília fica fora até a
+meia-noite local. **Descartado:** só os atalhos (com o servidor no dia universal, a proposta das 22h de hoje **sumiria** do *Este mês*);
+calcular o atalho no fuso de Brasília no navegador (as outras telas usam o dia do computador — Etapa 161); mexer nas dez consultas do
+painel. **Reversível:** `f7246f0e`, `a69b4e74` e `89569d20` (a correção da revisão).
+
+**B1062 (NOVA, da Etapa 166; do Comercial) — a *Última Proposta* dos Relatórios e os nomes dos arquivos baixados no dia local.**
+**Escolhido:** a coluna *Última Proposta* de *Clientes que Precisam de Visita* (na tela e no PDF) mostra o dia de Brasília em que a
+proposta foi criada; sem proposta, *Nunca* (como antes); ilegível, *-* (antes *Invalid Date*). O nome do PDF dos Relatórios
+(*Relatorios_GMP_AAAA-MM-DD.pdf*) e o do PNG baixado do modal de gráfico levam o dia local. **Muda (das 21h à meia-noite):** a proposta
+criada nessa faixa mostrava o dia seguinte; os arquivos baixados nessa faixa levavam a data de amanhã. Cosmético. **Reversível:** `f7246f0e`, `a69b4e74` e `89569d20` (a correção da revisão).
+
+**B1063 (NOVA, da Etapa 166; do Comercial) — o marcador da data no texto da proposta igual à data de emissão da capa. MUDA O TEXTO
+IMPRESSO.** **Escolhido:** o marcador `{{proposal.date}}` numa cláusula sai com a mesma data da *Data de Emissão* da capa, em
+*DD/MM/AAAA*. **Muda:** antes a data era relida no formato americano — a proposta criada nos dias **1 a 12** saía com **dia e mês
+trocados** (*05/11/2026* virava *11/05/2026*) e a dos dias **13 a 31** saía ***Invalid Date***. Agora sai certa, **também na reimpressão**
+de proposta antiga cuja cláusula ainda guarda o marcador. **Não conserta** a cláusula já re-salva pelo preview editável depois de o marcador
+aparecer — ela guardou o texto resolvido (**C418**; a **A104** conta essas cláusulas). Nenhum texto padrão usa o marcador. **Descartado:**
+recalcular a data pela criação a cada vez (a capa e o texto poderiam divergir). **Reversível:** `f7246f0e`, `a69b4e74` e `89569d20` (a correção da revisão).
+
+**B1064 (NOVA, da Etapa 166) — a próxima etapa (167).** Ver a "próxima tarefa detalhada" no plano da Etapa 166. As decisões que esperam
+vocês: as da **B957**, a **B988** e a **B989**; a **B1002** continua pedindo um olhar; a **B1013** (o acento nas buscas); a **C398**; a
+**C408**; a **C411** e a **C412**; a **B1057** (a data de emissão reimpressa); **a B1063** (o texto impresso das cláusulas com o marcador);
+a **C417** (o que o gráfico *Tendências Mensais* conta); a **B1060** a **B1062** são reversíveis.
+
 **B898 (NOVA, da Etapa 138) — a próxima etapa (139).** Ver a "próxima tarefa detalhada" no plano da Etapa 138. A **B853** (com a
 **C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
@@ -15039,8 +15121,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      revisão e o cartão *Manutenção vencida* leem **todas** as manutenções com próxima revisão marcada, sem olhar se já houve uma revisão mais
      nova para o mesmo veículo: registrada a revisão nova, a antiga continua no alerta (e crítica, se a data passou). **O que fazer:** apagar a
      data de próxima revisão da manutenção antiga ao registrar a nova. Qual revisão vale é pergunta de produto.
-413. **NOVO (da medição da Etapa 165; do Comercial, anterior a ela; lido no código) — as janelas por mês dos relatórios do Comercial no
-     horário universal.** A evolução dos últimos 6 meses e os clientes sem proposta há 90 dias do **Relatório Executivo**, as propostas dos
+413. **✅ RESOLVIDO NA ETAPA 166 (B1060 a B1062; `f7246f0e`, `a69b4e74` e `89569d20` (a correção da revisão)) — NOVO (da medição da Etapa 165; do Comercial, anterior a ela; lido no código) — as
+     janelas por mês dos relatórios do Comercial no horário universal.** *(Os relatórios, o histórico e o filtro do painel contam o calendário
+     de Brasília. **Isto estava incompleto:** falava dos atalhos do painel, mas o filtro *De*/*Até* que eles preenchem também comparava com o
+     dia universal no servidor — consertar só os atalhos faria a proposta das 22h de hoje sumir do *Este mês*; e a *Última Proposta* dos
+     Relatórios mostrava o dia seguinte. O texto abaixo fica como registro.)* A evolução dos últimos 6 meses e os clientes sem proposta há 90 dias do **Relatório Executivo**, as propostas dos
      últimos 90 dias das **Visitas Técnicas**, o histórico de 12 meses do painel e os atalhos de período do painel contam pelo horário
      universal: a proposta criada das 21h à meia-noite do último dia do mês conta no mês seguinte, e a borda das janelas anda 3 h. **O que
      fazer:** nada no dia a dia (o efeito é de uma noite por mês). Candidata a uma etapa futura (muda o desenho dos gráficos por mês).
@@ -15048,10 +15133,26 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      antiga de propostas, um formulário antigo de proposta, um gerador de PDF do navegador e um modelo antigo do documento continuam no
      código, sem nenhum menu ou chamada que os abra, e leem a data como antes (a véspera). **O que fazer:** nada — se algum for religado,
      trocar antes a leitura da data.
-415. **NOVO (da revisão do plano da Etapa 165; do Comercial, anterior a ela; reproduzido por sonda) — o marcador da data no texto da
-     proposta.** Quem escreve uma cláusula usando o marcador da data da proposta (`{{proposal.date}}`) recebe uma data errada: a data de
+415. **✅ RESOLVIDO NA ETAPA 166 (B1063; `f7246f0e`, `a69b4e74` e `89569d20` (a correção da revisão)) — NOVO (da revisão do plano da Etapa 165; do Comercial, anterior a ela; reproduzido por
+     sonda) — o marcador da data no texto da proposta.** *(O marcador sai igual à data de emissão da capa. A cláusula já re-salva pelo preview
+     editável guardou o texto quebrado e não se conserta sozinha — **C418**. O texto abaixo fica como registro.)* Quem escreve uma cláusula usando o marcador da data da proposta (`{{proposal.date}}`) recebe uma data errada: a data de
      emissão é relida no formato americano (*05/10/2026* sai *10/05/2026*) ou sai *Invalid Date* (*20/10/2026*). Nenhum texto padrão usa o
      marcador. **O que fazer:** não usar o marcador; escrever a data à mão. Consertar é uma etapa própria (muda o texto do documento).
+416. **NOVO (da medição da Etapa 166; do Comercial, anterior a ela; lido no código) — a *atividade recente* da elegibilidade de viagem.**
+     Em **Custos de Viagem**, a regra *Atividade Recente* (propostas nos últimos 90 dias) lê a hora de criação da última proposta como se
+     fosse a de Brasília (3 h de diferença) e conta períodos de 24 h, não dias de calendário: perto da borda dos 90 dias, ela pode discordar
+     da *atividade recente* das Visitas Técnicas para o mesmo cliente. **O que fazer:** nada no dia a dia (é critério recomendado, não
+     bloqueia). Candidata a uma etapa futura.
+417. **NOVO (da medição da Etapa 166; do Comercial, anterior a ela; lido no código) — o que o gráfico *Tendências Mensais* conta.** As
+     linhas *clientes* e *projetos* do gráfico do painel dão sempre o **mesmo número**: contam juntos os cadastros de clientes, projetos e
+     propostas criados no mês (com os números repetidos entre as três tabelas contados uma vez); e a série chamada *receita* é a **contagem**
+     de propostas aprovadas no mês, não o valor. **O que fazer:** não ler essas linhas como número de clientes, de projetos ou valor. O que o
+     gráfico deve mostrar é pergunta de produto.
+418. **NOVO (da revisão do plano da Etapa 166; das propostas, anterior a ela; lido no código) — o preview editável grava o marcador já
+     resolvido.** Ao abrir o **Preview** editável, a cláusula que usa o marcador da data já chega com a data no lugar; ao **Salvar**, o
+     editor compara o texto com o gravado, acha diferença e grava a data escrita — o marcador some daquela cláusula, e a data fica congelada
+     (antes da Etapa 166, congelada como *Invalid Date* ou com dia e mês trocados). **O que fazer:** depois de salvar pelo preview, conferir a
+     data escrita na cláusula; a **A104** acha as que guardaram *Invalid Date*. Manter o marcador vivo no editor é uma etapa própria.
 ### D. Limitações declaradas— são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -16383,6 +16484,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(166) Os relatórios por mês e a data no texto da proposta, o que ficou de fora.** A *atividade recente* da elegibilidade de viagem
+  (**C416**); o que o gráfico *Tendências Mensais* conta (**C417**); o preview editável que congela o marcador (**C418**). A janela dos
+  relatórios continua começando no mesmo dia de meses atrás, não no dia 1. O atalho do painel usa o dia do computador (num fuso a oeste de
+  Brasília, de noite, o dia local — **B1061**). Uma emissão com data impossível que chegasse por outro caminho sairia como veio no marcador
+  (hoje nenhum caminho a manda — a capa já valida). O modelo antigo do documento (sem uso — **C414**) continua lendo a data como antes.
+  Nenhuma porta de permissão mudou; nenhum valor gravado mudou.
 - **(165) Os lembretes e a validade das propostas, o que ficou de fora.** As janelas por mês dos relatórios do Comercial (**C413**); o
   código sem uso (**C414**); o marcador da data no texto da proposta (**C415**). A ordem do sino e a ordem *vencidos primeiro* das Atividades
   não mudaram de efeito (a ordem pela data já as dava — declarado). As telas continuam discordando sobre o lembrete de hoje (*Vencido* no
@@ -17477,6 +17584,14 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(166) Nenhum clique foi dado no navegador, e a regra das 21h só foi provada com o relógio adiantado.** As rotas foram provadas pelo
+servidor de verdade (em pasta vazia, no fuso universal e com o relógio adiantado para as 22h de Brasília do último dia do mês seguinte); o
+documento da proposta, pelo preview gerado de verdade (a capa e a cláusula escrita pela rota lidas no mesmo documento); as telas, em jsdom
+no fuso de Brasília com o relógio parado (às 22h30 do último dia do mês, às 22h30 de 31/12 e em janeiro). Vale conferir à mão: **a qualquer
+hora**, escreva uma cláusula com `{{proposal.date}}` numa proposta e abra o **Preview**: a data no texto é a da capa. **No último dia do
+mês, depois das 21h:** crie uma proposta e abra os **Relatórios** — a *Evolução de Propostas* a conta no mês de hoje; no painel, *Filtros*
+→ *Este mês* mostra *Até* = hoje e a proposta entra nos números.
 
 **(165) Nenhum clique foi dado no navegador, e a regra das 21h só foi provada com o relógio adiantado.** As rotas foram provadas pelo
 servidor de verdade (em pasta vazia, no fuso universal e com o relógio adiantado para as 22h de Brasília do último dia do mês seguinte); o
@@ -33106,9 +33221,67 @@ se preenche com **hoje**. No **Gerar proposta** com *Validade (dias)* = 15, a pr
 - O lembrete de hoje continua *Vencido* no painel e *Hoje* no sino (de antes — produto).
 - Nenhuma porta de permissão mudou; nenhuma data já gravada mudou; o documento da proposta só mudou na data de emissão.
 
+## Etapa 166 — Os relatórios por mês, o filtro do painel e a data no texto da proposta no dia de Brasília (2026-10-20)
+
+Uma etapa de **consertos técnicos** no Comercial, sem regra de acesso nova e sem mudar nenhum valor gravado. Os relatórios do Comercial
+contavam o mês e as janelas (*últimos 6 meses*, *90 dias*, *12 meses*) pelo horário universal, 3 h à frente de Brasília: a proposta criada
+**das 21h à meia-noite do último dia do mês** aparecia no **mês seguinte** na *Evolução de Propostas* e nas *Tendências Mensais*, e a borda
+das janelas andava 3 h. O filtro de período do painel tinha o mesmo defeito — e o atalho *Este mês*, à noite, punha *Até* = amanhã. E quem
+escrevia uma cláusula com o marcador da data da proposta recebia *Invalid Date* ou a data com dia e mês trocados. Agora tudo conta o
+calendário de Brasília, e o marcador sai igual à data de emissão da capa.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Proposta criada às 22h de 31/10: contava em **novembro** na *Evolução de Propostas* (Relatórios) e nas *Tendências Mensais* (painel) | Conta em outubro — **B1060** |
+| Cliente cuja última proposta foi criada às 22h de 91 dias atrás: fora de *Clientes que Precisam de Visita*, e com *atividade recente* nas Visitas Técnicas | Entra na lista de visita; sem atividade recente — **B1060** |
+| Às 22h, *Filtros* → *Este mês* no painel: *Até* = amanhã (no último dia do mês, o dia 1 do mês seguinte) | *Até* = hoje — **B1061** |
+| Painel filtrado *De* = *Até* = hoje: a proposta criada às 22h de hoje ficava fora, e a das 22h de ontem entrava | A de hoje entra; a de ontem sai — **B1061** |
+| Relatórios, *Última Proposta*: a proposta criada às 22h mostrava o dia seguinte | O dia da criação — **B1062** |
+| PDF dos Relatórios e PNG do gráfico baixados às 22h: o nome com a data de amanhã | A data de hoje — **B1062** |
+| Cláusula com `{{proposal.date}}` numa proposta de 20/10: *Invalid Date*; de 05/11: *11/05/2026* | *20/10/2026*; *05/11/2026* — a data da capa — **B1063** |
+
+### As regras, com o cenário exato
+
+**1. A evolução por mês (B1060).** No **Comercial → Relatórios**, o gráfico *Evolução de Propostas (Últimos 6 Meses)* agrupa as propostas
+pelo mês de Brasília em que foram criadas: uma proposta criada às 22h do último dia do mês aparece na barra desse mês. A janela começa no
+mesmo dia de 6 meses atrás (a primeira barra é parcial).
+
+**2. Os clientes para visitar e a atividade recente (B1060).** Em *Clientes que Precisam de Visita* entram os clientes ativos sem proposta
+(*Última Proposta*: *Nunca*) ou cuja última proposta foi criada **antes de hoje − 90 dias** (pelo dia de Brasília). Nas **Visitas
+Técnicas**, a regra *"Cliente teve propostas nos últimos 90 dias"* passa quando o cliente tem proposta criada **a partir de hoje − 90
+dias**; senão aparece *"Cliente não teve propostas nos últimos 90 dias"*.
+
+**3. As Tendências Mensais (B1060).** No painel do Comercial, o gráfico *Tendências Mensais* agrupa pelo mês de Brasília, nos últimos 12
+meses.
+
+**4. O filtro do painel (B1061).** No painel do Comercial, clique **Filtros** → **Este mês**: *De* = dia 1 do mês, *Até* = hoje — também
+às 22h. **Últimos 3 meses**: *De* = dia 1 de dois meses atrás; **Este ano**: *De* = 1º de janeiro. Com *De* = *Até* = hoje, os números do
+painel contam as propostas criadas hoje no horário de Brasília, inclusive as das 22h.
+
+**5. O marcador da data (B1063).** Abra uma proposta, inclua uma cláusula com o texto `Emitida em {{proposal.date}}` e abra o **Preview**:
+o texto diz *"Emitida em <a data de emissão da capa>"*.
+
+### O que esta etapa NÃO cobre
+
+- A *atividade recente* da elegibilidade de viagem (**C416**), o que o gráfico *Tendências Mensais* conta (**C417**) e o preview editável
+  que congela o marcador ao salvar (**C418**; a **A104** acha as cláusulas que já guardaram *Invalid Date*).
+- Nenhuma porta de permissão mudou; nenhum valor gravado mudou; o documento da proposta só mudou no texto do marcador.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 166 entregue (2026-10-20):** **os relatórios por mês, o filtro do painel e a data no texto da proposta no dia de Brasília**
+  (consertos técnicos no Comercial, sem regra de acesso nova e sem mudar valor gravado). A *Evolução de Propostas*, os *Clientes que
+  Precisam de Visita*, a *atividade recente* das Visitas Técnicas e as *Tendências Mensais* contam o calendário de Brasília (**B1060**); o
+  filtro *De*/*Até* e os atalhos do painel, o dia de Brasília (**B1061**); a *Última Proposta* e os nomes dos arquivos baixados, o dia local
+  (**B1062**); o marcador da data no texto da proposta sai igual à capa (**B1063** — muda o texto impresso) — **C413** e **C415** resolvidos.
+  Commits `f7246f0e`, `a69b4e74` e `89569d20` (a correção da revisão). **O que é seu:** as decisões **B1060** a **B1063** (reversíveis — **a B1063 pede um olhar**); a consulta **A104** (opcional);
+  os avisos novos **C416**, **C417** (produto) e **C418**; as perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **B988**,
+  **B989**, **B1013**, **C277**, **C312**, **C314**, **C316**, **C330**, **C398**, **C408**, **C411**, **C412**); as limitações **(166)** em D e a
+  verificação **(166)** em F. **Próxima: Etapa 167 — ver a "próxima tarefa detalhada" no plano da Etapa 166.**
 
 - **Etapa 165 entregue (2026-10-20):** **os lembretes, a validade e a data de emissão das propostas no dia de Brasília** (consertos técnicos
   no Comercial, sem regra de acesso nova e sem mudar data já gravada). O sino, as Atividades e o painel classificam o lembrete pelo dia de
@@ -33118,7 +33291,7 @@ se preenche com **hoje**. No **Gerar proposta** com *Validade (dias)* = 15, a pr
   decisões **B1054** a **B1058** (reversíveis — **a B1057 pede um olhar**); os avisos novos **C413**, **C414** e **C415**; as perguntas de
   antes (**B949**, **B910**, **B853**, **B924**, **B926**, **B988**, **B989**, **B1013**, **C277**, **C312**, **C314**, **C316**, **C330**,
   **C398**, **C408**, **C411**, **C412**); as limitações **(165)** em D e a verificação **(165)** em F. Nenhuma consulta nova antes do deploy.
-  **Próxima: Etapa 166 — ver a "próxima tarefa detalhada" no plano da Etapa 165.**
+  *(Próxima, na época: Etapa 166 — entregue acima.)*
 
 - **Etapa 164 entregue (2026-10-20):** **os vencimentos de Frotas e do Financeiro no dia de Brasília** (consertos técnicos, sem regra de
   acesso nova e sem mexer em dinheiro gravado). Os alertas, a lista e o painel de Frotas contam o dia de Brasília (**B1046**) e os dias

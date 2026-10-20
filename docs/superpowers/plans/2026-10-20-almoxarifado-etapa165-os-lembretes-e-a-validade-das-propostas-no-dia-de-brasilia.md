@@ -333,7 +333,11 @@ antes; a B1056 o desloca um pouco (o fechamento das 21h passa a contar um dia a 
    sem tela renderizada; o ramo `responsavel_id` dos binds) — a família do "atalho" das 163/164.
 3. **Paralelismo:** **0** galhos de código em paralelo; **1** revisor na Fase 2, **3** em paralelo na Fase 5 (o r3 na worktree própria, 25
    sabotagens) — **0** incidente de trava, **0** retrabalho.
-4. **Defeito que escapou:** *(preencher na Etapa 166)*.
+4. **Defeito que escapou:** *(preenchido na Etapa 166)* **nenhum no código da 165** — as três revisões da 166 não acharam defeito nas réguas,
+   nas datas gravadas nem na emissão. **Um no documento:** a **C413** que esta etapa registrou estava **incompleta** — nomeava os atalhos de
+   período do painel, mas não o filtro *De*/*Até* do servidor (`filtroDashboardSql`), que também comparava com o dia universal; consertar só
+   os atalhos faria a proposta das 22h de hoje sumir do *Este mês* (a Fase 0 da 166 achou; a C413 foi corrigida dizendo que estava
+   incompleta).
 
 ## Próxima tarefa detalhada — Etapa 166
 

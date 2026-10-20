@@ -121,9 +121,18 @@
     `new Date` o lê como hora **local** — a proposta criada das 21h à meia-noite imprimia o dia seguinte. A data impressa mudou para essas
     propostas, **inclusive na reimpressão** (o PDF é sempre regerado, `sempreRegenerarParaPdf`); a revisão desta etapa registrou isso na
     letra B. O `/pdf` lia `proposta.data_validade`, coluna que não existe em `propostas` — agora lê `validade` (continua não impressa). O
-    marcador `{{proposal.date}}` relê a emissão `DD/MM/AAAA` com `new Date` e a troca (C415, de antes — não mexido). Testes:
+    marcador `{{proposal.date}}` relia a emissão `DD/MM/AAAA` com `new Date` e a trocava (C415) — **isto dizia "não mexido"; a Etapa 166 o
+    consertou, ver a armadilha 22**. Testes:
     `tests/api/lembretesEValidadeDasPropostasNoDiaLocal.api.test.js` (o preview e o retrato gravado pelo `/pdf`, com o relógio nas 22h de
     Brasília, e uma guarda no fonte de que as duas rotas usam a função).
+
+22. **O marcador `{{proposal.date}}` é a Data de Emissão da capa, como está** (Etapa 166, B1063, C415). `prepareCompositionData`
+    (`propostaCompositionEngine.js`) usa a `totais.dataEmissao` quando ela já é `DD/MM/AAAA` (o que o `/premium` e o `/pdf` mandam); senão o
+    `diaLocal.dataDoBancoBR` dela e depois o do `created_at`; nada legível → `''`. **Nunca volte a `new Date(dataEmissao)`**: o `Date` lê
+    `DD/MM/AAAA` como `MM/DD/AAAA` — dia ≤ 12 troca dia e mês, dia > 12 sai *Invalid Date*. A mudança altera o **texto impresso** das cláusulas
+    que usam o marcador, também na reimpressão (letra B). **Limite (C418):** o preview editável recebe a cláusula já resolvida e o *Salvar*
+    grava a data escrita no lugar do marcador. Testes: `tests/api/relatoriosPorMesDoComercialNoDiaLocal.api.test.js` (o unitário em UTC-3 e a
+    cláusula escrita pela rota no `/premium`, igual à capa).
 
 ## Como rodar a validação (obrigatório antes de merge)
 
@@ -179,6 +188,7 @@ cd server && node tests/api/familiasListaOsPortao.api.test.js    # Etapa 149: o 
 cd server && node tests/api/produtosGruposVariaveisPortao.api.test.js  # Etapa 150: o portão nos produtos e nas variáveis técnicas que a proposta lê (C346, C347)
 cd server && node tests/api/clientesProjetosPortao.api.test.js   # Etapa 151: o portão nos clientes, projetos e oportunidades que a proposta lê (C349)
 cd server && node tests/api/lembretesEValidadeDasPropostasNoDiaLocal.api.test.js  # Etapa 165: a Data de Emissão da capa no dia de Brasília (B1057, armadilha 21)
+cd server && node tests/api/relatoriosPorMesDoComercialNoDiaLocal.api.test.js  # Etapa 166: o marcador {{proposal.date}} igual à capa (B1063, armadilha 22)
 ```
 
 Critério: **tudo verde**. Qualquer invariante quebrado bloqueia o merge. *(De julho à Etapa 138 a revisão rodava com dois vermelhos
