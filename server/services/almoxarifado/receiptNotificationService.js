@@ -288,7 +288,7 @@ async function avisarEntradaConfirmada(db, user, recebimentoId) {
   const marcasMat = materiaisDaNota.map(() => '?').join(',');
   const marcasSt = STATUS_QUE_ESPERAM.map(() => '?').join(',');
   const linhasReq = await dbAll(db, `SELECT r.id AS requisicao_id, r.numero, r.status, r.solicitante_id,
-      r.solicitante_nome, r.modulo_origem, r.projeto_id, ir.material_id,
+      r.solicitante_nome, r.modulo_origem, r.projeto_id, r.os_id, ir.material_id,
       ir.quantidade_solicitada, ir.quantidade_entregue, ir.quantidade_atendida,
       COALESCE((
         SELECT SUM(rs.quantidade - COALESCE(rs.quantidade_utilizada, 0))
@@ -375,7 +375,7 @@ async function avisarEntradaConfirmada(db, user, recebimentoId) {
     for (const r of requisicoes) {
       for (const m of r.pendentePorMaterial.keys()) {
         // eslint-disable-next-line no-await-in-loop
-        if (!(await ownerRules.saidaPassaNaRegraDoDono(db, materialInfo.get(m), r.projeto_id))) donoRecusa.add(`${r.requisicao_id}|${m}`);
+        if (!(await ownerRules.saidaPassaNaRegraDoDono(db, materialInfo.get(m), r.projeto_id, r.os_id))) donoRecusa.add(`${r.requisicao_id}|${m}`);
       }
     }
     const linhaAvisavel = (r, m) => livrePorMaterial.has(m)
@@ -455,7 +455,7 @@ async function avisarLiberacao(db, user, ctx, resultadoReserva) {
   }
 
   const marcasSt = STATUS_QUE_ESPERAM.map(() => '?').join(',');
-  const linhasReq = await dbAll(db, `SELECT r.id AS requisicao_id, r.numero, r.status, r.solicitante_id, r.modulo_origem, r.projeto_id,
+  const linhasReq = await dbAll(db, `SELECT r.id AS requisicao_id, r.numero, r.status, r.solicitante_id, r.modulo_origem, r.projeto_id, r.os_id,
       ir.id AS item_id,
       ir.quantidade_solicitada, ir.quantidade_entregue, ir.quantidade_atendida,
       COALESCE((SELECT SUM(rs.quantidade - COALESCE(rs.quantidade_utilizada, 0))
@@ -485,7 +485,7 @@ async function avisarLiberacao(db, user, ctx, resultadoReserva) {
   for (const r of porRequisicao.values()) {
     if (!(r.reservado > EPS || haLivre)) continue;
     // eslint-disable-next-line no-await-in-loop
-    if (!(await ownerRules.saidaPassaNaRegraDoDono(db, mat, r.projeto_id))) continue;
+    if (!(await ownerRules.saidaPassaNaRegraDoDono(db, mat, r.projeto_id, r.os_id))) continue; // Etapa 176 (I3): com a OS
     avisaveis.push(r);
   }
   if (!avisaveis.length) return resultado;

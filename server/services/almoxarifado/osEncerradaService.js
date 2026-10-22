@@ -24,7 +24,9 @@ const reservaChegadaService = require('./reservaChegadaService');
 const EPS = 1e-9;
 
 // Predicado congelado da "reserva da OS" (revisao da Fase 2 do plano da 171): a T2 cria, a T3 e a aprovacao consomem.
-const PREDICADO_RESERVA_DA_OS = `status = 'ATIVA' AND origem = 'MANUAL' AND os_id = ? AND recebimento_id IS NOT NULL`;
+// Etapa 176 (RN-176.06, M5): UMA definicao so — a de `reservaDaOs.js` (`PREDICADO_RESERVA_DA_OS_SQL`), reexportada aqui com o
+// nome de sempre para nao quebrar quem importa. Ate a 176 havia uma copia literal aqui, que divergiria na primeira edicao.
+const { PREDICADO_RESERVA_DA_OS_SQL: PREDICADO_RESERVA_DA_OS } = require('./reservaDaOs');
 
 function osFechada(status) {
   // eslint-disable-next-line global-require

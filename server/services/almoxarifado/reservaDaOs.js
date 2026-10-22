@@ -76,15 +76,30 @@ async function osIdDoPedido(db, pedidoId) {
 }
 
 /**
- * RN-171.08 — a OS ABERTA do pedido do recebimento: `{ id, numero_os }`, ou `null` (sem pedido, pedido de estoque, OS
- * fechada — `osFechada` da RN-171.03 —, OS que sumiu). `null` = comportamento de hoje (fila geral).
+ * Etapa 176 (C1 + I1 da Revisao da Fase 2) — a OS EFETIVA do recebimento, UMA regua so para quem a le (criacao, `/fiscal`,
+ * a entrada da nota, a reserva da chegada/inspecao/NC, as leituras): com `pedido_compra_id` GRAVADO (nao o `tipo`) -> a OS
+ * VIVA do pedido (trocar a OS do pedido antes do processamento continua valendo, como na 171); sem pedido -> o `os_id`
+ * proprio do recebimento (a NF de material de cliente para industrializacao). Recebimento de pedido nao grava `os_id`
+ * proprio (a criacao e o `/fiscal` garantem). `rec` = a linha (`SELECT *`); devolve o id ou `null`. Nao confere se a OS
+ * existe nem se esta aberta (isso e de `osAbertaDoRecebimento`).
+ */
+async function osDoRecebimento(db, rec) {
+  if (!rec) return null;
+  if (rec.pedido_compra_id) return osIdDoPedido(db, rec.pedido_compra_id);
+  return temOsId(rec.os_id) ? Number(rec.os_id) : null;
+}
+
+/**
+ * RN-171.08 — a OS ABERTA do recebimento: `{ id, numero_os }`, ou `null` (sem OS, pedido de estoque, OS fechada —
+ * `osFechada` da RN-171.03 —, OS que sumiu). `null` = comportamento de hoje (fila geral). Etapa 176 (RN-176.05, I2): a OS
+ * vem de `osDoRecebimento` (o pedido primeiro, senao a OS propria da nota sem pedido) — ate a 176 era so a do pedido.
  */
 async function osAbertaDoRecebimento(db, recebimentoId) {
   if (!recebimentoId) return null;
   let osId;
   try {
-    const r = await dbGet(db, 'SELECT pedido_compra_id FROM recebimentos_material_almoxarifado WHERE id = ?', [recebimentoId]);
-    osId = await osIdDoPedido(db, r && r.pedido_compra_id);
+    const r = await dbGet(db, 'SELECT * FROM recebimentos_material_almoxarifado WHERE id = ?', [recebimentoId]);
+    osId = await osDoRecebimento(db, r);
   } catch (e) {
     avisoSeNaoForTabelaAusente('leitura do pedido do recebimento', e);
     return null;
@@ -254,6 +269,7 @@ module.exports = {
   requisicaoEhDaOs,
   requisicaoCasaComOs,
   osIdDoPedido,
+  osDoRecebimento,
   osAbertaDoRecebimento,
   jaReservadoDaNotaParaOs,
   reservarParaOsSobTrava,

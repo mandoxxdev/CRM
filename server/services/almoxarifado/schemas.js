@@ -839,6 +839,9 @@ const RecebimentoItemSchema = z.looseObject({
 const RecebimentoCreateSchema = z.looseObject({
   tipo_recebimento: z.enum(TIPOS_RECEBIMENTO, { message: TIPO_RECEBIMENTO_INVALIDO }).optional(),
   itens: z.array(RecebimentoItemSchema).optional(),
+  // Etapa 176 (RN-176.01): a OS opcional, com a regua da 171/172 (ausente/null/'' = sem; inteiro positivo, como numero ou
+  // string de digitos; o resto -> `OS inválida`). Existencia, OS fechada, a OS do pedido e o dono moram no servico.
+  os_id: osIdOpcional,
 });
 const RecebimentoFiscalSchema = z.looseObject({
   tipo_recebimento: z.enum(TIPOS_RECEBIMENTO, { message: TIPO_RECEBIMENTO_INVALIDO }).optional(),

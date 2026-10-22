@@ -1846,6 +1846,9 @@ async function initSchemaUmaExecucao(db) {
     // status (`avancarWorkflow`); o relatorio de fornecedor le esta coluna — antes lia a trilha FINALIZAR_CONFERENCIA, que e
     // nao-fatal desde a 121 e pode faltar com o ato feito. Legado: `migrateBackfillConferenciaFinalizadaEm`.
     'conferencia_finalizada_em DATETIME',
+    // Etapa 176 (RN-176.01, C1): a OS PROPRIA do recebimento sem pedido (NF de material de cliente para industrializacao).
+    // Recebimento de pedido NAO grava (fica NULL): a OS dele e a do pedido, lida viva (`reservaDaOs.osDoRecebimento`).
+    'os_id INTEGER',
   ];
   for (const col of recebCols) await safeAlter(db, `ALTER TABLE recebimentos_material_almoxarifado ADD COLUMN ${col}`);
 

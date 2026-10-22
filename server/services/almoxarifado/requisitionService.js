@@ -398,6 +398,22 @@ async function converterReservasDaOs(db, user, materialId, osDaRequisicao, falta
   return out;
 }
 
+/**
+ * Etapa 176 (M1) — a requisicao (`projeto_id`, `os_id`) pode levar este material pela regra do dono? Material proprio: sim.
+ * Lido aqui (e nao do item) porque `carregarItensRequisicao` nao traz o dono. Falha de leitura conta como "nao" (como a fila).
+ */
+async function donoDeixaConverter(db, materialId, req) {
+  let material;
+  try {
+    material = await dbGet(db, 'SELECT id, codigo, proprietario_cliente_id FROM materiais_almoxarifado WHERE id = ?', [materialId]);
+  } catch (e) {
+    return false;
+  }
+  if (!material || !material.proprietario_cliente_id) return true;
+  // eslint-disable-next-line global-require
+  return require('./ownerRules').saidaPassaNaRegraDoDono(db, material, req.projeto_id, req.os_id);
+}
+
 /** Etapa 171 — a conversao nao aconteceu: cada pedaco liberado volta a ser reserva da OS. Nunca lanca. */
 async function recriarConvertidas(db, user, convertidas, rotuloReq) {
   for (const c of convertidas || []) {
@@ -475,9 +491,10 @@ async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}, { rec
   // Etapa 171 (T2, RN-171.12 b): a requisicao e "da OS". Etapa 172 (RN-172.04, I3): com `os_id` (a OS cadastrada) casa SO
   // pelo id; sem ele, pela `os_referencia` como na 171. Os dois lidos do `reqRow` que as tres portas passam (`SELECT *`)
   // ou, se ele nao os trouxer, do banco.
-  const osDaReq = reqRow && reqRow.os_referencia !== undefined && reqRow.os_id !== undefined
+  // Etapa 176 (M1): o `projeto_id` tambem — a conversao confere o dono com o projeto E a OS.
+  const osDaReq = reqRow && reqRow.os_referencia !== undefined && reqRow.os_id !== undefined && reqRow.projeto_id !== undefined
     ? reqRow
-    : ((await dbGet(db, 'SELECT os_id, os_referencia FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId])) || {});
+    : ((await dbGet(db, 'SELECT os_id, os_referencia, projeto_id FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId])) || {});
   const osDaRequisicao = { osId: osDaReq.os_id || null, osReferencia: osDaReq.os_referencia || null };
   const daOs = !!osDaRequisicao.osId || !!reservaDaOs.chaveDaOs(osDaRequisicao.osReferencia);
   const rotuloReq = (reqRow && reqRow.numero) || requisicaoId;
@@ -500,7 +517,11 @@ async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}, { rec
       // trava que a aprovacao ja segura. Calculado ANTES: com o livre de hoje negativo (caixa de outros acima do
       // disponivel), o liberado iria para a caixa alheia e nao para esta reserva — nao converte (nao deixa sobra solta).
       let convertidas = [];
-      if (daOs && disponivel - jaReservado - caixaOutros >= -1e-9) {
+      // Etapa 176 (M1): so converte se a SAIDA da entrega passaria na regra do dono (a mesma pergunta da fila, I3 — projeto
+      // primeiro, depois a OS). Material do cliente A com projeto do cliente B e OS de A: a entrega recusaria (o projeto vence)
+      // e a reserva da OS seria tirada da OS para uma requisicao que nunca leva o material.
+      // eslint-disable-next-line no-await-in-loop
+      if (daOs && disponivel - jaReservado - caixaOutros >= -1e-9 && await donoDeixaConverter(db, item.material_id, osDaReq)) {
         // eslint-disable-next-line no-await-in-loop
         convertidas = await converterReservasDaOs(db, user, item.material_id, osDaRequisicao, falta, rotuloReq);
         if (convertidas.length) {

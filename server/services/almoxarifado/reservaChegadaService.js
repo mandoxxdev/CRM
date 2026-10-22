@@ -106,8 +106,9 @@ function rotulosDaChegada(rec) {
 
 /** A saída da entrega passaria na regra do dono? (a entrega leva só o projeto — requisitionService). */
 async function passaNaRegraDoDono(db, material, candidato) {
-  // Etapa 75 (Fase 5): a mesma pergunta que os dois avisos fazem (ownerRules.saidaPassaNaRegraDoDono).
-  return ownerRules.saidaPassaNaRegraDoDono(db, material, candidato.projeto_id);
+  // Etapa 75 (Fase 5): a mesma pergunta que os dois avisos fazem (ownerRules.saidaPassaNaRegraDoDono). Etapa 176 (I3): com a OS
+  // da requisicao (a entrega a leva desde a 174) — a requisicao da OS do cliente, sem projeto, deixa de ser pulada.
+  return ownerRules.saidaPassaNaRegraDoDono(db, material, candidato.projeto_id, candidato.os_id);
 }
 
 async function bloqueadaPorValor(db, candidato) {

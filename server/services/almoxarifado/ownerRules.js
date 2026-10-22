@@ -363,21 +363,69 @@ async function assertMesmoDonoNoRetalho(db, materialOrigem, materialRetalho) {
 }
 
 /**
- * Etapa 75 (Fase 5) — a SAIDA da entrega passaria na regra do dono? (a entrega leva so o projeto da
- * requisicao — requisitionService). Booleano, nunca lanca: e a pergunta que o miolo da reserva
+ * Etapa 75 (Fase 5) — a SAIDA da entrega passaria na regra do dono? (a entrega leva o projeto da requisicao
+ * e, desde a 174, a OS — requisitionService; ESTAVA DESATUALIZADO ate a 176: dizia "so o projeto").
+ * Booleano, nunca lanca: e a pergunta que o miolo da reserva
  * (`reservaChegadaService`, quem e pulado) e os dois avisos ao solicitante (chegada 74, liberacao 75 — quem
  * NAO e avisado) fazem com a MESMA regra. Antes da Fase 5 o miolo pulava a requisicao sem o projeto do
  * dono e o aviso mandava a ela "Material liberado para a sua requisicao" com L0 — material que ela nunca
  * poderia retirar. Qualquer falha (projeto inexistente, banco) conta como "nao passa", como no miolo.
  */
-async function saidaPassaNaRegraDoDono(db, material, projetoId) {
+/*
+ * Etapa 176 (I3 da Revisao da Fase 2): ganha `osId` — a entrega leva o projeto E a OS da requisicao desde a 174 (RN-174.04),
+ * com a precedencia de `resolverClienteDoVinculo` (projeto primeiro, depois a OS). Antes a pergunta so via o projeto e
+ * ficava mais conservadora que a entrega: a requisicao da OS do cliente, sem projeto, era pulada na fila do material dele
+ * (a nota da OS reservava tudo para a OS e a requisicao aprovada antes ficava esperando). `osId` omitido = como antes.
+ */
+async function saidaPassaNaRegraDoDono(db, material, projetoId, osId) {
   if (!material?.proprietario_cliente_id) return true;
   try {
-    await assertSaidaPermitida(db, material, 'SAIDA', { projeto_id: projetoId || undefined });
+    await assertSaidaPermitida(db, material, 'SAIDA', { projeto_id: projetoId || undefined, os_id: osId || undefined });
     return true;
   } catch (e) {
     return false;
   }
+}
+
+/**
+ * Etapa 176 (RN-176.04 + M2 da Revisao da Fase 2) — o material de cliente que entra com OS tem de ser do cliente DA OS:
+ * senao a reserva da OS prenderia material de A para uma OS de B, e a entrega recusaria depois. Devolve a lista de
+ * problemas (um por item ruim; vazia = passa) — quem chama recusa a nota INTEIRA (a criacao com 400; a pre-checagem do
+ * processamento, I4, junta aos outros problemas dela). `itens`: `[{ codigo, proprietario_cliente_id }]`.
+ *   - material proprio, sem OS, ou OS que nao existe mais (M2: a nota processa e nao reserva) -> passa;
+ *   - OS sem cliente -> `Material <codigo> pertence ao cliente <X>, mas a OS <numero_os> não tem cliente` (NULL nao e
+ *     coringa, como na saida — `assertSaidaPermitida`);
+ *   - OS de outro cliente -> `Material <codigo> pertence ao cliente <X>, mas a OS <numero_os> é do cliente <Y>`.
+ * Sem a tabela `ordens_servico` (ambiente parcial): passa — nao ha OS para conferir.
+ */
+async function problemasDoDonoComOs(db, itens, osId) {
+  if (!osId) return [];
+  const deCliente = (itens || []).filter((i) => i && Number(i.proprietario_cliente_id) > 0);
+  if (!deCliente.length) return [];
+  let os;
+  try {
+    os = await dbGet(db, 'SELECT id, numero_os, cliente_id FROM ordens_servico WHERE id = ?', [osId]);
+  } catch (e) {
+    if (/no such (table|column)/i.test(String(e && e.message))) return [];
+    throw e;
+  }
+  if (!os) return [];
+  const numeroOs = os.numero_os || `#${os.id}`;
+  const nomeOs = os.cliente_id ? await nomeDoCliente(db, os.cliente_id) : null;
+  const problemas = [];
+  const vistos = new Set();
+  for (const i of deCliente) {
+    if (os.cliente_id && Number(os.cliente_id) === Number(i.proprietario_cliente_id)) continue;
+    const chave = `${i.codigo}|${i.proprietario_cliente_id}`;
+    if (vistos.has(chave)) continue;
+    vistos.add(chave);
+    // eslint-disable-next-line no-await-in-loop
+    const dono = await nomeDoCliente(db, i.proprietario_cliente_id);
+    problemas.push(os.cliente_id
+      ? `Material ${i.codigo} pertence ao cliente ${dono}, mas a OS ${numeroOs} é do cliente ${nomeOs}`
+      : `Material ${i.codigo} pertence ao cliente ${dono}, mas a OS ${numeroOs} não tem cliente`);
+  }
+  return problemas;
 }
 
 /**
@@ -455,7 +503,7 @@ async function auditarTrocaDeDono(db, { material, troca, quantidadeAtual, user }
 
 module.exports = {
   TIPOS_ISENTOS_DONO, TIPOS_SAIDA_COM_DONO, TIPOS_AJUSTE_DONO, TIPOS_AJUSTE_ESTORNAVEIS_DONO,
-  assertSaidaPermitida, assertAjustePermitido, saidaPassaNaRegraDoDono,
+  assertSaidaPermitida, assertAjustePermitido, saidaPassaNaRegraDoDono, problemasDoDonoComOs,
   assertEstornoDeAjustePermitido, auditarEstornoDeAjuste,
   materialTemHistorico, assertTrocaDeDonoPermitida, auditarTrocaDeDono,
   assertMesmoDonoNaTransformacao, assertMesmoDonoNoRetalho,

@@ -363,6 +363,73 @@ const recebidaDeclaradaNoPayload = (item) => {
   return 0;
 };
 
+/**
+ * Etapa 176 (RN-176.01..04, C1/I1, M2) — a OS do recebimento. UMA regua (`reservaDaOs.osDoRecebimento`) para a OS EFETIVA:
+ * com pedido gravado, a do pedido (viva); sem pedido, a propria. Os modulos de OS sao lidos LAZY (`reservaDaOs` requer o
+ * motor; `ownerRules` e `pedidoCompraService` idem) — o mesmo cuidado com ciclo dos outros `require` lazy deste arquivo.
+ */
+const temOsId = (v) => v !== null && v !== undefined && v !== '';
+const literalOsDoPedido = (rotulo) => `A OS do recebimento tem de ser a do pedido (${rotulo})`;
+const literalOsFechadaNaEntrada = (numero, status) => `A OS ${numero} está ${String(status || '').trim()} — não aceita entrada nova`;
+
+/** A OS pelo id: `{ id, numero_os, status, cliente_id }` ou `null` (sumiu, ou ambiente sem `ordens_servico`). */
+async function lerOs(db, osId) {
+  if (!temOsId(osId)) return null;
+  try {
+    return (await dbGet(db, 'SELECT id, numero_os, status, cliente_id FROM ordens_servico WHERE id = ?', [osId])) || null;
+  } catch (e) {
+    if (/no such (table|column)/i.test(String(e && e.message))) return null;
+    throw e;
+  }
+}
+
+/** O numero da OS para mostrar: o vivo; `OS #<id>` se sumiu; `null` sem OS (RN-176.08). */
+async function numeroDaOsParaMostrar(db, osId) {
+  if (!temOsId(osId)) return null;
+  const os = await lerOs(db, osId);
+  return os && os.numero_os ? os.numero_os : `OS #${osId}`;
+}
+
+/** RN-176.02 (C1): o rotulo da OS do pedido na recusa — o numero, ou "sem OS". */
+async function rotuloDaOsDoPedido(db, osIdPedido) {
+  return temOsId(osIdPedido) ? numeroDaOsParaMostrar(db, osIdPedido) : 'sem OS';
+}
+
+/**
+ * A OS da CRIACAO. `pedidoGravadoId` e o `pedido_compra_id` que o INSERT vai gravar; `pedido` a linha resolvida (ou null).
+ * Com pedido (RN-176.02, C1): `os_id` nao nulo diferente da OS do pedido -> 400; igual ou ausente -> aceito e NAO gravado.
+ * Sem pedido (RN-176.01/03): a OS tem de existir e estar aberta. OS fechada so e recusada SEM pedido: a nota do pedido cuja
+ * OS fechou continua entrando como estoque (RN-171.03/B1101 — a reserva nao nasce).
+ * @returns {Promise<{ osIdProprio: number|null, osIdEfetiva: number|null }>}
+ */
+async function resolverOsDaCriacao(db, osIdBruto, pedidoGravadoId, pedido) {
+  // eslint-disable-next-line global-require
+  const { normalizarOsIdBruto, OS_INVALIDA } = require('../compras/schemas');
+  const v = normalizarOsIdBruto(osIdBruto);
+  if (temOsId(v) && (typeof v !== 'number' || !Number.isInteger(v) || v <= 0)) {
+    throw Object.assign(new Error(OS_INVALIDA), { status: 400 });
+  }
+  const osPayload = temOsId(v) ? v : null;
+  if (pedidoGravadoId) {
+    let osPedido;
+    if (pedido) osPedido = temOsId(pedido.os_id) ? Number(pedido.os_id) : null;
+    // eslint-disable-next-line global-require
+    else osPedido = await require('./reservaDaOs').osIdDoPedido(db, pedidoGravadoId);
+    if (osPayload !== null && osPayload !== osPedido) {
+      throw Object.assign(new Error(literalOsDoPedido(await rotuloDaOsDoPedido(db, osPedido))), { status: 400 });
+    }
+    return { osIdProprio: null, osIdEfetiva: osPedido };
+  }
+  if (osPayload === null) return { osIdProprio: null, osIdEfetiva: null };
+  const os = await lerOs(db, osPayload);
+  if (!os) throw Object.assign(new Error(`OS #${osPayload} não encontrada`), { status: 400 });
+  // eslint-disable-next-line global-require
+  if (require('../compras/pedidoCompraService').osFechada(os.status)) {
+    throw Object.assign(new Error(literalOsFechadaNaEntrada(os.numero_os || `#${os.id}`, os.status)), { status: 400 });
+  }
+  return { osIdProprio: osPayload, osIdEfetiva: osPayload };
+}
+
 async function criarRecebimento(db, user, data) {
   const {
     pedido_compra_id, pedido_compra_numero, tipo_recebimento, nota_fiscal,
@@ -511,6 +578,21 @@ async function criarRecebimento(db, user, data) {
   const excedentesDoPedido = assertSaldoDoPedidoPermitido(user, resolvidos, linhasDoPedido,
     data.autorizar_excedente === true);
 
+  // Etapa 176 (RN-176.01..04, C1, M2): a OS e a guarda do dono, ANTES do INSERT (nada gravado na recusa). Qualquer item de
+  // material de cliente que nao case com o cliente da OS EFETIVA (a do pedido, ou a propria) recusa a nota inteira.
+  const { osIdProprio, osIdEfetiva } = await resolverOsDaCriacao(db, data.os_id,
+    pedido?.id || pedido_compra_id || null, pedido);
+  if (osIdEfetiva) {
+    const ids = [...new Set(itens.map((i) => Number(i.material_id)).filter((id) => id > 0))];
+    const mats = ids.length ? await dbAll(db, `SELECT id, codigo, proprietario_cliente_id FROM materiais_almoxarifado
+      WHERE id IN (${ids.map(() => '?').join(',')})`, ids) : [];
+    const porId = new Map(mats.map((m) => [Number(m.id), m]));
+    // eslint-disable-next-line global-require
+    const problemasDono = await require('./ownerRules').problemasDoDonoComOs(db,
+      itens.map((i) => porId.get(Number(i.material_id))).filter(Boolean), osIdEfetiva);
+    if (problemasDono.length) throw Object.assign(new Error(problemasDono.join('; ')), { status: 400 });
+  }
+
   // Etapa 31 (RN-07): o numero nasce DENTRO do gerador, na tentativa que vencer o UNIQUE, e e ele
   // que volta no `return` daqui. O `fn` contem SO o INSERT do cabecalho — os itens sao inseridos
   // DEPOIS, e entrariam em duplicata se estivessem aqui dentro quando o retry disparasse.
@@ -518,8 +600,8 @@ async function criarRecebimento(db, user, data) {
     `INSERT INTO recebimentos_material_almoxarifado
     (numero, pedido_compra_id, pedido_compra_numero, tipo_recebimento, nota_fiscal,
      fornecedor_id, fornecedor_nome, fornecedor_cnpj, status, etapa_atual,
-     responsavel_id, responsavel_nome, observacoes)
-    VALUES (?,?,?,?,?,?,?,?,'RECEBIDO','ALMOXARIFADO',?,?,?)`, [
+     responsavel_id, responsavel_nome, observacoes, os_id)
+    VALUES (?,?,?,?,?,?,?,?,'RECEBIDO','ALMOXARIFADO',?,?,?,?)`, [
     num,
     pedido?.id || pedido_compra_id || null,
     pedido?.numero || pedido_compra_numero || null,
@@ -528,7 +610,7 @@ async function criarRecebimento(db, user, data) {
     pedido?.fornecedor_id || fornecedor_id || null,
     pedido?.fornecedor_nome || fornecedor_nome || null,
     pedido?.fornecedor_cnpj || fornecedor_cnpj || null,
-    user.id, user.nome || user.email, observacoes || null,
+    user.id, user.nome || user.email, observacoes || null, osIdProprio,
   ]));
 
   // (F5) O id de cada item inserido, por POSICAO no payload: e o que deixa a trilha do excedente
@@ -1258,6 +1340,22 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
     pedido = await resolverPedidoCompra(db, { pedido_compra_id, pedido_compra_numero });
   }
 
+  // Etapa 176 (C1): ligar um pedido a um recebimento com OS PROPRIA — a OS do pedido tem de ser a mesma (400 com a frase da
+  // criacao, antes de qualquer gravacao); sendo, o `os_id` proprio e LIMPO no UPDATE abaixo e passa a valer o do pedido.
+  // O `/fiscal` nao aceita `os_id` (a OS se escolhe na criacao — declarado no plano).
+  let limparOsPropria = false;
+  const pedidoNovoId = pedido?.id ?? (pedido_compra_id || null);
+  if (pedidoNovoId && temOsId(rec.os_id)) {
+    let osPedido;
+    if (pedido) osPedido = temOsId(pedido.os_id) ? Number(pedido.os_id) : null;
+    // eslint-disable-next-line global-require
+    else osPedido = await require('./reservaDaOs').osIdDoPedido(db, pedidoNovoId);
+    if (osPedido !== Number(rec.os_id)) {
+      throw Object.assign(new Error(literalOsDoPedido(await rotuloDaOsDoPedido(db, osPedido))), { status: 400 });
+    }
+    limparOsPropria = true;
+  }
+
   // RN-14 (Etapa 36): a SEGUNDA porta. Roda DEPOIS de `resolverPedidoCompra` e ANTES do UPDATE,
   // com `recebimentoId` — que exclui o proprio documento, senao salvar os dados fiscais duas vezes
   // com a PROPRIA nota se autoacusaria com 409.
@@ -1306,6 +1404,7 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
     outras_despesas = COALESCE(?, outras_despesas),
     valor_ipi = COALESCE(?, valor_ipi),
     valor_total_nota = COALESCE(?, valor_total_nota),
+    os_id = CASE WHEN ? = 1 THEN NULL ELSE os_id END,
     faturamento_responsavel_id = ?,
     faturamento_responsavel_nome = ?,
     faturamento_data = CURRENT_TIMESTAMP,
@@ -1323,6 +1422,7 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
     tipo_recebimento ?? null,
     base_icms ?? null, valor_icms ?? null, valor_produtos ?? null,
     frete ?? null, desconto ?? null, outras_despesas ?? null, valor_ipi ?? null, valor_total_nota ?? null,
+    limparOsPropria ? 1 : 0,
     user.id, user.nome || user.email, recebimentoId,
   ]);
 
@@ -1532,6 +1632,10 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id,
   // calculado uma vez e usado na pre-checagem E na chamada do motor (Fase 2, critico 1).
   const destinoPorItem = normalizarDestinos(destinos, itens);
   const problemas = [];
+  // Etapa 176 (I2, C1/I1): a OS EFETIVA da nota (a do pedido, viva; senao a propria) — lida uma vez, para a guarda do dono
+  // (I4) e para a marca da ENTRADA_COMPRA (RN-171.07).
+  // eslint-disable-next-line global-require
+  const osIdDaNota = await require('./reservaDaOs').osDoRecebimento(db, rec);
   for (const item of itens) {
     if (!(quantidadeDoItem(item) > 0)) continue; // item sem quantidade nao move estoque
     if (item.entrada_estoque_em) continue;       // ja entrou numa tentativa anterior
@@ -1587,16 +1691,24 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id,
       problemas.push(`${item.material_codigo}: ${e.message}`);
     }
   }
+  // Etapa 176 (I4): a guarda do dono da criacao (RN-176.04, M2) roda de novo aqui — o dono do material pode trocar entre
+  // criar e processar (material sem historico troca sem permissao, ownerRules.assertTrocaDeDonoPermitida). So os itens que
+  // vao entrar agora (os mesmos `continue` do laco acima). OS que sumiu: passa (M2 — a nota processa e nao reserva).
+  if (osIdDaNota) {
+    const entram = itens.filter((i) => quantidadeDoItem(i) > 0 && !i.entrada_estoque_em && i.material_ativo)
+      .map((i) => ({ codigo: i.material_codigo, proprietario_cliente_id: i.proprietario_cliente_id }));
+    // eslint-disable-next-line global-require
+    problemas.push(...await require('./ownerRules').problemasDoDonoComOs(db, entram, osIdDaNota));
+  }
   if (problemas.length) {
     throw Object.assign(
       new Error(`Nao foi possivel dar entrada no estoque: ${problemas.join('; ')}`),
       { status: 400 });
   }
 
-  // Etapa 171 (T2, RN-171.07): a ENTRADA_COMPRA de nota de pedido com OS grava o `os_id` do pedido — a marca de origem
-  // (decisao 2 do Andre: OS cancelada depois, o material vira estoque mas fica marcado). Vale mesmo com a OS fechada.
-  // eslint-disable-next-line global-require
-  const osIdDoPedido = await require('./reservaDaOs').osIdDoPedido(db, rec.pedido_compra_id);
+  // Etapa 171 (T2, RN-171.07): a ENTRADA_COMPRA de nota com OS grava o `os_id` — a marca de origem (decisao 2 do Andre: OS
+  // cancelada depois, o material vira estoque mas fica marcado). Vale mesmo com a OS fechada. Etapa 176 (I2): a OS e a de
+  // `osDoRecebimento` (a do pedido, ou a propria da nota sem pedido) — ate a 176 era so a do pedido (`osIdDaNota`, acima).
 
   // ── 2. Entrada item a item, cada um reclamado antes de mover ──
   for (const item of itens) {
@@ -1687,7 +1799,7 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id,
           motivo: `Recebimento ${rec.numero}`,
           referencia: rec.nota_fiscal,
           recebimento_id: recebimentoId,
-          os_id: osIdDoPedido || undefined,
+          os_id: osIdDaNota || undefined,
           localizacao_destino_id: destinoPorItem.get(item.id) || localizacao_id,
           lote_id: loteId,
           documento_vinculado: rec.numero,
