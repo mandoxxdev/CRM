@@ -1,7 +1,7 @@
 # Etapa 182 — O alerta "material separado aguardando retirada há N dias" (feature 20, com a 05)
 
-> **Status:** 📝 **plano escrito (2026-10-22), Fase 0 medida — falta a revisão da Fase 2 e a execução.** Emendado da "próxima
-> tarefa detalhada" da Etapa 181 (B1188). Nenhuma task começou.
+> **Status:** 🔧 **T1–T4 executadas (2026-10-22), ver "Execução" — falta a T5 (fechamento), depois da revisão.** Emendado da
+> "próxima tarefa detalhada" da Etapa 181 (B1188).
 > **Origem:** a única lacuna da spec 20 que não depende de ninguém (`specs/modulo-almoxarifado/20-alertas/README.md:54`, item
 > desmarcado, e `:164`, *"falta a data da transição p/ PRONTA_PARA_RETIRADA"*). Dor de galpão: a caixa separada ocupa a área de
 > expedição e segura material que ninguém busca.
@@ -134,7 +134,38 @@
 
 ## Execução
 
-_(vazio — preencher com hash e divergências ao fechar cada task)_
+- [x] **T1** — `4ed84488`. Coluna `pronta_para_retirada_em` (`await safeAlter` ao lado de `os_id`), gravada no UPDATE da
+  liberação; **trigger** `trg_requisicoes_pronta_para_retirada_em` (`AFTER UPDATE OF status … WHEN NEW.status = 'PRONTA_PARA_RETIRADA'
+  AND OLD.status IS NOT 'PRONTA_PARA_RETIRADA'`) como escritor único (M1); backfill `migrateBackfillProntaParaRetiradaEm`
+  (ledger, exportado), chamado entre o `safeAlter` e o `CREATE TRIGGER`. Teste `retiradaParadaColuna.api.test.js`, 9 casos (inclui
+  o primeiro boot com `CRM_DATA_DIR` vazio, por `spawn` do `index.js`, conferindo coluna + trigger + ledger no arquivo).
+  Controles (7, todos vermelhos na asserção certa, restaurados por cópia + `cmp`): trigger inerte (`WHEN 0 AND …`), trigger inerte
+  + coluna fora do UPDATE da rota, `MIN` no lugar de `MAX`, backfill sem filtro de status, `<>` no `WHEN` (status NULL antigo),
+  B504 zerando a coluna, gravação antes do compare-and-set (o 409 grava). **Divergências:** (1) a guarda por texto-fonte da RN-182.02
+  foi **substituída** pelo trigger (M1) — o teste prova o `SET status=?` paramétrico; (2) tirar só a coluna do UPDATE da rota fica
+  **verde** (o trigger cobre — por desenho); (3) renomear o trigger não é controle (ele continua ativo com outro nome) — o primeiro
+  controle tentado assim ficou verde e foi trocado pelo `WHEN 0`. Suíte `test:api` 521/521.
+- [x] **T2** — `1e6677be`. Entrada `SEPARADO_AGUARDANDO_RETIRADA` (16ª, no fim), `listarSeparadoAguardandoRetirada` exportada,
+  semente `alerta_retirada_parada_dias = 3`. Teste `alertaRetiradaParada.api.test.js`, 12 casos. **Contagens 15 → 16: 13 asserções
+  em 6 arquivos, não 12** — a 13ª, que o plano não listou, é `alertaPedidoParcial.api.test.js` (11) `semCompras.length` 13 → 14 (as
+  entradas que só leem tabela do almoxarifado; ela entra nessa conta). Cada uma com o comentário da etapa. Controles: janela um dia
+  mais curta (2 d 23 h entra), sem `ativo`, chave sem o instante, corpo sem `instanteDoBancoNoFuso`, sem filtro de status, fallback
+  de data na leitura (`COALESCE(coluna, updated_at)`). **Divergências:** (1) o controle "`>` virando `>=`" **não é detectável** com
+  relógio real (os dois só diferem no instante exato) — trocado pelo da janela mais curta; (2) o caso "coluna NULL não entra" passava
+  com o fallback de leitura porque a requisição era nova — **endurecido** com `created_at`/`updated_at` antigos; (3) a fila não tem
+  coluna `dedupe_chave` (só `hash_dedupe`) — o teste mede a chave pelo hash escrito à mão. Suíte `test:api` 522/522.
+- [x] **T3** — `ee4aabcb`. `COLUNAS_POR_CHAVE.SEPARADO_AGUARDANDO_RETIRADA` (7 colunas), linha em `CAMPOS` depois da reserva parada,
+  fixture de `ConfiguracoesGerais.test.js`. Jest: cartão (7 cabeçalhos e as 14 células, `2026-10-19 01:30:00` → `18/10/26`,
+  travessão sem setor/OS), campo com `3`, `'0'` barrado sem PUT, `'7'` no payload. Controles: data sem o `Z` (vira `19/10/26`), setor
+  sem travessão, campo fora de `CAMPOS`. O primeiro teste do cartão (título/janela/badge) passa sem a entrada (o fallback genérico já
+  desenha o cartão) — é proteção de contrato, não de comportamento novo. Client 180 suítes / 2359 testes; `CI=true build` ok.
+- [x] **T4** — `eb8b8f32`. `retiradaParadaIntegracao.api.test.js`, 2 cenários: (A) pela rota, cada gesto até a entrega
+  parcial, com 1 e depois 2 linhas na fila; (B) o B504 pelo serviço. Material não crítico (M5). Controles: B504 sem voltar o status
+  (A e B vermelhos), chave sem o instante (A vermelho na 1ª varredura: a fila não tem a chave com o instante), trigger inerte + rota
+  sem a coluna — este ficava **verde** na primeira versão (o "envelhecer" do teste grava a coluna por cima) e foi **endurecido**:
+  depois de cada liberação pela rota a coluna tem de estar a menos de 60 s de agora.
+- **Verificação final (depois da T4):** `test:api` 523/523 arquivos; `test:almoxarifado` 44/44; `test:validation` 4/4;
+  `test:safealter` 3/3; `test:sqlite` 16/16; client 180 suítes / 2359 testes; `CI=true build` compilou. Uma suíte por vez.
 
 ## Próxima tarefa detalhada
 
