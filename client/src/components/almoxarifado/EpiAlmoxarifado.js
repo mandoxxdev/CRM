@@ -11,7 +11,7 @@ import {
   MOTIVOS_EPI, rotuloMotivo, ehEpi, avisoDoCa, erroDaQuantidade, montarFormDataEntrega, codigoVerificacao, seloVerificacao,
   novaChaveIdempotencia, erroDaConfirmacao, mensagemErroEntrega, resumoCadeia,
 } from '../../utils/epiEntrega';
-import { gerarFichaEpiPdf } from '../../utils/fichaEpiPdf';
+import { gerarFichaEpiPdf, montarFichaEpi } from '../../utils/fichaEpiPdf';
 import './Almoxarifado.css';
 
 /**
@@ -46,6 +46,8 @@ const rotuloMaterial = (m) => [m.codigo, m.nome].filter(Boolean).join(' — ');
 // Regra da Etapa 170: o `criado_em` (instante UTC do servidor) no dia de Brasilia, nunca os 10 primeiros caracteres.
 const diaDaEntrega = (v) => { const d = lerInstanteDoBanco(v); return d ? formatarDataDoBanco(hojeLocalISO(d)) : '—'; };
 const validadeCa = (v) => formatarDataDoBanco(v, '—', { soData: true });
+// Etapa 183 (RN-183.04): na celula, os primeiros 40 caracteres do aparelho + '…'; o texto inteiro vai no title (o PDF imprime tudo).
+const resumirAparelho = (s) => { const t = String(s ?? ''); return t.length > 40 ? `${t.slice(0, 40)}…` : t; };
 
 const EpiAlmoxarifado = () => {
   const { pode, bloquearSeNaoPode } = useAlmoxPermissoes();
@@ -102,6 +104,8 @@ const EpiAlmoxarifado = () => {
     return () => { cancelado = true; };
   }, [podeEntregar]);
 
+  // Etapa 183: as linhas do descritor da ficha (o mesmo do PDF) — a tela le dele a matricula confirmada e o aparelho.
+  const linhasDaFicha = useMemo(() => (ficha ? montarFichaEpi(ficha).linhas : []), [ficha]);
   const epis = useMemo(() => materiais.filter(ehEpi), [materiais]);
   const episFiltrados = useMemo(() => {
     const q = buscaEpi.trim().toLowerCase();
@@ -507,11 +511,13 @@ const EpiAlmoxarifado = () => {
                     <thead>
                       <tr>
                         <th>Data</th><th>EPI</th><th>CA</th><th>Validade CA</th><th>Qtd</th><th>Tamanho</th>
-                        <th>Motivo</th><th>Entregue por</th><th>Assinatura</th><th>Hash do registro</th>
+                        <th>Motivo</th><th>Entregue por</th><th>Matrícula confirmada</th><th>Aparelho</th>
+                        <th>Assinatura</th><th>Hash do registro</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {ficha.entregas.map((e) => (
+                      {/* Etapa 183 (RN-183.03/04): a confirmacao e o aparelho pelo MESMO descritor do PDF (um calculo so). */}
+                      {ficha.entregas.map((e, i) => (
                         <tr key={e.id}>
                           <td>{diaDaEntrega(e.criado_em)}</td>
                           <td>{rotuloMaterial({ codigo: e.material_codigo, nome: e.material_nome })}</td>
@@ -521,6 +527,8 @@ const EpiAlmoxarifado = () => {
                           <td>{e.tamanho || '—'}</td>
                           <td>{e.motivo ? rotuloMotivo(e.motivo) : '—'}</td>
                           <td>{e.entregue_por_nome || '—'}</td>
+                          <td>{linhasDaFicha[i]?.matriculaConfirmada}</td>
+                          <td title={linhasDaFicha[i]?.aparelho}>{resumirAparelho(linhasDaFicha[i]?.aparelho)}</td>
                           <td>
                             {resolveMaterialPhotoUrl(e.arquivo_url) ? (
                               <img src={resolveMaterialPhotoUrl(e.arquivo_url)} alt="Assinatura" style={{ height: 36, background: '#fff' }} />

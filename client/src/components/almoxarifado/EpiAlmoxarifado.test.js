@@ -469,3 +469,61 @@ describe('Ficha por colaborador', () => {
     expect(toast.error).toHaveBeenCalledWith('Colaborador #8 não encontrado');
   });
 });
+
+// Etapa 183 (T3, RN-183.03/04/05) — a ficha na tela mostra a matricula confirmada e o aparelho de cada entrega, pelo MESMO descritor
+// do PDF (montarFichaEpi). Ficha mockada na fronteira HTTP com o JSON do contrato da T1.
+describe('Ficha: matricula confirmada e aparelho (Etapa 183)', () => {
+  const UA_60 = 'Mozilla/5.0 (Linux; Android 13; SM-X200) AppleWebKit/537.36Z';
+  const FICHA_183 = {
+    colaborador: { id: 7, nome: 'Maria Souza', matricula: 'M-200', setor: 'Caldeiraria', cpf_mascarado: '***.***.***-01', excluido: false },
+    entregas: [
+      { ...ENTREGAS[0], arquivo_url: '/api/uploads/almoxarifado/assinatura-epi-11.png?exp=1&sig=a', registro_sha256: HASH,
+        confirmado_por_matricula: 1, user_agent: UA_60 },
+      { ...ENTREGAS[0], id: 13, numero: 'EPI-20260101-0001', criado_em: '2026-01-01T13:00:00.000Z', arquivo_url: null,
+        registro_sha256: HASH, confirmado_por_matricula: null, user_agent: null },
+    ],
+  };
+  async function abrirFicha() {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/aux/colaboradores') return Promise.resolve({ data: COLABORADORES });
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: MATERIAIS });
+      if (url === '/almoxarifado/epi/ficha/7') return Promise.resolve({ data: FICHA_183 });
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    await clicar(botao('Ficha por colaborador'));
+    preencher(container.querySelector('select[aria-label="Colaborador da ficha"]'), '7');
+    await esperarEfeitos();
+    const cabecalhos = [...container.querySelectorAll('.almox-epi-ficha-lista thead th')].map((th) => th.textContent.trim());
+    const linhas = [...container.querySelectorAll('.almox-epi-ficha-lista tbody tr')];
+    const celula = (linha, cab) => linhas[linha].querySelectorAll('td')[cabecalhos.indexOf(cab)];
+    return { cabecalhos, linhas, celula };
+  }
+
+  test('[RN-183.03] cabecalhos novos; a entrega diz "digitou M-100" enquanto o topo diz "Matrícula: M-200"', async () => {
+    const { cabecalhos, linhas, celula } = await abrirFicha();
+    expect(cabecalhos).toEqual(expect.arrayContaining(['Matrícula confirmada', 'Aparelho']));
+    expect(linhas).toHaveLength(2);
+    expect(texto()).toContain('Matrícula: M-200');
+    expect(celula(0, 'Matrícula confirmada').textContent).toBe('Sim — digitou M-100 (confere com o cadastro)');
+  });
+
+  test('[RN-183.03] nenhuma celula da confirmacao mostra a flag crua "1"', async () => {
+    const { linhas, celula } = await abrirFicha();
+    linhas.forEach((_, i) => expect(celula(i, 'Matrícula confirmada').textContent.trim()).not.toBe('1'));
+  });
+
+  test('[RN-183.05] entrega antiga -> "Não registrada" e "Não registrado"', async () => {
+    const { celula } = await abrirFicha();
+    expect(celula(1, 'Matrícula confirmada').textContent).toBe('Não registrada');
+    expect(celula(1, 'Aparelho').textContent).toBe('Não registrado');
+  });
+
+  test('[RN-183.04] aparelho de 60 caracteres -> 40 + "…" na celula e o texto inteiro no title', async () => {
+    expect(UA_60).toHaveLength(60);
+    const { celula } = await abrirFicha();
+    const td = celula(0, 'Aparelho');
+    expect(td.textContent).toBe(`${UA_60.slice(0, 40)}…`);
+    expect(td.getAttribute('title')).toBe(UA_60);
+  });
+});
