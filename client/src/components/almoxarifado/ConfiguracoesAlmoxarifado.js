@@ -3559,6 +3559,9 @@ const TabConfiguracoes = () => {
     { chave: 'alerta_calibracao_dias', label: 'Alerta de Calibração (dias)', tipo: 'number', descricao: 'Dias de antecedência para alertar calibração de ferramenta vencendo' },
     { chave: 'alerta_quarentena_dias', label: 'Alerta de Quarentena Parada (dias)', tipo: 'number', descricao: 'Dias aguardando inspeção para o item de recebimento contar como quarentena parada' },
     { chave: 'alerta_reserva_parada_dias', label: 'Alerta de Reserva Parada (dias)', tipo: 'number', descricao: 'Dias com reserva ativa parada para gerar alerta de reserva esquecida' },
+    // Etapa 182 (T3, RN-182.09): a janela do 16o alerta (caixa separada parada), semeada no schema.js no mesmo passo — chave
+    // fora desta lista fixa e ineditavel pela UI (a licao das Etapas 16, 43 e 46).
+    { chave: 'alerta_retirada_parada_dias', label: 'Alerta de Retirada Parada (dias)', tipo: 'number', descricao: 'Dias com a requisição liberada para retirada sem ninguém buscar para gerar alerta de caixa parada' },
     // Etapa 17 (C3): janela UNICA dos 3 alertas de evento (material reprovado, divergencia de
     // recebimento, divergencia de inventario) — semeada no schema.js e lida pela mesma
     // alertRegistry.resolverDias. O prefixo `alerta_` ja cai no guard do handleSalvar.

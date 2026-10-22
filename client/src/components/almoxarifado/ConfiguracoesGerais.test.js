@@ -95,6 +95,9 @@ const RESPOSTA_DO_SERVIDOR = {
   // Etapa 43 acima previa exatamente isso, e a fixture continua sendo a quarta ponta da config
   // que nenhum plano listou.
   alerta_nc_execucao_pendente_dias: { valor: '7', descricao: 'Alerta de execucao pendente da NC (dias)', id: 21 },
+  // Etapa 182 (T3, RN-182.09): a janela do 16o alerta (caixa separada parada). Mesma obrigacao das anteriores — sem
+  // fixture valida, o guard client-side le undefined como NaN e barra os testes de Salvar que nem tocam nela.
+  alerta_retirada_parada_dias: { valor: '3', descricao: 'Alerta de retirada parada (dias)', id: 182 },
   // Etapa 70 (T3): os avisos de entrada do recebimento. Os defaults sao os SEMEADOS no
   // schema.js (D3 revisto na Fase 2): o da nota nasce '0' (lista compartilhada — ligar e
   // decisao de quem opera), o do solicitante nasce '1'. Booleana fora da fixture nao derruba o
@@ -575,6 +578,36 @@ test('a chave de dias da execucao pendente da NC (Etapa 46) aparece, recusa 0 e 
   expect(api.put.mock.calls[0][1].alerta_nc_execucao_pendente_dias).toBe('30');
   // A irma segue no MESMO payload, com o valor da fixture — o salvar manda o mapa inteiro.
   expect(api.put.mock.calls[0][1].alerta_nc_parada_dias).toBe('7');
+});
+
+test('a chave de dias da retirada parada (Etapa 182) aparece, recusa 0 e entra no payload', async () => {
+  await renderAbaGeral();
+
+  expect(container.textContent).toContain('Alerta de Retirada Parada (dias)');
+  const input = inputDoCampo('Alerta de Retirada Parada (dias)');
+  expect(input).not.toBeNull();
+  expect(input.value).toBe('3');
+  expect(inputDoCampo('Alerta de Reserva Parada (dias)')).not.toBeNull();
+
+  const preencher = (el, valor) => {
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(el, valor);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  const botao = [...container.querySelectorAll('button')]
+    .find(b => /Salvar Configurações/.test(b.textContent));
+
+  await act(async () => { preencher(input, '0'); });
+  await act(async () => { botao.click(); });
+  expect(api.put).not.toHaveBeenCalled();
+  expect(toast.error).toHaveBeenCalledWith(
+    'Configuração "alerta_retirada_parada_dias" deve ser um número de dias maior que zero'
+  );
+
+  await act(async () => { preencher(input, '7'); });
+  await act(async () => { botao.click(); });
+  expect(api.put).toHaveBeenCalledTimes(1);
+  expect(api.put.mock.calls[0][1].alerta_retirada_parada_dias).toBe('7');
+  expect(api.put.mock.calls[0][1].alerta_reserva_parada_dias).toBe('30');
 });
 
 /**

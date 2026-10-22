@@ -129,6 +129,18 @@ const COLUNAS_POR_CHAVE = {
     { titulo: 'Criada em', render: (l) => formatData(l.created_at) },
     { titulo: 'Expira em', render: (l) => formatData(l.expira_em) },
   ],
+  // Etapa 182 (T3, RN-182.09): a caixa separada e liberada para retirada que ninguem buscou. Espelha o corpo do e-mail
+  // (alertRegistry.js, SEPARADO_AGUARDANDO_RETIRADA), menos o status (a populacao e so PRONTA_PARA_RETIRADA). A liberacao
+  // e DATETIME UTC do SQLite — formatData poe o 'Z' antes de ler.
+  SEPARADO_AGUARDANDO_RETIRADA: [
+    { titulo: 'Requisição', render: (l) => l.numero || `#${l.id}` },
+    { titulo: 'Solicitante', render: (l) => l.solicitante_nome || '—' },
+    { titulo: 'Setor', render: (l) => l.setor || '—' },
+    { titulo: 'OS', render: (l) => l.os_referencia || '—' },
+    { titulo: 'Itens na caixa', render: (l) => formatNum(l.itens_na_caixa) },
+    { titulo: 'Liberada em', render: (l) => formatData(l.pronta_para_retirada_em) },
+    { titulo: 'Dias', render: (l) => (l.dias_aguardando ?? '—') },
+  ],
   // ── Etapa 17 (C2): as 4 chaves novas. As colunas espelham os campos que o `listar` do
   // servidor REALMENTE devolve (alertRegistry.js, `listarReprovados` /
   // `listarDivergenciasRecebimento` / `listarDivergenciaConferencia` / o SELECT de lotes) e a

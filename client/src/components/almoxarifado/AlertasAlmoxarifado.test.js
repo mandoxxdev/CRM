@@ -247,6 +247,25 @@ const CENTRAL_FIXTURE = {
         },
       ],
     },
+    // Etapa 182 (T3, RN-182.09): a 16a entrada, no FIM — a posicao do ALERT_REGISTRY no servidor. A linha e a que
+    // `listarSeparadoAguardandoRetirada` projeta: { id, numero, solicitante_nome, setor, os_referencia, status,
+    // pronta_para_retirada_em, dias_aguardando, itens_na_caixa }. A liberacao '2026-10-19 01:30:00' e UTC (CURRENT_TIMESTAMP):
+    // no fuso de Brasilia e 18/10 22:30 — sem o 'Z' do formatData a celula diria 19/10/26. A 2a linha e sem setor e sem OS.
+    {
+      chave: 'SEPARADO_AGUARDANDO_RETIRADA', titulo: 'Separado aguardando retirada',
+      descricao: 'Requisições liberadas para retirada há mais dias que o configurado e ainda não retiradas.',
+      dias: 3, total: 4,
+      linhas: [
+        {
+          id: 77, numero: 'REQ-2026-077', solicitante_nome: 'Pedro Alves', setor: 'Usinagem', os_referencia: 'OS-777',
+          status: 'PRONTA_PARA_RETIRADA', pronta_para_retirada_em: '2026-10-19 01:30:00', dias_aguardando: 3, itens_na_caixa: 2,
+        },
+        {
+          id: 78, numero: 'REQ-2026-078', solicitante_nome: 'Ana Reis', setor: null, os_referencia: '',
+          status: 'PRONTA_PARA_RETIRADA', pronta_para_retirada_em: '2026-10-10 12:00:00', dias_aguardando: 12, itens_na_caixa: 1,
+        },
+      ],
+    },
   ],
 };
 
@@ -300,6 +319,8 @@ test('um cartao por alerta, na ordem do array do C1 (a tela nao reordena)', asyn
     'alerta-card-PEDIDO_COMPRA_PARCIAL',
     // Etapa 43 (T4): a 14a, pelo mesmo motivo e na mesma posição — o fim do ALERT_REGISTRY.
     'alerta-card-NAO_CONFORMIDADE_ABERTA',
+    // Etapa 182 (T3): a 16a (a 15a, NAO_CONFORMIDADE_EXECUCAO_PENDENTE, nao esta nesta fixture).
+    'alerta-card-SEPARADO_AGUARDANDO_RETIRADA',
   ]);
   expect(texto()).toContain('Calibração vencendo');
   expect(texto()).toContain('Requisição atrasada');
@@ -648,6 +669,33 @@ test('NAO_CONFORMIDADE_ABERTA: nenhum campo cru no cartao (id, status, created_a
   expect(cels).not.toContain('42');
   expect(cels).not.toContain('ABERTA');
   expect(cels).not.toContain('2026-09-15 08:30:00');
+});
+
+/**
+ * Etapa 182 (T3, RN-182.09) — cartao da 16a chave, `SEPARADO_AGUARDANDO_RETIRADA`: Requisição · Solicitante · Setor · OS ·
+ * Itens na caixa · Liberada em · Dias. Sem a entrada em COLUNAS_POR_CHAVE o fallback generico desenharia `id`, `numero`,
+ * `solicitante_nome`, `setor`, `os_referencia`, `status` — e a pergunta do cartao (ha quanto tempo a caixa espera) sumiria.
+ */
+test('SEPARADO_AGUARDANDO_RETIRADA: cartao com titulo, janela e o badge do total', async () => {
+  await renderizar();
+  const c = card('SEPARADO_AGUARDANDO_RETIRADA');
+  expect(c).not.toBeNull();
+  expect(c.textContent).toContain('Separado aguardando retirada');
+  expect(badgeTotal('SEPARADO_AGUARDANDO_RETIRADA').textContent).toContain('4');
+  expect(c.querySelector('.almox-badge-baixo').textContent).toContain('3');
+});
+
+test('SEPARADO_AGUARDANDO_RETIRADA: as 7 colunas, na ordem, e as celulas (data UTC em dd/mm/aa de Brasilia)', async () => {
+  await renderizar();
+  await expandir('SEPARADO_AGUARDANDO_RETIRADA');
+  expect(cabecalhos('SEPARADO_AGUARDANDO_RETIRADA')).toEqual([
+    'Requisição', 'Solicitante', 'Setor', 'OS', 'Itens na caixa', 'Liberada em', 'Dias',
+  ]);
+  expect(celulasTodas('SEPARADO_AGUARDANDO_RETIRADA')).toEqual([
+    'REQ-2026-077', 'Pedro Alves', 'Usinagem', 'OS-777', '2', '18/10/26', '3',
+    'REQ-2026-078', 'Ana Reis', '—', '—', '1', '10/10/26', '12',
+  ]);
+  expect(card('SEPARADO_AGUARDANDO_RETIRADA').textContent).not.toMatch(/null|undefined|Invalid Date|NaN|PRONTA_PARA_RETIRADA/);
 });
 
 test('gate visual: sem ver_alertas o painel de sem-permissao aparece sem nem chamar o GET', async () => {
