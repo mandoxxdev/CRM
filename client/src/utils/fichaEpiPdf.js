@@ -111,7 +111,7 @@ export async function gerarFichaEpiPdf(dados, { carregarImagem = carregarImagemC
     celulas.forEach((c, i) => pdf.text(String(c).slice(0, larguras[i] * 1.4), cols[i], y));
     y += 4;
     pdf.setFontSize(7);
-    pdf.text(`Entrega ${l.numero} · registro SHA-256: ${l.hash}`, M, y);
+    pdf.text(`Entrega ${l.numero} · registro (HMAC-SHA256): ${l.hash}`, M, y); // Fase 5: o registro e HMAC com segredo do servidor
     pdf.setFontSize(9);
     y += 2;
     if (imagens[idx]) {
