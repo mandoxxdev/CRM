@@ -11,14 +11,20 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-22):** **Etapa 180 fechada** (**termo de responsabilidade no empréstimo de ferramenta** —
+> **Onde o desenvolvimento está (2026-10-22):** **Etapa 181 fechada** (**o relatório *EPI por colaborador* passa a mostrar as entregas de
+> EPI** — data, número, colaborador, matrícula, setor, EPI, CA, validade do CA, quantidade, tamanho, motivo, quem entregou e se tem
+> assinatura, com filtros de colaborador, EPI e período; ele e o *Ferramentas emprestadas* passam a ser só de quem entrega EPI / gerencia
+> ferramentas (Administrador e Almoxarife — **o Gestor deixa de vê-los**); e o nome de quem recebeu o EPI e de quem está com a ferramenta
+> deixam de sair pelo **histórico de movimentações** e pela **lista de ferramentas** para os outros perfis; nada a rodar antes do deploy;
+> decisões **B1180** a **B1188**; avisos **C440** a **C442**; revisão adversarial feita e corrigida). **Próxima: Etapa 182** — o alerta
+> *material separado aguardando retirada há N dias* (ver o plano da 181).
+> *(Também em 2026-10-22: **Etapa 180 fechada** (**termo de responsabilidade no empréstimo de ferramenta** —
 > emprestar uma ferramenta passa a exigir o colaborador **do cadastro** (com matrícula), a leitura do **texto do termo** na tela, a
 > **assinatura** no tablet e a **matrícula digitada pelo próprio colaborador**; o termo assinado fica guardado como uma **fotografia** que não
 > muda (texto da versão assinada, ferramenta e colaborador daquele momento), sai em PDF e pode ser **verificado**, inclusive na mesma
 > **cadeia** das entregas de EPI; o administrador troca o texto pela tela, e cada troca é uma **versão nova**; **uma ação antes de usar em
 > produção — A108: trocar o texto PROVISÓRIO pelo termo da empresa** (o texto não foi fornecido); decisões **B1170** a **B1179**; avisos
-> **C436** a **C439**; revisão adversarial feita e corrigida). **Próxima: Etapa 181** — o relatório *EPI por colaborador* passa a ler as
-> entregas de EPI (hoje lê empréstimos de ferramenta — **D (180)**). A **179** é da outra frente.
+> **C436** a **C439**; revisão adversarial feita e corrigida); a próxima era a **181**. A **179** é da outra frente.)*
 > *(Também em 2026-10-22: **Etapa 178 fechada** (**entrega de EPI ao colaborador com assinatura na tela
 > (NR-6)** — tela nova **Almoxarifado → Entrega de EPI**: o colaborador do cadastro, o EPI com **CA** obrigatório e vigente, a quantidade, a
 > **assinatura** no tablet e a **matrícula digitada pelo próprio colaborador**; a baixa do estoque, a **ficha de EPI por colaborador** em PDF e a
@@ -4202,7 +4208,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169 e B1170 a B1179; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179 e B1180 a B1188; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -12507,6 +12513,68 @@ conferiu, não o que foi digitado; achado no teste ponta a ponta e corrigido). *
 **Relatórios → EPI por colaborador** lê **empréstimos de ferramenta** marcados como EPI e ignora as entregas de EPI da 178 — quem abre vê vazio
 com a ficha cheia na outra tela (**D (180)**). A 181 troca a fonte (data, EPI, CA, validade do CA, quantidade, quem entregou, o número da
 entrega), restringe à permissão de EPI (a ficha é restrita, **B1165**) e decide o legado. Ver a "próxima tarefa detalhada" no plano da 180.
+**✅ Feito na Etapa 181** (**B1180** a **B1182**).
+
+**B1180 (NOVA, da Etapa 181; decisão do agente) — o relatório "EPI por colaborador" lê as entregas de EPI.** Uma linha por entrega feita pela
+tela **Entrega de EPI**: **Entregue em** (dia e hora de Brasília), **Número**, **Colaborador**, **Matrícula**, **Setor**, **Código**, **EPI**,
+**CA**, **Validade do CA**, **Quantidade**, **Tamanho**, **Motivo** (*Primeira entrega*, *Troca*, *Perda*, *Dano*), **Entregue por** e
+**Assinatura** (*Sim*/*Não*), das mais recentes para as mais antigas, com os filtros **Colaborador**, **EPI (id do material)**, **De** e **Até**
+(dias de Brasília — a mesma régua da aba **Entregas**). Os dados são a **cópia gravada na entrega** (o nome e o setor daquele dia), não o
+cadastro de hoje. **Descartado:** reaproveitar a lista da aba Entregas (não tem setor nem a coluna de assinatura). `3ce1d3a2`.
+
+**B1181 (NOVA, da Etapa 181; decisão do agente) — os empréstimos de ferramenta cadastrada como EPI saem deste relatório.** Até aqui ele lia
+**só** isso (ferramenta com tipo *EPI*, em aberto) e ignorava as entregas. Esses empréstimos continuam no relatório **Ferramentas
+emprestadas**, e a nota do relatório diz: *"Empréstimos de ferramenta cadastrada como EPI não entram mais aqui: continuam em "Ferramentas
+emprestadas"."* **Descartado:** juntar as duas fontes numa lista (misturaria entrega com assinatura e empréstimo sem assinatura, que voltam
+de jeitos diferentes). **Reversível.** Se havia empréstimos assim em produção, eles **somem deste** relatório e aparecem só no outro (**C440**).
+`3ce1d3a2`.
+
+**B1182 (NOVA, da Etapa 181; decisão do agente) — os dois relatórios de pessoa ficam restritos.** **EPI por colaborador** passa a exigir a
+permissão **Entregar EPI** e **Ferramentas emprestadas**, a permissão **Ferramentas** — as duas são do **Administrador** e do **Almoxarife**.
+Era a mesma inconsistência da 178 e da 180: a tela de EPI e a aba **Empréstimos** já negavam o dado aos outros perfis, e o relatório o
+entregava a qualquer um do módulo (inclusive em planilha). Para os outros perfis os dois somem do menu de Relatórios; pelo endereço direto,
+*"Sem permissão para este relatório"*. **Consequência medida:** o **Gestor** passa de **26** para **24** relatórios e a **Produção** de **22**
+para **20** (**C440**). **Descartado:** deixar aberto e só tirar a matrícula (o nome com o EPI e a data já é o dado sensível). **Reversível**
+(uma linha do registro por relatório). `3ce1d3a2`.
+
+**B1183 (NOVA, da Etapa 181; decisão do agente) — o filtro de colaborador lista só os ativos.** O campo **Colaborador** é a mesma lista da
+entrega de EPI (os colaboradores **ativos** do cadastro, *nome (setor)*). Quem saiu da empresa não aparece na lista: as entregas dele aparecem
+no relatório **sem filtro** (ou pelo período), e a ficha dele continua na aba **Ficha por colaborador**. **Descartado:** uma lista nova com os
+inativos (mais uma rota de pessoa para restringir). **Reversível.** `3ce1d3a2`.
+
+**B1184 (NOVA, da Etapa 181; decisão do agente) — o filtro de EPI é pelo número interno do material.** **EPI (id do material)** é um campo de
+número: a lista de materiais da tela não sabe filtrar só os EPI, e um seletor com todos os materiais seria enganoso. **Descartado:** o
+seletor com todos. **Reversível** (quando houver lista de EPI, vira seletor). `3ce1d3a2`.
+
+**B1185 (NOVA, da Etapa 181; decisão do agente, da revisão da Fase 5) — o histórico de movimentações não diz mais quem recebeu o EPI.** A
+saída de cada entrega gravava a justificativa *"Entrega de EPI a ⟨nome⟩ (⟨matrícula⟩)"*, e o histórico (Relatórios → **Histórico de
+movimentações**, a planilha, a tela **Movimentações**, o **Extrato** do material; e a resposta das últimas movimentações do painel) a entregava a qualquer
+usuário do módulo — o mesmo dado que a tela de EPI e o relatório (**B1182**) negam. Agora: (a) as entregas **novas** gravam *"Entrega de EPI
+EPI-…"* (só o número; o nome continua na entrega); (b) as **antigas** continuam gravadas como estavam e, para quem **não** tem **Entregar EPI**,
+aparecem como *"Entrega de EPI (dados do colaborador restritos)"*; o Administrador e o Almoxarife continuam vendo o texto original. Conferido
+antes: esse texto **não** entra na impressão digital da entrega — mudar a escrita não afeta **Verificar** nem **Verificar cadeia**.
+**Descartado:** reescrever as linhas antigas (o livro de movimentações é o registro do que aconteceu; reescrever não teria volta).
+**Limite:** a régua é o texto — uma justificativa **digitada** que comece com *"Entrega de EPI a "* também aparece mascarada (o lado seguro).
+**Reversível.** `0e6d5b37`.
+
+**B1186 (NOVA, da Etapa 181; decisão do agente, da revisão da Fase 5) — a lista de ferramentas não diz com quem a ferramenta está, para quem
+não gerencia ferramentas.** Na aba **Ferramentas**, a linha de uma ferramenta emprestada mostrava *"com ⟨nome⟩"* a qualquer perfil — o dado
+que a aba **Empréstimos** (**B1177**) e o relatório (**B1182**) restringem. Para os outros perfis a linha mostra só **Emprestada** (a data
+prevista continua indo à tela). **Descartado:** esconder que está emprestada (o status é útil a todos: quem procura a ferramenta sabe que não
+está na prateleira). **Reversível.** `71418065`.
+
+**B1187 (NOVA, da Etapa 181; decisão do agente) — a coluna "Assinatura" diz se a assinatura existe, não se está íntegra.** *Sim* quando há a
+assinatura registrada da entrega; *Não* é anomalia (toda entrega pela tela grava a assinatura na mesma gravação). A **integridade** (o
+arquivo e a cadeia) continua sendo conferida na tela **Entrega de EPI** (**Verificar**, **Verificar cadeia**) — a nota do relatório diz isso.
+**Descartado:** recalcular a impressão digital linha a linha no relatório (lento num relatório sem teto, e a verificação mora num lugar só).
+A revisão da Fase 5 provou que um **termo de ferramenta** com o mesmo número interno não faz a entrega sem assinatura virar *Sim*.
+`3ce1d3a2`, `e104df3c`.
+
+**B1188 (NOVA, da Etapa 181) — a próxima etapa (182): o alerta "material separado aguardando retirada há N dias".** Pelo mapa, a feature 🟡
+de maior valor que **não** depende de resposta da empresa: a última lacuna do motor de alertas (feature 20) que não depende de orçamento de
+projeto. Medido: o sistema **não guarda quando** a requisição ficou pronta para retirada (só o status) — a 182 grava esse momento e cria o
+alerta, com os dias configuráveis. De passagem, medido: o **lembrete de ferramenta não devolvida** que a spec 16 dava como faltando **existe**
+desde a Etapa 12 (e-mail diário); a spec 16 foi corrigida neste fechamento, dizendo que estava errada. Ver a "próxima tarefa detalhada" no plano da 181.
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -16094,7 +16162,24 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      Engenharia continuam vendo **Ferramentas** e **Calibrações**, mas não a lista de quem está com cada ferramenta nem o termo (**B1177**). O
      mesmo segredo da assinatura de EPI (**A107**) agora protege também os termos: servidor restaurado sem ele acusa os termos como
      *"Adulterado: registro alterado"*. **O que fazer:** quem precisar consultar empréstimos sem operar, perfil de almoxarife — ou, por enquanto,
-     o relatório **Ferramentas emprestadas** (que continua aberto, **D (180)**).
+     o relatório **Ferramentas emprestadas** (que continua aberto, **D (180)**). **Atualizado na Etapa 181:** o relatório deixou de ser aberto
+     (**B1182**, **C440**) — a alternativa acima não vale mais.
+440. **NOVO (da Etapa 181) — o Gestor (e os outros perfis fora do almoxarifado) deixou de ver dois relatórios.** Em **Almoxarifado →
+     Relatórios**, **EPI por colaborador** e **Ferramentas emprestadas** sumiram do menu de Gestor, Produção, Compras, Consulta, Qualidade e
+     Engenharia; pelo endereço direto, *"Sem permissão para este relatório"* (**B1182**). O Gestor passa de 26 para 24 relatórios, a Produção de
+     22 para 20. E o **EPI por colaborador** mudou de conteúdo: mostra as **entregas de EPI** da tela de EPI, não mais os empréstimos de
+     ferramenta cadastrada como EPI (esses ficam em **Ferramentas emprestadas** — **B1181**). **O que fazer:** avisar quem usava esses dois
+     relatórios (a gestão e a Segurança do Trabalho) antes do deploy; quem precisar deles, perfil de almoxarife — ou o administrador do módulo.
+441. **NOVO (da Etapa 181) — no histórico de movimentações, a entrega de EPI aparece sem o nome de quem recebeu.** Para quem **não** é
+     Administrador nem Almoxarife, as saídas de entrega de EPI gravadas antes desta etapa aparecem como *"Entrega de EPI (dados do colaborador
+     restritos)"* — em **Relatórios → Histórico de movimentações** (e na planilha), na tela **Movimentações** e no **Extrato** do material. As
+     entregas **novas** aparecem para **todos** (inclusive o almoxarife) como *"Entrega de EPI EPI-…"* — só o número (**B1185**). **O que
+     fazer:** quem procurava "a entrega do fulano" pela justificativa do histórico passa a procurar na tela **Entrega de EPI** (aba **Entregas**,
+     filtro por colaborador) ou no relatório **EPI por colaborador**; o número *EPI-…* liga as duas.
+442. **NOVO (da Etapa 181) — a lista de ferramentas não diz mais com quem a ferramenta está, para quem não gerencia ferramentas.** Na aba
+     **Ferramentas**, a linha da ferramenta emprestada mostra só **Emprestada** (sem *"com ⟨nome⟩"*) para Gestor, Produção, Compras, Consulta,
+     Qualidade e Engenharia (**B1186**). **O que fazer:** nada — quem precisa saber com quem está a ferramenta é quem a empresta e recebe de
+     volta (Administrador, Almoxarife).
 ### D. Limitações declaradas— são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -17436,6 +17521,14 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   (`GET /ferramentas/:id/manutencoes`) e na Auditoria (*Fim de manutenção*). Quem empresta não fica sabendo da restrição pela tela.
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(181) O relatório EPI por colaborador e o que deixou de sair para todos, o que ficou de fora.** (1) O relatório **não verifica** a
+  integridade de cada entrega — a coluna **Assinatura** diz só se existe; **Verificar** e **Verificar cadeia** ficam na tela de EPI (**B1187**).
+  (2) O filtro **Colaborador** lista só os ativos (**B1183**) e o **EPI** é pelo número interno do material (**B1184**). (3) Os empréstimos de
+  ferramenta cadastrada como EPI não aparecem mais aqui — só em **Ferramentas emprestadas** (**B1181**). (4) A máscara do histórico é pelo
+  **texto** da justificativa: uma digitada que comece com *"Entrega de EPI a "* também é mascarada; e a **Auditoria** (só Administrador) e os
+  **e-mails de movimentação** já enviados (se o aviso de movimentações estava ligado) continuam com o texto antigo, com o nome (**B1185**).
+  (5) Quem tem acesso ao **banco** continua lendo o texto antigo — a máscara é na leitura, as linhas não foram reescritas. (6) A nota do
+  relatório cita a etapa (*"(Etapa 178)"*) — texto de tela, a trocar quando a nota for revista.
 - **(180) O termo de responsabilidade de ferramenta, o que ficou de fora.** (1) **RN-C — retirada definitiva** de ferramenta (com baixa em
   estoque) **não existe**: contradiz "ferramenta é patrimônio, não estoque" e precisa de decisão da empresa. (2) **A devolução não pede
   assinatura** — continua um botão, sem termo de devolução. (3) O relatório **EPI por colaborador** lê a **fonte errada**: empréstimos de
@@ -17448,7 +17541,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   relatório **Ferramentas emprestadas** continua aberto a todo usuário do módulo, enquanto a aba Empréstimos exige a permissão de ferramentas
   (**B1177**). (8) A matrícula vai na resposta da lista de colaboradores ao navegador do almoxarife — o ganho de escondê-la é só de tela
   (**B1177**). (9) Quem tem o banco, o disco **e** o segredo ainda forja um termo, como na 178 (**D (178)**, item 1). (10) Texto jurídico do termo:
-  responsabilidade da empresa (**A108**).
+  responsabilidade da empresa (**A108**). **Atualizado na Etapa 181:** os itens (3) e (7) foram resolvidos (**B1180**, **B1182**).
 - **(178) A entrega de EPI, o que ficou de fora.** (1) **Quem tem o banco, o disco E o segredo ainda forja** uma entrega, reescrevendo-a e
   todas as posteriores; e quem apaga a última entrega **e** acerta o contador interno do banco também escapa — fechar isso pede uma âncora
   **externa** (exportar periodicamente o último código da cadeia para fora do servidor, ou carimbo de tempo de terceiro), deixada para depois
@@ -18619,6 +18712,13 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(181) Nenhum clique foi dado no navegador.** O relatório (colunas, filtros, a ordem, *Sim*/*Não*, o dia de Brasília na consulta e na
+planilha, o 403 e o menu por perfil), a máscara do histórico nas sete leituras e na planilha, e a lista de ferramentas sem o nome foram
+provados pelas rotas de verdade no servidor de teste; a tela de Relatórios (a nota, o seletor de colaborador carregado da lista, a consulta
+com o colaborador escolhido, a data) e a linha da ferramenta emprestada sem nome, em jsdom com a resposta simulada. O que **só o navegador**
+prova: o roteiro da Etapa 181 no guia — o menu de Relatórios como Gestor e como Almoxarife, o seletor **Colaborador** com nomes de verdade, a
+planilha aberta no Excel com a data certa, e o **Extrato** de um EPI como Produção mostrando a frase mascarada.
 
 **(180) Nenhum clique foi dado no navegador, e nenhum termo foi assinado num tablet de verdade.** A versão nova do texto, o empréstimo com
 assinatura e matrícula, as recusas, o 409 da versão trocada no meio, a corrida de dois empréstimos, o reenvio com a mesma chave (inclusive no
@@ -35254,9 +35354,77 @@ sem **Texto do termo**. Como Almoxarife: **Empréstimos** aparece, **Texto do te
 - **Uma ação antes de usar: A108** (trocar o texto provisório). A **A107** (o segredo no backup do servidor) passa a valer também para os
   termos. As tabelas novas nascem sozinhas no primeiro boot, com a versão 1 provisória.
 
+## Etapa 181 — O relatório "EPI por colaborador" mostra as entregas de EPI, e quem recebeu o quê deixa de sair para todos (2026-10-22)
+
+Desde a 178 o almoxarifado registra a entrega de EPI com assinatura — mas quem abria **Relatórios → EPI por colaborador** via uma lista
+**vazia**: o relatório lia outra coisa (empréstimos de ferramenta cadastrada como EPI). Agora ele mostra **as entregas**: quem recebeu, o quê,
+quando, o CA, quem entregou e se a assinatura está lá — com filtro por colaborador, EPI e período, e em planilha. E como é dado de pessoa (a
+tela de EPI já era só do almoxarife), esse relatório e o **Ferramentas emprestadas** passam a ser só de quem entrega EPI e gerencia
+ferramentas — **o Gestor deixa de vê-los**. A revisão achou o mesmo dado saindo por outras portas: o **histórico de movimentações** dizia o
+nome de quem recebeu cada EPI, e a **lista de ferramentas** dizia com quem cada ferramenta estava, para qualquer perfil — as duas foram
+fechadas. Nada a rodar antes do deploy. Decisões do agente: **B1180** a **B1188**; avisos **C440** a **C442**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **EPI por colaborador** lia empréstimos de ferramenta tipo EPI — vazio para quem só usa a tela de EPI | Uma linha por **entrega de EPI**: Entregue em, Número, Colaborador, Matrícula, Setor, Código, EPI, CA, Validade do CA, Quantidade, Tamanho, Motivo, Entregue por, Assinatura (**B1180**) |
+| Sem filtros | **Colaborador** (lista), **EPI (id do material)**, **De**, **Até** (**B1183**, **B1184**) |
+| Os dois relatórios de pessoa abertos a todo o módulo | **EPI por colaborador**: Administrador e Almoxarife (Entregar EPI); **Ferramentas emprestadas**: Administrador e Almoxarife (Ferramentas) (**B1182**, **C440**) |
+| Histórico: *"Entrega de EPI a JOÃO DA SILVA (M-778)"* para todos | Entregas novas: *"Entrega de EPI EPI-…"*; antigas, fora do almoxarifado: *"Entrega de EPI (dados do colaborador restritos)"* (**B1185**, **C441**) |
+| Lista de ferramentas: *"com ⟨nome⟩"* para todos | Fora do almoxarifado: só **Emprestada** (**B1186**, **C442**) |
+
+### As regras, com o cenário exato
+
+Preparação: duas ou três entregas feitas pela tela **Almoxarifado → Entrega de EPI** (roteiro da Etapa 178), para dois colaboradores
+diferentes (ex.: *MARIA SOUZA* e *JOÃO PEREIRA*), em dias diferentes se possível; uma ferramenta emprestada (roteiro da Etapa 180). Usuários:
+um **Almoxarife** (ou Administrador) e um **Gestor** (ou Produção).
+
+**1. O relatório.** Como Almoxarife: **Almoxarifado → Relatórios**, grupo **Gestão**, **EPI por colaborador**. A nota no topo: *"Fonte: as
+entregas de EPI com assinatura feitas pela tela de EPI (Etapa 178). Toda entrega pela tela grava a assinatura na mesma transação — "Não" na
+coluna Assinatura é anomalia; a integridade (arquivo e cadeia) se confere na tela de EPI. Empréstimos de ferramenta cadastrada como EPI não
+entram mais aqui: continuam em "Ferramentas emprestadas"."* **Consultar** sem filtro: as entregas, da mais recente para a mais antiga, com as
+14 colunas; **Assinatura** *Sim* em todas; **Motivo** escrito por extenso (*Troca*, *Primeira entrega*…).
+
+**2. Os filtros.** **Colaborador**: a lista mostra *"Todos"* e os colaboradores ativos; escolha *MARIA SOUZA* → só as dela. **De** e **Até**
+no dia da entrega → só as daquele dia (o dia de Brasília: uma entrega às 22h30 é do dia em que foi feita). **EPI (id do material)**: o número
+interno do material (o sistema não tem lista só de EPI — **B1184**) → só as daquele EPI. Sem resultado: *"Nenhum registro encontrado"*.
+
+**3. A planilha.** **Exportar XLSX** → baixa *epi-colaborador-⟨data⟩.xlsx* com as mesmas colunas e rótulos; **Entregue em** na hora de
+Brasília.
+
+**4. Outro perfil.** Como Gestor: em **Relatórios**, **EPI por colaborador** e **Ferramentas emprestadas** **não aparecem** no grupo
+**Gestão**. Abrindo o endereço do relatório na mão: *"Sem permissão para este relatório"*.
+
+**5. O histórico.** Como Almoxarife: **Relatórios → Histórico de movimentações**, tipo *SAIDA* → as entregas novas aparecem com a
+justificativa *"Entrega de EPI EPI-…"* (o número, sem nome). Se a base tem entregas feitas **antes** desta etapa, elas aparecem como foram
+gravadas (*"Entrega de EPI a ⟨nome⟩ (⟨matrícula⟩)"*). Como Gestor, a mesma consulta: as antigas aparecem *"Entrega de EPI (dados do
+colaborador restritos)"*; uma saída comum continua com a justificativa que foi digitada. O mesmo no **Extrato** do material e na tela
+**Movimentações**.
+
+**6. A lista de ferramentas.** Como Almoxarife: **Almoxarifado → Ferramentas**, a ferramenta emprestada mostra *"com ⟨nome⟩"* embaixo do
+nome. Como Gestor: a mesma linha mostra só o status **Emprestada**.
+
+### O que esta etapa NÃO cobre
+
+- O relatório **não verifica** a integridade — **Verificar** e **Verificar cadeia** ficam na tela de EPI (**B1187**).
+- Colaborador que saiu não aparece no filtro (**B1183**); o EPI é filtrado pelo número interno (**B1184**).
+- As linhas antigas do histórico **não** foram reescritas — a máscara é na leitura; a Auditoria (só Administrador) e e-mails já enviados
+  continuam com o nome (**D (181)**).
+- **Nada a rodar antes do deploy.** O que muda para quem usa: **C440** a **C442** (avisar a gestão de que os dois relatórios saíram do menu).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 181 entregue (2026-10-22):** **o relatório "EPI por colaborador" mostra as entregas de EPI, e quem recebeu o quê deixa de sair para
+  todos.** O relatório lê as entregas da tela de EPI, com 14 colunas e filtros de colaborador, EPI e período (**B1180**, **B1183**, **B1184**);
+  o legado de ferramenta tipo EPI fica só em **Ferramentas emprestadas** (**B1181**); os dois relatórios de pessoa ficam com o Administrador e
+  o Almoxarife (**B1182** — o Gestor passa de 26 para 24 relatórios); a revisão adversarial fechou o histórico de movimentações (**B1185**) e
+  a lista de ferramentas (**B1186**). Commits `d91e5eb9`, `498530d7` (plano), `3ce1d3a2`, `99f120ed` (T1), a revisão adversarial `0e6d5b37`,
+  `71418065`, `e104df3c`, e o fechamento. **O que é seu:** as decisões **B1180** a **B1188** (reversíveis); os avisos **C440** a **C442**
+  (avisar a gestão antes do deploy); as limitações **(181)** em D e a verificação **(181)** em F. **Próxima: Etapa 182 — o alerta "material
+  separado aguardando retirada há N dias" (B1188); ver a "próxima tarefa detalhada" no plano da Etapa 181.**
 
 - **Etapa 180 entregue (2026-10-22):** **termo de responsabilidade no empréstimo de ferramenta.** O **Emprestar** pede o colaborador do
   cadastro, o texto do termo, a assinatura e a matrícula digitada pelo colaborador (**B1171**, **B1172**); o termo é uma fotografia que não muda

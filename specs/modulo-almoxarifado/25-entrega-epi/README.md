@@ -10,6 +10,10 @@
 >
 > **+ Etapa 180 (2026-10-22, `2092806d`, Fase 5 `003de01b`): a cadeia de evidências ficou MULTI-CONTEXTO** — os termos de responsabilidade de
 > ferramenta (feature 16) entram na mesma `sequencia`, com o mesmo segredo. Ver a seção "Etapa 180", no fim. O status desta feature não muda.
+>
+> **+ Etapa 181 (2026-10-22, T1 `3ce1d3a2`, Fase 5 `0e6d5b37`, `e104df3c`): o relatório *EPI por colaborador* lê as entregas desta feature**
+> (com `acao: entregar_epi`), e a justificativa da saída da entrega deixou de levar o nome e a matrícula (as antigas, mascaradas na leitura
+> para quem não tem `entregar_epi`). Ver a seção "Etapa 181", no fim. O status desta feature não muda.
 
 ## Por que é uma feature nova (25) e não a 16 nem a 05
 
@@ -60,6 +64,10 @@ A "Requisição de EPI" (5.1) **não** foi feita: fica registrada aqui como item
 - [x] **Fase 5:** as cinco leituras restritas a `entregar_epi` — `4c4bacbf`
 - [x] **Fase 5:** idempotência por `chave_idempotencia` — `d9cd7604`
 - [x] **Fase 5:** tela com a matrícula, a chave, as mensagens e Verificar cadeia — `853a46ce`
+- [x] **Relatório *EPI por colaborador*** lê as entregas (14 colunas, filtros colaborador/EPI/período, `entregar_epi`) — `3ce1d3a2`; a coluna
+  Assinatura filtra a evidência pelo contexto — `e104df3c` (Etapa 181)
+- [x] **A saída da entrega não diz quem recebeu no histórico** (`Entrega de EPI <numero>`; antigas mascaradas sem `entregar_epi`) — `0e6d5b37`
+  (Etapa 181)
 - [ ] **Campos conferidos com os formulários de EPI da empresa** — os formulários não chegaram (**B1160**); tudo foi desenhado para trocar.
 - [ ] **Devolução de EPI** — fora por decisão (**B1167**): precisa de regra própria (para onde vai o EPI usado?).
 - [ ] **Validade de uso / data de troca / alerta de troca** — depende do formulário da empresa.
@@ -96,3 +104,21 @@ validade de uso, série/lote, requisição de EPI, PDF sem a confirmação, evid
 - **Prova de que o EPI não mudou:** os 8 `epi*.api.test.js` verdes **sem mudança de asserção** depois da T1.
 - Motivos novos que a cadeia pode listar (vindos dos termos): `termo sem evidência`, `texto do termo alterado`, `termo apagado no fim da tabela`,
   `empréstimo reapontado`.
+
+## Etapa 181 — o relatório lê as entregas, e o histórico não diz quem recebeu (2026-10-22)
+
+- **`epi-colaborador`** (`reportService.relatorioEPIPorColaborador`, `reportRegistry.js`): SELECT próprio sobre `entregas_epi_almoxarifado` —
+  `criado_em` em `AAAA-MM-DD HH:MM:SS` (a tela e a planilha mostram Brasília), número, colaborador, matrícula, setor, código, EPI, CA, validade
+  do CA, quantidade, tamanho, motivo por extenso, `entregue_por_nome`, `tem_evidencia` *Sim*/*Não* por `EXISTS` na evidência
+  `contexto = 'ENTREGA_EPI'` (sem recalcular hash — **B1187**). Filtros pelo helper `epiService.filtroDasEntregas` (o mesmo de
+  `listarEntregas`): `colaborador_id` (select, `/aux/colaboradores` — só ativos, **B1183**), `material_id` (número, **B1184**), `de`/`ate` no dia
+  de Brasília. `acao: 'entregar_epi'` (**B1182**). `3ce1d3a2`; teste `relatorioEpiPorColaborador.api.test.js` (12, com o cenário
+  `TERMO_FERRAMENTA` da Fase 5 — `e104df3c`).
+- **A justificativa da saída** (`epiService.registrarEntrega`): era `Entrega de EPI a <nome> (<matrícula>)` e saía para qualquer usuário do
+  módulo pelo histórico (sete leituras: `GET /movimentacoes`, `/materiais/:id/historico`, `/materiais/:id/extrato`, `/dashboard`,
+  `/relatorio/movimentacoes-periodo`, o dispatcher de relatórios e a exportação). Agora é `Entrega de EPI <numero>`; as antigas ficam no banco e
+  são mascaradas na leitura sem `entregar_epi` (`services/almoxarifado/mascaraEntregaEpi.js`) — *"Entrega de EPI (dados do colaborador
+  restritos)"* (**B1185**). A justificativa **não** entra no HMAC (`camposDoRegistro` leva o `movimentacao_id`). `0e6d5b37`; teste
+  `historicoEntregaEpiMascara.api.test.js` (7).
+- Fora: **D (181)**. Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa181-relatorio-epi-por-colaborador.md`. Novidades: seção
+  "Etapa 181", **B1180** a **B1188**, **C440** a **C442**.

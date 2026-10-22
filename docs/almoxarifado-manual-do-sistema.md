@@ -1387,6 +1387,9 @@ As leituras que essa tabela permite fazer, e que vale explicar a quem pergunta:
   mascarado, a matrícula e a imagem da assinatura) e a verificação não são do **Visualizar** de todos: só quem entrega as vê (21-bis.1). Do
   mesmo jeito, a lista de empréstimos de ferramenta, o termo de responsabilidade e a verificação dele são só de quem gerencia ferramentas
   (21.6). A lista de colaboradores (usada na entrega de EPI e no empréstimo) e a verificação da cadeia aceitam **uma das duas** permissões.
+  Os relatórios **EPI por colaborador** e **Ferramentas emprestadas** seguem a mesma divisão (21d) — por isso o **Gestor**, que lê todos os
+  outros relatórios de gestão, não os vê; e, fora dessas permissões, o histórico de movimentações não diz a quem um EPI foi entregue
+  (21-bis.1) e a lista de ferramentas não diz com quem a ferramenta está (21.6).
 - **Ajustar material de cliente é mais restrito que ajustar o estoque próprio.** O Gestor acerta o saldo da GMP — pela conclusão da conferência de inventário com ajuste (13) e pelo estorno de um ajuste errado (6.10); lançar um Ajuste em Movimentações pede também **Movimentar estoque**, que o Gestor não tem —; **apenas o Administrador** ajusta o saldo de material que pertence a um cliente — e só ele **estorna** um ajuste desse material, porque o estorno devolve o saldo ao de antes (16.8), e só ele **troca o dono** de um material que já se movimentou, porque a troca leva o saldo e o histórico de um dono para o outro (16.2). O motivo é direto: aquele número é o que o cliente vai conferir e cobrar.
 - **Reservar para outra OS** é separado de **Reservar**. Qualquer requisitante reserva material para a própria ordem; transferir uma reserva de uma OS para outra é decisão de priorização, e fica com o Administrador e o Gestor. A reserva que nasceu de uma **requisição** não se transfere — ela pertence à requisição (9.5).
 - **Liberar a reserva de uma requisição** exige, além de **Reservar**, ser **quem pediu a requisição** — e só antes de a separação começar — ou ter esta permissão própria, que é do **Administrador** e do **Almoxarife** (9.6). É a única regra do módulo que olha **quem é a pessoa**, e não só o perfil: o perfil Produção reserva e libera as reservas manuais, mas não solta o material que foi separado para a requisição de outra pessoa. O **Gestor** não a tem porque não tem **Reservar** (a rota de liberar exige as duas); ele solta tudo de uma requisição pelo **Encerrar Requisição**.
@@ -6420,9 +6423,10 @@ baixa, reverter baixa, ocorrência, calibração, reencontrar) exige a permissã
 Administrador ou Almoxarife (ver 5.5). Essa permissão é **independente** da permissão de
 movimentar estoque: é possível autorizar alguém a mexer em ferramentas sem autorizar a mexer no
 estoque de materiais, e vice-versa. Ler a lista de ferramentas, o histórico e o painel de calibrações é livre para
-qualquer usuário do módulo. **A aba Empréstimos, o termo e a verificação do termo**, não: mostram quem está com cada ferramenta, a matrícula
-e a assinatura, e exigem a mesma permissão **Ferramentas** — para os outros perfis a aba nem aparece. O relatório *Ferramentas emprestadas*
-(Relatórios) continua aberto a todos do módulo, sem matrícula nem assinatura. **Editar o texto do termo** (21.2b) é uma permissão separada,
+qualquer usuário do módulo — mas, na lista, **com quem** a ferramenta emprestada está só aparece (*"com ⟨nome⟩"*, embaixo do nome) para quem
+tem a permissão **Ferramentas**; os outros veem o status **Emprestada**, sem o nome. **A aba Empréstimos, o termo e a verificação do termo**
+também são só dessa permissão: mostram quem está com cada ferramenta, a matrícula e a assinatura — para os outros perfis a aba nem aparece. O
+relatório **Ferramentas emprestadas** (21d) segue a mesma regra. **Editar o texto do termo** (21.2b) é uma permissão separada,
 só do **Administrador**: quem colhe a assinatura não redige o compromisso.
 
 Toda ação de escrita fica registrada na auditoria do módulo, com o usuário responsável.
@@ -6439,7 +6443,10 @@ alterado** (NR-6).
 ### 21-bis.1 Quem pode
 
 Só quem tem a permissão **Entregar EPI** — **Administrador** e **Almoxarife** (5.5). Ela vale para **tudo** nesta tela: registrar a entrega,
-ver a lista, verificar, abrir a ficha e a lista de colaboradores. Os outros perfis veem o item no menu e, ao abrir, só:
+ver a lista, verificar, abrir a ficha e a lista de colaboradores — e para o relatório **EPI por colaborador** (21d). Fora dela, o histórico de
+movimentações não mostra a quem um EPI foi entregue: a justificativa de uma saída de entrega de EPI que traga o nome do colaborador
+(*"Entrega de EPI a ⟨nome⟩ (⟨matrícula⟩)"*) aparece, para quem não tem a permissão, como *"Entrega de EPI (dados do colaborador restritos)"* —
+no relatório **Histórico de movimentações** e na planilha dele, na tela **Movimentações** e no **Extrato** do material. Os outros perfis veem o item no menu e, ao abrir, só:
 *"Seu perfil não acessa a entrega de EPI — só o almoxarife e o administrador do módulo registram entregas e consultam fichas."*
 
 ### 21-bis.2 O que precisa estar cadastrado
@@ -6479,8 +6486,8 @@ O sistema confere, e recusa com a mensagem:
 A tela antecipa as recusas do CA (o aviso vermelho aparece ao escolher o EPI, e o envio não sai), a da quantidade, a da assinatura e a da
 matrícula vazia, com as mesmas frases.
 
-Aceita, a entrega: (1) **baixa o estoque** — uma **saída** com o número da entrega (*EPI-…*) no documento e a justificativa *"Entrega de EPI a
-⟨nome⟩ (⟨matrícula⟩)"*; (2) grava a **entrega** e a **evidência** — a imagem, a hora **do servidor**, quem entregou, uma cópia do nome,
+Aceita, a entrega: (1) **baixa o estoque** — uma **saída** com o número da entrega (*EPI-…*) no documento e a justificativa *"Entrega de EPI
+⟨número⟩"* — só o número: o histórico de movimentações é de todos os perfis, e quem recebeu fica na entrega, que é restrita (21-bis.1); (2) grava a **entrega** e a **evidência** — a imagem, a hora **do servidor**, quem entregou, uma cópia do nome,
 matrícula, setor e CPF do colaborador naquele momento, o CA e a validade do CA naquele momento, que a identidade foi **confirmada pela
 matrícula**, o endereço de rede e o aparelho (navegador) de onde veio; (3) responde *"Entrega ⟨número⟩ registrada para ⟨nome⟩ — ⟨matrícula⟩.
 Código de verificação: XXXX-XXXX-XXXX"*.
@@ -7130,7 +7137,34 @@ Além de material, tipo (o código do tipo, sem diferença de maiúsculas nem de
 As colunas **Motivo** e **Justificativa** (logo depois de **Saldo após**), **Usuário** e **Centro de custo** (código e
 nome) saem na tela e no Excel. O relatório
 mostra as 500 movimentações mais recentes do filtro e não inclui as canceladas; o histórico completo
-de um material, sem teto e com as canceladas, é a tela **Movimentações** filtrada por ele.
+de um material, sem teto e com as canceladas, é a tela **Movimentações** filtrada por ele. A justificativa de uma saída de entrega de EPI
+que traga o nome do colaborador aparece, para quem não tem a permissão **Entregar EPI**, como *"Entrega de EPI (dados do colaborador
+restritos)"* — na tela e na planilha (21-bis.1).
+
+### EPI por colaborador e Ferramentas emprestadas — os relatórios de pessoa
+
+Os dois ficam no grupo **Gestão** e dizem **quem** recebeu ou está com o quê; por isso só aparecem para o **Administrador** e o **Almoxarife**:
+o **EPI por colaborador** exige a permissão **Entregar EPI**, e o **Ferramentas emprestadas**, a permissão **Ferramentas** (5.5). Para os
+outros perfis eles não estão no menu; pelo endereço direto, *"Sem permissão para este relatório"*.
+
+**EPI por colaborador** lista as entregas de EPI feitas pela tela **Entrega de EPI** (21-bis), uma linha por entrega, das mais recentes para
+as mais antigas, com: **Entregue em** (data e hora de Brasília), **Número** (*EPI-…*), **Colaborador**, **Matrícula**, **Setor**, **Código**,
+**EPI**, **CA**, **Validade do CA**, **Quantidade**, **Tamanho**, **Motivo** (*Primeira entrega*, *Troca*, *Perda* ou *Dano*), **Entregue
+por** e **Assinatura**. Colaborador, matrícula, setor, EPI, CA e validade são os **gravados na entrega** — o que valia naquele dia, mesmo que o
+cadastro tenha mudado depois.
+
+- **Assinatura** diz *Sim* quando a entrega tem a assinatura registrada e *Não* quando não tem — como toda entrega pela tela grava a
+  assinatura junto, *Não* indica um registro fora do normal. A coluna **não** confere a integridade: isso é o **Verificar** e o **Verificar
+  cadeia** da tela de EPI (21-bis.4).
+- Filtros, todos opcionais: **Colaborador** — a lista dos colaboradores **ativos** do cadastro (*"Todos"* no topo); as entregas de quem não
+  está mais ativo aparecem sem esse filtro. **EPI (id do material)** — o número interno do material. **De** e **Até** — os dias de Brasília
+  da entrega, a mesma régua da aba **Entregas** (uma entrega às 22h30 de 21/10 é de 21/10).
+- A nota do relatório diz a fonte e que os empréstimos de ferramenta cadastrada como EPI **não** entram nele — esses estão em **Ferramentas
+  emprestadas**.
+- **Exportar XLSX** traz as mesmas colunas, com **Entregue em** na hora de Brasília.
+
+**Ferramentas emprestadas** lista as ferramentas emprestadas em aberto, de qualquer tipo, com **Patrimônio**, **Ferramenta**,
+**Colaborador**, **Setor**, **Retirada em** e **Status**.
 
 ### Custo por projeto
 

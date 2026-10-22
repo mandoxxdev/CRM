@@ -1,5 +1,7 @@
 # 21 — Relatórios, Dashboards e Indicadores
 
+> **+ Etapa 181 (2026-10-22, T1 `3ce1d3a2`, Fase 5 `0e6d5b37`, `e104df3c`): o *EPI por colaborador* lê as entregas de EPI (feature 25) e ele e o *Ferramentas emprestadas* ficam restritos (`entregar_epi` / `gerenciar_ferramentas` — o GESTOR passa de 26 para 24 relatórios, a PRODUCAO de 22 para 20); o dispatcher e a exportação mascaram a justificativa antiga da entrega de EPI para quem não tem `entregar_epi`** — ver a seção "Etapa 181", no fim; o status não muda (falta para 🟢 continua só previsto × realizado).
+
 > **+ Etapa 174 (2026-10-22, `97d3012f`, Fase 5 `9d1fcd1d`, `aa053fa8`): o *Consumo por OS* ganha Devolvido e Líquido e passa a contar as entregas de requisição; o quadro do painel ignora linhas só de devolução** — ver a seção "Etapa 174", no fim; o status não muda.
 
 > **+ Etapa 162 (2026-10-20, `e2d2306c`, Fase 5 `e1ac2cfa`): os nove relatórios, o painel e o indicador *no prazo* no dia de Brasília, a planilha na hora de Brasília (C401 resolvido, B1033, B1037, B1039)** — ver a seção "Etapa 162", no fim.
@@ -253,3 +255,20 @@ Uma query, `cancelado = 0`, agrupada por `material_id, os_id`:
   10/10/0 — `d087bcfc`.
 - [ ] **Fora (letra D (174)):** quarentena depois sucateada continua contando como devolvida; devolução de destino SUCATA com a perna SUCATA
   recusada fica fora do devolvido; o *Custo por projeto* não desconta a ENTRADA da exclusão (I4, de antes).
+
+## Etapa 181 (2026-10-22) — o "EPI por colaborador" lê as entregas, e os dois relatórios de pessoa ficam restritos
+
+- **`epi-colaborador`** — a fonte **estava errada** desde a Etapa 13: lia empréstimos de ferramenta `tipo='EPI'` em aberto, com `acao: null`
+  e sem parâmetros; as entregas de EPI da 178 (`entregas_epi_almoxarifado`) não apareciam. Agora: SELECT próprio sobre as entregas, 14 colunas
+  (*Entregue em* no formato do banco, para a tela e a planilha mostrarem Brasília — C1 da revisão da Fase 2), parâmetros `colaborador_id`
+  (select de `/almoxarifado/aux/colaboradores`), `material_id` (número), `de`/`ate` (date, dia de Brasília), todos com `exemplo` (a varredura
+  I1 de `relatoriosRegistro.api.test.js` os exercita), nota nova, `acao: 'entregar_epi'` (**B1180** a **B1184**, **B1187**). `3ce1d3a2`.
+- **`ferramentas-emprestadas`** — `acao: 'gerenciar_ferramentas'` (**B1182**). O registro continua com **26** chaves; o GESTOR vê **24** e a
+  PRODUCAO **20** (eram 26 e 22 — `relatoriosJornada.api.test.js` mudou a asserção, mudança de contrato intencional).
+- **Dispatcher e exportação** (`extended.js`): o resultado de **todo** relatório passa por `mascararMovimentacoes(linhas, req.user)` — a
+  justificativa `^Entrega de EPI a .+$` (a SAÍDA da entrega de EPI até a 181) vira *"Entrega de EPI (dados do colaborador restritos)"* para quem
+  não tem `entregar_epi`; hoje só o `historico-movimentacoes` a devolve (**B1185**, revisão da Fase 5). `0e6d5b37`.
+- Testes: `relatorioEpiPorColaborador.api.test.js` (12), `historicoEntregaEpiMascara.api.test.js` (7), Jest em
+  `RelatoriosAlmoxarifado.test.js` (nota, select, consulta, data). Plano:
+  `docs/superpowers/plans/2026-10-22-almoxarifado-etapa181-relatorio-epi-por-colaborador.md`. Novidades: seção "Etapa 181", **B1180** a
+  **B1188**, **C440** a **C442**, **D (181)**, **F (181)**.

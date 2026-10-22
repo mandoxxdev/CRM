@@ -1,14 +1,20 @@
 # 16 — Ferramentas e Equipamentos de Medição
 
 > **Status: 🟡** — completa no que a 9b prometeu, mais a edição pela tela (175), o retorno da manutenção (177) e o **termo de
-> responsabilidade no empréstimo (180)**. **Falta para 🟢:** o lembrete de devolução com canal (feature 20) e a integração com a inspeção
-> (feature 09) — ver o checklist. **Correção (2026-10-22, Etapa 180):** este arquivo tinha **dois status contraditórios** — o bloco
+> responsabilidade no empréstimo (180)**. **Falta para 🟢:** a integração com a inspeção (feature 09; **B1146** pergunta à empresa) — ver o
+> checklist. **Correção (2026-10-22, Etapa 181, medida):** esta linha dizia que faltava também *"o lembrete de devolução com canal (feature
+> 20)"* — **estava errado desde a Etapa 12**: o job diário `notificationQueueService.varrerLembretesFerramenta` (e-mail pela fila, um por
+> empréstimo e dia) existe desde `837faec1` e a spec 20 já o marcava pago. Corrigido no checklist, dizendo. **Correção (2026-10-22, Etapa 180):** este arquivo tinha **dois status contraditórios** — o bloco
 > "Status" mais abaixo dizia **🟢** (escrito na 9b, 2026-08-22) enquanto as notas das Etapas 175 e 177 logo acima e o mapa
 > (`../README.md`) diziam **🟡**. **O 🟢 estava errado** desde a revisão final da 9b (que já registrava a edição pela tela e a inspeção como
 > pendências); vale o 🟡. O bloco antigo ficou, riscado, como histórico.
 >
 > **+ Etapa 180 (2026-10-22, T1 `2092806d`, T2 `11ef2821`, T3 `04b9d2fb`, T4 `31fb475f`+`3d161c35`, Fase 5 `c40b1f56`, `bcd89a2f`, `003de01b`):
 > termo de responsabilidade no empréstimo (RN-D do design de 16/09)** — colaborador do cadastro, texto versionado do termo, assinatura e
+> **+ Etapa 181 (2026-10-22, T1 `3ce1d3a2`, Fase 5 `71418065`): com quem a ferramenta está passa a ser só de quem gerencia ferramentas** — o
+> relatório *Ferramentas emprestadas* (`acao: gerenciar_ferramentas`) e o `emprestimo_aberto` de `GET /ferramentas` (lista branca `{id,
+> data_prevista_devolucao}` para os outros perfis). Ver a seção "Etapa 181", no fim. O status não muda (🟡, pela integração com a inspeção).
+>
 > matrícula; a fotografia congelada na cadeia de evidências da 178. Ver a seção "Etapa 180", no fim. O status não muda (🟡, pelos dois itens acima).
 >
 > **Etapa 178 (2026-10-22): a entrega de EPI virou a feature nova [25](../25-entrega-epi/README.md)**, não esta — EPI é consumo entregue,
@@ -89,7 +95,10 @@ calibração com vencimento que impede o uso. (Lembrete automático de devoluç�
 ### Backend
 - [x] Número de série da ferramenta + localização — `a62f71a` (Task 1, colunas), `a3d37dd`
       (Task 2, campos no create/update)
-- [ ] Lembrete de devolução vencida (job ligado a canal de notificação) + alerta (feature 20) —
+- [x] Lembrete de devolução vencida (job ligado a canal de notificação) + alerta (feature 20) — **pago na Etapa 12 (`837faec1`)**:
+      `varrerLembretesFerramenta`, job diário (`routes/almoxarifado.js:~5116`), e-mail pela fila para `alertas_estoque_emails`, dedupe
+      `ferramenta-lembrete-<id>-<dia>` (dia de Brasília desde a 163). **Este item ficou desmarcado por engano até a Etapa 181** — o texto
+      abaixo, da 9b, dizia que não havia job nem canal; **estava errado desde a Etapa 12**. Mantido como histórico:
       **parcial**: a função pura `toolReminderService.listarEmprestimosVencidos(db)` e o filtro
       `GET /emprestimos?vencidos=1` existem e estão testados (`f5004df`), mas **não há job
       agendado nem canal de notificação** — ruling registrado na execução: um agendador sem
@@ -158,7 +167,7 @@ numeradas" e tabela "Contratos de API").
 
 ## O que ficou de fora (declarado)
 
-- **Job de lembrete de devolução vencida** não está ligado a nenhum canal — ver checklist acima.
+- ~~**Job de lembrete de devolução vencida** não está ligado a nenhum canal~~ — **estava errado desde a Etapa 12** (`837faec1`); ver o checklist.
 - **UI de edição de ferramenta** — ver checklist acima.
 - **Integração com inspeção** (instrumento calibrado referenciado na medição) — feature 09.
 - **Motor de alertas formal** (notificação de vencimento) — feature 20.
@@ -268,3 +277,18 @@ Só exibição — nenhuma rota, consulta, valor gravado ou porta de saldo mudou
   o número do empréstimo fora do HMAC, o relatório *Ferramentas emprestadas* ainda aberto a todos.
 - Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa180-termo-de-responsabilidade-de-ferramenta.md`. Novidades: seção "Etapa 180",
   **A108**, **B1170** a **B1179**, **C436** a **C439**, **D (180)**, **F (180)**.
+
+## Etapa 181 — com quem a ferramenta está, só para quem gerencia ferramentas (2026-10-22)
+
+- **Relatório *Ferramentas emprestadas*** (`reportRegistry.js`): `acao` de `null` para `gerenciar_ferramentas` — a mesma de `GET /emprestimos`
+  desde a 180 (**B1177**). Fora do Administrador e do Almoxarife, some da lista e responde 403 *"Sem permissão para este relatório"* na consulta
+  e na exportação (**B1182**). `3ce1d3a2`. Os empréstimos de ferramenta cadastrada como EPI saíram do relatório *EPI por colaborador* e ficam
+  só aqui (**B1181**).
+- **`GET /ferramentas`** (só `auth`): sem `gerenciar_ferramentas`, o `emprestimo_aberto` sai por lista branca `{ id, data_prevista_devolucao }`
+  — sem `colaborador_nome` (**B1186**, revisão da Fase 5). A tela já só mostrava *"com ⟨nome⟩"* quando o nome vinha. `71418065`; testes
+  `ferramentasListaSemColaborador.api.test.js` (4) e um Jest em `FerramentasAlmoxarifado.test.js`.
+- **Correção declarada desta spec** (no topo e no checklist): o lembrete de devolução vencida **existe desde a Etapa 12** (`837faec1`); a
+  spec dizia que faltava — **estava errado**. O que falta para 🟢 é só a integração com a inspeção.
+- Fora: **D (180)** itens (3) e (7) resolvidos; ver **D (181)**. Plano:
+  `docs/superpowers/plans/2026-10-22-almoxarifado-etapa181-relatorio-epi-por-colaborador.md`. Novidades: seção "Etapa 181", **B1180** a
+  **B1188**, **C440** a **C442**.

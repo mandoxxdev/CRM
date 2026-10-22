@@ -1,18 +1,25 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-22 (Etapas 172 a 180) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-22 (Etapas 172 a 181) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178 e 180) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172 a 178 e 180 ENTREGUES · próxima: Etapa 181)
+> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172 a 178, 180 e 181 ENTREGUES · próxima: Etapa 182)
 >
-> **O desenvolvimento parou aqui: Etapa 180 fechada — 2026-10-22.** **Termo de responsabilidade no empréstimo de ferramenta**: o
+> **O desenvolvimento parou aqui: Etapa 181 fechada — 2026-10-22.** **O relatório *EPI por colaborador* mostra as entregas de EPI**
+> (quem recebeu, o quê, quando, o CA, quem entregou e se tem assinatura; filtros de colaborador, EPI e período; planilha), e ele e o
+> *Ferramentas emprestadas* passam a ser só do **Administrador** e do **Almoxarife** — **o Gestor deixa de vê-los**. O histórico de
+> movimentações não mostra mais o nome de quem recebeu cada EPI, e a lista de ferramentas não diz com quem a ferramenta está, para os outros
+> perfis. Nada a rodar antes do deploy; avisar a gestão (**C440** a **C442**). **Próxima: Etapa 182** — o alerta *material separado aguardando
+> retirada há N dias* (ver o plano da 181).
+>
+> **Etapa 180, 2026-10-22.** **Termo de responsabilidade no empréstimo de ferramenta**: o
 > **Emprestar** pede o colaborador do cadastro, mostra o **texto do termo**, colhe a **assinatura** no tablet e a **matrícula digitada pelo
 > colaborador**; o termo assinado sai em **PDF**, pode ser **verificado** e entra na mesma **cadeia** das entregas de EPI; o administrador troca o
 > texto pela aba **Texto do termo** (cada troca é uma versão). **Uma ação antes de usar: A108 — trocar o texto PROVISÓRIO pelo termo da
 > empresa** (o texto não foi fornecido). **Próxima: Etapa 181** — o relatório *EPI por colaborador* passa a ler as entregas de EPI (ver o plano
-> da 180). A 179 é da outra frente.
+> da 180). A 179 é da outra frente. *(Feita: a 181.)*
 >
 > **Etapa 178, 2026-10-22.** **Entrega de EPI ao colaborador com assinatura na tela (NR-6)**:
 > tela nova **Almoxarifado → Entrega de EPI** — o colaborador do cadastro, o EPI com **CA** válido, a **assinatura** no tablet e a
@@ -6888,6 +6895,56 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 181 — O relatório "EPI por colaborador" mostra as entregas de EPI (ENTREGUE — 2026-10-22)
+
+**O que mudou, em uma frase:** o relatório *EPI por colaborador* passa a listar as entregas feitas na tela de EPI, e ele, o *Ferramentas
+emprestadas*, o histórico de movimentações e a lista de ferramentas deixam de mostrar a quem não é do almoxarifado quem recebeu cada EPI e com
+quem está cada ferramenta.
+
+**O problema que ela resolve.** Desde a entrega de EPI com assinatura, o relatório *EPI por colaborador* continuava vazio — ele lia
+empréstimos de ferramenta, não as entregas. E o mesmo dado de pessoa que a tela de EPI só mostra ao almoxarife saía, para qualquer perfil, pelo
+relatório, pela justificativa do histórico de movimentações (*"Entrega de EPI a ⟨nome⟩ (⟨matrícula⟩)"*) e pela lista de ferramentas
+(*"com ⟨nome⟩"*).
+
+| Antes | Agora |
+|---|---|
+| *EPI por colaborador* vazio para quem usa a tela de EPI | As entregas, com 14 colunas, filtros e planilha |
+| Os dois relatórios de pessoa abertos a todos | Só Administrador e Almoxarife — o **Gestor** deixa de vê-los |
+| Histórico: o nome de quem recebeu o EPI | Novas: *"Entrega de EPI EPI-…"*; antigas, fora do almoxarifado: *"Entrega de EPI (dados do colaborador restritos)"* |
+| Lista de ferramentas: *"com ⟨nome⟩"* para todos | Fora do almoxarifado: só **Emprestada** |
+
+**Antes de testar (uma vez).** Duas ou três entregas pela tela **Almoxarifado → Entrega de EPI** (roteiro da Etapa 178) para dois
+colaboradores diferentes, e uma ferramenta emprestada (roteiro da Etapa 180). Dois usuários: um **Almoxarife** (ou Administrador) e um
+**Gestor** (ou Produção).
+
+**Roteiro de teste (10 minutos).**
+
+1. **O relatório.** Entre como Almoxarife. **Almoxarifado → Relatórios**, grupo **Gestão**, **EPI por colaborador**. Confira a nota no topo
+   (começa com *"Fonte: as entregas de EPI com assinatura feitas pela tela de EPI"* e termina com *"continuam em "Ferramentas emprestadas"."*).
+   Toque **Consultar**: as entregas, da mais recente para a mais antiga, com **Entregue em**, **Número**, **Colaborador**, **Matrícula**,
+   **Setor**, **Código**, **EPI**, **CA**, **Validade do CA**, **Quantidade**, **Tamanho**, **Motivo** (*Troca*, *Primeira entrega*…),
+   **Entregue por** e **Assinatura** (*Sim*).
+2. **Os filtros.** Em **Colaborador** (a lista começa com *"Todos"*), escolha um dos dois e **Consultar** → só as dele. Volte a *Todos*, ponha
+   **De** e **Até** no dia de uma entrega → só as daquele dia. Um período sem entrega → *"Nenhum registro encontrado"*.
+3. **A planilha.** **Exportar XLSX** → baixa *epi-colaborador-⟨data⟩.xlsx*; abra e confira as mesmas colunas e a hora de **Entregue em** igual
+   à da tela.
+4. **O histórico, como Almoxarife.** **Relatórios → Histórico de movimentações**, **Tipo de movimento** *SAIDA*, **Consultar**: as entregas
+   desta etapa em diante mostram **Justificativa** *"Entrega de EPI EPI-…"* (o número, sem o nome). Entregas feitas antes desta etapa (se a base
+   tiver) mostram o texto antigo, com o nome.
+5. **Como Gestor.** Saia e entre como Gestor. **Relatórios**: no grupo **Gestão** não há **EPI por colaborador** nem **Ferramentas
+   emprestadas**. No **Histórico de movimentações**, as entregas antigas aparecem *"Entrega de EPI (dados do colaborador restritos)"*; uma
+   saída comum continua com a justificativa digitada.
+6. **A lista de ferramentas, como Gestor.** **Almoxarifado → Ferramentas**: a ferramenta emprestada mostra o status **Emprestada**, sem
+   *"com ⟨nome⟩"* embaixo do nome. Como Almoxarife, o *"com ⟨nome⟩"* aparece.
+
+**O que esta etapa não cobre.** O relatório não verifica a integridade da assinatura (é na tela de EPI — **Verificar**); o filtro de colaborador
+não lista quem saiu da empresa; o EPI é filtrado pelo número interno do material; as linhas antigas do histórico não foram reescritas (a
+Auditoria, só do Administrador, continua com o nome). **Nada a rodar antes do deploy** — avisar a gestão de que os dois relatórios saíram do
+menu dela (**C440**).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos provam pelas rotas do servidor (as sete
+leituras do histórico, a planilha, o menu por perfil) e a tela em jsdom, escrito para você conferir à mão.
 
 ## Etapa 180 — Termo de responsabilidade no empréstimo de ferramenta (ENTREGUE — 2026-10-22)
 
