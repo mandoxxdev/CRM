@@ -1,6 +1,6 @@
 # Etapa 176 — O recebimento informa a OS (material de cliente para industrialização)
 
-> **Status:** 🟡 em execução (2026-10-22) — **T1 feita** (`c1c04e1b`, `e79b9718`); T2 (front) e T3 (integração) pendentes. Emendada da "próxima tarefa detalhada" da Etapa 174 (B1119).
+> **Status:** 🟡 em execução (2026-10-22) — **T1 feita** (`c1c04e1b`, `e79b9718`); **T2 feita** (`0d227edb`); T3 (integração) pendente. Emendada da "próxima tarefa detalhada" da Etapa 174 (B1119).
 > **Origem:** resposta do cliente (Matheus, 22/10 09:13): *"Industrialização: materiais que os clientes compram e nossa
 > empresa apenas realiza a mão de obra… um estoque de materiais do cliente que ficam em nosso estoque"*. A pergunta
 > "o material do cliente já vem para uma OS específica?" **foi feita e aguarda resposta** — por isso a OS é
@@ -106,6 +106,16 @@
   `osAbertaDoRecebimento` só pelo pedido → 5 vermelhos (reserva 0); `/fiscal` sem limpar → só C1/fiscal vermelho (`os_id: 15`);
   criação sem a OS do pedido → os 2 de RN-02/pedido vermelhos (201 ≠ 400).
   **Primeiro boot** com `CRM_DATA_DIR` vazio (`node index.js`): `recebimentos_material_almoxarifado.os_id INTEGER` criada.
+- [x] **T2** — `0d227edb`. `RecebimentosAlmoxarifado.js`: campo "OS (opcional)" (`data-testid="receb-os"`) no novo recebimento,
+  select "Sem OS" + OS de `GET /almoxarifado/aux/ordens-servico?abertas=1` (`numero_os — cliente_nome`, ou só o número),
+  carregado **ao abrir o modal** (não na montagem — a lista envelhece); falha → aviso discreto (`receb-os-erro`) e o
+  recebimento segue sem OS. Sem pedido: `os_id` numérico ou `null`. Com pedido: o campo mostra a OS da linha do pedido
+  (`os_id`/`os_numero` de `recebimentos-aux/pedidos-compra`, "Sem OS" se não tem) e fica `disabled`; o payload **não manda**
+  `os_id` (escolha: o servidor herda a OS viva do pedido, C1 — mandar a da lista, que pode ter envelhecido, só arriscaria o
+  400 da RN-02). Recusas do servidor no alerta do formulário (form não é limpo). Lista: coluna "OS"; detalhe: campo "OS"
+  (`os_numero` ou "—", o mesmo vazio das outras colunas). Teste novo `RecebimentosOs.test.js` (7, mock só no `api`).
+  **Controles positivos** (restaurados por cópia + `cmp`): sem `Number()` → só (b) vermelho (`"7"` ≠ `7`); sem `disabled`
+  com pedido → (c) e (d) vermelhos. Client **176 suítes / 2263 testes** antes do merge da 177 e **176 / 2271** depois dele (HEAD `0d227edb`, sobre `881e4c12`); `CI=true react-scripts build` ok nos dois.
 
 **Suítes (estado de `e79b9718`):** `test:api` 501/502 na primeira rodada — o único vermelho era o contrato de chaves do aux
 (`listasNotificacoesPortao`, RN-155.01: fixture `osDoAuxDoServidor.json`), atualizado com `cliente_id` (fixture + teste do
