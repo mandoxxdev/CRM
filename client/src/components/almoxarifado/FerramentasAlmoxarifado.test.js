@@ -950,6 +950,45 @@ describe('FerramentasAlmoxarifado — termo do empréstimo (Etapa 180, RN-180.05
     expect(toast.error).toHaveBeenCalledWith('Este empréstimo não tem termo assinado (anterior à exigência)');
     expect($('.almox-termo-emprestimo')).toBeNull();
   });
+
+  // Etapa 185 (T3, RN-185.07/08) — integracao: tela -> resposta HTTP -> gerador -> regua de margem. Texto da versao em CAIXA ALTA (ia a
+  // 210,6 mm) e "Registrado por" com 44 letras (199,9). Regua copiada (os arquivos de teste nao importam um do outro), jsPDF real.
+  test('[RN-185.07/08, pela tela] "PDF do termo" com texto em CAIXA ALTA e quem registrou de 44 letras: nada passa da margem', async () => {
+    const CAIXA_ALTA = 'MAIUSCULAS LARGAS NO TEXTO DO TERMO DE RESPONSABILIDADE QUE A EMPRESA FORNECEU EM CAIXA ALTA PARA DESTACAR AS '
+      + 'OBRIGACOES DO COLABORADOR';
+    const NOME_44 = 'Maria Aparecida dos Santos Oliveira Ferreira';
+    expect(NOME_44).toHaveLength(44);
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => (url === '/almoxarifado/ferramentas/emprestimos/20/termo'
+      ? Promise.resolve({ data: { ...TERMO_DO_EMPRESTIMO,
+        termo: { ...TERMO_DO_EMPRESTIMO.termo, texto: CAIXA_ALTA, criado_por_nome: NOME_44 } } })
+      : base(url, cfg)));
+    await abrirAbaEmprestimos();
+    await clicar(botao('Termo', linhasEmprestimos()[0]));
+    await clicar(botao('PDF do termo'));
+    expect(mockPdf.find(([n]) => n === 'save')[1]).toBe('termo-TERMO-20260801-0001.pdf');
+    // eslint-disable-next-line global-require
+    const { jsPDF: JsPdfReal } = jest.requireActual('jspdf');
+    const medidor = new JsPdfReal({ format: 'a4', orientation: 'portrait', unit: 'mm' });
+    let fonte = 16;
+    const fora = [];
+    const porFonte = { 9: [], 10: [] };
+    for (const [nome, ...args] of mockPdf) {
+      if (nome === 'setFontSize') fonte = args[0];
+      if (nome === 'text') {
+        medidor.setFontSize(fonte);
+        const fim = args[1] + medidor.getTextWidth(String(args[0]));
+        if (fim > 196 + 1e-6) fora.push([String(args[0]).slice(0, 30), fonte, Number(fim.toFixed(1))]);
+        if (porFonte[fonte]) porFonte[fonte].push(String(args[0]));
+      }
+    }
+    expect(fora).toEqual([]);
+    // metade positiva: o texto saiu em 2+ linhas (fonte 10), inteiro; a linha da devolucao em 2+ linhas com o nome inteiro
+    expect(porFonte[10].length).toBeGreaterThanOrEqual(2);
+    expect(porFonte[10].join('').replace(/\s/g, '')).toBe(CAIXA_ALTA.replace(/\s/g, ''));
+    const i = porFonte[9].findIndex((t) => t.startsWith('Devolução prevista: '));
+    expect(`${porFonte[9][i]} ${porFonte[9][i + 1]}`).toContain(NOME_44);
+  });
 });
 
 describe('FerramentasAlmoxarifado — abas por permissão (Etapa 180)', () => {

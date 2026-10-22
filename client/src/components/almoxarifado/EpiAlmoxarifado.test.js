@@ -544,3 +544,102 @@ describe('Ficha: matricula confirmada e aparelho (Etapa 183)', () => {
     expect(td.getAttribute('title')).toBe(UA_60);
   });
 });
+
+// Etapa 185 (T3, RN-185.01/02/06) — integracao: tela -> resposta HTTP REAL (a fixture gravada pela rota na 183) -> gerador -> reguas.
+// Na fixture, quem entregou, o EPI e o motivo sao sobrescritos por valores longos; o resto e o corpo real de GET /epi/ficha/:id.
+// As reguas sao copias das de fichaEpiPdf.test.js (os arquivos de teste nao importam um do outro), medidas com o jsPDF real.
+describe('Ficha: a tabela cabe na folha (Etapa 185)', () => {
+  const COLUNAS_FICHA = [14, 32, 82, 102, 121, 131, 143, 168];
+  const CABECALHO_FICHA = ['Data', 'EPI', 'CA', 'Validade CA', 'Qtd', 'Tam.', 'Motivo', 'Entregue por'];
+  const limiteDaColuna = (i) => (i < 7 ? COLUNAS_FICHA[i + 1] - 1 : 196);
+  const novoMedidor = () => {
+    // eslint-disable-next-line global-require
+    const { jsPDF: JsPdfReal } = jest.requireActual('jspdf');
+    return new JsPdfReal({ format: 'a4', orientation: 'portrait', unit: 'mm' });
+  };
+  const textosForaDaFolha = () => {
+    const medidor = novoMedidor();
+    let fonte = 16;
+    const fora = [];
+    for (const [nome, ...args] of mockPdf) {
+      if (nome === 'setFontSize') fonte = args[0];
+      if (nome === 'text') {
+        medidor.setFontSize(fonte);
+        const fim = args[1] + medidor.getTextWidth(String(args[0]));
+        if (fim > 196 + 1e-6) fora.push([String(args[0]).slice(0, 30), fonte, Number(fim.toFixed(1))]);
+      }
+    }
+    return fora;
+  };
+  // emenda I1: celulas pela ORDEM das chamadas — os text de fonte 9 entre a ultima line e o primeiro text de fonte 7 (o hash)
+  const recortarTabela = () => {
+    let fonte = 16;
+    const cabecalhos = [];
+    const entregas = [];
+    let desdeALinha = [];
+    let aberto = null;
+    for (const [nome, ...args] of mockPdf) {
+      if (nome === 'setFontSize') fonte = args[0];
+      else if (nome === 'line') {
+        const ultimos = desdeALinha.slice(-8);
+        if (ultimos.length === 8 && ultimos.every((c, i) => c.t === CABECALHO_FICHA[i])) cabecalhos.push(ultimos);
+        desdeALinha = [];
+        aberto = [];
+      } else if (nome === 'text') {
+        const c = { t: String(args[0]), x: args[1], y: args[2], fonte };
+        desdeALinha.push(c);
+        if (aberto && fonte === 7) {
+          if (aberto.length) entregas.push(aberto);
+          aberto = null;
+        } else if (aberto && fonte === 9) aberto.push(c);
+      }
+    }
+    return { cabecalhos, entregas };
+  };
+  const celulasInvasoras = () => {
+    const medidor = novoMedidor();
+    const { cabecalhos, entregas } = recortarTabela();
+    const fora = [];
+    [...cabecalhos.flat(), ...entregas.flat()].forEach((c) => {
+      const i = COLUNAS_FICHA.indexOf(c.x);
+      if (i < 0) { fora.push([c.t.slice(0, 30), c.x, 'fora das colunas']); return; }
+      medidor.setFontSize(c.fonte);
+      const fim = c.x + medidor.getTextWidth(c.t);
+      if (fim > limiteDaColuna(i) + 1e-6) fora.push([c.t.slice(0, 30), c.x, Number(fim.toFixed(2)), limiteDaColuna(i)]);
+    });
+    return fora;
+  };
+
+  test('[RN-185.01/02/06, pela tela] ficha REAL da rota com quem entregou, EPI e motivo longos -> Gerar PDF: nada fora, nada perdido', async () => {
+    // eslint-disable-next-line global-require
+    const real = require('../../utils/__fixtures__/fichaEpi.rota.json');
+    const NOME = 'Maria Aparecida dos Santos Oliveira';
+    const MATERIAL = 'Mascara de solda automatica escurecimento DIN 9-13 com regulagem';
+    const ficha = { ...real, entregas: [{ ...real.entregas[0], entregue_por_nome: NOME, material_nome: MATERIAL, motivo: 'PRIMEIRA_ENTREGA' }] };
+    const idColab = real.colaborador.id;
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/aux/colaboradores') return Promise.resolve({ data: [...COLABORADORES, { ...real.colaborador }] });
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: MATERIAIS });
+      if (url === `/almoxarifado/epi/ficha/${idColab}`) return Promise.resolve({ data: ficha });
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    await clicar(botao('Ficha por colaborador'));
+    preencher(container.querySelector('select[aria-label="Colaborador da ficha"]'), String(idColab));
+    await esperarEfeitos();
+    await clicar(botao('Gerar PDF'));
+    expect(mockPdf.find(([n]) => n === 'save')).toBeTruthy();
+    expect(celulasInvasoras()).toEqual([]);
+    expect(textosForaDaFolha()).toEqual([]);
+    // metade positiva: a regua viu a entrega (8 colunas), quem entregou em 2 linhas e o EPI em 2+, e as juncoes sao os textos
+    const { entregas } = recortarTabela();
+    expect(entregas).toHaveLength(1);
+    const coluna = (x) => entregas[0].filter((c) => c.x === x).map((c) => c.t);
+    COLUNAS_FICHA.forEach((x) => expect(coluna(x).length).toBeGreaterThan(0));
+    expect(coluna(168)).toHaveLength(2);
+    expect(coluna(168).join(' ')).toBe(NOME);
+    expect(coluna(32).length).toBeGreaterThanOrEqual(2);
+    expect(coluna(32).join('').replace(/\s/g, '')).toBe(`${real.entregas[0].material_codigo} — ${MATERIAL}`.replace(/\s/g, ''));
+    expect(mockPdf.filter(([n]) => n === 'text').map(([, t]) => t)).toContain('Primeira entrega');
+  });
+});
