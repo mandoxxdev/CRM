@@ -187,6 +187,28 @@ async function createTestApp(options = {}) {
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
+  // `colaboradores` é tabela CORE (`server/index.js:19255`, módulo Operacional). Entra no harness na Etapa 178: a entrega de
+  // EPI exige o colaborador do cadastro (RN-178.03) e o almoxarifado lista os ativos (`/aux/colaboradores`). Mesma DDL de
+  // produção (sem FK nenhuma lá também); sem o stub, as rotas morreriam com "no such table" — erro que não existe em produção.
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS colaboradores (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    cpf TEXT UNIQUE,
+    matricula TEXT UNIQUE,
+    cargo TEXT,
+    setor TEXT,
+    telefone TEXT,
+    email TEXT,
+    data_admissao DATE,
+    salario_base REAL,
+    tipo_contrato TEXT,
+    status TEXT DEFAULT 'ativo',
+    disponivel INTEGER DEFAULT 1,
+    observacoes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
   // Diretório temporário para uploads (multer do módulo exige um PERSISTENT_DATA_DIR)
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'almox-test-'));
 

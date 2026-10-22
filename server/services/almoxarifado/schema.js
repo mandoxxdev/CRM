@@ -353,6 +353,71 @@ async function safeAlter(db, sql) {
   }
 }
 
+/**
+ * Etapa 178 (RN-178.01, RN-178.07; C1, I1, I2 da Fase 2): a entrega de EPI ao colaborador com a assinatura na tela.
+ *
+ * - O material ganha `ca_numero` e `ca_validade` (AAAA-MM-DD) — a NR-6 exige o CA na ficha.
+ * - `entregas_epi_almoxarifado` e `evidencias_assinatura_almoxarifado` sao APPEND-ONLY no banco: os triggers BEFORE UPDATE e
+ *   BEFORE DELETE abortam qualquer alteracao — a integridade e o que torna a assinatura evidencia (a usuaria de Compras:
+ *   "o sistema deve garantir ... a integridade dos registros"). Por isso a gravacao nao faz UPDATE nenhum: `criado_em` vem do
+ *   Node, inserido explicito (sem DEFAULT na coluna — o instante entra no hash, e o hash e calculado antes do INSERT).
+ * - SEM FK para `usuarios` (I1): a exclusao de usuario (index.js) faz UPDATE em toda FK para `usuarios` e o trigger abortaria
+ *   a exclusao — e reescreveria quem entregou. SEM FK para `colaboradores` (I2): a ficha usa o snapshot quando o colaborador
+ *   e excluido. SEM FK para material e movimentacao, pela mesma razao (nenhum UPDATE em cascata pode tocar estas linhas).
+ * - A evidencia e GENERICA (`contexto`, `contexto_id`): o termo de responsabilidade de ferramenta (RN-D) vai reusa-la.
+ */
+async function ensureEntregaEpi(db) {
+  await safeAlter(db, 'ALTER TABLE materiais_almoxarifado ADD COLUMN ca_numero TEXT');
+  await safeAlter(db, 'ALTER TABLE materiais_almoxarifado ADD COLUMN ca_validade DATE');
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS entregas_epi_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    numero TEXT UNIQUE NOT NULL,
+    colaborador_id INTEGER NOT NULL,
+    colaborador_nome TEXT NOT NULL,
+    matricula TEXT,
+    setor TEXT,
+    material_id INTEGER NOT NULL,
+    material_codigo TEXT NOT NULL,
+    material_nome TEXT NOT NULL,
+    ca_numero TEXT NOT NULL,
+    ca_validade TEXT,
+    quantidade REAL NOT NULL,
+    tamanho TEXT,
+    motivo TEXT,
+    observacao TEXT,
+    movimentacao_id INTEGER NOT NULL UNIQUE,
+    entregue_por INTEGER,
+    entregue_por_nome TEXT,
+    criado_em TEXT NOT NULL
+  )`);
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_entregas_epi_colaborador
+    ON entregas_epi_almoxarifado (colaborador_id, criado_em)`);
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_entregas_epi_material
+    ON entregas_epi_almoxarifado (material_id, criado_em)`);
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS evidencias_assinatura_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    contexto TEXT NOT NULL,
+    contexto_id INTEGER NOT NULL,
+    colaborador_id INTEGER NOT NULL,
+    colaborador_nome TEXT NOT NULL,
+    matricula TEXT,
+    cpf TEXT,
+    arquivo TEXT NOT NULL,
+    arquivo_sha256 TEXT NOT NULL,
+    registro_sha256 TEXT NOT NULL,
+    criado_por INTEGER,
+    criado_por_nome TEXT,
+    criado_em TEXT NOT NULL,
+    UNIQUE (contexto, contexto_id)
+  )`);
+  for (const tabela of ['entregas_epi_almoxarifado', 'evidencias_assinatura_almoxarifado']) {
+    for (const [nome, evento] of [['sem_update', 'UPDATE'], ['sem_delete', 'DELETE']]) {
+      await dbRun(db, `CREATE TRIGGER IF NOT EXISTS trg_${tabela}_${nome} BEFORE ${evento} ON ${tabela}
+        BEGIN SELECT RAISE(ABORT, 'evidencia de assinatura nao pode ser alterada'); END`);
+    }
+  }
+}
+
 /** Base tables from almoxarifado.js — ensure they exist before v3 migrations (avoids startup race). */
 async function ensureBaseTables(db) {
   await dbRun(db, `CREATE TABLE IF NOT EXISTS materiais_almoxarifado (
@@ -2956,6 +3021,8 @@ async function initSchemaUmaExecucao(db) {
   )`);
   await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_fila_notif_status
     ON fila_notificacoes_almoxarifado (status, proxima_tentativa_em)`);
+
+  await ensureEntregaEpi(db);
 
   console.log('✅ Schema almoxarifado v3 inicializado');
 }

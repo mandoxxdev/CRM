@@ -70,6 +70,11 @@ const ACAO_PERFIS = {
   gerenciar_ferramentas: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
   aprovar_requisicao: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.GESTOR],
   separar_emitir: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
+  // Etapa 178 (RN-178.02): entregar EPI ao colaborador com a assinatura na tela. Acao propria, pelo criterio ja escrito acima
+  // (remessar_terceiro, conferir_separacao): a entrega gera EVIDENCIA de NR-6 com o nome de quem entregou, e o risco e de
+  // natureza diferente de `movimentar`. Concedida hoje aos MESMOS perfis de `movimentar` — o ganho e PODER restringir sem
+  // reescrever nada. Entra de graca em GET /almoxarifado/minhas-permissoes.
+  entregar_epi: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
   // Etapa 28 (C4): a SEGUNDA CONFERENCIA da separacao e acao propria, pelo mesmo criterio de
   // remessar_terceiro/gerenciar_ferramentas: concedida hoje aos MESMOS perfis de `separar_emitir`,
   // o ganho nao e restringir agora, e PODER restringir sem reescrever nada quando o cliente quiser
