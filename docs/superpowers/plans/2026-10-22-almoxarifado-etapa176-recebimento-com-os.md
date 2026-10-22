@@ -47,3 +47,40 @@
 ## Próxima tarefa detalhada
 
 *(preencher no fechamento)*
+
+---
+
+## Revisão da Fase 2 (2026-10-22) — 1 crítico, 4 importantes, 5 menores; as emendas PREVALECEM
+
+- **C1 + I1 — a OS efetiva do recebimento é UMA régua só:** `osDoRecebimento(rec)` = se `rec.pedido_compra_id`
+  (o **gravado**, não o `tipo`) → a OS **viva** do pedido (como na 171 — trocar a OS do pedido antes do processamento
+  continua valendo); senão → `rec.os_id`. **Recebimento de pedido NÃO grava `os_id` próprio** (fica NULL). Contratos:
+  - `POST` com `pedido_compra_id` e `os_id` não nulo diferente da OS do pedido → 400 `A OS do recebimento tem de ser a
+    do pedido (<numero_os do pedido ou "sem OS">)`; igual → aceito e **não** gravado.
+  - `PUT /recebimentos/:id/fiscal` (`salvarDadosFiscal`, `receiptService.js:1252-1300`) que liga um pedido a um
+    recebimento com `os_id` próprio: OS do pedido diferente → 400 com a mesma frase; igual → aceito e o `os_id` próprio
+    é **limpo** (passa a valer o do pedido).
+- **I2 —** `darEntradaEstoque` (`:1599`) grava na `ENTRADA_COMPRA` o `os_id` de `osDoRecebimento`, não só o do pedido.
+  `reservaDaOs.osAbertaDoRecebimento` usa a mesma régua.
+- **I3 — a regra do dono na distribuição passa a ver a OS** com a precedência da 174 (projeto primeiro, depois OS):
+  `saidaPassaNaRegraDoDono(db, material, projetoId, osId)` nos três chamadores (`reservaChegadaService.js:107-111` e
+  `receiptNotificationService.js:378`, `:488`). Cenário obrigatório na T1: requisição da OS **sem projeto, aprovada
+  ANTES da nota** do material de cliente → a fila a serve.
+- **I4 — a RN-176.04 roda também na pré-checagem de `darEntradaEstoque`** (`:1532-1590`, recusa a nota inteira, mesmo
+  texto): o dono pode trocar entre criar e processar (material sem histórico troca sem permissão,
+  `ownerRules.js:412-421`). A troca de cliente da OS não tem rota medida — declarado.
+- **M1 — a conversão na aprovação** (`requisitionService.js:~369`) passa a conferir o dono com a mesma régua antes de
+  converter (projeto do cliente B + OS do cliente A → não converte; a entrega recusaria). 
+- **M2 — contratos completos da RN-04:** material de cliente + OS **sem cliente** → 400 `Material <codigo> pertence ao
+  cliente <X>, mas a OS <numero_os> não tem cliente` (a saída recusaria: NULL não é coringa, `ownerRules.js:157`);
+  qualquer item que falhe recusa a **nota inteira** (como a pré-checagem já faz); `OS inválida` e `OS #<id> não
+  encontrada` como na 171; OS que sumiu entre criar e processar → a nota processa e **não reserva** (como a 171 —
+  `OS #<id>` na leitura).
+- **M3 — contratos de leitura para a T2 (congelados):** `GET /api/almoxarifado/aux/ordens-servico` ganha `?abertas=1`
+  (filtro `osFechada` antes do `LIMIT`) e o campo `cliente_id` — aditivo, sem `abertas` nada muda.
+  `lerPedidoParaRecebimento` e a lista de pedidos para recebimento (`receiptService.js:~2299`) devolvem `os_id`,
+  `os_numero`. A T2 só começa depois da T1.
+- **M4 —** `listarRecebimentos` (`:2121`) e `getRecebimento` (`:2906`) ganham `os_id` efetivo e `os_numero` por leitura
+  viva separada (`OS #<id>` se sumiu).
+- **M5 — RN-06:** `osEncerradaService` passa a reexportar o `PREDICADO_RESERVA_DA_OS` vindo de `reservaDaOs.js`
+  (mesmo nome exportado, para não quebrar quem importa).
