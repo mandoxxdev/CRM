@@ -18482,9 +18482,9 @@ devolução no meio, a compensação que falha e o reenvio foram provados pelas 
 com um PNG real; a tela (os campos, a chave do reenvio, as mensagens, o PDF, a cadeia), em jsdom com a resposta do servidor simulada. O que
 **só o aparelho** prova: o roteiro da Etapa 178 no guia num **tablet** — o traço no quadro de assinatura com o dedo, o teclado do campo de
 matrícula, o PDF da ficha baixado e aberto com a imagem da assinatura legível, e **Verificar cadeia** depois de um reinício do servidor (o
-segredo continua o mesmo). **E a verificação automática ficou incompleta por falta de memória da máquina:** a suíte de rotas rodou 313 de
-512 arquivos sem falha (todos os de EPI incluídos), a suíte inteira da tela e a compilação de produção **não rodaram** — rodar as três antes do
-deploy (o passo a passo está no plano da 178, "Verificação final").
+segredo continua o mesmo). ~~A verificação automática ficou incompleta por falta de memória da máquina~~ — **completada no mesmo dia (2026-10-22), depois do
+fechamento:** suíte de rotas **512/512 arquivos**, suíte inteira da tela **179 suítes / 2324 testes**, compilação de produção **Compiled
+successfully**.
 
 **(176) Nenhum clique foi dado no navegador.** O recebimento com OS, a recusa pelo dono, a nota de pedido que entra livre, a reserva da OS
 nas três portas (inclusive a inspeção com a OS trocada de cliente), a requisição da OS, a entrega, a devolução e a posição por cliente foram

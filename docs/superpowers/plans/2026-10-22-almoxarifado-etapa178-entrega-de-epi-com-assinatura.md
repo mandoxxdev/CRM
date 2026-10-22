@@ -318,3 +318,15 @@ Fase 2** (reversível, letra B).
 
 **Para fechar a verificação (com memória livre — parar o `npm run dev` antes):** `cd server && npm run test:api`; `cd client && CI=true npx
 react-scripts test --watchAll=false`; `cd client && CI=true npx react-scripts build`.
+
+### Verificação completada (2026-10-22, pelo controlador, depois do fechamento `d358fc49`)
+
+Rodadas em sequência, sem outro agente ativo, sobre a main com todas as correções da Fase 5:
+
+| Suíte | Resultado |
+|---|---|
+| `test:api` | **512/512 arquivos OK** |
+| client (`CI=true react-scripts test --watchAll=false`) | **179 suítes / 2324 testes**, todos passando |
+| `CI=true react-scripts build` | **Compiled successfully** |
+
+A tabela acima ("INCOMPLETA") fica como registro do que a sessão de fechamento conseguiu medir; esta é a medição que vale.
