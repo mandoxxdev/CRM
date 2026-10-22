@@ -2013,6 +2013,11 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
           { arquivo: req.file.filename, dir: uploadsAlmoxDir, segredo: segredoDaEvidencia(),
             // Fase 5 (importante 4): de onde veio a assinatura — entram na evidencia e no HMAC.
             ip: req.ip || (req.socket && req.socket.remoteAddress) || null, userAgent: req.get('user-agent') || null });
+        // Fase 5 (M2): o reenvio da mesma tentativa devolve a entrega ja gravada (200) — o PNG deste reenvio e duplicado, sai.
+        if (out && out.reutilizada) {
+          limparUploadOrfaoEm(req, uploadsAlmoxDir);
+          return res.status(200).json(out);
+        }
         res.status(201).json(out);
       } catch (e) {
         // Fase 5 (importante 3, M3): o PNG fica quando a saida NAO pode ser desfeita ou a transacao ja commitou — a evidencia (ou o

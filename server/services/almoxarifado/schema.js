@@ -392,8 +392,13 @@ async function ensureEntregaEpi(db) {
     movimentacao_id INTEGER NOT NULL UNIQUE,
     entregue_por INTEGER,
     entregue_por_nome TEXT,
-    criado_em TEXT NOT NULL
+    criado_em TEXT NOT NULL,
+    chave_idempotencia TEXT
   )`);
+  // Fase 5 (M2): a chave que o front gera por tentativa de envio — o reenvio com a mesma chave devolve a entrega gravada.
+  await safeAlter(db, 'ALTER TABLE entregas_epi_almoxarifado ADD COLUMN chave_idempotencia TEXT');
+  await dbRun(db, `CREATE UNIQUE INDEX IF NOT EXISTS ux_entregas_epi_chave_idempotencia
+    ON entregas_epi_almoxarifado (chave_idempotencia) WHERE chave_idempotencia IS NOT NULL`);
   await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_entregas_epi_colaborador
     ON entregas_epi_almoxarifado (colaborador_id, criado_em)`);
   await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_entregas_epi_material

@@ -79,6 +79,7 @@ function camposDoRegistro(entrega, ev) {
     entregue_por: numero(entrega.entregue_por),
     entregue_por_nome: texto(entrega.entregue_por_nome),
     criado_em: texto(entrega.criado_em),
+    chave_idempotencia: texto(entrega.chave_idempotencia), // Fase 5 (M2)
     evidencia: {
       colaborador_id: numero(ev.colaborador_id),
       colaborador_nome: texto(ev.colaborador_nome),
@@ -164,6 +165,44 @@ async function materialEpi(db, materialId) {
   return { ...m, ca_numero: ca, ca_validade: validade };
 }
 
+/** Fase 5 (M2): a chave de idempotencia (uuid do front) — opcional; fora do formato, 400. */
+function chaveIdempotencia(v) {
+  const c = evidencia.textoLimpo(v);
+  if (c === null) return null;
+  if (!/^[A-Za-z0-9-]{8,100}$/.test(c)) throw erro('Chave de idempotência inválida');
+  return c;
+}
+
+/**
+ * A entrega ja gravada com esta chave, no formato do 201 + `reutilizada: true`, ou null. A mesma chave com outro colaborador, EPI
+ * ou quantidade -> 409 (o front gera uma chave por tentativa; outra entrega com a mesma chave e engano do cliente).
+ */
+async function entregaDaChave(db, chave, { colaborador_id: colaboradorId, material_id: materialId, quantidade }) {
+  const e = await dbGet(db, `SELECT e.id, e.numero, e.movimentacao_id, e.colaborador_id, e.material_id, e.quantidade,
+      v.id AS evidencia_id, v.arquivo, v.arquivo_sha256, v.registro_sha256, v.criado_em
+    FROM entregas_epi_almoxarifado e
+    JOIN evidencias_assinatura_almoxarifado v ON v.contexto = ? AND v.contexto_id = e.id
+    WHERE e.chave_idempotencia = ?`, [CONTEXTO, chave]);
+  if (!e) return null;
+  if (Number(e.colaborador_id) !== Number(colaboradorId) || Number(e.material_id) !== Number(materialId)
+    || Q.qtd(Number(e.quantidade)) !== Q.qtd(Number(quantidade))) {
+    throw erro('Chave de idempotência já usada em outra entrega', 409);
+  }
+  return {
+    id: e.id,
+    numero: e.numero,
+    movimentacao_id: e.movimentacao_id,
+    evidencia: {
+      id: e.evidencia_id,
+      arquivo_url: materialPhotoUrl(e.arquivo),
+      arquivo_sha256: e.arquivo_sha256,
+      registro_sha256: e.registro_sha256,
+      criado_em: e.criado_em,
+    },
+    reutilizada: true,
+  };
+}
+
 /**
  * Fase 5 (importante 4): a identificacao do colaborador. Ele digita a PROPRIA matricula no tablet, junto da assinatura, e ela
  * tem de bater com o cadastro — a assinatura sozinha nao dizia quem assinou (o almoxarife escolhia o nome na lista). Compara sem
@@ -207,6 +246,13 @@ async function registrarEntrega(db, user, dados, { arquivo, dir, segredo, ip = n
   conferirPng(caminho);
 
   const quantidade = quantidadeInteira(dados.quantidade);
+  // Fase 5 (M2): o reenvio da mesma tentativa (a resposta se perdeu no Wi-Fi) devolve a entrega ja gravada — ANTES de qualquer
+  // outra conferencia (no ultimo item, o reenvio daria "saldo insuficiente" em vez da entrega que aconteceu).
+  const chave = chaveIdempotencia(dados.chave_idempotencia);
+  if (chave) {
+    const ja = await entregaDaChave(db, chave, { colaborador_id: dados.colaborador_id, material_id: dados.material_id, quantidade });
+    if (ja) return ja;
+  }
   const opcionais = validarOpcionais(dados);
   const colab = await colaboradorAtivo(db, dados.colaborador_id);
   conferirMatricula(colab, dados.confirmacao_matricula);
@@ -250,6 +296,7 @@ async function registrarEntrega(db, user, dados, { arquivo, dir, segredo, ip = n
     entregue_por: user && user.id != null ? Number(user.id) : null,
     entregue_por_nome: autorNome,
     criado_em: criadoEm,
+    chave_idempotencia: chave,
   };
   const ev = {
     contexto: CONTEXTO,
@@ -316,6 +363,11 @@ INSERT INTO evidencias_assinatura_almoxarifado (contexto_id, registro_sha256, ${
     // FICOU, com o numero da movimentacao, e o PNG fica no disco (`preservarArquivo`).
     const eComp = await compensar();
     if (eComp) throw saidaFicou(e.message, eComp);
+    // M2: o envio duplicado que perdeu a corrida no UNIQUE da chave (a saida dele ja foi desfeita) devolve a do vencedor.
+    if (chave) {
+      const ja = await entregaDaChave(db, chave, { colaborador_id: colab.id, material_id: material.id, quantidade });
+      if (ja) return ja;
+    }
     throw erro(`Não foi possível gravar a entrega de EPI — nada foi gravado: a saída do estoque foi desfeita. Pode tentar de novo. (${e.message})`, 500);
   }
 
