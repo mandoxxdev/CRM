@@ -1,6 +1,6 @@
 # Etapa 183 — A ficha de EPI (tela e PDF) mostra a matrícula confirmada e o aparelho de cada entrega
 
-> **Status:** 📝 **plano (2026-10-22)** — nenhuma task executada. Feature **25** (entrega de EPI), pendência **D (178)**, item (8):
+> **Status:** 🛠️ **T1, T1c, T2, T3 e T4 executadas (2026-10-22)** — falta a revisão adversarial (Fase 5) e o fechamento (seção Execução). Feature **25** (entrega de EPI), pendência **D (178)**, item (8):
 > *"o PDF da ficha ainda não imprime 'confirmado por matrícula' nem o aparelho de onde veio"* — e o último `[ ]` do checklist da spec
 > `specs/modulo-almoxarifado/25-entrega-epi/README.md` que não depende da empresa.
 > Antes: Etapa 182 (alerta de retirada parada) — **não tocar** nos arquivos dela (outra sessão está neles).
@@ -195,7 +195,53 @@ plano com a próxima tarefa detalhada.
 
 ## Execução
 
-_(vazia — preencher task a task: feita, hash, divergência do previsto, controles rodados e números das suítes.)_
+Executada em 2026-10-22, **sequencial na main** (emenda I1: T1 → T1c → T2 → T3 → T4), um executor só. Sabotagem por `perl` com âncora
+contada = 1, md5 antes/sabotado/restaurado e restauro por cópia (`e183-*` no scratchpad), `cmp` ok em todos.
+
+- **T1 — `b97ee386`** ✅ `fichaDoColaborador` seleciona `v.confirmado_por_matricula, v.user_agent` e normaliza no `map`
+  (`Number` ou `null`; `?? null`); `v.ip` fora. Teste novo `epiFichaConfirmacao.api.test.js` (10). Vermelho antes: 6 caíram com os campos
+  `undefined` (a RN-183.02, a do M-200 e os dois 403 passavam de primeira — guardas de regressão, provadas pelos controles abaixo).
+  **Mudança de contrato intencional:** `epiPontaAPonta.api.test.js:195` passa a esperar as duas chaves novas.
+  Controles: sem `v.user_agent` → cai **só** a RN-183.01 (valor `null`) e as duas de 200 com o UA — a RN-183.05 **não** cai (confirma a
+  emenda M1); flag fixa `1` → cai a RN-183.05 (`entrega 2: confirmado_por_matricula 1 !== null`); `+ v.ip` → cai a RN-183.02
+  (`entrega 1 com a chave ip`) e as de chaves exatas; ficha com `requirePermission('visualizar')` → cai a RN-183.06 (PRODUCAO e GESTOR 200).
+  Suítes da task: os 12 arquivos `epi*`/`relatorioEpiPorColaborador`/`historicoEntregaEpiMascara` verdes um a um.
+  **Divergência:** a M2 (conferir o IP não nulo antes) foi aplicada já na T1, não só na T4.
+- **T1c — `58f3f24b`** ✅ `montarFichaEpi` ganha `matriculaConfirmada` (`matriculaConfirmadaTexto` importado de `./termoFerramenta`, com
+  `{ matricula: e.matricula }`), `aparelho` (aparado, `Não registrado`) e `linhasAparelho` (fatias de 110, `LARGURA_LINHA_APARELHO`
+  exportada). 4 testes novos de descritor; **M3:** o `toEqual` da linha inteira passou a esperar os três campos (`Não registrada`/
+  `Não registrado`/`['Não registrado']`). Vermelho antes: 5 caíram (`undefined`). Controles: passar `c` (cadastro vivo) → caem os dois da
+  RN-183.03 (`Received: "Sim — digitou M-200 …"` e `"Sim — digitou M-100 …"` no lugar de `"Sim"`); fallback `—` → caem a RN-183.05
+  (`Received: "—"`) e o `toEqual` da linha. `termoFerramentaPdf.test.js` 8/8 (o molde não mudou).
+- **T2 — `399d2a0f`** ✅ Depois do hash: `y += 3` → `Matrícula confirmada pelo colaborador: …`; por fatia `y += 3` → `Aparelho: <1ª>` e as
+  seguintes em `M + 14`; depois o `y += 2` de antes. Limiar 245 → **235**. Passo **igual ao da I2** (limiar não recalculado). 5 testes novos.
+  Vermelho antes: os 3 de texto caíram; os 2 de rodapé passavam (sem linha nova não estoura — provados pelo controle do limiar).
+  **Caso montado da RN-183.08 (a):** a 1ª entrega começa em y = 50; sem imagem e 1 linha ocupa 25, com imagem e k linhas 39 + 3k → 6 sem imagem
+  + 1 com 2 linhas põem a 8ª (3 linhas) em **245**; o teste confere a divisória da 7ª em 240. Controles: flag crua no lugar do texto → cai o
+  literal; **linha certa mantida + uma extra `Matrícula digitada: 1`** → cai a régua `/Matr[ií]cula[^:]*:\s*1\b/` (`:148`, recebido
+  `["Matrícula digitada: 1"]`) — sem esta variante o literal caía antes e a régua nunca era exercitada; limiar 245 → cai a (a) com `line`
+  em **288**; imagem `h = 100` → cai o ramo `addImage y + h` (215 → 315). **Achado do controle:** `h = 60` **não** caía — a imagem mais baixa
+  começa em 212 (fundo 272); registrado para não se tomar o ramo da imagem por provado com um valor qualquer.
+- **T3 — `f4e5ec9f`** ✅ Colunas `Matrícula confirmada` e `Aparelho` (entre "Entregue por" e "Assinatura") lidas de
+  `useMemo(montarFichaEpi(ficha).linhas)`; `resumirAparelho` (40 + `…`) e o texto inteiro no `title`. 4 testes novos (`describe` próprio, ficha
+  mockada na fronteira HTTP). Vermelho antes: 4 caíram (cabeçalhos ausentes). Controles: célula com `e.confirmado_por_matricula` cru → caem o
+  do `1` (`Expected: not "1"`), o do literal e o da antiga (`Received: ""`); `title` cortado → cai o do aparelho.
+  **Tropeço (corrigido antes do commit):** a primeira inserção das células por `perl` sem contar a âncora caiu na tabela **Entregas** (a
+  âncora `<td>{e.entregue_por_nome || '—'}</td>` existe duas vezes); o teste ficou vermelho pelo motivo certo e o diff mostrou o lugar errado.
+- **T4 — `52fdf3df`** ✅ `epiFichaConfirmacaoIntegracao.api.test.js` (6): pela rota (entrega no tablet → ficha → `/verificar` íntegro →
+  cadeia `integra: true, problemas: []` → PRODUCAO 403 literal), pelo serviço (`deepStrictEqual` menos o `arquivo_url`, regex) e a fixture
+  `client/src/utils/__fixtures__/fichaEpi.rota.json` (I3: sempre compara as chaves da fixture com as da resposta real, os tipos e a ausência do
+  IP; `CRM_GRAVAR_FIXTURE=1` só regrava). Jest novo em `fichaEpiPdf.test.js` passa a fixture por `montarFichaEpi` e `gerarFichaEpiPdf`.
+  Vermelho antes: sem fixture, o do servidor caiu em `fixture ausente` e o Jest em `Cannot find module`. Controles: renomear `user_agent` →
+  `aparelho` no `map` **sem regravar** → cai o servidor (`a fixture do client nao e o corpo do servidor`); **regravando** → cai o Jest
+  (`Received: "Não registrado"`). Fixture e serviço restaurados por cópia.
+  **Divergência:** como o `map` espalha `...linha` (que já traz `user_agent` do SELECT), a renomeação do controle foi
+  `aparelho: … , user_agent: undefined` — renomear só a chave nova deixaria a velha no corpo.
+
+**Suítes no fim (sequenciais, uma vez cada, sobre `52fdf3df`):** `test:api` **525/525 arquivos OK** · `test:almoxarifado` **44 passou, 0 falhou** · `test:validation` **4/0** · `test:safealter` **3/0** · `test:sqlite` **16/0** · Jest **180 suítes, 2373 testes, 0 falha** · `CI=true build` **Compiled successfully** (exit 0 em todas).
+
+**Não feito aqui (de propósito):** T5/fechamento (spec 25, mapa, guia, novidades com B1200–B1206, D (183) com a M6) — a revisão adversarial
+vem antes.
 
 ## Letra B proposta (para `docs/almoxarifado-novidades-por-etapa.md`)
 
