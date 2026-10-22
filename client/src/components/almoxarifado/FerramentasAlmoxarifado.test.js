@@ -419,6 +419,24 @@ describe('FerramentasAlmoxarifado — permissão gerenciar_ferramentas', () => {
     expect(container.querySelector('.almox-modal')).toBeFalsy();
     expect(api.post).not.toHaveBeenCalled();
   });
+
+  // Etapa 181 (Fase 5, I2): sem gerenciar_ferramentas o servidor manda o emprestimo_aberto SEM o colaborador
+  // ({id, data_prevista_devolucao}). A linha mostra "Emprestada" e nenhum "com …" (nem "com undefined").
+  test('emprestimo_aberto sem colaborador_nome: a linha mostra "Emprestada", sem "com …"', async () => {
+    mockPode = () => false;
+    const original = api.get.getMockImplementation();
+    const semNome = FERRAMENTAS.map((f) => (f.emprestimo_aberto
+      ? { ...f, emprestimo_aberto: { id: f.emprestimo_aberto.id, data_prevista_devolucao: f.emprestimo_aberto.data_prevista_devolucao } }
+      : f));
+    api.get.mockImplementation((url, ...resto) => (url === '/almoxarifado/ferramentas'
+      ? Promise.resolve({ data: semNome }) : original(url, ...resto)));
+    await renderizar();
+    const linha = linhasFerramentas()[1]; // FER-002, EMPRESTADA
+    expect(linha.textContent).toContain('Paquímetro digital');
+    expect(linha.querySelector('.almox-badge').textContent).toBe('Emprestada');
+    expect(linha.textContent).not.toMatch(/com /);
+    expect(linha.textContent).not.toContain('undefined');
+  });
 });
 
 describe('FerramentasAlmoxarifado — painel de calibrações', () => {

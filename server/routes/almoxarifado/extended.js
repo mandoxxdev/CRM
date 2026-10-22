@@ -1622,9 +1622,18 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
   // Gate `gerenciar_ferramentas`, nao `movimentar`: ferramenta e PATRIMONIO emprestavel, nao
   // estoque (permissions.js, decisao D1) — acoplar ao gate de mover saldo impediria restringir
   // um sem o outro.
+  // Etapa 181 (Fase 5, I2): a lista e de qualquer usuario do modulo, mas COM QUEM a ferramenta esta e de quem gerencia
+  // ferramentas — o mesmo dado que `GET /emprestimos` (180) e o relatorio `ferramentas-emprestadas` (181) restringem. Sem
+  // `gerenciar_ferramentas`, o `emprestimo_aberto` sai por LISTA BRANCA: so `id` e `data_prevista_devolucao` (o status da
+  // ferramenta continua dizendo EMPRESTADA); um campo de pessoa novo no SELECT do servico nao vaza por omissao daqui.
   app.get('/api/almoxarifado/ferramentas', auth, async (req, res) => {
-    try { res.json(await toolService.listarFerramentas(db, req.query)); }
-    catch (e) { handleError(res, e); }
+    try {
+      const ferramentas = await toolService.listarFerramentas(db, req.query);
+      if (can(req.user, 'gerenciar_ferramentas')) return res.json(ferramentas);
+      res.json(ferramentas.map((f) => (f.emprestimo_aberto
+        ? { ...f, emprestimo_aberto: { id: f.emprestimo_aberto.id, data_prevista_devolucao: f.emprestimo_aberto.data_prevista_devolucao } }
+        : f)));
+    } catch (e) { handleError(res, e); }
   });
 
   app.post('/api/almoxarifado/ferramentas', auth, requirePermission('gerenciar_ferramentas'), validate(FerramentaCreateSchema), async (req, res) => {
