@@ -1,6 +1,8 @@
 # Etapa 172 — Requisição com OS cadastrada (opcional) e a cesta com campo de OS
 
-> **Status:** 🟡 em execução (2026-10-22). Emendada da "próxima tarefa detalhada" da Etapa 171.
+> **Status:** ✅ **fechada (2026-10-22)** — T0 `c34eab10`, T1 `f62bd21f`, T2 `033f1164`, T3 `a2a049bd` (merge `8c5f15a1`),
+> `8a08523f`, Fase 5 `c801e899`, `37c2732d`, `30f421c0`, `ffbbaae4`; fechamento no fim. Emendada da "próxima tarefa detalhada" da Etapa 171.
+> **Próxima: Etapa 174** (a 173 é de outra sessão, em worktree) — ver "Próxima tarefa detalhada".
 > **Fase 0 (medido, 2026-10-22):**
 > - `requisicoes_almoxarifado` só tem `os_referencia TEXT` (`schema.js:454-472`); nenhuma migração cria `os_id`. O
 >   `criarReserva` da aprovação lê `reqRow.os_id` (`requisitionService.js:534`) — coluna inexistente, sempre `null`.
@@ -29,15 +31,48 @@
 
 | # | Task | Tipo |
 |---|---|---|
-| T0 | **Prova por execução** do achado da cesta: teste que reproduz o fluxo do client (POST rascunho pela porta que a cesta usa → `/enviar` pela porta que ela usa, com o usuário de um módulo da cesta) e mostra o 400/403. Se o fluxo **não** estiver quebrado, registrar e rebaixar RN-172.07 a melhoria. | tronco |
-| T1 | Coluna `requisicoes_almoxarifado.os_id` (safeAlter + harness), Zod (`schemas.js:355`, hoje `z.object` descarta `os_id`), `requisitionCreateService` (RN-02/03/05), cópia (RN-06), rota aux (RN-08). | tronco |
-| T2 | Casamento por `os_id` nas duas portas da 171 (RN-04), sob a trava que já existe. | tronco (motor) |
-| T3 | Front: `RequisicaoForm` e `RequisicaoMaterialCesta` com seletor opcional + texto; a cesta ganha o texto obrigatório (RN-07). Mock só na fronteira HTTP. | galho (worktree) |
-| T4 | Integração: requisição criada pela cesta com OS cadastrada → pedido com a mesma OS recebido → reserva vai para a requisição; e pelo serviço. | integração |
+| ✅ T0 `c34eab10` | **Prova por execução** do achado da cesta: teste que reproduz o fluxo do client (POST rascunho pela porta que a cesta usa → `/enviar` pela porta que ela usa, com o usuário de um módulo da cesta) e mostra o 400/403. Se o fluxo **não** estiver quebrado, registrar e rebaixar RN-172.07 a melhoria. | tronco |
+| ✅ T1 `f62bd21f` | Coluna `requisicoes_almoxarifado.os_id` (safeAlter + harness), Zod (`schemas.js:355`, hoje `z.object` descarta `os_id`), `requisitionCreateService` (RN-02/03/05), cópia (RN-06), rota aux (RN-08). | tronco |
+| ✅ T2 `033f1164` | Casamento por `os_id` nas duas portas da 171 (RN-04), sob a trava que já existe. | tronco (motor) |
+| ✅ T3 `a2a049bd` (merge `8c5f15a1`) | Front: `RequisicaoForm` e `RequisicaoMaterialCesta` com seletor opcional + texto; a cesta ganha o texto obrigatório (RN-07). Mock só na fronteira HTTP. | galho (worktree) |
+| ✅ T4 (coberta — ver Fechamento) | Integração: requisição criada pela cesta com OS cadastrada → pedido com a mesma OS recebido → reserva vai para a requisição; e pelo serviço. | integração |
 
 ## Próxima tarefa detalhada
 
-*(preencher no fechamento)*
+### Etapa 174 — a entrega da requisição com OS cadastrada grava a OS na saída (o "Consumo por OS" passa a contar o que sai por requisição)
+
+> **O número é 174, não 173:** a 173 está sendo desenvolvida por outra sessão, em worktree separada. Antes de começar, `git log` e o
+> cabeçalho do guia — se a 173 já entrou na main, confira se ela tocou `requisitionService.entregar*`, `stockService.registrarMovimentacao`
+> ou `ownerRules` e renumere as letras B/C desta (a 172 parou em **B1110**/**C428**; a 173 pode ter usado as seguintes).
+
+**Por que esta (escolha pela regra do CLAUDE.md):** é o "falta" que este fechamento nomeou (letra **D (172)**, I5) e fecha a pergunta da
+usuária de Compras que abriu a 171 — *"…todos os itens comprados sejam devidamente associados **e controlados** por ela"*. Medido em
+2026-10-22: o relatório **Consumo por OS** (`reportService.relatorioConsumoPorOS`, chave `consumo-os` em `routes/almoxarifado/extended.js:2295`)
+soma `movimentacoes_almoxarifado` de tipo `SAIDA*` **por `m.os_id`**; a entrega da requisição grava `tipo: 'SAIDA'`
+(`requisitionService.js:~1920`) **sem `os_id`** (I5, travado pelo teste `requisicaoOsIdCasaReservaDaOs`). Resultado: **todo material que sai
+por requisição fica fora do Consumo por OS**, mesmo com a OS cadastrada desde a 172 — o relatório só conta saída avulsa com OS. A 22 continua
+🟡 por Engenharia/BOM e Produção/OP, bloqueadas por dependência (medição na própria spec) — não são candidatas.
+
+**Contrato que ela consome (pronto, não reabrir):** `requisicoes_almoxarifado.os_id INTEGER` (opcional, sem FK — M2); criação/rascunho/cópia
+(RN-172.02/06); a reserva da requisição já grava `os_id` (RN-172.05); `GET /api/almoxarifado/requisicoes/:id` devolve `os_id`.
+
+**Fase 0 — medir antes de prometer:**
+1. `stockService.registrarMovimentacao` com `tipo: 'SAIDA'` e `os_id`: `avaliarRegrasVinculo` (`movementRules.js:88`) só **afrouxa** com `os_id`
+   (vínculo satisfeito) — confirmar; e `ownerRules.assertSaidaPermitida` (`ownerRules.js:128`) para **material de cliente** passa a resolver o
+   cliente **pela OS** (`resolverClienteDoVinculo`, `ordens_servico.cliente_id`). **Risco I5:** material de cliente reservado para uma
+   requisição cuja OS é de **outro** cliente seria recusado **na entrega**, depois de aprovado, reservado e separado. Medir hoje: como a
+   entrega de material de cliente passa sem `os_id` (qual vínculo vai)? Se a regra do dono pode recusar, a conferência tem de vir **antes**
+   (criação/aprovação) ou a entrega não manda `os_id` para material de cliente — decisão reversível, letra B.
+2. Estorno da saída e **devolução** com `os_id`: o Consumo por OS desconta devolução? (`relatorioConsumoPorOS` filtra só `cancelado = 0` — a
+   devolução para Estoque entra como movimento próprio; medir se ela herda `os_id` e se o relatório a subtrai, senão o consumo da OS fica
+   inflado.)
+3. Requisição **sem** `os_id` (só texto): a saída continua sem `os_id` — **não** tentar casar texto aqui (a C426 mostra o custo do texto).
+4. As três portas que gravam a saída da requisição: entrega (`entregarRequisicao`), a segunda rodada, e a troca (`2192`) — todas.
+
+**Pontos de atenção:** a entrega roda sob a trava por requisição **e** a por material (CLAUDE.md — não pegar trava nova); o motor já está sob
+`naTravaDoMaterial`. Teste obrigatório: requisição com `os_id` entregue → `GET /api/almoxarifado/relatorios/consumo-os?os_id=` mostra a
+quantidade; requisição sem `os_id` → não aparece; material de cliente (o caso do risco 1) com o resultado decidido. Controle positivo: tirar o
+`os_id` da saída derruba o primeiro.
 
 ## Execução
 
@@ -153,3 +188,70 @@
   `/requisicoes-material/aux/ordens-servico`.
 - **M2 — OS excluída com requisição vinculada:** tolerado (a requisição não casa com nada; o texto continua) — letra D.
 - **M3/M4** — anotados no fechamento.
+
+---
+
+## Fase 5 — revisão adversarial (2026-10-22): 0 críticos; 4 achados reais corrigidos; 3 declarados
+
+**Corrigidos (TDD + controle positivo, cada um no seu commit):**
+
+1. **`c801e899` — nenhum teste travava o rascunho sem OS no client.** A guarda `!salvarRascunho &&` da RN-A (nova na cesta, antiga no
+   `RequisicaoForm`) podia sumir com a suíte verde: o rascunho sem OS ficaria bloqueado no client com a mensagem do servidor. Quatro cenários
+   em `warehouseMode` (o único modo em que o botão aparece): OS vazia + rascunho → **um** POST com `salvar_rascunho: true` e `os_id: null`;
+   OS escolhida → o rascunho manda `os_id`. Controle: tirar a guarda da cesta → 1/15 vermelho (o cenário da cesta); do form → 1/15 (o do form).
+2. **`37c2732d` — `?incluir` da rota aux saiu.** `GET /api/requisicoes-material/aux/ordens-servico` fica sob `authenticateToken` (qualquer
+   logado) e o `incluir=<id>` devolvia número e status de **qualquer** OS, fechada inclusive, por id. Nenhum client o usava (a cesta e o form
+   pedem a lista sem ele; a cópia leva o `os_id` pelo próprio `/copiar`). Agora o parâmetro é **ignorado** (200, só as abertas). Descartado:
+   400 para `incluir` (quebra client antigo em cache sem ganho). Teste invertido; contra a rota anterior 24/25. Letra **B1106**.
+3. **`30f421c0` — `osAindaExiste` (`routes/almoxarifado.js`, `/copiar`) engolia qualquer erro.** Banco ocupado ou outro erro de SQL virava
+   "a OS não existe" e a cópia saía 201 **sem `os_id`** (perdia o casamento por id sem ninguém saber). Agora só `no such table` copia o texto;
+   o resto propaga (500, nada gravado). Teste com o erro injetado só na consulta exata (`db.get`): `SQLITE_BUSY` → 500; `no such table` →
+   201 com `os_id` NULL. Vermelho contra o código anterior (26/27); controle: tirar o ramo da tabela ausente → 26/27.
+4. **`ffbbaae4` — os regex sobre código-fonte de `cestaEnviaRequisicao`.** O 0c (a cesta manda `os_referencia`/`os_id`) e a parte de porta e
+   botão do 0b já tinham teste de comportamento no client — saíram; entrou no client "fora do `warehouseMode` não há *Salvar rascunho* e o
+   envio é um POST em `/requisicoes-material`" (controle: botão sem a guarda → 1/16). **Ficam**, explicado no cabeçalho: 0a (registro da rota
+   em `index.js` sem portão — o harness não o monta) e o 0b reduzido a "as páginas forçam `warehouseMode: false`" (nenhum teste renderiza
+   `RequisicoesMaterialPages`).
+
+**Declarados (não corrigidos, com o porquê):**
+
+- **A lista do `warehouseMode` não filtra OS fechada.** O `RequisicaoForm` no almoxarifado usa `/api/almoxarifado/aux/ordens-servico`
+  (já existia, `extended.js:1020`, com `cliente_nome` e **sem** a régua `osFechada`), então o almoxarife vê OS cancelada/concluída no seletor.
+  Inofensivo: a requisição aceita OS fechada (**B1105**). Filtrar mudaria a rota de Recebimentos que a usa — fora do escopo. Letra **D (172)**.
+- **`AND os_id = ?` redundante** em `reservaDaOs.reservasDaOsParaRequisicao`: com `osId`, o SQL já restringe à OS e a função de casamento
+  confere de novo. Custo zero, duas réguas iguais; mantido (se uma mudar, a outra segura).
+- **OS com `numero_os` vazio:** `resolverOsDaRequisicao` faz `os.numero_os || osReferencia` — o texto digitado fica (C2 não sobrescreve com
+  vazio). `numero_os` é `NOT NULL UNIQUE` no core; vazio só por SQL à mão. Sem teste.
+
+---
+
+## Fechamento (2026-10-22)
+
+**T3 — `a2a049bd` (merge `8c5f15a1`):** cesta com *Número da OS \** (obrigatório no envio, mensagem `MSG_OS_OBRIGATORIA` junto do campo, não
+toast) e o seletor opcional *OS cadastrada* na cesta e no `RequisicaoForm` (escolher preenche e trava; *Digitar outro número* limpa); payload
+`os_referencia` aparado + `os_id` número ou `null`; lista `/almoxarifado/aux/ordens-servico` no `warehouseMode`, a rota nova fora dele e na
+cesta; lista que falha não bloqueia. O toast do form ganhou acento (mesma constante). Teste `Etapa172RequisicaoOS.test.js`.
+
+**T4 — coberta, sem commit próprio (divergência declarada):** o ponta a ponta do servidor (porta da cesta com `os_id`, usuário sem módulo →
+pedido da mesma OS recebido → reserva → aprovar/separar/entregar, nas duas ordens) já está no teste da T2 (`requisicaoOsIdCasaReservaDaOs`), e a
+cesta contra o contrato congelado está no client (`Etapa172RequisicaoOS`, mock só na fronteira HTTP). Um teste de integração a mais repetiria
+os dois.
+
+**Divergências do plano:** (1) a T0 supunha "rascunho → `/enviar`" — o fluxo é um POST só (C1); (2) a RN-172.08 previa `?incluir` e
+`cliente_nome` — saiu o cliente na Fase 2 (I4) e o `incluir` na Fase 5; (3) a RN-172.06 falava em "rascunho editado" — não existe edição (I1).
+
+**Documentação:** novidades — seção da etapa antes de "Onde estamos", **B1103** a **B1110** (B1106 pede um olhar), **C428** (a cesta que não
+enviava, resolvido), **D (172)**, **F (172)**, cabeçalho e "Onde estamos"; nenhuma **A** (coluna aditiva, criada no boot). Specs 04 (seção +
+cabeçalho, correção da "próxima tarefa" da 171), 22 (seção, correções do cabeçalho de `reservaDaOs.js` e da 171, item da 171 marcado), 07,
+mapa. Guia (cabeçalho apontando a 174, seção com roteiro de 8 passos). Manual (7.2 *Número da OS* reescrito — o toast agora tem acento — e
+*OS cadastrada*; cópia; 9.3e "a requisição da OS").
+
+**Retro.** (1) A T0 por execução pagou: a leitura do plano errou o fluxo (rascunho → `/enviar`) e só o request literal mostrou o defeito real
+— a cesta quebrada há 36 dias, sem ninguém ter reportado (sinal de que ela pouco era usada, ou que o pessoal desistiu). (2) A T3 entrou na
+main durante a T1/T2 e derrubou o 0c (regex sobre o fonte do client) — teste que lê fonte do outro lado do repo quebra com o trabalho
+paralelo; a Fase 5 cortou os redundantes. (3) A guarda de rascunho existia há 36 dias sem teste — qualquer guarda que **pula** uma regra
+precisa do cenário que prova o pulo. (4) Engolir erro "porque é ambiente parcial" (`osAindaExiste`) escondia falha real: só `no such table`.
+
+**Verificação final (medida, depois dos quatro commits da Fase 5):** `test:api` **498/498 arquivos**; `test:almoxarifado` **44 passou, 0
+falhou**; `test:validation` 4/0; `test:safealter` 3/0; `test:sqlite` 16/0; client **174/174 suítes, 2221/2221 testes**; `CI=true
+react-scripts build` **Compiled successfully** (só o aviso de depreciação do Node, `fs.F_OK`, que não é do ESLint).
