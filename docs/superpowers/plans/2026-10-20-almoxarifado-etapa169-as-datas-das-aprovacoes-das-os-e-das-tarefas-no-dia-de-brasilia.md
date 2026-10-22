@@ -244,7 +244,7 @@ revisão da proposta (`specs/proposta-editavel/review-proposta.md`) não muda: n
 3. **Paralelismo:** **0** galhos de código em paralelo (T1–T4 pequenas, em sequência); **3** revisores em paralelo na Fase 5 (o r3 na worktree
    própria) — **0** incidente de trava, **0** retrabalho. (O controle da P6 do condutor tocou o `index.js` por ~1 s durante a bateria 2 — sem
    efeito medido; a bateria 3 rodou inteira.)
-4. **Defeito que escapou:** *(preencher na Etapa 170)*.
+4. **Defeito que escapou:** **nenhum no código da 169** (preenchido na Etapa 170: as suítes da 169 — `datasDasOsEDasTarefasNoDiaLocal` 12, `datasDoPdfDaOsNoDiaLocal` 6 — verdes nas baterias da 170; nenhum achado das Fases 2 e 5 da 170 aponta código da 169). Na **lista** da próxima tarefa, uma frase herdada da 168 estava errada e a 169 a repetiu: a **C422** dizia "a tela sempre manda 100" — a tela não manda limite nenhum (o 100 é o padrão do servidor); corrigida na C422 com a correção visível. E a instrução "o fuso de produção é o do Dockerfile" não vale para os PDFs de remessa e de posição: são gerados no navegador (Fase 0 da 170).
 
 ## Próxima tarefa detalhada — Etapa 170
 

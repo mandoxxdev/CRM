@@ -1,5 +1,7 @@
 # 14 — Materiais Enviados a Terceiros
 
+> **+ Etapa 170 (2026-10-20, `3fb6aa0e`): o *Gerado em* do documento de remessa no dia de quem gera, e a data dos anexos do item (B1081, B1082)** — ver a seção "Etapa 170", no fim. O status não muda.
+
 > **+ Etapa 163 (2026-10-20, `6502c690`, Fase 5 `407ddfcc`): a remessa vencida pelo dia de Brasília (o selo, o filtro, a /vencidas e o aviso — C406, B1043)** — ver a seção "Etapa 163", no fim. O status não muda.
 
 > **Status:** 🟢 **completa** — a feature fecha com as **duas metades**:
@@ -532,3 +534,12 @@ Plano: `docs/superpowers/plans/2026-10-20-almoxarifado-etapa163-a-atividade-edit
   para o selo e o filtro — `6502c690`.
 
 Continua 🟢.
+
+## Etapa 170 — as datas no dia de Brasília (2026-10-20)
+
+Só exibição — nenhuma rota, consulta, valor gravado ou porta de saldo mudou. Plano:
+`docs/superpowers/plans/2026-10-20-almoxarifado-etapa170-as-datas-do-chat-de-compras-e-do-almoxarifado-no-dia-de-brasilia-e-o-limite-dos-logs.md`.
+
+- [x] O *Gerado em* do documento de remessa no dia do computador de quem gera (antes o dia UTC); o *Prazo previsto* (coluna `DATE`) no
+  dia gravado, inalterado. `3fb6aa0e`; do clique ao papel em `9353c1d5`; a prova com um instante longe de hoje em `26557862` (Fase 5 r3).
+- [x] A data dos anexos do item (o componente de anexos) no dia de Brasília — ver a spec 08. `3fb6aa0e`.

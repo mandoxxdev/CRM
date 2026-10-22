@@ -1,5 +1,7 @@
 # 13 — Materiais Pertencentes a Clientes
 
+> **+ Etapa 170 (2026-10-20, `3fb6aa0e`): o *Gerado em* do PDF de posição do cliente no dia de quem gera (B1082)** — ver a seção "Etapa 170", no fim. O status não muda.
+
 > **Status:** 🟢 — **Etapa 8 entregue em 2026-08-12** (`f26b635..5b5eb55`) **+ Etapa 123 (2026-10-16, `c97fe07f`): o dono do material tem de
 > estar em Clientes — `POST`/`PUT /materiais` com dono inexistente → 400 (C216 resolvido; a regra mora na spec 01, seção "Etapa 123")** **+ Etapa 106 (2026-10-15, `d6493a7e..0c8ec372`): o estorno do ajuste exige a mesma permissão do ajuste (C211 resolvido)** **+ Etapa 108 (2026-10-15, `cd7d5118..bc415eb6`): trocar o dono de material com histórico exige a mesma permissão (C213 resolvido)** · **Spec original:** seção 17 (fundamental para industrialização GMP)
 > **Última atualização:** 2026-10-19 (**Etapa 156** — o seletor **Proprietário** do cadastro diz o motivo quando a lista de clientes volta recusada, e o dono que não está na lista aparece como *"Cliente #7 — fora da lista"* (C366, `75e772cf`). Ver a seção no fim.) Antes: 2026-10-15 (Etapa 108)
@@ -331,3 +333,12 @@ Almoxarifado e o Operacional com a tela aberta (o portão das listas, Etapa 154)
   fora da lista"* marcado, e *GMP* manda `null`.
 - [x] **Testes** — `MaterialAlmoxarifadoForm.test.js` (71; o teste antigo que rejeitava `/clientes` com `new Error('403')` — sem
   `response`, a falha genérica — passou ao fixture do 403 real).
+
+## Etapa 170 — as datas no dia de Brasília (2026-10-20)
+
+Só exibição — nenhuma rota, consulta, valor gravado ou porta de saldo mudou. Plano:
+`docs/superpowers/plans/2026-10-20-almoxarifado-etapa170-as-datas-do-chat-de-compras-e-do-almoxarifado-no-dia-de-brasilia-e-o-limite-dos-logs.md`.
+
+- [x] O *Gerado em* do PDF de posição no dia do computador de quem gera — antes o dia UTC (`{ timeZone: 'UTC' }`: das 21h à meia-noite,
+  o de amanhã); `geradoEm` ilegível → hoje (antes *Invalid Date* no papel). O PDF é montado no **navegador** (o fuso do servidor não entra).
+  `3fb6aa0e`; do clique ao papel em `9353c1d5`.

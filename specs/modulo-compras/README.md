@@ -316,6 +316,10 @@ verificado só por build e suíte inteira).
   Agora a formatação é por `split('-')` da string, sem `new Date`, e vale para exibição e export; o
   `hojeISO` do formulário passou a ser local (era UTC: entre 21h e 0h o pedido nascia com a data de
   amanhã). **Regra desta base, escrita porque custou uma etapa: data não passa por `new Date(str)`.**
+  **Etapa 170 (B1080) — a regra acima estava errada num ponto:** o *Cadastrado em* da exportação é o `created_at`
+  (`CURRENT_TIMESTAMP`, em UTC), e cortar os 10 primeiros caracteres dava o **dia UTC** (das 21h à meia-noite, o de amanhã). Ele passou a sair
+  no dia de Brasília do instante (`formatarDataDoBanco`); as colunas só de data continuam cortadas da string, sem `new Date`. Também na 170:
+  o *Salva em* da planilha do fornecedor, depois de recarregar, na hora de Brasília (antes 3 h adiantado).
 - **Ainda não tratado nesta aba** (Minor da revisão final, declarado): a exportação faz **1 `GET
   /compras/pedidos/:id` por pedido** (N+1, sem teto), e com `Só atrasados` ligado e nenhum resultado
   a tela diz *"Nenhum pedido encontrado"* sem mencionar o filtro.

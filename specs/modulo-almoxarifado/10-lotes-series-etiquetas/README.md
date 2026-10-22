@@ -1,5 +1,7 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 170 (2026-10-20, `3fb6aa0e`): o *(anexado em …)* do certificado do lote no dia de Brasília (B1081, só exibição)** — ver a seção "Etapa 170", no fim. O status não muda.
+
 > **+ Etapa 164 (2026-10-20, `350eaed8`): o nome do PDF de etiquetas no dia local (B1051, cosmético)** — ver a seção "Etapa 164", no fim.
 > **+ Etapa 163 (2026-10-20, `6502c690`, Fase 5 `407ddfcc`): o lote vencido pelo dia de Brasília (a lista, a saída, a separação, a liberação e o aviso de vencendo — C406, B1042; porta de saldo só na data)** — ver a seção "Etapa 163", no fim. O status não muda.
 
@@ -983,3 +985,11 @@ Frotas e do Financeiro — C409; isto entrou de passagem, achado do r1 da 163).
   o arquivo saía com a data de amanhã) — `350eaed8`. Teste: `client/src/utils/etiquetasPdf.test.js` com o relógio parado às 22h30 (guarda de
   fuso); controle positivo: a volta ao `toISOString` derruba o cenário.
 - Nada mais da feature 10 mudou: nenhuma regra de lote, série ou etiqueta; o status continua 🟢.
+
+## Etapa 170 — as datas no dia de Brasília (2026-10-20)
+
+Só exibição — nenhuma rota, consulta, valor gravado ou porta de saldo mudou. Plano:
+`docs/superpowers/plans/2026-10-20-almoxarifado-etapa170-as-datas-do-chat-de-compras-e-do-almoxarifado-no-dia-de-brasilia-e-o-limite-dos-logs.md`.
+
+- [x] O *(anexado em …)* do certificado do lote (`certificado_em`, o `CURRENT_TIMESTAMP`) no dia de Brasília — antes lido como hora local
+  (das 21h à meia-noite, o dia de amanhã; ilegível, *Invalid Date*). `3fb6aa0e`; o cenário no teste de integração `9353c1d5`.

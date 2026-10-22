@@ -1,18 +1,26 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-20 (Etapa 169) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-20 (Etapa 170) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168 e 169) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169 e 170) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-20 (Etapa 169 ENTREGUE · próxima: Etapa 170)
+> ## Onde o desenvolvimento está — 2026-10-20 (Etapa 170 ENTREGUE · próxima: Etapa 171)
 >
-> **O desenvolvimento parou aqui: Etapa 169 fechada — 2026-10-20.** A **Etapa 169 (as datas das Aprovações, das Ordens de Serviço e das
+> **O desenvolvimento parou aqui: Etapa 170 fechada — 2026-10-20.** A **Etapa 170 (as datas do Chat, de Compras e do Almoxarifado no dia
+> de Brasília e o limite da consulta dos Logs; consertos técnicos, sem regra de acesso nova e sem mudar valor gravado)**: o **Chat** mostra
+> a hora de Brasília, o *Hoje*/*Ontem* e o separador do dia certos à noite, e a data ilegível não derruba mais a tela; em **Compras**, o
+> *Salva em* da planilha do fornecedor e o *Cadastrado em* do Excel de fornecedores; no **Almoxarifado** (só exibição), o certificado do lote,
+> os anexos, a retirada da ferramenta e o *Gerado em* dos PDFs de remessa e de posição do cliente — no dia certo à noite; a consulta dos
+> **Logs** pela integração recusa limite inválido com 400. Nenhuma consulta antes do deploy. **Próxima: Etapa 171** — ver a próxima tarefa
+> no plano da 170 (a **C423**: gravar as quatro datas do formulário da OS).
+>
+> **Etapa 169, 2026-10-20.** A **Etapa 169 (as datas das Aprovações, das Ordens de Serviço e das
 > Tarefas no dia de Brasília; consertos técnicos, sem regra de acesso nova e sem mudar valor gravado)**: as **Aprovações** mostram a hora de
 > Brasília (antes, 3 h atrasada); a abertura e a previsão da **OS** aparecem no dia cadastrado (no cartão e no *Ver Detalhes* do Comercial, na
 > lista da Fábrica, no *Ver Preview*, no quadro da Produção e no PDF gerado — antes, a véspera); **a OS só é vencida depois do dia previsto**
 > (antes, a de hoje já contava — o cartão *Vencidas* pode cair); nas **Tarefas**, o prazo no dia cadastrado e a criação na hora de Brasília.
-> Nenhuma consulta antes do deploy. **Próxima: Etapa 170** — ver a próxima tarefa no plano da 169 (o resto da **C421** e a **C422**).
+> Nenhuma consulta antes do deploy. **Próxima: Etapa 170** — ver a próxima tarefa no plano da 169 (o resto da **C421** e a **C422**). *(Próxima, na época: Etapa 170 — entregue acima.)*
 >
 > **Etapa 168, 2026-10-20.** A **Etapa 168 (a hora de criação no relógio de Brasília no núcleo, em
 > Custos de Viagem e nas Solicitações de Compra; consertos técnicos, sem regra de acesso nova e sem mudar valor gravado)**: o *Cadastrado em*
@@ -6825,6 +6833,53 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 170 — As datas do Chat, de Compras e do Almoxarifado no dia de Brasília, e o limite dos Logs (ENTREGUE — 2026-10-20)
+
+**O que mudou, em uma frase:** o Chat, a planilha e o Excel de fornecedores de Compras, o certificado do lote, os anexos, a retirada da
+ferramenta e os PDFs de remessa e de posição do cliente mostram a data e a hora de Brasília; e a consulta dos Logs pela integração recusa um
+limite de linhas inválido com uma mensagem clara.
+
+**O problema que ela resolve.** O sistema guarda a hora no horário universal (três horas à frente de Brasília). Estas telas a liam como se
+fosse a hora local (3 h adiantada) ou cortavam a data do horário universal — das 21h à meia-noite, o dia de amanhã. No Chat, a mensagem de
+hoje à noite aparecia com a data de amanhã e fora do separador *Hoje*, e uma data ilegível derrubava a tela. Os dois PDFs do Almoxarifado
+imprimiam o *Gerado em* do dia seguinte depois das 21h.
+
+| Antes | Agora |
+|---|---|
+| Chat, mensagem das 22h30 de hoje: *21/10/26*, sob o separador *21/10/2026* | *22:30*, sob *Hoje* |
+| Chat, mensagem das 23h de ontem: *02:00*, sob *Hoje* | *Ontem*, sob *Ontem* |
+| Chat, data ilegível numa mensagem: a tela do Chat caía | A tela abre; a mensagem aparece sem hora |
+| Compras, planilha do fornecedor salva às 22h30, depois de recarregar: *Salva em 21/10/2026, 01:30:05* | *Salva em 20/10/2026, 22:30:05* |
+| Compras, Excel de fornecedores, cadastrado às 22h30: *Cadastrado em 21/10/2026* | *20/10/2026* |
+| Lotes e Séries, certificado anexado às 22h30: *(anexado em 21/10/2026)* | *(anexado em 20/10/2026)* |
+| Anexos (recebimento, inspeção, não conformidade, requisição, devolução, remessa), anexado às 22h30: *21/10/2026* | *20/10/2026* |
+| Ferramentas → Empréstimos, retirada às 22h30: *2026-10-21* | *2026-10-20* |
+| PDF da remessa e PDF de posição do cliente, gerados às 22h30: *Gerado em 21/10/2026* | *Gerado em 20/10/2026* |
+| Logs pela integração, `limit=abc`: erro 500 do banco; `limit=-1`: a tabela inteira | 400 *"limit inválido. Use um número inteiro maior ou igual a zero."* |
+
+**Roteiro de teste (10 minutos — depois das 21h, que é quando o erro aparecia).**
+
+1. **Chat.** Abra **Chat**, escolha uma conversa e mande uma mensagem: ela aparece com a hora do relógio, debaixo do separador **Hoje**; na
+   lista de conversas, ao lado do nome, a mesma hora. Uma mensagem de ontem aparece *Ontem*, debaixo do separador *Ontem*.
+2. **Compras.** Em **Compras → Fornecedores homologados**, abra um grupo e um fornecedor e clique **Salvar planilha** com um Excel: *Salva em
+   <agora>*. Recarregue a página (e abra **Visualizar**): a mesma hora. Em **Compras → Fornecedores → Exportar Excel**, a coluna *Cadastrado
+   em* de um fornecedor cadastrado hoje à noite é hoje.
+3. **Almoxarifado.** Em **Lotes e Séries**, escolha o material e anexe o certificado de um lote: *(anexado em <hoje>)*. Num recebimento,
+   anexe um arquivo: a linha do anexo termina com a data de hoje. Em **Ferramentas → Empréstimos**, empreste uma ferramenta: a *Retirada* é
+   hoje (*AAAA-MM-DD*).
+4. **PDFs.** Em **Remessas a Terceiros**, abra uma remessa e clique **PDF da remessa**: *Gerado em <hoje>*. Em **Materiais de Clientes**,
+   escolha um cliente e clique **PDF**: *Gerado em <hoje>*.
+
+**O que esta etapa NÃO cobre.** O formato de cada tela não mudou (a *Retirada* continua *AAAA-MM-DD*); o limite dos Logs não tem teto
+(pergunta de produto); a tela de Logs não muda (ela não manda limite); as quatro datas do formulário da OS que não são gravadas (**C423** — a
+próxima etapa). Nenhuma porta de permissão mudou; nenhum valor gravado mudou; nenhuma consulta mudou; nada que mexe em saldo foi tocado; o
+documento da proposta não mudou.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos provam (as telas montadas em jsdom, no fuso
+de Brasília e com o relógio parado às 22h30, do clique até o texto — inclusive o *Gerado em* que cada PDF escreveria; a consulta dos Logs pelo
+servidor de verdade), escrito para você conferir à mão.
+Commits `b8aed080`, `73a577c0`, `3fb6aa0e`, `1e970cfb`, `9353c1d5` e `26557862` (a correção da revisão).
 
 ## Etapa 169 — As datas das Aprovações, das Ordens de Serviço e das Tarefas no dia de Brasília (ENTREGUE — 2026-10-20)
 

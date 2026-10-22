@@ -1,5 +1,7 @@
 # 16 — Ferramentas e Equipamentos de Medição
 
+> **+ Etapa 170 (2026-10-20, `3fb6aa0e`): a *Retirada* dos empréstimos no dia de Brasília, no formato da tela (B1081, só exibição)** — ver a seção "Etapa 170", no fim. O status não muda.
+
 > **+ Etapa 163 (2026-10-20, `6502c690`, Fase 5 `407ddfcc`): a calibração vigente, o painel, os empréstimos vencidos e o lembrete pelo dia de Brasília (C406, B1041)** — ver a seção "Etapa 163", no fim. O status não muda.
 
 > **+ Etapa 160 (2026-10-19, `eaf682e9`): a busca das ferramentas (`busca`) e dos empréstimos (`colaborador`) acha a letra acentuada em qualquer caixa e aparada (C393, B1019)** — ver a seção "Etapa 160", no fim.
@@ -146,3 +148,11 @@ Plano: `docs/superpowers/plans/2026-10-20-almoxarifado-etapa163-a-atividade-edit
   `dias_vencido` e o lembrete por e-mail); a chave diária do lembrete leva o mesmo dia, passado ao filtro — `6502c690`.
 
 Continua 🟢.
+
+## Etapa 170 — as datas no dia de Brasília (2026-10-20)
+
+Só exibição — nenhuma rota, consulta, valor gravado ou porta de saldo mudou. Plano:
+`docs/superpowers/plans/2026-10-20-almoxarifado-etapa170-as-datas-do-chat-de-compras-e-do-almoxarifado-no-dia-de-brasilia-e-o-limite-dos-logs.md`.
+
+- [x] A *Retirada* dos empréstimos (`data_retirada`, o `CURRENT_TIMESTAMP`) no dia de Brasília, ainda *AAAA-MM-DD* — antes os 10 primeiros
+  caracteres (o dia UTC). A *Previsão de devolução* e o *Vencido* são só data e já estavam certos. `3fb6aa0e`; o cenário em `9353c1d5`.

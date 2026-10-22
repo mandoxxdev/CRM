@@ -11,14 +11,21 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-20):** **Etapa 169 fechada** (consertos técnicos no Comercial, na Fábrica e nas Tarefas, sem regra
+> **Onde o desenvolvimento está (2026-10-20):** **Etapa 170 fechada** (consertos técnicos no Chat, em Compras, no Almoxarifado e no núcleo,
+> sem regra de acesso nova e sem mudar valor gravado; **as datas do Chat, de Compras e do Almoxarifado no dia de Brasília e o limite da
+> consulta dos Logs** — o **Chat** mostra a hora de Brasília e o *Hoje*/*Ontem* certos à noite, e a data ilegível não derruba mais a tela
+> (**B1079**); em **Compras**, o *Salva em* da planilha do fornecedor e o *Cadastrado em* do Excel de fornecedores (**B1080**); no
+> **Almoxarifado**, o certificado do lote, os anexos e a retirada da ferramenta (**B1081**) e o *Gerado em* dos PDFs de remessa e de posição
+> do cliente (**B1082**) no dia certo à noite; a consulta dos **Logs** recusa limite inválido com 400 (**B1083**); a **C421** e a **C422**
+> resolvidas); a próxima é a **171** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 169 fechada** (consertos técnicos no Comercial, na Fábrica e nas Tarefas, sem regra
 > de acesso nova e sem mudar valor gravado; **as datas das Aprovações, das Ordens de Serviço e das Tarefas no dia de Brasília** — as
 > **Aprovações** mostram a hora de Brasília (antes, 3 h atrasada — **B1073**); a abertura e a previsão da **OS** aparecem no dia cadastrado no
 > cartão e no detalhe do Comercial, na lista da Fábrica, na prévia, no quadro da Produção (**B1074**) e no PDF da OS (**B1077**) — antes, a
 > véspera; **a OS só é *vencida* depois do dia previsto** (antes, a de hoje já contava — **B1075**, o cartão *Vencidas* pode cair); nas
 > **Tarefas**, o prazo no dia cadastrado e a criação na hora de Brasília (**B1076**); a **C421** em parte resolvida (e corrigida: eram 3 h, não
 > 6 h); os avisos novos **C423** (quatro datas do formulário da OS que não são gravadas — de antes), **C424** e **C425** (perguntas de produto));
-> a próxima é a **170** — ver "Onde estamos e o que vem a seguir".
+> a próxima era a **170**.)*
 > *(Antes: **Etapa 168 fechada** (consertos técnicos no núcleo, no Comercial e nas Solicitações de
 > Compra, sem regra de acesso nova e sem mudar valor gravado; **a hora de criação no relógio de Brasília** — o *Cadastrado em* de Clientes e
 > de Usuários, a *Data/Hora* dos Logs, a autorização, o comprovante e o histórico de **Custos de Viagem**, as **Minhas Solicitações de
@@ -4060,7 +4067,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B1078; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B1085; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -11855,6 +11862,57 @@ Compras, o Almoxarifado, os PDFs de remessa e de posição do cliente) e a **C42
 cancelada como vencida) e **C425** (o que a *Data Aprovação* mostra); a **B1073** a **B1077** são reversíveis — **a B1075 muda um número que
 alguém pode acompanhar** (o cartão *Vencidas*).
 
+**B1079 (NOVA, da Etapa 170; do Chat) — o Chat na hora e no dia de Brasília.** **Escolhido:** a hora de cada mensagem, o *Hoje*/*Ontem*,
+o separador do dia e a hora da conversa na lista leem o instante gravado como horário universal (é como o banco grava) e o mostram no
+relógio de Brasília, nos mesmos formatos de antes (*HH:MM*, *Ontem*, *DD/MM/AA*; *DD/MM* na lista; *Hoje*, *Ontem*, *DD/MM/AAAA* no
+separador). **Muda:** a hora fica **3 h mais cedo** que antes (era 3 h adiantada); das 21h à meia-noite a mensagem de hoje sai com a hora (antes
+com a data de amanhã) e debaixo de *Hoje*; a de ontem à noite sai *Ontem*. A mensagem com data ilegível aparece **sem hora e sem separador**
+(antes a tela do Chat inteira caía); a seguinte compara o dia com a última mensagem legível antes dela. **Descartado:** converter no servidor
+(mudaria o que o socket e a rota entregam); trocar os formatos. **Reversível:** `b8aed080`.
+
+**B1080 (NOVA, da Etapa 170; de Compras) — a planilha do fornecedor e o *Cadastrado em* na hora de Brasília.** **Escolhido:** o *Salva em* da
+planilha do fornecedor (na página e no **Visualizar**) na hora de Brasília, no mesmo formato (*DD/MM/AAAA, HH:MM:SS*); a coluna *Cadastrado em*
+do Excel de fornecedores no dia de Brasília do cadastro. **Muda:** o *Salva em* depois de recarregar, 3 h mais cedo (logo depois de salvar já
+estava certo — agora os dois dizem a mesma hora); o *Cadastrado em* de quem foi cadastrado das 21h à meia-noite, o dia certo em vez do
+seguinte. As colunas só de data (pedido, previsão, cotação, validade) **não mudam**. **A regra RN-D01 da Etapa 39 ("valor com hora: os 10
+primeiros caracteres") estava errada para o *Cadastrado em*** — corrigida com a correção visível no plano da 39 e na spec de Compras.
+**Descartado:** mudar a formatação das colunas só de data (já estavam certas). **Reversível:** `73a577c0`.
+
+**B1081 (NOVA, da Etapa 170; do Almoxarifado — só exibição) — o certificado do lote, os anexos e a retirada da ferramenta no dia de
+Brasília.** **Escolhido:** o *(anexado em …)* do certificado do lote e a data dos anexos no dia de Brasília (*DD/MM/AAAA*); a *Retirada* dos
+empréstimos de ferramenta no dia de Brasília **no formato da tela** (*AAAA-MM-DD*). **Muda:** das 21h à meia-noite, o dia certo em vez do
+seguinte. O certificado com data ilegível mostra o texto gravado (antes *Invalid Date*); o anexo sem data continua sem data; a retirada
+ilegível continua mostrando os 10 primeiros caracteres. Nada que mexe em saldo foi tocado. **Descartado:** trocar a *Retirada* para
+*DD/MM/AAAA* (pergunta de formato). **Reversível:** `3fb6aa0e`.
+
+**B1082 (NOVA, da Etapa 170; do Almoxarifado) — o *Gerado em* dos PDFs de remessa e de posição do cliente no dia de quem gera.**
+**Escolhido:** o *Gerado em* dos dois PDFs (gerados no navegador) pelo dia do computador de quem clica — como o resto do sistema desde a
+Etapa 161; o *Prazo previsto* da remessa, o dia cadastrado (como antes). **Muda:** das 21h à meia-noite, o dia certo em vez do de amanhã. Sem
+data de geração legível, o dia de hoje (no PDF de posição saía *Invalid Date*). **O fuso do servidor não entra**: os dois PDFs são montados
+no navegador (medido na Fase 0). **Descartado:** fixar o fuso de Brasília no código (o sistema inteiro usa o fuso do navegador).
+**Reversível:** `3fb6aa0e`.
+
+**B1083 (NOVA, da Etapa 170; dos Logs — C422) — o limite e o deslocamento inválidos na consulta dos Logs recusados com 400.** **Escolhido:**
+na consulta `GET /api/auditoria/logs`, `limit` e `offset`, quando vierem, têm de ser um número inteiro maior ou igual a zero escrito só com
+dígitos; senão **400** *"limit inválido. Use um número inteiro maior ou igual a zero."* (ou *"offset inválido. …"*). Sem eles, até 100 linhas
+a partir da primeira (como antes); `limit=0` continua devolvendo nada. **Muda:** `limit=abc` 400 (antes 500 com a mensagem do banco);
+`limit=-1` 400 (antes a tabela inteira); `limit=10abc` 400 (antes 10); `offset=-1` 400 (antes tratado como 0); o parâmetro repetido ou em
+forma de lista 400. **A tela de Logs não muda** (ela não manda nenhum dos dois). O portão (só quem administra usuários) continua vindo antes.
+**Descartado:** cair no padrão (100) em silêncio — esconderia o erro de quem chama e trocaria o "tudo" do `-1` por 100 sem avisar; um teto
+para o limite (pergunta de produto). **Reversível:** `1e970cfb`.
+
+**B1084 (NOVA, da Etapa 170) — a próxima etapa (171).** Ver a "próxima tarefa detalhada" no plano da Etapa 170 — a **C423** (gravar as quatro
+datas do formulário da OS — técnica, muda o que a rota de salvar a OS aceita). As decisões que esperam vocês: as da **B957**, a **B988** e a
+**B989**; a **B1002** continua pedindo um olhar; a **B1013** (o acento nas buscas); a **C398**; a **C408**; a **C411** e a **C412**; a **B1057**
+(a data de emissão reimpressa); a **B1063** (o texto impresso das cláusulas com o marcador); a **C417**; a **C420**; a **C424** e a **C425**; a
+**B1079** a **B1083** e a **B1085** são reversíveis.
+
+**B1085 (NOVA, da Etapa 170, no fechamento) — o teste do relatório de ajustes por motivo falhava das 21h à meia-noite.** Só teste; nada
+muda na tela nem na rota. A bateria do fechamento, rodada às 21h14, deu **489/490**: o cenário dos três baldes do relatório *Ajustes por
+motivo* comparava o *Último em* cru (o instante gravado, em UTC) com o dia de hoje de Brasília — às 21h o UTC já é amanhã. **Escolhido:** o
+teste tira o dia do instante convertido para Brasília. **Descartado:** converter o *Último em* no servidor (mudaria o que a tela e a
+exportação recebem; a tela já converte na exibição). **Reversível:** `073d64fc`.
+
 **B1064 (NOVA, da Etapa 166) — a próxima etapa (167).** Ver a "próxima tarefa detalhada" no plano da Etapa 166. As decisões que esperam
 vocês: as da **B957**, a **B988** e a **B989**; a **B1002** continua pedindo um olhar; a **B1013** (o acento nas buscas); a **C398**; a
 **C408**; a **C411** e a **C412**; a **B1057** (a data de emissão reimpressa); **a B1063** (o texto impresso das cláusulas com o marcador);
@@ -15335,7 +15393,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      primeiro continua — escrever o marcador é escolha de quem escreve. **O que fazer:** nada no dia a dia (só quem tem o Comercial escreve
      cláusulas e cadastros). Restringir `raw` a uma lista de campos, ou escapar `{{` nos valores, é decisão de produto (muda o que o marcador
      aceita) — fica para uma etapa própria.
-421. **PARTE RESOLVIDA NA ETAPA 169 (B1073 a B1077; `1e8fa390`, `1537b0d6`, `009b560e`, `c8b14a86`) — NOVO (da medição da Etapa 168; de vários módulos, anterior a ela; lido no código, linha a linha) — as outras telas que ainda leem a
+421. **✅ RESOLVIDO NA ETAPA 170 (o resto: B1079 a B1082; `b8aed080`, `73a577c0`, `3fb6aa0e`) — PARTE RESOLVIDA NA ETAPA 169 (B1073 a B1077; `1e8fa390`, `1537b0d6`, `009b560e`, `c8b14a86`) — NOVO (da medição da Etapa 168; de vários módulos, anterior a ela; lido no código, linha a linha) — as outras telas que ainda leem a
      data no fuso universal.** A Etapa 168 consertou a hora de criação no núcleo, em Custos de Viagem e nas Solicitações de Compra e mediu o
      resto do sistema. Ainda mostram a data errada: no **Comercial**, as **Aprovações** (a hora sai **6 h atrasada** — o horário é convertido
      duas vezes; *isto dizia 6 h; **estava errado**: são **3 h** atrasada — as 6 h eram a distância para as telas que mostravam a hora 3 h
@@ -15348,11 +15406,15 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      à noite) e o *gerado em* dos PDFs de remessa e de posição do cliente (o dia seguinte das 21h à meia-noite). **O que fazer:** à noite,
      conferir a data dessas telas com o calendário. É a próxima etapa (169 e seguintes). *(Resolvido na Etapa 169: as Aprovações, as OS do
      Comercial e da Fábrica, a prévia, o quadro da Produção, a contagem de vencidas e as Tarefas — e o PDF da OS, que esta lista não nomeava.
-     Continuam: o Chat, Compras, o Almoxarifado e os PDFs de remessa e de posição do cliente — a Etapa 170.)*
-422. **NOVO (da revisão de autorização da Etapa 168; dos Logs, anterior a ela; reproduzido por sonda) — o limite de linhas inválido nos
+     Continuam: o Chat, Compras, o Almoxarifado e os PDFs de remessa e de posição do cliente — a Etapa 170.)* *(Resolvido na Etapa 170:
+     o Chat, a planilha e o *Cadastrado em* de Compras, o certificado do lote, os anexos, a retirada da ferramenta e o *Gerado em* dos dois
+     PDFs. Correção: os dois PDFs são gerados no **navegador** — o erro era o fuso universal escrito no código, não o do servidor.)*
+422. **✅ RESOLVIDO NA ETAPA 170 (B1083, `1e970cfb`) — NOVO (da revisão de autorização da Etapa 168; dos Logs, anterior a ela; reproduzido por sonda) — o limite de linhas inválido nos
      Logs.** A consulta dos logs pela integração com `limit=abc` (ou um número gigante) responde erro 500 com a mensagem crua do banco; com
      `limit=-1`, sem limite. Só um administrador alcança (a tela sempre manda 100). **O que fazer:** nada no dia a dia. Validar o limite é
-     uma etapa própria.
+     uma etapa própria. *(Resolvido na Etapa 170: `limit`/`offset` inválidos → 400 com a mensagem *"limit inválido. Use um número inteiro maior
+     ou igual a zero."* (ou *"offset inválido. …"*). Correção: "a tela sempre manda 100" — **estava errado**: a tela não manda limite
+     nenhum; o 100 é o padrão do servidor.)*
 423. **NOVO (da revisão do plano da Etapa 169; da Fábrica e do Comercial, anterior a ela; lido no código) — quatro datas do formulário da
      OS não são gravadas.** No **Editar** da OS (Fábrica), os campos *Data Entrega*, *Data Conferência*, a data de entrada do pedido e a da ordem
      de produção aceitam o valor e o **Salvar** responde *"OS atualizada com sucesso"* — mas o servidor não grava essas quatro: ao reabrir, os
@@ -16698,6 +16760,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(170) As datas do Chat, de Compras e do Almoxarifado e o limite dos Logs, o que ficou de fora.** O formato de cada tela não mudou (a
+  *Retirada* das ferramentas continua *AAAA-MM-DD* — **B1069**). O limite dos Logs não tem teto (pergunta de produto). Uma data impossível com
+  hora gravada pela integração (*30/02* com hora) ainda é lida rolando para março — agora também no Chat, no *Cadastrado em* de Compras e na
+  *Retirada* (o banco nunca grava assim: as três colunas são o relógio do banco — Fase 5 r1, a mesma da 169). O antigo componente de chat que
+  nenhuma tela monta não foi tocado. Nenhuma porta de permissão mudou; nenhum valor gravado mudou; nenhuma consulta mudou; nada que mexe em
+  saldo foi tocado.
 - **(169) As datas das Aprovações, das OS e das Tarefas, o que ficou de fora.** O resto da **C421** (o Chat, Compras, o Almoxarifado, os
   PDFs de remessa e de posição do cliente). O PDF já guardado de uma OS só muda ao gerar de novo. Quatro datas do formulário da OS não são
   gravadas (**C423**, de antes). A OS cancelada como vencida (**C424**) e o que a *Data Aprovação* mostra (**C425**) ficam para o produto. Uma
@@ -17811,6 +17879,14 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(170) Nenhum clique foi dado no navegador.** As telas foram provadas em jsdom com a tela de verdade (só a resposta do servidor, o socket,
+o arquivo do Excel e o PDF simulados), no fuso de Brasília e com o relógio parado às 22h30, do gesto até o texto (abrir a conversa, receber
+pelo socket, enviar, rolar para carregar as antigas; abrir a planilha e o **Visualizar**, salvar uma planilha, **Exportar Excel**; escolher o
+material dos lotes; a aba **Empréstimos**; clicar **PDF da remessa** e **PDF** e ler o *Gerado em* que o PDF escreveria); a consulta dos Logs
+pelo servidor de verdade em pasta vazia. **Nenhum PDF foi aberto.** Vale conferir à mão, depois das 21h: mande uma mensagem no **Chat** (a hora
+do relógio, sob *Hoje*); gere o **PDF da remessa** (*Gerado em* hoje); e, em **Compras → Fornecedores homologados**, salve uma planilha e
+recarregue a página (a mesma hora).
 
 **(169) Nenhum clique foi dado no navegador.** As sete telas foram provadas em jsdom com a tela de verdade (só a resposta do servidor
 simulada), no fuso de Brasília e com o relógio parado às 22h30, do gesto até o texto (abrir o detalhe da aprovação, a aba das OS, o filtro
@@ -33665,9 +33741,84 @@ novo.
 - Nenhuma porta de permissão mudou; nenhum valor gravado mudou; nenhuma consulta do servidor mudou; o documento da proposta não mudou (a
   revisão obrigatória da proposta passou inteira).
 
+## Etapa 170 — As datas do Chat, de Compras e do Almoxarifado no dia de Brasília, e o limite da consulta dos Logs (2026-10-20)
+
+Uma etapa de **consertos técnicos**, sem regra de acesso nova e sem mudar nada gravado. Fecha a lista de telas que ainda liam a data no
+horário universal (**C421**). No **Chat**, a hora das mensagens aparecia **3 horas adiantada** e, das 21h à meia-noite, a mensagem de hoje
+saía com a **data de amanhã** — o separador dizia a data de amanhã em vez de *Hoje*, e a mensagem de ontem à noite aparecia debaixo de
+*Hoje*; uma data ilegível derrubava a tela inteira do Chat. Em **Compras**, o *Salva em* da planilha do fornecedor (depois de recarregar)
+aparecia 3 horas adiantado e a coluna *Cadastrado em* do Excel de fornecedores trazia o dia seguinte para quem foi cadastrado à noite. No
+**Almoxarifado**, a data do certificado do lote, a dos anexos e a da retirada da ferramenta caíam no dia seguinte à noite, e o *Gerado em* dos
+PDFs de **remessa a terceiros** e de **posição do cliente** imprimia a data de amanhã quando o papel era gerado depois das 21h. Agora cada uma
+é a data e a hora de Brasília, no mesmo formato de antes. E a consulta dos **Logs** pela integração recusa um limite de linhas inválido com
+uma mensagem clara (antes respondia erro do banco, ou devolvia a tabela inteira).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Chat**, mensagem das 22h30 de hoje: *21/10/26* (a data de amanhã) e o separador *21/10/2026* | *22:30*, sob o separador *Hoje* — **B1079** |
+| **Chat**, mensagem das 23h de ontem: *02:00*, debaixo de *Hoje* | *Ontem*, sob o separador *Ontem* — **B1079** |
+| **Chat**, a lista de conversas, última mensagem às 22h30: *21/10* | *22:30* — **B1079** |
+| **Chat**, mensagem com data ilegível: a tela do Chat caía inteira | A tela abre; a mensagem aparece sem hora — **B1079** |
+| **Compras → Fornecedores homologados → (grupo) → (fornecedor)**, planilha salva às 22h30, depois de recarregar: *Salva em 21/10/2026, 01:30:05* | *Salva em 20/10/2026, 22:30:05* — **B1080** |
+| **Compras → Fornecedores → Exportar Excel**, fornecedor cadastrado às 22h30 de 20/10: *Cadastrado em 21/10/2026* | *20/10/2026* — **B1080** |
+| **Almoxarifado → Lotes e Séries**, certificado anexado às 22h30 de 20/10: *(anexado em 21/10/2026)* (ilegível: *Invalid Date*) | *(anexado em 20/10/2026)* (ilegível: o texto gravado) — **B1081** |
+| **Almoxarifado → anexos** (recebimento, inspeção, não conformidade, requisição, devolução, remessa), anexado às 22h30: *… · 21/10/2026* | *… · 20/10/2026* — **B1081** |
+| **Almoxarifado → Ferramentas → Empréstimos**, retirada às 22h30 de 20/10: *2026-10-21* | *2026-10-20* — **B1081** |
+| **PDF da remessa a terceiros** e **PDF de posição do cliente**, gerados às 22h30 de 20/10: *Gerado em 21/10/2026* | *Gerado em 20/10/2026* — **B1082** |
+| **Consulta dos Logs pela integração** com `limit=abc`: erro 500 com a mensagem do banco; com `limit=-1`: a tabela inteira | Erro 400 *"limit inválido. Use um número inteiro maior ou igual a zero."* — **B1083** |
+
+### As regras, com o cenário exato
+
+**1. O Chat na hora de Brasília (B1079).** Depois das 21h, abra **Chat**, escolha uma conversa e mande uma mensagem: ela aparece com a hora do
+relógio (*HH:MM*) debaixo do separador **Hoje**; na lista de conversas, ao lado do nome, a mesma hora. Uma mensagem de ontem mostra *Ontem*
+(e fica sob o separador *Ontem*); de antes, a data (*DD/MM/AA* na mensagem, *DD/MM* na lista, *DD/MM/AAAA* no separador). A mensagem que chega
+de outro usuário enquanto a conversa está aberta segue a mesma regra; ao rolar para cima e carregar as mensagens antigas, o separador do dia
+fica no lugar certo.
+
+**2. Compras (B1080).** Em **Compras → Fornecedores homologados**, abra um grupo e um fornecedor e clique **Salvar planilha** com um Excel: *Salva em
+<data e hora de agora>*. Recarregue a página: a mesma data e hora (antes, 3 h adiantada). Em **Compras → Fornecedores → Exportar Excel**, a
+coluna *Cadastrado em* traz o dia do cadastro no calendário de Brasília. As outras datas de Compras (pedido, previsão, cotação, validade) não
+mudaram — já mostravam o dia gravado.
+
+**3. As datas de tela do Almoxarifado (B1081).** Depois das 21h: em **Almoxarifado → Lotes e Séries**, anexe o certificado de um lote — a linha diz
+*(anexado em <hoje>)*; num recebimento (ou inspeção, não conformidade, requisição), anexe um arquivo — a linha do anexo termina com a data
+de hoje; em **Almoxarifado → Ferramentas → Empréstimos**, empreste uma ferramenta — a coluna *Retirada* mostra hoje (no formato
+*AAAA-MM-DD*, como antes).
+
+**4. Os PDFs do Almoxarifado (B1082).** Depois das 21h: em **Almoxarifado → Remessas a Terceiros**, abra uma remessa e clique **PDF da
+remessa** — *Gerado em <hoje>*; o *Prazo previsto* é o dia cadastrado (como antes). Em **Almoxarifado → Materiais de Clientes**, escolha um
+cliente e clique **PDF** — *Gerado em <hoje>*. A data é a do computador de quem gera o PDF.
+
+**5. O limite da consulta dos Logs (B1083).** Só pela integração (a tela de **Logs** não manda limite — nada muda nela): com um
+administrador, `GET /api/auditoria/logs?limit=2` devolve 2 linhas; `?limit=abc`, `?limit=-1`, `?limit=1.5` ou `?limit=10abc` → **400**
+*"limit inválido. Use um número inteiro maior ou igual a zero."*; `?offset=-1` → **400** *"offset inválido. Use um número inteiro maior ou
+igual a zero."*; sem o parâmetro, até 100 linhas (como antes). Quem não administra usuários continua recebendo *"Acesso negado. Apenas
+administradores podem visualizar logs."* antes de qualquer conferência do limite.
+
+### O que esta etapa NÃO cobre
+
+- O formato de cada tela não mudou (de propósito — **B1069**): a *Retirada* das ferramentas continua *AAAA-MM-DD*.
+- O limite dos Logs **não tem teto** (um número grande, até o maior inteiro seguro, é aceito como antes) — pergunta de produto.
+- O antigo componente de chat que nenhuma tela monta não foi tocado.
+- Quatro datas do formulário da OS que não são gravadas (**C423**) — técnica, candidata da próxima etapa.
+- Nenhuma porta de permissão mudou; nenhum valor gravado mudou; nenhuma consulta mudou; nada que mexe em saldo foi tocado; o documento da
+  proposta não mudou (a revisão obrigatória da proposta passou inteira).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 170 entregue (2026-10-20):** **as datas do Chat, de Compras e do Almoxarifado no dia de Brasília e o limite da consulta dos
+  Logs** — o Chat (**B1079**); a planilha do fornecedor e o *Cadastrado em* de Compras (**B1080**); o certificado do lote, os anexos e a
+  retirada da ferramenta (**B1081**); o *Gerado em* dos PDFs de remessa e de posição do cliente (**B1082**); o `limit`/`offset` inválido dos
+  Logs com 400 (**B1083**). Consertos técnicos, sem regra de acesso nova e sem mudar valor gravado; a **C421** e a **C422** resolvidas.
+  Commits `b8aed080`, `73a577c0`, `3fb6aa0e`, `1e970cfb`, `9353c1d5` (o teste de integração) e `26557862` (a correção da revisão). **O que é seu:** as decisões
+  **B1079** a **B1083** (reversíveis); as perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **B988**, **B989**, **B1013**,
+  **B1057**, **B1063**, **C277**, **C312**, **C314**, **C316**, **C330**, **C398**, **C408**, **C411**, **C412**, **C417**, **C420**, **C424**,
+  **C425**); as limitações **(170)** em D e a verificação **(170)** em F. **Próxima: Etapa 171 — ver a "próxima tarefa detalhada" no plano da
+  Etapa 170.**
 
 - **Etapa 169 entregue (2026-10-20):** **as datas das Aprovações, das Ordens de Serviço e das Tarefas no dia de Brasília** — as Aprovações na
   hora de Brasília (**B1073**); as datas da OS no dia cadastrado, nas telas (**B1074**) e no PDF (**B1077**); a OS vencida só depois do dia
@@ -33676,7 +33827,7 @@ novo.
   seu:** as decisões **B1073** a **B1077** (reversíveis — **a B1075 muda o número do cartão *Vencidas***); os avisos novos **C423** (de antes),
   **C424** e **C425** (perguntas de produto); as perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **B988**, **B989**,
   **B1013**, **B1057**, **B1063**, **C277**, **C312**, **C314**, **C316**, **C330**, **C398**, **C408**, **C411**, **C412**, **C417**, **C420**); as
-  limitações **(169)** em D e a verificação **(169)** em F. **Próxima: Etapa 170 — ver a "próxima tarefa detalhada" no plano da Etapa 169.**
+  limitações **(169)** em D e a verificação **(169)** em F. **Próxima: Etapa 170 — ver a "próxima tarefa detalhada" no plano da Etapa 169.** *(Feita: a 170.)*
 
 - **Etapa 168 entregue (2026-10-20):** **a hora de criação no relógio de Brasília** no núcleo (Clientes, Usuários, Logs), em Custos de
   Viagem, nas Minhas Solicitações de Compra e no modelo salvo da proposta, e a data da viagem no dia gravado (**B1069**); o filtro de datas dos

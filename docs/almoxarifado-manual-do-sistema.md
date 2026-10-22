@@ -1232,6 +1232,11 @@ e os logs com
 
 — sem mudar nada. Cada pessoa continua podendo ler as **próprias** permissões (é com elas que o sistema monta o menu dela).
 
+A consulta dos logs pela integração aceita `limit` (quantas linhas; sem ele, 100) e `offset` (quantas pular; sem ele, 0), cada um um número
+inteiro maior ou igual a zero escrito só com dígitos. Fora disso, a consulta é recusada com *"limit inválido. Use um número inteiro maior ou
+igual a zero."* (ou *"offset inválido. Use um número inteiro maior ou igual a zero."*) — depois de conferir quem pede: quem não gerencia
+usuários recebe a recusa de acesso acima. A tela de **Logs** não usa esses dois parâmetros.
+
 Ao salvar um usuário no formulário, o sistema grava o cadastro, apaga os módulos marcados direto nele e grava os que estão marcados agora;
 o usuário passa a entrar nos módulos novos e deixa de entrar nos desmarcados a partir da ação seguinte. Para um usuário com o papel
 *admin* ou super administrador, o formulário não grava módulos (ele já entra em todos).
@@ -7078,11 +7083,21 @@ O sistema guarda o instante de cada registro no horário universal (três horas 
     PDF foi gerado; o PDF já guardado de uma OS mostra as datas de quando foi gerado (**Gerar PDF** gera de novo);
   - nas **Tarefas**, o prazo do cartão aparece no dia cadastrado (o mesmo do campo *Prazo* ao abrir a tarefa); *Criada* (no cartão) e *Criada
     em* (ao abrir) são o dia e a hora de Brasília em que a tarefa foi criada, e *Resolvida* a hora em que foi concluída.
-- **Ainda pelo horário universal** (a data pode sair um dia adiantada das 21h à meia-noite, ou a hora 3 h adiantada; nas datas sem hora,
-  um dia antes): os indicadores do painel antigo do Operacional (OEE, manutenção e inspeções do dia), que nenhum menu abre; o
-  **Chat** (a hora das mensagens, *Hoje*/*Ontem*); em **Compras**, a data da planilha salva do fornecedor e o *Cadastrado em* da planilha de
-  fornecedores; no **Almoxarifado**, a data do certificado do lote, a data dos anexos e a da retirada da ferramenta; e o *gerado em* dos PDFs
-  de remessa a terceiro e de posição do cliente.
+- **O Chat, Compras e o Almoxarifado** mostram a data e a hora de **Brasília**, no formato de cada lugar:
+  - no **Chat**, a hora de cada mensagem é a do relógio (*HH:MM*) para a de hoje, *Ontem* para a de ontem e a data (*DD/MM/AA*) para as
+    anteriores; o separador entre os dias diz *Hoje*, *Ontem* ou a data (*DD/MM/AAAA*); na lista de conversas, ao lado do nome, a hora (hoje),
+    *Ontem* ou a data (*DD/MM*). A mensagem que chega enquanto a conversa está aberta e as antigas carregadas ao rolar seguem a mesma régua. Uma
+    mensagem com a data ilegível aparece sem hora e sem separador, e a seguinte compara o dia com a última mensagem legível antes dela;
+  - em **Compras**, o *Salva em* da planilha do fornecedor (na página do fornecedor e no **Visualizar**) é a hora de Brasília em que ela foi
+    salva (*DD/MM/AAAA, HH:MM:SS*); a coluna *Cadastrado em* do Excel de fornecedores é o dia de Brasília do cadastro (sem data, *-*; um valor
+    que não é data aparece como foi gravado). As outras datas de Compras (pedido, previsão de entrega, cotação, validade) mostram o dia gravado;
+  - no **Almoxarifado**, o *(anexado em …)* do certificado do lote (seção 4.6) e a data de cada anexo de documento são o dia de Brasília
+    (*DD/MM/AAAA*; um valor que não é data aparece como foi gravado; o anexo sem data não mostra data); a *Retirada* dos empréstimos de
+    ferramenta (seção 21) é o dia de Brasília, em *AAAA-MM-DD*;
+  - o *Gerado em* do **documento de remessa** (seção 17.2) e do **PDF de posição do cliente** (seção 16.9) é o dia do computador de quem gera o
+    PDF — os dois são montados no navegador; o *Prazo previsto* da remessa é o dia cadastrado.
+- **Ainda pelo horário universal** (a data pode sair um dia adiantada das 21h à meia-noite): os indicadores do painel antigo do Operacional
+  (OEE, manutenção e inspeções do dia), que nenhum menu abre.
 - O deslocamento usado é o atual do horário de Brasília (três horas, sem horário de verão).
 
 ### 22.6 A lista mostra o último filtro pedido
