@@ -1,6 +1,6 @@
 # Etapa 176 — O recebimento informa a OS (material de cliente para industrialização)
 
-> **Status:** 🟡 em execução (2026-10-22) — **T1 feita** (`c1c04e1b`, `e79b9718`); **T2 feita** (`0d227edb`); **T3 feita** (integração, ver Execução). Emendada da "próxima tarefa detalhada" da Etapa 174 (B1119).
+> **Status:** 🟡 em execução (2026-10-22) — **T1 feita** (`c1c04e1b`, `e79b9718`); **T2 feita** (`0d227edb`); **T3 feita** (`f5c75c68`). Emendada da "próxima tarefa detalhada" da Etapa 174 (B1119).
 > **Origem:** resposta do cliente (Matheus, 22/10 09:13): *"Industrialização: materiais que os clientes compram e nossa
 > empresa apenas realiza a mão de obra… um estoque de materiais do cliente que ficam em nosso estoque"*. A pergunta
 > "o material do cliente já vem para uma OS específica?" **foi feita e aguarda resposta** — por isso a OS é
@@ -116,7 +116,7 @@
   (`os_numero` ou "—", o mesmo vazio das outras colunas). Teste novo `RecebimentosOs.test.js` (7, mock só no `api`).
   **Controles positivos** (restaurados por cópia + `cmp`): sem `Number()` → só (b) vermelho (`"7"` ≠ `7`); sem `disabled`
   com pedido → (c) e (d) vermelhos. Client **176 suítes / 2263 testes** antes do merge da 177 e **176 / 2271** depois dele (HEAD `0d227edb`, sobre `881e4c12`); `CI=true react-scripts build` ok nos dois.
-- [x] **T3** — (hash no commit "Etapa 176 T3"). Teste novo `server/tests/api/recebimentoClienteOsPontaAPonta.api.test.js` (2, tudo
+- [x] **T3** — `f5c75c68`. Teste novo `server/tests/api/recebimentoClienteOsPontaAPonta.api.test.js` (2, tudo
   pela rota). **Roteiro 1:** material do cliente A + OS do cliente A → `POST /recebimentos` sem pedido com `os_id` e NF → detalhe
   com a OS → conferir → workflow (compras, faturamento) → `/fiscal` → processar → `ENTRADA_COMPRA` com a OS e reserva da OS de 10
   → requisição pela **cesta** (`POST /api/requisicoes-material`, usuário sem módulo) com `os_id` e **sem projeto** → aprovar
