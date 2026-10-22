@@ -278,3 +278,71 @@ describe('RequisicaoForm — OS cadastrada opcional (Etapa 172)', () => {
     expect(api.post.mock.calls[0][1]).toEqual(expect.objectContaining({ os_referencia: 'OS 1714', os_id: null }));
   });
 });
+
+// ------------------------------------------------------------------- rascunho (Fase 5 da Etapa 172)
+// A RN-A e cobrada no ENVIO e pulada no rascunho (igual ao servidor). Sem esta asercao, a guarda
+// `!salvarRascunho &&` podia virar `!osReferencia.trim()` e o rascunho sem OS ficaria travado no
+// cliente sem nenhum teste vermelho (controle positivo: remover `!salvarRascunho &&` → vermelho).
+describe('Rascunho em warehouseMode — OS vazia não bloqueia; OS escolhida vai junto (Etapa 172, Fase 5)', () => {
+  const CTX_CESTA_ALMOX = { ...CTX_CESTA, warehouseMode: true };
+
+  test('cesta: OS vazia + "Salvar rascunho" faz UM POST com salvar_rascunho true e os_id null', async () => {
+    await act(async () => {
+      root.render(
+        <MemoryRouter>
+          <RequisicoesMaterialContext.Provider value={CTX_CESTA_ALMOX}>
+            <RequisicaoMaterialCesta />
+          </RequisicoesMaterialContext.Provider>
+        </MemoryRouter>,
+      );
+    });
+    await esperarEfeitos();
+    await clicar(botao('Adicionar'));
+    expect($('cesta-os-numero').value).toBe('');
+    await clicar(botao('Salvar rascunho'));
+    const posts = postsCriacao('/requisicoes-material');
+    expect(posts).toHaveLength(1);
+    expect(posts[0][1]).toEqual(expect.objectContaining({ salvar_rascunho: true, os_id: null, os_referencia: '' }));
+    expect($('cesta-os-erro')).toBeNull();
+  });
+
+  test('cesta: rascunho com OS selecionada manda os_id', async () => {
+    await act(async () => {
+      root.render(
+        <MemoryRouter>
+          <RequisicoesMaterialContext.Provider value={CTX_CESTA_ALMOX}>
+            <RequisicaoMaterialCesta />
+          </RequisicoesMaterialContext.Provider>
+        </MemoryRouter>,
+      );
+    });
+    await esperarEfeitos();
+    await clicar(botao('Adicionar'));
+    await escolher($('cesta-os-select'), '7');
+    await clicar(botao('Salvar rascunho'));
+    const posts = postsCriacao('/requisicoes-material');
+    expect(posts).toHaveLength(1);
+    expect(posts[0][1]).toEqual(expect.objectContaining({ salvar_rascunho: true, os_id: 7, os_referencia: 'OS-2026-058' }));
+  });
+
+  test('RequisicaoForm: OS vazia + "Salvar Rascunho" faz UM POST com salvar_rascunho true e os_id null', async () => {
+    await renderizarForm(null);
+    expect($('req-os-numero').value).toBe('');
+    await clicar(botao('Salvar Rascunho'));
+    expect(api.post).toHaveBeenCalledTimes(1);
+    const [url, payload] = api.post.mock.calls[0];
+    expect(url).toBe('/almoxarifado/requisicoes');
+    expect(payload).toEqual(expect.objectContaining({ salvar_rascunho: true, os_id: null }));
+    expect(toast.error).not.toHaveBeenCalledWith(MSG_SERVIDOR);
+  });
+
+  test('RequisicaoForm: rascunho com OS selecionada manda os_id', async () => {
+    await renderizarForm(null);
+    await escolher($('req-os-select'), '12');
+    await clicar(botao('Salvar Rascunho'));
+    expect(api.post).toHaveBeenCalledTimes(1);
+    expect(api.post.mock.calls[0][1]).toEqual(expect.objectContaining({
+      salvar_rascunho: true, os_id: 12, os_referencia: 'OS-2026-061',
+    }));
+  });
+});
