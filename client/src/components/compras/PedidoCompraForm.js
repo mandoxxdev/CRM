@@ -14,6 +14,8 @@
  * Sem a coação daqui, a suíte de API ficaria verde e **todo submit real** tomaria 400. As chaves
  * coagidas: `fornecedor_id`, `material_id`, `quantidade`, `valor_unitario`, `ipi_percentual`,
  * `peso_unitario` (quando preenchido), os três encargos (e `solicitacao_id`, quando vem por query).
+ * E `os_id` (Etapa 171): número, ou `null` para "Estoque (sem OS)" — sempre presente, porque no `PUT`
+ * `null` TIRA a OS e a chave ausente não mexe (I6 da revisão da Fase 2).
  *
  * ⚠️ O QUE O PAYLOAD **NÃO** LEVA, e é decisão, não esquecimento:
  * - `numero`: é gerado pelo servidor (`inserirComNumeroUnico(db, 'PC', …)`). A tela não tem campo
@@ -152,6 +154,21 @@ const hojeISO = () => {
 function mensagemDeErro(erro, fallback) {
   const data = erro?.response?.data;
   return formatarErroPermissao(data) || data?.error || fallback;
+}
+
+// Etapa 171 (RN-171.06, M2): o rotulo de uma OS no `<select>`. `numero_os — cliente_nome`, ou so
+// o numero quando a OS nao tem cliente; sem numero (OS apagada/renumerada, ou a OS do pedido que
+// nao veio na lista) o texto e `OS #<id>`, o mesmo da lista de pedidos.
+function rotuloDaOs(os) {
+  if (!os) return '';
+  const numero = os.numero_os || `OS #${os.id}`;
+  return os.cliente_nome ? `${numero} — ${os.cliente_nome}` : numero;
+}
+
+// Etapa 171 (I6): `''` (opcao "Estoque (sem OS)") vira `null` — no `PUT` isso TIRA a OS, e por
+// isso o campo viaja sempre, nunca omitido. Fora disso, NUMERO: o `<select>` devolve string.
+function osIdParaPayload(valor) {
+  return valor === '' || valor == null ? null : Number(valor);
 }
 
 let sequenciaLinha = 0;
@@ -338,6 +355,12 @@ const PedidoCompraForm = () => {
 
   const [fornecedores, setFornecedores] = useState([]);
   const [fornecedorId, setFornecedorId] = useState('');
+  // Etapa 171 (RN-171.01): a OS do cabecalho. `''` = compra para estoque.
+  const [osId, setOsId] = useState('');
+  const [ordensServico, setOrdensServico] = useState([]);
+  // A OS gravada no pedido, como o `GET /:id` a descreve — para o `<select>` mostra-la mesmo se a
+  // lista nao a trouxer (OS apagada, M2), em vez de cair calado em "Estoque".
+  const [osDoPedido, setOsDoPedido] = useState(null);
   const [numero, setNumero] = useState('');
   const [dataPedido, setDataPedido] = useState(hojeISO());
   const [previsaoEntrega, setPrevisaoEntrega] = useState('');
@@ -379,6 +402,23 @@ const PedidoCompraForm = () => {
 
   const setCondicao = (campo, valor) => setCondicoes((c) => ({ ...c, [campo]: valor }));
   const setEncargo = (campo, valor) => setEncargos((c) => ({ ...c, [campo]: valor }));
+
+  // Etapa 171 (RN-171.06): as OS abertas para o `<select>`; na edicao com `incluir=<os do pedido>`,
+  // porque a OS ja gravada pode estar fechada e a lista aberta nao a traria. Falhar aqui NAO trava
+  // a tela (como as opcoes do documento): o pedido segue para estoque ou com a OS que ja tinha.
+  const carregarOrdensServico = useCallback((incluir, estaVivo) => {
+    const config = incluir ? { params: { incluir } } : undefined;
+    return api.get('/compras/aux/ordens-servico', config)
+      .then((res) => { if (estaVivo()) setOrdensServico(Array.isArray(res.data) ? res.data : []); })
+      .catch(() => { if (estaVivo()) toast.warn('Não foi possível carregar as OS — o pedido pode ser salvo para estoque.'); });
+  }, []);
+
+  useEffect(() => {
+    if (edicao) return undefined;
+    let vivo = true;
+    carregarOrdensServico(null, () => vivo);
+    return () => { vivo = false; };
+  }, [edicao, carregarOrdensServico]);
 
   useEffect(() => {
     let vivo = true;
@@ -424,6 +464,10 @@ const PedidoCompraForm = () => {
         const p = res.data || {};
         setNumero(p.numero || '');
         setFornecedorId(p.fornecedor_id == null ? '' : String(p.fornecedor_id));
+        // Etapa 171: a OS gravada, e a lista de OS com ela incluida (RN-171.06).
+        setOsId(p.os_id == null ? '' : String(p.os_id));
+        setOsDoPedido(p.os_id == null ? null : { id: p.os_id, numero_os: p.os_numero || null });
+        carregarOrdensServico(p.os_id == null ? null : p.os_id, () => vivo);
         setDataPedido((p.data_pedido || '').slice(0, 10));
         setPrevisaoEntrega((p.previsao_entrega || '').slice(0, 10));
         setStatus(p.status || 'pendente');
@@ -611,6 +655,7 @@ const PedidoCompraForm = () => {
     }
     const payload = {
       fornecedor_id: Number(fornecedorId),
+      os_id: osIdParaPayload(osId),
       data_pedido: dataPedido,
       previsao_entrega: previsaoEntrega,
       status,
@@ -839,6 +884,24 @@ const PedidoCompraForm = () => {
                   {fornecedores.map((f) => (
                     <option key={f.id} value={f.id}>{f.razao_social}</option>
                   ))}
+                </select>
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                OS
+                <select
+                  data-testid="pedido-os"
+                  value={osId}
+                  onChange={(ev) => setOsId(ev.target.value)}
+                  disabled={soStatus}
+                  className="filter-select"
+                >
+                  <option value="">Estoque (sem OS)</option>
+                  {ordensServico.map((os) => (
+                    <option key={os.id} value={os.id}>{rotuloDaOs(os)}</option>
+                  ))}
+                  {osDoPedido && !ordensServico.some((os) => String(os.id) === String(osDoPedido.id)) && (
+                    <option value={osDoPedido.id}>{rotuloDaOs(osDoPedido)}</option>
+                  )}
                 </select>
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

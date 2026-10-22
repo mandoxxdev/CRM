@@ -377,8 +377,9 @@ test('(h) o Excel exportado leva a data do banco e as colunas Atrasado/Dias de a
   expect(Object.keys(linhas[0])).toEqual([
     'Número', 'Fornecedor', 'Código', 'Descrição', 'Unidade', 'Quantidade', 'Valor Unitário',
     'Valor Total', 'Status', 'Data', 'Previsão Entrega', 'Atrasado', 'Dias de atraso',
-    'IPI %', 'Frete', 'ICMS-ST', 'Desconto',
-  ]); // ORDEM congelada: as duas da Etapa 39 e depois as quatro da Etapa 100 (RN-100.08), NO FIM
+    'IPI %', 'Frete', 'ICMS-ST', 'Desconto', 'OS',
+  ]); // ORDEM congelada: as duas da Etapa 39, as quatro da Etapa 100 (RN-100.08) e a OS da 171, NO FIM
+  expect(linhas[0]['OS']).toBe(''); // pedido de estoque: '' e nao null/'-' (mesma razao do (i))
 }, 10000);
 
 // ── RN-100.08 (Etapa 100, G13) o Excel leva IPI % da linha e os encargos do cabeçalho, como NÚMERO ──
@@ -620,5 +621,50 @@ describe('Etapa 78 — Documento (PDF) na lista', () => {
     expect(toast.error).toHaveBeenCalledWith('Pedido de compra não encontrado');
     expect(cliquesNoLink).toHaveLength(0);
     expect(texto()).toContain('PC-2026-419'); // a lista continua de pe
+  }, 10000);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// Etapa 171 (RN-171.05, M2) — a coluna OS da aba Pedidos e do Excel.
+//
+// Tres casos, porque a lista vem de `LEFT JOIN` vivo: OS achada (`os_numero`), OS gravada mas nao
+// achada (`os_id` sem `os_numero` — apagada/renumerada → `OS #<id>`) e pedido de estoque (`-`).
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+describe('Etapa 171 — coluna OS na aba Pedidos', () => {
+  const PEDIDOS_OS = [
+    { ...PEDIDO_419_NO_PRAZO, id: 431, numero: 'PC-2026-431', os_id: 57, os_numero: 'OS-2026-057' },
+    { ...PEDIDO_419_NO_PRAZO, id: 432, numero: 'PC-2026-432', os_id: 58, os_numero: null },
+    { ...PEDIDO_419_NO_PRAZO, id: 433, numero: 'PC-2026-433', os_id: null, os_numero: null },
+  ];
+
+  test('(171a) cabecalho tem OS antes de Acoes, e a celula mostra numero, OS #id ou -', async () => {
+    pedidosDoBanco = PEDIDOS_OS;
+
+    await renderizarEm('/compras/pedidos');
+
+    expect([...container.querySelectorAll('thead th')].map((th) => th.textContent))
+      .toEqual(['Número', 'Fornecedor', 'Valor Total', 'Data Pedido', 'Previsão Entrega', 'Status', 'OS', 'Ações']);
+    expect(celulasDaLinha(0)[6].textContent).toBe('OS-2026-057');
+    expect(celulasDaLinha(1)[6].textContent).toBe('OS #58');
+    expect(celulasDaLinha(2)[6].textContent).toBe('-');
+  }, 10000);
+
+  test('(171b) a lista vazia ocupa as 8 colunas', async () => {
+    pedidosDoBanco = [];
+
+    await renderizarEm('/compras/pedidos');
+
+    expect(container.querySelector('td.no-data').getAttribute('colspan')).toBe('8');
+  }, 10000);
+
+  test('(171c) o Excel leva a OS no fim: numero, OS #id ou vazio', async () => {
+    pedidosDoBanco = PEDIDOS_OS;
+
+    await renderizarEm('/compras/pedidos');
+    await clicar(botaoPorTexto('Exportar Excel'));
+
+    const [linhas] = exportToExcel.mock.calls[0];
+    expect(linhas.map((l) => l['OS'])).toEqual(['OS-2026-057', 'OS #58', '']);
+    expect(Object.keys(linhas[0]).pop()).toBe('OS');
   }, 10000);
 });
