@@ -924,6 +924,34 @@ async function migrateBackfillConferenciaFinalizadaEm(db) {
   if (r.changes > 0) console.log(`✅ Migração ${MIGRATION_BACKFILL_CONFERENCIA_FINALIZADA} aplicada (${r.changes} recebimento(s) com a conferência finalizada)`);
 }
 
+const MIGRATION_BACKFILL_PRONTA_PARA_RETIRADA = 'backfill_pronta_para_retirada_em';
+
+/**
+ * Etapa 182 (T1, RN-182.03) — o legado de `requisicoes_almoxarifado.pronta_para_retirada_em`: a requisicao que ja esta
+ * PRONTA_PARA_RETIRADA com a coluna vazia recebe a trilha LIBERACAO_RETIRADA MAIS RECENTE (a ultima liberacao — o mesmo que a
+ * coluna guarda dali em diante) e, sem trilha (a auditoria da liberacao e best-effort), o `updated_at`: enquanto ela esta
+ * PRONTA, `updated_at` >= o instante da liberacao, entao o alerta pode chegar atrasado, nunca cedo. Deixar sem data tiraria a
+ * caixa do alerta para sempre (letra B). So PRONTA: as outras nao entram no alerta. Ledger por custo; re-executar e
+ * inofensivo (so preenche NULL). Exportada para o teste.
+ */
+async function migrateBackfillProntaParaRetiradaEm(db) {
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS schema_migrations_almoxarifado (
+    id TEXT PRIMARY KEY,
+    applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  const applied = await dbGet(db, 'SELECT 1 as ok FROM schema_migrations_almoxarifado WHERE id = ?',
+    [MIGRATION_BACKFILL_PRONTA_PARA_RETIRADA]);
+  if (applied) return;
+  const r = await dbRun(db, `UPDATE requisicoes_almoxarifado
+    SET pronta_para_retirada_em = COALESCE((SELECT MAX(a.created_at) FROM auditoria_log_almoxarifado a
+      WHERE a.entidade = 'requisicao' AND a.entidade_id = requisicoes_almoxarifado.id
+        AND a.acao = 'LIBERACAO_RETIRADA'), requisicoes_almoxarifado.updated_at)
+    WHERE status = 'PRONTA_PARA_RETIRADA' AND pronta_para_retirada_em IS NULL`);
+  await dbRun(db, 'INSERT OR IGNORE INTO schema_migrations_almoxarifado (id) VALUES (?)',
+    [MIGRATION_BACKFILL_PRONTA_PARA_RETIRADA]);
+  if (r.changes > 0) console.log(`✅ Migração ${MIGRATION_BACKFILL_PRONTA_PARA_RETIRADA} aplicada (${r.changes} requisição(ões) pronta(s) para retirada)`);
+}
+
 const MIGRATION_REPARO_FAMILIA_PAI_ZERO = 'reparo_familia_pai_zero';
 
 /**
@@ -2721,6 +2749,21 @@ async function initSchemaUmaExecucao(db) {
   // da Etapa 33 intacta). Sem FK: `ordens_servico` e tabela core e a OS excluida e tolerada (M2 — a requisicao so deixa
   // de casar com a reserva da OS). Antes desta coluna o `criarReserva` da aprovacao lia `reqRow.os_id` e via sempre null.
   await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN os_id INTEGER');
+  // Etapa 182 (T1, RN-182.01/02): a ULTIMA liberacao para retirada — a regua do alerta SEPARADO_AGUARDANDO_RETIRADA
+  // (alertRegistry.js). Antes nao havia data da transicao (`updated_at` muda em qualquer gravacao). A rota grava no mesmo
+  // UPDATE da liberacao; o escritor unico e o TRIGGER abaixo (emenda M1 da revisao da Fase 2): pega qualquer caminho que
+  // ponha PRONTA, inclusive um `SET status=?` parametrico que uma guarda por texto-fonte nao veria. Nunca zerada: o B504, a
+  // entrega e a exclusao tiram a requisicao do alerta pelo status/`ativo`, e a unica volta a PRONTA regrava (letra B).
+  // `OLD.status IS NOT` (e nao `<>`): um status NULL antigo tambem conta como liberacao. Sem recursao: o trigger e de
+  // `UPDATE OF status` e o corpo so grava a coluna.
+  await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN pronta_para_retirada_em DATETIME');
+  await migrateBackfillProntaParaRetiradaEm(db);
+  await dbRun(db, `CREATE TRIGGER IF NOT EXISTS trg_requisicoes_pronta_para_retirada_em
+    AFTER UPDATE OF status ON requisicoes_almoxarifado
+    WHEN NEW.status = 'PRONTA_PARA_RETIRADA' AND OLD.status IS NOT 'PRONTA_PARA_RETIRADA'
+    BEGIN
+      UPDATE requisicoes_almoxarifado SET pronta_para_retirada_em = CURRENT_TIMESTAMP WHERE id = NEW.id;
+    END`);
 
   // ── Liberação por valor ──
   await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN valor_total REAL DEFAULT 0');
@@ -3130,6 +3173,7 @@ module.exports = {
   // Etapa 122 (C255a): o cenario do legado roda a migracao depois de montar o pedido e as trilhas.
   migrateBackfillPedidoFechadoAutomaticamente,
   migrateBackfillConferenciaFinalizadaEm, // Etapa 122 (C255b), idem
+  migrateBackfillProntaParaRetiradaEm, // Etapa 182 (T1, RN-182.03), idem
   migrateRepararFamiliaPaiZero, // Etapa 123 (C223), idem
   CATEGORIAS_SEED,
   FAMILIAS_SEED,

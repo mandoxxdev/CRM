@@ -4604,9 +4604,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           const itens = await requisitionService.carregarItensRequisicao(db, req.params.id);
           requisitionService.assertConferidaSeObrigatorio(reqRow, itens);
 
+          // Etapa 182 (T1, RN-182.01): a data da liberacao no MESMO UPDATE (a perda do compare-and-set nao grava). O
+          // trigger `trg_requisicoes_pronta_para_retirada_em` (schema.js) grava o mesmo instante — redundante de proposito.
           // eslint-disable-next-line no-await-in-loop
           const upd = await dbRun(db,
-            `UPDATE requisicoes_almoxarifado SET status='PRONTA_PARA_RETIRADA', updated_at=CURRENT_TIMESTAMP
+            `UPDATE requisicoes_almoxarifado SET status='PRONTA_PARA_RETIRADA', pronta_para_retirada_em=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP
               WHERE id=? AND status=?
                 AND NOT EXISTS (SELECT 1 FROM separacoes_requisicao_almoxarifado WHERE requisicao_id=? AND id > ?)`,
             [req.params.id, reqRow.status, req.params.id, marca]);
