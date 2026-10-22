@@ -233,11 +233,17 @@ test('[RN-183.01/03/04, integracao com o servidor] a ficha REAL da rota sai com 
   const fichaDaRota = require('./__fixtures__/fichaEpi.rota.json');
   const [l] = montarFichaEpi(fichaDaRota).linhas;
   expect(l.matriculaConfirmada).toBe('Sim — digitou M-100 (confere com o cadastro)');
-  expect(l.aparelho).toBe('Tablet-Almox/2.1 (Android)');
+  // Fase 5 (M2): o aparelho do servidor e um User-Agent real e longo (197 caracteres) — conferido INTEIRO, no descritor e no PDF.
+  const UA_DO_TABLET = 'Mozilla/5.0 (Linux; Android 14; SM-X210 Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) '
+    + 'Version/4.0 Chrome/129.0.6668.100 Safari/537.36 Tablet-Almox/2.1 (Android; GMP Industriais)';
+  expect(l.aparelho).toBe(UA_DO_TABLET);
   await gerarFichaEpiPdf(fichaDaRota, { carregarImagem: async () => 'data:image/png;base64,AAAA' });
   const textos = textosDoPdf();
   expect(textos).toContain(`${ROTULO_CONFIRMACAO}Sim — digitou M-100 (confere com o cadastro)`);
-  expect(textos).toContain('Aparelho: Tablet-Almox/2.1 (Android)');
+  const linhas = linhasDoAparelho(mockChamadas.filter(([n]) => n === 'text'));
+  expect(linhas.length).toBeGreaterThan(1);
+  expect(linhas.join('')).toBe(UA_DO_TABLET);
+  expect(textosFora()).toEqual([]);
 });
 
 // Etapa 183, Fase 5 (M1): a quebra era por CONTAGEM (110 caracteres) — 300 'W' na fonte 7 iam ate 283 mm (a folha tem 210). A regua

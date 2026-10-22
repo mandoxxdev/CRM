@@ -34,7 +34,11 @@ const GESTOR = { id: 7, nome: 'Gestor', role: 'user', email: 'g@test.com', perfi
 const CHAVES_LISTA = ['id', 'numero', 'criado_em', 'colaborador_id', 'colaborador_nome', 'matricula', 'material_id', 'material_codigo',
   'material_nome', 'ca_numero', 'ca_validade', 'quantidade', 'tamanho', 'motivo', 'entregue_por_nome'];
 const CHAVES_FICHA = [...CHAVES_LISTA, 'arquivo_url', 'registro_sha256', 'confirmado_por_matricula', 'user_agent'].sort();
-const UA = 'Tablet-Almox/2.1 (Android)';
+// Etapa 183, Fase 5 (M2): um User-Agent REAL de tablet Android (Chrome WebView), com mais de 150 caracteres. Com o curto de antes (26),
+// trocar `user_agent: linha.user_agent ?? null` por um corte em 26 passava verde. A comparacao e do texto INTEIRO.
+const UA = "Mozilla/5.0 (Linux; Android 14; SM-X210 Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 "
+  + "Chrome/129.0.6668.100 Safari/537.36 Tablet-Almox/2.1 (Android; GMP Industriais)";
+if (UA.length < 150) throw new Error(`UA de teste curto demais (${UA.length}) - o corte do aparelho deixaria de ser provado`);
 
 (async () => {
   const t = await createTestApp({ user: ADMIN });

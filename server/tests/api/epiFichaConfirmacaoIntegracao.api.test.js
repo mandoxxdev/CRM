@@ -38,7 +38,11 @@ async function test(name, fn) {
 
 const ADMIN = { id: 1, nome: 'Admin Teste', role: 'admin', is_superadmin: 1, email: 'admin@test.com' };
 const PRODUCAO = { id: 5, nome: 'Prod', role: 'user', email: 'prod@test.com' };
-const UA = 'Tablet-Almox/2.1 (Android)';
+// Etapa 183, Fase 5 (M2): um User-Agent REAL de tablet Android (Chrome WebView), com mais de 150 caracteres. Com o curto de antes (26),
+// trocar `user_agent: linha.user_agent ?? null` por um corte em 26 passava verde. A comparacao e do texto INTEIRO.
+const UA = "Mozilla/5.0 (Linux; Android 14; SM-X210 Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 "
+  + "Chrome/129.0.6668.100 Safari/537.36 Tablet-Almox/2.1 (Android; GMP Industriais)";
+if (UA.length < 150) throw new Error(`UA de teste curto demais (${UA.length}) - o corte do aparelho deixaria de ser provado`);
 const URL_ASSINADA = /^\/api\/uploads\/almoxarifado\/assinatura-epi-[^/?]+\.png\?exp=\d+&sig=[0-9a-f]+$/;
 
 (async () => {
@@ -121,6 +125,8 @@ const URL_ASSINADA = /^\/api\/uploads\/almoxarifado\/assinatura-epi-[^/?]+\.png\
     const f0 = fixture.entregas[0];
     assert.strictEqual(typeof f0.confirmado_por_matricula, 'number', 'confirmado_por_matricula da fixture');
     assert.strictEqual(typeof f0.user_agent, 'string', 'user_agent da fixture');
+    // Fase 5 (M2): a fixture e gravada com o MESMO aparelho deste teste (o UA longo) — o Jest confere o texto inteiro dele no PDF.
+    assert.strictEqual(f0.user_agent, UA, 'a fixture foi gravada com outro aparelho (regrave com CRM_GRAVAR_FIXTURE=1)');
     assert.ok(!JSON.stringify(fixture).includes(String(ipGravado)), 'a fixture tem o IP');
   });
 
