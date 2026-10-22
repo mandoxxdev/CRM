@@ -211,8 +211,32 @@ test('[RN-185.07] quebrarTexto com a regua medida: nenhuma linha passa de 182 mm
   expect(quebrarTexto('a\n\nb', LARGURA_UTIL, medirFonte10)).toEqual(['a', '', 'b']);
 });
 
+// Fase 5 da 185: a M6 prometia "termina sempre", mas com largura <= 0, ou uma regua que mede '' acima da largura, a palavra vazia
+// ainda "nao cabia" e o laco nao terminava (sonda rev185-s5: heap limit). A regua tem TETO de chamadas: uma regressao faz o teste
+// CAIR com "NAO TERMINA" em vez de travar o Jest.
+const comTeto = (medir, teto = 5000) => {
+  let n = 0;
+  return (s) => { n += 1; if (n > teto) throw new Error('NAO TERMINA'); return medir(s); };
+};
 test('[RN-185.07, emenda M6] quebrarTexto termina mesmo quando um caractere sozinho nao cabe: leva ao menos um por linha', () => {
-  expect(quebrarTexto('WW', 1, medirFonte10)).toEqual(['W', 'W']);
+  expect(quebrarTexto('WW', 1, comTeto(medirFonte10))).toEqual(['W', 'W']);
+});
+
+test('[Fase 5 da 185] quebrarTexto termina com qualquer largura ou regua e nao perde letra', () => {
+  const casos = [
+    ['a', -1, medirFonte10, ['a']],
+    ['WW', 0, medirFonte10, ['W', 'W']],
+    ['ab cd', -5, medirFonte10, ['a', 'b', 'c', 'd']],
+    ['a', 5, () => Infinity, ['a']],
+    ['ab', NaN, medirFonte10, ['ab']],
+    ['ab cd', Infinity, medirFonte10, ['ab cd']],
+    ['ab cd', 0, () => NaN, ['ab', 'cd']],
+  ];
+  casos.forEach(([texto, largura, medir, esperado]) => {
+    const linhas = quebrarTexto(texto, largura, comTeto(medir));
+    expect([texto, String(largura), linhas]).toEqual([texto, String(largura), esperado]);
+    expect(semEspaco(linhas.join(''))).toBe(semEspaco(texto)); // nenhuma letra perdida
+  });
 });
 
 test('[RN-185.07] o PDF do termo com o texto em CAIXA ALTA: nada passa da margem; o texto sai em 2+ linhas de fonte 10', async () => {

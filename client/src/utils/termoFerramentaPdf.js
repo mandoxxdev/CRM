@@ -28,7 +28,9 @@ export function quebrarTexto(texto, largura = 95, medir = (s) => s.length) {
     let linha = '';
     palavras.forEach((p) => {
       let palavra = p;
-      while (medir(palavra) > largura) { // palavra maior que a linha (hash, URL): corta por medida
+      // Fase 5 da 185: `palavra &&` na guarda — com largura <= 0 (ou uma regua que mede '' > largura) a palavra vazia "nao cabia" e o laco
+      // empurrava linhas vazias para sempre. Cada volta consome ao menos um caractere (o for...of leva o 1o) e para quando acaba a palavra.
+      while (palavra && medir(palavra) > largura) { // palavra maior que a linha (hash, URL): corta por medida
         if (linha) { saida.push(linha); linha = ''; }
         let pedaco = '';
         for (const ch of palavra) {
