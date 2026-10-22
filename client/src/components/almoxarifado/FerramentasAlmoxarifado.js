@@ -1,14 +1,22 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import {
   FiRefreshCw, FiTool, FiPlus, FiUserCheck, FiCornerUpLeft, FiLock, FiUnlock,
-  FiSettings, FiCheckCircle, FiAlertTriangle, FiRotateCcw, FiCalendar, FiEdit2,
+  FiSettings, FiCheckCircle, FiAlertTriangle, FiRotateCcw, FiCalendar, FiEdit2, FiFileText, FiSearch,
 } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import { formatLocalizacaoLabel } from '../../utils/localizacaoLabel';
-import { hojeLocalISO, lerDataDoBanco } from '../../utils/dataLocal';
+import { hojeLocalISO, lerDataDoBanco, formatarInstanteDoBanco, formatarDataDoBanco, COM_SEGUNDOS } from '../../utils/dataLocal';
+import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
+import AssinaturaCanvas from './AssinaturaCanvas';
+import { novaChaveIdempotencia, seloVerificacao, codigoVerificacao } from '../../utils/epiEntrega';
+import {
+  erroDaConfirmacaoTermo, montarFormDataEmprestimo, ehVersaoDoTermoTrocada, AVISO_VERSAO_TROCADA, mensagemErroEmprestimo,
+  erroDoNovoTexto,
+} from '../../utils/termoFerramenta';
+import { gerarTermoFerramentaPdf } from '../../utils/termoFerramentaPdf';
 
 // Etapa 170 (RN-170.03, B1081): a *Retirada* e o CURRENT_TIMESTAMP (UTC) — os 10 primeiros caracteres eram o dia UTC (das 21h a
 // meia-noite, o de amanha). O dia de Brasilia, no formato da tela (AAAA-MM-DD); so data -> o mesmo texto; ilegivel -> o corte de antes.
@@ -52,6 +60,11 @@ import './Almoxarifado.css';
  * (so `calibracao_vigente` e `emprestimo_aberto` resumidos, por design). Por isso o clique busca
  * `GET /ferramentas/:id/manutencoes` na hora e acha a que tem `data_fim` nulo — nao ha outra
  * fonte no contrato congelado.
+ *
+ * Etapa 180 (T3) — termo de responsabilidade: o emprestimo virou multipart (colaborador DO CADASTRO, texto vigente do termo
+ * exibido, matricula digitada pelo colaborador, assinatura no AssinaturaCanvas, `termo_versao` e `chave_idempotencia` por
+ * tentativa — molde EpiAlmoxarifado.js da 178). A lista de emprestimos ganhou a coluna Termo (ver / verificar / PDF) e so aparece
+ * com `gerenciar_ferramentas` (a leitura passou a exigir a acao, RN-180.06); a aba "Texto do termo" so com `editar_termos`.
  */
 
 const STATUS_FERRAMENTA = [
@@ -70,9 +83,22 @@ const FORM_FERRAMENTA_VAZIO = {
   codigo_patrimonio: '', nome: '', tipo: '', setor_responsavel: '',
   material_id: '', numero_serie: '', localizacao_id: '', exige_calibracao: false, observacoes: '',
 };
+// Etapa 180 (RN-180.03/04): o colaborador e DO CADASTRO (nunca texto livre) e assina o termo — a matricula ele digita.
 const FORM_EMPRESTAR_VAZIO = {
-  colaborador_nome: '', colaborador_id: '', setor: '', data_prevista_devolucao: '', observacoes: '',
+  colaborador_id: '', data_prevista_devolucao: '', observacoes: '', confirmacao_matricula: '',
 };
+// O seletor do emprestimo mostra nome e setor, SEM a matricula: e ela que o colaborador digita para assinar (precedente da 178,
+// Fase 5 — mostrada ao lado, a confirmacao nao provaria nada). Letra B.
+const rotuloColaboradorEmprestimo = (c) => (c ? `${c.nome}${c.setor ? ` (${c.setor})` : ''}` : '');
+const quandoFoi = (v) => formatarInstanteDoBanco(v, COM_SEGUNDOS);
+// O texto do termo, com rolagem: a pessoa le o que o colaborador assina.
+const ESTILO_TEXTO_TERMO = {
+  maxHeight: 220, overflowY: 'auto', whiteSpace: 'pre-wrap', padding: '10px 12px', borderRadius: 8,
+  border: '1px solid var(--gmp-border)', background: 'var(--gmp-bg, transparent)', fontSize: '0.85rem', lineHeight: 1.45,
+};
+const SeloProvisorio = () => (
+  <span className="almox-badge almox-badge-baixo almox-termo-provisorio" style={{ marginLeft: 8 }}>Texto provisório</span>
+);
 const FORM_JUSTIFICATIVA_VAZIO = { justificativa: '' };
 const FORM_MANUTENCAO_VAZIO = { descricao: '' };
 // Etapa 177 (RN-177.10): condicao obrigatoria na tela (o servidor aceita sem, B1140); destino nasce "Volta ao uso".
@@ -109,8 +135,29 @@ const SUCESSO_JUSTIFICATIVA = {
 const FerramentasAlmoxarifado = () => {
   const { pode, bloquearSeNaoPode } = useAlmoxPermissoes();
   const podeEscrever = pode('gerenciar_ferramentas');
+  // Etapa 180 (RN-180.02): so o ADMINISTRADOR redige o compromisso (acao `editar_termos`).
+  const podeEditarTermos = pode('editar_termos');
 
-  const [aba, setAba] = useState('FERRAMENTAS');
+  const [abaEscolhida, setAba] = useState('FERRAMENTAS');
+  // Etapa 180 (RN-180.06): a leitura de emprestimos exige `gerenciar_ferramentas` (PRODUCAO leva 403) — a aba some; a do texto do
+  // termo, sem `editar_termos`. Se a permissao some com a aba aberta (cache recarregado), a tela volta para Ferramentas.
+  const aba = (abaEscolhida === 'EMPRESTIMOS' && !podeEscrever) || (abaEscolhida === 'TERMO' && !podeEditarTermos) ? 'FERRAMENTAS' : abaEscolhida;
+
+  // Termo de responsabilidade (Etapa 180)
+  const chaveRef = useRef(null); // a chave da TENTATIVA de envio (molde 178, Fase 5 M2)
+  const [colaboradores, setColaboradores] = useState(null);
+  const [termo, setTermo] = useState(null); // resposta de GET /termos/FERRAMENTA: { vigente, historico }
+  const [carregandoTermo, setCarregandoTermo] = useState(false);
+  const [assinatura, setAssinatura] = useState(null);
+  const [canvasKey, setCanvasKey] = useState(0);
+  const [avisoTermo, setAvisoTermo] = useState(null);
+  const [termoEmprestimo, setTermoEmprestimo] = useState(null); // resposta de GET …/emprestimos/:id/termo
+  const [seloTermo, setSeloTermo] = useState(null);
+  const [verificandoTermo, setVerificandoTermo] = useState(false);
+  const [gerandoPdfTermo, setGerandoPdfTermo] = useState(false);
+  // Aba "Texto do termo" (administrador)
+  const [textoNovo, setTextoNovo] = useState('');
+  const [salvandoTermo, setSalvandoTermo] = useState(false);
 
   // Ferramentas
   const [ferramentas, setFerramentas] = useState([]);
@@ -204,12 +251,36 @@ const FerramentasAlmoxarifado = () => {
     return () => { cancelado = true; };
   }, []);
 
+  // ── Termo de responsabilidade (Etapa 180) ─────────────────────────────────────────────────
+  // O texto VIGENTE (GET /termos/FERRAMENTA). Devolve a resposta, ou null se falhou (a tela nao deixa assinar texto que nao mostrou).
+  const carregarTermo = useCallback(async () => {
+    setCarregandoTermo(true);
+    try {
+      const r = await api.get('/almoxarifado/termos/FERRAMENTA');
+      const dados = r.data && r.data.vigente ? r.data : null;
+      setTermo(dados);
+      return dados;
+    } catch (err) {
+      setTermo(null);
+      toast.error(err.response?.data?.error || 'Não foi possível carregar o texto do termo');
+      return null;
+    } finally {
+      setCarregandoTermo(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (aba !== 'TERMO') return;
+    carregarTermo().then((dados) => setTextoNovo(dados?.vigente?.texto || ''));
+  }, [aba, carregarTermo]);
+
   const recarregar = useCallback(() => setReloadToken((t) => t + 1), []);
   const recarregarEmp = useCallback(() => setReloadTokenEmp((t) => t + 1), []);
   const recarregarCal = useCallback(() => setReloadTokenCal((t) => t + 1), []);
   const recarregarAtual = () => {
     if (aba === 'FERRAMENTAS') recarregar();
     else if (aba === 'EMPRESTIMOS') recarregarEmp();
+    else if (aba === 'TERMO') carregarTermo().then((dados) => setTextoNovo(dados?.vigente?.texto || ''));
     else recarregarCal();
   };
 
@@ -298,31 +369,133 @@ const FerramentasAlmoxarifado = () => {
   };
 
   // ── Empréstimo / devolução ─────────────────────────────────────────────────────────────────
+  // Etapa 180 (RN-180.03/04): o modal carrega os colaboradores do cadastro (uma vez) e o texto VIGENTE do termo (a cada abertura —
+  // o administrador pode ter trocado). A versao exibida e a que vai em `termo_versao`.
+  const limparAssinatura = () => { chaveRef.current = null; setAssinatura(null); setCanvasKey((k) => k + 1); };
+
   const abrirEmprestar = (ferramenta, evento) => {
     if (!bloquearSeNaoPode('gerenciar_ferramentas', evento)) return;
     setFormEmprestar(FORM_EMPRESTAR_VAZIO);
+    setAvisoTermo(null);
+    limparAssinatura();
     setModal({ tipo: 'emprestar', ferramenta });
+    carregarTermo();
+    if (colaboradores === null) {
+      api.get('/almoxarifado/aux/colaboradores')
+        .then((r) => setColaboradores(Array.isArray(r.data) ? r.data : []))
+        .catch((err) => { setColaboradores(null); toast.error(err.response?.data?.error || 'Não foi possível carregar os colaboradores'); });
+    }
   };
 
-  const confirmarEmprestar = async () => {
-    if (!String(formEmprestar.colaborador_nome || '').trim()) { toast.error('Informe o nome do colaborador'); return; }
-    const payload = { colaborador_nome: String(formEmprestar.colaborador_nome).trim() };
-    if (formEmprestar.colaborador_id) payload.colaborador_id = Number(formEmprestar.colaborador_id);
-    if (formEmprestar.setor) payload.setor = String(formEmprestar.setor).trim();
-    if (formEmprestar.data_prevista_devolucao) payload.data_prevista_devolucao = formEmprestar.data_prevista_devolucao;
-    if (formEmprestar.observacoes) payload.observacoes = String(formEmprestar.observacoes).trim();
+  const setEmprestar = (campo, valor) => { chaveRef.current = null; setFormEmprestar((f) => ({ ...f, [campo]: valor })); };
 
+  const confirmarEmprestar = async () => {
+    if (!formEmprestar.colaborador_id) { toast.error('Selecione o colaborador'); return; }
+    const versao = termo?.vigente?.versao;
+    if (versao == null) { toast.error('O texto do termo não foi carregado — atualize e tente de novo'); return; }
+    if (!assinatura) { toast.error('A assinatura do colaborador é obrigatória'); return; }
+    const erroConf = erroDaConfirmacaoTermo(formEmprestar.confirmacao_matricula);
+    if (erroConf) { toast.error(erroConf); return; }
+
+    if (!chaveRef.current) chaveRef.current = novaChaveIdempotencia();
     setSalvando(true);
     try {
-      await api.post(`/almoxarifado/ferramentas/${modal.ferramenta.id}/emprestar`, payload);
-      toast.success('Ferramenta emprestada');
+      const fd = montarFormDataEmprestimo(formEmprestar, assinatura, versao, chaveRef.current);
+      const res = await api.post(`/almoxarifado/ferramentas/${modal.ferramenta.id}/emprestar`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      chaveRef.current = null;
+      const dados = res.data || {};
+      const numero = dados.termo?.numero;
+      if (dados.reutilizada) toast.success(`Empréstimo já estava registrado${numero ? ` (termo ${numero})` : ''} — o envio repetido não duplicou`);
+      else toast.success(numero ? `Ferramenta emprestada — termo ${numero} assinado` : 'Ferramenta emprestada');
       setModal(null);
+      limparAssinatura();
       recarregar();
+      recarregarEmp();
     } catch (err) {
-      // Mensagem do backend (RN-01/02/03) ensina o motivo da recusa — nao trocar por texto
-      // generico apagaria a instrucao (ex.: calibracao vencida).
-      toast.error(err.response?.data?.error || 'Erro ao emprestar a ferramenta');
+      // O servidor respondeu: nada foi gravado (ou o 500 diz o que foi) — a proxima tentativa e outra. Sem resposta: a chave fica.
+      if (err && err.response) chaveRef.current = null;
+      if (ehVersaoDoTermoTrocada(err)) {
+        // RN-180.04: o colaborador assinou um texto que ja nao e o vigente — mostra o novo e pede a assinatura de novo.
+        limparAssinatura();
+        await carregarTermo();
+        setAvisoTermo(AVISO_VERSAO_TROCADA);
+        toast.error(AVISO_VERSAO_TROCADA);
+      } else {
+        // A frase do servidor ensina o motivo (calibracao vencida, matricula que nao confere, perdeu a corrida...) — literal.
+        toast.error(mensagemErroEmprestimo(err));
+      }
     } finally { setSalvando(false); }
+  };
+
+  // ── Termo de um empréstimo (RN-180.05) ─────────────────────────────────────────────────────
+  const urlTermo = (id) => `/almoxarifado/ferramentas/emprestimos/${id}/termo`;
+
+  const abrirTermoEmprestimo = async (emprestimo) => {
+    setSeloTermo(null);
+    setTermoEmprestimo(null);
+    try {
+      const r = await api.get(urlTermo(emprestimo.id));
+      setTermoEmprestimo(r.data || null);
+      setModal({ tipo: 'termo', emprestimo });
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Não foi possível carregar o termo do empréstimo');
+    }
+  };
+
+  const verificarTermo = async () => {
+    setVerificandoTermo(true);
+    try {
+      const r = await api.get(`${urlTermo(modal.emprestimo.id)}/verificar`);
+      setSeloTermo(seloVerificacao(r.data));
+    } catch (err) {
+      setSeloTermo(null);
+      toast.error(err.response?.data?.error || 'Não foi possível verificar a integridade');
+    } finally { setVerificandoTermo(false); }
+  };
+
+  const baixarPdfTermo = async () => {
+    setGerandoPdfTermo(true);
+    // A `arquivo_url` da assinatura vale ~15 min (molde da ficha de EPI, 178 T3): rele o termo antes de gerar; se a releitura
+    // falhar, NAO gera com a URL velha (o PDF sairia sem a assinatura, calado).
+    let atual;
+    try {
+      const r = await api.get(urlTermo(modal.emprestimo.id));
+      atual = r.data;
+      setTermoEmprestimo(atual);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Não foi possível reler o termo para gerar o PDF');
+      setGerandoPdfTermo(false);
+      return;
+    }
+    try {
+      const doc = await gerarTermoFerramentaPdf(atual);
+      if (doc?.assinaturaIndisponivel) toast.warn('A assinatura não pôde ser carregada e saiu como indisponível no PDF');
+    } catch (err) {
+      toast.error('Não foi possível gerar o PDF do termo');
+    } finally { setGerandoPdfTermo(false); }
+  };
+
+  // ── Texto do termo (administrador, RN-180.02) ──────────────────────────────────────────────
+  const salvarNovaVersao = async (evento) => {
+    if (!bloquearSeNaoPode('editar_termos', evento)) return;
+    const erroTexto = erroDoNovoTexto(textoNovo, termo?.vigente);
+    if (erroTexto) { toast.error(erroTexto); return; }
+    setSalvandoTermo(true);
+    try {
+      const corpo = { texto: textoNovo };
+      if (termo?.vigente?.versao != null) corpo.versao_base = termo.vigente.versao;
+      const r = await api.post('/almoxarifado/termos/FERRAMENTA', corpo);
+      const v = r.data?.versao;
+      toast.success(`${v != null ? `Versão ${v}` : 'Nova versão'} do termo salva — os próximos empréstimos assinam este texto`);
+      const dados = await carregarTermo();
+      setTextoNovo(dados?.vigente?.texto || textoNovo);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao salvar a nova versão do termo');
+      // 409 (outro administrador salvou): recarrega a vigente e o historico SEM apagar o rascunho de quem estava escrevendo.
+      if (err.response?.status === 409) await carregarTermo();
+    } finally { setSalvandoTermo(false); }
   };
 
   const devolverFerramenta = async (ferramenta, evento) => {
@@ -517,6 +690,7 @@ const FerramentasAlmoxarifado = () => {
             {aba === 'FERRAMENTAS' && (loading ? 'Carregando...' : `${ferramentas.length} ferramenta(s) · patrimônio emprestável, nao estoque`)}
             {aba === 'EMPRESTIMOS' && (loadingEmp ? 'Carregando...' : `${emprestimos.length} empréstimo(s)`)}
             {aba === 'CALIBRACOES' && (loadingCal ? 'Carregando...' : `${painel.vencidas.length} vencida(s) · ${painel.a_vencer.length} a vencer`)}
+            {aba === 'TERMO' && 'Termo de responsabilidade que o colaborador assina ao retirar uma ferramenta'}
           </p>
         </div>
         <div className="almox-header-actions">
@@ -535,8 +709,13 @@ const FerramentasAlmoxarifado = () => {
           alternando, sem CSS novo. */}
       <div style={{ display: 'flex', gap: 8, margin: '12px 0' }}>
         <button className={aba === 'FERRAMENTAS' ? 'btn-almox-primary' : 'btn-almox-secondary'} onClick={() => setAba('FERRAMENTAS')}>Ferramentas</button>
-        <button className={aba === 'EMPRESTIMOS' ? 'btn-almox-primary' : 'btn-almox-secondary'} onClick={() => setAba('EMPRESTIMOS')}>Empréstimos</button>
+        {podeEscrever && (
+          <button className={aba === 'EMPRESTIMOS' ? 'btn-almox-primary' : 'btn-almox-secondary'} onClick={() => setAba('EMPRESTIMOS')}>Empréstimos</button>
+        )}
         <button className={aba === 'CALIBRACOES' ? 'btn-almox-primary' : 'btn-almox-secondary'} onClick={() => setAba('CALIBRACOES')}>Calibrações</button>
+        {podeEditarTermos && (
+          <button className={aba === 'TERMO' ? 'btn-almox-primary' : 'btn-almox-secondary'} onClick={() => setAba('TERMO')}>Texto do termo</button>
+        )}
       </div>
 
       {aba === 'FERRAMENTAS' && (
@@ -680,7 +859,7 @@ const FerramentasAlmoxarifado = () => {
           </div>
 
           <div className="almox-table-container">
-            {loadingEmp ? <SkeletonTable rows={6} columns={6} />
+            {loadingEmp ? <SkeletonTable rows={6} columns={7} />
               : emprestimos.length === 0 ? (
                 <div className="almox-empty"><p>Nenhum empréstimo registrado</p></div>
               ) : (
@@ -688,7 +867,7 @@ const FerramentasAlmoxarifado = () => {
                   <thead>
                     <tr>
                       <th>Ferramenta</th><th>Colaborador</th><th>Retirada</th>
-                      <th>Previsão de devolução</th><th>Status</th><th>Ações</th>
+                      <th>Previsão de devolução</th><th>Status</th><th>Termo</th><th>Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -703,6 +882,16 @@ const FerramentasAlmoxarifado = () => {
                             {e.status === 'DEVOLVIDA' ? 'Devolvida' : 'Emprestada'}
                           </span>
                           {vencido(e) && <span className="almox-badge almox-badge-vencida" style={{ marginLeft: 6 }}>Vencido</span>}
+                        </td>
+                        <td className="almox-emprestimo-termo">
+                          {/* RN-180.05/06: `tem_termo` por linha; o emprestimo de antes da 180 nao tem termo (e nao e defeito). */}
+                          {e.tem_termo ? (
+                            <button className="btn-almox-secondary" onClick={() => abrirTermoEmprestimo(e)}>
+                              <FiFileText size={13} /> Termo
+                            </button>
+                          ) : (
+                            <span style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>Anterior à exigência do termo</span>
+                          )}
                         </td>
                         <td>
                           {podeEscrever && e.status === 'EMPRESTADA' && (
@@ -777,6 +966,56 @@ const FerramentasAlmoxarifado = () => {
             </>
           )}
         </>
+      )}
+
+      {aba === 'TERMO' && (
+        <div className="almox-termo-admin">
+          {carregandoTermo && !termo ? <SkeletonTable rows={3} columns={4} /> : !termo ? (
+            <div className="almox-empty"><p>Texto do termo indisponível</p></div>
+          ) : (
+            <>
+              <div className="almox-section-title">
+                Versão vigente: {termo.vigente.versao}
+                {termo.vigente.provisorio && <SeloProvisorio />}
+              </div>
+              <p style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', marginTop: 0 }}>
+                Salva em {quandoFoi(termo.vigente.criado_em)}{termo.vigente.criado_por_nome ? ` por ${termo.vigente.criado_por_nome}` : ''}.
+                Cada salvamento cria uma versão nova; os empréstimos já assinados continuam com a versão que o colaborador leu.
+              </p>
+              <div className="almox-field almox-form-full">
+                <label className="almox-label" htmlFor="termo-texto-novo">Texto do termo *</label>
+                <textarea id="termo-texto-novo" className="almox-textarea" rows={12} maxLength={20000} value={textoNovo}
+                  onChange={(e) => setTextoNovo(e.target.value)} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', margin: '8px 0 16px' }}>
+                <button type="button" className="btn-almox-primary" onClick={salvarNovaVersao} disabled={salvandoTermo}>
+                  {salvandoTermo ? 'Salvando...' : 'Salvar nova versão'}
+                </button>
+              </div>
+              <div className="almox-section-title">Histórico</div>
+              <div className="almox-table-container">
+                <table className="almox-table almox-termo-historico">
+                  <thead><tr><th>Versão</th><th>Salva em</th><th>Por</th><th>Texto</th></tr></thead>
+                  <tbody>
+                    {(termo.historico || []).map((h) => (
+                      <tr key={h.versao}>
+                        <td>{h.versao}{h.provisorio && <SeloProvisorio />}</td>
+                        <td>{quandoFoi(h.criado_em)}</td>
+                        <td>{h.criado_por_nome || '—'}</td>
+                        <td>
+                          <details>
+                            <summary>Ver texto</summary>
+                            <div style={{ ...ESTILO_TEXTO_TERMO, marginTop: 6 }}>{h.texto}</div>
+                          </details>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
       )}
 
       {(modal?.tipo === 'nova' || modal?.tipo === 'editar') && (
@@ -866,7 +1105,7 @@ const FerramentasAlmoxarifado = () => {
 
       {modal?.tipo === 'emprestar' && (
         <div className="almox-modal-overlay" onClick={() => { if (!salvando) setModal(null); }}>
-          <div className="almox-modal almox-modal-sm" onClick={(e) => e.stopPropagation()}>
+          <div className="almox-modal almox-modal-lg" onClick={(e) => e.stopPropagation()}>
             <div className="almox-modal-header">
               <h2>Emprestar ferramenta</h2>
               <button className="almox-modal-close" onClick={() => setModal(null)}>✕</button>
@@ -874,35 +1113,116 @@ const FerramentasAlmoxarifado = () => {
             <div className="almox-modal-body">
               <p style={{ marginTop: 0 }}><strong>{modal.ferramenta.codigo_patrimonio}</strong> — {modal.ferramenta.nome}</p>
               <div className="almox-field">
-                <label className="almox-label">Colaborador<span className="required">*</span></label>
-                <input className="almox-input" value={formEmprestar.colaborador_nome}
-                  onChange={(e) => setFormEmprestar((f) => ({ ...f, colaborador_nome: e.target.value }))} />
+                <label className="almox-label" htmlFor="emprestimo-colaborador">Colaborador<span className="required">*</span></label>
+                <select id="emprestimo-colaborador" className="almox-form-select" value={formEmprestar.colaborador_id}
+                  onChange={(e) => setEmprestar('colaborador_id', e.target.value)}>
+                  <option value="">{colaboradores === null ? 'Carregando...' : 'Selecione...'}</option>
+                  {(colaboradores || []).map((c) => <option key={c.id} value={c.id}>{rotuloColaboradorEmprestimo(c)}</option>)}
+                </select>
               </div>
               <div className="almox-field">
-                <label className="almox-label">Setor</label>
-                <input className="almox-input" value={formEmprestar.setor}
-                  onChange={(e) => setFormEmprestar((f) => ({ ...f, setor: e.target.value }))} />
+                <label className="almox-label" htmlFor="emprestimo-data-prevista">Data prevista de devolução</label>
+                <input id="emprestimo-data-prevista" className="almox-input" type="date" value={formEmprestar.data_prevista_devolucao}
+                  onChange={(e) => setEmprestar('data_prevista_devolucao', e.target.value)} />
               </div>
               <div className="almox-field">
-                <label className="almox-label">Data prevista de devolução</label>
-                <input className="almox-input" type="date" value={formEmprestar.data_prevista_devolucao}
-                  onChange={(e) => setFormEmprestar((f) => ({ ...f, data_prevista_devolucao: e.target.value }))} />
+                <label className="almox-label" htmlFor="emprestimo-observacoes">Observações</label>
+                <textarea id="emprestimo-observacoes" className="almox-textarea" rows={2} maxLength={1000} value={formEmprestar.observacoes}
+                  onChange={(e) => setEmprestar('observacoes', e.target.value)} />
+              </div>
+              <div className="almox-field almox-form-full">
+                <label className="almox-label">
+                  Termo de responsabilidade{termo?.vigente ? ` — versão ${termo.vigente.versao}` : ''}
+                  {termo?.vigente?.provisorio && <SeloProvisorio />}
+                </label>
+                {avisoTermo && (
+                  <div className="almox-aviso-erro almox-termo-aviso" role="alert" style={{ marginBottom: 6 }}>{avisoTermo}</div>
+                )}
+                {carregandoTermo ? <p>Carregando o texto do termo...</p> : termo?.vigente ? (
+                  <div className="almox-termo-texto" style={ESTILO_TEXTO_TERMO}>{termo.vigente.texto}</div>
+                ) : (
+                  <div className="almox-aviso-erro" role="alert">O texto do termo não foi carregado — atualize e tente de novo</div>
+                )}
+              </div>
+              <div className="almox-field almox-form-full">
+                <label className="almox-label">Assinatura do colaborador<span className="required">*</span></label>
+                {assinatura ? (
+                  <div className="almox-termo-assinatura-ok" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <FiCheckCircle size={14} /> Assinatura confirmada
+                    <button type="button" className="btn-almox-secondary" onClick={limparAssinatura}>Refazer assinatura</button>
+                  </div>
+                ) : (
+                  <AssinaturaCanvas key={canvasKey} onConfirm={(blob) => { chaveRef.current = null; setAssinatura(blob); }} />
+                )}
               </div>
               <div className="almox-field">
-                <label className="almox-label">Observações</label>
-                <textarea className="almox-textarea" rows={2} value={formEmprestar.observacoes}
-                  onChange={(e) => setFormEmprestar((f) => ({ ...f, observacoes: e.target.value }))} />
+                <label className="almox-label" htmlFor="emprestimo-confirmacao-matricula">Matrícula — digitada pelo colaborador<span className="required">*</span></label>
+                <input id="emprestimo-confirmacao-matricula" className="almox-input" autoComplete="off" maxLength={40}
+                  placeholder="O colaborador digita a própria matrícula" value={formEmprestar.confirmacao_matricula}
+                  onChange={(e) => setEmprestar('confirmacao_matricula', e.target.value)} />
               </div>
             </div>
             <div className="almox-modal-footer">
               <button className="btn-almox-secondary" onClick={() => setModal(null)} disabled={salvando}>Fechar</button>
-              <button className="btn-almox-primary" onClick={confirmar} disabled={salvando}>
+              <button className="btn-almox-primary" onClick={confirmar} disabled={salvando || carregandoTermo}>
                 {salvando ? 'Emprestando...' : 'Emprestar'}
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {modal?.tipo === 'termo' && termoEmprestimo && (() => {
+        const t = termoEmprestimo.termo || {};
+        const ev = termoEmprestimo.evidencia || {};
+        const urlAssinatura = resolveMaterialPhotoUrl(ev.arquivo_url);
+        return (
+          <div className="almox-modal-overlay" onClick={() => setModal(null)}>
+            <div className="almox-modal almox-modal-lg almox-termo-emprestimo" onClick={(e) => e.stopPropagation()}>
+              <div className="almox-modal-header">
+                <h2>Termo {t.numero}</h2>
+                <button className="almox-modal-close" onClick={() => setModal(null)}>✕</button>
+              </div>
+              <div className="almox-modal-body">
+                <div className="almox-termo-dados" style={{ fontSize: '0.875rem', lineHeight: 1.6 }}>
+                  <div>
+                    <strong>Versão do texto:</strong> {t.versao}{t.provisorio && <SeloProvisorio />}
+                  </div>
+                  <div><strong>Ferramenta:</strong> {t.ferramenta?.codigo_patrimonio} — {t.ferramenta?.nome}{t.ferramenta?.numero_serie ? ` · série ${t.ferramenta.numero_serie}` : ''}</div>
+                  <div>
+                    <strong>Colaborador:</strong> {t.colaborador?.nome} · matrícula {t.colaborador?.matricula || '—'}
+                    {t.colaborador?.setor ? ` · ${t.colaborador.setor}` : ''}
+                  </div>
+                  <div><strong>Matrícula digitada:</strong> {ev.confirmado_por_matricula || '—'}</div>
+                  <div><strong>Devolução prevista:</strong> {formatarDataDoBanco(t.data_prevista_devolucao, '—', { soData: true })}</div>
+                  <div><strong>Assinado em:</strong> {quandoFoi(t.criado_em)}{t.criado_por_nome ? ` · registrado por ${t.criado_por_nome}` : ''}</div>
+                  <div title={ev.registro_sha256}><strong>Código de verificação:</strong> <code>{codigoVerificacao(ev.registro_sha256)}</code></div>
+                </div>
+                <div className="almox-termo-texto" style={{ ...ESTILO_TEXTO_TERMO, margin: '10px 0' }}>{t.texto}</div>
+                <div>
+                  {urlAssinatura ? (
+                    <img className="almox-termo-assinatura" src={urlAssinatura} alt="Assinatura do colaborador" style={{ height: 70, background: '#fff', border: '1px solid var(--gmp-border)', borderRadius: 6 }} />
+                  ) : <span>(imagem da assinatura indisponível)</span>}
+                </div>
+                {seloTermo && (
+                  <div style={{ marginTop: 10 }}>
+                    <span className={`almox-badge almox-badge-${seloTermo.ok ? 'ok' : 'critico'} almox-termo-selo`}>{seloTermo.texto}</span>
+                  </div>
+                )}
+              </div>
+              <div className="almox-modal-footer">
+                <button className="btn-almox-secondary" onClick={() => setModal(null)}>Fechar</button>
+                <button className="btn-almox-secondary" onClick={verificarTermo} disabled={verificandoTermo}>
+                  <FiSearch size={13} /> {verificandoTermo ? 'Verificando...' : 'Verificar integridade'}
+                </button>
+                <button className="btn-almox-primary" onClick={baixarPdfTermo} disabled={gerandoPdfTermo}>
+                  <FiFileText size={13} /> {gerandoPdfTermo ? 'Gerando...' : 'PDF do termo'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {ROTA_JUSTIFICATIVA[modal?.tipo] && (
         <div className="almox-modal-overlay" onClick={() => { if (!salvando) setModal(null); }}>

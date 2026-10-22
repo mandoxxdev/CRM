@@ -337,7 +337,7 @@ describe('Entregas', () => {
     let vez = 0;
     const base = api.get.getMockImplementation();
     api.get.mockImplementation((url, ...resto) => {
-      if (url === '/almoxarifado/epi/cadeia/verificar') {
+      if (url === '/almoxarifado/evidencias/cadeia/verificar') {
         vez += 1;
         return Promise.resolve({ data: vez === 1
           ? { integra: true, total: 2, cabeca: { sequencia: 2, registro_sha256: HASH }, problemas: [] }
@@ -348,7 +348,7 @@ describe('Entregas', () => {
     await renderizar();
     await clicar(botao('Entregas'));
     await clicar(botao('Verificar cadeia'));
-    expect(api.get).toHaveBeenCalledWith('/almoxarifado/epi/cadeia/verificar');
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/evidencias/cadeia/verificar');
     expect($('.almox-epi-cadeia').textContent).toContain('Cadeia íntegra — 2 registros');
     await clicar(botao('Verificar cadeia'));
     expect($('.almox-epi-cadeia').textContent).toContain('Cadeia com problema — 1 ocorrência');

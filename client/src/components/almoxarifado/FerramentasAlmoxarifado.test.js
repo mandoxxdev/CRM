@@ -39,6 +39,36 @@ jest.mock('../../hooks/useAlmoxPermissoes', () => ({
     loading: false,
   }),
 }));
+const mockPdf = [];
+// Funcao comum, nao jest.fn: o CRA liga `resetMocks` e apagaria a implementacao antes de cada teste (molde EpiAlmoxarifado.test.js).
+jest.mock('jspdf', () => function JsPdfGravador() {
+  return new Proxy({}, { get: (_alvo, nome) => (...args) => { mockPdf.push([nome, ...args]); } });
+});
+
+// Etapa 180 — o termo de responsabilidade (contrato da T2 no plano da etapa).
+const COLABORADORES = [
+  { id: 7, nome: 'Carlos Pereira', matricula: 'M-700', setor: 'Manutenção' },
+  { id: 8, nome: 'Ana Costa', matricula: 'M-800', setor: null },
+];
+const TEXTO_V1 = 'TEXTO PROVISÓRIO — substituir pelo termo da empresa.\nDeclaro que recebi a ferramenta em perfeito estado.';
+const TEXTO_V2 = 'Declaro que recebi a ferramenta e me responsabilizo por ela (texto da empresa).';
+const TERMO_V1 = { vigente: { versao: 1, texto: TEXTO_V1, criado_em: '2026-10-22T12:00:00.000Z', criado_por_nome: 'Sistema', provisorio: true },
+  historico: [{ versao: 1, texto: TEXTO_V1, criado_em: '2026-10-22T12:00:00.000Z', criado_por_nome: 'Sistema', provisorio: true }] };
+const TERMO_V2 = { vigente: { versao: 2, texto: TEXTO_V2, criado_em: '2026-10-22T15:00:00.000Z', criado_por_nome: 'Admin', provisorio: false },
+  historico: [{ versao: 2, texto: TEXTO_V2, criado_em: '2026-10-22T15:00:00.000Z', criado_por_nome: 'Admin', provisorio: false },
+    TERMO_V1.historico[0]] };
+const HASH = 'c0ffee1234567890'.padEnd(64, 'b');
+const TERMO_DO_EMPRESTIMO = {
+  emprestimo: { id: 20, ferramenta_id: 2, ferramenta_nome: 'Paquímetro digital', codigo_patrimonio: 'FER-002', status: 'EMPRESTADA',
+    data_retirada: '2026-08-01 10:00:00', data_prevista_devolucao: '2026-08-10', data_devolucao_real: null },
+  termo: { numero: 'TERMO-20260801-0001', versao: 1, texto: TEXTO_V1, texto_sha256: 'd'.repeat(64), provisorio: true,
+    ferramenta: { id: 2, codigo_patrimonio: 'FER-002', numero_serie: 'SN-2002', nome: 'Paquímetro digital' },
+    colaborador: { id: 9, nome: 'João Silva', matricula: 'M-900', setor: 'Qualidade' },
+    data_prevista_devolucao: '2026-08-10', criado_por_nome: 'Joao Almoxarife', criado_em: '2026-08-01T13:00:00.000Z' },
+  evidencia: { id: 60, arquivo_url: '/api/uploads/almoxarifado/assinatura-termo-1.png?exp=1&sig=a', arquivo_sha256: 'f'.repeat(64),
+    registro_sha256: HASH, confirmado_por_matricula: 'M-900', criado_em: '2026-08-01T13:00:00.000Z', sequencia: 3 },
+};
+const BLOB_PNG = new Blob(['png'], { type: 'image/png' });
 
 // Shape real de toolService.listarFerramentas: calibracao_vigente e bool|null (null quando a
 // ferramenta nao exige calibracao), emprestimo_aberto e {id, colaborador_nome,
@@ -62,10 +92,10 @@ const FERRAMENTAS = [
 const EMPRESTIMOS = [
   { id: 20, ferramenta_id: 2, codigo_patrimonio: 'FER-002', ferramenta_nome: 'Paquímetro digital',
     colaborador_nome: 'João Silva', setor: 'Qualidade', data_retirada: '2026-08-01',
-    data_prevista_devolucao: '2026-08-10', data_devolucao_real: null, status: 'EMPRESTADA', observacoes: null },
+    data_prevista_devolucao: '2026-08-10', data_devolucao_real: null, status: 'EMPRESTADA', observacoes: null, tem_termo: true },
   { id: 21, ferramenta_id: 1, codigo_patrimonio: 'FER-001', ferramenta_nome: 'Furadeira de bancada',
     colaborador_nome: 'Maria Souza', setor: 'Produção', data_retirada: '2026-07-01',
-    data_prevista_devolucao: '2026-07-05', data_devolucao_real: '2026-07-04', status: 'DEVOLVIDA', observacoes: null },
+    data_prevista_devolucao: '2026-07-05', data_devolucao_real: '2026-07-04', status: 'DEVOLVIDA', observacoes: null, tem_termo: false },
 ];
 
 // GET /calibracoes/painel: {vencidas:[], a_vencer:[]} — FER-003 vencida, FER-002 a vencer. Os
@@ -91,7 +121,21 @@ let container; let root;
 beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
   mockPode = () => true;
+  mockPdf.length = 0;
+  // o que o jsdom nao tem (canvas 2D, toBlob, pointer capture) — o mesmo shim de AssinaturaCanvas.test.js
+  HTMLCanvasElement.prototype.getContext = jest.fn(() => ({
+    fillStyle: '', strokeStyle: '', lineWidth: 0, lineCap: '', lineJoin: '',
+    fillRect: jest.fn(), beginPath: jest.fn(), moveTo: jest.fn(), lineTo: jest.fn(), stroke: jest.fn(),
+  }));
+  HTMLCanvasElement.prototype.toBlob = jest.fn(function (cb) { cb(BLOB_PNG); });
+  HTMLElement.prototype.setPointerCapture = jest.fn();
+  HTMLElement.prototype.releasePointerCapture = jest.fn();
+  global.fetch = jest.fn().mockRejectedValue(new Error('sem rede no teste'));
   api.get.mockImplementation((url) => {
+    if (url === '/almoxarifado/aux/colaboradores') return Promise.resolve({ data: COLABORADORES });
+    if (url === '/almoxarifado/termos/FERRAMENTA') return Promise.resolve({ data: TERMO_V1 });
+    if (url === '/almoxarifado/ferramentas/emprestimos/20/termo') return Promise.resolve({ data: TERMO_DO_EMPRESTIMO });
+    if (url === '/almoxarifado/ferramentas/emprestimos/20/termo/verificar') return Promise.resolve({ data: { integro: true } });
     if (url === '/almoxarifado/ferramentas') return Promise.resolve({ data: FERRAMENTAS });
     if (url === '/almoxarifado/emprestimos') return Promise.resolve({ data: EMPRESTIMOS });
     if (url === '/almoxarifado/calibracoes/painel') return Promise.resolve({ data: PAINEL });
@@ -179,33 +223,169 @@ describe('FerramentasAlmoxarifado — lista de ferramentas', () => {
   });
 });
 
-describe('FerramentasAlmoxarifado — emprestar', () => {
-  test('emprestar dispara POST com o payload do contrato', async () => {
-    await renderizar();
-    const linhaDisponivel = linhasFerramentas()[0]; // FER-001, DISPONIVEL
-    await clicar(botao('Emprestar', linhaDisponivel));
+// Etapa 180 (T3): o emprestimo virou multipart com o termo assinado (RN-180.03/04). Antes a tela mandava JSON com
+// `colaborador_nome` digitado — que o servidor da T2 recusa com 400 "A assinatura do colaborador é obrigatória".
+const pointer = (tipo, x, y) => {
+  const ev = new MouseEvent(tipo, { bubbles: true, cancelable: true, clientX: x, clientY: y });
+  Object.defineProperty(ev, 'pointerId', { value: 1 });
+  return ev;
+};
+async function assinar() {
+  const canvas = container.querySelector('.almox-modal canvas');
+  act(() => { canvas.dispatchEvent(pointer('pointerdown', 10, 10)); });
+  act(() => { canvas.dispatchEvent(pointer('pointermove', 40, 30)); });
+  act(() => { canvas.dispatchEvent(pointer('pointerup', 40, 30)); });
+  await clicar(botao('Confirmar assinatura'));
+}
+const $ = (sel) => container.querySelector(sel);
+const rodapeModal = () => container.querySelector('.almox-modal-footer');
+async function abrirEmprestimo() {
+  await renderizar();
+  await clicar(botao('Emprestar', linhasFerramentas()[0])); // FER-001, DISPONIVEL
+}
+async function preencherEmprestimo({ colaborador = '7', matricula = 'M-700', data = '2026-11-05' } = {}) {
+  preencher($('#emprestimo-colaborador'), colaborador);
+  if (data) preencher($('#emprestimo-data-prevista'), data);
+  preencher($('#emprestimo-confirmacao-matricula'), matricula);
+}
+const postsEmprestar = () => api.post.mock.calls.filter(([url]) => url === '/almoxarifado/ferramentas/1/emprestar');
 
-    preencher(campo('Colaborador'), 'Carlos Pereira');
-    preencher(campo('Setor'), 'Manutenção');
-    await clicar(botao('Emprestar', container.querySelector('.almox-modal-footer')));
-
-    expect(api.post).toHaveBeenCalledWith('/almoxarifado/ferramentas/1/emprestar', expect.objectContaining({
-      colaborador_nome: 'Carlos Pereira',
-      setor: 'Manutenção',
-    }));
+describe('FerramentasAlmoxarifado — emprestar (Etapa 180, termo de responsabilidade)', () => {
+  test('o modal traz o colaborador do cadastro (nome e setor, sem a matrícula) e o texto VIGENTE com o selo "Texto provisório"', async () => {
+    await abrirEmprestimo();
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/aux/colaboradores');
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/termos/FERRAMENTA');
+    expect([...$('#emprestimo-colaborador').options].map((o) => o.textContent))
+      .toEqual(['Selecione...', 'Carlos Pereira (Manutenção)', 'Ana Costa']);
+    expect($('.almox-termo-texto').textContent).toBe(TEXTO_V1);
+    expect(container.querySelector('.almox-modal').textContent).toContain('Termo de responsabilidade — versão 1');
+    expect($('.almox-modal .almox-termo-provisorio').textContent).toBe('Texto provisório');
+    expect($('.almox-modal canvas')).not.toBeNull();
+    // o campo digitado de antes nao existe mais
+    expect(campo('Setor')).toBeFalsy();
   });
 
-  test('recusa 400 do backend (RN-03, calibração vencida) aparece como mensagem na tela', async () => {
-    api.post.mockRejectedValueOnce({
-      response: { data: { error: 'Ferramenta com calibração vencida ou sem calibração registrada' } },
-    });
-    await renderizar();
-    const linhaDisponivel = linhasFerramentas()[0];
-    await clicar(botao('Emprestar', linhaDisponivel));
-    preencher(campo('Colaborador'), 'Carlos Pereira');
-    await clicar(botao('Emprestar', container.querySelector('.almox-modal-footer')));
+  test('sem provisório: o selo não aparece', async () => {
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => (url === '/almoxarifado/termos/FERRAMENTA' ? Promise.resolve({ data: TERMO_V2 }) : base(url, cfg)));
+    await abrirEmprestimo();
+    expect($('.almox-termo-texto').textContent).toBe(TEXTO_V2);
+    expect($('.almox-modal .almox-termo-provisorio')).toBeNull();
+  });
 
-    expect(toast.error).toHaveBeenCalledWith('Ferramenta com calibração vencida ou sem calibração registrada');
+  test('envio: um POST multipart com os campos do contrato (termo_versao, chave, PNG em `assinatura`), sem colaborador_nome', async () => {
+    api.post.mockResolvedValueOnce({ data: { id: 31, termo: { numero: 'TERMO-20261022-0001', versao: 1, evidencia: { id: 61 } } } });
+    await abrirEmprestimo();
+    await preencherEmprestimo();
+    preencher($('#emprestimo-observacoes'), '  caixa azul  ');
+    await assinar();
+    expect(container.querySelector('.almox-modal').textContent).toContain('Assinatura confirmada');
+    await clicar(botao('Emprestar', rodapeModal()));
+    expect(postsEmprestar()).toHaveLength(1);
+    const [, corpo, cfg] = postsEmprestar()[0];
+    expect(corpo).toBeInstanceOf(FormData);
+    expect(corpo.get('colaborador_id')).toBe('7');
+    expect(corpo.get('confirmacao_matricula')).toBe('M-700');
+    expect(corpo.get('termo_versao')).toBe('1');
+    expect(corpo.get('data_prevista_devolucao')).toBe('2026-11-05');
+    expect(corpo.get('observacoes')).toBe('caixa azul');
+    expect(corpo.get('chave_idempotencia')).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(corpo.get('assinatura').type).toBe('image/png');
+    expect(corpo.has('colaborador_nome')).toBe(false);
+    expect(corpo.has('setor')).toBe(false);
+    expect(cfg.headers['Content-Type']).toBe('multipart/form-data');
+    expect(toast.success).toHaveBeenCalledWith('Ferramenta emprestada — termo TERMO-20261022-0001 assinado');
+    expect(container.querySelector('.almox-modal')).toBeFalsy();
+  });
+
+  test('sem a matrícula digitada: a frase do servidor e nada é enviado', async () => {
+    await abrirEmprestimo();
+    await preencherEmprestimo({ matricula: '   ' });
+    await assinar();
+    await clicar(botao('Emprestar', rodapeModal()));
+    expect(postsEmprestar()).toHaveLength(0);
+    expect(toast.error).toHaveBeenCalledWith('O colaborador deve digitar a própria matrícula para assinar o termo');
+  });
+
+  test('sem assinatura e sem colaborador: recusa na tela com a frase, sem POST', async () => {
+    await abrirEmprestimo();
+    await clicar(botao('Emprestar', rodapeModal()));
+    expect(toast.error).toHaveBeenLastCalledWith('Selecione o colaborador');
+    await preencherEmprestimo();
+    await clicar(botao('Emprestar', rodapeModal()));
+    expect(toast.error).toHaveBeenLastCalledWith('A assinatura do colaborador é obrigatória');
+    expect(postsEmprestar()).toHaveLength(0);
+  });
+
+  test('409 de versão trocada: recarrega o texto (v2), pede nova assinatura, avisa — e o reenvio vai com termo_versao 2', async () => {
+    let versaoNoServidor = 1;
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => (url === '/almoxarifado/termos/FERRAMENTA'
+      ? Promise.resolve({ data: versaoNoServidor === 1 ? TERMO_V1 : TERMO_V2 }) : base(url, cfg)));
+    api.post.mockImplementationOnce(() => {
+      versaoNoServidor = 2;
+      return Promise.reject({ response: { status: 409, data: { error: 'O texto do termo mudou (versão 2) — releia e assine de novo' } } });
+    });
+    await abrirEmprestimo();
+    await preencherEmprestimo();
+    await assinar();
+    await clicar(botao('Emprestar', rodapeModal()));
+    expect(toast.error).toHaveBeenCalledWith('O texto do termo mudou — releia e assine de novo');
+    expect($('.almox-termo-aviso').textContent).toBe('O texto do termo mudou — releia e assine de novo');
+    expect($('.almox-termo-texto').textContent).toBe(TEXTO_V2);
+    expect(container.querySelector('.almox-modal').textContent).toContain('versão 2');
+    // a assinatura do texto velho nao vale: o canvas volta
+    expect(container.querySelector('.almox-modal').textContent).not.toContain('Assinatura confirmada');
+    expect($('.almox-modal canvas')).not.toBeNull();
+    const chave1 = postsEmprestar()[0][1].get('chave_idempotencia');
+    api.post.mockResolvedValueOnce({ data: { id: 32, termo: { numero: 'TERMO-20261022-0002', versao: 2 } } });
+    await assinar();
+    await clicar(botao('Emprestar', rodapeModal()));
+    expect(postsEmprestar()).toHaveLength(2);
+    expect(postsEmprestar()[1][1].get('termo_versao')).toBe('2');
+    expect(postsEmprestar()[1][1].get('chave_idempotencia')).not.toBe(chave1);
+  });
+
+  test.each([
+    [409, 'A ferramenta não está disponível'],
+    [400, 'Ferramenta com calibração vencida ou sem calibração registrada'],
+    [400, 'A matrícula informada não confere com a do colaborador'],
+  ])('o %i do servidor aparece literal e a janela fica aberta: %s', async (status, frase) => {
+    api.post.mockRejectedValueOnce({ response: { status, data: { error: frase } } });
+    await abrirEmprestimo();
+    await preencherEmprestimo();
+    await assinar();
+    await clicar(botao('Emprestar', rodapeModal()));
+    expect(toast.error).toHaveBeenCalledWith(frase);
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(container.querySelector('.almox-modal')).toBeTruthy();
+  });
+
+  test('a rede cai sem resposta: o próximo toque reusa a MESMA chave; o 200 reutilizado avisa que não duplicou', async () => {
+    api.post.mockRejectedValueOnce(new Error('Network Error'));
+    await abrirEmprestimo();
+    await preencherEmprestimo();
+    await assinar();
+    await clicar(botao('Emprestar', rodapeModal()));
+    expect(toast.error).toHaveBeenCalledWith(
+      'Sem resposta do servidor — o empréstimo pode ter sido registrado. Toque em "Emprestar" de novo: o reenvio não duplica.');
+    api.post.mockResolvedValueOnce({ data: { id: 31, reutilizada: true, termo: { numero: 'TERMO-20261022-0001', versao: 1 } } });
+    await clicar(botao('Emprestar', rodapeModal()));
+    expect(postsEmprestar()).toHaveLength(2);
+    expect(postsEmprestar()[1][1].get('chave_idempotencia')).toBe(postsEmprestar()[0][1].get('chave_idempotencia'));
+    expect(toast.success).toHaveBeenCalledWith('Empréstimo já estava registrado (termo TERMO-20261022-0001) — o envio repetido não duplicou');
+  });
+
+  test('o texto do termo não carregou: não deixa assinar o que não mostrou', async () => {
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => (url === '/almoxarifado/termos/FERRAMENTA'
+      ? Promise.reject({ response: { status: 403, data: { error: 'Sem permissão' } } }) : base(url, cfg)));
+    await abrirEmprestimo();
+    await preencherEmprestimo();
+    await assinar();
+    await clicar(botao('Emprestar', rodapeModal()));
+    expect(postsEmprestar()).toHaveLength(0);
+    expect(toast.error).toHaveBeenCalledWith('O texto do termo não foi carregado — atualize e tente de novo');
   });
 
   test('devolver dispara POST no empréstimo aberto da ferramenta', async () => {
@@ -640,5 +820,186 @@ describe('FerramentasAlmoxarifado — Etapa 177, retorno da manutenção (condi�
     expect(container.querySelector('.almox-modal')).toBeFalsy();
     await clicar(botao('Calibrações'));
     expect(getsDe('/almoxarifado/calibracoes/painel')).toBeGreaterThan(painel);
+  });
+});
+
+describe('FerramentasAlmoxarifado — termo do empréstimo (Etapa 180, RN-180.05)', () => {
+  async function abrirAbaEmprestimos() {
+    await renderizar();
+    await clicar(botao('Empréstimos'));
+  }
+
+  test('coluna Termo: com termo, botão "Termo"; sem, "Anterior à exigência do termo"', async () => {
+    await abrirAbaEmprestimos();
+    const [comTermo, semTermo] = linhasEmprestimos();
+    expect(botao('Termo', comTermo)).toBeTruthy();
+    expect(semTermo.textContent).toContain('Anterior à exigência do termo');
+    expect(botao('Termo', semTermo)).toBeFalsy();
+  });
+
+  test('"Termo" mostra o texto da versão ASSINADA, os dados da fotografia, a matrícula digitada e a assinatura', async () => {
+    await abrirAbaEmprestimos();
+    await clicar(botao('Termo', linhasEmprestimos()[0]));
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/ferramentas/emprestimos/20/termo');
+    const modal = $('.almox-termo-emprestimo');
+    expect(modal.querySelector('h2').textContent).toBe('Termo TERMO-20260801-0001');
+    expect(modal.querySelector('.almox-termo-texto').textContent).toBe(TEXTO_V1);
+    expect(modal.querySelector('.almox-termo-provisorio')).not.toBeNull();
+    expect(modal.textContent).toContain('FER-002 — Paquímetro digital · série SN-2002');
+    expect(modal.textContent).toContain('João Silva · matrícula M-900 · Qualidade');
+    expect(modal.textContent).toContain('Matrícula digitada: M-900');
+    expect(modal.textContent).toContain('10/08/2026');
+    expect(modal.textContent).toContain('C0FF-EE12-3456');
+    expect(modal.querySelector('img.almox-termo-assinatura').getAttribute('src')).toContain('assinatura-termo-1.png');
+  });
+
+  test('"Verificar integridade": selo Íntegro; e Adulterado com o motivo', async () => {
+    await abrirAbaEmprestimos();
+    await clicar(botao('Termo', linhasEmprestimos()[0]));
+    await clicar(botao('Verificar integridade'));
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/ferramentas/emprestimos/20/termo/verificar');
+    expect($('.almox-termo-selo').textContent).toBe('Íntegro');
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => (url === '/almoxarifado/ferramentas/emprestimos/20/termo/verificar'
+      ? Promise.resolve({ data: { integro: false, motivo: 'texto do termo alterado' } }) : base(url, cfg)));
+    await clicar(botao('Fechar', rodapeModal()));
+    await clicar(botao('Termo', linhasEmprestimos()[0]));
+    expect($('.almox-termo-selo')).toBeNull();
+    await clicar(botao('Verificar integridade'));
+    expect($('.almox-termo-selo').textContent).toBe('Adulterado: texto do termo alterado');
+    expect($('.almox-termo-selo').className).toContain('almox-badge-critico');
+  });
+
+  test('"PDF do termo" relê o termo (URL nova da assinatura) e gera o PDF com o texto e o número', async () => {
+    let leituras = 0;
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => {
+      if (url === '/almoxarifado/ferramentas/emprestimos/20/termo') {
+        leituras += 1;
+        const ev = { ...TERMO_DO_EMPRESTIMO.evidencia, arquivo_url: `/api/uploads/almoxarifado/assinatura-termo-1.png?exp=${leituras}&sig=a` };
+        return Promise.resolve({ data: { ...TERMO_DO_EMPRESTIMO, evidencia: ev } });
+      }
+      return base(url, cfg);
+    });
+    await abrirAbaEmprestimos();
+    await clicar(botao('Termo', linhasEmprestimos()[0]));
+    await clicar(botao('PDF do termo'));
+    expect(leituras).toBe(2);
+    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('exp=2'));
+    const textos = mockPdf.filter(([n]) => n === 'text').map((c) => c[1]);
+    expect(textos).toContain('Termo de responsabilidade — TERMO-20260801-0001');
+    expect(textos).toContain('Declaro que recebi a ferramenta em perfeito estado.');
+    expect(mockPdf.find(([n]) => n === 'save')[1]).toBe('termo-TERMO-20260801-0001.pdf');
+    // o fetch da assinatura falhou no teste: avisa, nao entrega calado
+    expect(toast.warn).toHaveBeenCalledWith('A assinatura não pôde ser carregada e saiu como indisponível no PDF');
+  });
+
+  test('a releitura falha: não gera o PDF com a URL velha', async () => {
+    await abrirAbaEmprestimos();
+    await clicar(botao('Termo', linhasEmprestimos()[0]));
+    api.get.mockImplementation(() => Promise.reject({ response: { status: 500, data: { error: 'Erro interno' } } }));
+    await clicar(botao('PDF do termo'));
+    expect(toast.error).toHaveBeenCalledWith('Erro interno');
+    expect(mockPdf.find(([n]) => n === 'save')).toBeUndefined();
+  });
+
+  test('404 do termo (anterior à exigência) aparece literal e não abre a janela', async () => {
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => (url === '/almoxarifado/ferramentas/emprestimos/20/termo'
+      ? Promise.reject({ response: { status: 404, data: { error: 'Este empréstimo não tem termo assinado (anterior à exigência)' } } })
+      : base(url, cfg)));
+    await abrirAbaEmprestimos();
+    await clicar(botao('Termo', linhasEmprestimos()[0]));
+    expect(toast.error).toHaveBeenCalledWith('Este empréstimo não tem termo assinado (anterior à exigência)');
+    expect($('.almox-termo-emprestimo')).toBeNull();
+  });
+});
+
+describe('FerramentasAlmoxarifado — abas por permissão (Etapa 180)', () => {
+  test('sem gerenciar_ferramentas: a aba Empréstimos some e GET /emprestimos não é chamado (metade positiva: com, aparece)', async () => {
+    mockPode = (acao) => acao !== 'gerenciar_ferramentas';
+    await renderizar();
+    expect(botao('Ferramentas')).toBeTruthy();
+    expect(botao('Calibrações')).toBeTruthy();
+    expect(botao('Empréstimos')).toBeFalsy();
+    expect(api.get).not.toHaveBeenCalledWith('/almoxarifado/emprestimos', expect.anything());
+    act(() => root.unmount());
+    root = createRoot(container);
+    mockPode = () => true;
+    await renderizar();
+    expect(botao('Empréstimos')).toBeTruthy();
+  });
+
+  test('sem editar_termos: a aba "Texto do termo" some (metade positiva: com, aparece)', async () => {
+    mockPode = (acao) => acao !== 'editar_termos';
+    await renderizar();
+    expect(botao('Texto do termo')).toBeFalsy();
+    expect(botao('Empréstimos')).toBeTruthy();
+    act(() => root.unmount());
+    root = createRoot(container);
+    mockPode = () => true;
+    await renderizar();
+    expect(botao('Texto do termo')).toBeTruthy();
+  });
+});
+
+describe('FerramentasAlmoxarifado — texto do termo, administrador (Etapa 180, RN-180.02)', () => {
+  const postsTermo = () => api.post.mock.calls.filter(([url]) => url === '/almoxarifado/termos/FERRAMENTA');
+  async function abrirAbaTermo() {
+    await renderizar();
+    await clicar(botao('Texto do termo'));
+  }
+
+  test('mostra a vigente (com o selo provisório) no editor e o histórico', async () => {
+    await abrirAbaTermo();
+    expect(container.textContent).toContain('Versão vigente: 1');
+    expect($('.almox-termo-admin .almox-termo-provisorio')).not.toBeNull();
+    expect($('#termo-texto-novo').value).toBe(TEXTO_V1);
+    expect(container.querySelectorAll('.almox-termo-historico tbody tr')).toHaveLength(1);
+  });
+
+  test('salvar nova versão: POST { texto, versao_base } e recarrega a vigente e o histórico', async () => {
+    let salvo = false;
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => (url === '/almoxarifado/termos/FERRAMENTA'
+      ? Promise.resolve({ data: salvo ? TERMO_V2 : TERMO_V1 }) : base(url, cfg)));
+    api.post.mockImplementationOnce(() => { salvo = true; return Promise.resolve({ data: TERMO_V2.vigente }); });
+    await abrirAbaTermo();
+    preencher($('#termo-texto-novo'), TEXTO_V2);
+    await clicar(botao('Salvar nova versão'));
+    expect(postsTermo()).toHaveLength(1);
+    expect(postsTermo()[0][1]).toEqual({ texto: TEXTO_V2, versao_base: 1 });
+    expect(toast.success).toHaveBeenCalledWith('Versão 2 do termo salva — os próximos empréstimos assinam este texto');
+    expect(container.textContent).toContain('Versão vigente: 2');
+    expect($('.almox-termo-admin .almox-section-title .almox-termo-provisorio')).toBeNull();
+    expect(container.querySelectorAll('.almox-termo-historico tbody tr')).toHaveLength(2);
+  });
+
+  test.each([
+    ['   ', 'O texto do termo é obrigatório'],
+    [`  ${TEXTO_V1}  `, 'O texto é igual ao da versão vigente'],
+  ])('recusa na tela, com a frase do servidor, sem POST: %j', async (texto, frase) => {
+    await abrirAbaTermo();
+    preencher($('#termo-texto-novo'), texto);
+    await clicar(botao('Salvar nova versão'));
+    expect(toast.error).toHaveBeenCalledWith(frase);
+    expect(postsTermo()).toHaveLength(0);
+  });
+
+  test('409 de outro administrador: a frase literal, recarrega a vigente e NÃO apaga o rascunho', async () => {
+    let outroSalvou = false;
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => (url === '/almoxarifado/termos/FERRAMENTA'
+      ? Promise.resolve({ data: outroSalvou ? TERMO_V2 : TERMO_V1 }) : base(url, cfg)));
+    api.post.mockImplementationOnce(() => {
+      outroSalvou = true;
+      return Promise.reject({ response: { status: 409, data: { error: 'Outra versão do termo acabou de ser salva — recarregue' } } });
+    });
+    await abrirAbaTermo();
+    preencher($('#termo-texto-novo'), 'Meu rascunho do termo');
+    await clicar(botao('Salvar nova versão'));
+    expect(toast.error).toHaveBeenCalledWith('Outra versão do termo acabou de ser salva — recarregue');
+    expect(container.textContent).toContain('Versão vigente: 2');
+    expect($('#termo-texto-novo').value).toBe('Meu rascunho do termo');
   });
 });

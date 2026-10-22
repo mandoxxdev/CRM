@@ -109,7 +109,7 @@ export function mensagemErroEntrega(err) {
   return 'Erro ao registrar a entrega de EPI';
 }
 
-/** Fase 5: o resumo do `GET /epi/cadeia/verificar` para a tela. */
+/** Fase 5: o resumo do `GET /evidencias/cadeia/verificar` (a cadeia global desde a 180) para a tela. */
 export function resumoCadeia(resposta) {
   if (!resposta) return null;
   const total = Number(resposta.total || 0);

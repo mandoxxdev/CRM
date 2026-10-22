@@ -194,7 +194,8 @@ const EpiAlmoxarifado = () => {
   const verificarCadeia = async () => {
     setVerificandoCadeia(true);
     try {
-      const res = await api.get('/almoxarifado/epi/cadeia/verificar');
+      // Etapa 180 (RN-180.01): a rota da cadeia e global (EPI + termos de ferramenta); /epi/cadeia/verificar continua como apelido.
+      const res = await api.get('/almoxarifado/evidencias/cadeia/verificar');
       setCadeia(resumoCadeia(res.data));
     } catch (err) {
       setCadeia(null);

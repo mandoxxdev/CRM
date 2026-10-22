@@ -82,6 +82,9 @@ const ACOES = {
   // vermelha em `permissaoErro.test.js:52` (`semRotulo = ["entregar_epi"]`), medido na T3. O 403 e o que todo perfil fora de
   // ADMINISTRADOR e ALMOXARIFE ve ao registrar a entrega na tela "Entrega de EPI"; sem rotulo, o toast mostraria "entregar epi" cru.
   entregar_epi: 'registrar entrega de EPI',
+  // Etapa 180 (T3): o mesmo buraco de novo — `editar_termos` entrou em ACAO_PERFIS na T2 (servidor) sem esta linha; a suite do
+  // client ficou vermelha em `permissaoErro.test.js:52` (`semRotulo = ["editar_termos"]`), medido na T3. So ADMINISTRADOR.
+  editar_termos: 'editar o texto do termo de responsabilidade',
 
   // Etapa 30, fix-round da revisao adversarial: QUATRO acoes de ACAO_PERFIS nao tinham rotulo, e
   // tres delas ja tinham call site de UI — o toast mostrava a chave crua ("gerenciar plano
