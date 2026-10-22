@@ -1,6 +1,8 @@
 # Etapa 171 — Pedido de compra vinculado a uma OS
 
-> **Status:** 🟡 em execução (2026-10-22). Plano escrito na Fase 1 da skill `desenvolver-etapa-almoxarifado`.
+> **Status:** ✅ fechada (2026-10-22) — range `7d43f662..fb5a4e36` + o commit de documentação do fechamento. T1–T5 e a Fase 5 feitas
+> (ver "Execução" e "Fase 5"); fechamento e retro no fim; **próxima: Etapa 172** (ver "Próxima tarefa detalhada").
+> Plano escrito na Fase 1 da skill `desenvolver-etapa-almoxarifado`.
 > **Origem:** pergunta da usuária de Compras ao André (2026-10-22): *"Quando um material for adquirido
 > para atender a uma Ordem de Serviço (OS), qual será o procedimento para cadastrar ou vincular essa OS
 > ao sistema, permitindo que todos os itens comprados sejam devidamente associados e controlados por ela?"*
@@ -69,7 +71,74 @@
 
 ## Próxima tarefa detalhada
 
-*(preencher no fechamento)*
+**Etapa 172 — a requisição com campo OS de verdade.** Fecha a **C426** e a **B1092** (a requisição casa com a OS pelo texto livre
+`os_referencia`; texto diferente — `42` × `OS-042`, erro de digitação — não pega a reserva da OS, e o material fica preso até a OS fechar).
+
+**O que fazer.**
+1. Coluna `requisicoes_almoxarifado.os_id INTEGER` (`safeAlter` no `initSchema` do módulo, `services/almoxarifado/schema.js`; a tabela é do
+   módulo, então chega ao harness sem stub — conferir). Primeiro boot em pasta vazia (memória do projeto).
+2. Criação/envio (`requisitionCreateService.createRequisicao`, `exigirOS`; rotas `POST /api/almoxarifado/requisicoes`,
+   `POST /api/requisicoes-material`, o `/enviar` do rascunho): aceitar `os_id` (inteiro positivo; Zod com a régua do `normalizarOsIdBruto` de
+   `services/compras/schemas.js`), conferir que a OS existe (e decidir se OS fechada recusa — provavelmente **sim**, com a literal do pedido
+   `A OS <n> está <status> — não aceita …`, mas é decisão de letra B) e **gravar também `os_referencia = numero_os`** (o texto continua sendo o
+   que as telas, o PDF e os relatórios mostram — não quebrar os leitores de `os_referencia`). `exigirOS` passa a aceitar `os_id` **ou** texto.
+   "Copiar como Novo Rascunho" copia o `os_id`.
+3. Telas: `client/src/components/almoxarifado/RequisicaoForm.js` (campo **Número da OS \*** na linha ~324 vira `<select>` de OS abertas,
+   molde `PedidoCompraForm` da 171 — `GET /api/almoxarifado/aux/ordens-servico` não filtra status: filtrar no cliente ou criar `?abertas=1`);
+   `RequisicaoMaterialCesta.js` (a "Solicitação de material" das outras áreas — **medir na Fase 0**: ela **não manda `os_referencia`** e o
+   servidor exige OS no envio (`exigirOS`), então ou o fluxo de cesta está desligado em produção (`usesCestaFlow`) ou o envio por ela é
+   recusado com *"Informe o número da OS…"* — achado do fechamento da 171, não verificado em tela); `RequisicoesList.js` (coluna e detalhe
+   *OS / Referência*).
+4. **Os dois consumidores da 171 passam a casar por `os_id`**, mantendo o texto como reserva para as requisições antigas (sem `os_id`):
+   - a fila da chegada (RN-171.12(a)): `reservaChegadaService.js` ~464, `filtro: (c) => reservaDaOs.requisicaoEhDaOs(c.os_referencia,
+     os.numero_os)` → `c.os_id ? c.os_id === os.id : requisicaoEhDaOs(...)` (o `SELECT` das candidatas, ~374, tem de trazer `r.os_id`);
+   - a conversão na aprovação (RN-171.12(b)): `requisitionService.js` ~373, `reservaDaOs.reservasDaOsParaRequisicao(db, materialId,
+     osReferencia)` → passar também o `os_id` da requisição e filtrar `l.os_id === reqRow.os_id` quando houver (hoje compara o número lido vivo
+     pela `chaveDaOs`). O `reqRow.os_id` que `reservarItensAprovacao` já passa ao `criarReserva` passa a ter valor — conferir o efeito na
+     reserva de requisição (o `os_id` na reserva e na movimentação muda os relatórios por OS, `reportService.relatorioConsumoPorOS` /
+     `relatorioReservadoPorOS` — provavelmente **para melhor**, mas medir).
+
+**Contrato que ela consome (pronto, não reabrir):** `services/almoxarifado/reservaDaOs.js` — `PREDICADO_RESERVA_DA_OS_SQL` (congelado:
+`status='ATIVA' AND origem='MANUAL' AND os_id = ? AND recebimento_id IS NOT NULL`), `chaveDaOs`/`requisicaoEhDaOs` (a régua do texto, que vira
+o fallback), `reservasDaOsParaRequisicao`, `recriarReservaDaOs`, `soltarSeOsFechou`; `osEncerradaService.liberarReservasDaOs` /
+`entrouNoFechado`; `pedidoCompraService.STATUS_OS_FECHADA` / `osFechada` / `numerosDasOs`.
+
+**Pontos de atenção.**
+- **Trava por material:** a fila da chegada roda **dentro** da seção da nota/inspeção/NC e a conversão **dentro** de `comTravaDaRequisicao`
+  da aprovação — trocar o filtro não pode introduzir leitura fora delas nem aninhar trava (CLAUDE.md, "não é reentrante").
+- **Aprovação automática:** a conversão vale para as três portas (`/aprovar`, `/aprovar-valor`, automática no `POST`) por
+  `prepararPosAprovacao` — testar as três com `os_id`, como a Fase 5 da 171 fez (`recebimentoPedidoOs.api.test.js`).
+- **Requisições antigas e rascunhos** sem `os_id` continuam casando pelo texto — não migrar dados (decisão da 171: não inventar vínculo).
+- **Telas de requisição são várias** (almoxarifado, cesta das outras áreas, a lista, o PDF/comprovante): o texto `os_referencia` continua
+  sendo gravado para elas.
+- O `PUT` da OS só solta na **transição** para fechado; reabrir não reserva de novo (**C427**) — fora do escopo da 172.
+
+## Fechamento (2026-10-22)
+
+**Tasks:** T1 ✅ `c0c4746b` · T2 ✅ `4dc8433d` · T3 ✅ `07d6a8c8` (merge `5bb6946c`) · T4 ✅ `19ef34b1` (merge `2621b581`) · T5 ✅ `86a956bb` ·
+rótulo da redistribuição ✅ `0ac039db` · Fase 5 ✅ `a70b82ba`, `f2f2b2ed`, `c22283cd`. Plano: `7d43f662`, `1099832c`, `d9bbc778`, `390c2c94`,
+`fb5a4e36`. Todos conferidos com `git merge-base --is-ancestor <hash> HEAD` (16/16 ancestrais).
+
+**Divergências do plano (resumo — o detalhe está em cada task):** (1) a emenda C1 supunha `requisicoes.os_id` — não existe; o casamento é
+pela `os_referencia` (B1092, corrigido na spec da feature 22 no formato "dizia X; estava errado"); (2) "LEFT JOIN vivo" virou consulta viva
+separada (B1094); (3) manter a mesma OS no `PUT` dispensa as duas guardas (B1099); (4) a aux traz o `incluir` à parte (B1100); (5) I3 só na
+porta da nota; (6) a origem `OS_ENCERRADA` caía no rótulo da inspeção — ramo próprio (`0ac039db`); (7) a Fase 0 dizia que
+`solicitacoes_compra` não tem `os_id` — vale para a do core; `solicitacoes_compra_almoxarifado` **tem** (sem escritor) — registrado na spec 22.
+
+**Documentação:** `docs/almoxarifado-novidades-por-etapa.md` (seção da 171; A106; B1086–B1102; C426, C427; D (171); F (171)); specs 22, 07,
+08, mapa do módulo e `specs/modulo-compras/README.md`; guia (seção e cabeçalho); manual (14b.1, 14b.2, 14b.2b, 14b.3, 7.2, 9.3b, 9.3e, 9.6).
+
+**Retro (4 números):**
+- **Rodadas de correção:** 1 (a Fase 5).
+- **Achados da revisão (Fase 5):** 16 reais — 3 corrigidos no código/tela (o TOCTOU da OS cancelada durante a nota, o aviso da conversão no
+  meio, o front da OS), 7 testes fracos reforçados (estorno recusado, corrida sem timer, RN-171.04, RN-171.12(b) ×3 cenários num item, I1
+  provado inalcançável, RN-171.06/03, o PATCH do client), 6 declarados sem correção (letra D (171)); ruído: **0 registrado** — a seção da Fase 5
+  não lista achados descartados, então não há como contar o que foi descartado como ruído.
+- **Paralelismo:** T4 (front) e T3 (OS) em worktree em paralelo com T1/T2 (tronco), sem retrabalho (os merges `2621b581` e `5bb6946c`
+  não trouxeram task refeita).
+- **Defeito que escapou:** a preencher na próxima etapa (o que a 172 ou o uso real achar da 171).
+
+**Verificação final (rodada no fechamento):** ver "Suítes do fechamento", no fim deste arquivo.
 
 ---
 
@@ -354,3 +423,9 @@ aprovação converte.
 `test:api` 495/495 arquivos OK (`recebimentoPedidoOs` 23/23, `comprasPedidoOs` 28/28); `test:almoxarifado` 44/44;
 `test:validation` 4/4, `test:safealter` 3/3, `test:sqlite` 16/16; client 173/173 suítes, 2205/2205 testes; `CI=true` build
 compilou sem aviso. A sonda `sonda-toctou` agora mostra a reserva `LIBERADA`.
+
+### Suítes do fechamento (rodadas em 2026-10-22, sobre `fb5a4e36` + só documentação)
+
+`test:api` **495/495** arquivos OK; `test:almoxarifado` **44/44**; `test:validation` 4/4, `test:safealter` 3/3, `test:sqlite` 16/16; client
+**173/173** suítes, **2205/2205** testes; `CI=true react-scripts build` *Compiled successfully*. A **A106** (opcional) rodada numa cópia do banco
+local: 2 textos, nenhum casa; controle com uma OS plantada casou o esperado.

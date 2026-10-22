@@ -1,19 +1,26 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-20 (Etapa 170) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-22 (Etapa 171) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169 e 170) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170 e 171) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-20 (Etapa 170 ENTREGUE · próxima: Etapa 171)
+> ## Onde o desenvolvimento está — 2026-10-22 (Etapa 171 ENTREGUE · próxima: Etapa 172)
 >
-> **O desenvolvimento parou aqui: Etapa 170 fechada — 2026-10-20.** A **Etapa 170 (as datas do Chat, de Compras e do Almoxarifado no dia
+> **O desenvolvimento parou aqui: Etapa 171 fechada — 2026-10-22.** A **Etapa 171 (pedido de compra vinculado a uma OS — a pergunta da
+> usuária de Compras)**: o pedido de compra ganha o campo **OS** (um pedido, uma OS ou estoque); quando a nota do pedido com OS é processada,
+> o que entrou fica **reservado para a OS**, e a requisição que cita a OS em **Número da OS** leva o material (as outras não); cancelar ou
+> concluir a OS devolve o material ao estoque, com a marca de origem; OS com pedido de compra não se exclui. Consulta **opcional** antes do
+> deploy (**A106**). **Próxima: Etapa 172** — a requisição com campo OS de verdade (uma lista de OS no lugar do texto livre); ver a próxima
+> tarefa no plano da 171.
+>
+> **Etapa 170, 2026-10-20.** A **Etapa 170 (as datas do Chat, de Compras e do Almoxarifado no dia
 > de Brasília e o limite da consulta dos Logs; consertos técnicos, sem regra de acesso nova e sem mudar valor gravado)**: o **Chat** mostra
 > a hora de Brasília, o *Hoje*/*Ontem* e o separador do dia certos à noite, e a data ilegível não derruba mais a tela; em **Compras**, o
 > *Salva em* da planilha do fornecedor e o *Cadastrado em* do Excel de fornecedores; no **Almoxarifado** (só exibição), o certificado do lote,
 > os anexos, a retirada da ferramenta e o *Gerado em* dos PDFs de remessa e de posição do cliente — no dia certo à noite; a consulta dos
 > **Logs** pela integração recusa limite inválido com 400. Nenhuma consulta antes do deploy. **Próxima: Etapa 171** — ver a próxima tarefa
-> no plano da 170 (a **C423**: gravar as quatro datas do formulário da OS).
+> no plano da 170 (a **C423**: gravar as quatro datas do formulário da OS). *(Próxima, na época: Etapa 171 — entregue acima, com outro tema: a pergunta de Compras passou na frente; a **C423** continua para depois.)*
 >
 > **Etapa 169, 2026-10-20.** A **Etapa 169 (as datas das Aprovações, das Ordens de Serviço e das
 > Tarefas no dia de Brasília; consertos técnicos, sem regra de acesso nova e sem mudar valor gravado)**: as **Aprovações** mostram a hora de
@@ -6833,6 +6840,66 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 171 — Pedido de compra vinculado a uma OS (ENTREGUE — 2026-10-22)
+
+**O que mudou, em uma frase:** o comprador diz no pedido para qual OS é a compra, e o material que chega desse pedido fica guardado para
+essa OS até a requisição dela levá-lo — ou até a OS ser cancelada ou concluída, quando volta ao estoque comum.
+
+**O problema que ela resolve.** A usuária de Compras perguntou como vincular a OS ao material comprado para ela. Não havia como: o pedido não
+tinha OS, a nota entrava como estoque comum, e a primeira requisição de qualquer trabalho levava o material — inclusive o que foi comprado
+para outra OS que ainda esperava.
+
+| Antes | Agora |
+|---|---|
+| Pedido de compra sem OS | Campo **OS** no pedido (*Estoque (sem OS)* ou uma OS aberta) e coluna **OS** na lista, no Excel e no documento do pedido |
+| A nota do pedido entrava livre para todos | O que entrou fica reservado para a OS (tela **Reservas**: origem *MANUAL*, destino a OS, sem validade) |
+| A requisição da OS disputava com as outras | A requisição com o número da OS em **Número da OS** é servida primeiro e, na aprovação, fica com o material da OS |
+| Cancelar a OS não mexia no almoxarifado | Cancelar ou concluir a OS solta a reserva (*"OS ⟨n⟩ cancelado — material volta ao estoque"*) e avisa quantas soltou |
+| Excluir OS com compra apagava a OS | Recusado: *"A OS ⟨n⟩ tem pedido de compra vinculado (⟨PC-…⟩) — cancele a OS em vez de excluir"* |
+
+**Roteiro de teste (15 minutos — com um usuário que tenha Compras, Almoxarifado e Fábrica, ou o administrador).**
+
+1. **Criar a OS.** **Fábrica → Ordens de Serviço → Nova OS**: crie uma OS (ex.: número *OS-171*, status *Pendente*). Crie também uma
+   segunda OS (ex.: *OS-172*), para o passo 8.
+2. **Pedido com OS.** **Compras → Pedidos de Compra → Novo Pedido**: escolha o fornecedor; no campo **OS**, escolha *OS-171 — ⟨cliente⟩*
+   (as OS canceladas ou concluídas não aparecem); inclua 10 unidades de um material com estoque zero; salve. Na lista, a coluna **OS** mostra
+   *OS-171*. Faça um segundo pedido igual, de 5 unidades, para a *OS-172*.
+3. **Receber.** **Almoxarifado → Recebimentos**: receba o pedido da *OS-171* (10 unidades), confira e clique **Processar Nota — Estoque +
+   Contas a Pagar**. Receba e processe também o pedido da *OS-172*.
+4. **Ver a reserva.** **Almoxarifado → Reservas**: uma reserva **Ativa** de 10 com origem *MANUAL* e destino *OS-171*, e outra de 5 para a
+   *OS-172* — sem validade. No extrato do material (clique no nome), a reserva tem o motivo *"Compra para a OS OS-171"*. O disponível do
+   material é 0: tudo está reservado.
+5. **Requisição de outro trabalho não leva.** **Almoxarifado → Nova Requisição** com **Número da OS** de outra OS qualquer, pedindo 2 do
+   material: ao aprovar, ela fica esperando (não há disponível).
+6. **Requisição da OS leva.** **Almoxarifado → Nova Requisição**, **Número da OS** *OS-171* (vale também *os-171*, *OS 171* ou *171*), pedindo
+   6; envie e, se não for aprovada sozinha, **Só Aprovar**. Ela fica *Totalmente Reservada*; em **Reservas**, a da OS cai para 4 e aparece a da
+   requisição com 6.
+7. **Separar e entregar.** Separe e entregue as 6 pela tela de separação de sempre. O físico fica 9 (10 + 5 − 6); em **Reservas**, os 4 da
+   *OS-171* e os 5 da *OS-172* continuam.
+8. **Cancelar a outra OS.** **Fábrica → Ordens de Serviço**, lápis da *OS-172*, **Status** *Cancelado*, salvar: *"OS atualizada com sucesso"*
+   e *"1 reserva(s) de material de compra liberada(s) para o estoque"*. Em **Reservas**, a reserva da *OS-172* fica **Liberada** com
+   *"Motivo: OS OS-172 cancelado — material volta ao estoque"*, e a requisição do passo 5 (que esperava) recebe uma reserva com a observação
+   *"Reserva na liberação da OS OS-172 encerrada — recebimento ⟨REC⟩ — requisição ⟨REQ⟩"*.
+9. **Não excluir OS com compra.** Na lista de **Ordens de Serviço**, lixeira da *OS-171*, confirmar: a tela mostra *"A OS OS-171 tem pedido
+   de compra vinculado (PC-…) — cancele a OS em vez de excluir"*, e a OS continua lá.
+10. **OS fechada não recebe compra.** **Compras → Pedidos de Compra → Novo Pedido**: a *OS-172* cancelada não aparece no campo **OS**.
+
+**O que esperar no dia a dia.** O número da OS na requisição tem de ser escrito como está na OS (o prefixo *OS*, maiúsculas e espaços não
+importam; um zero à esquerda importa — *42* não casa com *OS-042*). Se não casar, a requisição espera e o material fica preso para a OS até ela
+fechar ou alguém liberar a reserva em **Reservas** (aviso **C426** no documento de novidades). Reabrir uma OS cancelada não traz a reserva de
+volta.
+
+**O que esta etapa NÃO cobre.** A requisição não tem uma lista de OS para escolher — é texto (a próxima etapa, 172); um pedido não mistura
+OS; o pedido gerado de cotação ou da Reposição nasce sem OS (coloque editando o pedido antes de receber); a importação por planilha ignora OS;
+a tela da OS não lista os pedidos dela; uma saída que consome contra a reserva da OS não confere a OS; com mais de 300 OS abertas, as mais
+antigas não aparecem no campo do pedido. Os pedidos e reservas de antes não mudam.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos provam (as rotas de verdade no servidor de
+teste, do pedido à entrega, o cancelamento e o estorno; o salvar e o excluir da OS no servidor completo; o campo **OS** e os avisos em jsdom),
+escrito para você conferir à mão. O documento/PDF do pedido com a linha *OS:* não foi aberto.
+Commits `7d43f662` (plano), `c0c4746b`, `19ef34b1`, `2621b581`, `4dc8433d`, `07d6a8c8`, `5bb6946c`, `0ac039db`, `86a956bb`, `a70b82ba`,
+`f2f2b2ed` e `c22283cd` (a revisão).
 
 ## Etapa 170 — As datas do Chat, de Compras e do Almoxarifado no dia de Brasília, e o limite dos Logs (ENTREGUE — 2026-10-20)
 

@@ -1,5 +1,7 @@
 # 08 — Entrada e Recebimento de Materiais
 
+> **+ Etapa 171 (2026-10-22, `4dc8433d`, Fase 5 `f2f2b2ed`): a nota de pedido com OS grava a OS na entrada e reserva o que entrou para a OS (a requisição da OS primeiro) — nas três portas (nota, inspeção, não conformidade); o estorno solta a reserva da OS primeiro** — ver a seção "Etapa 171", no fim. O status não muda.
+
 > **+ Etapa 170 (2026-10-20, `3fb6aa0e`): a data dos anexos de documento no dia de Brasília (B1081, só exibição — o componente é o mesmo no recebimento, na inspeção, na não conformidade, na requisição, na devolução e na remessa)** — ver a seção "Etapa 170", no fim. O status não muda.
 
 > **+ Etapa 160 (2026-10-19, `d5cd52ea`, Fase 5 `ff3e7d78`): o seletor de material do Novo recebimento apara, mede o mínimo no aparado e não trava com material sem nome (C395)** — ver a seção "Etapa 160", no fim.
@@ -1158,3 +1160,21 @@ Só exibição — nenhuma rota, consulta, valor gravado ou porta de saldo mudou
 - [x] A data de cada anexo de documento (`anexos_documento_almoxarifado.created_at`, o `CURRENT_TIMESTAMP`) no dia de Brasília — antes o
   texto sem `Z` era lido como hora local (das 21h à meia-noite, o dia de amanhã). Vazio continua sem data; ilegível, o texto gravado. O
   componente é um só (recebimento, inspeção, não conformidade, requisição, devolução, remessa). `3fb6aa0e`; o cenário em `9353c1d5`.
+
+## Etapa 171 — a nota de pedido com OS (2026-10-22)
+
+Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa171-pedido-de-compra-vinculado-a-os.md`. Contrato completo na feature 22
+(seção "Etapa 171"); a reserva na feature 07. Nenhum contrato HTTP do recebimento mudou. O status não muda.
+
+- [x] **RN-171.07** — `darEntradaEstoque` lê `pedidos_compra.os_id` e grava `os_id` na `ENTRADA_COMPRA` (mesmo com a OS fechada: é a marca
+  de origem, B1087; base sem a coluna → `null`) — `4dc8433d`.
+- [x] **RN-171.08 + 12(a)** — com a OS do pedido **aberta**, lida dentro da seção: `reservarChegadaParaQuemEspera` e
+  `reservarLiberacaoParaQuemEspera` (inspeção e NC) servem só a fila da OS (`distribuirSemLock` com `filtro`) e reservam o resto para a OS; a
+  fila geral não é chamada para esse material. `distribuirSemLock` passou a devolver o quanto reservou — `4dc8433d`.
+- [x] **I3** — na nota, idempotente: o teto desconta as reservas já feitas com o mesmo `recebimento_id` + material — `4dc8433d`.
+- [x] **RN-171.11** — `liberarParaEstorno` solta primeiro a reserva da OS do recebimento/material; `recriarAposEstornoRecusado` a recria
+  com a OS — `4dc8433d`.
+- [x] **Fase 5** — OS cancelada no meio do processamento: a reserva recém-criada é relida e solta, e o soltado vai para a fila geral ainda
+  sob a trava — `f2f2b2ed`.
+- [ ] **Declarado:** na retomada da nota, a reserva que a inspeção já criou com o mesmo `recebimento_id` entra no desconto da I3 (a OS recebe
+  menos do que podia; nada vaza nem duplica).

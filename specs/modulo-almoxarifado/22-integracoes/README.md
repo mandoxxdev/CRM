@@ -37,6 +37,12 @@
 > inerte · antes: 2026-09-16 — a correção medida na Fase 0 da Etapa 38 (Compras **não** está maduro:
 > não há como criar pedido) · antes: 2026-08-25 — fechamento da Etapa 14
 >
+> **Etapa 171 (2026-10-22, `7d43f662..fb5a4e36`):** o pedido de compra ganha **OS no cabeçalho** (`pedidos_compra.os_id`, opcional; um
+> pedido = uma OS ou estoque, B1086); a nota do pedido com OS **reserva para a OS** e a requisição da OS a converte na aprovação; a OS
+> cancelada ou concluída solta a reserva com a marca de origem; OS com pedido não se exclui (409). Ver a seção "Etapa 171" no fim — inclusive
+> a **correção** da emenda C1 do plano, que supunha `requisicoes.os_id`. O status da feature continua 🟡 (Engenharia/BOM e Produção/OP não
+> mudaram).
+>
 > **Etapa 122 (2026-10-16):** a tabela `pedidos_compra` (core) ganha `fechado_automaticamente_de`, escrita pelo fechamento automático, limpa pela reabertura do estorno e pela mudança manual de status do Compras (`alterarStatusPedido`, quando o status muda — comparando o status lido) (C255a, B788 — core × módulo, reversível).
 
 ## Contexto importante
@@ -854,6 +860,62 @@ Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa122-a-aprovacao-que-
 - [x] `alterarStatusPedido` (core): `fechado_automaticamente_de = CASE WHEN LOWER(status lido) = LOWER(novo) THEN coluna ELSE NULL END`
   no mesmo `UPDATE` — `63490f75`; comparar o status **lido** (não o da linha) é da Fase 5 (r2 M1, RN-07e) — `0980cd78`.
 - [ ] Fora (declarado): `atualizarPedido` não limpa a coluna — inalcançável (recusa pedido com recebimento).
+
+## Etapa 171 (2026-10-22) — pedido de compra vinculado a uma OS
+
+Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa171-pedido-de-compra-vinculado-a-os.md` (RN-171.01 a RN-171.12 e as emendas da
+Revisão da Fase 2, que prevalecem). Origem: a pergunta da usuária de Compras (como vincular a OS à compra). Decisões do André: um pedido = uma
+OS ou estoque (B1086); OS cancelada devolve ao estoque com marca de origem (B1087); só quem tem Compras e os administradores (B1088).
+
+> ⚠️ **CORREÇÃO (2026-10-22, T2 da Etapa 171) — a emenda C1 do plano dizia que a fila da chegada serviria "as requisições com
+> `r.os_id = pedido.os_id`"; estava errado: `requisicoes_almoxarifado` não tem `os_id`** — só `os_referencia` (texto livre, obrigatório no
+> envio, `requisitionCreateService.exigirOS`); o `reqRow.os_id` que `reservarItensAprovacao` passava ao `criarReserva` era sempre
+> `undefined`. **O certo é:** "requisição da OS" = `os_referencia` igual ao `numero_os` pela `reservaDaOs.chaveDaOs` (sem caixa, espaços das
+> pontas, espaços internos colapsados, prefixo `OS`/`OS-`/`OS#`/`OS:` ignorado) — B1092; o vínculo de verdade é a Etapa 172.
+>
+> ⚠️ **Precisão (2026-10-22) — a Fase 0 do plano dizia que `solicitacoes_compra` não tem `os_id`; vale para a tabela do core
+> (`solicitacoes_compra`, `index.js`).** A do almoxarifado, `solicitacoes_compra_almoxarifado` (`schema.js`), **tem** `os_id INTEGER` —
+> **sem escritor**: os dois `INSERT` (`purchaseService.js`, `ESTOQUE_MINIMO` e `PONTO_REPOSICAO`) não a gravam. A Reposição → pedido continua
+> sem repassar OS (letra D (171)).
+
+### Contratos (congelados no plano)
+
+- `POST`/`PUT /api/compras/pedidos[/:id]` — corpo + `os_id`: ausente = não mexe; `null`/`''` = sem OS (no `PUT`, **tira**); inteiro positivo
+  (número ou string só de dígitos) = OS; o resto → 400 `Dados inválidos — os_id: OS inválida` (Zod) / `OS inválida` (serviço direto). Recusas
+  no serviço, antes de escrever: `OS #<id> não encontrada`; `A OS <numero_os> está <status> — não aceita compra nova` (status em
+  `STATUS_OS_FECHADA` = `cancelado, cancelada, concluido, concluida, encerrada`, por `LOWER(TRIM())`). Manter a mesma OS no `PUT` dispensa as
+  duas (B1099). No `PUT`, depois da guarda de recebimento.
+- `GET /api/compras/pedidos` — + `os_id`, `os_numero` (lido vivo); `?os_id=N` (inválido ignorado). `GET /:id` — + `os_id`, `os_numero`,
+  `os_status`. Documento/PDF — `OS: <numero_os>`, `OS #<id>` com a OS sumida, nada no pedido de estoque.
+- `GET /api/compras/aux/ordens-servico[?incluir=id]` — portão `compras`; OS abertas `ORDER BY id DESC LIMIT 300` + a do `incluir` à parte.
+- `PUT /api/operacional/ordens-servico/:id` — + `reservas_liberadas` (número) e, se a liberação falhar, `aviso`. `DELETE` — 409
+  `A OS <numero_os> tem pedido de compra vinculado (<PC-…>) — cancele a OS em vez de excluir`.
+- **Predicado congelado da reserva da OS:** `status='ATIVA' AND origem='MANUAL' AND os_id = ? AND recebimento_id IS NOT NULL`
+  (`reservaDaOs.PREDICADO_RESERVA_DA_OS_SQL`).
+
+### Checklist
+
+- [x] RN-171.01 a 06 — coluna `pedidos_compra.os_id` (`ALTERS_PEDIDOS_COMPRA` no `index.js` + stub do harness; primeiro boot provado), Zod,
+  guardas no serviço, leitura viva, documento, rota aux — `c0c4746b`.
+- [x] Front — `<select data-testid="pedido-os">` no `PedidoCompraForm` (*Estoque (sem OS)*), coluna **OS** na lista e no Excel — `19ef34b1`
+  (merge `2621b581`); o pedido recebido salva só `PATCH /status` sem `os_id` — teste em `c22283cd`.
+- [x] RN-171.07 — `ENTRADA_COMPRA` grava o `os_id` do pedido (mesmo com a OS fechada) — `4dc8433d`.
+- [x] RN-171.08 + 12(a), I1, I2, I3, I4 — nas três portas (nota, inspeção, NC), sob a trava que já seguram: fila da OS primeiro, o resto na
+  reserva da OS (teto pelo livre de caixa, sem expiração, idempotente na retomada da nota) — `4dc8433d`. Feature 07/08 consumidoras.
+- [x] RN-171.12(b) — a aprovação (as três portas) converte a reserva da OS na da requisição até a falta; desfazer recria — `4dc8433d`;
+  testes da conversão automática, da pré-condição e do desfazer em `f2f2b2ed`.
+- [x] RN-171.11 + I5 — o estorno solta a reserva da OS primeiro; a recusa a recria — `4dc8433d`.
+- [x] RN-171.09 + C2 + I7 — OS que entra no conjunto fechado solta as reservas do predicado e redistribui fora da trava
+  (`osEncerradaService`) — `07d6a8c8` (merge `5bb6946c`); rótulo próprio da redistribuição — `0ac039db`.
+- [x] RN-171.10 — `DELETE` de OS com pedido → 409 — `07d6a8c8`; a tela mostra a mensagem — `a70b82ba`.
+- [x] Fase 5 — a OS que fecha durante a nota (ou durante a recriação) não deixa reserva presa: relê e solta (B1093) — `f2f2b2ed`; o
+  `OSForm` mostra `aviso` e `reservas_liberadas` — `a70b82ba`.
+- [x] Integração ponta a ponta (rota e serviço, até a entrega; cancelamento; estorno parcial) — `86a956bb`.
+- [ ] **Fora, declarado (letra D (171)):** a saída que consome contra a reserva da OS não confere a OS; trocar o destino da reserva da OS;
+  cotação/Reposição/importação sem OS; a tela da OS sem a lista de pedidos; as portas que não convertem (separação/entrega sem reserva, reserva
+  manual); os declarados da Fase 5 (janela do estorno, corrida criar pedido × apagar OS, teto de 300, 409 de OS inexistente, desconto na
+  retomada).
+- [ ] **A requisição com `os_id` de verdade** — não feito: contrato novo de tela e de API, fora do escopo; é a Etapa 172 (C426, B1092).
 
 ## Regras essenciais + testes de API exigidos
 

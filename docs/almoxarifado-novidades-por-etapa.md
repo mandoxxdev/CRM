@@ -11,13 +11,18 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-20):** **Etapa 170 fechada** (consertos técnicos no Chat, em Compras, no Almoxarifado e no núcleo,
+> **Onde o desenvolvimento está (2026-10-22):** **Etapa 171 fechada** (**pedido de compra vinculado a uma OS** — a pergunta da usuária de
+> Compras: o pedido ganha o campo **OS** (um pedido, uma OS ou estoque — **B1086**); a nota do pedido com OS reserva o material para a OS, e a
+> requisição que cita a OS em **Número da OS** o leva (**B1092**, **B1097**); cancelar ou concluir a OS devolve o material ao estoque com a
+> marca de origem (**B1087**, **B1090**); OS com pedido não se exclui (**B1091**); decisões **B1086** a **B1102**, avisos **C426** e **C427**,
+> consulta opcional **A106**); a próxima é a **172** (a requisição com campo OS de verdade) — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 170 fechada** (consertos técnicos no Chat, em Compras, no Almoxarifado e no núcleo,
 > sem regra de acesso nova e sem mudar valor gravado; **as datas do Chat, de Compras e do Almoxarifado no dia de Brasília e o limite da
 > consulta dos Logs** — o **Chat** mostra a hora de Brasília e o *Hoje*/*Ontem* certos à noite, e a data ilegível não derruba mais a tela
 > (**B1079**); em **Compras**, o *Salva em* da planilha do fornecedor e o *Cadastrado em* do Excel de fornecedores (**B1080**); no
 > **Almoxarifado**, o certificado do lote, os anexos e a retirada da ferramenta (**B1081**) e o *Gerado em* dos PDFs de remessa e de posição
 > do cliente (**B1082**) no dia certo à noite; a consulta dos **Logs** recusa limite inválido com 400 (**B1083**); a **C421** e a **C422**
-> resolvidas); a próxima é a **171** — ver "Onde estamos e o que vem a seguir".
+> resolvidas); a próxima era a **171**.)*
 > *(Antes: **Etapa 169 fechada** (consertos técnicos no Comercial, na Fábrica e nas Tarefas, sem regra
 > de acesso nova e sem mudar valor gravado; **as datas das Aprovações, das Ordens de Serviço e das Tarefas no dia de Brasília** — as
 > **Aprovações** mostram a hora de Brasília (antes, 3 h atrasada — **B1073**); a abertura e a previsão da **OS** aparecem no dia cadastrado no
@@ -421,7 +426,11 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Cento e cinco itens para rodar em produção ANTES do deploy — cento e dois são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Cento e seis itens para rodar em produção ANTES do deploy — cento e três são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-22 (Etapa 171) de cento e cinco para cento e seis**, com a **A106** — as referências de OS digitadas nas
+requisições que não casam com nenhuma OS (**C426**). **Somente leitura, opcional:** a coluna nova do pedido (`os_id`) é aditiva e criada no
+boot — nada a conferir para o deploy em si.)*
 
 *(**Atualizado em 2026-10-20 (Etapa 167) de cento e quatro para cento e cinco**, com a **A105** — as cláusulas de proposta que podem ter
 guardado a data escrita no lugar do marcador (candidatas; **C418**/**B1067**). **Somente leitura, opcional:** no banco medido, nenhuma.)*
@@ -4062,12 +4071,47 @@ escrita de propósito, deixe como está. *(Rodada no banco local, cópia de 09/1
 plantadas na proposta 3 — uma com a data de emissão de Brasília, uma com dia e mês trocados e uma com *31/12/1999*: a consulta achou as duas
 primeiras e não a terceira.)*
 
+**A106 (NOVA, da Etapa 171 — opcional — as referências de OS das requisições que não casam com nenhuma OS).** Desde a Etapa 171 a
+requisição leva o material comprado para uma OS quando o texto do campo **Número da OS** casa com o número da OS (**B1092**): sem diferença de
+maiúscula, sem os espaços das pontas e com um prefixo *OS*, *OS-*, *OS#* ou *OS:* ignorado. A consulta mostra, para cada texto já digitado nas
+requisições, quantas requisições o usam e com qual OS ele casa — vazio é o texto que **não** casa com nenhuma (o **C426**: essa requisição
+não pega a reserva da OS). Serve para medir quantas vezes o pessoal escreve o número de um jeito que o sistema não reconhece, antes da Etapa
+172 (o campo OS de verdade). A consulta é um pouco mais rígida que o sistema (não colapsa espaços internos nem aceita espaço em volta do
+`-`/`#`/`:` do prefixo) — um "não casa" de diferença só de espaço casaria no sistema. Somente leitura.
+
+```sql
+-- as referencias de OS digitadas nas requisicoes e a OS com que o sistema as casa (vazio = nao casa com nenhuma)
+WITH chave_req AS (
+  SELECT r.os_referencia AS digitado, COUNT(*) AS requisicoes,
+    CASE WHEN LOWER(TRIM(r.os_referencia)) LIKE 'os-%' OR LOWER(TRIM(r.os_referencia)) LIKE 'os#%'
+           OR LOWER(TRIM(r.os_referencia)) LIKE 'os:%' OR LOWER(TRIM(r.os_referencia)) LIKE 'os %'
+         THEN TRIM(SUBSTR(LOWER(TRIM(r.os_referencia)), 4)) ELSE LOWER(TRIM(r.os_referencia)) END AS chave
+  FROM requisicoes_almoxarifado r
+  WHERE TRIM(COALESCE(r.os_referencia, '')) <> ''
+  GROUP BY r.os_referencia
+), chave_os AS (
+  SELECT os.numero_os,
+    CASE WHEN LOWER(TRIM(os.numero_os)) LIKE 'os-%' OR LOWER(TRIM(os.numero_os)) LIKE 'os#%'
+           OR LOWER(TRIM(os.numero_os)) LIKE 'os:%' OR LOWER(TRIM(os.numero_os)) LIKE 'os %'
+         THEN TRIM(SUBSTR(LOWER(TRIM(os.numero_os)), 4)) ELSE LOWER(TRIM(os.numero_os)) END AS chave
+  FROM ordens_servico os
+)
+SELECT q.digitado, q.requisicoes, (SELECT o.numero_os FROM chave_os o WHERE o.chave = q.chave LIMIT 1) AS casa_com_a_os
+FROM chave_req q
+ORDER BY (casa_com_a_os IS NULL) DESC, q.requisicoes DESC;
+```
+
+**Como ler o resultado:** linhas com **`casa_com_a_os` vazio** no topo — são os textos que não pegam a reserva da OS. Se forem muitos (ou
+os mais usados), a Etapa 172 é urgente e, até ela, avise o pessoal da produção a escrever o número **como está na OS**. Se todos casam, nada a
+fazer. *(Rodada numa cópia do banco local de 22/10: **2** textos (*1960* e *1980*, uma requisição cada), **nenhum** casa — o banco tem uma OS só,
+*OS-001*. Controle na mesma cópia, com uma OS *OS-1960* plantada: *1960* passou a casar com *OS-1960* e *1980* continuou vazio.)*
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B1085; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B1102; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -11913,6 +11957,105 @@ motivo* comparava o *Último em* cru (o instante gravado, em UTC) com o dia de h
 teste tira o dia do instante convertido para Brasília. **Descartado:** converter o *Último em* no servidor (mudaria o que a tela e a
 exportação recebem; a tela já converte na exibição). **Reversível:** `073d64fc`.
 
+**B1086 (TOMADA pelo André em 2026-10-22, da Etapa 171) — um pedido de compra é de uma OS, ou é de estoque.** Nada de itens de OS diferentes
+no mesmo pedido; "se ela reclamar mudamos depois". **Como ficou:** o campo **OS** é do pedido inteiro, opcional; vazio (*Estoque (sem OS)*) é
+o pedido de sempre. Para comprar para duas OS, dois pedidos. `c0c4746b`, `19ef34b1`.
+
+**B1087 (TOMADA pelo André em 2026-10-22, da Etapa 171) — OS cancelada com material já recebido: o material vira estoque normal, mas fica
+marcado que era de uma OS.** **Como ficou:** a entrada da nota de pedido com OS guarda a OS (mesmo que a OS já esteja fechada na chegada), e
+a reserva da OS liberada guarda a OS e o motivo *"OS ⟨n⟩ ⟨status⟩ — material volta ao estoque"*; nenhuma das duas marcas é apagada depois.
+`4dc8433d`, `07d6a8c8`.
+
+**B1088 (TOMADA pelo André em 2026-10-22, da Etapa 171) — quem vincula ou troca a OS do pedido: quem tem Compras e os administradores.**
+**Como ficou:** a mesma porta de sempre do pedido (módulo **Compras**; o administrador passa por cima da restrição de módulo), sem permissão
+nova; e só enquanto o pedido não teve recebimento (a trava de edição de antes — a OS não ganhou exceção). `c0c4746b`.
+
+**B1089 (NOVA, da Etapa 171; decisão do agente) — a OS mora no cabeçalho do pedido.** Consequência direta da **B1086**. **Descartado:** OS
+por item (permitiria o pedido misto que a B1086 recusou, e obrigaria a reserva na chegada a ler a OS linha a linha). **Reversível:**
+`c0c4746b` — passar para o item é coluna nova na linha, sem perder o que está gravado no cabeçalho.
+
+**B1090 (NOVA, da Etapa 171; decisão do agente) — OS concluída também solta a reserva da compra, não só a cancelada.** **Escolhido:** a
+reserva é solta quando o status da OS **passa** de aberto para *cancelado*, *cancelada*, *concluido*, *concluida* ou *encerrada* (sem
+diferença de maiúscula ou espaço) — o mesmo conjunto que recusa compra nova. **Por quê:** a OS concluída não vai mais pedir material; a reserva
+dela prenderia o estoque para sempre (ela não vence — **B1096**). **Descartado:** só cancelada (a decisão 2 do André fala de cancelada; a
+concluída sobraria com material preso). Salvar de novo uma OS já fechada não solta nada; reabrir não reserva de novo (**C427**).
+**Reversível:** `07d6a8c8`.
+
+**B1091 (NOVA, da Etapa 171; decisão do agente) — excluir uma OS que tem pedido de compra é recusado (409).** *"A OS ⟨n⟩ tem pedido de
+compra vinculado (⟨PC-…⟩) — cancele a OS em vez de excluir"*. **Por quê:** a marca de origem da **B1087** aponta para a OS; apagá-la deixaria o
+pedido e a entrada apontando para nada. **Descartado:** apagar e deixar o pedido com *OS #⟨id⟩* (perde o histórico que o André pediu); apagar
+em cascata a OS do pedido (mesma perda). OS **sem** pedido se exclui como antes. A tela de OS passou a mostrar a mensagem do servidor na recusa
+(antes, só *"Erro ao excluir OS"*). **Reversível:** `07d6a8c8`, `a70b82ba`.
+
+**B1092 (NOVA, da Etapa 171; decisão do agente — PEDE UM OLHAR) — a requisição casa com a OS pelo texto do campo Número da OS.** A requisição
+**não tem** a OS como vínculo: o campo **Número da OS** é texto livre (obrigatório no envio). O plano supunha um vínculo que não existe (a
+correção está na spec da feature 22 e no plano). **Escolhido:** "requisição da OS" = o texto digitado igual ao número da OS, sem diferença de
+maiúscula, sem os espaços das pontas, com os espaços internos reduzidos a um e com um prefixo *OS*, *OS-*, *OS#* ou *OS:* ignorado (*OS-171*,
+*os-171*, *OS 171* e *171* casam). **Consequência:** o texto escrito diferente (*42* × *OS-042*) não pega a reserva (**C426**); a
+**A106** mede quantas vezes isso acontece. **Descartado:** criar agora o vínculo de verdade (campo OS na requisição com lista de OS — muda a
+tela e o contrato da requisição; ficou para a **Etapa 172**). Zeros à esquerda **não** são ignorados.
+**Reversível:** `4dc8433d`.
+
+**B1093 (NOVA, da Etapa 171, da revisão adversarial; decisão do agente) — a OS cancelada no meio do processamento da nota.** O cancelamento da
+OS não espera a nota (soltar reserva não espera ninguém — **B441**); se ele caía entre a nota ler a OS aberta e criar a reserva, a reserva nascia
+**ativa e sem validade para uma OS fechada — presa para sempre** (reproduzido por sonda). **Escolhido:** quem cria a reserva da OS relê a OS
+**depois** de criar; fechada ou apagada, solta na hora (motivo *"OS ⟨n⟩ ⟨status⟩ — material volta ao estoque"*; apagada: *"… excluída — …"*) e,
+na nota, o que soltou vai para a fila comum. Vale também para a reserva da OS **recriada** (estorno recusado, aprovação que não a usou).
+**Descartado:** reler antes de criar (não fecha a janela); fazer o salvar da OS esperar a trava de cada material (a OS não sabe quais materiais
+sem ler as reservas que ainda não existem, e o núcleo passaria a depender do almoxarifado); uma varredura periódica (a reserva ficaria presa
+até ela). **Reversível:** `f2f2b2ed`.
+
+**B1094 (NOVA, da Etapa 171; decisão do agente) — o número da OS no pedido é lido na hora, sem cópia.** A lista, o detalhe e o documento do
+pedido leem o número da OS **atual**; se a OS for renumerada, o pedido mostra o número novo; se a linha da OS sumir, *OS #⟨id⟩*. **Descartado:**
+guardar uma cópia do número no pedido (renumerar OS é raro e a **B1091** impede apagar OS com pedido). Também: a leitura é uma consulta à parte,
+não uma junção na consulta do pedido — o efeito para o usuário é o mesmo. **Reversível:** `c0c4746b`.
+
+**B1095 (NOVA, da Etapa 171; decisão do agente) — se a liberação das reservas falhar ao salvar a OS, a OS fica salva e a tela avisa.**
+*"A OS foi atualizada, mas nem todas as reservas de compra dela foram liberadas (⟨motivo⟩) — libere-as pela tela de Reservas do Almoxarifado"*.
+**Por quê:** o status da OS já foi gravado quando a liberação roda; responder erro 500 faria o usuário achar que a OS não salvou. **Descartado:**
+desfazer o status da OS (o núcleo passaria a depender do sucesso do almoxarifado); erro 500. **Reversível:** `07d6a8c8`, `a70b82ba` (a tela).
+
+**B1096 (NOVA, da Etapa 171; decisão do agente) — a reserva da OS não vence.** Mesmo com a validade padrão das reservas ligada nas
+configurações, a reserva da compra para a OS nasce **sem validade**. **Por quê:** o material é da OS até a OS fechar (**B1090**); vencer
+devolveria ao estoque comum o que foi comprado para ela, sem ninguém decidir. **Descartado:** herdar a validade padrão. **Reversível:**
+`4dc8433d`.
+
+**B1097 (NOVA, da Etapa 171; decisão do agente) — a chegada serve primeiro a requisição da OS, depois reserva o resto para a OS, e a fila
+comum não leva nada daquele material daquela nota.** **Escolhido:** na nota (e na inspeção que aprova, e na não conformidade que aceita) de
+pedido com OS **aberta**: (1) as requisições que esperavam e são da OS (**B1092**) recebem reserva comum de requisição, na ordem da fila; (2) o
+que sobrar vira a reserva da OS, até o livre do material; (3) as outras requisições que esperavam não levam nada desse material dessa nota.
+Na **aprovação** de uma requisição da OS, a reserva da OS do material é convertida (as mais antigas primeiro) em reserva da requisição, até o
+que falta — **antes** de usar o livre comum (o livre fica para os outros). **Descartado:** a fila comum primeiro (o material comprado para a OS
+iria para outro trabalho — é o problema da pergunta); usar o livre comum antes da reserva da OS (prenderia o comprado e gastaria o estoque de
+todos). Retomar ou reprocessar a mesma nota não reserva de novo. **Reversível:** `4dc8433d`.
+
+**B1098 (NOVA, da Etapa 171; decisão do agente) — o estorno da entrada tira da OS primeiro.** Estornar a entrada de uma nota de pedido com OS
+solta **primeiro** a reserva da OS daquela nota (até a quantidade estornada, mesmo com disponível sobrando) e só depois as de requisição.
+**Por quê:** o estorno desfaz o que a nota deu, e a nota deu à OS. Se o estorno for recusado, a reserva da OS é recriada com a OS, sem
+validade (*"Compra para a OS ⟨n⟩ — recriada após estorno recusado — recebimento ⟨REC⟩"*). **Descartado:** só soltar quando faltasse disponível
+(o estorno deixaria a OS com reserva de material que saiu). **Reversível:** `4dc8433d`.
+
+**B1099 (NOVA, da Etapa 171; decisão do agente) — editar um pedido mantendo a mesma OS passa, mesmo que a OS tenha sido fechada ou apagada
+depois.** A tela manda a OS atual em todo salvar; recusar travaria o pedido inteiro (a observação, a previsão) por causa da OS. Trocar **para**
+uma OS fechada continua recusado. **Descartado:** recusar *"OS #⟨id⟩ não encontrada"* ao editar o pedido de uma OS apagada. **Reversível:**
+`c0c4746b`.
+
+**B1100 (NOVA, da Etapa 171; decisão do agente) — o campo OS do pedido mostra as 300 OS abertas mais recentes.** E a OS que o pedido já tem,
+mesmo fechada ou mais antiga que as 300 (buscada à parte). **Consequência:** com mais de 300 OS abertas, as mais antigas não aparecem para
+escolha nova (letra **D (171)**). **Descartado:** busca por digitação (tela nova). **Reversível:** `c0c4746b`, `19ef34b1`.
+
+**B1101 (NOVA, da Etapa 171; decisão do agente) — OS fechada ou apagada antes de o material chegar: o material entra livre.** A nota de um
+pedido cuja OS já foi cancelada ou concluída não reserva para ela — o material vai para a fila comum, como num pedido de estoque — mas a entrada
+guarda a OS (a marca da **B1087**). Pedido apontando para uma OS que sumiu: o mesmo. **Descartado:** reservar mesmo assim (a reserva seria solta
+na hora — **B1093**). **Reversível:** `4dc8433d`.
+
+**B1102 (NOVA, da Etapa 171) — a próxima etapa (172).** Ver a "próxima tarefa detalhada" no plano da Etapa 171 — **a requisição com campo OS
+de verdade** (a lista de OS na tela de nova requisição, e a reserva da OS casando pelo vínculo, com o texto como reserva para as requisições
+antigas), que fecha a **C426** e a **B1092**. As decisões que esperam vocês: as da **B957**, a **B988** e a **B989**; a **B1002**; a **B1013**;
+a **C398**; a **C408**; a **C411** e a **C412**; a **B1057**; a **B1063**; a **C417**; a **C420**; a **C423** (as quatro datas do formulário
+da OS — era a próxima da 170 e passou para depois); a **C424** e a **C425**; a **B1089** a **B1101** são reversíveis — **a B1092 pede um
+olhar**.
+
 **B1064 (NOVA, da Etapa 166) — a próxima etapa (167).** Ver a "próxima tarefa detalhada" no plano da Etapa 166. As decisões que esperam
 vocês: as da **B957**, a **B988** e a **B989**; a **B1002** continua pedindo um olhar; a **B1013** (o acento nas buscas); a **C398**; a
 **C408**; a **C411** e a **C412**; a **B1057** (a data de emissão reimpressa); **a B1063** (o texto impresso das cláusulas com o marcador);
@@ -15429,6 +15572,20 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      alteração** da proposta (qualquer edição depois da aprovação muda a data), não o da aprovação — a proposta não guarda a hora da
      aprovação; guarda o dia de fechamento. **O que fazer:** não ler essa coluna como a data da aprovação. Mostrar o dia de fechamento é
      pergunta de produto.
+426. **NOVO (da Etapa 171) — a requisição com o número da OS escrito diferente não pega o material comprado para a OS.** A requisição casa
+     com a OS pelo texto do campo **Número da OS** (**B1092**): sem diferença de maiúscula e de espaços, com o prefixo *OS*/*OS-*/*OS#*/*OS:*
+     ignorado — mas *42* não casa com *OS-042* (o zero à esquerda), nem um número com erro de digitação. Essa requisição **não** converte a
+     reserva da OS: espera como qualquer outra (o material comprado está reservado e não conta como disponível para ela), e o material fica
+     **preso para a OS** até a OS ser cancelada ou concluída (**B1090**) — ou até alguém liberar à mão. **O que fazer:** ao ver uma requisição
+     da OS parada em *Aguardando* com a reserva da OS ativa na tela **Reservas** (origem *MANUAL*, destino a OS), o campo da requisição não se
+     edita depois de enviada; ou **cancele-a e faça outra com o número certo** (a aprovação da nova converte a reserva), ou **libere a reserva
+     da OS** em **Almoxarifado → Reservas → Liberar** (informando o motivo) e
+     aprove/separe a requisição em seguida — o liberado vai para o disponível comum, **não** direto para ela (9.6 do manual). Para evitar,
+     escrever o número **como está na OS**. A **A106** mede quantas vezes acontece; a **Etapa 172** troca o texto por uma lista de OS.
+427. **NOVO (da Etapa 171) — reabrir uma OS cancelada ou concluída não reserva de novo o material.** Ao fechar, a reserva da compra foi solta e
+     o material foi para quem esperava ou ficou livre (**B1090**). Voltar a OS para *Pendente* ou *Em Andamento* não refaz a reserva — o material
+     pode já ter sido levado. **O que fazer:** se a OS reaberta ainda precisa do material, criar uma requisição para ela (ou uma reserva manual
+     em **Reservas**) logo depois de reabrir.
 ### D. Limitações declaradas— são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -16760,6 +16917,20 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(171) Pedido de compra vinculado a uma OS, o que ficou de fora.** Do plano: (1) a reserva da OS segura o saldo, mas uma saída que
+  **consome contra ela** não confere se é da mesma OS, e trocar o destino dela na tela **Reservas** é permitido; (2) cotação → **Gerar pedido**
+  e Reposição → pedido nascem **sem** OS (o comprador a coloca editando o pedido antes de receber), e a importação por planilha ignora coluna de
+  OS; (3) a tela da OS não lista os pedidos dela (a lista de pedidos filtra por OS só pela integração, `?os_id=`). Da execução: (4) a requisição
+  da OS que **não tinha reserva** quando chegou à separação ou à entrega (ex.: pulada na chegada por valor e liberada depois), a reserva manual e
+  a troca de destino da reserva **não** convertem a reserva da OS — só uma **aprovação** converte; (5) a requisição da OS que já estava aprovada e
+  esperando e foi pulada na chegada (valor, material de cliente) não reconverte depois. Da revisão: (6) o estorno solta a reserva da OS
+  **antes** de saber se vai estornar (o mesmo padrão das reservas de requisição, **B374**) — se for recusado, a reserva é recriada (e solta na
+  hora se a OS fechou no meio, **B1093**); (7) um pedido criado no exato instante em que a OS é apagada pode nascer apontando para a OS que
+  sumiu — mostra *OS #⟨id⟩* e a chegada não reserva (fila comum); (8) o campo **OS** do pedido mostra as 300 OS abertas mais recentes
+  (**B1100**); (9) apagar uma OS **que não existe** mas tem pedido apontando para ela responde 409 (nada é apagado; a mensagem nomeia os
+  pedidos); (10) ao **retomar** uma nota que falhou no meio, a reserva que a inspeção já tinha criado para a mesma nota entra no desconto — a
+  OS recebe menos do que podia (nada vaza nem duplica); (11) o texto de **Número da OS** que não casa (**C426**). A tela de pedido não foi
+  aberta num navegador (letra F).
 - **(170) As datas do Chat, de Compras e do Almoxarifado e o limite dos Logs, o que ficou de fora.** O formato de cada tela não mudou (a
   *Retirada* das ferramentas continua *AAAA-MM-DD* — **B1069**). O limite dos Logs não tem teto (pergunta de produto). Uma data impossível com
   hora gravada pela integração (*30/02* com hora) ainda é lida rolando para março — agora também no Chat, no *Cadastrado em* de Compras e na
@@ -17879,6 +18050,13 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(171) Nenhum clique foi dado no navegador.** O pedido com OS, a chegada, a conversão na aprovação, a entrega, o cancelamento da OS e o
+estorno foram provados pelas rotas de verdade no servidor de teste (inclusive o roteiro ponta a ponta até a entrega, e o salvar e o excluir da
+OS no servidor completo, em pasta vazia); o campo **OS** do pedido, a coluna da lista e os avisos da tela de OS, em jsdom com a resposta do
+servidor simulada. **O documento/PDF do pedido com *OS:* não foi aberto.** Vale conferir à mão o roteiro da Etapa 171 no guia: criar a OS, o
+pedido com OS, processar a nota, ver a reserva em **Reservas**, a requisição com o número da OS levar o material, e cancelar outra OS e ver a
+reserva soltar com o aviso na tela.
 
 **(170) Nenhum clique foi dado no navegador.** As telas foram provadas em jsdom com a tela de verdade (só a resposta do servidor, o socket,
 o arquivo do Excel e o PDF simulados), no fuso de Brasília e com o relógio parado às 22h30, do gesto até o texto (abrir a conversa, receber
@@ -33806,9 +33984,122 @@ administradores podem visualizar logs."* antes de qualquer conferência do limit
 - Nenhuma porta de permissão mudou; nenhum valor gravado mudou; nenhuma consulta mudou; nada que mexe em saldo foi tocado; o documento da
   proposta não mudou (a revisão obrigatória da proposta passou inteira).
 
+## Etapa 171 — Pedido de compra para uma OS: o material comprado para um trabalho fica com esse trabalho (2026-10-22)
+
+A pergunta veio da usuária de Compras: *"Quando um material for adquirido para atender a uma Ordem de Serviço (OS), qual será o
+procedimento para cadastrar ou vincular essa OS ao sistema, permitindo que todos os itens comprados sejam devidamente associados e
+controlados por ela?"* Até aqui, **não havia procedimento**: o pedido de compra não sabia para quem era. O material chegava, entrava no
+estoque como qualquer outro, e a primeira requisição que pedisse aquele material o levava — mesmo que fosse de outro trabalho, e mesmo que a
+OS que motivou a compra ainda estivesse esperando. Agora o comprador escolhe a **OS no pedido** (ou deixa *Estoque (sem OS)*, como sempre
+foi). Quando o pedido com OS chega e a nota é processada, o que entrou fica **reservado para aquela OS**: a requisição que citar a OS no campo
+**Número da OS** leva o material; as outras não. Se a OS for **cancelada ou concluída** com material ainda guardado para ela, o material volta
+ao estoque comum — mas a entrada e a reserva continuam marcadas com a OS de origem, para o histórico. E uma OS que tem pedido de compra não
+pode mais ser apagada: tem de ser cancelada. As três regras de fundo são decisões do André (**B1086**, **B1087**, **B1088**); o resto, as
+decisões do agente (**B1089** a **B1102**).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Compras → Pedidos de Compra → Novo Pedido**: não havia onde dizer para qual OS era a compra | Campo **OS**, com *Estoque (sem OS)* e as OS abertas (*número — cliente*) — **B1086** |
+| A lista de pedidos não dizia para quem era a compra | Coluna **OS** na lista e no Excel exportado (`-` no pedido de estoque); o documento/PDF do pedido diz *OS: ⟨número⟩* |
+| A nota de um pedido "para a OS 42" entrava livre: a primeira requisição de qualquer trabalho levava o material | O que entrou livre fica **reservado para a OS** (tela **Reservas**, origem *MANUAL*, destino a OS, sem validade) — **B1097** |
+| A requisição da própria OS disputava o material com as outras | A requisição com o número da OS em **Número da OS** é servida **primeiro** na chegada, e na aprovação **converte** a reserva da OS em reserva dela — **B1092** |
+| Cancelar a OS não mexia em nada do almoxarifado | Cancelar **ou concluir** a OS solta a reserva da compra (*"OS ⟨n⟩ cancelado — material volta ao estoque"*), passa o material a quem esperava e avisa na tela *"1 reserva(s) de material de compra liberada(s) para o estoque"* — **B1087**, **B1090** |
+| A entrada da nota não guardava a OS | A entrada da nota de pedido com OS guarda a OS — a marca de origem, que fica mesmo depois de a OS ser cancelada — **B1087** |
+| Excluir uma OS com compra feita para ela apagava a OS e deixava o pedido apontando para o nada | Recusado: *"A OS ⟨n⟩ tem pedido de compra vinculado (⟨PC-…⟩) — cancele a OS em vez de excluir"* — **B1091** |
+| A exclusão de OS recusada mostrava só *"Erro ao excluir OS"* | A tela mostra a mensagem do servidor |
+
+### As regras, com o cenário exato
+
+Preparação: uma OS aberta (**Fábrica → Ordens de Serviço → Nova OS**, ex.: número *OS-171*), um material com estoque zero, e um usuário com
+o módulo **Compras** (ou administrador).
+
+**1. Pedido com OS (B1086, B1088).** **Compras → Pedidos de Compra → Novo Pedido**, escolha o fornecedor, no campo **OS** escolha *OS-171 —
+⟨cliente⟩*, inclua 10 unidades do material e salve. A lista mostra *OS-171* na coluna **OS**. Abra o pedido de novo: a OS vem marcada.
+Volte o campo para *Estoque (sem OS)* e salve: a OS sai do pedido. Pedido sem OS é exatamente o pedido de antes.
+
+**2. Só OS aberta (RN-171.03, B1100).** O campo **OS** lista só as OS que não estão *cancelado*, *cancelada*, *concluido*, *concluida* ou
+*encerrada* (sem diferença de maiúscula ou espaço), as 300 mais recentes. Um pedido que já tem uma OS que depois foi fechada continua mostrando
+essa OS no campo (e pode ser salvo sem trocá-la — **B1099**). Pela integração, mandar uma OS fechada é recusado com **400** *"A OS ⟨número⟩ está
+⟨status⟩ — não aceita compra nova"* — com o status como está gravado, ex.: *"A OS OS-171 está cancelado — não aceita compra nova"*.
+
+**3. OS que não existe ou valor inválido (só pela integração).** `os_id: 999999` → **400** *"OS #999999 não encontrada"*. `os_id: 0`, `-1`,
+`1.5`, `true` ou `"abc"` → **400** *"Dados inválidos — os_id: OS inválida"* (quem chama o serviço por dentro — cotação, reposição — recebe
+*"OS inválida"*). Nada é gravado.
+
+**4. Trocar a OS depois que o material chegou (RN-171.04).** Pedido que já teve recebimento não se edita, como antes: *"Pedido de compra
+⟨número⟩ já teve recebimento — não pode mais ser editado"*. O campo **OS** fica travado junto com os outros; a OS não ganhou exceção.
+
+**5. A chegada reserva para a OS (B1097).** Em **Almoxarifado → Recebimentos**, receba o pedido do cenário 1 (10 unidades) e clique
+**Processar Nota — Estoque + Contas a Pagar**. Em **Almoxarifado → Reservas**: uma reserva **Ativa** de 10, origem *MANUAL*, destino
+*OS-171*, sem validade, no nome de quem processou a nota. No extrato do material, a reserva tem o motivo *"Compra para a OS OS-171"*. Uma
+requisição de **outro** trabalho que esperava esse material continua esperando (não leva nada desta nota).
+
+**6. A requisição da OS leva o material (B1092).** **Almoxarifado → Nova Requisição**, em **Número da OS** escreva o número da OS — *OS-171*,
+*os-171*, *OS 171* ou *171* casam (sem diferença de maiúscula, espaços das pontas e um prefixo *OS*, *OS-*, *OS#* ou *OS:* ignorado); peça 6
+e envie. Na aprovação (**Só Aprovar**, **Aprovar Liberação** ou a automática), a reserva da OS cai para 4 e a requisição fica com uma reserva
+de 6 (*Totalmente Reservada*). No livro, *"Reserva da OS OS-171 convertida na requisição ⟨REQ⟩"*. Separe e entregue as 6: o físico fica 4, e os
+4 continuam reservados para a OS. Se a requisição já esperava quando a nota chegou, ela é servida primeiro na própria chegada (reserva de
+requisição comum, *"Reserva na chegada do recebimento ⟨REC⟩ — requisição ⟨REQ⟩"*), e só o que sobrar vira reserva da OS.
+
+**7. Cancelar ou concluir a OS solta o material (B1087, B1090).** **Fábrica → Ordens de Serviço**, lápis da OS, **Status** *Cancelado* (ou
+*Concluído*), salvar. A tela diz *"OS atualizada com sucesso"* e *"1 reserva(s) de material de compra liberada(s) para o estoque"*. Em
+**Reservas**, a reserva da OS fica **Liberada**, com *"Motivo: OS OS-171 cancelado — material volta ao estoque"* (o número e o status como
+estão gravados). O material vai para quem esperava, com a observação *"Reserva na liberação da OS OS-171 encerrada — recebimento ⟨REC⟩ —
+requisição ⟨REQ⟩"*; o que ninguém esperava fica livre. Salvar de novo a OS já cancelada não solta nada de novo (só a passagem de aberta para
+fechada solta). **Reabrir** a OS não traz a reserva de volta (**C427**).
+
+**8. OS cancelada no meio do processamento da nota (B1093).** Se a OS for cancelada exatamente enquanto a nota está sendo processada, a reserva
+que a nota criaria para ela nasce já **Liberada** (mesmo motivo do cenário 7) e o material segue para a fila comum. Não fica reserva presa para
+OS fechada.
+
+**9. Excluir OS com pedido (B1091).** **Fábrica → Ordens de Serviço**, lixeira da OS do cenário 1, confirmar: **409** e a tela mostra *"A OS
+OS-171 tem pedido de compra vinculado (PC-…) — cancele a OS em vez de excluir"*. OS sem pedido se exclui como antes (*"OS excluída com
+sucesso"*).
+
+**10. Se a liberação falhar (B1095).** Se alguma reserva da OS não puder ser liberada ao salvar a OS, a OS fica salva mesmo assim e a tela
+mostra o aviso *"A OS foi atualizada, mas nem todas as reservas de compra dela foram liberadas (⟨motivo⟩) — libere-as pela tela de Reservas
+do Almoxarifado"*.
+
+**11. Estorno da entrada (B1098).** Estornar a entrada da nota de um pedido com OS solta **primeiro** a reserva da OS daquela nota (até a
+quantidade estornada, motivo *"Estorno da entrada do recebimento ⟨REC⟩"*), e só depois as de requisição. Se o estorno for recusado
+(*"Não é possível estornar: saldo disponível insuficiente (material já consumido)"*), a reserva da OS é recriada: *"Compra para a OS ⟨n⟩ —
+recriada após estorno recusado — recebimento ⟨REC⟩"*.
+
+**12. A lista de OS não carregou.** Se o campo **OS** não conseguir buscar a lista, a tela avisa *"Não foi possível carregar as OS — o pedido
+pode ser salvo para estoque."* e o pedido continua salvável sem OS.
+
+### O que esta etapa NÃO cobre
+
+- **A requisição não tem campo de OS de verdade** — ela casa com a OS pelo texto digitado em **Número da OS** (**B1092**). Texto que não
+  casa (ex.: *42* × *OS-042*, um zero à esquerda) não pega a reserva (**C426**). É a próxima etapa (172).
+- Itens de OS diferentes no mesmo pedido (**B1086** — um pedido, uma OS).
+- Cotação → **Gerar pedido** e Reposição → pedido nascem **sem** OS; o comprador coloca a OS editando o pedido antes de receber. A importação
+  por planilha ignora coluna de OS.
+- A reserva da OS segura o saldo como qualquer reserva, mas uma **saída que consome contra ela** (citando a reserva) não confere se a saída é
+  da mesma OS; e trocar o destino da reserva da OS na tela **Reservas** é permitido.
+- A tela da OS não lista os pedidos dela (a lista de pedidos filtra por OS pela integração, `?os_id=`).
+- Os declarados da revisão estão na letra **D (171)**.
+- Nenhuma consulta obrigatória antes do deploy: a coluna nova do pedido é criada no boot (aditiva). A **A106** é opcional (mede o **C426**).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 171 entregue (2026-10-22):** **pedido de compra vinculado a uma OS** — a resposta à pergunta da usuária de Compras. O pedido tem
+  o campo **OS** (um pedido, uma OS ou estoque — **B1086**); a nota de pedido com OS reserva o que entrou para a OS e a requisição com o número
+  da OS em **Número da OS** leva o material (**B1092**, **B1097**); cancelar ou concluir a OS devolve o material ao estoque com a marca de
+  origem (**B1087**, **B1090**); OS com pedido não se exclui (**B1091**). Etapa com **regra de negócio nova que mexe em reserva** (reserva na
+  chegada, conversão na aprovação, liberação ao fechar a OS, estorno). Commits `7d43f662` (plano), `c0c4746b`, `19ef34b1`, `2621b581` (merge T4),
+  `4dc8433d`, `07d6a8c8`, `5bb6946c` (merge T3), `0ac039db`, `86a956bb` (o teste de integração), `a70b82ba`, `f2f2b2ed`, `c22283cd` (a revisão)
+  e os do plano (`1099832c`, `d9bbc778`, `390c2c94`, `fb5a4e36`). **O que é seu:** as três decisões suas (**B1086** a **B1088**, tomadas, para
+  conferir que foram entendidas); as do agente, **B1089** a **B1102** (reversíveis — **a B1092 pede um olhar**: a requisição casa com a OS pelo
+  texto); os avisos novos **C426** (a requisição digitada diferente não pega a reserva) e **C427** (reabrir a OS não reserva de novo); a
+  consulta opcional **A106**; as perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **B988**, **B989**, **B1013**, **B1057**,
+  **B1063**, **C277**, **C312**, **C314**, **C316**, **C330**, **C398**, **C408**, **C411**, **C412**, **C417**, **C420**, **C423**, **C424**,
+  **C425**); as limitações **(171)** em D e a verificação **(171)** em F. **Próxima: Etapa 172 — a requisição com campo OS de verdade; ver a
+  "próxima tarefa detalhada" no plano da Etapa 171.**
 
 - **Etapa 170 entregue (2026-10-20):** **as datas do Chat, de Compras e do Almoxarifado no dia de Brasília e o limite da consulta dos
   Logs** — o Chat (**B1079**); a planilha do fornecedor e o *Cadastrado em* de Compras (**B1080**); o certificado do lote, os anexos e a
@@ -33818,7 +34109,7 @@ administradores podem visualizar logs."* antes de qualquer conferência do limit
   **B1079** a **B1083** (reversíveis); as perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **B988**, **B989**, **B1013**,
   **B1057**, **B1063**, **C277**, **C312**, **C314**, **C316**, **C330**, **C398**, **C408**, **C411**, **C412**, **C417**, **C420**, **C424**,
   **C425**); as limitações **(170)** em D e a verificação **(170)** em F. **Próxima: Etapa 171 — ver a "próxima tarefa detalhada" no plano da
-  Etapa 170.**
+  Etapa 170.** *(Feita: a 171 — mas com outro tema: a pergunta da usuária de Compras passou na frente; a **C423** continua para depois.)*
 
 - **Etapa 169 entregue (2026-10-20):** **as datas das Aprovações, das Ordens de Serviço e das Tarefas no dia de Brasília** — as Aprovações na
   hora de Brasília (**B1073**); as datas da OS no dia cadastrado, nas telas (**B1074**) e no PDF (**B1077**); a OS vencida só depois do dia

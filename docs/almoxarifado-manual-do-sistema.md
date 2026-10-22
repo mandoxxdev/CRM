@@ -1999,6 +1999,7 @@ Os status e as passagens permitidas entre eles são fixos; qualquer tentativa fo
   **"Requisições no prazo"** (21d). Em branco, a requisição fica sem prazo. Pela API, ela tem de vir no formato
   *AAAA-MM-DD* e ser um dia que existe; fora disso — *15/09/2026*, *2026-02-30* — a criação é recusada, sem gravar nada:
   *"data_necessidade deve estar no formato AAAA-MM-DD"*.
+- **Número da OS** — texto obrigatório para enviar (o rascunho pode ficar sem). A tela recusa antes de enviar com *"Informe o numero da OS: toda saida de material precisa estar vinculada a uma OS"* (assim, sem acento); pela integração, a recusa é *"Informe o número da OS: toda saída de material precisa estar vinculada a uma OS"*. Escreva o número **como está na OS**: é por ele que a requisição leva o material comprado para aquela OS (9.3e) — maiúsculas, espaços e o prefixo *OS* não importam; zeros à esquerda e erros de digitação, sim.
 - **Rascunho é do dono.** Só o solicitante envia o próprio rascunho: *"Apenas o solicitante pode enviar o rascunho"*; e só rascunho pode ser enviado: *"Apenas rascunhos podem ser enviados"*.
 - **O envio confere de novo se os materiais estão ativos.** Um rascunho salvo antes de um material dele ser inativado é recusado no envio, e continua rascunho, sem e-mail nem avaliação: *"O rascunho ⟨número⟩ tem material inativo: ⟨códigos⟩. Reative o material em Materiais → Inativos (Administrador, Almoxarife ou Engenharia) ou cancele o rascunho e faça outro sem ele."* (7.8).
 - **A ordem dos itens é a do pedido.** Os itens são gravados e mostrados — no detalhe, no comprovante e na fila de separação — na ordem em que o solicitante os incluiu, tanto na tela do almoxarifado quanto na de requisição das outras áreas.
@@ -2373,7 +2374,7 @@ rejeitada no mesmo instante, a reserva é desfeita.
 
 ### 9.3b Reserva na chegada da nota — quem esperava fica com o que chegou
 
-Quando uma nota de compra dá entrada no estoque (**Processar Nota**, ou o **Aprovar** direto do recebimento), o sistema reserva o que entrou **livre** para as requisições que **esperavam** aquele material — antes que qualquer outra requisição, aprovada depois, possa levá-lo.
+Quando uma nota de compra dá entrada no estoque (**Processar Nota**, ou o **Aprovar** direto do recebimento), o sistema reserva o que entrou **livre** para as requisições que **esperavam** aquele material — antes que qualquer outra requisição, aprovada depois, possa levá-lo. Se o pedido da nota foi feito **para uma OS** aberta, a regra é outra: o material fica com a OS (9.3e).
 
 **Quem esperava.** Toda requisição ativa que ainda pode ser separada — **Aprovado**, **Aguard. Compra**, **Aguard. Estoque**, **Parcialmente Reservada**, **Totalmente Reservada**, **Parcialmente Atendida** e **Em Separação** — com algum item daquele material em que falta:
 
@@ -2447,6 +2448,72 @@ Três operações põem material no disponível e o distribuem para quem esperav
 
 **As portas avulsas também entram nessa fila**, pelo material que movimentam: a saída e o ajuste (tela **Movimentações** ou integração), o bloqueio avulso, a reserva manual (tela **Reservas**) e as demais portas listadas em 10.2 esperam a nota, a inspeção, a não conformidade, a aprovação, a separação ou a entrega em andamento desse material, e só então conferem o saldo — e essas operações esperam a porta avulsa em andamento. A fila também vale para **um** servidor do sistema: com mais de um servidor atendendo ao mesmo tempo, as operações de servidores diferentes não esperam umas pelas outras.
 
+### 9.3e Material comprado para uma OS — fica com a OS
+
+Quando o pedido de compra foi feito **para uma OS** (14b.2b), o material que chega dele é dessa OS: fica reservado para ela, só a requisição
+dela o leva, e volta ao estoque comum se a OS for cancelada ou concluída.
+
+**A requisição "da OS".** A requisição não escolhe a OS de uma lista: ela tem o campo de texto **Número da OS** (7.2). O sistema considera a
+requisição **da OS** quando esse texto é igual ao número da OS, **sem diferença de maiúscula**, sem os espaços do começo e do fim, com os
+espaços do meio contados como um só e com um prefixo *OS*, *OS-*, *OS#* ou *OS:* ignorado dos dois lados. Assim, para a OS *OS-171*, servem
+*OS-171*, *os-171*, *OS 171* e *171*. **Zeros à esquerda contam**: *42* não é a OS *OS-042*. Uma requisição com o número escrito de outro
+jeito é tratada como de outro trabalho.
+
+**Na chegada da nota** (e na decisão da inspeção que aprova, e na não conformidade aceita — 9.3b, 9.3c), se o pedido tem OS e a OS está
+**aberta** naquele momento:
+
+1. as requisições **da OS** que esperavam aquele material são servidas primeiro, na ordem da fila (9.3b), com a reserva comum de requisição;
+2. o que sobrar vira a **reserva da OS**:
+
+   ```
+   reserva da OS = mínimo(o que entrou livre e não foi para as requisições da OS, livre do material naquele momento)
+   ```
+
+3. as requisições de **outros** trabalhos que esperavam o mesmo material **não** recebem nada daquele material daquela nota.
+
+A reserva da OS aparece na tela **Reservas** com origem *MANUAL*, destino a OS, **sem validade** (ela não vence, mesmo com a validade padrão
+ligada — 9.7), no nome de quem processou a nota (ou decidiu a inspeção); no extrato do material, com o motivo *"Compra para a OS ⟨número⟩"*. A
+entrada da nota fica marcada com a OS. Processar de novo uma nota que falhou no meio não reserva duas vezes.
+
+**Se a OS já estava fechada** (cancelada, concluída ou encerrada) ou não existe mais quando a nota entra, o material entra **livre** e vai para
+quem esperava como numa compra para estoque (9.3b) — mas a entrada continua marcada com a OS. Se a OS for cancelada **no exato momento** em que
+a nota está sendo processada, a reserva da OS nasce já **Liberada** (com o motivo de OS fechada, abaixo) e o material segue para a fila comum.
+
+**Na aprovação da requisição da OS** (**Só Aprovar**, **Aprovar Liberação** ou a aprovação automática — 9.3), para cada material, antes de
+reservar do disponível comum, o sistema **converte** a reserva da OS na reserva da requisição: solta da reserva da OS (a mais antiga primeiro)
+até o que falta para o item e reserva para a requisição como sempre. No livro, a conversão aparece como *"Reserva da OS ⟨número⟩ convertida
+na requisição ⟨REQ⟩"*. O que a requisição não usou continua reservado para a OS. Se a aprovação não se confirmar (a requisição foi cancelada no
+mesmo instante, por exemplo), a reserva da OS é refeita com o que tinha sido convertido. A conversão acontece **só na aprovação**: a requisição
+da OS que já estava aprovada e sem reserva quando chega à separação ou à entrega não converte — ela usa só o disponível comum.
+
+**O que a reserva da OS segura.** Como toda reserva, ela tira o material do **disponível** (9.1): nenhuma outra requisição, saída avulsa ou
+reserva manual o leva. Uma saída que **consome contra a reserva** (9.4, citando a reserva) consome dela sem conferir se é da mesma OS. Na tela
+**Reservas** ela pode ser liberada (9.6 — como reserva manual, quem tem **Reservar** libera) ou ter o destino trocado (9.5), como qualquer
+reserva manual.
+
+**Quando a OS é cancelada ou concluída.** Ao salvar a OS mudando o status de um valor aberto para *cancelado*, *cancelada*, *concluido*,
+*concluida* ou *encerrada* (**Fábrica → Ordens de Serviço**, editar), o sistema solta todas as reservas da OS que ainda estão ativas: cada uma
+fica **Liberada** com o motivo *"OS ⟨número⟩ ⟨status⟩ — material volta ao estoque"* (o número e o status como estão gravados — ex.: *"OS OS-171
+cancelado — material volta ao estoque"*), e a reserva liberada continua marcada com a OS. O que foi solto é distribuído em seguida para as
+requisições que esperavam o material, pelas regras da chegada (9.3b), com a observação *"Reserva na liberação da OS ⟨número⟩ encerrada —
+recebimento ⟨REC⟩ — requisição ⟨REQ⟩"*; o que ninguém esperava fica livre. A tela da OS confirma: *"OS atualizada com sucesso"* e, quando
+soltou alguma, *"⟨n⟩ reserva(s) de material de compra liberada(s) para o estoque"*. Se alguma reserva não puder ser liberada, a OS fica salva
+assim mesmo e a tela avisa *"A OS foi atualizada, mas nem todas as reservas de compra dela foram liberadas (⟨motivo⟩) — libere-as pela tela
+de Reservas do Almoxarifado"*.
+
+- Só a **passagem** de aberta para fechada solta: salvar de novo uma OS já fechada não faz nada.
+- **Reabrir** a OS (voltar para *Pendente* ou *Em Andamento*) **não** refaz a reserva — o material pode já ter ido para outra requisição.
+
+**Uma OS com pedido de compra não pode ser excluída.** A lixeira da OS é recusada com *"A OS ⟨número⟩ tem pedido de compra vinculado
+(⟨números dos pedidos⟩) — cancele a OS em vez de excluir"*, e nada é apagado. Para encerrar uma OS que teve compra, mude o status para
+cancelado ou concluído. A OS sem pedido de compra se exclui como sempre.
+
+**Estorno da entrada de uma nota com OS** (6.10). O estorno solta **primeiro** a reserva da OS que aquela nota criou — até a quantidade
+estornada, mesmo que haja disponível sobrando —, com o motivo *"Estorno da entrada do recebimento ⟨REC⟩"*, e só depois, se ainda faltar, as
+reservas de requisição. Se o estorno for recusado (*"Não é possível estornar: saldo disponível insuficiente (material já consumido)"*), a
+reserva da OS é refeita, com a observação *"Compra para a OS ⟨número⟩ — recriada após estorno recusado — recebimento ⟨REC⟩"* (e solta na hora,
+se a OS tiver sido fechada nesse meio-tempo).
+
 ### 9.4 Consumo contra reserva
 
 Esta é a regra que faz a reserva ser útil em vez de virar armadilha. Uma saída pode **citar a reserva**; nesse caso ela consome o que já estava separado para ela e **não é barrada pelo disponível** — o disponível justamente exclui o reservado.
@@ -2518,6 +2585,8 @@ Quem não se encaixa é barrado. Pela tela, antes de abrir o formulário:
 Pela integração, a recusa é *"Sem permissão para liberar a reserva da requisição ⟨número⟩: só quem pediu a requisição, o almoxarife ou o administrador liberam"* ou *"Sem permissão para liberar a reserva da requisição ⟨número⟩: ela já está em separação — só o almoxarife ou o administrador liberam agora"*. Quem não tem **Reservar** (Gestor, Compras, Consulta, Qualidade) é barrado antes, pela permissão, mesmo que tenha pedido a requisição — o caminho dele é **cancelar** a requisição. A **reserva manual** não tem essa regra: quem tem **Reservar** libera qualquer uma.
 
 **Liberação automática:** **cancelar**, **excluir**, **encerrar** (**Encerrar Requisição**) ou **rejeitar a liberação por valor** de uma requisição solta todas as reservas ativas dela. Isso é essencial porque a expiração é opcional (9.7) — sem essa liberação, o saldo ficaria preso a uma requisição morta para sempre. No livro, o motivo diz qual foi o gesto (por exemplo, *"Liberação por encerramento de requisição"*, *"Liberação por rejeição de valor da requisição"*).
+
+**A reserva da compra para uma OS** (9.3e) é solta automaticamente quando a OS é cancelada ou concluída, e o que ela soltou **é** distribuído para quem esperava o material — ao contrário da liberação à mão, abaixo.
 
 **Liberar à mão atualiza o status da requisição.** Logo depois de liberar pela tela **Reservas** a reserva de uma requisição, o sistema recalcula o status dela pela mesma régua de quando o material chega (9.3b):
 
@@ -3718,7 +3787,8 @@ uma **cotação** com um clique (14c.9) — nos três casos ele é o mesmo docum
 ### 14b.1 A lista de pedidos
 
 A aba mostra, por pedido: **Número**, **Fornecedor**, **Valor Total**, **Data Pedido**, **Previsão
-Entrega**, **Status** e os botões de **editar** e **excluir**. Há busca por número do pedido ou razão
+Entrega**, **Status**, **OS** (o número da OS para a qual o pedido foi feito, ou `-` no pedido para estoque — 14b.2b) e os botões de
+**editar** e **excluir**. O **Exportar Excel** traz a mesma coluna **OS**. Há busca por número do pedido ou razão
 social do fornecedor, filtro por status, a caixa **"Só atrasados"** e o botão **Exportar Excel**. Sem
 nenhum pedido cadastrado — e também quando um filtro não deixa nenhuma linha —, a lista mostra
 *"Nenhum pedido encontrado"*.
@@ -3815,6 +3885,7 @@ descrito na seção 21c-bis.
 | **Data do pedido** | Calendário, já preenchido com a data corrente |
 | **Previsão de entrega** | Calendário, opcional |
 | **Status** | *Pendente, Aprovado, Rejeitado, Em Análise, Enviado, Recebido, Cancelado* — o padrão é *Pendente* |
+| **OS** | Opcional. *Estoque (sem OS)* (o padrão) ou a ordem de serviço para a qual a compra é feita — 14b.2b |
 | **Observações** | Texto livre |
 | **Itens do pedido** | Um ou mais materiais, cada um com **Quantidade** e **Valor unitário** |
 
@@ -3843,6 +3914,32 @@ total para digitar: o valor gravado é sempre o derivado dos itens.
 
 Salvo o pedido, a tela volta para a lista e o número gerado aparece na mensagem de sucesso.
 
+### 14b.2b Pedido para uma OS
+
+Quando a compra é para atender uma ordem de serviço, o comprador escolhe a OS no campo **OS** do pedido. **Um pedido é de uma OS ou é de
+estoque** — não existe pedido com itens de OS diferentes; para comprar para duas OS, fazem-se dois pedidos. Pedido com *Estoque (sem OS)* é o
+pedido comum, sem nenhuma diferença.
+
+**Quais OS aparecem.** O campo lista as OS **abertas** — todas menos as de status *cancelado*, *cancelada*, *concluido*, *concluida* ou
+*encerrada* (sem diferença de maiúscula ou espaço) —, as 300 mais recentes, cada uma como *número — cliente*. Ao editar um pedido que já tem
+uma OS, essa OS aparece no campo mesmo que tenha sido fechada depois ou seja mais antiga que as 300. Se a lista não puder ser carregada, a
+tela avisa *"Não foi possível carregar as OS — o pedido pode ser salvo para estoque."* e o pedido pode ser salvo sem OS.
+
+**Colocar, trocar ou tirar a OS** é pelo **editar** do pedido, com as mesmas regras do resto do pedido: só quem tem o módulo **Compras** (e
+os administradores) e só **enquanto o pedido não teve recebimento** (14b.4) — depois disso o campo **OS** fica travado como os outros. Voltar
+o campo para *Estoque (sem OS)* e salvar tira a OS do pedido. Salvar o pedido mantendo a OS que ele já tem é sempre aceito, mesmo que essa OS
+tenha sido fechada ou apagada depois; o que é recusado é **escolher** uma OS fechada.
+
+**O número da OS é o de agora.** A lista, o pedido aberto e o documento impresso mostram o número **atual** da OS (se a OS for renumerada,
+o pedido mostra o número novo); se a OS não existir mais, aparece *OS #⟨número interno⟩*. O documento/PDF do pedido traz a linha
+*OS: ⟨número⟩* no cabeçalho; o pedido de estoque não traz linha nenhuma.
+
+**O que acontece com o material.** Quando a nota de um pedido com OS entra no estoque, o que entrou fica **reservado para a OS** — só a
+requisição daquela OS o leva —, e se a OS for cancelada ou concluída, o material volta ao estoque comum (9.3e).
+
+**Pedidos que nascem de outro lugar.** O pedido gerado de uma cotação (14c.9) ou de uma solicitação da Reposição (21b.3d) nasce **sem**
+OS, e a importação por planilha (14b.6) não lê OS: para vincular, edite o pedido antes do primeiro recebimento.
+
 ### 14b.3 O que o sistema recusa, e com que mensagem
 
 | Situação | O que acontece |
@@ -3857,6 +3954,9 @@ Salvo o pedido, a tela volta para a lista e o número gerado aparece na mensagem
 | **Previsão de entrega** que não seja uma data | *"previsão de entrega inválida (use AAAA-MM-DD)"* |
 | Fornecedor que **não existe** | *"Fornecedor não encontrado"* — e **nada** é gravado |
 | Material que **não existe** | *"Material não encontrado"* — e **nada** é gravado |
+| **OS** que **não existe** (pela integração) | *"OS #⟨número interno⟩ não encontrada"* — e **nada** é gravado |
+| **OS** cancelada, concluída ou encerrada (pela integração; a tela não as oferece) | *"A OS ⟨número⟩ está ⟨status⟩ — não aceita compra nova"*, com o status como está gravado na OS (ex.: *"A OS OS-171 está cancelado — não aceita compra nova"*) — e **nada** é gravado |
+| **OS** que não é um número inteiro positivo (pela integração) | *"Dados inválidos — os_id: OS inválida"* |
 | Pedido que **não existe** (abrir, editar ou excluir) | *"Pedido de compra não encontrado"* |
 
 **As duas datas só aceitam o formato `AAAA-MM-DD` ou nada.** Campo de data em branco é gravado como

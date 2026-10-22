@@ -2,7 +2,8 @@
 
 > **Status:** 🟢 Etapa 4 completa — backend (2026-08-05) e tela (2026-08-06) ·
 > **Spec original:** seção 7
-> **Última atualização:** 2026-10-19 (**Etapa 156** — a lista de clientes ou de projetos recusada diz o motivo sob os cinco seletores da tela (C366), e a transferência de uma reserva com projeto ou cliente fora da lista mostra *"Projeto #12 — fora da lista"* em vez de gravar o escondido (`75e772cf`); a lista de reservas trocada de filtro com o banco ocupado chega (C369, `03ecf059`, `02545473`). Continua 🟢. Ver a seção da Etapa 156 no fim.)
+> **Última atualização:** 2026-10-22 (**Etapa 171** — a **reserva da compra para uma OS**: nasce na chegada da nota de pedido com OS, sem validade; a requisição da OS a converte na aprovação; a OS cancelada ou concluída a solta com a marca de origem (`4dc8433d`, `07d6a8c8`, `0ac039db`, `f2f2b2ed`). Continua 🟢. Ver a seção da Etapa 171 no fim.)
+> Antes: 2026-10-19 (**Etapa 156** — a lista de clientes ou de projetos recusada diz o motivo sob os cinco seletores da tela (C366), e a transferência de uma reserva com projeto ou cliente fora da lista mostra *"Projeto #12 — fora da lista"* em vez de gravar o escondido (`75e772cf`); a lista de reservas trocada de filtro com o banco ocupado chega (C369, `03ecf059`, `02545473`). Continua 🟢. Ver a seção da Etapa 156 no fim.)
 > Antes: 2026-10-19 (**Etapa 155** — a tela de reservas mostra o cliente pela razão social e a OS pelo número (C367, C368: os seletores liam campos que o servidor não manda; `d3ef595a`). Continua 🟢. Ver a seção da Etapa 155 no fim.)
 > Antes: 2026-10-09 (**Etapa 98** — devolver da caixa à prateleira **não mexe na reserva do item** (B506, C194): com reserva, a `PERDA` do devolvido continua recusando até a reserva ser liberada pelo gesto que já existe (`POST /reservas/:id/liberar`, `liberar_reserva_requisicao`); e o **C190** fica resolvido do lado da entrega: com o disponível do material negativo (bloqueio sobre o reservado já separado, ou a reserva de outra requisição ocupando o físico) a prévia, a fila e o detalhe dizem 0 e a recusa (E190) nomeia a saída — liberar da reserva **desta** requisição só quando isso destrava (reserva do item + disponível > 0), senão liberar **outra** reserva do material ou desbloquear (B509, B513). Range `6e61cb27..b7fc06a0`; ver a seção "Etapa 98" no fim. Continua 🟢.) Antes: 2026-10-09 (**Etapa 97** — a reserva manual (`POST /reservas`) não toma mais o material separado na caixa sem reserva de uma requisição: recusa 400 *"Saldo disponível insuficiente: ⟨n⟩"* com o sufixo que nomeia a requisição (M3); as reservas de requisição (aprovação, chegada, recriação no estorno) ficam na régua de hoje (B492); `criarReserva` roda sob a trava do material. `65dc74b2`; range `eb7cd9d8..3fc39310`. Continua 🟢. Ver o item da Etapa 97 no checklist e a seção no fim.)
 > Antes: 2026-10-09 (**Etapa 96** — a reserva grava arredondado a 6 casas e o claim de `criarReserva` compara com folga de 1e-9: no legado torto (físico `0.9999…`) a aprovação de uma requisição de 1 volta a reservar **1** (*Totalmente Reservada* — fecha a ressalva do `6e0fae83`, C179); o reservado sem reserva `ATIVA` não guarda resíduo abaixo de 0,0001 (Fase 5, R2, `2adcd51c`). Range `604b37b1..2d0bbfe9`. Continua 🟢. Ver o item da Etapa 96 no checklist.)
@@ -580,3 +581,24 @@ data mudou. O status da feature não muda.
 - [x] **RN-162.07** — o alerta *Reserva parada*: `date(expira_em) < ?` com o hoje de Brasília (o tempo parado, instante × instante, não muda) —
   `e2d2306c`.
 - [ ] **O `referencia: 'now'` explícito** continua sendo o dia UTC (só o administrador chama a rota; a tela manda `{}`) — declarado (Fase 5 r2).
+
+## Etapa 171 — a reserva da compra para uma OS (2026-10-22)
+
+Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa171-pedido-de-compra-vinculado-a-os.md`. Contrato completo na feature 22
+(seção "Etapa 171"). Um **tipo novo de reserva**, sem coluna nova em `reservas_material_almoxarifado`: a **reserva da OS** — `origem='MANUAL'`,
+`os_id` da OS, `os_referencia` = número, `recebimento_id` da nota, sem `expira_em`, motivo/observação `Compra para a OS <numero_os>`.
+Predicado congelado: `status='ATIVA' AND origem='MANUAL' AND os_id = ? AND recebimento_id IS NOT NULL`. Continua 🟢.
+
+- [x] **Nasce na chegada** de nota/inspeção/NC de pedido com OS aberta, sob a trava por material que essas portas já seguram
+  (`reservaDaOs.reservarParaOsSobTrava`, `criarReservaSemTrava`), depois de servir a fila da OS — `4dc8433d`.
+- [x] **`criarReservaSemTrava` ganhou `opcoes.semExpiracao`** (ignora `expira_em` e `reserva_dias_validade`; exportada) — `4dc8433d`.
+- [x] **Conversão na aprovação** (RN-171.12(b)): a requisição cuja `os_referencia` casa com a OS (B1092) libera as reservas da OS do material
+  até a falta e reserva como hoje; motivo da liberação `Convertida na reserva da requisição <REQ>`, movimentação `Reserva da OS <n>
+  convertida na requisição <REQ>` — `4dc8433d`.
+- [x] **Liberação** quando a OS entra no conjunto fechado (`LIBERADA`, `OS <n> <status> — material volta ao estoque`, `os_id` preservado) e
+  redistribuição fora da trava com `origem: 'OS_ENCERRADA'` (rótulo `Reserva na liberação da OS <n> encerrada — recebimento <REC> —
+  requisição <REQ>`) — `07d6a8c8`, `0ac039db`; a criada com a OS já fechada é solta na hora — `f2f2b2ed`.
+- [x] **Estorno da entrada** solta primeiro a da OS; recusado, recria pela `recriarReservaDaOs` — `4dc8433d`.
+- [ ] **Fora (declarado):** consumir contra a reserva da OS (`reserva_id` numa saída) não confere a OS; `transferir` (troca de destino) da
+  reserva da OS é permitido (M4); a liberação manual dela pela tela segue a regra da reserva **manual** (quem tem *Reservar* libera). Ver letra
+  D (171) do documento de novidades.
