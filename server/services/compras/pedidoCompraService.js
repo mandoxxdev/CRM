@@ -500,12 +500,27 @@ async function relerPedido(db, pedidoId) {
 async function lerPedidoParaRecebimento(db, pedidoId) {
   const p = await dbGet(db, SQL_PEDIDO, [pedidoId]);
   if (!p) return null;
+  // Etapa 176 (M3): a OS do pedido — a tela de Recebimentos mostra e TRAVA a OS do recebimento de pedido (RN-176.02). Leitura
+  // viva separada; `OS #<id>` se a OS sumiu (a mesma regua da lista e do detalhe do recebimento, RN-176.08) — ao contrario
+  // da leitura do comprador (`lerOsDoPedido`, null), porque a tela do recebimento mostra este texto direto.
+  const osId = p.os_id === null || p.os_id === undefined || p.os_id === '' ? null : Number(p.os_id);
+  let osNumero = null;
+  if (osId !== null) {
+    try {
+      osNumero = (await lerOsDoPedido(db, osId)).os_numero;
+    } catch (e) {
+      if (!/no such table/i.test(String(e && e.message))) throw e;
+    }
+    osNumero = osNumero || `OS #${osId}`;
+  }
   return {
     id: p.id,
     numero: p.numero,
     status: p.status,
     data_pedido: p.data_pedido,
     previsao_entrega: p.previsao_entrega,
+    os_id: osId,
+    os_numero: osNumero,
     fornecedor: montarFornecedor(p),
     condicoes: Object.fromEntries(CONDICOES_COMERCIAIS.map((c) => [c, p[c] == null ? null : p[c]])),
   };

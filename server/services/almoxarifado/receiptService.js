@@ -2236,7 +2236,44 @@ async function listarRecebimentos(db, filters = {}) {
   if (filters.status) { sql += ' AND status = ?'; params.push(filters.status); }
   if (filters.etapa) { sql += ' AND etapa_atual = ?'; params.push(filters.etapa); }
   sql += ' ORDER BY created_at DESC';
-  return dbAll(db, sql, params);
+  return comOsEfetiva(db, await dbAll(db, sql, params));
+}
+
+/**
+ * Etapa 176 (RN-176.08, M4) — cada recebimento sai com o `os_id` EFETIVO (o do pedido, vivo, quando ha pedido; senao o
+ * proprio — a regua de `osDoRecebimento`) e `os_numero` por leitura viva SEPARADA (`OS #<id>` se sumiu; `null` sem OS).
+ * Duas consultas em lote (os pedidos e as OS), nao uma por linha nem JOIN: `ordens_servico` e tabela core que o harness nao
+ * tem (sem ela, o numero cai em `OS #<id>`).
+ */
+async function comOsEfetiva(db, recs) {
+  if (!recs.length) return recs;
+  const pedidoIds = [...new Set(recs.map((r) => r.pedido_compra_id).filter(Boolean).map(Number))];
+  const osDoPedido = new Map();
+  if (pedidoIds.length) {
+    try {
+      const ps = await dbAll(db, `SELECT id, os_id FROM pedidos_compra WHERE id IN (${pedidoIds.map(() => '?').join(',')})`, pedidoIds);
+      for (const p of ps) osDoPedido.set(Number(p.id), temOsId(p.os_id) ? Number(p.os_id) : null);
+    } catch (e) {
+      if (!/no such (table|column)/i.test(String(e && e.message))) throw e;
+    }
+  }
+  const efetiva = (r) => (r.pedido_compra_id
+    ? (osDoPedido.get(Number(r.pedido_compra_id)) ?? null)
+    : (temOsId(r.os_id) ? Number(r.os_id) : null));
+  const osIds = [...new Set(recs.map(efetiva).filter((id) => id !== null))];
+  const numeros = new Map();
+  if (osIds.length) {
+    try {
+      const os = await dbAll(db, `SELECT id, numero_os FROM ordens_servico WHERE id IN (${osIds.map(() => '?').join(',')})`, osIds);
+      for (const o of os) numeros.set(Number(o.id), o.numero_os);
+    } catch (e) {
+      if (!/no such (table|column)/i.test(String(e && e.message))) throw e;
+    }
+  }
+  return recs.map((r) => {
+    const osId = efetiva(r);
+    return { ...r, os_id: osId, os_numero: osId === null ? null : (numeros.get(osId) || `OS #${osId}`) };
+  });
 }
 
 /**
@@ -2408,7 +2445,7 @@ async function listarPedidosCompraAux(db, { search, pendentes } = {}) {
   // A soma por pedido vem de uma SUBQUERY AGRUPADA (`SOMA_POR_PEDIDO_SQL`), e nao de um
   // `.filter()`/`reduce` em JS depois da consulta, porque o filtro de `?pendentes=1` tem de rodar
   // ANTES do `LIMIT 50` (ver abaixo) — e para isso a soma precisa existir dentro do SQL.
-  let sql = `SELECT p.id, p.numero, p.status, p.data_pedido,
+  let sql = `SELECT p.id, p.numero, p.status, p.data_pedido, p.os_id,
     f.razao_social as fornecedor_nome, f.cnpj as fornecedor_cnpj,
     COALESCE(i.total_pedido, 0) as total_pedido,
     COALESCE(i.soma_recebida, 0) as soma_recebida,
@@ -2446,6 +2483,18 @@ async function listarPedidosCompraAux(db, { search, pendentes } = {}) {
   }
   sql += ' ORDER BY p.created_at DESC LIMIT 50';
   const linhas = await dbAll(db, sql, params);
+  // Etapa 176 (M3): a OS do pedido (`os_id`, `os_numero` vivo — `OS #<id>` se sumiu), para a tela mostrar e travar a OS do
+  // recebimento de pedido. Uma consulta em lote, fora do SQL principal (ordens_servico e core; o harness nao a tem).
+  const numerosOs = new Map();
+  const osIds = [...new Set(linhas.map((l) => l.os_id).filter(temOsId).map(Number))];
+  if (osIds.length) {
+    try {
+      const os = await dbAll(db, `SELECT id, numero_os FROM ordens_servico WHERE id IN (${osIds.map(() => '?').join(',')})`, osIds);
+      for (const o of os) numerosOs.set(Number(o.id), o.numero_os);
+    } catch (e) {
+      if (!/no such (table|column)/i.test(String(e && e.message))) throw e;
+    }
+  }
   // Os campos NOVOS ficam AO LADO de `status` (o status CORE, ecoado como sempre) e nunca no lugar
   // dele: `pedidos_compra` nao e escrita por nenhuma linha desta etapa.
   return linhas.map((linha) => ({
@@ -2455,6 +2504,8 @@ async function listarPedidosCompraAux(db, { search, pendentes } = {}) {
     data_pedido: linha.data_pedido,
     fornecedor_nome: linha.fornecedor_nome,
     fornecedor_cnpj: linha.fornecedor_cnpj,
+    os_id: temOsId(linha.os_id) ? Number(linha.os_id) : null,
+    os_numero: temOsId(linha.os_id) ? (numerosOs.get(Number(linha.os_id)) || `OS #${linha.os_id}`) : null,
     ...derivarRecebimentoDoPedido(linha.total_pedido, linha.soma_recebida, linha.saldo_por_material),
   }));
 }
@@ -3029,7 +3080,9 @@ async function getRecebimento(db, id) {
       FROM pedidos_compra p LEFT JOIN fornecedores f ON p.fornecedor_id = f.id WHERE p.id = ?`, [rec.pedido_compra_id]);
   }
 
-  return { ...rec, itens, pedido_compra };
+  // Etapa 176 (RN-176.08, M4): o `os_id` efetivo e o `os_numero` vivo, pela mesma regua da lista.
+  const [comOs] = await comOsEfetiva(db, [rec]);
+  return { ...comOs, itens, pedido_compra };
 }
 
 module.exports = {

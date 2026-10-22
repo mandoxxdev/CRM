@@ -1017,19 +1017,27 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
   });
 
   // ── Aux: ordens de serviço (padrão recebimentos-aux, sem gate do módulo operacional) ──
+  // Etapa 176 (M3, aditivo): `cliente_id` em toda linha e `?abertas=1` — so as OS fora de `STATUS_OS_FECHADA` (a regua
+  // `osFechada` da 171), filtradas ANTES do `LIMIT` (filtrar depois perderia OS abertas com mais de 300 fechadas mais novas).
+  // Sem `abertas` nada muda. O select "OS (opcional)" do recebimento usa `?abertas=1` (RN-176.03 recusa a fechada).
   app.get('/api/almoxarifado/aux/ordens-servico', auth, async (req, res) => {
+    const abertas = req.query.abertas === '1' || req.query.abertas === 'true';
+    const { STATUS_OS_FECHADA } = require('../../services/compras/pedidoCompraService');
+    const filtro = abertas
+      ? `WHERE LOWER(TRIM(COALESCE(os.status, ''))) NOT IN (${STATUS_OS_FECHADA.map(() => '?').join(', ')})` : '';
+    const params = abertas ? STATUS_OS_FECHADA : [];
     try {
-      const rows = await dbAll(db, `SELECT os.id, os.numero_os, os.status, c.razao_social as cliente_nome
+      const rows = await dbAll(db, `SELECT os.id, os.numero_os, os.status, os.cliente_id, c.razao_social as cliente_nome
         FROM ordens_servico os LEFT JOIN clientes c ON os.cliente_id = c.id
-        ORDER BY os.id DESC LIMIT 300`);
+        ${filtro} ORDER BY os.id DESC LIMIT 300`, params);
       return res.json(rows);
     } catch (e) {
       // Ambiente parcial: tabela clientes pode não existir mesmo com ordens_servico presente
       // (clientes é tabela core, fora do initSchema do almoxarifado). Tenta sem o JOIN antes de desistir.
       if (/no such table:\s*clientes/i.test(e.message)) {
         try {
-          const rows = await dbAll(db, `SELECT os.id, os.numero_os, os.status, NULL as cliente_nome
-            FROM ordens_servico os ORDER BY os.id DESC LIMIT 300`);
+          const rows = await dbAll(db, `SELECT os.id, os.numero_os, os.status, os.cliente_id, NULL as cliente_nome
+            FROM ordens_servico os ${filtro} ORDER BY os.id DESC LIMIT 300`, params);
           return res.json(rows);
         } catch (e2) { return res.json([]); }
       }

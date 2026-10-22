@@ -397,6 +397,68 @@ const EM_ESPERA = ['AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA'];
     assert.ok(!/recebimento_id IS NOT NULL/.test(fonte), 'osEncerradaService nao pode ter a sua copia do predicado');
   });
 
+  // ══════════════ RN-176.08 / M3 / M4 — leituras ══════════════
+  await test('[M3] aux de OS: ?abertas=1 tira as fechadas e toda linha traz cliente_id; sem o parametro nada muda', async () => {
+    const aberta = await novaOs(cliA);
+    const fechada = await novaOs(cliB, ' Cancelado ');
+    const todas = await request(app).get(`${API}/aux/ordens-servico`);
+    assert.strictEqual(todas.status, 200);
+    assert.ok(todas.body.some((o) => o.id === fechada.id), 'sem ?abertas a fechada continua');
+    const abertas = await request(app).get(`${API}/aux/ordens-servico`).query({ abertas: 1 });
+    assert.strictEqual(abertas.status, 200);
+    assert.ok(!abertas.body.some((o) => o.id === fechada.id), '?abertas=1 tira a fechada');
+    const a = abertas.body.find((o) => o.id === aberta.id);
+    assert.ok(a, 'a aberta esta la');
+    assert.strictEqual(a.cliente_id, cliA);
+    assert.strictEqual(a.cliente_nome, 'Cliente A E176');
+    assert.strictEqual(todas.body.find((o) => o.id === fechada.id).cliente_id, cliB);
+  });
+
+  await test('[M3] pedido para recebimento (detalhe e lista) traz os_id e os_numero', async () => {
+    const os = await novaOs(cliA);
+    const m = await material(null);
+    const ped = await pedido(m.id, 3, os.id);
+    const sem = await pedido(m.id, 3, null);
+    const d = await request(app).get(`${API}/recebimentos-aux/pedidos-compra/${ped.id}`);
+    assert.strictEqual(d.status, 200, JSON.stringify(d.body));
+    assert.deepStrictEqual([d.body.os_id, d.body.os_numero], [os.id, os.numero]);
+    const d2 = await request(app).get(`${API}/recebimentos-aux/pedidos-compra/${sem.id}`);
+    assert.deepStrictEqual([d2.body.os_id, d2.body.os_numero], [null, null]);
+    const l = await request(app).get(`${API}/recebimentos-aux/pedidos-compra`);
+    assert.strictEqual(l.status, 200);
+    const linha = l.body.find((p) => p.id === ped.id);
+    assert.deepStrictEqual([linha.os_id, linha.os_numero], [os.id, os.numero]);
+    const linhaSem = l.body.find((p) => p.id === sem.id);
+    assert.deepStrictEqual([linhaSem.os_id, linhaSem.os_numero], [null, null]);
+  });
+
+  await test('[RN-176.08, M4] lista e detalhe do recebimento: os_id efetivo (proprio ou do pedido) e os_numero vivo; "OS #<id>" se sumiu', async () => {
+    const osP = await novaOs(cliA);
+    const osN = await novaOs(cliA);
+    const osSome = await novaOs(cliA);
+    const mP = await material(null);
+    const mN = await material(cliA);
+    const ped = await pedido(mP.id, 3, osP.id);
+    const rp = (await postPedido(ped, mP.id, 3)).body.id;
+    const rn = (await postNf([{ m: mN.id, q: 1 }], { os_id: osN.id })).body.id;
+    const rs = (await postNf([{ m: mN.id, q: 1 }], { os_id: osSome.id })).body.id;
+    const r0 = (await postNf([{ m: mP.id, q: 1 }])).body.id;
+    await dbRun(db, 'DELETE FROM ordens_servico WHERE id = ?', [osSome.id]);
+    const lista = await request(app).get(`${API}/recebimentos`);
+    assert.strictEqual(lista.status, 200);
+    const ver = (id) => { const x = lista.body.find((r) => r.id === id); return [x.os_id, x.os_numero]; };
+    assert.deepStrictEqual(ver(rp), [osP.id, osP.numero], 'pedido: a OS do pedido');
+    assert.deepStrictEqual(ver(rn), [osN.id, osN.numero], 'sem pedido: a OS propria');
+    assert.deepStrictEqual(ver(rs), [osSome.id, `OS #${osSome.id}`], 'OS que sumiu');
+    assert.deepStrictEqual(ver(r0), [null, null]);
+    for (const [id, esperado] of [[rp, [osP.id, osP.numero]], [rn, [osN.id, osN.numero]], [rs, [osSome.id, `OS #${osSome.id}`]], [r0, [null, null]]]) {
+      // eslint-disable-next-line no-await-in-loop
+      const d = await request(app).get(`${API}/recebimentos/${id}`);
+      assert.strictEqual(d.status, 200);
+      assert.deepStrictEqual([d.body.os_id, d.body.os_numero], esperado, `detalhe ${id}`);
+    }
+  });
+
   await close();
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
   process.exit(failed ? 1 : 0);

@@ -408,7 +408,8 @@ describe('[RN-155.01] o cliente e a OS pelos campos que o servidor manda', () =>
   test('o fixture e o corpo do servidor: sem `nome` no cliente, sem `numero` na OS (o que a tela lia)', () => {
     expect(Object.keys(CLIENTE_DO_SERVIDOR)).toEqual(expect.arrayContaining(['id', 'razao_social', 'nome_fantasia']));
     expect(CLIENTE_DO_SERVIDOR).not.toHaveProperty('nome');
-    expect(Object.keys(OS_DO_AUX_DO_SERVIDOR).sort()).toEqual(['cliente_nome', 'id', 'numero_os', 'status']);
+    // Etapa 176 (M3, aditivo): o aux passou a mandar `cliente_id` (o select de OS do recebimento confere o dono).
+    expect(Object.keys(OS_DO_AUX_DO_SERVIDOR).sort()).toEqual(['cliente_id', 'cliente_nome', 'id', 'numero_os', 'status']);
   });
 
   test('Nova Reserva: o cliente pela razao social, pelo nome fantasia quando ela e vazia; a OS pelo numero, com o cliente so quando ha', async () => {
