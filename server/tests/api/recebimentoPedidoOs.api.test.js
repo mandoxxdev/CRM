@@ -19,6 +19,10 @@ const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 const reservaChegadaService = require('../../services/almoxarifado/reservaChegadaService');
 const reservaDaOs = require('../../services/almoxarifado/reservaDaOs');
+const stockService = require('../../services/almoxarifado/stockService');
+const requisitionService = require('../../services/almoxarifado/requisitionService');
+const osEncerradaService = require('../../services/almoxarifado/osEncerradaService');
+const caixaSql = require('../../services/almoxarifado/caixaSql');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -194,7 +198,7 @@ const EM_ESPERA = ['AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA'];
   });
 
   // ══════════════ I1 ══════════════
-  await test('[I1] a caixa sem reserva de outra requisicao limita a reserva da OS (livre de caixa): nota de 10 com 3 na caixa -> OS 7', async () => {
+  await test('[I1, teste de FORMULA: semente de legado gravada no banco; pelas rotas o teto nao morde, ver o [Fase 5, I1, alcancavel]] a caixa sem reserva de outra requisicao limita a reserva da OS (livre de caixa): nota de 10 com 3 na caixa -> OS 7', async () => {
     const os = await novaOs();
     const m = await material();
     const outra = (await dbRun(db, `INSERT INTO requisicoes_almoxarifado (numero, solicitante_id, solicitante_nome, status, urgencia, ativo, os_referencia)
@@ -337,13 +341,20 @@ const EM_ESPERA = ['AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA'];
     assert.strictEqual((await request(app).put(`${API}/requisicoes/${R}/separar`).send({ itens_separados: [{ item_id: it, quantidade_separada: 4 }] })).status, 200);
     assert.strictEqual((await request(app).put(`${API}/requisicoes/${R}/entregar`).send({ itens_atendidos: [{ item_id: it, quantidade_atendida: 4 }] })).status, 200);
     assert.deepStrictEqual([await saldoOsAtivo(m), (await mat(m)).q], [6, 6], 'premissa: a OS ficou com 6, fisico 6');
+    const [original] = await ativasOs(m);
     const e = await request(app).post(`${API}/movimentacoes/${(await movEntrada(rec)).id}/cancelar`).send({ motivo: 'estorno e171' });
     assert.strictEqual(e.status, 400, JSON.stringify(e.body));
+    // Fase 5: a recusa e a da falta fisica (6 no fisico, estorno de 10), literal — nao uma recusa qualquer antes de soltar.
+    assert.strictEqual(e.body.error, 'Não é possível estornar: saldo disponível insuficiente (material já consumido)');
     const ativas = await ativasOs(m);
     assert.strictEqual(ativas.length, 1, JSON.stringify(ativas));
+    assert.notStrictEqual(ativas[0].id, original.id, 'a ativa e uma reserva NOVA (a original foi solta e recriada)');
+    const orig = await dbGet(db, 'SELECT status, motivo_liberacao FROM reservas_material_almoxarifado WHERE id = ?', [original.id]);
+    assert.deepStrictEqual({ ...orig }, { status: 'LIBERADA', motivo_liberacao: `Estorno da entrada do recebimento ${await numeroRec(rec)}` });
     assert.deepStrictEqual([Number(ativas[0].quantidade), ativas[0].os_id, ativas[0].recebimento_id, ativas[0].expira_em, ativas[0].requisicao_id],
       [6, os.id, rec, null, null]);
-    assert.ok(String(ativas[0].observacoes).startsWith(`Compra para a OS ${os.numero}`), ativas[0].observacoes);
+    assert.strictEqual(ativas[0].observacoes,
+      `Compra para a OS ${os.numero} — recriada após estorno recusado — recebimento ${await numeroRec(rec)}`);
     assert.deepStrictEqual(await mat(m), { q: 6, r: 6 });
   });
 
@@ -374,9 +385,232 @@ const EM_ESPERA = ['AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA'];
     assert.strictEqual(a.status, 200, JSON.stringify(a.body));
     assert.strictEqual(a.body.status, 'TOTALMENTE_RESERVADA');
     assert.deepStrictEqual([await holdReq(R), await saldoOsAtivo(m)], [4, 6], 'a aprovacao veio depois e converteu 4 da OS');
-    const r0 = (await reservasOs(m))[0];
+    const rsOs = await reservasOs(m);
+    assert.strictEqual(rsOs.length, 1, JSON.stringify(rsOs));
+    const r0 = rsOs[0];
     assert.strictEqual(r0.recebimento_id, rec);
+    // Fase 5: a prova da ORDEM nao depende do timer. A nota reservou os 10 inteiros para a OS (a aprovacao nao tinha levado
+    // nada antes) e a aprovacao CONVERTEU 4 (a reserva da OS ficou com 6), e a RESERVA da aprovacao e posterior a da OS.
+    const movOs = await dbGet(db, "SELECT id, quantidade FROM movimentacoes_almoxarifado WHERE tipo = 'RESERVA' AND reserva_id = ?", [r0.id]);
+    assert.strictEqual(Number(movOs.quantidade), 10, 'a reserva da OS nasceu com 10: a aprovacao nao passou antes da nota');
+    assert.deepStrictEqual([r0.status, Number(r0.quantidade)], ['ATIVA', 6], 'a aprovacao converteu 4 da reserva da OS');
+    const resR = await dbGet(db, "SELECT id FROM reservas_material_almoxarifado WHERE requisicao_id = ? AND status = 'ATIVA'", [R]);
+    const movR = await dbGet(db, "SELECT id FROM movimentacoes_almoxarifado WHERE tipo = 'RESERVA' AND reserva_id = ?", [resR.id]);
+    assert.ok(movR.id > movOs.id, `a RESERVA da aprovacao (${movR.id}) vem depois da da OS (${movOs.id})`);
+    const conv = await dbGet(db, "SELECT motivo FROM movimentacoes_almoxarifado WHERE tipo = 'LIBERACAO_RESERVA' AND reserva_id = ?", [r0.id]);
+    assert.ok(conv && /convertida na requisição/.test(conv.motivo), JSON.stringify(conv));
     assert.deepStrictEqual(await mat(m), { q: 10, r: 10 });
+  });
+
+  // ══════════════ Fase 5 (revisao adversarial) — OS que fecha no meio da criacao da reserva da OS ══════════════
+  // Molde do CLAUDE.md: o gancho so sinaliza e segura; o gesto concorrente (o PUT da OS: UPDATE do status +
+  // liberarReservasDaOs, como o index.js faz) sai do CONTEXTO DO TESTE, nao de dentro do gancho.
+  const portaoDoGancho = () => {
+    let sinalizar; const sinal = new Promise((res) => { sinalizar = res; });
+    let soltar; const portao = new Promise((res) => { soltar = res; });
+    return { sinal, sinalizar, portao, soltar };
+  };
+  const cancelarOs = async (osId) => {
+    await dbRun(db, "UPDATE ordens_servico SET status = 'cancelado' WHERE id = ?", [osId]);
+    return osEncerradaService.liberarReservasDaOs(db, ADMIN, osId, 'cancelado');
+  };
+  const motivoOsCancelada = (numero) => `OS ${numero} cancelado — material volta ao estoque`;
+
+  await test('[Fase 5, corrida] OS cancelada com a nota DENTRO da secao, depois de ler a OS aberta e antes de reservar para ela: a reserva criada e liberada na hora (motivo da OS encerrada) e a fila geral leva', async () => {
+    const os = await novaOs();
+    const m = await material();
+    const geral = await esperando(m, 4, 'OS-GERAL');
+    const rec = await notaPronta(await pedido(m, 10, os.id), m, 10);
+    const original = reservaDaOs.reservarParaOsSobTrava;
+    const g = portaoDoGancho();
+    reservaDaOs.reservarParaOsSobTrava = async (...args) => { g.sinalizar(); await g.portao; return original(...args); };
+    let pNota; let liberadasNoCancel;
+    try {
+      pNota = processar(rec).then((r) => r);
+      await g.sinal; // a nota ja leu a OS aberta, dentro da secao
+      liberadasNoCancel = await cancelarOs(os.id);
+    } finally {
+      g.soltar();
+      reservaDaOs.reservarParaOsSobTrava = original;
+    }
+    const n = await pNota;
+    assert.strictEqual(n.status, 200, JSON.stringify(n.body));
+    assert.strictEqual(liberadasNoCancel, 0, 'premissa: o cancelamento nao viu reserva da OS nenhuma (ela ainda nao existia)');
+    assert.deepStrictEqual(await ativasOs(m), [], 'nenhuma reserva ATIVA para a OS fechada');
+    const rs = await reservasOs(m);
+    assert.strictEqual(rs.length, 1, JSON.stringify(rs));
+    assert.deepStrictEqual([rs[0].status, rs[0].motivo_liberacao, rs[0].os_id], ['LIBERADA', motivoOsCancelada(os.numero), os.id]);
+    const movs = await dbAll(db, "SELECT motivo, os_id FROM movimentacoes_almoxarifado WHERE tipo = 'LIBERACAO_RESERVA' AND reserva_id = ?", [rs[0].id]);
+    assert.deepStrictEqual(movs.map((x) => ({ ...x })), [{ motivo: motivoOsCancelada(os.numero), os_id: os.id }]);
+    assert.strictEqual(await holdReq(geral), 4, 'com a OS fechada a nota volta ao comportamento de hoje: a fila geral leva');
+    assert.deepStrictEqual(await mat(m), { q: 10, r: 4 });
+  });
+
+  await test('[Fase 5, corrida] OS cancelada DEPOIS de a reserva da OS nascer e antes da releitura: o cancelamento a solta, a nota nao solta de novo (sem desconto em dobro), a redistribuicao do cancelamento leva para a fila geral', async () => {
+    const os = await novaOs();
+    const m = await material();
+    const geral = await esperando(m, 4, 'OS-GERAL');
+    const rec = await notaPronta(await pedido(m, 10, os.id), m, 10);
+    const original = stockService.criarReservaSemTrava;
+    const g = portaoDoGancho();
+    stockService.criarReservaSemTrava = async (...args) => {
+      const r = await original(...args);
+      if (args[3] && args[3].semExpiracao) { g.sinalizar(); await g.portao; }
+      return r;
+    };
+    let pNota; let pCancel;
+    try {
+      pNota = processar(rec).then((r) => r);
+      await g.sinal; // a reserva da OS existe, a nota ainda nao releu a OS
+      pCancel = cancelarOs(os.id); // a redistribuicao dele pega a trava: so termina depois que a nota soltar
+      for (let i = 0; i < 200; i += 1) {
+        // eslint-disable-next-line no-await-in-loop
+        const [r] = await reservasOs(m);
+        if (r && r.status !== 'ATIVA') break;
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((res) => { setTimeout(res, 5); });
+      }
+      assert.strictEqual((await reservasOs(m))[0].status, 'LIBERADA', 'premissa: o cancelamento soltou a reserva da OS');
+    } finally {
+      g.soltar();
+      stockService.criarReservaSemTrava = original;
+    }
+    const [n, liberadas] = await Promise.all([pNota, pCancel]);
+    assert.strictEqual(n.status, 200, JSON.stringify(n.body));
+    assert.strictEqual(liberadas, 1);
+    const rs = await reservasOs(m);
+    assert.strictEqual(rs.length, 1, JSON.stringify(rs));
+    const movs = await dbAll(db, "SELECT id FROM movimentacoes_almoxarifado WHERE tipo = 'LIBERACAO_RESERVA' AND reserva_id = ?", [rs[0].id]);
+    assert.strictEqual(movs.length, 1, 'uma liberacao so');
+    assert.strictEqual(await holdReq(geral), 4);
+    assert.deepStrictEqual(await mat(m), { q: 10, r: 4 });
+  });
+
+  await test('[Fase 5, corrida] estorno RECUSADO com a OS cancelada no meio (antes de recriar a reserva da OS): a recriada e liberada na hora, nada fica preso para a OS fechada', async () => {
+    const os = await novaOs();
+    const m = await material();
+    const rec = await receber(await pedido(m, 10, os.id), m, 10);
+    const R = await criar(m, 4, os.numero);
+    assert.strictEqual(await aprovar(R), 'TOTALMENTE_RESERVADA');
+    const it = await itemDe(R);
+    assert.strictEqual((await request(app).put(`${API}/requisicoes/${R}/separar`).send({ itens_separados: [{ item_id: it, quantidade_separada: 4 }] })).status, 200);
+    assert.strictEqual((await request(app).put(`${API}/requisicoes/${R}/entregar`).send({ itens_atendidos: [{ item_id: it, quantidade_atendida: 4 }] })).status, 200);
+    const original = reservaDaOs.recriarReservaDaOs;
+    const g = portaoDoGancho();
+    reservaDaOs.recriarReservaDaOs = async (...args) => { g.sinalizar(); await g.portao; return original(...args); };
+    let pEst; let liberadasNoCancel;
+    try {
+      pEst = request(app).post(`${API}/movimentacoes/${(await movEntrada(rec)).id}/cancelar`).send({ motivo: 'estorno e171' }).then((r) => r);
+      await g.sinal; // o estorno soltou a reserva da OS e vai recria-la
+      liberadasNoCancel = await cancelarOs(os.id);
+    } finally {
+      g.soltar();
+      reservaDaOs.recriarReservaDaOs = original;
+    }
+    const e = await pEst;
+    assert.strictEqual(e.status, 400, JSON.stringify(e.body));
+    assert.strictEqual(liberadasNoCancel, 0, 'premissa: o estorno ja tinha soltado a reserva da OS');
+    assert.deepStrictEqual(await ativasOs(m), [], 'nenhuma reserva ATIVA para a OS fechada');
+    const rs = await reservasOs(m);
+    assert.strictEqual(rs.length, 2, JSON.stringify(rs));
+    assert.deepStrictEqual([rs[1].status, rs[1].motivo_liberacao], ['LIBERADA', motivoOsCancelada(os.numero)]);
+    assert.deepStrictEqual(await mat(m), { q: 6, r: 0 });
+  });
+
+  // ══════════════ Fase 5 — RN-171.12 (b): o desfazer, a pre-condicao e outra porta de aprovacao ══════════════
+  await test('[Fase 5, RN-171.12 b] aprovacao que PERDE o UPDATE (requisicao cancelada no meio) desfaz a reserva da requisicao e devolve o convertido para a OS', async () => {
+    const os = await novaOs();
+    const m = await material();
+    await receber(await pedido(m, 10, os.id), m, 10);
+    const [r0] = await ativasOs(m);
+    const R = await criar(m, 6, os.numero);
+    const original = reservaDaOs.reservasDaOsParaRequisicao;
+    // O cancelamento da requisicao nao pega trava (B450): simulado pelo UPDATE de status que ele grava.
+    reservaDaOs.reservasDaOsParaRequisicao = async (...args) => {
+      const out = await original(...args);
+      await dbRun(db, "UPDATE requisicoes_almoxarifado SET status = 'CANCELADA' WHERE id = ?", [R]);
+      return out;
+    };
+    let a;
+    try {
+      a = await request(app).put(`${API}/requisicoes/${R}/aprovar`).send({});
+    } finally { reservaDaOs.reservasDaOsParaRequisicao = original; }
+    assert.strictEqual(a.status, 400, JSON.stringify(a.body));
+    assert.strictEqual(a.body.error, 'Transição inválida: CANCELADA → APROVADO');
+    assert.strictEqual(await holdReq(R), 0, 'a reserva da requisicao foi desfeita');
+    const rs = await ativasOs(m);
+    assert.deepStrictEqual(rs.map((x) => [x.id === r0.id, Number(x.quantidade), x.os_id]), [[true, 4, os.id], [false, 6, os.id]]);
+    assert.strictEqual(rs[1].observacoes, `Compra para a OS ${os.numero} — devolvida: aprovação recusada`);
+    assert.strictEqual(rs[1].expira_em, null);
+    assert.deepStrictEqual(await mat(m), { q: 10, r: 10 });
+  });
+
+  await test('[Fase 5, RN-171.12 b] pre-condicao: com o livre de hoje negativo (caixa sem reserva acima do disponivel) a aprovacao NAO converte — a reserva da OS fica intacta e a requisicao espera', async () => {
+    const os = await novaOs();
+    const m = await material();
+    await receber(await pedido(m, 10, os.id), m, 10);
+    // Semente de legado (as rotas recusam deixar o livre de caixa negativo — ver o [Fase 5, I1, alcancavel]): 3 na caixa
+    // sem reserva com disponivel 0.
+    const outra = (await dbRun(db, `INSERT INTO requisicoes_almoxarifado (numero, solicitante_id, solicitante_nome, status, urgencia, ativo, os_referencia)
+      VALUES (?, ?, 'Sol', 'EM_SEPARACAO', 'NORMAL', 1, 'OS-ALHEIA')`, [`REQ-E171T2-${++seq}`, SOL.id])).lastID;
+    await dbRun(db, `INSERT INTO itens_requisicao_almoxarifado (requisicao_id, material_id, quantidade_solicitada, quantidade_separada,
+      quantidade_entregue, quantidade_atendida) VALUES (?, ?, 3, 3, 0, 0)`, [outra, m]);
+    const R = await criar(m, 4, os.numero);
+    assert.ok(EM_ESPERA.includes(await aprovar(R)), await st(R));
+    assert.strictEqual(await holdReq(R), 0);
+    const rs = await reservasOs(m);
+    assert.deepStrictEqual(rs.map((x) => [x.status, Number(x.quantidade)]), [['ATIVA', 10]], 'nem convertida nem devolvida em pedaco');
+    assert.deepStrictEqual(await mat(m), { q: 10, r: 10 });
+  });
+
+  await test('[Fase 5, RN-171.12 b] aprovacao AUTOMATICA (POST /requisicoes) da requisicao da OS converte a reserva da OS', async () => {
+    const os = await novaOs();
+    const m = await material();
+    await receber(await pedido(m, 10, os.id), m, 10);
+    const [r0] = await ativasOs(m);
+    await cfg('aprovacao_automatica', '1');
+    let r;
+    try {
+      r = await as(SOL, () => request(app).post(`${API}/requisicoes`).send({ os_referencia: os.numero, itens: [{ material_id: m, quantidade: 3 }] }));
+    } finally { await cfg('aprovacao_automatica', '0'); }
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    assert.deepStrictEqual([r.body.aprovacao, r.body.status], ['automatica', 'TOTALMENTE_RESERVADA']);
+    assert.strictEqual(await holdReq(r.body.id), 3);
+    const depois = await dbGet(db, 'SELECT status, quantidade FROM reservas_material_almoxarifado WHERE id = ?', [r0.id]);
+    assert.deepStrictEqual([depois.status, Number(depois.quantidade)], ['ATIVA', 7]);
+    assert.deepStrictEqual(await mat(m), { q: 10, r: 10 });
+  });
+
+  // ══════════════ Fase 5 — I1 pelas rotas ══════════════
+  await test('[Fase 5, I1, alcancavel] caixa sem reserva montada pelas ROTAS (entrada, aprovar, separar, liberar a reserva): as rotas recusam deixar o livre de caixa negativo, entao a nota de 10 da OS reserva 10 (o teto do I1 nao morde)', async () => {
+    const os = await novaOs();
+    const m = await material();
+    await entradaManual(m, 3);
+    const A = await criar(m, 3, 'OS-ALHEIA');
+    assert.strictEqual(await aprovar(A), 'TOTALMENTE_RESERVADA');
+    const it = await itemDe(A);
+    assert.strictEqual((await request(app).put(`${API}/requisicoes/${A}/separar`).send({ itens_separados: [{ item_id: it, quantidade_separada: 3 }] })).status, 200);
+    const resA = await dbGet(db, "SELECT id FROM reservas_material_almoxarifado WHERE requisicao_id = ? AND status = 'ATIVA'", [A]);
+    const lib = await request(app).post(`${API}/reservas/${resA.id}/liberar`).send({ motivo: 'teste e171 fase 5' });
+    assert.strictEqual(lib.status, 200, JSON.stringify(lib.body));
+    const livreCaixa = async () => Number((await dbGet(db, `SELECT ${caixaSql.livreDeCaixaSql()} AS l
+      FROM materiais_almoxarifado WHERE id = ?`, [m])).l);
+    assert.strictEqual(await livreCaixa(), 0, 'premissa: 3 na caixa sem reserva, fisico 3');
+    // As portas que baixariam o livre de caixa abaixo de zero recusam:
+    const aj = await request(app).post(`${API}/movimentacoes/v2`).send({ material_id: m, tipo: 'AJUSTE', quantidade: 1, motivo: 'inv', justificativa: 'contou 1' });
+    assert.strictEqual(aj.status, 400, JSON.stringify(aj.body));
+    assert.ok(/deixaria o disponível negativo/.test(aj.body.error), aj.body.error);
+    const sd = await request(app).post(`${API}/movimentacoes/v2`).send({ material_id: m, tipo: 'SAIDA', quantidade: 1, motivo: 'x', justificativa: 'teste' });
+    assert.strictEqual(sd.status, 400, JSON.stringify(sd.body));
+    const mr = await request(app).post(`${API}/reservas`).send({ material_id: m, quantidade: 1, os_referencia: 'X' });
+    assert.ok(mr.status >= 400, JSON.stringify(mr.body));
+    const R = await criar(m, 2, 'OS-OUTRA');
+    await aprovar(R);
+    assert.strictEqual(await holdReq(R), 0, 'a aprovacao desconta a caixa: nao reserva nada');
+    assert.strictEqual(await livreCaixa(), 0);
+    await receber(await pedido(m, 10, os.id), m, 10);
+    assert.strictEqual(await saldoOsAtivo(m), 10, 'livre de caixa 0 antes + 10 da nota: o teto (10) nao corta');
+    assert.deepStrictEqual(await mat(m), { q: 13, r: 10 });
   });
 
   await test('[chave da OS] a comparacao ignora caixa, espacos e o prefixo "OS"; vazio nunca casa', async () => {

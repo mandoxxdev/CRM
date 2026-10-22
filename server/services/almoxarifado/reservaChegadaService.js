@@ -465,6 +465,12 @@ async function distribuirParaOs(db, user, materialId, teto, rotulos, acc, os) {
   const r = await reservaDaOs.reservarParaOsSobTrava(db, user, {
     materialId, quantidade: teto - usado, os, recebimentoId: rotulos.recebimento_id,
   });
+  // Etapa 171 (Fase 5): a OS fechou entre a leitura e a reserva — a reserva saiu ja solta e o que ela prendia vai para a fila
+  // geral, como a nota faria com a OS fechada desde o comeco (ainda sob a trava de quem chama).
+  if (r && r.solta_os_fechada) {
+    await distribuirSemLock(db, user, materialId, r.quantidade, rotulos, acc);
+    return;
+  }
   if (r) {
     if (!acc.resultado.reservas_os) acc.resultado.reservas_os = [];
     acc.resultado.reservas_os.push(r);

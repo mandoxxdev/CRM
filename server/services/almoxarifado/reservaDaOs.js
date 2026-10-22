@@ -105,9 +105,53 @@ async function jaReservadoDaNotaParaOs(db, recebimentoId, materialId, osId) {
 }
 
 /**
+ * Etapa 171 (Fase 5) — a OS pode fechar (o `PUT` da OS: `UPDATE` do status + `liberarReservasDaOs`) entre a leitura da OS
+ * aberta e a criacao da reserva da OS: o cancelamento nao pega a trava (liberar nao pega, B441), entao roda no meio, nao ve
+ * a reserva que ainda nao existe, e a reserva nascia ATIVA, sem expiracao, para uma OS fechada — presa para sempre (sonda
+ * sonda-toctou; 1 reserva ATIVA de 10, OS cancelado). Por isso quem CRIA a reserva da OS relê a OS DEPOIS de criar: fechada
+ * ou sumida, solta na hora com o motivo da OS encerrada (`OS <numero> <status> — material volta ao estoque`, o mesmo do
+ * osEncerradaService). Fecha a janela: o cancelamento grava o status ANTES de procurar as reservas; se ele procurou antes
+ * desta criacao, o status ja estava gravado e esta releitura o ve; se procurou depois, ele mesmo a solta (e o
+ * `liberarReserva` daqui perde o claim — tolerado, sem desconto em dobro).
+ * Sem trava nova: liberar nao pega (quem chama pode estar sob a trava do material ou nao). Nunca lanca.
+ * @returns {Promise<boolean>} true se ESTA chamada soltou a reserva (quem chama pode redistribuir o que soltou).
+ */
+async function soltarSeOsFechou(db, user, reservaId, osId, numeroOs) {
+  let os;
+  try {
+    os = await dbGet(db, 'SELECT status FROM ordens_servico WHERE id = ?', [osId]);
+  } catch (e) {
+    avisoSeNaoForTabelaAusente('releitura da OS depois de reservar', e);
+    return false;
+  }
+  // eslint-disable-next-line global-require
+  const { osFechada } = require('../compras/pedidoCompraService');
+  if (os && !osFechada(os.status)) return false;
+  // eslint-disable-next-line global-require
+  const { motivoDaLiberacao } = require('./osEncerradaService');
+  const motivo = motivoDaLiberacao(numeroOs, os ? os.status : 'excluída');
+  try {
+    await module.exports.liberarDaOsFechada(db, user, reservaId, motivo);
+    return true;
+  } catch (e) {
+    const agora = await dbGet(db, 'SELECT status FROM reservas_material_almoxarifado WHERE id = ?', [reservaId]).catch(() => null);
+    if (!(agora && agora.status !== 'ATIVA')) {
+      console.warn(`[almoxarifado-reserva-os] a OS ${numeroOs} fechou e a reserva ${reservaId} nao foi solta: ${e.message}`);
+    }
+    return false;
+  }
+}
+
+/** Pelo objeto do modulo (o controle positivo da Fase 5 o desliga). */
+function liberarDaOsFechada(db, user, reservaId, motivo) {
+  return stockService.liberarReserva(db, user, reservaId, null, { statusFinal: 'LIBERADA', motivo, motivoMovimentacao: motivo });
+}
+
+/**
  * Cria a reserva da OS SOB A TRAVA que quem chama ja segura (nota, inspecao, NC — `criarReservaSemTrava`, nunca aninha).
  * I1: teto = min(quantidade, livre de caixa do material agora). Nunca lanca: falhou, `console.warn` e devolve null.
- * @returns {Promise<{reserva_id, material_id, os_id, quantidade}|null>}
+ * Fase 5: se a OS fechou no meio, a reserva sai ja LIBERADA e o retorno traz `solta_os_fechada: true`.
+ * @returns {Promise<{reserva_id, material_id, os_id, quantidade, solta_os_fechada?}|null>}
  */
 async function reservarParaOsSobTrava(db, user, { materialId, quantidade, os, recebimentoId }) {
   if (!(num(quantidade) > EPS) || !os) return null;
@@ -119,6 +163,10 @@ async function reservarParaOsSobTrava(db, user, { materialId, quantidade, os, re
     const r = await stockService.criarReservaSemTrava(db, user, {
       material_id: materialId, quantidade: q, os_id: os.id, os_referencia: os.numero_os, observacoes: motivo,
     }, { sistema: true, recebimento_id: recebimentoId, motivo, semExpiracao: true });
+    // Fase 5: a OS fechou no meio -> solta agora; quem chama devolve o soltado a fila geral (a OS fechada e a de hoje).
+    if (await soltarSeOsFechou(db, user, r.id, os.id, os.numero_os)) {
+      return { reserva_id: r.id, material_id: Number(materialId), os_id: os.id, quantidade: q, solta_os_fechada: true };
+    }
     return { reserva_id: r.id, material_id: Number(materialId), os_id: os.id, quantidade: q };
   } catch (e) {
     console.warn(`[almoxarifado-reserva-os] Falha ao reservar o material ${materialId} para a OS ${os.numero_os} `
@@ -171,6 +219,8 @@ async function recriarReservaDaOs(db, user, { material_id: materialId, quantidad
       material_id: materialId, quantidade, os_id: osId, os_referencia: numeroOs,
       observacoes: `${motivoReservaDaOs(numeroOs)} — ${motivoRecriacao}`,
     }, { sistema: true, recebimento_id: recebimentoId, motivo: motivoReservaDaOs(numeroOs), semExpiracao: true });
+    // Fase 5: a OS fechou entre soltar a original e recriar (estorno recusado, aprovacao que perdeu, excesso) -> solta agora.
+    if (await soltarSeOsFechou(db, user, r.id, osId, numeroOs)) return null;
     return r.id;
   } catch (e) {
     console.warn(`[almoxarifado-reserva-os] Falha ao recriar a reserva da OS ${numeroOs} (material ${materialId}, `
@@ -190,4 +240,6 @@ module.exports = {
   reservarParaOsSobTrava,
   reservasDaOsParaRequisicao,
   recriarReservaDaOs,
+  soltarSeOsFechou,
+  liberarDaOsFechada,
 };
