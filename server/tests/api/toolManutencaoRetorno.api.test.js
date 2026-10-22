@@ -9,6 +9,7 @@ const assert = require('assert');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbAll, dbGet } = require('../../services/almoxarifado/db');
+const diaLocal = require('../../services/diaLocal');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -200,6 +201,69 @@ const concluir = (app, mid, corpo) => request(app).put(`/api/almoxarifado/manute
     const ids = [...r.body.vencidas, ...r.body.a_vencer].map((x) => x.id);
     assert.ok(ids.includes(viva), 'a ferramenta viva sem calibracao tinha de aparecer como vencida');
     assert.ok(!ids.includes(baixada), 'a baixada apareceu no painel');
+    await close();
+  });
+
+  // ── Fase 5 (revisao adversarial independente) ─────────────────────────────────────────────
+  await test('Fase 5 / RN-177.09: baixada com calibracao VALIDA a vencer sai do painel (metade positiva: a viva com a mesma calibracao aparece)', async () => {
+    const { app, db, close } = await createTestApp();
+    const viva = await novaFerramenta(db, { exige_calibracao: 1 });
+    const baixada = await novaFerramenta(db, { exige_calibracao: 1, status: 'BAIXADA' });
+    const hoje = diaLocal.hojeLocalISO();
+    for (const fid of [viva, baixada]) {
+      await dbRun(db, `INSERT INTO calibracoes_ferramenta_almoxarifado (ferramenta_id, data_calibracao, data_validade)
+        VALUES (?, date(?, '-30 days'), date(?, '+10 days'))`, [fid, hoje, hoje]);
+    }
+    const r = await request(app).get('/api/almoxarifado/calibracoes/painel').expect(200);
+    assert.ok(r.body.a_vencer.map((x) => x.id).includes(viva), 'a viva com calibracao a vencer em 10 dias tinha de aparecer');
+    const ids = [...r.body.vencidas, ...r.body.a_vencer].map((x) => x.id);
+    assert.ok(!ids.includes(baixada), 'a baixada com calibracao valida apareceu no painel');
+    await close();
+  });
+
+  await test('Fase 5 / B1140: baixa sem condicao e aceita — BAIXADA, condicao_retorno NULL, destino BAIXA', async () => {
+    const { app, db, close } = await createTestApp();
+    const { fid, mid } = await emManutencao(app, db);
+    const r = await concluir(app, mid, { destino: 'BAIXA', observacoes: 'Descartada sem laudo' }).expect(200);
+    assert.deepStrictEqual(r.body, { success: true, status: 'BAIXADA' });
+    assert.strictEqual(await statusDe(db, fid), 'BAIXADA');
+    const m = await manutencao(db, mid);
+    assert.strictEqual(m.condicao_retorno, null);
+    assert.strictEqual(m.destino, 'BAIXA');
+    await close();
+  });
+
+  await test('Fase 5: anomalia — ferramenta fora de EM_MANUTENCAO ao concluir com baixa nao grava destino BAIXA nem a trilha BAIXA', async () => {
+    const { app, db, close } = await createTestApp();
+    const { fid, mid } = await emManutencao(app, db);
+    // fixture direta: alguem tirou a ferramenta de EM_MANUTENCAO por fora (o caminho anomalo de sempre)
+    await dbRun(db, "UPDATE ferramentas_almoxarifado SET status = 'BLOQUEADA' WHERE id = ?", [fid]);
+    const r = await concluir(app, mid, { condicao: 'INSERVIVEL', destino: 'BAIXA', observacoes: 'Motor queimado' }).expect(400);
+    assert.strictEqual(r.body.error, 'Estado da ferramenta mudou durante a conclusão da manutenção (status atual: BLOQUEADA)');
+    assert.strictEqual(await statusDe(db, fid), 'BLOQUEADA');
+    const m = await manutencao(db, mid);
+    assert.ok(m.data_fim, 'a manutencao continua fechada (como antes)');
+    assert.strictEqual(m.destino, null, 'gravou destino BAIXA sem a ferramenta ter sido baixada');
+    const baixa = await dbAll(db, `SELECT id FROM auditoria_log_almoxarifado
+      WHERE entidade = 'ferramenta' AND entidade_id = ? AND acao = 'BAIXA'`, [fid]);
+    assert.strictEqual(baixa.length, 0);
+    const fim = await dbAll(db, `SELECT dados_novos FROM auditoria_log_almoxarifado
+      WHERE entidade = 'ferramenta' AND entidade_id = ? AND acao = 'MANUTENCAO_FIM'`, [fid]);
+    assert.strictEqual(fim.length, 1);
+    assert.ok(/"destino_pedido":"BAIXA"/.test(fim[0].dados_novos), fim[0].dados_novos);
+    await close();
+  });
+
+  await test('Fase 5 / B1143: usuario sem perfil (PRODUCAO) leva 403 em concluir e em reverter-baixa; nada muda', async () => {
+    const { app, db, close, setUser } = await createTestApp();
+    const { fid, mid } = await emManutencao(app, db);
+    const fb = await novaFerramenta(db, { status: 'BAIXADA' });
+    setUser({ id: 7, nome: 'Chao de Fabrica', email: 'p@t.com' }); // sem perfil -> PRODUCAO
+    await concluir(app, mid, { condicao: 'INSERVIVEL', destino: 'BAIXA', observacoes: 'Motor queimado' }).expect(403);
+    assert.strictEqual((await manutencao(db, mid)).data_fim, null);
+    assert.strictEqual(await statusDe(db, fid), 'EM_MANUTENCAO');
+    await request(app).post(`/api/almoxarifado/ferramentas/${fb}/reverter-baixa`).send({ justificativa: 'baixa errada' }).expect(403);
+    assert.strictEqual(await statusDe(db, fb), 'BAIXADA');
     await close();
   });
 

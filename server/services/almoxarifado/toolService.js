@@ -292,10 +292,14 @@ async function concluirManutencao(db, user, manutencaoId, data = {}) {
 
   if (claimFerramenta.changes === 0) {
     const atual = await dbGet(db, 'SELECT status FROM ferramentas_almoxarifado WHERE id = ?', [manutencao.ferramenta_id]);
+    // Etapa 177 Fase 5: o destino pedido nao aconteceu — a linha nao pode dizer "BAIXA" com a ferramenta em outro status.
+    // Grava o destino efetivo (nenhum, NULL); o pedido vai para a trilha como destino_pedido.
+    await dbRun(db, 'UPDATE manutencoes_ferramenta_almoxarifado SET destino = NULL WHERE id = ?', [manutencaoId]);
     // Etapa 121 (C252, B784): a manutencao ja foi fechada — a falha da Auditoria nao troca o 400 abaixo (o status real) por 500
     await registrarAuditoriaDoAto(db, { entidade: 'ferramenta', entidade_id: manutencao.ferramenta_id, acao: 'MANUTENCAO_FIM',
       usuario_id: user.id, usuario_nome: user.nome || user.email,
-      dados_novos: { manutencao_id: Number(manutencaoId), anomalia: 'ferramenta_nao_estava_em_manutencao', status_atual: atual ? atual.status : null } });
+      dados_novos: { manutencao_id: Number(manutencaoId), anomalia: 'ferramenta_nao_estava_em_manutencao', status_atual: atual ? atual.status : null,
+        condicao, destino_pedido: destino } });
     throw Object.assign(new Error(`Estado da ferramenta mudou durante a conclusão da manutenção (status atual: ${atual ? atual.status : 'desconhecido'})`), { status: 400 });
   }
 
