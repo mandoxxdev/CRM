@@ -8,6 +8,9 @@ import jsPDF from 'jspdf';
 import { formatarDataDoBanco, hojeLocalISO, lerInstanteDoBanco } from './dataLocal';
 import { resolveMaterialPhotoUrl } from './resolveMaterialPhotoUrl';
 import { rotuloMotivo } from './epiEntrega';
+// Etapa 183 (RN-183.03): o MESMO texto do termo de ferramenta. De termoFerramenta (sem imports), nao de termoFerramentaPdf: aquele
+// importa carregarImagemComoDataUrl daqui e fecharia um ciclo.
+import { matriculaConfirmadaTexto } from './termoFerramenta';
 
 const txt = (v) => (v === null || v === undefined || String(v).trim() === '' ? '—' : String(v));
 
@@ -17,6 +20,13 @@ const diaDoInstante = (instante) => {
   const d = lerInstanteDoBanco(instante);
   return d ? formatarDataDoBanco(hojeLocalISO(d)) : '—';
 };
+
+// Etapa 183 (RN-183.04): o aparelho e o User-Agent gravado na evidencia, LITERAL (e prova; interpretar seria adivinhar), aparado.
+// No PDF, fatias de 110 caracteres por corte simples (fidelidade ao texto vale mais que a palavra inteira; o gravado tem <= 300).
+export const LARGURA_LINHA_APARELHO = 110;
+const SEM_APARELHO = 'Não registrado';
+const textoDoAparelho = (ua) => String(ua ?? '').trim() || SEM_APARELHO;
+const fatiar = (s, n) => { const out = []; for (let i = 0; i < s.length; i += n) out.push(s.slice(i, i + n)); return out; };
 
 /** Descritor da ficha — a moeda entre a tela, o teste e o renderizador. */
 export function montarFichaEpi({ colaborador, entregas = [], geradoEm } = {}) {
@@ -35,6 +45,10 @@ export function montarFichaEpi({ colaborador, entregas = [], geradoEm } = {}) {
     entreguePor: txt(e.entregue_por_nome),
     assinaturaUrl: resolveMaterialPhotoUrl(e.arquivo_url),
     hash: e.registro_sha256 || '—',
+    // Etapa 183 (RN-183.03): a matricula DA ENTREGA (snapshot do ato, no HMAC), nao a do cadastro de hoje (c.matricula).
+    matriculaConfirmada: matriculaConfirmadaTexto({ confirmado_por_matricula: e.confirmado_por_matricula }, { matricula: e.matricula }),
+    aparelho: textoDoAparelho(e.user_agent),
+    linhasAparelho: fatiar(textoDoAparelho(e.user_agent), LARGURA_LINHA_APARELHO),
   }));
   return {
     titulo: `Ficha de EPI — ${c.nome || 'colaborador'}`,
