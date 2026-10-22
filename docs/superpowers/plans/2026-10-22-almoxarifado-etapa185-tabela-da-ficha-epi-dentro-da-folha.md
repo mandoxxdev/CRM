@@ -1,6 +1,6 @@
 # Etapa 185 — A tabela da ficha de EPI (e o termo de ferramenta) cabe na folha: célula quebra em linhas, nada é cortado
 
-> **Status:** 📝 **PLANO (2026-10-22)** — Fase 0 medida com o jsPDF real; Fase 2 (revisão fresca) feita — ver "Emendas da Fase 2" (0 críticos, 3 importantes, 9 menores; prevalecem). Nenhuma task executada.
+> **Status:** 🟡 **T1–T3 FEITAS (2026-10-22)** — `b194b38b`, `b76f7146`, `06ef5377`; suítes verdes (ver "Execução"). Falta a T4 (Fase 5 + fechamento). Fase 2 (revisão fresca) feita — ver "Emendas da Fase 2" (0 críticos, 3 importantes, 9 menores; prevalecem).
 > Feature **25** (entrega de EPI) e **feature das ferramentas** (termo de responsabilidade, Etapa 180). Corrige **B1208** / **C444**
 > (registrados na Etapa 183, defeito da 178). Decisões desta etapa a partir de **B1215** (a 184 reservou até B1214).
 > Antes: Etapa 184 (aprovadores da liberação por valor) — **outra sessão revisa a 184 em paralelo: não tocar nos arquivos dela**
@@ -409,4 +409,99 @@ teste (I1, M1, M2, M4), de texto de decisão com fato errado (I2, I3) e de contr
 
 ## Execução
 
-*(vazia — a preencher pelas tasks, com hash, vermelho antes, controles e suítes.)*
+### T1 — ✅ `b194b38b` (2026-10-22, sequencial na main)
+
+- **Sonda antes** (`p185-sonda-tabela.js`, jsPDF real, lê o arquivo de produção): saída em `e185-sonda-antes-tabela.txt` — igual à Fase 0
+  (`Joao Almoxarife` 198,6; `Maria Aparecida dos Santo` 214,0; `Primeira entreg`; pior caso de *Entregue por* 250,6).
+- **Vermelho antes:** 10 de 28 caíram, pelo motivo certo — x antigos (`34, 86…` → `fora das colunas`), `Joao Almoxarife` em fonte 9 a
+  **198,6** (os 3 testes da 183 que chamam `textosFora` caíram também: a régua passou a olhar toda fonte, e a `ENTREGA` deles tem o
+  B1208), título de 90 letras a **252,1** em fonte 14, `Maria Aparecida dos Santo` 214. Log `e185-t1-vermelho.log`.
+- **Verde:** `fichaEpiPdf` 28/28 + `EpiAlmoxarifado` 26/26 = **54/54**, `EpiAlmoxarifado.test.js` **sem** mudança.
+- **Controles** (perl, âncora = 1, md5 antes `79586e47…` / sabotado / restaurado = antes, `cmp` ok; `e185-sab.sh`, logs `e185-sab-c*.log`):
+  - (c1) corte de hoje numa linha → caem RN-185.01 em `celulasInvasoras` (`EPI-MASC-SOLDA-07 — Mascara de` a 93,37 > 81), RN-185.02 na junção
+    (`…Mascaradesolda`), RN-185.03 (`Primeira entreg`), RN-185.06 em `textosForaDaFolha` (`Maria Aparecida dos Santo` 206), e as duas RN-185.04;
+  - (c2) só a 1ª linha → cai **RN-185.02** na junção; a régua de margem **não** cai (RN-185.01 cai só na metade positiva `:422`,
+    *Entregue por* com 1 linha; RN-185.06 verde);
+  - (c3) altura com `4` fixo → caem RN-185.04 e RN-185.06 em `conferirRodape` (`line` 295, `addImage` até 292,5);
+  - (c4) útil sem a folga → caem RN-185.01 e RN-185.06 em `celulasInvasoras`: EPI 81,63 > 81, `Tamanh` 142,18 e `especial` 142,56 > 142.
+    **Divergência:** a emenda citava também `Maria…Oliveira 196,89 > 196` — com o (c4) como o plano o escreve, a última coluna não muda
+    (vai até 196 com ou sem folga), então esse caso não cai; os outros dois bastam;
+  - (c5) colunas antigas → RN-185.03 cai em `"Joao", "Almoxarife"` (2 `text`); caem também as montagens `240` (183 (a)), `229` (183 M1 e
+    RN-185.04). **Ajuste do teste:** na 1ª rodada o RN-185.03 caía antes, na conferência dos x do cabeçalho; a asserção "um `text` por
+    célula" foi posta **antes** da dos x e o (c5) re-rodado para provar que ela sabe cair sozinha;
+  - (c6) título sem quebra → caem RN-185.05 e RN-185.06 em `textosForaDaFolha` (fonte 14, 252,1).
+- **Divergências:** (1) o teste da RN-185.01 afirmava a quebra literal `['Maria Aparecida dos', 'Santos Oliveira']` — o `splitTextToSize`
+  dá `['Maria Aparecida', 'dos Santos Oliveira']`; palpite meu, não do plano (que pede "2 linhas"): o teste passou a conferir 2 linhas e a
+  junção com espaço. (2) `COLUNAS` e `UTIL_DA_COLUNA` são do módulo (literais, comentário com `M + …`), não do corpo de
+  `gerarFichaEpiPdf` — mesmo valor do contrato. (3) M1 (aparar à direita) está em `linhasPorLargura`, usada pelas células **e** pelo
+  cabeçalho; sem controle próprio (o plano não prescreve).
+
+### T2 — ✅ `b76f7146` (2026-10-22, sequencial na main, depois da T1)
+
+- **Gravadores primeiro:** os dois `jest.mock('jspdf')` (termo e tela de ferramentas) passaram a medir com o jsPDF real — **61/61 verdes
+  antes** de qualquer mudança de produção, sem mudar asserção.
+- **Vermelho antes:** 5 de 12 no `termoFerramentaPdf.test.js` — `doc.texto` `undefined` (os dois testes do descritor, `:64`/`:77`),
+  `quebrarTexto` com a régua medida (linha > 182), CAIXA ALTA a **210,6** em fonte 10, `Colaborador: …` a **279,8** em fonte 9. O teste do M6
+  (`quebrarTexto('WW', 1, medir)`) passou de primeira (com a régua de contagem, `'WW'`/1 também dá `['W','W']`) — controle abaixo.
+- **Verde:** `termoFerramentaPdf` + `FerramentasAlmoxarifado` = **65/65**; o teste da tela (`'Declaro que recebi a ferramenta em perfeito
+  estado.'` como um `text`) e os antigos do termo **sem** mudança de asserção.
+- **Contrato do descritor (RN-185.09), intencional:** `linhasTexto` saiu, `texto` entrou (`String(t.texto ?? '')`); os testes `:45`/`:57` de
+  antes passaram a conferir `texto` (e a ausência de `linhasTexto`). `grep linhasTexto client/src` → 0.
+- **Controles** (mesmo protocolo; md5 antes `ea05a598…`, restaurado = antes, `cmp` ok; logs `e185-sab-t2c*.log`):
+  - (c1) desenho com `quebrarTexto(doc.texto, 95)` → cai RN-185.07 (PDF) em `textosForaDaFolha` (`MAIUSCULAS…`, fonte 10, **210,6**);
+  - (c2) pedaço cortado por contagem (`palavra.slice(0, largura)`) → cai o unitário da RN-185.07 na régua (a linha de 182 `W`) e o PDF
+    (`WWW…` a 617,5);
+  - (c3) linha da devolução sem quebra → cai RN-185.08 em `textosForaDaFolha` (`Devolução prevista: 05/11/2026…`, fonte 9, **200,8** —
+    a Fase 0 mediu 199,9 com outra data/hora; mesmo defeito);
+  - (c4) última linha do parágrafo descartada → caem as **junções** da RN-185.07 (`:207` e `:224`), **não** as réguas (`:203`, `:221`);
+    caem também os dois testes antigos que veem `quatro` e `Declaro que recebi a ferramenta.`;
+  - (M6) a sabotagem da guarda (`pedaco !== '' &&` fora) faria o Jest **não terminar** (laço infinito, memória) — controle rodado fora do Jest,
+    em `e185-m6-controle.js` (jsPDF real, lê `quebrarTexto` da produção, cap de 1000 voltas): produção → `["W","W"]`; sem guarda →
+    `NAO TERMINA voltas 1001`.
+- **Divergências:** (1) a quebra por largura (`linhasQuebradas`) vale também para o **título** (fonte 14), a linha da **versão** e o
+  **aviso** de provisório — o contrato listava as linhas de identificação e "avisos"; o título e a versão entraram para a pergunta da T4
+  ("algum texto ainda é desenhado sem medida?") ter só os dois hashes (fonte 7, tamanho fixo: 162,8 / 135,3) e o
+  `(imagem da assinatura indisponível)` (texto fixo, curto) como resposta. (2) `colaborador.nome` de 60 e `ferramenta.nome` de 80
+  conferidos por `toHaveLength` no teste (o primeiro palpite tinha 59/78 — corrigido antes do vermelho).
+
+### T3 — ✅ `06ef5377` (2026-10-22, depois de T1 e T2)
+
+- **Ficha pela tela** (`EpiAlmoxarifado.test.js`, describe *"Ficha: a tabela cabe na folha (Etapa 185)"*): a fixture **real**
+  `fichaEpi.rota.json` com `entregue_por_nome: 'Maria Aparecida dos Santos Oliveira'`, `material_nome` de 64 letras e
+  `motivo: 'PRIMEIRA_ENTREGA'` → *Ficha por colaborador* → *Gerar PDF* (a assinatura não carrega no teste: sai o aviso em x = 14, que o recorte
+  da I1 ignora) → `celulasInvasoras()` e `textosForaDaFolha()` vazios; metade positiva: 1 entrega com as 8 colunas, *Entregue por* em 2
+  linhas com o nome inteiro, EPI em 2+ com a junção = `código — nome`, `Primeira entrega` num `text`.
+- **Termo pela tela** (`FerramentasAlmoxarifado.test.js`, no describe do termo da 180): *Termo* → *PDF do termo* com texto em CAIXA ALTA e
+  `criado_por_nome` de 44 → régua vazia; texto em 2+ linhas de fonte 10 com junção = texto; o nome inteiro na linha da devolução.
+- **Verde:** os dois arquivos **81/81** (passaram de primeira — esperado, T1/T2 já feitas; provados pelos controles cruzados).
+- **Controles cruzados** (mesmo protocolo, `cmp` ok): (c1) da T1 → cai o teste da tela de EPI em `celulasInvasoras` (`EPI-183I — Mascara de
+  solda au…` a **87,09** > 81; `Maria Aparecida dos Santo` a **206** > 196); (c1) da T2 → cai o da tela do termo na régua
+  (`MAIUSCULAS…`, fonte 10, **210,6**).
+- **Sonda real** — antes (`p185-sonda-tabela.js` / `p185-sonda-outros.js` sobre o arquivo de produção antes da T1:
+  `e185-sonda-antes-*.txt`) e **depois** (`p185-sonda-pos.js`, lê `COLUNAS`, `UTIL_DA_COLUNA`, o aparar e a `quebrarTexto` **do arquivo de
+  produção**; saída `e185-sonda-pos.txt`):
+
+  | Coluna | antes: pior texto real (fim, mm) | depois: maior fim / limite | linhas do pior caso |
+  |---|---|---|---|
+  | Data | 29,7 | 29,7 / 31 | 1 |
+  | EPI | 95,4 (invadia o CA em 86; perdia 34) | **80,6** / 81 | 70 car. 3, 84 car. 4 |
+  | CA | 127,8 (20 `W`) | 99,9 / 101 | 20 `W` 4 |
+  | Validade CA | 121,7 | 119,5 (cabeçalho) / 120 | 1 |
+  | Qtd | 136,7 | 129,7 / 130 | `100000` 2 (B1221) |
+  | Tam. | 155,6 (perdia 11) | 140,5 / 142 | 20 car. 4 |
+  | Motivo | `Primeira entreg` (perdia 1) | **166,3** / 167 — `Primeira entrega` em 1 linha | 1 |
+  | Entregue por | **214,0** (`Maria Aparecida dos Santo`), 198,6 (`Joao Almoxarife`) | **195,4** / 196 — `Joao Almoxarife` 190,6 em 1 linha | 35 car. 2, 43 car. 3, 60 `W` 7 |
+
+  Termo: texto em CAIXA ALTA **210,6 → 190,2** (2 linhas), 200 `W` **329,0 → 193,1** (4), texto comum 168,6 → 190,6 (agora vai até a
+  margem, 182 mm, e não 95 letras); devolução com nome de 44 **199,9 → 186,8** (2 linhas); matrícula confirmada de 40 **195,0 → 195,5**
+  (2 linhas; antes cabia por 1 mm, a 41ª passava). **Junções = texto em 43/43 casos; 0 casos além do limite.** Controle da sonda
+  (`e185-sonda-pos-controle.js`: útil + 1 mm, limite o de produção) → **6** casos além do limite (EPI 81,6; Tam. 142,9; *Entregue por*
+  196,9) — a sonda sabe falhar.
+- **Divergência:** nenhuma no escopo. A sonda pós mede a quebra com o `splitTextToSize` do jsPDF de Node (o mesmo binário do client), não
+  passa pelo `gerarFichaEpiPdf` — a passagem pelo gerador é a dos testes da T1/T3.
+- **Suítes no fim** (sequenciais, uma vez cada, sobre `06ef5377`; logs `e185-log-*.txt`): `test:api` **527/527 arquivos OK**;
+  `test:almoxarifado` **44 passou, 0 falhou**; `test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0**; client
+  `CI=true react-scripts test` **180 suítes, 2399/2399**; `CI=true react-scripts build` **Compiled successfully**.
+- **Falta:** T4 (Fase 5 — revisão adversarial com sonda, com a pergunta "algum texto ainda é desenhado sem medida?": no termo, só os dois
+  hashes de fonte 7 e o aviso fixo de imagem; na ficha, `Gerado em`, o hash, a confirmação/aparelho (já medidos, 183) e os avisos fixos —
+  e o fechamento pela skill `fechar-etapa`, com as letras B1215–B1222 e as emendas I2/I3 no texto da B1217/B1220 e a C445 incondicional).
