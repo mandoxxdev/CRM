@@ -38,8 +38,25 @@ jest.mock('../../hooks/useAlmoxPermissoes', () => ({
 }));
 const mockPdf = [];
 // Funcao comum, nao jest.fn: o CRA liga `resetMocks` e apagaria a implementacao antes de cada teste.
-jest.mock('jspdf', () => function JsPdfGravador() {
-  return new Proxy({}, { get: (_alvo, nome) => (...args) => { mockPdf.push([nome, ...args]); } });
+// Etapa 183, Fase 5 (M1): a ficha quebra as linhas da evidencia por LARGURA (getTextWidth/splitTextToSize) — essas medidas vao para um
+// jsPDF real (molde: fichaEpiPdf.test.js); o resto continua gravado. O console.error do carregamento (sonda de canvas do jsdom) e calado.
+jest.mock('jspdf', () => {
+  const erroOriginal = console.error;
+  console.error = () => {};
+  let JsPdfReal;
+  try { ({ jsPDF: JsPdfReal } = jest.requireActual('jspdf')); } finally { console.error = erroOriginal; }
+  return function JsPdfGravador() {
+    const medidor = new JsPdfReal({ format: 'a4', orientation: 'portrait', unit: 'mm' });
+    const soMedem = { getTextWidth: true, splitTextToSize: true };
+    return new Proxy({}, {
+      get: (_alvo, nome) => (...args) => {
+        if (nome === 'setFontSize') medidor.setFontSize(...args);
+        if (soMedem[nome]) return medidor[nome](...args);
+        mockPdf.push([nome, ...args]);
+        return undefined;
+      },
+    });
+  };
 });
 
 const COLABORADORES = [
