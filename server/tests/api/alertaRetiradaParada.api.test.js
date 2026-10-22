@@ -175,6 +175,28 @@ process.on('exit', (code) => {
     assert.strictEqual(c.linhas[0].id, x.R, 'a mais antiga primeiro');
   });
 
+  // Fix-round da Fase 5 (Menor 2): o caso acima so tinha itens SEM entrega, entao trocar a regua por `quantidade_separada > 0`
+  // ficava verde. Aqui o item 1 foi TODO entregue numa rodada anterior (separado = entregue) e o item 2 esta na caixa: so ele conta.
+  await test('[182 RN-04] itens_na_caixa desconta o que ja foi entregue numa rodada anterior (separado - entregue)', async () => {
+    const x = await pronta({ qs: [2, 3], sep: [2, 0] });
+    const e1 = await como('ALMOX').put(`${API}/requisicoes/${x.R}/entregar`, { itens_atendidos: [{ item_id: x.itens[0], quantidade_atendida: 2 }] });
+    assert.strictEqual(e1.status, 200, `entregar rodada 1: ${JSON.stringify(e1.body)}`);
+    assert.strictEqual((await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id=?', [x.R])).status, 'PARCIALMENTE_ATENDIDA');
+    const s2 = await como('ALMOX').put(`${API}/requisicoes/${x.R}/separar`, { itens_separados: [{ item_id: x.itens[1], quantidade_separada: 3 }] });
+    assert.strictEqual(s2.status, 200, `separar rodada 2: ${JSON.stringify(s2.body)}`);
+    const l2 = await como('ALMOX').put(`${API}/requisicoes/${x.R}/liberar-retirada`, {});
+    assert.strictEqual(l2.status, 200, `liberar rodada 2: ${JSON.stringify(l2.body)}`);
+    const its = await dbAll(db, `SELECT COALESCE(quantidade_separada,0) AS s, COALESCE(quantidade_entregue, quantidade_atendida, 0) AS e
+      FROM itens_requisicao_almoxarifado WHERE requisicao_id=? ORDER BY id`, [x.R]);
+    // premissa: os DOIS itens tem separado > 0 (senao a sabotagem `quantidade_separada > 0` nao teria o que contar a mais)
+    assert.deepStrictEqual(its.map((i) => [Number(i.s), Number(i.e)]), [[2, 2], [3, 0]], `premissa dos itens: ${JSON.stringify(its)}`);
+    await envelhecer(x.R, 6 * D + 37);
+    const lx = (await cartao()).linhas.find((l) => l.id === x.R);
+    assert.ok(lx, 'no cartao (PRONTA de novo, liberada ha 6 d)');
+    assert.strictEqual(lx.itens_na_caixa, 1, `itens_na_caixa: o item 1 ja foi entregue e nao esta na caixa (veio ${lx.itens_na_caixa})`);
+    await dbRun(db, 'UPDATE requisicoes_almoxarifado SET ativo = 0 WHERE id = ?', [x.R]); // nao polui a ordem dos seguintes
+  });
+
   // ── RN-182.04: as saidas ──────────────────────────────────────────────────────────────────────────────────────
   await test('[182 RN-04] B504 (devolver da caixa) tira do cartao', async () => {
     const x = await pronta();
