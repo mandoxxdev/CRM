@@ -580,16 +580,21 @@ async function criarRecebimento(db, user, data) {
 
   // Etapa 176 (RN-176.01..04, C1, M2): a OS e a guarda do dono, ANTES do INSERT (nada gravado na recusa). Qualquer item de
   // material de cliente que nao case com o cliente da OS EFETIVA (a do pedido, ou a propria) recusa a nota inteira.
-  const { osIdProprio, osIdEfetiva } = await resolverOsDaCriacao(db, data.os_id,
+  // Fase 5 (B1152/B1153): a guarda RECUSA so no recebimento SEM pedido (a OS propria, que o almoxarife escolheu e que
+  // `resolverOsDaCriacao` ja exigiu existente e ABERTA). Com pedido ela nao recusa: OS fechada ou sumida nao reserva (nada a
+  // proteger — a 171 aceitava), e a OS aberta de outro cliente ou sem cliente faz o material entrar LIVRE (a conferencia do
+  // dono sob a trava, `reservaDaOs.reservarParaOsSobTrava`, nao deixa a reserva nascer). Recusar com pedido travava para
+  // sempre o pedido ja parcialmente recebido (`atualizarPedido` bloqueia depois do recebimento).
+  const { osIdProprio } = await resolverOsDaCriacao(db, data.os_id,
     pedido?.id || pedido_compra_id || null, pedido);
-  if (osIdEfetiva) {
+  if (osIdProprio) {
     const ids = [...new Set(itens.map((i) => Number(i.material_id)).filter((id) => id > 0))];
     const mats = ids.length ? await dbAll(db, `SELECT id, codigo, proprietario_cliente_id FROM materiais_almoxarifado
       WHERE id IN (${ids.map(() => '?').join(',')})`, ids) : [];
     const porId = new Map(mats.map((m) => [Number(m.id), m]));
     // eslint-disable-next-line global-require
     const problemasDono = await require('./ownerRules').problemasDoDonoComOs(db,
-      itens.map((i) => porId.get(Number(i.material_id))).filter(Boolean), osIdEfetiva);
+      itens.map((i) => porId.get(Number(i.material_id))).filter(Boolean), osIdProprio);
     if (problemasDono.length) throw Object.assign(new Error(problemasDono.join('; ')), { status: 400 });
   }
 
@@ -1694,7 +1699,11 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id,
   // Etapa 176 (I4): a guarda do dono da criacao (RN-176.04, M2) roda de novo aqui — o dono do material pode trocar entre
   // criar e processar (material sem historico troca sem permissao, ownerRules.assertTrocaDeDonoPermitida). So os itens que
   // vao entrar agora (os mesmos `continue` do laco acima). OS que sumiu: passa (M2 — a nota processa e nao reserva).
-  if (osIdDaNota) {
+  // Fase 5 (B1152/B1153): so no recebimento SEM pedido e com a OS ABERTA (`osAbertaDoRecebimento` — fechada ou sumida nao
+  // reserva, nada a proteger). Com pedido nao recusa: a nota de pedido criada antes da 176 (ou cuja OS mudou) processa, e o
+  // material de dono que nao casa entra livre (conferencia sob a trava na reserva da OS). Recusar travava o pedido.
+  // eslint-disable-next-line global-require
+  if (osIdDaNota && !rec.pedido_compra_id && await require('./reservaDaOs').osAbertaDoRecebimento(db, rec.id)) {
     const entram = itens.filter((i) => quantidadeDoItem(i) > 0 && !i.entrada_estoque_em && i.material_ativo)
       .map((i) => ({ codigo: i.material_codigo, proprietario_cliente_id: i.proprietario_cliente_id }));
     // eslint-disable-next-line global-require
