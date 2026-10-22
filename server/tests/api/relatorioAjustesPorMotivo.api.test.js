@@ -172,8 +172,10 @@ function helpers(app, db, setUser) {
     assert.strictEqual(inv.motivo, INVENTARIO);
     assert.strictEqual(inv.motivo_id, null);
     assert.strictEqual(inv.ajustes, 1);
+    // Etapa 170 (B1085): o `ultimo_em` e o `created_at` em UTC (a tela converte); comparar o prefixo cru com o HOJE de Brasilia falhava
+    // das 21h a meia-noite — o dia vem do instante convertido
     for (const l of linhas) {
-      assert.ok(typeof l.ultimo_em === 'string' && l.ultimo_em.startsWith(HOJE), `ultimo_em: ${JSON.stringify(l)}`);
+      assert.ok(typeof l.ultimo_em === 'string' && diaLocal.instanteDoBancoNoFuso(l.ultimo_em).startsWith(HOJE), `ultimo_em: ${JSON.stringify(l)}`);
     }
   });
 
