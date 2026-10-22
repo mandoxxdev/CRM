@@ -365,6 +365,10 @@ async function safeAlter(db, sql) {
  *   a exclusao — e reescreveria quem entregou. SEM FK para `colaboradores` (I2): a ficha usa o snapshot quando o colaborador
  *   e excluido. SEM FK para material e movimentacao, pela mesma razao (nenhum UPDATE em cascata pode tocar estas linhas).
  * - A evidencia e GENERICA (`contexto`, `contexto_id`): o termo de responsabilidade de ferramenta (RN-D) vai reusa-la.
+ * - Fase 5 (revisao adversarial, critico 1): `sequencia` (UNIQUE, crescente, global da tabela) e `hash_anterior` (o
+ *   `registro_sha256` da evidencia anterior) encadeiam as evidencias — apagar uma deixa lacuna, e os dois entram no HMAC. As
+ *   colunas vao no CREATE e no safeAlter (bases de dev que ja tinham a tabela da T1; a linha antiga fica com `sequencia` NULL
+ *   e a verificacao da cadeia a acusa como "fora da cadeia" — a etapa nao foi publicada antes da Fase 5).
  */
 async function ensureEntregaEpi(db) {
   await safeAlter(db, 'ALTER TABLE materiais_almoxarifado ADD COLUMN ca_numero TEXT');
@@ -408,8 +412,14 @@ async function ensureEntregaEpi(db) {
     criado_por INTEGER,
     criado_por_nome TEXT,
     criado_em TEXT NOT NULL,
+    sequencia INTEGER,
+    hash_anterior TEXT,
     UNIQUE (contexto, contexto_id)
   )`);
+  await safeAlter(db, 'ALTER TABLE evidencias_assinatura_almoxarifado ADD COLUMN sequencia INTEGER');
+  await safeAlter(db, 'ALTER TABLE evidencias_assinatura_almoxarifado ADD COLUMN hash_anterior TEXT');
+  await dbRun(db, `CREATE UNIQUE INDEX IF NOT EXISTS ux_evidencias_assinatura_sequencia
+    ON evidencias_assinatura_almoxarifado (sequencia)`);
   for (const tabela of ['entregas_epi_almoxarifado', 'evidencias_assinatura_almoxarifado']) {
     for (const [nome, evento] of [['sem_update', 'UPDATE'], ['sem_delete', 'DELETE']]) {
       await dbRun(db, `CREATE TRIGGER IF NOT EXISTS trg_${tabela}_${nome} BEFORE ${evento} ON ${tabela}

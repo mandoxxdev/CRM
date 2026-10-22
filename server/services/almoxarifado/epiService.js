@@ -10,7 +10,8 @@
  *   3. a SAIDA pelo motor (`registrarMovimentacao` ja pega a trava do material — este servico NAO se embrulha em
  *      `naTravaDoMaterial`: a trava nao e reentrante, e a compensacao roda depois de a saida voltar);
  *   4. entrega + evidencia num unico `db.execEmTransacao` (BEGIN IMMEDIATE/COMMIT, ROLLBACK na mesma vaga), com o
- *      `movimentacao_id` ja conhecido;
+ *      `movimentacao_id` ja conhecido — desde a Fase 5, dentro da fila da cadeia (`naFilaDaCadeia`: cabeca -> elo -> HMAC
+ *      com o segredo fora do banco -> grava);
  *   5. falhou o passo 4 -> o estorno de COMPENSACAO da saida (`compensacao: true` — o estorno pelo livro dessa saida e
  *      recusado, C2; so a compensacao passa).
  * Desvio declarado do contrato de `inserirComNumeroUnico` (C1): o numero e gerado com `gerarNumeroDocumento` antes da saida,
@@ -86,6 +87,9 @@ function camposDoRegistro(entrega, ev) {
       criado_por: numero(ev.criado_por),
       criado_por_nome: texto(ev.criado_por_nome),
       criado_em: texto(ev.criado_em),
+      // Fase 5 (critico 1): o elo da cadeia dentro do HMAC — mudar a posicao ou o elo de uma evidencia muda o registro dela.
+      sequencia: numero(ev.sequencia),
+      hash_anterior: texto(ev.hash_anterior),
     },
   };
 }
@@ -172,7 +176,9 @@ function conferirPng(caminho) {
  * Registra a entrega. `dados`: colaborador_id, material_id, quantidade, tamanho?, motivo?, observacao?. `arquivo`: o nome que o
  * multer gravou em `dir`. Lanca com `.status` e a mensagem literal do plano; a rota limpa o upload em toda saida != 201.
  */
-async function registrarEntrega(db, user, dados, { arquivo, dir }) {
+async function registrarEntrega(db, user, dados, { arquivo, dir, segredo }) {
+  // Fase 5: sem o segredo do HMAC nada sai do estoque (a recusa viria depois da saida, na compensacao).
+  if (!segredo) throw erro('Segredo da evidência de assinatura não configurado', 500);
   if (!arquivo) throw erro('A assinatura do colaborador é obrigatória');
   const caminho = path.join(dir, path.basename(String(arquivo)));
   conferirPng(caminho);
@@ -233,24 +239,30 @@ async function registrarEntrega(db, user, dados, { arquivo, dir }) {
     criado_por_nome: autorNome,
     criado_em: criadoEm,
   };
-  const registroSha = evidencia.registroSha256(camposDoRegistro(entrega, ev));
+  let registroSha = null;
 
   // 4. Entrega + evidencia numa transacao. A entrega so entra se a saida continua de pe (`cancelado = 0`): um estorno pelo
   // livro que ganhou a corrida antes da transacao (a recusa C2 so existe depois que a entrega existe) deixa a transacao sem
-  // linha, e a evidencia so entra se a entrega entrou.
+  // linha, e a evidencia so entra se a entrega entrou. Fase 5 (critico 1): na fila da cadeia — le a cabeca, poe o elo
+  // (`sequencia`, `hash_anterior`) na evidencia, calcula o HMAC e grava, sem outra gravacao no meio.
   const L = evidencia.literalSql;
   const colsEntrega = Object.keys(entrega);
-  const colsEv = Object.keys(ev);
-  const corpo = `INSERT INTO entregas_epi_almoxarifado (${colsEntrega.join(', ')})
+
+  try {
+    if (typeof ganchos.antesDaGravacao === 'function') await ganchos.antesDaGravacao({ movimentacaoId, numero: numeroEntrega });
+    await evidencia.naFilaDaCadeia(async () => {
+      const cabeca = await evidencia.cabecaDaCadeia(db);
+      ev.sequencia = cabeca ? cabeca.sequencia + 1 : 1;
+      ev.hash_anterior = cabeca ? cabeca.registro_sha256 : null;
+      registroSha = evidencia.registroHmac(camposDoRegistro(entrega, ev), segredo);
+      const colsEv = Object.keys(ev);
+      await execEmTransacao(db, `INSERT INTO entregas_epi_almoxarifado (${colsEntrega.join(', ')})
   SELECT ${colsEntrega.map((c) => L(entrega[c])).join(', ')}
   WHERE EXISTS (SELECT 1 FROM movimentacoes_almoxarifado WHERE id = ${L(movimentacaoId)} AND COALESCE(cancelado, 0) = 0);
 INSERT INTO evidencias_assinatura_almoxarifado (contexto_id, registro_sha256, ${colsEv.join(', ')})
   SELECT e.id, ${L(registroSha)}, ${colsEv.map((c) => L(ev[c])).join(', ')}
-  FROM entregas_epi_almoxarifado e WHERE e.numero = ${L(numeroEntrega)};`;
-
-  try {
-    if (typeof ganchos.antesDaGravacao === 'function') await ganchos.antesDaGravacao({ movimentacaoId, numero: numeroEntrega });
-    await execEmTransacao(db, corpo);
+  FROM entregas_epi_almoxarifado e WHERE e.numero = ${L(numeroEntrega)};`);
+    });
   } catch (e) {
     // 5. A compensacao: a saida volta. Se ela tambem falhar, a saida fica sem evidencia — o log diz qual.
     try {
@@ -347,20 +359,61 @@ async function fichaDoColaborador(db, colaboradorId) {
   };
 }
 
-/** RN-178.08 — relê o arquivo e a linha, recalcula os dois hashes. */
-async function verificarEntrega(db, entregaId, { dir }) {
+/**
+ * RN-178.08 — relê o arquivo e a linha, recalcula o hash do arquivo e o HMAC do registro; desde a Fase 5 confere tambem o elo
+ * com a evidencia anterior e a posterior ('registro anterior apagado', 'elo com o anterior quebrado', 'registro posterior
+ * apagado', 'elo com o posterior quebrado'; 'fora da cadeia' so em base de dev anterior a Fase 5). A cauda apagada so a
+ * cadeia inteira ve (`verificarCadeia`).
+ */
+async function verificarEntrega(db, entregaId, { dir, segredo }) {
   const entrega = await dbGet(db, 'SELECT * FROM entregas_epi_almoxarifado WHERE id = ?', [entregaId]);
   if (!entrega) throw erro(`Entrega de EPI #${entregaId} não encontrada`, 404);
   const ev = await dbGet(db, 'SELECT * FROM evidencias_assinatura_almoxarifado WHERE contexto = ? AND contexto_id = ?',
     [CONTEXTO, entrega.id]);
   if (!ev) return { integro: false, motivo: 'registro alterado' };
-  return evidencia.verificar({
+  const r = evidencia.verificar({
     dir,
     arquivo: ev.arquivo,
     arquivoSha256: ev.arquivo_sha256,
     campos: camposDoRegistro(entrega, ev),
     registroSha256Gravado: ev.registro_sha256,
+    segredo,
   });
+  if (!r.integro) return r;
+  const elo = await evidencia.conferirElos(db, ev);
+  return elo ? { integro: false, motivo: elo } : { integro: true };
+}
+
+/**
+ * Fase 5 — `GET /epi/cadeia/verificar`: a cadeia inteira (evidenciaAssinaturaService.verificarCadeia) com o montador da entrega
+ * de EPI, mais o que so o contexto ve: a entrega cuja evidencia sumiu ('entrega sem evidência', com o numero) e a entrega
+ * apagada no fim da tabela (sqlite_sequence).
+ */
+async function verificarCadeia(db, { dir, segredo }) {
+  const entregaPorId = new Map((await dbAll(db, 'SELECT * FROM entregas_epi_almoxarifado')).map((e) => [e.id, e]));
+  const out = await evidencia.verificarCadeia(db, {
+    dir,
+    segredo,
+    camposDe: async (ev) => {
+      if (ev.contexto !== CONTEXTO) return null; // nenhum outro contexto existe ainda (o termo de ferramenta trara o dele)
+      const entrega = entregaPorId.get(Number(ev.contexto_id));
+      return entrega ? camposDoRegistro(entrega, ev) : null;
+    },
+  });
+  const semEvidencia = await dbAll(db, `SELECT e.numero FROM entregas_epi_almoxarifado e
+    WHERE NOT EXISTS (SELECT 1 FROM evidencias_assinatura_almoxarifado v WHERE v.contexto = ? AND v.contexto_id = e.id)
+    ORDER BY e.id`, [CONTEXTO]);
+  for (const { numero } of semEvidencia) {
+    out.problemas.push({ sequencia: null, evidencia_id: null, numero, motivo: 'entrega sem evidência' });
+  }
+  const maior = await dbGet(db, 'SELECT MAX(id) AS m FROM entregas_epi_almoxarifado');
+  const autoinc = await dbGet(db, "SELECT seq FROM sqlite_sequence WHERE name = 'entregas_epi_almoxarifado'");
+  if (autoinc && Number(autoinc.seq) > Number((maior && maior.m) || 0)
+    && !out.problemas.some((p) => p.motivo === 'registro apagado no fim da cadeia')) {
+    out.problemas.push({ sequencia: null, evidencia_id: null, numero: null, motivo: 'registro apagado no fim da cadeia' });
+  }
+  out.integra = out.problemas.length === 0;
+  return out;
 }
 
 /** RN-178.10 — so os ativos, sem CPF e sem salario. */
@@ -371,5 +424,5 @@ async function listarColaboradoresAtivos(db) {
 
 module.exports = {
   CONTEXTO, MOTIVOS, ganchos, ehEpiSql, camposDoRegistro,
-  registrarEntrega, listarEntregas, fichaDoColaborador, verificarEntrega, listarColaboradoresAtivos,
+  registrarEntrega, listarEntregas, fichaDoColaborador, verificarEntrega, verificarCadeia, listarColaboradoresAtivos,
 };

@@ -5057,7 +5057,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     // extended usa no `destination` do multer de anexo. Sem este argumento a rota registra
     // normalmente e so morre no primeiro upload real, com a suite de unidade inteira verde: o
     // modo de falha exato da Etapa 25.
-    require('./almoxarifado/extended')(app, db, authenticateToken, uploadsAlmoxDir, uploadsAnexosDir);
+    // Etapa 178 (Fase 5): o 6o parametro e o PROPRIO diretorio de dados — o segredo do HMAC da evidencia de assinatura mora
+    // no `.runtime-secrets.json` dele (o mesmo do jwtSecret, resolvido acima com este mesmo PERSISTENT_DATA_DIR).
+    require('./almoxarifado/extended')(app, db, authenticateToken, uploadsAlmoxDir, uploadsAnexosDir, PERSISTENT_DATA_DIR);
     console.log('✅ Módulo Almoxarifado registrado (v3 — controle completo de estoque)');
   });
 

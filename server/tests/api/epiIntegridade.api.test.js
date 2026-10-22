@@ -101,11 +101,12 @@ let seq = 0;
     const entrega = await dbGet(db, 'SELECT * FROM entregas_epi_almoxarifado WHERE id = ?', [e1.id]);
     const ev = await dbGet(db, 'SELECT * FROM evidencias_assinatura_almoxarifado WHERE id = ?', [e1.evidencia.id]);
     const campos = epiService.camposDoRegistro(entrega, ev);
-    assert.strictEqual(evidencia.registroSha256(campos), e1.evidencia.registro_sha256);
+    const SEGREDO = process.env.EVIDENCIA_ASSINATURA_SECRET;
+    assert.strictEqual(evidencia.registroHmac(campos, SEGREDO), e1.evidencia.registro_sha256);
     assert.strictEqual(ev.registro_sha256, e1.evidencia.registro_sha256);
-    // conferido por fora do servico: SHA-256 do JSON com as chaves ordenadas
+    // conferido por fora do servico: HMAC-SHA256 (Fase 5; era SHA-256 publico na T1) do JSON com as chaves ordenadas
     const ordenado = (o) => (o && typeof o === 'object' ? Object.fromEntries(Object.keys(o).sort().map((k) => [k, ordenado(o[k])])) : o);
-    const porFora = crypto.createHash('sha256').update(JSON.stringify(ordenado(campos))).digest('hex');
+    const porFora = crypto.createHmac('sha256', SEGREDO).update(JSON.stringify(ordenado(campos))).digest('hex');
     assert.strictEqual(porFora, e1.evidencia.registro_sha256);
     assert.strictEqual(campos.quantidade, 2);
     assert.strictEqual(campos.evidencia.arquivo_sha256, crypto.createHash('sha256').update(PNG_1PX).digest('hex'));
@@ -114,7 +115,8 @@ let seq = 0;
 
   await test('[RN-178.07] JSON canonico: chaves ordenadas em todo nivel, undefined vira null', async () => {
     assert.strictEqual(evidencia.jsonCanonico({ b: 1, a: { d: undefined, c: 2 } }), '{"a":{"c":2,"d":null},"b":1}');
-    assert.strictEqual(evidencia.registroSha256({ x: 1, y: 2 }), evidencia.registroSha256({ y: 2, x: 1 }));
+    assert.strictEqual(evidencia.registroHmac({ x: 1, y: 2 }, 's'), evidencia.registroHmac({ y: 2, x: 1 }, 's'));
+    assert.throws(() => evidencia.registroHmac({ x: 1 }, ''), /Segredo da evidência de assinatura não configurado/);
   });
 
   // ── RN-178.08: verificar ────────────────────────────────────────────────────────────────────

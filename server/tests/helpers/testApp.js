@@ -24,6 +24,9 @@ async function createTestApp(options = {}) {
   // De quebra, cala os `console.log` de `runtimeSecrets.js`, que ainda por cima imprimem um
   // caminho errado (dizem `server/data/` quando o segredo foi para o temporário).
   process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-almoxarifado';
+  // Etapa 178 (Fase 5): o mesmo motivo para o segredo do HMAC da evidencia de assinatura — sem ele fixo, cada app do mesmo
+  // processo geraria o seu e a verificacao de um acusaria as evidencias gravadas pelo outro.
+  process.env.EVIDENCIA_ASSINATURA_SECRET = process.env.EVIDENCIA_ASSINATURA_SECRET || 'test-segredo-evidencia-assinatura';
 
   const app = express();
   app.use(express.json());

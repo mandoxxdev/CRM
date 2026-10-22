@@ -79,6 +79,7 @@ const toolService = require('../../services/almoxarifado/toolService');
 const deliverySignatureService = require('../../services/almoxarifado/deliverySignatureService');
 // Etapa 178: entrega de EPI com assinatura (a evidencia generica mora em evidenciaAssinaturaService).
 const epiService = require('../../services/almoxarifado/epiService');
+const { resolveEvidenciaAssinaturaSecret } = require('../../services/runtimeSecrets');
 // Etapa 32: anexos de documento. O servico NAO toca em disco — quem grava e o multer daqui, quem
 // apaga o orfao e o `limparUploadOrfaoEm`.
 const anexoService = require('../../services/almoxarifado/anexoService');
@@ -140,7 +141,7 @@ async function runInitSchemaWithRetry(db, retries = 3) {
   }
 }
 
-module.exports = function registerExtendedRoutes(app, db, authenticateToken, uploadsAlmoxDir, uploadsAnexosDir) {
+module.exports = function registerExtendedRoutes(app, db, authenticateToken, uploadsAlmoxDir, uploadsAnexosDir, dataDir) {
   runInitSchemaWithRetry(db).catch((e) => console.error('Falha definitiva schema almoxarifado v3:', e.message));
 
   const auth = authenticateToken;
@@ -1992,13 +1993,24 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     },
   });
 
+  // Fase 5 (critico 1): o segredo do HMAC da evidencia, FORA do banco (variavel de ambiente ou `.runtime-secrets.json` do
+  // diretorio de dados — o mesmo do jwtSecret). Resolvido no primeiro uso (o registrador de relatorios do harness monta esta
+  // extended sem diretorio). `dataDir` desce de almoxarifado.js; sem ele, o pai de `uploads/almoxarifado` (o mesmo diretorio).
+  let segredoEvidencia = null;
+  const segredoDaEvidencia = () => {
+    if (!segredoEvidencia) {
+      segredoEvidencia = resolveEvidenciaAssinaturaSecret(dataDir || path.resolve(uploadsAlmoxDir, '..', '..'));
+    }
+    return segredoEvidencia;
+  };
+
   // POST /epi/entregas — multipart. Ordem: auth -> requirePermission (antes do multer gravar: 403 nao deixa arquivo) -> multer.
   app.post('/api/almoxarifado/epi/entregas', auth, requirePermission('entregar_epi'),
     uploadAssinaturaEpi.single('assinatura'), async (req, res) => {
       if (!req.file) return res.status(400).json({ error: 'A assinatura do colaborador é obrigatória' });
       try {
         const out = await epiService.registrarEntrega(db, req.user, req.body || {},
-          { arquivo: req.file.filename, dir: uploadsAlmoxDir });
+          { arquivo: req.file.filename, dir: uploadsAlmoxDir, segredo: segredoDaEvidencia() });
         res.status(201).json(out);
       } catch (e) {
         limparUploadOrfaoEm(req, uploadsAlmoxDir);
@@ -2016,7 +2028,14 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
   // GET /epi/entregas/:id/verificar — relê o arquivo e a linha (RN-178.08).
   app.get('/api/almoxarifado/epi/entregas/:id/verificar', auth, async (req, res) => {
     try {
-      res.json(await epiService.verificarEntrega(db, req.params.id, { dir: uploadsAlmoxDir }));
+      res.json(await epiService.verificarEntrega(db, req.params.id, { dir: uploadsAlmoxDir, segredo: segredoDaEvidencia() }));
+    } catch (e) { handleError(res, e); }
+  });
+
+  // GET /epi/cadeia/verificar — a cadeia inteira das evidencias (Fase 5): lacuna = registro apagado, elo quebrado, HMAC.
+  app.get('/api/almoxarifado/epi/cadeia/verificar', auth, async (req, res) => {
+    try {
+      res.json(await epiService.verificarCadeia(db, { dir: uploadsAlmoxDir, segredo: segredoDaEvidencia() }));
     } catch (e) { handleError(res, e); }
   });
 

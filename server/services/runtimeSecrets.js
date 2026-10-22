@@ -52,6 +52,33 @@ function resolveJwtSecret(dataDir) {
   return jwtSecret;
 }
 
+/**
+ * Etapa 178 (Fase 5, revisao adversarial — critico 1): o segredo do HMAC da evidencia de assinatura (entrega de EPI e, depois,
+ * o termo de ferramenta). Mora FORA do banco, no mesmo lugar dos outros segredos de runtime: a variavel de ambiente
+ * `EVIDENCIA_ASSINATURA_SECRET` ou, sem ela, `.runtime-secrets.json` do diretorio de dados (gerado e persistido no primeiro
+ * uso). Quem tem so o banco e o disco dos uploads nao recalcula o `registro_sha256` de um registro forjado.
+ *
+ * ATENCAO DE OPERACAO: o `.runtime-secrets.json` NAO entra no zip de `GET /api/backup` (backupPackage.js — ele carrega o
+ * jwtSecret). Restaurar o banco sem ESTE segredo (ou com outro gerado no lugar) faz a verificacao acusar "registro alterado" em
+ * todas as evidencias: o segredo tem de ir para o backup do servidor por fora (ou ficar na variavel de ambiente do deploy).
+ */
+function resolveEvidenciaAssinaturaSecret(dataDir) {
+  if (process.env.EVIDENCIA_ASSINATURA_SECRET) {
+    return process.env.EVIDENCIA_ASSINATURA_SECRET;
+  }
+  const secrets = loadSecretsFile(dataDir);
+  if (secrets.evidenciaAssinaturaSecret) {
+    return secrets.evidenciaAssinaturaSecret;
+  }
+  const segredo = generateSecret();
+  secrets.evidenciaAssinaturaSecret = segredo;
+  secrets.evidenciaAssinaturaSecretCreatedAt = new Date().toISOString();
+  saveSecretsFile(dataDir, secrets);
+  console.log(`[runtimeSecrets] segredo da evidencia de assinatura gerado e persistido em ${getSecretsPath(dataDir)}`
+    + ' — inclua este arquivo no backup do servidor');
+  return segredo;
+}
+
 function resolveSeedAdminCredentials(dataDir) {
   const envEmail = process.env.SEED_ADMIN_EMAIL;
   const envPassword = process.env.SEED_ADMIN_PASSWORD;
@@ -89,6 +116,7 @@ function getAdminCredentialsForUpload(dataDir) {
 module.exports = {
   SECRETS_FILENAME,
   resolveJwtSecret,
+  resolveEvidenciaAssinaturaSecret,
   resolveSeedAdminCredentials,
   persistSeedAdmin,
   getAdminCredentialsForUpload,
