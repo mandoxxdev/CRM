@@ -63,7 +63,8 @@ Nenhuma rota nova. Consome `PUT /api/almoxarifado/ferramentas/:id`:
   linha existe no POST).
 - [x] T2 — `735f7c5d`: botão, modal, PUT, opções `#id`; 6 cenários novos em `FerramentasAlmoxarifado.test.js` (19/19). Controle: 6
   sabotagens, cada uma derrubou o cenário dela.
-- [ ] **Revisão do plano (Fase 2) e revisão adversarial (Fase 5) por agente fresco — NÃO EXECUTADAS.** Esta etapa foi executada por um
+- [x] **Revisão adversarial (Fase 5) — feita depois do merge** (seção própria abaixo): nenhum bug, 4 asserções reforçadas. A Fase 2
+  continua não executada. Texto original deste item: **Revisão do plano (Fase 2) e revisão adversarial (Fase 5) por agente fresco — NÃO EXECUTADAS.** Esta etapa foi executada por um
   agente que não pode abrir outros agentes. Feita só a autorrevisão (abaixo). **Pendente:** rodar as duas revisões antes ou depois do
   merge; o risco está concentrado na tela (o servidor não mudou).
 - [x] Fechamento — novidades (seção, **B1130**, **B1131**, cabeçalho, "Onde estamos"), spec 16 (item marcado, seção "Etapa 175"), mapa
@@ -80,6 +81,29 @@ pela integração (`z.string().min(1)` sem `trim`) — a tela apara e recusa; **
 **Verificação final (medida, sobre a `main` `e424f8c2` + 175):** `test:api` **499/499** arquivos; `test:almoxarifado` 44/44; `test:validation`
 4/4; `test:safealter` 3/3; `test:sqlite` 16/16; client **175 suítes / 2250 testes**; `CI=true react-scripts build` **Compiled successfully**.
 
+## Fase 5 — revisão adversarial (feita depois do merge)
+
+Rodada por agente fresco sobre o diff da 175 já na `main`. A Fase 2 (revisão do plano) continua não executada — o plano já virou código e
+foi medido; refazê-la agora não muda nada.
+
+**Achados.**
+
+- **Nenhum bug real** de produção. Nenhum arquivo de produção mudou nesta fase.
+- **Corrida de edição simultânea** (duas pessoas com a mesma ferramenta aberta, vence quem salva por último): **já é a B1130**, declarada
+  e mantida. Não é achado novo.
+- **4 asserções fracas**, reforçadas (commit "Etapa 175 Fase 5: testes que a revisao achou fracos"). Cada uma foi sabotada com o
+  original copiado para o scratchpad, `perl -0pi -e`, âncora conferida com `grep -cF` = 1, e restaurada por cópia + `cmp`:
+
+| # | Fraqueza | Teste novo | Sabotagem | Resultado |
+|---|---|---|---|---|
+| 1 | "null limpa o gravado" mandava `material_id: null` a uma ferramenta **sem** material e não tocava em `exige_calibracao` | servidor: `RN-175.07: material_id null e exige_calibracao false limpam material e calibracao gravados` (nasce com material do harness e exigindo calibração; confere banco e GET) | (a) `atualizarFerramenta` mantém o gravado quando `material_id`/`exige_calibracao` vêm falsos; (b) só `material_id: null` ignorado | (a) cai o cenário novo (e o RN-175.08); (b) cai **só** o novo — o antigo "null nos opcionais" passou verde nas duas, provando que era fraco |
+| 2 | RN-175.05 só provava o 409 | client: `RN-175.05 (revisão): o 404/400 do servidor aparece literal e a janela fica aberta` (`test.each`, 2 casos) | `toast.error` só usa a frase do servidor quando o status é 409 | caem os 2 novos; o 409 antigo passou verde |
+| 3 | RN-175.01 só tinha DISPONIVEL/EMPRESTADA/BLOQUEADA | client: `RN-175.01 (revisão): "Editar" também em EM_MANUTENCAO, AVARIADA e PERDIDA` (status de `toolStateMachine.STATUS`) | botão Editar embrulhado em `["DISPONIVEL","EMPRESTADA","BLOQUEADA"].includes(f.status)` | cai só o novo; o RN-175.01 antigo passou verde |
+| 4 | RN-175.02 só contava o GET da lista, não o do painel | client: `RN-175.02 (revisão): depois de salvar, o painel de calibrações vem de um GET posterior ao PUT` (ordem por `invocationCallOrder` e o conteúdo novo na tela) | (a) tirar só o `recarregarCal()` do salvar; (b) painel com cache por `reloadTokenCal`, `recarregarCal()` mantido; (c) cache **e** sem `recarregarCal()` | (a) **passa** — medido: hoje o painel rebusca a cada entrada na aba, e o `recarregarCal()` do salvar é redundante (mantido, inofensivo); (b) passa; (c) cai só o novo. O teste prende o comportamento (painel fresco depois de editar), não o mecanismo |
+
+**Verificação (medida, sobre a `main` `aa053fa8` + estes testes):** `toolFerramentaEdicao.api.test.js` **8/8**;
+`FerramentasAlmoxarifado.test.js` **23/23**; `test:api` **501/501** arquivos; client **175 suítes / 2256 testes**.
+
 ## Retro (4 números)
 
 - Rodadas de correção até verde: **0** (nenhum teste ficou vermelho fora das sabotagens).
@@ -91,7 +115,7 @@ pela integração (`z.string().min(1)` sem `trim`) — a tela apara e recusa; **
 
 Desta frente (pedido de ferramentas/EPI/ativos da usuária de Compras), em ordem:
 
-1. **Rodar as revisões que faltaram** (Fase 2/5 desta etapa) por agente fresco, com o diff `e424f8c2..735f7c5d` em
+1. ~~**Rodar as revisões que faltaram**~~ — a Fase 5 foi feita depois do merge (seção acima); a Fase 2 não será refeita. Era: (Fase 2/5 desta etapa) por agente fresco, com o diff `e424f8c2..735f7c5d` em
    `FerramentasAlmoxarifado.js`.
 2. **Entrega/empréstimo de ferramenta e EPI com assinatura (NR-6)** — **espera os formulários em papel da empresa.** Molde de gravação:
    `server/services/almoxarifado/deliverySignatureService.js` (append-only, sem UPDATE/DELETE, arquivo pelo multer). O que a NR-6 exige e
