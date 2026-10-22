@@ -43,3 +43,35 @@
 ## Próxima tarefa detalhada
 
 *(preencher no fechamento)*
+
+---
+
+## Revisão da Fase 2 (2026-10-22) — 2 críticos, 4 importantes; as emendas PREVALECEM
+
+- **C1 — a ENTRADA da exclusão leva o `os_id` DA SAÍDA que ela estorna**, não o da requisição (a exclusão estorna saída
+  por saída, laço sobre `g`, `requisitionService.js:2103-2109`; molde `returnService.js:142`). Ramo legado
+  (`:2167-2175`): null. Sem isso, requisição entregue antes do deploy e excluída depois dava consumido 0 / devolvido 10
+  / líquido −10.
+- **C2 — período:** cada linha conta pela **data dela**; com filtro de período o líquido **pode ficar negativo** (saída
+  em setembro, devolução em outubro, filtro só outubro). Declarado na `nota` do relatório e na letra B. Descartado:
+  atribuir a devolução à data da saída citada (não serve para a ENTRADA da exclusão).
+- **I1 — contrato congelado do relatório** (`relatorioConsumoPorOS`, uma query, `cancelado = 0`, agrupado por
+  `material_id, os_id`): `total_consumido` = SAIDA* (sem mudança); `devolvido` = `tipo IN TIPOS_DEVOLUCAO` (com o legado
+  `DEVOLUCAO`, como `reportService.js:965`) **OR** `(tipo = 'ENTRADA' AND requisicao_id IS NOT NULL)` (a ENTRADA da
+  exclusão — o único outro `ENTRADA` é o saldo inicial, sem requisição) — **menos** o que a I2 exclui; `liquido =
+  total_consumido − devolvido`; `HAVING total_consumido > 0 OR devolvido > 0`; `ORDER BY total_consumido DESC`. No
+  `reportRegistry.js` (~:260-265): colunas `devolvido` ("Devolvido") e `liquido` ("Líquido") e a `nota` reescrita
+  (régua, data de cada linha, sucata). A exportação já projeta pelas `colunas`. Linhas **só com devolução** passam a
+  aparecer (inclusive devolução avulsa com OS digitada).
+- **I2 — devolução que vai para SUCATA não conta como devolvida** (decisão reversível, letra B): ela gera
+  ENTRADA_DEVOLUCAO + SUCATA (`returnService.js:338-364`); a peça não voltou a ser usável, então o líquido da OS não
+  cai. Quarentena **conta** como devolvida; Retrabalho não gera ENTRADA_DEVOLUCAO (fica fora) — declarados.
+- **I3 — a saída da entrega não se estorna pelo livro** (`cancelarMovimentacao` recusa `requisicao_id`,
+  `stockService.js:2711-2713`). O item "estorno da saída espelha" sai da T1; entra: "estorno da devolução
+  (ENTRADA_DEVOLUCAO cancelada) sai do devolvido".
+- **I4 — o custo por projeto também ignora a ENTRADA da exclusão** (`reportService.js:965`) — furo pré-existente no
+  outro relatório; **letra D** nesta etapa (fora do escopo).
+- **RN-174.04 conferida** nos cinco cenários (OS excluída: material de cliente recusa como antes, agora com "OS informada
+  nao existe"; material próprio passa — sem FK; projeto + OS de clientes diferentes: o projeto vence na entrega, mas o
+  relatório atribui à OS — declarar; próprio, emergencial e série: nada muda).
+- **T2 não tem client:** a tela genérica lê as `colunas`; o dashboard soma só `total_consumido` (o `HAVING` o protege).
