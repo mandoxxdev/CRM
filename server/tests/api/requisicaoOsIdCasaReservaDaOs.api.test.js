@@ -4,7 +4,9 @@
  *
  * - Requisicao COM `os_id`: casa SO pelo id (o texto nao conta). Requisicao SEM `os_id`: pelo texto, como na 171.
  * - A reserva criada para a requisicao (fila e aprovacao) grava o `os_id` da requisicao (antes sempre null).
- * - I5: o `os_id` NAO vai para a saida da entrega.
+ * - I5 (REVISTA na Etapa 174): a 172 dizia que o `os_id` NAO ia para a saida da entrega, por medo de recusa nova da regra
+ *   do dono. A 174 mediu que o risco nao existia (material de cliente sem projeto ja recusava sem OS) e passou a gravar a
+ *   OS na saida (RN-174.01) — o teste abaixo agora prova o contrario do que provava.
  * - A "forma legada" (os_id 7 com texto "42") nao se cria mais pela rota (C2 sobrescreve o texto): e semeada por INSERT,
  *   com uma OUTRA OS de numero "42" — se o casamento fosse pelo texto, a requisicao iria para ela.
  * - Ponta a ponta: requisicao criada por POST /api/requisicoes-material com `os_id` (o payload que a cesta vai mandar,
@@ -231,7 +233,7 @@ const EM_ESPERA = ['AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA'];
     assert.strictEqual(ent.status, 200, JSON.stringify(ent.body));
   };
 
-  await test('[ponta a ponta, fila] cesta (POST /requisicoes-material com os_id, usuario sem modulo) -> aprovar espera -> pedido da MESMA OS recebido -> a reserva vai para a requisicao -> separa e entrega 4; a saida NAO leva os_id (I5)', async () => {
+  await test('[ponta a ponta, fila] cesta (POST /requisicoes-material com os_id, usuario sem modulo) -> aprovar espera -> pedido da MESMA OS recebido -> a reserva vai para a requisicao -> separa e entrega 4; a saida LEVA o os_id (I5 revista na 174, RN-174.01)', async () => {
     const os = await novaOs();
     const m = await material();
     const R = await criarPelaCesta(m, 4, os.id);
@@ -246,7 +248,8 @@ const EM_ESPERA = ['AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA'];
     assert.deepStrictEqual(await mat(m), { q: 6, r: 6 }, 'entregou 4; os 6 da OS continuam presos para ela');
     const saidas = await dbAll(db, "SELECT os_id FROM movimentacoes_almoxarifado WHERE requisicao_id = ? AND tipo = 'SAIDA'", [R]);
     assert.ok(saidas.length > 0, 'premissa: houve saida');
-    assert.deepStrictEqual(saidas.map((s) => s.os_id), saidas.map(() => null), 'I5: a saida da entrega nao leva os_id');
+    // Etapa 174: a I5 da 172 ("a saida nao leva os_id") foi revista — a entrega grava a OS da requisicao (RN-174.01).
+    assert.deepStrictEqual(saidas.map((s) => s.os_id), saidas.map(() => os.id), 'RN-174.01: a saida da entrega leva o os_id da requisicao');
   });
 
   await test('[ponta a ponta, conversao] pedido da OS recebido ANTES -> cesta cria com os_id e texto de OUTRA OS (C2 o sobrescreve) -> aprovar converte da OS -> separa e entrega 3', async () => {

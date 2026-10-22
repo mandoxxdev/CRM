@@ -1937,6 +1937,10 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
               justificativa: `Entrega requisição ${reqRow.numero}`,
               requisicao_id: requisicaoId,
               projeto_id: reqRow.projeto_id || undefined,
+              // Etapa 174 (RN-174.01): a OS cadastrada da requisicao vai para a saida — o consumo por OS passa a enxergar a
+              // entrega, e a regra do dono (sem projeto) olha a OS. Revisa a emenda I5 da 172 (o risco de recusa nova nao
+              // existia: material de cliente sem projeto ja recusava sem OS).
+              os_id: reqRow.os_id || undefined,
               cliente_id: reqRow.cliente_id || undefined,
               centro_custo_id: reqRow.centro_custo_id || undefined,
             }, {
@@ -2100,7 +2104,8 @@ async function excluirSemTrava(db, requisicaoId, user, justificativa, alertServi
     // de novo, e descontá-la deixava o físico a menos depois da exclusão (entrega 2, devolução 2, estorno da entrada, excluir:
     // 3 em vez de 5).
     // eslint-disable-next-line no-await-in-loop
-    const saidas = await dbAll(db, `SELECT m.id, m.localizacao_origem_id as origem, m.lote_id, m.quantidade as q,
+    // Etapa 174 (C1): `m.os_id` — a ENTRADA do estorno leva a OS DA SAIDA, nao a da requisicao (saida de antes da 174: null).
+    const saidas = await dbAll(db, `SELECT m.id, m.localizacao_origem_id as origem, m.lote_id, m.quantidade as q, m.os_id,
         COALESCE((SELECT SUM(d.quantidade) FROM devolucoes_material_almoxarifado d WHERE d.movimentacao_saida_id = m.id
           AND ${DEVOLUCAO_VIVA_SQL}), 0) as devolvida
       FROM movimentacoes_almoxarifado m
@@ -2162,7 +2167,7 @@ async function excluirSemTrava(db, requisicaoId, user, justificativa, alertServi
           // eslint-disable-next-line no-await-in-loop
           await recusaSeVoltaram();
         }
-        partes.push({ material, nome, quantidade: liquido, destino, lote_id: g.lote_id || undefined, series });
+        partes.push({ material, nome, quantidade: liquido, destino, lote_id: g.lote_id || undefined, series, os_id: g.os_id || undefined });
       }
     } else {
       // Livro que não soma o entregue (dado antigo): o estorno de antes — líquido do que já foi
@@ -2200,6 +2205,8 @@ async function excluirSemTrava(db, requisicaoId, user, justificativa, alertServi
         referencia: reqRow.os_referencia || reqRow.numero,
         justificativa: justificativa || motivo,
         requisicao_id: requisicaoId,
+        // Etapa 174 (RN-174.02, C1): a OS da saida estornada (ramo legado: nenhuma — undefined).
+        os_id: parte.os_id,
         projeto_id: reqRow.projeto_id || undefined,
         cliente_id: reqRow.cliente_id || undefined,
         centro_custo_id: reqRow.centro_custo_id || undefined,
