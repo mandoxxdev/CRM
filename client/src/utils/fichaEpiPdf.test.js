@@ -247,24 +247,30 @@ test('[RN-183.01/03/04, integracao com o servidor] a ficha REAL da rota sai com 
 });
 
 // Etapa 183, Fase 5 (M1): a quebra era por CONTAGEM (110 caracteres) — 300 'W' na fonte 7 iam ate 283 mm (a folha tem 210). A regua
-// mede cada texto de fonte 7 (as linhas da evidencia) com o jsPDF REAL, na fonte em que foi desenhado: x + largura <= 196 (margem direita).
+// mede cada texto com o jsPDF REAL, na fonte em que foi desenhado: x + largura <= 196 (margem direita).
+// Etapa 185 (RN-185.06): a regua olhava SO a fonte 7; agora e TODA chamada text, em qualquer fonte (14 do titulo, 9 da tabela, 7 da
+// evidencia) — a `textosForaDaFolha`. Os testes da 183 continuam chamando `textosFora`, que passou a ser ela.
 const MARGEM_DIREITA = 196;
-const textosFora = () => {
+const novoMedidor = () => {
   // eslint-disable-next-line global-require
   const { jsPDF: JsPdfReal } = jest.requireActual('jspdf');
-  const medidor = new JsPdfReal({ format: 'a4', orientation: 'portrait', unit: 'mm' });
+  return new JsPdfReal({ format: 'a4', orientation: 'portrait', unit: 'mm' });
+};
+const textosForaDaFolha = () => {
+  const medidor = novoMedidor();
   let fonte = 16;
   const fora = [];
   for (const [nome, ...args] of mockChamadas) {
     if (nome === 'setFontSize') fonte = args[0];
-    if (nome === 'text' && fonte === 7) {
+    if (nome === 'text') {
       medidor.setFontSize(fonte);
       const fim = args[1] + medidor.getTextWidth(String(args[0]));
-      if (fim > MARGEM_DIREITA + 1e-6) fora.push([String(args[0]).slice(0, 30), Number(fim.toFixed(1))]);
+      if (fim > MARGEM_DIREITA + 1e-6) fora.push([String(args[0]).slice(0, 30), fonte, Number(fim.toFixed(1))]);
     }
   }
   return fora;
 };
+const textosFora = textosForaDaFolha;
 const MATRICULA_88 = 'MATRICULA-MUITO-LONGA-'.repeat(4);
 const linhasDoAparelho = (textos) => {
   const i = textos.findIndex(([, t]) => String(t).startsWith('Aparelho: '));
@@ -336,4 +342,194 @@ test('[Fase 5 M1] entrega mais alta que o limiar antigo supunha, comecando em 23
   expect(conferirRodape()).toEqual([]); // a regua do rodape vem ANTES da contagem de paginas: e ela que o controle do limiar tem de derrubar
   expect(textosFora()).toEqual([]);
   expect(mockChamadas.filter(([n]) => n === 'addPage')).toHaveLength(1);
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Etapa 185 (T1, B1208/B1215/B1216) — a linha da entrega quebra por LARGURA. Antes, cada celula era cortada por CONTAGEM de letras, em
+// uma linha so: "Joao Almoxarife" ia a 198,6 mm (margem 196), "Primeira entrega" saia "Primeira entreg", o EPI de 70 letras perdia 34.
+// As colunas sao LITERAIS aqui: e o contrato do plano — se o codigo mudar o layout sem mudar o plano, o teste tem de cair.
+const COLUNAS_FICHA = [14, 32, 82, 102, 121, 131, 143, 168];
+const CABECALHO_FICHA = ['Data', 'EPI', 'CA', 'Validade CA', 'Qtd', 'Tam.', 'Motivo', 'Entregue por'];
+const limiteDaColuna = (i) => (i < 7 ? COLUNAS_FICHA[i + 1] - 1 : MARGEM_DIREITA); // folga de 1 mm antes da proxima coluna
+
+// Emenda I1 da Fase 2: as celulas sao reconhecidas pela ORDEM das chamadas, nao por y (na pagina 2 o cabecalho esta em 18, abaixo do y
+// do da pagina 1) nem so por x (o aviso "(imagem da assinatura indisponível)" sai em x = 14, a coluna Data). As celulas de uma entrega
+// sao os text de fonte 9 entre a ultima `line` (o sublinhado do cabecalho ou a divisoria anterior) e o primeiro text de fonte 7 seguinte
+// (o hash, "Entrega … registro"). O cabecalho da tabela sao os 8 text imediatamente antes da `line` que o sublinha. Uma funcao so,
+// para as duas reguas.
+const recortarTabela = () => {
+  let fonte = 16;
+  let pagina = 1;
+  const cabecalhos = [];
+  const entregas = [];
+  let desdeALinha = []; // text de qualquer fonte desde a ultima line
+  let aberto = null; // celulas da entrega em curso (null = nenhuma line ainda, ou ja fechada pelo hash)
+  for (const [nome, ...args] of mockChamadas) {
+    if (nome === 'setFontSize') fonte = args[0];
+    else if (nome === 'addPage') pagina += 1;
+    else if (nome === 'line') {
+      const ultimos = desdeALinha.slice(-8);
+      if (ultimos.length === 8 && ultimos.every((c, i) => c.t === CABECALHO_FICHA[i])) {
+        cabecalhos.push({ pagina, linhaY: args[1], textos: ultimos });
+      }
+      desdeALinha = [];
+      aberto = [];
+    } else if (nome === 'text') {
+      const c = { t: String(args[0]), x: args[1], y: args[2], fonte, pagina };
+      desdeALinha.push(c);
+      if (aberto && fonte === 7) {
+        if (aberto.length) entregas.push({ celulas: aberto, hash: c });
+        aberto = null;
+      } else if (aberto && fonte === 9) aberto.push(c);
+    }
+  }
+  return { cabecalhos, entregas };
+};
+// As linhas desenhadas de cada coluna (na ordem de COLUNAS_FICHA) da k-esima entrega.
+const celulasDaEntrega = (k) => {
+  const { celulas } = recortarTabela().entregas[k];
+  return COLUNAS_FICHA.map((x) => celulas.filter((c) => c.x === x).map((c) => c.t));
+};
+// Toda celula (e todo titulo do cabecalho da tabela) que termina depois do limite da coluna, medida na fonte gravada; ou fora das colunas.
+const celulasInvasoras = () => {
+  const medidor = novoMedidor();
+  const { cabecalhos, entregas } = recortarTabela();
+  const fora = [];
+  [...cabecalhos.flatMap((c) => c.textos), ...entregas.flatMap((e) => e.celulas)].forEach((c) => {
+    const i = COLUNAS_FICHA.indexOf(c.x);
+    if (i < 0) { fora.push([c.t.slice(0, 30), c.x, 'fora das colunas']); return; }
+    medidor.setFontSize(c.fonte);
+    const fim = c.x + medidor.getTextWidth(c.t);
+    if (fim > limiteDaColuna(i) + 1e-6) fora.push([c.t.slice(0, 30), c.x, Number(fim.toFixed(2)), limiteDaColuna(i)]);
+  });
+  return fora;
+};
+const textosDoDescritor = (l) => [l.data, l.epi, l.ca, l.validadeCa, l.quantidade, l.tamanho, l.motivo, l.entreguePor];
+const semEspaco = (s) => String(s).replace(/\s/g, '');
+
+const LONGA = {
+  ...ENTREGA, id: 80, entregue_por_nome: 'Maria Aparecida dos Santos Oliveira',
+  material_codigo: 'EPI-MASC-SOLDA-07', material_nome: 'Mascara de solda automatica escurecimento DIN 9-13 com regulagem',
+  ca_numero: 'W'.repeat(20), tamanho: 'Tamanho especial XGG',
+};
+const comImagem = async () => 'data:image/png;base64,AAAA';
+
+test('[RN-185.01] celulas longas quebram em linhas: nenhuma passa da coluna seguinte (folga de 1 mm) nem da margem', async () => {
+  await gerarFichaEpiPdf({ colaborador: COLABORADOR, entregas: [LONGA] }, { carregarImagem: comImagem });
+  expect(celulasInvasoras()).toEqual([]);
+  // metade positiva: houve quebra de verdade (a regua viu varias linhas)
+  const colunas = celulasDaEntrega(0);
+  expect(colunas[7]).toHaveLength(2);
+  expect(colunas[7].join(' ')).toBe('Maria Aparecida dos Santos Oliveira');
+  expect(colunas[1].length).toBeGreaterThanOrEqual(2);
+  expect(textosForaDaFolha()).toEqual([]);
+});
+
+test('[RN-185.02] nenhuma letra e perdida: a juncao das linhas de cada celula e o texto do descritor; "Primeira entrega" inteiro', async () => {
+  const doc = await gerarFichaEpiPdf({ colaborador: COLABORADOR, entregas: [LONGA, { ...ENTREGA, id: 81, motivo: 'PRIMEIRA_ENTREGA' }] },
+    { carregarImagem: comImagem });
+  expect(doc.linhas[1].motivo).toBe('Primeira entrega');
+  [0, 1].forEach((k) => {
+    const colunas = celulasDaEntrega(k);
+    textosDoDescritor(doc.linhas[k]).forEach((texto, i) => expect([i, semEspaco(colunas[i].join(''))]).toEqual([i, semEspaco(texto)]));
+  });
+  expect(textosDoPdf()).toContain('Primeira entrega');
+});
+
+test('[RN-185.03] colunas novas; os textos comuns cabem em UMA linha por celula; nada de fonte 9 em x = 28', async () => {
+  for (const motivo of ['TROCA', 'PRIMEIRA_ENTREGA']) {
+    mockChamadas.length = 0;
+    await gerarFichaEpiPdf({ colaborador: COLABORADOR, entregas: [{ ...ENTREGA, motivo, ca_numero: '45.678/2024', quantidade: 99999 }] },
+      { carregarImagem: comImagem });
+    const { cabecalhos, entregas } = recortarTabela();
+    // cada celula e UM text (com as colunas antigas, "Joao Almoxarife" e "Primeira entrega" virariam 2) — antes da conferencia dos x
+    expect(entregas[0].celulas.map((c) => c.t)).toEqual(['22/10/2026', 'EPI-LUV-01 — Luva de vaqueta', '45.678/2024', '31/03/2027',
+      '99999', 'G', motivo === 'TROCA' ? 'Troca' : 'Primeira entrega', 'Joao Almoxarife']);
+    expect(cabecalhos).toHaveLength(1);
+    expect(cabecalhos[0].textos.map((c) => c.x)).toEqual(COLUNAS_FICHA);
+    expect(entregas[0].celulas.map((c) => c.x)).toEqual(COLUNAS_FICHA);
+    let fonte = 16;
+    const em28 = [];
+    for (const [nome, ...args] of mockChamadas) {
+      if (nome === 'setFontSize') fonte = args[0];
+      if (nome === 'text' && fonte === 9 && args[1] === 28) em28.push(args[0]);
+    }
+    expect(em28).toEqual([]);
+  }
+});
+
+test('[RN-185.04] a linha cresce: a altura conta a celula mais alta — a 7a, comecando em 234, vai para a pagina seguinte', async () => {
+  const entregas = [
+    ...Array.from({ length: 2 }, (_, i) => ({ ...ENTREGA, id: 50 + i, user_agent: 'curto' })),
+    ...Array.from({ length: 4 }, (_, i) => ({ ...ENTREGA, id: 60 + i, arquivo_url: SEM_IMG(i), user_agent: 'curto' })),
+    { ...ENTREGA, id: 70, user_agent: 'curto', entregue_por_nome: 'W'.repeat(60) },
+  ];
+  await gerarFichaEpiPdf({ colaborador: COLABORADOR, entregas }, { carregarImagem: carregarSoComImagem });
+  // a montagem e a que o teste diz: a divisoria da 6a entrega em 229 -> a 7a comecaria em 234 (com 7 linhas: 234 + 61 = 295 > 287)
+  expect(mockChamadas.filter(([n, , y1]) => n === 'line' && y1 === 229)).toHaveLength(1);
+  expect(conferirRodape()).toEqual([]); // a regua do rodape vem ANTES da contagem de paginas
+  expect(celulasDaEntrega(6)[7]).toHaveLength(7);
+  expect(mockChamadas.filter(([n]) => n === 'addPage')).toHaveLength(1);
+  // Emenda M4: na pagina nova, o cabecalho da tabela e repetido (y = 18, sublinhado em 20) e a 7a entrega comeca em 25
+  const iPagina = mockChamadas.findIndex(([n]) => n === 'addPage');
+  const depois = mockChamadas.slice(iPagina + 1);
+  const textosDepois = depois.filter(([n]) => n === 'text');
+  expect(textosDepois.slice(0, 8).map(([, t, x, y]) => [t, x, y])).toEqual(CABECALHO_FICHA.map((h, i) => [h, COLUNAS_FICHA[i], 18]));
+  expect(depois.find(([n]) => n === 'line').slice(1)).toEqual([14, 20, 196, 20]);
+  const { entregas: recortadas } = recortarTabela();
+  expect(recortadas[6].celulas[0]).toMatchObject({ pagina: 2, x: 14, y: 25 });
+  expect(textosForaDaFolha()).toEqual([]);
+  expect(celulasInvasoras()).toEqual([]);
+});
+
+test('[RN-185.04] celula de 3 linhas: as linhas em y, y+4, y+8 e o hash em y + 12', async () => {
+  // Emenda M9: o texto de 3 linhas em 28 mm e nomeado (um de 2 linhas faria o teste virar +8).
+  await gerarFichaEpiPdf({ colaborador: COLABORADOR, entregas: [{ ...ENTREGA, entregue_por_nome: 'Administrador do Sistema Geral da Empresa X' }] },
+    { carregarImagem: comImagem });
+  const [e] = recortarTabela().entregas;
+  const y0 = e.celulas[0].y;
+  expect(e.celulas.filter((c) => c.x === 168).map((c) => c.y)).toEqual([y0, y0 + 4, y0 + 8]);
+  expect(e.hash.t.startsWith('Entrega ')).toBe(true);
+  expect(e.hash.y).toBe(y0 + 12);
+});
+
+const NOME_90 = 'Maria Aparecida dos Santos Oliveira de Albuquerque Cavalcanti Pereira da Silva Junior Neto';
+
+test('[RN-185.05] cabecalho da ficha quebra por largura: nome de 90 letras -> titulo em 2+ linhas, nada fora, a tabela vem depois', async () => {
+  expect(NOME_90).toHaveLength(90);
+  await gerarFichaEpiPdf({ colaborador: { ...COLABORADOR, nome: NOME_90, excluido: true }, entregas: [ENTREGA] },
+    { carregarImagem: comImagem });
+  expect(textosForaDaFolha()).toEqual([]);
+  let fonte = 16;
+  const titulo = [];
+  for (const [nome, ...args] of mockChamadas) {
+    if (nome === 'setFontSize') fonte = args[0];
+    if (nome === 'text' && fonte === 14) titulo.push(args[0]);
+  }
+  expect(titulo.length).toBeGreaterThanOrEqual(2);
+  expect(semEspaco(titulo.join(''))).toBe(semEspaco(`Ficha de EPI — ${NOME_90}`));
+  const textos = mockChamadas.filter(([n]) => n === 'text');
+  const iCab = textos.findIndex(([, t]) => t === 'Data');
+  const anteriores = textos.slice(0, iCab);
+  expect(textos[iCab][3]).toBeGreaterThan(Math.max(...anteriores.map(([, , , y]) => y)));
+  // nenhuma linha do cabecalho da ficha cai no y de outra (nao se sobrepoem)
+  const ys = anteriores.map(([, , , y]) => y);
+  expect(new Set(ys).size).toBe(ys.length);
+});
+
+test('[RN-185.06] o pior caso (8 entregas: aparelho 300 "W", matricula 88, celulas longas; com e sem imagem) — nada fora da folha nem da coluna', async () => {
+  for (const imagem of [true, false]) {
+    mockChamadas.length = 0;
+    const entregas = Array.from({ length: 8 }, (_, i) => ({ ...LONGA, id: 90 + i, user_agent: 'W'.repeat(300), confirmado_por_matricula: 1,
+      matricula: MATRICULA_88, arquivo_url: imagem ? ENTREGA.arquivo_url : SEM_IMG(i) }));
+    await gerarFichaEpiPdf({ colaborador: { ...COLABORADOR, nome: NOME_90 }, entregas }, { carregarImagem: carregarSoComImagem });
+    expect(textosForaDaFolha()).toEqual([]);
+    expect(celulasInvasoras()).toEqual([]);
+    expect(conferirRodape()).toEqual([]);
+    // metade positiva (emenda I1): o recorte viu as 8 colunas em todas as entregas, e celulas na pagina 2
+    const { entregas: recortadas } = recortarTabela();
+    expect(recortadas).toHaveLength(8);
+    recortadas.forEach((_, k) => celulasDaEntrega(k).forEach((linhas) => expect(linhas.length).toBeGreaterThan(0)));
+    expect(recortadas.some((e) => e.celulas.some((c) => c.pagina === 2))).toBe(true);
+  }
 });

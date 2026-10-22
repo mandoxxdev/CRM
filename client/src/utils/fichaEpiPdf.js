@@ -44,6 +44,22 @@ export function quebrarPorLargura(medir, texto, { rotulo = '', largura, larguraD
   return linhas;
 }
 
+// Etapa 185 (B1208, B1215, B1216, B1217) — a tabela da ficha cabe na folha. Antes cada celula era cortada por CONTAGEM de letras numa
+// linha so, sem medir: "Joao Almoxarife" ia a 198,6 mm (a margem e 196), um nome de 25 letras saia da folha (214), o EPI comprido
+// invadia a coluna do CA e perdia o fim, e "Primeira entrega" saia "Primeira entreg". A ficha e a prova da NR-6 — quem entregou, o que,
+// com que CA: nada pode ser perdido. Agora cada celula QUEBRA em quantas linhas precisar (a linha da entrega fica mais alta) e as colunas
+// foram redistribuidas (medidas com o jsPDF real) para os textos comuns caberem numa linha so. Nenhuma coluna em x = 28 (M + 14): e o
+// recuo das linhas seguintes do aparelho.
+const COLUNAS = [14, 32, 82, 102, 121, 131, 143, 168]; // = M, M + 18, M + 68, M + 88, M + 107, M + 117, M + 129, M + 154
+// Largura util: ate 1 mm antes da proxima coluna; a ultima (Entregue por) ate a margem direita.
+const UTIL_DA_COLUNA = COLUNAS.map((x, i) => (i < COLUNAS.length - 1 ? COLUNAS[i + 1] - 1 : 196) - x);
+
+// Quebra por PALAVRA, medida na fonte corrente (splitTextToSize: palavra maior que a largura e partida por caractere — nenhuma letra
+// perdida; a quebra so come o espaco entre palavras). Diferente do aparelho (quebrarPorLargura, corte por letra, B1207): ali a juncao das
+// linhas tem de ser o texto literal impresso como prova. Emenda M1: a linha e aparada a direita — o splitTextToSize deixa um espaco no
+// fim quando parte a palavra seguinte, e esse espaco (que nao e tinta) passaria da coluna na medida.
+const linhasPorLargura = (pdf, texto, largura) => pdf.splitTextToSize(String(texto), largura).map((s) => String(s).replace(/\s+$/, ''));
+
 /** Descritor da ficha — a moeda entre a tela, o teste e o renderizador. */
 export function montarFichaEpi({ colaborador, entregas = [], geradoEm } = {}) {
   const c = colaborador || {};
@@ -106,35 +122,38 @@ export async function gerarFichaEpiPdf(dados, { carregarImagem = carregarImagemC
   const imagens = await Promise.all(doc.linhas.map((l) => carregarImagem(l.assinaturaUrl)));
   const pdf = new jsPDF({ format: 'a4', orientation: 'portrait', unit: 'mm' });
   const M = 14;
+  // Etapa 183, Fase 5 (M1): a largura util e de margem a margem (M a 196); as linhas seguintes do aparelho vem recuadas (M + 14).
+  // Etapa 185 (emenda M3): declarada aqui em cima — o cabecalho da ficha tambem a usa (abaixo dele seria ReferenceError, TDZ).
+  const LARGURA_UTIL = 196 - M;
   let y = 18;
 
+  // Etapa 185 (RN-185.05, B1218): cada bloco do cabecalho quebra por largura MEDIDA na fonte corrente (o setFontSize vem antes) e avanca
+  // o passo de hoje POR LINHA (emenda M2) — com nome curto todo y e o de antes. Nome do colaborador nao tem tamanho maximo no cadastro:
+  // com ~66+ letras o titulo ja passava da margem.
+  const blocoQuebrado = (texto, passo) => {
+    linhasPorLargura(pdf, texto, LARGURA_UTIL).forEach((s) => {
+      pdf.text(s, M, y);
+      y += passo;
+    });
+  };
   pdf.setFontSize(14);
-  pdf.text(doc.titulo, M, y);
-  y += 6;
+  blocoQuebrado(doc.titulo, 6);
   pdf.setFontSize(9);
   pdf.text(`Gerado em ${doc.geradoEm}`, M, y);
   y += 6;
-  pdf.text(`Nome: ${doc.colaborador.nome}    Matrícula: ${doc.colaborador.matricula}`, M, y);
-  y += 5;
-  pdf.text(`Setor: ${doc.colaborador.setor}    CPF: ${doc.colaborador.cpf}`, M, y);
-  y += 5;
-  if (doc.avisoExcluido) {
-    pdf.text(doc.avisoExcluido, M, y);
-    y += 5;
-  }
+  blocoQuebrado(`Nome: ${doc.colaborador.nome}    Matrícula: ${doc.colaborador.matricula}`, 5);
+  blocoQuebrado(`Setor: ${doc.colaborador.setor}    CPF: ${doc.colaborador.cpf}`, 5);
+  if (doc.avisoExcluido) blocoQuebrado(doc.avisoExcluido, 5);
   y += 3;
 
-  const cols = [M, M + 20, M + 72, M + 92, M + 114, M + 126, M + 140, M + 162];
   const cabecalho = () => {
-    doc.cabecalho.forEach((h, i) => pdf.text(h, cols[i], y));
+    doc.cabecalho.forEach((h, i) => pdf.text(h, COLUNAS[i], y));
     y += 2;
     pdf.line(M, y, 196, y);
     y += 5;
   };
   cabecalho();
 
-  // Etapa 183, Fase 5 (M1): a largura util e de margem a margem (M a 196); as linhas seguintes do aparelho vem recuadas (M + 14).
-  const LARGURA_UTIL = 196 - M;
   const RECUO_APARELHO = 14;
   const RODAPE = 287;
   doc.linhas.forEach((l, idx) => {
@@ -147,12 +166,16 @@ export async function gerarFichaEpiPdf(dados, { carregarImagem = carregarImagemC
     const linhasAparelho = quebrarPorLargura((s) => pdf.getTextWidth(s), l.aparelho,
       { rotulo: 'Aparelho: ', largura: LARGURA_UTIL, larguraDemais: LARGURA_UTIL - RECUO_APARELHO });
     pdf.setFontSize(9);
-    const altura = 4 + 3 * (linhasConfirmacao.length + linhasAparelho.length) + 2 + (imagens[idx] ? 25 : 8);
-    if (y + altura > RODAPE) { pdf.addPage(); y = 18; cabecalho(); }
+    // Etapa 185 (RN-185.01/02/04): as celulas quebram na fonte 9 (medidas DEPOIS do setFontSize(9) — emenda M3), e a altura da entrega
+    // conta as linhas da celula mais alta: 4 mm por linha da tabela, no lugar do 4 fixo de uma linha so.
     const celulas = [l.data, l.epi, l.ca, l.validadeCa, l.quantidade, l.tamanho, l.motivo, l.entreguePor];
-    const larguras = [10, 26, 10, 11, 6, 7, 11, 18];
-    celulas.forEach((c, i) => pdf.text(String(c).slice(0, larguras[i] * 1.4), cols[i], y));
-    y += 4;
+    const linhasCelula = celulas.map((c, i) => linhasPorLargura(pdf, String(c), UTIL_DA_COLUNA[i]));
+    const n = Math.max(...linhasCelula.map((ls) => ls.length));
+    const altura = 4 * n + 3 * (linhasConfirmacao.length + linhasAparelho.length) + 2 + (imagens[idx] ? 25 : 8);
+    if (y + altura > RODAPE) { pdf.addPage(); y = 18; cabecalho(); }
+    // cada linha da celula num text proprio (nao text(array)), em y + 4·j; o hash vem depois da celula mais alta
+    linhasCelula.forEach((ls, i) => ls.forEach((s, j) => pdf.text(s, COLUNAS[i], y + 4 * j)));
+    y += 4 * n;
     pdf.setFontSize(7);
     pdf.text(`Entrega ${l.numero} · registro (HMAC-SHA256): ${l.hash}`, M, y); // Fase 5: o registro e HMAC com segredo do servidor
     // Etapa 183 (RN-183.03/04): as provas da evidencia do ato. Passo de 3 mm na fonte 7; o aparelho continua recuado, sem rotulo.
