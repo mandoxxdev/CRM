@@ -107,3 +107,58 @@
 - `GET /api/almoxarifado/aux/colaboradores` → `[{ id, nome, matricula, setor }]` (ativos, por nome).
 - Material (`GET/POST/PUT /materiais`) com `ca_numero`, `ca_validade`; a lista/busca de materiais devolve `is_epi`
   (bool calculado pelas três marcas) para a tela filtrar.
+
+---
+
+## Execução
+
+### T1 (tronco) — ✅ 2026-10-22 — `5d06920b`, `6ee553f3`, `3dfd69ef`
+
+- [x] Schema: `ca_numero`/`ca_validade` (safeAlter); `entregas_epi_almoxarifado` e `evidencias_assinatura_almoxarifado` sem FK
+  nenhuma, `criado_em TEXT NOT NULL` sem DEFAULT, triggers `BEFORE UPDATE`/`BEFORE DELETE` → `RAISE(ABORT, 'evidencia de
+  assinatura nao pode ser alterada')` nas duas (`schema.js` `ensureEntregaEpi`). 1º boot com `CRM_DATA_DIR` vazio, duas vezes:
+  0 erros de schema, tabelas/índices/4 triggers criados. Harness: stub de `colaboradores` (DDL de produção) em `testApp.js` — `5d06920b`.
+- [x] Ação `entregar_epi` (ADMINISTRADOR, ALMOXARIFE) — `5d06920b`.
+- [x] `evidenciaAssinaturaService.js` (genérico) e `epiService.js` (RN-178.01..11, C1, C2, I2, I3, I5, menores) — `6ee553f3`.
+- [x] `cancelarMovimentacao` recusa a saída da entrega (guarda antes do claim **e** `NOT EXISTS` no claim); compensação passa.
+  Devolução que cite a saída → 400; a saída sai de `saidas-elegiveis` — `6ee553f3`.
+- [x] Cadastro do material (I4) + `is_epi` na lista/busca **e** no `GET /materiais/:id`; `ca_numero`/`ca_validade` em
+  `camposLidos.js` **e** no `CAMPOS_LIDOS` do cliente (37 → 39, pedido do coordenador) — `6ee553f3`, `3dfd69ef`.
+- [x] Rotas em `extended.js` (multer só `image/png`, 2 MB, `limparUploadOrfaoEm` em toda saída ≠ 201) e `/aux/colaboradores`.
+- [x] Testes: `epiEntrega.api.test.js` 29/29, `epiIntegridade.api.test.js` 17/17. Suítes: `test:api` **506/506** arquivos;
+  `test:almoxarifado` 44/0; `test:validation` 4/0; `test:safealter` 3/0; `test:sqlite` 16/0; cliente
+  `MaterialAlmoxarifadoForm.test.js` 74/74. (A 1ª rodada do `test:api` deu 505/506: `auditLabels` acusou `ENTREGA_EPI` e
+  `entrega_epi` sem rótulo — rótulos acrescentados.)
+- Controles positivos (sabotar → vermelho na asserção certa → restaurar por cópia + `cmp`): trigger `SELECT 1` → "Missing
+  expected rejection"; `verificar` sem o hash do registro → os 5 "registro alterado"; sem as duas guardas do estorno → 200 !== 400;
+  **só** sem a guarda de leitura → verde (o claim recusa sozinho); só sem o `NOT EXISTS` do claim → vermelho no teste da janela
+  (a 1ª leitura da guarda é forçada a "não viu"); sem a compensação → "a saida nao foi estornada"; sem `cancelado = 0` no INSERT
+  da entrega → 201 em vez de 409; sem a guarda da devolução → "mudou enquanto a devolução era gravada"; sem a limpeza do órfão →
+  16 vermelhos (corrida 20 !== 10); `<=` no CA → "vence hoje" recusado; quantidade sem `isInteger` → 1.5 dá 201.
+  **Declarado:** trocar a saída por `registrarMovimentacaoSemTrava` **não** deixa a corrida vermelha (10/10 verdes) — quem decide
+  o último item é o claim guardado do motor, não só a trava. O teste prova "uma 201, uma recusa de saldo, nada órfão", não a trava.
+- Os testes embrulham a conexão com `wrapDatabase` para passar pelo `db.execEmTransacao` de produção; o serviço tem fallback
+  (`exec` com BEGIN IMMEDIATE/COMMIT/ROLLBACK) para conexão crua.
+
+**Contrato REAL (o que mudou ou foi acrescentado em relação ao congelado — o front depende):**
+- `POST /epi/entregas`: 201 exatamente como congelado. Recusas extras além das literais do plano: 400 `O colaborador é
+  obrigatório`, `O EPI é obrigatório`, `Material #<id> não encontrado`, `Tamanho deve ter no máximo 20 caracteres`,
+  `Observação deve ter no máximo 500 caracteres`; `Colaborador #<id> não encontrado` é **400** no POST (404 só na ficha);
+  `Quantidade de EPI deve ser inteira` vale também para 0, negativo e vazio. Arquivo > 2 MB → **413** do módulo (`Arquivo grande
+  demais…`), não 400. MIME ≠ PNG → 400 do multer; **bytes** que não são PNG com MIME png → o mesmo 400 `A assinatura deve ser uma
+  imagem PNG`. 409 `A saída da entrega <numero> foi estornada enquanto a entrega era gravada — nada foi gravado. Faça a entrega de
+  novo.` 500 `Não foi possível gravar a entrega de EPI — a saída do estoque foi desfeita. (<erro>)`.
+- `arquivo_url` sai por `materialPhotoUrl` (`/api/uploads/almoxarifado/assinatura-epi-….png?exp=&sig=`).
+- `GET /epi/entregas`: chaves exatamente as congeladas; `de`/`ate` `AAAA-MM-DD` (dia de Brasília sobre `criado_em` UTC); valor fora do
+  formato é ignorado.
+- Ficha: `entregas[]` = as chaves da lista + `arquivo_url` + `registro_sha256`. `excluido: true` usa nome/matrícula/setor da entrega
+  mais recente e o CPF (mascarado) da evidência. Colaborador existente sem entregas → 200 com `entregas: []`.
+- `is_epi` é **bool** na lista e no detalhe; `ca_numero`/`ca_validade` vêm no objeto (`m.*`). PUT: `ca_validade` `''`/`null` limpa,
+  omitido preserva; `ca_numero` é aparado.
+- Auditoria: entidade `entrega_epi`, verbo `ENTREGA_EPI` (rótulos "Entrega de EPI").
+
+**Letra B (reversíveis, escolhidos sem consulta):** (1) CA **sem** validade cadastrada passa (a RN-178.04 só recusa vencido) —
+alternativa descartada: exigir a validade. (2) conferência dos bytes do PNG além do MIME. (3) janela residual: uma devolução
+**avulsa por API** que cite a saída entre a saída e a transação da entrega (ms, exige saber o id) passaria — o INSERT da devolução
+tem `NOT EXISTS` da entrega, mas o da entrega não confere devolução; fechar exigiria recusar a entrega depois de a saída já ter sido
+devolvida. (4) o hash amarra a evidência à entrega pelo `numero` (o `id` e o `contexto_id` não existem antes do INSERT).
