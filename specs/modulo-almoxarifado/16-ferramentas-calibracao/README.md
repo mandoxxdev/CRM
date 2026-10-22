@@ -1,5 +1,7 @@
 # 16 — Ferramentas e Equipamentos de Medição
 
+> **+ Etapa 175 (2026-10-22, T1 `2a54344f`, T2 `735f7c5d`): editar a ferramenta pela tela** — o item "Edição de ferramenta pela tela" do checklist, aberto desde a 9b, foi entregue. Ver a seção "Etapa 175", no fim. A feature continua 🟡 pelo lembrete de devolução (feature 20) e pela integração com a inspeção.
+
 > **+ Etapa 170 (2026-10-20, `3fb6aa0e`): a *Retirada* dos empréstimos no dia de Brasília, no formato da tela (B1081, só exibição)** — ver a seção "Etapa 170", no fim. O status não muda.
 
 > **+ Etapa 163 (2026-10-20, `6502c690`, Fase 5 `407ddfcc`): a calibração vigente, o painel, os empréstimos vencidos e o lembrete pelo dia de Brasília (C406, B1041)** — ver a seção "Etapa 163", no fim. O status não muda.
@@ -82,7 +84,8 @@ calibração com vencimento que impede o uso. (Lembrete automático de devoluç�
 - [x] Tela de ferramentas: cadastro, empréstimos ativos, histórico por colaborador — `96d0879`
       (Task 7, worktree `etapa9b-task7-front`), merge `daffb81`; filtros `busca`/`status`/
       `exige_calibracao` fechados em `60a452e`/`b8e6f60` (revisão final)
-- [ ] **Edição de ferramenta pela tela** — **não entregue nesta etapa**: o design (D9) prometia
+- [x] **Edição de ferramenta pela tela** — **entregue na Etapa 175** (`735f7c5d`; contrato do PUT medido em `2a54344f`). O texto
+      abaixo é o registro da 9b, mantido como histórico: **não entregue nesta etapa**: o design (D9) prometia
       "cadastro/edição", só o cadastro foi construído (corte não declarado até a revisão final
       de branch, achado F3). `PUT /ferramentas/:id` e o 409 de patrimônio duplicado **existem no
       backend e estão testados** (`server/tests/api/toolFerramentaEdicao.api.test.js`,
@@ -156,3 +159,17 @@ Só exibição — nenhuma rota, consulta, valor gravado ou porta de saldo mudou
 
 - [x] A *Retirada* dos empréstimos (`data_retirada`, o `CURRENT_TIMESTAMP`) no dia de Brasília, ainda *AAAA-MM-DD* — antes os 10 primeiros
   caracteres (o dia UTC). A *Previsão de devolução* e o *Vencido* são só data e já estavam certos. `3fb6aa0e`; o cenário em `9353c1d5`.
+
+## Etapa 175 — editar a ferramenta pela tela (2026-10-22)
+
+- Botão **Editar** em toda linha, em qualquer status, para `gerenciar_ferramentas`; o modal é o do cadastro ("Editar ferramenta"), com os
+  9 campos preenchidos (RN-175.01/02).
+- Salvar manda os 9 campos sempre; opcional vazio vai `null` e limpa o gravado; sucesso *"Ferramenta atualizada"*, recarrega a lista e o
+  painel de calibrações (RN-175.03). Código ou nome em branco recusam na tela (RN-175.04). O 409 *"Código de patrimônio já cadastrado"* e o
+  404 *"Ferramenta não encontrada"* aparecem com a frase do servidor, janela aberta (RN-175.05). Material/localização gravados fora da lista
+  carregada aparecem como *#id* e são mantidos (RN-175.06).
+- Servidor sem mudança de código. **Medido** (`2a54344f`, `toolFerramentaEdicao.api.test.js`): o PUT que repete o patrimônio de outra →
+  409; o próprio patrimônio passa; `null` limpa; o PUT não muda o status; marcar "exige calibração" pelo PUT faz o próximo empréstimo
+  recusar (RN-03) e desmarcar libera (RN-175.07/08). Antes desta etapa o 409 só era provado no POST.
+- Decisões **B1130** (sem trava de edição simultânea — vale o último) e **B1131** (editar em qualquer status).
+- Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa175-edicao-de-ferramenta-pela-tela.md`.

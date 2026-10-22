@@ -1,11 +1,15 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-22 (Etapas 172 e 173) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-22 (Etapas 172, 173 e 175) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172 e 173) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173 e 175) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172 e 173 ENTREGUES · em andamento: Etapa 174)
+> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172, 173 e 175 ENTREGUES · em andamento: Etapa 174)
+>
+> **Etapa 175, 2026-10-22.** **Editar a ferramenta pela tela**: botão **Editar** em toda linha de **Almoxarifado → Ferramentas**, em
+> qualquer status; campo apagado apaga o gravado; patrimônio de outra ferramenta recusado. Só tela; nada a rodar antes do deploy. Próxima
+> desta frente: a assinatura na entrega/empréstimo de ferramenta e EPI, que espera os formulários da empresa.
 >
 > **O desenvolvimento parou aqui: Etapas 172 e 173 fechadas — 2026-10-22** (duas frentes em paralelo). A **Etapa 173 (F2 abre o cadastro
 > completo do fornecedor)**: no pedido de compra, na cotação e na tela do grupo homologado, a tecla **F2** ou o botão **+ Novo fornecedor F2**
@@ -6853,6 +6857,31 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 175 — Editar a ferramenta pela tela (ENTREGUE — 2026-10-22)
+
+**O que mudou, em uma frase:** toda linha de **Almoxarifado → Ferramentas** tem o botão **Editar**, que abre a ficha da ferramenta preenchida
+para corrigir o que foi cadastrado errado.
+
+**O problema que ela resolve.** Desde a Etapa 9b a ferramenta só se cadastrava; um patrimônio, uma série, uma localização ou um "exige
+calibração" errado não tinha como ser corrigido pela tela.
+
+| Antes | Agora |
+|---|---|
+| Só **Nova ferramenta** | **Editar** em toda linha, em qualquer status |
+
+**Roteiro de teste (5 minutos — com um usuário Administrador ou Almoxarife).**
+
+1. **Almoxarifado → Ferramentas**, cadastre duas ferramentas (**Nova ferramenta**): *FER-001* e *FER-002*, a primeira com número de série.
+2. **Editar** na *FER-001*: a janela **"Editar ferramenta"** vem preenchida.
+3. Apague o **Número de série**, troque o nome, **Salvar**: *"Ferramenta atualizada"*, e a coluna **Série** mostra *—*.
+4. **Editar** de novo, troque o código para *FER-002*, **Salvar**: *"Código de patrimônio já cadastrado"*, e a janela continua aberta.
+5. Apague o nome e salve: *"Informe o nome da ferramenta"*.
+6. Marque **Exige calibração** e salve. **Emprestar** a ferramenta: *"Ferramenta com calibração vencida ou sem calibração registrada"*.
+   Desmarque, salve, e empreste: passa. Na ferramenta agora *Emprestada*, **Editar** continua lá, e salvar não a devolve.
+
+**O que esta etapa não cobre.** A assinatura na entrega e no empréstimo (NR-6) e o destino depois da manutenção — esperam os formulários
+da empresa. Sem trava de edição simultânea (vale o último a salvar — **B1130**). Nada a rodar antes do deploy.
 
 ## Etapa 173 — F2 abre o cadastro completo do fornecedor sem sair do pedido, da cotação ou do grupo (ENTREGUE — 2026-10-22)
 

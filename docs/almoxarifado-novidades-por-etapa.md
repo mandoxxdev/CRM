@@ -11,11 +11,14 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-22):** **Etapa 173 fechada** (**F2 abre o cadastro completo do fornecedor** — o pedido e a
+> **Onde o desenvolvimento está (2026-10-22):** **Etapa 175 fechada** (**editar a ferramenta pela tela** — o primeiro passo do pedido de
+> ferramentas/EPI da usuária de Compras que não depende dos formulários da empresa: botão **Editar** em toda linha de **Almoxarifado →
+> Ferramentas**; só tela, nada a rodar antes do deploy; decisões **B1130** e **B1131**). A **174** está em andamento em outra frente.
+> *(Também em 2026-10-22: **Etapa 173 fechada** (**F2 abre o cadastro completo do fornecedor** — o pedido e a
 > reclamação da usuária de Compras: no pedido de compra, na cotação e no grupo homologado, a tecla **F2** ou o botão **+ Novo fornecedor F2**
 > abre a ficha completa numa janela, e o fornecedor salvo já fica escolhido; o cadastro de 3 campos do grupo homologado saiu; só tela, nada
 > a rodar antes do deploy; decisões **B1120** a **B1124** — **a B1122 pede um olhar** (o F2 de setembro, de materiais em lote, não volta)).
-> A **174** está em andamento em outra frente — ver "Onde estamos e o que vem a seguir".
+> A **174** estava em andamento em outra frente.)*
 > *(Também em 2026-10-22: **Etapa 172 fechada** (**a requisição com OS cadastrada, e a cesta volta a enviar** — a tela
 > *Solicitar Material* dos módulos de escritório não enviava requisição nenhuma desde 16/09 (**C428**, resolvido); as duas telas de nova
 > requisição ganham a lista opcional **OS cadastrada** ao lado do número digitado (**B1103**), que liga a requisição à OS e a faz pegar o
@@ -4121,7 +4124,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1110 e B1120 a B1124; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1110, B1120 a B1124 e B1130 a B1131; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -12142,6 +12145,14 @@ salvo não aparecer na lista que a pessoa está olhando. Para cadastrar em outro
 botão **?**), o tour do primeiro acesso, o relatório, o workflow e os modais da própria tela ficam por cima da janela do F2; abrir a ficha
 por trás deles a esconderia, e o que se digitasse iria para um cadastro invisível (achado da revisão). **Descartado:** fechar a outra janela
 e abrir a ficha. **Reversível:** `0cbaa535`, `5b67cfa8`.
+
+**B1130 (NOVA, da Etapa 175; decisão do agente) — a edição de ferramenta não tem trava de edição simultânea.** Duas pessoas editando a mesma
+ferramenta: vale o que foi salvo por último (a tela manda todos os campos). **Descartado:** a conferência de "campos lidos" que a família de
+material tem (Etapa 126) — cadastro de ferramenta é raro e feito por uma pessoa. **Reversível:** `735f7c5d`.
+
+**B1131 (NOVA, da Etapa 175; decisão do agente) — Editar aparece em qualquer status.** Corrigir o patrimônio ou a série de uma ferramenta
+emprestada, bloqueada ou perdida é tão legítimo quanto de uma disponível, e a edição não toca o status (só as ações da linha o mudam).
+**Descartado:** só em *Disponível*. **Reversível:** `735f7c5d`.
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -34313,9 +34324,62 @@ salva com *"Fornecedor salvo"* e volta para a lista.
   do grupo.
 - **Nada muda no servidor**: a janela usa a mesma gravação de fornecedor de sempre, com as mesmas recusas. Nenhuma consulta antes do deploy.
 
+## Etapa 175 — Editar a ferramenta pela tela (2026-10-22)
+
+A usuária de Compras pediu para centralizar no sistema o controle de ferramentas, maquinários, EPIs e ativos — entrega, empréstimo,
+manutenção e histórico. A maior parte disso depende dos formulários em papel que a empresa usa hoje (ainda não chegaram). O primeiro passo
+que não depende deles estava aberto desde a Etapa 9b: **a ferramenta não se editava pela tela.** Um patrimônio, um número de série, uma
+localização ou um "exige calibração" cadastrado errado só se corrigia pela integração. Agora toda linha da lista de ferramentas tem o botão
+**Editar**, que abre a ficha preenchida; salvar grava tudo de uma vez. Nada mudou no servidor — a gravação já existia; esta etapa mediu o que
+faltava provar dela (o patrimônio repetido na edição) e ligou a tela. Decisões do agente: **B1130** e **B1131**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Almoxarifado → Ferramentas**: só **Nova ferramenta**; o cadastrado não se corrigia | Botão **Editar** em toda linha, em qualquer status — **B1131** |
+| — | Campo apagado na edição **apaga** o valor gravado (série, localização, tipo…) |
+| — | Material ou localização gravados que não estão na lista da tela aparecem como *"Material #⟨n⟩"* / *"Localização #⟨n⟩"* e são mantidos |
+
+### As regras, com o cenário exato
+
+Preparação: um usuário com a permissão **Ferramentas** (Administrador ou Almoxarife) e duas ferramentas, *FER-001* e *FER-002*.
+
+**1. Editar (RN-175.01 a 03).** **Almoxarifado → Ferramentas**, botão **Editar** na linha de *FER-001*: abre **"Editar ferramenta"** com
+código, nome, tipo, setor, série, material, localização, "Exige calibração" e observações preenchidos. Apague o **Número de série**, troque o
+nome e clique **Salvar**: *"Ferramenta atualizada"*, a janela fecha e a coluna **Série** mostra *—*. O botão existe também numa ferramenta
+*Emprestada*, *Bloqueada* ou *Em manutenção* — editar não muda o status nem tira a ferramenta de quem está com ela.
+
+**2. Em branco (RN-175.04).** Apague o **Nome** e salve: *"Informe o nome da ferramenta"*; apague o **Código de patrimônio**: *"Informe o código
+de patrimônio"*. Nada é gravado.
+
+**3. Patrimônio de outra (RN-175.05, RN-175.07).** Troque o código de *FER-001* para *FER-002* e salve: *"Código de patrimônio já cadastrado"*;
+a janela fica aberta com o que foi digitado, e nada muda.
+
+**4. "Exige calibração" (RN-175.08).** Edite uma ferramenta *Disponível* sem calibração registrada, marque **Exige calibração** e salve. Clique
+**Emprestar**, informe o colaborador: *"Ferramenta com calibração vencida ou sem calibração registrada"*. Edite de novo, desmarque, salve: o
+empréstimo passa. Ela também aparece/sai do painel de calibrações.
+
+**5. Sem permissão (RN-175.01).** Com um usuário sem a permissão **Ferramentas**, a lista não mostra **Editar** (nem os outros botões da linha).
+
+### O que esta etapa NÃO cobre
+
+- A **assinatura** na entrega e no empréstimo de ferramenta/EPI (NR-6: identificação do colaborador, número do CA, ficha de EPI) e o
+  **destino depois da manutenção** (volta ao responsável ou descarte) — esperam os formulários em papel da empresa.
+- **Trava de edição simultânea**: duas pessoas editando a mesma ferramenta, vale o último a salvar (**B1130**).
+- Nada a rodar antes do deploy.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 175 entregue (2026-10-22):** **editar a ferramenta pela tela** — o item aberto na spec 16 desde a Etapa 9b, e o primeiro passo do
+  pedido de ferramentas, EPIs e ativos da usuária de Compras que não depende dos formulários em papel da empresa. Botão **Editar** em toda
+  linha de **Almoxarifado → Ferramentas**, em qualquer status; campo apagado apaga o gravado; o patrimônio de outra ferramenta é recusado.
+  Só tela (o servidor já gravava; o 409 do patrimônio repetido na edição foi medido agora). Commits `2a54344f` (T1), `735f7c5d` (T2) e o
+  fechamento. **O que é seu:** as decisões **B1130** e **B1131** (reversíveis). **Próxima desta frente:** a entrega/empréstimo de ferramenta
+  e EPI com assinatura (NR-6) — **espera os formulários em papel** da empresa; enquanto isso, ver a "próxima tarefa detalhada" no plano da
+  Etapa 175.
 
 - **Etapa 173 entregue (2026-10-22):** **F2 abre o cadastro completo do fornecedor sem sair do pedido, da cotação ou do grupo** — o pedido e
   a reclamação da usuária de Compras. No pedido de compra, na cotação e na tela do grupo homologado, **F2** ou **+ Novo fornecedor F2** abre a

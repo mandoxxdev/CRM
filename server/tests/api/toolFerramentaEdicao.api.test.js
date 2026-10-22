@@ -63,6 +63,65 @@ async function novaFerramenta(app, extra = {}) {
     await close();
   });
 
+  // ── Etapa 175 (edicao pela tela) — o contrato que a tela passa a consumir ──────────────────
+  await test('RN-175.07: PUT que repete o patrimonio de OUTRA ferramenta -> 409 e nada muda', async () => {
+    const { app, db, close } = await createTestApp();
+    const a = await novaFerramenta(app);
+    const b = await novaFerramenta(app);
+    const codigoA = (await dbGet(db, 'SELECT codigo_patrimonio FROM ferramentas_almoxarifado WHERE id = ?', [a])).codigo_patrimonio;
+    const r = await request(app).put(`/api/almoxarifado/ferramentas/${b}`)
+      .send({ codigo_patrimonio: codigoA, nome: 'Trocada' }).expect(409);
+    assert.strictEqual(r.body.error, 'Código de patrimônio já cadastrado');
+    const linhaB = await dbGet(db, 'SELECT codigo_patrimonio, nome FROM ferramentas_almoxarifado WHERE id = ?', [b]);
+    assert.notStrictEqual(linhaB.codigo_patrimonio, codigoA);
+    assert.notStrictEqual(linhaB.nome, 'Trocada');
+    await close();
+  });
+
+  await test('RN-175.07: PUT com o PROPRIO patrimonio passa (a tela manda os 9 campos sempre)', async () => {
+    const { app, db, close } = await createTestApp();
+    const a = await novaFerramenta(app);
+    const { codigo_patrimonio } = await dbGet(db, 'SELECT codigo_patrimonio FROM ferramentas_almoxarifado WHERE id = ?', [a]);
+    await request(app).put(`/api/almoxarifado/ferramentas/${a}`)
+      .send({ codigo_patrimonio, nome: 'Mesmo codigo, nome novo' }).expect(200);
+    const linha = await dbGet(db, 'SELECT nome FROM ferramentas_almoxarifado WHERE id = ?', [a]);
+    assert.strictEqual(linha.nome, 'Mesmo codigo, nome novo');
+    await close();
+  });
+
+  await test('RN-175.07: null nos opcionais limpa o gravado, e o PUT nao muda o status', async () => {
+    const { app, db, close } = await createTestApp();
+    const a = await novaFerramenta(app, {
+      tipo: 'Eletrica', setor_responsavel: 'Producao', numero_serie: 'SN-9', localizacao_id: 3, observacoes: 'obs',
+    });
+    await request(app).post(`/api/almoxarifado/ferramentas/${a}/bloquear`).send({ justificativa: 'teste' }).expect(200);
+    await request(app).put(`/api/almoxarifado/ferramentas/${a}`).send({
+      tipo: null, setor_responsavel: null, numero_serie: null, localizacao_id: null, material_id: null, observacoes: null,
+    }).expect(200);
+    const l = await dbGet(db, 'SELECT * FROM ferramentas_almoxarifado WHERE id = ?', [a]);
+    assert.strictEqual(l.tipo, null);
+    assert.strictEqual(l.setor_responsavel, null);
+    assert.strictEqual(l.numero_serie, null);
+    assert.strictEqual(l.localizacao_id, null);
+    assert.strictEqual(l.observacoes, null);
+    assert.strictEqual(l.status, 'BLOQUEADA');
+    await close();
+  });
+
+  await test('RN-175.08 (integracao): marcar "exige calibracao" pelo PUT faz o proximo emprestimo recusar; desmarcar libera', async () => {
+    const { app, close } = await createTestApp();
+    const a = await novaFerramenta(app);
+    await request(app).put(`/api/almoxarifado/ferramentas/${a}`).send({ exige_calibracao: true }).expect(200);
+    const r = await request(app).post(`/api/almoxarifado/ferramentas/${a}/emprestar`)
+      .send({ colaborador_nome: 'Ana' }).expect(400);
+    assert.strictEqual(r.body.error, 'Ferramenta com calibração vencida ou sem calibração registrada');
+    // a tela manda o 0/1 que o GET devolveu quando a pessoa nao mexe no campo
+    await request(app).put(`/api/almoxarifado/ferramentas/${a}`).send({ exige_calibracao: 0 }).expect(200);
+    await request(app).post(`/api/almoxarifado/ferramentas/${a}/emprestar`)
+      .send({ colaborador_nome: 'Ana' }).expect(201);
+    await close();
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
 })();
