@@ -216,3 +216,77 @@ _(vazia — preencher task a task: feita, hash, divergência do previsto, contro
 ## Próxima tarefa detalhada
 
 _(preencher no fechamento.)_
+
+## Emendas da Fase 2
+
+Revisão fresca (2026-10-22, sobre `c8500355`). **Prevalecem sobre a tabela de regras e as tasks acima.** Sem crítico.
+
+**Conferido e certo (não muda nada):**
+- **De onde vem a matrícula da linha:** `e.matricula` (`COLUNAS_LISTA`, `epiService.js:381`) — o snapshot do cadastro **no ato**, gravado em
+  `registrarEntrega` (`:211`, `colab.matricula` depois de `conferirMatricula`) e **dentro do HMAC** duas vezes (`camposDoRegistro`, `matricula`
+  `:67` e `evidencia.matricula` `:86`). A flag `confirmado_por_matricula` também está no HMAC (`:97`). O topo da ficha é o cadastro vivo
+  (`:428-429`). A RN-183.03 está certa ao usar `{ matricula: e.matricula }`.
+- **Literais:** `matriculaConfirmadaTexto({ confirmado_por_matricula: 1 }, { matricula: 'M-100' })` (`termoFerramenta.js:69-74`) →
+  `Sim — digitou M-100 (confere com o cadastro)`; `null`/`0`/ausente → `Number(...) !== 1` → `Não registrada`; `1` com `''` → `Sim`. Bate
+  com a RN-183.03. Entrega sem evidência (LEFT JOIN vazio) e evidência de antes da Fase 5 da 178 caem em `Não registrada`/`Não registrado`.
+- **jsPDF 2.5.2** (Helvetica, `WinAnsiEncoding`) mapeia `—` (U+2014 → 151) e `í`: as frases novas renderizam, como já renderizam no termo.
+  O `User-Agent` chega pelo Node só em latin1 e sem CR/LF (o parser recusa), então não quebra linha nem sai glifo fora da tabela.
+- **Exposição:** o `user_agent` sai só para `entregar_epi` (ADMINISTRADOR, ALMOXARIFE — `extended.js:2073`, sem mudança), e é o navegador do
+  **tablet do almoxarifado**, não dado pessoal do colaborador; o `ip` fica fora (B1202). Nenhuma outra leitura (lista, relatório, cadeia)
+  ganha o campo.
+- **Do gesto ao fim:** entregar → ficha na tela → Gerar PDF (que **relê** a ficha, `EpiAlmoxarifado.js:232`, então tela e PDF vêm da mesma
+  resposta) → verificar/cadeia (a etapa não grava; o HMAC não muda). Nenhum passo recusa ou mostra diferente, fora o corte de 40 caracteres do
+  aparelho na tela (intencional, texto inteiro no `title`).
+
+### Importantes
+
+- **I1 — T2 e T3 não são independentes (e a T4 depende da T2).** A T3 manda reaproveitar `montarFichaEpi(ficha).linhas[i].matriculaConfirmada`/
+  `.aparelho`, mas esses campos **só a T2 cria** (`fichaEpiPdf.js:22-54`). O `EpiAlmoxarifado.test.js` troca o `jspdf` (`:41`), **não** o
+  `fichaEpiPdf` — então o teste da T3 roda o `montarFichaEpi` real: em paralelo, ou ele fica vermelho pelo motivo errado (campo `undefined`), ou o
+  agente da T3 edita `fichaEpiPdf.js` e conflita com a T2. A parte client da T4 também escreve em `fichaEpiPdf.test.js` (arquivo da T2) e precisa
+  dos campos dela. **Correção:** o **descritor** vira tronco. Nova ordem:
+  - **T1** (servidor, como está) e **T1c** (client, tronco): `montarFichaEpi` ganha `matriculaConfirmada`, `aparelho`, `linhasAparelho`, com os
+    testes de descritor da RN-183.03/04/05 (os itens do vermelho da T2 que só olham `linhas[i]`) e os controles "passar `c` em vez de
+    `{ matricula: e.matricula }`" e "tirar o fallback `Não registrado`". T1 e T1c não se tocam (servidor × client) e podem ir juntas.
+  - **T2** (galho): só `gerarFichaEpiPdf` — as linhas desenhadas, a régua `/Matr[ií]cula[^:]*:\s*1\b/`, `Aparelho: ` e a RN-183.08.
+  - **T3** (galho): só a tela, consumindo os campos da T1c.
+  - **T4**: depois de T1, T1c **e** T2 (o teste Jest da fixture mora em `fichaEpiPdf.test.js`).
+
+- **I2 — A régua do rodapé (RN-183.08) não olha a imagem inteira, e o espaçamento não está fixado.** O teste proposto confere a coordenada y de
+  `text`/`line`/`addImage`; no `addImage(img, 'PNG', x, y, 60, 22.5)` (`fichaEpiPdf.js:117`) o y é o **topo**: uma assinatura que começa em 280 e
+  termina em 302,5 passa. E o "~10 mm" e o `235` foram estimados sem o passo das linhas novas. **Correção (contrato do desenho):** depois do hash,
+  `y += 3` → `Matrícula confirmada pelo colaborador: …`; `y += 3` → `Aparelho: <linhasAparelho[0]>`; cada linha seguinte `y += 3` (recuo
+  `M + 14`, sem rótulo); depois `y += 2` e segue como hoje (imagem 22,5 + `y += 25`, ou o aviso). Entrega mais alta (3 linhas de aparelho), do
+  início `s` à linha divisória: `s + 4 + 3 + 3 + 3 + 3 + 2 + 25 = s + 43`; fundo da imagem `s + 40,5`. Com `s ≤ 235` → divisória ≤ 278; com
+  `s ≤ 245` → até 288 > 287 (o controle "voltar para 245" cai com 3 linhas, se alguma entrega começar em (235, 245] — montar o caso para isso).
+  A régua do teste: `text`/`line` com **todo** y ≤ 287 **e** `addImage` com `y + h ≤ 287` (argumentos 4 e 6). Se o agente mudar o passo,
+  recalcula o limiar e registra na Execução.
+
+- **I3 — A fixture da T4 só pega a troca de nome se alguém lembrar de regravá-la.** O plano grava `client/src/utils/__fixtures__/fichaEpi.rota.json`
+  com `CRM_GRAVAR_FIXTURE=1` e não diz o que o teste do servidor faz sem a variável. Se não compara, a T1 renomeia `user_agent` e as **duas**
+  suítes continuam verdes (o Jest lê a fixture velha) — o controle proposto ("renomear **e regravar**") prova o caminho que ninguém percorre no
+  dia a dia. **Correção:** molde `listasNotificacoesPortao.api.test.js:323-326` — o teste do servidor **sempre** lê a fixture versionada e confere
+  `Object.keys(entrega).sort()` da fixture = da resposta real, e os tipos de `confirmado_por_matricula` (`number`) e `user_agent` (`string`);
+  com `CRM_GRAVAR_FIXTURE=1` ele só regrava. Controle positivo: renomear no `map` **sem** regravar → cai o teste do **servidor**; regravar → cai o
+  Jest (`Aparelho: Não registrado`). A fixture não pode conter o `ip` (conferir com `includes` do IP do banco, como na RN-183.02).
+
+### Menores
+
+- **M1 — Previsão errada num controle da T1.** "Tirar `v.user_agent` do SELECT → caem RN-183.01 (valor) **e RN-183.05 (chave presente)**": o `map`
+  com `user_agent: linha.user_agent ?? null` recria a chave, então **só a RN-183.01 cai** (a antiga e a sem evidência continuam `null`). Corrigir a
+  expectativa (não "consertar" o teste para cair). O mesmo vale para `confirmado_por_matricula`.
+- **M2 — RN-183.02 pode virar teste vazio.** `!JSON.stringify(body).includes(ip)` com o `ip` lido do banco: se ele vier `null`, `String(null)`
+  é `'null'` (o corpo tem `null` → vermelho falso) ou a guarda pula a asserção. Antes, `assert.ok(ip && ip.length > 3)` (no harness o supertest
+  grava `::ffff:127.0.0.1`).
+- **M3 — Teste que vai ficar vermelho e não está listado.** `fichaEpiPdf.test.js:37-52` faz `toEqual` da **linha inteira** do descritor: os
+  três campos novos o derrubam. É mudança de contrato intencional (como `epiPontaAPonta.api.test.js:195`) — ajustar e registrar na Execução da
+  T1c. A `ENTREGA` dele não tem `confirmado_por_matricula` → `Não registrada`.
+- **M4 — O 403 sem literal.** O contrato diz "403 `{ error }`"; o literal é `{ error: 'Sem permissão para esta operação', acao: 'entregar_epi',
+  perfil }` (`permissions.js:292`). O teste da RN-183.06 confere `error` e `acao`.
+- **M5 — "digitou M-100" é o cadastro, não o que foi digitado letra a letra.** `conferirMatricula` compara sem caixa e sem espaços
+  (`identificacaoColaborador.js:38-46`): quem digitou `m 100` vê `digitou M-100`. É o texto do molde (Etapa 180) e **não muda** aqui (a ficha e o
+  termo têm de dizer o mesmo); o guia explica que "(confere com o cadastro)" é a conferência normalizada. Letra B nova: **B1206** — mantido o texto
+  do molde; **descartado:** gravar a matrícula digitada (mudaria o HMAC e o schema; é outra etapa).
+- **M6 — Corte fixo de 110 caracteres.** Em fonte 7, um UA real (minúsculas e dígitos) dá ~140-150 mm dos 182 úteis; uma sequência só de
+  maiúsculas largas passaria da margem. `getTextWidth` não serve porque o gravador do teste devolve `undefined`. Aceito como limite conhecido
+  (o UA vem do navegador do almoxarifado); registrar em D (183).
