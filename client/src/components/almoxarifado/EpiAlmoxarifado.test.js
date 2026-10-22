@@ -295,6 +295,73 @@ describe('Ficha por colaborador', () => {
     expect(mockPdf.filter(([n]) => n === 'text').some(([, t]) => String(t).includes(HASH))).toBe(true);
   });
 
+  // Etapa 178 (T3): a `arquivo_url` e assinada por ~15 min (o servidor mede: exp - agora = 900 s). A ficha aberta ha mais tempo dava
+  // 404 no fetch do PDF e o documento da NR-6 saia sem as assinaturas, sem erro nenhum. "Gerar PDF" rele a ficha (URLs novas).
+  test('Gerar PDF rele a ficha e busca a assinatura pela URL NOVA (a da tela pode ter expirado)', async () => {
+    let leituras = 0;
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/aux/colaboradores') return Promise.resolve({ data: COLABORADORES });
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: MATERIAIS });
+      if (url === '/almoxarifado/epi/entregas') return Promise.resolve({ data: ENTREGAS });
+      if (url === '/almoxarifado/epi/ficha/99') {
+        leituras += 1;
+        const sig = leituras === 1 ? 'velha' : 'nova';
+        return Promise.resolve({ data: { ...FICHA_EXCLUIDO, entregas: [{ ...FICHA_EXCLUIDO.entregas[0],
+          arquivo_url: `/api/uploads/almoxarifado/assinatura-epi-12.png?exp=1&sig=${sig}` }] } });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    // so a URL nova abre; a velha (expirada) e o 404 do servidor
+    global.fetch = jest.fn((url) => Promise.resolve(String(url).includes('sig=nova')
+      ? { ok: true, blob: () => Promise.resolve(new Blob(['png'], { type: 'image/png' })) }
+      : { ok: false, status: 404 }));
+    await renderizar();
+    await clicar(botao('Entregas'));
+    const linha = [...container.querySelectorAll('.almox-epi-lista tbody tr')][1];
+    await clicar([...linha.querySelectorAll('button')].find((b) => b.textContent.includes('Ficha')));
+    await clicar(botao('Gerar PDF'));
+    await esperarEfeitos();
+    expect(api.get.mock.calls.filter(([u]) => u === '/almoxarifado/epi/ficha/99')).toHaveLength(2);
+    expect(global.fetch).toHaveBeenCalledWith('/api/uploads/almoxarifado/assinatura-epi-12.png?exp=1&sig=nova');
+    expect(mockPdf.some(([n]) => n === 'addImage')).toBe(true);
+    expect(mockPdf.some(([n]) => n === 'save')).toBe(true);
+    expect(toast.warn).not.toHaveBeenCalled();
+  });
+
+  test('Gerar PDF: assinatura que nao abre -> o PDF sai com a lacuna marcada E a tela avisa (nao em silencio)', async () => {
+    await renderizar();
+    await clicar(botao('Entregas'));
+    const linha = [...container.querySelectorAll('.almox-epi-lista tbody tr')][1];
+    await clicar([...linha.querySelectorAll('button')].find((b) => b.textContent.includes('Ficha')));
+    await clicar(botao('Gerar PDF'));
+    await esperarEfeitos();
+    expect(mockPdf.some(([n]) => n === 'save')).toBe(true);
+    expect(toast.warn).toHaveBeenCalledWith('1 assinatura não pôde ser carregada e saiu como indisponível no PDF');
+  });
+
+  test('Gerar PDF: a releitura da ficha falha -> nao gera PDF com URLs velhas, mostra o erro', async () => {
+    let leituras = 0;
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/aux/colaboradores') return Promise.resolve({ data: COLABORADORES });
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: MATERIAIS });
+      if (url === '/almoxarifado/epi/entregas') return Promise.resolve({ data: ENTREGAS });
+      if (url === '/almoxarifado/epi/ficha/99') {
+        leituras += 1;
+        return leituras === 1 ? Promise.resolve({ data: FICHA_EXCLUIDO })
+          : Promise.reject({ response: { status: 500, data: { error: 'banco fora' } } });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    await clicar(botao('Entregas'));
+    const linha = [...container.querySelectorAll('.almox-epi-lista tbody tr')][1];
+    await clicar([...linha.querySelectorAll('button')].find((b) => b.textContent.includes('Ficha')));
+    await clicar(botao('Gerar PDF'));
+    await esperarEfeitos();
+    expect(mockPdf.some(([n]) => n === 'save')).toBe(false);
+    expect(toast.error).toHaveBeenCalledWith('banco fora');
+  });
+
   test('ficha inexistente: a frase do servidor', async () => {
     api.get.mockImplementation((url) => {
       if (url === '/almoxarifado/aux/colaboradores') return Promise.resolve({ data: COLABORADORES });

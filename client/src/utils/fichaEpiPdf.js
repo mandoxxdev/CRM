@@ -131,5 +131,6 @@ export async function gerarFichaEpiPdf(dados, { carregarImagem = carregarImagemC
   const nome = String(dados?.colaborador?.nome || 'colaborador').normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(/\W+/g, '-').toLowerCase();
   pdf.save(`ficha-epi-${nome}.pdf`);
-  return doc;
+  // Etapa 178 (T3): quantas assinaturas sairam "indisponivel" — a tela avisa, em vez de entregar a ficha da NR-6 sem elas em silencio.
+  return { ...doc, assinaturasIndisponiveis: imagens.filter((img) => !img).length };
 }

@@ -183,8 +183,27 @@ const EpiAlmoxarifado = () => {
   const baixarPdf = async () => {
     if (!ficha) return;
     setGerandoPdf(true);
+    // Etapa 178 (T3): a `arquivo_url` da assinatura e assinada por ~15 min (servidor, materialPhotoUrl). Com a ficha aberta ha mais
+    // tempo, o fetch do PDF dava 404 e a ficha da NR-6 saia sem as assinaturas, sem aviso. Rele a ficha (URLs novas) antes de gerar;
+    // se a releitura falhar, NAO gera com as URLs velhas.
+    let atual;
     try {
-      await gerarFichaEpiPdf(ficha);
+      const r = await api.get(`/almoxarifado/epi/ficha/${ficha.colaborador?.id || fichaColaboradorId}`);
+      atual = r.data || ficha;
+      setFicha(atual);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Não foi possível reler a ficha para gerar o PDF');
+      setGerandoPdf(false);
+      return;
+    }
+    try {
+      const doc = await gerarFichaEpiPdf(atual);
+      const faltando = doc?.assinaturasIndisponiveis || 0;
+      if (faltando > 0) {
+        toast.warn(faltando === 1
+          ? '1 assinatura não pôde ser carregada e saiu como indisponível no PDF'
+          : `${faltando} assinaturas não puderam ser carregadas e saíram como indisponíveis no PDF`);
+      }
     } catch (err) {
       toast.error('Não foi possível gerar o PDF da ficha');
     } finally {
