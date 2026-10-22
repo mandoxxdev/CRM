@@ -288,4 +288,18 @@ function requirePermission(acao) {
   };
 }
 
-module.exports = { PERFIS, ACAO_PERFIS, getPerfilFromUser, can, requirePermission };
+/**
+ * Etapa 180 (I4 da revisao da Fase 2): a porta que aceita QUALQUER UMA das acoes — a cadeia de evidencias e a lista de
+ * colaboradores servem a entrega de EPI (`entregar_epi`) e ao termo de ferramenta (`gerenciar_ferramentas`). O 403 traz a
+ * lista em `acoes` (e `acao` com a primeira, para quem ja lia o campo).
+ */
+function requireAlgumaPermissao(acoes) {
+  const lista = Array.isArray(acoes) ? acoes : [acoes];
+  return (req, res, next) => {
+    if (lista.some((a) => can(req.user, a))) return next();
+    return res.status(403).json({ error: 'Sem permissão para esta operação', acao: lista[0], acoes: lista,
+      perfil: getPerfilFromUser(req.user) });
+  };
+}
+
+module.exports = { PERFIS, ACAO_PERFIS, getPerfilFromUser, can, requirePermission, requireAlgumaPermissao };

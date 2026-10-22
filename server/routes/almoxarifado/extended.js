@@ -15,7 +15,7 @@ const XLSX = require('xlsx');
 const diaLocal = require('../../services/diaLocal');
 const { canConfigureAlmox, isSystemAdmin } = require('../../services/systemPermissions');
 const { initSchema, TIPOS_MATERIAL_ENUM, TIPOS_LOCALIZACAO, AREAS_ESPECIAIS, SETORES_REQUISICAO } = require('../../services/almoxarifado/schema');
-const { requirePermission, can, getPerfilFromUser, ACAO_PERFIS, PERFIS } = require('../../services/almoxarifado/permissions');
+const { requirePermission, requireAlgumaPermissao, can, getPerfilFromUser, ACAO_PERFIS, PERFIS } = require('../../services/almoxarifado/permissions');
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
 // Etapa 33: a URL de arquivo e minada no ponto unico do modulo, nunca montada aqui.
 const { enrichMaterialRows } = require('../../services/almoxarifado/materialPhoto');
@@ -2044,12 +2044,19 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     } catch (e) { handleError(res, e); }
   });
 
-  // GET /epi/cadeia/verificar — a cadeia inteira das evidencias (Fase 5): lacuna = registro apagado, elo quebrado, HMAC.
-  app.get('/api/almoxarifado/epi/cadeia/verificar', auth, requirePermission('entregar_epi'), async (req, res) => {
+  // GET /evidencias/cadeia/verificar — a cadeia inteira das evidencias (Fase 5 da 178): lacuna = registro apagado, elo quebrado,
+  // HMAC. Etapa 180 (RN-180.01): todos os contextos registrados (EPI e termo de ferramenta), contexto sem montador -> 'contexto
+  // desconhecido'; porta `entregar_epi` OU `gerenciar_ferramentas` (I4). `/epi/cadeia/verificar` fica como apelido (a tela da
+  // 178 chama esse caminho) — mesma resposta, mesma porta.
+  const verificarCadeiaDasEvidencias = async (req, res) => {
     try {
       res.json(await epiService.verificarCadeia(db, { dir: uploadsAlmoxDir, segredo: segredoDaEvidencia() }));
     } catch (e) { handleError(res, e); }
-  });
+  };
+  app.get('/api/almoxarifado/evidencias/cadeia/verificar', auth,
+    requireAlgumaPermissao(['entregar_epi', 'gerenciar_ferramentas']), verificarCadeiaDasEvidencias);
+  app.get('/api/almoxarifado/epi/cadeia/verificar', auth,
+    requireAlgumaPermissao(['entregar_epi', 'gerenciar_ferramentas']), verificarCadeiaDasEvidencias);
 
   // GET /epi/ficha/:colaborador_id — a ficha de EPI (RN-178.09).
   app.get('/api/almoxarifado/epi/ficha/:colaborador_id', auth, requirePermission('entregar_epi'), async (req, res) => {

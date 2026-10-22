@@ -17,7 +17,7 @@
  *     ancora externa da cabeca fica para depois);
  *   - as tabelas sao append-only no banco (triggers, schema.js `ensureEntregaEpi`).
  *
- * Nao sabe nada de EPI: o termo de responsabilidade de ferramenta (RN-D, letra D) vai reusar `registroHmac`, `verificar`,
+ * Nao sabe nada de EPI: desde a Etapa 180 cada contexto (EPI, termo de ferramenta) se registra com `registrarContexto` e reusa `registroHmac`, `verificar`,
  * `naFilaDaCadeia`/`cabecaDaCadeia`, `verificarCadeia` e `literalSql` com o contexto dele. Quem chama decide QUAIS campos entram — e tem de normaliza-los da MESMA forma na gravacao
  * e na verificacao (a ida e volta pelo SQLite nao pode mudar o hash: `Number(...)`, texto ou null).
  */
@@ -144,21 +144,48 @@ function verificar({ dir, arquivo, arquivoSha256, campos, registroSha256Gravado,
 }
 
 /**
- * Percorre a cadeia inteira (todos os contextos). `camposDe(ev)` devolve os campos do registro (o mesmo montador da gravacao)
+ * Etapa 180 (RN-180.01, I2 da revisao da Fase 2): o REGISTRO DE CONTEXTOS. A cadeia e global (todos os contextos na mesma
+ * `sequencia`), mas so quem gravou sabe remontar os campos do registro — ate a 180 a verificacao da cadeia so conhecia o EPI e
+ * acusava "registro alterado" em qualquer evidencia de outro contexto (um termo de ferramenta gravado faria o EPI acusar). Cada
+ * contexto registra, no carregamento do modulo dele:
+ *   - `montador(db)`: prepara (uma vez por verificacao) e devolve `async (ev) => campos | null` — o MESMO montador da gravacao;
+ *     null quando o registro do contexto sumiu;
+ *   - `extras(db, problemasAteAqui)` (opcional): os controles que so o contexto ve (o registro sem evidencia, a cauda apagada da
+ *     tabela dele) — devolve a lista de problemas `{ sequencia, evidencia_id, numero, motivo }` a acrescentar.
+ * Uma evidencia de contexto SEM montador registrado vira `'contexto desconhecido'` (nao "registro alterado": nao e prova de
+ * adulteracao, e sim de que este servidor nao sabe remontar aquele registro). Registrar de novo o mesmo contexto substitui (os
+ * testes usam isso); `removerContexto` existe para os testes.
+ */
+const contextos = new Map();
+function registrarContexto(contexto, { montador, extras = null } = {}) {
+  if (!contexto || typeof montador !== 'function') throw new Error('registrarContexto: contexto e montador sao obrigatorios');
+  contextos.set(String(contexto), { montador, extras: typeof extras === 'function' ? extras : null });
+}
+function removerContexto(contexto) { contextos.delete(String(contexto)); }
+function contextosRegistrados() { return [...contextos.keys()]; }
+
+/**
+ * Percorre a cadeia inteira (todos os contextos). Sem `camposDe`, usa o registro de contextos (RN-180.01) e roda os `extras`
+ * de cada contexto no fim. `camposDe(ev)` (legado, um montador so) devolve os campos do registro (o mesmo montador da gravacao)
  * ou null quando o registro do contexto sumiu. Problemas, em ordem de sequencia: 'registro apagado' (lacuna — a sequencia que
  * falta), 'elo quebrado' (o `hash_anterior` nao e o registro da anterior), 'arquivo ausente' | 'arquivo alterado' | 'registro
  * alterado' (a propria evidencia), 'fora da cadeia' (sem sequencia: so base de dev anterior a Fase 5) e 'registro apagado no
  * fim da cadeia' (o AUTOINCREMENT ja passou do maior id: a cauda sumiu — quem tambem edita a `sqlite_sequence` escapa,
  * declarado). Cada problema: `{ sequencia, evidencia_id, numero, motivo }` (`numero` = o do registro do contexto, se houver).
  */
-async function verificarCadeia(db, { dir, segredo, camposDe }) {
+async function verificarCadeia(db, { dir, segredo, camposDe = null }) {
+  const preparados = new Map();
+  if (!camposDe) {
+    for (const [ctx, { montador }] of contextos) preparados.set(ctx, await montador(db));
+  }
   const linhas = await dbAll(db, `SELECT * FROM ${TABELA} ORDER BY sequencia IS NULL, sequencia, id`);
   const problemas = [];
   let anterior = null;
   let esperado = 1;
   let cabeca = null;
   for (const ev of linhas) {
-    const campos = await camposDe(ev);
+    const montadorDaLinha = camposDe || preparados.get(ev.contexto) || null;
+    const campos = montadorDaLinha ? await montadorDaLinha(ev) : null;
     const numero = campos && campos.numero ? campos.numero : null;
     const problema = (motivo) => problemas.push({
       sequencia: ev.sequencia == null ? null : Number(ev.sequencia), evidencia_id: ev.id, numero, motivo,
@@ -171,7 +198,9 @@ async function verificarCadeia(db, { dir, segredo, camposDe }) {
       lacuna = true;
     }
     if (!lacuna && (anterior ? ev.hash_anterior !== anterior.registro_sha256 : ev.hash_anterior != null)) problema('elo quebrado');
-    if (!campos) {
+    if (!montadorDaLinha) {
+      problema('contexto desconhecido');
+    } else if (!campos) {
       problema('registro alterado');
     } else {
       const r = verificar({ dir, arquivo: ev.arquivo, arquivoSha256: ev.arquivo_sha256, campos,
@@ -187,6 +216,11 @@ async function verificarCadeia(db, { dir, segredo, camposDe }) {
   if (autoinc && Number(autoinc.seq) > Number((maior && maior.m) || 0)) {
     problemas.push({ sequencia: null, evidencia_id: null, numero: null, motivo: 'registro apagado no fim da cadeia' });
   }
+  if (!camposDe) {
+    for (const [, { extras }] of contextos) {
+      if (extras) problemas.push(...((await extras(db, problemas)) || []));
+    }
+  }
   return { integra: problemas.length === 0, total: linhas.length, cabeca, problemas };
 }
 
@@ -200,4 +234,5 @@ function mascararCpf(cpf) {
 module.exports = {
   sha256, sha256Arquivo, jsonCanonico, registroHmac, verificar, literalSql, textoLimpo, texto, numero, mascararCpf,
   naFilaDaCadeia, cabecaDaCadeia, conferirElos, verificarCadeia,
+  registrarContexto, removerContexto, contextosRegistrados,
 };

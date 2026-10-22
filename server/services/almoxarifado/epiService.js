@@ -18,7 +18,6 @@
  * sem retry — a colisao e ~0 (2,8e12 sufixos por ms) e, se acontecer, o UNIQUE derruba a transacao e a compensacao cobre.
  */
 const path = require('path');
-const fs = require('fs');
 const { dbGet, dbAll } = require('./db');
 const Q = require('./quantidade');
 const stockService = require('./stockService');
@@ -28,10 +27,11 @@ const { registrarAuditoriaDoAto } = require('./audit');
 const evidencia = require('./evidenciaAssinaturaService');
 const { DEVOLUCAO_VIVA_SQL } = require('./devolucaoViva');
 const diaLocal = require('../diaLocal');
+// Etapa 180 (T1): a identificacao do colaborador mora num modulo comum — o termo de ferramenta usa a mesma regua.
+const { colaboradorAtivo, conferirMatricula, conferirPng, chaveIdempotencia } = require('./identificacaoColaborador');
 
 const CONTEXTO = 'ENTREGA_EPI';
 const MOTIVOS = ['PRIMEIRA_ENTREGA', 'TROCA', 'PERDA', 'DANO'];
-const PNG_ASSINATURA = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 // Ganchos de teste (pelo OBJETO do modulo, como os monkeypatch de reservaChegadaService): `antesDaGravacao` roda depois da
 // saida e antes da transacao — o teste da compensacao o usa para fazer a transacao falhar de verdade.
@@ -128,18 +128,6 @@ function quantidadeInteira(q) {
   return n;
 }
 
-async function colaboradorAtivo(db, colaboradorId) {
-  const id = Number(colaboradorId);
-  if (colaboradorId === undefined || colaboradorId === null || String(colaboradorId).trim() === '') {
-    throw erro('O colaborador é obrigatório');
-  }
-  if (!Number.isInteger(id) || id <= 0) throw erro(`Colaborador #${colaboradorId} não encontrado`);
-  const c = await dbGet(db, 'SELECT id, nome, matricula, setor, cpf, status FROM colaboradores WHERE id = ?', [id]);
-  if (!c) throw erro(`Colaborador #${id} não encontrado`);
-  if (String(c.status == null ? '' : c.status).trim().toLowerCase() !== 'ativo') throw erro(`Colaborador ${c.nome} não está ativo`);
-  return c;
-}
-
 async function materialEpi(db, materialId) {
   if (materialId === undefined || materialId === null || String(materialId).trim() === '') {
     throw erro('O EPI é obrigatório');
@@ -163,14 +151,6 @@ async function materialEpi(db, materialId) {
     throw erro(`O CA ${ca} do EPI ${m.codigo} venceu em ${dataBr(validade)}`);
   }
   return { ...m, ca_numero: ca, ca_validade: validade };
-}
-
-/** Fase 5 (M2): a chave de idempotencia (uuid do front) — opcional; fora do formato, 400. */
-function chaveIdempotencia(v) {
-  const c = evidencia.textoLimpo(v);
-  if (c === null) return null;
-  if (!/^[A-Za-z0-9-]{8,100}$/.test(c)) throw erro('Chave de idempotência inválida');
-  return c;
 }
 
 /**
@@ -201,37 +181,6 @@ async function entregaDaChave(db, chave, { colaborador_id: colaboradorId, materi
     },
     reutilizada: true,
   };
-}
-
-/**
- * Fase 5 (importante 4): a identificacao do colaborador. Ele digita a PROPRIA matricula no tablet, junto da assinatura, e ela
- * tem de bater com o cadastro — a assinatura sozinha nao dizia quem assinou (o almoxarife escolhia o nome na lista). Compara sem
- * caixa, sem as pontas e sem espacos internos; zeros a esquerda contam. Letra B: descartado PIN/senha do colaborador (exigiria
- * cadastro de credencial de chao de fabrica).
- */
-function conferirMatricula(colab, digitada) {
-  const norm = (v) => String(v).replace(/\s+/g, '').toUpperCase();
-  const cadastro = evidencia.textoLimpo(colab.matricula);
-  if (!cadastro) {
-    throw erro(`Colaborador ${colab.nome} sem matrícula cadastrada — não é possível confirmar a identidade`);
-  }
-  const conf = evidencia.textoLimpo(digitada);
-  if (!conf) throw erro('O colaborador deve digitar a própria matrícula para confirmar o recebimento');
-  if (norm(conf) !== norm(cadastro)) throw erro('A matrícula informada não confere com a do colaborador');
-}
-
-/** I5: o PNG de verdade — o MIME (multer) e a assinatura do arquivo. */
-function conferirPng(caminho) {
-  let cabeca = Buffer.alloc(0);
-  try {
-    const fd = fs.openSync(caminho, 'r');
-    try {
-      cabeca = Buffer.alloc(8);
-      const lidos = fs.readSync(fd, cabeca, 0, 8, 0);
-      cabeca = cabeca.subarray(0, lidos);
-    } finally { fs.closeSync(fd); }
-  } catch (e) { /* arquivo ilegivel = nao e PNG */ }
-  if (!cabeca.equals(PNG_ASSINATURA)) throw erro('A assinatura deve ser uma imagem PNG');
 }
 
 /**
@@ -502,35 +451,40 @@ async function verificarEntrega(db, entregaId, { dir, segredo }) {
 }
 
 /**
- * Fase 5 — `GET /epi/cadeia/verificar`: a cadeia inteira (evidenciaAssinaturaService.verificarCadeia) com o montador da entrega
- * de EPI, mais o que so o contexto ve: a entrega cuja evidencia sumiu ('entrega sem evidência', com o numero) e a entrega
- * apagada no fim da tabela (sqlite_sequence).
+ * Fase 5 da 178 — os controles que so o contexto do EPI ve, alem da cadeia: a entrega cuja evidencia sumiu ('entrega sem
+ * evidência', com o numero) e a entrega apagada no fim da tabela (sqlite_sequence). Desde a Etapa 180 (RN-180.01, I2) eles e o
+ * montador vivem no REGISTRO DE CONTEXTOS da evidencia — a cadeia e verificada por `evidencia.verificarCadeia` com todos os
+ * contextos registrados (antes, este servico devolvia null para qualquer outro contexto, que virava "registro alterado").
  */
-async function verificarCadeia(db, { dir, segredo }) {
-  const entregaPorId = new Map((await dbAll(db, 'SELECT * FROM entregas_epi_almoxarifado')).map((e) => [e.id, e]));
-  const out = await evidencia.verificarCadeia(db, {
-    dir,
-    segredo,
-    camposDe: async (ev) => {
-      if (ev.contexto !== CONTEXTO) return null; // nenhum outro contexto existe ainda (o termo de ferramenta trara o dele)
+evidencia.registrarContexto(CONTEXTO, {
+  montador: async (db) => {
+    const entregaPorId = new Map((await dbAll(db, 'SELECT * FROM entregas_epi_almoxarifado')).map((e) => [e.id, e]));
+    return async (ev) => {
       const entrega = entregaPorId.get(Number(ev.contexto_id));
       return entrega ? camposDoRegistro(entrega, ev) : null;
-    },
-  });
-  const semEvidencia = await dbAll(db, `SELECT e.numero FROM entregas_epi_almoxarifado e
-    WHERE NOT EXISTS (SELECT 1 FROM evidencias_assinatura_almoxarifado v WHERE v.contexto = ? AND v.contexto_id = e.id)
-    ORDER BY e.id`, [CONTEXTO]);
-  for (const { numero } of semEvidencia) {
-    out.problemas.push({ sequencia: null, evidencia_id: null, numero, motivo: 'entrega sem evidência' });
-  }
-  const maior = await dbGet(db, 'SELECT MAX(id) AS m FROM entregas_epi_almoxarifado');
-  const autoinc = await dbGet(db, "SELECT seq FROM sqlite_sequence WHERE name = 'entregas_epi_almoxarifado'");
-  if (autoinc && Number(autoinc.seq) > Number((maior && maior.m) || 0)
-    && !out.problemas.some((p) => p.motivo === 'registro apagado no fim da cadeia')) {
-    out.problemas.push({ sequencia: null, evidencia_id: null, numero: null, motivo: 'registro apagado no fim da cadeia' });
-  }
-  out.integra = out.problemas.length === 0;
-  return out;
+    };
+  },
+  extras: async (db, problemasAteAqui) => {
+    const out = [];
+    const semEvidencia = await dbAll(db, `SELECT e.numero FROM entregas_epi_almoxarifado e
+      WHERE NOT EXISTS (SELECT 1 FROM evidencias_assinatura_almoxarifado v WHERE v.contexto = ? AND v.contexto_id = e.id)
+      ORDER BY e.id`, [CONTEXTO]);
+    for (const { numero } of semEvidencia) {
+      out.push({ sequencia: null, evidencia_id: null, numero, motivo: 'entrega sem evidência' });
+    }
+    const maior = await dbGet(db, 'SELECT MAX(id) AS m FROM entregas_epi_almoxarifado');
+    const autoinc = await dbGet(db, "SELECT seq FROM sqlite_sequence WHERE name = 'entregas_epi_almoxarifado'");
+    if (autoinc && Number(autoinc.seq) > Number((maior && maior.m) || 0)
+      && !problemasAteAqui.some((p) => p.motivo === 'registro apagado no fim da cadeia')) {
+      out.push({ sequencia: null, evidencia_id: null, numero: null, motivo: 'registro apagado no fim da cadeia' });
+    }
+    return out;
+  },
+});
+
+/** `GET /evidencias/cadeia/verificar` (e o apelido `/epi/cadeia/verificar`): a cadeia inteira, todos os contextos registrados. */
+async function verificarCadeia(db, { dir, segredo }) {
+  return evidencia.verificarCadeia(db, { dir, segredo });
 }
 
 /** RN-178.10 — so os ativos, sem CPF e sem salario. */
