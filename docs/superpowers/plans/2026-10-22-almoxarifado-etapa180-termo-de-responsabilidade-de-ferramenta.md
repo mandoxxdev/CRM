@@ -1,7 +1,7 @@
 # Etapa 180 — Termo de responsabilidade no empréstimo de ferramenta (RN-D)
 
-> **Status:** 🟡 em execução (2026-10-22) — T1 `2092806d`, T2 `11ef2821` e T3 `04b9d2fb` (front — a tela de empréstimo voltou a funcionar) feitas (ver "Execução" no fim, com o
-> contrato real para o front); falta T4. Emendada da "próxima tarefa detalhada" da Etapa 178 (B1169). A 179 é da
+> **Status:** 🟡 em execução (2026-10-22) — T1 `2092806d`, T2 `11ef2821`, T3 `04b9d2fb` (front — a tela de empréstimo voltou a funcionar), T4 `31fb475f`+`3d161c35` (integração pela rota + a matrícula
+> confirmada que a tela imprimia como "1") feitas (ver "Execução" no fim, com o contrato real para o front); falta o fechamento. Emendada da "próxima tarefa detalhada" da Etapa 178 (B1169). A 179 é da
 > outra sessão (sem escopo ainda).
 > **Origem:** pergunta 3 da usuária (21/10): *"solicitamos a assinatura do colaborador responsável pela utilização ou
 > retirada… empréstimo de equipamentos e ferramentas, incluindo o registro da devolução"*; RN-D do design de 16/09: o
@@ -227,5 +227,30 @@
 - Controle positivo (restaurado por cópia + `cmp`): S1 sem `termo_versao` no FormData → 3 vermelhos (`montarFormDataEmprestimo`,
   "envio", "versão trocada"); S2 aba Empréstimos visível sem permissão → 1 vermelho (`Received: <button…>Empréstimos</button>`).
 - Suítes (uma por vez): client **180 suítes / 2353 testes verdes**; `CI=true npx react-scripts build` **ok**.
-- **Falta:** T4 (integração pela rota) e o fechamento (`fechar-etapa`: novidades letra B — a divergência do seletor, o rótulo que a T2
+- ~~**Falta:** T4~~ (feita, abaixo).
+
+### T4 (integração pela rota) — ✅ 2026-10-22 — `31fb475f` (teste) e `3d161c35` (front)
+
+- [x] `server/tests/api/termoFerramentaPontaAPonta.api.test.js` **12/12**, tudo pela rota: admin cria a v2 (`versao_base` 1, texto
+  aparado) → `GET /termos/FERRAMENTA` (o que o modal lê) → `POST /ferramentas` → colaborador ativo (SQL direto: tabela core, molde
+  `epiPontaAPonta`) → `/aux/colaboradores` → `POST /emprestar` multipart com **PNG real** 240x80, matrícula `' m-t4-77 '`, `termo_versao` 2
+  e `colaborador_nome` digitado (ignorado) → `GET /emprestimos` (`tem_termo`, nome do cadastro) → `GET …/termo` (texto da v2, chaves
+  congeladas das três partes) → `GET arquivo_url` (200 `image/png`, mesmos bytes; sem/errada a `sig` → 404) → `/verificar` íntegro →
+  `PUT /ferramentas/:id` com `numero_serie` novo (a viva mudou; o termo mostra a fotografia e segue íntegro) → devolução (íntegro,
+  DEVOLVIDA) → entrega de EPI pela rota → cadeia íntegra, `total` 2, sequências `[TERMO_FERRAMENTA, ENTREGA_EPI]` → 1 byte do PNG do termo
+  → `/verificar` e cadeia acusam `arquivo alterado` só no termo (o EPI segue íntegro) → restaurado, íntegro → v3 salva com a tela na v2 →
+  409 `O texto do termo mudou (versão 3) — releia e assine de novo`, sem PNG órfão, ferramenta DISPONIVEL → relida a v3 → 201 (o novo termo
+  tem a v3 e a série de agora; o velho segue v2 e a série original) → cadeia íntegra com 3, só 3 PNGs novos em disco.
+- Controle positivo (restaurado por cópia + `cmp`): montador e `/verificar` lendo `numero_serie` da ferramenta **viva** (join em
+  `ferramentas_almoxarifado`) → 5 vermelhos, o **primeiro no passo do PUT** (`{ integro: false, motivo: 'registro alterado' }`).
+- [x] **Conferência do front campo a campo (formas impressas com `TERMO_T4_FORMAS=1`) — 1 divergência, corrigida:**
+  `evidencia.confirmado_por_matricula` é a **flag `1`** (a matrícula digitada não é gravada — só se confere), mas a T3 a imprimia como
+  "Matrícula digitada" na tela e no PDF: na tela real saía `Matrícula digitada: 1`. Os mocks da T3 tinham `'M-900'` nesse campo, por isso
+  o teste não via. Agora `matriculaConfirmadaTexto` (`utils/termoFerramenta.js`): flag 1 → `Sim — digitou <matrícula da fotografia>
+  (confere com o cadastro)`; senão `Não registrada`; rótulo `Matrícula confirmada pelo colaborador` no modal e no PDF; fixtures com a forma
+  real. Controle: o modal de volta ao campo cru → 1 vermelho, `Received … Matrícula confirmada pelo colaborador: 1`. O resto bate
+  (201 do empréstimo, `reutilizada`, linha de `/emprestimos` com `data_retirada` `AAAA-MM-DD HH:MM:SS`, `termo`/`evidencia`/`emprestimo`
+  do GET do termo, `vigente`/`historico`, `arquivo_url` relativo assinado que o `resolveMaterialPhotoUrl` resolve).
+- Suítes (uma por vez): `test:api` **517/517 arquivos OK**; `test:almoxarifado` **44/0**; client **180 suítes / 2354 testes verdes**; `CI=true npx react-scripts build` **ok**.
+- **Falta:** o fechamento (`fechar-etapa`: novidades letra B — a divergência do seletor, o rótulo que a T2
   esqueceu —, README da feature, mapa, guia do usuário com roteiro clicável).
