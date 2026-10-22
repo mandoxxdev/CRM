@@ -229,3 +229,44 @@ As emendas **prevalecem** sobre a tabela de RN acima quando discordarem.
 manual (`POST /reservas`) e a troca de destino da reserva (`reservationService`, M4) não olham a OS. A requisição da OS
 que já estava aprovada e esperando e foi pulada na chegada (valor/dono) também não reconverte depois — só uma nova
 aprovação converte.
+
+### T3 — OS encerrada/excluída (RN-171.09, 10; C2, I7, M1) — ✅ feita (`07d6a8c8`, merge `5bb6946c`)
+
+- **Serviço** `services/almoxarifado/osEncerradaService.js`: `liberarReservasDaOs(db, user, osId, statusNovo)` solta as
+  reservas do predicado congelado com `statusFinal: 'LIBERADA'` e motivo `OS <numero_os> <status> — material volta ao
+  estoque` (reserva e movimentação; `os_id` preservado nas duas). Liberar não pega a trava (B441). Depois, **fora** de
+  qualquer trava, redistribui por material + nota de origem chamando `reservaChegadaService.reservarLiberacaoParaQuemEspera`
+  **sem** `sobTrava`, com `origem: 'OS_ENCERRADA'` (I7). `pedidosDaOs` e `recusaExclusaoComPedido` para a RN-171.10.
+- **Rotas** (`index.js`): o `PUT` da OS lê o status anterior antes do `UPDATE`, só a transição de fora para dentro do
+  conjunto fechado solta (`entrouNoFechado`) e a resposta ganha `reservas_liberadas`; o `DELETE` com pedido → 409.
+- **Testes:** `osEncerradaLiberaCompra.api.test.js` (serviço, no harness) e `osEncerradaRotas.api.test.js` (fiação no
+  `index.js` por spawn, 8/8).
+
+### Correção do rótulo da redistribuição da OS encerrada — ✅ feita (`0ac039db`)
+
+- **Defeito:** `reservaChegadaService.rotulosDaLiberacao` só conhecia `NAO_CONFORMIDADE`; a origem `OS_ENCERRADA` da T3 caía
+  no ramo da inspeção — a reserva redistribuída dizia `Reserva na liberação da inspeção — recebimento X` sem inspeção
+  nenhuma. **Agora:** ramo próprio `rotulosDaOsEncerrada`: motivo `Reserva na liberação da OS <numero_os> encerrada —
+  recebimento <REC>` e observação `… — requisição <REQ>` (número vem em `documento_numero`, que o `osEncerradaService` já
+  passava; sem ele, `#<id>`). "encerrada" é genérico de propósito: cobre cancelada/concluída (C2).
+- **Teste:** novo cenário RN-171.09/I7 em `osEncerradaLiberaCompra.api.test.js` (observação da reserva + motivo da
+  movimentação `RESERVA`), 18/18. Controle positivo: ramo desligado → só ele vermelho (17/18); restaurado e conferido com `cmp`.
+
+### T5 — integração ponta a ponta (T1+T2+T3) — ✅ feita (`86a956bb`)
+
+- **Teste** `server/tests/api/pedidoOsPontaAPonta.api.test.js`, 3 roteiros, 3/3:
+  1. **Pela rota:** OS aberta → `POST /api/compras/pedidos` com `os_id` → `GET` detalhe com `os_numero` → nota processada
+     pela rota → `ENTRADA_COMPRA.os_id` e reserva da OS de 10 → a requisição sem OS que esperava fica com 0 → a requisição da
+     OS (`os_referencia = numero_os`) aprovada converte 6 → separa e **entrega** 6 → físico 4, reservado 4 (os 4 da OS).
+  2. **Pelo serviço** (`criarPedido` direto) até a reserva da OS → OS cancelada (`UPDATE` + `liberarReservasDaOs`, como o
+     `PUT` do `index.js` faz — a rota não está no harness, a fiação é o `osEncerradaRotas`) → reserva `LIBERADA` com `os_id` e
+     motivo, `mov.os_id` preservado, a requisição sem OS recebe 6 com o rótulo novo e fica `TOTALMENTE_RESERVADA`, 4 livres;
+     `PUT` de um pedido de estoque trocando para a OS cancelada → 400 `A OS <n> está cancelado — não aceita compra nova`;
+     `PUT` do pedido já recebido → 400 da guarda de recebimento (OS mantida).
+  3. Pedido de 10 com OS recebido em 4 + 6 → duas reservas da OS (4 e 6, cada uma com o seu `recebimento_id`) → estorno da
+     segunda entrada → 200, só a dela `LIBERADA` (motivo do estorno), físico 4, reservado 4.
+- **Controle positivo** (restaurado por cópia, conferido com `cmp`): S-T1 `criarPedido` sem gravar `os_id` → 3/3 vermelhos;
+  S-T2 `reservarParaOsSobTrava` sem criar → 3/3 vermelhos; S-T3 `liberarReservasDaOs` sem liberar → só o Roteiro 2 vermelho.
+- Suítes: `test:api` 495/495 arquivos OK; `test:almoxarifado` 44/44.
+- **Defeito achado pelo roteiro:** nenhum além do rótulo acima (que já era conhecido ao abrir a T5). O roteiro confirmou
+  que o `PUT` do pedido exige o corpo completo (Zod) — não é defeito, é o contrato de hoje.
