@@ -1294,3 +1294,37 @@ describe('Etapa 93 (Fase 5): exclusao que perde a corrida fecha o modal e recarr
     expect(chamadas('/almoxarifado/requisicoes')).toBe(antesLista);
   });
 });
+
+// Etapa 184 (RN-184.06): o GET da liberacao por valor passou a responder so `{ ativo, limite, souAprovador }` a quem nao
+// configura (sem `aprovadorIds`, sem `aprovadores`). A lista le so `souAprovador` — o filtro "Aprovacoes de valor" tem de
+// continuar aparecendo para o aprovador que nao configura. Usuario NAO admin: com `role: 'admin'` o `isAdmin` da lista
+// (`canDeleteAlmoxRequisicao`) mostra o botao de qualquer jeito e o teste nao provaria nada.
+describe('Etapa 184: a lista com a resposta reduzida da liberacao por valor', () => {
+  const APROVADOR = { id: 7, nome: 'Aprovador Um', role: 'user', perfil_almoxarifado: 'GESTOR' };
+  let liberacaoDoBanco;
+  beforeEach(() => {
+    mockUser = APROVADOR;
+    detalheDoBanco = baseRequisicao('PENDENTE');
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => {
+      if (url === '/almoxarifado/configuracoes/liberacao-valor') return Promise.resolve({ data: liberacaoDoBanco });
+      return base(url, cfg);
+    });
+  });
+
+  test('[RN-184.06] lista: aprovador sem configurar, GET { ativo, limite, souAprovador: true } -> mostra "Aprovações de valor"', async () => {
+    liberacaoDoBanco = { ativo: true, limite: 800, souAprovador: true };
+    await renderizarSemDetalhe();
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/configuracoes/liberacao-valor');
+    expect(botaoPorTexto('Aprovações de valor')).toBeTruthy();
+  });
+
+  test('[RN-184.06] lista: GET { ativo, limite, souAprovador: false } -> sem "Aprovações de valor" (metade negativa)', async () => {
+    liberacaoDoBanco = { ativo: true, limite: 800, souAprovador: false };
+    await renderizarSemDetalhe();
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/configuracoes/liberacao-valor');
+    expect(botaoPorTexto('Aprovações de valor')).toBeUndefined();
+  });
+});

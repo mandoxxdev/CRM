@@ -314,3 +314,19 @@ describe('C261 (Etapa 126) — RN-09/RN-10', () => {
     expect(frasesNaTela()).toEqual([F_FAMILIAS_125]);
   });
 });
+
+// Etapa 184 (RN-184.06, emenda M3 da Fase 2) — teste de ROBUSTEZ, nao de comportamento desejado. Quem abre a aba Liberacao por
+// Valor SEMPRE recebe `aprovadorIds` (o `verIds` do servidor e o `canConfigureAlmox` do client sao o mesmo predicado); caixas
+// todas desmarcadas diriam "ninguem aprova", que e justamente o que a B1210 descartou. Aqui so se prova que a aba nao quebra se
+// a resposta vier sem os ids (a leitura nao depende de `aprovadores`, que o GET nao manda mais). A guarda real de que o admin
+// do sistema recebe os ids e o controle (5) da T1 + a fixture da T3.
+describe('Etapa 184 — a aba Liberação por valor com a resposta reduzida', () => {
+  test('[RN-184.06] robustez: sem aprovadorIds a aba não quebra', async () => {
+    dados['/almoxarifado/configuracoes/liberacao-valor'] = { ativo: true, limite: 800, souAprovador: false };
+    await renderAba(ADMIN_SISTEMA, 'liberacao-valor');
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(container.querySelector('input[type="number"]').value).toBe('800');
+    expect([...container.querySelectorAll('label')].some((l) => l.textContent.includes('Aprovador Um'))).toBe(true);
+    expect(frasesNaTela()).toEqual([F_LIBERACAO]);
+  });
+});
