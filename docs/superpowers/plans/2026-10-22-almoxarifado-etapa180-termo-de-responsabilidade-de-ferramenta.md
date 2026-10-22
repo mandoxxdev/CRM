@@ -1,6 +1,7 @@
 # Etapa 180 — Termo de responsabilidade no empréstimo de ferramenta (RN-D)
 
-> **Status:** 🟡 em execução (2026-10-22). Emendada da "próxima tarefa detalhada" da Etapa 178 (B1169). A 179 é da
+> **Status:** 🟡 em execução (2026-10-22) — T1 `2092806d` e T2 `11ef2821` feitas (backend, ver "Execução" no fim, com o
+> contrato real para o front); faltam T3 (front — a tela de empréstimo está quebrada até ela) e T4. Emendada da "próxima tarefa detalhada" da Etapa 178 (B1169). A 179 é da
 > outra sessão (sem escopo ainda).
 > **Origem:** pergunta 3 da usuária (21/10): *"solicitamos a assinatura do colaborador responsável pela utilização ou
 > retirada… empréstimo de equipamentos e ferramentas, incluindo o registro da devolução"*; RN-D do design de 16/09: o
@@ -81,3 +82,114 @@
   `gerenciar_ferramentas`.
 - **Letra D:** o relatório "EPI por colaborador" (`reportService.js:561`) lê empréstimos de ferramenta `tipo='EPI'` e
   ignora as entregas de EPI da 178 — enganoso, pré-existente, fora desta etapa.
+
+---
+
+## Execução
+
+### T1 (tronco) — ✅ 2026-10-22 — `2092806d`
+
+- [x] `evidenciaAssinaturaService.registrarContexto(ctx, { montador, extras })` (+ `removerContexto`, `contextosRegistrados`):
+  `montador(db)` prepara uma vez por verificação e devolve `async (ev) => campos | null`; `extras(db, problemasAteAqui)` devolve
+  problemas a acrescentar. `verificarCadeia(db, { dir, segredo })` sem `camposDe` usa o registro: contexto sem montador →
+  `'contexto desconhecido'` (não "registro alterado"); os extras de cada contexto entram no fim e derrubam o `integra`.
+- [x] O EPI se registra (montador = `camposDoRegistro`; extras = "entrega sem evidência" + cauda apagada de
+  `entregas_epi_almoxarifado`); `epiService.verificarCadeia` só delega.
+- [x] `GET /api/almoxarifado/evidencias/cadeia/verificar` com `requireAlgumaPermissao(['entregar_epi', 'gerenciar_ferramentas'])`
+  (helper novo em `permissions.js`; o 403 traz `acao` = a primeira e `acoes` = a lista); `/epi/cadeia/verificar` é apelido (mesmo
+  handler, mesma porta — **divergência:** o apelido também passou a aceitar `gerenciar_ferramentas`, para as duas rotas não
+  divergirem; hoje os dois perfis são os mesmos).
+- [x] `services/almoxarifado/identificacaoColaborador.js`: `colaboradorAtivo`, `conferirMatricula` (ganhou `{ acao }` só para a frase
+  do "digite" — o EPI segue "confirmar o recebimento"), `conferirPng`, `chaveIdempotencia`. Nenhuma mensagem mudou.
+- [x] Prova: os 8 `epi*.api.test.js` verdes **sem mudança de asserção** (`epiCadeiaHmac` 13, `epiCompensacao` 6, `epiEntrega` 29,
+  `epiIdempotencia` 7, `epiIntegridade` 17, `epiLeituras` 6, `epiMatricula` 9, `epiPontaAPonta` 11); teste novo
+  `evidenciaMultiContexto.api.test.js` **8/8** (cadeia EPI → alheio → EPI íntegra pelas duas rotas; `/verificar` do EPI depois
+  da alheia íntegro; contexto sem montador → `contexto desconhecido`; extras; a alheia adulterada acusada pelo montador dela;
+  PRODUCAO 403; "OU" provado tirando `entregar_epi` do ALMOXARIFE; a extração).
+- Controle positivo: despacho sabotado para sempre usar o montador do EPI → 4 vermelhos (o 1º: `registro alterado` na seq. 2);
+  `'contexto desconhecido'` trocado por `'registro alterado'` → 1 vermelho, na asserção do motivo. Restaurado por cópia + `cmp`.
+
+### T2 (tronco) — ✅ 2026-10-22 — `11ef2821`
+
+- [x] Schema (`schema.js` `ensureTermoFerramenta`, chamado depois de `ensureEntregaEpi`): `termos_responsabilidade_versao`
+  (UNIQUE(tipo, versao), sem FK) e `termos_emprestimo_ferramenta` (C1: `numero` UNIQUE, `emprestimo_id` UNIQUE, snapshot da
+  ferramenta e do colaborador, `termo_versao`, `texto_sha256`, `data_prevista_devolucao`, autor, `criado_em` do Node,
+  `chave_idempotencia` UNIQUE parcial; sem FK). Triggers append-only nas duas (`RAISE(ABORT, 'termo de responsabilidade nao pode ser
+  alterado')`). Semente v1 `FERRAMENTA` (`TEXTO PROVISÓRIO — substituir pelo termo da empresa.` + texto genérico), por
+  `INSERT … WHERE NOT EXISTS` — nunca sobrescreve. Prova de boot: `initSchema` duas vezes no mesmo arquivo → 1 versão, 4 triggers.
+- [x] Ação `editar_termos: [ADMINISTRADOR]` (letra B: só quem não colhe a assinatura redige o compromisso; reversível numa linha).
+  Rótulos de auditoria: entidade `termo_responsabilidade`, verbo `NOVA_VERSAO_TERMO`.
+- [x] `services/almoxarifado/termoFerramentaService.js`: `obterTermo`, `criarVersao`, `emprestarComTermo` (C2/C3/I3), `obterTermoDoEmprestimo`,
+  `verificarTermo`; registra o contexto `TERMO_FERRAMENTA` (montador pela fotografia, por `emprestimo_id = contexto_id`; extras
+  "termo sem evidência", "texto do termo alterado", "termo apagado no fim da tabela"). Gancho de teste `ganchos.antesDaGravacao`.
+- [x] Rotas (`extended.js`): o `POST /ferramentas/:id/emprestar` saiu do bloco da 9b (JSON + `EmprestimoSchema`) e foi para o bloco
+  do termo (multipart, multer próprio só PNG 2 MB, prefixo `assinatura-termo-`); `toolService.emprestarFerramenta` ficou sem rota
+  (comentado como legado). `GET /emprestimos` exige `gerenciar_ferramentas` e devolve `tem_termo`. `/aux/colaboradores` aceita
+  `entregar_epi` OU `gerenciar_ferramentas`.
+- [x] Testes novos: `termoFerramentaVersao` **10/10**, `termoFerramentaEmprestimo` **12/12**, `termoFerramentaVerificacao` **14/14**;
+  helper `tests/helpers/termoFerramenta.js` (`emprestarComTermo`, `colaboradorDoCadastro`, `PNG_1PX`).
+- [x] **Testes migrados (I1)** — mandavam JSON só com `colaborador_nome`, que deixou de existir como entrada (RN-180.03: o colaborador
+  é do cadastro; a rota é multipart com termo). O helper cria/reusa um colaborador ativo **com esse nome** e manda o multipart; as
+  asserções sobre `colaborador_nome` continuam valendo porque o snapshot é o nome do cadastro:
+  `toolCalibracao`, `toolEmprestimo`, `toolEmprestimoVencido`, `toolFerramentaEdicao`, `toolIntegracao`, `toolManutencao`,
+  `toolManutencaoRetorno`, `toolOcorrencia`, `auditoriaDoAtoCadastros`, `validadesNoDiaLocal` (10 arquivos). **Duas asserções
+  mudaram, e por quê:** (1) `toolEmprestimo` "corrida": o perdedor era sempre 400; agora é 400 (chegou depois do vencedor — a
+  literal de sempre com o status) **ou** 409 `A ferramenta não está disponível` (passou das conferências junto e perdeu o claim na
+  transação, C2) — a corrida determinística com gancho está em `termoFerramentaEmprestimo`; (2) `toolEmprestimo` "Zod: sem
+  `colaborador_nome` → 400 Dados inválidos" virou "sem `colaborador_id` → 400 `O colaborador é obrigatório`" (o Zod saiu: a
+  validação é do serviço, depois do multer, I1). `toolFerramentaEdicao` RN-175.08 só ganhou o `db` no destructuring.
+  **Não migrado (fora do escopo desta sessão — só server):** `client/src/…/FerramentasAlmoxarifado.test.js` (mocka o HTTP, não
+  quebra) — **a tela real de empréstimo fica quebrada entre a T2 e a T3** (ela manda JSON → 400 `A assinatura do colaborador é
+  obrigatória`); a T3 é quem a conserta.
+- Controles positivos (sabotar `termoFerramentaService.js` → vermelho na asserção certa → restaurar por cópia + `cmp`):
+  S1 sem os dois `WHERE changes() = 1` → a corrida dá 201/201 e a versão-no-meio dá 201; S2 sem a versão no `UPDATE` do claim →
+  só a versão-no-meio fica vermelha (201 ≠ 409); S3 contexto do termo não registrado → 6 vermelhos (`contexto desconhecido` na
+  cadeia mista); S4 idempotência depois do claim → `expected 200, got 400 … (status atual: EMPRESTADA)`; S5a sem a checagem lida
+  da `versao_base` → **verde** (o `INSERT … WHERE MAX = base` e o UNIQUE recusam sozinhos); S5c sem as três guardas da versão →
+  vermelho nos dois testes de 409 (o UNIQUE vira 500).
+- Suítes (uma por vez): `test:api` **516/516 arquivos OK**; `test:almoxarifado` **44/0**; `test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0**. (O rótulo de auditoria de `termo_responsabilidade`/`NOVA_VERSAO_TERMO` entrou durante a rodada do `test:api`; `auditLabels.api.test.js` re-rodado sozinho depois: 14/0.) Client e build **não** rodados (esta sessão é só server).
+
+#### Contrato real para o front (T3)
+
+- **`GET /api/almoxarifado/termos/FERRAMENTA`** (`gerenciar_ferramentas`) → `200 { vigente: { versao, texto, criado_em,
+  criado_por_nome, provisorio }, historico: [ {mesma forma}, … ] }` (mais recente primeiro; `provisorio` = o texto começa por
+  `TEXTO PROVISÓRIO`). Tipo ≠ `FERRAMENTA` → 404 `Tipo de termo desconhecido: <tipo>`.
+- **`POST /api/almoxarifado/termos/FERRAMENTA`** (`editar_termos`, só ADMINISTRADOR) — JSON `{ texto, versao_base? }` (mande a
+  `vigente.versao` que a tela mostrou) → `201 { versao, texto, criado_em, criado_por_nome, provisorio }`. 400 `O texto do termo é
+  obrigatório` (vazio/espaços) · 400 `O texto do termo deve ter no máximo 20000 caracteres` · 400 `O texto é igual ao da versão
+  vigente` · 409 `Outra versão do termo acabou de ser salva — recarregue` (base velha ou dois admins juntos) · 400 `Versão base inválida`.
+- **`POST /api/almoxarifado/ferramentas/:id/emprestar`** (`gerenciar_ferramentas`) — **multipart**: `colaborador_id`,
+  `confirmacao_matricula`, `termo_versao` (a `vigente.versao` exibida), `data_prevista_devolucao?` (data parseável),
+  `observacoes?` (≤ 1000), `chave_idempotencia?` (`[A-Za-z0-9-]{8,100}`, uuid por tentativa), arquivo **`assinatura`** (PNG ≤ 2 MB).
+  `colaborador_nome`/`setor` enviados são **ignorados** (snapshot do cadastro).
+  - `201 { id, termo: { numero: 'TERMO-…', versao, evidencia: { id, arquivo_url, arquivo_sha256, registro_sha256, criado_em } } }`;
+    reenvio com a mesma chave → `200` com a mesma forma + `reutilizada: true`.
+  - Recusas, nesta ordem: 400 `A assinatura do colaborador é obrigatória` · 400 `A assinatura deve ser uma imagem PNG` (MIME ou
+    bytes) · 400 `Chave de idempotência inválida` · 409 `Chave de idempotência já usada em outro empréstimo` · 404 `Ferramenta não
+    encontrada` · 400 `O colaborador é obrigatório` · 400 `Colaborador #<id> não encontrado` · 400 `Colaborador <nome> não está
+    ativo` · 400 `Colaborador <nome> sem matrícula cadastrada — não é possível confirmar a identidade` · 400 `O colaborador deve
+    digitar a própria matrícula para assinar o termo` · 400 `A matrícula informada não confere com a do colaborador` · 400 `A versão
+    do termo é obrigatória` · 409 `O texto do termo mudou (versão <n>) — releia e assine de novo` (recarregar o termo e reassinar) ·
+    400 `Data prevista de devolução inválida` · 400 `Observações deve ter no máximo 1000 caracteres` · 400 `Ferramenta com calibração
+    vencida ou sem calibração registrada` · 400 `Ferramenta não está disponível (status atual: <STATUS>)` · 409 `A ferramenta não
+    está disponível` (perdeu a corrida) · 500 `Não foi possível gravar o empréstimo — nada foi gravado. Pode tentar de novo. (…)`.
+    Em toda saída ≠ 2xx o PNG é apagado (menos o 500 pós-COMMIT, que diz "foi gravado, … confira a lista").
+- **`GET /api/almoxarifado/emprestimos`** (`gerenciar_ferramentas` — PRODUCAO agora 403; a T3 esconde a aba) → cada linha ganha
+  `tem_termo: boolean`.
+- **`GET /api/almoxarifado/ferramentas/emprestimos/:id/termo`** (`gerenciar_ferramentas`) → `200 { emprestimo: { id,
+  ferramenta_id, ferramenta_nome, codigo_patrimonio, status, data_retirada, data_prevista_devolucao, data_devolucao_real },
+  termo: { numero, versao, texto (da versão ASSINADA), texto_sha256, provisorio, ferramenta: { id, codigo_patrimonio,
+  numero_serie, nome } (fotografia), colaborador: { id, nome, matricula, setor }, data_prevista_devolucao, criado_por_nome,
+  criado_em }, evidencia: { id, arquivo_url, arquivo_sha256, registro_sha256, confirmado_por_matricula, criado_em, sequencia } }`.
+  404 `Empréstimo não encontrado` · 404 `Este empréstimo não tem termo assinado (anterior à exigência)`.
+- **`GET …/termo/verificar`** → `{ integro: true }` ou `{ integro: false, motivo }`, motivo ∈ `arquivo ausente`, `arquivo alterado`,
+  `registro alterado`, `texto do termo alterado`, `registro anterior apagado`, `elo com o anterior quebrado`, `registro posterior
+  apagado`, `elo com o posterior quebrado`. Mesmos 404.
+- **`GET /api/almoxarifado/evidencias/cadeia/verificar`** (`entregar_epi` OU `gerenciar_ferramentas`; `/epi/cadeia/verificar` é
+  apelido) → `{ integra, total, cabeca, problemas: [{ sequencia, evidencia_id, numero, motivo }] }`; motivos novos: `contexto
+  desconhecido`, `termo sem evidência`, `texto do termo alterado`, `termo apagado no fim da tabela`.
+- **`GET /api/almoxarifado/aux/colaboradores`** — `entregar_epi` OU `gerenciar_ferramentas` → `[{ id, nome, matricula, setor }]`.
+- **`GET /api/almoxarifado/minhas-permissoes`** → `acoes.editar_termos` (true só ADMINISTRADOR); `acoes.gerenciar_ferramentas` para
+  a aba Empréstimos e o botão Termo.
+- **Letra D (declarado):** o `emprestimo_id`/`contexto_id` fica fora do HMAC (não existe antes do INSERT, como o `id` no EPI); o vínculo
+  provado é o `numero`. Quem derruba o trigger e re-aponta a fotografia para outro empréstimo não é pego pelo HMAC.
