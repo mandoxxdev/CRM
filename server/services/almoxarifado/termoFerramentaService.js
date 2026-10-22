@@ -410,6 +410,18 @@ async function conferirTextoDaVersao(db, termo) {
   return null;
 }
 
+/**
+ * Fase 5 (revisao adversarial, I2): o emprestimo VIVO ainda aponta para a ferramenta e o colaborador da fotografia. O HMAC cobre so
+ * a fotografia (C1) e a tabela de emprestimos nao e append-only (a devolucao e a ocorrencia mudam status, datas e observacoes — nunca
+ * esses dois campos); quem reapontasse o emprestimo para outra pessoa via a lista com o nome novo e "Termo" integro. null = bate.
+ */
+function emprestimoReapontado(emp, termo) {
+  if (Number(emp.ferramenta_id) !== Number(termo.ferramenta_id) || Number(emp.colaborador_id) !== Number(termo.colaborador_id)) {
+    return 'empréstimo reapontado';
+  }
+  return null;
+}
+
 /** RN-180.05 — `GET …/termo/verificar`: arquivo, HMAC, elos e o texto da versao (molde `verificarEntrega` da 178). */
 async function verificarTermo(db, emprestimoId, { dir, segredo }) {
   const emp = await emprestimoOu404(db, emprestimoId);
@@ -422,6 +434,8 @@ async function verificarTermo(db, emprestimoId, { dir, segredo }) {
   if (!r.integro) return r;
   const texto = await conferirTextoDaVersao(db, t);
   if (texto) return { integro: false, motivo: texto };
+  const reapontado = emprestimoReapontado(emp, t);
+  if (reapontado) return { integro: false, motivo: reapontado };
   const elo = await evidencia.conferirElos(db, ev);
   return elo ? { integro: false, motivo: elo } : { integro: true };
 }
@@ -445,6 +459,13 @@ evidencia.registrarContexto(CONTEXTO, {
     for (const t of await dbAll(db, 'SELECT numero, termo_versao, texto_sha256 FROM termos_emprestimo_ferramenta ORDER BY id')) {
       const motivo = await conferirTextoDaVersao(db, t);
       if (motivo) out.push({ sequencia: null, evidencia_id: null, numero: t.numero, motivo });
+    }
+    const vivos = await dbAll(db, `SELECT t.numero, t.ferramenta_id, t.colaborador_id, e.ferramenta_id AS emp_ferramenta_id,
+        e.colaborador_id AS emp_colaborador_id
+      FROM termos_emprestimo_ferramenta t JOIN emprestimos_ferramenta_almoxarifado e ON e.id = t.emprestimo_id ORDER BY t.id`);
+    for (const v of vivos) {
+      const motivo = emprestimoReapontado({ ferramenta_id: v.emp_ferramenta_id, colaborador_id: v.emp_colaborador_id }, v);
+      if (motivo) out.push({ sequencia: null, evidencia_id: null, numero: v.numero, motivo });
     }
     const maior = await dbGet(db, 'SELECT MAX(id) AS m FROM termos_emprestimo_ferramenta');
     const autoinc = await dbGet(db, "SELECT seq FROM sqlite_sequence WHERE name = 'termos_emprestimo_ferramenta'");

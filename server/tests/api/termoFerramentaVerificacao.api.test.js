@@ -191,6 +191,37 @@ const PRODUCAO = { id: 3, nome: 'Chao', email: 'chao@test.com' };
     } finally { permissions.ACAO_PERFIS.entregar_epi = original; t.setUser(ADMIN); }
   });
 
+  await test('[Fase 5, I2] ocorrencia (PERDA) encerrando o emprestimo -> o termo continua integro (nao muda ferramenta_id nem colaborador_id)', async () => {
+    // No emp2 (ainda EMPRESTADA): um emprestimo novo aqui passaria a ser a cauda e o teste da cauda apagada, abaixo, mudaria.
+    const oc = await request(app).post(`/api/almoxarifado/ferramentas/${f2}/ocorrencias`).field('tipo', 'PERDA').field('descricao', 'sumiu no turno');
+    assert.strictEqual(oc.status, 201, JSON.stringify(oc.body));
+    assert.strictEqual((await dbGet(db, 'SELECT status FROM emprestimos_ferramenta_almoxarifado WHERE id = ?', [emp2.id])).status, 'DEVOLVIDA');
+    assert.deepStrictEqual(await verificar(emp2.id), { integro: true });
+    assert.strictEqual((await cadeia()).integra, true);
+  });
+
+  await test('[Fase 5, I2] emprestimo vivo reapontado (outro colaborador / outra ferramenta) -> "empréstimo reapontado" no /verificar e na cadeia', async () => {
+    // A tabela de emprestimos nao e append-only (a devolucao a muda). Antes, reapontar o emprestimo para outra pessoa deixava o
+    // termo "integro" (o HMAC cobre so a fotografia) e a lista mostrava o outro nome com "Termo" — a sonda da revisao da Fase 5.
+    const outro = await colaboradorDoCadastro(db, 'BETO REAPONTADO');
+    const f5 = await novaFerramenta();
+    const original = await dbGet(db, 'SELECT ferramenta_id, colaborador_id, colaborador_nome FROM emprestimos_ferramenta_almoxarifado WHERE id = ?', [emp2.id]);
+    try {
+      await dbRun(db, 'UPDATE emprestimos_ferramenta_almoxarifado SET colaborador_id = ?, colaborador_nome = ? WHERE id = ?', [outro.id, 'BETO REAPONTADO', emp2.id]);
+      assert.deepStrictEqual(await verificar(emp2.id), { integro: false, motivo: 'empréstimo reapontado' });
+      assert.deepStrictEqual((await cadeia()).problemas.map((x) => [x.numero, x.motivo]), [[emp2.termo.numero, 'empréstimo reapontado']]);
+      await dbRun(db, 'UPDATE emprestimos_ferramenta_almoxarifado SET colaborador_id = ?, colaborador_nome = ?, ferramenta_id = ? WHERE id = ?',
+        [original.colaborador_id, original.colaborador_nome, f5, emp2.id]);
+      assert.deepStrictEqual(await verificar(emp2.id), { integro: false, motivo: 'empréstimo reapontado' });
+      assert.deepStrictEqual((await cadeia()).problemas.map((x) => [x.numero, x.motivo]), [[emp2.termo.numero, 'empréstimo reapontado']]);
+    } finally {
+      await dbRun(db, 'UPDATE emprestimos_ferramenta_almoxarifado SET ferramenta_id = ?, colaborador_id = ?, colaborador_nome = ? WHERE id = ?',
+        [original.ferramenta_id, original.colaborador_id, original.colaborador_nome, emp2.id]);
+    }
+    assert.deepStrictEqual(await verificar(emp2.id), { integro: true });
+    assert.strictEqual((await cadeia()).integra, true);
+  });
+
   // ── Adulteracoes (quem tem o banco derruba os triggers) — por ultimo, num banco que ja nao precisa ficar integro ──
   const derrubar = async (tabela) => {
     for (const nome of ['sem_update', 'sem_delete']) await dbRun(db, `DROP TRIGGER IF EXISTS trg_${tabela}_${nome}`);
