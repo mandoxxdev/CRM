@@ -185,9 +185,22 @@ function liberarDaOsFechada(db, user, reservaId, motivo) {
 async function reservarParaOsSobTrava(db, user, { materialId, quantidade, os, recebimentoId }) {
   if (!(num(quantidade) > EPS) || !os) return null;
   try {
-    const m = await dbGet(db, `SELECT ${caixaSql.livreDeCaixaSql()} AS livre FROM materiais_almoxarifado WHERE id = ?`, [materialId]);
+    const m = await dbGet(db, `SELECT codigo, proprietario_cliente_id, ${caixaSql.livreDeCaixaSql()} AS livre
+      FROM materiais_almoxarifado WHERE id = ?`, [materialId]);
     const q = Q.qtd(Math.min(num(quantidade), Math.max(0, num(m && m.livre))));
     if (!(q > EPS)) return null;
+    // Etapa 176, Fase 5 (item 2, B1154): o dono confere AQUI, sob a trava, com o dono do material e o cliente da OS relidos
+    // agora — a OS troca de cliente pela rota core (`PUT /api/operacional/ordens-servico/:id` com `cliente_id`; o plano dizia
+    // que nao trocava e estava errado) e o recebimento de pedido nao recusa pelo dono (B1153). Nao casa (outro cliente, OS
+    // sem cliente) -> nao reserva: o material fica livre (a fila geral o ve), como a OS fechada da 171.
+    // eslint-disable-next-line global-require
+    const problemas = await require('./ownerRules').problemasDoDonoComOs(db,
+      [{ codigo: m && m.codigo, proprietario_cliente_id: m && m.proprietario_cliente_id }], os.id);
+    if (problemas.length) {
+      console.warn(`[almoxarifado-reserva-os] Nao reservado para a OS ${os.numero_os} (recebimento ${recebimentoId}): `
+        + `${problemas.join('; ')}`);
+      return null;
+    }
     const motivo = motivoReservaDaOs(os.numero_os);
     const r = await stockService.criarReservaSemTrava(db, user, {
       material_id: materialId, quantidade: q, os_id: os.id, os_referencia: os.numero_os, observacoes: motivo,
