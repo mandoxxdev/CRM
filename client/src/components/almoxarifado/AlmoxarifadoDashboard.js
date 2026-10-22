@@ -32,6 +32,9 @@ const getPeriodDates = (days, agora = new Date()) => {
 const aggregateConsumoPorOS = (rows) => {
   const map = {};
   (rows || []).forEach((r) => {
+    // Etapa 174 (Fase 5): o relatorio traz linhas so de devolucao (consumido 0) — o quadro soma so o consumido, entao elas
+    // ficam fora (senao a OS aparecia com "Qtd. consumida 0" e o estado vazio nao voltava).
+    if (!(Number(r.total_consumido) > 0)) return;
     const key = r.os_id != null && r.os_id !== '' ? String(r.os_id) : 'Sem O.S.';
     map[key] = (map[key] || 0) + (r.total_consumido || 0);
   });

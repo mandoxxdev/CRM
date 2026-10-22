@@ -81,7 +81,10 @@ function mockarApi(overrides = {}) {
       if (overrides.requisicoes) return overrides.requisicoes();
       return Promise.resolve({ data: REQUISICOES_FIXTURE });
     }
-    if (url.startsWith('/almoxarifado/relatorios/consumo-os')) return Promise.resolve({ data: [] });
+    if (url.startsWith('/almoxarifado/relatorios/consumo-os')) {
+      if (overrides.consumoOs) return overrides.consumoOs();
+      return Promise.resolve({ data: [] });
+    }
     if (url.startsWith('/almoxarifado/relatorios/materiais-mais-consumidos')) return Promise.resolve({ data: [] });
     if (url === URLS.dashboard) {
       if (overrides.dashboard) return overrides.dashboard();
@@ -270,5 +273,37 @@ describe('AlmoxarifadoDashboard — cartão "Requisições no prazo" (Etapa 67, 
     const secao = secaoIndicadores();
     expect(secao.querySelector('[data-testid="indicadores-erro"]')).toBeTruthy();
     expect(secao.querySelector('[data-testid="kpi-no-prazo"]')).toBeNull();
+  });
+});
+
+// Etapa 174 (Fase 5, item 2): o relatorio consumo-os passou a trazer linhas SO de devolucao (total_consumido 0, devolvido > 0).
+// O quadro "Consumo por O.S." soma so o consumido — sem filtrar, aparecia a OS com "Qtd. consumida 0" e o estado vazio sumia.
+describe('AlmoxarifadoDashboard — quadro "Consumo por O.S." ignora linhas só de devolução (Etapa 174)', () => {
+  const textoDoQuadro = () => {
+    const titulo = [...container.querySelectorAll('h3')].find((h) => h.textContent.includes('O.S.'));
+    return titulo.closest('.almox-dash-card').textContent;
+  };
+
+  test('só linhas de devolução (consumido 0): o quadro mostra o estado vazio, nunca a OS com 0', async () => {
+    mockarApi({ consumoOs: () => Promise.resolve({ data: [
+      { material_id: 1, os_id: 77, total_consumido: 0, devolvido: 2, liquido: -2 },
+    ] }) });
+    await renderizar();
+    const t = textoDoQuadro();
+    expect(t).toContain('Nenhum consumo vinculado a O.S. no período');
+    expect(t).not.toContain('77');
+  });
+
+  test('misto: a OS com consumo aparece com o total; a OS só com devolução não aparece', async () => {
+    mockarApi({ consumoOs: () => Promise.resolve({ data: [
+      { material_id: 1, os_id: 501, total_consumido: 12, devolvido: 3, liquido: 9 },
+      { material_id: 2, os_id: 502, total_consumido: 0, devolvido: 4, liquido: -4 },
+    ] }) });
+    await renderizar();
+    const t = textoDoQuadro();
+    expect(t).toContain('501');
+    expect(t).toContain('12');
+    expect(t).not.toContain('502');
+    expect(t).not.toContain('Nenhum consumo vinculado a O.S. no período');
   });
 });
