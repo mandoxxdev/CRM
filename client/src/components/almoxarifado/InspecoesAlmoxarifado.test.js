@@ -415,6 +415,24 @@ describe('InspecoesAlmoxarifado — medidas do plano de inspeção (Etapa 29)', 
     expect(payloadEnviado().medidas[0]).toEqual({ plano_id: 1, valor_medido: '10.01', ferramenta_id: 1 });
   });
 
+  test('(5b) Etapa 177/B1146: instrumento baixado aparece desabilitado com o motivo, mesmo com calibração vigente; perdido continua oferecido', async () => {
+    planoDoBanco = [PLANO_DIAMETRO];
+    ferramentasDoBanco = [
+      ...FERRAMENTAS,
+      { id: 4, nome: 'Torquímetro', codigo_patrimonio: 'TOR-4', exige_calibracao: 1, calibracao_vigente: true, status: 'BAIXADA' },
+      { id: 5, nome: 'Trena', codigo_patrimonio: 'TRE-5', exige_calibracao: 0, calibracao_vigente: null, status: 'PERDIDA' },
+    ];
+    await renderizar();
+    await abrirDecisao(0);
+    const opcoes = [...selectInstrumento(0).options];
+    const porValor = (v) => opcoes.find((o) => o.value === v);
+    expect(porValor('4').textContent).toBe('Torquímetro (TOR-4) (baixada — não mede)');
+    expect(porValor('4').disabled).toBe(true);
+    expect(porValor('5').disabled).toBe(false);
+    expect(porValor('5').textContent).not.toContain('baixada');
+    expect(porValor('1').disabled).toBe(false);
+  });
+
   test('(6) recusa do servidor vai literal ao toast e o modal continua aberto com os valores', async () => {
     planoDoBanco = [PLANO_DIAMETRO];
     api.post.mockRejectedValue({

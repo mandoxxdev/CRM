@@ -2334,6 +2334,9 @@ async function initSchemaUmaExecucao(db) {
   await safeAlter(db, 'ALTER TABLE ferramentas_almoxarifado ADD COLUMN numero_serie TEXT');
   await safeAlter(db, 'ALTER TABLE ferramentas_almoxarifado ADD COLUMN localizacao_id INTEGER');
   await safeAlter(db, 'ALTER TABLE ferramentas_almoxarifado ADD COLUMN exige_calibracao INTEGER DEFAULT 0');
+  // Etapa 177 (RN-177.06): como a manutencao terminou — a condicao do item e o destino (USO ou BAIXA). Aditivas; a linha antiga fica NULL.
+  await safeAlter(db, 'ALTER TABLE manutencoes_ferramenta_almoxarifado ADD COLUMN condicao_retorno TEXT');
+  await safeAlter(db, 'ALTER TABLE manutencoes_ferramenta_almoxarifado ADD COLUMN destino TEXT');
 
   // ── Materiais do cliente ──
   // ── APOSENTADA na Etapa 8 (decisao 4 do design, 2026-08-12) ──────────────────────────────────

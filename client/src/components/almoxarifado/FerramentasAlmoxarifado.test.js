@@ -523,3 +523,122 @@ describe('FerramentasAlmoxarifado — Etapa 175, editar', () => {
     expect(api.put).not.toHaveBeenCalled();
   });
 });
+
+describe('FerramentasAlmoxarifado — Etapa 177, retorno da manutenção (condição e destino)', () => {
+  const rodape = () => container.querySelector('.almox-modal-footer');
+  const EM_MANUTENCAO = { id: 7, codigo_patrimonio: 'FER-007', nome: 'Esmerilhadeira', tipo: 'Elétrica',
+    setor_responsavel: 'Produção', status: 'EM_MANUTENCAO', numero_serie: null, localizacao_id: null,
+    exige_calibracao: 0, calibracao_vigente: null, emprestimo_aberto: null };
+  const BAIXADA = { id: 8, codigo_patrimonio: 'FER-008', nome: 'Torquímetro', tipo: 'Instrumento',
+    setor_responsavel: 'Qualidade', status: 'BAIXADA', numero_serie: null, localizacao_id: null,
+    exige_calibracao: 1, calibracao_vigente: false, emprestimo_aberto: null };
+  const comLista = (lista) => {
+    const original = api.get.getMockImplementation();
+    api.get.mockImplementation((url, ...resto) => (url === '/almoxarifado/ferramentas'
+      ? Promise.resolve({ data: lista }) : original(url, ...resto)));
+  };
+  const putsConcluir = () => api.put.mock.calls.filter(([url]) => url === '/almoxarifado/manutencoes/900/concluir');
+  const getsDe = (url) => api.get.mock.calls.filter(([u]) => u === url).length;
+
+  async function abrirConcluir() {
+    comLista([EM_MANUTENCAO]);
+    await renderizar();
+    await clicar(botao('Concluir manutenção', linhasFerramentas()[0]));
+    expect(container.querySelector('.almox-modal h2').textContent).toBe('Concluir manutenção');
+  }
+
+  test('RN-177.10: sem condição a tela recusa com a frase e não manda PUT; o destino nasce "Volta ao uso"', async () => {
+    await abrirConcluir();
+    expect(campo('Destino').value).toBe('USO');
+    expect([...campo('Condição do item').options].map((o) => o.textContent))
+      .toEqual(['Escolha…', 'Em condições de uso', 'Em uso com restrição', 'Inservível']);
+    await clicar(botao('Concluir', rodape()));
+    expect(toast.error).toHaveBeenCalledWith('Escolha a condição do item');
+    expect(putsConcluir()).toHaveLength(0);
+    expect(container.querySelector('.almox-modal')).toBeTruthy();
+  });
+
+  test('RN-177.02/10: condição OK + volta ao uso manda os dois, avisa e recarrega a lista e o painel', async () => {
+    await abrirConcluir();
+    preencher(campo('Condição do item'), 'OK');
+    const lista = getsDe('/almoxarifado/ferramentas');
+    const painel = getsDe('/almoxarifado/calibracoes/painel');
+    await clicar(botao('Concluir', rodape()));
+    expect(putsConcluir()).toHaveLength(1);
+    expect(putsConcluir()[0][1]).toEqual({ condicao: 'OK', destino: 'USO' });
+    expect(toast.success).toHaveBeenCalledWith('Manutenção concluída');
+    expect(container.querySelector('.almox-modal')).toBeFalsy();
+    expect(getsDe('/almoxarifado/ferramentas')).toBeGreaterThan(lista);
+    // o painel so busca quando a aba abre; o recarregar tem de valer na proxima abertura
+    await clicar(botao('Calibrações'));
+    expect(getsDe('/almoxarifado/calibracoes/painel')).toBeGreaterThan(painel);
+  });
+
+  test('RN-177.03/05/10: inservível puxa o destino para a baixa; o rótulo pede o motivo e o PUT vai com ele', async () => {
+    await abrirConcluir();
+    preencher(campo('Condição do item'), 'INSERVIVEL');
+    expect(campo('Destino').value).toBe('BAIXA');
+    expect(campo('Motivo da baixa')).toBeTruthy();
+    preencher(campo('Motivo da baixa'), '  Motor queimado  ');
+    await clicar(botao('Concluir', rodape()));
+    expect(putsConcluir()[0][1]).toEqual({ condicao: 'INSERVIVEL', destino: 'BAIXA', observacoes: 'Motor queimado' });
+    expect(toast.success).toHaveBeenCalledWith('Manutenção concluída — ferramenta baixada');
+  });
+
+  test('RN-177.04/10: com restrição o rótulo pede a restrição; a recusa do servidor aparece com a frase dele e a janela fica', async () => {
+    api.put.mockRejectedValue({ response: { status: 400, data: { error: 'Descreva a restrição nas observações' } } });
+    await abrirConcluir();
+    preencher(campo('Condição do item'), 'COM_RESTRICAO');
+    expect(campo('Qual é a restrição')).toBeTruthy();
+    expect(campo('Destino').value).toBe('USO');
+    await clicar(botao('Concluir', rodape()));
+    expect(putsConcluir()[0][1]).toEqual({ condicao: 'COM_RESTRICAO', destino: 'USO' });
+    expect(toast.error).toHaveBeenCalledWith('Descreva a restrição nas observações');
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(container.querySelector('.almox-modal')).toBeTruthy();
+    expect(campo('Condição do item').value).toBe('COM_RESTRICAO');
+  });
+
+  test('RN-177.10: a baixada mostra "Baixada" e "Reverter baixa", sem Ocorrência nem Calibração (metade positiva: a em manutenção tem Ocorrência)', async () => {
+    comLista([BAIXADA, EM_MANUTENCAO]);
+    await renderizar();
+    const [baixada, emManut] = linhasFerramentas();
+    expect(baixada.textContent).toContain('Baixada');
+    expect(botao('Reverter baixa', baixada)).toBeTruthy();
+    expect(botao('Ocorrência', baixada)).toBeFalsy();
+    expect(botao('Calibração', baixada)).toBeFalsy();
+    expect(botao('Editar', baixada)).toBeTruthy();
+    expect(botao('Ocorrência', emManut)).toBeTruthy();
+    expect(botao('Reverter baixa', emManut)).toBeFalsy();
+    // o filtro de status oferece "Baixada"
+    const filtro = container.querySelector('.almox-filters select');
+    expect([...filtro.options].map((o) => o.value)).toContain('BAIXADA');
+  });
+
+  test('Fase 5: a baixada com calibração vigente mostra "—" na coluna Calibração, não "Vigente" (metade positiva: a disponível vigente mostra "Vigente")', async () => {
+    const DISPONIVEL_VIGENTE = { ...EM_MANUTENCAO, id: 9, codigo_patrimonio: 'FER-009', status: 'DISPONIVEL',
+      exige_calibracao: 1, calibracao_vigente: true };
+    comLista([{ ...BAIXADA, calibracao_vigente: true }, DISPONIVEL_VIGENTE]);
+    await renderizar();
+    const [baixada, viva] = linhasFerramentas();
+    const celulaCalibracao = (linha) => linha.querySelectorAll('td')[5].textContent.trim();
+    expect(celulaCalibracao(baixada)).toBe('—');
+    expect(celulaCalibracao(viva)).toBe('Vigente');
+  });
+
+  test('RN-177.08/10: "Reverter baixa" pede justificativa, posta na rota, avisa e recarrega a lista e o painel', async () => {
+    comLista([BAIXADA]);
+    await renderizar();
+    await clicar(botao('Reverter baixa', linhasFerramentas()[0]));
+    expect(container.querySelector('.almox-modal h2').textContent).toBe('Reverter a baixa da ferramenta');
+    const just = container.querySelector('.almox-modal textarea');
+    preencher(just, 'baixa errada');
+    const painel = getsDe('/almoxarifado/calibracoes/painel');
+    await clicar(botao('Confirmar', rodape()) || [...rodape().querySelectorAll('button')].pop());
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/ferramentas/8/reverter-baixa', { justificativa: 'baixa errada' });
+    expect(toast.success).toHaveBeenCalledWith('Baixa revertida — a ferramenta voltou a ficar disponível');
+    expect(container.querySelector('.almox-modal')).toBeFalsy();
+    await clicar(botao('Calibrações'));
+    expect(getsDe('/almoxarifado/calibracoes/painel')).toBeGreaterThan(painel);
+  });
+});

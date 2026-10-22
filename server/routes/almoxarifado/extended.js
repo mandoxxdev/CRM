@@ -1745,6 +1745,12 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     catch (e) { handleError(res, e); }
   });
 
+  // Etapa 177 (RN-177.08, B1142): a baixa por engano volta — mesmo gate e mesmo molde do reencontro.
+  app.post('/api/almoxarifado/ferramentas/:id/reverter-baixa', auth, requirePermission('gerenciar_ferramentas'), validate(JustificativaSchema), async (req, res) => {
+    try { res.json(await toolService.reverterBaixa(db, req.user, req.params.id, req.body)); }
+    catch (e) { handleError(res, e); }
+  });
+
   // Upload da foto de ocorrencia (Etapa 9b, Task 5) — CLONE de uploadCertificadoCalibracao
   // (linha ~910): gravacao FLAT em uploadsAlmoxDir com prefixo `ocorrencia-` no filename, SEM
   // subpasta (mesma razao D3: o multer nao cria diretorio e ninguem mkdir'a subpastas aqui).

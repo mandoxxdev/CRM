@@ -61,6 +61,8 @@ const STATUS_FERRAMENTA = [
   { value: 'EM_MANUTENCAO', label: 'Em manutenção', cls: 'baixo' },
   { value: 'AVARIADA', label: 'Avariada', cls: 'critico' },
   { value: 'PERDIDA', label: 'Perdida', cls: 'critico' },
+  // Etapa 177 (B1144): descartada depois da manutencao — fica na lista e no historico; sai por "Reverter baixa".
+  { value: 'BAIXADA', label: 'Baixada', cls: 'critico' },
 ];
 const statusInfo = (s) => STATUS_FERRAMENTA.find((x) => x.value === s) || { label: s || '—', cls: 'ajuste' };
 
@@ -73,7 +75,18 @@ const FORM_EMPRESTAR_VAZIO = {
 };
 const FORM_JUSTIFICATIVA_VAZIO = { justificativa: '' };
 const FORM_MANUTENCAO_VAZIO = { descricao: '' };
-const FORM_CONCLUIR_MANUTENCAO_VAZIO = { observacoes: '' };
+// Etapa 177 (RN-177.10): condicao obrigatoria na tela (o servidor aceita sem, B1140); destino nasce "Volta ao uso".
+const FORM_CONCLUIR_MANUTENCAO_VAZIO = { observacoes: '', condicao: '', destino: 'USO' };
+// Os valores sao os do contrato (RN-177.01); o rotulo e o que a pessoa le.
+const CONDICOES_RETORNO = [
+  { value: 'OK', label: 'Em condições de uso' },
+  { value: 'COM_RESTRICAO', label: 'Em uso com restrição' },
+  { value: 'INSERVIVEL', label: 'Inservível' },
+];
+const DESTINOS_RETORNO = [
+  { value: 'USO', label: 'Volta ao uso' },
+  { value: 'BAIXA', label: 'Baixa (descarte)' },
+];
 const FORM_OCORRENCIA_VAZIO = {
   tipo: 'AVARIA', descricao: '', responsavel_nome: '', responsavel_colaborador_id: '', foto: null,
 };
@@ -83,10 +96,14 @@ const TITULO_JUSTIFICATIVA = {
   bloquear: 'Bloquear ferramenta',
   desbloquear: 'Desbloquear ferramenta',
   reencontrar: 'Reencontrar ferramenta',
+  'reverter-baixa': 'Reverter a baixa da ferramenta',
 };
-const ROTA_JUSTIFICATIVA = { bloquear: 'bloquear', desbloquear: 'desbloquear', reencontrar: 'reencontrar' };
+const ROTA_JUSTIFICATIVA = {
+  bloquear: 'bloquear', desbloquear: 'desbloquear', reencontrar: 'reencontrar', 'reverter-baixa': 'reverter-baixa',
+};
 const SUCESSO_JUSTIFICATIVA = {
   bloquear: 'Ferramenta bloqueada', desbloquear: 'Ferramenta desbloqueada', reencontrar: 'Ferramenta reencontrada',
+  'reverter-baixa': 'Baixa revertida — a ferramenta voltou a ficar disponível',
 };
 
 const FerramentasAlmoxarifado = () => {
@@ -337,6 +354,8 @@ const FerramentasAlmoxarifado = () => {
       toast.success(SUCESSO_JUSTIFICATIVA[modal.tipo]);
       setModal(null);
       recarregar();
+      // Etapa 177 (RN-177.09): a ferramenta que volta da baixa volta ao painel de calibracoes
+      if (modal.tipo === 'reverter-baixa') recarregarCal();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao registrar a ação');
     } finally { setSalvando(false); }
@@ -383,15 +402,20 @@ const FerramentasAlmoxarifado = () => {
     }
   };
 
+  // Etapa 177 (RN-177.10): condicao e destino viajam sempre; as combinacoes (inservivel so com baixa, restricao e
+  // baixa com observacoes) quem decide e o servidor — a frase dele vai ao toast e a janela fica aberta.
   const confirmarConcluirManutencao = async () => {
-    const payload = {};
+    if (!formConcluirManutencao.condicao) { toast.error('Escolha a condição do item'); return; }
+    const payload = { condicao: formConcluirManutencao.condicao, destino: formConcluirManutencao.destino };
     if (formConcluirManutencao.observacoes) payload.observacoes = String(formConcluirManutencao.observacoes).trim();
     setSalvando(true);
     try {
       await api.put(`/almoxarifado/manutencoes/${modal.manutencaoId}/concluir`, payload);
-      toast.success('Manutenção concluída');
+      toast.success(payload.destino === 'BAIXA' ? 'Manutenção concluída — ferramenta baixada' : 'Manutenção concluída');
       setModal(null);
       recarregar();
+      // a baixada sai do painel de calibracoes (RN-177.09)
+      recarregarCal();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao concluir a manutenção');
     } finally { setSalvando(false); }
@@ -463,7 +487,7 @@ const FerramentasAlmoxarifado = () => {
     if (modal?.tipo === 'nova') return confirmarNova();
     if (modal?.tipo === 'editar') return confirmarEditar();
     if (modal?.tipo === 'emprestar') return confirmarEmprestar();
-    if (modal?.tipo === 'bloquear' || modal?.tipo === 'desbloquear' || modal?.tipo === 'reencontrar') return confirmarJustificativa();
+    if (ROTA_JUSTIFICATIVA[modal?.tipo]) return confirmarJustificativa();
     if (modal?.tipo === 'manutencao') return confirmarManutencao();
     if (modal?.tipo === 'concluir-manutencao') return confirmarConcluirManutencao();
     if (modal?.tipo === 'ocorrencia') return confirmarOcorrencia();
@@ -566,7 +590,8 @@ const FerramentasAlmoxarifado = () => {
                             })()
                             : '—'}</td>
                           <td>
-                            {!f.exige_calibracao ? '—' : (
+                            {/* Etapa 177 Fase 5: a baixada nao e mais usada — "Vigente" nela engana; mostra "—" como quem nao exige */}
+                            {!f.exige_calibracao || f.status === 'BAIXADA' ? '—' : (
                               <span className={`almox-badge almox-badge-${f.calibracao_vigente ? 'ok' : 'critico'}`}>
                                 {f.calibracao_vigente ? 'Vigente' : 'Vencida/ausente'}
                               </span>
@@ -613,10 +638,19 @@ const FerramentasAlmoxarifado = () => {
                                     <FiRotateCcw size={13} /> Reencontrar
                                   </button>
                                 )}
-                                <button className="btn-almox-secondary" onClick={(e) => abrirOcorrencia(f, e)}>
-                                  <FiAlertTriangle size={13} /> Ocorrência
-                                </button>
-                                {!!f.exige_calibracao && (
+                                {f.status === 'BAIXADA' && (
+                                  <button className="btn-almox-secondary" onClick={(e) => abrirJustificativa('reverter-baixa', f, e)}>
+                                    <FiRotateCcw size={13} /> Reverter baixa
+                                  </button>
+                                )}
+                                {/* Etapa 177 (RN-177.10): a baixada nao registra ocorrencia (o servidor recusa) nem
+                                    precisa de calibracao — os botoes saem dela. */}
+                                {f.status !== 'BAIXADA' && (
+                                  <button className="btn-almox-secondary" onClick={(e) => abrirOcorrencia(f, e)}>
+                                    <FiAlertTriangle size={13} /> Ocorrência
+                                  </button>
+                                )}
+                                {!!f.exige_calibracao && f.status !== 'BAIXADA' && (
                                   <button className="btn-almox-secondary" onClick={(e) => abrirCalibracao(f, e)}>
                                     <FiCalendar size={13} /> Calibração
                                   </button>
@@ -870,7 +904,7 @@ const FerramentasAlmoxarifado = () => {
         </div>
       )}
 
-      {(modal?.tipo === 'bloquear' || modal?.tipo === 'desbloquear' || modal?.tipo === 'reencontrar') && (
+      {ROTA_JUSTIFICATIVA[modal?.tipo] && (
         <div className="almox-modal-overlay" onClick={() => { if (!salvando) setModal(null); }}>
           <div className="almox-modal almox-modal-sm" onClick={(e) => e.stopPropagation()}>
             <div className="almox-modal-header">
@@ -931,9 +965,34 @@ const FerramentasAlmoxarifado = () => {
             <div className="almox-modal-body">
               <p style={{ marginTop: 0 }}><strong>{modal.ferramenta.codigo_patrimonio}</strong> — {modal.ferramenta.nome}</p>
               <div className="almox-field">
-                <label className="almox-label">Observações</label>
+                <label className="almox-label" htmlFor="concluir-condicao">Condição do item *</label>
+                {/* Inservivel puxa o destino para a baixa: e a unica combinacao que o servidor aceita (RN-177.03). */}
+                <select id="concluir-condicao" data-testid="concluir-condicao" className="almox-select"
+                  value={formConcluirManutencao.condicao}
+                  onChange={(e) => {
+                    const condicao = e.target.value;
+                    setFormConcluirManutencao((p) => ({ ...p, condicao, destino: condicao === 'INSERVIVEL' ? 'BAIXA' : p.destino }));
+                  }}>
+                  <option value="">Escolha…</option>
+                  {CONDICOES_RETORNO.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+              </div>
+              <div className="almox-field">
+                <label className="almox-label" htmlFor="concluir-destino">Destino *</label>
+                <select id="concluir-destino" data-testid="concluir-destino" className="almox-select"
+                  value={formConcluirManutencao.destino}
+                  onChange={(e) => setFormConcluirManutencao((p) => ({ ...p, destino: e.target.value }))}>
+                  {DESTINOS_RETORNO.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+                </select>
+              </div>
+              <div className="almox-field">
+                <label className="almox-label">
+                  {formConcluirManutencao.destino === 'BAIXA' ? 'Motivo da baixa *'
+                    : formConcluirManutencao.condicao === 'COM_RESTRICAO' ? 'Qual é a restrição *' : 'Observações'}
+                </label>
                 <textarea className="almox-textarea" rows={3} value={formConcluirManutencao.observacoes}
-                  onChange={(e) => setFormConcluirManutencao({ observacoes: e.target.value })} />
+                  data-testid="concluir-observacoes"
+                  onChange={(e) => setFormConcluirManutencao((p) => ({ ...p, observacoes: e.target.value }))} />
               </div>
             </div>
             <div className="almox-modal-footer">

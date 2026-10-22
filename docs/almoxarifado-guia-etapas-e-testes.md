@@ -1,13 +1,18 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-22 (Etapas 172, 173, 174 e 175) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-22 (Etapas 172, 173, 174, 175 e 177) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174 e 175) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175 e 177) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172, 173, 174 e 175 ENTREGUES · próxima: Etapa 176)
+> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172 a 175 e 177 ENTREGUES · em andamento: Etapa 176)
 >
-> **O desenvolvimento parou aqui: Etapa 174 fechada — 2026-10-22.** **A entrega grava a OS, e o *Consumo por OS* passa a enxergar as
+> **O desenvolvimento parou aqui: Etapa 177 fechada — 2026-10-22** (a 176 está em andamento em outra frente). **O retorno da manutenção com
+> a condição do item e o destino**: concluir a manutenção de uma ferramenta pede a **condição** e o **destino** (*Volta ao uso* ou *Baixa*);
+> a baixa deixa a ferramenta **Baixada** — fora de circulação e do painel de calibrações, com histórico — e se desfaz com **Reverter baixa**.
+> Nada a rodar antes do deploy.
+>
+> **Etapa 174, 2026-10-22.** **A entrega grava a OS, e o *Consumo por OS* passa a enxergar as
 > requisições**: a entrega da requisição com **OS cadastrada** entra no relatório, que ganha **Devolvido** e **Líquido** (a devolução para
 > sucata não conta; com período, o líquido pode ser negativo); material de cliente sai pela OS do próprio cliente e **Materiais de Clientes**
 > mostra a OS em **Aplicado em**. Só as entregas feitas depois desta versão contam (aviso **C429**). Nada a rodar antes do deploy.
@@ -6864,6 +6869,30 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 177 — O retorno da manutenção: a condição do item e o destino (ENTREGUE — 2026-10-22)
+
+**O que mudou, em uma frase:** ao concluir a manutenção de uma ferramenta, o almoxarife diz em que condição ela voltou e se volta ao uso ou
+vai para baixa (descarte); a baixada fica na lista, mas não circula mais.
+
+| Antes | Agora |
+|---|---|
+| Concluir manutenção: só observações, e a ferramenta voltava a *Disponível* | **Condição do item** e **Destino**, gravados |
+| Ferramenta sem conserto não tinha saída | **Baixa (descarte)** com o motivo → selo **Baixada**; **Reverter baixa** desfaz |
+
+**Roteiro de teste (5 minutos — com o administrador ou um almoxarife).**
+
+1. **Almoxarifado → Ferramentas**, numa ferramenta *Disponível*, **Iniciar manutenção** (descrição *Revisão*).
+2. **Concluir manutenção** e **Concluir** sem escolher a condição: *"Escolha a condição do item"*.
+3. Escolha *Em condições de uso* e conclua: *"Manutenção concluída"*, a ferramenta volta a *Disponível*.
+4. Inicie de novo; escolha *Inservível*: o **Destino** vira *Baixa (descarte)* e o campo vira **Motivo da baixa**. Conclua sem motivo: *"Informe
+   o motivo da baixa nas observações"*. Escreva *Motor queimado* e conclua: *"Manutenção concluída — ferramenta baixada"*, selo **Baixada**.
+5. Na linha da baixada: só **Editar** e **Reverter baixa** (sem Emprestar, Ocorrência, Calibração). O filtro de status tem *Baixada*.
+6. **Reverter baixa**, justificativa *baixa errada*: *"Baixa revertida — a ferramenta voltou a ficar disponível"*.
+7. (Opcional) Inicie outra manutenção e conclua com *Em uso com restrição* sem descrever: *"Descreva a restrição nas observações"*.
+
+**O que esta etapa não cobre.** Baixa direta de uma ferramenta *Avariada* (passa pela manutenção); a lista do histórico de manutenções na tela
+(está gravado, sai pela Auditoria); a assinatura NR-6 (espera os formulários da empresa). Nada a rodar antes do deploy.
 
 ## Etapa 174 — A entrega grava a OS, e o "Consumo por OS" passa a enxergar as requisições (ENTREGUE — 2026-10-22)
 

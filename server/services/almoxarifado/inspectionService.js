@@ -116,6 +116,13 @@ async function resolverMedidas(db, materialId, medidas) {
       if (!ferramenta) {
         throw Object.assign(new Error('Ferramenta não encontrada'), { status: 404 });
       }
+      // Etapa 177 Fase 5 (B1146): instrumento BAIXADO (inservivel, descartado) nao mede — nem com calibracao vigente.
+      // So BAIXADA: PERDIDA/AVARIADA/EM_MANUTENCAO/BLOQUEADA medem como antes (regra existente, nao pedida).
+      if (ferramenta.status === 'BAIXADA') {
+        throw Object.assign(
+          new Error(`Ferramenta baixada não pode ser usada em medição (${ferramenta.nome})`),
+          { status: 400 });
+      }
       // RN-04: instrumento vencido NAO MEDE. Mensagem literal do vizinho (toolService.js:70),
       // que cobre "vencida" e "nunca calibrada" com a mesma frase de proposito: `calibracaoVigente`
       // devolve a linha vigente ou `undefined`, entao na recusa nao existe data para prometer.

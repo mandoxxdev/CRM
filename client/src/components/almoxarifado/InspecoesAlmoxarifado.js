@@ -539,10 +539,13 @@ const InspecoesAlmoxarifado = () => {
                             {ferramentas.map((f) => {
                               // D4: vencida aparece, mas desabilitada — o servidor recusaria de
                               // qualquer jeito; `null` (não exige calibração) aparece normal.
-                              const vencida = f.calibracao_vigente === false;
+                              // Etapa 177 Fase 5 (B1146): a baixada aparece desabilitada com o motivo — o servidor
+                              // recusa; so BAIXADA (os outros status medem como antes).
+                              const baixada = f.status === 'BAIXADA';
+                              const vencida = !baixada && f.calibracao_vigente === false;
                               return (
-                                <option key={f.id} value={f.id} disabled={vencida}>
-                                  {f.nome}{f.codigo_patrimonio ? ` (${f.codigo_patrimonio})` : ''}{vencida ? ' (calibração vencida)' : ''}
+                                <option key={f.id} value={f.id} disabled={vencida || baixada}>
+                                  {f.nome}{f.codigo_patrimonio ? ` (${f.codigo_patrimonio})` : ''}{vencida ? ' (calibração vencida)' : ''}{baixada ? ' (baixada — não mede)' : ''}
                                 </option>
                               );
                             })}
