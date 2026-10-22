@@ -127,3 +127,44 @@ As emendas **prevalecem** sobre a tabela de RN acima quando discordarem.
 | T3 | OS encerrada/excluída (RN-09, 10; C2, I7, M1) contra o predicado congelado, semeando com `criarReserva` | galho (worktree) | T1 |
 | T4 | Front | galho (worktree) | contrato T1 |
 | T5 | Integração ponta a ponta até a entrega, pela rota e pelo serviço | integração | T1–T4 |
+
+## Execução
+
+### T1 — pedido com OS (RN-171.01 a 06, I6, M2) — ✅ feita (`c0c4746b`)
+
+- **Coluna:** `pedidos_compra.os_id INTEGER` em `ALTERS_PEDIDOS_COMPRA` (`index.js`, no callback do CREATE) e no stub do
+  harness (`tests/helpers/testApp.js`). Sem FK (a RN-171.10 da T3 protege a exclusão). Primeiro boot provado:
+  `CRM_DATA_DIR` em pasta vazia, duas subidas, 0 `no such table`/`no column named`, `pragma_table_info` mostra `os_id INTEGER`.
+- **Zod** (`schemas.js`, `os_id` no `PedidoCompraCreateSchema`): ausente = não mexe; `null`/`''` = sem OS; inteiro positivo
+  como número ou string só de dígitos = OS; `0`, `-1`, `1.5`, `true`, `"abc"` → 400 `Dados inválidos — os_id: OS inválida`.
+  A mesma normalização (`normalizarOsIdBruto` + `OS_INVALIDA`) é reusada no serviço: chamador direto com lixo → 400 `OS inválida`.
+- **Serviço** (`pedidoCompraService.js`): `os_id` fora de `COLUNAS_CABECALHO`; `criarPedido` grava só quando há OS;
+  `atualizarPedido` grava quando a chave veio (`null` tira). Guardas no serviço, antes de qualquer escrita:
+  `OS #<id> não encontrada` e `A OS <numero_os> está <status> — não aceita compra nova` (status com `trim`, como gravado).
+  No `PUT`, a guarda da OS roda **depois** da de recebimento (que continua sem exceção). Exportados para a T2/T3:
+  `STATUS_OS_FECHADA`, `osFechada`, `numerosDasOs`.
+- **Leitura:** detalhe (`relerPedido`, logo também a resposta do POST/PUT e o documento) + `os_id`, `os_numero`, `os_status`;
+  lista + `os_id`, `os_numero` e `?os_id=N` (inválido ignorado); documento/PDF com `OS: <numero_os>`, `OS #<id>` com a OS
+  sumida, sem linha no pedido de estoque.
+- **Rota** `GET /api/compras/aux/ordens-servico[?incluir=id]` (`routes/compras.js`, antes do POST de pedidos; GET de 3
+  segmentos não é sombreado pelo `DELETE /api/compras/:tipo/:id`).
+- **Teste** `server/tests/api/comprasPedidoOs.api.test.js`: 26 cenários, inclusive o portão **real** de módulo
+  (`criarPortoesDeModulo` num app próprio — o harness libera essa camada): sem `compras` → 403 no POST/PUT/aux; com
+  `compras` e admin passam. Controle positivo: 13 sabotagens (guarda de fechada, de inexistente, `null` que não tira,
+  exceção da mesma OS, Zod sem `os_id`, serviço sem normalizar, aux sem filtro, aux sem `incluir`, lista sem `os_numero`,
+  lista sem filtro, documento sem OS, documento sem `OS #id`, detalhe sem OS) — todas deixaram o teste certo vermelho;
+  restauradas por cópia e conferidas com `cmp`. Suíte: `test:api` 491/491 arquivos OK; `test:validation` 4/4, `test:safealter` 3/3, `test:sqlite` 16/16. Além disso, o primeiro rodar pegou um defeito real (regex `\d` perdido
+  no filtro e no `incluir`).
+
+**Divergências do previsto (letra B):**
+1. **"LEFT JOIN vivo" virou consulta viva separada** (`lerOsDoPedido`/`numerosDasOs`), só quando o pedido tem `os_id`.
+   Motivo: `ordens_servico` é tabela core que o harness não tem e 13 arquivos de teste a criam com DDL própria; um JOIN
+   incondicional no `SQL_PEDIDO`/lista derrubaria com `no such table` todo teste de Compras, e pôr a tabela no stub mudaria
+   "quem cria primeiro vence" para esses 13. Efeito para o usuário é o mesmo (lido na hora, OS sumida → `null`).
+   Descartado: stub de `ordens_servico` no harness.
+2. **Manter a mesma OS no `PUT` dispensa as DUAS guardas**, não só a de fechada: se a OS sumiu depois do vínculo, o
+   pedido continua editável (o `<select>` manda a OS atual em todo `PUT`). Descartado: recusar `OS #<id> não encontrada`
+   ao editar um pedido cuja OS foi apagada — travaria o pedido sem gesto de saída além de tirar a OS.
+3. **A aux traz o `incluir` por consulta à parte** (acrescentado se não veio), não por `OR id = ?` dentro do `LIMIT 300`:
+   com mais de 300 OS abertas uma OS antiga do `incluir` ficaria de fora.
+4. `lerPedidoParaRecebimento` (projeção do almoxarife) **não** ganhou a OS — fica para a T2 se ela precisar.
