@@ -1,5 +1,7 @@
 # 20 — Alertas Operacionais
 
+> **+ Etapa 182 (2026-10-22, `4ed84488`, `1e6677be`, `ee4aabcb`, `eb8b8f32`, Fase 5 `f43f8088`): o alerta `SEPARADO_AGUARDANDO_RETIRADA` — a 16ª entrada do registro, e o item "Material separado aguardando retirada há N dias" do checklist, que estava desmarcado, ENTREGUE** — ver a seção "Etapa 182", no fim. Contagem medida no fechamento (as linhas do checklist abaixo): **21 marcados, 1 desmarcado, 2 riscados** (saíram dizendo por quê). Resta **uma** lacuna — consumo acima do previsto, que depende do orçamento do projeto (feature 22). **A contagem do status logo abaixo ("20 de 21 … mais um que a spec não previa") e a do mapa ("19 de 21") não batiam entre si nem com o checklist; ficam como estavam, como histórico, e a de cima é a medida.**
+
 > **+ Etapa 163 (2026-10-20, `6502c690`, Fase 5 `407ddfcc`): o mês e a semana das chaves dos avisos no calendário de Brasília (C406, B1044)** — ver a seção "Etapa 163", no fim. O status não muda.
 
 > **Status:** 🟢 no que é viável hoje — **20 de 21 alertas** do checklist original, **mais um que a spec não previa**: a **Etapa 46** acrescentou `NAO_CONFORMIDADE_EXECUCAO_PENDENTE` (a **15ª entrada do registro**), que nasceu do fluxo criado pelas Etapas 45/46 e entrou no checklist abaixo como item novo, pela regra que este próprio checklist manda ("cada alerta novo entra … incluir o alerta no checklist") (Etapa 16 somou 7 pela varredura, Etapa 17 somou 4 no ato/vigília, **Etapa 39 somou 1 — o primeiro que lê tabela CORE**, a **Etapa 42 somou o 19o** (`PEDIDO_COMPRA_PARCIAL`, que fechou a lacuna mais antiga desta lista) e a **Etapa 43 somou o 20o**, `NAO_CONFORMIDADE_ABERTA` — documento de nao conformidade sem decisao, o primeiro alerta que cobra um ATO HUMANO sobre um documento que o proprio sistema abriu; 2 itens SAÍRAM do checklist dizendo por quê — ver abaixo), **central no front entregue** e o motor único em duas parcelas (`alertRegistry` + modo evento com `dispararAlertaRegistrado`). **Restam só os 3 com lacuna nas features donas** — nenhum deles é bloqueio deste arquivo. · **Spec original:** seção 26
@@ -23,7 +25,11 @@
 > do estoque parado. O cartão ficaria aceso para quem só pode tomar erro. **Escolhido:** o corpo e a
 > descrição da entrada **nomeiam a saída**. **Descartado:** pôr QUALIDADE em `ver_alertas` —
 > alargar permissão é menos reversível que escrever a frase. **B183** das novidades.
-> **Custo medido de acrescentar entrada neste registro, e ele vale registro aqui:** **nove**
+> > **⚠️ Correção da Etapa 182: o "nove em cinco" abaixo ESTAVA DESATUALIZADO** — era a medida da Etapa 46 antes dela mesma
+> acrescentar asserções. Medido na Fase 0 da 182: **doze** asserções de contagem em **seis** arquivos; a execução achou a
+> **13ª** (`alertaPedidoParcial.api.test.js` (11), `semCompras.length`, as entradas que só leem tabela do almoxarifado). Quem
+> acrescentar a 17ª entrada: procure por `16` nos testes de alerta, não confie nesta contagem.
+**Custo medido de acrescentar entrada neste registro, e ele vale registro aqui:** **nove**
 > asserções de contagem em **cinco** arquivos de teste, mais **quatro** pontas de configuração
 > (semente no schema, campo na tela de Configurações, entrada em `COLUNAS_POR_CHAVE` da central, e a
 > fixture do teste da tela de Configurações — sem esta última, sete testes de Salvar que nada têm
@@ -51,7 +57,7 @@ Todos os alertas preventivos da spec, com motor único (verificação periódica
 - [x] Estoque zerado — `837faec`/`078cce2`/`d7fee6c` (máquina de estado própria com claim atômico na transição, anti-flap 60s, régua = saldo FÍSICO ≤ 0; **só material SEM mínimo** — com mínimo fica no canal do alerta de mínimo, decisão B17; inativo e cliente fora; primeira zeragem observada decide pelo `saldo_anterior` do motor)
 - ~~Estoque negativo~~ — **SAIU do checklist (Etapa 16)**: não é alerta, é regra do motor (feature 03), como este arquivo já dizia; mantê-lo desmarcado fingia pendência
 - [x] Requisição atrasada — Etapa 16, `6bed5e2` (status derivado da máquina de estados — a primeira versão do plano hardcodava literais inexistentes como `APROVADA` e **estava errada**; só alerta quem preencheu `data_necessidade`; dedupe 1× por requisição). **Pendência nomeada:** `data_necessidade` aceita texto livre por API e data ilegível nunca alerta, em silêncio (letra C19 das novidades) — falta `z.regex` no schema
-- [ ] Material separado aguardando retirada há N dias
+- [x] **Material separado aguardando retirada há N dias** — **Etapa 182, 2026-10-22.** A 16ª entrada do registro (`SEPARADO_AGUARDANDO_RETIRADA`), com o dado que faltava: a coluna `requisicoes_almoxarifado.pronta_para_retirada_em` (a ÚLTIMA liberação, nunca zerada), gravada no UPDATE da liberação **e** por um trigger `AFTER UPDATE OF status` que pega qualquer caminho que ponha `PRONTA_PARA_RETIRADA` (`4ed84488`); backfill de uma vez para o legado PRONTA (auditoria `LIBERACAO_RETIRADA` mais recente, senão `updated_at`, ledger `backfill_pronta_para_retirada_em`). Régua: `status = 'PRONTA_PARA_RETIRADA'`, ativa, `julianday('now') - julianday(pronta_para_retirada_em) > alerta_retirada_parada_dias` (padrão 3, dias corridos); colunas nomeadas com `dias_aguardando` (dias completos) e `itens_na_caixa` (separado − entregue > 0, arredondado a 6 casas); dedupe `retirada-parada-<id>-<pronta_para_retirada_em>` = um aviso por liberação (`1e6677be`); cartão com 7 colunas e campo em Configurações Gerais (`ee4aabcb`); integração pela rota e pelo serviço (`eb8b8f32`); a régua de `itens_na_caixa` com item já entregue numa rodada anterior ganhou cenário na revisão da Fase 5 (`f43f8088` — sem ele, trocar por `quantidade_separada > 0` ficava verde). Entrega parcial a partir de PRONTA sai do alerta (B1192).
 - [x] Material reservado há muitos dias — Etapa 16, `6bed5e2` (reserva ATIVA além de `alerta_reserva_parada_dias` OU `expira_em` vencida; dedupe 1× por reserva)
 - [x] **Pedido recebido parcialmente** — **Etapa 42, 2026-09-27.** A 13ª entrada do registro
   (`PEDIDO_COMPRA_PARCIAL`), com o follow-up que este item nomeava **entregue na mesma etapa**:
@@ -161,7 +167,7 @@ Todos os alertas preventivos da spec, com motor único (verificação periódica
 - [x] **Primeira parcela do motor único** — Etapa 16, `6bed5e2`: o `alertRegistry` é o registro de regras (condição, dedupe, janela em config, textos), consumido pela varredura E pela central. **O que NÃO entrou, declarado:** canal/destinatário POR alerta (todos usam a lista única `alertas_estoque_emails` e o toggle mestre — corte da Etapa 12 que continua, B15) e a unificação da máquina do mínimo/zerado no registro (funciona e é testada; reescrever seria risco sem valor novo — decisão do design da 16)
 - [x] Central de alertas no front — Etapa 16, `3eb2c42`/`ed5f032` (tela própria com item de menu; SEM segundo sino no header, decisão da Etapa 12 mantida)
 - [x] **Segunda parcela do motor único — modo EVENTO** (Etapa 17, `c1cd0a1`): `dispararAlertaRegistrado(db, chave, linha)` enfileira no ato reusando dedupe/assunto/corpo/payload da MESMA entrada do registro, e os `listar` dos alertas de evento são **dual-mode** (janela para central/varredura, id do fato para o gancho) — uma régua só para os dois caminhos, com o `INSERT OR IGNORE` da fila garantindo que o duplo disparo vire DUPLICADA e que evento perdido seja pego pela varredura
-- [ ] Cada alerta novo entra quando a feature correspondente ganhar o dado — **incluir o alerta no checklist da feature dona**. Lacunas nomeadas (medição 2026-08-28), as ÚNICAS que restam **e agora são DUAS**: separado-aguardando-retirada (falta a data da transição p/ PRONTA_PARA_RETIRADA) e consumo-acima-do-previsto (projeto sem orçamento). ~~pedido-parcial (falta noção de saldo do pedido)~~ — **ENTREGUE na Etapa 42** (`dcda360` + a entrada do registro), e o texto riscado registra as duas correções que essa linha já sofreu: o motivo original (*"falta o dado"*) estava desatualizado desde a Etapa 37, o segundo (*"falta a fonte exportada"*) estava certo, e a Etapa 42 removeu o bloqueio em vez de contorná-lo — ver o item do checklist acima
+- [ ] Cada alerta novo entra quando a feature correspondente ganhar o dado — **incluir o alerta no checklist da feature dona**. Lacunas nomeadas (medição 2026-08-28), as ÚNICAS que restam **e agora é UMA**: consumo-acima-do-previsto (projeto sem orçamento). ~~separado-aguardando-retirada (falta a data da transição p/ PRONTA_PARA_RETIRADA)~~ — **ENTREGUE na Etapa 182** (`4ed84488` grava a data; `1e6677be` a entrada). ~~pedido-parcial (falta noção de saldo do pedido)~~ — **ENTREGUE na Etapa 42** (`dcda360` + a entrada do registro), e o texto riscado registra as duas correções que essa linha já sofreu: o motivo original (*"falta o dado"*) estava desatualizado desde a Etapa 37, o segundo (*"falta a fonte exportada"*) estava certo, e a Etapa 42 removeu o bloqueio em vez de contorná-lo — ver o item do checklist acima
 - [x] **Uma entrada do registro pode ler tabela de OUTRO módulo** — Etapa 39, `ddbc18f`: `PEDIDO_COMPRA_ATRASADO` consulta `pedidos_compra`/`fornecedores` (CORE) pelo mesmo handle e importa a régua do módulo Compras por **require lazy**. Precedente aberto de propósito e declarado: o registro deixou de ser exclusivamente do almoxarifado. **O que isso exige de quem escrever a próxima entrada cross-módulo:** projetar as colunas (a central não tem o gate do módulo de origem) e manter o require lazy (o ciclo está a um require de distância)
 
 ## Regras essenciais + testes de API exigidos
@@ -187,3 +193,32 @@ Plano: `docs/superpowers/plans/2026-10-20-almoxarifado-etapa163-a-atividade-edit
   .07, .08) — `6502c690`.
 
 Continua 🟢.
+
+## Etapa 182 — o alerta "material separado aguardando retirada" (2026-10-22)
+
+Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa182-alerta-de-retirada-parada.md`. A lacuna que a spec nomeava (*"falta a data da
+transição p/ PRONTA_PARA_RETIRADA"*) foi paga criando o dado; o cartão é a 16ª entrada do registro, no fim.
+
+- [x] **RN-182.01..03 — a data da liberação** — `4ed84488`. `pronta_para_retirada_em DATETIME` (`await safeAlter` ao lado de `os_id`),
+  gravada no UPDATE da liberação (`PUT /requisicoes/:id/liberar-retirada`, resposta inalterada) e pelo trigger
+  `trg_requisicoes_pronta_para_retirada_em` (`WHEN NEW.status = 'PRONTA_PARA_RETIRADA' AND OLD.status IS NOT 'PRONTA_PARA_RETIRADA'`) — o
+  escritor único é o trigger, não uma guarda de texto-fonte (que não vê `SET status=?` paramétrico; B1191). Nunca zerada. Backfill
+  `migrateBackfillProntaParaRetiradaEm` (ledger, exportado), antes do `CREATE TRIGGER` (B1190). Primeiro boot em `CRM_DATA_DIR` vazio provado.
+- [x] **RN-182.04..08 — a entrada, a config e os textos** — `1e6677be`. `listarSeparadoAguardandoRetirada` exportada; semente
+  `alerta_retirada_parada_dias = 3` (B1189); `'0'` → 400 `Configuração "alerta_retirada_parada_dias" deve ser um número de dias maior que
+  zero`; assunto `[Almoxarifado] Separado aguardando retirada — <numero>`; corpo de 7 linhas com a liberação na hora de Brasília
+  (`instanteDoBancoNoFuso`); `payload { requisicao_id }`; um aviso por liberação (B1193; duas liberações no mesmo segundo compartilham a chave).
+  Sem rota nova, sem ação nova: a central continua `ver_alertas`. **13** asserções de contagem 15 → 16 em 6 arquivos (o plano dizia 12).
+- [x] **RN-182.09 — a tela** — `ee4aabcb`. `COLUNAS_POR_CHAVE.SEPARADO_AGUARDANDO_RETIRADA` (Requisição, Solicitante, Setor, OS, Itens na
+  caixa, Liberada em, Dias) e o campo **Alerta de Retirada Parada (dias)** em `CAMPOS`, com a fixture de `ConfiguracoesGerais.test.js`.
+- [x] **Integração** — `eb8b8f32`. Pela rota (aprovar → separar → liberar → central → varredura → devolver à prateleira → reliberar → 2ª
+  varredura → entrega parcial) e o B504 pelo serviço.
+- [x] **Fase 5 (revisão adversarial)** — `f43f8088`: o cenário de `itens_na_caixa` com item já entregue numa rodada anterior (Menor 2);
+  sabotagem `quantidade_separada > 0` caiu na asserção nova (`veio 2`). Registrados sem mudar código: a entrega parcial a partir de PRONTA
+  sai do alerta e de todos os 16 cartões (Menor 1, **B1192**); o validador genérico das chaves `alerta_*` aceita `1e3`, `" 4 "` e `9999999`
+  (anterior à etapa, **B1195**).
+
+**Fica de fora, declarado (D (182)):** a caixa de *Parcialmente Atendida*; aviso ao solicitante; a localização virtual "Aguardando
+retirada" (spec 05); link do cartão; consumo acima do previsto (feature 22).
+
+Continua 🟢 — agora com **uma** lacuna no checklist (consumo acima do previsto), que depende da feature 22.

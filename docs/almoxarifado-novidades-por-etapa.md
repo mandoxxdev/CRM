@@ -11,13 +11,20 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-22):** **Etapa 181 fechada** (**o relatório *EPI por colaborador* passa a mostrar as entregas de
+> **Onde o desenvolvimento está (2026-10-22):** **Etapa 182 fechada** (**o alerta *material separado aguardando retirada*** — o sistema
+> passa a guardar **quando** cada requisição foi liberada para retirada, e a central de **Alertas** ganha o 16º cartão, **Separado aguardando
+> retirada**: as requisições liberadas há mais de **3** dias (configurável em Configurações Gerais) e ainda não retiradas, com solicitante,
+> setor, OS, itens na caixa, data da liberação e dias; **um e-mail por liberação** para a lista de alertas; as que já estavam prontas no deploy
+> ganham a data pela auditoria ou pela última alteração; nada obrigatório antes do deploy — a **A109** (opcional) diz quantos e-mails o primeiro
+> dia vai mandar; decisões **B1189** a **B1196** — **a B1192 pede um olhar** (a caixa que sobra depois de uma entrega parcial não é cobrada);
+> aviso **C443**; revisão adversarial feita e corrigida). **Próxima: Etapa 183** — a ficha de EPI (tela e PDF) mostra a matrícula confirmada
+> e o aparelho de cada entrega (ver o plano da 183).
+> *(Também em 2026-10-22: **Etapa 181 fechada** (**o relatório *EPI por colaborador* passa a mostrar as entregas de
 > EPI** — data, número, colaborador, matrícula, setor, EPI, CA, validade do CA, quantidade, tamanho, motivo, quem entregou e se tem
 > assinatura, com filtros de colaborador, EPI e período; ele e o *Ferramentas emprestadas* passam a ser só de quem entrega EPI / gerencia
 > ferramentas (Administrador e Almoxarife — **o Gestor deixa de vê-los**); e o nome de quem recebeu o EPI e de quem está com a ferramenta
 > deixam de sair pelo **histórico de movimentações** e pela **lista de ferramentas** para os outros perfis; nada a rodar antes do deploy;
-> decisões **B1180** a **B1188**; avisos **C440** a **C442**; revisão adversarial feita e corrigida). **Próxima: Etapa 182** — o alerta
-> *material separado aguardando retirada há N dias* (ver o plano da 181).
+> decisões **B1180** a **B1188**; avisos **C440** a **C442**; revisão adversarial feita e corrigida); a próxima era a **182**.)*
 > *(Também em 2026-10-22: **Etapa 180 fechada** (**termo de responsabilidade no empréstimo de ferramenta** —
 > emprestar uma ferramenta passa a exigir o colaborador **do cadastro** (com matrícula), a leitura do **texto do termo** na tela, a
 > **assinatura** no tablet e a **matrícula digitada pelo próprio colaborador**; o termo assinado fica guardado como uma **fotografia** que não
@@ -476,7 +483,11 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Cento e oito itens para rodar em produção ANTES do deploy — cento e três são consulta, três são ação fora do sistema, um é ação na tela antes de liberar o uso, e um é uma limpeza de disco que roda sozinha
+### A. Cento e nove itens para rodar em produção ANTES do deploy — cento e quatro são consulta, três são ação fora do sistema, um é ação na tela antes de liberar o uso, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-22 (Etapa 182) de cento e oito para cento e nove**, com a **A109** — as requisições que já estão prontas para
+retirada e há quantos dias (**C443**): quantos e-mails do alerta novo o primeiro dia vai mandar. **Somente leitura, opcional**, com a linha
+pronta para gravar outra janela antes do deploy.)*
 
 *(**Atualizado em 2026-10-22 (Etapa 180) de cento e sete para cento e oito**, com a **A108** — **ação na tela, não consulta: trocar o texto
 PROVISÓRIO do termo de responsabilidade de ferramenta pelo termo da empresa ANTES de liberar o empréstimo em produção** (**C438**). E a
@@ -4203,12 +4214,43 @@ WHERE v.texto LIKE 'TEXTO PROVISÓRIO%' ORDER BY t.criado_em;
 para que o termo da empresa valha para eles, **devolva** a ferramenta e **empreste de novo** (o novo empréstimo assina a versão vigente) —
 o termo antigo continua guardado, como prova do que foi assinado.
 
+**A109 (NOVA, da Etapa 182 — somente leitura, OPCIONAL — quantos avisos de "separado aguardando retirada" o primeiro dia vai mandar).** Na
+primeira subida da versão nova, cada requisição *Pronta p/ Retirada* ganha a data da liberação (**B1190**), e a varredura que roda uns 30
+segundos depois manda um e-mail para cada uma que passou da janela (**C443**). Esta consulta roda **antes** do deploy (só usa colunas que já
+existem) e mostra a data que cada uma vai receber e há quantos dias:
+```sql
+WITH pronta AS (
+  SELECT r.id, r.numero, r.solicitante_nome, r.setor, r.updated_at,
+    (SELECT MAX(a.created_at) FROM auditoria_log_almoxarifado a
+      WHERE a.entidade = 'requisicao' AND a.entidade_id = r.id AND a.acao = 'LIBERACAO_RETIRADA') AS liberada_pela_trilha
+  FROM requisicoes_almoxarifado r
+  WHERE r.status = 'PRONTA_PARA_RETIRADA' AND COALESCE(r.ativo, 1) = 1
+)
+SELECT numero, solicitante_nome, setor,
+  COALESCE(liberada_pela_trilha, updated_at) AS liberada_em,
+  CASE WHEN liberada_pela_trilha IS NULL THEN 'updated_at (sem trilha)' ELSE 'auditoria' END AS fonte,
+  CAST(julianday('now') - julianday(COALESCE(liberada_pela_trilha, updated_at)) AS INTEGER) AS dias
+FROM pronta
+ORDER BY dias DESC;
+```
+**Como ler o resultado:** cada linha com **`dias` ≥ 3** vira um e-mail no primeiro dia (com 3 dias e algumas horas já entra). **Vazio ou
+poucas:** nada a fazer. **Muitas e antigas** (caixas que ninguém vai buscar): resolver antes — entregar, ou **Devolver à prateleira** — ou avisar
+quem recebe a lista de alertas. `fonte = updated_at (sem trilha)` é o caso do **B1190**: a data pode ser mais nova que a liberação real (o
+alerta vem atrasado, nunca adiantado). **Para usar outra janela já no primeiro dia** (ex.: 7), grave-a antes do deploy — a versão nova não
+sobrescreve uma chave que já existe:
+```sql
+INSERT OR IGNORE INTO configuracoes_almoxarifado (chave, valor, descricao)
+VALUES ('alerta_retirada_parada_dias', '7', 'Dias com a requisicao liberada para retirada (caixa separada parada) para alertar');
+```
+*(Conferida num banco de teste com o esquema atual: uma requisição pronta com trilha de liberação, uma sem trilha e uma em separação — vieram
+as duas prontas, com a fonte certa em cada uma, e a em separação ficou de fora. **Não** rodada no banco de produção.)*
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179 e B1180 a B1188; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188 e B1189 a B1196; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -12575,6 +12617,60 @@ de maior valor que **não** depende de resposta da empresa: a última lacuna do 
 projeto. Medido: o sistema **não guarda quando** a requisição ficou pronta para retirada (só o status) — a 182 grava esse momento e cria o
 alerta, com os dias configuráveis. De passagem, medido: o **lembrete de ferramenta não devolvida** que a spec 16 dava como faltando **existe**
 desde a Etapa 12 (e-mail diário); a spec 16 foi corrigida neste fechamento, dizendo que estava errada. Ver a "próxima tarefa detalhada" no plano da 181.
+*(Feita: a Etapa 182 — B1189 a B1196.)*
+
+**B1189 (NOVA, da Etapa 182; decisão do agente) — a janela do alerta de retirada parada é de 3 dias corridos, e é um palpite.** Ninguém da
+empresa disse quanto tempo uma caixa pode esperar no balcão. **Escolhido:** **3** dias **corridos** desde a liberação (sábado e domingo
+contam), a mesma régua do alerta de reserva parada. **Descartado:** dias úteis — o sistema não tem calendário de expediente nem de feriados.
+**Reversível pela tela:** **Configurações → Configurações Gerais → Alerta de Retirada Parada (dias)**. Se o galpão trabalha com retirada
+semanal, ponha **7** — mas a varredura roda uns 30 segundos depois de o sistema subir, então, para valer já no primeiro dia, a janela tem de ser gravada **antes** do deploy (a **A109** traz a linha pronta); depois, é pela tela (**C443**). `1e6677be`.
+
+**B1190 (NOVA, da Etapa 182; decisão do agente) — as requisições que já estavam prontas no dia do deploy ganham uma data, mesmo sem trilha.**
+O sistema não guardava quando a requisição ficou pronta. Na primeira subida da versão nova, cada requisição *Pronta p/ Retirada* recebe a data
+da **última** liberação registrada na auditoria; se a auditoria não tem (ela é gravada depois da liberação e pode faltar), a data da **última
+alteração** da requisição. Enquanto ela está pronta, a última alteração nunca é anterior à liberação — então, sem trilha, o alerta pode chegar
+**atrasado**, nunca **adiantado**. Roda uma vez só (fica registrado) e só mexe em quem está pronta. **Descartado:** (a) deixar sem data, fora do
+alerta — a caixa mais esquecida ficaria invisível para sempre; (b) procurar a data na auditoria a cada consulta — duas fontes na mesma régua.
+**Risco declarado (só no legado):** se a liberação **mais recente** perdeu a auditoria e uma **anterior** a teve, a data usada é a anterior e o
+alerta pode vir cedo. A consulta **A109** mostra, antes do deploy, qual data cada uma vai receber. `4ed84488`.
+
+**B1191 (NOVA, da Etapa 182; decisão do agente) — a data é a da ÚLTIMA liberação, nunca é apagada, e quem a grava é o próprio banco.** Toda
+vez que uma requisição passa a *Pronta p/ Retirada*, por qualquer caminho, o banco grava o momento (um gatilho no banco, além da gravação na
+própria liberação). Devolver à prateleira, entregar e excluir **não** apagam a data: a requisição sai do cartão pelo status, e a única volta a
+*Pronta* regrava a data — o relógio recomeça. **Descartado:** (a) apagar a data ao devolver à prateleira — medido desnecessário, e deixaria a
+data com sentido torto (preenchida depois da entrega, vazia depois da devolução); (b) garantir o "um escritor só" por uma varredura do
+texto do código — não enxerga uma gravação com o status vindo de variável; o gatilho pega qualquer caminho. **Reversível.** `4ed84488`.
+
+**B1192 (NOVA, da Etapa 182; decisão do agente, confirmada na revisão da Fase 5 — PEDE UM OLHAR) — a entrega parcial tira a requisição do
+alerta, mesmo com material ainda na caixa.** Cenário provado pela revisão: requisição *Pronta p/ Retirada* com **4** separadas; o
+solicitante leva **1** → a requisição vira *Parcialmente Atendida* com **3** ainda na caixa, e sai deste cartão — e de **todos os 16** (nenhum
+alerta cobra *Parcialmente Atendida* com caixa). **Escolhido: manter.** **Descartado:** incluir *Parcialmente Atendida* com caixa no alerta —
+a data de "há quantos dias" ficaria ambígua (a liberação antiga ou a última entrega? a requisição pode ter tido várias rodadas), e o status já
+não diz "liberada para retirada". **Consequência:** essas 3 peças ficam visíveis na **Fila de separação** (a requisição *Parcialmente
+Atendida* continua lá, para separar ou entregar) e na lista de requisições, mas **sem cobrança de tempo**: se ninguém voltar, ninguém é
+avisado. **Reversível** — se a empresa quiser a cobrança, o caminho é guardar a data da última entrega e um segundo cartão (*caixa parada depois
+de entrega parcial*). `1e6677be`, cenário da revisão em `f43f8088`.
+
+**B1193 (NOVA, da Etapa 182; decisão do agente) — um e-mail por liberação, não um por dia.** A caixa parada há 30 dias recebe **um** aviso, no
+primeiro dia depois da janela; a central continua mostrando enquanto ela estiver lá. Devolver à prateleira e liberar de novo é uma liberação
+nova e, passada a janela, avisa outra vez. **Limite medido:** duas liberações da mesma requisição **no mesmo segundo** contam como uma (um e-mail a
+menos — aceito; na prática exige devolver e liberar dentro de um segundo). **Descartado:** repetir a cada N dias — seria o único alerta do
+sistema que insiste; os outros avisam uma vez por situação. **Reversível.** `1e6677be`.
+
+**B1194 (NOVA, da Etapa 182; decisão do agente) — o cartão novo é o último da central.** **Descartado:** ao lado de *Reserva parada*, que é o
+parente mais próximo — mudaria a ordem dos 15 cartões que quem usa já conhece, sem ganho. **Reversível.** `1e6677be`.
+
+**B1195 (NOVA, da Etapa 182; anterior a ela, registrado sem corrigir) — o campo de dias dos alertas aceita "1e3", " 4 " e 9999999.** Medido
+na revisão da Fase 5, vale para **todas** as janelas de alerta e de reposição (não só a nova): a conferência pede um número inteiro maior que
+zero e aceita a notação *1e3* (vira 1000 dias), o número com espaços (*" 4 "* vale 4) e um número enorme (*9999999* desliga o alerta na
+prática, sem dizer que desligou). Nada disso quebra o sistema — o alerta lê o mesmo número. **Escolhido:** não mexer nesta etapa.
+**Descartado:** endurecer a conferência agora — mudaria a regra de todas as chaves de uma vez, fora do assunto. **Reversível**; se quiser, uma
+etapa curta põe um teto (ex.: 365) e recusa notação científica.
+
+**B1196 (NOVA, da Etapa 182) — a próxima etapa (183): a ficha de EPI (tela e PDF) mostra a matrícula confirmada e o aparelho de cada
+entrega.** A última pendência da entrega de EPI (feature 25) que não depende da empresa: o sistema já guarda, em cada entrega, que o
+colaborador digitou a matrícula e de qual aparelho veio a assinatura — e a ficha impressa (o papel da pasta da NR-6) não mostra. O plano já
+está escrito: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa183-ficha-epi-com-matricula-e-aparelho.md`.
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -16180,6 +16276,14 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      **Ferramentas**, a linha da ferramenta emprestada mostra só **Emprestada** (sem *"com ⟨nome⟩"*) para Gestor, Produção, Compras, Consulta,
      Qualidade e Engenharia (**B1186**). **O que fazer:** nada — quem precisa saber com quem está a ferramenta é quem a empresta e recebe de
      volta (Administrador, Almoxarife).
+443. **NOVO (da Etapa 182) — no primeiro dia depois do deploy, pode chegar um e-mail para cada caixa que já está no balcão há mais de 3
+     dias.** As requisições que já estavam *Pronta p/ Retirada* ganham a data da liberação (pela auditoria; sem ela, pela última alteração —
+     **B1190**), e a varredura diária (que roda uns 30 segundos depois de o sistema subir, e depois a cada 24 horas) manda um aviso
+     *"[Almoxarifado] Separado aguardando retirada — ⟨número⟩"* para cada uma que passou da janela, para a lista de e-mails dos alertas (se o
+     e-mail de alertas estiver ligado). É **um por requisição**, não se repete no dia seguinte (**B1193**). A central de **Alertas** ganha o
+     16º cartão, **Separado aguardando retirada**. **O que fazer:** antes do deploy, rodar a **A109** (opcional) para ver quantas são; se forem
+     muitas e antigas (caixas que ninguém vai buscar), resolver antes — entregar, ou **Devolver à prateleira** — ou avisar quem recebe a lista
+     de alertas. Se a janela de 3 dias for curta para o galpão, gravar a janela antes do deploy pela linha da **A109** — pela tela, só depois de o sistema subir, e aí a primeira varredura já terá rodado com 3 (**B1189**).
 ### D. Limitações declaradas— são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -17521,6 +17625,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   (`GET /ferramentas/:id/manutencoes`) e na Auditoria (*Fim de manutenção*). Quem empresta não fica sabendo da restrição pela tela.
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(182) O alerta de material separado aguardando retirada, o que ficou de fora.** (1) A **entrega parcial** a partir de *Pronta p/
+  Retirada* tira a requisição do alerta, mesmo com material na caixa (**B1192**). (2) O aviso vai para a **lista de alertas** do almoxarifado,
+  não para o **solicitante** (avisar quem pediu seria um canal novo). (3) Não existe o local **"Aguardando retirada"** no estoque: a caixa
+  continua no endereço de onde foi separada (spec 05 — exige um tipo de localização novo). (4) O cartão **não tem link** para a requisição
+  (nenhum cartão da central tem). (5) A outra lacuna dos alertas, **consumo acima do previsto** por projeto, continua de fora — depende do
+  orçamento do projeto (feature 22). (6) Dias **corridos**, sem calendário de expediente (**B1189**).
 - **(181) O relatório EPI por colaborador e o que deixou de sair para todos, o que ficou de fora.** (1) O relatório **não verifica** a
   integridade de cada entrega — a coluna **Assinatura** diz só se existe; **Verificar** e **Verificar cadeia** ficam na tela de EPI (**B1187**).
   (2) O filtro **Colaborador** lista só os ativos (**B1183**) e o **EPI** é pelo número interno do material (**B1184**). (3) Os empréstimos de
@@ -18712,6 +18822,13 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(182) Nenhum clique foi dado no navegador, e nenhum e-mail saiu de verdade.** A data da liberação (na rota, pelo gatilho e na primeira
+subida num banco vazio), o preenchimento das requisições antigas, a régua do cartão, as saídas (entrega total e parcial, devolver à prateleira
+pela tela e pelo serviço, exclusão), o e-mail enfileirado uma vez por liberação com o texto literal e a hora de Brasília, e o 403 da central
+foram provados pelas rotas de verdade no servidor de teste; o cartão e o campo de configuração, em jsdom com a resposta simulada. O que **só o
+navegador** prova: o roteiro da Etapa 182 no guia — o campo em **Configurações Gerais**, o cartão **Separado aguardando retirada** com as sete
+colunas e a data no formato da tela, e a tela **Notificações** com o aviso enfileirado (o envio real depende do servidor de e-mail).
 
 **(181) Nenhum clique foi dado no navegador.** O relatório (colunas, filtros, a ordem, *Sim*/*Não*, o dia de Brasília na consulta e na
 planilha, o 403 e o menu por perfil), a máscara do histórico nas sete leituras e na planilha, e a lista de ferramentas sem o nome foram
@@ -35413,9 +35530,87 @@ nome. Como Gestor: a mesma linha mostra só o status **Emprestada**.
   continuam com o nome (**D (181)**).
 - **Nada a rodar antes do deploy.** O que muda para quem usa: **C440** a **C442** (avisar a gestão de que os dois relatórios saíram do menu).
 
+## Etapa 182 — O alerta "material separado aguardando retirada" (2026-10-22)
+
+O almoxarife separa o material, põe a caixa no balcão e toca **Liberar para Retirada** — e aí ninguém vem buscar. A caixa ocupa a área de
+expedição, o material fica preso para aquela requisição e não serve a mais ninguém, e nada no sistema cobrava isso: ele nem guardava **quando**
+a requisição ficou pronta. Agora guarda, e a central de alertas ganha um cartão novo, **Separado aguardando retirada**: toda requisição
+liberada para retirada há mais dias que o configurado (de fábrica, **3**) e ainda não retirada, com quem pediu, o setor, a OS, quantos itens
+estão na caixa, quando foi liberada e há quantos dias. Quem tem o e-mail de alertas ligado recebe **um aviso por liberação**. Nada a rodar
+antes do deploy (há uma consulta **opcional**, **A109**, para saber quantos avisos o primeiro dia vai mandar). Decisões do agente: **B1189** a
+**B1196**; aviso **C443**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| O sistema não sabia quando a requisição ficou *Pronta p/ Retirada* (só o status) | Cada liberação grava o momento — a **última** liberação, a que vale (**B1191**) |
+| Caixa parada no balcão sem cobrança nenhuma | Cartão **Separado aguardando retirada** na central (o 16º), com 7 colunas, e e-mail para a lista de alertas (**B1193**) |
+| — | Campo **Alerta de Retirada Parada (dias)** em Configurações Gerais, de fábrica **3** (**B1189**) |
+| Requisições que já estavam prontas no dia do deploy | Ganham a data pela trilha de auditoria da liberação; sem trilha, pela última alteração (**B1190**, **C443**) |
+
+### As regras, com o cenário exato
+
+Preparação: um **Almoxarife** (ou Administrador) e um usuário qualquer que faça requisição. Duas requisições de material **não crítico** com
+saldo, aprovadas e separadas (roteiro da Etapa 3). Como o alerta conta **dias**, para ver o cartão sem esperar baixe o campo para **1** e use
+uma requisição liberada ontem — ou peça a quem tem acesso ao banco de testes para "envelhecer" a liberação.
+
+**1. O campo.** **Almoxarifado → Configurações → Configurações Gerais**: o campo **Alerta de Retirada Parada (dias)**, logo depois do
+**Alerta de Reserva Parada (dias)**, com **3** e a explicação *"Dias com a requisição liberada para retirada sem ninguém buscar para gerar
+alerta de caixa parada"*. Digite **0** e **Salvar** → aviso vermelho *"Configuração "alerta_retirada_parada_dias" deve ser um número de dias
+maior que zero"*, nada é salvo. Volte para **3** (ou **1**, para a demonstração) e salve.
+
+**2. O cartão.** **Almoxarifado → Alertas**: o último cartão é **Separado aguardando retirada**, com a explicação *"Requisições liberadas para
+retirada há mais dias que o configurado e ainda não retiradas."* e o selo **3 dias** (a janela). Com uma requisição liberada há mais tempo que a
+janela, o total fica vermelho e **Detalhes** abre a linha: **Requisição**, **Solicitante**, **Setor**, **OS** (*—* quando não há),
+**Itens na caixa**, **Liberada em** (a data do dia de Brasília, *dd/mm/aa*) e **Dias**. A mais antiga primeiro.
+
+**3. A régua.** A janela conta **dias corridos desde a liberação**, e só entra quem **passou** dela: com 3 dias, a liberada há 3 dias e 1 hora
+entra; a liberada há 2 dias e 23 horas não. A coluna **Dias** mostra os dias **completos** (3 dias e 20 horas = *3*). Mudar o campo para **5**
+tira a de 3 dias do cartão na hora (a central é ao vivo).
+
+**4. Itens na caixa.** Conta só os itens com material **separado e ainda não entregue** — a mesma conta que decide se o **Liberar para
+Retirada** aparece. Item que pediu e não separou nada não conta; item que já foi **todo entregue** numa rodada anterior também não (pediu 2 e 3,
+entregou os 2 do primeiro, separou e liberou o segundo → **Itens na caixa: 1**).
+
+**5. Como a requisição sai do cartão.** Qualquer um destes, e o cartão muda na hora:
+- **entregar** (tudo → *Entregue*; uma parte → *Parcialmente Atendida* — sai também, ver **B1192**);
+- **Devolver à prateleira** um item da caixa → a requisição volta a *Em Separação* e sai; se for liberada de novo, o relógio **recomeça** da
+  nova liberação;
+- **excluir** a requisição (ela vira *Cancelado*, fora de uso).
+
+**6. O e-mail.** Com o e-mail de alertas ligado (Configurações → Alertas de Estoque), a varredura diária manda para a lista de alertas, uma vez
+por liberação, o assunto *"[Almoxarifado] Separado aguardando retirada — ⟨número⟩"* e o corpo:
+*"Requisição: ⟨número⟩ / Solicitante: ⟨nome⟩ / Setor: ⟨setor ou -⟩ / OS: ⟨OS ou -⟩ / Itens na caixa: ⟨n⟩ / Liberada para retirada em:
+⟨data e hora de Brasília⟩ / Aguardando há: ⟨n⟩ dia(s)"* (uma linha cada). No dia seguinte, a mesma liberação **não** manda de novo; devolver à
+prateleira e liberar de novo, depois de passar a janela outra vez, manda um aviso novo (**B1193**). A tela **Notificações** mostra o envio.
+
+**7. Quem vê.** O cartão está na mesma central de sempre — Administrador, Almoxarife, Gestor e Compras. Produção, Engenharia, Consulta e
+Qualidade continuam sem a central (*"Dados indisponíveis no momento"*).
+
+### O que esta etapa NÃO cobre
+
+- **Entrega parcial a partir de *Pronta p/ Retirada*** tira a requisição do cartão, mesmo com material ainda na caixa (**B1192**) — o resto
+  continua na **Fila de separação**, mas sem alerta de tempo.
+- **O solicitante não é avisado** — o e-mail vai para a lista de alertas do almoxarifado, como todos os outros (**D (182)**).
+- **Não há local "Aguardando retirada"** no estoque: a caixa continua no endereço de onde foi separada (spec 05, **D (182)**).
+- O cartão não tem link para a requisição (nenhum cartão da central tem).
+- **Nada a rodar antes do deploy.** Opcional: a **A109** diz quantas requisições já estão prontas e há quanto tempo — o primeiro dia depois do
+  deploy manda um e-mail para cada uma que já passou de 3 dias (**C443**).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 182 entregue (2026-10-22):** **o alerta "material separado aguardando retirada".** Cada liberação para retirada grava o momento (a
+  última vale — **B1191**); as requisições que já estavam prontas ganham a data pela auditoria ou pela última alteração (**B1190**); a central
+  ganha o 16º cartão, **Separado aguardando retirada**, com a janela de **3** dias configurável (**B1189**) e um e-mail por liberação
+  (**B1193**). A revisão adversarial (Fase 5) achou um teste que não protegia a conta de **Itens na caixa** — cenário acrescentado e provado
+  por sabotagem. Commits `b3b12523`, `46672f27` (plano), `4ed84488` (T1), `1e6677be` (T2), `ee4aabcb` (T3), `eb8b8f32` (T4), `d13ca04e`
+  (execução), `f43f8088` (Fase 5) e o fechamento. **O que é seu:** as decisões **B1189** a **B1196** (reversíveis; a **B1192** pede um olhar —
+  a caixa que sobra depois de uma entrega parcial não é cobrada); o aviso **C443** (o primeiro dia pode mandar vários e-mails — a **A109**,
+  opcional, diz quantos); as limitações **(182)** em D e a verificação **(182)** em F. **Próxima: Etapa 183 — a ficha de EPI (tela e PDF)
+  mostra a matrícula confirmada e o aparelho de cada entrega (B1196); ver o plano da 183.**
 
 - **Etapa 181 entregue (2026-10-22):** **o relatório "EPI por colaborador" mostra as entregas de EPI, e quem recebeu o quê deixa de sair para
   todos.** O relatório lê as entregas da tela de EPI, com 14 colunas e filtros de colaborador, EPI e período (**B1180**, **B1183**, **B1184**);

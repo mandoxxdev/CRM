@@ -1,6 +1,7 @@
 # Etapa 182 — O alerta "material separado aguardando retirada há N dias" (feature 20, com a 05)
 
-> **Status:** 🔧 **T1–T4 executadas (2026-10-22), ver "Execução" — falta a T5 (fechamento), depois da revisão.** Emendado da
+> **Status:** ✅ **FECHADA (2026-10-22)** — T1–T4 executadas, Fase 5 (revisão adversarial) com 1 correção de teste (`f43f8088`) e 2
+> registros sem código, T5 (fechamento) feita; ver "Execução", "Fase 5", "Verificação final" e a "Próxima tarefa detalhada" (Etapa 183). Emendado da
 > "próxima tarefa detalhada" da Etapa 181 (B1188).
 > **Origem:** a única lacuna da spec 20 que não depende de ninguém (`specs/modulo-almoxarifado/20-alertas/README.md:54`, item
 > desmarcado, e `:164`, *"falta a data da transição p/ PRONTA_PARA_RETIRADA"*). Dor de galpão: a caixa separada ocupa a área de
@@ -164,13 +165,94 @@
   (A e B vermelhos), chave sem o instante (A vermelho na 1ª varredura: a fila não tem a chave com o instante), trigger inerte + rota
   sem a coluna — este ficava **verde** na primeira versão (o "envelhecer" do teste grava a coluna por cima) e foi **endurecido**:
   depois de cada liberação pela rota a coluna tem de estar a menos de 60 s de agora.
+- [x] **Fase 5** — `f43f8088` (o cenário de `itens_na_caixa` com item já entregue; ver a seção "Fase 5" abaixo).
+- [x] **T5 — fechamento** — o commit de fechamento desta etapa (novidades: seção da etapa, cabeçalho, **A109**, **B1189** a **B1196**,
+  **C443**, **D (182)**, **F (182)**; spec 20 com o item marcado, a lacuna "agora é UMA" e o "nove em cinco" corrigido dizendo que estava
+  desatualizado; spec 05; mapa (cabeçalho, linhas 05 e 20); guia (cabeçalho e roteiro de 7 passos); manual (10.4, 21c-bis, 21c.6); este
+  plano). **Divergências do fechamento:** (1) a contagem do status da spec 20 (*"20 de 21"*) e a do mapa (*"19 de 21"*) não batiam entre si;
+  medida no checklist: 21 marcados, 1 desmarcado, 2 riscados — registrada no topo da spec, as antigas ficaram como histórico; (2) o plano dizia, do default, "muda-se pela tela" —
+  para o primeiro dia não dá (o campo nasce no boot e a varredura roda 30 s depois); a **A109** traz o
+  `INSERT OR IGNORE` para gravar a janela antes (a semente não sobrescreve); (3) mapeamento das decisões do plano para a letra B: default 3
+  → B1189; backfill → B1190; coluna nunca zerada + trigger (M1) → B1191; entrega parcial → B1192; um e-mail por liberação (M4, I2) → B1193;
+  cartão no fim → B1194; validador → B1195; próxima → B1196.
 - **Verificação final (depois da T4):** `test:api` 523/523 arquivos; `test:almoxarifado` 44/44; `test:validation` 4/4;
   `test:safealter` 3/3; `test:sqlite` 16/16; client 180 suítes / 2359 testes; `CI=true build` compilou. Uma suíte por vez.
 
-## Próxima tarefa detalhada
+## Fase 5 — revisão adversarial (2026-10-22) — 0 críticos, 0 importantes, 2 menores + 1 registro anterior à etapa
 
-_(placeholder — escrever no fechamento: reler o mapa `specs/modulo-almoxarifado/README.md` pelas 🟡 que não dependem da empresa — 05,
-06, 01, 23 — e medir antes de prometer.)_
+- **Menor 2 (CORRIGIDO, `f43f8088`) — a régua `itens_na_caixa` não tinha teste que a distinguisse.** O cenário de `itens_na_caixa` da T2
+  só usava itens **sem** entrega, então trocar `ROUND(separado - entregue, 6) > 1e-9` por `quantidade_separada > 0`
+  (`alertRegistry.js:440`) deixava `alertaRetiradaParada` 12/12 verde. Cenário novo: requisição com item 1 (2 un.) **todo entregue** numa
+  primeira rodada (→ `PARCIALMENTE_ATENDIDA`), item 2 (3 un.) separado numa segunda rodada e liberado de novo → PRONTA com
+  `itens_na_caixa = 1` (a premissa `[[2,2],[3,0]]` afirmada antes da régua, para a sabotagem ter o que contar a mais).
+  **Controle positivo:** `perl -pi` com âncora de **uma linha** (`AND ROUND(COALESCE(i.quantidade_separada, 0) - …) > 1e-9)`, `grep -cF` = 1;
+  a primeira tentativa com âncora multilinha deu **0** e foi abortada sem sabotar, md5 inalterado), md5 `90f8a1a4…` → `1036eb17…` →
+  restaurado por cópia no scratchpad `90f8a1a4…`, `git diff --stat` vazio. Resultado: **12 passaram, 1 falhou** — só o caso novo, **na
+  asserção nova**: *"itens_na_caixa: o item 1 ja foi entregue e nao esta na caixa (veio 2) 2 !== 1"*. Com a régua real: 13/13.
+- **Menor 1 (REGISTRADO, sem código) — entrega parcial a partir de PRONTA sai deste cartão e de todos os 16.** Cenário provado pela
+  revisão: 4 separadas, 1 entregue → `PARCIALMENTE_ATENDIDA` com caixa 3 → nenhum cartão a cobra. O plano já tinha decidido (seção
+  "Decisões reversíveis", 4º item); registrado como **B1192** com o descartado (incluir `PARCIALMENTE_ATENDIDA` com caixa > 0 — a data da
+  idade ficaria ambígua: liberação antiga ou última entrega) e a consequência (a caixa restante só aparece na Fila de separação, sem cobrança
+  de tempo).
+- **Anterior à etapa (REGISTRADO, sem código):** o validador genérico das chaves `alerta_*`/`reposicao_*` do `PUT /configuracoes`
+  (`Number(valor)` + `Number.isInteger` + `>= 1`) aceita `1e3`, `" 4 "` e `9999999` — **B1195**.
+
+## Verificação final (2026-10-22, uma suíte por vez, depois do fix-round)
+
+- `test:api` **523/523** arquivos OK (o `alertaRetiradaParada` com 13 casos).
+- `test:almoxarifado` **44 passou, 0 falhou**.
+- `test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0**.
+- client **180 suítes / 2359 testes**, todos passando.
+- `CI=true react-scripts build`: compilou (sem warning virando erro).
+- `git status`: só os arquivos do fechamento antes do commit.
+
+## Retrospectiva
+
+1. **13, não 12** — a Fase 0 contou as asserções de contagem por `15` e perdeu a que conta `semCompras.length` (13 → 14): medir o custo
+   de entrada nova por **todas** as contagens derivadas do registro, não só pelo `length`.
+2. **1 controle impossível** — `>` virando `>=` não é detectável com relógio real (os dois só diferem no instante exato); a régua com folga
+   se prova pela **posição** (a janela um dia mais curta), como a skill já dizia para epsilon.
+3. **2 testes que passavam vazios até serem endurecidos** — "coluna NULL não entra" (a requisição nova não distinguia o fallback de leitura;
+   endurecido com `created_at`/`updated_at` antigos) e a integração da T4 (o "envelhecer" do teste regravava a coluna; endurecido com
+   "a menos de 60 s de agora" depois de cada liberação pela rota). E um terceiro só a revisão achou: `itens_na_caixa` sem item entregue.
+4. **0 achados de código** na Fase 5 — o trigger (M1 da Fase 2) tirou do caminho a classe de defeito mais provável (um escritor que esquece a
+   coluna); o que sobrou foi falta de **cenário**, não de código.
+
+## Próxima tarefa detalhada — Etapa 183: a ficha de EPI (tela e PDF) mostra a matrícula confirmada e o aparelho (feature 25)
+
+**O plano já existe e foi revisado:** `docs/superpowers/plans/2026-10-22-almoxarifado-etapa183-ficha-epi-com-matricula-e-aparelho.md`
+(commit `c8500355`, decisões **B1200** a **B1205** reservadas nele). Este resumo é só o que permite retomar sem reler o código.
+
+**Por que esta.** É o último `[ ]` da spec 25 (entrega de EPI) que não depende da empresa — **D (178)**, item (8): *"o PDF da ficha ainda
+não imprime 'confirmado por matrícula' nem o aparelho de onde veio"*. A ficha é o papel da pasta da NR-6; as duas provas já estão gravadas e
+dentro do HMAC, mas não **saem**.
+
+**Contrato que ela consome e muda:**
+- `GET /api/almoxarifado/epi/ficha/:colaborador_id` (`routes/almoxarifado/extended.js:2072-2077`, `auth` + `requirePermission('entregar_epi')`
+  — ADMINISTRADOR, ALMOXARIFE). Cada item de `entregas` passa a ter **exatamente** `[...CHAVES_LISTA, 'arquivo_url', 'registro_sha256',
+  'confirmado_por_matricula', 'user_agent']`; `confirmado_por_matricula` `1 | null` (número), `user_agent` `string | null`. **Não** sai o
+  `ip`. 404 `Colaborador #<id> não encontrado` inalterado.
+- Fonte: `epiService.fichaDoColaborador` (`:416-439`) — acrescentar `v.confirmado_por_matricula, v.user_agent` ao SELECT de `:420` (o `LEFT
+  JOIN` da evidência `contexto = 'ENTREGA_EPI'` já existe) e normalizar no `map`.
+- Client: `client/src/utils/fichaEpiPdf.js` (`montarFichaEpi` `:22-54`, `gerarFichaEpiPdf` `:75-136`) e a ficha na tela
+  (`EpiAlmoxarifado.js:505-527`). Texto da matrícula pelo **mesmo** `matriculaConfirmadaTexto` de `client/src/utils/termoFerramenta.js`
+  (importar de `termoFerramenta.js`, **não** de `termoFerramentaPdf.js` — esse importa de `fichaEpiPdf.js` e fecharia ciclo).
+
+**Pontos de atenção:**
+- `epiPontaAPonta.api.test.js:195` confere as chaves exatas da ficha — **vai ficar vermelho** de propósito (mudança de contrato; ajustar e
+  registrar).
+- Asserção negativa do `ip` (RN-183.02) só se prova por sabotagem (acrescentar `v.ip` ao SELECT).
+- A quebra de página do PDF (`if (y > 245)`, `:108`) tem de descer para `> 235` com as linhas novas (RN-183.08) — senão a última entrega
+  da página corta no rodapé.
+- A spec 25 diz que *"a tela de verificação e a cadeia usam esses dados"* — usam no **cálculo**, não **mostram**; reescrever no fechamento
+  dizendo que a frase enganava.
+
+**O que já está pronto e ela não reabre:** a gravação (`epiService.js:254-267`, `confirmado_por_matricula` sempre 1 na rota, `user_agent`
+cortado em 300), o HMAC (`camposDoRegistro`), a verificação e a cadeia, a permissão da ficha. Nada de motor de estoque, trava, migration ou
+`ACAO_PERFIS`. **Nada da 182** (outra sessão estava nos arquivos dela).
+
+**Depois da 183** (para a escolha seguinte, medir antes de prometer): as 🟡 do mapa que não dependem da empresa — 05 (os motivos de produto
+e a C198), 06, 01, 23; a 20 ficou com **uma** lacuna (consumo acima do previsto), que depende da 22.
 
 ---
 

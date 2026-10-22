@@ -1,18 +1,25 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-22 (Etapas 172 a 181) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-22 (Etapas 172 a 182) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178 e 180) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181 e 182) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172 a 178, 180 e 181 ENTREGUES · próxima: Etapa 182)
+> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172 a 178, 180, 181 e 182 ENTREGUES · próxima: Etapa 183)
 >
-> **O desenvolvimento parou aqui: Etapa 181 fechada — 2026-10-22.** **O relatório *EPI por colaborador* mostra as entregas de EPI**
+> **O desenvolvimento parou aqui: Etapa 182 fechada — 2026-10-22.** **O alerta *material separado aguardando retirada***: o sistema
+> passa a guardar quando cada requisição foi liberada para retirada, e **Almoxarifado → Alertas** ganha o cartão **Separado aguardando
+> retirada** — as requisições liberadas há mais de **3** dias (campo **Alerta de Retirada Parada (dias)** em Configurações Gerais) e ainda não
+> retiradas, com solicitante, setor, OS, itens na caixa, data e dias; um e-mail por liberação para a lista de alertas. Nada obrigatório antes
+> do deploy; a **A109** (opcional) diz quantos e-mails o primeiro dia vai mandar (**C443**). **Próxima: Etapa 183** — a ficha de EPI (tela e
+> PDF) mostra a matrícula confirmada e o aparelho de cada entrega (ver o plano da 183).
+>
+> **Etapa 181, 2026-10-22.** **O relatório *EPI por colaborador* mostra as entregas de EPI**
 > (quem recebeu, o quê, quando, o CA, quem entregou e se tem assinatura; filtros de colaborador, EPI e período; planilha), e ele e o
 > *Ferramentas emprestadas* passam a ser só do **Administrador** e do **Almoxarife** — **o Gestor deixa de vê-los**. O histórico de
 > movimentações não mostra mais o nome de quem recebeu cada EPI, e a lista de ferramentas não diz com quem a ferramenta está, para os outros
 > perfis. Nada a rodar antes do deploy; avisar a gestão (**C440** a **C442**). **Próxima: Etapa 182** — o alerta *material separado aguardando
-> retirada há N dias* (ver o plano da 181).
+> retirada há N dias* (ver o plano da 181). *(Feita: a 182.)*
 >
 > **Etapa 180, 2026-10-22.** **Termo de responsabilidade no empréstimo de ferramenta**: o
 > **Emprestar** pede o colaborador do cadastro, mostra o **texto do termo**, colhe a **assinatura** no tablet e a **matrícula digitada pelo
@@ -6895,6 +6902,53 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 182 — O alerta "material separado aguardando retirada" (ENTREGUE — 2026-10-22)
+
+**O que mudou, em uma frase:** a caixa que foi liberada para retirada e ninguém veio buscar passa a aparecer na central de alertas (e no
+e-mail de alertas) depois de 3 dias.
+
+**O problema que ela resolve.** O almoxarife separa, põe a caixa no balcão e toca **Liberar para Retirada**. Se ninguém vem buscar, a caixa
+ocupa a área de expedição e o material fica preso para aquela requisição — e nada avisava, porque o sistema nem guardava quando a requisição
+tinha ficado pronta.
+
+| Antes | Agora |
+|---|---|
+| O sistema não sabia desde quando a requisição estava *Pronta p/ Retirada* | Guarda o momento da última liberação |
+| Nada cobrava a caixa parada | Cartão **Separado aguardando retirada** em **Almoxarifado → Alertas** e um e-mail por liberação |
+| — | Campo **Alerta de Retirada Parada (dias)** em Configurações Gerais (de fábrica **3**) |
+
+**Antes de testar (uma vez).** Um usuário **Almoxarife** (ou Administrador) e alguém que faça requisição. Duas requisições de material
+**comum** (não crítico) com saldo, aprovadas. Como o alerta conta dias, para ver o cartão no mesmo dia use uma requisição liberada **ontem**
+com o campo em **1** — ou peça a quem tem acesso ao banco de testes para mudar a data da liberação.
+
+**Roteiro de teste (10 minutos).**
+
+1. **O campo.** Entre como Almoxarife. **Almoxarifado → Configurações → Configurações Gerais**: logo depois de **Alerta de Reserva Parada
+   (dias)** está **Alerta de Retirada Parada (dias)**, com **3**. Digite **0** e **Salvar** → aviso vermelho *"Configuração
+   "alerta_retirada_parada_dias" deve ser um número de dias maior que zero"* e nada é salvo. Ponha **1** e salve.
+2. **Liberar.** **Almoxarifado → Requisições**, abra a primeira requisição, **Iniciar Separação**, separe tudo e toque **Liberar para
+   Retirada** → status *Pronta p/ Retirada*. Faça o mesmo com a segunda.
+3. **O cartão.** **Almoxarifado → Alertas**: o último cartão é **Separado aguardando retirada**, com *"Requisições liberadas para retirada há
+   mais dias que o configurado e ainda não retiradas."* e o selo **1 dias**. Recém-liberada, a requisição **não** aparece (precisa passar da
+   janela). No dia seguinte (ou com a data mudada no banco de testes), ela aparece: o total fica vermelho e **Detalhes** mostra **Requisição**,
+   **Solicitante**, **Setor**, **OS**, **Itens na caixa**, **Liberada em** e **Dias**. A mais antiga primeiro.
+4. **Sair do cartão — devolver.** Na primeira requisição, no item com caixa, **Devolver à prateleira** 1 unidade (com motivo) → a requisição
+   volta a *Em Separação*; em **Alertas**, ela some do cartão. Separe e **Liberar para Retirada** de novo → o relógio recomeça da nova
+   liberação.
+5. **Sair do cartão — entregar.** Na segunda requisição, **Confirmar Entrega e Baixar Estoque** → *Entregue*; em **Alertas**, ela some.
+6. **O e-mail.** Com o e-mail de alertas ligado (**Configurações → Alertas de Estoque**), a varredura diária (uns 30 segundos depois de o
+   sistema subir, e a cada 24 horas) põe em **Almoxarifado → Notificações** um aviso *"[Almoxarifado] Separado aguardando retirada —
+   ⟨número⟩"* para cada requisição do cartão. No dia seguinte, a mesma liberação **não** gera outro.
+7. **Volte o campo para 3** (ou o número que o galpão combinar) e salve.
+
+**O que esta etapa não cobre.** Entrega **parcial** a partir de *Pronta p/ Retirada* tira a requisição do cartão, mesmo com material ainda na
+caixa (ela continua na **Fila de separação**, mas sem cobrança de tempo — **B1192**). O aviso vai para a lista de alertas, não para quem pediu.
+Não existe o local "Aguardando retirada" no estoque. O cartão não tem link para a requisição. **Nada obrigatório antes do deploy**; a **A109**
+(opcional) diz quantos e-mails o primeiro dia vai mandar (**C443**).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos provam pelas rotas do servidor (a data, a
+régua, as saídas, o e-mail na fila com o texto e a hora de Brasília, o 403) e a tela em jsdom, escrito para você conferir à mão.
 
 ## Etapa 181 — O relatório "EPI por colaborador" mostra as entregas de EPI (ENTREGUE — 2026-10-22)
 
