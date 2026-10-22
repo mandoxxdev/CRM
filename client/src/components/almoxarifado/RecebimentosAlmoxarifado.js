@@ -279,8 +279,29 @@ const RecebimentosAlmoxarifado = () => {
     fornecedor_nome: '',
     fornecedor_cnpj: '',
     observacoes: '',
+    // Etapa 176 (RN-176.07): a OS do recebimento SEM pedido ('' = "Sem OS"). Com pedido a OS e a do pedido e nao vai no
+    // payload (o servidor herda a viva do pedido, C1 da Fase 2) — ver `osDoPedidoEscolhido`.
+    os_id: '',
     itens: [],
   });
+  // Etapa 176 (RN-176.07): as OS abertas do select "OS (opcional)". Carregadas ao ABRIR o modal (a lista envelhece: OS fecham), e a
+  // falha nao bloqueia — o recebimento segue sem OS, com um aviso discreto.
+  const [osAbertas, setOsAbertas] = useState([]);
+  const [erroOsAbertas, setErroOsAbertas] = useState(false);
+  const osSeqRef = useRef(0);
+
+  useEffect(() => {
+    if (!showNovo) return;
+    const seq = ++osSeqRef.current;
+    setErroOsAbertas(false);
+    api.get('/almoxarifado/aux/ordens-servico', { params: { abertas: 1 } })
+      .then((r) => { if (seq === osSeqRef.current) setOsAbertas(Array.isArray(r.data) ? r.data : []); })
+      .catch(() => {
+        if (seq !== osSeqRef.current) return;
+        setOsAbertas([]);
+        setErroOsAbertas(true);
+      });
+  }, [showNovo]);
 
   const loadRecebimentos = useCallback(async () => {
     const ehUltimo = novoPedidoLista();
@@ -816,6 +837,9 @@ const RecebimentosAlmoxarifado = () => {
         fornecedor_nome: form.fornecedor_nome || null,
         fornecedor_cnpj: form.fornecedor_cnpj || null,
         observacoes: form.observacoes || null,
+        // Etapa 176 (RN-176.02/C1): com pedido a OS NAO vai — o servidor usa a OS viva do pedido, e mandar a da lista (que pode
+        // ter envelhecido) so arriscaria o 400 "A OS do recebimento tem de ser a do pedido". Sem pedido: numero ou null.
+        ...(form.tipo_recebimento === 'PEDIDO_COMPRA' ? {} : { os_id: form.os_id ? Number(form.os_id) : null }),
         autorizar_excedente: autorizarExcedenteCriacao === true,
         // Dois mapas e não um, porque os dois caminhos declaram coisas diferentes:
         // - PEDIDO_COMPRA leva `pedido_item_id` (a LINHA do pedido, que o servidor confere antes
@@ -844,7 +868,7 @@ const RecebimentosAlmoxarifado = () => {
       limparEstadoDoPedido();
       setForm({
         tipo_recebimento: 'NOTA_FISCAL', pedido_compra_id: '', nota_fiscal: '',
-        fornecedor_nome: '', fornecedor_cnpj: '', observacoes: '', itens: [],
+        fornecedor_nome: '', fornecedor_cnpj: '', observacoes: '', os_id: '', itens: [],
       });
       loadRecebimentos();
       abrirDetalhe(res.data.id);
@@ -973,6 +997,13 @@ const RecebimentosAlmoxarifado = () => {
   // `currentStep={warehouseMode && detalhe ? … : undefined}`.
   // Descartado: guardar o ultimo passo num ref para "congelar" a barra — mostraria o passo do
   // recebimento ANTERIOR sob o id novo, que e exatamente a classe de defeito que a RN-07 fechou.
+  // Etapa 176 (RN-176.07): a OS do pedido escolhido, da linha da lista de pedidos para recebimento (`os_id`, `os_numero`).
+  const pedidoEscolhido = form.tipo_recebimento === 'PEDIDO_COMPRA' && form.pedido_compra_id
+    ? pedidos.find((p) => String(p.id) === String(form.pedido_compra_id)) : null;
+  const osDoPedidoEscolhido = pedidoEscolhido && pedidoEscolhido.os_id != null
+    ? { id: pedidoEscolhido.os_id, numero: pedidoEscolhido.os_numero || `OS #${pedidoEscolhido.os_id}` }
+    : null;
+
   const currentStep = detalhe
     ? (STATUS_INFO[detalhe.status]?.etapa || 1) - 1
     : undefined;
@@ -1105,7 +1136,7 @@ const RecebimentosAlmoxarifado = () => {
           {/* A ORDEM dos ramos é a regra, não estilo: com o ramo de `erro` DEPOIS do teste de
               lista vazia, a rede caída volta a renderizar "Nenhum recebimento registrado" e o
               conserto some. Molde: `HistoricoInspecoes.js:106-116`. */}
-          {loading ? <SkeletonTable rows={8} columns={6} /> : erro ? (
+          {loading ? <SkeletonTable rows={8} columns={7} /> : erro ? (
             <div className="almox-empty">
               <p>Não foi possível carregar os recebimentos.</p>
               <p style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{erro}</p>
@@ -1128,6 +1159,7 @@ const RecebimentosAlmoxarifado = () => {
                   <th>Número</th>
                   <th>NF</th>
                   <th>Pedido</th>
+                  <th>OS</th>
                   <th>Fornecedor</th>
                   <th>Status</th>
                   <th>Data</th>
@@ -1142,6 +1174,7 @@ const RecebimentosAlmoxarifado = () => {
                       <td style={{ fontWeight: 700, fontFamily: 'monospace', color: '#4facfe' }}>{r.numero}</td>
                       <td>{r.nota_fiscal || '—'}</td>
                       <td>{r.pedido_compra_numero || '—'}</td>
+                      <td data-testid={`receb-lista-os-${r.id}`}>{r.os_numero || '—'}</td>
                       <td>{r.fornecedor_nome || '—'}</td>
                       <td><span className={`almox-badge almox-badge-${st.cls}`}>{st.label}</span></td>
                       <td style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>{formatDate(r.created_at)}</td>
@@ -1178,6 +1211,7 @@ const RecebimentosAlmoxarifado = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16, fontSize: '0.85rem' }}>
                   <div><span style={{ color: 'var(--gmp-text-light)', fontSize: '0.7rem' }}>NF</span><br />{detalhe.nota_fiscal || '—'}{detalhe.nota_serie ? ` / ${detalhe.nota_serie}` : ''}</div>
                   <div><span style={{ color: 'var(--gmp-text-light)', fontSize: '0.7rem' }}>Pedido de Compra</span><br />{detalhe.pedido_compra_numero || '—'}</div>
+                  <div data-testid="receb-detalhe-os"><span style={{ color: 'var(--gmp-text-light)', fontSize: '0.7rem' }}>OS</span><br />{detalhe.os_numero || '—'}</div>
                   <div><span style={{ color: 'var(--gmp-text-light)', fontSize: '0.7rem' }}>Fornecedor</span><br />{detalhe.fornecedor_nome || '—'}</div>
                   <div><span style={{ color: 'var(--gmp-text-light)', fontSize: '0.7rem' }}>CNPJ</span><br />{detalhe.fornecedor_cnpj || '—'}</div>
                   <div><span style={{ color: 'var(--gmp-text-light)', fontSize: '0.7rem' }}>Valor Total NF</span><br />{formatMoney(detalhe.valor_total_nota)}</div>
@@ -1374,7 +1408,7 @@ const RecebimentosAlmoxarifado = () => {
                   <label className="almox-label">Forma de recebimento</label>
                   <select className="almox-select" value={form.tipo_recebimento}
                     onChange={(e) => {
-                      setForm((f) => ({ ...f, tipo_recebimento: e.target.value, pedido_compra_id: '', itens: [] }));
+                      setForm((f) => ({ ...f, tipo_recebimento: e.target.value, pedido_compra_id: '', os_id: '', itens: [] }));
                       limparEstadoDoPedido();
                     }}>
                     <option value="NOTA_FISCAL">Somente pela Nota Fiscal</option>
@@ -1423,6 +1457,36 @@ const RecebimentosAlmoxarifado = () => {
                     </div>
                   </div>
                 )}
+
+                {/* Etapa 176 (RN-176.07): material de cliente para industrializacao chega com a OS. Com pedido, a OS e a do
+                    pedido e o campo trava (o servidor recusa outra — RN-176.02). */}
+                <div className="almox-field almox-form-full">
+                  <label className="almox-label" htmlFor="receb-os">OS (opcional)</label>
+                  {form.tipo_recebimento === 'PEDIDO_COMPRA' ? (
+                    <select id="receb-os" className="almox-select" data-testid="receb-os" disabled
+                      value={osDoPedidoEscolhido ? String(osDoPedidoEscolhido.id) : ''}
+                      title="A OS do recebimento é a do pedido de compra">
+                      {osDoPedidoEscolhido
+                        ? <option value={String(osDoPedidoEscolhido.id)}>{osDoPedidoEscolhido.numero}</option>
+                        : <option value="">{form.pedido_compra_id ? 'Sem OS' : 'A OS do pedido'}</option>}
+                    </select>
+                  ) : (
+                    <select id="receb-os" className="almox-select" data-testid="receb-os" value={form.os_id}
+                      onChange={(e) => setForm((f) => ({ ...f, os_id: e.target.value }))}>
+                      <option value="">Sem OS</option>
+                      {osAbertas.map((os) => (
+                        <option key={os.id} value={String(os.id)}>
+                          {os.numero_os}{os.cliente_nome ? ` — ${os.cliente_nome}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {erroOsAbertas && form.tipo_recebimento !== 'PEDIDO_COMPRA' && (
+                    <p data-testid="receb-os-erro" style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)', margin: '4px 0 0' }}>
+                      Não foi possível carregar as OS abertas — o recebimento pode seguir sem OS.
+                    </p>
+                  )}
+                </div>
 
                 <div className="almox-field almox-form-full">
                   <label className="almox-label">Observações</label>
