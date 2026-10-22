@@ -11,11 +11,16 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-22):** **Etapa 172 fechada** (**a requisição com OS cadastrada, e a cesta volta a enviar** — a tela
+> **Onde o desenvolvimento está (2026-10-22):** **Etapa 173 fechada** (**F2 abre o cadastro completo do fornecedor** — o pedido e a
+> reclamação da usuária de Compras: no pedido de compra, na cotação e no grupo homologado, a tecla **F2** ou o botão **+ Novo fornecedor F2**
+> abre a ficha completa numa janela, e o fornecedor salvo já fica escolhido; o cadastro de 3 campos do grupo homologado saiu; só tela, nada
+> a rodar antes do deploy; decisões **B1120** a **B1124** — **a B1122 pede um olhar** (o F2 de setembro, de materiais em lote, não volta)).
+> A **174** está em andamento em outra frente — ver "Onde estamos e o que vem a seguir".
+> *(Também em 2026-10-22: **Etapa 172 fechada** (**a requisição com OS cadastrada, e a cesta volta a enviar** — a tela
 > *Solicitar Material* dos módulos de escritório não enviava requisição nenhuma desde 16/09 (**C428**, resolvido); as duas telas de nova
 > requisição ganham a lista opcional **OS cadastrada** ao lado do número digitado (**B1103**), que liga a requisição à OS e a faz pegar o
 > material comprado para ela pelo vínculo (**B1107**); decisões **B1103** a **B1110** — **a B1106 pede um olhar**; nada a rodar antes do
-> deploy); a próxima é a **174** (a 173 está em outra frente) — ver "Onde estamos e o que vem a seguir".
+> deploy); a próxima era a **174**.)*
 > *(Antes: **Etapa 171 fechada** (**pedido de compra vinculado a uma OS** — a pergunta da usuária de
 > Compras: o pedido ganha o campo **OS** (um pedido, uma OS ou estoque — **B1086**); a nota do pedido com OS reserva o material para a OS, e a
 > requisição que cita a OS em **Número da OS** o leva (**B1092**, **B1097**); cancelar ou concluir a OS devolve o material ao estoque com a
@@ -4116,7 +4121,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B1110; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1110 e B1120 a B1124; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -12115,6 +12120,28 @@ a **C417** (o que o gráfico *Tendências Mensais* conta); a **B1060** a **B1062
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
 as perguntas da **C275**, **C276** e **C277** continuam esperando vocês; nas propostas, a verificação de quem é o dono da proposta e o
 filtro por permissão do histórico.
+
+**B1120 (NOVA, da Etapa 173; decisão do agente) — o F2 vale no pedido de compra, na cotação e no grupo homologado.** São as telas de Compras
+onde se escolhe ou se cadastra fornecedor. **Descartado:** levar o F2 às telas do almoxarifado que também escolhem fornecedor (**Remessas a
+terceiros**, **Reposição**) — não foram pedidas; a janela e o atalho servem a elas sem mudança se forem. **Reversível:** `f86947bb`, `85b4bbdc`.
+
+**B1121 (NOVA, da Etapa 173; decisão do agente) — clicar no fundo escuro não fecha a janela.** A ficha tem 13 campos; um clique fora não pode
+jogá-los fora. Fecha por **×**, **Cancelar** e **Esc**. **Descartado:** fechar no clique fora, como fazia o modal antigo do grupo.
+**Reversível:** `0cbaa535`.
+
+**B1122 (NOVA, da Etapa 173; decisão do agente — PEDE UM OLHAR) — a tecla F2 é do cadastro de fornecedor, e o F2 de setembro não volta.** Em
+16/09 o pedido de compra ganhou um F2 que incluía vários materiais de uma vez (pedido da Gerente de Compras, `98f6fc9d`); ele saiu no merge de
+07/10 (Etapa 39, **B19**: o formulário atual tem a busca e a importação por planilha). **Escolhido:** o pedido vigente — F2 abre o cadastro de
+fornecedor. **Pergunta:** se o pessoal de Compras sentir falta da inclusão em lote, ela precisa de **outra tecla**. **Reversível:** `f86947bb`.
+
+**B1123 (NOVA, da Etapa 173; decisão do agente) — no grupo homologado, o grupo da ficha fica travado.** Trocar o grupo ali faria o fornecedor
+salvo não aparecer na lista que a pessoa está olhando. Para cadastrar em outro grupo, abra o outro grupo (ou use Compras → Fornecedores).
+**Descartado:** deixar o campo livre. **Reversível:** `0cbaa535`, `85b4bbdc`.
+
+**B1124 (NOVA, da Etapa 173; decisão do agente) — com outra janela aberta por cima, o F2 não faz nada.** A busca do Ctrl+K, a ajuda (F1 e o
+botão **?**), o tour do primeiro acesso, o relatório, o workflow e os modais da própria tela ficam por cima da janela do F2; abrir a ficha
+por trás deles a esconderia, e o que se digitasse iria para um cadastro invisível (achado da revisão). **Descartado:** fechar a outra janela
+e abrir a ficha. **Reversível:** `0cbaa535`, `5b67cfa8`.
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -34226,9 +34253,79 @@ abertas — sem cliente. O parâmetro `?incluir=` é ignorado (a OS fechada não
 - **Nada a rodar antes do deploy:** a coluna nova da requisição é criada no boot (aditiva); as requisições antigas ficam sem OS cadastrada e
   continuam casando pelo texto.
 
+## Etapa 173 — F2 abre o cadastro completo do fornecedor sem sair do pedido, da cotação ou do grupo (2026-10-22)
+
+Dois pedidos da usuária de Compras, que são o mesmo problema. O primeiro: *"atalho ao apertar F2 para abrir um modal com a tela de cadastro de
+fornecedor"*. O segundo: *"ao iniciar o cadastro, são exibidos apenas os campos Nome, Nome Fantasia e CNPJ, com a opção de salvar. Para preencher
+as demais informações, é necessário salvar o cadastro e acessar novamente o fornecedor"*. Medido: a ficha de **Compras → Fornecedores → Novo
+Fornecedor** já é completa desde a Etapa 34 — **se em produção ela ainda mostra só três campos, é a produção sem a Etapa 34 (falta de deploy)**.
+Os três campos que ela descreve eram do botão **Novo fornecedor** da tela do **grupo homologado**, que continuava com o cadastro resumido. E quem
+estava no meio de um pedido de compra e não achava o fornecedor tinha de largar o pedido, ir a Fornecedores, cadastrar e voltar. Agora a tecla
+**F2** (ou o botão **+ Novo fornecedor F2**) abre a **ficha completa** numa janela por cima do pedido, da cotação ou do grupo; ao salvar, o
+fornecedor novo já fica escolhido e nada do que estava digitado se perde. O F2 que existiu em setembro no pedido de compra (incluir vários
+materiais de uma vez) **não volta** com esta etapa — a tecla agora é do fornecedor (**B1122**). Decisões do agente: **B1120** a **B1124**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| No pedido de compra ou na cotação, fornecedor que não estava na lista: sair da tela, cadastrar em Fornecedores, voltar e refazer | **F2** ou **+ Novo fornecedor F2** abre a ficha completa por cima; salvar escolhe o fornecedor novo e deixa itens, preços e condições como estavam |
+| Grupo homologado → **Novo fornecedor**: razão social, nome fantasia e CNPJ; o resto só salvando e abrindo de novo | A mesma ficha completa (CNPJ e CEP que preenchem, inscrição estadual, dois telefones, e-mail, endereço), com o grupo da tela já escolhido e travado — **B1123** |
+| Nenhuma tecla de atalho em Compras | **F2** no pedido, na cotação e no grupo homologado — **B1120** |
+
+### As regras, com o cenário exato
+
+Preparação: um usuário com o módulo **Compras**.
+
+**1. F2 no pedido (RN-173.01, RN-173.03).** **Compras → Pedidos de Compra → Novo Pedido**. Escolha um fornecedor qualquer e inclua um item com
+quantidade e preço. Com o cursor em qualquer campo, aperte **F2**: abre a janela **"Novo fornecedor"** com os blocos **Identificação**,
+**Contato** e **Endereço**, e o cursor na **Razão social**. Digite *ACME TESTE LTDA* e clique **Salvar**: a janela fecha, aparece *"Fornecedor
+ACME TESTE LTDA cadastrado e escolhido no pedido"*, o campo **Fornecedor** mostra *ACME TESTE LTDA* (primeiro da lista) e o item continua lá. O
+pedido **não** foi salvo: confira em **Pedidos de Compra** que ele não está na lista; ele só é gravado no **Salvar pedido**.
+
+**2. O botão (RN-173.02).** Ao lado do campo **Fornecedor** está **+ Novo fornecedor F2**: faz o mesmo que a tecla. Na **Nova Cotação**, igual:
+*"Fornecedor ⟨razão social⟩ cadastrado e escolhido na cotação"*.
+
+**3. Fechar sem gravar (RN-173.04, B1121).** Abra com F2, digite metade da ficha e clique no **fundo escuro**: a janela **não** fecha e o digitado
+continua. **Esc**, **×** e **Cancelar** fecham sem gravar nada, e o cursor volta para o campo onde estava. Com a janela aberta, o **Tab** passa
+só pelos campos dela.
+
+**4. Recusa dentro da janela (RN-173.07).** Abra com F2 e clique **Salvar** sem razão social: a faixa vermelha *"Razão social é obrigatória"*
+aparece **dentro da janela**, e ela fica aberta. (Com outra pessoa desativando o grupo escolhido na ficha enquanto ela está aberta, a faixa é
+*"Grupo desativado — reative o grupo em Fornecedores homologados antes de vincular fornecedores"* — o digitado fica.)
+
+**5. Quando o F2 não faz nada (RN-173.05, RN-173.06, B1124).** Abra um pedido que **já teve recebimento** (a faixa *"Este pedido já teve
+recebimento — só o status pode ser alterado"*): o botão não aparece e o F2 não abre. Uma cotação que **já virou pedido**: idem. Com a busca
+**Ctrl+K** aberta, ou a ajuda do botão **?**, o F2 não abre a ficha por trás dela. F2 segurado abre uma janela só.
+
+**6. Grupo homologado (RN-173.08, B1123).** **Compras → Fornecedores homologados**, abra um grupo, clique **Novo fornecedor (F2)** (ou aperte
+F2): a mesma ficha completa, com **Grupo homologado** já escolhido e **travado** no grupo da tela. Salve: *"Fornecedor cadastrado e vinculado ao
+grupo"* e o cartão novo aparece no grupo. Com o modal **Vincular fornecedor** aberto, o F2 não faz nada.
+
+**7. A tela de sempre não mudou (RN-173.09).** **Compras → Fornecedores → Novo Fornecedor** continua abrindo a página **"Novo fornecedor"**,
+salva com *"Fornecedor salvo"* e volta para a lista.
+
+### O que esta etapa NÃO cobre
+
+- **O F2 de setembro** (incluir vários materiais de uma vez no pedido) — descartado no merge de 07/10 e não volta aqui (**B1122**).
+- **Remessas a terceiros** e **Reposição** do almoxarifado, que também escolhem fornecedor, não ganharam o F2 (**B1120**).
+- **Editar** fornecedor pela janela: ela só cadastra. Editar continua no lápis de **Compras → Fornecedores** ou no modal **Editar fornecedor**
+  do grupo.
+- **Nada muda no servidor**: a janela usa a mesma gravação de fornecedor de sempre, com as mesmas recusas. Nenhuma consulta antes do deploy.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 173 entregue (2026-10-22):** **F2 abre o cadastro completo do fornecedor sem sair do pedido, da cotação ou do grupo** — o pedido e
+  a reclamação da usuária de Compras. No pedido de compra, na cotação e na tela do grupo homologado, **F2** ou **+ Novo fornecedor F2** abre a
+  ficha completa numa janela; salvar escolhe o fornecedor novo sem salvar o pedido; o cadastro de 3 campos do grupo homologado virou a ficha
+  completa com o grupo travado. Só tela: nenhuma rota nova, nada a rodar antes do deploy. **Se em produção Compras → Fornecedores → Novo
+  Fornecedor ainda mostra 3 campos, é a produção sem a Etapa 34.** Commits `1f889f51` (T1), `0cbaa535` (T2), `f86947bb` (T3), `85b4bbdc`
+  (T4), `15b8b91a` (T5), `5b67cfa8` (a revisão) e `88c9778c` (fechamento). **O que é seu:** as decisões do agente **B1120** a **B1124**
+  (reversíveis — **a B1122 pede um olhar**: se Compras sentir falta da inclusão de materiais em lote do F2 de setembro, ela precisa de outra
+  tecla). O manual (14c.2 e 14c.4) foi reescrito: descrevia a ficha antiga e recusas da rota que nunca roda. **Próxima desta frente:** a
+  edição de ferramenta pela tela (primeiro passo do pedido de ferramentas/EPI) — ver a "próxima tarefa detalhada" no plano da Etapa 173.
 
 - **Etapa 172 entregue (2026-10-22):** **a requisição com OS cadastrada, e a cesta volta a enviar.** A cesta (*Solicitar Material*) de
   Comercial, Compras, Financeiro, Engenharia, Administrativo, Administração e Almoxarifado não enviava requisição desde a regra do número da OS

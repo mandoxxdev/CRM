@@ -74,6 +74,8 @@ import { baixarDocumentoPedido } from '../../utils/baixarDocumentoPedido';
 import { mascararTelefoneCompleto, mascararTelefoneDigitando } from '../../utils/telefone';
 import '../Compras.css';
 import './PedidoCompraForm.css';
+import FornecedorModal, { colocarNoTopo, juntarListaCarregada } from './FornecedorModal';
+import useAtalhoF2 from './useAtalhoF2';
 
 // Os 7 status do contrato (`STATUS_PEDIDO_COMPRA` do servidor). A ordem é a do schema; os rótulos
 // são os mesmos do filtro de `Compras.js`, para a mesma coisa não ter dois nomes no módulo.
@@ -355,6 +357,8 @@ const PedidoCompraForm = () => {
 
   const [fornecedores, setFornecedores] = useState([]);
   const [fornecedorId, setFornecedorId] = useState('');
+  // Etapa 173 (RN-173.01): a janela do F2 — cadastra o fornecedor sem sair do pedido.
+  const [novoFornecedorAberto, setNovoFornecedorAberto] = useState(false);
   // Etapa 171 (RN-171.01): a OS do cabecalho. `''` = compra para estoque.
   const [osId, setOsId] = useState('');
   const [ordensServico, setOrdensServico] = useState([]);
@@ -400,6 +404,19 @@ const PedidoCompraForm = () => {
   // CORE, outra tabela, que traria o registro errado em silêncio.
   const solicitacaoId = params.get('solicitacao');
 
+  // Etapa 173 (RN-173.05): com o fornecedor travado (pedido recebido) ou o pedido ainda carregando
+  // (o `soStatus` so chega com o GET /:id), o F2 nao abre nada.
+  const podeCadastrarFornecedor = !carregando && !soStatus;
+  useAtalhoF2(podeCadastrarFornecedor && !novoFornecedorAberto, () => setNovoFornecedorAberto(true));
+
+  // RN-173.03: o novo entra na lista e fica escolhido; o resto do pedido nao muda.
+  const aoSalvarFornecedor = (novo) => {
+    setFornecedores((atual) => colocarNoTopo(atual, novo));
+    setFornecedorId(String(novo.id));
+    setNovoFornecedorAberto(false);
+    toast.success(`Fornecedor ${novo.razao_social} cadastrado e escolhido no pedido`);
+  };
+
   const setCondicao = (campo, valor) => setCondicoes((c) => ({ ...c, [campo]: valor }));
   const setEncargo = (campo, valor) => setEncargos((c) => ({ ...c, [campo]: valor }));
 
@@ -423,7 +440,7 @@ const PedidoCompraForm = () => {
   useEffect(() => {
     let vivo = true;
     api.get('/compras/fornecedores')
-      .then((res) => { if (vivo) setFornecedores(res.data || []); })
+      .then((res) => { if (vivo) setFornecedores((atual) => juntarListaCarregada(atual, res.data)); })
       .catch(() => { if (vivo) setErro('Não foi possível carregar os fornecedores.'); });
     // As opções do documento (RN-39.06). Falhar aqui NÃO trava a tela: os chips ficam só com
     // "Outro" e o comprador digita — o servidor continua aceitando qualquer valor.
@@ -886,6 +903,17 @@ const PedidoCompraForm = () => {
                   ))}
                 </select>
               </label>
+              {podeCadastrarFornecedor && (
+                <button
+                  type="button"
+                  className="btn-novo-fornecedor"
+                  data-testid="pedido-novo-fornecedor"
+                  title="Cadastrar um fornecedor sem sair do pedido (atalho: F2)"
+                  onClick={() => setNovoFornecedorAberto(true)}
+                >
+                  + Novo fornecedor <kbd>F2</kbd>
+                </button>
+              )}
               <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 OS
                 <select
@@ -1350,6 +1378,11 @@ const PedidoCompraForm = () => {
           </div>
         </form>
       )}
+      <FornecedorModal
+        aberto={novoFornecedorAberto}
+        onSalvo={aoSalvarFornecedor}
+        onFechar={() => setNovoFornecedorAberto(false)}
+      />
     </div>
   );
 };

@@ -1,17 +1,22 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-22 (Etapa 172) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-22 (Etapas 172 e 173) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171 e 172) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172 e 173) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-22 (Etapa 172 ENTREGUE · próxima: Etapa 174)
+> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172 e 173 ENTREGUES · em andamento: Etapa 174)
 >
-> **O desenvolvimento parou aqui: Etapa 172 fechada — 2026-10-22.** A **Etapa 172 (a requisição com OS cadastrada, e a cesta volta a
+> **O desenvolvimento parou aqui: Etapas 172 e 173 fechadas — 2026-10-22** (duas frentes em paralelo). A **Etapa 173 (F2 abre o cadastro
+> completo do fornecedor)**: no pedido de compra, na cotação e na tela do grupo homologado, a tecla **F2** ou o botão **+ Novo fornecedor F2**
+> abre a ficha completa numa janela, e o fornecedor salvo já fica escolhido sem salvar o pedido; o cadastro de 3 campos do grupo homologado
+> virou a ficha completa. Só tela; nada a rodar antes do deploy.
+>
+> **Etapa 172, 2026-10-22.** A **Etapa 172 (a requisição com OS cadastrada, e a cesta volta a
 > enviar)**: a tela **Solicitar Material** dos módulos de escritório ganhou o campo **Número da OS** — sem ele, desde 16/09 nenhum envio
 > passava (aviso **C428**, resolvido); as duas telas de nova requisição ganharam a lista opcional **OS cadastrada**, que liga a requisição à OS
 > de verdade e a faz pegar o material comprado para a OS pelo vínculo. Nada a rodar antes do deploy (a coluna nova é criada no boot).
-> **Próxima: Etapa 174** (a 173 está em desenvolvimento em outra frente) — a saída da entrega com a OS, para o relatório **Consumo por OS**
+> **Próxima: Etapa 174** (em andamento) — a saída da entrega com a OS, para o relatório **Consumo por OS**
 > contar o que sai por requisição; ver a próxima tarefa no plano da 172.
 >
 > **Etapa 171, 2026-10-22.** A **Etapa 171 (pedido de compra vinculado a uma OS — a pergunta da
@@ -6848,6 +6853,43 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 173 — F2 abre o cadastro completo do fornecedor sem sair do pedido, da cotação ou do grupo (ENTREGUE — 2026-10-22)
+
+**O que mudou, em uma frase:** apertar **F2** no pedido de compra, na cotação ou na tela de um grupo homologado abre a ficha completa do
+fornecedor numa janela; ao salvar, o fornecedor novo já fica escolhido e nada do que estava digitado se perde.
+
+**O problema que ela resolve.** A usuária de Compras pediu o atalho F2 e reclamou que o cadastro de fornecedor só mostrava razão social,
+nome fantasia e CNPJ, obrigando a salvar e abrir de novo para completar. Esse cadastro resumido era o do botão **Novo fornecedor** do grupo
+homologado; a ficha de **Compras → Fornecedores → Novo Fornecedor** já era completa (se em produção ela mostra três campos, falta o deploy da
+Etapa 34). E quem estava no meio de um pedido tinha de largá-lo para cadastrar o fornecedor.
+
+| Antes | Agora |
+|---|---|
+| Fornecedor fora da lista no pedido ou na cotação: sair, cadastrar, voltar e refazer | **F2** ou **+ Novo fornecedor F2** abre a ficha por cima; salvar escolhe o novo |
+| Grupo homologado → **Novo fornecedor**: só razão social, fantasia e CNPJ | A ficha completa, com o grupo da tela já escolhido e travado |
+
+**Roteiro de teste (5 minutos — com um usuário que tenha Compras, ou o administrador).**
+
+1. **Compras → Pedidos de Compra → Novo Pedido.** Escolha um fornecedor e inclua um item com quantidade e preço.
+2. Clique em qualquer campo e aperte **F2**. Abre a janela **"Novo fornecedor"** com **Identificação**, **Contato** e **Endereço**; o
+   cursor está na **Razão social**.
+3. Clique no **fundo escuro**: a janela **não** fecha. Aperte **Esc**: fecha, e nada foi gravado.
+4. Aperte **F2** de novo e clique **Salvar** sem digitar nada: a faixa vermelha *"Razão social é obrigatória"* aparece dentro da janela.
+5. Digite *ACME TESTE LTDA* (e, se quiser, um CNPJ válido — sair do campo preenche o resto) e **Salvar**. A janela fecha, aparece *"Fornecedor
+   ACME TESTE LTDA cadastrado e escolhido no pedido"*, o campo **Fornecedor** mostra o novo, e o item do passo 1 continua lá.
+6. Vá a **Compras → Pedidos de Compra** sem salvar: o pedido **não** está na lista (a janela não salva o pedido). Volte, refaça e clique
+   **Salvar pedido**: o pedido sai com o fornecedor novo.
+7. **Compras → Cotações → Nova Cotação**: o botão **+ Novo fornecedor F2** ao lado de **Fornecedor** faz o mesmo (*"… escolhido na
+   cotação"*).
+8. Abra um pedido que **já teve recebimento**: o botão não aparece e o F2 não abre nada.
+9. **Compras → Fornecedores homologados**, abra um grupo e clique **Novo fornecedor (F2)**: a ficha completa com **Grupo homologado** travado
+   no grupo. Salve: *"Fornecedor cadastrado e vinculado ao grupo"* e o cartão aparece.
+10. Com a busca **Ctrl+K** aberta, aperte **F2**: nada abre por trás dela.
+
+**O que esta etapa não cobre.** O F2 de setembro (incluir vários materiais de uma vez no pedido) não volta — a tecla agora é do fornecedor
+(**B1122** pergunta se vocês sentem falta dele). Remessas a terceiros e Reposição não ganharam o F2. A janela só cadastra; editar continua no
+lápis de Compras → Fornecedores. Nada muda no servidor; nenhuma consulta antes do deploy.
 
 ## Etapa 172 — A requisição com OS cadastrada, e a cesta volta a enviar (ENTREGUE — 2026-10-22)
 

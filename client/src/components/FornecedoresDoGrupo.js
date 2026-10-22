@@ -7,6 +7,8 @@ import { mascararTelefoneDigitando, mascararTelefoneCompleto } from '../utils/te
 import './FamiliasProdutos.css';
 import './ModalGrupoForm.css';
 import './Loading.css';
+import FornecedorModal from './compras/FornecedorModal';
+import useAtalhoF2 from './compras/useAtalhoF2';
 
 function getFotoUrlFornecedor(foto) {
   if (!foto) return null;
@@ -59,9 +61,6 @@ const FornecedoresDoGrupo = () => {
   const [editFotoFile, setEditFotoFile] = useState(null);
   const [editPreviewUrl, setEditPreviewUrl] = useState(null);
   const [selectedFornecedorId, setSelectedFornecedorId] = useState('');
-  const [novoRazao, setNovoRazao] = useState('');
-  const [novoFantasia, setNovoFantasia] = useState('');
-  const [novoCnpj, setNovoCnpj] = useState('');
   const [saving, setSaving] = useState(false);
   // Etapa 103 (RN-103.07): 'ativo' | 'desativado' | 'inexistente' | 'desconhecido' (erro que nao e 404 —
   // a tela fica como antes e o servidor decide, RN-103.08).
@@ -222,32 +221,13 @@ const FornecedoresDoGrupo = () => {
     }
   };
 
-  const handleCriarNovo = async (e) => {
-    e.preventDefault();
-    const razao = (novoRazao || '').trim();
-    if (!razao) {
-      toast.warning('Razão social é obrigatória');
-      return;
-    }
-    setSaving(true);
-    try {
-      await api.post('/compras/fornecedores', {
-        razao_social: razao,
-        nome_fantasia: (novoFantasia || '').trim(),
-        cnpj: (novoCnpj || '').trim(),
-        grupo_id: grupoId
-      });
-      toast.success('Fornecedor cadastrado e vinculado ao grupo');
-      setShowModalNovo(false);
-      setNovoRazao('');
-      setNovoFantasia('');
-      setNovoCnpj('');
-      loadData();
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Erro ao cadastrar');
-    } finally {
-      setSaving(false);
-    }
+  // Etapa 173 (RN-173.08): "Novo fornecedor" abre a ficha COMPLETA (a da Etapa 34) com o grupo
+  // travado. Antes era um modal com razão social, fantasia e CNPJ — o cliente tinha de salvar e
+  // abrir o fornecedor de novo para completar o cadastro.
+  const aoSalvarNovo = () => {
+    toast.success('Fornecedor cadastrado e vinculado ao grupo');
+    setShowModalNovo(false);
+    loadData();
   };
 
   const handleReativarGrupo = async () => {
@@ -266,6 +246,9 @@ const FornecedoresDoGrupo = () => {
   // Vincular e cadastrar no grupo so quando ele pode receber fornecedor (ou quando nao se sabe — erro
   // de rede: o servidor decide). Editar e "Remover do grupo" continuam nos dois casos.
   const podeVincular = estadoGrupo === 'ativo' || estadoGrupo === 'desconhecido';
+  // RN-173.08: o F2 faz o mesmo que o botão — só quando o botão existe e nenhuma janela está aberta.
+  useAtalhoF2(!loading && podeVincular && !showModalNovo && !showModalAdd && !editingFornecedor,
+    () => setShowModalNovo(true));
   const tituloGrupo = estadoGrupo === 'inexistente' ? 'Grupo não encontrado' : (grupo ? grupo.nome : 'Grupo');
 
   if (loading) {
@@ -322,7 +305,7 @@ const FornecedoresDoGrupo = () => {
             style={{ marginLeft: 8 }}
           >
             <div className="btn-premium-icon"><FiTruck size={20} /></div>
-            <span className="btn-premium-text">Novo fornecedor</span>
+            <span className="btn-premium-text" title="Atalho: F2">Novo fornecedor (F2)</span>
             <div className="btn-premium-shine"></div>
           </button>
         </div>
@@ -365,35 +348,14 @@ const FornecedoresDoGrupo = () => {
         </div>
       )}
 
-      {/* Modal: Novo fornecedor */}
-      {showModalNovo && podeVincular && (
-        <div className="modal-grupo-overlay" onClick={() => setShowModalNovo(false)}>
-          <div className="modal-grupo-container" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-grupo-header">
-              <h2>Novo fornecedor</h2>
-              <button type="button" className="modal-grupo-close" onClick={() => setShowModalNovo(false)} aria-label="Fechar">×</button>
-            </div>
-            <form onSubmit={handleCriarNovo} className="modal-grupo-form">
-              <div className="modal-grupo-field">
-                <label>Razão social *</label>
-                <input type="text" value={novoRazao} onChange={(e) => setNovoRazao(e.target.value)} placeholder="Razão social" required />
-              </div>
-              <div className="modal-grupo-field">
-                <label>Nome fantasia</label>
-                <input type="text" value={novoFantasia} onChange={(e) => setNovoFantasia(e.target.value)} placeholder="Nome fantasia" />
-              </div>
-              <div className="modal-grupo-field">
-                <label>CNPJ</label>
-                <input type="text" value={novoCnpj} onChange={(e) => setNovoCnpj(e.target.value)} placeholder="CNPJ" />
-              </div>
-              <div className="modal-grupo-actions-right" style={{ marginTop: 16 }}>
-                <button type="button" className="btn-cancel" onClick={() => setShowModalNovo(false)}>Cancelar</button>
-                <button type="submit" className="btn-save" disabled={saving}>{saving ? 'Salvando...' : 'Cadastrar'}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Modal: Novo fornecedor — a ficha completa (Etapa 173, RN-173.08) */}
+      <FornecedorModal
+        aberto={showModalNovo && podeVincular}
+        grupoIdInicial={grupoId}
+        grupoTravado
+        onSalvo={aoSalvarNovo}
+        onFechar={() => setShowModalNovo(false)}
+      />
 
       {/* Modal: Editar fornecedor */}
       {editingFornecedor && (
