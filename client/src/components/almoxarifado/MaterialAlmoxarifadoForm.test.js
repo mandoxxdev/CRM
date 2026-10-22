@@ -1153,7 +1153,9 @@ describe('MaterialAlmoxarifadoForm — RN-08 (Etapa 125): o PUT diz os campos qu
     'peso_unitario', 'dimensoes', 'ncm', 'aplicacao', 'especificacoes', 'observacoes', 'unidade', 'quantidade_minima',
     'quantidade_maxima', 'ponto_reposicao', 'lote_economico', 'localizacao_padrao_id', 'controle_validade', 'controle_corrida',
     'controle_certificado', 'requer_inspecao', 'requer_foto', 'classe_abc', 'custo_unitario', 'unidade_compra',
-    'fator_conversao_compra', 'fornecedor_principal', 'codigo_fornecedor'];
+    'fator_conversao_compra', 'fornecedor_principal', 'codigo_fornecedor',
+    // Etapa 178 (I4): o CA do EPI
+    'ca_numero', 'ca_validade'];
   // Material com legado: unidade null, marca null, número 0, custo decimal, caixa 1. `ncm` ausente no GET (vai null — Fase 2, M7).
   const CARREGADO = { ...MATERIAL_DO_CLIENTE, id: 90, unidade: null, marca: null, quantidade_minima: 0, custo_unitario: 12.5,
     material_critico: 1, classe_abc: null, localizacao_padrao_id: null };
@@ -1175,7 +1177,7 @@ describe('MaterialAlmoxarifadoForm — RN-08 (Etapa 125): o PUT diz os campos qu
     expect(CAMPOS_LIDOS).toEqual(CONTRATO);
   });
 
-  test('abre, renomeia e salva: campos_lidos com as 37 chaves, os valores crus do carregado (não o que foi digitado)', async () => {
+  test('abre, renomeia e salva: campos_lidos com as 39 chaves, os valores crus do carregado (não o que foi digitado)', async () => {
     mock();
     await renderizarEdicao(90);
     preencher(inputNome(), 'Nome digitado');

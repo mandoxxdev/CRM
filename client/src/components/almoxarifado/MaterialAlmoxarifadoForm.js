@@ -54,6 +54,8 @@ export const CAMPOS_LIDOS = [
   'quantidade_maxima', 'ponto_reposicao', 'lote_economico', 'localizacao_padrao_id', 'controle_validade', 'controle_corrida',
   'controle_certificado', 'requer_inspecao', 'requer_foto', 'classe_abc', 'custo_unitario', 'unidade_compra',
   'fator_conversao_compra', 'fornecedor_principal', 'codigo_fornecedor',
+  // Etapa 178 (I4): o CA do EPI — a mesma lista do servidor (camposLidos.js), para o 409 de edicao concorrente cobrir o CA.
+  'ca_numero', 'ca_validade',
 ];
 
 // Etapa 110 (RN-11): a frase sob o "Saldo Inicial" no cadastro novo quando o material tem um controle que o cadastro não
