@@ -329,4 +329,18 @@ describe('Etapa 184 — a aba Liberação por valor com a resposta reduzida', ()
     expect([...container.querySelectorAll('label')].some((l) => l.textContent.includes('Aprovador Um'))).toBe(true);
     expect(frasesNaTela()).toEqual([F_LIBERACAO]);
   });
+
+  // T3: a resposta REAL da rota para o administrador do sistema (gravada e conferida pelo teste do servidor
+  // liberacaoValorLeituraIntegracao.api.test.js). Os nomes vem do mock de /usuarios, como na tela.
+  test('[RN-184.06, fixture da rota] administrador do sistema com a resposta real: a caixa do aprovador 7 marcada e desabilitada', async () => {
+    // eslint-disable-next-line global-require
+    dados['/almoxarifado/configuracoes/liberacao-valor'] = require('./__fixtures__/liberacaoValor.rota.json').adminDoSistema;
+    await renderAba(ADMIN_SISTEMA, 'liberacao-valor');
+    expect(toast.error).not.toHaveBeenCalled();
+    const caixa7 = [...container.querySelectorAll('label')].find((l) => l.textContent.includes('Aprovador Um')).querySelector('input');
+    expect(caixa7.checked).toBe(true);
+    expect(caixa7.disabled).toBe(true);
+    const outra = [...container.querySelectorAll('label')].find((l) => l.textContent.includes('Outra Pessoa')).querySelector('input');
+    expect(outra.checked).toBe(false);
+  });
 });

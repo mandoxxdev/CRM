@@ -1,0 +1,16 @@
+{
+  "aprovadorSemConfigurar": {
+    "ativo": true,
+    "limite": 800,
+    "souAprovador": true
+  },
+  "adminDoSistema": {
+    "ativo": true,
+    "limite": 800,
+    "aprovadorIds": [
+      7,
+      9
+    ],
+    "souAprovador": true
+  }
+}

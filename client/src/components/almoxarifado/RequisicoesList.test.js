@@ -1327,4 +1327,15 @@ describe('Etapa 184: a lista com a resposta reduzida da liberacao por valor', ()
     expect(api.get).toHaveBeenCalledWith('/almoxarifado/configuracoes/liberacao-valor');
     expect(botaoPorTexto('Aprovações de valor')).toBeUndefined();
   });
+
+  // T3: a resposta REAL da rota para o aprovador sem configurar (gravada pelo teste do servidor
+  // liberacaoValorLeituraIntegracao.api.test.js, que a confere contra a rota a cada execucao).
+  test('[RN-184.06, fixture da rota] aprovador sem configurar com a resposta real -> mostra "Aprovações de valor"', async () => {
+    // eslint-disable-next-line global-require
+    liberacaoDoBanco = require('./__fixtures__/liberacaoValor.rota.json').aprovadorSemConfigurar;
+    expect(liberacaoDoBanco.souAprovador).toBe(true);
+    await renderizarSemDetalhe();
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(botaoPorTexto('Aprovações de valor')).toBeTruthy();
+  });
 });
