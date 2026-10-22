@@ -44,7 +44,11 @@ const RAIZ = path.join(__dirname, '..', '..', '..');
 const lerFonte = (rel) => fs.readFileSync(path.join(RAIZ, rel), 'utf8');
 
 // O payload LITERAL do `submit(false)` da cesta (RequisicaoMaterialCesta.js), com `ctx` do modulo.
-function payloadDaCesta({ setor, moduloOrigem, materialId, quantidade = 1, tipo = 'CONSUMO', justificativa = '', dataNecessidade = '' }) {
+// Etapa 172 (T3, a2a049bd): a cesta passou a mandar `os_referencia` (texto do campo, trim) e `os_id` (seletor opcional;
+// `null` sem selecao). O default aqui e o campo VAZIO e sem selecao — o que chega ao servidor se o bloqueio do front
+// for contornado; a RN-A do servidor continua recusando.
+function payloadDaCesta({ setor, moduloOrigem, materialId, quantidade = 1, tipo = 'CONSUMO', justificativa = '', dataNecessidade = '',
+  osReferencia = '', osId = null }) {
   return {
     setor,
     departamento: setor,
@@ -52,6 +56,8 @@ function payloadDaCesta({ setor, moduloOrigem, materialId, quantidade = 1, tipo 
     observacoes: '',
     tipo_requisicao: tipo,
     justificativa,
+    os_referencia: osReferencia.trim(),
+    os_id: osId ? Number(osId) : null,
     ...(dataNecessidade ? { data_necessidade: dataNecessidade } : {}),
     salvar_rascunho: false,
     itens: [{ material_id: materialId, quantidade }],
@@ -90,10 +96,11 @@ function payloadDaCesta({ setor, moduloOrigem, materialId, quantidade = 1, tipo 
     assert.ok(paginas.includes('warehouseMode: false'), 'as paginas deixaram de forcar warehouseMode false');
   });
 
-  await test('0c. a cesta NAO manda os_referencia nem tem campo de OS', async () => {
+  await test('0c. (invertido pela T3, a2a049bd) a cesta manda os_referencia e os_id no POST e tem o campo de OS', async () => {
     const cesta = lerFonte('client/src/components/almoxarifado/RequisicaoMaterialCesta.js');
-    // T0 (Etapa 172): comportamento ATUAL medido — a T1/T3 inverte esta assercao
-    assert.ok(!/os_referencia/.test(cesta), 'a cesta ja manda os_referencia — inverter (T3 entregue?)');
+    assert.ok(cesta.includes('os_referencia: osReferencia.trim(),'), 'a cesta deixou de mandar os_referencia — reavaliar payloadDaCesta');
+    assert.ok(cesta.includes('os_id: osId ? Number(osId) : null,'), 'a cesta mudou o os_id — reavaliar payloadDaCesta');
+    assert.ok(cesta.includes('data-testid="cesta-os-numero"'), 'o campo de OS sumiu da cesta');
   });
 
   await test('0d. o catalogo da cesta (GET /requisicoes-material/materiais?setor=Comercial) lista o material', async () => {
@@ -113,14 +120,14 @@ function payloadDaCesta({ setor, moduloOrigem, materialId, quantidade = 1, tipo 
   ];
   for (const c of casosA) {
     // eslint-disable-next-line no-await-in-loop
-    await test(`a. ${c.nome}, usuario sem perfil: envio recusado 400 com a literal da RN-A, nada gravado`, async () => {
+    await test(`a. ${c.nome}, usuario sem perfil: campo de OS VAZIO e sem selecao (o front bloqueia antes; o servidor tambem) -> 400 com a literal da RN-A, nada gravado`, async () => {
       setUser(c.user);
       const antes = await contarReqs();
       const r = await request(app).post('/api/requisicoes-material')
         .send(payloadDaCesta({ setor: c.setor, moduloOrigem: c.moduloOrigem, materialId }));
       console.log(`      medido: ${r.status} ${JSON.stringify(r.body)}`);
-      // T0 (Etapa 172): comportamento ATUAL medido — a T1/T3 inverte esta assercao
-      // (depois da T3 a cesta manda os_referencia e o envio passa: 201 PENDENTE).
+      // Etapa 172: era o marcador da T0 ("a T1/T3 inverte"). NAO inverte: com o campo vazio a RN-A do servidor continua
+      // recusando (RN-172.01). O que a T3 mudou (a cesta manda o texto) esta no 0c e no (b)/(c).
       assert.strictEqual(r.status, 400, `esperava 400, veio ${r.status}: ${JSON.stringify(r.body)}`);
       assert.strictEqual(r.body.error, LITERAL_OS);
       assert.strictEqual(await contarReqs(), antes, 'gravou requisicao apesar do 400');
@@ -134,7 +141,7 @@ function payloadDaCesta({ setor, moduloOrigem, materialId, quantidade = 1, tipo 
       tipo: 'EMERGENCIAL', justificativa: 'cliente parado', dataNecessidade: '2026-10-30',
     }));
     console.log(`      medido: ${r.status} ${JSON.stringify(r.body)}`);
-    // T0 (Etapa 172): comportamento ATUAL medido — a T1/T3 inverte esta assercao
+    // Etapa 172: idem — campo vazio continua 400 no servidor (RN-A intacta).
     assert.strictEqual(r.status, 400, `esperava 400, veio ${r.status}: ${JSON.stringify(r.body)}`);
     assert.strictEqual(r.body.error, LITERAL_OS);
   });
@@ -146,7 +153,7 @@ function payloadDaCesta({ setor, moduloOrigem, materialId, quantidade = 1, tipo 
     await test(`b. ${c.nome}, mesmo usuario sem perfil: com os_referencia passa (201 PENDENTE) — a unica barreira e a OS`, async () => {
       setUser(c.user);
       const r = await request(app).post('/api/requisicoes-material')
-        .send({ ...payloadDaCesta({ setor: c.setor, moduloOrigem: c.moduloOrigem, materialId }), os_referencia: 'OS 1714' });
+        .send(payloadDaCesta({ setor: c.setor, moduloOrigem: c.moduloOrigem, materialId, osReferencia: ' OS 1714 ' }));
       console.log(`      medido: ${r.status} ${JSON.stringify(r.body)}`);
       assert.strictEqual(r.status, 201, `status ${r.status}: ${JSON.stringify(r.body)}`);
       const row = await dbGet(db, `SELECT status, os_referencia, solicitante_id, modulo_origem, departamento
@@ -158,6 +165,20 @@ function payloadDaCesta({ setor, moduloOrigem, materialId, quantidade = 1, tipo 
       assert.strictEqual(row.departamento, c.setor);
     });
   }
+
+  console.log('\n(c) o seletor de OS cadastrada (Etapa 172, T1 + T3)');
+
+  await test('c. Comercial: campo vazio + OS cadastrada no seletor -> 201 PENDENTE, os_id gravado e os_referencia = numero_os (C2)', async () => {
+    await dbRun(db, `CREATE TABLE IF NOT EXISTS ordens_servico (id INTEGER PRIMARY KEY AUTOINCREMENT, numero_os TEXT UNIQUE NOT NULL,
+      status TEXT DEFAULT 'pendente')`);
+    const os = await dbRun(db, "INSERT INTO ordens_servico (numero_os, status) VALUES ('OS-E172-CESTA', 'em_andamento')");
+    setUser(COMERCIAL);
+    const r = await request(app).post('/api/requisicoes-material')
+      .send(payloadDaCesta({ setor: 'Comercial', moduloOrigem: 'comercial', materialId, osId: os.lastID }));
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    const row = await dbGet(db, 'SELECT status, os_id, os_referencia FROM requisicoes_almoxarifado WHERE id = ?', [r.body.id]);
+    assert.deepStrictEqual({ ...row }, { status: 'PENDENTE', os_id: os.lastID, os_referencia: 'OS-E172-CESTA' });
+  });
 
   await ctx.close();
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
