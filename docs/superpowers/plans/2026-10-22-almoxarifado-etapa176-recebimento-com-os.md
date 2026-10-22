@@ -1,6 +1,10 @@
 # Etapa 176 — O recebimento informa a OS (material de cliente para industrialização)
 
-> **Status:** 🟡 em execução (2026-10-22) — **T1 feita** (`c1c04e1b`, `e79b9718`); **T2 feita** (`0d227edb`); **T3 feita** (`f5c75c68`). Emendada da "próxima tarefa detalhada" da Etapa 174 (B1119).
+> **Status:** 🟢 **fechada** (2026-10-22) — **T1 feita** (`c1c04e1b`, `e79b9718`); **T2 feita** (`0d227edb`); **T3 feita** (`f5c75c68`);
+> **Fase 5 (revisão adversarial) feita** (`cf451bed`, `eb82e52b`, `928f5bd6`); fechamento de documentação no commit seguinte. Emendada da
+> "próxima tarefa detalhada" da Etapa 174 (B1119). Decisões **B1150** a **B1157**; aviso **C430**; limitações **D (176)**; verificação **F (176)**.
+> **A regra RN-176.04 e a "divergência" que estendeu a guarda ao recebimento de pedido foram reescritas na Fase 5** (ver a seção no fim:
+> a guarda só recusa no recebimento SEM pedido com OS aberta; com pedido o dono é conferido sob a trava, na reserva).
 > **Origem:** resposta do cliente (Matheus, 22/10 09:13): *"Industrialização: materiais que os clientes compram e nossa
 > empresa apenas realiza a mão de obra… um estoque de materiais do cliente que ficam em nosso estoque"*. A pergunta
 > "o material do cliente já vem para uma OS específica?" **foi feita e aguarda resposta** — por isso a OS é
@@ -23,7 +27,7 @@
 | RN-176.01 | O recebimento ganha `os_id` **opcional** (`recebimentos_material_almoxarifado.os_id`), aceito no `POST` com a régua da 171 (`OS inválida`; `OS #<id> não encontrada`). | NF de cliente com OS 7 → recebimento com `os_id` 7 |
 | RN-176.02 | **Recebimento de pedido:** a OS é a do pedido. `os_id` no payload diferente da do pedido → 400 `A OS do recebimento tem de ser a do pedido (<numero_os do pedido ou "sem OS">)`; igual ou ausente → herda a do pedido. | pedido com OS 7 + payload OS 8 → 400 |
 | RN-176.03 | OS **fechada** (régua `osFechada`) no `POST` → 400 `A OS <numero_os> está <status> — não aceita entrada nova`. | — |
-| RN-176.04 | **Guarda do dono, por item, na criação do recebimento:** item de material com dono (cliente X) e OS de outro cliente (Y) → 400 `Material <codigo> pertence ao cliente <X>, mas a OS <numero_os> é do cliente <Y>` (nada gravado). OS sem cliente, material próprio, ou mesmo cliente → passa. | chapa do cliente A + OS do cliente B → 400 |
+| RN-176.04 | **Guarda do dono, por item, na criação do recebimento:** item de material com dono (cliente X) e OS de outro cliente (Y) → 400 `Material <codigo> pertence ao cliente <X>, mas a OS <numero_os> é do cliente <Y>` (nada gravado). OS sem cliente, material próprio, ou mesmo cliente → passa. **(Emendada pela M2: OS sem cliente recusa. Reescrita na Fase 5 — B1152/B1153: recusa só no recebimento SEM pedido com OS aberta; com pedido, o material que não casa entra livre e a reserva da OS não nasce — conferência sob a trava, B1154.)** | chapa do cliente A + OS do cliente B → 400 (sem pedido) |
 | RN-176.05 | `osAbertaDoRecebimento` lê **primeiro** o `os_id` do recebimento, depois o do pedido (como hoje). A partir daí tudo é a 171: a entrada `ENTRADA_COMPRA` grava o `os_id` (RN-171.07), o que entrou livre fica reservado para a OS nas três portas (RN-171.08), a requisição da OS converte (RN-171.12), a OS que fecha solta (RN-171.09), o estorno solta (RN-171.11). | nota de cliente sem pedido com OS 7 → reserva da OS 7 |
 | RN-176.06 | `PREDICADO_RESERVA_DA_OS` passa a ter **uma** definição (o `osEncerradaService` importa de `reservaDaOs.js`). | — |
 | RN-176.07 | Tela de Recebimentos: campo **"OS (opcional)"** (select das OS abertas de `/almoxarifado/aux/ordens-servico`, opção vazia "Sem OS"); com pedido escolhido, mostra a OS do pedido e trava. Lista e detalhe do recebimento mostram a OS. | — |
@@ -44,9 +48,112 @@
 - Guarda de dono na `ENTRADA_MANUAL` com OS de outro cliente (não existe hoje; declarado).
 - "Posição por cliente" mostrar a OS da **entrada** (hoje só lista aplicações = saídas).
 
-## Próxima tarefa detalhada
+## Próxima tarefa detalhada — Etapa 178: entrega de EPI ao colaborador com assinatura na tela (NR-6)
 
-*(preencher no fechamento)*
+**Por que esta:** é o próximo passo do pedido de ferramentas/EPI da usuária de Compras (as Etapas 175 e 177 fizeram a edição e o retorno da
+manutenção da ferramenta). A 176 não deixou "falta para 🟢" próprio: a OS do recebimento é opcional e aguarda a resposta do cliente (B1150).
+
+**O que ainda NÃO chegou (deixar explícito em B, B1157):** os **formulários em papel de EPI** da empresa ainda não chegaram — o André vai
+pedir à usuária. A planilha `C:\Users\User\projetos\CRM\image.png` é controle de **COMPRAS**, **não** o formulário de EPI: não usar como
+fonte de campo. Logo os campos e o layout da ficha são **deduzidos**: a etapa entra com o **mínimo reversível** e é desenhada para trocar
+campos depois (campos do EPI numa estrutura isolada, a ficha montada a partir de uma lista de colunas, nada de layout espalhado).
+
+**Exigência literal da usuária (NR-6):** *identificação do colaborador, integridade, recuperação, evidências confiáveis.* Por isso **o que
+`deliverySignatureService.js` faz hoje (imagem + nome digitado) NÃO basta**. O molde vale pelo princípio (append-only, assinatura como
+evidência, a rota grava o arquivo pelo multer e limpa o órfão nas saídas ≠ 201, trilha que não vira 500 — C252/B784), não pelo conteúdo.
+A 178 precisa de:
+1. **Colaborador do cadastro**, não texto livre: `colaboradores` (core, `server/index.js:19255` — `id, nome, cpf UNIQUE, matricula UNIQUE,
+   cargo, setor, status`). Recusar colaborador inexistente ou `status` ≠ ativo (mensagem a definir e escrever no manual). O nome **também** é
+   gravado na linha (foto do momento — o cadastro muda).
+2. **Carimbo de hora do servidor** (`CURRENT_TIMESTAMP` no `INSERT`, nunca a hora do navegador) e **quem registrou** (`user.id`, nome).
+3. **Hash do registro com a imagem:** SHA-256 do arquivo de assinatura (lido do disco depois do multer) e um hash do registro (colaborador,
+   EPI, CA, quantidade, data/hora do servidor, quem registrou, hash do arquivo), gravados na linha. A releitura confere o hash (arquivo
+   trocado no disco → a ficha marca "assinatura não confere").
+4. **Append-only:** nenhum `UPDATE`/`DELETE` na tabela de entregas de EPI nem por rota nem por serviço; correção = novo registro que cita o
+   anterior (estorno). Teste que prova a ausência de rota de edição/exclusão (controle positivo: criar a rota faz o teste cair).
+5. **CA e validade do EPI:** número do **CA** e a **validade** (do CA e/ou da troca) gravados **na entrega** (foto do momento). Onde ficam no
+   cadastro (material com tipo `EPI` — `tipos_material_almoxarifado.is_epi`, `schema.js:439`; categoria `EPIs`) é decisão da T1: coluna nova
+   reversível no material ou tabela própria. Tamanho e periodicidade de troca **a confirmar com o cliente** — entram como opcionais.
+6. **Ficha de EPI por colaborador**, recuperável e **imprimível em PDF** (o client já usa `jspdf` + `jspdf-autotable`; o servidor tem
+   `pdfkit`): todas as entregas do colaborador, com data/hora do servidor, EPI, CA, validade, quantidade, quem entregou, a imagem da assinatura
+   e o hash; o PDF diz se cada assinatura confere.
+7. **Serviço/componente ÚNICO de assinatura**, reaproveitável pelo futuro **termo de responsabilidade de ferramenta** (RN-D do pedido da
+   usuária): um serviço de servidor (gravar arquivo + hash + carimbo + quem registrou, devolvendo o id da evidência) e um componente de tela
+   (o canvas de assinatura já existe na entrega de requisição — medir na Fase 0 onde, e extrair em vez de copiar). A entrega de EPI e o termo
+   de ferramenta só referenciam a evidência.
+
+**Contrato a medir na Fase 0 (não presumir):** a rota atual `POST /api/almoxarifado/requisicoes/:id/assinatura-entrega`
+(`routes/almoxarifado/extended.js:1946-1954`, multipart `assinatura`, gate `separar_emitir`, `assinatura-<ts>-<rand>.<ext>`, 2 MB) e a tabela
+`assinaturas_entrega_almoxarifado`; se a entrega de EPI vira uma **saída** do motor (`registrarMovimentacao`, sob `naTravaDoMaterial` — a
+regra da trava do CLAUDE.md) ou só referencia uma saída já feita; quem pode (perfil — `ACAO_PERFIS`; provavelmente a mesma
+`separar_emitir`, ou ação nova reversível registrada em B); se `colaboradores` existe no harness (`testApp.js` — tabelas core costumam faltar,
+o teste as cria, como `ordens_servico` aqui).
+
+**Pontos de atenção:** a imagem é **evidência** — a rota de leitura usa a URL assinada de `materialPhotoUrl` (Etapa 33), nunca arquivo
+público; CPF do colaborador é dado pessoal: a ficha mostra, a lista não (registrar em B); `TZ` — a data/hora do PDF no dia de Brasília (a
+régua da 170).
+
+**O que NÃO precisa reabrir:** nada da 176 — o recebimento com OS, a reserva da OS e a guarda do dono estão fechados.
+
+---
+
+## Fase 5 — revisão adversarial (2026-10-22)
+
+Revisão independente sobre `c1c04e1b..b1781ad7`, com sonda executada (`sonda.js` no scratchpad da sessão, quatro cenários pela rota). As
+correções (TDD, controle positivo na asserção certa, restauro por cópia + `cmp`, um commit por assunto):
+
+- [x] **Importante (reproduzido) — a guarda do dono travava o recebimento de pedido.** A guarda (criação e pré-checagem do processamento,
+  `problemasDoDonoComOs`) recusava o recebimento de **pedido** cuja OS estava **fechada** ou **sem cliente** — a 171 aceitava (OS fechada →
+  entra como estoque, sem reserva). Um recebimento criado antes da 176 deixava de processar, e o pedido parcialmente recebido travava para
+  sempre (`atualizarPedido` bloqueia depois do recebimento). **Correção `cf451bed` (B1152, B1153):** a guarda **recusa só no recebimento SEM
+  pedido** (a OS própria, que o almoxarife escolheu) e só com a OS **aberta** (`osAbertaDoRecebimento` na pré-checagem; a criação já exige a
+  OS aberta). **Com pedido, a guarda não recusa nunca** — nem OS de outro cliente, nem OS sem cliente: o material entra **livre** e a reserva
+  da OS não nasce (item seguinte). **Mais largo que a recomendação da revisão** (que mantinha a recusa de "outro cliente" com pedido):
+  recusar a segunda nota de um pedido já parcialmente recebido cai na mesma trava — descartado, registrado em B1153. O teste antigo
+  "[RN-176.04 + C1] recebimento de pedido: a guarda do dono usa a OS do pedido" (400) **mudou de lado**: agora 201, processa, sem reserva.
+  Testes novos: pedido com OS fechada (de outro cliente) → 201/200, físico 3, reservado 0; pedido com OS aberta sem cliente → idem; recebimento
+  "pré-176" (OS trocada depois de criar: pedido cuja OS fechou, pedido cuja OS ficou sem cliente, NF própria cuja OS fechou) processa; e a
+  metade que continua recusando (NF sem pedido, OS aberta que ficou sem cliente → 400 no processamento com a frase literal).
+- [x] **Importante — a OS troca de cliente por rota (o plano estava errado).** `PUT /api/operacional/ordens-servico/:id` com `cliente_id`
+  troca. **Correção `eb82e52b` (B1154):** `reservaDaOs.reservarParaOsSobTrava` (nota, inspeção, NC) relê **sob a trava** o dono do material e
+  o cliente da OS (`problemasDoDonoComOs`); não casa → não reserva, o material fica livre e loga
+  `[almoxarifado-reserva-os] Nao reservado para a OS …`. A conferência roda **depois** do teto de quantidade (sem livre não há o que conferir —
+  evita log de item que já entrou). Teste: item crítico vai à inspeção com a OS do cliente A, a OS passa ao cliente B (por `UPDATE` — a rota
+  da OS é core, fora do harness), a inspeção aprova 4 → reserva da OS 0, físico 4, reservado 0.
+- [x] **Lacunas de teste** (`cf451bed`, `928f5bd6`): retomada parcial na pré-checagem (o item com `entrada_estoque_em` não entra na guarda —
+  simulado por `UPDATE`, a falha no meio não é alcançável pela rota); criação com `tipo_recebimento: NOTA_FISCAL` + `pedido_compra_id` cru (o
+  ramo `else osPedido` — o pedido não é resolvido); `/fiscal` com `pedido_compra_id` que não resolve num recebimento com OS própria → 400
+  "(sem OS)" (o mesmo ramo no `/fiscal`); inspeção de recebimento com **OS própria** (NF sem pedido) → o aprovado vira reserva da OS (a NC não
+  ganhou teste direto com OS própria: a NC passa pela mesma `reservarParaOsSobTrava` e a 171 a cobre com pedido); front (h): escolher a OS 7
+  sem pedido → trocar para pedido → voltar → `os_id` `''` e o payload manda `null`.
+- **Vermelho antes (TDD):** 6 de 10 novos vermelhos no ponto certo (os 4 de item 1 no status 400 ≠ 201/200, o de item 2 em "sem reserva da OS
+  do cliente B 4 !== 0", o `/fiscal` pelo status do recebimento — fixture corrigida para levar até o faturamento); os outros passaram de
+  primeira (o código já fazia) e ganharam controle positivo.
+- **Controles positivos** (cópia em scratchpad, `md5sum` antes/depois, `cmp` ok ao restaurar, `git diff` só com o conserto):
+  S1 sem o filtro `!i.entrada_estoque_em` → só a retomada vermelha (400 com a frase do material 1); S2 `else osPedido = null` na criação → só o
+  NOTA_FISCAL+pedido vermelho (`(sem OS)` ≠ o número); S3 `else osPedido = Number(rec.os_id)` no `/fiscal` → só o `/fiscal` vermelho (200 ≠
+  400); S4 `osDoRecebimento` sem o `os_id` próprio → 10 vermelhos, incluindo a inspeção com OS própria (`[]` ≠ `[[4, rec, os]]`); S5 sem a
+  conferência sob a trava → os 4 de reserva vermelhos ("sem reserva da OS" 2/4/5/4 ≠ 0); S6 a guarda da criação de volta com a OS do pedido →
+  os 3 de criação com pedido vermelhos (400 ≠ 201) — **a primeira versão de S6 não sabotava** (`osIdProprio || pedido` passava `osIdProprio`
+  nulo à guarda): refeita passando a OS do pedido; S7 a pré-checagem sem o filtro de pedido/OS aberta → os 4 de processamento com pedido
+  vermelhos. Front: sem o `os_id: ''` no `onChange` da forma → só o (h) vermelho, na linha do `value` (`'7'` ≠ `''`).
+- **Nota sobre os commits:** `cf451bed` leva os testes da Fase 5 inteiros; os de B1153/item 2 só ficam verdes com `eb82e52b` (o commit
+  seguinte) — a suíte vale em `eb82e52b`.
+
+**Declarado (não corrigido):** a troca de cliente da OS **depois** de a reserva da OS ter nascido não a solta (D (176)); a `ENTRADA_MANUAL`
+com OS não reserva nem tem guarda (D (176), já declarado); a posição por cliente mostra as aplicações brutas (D (176)).
+
+**Suítes (estado de `928f5bd6`):** ver "Verificação do fechamento" abaixo.
+
+## Retro da etapa
+
+- **O plano errou duas vezes, e as duas foram pegas por execução:** "a OS não troca de cliente por rota" (havia a rota, e um teste da 155 a
+  usava) e "a guarda vale também para o pedido" (a divergência da T1 regrediu a 171 sem nenhum teste vermelho, porque nenhum teste da 171
+  recebia material **de cliente** com OS fechada). A sonda pela rota achou o primeiro em quatro cenários; leitura não achou.
+- **Guarda na porta de criação é sinal; a proteção é sob a trava.** Toda conferência que depende de dado que muda (dono do material, cliente
+  da OS) tem de ser refeita no momento do efeito, sob a trava — a criação e a pré-checagem só dão a mensagem cedo.
+- **Sabotagem que passa um valor nulo à função sabotada não sabota** (S6, primeira versão): conferir que o caminho sabotado alcança o efeito,
+  não só que a condição mudou.
 
 ---
 
@@ -68,7 +175,10 @@
   ANTES da nota** do material de cliente → a fila a serve.
 - **I4 — a RN-176.04 roda também na pré-checagem de `darEntradaEstoque`** (`:1532-1590`, recusa a nota inteira, mesmo
   texto): o dono pode trocar entre criar e processar (material sem histórico troca sem permissão,
-  `ownerRules.js:412-421`). A troca de cliente da OS não tem rota medida — declarado.
+  `ownerRules.js:412-421`). ~~A troca de cliente da OS não tem rota medida — declarado.~~ **ESTAVA ERRADO** (achado da revisão da
+  Fase 5): `PUT /api/operacional/ordens-servico/:id` com `cliente_id` troca o cliente da OS (provado em
+  `listasNotificacoesPortao.api.test.js:314`). A conferência do dono passou a rodar também **sob a trava**, na criação da reserva da OS
+  (`reservaDaOs.reservarParaOsSobTrava`, `eb82e52b`).
 - **M1 — a conversão na aprovação** (`requisitionService.js:~369`) passa a conferir o dono com a mesma régua antes de
   converter (projeto do cliente B + OS do cliente A → não converte; a entrega recusaria). 
 - **M2 — contratos completos da RN-04:** material de cliente + OS **sem cliente** → 400 `Material <codigo> pertence ao
@@ -140,8 +250,9 @@ client `ReservasAlmoxarifado.test.js`); depois 10/10 nesse arquivo e, na 2ª rod
 **Divergências do plano:**
 - **RN-03 só vale sem pedido.** A nota de pedido cuja OS fechou continua entrando como estoque (RN-171.03/B1101); recusar
   ali regrediria a 171. Com pedido, a OS do payload só é comparada com a do pedido (RN-02).
-- **A guarda do dono vale também para recebimento de pedido** (ela usa a OS efetiva, C1): pedido com OS do cliente B
-  recebendo material do cliente A → 400 na criação e na pré-checagem.
+- ~~**A guarda do dono vale também para recebimento de pedido** (ela usa a OS efetiva, C1): pedido com OS do cliente B
+  recebendo material do cliente A → 400 na criação e na pré-checagem.~~ **Revertida na Fase 5 (B1153)** — recusava também o pedido
+  cuja OS fechou ou ficou sem cliente (a 171 aceitava) e travava para sempre o pedido parcialmente recebido. Ver "Fase 5".
 - **`/fiscal` não aceita `os_id`** (a OS se escolhe na criação); ele só confere/limpa ao ligar um pedido (C1).
 - **M2 "OS que sumiu"**: a ENTRADA continua gravando o `os_id` como marca (igual à 171 com pedido) — só a reserva não nasce.
 - **Conversão (M1)** usa a mesma pergunta da fila (`saidaPassaNaRegraDoDono` com projeto e OS); requisição só com o texto da
