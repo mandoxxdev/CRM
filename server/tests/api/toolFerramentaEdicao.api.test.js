@@ -9,7 +9,7 @@
 const assert = require('assert');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
-const { dbGet } = require('../../services/almoxarifado/db');
+const { dbGet, dbRun } = require('../../services/almoxarifado/db');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -105,6 +105,31 @@ async function novaFerramenta(app, extra = {}) {
     assert.strictEqual(l.localizacao_id, null);
     assert.strictEqual(l.observacoes, null);
     assert.strictEqual(l.status, 'BLOQUEADA');
+    await close();
+  });
+
+  // Revisao adversarial (Fase 5): o cenario acima mandava material_id: null numa ferramenta que ja
+  // nao tinha material, e nem tocava em exige_calibracao — nao provava que null/false LIMPAM o
+  // gravado. Aqui a ferramenta nasce com material e exigindo calibracao, e o PUT zera os dois.
+  await test('RN-175.07: material_id null e exige_calibracao false limpam material e calibracao gravados', async () => {
+    const { app, db, close } = await createTestApp();
+    const matId = (await dbRun(db, `INSERT INTO materiais_almoxarifado (codigo, nome, unidade, quantidade_atual, ativo)
+      VALUES ('E175-MAT-1', 'Material da ferramenta', 'UN', 0, 1)`)).lastID;
+    const a = await novaFerramenta(app, { material_id: matId, exige_calibracao: true });
+    const antes = await dbGet(db, 'SELECT material_id, exige_calibracao FROM ferramentas_almoxarifado WHERE id = ?', [a]);
+    assert.strictEqual(antes.material_id, matId);
+    assert.strictEqual(antes.exige_calibracao, 1);
+    await request(app).put(`/api/almoxarifado/ferramentas/${a}`)
+      .send({ material_id: null, exige_calibracao: false }).expect(200);
+    const l = await dbGet(db, 'SELECT material_id, exige_calibracao FROM ferramentas_almoxarifado WHERE id = ?', [a]);
+    assert.strictEqual(l.material_id, null);
+    assert.strictEqual(l.exige_calibracao, 0);
+    // e o GET que a tela le devolve o mesmo
+    const lista = await request(app).get('/api/almoxarifado/ferramentas').expect(200);
+    const doGet = lista.body.find((f) => f.id === a);
+    assert.strictEqual(doGet.material_id, null);
+    assert.strictEqual(doGet.exige_calibracao, 0);
+    assert.strictEqual(doGet.calibracao_vigente, null);
     await close();
   });
 

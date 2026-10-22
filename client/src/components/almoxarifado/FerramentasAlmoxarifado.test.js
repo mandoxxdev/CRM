@@ -439,6 +439,79 @@ describe('FerramentasAlmoxarifado — Etapa 175, editar', () => {
     expect(corpo.observacoes).toBe('Caixa azul');
   });
 
+  // Revisao adversarial (Fase 5): o RN-175.01 so tinha DISPONIVEL/EMPRESTADA/BLOQUEADA. Os outros
+  // tres status da maquina (toolStateMachine.STATUS) tambem tem de oferecer "Editar" — um botao
+  // embrulhado num `f.status === ...` passaria no teste de cima.
+  test('RN-175.01 (revisão): "Editar" também em EM_MANUTENCAO, AVARIADA e PERDIDA', async () => {
+    const outros = ['EM_MANUTENCAO', 'AVARIADA', 'PERDIDA'].map((status, i) => ({
+      ...FERRAMENTAS[0], id: 40 + i, codigo_patrimonio: `FER-0${40 + i}`, status,
+    }));
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => (url === '/almoxarifado/ferramentas'
+      ? Promise.resolve({ data: outros }) : base(url, cfg)));
+    await renderizar();
+    const linhas = linhasFerramentas();
+    expect(linhas).toHaveLength(3);
+    ['FER-040', 'FER-041', 'FER-042'].forEach((cod, i) => {
+      expect(linhas[i].textContent).toContain(cod);
+      expect(botao('Editar', linhas[i])).toBeTruthy();
+    });
+    await clicar(botao('Editar', linhas[2])); // PERDIDA
+    expect(container.querySelector('.almox-modal h2').textContent).toBe('Editar ferramenta');
+    expect(campo('Código de patrimônio').value).toBe('FER-042');
+  });
+
+  // Revisao adversarial (Fase 5): o RN-175.05 so provava o 409. O 404 (ferramenta excluida por
+  // outra pessoa com a janela aberta) e um 400 qualquer do servidor tambem tem de chegar com a frase
+  // dele — nao a generica — e a janela fica aberta.
+  test.each([
+    [404, 'Ferramenta não encontrada'],
+    [400, 'Frase de validação que só o servidor conhece'],
+  ])('RN-175.05 (revisão): o %i do servidor aparece literal e a janela fica aberta', async (status, frase) => {
+    api.put.mockRejectedValue({ response: { status, data: { error: frase } } });
+    await renderizar();
+    await clicar(botao('Editar', linhasFerramentas()[0]));
+    preencher(campo('Nome'), 'Nome digitado');
+    await clicar(botao('Salvar', rodape()));
+    expect(api.put).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith(frase);
+    expect(toast.error).not.toHaveBeenCalledWith('Erro ao atualizar a ferramenta');
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(container.querySelector('.almox-modal')).toBeTruthy();
+    expect(campo('Nome').value).toBe('Nome digitado');
+  });
+
+  // Revisao adversarial (Fase 5): o RN-175.02 so contava o GET da lista. Marcar/desmarcar "exige
+  // calibracao" muda o painel; depois de salvar, o painel tem de vir de um GET feito DEPOIS do PUT,
+  // e o que ele mostra e o novo. (Hoje o painel rebusca a cada entrada na aba, e o recarregarCal()
+  // do salvar e redundante — o teste prende o comportamento, nao o mecanismo.)
+  test('RN-175.02 (revisão): depois de salvar, o painel de calibrações vem de um GET posterior ao PUT', async () => {
+    const PAINEL_NOVO = { vencidas: [], a_vencer: [{ id: 102, ferramenta_id: 1, codigo_patrimonio: 'FER-001',
+      nome: 'Furadeira de bancada', data_validade: '2026-12-01', dias_restantes: 40 }] };
+    let salvou = false;
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => (url === '/almoxarifado/calibracoes/painel'
+      ? Promise.resolve({ data: salvou ? PAINEL_NOVO : PAINEL }) : base(url, cfg)));
+    api.put.mockImplementation(() => { salvou = true; return Promise.resolve({ data: { id: 1 } }); });
+    await renderizar();
+    await clicar(botao('Calibrações'));
+    expect(linhasVencidas()).toHaveLength(2);
+    await clicar(botao('Ferramentas'));
+    await clicar(botao('Editar', linhasFerramentas()[0]));
+    await act(async () => { exigeCalibracao().click(); });
+    await clicar(botao('Salvar', rodape()));
+    expect(putsDe(1)[0][1].exige_calibracao).toBe(true);
+    await clicar(botao('Calibrações'));
+    const ordemPut = api.put.mock.invocationCallOrder[0];
+    const getsPainelDepois = api.get.mock.calls
+      .map((c, i) => [c[0], api.get.mock.invocationCallOrder[i]])
+      .filter(([url, ordem]) => url === '/almoxarifado/calibracoes/painel' && ordem > ordemPut);
+    expect(getsPainelDepois.length).toBeGreaterThan(0);
+    expect(linhasVencidas()).toHaveLength(0);
+    expect(linhasAVencer()).toHaveLength(1);
+    expect(container.querySelector('.almox-calibracao-a-vencer').textContent).toContain('FER-001');
+  });
+
   test('o "Nova ferramenta" continua cadastrando (POST) com o botão "Cadastrar"', async () => {
     await renderizar();
     await clicar(botao('Nova ferramenta'));
