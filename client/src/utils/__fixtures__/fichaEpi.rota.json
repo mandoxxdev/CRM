@@ -1,0 +1,33 @@
+{
+  "colaborador": {
+    "id": 1,
+    "nome": "MARIA SOUZA",
+    "matricula": "M-100",
+    "setor": "Caldeiraria",
+    "cpf_mascarado": "***.***.***-09",
+    "excluido": false
+  },
+  "entregas": [
+    {
+      "id": 1,
+      "numero": "EPI-MVK1U8F1ATZ4Z3MS",
+      "criado_em": "2026-10-22T21:24:36.254Z",
+      "colaborador_id": 1,
+      "colaborador_nome": "MARIA SOUZA",
+      "matricula": "M-100",
+      "material_id": 1,
+      "material_codigo": "EPI-183I",
+      "material_nome": "Protetor auricular",
+      "ca_numero": "CA-1830",
+      "ca_validade": "2099-01-01",
+      "quantidade": 1,
+      "tamanho": null,
+      "motivo": "PRIMEIRA_ENTREGA",
+      "entregue_por_nome": "Admin Teste",
+      "registro_sha256": "6222a951408468b6231b95e18f79bc7ec750c21776c46bd54cbabc27b9b88397",
+      "confirmado_por_matricula": 1,
+      "user_agent": "Tablet-Almox/2.1 (Android)",
+      "arquivo_url": "/api/uploads/almoxarifado/assinatura-epi-1792704276241-268017278.png?exp=1792705200&sig=14d75ab8d52f9a150d5824546af6ee80"
+    }
+  ]
+}

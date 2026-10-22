@@ -211,3 +211,18 @@ test('[RN-183.08] (b, c) 8 entregas de aparelho com 300 caracteres, com e sem im
     expect(conferirRodape()).toEqual([]);
   }
 });
+
+// Etapa 183 (T4, I3) — a fixture e o corpo REAL de GET /epi/ficha/:id, gravado pelo teste do servidor
+// (server/tests/api/epiFichaConfirmacaoIntegracao.api.test.js, CRM_GRAVAR_FIXTURE=1), que tambem confere SEMPRE que as chaves dela sao
+// as da resposta real. Se o servidor renomear `user_agent` ou `confirmado_por_matricula`, um dos dois lados cai.
+test('[RN-183.01/03/04, integracao com o servidor] a ficha REAL da rota sai com "Sim — digitou M-100" e o aparelho do tablet', async () => {
+  // eslint-disable-next-line global-require
+  const fichaDaRota = require('./__fixtures__/fichaEpi.rota.json');
+  const [l] = montarFichaEpi(fichaDaRota).linhas;
+  expect(l.matriculaConfirmada).toBe('Sim — digitou M-100 (confere com o cadastro)');
+  expect(l.aparelho).toBe('Tablet-Almox/2.1 (Android)');
+  await gerarFichaEpiPdf(fichaDaRota, { carregarImagem: async () => 'data:image/png;base64,AAAA' });
+  const textos = textosDoPdf();
+  expect(textos).toContain(`${ROTULO_CONFIRMACAO}Sim — digitou M-100 (confere com o cadastro)`);
+  expect(textos).toContain('Aparelho: Tablet-Almox/2.1 (Android)');
+});
