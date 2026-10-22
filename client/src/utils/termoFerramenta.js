@@ -60,3 +60,15 @@ export function erroDoNovoTexto(texto, vigente) {
   if (vigente && String(vigente.texto ?? '').trim() === t) return 'O texto é igual ao da versão vigente';
   return null;
 }
+
+/**
+ * T4 (conferencia contra a forma real): `evidencia.confirmado_por_matricula` do `GET …/termo` e a FLAG `1` (o colaborador digitou
+ * a matricula e ela conferiu com o cadastro — a digitada nao e gravada), nao o texto digitado. A T3 imprimia o campo cru: a tela e o
+ * PDF diziam "Matrícula digitada: 1". A matricula que ele digitou e a do cadastro (a fotografia `termo.colaborador.matricula`).
+ */
+export function matriculaConfirmadaTexto(evidencia, colaborador) {
+  const flag = evidencia ? Number(evidencia.confirmado_por_matricula) : NaN;
+  if (flag !== 1) return 'Não registrada';
+  const m = String(colaborador?.matricula ?? '').trim();
+  return m ? `Sim — digitou ${m} (confere com o cadastro)` : 'Sim';
+}

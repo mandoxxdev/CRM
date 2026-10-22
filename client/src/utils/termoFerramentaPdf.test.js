@@ -8,6 +8,7 @@
 import { montarTermoFerramenta, gerarTermoFerramentaPdf, quebrarTexto } from './termoFerramentaPdf';
 import {
   montarFormDataEmprestimo, erroDaConfirmacaoTermo, ehVersaoDoTermoTrocada, mensagemErroEmprestimo, erroDoNovoTexto,
+  matriculaConfirmadaTexto,
 } from './termoFerramenta';
 
 const mockChamadas = [];
@@ -24,7 +25,7 @@ const DADOS = {
     colaborador: { id: 9, nome: 'João Silva', matricula: 'M-900', setor: 'Qualidade' },
     data_prevista_devolucao: '2026-11-05', criado_por_nome: 'Joao Almoxarife', criado_em: '2026-10-23T01:30:00.000Z' },
   evidencia: { arquivo_url: '/api/uploads/almoxarifado/assinatura-termo-1.png?exp=1&sig=a', registro_sha256: HASH,
-    confirmado_por_matricula: 'M-900' },
+    confirmado_por_matricula: 1 }, // a forma real do servidor: a FLAG (T4), nao a matricula
 };
 
 beforeEach(() => { mockChamadas.length = 0; });
@@ -37,7 +38,7 @@ test('montarTermoFerramenta: dados da fotografia, versão, selo provisório, mat
   expect(doc.avisoProvisorio).toBe('Texto provisório — a empresa ainda não forneceu o texto definitivo do termo');
   expect(doc.ferramenta).toEqual({ codigo: 'FER-002', nome: 'Paquímetro digital', serie: '—' });
   expect(doc.colaborador).toEqual({ nome: 'João Silva', matricula: 'M-900', setor: 'Qualidade' });
-  expect(doc.matriculaConfirmada).toBe('M-900');
+  expect(doc.matriculaConfirmada).toBe('Sim — digitou M-900 (confere com o cadastro)');
   expect(doc.dataPrevista).toBe('05/11/2026');
   // 22h30 de 22/10 em Brasilia: nao vira 23/10
   expect(doc.assinadoEm).toMatch(/^22\/10\/2026/);
@@ -76,7 +77,7 @@ test('gerarTermoFerramentaPdf: a assinatura entra como PNG, o texto linha a linh
   expect(textos).toContain('Declaro que recebi a ferramenta.');
   expect(textos).toContain('Texto provisório — a empresa ainda não forneceu o texto definitivo do termo');
   expect(textos.some((t) => t.includes(HASH))).toBe(true);
-  expect(textos.some((t) => t.includes('Matrícula digitada pelo colaborador: M-900'))).toBe(true);
+  expect(textos.some((t) => t.includes('Matrícula confirmada pelo colaborador: Sim — digitou M-900 (confere com o cadastro)'))).toBe(true);
   expect(mockChamadas.find(([n]) => n === 'save')[1]).toBe('termo-TERMO-20261022-0001.pdf');
   expect(doc.assinaturaIndisponivel).toBe(false);
 });
@@ -117,4 +118,14 @@ describe('termoFerramenta (regras puras do empréstimo)', () => {
     expect(erroDoNovoTexto('x'.repeat(20001), null)).toBe('O texto do termo deve ter no máximo 20000 caracteres');
     expect(erroDoNovoTexto('b', { texto: 'a' })).toBeNull();
   });
+});
+
+test('matriculaConfirmadaTexto (T4): a evidencia traz a FLAG 1, nao a matricula; nunca imprime o "1" cru', () => {
+  const colab = { matricula: 'M-900' };
+  expect(matriculaConfirmadaTexto({ confirmado_por_matricula: 1 }, colab)).toBe('Sim — digitou M-900 (confere com o cadastro)');
+  expect(matriculaConfirmadaTexto({ confirmado_por_matricula: '1' }, colab)).toBe('Sim — digitou M-900 (confere com o cadastro)');
+  expect(matriculaConfirmadaTexto({ confirmado_por_matricula: 1 }, { matricula: null })).toBe('Sim');
+  expect(matriculaConfirmadaTexto({ confirmado_por_matricula: 0 }, colab)).toBe('Não registrada');
+  expect(matriculaConfirmadaTexto({ confirmado_por_matricula: null }, colab)).toBe('Não registrada');
+  expect(matriculaConfirmadaTexto(null, colab)).toBe('Não registrada');
 });

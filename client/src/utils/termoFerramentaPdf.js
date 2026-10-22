@@ -9,6 +9,7 @@ import jsPDF from 'jspdf';
 import { formatarDataDoBanco, formatarInstanteDoBanco, hojeLocalISO, lerInstanteDoBanco, COM_SEGUNDOS } from './dataLocal';
 import { resolveMaterialPhotoUrl } from './resolveMaterialPhotoUrl';
 import { carregarImagemComoDataUrl } from './fichaEpiPdf';
+import { matriculaConfirmadaTexto } from './termoFerramenta';
 
 const txt = (v) => (v === null || v === undefined || String(v).trim() === '' ? '—' : String(v));
 
@@ -59,7 +60,7 @@ export function montarTermoFerramenta({ emprestimo, termo, evidencia } = {}, { g
       matricula: txt(c.matricula),
       setor: txt(c.setor),
     },
-    matriculaConfirmada: txt(ev.confirmado_por_matricula),
+    matriculaConfirmada: matriculaConfirmadaTexto(evidencia, t.colaborador),
     dataPrevista: formatarDataDoBanco(t.data_prevista_devolucao, '—', { soData: true }),
     registradoPor: txt(t.criado_por_nome),
     assinadoEm: formatarInstanteDoBanco(t.criado_em, COM_SEGUNDOS),
@@ -101,7 +102,7 @@ export async function gerarTermoFerramentaPdf(dados, { carregarImagem = carregar
   pular(4);
 
   pdf.setFontSize(9);
-  pdf.text(`Matrícula digitada pelo colaborador: ${doc.matriculaConfirmada}`, M, y);
+  pdf.text(`Matrícula confirmada pelo colaborador: ${doc.matriculaConfirmada}`, M, y);
   pular(3);
   if (y > 245) { pdf.addPage(); y = 18; }
   if (imagem) {

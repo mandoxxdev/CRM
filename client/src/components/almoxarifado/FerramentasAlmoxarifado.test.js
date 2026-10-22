@@ -66,7 +66,7 @@ const TERMO_DO_EMPRESTIMO = {
     colaborador: { id: 9, nome: 'João Silva', matricula: 'M-900', setor: 'Qualidade' },
     data_prevista_devolucao: '2026-08-10', criado_por_nome: 'Joao Almoxarife', criado_em: '2026-08-01T13:00:00.000Z' },
   evidencia: { id: 60, arquivo_url: '/api/uploads/almoxarifado/assinatura-termo-1.png?exp=1&sig=a', arquivo_sha256: 'f'.repeat(64),
-    registro_sha256: HASH, confirmado_por_matricula: 'M-900', criado_em: '2026-08-01T13:00:00.000Z', sequencia: 3 },
+    registro_sha256: HASH, confirmado_por_matricula: 1, criado_em: '2026-08-01T13:00:00.000Z', sequencia: 3 },
 };
 const BLOB_PNG = new Blob(['png'], { type: 'image/png' });
 
@@ -847,7 +847,9 @@ describe('FerramentasAlmoxarifado — termo do empréstimo (Etapa 180, RN-180.05
     expect(modal.querySelector('.almox-termo-provisorio')).not.toBeNull();
     expect(modal.textContent).toContain('FER-002 — Paquímetro digital · série SN-2002');
     expect(modal.textContent).toContain('João Silva · matrícula M-900 · Qualidade');
-    expect(modal.textContent).toContain('Matrícula digitada: M-900');
+    // T4: a forma real e a flag 1 (nao a matricula) — a T3 imprimia "Matrícula digitada: 1" na tela de verdade.
+    expect(modal.textContent).toContain('Matrícula confirmada pelo colaborador: Sim — digitou M-900 (confere com o cadastro)');
+    expect(modal.textContent).not.toContain('Matrícula digitada');
     expect(modal.textContent).toContain('10/08/2026');
     expect(modal.textContent).toContain('C0FF-EE12-3456');
     expect(modal.querySelector('img.almox-termo-assinatura').getAttribute('src')).toContain('assinatura-termo-1.png');

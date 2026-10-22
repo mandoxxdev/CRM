@@ -14,7 +14,7 @@ import AssinaturaCanvas from './AssinaturaCanvas';
 import { novaChaveIdempotencia, seloVerificacao, codigoVerificacao } from '../../utils/epiEntrega';
 import {
   erroDaConfirmacaoTermo, montarFormDataEmprestimo, ehVersaoDoTermoTrocada, AVISO_VERSAO_TROCADA, mensagemErroEmprestimo,
-  erroDoNovoTexto,
+  erroDoNovoTexto, matriculaConfirmadaTexto,
 } from '../../utils/termoFerramenta';
 import { gerarTermoFerramentaPdf } from '../../utils/termoFerramentaPdf';
 
@@ -1193,7 +1193,7 @@ const FerramentasAlmoxarifado = () => {
                     <strong>Colaborador:</strong> {t.colaborador?.nome} · matrícula {t.colaborador?.matricula || '—'}
                     {t.colaborador?.setor ? ` · ${t.colaborador.setor}` : ''}
                   </div>
-                  <div><strong>Matrícula digitada:</strong> {ev.confirmado_por_matricula || '—'}</div>
+                  <div><strong>Matrícula confirmada pelo colaborador:</strong> {matriculaConfirmadaTexto(termoEmprestimo.evidencia, t.colaborador)}</div>
                   <div><strong>Devolução prevista:</strong> {formatarDataDoBanco(t.data_prevista_devolucao, '—', { soData: true })}</div>
                   <div><strong>Assinado em:</strong> {quandoFoi(t.criado_em)}{t.criado_por_nome ? ` · registrado por ${t.criado_por_nome}` : ''}</div>
                   <div title={ev.registro_sha256}><strong>Código de verificação:</strong> <code>{codigoVerificacao(ev.registro_sha256)}</code></div>
