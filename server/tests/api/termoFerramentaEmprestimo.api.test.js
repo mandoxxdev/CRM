@@ -173,6 +173,33 @@ const PRODUCAO = { id: 3, nome: 'Chao', email: 'chao@test.com' };
     assert.strictEqual(c.body.integra, true, JSON.stringify(c.body.problemas));
   });
 
+  await test('[Fase 5, I1] reenvio com a MESMA chave enquanto o primeiro grava (os dois disparados do teste) -> 201 e 200 com o mesmo emprestimo', async () => {
+    // O reenvio passa pela consulta da chave antes de o primeiro gravar (nada ainda), espera na fila, perde o claim e o COMMIT
+    // vazio caia no 409 "nao disponivel": o front apagava a chave e dizia que nao emprestou. Molde CLAUDE.md: o gancho so sinaliza
+    // e segura; os dois gestos saem do contexto do teste.
+    const fid = await novaFerramenta();
+    const chave = 'chave-termo-corrida-0001';
+    const antes = await contagem();
+    let chegaram = 0; let soltar; const barreira = new Promise((r) => { soltar = r; });
+    termoService.ganchos.antesDaGravacao = async () => { chegaram += 1; if (chegaram === 2) soltar(); await barreira; };
+    let a; let b;
+    try {
+      [a, b] = await Promise.all([
+        emprestarComTermo(app, db, fid, { colaborador_nome: 'ANA DO CADASTRO', chave_idempotencia: chave }),
+        emprestarComTermo(app, db, fid, { colaborador_nome: 'ANA DO CADASTRO', chave_idempotencia: chave }),
+      ]);
+    } finally { termoService.ganchos.antesDaGravacao = null; soltar(); }
+    assert.strictEqual(chegaram, 2, 'os dois nao passaram da consulta da chave (a corrida nao aconteceu)');
+    assert.deepStrictEqual([a.status, b.status].sort(), [200, 201], JSON.stringify([a.body, b.body]));
+    const [novo, reenvio] = a.status === 201 ? [a, b] : [b, a];
+    assert.strictEqual(reenvio.body.reutilizada, true);
+    assert.strictEqual(reenvio.body.id, novo.body.id);
+    assert.strictEqual(reenvio.body.termo.numero, novo.body.termo.numero);
+    assert.deepStrictEqual(await contagem(),
+      { emprestimos: antes.emprestimos + 1, termos: antes.termos + 1, evidencias: antes.evidencias + 1, pngs: antes.pngs + 1 },
+      'o reenvio gravou alguma coisa ou deixou o PNG dele');
+  });
+
   await test('[menores] a versao trocada NO MEIO (depois das conferencias, antes da transacao) -> 409 da versao; nada gravado, PNG limpo', async () => {
     const fid = await novaFerramenta();
     const antes = await contagem();

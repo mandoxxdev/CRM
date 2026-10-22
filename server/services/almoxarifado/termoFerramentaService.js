@@ -332,6 +332,13 @@ INSERT INTO evidencias_assinatura_almoxarifado (contexto_id, registro_sha256, ${
       + 'confira a lista de empréstimos antes de emprestar de novo.', 500), { preservarArquivo: true });
   }
   if (!gravado) {
+    // Fase 5 (revisao adversarial, I1): o reenvio da MESMA tentativa que chegou enquanto a primeira gravava passou pela consulta da
+    // chave antes de haver o que achar, esperou na fila e perdeu o claim para ela mesma (COMMIT vazio). Sem esta releitura caia no
+    // 409 "nao disponivel" — e o front apagava a chave dizendo que nao emprestou, quando emprestou.
+    if (chave) {
+      const ja = await emprestimoDaChave(db, chave, { ferramentaId: fid, colaboradorId: colab.id });
+      if (ja) return ja;
+    }
     const agora = await versaoVigente(db, TIPO_FERRAMENTA);
     if (agora && Number(agora.versao) !== versaoAssinada) throw mudou(agora.versao);
     throw erro('A ferramenta não está disponível', 409);
