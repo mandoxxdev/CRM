@@ -1,6 +1,6 @@
 # Etapa 175 — Editar a ferramenta pela tela
 
-> **Status:** em execução · **Branch:** `etapa-e175` (worktree `CRM-wt-e175`, a partir da `main` `e424f8c2`, com a 173) · **Data:** 2026-10-22
+> **Status:** 🟢 entregue (2026-10-22) · **Branch:** `etapa-e175` (worktree `CRM-wt-e175`, a partir da `main` `e424f8c2`, com a 173) · **Data:** 2026-10-22
 > **Origem:** o pedido da usuária de Compras sobre ferramentas, maquinários, EPIs e ativos (entrega, empréstimo, manutenção, histórico).
 > O primeiro passo que não depende dos formulários em papel da empresa é este, que a spec 16 deixou aberto desde a Etapa 9b: **editar a
 > ferramenta pela tela**. Hoje um erro de digitação no cadastro (patrimônio, série, localização, "exige calibração") só se corrige pela
@@ -57,7 +57,46 @@ Nenhuma rota nova. Consome `PUT /api/almoxarifado/ferramentas/:id`:
 
 ## Andamento
 
-- [ ] T1
-- [ ] T2
-- [ ] Revisão do plano (Fase 2) e revisão adversarial (Fase 5)
-- [ ] Fechamento
+- [x] T1 — `2a54344f`: 4 cenários novos em `toolFerramentaEdicao.api.test.js` (7/7). O PUT que repete o patrimônio de outra já respondia
+  409 — **medido**, nenhuma mudança de código. Controle: tirar o 409 do PUT (vira 500), ignorar `null` no update, tirar
+  `exige_calibracao` das colunas editáveis — cada um derrubou o cenário dele (a âncora multilinha do 409 foi contada com `perl`: a mesma
+  linha existe no POST).
+- [x] T2 — `735f7c5d`: botão, modal, PUT, opções `#id`; 6 cenários novos em `FerramentasAlmoxarifado.test.js` (19/19). Controle: 6
+  sabotagens, cada uma derrubou o cenário dela.
+- [ ] **Revisão do plano (Fase 2) e revisão adversarial (Fase 5) por agente fresco — NÃO EXECUTADAS.** Esta etapa foi executada por um
+  agente que não pode abrir outros agentes. Feita só a autorrevisão (abaixo). **Pendente:** rodar as duas revisões antes ou depois do
+  merge; o risco está concentrado na tela (o servidor não mudou).
+- [x] Fechamento — novidades (seção, **B1130**, **B1131**, cabeçalho, "Onde estamos"), spec 16 (item marcado, seção "Etapa 175"), mapa
+  (linha 16), guia (seção e cabeçalho), manual (21.6).
+
+**Autorrevisão (no lugar da Fase 2/5, declarada como tal).** Traçado cada RN até o último gesto: editar → salvar → a lista recarrega com o
+valor novo; marcar "exige calibração" → o empréstimo seguinte recusa (provado no servidor pela rota); a ferramenta emprestada editada continua
+emprestada (o PUT não toca `status`, provado). Pontos olhados e mantidos: o modal de cadastro fecha no clique no fundo e o de edição herda
+isso (perde o digitado num clique fora — mesmo comportamento do cadastro desde a 9b, não mudado aqui); o PUT aceita código só com espaços
+pela integração (`z.string().min(1)` sem `trim`) — a tela apara e recusa; **não** corrigido no servidor nesta etapa (mudaria o POST junto).
+
+**Divergências do plano.** Nenhuma de contrato. A Fase 0 previa que o 409 do PUT talvez não existisse; existia.
+
+**Verificação final (medida, sobre a `main` `e424f8c2` + 175):** `test:api` **499/499** arquivos; `test:almoxarifado` 44/44; `test:validation`
+4/4; `test:safealter` 3/3; `test:sqlite` 16/16; client **175 suítes / 2250 testes**; `CI=true react-scripts build` **Compiled successfully**.
+
+## Retro (4 números)
+
+- Rodadas de correção até verde: **0** (nenhum teste ficou vermelho fora das sabotagens).
+- Achados de revisão: **não houve revisão por agente fresco** (ver acima); autorrevisão: 2 pontos, ambos mantidos e declarados.
+- Paralelismo: **0** (duas tasks em sequência).
+- Defeito que escapou: a preencher na próxima etapa que tocar ferramentas.
+
+## Próxima tarefa detalhada
+
+Desta frente (pedido de ferramentas/EPI/ativos da usuária de Compras), em ordem:
+
+1. **Rodar as revisões que faltaram** (Fase 2/5 desta etapa) por agente fresco, com o diff `e424f8c2..735f7c5d` em
+   `FerramentasAlmoxarifado.js`.
+2. **Entrega/empréstimo de ferramenta e EPI com assinatura (NR-6)** — **espera os formulários em papel da empresa.** Molde de gravação:
+   `server/services/almoxarifado/deliverySignatureService.js` (append-only, sem UPDATE/DELETE, arquivo pelo multer). O que a NR-6 exige e
+   a assinatura de requisição **não** tem: identificação forte do colaborador (o empréstimo hoje guarda `colaborador_nome` livre e
+   `colaborador_id` opcional), número do CA e validade do EPI, carimbo do servidor e hash do registro, ficha de EPI por colaborador em PDF.
+3. **Retorno da manutenção com condição e destino** (volta ao responsável ou descarte/baixa): hoje `concluirManutencao`
+   (`toolService.js`) só devolve a ferramenta a *DISPONIVEL*; falta a condição, a baixa patrimonial (status novo na máquina de estados —
+   `toolStateMachine.js`, claim por `UPDATE … WHERE status IN`) e quem autorizou.

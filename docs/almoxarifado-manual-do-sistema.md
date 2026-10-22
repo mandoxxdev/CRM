@@ -6217,12 +6217,28 @@ obrigatória. Tentar reencontrar uma ferramenta que não está perdida:
 
 ### 21.6 Cadastro e perfis
 
-Cadastrar uma ferramenta exige código de patrimônio e nome; os demais campos (tipo, setor
+Cadastrar uma ferramenta (**Nova ferramenta**) exige código de patrimônio e nome; os demais campos (tipo, setor
 responsável, material de referência, número de série, localização, se exige calibração,
 observações) são opcionais. O código de patrimônio é único — cadastrar um repetido recusa:
 > `Código de patrimônio já cadastrado`
 
-**Toda ação de escrita** (cadastrar, emprestar, devolver, bloquear, desbloquear, manutenção,
+**Editar** (botão em toda linha da lista, em qualquer status) abre **"Editar ferramenta"** com os mesmos
+campos já preenchidos. **Salvar** grava todos de uma vez: o campo opcional deixado em branco **apaga** o
+valor que estava gravado. Sucesso: *"Ferramenta atualizada"*, e a lista e o painel de calibrações se
+atualizam. Código ou nome em branco são recusados na própria tela (*"Informe o código de patrimônio"*,
+*"Informe o nome da ferramenta"*), e trocar o código para o de **outra** ferramenta é recusado com a mesma
+frase do cadastro, *"Código de patrimônio já cadastrado"* — nesses casos a janela continua aberta com o
+que foi digitado. O **status** não se edita: ele muda só pelas ações da linha (emprestar, devolver,
+bloquear, manutenção, ocorrência, reencontrar), e editar uma ferramenta emprestada não a tira de quem
+está com ela. Um material de referência ou uma localização gravados que não aparecem na lista da tela
+aparecem como *"Material #⟨número⟩"* / *"Localização #⟨número⟩"* e
+continuam gravados ao salvar, a não ser que se escolha outro (ou *—*, que apaga).
+
+Marcar **"Exige calibração"** numa ferramenta sem calibração vigente faz o **próximo** empréstimo ser
+recusado (21.3); desmarcar libera. Se duas pessoas editarem a mesma ferramenta ao mesmo tempo, vale o
+que foi salvo por último.
+
+**Toda ação de escrita** (cadastrar, editar, emprestar, devolver, bloquear, desbloquear, manutenção,
 ocorrência, calibração, reencontrar) exige a permissão **Ferramentas** —
 Administrador ou Almoxarife (ver 5.5). Essa permissão é **independente** da permissão de
 movimentar estoque: é possível autorizar alguém a mexer em ferramentas sem autorizar a mexer no
