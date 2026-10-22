@@ -171,12 +171,47 @@ const SUPER = { id: 1, nome: 'Super Teste', role: 'admin', is_superadmin: 1, ema
     assert.deepStrictEqual((await movs(r.rq, 'SAIDA')).map((x) => x.os_id), [os.id]);
   });
 
-  await test('[RN-174.04] material de cliente A com projeto do cliente A e OS do cliente B: o projeto vence, passa; a saida leva a OS B', async () => {
+  // Fase 5 (revisao adversarial, item 1): antes a saida levava a OS B, e a posicao do cliente A mostrava "aplicado na OS de B"
+  // (e o consumo por OS de B somava material de A). Decisao reversivel (letra B): com projeto e cliente do projeto diferente do
+  // cliente da OS, a SAIDA nao grava os_id — so o projeto. Mesmo cliente, ou sem projeto: grava como antes.
+  const posicao = async (clienteId) => {
+    const r = await request(app).get('/api/almoxarifado/materiais-cliente/posicao').query({ cliente_id: clienteId });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    return r.body;
+  };
+  const consumoDaOs = async (osId) => {
+    const r = await request(app).get('/api/almoxarifado/relatorios/consumo-os').query({ os_id: osId });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    return (Array.isArray(r.body) ? r.body : (r.body.dados || r.body.linhas || r.body)).map((l) => l.material_id);
+  };
+
+  await test('[F5-1] material de cliente A com projeto do cliente A e OS do cliente B: o projeto vence, passa; a saida NAO leva a OS B', async () => {
     const os = await novaOs(cliB);
     const proj = (await dbRun(db, 'INSERT INTO projetos (cliente_id, nome) VALUES (?, ?)', [cliA, 'Projeto A E174'])).lastID;
     const m = await material({ cliente: cliA });
     const r = await entregue(m, 2, { osId: os.id, projetoId: proj });
+    const s = await dbAll(db, "SELECT os_id, projeto_id FROM movimentacoes_almoxarifado WHERE requisicao_id = ? AND tipo = 'SAIDA'", [r.rq]);
+    assert.deepStrictEqual(s.map((x) => [x.os_id, x.projeto_id]), [[null, proj]]);
+    // a posicao do cliente A mostra a aplicacao no projeto, sem a OS de B
+    const apl = (await posicao(cliA)).aplicacoes.filter((a) => a.material_id === m.id);
+    assert.deepStrictEqual(apl.map((a) => [a.os_id, a.projeto_id, Number(a.quantidade)]), [[null, proj, 2]]);
+    // e o consumo por OS de B nao soma material de A
+    assert.ok(!(await consumoDaOs(os.id)).includes(m.id), 'consumo por OS de B inclui material de A');
+    // a exclusao estorna com o os_id da saida (C1): null tambem
+    const ex = await excluir(r.rq);
+    assert.strictEqual(ex.status, 200, JSON.stringify(ex.body));
+    assert.deepStrictEqual((await movs(r.rq, 'ENTRADA')).map((x) => x.os_id), [null]);
+  });
+
+  await test('[F5-1] controle: projeto do cliente A e OS do MESMO cliente A: a saida leva a OS e a posicao mostra a aplicacao na OS', async () => {
+    const os = await novaOs(cliA);
+    const proj = (await dbRun(db, 'INSERT INTO projetos (cliente_id, nome) VALUES (?, ?)', [cliA, 'Projeto A2 E174'])).lastID;
+    const m = await material({ cliente: cliA });
+    const r = await entregue(m, 3, { osId: os.id, projetoId: proj });
     assert.deepStrictEqual((await movs(r.rq, 'SAIDA')).map((x) => x.os_id), [os.id]);
+    const apl = (await posicao(cliA)).aplicacoes.filter((a) => a.material_id === m.id);
+    assert.deepStrictEqual(apl.map((a) => [a.os_id, a.numero_os, a.projeto_id, Number(a.quantidade)]), [[os.id, os.numero, proj, 3]]);
+    assert.deepStrictEqual(await consumoDaOs(os.id), [m.id]);
   });
 
   await test('[RN-174.04] controle: material de cliente sem OS nem projeto continua recusando "so pode sair com OS ou projeto"', async () => {

@@ -1907,6 +1907,18 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     });
   }
 
+  // Etapa 174 (Fase 5, item 1): com projeto E OS de clientes diferentes, a regra do dono deixa passar pelo projeto, mas a
+  // saida com a OS do outro cliente punha a aplicacao na posicao do cliente errado ("aplicado na OS de B" no relatorio do
+  // cliente A) e o material de A no consumo por OS de B. Decisao reversivel (letra B): nesse caso a SAIDA nao grava os_id, so
+  // o projeto; mesmo cliente, ou sem projeto, grava como antes. A ENTRADA da exclusao copia o os_id da saida (C1) e acompanha.
+  // Descartado: esconder a OS so no relatorio do cliente (esconderia tambem no caso certo). Lido uma vez, fora do laco.
+  let osIdDaSaida = reqRow.os_id || undefined;
+  if (osIdDaSaida && reqRow.projeto_id) {
+    const donos = await dbGet(db, `SELECT (SELECT cliente_id FROM projetos WHERE id = ?) AS cliente_projeto,
+      (SELECT cliente_id FROM ordens_servico WHERE id = ?) AS cliente_os`, [reqRow.projeto_id, reqRow.os_id]);
+    if (Number(donos.cliente_projeto || 0) !== Number(donos.cliente_os || 0)) osIdDaSaida = undefined;
+  }
+
   // Etapa 63 (Fase 5): o registro sai num finally — se um pedaco falhar depois de outro ja baixado, o livro mostra a saida e a troca nao
   // pode ficar sem registro. Etapa 136 (RN-05): o finally cobre as tres passadas — todo item que teve baixa, nao so o da vez.
   try {
@@ -1939,8 +1951,9 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
               projeto_id: reqRow.projeto_id || undefined,
               // Etapa 174 (RN-174.01): a OS cadastrada da requisicao vai para a saida — o consumo por OS passa a enxergar a
               // entrega, e a regra do dono (sem projeto) olha a OS. Revisa a emenda I5 da 172 (o risco de recusa nova nao
-              // existia: material de cliente sem projeto ja recusava sem OS).
-              os_id: reqRow.os_id || undefined,
+              // existia: material de cliente sem projeto ja recusava sem OS). Fase 5: sem a OS quando o cliente dela difere
+              // do cliente do projeto (`osIdDaSaida`, acima).
+              os_id: osIdDaSaida,
               cliente_id: reqRow.cliente_id || undefined,
               centro_custo_id: reqRow.centro_custo_id || undefined,
             }, {
