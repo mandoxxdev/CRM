@@ -177,7 +177,7 @@ function resultadoDe(resultados, chave) {
     // (O molde do numero DINAMICO, para quem quer o outro contrato, e
     // `alertaRegistro.api.test.js:260`, que compara a varredura com `ALERT_REGISTRY.length` porque
     // ali o que se mede e "uma entrada de resultado por entrada do registro", nao o total.)
-    assert.strictEqual(alertas.length, 15, `a central tem ${alertas.length} cartoes`);
+    assert.strictEqual(alertas.length, 16, /* Etapa 182 (T2): 15 -> 16, SEPARADO_AGUARDANDO_RETIRADA no fim */ `a central tem ${alertas.length} cartoes`);
   });
 
   // ── (5) RN-D11: os ids do alerta sao os MESMOS ids de atrasado=1 na rota ────────────────────
@@ -243,7 +243,7 @@ function resultadoDe(resultados, chave) {
     // (`receiptService.js:31` requer este registro no topo), e um `ALERT_REGISTRY.length` no lugar
     // do numero compararia o processo frio consigo mesmo. 13 -> 14 na Etapa 43, T4; 14 -> 15 na
     // Etapa 46, T3 (`NAO_CONFORMIDADE_EXECUCAO_PENDENTE`, SQL proprio e nenhum require novo).
-    assert.deepStrictEqual(medido, { total: 15, tem: true, listar: 'function' },
+    assert.deepStrictEqual(medido, { total: 16 /* Etapa 182 (T2): 15 -> 16 */, tem: true, listar: 'function' },
       `carga a frio devolveu ${saida.trim()}`);
   });
 

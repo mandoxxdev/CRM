@@ -421,6 +421,32 @@ function previsaoOuNaoInformada(valor) {
  * gravado na fila (campo aditivo ao C2 — as assercoes de teste filtram por ele, nunca por
  * total global).
  */
+/**
+ * SEPARADO_AGUARDANDO_RETIRADA (Etapa 182, T2 — RN-182.04): requisicoes liberadas para retirada (PRONTA_PARA_RETIRADA) ha mais
+ * dias que o configurado. A caixa separada ocupa a area de expedicao e segura material que ninguem busca.
+ *
+ * A regua e `pronta_para_retirada_em` (Etapa 182, T1): a ULTIMA liberacao, escrita pelo trigger do schema em qualquer caminho
+ * que ponha PRONTA, nunca zerada. A requisicao sai do cartao pelo STATUS (B504 volta a EM_SEPARACAO; a entrega vai a
+ * PARCIALMENTE_ATENDIDA/ENTREGUE) ou pelo `ativo` — e a unica volta a PRONTA regrava a coluna. Coluna NULL nao entra (o
+ * backfill da T1 preenche o legado PRONTA). Colunas NOMEADAS (licao F3 da 39: a central devolve a linha crua) e
+ * `CAST(... AS INTEGER)` = dias ja completos, como as irmas de NC acima. `itens_na_caixa` usa a mesma regua da caixa da
+ * liberacao (separado - entregue > 0, Etapa 98 Fase 5).
+ */
+async function listarSeparadoAguardandoRetirada(db, { dias }) {
+  return dbAll(db, `
+    SELECT r.id, r.numero, r.solicitante_nome, r.setor, r.os_referencia, r.status, r.pronta_para_retirada_em,
+      CAST(julianday('now') - julianday(r.pronta_para_retirada_em) AS INTEGER) AS dias_aguardando,
+      (SELECT COUNT(*) FROM itens_requisicao_almoxarifado i WHERE i.requisicao_id = r.id
+        AND ROUND(COALESCE(i.quantidade_separada, 0) - COALESCE(i.quantidade_entregue, i.quantidade_atendida, 0), 6) > 1e-9)
+        AS itens_na_caixa
+    FROM requisicoes_almoxarifado r
+    WHERE r.status = 'PRONTA_PARA_RETIRADA'
+      AND COALESCE(r.ativo, 1) = 1
+      AND r.pronta_para_retirada_em IS NOT NULL
+      AND julianday('now') - julianday(r.pronta_para_retirada_em) > ?
+    ORDER BY r.pronta_para_retirada_em ASC, r.id ASC`, [dias]);
+}
+
 const ALERT_REGISTRY = Object.freeze([
   {
     chave: 'CALIBRACAO_VENCENDO',
@@ -1026,6 +1052,30 @@ const ALERT_REGISTRY = Object.freeze([
       'Execução impossível (número de série, lote não identificável)? A Qualidade pode cancelar o documento em Almoxarifado → Não Conformidades.',
     ].join('\n'),
   },
+  // Etapa 182 (T2, RN-182.04..07) — a 16a entrada, no FIM (nao desloca nenhum cartao da central).
+  {
+    chave: 'SEPARADO_AGUARDANDO_RETIRADA',
+    titulo: 'Separado aguardando retirada',
+    descricao: 'Requisições liberadas para retirada há mais dias que o configurado e ainda não retiradas.',
+    // Default 3 dias CORRIDOS e palpite (nao veio da empresa) — letra B; muda-se pela tela.
+    configDias: { chave: 'alerta_retirada_parada_dias', default: 3 },
+    listar: (db, { dias }) => listarSeparadoAguardandoRetirada(db, { dias }),
+    // UM aviso por LIBERACAO (RN-182.05): a varredura do dia seguinte e DUPLICADA; reliberar (instante novo) avisa de novo.
+    // Resolucao de segundo: duas liberacoes no mesmo segundo compartilham a chave (um e-mail a menos — aceito, letra B).
+    dedupeChave: (linha) => `retirada-parada-${linha.id}-${linha.pronta_para_retirada_em}`,
+    payload: (linha) => ({ requisicao_id: linha.id }),
+    assunto: (linha) => `[Almoxarifado] Separado aguardando retirada — ${linha.numero}`,
+    corpo: (linha) => [
+      `Requisição: ${linha.numero}`,
+      `Solicitante: ${linha.solicitante_nome}`,
+      `Setor: ${linha.setor || '-'}`,
+      `OS: ${linha.os_referencia || '-'}`,
+      `Itens na caixa: ${linha.itens_na_caixa}`,
+      // A coluna e CURRENT_TIMESTAMP (UTC); o e-mail fala a hora de Brasilia.
+      `Liberada para retirada em: ${diaLocal.instanteDoBancoNoFuso(linha.pronta_para_retirada_em)}`,
+      `Aguardando há: ${linha.dias_aguardando} dia(s)`,
+    ].join('\n'),
+  },
 ]);
 
 /** Corte de linhas por alerta na central (C1) — o `total` continua sendo o numero cheio. */
@@ -1082,6 +1132,8 @@ module.exports = {
   listarNaoConformidadesParadas,
   // Etapa 46 (T3): idem, para a 15a entrada — a regua de "execucao pendente" medida direto.
   listarNaoConformidadesExecucaoPendente,
+  // Etapa 182 (T2): idem, para a 16a — a regua da caixa parada medida direto.
+  listarSeparadoAguardandoRetirada,
   // Etapa 163 (RN-163.09): exportadas para o teste medir o mes e a semana de Brasilia num instante fixo (a semana so difere da UTC no
   // domingo das 21h, que o relogio da suite nao garante).
   mesAtual,

@@ -93,7 +93,7 @@ const ROTA = '/api/almoxarifado/nao-conformidades';
   await test('(0) a entrada nova do registro EXISTE e e a 15a — sem ela o resto nao mede nada', async () => {
     assert.ok(entradaExecucaoPendente, 'NAO_CONFORMIDADE_EXECUCAO_PENDENTE nao esta no registro');
     assert.strictEqual(typeof entradaExecucaoPendente.listar, 'function');
-    assert.strictEqual(ALERT_REGISTRY.length, 15, `o registro tem ${ALERT_REGISTRY.length} entradas`);
+    assert.strictEqual(ALERT_REGISTRY.length, 16, /* Etapa 182 (T2): 15 -> 16, SEPARADO_AGUARDANDO_RETIRADA no fim */ `o registro tem ${ALERT_REGISTRY.length} entradas`);
   });
 
   await test('(1) o beco inteiro: 400 fatal -> na fila E no cartao -> cancelar -> fora dos DOIS', async () => {

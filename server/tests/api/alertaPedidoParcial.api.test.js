@@ -456,10 +456,10 @@ function resultadoDe(resultados, chave) {
     // Etapa 43 (T4): 13 -> 14 (a entrada NAO_CONFORMIDADE_ABERTA). Etapa 46 (T3): 14 -> 15 (a
     // entrada NAO_CONFORMIDADE_EXECUCAO_PENDENTE). O numero cheio continua sendo a assercao
     // certa: ele e o que pega a entrada que some por um merge ruim.
-    assert.strictEqual(alertRegistry.ALERT_REGISTRY.length, 15,
-      `o registro tinha de ter 15 entradas, tem ${alertRegistry.ALERT_REGISTRY.length}`);
+    assert.strictEqual(alertRegistry.ALERT_REGISTRY.length, 16, /* Etapa 182 (T2): 15 -> 16, SEPARADO_AGUARDANDO_RETIRADA no fim */
+      `o registro tinha de ter 16 entradas, tem ${alertRegistry.ALERT_REGISTRY.length}`);
     const { cartao, alertas } = await cartaoDaCentral();
-    assert.strictEqual(alertas.length, 15, `a central tem ${alertas.length} cartoes`);
+    assert.strictEqual(alertas.length, 16, /* Etapa 182 (T2): 15 -> 16, SEPARADO_AGUARDANDO_RETIRADA no fim */ `a central tem ${alertas.length} cartoes`);
     assert.strictEqual(cartao.erro, undefined, `listar lancou: ${cartao.erro_mensagem}`);
     // Nenhuma das outras 14 caiu por causa da nova.
     const comErro = alertas.filter((a) => a.erro).map((a) => a.chave);
@@ -482,7 +482,7 @@ function resultadoDe(resultados, chave) {
     // FRIO tem a sua, porque o total literal aqui e o que compara o processo novo com o numero
     // esperado em vez de consigo mesmo. Quem so atualizar as tres do plano ve este arquivo
     // vermelho sem entender por que.
-    assert.deepStrictEqual(medido, { total: 15, tem: true, listar: 'function' },
+    assert.deepStrictEqual(medido, { total: 16 /* Etapa 182 (T2): 15 -> 16 */, tem: true, listar: 'function' },
       `carga a frio devolveu ${saida.trim()}`);
   });
 
@@ -526,7 +526,7 @@ function resultadoDe(resultados, chave) {
     await dbRun(db, 'ALTER TABLE pedidos_compra RENAME TO pedidos_compra_fora_e42t3');
     try {
       const { alertas, cartao } = await cartaoDaCentral();
-      assert.strictEqual(alertas.length, 15, 'a central perdeu cartoes com a tabela ausente');
+      assert.strictEqual(alertas.length, 16, /* Etapa 182 (T2): 15 -> 16, SEPARADO_AGUARDANDO_RETIRADA no fim */ 'a central perdeu cartoes com a tabela ausente');
       assert.ok(cartao, 'o cartao do parcial desapareceu');
       // A guarda `sqlite_master` e da fonte (T1): sem a tabela, ela devolve `[]` e o cartao vem
       // VAZIO, nao com erro.
@@ -541,7 +541,9 @@ function resultadoDe(resultados, chave) {
       // NAO_CONFORMIDADE_EXECUCAO_PENDENTE, pelo MESMO motivo — o SQL dela toca
       // `nao_conformidades_almoxarifado`, `materiais_almoxarifado` e
       // `recebimentos_material_almoxarifado`, e nenhuma tabela CORE.
-      assert.strictEqual(semCompras.length, 13, JSON.stringify(semCompras.map((a) => a.chave)));
+      // Etapa 182 (T2): 13 -> 14 com SEPARADO_AGUARDANDO_RETIRADA (le so `requisicoes_almoxarifado` e
+      // `itens_requisicao_almoxarifado`). ESTA LINHA NAO ESTAVA NA LISTA DO PLANO (que contou doze): e a 13a.
+      assert.strictEqual(semCompras.length, 14, JSON.stringify(semCompras.map((a) => a.chave)));
       const quebradas = semCompras.filter((a) => a.erro).map((a) => a.chave);
       assert.deepStrictEqual(quebradas, [],
         `entradas de almoxarifado quebraram por falta de tabela de compras: ${JSON.stringify(quebradas)}`);

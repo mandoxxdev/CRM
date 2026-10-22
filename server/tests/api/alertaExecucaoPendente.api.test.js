@@ -165,8 +165,8 @@ function resultadoDe(resultados, chave) {
     assert.deepStrictEqual(e.configDias, { chave: CONFIG_DIAS, default: 7 },
       `a janela tinha de sair da config: ${JSON.stringify(e.configDias)}`);
     assert.strictEqual(typeof e.listar, 'function');
-    assert.strictEqual(alertRegistry.ALERT_REGISTRY.length, 15,
-      `o registro tinha de ter 15 entradas, tem ${alertRegistry.ALERT_REGISTRY.length}`);
+    assert.strictEqual(alertRegistry.ALERT_REGISTRY.length, 16, /* Etapa 182 (T2): 15 -> 16, SEPARADO_AGUARDANDO_RETIRADA no fim */
+      `o registro tinha de ter 16 entradas, tem ${alertRegistry.ALERT_REGISTRY.length}`);
     assert.strictEqual(alertRegistry.ALERT_REGISTRY[14].chave, EVENTO,
       'a entrada nova entra NO FIM — a ordem do registro e a ordem dos cartoes da tela');
 
@@ -186,7 +186,7 @@ function resultadoDe(resultados, chave) {
     assert.strictEqual(semeada.valor, '7', semeada.valor);
 
     const { alertas, cartao: c } = await cartao();
-    assert.strictEqual(alertas.length, 15, `a central tem ${alertas.length} cartoes`);
+    assert.strictEqual(alertas.length, 16, /* Etapa 182 (T2): 15 -> 16, SEPARADO_AGUARDANDO_RETIRADA no fim */ `a central tem ${alertas.length} cartoes`);
     assert.strictEqual(c.erro, undefined, `o listar da entrada nova lancou: ${JSON.stringify(c)}`);
     assert.strictEqual(c.dias, 7, `a janela do cartao tinha de ser 7, veio ${c.dias}`);
     assert.strictEqual(c.titulo, 'Execução pendente', c.titulo);

@@ -3096,6 +3096,10 @@ async function initSchemaUmaExecucao(db) {
     // em alertRegistry.js. SEMEADA pelo mesmo motivo da irma acima — chave nao semeada e
     // ineditavel pelo PUT /configuracoes (a licao da Etapa 10).
     ['alerta_nc_execucao_pendente_dias', '7', 'Dias desde a decisao com a execucao da nao conformidade ainda PENDENTE para alertar'],
+    // Etapa 182 (T2, RN-182.06): janela do alerta SEPARADO_AGUARDANDO_RETIRADA — dias com a requisicao liberada para
+    // retirada. SEMEADA pelo mesmo motivo das irmas (chave nao semeada e ineditavel pelo PUT /configuracoes); o prefixo
+    // 'alerta_' ja a valida nos dois lados. Default 3 e palpite (letra B).
+    ['alerta_retirada_parada_dias', '3', 'Dias com a requisicao liberada para retirada (caixa separada parada) para alertar'],
   ];
   for (const [chave, valor, desc] of configs) {
     await dbRun(db, 'INSERT OR IGNORE INTO configuracoes_almoxarifado (chave, valor, descricao) VALUES (?,?,?)', [chave, valor, desc]);
