@@ -306,6 +306,17 @@ describe('Rascunho em warehouseMode — OS vazia não bloqueia; OS escolhida vai
     expect($('cesta-os-erro')).toBeNull();
   });
 
+  // Substitui a parte regex do 0b de server/tests/api/cestaEnviaRequisicao (fiacao lida do fonte).
+  test('cesta fora do warehouseMode: sem botão de rascunho; o envio é UM POST em /requisicoes-material', async () => {
+    await renderizarCesta();
+    expect(botao('Salvar rascunho')).toBeUndefined();
+    expect(botao('Enviar solicitação')).toBeDefined();
+    await digitar($('cesta-os-numero'), 'OS 1714');
+    await enviarCesta();
+    expect(postsCriacao('/requisicoes-material')).toHaveLength(1);
+    expect(postsCriacao('/requisicoes-material')[0][1].salvar_rascunho).toBe(false);
+  });
+
   test('cesta: rascunho com OS selecionada manda os_id', async () => {
     await act(async () => {
       root.render(

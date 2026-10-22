@@ -19,6 +19,12 @@
  * Medido: o envio da cesta e recusado com 400 pela RN-A (`exigirOS`) — a cesta esta QUEBRADA para enviar, e o usuario
  * nao tem onde digitar a OS. Com `os_referencia` no mesmo payload, passa (201, PENDENTE): a unica barreira e a OS.
  *
+ * Regex sobre codigo-fonte (Fase 5 da 172): so ficam as premissas que NENHUM teste de comportamento exerce — 0a (o
+ * registro da rota em `index.js` sem portao: o harness monta a rota sem ele, entao so lendo o fonte se ve) e 0b (as
+ * paginas forcam `warehouseMode: false`: nenhum teste renderiza `RequisicoesMaterialPages`). A porta de envio, o botao de
+ * rascunho so em warehouseMode e o payload com `os_referencia`/`os_id` (o antigo 0c) tem teste de comportamento no client
+ * (`client/src/components/almoxarifado/Etapa172RequisicaoOS.test.js`) e sairam daqui.
+ *
  * Executar: cd server && node tests/api/cestaEnviaRequisicao.api.test.js
  */
 const assert = require('assert');
@@ -88,19 +94,12 @@ function payloadDaCesta({ setor, moduloOrigem, materialId, quantidade = 1, tipo 
       'a rota passou a ter portao de modulo/perfil — este teste nao o exerce');
   });
 
-  await test('0b. a cesta envia por POST /requisicoes-material, sem rascunho fora do warehouseMode, e forca warehouseMode false', async () => {
-    const cesta = lerFonte('client/src/components/almoxarifado/RequisicaoMaterialCesta.js');
-    assert.ok(cesta.includes("api.post('/requisicoes-material', {"), 'a cesta mudou de porta de envio');
-    assert.ok(/\{ctx\.warehouseMode && \(/.test(cesta), 'o botao de rascunho deixou de depender de warehouseMode');
+  // Fase 5 da 172: a porta de envio, o botao de rascunho so em warehouseMode e o payload com os_referencia/os_id (o
+  // antigo 0c) sairam daqui — tem teste de COMPORTAMENTO no client (Etapa172RequisicaoOS.test.js). Fica so a fiacao
+  // das paginas, que nenhum teste renderiza.
+  await test('0b. as paginas da cesta forcam warehouseMode false (o rascunho -> /enviar da cesta e inalcancavel)', async () => {
     const paginas = lerFonte('client/src/components/almoxarifado/RequisicoesMaterialPages.js');
     assert.ok(paginas.includes('warehouseMode: false'), 'as paginas deixaram de forcar warehouseMode false');
-  });
-
-  await test('0c. (invertido pela T3, a2a049bd) a cesta manda os_referencia e os_id no POST e tem o campo de OS', async () => {
-    const cesta = lerFonte('client/src/components/almoxarifado/RequisicaoMaterialCesta.js');
-    assert.ok(cesta.includes('os_referencia: osReferencia.trim(),'), 'a cesta deixou de mandar os_referencia — reavaliar payloadDaCesta');
-    assert.ok(cesta.includes('os_id: osId ? Number(osId) : null,'), 'a cesta mudou o os_id — reavaliar payloadDaCesta');
-    assert.ok(cesta.includes('data-testid="cesta-os-numero"'), 'o campo de OS sumiu da cesta');
   });
 
   await test('0d. o catalogo da cesta (GET /requisicoes-material/materiais?setor=Comercial) lista o material', async () => {
@@ -127,7 +126,7 @@ function payloadDaCesta({ setor, moduloOrigem, materialId, quantidade = 1, tipo 
         .send(payloadDaCesta({ setor: c.setor, moduloOrigem: c.moduloOrigem, materialId }));
       console.log(`      medido: ${r.status} ${JSON.stringify(r.body)}`);
       // Etapa 172: era o marcador da T0 ("a T1/T3 inverte"). NAO inverte: com o campo vazio a RN-A do servidor continua
-      // recusando (RN-172.01). O que a T3 mudou (a cesta manda o texto) esta no 0c e no (b)/(c).
+      // recusando (RN-172.01). O que a T3 mudou (a cesta manda o texto) esta no client (Etapa172RequisicaoOS.test.js) e no (b)/(c).
       assert.strictEqual(r.status, 400, `esperava 400, veio ${r.status}: ${JSON.stringify(r.body)}`);
       assert.strictEqual(r.body.error, LITERAL_OS);
       assert.strictEqual(await contarReqs(), antes, 'gravou requisicao apesar do 400');
