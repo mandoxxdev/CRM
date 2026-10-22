@@ -342,3 +342,111 @@ describe('FerramentasAlmoxarifado — extras da revisão final', () => {
     expect(celulaLocalizacao.textContent).toContain('Almoxarifado Central');
   });
 });
+
+// ── Etapa 175 — editar a ferramenta pela tela ──────────────────────────────────────────────────
+describe('FerramentasAlmoxarifado — Etapa 175, editar', () => {
+  const rodape = () => container.querySelector('.almox-modal-footer');
+  const putsDe = (id) => api.put.mock.calls.filter(([url]) => url === `/almoxarifado/ferramentas/${id}`);
+  const getsDaLista = () => api.get.mock.calls.filter(([url]) => url === '/almoxarifado/ferramentas').length;
+  const exigeCalibracao = () => [...container.querySelectorAll('.almox-modal input[type="checkbox"]')][0];
+
+  test('RN-175.01: "Editar" em toda linha, em qualquer status; sem permissão, em nenhuma', async () => {
+    await renderizar();
+    const linhas = linhasFerramentas();
+    expect(linhas).toHaveLength(3); // DISPONIVEL, EMPRESTADA, BLOQUEADA
+    linhas.forEach((l) => expect(botao('Editar', l)).toBeTruthy());
+    act(() => root.unmount());
+    root = createRoot(container);
+    mockPode = () => false;
+    await renderizar();
+    expect(linhasFerramentas()).toHaveLength(3);
+    linhasFerramentas().forEach((l) => expect(botao('Editar', l)).toBeFalsy());
+  });
+
+  test('RN-175.02/03: abre preenchido; salvar manda os 9 campos (vazio = null), avisa, fecha e recarrega', async () => {
+    await renderizar();
+    await clicar(botao('Editar', linhasFerramentas()[0])); // FER-001
+    expect(container.querySelector('.almox-modal h2').textContent).toBe('Editar ferramenta');
+    expect(campo('Código de patrimônio').value).toBe('FER-001');
+    expect(campo('Nome').value).toBe('Furadeira de bancada');
+    expect(campo('Tipo').value).toBe('Elétrica');
+    expect(campo('Setor responsável').value).toBe('Produção');
+    expect(campo('Número de série').value).toBe('SN-1001');
+    expect(exigeCalibracao().checked).toBe(false);
+    // localização 5 não veio na lista (o mock devolve []) — RN-175.06
+    expect(campo('Localização').value).toBe('5');
+    expect(campo('Localização').selectedOptions[0].textContent).toBe('Localização #5');
+
+    preencher(campo('Nome'), 'Furadeira de bancada revisada');
+    preencher(campo('Número de série'), '   ');
+    const antes = getsDaLista();
+    await clicar(botao('Salvar', rodape()));
+
+    expect(putsDe(1)).toHaveLength(1);
+    expect(putsDe(1)[0][1]).toEqual({
+      codigo_patrimonio: 'FER-001', nome: 'Furadeira de bancada revisada', tipo: 'Elétrica',
+      setor_responsavel: 'Produção', material_id: null, numero_serie: null, localizacao_id: 5,
+      exige_calibracao: false, observacoes: null,
+    });
+    expect(api.post).not.toHaveBeenCalled();
+    expect(toast.success).toHaveBeenCalledWith('Ferramenta atualizada');
+    expect(container.querySelector('.almox-modal')).toBeFalsy();
+    expect(getsDaLista()).toBeGreaterThan(antes);
+  });
+
+  test('RN-175.04: nome ou código em branco recusam na tela, sem PUT', async () => {
+    await renderizar();
+    await clicar(botao('Editar', linhasFerramentas()[0]));
+    preencher(campo('Nome'), '  ');
+    await clicar(botao('Salvar', rodape()));
+    expect(toast.error).toHaveBeenCalledWith('Informe o nome da ferramenta');
+    preencher(campo('Nome'), 'Ok');
+    preencher(campo('Código de patrimônio'), '');
+    await clicar(botao('Salvar', rodape()));
+    expect(toast.error).toHaveBeenCalledWith('Informe o código de patrimônio');
+    expect(api.put).not.toHaveBeenCalled();
+    expect(container.querySelector('.almox-modal')).toBeTruthy();
+  });
+
+  test('RN-175.05: o 409 do servidor aparece com a frase dele e a janela fica com o digitado', async () => {
+    api.put.mockRejectedValue({ response: { status: 409, data: { error: 'Código de patrimônio já cadastrado' } } });
+    await renderizar();
+    await clicar(botao('Editar', linhasFerramentas()[0]));
+    preencher(campo('Código de patrimônio'), 'FER-002');
+    await clicar(botao('Salvar', rodape()));
+    expect(toast.error).toHaveBeenCalledWith('Código de patrimônio já cadastrado');
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(container.querySelector('.almox-modal')).toBeTruthy();
+    expect(campo('Código de patrimônio').value).toBe('FER-002');
+  });
+
+  test('RN-175.06: material gravado fora da lista aparece como "Material #77" e é mantido; exige calibração 1 vem marcado', async () => {
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => (url === '/almoxarifado/ferramentas'
+      ? Promise.resolve({ data: [{ ...FERRAMENTAS[1], material_id: 77, observacoes: 'Caixa azul' }] })
+      : base(url, cfg)));
+    await renderizar();
+    await clicar(botao('Editar', linhasFerramentas()[0])); // FER-002, EMPRESTADA
+    expect(campo('Material do catálogo').value).toBe('77');
+    expect(campo('Material do catálogo').selectedOptions[0].textContent).toBe('Material #77');
+    expect(exigeCalibracao().checked).toBe(true);
+    expect(campo('Observações').value).toBe('Caixa azul');
+    await clicar(botao('Salvar', rodape()));
+    const corpo = putsDe(2)[0][1];
+    expect(corpo.material_id).toBe(77);
+    expect(corpo.exige_calibracao).toBe(true);
+    expect(corpo.localizacao_id).toBeNull();
+    expect(corpo.observacoes).toBe('Caixa azul');
+  });
+
+  test('o "Nova ferramenta" continua cadastrando (POST) com o botão "Cadastrar"', async () => {
+    await renderizar();
+    await clicar(botao('Nova ferramenta'));
+    expect(container.querySelector('.almox-modal h2').textContent).toBe('Nova ferramenta');
+    preencher(campo('Código de patrimônio'), 'FER-NOVA');
+    preencher(campo('Nome'), 'Serra');
+    await clicar(botao('Cadastrar', rodape()));
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/ferramentas', expect.objectContaining({ codigo_patrimonio: 'FER-NOVA' }));
+    expect(api.put).not.toHaveBeenCalled();
+  });
+});

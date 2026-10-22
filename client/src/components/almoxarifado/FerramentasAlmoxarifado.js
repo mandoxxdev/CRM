@@ -3,7 +3,7 @@ import api from '../../services/api';
 import { toast } from 'react-toastify';
 import {
   FiRefreshCw, FiTool, FiPlus, FiUserCheck, FiCornerUpLeft, FiLock, FiUnlock,
-  FiSettings, FiCheckCircle, FiAlertTriangle, FiRotateCcw, FiCalendar,
+  FiSettings, FiCheckCircle, FiAlertTriangle, FiRotateCcw, FiCalendar, FiEdit2,
 } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
@@ -229,6 +229,57 @@ const FerramentasAlmoxarifado = () => {
     } finally { setSalvando(false); }
   };
 
+  // ── Edição (Etapa 175) ─────────────────────────────────────────────────────────────────────
+  // RN-175.01/02: em qualquer status (o PUT não toca o status — ele muda pelas ações da linha).
+  // O form nasce da linha da lista: `exige_calibracao` chega 0/1 do SQLite e vira booleano aqui.
+  const abrirEditar = (ferramenta, evento) => {
+    if (!bloquearSeNaoPode('gerenciar_ferramentas', evento)) return;
+    const txt = (v) => (v == null ? '' : String(v));
+    setForm({
+      codigo_patrimonio: txt(ferramenta.codigo_patrimonio),
+      nome: txt(ferramenta.nome),
+      tipo: txt(ferramenta.tipo),
+      setor_responsavel: txt(ferramenta.setor_responsavel),
+      material_id: txt(ferramenta.material_id),
+      numero_serie: txt(ferramenta.numero_serie),
+      localizacao_id: txt(ferramenta.localizacao_id),
+      exige_calibracao: !!Number(ferramenta.exige_calibracao),
+      observacoes: txt(ferramenta.observacoes),
+    });
+    setModal({ tipo: 'editar', ferramenta });
+  };
+
+  // RN-175.03: os 9 campos sempre; opcional vazio vai `null` e LIMPA o gravado (o servidor grava só as
+  // chaves presentes — mandar só o que mudou deixaria um campo apagado na tela com o valor antigo).
+  const confirmarEditar = async () => {
+    if (!String(form.codigo_patrimonio || '').trim()) { toast.error('Informe o código de patrimônio'); return; }
+    if (!String(form.nome || '').trim()) { toast.error('Informe o nome da ferramenta'); return; }
+    const textoOuNulo = (v) => (String(v || '').trim() ? String(v).trim() : null);
+    const payload = {
+      codigo_patrimonio: String(form.codigo_patrimonio).trim(),
+      nome: String(form.nome).trim(),
+      tipo: textoOuNulo(form.tipo),
+      setor_responsavel: textoOuNulo(form.setor_responsavel),
+      material_id: form.material_id ? Number(form.material_id) : null,
+      numero_serie: textoOuNulo(form.numero_serie),
+      localizacao_id: form.localizacao_id ? Number(form.localizacao_id) : null,
+      exige_calibracao: !!form.exige_calibracao,
+      observacoes: textoOuNulo(form.observacoes),
+    };
+    setSalvando(true);
+    try {
+      await api.put(`/almoxarifado/ferramentas/${modal.ferramenta.id}`, payload);
+      toast.success('Ferramenta atualizada');
+      setModal(null);
+      recarregar();
+      // "Exige calibração" muda o painel de calibrações
+      recarregarCal();
+    } catch (err) {
+      // RN-175.05: a frase do servidor (409 de patrimônio, 404), e a janela fica aberta com o digitado
+      toast.error(err.response?.data?.error || 'Erro ao atualizar a ferramenta');
+    } finally { setSalvando(false); }
+  };
+
   // ── Empréstimo / devolução ─────────────────────────────────────────────────────────────────
   const abrirEmprestar = (ferramenta, evento) => {
     if (!bloquearSeNaoPode('gerenciar_ferramentas', evento)) return;
@@ -410,6 +461,7 @@ const FerramentasAlmoxarifado = () => {
 
   const confirmar = () => {
     if (modal?.tipo === 'nova') return confirmarNova();
+    if (modal?.tipo === 'editar') return confirmarEditar();
     if (modal?.tipo === 'emprestar') return confirmarEmprestar();
     if (modal?.tipo === 'bloquear' || modal?.tipo === 'desbloquear' || modal?.tipo === 'reencontrar') return confirmarJustificativa();
     if (modal?.tipo === 'manutencao') return confirmarManutencao();
@@ -523,6 +575,9 @@ const FerramentasAlmoxarifado = () => {
                           <td>
                             {podeEscrever && (
                               <div className="almox-actions">
+                                <button className="btn-almox-secondary" onClick={(e) => abrirEditar(f, e)}>
+                                  <FiEdit2 size={13} /> Editar
+                                </button>
                                 {f.status === 'DISPONIVEL' && (
                                   <button className="btn-almox-secondary" onClick={(e) => abrirEmprestar(f, e)}>
                                     <FiUserCheck size={13} /> Emprestar
@@ -690,11 +745,11 @@ const FerramentasAlmoxarifado = () => {
         </>
       )}
 
-      {modal?.tipo === 'nova' && (
+      {(modal?.tipo === 'nova' || modal?.tipo === 'editar') && (
         <div className="almox-modal-overlay" onClick={() => { if (!salvando) setModal(null); }}>
           <div className="almox-modal almox-modal-lg" onClick={(e) => e.stopPropagation()}>
             <div className="almox-modal-header">
-              <h2>Nova ferramenta</h2>
+              <h2>{modal.tipo === 'editar' ? 'Editar ferramenta' : 'Nova ferramenta'}</h2>
               <button className="almox-modal-close" onClick={() => setModal(null)}>✕</button>
             </div>
             <div className="almox-modal-body">
@@ -729,6 +784,11 @@ const FerramentasAlmoxarifado = () => {
                   <select className="almox-form-select" value={form.material_id}
                     onChange={(e) => setForm((f) => ({ ...f, material_id: e.target.value }))}>
                     <option value="">—</option>
+                    {/* RN-175.06: material gravado fora da lista carregada — sem esta opção o seletor mostraria "—"
+                        com o id no estado, e o salvar o regravaria calado */}
+                    {form.material_id !== '' && !materiais.some((m) => String(m.id) === String(form.material_id)) && (
+                      <option value={form.material_id}>{`Material #${form.material_id}`}</option>
+                    )}
                     {materiais.map((m) => <option key={m.id} value={m.id}>{m.codigo} — {m.nome}</option>)}
                   </select>
                 </div>
@@ -737,6 +797,9 @@ const FerramentasAlmoxarifado = () => {
                   <select className="almox-form-select" value={form.localizacao_id}
                     onChange={(e) => setForm((f) => ({ ...f, localizacao_id: e.target.value }))}>
                     <option value="">—</option>
+                    {form.localizacao_id !== '' && !localizacoes.some((l) => String(l.id) === String(form.localizacao_id)) && (
+                      <option value={form.localizacao_id}>{`Localização #${form.localizacao_id}`}</option>
+                    )}
                     {localizacoes.map((l) => <option key={l.id} value={l.id}>{rotuloLocalizacao(l)}</option>)}
                   </select>
                 </div>
@@ -760,7 +823,7 @@ const FerramentasAlmoxarifado = () => {
             <div className="almox-modal-footer">
               <button className="btn-almox-secondary" onClick={() => setModal(null)} disabled={salvando}>Fechar</button>
               <button className="btn-almox-primary" onClick={confirmar} disabled={salvando}>
-                {salvando ? 'Salvando...' : 'Cadastrar'}
+                {salvando ? 'Salvando...' : (modal.tipo === 'editar' ? 'Salvar' : 'Cadastrar')}
               </button>
             </div>
           </div>
