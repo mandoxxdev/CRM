@@ -41,8 +41,25 @@ jest.mock('../../hooks/useAlmoxPermissoes', () => ({
 }));
 const mockPdf = [];
 // Funcao comum, nao jest.fn: o CRA liga `resetMocks` e apagaria a implementacao antes de cada teste (molde EpiAlmoxarifado.test.js).
-jest.mock('jspdf', () => function JsPdfGravador() {
-  return new Proxy({}, { get: (_alvo, nome) => (...args) => { mockPdf.push([nome, ...args]); } });
+// Etapa 185 (T2): o termo passa a quebrar por LARGURA (getTextWidth/splitTextToSize) — essas medidas vao para um jsPDF REAL (molde:
+// EpiAlmoxarifado.test.js da 183); o resto continua gravado. O console.error do carregamento (sonda de canvas do jsdom) e calado.
+jest.mock('jspdf', () => {
+  const erroOriginal = console.error;
+  console.error = () => {};
+  let JsPdfReal;
+  try { ({ jsPDF: JsPdfReal } = jest.requireActual('jspdf')); } finally { console.error = erroOriginal; }
+  return function JsPdfGravador() {
+    const medidor = new JsPdfReal({ format: 'a4', orientation: 'portrait', unit: 'mm' });
+    const soMedem = { getTextWidth: true, splitTextToSize: true };
+    return new Proxy({}, {
+      get: (_alvo, nome) => (...args) => {
+        if (nome === 'setFontSize') medidor.setFontSize(...args);
+        if (soMedem[nome]) return medidor[nome](...args);
+        mockPdf.push([nome, ...args]);
+        return undefined;
+      },
+    });
+  };
 });
 
 // Etapa 180 — o termo de responsabilidade (contrato da T2 no plano da etapa).
