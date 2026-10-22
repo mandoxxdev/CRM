@@ -1,7 +1,7 @@
 # Etapa 180 — Termo de responsabilidade no empréstimo de ferramenta (RN-D)
 
-> **Status:** 🟡 em execução (2026-10-22) — T1 `2092806d` e T2 `11ef2821` feitas (backend, ver "Execução" no fim, com o
-> contrato real para o front); faltam T3 (front — a tela de empréstimo está quebrada até ela) e T4. Emendada da "próxima tarefa detalhada" da Etapa 178 (B1169). A 179 é da
+> **Status:** 🟡 em execução (2026-10-22) — T1 `2092806d`, T2 `11ef2821` e T3 `04b9d2fb` (front — a tela de empréstimo voltou a funcionar) feitas (ver "Execução" no fim, com o
+> contrato real para o front); falta T4. Emendada da "próxima tarefa detalhada" da Etapa 178 (B1169). A 179 é da
 > outra sessão (sem escopo ainda).
 > **Origem:** pergunta 3 da usuária (21/10): *"solicitamos a assinatura do colaborador responsável pela utilização ou
 > retirada… empréstimo de equipamentos e ferramentas, incluindo o registro da devolução"*; RN-D do design de 16/09: o
@@ -193,3 +193,39 @@
   a aba Empréstimos e o botão Termo.
 - **Letra D (declarado):** o `emprestimo_id`/`contexto_id` fica fora do HMAC (não existe antes do INSERT, como o `id` no EPI); o vínculo
   provado é o `numero`. Quem derruba o trigger e re-aponta a fotografia para outro empréstimo não é pego pelo HMAC.
+
+### T3 (galho, front) — ✅ 2026-10-22 — `04b9d2fb`
+
+- [x] Modal de empréstimo (`FerramentasAlmoxarifado.js`): colaborador do cadastro (`/aux/colaboradores`, carregado uma vez), texto
+  **vigente** do termo (`GET /termos/FERRAMENTA` a cada abertura) com rolagem e selo "Texto provisório", data prevista, observações,
+  `AssinaturaCanvas`, matrícula digitada pelo colaborador; multipart do contrato (`montarFormDataEmprestimo` em
+  `client/src/utils/termoFerramenta.js`: `colaborador_id`, `confirmacao_matricula`, `termo_versao` = a versão exibida,
+  `data_prevista_devolucao?`, `observacoes?`, `chave_idempotencia` por tentativa, `assinatura` PNG; **não** manda `colaborador_nome`).
+  409 `O texto do termo mudou…` → recarrega o texto, descarta a assinatura e avisa `O texto do termo mudou — releia e assine de novo`
+  (toast + aviso no modal). Demais recusas literais; sem resposta → a chave fica (reenvio não duplica); 200 `reutilizada` avisa.
+- [x] **Divergência (letra B):** o seletor mostra `nome (setor)`, **sem** a matrícula — o pedido da T3 dizia "nome — matrícula", mas é
+  ela que o colaborador digita para assinar (precedente da 178, Fase 5: mostrada ao lado, a confirmação não prova nada). Reversível
+  em `rotuloColaboradorEmprestimo`.
+- [x] Lista de empréstimos: coluna Termo (`tem_termo`); "Termo" → modal com o texto **da versão assinada**, a fotografia
+  (ferramenta, colaborador), a matrícula digitada, a assinatura e o código de verificação; "Verificar integridade" (selo Íntegro /
+  `Adulterado: <motivo>`) e "PDF do termo" (`client/src/utils/termoFerramentaPdf.js`: montador puro `montarTermoFerramenta`, com a
+  quebra do texto `quebrarTexto` pura, + `gerarTermoFerramentaPdf`; relê o termo antes de gerar — se a releitura falha, não gera).
+  Sem termo: "Anterior à exigência do termo"; o 404 do servidor aparece literal.
+- [x] Aba Empréstimos só com `gerenciar_ferramentas` (e a escolhida volta para Ferramentas se a permissão some); aba "Texto do termo"
+  só com `editar_termos`: vigente + histórico (com "Ver texto"), "Salvar nova versão" com `{ texto, versao_base }`; recusas
+  antecipadas com a frase do servidor (vazio, igual — aparado, como o `textoLimpo` do servidor, 20000); 409 de outro administrador
+  recarrega a vigente e o histórico **sem** apagar o rascunho.
+- [x] Tela de EPI: "Verificar cadeia" chama `/evidencias/cadeia/verificar` (o apelido `/epi/cadeia/verificar` continua no servidor).
+- [x] `permissaoErro.js`: rótulo de `editar_termos` — a T2 criou a ação sem ele e a suíte do client ficou **vermelha** em
+  `permissaoErro.test.js:52` (`semRotulo = ["editar_termos"]`), o mesmo buraco da 178 com `entregar_epi`. Achado ao rodar a suíte
+  inteira da T3.
+- [x] Testes: `FerramentasAlmoxarifado.test.js` **52** (os 2 de empréstimo JSON reescritos para o multipart; novos: modal, provisório,
+  payload, sem matrícula, sem assinatura/colaborador, versão trocada com reenvio na v2, recusas literais 409/400, rede caída com a
+  mesma chave + reutilizada, termo não carregado; termo do empréstimo ver/verificar/PDF/releitura falha/404; abas por permissão;
+  tela de versões); `termoFerramentaPdf.test.js` **7** (montador, quebra, renderizador, regras puras). Mock só no HTTP, no canvas do
+  jsdom e no binário do jspdf.
+- Controle positivo (restaurado por cópia + `cmp`): S1 sem `termo_versao` no FormData → 3 vermelhos (`montarFormDataEmprestimo`,
+  "envio", "versão trocada"); S2 aba Empréstimos visível sem permissão → 1 vermelho (`Received: <button…>Empréstimos</button>`).
+- Suítes (uma por vez): client **180 suítes / 2353 testes verdes**; `CI=true npx react-scripts build` **ok**.
+- **Falta:** T4 (integração pela rota) e o fechamento (`fechar-etapa`: novidades letra B — a divergência do seletor, o rótulo que a T2
+  esqueceu —, README da feature, mapa, guia do usuário com roteiro clicável).
