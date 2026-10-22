@@ -250,7 +250,8 @@ const RELATORIOS = {
     // régua de `indicadores`, que usa TIPOS_SAIDA inteiro; a tela mostra a nota no rodapé).
     acao: null,
     exportavel: true,
-    nota: "Conta apenas saídas diretas (SAIDA, SAIDA_PRODUCAO, SAIDA_MONTAGEM, SAIDA_ASSISTENCIA) — régua histórica deste relatório; o indicador de giro conta todo débito de patrimônio.",
+    // Etapa 174 (RN-174.03, I1/I2/C2): + Devolvido e Líquido (aditivo — o Total consumido não muda de significado).
+    nota: "Total consumido conta apenas saídas diretas (SAIDA, SAIDA_PRODUCAO, SAIDA_MONTAGEM, SAIDA_ASSISTENCIA) — régua histórica deste relatório; o indicador de giro conta todo débito de patrimônio. Devolvido soma as devoluções (estoque e quarentena) e o estorno da exclusão de requisição entregue; devolução para sucata não conta (a peça não voltou a ser usável). Líquido = consumido − devolvido. Cada lançamento conta pela data dele: com filtro de período o líquido pode ficar negativo (saída antes do período, devolução dentro).",
     limite: null,
     params: [
       { nome: 'os_id', rotulo: 'OS', tipo: 'number', obrigatorio: false },
@@ -261,6 +262,8 @@ const RELATORIOS = {
       { chave: 'codigo', rotulo: 'Código' },
       { chave: 'nome', rotulo: 'Material' },
       { chave: 'total_consumido', rotulo: 'Total consumido' },
+      { chave: 'devolvido', rotulo: 'Devolvido' },
+      { chave: 'liquido', rotulo: 'Líquido' },
       { chave: 'os_id', rotulo: 'OS' },
     ],
     fn: null,

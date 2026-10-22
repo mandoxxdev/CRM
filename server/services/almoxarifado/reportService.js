@@ -147,17 +147,40 @@ async function relatorioReservadoPorOS(db, osId) {
   return dbAll(db, sql, params);
 }
 
+/**
+ * Etapa 174 (RN-174.03, contrato I1 da revisao da Fase 2): ADITIVO — `total_consumido` continua a regua historica (so
+ * SAIDA*, bruto); entram `devolvido` e `liquido = total_consumido - devolvido`.
+ * - `devolvido`: TIPOS_DEVOLUCAO (com o legado DEVOLUCAO, como o custo por projeto) + a ENTRADA do estorno da exclusao de
+ *   requisicao entregue (`tipo = 'ENTRADA' AND requisicao_id IS NOT NULL` — o unico outro ENTRADA e o saldo inicial, sem
+ *   requisicao), nao canceladas. A ENTRADA da exclusao leva a OS da saida que estorna (C1, requisitionService).
+ * - I2: a devolucao que foi para SUCATA NAO conta (a peca nao voltou a ser usavel; a perna SUCATA tambem nao entra no
+ *   consumido, que e so SAIDA*). Achada pela devolucao de referencia `DEV-<id>` com destino SUCATA. Quarentena conta;
+ *   Retrabalho nao gera ENTRADA_DEVOLUCAO. Decisao reversivel (letra B).
+ * - C2: cada linha conta pela data DELA — com filtro de periodo o liquido pode ficar negativo (declarado na nota).
+ * - HAVING: linha so com devolucao aparece (inclusive devolucao avulsa com OS digitada).
+ */
 async function relatorioConsumoPorOS(db, osId, dataInicio, dataFim) {
-  let sql = `SELECT m.material_id, ma.nome, ma.codigo, SUM(m.quantidade) as total_consumido, m.os_id
+  const ehSaida = "m.tipo IN ('SAIDA','SAIDA_PRODUCAO','SAIDA_MONTAGEM','SAIDA_ASSISTENCIA')";
+  const tiposDev = TIPOS_DEVOLUCAO.map((t) => `'${t}'`).join(',');
+  const ehDevolvido = `((m.tipo IN (${tiposDev}) AND NOT EXISTS (SELECT 1 FROM devolucoes_material_almoxarifado d
+        WHERE m.referencia = 'DEV-' || d.id AND d.destino = 'SUCATA'))
+      OR (m.tipo = 'ENTRADA' AND m.requisicao_id IS NOT NULL))`;
+  let sql = `SELECT m.material_id, ma.nome, ma.codigo,
+      SUM(CASE WHEN ${ehSaida} THEN m.quantidade ELSE 0 END) as total_consumido,
+      SUM(CASE WHEN ${ehDevolvido} THEN m.quantidade ELSE 0 END) as devolvido,
+      m.os_id
     FROM movimentacoes_almoxarifado m
     JOIN materiais_almoxarifado ma ON m.material_id = ma.id
-    WHERE m.tipo IN ('SAIDA','SAIDA_PRODUCAO','SAIDA_MONTAGEM','SAIDA_ASSISTENCIA') AND m.cancelado = 0`;
+    WHERE (${ehSaida} OR ${ehDevolvido}) AND m.cancelado = 0`;
   const params = [];
   if (osId) { sql += ' AND m.os_id = ?'; params.push(osId); }
   if (dataInicio) { sql += ' AND DATE(m.created_at, ?) >= ?'; params.push(diaLocal.modificadorDoFuso(), dataInicio); }
   if (dataFim) { sql += ' AND DATE(m.created_at, ?) <= ?'; params.push(diaLocal.modificadorDoFuso(), dataFim); }
-  sql += ' GROUP BY m.material_id, m.os_id ORDER BY total_consumido DESC';
-  return dbAll(db, sql, params);
+  sql += ' GROUP BY m.material_id, m.os_id HAVING total_consumido > 0 OR devolvido > 0';
+  const linhas = await dbAll(db, `SELECT x.material_id, x.nome, x.codigo, x.total_consumido, x.devolvido,
+      x.total_consumido - x.devolvido AS liquido, x.os_id
+    FROM (${sql}) x ORDER BY x.total_consumido DESC`, params);
+  return linhas;
 }
 
 async function relatorioRecebimentosPendentes(db) {
