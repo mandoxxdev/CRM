@@ -38,3 +38,27 @@
 ## Próxima tarefa detalhada
 
 *(preencher no fechamento)*
+
+## Execução
+
+### T0 — `c34eab10` (✅ 2026-10-22): **quebrado, sim** — por execução, não mais por leitura
+
+- **Teste:** `server/tests/api/cestaEnviaRequisicao.api.test.js` (11/11 verde; as asserções do 400 descrevem o
+  comportamento ATUAL e estão marcadas `// T0 (Etapa 172): ... a T1/T3 inverte esta assercao`).
+- **O que a cesta faz (lido do client):** um único `POST /api/requisicoes-material` com `{ setor, departamento: setor,
+  modulo_origem, observacoes, tipo_requisicao, justificativa, [data_necessidade], salvar_rascunho: false, itens }` —
+  **sem** `os_referencia`. Não há rascunho + `/enviar` no caminho da cesta: o botão "Salvar rascunho" só aparece em
+  `ctx.warehouseMode`, e `RequisicoesMaterialPages.js` força `warehouseMode: false` (até no módulo almoxarifado); o
+  `/enviar` de `RequisicoesList.js:1143` é só da lista do almoxarife. O plano supunha "POST rascunho → `/enviar`" — **não
+  é o fluxo**.
+- **Barreira:** só a RN-A (`exigirOS`). Medido, literal: `400 {"error":"Informe o número da OS: toda saída de material
+  precisa estar vinculada a uma OS"}`, nada gravado — nos três módulos da cesta (comercial/`Comercial`,
+  administrativo/`Administrativo`, admin/`Administrativo`) e no emergencial com justificativa e prazo.
+- **Usuários:** `role: 'usuario'`, sem `perfil_almoxarifado` (fallback PRODUCAO), sem módulo almoxarifado. **Não há 403**:
+  a rota é cross-módulo (`index.js` a registra só com `authenticateToken`; nem portão de módulo nem `requirePermission`) —
+  o cenário 0a trava essa premissa lendo `index.js`, porque o harness também não tem portão nessa rota.
+- **Controle (b):** o mesmo payload + `os_referencia: 'OS 1714'` → `201 {"status":"PENDENTE",...}` nos três módulos,
+  gravando `os_referencia`, `solicitante_id`, `modulo_origem` e `departamento` — a OS é a única coisa que falta.
+- **Consequência para o plano:** RN-172.07 **não** é rebaixada a melhoria — é correção de bug (a cesta, fluxo padrão de
+  comercial/administrativo/admin e de qualquer módulo administrativo via `tipoOverrides`, não envia requisição nenhuma
+  desde a RN-A da Etapa 33). A T3 deve pôr o texto obrigatório na cesta e inverter o 0c e os cenários (a).
