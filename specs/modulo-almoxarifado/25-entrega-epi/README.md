@@ -14,6 +14,11 @@
 > **+ Etapa 181 (2026-10-22, T1 `3ce1d3a2`, Fase 5 `0e6d5b37`, `e104df3c`): o relatório *EPI por colaborador* lê as entregas desta feature**
 > (com `acao: entregar_epi`), e a justificativa da saída da entrega deixou de levar o nome e a matrícula (as antigas, mascaradas na leitura
 > para quem não tem `entregar_epi`). Ver a seção "Etapa 181", no fim. O status desta feature não muda.
+>
+> **+ Etapa 183 (2026-10-22, `b97ee386`, `58f3f24b`, `399d2a0f`, `f4e5ec9f`, `52fdf3df`, Fase 5 `83ae8be0`, `8e79177e`, `21818eef`): a
+> ficha (tela e PDF) mostra a matrícula confirmada e o aparelho de cada entrega** — o último `[ ]` do checklist que não dependia da empresa
+> (**D (178)**, item 8). Ver a seção "Etapa 183", no fim. O status continua 🟡: o que falta para 🟢 é todo da empresa ou decisão (os
+> formulários, a devolução de EPI, a validade de uso/troca, a âncora externa, a requisição de EPI, série/lote).
 
 ## Por que é uma feature nova (25) e não a 16 nem a 05
 
@@ -75,7 +80,11 @@ A "Requisição de EPI" (5.1) **não** foi feita: fica registrada aqui como item
 - [ ] **EPI com série ou lote** — recusado (**B1161**): a assinatura teria de dizer qual série/lote.
 - [ ] **Âncora externa da cadeia** (exportar a cabeça / carimbo de tempo de terceiro) — **D (178)**: quem tem banco + disco + segredo ainda
   forja.
-- [ ] **"Confirmado por matrícula" e o aparelho no PDF da ficha** — os dados existem na evidência; o PDF ainda não os imprime (**D (178)**).
+- [x] **"Confirmado por matrícula" e o aparelho na ficha — tela e PDF** (Etapa 183): `GET /epi/ficha/:colaborador_id` devolve
+  `confirmado_por_matricula` e `user_agent` da evidência (sem o `ip`) — `b97ee386`; o descritor (`matriculaConfirmadaTexto` com a
+  matrícula **da entrega**) — `58f3f24b`; o PDF imprime as duas linhas — `399d2a0f`, quebradas por largura e com a página pela altura
+  medida — `83ae8be0`, e a assinatura abaixo delas — `8e79177e`; as duas colunas na tela — `f4e5ec9f`; integração pela rota e pelo serviço,
+  com a fixture do client — `52fdf3df`, com um User-Agent real de 197 caracteres — `21818eef`.
 
 ## Correção declarada
 
@@ -85,10 +94,18 @@ desde `dcf65ae1`: **HMAC-SHA256** com segredo fora do banco + cadeia por `sequen
 congelado da T2). A RN-178.10 dizia "sob o portão do módulo almoxarifado" para `/aux/colaboradores`, e o contrato dizia "leitura, portão do
 módulo" para a lista — **mudou de propósito** na Fase 5 (`4c4bacbf`): as leituras exigem `entregar_epi`.
 
+**Etapa 183 — a frase do D (178), item (8), estava errada.** Ela dizia que o PDF não imprimia a confirmação nem o aparelho *"(a tela de
+verificação e a cadeia usam esses dados)"*. **Estava errado** como descrição do sistema: a verificação e a cadeia **usam esses dados no
+cálculo** do HMAC (`camposDoRegistro`), mas **nenhuma tela os mostrava** — nem a ficha na tela, nem a lista, nem a verificação (`user_agent`
+não aparecia em nenhum arquivo de `client/src`, medido na Fase 0 da 183). O plano da 183 atribuiu a frase a esta spec; ela estava só no
+documento de novidades (D (178)), onde também foi corrigida, dizendo. O certo, desde a 183: a **ficha** (tela e PDF) mostra os dois; a
+verificação e a cadeia continuam só calculando.
+
 ## Fora (letra D da novidades, "(178)")
 
 Ver **D (178)** no documento de novidades — âncora externa, URL assinada de ~15 min, matrícula como confirmação e não senha, devolução de EPI,
-validade de uso, série/lote, requisição de EPI, PDF sem a confirmação, evidências de dev anteriores à Fase 5.
+validade de uso, série/lote, requisição de EPI, ~~PDF sem a confirmação~~ (resolvido na 183), evidências de dev anteriores à Fase 5.
+Da 183: **D (183)**.
 
 ## Etapa 180 — a cadeia ficou multi-contexto (2026-10-22)
 
@@ -122,3 +139,25 @@ validade de uso, série/lote, requisição de EPI, PDF sem a confirmação, evid
   `historicoEntregaEpiMascara.api.test.js` (7).
 - Fora: **D (181)**. Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa181-relatorio-epi-por-colaborador.md`. Novidades: seção
   "Etapa 181", **B1180** a **B1188**, **C440** a **C442**.
+
+## Etapa 183 — a ficha mostra a matrícula confirmada e o aparelho (2026-10-22)
+
+- **Servidor** (`epiService.fichaDoColaborador`): o SELECT ganha `v.confirmado_por_matricula, v.user_agent` da evidência
+  `contexto = 'ENTREGA_EPI'` (o `LEFT JOIN` que já existia); o `map` normaliza `confirmado_por_matricula` para `1 | null` (número) e
+  `user_agent` para `string | null`. **O `ip` não sai** (**B1202**). Cada entrega da ficha tem exatamente
+  `[...CHAVES_LISTA, 'arquivo_url', 'registro_sha256', 'confirmado_por_matricula', 'user_agent']` — mudança de contrato intencional
+  (`epiPontaAPonta.api.test.js` ajustado). Rota e permissão (`entregar_epi`) sem mudança. `b97ee386`; teste `epiFichaConfirmacao.api.test.js` (10).
+- **Descritor** (`client/src/utils/fichaEpiPdf.js`, `montarFichaEpi`): `matriculaConfirmada` pelo **mesmo** `matriculaConfirmadaTexto` do termo
+  de ferramenta, com a matrícula **da entrega** (`e.matricula`, a fotografia do ato, no HMAC) — não a do cadastro de hoje (**B1200**);
+  `aparelho` literal, aparado, `Não registrado` quando falta (**B1203**, **B1204**). `58f3f24b`.
+- **PDF** (`gerarFichaEpiPdf`): depois do registro HMAC de cada entrega, fonte 7, *"Matrícula confirmada pelo colaborador: …"* e *"Aparelho:
+  …"* (linhas seguintes recuadas). `399d2a0f`. **Fase 5 (`83ae8be0`):** as duas linhas quebram por **largura medida** (o aparelho por
+  caractere — a junção é o texto gravado —, a matrícula por palavra) e a página quebra pela **altura medida** da entrega (`y + altura ≤ 287`),
+  não mais pelo limiar fixo 235 nem por fatias de 110 caracteres (**B1207**). Assinatura sempre abaixo do texto — `8e79177e`.
+- **Tela** (`EpiAlmoxarifado.js`, aba Ficha): colunas **Matrícula confirmada** e **Aparelho** (40 caracteres + `…`, o texto inteiro no
+  `title`), lidas do mesmo descritor do PDF (**B1201**). `f4e5ec9f`.
+- **Integração** (`epiFichaConfirmacaoIntegracao.api.test.js`, 6): entrega pela rota → ficha → `/verificar` íntegro → cadeia íntegra → 403 de
+  PRODUCAO; o serviço igual ao corpo da rota; a fixture versionada `client/src/utils/__fixtures__/fichaEpi.rota.json` conferida contra a
+  resposta real (chaves, tipos, sem IP e com o mesmo aparelho). `52fdf3df`, UA real de 197 caracteres `21818eef`.
+- Fora: **D (183)**. Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa183-ficha-epi-com-matricula-e-aparelho.md`. Novidades:
+  seção "Etapa 183", **B1200** a **B1209**, **C444**.

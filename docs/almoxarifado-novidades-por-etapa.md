@@ -11,14 +11,20 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-22):** **Etapa 182 fechada** (**o alerta *material separado aguardando retirada*** — o sistema
+> **Onde o desenvolvimento está (2026-10-22):** **Etapa 183 fechada** (**a ficha de EPI mostra a matrícula confirmada e o aparelho de cada
+> entrega** — na tela e no PDF da ficha por colaborador (o papel da pasta da NR-6), cada entrega passa a dizer *"Matrícula confirmada pelo
+> colaborador: Sim — digitou ⟨matrícula⟩ (confere com o cadastro)"* e *"Aparelho: ⟨identificação do navegador⟩"*, lidas da prova gravada no
+> ato (a matrícula é a do dia da entrega, não a de hoje); o endereço de rede continua guardado e fora da ficha; textos longos quebram dentro da
+> folha; nada a rodar antes do deploy; quem abre a ficha não muda; decisões **B1200** a **B1209**; aviso **C444** (anterior à etapa: nomes
+> longos na linha da tabela do PDF passam da margem); revisão adversarial feita e corrigida). **Próxima: Etapa 184** — a leitura da liberação
+> por valor para de entregar nome e e-mail dos aprovadores a quem não configura (ver o plano da 184).
+> *(Também em 2026-10-22: **Etapa 182 fechada** (**o alerta *material separado aguardando retirada*** — o sistema
 > passa a guardar **quando** cada requisição foi liberada para retirada, e a central de **Alertas** ganha o 16º cartão, **Separado aguardando
 > retirada**: as requisições liberadas há mais de **3** dias (configurável em Configurações Gerais) e ainda não retiradas, com solicitante,
 > setor, OS, itens na caixa, data da liberação e dias; **um e-mail por liberação** para a lista de alertas; as que já estavam prontas no deploy
 > ganham a data pela auditoria ou pela última alteração; nada obrigatório antes do deploy — a **A109** (opcional) diz quantos e-mails o primeiro
 > dia vai mandar; decisões **B1189** a **B1196** — **a B1192 pede um olhar** (a caixa que sobra depois de uma entrega parcial não é cobrada);
-> aviso **C443**; revisão adversarial feita e corrigida). **Próxima: Etapa 183** — a ficha de EPI (tela e PDF) mostra a matrícula confirmada
-> e o aparelho de cada entrega (ver o plano da 183).
+> aviso **C443**; revisão adversarial feita e corrigida); a próxima era a **183**.)*
 > *(Também em 2026-10-22: **Etapa 181 fechada** (**o relatório *EPI por colaborador* passa a mostrar as entregas de
 > EPI** — data, número, colaborador, matrícula, setor, EPI, CA, validade do CA, quantidade, tamanho, motivo, quem entregou e se tem
 > assinatura, com filtros de colaborador, EPI e período; ele e o *Ferramentas emprestadas* passam a ser só de quem entrega EPI / gerencia
@@ -4250,7 +4256,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188 e B1189 a B1196; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196 e B1200 a B1209; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -12671,6 +12677,58 @@ etapa curta põe um teto (ex.: 365) e recusa notação científica.
 entrega.** A última pendência da entrega de EPI (feature 25) que não depende da empresa: o sistema já guarda, em cada entrega, que o
 colaborador digitou a matrícula e de qual aparelho veio a assinatura — e a ficha impressa (o papel da pasta da NR-6) não mostra. O plano já
 está escrito: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa183-ficha-epi-com-matricula-e-aparelho.md`.
+*(Feita: a Etapa 183 — B1200 a B1209.)*
+
+*(B1197 a B1199 não foram usados: o plano da 183 reservou a faixa a partir de B1200.)*
+
+**B1200 (NOVA, da Etapa 183; decisão do agente) — a matrícula confirmada da ficha é a matrícula gravada NA ENTREGA, não a do cadastro de
+hoje.** Se o RH trocar a matrícula do colaborador, o topo da ficha mostra a nova e cada entrega continua dizendo a que conferiu no dia (ela
+está dentro do lacre da entrega). **Descartado:** a do cadastro de hoje — a ficha diria que ele digitou um número que nem existia na data.
+**Reversível.** `58f3f24b`.
+
+**B1201 (NOVA, da Etapa 183; decisão do agente) — as duas provas entram na TELA da ficha também, não só no PDF.** O pedido dizia que a tela
+já mostrava — **não mostrava**: nenhuma tela exibia o aparelho, e a ficha na tela não tinha a confirmação. **Descartado:** só o PDF (o papel
+diria algo que a tela não diz, e quem confere pela tela não veria). A tela e o PDF leem o **mesmo** cálculo. **Reversível.** `f4e5ec9f`.
+
+**B1202 (NOVA, da Etapa 183; decisão do agente) — o endereço de rede (IP) NÃO sai na ficha nem no PDF.** Continua gravado e dentro do lacre.
+**Descartado:** imprimir o IP — dado de rede interno, não ajuda quem lê a ficha da NR-6 e circularia no papel. **Reversível:** é um campo a
+mais na leitura. `b97ee386`.
+
+**B1203 (NOVA, da Etapa 183; decisão do agente) — o aparelho sai como foi gravado**, o texto de identificação do navegador (ex.: *"Mozilla/5.0
+(Linux; Android 14; SM-X210 …) … Chrome/…"*), não traduzido para *"Android — Chrome"*. **Descartado:** interpretar — seria adivinhação, e o texto
+cru é o que está no lacre. **Reversível.** `58f3f24b`.
+
+**B1204 (NOVA, da Etapa 183; decisão do agente) — entrega sem a prova mostra "Não registrada" / "Não registrado"**, em vez de esconder as
+duas linhas. **Descartado:** omitir — a falta da prova é informação para quem audita. Em produção toda entrega tem as duas provas (as entregas
+sem elas só existem em base de desenvolvimento antiga, **D (178)**, item 9). **Reversível.** `58f3f24b`, `399d2a0f`.
+
+**B1205 (NOVA, da Etapa 183; decisão do agente) — o relatório *EPI por colaborador* e a aba *Entregas* NÃO ganharam as duas colunas.** O
+pedido era a ficha. **Reversível**; possível etapa curta se a Segurança do Trabalho quiser ver a prova na lista ou na planilha.
+
+**B1206 (NOVA, da Etapa 183; decisão do agente) — "digitou M-100" diz qual matrícula conferiu, não o que foi teclado.** A conferência ignora
+maiúsculas e espaços: quem digitou *m 100* aparece como *"Sim — digitou M-100 (confere com o cadastro)"*. É o **mesmo texto** do termo de
+responsabilidade de ferramenta — a ficha e o termo dizem o mesmo. **Descartado:** gravar a matrícula digitada letra a letra (mudaria o lacre e
+o banco; outra etapa). **Reversível.**
+
+**B1207 (NOVA, da Etapa 183, revisão adversarial; decisão do agente) — no PDF, o aparelho e a matrícula quebram por LARGURA, e a página
+quebra pela altura de cada entrega.** A primeira versão cortava o aparelho a cada 110 letras sem medir: com letras largas o texto saía da
+folha (medido: até 283 mm numa folha de 210), e uma matrícula longa também. **Escolhido:** medir cada linha com a fonte do PDF; o aparelho é
+cortado letra a letra (as linhas, juntas, são exatamente o texto gravado); a frase da matrícula quebra entre palavras; e a entrega só começa na
+página se couber inteira até o rodapé — senão vai para a seguinte. **Descartado:** (a) quebrar o aparelho entre palavras (a quebra come o espaço,
+e o texto impresso deixaria de bater com o gravado); (b) manter o limite fixo de linhas por página (não cobre a matrícula, que não tem tamanho
+máximo no cadastro). **Reversível.** `83ae8be0`.
+
+**B1208 (NOVA, da Etapa 183; ANTERIOR a ela, registrado sem corrigir) — a linha da tabela do PDF da ficha corta por número de letras e um nome
+longo sai da folha.** Medido na revisão com o gerador de PDF real: na linha de cada entrega (Data, EPI, CA, Validade CA, Qtd, Tam., Motivo,
+Entregue por), *Entregue por* com uns 15 caracteres (*Joao Almoxarife*) já passa da margem direita (198,6 mm; a margem é 196), e com 25
+(*Maria Aparecida dos Santo*) sai da folha (214 mm) — o fim do nome não aparece no papel. O EPI com nome comprido encosta na coluna do CA.
+Vem da Etapa 178. **Escolhido:** não mexer nesta etapa (a correção da revisão foi limitada às duas linhas novas). **Descartado:** corrigir junto
+sem revisão própria. **Reversível**; uma etapa curta quebra as células por largura, como a **B1207**. Aviso de operação: **C444**.
+
+**B1209 (NOVA, da Etapa 183) — a próxima etapa (184): a leitura da liberação por valor para de entregar nome e e-mail dos aprovadores.**
+Hoje qualquer usuário do almoxarifado (até Produção) recebe, ao abrir Requisições, a lista de aprovadores de valor com nome e e-mail, mesmo a
+tela não mostrando (**D (20)**). Não depende da empresa. O plano já está escrito:
+`docs/superpowers/plans/2026-10-22-almoxarifado-etapa184-aprovadores-da-liberacao-por-valor.md`.
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -16284,6 +16342,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      16º cartão, **Separado aguardando retirada**. **O que fazer:** antes do deploy, rodar a **A109** (opcional) para ver quantas são; se forem
      muitas e antigas (caixas que ninguém vai buscar), resolver antes — entregar, ou **Devolver à prateleira** — ou avisar quem recebe a lista
      de alertas. Se a janela de 3 dias for curta para o galpão, gravar a janela antes do deploy pela linha da **A109** — pela tela, só depois de o sistema subir, e aí a primeira varredura já terá rodado com 3 (**B1189**).
+444. **NOVO (da Etapa 183; o defeito é anterior a ela, da 178) — no PDF da ficha de EPI, um nome longo em "Entregue por" sai cortado pela
+     borda da folha.** A linha de cada entrega corta os textos por número de letras, não pelo espaço do papel: o nome de quem entregou com mais
+     de uns 15 caracteres passa da margem, e com 25 (o máximo que a linha leva) o fim dele fica fora da folha (**B1208**). As duas linhas novas (matrícula
+     confirmada e aparelho) **não** têm esse problema. **O que fazer:** se a ficha for para auditoria, conferir o nome de quem entregou na
+     **tela** da ficha (lá ele sai inteiro); a correção é uma etapa curta (**B1208**).
 ### D. Limitações declaradas— são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -17625,6 +17688,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   (`GET /ferramentas/:id/manutencoes`) e na Auditoria (*Fim de manutenção*). Quem empresta não fica sabendo da restrição pela tela.
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(183) A ficha de EPI com a matrícula confirmada e o aparelho, o que ficou de fora.** (1) O **endereço de rede** (IP) não sai na ficha
+  (**B1202**). (2) O aparelho não é traduzido (**B1203**) e *"digitou M-100"* é a matrícula que conferiu, não o que foi teclado (**B1206**).
+  (3) O relatório **EPI por colaborador** e a aba **Entregas** não mostram as duas provas (**B1205**). (4) A linha da tabela do PDF continua
+  cortando por número de letras — nomes longos passam da margem (**B1208**, **C444**). (5) Uma entrega mais alta que uma página inteira (só
+  uma matrícula de centenas de caracteres faria isso) ainda passaria do rodapé — a régua manda a entrega para a página seguinte, mas não a
+  divide. (6) Na tela, a coluna **Aparelho** mostra 40 caracteres; o resto, só ao parar o mouse em cima (em tablet, sem mouse, não aparece —
+  o PDF traz o texto inteiro).
 - **(182) O alerta de material separado aguardando retirada, o que ficou de fora.** (1) A **entrega parcial** a partir de *Pronta p/
   Retirada* tira a requisição do alerta, mesmo com material na caixa (**B1192**). (2) O aviso vai para a **lista de alertas** do almoxarifado,
   não para o **solicitante** (avisar quem pediu seria um canal novo). (3) Não existe o local **"Aguardando retirada"** no estoque: a caixa
@@ -17659,9 +17729,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   imagens do módulo); a integridade é garantida pela impressão digital, não pelo sigilo do link. (3) A matrícula é **confirmação**, não senha
   (**B1164**). (4) **Devolução de EPI** e troca com devolução do usado: não existem (**B1167**). (5) **Validade de uso** do EPI, data de troca
   e alerta de troca: dependem do formulário da empresa. (6) EPI com **série ou lote** não se entrega (**B1161**). (7) A **requisição de EPI**
-  (o colaborador pedir pelo sistema) não existe — a entrega é avulsa, no balcão. (8) O **PDF da ficha** ainda não imprime "confirmado por
-  matrícula" nem o aparelho de onde veio (a tela de verificação e a cadeia usam esses dados). (9) Base de **desenvolvimento** que já tinha
+  (o colaborador pedir pelo sistema) não existe — a entrega é avulsa, no balcão. (8) ~~O **PDF da ficha** ainda não imprime "confirmado por
+  matrícula" nem o aparelho de onde veio (a tela de verificação e a cadeia usam esses dados).~~ (9) Base de **desenvolvimento** que já tinha
   entregas de antes da revisão mostra essas entregas como "fora da cadeia"/"registro alterado" — produção nunca as teve.
+  **Atualizado na Etapa 183:** o item (8) foi resolvido — a ficha, **na tela e no PDF**, mostra a matrícula confirmada e o aparelho (**B1200**
+  a **B1204**). **E a frase entre parênteses estava errada:** a verificação e a cadeia **usam esses dados no cálculo** da impressão do registro,
+  mas **nenhuma tela os mostrava** — nem a ficha na tela, nem a lista, nem a verificação. Por isso a 183 pôs os dois também na tela (**B1201**).
 - **(176) O recebimento com OS, o que ficou de fora.** (1) A **entrada manual** (Movimentações, *Entrada*) com OS não reserva para a OS (é
   por desenho: só as três portas do recebimento distribuem) e **não confere o dono** — material do cliente A pode entrar marcado com a OS do
   cliente B por ali; a saída depois recusa como sempre. Material de cliente pela entrada manual continua sem exigir documento (já era
@@ -18822,6 +18895,13 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(183) Nenhum clique foi dado no navegador, e nenhum PDF foi aberto num leitor de PDF.** Os dois campos novos da ficha (pela rota de
+verdade, com um texto de aparelho real de 197 caracteres), o endereço de rede fora, o 403 de Produção e Gestor e a integridade depois de abrir
+a ficha foram provados no servidor de teste; a tela da ficha, em jsdom com a resposta simulada; o PDF, com as larguras **medidas no gerador de
+PDF real** (nenhuma linha nova passa de 195,1 mm; nada passa do rodapé) — mas o arquivo não foi aberto. O que **só o navegador** prova: o
+roteiro da Etapa 183 no guia — a entrega no tablet de verdade (o texto do aparelho real dele), as duas colunas na tela, e o PDF aberto num
+leitor, com as linhas novas legíveis e a assinatura abaixo delas.
 
 **(182) Nenhum clique foi dado no navegador, e nenhum e-mail saiu de verdade.** A data da liberação (na rota, pelo gatilho e na primeira
 subida num banco vazio), o preenchimento das requisições antigas, a régua do cartão, as saídas (entrega total e parcial, devolver à prateleira
@@ -35598,9 +35678,79 @@ Qualidade continuam sem a central (*"Dados indisponíveis no momento"*).
 - **Nada a rodar antes do deploy.** Opcional: a **A109** diz quantas requisições já estão prontas e há quanto tempo — o primeiro dia depois do
   deploy manda um e-mail para cada uma que já passou de 3 dias (**C443**).
 
+## Etapa 183 — A ficha de EPI mostra a matrícula confirmada e o aparelho de cada entrega (2026-10-22)
+
+Na entrega de EPI o colaborador assina no tablet e digita a própria matrícula, e o sistema guarda duas provas: **que a matrícula conferiu** com
+o cadastro e **de qual aparelho** veio a assinatura — as duas dentro do lacre da entrega. Mas a **ficha do colaborador**, o papel que vai para a
+pasta da NR-6, não as mostrava: quem lia via o nome, o EPI e o rabisco, e não via *"ele digitou a matrícula e conferiu"* nem *"assinado no
+tablet tal"*. Agora a ficha — na tela e no PDF — diz as duas coisas em cada entrega. Nada a rodar antes do deploy; quem abre a ficha continua
+sendo o Almoxarife e o Administrador. Decisões do agente: **B1200** a **B1209**; aviso **C444** (anterior à etapa).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A ficha na tela não dizia se a matrícula foi conferida | Coluna **Matrícula confirmada**: *"Sim — digitou ⟨matrícula⟩ (confere com o cadastro)"* (**B1200**, **B1201**) |
+| Nenhuma tela mostrava de qual aparelho veio a assinatura | Coluna **Aparelho**: o começo do texto do navegador, inteiro ao parar o mouse em cima (**B1203**) |
+| O PDF da ficha não trazia nenhuma das duas | Duas linhas a mais em cada entrega, depois do código do registro |
+| — | Texto longo quebra dentro da folha, e a entrega que não cabe no fim da página vai inteira para a seguinte (**B1207**) |
+| O endereço de rede ficava guardado e no lacre | Continua — e **não** sai na ficha (**B1202**) |
+
+### As regras, com o cenário exato
+
+Preparação: um **Almoxarife** (ou Administrador do almoxarifado); um colaborador **ativo** com matrícula **M-100**; um EPI com **Nº do CA** e
+validade futura, com saldo. Faça uma entrega em **Almoxarifado → Entrega de EPI → Nova entrega** (colaborador, EPI, quantidade **1**,
+assinatura com **Confirmar assinatura**, matrícula digitada em **Matrícula — digitada pelo colaborador**, **Registrar entrega**).
+
+**1. A matrícula confirmada, na tela.** Aba **Ficha por colaborador**, escolha o colaborador. Na tabela, depois de **Entregue por**, a coluna
+**Matrícula confirmada** diz *"Sim — digitou M-100 (confere com o cadastro)"*. Se o colaborador digitou *m 100*, a tela diz o mesmo
+*"digitou M-100"*: a conferência ignora maiúsculas e espaços, e o texto diz **qual matrícula conferiu** (**B1206**) — é o mesmo texto do termo
+de responsabilidade de ferramenta.
+
+**2. A matrícula é a do dia da entrega.** Troque a matrícula do colaborador no cadastro para **M-200** e reabra a ficha: o topo diz
+*"Matrícula: M-200"* e a entrega continua *"Sim — digitou M-100 (confere com o cadastro)"* (**B1200**).
+
+**3. O aparelho, na tela.** A coluna **Aparelho** mostra os **40** primeiros caracteres do texto do navegador seguidos de *…* — num tablet
+Android, algo como *"Mozilla/5.0 (Linux; Android 14; SM-X210 …"*; parar o mouse em cima mostra o texto inteiro. Texto de até 40 caracteres
+sai inteiro, sem *…*.
+
+**4. O PDF.** **Gerar PDF** → *ficha-epi-⟨nome⟩.pdf*. Em cada entrega, depois de *"Entrega ⟨número⟩ · registro (HMAC-SHA256): ⟨código⟩"*:
+*"Matrícula confirmada pelo colaborador: Sim — digitou M-100 (confere com o cadastro)"* e *"Aparelho: ⟨texto inteiro⟩"*. O texto do
+aparelho que não cabe na linha continua nas de baixo, recuadas, sem rótulo, e não passa da margem direita (**B1207**); juntas, as linhas são
+exatamente o texto gravado. A imagem da assinatura vem **abaixo** dessas linhas.
+
+**5. Entrega sem a prova.** Numa base de **desenvolvimento** antiga (entregas de antes da revisão da Etapa 178), a ficha diz *"Não registrada"*
+e *"Não registrado"* — na tela e no PDF, as duas linhas aparecem do mesmo jeito (**B1204**). Em produção toda entrega tem as duas provas.
+
+**6. O endereço de rede não sai.** Nem a tela nem o PDF mostram o IP de onde veio a entrega; ele continua no registro e no lacre (**B1202**).
+
+**7. Quem pode, e a integridade.** Produção e Gestor continuam vendo só *"Seu perfil não acessa a entrega de EPI — só o almoxarife e o
+administrador do módulo registram entregas e consultam fichas."* Depois de abrir a ficha e gerar o PDF, **Verificar** na entrega diz
+*"Íntegro"* e **Verificar cadeia** diz *"Cadeia íntegra — ⟨n⟩ registros"* — abrir a ficha não grava nada.
+
+### O que esta etapa NÃO cobre
+
+- O **relatório *EPI por colaborador*** e a aba **Entregas** não mostram as duas provas (**B1205**).
+- O IP não sai na ficha (**B1202**); o aparelho não é traduzido (**B1203**); *"digitou"* é a matrícula que conferiu, não o que foi teclado
+  (**B1206**).
+- A **linha da tabela** do PDF (EPI, Entregue por…) continua cortando nomes longos pela borda da folha — vem da Etapa 178 (**B1208**,
+  **C444**).
+- **Nada a rodar antes do deploy.**
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 183 entregue (2026-10-22):** **a ficha de EPI mostra a matrícula confirmada e o aparelho de cada entrega.** A ficha por colaborador,
+  na tela e no PDF, diz em cada entrega *"Sim — digitou ⟨matrícula⟩ (confere com o cadastro)"* — a matrícula do dia da entrega (**B1200**) — e o
+  aparelho de onde veio a assinatura, como foi gravado (**B1203**); o IP fica fora (**B1202**); as duas provas entram também na tela
+  (**B1201**). A revisão adversarial achou o texto do aparelho e da matrícula saindo da folha do PDF (corrigido: quebra por largura e página
+  pela altura de cada entrega — **B1207**) e dois testes que não sabiam falhar (a assinatura por cima do texto; o servidor que truncasse o
+  aparelho) — cenários acrescentados e provados por sabotagem. Commits `c8500355`, `8bbfddbd` (plano), `b97ee386` (T1), `58f3f24b` (T1c),
+  `399d2a0f` (T2), `f4e5ec9f` (T3), `52fdf3df` (T4), `68d72b17` (execução), a revisão adversarial `83ae8be0`, `8e79177e`, `21818eef`, e o
+  fechamento. **O que é seu:** as decisões **B1200** a **B1209** (reversíveis); o aviso **C444** (anterior à etapa — nomes longos na linha da
+  tabela do PDF); as limitações **(183)** em D e a verificação **(183)** em F. **Próxima: Etapa 184 — a leitura da liberação por valor para de
+  entregar nome e e-mail dos aprovadores (B1209); ver o plano da 184.**
 
 - **Etapa 182 entregue (2026-10-22):** **o alerta "material separado aguardando retirada".** Cada liberação para retirada grava o momento (a
   última vale — **B1191**); as requisições que já estavam prontas ganham a data pela auditoria ou pela última alteração (**B1190**); a central

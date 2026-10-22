@@ -6553,10 +6553,27 @@ tamanho, motivo, quem entregou e a verificação; filtra por colaborador, EPI e 
 
 **Ficha por colaborador** (a aba, ou **Ficha** na linha da lista): nome, matrícula, setor e CPF **mascarado** (*\*\*\*.\*\*\*.\*\*\*-NN*, só os
 dois últimos dígitos; sem CPF ou com menos de dois dígitos, *—*) e as entregas com data, EPI, CA, validade do CA, quantidade, tamanho, motivo,
-quem entregou, a **imagem da assinatura** e o código. Colaborador **excluído** do cadastro continua com ficha, pelos dados guardados na
-entrega mais recente, com o selo *"Excluído do cadastro"*. **Gerar PDF** relê a ficha (a imagem de cada assinatura abre por um link que vale
-cerca de 15 minutos) e baixa *ficha-epi-⟨nome⟩.pdf*, com a imagem e a impressão completa do registro de cada entrega; assinatura que não carrega
-sai como *"(imagem da assinatura indisponível)"* e a tela avisa quantas.
+quem entregou, **matrícula confirmada**, **aparelho**, a **imagem da assinatura** e o código. Colaborador **excluído** do cadastro continua com
+ficha, pelos dados guardados na entrega mais recente, com o selo *"Excluído do cadastro"*. **Gerar PDF** relê a ficha (a imagem de cada
+assinatura abre por um link que vale cerca de 15 minutos) e baixa *ficha-epi-⟨nome⟩.pdf*, com a imagem e a impressão completa do registro de
+cada entrega; assinatura que não carrega sai como *"(imagem da assinatura indisponível)"* e a tela avisa quantas.
+
+**As duas provas do ato, na ficha.** Cada entrega da ficha — na tela e no PDF — diz o que a evidência guardou no momento da entrega:
+
+- **Matrícula confirmada** (no PDF, *"Matrícula confirmada pelo colaborador: …"*): *"Sim — digitou ⟨matrícula⟩ (confere com o cadastro)"*
+  quando o colaborador digitou a matrícula e ela conferiu. A matrícula mostrada é a **do cadastro no dia da entrega** (a cópia guardada na
+  entrega), não a de hoje: se o cadastro mudar de *M-100* para *M-200*, o topo da ficha passa a dizer *M-200* e a entrega continua *"Sim —
+  digitou M-100 (confere com o cadastro)"*. Como a conferência ignora maiúsculas e espaços, quem digitou *m 100* aparece como *"digitou
+  M-100"* — o texto diz qual matrícula conferiu, não o que foi teclado letra a letra (o sistema não guarda o que foi digitado). Entrega sem
+  essa prova: *"Não registrada"*.
+- **Aparelho** (no PDF, *"Aparelho: …"*): o texto de identificação do navegador de onde veio a assinatura, **exatamente como foi gravado**,
+  sem tradução; sem a prova, *"Não registrado"*. Na tela, a coluna mostra os 40 primeiros caracteres seguidos de *…*, e o texto inteiro ao
+  parar o mouse em cima. No PDF, o texto sai inteiro: quando não cabe numa linha, continua nas de baixo, recuadas, sem passar da margem.
+
+As duas linhas aparecem em todas as entregas, inclusive nas que não têm a prova (com *"Não registrada"* / *"Não registrado"*): a falta da prova
+também é informação para quem audita. O **endereço de rede** de onde veio a entrega fica guardado e dentro da impressão do registro (21-bis.4),
+mas não sai na ficha. Uma entrega do PDF não é dividida entre duas páginas: se ela não cabe inteira no fim da página, começa na seguinte
+(a exceção seria uma entrega mais alta que uma página inteira, o que só uma matrícula de centenas de caracteres produziria).
 
 ---
 

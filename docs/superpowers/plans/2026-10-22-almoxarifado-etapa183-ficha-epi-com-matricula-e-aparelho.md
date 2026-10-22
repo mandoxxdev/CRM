@@ -1,6 +1,8 @@
 # Etapa 183 — A ficha de EPI (tela e PDF) mostra a matrícula confirmada e o aparelho de cada entrega
 
-> **Status:** 🛠️ **T1, T1c, T2, T3 e T4 executadas (2026-10-22)** — falta a revisão adversarial (Fase 5) e o fechamento (seção Execução). Feature **25** (entrega de EPI), pendência **D (178)**, item (8):
+> **Status:** ✅ **FECHADA (2026-10-22)** — T1, T1c, T2, T3 e T4 executadas; Fase 5 (revisão adversarial) com 3 menores corrigidos
+> (`83ae8be0`, `8e79177e`, `21818eef`); fechamento feito (ver "Execução", "Fase 5", "Verificação final", "Retrospectiva" e a "Próxima tarefa
+> detalhada" — Etapa 184). Feature **25** (entrega de EPI), pendência **D (178)**, item (8):
 > *"o PDF da ficha ainda não imprime 'confirmado por matrícula' nem o aparelho de onde veio"* — e o último `[ ]` do checklist da spec
 > `specs/modulo-almoxarifado/25-entrega-epi/README.md` que não depende da empresa.
 > Antes: Etapa 182 (alerta de retirada parada) — **não tocar** nos arquivos dela (outra sessão está neles).
@@ -97,10 +99,14 @@ No PDF, depois de `Entrega <n> · registro (HMAC-SHA256): <hash>` (fonte 7):
 
 | # | Task | Tipo |
 |---|---|---|
-| T1 | Servidor: RN-183.01/02/05/06 | **tronco** (congela o contrato do JSON) |
-| T2 | `fichaEpiPdf.js`: descritor + desenho (RN-183.03/04/05/08) | galho (contra o contrato acima) |
-| T3 | Tela `EpiAlmoxarifado.js`: duas colunas na ficha (RN-183.03/04) | galho |
-| T4 | Integração pela rota **e** pelo serviço (RN-183.01..07) | depois de T1; o cenário client usa a resposta real capturada |
+| T1 | Servidor: RN-183.01/02/05/06 | **tronco** (congela o contrato do JSON) — ✅ `b97ee386` |
+| T1c | Descritor `montarFichaEpi` (emenda I1) | tronco client — ✅ `58f3f24b` |
+| T2 | `fichaEpiPdf.js`: descritor + desenho (RN-183.03/04/05/08) | galho (contra o contrato acima) — ✅ `399d2a0f`; quebra por largura na Fase 5 `83ae8be0` |
+| T3 | Tela `EpiAlmoxarifado.js`: duas colunas na ficha (RN-183.03/04) | galho — ✅ `f4e5ec9f` |
+| T4 | Integração pela rota **e** pelo serviço (RN-183.01..07) | depois de T1; o cenário client usa a resposta real capturada — ✅ `52fdf3df`; UA real na Fase 5 `21818eef` |
+| T5 | Fase 5 (revisão adversarial) + fix-round + fechamento | ✅ `83ae8be0`, `8e79177e`, `21818eef` + o commit de fechamento |
+
+*(Execução real: sequencial na main, T1 → T1c → T2 → T3 → T4 — emenda I1; a tabela de cima é a do plano original com a T1c acrescentada.)*
 
 T2 e T3 mexem em arquivos diferentes do client e só **consomem** o contrato congelado — paralelizáveis. Nenhuma task toca motor de
 estoque, trava, migration nem `ACAO_PERFIS`.
@@ -241,7 +247,91 @@ contada = 1, md5 antes/sabotado/restaurado e restauro por cópia (`e183-*` no sc
 **Suítes no fim (sequenciais, uma vez cada, sobre `52fdf3df`):** `test:api` **525/525 arquivos OK** · `test:almoxarifado` **44 passou, 0 falhou** · `test:validation` **4/0** · `test:safealter` **3/0** · `test:sqlite` **16/0** · Jest **180 suítes, 2373 testes, 0 falha** · `CI=true build` **Compiled successfully** (exit 0 em todas).
 
 **Não feito aqui (de propósito):** T5/fechamento (spec 25, mapa, guia, novidades com B1200–B1206, D (183) com a M6) — a revisão adversarial
-vem antes.
+vem antes. *(Feito depois: ver "Fase 5" e "Verificação final" abaixo.)*
+
+## Fase 5 — revisão adversarial (2026-10-22) — 0 críticos, 0 importantes, 3 menores, todos CORRIGIDOS
+
+A revisão rodou sondas de verdade (jsPDF real no Node, `rev183-largura.js` e `rev183-matricula-larga.js` no scratchpad) e sabotagens que a
+suíte não pegava. Fix-round sequencial na main, TDD (vermelho antes) e controle positivo por achado — sabotagem por `perl` com âncora contada
+= 1, md5 antes/sabotado/restaurado, restauro por cópia (`fix183-*` no scratchpad), `cmp` ok em todos. **Uma sabotagem não sabotou na primeira
+tentativa** (o padrão do `perl` casava 5 caracteres onde havia 2 — `''`): o md5 ficou igual, a suíte passou, e o resultado foi descartado e
+refeito com o padrão certo. Só o md5 pegou.
+
+- **M1 (CORRIGIDO, `83ae8be0`) — o aparelho e a matrícula passavam da folha.** A T2 cortava o aparelho a cada **110 caracteres** sem medir
+  (a M6 da Fase 2 tinha aceitado como limite): na fonte 7, 300 `W` iam a **280,5 / 283,3 / 213,7 mm** (a folha tem 210) e a linha da
+  matrícula confirmada com uma matrícula de 88 caracteres ia a **232,8 mm**. Correção:
+  - **aparelho** — `quebrarPorLargura(medir, texto, { rotulo, largura, larguraDemais })` (exportada): corte **por caractere** medido com
+    `pdf.getTextWidth` no texto **como será desenhado** (com o rótulo `Aparelho: ` na 1ª linha; as seguintes em `M + 14`, largura 168);
+    a junção das linhas é o texto gravado, literal. **Divergência do pedido da revisão** (que sugeria `splitTextToSize` para os dois): o
+    `splitTextToSize` come o espaço da quebra, e o aparelho é prova — a junção tem de bater com o que está no HMAC;
+  - **matrícula confirmada** — `pdf.splitTextToSize(…, 182)` (frase comum, quebra por palavra; quebra palavra maior que a linha também);
+  - **página** — o número de linhas virou variável (1 a 5 de aparelho, mais as da matrícula, que **não** tem tamanho máximo no cadastro —
+    `colaboradores.matricula TEXT`, sem limite na rota), então o limiar fixo `y > 235` (que supunha 3 linhas) saiu: a entrega mede a própria
+    altura antes de desenhar, `4 + 3 × (linhas de matrícula + linhas de aparelho) + 2 + (25 com imagem | 8 sem)`, e só começa na página se
+    `y + altura ≤ 287` (a divisória é o último traço; o fundo da imagem fica 2,5 acima). **A RN-183.08 (limiar 235) está superada por
+    esta régua**, e a RN-183.04 ("linhas de até 110") pela quebra por largura;
+  - o descritor perdeu `linhasAparelho` e `LARGURA_LINHA_APARELHO` (a quebra é do desenho, que conhece a fonte; a tela não usava o campo).
+  - **Testes:** o gravador do `jspdf` (em `fichaEpiPdf.test.js` **e** `EpiAlmoxarifado.test.js`, que também gera o PDF) passa a mandar as
+    **medidas** (`getTextWidth`, `splitTextToSize` e o `setFontSize` que as afeta) para um jsPDF **real** (`jest.requireActual`; o
+    `console.error` da sonda de canvas do jsdom calado só no carregamento). Régua nova `textosFora`: todo texto de **fonte 7** com
+    `x + largura real ≤ 196`. Três testes novos: UA de 300 `W` + matrícula de 88 (junção = UA; a confirmação inteira, quebrada por palavra);
+    o pior caso de 8 entregas com e sem imagem (rodapé **e** margem); e a entrega alta começando em **234** (2 curtas com imagem + 4 sem
+    imagem — a montagem é conferida pela divisória da 6ª em 229).
+  - **Vermelho antes:** os dois primeiros caíram em `textosFora` com `Matrícula confirmada pelo cola… 232,8` e `Aparelho: WWW… 280,5` — os
+    números da sonda real.
+  - **Controles:** (c1) corte por contagem (`atual.length >= 110` no lugar da medida) → caem os dois de margem, na régua (`Aparelho …
+    280,5`); (c2) matrícula sem quebra (`[texto]` no lugar do `splitTextToSize`) → caem os dois, na régua (`Matrícula confirmada pelo cola…`,
+    linha 271 do teste); (c3) limiar `y > 235` de volta → cai **só** o da entrega em 234, na régua do rodapé (`addImage 270 → 292,5`, `line
+    295`). Na 1ª versão desse teste a contagem de `addPage` vinha antes da régua e caía primeiro (`Expected length: 1, Received 0`) —
+    reordenado para a régua do rodapé ser a que o controle derruba.
+  - **Sonda real depois** (`fix183-sonda-real.js`: a `quebrarPorLargura` **lida do arquivo de produção** + jsPDF real): UA de tablet Android
+    (186) → 2 linhas, fim **195,1** mm; 300 `W` → 5 linhas, fim **≤ 195,1**; 300 `@` (o glifo mais largo da Helvetica) → 5 linhas, **≤
+    195,1**; matrícula de 88 → 2 linhas, **173,6**; junção = texto nos três. Maior x final: **195,1** (margem 196).
+- **M3 (CORRIGIDO, `8e79177e`) — nada provava que a assinatura não cobre o texto.** `addImage(…, M, y - 9, …)` passava 17/17. Teste novo:
+  para cada `addImage`, o y da imagem é **maior** que o y do último texto da mesma entrega (desde a divisória anterior). Passou de primeira
+  (guarda de regressão). **Controle:** `y - 9` → cai **só** ele (`Expected: > 63, Received: 56`).
+- **M2 (CORRIGIDO, `21818eef`) — o servidor podia truncar o aparelho sem ninguém ver.** Os testes usavam só `Tablet-Almox/2.1 (Android)`
+  (26 caracteres): trocar `user_agent: linha.user_agent ?? null` (`epiService.js:440`) por um corte em 26 passava verde. Agora
+  `epiFichaConfirmacao` e a integração usam um User-Agent real de tablet Android (Chrome WebView, **197** caracteres), com guarda que derruba o
+  arquivo se ele ficar curto (`< 150`), e comparam o texto inteiro. A fixture `fichaEpi.rota.json` foi **regravada pela rota**
+  (`CRM_GRAVAR_FIXTURE=1`) e o teste do servidor passou a exigir `f0.user_agent === UA` (antes conferia só chaves e tipos — a fixture velha
+  continuaria valendo; rodado com a fixture velha, caiu: *"a fixture foi gravada com outro aparelho"*). O Jest da fixture confere a junção
+  das linhas do aparelho no PDF = o UA inteiro, e a margem. **Controle:** corte em 26 no `map` → caem 3 de `epiFichaConfirmacao` (RN-183.01 e
+  os dois 200 da RN-183.06, recebido `'Mozilla/5.0 (Linux; Androi'`) e 2 da integração (rota e serviço); md5 `a3246a24…` → `0568753f…` →
+  `a3246a24…`, diff vazio.
+- **Achado de passagem (REGISTRADO, sem código — anterior à etapa, B1208):** a **linha da tabela** do PDF (fonte 9) corta por contagem
+  (`slice(0, largura × 1,4)`) desde a 178. Medido com o jsPDF real: *Entregue por* com 15 caracteres (`Joao Almoxarife`) termina em
+  **198,6 mm** (passa da margem 196), com 25 (`Maria Aparecida dos Santo`) em **214,0** (sai da folha); o EPI com 36 caracteres encosta na
+  coluna do CA (86,2 × 86). Fora do escopo do fix-round (a revisão nomeou M1–M3); registrado em **B1208** e **C444**.
+
+**Commits um por achado** (a correção e o teste de cada um juntos): os três tocavam `fichaEpiPdf.test.js`, então o arquivo foi montado em
+três versões intermediárias no scratchpad (`fix183-v1/v2/final-test.js`) e cada commit levou a sua — cada versão rodada antes do commit
+(v1 46/46 com o `EpiAlmoxarifado`; v2 21/21; final 21/21 + os dois do servidor e o `epiPontaAPonta` 11/11).
+
+## Verificação final (2026-10-22, uma suíte por vez, depois do fix-round)
+
+Sobre `21818eef` (código) + os documentos do fechamento; exit 0 em todas:
+
+- `test:api` **525/525** arquivos OK (mais lento: `propostaClausulasGrava.api.test.js`, 68,5 s).
+- `test:almoxarifado` **44 passou, 0 falhou**.
+- `test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0**.
+- client **180 suítes / 2377 testes**, todos passando (eram 2373 na T4: +4 da Fase 5 — 2 de margem, 1 da entrega em 234, 1 da assinatura).
+- `CI=true react-scripts build`: *Compiled successfully*.
+- `git status`: só os arquivos do fechamento antes do commit.
+
+## Retrospectiva
+
+1. **283 mm numa folha de 210** — o corte de 110 caracteres foi aceito na Fase 2 (M6) porque "o UA vem do navegador do almoxarifado"; a
+   sonda real mostrou que a linha da **matrícula** (que nenhum limite segura) estoura do mesmo jeito. Limite aceito sem medir é palpite:
+   medir com o renderizador **real** antes de aceitar.
+2. **3 de 3 achados eram testes que não sabiam falhar** — o gravador do `jspdf` devolvia `undefined` para qualquer medida, então nenhum
+   teste podia ver largura; o UA de 26 caracteres era menor que o corte que se queria pegar; e nada olhava a posição da imagem. O que
+   destravou o M1 foi pôr o jsPDF real **atrás** do gravador, só para medir.
+3. **1 sabotagem que não sabotou** (padrão do `perl` com 5 caracteres onde havia 2): o placar verde parecia "falta asserção"; o md5 igual
+   disse que não houve sabotagem. E **1 controle que caiu pela asserção errada** (a contagem de `addPage` antes da régua do rodapé) —
+   reordenado.
+4. **0 mudanças de contrato de API** no fix-round — o JSON da ficha continua o da T1; mudou só o descritor do client (`linhasAparelho` saiu)
+   e o desenho.
 
 ## Letra B proposta (para `docs/almoxarifado-novidades-por-etapa.md`)
 
@@ -258,10 +348,47 @@ vem antes.
   da prova é informação para quem audita). Reversível.
 - **B1205** — O relatório *EPI por colaborador* e a lista *Entregas* **não** ganham as duas colunas nesta etapa (o pedido é a ficha). Fica
   registrado como possível próxima pequena etapa. Reversível.
+- **B1206** — (M5 da Fase 2) mantido o texto do molde *"Sim — digitou ⟨matrícula do cadastro⟩ (confere com o cadastro)"*. **Descartado:**
+  gravar a matrícula digitada letra a letra (mudaria o HMAC e o schema; outra etapa).
+- **B1207** (Fase 5, M1) — a quebra das linhas da evidência no PDF é **por largura medida**: o aparelho por caractere (a junção é o texto
+  literal), a matrícula por palavra; a página quebra pela altura medida da entrega. **Descartado:** `splitTextToSize` no aparelho (come o
+  espaço da quebra) e manter o limiar fixo (não cobre a matrícula sem limite). Reversível.
+- **B1208** (anterior à etapa, registrado sem corrigir) — a linha da tabela do PDF (Data, EPI, CA, …, Entregue por) corta por contagem e um
+  nome de quem entregou com ~16+ caracteres passa da margem (25 → 214 mm, fora da folha). **Escolhido:** não mexer no fix-round (escopo
+  M1–M3). **Descartado:** corrigir agora sem revisão. Reversível; candidato a etapa curta (quebrar as células por largura, como a M1).
+- **B1209** — a próxima etapa: **184**, aprovadores da liberação por valor (feature 23).
 
-## Próxima tarefa detalhada
+*(No fechamento as letras B foram publicadas como **B1200** a **B1209** no documento de novidades.)*
 
-_(preencher no fechamento.)_
+## Próxima tarefa detalhada — Etapa 184: a leitura da liberação por valor para de entregar nome e e-mail dos aprovadores (feature 23)
+
+**O plano já existe e tem a revisão da Fase 2:** `docs/superpowers/plans/2026-10-22-almoxarifado-etapa184-aprovadores-da-liberacao-por-valor.md`
+(commits do plano por outra sessão, a última `8ca2c38f` — emendas da Fase 2; decisões a partir de **B1210**). Este resumo é só o que permite
+retomar sem reler o código — **o plano da 184 prevalece** sobre ele.
+
+**Por que esta.** Item aberto da spec 23 (`specs/modulo-almoxarifado/23-perfis-seguranca-auditoria/README.md`, letra **D (20)** das novidades):
+qualquer usuário do almoxarifado (até Produção) recebe, ao abrir Requisições, a lista de aprovadores de valor **com nome e e-mail**, mesmo a
+tela não mostrando. É exposição de dado pessoal, não depende da empresa e é pequena.
+
+**Contrato que ela consome e muda (medido pelo plano da 184 em `68d72b17`):**
+- `GET /api/almoxarifado/configuracoes/liberacao-valor` (`server/routes/almoxarifado.js:3655-3662`, só `authenticateToken` + o portão do
+  módulo) → `valueApprovalService.getConfigForApi(db, req.user)` (`requisitionValueApprovalService.js:428-438`), que hoje devolve
+  `{ ativo, limite, aprovadores, aprovadorIds, souAprovador }`; `aprovadores` vem de `getAprovadoresDetalhes` (`SELECT id, nome, email`).
+- Depois: quem **não** configura recebe `{ ativo, limite, souAprovador }`; quem configura (`canConfigureAlmox` do servidor) **ou**
+  `isSystemAdmin` recebe também `aprovadorIds`; **ninguém** recebe `aprovadores` (nome/e-mail) por esta leitura. O `PUT` (`:3664`,
+  `denyUnlessAlmoxAdmin`) não muda.
+
+**Pontos de atenção:**
+- O client abre a aba com `canConfigureAlmox` **do client** (inclui `isSystemAdmin`), e o servidor **não** aceita `role = 'admin'` sozinho
+  como configurador — por isso o critério de quem recebe `aprovadorIds` é a união (ver a Fase 0 do plano da 184).
+- Asserção negativa (ninguém recebe nome/e-mail) só se prova por sabotagem — devolver `aprovadores` e ver o teste cair **nomeando** o campo.
+- Quem consome `souAprovador` na tela de Requisições não pode quebrar (o botão de aprovar valor).
+
+**O que já está pronto e ela não reabre:** a regra de aprovação por valor, o `PUT` e a tela de configuração (só deixa de receber o que não
+usa). **Nada da 183.**
+
+**Depois da 184** (medir antes de prometer): a **B1208** (a linha da tabela do PDF da ficha cortada por contagem) é uma etapa curta candidata;
+as 🟡 do mapa que não dependem da empresa — 05, 06, 01, 23.
 
 ## Emendas da Fase 2
 

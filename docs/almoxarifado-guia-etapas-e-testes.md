@@ -1,18 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-22 (Etapas 172 a 182) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-22 (Etapas 172 a 183) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181 e 182) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182 e 183) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172 a 178, 180, 181 e 182 ENTREGUES · próxima: Etapa 183)
+> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172 a 178 e 180 a 183 ENTREGUES · próxima: Etapa 184)
 >
-> **O desenvolvimento parou aqui: Etapa 182 fechada — 2026-10-22.** **O alerta *material separado aguardando retirada***: o sistema
+> **O desenvolvimento parou aqui: Etapa 183 fechada — 2026-10-22.** **A ficha de EPI mostra a matrícula confirmada e o aparelho de cada
+> entrega**: em **Almoxarifado → Entrega de EPI → Ficha por colaborador**, a tabela ganha as colunas **Matrícula confirmada** e **Aparelho**, e o
+> PDF da ficha (o papel da pasta da NR-6) imprime, em cada entrega, *"Matrícula confirmada pelo colaborador: Sim — digitou ⟨matrícula⟩ (confere
+> com o cadastro)"* e *"Aparelho: ⟨identificação do navegador⟩"*. Nada a rodar antes do deploy; nada muda em quem abre a ficha. **Próxima: Etapa
+> 184** — a leitura da liberação por valor para de entregar nome e e-mail dos aprovadores a quem não configura (ver o plano da 184).
+>
+> **Etapa 182, 2026-10-22.** **O alerta *material separado aguardando retirada***: o sistema
 > passa a guardar quando cada requisição foi liberada para retirada, e **Almoxarifado → Alertas** ganha o cartão **Separado aguardando
 > retirada** — as requisições liberadas há mais de **3** dias (campo **Alerta de Retirada Parada (dias)** em Configurações Gerais) e ainda não
 > retiradas, com solicitante, setor, OS, itens na caixa, data e dias; um e-mail por liberação para a lista de alertas. Nada obrigatório antes
 > do deploy; a **A109** (opcional) diz quantos e-mails o primeiro dia vai mandar (**C443**). **Próxima: Etapa 183** — a ficha de EPI (tela e
-> PDF) mostra a matrícula confirmada e o aparelho de cada entrega (ver o plano da 183).
+> PDF) mostra a matrícula confirmada e o aparelho de cada entrega (ver o plano da 183). *(Feita: a 183.)*
 >
 > **Etapa 181, 2026-10-22.** **O relatório *EPI por colaborador* mostra as entregas de EPI**
 > (quem recebeu, o quê, quando, o CA, quem entregou e se tem assinatura; filtros de colaborador, EPI e período; planilha), e ele e o
@@ -6902,6 +6908,62 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 183 — A ficha de EPI mostra a matrícula confirmada e o aparelho de cada entrega (ENTREGUE — 2026-10-22)
+
+**O que mudou, em uma frase:** a ficha de EPI do colaborador — na tela e no PDF — passa a dizer, em cada entrega, que ele digitou a
+matrícula e ela conferiu, e de qual aparelho veio a assinatura.
+
+**O problema que ela resolve.** Na entrega de EPI o colaborador assina no tablet e digita a própria matrícula. O sistema já guardava as
+duas provas (que a matrícula conferiu e de qual aparelho veio a assinatura), dentro do lacre da entrega — mas a **ficha impressa**, que vai para
+a pasta da NR-6, não as mostrava. Quem lia o papel via o nome, o EPI e o rabisco, e não via *"ele digitou M-100 e conferiu"* nem *"assinado no
+tablet tal"*.
+
+| Antes | Agora |
+|---|---|
+| A ficha na tela não dizia se a matrícula foi conferida | Coluna **Matrícula confirmada** (*"Sim — digitou ⟨matrícula⟩ (confere com o cadastro)"*) |
+| A ficha não dizia de qual aparelho veio a assinatura | Coluna **Aparelho** (o começo do texto; o texto inteiro ao parar o mouse em cima) |
+| O PDF da ficha não trazia nenhuma das duas | Duas linhas a mais em cada entrega, depois do código do registro |
+| — | Texto longo do aparelho ou da matrícula quebra em linhas dentro da folha; a entrega que não cabe no fim da página vai inteira para a seguinte |
+
+**Antes de testar (uma vez).** Um usuário **Almoxarife** (ou Administrador do almoxarifado), um colaborador **ativo e com matrícula** (ex.:
+*M-100*) em **Fábrica → Colaboradores**, e um material de **EPI** com **Nº do CA** e validade futura, com saldo (roteiro da Etapa 178).
+
+**Roteiro de teste (10 minutos).**
+
+1. **Entregar.** Entre como Almoxarife. **Almoxarifado → Entrega de EPI → Nova entrega**: escolha o colaborador e o EPI, quantidade **1**,
+   o colaborador assina no quadro e toca **Confirmar assinatura**, e digita a matrícula em **Matrícula — digitada pelo colaborador** (pode
+   ser *m 100*: maiúscula e espaços não contam). **Registrar entrega** → *"Entrega ⟨número⟩ registrada para ⟨nome⟩ — ⟨matrícula⟩. Código de
+   verificação: …"*.
+2. **A ficha na tela.** Aba **Ficha por colaborador**, escolha o colaborador (ou toque **Ficha** na linha da aba **Entregas**). Na tabela, entre
+   **Entregue por** e **Assinatura**, as colunas novas: **Matrícula confirmada** = *"Sim — digitou M-100 (confere com o cadastro)"* — a
+   matrícula **do cadastro** no dia da entrega, mesmo que tenha sido digitada *m 100*; **Aparelho** = os 40 primeiros caracteres do texto
+   do navegador (ex.: *"Mozilla/5.0 (Linux; Android 14; SM-X210 …"*) com *…* no fim; pare o mouse em cima para ver o texto inteiro.
+3. **O PDF.** **Gerar PDF** → baixa *ficha-epi-⟨nome⟩.pdf*. Em cada entrega, depois da linha *"Entrega ⟨número⟩ · registro (HMAC-SHA256):
+   ⟨código⟩"*, as linhas *"Matrícula confirmada pelo colaborador: Sim — digitou M-100 (confere com o cadastro)"* e *"Aparelho: ⟨texto⟩"* —
+   um aparelho com texto comprido continua nas linhas de baixo, recuadas, sem passar da margem direita; a imagem da assinatura vem **abaixo**
+   dessas linhas.
+4. **A matrícula é a do dia da entrega.** Em **Fábrica → Colaboradores**, troque a matrícula do colaborador para *M-200* e salve. Volte à
+   **Ficha**: o topo diz *Matrícula: M-200* (o cadastro de hoje), e a entrega continua *"Sim — digitou M-100 (confere com o cadastro)"* — o
+   que valia no dia. Volte a matrícula para *M-100* se for usar o colaborador de novo.
+5. **Quem não pode.** Entre como um usuário de **Produção** ou **Gestor**: **Entrega de EPI** mostra só *"Seu perfil não acessa a entrega de
+   EPI — só o almoxarife e o administrador do módulo registram entregas e consultam fichas."* — como antes.
+6. **A integridade não muda.** Aba **Entregas**: **Verificar** na entrega nova → *"Íntegro"*; **Verificar cadeia** → *"Cadeia íntegra — ⟨n⟩
+   registros"*. Abrir a ficha e gerar o PDF não grava nada.
+
+**Entrega sem a prova.** Numa **base de desenvolvimento** antiga (entregas gravadas antes da revisão da Etapa 178), a ficha mostra
+*"Não registrada"* e *"Não registrado"* nessas entregas — a linha aparece, vazia de prova, em vez de sumir (**B1204**). Em produção toda
+entrega tem as duas provas.
+
+**O que esta etapa não cobre.** O **endereço de rede** (IP) continua guardado e no lacre, mas não sai na ficha (**B1202**). O aparelho sai
+como foi gravado — não é traduzido para *"Android — Chrome"* (**B1203**). *"digitou M-100"* é a matrícula do cadastro que conferiu, não o que
+foi digitado letra a letra (**B1206**). O relatório **EPI por colaborador** e a aba **Entregas** não ganharam as colunas (**B1205**). A linha da
+tabela do PDF (EPI, Entregue por…) corta nomes longos — um *Entregue por* com mais de uns 15 caracteres passa da margem (**B1208**, **C444**).
+**Nada a rodar antes do deploy.**
+
+*Nenhum clique no navegador foi dado nesta etapa, e nenhum PDF foi aberto num leitor*: o roteiro acima é o que os testes automáticos provam
+pela rota do servidor (os campos, o 403, a integridade), pela tela em jsdom e pelo PDF com as larguras medidas no jsPDF real, escrito para
+você conferir à mão.
 
 ## Etapa 182 — O alerta "material separado aguardando retirada" (ENTREGUE — 2026-10-22)
 
