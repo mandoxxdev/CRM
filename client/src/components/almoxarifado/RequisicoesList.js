@@ -1371,7 +1371,7 @@ const RequisicoesList = () => {
 
       {/* Filtros */}
       <div className="almox-filters">
-        {warehouseMode && (souAprovadorValor || isAdmin) && (
+        {warehouseMode && souAprovadorValor && (
           <button
             className={filtroAprovacoesValor ? 'btn-almox-primary' : 'btn-almox-secondary'}
             onClick={() => {
@@ -1776,8 +1776,9 @@ const RequisicoesList = () => {
                   </div>
                 )}
 
-                {/* Ações — aprovação de valor */}
-                {warehouseMode && detalhe.status === 'AGUARDANDO_APROVACAO_VALOR' && (souAprovadorValor || isAdmin) && (
+                {/* Ações — aprovação de valor. Só `souAprovadorValor` (Etapa 184, Fase 5): o servidor o calcula com o
+                    mesmo critério do portão de /aprovar-valor; o `isAdmin` desta tela aceitava quem o portão recusa (403). */}
+                {warehouseMode && detalhe.status === 'AGUARDANDO_APROVACAO_VALOR' && souAprovadorValor && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 20, flexWrap: 'wrap' }}>
                     <button className="btn-almox-primary" style={{ flex: 1, justifyContent: 'center', minWidth: 140 }}
                       onClick={handleAprovarValor} disabled={saving || temPendenciaRegra}
@@ -1790,7 +1791,7 @@ const RequisicoesList = () => {
                     </button>
                   </div>
                 )}
-                {warehouseMode && detalhe.status === 'AGUARDANDO_APROVACAO_VALOR' && !souAprovadorValor && !isAdmin && (
+                {warehouseMode && detalhe.status === 'AGUARDANDO_APROVACAO_VALOR' && !souAprovadorValor && (
                   <div className="almox-hint-banner" style={{ marginTop: 20, fontSize: '0.8rem' }}>
                     Esta requisição aguarda aprovação de um aprovador de alto valor configurado.
                   </div>

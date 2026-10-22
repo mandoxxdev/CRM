@@ -836,6 +836,12 @@ describe('Etapa 47: pendências de regra na tela de requisições', () => {
   });
 
   test('a lane de valor tambem fica desabilitada com pendencia aberta', async () => {
+    // Etapa 184 (Fase 5): a lane segue so `souAprovador`. O usuario padrao e `role: 'admin'`, a quem o servidor real
+    // responde `souAprovador: true` (o mock global `false` so valia porque o `isAdmin` da tela mostrava a lane de qualquer jeito).
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => (url === '/almoxarifado/configuracoes/liberacao-valor'
+      ? Promise.resolve({ data: { ativo: true, limite: 800, aprovadorIds: [], souAprovador: true } })
+      : base(url, cfg)));
     detalheDoBanco = {
       ...baseRequisicao('AGUARDANDO_APROVACAO_VALOR'), solicitante_id: 1, valor_total: 900, pendencias_regra_abertas: 1,
     };
@@ -1337,5 +1343,50 @@ describe('Etapa 184: a lista com a resposta reduzida da liberacao por valor', ()
     await renderizarSemDetalhe();
     await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
     expect(botaoPorTexto('Aprovações de valor')).toBeTruthy();
+  });
+});
+
+// Etapa 184 (Fase 5, Menor 3): o filtro "Aprovações de valor" e os botões Aprovar Liberação/Reprovar apareciam com
+// `souAprovadorValor || isAdmin` — e `isAdmin` (`canDeleteAlmoxRequisicao`) aceita o admin do módulo e o `role: 'Admin'`,
+// a quem o portão real (`isAprovadorValor`: `role === 'admin'` estrito ou estar na lista) responde 403. Agora a tela
+// segue só `souAprovador`, que vem do servidor com o mesmo critério do portão (provado em liberacaoValorLeitura RN-184.04 Fase 5).
+describe('Etapa 184 (Fase 5): a aprovação de valor segue só o souAprovador do servidor', () => {
+  let liberacaoDoBanco;
+  beforeEach(() => {
+    detalheDoBanco = { ...baseRequisicao('AGUARDANDO_APROVACAO_VALOR'), solicitante_id: 1, valor_total: 900 };
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => {
+      if (url === '/almoxarifado/configuracoes/liberacao-valor') return Promise.resolve({ data: liberacaoDoBanco });
+      return base(url, cfg);
+    });
+  });
+  const esperar = async () => { await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); };
+  const BANNER = 'Esta requisição aguarda aprovação de um aprovador de alto valor configurado.';
+
+  test.each([
+    ['admin do módulo', { id: 6, nome: 'Admin Modulo', role: 'user', admin_modulos: ['almoxarifado'] }],
+    ["role 'Admin' (caixa alta)", { id: 31, nome: 'Admin Caixa', role: 'Admin' }],
+    ["super com role 'user'", { id: 32, nome: 'Super', role: 'user', is_superadmin: 1 }],
+  ])('[RN-184.04, Fase 5] %s com souAprovador false: sem filtro, sem Aprovar Liberação/Reprovar, com o aviso', async (_r, u) => {
+    mockUser = u;
+    liberacaoDoBanco = { ativo: true, limite: 800, aprovadorIds: [7, 9], souAprovador: false };
+    await renderizar();
+    await esperar();
+    // Metade positiva: o detalhe abriu (o aviso de quem não aprova está na tela).
+    expect(container.textContent).toContain(BANNER);
+    expect(botaoPorTexto('Aprovações de valor')).toBeUndefined();
+    expect(botaoPorTexto('Aprovar Liberação')).toBeUndefined();
+    expect(botaoPorTexto('Reprovar')).toBeUndefined();
+  });
+
+  test("[RN-184.04, Fase 5] admin do sistema (role 'admin') com souAprovador true: filtro e botões, sem o aviso", async () => {
+    mockUser = { id: 5, nome: 'Admin Sistema', role: 'admin' };
+    liberacaoDoBanco = { ativo: true, limite: 800, aprovadorIds: [7, 9], souAprovador: true };
+    await renderizar();
+    await esperar();
+    expect(botaoPorTexto('Aprovações de valor')).toBeTruthy();
+    expect(botaoPorTexto('Aprovar Liberação')).toBeTruthy();
+    expect(botaoPorTexto('Reprovar')).toBeTruthy();
+    expect(container.textContent).not.toContain(BANNER);
   });
 });
