@@ -1593,6 +1593,11 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id,
       { status: 400 });
   }
 
+  // Etapa 171 (T2, RN-171.07): a ENTRADA_COMPRA de nota de pedido com OS grava o `os_id` do pedido — a marca de origem
+  // (decisao 2 do Andre: OS cancelada depois, o material vira estoque mas fica marcado). Vale mesmo com a OS fechada.
+  // eslint-disable-next-line global-require
+  const osIdDoPedido = await require('./reservaDaOs').osIdDoPedido(db, rec.pedido_compra_id);
+
   // ── 2. Entrada item a item, cada um reclamado antes de mover ──
   for (const item of itens) {
     // Etapa 5: a inspecao deixou de ser PRE-REQUISITO da entrada e passou a ser passo posterior.
@@ -1682,6 +1687,7 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id,
           motivo: `Recebimento ${rec.numero}`,
           referencia: rec.nota_fiscal,
           recebimento_id: recebimentoId,
+          os_id: osIdDoPedido || undefined,
           localizacao_destino_id: destinoPorItem.get(item.id) || localizacao_id,
           lote_id: loteId,
           documento_vinculado: rec.numero,

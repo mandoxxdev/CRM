@@ -2927,7 +2927,8 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
     try {
       // eslint-disable-next-line global-require
       liberadasNoEstorno = await require('./reservaChegadaService').liberarParaEstorno(db, user, mov);
-      requisicoesDoEstorno = [...new Set(liberadasNoEstorno.map((l) => l.requisicao_id))];
+      // Etapa 171 (T2, I5): a reserva da OS liberada no estorno nao tem requisicao (`requisicao_id: null`).
+      requisicoesDoEstorno = [...new Set(liberadasNoEstorno.map((l) => l.requisicao_id).filter((x) => x != null))];
     } catch (e) {
       console.warn(`[almoxarifado] liberacao das reservas da chegada no estorno falhou (movimentacao ${movimentoId}): ${e.message}`);
     }
@@ -3681,8 +3682,11 @@ async function criarReservaSemTrava(db, user, data, opcoes = {}) {
   // `reserva_dias_validade`. Sem a config e sem valor explícito a reserva NÃO expira — o job de
   // expiração só age sobre quem tem `expira_em`. É opt-in de propósito: ligar um default aqui
   // faria as reservas manuais que já existem começarem a ser liberadas sozinhas.
-  let expiraEm = expira_em || null;
-  if (!expiraEm) {
+  // Etapa 171 (T2, I2): `opcoes.semExpiracao` (so do 4o argumento) — a reserva da OS (compra para a OS) nao vence: o
+  // material e da OS ate a OS fechar (RN-171.09). Ignora o `expira_em` explicito e a `reserva_dias_validade`.
+  const semExpiracao = opcoes.semExpiracao === true;
+  let expiraEm = semExpiracao ? null : (expira_em || null);
+  if (!expiraEm && !semExpiracao) {
     const dias = parseInt(await getConfig(db, 'reserva_dias_validade'), 10);
     if (Number.isFinite(dias) && dias > 0) {
       // Etapa 162 (RN-162.06, C404, B1035): hoje de Brasilia + N dias de calendario (era o dia UTC de agora + N x 24 h — a reserva
@@ -3872,6 +3876,7 @@ module.exports = {
   registrarMovimentacaoSemTrava, // Etapa 97 (Fase 2, I-3): SO para os testes de corrida do claim
   cancelarMovimentacao,
   criarReserva,
+  criarReservaSemTrava, // Etapa 171 (T2): a reserva da OS, de dentro da secao da nota/inspecao/NC
   liberarReserva,
   consultarEstoque,
   consultarSaldosPorLocalizacao,

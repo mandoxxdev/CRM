@@ -14,6 +14,8 @@ const lotService = require('./lotService');
 const reservationService = require('./reservationService');
 // Etapa 91 (T1): a trava por material (modulo sem nenhum require — sem ciclo).
 const travaPorMaterial = require('./travaPorMaterial');
+// Etapa 171 (T2, RN-171.12 b): a reserva da OS que a requisicao da OS converte na aprovacao (modulo sem ciclo).
+const reservaDaOs = require('./reservaDaOs');
 // Etapa 117 (C236, B759): a devolucao viva (a entrada nao estornada) — a mesma regua do estorno e da tela de Devolucoes.
 const { DEVOLUCAO_VIVA_SQL } = require('./devolucaoViva');
 // Etapa 93 (T0, B443): a trava POR REQUISICAO das portas do almoxarife (outra trava; ordem requisicao -> material).
@@ -359,6 +361,70 @@ async function saldoDisponivelParaItem(db, item) {
 }
 
 /**
+ * Etapa 171 (T2, RN-171.12 b) — libera, das reservas da OS do material que a requisicao (`osReferencia`) pode usar, ate
+ * `falta`, as mais antigas primeiro. Roda SOB A TRAVA da aprovacao (liberar nao pega trava). Nunca lanca: a liberacao
+ * que falha vira `console.warn` e para (o que ja foi liberado volta na lista, para a reserva ou a recriacao).
+ * @returns {Promise<Array<{reserva_id, material_id, quantidade, os_id, numero_os, recebimento_id}>>}
+ */
+async function converterReservasDaOs(db, user, materialId, osReferencia, falta, rotuloReq) {
+  const out = [];
+  let lista;
+  try {
+    lista = await reservaDaOs.reservasDaOsParaRequisicao(db, materialId, osReferencia);
+  } catch (e) {
+    console.warn(`[almoxarifado-reserva-os] leitura das reservas da OS falhou (material ${materialId}): ${e.message}`);
+    return out;
+  }
+  let resta = falta;
+  for (const l of lista) {
+    if (resta <= 1e-9) break;
+    const q = Q.qtd(Math.min(l.saldo, resta));
+    if (!(q > 0)) break;
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await stockService.liberarReserva(db, user, l.id, q >= l.saldo - 1e-9 ? null : q, {
+        statusFinal: 'LIBERADA',
+        motivo: `Convertida na reserva da requisição ${rotuloReq}`,
+        motivoMovimentacao: `Reserva da OS ${l.numero_os} convertida na requisição ${rotuloReq}`,
+      });
+    } catch (e) {
+      console.warn(`[almoxarifado-reserva-os] Falha ao converter a reserva da OS ${l.id}: ${e.message}`);
+      break;
+    }
+    resta -= q;
+    out.push({ reserva_id: l.id, material_id: Number(materialId), quantidade: q, os_id: l.os_id, numero_os: l.numero_os,
+      recebimento_id: l.recebimento_id });
+  }
+  return out;
+}
+
+/** Etapa 171 — a conversao nao aconteceu: cada pedaco liberado volta a ser reserva da OS. Nunca lanca. */
+async function recriarConvertidas(db, user, convertidas, rotuloReq) {
+  for (const c of convertidas || []) {
+    // eslint-disable-next-line no-await-in-loop
+    await reservaDaOs.recriarReservaDaOs(db, user, c, `devolvida: aprovação da requisição ${rotuloReq} não a usou`);
+  }
+}
+
+/**
+ * Etapa 171 — a reserva da requisicao ficou com `aReservar`; se a conversao liberou mais (so arredondamento: o livre de
+ * hoje nao negativo garante `aReservar >= liberado`), o excesso volta para a OS, do ultimo pedaco para o primeiro.
+ * Devolve o que FICOU convertido (o `desfazerReservas` recria se a aprovacao perder).
+ */
+async function devolverExcessoDaConversao(db, user, convertidas, aReservar, rotuloReq) {
+  const ficou = (convertidas || []).map((c) => ({ ...c }));
+  let excesso = ficou.reduce((s2, c) => s2 + c.quantidade, 0) - aReservar;
+  for (let i = ficou.length - 1; i >= 0 && excesso > 1e-6; i -= 1) {
+    const q = Q.qtd(Math.min(ficou[i].quantidade, excesso));
+    // eslint-disable-next-line no-await-in-loop
+    await reservaDaOs.recriarReservaDaOs(db, user, { ...ficou[i], quantidade: q }, `excesso da conversão na requisição ${rotuloReq}`);
+    ficou[i].quantidade = Q.qtd(ficou[i].quantidade - q);
+    excesso -= q;
+  }
+  return ficou.filter((c) => c.quantidade > 1e-9);
+}
+
+/**
  * Reserva de material na APROVAÇÃO (Etapa 4, ligação 04→07 — design, decisão 2).
  *
  * Para cada item reserva `min(pendente de atendimento, disponível do material)` e devolve o
@@ -406,6 +472,12 @@ async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}, { rec
   const reservas = [];
   let algumFaltou = false;
   let algumSeguro = false; // algum item com hold: criado agora OU ja existente (Etapa 73, Fase 5)
+  // Etapa 171 (T2, RN-171.12 b): a requisicao e "da OS" pela `os_referencia` (a requisicao nao tem `os_id`).
+  const osReferencia = reqRow && reqRow.os_referencia !== undefined
+    ? reqRow.os_referencia
+    : ((await dbGet(db, 'SELECT os_referencia FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId])) || {}).os_referencia;
+  const daOs = !!reservaDaOs.chaveDaOs(osReferencia);
+  const rotuloReq = (reqRow && reqRow.numero) || requisicaoId;
 
   try {
     for (const item of itens) {
@@ -417,10 +489,28 @@ async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}, { rec
       // (duas reservas de 4 para um item de 4). `disponivel` ja soma o hold do proprio item de volta,
       // entao o livre de verdade e `disponivel - reservado_para_item`.
       // eslint-disable-next-line no-await-in-loop
-      const { disponivel, reservado_para_item: jaReservado, caixa_outros_itens: caixaOutros } = await saldoDisponivelParaItem(db, item);
+      let { disponivel, reservado_para_item: jaReservado, caixa_outros_itens: caixaOutros } = await saldoDisponivelParaItem(db, item);
       const falta = pendente - jaReservado;
       if (jaReservado > 0) algumSeguro = true;
       if (falta <= 1e-9) continue; // o item ja esta todo seguro
+      // Etapa 171 (T2, RN-171.12 b): requisicao da OS converte primeiro a reserva da OS do material (ate a falta), sob a
+      // trava que a aprovacao ja segura. Calculado ANTES: com o livre de hoje negativo (caixa de outros acima do
+      // disponivel), o liberado iria para a caixa alheia e nao para esta reserva — nao converte (nao deixa sobra solta).
+      let convertidas = [];
+      if (daOs && disponivel - jaReservado - caixaOutros >= -1e-9) {
+        // eslint-disable-next-line no-await-in-loop
+        convertidas = await converterReservasDaOs(db, user, item.material_id, osReferencia, falta, rotuloReq);
+        if (convertidas.length) {
+          try {
+            // eslint-disable-next-line no-await-in-loop
+            ({ disponivel, reservado_para_item: jaReservado, caixa_outros_itens: caixaOutros } = await saldoDisponivelParaItem(db, item));
+          } catch (e) {
+            // eslint-disable-next-line no-await-in-loop
+            await recriarConvertidas(db, user, convertidas, rotuloReq);
+            throw e;
+          }
+        }
+      }
       // Etapa 95 (T2, B469): o livre que a aprovacao reserva desconta a caixa sem reserva dos OUTROS itens ativos do
       // material — o separado ainda nao entregue, que o disponivel do motor conta como livre. Antes a aprovacao
       // reservava a caixa de outra requisicao e a dona dela nao entregava mais o que separou (M3). A caixa do PROPRIO
@@ -428,7 +518,12 @@ async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}, { rec
       // Etapa 95 (Fase 5): arredondado a 1e-6, como o teto da separacao (B471/I2). Sem isso fisico 0,3 com 0,1 na
       // caixa de outra reservava 0.19999999999999998 para um pedido de 0,2 e deixava PARCIALMENTE_RESERVADA.
       const aReservar = Math.min(falta, Math.round(Math.max(0, disponivel - jaReservado - caixaOutros) * 1e6) / 1e6);
-      if (aReservar <= 0) { algumFaltou = true; continue; }
+      if (aReservar <= 0) {
+        algumFaltou = true;
+        // eslint-disable-next-line no-await-in-loop
+        await recriarConvertidas(db, user, convertidas, rotuloReq);
+        continue;
+      }
 
       try {
         // eslint-disable-next-line no-await-in-loop
@@ -446,12 +541,19 @@ async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}, { rec
           item_requisicao_id: item.id,
           motivo: `Reserva automática requisição ${reqRow.numero || requisicaoId}`,
         });
-        reservas.push({ item_id: item.id, reserva_id: r.id, quantidade: aReservar });
+        // Etapa 171: o que foi convertido e nao coube nesta reserva (arredondamento) volta para a OS.
+        // eslint-disable-next-line no-await-in-loop
+        const osConvertida = await devolverExcessoDaConversao(db, user, convertidas, aReservar, rotuloReq);
+        reservas.push(osConvertida.length
+          ? { item_id: item.id, reserva_id: r.id, quantidade: aReservar, os_convertida: osConvertida }
+          : { item_id: item.id, reserva_id: r.id, quantidade: aReservar });
         algumSeguro = true;
         if (aReservar < falta) algumFaltou = true;
       } catch (e) {
         console.warn(`[almoxarifado-reservas] Falha ao reservar item ${item.id} da requisição ${requisicaoId}: ${e.message}`);
         algumFaltou = true;
+        // eslint-disable-next-line no-await-in-loop
+        await recriarConvertidas(db, user, convertidas, rotuloReq);
       }
     }
   } catch (e) {
@@ -552,6 +654,9 @@ const MSG_TRAVA_INCOMPLETA = 'A requisição ganhou itens enquanto era aprovada 
  */
 async function desfazerReservas(db, user, reservas = []) {
   for (const r of reservas) {
+    // Etapa 171 (T2, RN-171.12 b): a reserva desfeita tinha convertido reserva da OS — ela volta para a OS depois de a da
+    // requisicao soltar (ou se ela ja estava solta). Se a da requisicao nao soltar (W1), nao recria: seria hold em dobro.
+    let soltou = false;
     // Etapa 92 (T3, C148 (1), B438): quem venceu pode ter sido o cancelamento, que ja soltou esta reserva —
     // `liberarReserva` lancaria "Reserva liberada nao pode ser liberada" e o W1 abaixo parecia incidente
     // num desfecho certo (sonda: 5/5). Reserva que ja nao esta ATIVA: I1 e segue. A falha REAL (ativa que
@@ -567,16 +672,24 @@ async function desfazerReservas(db, user, reservas = []) {
         .catch(() => null);
       if (atual && atual.status !== 'ATIVA') {
         console.info(`[almoxarifado-aprovar] Reserva ${r.reserva_id} ja estava ${atual.status} — nada a desfazer`);
-        continue; // eslint-disable-line no-continue
+        soltou = true;
+      } else {
+        // eslint-disable-next-line no-await-in-loop
+        await stockService.liberarReserva(db, user, r.reserva_id, null, {
+          statusFinal: 'LIBERADA',
+          motivo: 'Aprovação recusada — reserva desfeita',
+          motivoMovimentacao: 'Liberação por aprovação recusada',
+        });
+        soltou = true;
       }
-      // eslint-disable-next-line no-await-in-loop
-      await stockService.liberarReserva(db, user, r.reserva_id, null, {
-        statusFinal: 'LIBERADA',
-        motivo: 'Aprovação recusada — reserva desfeita',
-        motivoMovimentacao: 'Liberação por aprovação recusada',
-      });
     } catch (relErr) {
       console.warn('[almoxarifado-aprovar] Falha ao desfazer reserva', r.reserva_id, '—', relErr.message);
+    }
+    if (soltou && Array.isArray(r.os_convertida)) {
+      for (const c of r.os_convertida) {
+        // eslint-disable-next-line no-await-in-loop
+        await reservaDaOs.recriarReservaDaOs(db, user, c, 'devolvida: aprovação recusada');
+      }
     }
   }
 }

@@ -36,6 +36,8 @@ const receiptNotificationService = require('./receiptNotificationService');
 // Etapa 91 (T0, D4/B422): a trava por material mora num modulo sem dependencias, com UM `Map` para o
 // processo inteiro — a fila da 75/76 e a das portas que aprovam/liberam (T1/T2) sao a mesma.
 const trava = require('./travaPorMaterial');
+// Etapa 171 (T2): a reserva da OS (pedido de compra com OS). Pelo objeto do modulo.
+const reservaDaOs = require('./reservaDaOs');
 
 const { QTD_DO_ITEM_SQL, faltaDoItem } = receiptNotificationService;
 
@@ -225,9 +227,19 @@ async function reservarChegadaParaQuemEspera(db, user, recebimentoId, opcoes = {
   const sobTrava = !!(opcoes && opcoes.sobTrava);
   const pend = sobTrava ? opcoes.pendencia : novaPendencia();
   if (pend) pend.distribuicoes.push({ acc, rotulos });
+  // Etapa 171 (T2, RN-171.08): pedido com OS ABERTA -> a fila da OS primeiro, o resto vira a reserva da OS (lida DENTRO
+  // da secao: a OS que fecha no meio vale a partir dai). I3: a nota desconta o que ja reservou para a OS (retomada).
   const distribuir = async () => {
+    const os = livrePorMaterial.size ? await reservaDaOs.osAbertaDoRecebimento(db, recebimentoId) : null;
     for (const [materialId, livre] of livrePorMaterial) {
       if (sobTrava && !trava.travado(materialId)) throw erroSemTrava(materialId);
+      if (os) {
+        // eslint-disable-next-line no-await-in-loop
+        const ja = await reservaDaOs.jaReservadoDaNotaParaOs(db, recebimentoId, materialId, os.id);
+        // eslint-disable-next-line no-await-in-loop
+        await distribuirParaOs(db, user, materialId, livre - ja, rotulos, acc, os);
+        continue; // eslint-disable-line no-continue
+      }
       // eslint-disable-next-line no-await-in-loop
       await distribuirSemLock(db, user, materialId, livre, rotulos, acc);
     }
@@ -343,12 +355,17 @@ async function recalcularRequisicoesDasReservas(db, reservaIds, rotulo) {
   return mudaram;
 }
 
-async function distribuirSemLock(db, user, materialId, teto, rotulos, acc) {
-  if (!(teto > EPS)) return;
+/**
+ * Etapa 171 (T2): `filaOpcoes.filtro(c)` restringe as candidatas (a fila da OS, RN-171.12 a). Devolve o que ficou
+ * reservado nesta chamada (antes nao devolvia nada; os chamadores de hoje ignoram).
+ */
+async function distribuirSemLock(db, user, materialId, teto, rotulos, acc, filaOpcoes = {}) {
+  if (!(teto > EPS)) return 0;
   const material = await dbGet(db, `SELECT *, ${disponivelSql()} AS disponivel FROM materiais_almoxarifado WHERE id = ?`, [materialId]);
-  if (!material) return;
+  if (!material) return 0;
   let distribuivel = Math.min(teto, Math.max(0, num(material.disponivel)));
-  if (distribuivel <= EPS) return;
+  if (distribuivel <= EPS) return 0;
+  let usado = 0;
 
   const marcasSt = STATUS_CANDIDATOS.map(() => '?').join(',');
   const candidatos = await dbAll(db, `SELECT ir.id AS item_id, ir.requisicao_id, ir.quantidade_solicitada,
@@ -359,8 +376,9 @@ async function distribuirSemLock(db, user, materialId, teto, rotulos, acc) {
     JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
     WHERE COALESCE(r.ativo, 1) = 1 AND r.status IN (${marcasSt}) AND ir.material_id = ?`,
   [...STATUS_CANDIDATOS, materialId]);
+  const filtro = typeof filaOpcoes.filtro === 'function' ? filaOpcoes.filtro : () => true;
   const naFila = candidatos
-    .filter((c) => faltaDoItem(c, c.hold) > EPS)
+    .filter((c) => faltaDoItem(c, c.hold) > EPS && filtro(c))
     .sort((a, b) => requisitionService.compararPrioridade(a, b) || (a.item_id - b.item_id));
 
   for (const c of naFila) {
@@ -423,11 +441,33 @@ async function distribuirSemLock(db, user, materialId, teto, rotulos, acc) {
     }
     if (ficou <= EPS) continue;
     distribuivel -= ficou;
+    usado += ficou;
     acc.tocadas.add(Number(c.requisicao_id));
     acc.resultado.reservas.push({
       requisicao_id: Number(c.requisicao_id), item_id: c.item_id, material_id: materialId,
       reserva_id: reserva.id, quantidade: ficou,
     });
+  }
+  return usado;
+}
+
+/**
+ * Etapa 171 (T2, RN-171.08 + RN-171.12 a, I1) — a distribuicao de um material que chegou por pedido com OS ABERTA, SOB A
+ * TRAVA de quem chama: (1) a fila das requisicoes DA OS (`os_referencia` = numero da OS, `reservaDaOs.requisicaoEhDaOs`)
+ * pelo mesmo miolo, com o mesmo teto; (2) o que sobrar vira a reserva da OS (`reservarParaOsSobTrava`: teto pelo livre
+ * de caixa, sem expiracao). A fila geral nao leva nada deste material desta nota/liberacao — o que nao coube na reserva
+ * da OS (caixa) fica livre.
+ */
+async function distribuirParaOs(db, user, materialId, teto, rotulos, acc, os) {
+  if (!(teto > EPS)) return;
+  const usado = await distribuirSemLock(db, user, materialId, teto, rotulos, acc,
+    { filtro: (c) => reservaDaOs.requisicaoEhDaOs(c.os_referencia, os.numero_os) });
+  const r = await reservaDaOs.reservarParaOsSobTrava(db, user, {
+    materialId, quantidade: teto - usado, os, recebimentoId: rotulos.recebimento_id,
+  });
+  if (r) {
+    if (!acc.resultado.reservas_os) acc.resultado.reservas_os = [];
+    acc.resultado.reservas_os.push(r);
   }
 }
 
@@ -489,6 +529,14 @@ async function reservarLiberacaoParaQuemEspera(db, user, ctx, resultado = { rese
     const rotulos = rotulosDaLiberacao(ctx, rec ? rec.numero : ctx.recebimento_id);
     const acc = { tocadas: new Set(), resultado };
     if (pend) pend.distribuicoes.push({ acc, rotulos });
+    // Etapa 171 (T2, RN-171.08, I4): a inspecao que aprova e a NC que aceita, de nota de pedido com OS ABERTA, servem a
+    // fila da OS e reservam o resto para ela. Sem desconto da I3: a decisao e reivindicada uma vez (nao ha retomada), e
+    // a NC que aceita depois de uma inspecao do mesmo recebimento/material libera quantidade NOVA.
+    const os = rotulos.recebimento_id ? await reservaDaOs.osAbertaDoRecebimento(db, rotulos.recebimento_id) : null;
+    if (os) {
+      await distribuirParaOs(db, user, material.id, teto, rotulos, acc, os);
+      return;
+    }
     await distribuirSemLock(db, user, material.id, teto, rotulos, acc);
   };
   if (sobTrava) {
@@ -554,9 +602,13 @@ async function aposLiberacaoSemFalhar(db, user, ctx, opcoes = {}) {
  */
 async function liberarParaEstorno(db, user, mov) {
   const qtd = num(mov.quantidade);
+  // Etapa 171 (T2, RN-171.11, I5): PRIMEIRO a reserva da OS deste recebimento/material — sempre `min(reserva, estornado)`,
+  // mesmo com disponivel sobrando (o estorno tira da OS o que a nota deu a ela). Entra na lista com `requisicao_id:
+  // null` e `reserva_da_os: true`; `recriarAposEstornoRecusado` a recria com a OS se o estorno nao acontecer.
+  const liberadasOs = await liberarReservaDaOsParaEstorno(db, user, mov, qtd);
   const mat = await dbGet(db, `SELECT ${disponivelSql()} AS disponivel FROM materiais_almoxarifado WHERE id = ?`, [mov.material_id]);
   const disp = num(mat && mat.disponivel);
-  if (disp >= qtd - EPS) return [];
+  if (disp >= qtd - EPS) return liberadasOs;
 
   const marcasSt = STATUS_QUE_ESPERAM.map(() => '?').join(',');
   const reservas = await dbAll(db, `SELECT rs.id AS reserva_id, rs.item_requisicao_id AS item_id,
@@ -574,11 +626,11 @@ async function liberarParaEstorno(db, user, mov) {
   const liberaveis = reservas.filter((x) => num(x.saldo) > EPS)
     .sort((a, b) => requisitionService.compararPrioridade(b, a) || (b.item_id - a.item_id));
   const total = liberaveis.reduce((s, x) => s + num(x.saldo), 0);
-  if (disp + total < qtd - EPS) return [];
+  if (disp + total < qtd - EPS) return liberadasOs;
 
   const rec = await dbGet(db, 'SELECT numero FROM recebimentos_material_almoxarifado WHERE id = ?', [mov.recebimento_id]);
   let falta = qtd - disp;
-  const liberadas = [];
+  const liberadas = [...liberadasOs];
   for (const r of liberaveis) {
     if (falta <= EPS) break;
     const q = Math.min(num(r.saldo), falta);
@@ -605,6 +657,50 @@ async function liberarParaEstorno(db, user, mov) {
 }
 
 /**
+ * Etapa 171 (T2, RN-171.11, I5) — a reserva da OS (predicado congelado) que ESTE recebimento criou deste material, mais
+ * novas primeiro, ate `qtd`. Fora da trava, como o resto de `liberarParaEstorno` (soltar sem distribuir nao pega —
+ * B441). Cada uma no seu try: falhou, `console.warn` e segue (o estorno recusa pelo disponivel, como antes).
+ */
+async function liberarReservaDaOsParaEstorno(db, user, mov, qtd) {
+  if (!mov.recebimento_id || !(qtd > EPS)) return [];
+  const linhas = await dbAll(db, `SELECT id, os_id, os_referencia, quantidade - COALESCE(quantidade_utilizada, 0) AS saldo
+    FROM reservas_material_almoxarifado
+    WHERE status = 'ATIVA' AND origem = 'MANUAL' AND os_id IS NOT NULL AND recebimento_id = ? AND material_id = ?
+    ORDER BY id DESC`, [mov.recebimento_id, mov.material_id]);
+  const out = [];
+  let resta = qtd;
+  let recNumero = null;
+  for (const l of linhas) {
+    if (resta <= EPS) break;
+    const saldo = num(l.saldo);
+    if (saldo <= EPS) continue; // eslint-disable-line no-continue
+    const q = Math.min(saldo, resta);
+    if (recNumero == null) {
+      // eslint-disable-next-line no-await-in-loop
+      const rec = await dbGet(db, 'SELECT numero FROM recebimentos_material_almoxarifado WHERE id = ?', [mov.recebimento_id]);
+      recNumero = rec ? rec.numero : String(mov.recebimento_id);
+    }
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await stockService.liberarReserva(db, user, l.id, q >= saldo - EPS ? null : q, {
+        statusFinal: 'LIBERADA',
+        motivo: `Estorno da entrada do recebimento ${recNumero}`,
+        motivoMovimentacao: 'Liberação por estorno da entrada',
+      });
+      resta -= q;
+      out.push({
+        reserva_id: l.id, reserva_da_os: true, requisicao_id: null, item_id: null, material_id: mov.material_id,
+        quantidade: q, recebimento_id: Number(mov.recebimento_id), recebimento_numero: recNumero,
+        os_id: l.os_id, numero_os: l.os_referencia,
+      });
+    } catch (e) {
+      console.warn(`[almoxarifado-reservas] Falha ao liberar a reserva da OS ${l.id} no estorno da entrada: ${e.message}`);
+    }
+  }
+  return out;
+}
+
+/**
  * Etapa 74 (Fase 5) — o estorno liberou reservas da chegada e depois NÃO aconteceu (recusa do lote, claim
  * perdido para outro estorno, ledger que falhou): sem isto a requisição perdia a reserva e o estorno não
  * acontecia — o material voltava a ficar livre para quem fosse aprovado depois (C121 de novo). Recria
@@ -619,6 +715,13 @@ async function liberarParaEstorno(db, user, mov) {
 async function recriarAposEstornoRecusado(db, user, liberadas) {
   const recriadas = [];
   for (const l of liberadas || []) {
+    // Etapa 171 (T2, I5): a reserva da OS volta como reserva da OS (os_id, motivo, sem expiracao), nao de requisicao.
+    if (l.reserva_da_os) {
+      // eslint-disable-next-line no-await-in-loop
+      const id = await reservaDaOs.recriarReservaDaOs(db, user, l, `recriada após estorno recusado — recebimento ${l.recebimento_numero}`);
+      if (id) recriadas.push(id);
+      continue; // eslint-disable-line no-continue
+    }
     try {
       // eslint-disable-next-line no-await-in-loop
       const r = await stockService.criarReserva(db, user, {
