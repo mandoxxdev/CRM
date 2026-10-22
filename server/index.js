@@ -20672,32 +20672,70 @@ app.put('/api/operacional/ordens-servico/:id', authenticateToken, checkModulePer
   const { numero_os, projeto_id, cliente_id, tipo_os, prioridade, status, data_abertura, data_prevista, data_inicio, data_conclusao, descricao, observacoes, responsavel_id, valor_total, custo_real } = req.body;
   
   const { proposta_id } = req.body;
-  db.run(`UPDATE ordens_servico SET numero_os = ?, proposta_id = ?, projeto_id = ?, cliente_id = ?, tipo_os = ?, prioridade = ?, status = ?, data_abertura = ?, data_prevista = ?, data_inicio = ?, data_conclusao = ?, descricao = ?, observacoes = ?, responsavel_id = ?, valor_total = ?, custo_real = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-    [numero_os, proposta_id || null, projeto_id || null, cliente_id || null, tipo_os, prioridade || 'normal', status || 'pendente', data_abertura, data_prevista || null, data_inicio || null, data_conclusao || null, descricao || null, observacoes || null, responsavel_id || null, valor_total || 0, custo_real || null, id],
-    function(err) {
-      if (err) {
-        if (err.message.includes('UNIQUE constraint')) {
-          return res.status(400).json({ error: 'Número de OS já existe' });
+  const statusNovo = status || 'pendente';
+  // Etapa 171 (RN-171.09, C2, I7): o status ANTERIOR e lido antes do UPDATE — se a OS entrou agora no conjunto fechado
+  // (cancelado, cancelada, concluido, concluida, encerrada), as reservas que a compra dela prendeu voltam ao estoque e vao
+  // para quem espera. Falha na liberacao nao desfaz o UPDATE: responde 200 com o que foi liberado e um `aviso`.
+  db.get('SELECT status FROM ordens_servico WHERE id = ?', [id], (errAnt, anterior) => {
+    if (errAnt) return res.status(500).json({ error: errAnt.message });
+    db.run(`UPDATE ordens_servico SET numero_os = ?, proposta_id = ?, projeto_id = ?, cliente_id = ?, tipo_os = ?, prioridade = ?, status = ?, data_abertura = ?, data_prevista = ?, data_inicio = ?, data_conclusao = ?, descricao = ?, observacoes = ?, responsavel_id = ?, valor_total = ?, custo_real = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [numero_os, proposta_id || null, projeto_id || null, cliente_id || null, tipo_os, prioridade || 'normal', statusNovo, data_abertura, data_prevista || null, data_inicio || null, data_conclusao || null, descricao || null, observacoes || null, responsavel_id || null, valor_total || 0, custo_real || null, id],
+      async function(err) {
+        if (err) {
+          if (err.message.includes('UNIQUE constraint')) {
+            return res.status(400).json({ error: 'Número de OS já existe' });
+          }
+          return res.status(500).json({ error: err.message });
         }
-        return res.status(500).json({ error: err.message });
-      }
-      if (this.changes === 0) {
-        return res.status(404).json({ error: 'Ordem de Serviço não encontrada' });
-      }
-      res.json({ message: 'Ordem de Serviço atualizada com sucesso' });
-    });
+        if (this.changes === 0) {
+          return res.status(404).json({ error: 'Ordem de Serviço não encontrada' });
+        }
+        const osEncerradaService = require('./services/almoxarifado/osEncerradaService');
+        const resposta = { message: 'Ordem de Serviço atualizada com sucesso', reservas_liberadas: 0 };
+        if (osEncerradaService.entrouNoFechado(anterior && anterior.status, statusNovo)) {
+          try {
+            resposta.reservas_liberadas = await osEncerradaService.liberarReservasDaOs(db, req.user, Number(id), statusNovo);
+          } catch (e) {
+            console.error(`[OS] PUT ${id}: liberacao das reservas da OS falhou: ${e.message}`);
+            resposta.reservas_liberadas = Number(e.liberadas) || 0;
+            resposta.aviso = `A OS foi atualizada, mas nem todas as reservas de compra dela foram liberadas (${e.message}) — libere-as pela tela de Reservas do Almoxarifado`;
+          }
+        }
+        res.json(resposta);
+      });
+  });
 });
 
 app.delete('/api/operacional/ordens-servico/:id', authenticateToken, checkModulePermission('operacional'), (req, res) => {
   const { id } = req.params;
-  db.run('DELETE FROM ordens_servico WHERE id = ?', [id], function(err) {
-    if (err) {
-      return res.status(500).json({ error: err.message });
+  // Etapa 171 (RN-171.10): OS com pedido de compra vinculado nao se apaga — o pedido, a entrada e a reserva liberada guardam o
+  // `os_id` como historico (decisao 2 do Andre). O caminho de saida e cancelar a OS (RN-171.09).
+  const osEncerradaService = require('./services/almoxarifado/osEncerradaService');
+  db.get('SELECT numero_os FROM ordens_servico WHERE id = ?', [id], async (errOs, os) => {
+    if (errOs) return res.status(500).json({ error: errOs.message });
+    let pedidos;
+    try {
+      pedidos = await osEncerradaService.pedidosDaOs(db, id);
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
     }
-    if (this.changes === 0) {
-      return res.status(404).json({ error: 'Ordem de Serviço não encontrada' });
+    if (pedidos.length) {
+      return res.status(409).json({ error: osEncerradaService.recusaExclusaoComPedido(os && os.numero_os ? os.numero_os : `#${id}`, pedidos) });
     }
-    res.json({ message: 'Ordem de Serviço excluída com sucesso' });
+    // A guarda tambem no comando: um pedido vinculado entre a leitura acima e o DELETE nao deixa a OS ser apagada.
+    db.run('DELETE FROM ordens_servico WHERE id = ? AND NOT EXISTS (SELECT 1 FROM pedidos_compra WHERE os_id = ?)', [id, id], async function(err) {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+      if (this.changes === 0) {
+        const depois = os ? await osEncerradaService.pedidosDaOs(db, id).catch(() => []) : [];
+        if (depois.length) {
+          return res.status(409).json({ error: osEncerradaService.recusaExclusaoComPedido(os.numero_os || `#${id}`, depois) });
+        }
+        return res.status(404).json({ error: 'Ordem de Serviço não encontrada' });
+      }
+      res.json({ message: 'Ordem de Serviço excluída com sucesso' });
+    });
   });
 });
 
