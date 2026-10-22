@@ -1,6 +1,6 @@
 # Etapa 176 — O recebimento informa a OS (material de cliente para industrialização)
 
-> **Status:** 🟡 em execução (2026-10-22). Emendada da "próxima tarefa detalhada" da Etapa 174 (B1119).
+> **Status:** 🟡 em execução (2026-10-22) — **T1 feita** (`c1c04e1b`, `e79b9718`); T2 (front) e T3 (integração) pendentes. Emendada da "próxima tarefa detalhada" da Etapa 174 (B1119).
 > **Origem:** resposta do cliente (Matheus, 22/10 09:13): *"Industrialização: materiais que os clientes compram e nossa
 > empresa apenas realiza a mão de obra… um estoque de materiais do cliente que ficam em nosso estoque"*. A pergunta
 > "o material do cliente já vem para uma OS específica?" **foi feita e aguarda resposta** — por isso a OS é
@@ -84,3 +84,65 @@
   viva separada (`OS #<id>` se sumiu).
 - **M5 — RN-06:** `osEncerradaService` passa a reexportar o `PREDICADO_RESERVA_DA_OS` vindo de `reservaDaOs.js`
   (mesmo nome exportado, para não quebrar quem importa).
+
+---
+
+## Execução (2026-10-22)
+
+- [x] **T1** — `c1c04e1b` (regra) + `e79b9718` (leituras, contrato da T2). Teste novo
+  `server/tests/api/recebimentoComOs.api.test.js` (22, pela rota): fluxo do cliente (NF sem pedido com OS → `os_id` gravado,
+  ENTRADA_COMPRA com a OS, reserva da OS); régua do `os_id` (Zod `Dados inválidos — os_id: OS inválida` na rota e `OS inválida`
+  no serviço; `OS #<id> não encontrada`); sem OS nada muda; RN-03; RN-04 (A + OS de B), M2 (OS sem cliente; donos diferentes
+  recusam a nota inteira, nada gravado); material próprio passa; I4 (dono trocado entre criar e processar → 400 no
+  processamento, nada entra); M2 (OS que sumiu → processa com a marca e não reserva); RN-02/C1 (divergente → 400 com o
+  número da OS do pedido ou "sem OS"; igual → 201 sem gravar `os_id`); guarda do dono com a OS do pedido; I1 (OS do pedido
+  trocada depois de criar → entrada e reserva na OS nova); `/fiscal` (outra OS / pedido sem OS → 400; mesma → 200 e limpa);
+  I3 (requisição da OS sem projeto aprovada **antes** da nota → a fila a serve com 4, a OS fica com 6); requisição criada
+  depois converte e entrega (SAÍDA com a OS); M1 (projeto de B + OS de A não converte); a OS que fecha solta; M5; aux
+  `?abertas=1`; leituras com `os_numero`.
+  **Vermelho antes:** 21/22 (o de I1 já passava — a 171 já lia a OS do pedido viva; fica como guarda de regressão).
+  **Controles positivos** (um por vez, restaurado por cópia + `cmp` ok): fila sem `candidato.os_id` → só I3 vermelho (`0 !== 4`);
+  conversão sem `donoDeixaConverter` → só M1 vermelho; processamento sem a guarda → só I4 vermelho (200 ≠ 400);
+  `osAbertaDoRecebimento` só pelo pedido → 5 vermelhos (reserva 0); `/fiscal` sem limpar → só C1/fiscal vermelho (`os_id: 15`);
+  criação sem a OS do pedido → os 2 de RN-02/pedido vermelhos (201 ≠ 400).
+  **Primeiro boot** com `CRM_DATA_DIR` vazio (`node index.js`): `recebimentos_material_almoxarifado.os_id INTEGER` criada.
+
+**Suítes (estado de `e79b9718`):** `test:api` 501/502 na primeira rodada — o único vermelho era o contrato de chaves do aux
+(`listasNotificacoesPortao`, RN-155.01: fixture `osDoAuxDoServidor.json`), atualizado com `cliente_id` (fixture + teste do
+client `ReservasAlmoxarifado.test.js`); depois 10/10 nesse arquivo e, na 2ª rodada (estado de `e79b9718`), **502/502**; `test:almoxarifado` 44/0;
+`test:validation` 4/0; `test:safealter` 3/0; `test:sqlite` 16/0; client 175 suítes / 2256 testes. Os testes da 171/172/174 e
+`materialCliente*` ficaram verdes sem alteração.
+
+**Divergências do plano:**
+- **RN-03 só vale sem pedido.** A nota de pedido cuja OS fechou continua entrando como estoque (RN-171.03/B1101); recusar
+  ali regrediria a 171. Com pedido, a OS do payload só é comparada com a do pedido (RN-02).
+- **A guarda do dono vale também para recebimento de pedido** (ela usa a OS efetiva, C1): pedido com OS do cliente B
+  recebendo material do cliente A → 400 na criação e na pré-checagem.
+- **`/fiscal` não aceita `os_id`** (a OS se escolhe na criação); ele só confere/limpa ao ligar um pedido (C1).
+- **M2 "OS que sumiu"**: a ENTRADA continua gravando o `os_id` como marca (igual à 171 com pedido) — só a reserva não nasce.
+- **Conversão (M1)** usa a mesma pergunta da fila (`saidaPassaNaRegraDoDono` com projeto e OS); requisição só com o texto da
+  OS (sem `os_id`) de material de cliente sem projeto deixa de converter — a entrega já recusaria.
+- **Mudança de contrato aditiva no aux de OS** quebrou o teste de chaves da 155 (servidor e client) — atualizados, sem mudar
+  a tela das Reservas.
+- Testes que trocam o dono do material e a OS do pedido fazem por `UPDATE` (o que está em prova é a releitura no
+  processamento); a OS fechando chama `osEncerradaService.liberarReservasDaOs` (a rota da OS é core, fora do harness).
+
+**CONTRATO REAL das leituras para a T2 (front):**
+- `GET /api/almoxarifado/aux/ordens-servico?abertas=1` → `[{ id, numero_os, status, cliente_id, cliente_nome }]`, só abertas
+  (fora de `cancelado|cancelada|concluido|concluida|encerrada`, sem caixa/espaço), `ORDER BY id DESC LIMIT 300`. Sem
+  `abertas`: as mesmas chaves, todas as OS. Falha de tabela → `[]`.
+- `GET /api/almoxarifado/recebimentos-aux/pedidos-compra` → cada linha ganha `os_id` (number|null) e `os_numero`
+  (string|null; `OS #<id>` se a OS sumiu).
+- `GET /api/almoxarifado/recebimentos-aux/pedidos-compra/:id` → ganha `os_id`, `os_numero` (mesma regra).
+- `GET /api/almoxarifado/recebimentos` e `GET /api/almoxarifado/recebimentos/:id` → `os_id` é o **efetivo** (com pedido, o do
+  pedido; sem pedido, o próprio) e `os_numero` vivo (`OS #<id>` se sumiu; `null` sem OS). Atenção: na lista, `os_id` **não** é
+  a coluna crua (para recebimento de pedido a coluna é sempre NULL).
+- `POST /api/almoxarifado/recebimentos` aceita `os_id` (number, string de dígitos, `null`, `''`). Recusas (400, `error`):
+  `Dados inválidos — os_id: OS inválida`; `OS #<id> não encontrada`; `A OS <numero> está <status> — não aceita entrada nova`
+  (sem pedido); `A OS do recebimento tem de ser a do pedido (<numero da OS do pedido>|sem OS)` (com pedido e `os_id` não nulo
+  diferente — a tela deve mandar a OS do pedido ou nada); `Material <codigo> pertence ao cliente <X>, mas a OS <numero> é do
+  cliente <Y>` / `... mas a OS <numero> não tem cliente` (vários itens: unidos por `; `).
+- Processar (`POST .../workflow {acao:'processar'}`) pode recusar com `Nao foi possivel dar entrada no estoque: Material ...`
+  (I4, mesmo texto da criação depois do prefixo).
+- `PUT .../fiscal` com `pedido_compra_id` num recebimento com OS própria: OS do pedido diferente → 400 com a frase da RN-02;
+  igual → 200 e a OS própria é limpa.
