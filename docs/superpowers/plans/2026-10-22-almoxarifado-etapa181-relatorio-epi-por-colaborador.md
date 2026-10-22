@@ -33,3 +33,23 @@
 ## Próxima tarefa detalhada
 
 *(preencher no fechamento)*
+
+---
+
+## Revisão da Fase 2 (2026-10-22) — 2 críticos, 3 importantes, 5 menores; as emendas PREVALECEM
+
+- **C1 — data:** `criado_em` da entrega é ISO UTC do Node (`2026-10-22T01:30:00.000Z`); os formatadores da tela
+  (`RelatoriosAlmoxarifado.js:78-85`) e do Excel (`diaLocal.js:59-61`) só reconhecem `AAAA-MM-DD HH:MM:SS`. No SQL:
+  `strftime('%Y-%m-%d %H:%M:%S', e.criado_em) AS criado_em` → a tela e a exportação mostram Brasília. Teste na linha
+  exportada (22h30 de 21/10 → 21/10).
+- **C2 — `tem_evidencia`:** `CASE WHEN EXISTS(...) THEN 'Sim' ELSE 'Não' END`. A nota diz que toda entrega pela tela
+  grava a evidência na mesma transação — "Não" só aparece em anomalia (e a tela de EPI verifica a cadeia).
+- **I1 — SELECT próprio** do relatório (o `COLUNAS_LISTA` não tem `setor` nem evidência), com o filtro `de`/`ate` extraído
+  para um helper compartilhado com `listarEntregas` (mesma regex e `DATE(e.criado_em, ?)` do dia de Brasília).
+- **I2 — tipos concretos dos params:** `colaborador_id` → `select` com `opcoes_url: '/almoxarifado/aux/colaboradores'`,
+  `exemplo: 1` (lista só os ativos — quem saiu não é filtrável; letra B); `material_id` → `number`, `exemplo: 1`
+  (a lista de materiais não filtra EPI — letra B); `de`/`ate` → `date`.
+- **I3 —** `exemplo` declarado em todo param (a varredura I1 manda `'x'` sem ele).
+- **Menores:** `motivo` com rótulo por CASE (`Primeira entrega`, `Troca`, `Perda`, `Dano`); `tamanho` entra nas colunas;
+  testes positivos de ALMOXARIFE ao lado dos 403 de PRODUCAO (consulta **e** exportação, nos dois relatórios); a `nota`
+  conferida no Jest (`nota-relatorio`).
