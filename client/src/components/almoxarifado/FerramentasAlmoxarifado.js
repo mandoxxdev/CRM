@@ -590,7 +590,8 @@ const FerramentasAlmoxarifado = () => {
                             })()
                             : '—'}</td>
                           <td>
-                            {!f.exige_calibracao ? '—' : (
+                            {/* Etapa 177 Fase 5: a baixada nao e mais usada — "Vigente" nela engana; mostra "—" como quem nao exige */}
+                            {!f.exige_calibracao || f.status === 'BAIXADA' ? '—' : (
                               <span className={`almox-badge almox-badge-${f.calibracao_vigente ? 'ok' : 'critico'}`}>
                                 {f.calibracao_vigente ? 'Vigente' : 'Vencida/ausente'}
                               </span>

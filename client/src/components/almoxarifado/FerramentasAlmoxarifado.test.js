@@ -615,6 +615,17 @@ describe('FerramentasAlmoxarifado — Etapa 177, retorno da manutenção (condi�
     expect([...filtro.options].map((o) => o.value)).toContain('BAIXADA');
   });
 
+  test('Fase 5: a baixada com calibração vigente mostra "—" na coluna Calibração, não "Vigente" (metade positiva: a disponível vigente mostra "Vigente")', async () => {
+    const DISPONIVEL_VIGENTE = { ...EM_MANUTENCAO, id: 9, codigo_patrimonio: 'FER-009', status: 'DISPONIVEL',
+      exige_calibracao: 1, calibracao_vigente: true };
+    comLista([{ ...BAIXADA, calibracao_vigente: true }, DISPONIVEL_VIGENTE]);
+    await renderizar();
+    const [baixada, viva] = linhasFerramentas();
+    const celulaCalibracao = (linha) => linha.querySelectorAll('td')[5].textContent.trim();
+    expect(celulaCalibracao(baixada)).toBe('—');
+    expect(celulaCalibracao(viva)).toBe('Vigente');
+  });
+
   test('RN-177.08/10: "Reverter baixa" pede justificativa, posta na rota, avisa e recarrega a lista e o painel', async () => {
     comLista([BAIXADA]);
     await renderizar();
