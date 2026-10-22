@@ -250,3 +250,18 @@ test('(g) a lista de OS falha: aviso discreto e o recebimento sai sem OS', async
   expect(api.post).toHaveBeenCalledTimes(1);
   expect(api.post.mock.calls[0][1]).toHaveProperty('os_id', null);
 });
+
+test('(h) escolher a OS 7 sem pedido, trocar para pedido e voltar para a nota: a OS volta para "Sem OS" e o payload manda null', async () => {
+  await renderizar();
+  await abrirNovo();
+  await selecionar(campoOs(), '7');
+  expect(campoOs().value).toBe('7');                 // premissa: a OS foi escolhida
+  await selecionar(selectPorLabel('Forma de recebimento'), 'PEDIDO_COMPRA');
+  await selecionar(selectPorLabel('Forma de recebimento'), 'NOTA_FISCAL');
+  expect(campoOs().disabled).toBe(false);
+  expect(campoOs().value).toBe('');                  // a troca de forma limpa a OS escolhida (nao reaparece a 7)
+  await adicionarMaterial();
+  await registrar();
+  expect(api.post).toHaveBeenCalledTimes(1);
+  expect(api.post.mock.calls[0][1]).toHaveProperty('os_id', null);
+});
