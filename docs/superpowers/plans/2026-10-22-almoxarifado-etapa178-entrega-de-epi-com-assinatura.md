@@ -162,3 +162,33 @@ alternativa descartada: exigir a validade. (2) conferência dos bytes do PNG al�
 **avulsa por API** que cite a saída entre a saída e a transação da entrega (ms, exige saber o id) passaria — o INSERT da devolução
 tem `NOT EXISTS` da entrega, mas o da entrega não confere devolução; fechar exigiria recusar a entrega depois de a saída já ter sido
 devolvida. (4) o hash amarra a evidência à entrega pelo `numero` (o `id` e o `contexto_id` não existem antes do INSERT).
+
+### T3 (integração) — ✅ 2026-10-22 — `2a33f279`, `bc5fa54d`, `6ddecac2`
+
+- [x] `server/tests/api/epiPontaAPonta.api.test.js` **11/11**, tudo pela rota: POST/PUT `/materiais` (CA) → GET `/materiais`
+  (`is_epi: true`, `ca_validade` `AAAA-MM-DD`) → ENTRADA por `/movimentacoes` → `/aux/colaboradores` → POST `/epi/entregas` multipart com
+  PNG **real** 240×80 RGBA (o hash do arquivo = o do PNG enviado, saldo 10 → 8, `documento_vinculado` = número) → lista (chaves congeladas,
+  filtro `de`/`ate` do dia e de ontem) → ficha (`***.***.***-01`, CPF completo não aparece) → GET da `arquivo_url` **sem sessão** (200
+  `image/png`, mesmos bytes; sem `sig` ou `sig` trocada → 404) → `/verificar` íntegro → 1 byte trocado → `arquivo alterado` → estorno pelo
+  livro → 400 literal → colaborador excluído → ficha pelo snapshot (`excluido: true`) e a assinatura ainda abre; 413 e 400 de MIME com
+  `{ error }` e nenhum órfão. Colaborador criado/excluído direto no SQLite (tabela core, sem rota no harness). `EPI_T3_FORMAS=1` imprime as
+  formas reais — `2a33f279`.
+- Controles positivos (sabotar → vermelho no ponto certo → restaurar por cópia + `cmp`): `verificar` sem comparar o hash do arquivo → só o
+  teste do byte trocado; ficha do excluído com `excluido: false` → só o I2; middleware da URL sem conferir a assinatura → `200 !== 404`.
+  (A 1ª sabotagem mostrou a falha vazando para o teste seguinte — o byte agora volta num `finally`.)
+- [x] **Conferência do front contra o backend real** — campo a campo bate (chaves da lista/ficha, `is_epi` bool, `ca_validade`
+  `AAAA-MM-DD`, `criado_em` ISO UTC com ms, `quantidade` número, `cpf_mascarado`, `excluido`, 413/400/409/500 todos `{ error }`, que a tela
+  mostra literal). **Duas divergências, corrigidas no front:**
+  1. **A `arquivo_url` expira em ~15 min** (`exp − agora = 900 s`, medido) e o "Gerar PDF" buscava as assinaturas pelas URLs da ficha já
+     carregada: ficha aberta há mais tempo → 404 → PDF da NR-6 sem nenhuma assinatura, **sem aviso**. Agora o botão relê a ficha antes (URLs
+     novas); releitura que falha → erro e nada de PDF; assinatura que não carrega → `toast.warn`. Jest +3 (vermelhos antes: 3 failed) — `bc5fa54d`.
+  2. **`entregar_epi` sem rótulo no `permissaoErro` do client** (a T1 criou a ação no servidor): a suíte inteira do client estava vermelha
+     em `permissaoErro.test.js` (`semRotulo = ["entregar_epi"]`) — `6ddecac2`.
+- Suítes: cliente `CI=true react-scripts test` **2312/2313** (o 1 vermelho era o rótulo acima; `permissaoErro` 9/9 depois; EPI 3 arquivos
+  38/38 → 41 com os novos) e `CI=true react-scripts build` **Compiled successfully** (rodado antes do rótulo, mudança só de string).
+  **`test:api` incompleto:** o processo foi encerrado pelo sistema por falta de memória da máquina — 429 de 507 arquivos rodaram (428 OK,
+  incluindo `epiEntrega` 29/29, `epiIntegridade` 17/17, `epiPontaAPonta` 11/11, `auditLabels`); os 78 de `schemaAlmoxUmaVez` em diante não
+  rodaram. `test:almoxarifado` **não rodou** (vinha depois). Rodar os dois de novo com memória livre antes de fechar a etapa.
+
+**Letra B (T3):** o PDF relê a ficha em vez de (descartados) aumentar a validade da URL no servidor (mesma URL de todas as imagens do módulo,
+letra D) ou o cliente interpretar o `exp` da URL.
