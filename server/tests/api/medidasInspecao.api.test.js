@@ -315,6 +315,40 @@ async function recusa(fn) {
     assert.strictEqual(e.status, 404, `esperava 404, veio ${e.status}: ${e.message}`);
   });
 
+  // ─── Etapa 177 Fase 5 (B1146): instrumento BAIXADO nao mede ───────────────────────────────
+
+  await test('(10b) Etapa 177/B1146 instrumento BAIXADO (mesmo com calibracao vigente) recusa com 400 literal, antes do claim', async () => {
+    const { mat, itemId, qtd } = await itemRetido(db, 10);
+    const plano = await novoPlano(db, mat, { caracteristica: 'Diametro ferr baixada' });
+    const ferr = await novaFerramenta(db, { exige_calibracao: 1, nome: 'Paquimetro baixado' });
+    await calibrar(db, ferr, true);
+    await dbRun(db, "UPDATE ferramentas_almoxarifado SET status = 'BAIXADA' WHERE id = ?", [ferr]);
+    const nome = (await dbGet(db, 'SELECT nome FROM ferramentas_almoxarifado WHERE id = ?', [ferr])).nome;
+
+    const e = await recusa(() => inspectionService.decidirInspecao(db, ADMIN, itemId, {
+      quantidade_aprovada: qtd, quantidade_reprovada: 0,
+      medidas: [{ plano_id: plano, valor_medido: 10, ferramenta_id: ferr }],
+    }));
+    assert.strictEqual(e.status, 400, `esperava 400, veio ${e.status}: ${e.message}`);
+    assert.strictEqual(e.message, `Ferramenta baixada não pode ser usada em medição (${nome})`);
+    assert.strictEqual((await item(db, itemId)).quantidade_em_inspecao, qtd, 'a recusa saiu depois de o saldo se mover');
+    assert.strictEqual((await inspecoesDoItem(db, itemId)).length, 0, 'nao pode ter gravado inspecao');
+  });
+
+  await test('(10c) B1146 os outros status NAO mudaram nesta etapa: instrumento PERDIDA com calibracao vigente ainda mede', async () => {
+    const { mat, itemId, qtd } = await itemRetido(db, 10);
+    const plano = await novoPlano(db, mat, { caracteristica: 'Diametro ferr perdida' });
+    const ferr = await novaFerramenta(db, { exige_calibracao: 1, nome: 'Paquimetro perdido' });
+    await calibrar(db, ferr, true);
+    await dbRun(db, "UPDATE ferramentas_almoxarifado SET status = 'PERDIDA' WHERE id = ?", [ferr]);
+    await inspectionService.decidirInspecao(db, ADMIN, itemId, {
+      quantidade_aprovada: qtd, quantidade_reprovada: 0,
+      medidas: [{ plano_id: plano, valor_medido: 10, ferramenta_id: ferr }],
+    });
+    const [insp] = await inspecoesDoItem(db, itemId);
+    assert.strictEqual((await medidasDaInspecao(db, insp.id))[0].ferramenta_id, ferr);
+  });
+
   // ─── RN-05: o plano e congelado no ato ────────────────────────────────────────────────────
 
   await test('(11) RN-05 editar o plano DEPOIS nao reescreve a inspecao antiga', async () => {
