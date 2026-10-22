@@ -62,16 +62,24 @@ async function criarEpi(db, { qtd = 10, ca = 'CA-12345', validade = diaMais(diaL
   return { id: r.lastID, codigo: cod };
 }
 
+// Fase 5 (importante 4): o colaborador confirma a entrega digitando a propria matricula. O helper manda a do cadastro (id ->
+// matricula), a nao ser que o cenario passe `confirmacao_matricula`.
+const matriculaDe = new Map();
 async function criarColaborador(db, { nome, matricula, cpf = null, status = 'ativo', setor = 'Caldeiraria' } = {}) {
   seq += 1;
   const r = await dbRun(db, `INSERT INTO colaboradores (nome, matricula, cpf, status, setor, salario_base) VALUES (?,?,?,?,?,?)`,
     [nome || `COLABORADOR ${seq}`, matricula === undefined ? `M${seq}` : matricula, cpf, status, setor, 3000]);
+  matriculaDe.set(r.lastID, matricula === undefined ? `M${seq}` : matricula);
   return { id: r.lastID, nome: nome || `COLABORADOR ${seq}`, matricula: matricula === undefined ? `M${seq}` : matricula };
 }
 
 function postEntrega(app, campos, { png = PNG_1PX, tipo = 'image/png', semArquivo = false } = {}) {
   let r = request(app).post('/api/almoxarifado/epi/entregas');
-  for (const [k, v] of Object.entries(campos)) if (v !== undefined) r = r.field(k, String(v));
+  const conf = { ...campos };
+  if (!('confirmacao_matricula' in conf) && matriculaDe.get(Number(conf.colaborador_id))) {
+    conf.confirmacao_matricula = matriculaDe.get(Number(conf.colaborador_id));
+  }
+  for (const [k, v] of Object.entries(conf)) if (v !== undefined) r = r.field(k, String(v));
   if (!semArquivo) r = r.attach('assinatura', png, { filename: 'assinatura.png', contentType: tipo });
   return r;
 }
@@ -140,13 +148,15 @@ const contar = async (db, sql, p = []) => (await dbGet(db, sql, p)).n;
     assert.ok(aud && aud.acao === 'ENTREGA_EPI', 'sem auditoria ENTREGA_EPI');
   });
 
-  await test('[RN-178.06] matricula vazia: a justificativa sem os parenteses', async () => {
+  // Fase 5 (importante 4): este cenario era "matricula vazia: a justificativa sem os parenteses" (201). Desde a Fase 5 o
+  // colaborador confirma digitando a propria matricula — sem matricula no cadastro nao ha o que confirmar: 400, nada gravado.
+  await test('[F5-4] colaborador sem matricula cadastrada -> 400 literal; nada gravado', async () => {
     const mat = await criarEpi(db);
     const col = await criarColaborador(db, { nome: 'SEM MATRICULA', matricula: null });
-    const res = await postEntrega(app, { colaborador_id: col.id, material_id: mat.id, quantidade: 1 });
-    assert.strictEqual(res.status, 201, JSON.stringify(res.body));
-    const mov = await dbGet(db, 'SELECT justificativa FROM movimentacoes_almoxarifado WHERE id = ?', [res.body.movimentacao_id]);
-    assert.strictEqual(mov.justificativa, 'Entrega de EPI a SEM MATRICULA');
+    const res = await postEntrega(app, { colaborador_id: col.id, material_id: mat.id, quantidade: 1, confirmacao_matricula: 'X1' });
+    assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+    assert.strictEqual(res.body.error, 'Colaborador SEM MATRICULA sem matrícula cadastrada — não é possível confirmar a identidade');
+    await nadaGravado(mat, 10);
   });
 
   // ── RN-178.01: as tres marcas ───────────────────────────────────────────────────────────────

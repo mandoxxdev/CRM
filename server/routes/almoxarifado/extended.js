@@ -2010,7 +2010,9 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       if (!req.file) return res.status(400).json({ error: 'A assinatura do colaborador é obrigatória' });
       try {
         const out = await epiService.registrarEntrega(db, req.user, req.body || {},
-          { arquivo: req.file.filename, dir: uploadsAlmoxDir, segredo: segredoDaEvidencia() });
+          { arquivo: req.file.filename, dir: uploadsAlmoxDir, segredo: segredoDaEvidencia(),
+            // Fase 5 (importante 4): de onde veio a assinatura — entram na evidencia e no HMAC.
+            ip: req.ip || (req.socket && req.socket.remoteAddress) || null, userAgent: req.get('user-agent') || null });
         res.status(201).json(out);
       } catch (e) {
         // Fase 5 (importante 3, M3): o PNG fica quando a saida NAO pode ser desfeita ou a transacao ja commitou — a evidencia (ou o

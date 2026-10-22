@@ -92,6 +92,10 @@ function camposDoRegistro(entrega, ev) {
       // Fase 5 (critico 1): o elo da cadeia dentro do HMAC — mudar a posicao ou o elo de uma evidencia muda o registro dela.
       sequencia: numero(ev.sequencia),
       hash_anterior: texto(ev.hash_anterior),
+      // Fase 5 (importante 4): a identificacao do colaborador e de onde veio a assinatura.
+      confirmado_por_matricula: numero(ev.confirmado_por_matricula),
+      ip: texto(ev.ip),
+      user_agent: texto(ev.user_agent),
     },
   };
 }
@@ -160,6 +164,23 @@ async function materialEpi(db, materialId) {
   return { ...m, ca_numero: ca, ca_validade: validade };
 }
 
+/**
+ * Fase 5 (importante 4): a identificacao do colaborador. Ele digita a PROPRIA matricula no tablet, junto da assinatura, e ela
+ * tem de bater com o cadastro — a assinatura sozinha nao dizia quem assinou (o almoxarife escolhia o nome na lista). Compara sem
+ * caixa, sem as pontas e sem espacos internos; zeros a esquerda contam. Letra B: descartado PIN/senha do colaborador (exigiria
+ * cadastro de credencial de chao de fabrica).
+ */
+function conferirMatricula(colab, digitada) {
+  const norm = (v) => String(v).replace(/\s+/g, '').toUpperCase();
+  const cadastro = evidencia.textoLimpo(colab.matricula);
+  if (!cadastro) {
+    throw erro(`Colaborador ${colab.nome} sem matrícula cadastrada — não é possível confirmar a identidade`);
+  }
+  const conf = evidencia.textoLimpo(digitada);
+  if (!conf) throw erro('O colaborador deve digitar a própria matrícula para confirmar o recebimento');
+  if (norm(conf) !== norm(cadastro)) throw erro('A matrícula informada não confere com a do colaborador');
+}
+
 /** I5: o PNG de verdade — o MIME (multer) e a assinatura do arquivo. */
 function conferirPng(caminho) {
   let cabeca = Buffer.alloc(0);
@@ -178,7 +199,7 @@ function conferirPng(caminho) {
  * Registra a entrega. `dados`: colaborador_id, material_id, quantidade, tamanho?, motivo?, observacao?. `arquivo`: o nome que o
  * multer gravou em `dir`. Lanca com `.status` e a mensagem literal do plano; a rota limpa o upload em toda saida != 201.
  */
-async function registrarEntrega(db, user, dados, { arquivo, dir, segredo }) {
+async function registrarEntrega(db, user, dados, { arquivo, dir, segredo, ip = null, userAgent = null }) {
   // Fase 5: sem o segredo do HMAC nada sai do estoque (a recusa viria depois da saida, na compensacao).
   if (!segredo) throw erro('Segredo da evidência de assinatura não configurado', 500);
   if (!arquivo) throw erro('A assinatura do colaborador é obrigatória');
@@ -188,6 +209,7 @@ async function registrarEntrega(db, user, dados, { arquivo, dir, segredo }) {
   const quantidade = quantidadeInteira(dados.quantidade);
   const opcionais = validarOpcionais(dados);
   const colab = await colaboradorAtivo(db, dados.colaborador_id);
+  conferirMatricula(colab, dados.confirmacao_matricula);
   const material = await materialEpi(db, dados.material_id);
 
   const arquivoSha256 = evidencia.sha256Arquivo(caminho);
@@ -240,6 +262,9 @@ async function registrarEntrega(db, user, dados, { arquivo, dir, segredo }) {
     criado_por: entrega.entregue_por,
     criado_por_nome: autorNome,
     criado_em: criadoEm,
+    confirmado_por_matricula: 1,
+    ip: evidencia.textoLimpo(ip),
+    user_agent: (() => { const u = evidencia.textoLimpo(userAgent); return u === null ? null : u.slice(0, 300); })(),
   };
   let registroSha = null;
 

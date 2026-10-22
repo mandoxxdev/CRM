@@ -414,10 +414,17 @@ async function ensureEntregaEpi(db) {
     criado_em TEXT NOT NULL,
     sequencia INTEGER,
     hash_anterior TEXT,
+    confirmado_por_matricula INTEGER,
+    ip TEXT,
+    user_agent TEXT,
     UNIQUE (contexto, contexto_id)
   )`);
   await safeAlter(db, 'ALTER TABLE evidencias_assinatura_almoxarifado ADD COLUMN sequencia INTEGER');
   await safeAlter(db, 'ALTER TABLE evidencias_assinatura_almoxarifado ADD COLUMN hash_anterior TEXT');
+  // Fase 5 (importante 4): o colaborador confirma digitando a propria matricula; o ip e o user_agent da requisicao. No HMAC.
+  await safeAlter(db, 'ALTER TABLE evidencias_assinatura_almoxarifado ADD COLUMN confirmado_por_matricula INTEGER');
+  await safeAlter(db, 'ALTER TABLE evidencias_assinatura_almoxarifado ADD COLUMN ip TEXT');
+  await safeAlter(db, 'ALTER TABLE evidencias_assinatura_almoxarifado ADD COLUMN user_agent TEXT');
   await dbRun(db, `CREATE UNIQUE INDEX IF NOT EXISTS ux_evidencias_assinatura_sequencia
     ON evidencias_assinatura_almoxarifado (sequencia)`);
   for (const tabela of ['entregas_epi_almoxarifado', 'evidencias_assinatura_almoxarifado']) {

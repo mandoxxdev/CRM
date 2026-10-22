@@ -129,6 +129,8 @@ const ESTORNO_EPI = 'Saída de entrega de EPI não pode ser estornada pelo livro
     const res = await request(app).post('/api/almoxarifado/epi/entregas')
       .field('colaborador_id', String(colabId)).field('material_id', String(material.id)).field('quantidade', '2')
       .field('tamanho', 'G').field('motivo', 'PRIMEIRA_ENTREGA').field('observacao', 'integracao T3')
+      .field('confirmacao_matricula', 'm-t3 ') // Fase 5: o colaborador digita a propria matricula (caixa e pontas nao contam)
+      .set('User-Agent', 'TabletEPI-T3/1.0')
       .attach('assinatura', PNG, { filename: 'assinatura.png', contentType: 'image/png' });
     assert.strictEqual(res.status, 201, JSON.stringify(res.body));
     forma('POST /epi/entregas 201', res.body);

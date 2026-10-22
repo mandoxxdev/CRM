@@ -60,7 +60,8 @@ let seq = 0;
   }
   async function entregar(colaborador_id, material_id, quantidade = 1, extra = {}) {
     let r = request(app).post('/api/almoxarifado/epi/entregas')
-      .field('colaborador_id', String(colaborador_id)).field('material_id', String(material_id)).field('quantidade', String(quantidade));
+      .field('colaborador_id', String(colaborador_id)).field('material_id', String(material_id)).field('quantidade', String(quantidade))
+      .field('confirmacao_matricula', (await dbGet(db, 'SELECT matricula FROM colaboradores WHERE id = ?', [colaborador_id])).matricula);
     for (const [k, v] of Object.entries(extra)) r = r.field(k, v);
     const res = await r.attach('assinatura', PNG_1PX, { filename: 'a.png', contentType: 'image/png' });
     assert.strictEqual(res.status, 201, JSON.stringify(res.body));
