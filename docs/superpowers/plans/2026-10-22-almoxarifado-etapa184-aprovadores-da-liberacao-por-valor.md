@@ -251,3 +251,74 @@ _(vazia — preencher task a task com hash, vermelho antes, controles e suítes.
 ## Próxima tarefa detalhada
 
 _(preencher no fechamento.)_
+
+## Emendas da Fase 2
+
+Revisor fresco, 2026-10-22, sobre `0036a2a5`. Lido: rota `server/routes/almoxarifado.js:3654-3662` (GET), `:3664` (PUT), `:173-179`
+(`denyUnlessAlmoxAdmin`), `:3819-3826` (`/requisicoes/aprovacoes-valor`), `:4322-4324` (`/aprovar-valor`); serviço
+`requisitionValueApprovalService.js:41-99`, `:195-216`, `:428-464`; `server/services/systemPermissions.js:30-83`; `permissions.js:273-287`;
+client `systemPermissions.js:1-77`, `permissionsCache.js:109-116`, `ConfiguracoesAlmoxarifado.js:225-296` e `:3227-3330`,
+`RequisicoesList.js:272`, `:283`, `:380-386`, `:1374`, `:1780`, `:1793`; os testes citados; spec 23 `:709-715`; `errosApi.js:103-106`.
+
+**Veredito: nenhum Crítico. O contrato e as RN batem com o código; as emendas abaixo são de teste (para não ficar vazio) e de ordem.**
+
+### As quatro perguntas
+
+1. **Contratos × código.** Conferido linha a linha da tabela, com os predicados reais: `verIds` = `canConfigureAlmox` do servidor (super ‖
+   `isModuleAdmin` ‖ perfil `ADMINISTRADOR`) ‖ `isSystemAdmin` (super ‖ `role` minúsculo `admin`); `souAprovador` = `isAprovadorValor`
+   (`role === 'admin'` estrito ‖ id na lista). Comum/PRODUCAO/ALMOXARIFE → `{ativo,limite,souAprovador:false}`; 7 GESTOR → `souAprovador:true`
+   sem ids; admin do sistema (5) → ids + `true` (só por `isSystemAdmin`); perfil ADMINISTRADOR (4) e admin do módulo (6) → ids + `false`; super
+   (1) → ids + `true`. A ordem das chaves do objeto literal do contrato é a que o `res.json` serializa. Erro: o `try/catch` da rota continua 500
+   `{ error }`. Bate.
+2. **RN × spec.** A spec 23 (`:709-712`) pede "reduzir o payload para não-admin"; o plano vai além (tira `aprovadores` também do admin, B1211)
+   e declara. O item do multer (`:713-715`) está mesmo errado: `errosApi.js:103-106` é o handler global e devolve 400 `Upload inválido` para
+   `MulterError`; os `fileFilter` das rotas de `extended.js` usam `erroComMensagemUsuario` (4xx com mensagem) e a de anexos tem wrapper próprio
+   400 (`extended.js:1861-1869`). Bate.
+3. **Galhos.** T2 só escreve Jest com mock na fronteira HTTP e nenhum código do client muda — independente da T1 de verdade. T3 depende das duas
+   e escreve nos **mesmos** dois arquivos de teste da T2: só pode ir depois (o plano já diz). Bate.
+4. **Até o último gesto.**
+   - *Aprovador que não configura:* a lista lê só `souAprovador` (`RequisicoesList.js:383`), que não muda; `/aprovacoes-valor` (`:3822`) e
+     `/aprovar-valor` (serviço `:195-199`) usam o mesmo `isAprovadorValor`, sem `requirePermission` de perfil no caminho (`aprovar_requisicao`
+     de `ACAO_PERFIS` não é usado por essas rotas). Vê o botão e aprova. OK.
+   - *Admin do sistema só leitura:* a aba abre por `canConfigureAlmox` do client (`ConfiguracoesAlmoxarifado.js:225`, com `getEffectiveUser`),
+     que é `isSystemAdmin ‖ isModuleAdmin ‖ perfil ADMINISTRADOR` (`client/src/utils/systemPermissions.js:49-68`). O `verIds` da rota é o
+     **mesmo** predicado (o super está nos dois lados; `parseAdminModulos` igual nos dois; `role` comparado em minúsculas nos dois; o servidor
+     ainda põe `perfil_almoxarifado = 'ADMINISTRADOR'` no admin do módulo, `systemPermissions.js:193`). **Não há** usuário que abre a aba e não
+     recebe `aprovadorIds`. OK — e o controle (5) prova o contrário.
+   - *Quem grava:* `handleSalvar` (`:3266-3280`) **ignora** a resposta do PUT e **não** relê o GET — a tela fica com o estado local, que é o
+     que acabou de gravar. Reabrir a aba relê o GET, e quem grava (`podeGravarConfigAlmox` ⊂ `verIds`) recebe os ids. Nada quebra.
+   - *Outros consumidores:* busca por `liberacao-valor` no repositório inteiro (fora de `node_modules`/`build`): só `RequisicoesList.js:382`,
+     `ConfiguracoesAlmoxarifado.js:3241/3269` e mocks de teste (todos já no formato reduzido). `getConfigForApi` no servidor: só a rota GET
+     (`:3657`, que sai) e `saveConfig` (`:463`, fica). Nenhum hook/serviço do client. OK.
+
+### Achados
+
+- **I1 (Importante) — o "nenhum GET tem `@`" da T3 fica vazio.** A T3 (`### T3`) não manda criar nem semear `usuarios`. Sem a tabela, o
+  `PUT` do admin almox responde 500 (grava antes, `alcadaValorDepoisDaSeparacaoIntegracao.api.test.js:24`) e — pior — a asserção "sem `@`"
+  passaria mesmo com a rota sabotada para `getConfigForApi`, porque o sabotado também daria **500** sem e-mail nenhum no corpo, e o controle
+  (b) da T3 cairia pelo status, não pelo e-mail. **Correção:** a T3 cria `usuarios` (molde `alertaForaDaTrava.api.test.js:73`) com 7 `a1@x.com`
+  e um solicitante, e afirma a premissa (`SELECT email … id = 7` é `a1@x.com`) **antes** dos "sem `@`", como a T1. O controle (b) tem de cair
+  com o `@`/`aprovadores` no corpo **200**, não com 500.
+- **I2 (Importante) — "`/aprovar-valor` não dá 403" é fraco e mascara a segregação.** `aprovarValor` (`requisitionValueApprovalService.js:213-216`)
+  também responde **403** quando o aprovador é o solicitante; e qualquer 404/409/500 passaria em "não dá 403". **Correção:** a requisição da T3 é
+  criada por outro usuário (não o 7) e o gesto do 7 afirma **200** e o status relido diferente de `AGUARDANDO_APROVACAO_VALOR` (e
+  `aprovador_valor_id = 7`). O ALMOXARIFE, no mesmo cenário, afirma 403 com o literal `Sem permissão para aprovar liberação por valor` — o
+  par positivo/negativo do RN-184.04 pelo gesto final, não só pela listagem.
+- **M1 (Menor) — ordem dos testes da T1 conflita.** O `[RN-184.05]` grava `limite: 900, aprovadorIds: [7]` (muda a configuração-base das oito
+  linhas) e precisa de `usuarios`; o `[RN-184.07]` faz `DROP TABLE usuarios`. O plano diz "rodar por último" para o 07 e não ordena o 05.
+  **Correção:** ordem fixa — 01/02/04 → 03 (laço) → 05 → ressemear as três chaves → 07 por último. E o PUT do ALMOXARIFE no 05 manda o
+  **mesmo** corpo da configuração-base (`limite: 800, aprovadorIds: [7, 9]`), para que o controle (7) derrube só o 05 e não as linhas seguintes
+  por efeito colateral.
+- **M2 (Menor) — "chaves exatas, nesta ordem" não é o que o `deepStrictEqual` trava.** `assert.deepStrictEqual` ignora a ordem das chaves.
+  **Correção:** ou tirar "nesta ordem" do contrato, ou afirmar também `assert.strictEqual(JSON.stringify(res.body), '<literal da tabela>')`
+  (o literal já está escrito na tabela; preferido — custa uma linha e trava o que o contrato promete).
+- **M3 (Menor) — o Jest "apaga `aprovadorIds` → nenhuma caixa marcada, sem toast" abençoa o estado enganoso.** Caixas todas desmarcadas
+  dizem "ninguém aprova" — é exatamente o que o B1210 descartou. Como teste de robustez (a aba não quebra) ele serve, mas o nome e o comentário
+  não podem apresentar isso como comportamento correto. **Correção:** nomear `[RN-184.06] robustez: sem aprovadorIds a aba não quebra` e
+  comentar que quem abre a aba **sempre** recebe os ids (o predicado é o mesmo nos dois lados — pergunta 4) e que a guarda real é o controle
+  (5) + a fixture da T3. Não afirmar "nenhuma caixa marcada" como se fosse desejado; afirmar só "sem `TypeError`/toast e a aba renderiza".
+- **M4 (Menor) — o B1210 diz que `can(user, 'configurar')` "dá o mesmo grupo hoje".** Quase: `getPerfilFromUser` (`permissions.js:278`) compara
+  `role === 'admin'` estrito, e `isSystemAdmin` em minúsculas — um `role: 'Admin'` entra num e não no outro. O próprio B1210 cita a caixa; a frase
+  "dá o mesmo grupo" deve dizer "o mesmo grupo, salvo a caixa do `role`". Só redação.
+
+Nenhum achado muda o contrato congelado nem as RN; a execução segue T1 → T2 → T3 com I1, I2 e M1–M3 aplicados.
