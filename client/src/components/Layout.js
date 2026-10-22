@@ -16,7 +16,7 @@ import {
   FiCalendar, FiLogOut, FiMenu, FiX, FiUserPlus, FiPackage, FiBarChart2, FiMap, FiDollarSign, FiSettings, FiShield, FiMoon, FiSun, FiGrid,
   FiShoppingCart, FiTrendingDown, FiTrendingUp, FiCreditCard, FiTruck, FiFileText as FiFileText2, FiTool, FiCheckCircle,   FiSliders, FiCircle, FiDroplet, FiZap, FiLayers, FiClipboard,
   FiArchive, FiActivity, FiList, FiMessageCircle, FiAlertTriangle, FiCheckSquare, FiLock, FiCornerUpLeft,
-  FiScissors, FiBell, FiMail, FiCamera, FiAlertOctagon, FiInbox
+  FiScissors, FiBell, FiMail, FiCamera, FiAlertOctagon, FiInbox, FiUserCheck
 } from 'react-icons/fi';
 import Notificacoes from './Notificacoes';
 import BuscaGlobal from './BuscaGlobal';
@@ -380,6 +380,9 @@ const Layout = () => {
     // Etapa 9b: ferramenta e PATRIMONIO emprestavel (furadeira, paquimetro...), nao estoque —
     // tela nova para emprestimo/devolucao, manutencao, avaria/perda e calibracao (design D9).
     { path: '/almoxarifado/ferramentas', icon: FiTool, label: 'Ferramentas' },
+    // Etapa 178: entrega de EPI ao colaborador com assinatura na tela (NR-6). Sem adminOnly, mesmo criterio de reposicao/alertas:
+    // a lista e a ficha sao leitura do modulo; quem barra a entrega e o requirePermission('entregar_epi') do servidor.
+    { path: '/almoxarifado/epi', icon: FiUserCheck, label: 'Entrega de EPI' },
     // Etapa 11: sugestao de compra por fornecedor, estoque parado e acompanhamento das
     // solicitacoes — gate proprio (gerenciar_reposicao) resolvido pelo backend, sem adminOnly
     // aqui (o perfil COMPRAS/GESTOR tambem acessa, nao so admin do modulo).

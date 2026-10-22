@@ -1289,3 +1289,50 @@ describe('[RN-156.02] o Proprietario com a lista de clientes recusada', () => {
     expect(opcoes()).toEqual(['GMP (estoque próprio)', 'Cliente Alfa LTDA', 'Cliente Beta SA']);
   });
 });
+
+/**
+ * Etapa 178 (T2, contrato I4) — o cadastro do material edita o CA do EPI: `ca_numero` e `ca_validade` (date). Vazio vai `null`
+ * explicito: '' no PUT caia no "ausente" da coercao e preservaria o CA antigo — limpar o CA nao funcionaria, em silencio.
+ */
+describe('MaterialAlmoxarifadoForm — Etapa 178: Nº do CA e Validade do CA', () => {
+  const caNumero = () => container.querySelector('#material-ca-numero');
+  const caValidade = () => container.querySelector('#material-ca-validade');
+
+  test('cadastro novo: os dois campos existem, o de validade e date, e o POST leva o que foi digitado', async () => {
+    await renderizarNovo();
+    await preencherObrigatorios();
+    expect(caValidade().type).toBe('date');
+    preencher(caNumero(), ' 12345 ');
+    preencher(caValidade(), '2027-03-31');
+    await submeter();
+    expect(api.post.mock.calls[0][1].ca_numero).toBe('12345');
+    expect(api.post.mock.calls[0][1].ca_validade).toBe('2027-03-31');
+  });
+
+  test('cadastro novo sem CA: os dois vao null (nunca string vazia)', async () => {
+    await renderizarNovo();
+    await preencherObrigatorios();
+    await submeter();
+    expect(api.post.mock.calls[0][1].ca_numero).toBeNull();
+    expect(api.post.mock.calls[0][1].ca_validade).toBeNull();
+  });
+
+  test('edicao: carrega o CA gravado e apagar os dois manda null no PUT', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/familias') return Promise.resolve({ data: FAMILIAS });
+      if (url === '/almoxarifado/categorias') return Promise.resolve({ data: CATALOGO });
+      if (url.startsWith('/almoxarifado/materiais/')) {
+        return Promise.resolve({ data: { ...MATERIAL_DO_CLIENTE, ca_numero: '998877', ca_validade: '2026-12-31' } });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    await renderizarEdicao(77);
+    expect(caNumero().value).toBe('998877');
+    expect(caValidade().value).toBe('2026-12-31');
+    preencher(caNumero(), '');
+    preencher(caValidade(), '');
+    await submeter();
+    expect(api.put.mock.calls[0][1].ca_numero).toBeNull();
+    expect(api.put.mock.calls[0][1].ca_validade).toBeNull();
+  });
+});

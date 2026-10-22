@@ -166,6 +166,7 @@ export const MateriaisClienteAlmoxarifado = page(() => import('../components/alm
 export const RemessasTerceirosAlmoxarifado = page(() => import('../components/almoxarifado/RemessasTerceirosAlmoxarifado'));
 export const SobrasAlmoxarifado = page(() => import('../components/almoxarifado/SobrasAlmoxarifado'));
 export const FerramentasAlmoxarifado = page(() => import('../components/almoxarifado/FerramentasAlmoxarifado'));
+export const EpiAlmoxarifado = page(() => import('../components/almoxarifado/EpiAlmoxarifado'));
 export const ReposicaoAlmoxarifado = page(() => import('../components/almoxarifado/ReposicaoAlmoxarifado'));
 export const AlertasAlmoxarifado = page(() => import('../components/almoxarifado/AlertasAlmoxarifado'));
 export const NotificacoesAlmoxarifado = page(() => import('../components/almoxarifado/NotificacoesAlmoxarifado'));
@@ -222,6 +223,7 @@ export const ROUTE_PREFETCH = {
   '/almoxarifado': () => import('../components/almoxarifado/AlmoxarifadoDashboard'),
   '/almoxarifado/sobras': () => import('../components/almoxarifado/SobrasAlmoxarifado'),
   '/almoxarifado/ferramentas': () => import('../components/almoxarifado/FerramentasAlmoxarifado'),
+  '/almoxarifado/epi': () => import('../components/almoxarifado/EpiAlmoxarifado'),
   '/almoxarifado/reposicao': () => import('../components/almoxarifado/ReposicaoAlmoxarifado'),
   '/almoxarifado/alertas': () => import('../components/almoxarifado/AlertasAlmoxarifado'),
   '/almoxarifado/notificacoes': () => import('../components/almoxarifado/NotificacoesAlmoxarifado'),
