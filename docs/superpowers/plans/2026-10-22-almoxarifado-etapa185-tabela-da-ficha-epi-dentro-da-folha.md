@@ -1,6 +1,6 @@
 # Etapa 185 — A tabela da ficha de EPI (e o termo de ferramenta) cabe na folha: célula quebra em linhas, nada é cortado
 
-> **Status:** 📝 **PLANO (2026-10-22)** — Fase 0 medida com o jsPDF real; Fase 2 (revisão do plano) ainda não rodou. Nenhuma task executada.
+> **Status:** 📝 **PLANO (2026-10-22)** — Fase 0 medida com o jsPDF real; Fase 2 (revisão fresca) feita — ver "Emendas da Fase 2" (0 críticos, 3 importantes, 9 menores; prevalecem). Nenhuma task executada.
 > Feature **25** (entrega de EPI) e **feature das ferramentas** (termo de responsabilidade, Etapa 180). Corrige **B1208** / **C444**
 > (registrados na Etapa 183, defeito da 178). Decisões desta etapa a partir de **B1215** (a 184 reservou até B1214).
 > Antes: Etapa 184 (aprovadores da liberação por valor) — **outra sessão revisa a 184 em paralelo: não tocar nos arquivos dela**
@@ -306,7 +306,106 @@ divergência 2 da Fase 0); este plano com a próxima tarefa detalhada.
 
 ## Emendas da Fase 2
 
-*(a preencher pela revisão fresca do plano — Fase 2 da skill `desenvolver-etapa-almoxarifado`. Prevalecem sobre as regras e as tasks acima.)*
+*(Revisão fresca do plano — Fase 2 da skill `desenvolver-etapa-almoxarifado`, 2026-10-22, sobre `90168815`. Prevalecem sobre as regras e as
+tasks acima.)*
+
+**Como foi revisado.** Leitura de `fichaEpiPdf.js`, `termoFerramentaPdf.js`, dos quatro testes (`fichaEpiPdf.test.js`,
+`termoFerramentaPdf.test.js`, `EpiAlmoxarifado.test.js`, `FerramentasAlmoxarifado.test.js`), de `remessaPdf.js`, `posicaoClientePdf.js`,
+`etiquetasPdf.js` e de `epiService.camposDoRegistro`; sondas com o **jsPDF real** do client (fonte 9/10/14, mm, A4) no scratchpad, prefixo
+`f2r185-` (`f2r185-sonda.js`, `-excesso.js`, `-espacofinal.js`, `-espacofinal2.js`, `-c4.js`; caminho completo
+`C:\Users\User\AppData\Local\Temp\claude\C--Users-User-projetos-CRM-main\bf36ab2c-c3a4-467f-bc1f-24a9b62a2a92\scratchpad\`).
+
+**O que a sonda confirmou (sem emenda).**
+- Colunas x = 14, 32, 82, 102, 121, 131, 143, 168 → útil 17/49/19/18/9/11/24/28. Cabeçalhos em 1 linha: o mais justo é `Validade CA`
+  (119,49 ≤ 120 — folga de 0,5 mm); `Entregue por` 186,2 ≤ 196. `ENTREGA` do teste e a entrega da fixture real (`fichaEpi.rota.json`)
+  saem com **todas** as células em 1 linha — as montagens literais da 183 (divisória em **240** e em **229**, a 7ª em 234) continuam
+  valendo. Casos da RN-185.01: linhas por célula 1,4,4,1,1,4,1,2; `Maria Aparecida dos Santos Oliveira` → 195,4. RN-185.04: 60 `W` em
+  *Entregue por* = 7 linhas → altura 61 → 295 > 287 → página seguinte; com `4` fixo cabia (271) e a divisória ia a 295 — o (c3) sabe falhar.
+- O (c4) (útil sem a folga) **cai** com os casos da RN-185.01: *Entregue por* `Maria…Oliveira` 196,89 > 196, EPI de 85 car. 81,63 > 81,
+  `Tamanho especial XGG` 142,56 > 142. Não precisa aumentar caso.
+- Fuzz de 20 000 textos (acentos, travessão, parênteses, espaço duplo) nas 8 larguras: o `splitTextToSize` **nunca perde** caractere
+  não-espaço (junção sem espaços = texto em todos) e, com a linha aparada à direita, **nunca passa** do útil. Espaço duplo interno, espaço
+  inicial e tab são preservados; `\n` vira quebra.
+- Termo: `quebrarTexto` com `medir` (implementação do contrato rodada na sonda) — CAIXA ALTA de 121 car. → 2 linhas, fim 166,4; 200 `W` →
+  4 linhas, fim 193,1, junção = texto; com o `medir` padrão devolve exatamente o que os testes de hoje esperam (`['um dois','tres','quatro']`,
+  `['xxxxx','xxxxx','xx']`, `['a','','b']`). Linha de devolução com nome de 44 → 199,1 hoje, 2 linhas quebrada.
+- A altura `4·n + 3·(conf + aparelho) + 2 + (25 | 8)` bate com o desenho de `fichaEpiPdf.js:150-178` (y += 4·n; +3 por linha de evidência;
+  +2; imagem +25 ou +4/texto/+4; divisória) e a régua `y + altura > 287` é a da 183 (`:151`). O aparelho (`quebrarPorLargura`, corte por
+  letra, B1207) **não é tocado** pelo contrato — a quebra por palavra fica só nas 8 células e no cabeçalho.
+- T1 e T2: nenhum helper de quebra compartilhado (a T2 dá `medir` à `quebrarTexto` do próprio arquivo; a T1 usa o `splitTextToSize`), cada
+  arquivo de teste tem o próprio `jest.mock('jspdf')` e as réguas são copiadas, não importadas. Ver a ressalva do M5.
+
+### Importante
+
+- **I1 — A régua `celulasInvasoras()` como descrita dá falso vermelho com o código certo** (T1 passo 1; T3). A definição "toda `text` de
+  fonte 9 cujo `x` está em `COLUNAS_FICHA` e cujo `y` é de uma linha da tabela (depois do primeiro cabeçalho)" pega:
+  (a) `'(imagem da assinatura indisponível)'` — fonte 9, x = 14 (= coluna Data), termina em **64,6** com o limite da Data em 31
+  (`fichaEpiPdf.js:174`); a RN-185.06 roda **sem imagem** → vermelho com a produção correta; idem `'Nenhuma entrega de EPI registrada.'`
+  (65,3, `:181`); (b) o filtro por **y** quebra na página 2: lá o cabeçalho da tabela está em y = 18 e a 1ª entrega em 25, **abaixo** do y do
+  primeiro cabeçalho da página 1 (43) — as células da página 2 ficariam fora da régua (falso verde justamente na virada de página da
+  RN-185.04). **Emenda:** as células são identificadas pela **sequência** das chamadas, não por y: de cada entrega, os `text` de fonte 9 entre
+  a última `line` (cabeçalho da tabela ou divisória anterior) e o primeiro `text` de fonte 7 seguinte (`Entrega … registro`); o cabeçalho
+  da tabela são os 8 `text` imediatamente antes da `line` que o sublinha. `celulasInvasoras` e `celulasDaEntrega` usam o **mesmo** recorte
+  (uma função só no arquivo). Metade positiva obrigatória: no caso sem imagem da RN-185.06, `celulasDaEntrega(k)` tem as 8 colunas em todas
+  as entregas e a régua viu ≥ 1 célula **na página 2** (contar `addPage` antes dela). Vale para a cópia da régua na T3.
+- **I2 — A justificativa da B1217 está errada no fato.** Ela diz que o aparelho é cortado por letra "porque lá a junção literal das linhas
+  tem de ser o texto do lacre; aqui a garantia é nenhuma letra perdida" — como se as células não estivessem no lacre. **Estão:**
+  `camposDoRegistro` (`server/services/almoxarifado/epiService.js:70-80`) põe no HMAC `material_codigo`, `material_nome`, `ca_numero`,
+  `ca_validade`, `quantidade`, `tamanho`, `motivo` e `entregue_por_nome`. A diferença verdadeira: a tabela **nunca** foi o texto literal do
+  lacre — a data é formatada no dia local, o motivo sai pelo rótulo (`PRIMEIRA_ENTREGA` → *Primeira entrega*), o EPI é `código — nome`, a
+  validade é `dd/mm/aaaa`, a quantidade passa por `Number`; quem confere o lacre é o *Verificar integridade* no servidor, não a leitura do
+  papel. O aparelho é impresso como prova **literal** (B1207) e por isso a junção tem de ser exata. **Emenda:** a B1217 do fechamento diz
+  isso, e diz o custo aceito: a quebra por palavra come **um** espaço por quebra (`textoLimpo` só apara as pontas — `material_nome` com espaço
+  duplo interno continua com ele dentro da linha, mas não numa quebra). Não muda código; muda o texto da decisão (regra do CLAUDE.md: decisão
+  com fato errado engana a próxima sessão).
+- **I3 — A B1220 justifica a remessa fora com um fato que o código contradiz.** "Não são o documento de prova … nem de assinatura" — mas
+  `remessaPdf.js:121` diz *"Campos de assinatura: o papel volta assinado pelo terceiro, e é o que prova a entrega"*, e a linha do item corta o
+  material em 40 letras (`:110`) e o código invade a coluna (64,3 com a coluna acabando em 44, medida da Fase 0). É prova assinada **em
+  papel**, com o mesmo defeito. **Emenda:** a remessa continua **fora** (escopo curto, layout e página próprios — reversível), mas a B1220
+  passa a dizer que ela **é** prova assinada pelo terceiro, e o aviso de operação **C445** é registrado **sem condição** ("se for
+  considerada prova" sai): quem imprime remessa de material de nome comprido hoje manda um papel que não diz tudo o que foi. A posição do
+  cliente (sem assinatura) e as etiquetas (já medem) ficam como estão.
+
+### Menor
+
+- **M1 — Linha com espaço no fim.** O `splitTextToSize` devolve linhas com espaço final quando a palavra seguinte é maior que a coluna e é
+  partida (sonda: `'XGG Maria '`, `'automatica '`; 5 618 linhas assim no fuzz, 1 023 com a largura **crua** acima do útil por até 0,87 mm;
+  aparada, nenhuma). O espaço não é tinta, mas a régua mede `getTextWidth` do texto cru → falso vermelho fora dos casos do plano (que não
+  geram espaço final — conferido). **Emenda:** o desenho apara à direita (`s.replace(/\s+$/, '')`) cada linha antes do `text` — a RN-185.02
+  (junção sem espaços) não muda e a régua continua medindo o texto cru, sem afrouxar.
+- **M2 — O passo do cabeçalho da ficha tem de deixar o nome curto no mesmo y de hoje** (RN-185.05, contrato). Hoje: título +6, `Gerado em`
+  **+6**, `Nome` +5, `Setor` +5, aviso +5, +3. O contrato diz "título passo 6; demais passo 5" — aplicado ao `Gerado em` desloca a tabela 1 mm e
+  derruba as montagens literais da 183 (240 e 229), convidando a "corrigir" o número do teste. **Emenda:** cada bloco quebrado avança o passo
+  de hoje **por linha** (título 6·k, `Nome`/`Setor`/aviso 5·k); `Gerado em` (texto fixo) não muda. Com nome curto, todo y é idêntico ao de
+  hoje — os testes `[RN-183.08] (a)` e `[Fase 5 M1] … 234` ficam **sem mudança** e são a guarda disso.
+- **M3 — `LARGURA_UTIL` é declarada depois do cabeçalho** (`fichaEpiPdf.js:137`, `const`): usá-la no cabeçalho como o contrato manda dá
+  `ReferenceError` (TDZ). Subir a constante para junto de `M`. E as duas medições têm de vir **depois** do `setFontSize` certo: o título depois
+  do `setFontSize(14)`, as células depois do `setFontSize(9)` da `:149` (medidas na fonte 7 das linhas de evidência, caberiam mais letras e a
+  célula passaria da coluna — a `celulasInvasoras`, que mede na fonte gravada, pega). No termo, `quebrarTexto(…, 182, getTextWidth)` depois do
+  `setFontSize(10)`.
+- **M4 — O cabeçalho da tabela repetido na página nova não é afirmado por nenhum teste** (pergunta 4). O código já repete (`:151`), mas a
+  RN-185.03 confere os x sem dizer em que página. **Emenda** ao teste da RN-185.04: depois do `addPage`, os 8 `text` seguintes são
+  `doc.cabecalho` em `COLUNAS_FICHA` com y = 18, a `line` em 20 e a 1ª célula da 7ª entrega em y = 25.
+- **M5 — Independência T1/T2: uma aresta de import.** `termoFerramentaPdf.js:11` importa `carregarImagemComoDataUrl` de `fichaEpiPdf.js` — as
+  suítes da T2 **carregam** o arquivo da T1. As sabotagens da T1 ficam dentro de `gerarFichaEpiPdf` e não mudam o resultado da T2, mas uma
+  sabotagem que deixe o arquivo sintaticamente quebrado (ou uma escrita no meio) derruba os testes do termo. Se rodarem em paralelo: a T2 não
+  roda vermelho/verde/controles enquanto a T1 estiver com o arquivo sabotado (o protocolo de `cmp` do plano já cobre a suíte completa; isto
+  estende para as duas suítes do termo). A T2 **não** reusa `quebrarPorLargura` da ficha (corte por letra — é a régua do aparelho, B1207).
+- **M6 — `quebrarTexto` com `medir`: guarda de progresso.** Se um caractere sozinho medir mais que `largura`, "cortar enquanto
+  `medir(pedaço + ch) <= largura`" devolve pedaço vazio e o `while` não termina. Com 182 mm não acontece; com a função exportada e largura
+  pequena, sim. **Emenda:** pedaço vazio leva ao menos um caractere (iterar por código, `for…of`, para não partir par substituto). Teste:
+  `quebrarTexto('WW', 1, medir)` termina e devolve `['W','W']`.
+- **M7 — "Nada passa de 287" tem limite** (RN-185.04). Uma entrega mais alta que a página inteira continua passando do rodapé (a régua manda
+  para a página seguinte, não divide — é a limitação **D (183)(5)**); agora também por célula (só com centenas de letras num nome — sem limite
+  no cadastro). E se a 1ª entrega já não cabe numa página vazia, a página 1 sai só com o cabeçalho. Não é regressão; o fechamento repete a
+  D (183)(5) na D (185) dizendo que as células também contam.
+- **M8 — Comentário do topo de `termoFerramentaPdf.js:1-3`** diz que o montador é testável "inclusive a quebra do texto em linhas" — com o
+  `linhasTexto` saindo do descritor (RN-185.09), deixa de ser verdade; atualizar o comentário junto.
+- **M9 — Na T1, nomear o texto de 3 linhas** do teste do hash em `y_linha + 12`: `'Administrador do Sistema Geral da Empresa X'` dá 3 linhas
+  em 28 mm (sonda); `'W'.repeat(25)` também. Sem nome, o executor escolhe um que dá 2 e o teste vira `+8`.
+
+**Crítico:** nenhum. As medidas, as posições, a fórmula da altura e o escopo (aparelho intocado) batem com o código; os achados são de régua de
+teste (I1, M1, M2, M4), de texto de decisão com fato errado (I2, I3) e de contrato incompleto (M3, M6).
 
 ## Execução
 
