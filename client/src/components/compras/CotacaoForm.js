@@ -18,6 +18,8 @@ import { FiArrowLeft, FiPlus, FiSave, FiSearch, FiTrash2 } from 'react-icons/fi'
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { formatarErroPermissao } from '../../utils/permissaoErro';
+import FornecedorModal, { colocarNoTopo, juntarListaCarregada } from './FornecedorModal';
+import useAtalhoF2 from './useAtalhoF2';
 import '../Compras.css';
 
 // O vocabulario de `STATUS_COTACAO` do servidor, na mesma ordem; rotulos iguais aos do filtro da aba.
@@ -77,11 +79,13 @@ const CotacaoForm = () => {
   // no 409 do Salvar, com o formulario inteiro editado e perdido. Molde: `soStatus` do pedido.
   const [convertida, setConvertida] = useState(false);
   const [pedidoGerado, setPedidoGerado] = useState({ id: null, numero: '' });
+  // Etapa 173 (RN-173.01): a janela do F2 — cadastra o fornecedor sem sair da cotação.
+  const [novoFornecedorAberto, setNovoFornecedorAberto] = useState(false);
 
   useEffect(() => {
     let vivo = true;
     api.get('/compras/fornecedores')
-      .then((res) => { if (vivo) setFornecedores(res.data || []); })
+      .then((res) => { if (vivo) setFornecedores((atual) => juntarListaCarregada(atual, res.data)); })
       .catch(() => { if (vivo) setErro('Não foi possível carregar os fornecedores.'); });
     return () => { vivo = false; };
   }, []);
@@ -196,6 +200,17 @@ const CotacaoForm = () => {
   };
 
   const coluna = { display: 'flex', flexDirection: 'column', gap: 4 };
+
+  // Etapa 173 (RN-173.05): cotação que já virou pedido, ou ainda carregando, não cadastra pelo F2.
+  const podeCadastrarFornecedor = !carregando && !convertida;
+  useAtalhoF2(podeCadastrarFornecedor && !novoFornecedorAberto, () => setNovoFornecedorAberto(true));
+  // RN-173.03: o novo entra na lista e fica escolhido; o resto da cotação não muda.
+  const aoSalvarFornecedor = (novo) => {
+    setFornecedores((atual) => colocarNoTopo(atual, novo));
+    setFornecedorId(String(novo.id));
+    setNovoFornecedorAberto(false);
+    toast.success(`Fornecedor ${novo.razao_social} cadastrado e escolhido na cotação`);
+  };
   return (
     <div className="compras">
       <div className="page-header">
@@ -236,6 +251,17 @@ const CotacaoForm = () => {
                 {fornecedores.map((f) => <option key={f.id} value={f.id}>{f.razao_social}</option>)}
               </select>
             </label>
+            {podeCadastrarFornecedor && (
+              <button
+                type="button"
+                className="btn-novo-fornecedor"
+                data-testid="cotacao-novo-fornecedor"
+                title="Cadastrar um fornecedor sem sair da cotação (atalho: F2)"
+                onClick={() => setNovoFornecedorAberto(true)}
+              >
+                + Novo fornecedor <kbd>F2</kbd>
+              </button>
+            )}
             <label style={coluna}>Data<input data-testid="cotacao-data" type="date" value={dataCotacao} onChange={(ev) => setDataCotacao(ev.target.value)} disabled={convertida} /></label>
             <label style={coluna}>Validade<input data-testid="cotacao-validade" type="date" value={validade} onChange={(ev) => setValidade(ev.target.value)} disabled={convertida} /></label>
             {/* Sem `min`: o servidor decide (D3/D11) e a literal do 400 chega ao role="alert";
@@ -401,6 +427,11 @@ const CotacaoForm = () => {
           )}
         </form>
       )}
+      <FornecedorModal
+        aberto={novoFornecedorAberto}
+        onSalvo={aoSalvarFornecedor}
+        onFechar={() => setNovoFornecedorAberto(false)}
+      />
     </div>
   );
 };
