@@ -175,6 +175,23 @@ let seq = 0;
     assert.strictEqual(st, 'TOTALMENTE_RESERVADA', 'o status acompanha (recalculo depois de soltar a trava)');
   });
 
+  await test('[RN-171.09, I7] a reserva redistribuida diz que veio da OS encerrada (nao da inspecao): observacao e motivo da movimentacao', async () => {
+    const m = await material(); await entrada(m, 5);
+    const os = await novaOs(); const rec = await recebimento();
+    const recNumero = (await dbGet(db, 'SELECT numero FROM recebimentos_material_almoxarifado WHERE id = ?', [rec])).numero;
+    await reservaDaOs(m, 5, os.id, rec);
+    const reqId = await criarReqEsperando(m, 3);
+    const reqNumero = (await dbGet(db, 'SELECT numero FROM requisicoes_almoxarifado WHERE id = ?', [reqId])).numero;
+    assert.strictEqual(await osEncerradaService.liberarReservasDaOs(db, ADMIN, os.id, 'cancelado'), 1);
+    const r = await dbGet(db, "SELECT * FROM reservas_material_almoxarifado WHERE requisicao_id = ? AND status = 'ATIVA'", [reqId]);
+    assert.ok(r, 'a requisicao ganhou a reserva');
+    const onde = `Reserva na liberação da OS ${os.numero} encerrada — recebimento ${recNumero}`;
+    assert.strictEqual(r.observacoes, `${onde} — requisição ${reqNumero}`);
+    const mov = await dbGet(db, "SELECT motivo FROM movimentacoes_almoxarifado WHERE reserva_id = ? AND tipo = 'RESERVA'", [r.id]);
+    assert.strictEqual(mov && mov.motivo, onde);
+    assert.ok(!/inspeção/.test(`${r.observacoes} ${mov.motivo}`), 'nada de inspecao no rotulo');
+  });
+
   await test('[RN-171.09, I7] a redistribuicao roda FORA de qualquer trava do chamador (a porta pega a sua) e por material + nota', async () => {
     const m1 = await material(); const m2 = await material(); await entrada(m1, 4); await entrada(m2, 6);
     const os = await novaOs(); const recA = await recebimento(); const recB = await recebimento();

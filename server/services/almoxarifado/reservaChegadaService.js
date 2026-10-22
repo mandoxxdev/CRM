@@ -475,7 +475,27 @@ async function distribuirParaOs(db, user, materialId, teto, rotulos, acc, os) {
  * Etapa 75 (T1) — os textos da liberação pela inspeção ou pela não conformidade (contrato do plano). O
  * documento entra no texto de log (a inspeção não tem número: vai o id; a NC vai pelo número).
  */
+function rotulosDaOsEncerrada(ctx, recNumero) {
+  const os = ctx.documento_numero || `#${ctx.documento_id}`;
+  const onde = `na liberação da OS ${os} encerrada`;
+  return {
+    recebimento_id: ctx.recebimento_id ? Number(ctx.recebimento_id) : null,
+    observacao: (c) => `Reserva ${onde} — recebimento ${recNumero} — requisição ${c.numero}`,
+    motivo: `Reserva ${onde} — recebimento ${recNumero}`,
+    falhaReserva: (c, e) => `[almoxarifado-reservas] Falha ao reservar ${onde} o item ${c.item_id} da requisição ${c.requisicao_id}: ${e.message}`,
+    motivoDesfazer: `Liberação de reserva ${onde} desfeita`,
+    falhaDesfazer: (reservaId, e) => `[almoxarifado-reservas] Falha ao desfazer a reserva ${reservaId} ${onde}: ${e.message}`,
+    saiuDaEspera: `Requisição saiu da espera durante a reserva ${onde}`,
+    excessoDesfeito: `Reserva ${onde} acima do pendente — excesso desfeito`,
+    falhaRecalculo: (id, e) => `[almoxarifado-reservas] recalculo do status apos a reserva na liberacao falhou (${ctx.origem} ${ctx.documento_id}, requisicao ${id}): ${e.message}`,
+  };
+}
+
 function rotulosDaLiberacao(ctx, recNumero) {
+  // Etapa 171 (RN-171.09, I7): a OS encerrada que soltou a compra dela redistribui por esta porta (osEncerradaService, com
+  // `documento_numero` = numero da OS). Antes caia no ramo da inspecao — a reserva da fila dizia "Reserva na liberação da
+  // inspeção — recebimento X" sem inspecao nenhuma.
+  if (ctx.origem === 'OS_ENCERRADA') return rotulosDaOsEncerrada(ctx, recNumero);
   const ehNc = ctx.origem === 'NAO_CONFORMIDADE';
   const nc = ctx.documento_numero || ctx.documento_id;
   const onde = ehNc ? `na liberação da não conformidade ${nc}` : `na liberação da inspeção ${ctx.documento_id}`;
