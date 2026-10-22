@@ -1,18 +1,26 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-22 (Etapa 171) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-22 (Etapa 172) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170 e 171) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171 e 172) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-22 (Etapa 171 ENTREGUE · próxima: Etapa 172)
+> ## Onde o desenvolvimento está — 2026-10-22 (Etapa 172 ENTREGUE · próxima: Etapa 174)
 >
-> **O desenvolvimento parou aqui: Etapa 171 fechada — 2026-10-22.** A **Etapa 171 (pedido de compra vinculado a uma OS — a pergunta da
+> **O desenvolvimento parou aqui: Etapa 172 fechada — 2026-10-22.** A **Etapa 172 (a requisição com OS cadastrada, e a cesta volta a
+> enviar)**: a tela **Solicitar Material** dos módulos de escritório ganhou o campo **Número da OS** — sem ele, desde 16/09 nenhum envio
+> passava (aviso **C428**, resolvido); as duas telas de nova requisição ganharam a lista opcional **OS cadastrada**, que liga a requisição à OS
+> de verdade e a faz pegar o material comprado para a OS pelo vínculo. Nada a rodar antes do deploy (a coluna nova é criada no boot).
+> **Próxima: Etapa 174** (a 173 está em desenvolvimento em outra frente) — a saída da entrega com a OS, para o relatório **Consumo por OS**
+> contar o que sai por requisição; ver a próxima tarefa no plano da 172.
+>
+> **Etapa 171, 2026-10-22.** A **Etapa 171 (pedido de compra vinculado a uma OS — a pergunta da
 > usuária de Compras)**: o pedido de compra ganha o campo **OS** (um pedido, uma OS ou estoque); quando a nota do pedido com OS é processada,
 > o que entrou fica **reservado para a OS**, e a requisição que cita a OS em **Número da OS** leva o material (as outras não); cancelar ou
 > concluir a OS devolve o material ao estoque, com a marca de origem; OS com pedido de compra não se exclui. Consulta **opcional** antes do
 > deploy (**A106**). **Próxima: Etapa 172** — a requisição com campo OS de verdade (uma lista de OS no lugar do texto livre); ver a próxima
-> tarefa no plano da 171.
+> tarefa no plano da 171. *(Feita na 172 — a lista ficou **ao lado** do texto, opcional, e não no lugar dele: trocar o texto pela lista
+> contrariaria a regra de 16/09, que aceita qualquer número digitado.)*
 >
 > **Etapa 170, 2026-10-20.** A **Etapa 170 (as datas do Chat, de Compras e do Almoxarifado no dia
 > de Brasília e o limite da consulta dos Logs; consertos técnicos, sem regra de acesso nova e sem mudar valor gravado)**: o **Chat** mostra
@@ -6840,6 +6848,57 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 172 — A requisição com OS cadastrada, e a cesta volta a enviar (ENTREGUE — 2026-10-22)
+
+**O que mudou, em uma frase:** a tela de **Solicitar Material** dos módulos de escritório ganhou o campo **Número da OS** — sem ele, ela não
+conseguia enviar requisição nenhuma — e as duas telas de nova requisição ganharam uma lista **OS cadastrada**, opcional, que preenche o número
+e liga a requisição à OS de verdade.
+
+**O problema que ela resolve.** Desde 16/09 o sistema exige o número da OS em toda requisição (decisão do P.O.: toda saída de material tem de
+dizer em qual serviço foi usada). A tela de **Solicitar Material** (a "cesta") de Comercial, Compras, Financeiro, Engenharia, Administrativo,
+Administração e do próprio Almoxarifado nunca teve esse campo: clicar **Enviar solicitação** dava sempre *"Informe o número da OS: toda saída
+de material precisa estar vinculada a uma OS"* e não havia onde preencher — **ninguém desses módulos conseguia pedir material por ali**. E,
+mesmo onde o campo existia, o número era só texto: a requisição pegava o material comprado para a OS (Etapa 171) apenas se o número fosse
+escrito igual ao da OS.
+
+| Antes | Agora |
+|---|---|
+| **Solicitar Material** (cesta): *Enviar solicitação* voltava sempre a mensagem da OS, sem campo para preencher | Campo **Número da OS \*** na cesta; vazio, a mensagem aparece **embaixo do campo** e nada é enviado |
+| O número da OS era só texto livre | Continua texto livre (qualquer número é aceito) **e** há a lista opcional **OS cadastrada**: escolher uma OS preenche o número e o trava |
+| A requisição pegava o material comprado para a OS só se o número fosse escrito igual | Com a OS escolhida na lista, pega pelo vínculo, sem depender de como o número foi escrito |
+| Copiar uma requisição levava só o texto da OS | Leva também a OS cadastrada (se ela ainda existir) |
+
+**Roteiro de teste (10 minutos).** Prepare uma OS aberta (**Fábrica → Ordens de Serviço → Nova OS**, ex.: *OS-2026-058*) e um usuário só do
+**Comercial** (sem o módulo Almoxarifado).
+
+1. **A cesta sem OS não envia.** Entre com o usuário do Comercial, **Comercial → Solicitar Material**, clique **Adicionar** num material e,
+   sem preencher **Número da OS \***, clique **Enviar solicitação**. Embaixo do campo aparece, em vermelho, *"Informe o número da OS: toda
+   saída de material precisa estar vinculada a uma OS"*; nada foi enviado (**Minhas Requisições** não mostra requisição nova). Digite uma letra
+   no campo: a mensagem some.
+2. **Número digitado à mão (como sempre).** Em **Número da OS \***, digite *MANUT 22* (não precisa existir) e envie: *"Requisição REQ-… enviada
+   com sucesso"*, e a tela volta para **Minhas Requisições** com a requisição nova.
+3. **OS cadastrada.** De novo em **Solicitar Material**, adicione um material; em **OS cadastrada**, escolha *OS-2026-058 (⟨status⟩)*: o campo
+   **Número da OS** se preenche com *OS-2026-058* e fica travado (cinza). Envie. No detalhe da requisição, a OS é *OS-2026-058*.
+4. **Voltar a digitar.** Escolha uma OS na lista e depois volte para *Digitar outro número*: o campo **Número da OS** fica vazio e destravado.
+5. **Só OS abertas na cesta.** Cancele uma OS (**Fábrica → Ordens de Serviço**, lápis, **Status** *Cancelado*) e reabra **Solicitar
+   Material**: ela não aparece em **OS cadastrada**. *(Na **Nova Requisição** do Almoxarifado a lista mostra todas as OS, inclusive as
+   fechadas — a requisição para OS fechada é aceita.)*
+6. **No Almoxarifado.** **Almoxarifado → Requisições (almox.) → Nova Requisição**: o mesmo par **OS cadastrada** + **Número da OS \***; sem número,
+   **Enviar Requisição** mostra a mesma mensagem num aviso; **Salvar Rascunho** salva **sem** OS (a OS só é cobrada no envio).
+7. **Copiar.** Em **Requisições (almox.)**, abra a requisição do passo 3 e clique **Copiar como Novo Rascunho** → **Copiar**: o rascunho
+   copiado vem com a OS *OS-2026-058*.
+8. **Com a compra da OS (Etapa 171).** Faça o roteiro da Etapa 171 até o passo 4 (pedido com OS recebido e reservado para a OS), mas no passo
+   6 crie a requisição pela **OS cadastrada** em vez de digitar: ao aprovar, ela fica com o material reservado para a OS.
+
+**O que esperar no dia a dia.** Escolher a OS na lista é o jeito seguro: a requisição fica ligada à OS e pega o material comprado para ela.
+Digitar continua valendo para quem não acha a OS na lista ou usa uma referência que não é OS (ex.: *MANUT 22*) — mas aí vale a regra antiga
+do texto (o número escrito diferente não pega a reserva da OS). Se a lista de OS não carregar, a tela diz *"Não foi possível carregar as OS
+cadastradas — digite o número abaixo."* (ou *"… ao lado."* na tela do Almoxarifado) e o envio continua funcionando pelo número digitado.
+
+**O que esta etapa NÃO cobre.** A saída da entrega ainda não leva a OS — o relatório **Consumo por OS** não conta o que sai por requisição
+(é a próxima etapa, 174). Requisição já enviada não se edita (para trocar a OS, cancele e faça outra, ou copie). A lista **OS cadastrada**
+mostra as 300 OS abertas mais recentes. Excluir uma OS que tem requisição ligada a ela não é impedido (a requisição fica com o número escrito).
 
 ## Etapa 171 — Pedido de compra vinculado a uma OS (ENTREGUE — 2026-10-22)
 

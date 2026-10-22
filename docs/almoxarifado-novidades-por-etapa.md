@@ -11,11 +11,16 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-22):** **Etapa 171 fechada** (**pedido de compra vinculado a uma OS** — a pergunta da usuária de
+> **Onde o desenvolvimento está (2026-10-22):** **Etapa 172 fechada** (**a requisição com OS cadastrada, e a cesta volta a enviar** — a tela
+> *Solicitar Material* dos módulos de escritório não enviava requisição nenhuma desde 16/09 (**C428**, resolvido); as duas telas de nova
+> requisição ganham a lista opcional **OS cadastrada** ao lado do número digitado (**B1103**), que liga a requisição à OS e a faz pegar o
+> material comprado para ela pelo vínculo (**B1107**); decisões **B1103** a **B1110** — **a B1106 pede um olhar**; nada a rodar antes do
+> deploy); a próxima é a **174** (a 173 está em outra frente) — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 171 fechada** (**pedido de compra vinculado a uma OS** — a pergunta da usuária de
 > Compras: o pedido ganha o campo **OS** (um pedido, uma OS ou estoque — **B1086**); a nota do pedido com OS reserva o material para a OS, e a
 > requisição que cita a OS em **Número da OS** o leva (**B1092**, **B1097**); cancelar ou concluir a OS devolve o material ao estoque com a
 > marca de origem (**B1087**, **B1090**); OS com pedido não se exclui (**B1091**); decisões **B1086** a **B1102**, avisos **C426** e **C427**,
-> consulta opcional **A106**); a próxima é a **172** (a requisição com campo OS de verdade) — ver "Onde estamos e o que vem a seguir".
+> consulta opcional **A106**); a próxima era a **172** (a requisição com campo OS de verdade).)*
 > *(Antes: **Etapa 170 fechada** (consertos técnicos no Chat, em Compras, no Almoxarifado e no núcleo,
 > sem regra de acesso nova e sem mudar valor gravado; **as datas do Chat, de Compras e do Almoxarifado no dia de Brasília e o limite da
 > consulta dos Logs** — o **Chat** mostra a hora de Brasília e o *Hoje*/*Ontem* certos à noite, e a data ilegível não derruba mais a tela
@@ -4111,7 +4116,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B1102; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B1110; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -12056,6 +12061,50 @@ a **C398**; a **C408**; a **C411** e a **C412**; a **B1057**; a **B1063**; a **C
 da OS — era a próxima da 170 e passou para depois); a **C424** e a **C425**; a **B1089** a **B1101** são reversíveis — **a B1092 pede um
 olhar**.
 
+**B1103 (NOVA, da Etapa 172; decisão do agente) — a OS cadastrada é opcional e fica AO LADO do número digitado, não no lugar dele.** A
+"próxima tarefa" da 171 pedia "a lista de OS na tela de nova requisição"; como **obrigatória**, ela contrariaria a regra que o P.O. decidiu em
+16/09 (Etapa 33): o número da OS é **digitado** — *OS-QUE-NAO-EXISTE-9999*, *MANUT 22* e *OS-1714/A* são aceitos, e o teste que trava isso
+não mudou. **Escolhido:** lista **OS cadastrada** opcional + o **Número da OS** obrigatório no envio, nas duas telas. **Descartado:** lista
+obrigatória (desfaz a decisão do P.O. sem ele pedir); trocar o texto pela lista (idem). **Reversível:** `f62bd21f`, `a2a049bd`.
+
+**B1104 (NOVA, da Etapa 172; decisão do agente) — com a OS cadastrada, o número gravado é o da OS, mesmo que o texto diga outra coisa.**
+**Escolhido:** o servidor grava o número da OS por cima do que veio digitado (na criação e no rascunho); a tela já preenche e trava o campo.
+**Por quê:** relatórios e e-mails mostram o texto — mostrariam uma OS diferente da que a reserva usa. **Descartado:** recusar com 400 quando o
+texto diverge (mais um erro para o solicitante, sem ganho — a lista é a fonte forte); manter o texto do usuário. **Reversível:** `f62bd21f`.
+
+**B1105 (NOVA, da Etapa 172; decisão do agente) — a requisição aceita OS já fechada (cancelada, concluída).** A requisição pode ser do
+consumo de uma OS que está fechando. **Escolhido:** OS fechada aceita na criação e na cópia; a lista da cesta só mostra abertas (para não
+induzir), a do Almoxarifado mostra todas. **Descartado:** recusar como o pedido de compra recusa (a 171 recusa compra **nova** para OS
+fechada — comprar é gastar; requisitar o que já está no estoque não é). **Reversível:** `f62bd21f`.
+
+**B1106 (NOVA, da Etapa 172; decisão do agente — EXPOSIÇÃO ACEITA) — qualquer usuário logado vê número e status das OS abertas.** A lista
+**OS cadastrada** da cesta precisa funcionar para quem só tem o Comercial (ou Compras, Financeiro…), sem o módulo da Fábrica. **Escolhido:**
+rota própria da requisição (`GET /api/requisicoes-material/aux/ordens-servico`), só com o login — devolve **apenas** código interno, número e
+status das 300 OS abertas mais recentes, **sem o cliente**. Na revisão adversarial, o parâmetro `?incluir=<código>` (que devolvia também uma
+OS fechada pelo código) **saiu**: nenhuma tela o usava e ele deixava ler qualquer OS por código (`37c2732d`). **Descartado:** exigir um
+"módulo que requisita" (não há uma régua única — a lista de módulos da cesta é configurável); devolver o cliente (exposição sem uso).
+**Reversível:** `f62bd21f`, `37c2732d`.
+
+**B1107 (NOVA, da Etapa 172; decisão do agente) — a requisição com OS cadastrada casa com a reserva da OS SÓ pelo vínculo.** Nas duas portas
+da 171 (a chegada da nota que serve a fila da OS e a conversão na aprovação). **Escolhido:** com OS cadastrada, o texto **não conta** (nem
+quando casaria com outra OS); sem, vale o texto como na 171 (**B1092**) — para as requisições antigas e para quem digita. A reserva criada para
+a requisição grava a OS (antes, nunca). **Descartado:** casar pelo vínculo **ou** pelo texto (uma requisição da OS 7 com texto "42" pegaria
+material das duas). **Reversível:** `033f1164`.
+
+**B1108 (NOVA, da Etapa 172; decisão do agente) — a cópia leva a OS cadastrada só se ela ainda existir.** Excluída, a cópia vem só com o
+número escrito — a cópia não falha por causa da OS. Mas se o sistema não consegue **conferir** (erro do banco), a cópia termina em erro e nada
+é gravado, em vez de sair calada sem a OS (achado da revisão adversarial, `30f421c0`). **Descartado:** copiar sem conferir (o rascunho
+nasceria ligado a uma OS que não existe). **Reversível:** `f62bd21f`, `30f421c0`.
+
+**B1109 (NOVA, da Etapa 172; decisão do agente) — a lista de OS que não carrega não impede o envio.** Aviso discreto embaixo da lista
+(*"Não foi possível carregar as OS cadastradas — digite o número abaixo."*), sem mensagem de erro; o número digitado continua valendo.
+**Descartado:** mensagem de erro (o envio não depende da lista). **Reversível:** `a2a049bd`.
+
+**B1110 (NOVA, da Etapa 172) — a próxima etapa (174).** A **173** está em desenvolvimento em outra frente. Ver a "próxima tarefa detalhada"
+no plano da 172 — **a saída da entrega com a OS**, para o relatório **Consumo por OS** contar o que sai por requisição (**D (172)**). As
+decisões que esperam vocês: as mesmas da **B1102**; a **B1103** a **B1109** são reversíveis — **a B1106 pede um olhar** (exposição de número e
+status das OS a qualquer usuário logado).
+
 **B1064 (NOVA, da Etapa 166) — a próxima etapa (167).** Ver a "próxima tarefa detalhada" no plano da Etapa 166. As decisões que esperam
 vocês: as da **B957**, a **B988** e a **B989**; a **B1002** continua pedindo um olhar; a **B1013** (o acento nas buscas); a **C398**; a
 **C408**; a **C411** e a **C412**; a **B1057** (a data de emissão reimpressa); **a B1063** (o texto impresso das cláusulas com o marcador);
@@ -15586,6 +15635,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      o material foi para quem esperava ou ficou livre (**B1090**). Voltar a OS para *Pendente* ou *Em Andamento* não refaz a reserva — o material
      pode já ter sido levado. **O que fazer:** se a OS reaberta ainda precisa do material, criar uma requisição para ela (ou uma reserva manual
      em **Reservas**) logo depois de reabrir.
+428. **NOVO — e RESOLVIDO (da Etapa 172) — de 16/09 a 22/10, a tela *Solicitar Material* (a cesta) não enviava requisição.** A cesta é a tela
+     de nova requisição de Comercial, Compras, Financeiro, Engenharia, Engenharia/Projetos, Administrativo, Administração e do próprio
+     Almoxarifado (o *Solicitar Material* do menu — a **Nova Requisição** de **Requisições (almox.)** é outra tela e funcionava). Desde a regra
+     do número da OS obrigatório (Etapa 33, 16/09), todo *Enviar solicitação* voltava *"Informe o número da OS: toda saída de material precisa
+     estar vinculada a uma OS"* e a tela não tinha onde digitar a OS. Nada era gravado. Provado por execução na Etapa 172 (`c34eab10`) e
+     corrigido (`a2a049bd`). **O que fazer:** avisar quem usa essas telas que voltou a funcionar — quem tentou nesse período pode ter pedido
+     material por fora (e-mail, verbal, pela Fábrica); não há registro no sistema das tentativas recusadas.
 ### D. Limitações declaradas— são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -16917,6 +16973,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(172) A requisição com OS cadastrada, o que ficou de fora.** Do plano: (1) **a saída da entrega não leva a OS** (I5) — levar ligaria as
+  regras de vínculo e de dono do material à OS e poderia recusar, na entrega, material já aprovado, reservado e separado (material de cliente
+  de outro cliente); consequência: o **Consumo por OS** não conta o que sai por requisição — é a Etapa 174; (2) não há edição de requisição
+  (a OS só se troca cancelando e fazendo outra, ou copiando); (3) OS excluída com requisição ligada é tolerada (a requisição fica com o número
+  escrito e não casa com nada). Da revisão: (4) a lista **OS cadastrada** da Nova Requisição do **Almoxarifado** usa a lista que já existia
+  (a de Recebimentos) e mostra OS fechadas (inofensivo — **B1105**); (5) uma OS com número em branco (só possível por fora do sistema) não
+  sobrescreve o número digitado; (6) a lista mostra as 300 OS mais recentes (sem busca por digitação).
 - **(171) Pedido de compra vinculado a uma OS, o que ficou de fora.** Do plano: (1) a reserva da OS segura o saldo, mas uma saída que
   **consome contra ela** não confere se é da mesma OS, e trocar o destino dela na tela **Reservas** é permitido; (2) cotação → **Gerar pedido**
   e Reposição → pedido nascem **sem** OS (o comprador a coloca editando o pedido antes de receber), e a importação por planilha ignora coluna de
@@ -18050,6 +18113,11 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(172) Nenhum clique foi dado no navegador.** O envio da cesta foi provado pelas rotas de verdade no servidor de teste, com o pedido exatamente
+como a tela o monta e um usuário só do Comercial (o antes: 400 nos três módulos; o depois: 201 com o número e com a OS cadastrada); as telas, em
+jsdom com a resposta do servidor simulada (o campo, a mensagem embaixo dele, a lista, o travamento, o rascunho). Vale conferir à mão o roteiro
+da Etapa 172 no guia — em especial o passo 1 com um usuário **só do Comercial** e o passo 8 (a cópia).
 
 **(171) Nenhum clique foi dado no navegador.** O pedido com OS, a chegada, a conversão na aprovação, a entrega, o cancelamento da OS e o
 estorno foram provados pelas rotas de verdade no servidor de teste (inclusive o roteiro ponta a ponta até a entrega, e o salvar e o excluir da
@@ -34083,9 +34151,95 @@ pode ser salvo para estoque."* e o pedido continua salvável sem OS.
 - Os declarados da revisão estão na letra **D (171)**.
 - Nenhuma consulta obrigatória antes do deploy: a coluna nova do pedido é criada no boot (aditiva). A **A106** é opcional (mede o **C426**).
 
+## Etapa 172 — A requisição com OS cadastrada, e a cesta dos módulos de escritório volta a enviar (2026-10-22)
+
+Esta etapa nasceu para ligar a requisição à OS de verdade (a continuação da 171) e, no caminho, achou um defeito grave: **a tela
+*Solicitar Material* (a "cesta") de Comercial, Compras, Financeiro, Engenharia, Administrativo, Administração e do próprio Almoxarifado não
+conseguia enviar requisição nenhuma desde 16/09.** Naquele dia passou a valer a regra do P.O. de que toda requisição diz o número da OS; o
+servidor passou a cobrar, mas a cesta nunca ganhou o campo — todo *Enviar solicitação* voltava *"Informe o número da OS…"* e não havia onde
+digitar. Isso foi provado rodando o envio exatamente como a tela o faz, com um usuário só do Comercial (**C428**). Agora a cesta tem o campo
+**Número da OS**, e as duas telas de nova requisição ganharam, **ao lado** dele, a lista opcional **OS cadastrada**: escolher a OS preenche o
+número e liga a requisição à OS, e é por esse vínculo — não mais pelo jeito como o número foi escrito — que ela pega o material comprado para
+a OS (Etapa 171). O texto livre continua valendo, como o P.O. decidiu em 16/09 (**B1103**).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Solicitar Material** (cesta): todo *Enviar solicitação* voltava *"Informe o número da OS…"* num aviso que some, sem campo para preencher — ninguém dos módulos de escritório pedia material por ali (**C428**) | Campo **Número da OS \*** na cesta; vazio, a mensagem fica **embaixo do campo**, em vermelho, e nada é enviado |
+| O número da OS era só texto | Continua texto livre **e** há a lista opcional **OS cadastrada** nas duas telas (**B1103**) |
+| A requisição pegava o material comprado para a OS só se o número estivesse escrito igual ao da OS (**C426**) | Com a OS escolhida na lista, pega **pelo vínculo** — o texto não conta (**B1107**); sem OS escolhida, continua pelo texto |
+| — | Com a OS escolhida, o número gravado é sempre o da OS, mesmo que algo diferente tenha sido digitado antes (**B1104**) |
+| Copiar uma requisição levava só o texto da OS | Leva também a OS cadastrada, se ela ainda existir (**B1108**) |
+| A reserva criada para a requisição nunca dizia a OS | A reserva da requisição ligada a uma OS grava a OS — e aparece no relatório **Reservas por OS** |
+| A Nova Requisição do Almoxarifado avisava *"Informe o numero da OS…"* sem acento | A mesma frase do servidor, com acento |
+
+### As regras, com o cenário exato
+
+Preparação: uma OS aberta (**Fábrica → Ordens de Serviço → Nova OS**, ex.: número *OS-2026-058*), uma OS cancelada, e um usuário **só do
+Comercial** (sem o módulo Almoxarifado).
+
+**1. A cesta sem OS não envia (C428).** Com o usuário do Comercial, **Comercial → Solicitar Material**, **Adicionar** num material, **Número da
+OS \*** em branco (ou só espaços), **Enviar solicitação**: embaixo do campo, em vermelho, *"Informe o número da OS: toda saída de material
+precisa estar vinculada a uma OS"*. Nada é enviado. Digitar no campo apaga a mensagem.
+
+**2. Número digitado à mão continua valendo (B1103).** No mesmo lugar, digite *MANUT 22* — não precisa existir OS com esse número — e envie:
+*"Requisição REQ-… enviada com sucesso"* e a tela vai para **Minhas Requisições**. O número é gravado sem os espaços das pontas.
+
+**3. OS cadastrada (B1103, B1104).** Em **OS cadastrada**, escolha *OS-2026-058 (⟨status⟩)*: o **Número da OS** se preenche com *OS-2026-058*
+e fica travado. Envie: a requisição fica ligada à OS. *Digitar outro número* (a primeira opção da lista) limpa o campo e o destrava.
+
+**4. Quais OS aparecem (B1105, B1106).** Na cesta (e na Nova Requisição da Fábrica e da Frota) aparecem as 300 OS **abertas** mais recentes —
+a cancelada não está. Na **Nova Requisição do Almoxarifado** (**Requisições (almox.) → Nova Requisição**) aparecem as 300 mais recentes de
+qualquer status, com a fechada inclusive — e a requisição para uma OS fechada é aceita.
+
+**5. A lista não carregou.** Se a busca das OS falhar, a cesta mostra *"Não foi possível carregar as OS cadastradas — digite o número abaixo."*
+(a Nova Requisição: *"… — digite o número ao lado."*), e o envio pelo número digitado funciona normalmente.
+
+**6. Rascunho sem OS (só no Almoxarifado).** **Requisições (almox.) → Nova Requisição**, sem número da OS, **Salvar Rascunho**: o rascunho é
+salvo. **Enviar Requisição** sem o número: o aviso *"Informe o número da OS: toda saída de material precisa estar vinculada a uma OS"*.
+
+**7. A requisição da OS leva o material comprado para ela, pelo vínculo (B1107).** Faça o roteiro da Etapa 171 até o pedido da *OS-2026-058*
+recebido (reserva da OS **Ativa** em **Reservas**). Crie a requisição escolhendo a OS em **OS cadastrada** e aprove: a reserva da OS é
+convertida na da requisição (*"Reserva da OS OS-2026-058 convertida na requisição ⟨REQ⟩"* no livro). Uma requisição ligada a **outra** OS não
+leva esse material, qualquer que seja o número escrito nela.
+
+**8. Copiar (B1108).** **Requisições (almox.)**, abra a requisição do cenário 3, **Copiar como Novo Rascunho** → **Copiar**: o rascunho vem
+com a OS *OS-2026-058*. Se a OS tiver sido excluída antes, a cópia vem só com o número escrito.
+
+**9. Só pela integração (contrato da API).** `POST /api/requisicoes-material` com `os_id: "abc"` (ou `0`, `-1`, `1.5`, `true`) → **400**
+*"Dados inválidos — os_id: OS inválida"*; com `os_id: 999999` → **400** *"OS #999999 não encontrada"* — as duas **antes** da cobrança do
+número (mesmo sem texto, é essa a resposta), e nada é gravado. Com `os_id` de uma OS e `os_referencia: "outra coisa"` → **201**, e o número
+gravado é o da OS (**B1104**). `os_id: null` ou `""` = sem OS (a regra do texto, como antes).
+
+**10. A lista de OS é visível a qualquer usuário logado (B1106).** `GET /api/requisicoes-material/aux/ordens-servico` responde, para qualquer
+usuário com login (é o que permite ao Comercial escolher a OS sem ter o módulo da Fábrica), só **código interno, número e status** das OS
+abertas — sem cliente. O parâmetro `?incluir=` é ignorado (a OS fechada não vem nem pedida pelo código).
+
+### O que esta etapa NÃO cobre
+
+- **A saída da entrega não leva a OS** (**D (172)**): o relatório **Consumo por OS** continua sem contar o que sai por requisição. É a próxima
+  etapa (174).
+- Requisição enviada não se edita — trocar a OS é cancelar e fazer outra (ou copiar).
+- A requisição que só digita o número continua dependendo de ele estar escrito como na OS (**C426** continua valendo para ela).
+- Excluir uma OS que tem requisição ligada não é impedido; a requisição fica com o número escrito e não casa com mais nada.
+- **Nada a rodar antes do deploy:** a coluna nova da requisição é criada no boot (aditiva); as requisições antigas ficam sem OS cadastrada e
+  continuam casando pelo texto.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 172 entregue (2026-10-22):** **a requisição com OS cadastrada, e a cesta volta a enviar.** A cesta (*Solicitar Material*) de
+  Comercial, Compras, Financeiro, Engenharia, Administrativo, Administração e Almoxarifado não enviava requisição desde a regra do número da OS
+  de 16/09 — provado por execução e corrigido (**C428**); as duas telas de nova requisição ganham **OS cadastrada**, opcional, ao lado do
+  número digitado (**B1103**, **B1104**), e a requisição ligada à OS pega a reserva da OS pelo vínculo (**B1107**). Commits `e7e69fea`,
+  `a8380a91`, `996bbe14`, `5086bdcc` (plano), `c34eab10` (T0), `f62bd21f` (T1), `033f1164` (T2), `a2a049bd` e `8c5f15a1` (T3 e merge),
+  `8a08523f`, e a revisão adversarial `c801e899`, `37c2732d`, `30f421c0`, `ffbbaae4`. **O que é seu:** as decisões do agente **B1103** a
+  **B1110** (reversíveis — **a B1106 pede um olhar**: número e status das OS abertas para qualquer usuário logado); o aviso **C428** (avisar
+  quem usa a cesta que voltou a funcionar); as perguntas de antes (as mesmas da 171); as limitações **(172)** em D e a verificação **(172)**
+  em F. **Próxima: Etapa 174 — a saída da entrega com a OS (o Consumo por OS contar o que sai por requisição); ver a "próxima tarefa
+  detalhada" no plano da Etapa 172.**
 
 - **Etapa 171 entregue (2026-10-22):** **pedido de compra vinculado a uma OS** — a resposta à pergunta da usuária de Compras. O pedido tem
   o campo **OS** (um pedido, uma OS ou estoque — **B1086**); a nota de pedido com OS reserva o que entrou para a OS e a requisição com o número
@@ -34099,7 +34253,7 @@ pode ser salvo para estoque."* e o pedido continua salvável sem OS.
   consulta opcional **A106**; as perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **B988**, **B989**, **B1013**, **B1057**,
   **B1063**, **C277**, **C312**, **C314**, **C316**, **C330**, **C398**, **C408**, **C411**, **C412**, **C417**, **C420**, **C423**, **C424**,
   **C425**); as limitações **(171)** em D e a verificação **(171)** em F. **Próxima: Etapa 172 — a requisição com campo OS de verdade; ver a
-  "próxima tarefa detalhada" no plano da Etapa 171.**
+  "próxima tarefa detalhada" no plano da Etapa 171.** *(Feita: a 172 — a lista ficou ao lado do texto, opcional — **B1103**.)*
 
 - **Etapa 170 entregue (2026-10-20):** **as datas do Chat, de Compras e do Almoxarifado no dia de Brasília e o limite da consulta dos
   Logs** — o Chat (**B1079**); a planilha do fornecedor e o *Cadastrado em* de Compras (**B1080**); o certificado do lote, os anexos e a

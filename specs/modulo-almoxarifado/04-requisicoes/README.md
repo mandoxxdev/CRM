@@ -1,5 +1,7 @@
 # 04 — Requisições de Materiais
 
+> **+ Etapa 172 (2026-10-22, `c34eab10..ffbbaae4`): a requisição ganha OS cadastrada OPCIONAL (`os_id`) ao lado do texto livre da RN-A, e a cesta — que não enviava requisição nenhuma desde a RN-A de 16/09 (C428, provado por execução) — ganha o campo *Número da OS*** — ver a seção "Etapa 172", no fim. Continua 🟢.
+
 > **+ Etapa 160 (2026-10-19, `d5cd52ea`): o seletor de material da Nova requisição apara o termo, mede o mínimo de 2 letras no aparado e não trava com material sem nome (C395)** — ver a seção "Etapa 160", no fim.
 
 > **Status:** 🟢 — Etapa 3 entregue (2026-08-05); ciclo ponta a ponta rascunho→entrega→confirmação→encerramento · **Spec original:** seção 5
@@ -436,3 +438,46 @@ Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa161-respostas-velhas
 
 - [x] **RN-161.02 (C396)** — a lista de Requisições (as duas rotas — `requisicoes` e `requisicoes-material`; os ~20 chamadores com `await`): só a resposta do último pedido mexe na lista (a de um filtro anterior que chega depois, o erro dela e o fim do *carregando* dela são descartados; quem chama com `await` continua recebendo uma promessa que resolve) — `f2a10ffe`.
 - [x] **RN-161.06 (C397)** — as datas da lista e do detalhe (criação, recebimento confirmado, conferência, separação) na hora de Brasília — `db960831`.
+
+## Etapa 172 — a requisição com OS cadastrada (opcional) e a cesta com o número da OS (2026-10-22)
+
+Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa172-requisicao-com-os-cadastrada-e-cesta-com-os.md` (RN-172.01 a 08 e as emendas
+da Revisão da Fase 2, que prevalecem). O status da feature não muda (🟢).
+
+**Bug que existiu (C428):** desde a RN-A (Etapa 33, `f8cdae33`, 16/09) o servidor exige `os_referencia` na criação, mas a
+`RequisicaoMaterialCesta` — o fluxo de nova requisição dos módulos Comercial, Administrativo, admin e de qualquer módulo administrativo
+(`usesCestaFlow`) — nunca teve campo de OS: **todo** *Enviar solicitação* voltava 400 *"Informe o número da OS: toda saída de material precisa
+estar vinculada a uma OS"* num toast, sem onde preencher. Provado por execução na T0 (`c34eab10`), com o payload literal da cesta e usuário
+só do Comercial; não havia 403 (a rota é cross-módulo).
+
+### Contratos
+
+- `POST /api/requisicoes-material` e `POST /api/almoxarifado/requisicoes` (criação e rascunho) — + `os_id` opcional: ausente/`null`/`''` = sem
+  OS; inteiro positivo (número ou string de dígitos); o resto → 400 `Dados inválidos — os_id: OS inválida` (Zod, régua `osIdOpcional` da 171) /
+  `OS inválida` (serviço direto). OS inexistente → 400 `OS #<id> não encontrada` (também sem a tabela `ordens_servico`). **Ordem (I6):** essas
+  duas antes da `exigirOS`. Com OS: `os_referencia = numero_os` (C2, sobrescreve o digitado; vale no rascunho). OS fechada **aceita**.
+- `os_referencia` continua obrigatório no envio e **livre** (RN-A intacta; `requisicaoExigeOS.api.test.js` verde sem mudança).
+- `POST /api/almoxarifado/requisicoes/:id/copiar` — leva `os_id` se a OS ainda existir (fechada inclusive); excluída → só o texto; outro erro
+  de banco na conferência → 500, nada gravado (Fase 5).
+- `GET /api/requisicoes-material/aux/ordens-servico` — `authenticateToken` só (qualquer logado); `[{ id, numero_os, status }]`, abertas pela
+  régua `STATUS_OS_FECHADA` (`LOWER(TRIM())`) **antes** do `LIMIT 300`, `ORDER BY id DESC`; sem a tabela → `[]`. **Sem `?incluir`** (removido
+  na Fase 5 — ignorado). Registrada antes de `GET /:id`.
+- Coluna `requisicoes_almoxarifado.os_id INTEGER` (safeAlter, sem FK). `GET /api/almoxarifado/requisicoes/:id` devolve `os_id`.
+
+### Checklist
+
+- [x] **T0** — prova por execução de que a cesta não enviava (`cestaEnviaRequisicao.api.test.js`) — `c34eab10`.
+- [x] **RN-172.01/02/03, I6, C2** — coluna, Zod, `resolverOsDaRequisicao` antes da `exigirOS` — `f62bd21f`.
+- [x] **RN-172.06, I2** — a cópia leva `os_id` só com a OS viva — `f62bd21f`; erro de banco propaga — `30f421c0`.
+- [x] **RN-172.08, I4** — rota aux para quem requisita, só `id, numero_os, status` — `f62bd21f`; `?incluir` removido — `37c2732d`.
+- [x] **RN-172.04/05** — casamento com a reserva da OS por `os_id` (feature 22/07) — `033f1164`.
+- [x] **RN-172.07** — cesta com *Número da OS ** (obrigatório, mensagem junto do campo) e o seletor opcional *OS cadastrada* nas duas telas;
+  `os_id` número ou `null` — `a2a049bd` (merge `8c5f15a1`); o teste da T0 acompanhou — `8a08523f`.
+- [x] **Fase 5** — rascunho sem OS travado por teste no client — `c801e899`; regex de fonte redundantes fora — `ffbbaae4`.
+- [ ] **Fora, declarado (letra D (172)):** não há edição de requisição (I1 — RN-172.06 vale só para a cópia); a saída da entrega **não** leva o
+  `os_id` (I5 — é a Etapa 174); a lista do almoxarifado (`/almoxarifado/aux/ordens-servico`) mostra OS fechada; OS excluída com requisição
+  vinculada é tolerada (M2).
+
+**Spec errada, dita:** a "próxima tarefa" da Etapa 171 pedia "select de OS na nova requisição" — **como obrigatório, contrariaria a RN-A**
+(decisão do P.O. de 16/09: o número é **digitado**; `OS-QUE-NAO-EXISTE-9999`, `MANUT 22` e `OS-1714/A` são aceitos). Feito **opcional e ao
+lado** do texto (B1103).
