@@ -134,3 +134,80 @@ test('[RN-183.05] sem user_agent (null ou so espacos) -> "Não registrado", tamb
     expect(l.linhasAparelho).toEqual(['Não registrado']);
   }
 });
+
+// Etapa 183 (T2) — o PDF desenha as duas linhas novas depois do hash (fonte 7, passo de 3 mm; aparelho em fatias de 110 recuadas).
+const ROTULO_CONFIRMACAO = 'Matrícula confirmada pelo colaborador: ';
+const textosDoPdf = () => mockChamadas.filter(([n]) => n === 'text').map(([, t]) => String(t));
+
+test('[RN-183.03] o PDF imprime a confirmacao da entrega e nenhum texto com a flag crua ("Matrícula ...: 1")', async () => {
+  const carregarImagem = jest.fn().mockResolvedValue('data:image/png;base64,AAAA');
+  await gerarFichaEpiPdf({ colaborador: { ...COLABORADOR, matricula: 'M-200' },
+    entregas: [{ ...ENTREGA, confirmado_por_matricula: 1 }] }, { carregarImagem });
+  const textos = textosDoPdf();
+  expect(textos).toContain(`${ROTULO_CONFIRMACAO}Sim — digitou M-100 (confere com o cadastro)`);
+  expect(textos.filter((t) => /Matr[ií]cula[^:]*:\s*1\b/.test(t))).toEqual([]);
+  expect(textos.filter((t) => /:\s*1$/.test(t))).toEqual([]);
+});
+
+test('[RN-183.04] o aparelho longo sai com rotulo na 1a linha e o resto recuado, sem rotulo; a juncao e o texto inteiro', async () => {
+  const carregarImagem = jest.fn().mockResolvedValue('data:image/png;base64,AAAA');
+  await gerarFichaEpiPdf({ colaborador: COLABORADOR, entregas: [{ ...ENTREGA, user_agent: UA_200 }] }, { carregarImagem });
+  const textos = mockChamadas.filter(([n]) => n === 'text');
+  const i = textos.findIndex(([, t]) => String(t).startsWith('Aparelho: '));
+  expect(i).toBeGreaterThan(-1);
+  const primeira = String(textos[i][1]).slice('Aparelho: '.length);
+  const segunda = textos[i + 1];
+  expect(primeira + segunda[1]).toBe(UA_200);
+  expect(segunda[2]).toBe(14 + 14); // recuo M + 14
+  expect(segunda[3]).toBe(textos[i][3] + 3); // passo de 3 mm
+});
+
+test('[RN-183.05] entrega antiga (sem evidencia nova) -> as duas linhas, com "Não registrada" e "Não registrado"', async () => {
+  const carregarImagem = jest.fn().mockResolvedValue('data:image/png;base64,AAAA');
+  await gerarFichaEpiPdf({ colaborador: COLABORADOR,
+    entregas: [{ ...ENTREGA, id: 2, confirmado_por_matricula: 1, user_agent: 'Tablet-Almox/2.1 (Android)' },
+      { ...ENTREGA, user_agent: null, confirmado_por_matricula: null }] }, { carregarImagem });
+  const textos = textosDoPdf();
+  expect(textos).toContain(`${ROTULO_CONFIRMACAO}Não registrada`);
+  expect(textos).toContain('Aparelho: Não registrado');
+  expect(textos).toContain(`${ROTULO_CONFIRMACAO}Sim — digitou M-100 (confere com o cadastro)`);
+  expect(textos).toContain('Aparelho: Tablet-Almox/2.1 (Android)');
+});
+
+// I2: a regua olha TODO y de text/line e o FUNDO da imagem (y + h). Casos: (a) a montagem que poe uma entrega de 3 linhas de aparelho
+// comecando em y = 245 (6 sem imagem e aparelho curto = 6 x 25; 1 com imagem e 2 linhas = 45; a 1a comeca em 50) — com o limiar 245
+// ela desenha ate 288; (b) 8 entregas de aparelho de 300 caracteres com imagem; (c) as mesmas, sem imagem.
+const conferirRodape = () => {
+  const fora = [];
+  for (const c of mockChamadas) {
+    if (c[0] === 'text' && c[3] > 287) fora.push(['text', c[3], c[1]]);
+    if (c[0] === 'line' && (c[2] > 287 || c[4] > 287)) fora.push(['line', c[2], c[4]]);
+    if (c[0] === 'addImage' && c[4] + c[6] > 287) fora.push(['addImage', c[4], c[4] + c[6]]);
+  }
+  return fora;
+};
+const SEM_IMG = (i) => `/api/uploads/almoxarifado/sem-${i}.png`;
+const carregarSoComImagem = async (url) => (String(url).includes('/sem-') ? null : 'data:image/png;base64,AAAA');
+
+test('[RN-183.08] (a) entrega mais alta comecando em 245 -> nenhum text/line/addImage passa de 287 mm', async () => {
+  const entregas = [
+    ...Array.from({ length: 6 }, (_, i) => ({ ...ENTREGA, id: 10 + i, arquivo_url: SEM_IMG(i), user_agent: 'curto' })),
+    { ...ENTREGA, id: 20, user_agent: 'z'.repeat(200) },
+    { ...ENTREGA, id: 21, user_agent: 'w'.repeat(300) },
+  ];
+  await gerarFichaEpiPdf({ colaborador: COLABORADOR, entregas }, { carregarImagem: carregarSoComImagem });
+  // a montagem e a que o teste diz: a divisoria da 7a entrega em 240 (200 + 40) -> a 8a comeca em 245
+  expect(mockChamadas.filter(([n]) => n === 'addImage')).toHaveLength(2);
+  expect(mockChamadas.filter(([n, , y1]) => n === 'line' && y1 === 240)).toHaveLength(1);
+  expect(conferirRodape()).toEqual([]);
+});
+
+test('[RN-183.08] (b, c) 8 entregas de aparelho com 300 caracteres, com e sem imagem -> nada passa de 287 mm', async () => {
+  for (const comImagem of [true, false]) {
+    mockChamadas.length = 0;
+    const entregas = Array.from({ length: 8 }, (_, i) => ({ ...ENTREGA, id: 30 + i, user_agent: 'q'.repeat(300),
+      arquivo_url: comImagem ? ENTREGA.arquivo_url : SEM_IMG(i) }));
+    await gerarFichaEpiPdf({ colaborador: COLABORADOR, entregas }, { carregarImagem: carregarSoComImagem });
+    expect(conferirRodape()).toEqual([]);
+  }
+});

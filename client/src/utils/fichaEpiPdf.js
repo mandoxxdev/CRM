@@ -119,13 +119,22 @@ export async function gerarFichaEpiPdf(dados, { carregarImagem = carregarImagemC
   cabecalho();
 
   doc.linhas.forEach((l, idx) => {
-    if (y > 245) { pdf.addPage(); y = 18; cabecalho(); }
+    // Etapa 183 (RN-183.08, I2): a entrega mais alta (3 linhas de aparelho) vai de s a s + 43 (divisoria); com s <= 235 termina em
+    // 278 e o fundo da imagem em 275,5. Com 245, ate 288 > 287 (o rodape). Mudou o passo abaixo? Recalcule este limiar.
+    if (y > 235) { pdf.addPage(); y = 18; cabecalho(); }
     const celulas = [l.data, l.epi, l.ca, l.validadeCa, l.quantidade, l.tamanho, l.motivo, l.entreguePor];
     const larguras = [10, 26, 10, 11, 6, 7, 11, 18];
     celulas.forEach((c, i) => pdf.text(String(c).slice(0, larguras[i] * 1.4), cols[i], y));
     y += 4;
     pdf.setFontSize(7);
     pdf.text(`Entrega ${l.numero} · registro (HMAC-SHA256): ${l.hash}`, M, y); // Fase 5: o registro e HMAC com segredo do servidor
+    // Etapa 183 (RN-183.03/04): as provas da evidencia do ato. Passo de 3 mm na fonte 7; o aparelho em fatias de 110, recuadas.
+    y += 3;
+    pdf.text(`Matrícula confirmada pelo colaborador: ${l.matriculaConfirmada}`, M, y);
+    l.linhasAparelho.forEach((s, i) => {
+      y += 3;
+      pdf.text(i === 0 ? `Aparelho: ${s}` : s, i === 0 ? M : M + 14, y);
+    });
     pdf.setFontSize(9);
     y += 2;
     if (imagens[idx]) {
