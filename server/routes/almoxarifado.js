@@ -4798,7 +4798,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     try {
       return !!(await dbGet(dbx, 'SELECT id FROM ordens_servico WHERE id = ?', [osId]));
     } catch (e) {
-      return false; // sem a tabela core (ambiente parcial): copia so o texto
+      // So a tabela core ausente (ambiente parcial) vira "nao existe" -> copia so o texto. Outro erro de banco PROPAGA
+      // (500 na copia): engolir fazia a copia sair silenciosamente sem os_id (Fase 5 da 172).
+      if (/no such table/i.test(String(e && e.message))) return false;
+      throw e;
     }
   };
   app.post('/api/almoxarifado/requisicoes/:id/copiar', requirePermission('requisitar'), async (req, res) => {

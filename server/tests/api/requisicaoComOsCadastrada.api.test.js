@@ -188,6 +188,41 @@ const AUX = '/api/requisicoes-material/aux/ordens-servico';
     assert.deepStrictEqual({ ...(await linha(c.body.id)) }, { status: 'RASCUNHO', os_id: null, os_referencia: os.numero });
   });
 
+  // Fase 5 da 172: `osAindaExiste` engolia QUALQUER erro como "a OS nao existe" — um banco ocupado/corrompido virava
+  // copia silenciosa sem os_id (a requisicao copiada perdia o casamento por id com a reserva da OS sem ninguem saber).
+  // So a tabela ausente (ambiente parcial) e "nao existe"; o resto propaga (500, nada gravado). O erro e injetado so na
+  // consulta exata da conferencia, por `db.get` (o `dbGet` da rota chama `db.get` a cada vez).
+  const comFalhaNaConferenciaDaOs = async (mensagem, fn) => {
+    const original = db.get;
+    db.get = function getComFalha(sql, params, cb) {
+      if (/SELECT id FROM ordens_servico WHERE id = \?/.test(String(sql))) {
+        const callback = typeof params === 'function' ? params : cb;
+        return process.nextTick(() => callback(new Error(mensagem)));
+      }
+      return original.apply(this, arguments); // eslint-disable-line prefer-rest-params
+    };
+    try { return await fn(); } finally { db.get = original; }
+  };
+
+  await test('[I2, Fase 5] copiar com erro de banco que NAO e tabela ausente: 500, nenhum rascunho gravado (nao copia sem os_id)', async () => {
+    const os = await novaOs();
+    const orig = await criarAlmox(corpo({ os_id: os.id }));
+    const antes = await contar();
+    const c = await comFalhaNaConferenciaDaOs('SQLITE_BUSY: database is locked',
+      () => request(app).post(`/api/almoxarifado/requisicoes/${orig.body.id}/copiar`).send({}));
+    assert.strictEqual(c.status, 500, JSON.stringify(c.body));
+    assert.strictEqual(await contar(), antes, 'nada gravado');
+  });
+
+  await test('[I2, Fase 5] copiar com a tabela ordens_servico ausente: 201, copia so o texto (os_id NULL)', async () => {
+    const os = await novaOs();
+    const orig = await criarAlmox(corpo({ os_id: os.id }));
+    const c = await comFalhaNaConferenciaDaOs('SQLITE_ERROR: no such table: ordens_servico',
+      () => request(app).post(`/api/almoxarifado/requisicoes/${orig.body.id}/copiar`).send({}));
+    assert.strictEqual(c.status, 201, JSON.stringify(c.body));
+    assert.deepStrictEqual({ ...(await linha(c.body.id)) }, { status: 'RASCUNHO', os_id: null, os_referencia: os.numero });
+  });
+
   await test('[RN-172.06] copiar requisicao SEM os_id: como antes (texto, os_id NULL)', async () => {
     const orig = await criarAlmox(corpo({ os_referencia: 'MANUT 22' }));
     const c = await request(app).post(`/api/almoxarifado/requisicoes/${orig.body.id}/copiar`).send({});
