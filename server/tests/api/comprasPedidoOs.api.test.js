@@ -142,6 +142,22 @@ const textoDoHtml = (html) => String(html).replace(/<[^>]+>/g, ' ').replace(/\s+
     assert.strictEqual(b.body.error, 'A OS E171-ENC está ENCERRADA — não aceita compra nova');
   });
 
+  await test('RN-171.03 (Fase 5) "concluido" no POST e "cancelada" numa TROCA pelo PUT tambem recusam, nada gravado', async () => {
+    const osConcluido = await novaOs('E171-CONCLUIDO', 'concluido');
+    const osCanceladaF = await novaOs('E171-CANCELADA-F', 'cancelada');
+    const antes = await contar();
+    const a = await request(app).post('/api/compras/pedidos').send(payload({ os_id: osConcluido }));
+    assert.strictEqual(a.status, 400, JSON.stringify(a.body));
+    assert.strictEqual(a.body.error, 'A OS E171-CONCLUIDO está concluido — não aceita compra nova');
+    assert.strictEqual(await contar(), antes);
+    const base = await request(app).post('/api/compras/pedidos').send(payload({ os_id: osAberta }));
+    assert.strictEqual(base.status, 201, JSON.stringify(base.body));
+    const t = await request(app).put(`/api/compras/pedidos/${base.body.id}`).send(payload({ os_id: osCanceladaF }));
+    assert.strictEqual(t.status, 400, JSON.stringify(t.body));
+    assert.strictEqual(t.body.error, 'A OS E171-CANCELADA-F está cancelada — não aceita compra nova');
+    assert.strictEqual(await osDoPedido(base.body.id), osAberta, 'a troca recusada nao mexe na OS');
+  });
+
   await test('RN-171.02/03 pelo SERVICO (criarPedido direto, sem Zod): grava, recusa inexistente, fechada e invalida', async () => {
     const ok = await pedidoCompraService.criarPedido(db, payload({ os_id: osAberta }), ADMIN);
     assert.strictEqual(await osDoPedido(ok.id), osAberta);
@@ -212,6 +228,16 @@ const textoDoHtml = (html) => String(html).replace(/<[^>]+>/g, ' ').replace(/\s+
     const r = await request(app).put(`/api/compras/pedidos/${c.body.id}`).send(payload({ os_id: osAberta }));
     assert.strictEqual(r.status, 400, JSON.stringify(r.body));
     assert.strictEqual(r.body.error, `Pedido de compra ${c.body.numero} já teve recebimento — não pode mais ser editado`);
+    assert.strictEqual(await osDoPedido(c.body.id), null);
+    // Fase 5: a guarda de recebimento vem ANTES da da OS — com OS cancelada e com OS inexistente a recusa e a de
+    // recebimento (se a ordem invertesse, viriam "A OS ... está ..." e "OS #... não encontrada").
+    for (const osId of [osCancelada, 999999]) {
+      // eslint-disable-next-line no-await-in-loop
+      const x = await request(app).put(`/api/compras/pedidos/${c.body.id}`).send(payload({ os_id: osId }));
+      assert.strictEqual(x.status, 400, JSON.stringify(x.body));
+      assert.ok(x.body.error.includes('já teve recebimento'), `os_id ${osId}: ${x.body.error}`);
+      assert.strictEqual(x.body.error, `Pedido de compra ${c.body.numero} já teve recebimento — não pode mais ser editado`);
+    }
     assert.strictEqual(await osDoPedido(c.body.id), null);
   });
 
@@ -360,6 +386,24 @@ const textoDoHtml = (html) => String(html).replace(/<[^>]+>/g, ' ').replace(/\s+
     const lixo = await request(app).get('/api/compras/aux/ordens-servico?incluir=abc');
     assert.strictEqual(lixo.status, 200);
     assert.ok(!lixo.body.some((o) => o.id === osCancelada));
+  });
+
+  await test('RN-171.06 (Fase 5) com MAIS DE 300 OS abertas a lista corta em 300, e o ?incluir de uma OS antiga (aberta ou fechada) ainda vem', async () => {
+    for (let i = 0; i < 305; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await novaOs(`E171-MASSA-${i}`, 'pendente');
+    }
+    const sem = await request(app).get('/api/compras/aux/ordens-servico');
+    assert.strictEqual(sem.status, 200);
+    assert.strictEqual(sem.body.length, 300, 'o teto da lista');
+    assert.ok(!sem.body.some((o) => o.id === osAberta), 'premissa: a OS antiga ficou fora das 300');
+    for (const antiga of [osAberta, osCancelada]) {
+      // eslint-disable-next-line no-await-in-loop
+      const r = await request(app).get(`/api/compras/aux/ordens-servico?incluir=${antiga}`);
+      assert.strictEqual(r.status, 200);
+      assert.strictEqual(r.body.filter((o) => o.id === antiga).length, 1, `incluir=${antiga} sumiu com mais de 300 abertas`);
+      assert.strictEqual(r.body.length, 301);
+    }
   });
 
   await close();

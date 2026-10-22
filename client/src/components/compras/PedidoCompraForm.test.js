@@ -1688,11 +1688,18 @@ describe('Etapa 171 — OS no pedido de compra', () => {
     expect(chamadasPost()[0][1].os_id).toBeNull();
   });
 
-  test('(171h) pedido ja recebido trava o select (so status)', async () => {
+  test('(171h) pedido ja recebido trava o select (so status) e o salvar manda SO { status } pelo PATCH — nada de os_id, nada de PUT', async () => {
     detalhe418 = { ...PEDIDO_418_RECEBIDO, os_id: 57, os_numero: 'OS-2026-057' };
 
     await renderizarEm('/compras/pedidos/editar/418');
 
     expect(porTestId('pedido-os').disabled).toBe(true);
+    // Etapa 171 (Fase 5): a guarda de recebimento do servidor nao ganha excecao para a OS (RN-171.04); o front tambem
+    // nao manda a OS por porta nenhuma depois do recebimento.
+    await selecionar(porTestId('pedido-status'), 'recebido');
+    await submeter();
+    expect(chamadasPatchStatus(418)).toHaveLength(1);
+    expect(chamadasPatchStatus(418)[0][1]).toEqual({ status: 'recebido' });
+    expect(chamadasPut(418)).toHaveLength(0);
   });
 });
