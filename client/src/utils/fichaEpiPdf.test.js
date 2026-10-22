@@ -297,6 +297,24 @@ test('[Fase 5 M1] o pior caso (8 entregas de 300 "W" e matricula larga, com e se
   }
 });
 
+// Etapa 183, Fase 5 (M3): a assinatura comeca ABAIXO da ultima linha de texto da sua entrega (desenhada por cima, ela cobriria o aparelho).
+test('[Fase 5 M3] a imagem da assinatura comeca abaixo da ultima linha de texto da entrega', async () => {
+  await gerarFichaEpiPdf({ colaborador: COLABORADOR, entregas: [{ ...ENTREGA, user_agent: UA_200, confirmado_por_matricula: 1 },
+    { ...ENTREGA, id: 2, user_agent: 'W'.repeat(300) }] }, { carregarImagem: async () => 'data:image/png;base64,AAAA' });
+  let ultimoTexto = null;
+  const conferidas = [];
+  for (const [nome, ...args] of mockChamadas) {
+    if (nome === 'text') ultimoTexto = args[2];
+    if (nome === 'line') ultimoTexto = null;
+    if (nome === 'addImage') conferidas.push([args[3], ultimoTexto]);
+  }
+  expect(conferidas).toHaveLength(2);
+  conferidas.forEach(([yImagem, yTexto]) => {
+    expect(yTexto).not.toBeNull();
+    expect(yImagem).toBeGreaterThan(yTexto);
+  });
+});
+
 // Fase 5 (M1): com a quebra por largura a entrega pode ser MAIS alta que a de 3 linhas que o limiar fixo (y > 235) supunha. Montagem:
 // 2 entregas curtas com imagem (42 cada) + 4 sem imagem (25 cada) poem a 7a em y = 234 (<= 235: o limiar antigo deixava comecar aqui);
 // ela tem matricula e aparelho de 300 'W' (4+ linhas cada) e imagem — mais de 53 mm, entao so cabe na pagina seguinte.
