@@ -68,6 +68,57 @@
   comercial/administrativo/admin e de qualquer módulo administrativo via `tipoOverrides`, não envia requisição nenhuma
   desde a RN-A da Etapa 33). A T3 deve pôr o texto obrigatório na cesta e inverter o 0c e os cenários (a).
 
+### T1 — `f62bd21f` (✅ 2026-10-22): `os_id` na requisição, Zod, criação (I6/C2), cópia (I2), rota aux (I4)
+
+- **Coluna:** `requisicoes_almoxarifado.os_id INTEGER` por `safeAlter` em `schema.js` (sem FK — M2). O harness usa o
+  `initSchema` real, sem DDL própria da tabela: nada a mudar em `testApp.js`. **1º boot provado:** `CRM_DATA_DIR` vazio +
+  `node index.js` → `PRAGMA table_info` mostra `os_referencia TEXT, os_id INTEGER`; a rota aux responde 401 sem token.
+- **Contrato real (literais):**
+  - `os_id` inválido pela rota (`0`, `-1`, `1.5`, `true`, `'abc'`, `'7a'`, `' '`) → `400 {"error":"Dados inválidos — os_id: OS inválida"}`
+    (Zod, `osIdOpcional` exportado de `compras/schemas` — uma régua só); pelo serviço direto → `400 "OS inválida"`.
+  - OS inexistente → `400 {"error":"OS #<id> não encontrada"}` — **também sem a tabela `ordens_servico`** (ambiente parcial: 400, não 500).
+  - Ordem (I6) provada: os dois 400 acima vêm **antes** da literal da RN-A mesmo sem texto.
+  - Com OS: `os_referencia = numero_os` (C2, sobrescreve o digitado; vale no rascunho, e o `/enviar` passa). OS fechada aceita.
+  - `os_id: null` / `''` = sem OS (o que a cesta da T3 manda sem seleção) — RN-A como hoje.
+  - `GET /api/requisicoes-material/aux/ordens-servico[?incluir=<id>]` → `[{ id, numero_os, status }]`, abertas (régua
+    `STATUS_OS_FECHADA`, `LOWER(TRIM())`) filtradas **antes** do `LIMIT 300`, `ORDER BY id DESC`; `incluir` por consulta à
+    parte, sem duplicar; `incluir` não numérico ignorado; sem a tabela core → `[]`. Registrada antes de `/:id`.
+  - `/copiar`: leva `os_id` se a OS ainda existe (fechada inclusive); excluída → só o texto, `os_id` NULL.
+- **Teste:** `requisicaoComOsCadastrada.api.test.js` 25/25. **Controles** (sabotar → vermelho → restaurar com `cmp`): C2
+  desligado (2 ✗), filtro de fechadas inerte (3 ✗), filtro **depois** do LIMIT (0 ✗ na 1ª versão: o `?incluir` da mesma OS
+  mascarava — o teste ganhou a consulta sem `incluir`, depois 1 ✗), cópia sem checar existência (1 ✗), Zod sem `os_id`
+  (17 ✗), `exigirOS` antes da OS (7 ✗). `requisicaoExigeOS.api.test.js` verde **sem mudança**.
+- **Os marcadores `// T0` do `cestaEnviaRequisicao`:** a T1 sozinha **não** inverte nada no servidor (o payload sem OS
+  continua 400 — RN-A intacta). Mas a **T3 (`a2a049bd`) entrou na main durante a T1/T2** e o 0c (alarme "a cesta não manda
+  `os_referencia`") ficou vermelho (suíte 497/498). Commit à parte `8a08523f`: 0c invertido (a cesta manda `os_referencia`
+  e `os_id`), `payloadDaCesta` com o payload novo, (a) **não** inverte (campo vazio continua 400 no servidor — comentário
+  explica), (c) novo: campo vazio + OS no seletor → 201 com `os_referencia = numero_os`. 12/12.
+- **Divergências do plano:** nenhuma de contrato. A rota aux sem tabela devolve `[]` (o plano não dizia; segue a de
+  `/almoxarifado/aux`). `resolverOsDaRequisicao` fica exportado do serviço (ninguém de fora o usa ainda).
+
+### T2 — `033f1164` (✅ 2026-10-22): casamento por `os_id` nas duas portas da 171 (I3), I5
+
+- `reservaDaOs.requisicaoCasaComOs({ osId, osReferencia }, os)`: com `osId` só pelo id; sem, `requisicaoEhDaOs` (texto, 171).
+  `reservasDaOsParaRequisicao(db, materialId, { osId, osReferencia })` — com `osId`, `AND os_id = ?` no SQL.
+- Fila (`distribuirSemLock` seleciona `r.os_id`; `distribuirParaOs` filtra pela função nova); o `criarReserva` da fila e
+  o da aprovação gravam o `os_id` da requisição (RN-172.05). `converterReservasDaOs` recebe `{ osId, osReferencia }`.
+  Sem trava nova (mesmas seções). **I5:** a saída da entrega continua sem `os_id` (teste trava).
+- **Spec corrigida:** o cabeçalho de `reservaDaOs.js` dizia "A REQUISICAO NAO TEM `os_id`" — verdade só até a T1; reescrito
+  dizendo que estava desatualizado.
+- **Teste:** `requisicaoOsIdCasaReservaDaOs.api.test.js` 10/10 — os obrigatórios do I3 (sem `os_id` e texto que casa
+  continua casando, na fila e na aprovação; semente legada **por INSERT** `os_id 7` + texto `"42"` **com a OS de número "42"
+  existindo** → casa com a 7, não com a "42", nas duas portas; `os_id` de outra OS com o texto da 7 não converte; C426
+  intacto) e ponta a ponta pela porta da cesta (`POST /api/requisicoes-material` com `os_id`, usuário sem módulo) → pedido
+  da mesma OS recebido → reserva para a requisição → aprovar/separar/entregar, nas duas ordens (espera→chegada e
+  chegada→aprovação). Contra o código de antes da T2: 5 ✗ (o RN-172.05 da aprovação já passava depois da T1 — o
+  `reqRow.os_id` do `SELECT *` passou a existir). Controles: fila sem gravar `os_id` (2 ✗), casamento ignorando `os_id`
+  (3 ✗), `os_id` na saída da entrega (1 ✗).
+- **Efeito aceito:** reservas de requisição com `os_id` passam a aparecer em `relatorioReservadoPorOS` (filtra `r.os_id`).
+- **Suítes (com T1+T2):** `test:api` 497/498 (a 1 era o 0c acima, depois 12/12), `test:almoxarifado` 44/0,
+  `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 16/0.
+- **Falta:** T4 (integração) — o ponta a ponta do servidor já está no teste da T2; resta o da cesta no client contra o
+  contrato acima, e o fechamento (letra B: C2, OS fechada aceita, exposição da rota aux; letra D: I5, M2).
+
 ---
 
 ## Revisão da Fase 2 (2026-10-22) — 2 críticos, 6 importantes, 4 menores; as emendas PREVALECEM sobre as RN acima
