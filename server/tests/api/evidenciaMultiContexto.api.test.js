@@ -180,6 +180,44 @@ const registrarAlheio = (extras = null) => evidencia.registrarContexto(ALHEIO, {
     assert.throws(() => ident.conferirMatricula({ nome: 'ANA', matricula: 'M1' }, 'M2'), /não confere/);
   });
 
+  await test('[Fase 5, M3] um processo que carrega SO um dos donos (ou nenhum) ve os dois contextos: nada de "contexto desconhecido"', async () => {
+    // Os contextos se registram no carregamento do modulo dono. Um script (manutencao, auditoria) que carregasse so o epiService
+    // e verificasse a cadeia acusaria cada termo de ferramenta como "contexto desconhecido" — e vice-versa. A verificacao da cadeia
+    // passou a carregar os donos conhecidos. Processo filho: o cache de modulos deste ja tem os dois.
+    const { execFileSync } = require('child_process');
+    const svc = path.join(__dirname, '../../services/almoxarifado');
+    const filho = (carregar) => {
+      const codigo = `
+        const sqlite3 = require(${JSON.stringify(require.resolve('sqlite3'))});
+        const { initSchema } = require(${JSON.stringify(path.join(svc, 'schema'))});
+        const { dbRun } = require(${JSON.stringify(path.join(svc, 'db'))});
+        const evidencia = require(${JSON.stringify(path.join(svc, 'evidenciaAssinaturaService'))});
+        ${carregar ? `require(${JSON.stringify(path.join(svc, carregar))});` : ''}
+        (async () => {
+          const db = new sqlite3.Database(':memory:');
+          const log = console.log; console.log = () => {};
+          await initSchema(db);
+          const ins = (ctx, seq) => dbRun(db, "INSERT INTO evidencias_assinatura_almoxarifado (contexto, contexto_id, colaborador_id, colaborador_nome, arquivo, arquivo_sha256, registro_sha256, criado_em, sequencia, hash_anterior) VALUES (?, 99, 1, 'X', 'x.png', 'a', ?, '2026-01-01', ?, ?)", [ctx, 'h' + seq, seq, seq > 1 ? 'h' + (seq - 1) : null]);
+          await ins('ENTREGA_EPI', 1);
+          await ins('TERMO_FERRAMENTA', 2);
+          const c = await evidencia.verificarCadeia(db, { dir: ${JSON.stringify(uploadsAlmoxDir)}, segredo: 's' });
+          console.log = log;
+          console.log('RESULTADO ' + JSON.stringify({ motivos: c.problemas.map((p) => p.motivo), contextos: evidencia.contextosRegistrados().sort() }));
+          process.exit(0);
+        })().catch((e) => { console.error(e); process.exit(2); });`;
+      const saida = execFileSync(process.execPath, ['-e', codigo], { encoding: 'utf8', cwd: path.join(__dirname, '../..') });
+      const linha = saida.split('\n').find((l) => l.startsWith('RESULTADO '));
+      assert.ok(linha, `o filho nao imprimiu o resultado: ${saida}`);
+      return JSON.parse(linha.slice('RESULTADO '.length));
+    };
+    for (const carregar of ['epiService', 'termoFerramentaService', null]) {
+      const r = filho(carregar);
+      assert.deepStrictEqual(r.contextos, ['ENTREGA_EPI', 'TERMO_FERRAMENTA'], `carregando ${carregar}: ${JSON.stringify(r)}`);
+      // As duas linhas nao tem registro (entrega/fotografia) -> 'registro alterado' pelo montador do contexto — e nao 'contexto desconhecido'.
+      assert.deepStrictEqual(r.motivos, ['registro alterado', 'registro alterado'], `carregando ${carregar}: ${JSON.stringify(r)}`);
+    }
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

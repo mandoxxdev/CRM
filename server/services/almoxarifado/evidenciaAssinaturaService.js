@@ -162,6 +162,17 @@ function registrarContexto(contexto, { montador, extras = null } = {}) {
   contextos.set(String(contexto), { montador, extras: typeof extras === 'function' ? extras : null });
 }
 function removerContexto(contexto) { contextos.delete(String(contexto)); }
+
+/**
+ * Fase 5 da 180 (revisao adversarial, M3): os DONOS conhecidos de contexto. Eles se registram ao serem carregados — um processo
+ * que carregasse so um deles (script de manutencao, auditoria) veria as evidencias do outro como 'contexto desconhecido'. A
+ * verificacao da cadeia os carrega antes de percorrer. `require` tardio (dentro da funcao): os donos requerem este modulo no topo,
+ * entao o require aqui em cima seria ciclo. Dono novo de contexto entra nesta lista.
+ */
+const DONOS_DE_CONTEXTO = ['./epiService', './termoFerramentaService'];
+function carregarDonosDeContexto() {
+  for (const m of DONOS_DE_CONTEXTO) require(m); // eslint-disable-line global-require
+}
 function contextosRegistrados() { return [...contextos.keys()]; }
 
 /**
@@ -176,6 +187,7 @@ function contextosRegistrados() { return [...contextos.keys()]; }
 async function verificarCadeia(db, { dir, segredo, camposDe = null }) {
   const preparados = new Map();
   if (!camposDe) {
+    carregarDonosDeContexto();
     for (const [ctx, { montador }] of contextos) preparados.set(ctx, await montador(db));
   }
   const linhas = await dbAll(db, `SELECT * FROM ${TABELA} ORDER BY sequencia IS NULL, sequencia, id`);
@@ -234,5 +246,5 @@ function mascararCpf(cpf) {
 module.exports = {
   sha256, sha256Arquivo, jsonCanonico, registroHmac, verificar, literalSql, textoLimpo, texto, numero, mascararCpf,
   naFilaDaCadeia, cabecaDaCadeia, conferirElos, verificarCadeia,
-  registrarContexto, removerContexto, contextosRegistrados,
+  registrarContexto, removerContexto, contextosRegistrados, carregarDonosDeContexto, DONOS_DE_CONTEXTO,
 };
