@@ -1,6 +1,6 @@
 # Etapa 174 — A entrega grava a OS e o "Consumo por OS" passa a enxergar as requisições
 
-> **Status:** 🟡 em execução (2026-10-22). Emendada da "próxima tarefa detalhada" da Etapa 172. (A 173 é de outra
+> **Status:** 🟡 T1–T3 feitas (2026-10-22); falta o fechamento (docs). Emendada da "próxima tarefa detalhada" da Etapa 172. (A 173 é de outra
 > sessão — atalho F2 do fornecedor, só client.)
 > **Fase 0 (medido):**
 > - A entrega tem **uma** porta de SAÍDA (`requisitionService.js:1920-1948`, `entregarSemTrava`); passa `projeto_id`,
@@ -75,3 +75,44 @@
   nao existe"; material próprio passa — sem FK; projeto + OS de clientes diferentes: o projeto vence na entrega, mas o
   relatório atribui à OS — declarar; próprio, emergencial e série: nada muda).
 - **T2 não tem client:** a tela genérica lê as `colunas`; o dashboard soma só `total_consumido` (o `HAVING` o protege).
+
+---
+
+## Execução (2026-10-22)
+
+- [x] **T1** — `4b8945a1`. `requisitionService.entregarSemTrava`: a SAIDA grava `os_id: reqRow.os_id` (RN-174.01). Exclusão:
+  o `SELECT` das saídas lê `m.os_id` e cada parte leva o `os_id` **da saída** para a ENTRADA (RN-174.02 com C1); ramo legado:
+  `undefined` → null. Teste novo `server/tests/api/entregaComOsId.api.test.js` (11): req com/sem OS; exclusão com OS; C1 (saída
+  sem `os_id` → ENTRADA null); ramo legado null; dono: mesmo cliente passa, outro cliente recusa ("...mas a OS X e do cliente
+  Y"), OS excluída recusa "OS informada nao existe", material próprio com OS excluída passa, projeto A + OS B passa (projeto
+  vence; a saída leva a OS B), controle sem OS/projeto recusa como antes. Vermelho antes: 7/11 falhando (os 2 de C1 e os 2
+  controles já passavam — são os que provam que **não** se usa o `os_id` da requisição). Controle positivo: ENTRADA com
+  `reqRow.os_id` → os 2 de C1 vermelhos na asserção de `os_id`; restaurado por cópia, `cmp` ok. O teste da 172
+  (`requisicaoOsIdCasaReservaDaOs`, "a saída NÃO leva os_id") foi **invertido** com a explicação da I5 revista.
+  `test:api` com T1: 499/499.
+- [x] **T2** — `97d3012f`. `relatorioConsumoPorOS` pelo contrato I1: `total_consumido` inalterado (SAIDA*), `devolvido` = TIPOS_DEVOLUCAO
+  sem a devolução de destino SUCATA (achada por `referencia = 'DEV-' || d.id`, I2) + `ENTRADA` com `requisicao_id`; `liquido`;
+  `HAVING`; `ORDER BY total_consumido DESC`. `reportRegistry`: colunas Devolvido/Líquido e a nota (régua, sucata, data de cada
+  linha/negativo — C2; mantém "saídas diretas", que o `relatoriosRegistro` confere). Teste novo
+  `server/tests/api/consumoPorOsDevolvido.api.test.js` (11): 10/3/7; sucata 10/0/10; quarentena 10/4/6; estorno da devolução
+  10/0/10; exclusão 6/6/0; C1 → OS sem linha; período (out: 0/3/−3, set: 10/0/10, set–out: 10/3/7); avulsa só devolução
+  0/2/−2; HAVING + saldo inicial com OS; ordem e sem filtro; registro + exportação xlsx (cabeçalho e 10/3/7). Vermelho
+  antes: 10/11. Controles positivos (cada um restaurado por cópia + `cmp`): sucata contando → só o teste I2 vermelho (10/3/7);
+  sem a ENTRADA da exclusão → só o de exclusão vermelho (6/0/6); sem o filtro de tipo do WHERE **e** sem HAVING → o de HAVING
+  vermelho (linha 0/0/0).
+- [x] **T3** — `94d18eac`. `server/tests/api/consumoPorOsPontaAPonta.api.test.js` (1, pela rota): pedido de compra com OS → recebimento →
+  requisição pela cesta (`POST /api/requisicoes-material`, usuário sem módulo) com `os_id` → aprovar (converte da reserva
+  da OS) → separar → entregar 8 (saída com a OS) → 8/0/8 → devolução 3 → 8/3/5 → mais 1 para sucata → 8/3/5. Vermelho antes
+  da T2 (devolvido NaN). Controle positivo: SAIDA sem `os_id` → vermelho na asserção RN-174.01; restaurado, `cmp` ok.
+
+**Suítes com T1–T3 (antes do merge da 173 no client):** `test:api` 501/501 arquivos; `test:almoxarifado` 44/0;
+`test:validation` 4/0; `test:safealter` 3/0; `test:sqlite` 16/0; client 174 suítes / 2221 testes; `build` com `CI=true`
+compilou. (Com a 173 mesclada o client passa a ter 175 suítes — não é regressão desta etapa.)
+
+**Divergências do plano:**
+- **HAVING sozinho não é observável:** o `WHERE` já filtra o tipo (SAIDA* ou devolvido) e `cancelado = 0`, então nenhuma linha
+  chega com 0/0 a não ser com quantidade zero. Mantido (contrato I1, defesa); o teste prova o par (sem os dois → vermelho).
+- **O "estorno da devolução" se provou pelo livro** (`/movimentacoes/:id/cancelar` da ENTRADA_DEVOLUCAO), como pedia a I3.
+- **T2 sem client**, como a revisão previu; client rodado só para garantir que nada quebrou.
+- Documentação de fechamento (README da feature, mapa, guia, novidades letra B com I2/C2/I4) **não** foi feita aqui — fica
+  para o `fechar-etapa`.
