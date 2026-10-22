@@ -381,7 +381,8 @@ const Layout = () => {
     // tela nova para emprestimo/devolucao, manutencao, avaria/perda e calibracao (design D9).
     { path: '/almoxarifado/ferramentas', icon: FiTool, label: 'Ferramentas' },
     // Etapa 178: entrega de EPI ao colaborador com assinatura na tela (NR-6). Sem adminOnly, mesmo criterio de reposicao/alertas:
-    // a lista e a ficha sao leitura do modulo; quem barra a entrega e o requirePermission('entregar_epi') do servidor.
+    // desde a Fase 5 a entrega e as leituras (lista, ficha, cadeia) exigem requirePermission('entregar_epi') no servidor; a tela,
+    // sem a acao, so mostra o aviso.
     { path: '/almoxarifado/epi', icon: FiUserCheck, label: 'Entrega de EPI' },
     // Etapa 11: sugestao de compra por fornecedor, estoque parado e acompanhamento das
     // solicitacoes — gate proprio (gerenciar_reposicao) resolvido pelo backend, sem adminOnly

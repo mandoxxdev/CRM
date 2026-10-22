@@ -545,8 +545,8 @@ export function AppRoutes() {
         <Route path="remessas-terceiros" element={<RemessasTerceirosAlmoxarifado />} />
         <Route path="sobras" element={<SobrasAlmoxarifado />} />
         <Route path="ferramentas" element={<FerramentasAlmoxarifado />} />
-        {/* Etapa 178: entrega de EPI com assinatura (NR-6). Sem adminOnly: a leitura e do portao do modulo e quem barra a
-            entrega e o requirePermission('entregar_epi') do servidor. */}
+        {/* Etapa 178: entrega de EPI com assinatura (NR-6). Sem adminOnly: desde a Fase 5 a entrega E as leituras exigem
+            requirePermission('entregar_epi') no servidor; a tela, sem a acao, so mostra o aviso. */}
         <Route path="epi" element={<EpiAlmoxarifado />} />
         <Route path="reposicao" element={<ReposicaoAlmoxarifado />} />
         <Route path="alertas" element={<AlertasAlmoxarifado />} />

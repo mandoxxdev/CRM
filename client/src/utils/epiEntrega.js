@@ -54,7 +54,7 @@ export function erroDaQuantidade(valor) {
  * O corpo multipart do `POST /almoxarifado/epi/entregas` (contrato congelado): `colaborador_id`, `material_id`, `quantidade`,
  * `tamanho?`, `motivo?`, `observacao?` e o arquivo `assinatura` (PNG). Opcional vazio NAO vai (o servidor trata ausente como nulo).
  */
-export function montarFormDataEntrega(form, assinatura) {
+export function montarFormDataEntrega(form, assinatura, chave) {
   const fd = new FormData();
   fd.append('colaborador_id', String(Number(form.colaborador_id)));
   fd.append('material_id', String(Number(form.material_id)));
@@ -64,8 +64,63 @@ export function montarFormDataEntrega(form, assinatura) {
   if (form.motivo) fd.append('motivo', form.motivo);
   const observacao = String(form.observacao ?? '').trim();
   if (observacao) fd.append('observacao', observacao);
+  // Fase 5 (importante 4): a matricula que o PROPRIO colaborador digitou no tablet — o servidor confere com o cadastro.
+  fd.append('confirmacao_matricula', String(form.confirmacao_matricula ?? '').trim());
+  // Fase 5 (M2): a chave da tentativa — o reenvio com a mesma chave devolve a entrega ja gravada, sem segunda saida.
+  if (chave) fd.append('chave_idempotencia', chave);
   fd.append('assinatura', assinatura, 'assinatura.png');
   return fd;
+}
+
+/**
+ * Fase 5 (M2): a chave de idempotencia de uma tentativa de envio (uuid v4). `crypto.randomUUID` so existe em contexto seguro
+ * (https/localhost) — o tablet que abre o CRM por http no IP da rede nao o tem; `getRandomValues` existe nos dois.
+ */
+export function novaChaveIdempotencia(cr = (typeof globalThis !== 'undefined' ? globalThis.crypto : undefined)) {
+  if (cr && typeof cr.randomUUID === 'function') {
+    try { return cr.randomUUID(); } catch (e) { /* contexto inseguro: cai no getRandomValues */ }
+  }
+  const b = new Uint8Array(16);
+  if (cr && typeof cr.getRandomValues === 'function') cr.getRandomValues(b);
+  else for (let i = 0; i < 16; i += 1) b[i] = Math.floor(Math.random() * 256);
+  b[6] = (b[6] & 0x0f) | 0x40; // eslint-disable-line no-bitwise
+  b[8] = (b[8] & 0x3f) | 0x80; // eslint-disable-line no-bitwise
+  const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+/** Fase 5: o colaborador tem de digitar a propria matricula (o servidor confere com o cadastro). Mensagem, ou null. */
+export function erroDaConfirmacao(valor) {
+  return String(valor ?? '').trim() ? null : 'O colaborador deve digitar a própria matrícula para confirmar o recebimento';
+}
+
+/**
+ * Fase 5 (M5): a mensagem do erro do POST da entrega. O `error` do servidor e literal (inclusive o 500 que diz que a saida FICOU
+ * registrada sem evidencia, e o 413 do modulo); sem resposta nenhuma (rede caiu), a entrega PODE ter sido gravada — e o reenvio
+ * com a mesma chave nao duplica, entao a tela manda tentar de novo em vez de dizer que falhou.
+ */
+export function mensagemErroEntrega(err) {
+  const r = err && err.response;
+  if (!r) {
+    return 'Sem resposta do servidor — a entrega pode ter sido registrada. Toque em "Registrar entrega" de novo: o reenvio não duplica.';
+  }
+  if (r.data && r.data.error) return r.data.error;
+  if (r.status === 413) return 'A imagem da assinatura passou de 2 MB — refaça a assinatura';
+  return 'Erro ao registrar a entrega de EPI';
+}
+
+/** Fase 5: o resumo do `GET /epi/cadeia/verificar` para a tela. */
+export function resumoCadeia(resposta) {
+  if (!resposta) return null;
+  const total = Number(resposta.total || 0);
+  if (resposta.integra === true) {
+    return { ok: true, texto: `Cadeia íntegra — ${total} ${total === 1 ? 'registro' : 'registros'}`, problemas: [] };
+  }
+  const problemas = (resposta.problemas || []).map((p) => {
+    const onde = [p.sequencia != null ? `#${p.sequencia}` : null, p.numero || null].filter(Boolean).join(' ');
+    return onde ? `${onde}: ${p.motivo}` : p.motivo;
+  });
+  return { ok: false, texto: `Cadeia com problema — ${problemas.length} ${problemas.length === 1 ? 'ocorrência' : 'ocorrências'}`, problemas };
 }
 
 /** O codigo de verificacao que a tela mostra: os 12 primeiros hex do `registro_sha256`, em grupos de 4. */

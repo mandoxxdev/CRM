@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { toast } from 'react-toastify';
 import { FiShield, FiRefreshCw, FiCheckCircle, FiAlertOctagon, FiFileText, FiSearch } from 'react-icons/fi';
 import api from '../../services/api';
@@ -9,6 +9,7 @@ import { formatarDataDoBanco, hojeLocalISO, lerInstanteDoBanco } from '../../uti
 import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
 import {
   MOTIVOS_EPI, rotuloMotivo, ehEpi, avisoDoCa, erroDaQuantidade, montarFormDataEntrega, codigoVerificacao, seloVerificacao,
+  novaChaveIdempotencia, erroDaConfirmacao, mensagemErroEntrega, resumoCadeia,
 } from '../../utils/epiEntrega';
 import { gerarFichaEpiPdf } from '../../utils/fichaEpiPdf';
 import './Almoxarifado.css';
@@ -24,14 +25,23 @@ import './Almoxarifado.css';
  *  - Entregas: a lista com filtros e, por linha, "Verificar integridade" (o servidor recalcula os dois hashes, RN-178.08).
  *  - Ficha: a recuperacao por colaborador (RN-178.09), com o PDF gerado no navegador (utils/fichaEpiPdf.js).
  *
- * Permissao: a acao `entregar_epi` (RN-178.02) e do servidor; aqui so `bloquearSeNaoPode` no envio e o aviso na aba — a leitura
- * (lista, ficha, verificar) e do portao do modulo.
+ * Permissao: a acao `entregar_epi` (RN-178.02) e do servidor. Desde a Fase 5 (revisao adversarial, importante 5) as LEITURAS
+ * (lista, ficha, verificar, cadeia, colaboradores) tambem exigem `entregar_epi`: sem ela a tela mostra so o aviso e nao chama
+ * nada (cada chamada seria um 403).
+ *
+ * Fase 5 tambem: o colaborador DIGITA a propria matricula junto da assinatura (o servidor confere com o cadastro) — por isso o
+ * seletor da Nova entrega mostra nome e setor, sem a matricula (letra B); cada tentativa de envio leva uma `chave_idempotencia`
+ * (o reenvio depois de a rede cair nao duplica a entrega); e a aba Entregas verifica a cadeia inteira das evidencias.
  */
 
-const FORM_VAZIO = { colaborador_id: '', material_id: '', quantidade: '1', tamanho: '', motivo: '', observacao: '' };
+const FORM_VAZIO = {
+  colaborador_id: '', material_id: '', quantidade: '1', tamanho: '', motivo: '', observacao: '', confirmacao_matricula: '',
+};
 const FILTROS_VAZIOS = { colaborador_id: '', material_id: '', de: '', ate: '' };
 
 const rotuloColaborador = (c) => (c ? [c.nome, c.matricula].filter(Boolean).join(' — ') : '');
+// Na Nova entrega o seletor NAO mostra a matricula: e ela que o colaborador digita para confirmar (Fase 5).
+const rotuloColaboradorEntrega = (c) => (c ? `${c.nome}${c.setor ? ` (${c.setor})` : ''}` : '');
 const rotuloMaterial = (m) => [m.codigo, m.nome].filter(Boolean).join(' — ');
 // Regra da Etapa 170: o `criado_em` (instante UTC do servidor) no dia de Brasilia, nunca os 10 primeiros caracteres.
 const diaDaEntrega = (v) => { const d = lerInstanteDoBanco(v); return d ? formatarDataDoBanco(hojeLocalISO(d)) : '—'; };
@@ -40,6 +50,9 @@ const validadeCa = (v) => formatarDataDoBanco(v, '—', { soData: true });
 const EpiAlmoxarifado = () => {
   const { pode, bloquearSeNaoPode } = useAlmoxPermissoes();
   const podeEntregar = pode('entregar_epi');
+  // Fase 5 (M2): a chave da tentativa de envio. Vale ate a entrega sair ou o servidor responder; se a rede cair sem resposta, o
+  // proximo toque reusa a MESMA chave (o servidor devolve a entrega ja gravada). Mexer no formulario ou na assinatura troca.
+  const chaveRef = useRef(null);
 
   const [aba, setAba] = useState('ENTREGAR');
   const [colaboradores, setColaboradores] = useState([]);
@@ -66,8 +79,11 @@ const EpiAlmoxarifado = () => {
   const [loadingFicha, setLoadingFicha] = useState(false);
   const [reloadFicha, setReloadFicha] = useState(0);
   const [gerandoPdf, setGerandoPdf] = useState(false);
+  const [cadeia, setCadeia] = useState(null);
+  const [verificandoCadeia, setVerificandoCadeia] = useState(false);
 
   useEffect(() => {
+    if (!podeEntregar) return undefined;
     let cancelado = false;
     Promise.all([
       api.get('/almoxarifado/aux/colaboradores').catch(() => {
@@ -84,7 +100,7 @@ const EpiAlmoxarifado = () => {
       setMateriais(Array.isArray(mat.data) ? mat.data : []);
     });
     return () => { cancelado = true; };
-  }, []);
+  }, [podeEntregar]);
 
   const epis = useMemo(() => materiais.filter(ehEpi), [materiais]);
   const episFiltrados = useMemo(() => {
@@ -99,7 +115,7 @@ const EpiAlmoxarifado = () => {
   const avisoCa = epiEscolhido ? avisoDoCa(epiEscolhido) : null;
 
   useEffect(() => {
-    if (aba !== 'ENTREGAS') return undefined;
+    if (aba !== 'ENTREGAS' || !podeEntregar) return undefined;
     let cancelado = false;
     setLoadingEntregas(true);
     const params = {};
@@ -113,10 +129,10 @@ const EpiAlmoxarifado = () => {
       })
       .finally(() => { if (!cancelado) setLoadingEntregas(false); });
     return () => { cancelado = true; };
-  }, [aba, filtros, reloadEntregas]);
+  }, [aba, filtros, reloadEntregas, podeEntregar]);
 
   useEffect(() => {
-    if (aba !== 'FICHA' || !fichaColaboradorId) return undefined;
+    if (aba !== 'FICHA' || !fichaColaboradorId || !podeEntregar) return undefined;
     let cancelado = false;
     setLoadingFicha(true);
     setFicha(null);
@@ -127,11 +143,11 @@ const EpiAlmoxarifado = () => {
       })
       .finally(() => { if (!cancelado) setLoadingFicha(false); });
     return () => { cancelado = true; };
-  }, [aba, fichaColaboradorId, reloadFicha]);
+  }, [aba, fichaColaboradorId, reloadFicha, podeEntregar]);
 
-  const set = (campo, valor) => setForm((f) => ({ ...f, [campo]: valor }));
+  const set = (campo, valor) => { chaveRef.current = null; setForm((f) => ({ ...f, [campo]: valor })); };
 
-  const limparAssinatura = () => { setAssinatura(null); setCanvasKey((k) => k + 1); };
+  const limparAssinatura = () => { chaveRef.current = null; setAssinatura(null); setCanvasKey((k) => k + 1); };
 
   const registrar = async (evento) => {
     if (!bloquearSeNaoPode('entregar_epi', evento)) return;
@@ -141,26 +157,50 @@ const EpiAlmoxarifado = () => {
     const erroQtd = erroDaQuantidade(form.quantidade);
     if (erroQtd) { toast.error(erroQtd); return; }
     if (!assinatura) { toast.error('A assinatura do colaborador é obrigatória'); return; }
+    const erroConf = erroDaConfirmacao(form.confirmacao_matricula);
+    if (erroConf) { toast.error(erroConf); return; }
 
+    if (!chaveRef.current) chaveRef.current = novaChaveIdempotencia();
     setSalvando(true);
     try {
-      const fd = montarFormDataEntrega(form, assinatura);
+      const fd = montarFormDataEntrega(form, assinatura, chaveRef.current);
       const res = await api.post('/almoxarifado/epi/entregas', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      chaveRef.current = null;
       const dados = res.data || {};
       setUltima({
         numero: dados.numero,
         registro: dados.evidencia?.registro_sha256 || '',
         colaborador: rotuloColaborador(colaboradores.find((c) => String(c.id) === String(form.colaborador_id))),
       });
-      toast.success(dados.numero ? `Entrega ${dados.numero} registrada` : 'Entrega registrada');
+      if (dados.reutilizada) {
+        toast.success(`Entrega ${dados.numero} já estava registrada — o envio repetido não duplicou`);
+      } else {
+        toast.success(dados.numero ? `Entrega ${dados.numero} registrada` : 'Entrega registrada');
+      }
       setForm(FORM_VAZIO);
       setBuscaEpi('');
       limparAssinatura();
       setReloadEntregas((t) => t + 1);
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Erro ao registrar a entrega de EPI');
+      // O servidor respondeu: nada foi gravado como entrega (a recusa, ou a saida sem evidencia que o 500 descreve) — a proxima
+      // tentativa e outra. Sem resposta: a chave fica, e o proximo toque nao duplica.
+      if (err && err.response) chaveRef.current = null;
+      toast.error(mensagemErroEntrega(err));
     } finally {
       setSalvando(false);
+    }
+  };
+
+  const verificarCadeia = async () => {
+    setVerificandoCadeia(true);
+    try {
+      const res = await api.get('/almoxarifado/epi/cadeia/verificar');
+      setCadeia(resumoCadeia(res.data));
+    } catch (err) {
+      setCadeia(null);
+      toast.error(err.response?.data?.error || 'Não foi possível verificar a cadeia');
+    } finally {
+      setVerificandoCadeia(false);
     }
   };
 
@@ -232,19 +272,23 @@ const EpiAlmoxarifado = () => {
         </div>
       </div>
 
+      {!podeEntregar && (
+        <div className="almox-aviso-erro almox-epi-sem-perfil" style={{ marginTop: 12 }}>
+          Seu perfil não acessa a entrega de EPI — só o almoxarife e o administrador do módulo registram entregas e consultam
+          fichas.
+        </div>
+      )}
+
+      {podeEntregar && (
       <div style={{ display: 'flex', gap: 8, margin: '12px 0', flexWrap: 'wrap' }}>
         <button className={aba === 'ENTREGAR' ? 'btn-almox-primary' : 'btn-almox-secondary'} onClick={() => setAba('ENTREGAR')}>Nova entrega</button>
         <button className={aba === 'ENTREGAS' ? 'btn-almox-primary' : 'btn-almox-secondary'} onClick={() => setAba('ENTREGAS')}>Entregas</button>
         <button className={aba === 'FICHA' ? 'btn-almox-primary' : 'btn-almox-secondary'} onClick={() => setAba('FICHA')}>Ficha por colaborador</button>
       </div>
+      )}
 
-      {aba === 'ENTREGAR' && (
+      {podeEntregar && aba === 'ENTREGAR' && (
         <div className="almox-epi-entrega">
-          {!podeEntregar && (
-            <div className="almox-aviso-erro">
-              Seu perfil não registra entrega de EPI — só o almoxarife e o administrador do módulo.
-            </div>
-          )}
           {ultima && (
             <div className="almox-epi-sucesso" style={{
               marginBottom: 12, padding: '10px 14px', borderRadius: 8,
@@ -261,7 +305,7 @@ const EpiAlmoxarifado = () => {
               <select id="epi-colaborador" className="almox-select" value={form.colaborador_id}
                 onChange={(e) => set('colaborador_id', e.target.value)}>
                 <option value="">Selecione...</option>
-                {colaboradores.map((c) => <option key={c.id} value={c.id}>{rotuloColaborador(c)}</option>)}
+                {colaboradores.map((c) => <option key={c.id} value={c.id}>{rotuloColaboradorEntrega(c)}</option>)}
               </select>
             </div>
             <div className="almox-field">
@@ -321,8 +365,14 @@ const EpiAlmoxarifado = () => {
                   <button type="button" className="btn-almox-secondary" onClick={limparAssinatura}>Refazer assinatura</button>
                 </div>
               ) : (
-                <AssinaturaCanvas key={canvasKey} onConfirm={(blob) => setAssinatura(blob)} />
+                <AssinaturaCanvas key={canvasKey} onConfirm={(blob) => { chaveRef.current = null; setAssinatura(blob); }} />
               )}
+            </div>
+            <div className="almox-field">
+              <label className="almox-label" htmlFor="epi-confirmacao-matricula">Matrícula — digitada pelo colaborador *</label>
+              <input id="epi-confirmacao-matricula" className="almox-input" autoComplete="off" maxLength={40}
+                placeholder="O colaborador digita a própria matrícula" value={form.confirmacao_matricula}
+                onChange={(e) => set('confirmacao_matricula', e.target.value)} />
             </div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
@@ -333,8 +383,27 @@ const EpiAlmoxarifado = () => {
         </div>
       )}
 
-      {aba === 'ENTREGAS' && (
+      {podeEntregar && aba === 'ENTREGAS' && (
         <>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+            <button type="button" className="btn-almox-secondary" onClick={verificarCadeia} disabled={verificandoCadeia}>
+              <FiShield size={12} /> {verificandoCadeia ? 'Verificando...' : 'Verificar cadeia'}
+            </button>
+          </div>
+          {cadeia && (
+            <div className={`almox-epi-cadeia ${cadeia.ok ? '' : 'almox-aviso-erro'}`} role="status" style={{
+              marginBottom: 12, padding: '10px 14px', borderRadius: 8,
+              border: cadeia.ok ? '1px solid rgba(16, 185, 129, 0.35)' : undefined,
+              background: cadeia.ok ? 'rgba(16, 185, 129, 0.08)' : undefined,
+            }}>
+              {cadeia.ok ? <FiCheckCircle size={14} /> : <FiAlertOctagon size={14} />} {cadeia.texto}
+              {cadeia.problemas.length > 0 && (
+                <ul style={{ margin: '6px 0 0 18px' }}>
+                  {cadeia.problemas.map((p, i) => <li key={i}>{p}</li>)}
+                </ul>
+              )}
+            </div>
+          )}
           <div className="almox-filters">
             <select className="almox-select" aria-label="Filtrar por colaborador" value={filtros.colaborador_id}
               onChange={(e) => setFiltro('colaborador_id', e.target.value)}>
@@ -401,7 +470,7 @@ const EpiAlmoxarifado = () => {
         </>
       )}
 
-      {aba === 'FICHA' && (
+      {podeEntregar && aba === 'FICHA' && (
         <>
           <div className="almox-filters">
             <select className="almox-select" aria-label="Colaborador da ficha" value={fichaColaboradorId}

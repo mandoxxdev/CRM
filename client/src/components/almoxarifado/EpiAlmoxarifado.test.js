@@ -137,17 +137,19 @@ async function assinar() {
 const $ = (sel) => container.querySelector(sel);
 const opcoes = (sel) => [...$(sel).querySelectorAll('option')].map((o) => o.textContent.trim());
 
-async function preencherValido({ material = '3', quantidade = '2' } = {}) {
+async function preencherValido({ material = '3', quantidade = '2', matricula = 'M-100' } = {}) {
   preencher($('#epi-colaborador'), '7');
   preencher($('#epi-material'), material);
   preencher($('#epi-quantidade'), quantidade);
+  preencher($('#epi-confirmacao-matricula'), matricula);
 }
 
 describe('Nova entrega', () => {
-  test('colaborador vem da lista aux (nome — matrícula) e o EPI so dos materiais is_epi', async () => {
+  // Fase 5: o seletor mostra nome e setor, SEM a matricula — e ela que o colaborador digita para confirmar.
+  test('colaborador vem da lista aux (nome (setor), sem a matricula) e o EPI so dos materiais is_epi', async () => {
     await renderizar();
     expect(api.get).toHaveBeenCalledWith('/almoxarifado/aux/colaboradores');
-    expect(opcoes('#epi-colaborador')).toEqual(['Selecione...', 'Maria Souza — M-100', 'Pedro Lima']);
+    expect(opcoes('#epi-colaborador')).toEqual(['Selecione...', 'Maria Souza (Caldeiraria)', 'Pedro Lima (Usinagem)']);
     const epis = opcoes('#epi-material');
     expect(epis).toContain('EPI-LUV-01 — Luva de vaqueta (CA 12345)');
     expect(epis).toContain('EPI-CAP-01 — Capacete');
@@ -217,6 +219,8 @@ describe('Nova entrega', () => {
     expect(corpo.get('motivo')).toBe('TROCA');
     expect(corpo.get('observacao')).toBe('luva rasgada');
     expect(corpo.get('assinatura').type).toBe('image/png');
+    expect(corpo.get('confirmacao_matricula')).toBe('M-100');
+    expect(corpo.get('chave_idempotencia')).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     const sucesso = $('.almox-epi-sucesso');
     expect(sucesso.textContent).toContain('EPI-20261022-0009');
     expect(sucesso.textContent).toContain('C0FF-EE12-3456');
@@ -236,14 +240,81 @@ describe('Nova entrega', () => {
     expect($('.almox-epi-sucesso')).toBeNull();
   });
 
-  test('perfil sem entregar_epi: avisa na aba e o clique nao envia', async () => {
+  // Fase 5 (importante 5): as leituras tambem exigem entregar_epi — sem ela a tela so avisa e nao chama nada (cada GET seria 403).
+  test('perfil sem entregar_epi: so o aviso; nenhuma chamada, nenhuma aba, nenhum formulario', async () => {
     mockPode = (acao) => acao !== 'entregar_epi';
     await renderizar();
-    expect(texto()).toContain('Seu perfil não registra entrega de EPI');
-    await preencherValido();
+    expect(texto()).toContain('Seu perfil não acessa a entrega de EPI');
+    expect(api.get).not.toHaveBeenCalled();
+    expect(botao('Registrar entrega')).toBeUndefined();
+    expect(botao('Entregas')).toBeUndefined();
+    expect($('#epi-colaborador')).toBeNull();
+  });
+
+  test('Fase 5: sem a matricula digitada -> a frase do servidor e nao envia', async () => {
+    await renderizar();
+    await preencherValido({ matricula: '  ' });
     await assinar();
     await clicar(botao('Registrar entrega'));
     expect(api.post).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('O colaborador deve digitar a própria matrícula para confirmar o recebimento');
+  });
+
+  test('Fase 5 (M2): a rede cai sem resposta -> o proximo toque reusa a MESMA chave; resposta de erro ou formulario mexido -> chave nova', async () => {
+    api.post
+      .mockRejectedValueOnce(new Error('Network Error'))
+      .mockRejectedValueOnce({ response: { status: 400, data: { error: 'A matrícula informada não confere com a do colaborador' } } })
+      .mockRejectedValueOnce(new Error('Network Error'));
+    await renderizar();
+    await preencherValido();
+    await assinar();
+    await clicar(botao('Registrar entrega'));
+    expect(toast.error).toHaveBeenLastCalledWith(
+      'Sem resposta do servidor — a entrega pode ter sido registrada. Toque em "Registrar entrega" de novo: o reenvio não duplica.');
+    await clicar(botao('Registrar entrega')); // reenvio: mesma chave -> 400 (o servidor respondeu)
+    expect(toast.error).toHaveBeenLastCalledWith('A matrícula informada não confere com a do colaborador');
+    await clicar(botao('Registrar entrega')); // depois de resposta: chave nova -> cai a rede
+    preencher($('#epi-confirmacao-matricula'), 'M-100 '); // mexer no formulario troca a chave
+    await clicar(botao('Registrar entrega'));
+    const chaves = api.post.mock.calls.map(([, fd]) => fd.get('chave_idempotencia'));
+    expect(chaves).toHaveLength(4);
+    expect(chaves[1]).toBe(chaves[0]);
+    expect(chaves[2]).not.toBe(chaves[1]);
+    expect(chaves[3]).not.toBe(chaves[2]);
+  });
+
+  test('Fase 5 (M2): o servidor devolve a entrega ja gravada (200, reutilizada) -> avisa que nao duplicou', async () => {
+    api.post.mockResolvedValueOnce({ status: 200, data: { id: 50, numero: 'EPI-20261022-0009', movimentacao_id: 700, reutilizada: true,
+      evidencia: { id: 60, registro_sha256: HASH } } });
+    await renderizar();
+    await preencherValido();
+    await assinar();
+    await clicar(botao('Registrar entrega'));
+    expect(toast.success).toHaveBeenCalledWith('Entrega EPI-20261022-0009 já estava registrada — o envio repetido não duplicou');
+  });
+
+  test('Fase 5 (M5): 413 -> a frase do modulo literal', async () => {
+    api.post.mockRejectedValueOnce({ response: { status: 413, data: { error: 'Arquivo grande demais (máximo 2 MB)' } } });
+    await renderizar();
+    await preencherValido();
+    await assinar();
+    await clicar(botao('Registrar entrega'));
+    expect(toast.error).toHaveBeenCalledWith('Arquivo grande demais (máximo 2 MB)');
+    expect($('.almox-epi-sucesso')).toBeNull();
+  });
+
+  test('Fase 5 (M5): 500 da compensacao que falhou -> o texto do servidor (a saida FICOU, com o numero) e o formulario nao some', async () => {
+    const msg = 'Não foi possível gravar a entrega de EPI e a saída do estoque NÃO pôde ser desfeita: a movimentação #700 '
+      + '(EPI-X1) ficou registrada sem evidência de entrega. A assinatura foi preservada no servidor. Avise o administrador antes de '
+      + 'entregar de novo. (falha; busy)';
+    api.post.mockRejectedValueOnce({ response: { status: 500, data: { error: msg } } });
+    await renderizar();
+    await preencherValido();
+    await assinar();
+    await clicar(botao('Registrar entrega'));
+    expect(toast.error).toHaveBeenCalledWith(msg);
+    expect($('.almox-epi-sucesso')).toBeNull();
+    expect($('#epi-colaborador').value).toBe('7');
   });
 });
 
@@ -260,6 +331,28 @@ describe('Entregas', () => {
     await esperarEfeitos();
     const ultima = api.get.mock.calls.filter(([u]) => u === '/almoxarifado/epi/entregas').pop();
     expect(ultima[1]).toEqual({ params: { colaborador_id: '7', de: '2026-10-01' } });
+  });
+
+  test('Fase 5: Verificar cadeia -> integra; com problema, a lista (#sequencia numero: motivo)', async () => {
+    let vez = 0;
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url, ...resto) => {
+      if (url === '/almoxarifado/epi/cadeia/verificar') {
+        vez += 1;
+        return Promise.resolve({ data: vez === 1
+          ? { integra: true, total: 2, cabeca: { sequencia: 2, registro_sha256: HASH }, problemas: [] }
+          : { integra: false, total: 2, cabeca: null, problemas: [{ sequencia: 2, evidencia_id: null, numero: null, motivo: 'registro apagado' }] } });
+      }
+      return base(url, ...resto);
+    });
+    await renderizar();
+    await clicar(botao('Entregas'));
+    await clicar(botao('Verificar cadeia'));
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/epi/cadeia/verificar');
+    expect($('.almox-epi-cadeia').textContent).toContain('Cadeia íntegra — 2 registros');
+    await clicar(botao('Verificar cadeia'));
+    expect($('.almox-epi-cadeia').textContent).toContain('Cadeia com problema — 1 ocorrência');
+    expect($('.almox-epi-cadeia').textContent).toContain('#2: registro apagado');
   });
 
   test('Verificar integridade: selo Íntegro e Adulterado com o motivo', async () => {

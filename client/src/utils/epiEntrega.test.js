@@ -6,6 +6,7 @@
  */
 import {
   avisoDoCa, erroDaQuantidade, montarFormDataEntrega, codigoVerificacao, seloVerificacao, ehEpi, rotuloMotivo,
+  novaChaveIdempotencia, erroDaConfirmacao, mensagemErroEntrega, resumoCadeia,
 } from './epiEntrega';
 
 const EPI = { id: 3, codigo: 'EPI-LUV-01', nome: 'Luva de vaqueta', is_epi: true, ca_numero: '12345', ca_validade: '2026-10-22' };
@@ -84,6 +85,56 @@ describe('montarFormDataEntrega', () => {
     expect(fd.has('tamanho')).toBe(false);
     expect(fd.has('motivo')).toBe(false);
     expect(fd.has('observacao')).toBe(false);
+  });
+
+  test('Fase 5: a matricula digitada pelo colaborador (aparada) e a chave da tentativa', () => {
+    const fd = montarFormDataEntrega({ colaborador_id: 7, material_id: 3, quantidade: 1, confirmacao_matricula: ' M-100 ' }, blob,
+      '0b4f0c4e-1a2b-4c3d-8e9f-001122334455');
+    expect(fd.get('confirmacao_matricula')).toBe('M-100');
+    expect(fd.get('chave_idempotencia')).toBe('0b4f0c4e-1a2b-4c3d-8e9f-001122334455');
+    expect(montarFormDataEntrega({ colaborador_id: 7, material_id: 3, quantidade: 1 }, blob).has('chave_idempotencia')).toBe(false);
+  });
+});
+
+describe('Fase 5: chave, confirmacao, mensagens e cadeia', () => {
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+  test('chave: randomUUID quando existe; sem ele (http no IP da rede), getRandomValues no formato uuid v4 — e a regua do servidor aceita', () => {
+    expect(novaChaveIdempotencia({ randomUUID: () => 'do-navegador-123' })).toBe('do-navegador-123');
+    const semUuid = { getRandomValues: (b) => { for (let i = 0; i < b.length; i += 1) b[i] = (i * 37) % 256; return b; } };
+    const c = novaChaveIdempotencia(semUuid);
+    expect(c).toMatch(UUID);
+    expect(c).toMatch(/^[A-Za-z0-9-]{8,100}$/); // a regua do servidor (epiService.chaveIdempotencia)
+    expect(novaChaveIdempotencia(undefined)).toMatch(UUID);
+    expect(novaChaveIdempotencia(undefined)).not.toBe(novaChaveIdempotencia(undefined));
+  });
+
+  test('confirmacao: vazia ou so espacos -> a frase do servidor', () => {
+    const frase = 'O colaborador deve digitar a própria matrícula para confirmar o recebimento';
+    expect(erroDaConfirmacao('')).toBe(frase);
+    expect(erroDaConfirmacao('   ')).toBe(frase);
+    expect(erroDaConfirmacao(undefined)).toBe(frase);
+    expect(erroDaConfirmacao('M-1')).toBeNull();
+  });
+
+  test('mensagem do erro: o error do servidor literal (413 e o 500 da saida sem evidencia); 413 sem corpo; sem resposta', () => {
+    expect(mensagemErroEntrega({ response: { status: 413, data: { error: 'Arquivo grande demais (máximo 2 MB)' } } }))
+      .toBe('Arquivo grande demais (máximo 2 MB)');
+    expect(mensagemErroEntrega({ response: { status: 413, data: '' } })).toBe('A imagem da assinatura passou de 2 MB — refaça a assinatura');
+    expect(mensagemErroEntrega({ response: { status: 502, data: {} } })).toBe('Erro ao registrar a entrega de EPI');
+    expect(mensagemErroEntrega(new Error('Network Error'))).toMatch(/^Sem resposta do servidor — a entrega pode ter sido registrada/);
+  });
+
+  test('resumo da cadeia: integra (singular/plural) e com problemas (#sequencia numero: motivo)', () => {
+    expect(resumoCadeia({ integra: true, total: 1, cabeca: {}, problemas: [] })).toEqual({ ok: true, texto: 'Cadeia íntegra — 1 registro', problemas: [] });
+    expect(resumoCadeia({ integra: true, total: 3, problemas: [] }).texto).toBe('Cadeia íntegra — 3 registros');
+    expect(resumoCadeia({ integra: false, total: 2, problemas: [
+      { sequencia: 2, evidencia_id: null, numero: null, motivo: 'registro apagado' },
+      { sequencia: 3, evidencia_id: 9, numero: 'EPI-X', motivo: 'elo quebrado' },
+      { sequencia: null, evidencia_id: null, numero: null, motivo: 'registro apagado no fim da cadeia' },
+    ] })).toEqual({ ok: false, texto: 'Cadeia com problema — 3 ocorrências',
+      problemas: ['#2: registro apagado', '#3 EPI-X: elo quebrado', 'registro apagado no fim da cadeia'] });
+    expect(resumoCadeia(null)).toBeNull();
   });
 });
 
