@@ -143,7 +143,7 @@ correções (TDD, controle positivo na asserção certa, restauro por cópia + `
 **Declarado (não corrigido):** a troca de cliente da OS **depois** de a reserva da OS ter nascido não a solta (D (176)); a `ENTRADA_MANUAL`
 com OS não reserva nem tem guarda (D (176), já declarado); a posição por cliente mostra as aplicações brutas (D (176)).
 
-**Suítes (estado de `928f5bd6`):** ver "Verificação do fechamento" abaixo.
+**Suítes:** ver "Verificação do fechamento" no fim.
 
 ## Retro da etapa
 
@@ -281,3 +281,12 @@ client `ReservasAlmoxarifado.test.js`); depois 10/10 nesse arquivo e, na 2ª rod
   (I4, mesmo texto da criação depois do prefixo).
 - `PUT .../fiscal` com `pedido_compra_id` num recebimento com OS própria: OS do pedido diferente → 400 com a frase da RN-02;
   igual → 200 e a OS própria é limpa.
+
+## Verificação do fechamento (2026-10-22, estado de `3ef8526b` — o código é o de `928f5bd6`; o fechamento só mexe em documento)
+
+- `cd server && npm run test:api` → **504/504 arquivos de teste OK** (`recebimentoComOs.api.test.js` com 31 cenários).
+- `cd server && npm run test:almoxarifado` → **44 passou, 0 falhou**.
+- `test:validation` **4/0**, `test:safealter` **3/0**, `test:sqlite` **16/0**.
+- `cd client && CI=true npx react-scripts test --watchAll=false` → **176 suítes / 2272 testes**, todos verdes (`RecebimentosOs.test.js` com 8).
+- `cd client && CI=true npx react-scripts build` → **Compiled successfully**.
+- Nenhum clique no navegador (letra F (176)).

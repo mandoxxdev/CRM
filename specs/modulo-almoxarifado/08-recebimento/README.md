@@ -1,5 +1,7 @@
 # 08 — Entrada e Recebimento de Materiais
 
+> **+ Etapa 176 (2026-10-22, `c1c04e1b`..`928f5bd6`): o recebimento informa a OS (opcional) — a NF de material de cliente sem pedido reserva para a OS escolhida; com pedido vale a OS viva do pedido; a guarda do dono recusa só sem pedido com a OS aberta (B1152/B1153)** — ver a seção "Etapa 176", no fim. O status não muda.
+
 > **+ Etapa 171 (2026-10-22, `4dc8433d`, Fase 5 `f2f2b2ed`): a nota de pedido com OS grava a OS na entrada e reserva o que entrou para a OS (a requisição da OS primeiro) — nas três portas (nota, inspeção, não conformidade); o estorno solta a reserva da OS primeiro** — ver a seção "Etapa 171", no fim. O status não muda.
 
 > **+ Etapa 170 (2026-10-20, `3fb6aa0e`): a data dos anexos de documento no dia de Brasília (B1081, só exibição — o componente é o mesmo no recebimento, na inspeção, na não conformidade, na requisição, na devolução e na remessa)** — ver a seção "Etapa 170", no fim. O status não muda.
@@ -1178,3 +1180,28 @@ Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa171-pedido-de-compra
   sob a trava — `f2f2b2ed`.
 - [ ] **Declarado:** na retomada da nota, a reserva que a inspeção já criou com o mesmo `recebimento_id` entra no desconto da I3 (a OS recebe
   menos do que podia; nada vaza nem duplica).
+
+## Etapa 176 — o recebimento informa a OS (2026-10-22)
+
+Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa176-recebimento-com-os.md`. Contratos (congelados no plano, seção "CONTRATO
+REAL"): `POST /recebimentos` aceita `os_id` (número, string de dígitos, `null`, `''`); a OS efetiva é `reservaDaOs.osDoRecebimento` (com
+`pedido_compra_id` gravado, a OS viva do pedido e o recebimento não grava `os_id` próprio; sem, a própria).
+
+- [x] **RN-176.01** — `os_id` opcional (`OS inválida` / `Dados inválidos — os_id: OS inválida` na rota; `OS #<id> não encontrada`) — `c1c04e1b`.
+- [x] **RN-176.02 / C1** — com pedido: `os_id` não nulo diferente da OS do pedido → 400 `A OS do recebimento tem de ser a do pedido (<numero>|sem
+  OS)`; igual → aceito e não gravado; vale também com `tipo_recebimento: NOTA_FISCAL` + `pedido_compra_id` cru — `c1c04e1b` (teste do ramo
+  cru em `cf451bed`).
+- [x] **RN-176.03** — sem pedido, OS fechada → 400 `A OS <numero> está <status> — não aceita entrada nova`. Com pedido a OS fechada **não**
+  recusa (a nota entra como estoque — RN-171.03) — `c1c04e1b`.
+- [x] **RN-176.04** — guarda do dono na criação e na pré-checagem de `darEntradaEstoque` — `c1c04e1b`. **Reescrita na Fase 5** (`cf451bed`,
+  B1152/B1153): só no recebimento **sem pedido** com a OS **aberta**; com pedido não recusa (a T1 recusava o pedido cuja OS fechou ou ficou
+  sem cliente — regressão da 171 que travava o pedido parcialmente recebido). A pré-checagem só olha os itens que entram agora (retomada:
+  `!entrada_estoque_em`, teste em `cf451bed`).
+- [x] **I2** — a `ENTRADA_COMPRA` grava o `os_id` de `osDoRecebimento` (mesmo com a OS fechada ou sumida — a marca) — `c1c04e1b`.
+- [x] **`/fiscal`** — não aceita `os_id`; ligar pedido a um recebimento com OS própria: OS do pedido diferente → 400 com a frase da RN-02,
+  igual → 200 e o `os_id` próprio é limpo — `c1c04e1b` (B1155; pedido que não resolve → "(sem OS)", teste em `cf451bed`).
+- [x] **RN-176.08 / M3 / M4** — lista e detalhe com `os_id` efetivo e `os_numero` vivo (`OS #<id>` se sumiu); pedidos para recebimento com
+  `os_id`/`os_numero`; aux de OS com `?abertas=1` e `cliente_id` — `e79b9718`.
+- [x] **RN-176.07** — tela: campo **OS (opcional)** (carregado ao abrir o modal), travado com a OS do pedido, payload sem `os_id` com pedido
+  (B1156); coluna e detalhe — `0d227edb`; a troca de forma limpa a OS escolhida (teste em `928f5bd6`).
+- [x] **Primeiro boot** em pasta vazia: a coluna `os_id INTEGER` nasce (plano, T1).

@@ -1049,11 +1049,34 @@ Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa174-entrega-com-os-e
   (`consumoPorOsPontaAPonta.api.test.js`).
 - [x] **Fase 5, item 1 (B1115)** — projeto do cliente A + OS do cliente B: a saída sem `os_id`; a posição do cliente A mostra só o projeto; o
   consumo por OS de B sem o material; a exclusão estorna com `os_id` null; controle mesmo cliente com a OS — `c3655b0f`.
-- [ ] **Fora (letra D (174)):** `passaNaRegraDoDono` da chegada e os avisos do recebimento continuam olhando só o projeto (mais conservadores
+- [ ] **Fora (letra D (174)):** `passaNaRegraDoDono` da chegada e os avisos do recebimento continuam olhando só o projeto *(resolvido na Etapa 176, I3 — ver a seção no fim)* (mais conservadores
   que a entrega — pulam requisição que a entrega aceitaria; nada é entregue errado); o Custo por projeto não desconta a ENTRADA da exclusão (I4,
   de antes).
 - [ ] **M2** (172) continua: OS excluída com requisição vinculada é tolerada; na entrega, material de cliente recusa *"OS informada nao
   existe"*, material próprio passa (sem FK).
 
-**Falta para 🟢 (não mudou):** Engenharia/BOM e Produção/OP. Próxima da fatia OS: **Etapa 176** — entrada de material de cliente com OS
-opcional (plano da 174, "próxima tarefa detalhada").
+**Falta para 🟢 (não mudou):** Engenharia/BOM e Produção/OP. Próxima da fatia OS: ~~**Etapa 176** — entrada de material de cliente com OS
+opcional~~ — **feita** (seção "Etapa 176", abaixo).
+
+## Etapa 176 (2026-10-22) — o recebimento informa a OS (material de cliente para industrialização)
+
+Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa176-recebimento-com-os.md`. A fatia OS chega à **entrada**: o recebimento (NF de
+material de cliente sem pedido) ganha `os_id` opcional; a OS efetiva é `reservaDaOs.osDoRecebimento` (com pedido, a do pedido — viva).
+
+- [x] **I2** — a `ENTRADA_COMPRA` grava a OS efetiva (a marca de origem da 171) — `c1c04e1b`.
+- [x] **I3** — a regra do dono da distribuição vê a OS (`ownerRules.saidaPassaNaRegraDoDono(db, material, projetoId, osId)`, projeto
+  primeiro e depois a OS — a precedência da 174) nos três chamadores: a fila da chegada (`reservaChegadaService`) e os dois avisos do
+  recebimento (`receiptNotificationService`) — `c1c04e1b`. **Resolve** o item "Fora (D (174))" acima, que dizia que a chegada e os avisos
+  olhavam só o projeto (verdade até a 176).
+- [x] **M1** — a conversão da reserva da OS na aprovação confere o dono com a mesma régua — `c1c04e1b`.
+- [x] **Aux de OS** — `GET /api/almoxarifado/aux/ordens-servico?abertas=1` (filtro `osFechada` antes do `LIMIT`) e `cliente_id` em toda linha —
+  aditivo; quebrou o teste de chaves da 155 (fixture `osDoAuxDoServidor.json` atualizada, servidor e client) — `e79b9718`.
+- [x] **Ponta a ponta** — recebimento com OS → reserva da OS → requisição pela cesta com `os_id` sem projeto → entrega (SAÍDA com a OS) →
+  posição por cliente e "Consumo por OS" → devolução; e a OS que fecha devolvendo ao estoque do cliente — `f5c75c68`.
+- [x] **Fase 5** — a guarda do dono só recusa sem pedido com OS aberta (`cf451bed`, B1152/B1153); o dono conferido sob a trava na reserva da OS
+  (`eb82e52b`, B1154). **Correção:** o plano dizia que a OS não troca de cliente por rota — **estava errado**: `PUT
+  /api/operacional/ordens-servico/:id` com `cliente_id` troca (`listasNotificacoesPortao.api.test.js:314`).
+- [ ] **Fora (D (176)):** `ENTRADA_MANUAL` com OS não reserva nem tem guarda de dono; a posição por cliente mostra as aplicações brutas e não a
+  OS da entrada; a troca de cliente da OS depois de a reserva nascer não a solta.
+
+**Falta para 🟢 (não mudou):** Engenharia/BOM e Produção/OP.

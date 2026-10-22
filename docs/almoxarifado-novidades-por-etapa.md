@@ -11,18 +11,23 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-22):** **Etapa 177 fechada** (**o retorno da manutenção com a condição do item e o destino** — concluir
+> **Onde o desenvolvimento está (2026-10-22):** **Etapa 176 fechada** (**o recebimento informa a OS — material do cliente para
+> industrialização fica com o trabalho dele**: o novo recebimento ganha **OS (opcional)**; o que entra fica reservado para a OS, só a requisição
+> dela o leva, e a OS fechada o devolve ao estoque do cliente; chapa do cliente A não entra para a OS do cliente B; nada a rodar antes do
+> deploy; decisões **B1150** a **B1157** — **a B1153 pede um olhar** (a nota de pedido com OS de outro cliente entra livre, sem aviso na
+> tela); aviso **C430**; a pergunta ao cliente da **B1150** continua aberta; revisão adversarial feita e corrigida). **Próxima: Etapa 178** —
+> entrega de EPI ao colaborador com assinatura na tela (NR-6); os formulários de EPI ainda não chegaram (**B1157**).
+> **Também em 2026-10-22: Etapa 177 fechada** (**o retorno da manutenção com a condição do item e o destino** — concluir
 > a manutenção de uma ferramenta pede a **condição** (*Em condições de uso*, *Em uso com restrição*, *Inservível*) e o **destino** (*Volta ao
 > uso* ou *Baixa*); a baixa deixa a ferramenta **Baixada**, fora de circulação e do painel de calibrações, reversível; nada a rodar antes do
 > deploy; decisões **B1140** a **B1146** — **a B1143 pergunta** se a baixa deve passar por um gestor, **a B1146 pergunta** se instrumento
 > *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* também deve parar de medir na inspeção; a revisão adversarial independente foi
-> feita e corrigida — o instrumento *Baixado* não mede mais). A **176** está em andamento em outra
-> frente.
-> **Também em 2026-10-22: Etapa 174 fechada** (**a entrega grava a OS, e o *Consumo por OS* passa a enxergar as
+> feita e corrigida — o instrumento *Baixado* não mede mais).
+> *(Também em 2026-10-22: **Etapa 174 fechada** (**a entrega grava a OS, e o *Consumo por OS* passa a enxergar as
 > requisições** — a entrega de requisição ligada a uma OS cadastrada entra no relatório, que ganha **Devolvido** e **Líquido**; material de
 > cliente sai pela OS do próprio cliente; **Materiais de Clientes** mostra a OS onde foi aplicado; nada a rodar antes do deploy; decisões
-> **B1111** a **B1119** — **a B1115 pede um olhar** (projeto e OS de clientes diferentes); aviso de número **C429**). **Próxima: Etapa 176** —
-> entrada de material de cliente com OS opcional (**B1119**: deduzida, a pergunta ao cliente aguarda resposta).
+> **B1111** a **B1119** — **a B1115 pede um olhar** (projeto e OS de clientes diferentes); aviso de número **C429**); a próxima era a **176**
+> (entrada de material de cliente com OS opcional — **B1119**).)*
 > *(Também em 2026-10-22: **Etapa 175 fechada** (**editar a ferramenta pela tela** — o primeiro passo do pedido de
 > ferramentas/EPI da usuária de Compras que não depende dos formulários da empresa: botão **Editar** em toda linha de **Almoxarifado →
 > Ferramentas**; só tela, nada a rodar antes do deploy; decisões **B1130** e **B1131**). A **174** estava em andamento em outra frente.)*
@@ -4136,7 +4141,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131 e B1140 a B1146; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146 e B1150 a B1157; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -12249,6 +12254,56 @@ medição. **Descartado:** recusar também esses quatro — muda uma regra de in
 **Pergunta:** vocês querem que instrumento *Avariado*, *Em manutenção*, *Bloqueado* ou *Perdido* também seja recusado na medição? (É uma
 linha no servidor e uma na tela.) **Reversível:** o commit da Fase 5 (ver o plano da 177).
 
+**B1150 (NOVA, da Etapa 176; decisão do agente) — a OS no recebimento é opcional.** A necessidade foi **deduzida** da resposta do cliente
+sobre industrialização (*"um estoque de materiais do cliente que ficam em nosso estoque"*); a pergunta **"o material do cliente já vem para
+uma OS específica?"** foi feita e **aguarda resposta**. Sem OS, nada muda. Com OS, o que entra fica reservado para ela como no pedido de compra
+com OS (Etapa 171). **Descartado:** OS obrigatória para material de cliente (travaria quem recebe material de cliente sem trabalho definido).
+**Se a resposta for "não":** o campo fica sem uso e sai. **Reversível:** `c1c04e1b`, `0d227edb`.
+
+**B1151 (NOVA, da Etapa 176; decisão do agente, da revisão da Fase 2) — a OS do recebimento é uma régua só.** Com pedido de compra, vale a OS
+**do pedido no momento da entrada** (trocar a OS do pedido antes de processar continua valendo, como na 171) e o recebimento não guarda OS
+própria; sem pedido, a OS escolhida no recebimento. A mesma régua serve para a entrada, a reserva (nota, inspeção, não conformidade), a lista e o
+detalhe. **Descartado:** copiar a OS do pedido para o recebimento ao criar (duas fontes que podiam divergir). **Reversível:** `c1c04e1b`.
+
+**B1152 (NOVA, da Etapa 176; decisão do agente, refeita na revisão da Fase 5) — a conferência do dono recusa só a nota SEM pedido com a OS
+aberta.** Material de cliente com a OS de **outro** cliente, ou com OS **sem cliente**, é recusado ao salvar (a nota inteira, nada gravado) e
+de novo ao processar (o dono pode ter mudado). A OS **fechada** ou que sumiu não passa pela conferência: ela não reserva, então não há o que
+proteger (a nota entra como estoque, como na 171). **Descartado:** conferir com a OS fechada (recusava notas que a 171 aceitava).
+**Reversível:** `cf451bed`.
+
+**B1153 (NOVA, da Etapa 176; decisão do agente, da revisão da Fase 5) — a nota de PEDIDO não é recusada pelo dono; o material que não casa
+entra livre.** Na versão da T1 a conferência valia também para o pedido, e o recebimento de pedido cuja OS fechou ou ficou sem cliente
+**parava de processar** — e o pedido já parcialmente recebido não se edita (ficava travado para sempre). Agora, com pedido, o material de
+cliente com OS de outro cliente ou sem cliente entra **livre** e a reserva da OS não nasce (**B1154**); a tela **não avisa** (**C430**).
+**Descartado:** (1) manter a recusa de "outro cliente" na criação com pedido, como a revisão recomendava — a segunda nota de um pedido
+parcialmente recebido cairia na mesma trava; (2) recusar a OS sem cliente com pedido. **Pede um olhar:** se vocês preferem a recusa (e
+aceitam corrigir o pedido por fora quando acontecer), é uma condição no servidor. **Reversível:** `cf451bed`.
+
+**B1154 (NOVA, da Etapa 176; decisão do agente, da revisão da Fase 5) — o dono é conferido de novo na hora de reservar, sob a trava.** O
+cliente da OS **troca** pela tela da OS (o plano dizia que não — **estava errado**). Na entrada da nota, na inspeção que aprova e na não
+conformidade aceita, a reserva para a OS só nasce se o dono do material e o cliente da OS (os dois lidos naquele instante) casam; senão o
+material fica livre (o servidor registra o motivo no log). **Descartado:** recusar a inspeção ou a NC (o material já está no galpão).
+**Reversível:** `eb82e52b`.
+
+**B1155 (NOVA, da Etapa 176; decisão do agente) — os dados fiscais não trocam a OS.** A OS se escolhe ao registrar o recebimento. Ligar um
+pedido de compra pelos dados fiscais a um recebimento que tinha OS própria exige que a OS do pedido seja a mesma (senão *"A OS do recebimento
+tem de ser a do pedido (⟨número⟩)"*, ou *"(sem OS)"*); sendo, a OS própria é apagada e passa a valer a do pedido. **Descartado:** aceitar a OS
+nos dados fiscais (uma segunda porta para a mesma regra). **Reversível:** `c1c04e1b`.
+
+**B1156 (NOVA, da Etapa 176; decisão do agente) — com pedido, a tela não manda a OS.** O campo mostra a OS do pedido (da lista de pedidos) e
+fica travado; o servidor usa a OS do pedido no momento da entrada (**B1151**). **Descartado:** mandar a OS da lista (pode ter envelhecido desde
+que a tela abriu e só arriscaria a recusa *"A OS do recebimento tem de ser a do pedido…"*). **Reversível:** `0d227edb`.
+
+**B1157 (NOVA, da Etapa 176) — a próxima etapa (178): entrega de EPI ao colaborador com assinatura na tela (NR-6), com campos deduzidos.**
+Os **formulários em papel de EPI** da empresa **ainda não chegaram** (o André vai pedir à usuária); a planilha que circulou é controle de
+**Compras**, não o formulário de EPI. Então os campos e o layout da ficha serão **deduzidos** e desenhados para trocar depois. O que a usuária
+exigiu, literalmente — *identificação do colaborador, integridade, recuperação, evidências confiáveis* — define o mínimo: colaborador **do
+cadastro** (não nome digitado), hora do **servidor**, impressão digital (hash) do registro com a imagem da assinatura, registro que **não se
+edita nem se apaga**, número do **CA** e **validade** do EPI, e a **ficha de EPI por colaborador** em PDF; a assinatura vira um serviço único,
+que o futuro termo de responsabilidade de ferramenta reaproveita. Tamanho e periodicidade de troca **a confirmar** com o cliente. Ver a
+"próxima tarefa detalhada" no plano da 176. As decisões que esperam vocês: as mesmas da **B1146**; a **B1150** a **B1156** são reversíveis —
+**a B1153 pede um olhar**.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -15782,6 +15837,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      também fica fora. E há duas colunas novas, **Devolvido** e **Líquido**; com filtro de período o **Líquido** pode sair negativo
      (**B1114**). **O que fazer:** ao comparar o consumo de uma OS com o de meses anteriores, lembrar que antes desta versão as requisições não
      contavam; para o histórico, o **Extrato** do material e o **Histórico de movimentações** continuam mostrando as saídas de requisição.
+430. **NOVO (da Etapa 176) — a nota de pedido com material de cliente para uma OS de outro cliente (ou sem cliente) entra livre, sem aviso
+     na tela.** O recebimento registra e processa normalmente, mas a reserva para a OS **não** nasce (**B1153**, **B1154**) — o material fica no
+     disponível do cliente dono, e só o log do servidor diz por quê. O mesmo vale quando o cliente da OS é trocado entre a chegada e a
+     inspeção. **O que fazer:** depois de processar uma nota de pedido com material de cliente, conferir em **Almoxarifado → Reservas** se a
+     reserva da OS apareceu; se não, conferir o cliente da OS (**Fábrica → Ordens de Serviço**) e o **Proprietário** do material — se o pedido
+     estava para a OS errada, a requisição da OS certa leva o material do disponível normalmente.
 ### D. Limitações declaradas— são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -17123,13 +17184,22 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   (`GET /ferramentas/:id/manutencoes`) e na Auditoria (*Fim de manutenção*). Quem empresta não fica sabendo da restrição pela tela.
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(176) O recebimento com OS, o que ficou de fora.** (1) A **entrada manual** (Movimentações, *Entrada*) com OS não reserva para a OS (é
+  por desenho: só as três portas do recebimento distribuem) e **não confere o dono** — material do cliente A pode entrar marcado com a OS do
+  cliente B por ali; a saída depois recusa como sempre. Material de cliente pela entrada manual continua sem exigir documento (já era
+  assim). (2) **Materiais de Clientes → Aplicado em** mostra as saídas **brutas**: depois de entregar 8 e devolver 3, continua 8 ali (o
+  líquido 5 está no **Consumo por OS**); e não mostra a OS da **entrada**, só onde foi aplicado. (3) A OS que troca de cliente **depois** de
+  a reserva da OS ter nascido **não** a solta: a reserva fica para a OS (agora de outro cliente) e a entrega recusaria pela regra do dono —
+  liberar à mão em **Reservas**. (4) A OS se escolhe só ao registrar; os dados fiscais não a trocam (**B1155**). (5) A não conformidade
+  aceita de um recebimento com OS própria passa pela mesma reserva da inspeção, mas não tem teste direto com a OS própria (a da 171 é com
+  pedido).
 - **(174) A entrega com a OS e o Consumo por OS, o que ficou de fora.** (1) A devolução para **Quarentena** conta como devolvida (**B1113**) —
   e continua contando se a peça for **sucateada depois**, na inspeção da quarentena: o relatório não acompanha o destino final da peça. (2) A
   devolução registrada com destino **Sucata** cuja segunda perna (a ida para a sucata) foi **recusada** fica fora do devolvido, embora a peça
   tenha voltado ao estoque: o relatório olha o destino declarado da devolução. (3) O **Custo por projeto** não desconta o estorno da exclusão
-  de requisição entregue (de antes desta etapa — a mesma régua que esta etapa corrigiu só no Consumo por OS). (4) A fila de reserva na chegada
+  de requisição entregue (de antes desta etapa — a mesma régua que esta etapa corrigiu só no Consumo por OS). (4) ~~A fila de reserva na chegada
   da nota e os avisos do recebimento continuam olhando só o **projeto** para a regra do dono — ficam mais conservadores que a entrega (pulam
-  requisição que a entrega aceitaria; nada é entregue errado). (5) As entregas antigas não ganham a OS (**B1118**). (6) A coluna **OS** do
+  requisição que a entrega aceitaria; nada é entregue errado).~~ *(Resolvido na Etapa 176: a fila e os avisos também olham a OS.)* (5) As entregas antigas não ganham a OS (**B1118**). (6) A coluna **OS** do
   relatório e o filtro mostram o **código interno** da OS, não o número (como antes).
 - **(172) A requisição com OS cadastrada, o que ficou de fora.** Do plano: (1) **a saída da entrega não leva a OS** (I5) — levar ligaria as
   regras de vínculo e de dono do material à OS e poderia recusar, na entrega, material já aprovado, reservado e separado (material de cliente
@@ -18274,6 +18344,13 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(176) Nenhum clique foi dado no navegador.** O recebimento com OS, a recusa pelo dono, a nota de pedido que entra livre, a reserva da OS
+nas três portas (inclusive a inspeção com a OS trocada de cliente), a requisição da OS, a entrega, a devolução e a posição por cliente foram
+provados pelas rotas de verdade no servidor de teste — inclusive ponta a ponta, do recebimento à posição do cliente; a tela de Recebimentos
+(o campo, a trava com pedido, a troca de forma que limpa a OS, a coluna e o detalhe), em jsdom com a resposta do servidor simulada. A troca de
+cliente da OS foi simulada direto no banco (a tela da OS é do núcleo, fora do servidor de teste). Vale conferir à mão o roteiro da Etapa 176
+no guia — em especial o campo **OS (opcional)** travado com pedido e a reserva aparecendo em **Reservas** depois de processar.
 
 **(174) Nenhum clique foi dado no navegador.** A entrega com a OS, a exclusão, a regra do dono, o relatório (consumido, devolvido, líquido,
 período, exportação XLSX) e a posição por cliente foram provados pelas rotas de verdade no servidor de teste — inclusive ponta a ponta, do
@@ -34564,7 +34641,7 @@ avulsa não aparece; se for a única, o quadro diz *"Nenhum consumo vinculado a 
   16/09); elas continuam fora do relatório (**C429**, **B1118**).
 - A requisição que só **digita** o número da OS (sem **OS cadastrada**) não leva a OS para a saída.
 - O **Custo por projeto** continua sem descontar o estorno da exclusão de requisição (de antes — **D (174)**).
-- A fila de reserva na chegada da nota e os avisos do recebimento continuam olhando só o projeto, não a OS (**D (174)**).
+- A fila de reserva na chegada da nota e os avisos do recebimento continuam olhando só o projeto, não a OS (**D (174)**). *(Resolvido na Etapa 176.)*
 - **Nada a rodar antes do deploy:** nenhuma coluna nova; muda o que é gravado nas entregas daqui em diante.
 
 ## Etapa 177 — O retorno da manutenção: a condição do item e o destino (volta ao uso ou baixa) (2026-10-22)
@@ -34632,9 +34709,101 @@ inspeção.
 - A **assinatura** na entrega/empréstimo (NR-6) continua esperando os formulários em papel da empresa.
 - Nada a rodar antes do deploy: as duas colunas novas da manutenção nascem no boot (as manutenções antigas ficam sem condição).
 
+## Etapa 176 — O recebimento informa a OS: material do cliente para industrialização fica com o trabalho dele (2026-10-22)
+
+O cliente explicou o que é industrialização para a empresa: *"materiais que os clientes compram e nossa empresa apenas realiza a mão de obra…
+um estoque de materiais do cliente que ficam em nosso estoque"*. A chapa do cliente chega com a nota de remessa dele, sem pedido de compra
+nosso — e até aqui, ao entrar, ela ia para o estoque **sem trabalho nenhum**: qualquer requisição do mesmo cliente podia levá-la, e nada
+dizia para qual OS ela tinha vindo. Agora, ao registrar o recebimento, o almoxarife pode escolher a **OS** (opcional): o que entra fica
+**reservado para essa OS**, só a requisição dela o leva, e se a OS for cancelada ou concluída o material volta ao estoque do cliente — o
+mesmo caminho que o pedido de compra com OS já fazia (Etapa 171). E o sistema confere o **dono**: chapa do cliente A não entra para a OS do
+cliente B. A pergunta *"o material do cliente já vem para uma OS específica?"* foi feita ao cliente e **aguarda resposta** — por isso o campo
+é opcional e nada muda para quem não o preencher (**B1150**). Decisões do agente: **B1150** a **B1157**; aviso **C430**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Recebimentos → Novo Recebimento** (nota sem pedido): sem campo de OS | Campo **OS (opcional)** com as OS **abertas** (*número — cliente*) e **Sem OS**; escolhida a OS, o que entra fica reservado para ela (**B1150**) |
+| Recebimento de **pedido**: a OS do pedido valia na chegada, mas a tela não a mostrava | O campo **OS** mostra a OS do pedido e fica **travado**; a OS que vale é a do pedido **no momento da entrada** (**B1151**, **B1156**) |
+| Material de cliente entrava para qualquer trabalho | Nota **sem pedido** com OS de **outro** cliente, ou OS **sem cliente**: recusada na hora de salvar, nada gravado (**B1152**) |
+| — | Nota **de pedido** com OS de outro cliente ou sem cliente: entra **livre**, sem reservar para a OS (**B1153**, aviso **C430**) |
+| — | A OS que trocou de cliente depois da chegada não recebe o material na inspeção (o dono é conferido de novo na hora de reservar — **B1154**) |
+| Lista e detalhe dos recebimentos sem OS | Coluna **OS** na lista e campo **OS** no detalhe (*—* sem OS; *OS #⟨n⟩* se a OS foi apagada) |
+
+### As regras, com o cenário exato
+
+Preparação: um cliente *Metalúrgica X* em **Clientes**; um material dele (**Almoxarifado → Materiais**, *Proprietário* = *Metalúrgica X*, ex.:
+*CHP-176*); uma OS aberta da *Metalúrgica X* (**Fábrica → Ordens de Serviço**, ex.: *OS-2026-176*) e uma OS aberta de **outro** cliente
+(*OS-2026-177*).
+
+**1. A nota do cliente com a OS (B1150).** **Almoxarifado → Recebimentos → Novo Recebimento**, forma **Nota fiscal**, nota *NF-REM-176*,
+fornecedor *Metalúrgica X*, item *CHP-176* 10. O campo **OS (opcional)** lista *OS-2026-176 — Metalúrgica X*; escolha e **Registrar
+Recebimento**. A lista mostra *OS-2026-176* na coluna **OS**. Leve o recebimento até **Processar Nota — Estoque + Contas a Pagar** e
+confirme: em **Almoxarifado → Reservas** aparece a reserva de 10 com destino a *OS-2026-176*, origem *MANUAL*, sem validade; no extrato do
+material, o motivo *"Compra para a OS OS-2026-176"*.
+
+**2. A requisição da OS leva o material.** **Requisições (almox.) → Nova Requisição** com **OS cadastrada** = *OS-2026-176*, 8 de *CHP-176*,
+sem projeto: aprovar → *Totalmente Reservada* (a reserva da OS vira a da requisição; sobra 2 para a OS); separar e entregar. Em
+**Almoxarifado → Materiais de Clientes**, cliente *Metalúrgica X*: **Recebido** 10, **Consumido** 8, **Saldo** 2, **Aplicado em** a
+*OS-2026-176* com 8. Em **Relatórios → Consumo por OS**: 8 / 0 / 8.
+
+**3. Chapa do cliente A para a OS do cliente B — recusa (B1152).** Novo recebimento sem pedido com *CHP-176* e a OS *OS-2026-177*: o aviso
+vermelho do formulário diz *"Material CHP-176 pertence ao cliente Metalúrgica X, mas a OS OS-2026-177 é do cliente ⟨outro cliente⟩"* e nada
+é gravado (o formulário continua preenchido).
+
+**4. OS sem cliente — recusa (B1152).** Uma OS aberta **sem cliente**: *"Material CHP-176 pertence ao cliente Metalúrgica X, mas a OS
+⟨número⟩ não tem cliente"*.
+
+**5. Material nosso passa com qualquer OS.** Um material próprio com a *OS-2026-177* ou com a OS sem cliente: registra e reserva para a OS.
+
+**6. O dono trocou entre registrar e processar.** No cenário 1, antes de processar, troque o *Proprietário* de *CHP-176* (material ainda sem
+movimento) para o outro cliente: **Processar** responde *"Nao foi possivel dar entrada no estoque: Material CHP-176 pertence ao cliente
+⟨outro cliente⟩, mas a OS OS-2026-176 é do cliente Metalúrgica X"* e nada entra.
+
+**7. A nota de pedido não trava (B1153).** Um pedido de compra com a OS *OS-2026-177* (de outro cliente) contendo *CHP-176*: o recebimento
+do pedido **registra e processa**; o material entra **livre** — **não** aparece reserva para a *OS-2026-177* em **Reservas** (aviso **C430**).
+O mesmo com o pedido cuja OS foi **concluída** (como na 171: entra como estoque).
+
+**8. A OS mudou de cliente antes da inspeção (B1154).** *(Precisa de material crítico com a inspeção ligada.)* Cenário 1 com *CHP-176*
+crítico: a nota entra retida. Em **Fábrica → Ordens de Serviço**, troque o cliente da *OS-2026-176* para outro; aprove a inspeção: o
+material fica **livre** — nenhuma reserva para a OS.
+
+**9. A OS fecha (como na 171).** Depois do cenário 1, cancele ou conclua a *OS-2026-176*: a reserva é solta com *"OS OS-2026-176 ⟨status⟩ —
+material volta ao estoque"* e o material continua sendo da *Metalúrgica X* (aparece na posição dela, não no estoque próprio).
+
+**10. O pedido e a OS (B1151, B1156).** Forma **Pedido de compra**, escolha um pedido com OS: o campo **OS** mostra a OS do pedido e não deixa
+trocar. Pela integração, mandar outra OS com o pedido responde *"A OS do recebimento tem de ser a do pedido (⟨número da OS do pedido⟩)"*
+(ou *"(sem OS)"*); OS inexistente, *"OS #⟨n⟩ não encontrada"*; OS fechada numa nota sem pedido, *"A OS ⟨número⟩ está ⟨status⟩ — não aceita
+entrada nova"*.
+
+**11. A lista de OS não carregou.** Se a lista falhar, o formulário diz *"Não foi possível carregar as OS abertas — o recebimento pode seguir
+sem OS."* e o recebimento é registrado sem OS.
+
+### O que esta etapa NÃO cobre
+
+- A **entrada manual** pela tela **Movimentações** com OS não reserva para a OS nem confere o dono (**D (176)**).
+- **Materiais de Clientes → Aplicado em** mostra as saídas **brutas** (a devolução não abate ali; o líquido está no **Consumo por OS**) e não
+  mostra a OS da **entrada** (**D (176)**).
+- A OS que troca de cliente **depois** de a reserva ter nascido **não** solta a reserva (**D (176)**).
+- A OS é escolhida **só na criação** do recebimento — os dados fiscais não a trocam (**B1155**).
+- **Nada a rodar antes do deploy:** a coluna nova do recebimento nasce sozinha no primeiro boot (provado em pasta vazia); os recebimentos
+  antigos ficam sem OS própria e continuam processando (**B1152**, **B1153**).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 176 entregue (2026-10-22):** **o recebimento informa a OS — material do cliente para industrialização fica com o trabalho dele.**
+  O novo recebimento ganha **OS (opcional)**; o que entra fica reservado para a OS, a requisição dela o leva, e a OS fechada o devolve ao
+  estoque do cliente (**B1150**); a OS efetiva é uma régua só — com pedido, a do pedido no momento da entrada (**B1151**); o dono é conferido:
+  sem pedido, a OS de outro cliente ou sem cliente é recusada (**B1152**); com pedido, entra livre (**B1153**, **C430**); e de novo sob a
+  trava, na hora de reservar (**B1154**). Commits `8d413593`, `2e6ef8ba` (plano), `c1c04e1b` e `e79b9718` (T1), `c871a128`, `0d227edb` (T2),
+  `b4232a84`, `f5c75c68` (T3), `b1781ad7`, a revisão adversarial `cf451bed`, `eb82e52b`, `928f5bd6`, `3ef8526b`, e o fechamento. **O que é
+  seu:** as decisões **B1150** a **B1157** (reversíveis — **a B1153 pede um olhar**: a nota de pedido com OS de outro cliente entra sem
+  avisar na tela); o aviso **C430**; a resposta do cliente à pergunta da **B1150**; os formulários de EPI (**B1157**); as limitações **(176)**
+  em D e a verificação **(176)** em F. **Próxima: Etapa 178 — entrega de EPI ao colaborador com assinatura na tela (NR-6); ver a "próxima
+  tarefa detalhada" no plano da Etapa 176.**
 
 - **Etapa 177 entregue (2026-10-22):** **o retorno da manutenção com a condição do item e o destino** — o item "condição após a manutenção,
   volta ao responsável ou descarte" do pedido de ferramentas/EPI da usuária. Concluir a manutenção pede **Condição** e **Destino**; a **baixa**

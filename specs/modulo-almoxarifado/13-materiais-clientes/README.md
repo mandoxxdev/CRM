@@ -1,5 +1,7 @@
 # 13 — Materiais Pertencentes a Clientes
 
+> **+ Etapa 176 (2026-10-22, `c1c04e1b`..`928f5bd6`): o recebimento informa a OS (opcional) — o material de cliente que entra com OS fica reservado para ela; o dono é conferido (sem pedido, OS de outro cliente ou sem cliente → 400; com pedido, entra livre — B1153; e de novo sob a trava, B1154). O Objetivo abaixo ESTAVA ERRADO ("projeto e documento em toda entrada")** — ver a seção "Etapa 176", no fim. O status não muda.
+
 > **+ Etapa 174 (2026-10-22, `4b8945a1`, Fase 5 `c3655b0f`): a posição por cliente passa a mostrar em *Aplicado em* as entregas por requisição ligadas a uma OS cadastrada; com projeto e OS de clientes diferentes, só o projeto (B1115)** — ver a seção "Etapa 174", no fim. O status não muda.
 
 > **+ Etapa 170 (2026-10-20, `3fb6aa0e`): o *Gerado em* do PDF de posição do cliente no dia de quem gera (B1082)** — ver a seção "Etapa 170", no fim. O status não muda.
@@ -23,7 +25,14 @@
 
 ## Objetivo
 
-Saldo de material de cliente totalmente segregado do próprio, com proprietário, projeto e documento em toda entrada, aplicação em toda saída e posição de estoque por cliente.
+Saldo de material de cliente totalmente segregado do próprio, com proprietário em toda entrada, documento na entrada **pelo recebimento**, aplicação em toda saída e posição de estoque por cliente.
+
+> **Correção (Etapa 176): este Objetivo dizia "com proprietário, projeto e documento em toda entrada" — ESTAVA ERRADO, e desde a Etapa 8.**
+> **Projeto nunca foi exigido na entrada** (decisão 8 da Etapa 8: o mesmo cliente manda a mesma chapa para dois projetos; o projeto é exigido
+> na **saída** — `ownerRules.assertSaidaPermitida`). **O documento é exigido só pelo recebimento** (`receiptService.darEntradaEstoque`: *"…
+> exige numero de documento (nota de remessa) para dar entrada"*); a **entrada manual** pelo motor (`ENTRADA_MANUAL`, `POST /movimentacoes/v2`)
+> continua sem documento para material de cliente (medido, `materialClienteEntrada.api.test.js:139`; D (176)). A OS na entrada é **opcional**
+> (Etapa 176, B1150).
 
 ## O que já existe
 
@@ -359,3 +368,26 @@ entregas por requisição porque a SAÍDA da entrega agora grava o `os_id` da re
   `GET /api/almoxarifado/materiais-cliente/posicao`, nos dois cenários).
 - [ ] **Fora:** as entregas antigas não ganham a OS (B1118) — a posição continua mostrando-as só se tinham projeto; requisição que só digita o
   número da OS não leva a OS.
+
+## Etapa 176 — o recebimento informa a OS (material de cliente para industrialização) (2026-10-22)
+
+Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa176-recebimento-com-os.md`. Origem: a resposta do cliente sobre industrialização
+(*"um estoque de materiais do cliente que ficam em nosso estoque"*); a pergunta "o material já vem para uma OS?" **aguarda resposta** — por
+isso a OS é opcional (B1150). **Não existe porta `ENTRADA_CLIENTE`**: material de cliente entra pelo recebimento normal como `ENTRADA_COMPRA`
+(o plano da 174 falava de "entrada de material de cliente" como outra porta — não é).
+
+- [x] **OS opcional no recebimento** (`recebimentos_material_almoxarifado.os_id`, criada no boot) e a régua única
+  `reservaDaOs.osDoRecebimento` (com pedido gravado, a OS **viva** do pedido; sem, a própria) — `c1c04e1b` (B1150, B1151).
+- [x] **O que entra com a OS fica reservado para ela** nas três portas (nota, inspeção, NC), a requisição da OS converte, a OS que fecha solta —
+  a mecânica da 171, agora também para a NF sem pedido — `c1c04e1b`; ponta a ponta até a posição do cliente em `f5c75c68`.
+- [x] **Guarda do dono** (`ownerRules.problemasDoDonoComOs`): sem pedido, com a OS aberta, material de cliente com OS de outro cliente →
+  400 *"Material ⟨codigo⟩ pertence ao cliente ⟨X⟩, mas a OS ⟨numero⟩ é do cliente ⟨Y⟩"*; OS sem cliente → *"… mas a OS ⟨numero⟩ não tem
+  cliente"*; um item ruim recusa a nota inteira; de novo na pré-checagem do processamento (dono trocado no meio) — `c1c04e1b`; restrita ao
+  recebimento sem pedido e à OS aberta em `cf451bed` (B1152, B1153 — **a T1 recusava também o pedido, e isso travava o pedido parcialmente
+  recebido**).
+- [x] **O dono conferido sob a trava** na criação da reserva da OS (`reservarParaOsSobTrava`): não casa → não reserva, material livre —
+  `eb82e52b` (B1154; a OS troca de cliente pela rota core — o plano dizia que não, **estava errado**).
+- [x] **Posição por cliente** (`/materiais-cliente/posicao`) com a aplicação na OS e a OS que fecha devolvendo ao estoque **do cliente**
+  (segregado da posição de estoque próprio) — provado em `f5c75c68`, sem mudar `clienteEstoqueService`.
+- [ ] **Fora (D (176)):** a `ENTRADA_MANUAL` com OS não reserva nem confere o dono; *Aplicado em* é bruto (não abate devolução) e não mostra a
+  OS da entrada; a troca de cliente da OS depois da reserva criada não a solta.

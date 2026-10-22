@@ -1,5 +1,7 @@
 # 07 — Reservas de Estoque
 
+> **+ Etapa 176 (2026-10-22, `c1c04e1b`, Fase 5 `eb82e52b`): a reserva da OS nasce também da NF sem pedido com OS, e o dono do material é conferido sob a trava antes de reservar (B1154)** — ver a seção "Etapa 176", no fim. O status não muda.
+
 > **Status:** 🟢 Etapa 4 completa — backend (2026-08-05) e tela (2026-08-06) ·
 > **Spec original:** seção 7
 > **Última atualização:** 2026-10-22 (**Etapa 172** — a reserva criada para a requisição grava o `os_id` dela (antes sempre `null`) e a requisição com `os_id` converte a reserva da OS **pelo id**, sem olhar o texto (`033f1164`). Continua 🟢. Ver a seção da Etapa 172 no fim.)
@@ -614,3 +616,18 @@ Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa172-requisicao-com-o
   `relatorioReservadoPorOS` — `033f1164`.
 - [x] **RN-172.04** — a conversão da reserva da OS na aprovação e a fila da OS na chegada casam a requisição com `os_id` **só** pelo id — `033f1164`.
 - [x] ~~**Fora:** a saída da entrega não leva o `os_id` (I5, Etapa 174).~~ Feita na Etapa 174 (`4b8945a1`; a I5 estava errada — feature 22).
+
+## Etapa 176 — a reserva da OS também para a NF sem pedido, e o dono conferido sob a trava (2026-10-22)
+
+Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa176-recebimento-com-os.md`.
+
+- [x] **RN-176.05** — `reservaDaOs.osAbertaDoRecebimento` lê a OS por `osDoRecebimento` (o pedido primeiro, senão a OS própria do
+  recebimento): a NF de material de cliente sem pedido com OS gera a reserva da OS nas três portas (nota, inspeção, NC) — `c1c04e1b`.
+- [x] **RN-176.06 / M5** — `PREDICADO_RESERVA_DA_OS` com uma definição (`osEncerradaService` reexporta a de `reservaDaOs.js`) — `c1c04e1b`.
+- [x] **I3** — a regra do dono da fila de chegada vê a OS (projeto primeiro, depois a OS — precedência da 174): requisição da OS sem projeto,
+  aprovada antes da nota, é servida — `c1c04e1b`.
+- [x] **M1** — a conversão na aprovação confere o dono antes de converter (projeto do cliente B + OS do cliente A não converte) — `c1c04e1b`.
+- [x] **Fase 5 (B1154)** — `reservarParaOsSobTrava` relê **sob a trava** o dono do material e o cliente da OS (`problemasDoDonoComOs`), depois
+  do teto de quantidade; não casa → não reserva (o material fica livre) e loga — `eb82e52b`. Teste: a OS troca de cliente entre a chegada e a
+  inspeção → a inspeção não reserva.
+- [ ] **Fora (D (176)):** a OS que troca de cliente **depois** de a reserva nascer não a solta (liberar à mão em **Reservas**).

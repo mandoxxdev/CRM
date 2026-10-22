@@ -1,13 +1,19 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-22 (Etapas 172, 173, 174, 175 e 177) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-22 (Etapas 172 a 177) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175 e 177) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176 e 177) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172 a 175 e 177 ENTREGUES · em andamento: Etapa 176)
+> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172 a 177 ENTREGUES · próxima: Etapa 178)
 >
-> **O desenvolvimento parou aqui: Etapa 177 fechada — 2026-10-22** (a 176 está em andamento em outra frente). **O retorno da manutenção com
+> **O desenvolvimento parou aqui: Etapa 176 fechada — 2026-10-22.** **O recebimento informa a OS**: no **Novo Recebimento**, o campo
+> **OS (opcional)**; o material que entra com a OS fica reservado para ela, só a requisição dela o leva, e a OS que fecha o devolve ao estoque
+> do cliente; chapa do cliente A não entra para a OS do cliente B (nota sem pedido); a nota de pedido com OS de outro cliente entra livre
+> (aviso **C430**). Nada a rodar antes do deploy. **Próxima: Etapa 178** — entrega de EPI ao colaborador com assinatura na tela (NR-6); os
+> formulários de EPI da empresa ainda não chegaram — ver a próxima tarefa no plano da 176.
+>
+> **Etapa 177, 2026-10-22.** **O retorno da manutenção com
 > a condição do item e o destino**: concluir a manutenção de uma ferramenta pede a **condição** e o **destino** (*Volta ao uso* ou *Baixa*);
 > a baixa deixa a ferramenta **Baixada** — fora de circulação e do painel de calibrações, com histórico — e se desfaz com **Reverter baixa**.
 > Nada a rodar antes do deploy.
@@ -16,8 +22,7 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > requisições**: a entrega da requisição com **OS cadastrada** entra no relatório, que ganha **Devolvido** e **Líquido** (a devolução para
 > sucata não conta; com período, o líquido pode ser negativo); material de cliente sai pela OS do próprio cliente e **Materiais de Clientes**
 > mostra a OS em **Aplicado em**. Só as entregas feitas depois desta versão contam (aviso **C429**). Nada a rodar antes do deploy.
-> **Próxima: Etapa 176** — entrada de material de cliente com OS opcional (o que entra fica reservado para a OS); ver a próxima tarefa no
-> plano da 174.
+> A próxima era a **176** (feita — acima).
 >
 > **Etapa 175, 2026-10-22.** **Editar a ferramenta pela tela**: botão **Editar** em toda linha de **Almoxarifado → Ferramentas**, em
 > qualquer status; campo apagado apaga o gravado; patrimônio de outra ferramenta recusado. Só tela; nada a rodar antes do deploy. Próxima
@@ -6869,6 +6874,55 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 176 — O recebimento informa a OS: material do cliente para industrialização (ENTREGUE — 2026-10-22)
+
+**O que mudou, em uma frase:** ao registrar um recebimento, o almoxarife pode escolher a **OS** (opcional), e o material que entra fica
+reservado para essa OS — só a requisição dela o leva.
+
+**O problema que ela resolve.** Na industrialização, o cliente manda o material dele e a empresa faz a mão de obra. A chapa do cliente
+chegava com a nota de remessa e entrava no estoque **sem trabalho nenhum**: nada dizia para qual OS ela tinha vindo, e nada impedia que a
+chapa de um cliente fosse parar na OS de outro. A pergunta *"o material do cliente já vem para uma OS específica?"* foi feita ao cliente e
+aguarda resposta — por isso o campo é opcional (**B1150**).
+
+| Antes | Agora |
+|---|---|
+| **Novo Recebimento** sem campo de OS | **OS (opcional)**, com as OS abertas e **Sem OS** |
+| A chapa do cliente entrava sem trabalho | Com a OS, fica reservada para ela (aparece em **Reservas**) e a requisição da OS a leva |
+| Chapa do cliente A podia ir para a OS do cliente B | Nota sem pedido com OS de outro cliente ou sem cliente: recusada ao salvar |
+| Recebimento de pedido: a OS do pedido não aparecia | O campo mostra a OS do pedido, travado |
+| Lista e detalhe sem OS | Coluna **OS** e campo **OS** |
+
+**Roteiro de teste (15 minutos — com um usuário Administrador ou Almoxarife).** Prepare: um cliente *Metalúrgica X*; um material dele
+(**Almoxarifado → Materiais**, **Proprietário** = *Metalúrgica X*, ex.: *CHP-176*, sem saldo); uma OS aberta da *Metalúrgica X*
+(**Fábrica → Ordens de Serviço → Nova OS**, ex.: *OS-2026-176*) e uma OS aberta de outro cliente (*OS-2026-177*).
+
+1. **Material com dono → recebimento com OS.** **Almoxarifado → Recebimentos → Novo Recebimento**, forma **Nota fiscal**, nota
+   *NF-REM-176*, fornecedor *Metalúrgica X*, material *CHP-176* com 10. No campo **OS (opcional)** escolha *OS-2026-176 — Metalúrgica X*.
+   **Registrar Recebimento**: a lista mostra *OS-2026-176* na coluna **OS**; abrindo o recebimento, o campo **OS** também.
+2. **Recusa pelo dono.** Novo recebimento igual, mas com a *OS-2026-177*: o aviso vermelho do formulário diz *"Material CHP-176 pertence ao
+   cliente Metalúrgica X, mas a OS OS-2026-177 é do cliente ⟨outro cliente⟩"* e nada é gravado. Feche sem salvar.
+3. **Processar.** No recebimento do passo 1, avance as etapas (**Iniciar conferência** … **Encaminhar para Compras**, **Encaminhar para
+   Faturamento**, **Iniciar entrada de NF**, dados fiscais) e **Processar Nota — Estoque + Contas a Pagar** → **Confirmar**.
+4. **Reserva.** **Almoxarifado → Reservas**: a reserva de 10 de *CHP-176*, origem *MANUAL*, destino a *OS-2026-176*, sem validade. O
+   disponível de *CHP-176* é 0.
+5. **Requisição.** **Almoxarifado → Requisições (almox.) → Nova Requisição**, **OS cadastrada** = *OS-2026-176*, 8 de *CHP-176*, sem
+   projeto. Envie e aprove: *Totalmente Reservada* (sobra 2 reservado para a OS em **Reservas**).
+6. **Entrega.** Separe e entregue os 8.
+7. **Posição por cliente.** **Almoxarifado → Materiais de Clientes**, cliente *Metalúrgica X*: **Recebido** 10, **Consumido** 8, **Saldo**
+   2, **Aplicado em** a *OS-2026-176* com 8. Escolha o outro cliente: *CHP-176* não aparece. **Relatórios → Consumo por OS**: 8 / 0 / 8.
+8. **Pedido.** Novo recebimento, forma **Pedido de compra**, escolha um pedido que tenha OS: o campo **OS** mostra a OS do pedido e não deixa
+   trocar. Volte a forma para **Nota fiscal**: o campo volta para **Sem OS** (a OS escolhida antes não reaparece).
+9. **A OS fecha.** Cancele ou conclua a *OS-2026-176*: em **Reservas**, os 2 que sobraram são liberados com *"OS OS-2026-176 ⟨status⟩ —
+   material volta ao estoque"*; *CHP-176* continua na posição da *Metalúrgica X*.
+
+**O que esta etapa não cobre.** A **entrada manual** (Movimentações) com OS não reserva nem confere o dono. A nota **de pedido** com material
+de cliente para uma OS de outro cliente (ou sem cliente) **entra livre**, sem reservar e sem avisar na tela (**B1153**, aviso **C430** —
+confira **Reservas** depois de processar). A OS que troca de cliente depois de a reserva nascer não a solta. **Aplicado em** mostra o que saiu
+(não abate devolução). Nada a rodar antes do deploy.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos provam pelas rotas do servidor (ponta a ponta,
+do recebimento à posição do cliente) e a tela em jsdom, escrito para você conferir à mão.
 
 ## Etapa 177 — O retorno da manutenção: a condição do item e o destino (ENTREGUE — 2026-10-22)
 

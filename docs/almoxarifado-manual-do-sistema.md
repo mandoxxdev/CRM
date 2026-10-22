@@ -2467,8 +2467,15 @@ Três operações põem material no disponível e o distribuem para quem esperav
 
 ### 9.3e Material comprado para uma OS — fica com a OS
 
-Quando o pedido de compra foi feito **para uma OS** (14b.2b), o material que chega dele é dessa OS: fica reservado para ela, só a requisição
-dela o leva, e volta ao estoque comum se a OS for cancelada ou concluída.
+Quando o pedido de compra foi feito **para uma OS** (14b.2b), ou o recebimento sem pedido foi registrado **com uma OS** (14.1e — o material do
+cliente para industrialização), o material que chega é dessa OS: fica reservado para ela, só a requisição dela o leva, e volta ao estoque
+comum (o do dono, se for material de cliente) se a OS for cancelada ou concluída. Tudo o que esta seção diz da "OS do pedido" vale igual para a
+OS do recebimento.
+
+**Material de cliente só fica reservado para a OS do próprio cliente.** Na hora de reservar (na chegada, na inspeção, na não conformidade), o
+sistema confere o proprietário do material e o cliente da OS como estão **naquele instante**; se não casam (a OS é de outro cliente ou não tem
+cliente — inclusive porque o cliente da OS foi trocado depois da chegada), a reserva da OS **não** nasce e o material fica livre. Uma reserva da
+OS que já existia **não** é solta se o cliente da OS for trocado depois — libere-a em **Reservas** (9.6).
 
 **A requisição "da OS".** A requisição com uma **OS cadastrada** escolhida (7.2) é da OS escolhida — e só dela, qualquer que seja o texto. A
 requisição sem OS cadastrada tem só o campo de texto **Número da OS** (7.2), e o sistema considera a
@@ -3503,6 +3510,43 @@ fica como estava. Escolher o fornecedor copia o nome e o CNPJ para o recebimento
 o mesmo campo — *"Buscar terceiro (nome ou CNPJ)..."* —, e o terceiro já escolhido continua no seletor mesmo que uma busca seguinte não o
 traga. Fornecedor inativo não aparece. Trocar o filtro da lista de recebimentos recarrega só a lista; os materiais, os pedidos de compra
 pendentes e os fornecedores do formulário são carregados ao abrir a tela.
+
+### 14.1e A OS do recebimento — o material que chega para um trabalho
+
+O formulário do **Novo Recebimento** tem o campo **OS (opcional)**. Ele serve, sobretudo, para o material **do cliente** que chega para
+industrialização (16.6): escolhida a OS, tudo o que entra por esse recebimento fica **reservado para a OS** (9.3e).
+
+- **Nota fiscal (sem pedido):** o campo lista as OS **abertas** (as canceladas, concluídas e encerradas não aparecem), cada uma como
+  *número — cliente* (ou só o número, se a OS não tem cliente), e a opção **Sem OS**. A lista é carregada ao abrir o formulário; se não
+  carregar, o formulário avisa *"Não foi possível carregar as OS abertas — o recebimento pode seguir sem OS."* e o recebimento é registrado
+  sem OS. Trocar a forma de recebimento limpa a OS escolhida.
+- **Pedido de compra:** a OS é a **do pedido** (14b.2b). O campo mostra a OS do pedido escolhido (ou **Sem OS**) e não deixa trocar. A OS que
+  vale é a do pedido **no momento em que a nota é processada** — se o comprador trocar a OS do pedido antes disso, vale a nova.
+- A OS se escolhe **só ao registrar** o recebimento; os dados fiscais não a trocam. Ligar, pelos dados fiscais, um pedido de compra a um
+  recebimento que tinha OS própria só é aceito se a OS do pedido for a mesma (e aí passa a valer a do pedido); senão: *"A OS do recebimento tem
+  de ser a do pedido (⟨número da OS do pedido⟩)"* — ou *"(sem OS)"*, se o pedido não tem OS.
+- A lista de recebimentos tem a coluna **OS** e o detalhe, o campo **OS** (*—* sem OS; *OS #⟨n⟩* se a OS foi apagada).
+
+**O dono do material e o cliente da OS.** Material de cliente (2.8) só entra para uma OS **do mesmo cliente**. Num recebimento **sem pedido**
+com OS aberta, ao salvar, cada item de material de cliente é conferido — e um item que não casa recusa o recebimento **inteiro**, sem gravar
+nada:
+
+> *"Material ⟨código⟩ pertence ao cliente ⟨dono⟩, mas a OS ⟨número⟩ é do cliente ⟨cliente da OS⟩"*
+>
+> *"Material ⟨código⟩ pertence ao cliente ⟨dono⟩, mas a OS ⟨número⟩ não tem cliente"*
+
+(com vários itens ruins, as frases vêm juntas, separadas por *;*). Material **próprio** entra com a OS de qualquer cliente e com OS sem
+cliente. A mesma conferência roda de novo no **Processar Nota** (o proprietário do material pode ter sido trocado entre registrar e
+processar), com a frase precedida de *"Nao foi possivel dar entrada no estoque: "*, e nada entra.
+
+Num recebimento **de pedido**, a conferência **não recusa**: o material de cliente cuja OS do pedido é de outro cliente, ou não tem cliente,
+**entra normalmente, mas livre** — sem reserva para a OS e sem aviso na tela. Depois de processar uma nota de pedido com material de cliente,
+confira em **Reservas** se a reserva da OS apareceu.
+
+**Outras recusas** (para quem registra pela integração, já que a tela só oferece OS abertas): OS que não existe — *"OS #⟨n⟩ não
+encontrada"*; OS fechada numa nota sem pedido — *"A OS ⟨número⟩ está ⟨situação⟩ — não aceita entrada nova"*; OS diferente da do pedido —
+*"A OS do recebimento tem de ser a do pedido (⟨número⟩)"* (ou *"(sem OS)"*); valor que não é um número de OS — *"Dados inválidos — os_id: OS
+inválida"*. A nota de **pedido** cuja OS já fechou não é recusada: entra como estoque (9.3e).
 
 ### 14.2 O caminho do recebimento até o estoque
 
@@ -5502,6 +5546,14 @@ Material de cliente entra pela tela normal de **Recebimentos**, com uma exigênc
 
 > *"CHP-0001: material do cliente Metalúrgica X exige numero de documento (nota de remessa) para dar entrada"*
 
+O documento é exigido **no recebimento**; a entrada lançada à mão em **Movimentações** não o exige (nem para material de cliente).
+
+**A OS na entrada — material de cliente para industrialização.** Quando o cliente manda o material para um trabalho, escolha a **OS** no
+recebimento (14.1e): o que entra fica reservado para essa OS (9.3e) e só a requisição dela o leva; a OS tem de ser **do mesmo cliente** dono do
+material (nota sem pedido com OS de outro cliente, ou sem cliente, é recusada ao salvar). A OS é **opcional**: sem ela, o material entra no
+estoque do cliente e sai por qualquer requisição com OS ou projeto desse cliente (16.4). A entrada lançada à mão em **Movimentações** com OS
+**não** reserva para a OS nem confere o dono.
+
 **Projeto não é exigido na entrada** — e isso é intencional. O mesmo cliente manda a mesma chapa para dois projetos diferentes; exigir projeto na entrada obrigaria a cadastrar dois materiais idênticos para o mesmo item físico do mesmo dono. O projeto é exigido na **saída**, que é onde ele existe de verdade.
 
 Material **nosso** continua podendo entrar sem nota (entrada manual, devolução, ajuste de inventário).
@@ -5556,7 +5608,7 @@ Em **Almoxarifado → Materiais de Clientes**, escolhe-se o cliente e o sistema 
 | **Consumido** | tudo que saiu por aplicação, perda, sucata, consumo em terceiro e devolução ao fornecedor |
 | **Devolvido** | o que voltou para o cliente (coluna separada, de propósito) |
 | **Saldo** | o que está no galpão agora |
-| **Aplicado em** | a lista de OS e projetos onde aquele material foi usado, com a quantidade de cada — inclusive o que saiu por entrega de requisição, pela OS cadastrada e pelo projeto da requisição (16.4) |
+| **Aplicado em** | a lista de OS e projetos onde aquele material foi usado, com a quantidade de cada — inclusive o que saiu por entrega de requisição, pela OS cadastrada e pelo projeto da requisição (16.4). É o que **saiu**: a devolução não abate aqui (o líquido da OS está no relatório **Consumo por OS**), e a OS escolhida na entrada (14.1e) não aparece — só onde foi aplicado |
 
 Os números **saem do livro de movimentações**, não de contadores paralelos: a conta que o cliente faz de cabeça — **recebido − consumido − devolvido = saldo** — fecha. Movimentações estornadas não contam (o estorno é visível no livro, mas não pesa na posição). Material de cliente **inativo** não aparece nesta tela nem no relatório — por isso o sistema não deixa inativar material com saldo (2.11): o caminho é devolver ao cliente antes.
 
