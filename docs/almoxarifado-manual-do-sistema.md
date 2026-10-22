@@ -1351,6 +1351,7 @@ A separação entre **Almoxarife** e **Gestor** é intencional e é o desenho de
 | Movimentar estoque | ● | ● | – | – | – | – | – | – |
 | Gerenciar ferramentas (emprestar, calibrar, bloquear...) | ● | ● | – | – | – | – | – | – |
 | Entregar EPI — e ver a lista, as fichas, a verificação e a lista de colaboradores da entrega de EPI | ● | ● | – | – | – | – | – | – |
+| Editar o texto do termo de responsabilidade (de ferramenta) | ● | – | – | – | – | – | – | – |
 | Aprovar sucateamento (perna do almoxarifado) | ● | ● | – | – | – | – | – | – |
 | Aprovar sucateamento (perna da gestão) | ● | – | – | – | – | ● | – | – |
 | Ajustar estoque | ● | – | – | – | – | ● | – | – |
@@ -1382,9 +1383,10 @@ As leituras que essa tabela permite fazer, e que vale explicar a quem pergunta:
   hoje: ferramenta é patrimônio emprestável, não estoque (seção 21), e a permissão existe separada
   de propósito — dá para autorizar um perfil só para ferramentas, sem abrir movimentação de
   material, se um dia isso for pedido.
-- **Entregar EPI é a única ação do módulo que vale também para LER.** A lista de entregas, a ficha de EPI (com o CPF mascarado, a matrícula
-  e a imagem da assinatura), a verificação e a lista de colaboradores da entrega de EPI não são do **Visualizar** de todos: só quem entrega
-  as vê (21-bis.1).
+- **Entregar EPI e Gerenciar ferramentas valem também para LER o que tem assinatura.** A lista de entregas, a ficha de EPI (com o CPF
+  mascarado, a matrícula e a imagem da assinatura) e a verificação não são do **Visualizar** de todos: só quem entrega as vê (21-bis.1). Do
+  mesmo jeito, a lista de empréstimos de ferramenta, o termo de responsabilidade e a verificação dele são só de quem gerencia ferramentas
+  (21.6). A lista de colaboradores (usada na entrega de EPI e no empréstimo) e a verificação da cadeia aceitam **uma das duas** permissões.
 - **Ajustar material de cliente é mais restrito que ajustar o estoque próprio.** O Gestor acerta o saldo da GMP — pela conclusão da conferência de inventário com ajuste (13) e pelo estorno de um ajuste errado (6.10); lançar um Ajuste em Movimentações pede também **Movimentar estoque**, que o Gestor não tem —; **apenas o Administrador** ajusta o saldo de material que pertence a um cliente — e só ele **estorna** um ajuste desse material, porque o estorno devolve o saldo ao de antes (16.8), e só ele **troca o dono** de um material que já se movimentou, porque a troca leva o saldo e o histórico de um dono para o outro (16.2). O motivo é direto: aquele número é o que o cliente vai conferir e cobrar.
 - **Reservar para outra OS** é separado de **Reservar**. Qualquer requisitante reserva material para a própria ordem; transferir uma reserva de uma OS para outra é decisão de priorização, e fica com o Administrador e o Gestor. A reserva que nasceu de uma **requisição** não se transfere — ela pertence à requisição (9.5).
 - **Liberar a reserva de uma requisição** exige, além de **Reservar**, ser **quem pediu a requisição** — e só antes de a separação começar — ou ter esta permissão própria, que é do **Administrador** e do **Almoxarife** (9.6). É a única regra do módulo que olha **quem é a pessoa**, e não só o perfil: o perfil Produção reserva e libera as reservas manuais, mas não solta o material que foi separado para a requisição de outra pessoa. O **Gestor** não a tem porque não tem **Reservar** (a rota de liberar exige as duas); ele solta tudo de uma requisição pelo **Encerrar Requisição**.
@@ -6195,19 +6197,53 @@ altera saldo de nenhum material, não gera entrada nem saída no livro de movime
 com um material do catálogo (campo opcional) é só referência — não é controle de estoque.
 
 Cada ferramenta tem um destes status: **Disponível**, **Emprestada**, **Bloqueada**, **Em
-manutenção**, **Avariada** ou **Perdida**. Só existe um caminho entre dois status por vez — por
+manutenção**, **Avariada**, **Perdida** ou **Baixada** (21.5). Só existe um caminho entre dois status por vez — por
 exemplo, uma ferramenta emprestada não pode ser bloqueada diretamente; ela precisa voltar a
 disponível primeiro (com a devolução).
 
 ### 21.2 O ciclo de empréstimo
 
-Emprestar registra o colaborador (nome obrigatório; setor e data prevista de devolução são
-opcionais) e muda a ferramenta para **Emprestada**. Essa mudança é **atômica**: se duas pessoas
-tentarem emprestar a mesma ferramenta ao mesmo instante, exatamente uma consegue — a outra recebe
-a recusa abaixo, nunca as duas ficam "donas" da mesma ferramenta.
+Todo empréstimo é feito **com o termo de responsabilidade assinado** (21.2b), com o colaborador presente. **Emprestar** (na linha da
+ferramenta) abre a janela *"Emprestar ferramenta"* com:
 
-Uma ferramenta que não está **Disponível** recusa o empréstimo:
-> `Ferramenta não está disponível (status atual: <status>)`
+- **Colaborador** — a lista dos colaboradores **ativos** do cadastro da Fábrica, mostrando *nome (setor)*; **sem** a matrícula, de propósito: é
+  ela que o colaborador vai digitar. Não existe empréstimo para nome digitado: quem não está no cadastro precisa ser cadastrado. O nome e o
+  setor gravados no empréstimo são os do cadastro naquele momento;
+- **Data prevista de devolução** e **Observações** (até 1000 caracteres), opcionais;
+- o **texto do termo** vigente, com rolagem, sob o título *"Termo de responsabilidade — versão ⟨n⟩"* (e o selo *"Texto provisório"*, se for o
+  caso — 21.2b);
+- **Assinatura do colaborador** — ele assina no quadro e toca **Confirmar assinatura** (*"Assinatura confirmada"*; **Refazer assinatura**
+  descarta);
+- **Matrícula — digitada pelo colaborador** — ele digita a própria matrícula.
+
+**Emprestar** muda a ferramenta para **Emprestada** e responde *"Ferramenta emprestada — termo ⟨número⟩ assinado"*. A mudança é **atômica**:
+se duas pessoas tentarem emprestar a mesma ferramenta ao mesmo instante, exatamente uma consegue — nunca as duas ficam "donas" da mesma
+ferramenta; e o empréstimo, o termo e a assinatura são gravados juntos ou nenhum é.
+
+O sistema confere, e recusa com a mensagem:
+
+| O que confere | Mensagem |
+|---|---|
+| Colaborador escolhido (a tela) | *"Selecione o colaborador"* |
+| Assinatura feita | *"A assinatura do colaborador é obrigatória"* |
+| A assinatura é uma imagem PNG de verdade (a tela sempre manda PNG) | *"A assinatura deve ser uma imagem PNG"* |
+| Colaborador existente e ativo | *"O colaborador é obrigatório"*, *"Colaborador #⟨id⟩ não encontrado"*, *"Colaborador ⟨nome⟩ não está ativo"* |
+| O colaborador tem matrícula no cadastro | *"Colaborador ⟨nome⟩ sem matrícula cadastrada — não é possível confirmar a identidade"* |
+| A matrícula foi digitada | *"O colaborador deve digitar a própria matrícula para assinar o termo"* |
+| A matrícula digitada é a do cadastro (maiúscula/minúscula e espaços não contam; zero à esquerda conta) | *"A matrícula informada não confere com a do colaborador"* |
+| O texto que o colaborador leu ainda é o vigente | *"O texto do termo mudou (versão ⟨n⟩) — releia e assine de novo"* (21.2b) |
+| Data prevista válida; observações até 1000 | *"Data prevista de devolução inválida"*, *"Observações deve ter no máximo 1000 caracteres"* |
+| Calibração vigente, quando a ferramenta exige (21.3) | *"Ferramenta com calibração vencida ou sem calibração registrada"* |
+| A ferramenta está **Disponível** | *"Ferramenta não está disponível (status atual: ⟨status⟩)"* |
+| Ninguém a emprestou no mesmo instante | *"A ferramenta não está disponível"* |
+
+Nenhuma recusa grava nada (nem a imagem da assinatura fica no servidor). Se a gravação falhar por um erro do banco, a resposta diz que
+*nada foi gravado* e que pode tentar de novo.
+
+**Tocar "Emprestar" de novo não duplica.** Cada tentativa leva uma chave; se a resposta se perder, a tela diz *"Sem resposta do servidor — o
+empréstimo pode ter sido registrado. Toque em "Emprestar" de novo: o reenvio não duplica."*, e o novo toque, se o primeiro tinha chegado —
+mesmo que ainda estivesse sendo gravado —, responde *"Empréstimo já estava registrado (termo ⟨número⟩) — o envio repetido não duplicou"*.
+Mexer em qualquer campo ou refazer a assinatura começa uma tentativa nova.
 
 Devolver fecha o empréstimo (fica registrada a data real de devolução) e a ferramenta volta a
 **Disponível**, liberada para um novo empréstimo. Tentar devolver um empréstimo que já foi
@@ -6216,7 +6252,44 @@ fechado (ou que não existe) recusa com:
 
 A tela de Empréstimos destaca os que já passaram da data prevista de devolução — isso é um
 **aviso visual**, não um bloqueio: a ferramenta continua emprestada normalmente até alguém
-devolvê-la ou registrar uma ocorrência sobre ela.
+devolvê-la ou registrar uma ocorrência sobre ela. A devolução não pede assinatura.
+
+### 21.2b O termo de responsabilidade
+
+**O texto.** O texto que o colaborador lê e assina é do **Administrador**, na aba **Texto do termo** da tela de Ferramentas (só ele a vê).
+A aba mostra *"Versão vigente: ⟨n⟩"*, quando e por quem foi salva, o campo **Texto do termo** (até 20000 caracteres) e o **Histórico** com o
+texto de cada versão. **Salvar nova versão** cria a versão seguinte — *"Versão ⟨n⟩ do termo salva — os próximos empréstimos assinam este
+texto"* — e nenhuma versão se edita nem se apaga. Recusas: *"O texto do termo é obrigatório"* (vazio ou só espaços), *"O texto do termo deve
+ter no máximo 20000 caracteres"*, *"O texto é igual ao da versão vigente"* (espaços nas pontas não contam) e, se outro administrador salvou
+uma versão depois que a sua tela abriu, *"Outra versão do termo acabou de ser salva — recarregue"* (a tela recarrega a vigente e o histórico e
+mantém o seu texto no campo). O sistema vem com uma versão 1 que começa por *"TEXTO PROVISÓRIO — substituir pelo termo da empresa."*: enquanto
+um texto que comece assim for o vigente, a tela mostra o selo **Texto provisório** no empréstimo e nos termos assinados com ele. **Antes de
+usar o empréstimo, o administrador salva o texto aprovado pela empresa.**
+
+**O texto que muda no meio.** O colaborador assina o texto que viu. Se uma versão nova for salva entre a abertura da janela de empréstimo e o
+**Emprestar**, o empréstimo é recusado (*"O texto do termo mudou (versão ⟨n⟩) — releia e assine de novo"*), a tela avisa *"O texto do termo
+mudou — releia e assine de novo"*, mostra o texto novo e descarta a assinatura.
+
+**O que fica guardado.** No ato do empréstimo o sistema grava o **termo** (número *TERMO-…*), que **não se edita nem se apaga** — nem pela tela,
+nem direto no banco (o banco recusa): a ferramenta como estava (patrimônio, número de série, nome), o colaborador como estava no cadastro
+(nome, matrícula, setor), a versão do texto e a impressão digital desse texto, a data prevista, quem registrou e a hora **do servidor**; e a
+**evidência** da assinatura — a imagem, que a identidade foi confirmada pela matrícula, o endereço de rede e o aparelho (navegador) de onde
+veio. Por ser uma fotografia, editar a ferramenta depois (outra série, outro nome), devolver ou registrar avaria/perda **não** muda o termo: ele
+mostra o que foi assinado.
+
+**Ver o termo.** Na aba **Empréstimos** (só para quem gerencia ferramentas — 21.6), a coluna **Termo** tem o botão **Termo**; os empréstimos
+feitos antes da exigência mostram *"Anterior à exigência do termo"* (pela integração: *"Este empréstimo não tem termo assinado (anterior à
+exigência)"*). O termo mostra: **Versão do texto**, **Ferramenta**, **Colaborador** (com matrícula e setor), **Matrícula confirmada pelo
+colaborador** (*"Sim — digitou ⟨matrícula⟩ (confere com o cadastro)"*; a matrícula digitada não é gravada — só que ela conferiu), **Devolução
+prevista**, **Assinado em** (com quem registrou), o **Código de verificação**, o **texto da versão assinada** (não o vigente) e a imagem da
+assinatura. **PDF do termo** relê o termo e baixa *termo-⟨número⟩.pdf* com tudo isso; se a imagem da assinatura não carregar, ela sai como
+*"(imagem da assinatura indisponível)"* e a tela avisa.
+
+**Verificar integridade** (no termo) responde *"Íntegro"* ou *"Adulterado: ⟨motivo⟩"* — a mesma régua da entrega de EPI (21-bis.4): a impressão
+digital do arquivo, a do registro (com o segredo do servidor, que também tem de estar no backup do servidor) e os elos com o registro anterior
+e o seguinte, mais duas conferências próprias: *texto do termo alterado* (o texto guardado daquela versão não é mais o que foi assinado) e
+*empréstimo reapontado* (o empréstimo aponta hoje para outra ferramenta ou outro colaborador que não os do termo). Os termos fazem parte da mesma
+**cadeia** das entregas de EPI: **Verificar cadeia**, na tela de Entrega de EPI, confere os dois.
 
 ### 21.3 Calibração — o que trava o empréstimo
 
@@ -6346,8 +6419,11 @@ que foi salvo por último.
 baixa, reverter baixa, ocorrência, calibração, reencontrar) exige a permissão **Ferramentas** —
 Administrador ou Almoxarife (ver 5.5). Essa permissão é **independente** da permissão de
 movimentar estoque: é possível autorizar alguém a mexer em ferramentas sem autorizar a mexer no
-estoque de materiais, e vice-versa. Ler a lista de ferramentas e o histórico é livre para
-qualquer usuário autenticado, como todo GET do módulo.
+estoque de materiais, e vice-versa. Ler a lista de ferramentas, o histórico e o painel de calibrações é livre para
+qualquer usuário do módulo. **A aba Empréstimos, o termo e a verificação do termo**, não: mostram quem está com cada ferramenta, a matrícula
+e a assinatura, e exigem a mesma permissão **Ferramentas** — para os outros perfis a aba nem aparece. O relatório *Ferramentas emprestadas*
+(Relatórios) continua aberto a todos do módulo, sem matrícula nem assinatura. **Editar o texto do termo** (21.2b) é uma permissão separada,
+só do **Administrador**: quem colhe a assinatura não redige o compromisso.
 
 Toda ação de escrita fica registrada na auditoria do módulo, com o usuário responsável.
 
@@ -6445,10 +6521,13 @@ dentro da sua própria impressão. Apagar uma entrega deixa um buraco na numera�
 motivo é *arquivo ausente*, *arquivo alterado*, *registro alterado*, *registro anterior apagado*, *elo com o anterior quebrado*, *registro
 posterior apagado* ou *elo com o posterior quebrado*.
 
-**Verificar cadeia** (aba **Entregas**, no topo) percorre todas as evidências e responde *"Cadeia íntegra — ⟨n⟩ registros"* ou *"Cadeia com
-problema — ⟨n⟩ ocorrências"*, com uma linha por problema: *"#⟨número de ordem⟩ ⟨número da entrega⟩: ⟨motivo⟩"*, onde o motivo é *registro
-apagado* (o número de ordem que falta), *elo quebrado*, *arquivo ausente*, *arquivo alterado*, *registro alterado*, *entrega sem evidência*,
-*fora da cadeia* ou *registro apagado no fim da cadeia* (a última entrega sumiu).
+**Verificar cadeia** (aba **Entregas**, no topo) percorre todas as evidências — as das entregas de EPI **e** as dos termos de responsabilidade
+de ferramenta (21.2b), que dividem a mesma numeração — e responde *"Cadeia íntegra — ⟨n⟩ registros"* ou *"Cadeia com problema — ⟨n⟩
+ocorrências"*, com uma linha por problema: *"#⟨número de ordem⟩ ⟨número da entrega ou do termo⟩: ⟨motivo⟩"*, onde o motivo é *registro apagado*
+(o número de ordem que falta), *elo quebrado*, *arquivo ausente*, *arquivo alterado*, *registro alterado*, *entrega sem evidência*, *fora da
+cadeia*, *registro apagado no fim da cadeia* (a última evidência sumiu), e, dos termos, *termo sem evidência*, *texto do termo alterado*,
+*termo apagado no fim da tabela* e *empréstimo reapontado*; *contexto desconhecido* aparece só se houver uma evidência de um tipo que o servidor
+não sabe conferir (não é prova de adulteração). O botão fica nesta tela (que é de quem entrega EPI); pela integração, a verificação da cadeia aceita também quem gerencia ferramentas.
 
 **O segredo do servidor precisa estar no backup do servidor.** Ele fica numa variável de ambiente do servidor ou num arquivo de segredos do
 diretório de dados, e o backup do sistema (Configurações → Backup) **não** o leva — de propósito, porque o mesmo arquivo guarda a chave dos

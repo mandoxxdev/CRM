@@ -7,6 +7,9 @@
 > Fase 2, execução T1/T2/T3, **Fase 5 — revisão adversarial** e a próxima tarefa).
 > Novidades: `docs/almoxarifado-novidades-por-etapa.md`, seção "Etapa 178", **A107**, **B1160** a **B1169**, **C431** a **C435**, **D (178)**,
 > **F (178)**.
+>
+> **+ Etapa 180 (2026-10-22, `2092806d`, Fase 5 `003de01b`): a cadeia de evidências ficou MULTI-CONTEXTO** — os termos de responsabilidade de
+> ferramenta (feature 16) entram na mesma `sequencia`, com o mesmo segredo. Ver a seção "Etapa 180", no fim. O status desta feature não muda.
 
 ## Por que é uma feature nova (25) e não a 16 nem a 05
 
@@ -33,8 +36,9 @@ A "Requisição de EPI" (5.1) **não** foi feita: fica registrada aqui como item
 - **Evidência** (`evidencias_assinatura_almoxarifado`, genérica): snapshot do colaborador, `arquivo_sha256`, **`registro_sha256` = HMAC-SHA256**
   com segredo fora do banco (`runtimeSecrets.resolveEvidenciaAssinaturaSecret`), **`sequencia`** (UNIQUE) + **`hash_anterior`** (cadeia),
   `confirmado_por_matricula`, `ip`, `user_agent`. As duas tabelas são **append-only** (triggers `BEFORE UPDATE/DELETE`).
-- **Leituras** (todas com `entregar_epi`): `GET /epi/entregas`, `GET /epi/entregas/:id/verificar`, `GET /epi/cadeia/verificar`,
-  `GET /epi/ficha/:colaborador_id`, `GET /aux/colaboradores`.
+- **Leituras** (com `entregar_epi`): `GET /epi/entregas`, `GET /epi/entregas/:id/verificar`, `GET /epi/ficha/:colaborador_id`. **Desde a
+  180** (ver o fim): `GET /evidencias/cadeia/verificar` (com `/epi/cadeia/verificar` de apelido) e `GET /aux/colaboradores` aceitam
+  `entregar_epi` **OU** `gerenciar_ferramentas` — esta linha dizia "todas com `entregar_epi`", **o que deixou de ser verdade na 180**.
 - **Tela** `Almoxarifado → Entrega de EPI` (`EpiAlmoxarifado.js`): Nova entrega, Entregas (filtros, verificar, verificar cadeia), Ficha por
   colaborador com PDF (`fichaEpiPdf.js`, jsPDF no navegador).
 - O estorno pelo livro e a devolução da saída de uma entrega são **recusados** (casam pelo vínculo `movimentacao_id`).
@@ -77,3 +81,18 @@ módulo" para a lista — **mudou de propósito** na Fase 5 (`4c4bacbf`): as lei
 
 Ver **D (178)** no documento de novidades — âncora externa, URL assinada de ~15 min, matrícula como confirmação e não senha, devolução de EPI,
 validade de uso, série/lote, requisição de EPI, PDF sem a confirmação, evidências de dev anteriores à Fase 5.
+
+## Etapa 180 — a cadeia ficou multi-contexto (2026-10-22)
+
+- `evidenciaAssinaturaService.registrarContexto(contexto, { montador, extras })`: cada dono de contexto (`ENTREGA_EPI`, aqui; `TERMO_FERRAMENTA`,
+  feature 16) registra como remontar o registro dele e os controles que só ele vê. `verificarCadeia` usa o montador **do contexto da linha**;
+  contexto sem montador → `contexto desconhecido` (não "registro alterado"). O EPI registra os extras dele (`entrega sem evidência`, cauda
+  apagada da tabela de entregas). `2092806d`. **Antes:** `epiService.verificarCadeia` montava só o registro de EPI e devolvia `null` para outro
+  contexto — um termo de ferramenta gravado na cadeia faria o EPI acusar "registro alterado".
+- **Fase 5 (`003de01b`):** a verificação carrega os donos conhecidos (`DONOS_DE_CONTEXTO`) antes de percorrer — um script que carregasse só o
+  `epiService` via os termos como `contexto desconhecido`. Teste por processo filho em `evidenciaMultiContexto.api.test.js`.
+- Rota `GET /api/almoxarifado/evidencias/cadeia/verificar` (`requireAlgumaPermissao(['entregar_epi', 'gerenciar_ferramentas'])`); o apelido
+  `/epi/cadeia/verificar` passou a aceitar as duas também (divergência registrada no plano da 180, T1). A tela de EPI chama a rota nova.
+- **Prova de que o EPI não mudou:** os 8 `epi*.api.test.js` verdes **sem mudança de asserção** depois da T1.
+- Motivos novos que a cadeia pode listar (vindos dos termos): `termo sem evidência`, `texto do termo alterado`, `termo apagado no fim da tabela`,
+  `empréstimo reapontado`.

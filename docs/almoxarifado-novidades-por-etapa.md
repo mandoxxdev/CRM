@@ -11,14 +11,21 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-22):** **Etapa 178 fechada** (**entrega de EPI ao colaborador com assinatura na tela
+> **Onde o desenvolvimento está (2026-10-22):** **Etapa 180 fechada** (**termo de responsabilidade no empréstimo de ferramenta** —
+> emprestar uma ferramenta passa a exigir o colaborador **do cadastro** (com matrícula), a leitura do **texto do termo** na tela, a
+> **assinatura** no tablet e a **matrícula digitada pelo próprio colaborador**; o termo assinado fica guardado como uma **fotografia** que não
+> muda (texto da versão assinada, ferramenta e colaborador daquele momento), sai em PDF e pode ser **verificado**, inclusive na mesma
+> **cadeia** das entregas de EPI; o administrador troca o texto pela tela, e cada troca é uma **versão nova**; **uma ação antes de usar em
+> produção — A108: trocar o texto PROVISÓRIO pelo termo da empresa** (o texto não foi fornecido); decisões **B1170** a **B1179**; avisos
+> **C436** a **C439**; revisão adversarial feita e corrigida). **Próxima: Etapa 181** — o relatório *EPI por colaborador* passa a ler as
+> entregas de EPI (hoje lê empréstimos de ferramenta — **D (180)**). A **179** é da outra frente.
+> *(Também em 2026-10-22: **Etapa 178 fechada** (**entrega de EPI ao colaborador com assinatura na tela
 > (NR-6)** — tela nova **Almoxarifado → Entrega de EPI**: o colaborador do cadastro, o EPI com **CA** obrigatório e vigente, a quantidade, a
 > **assinatura** no tablet e a **matrícula digitada pelo próprio colaborador**; a baixa do estoque, a **ficha de EPI por colaborador** em PDF e a
 > **verificação de integridade** de cada entrega e da **cadeia** inteira; registro que não se edita nem se apaga, com impressão digital
 > protegida por um **segredo do servidor**; **uma ação antes do deploy — A107: o segredo da assinatura tem de entrar no backup do servidor
 > (o backup do sistema NÃO o leva)**; decisões **B1160** a **B1169** (campos deduzidos — os formulários de EPI da empresa não chegaram);
-> avisos **C431** a **C435**; revisão adversarial feita e corrigida). **Próxima: Etapa 180** — termo de responsabilidade de ferramenta com a
-> mesma assinatura, **depende dos formulários da empresa** (**B1169**; a 179 fica para a outra frente).
+> avisos **C431** a **C435**; revisão adversarial feita e corrigida); a próxima era a **180**.)*
 > *(Também em 2026-10-22: **Etapa 176 fechada** (**o recebimento informa a OS — material do cliente para
 > industrialização fica com o trabalho dele**: o novo recebimento ganha **OS (opcional)**; o que entra fica reservado para a OS, só a requisição
 > dela o leva, e a OS fechada o devolve ao estoque do cliente; chapa do cliente A não entra para a OS do cliente B; nada a rodar antes do
@@ -463,7 +470,11 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Cento e sete itens para rodar em produção ANTES do deploy — cento e três são consulta, três são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Cento e oito itens para rodar em produção ANTES do deploy — cento e três são consulta, três são ação fora do sistema, um é ação na tela antes de liberar o uso, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-22 (Etapa 180) de cento e sete para cento e oito**, com a **A108** — **ação na tela, não consulta: trocar o texto
+PROVISÓRIO do termo de responsabilidade de ferramenta pelo termo da empresa ANTES de liberar o empréstimo em produção** (**C438**). E a
+**A107** passou a valer também para o termo: o mesmo segredo assina os termos de ferramenta.)*
 
 *(**Atualizado em 2026-10-22 (Etapa 178) de cento e seis para cento e sete**, com a **A107** — **ação, não consulta: o segredo da assinatura
 de EPI tem de entrar no backup do servidor** (**C433**). **Obrigatória** para quem vai usar a entrega de EPI: sem ela, um servidor restaurado
@@ -4163,12 +4174,35 @@ todas as entregas** e a ficha de EPI perde o valor de prova. **O que fazer, esco
 **Nunca** troque o segredo depois da primeira entrega, nem passe de (b) para (a) com um valor diferente — as entregas antigas passam a ser
 acusadas. Teste de restauração: num servidor restaurado, **Entrega de EPI → Entregas → Verificar cadeia** tem de dizer *"Cadeia íntegra"*.
 
+*(**A107, acréscimo da Etapa 180:** o termo de responsabilidade de ferramenta usa **o mesmo segredo** e a **mesma cadeia** das entregas de
+EPI. Sem o segredo, também **todos os termos** passam a ser acusados como *"Adulterado: registro alterado"*. Mesma ação, sem nada a mais.)*
+
+**A108 (NOVA, da Etapa 180 — AÇÃO NA TELA, obrigatória antes de liberar o empréstimo de ferramenta em produção — o texto do termo).** A
+empresa **não mandou** o texto do termo de responsabilidade. O sistema nasce com uma versão **1** que começa por *"TEXTO PROVISÓRIO — substituir
+pelo termo da empresa."* seguida de um compromisso genérico (usar só nas atividades da empresa, zelar, comunicar avaria/perda, devolver na
+data). Enquanto ela for a vigente, **todo empréstimo assina o texto provisório** — e a tela mostra o selo *"Texto provisório"* no modal de
+empréstimo e no termo. **O que fazer, depois do deploy e antes de emprestar a primeira ferramenta:** um usuário **Administrador** abre
+**Almoxarifado → Ferramentas → Texto do termo**, cola o texto aprovado pela empresa (jurídico/Segurança do Trabalho) em **Texto do termo**, e
+toca **Salvar nova versão** → *"Versão 2 do termo salva — os próximos empréstimos assinam este texto"*; o selo some. Conferir: abrir
+**Emprestar** numa ferramenta disponível e ver *"Termo de responsabilidade — versão 2"* sem o selo. **Não dá para apagar nem editar** a versão
+1 (nem pelo banco) — se algum empréstimo for feito antes da troca, ele fica para sempre com a v1 provisória (**B1170**). Consulta para saber
+se isso já aconteceu (somente leitura):
+```sql
+SELECT t.numero, t.colaborador_nome, t.ferramenta_codigo_patrimonio, t.criado_em
+FROM termos_emprestimo_ferramenta t
+JOIN termos_responsabilidade_versao v ON v.tipo = 'FERRAMENTA' AND v.versao = t.termo_versao
+WHERE v.texto LIKE 'TEXTO PROVISÓRIO%' ORDER BY t.criado_em;
+```
+**Resultado vazio:** nenhum empréstimo assinou o provisório — nada a fazer. **Com linhas:** esses colaboradores assinaram o texto genérico;
+para que o termo da empresa valha para eles, **devolva** a ferramenta e **empreste de novo** (o novo empréstimo assina a versão vigente) —
+o termo antigo continua guardado, como prova do que foi assinado.
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157 e B1160 a B1169; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169 e B1170 a B1179; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -12397,6 +12431,83 @@ da empresa.** O empréstimo de ferramenta (RN-D) passa a pedir a assinatura e a 
 os campos vêm dos **formulários em papel** que o André vai pedir — sem eles, o texto será deduzido como nesta etapa. A **179** fica para a
 outra frente de trabalho (nenhum commit dela até este fechamento; reservada para não colidir). Ver a "próxima tarefa detalhada" no plano da 178.
 
+**B1170 (NOVA, da Etapa 180; decisão do agente — PEDE UMA AÇÃO: A108) — o texto do termo é provisório e editável, com versões, porque a
+empresa não mandou o termo.** Os formulários foram pedidos e não chegaram. Em vez de esperar, o sistema nasce com a **versão 1** marcada
+*"TEXTO PROVISÓRIO — substituir pelo termo da empresa."* e um compromisso genérico, e o **Administrador** troca pela aba **Ferramentas → Texto do
+termo** (**Salvar nova versão**). Cada troca é uma **versão nova** (1, 2, 3…); nenhuma se edita nem se apaga (nem pelo banco); o empréstimo
+guarda a versão que o colaborador **leu e assinou**, e o termo dele mostra sempre aquele texto, mesmo depois de outra versão. Só o
+**Administrador** redige (permissão nova *Editar o texto do termo de responsabilidade*): quem colhe a assinatura (o almoxarife) não escreve o
+compromisso. **Descartado:** esperar o texto da empresa para entregar a etapa (o empréstimo continuaria sem prova nenhuma); um texto "final"
+escrito pelo agente sem a marca de provisório (pareceria aprovado pela empresa); deixar o almoxarife editar (reversível numa linha da tabela de
+perfis). **Reversível.** `11ef2821`, `04b9d2fb`.
+
+**B1171 (NOVA, da Etapa 180; decisão do agente) — o colaborador do empréstimo é sempre do cadastro.** O empréstimo gravava o nome **digitado**;
+agora a tela escolhe da lista de colaboradores **ativos** e o servidor grava o nome e o setor **do cadastro** naquele momento (o que vier
+digitado é ignorado). Recusas: *"O colaborador é obrigatório"*, *"Colaborador #⟨id⟩ não encontrado"*, *"Colaborador ⟨nome⟩ não está ativo"*.
+Os empréstimos antigos ficam como estão, com o selo *"Anterior à exigência do termo"*. **Descartado:** aceitar nome digitado para quem não
+está no cadastro (terceiro, visitante) — sem cadastro não há matrícula para confirmar quem assinou; se a empresa empresta para terceiros, é
+preciso cadastrá-los (ou uma regra nova). **Reversível.** `11ef2821`.
+
+**B1172 (NOVA, da Etapa 180; decisão do agente) — sem matrícula no cadastro, não empresta; a matrícula é confirmação, não senha.** A mesma
+régua da entrega de EPI (**B1164**): o colaborador digita a **própria** matrícula no tablet e ela tem de bater com o cadastro (maiúscula e
+espaços não contam; zero à esquerda conta). *"Colaborador ⟨nome⟩ sem matrícula cadastrada — não é possível confirmar a identidade"*, *"O
+colaborador deve digitar a própria matrícula para assinar o termo"*, *"A matrícula informada não confere com a do colaborador"* (**C437**).
+**Descartado:** PIN/senha do colaborador (credencial para cada pessoa do chão). **Limite:** quem sabe a matrícula do colega assina por ele.
+**Reversível.** `11ef2821`.
+
+**B1173 (NOVA, da Etapa 180; decisão do agente, da revisão da Fase 2 e da Fase 5) — o termo é uma fotografia congelada.** No ato do
+empréstimo o sistema grava, num registro que **não se edita nem se apaga**, a ferramenta (patrimônio, série, nome), o colaborador (nome,
+matrícula, setor), a versão e a impressão do texto, a data prevista, quem registrou e quando — e a impressão digital (com o segredo do
+servidor, **A107**) cobre **só essa fotografia** e a assinatura. Por isso editar a ferramenta depois (trocar a série), devolver ou registrar
+avaria/perda **não** tornam o termo "adulterado": ele mostra o que foi assinado. Achado da revisão da Fase 5: como o **empréstimo** em si
+continua editável pelo banco, quem o **reapontasse** para outra pessoa ou outra ferramenta deixava a lista mostrando o nome novo com um termo
+"íntegro"; agora a verificação compara e acusa *"Adulterado: empréstimo reapontado"*. **Descartado:** pôr o empréstimo vivo na impressão
+digital (a devolução mudaria o registro e todo termo devolvido apareceria adulterado). `11ef2821`, `bcd89a2f`.
+
+**B1174 (NOVA, da Etapa 180; decisão do agente) — os termos entram na mesma cadeia das entregas de EPI.** Um segredo, uma numeração, uma
+verificação: **Entrega de EPI → Entregas → Verificar cadeia** percorre entregas **e** termos. Até a 178 a cadeia só sabia conferir EPI — um
+termo gravado nela seria acusado de "registro alterado"; agora cada tipo de registro sabe se conferir, e um tipo que o servidor não reconhece
+aparece como *"contexto desconhecido"* (não como adulteração). Achado da Fase 5: um programa que carregasse só a parte de EPI (manutenção,
+auditoria) via os termos como desconhecidos — a verificação passou a carregar os dois. **Descartado:** uma cadeia separada para os termos
+(duas numerações e dois botões para a mesma pergunta, "alguém apagou alguma coisa?"). **Limite:** o botão **Verificar cadeia** só existe na tela
+de EPI (**D (180)**). `2092806d`, `003de01b`.
+
+**B1175 (NOVA, da Etapa 180; decisão do agente, da revisão da Fase 5) — tocar "Emprestar" de novo não duplica — inclusive no meio da
+gravação.** Cada tentativa leva uma chave; sem resposta, a tela diz *"Sem resposta do servidor — o empréstimo pode ter sido registrado. Toque
+em "Emprestar" de novo: o reenvio não duplica."*, e o novo toque, se o primeiro chegou, responde *"Empréstimo já estava registrado (termo
+⟨número⟩) — o envio repetido não duplicou"*. A revisão achou o caso em que o segundo toque chegava **enquanto** o primeiro ainda gravava: ele
+respondia *"A ferramenta não está disponível"* — a tela entendia como recusa e dizia que não tinha emprestado, quando tinha. Agora devolve o
+empréstimo gravado. Mexer no formulário ou refazer a assinatura começa uma tentativa nova. **Descartado:** bloquear empréstimo igual por
+alguns minutos (devolver e reemprestar no mesmo turno é legítimo). **Reversível.** `11ef2821`, `04b9d2fb`, `c40b1f56`.
+
+**B1176 (NOVA, da Etapa 180; decisão do agente) — se o texto do termo muda enquanto o colaborador assina, o empréstimo é recusado e a tela pede
+nova leitura.** O colaborador assina o texto que **viu**: se o administrador salvou outra versão entre a abertura do modal e o **Emprestar**,
+o servidor recusa — *"O texto do termo mudou (versão ⟨n⟩) — releia e assine de novo"* — a tela recarrega o texto, descarta a assinatura e avisa
+*"O texto do termo mudou — releia e assine de novo"*. A comparação é feita **dentro** da gravação (não há janela). Dois administradores
+salvando juntos: o segundo recebe *"Outra versão do termo acabou de ser salva — recarregue"* (o rascunho dele fica na tela). **Descartado:**
+gravar com a versão nova (o colaborador assinaria um texto que não leu) ou com a antiga (a vigente seria ignorada). `11ef2821`, `04b9d2fb`.
+
+**B1177 (NOVA, da Etapa 180; decisão do agente) — quem vê o quê: a aba Empréstimos e o termo são só de quem gerencia ferramentas; a
+lista de colaboradores mostra menos do que entrega.** A lista de empréstimos (com o nome de quem está com cada ferramenta), o termo (com
+matrícula e a imagem da assinatura) e a verificação passaram a exigir a permissão **Ferramentas** (Administrador, Almoxarife); para os outros
+perfis a aba **Empréstimos** some. A lista de colaboradores do empréstimo é a mesma da entrega de EPI e aceita quem tem **uma das duas**
+permissões. **Registrado como limite:** essa lista **entrega a matrícula** na resposta ao navegador do almoxarife — o seletor não a mostra
+(**B1178**), então o ganho é **só de tela** (quem abre as ferramentas do navegador a vê; mesmo precedente da 178). E o relatório **Ferramentas
+emprestadas** continua aberto a todos do módulo (patrimônio, ferramenta, colaborador, setor, data — sem matrícula nem assinatura) —
+**D (180)**, ponto da 181. **Descartado:** tirar a matrícula da resposta (a tela não teria como antecipar a recusa "sem matrícula"; a
+conferência é do servidor de qualquer forma). **Reversível.** `2092806d`, `11ef2821`, `04b9d2fb`.
+
+**B1178 (NOVA, da Etapa 180; decisão do agente) — o seletor do empréstimo mostra *nome (setor)*, sem a matrícula; o termo mostra a matrícula
+confirmada.** O pedido da tela dizia "nome — matrícula", mas é a matrícula que o colaborador digita para assinar: mostrada ao lado do nome,
+a confirmação não prova nada (precedente da 178, **B1164**). No termo e no PDF, a linha **Matrícula confirmada pelo colaborador** diz *"Sim —
+digitou ⟨matrícula⟩ (confere com o cadastro)"* — a primeira versão da tela imprimia *"Matrícula digitada: 1"* (o sistema guarda só que
+conferiu, não o que foi digitado; achado no teste ponta a ponta e corrigido). **Reversível.** `04b9d2fb`, `3d161c35`.
+
+**B1179 (NOVA, da Etapa 180) — a próxima etapa (181): o relatório "EPI por colaborador" passa a ler as entregas de EPI.** Hoje
+**Relatórios → EPI por colaborador** lê **empréstimos de ferramenta** marcados como EPI e ignora as entregas de EPI da 178 — quem abre vê vazio
+com a ficha cheia na outra tela (**D (180)**). A 181 troca a fonte (data, EPI, CA, validade do CA, quantidade, quem entregou, o número da
+entrega), restringe à permissão de EPI (a ficha é restrita, **B1165**) e decide o legado. Ver a "próxima tarefa detalhada" no plano da 180.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -15964,6 +16075,26 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      Consulta, Qualidade, Engenharia) veem o item no menu e, ao abrir, só *"Seu perfil não acessa a entrega de EPI — só o almoxarife e o
      administrador do módulo registram entregas e consultam fichas."* (**B1165**). **O que fazer:** se a Segurança do Trabalho precisar
      consultar fichas, dar a ela o perfil de almoxarife, ou pedir a permissão só de leitura (**B1165**, descartada por enquanto).
+436. **NOVO (da Etapa 180) — a tela de empréstimo de ferramenta mudou: exige o colaborador do cadastro, a assinatura e a matrícula.** Em
+     **Almoxarifado → Ferramentas → Emprestar**, o campo de nome digitado deu lugar à lista de colaboradores; o modal mostra o **texto do
+     termo**, o quadro de **assinatura** e o campo **Matrícula — digitada pelo colaborador**. Sem assinatura, a tela não envia: *"A assinatura do
+     colaborador é obrigatória"*; sem matrícula: *"O colaborador deve digitar a própria matrícula para assinar o termo"*. **O que fazer:**
+     avisar o almoxarifado antes do deploy e combinar que o empréstimo é feito **com o colaborador presente**, no tablet (ele lê, assina e
+     digita a matrícula — o almoxarife não digita por ele). A devolução continua igual, sem assinatura (**D (180)**).
+437. **NOVO (da Etapa 180) — colaborador sem matrícula no cadastro não pega ferramenta pela tela, e quem não está no cadastro também não.**
+     *"Colaborador ⟨nome⟩ sem matrícula cadastrada — não é possível confirmar a identidade"* (**B1172**); a lista só tem colaboradores
+     **ativos** do cadastro (**B1171**). **O que fazer:** antes de começar, conferir em **Fábrica → Colaboradores** que todos os ativos que
+     pegam ferramenta têm **Matrícula** (a mesma conferência da **C432**, da entrega de EPI); terceiro ou visitante que pega ferramenta precisa
+     ser cadastrado.
+438. **NOVO (da Etapa 180) — CRÍTICO ANTES DE USAR: o termo nasce com um texto PROVISÓRIO** (**A108**, **B1170**). Enquanto o administrador não
+     salvar o termo da empresa em **Ferramentas → Texto do termo**, todo empréstimo assina o texto genérico, com o selo *"Texto provisório"* na
+     tela e no termo. O termo assinado **não muda depois** — quem assinou o provisório continua com ele. **O que fazer:** a **A108** antes do
+     primeiro empréstimo em produção.
+439. **NOVO (da Etapa 180) — a aba Empréstimos sumiu para quem não gerencia ferramentas.** Produção, Compras, Gestor, Consulta, Qualidade e
+     Engenharia continuam vendo **Ferramentas** e **Calibrações**, mas não a lista de quem está com cada ferramenta nem o termo (**B1177**). O
+     mesmo segredo da assinatura de EPI (**A107**) agora protege também os termos: servidor restaurado sem ele acusa os termos como
+     *"Adulterado: registro alterado"*. **O que fazer:** quem precisar consultar empréstimos sem operar, perfil de almoxarife — ou, por enquanto,
+     o relatório **Ferramentas emprestadas** (que continua aberto, **D (180)**).
 ### D. Limitações declaradas— são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -17305,6 +17436,19 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   (`GET /ferramentas/:id/manutencoes`) e na Auditoria (*Fim de manutenção*). Quem empresta não fica sabendo da restrição pela tela.
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(180) O termo de responsabilidade de ferramenta, o que ficou de fora.** (1) **RN-C — retirada definitiva** de ferramenta (com baixa em
+  estoque) **não existe**: contradiz "ferramenta é patrimônio, não estoque" e precisa de decisão da empresa. (2) **A devolução não pede
+  assinatura** — continua um botão, sem termo de devolução. (3) O relatório **EPI por colaborador** lê a **fonte errada**: empréstimos de
+  ferramenta marcados como EPI, e não as entregas de EPI da 178 — enganoso, anterior a esta etapa; é a **181** (**B1179**). (4) O número do
+  empréstimo fica **fora** da impressão digital do termo (ele não existe antes da gravação; o vínculo provado é o número *TERMO-…*): quem tem o
+  banco, derruba a proteção e **re-aponta a fotografia** para outro empréstimo não é pego pela impressão — a verificação ainda compara a
+  ferramenta e o colaborador do empréstimo com os da fotografia (**B1173**), então só passa o re-apontamento para outro empréstimo **da mesma
+  ferramenta e do mesmo colaborador**. (5) Empréstimo **apagado** do banco não é acusado pela cadeia (o termo fica órfão; a verificação dele
+  responde *"Empréstimo não encontrado"*). (6) **Verificar cadeia** só existe na tela de **Entrega de EPI** (a cadeia é uma só, **B1174**). (7) O
+  relatório **Ferramentas emprestadas** continua aberto a todo usuário do módulo, enquanto a aba Empréstimos exige a permissão de ferramentas
+  (**B1177**). (8) A matrícula vai na resposta da lista de colaboradores ao navegador do almoxarife — o ganho de escondê-la é só de tela
+  (**B1177**). (9) Quem tem o banco, o disco **e** o segredo ainda forja um termo, como na 178 (**D (178)**, item 1). (10) Texto jurídico do termo:
+  responsabilidade da empresa (**A108**).
 - **(178) A entrega de EPI, o que ficou de fora.** (1) **Quem tem o banco, o disco E o segredo ainda forja** uma entrega, reescrevendo-a e
   todas as posteriores; e quem apaga a última entrega **e** acerta o contador interno do banco também escapa — fechar isso pede uma âncora
   **externa** (exportar periodicamente o último código da cadeia para fora do servidor, ou carimbo de tempo de terceiro), deixada para depois
@@ -18475,6 +18619,15 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(180) Nenhum clique foi dado no navegador, e nenhum termo foi assinado num tablet de verdade.** A versão nova do texto, o empréstimo com
+assinatura e matrícula, as recusas, o 409 da versão trocada no meio, a corrida de dois empréstimos, o reenvio com a mesma chave (inclusive no
+meio da gravação), o termo, a imagem pelo link, a verificação, a cadeia misturada com entregas de EPI, a adulteração e o reapontamento, o PUT
+da ferramenta, a ocorrência e a devolução foram provados pelas rotas de verdade no servidor de teste — inclusive ponta a ponta, com um PNG real;
+a tela (o modal, o texto vigente, o selo provisório, a chave do reenvio, as mensagens, o termo, o PDF, a aba do texto), em jsdom com a
+resposta do servidor simulada. O que **só o aparelho** prova: o roteiro da Etapa 180 no guia num **tablet** — a rolagem do texto do termo, o
+traço com o dedo, o teclado da matrícula, o **PDF do termo** aberto com a assinatura legível e o texto inteiro (quebra de linha de um texto
+longo da empresa), e a aba **Texto do termo** com o texto real colado.
 
 **(178) Nenhum clique foi dado no navegador, e nenhuma assinatura foi feita num tablet de verdade.** A entrega, as recusas, a matrícula, a
 baixa do estoque, a ficha, a imagem pelo link, a verificação, a cadeia, a forja e o apagamento (com o gatilho do banco derrubado), a
@@ -35017,9 +35170,103 @@ administrador do módulo registram entregas e consultam fichas."*
 - **Uma ação antes do deploy: A107** — o segredo da assinatura no backup do servidor (**C433**). As colunas e tabelas novas nascem sozinhas no
   primeiro boot.
 
+## Etapa 180 — Termo de responsabilidade no empréstimo de ferramenta (2026-10-22)
+
+A usuária de Compras perguntou se o sistema podia colher *"a assinatura do colaborador responsável pela utilização ou retirada… empréstimo de
+equipamentos e ferramentas, incluindo o registro da devolução"*. Até aqui o empréstimo de ferramenta era um **nome digitado**: não dizia quem
+de fato levou, nem que ele se comprometeu com nada. Agora, para emprestar, o almoxarife escolhe o colaborador **do cadastro**, o colaborador
+**lê o termo de responsabilidade na tela**, **assina no tablet** e **digita a própria matrícula**. O termo assinado fica guardado como uma
+**fotografia** — o texto que ele leu, a ferramenta e os dados dele naquele momento — que não se edita nem se apaga, sai em **PDF** e pode ser
+**verificada**, na mesma **cadeia** das entregas de EPI. O texto do termo é do **administrador**, que o troca pela tela; cada troca é uma
+**versão** nova, e cada empréstimo guarda a versão que foi assinada. **A empresa não mandou o texto do termo**: o sistema nasce com um texto
+**provisório**, marcado como tal, que **tem de ser trocado antes de usar** (**A108**). Decisões do agente: **B1170** a **B1179**; avisos **C436**
+a **C439**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Emprestar**: nome do colaborador digitado, setor e data prevista | **Emprestar**: colaborador da **lista do cadastro** (*nome (setor)*), data prevista, observações, o **texto do termo** (com a versão), o **quadro de assinatura** e a **matrícula digitada pelo colaborador** (**B1171**, **B1172**) |
+| O empréstimo não provava nada | O **termo** (*TERMO-…*): o texto da versão assinada, a ferramenta e o colaborador daquele momento, a assinatura e o **código de verificação** — não se edita nem se apaga (**B1173**) |
+| — | Aba **Empréstimos**: coluna **Termo** — botão **Termo** (ver, **Verificar integridade**, **PDF do termo**) ou *"Anterior à exigência do termo"* nos antigos |
+| — | Aba **Texto do termo** (só Administrador): a versão vigente, **Salvar nova versão** e o **Histórico** com o texto de cada versão (**B1170**) |
+| A cadeia de evidências só conhecia EPI | **Verificar cadeia** (na tela de EPI) confere entregas **e** termos (**B1174**) |
+| A aba Empréstimos era de todos | Só de quem gerencia ferramentas (Administrador, Almoxarife) (**B1177**, **C439**) |
+| — | Tocar **Emprestar** de novo depois de a rede cair não duplica (**B1175**) |
+
+### As regras, com o cenário exato
+
+Preparação: um colaborador ativo em **Fábrica → Colaboradores** com **Matrícula** (ex.: *MARIA SOUZA*, setor *Caldeiraria*, matrícula *M-450*);
+uma ferramenta **Disponível** sem exigência de calibração em **Almoxarifado → Ferramentas** (ex.: *PAT-100 — Furadeira*). Usuário
+**Administrador** (para o texto) e **Almoxarife** ou Administrador (para emprestar).
+
+**1. Trocar o texto provisório (A108).** **Almoxarifado → Ferramentas → Texto do termo**: *"Versão vigente: 1"* com o selo *"Texto provisório"*.
+Apague e cole o texto da empresa em **Texto do termo** e toque **Salvar nova versão**: *"Versão 2 do termo salva — os próximos empréstimos
+assinam este texto"*; o selo some; o **Histórico** mostra a 1 e a 2. Salvar com o campo vazio: *"O texto do termo é obrigatório"*; sem mudar
+nada: *"O texto é igual ao da versão vigente"*. Se outro administrador tiver salvo antes: *"Outra versão do termo acabou de ser salva —
+recarregue"* (o seu texto continua no campo).
+
+**2. O empréstimo.** Aba **Ferramentas**, na linha da *PAT-100*, **Emprestar**: o modal *"Emprestar ferramenta"* com **Colaborador** (*MARIA SOUZA
+(Caldeiraria)* — **sem** a matrícula), **Data prevista de devolução**, **Observações**, *"Termo de responsabilidade — versão 2"* com o texto, o
+quadro **Assinatura do colaborador** e **Matrícula — digitada pelo colaborador**. A colaboradora lê, assina, toca **Confirmar assinatura**
+(*"Assinatura confirmada"*), digita *M-450* e o almoxarife toca **Emprestar**: *"Ferramenta emprestada — termo TERMO-… assinado"*. A ferramenta
+fica **Emprestada**.
+
+**3. As recusas.** Sem escolher o colaborador: *"Selecione o colaborador"*. Sem assinatura: *"A assinatura do colaborador é obrigatória"*.
+Matrícula em branco: *"O colaborador deve digitar a própria matrícula para assinar o termo"*. *M-451*: *"A matrícula informada não confere com a
+do colaborador"* (*m-450* passa; zero à esquerda conta). Colaborador sem matrícula no cadastro: *"Colaborador ⟨nome⟩ sem matrícula cadastrada —
+não é possível confirmar a identidade"*. Ferramenta que exige calibração e está vencida: *"Ferramenta com calibração vencida ou sem calibração
+registrada"*. Nada é gravado em nenhuma recusa.
+
+**4. O texto mudou enquanto ela assinava.** Abra o **Emprestar**, e — antes de tocar **Emprestar** — em outra aba o administrador salva a versão
+3. Toque **Emprestar**: *"O texto do termo mudou — releia e assine de novo"*; o modal mostra o texto da versão 3 e pede a assinatura de novo.
+(Pela integração, a frase do servidor é *"O texto do termo mudou (versão 3) — releia e assine de novo"*.)
+
+**5. O termo.** Aba **Empréstimos**: a linha da *MARIA SOUZA* com o botão **Termo**; os empréstimos de antes desta etapa mostram *"Anterior à
+exigência do termo"*. **Termo** abre *"Termo TERMO-…"*: **Versão do texto**, **Ferramenta** (*PAT-100 — Furadeira*, com a série se houver),
+**Colaborador** (*MARIA SOUZA · matrícula M-450 · Caldeiraria*), *"Matrícula confirmada pelo colaborador: Sim — digitou M-450 (confere com o
+cadastro)"*, **Devolução prevista**, **Assinado em** (com quem registrou), **Código de verificação**, o texto **da versão que ela assinou** e a
+imagem da assinatura. **Verificar integridade** → *"Íntegro"*. **PDF do termo** → baixa *termo-TERMO-….pdf*.
+
+**6. O termo não muda depois.** Edite a ferramenta (troque o **Número de série**), salve, e abra o **Termo** de novo: ele mostra a série **do
+momento do empréstimo**, e **Verificar integridade** continua *"Íntegro"*. Salve uma versão nova do texto: o termo continua com a versão que
+ela assinou.
+
+**7. A devolução.** Na aba **Empréstimos**, **Devolver** → *"Ferramenta devolvida"* (sem assinatura — **D (180)**). O **Termo** continua lá e
+*"Íntegro"*.
+
+**8. A cadeia.** **Almoxarifado → Entrega de EPI → Entregas → Verificar cadeia** → *"Cadeia íntegra — ⟨n⟩ registros"* — as entregas de EPI **e**
+os termos. (Servidor de teste: trocar um byte do arquivo `assinatura-termo-….png` em `server/data/uploads/almoxarifado/` → **Verificar
+integridade** do termo: *"Adulterado: arquivo alterado"*; a cadeia: *"Cadeia com problema — 1 ocorrência"*.)
+
+**9. O reenvio não duplica.** Com a rede caindo no meio: *"Sem resposta do servidor — o empréstimo pode ter sido registrado. Toque em
+"Emprestar" de novo: o reenvio não duplica."*; tocando de novo, se o primeiro tinha chegado: *"Empréstimo já estava registrado (termo TERMO-…)
+— o envio repetido não duplicou"*.
+
+**10. Outro perfil.** Entrando como Produção: a tela **Ferramentas** mostra as abas **Ferramentas** e **Calibrações**, sem **Empréstimos** e
+sem **Texto do termo**. Como Almoxarife: **Empréstimos** aparece, **Texto do termo** não.
+
+### O que esta etapa NÃO cobre
+
+- **Retirada definitiva** de ferramenta (RN-C) e **assinatura na devolução** (**D (180)**).
+- O **texto jurídico** do termo — é da empresa (**A108**).
+- O relatório **EPI por colaborador** continua lendo a fonte errada — a próxima (**B1179**).
+- **Uma ação antes de usar: A108** (trocar o texto provisório). A **A107** (o segredo no backup do servidor) passa a valer também para os
+  termos. As tabelas novas nascem sozinhas no primeiro boot, com a versão 1 provisória.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 180 entregue (2026-10-22):** **termo de responsabilidade no empréstimo de ferramenta.** O **Emprestar** pede o colaborador do
+  cadastro, o texto do termo, a assinatura e a matrícula digitada pelo colaborador (**B1171**, **B1172**); o termo é uma fotografia que não muda
+  e se verifica, na mesma cadeia das entregas de EPI (**B1173**, **B1174**); o texto é do administrador, com versões (**B1170**); o texto que
+  muda no meio pede nova assinatura (**B1176**); o reenvio não duplica (**B1175**); a aba Empréstimos é de quem gerencia ferramentas (**B1177**).
+  Commits `fd7b8849`, `f86ccafd` (plano), `2092806d` (T1), `11ef2821` (T2), `04b9d2fb` (T3), `31fb475f`, `3d161c35` (T4), a revisão adversarial
+  `c40b1f56`, `bcd89a2f`, `003de01b`, e o fechamento. **O que é seu:** a **A108** antes do primeiro empréstimo em produção (**trocar o texto
+  provisório** — **crítico**, **C438**); a **A107** vale também para os termos; as decisões **B1170** a **B1179** (reversíveis); os avisos
+  **C436** a **C439**; as limitações **(180)** em D e a verificação **(180)** em F. **Próxima: Etapa 181 — o relatório "EPI por colaborador"
+  passa a ler as entregas de EPI (B1179); ver a "próxima tarefa detalhada" no plano da Etapa 180.**
 
 - **Etapa 178 entregue (2026-10-22):** **entrega de EPI ao colaborador com assinatura na tela (NR-6).** Tela **Almoxarifado → Entrega de
   EPI** (nova entrega com a assinatura e a matrícula digitada pelo colaborador; lista com verificação de integridade e da cadeia; ficha por

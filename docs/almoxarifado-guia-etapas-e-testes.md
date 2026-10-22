@@ -1,13 +1,20 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-22 (Etapas 172 a 178) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-22 (Etapas 172 a 180) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177 e 178) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178 e 180) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172 a 178 ENTREGUES · próxima: Etapa 180)
+> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172 a 178 e 180 ENTREGUES · próxima: Etapa 181)
 >
-> **O desenvolvimento parou aqui: Etapa 178 fechada — 2026-10-22.** **Entrega de EPI ao colaborador com assinatura na tela (NR-6)**:
+> **O desenvolvimento parou aqui: Etapa 180 fechada — 2026-10-22.** **Termo de responsabilidade no empréstimo de ferramenta**: o
+> **Emprestar** pede o colaborador do cadastro, mostra o **texto do termo**, colhe a **assinatura** no tablet e a **matrícula digitada pelo
+> colaborador**; o termo assinado sai em **PDF**, pode ser **verificado** e entra na mesma **cadeia** das entregas de EPI; o administrador troca o
+> texto pela aba **Texto do termo** (cada troca é uma versão). **Uma ação antes de usar: A108 — trocar o texto PROVISÓRIO pelo termo da
+> empresa** (o texto não foi fornecido). **Próxima: Etapa 181** — o relatório *EPI por colaborador* passa a ler as entregas de EPI (ver o plano
+> da 180). A 179 é da outra frente.
+>
+> **Etapa 178, 2026-10-22.** **Entrega de EPI ao colaborador com assinatura na tela (NR-6)**:
 > tela nova **Almoxarifado → Entrega de EPI** — o colaborador do cadastro, o EPI com **CA** válido, a **assinatura** no tablet e a
 > **matrícula digitada pelo próprio colaborador**; a entrega baixa o estoque, não se edita nem se apaga, e pode ser **verificada** (uma por
 > uma e a **cadeia** inteira); **ficha de EPI por colaborador** em PDF. **Uma ação antes do deploy: A107 — o segredo da assinatura tem de ir
@@ -6881,6 +6888,64 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 180 — Termo de responsabilidade no empréstimo de ferramenta (ENTREGUE — 2026-10-22)
+
+**O que mudou, em uma frase:** emprestar uma ferramenta passa a pedir que o colaborador leia o termo de responsabilidade, assine no tablet e
+digite a própria matrícula — e o termo assinado fica guardado, verificável e em PDF.
+
+**O problema que ela resolve.** O empréstimo era um nome digitado: não provava quem levou a ferramenta nem que essa pessoa se comprometeu a
+cuidar dela e devolvê-la. A usuária pediu a assinatura do responsável no empréstimo. Agora o colaborador é escolhido **do cadastro**, lê o
+texto, assina e confirma a identidade com a matrícula; o sistema guarda uma **fotografia** do que foi assinado (o texto daquela versão, a
+ferramenta e os dados dele naquele dia), que não se edita nem se apaga e entra na mesma **cadeia** de verificação das entregas de EPI.
+
+| Antes | Agora |
+|---|---|
+| Nome do colaborador digitado | Colaborador da lista do cadastro (*nome (setor)*), com matrícula obrigatória |
+| Sem termo | O texto do termo no modal, assinatura e matrícula digitada pelo colaborador |
+| — | Botão **Termo** na aba Empréstimos: ver, **Verificar integridade**, **PDF do termo** |
+| — | Aba **Texto do termo** (Administrador): versões do texto e histórico |
+| Aba Empréstimos para todos | Só para quem gerencia ferramentas (Administrador, Almoxarife) |
+
+**Antes de testar (uma vez).** Um colaborador ativo com **Matrícula** em **Fábrica → Colaboradores** (ex.: *MARIA SOUZA*, setor *Caldeiraria*,
+matrícula *M-450*) e uma ferramenta **Disponível** que **não** exige calibração (ex.: *PAT-100 — Furadeira*). O segredo da assinatura (**A107**)
+não precisa de nada no ambiente de teste.
+
+**Roteiro de teste (15 minutos — Administrador para o texto; Administrador ou Almoxarife para emprestar; de preferência num tablet).**
+
+1. **O administrador troca o texto.** **Almoxarifado → Ferramentas → Texto do termo**: *"Versão vigente: 1"* com o selo *"Texto provisório"*.
+   Toque **Salvar nova versão** sem mudar nada: *"O texto é igual ao da versão vigente"*. Troque o texto (ex.: *"Declaro que recebi a
+   ferramenta e me comprometo a devolvê-la."*) e **Salvar nova versão**: *"Versão 2 do termo salva — os próximos empréstimos assinam este
+   texto"*; o selo some e o **Histórico** mostra a 1 e a 2 (**Ver texto** em cada uma).
+2. **O empréstimo com assinatura.** Aba **Ferramentas**, linha da *PAT-100*, **Emprestar**: o modal mostra *"Termo de responsabilidade — versão
+   2"* com o texto do passo 1. Escolha *MARIA SOUZA (Caldeiraria)* (a lista **não** mostra a matrícula). Toque **Emprestar** sem assinar: *"A
+   assinatura do colaborador é obrigatória"*. Assine no quadro e toque **Confirmar assinatura** (*"Assinatura confirmada"*). Toque **Emprestar**
+   sem matrícula: *"O colaborador deve digitar a própria matrícula para assinar o termo"*. Digite *M-451*: *"A matrícula informada não confere
+   com a do colaborador"*. Digite *M-450*: *"Ferramenta emprestada — termo TERMO-… assinado"*; a ferramenta fica **Emprestada**.
+3. **O termo.** Aba **Empréstimos**: na linha da *MARIA SOUZA*, coluna **Termo**, o botão **Termo** (os empréstimos antigos dizem *"Anterior à
+   exigência do termo"*). Abra: versão 2, a ferramenta, *"MARIA SOUZA · matrícula M-450 · Caldeiraria"*, *"Matrícula confirmada pelo
+   colaborador: Sim — digitou M-450 (confere com o cadastro)"*, o texto da versão 2, a assinatura e o **Código de verificação**.
+4. **O PDF e a verificação.** No termo, **Verificar integridade** → *"Íntegro"*. **PDF do termo** → baixa *termo-TERMO-….pdf*: abra e confira o
+   texto inteiro, os dados e a assinatura legível.
+5. **O termo não muda.** Volte ao **Texto do termo** e salve uma versão 3. Abra o **Termo** da *MARIA* de novo: continua na **versão 2**, com o
+   texto que ela leu, e *"Íntegro"*.
+6. **O texto mudou no meio.** Em outra ferramenta, abra **Emprestar** (mostra a versão 3). Noutra aba do navegador, como Administrador, salve a
+   versão 4. Volte, assine, digite a matrícula e toque **Emprestar**: *"O texto do termo mudou — releia e assine de novo"*; o modal mostra a
+   versão 4 e pede a assinatura de novo. Assine e empreste.
+7. **A devolução.** Aba **Empréstimos**, **Devolver** na linha da *PAT-100* → *"Ferramenta devolvida"* (sem assinatura nesta etapa). O **Termo**
+   continua lá e *"Íntegro"*.
+8. **A cadeia.** **Almoxarifado → Entrega de EPI → Entregas → Verificar cadeia** → *"Cadeia íntegra — ⟨n⟩ registros"* (as entregas de EPI e os
+   termos juntos).
+9. **Outro perfil.** Entre como Produção: em **Ferramentas**, só as abas **Ferramentas** e **Calibrações**. Como Almoxarife: aparece
+   **Empréstimos**, mas não **Texto do termo**.
+10. **(Opcional, servidor de teste) A adulteração.** Troque um byte do arquivo `assinatura-termo-….png` em `server/data/uploads/almoxarifado/` e
+    **Verificar integridade** do termo: *"Adulterado: arquivo alterado"*; **Verificar cadeia**: *"Cadeia com problema — 1 ocorrência"*.
+
+**O que esta etapa não cobre.** Retirada definitiva de ferramenta; assinatura na devolução; o texto jurídico (é da empresa — **A108**); o
+relatório *EPI por colaborador* ainda lê empréstimos de ferramenta (a próxima, 181). **Uma ação antes de usar: A108.**
+
+*Nenhum clique no navegador foi dado nesta etapa, nem assinatura num tablet de verdade*: o roteiro acima é o que os testes automáticos provam
+pelas rotas do servidor (ponta a ponta, com um PNG real) e a tela em jsdom, escrito para você conferir à mão.
 
 ## Etapa 178 — Entrega de EPI ao colaborador com assinatura na tela (NR-6) (ENTREGUE — 2026-10-22)
 

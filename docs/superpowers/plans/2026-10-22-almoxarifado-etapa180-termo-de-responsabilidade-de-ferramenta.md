@@ -1,8 +1,8 @@
 # Etapa 180 — Termo de responsabilidade no empréstimo de ferramenta (RN-D)
 
-> **Status:** 🟡 em execução (2026-10-22) — T1 `2092806d`, T2 `11ef2821`, T3 `04b9d2fb` (front — a tela de empréstimo voltou a funcionar), T4 `31fb475f`+`3d161c35` (integração pela rota + a matrícula
-> confirmada que a tela imprimia como "1") feitas (ver "Execução" no fim, com o contrato real para o front); falta o fechamento. Emendada da "próxima tarefa detalhada" da Etapa 178 (B1169). A 179 é da
-> outra sessão (sem escopo ainda).
+> **Status:** ✅ fechada (2026-10-22) — T1 `2092806d`, T2 `11ef2821`, T3 `04b9d2fb` (front — a tela de empréstimo voltou a funcionar), T4 `31fb475f`+`3d161c35` (integração pela rota + a matrícula
+> confirmada que a tela imprimia como "1"), **Fase 5** `c40b1f56`, `bcd89a2f`, `003de01b` e o fechamento (ver "Execução" no fim, com o contrato real para o front). **Próxima: Etapa 181** (fim do
+> documento). Emendada da "próxima tarefa detalhada" da Etapa 178 (B1169). A 179 é da outra sessão (sem escopo ainda).
 > **Origem:** pergunta 3 da usuária (21/10): *"solicitamos a assinatura do colaborador responsável pela utilização ou
 > retirada… empréstimo de equipamentos e ferramentas, incluindo o registro da devolução"*; RN-D do design de 16/09: o
 > empréstimo guarda **quem aceitou, quando e qual versão do texto**.
@@ -44,7 +44,7 @@
 
 ## Próxima tarefa detalhada
 
-*(preencher no fechamento)*
+Ver **"Próxima tarefa detalhada — Etapa 181"** no fim (o relatório "EPI por colaborador" passa a ler as entregas de EPI da 178).
 
 ---
 
@@ -252,5 +252,87 @@
   (201 do empréstimo, `reutilizada`, linha de `/emprestimos` com `data_retirada` `AAAA-MM-DD HH:MM:SS`, `termo`/`evidencia`/`emprestimo`
   do GET do termo, `vigente`/`historico`, `arquivo_url` relativo assinado que o `resolveMaterialPhotoUrl` resolve).
 - Suítes (uma por vez): `test:api` **517/517 arquivos OK**; `test:almoxarifado` **44/0**; client **180 suítes / 2354 testes verdes**; `CI=true npx react-scripts build` **ok**.
-- **Falta:** o fechamento (`fechar-etapa`: novidades letra B — a divergência do seletor, o rótulo que a T2
-  esqueceu —, README da feature, mapa, guia do usuário com roteiro clicável).
+- ~~**Falta:** o fechamento~~ (feito, abaixo).
+
+### Fase 5 — revisão adversarial (2026-10-22) — 1 importante + 2 menores, corrigidos — `c40b1f56`, `bcd89a2f`, `003de01b`
+
+Revisor independente com sonda executada (`scratchpad/rev-180/probe1.js`, reproduzida antes e depois da correção).
+
+- [x] **I1 (importante, reproduzido) — reenvio com a MESMA chave enquanto o primeiro grava → 409 mentiroso.** O reenvio passava pela
+  consulta da chave antes de haver o que achar, esperava na fila da cadeia, perdia o claim para a própria primeira tentativa, o COMMIT saía
+  vazio e o ramo `!gravado` de `emprestarComTermo` respondia 409 `A ferramenta não está disponível` — o front trata 409 como recusa, apaga a
+  chave e diz que não emprestou. **Correção:** o ramo `!gravado` relê `emprestimoDaChave` antes de decidir; achou → 200 `reutilizada` (a rota
+  já apaga o PNG do reenvio). Teste novo em `termoFerramentaEmprestimo` (13/13): os dois gestos com a mesma chave disparados do contexto do
+  teste, o gancho só segura (molde do CLAUDE.md) → `[200, 201]`, mesmo `id` e `numero`, nada a mais gravado (nem PNG). Sonda depois:
+  `200 | 201` com o mesmo empréstimo. `c40b1f56`.
+- [x] **I2 (menor, reproduzido) — empréstimo vivo reapontado continuava "íntegro".** O HMAC cobre só a fotografia (C1) e a tabela de
+  empréstimos não é append-only: a sonda trocou `colaborador_id`/`ferramenta_id` do empréstimo por UPDATE direto — `/verificar` íntegro,
+  cadeia íntegra, a lista mostrava *BETO* com "Termo" num papel assinado pela *ANA*. **Correção:** `/termo/verificar` (depois do texto, antes
+  dos elos) e os extras do contexto `TERMO_FERRAMENTA` comparam os dois campos do empréstimo vivo com os da fotografia → `{ integro: false,
+  motivo: 'empréstimo reapontado' }`. Testes em `termoFerramentaVerificacao` (16/16): reapontar o colaborador e depois a ferramenta →
+  acusado nas duas rotas, restaurado → íntegro; **ocorrência PERDA** encerrando o empréstimo → íntegro (PUT e devolução já eram testados:
+  nenhum dos três muda esses campos). **Divergência:** o teste da ocorrência usa o `emp2` (ainda EMPRESTADA) e não um empréstimo novo — um
+  novo viraria a cauda da cadeia e o teste já existente da "cauda apagada" mudaria de motivo (medido: o primeiro rascunho derrubou ele).
+  `bcd89a2f`.
+- [x] **M3 (menor) — os contextos só existiam quando o módulo dono era carregado.** Um script que carregasse só o `epiService` veria cada
+  termo como `contexto desconhecido` (e vice-versa). **Correção:** `evidenciaAssinaturaService.verificarCadeia` carrega `DONOS_DE_CONTEXTO`
+  (`./epiService`, `./termoFerramentaService`) antes de percorrer — `require` tardio, porque os donos requerem o serviço no topo (ciclo).
+  **Descartado:** um índice novo que requeresse os dois (outro arquivo para lembrar de usar). Teste em `evidenciaMultiContexto` (9/9):
+  processo **filho** carregando só `epiService`, só `termoFerramentaService` e nenhum → os dois contextos registrados e os dois motivos
+  `registro alterado` (nenhum `contexto desconhecido`). `003de01b`.
+- [x] **Letra B** (registrado no fechamento): `/aux/colaboradores` entrega a matrícula na resposta da rede ao almoxarife — o seletor não a
+  mostra, então o ganho é **só de tela** (precedente da 178); o seletor mostra `nome (setor)` (T3); a "Matrícula digitada: 1" (T4).
+- Controles positivos (restauro por cópia + `cmp`; md5 pós-conserto `255cca1f…`/`a02e69eb…` conferido no fim): S1 os extras sem o
+  reapontado → 1 vermelho, **na asserção da cadeia** (`+ [] - [[TERMO-…, 'empréstimo reapontado']]`) — a rodada TDD tinha caído só no
+  `/verificar`, que vem antes; S2 o `/verificar` sem a checagem → 1 vermelho (`integro: true`); S3 sem a releitura da chave → 1 vermelho
+  (409 no lugar do 200; o `grep -cF` da âncora multilinha deu 20 — conta linhas, não blocos —, a aplicação foi conferida pelo md5 e pelo
+  vermelho); S4 sem a carga dos donos → 1 vermelho (`contextos: ['ENTREGA_EPI']`, o filho via `contexto desconhecido`).
+- Também achado ao ler, **não** corrigido (letra D, ponto da 181): o relatório **Ferramentas emprestadas** (`reportRegistry.js`,
+  `acao: null`) mostra colaborador e ferramenta a todo usuário do módulo, enquanto `GET /emprestimos` passou a exigir `gerenciar_ferramentas`
+  — a restrição da RN-180.06 vale para a tela e o termo, não para o relatório (que não traz matrícula nem assinatura).
+
+### Verificação final (medida, uma suíte por vez, depois da Fase 5)
+
+`test:api` **517/517 arquivos OK**; `test:almoxarifado` **44/0**; `test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0**;
+client **180 suítes / 2354 testes verdes**; `CI=true npx react-scripts build` **Compiled successfully**. A consulta da **A108** rodada contra o
+schema real (servidor de teste): vazia antes, 1 linha com o empréstimo na v1, e o empréstimo na v2 **não** entra (controle). Nenhum clique no
+navegador (**F (180)**).
+
+### Retro
+
+- **O que a revisão pegou e a suíte não:** os três achados são do tipo "dois caminhos para o mesmo estado" — a mesma chave por dois caminhos
+  (antes e depois do claim), o mesmo empréstimo por duas tabelas (fotografia × vivo), o mesmo registro de contexto por dois carregamentos. A
+  sonda executada achou o I1 e o I2 em minutos; a leitura do plano não.
+- **O plano acertou** o tronco (T1 antes de tudo) e a fotografia congelada (C1): nenhum teste da 9b precisou mudar de intenção.
+- **O plano errou** em deixar a conferência do front contra a forma real para a T4 — a "Matrícula digitada: 1" só apareceu lá (os mocks da
+  T3 tinham a forma imaginada). Para a próxima: a T3 imprime as formas reais (`TERMO_T4_FORMAS=1` virou o molde) antes de escrever fixture.
+
+## Próxima tarefa detalhada — Etapa 181: o relatório "EPI por colaborador" passa a ler as entregas de EPI
+
+**Por quê.** Em **Relatórios → Gestão → EPI por colaborador** (`reportRegistry.js` `'epi-colaborador'`, `acao: null`; função
+`reportService.relatorioEPIPorColaborador`, ~561) o sistema lê **empréstimos de ferramenta** com `ferramentas_almoxarifado.tipo = 'EPI'` e
+`status = 'EMPRESTADA'` — e ignora as **entregas de EPI da 178** (`entregas_epi_almoxarifado`), que são a fonte de verdade desde então. Quem
+abre o relatório vê vazio (ou só o legado) com a ficha de EPI cheia na outra tela. É o furo declarado na Fase 2 da 180 (letra D).
+
+**O que fazer.**
+1. Fonte nova: `entregas_epi_almoxarifado` (append-only, triggers) com o join da evidência (`evidencias_assinatura_almoxarifado`,
+   `contexto = 'ENTREGA_EPI'`, `contexto_id = entrega.id`). Colunas por linha: **data** (`criado_em` da entrega, dia de Brasília —
+   `diaLocal`), **colaborador** (snapshot da entrega: nome, matrícula, setor), **EPI** (código + nome do snapshot), **CA** e **validade do CA**
+   (snapshot), **quantidade**, **tamanho**, **motivo**, **quem entregou** (`criado_por_nome`), **número** da entrega. **Integridade:** NÃO
+   recalcular HMAC por linha no relatório (custo e segredo no export XLSX) — mostrar só o **número** e remeter à verificação da tela de EPI;
+   se quiser uma coluna, que seja "tem evidência" (EXISTS), declarada como tal.
+2. **Permissão:** o relatório passa a exigir `entregar_epi` (`acao: 'entregar_epi'` no registro) — a ficha de EPI é restrita desde a 178
+   (B1165); relatório aberto vazaria o que a tela esconde. Conferir `RelatoriosAlmoxarifado` (a tela filtra pela `acao` do registro?) e o export
+   (mesmo gate, RN-03 da 13).
+3. **Parâmetros:** período (`data_inicio`/`data_fim`, dia de Brasília, molde dos outros relatórios), colaborador, EPI.
+4. **Legado:** empréstimos de ferramenta `tipo = 'EPI'` — medir primeiro no banco local e na cópia de produção (`SELECT COUNT(*) FROM
+   ferramentas_almoxarifado WHERE tipo = 'EPI'`). Se houver, decidir (letra B): mostrar numa seção/aba "Empréstimos de ferramenta tipo EPI
+   (legado)" ou só remeter ao relatório de ferramentas; **não** misturar as duas fontes na mesma tabela (uma é consumo entregue, a outra
+   patrimônio que volta).
+5. **Aproveitar:** o relatório **Ferramentas emprestadas** (`acao: null`) mostra colaborador a todos, enquanto `GET /emprestimos` exige
+   `gerenciar_ferramentas` (RN-180.06) — alinhar a `acao` (decisão reversível, letra B).
+
+**Contrato que consome:** `GET /api/almoxarifado/relatorios/epi-colaborador` e `/export` (dispatcher genérico, `extended.js:~2577`, gate pela
+`acao` do registro). **Pontos de atenção:** o `reportRegistry` tem teste de forma (`colunas` × chaves da função); data no dia de Brasília
+(C406/B1041); a entrega cancelada pela devolução no meio (B1168) não tem linha — nada a filtrar. **Pronto e não reabrir:** a entrega de EPI, a
+cadeia multi-contexto e o termo de ferramenta (178/180).
