@@ -1,6 +1,6 @@
 # Etapa 174 — A entrega grava a OS e o "Consumo por OS" passa a enxergar as requisições
 
-> **Status:** 🟡 T1–T3 feitas (2026-10-22); falta o fechamento (docs). Emendada da "próxima tarefa detalhada" da Etapa 172. (A 173 é de outra
+> **Status:** 🟢 FECHADA (2026-10-22) — T1–T3, revisão adversarial da Fase 5 e fechamento (docs). Emendada da "próxima tarefa detalhada" da Etapa 172. (A 173 é de outra
 > sessão — atalho F2 do fornecedor, só client.)
 > **Fase 0 (medido):**
 > - A entrega tem **uma** porta de SAÍDA (`requisitionService.js:1920-1948`, `entregarSemTrava`); passa `projeto_id`,
@@ -40,9 +40,38 @@
 - `passaNaRegraDoDono` da chegada e os avisos do recebimento continuam olhando só o projeto (ficam mais
   conservadores que a entrega — pulam requisição que a entrega aceitaria; nada é entregue errado).
 
-## Próxima tarefa detalhada
+## Próxima tarefa detalhada — Etapa 176: entrada de material de cliente com OS opcional
 
-*(preencher no fechamento)*
+*(A 175 é de outra sessão — editar ferramenta pela tela; a numeração pula para a 176.)*
+
+**O pedido, deduzido (letra B1119).** A resposta do cliente sobre industrialização foi: *"industrialização = material do cliente que fica
+em nosso estoque; nós fazemos a mão de obra"*. A pergunta *"o material do cliente já vem para uma OS específica?"* **foi feita e aguarda
+resposta** — por isso o campo é **opcional** e **reversível** (nada que exista passa a ser exigido).
+
+**O que fazer.** Na entrada de material de cliente (tela **Recebimentos**, manual 16.6 — hoje exige só o número do documento/nota de remessa;
+projeto **não** é exigido de propósito), aceitar uma **OS opcional**. Com a OS informada e aberta, o que entrou fica **reservado para a OS**,
+reaproveitando inteira a maquinaria da 171 (`services/almoxarifado/reservaDaOs.js`):
+- **Predicado**: `osAbertaDoRecebimento(db, recebimentoId)` (`reservaDaOs.js:82`) hoje lê a OS **só** pelo pedido de compra
+  (`recebimentos_material_almoxarifado.pedido_compra_id` → `pedidos_compra.os_id`). Ponto de extensão: coluna nova aditiva
+  `recebimentos_material_almoxarifado.os_id` (o `recebCols` + `safeAlter` de `schema.js:~1850`), lida **antes** do pedido; recebimento com
+  pedido **e** OS própria diferente → decidir (sugestão: recusar 400 na criação, para não ter duas OS). OS fechada → `null` (fila comum,
+  RN-171.03/B1101).
+- **Reserva na chegada**: `reservaChegadaService.js:~233` (`osAbertaDoRecebimento` → `distribuirParaOs` → `reservarParaOsSobTrava`, sob a trava
+  por material; `jaReservadoDaNotaParaOs` para a retomada). Não precisa de porta nova — só o predicado enxergar a OS do recebimento.
+- **Conversão na aprovação**: `converterReservasDaOs` / `reservasDaOsParaRequisicao` (`reservaDaOs.js:198`) — a requisição com `os_id` (172)
+  converte a reserva da OS; nada a mudar.
+- **Liberação ao fechar a OS**: `liberarDaOsFechada` / `soltarSeOsFechou` (171, B1087/B1090) — nada a mudar.
+- **Regra do dono**: o material é do cliente; a OS informada na entrada tem de ser **do mesmo cliente** (senão a reserva prenderia material de
+  A para uma OS de B, e a entrega recusaria depois — o mesmo problema da Fase 5 desta etapa). Recusar na entrada com a mensagem de
+  `ownerRules.assertSaidaPermitida` como molde ("pertence ao cliente X, mas a OS N e do cliente Y").
+- **Tela**: campo **OS** opcional no recebimento de material de cliente (a lista de OS de `GET /api/almoxarifado/aux/ordens-servico` que a
+  Nova Requisição do almoxarifado já usa); a ENTRADA do recebimento grava `os_id` (o consumo por OS desta etapa **não** conta ENTRADA sem
+  requisição — o saldo inicial fica fora, I1; manter).
+
+**Pontos de atenção.** (1) Material de cliente hoje entra com `ENTRADA` do recebimento — conferir qual tipo e se ele passa por
+`reservaChegadaService` (o pedido da 171 passava por `ENTRADA_COMPRA`); se não passar, a reserva tem de ser ligada nesse caminho **sob a trava
+por material** (CLAUDE.md, porta nova que reserva). (2) A posição por cliente não muda (reserva não é consumo). (3) O que **não** reabrir: o
+casamento por `os_id` da 172, a saída com a OS e a regra projeto × OS de clientes diferentes desta etapa (`c3655b0f`).
 
 ---
 
@@ -116,3 +145,60 @@ compilou. (Com a 173 mesclada o client passa a ter 175 suítes — não é regre
 - **T2 sem client**, como a revisão previu; client rodado só para garantir que nada quebrou.
 - Documentação de fechamento (README da feature, mapa, guia, novidades letra B com I2/C2/I4) **não** foi feita aqui — fica
   para o `fechar-etapa`.
+
+---
+
+## Fase 5 — revisão adversarial (2026-10-22)
+
+Revisor fresco sobre T1–T3; 1 importante, 2 menores, lacunas de teste e o HAVING. Cada correção com TDD, controle positivo na asserção
+certa, restauro por cópia + `cmp`, commit por assunto.
+
+- [x] **1 (importante) — projeto do cliente A + OS do cliente B** — `c3655b0f`. A entrega passava (o projeto vence na regra do dono), mas a
+  SAÍDA gravava o `os_id` de B: a posição por cliente de A (`clienteEstoqueService.js:106-120`) mostrava "aplicado na OS de B" e o consumo
+  por OS de B somava material de A. **Escolhido (B1115, reversível):** com `projeto_id` e cliente do projeto ≠ cliente da OS, a SAÍDA não
+  grava `os_id` (`osIdDaSaida`, lido uma vez antes do laço); mesmo cliente, ou sem projeto, como antes. A ENTRADA da exclusão copia o
+  `os_id` da saída (C1) e acompanha. **Descartado:** mostrar só o projeto no relatório do cliente (esconderia a OS no caso certo). Teste
+  `entregaComOsId` (12): o cenário A/B invertido (saída `[null, proj]`, posição de A só com o projeto, consumo por OS de B sem o material,
+  exclusão com `os_id` null) e o controle mesmo cliente (saída e posição com a OS). Vermelho antes: 1/12 (o A/B). Controles positivos: sem o
+  descarte → cai na asserção do `os_id` da saída; com essa asserção desligada (cópia do teste) → cai na asserção da **posição do cliente**
+  (`[9, null, 1, 2]` — a OS de B aparece). Restaurados por cópia, `cmp` ok.
+- [x] **2 (menor) — quadro do painel** — `aa053fa8`. `aggregateConsumoPorOS` pula linha com `total_consumido` não positivo (linhas só de
+  devolução): a OS não aparece com "Qtd. consumida 0" e o estado vazio volta (B1117). Jest (2) em `AlmoxarifadoDashboard.test.js` (o
+  `mockarApi` ganhou `overrides.consumoOs`): vermelhos antes (2/15), verdes depois (15/15). **O plano (revisão da Fase 2) dizia "o `HAVING` o
+  protege" — estava errado**: o `HAVING` deixa passar exatamente essas linhas.
+- [x] **3 (menor) — índice no `NOT EXISTS` da sucata** — `9d1fcd1d`. `m.referencia = 'DEV-' || d.id` → `EXPLAIN QUERY PLAN` `SCAN d`.
+  Acrescentado `d.id = CAST(SUBSTR(m.referencia, 5) AS INTEGER)` (mantida a igualdade de texto — casa exatamente as mesmas linhas): `SEARCH d
+  USING INTEGER PRIMARY KEY`. Não há coluna `devolucao_id` no livro; criar seria migração (descartado). Controle: `SUBSTR(..., 6)` → o teste I2
+  cai (10/3/7 em vez de 10/0/10); restaurado, `cmp` ok.
+- [x] **4 — lacunas de teste** — `d087bcfc` (`consumoPorOsDevolvido`, 13): o legado `DEVOLUCAO` conta (10/4/6); entrega 10 com OS, devolução
+  parcial 5 citando a saída, exclusão → **o código estorna só os 5 que não voltaram** (uma ENTRADA de 5 com a OS) e o relatório fica 10/10/0
+  (antes da exclusão 10/5/5) — o raciocínio do revisor confere. Os dois passaram de primeira; controles: tirar `DEVOLUCAO` da lista → o do
+  legado cai (10/0/10); a exclusão estornando o entregue cheio (`liquido = g.q`) → o da parcial cai na asserção do estorno (10 em vez de 5).
+  O relatório do cliente com projeto + OS de clientes diferentes está no item 1.
+- [x] **5 — HAVING: mantido** (contrato I1, defesa). O revisor provou que é código morto: o `WHERE` já filtra o tipo (SAIDA* ou devolvido) e
+  `cancelado = 0`, então nenhum grupo chega 0/0 (só com quantidade zero, que o motor não grava). **A suíte não o protege sozinho**: o teste
+  prova o par (sem o filtro de tipo do `WHERE` **e** sem o `HAVING` → vermelho). Descartado: remover (se alguém afrouxar o `WHERE`, o
+  `HAVING` é o que impede a linha 0/0/0). Declarado também na spec 21.
+
+**Declarados na letra D (174):** a devolução para quarentena depois sucateada conta como devolvida; a devolução de destino SUCATA com a perna
+SUCATA recusada fica fora do devolvido; o Custo por projeto sem a ENTRADA da exclusão (I4); a chegada olhando só o projeto.
+
+## Fechamento (2026-10-22)
+
+Novidades (seção da 174 depois da 175, cabeçalho com a 174 no topo e 175/173/172 em "Também em", B1111–B1119, C429, D (174), F (174) e a
+correção da D (172)); specs 22 (a I5 da 172 **estava errada** — corrigido dizendo), 21, 13, 04 e 07 (as menções à I5) e o mapa; guia
+(cabeçalho e roteiro de 8 passos); manual (7.2, 16.4, 16.9, 21d "Consumo por OS" e o quadro do Dashboard).
+
+### Retro
+
+- **A Fase 0 desmentiu a revisão da 172** (a I5): medir a regra do dono antes de aceitar o risco salvou a etapa de nascer com um "não fazer".
+- **A revisão adversarial achou o caso cruzado (projeto × OS de clientes diferentes)** que a revisão da Fase 2 só "declarou": declarar uma
+  consequência que mostra dado de um cliente no relatório de outro não basta — precisava de decisão. Lição: consequência que atravessa
+  dono de material vira decisão B, não D.
+- **"O HAVING o protege"** era uma afirmação sobre o client feita sem rodar o client: o painel soma linha 0. Afirmação sobre consumidor só
+  depois de ler o consumidor.
+
+### Verificação final (medida, sobre a main com a 175 mesclada e a Fase 5)
+
+`test:api` **501/501** arquivos; `test:almoxarifado` **44/0**; `test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0**;
+client **175 suítes / 2252 testes** (a 175 trouxe testes novos — não é regressão); `CI=true` build **compilou**.
