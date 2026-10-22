@@ -266,11 +266,21 @@ let container; let root; let pedidosDoBanco;
 // o (r), que precisa de `teve_recebimento: 1`. Restaurado a cada `beforeEach`, e nao no proprio
 // cenario, para um `expect` que falhe no meio nao vazar o fixture recebido para os outros 22.
 let detalhe418;
+// Etapa 171 (RN-171.06): as OS abertas como `GET /compras/aux/ordens-servico` as devolve
+// (`[{ id, numero_os, status, cliente_nome }]`, id DESC). A 57 nao e a primeira de proposito: um
+// `<select>` que escolhesse a primeira OS sozinho passaria por acidente. A 55 nao tem cliente.
+const ORDENS_SERVICO = [
+  { id: 58, numero_os: 'OS-2026-058', status: 'em_andamento', cliente_nome: 'Frigorifico Serra' },
+  { id: 57, numero_os: 'OS-2026-057', status: 'pendente', cliente_nome: 'Laticinios Vale' },
+  { id: 55, numero_os: 'OS-2026-055', status: 'pendente', cliente_nome: null },
+];
+let ordensDoBanco;
 
 beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
   pedidosDoBanco = [];
   detalhe418 = PEDIDO_418;
+  ordensDoBanco = ORDENS_SERVICO;
   // Implementação aqui e não na fábrica do `jest.mock`: o `resetMocks` do react-scripts apaga
   // implementações entre cenários.
   api.get.mockImplementation((url) => {
@@ -288,6 +298,8 @@ beforeEach(() => {
     }
     if (url === '/compras/materiais') return Promise.resolve({ data: MATERIAIS_CHAPA });
     if (url === '/compras/pedidos-aux/opcoes') return Promise.resolve({ data: OPCOES });
+    // Etapa 171 (RN-171.06): a lista do `<select>` de OS. Trocavel por cenario (`ordensDoBanco`).
+    if (url === '/compras/aux/ordens-servico') return Promise.resolve({ data: ordensDoBanco });
     return Promise.reject(new Error(`URL inesperada no teste: ${url}`));
   });
   // Etapa 39: o POST e por URL — `/calcular` responde a conta simulada (ver `calcularComoServidor`)
@@ -467,6 +479,7 @@ test('(c) submeter manda UM POST com o payload exato, sem numero e sem valor_tot
   // COM o documento preenchido; este continua afirmando o pedido MINIMO — e que nada mais viaja.
   expect(payload).toEqual({
     fornecedor_id: 312,
+    os_id: null, // Etapa 171 (I6): sempre presente; null = estoque
     data_pedido: '2026-09-16',
     previsao_entrega: '2026-09-30',
     status: 'pendente',
@@ -542,6 +555,7 @@ test('(e) /compras/pedidos/editar/418 carrega o GET /:id, mostra os itens e subm
   // pedido legado manda as condicoes vazias e o item com IPI 0 — o servidor completa NCM/peso.
   expect(chamadasPut(418)[0][1]).toEqual({
     fornecedor_id: 312,
+    os_id: null, // Etapa 171 (I6): sempre presente; null = estoque
     data_pedido: '2026-09-10',
     previsao_entrega: '2026-09-25',
     status: 'aprovado',
@@ -1358,6 +1372,7 @@ describe('RN-39', () => {
     const payload = chamadasPost()[0][1];
     expect(payload).toEqual({
       fornecedor_id: 312,
+      os_id: null, // Etapa 171 (I6): sempre presente; null = estoque
       data_pedido: '2026-09-16',
       previsao_entrega: '2026-09-30',
       status: 'pendente',
@@ -1432,6 +1447,7 @@ describe('RN-39', () => {
     expect(chamadasPut(418)).toHaveLength(1);
     expect(chamadasPut(418)[0][1]).toEqual({
       fornecedor_id: 312,
+      os_id: null, // Etapa 171 (I6): sempre presente; null = estoque
       data_pedido: '2026-09-10',
       previsao_entrega: '2026-09-25',
       status: 'aprovado',
@@ -1545,5 +1561,138 @@ describe('Etapa 78 — Documento (PDF) no formulario', () => {
     await renderizarEm('/compras/pedidos/novo');
     expect(texto()).toContain('Novo pedido de compra');
     expect(botaoPorTexto('Documento (PDF)')).toBeUndefined();
+  });
+});
+
+/**
+ * ── Etapa 171 — o pedido de compra vinculado a uma OS (RN-171.01..06, I6, M2) ────────────────
+ *
+ * O contrato congelado: o `<select data-testid="pedido-os">` nasce em "Estoque (sem OS)" (valor
+ * `''`), carrega de `GET /compras/aux/ordens-servico` (com `params.incluir` na edicao de pedido que
+ * ja tem OS, porque a OS gravada pode estar fechada), e o payload leva `os_id` SEMPRE: numero, ou
+ * `null` — no `PUT`, `null` TIRA a OS e a chave ausente nao mexe (I6). As recusas sao do servidor e
+ * chegam ao DOM com a literal dele.
+ */
+describe('Etapa 171 — OS no pedido de compra', () => {
+  const chamadasOrdens = () => api.get.mock.calls.filter(([url]) => url === '/compras/aux/ordens-servico');
+  const opcoesOs = () => [...porTestId('pedido-os').querySelectorAll('option')]
+    .map((o) => [o.value, o.textContent]);
+
+  test('(171a) o select nasce em Estoque e lista as OS como "numero — cliente" (ou so o numero)', async () => {
+    await renderizarEm('/compras/pedidos/novo');
+
+    const select = porTestId('pedido-os');
+    expect(select).not.toBeNull();
+    expect(select.closest('label').textContent.startsWith('OS')).toBe(true);
+    expect(select.value).toBe('');
+    expect(opcoesOs()).toEqual([
+      ['', 'Estoque (sem OS)'],
+      ['58', 'OS-2026-058 — Frigorifico Serra'],
+      ['57', 'OS-2026-057 — Laticinios Vale'],
+      ['55', 'OS-2026-055'],
+    ]);
+    // Na criacao nao ha OS gravada: sem `incluir`.
+    expect(chamadasOrdens()).toHaveLength(1);
+    expect(chamadasOrdens()[0][1]).toBeUndefined();
+  });
+
+  test('(171b) o POST leva os_id NUMERO da OS escolhida', async () => {
+    await renderizarEm('/compras/pedidos/novo');
+    await preencherPedidoValido();
+    await selecionar(porTestId('pedido-os'), '57');
+    await submeter();
+
+    expect(chamadasPost()).toHaveLength(1);
+    const payload = chamadasPost()[0][1];
+    expect(payload.os_id).toBe(57);
+    expect(typeof payload.os_id).toBe('number'); // o `<select>` devolve '57'
+  });
+
+  test('(171c) a edicao carrega o os_id do pedido, pede a lista com incluir, e o PUT com Estoque manda os_id null', async () => {
+    // A OS 41 do pedido esta CONCLUIDA: a lista aberta nao a traz, o `incluir` traz.
+    const OS_41 = { id: 41, numero_os: 'OS-2026-041', status: 'concluido', cliente_nome: 'Laticinios Vale' };
+    detalhe418 = { ...PEDIDO_418, os_id: 41, os_numero: 'OS-2026-041', os_status: 'concluido' };
+    const getOriginal = api.get.getMockImplementation();
+    api.get.mockImplementation((url, config) => (url === '/compras/aux/ordens-servico' && config?.params?.incluir === 41
+      ? Promise.resolve({ data: [...ORDENS_SERVICO, OS_41] })
+      : getOriginal(url, config)));
+
+    await renderizarEm('/compras/pedidos/editar/418');
+
+    expect(chamadasOrdens()).toHaveLength(1);
+    expect(chamadasOrdens()[0][1]).toEqual({ params: { incluir: 41 } });
+    expect(porTestId('pedido-os').value).toBe('41');
+    expect(opcoesOs()).toContainEqual(['41', 'OS-2026-041 — Laticinios Vale']);
+
+    await selecionar(porTestId('pedido-os'), '');
+    await submeter();
+
+    expect(chamadasPut(418)).toHaveLength(1);
+    const corpo = chamadasPut(418)[0][1];
+    expect('os_id' in corpo).toBe(true); // a chave viaja: ausente seria "nao mexe" (I6)
+    expect(corpo.os_id).toBeNull();
+  });
+
+  test('(171d) PUT sem trocar a OS devolve o os_id gravado como numero', async () => {
+    detalhe418 = { ...PEDIDO_418, os_id: 57, os_numero: 'OS-2026-057' };
+
+    await renderizarEm('/compras/pedidos/editar/418');
+    expect(porTestId('pedido-os').value).toBe('57');
+    await submeter();
+
+    expect(chamadasPut(418)[0][1].os_id).toBe(57);
+  });
+
+  test('(171e) OS gravada que a lista nao traz (apagada, M2) aparece como "OS #id" e nao vira Estoque', async () => {
+    detalhe418 = { ...PEDIDO_418, os_id: 99, os_numero: null };
+
+    await renderizarEm('/compras/pedidos/editar/418');
+
+    expect(porTestId('pedido-os').value).toBe('99');
+    expect(opcoesOs()).toContainEqual(['99', 'OS #99']);
+    await submeter();
+    expect(chamadasPut(418)[0][1].os_id).toBe(99);
+  });
+
+  test.each([
+    ['OS inválida'],
+    ['OS #999999 não encontrada'],
+    ['A OS 2024-015 está cancelado — não aceita compra nova'],
+  ])('(171f) a recusa do servidor "%s" aparece em role=alert', async (literal) => {
+    api.post.mockImplementation((url, corpo) => (url === '/compras/pedidos/calcular'
+      ? Promise.resolve({ data: calcularComoServidor(corpo) })
+      : Promise.reject({ response: { status: 400, data: { error: literal } } })));
+
+    await renderizarEm('/compras/pedidos/novo');
+    await preencherPedidoValido();
+    await selecionar(porTestId('pedido-os'), '58');
+    await submeter();
+
+    expect(chamadasPost()).toHaveLength(1);
+    expect(alertas()).toContain(literal);
+    expect(porTestId('pedido-os').value).toBe('58'); // o formulario fica de pe com a escolha
+  });
+
+  test('(171g) a lista de OS falhar nao trava a tela: avisa e o pedido sai para estoque', async () => {
+    const getOriginal = api.get.getMockImplementation();
+    api.get.mockImplementation((url, config) => (url === '/compras/aux/ordens-servico'
+      ? Promise.reject({ response: { status: 500, data: { error: 'falhou' } } })
+      : getOriginal(url, config)));
+
+    await renderizarEm('/compras/pedidos/novo');
+    expect(toast.warn).toHaveBeenCalledWith('Não foi possível carregar as OS — o pedido pode ser salvo para estoque.');
+    expect(alertas()).not.toContain('falhou');
+    expect(opcoesOs()).toEqual([['', 'Estoque (sem OS)']]);
+    await preencherPedidoValido();
+    await submeter();
+    expect(chamadasPost()[0][1].os_id).toBeNull();
+  });
+
+  test('(171h) pedido ja recebido trava o select (so status)', async () => {
+    detalhe418 = { ...PEDIDO_418_RECEBIDO, os_id: 57, os_numero: 'OS-2026-057' };
+
+    await renderizarEm('/compras/pedidos/editar/418');
+
+    expect(porTestId('pedido-os').disabled).toBe(true);
   });
 });

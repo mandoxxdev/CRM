@@ -24,6 +24,14 @@ const OPCOES_STATUS = {
   cotacoes: [['em_analise', 'Em Análise'], ['aprovado', 'Aprovado'], ['rejeitado', 'Rejeitado'], ['cancelado', 'Cancelado']],
 };
 
+// Etapa 171 (RN-171.05, M2): o texto da OS de um pedido na lista e no Excel. `os_numero` vem do
+// LEFT JOIN vivo; OS apagada/renumerada com `os_id` gravado vira `OS #<id>`; sem OS, `''`.
+const rotuloOsDoPedido = (pedido) => {
+  if (pedido.os_numero) return pedido.os_numero;
+  if (pedido.os_id != null) return `OS #${pedido.os_id}`;
+  return '';
+};
+
 const Compras = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -283,7 +291,9 @@ const Compras = () => {
     'IPI %': item ? (Number(item.ipi_percentual) || 0) : '',
     'Frete': detalhe && detalhe.totais ? detalhe.totais.valor_frete : '',
     'ICMS-ST': detalhe && detalhe.totais ? detalhe.totais.total_icms_st : '',
-    'Desconto': detalhe && detalhe.totais ? detalhe.totais.total_desconto : ''
+    'Desconto': detalhe && detalhe.totais ? detalhe.totais.total_desconto : '',
+    // Etapa 171 (RN-171.05): a OS do pedido, NO FIM (a importacao le por cabecalho e ignora esta).
+    'OS': rotuloOsDoPedido(pedido)
   });
 
   const handleExportExcel = async () => {
@@ -440,13 +450,14 @@ const Compras = () => {
               <th>Data Pedido</th>
               <th>Previsão Entrega</th>
               <th>Status</th>
+              <th>OS</th>
               <th>Ações</th>
             </tr>
           </thead>
           <tbody>
             {pedidos.length === 0 ? (
               <tr>
-                <td colSpan="7" className="no-data">Nenhum pedido encontrado</td>
+                <td colSpan="8" className="no-data">Nenhum pedido encontrado</td>
               </tr>
             ) : (
               pedidos.map(pedido => (
@@ -474,6 +485,8 @@ const Compras = () => {
                       {pedido.status || 'pendente'}
                     </span>
                   </td>
+                  {/* Etapa 171 (RN-171.05): a OS do pedido. */}
+                  <td data-testid={`pedido-os-${pedido.id}`}>{rotuloOsDoPedido(pedido) || '-'}</td>
                   <td>
                     <div className="action-buttons">
                       <Link to={`/compras/pedidos/editar/${pedido.id}`} className="btn-icon" title="Editar">
