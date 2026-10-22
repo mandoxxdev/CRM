@@ -77,6 +77,8 @@ const scrapService = require('../../services/almoxarifado/scrapService');
 const scrapDisposalService = require('../../services/almoxarifado/scrapDisposalService');
 const toolService = require('../../services/almoxarifado/toolService');
 const deliverySignatureService = require('../../services/almoxarifado/deliverySignatureService');
+// Etapa 178: entrega de EPI com assinatura (a evidencia generica mora em evidenciaAssinaturaService).
+const epiService = require('../../services/almoxarifado/epiService');
 // Etapa 32: anexos de documento. O servico NAO toca em disco — quem grava e o multer daqui, quem
 // apaga o orfao e o `limparUploadOrfaoEm`.
 const anexoService = require('../../services/almoxarifado/anexoService');
@@ -1972,6 +1974,65 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
         handleError(res, e);
       }
     });
+
+  // ── Entrega de EPI ao colaborador com assinatura na tela (Etapa 178, NR-6) ──────────────────
+  // Contratos congelados no plano (docs/superpowers/plans/2026-10-22-almoxarifado-etapa178-entrega-de-epi-com-assinatura.md).
+  // Multer proprio: SO PNG (I5 — o canvas exporta PNG, e o hash da evidencia e do arquivo como gravado), 2 MB. A recusa do
+  // MIME vira 400 com a literal pelo handler global; o tamanho, o 413 do modulo (tratarArquivoGrandeDemais). O servico confere
+  // tambem a assinatura de bytes do PNG. Toda saida != 201 apaga o upload (molde da assinatura-entrega acima).
+  const uploadAssinaturaEpi = multer({
+    storage: multer.diskStorage({
+      destination: (req, file, cb) => cb(null, uploadsAlmoxDir),
+      filename: (req, file, cb) => cb(null, `assinatura-epi-${Date.now()}-${Math.round(Math.random() * 1e9)}.png`),
+    }),
+    limits: { fileSize: 2 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+      if (/^image\/png$/i.test(file.mimetype)) return cb(null, true);
+      cb(erroComMensagemUsuario('A assinatura deve ser uma imagem PNG'));
+    },
+  });
+
+  // POST /epi/entregas — multipart. Ordem: auth -> requirePermission (antes do multer gravar: 403 nao deixa arquivo) -> multer.
+  app.post('/api/almoxarifado/epi/entregas', auth, requirePermission('entregar_epi'),
+    uploadAssinaturaEpi.single('assinatura'), async (req, res) => {
+      if (!req.file) return res.status(400).json({ error: 'A assinatura do colaborador é obrigatória' });
+      try {
+        const out = await epiService.registrarEntrega(db, req.user, req.body || {},
+          { arquivo: req.file.filename, dir: uploadsAlmoxDir });
+        res.status(201).json(out);
+      } catch (e) {
+        limparUploadOrfaoEm(req, uploadsAlmoxDir);
+        handleError(res, e);
+      }
+    });
+
+  // GET /epi/entregas — leitura, portao do modulo.
+  app.get('/api/almoxarifado/epi/entregas', auth, async (req, res) => {
+    try {
+      res.json(await epiService.listarEntregas(db, req.query || {}));
+    } catch (e) { handleError(res, e); }
+  });
+
+  // GET /epi/entregas/:id/verificar — relê o arquivo e a linha (RN-178.08).
+  app.get('/api/almoxarifado/epi/entregas/:id/verificar', auth, async (req, res) => {
+    try {
+      res.json(await epiService.verificarEntrega(db, req.params.id, { dir: uploadsAlmoxDir }));
+    } catch (e) { handleError(res, e); }
+  });
+
+  // GET /epi/ficha/:colaborador_id — a ficha de EPI (RN-178.09).
+  app.get('/api/almoxarifado/epi/ficha/:colaborador_id', auth, async (req, res) => {
+    try {
+      res.json(await epiService.fichaDoColaborador(db, req.params.colaborador_id));
+    } catch (e) { handleError(res, e); }
+  });
+
+  // GET /aux/colaboradores — os ativos, sem CPF e sem salario, sob o portao do almoxarifado (RN-178.10).
+  app.get('/api/almoxarifado/aux/colaboradores', auth, async (req, res) => {
+    try {
+      res.json(await epiService.listarColaboradoresAtivos(db));
+    } catch (e) { handleError(res, e); }
+  });
 
   // ── Materiais de cliente: a ILHA foi aposentada na Etapa 8 (decisao 4) ───────────────────────
   // Existiam aqui GET/POST /materiais-cliente e POST /materiais-cliente/:id/consumir, sobre

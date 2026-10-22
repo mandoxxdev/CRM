@@ -59,6 +59,7 @@ const ROTULOS_ENTIDADE = Object.freeze({
   conferencia: 'Conferência',
   configuracao: 'Configuração',
   devolucao: 'Devolução',
+  entrega_epi: 'Entrega de EPI', // Etapa 178 (RN-178.06)
   familia: 'Família',
   ferramenta: 'Ferramenta',
   localizacao: 'Localização',
@@ -149,6 +150,7 @@ const GRUPOS_ACAO = congelarGrupos([
   { rotulo: 'Mudança de status', verbos: ['MUDANCA_STATUS'] },
   { rotulo: 'Regularização de séries', verbos: ['REGULARIZACAO_SERIES'] }, // Etapa 61
   { rotulo: 'Assinatura de entrega', verbos: ['ASSINATURA_ENTREGA'] },
+  { rotulo: 'Entrega de EPI', verbos: ['ENTREGA_EPI'] }, // Etapa 178
   { rotulo: 'Confirmação de recebimento', verbos: ['CONFIRMACAO_RECEBIMENTO'] },
   // Etapa 28: a separação passa a ter dono e a auditar (SEPARACAO, Task 1); a segunda
   // conferência e a liberação para retirada ganham verbo próprio (Task 2). Os três entram

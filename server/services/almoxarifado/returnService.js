@@ -25,6 +25,8 @@ const DESTINOS = ['ESTOQUE', 'QUARENTENA', 'SUCATA', 'RETRABALHO'];
 // ofereca uma saida que o servico vai recusar.
 const TIPOS_SAIDA_DEVOLVIVEL = ['SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA'];
 
+// Etapa 178 (C2): a literal do plano ("estornada pelo livro" trocado por "devolvida").
+const MSG_DEVOLUCAO_SAIDA_EPI = 'Saída de entrega de EPI não pode ser devolvida — a ficha do colaborador continuaria dizendo que recebeu';
 const erro400 = (msg) => Object.assign(new Error(msg), { status: 400 });
 
 /**
@@ -44,6 +46,12 @@ async function validarSaidaOriginal(db, { movimentacaoSaidaId, materialId, quant
   }
   if (saida.cancelado) {
     throw erro400(`A saída ${movimentacaoSaidaId} foi cancelada (estornada) — o estorno já devolveu o material`);
+  }
+  // Etapa 178 (C2, letra D): a saida de uma entrega de EPI nao se devolve por aqui — a ficha do colaborador (append-only, com a
+  // assinatura) continuaria dizendo que ele recebeu. Devolucao de EPI e etapa propria. Casa pelo vinculo da entrega; a mesma
+  // condicao vai no INSERT da devolucao (abaixo).
+  if (await dbGet(db, 'SELECT 1 AS v FROM entregas_epi_almoxarifado WHERE movimentacao_id = ?', [movimentacaoSaidaId])) {
+    throw erro400(MSG_DEVOLUCAO_SAIDA_EPI);
   }
   if (Number(saida.material_id) !== Number(materialId)) {
     throw erro400(`A saída ${movimentacaoSaidaId} é de outro material`);
@@ -224,6 +232,7 @@ async function registrarDevolucao(db, user, data) {
       SELECT ?,?,?,?,?,?,?,?,?,?,?,?
       WHERE EXISTS (SELECT 1 FROM movimentacoes_almoxarifado s WHERE s.id = ? AND COALESCE(s.cancelado, 0) = 0
         AND ${requisicaoNaoExcluidaSql('s')}
+        AND NOT EXISTS (SELECT 1 FROM entregas_epi_almoxarifado ee WHERE ee.movimentacao_id = s.id)
         AND ROUND(s.quantidade - (SELECT COALESCE(SUM(d.quantidade), 0) FROM devolucoes_material_almoxarifado d
           WHERE d.movimentacao_saida_id = s.id AND ${DEVOLUCAO_VIVA_SQL}) - ${seriesQueVoltaramSql('s.id')}, 6)
           >= ROUND(?, 6) ${Q.FOLGA_SQL})`,
@@ -503,6 +512,8 @@ async function listarSaidasElegiveis(db, materialId, { limite = 30 } = {}) {
       LEFT JOIN requisicoes_almoxarifado req ON req.id = mv.requisicao_id
      WHERE mv.material_id = ? AND COALESCE(mv.cancelado,0) = 0 AND mv.tipo IN (${marcadores})
        AND ${requisicaoNaoExcluidaSql('mv')}
+       -- Etapa 178 (C2): a saida de entrega de EPI nao e devolvivel nesta etapa — nao aparece para escolher.
+       AND NOT EXISTS (SELECT 1 FROM entregas_epi_almoxarifado ee WHERE ee.movimentacao_id = mv.id)
      ORDER BY mv.created_at DESC, mv.id DESC
      LIMIT ?`, [materialId, ...TIPOS_SAIDA_DEVOLVIVEL, limite]);
 

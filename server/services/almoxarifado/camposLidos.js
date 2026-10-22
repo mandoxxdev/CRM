@@ -51,6 +51,10 @@ const CAMPOS_LIDOS = [
   ['fator_conversao_compra', 'Como é comprado', 'numero'],
   ['fornecedor_principal', 'Fornecedor Principal', 'texto'],
   ['codigo_fornecedor', 'Código no Fornecedor', 'texto'],
+  // Etapa 178 (I4): o CA do EPI — o formulario que manda estes dois em `campos_lidos` ganha o 409 de quem mudou por outro.
+  // Quem nao manda (a tela antes da T2 da 178) nao e comparado: a conferencia so olha as chaves presentes.
+  ['ca_numero', 'Número do CA', 'texto'],
+  ['ca_validade', 'Validade do CA', 'texto'],
 ];
 
 const COLUNAS_CAMPOS_LIDOS = CAMPOS_LIDOS.map(([col]) => col);

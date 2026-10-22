@@ -51,6 +51,8 @@ const stockService = require('../services/almoxarifado/stockService');
 // Etapa 97 (T2): a conclusao do inventario sob a trava por material (a caixa na guarda vem do motor — Fase 5, item 1).
 const trava = require('../services/almoxarifado/travaPorMaterial');
 const materialService = require('../services/almoxarifado/materialService');
+// Etapa 178: a regua de EPI (is_epi da lista de materiais).
+const epiService = require('../services/almoxarifado/epiService');
 const ownerRules = require('../services/almoxarifado/ownerRules');
 const {
   materialPhotoFilename,
@@ -412,10 +414,14 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // stockService.consultarEstoque. `clientes` e tabela CORE (criada por index.js, fora do
       // initSchema do modulo) — o harness de teste replica um subconjunto dela de proposito;
       // fallback sem o JOIN aqui esconderia um ambiente quebrado em vez de resolve-lo.
+      // Etapa 178 (RN-178.01): `is_epi` calculado pelas tres marcas (tipo com is_epi, tipo_material 'epi', categoria EPIs) —
+      // a tela de entrega filtra a lista por ele. A regua mora em epiService.ehEpiSql (a mesma da entrega).
       let sql = `SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo,
                         a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome,
-                        cli.razao_social as proprietario_cliente_nome
+                        cli.razao_social as proprietario_cliente_nome,
+                        ${epiService.ehEpiSql('m', 'tmepi')} as is_epi
                  FROM materiais_almoxarifado m
+                 LEFT JOIN tipos_material_almoxarifado tmepi ON tmepi.id = m.tipo_material_id
                  LEFT JOIN familias_material_almoxarifado f ON m.familia_id = f.id
                  LEFT JOIN localizacoes_almoxarifado l ON m.localizacao_padrao_id = l.id
                  LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
@@ -459,7 +465,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
       db.all(sql, params, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json(enrichMaterialRows(rows));
+        res.json(enrichMaterialRows(rows).map((r) => ({ ...r, is_epi: !!r.is_epi })));
       });
     } catch (e) {
       res.status(500).json({ error: e.message });
@@ -544,8 +550,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   app.get('/api/almoxarifado/materiais/:id',(req, res) => {
     db.get(`SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo,
                    a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome,
-                   cli.razao_social as proprietario_cliente_nome
+                   cli.razao_social as proprietario_cliente_nome,
+                   ${epiService.ehEpiSql('m', 'tmepi')} as is_epi
             FROM materiais_almoxarifado m
+            LEFT JOIN tipos_material_almoxarifado tmepi ON tmepi.id = m.tipo_material_id
             LEFT JOIN familias_material_almoxarifado f ON m.familia_id = f.id
             LEFT JOIN localizacoes_almoxarifado l ON m.localizacao_padrao_id = l.id
             LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
@@ -553,7 +561,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
             WHERE m.id = ?`, [req.params.id], (err, row) => {
       if (err) return res.status(500).json({ error: err.message });
       if (!row) return res.status(404).json({ error: 'Material não encontrado' });
-      res.json(enrichMaterialRow(row));
+      res.json({ ...enrichMaterialRow(row), is_epi: !!row.is_epi });
     });
   });
 
@@ -600,6 +608,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     'norma', 'marca', 'modelo', 'aplicacao', 'ponto_reposicao', 'lote_economico',
     'controle_serie', 'controle_validade', 'controle_corrida', 'requer_inspecao', 'requer_foto',
     'classe_abc', 'unidade_compra', 'fator_conversao_compra', 'unidade_consumo', 'fator_conversao_consumo',
+    // Etapa 178 (I4): o CA do EPI — preserve-when-omitted como o resto; normalizados abaixo (validade invalida -> 400).
+    'ca_numero', 'ca_validade',
   ];
 
   // Etapa 113 (R4 da Fase 2): o E1 de inativar diz a quem nao movimenta (Engenharia) que o zerar e do almoxarifado.
@@ -654,6 +664,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     for (const col of MATERIAL_UPDATE_COLUMNS) {
       if (col === 'localizacao') continue; // derivada de localizacao_padrao_id, resolvida abaixo
       merged[col] = MATERIAL_BOOL_FIELDS.has(col) ? bool01(val(col)) : val(col);
+    }
+    // Etapa 178 (I4): so o que veio no corpo e normalizado/validado — o gravado (legado) e preservado como esta.
+    try {
+      if (req.body.ca_numero !== undefined) merged.ca_numero = materialService.normalizarCaNumero(req.body.ca_numero);
+      if (req.body.ca_validade !== undefined) merged.ca_validade = materialService.normalizarCaValidade(req.body.ca_validade);
+    } catch (errCa) {
+      return res.status(errCa.status || 400).json({ error: errCa.message });
     }
 
     // Etapa 116 (C233, RN-01..RN-04; B752/B753): o formulario manda os controles que mostrava ao abrir. Se outra pessoa

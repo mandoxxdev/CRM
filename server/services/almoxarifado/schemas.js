@@ -308,6 +308,10 @@ const MaterialShape = z.object({
   fator_conversao_compra: numFromForm(z.number().nullable().optional()),
   unidade_consumo: z.string().nullable().optional(),
   fator_conversao_consumo: numFromForm(z.number().nullable().optional()),
+  // Etapa 178 (RN-178.01, I4): o CA do EPI. Sem declarar aqui o z.object descarta a chave calado (a armadilha da reserva_id).
+  // Texto cru: a regua da validade (AAAA-MM-DD ou vazio, 'Validade do CA inválida') mora em materialService, com a literal.
+  ca_numero: z.union([z.string(), z.number()]).nullable().optional(),
+  ca_validade: z.string().nullable().optional(),
 });
 
 // POST — shape completo (familia_id obrigatório) + invariantes de fator de conversão.

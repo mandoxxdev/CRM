@@ -28,6 +28,25 @@ const { CAMPOS_LIDOS } = require('./camposLidos');
 
 const erro = (msg, status = 400) => Object.assign(new Error(msg), { status });
 
+/**
+ * Etapa 178 (RN-178.01, I4): o CA do EPI. `ca_numero` aparado, vazio -> null. `ca_validade` AAAA-MM-DD (uma data que existe) ou
+ * vazio -> null; o resto -> 400 'Validade do CA inválida'. `undefined` passa como undefined (o PUT preserva o gravado).
+ */
+function normalizarCaNumero(v) {
+  if (v === undefined) return undefined;
+  const s = v === null ? '' : String(v).trim();
+  return s === '' ? null : s;
+}
+function normalizarCaValidade(v) {
+  if (v === undefined) return undefined;
+  const s = v === null ? '' : String(v).trim();
+  if (s === '') return null;
+  const ok = /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(`${s}T00:00:00Z`))
+    && new Date(`${s}T00:00:00Z`).toISOString().slice(0, 10) === s;
+  if (!ok) throw erro('Validade do CA inválida', 400);
+  return s;
+}
+
 function bool01(v) { return v ? 1 : 0; }
 
 /**
@@ -290,8 +309,11 @@ async function createMaterial(db, user, data) {
     norma, marca, modelo, aplicacao, ponto_reposicao, lote_economico,
     controle_serie, controle_validade, controle_corrida, requer_inspecao, requer_foto,
     classe_abc, unidade_compra, fator_conversao_compra, unidade_consumo, fator_conversao_consumo,
-    codigo_auto,
+    codigo_auto, ca_numero, ca_validade,
   } = data;
+
+  // Etapa 178 (I4): a validade do CA antes de tudo (recusa = nada gravado).
+  const caValidade = normalizarCaValidade(ca_validade);
 
   // RN-02 (Etapa 110): antes da familia e de gravar.
   const saldoInicial = quantidadeSaldoInicial(data);
@@ -372,6 +394,8 @@ async function createMaterial(db, user, data) {
     fator_conversao_compra: fator_conversao_compra ?? null,
     unidade_consumo: unidade_consumo || null,
     fator_conversao_consumo: fator_conversao_consumo ?? null,
+    ca_numero: normalizarCaNumero(ca_numero) ?? null,
+    ca_validade: caValidade ?? null,
   };
   const insertColumns = Object.keys(insertValues);
 
@@ -727,6 +751,7 @@ function mensagemInativarComSaldo(codigo, preso, { podeMovimentar = true, perfil
 module.exports = {
   COLUNAS_INATIVAR_SQL, SEM_SALDO_SQL, saldoQuePrendeInativacao, mensagemInativarComSaldo,
   FAMILIA_E_SUBFAMILIA,
+  normalizarCaNumero, normalizarCaValidade,
   bool01, validateFamiliaAtiva, validateSubfamilia, resolveLocalizacaoFromFk, validarLocalizacaoPadrao,
   proximoCodigo, createMaterial, TENTATIVAS_CODIGO_AUTO,
   condicaoFamiliaSql, FAMILIA_MUDOU_NO_CADASTRO,

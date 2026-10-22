@@ -2533,6 +2533,8 @@ async function contarSeriesDaSaida(db, movimentoId) {
 
 /** A recusa da 6b (series da saida que ja reentraram) — tambem usada pela 116 com a serie desligada (Fase 2, R3). */
 const MSG_SERIES_REENTRARAM = 'estorno de saida recusado: series desta saida ja reentraram no estoque — a devolucao ja repos o material';
+// Etapa 178 (C2): a saida de entrega de EPI nao se estorna pelo livro (a literal do plano).
+const MSG_ESTORNO_SAIDA_EPI = 'Saída de entrega de EPI não pode ser estornada pelo livro — a ficha do colaborador continuaria dizendo que recebeu';
 
 // Etapa 116 (Fase 5, revisor 1): a devolucao "viva" — desde a 117 (C236) a regua mora em `devolucaoViva.js`, comum as cinco
 // contas do que ja voltou de uma saida (ver la).
@@ -2710,6 +2712,14 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
   }
   if (mov.requisicao_id) {
     throw Object.assign(new Error('Movimentação vinculada a requisição — use os fluxos da requisição (exclusão/encerramento)'), { status: 400 });
+  }
+  // Etapa 178 (C2): a SAIDA de uma entrega de EPI nao se estorna pelo livro — o material voltaria e a ficha do colaborador
+  // (append-only, com a assinatura) continuaria dizendo que ele recebeu. Casa pelo VINCULO (`movimentacao_id` da entrega), nao
+  // por `documento_vinculado LIKE 'EPI-%'` (o documento e digitavel na Saida avulsa). So a compensacao do proprio epiService
+  // (a transacao da entrega falhou depois da saida) passa. A mesma condicao vai no claim, abaixo.
+  if (opcoesEstorno.compensacao !== true
+    && await dbGet(db, 'SELECT 1 AS v FROM entregas_epi_almoxarifado WHERE movimentacao_id = ?', [movimentoId])) {
+    throw Object.assign(new Error(MSG_ESTORNO_SAIDA_EPI), { status: 400 });
   }
 
   // SEGUNDA declaracao de tiposSaida deste arquivo (a outra esta em registrarMovimentacao). Sao
@@ -2947,9 +2957,19 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
     SET cancelado = 1, cancelado_por = ?, cancelado_em = CURRENT_TIMESTAMP, cancelamento_motivo = ?, regularizacao_pendente = 0
     WHERE id = ? AND cancelado = 0${claimSemDevolucao ? ` AND NOT EXISTS (SELECT 1 FROM devolucoes_material_almoxarifado d
       WHERE d.movimentacao_saida_id = movimentacoes_almoxarifado.id AND ${DEVOLUCAO_VIVA_SQL})` : ''}${
-  entradaDaSucata ? ` AND NOT ${sucataViva('movimentacoes_almoxarifado.referencia', 'movimentacoes_almoxarifado.material_id')}` : ''}`,
+  entradaDaSucata ? ` AND NOT ${sucataViva('movimentacoes_almoxarifado.referencia', 'movimentacoes_almoxarifado.material_id')}` : ''}${
+  // Etapa 178 (C2): a entrega de EPI gravada entre a guarda la de cima e este claim tambem recusa (a transacao da entrega so
+  // grava com a saida de pe — as duas condicoes ordenam a corrida).
+  opcoesEstorno.compensacao !== true ? ` AND NOT EXISTS (SELECT 1 FROM entregas_epi_almoxarifado ee
+      WHERE ee.movimentacao_id = movimentacoes_almoxarifado.id)` : ''}`,
   [user.id, motivo, movimentoId]);
   if (!claim.changes) {
+    if (opcoesEstorno.compensacao !== true
+      && await dbGet(db, 'SELECT 1 AS v FROM entregas_epi_almoxarifado WHERE movimentacao_id = ?', [movimentoId])) {
+      await recriarReservasDoEstorno(db, user, liberadasNoEstorno, movimentoId);
+      await recalcularStatusAposEstorno(db, requisicoesDoEstorno);
+      throw Object.assign(new Error(MSG_ESTORNO_SAIDA_EPI), { status: 400 });
+    }
     if (entradaDaSucata && await dbGet(db, `SELECT 1 AS v WHERE ${sucataViva('?', '?')}`, [mov.referencia, mov.material_id])) {
       throw Object.assign(new Error(mensagemEntradaDaSucata(mov.referencia)), { status: 400 });
     }
