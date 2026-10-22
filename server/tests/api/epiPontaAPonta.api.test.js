@@ -192,7 +192,7 @@ const ESTORNO_EPI = 'Saída de entrega de EPI não pode ser estornada pelo livro
     assert.ok(!JSON.stringify(fichaAtiva).includes('123.456.789'), 'CPF completo vazou na ficha');
     assert.strictEqual(fichaAtiva.entregas.length, 1);
     const e = fichaAtiva.entregas[0];
-    assert.deepStrictEqual(Object.keys(e).sort(), [...CHAVES_LISTA, 'arquivo_url', 'registro_sha256'].sort());
+    assert.deepStrictEqual(Object.keys(e).sort(), [...CHAVES_LISTA, 'arquivo_url', 'registro_sha256', 'confirmado_por_matricula', 'user_agent'].sort()); // Etapa 183: +2 chaves (RN-183.01)
     assert.strictEqual(e.registro_sha256, entrega.evidencia.registro_sha256);
     assert.match(e.arquivo_url, /^\/api\/uploads\/almoxarifado\/assinatura-epi-[^/?]+\.png\?exp=\d+&sig=[0-9a-f]+$/);
   });

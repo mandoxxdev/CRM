@@ -417,7 +417,8 @@ async function fichaDoColaborador(db, colaboradorId) {
   const id = Number(colaboradorId);
   const naoEncontrado = () => erro(`Colaborador #${colaboradorId} não encontrado`, 404);
   if (!Number.isInteger(id) || id <= 0) throw naoEncontrado();
-  const entregas = await dbAll(db, `SELECT ${COLUNAS_LISTA}, v.arquivo, v.registro_sha256, v.cpf AS cpf_snapshot, e.setor AS setor_snapshot
+  const entregas = await dbAll(db, `SELECT ${COLUNAS_LISTA}, v.arquivo, v.registro_sha256, v.cpf AS cpf_snapshot, e.setor AS setor_snapshot,
+    v.confirmado_por_matricula, v.user_agent
     FROM entregas_epi_almoxarifado e
     LEFT JOIN evidencias_assinatura_almoxarifado v ON v.contexto = ? AND v.contexto_id = e.id
     WHERE e.colaborador_id = ? ORDER BY e.criado_em DESC, e.id DESC`, [CONTEXTO, id]);
@@ -434,6 +435,9 @@ async function fichaDoColaborador(db, colaboradorId) {
     entregas: entregas.map(({ arquivo, cpf_snapshot: _c, setor_snapshot: _s, ...linha }) => ({
       ...linha,
       arquivo_url: arquivo ? materialPhotoUrl(arquivo) : null,
+      // Etapa 183 (RN-183.01): a confirmacao e o aparelho da EVIDENCIA do ato (no HMAC). O ip fica fora (RN-183.02, B1202).
+      confirmado_por_matricula: linha.confirmado_por_matricula == null ? null : Number(linha.confirmado_por_matricula),
+      user_agent: linha.user_agent ?? null,
     })),
   };
 }
