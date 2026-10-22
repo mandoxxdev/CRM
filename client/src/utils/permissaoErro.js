@@ -78,6 +78,10 @@ const ACOES = {
   // pediu, o almoxarife ou o administrador", não "solicite acesso"), então este rótulo serve ao gate
   // da tela (`bloquearSeNaoPode`) e ao /minhas-permissoes.
   liberar_reserva_requisicao: 'liberar a reserva de uma requisição',
+  // Etapa 178 (T3): `entregar_epi` entrou em ACAO_PERFIS na T1 (commit de SERVIDOR) sem esta linha — a suite do client ficou
+  // vermelha em `permissaoErro.test.js:52` (`semRotulo = ["entregar_epi"]`), medido na T3. O 403 e o que todo perfil fora de
+  // ADMINISTRADOR e ALMOXARIFE ve ao registrar a entrega na tela "Entrega de EPI"; sem rotulo, o toast mostraria "entregar epi" cru.
+  entregar_epi: 'registrar entrega de EPI',
 
   // Etapa 30, fix-round da revisao adversarial: QUATRO acoes de ACAO_PERFIS nao tinham rotulo, e
   // tres delas ja tinham call site de UI — o toast mostrava a chave crua ("gerenciar plano
