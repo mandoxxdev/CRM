@@ -266,8 +266,13 @@ const OSForm = ({ os, onClose }) => {
       };
 
       if (os) {
-        await api.put(`/operacional/ordens-servico/${os.id}`, payload);
+        const resp = await api.put(`/operacional/ordens-servico/${os.id}`, payload);
         toast.success('OS atualizada com sucesso');
+        // Etapa 171 T3: a OS encerrada solta a reserva da compra e o PUT conta o que soltou (antes o front engolia)
+        const dados = (resp && resp.data) || {};
+        if (dados.aviso) toast.warning(dados.aviso);
+        const liberadas = Number(dados.reservas_liberadas) || 0;
+        if (liberadas > 0) toast.info(`${liberadas} reserva(s) de material de compra liberada(s) para o estoque`);
       } else {
         await api.post('/operacional/ordens-servico', payload);
         toast.success('OS criada com sucesso');

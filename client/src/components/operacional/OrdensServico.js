@@ -50,7 +50,8 @@ const OrdensServico = () => {
         toast.success('OS excluída com sucesso');
         loadOS();
       } catch (error) {
-        toast.error('Erro ao excluir OS');
+        // RN-171.10: OS com pedido de compra vinculado responde 409 com o motivo — mostrar o do servidor
+        toast.error(error.response?.data?.error || 'Erro ao excluir OS');
       }
     }
   };
