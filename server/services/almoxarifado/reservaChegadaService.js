@@ -371,7 +371,7 @@ async function distribuirSemLock(db, user, materialId, teto, rotulos, acc, filaO
   const candidatos = await dbAll(db, `SELECT ir.id AS item_id, ir.requisicao_id, ir.quantidade_solicitada,
       ir.quantidade_entregue, ir.quantidade_atendida, ${HOLD_DO_ITEM_SQL} AS hold,
       r.id, r.numero, r.status, r.urgencia, r.data_necessidade, r.created_at, r.projeto_id,
-      r.os_referencia, r.cliente_id, r.data_aprovacao_valor
+      r.os_referencia, r.os_id, r.cliente_id, r.data_aprovacao_valor
     FROM itens_requisicao_almoxarifado ir
     JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
     WHERE COALESCE(r.ativo, 1) = 1 AND r.status IN (${marcasSt}) AND ir.material_id = ?`,
@@ -401,6 +401,7 @@ async function distribuirSemLock(db, user, materialId, teto, rotulos, acc, filaO
         material_id: materialId,
         quantidade: q,
         projeto_id: c.projeto_id || null,
+        os_id: c.os_id || null, // Etapa 172 (RN-172.05, I3): a reserva da fila grava a OS cadastrada da requisicao
         os_referencia: c.os_referencia || null,
         cliente_id: c.cliente_id || null,
         data_necessidade: c.data_necessidade || null,
@@ -453,7 +454,7 @@ async function distribuirSemLock(db, user, materialId, teto, rotulos, acc, filaO
 
 /**
  * Etapa 171 (T2, RN-171.08 + RN-171.12 a, I1) — a distribuicao de um material que chegou por pedido com OS ABERTA, SOB A
- * TRAVA de quem chama: (1) a fila das requisicoes DA OS (`os_referencia` = numero da OS, `reservaDaOs.requisicaoEhDaOs`)
+ * TRAVA de quem chama: (1) a fila das requisicoes DA OS (Etapa 172: por `os_id` se a requisicao o tem, senao `os_referencia` = numero da OS — `reservaDaOs.requisicaoCasaComOs`)
  * pelo mesmo miolo, com o mesmo teto; (2) o que sobrar vira a reserva da OS (`reservarParaOsSobTrava`: teto pelo livre
  * de caixa, sem expiracao). A fila geral nao leva nada deste material desta nota/liberacao — o que nao coube na reserva
  * da OS (caixa) fica livre.
@@ -461,7 +462,7 @@ async function distribuirSemLock(db, user, materialId, teto, rotulos, acc, filaO
 async function distribuirParaOs(db, user, materialId, teto, rotulos, acc, os) {
   if (!(teto > EPS)) return;
   const usado = await distribuirSemLock(db, user, materialId, teto, rotulos, acc,
-    { filtro: (c) => reservaDaOs.requisicaoEhDaOs(c.os_referencia, os.numero_os) });
+    { filtro: (c) => reservaDaOs.requisicaoCasaComOs({ osId: c.os_id, osReferencia: c.os_referencia }, os) });
   const r = await reservaDaOs.reservarParaOsSobTrava(db, user, {
     materialId, quantidade: teto - usado, os, recebimentoId: rotulos.recebimento_id,
   });

@@ -361,16 +361,16 @@ async function saldoDisponivelParaItem(db, item) {
 }
 
 /**
- * Etapa 171 (T2, RN-171.12 b) — libera, das reservas da OS do material que a requisicao (`osReferencia`) pode usar, ate
+ * Etapa 171 (T2, RN-171.12 b) — libera, das reservas da OS do material que a requisicao (`{ osId, osReferencia }`, Etapa 172) pode usar, ate
  * `falta`, as mais antigas primeiro. Roda SOB A TRAVA da aprovacao (liberar nao pega trava). Nunca lanca: a liberacao
  * que falha vira `console.warn` e para (o que ja foi liberado volta na lista, para a reserva ou a recriacao).
  * @returns {Promise<Array<{reserva_id, material_id, quantidade, os_id, numero_os, recebimento_id}>>}
  */
-async function converterReservasDaOs(db, user, materialId, osReferencia, falta, rotuloReq) {
+async function converterReservasDaOs(db, user, materialId, osDaRequisicao, falta, rotuloReq) {
   const out = [];
   let lista;
   try {
-    lista = await reservaDaOs.reservasDaOsParaRequisicao(db, materialId, osReferencia);
+    lista = await reservaDaOs.reservasDaOsParaRequisicao(db, materialId, osDaRequisicao);
   } catch (e) {
     console.warn(`[almoxarifado-reserva-os] leitura das reservas da OS falhou (material ${materialId}): ${e.message}`);
     return out;
@@ -472,11 +472,14 @@ async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}, { rec
   const reservas = [];
   let algumFaltou = false;
   let algumSeguro = false; // algum item com hold: criado agora OU ja existente (Etapa 73, Fase 5)
-  // Etapa 171 (T2, RN-171.12 b): a requisicao e "da OS" pela `os_referencia` (a requisicao nao tem `os_id`).
-  const osReferencia = reqRow && reqRow.os_referencia !== undefined
-    ? reqRow.os_referencia
-    : ((await dbGet(db, 'SELECT os_referencia FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId])) || {}).os_referencia;
-  const daOs = !!reservaDaOs.chaveDaOs(osReferencia);
+  // Etapa 171 (T2, RN-171.12 b): a requisicao e "da OS". Etapa 172 (RN-172.04, I3): com `os_id` (a OS cadastrada) casa SO
+  // pelo id; sem ele, pela `os_referencia` como na 171. Os dois lidos do `reqRow` que as tres portas passam (`SELECT *`)
+  // ou, se ele nao os trouxer, do banco.
+  const osDaReq = reqRow && reqRow.os_referencia !== undefined && reqRow.os_id !== undefined
+    ? reqRow
+    : ((await dbGet(db, 'SELECT os_id, os_referencia FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId])) || {});
+  const osDaRequisicao = { osId: osDaReq.os_id || null, osReferencia: osDaReq.os_referencia || null };
+  const daOs = !!osDaRequisicao.osId || !!reservaDaOs.chaveDaOs(osDaRequisicao.osReferencia);
   const rotuloReq = (reqRow && reqRow.numero) || requisicaoId;
 
   try {
@@ -499,7 +502,7 @@ async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}, { rec
       let convertidas = [];
       if (daOs && disponivel - jaReservado - caixaOutros >= -1e-9) {
         // eslint-disable-next-line no-await-in-loop
-        convertidas = await converterReservasDaOs(db, user, item.material_id, osReferencia, falta, rotuloReq);
+        convertidas = await converterReservasDaOs(db, user, item.material_id, osDaRequisicao, falta, rotuloReq);
         if (convertidas.length) {
           try {
             // eslint-disable-next-line no-await-in-loop
@@ -531,7 +534,8 @@ async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}, { rec
           material_id: item.material_id,
           quantidade: aReservar,
           projeto_id: reqRow.projeto_id || null,
-          os_id: reqRow.os_id || null,
+          // Etapa 172 (RN-172.05): a OS cadastrada da requisicao (antes `reqRow.os_id` de coluna inexistente, sempre null).
+          os_id: osDaRequisicao.osId,
           os_referencia: reqRow.os_referencia || null,
           cliente_id: reqRow.cliente_id || null,
           observacoes: `Reserva automática da requisição ${reqRow.numero || requisicaoId}`,

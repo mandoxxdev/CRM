@@ -6,10 +6,11 @@
  * AND os_id = ? AND recebimento_id IS NOT NULL`. A reserva nasce MANUAL (sem requisicao), com `os_id`, `os_referencia`
  * = numero da OS, `recebimento_id` da nota e sem `expira_em` (I2).
  *
- * A REQUISICAO NAO TEM `os_id` (medido na T2 — a Revisao da Fase 2 supunha `r.os_id`): `requisicoes_almoxarifado` so tem
- * `os_referencia`, texto livre que o solicitante digita ("Informe o numero da OS", `requisitionCreateService.exigirOS`).
- * "Requisicao da OS" e, portanto, `os_referencia` igual ao `numero_os` pela `chaveDaOs` (sem caixa, sem espaco nas
- * pontas, espacos internos colapsados, um prefixo "OS" opcional ignorado). Letra B da Etapa 171.
+ * "Requisicao da OS" (Etapa 172, RN-172.04 — `requisicaoCasaComOs`): a requisicao COM `os_id` (a OS cadastrada, opcional,
+ * desde a Etapa 172) casa SO pelo id; SEM `os_id` (as antigas e quem so digitou) casa como na 171: `os_referencia` igual
+ * ao `numero_os` pela `chaveDaOs` (sem caixa, sem espaco nas pontas, espacos internos colapsados, um prefixo "OS"
+ * opcional ignorado). ESTAVA DESATUALIZADO aqui ate a 172: "A REQUISICAO NAO TEM `os_id`" era verdade so ate a coluna
+ * nascer (`requisicoes_almoxarifado.os_id`, Etapa 172 T1); o casamento pelo texto e agora so o fallback.
  *
  * Modulo sem ciclo: requer `db`, `stockService`, `caixaSql`, `quantidade`; o `pedidoCompraService` (Compras) e lido
  * LAZY (`osFechada`), so quando o pedido tem OS.
@@ -38,6 +39,19 @@ function chaveDaOs(texto) {
 function requisicaoEhDaOs(osReferencia, numeroOs) {
   const a = chaveDaOs(osReferencia);
   return !!a && a === chaveDaOs(numeroOs);
+}
+
+const temOsId = (osId) => osId !== null && osId !== undefined && osId !== '';
+
+/**
+ * Etapa 172 (RN-172.04, I3) — a requisicao `{ osId, osReferencia }` e da OS `{ id, numero_os }`? Com `osId`: so pelo id
+ * (o texto nao conta — nem para casar com outra OS de numero parecido, nem para deixar de casar). Sem `osId`: pelo texto
+ * (`requisicaoEhDaOs`, a regua da 171).
+ */
+function requisicaoCasaComOs({ osId, osReferencia } = {}, os) {
+  if (!os) return false;
+  if (temOsId(osId)) return Number(osId) === Number(os.id);
+  return requisicaoEhDaOs(osReferencia, os.numero_os);
 }
 
 function avisoSeNaoForTabelaAusente(onde, e) {
@@ -176,16 +190,20 @@ async function reservarParaOsSobTrava(db, user, { materialId, quantidade, os, re
 }
 
 /**
- * RN-171.12(b) — as reservas da OS do material que a requisicao (pela `os_referencia`) pode converter, mais antigas
- * primeiro. Le o numero AO VIVO (`ordens_servico`); sem a tabela/linha, o `os_referencia` gravado na reserva.
+ * RN-171.12(b) — as reservas da OS do material que a requisicao pode converter, mais antigas primeiro. Le o numero AO VIVO
+ * (`ordens_servico`); sem a tabela/linha, o `os_referencia` gravado na reserva.
+ * Etapa 172 (RN-172.04, I3): recebe `{ osId, osReferencia }` da requisicao (era so o texto). Com `osId`, so as reservas
+ * DESSA OS (`os_id = ?`; o texto nao conta); sem `osId`, o casamento pelo texto da 171.
  */
-async function reservasDaOsParaRequisicao(db, materialId, osReferencia) {
-  if (!chaveDaOs(osReferencia)) return [];
+async function reservasDaOsParaRequisicao(db, materialId, { osId = null, osReferencia = null } = {}) {
+  const porId = temOsId(osId);
+  if (!porId && !chaveDaOs(osReferencia)) return [];
   const linhas = await dbAll(db, `SELECT id, os_id, os_referencia, recebimento_id, material_id,
       quantidade - COALESCE(quantidade_utilizada, 0) AS saldo
     FROM reservas_material_almoxarifado
     WHERE status = 'ATIVA' AND origem = 'MANUAL' AND os_id IS NOT NULL AND recebimento_id IS NOT NULL AND material_id = ?
-    ORDER BY id`, [materialId]);
+      ${porId ? 'AND os_id = ?' : ''}
+    ORDER BY id`, porId ? [materialId, Number(osId)] : [materialId]);
   const numeroDa = new Map();
   const out = [];
   for (const l of linhas) {
@@ -202,7 +220,7 @@ async function reservasDaOsParaRequisicao(db, materialId, osReferencia) {
       numeroDa.set(l.os_id, numero);
     }
     const numero = numeroDa.get(l.os_id);
-    if (requisicaoEhDaOs(osReferencia, numero)) out.push({ ...l, numero_os: numero, saldo: num(l.saldo) });
+    if (requisicaoCasaComOs({ osId, osReferencia }, { id: l.os_id, numero_os: numero })) out.push({ ...l, numero_os: numero, saldo: num(l.saldo) });
   }
   return out;
 }
@@ -234,6 +252,7 @@ module.exports = {
   motivoReservaDaOs,
   chaveDaOs,
   requisicaoEhDaOs,
+  requisicaoCasaComOs,
   osIdDoPedido,
   osAbertaDoRecebimento,
   jaReservadoDaNotaParaOs,
