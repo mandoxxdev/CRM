@@ -1,6 +1,7 @@
 # Etapa 178 — Entrega de EPI ao colaborador com assinatura na tela (NR-6)
 
-> **Status:** 🟡 em execução (2026-10-22). Emendada da "próxima tarefa detalhada" da Etapa 176 (B1157).
+> **Status:** ✅ FECHADA (2026-10-22) — T1, T2, T3, revisão adversarial (Fase 5) e fechamento; ver "Verificação final" e "Próxima tarefa
+> detalhada" (Etapa 180) no fim. *(Era: 🟡 em execução.)* Emendada da "próxima tarefa detalhada" da Etapa 176 (B1157).
 > **Origem:** pergunta 3 da usuária de Compras (21/10) e a observação dela: *"é possível utilizar registros eletrônicos
 > para comprovar a entrega de EPIs, mas o sistema deve garantir a identificação do colaborador, a integridade dos
 > registros e a possibilidade de recuperação das informações, observando as exigências aplicáveis da NR-6. A assinatura
@@ -59,7 +60,7 @@
 
 ## Próxima tarefa detalhada
 
-*(preencher no fechamento)*
+*(Preenchida no fechamento — a seção completa está no fim deste plano: "Próxima tarefa detalhada — Etapa 180".)*
 
 ---
 
@@ -192,3 +193,128 @@ devolvida. (4) o hash amarra a evidência à entrega pelo `numero` (o `id` e o `
 
 **Letra B (T3):** o PDF relê a ficha em vez de (descartados) aumentar a validade da URL no servidor (mesma URL de todas as imagens do módulo,
 letra D) ou o cliente interpretar o `exp` da URL.
+
+---
+
+## Fase 5 — revisão adversarial (2026-10-22) — 1 crítico, 4 importantes, 3 menores; todos corrigidos
+
+Revisor independente com sondas executadas (`rev-178/sonda.js` no scratchpad da sessão: P1 forja, P2 apagar, P3 devolução no meio, P4
+compensação que falha — **as quatro reproduzidas** antes da correção). TDD em todos: o teste novo vermelho na asserção do achado, a correção,
+verde, e o controle positivo (sabotar → vermelho na asserção certa → restaurar por cópia + `cmp`).
+
+| # | Achado | Correção | Commit |
+|---|---|---|---|
+| 1 (crítico, P1/P2) | `registro_sha256` era o SHA-256 **público** do JSON canônico: quem tinha o banco e o disco derrubava o trigger, trocava o PNG, mudava a entrega (qtd 1→5, outro nome), recalculava os dois hashes → `/verificar` "íntegro"; apagar entrega + evidência não deixava rastro | (a) **HMAC-SHA256** com segredo **fora do banco** — `runtimeSecrets.resolveEvidenciaAssinaturaSecret` (env `EVIDENCIA_ASSINATURA_SECRET` ou `evidenciaAssinaturaSecret` no `.runtime-secrets.json` do diretório de dados, gerado e persistido no primeiro uso, o mesmo mecanismo do `jwtSecret`); (b) **cadeia**: `sequencia` (UNIQUE, global) + `hash_anterior` no HMAC, gravação numa fila em memória (`naFilaDaCadeia`: cabeça → elo → HMAC → transação); `/verificar` confere o elo com a anterior e a posterior; rota nova **`GET /epi/cadeia/verificar`** (lacuna = "registro apagado", "elo quebrado", arquivo/registro alterado, "entrega sem evidência", "registro apagado no fim da cadeia" pelo `sqlite_sequence`) | `dcf65ae1` |
+| 2 (importante, P3) | devolução citando a saída, gravada na janela saída → transação, deixava a entrega gravar (201) com o material de volta | `AND NOT EXISTS` de devolução viva (`DEVOLUCAO_VIVA_SQL`) no INSERT da entrega → compensação; a compensação pede **`semDevolucaoViva: true`** ao motor (`exigeSemDevolucao` na guarda e no claim de `cancelarMovimentacao`) — sem isso ela estornava por cima da devolução e o físico ia a **11 com 10** de verdade | `4568c917` |
+| 3 (importante, P4) | compensação que falhava respondia "a saída do estoque foi desfeita" | desfez → 500 `Não foi possível gravar a entrega de EPI — nada foi gravado: a saída do estoque foi desfeita. Pode tentar de novo. (<erro>)`; não desfez → 500 `Não foi possível gravar a entrega de EPI e a saída do estoque NÃO pôde ser desfeita: a movimentação #<id> (<numero>) ficou registrada sem evidência de entrega. A assinatura foi preservada no servidor. Avise o administrador antes de entregar de novo. (<causa>; <erro da compensação>)` com `preservarArquivo` (a rota não apaga o PNG) | `4568c917` |
+| M1 | o 409 "foi estornada, nada foi gravado" valia com o claim provisório | só com `cancelado = 1` **e** `movimento_estorno_id`; senão compensação (que falha → o 500 do item 3); saída viva sem linha gravada e compensação ok → 409 `A entrega <n> não foi gravada — a saída mudou enquanto a entrega era gravada (devolução ou estorno no meio); nada foi gravado: a saída do estoque foi desfeita. Faça a entrega de novo.` | `4568c917` |
+| M3 | erro depois do COMMIT apagava o PNG de uma evidência gravada | todo erro pós-commit carrega `preservarArquivo`; 500 `A entrega <n> foi gravada, mas a resposta falhou (<erro>) — confira a ficha do colaborador antes de entregar de novo.` (gancho `depoisDaGravacao` para o teste) | `4568c917` |
+| 4 (importante) | a assinatura não identificava quem assinou | `confirmacao_matricula` obrigatória, conferida com o cadastro (sem caixa, pontas e espaços internos; zeros à esquerda contam): `Colaborador <nome> sem matrícula cadastrada — não é possível confirmar a identidade`, `A matrícula informada não confere com a do colaborador`, `O colaborador deve digitar a própria matrícula para confirmar o recebimento`; evidência com `confirmado_por_matricula = 1`, `ip`, `user_agent` (≤ 300) no HMAC | `44f58fd9` |
+| 5 (importante) | ficha, lista, verificar, cadeia e `/aux/colaboradores` abertos a todo o módulo (PRODUCAO lia CPF mascarado, matrícula e URL da assinatura) | `requirePermission('entregar_epi')` nas **cinco** leituras (o `/verificar` por id entrou junto — o pedido listava quatro) | `4c4bacbf` |
+| M2 | reenvio depois de a resposta se perder duplicava a entrega | `chave_idempotencia` (índice UNIQUE parcial, no HMAC); reenvio com a mesma chave → **200** com o corpo do 201 + `reutilizada: true`, sem saída nova, PNG do reenvio apagado; a busca vem **antes** da conferência de estoque (no último item o reenvio dava "saldo insuficiente"); dois envios iguais em paralelo → o perdedor do UNIQUE compensa e devolve o do vencedor; mesma chave com outro colaborador/EPI/quantidade → 409 `Chave de idempotência já usada em outra entrega`; fora de `^[A-Za-z0-9-]{8,100}$` → 400 `Chave de idempotência inválida` | `d9cd7604` |
+| front + M5 | — | campo **Matrícula — digitada pelo colaborador**; o seletor da Nova entrega sem a matrícula (nome (setor)); chave por tentativa (`getRandomValues` sem `randomUUID` — o tablet abre por http no IP), mantida só quando a rede cai sem resposta; mensagens literais do 413 e do 500 da compensação falha; sem `entregar_epi` a tela só avisa e não chama nada; botão **Verificar cadeia** | `853a46ce` |
+
+**Testes novos:** `epiCadeiaHmac` 13/13, `epiCompensacao` 6/6, `epiMatricula` 9/9, `epiLeituras` 6/6, `epiIdempotencia` 7/7; existentes
+ajustados: `epiEntrega` 29/29 (o "colaborador sem matrícula entrega" virou 400; PRODUCAO não lê a lista; a frase nova do 500), `epiIntegridade`
+17/17 (HMAC no lugar do SHA), `epiPontaAPonta` 11/11 (manda a matrícula e um User-Agent); cliente EPI 3 arquivos **49/49**.
+
+**Controles positivos (todos vermelhos na asserção do achado, restaurados por cópia + `cmp`):** HMAC → SHA público (P1 e o teste do HMAC);
+sem a fila (a concorrência dá 500 no UNIQUE da sequência); elos sempre ok (P2 vizinhos e o "quem tem o segredo"); sem o `sqlite_sequence` (a
+cauda apagada); sem o `NOT EXISTS` da devolução e sem o `semDevolucaoViva` (P3); a rota apagando sempre (P3, P4, M1, M3); M1 sem
+`movimento_estorno_id`; sem a conferência da matrícula (4 cenários); `ip`/`user_agent`/`confirmado_por_matricula` fora do HMAC (os três
+cenários do HMAC — o `ok` passou a ser gravado **antes** das asserções do cenário de cima, senão a sabotagem derrubava os três pela asserção
+errada); sem a busca antecipada da chave (o último item dá 400 — a busca do catch cobre o reenvio sequencial sozinha, **declarado**); sem a busca
+no catch (a corrida dá 500); a rota sem apagar o PNG do reenvio (órfão); no cliente, trocar a chave em todo erro e tirar o bloqueio das
+leituras (1 vermelho cada). O item 5 não tem sabotagem separada: o teste foi rodado **vermelho antes** da mudança (200 !== 403) nos quatro perfis.
+
+**Declarados (letra D):** (1) quem tem o banco, o disco **e** o segredo ainda forja — reescrevendo a evidência e todas as posteriores; âncora
+externa (exportar a cabeça da cadeia, carimbo de tempo de terceiro) fica para depois; (2) a cauda apagada **junto** com a `sqlite_sequence`
+editada escapa; (3) a URL assinada da imagem (~15 min) continua abrindo sem sessão; (4) a matrícula é **confirmação** de identidade, não
+senha — quem sabe a matrícula do colega assina por ele; (5) bases de **dev** que já tinham entregas da T1 mostram essas evidências como "fora da
+cadeia" / "registro alterado" (SHA antigo) — a etapa não foi publicada antes da Fase 5; (6) o PDF da ficha ainda não imprime "confirmado por
+matrícula" nem o IP.
+
+---
+
+## Fechamento (2026-10-22)
+
+**Documentação:** `docs/almoxarifado-novidades-por-etapa.md` (seção "Etapa 178" antes de "Onde estamos"; cabeçalho com a 178 no topo e a 176
+em "Também em"; **A107** — ação antes do deploy, o segredo no backup do servidor; **B1160** a **B1169**; **C431** a **C435**; **D (178)**; **F
+(178)**; o bullet em "Onde estamos"); spec nova **`specs/modulo-almoxarifado/25-entrega-epi/README.md`** (por que 25 e não 16/05, checklist com
+hash, a correção declarada do "SHA-256 garante a integridade") e a linha 25 no mapa; nota na spec 16; guia (cabeçalho e roteiro de 10 passos);
+manual (**21-bis. Entrega de EPI**, a linha da permissão em 5.5 e a leitura que ela explica, **Nº do CA / Validade do CA** em 2.4, a recusa no
+estorno 6.10 e na devolução 12.2); `docs/DEPLOY_COOLIFY.md` (a variável `EVIDENCIA_ASSINATURA_SECRET` e o backup). Rótulo do PDF da ficha
+"registro (HMAC-SHA256)" (era "registro SHA-256", desde a Fase 5 errado). Commits de código do fechamento: `f454d877` (rótulo do PDF) e `8b93b960` (`window.crypto` no lugar de `globalThis` — o eslint acusava erro que derrubaria o build).
+
+### Retro
+
+- **A revisão adversarial achou o crítico que as três tasks não acharam**, e ele estava no **plano** (RN-178.07: "SHA-256 do JSON canônico"):
+  hash público não é prova contra quem tem o banco. A suíte da T1 testava "linha alterada → registro alterado" **derrubando o trigger e não
+  recalculando o hash** — provava a detecção do descuido, não da forja. Lição: integridade se testa com o atacante que **recalcula**.
+- **A compensação genérica do motor (`compensacao: true`) pula a guarda de devolução** — certo para desfazer o próprio evento no mesmo instante,
+  errado quando outra porta pode citar a saída no meio. O `semDevolucaoViva` é opt-in; as outras compensações (retalho, transformação) não
+  citam saída devolvível e ficaram como estavam (não medido além disso).
+- **Controle positivo na asserção errada, de novo:** a primeira sabotagem dos campos do HMAC derrubava os três cenários pelo `ok` não gravado
+  (o cenário de cima falhava antes). Corrigido gravando o `ok` antes das asserções.
+- **Memória:** a T3 perdeu a rodada do `test:api` por falta de memória; o fechamento rodou as suítes **uma por vez**.
+- **Divergências do plano:** o contrato congelado da T2 mudou em três pontos de propósito (Fase 5): `confirmacao_matricula` obrigatória, as
+  leituras com `entregar_epi` e o 200 `reutilizada` — todos com a tela ajustada no mesmo turno (`853a46ce`).
+
+---
+
+## Próxima tarefa detalhada — Etapa 180: termo de responsabilidade de ferramenta (RN-D) com a mesma assinatura
+
+> **Número:** 180, não 179 — a 179 não tem commit até este fechamento, mas fica reservada para a outra frente (sessão paralela) para não
+> colidir (**B1169**). **Depende dos formulários em papel da empresa** (o termo de responsabilidade e a ficha de EPI); sem eles o texto do
+> termo é deduzido e declarado em B, como nesta etapa.
+
+**O que é.** O empréstimo de ferramenta (`POST /api/almoxarifado/ferramentas/:id/emprestar`, `toolService.emprestarFerramenta`, gate
+`gerenciar_ferramentas`) passa a colher o **termo de responsabilidade**: o colaborador **do cadastro** (`colaborador_id` obrigatório — hoje é
+opcional e `colaborador_nome` é texto livre), a **assinatura** PNG e a **matrícula digitada por ele**, e o **texto do termo versionado** (a
+evidência guarda **qual versão** ele assinou).
+
+**O que já está pronto e não se reabre:**
+- `evidenciaAssinaturaService` (genérico por `contexto`): `registroHmac`, `naFilaDaCadeia` + `cabecaDaCadeia` (a cadeia é **global** — o termo
+  entra na **mesma** sequência das entregas de EPI), `conferirElos`, `verificarCadeia(db, { dir, segredo, camposDe })`, `literalSql`,
+  `textoLimpo`, `mascararCpf`, `sha256Arquivo`. Tabela `evidencias_assinatura_almoxarifado` (append-only, `contexto`/`contexto_id`,
+  `sequencia` UNIQUE, `hash_anterior`, `confirmado_por_matricula`, `ip`, `user_agent`).
+- O segredo: `runtimeSecrets.resolveEvidenciaAssinaturaSecret` e o `segredoDaEvidencia()` de `extended.js` (resolvido no 1º uso).
+- O molde completo em `epiService.registrarEntrega`: PNG pelos bytes, `conferirMatricula`, a ordem efeito → transação única na fila da
+  cadeia, compensação, `preservarArquivo`, `chave_idempotencia`, os ganchos de teste. A tela: `AssinaturaCanvas`, o campo de matrícula, a
+  chave por tentativa (`novaChaveIdempotencia`), `mensagemErroEntrega`.
+
+**Pontos de atenção (medir na Fase 0):**
+1. **`verificarCadeia` de `epiService` só monta os campos de `ENTREGA_EPI`** (`camposDe` devolve `null` para outro contexto → "registro
+   alterado"). Ao criar o contexto `TERMO_FERRAMENTA`, a verificação da cadeia tem de virar um **registro de montadores por contexto**
+   (`{ ENTREGA_EPI: epiService.camposDoRegistro, TERMO_FERRAMENTA: … }`) e a rota da cadeia sair de `/epi/` (ex.: `GET
+   /api/almoxarifado/evidencias/cadeia/verificar`, mantendo `/epi/cadeia/verificar` como apelido) — senão o primeiro termo assinado deixa a
+   cadeia do EPI "com problema".
+2. **O empréstimo não mexe em estoque** (ferramenta é patrimônio — claim de status em `ferramentas_almoxarifado`); a compensação é devolver o
+   status a `DISPONIVEL` (já existe no `.catch` do INSERT). O termo tem de entrar **na mesma transação** do empréstimo (hoje são dois comandos
+   soltos: claim + INSERT) — reescrever com `execEmTransacao` e a fila da cadeia.
+3. **`emprestimos_ferramenta_almoxarifado` não é append-only** (a devolução faz UPDATE `status`/`data_devolucao_real`): o termo é uma linha
+   nova (tabela `termos_ferramenta_almoxarifado` append-only, ou só a evidência com `contexto_id = emprestimo_id`), **nunca** trigger no
+   empréstimo.
+4. **Texto versionado:** `termos_responsabilidade_versao` (id, versão, texto, vigente_desde) append-only; o HMAC inclui `versao` e o SHA-256 do
+   texto. Quem edita o texto: `configurar` (ADMINISTRADOR). Sem formulário da empresa → texto deduzido, letra B.
+5. **Leituras:** a ficha do colaborador ganha os termos (ou uma ficha própria de ferramentas); restringir como a 178 (`gerenciar_ferramentas`).
+6. **Devolução da ferramenta:** assinar também na devolução? (decisão — o formulário dirá; default: não, letra B).
+7. Os testes de corrida do empréstimo (`ferramentas*.api.test.js`) e o C252 (auditoria fora do ato) continuam valendo.
+
+**Contrato proposto (congelar na Fase 2):** `POST /ferramentas/:id/emprestar` passa a multipart (`assinatura` PNG + `colaborador_id`,
+`confirmacao_matricula`, `data_prevista_devolucao?`, `observacoes?`, `chave_idempotencia?`) → 201 `{ id, termo: { evidencia_id, versao,
+registro_sha256, arquivo_url, criado_em } }`; o JSON antigo (sem assinatura) → 400 literal ou aceito com flag de configuração — **decidir na
+Fase 2** (reversível, letra B).
+
+## Verificação final (2026-10-22) — medida, uma suíte por vez; INCOMPLETA por falta de memória da máquina
+
+| Suíte | Resultado |
+|---|---|
+| `test:api` | **INCOMPLETA:** o processo foi encerrado pelo sistema por falta de memória (a máquina tinha ~1,8 GB livres de 32 GB, com o `npm run dev` do André em `projetos\CRM` ocupando). **313 de 512** arquivos terminaram, **0 falha** (nenhum `✗` no log), incluindo os **8 de EPI** (`epiCadeiaHmac` 13, `epiCompensacao` 6, `epiEntrega` 29, `epiIdempotencia` 7, `epiIntegridade` 17, `epiLeituras` 6, `epiMatricula` 9, `epiPontaAPonta` 11); o 314º (`propostaDocumentoDesconto`) foi morto no meio e os 198 seguintes não rodaram. **Não foi reiniciado** (a instrução do sistema foi não reiniciar com a memória curta). |
+| `test:almoxarifado` | **44 passou, 0 falhou** |
+| `test:validation` / `test:safealter` / `test:sqlite` | **4/0**, **3/0**, **16/0** |
+| client | **suíte inteira NÃO rodada** (memória). Rodados com `--maxWorkers=1`: `EpiAlmoxarifado`, `epiEntrega`, `fichaEpiPdf`, `permissaoErro`, `MaterialAlmoxarifadoForm` — **5 arquivos, 132/132**. |
+| `CI=true react-scripts build` | **NÃO rodado** (memória). No lugar: `eslint --max-warnings=0` nos arquivos da tela de EPI — achou **um erro real** (`'globalThis' is not defined`, que derrubaria o build com `CI=true`), corrigido em `8b93b960`; depois, 0 erro e 0 aviso. App.js/Layout.js têm avisos **antigos** do eslint puro (variáveis não usadas, de antes desta etapa; a mudança nelas é só comentário). |
+
+**Para fechar a verificação (com memória livre — parar o `npm run dev` antes):** `cd server && npm run test:api`; `cd client && CI=true npx
+react-scripts test --watchAll=false`; `cd client && CI=true npx react-scripts build`.

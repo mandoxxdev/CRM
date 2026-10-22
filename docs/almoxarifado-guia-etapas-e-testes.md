@@ -1,13 +1,20 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-22 (Etapas 172 a 177) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-22 (Etapas 172 a 178) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176 e 177) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177 e 178) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172 a 177 ENTREGUES · próxima: Etapa 178)
+> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172 a 178 ENTREGUES · próxima: Etapa 180)
 >
-> **O desenvolvimento parou aqui: Etapa 176 fechada — 2026-10-22.** **O recebimento informa a OS**: no **Novo Recebimento**, o campo
+> **O desenvolvimento parou aqui: Etapa 178 fechada — 2026-10-22.** **Entrega de EPI ao colaborador com assinatura na tela (NR-6)**:
+> tela nova **Almoxarifado → Entrega de EPI** — o colaborador do cadastro, o EPI com **CA** válido, a **assinatura** no tablet e a
+> **matrícula digitada pelo próprio colaborador**; a entrega baixa o estoque, não se edita nem se apaga, e pode ser **verificada** (uma por
+> uma e a **cadeia** inteira); **ficha de EPI por colaborador** em PDF. **Uma ação antes do deploy: A107 — o segredo da assinatura tem de ir
+> para o backup do servidor** (o backup do sistema não o leva). Campos deduzidos: os formulários de EPI da empresa não chegaram (**B1160**).
+> **Próxima: Etapa 180** — termo de responsabilidade de ferramenta com a mesma assinatura (depende dos formulários; ver o plano da 178).
+>
+> **Etapa 176, 2026-10-22.** **O recebimento informa a OS**: no **Novo Recebimento**, o campo
 > **OS (opcional)**; o material que entra com a OS fica reservado para ela, só a requisição dela o leva, e a OS que fecha o devolve ao estoque
 > do cliente; chapa do cliente A não entra para a OS do cliente B (nota sem pedido); a nota de pedido com OS de outro cliente entra livre
 > (aviso **C430**). Nada a rodar antes do deploy. **Próxima: Etapa 178** — entrega de EPI ao colaborador com assinatura na tela (NR-6); os
@@ -6874,6 +6881,58 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 178 — Entrega de EPI ao colaborador com assinatura na tela (NR-6) (ENTREGUE — 2026-10-22)
+
+**O que mudou, em uma frase:** o almoxarife registra a entrega de EPI no tablet — o colaborador assina na tela e digita a própria matrícula —,
+o estoque baixa, e a ficha de EPI do colaborador sai em PDF com cada assinatura.
+
+**O problema que ela resolve.** A entrega de EPI era só papel. A usuária de Compras perguntou se podia ser no tablet, desde que o sistema
+garantisse **quem** recebeu, que o registro **não fosse alterado** e que desse para **recuperar** tudo depois (NR-6). Agora cada entrega fica
+gravada com a hora do servidor e um **código de verificação** que deixa de bater se alguém mexer no registro ou na imagem — e as entregas
+formam uma **cadeia**: apagar uma deixa um buraco que a verificação mostra.
+
+| Antes | Agora |
+|---|---|
+| Entrega de EPI no papel | **Almoxarifado → Entrega de EPI**: colaborador, EPI, quantidade, assinatura e matrícula digitada pelo colaborador |
+| Material sem CA | **Nº do CA** e **Validade do CA** no cadastro; sem CA ou vencido, o EPI não sai |
+| Ficha em papel | **Ficha por colaborador** com a imagem de cada assinatura, e **Gerar PDF** |
+| — | **Verificar integridade** (por entrega) e **Verificar cadeia** (todas) |
+
+**Antes de testar (uma vez).** O segredo da assinatura (**A107** do documento de novidades) — no ambiente de teste não precisa de nada: o
+servidor gera sozinho em `server/data/.runtime-secrets.json` na primeira entrega.
+
+**Roteiro de teste (15 minutos — com um usuário Administrador ou Almoxarife, de preferência num tablet).** Prepare um colaborador ativo
+com matrícula em **Fábrica → Colaboradores** (ex.: *JOSÉ DA SILVA*, matrícula *M-778*).
+
+1. **Cadastrar o CA no material.** **Almoxarifado → Materiais**, abra (ou crie) um material de categoria *EPIs* (ex.: *EPI-LUV-01 — Luva de
+   vaqueta*), preencha **Nº do CA** *12345* e **Validade do CA** daqui a um ano, salve. Dê **Entrada** de 10 em **Movimentações**.
+2. **A entrega.** **Almoxarifado → Entrega de EPI → Nova entrega**: **Colaborador** *JOSÉ DA SILVA (⟨setor⟩)* (sem a matrícula na lista);
+   **EPI** *EPI-LUV-01 — Luva de vaqueta (CA 12345)* — aparece *"CA: 12345 · validade: ⟨data⟩"*; **Quantidade** 2; o colaborador assina e toca
+   **Confirmar assinatura** (*"Assinatura confirmada"*); **sem** digitar a matrícula, toque **Registrar entrega**: *"O colaborador deve digitar a
+   própria matrícula para confirmar o recebimento"*. Digite *M-779*: *"A matrícula informada não confere com a do colaborador"*. Digite
+   *M-778*: *"Entrega EPI-… registrada para JOSÉ DA SILVA — M-778. Código de verificação: XXXX-XXXX-XXXX"*. O saldo do material vai a 8.
+3. **CA vencido.** No cadastro do material, **Validade do CA** = ontem; volte à **Nova entrega** e escolha o EPI: aviso vermelho *"O CA 12345
+   do EPI EPI-LUV-01 venceu em ⟨dd/mm/aaaa⟩"*, e **Registrar entrega** não envia. Volte a validade para o futuro.
+4. **A lista e a verificação.** Aba **Entregas**: a entrega aparece (data, colaborador, EPI, CA, quantidade, quem entregou). **Verificar
+   integridade** na linha → *"Íntegro"*.
+5. **A cadeia.** Ainda em **Entregas**, **Verificar cadeia** → *"Cadeia íntegra — ⟨n⟩ registros"*.
+6. **A ficha e o PDF.** Na linha, **Ficha**: nome, matrícula, setor, CPF só com os dois últimos dígitos, a entrega com a imagem da
+   assinatura e o código. **Gerar PDF** → baixa *ficha-epi-⟨nome⟩.pdf*; abra e confira a imagem da assinatura e o código de cada entrega.
+7. **A saída não se estorna.** **Movimentações**, estorne a saída *EPI-…*: *"Saída de entrega de EPI não pode ser estornada pelo livro — a
+   ficha do colaborador continuaria dizendo que recebeu"*.
+8. **Outro perfil.** Entre com um usuário de Produção: a tela **Entrega de EPI** só diz *"Seu perfil não acessa a entrega de EPI — só o
+   almoxarife e o administrador do módulo registram entregas e consultam fichas."*
+9. **(Opcional, servidor de teste) A adulteração.** Troque um byte do arquivo `assinatura-epi-….png` em `server/data/uploads/almoxarifado/` e
+   **Verificar integridade** de novo: *"Adulterado: arquivo alterado"*; **Verificar cadeia**: *"Cadeia com problema — 1 ocorrência"*.
+10. **(Opcional) Reiniciar o servidor** e **Verificar cadeia** de novo: continua *"Cadeia íntegra"* (o segredo não mudou).
+
+**O que esta etapa não cobre.** Devolução de EPI, validade de uso/data de troca, requisição de EPI, EPI com série ou lote; os campos além da
+NR-6 foram deduzidos (**B1160**). Quem tem o banco, o disco **e** o segredo ainda conseguiria forjar (**D (178)**). **Uma ação antes do
+deploy: A107.**
+
+*Nenhum clique no navegador foi dado nesta etapa, nem assinatura num tablet de verdade*: o roteiro acima é o que os testes automáticos provam
+pelas rotas do servidor (ponta a ponta, com um PNG real) e a tela em jsdom, escrito para você conferir à mão.
 
 ## Etapa 176 — O recebimento informa a OS: material do cliente para industrialização (ENTREGUE — 2026-10-22)
 

@@ -11,12 +11,19 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-22):** **Etapa 176 fechada** (**o recebimento informa a OS — material do cliente para
+> **Onde o desenvolvimento está (2026-10-22):** **Etapa 178 fechada** (**entrega de EPI ao colaborador com assinatura na tela
+> (NR-6)** — tela nova **Almoxarifado → Entrega de EPI**: o colaborador do cadastro, o EPI com **CA** obrigatório e vigente, a quantidade, a
+> **assinatura** no tablet e a **matrícula digitada pelo próprio colaborador**; a baixa do estoque, a **ficha de EPI por colaborador** em PDF e a
+> **verificação de integridade** de cada entrega e da **cadeia** inteira; registro que não se edita nem se apaga, com impressão digital
+> protegida por um **segredo do servidor**; **uma ação antes do deploy — A107: o segredo da assinatura tem de entrar no backup do servidor
+> (o backup do sistema NÃO o leva)**; decisões **B1160** a **B1169** (campos deduzidos — os formulários de EPI da empresa não chegaram);
+> avisos **C431** a **C435**; revisão adversarial feita e corrigida). **Próxima: Etapa 180** — termo de responsabilidade de ferramenta com a
+> mesma assinatura, **depende dos formulários da empresa** (**B1169**; a 179 fica para a outra frente).
+> *(Também em 2026-10-22: **Etapa 176 fechada** (**o recebimento informa a OS — material do cliente para
 > industrialização fica com o trabalho dele**: o novo recebimento ganha **OS (opcional)**; o que entra fica reservado para a OS, só a requisição
 > dela o leva, e a OS fechada o devolve ao estoque do cliente; chapa do cliente A não entra para a OS do cliente B; nada a rodar antes do
 > deploy; decisões **B1150** a **B1157** — **a B1153 pede um olhar** (a nota de pedido com OS de outro cliente entra livre, sem aviso na
-> tela); aviso **C430**; a pergunta ao cliente da **B1150** continua aberta; revisão adversarial feita e corrigida). **Próxima: Etapa 178** —
-> entrega de EPI ao colaborador com assinatura na tela (NR-6); os formulários de EPI ainda não chegaram (**B1157**).
+> tela); aviso **C430**; a pergunta ao cliente da **B1150** continua aberta; revisão adversarial feita e corrigida); a próxima era a **178**.)*
 > **Também em 2026-10-22: Etapa 177 fechada** (**o retorno da manutenção com a condição do item e o destino** — concluir
 > a manutenção de uma ferramenta pede a **condição** (*Em condições de uso*, *Em uso com restrição*, *Inservível*) e o **destino** (*Volta ao
 > uso* ou *Baixa*); a baixa deixa a ferramenta **Baixada**, fora de circulação e do painel de calibrações, reversível; nada a rodar antes do
@@ -456,7 +463,11 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Cento e seis itens para rodar em produção ANTES do deploy — cento e três são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Cento e sete itens para rodar em produção ANTES do deploy — cento e três são consulta, três são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-22 (Etapa 178) de cento e seis para cento e sete**, com a **A107** — **ação, não consulta: o segredo da assinatura
+de EPI tem de entrar no backup do servidor** (**C433**). **Obrigatória** para quem vai usar a entrega de EPI: sem ela, um servidor restaurado
+acusa **todas** as entregas como adulteradas.)*
 
 *(**Atualizado em 2026-10-22 (Etapa 171) de cento e cinco para cento e seis**, com a **A106** — as referências de OS digitadas nas
 requisições que não casam com nenhuma OS (**C426**). **Somente leitura, opcional:** a coluna nova do pedido (`os_id`) é aditiva e criada no
@@ -4136,12 +4147,28 @@ os mais usados), a Etapa 172 é urgente e, até ela, avise o pessoal da produç�
 fazer. *(Rodada numa cópia do banco local de 22/10: **2** textos (*1960* e *1980*, uma requisição cada), **nenhum** casa — o banco tem uma OS só,
 *OS-001*. Controle na mesma cópia, com uma OS *OS-1960* plantada: *1960* passou a casar com *OS-1960* e *1980* continuou vazio.)*
 
+**A107 (NOVA, da Etapa 178 — AÇÃO fora do sistema, obrigatória para quem usar a entrega de EPI — o segredo da assinatura no backup do
+servidor).** A impressão digital de cada entrega de EPI (o "código de verificação") é calculada com um **segredo do servidor** que fica **fora
+do banco de dados** — é isso que impede quem tem o banco de forjar uma entrega (**B1163**). O segredo mora em **um de dois lugares**: (1) a
+variável de ambiente **`EVIDENCIA_ASSINATURA_SECRET`** do servidor (no Coolify, *Environment Variables*), se ela existir; (2) senão, o arquivo
+**`server/data/.runtime-secrets.json`** (no volume persistente `/app/server/data`), chave `evidenciaAssinaturaSecret`, que o servidor **gera
+sozinho** na primeira entrega ou verificação depois do deploy. **O backup do sistema (Configurações → Backup) NÃO leva esse arquivo** — de
+propósito: ele também guarda a chave dos logins. Sem o segredo, ou com outro gerado no lugar, **a verificação acusa "registro alterado" em
+todas as entregas** e a ficha de EPI perde o valor de prova. **O que fazer, escolha um:**
+- **(a) recomendado** — antes do deploy, gere um segredo e ponha na variável do Coolify:
+  `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` → copie a saída para `EVIDENCIA_ASSINATURA_SECRET` e guarde
+  a mesma linha no cofre de senhas da empresa;
+- **(b)** deixe o servidor gerar e, **depois da primeira entrega**, copie `server/data/.runtime-secrets.json` para o backup do servidor (o
+  mesmo lugar onde vai a cópia do volume), e de novo sempre que o arquivo mudar.
+**Nunca** troque o segredo depois da primeira entrega, nem passe de (b) para (a) com um valor diferente — as entregas antigas passam a ser
+acusadas. Teste de restauração: num servidor restaurado, **Entrega de EPI → Entregas → Verificar cadeia** tem de dizer *"Cadeia íntegra"*.
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146 e B1150 a B1157; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157 e B1160 a B1169; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -12304,6 +12331,72 @@ que o futuro termo de responsabilidade de ferramenta reaproveita. Tamanho e peri
 "próxima tarefa detalhada" no plano da 176. As decisões que esperam vocês: as mesmas da **B1146**; a **B1150** a **B1156** são reversíveis —
 **a B1153 pede um olhar**.
 
+**B1160 (NOVA, da Etapa 178; decisão do agente — PEDE UM OLHAR quando os formulários chegarem) — os campos da entrega de EPI foram
+deduzidos.** Os formulários em papel de EPI da empresa **não chegaram**. O que a NR-6 exige e a usuária pediu entrou como regra: colaborador
+**do cadastro**, **CA** do EPI **obrigatório** (*"EPI ⟨código⟩ sem número de CA cadastrado"*) e **vigente** — vencido **no dia anterior** ao de
+Brasília recusa (*"O CA ⟨número⟩ do EPI ⟨código⟩ venceu em ⟨dd/mm/aaaa⟩"*), no próprio dia ainda vale. **CA sem validade cadastrada passa.**
+O que foi deduzido e é **opcional**: **tamanho** (até 20 caracteres), **motivo** (*Primeira entrega*, *Troca*, *Perda*, *Dano*) e
+**observação** (até 500). **Descartado:** exigir a validade do CA (há CA antigo sem data no cadastro; recusar travaria a entrega no primeiro
+dia). **Reversível:** os campos são do servidor e da tela, sem mudança de banco para trocar — quando os formulários chegarem, compare e ajuste.
+Commits `6ee553f3`, `674c05a1`.
+
+**B1161 (NOVA, da Etapa 178; decisão do agente) — EPI com controle de série ou de lote não se entrega por esta tela.** *"EPI ⟨código⟩ com
+controle de série/lote não é suportado nesta etapa"*. A assinatura teria de dizer **qual** série ou lote o colaborador recebeu, e isso muda o
+formulário. **Descartado:** entregar sem dizer a série (a ficha mentiria por omissão). **Reversível.** `6ee553f3`.
+
+**B1162 (NOVA, da Etapa 178; decisão do agente) — a assinatura é só PNG, até 2 MB, conferida pelos bytes.** O quadro de assinatura da tela
+gera PNG; o servidor recusa outro tipo (*"A assinatura deve ser uma imagem PNG"*) inclusive quando o arquivo diz ser PNG e não é; acima de 2 MB,
+*"Arquivo grande demais…"*. A impressão digital é do arquivo **como gravado**. **Gerar PDF** da ficha relê a ficha antes (o link da imagem
+vale ~15 min). **Descartado:** aceitar JPEG/WebP (como a assinatura da requisição) — compressão com perda, e a imagem da prova não precisa
+disso; aumentar a validade do link (é o mesmo de todas as imagens do módulo). **Reversível.** `6ee553f3`, `bc5fa54d`.
+
+**B1163 (NOVA, da Etapa 178; decisão do agente, da revisão adversarial) — a impressão digital do registro é protegida por um segredo do
+servidor, e as entregas formam uma cadeia.** A primeira versão usava uma impressão digital de fórmula pública: a revisão provou que quem tinha
+o banco e o disco **forjava** uma entrega (trocava a quantidade, o nome e a imagem e recalculava) e a verificação dizia *"Íntegro"*; e apagar
+uma entrega não deixava rastro. Agora: a impressão digital usa um **segredo que fica fora do banco** (a **A107** diz onde e por que tem de ir
+para o backup do servidor), e cada entrega guarda o número de ordem e a impressão digital da **anterior** — apagar uma deixa um buraco na
+numeração, e **Verificar cadeia** acusa *"registro apagado"*. **Limite declarado (D (178)):** quem tem o banco, o disco **e** o segredo
+ainda forja, reescrevendo daquela entrega até a última. **Descartado:** assinatura digital com certificado ICP-Brasil ou carimbo de tempo de
+terceiro (exigem contratação e certificado — ficam para quando a empresa pedir valor jurídico além da NR-6); o segredo no banco (é exatamente o
+que o atacante teria). **Reversível.** `dcf65ae1`.
+
+**B1164 (NOVA, da Etapa 178; decisão do agente, da revisão adversarial) — o colaborador confirma digitando a própria matrícula.** A assinatura
+na tela sozinha não dizia **quem** assinou — o almoxarife escolhia o nome na lista e qualquer traço valia. Agora o colaborador digita a **própria
+matrícula** no tablet e ela tem de bater com o cadastro (sem diferença de maiúscula e de espaços; zeros à esquerda contam). Colaborador **sem
+matrícula** no cadastro **não recebe** pela tela (**C432**). Por isso a lista de colaboradores da **Nova entrega** mostra *nome (setor)*, sem
+a matrícula. A entrega guarda que foi confirmada por matrícula, o endereço de rede e o aparelho (navegador) de onde veio. **Descartado:** PIN ou
+senha do colaborador (exigiria cadastrar e manter uma credencial para cada pessoa do chão de fábrica). **Limite:** a matrícula é
+**confirmação**, não senha — quem sabe a matrícula do colega assina por ele. **Reversível.** `44f58fd9`, `853a46ce`.
+
+**B1165 (NOVA, da Etapa 178; decisão do agente, da revisão adversarial) — só o almoxarife e o administrador do módulo veem a entrega de EPI.**
+A lista, a ficha (com CPF mascarado, matrícula e a imagem da assinatura), a verificação, a cadeia e a lista de colaboradores eram de todo
+usuário do almoxarifado; agora exigem a mesma permissão da entrega (**C435**). **Descartado:** uma permissão separada só de leitura para a
+Qualidade/Gestão (não houve pedido; é uma linha na tabela de perfis quando houver). **Reversível.** `4c4bacbf`.
+
+**B1166 (NOVA, da Etapa 178; decisão do agente, da revisão adversarial) — tocar "Registrar entrega" de novo não duplica.** O tablet fica no
+Wi-Fi do galpão: a resposta se perdia, a pessoa tocava de novo e o colaborador "recebia" duas vezes. Cada tentativa leva uma chave; o reenvio
+com a mesma chave devolve a entrega já gravada (*"Entrega ⟨número⟩ já estava registrada — o envio repetido não duplicou"*). Mexer no
+formulário ou refazer a assinatura começa outra tentativa. **Descartado:** bloquear entrega igual (mesmo colaborador, mesmo EPI) por alguns
+minutos — duas luvas no mesmo dia são legítimas. **Reversível.** `d9cd7604`, `853a46ce`.
+
+**B1167 (NOVA, da Etapa 178; decisão do agente) — a saída de uma entrega de EPI não se estorna nem se devolve.** Estornar pelo livro:
+*"Saída de entrega de EPI não pode ser estornada pelo livro — a ficha do colaborador continuaria dizendo que recebeu"*; devolver pela tela de
+Devoluções: *"Saída de entrega de EPI não pode ser devolvida — a ficha do colaborador continuaria dizendo que recebeu"* (e ela nem aparece
+entre as saídas devolvíveis). O registro da entrega não se apaga. **Descartado:** permitir e marcar a ficha (a devolução de EPI precisa de
+regra própria — o EPI usado volta para onde?). **Reversível;** devolução de EPI é etapa própria (**D (178)**). `6ee553f3`.
+
+**B1168 (NOVA, da Etapa 178; decisão do agente, da revisão adversarial) — uma devolução registrada no meio de uma entrega cancela a entrega,
+e a saída fica.** Se, no instante entre a baixa do estoque e a gravação da entrega, alguém registrar uma devolução citando aquela saída (só
+pela integração — a saída ainda não aparece na tela), a entrega **não** é gravada; desfazer a saída por cima da devolução contaria o material
+duas vezes (medido: 11 no sistema com 10 na prateleira), então ela **fica**, e a tela diz que ficou (**C434**). **Descartado:** gravar a
+entrega mesmo assim (a primeira versão fazia — o material tinha voltado). **Reversível.** `4568c917`.
+
+**B1169 (NOVA, da Etapa 178) — a próxima etapa (180): termo de responsabilidade de ferramenta com a mesma assinatura — depende dos formulários
+da empresa.** O empréstimo de ferramenta (RN-D) passa a pedir a assinatura e a matrícula do colaborador, com o mesmo serviço de evidência
+(a mesma cadeia e o mesmo segredo) e o **texto do termo versionado** (a entrega guarda qual versão o colaborador assinou). O texto do termo e
+os campos vêm dos **formulários em papel** que o André vai pedir — sem eles, o texto será deduzido como nesta etapa. A **179** fica para a
+outra frente de trabalho (nenhum commit dela até este fechamento; reservada para não colidir). Ver a "próxima tarefa detalhada" no plano da 178.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -15843,6 +15936,34 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      inspeção. **O que fazer:** depois de processar uma nota de pedido com material de cliente, conferir em **Almoxarifado → Reservas** se a
      reserva da OS apareceu; se não, conferir o cliente da OS (**Fábrica → Ordens de Serviço**) e o **Proprietário** do material — se o pedido
      estava para a OS errada, a requisição da OS certa leva o material do disponível normalmente.
+431. **NOVO (da Etapa 178) — EPI sem CA não é entregue, e CA vencido bloqueia.** A tela **Entrega de EPI** avisa ao escolher o EPI e não
+     envia: *"EPI ⟨código⟩ sem número de CA cadastrado"* ou *"O CA ⟨número⟩ do EPI ⟨código⟩ venceu em ⟨dd/mm/aaaa⟩"*. **O que fazer antes de
+     começar a usar:** em **Almoxarifado → Materiais**, abrir cada EPI e preencher **Nº do CA** e **Validade do CA**; quando o CA vencer,
+     atualizar o cadastro (com o CA novo do fabricante) — enquanto isso, aquele EPI não sai pela tela. Material só aparece na lista de EPIs se
+     o tipo de material for de EPI, ou o tipo for *epi*, ou a categoria for *EPIs*.
+432. **NOVO (da Etapa 178) — colaborador sem matrícula no cadastro não recebe EPI pela tela.** *"Colaborador ⟨nome⟩ sem matrícula cadastrada
+     — não é possível confirmar a identidade"* (**B1164**). **O que fazer:** antes de começar, conferir em **Fábrica → Colaboradores** que
+     todos os ativos têm **Matrícula**. E combinar com o pessoal que **o colaborador digita a própria matrícula** no tablet — o almoxarife não
+     digita por ele; se não bater: *"A matrícula informada não confere com a do colaborador"*.
+433. **NOVO (da Etapa 178) — CRÍTICO PARA PRODUÇÃO: o segredo da assinatura de EPI tem de estar no backup do servidor** (**A107**). Sem ele
+     (servidor restaurado de um backup sem o arquivo de segredos, ou com a variável de ambiente trocada), a verificação diz *"Adulterado:
+     registro alterado"* em **todas** as entregas e **Verificar cadeia** acusa a cadeia inteira — o registro continua lá, mas perde o valor de
+     prova até o segredo certo voltar. O backup do sistema (**Configurações → Backup**) **não** leva o segredo, de propósito. **O que fazer:** a
+     **A107** antes do deploy; e, depois de toda restauração, **Entrega de EPI → Entregas → Verificar cadeia** tem de dizer *"Cadeia íntegra"*.
+434. **NOVO (da Etapa 178) — a mensagem "a saída do estoque NÃO pôde ser desfeita".** Rara (falha do banco no meio da gravação, ou uma
+     devolução registrada pela integração no mesmo instante — **B1168**): *"Não foi possível gravar a entrega de EPI e a saída do estoque NÃO pôde
+     ser desfeita: a movimentação #⟨id⟩ (⟨número⟩) ficou registrada sem evidência de entrega. A assinatura foi preservada no servidor. Avise o
+     administrador antes de entregar de novo. (…)"*. O EPI saiu do estoque e **não** há entrega na ficha. **O que fazer:** o administrador abre
+     **Movimentações**, acha a movimentação pelo número e decide — se o colaborador **levou** o EPI, refaça a entrega pela tela **depois de
+     estornar** essa saída (senão o estoque baixa duas vezes); se **não levou**, só estorne. Se o estorno for recusado porque a saída já tem
+     devolução (o caso da **B1168**), o estoque já está certo: a devolução trouxe o material de volta — refaça a entrega só se o colaborador
+     levou o EPI. Já *"…nada foi gravado: a saída do estoque foi
+     desfeita. Pode tentar de novo."* e *"Sem resposta do servidor — a entrega pode ter sido registrada…"* pedem só tocar **Registrar entrega**
+     de novo (o reenvio não duplica — **B1166**).
+435. **NOVO (da Etapa 178) — só o almoxarife e o administrador do módulo veem a Entrega de EPI.** Os outros perfis (Produção, Compras, Gestor,
+     Consulta, Qualidade, Engenharia) veem o item no menu e, ao abrir, só *"Seu perfil não acessa a entrega de EPI — só o almoxarife e o
+     administrador do módulo registram entregas e consultam fichas."* (**B1165**). **O que fazer:** se a Segurança do Trabalho precisar
+     consultar fichas, dar a ela o perfil de almoxarife, ou pedir a permissão só de leitura (**B1165**, descartada por enquanto).
 ### D. Limitações declaradas— são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -17184,6 +17305,16 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   (`GET /ferramentas/:id/manutencoes`) e na Auditoria (*Fim de manutenção*). Quem empresta não fica sabendo da restrição pela tela.
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(178) A entrega de EPI, o que ficou de fora.** (1) **Quem tem o banco, o disco E o segredo ainda forja** uma entrega, reescrevendo-a e
+  todas as posteriores; e quem apaga a última entrega **e** acerta o contador interno do banco também escapa — fechar isso pede uma âncora
+  **externa** (exportar periodicamente o último código da cadeia para fora do servidor, ou carimbo de tempo de terceiro), deixada para depois
+  (**B1163**). (2) A **imagem da assinatura** abre por um link assinado de ~15 minutos, sem login, para quem o tiver em mãos (o mesmo das demais
+  imagens do módulo); a integridade é garantida pela impressão digital, não pelo sigilo do link. (3) A matrícula é **confirmação**, não senha
+  (**B1164**). (4) **Devolução de EPI** e troca com devolução do usado: não existem (**B1167**). (5) **Validade de uso** do EPI, data de troca
+  e alerta de troca: dependem do formulário da empresa. (6) EPI com **série ou lote** não se entrega (**B1161**). (7) A **requisição de EPI**
+  (o colaborador pedir pelo sistema) não existe — a entrega é avulsa, no balcão. (8) O **PDF da ficha** ainda não imprime "confirmado por
+  matrícula" nem o aparelho de onde veio (a tela de verificação e a cadeia usam esses dados). (9) Base de **desenvolvimento** que já tinha
+  entregas de antes da revisão mostra essas entregas como "fora da cadeia"/"registro alterado" — produção nunca as teve.
 - **(176) O recebimento com OS, o que ficou de fora.** (1) A **entrada manual** (Movimentações, *Entrada*) com OS não reserva para a OS (é
   por desenho: só as três portas do recebimento distribuem) e **não confere o dono** — material do cliente A pode entrar marcado com a OS do
   cliente B por ali; a saída depois recusa como sempre. Material de cliente pela entrada manual continua sem exigir documento (já era
@@ -18344,6 +18475,16 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(178) Nenhum clique foi dado no navegador, e nenhuma assinatura foi feita num tablet de verdade.** A entrega, as recusas, a matrícula, a
+baixa do estoque, a ficha, a imagem pelo link, a verificação, a cadeia, a forja e o apagamento (com o gatilho do banco derrubado), a
+devolução no meio, a compensação que falha e o reenvio foram provados pelas rotas de verdade no servidor de teste — inclusive ponta a ponta,
+com um PNG real; a tela (os campos, a chave do reenvio, as mensagens, o PDF, a cadeia), em jsdom com a resposta do servidor simulada. O que
+**só o aparelho** prova: o roteiro da Etapa 178 no guia num **tablet** — o traço no quadro de assinatura com o dedo, o teclado do campo de
+matrícula, o PDF da ficha baixado e aberto com a imagem da assinatura legível, e **Verificar cadeia** depois de um reinício do servidor (o
+segredo continua o mesmo). **E a verificação automática ficou incompleta por falta de memória da máquina:** a suíte de rotas rodou 313 de
+512 arquivos sem falha (todos os de EPI incluídos), a suíte inteira da tela e a compilação de produção **não rodaram** — rodar as três antes do
+deploy (o passo a passo está no plano da 178, "Verificação final").
 
 **(176) Nenhum clique foi dado no navegador.** O recebimento com OS, a recusa pelo dono, a nota de pedido que entra livre, a reserva da OS
 nas três portas (inclusive a inspeção com a OS trocada de cliente), a requisição da OS, a entrega, a devolução e a posição por cliente foram
@@ -34790,9 +34931,107 @@ sem OS."* e o recebimento é registrado sem OS.
 - **Nada a rodar antes do deploy:** a coluna nova do recebimento nasce sozinha no primeiro boot (provado em pasta vazia); os recebimentos
   antigos ficam sem OS própria e continuam processando (**B1152**, **B1153**).
 
+## Etapa 178 — Entrega de EPI ao colaborador com assinatura na tela (NR-6) (2026-10-22)
+
+A usuária de Compras perguntou se a entrega de EPI podia deixar de ser papel, e lembrou a condição: *"o sistema deve garantir a
+identificação do colaborador, a integridade dos registros e a possibilidade de recuperação das informações, observando as exigências
+aplicáveis da NR-6. A assinatura feita diretamente na tela do tablet deve ser estruturada de modo que ofereça evidências confiáveis do
+recebimento."* Agora existe a tela **Almoxarifado → Entrega de EPI**: o almoxarife escolhe o colaborador **do cadastro** e o EPI (que precisa
+ter **CA** válido), o colaborador **assina no tablet** e **digita a própria matrícula**; o estoque baixa, e a entrega fica registrada com a hora
+do servidor e uma **impressão digital** (o *código de verificação*) que não bate mais se alguém mexer no registro ou na imagem. O registro
+**não se edita nem se apaga** — nem pelo banco. A **ficha de EPI por colaborador** sai em PDF, com a imagem de cada assinatura. E dá para
+**verificar** uma entrega ou a **cadeia** inteira: apagar uma entrega deixa um buraco que a verificação acusa. Os formulários em papel de EPI
+da empresa **não chegaram**: os campos além do que a NR-6 exige foram **deduzidos** e são opcionais (**B1160**). Decisões do agente: **B1160**
+a **B1169**; avisos **C431** a **C435**; **uma ação antes do deploy: A107** (o segredo da assinatura no backup do servidor).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Entrega de EPI só no papel; o sistema não sabia quem recebeu o quê | **Almoxarifado → Entrega de EPI → Nova entrega**: colaborador (lista do cadastro), EPI, quantidade, tamanho/motivo/observação opcionais, **assinatura** no quadro e **matrícula digitada pelo colaborador** |
+| O material não tinha CA | **Almoxarifado → Materiais** (cadastro): **Nº do CA** e **Validade do CA**; EPI sem CA ou com CA vencido não sai pela tela (**B1160**, **C431**) |
+| — | A entrega baixa o estoque (saída com o número *EPI-…* da entrega) e **não** se estorna nem se devolve pelas telas de sempre (**B1167**) |
+| — | **Entregas**: a lista com filtros (colaborador, EPI, período), **Verificar integridade** por linha (*Íntegro* / *Adulterado: …*) e **Verificar cadeia** |
+| — | **Ficha por colaborador**: as entregas com CA, validade, a imagem da assinatura e o código de verificação; **Gerar PDF** |
+| — | Tocar **Registrar entrega** de novo depois de a rede cair não duplica (**B1166**) |
+| — | Só o almoxarife e o administrador do módulo veem a tela (**B1165**, **C435**) |
+
+### As regras, com o cenário exato
+
+Preparação: um colaborador ativo em **Fábrica → Colaboradores** com **Matrícula** (ex.: *JOSÉ DA SILVA*, matrícula *M-778*); um material de
+EPI (categoria *EPIs*, ou tipo de material de EPI) em **Almoxarifado → Materiais**, ex.: *EPI-LUV-01 — Luva de vaqueta*, com **Nº do CA**
+*12345* e **Validade do CA** daqui a um ano, e com saldo (uma **Entrada** de 10 em **Movimentações**). Usuário com perfil **Almoxarife** ou
+**Administrador** do módulo.
+
+**1. A entrega.** **Almoxarifado → Entrega de EPI → Nova entrega**: **Colaborador** *JOSÉ DA SILVA (⟨setor⟩)* — a lista mostra nome e setor,
+**sem** a matrícula; **EPI** *EPI-LUV-01 — Luva de vaqueta (CA 12345)*; abaixo aparece *"CA: 12345 · validade: ⟨dd/mm/aaaa⟩"*; **Quantidade** 2;
+o colaborador assina no quadro e toca **Confirmar assinatura** (aparece *"Assinatura confirmada"*); o colaborador digita *M-778* em
+**Matrícula — digitada pelo colaborador**; **Registrar entrega**. Aparece *"Entrega EPI-… registrada para JOSÉ DA SILVA — M-778. Código de
+verificação: XXXX-XXXX-XXXX"*. O saldo do material vai de 10 a 8; no extrato, a saída tem o documento *EPI-…* e a justificativa *"Entrega de
+EPI a JOSÉ DA SILVA (M-778)"*.
+
+**2. A matrícula não confere.** Repita digitando *M-779*: *"A matrícula informada não confere com a do colaborador"*; nada sai do estoque.
+Com o campo vazio, a tela nem envia: *"O colaborador deve digitar a própria matrícula para confirmar o recebimento"*. Maiúscula e espaços não
+contam (*m-778* passa); zero à esquerda conta.
+
+**3. Colaborador sem matrícula no cadastro.** *"Colaborador ⟨nome⟩ sem matrícula cadastrada — não é possível confirmar a identidade"*.
+
+**4. CA ausente ou vencido.** EPI sem **Nº do CA**: ao escolher, o aviso vermelho *"EPI ⟨código⟩ sem número de CA cadastrado"* e
+**Registrar entrega** recusa com a mesma frase. **Validade do CA** ontem: *"O CA ⟨número⟩ do EPI ⟨código⟩ venceu em ⟨dd/mm/aaaa⟩"*.
+Validade **hoje**: entrega normalmente. Sem validade cadastrada: entrega (**B1160**).
+
+**5. As outras recusas.** Material que não é EPI não aparece na lista (pela integração: *"Material ⟨código⟩ não é EPI"*). EPI com série ou
+lote: *"EPI ⟨código⟩ com controle de série/lote não é suportado nesta etapa"*. Quantidade 1,5: *"Quantidade de EPI deve ser inteira"*. Sem
+assinatura: *"A assinatura do colaborador é obrigatória"*. Saldo menor que a quantidade: *"Saldo insuficiente. Disponível: ⟨n⟩ ⟨unidade⟩"*.
+Colaborador inativo: *"Colaborador ⟨nome⟩ não está ativo"*. Motivo fora da lista (integração): *"Motivo inválido"*.
+
+**6. Estornar ou devolver a saída da entrega.** Em **Movimentações**, estornar a saída *EPI-…*: *"Saída de entrega de EPI não pode ser
+estornada pelo livro — a ficha do colaborador continuaria dizendo que recebeu"*. Em **Devoluções**, a saída nem aparece entre as devolvíveis
+(pela integração: *"Saída de entrega de EPI não pode ser devolvida — a ficha do colaborador continuaria dizendo que recebeu"*).
+
+**7. Verificar uma entrega.** **Entregas** → na linha, **Verificar integridade** → *"Íntegro"* (verde). Se o arquivo da imagem for trocado no
+servidor: *"Adulterado: arquivo alterado"*; apagado: *"Adulterado: arquivo ausente"*; o registro alterado no banco: *"Adulterado: registro
+alterado"*; a entrega anterior apagada: *"Adulterado: registro anterior apagado"*.
+
+**8. Verificar a cadeia.** **Entregas → Verificar cadeia** → *"Cadeia íntegra — ⟨n⟩ registros"*. Com uma entrega apagada pelo banco: *"Cadeia
+com problema — 1 ocorrência"* e a linha *"#⟨posição⟩: registro apagado"*.
+
+**9. A ficha e o PDF.** Na linha, **Ficha** (ou a aba **Ficha por colaborador**): nome, *"Matrícula: M-778 · Setor: … · CPF:
+\*\*\*.\*\*\*.\*\*\*-NN"* (só os dois últimos dígitos), as entregas com CA, validade do CA, a imagem da assinatura e o código. **Gerar PDF**
+baixa *ficha-epi-⟨nome⟩.pdf* com tudo isso. Colaborador **excluído** do cadastro: a ficha continua, com o selo *"Excluído do cadastro"*.
+
+**10. O reenvio não duplica.** Com a rede caindo no meio: *"Sem resposta do servidor — a entrega pode ter sido registrada. Toque em
+"Registrar entrega" de novo: o reenvio não duplica."*; tocando de novo, se a primeira tinha chegado: *"Entrega ⟨número⟩ já estava registrada —
+o envio repetido não duplicou"* (uma saída só no estoque).
+
+**11. Outro perfil.** Entrando como Produção (ou Compras, Gestor, Consulta): *"Seu perfil não acessa a entrega de EPI — só o almoxarife e o
+administrador do módulo registram entregas e consultam fichas."*
+
+### O que esta etapa NÃO cobre
+
+- **Devolução de EPI**, troca com devolução do usado, **validade de uso**/data de troca e alerta de troca (**D (178)**).
+- **Requisição de EPI** pelo colaborador; EPI com série ou lote (**B1161**).
+- Âncora **externa** da cadeia (exportar o último código, carimbo de tempo de terceiro): quem tem o banco, o disco **e** o segredo ainda forja
+  (**B1163**, **D (178)**).
+- O **termo de responsabilidade de ferramenta** com a mesma assinatura — a próxima (**B1169**).
+- **Uma ação antes do deploy: A107** — o segredo da assinatura no backup do servidor (**C433**). As colunas e tabelas novas nascem sozinhas no
+  primeiro boot.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 178 entregue (2026-10-22):** **entrega de EPI ao colaborador com assinatura na tela (NR-6).** Tela **Almoxarifado → Entrega de
+  EPI** (nova entrega com a assinatura e a matrícula digitada pelo colaborador; lista com verificação de integridade e da cadeia; ficha por
+  colaborador em PDF); CA obrigatório e vigente no cadastro do material (**B1160**); registro que não se edita nem se apaga, com impressão
+  digital protegida por segredo do servidor e encadeada (**B1163**); a saída da entrega não se estorna nem se devolve (**B1167**); o reenvio
+  não duplica (**B1166**); só almoxarife e administrador do módulo (**B1165**). Commits `0ef4c130`, `c02fe040` (plano), `5d06920b`,
+  `6ee553f3`, `3dfd69ef` (T1), `674c05a1`, `96f16fb0` (T2), `2a33f279`, `bc5fa54d`, `6ddecac2` (T3), a revisão adversarial `dcf65ae1`,
+  `4568c917`, `44f58fd9`, `4c4bacbf`, `d9cd7604`, `853a46ce`, e o fechamento. **O que é seu:** a **A107** antes do deploy (o segredo no
+  backup do servidor — **crítico**, **C433**); as decisões **B1160** a **B1169** (reversíveis — **a B1160 pede um olhar** quando os formulários
+  de EPI chegarem); os avisos **C431** a **C435**; as limitações **(178)** em D e a verificação **(178)** em F. **Próxima: Etapa 180 — termo
+  de responsabilidade de ferramenta com a mesma assinatura; depende dos formulários da empresa (B1169); ver a "próxima tarefa detalhada" no
+  plano da Etapa 178.**
 
 - **Etapa 176 entregue (2026-10-22):** **o recebimento informa a OS — material do cliente para industrialização fica com o trabalho dele.**
   O novo recebimento ganha **OS (opcional)**; o que entra fica reservado para a OS, a requisição dela o leva, e a OS fechada o devolve ao

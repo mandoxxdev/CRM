@@ -147,7 +147,15 @@ PORT=3000
 # JWT_SECRET=          # opcional — gerado automaticamente se omitido
 # SEED_ADMIN_EMAIL=    # opcional — padrão admin@gmp.com.br
 # SEED_ADMIN_PASSWORD= # opcional — gerado automaticamente se omitido
+# EVIDENCIA_ASSINATURA_SECRET= # recomendado — segredo do HMAC da entrega de EPI (ver abaixo)
 ```
+
+**Segredo da assinatura de EPI (`EVIDENCIA_ASSINATURA_SECRET`) — tem de estar no backup do servidor.** A entrega de EPI
+(Almoxarifado → Entrega de EPI) assina cada registro com um HMAC cujo segredo fica **fora do banco**: na variável acima ou, sem ela,
+na chave `evidenciaAssinaturaSecret` do `server/data/.runtime-secrets.json`, gerada no primeiro uso. O zip de **Configurações →
+Backup** **não** leva o `.runtime-secrets.json`. Sem o segredo certo, um servidor restaurado acusa "registro alterado" em todas as
+entregas. Recomendado: gere com `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`, ponha na variável do
+Coolify e guarde no cofre de senhas; nunca troque depois da primeira entrega. Ver a **A107** em `docs/almoxarifado-novidades-por-etapa.md`.
 
 Na primeira inicialização com banco vazio, o log do container mostrará:
 `Admin inicial criado - credenciais em server/data/.runtime-secrets.json`

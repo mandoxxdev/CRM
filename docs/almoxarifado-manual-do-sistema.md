@@ -35,6 +35,7 @@ explicada logo abaixo dela.
 19. [Sobras e retalhos](#19-sobras-e-retalhos)
 20. [Sucateamento](#20-sucateamento)
 21. [Ferramentas e calibração](#21-ferramentas-e-calibração)
+21-bis. [Entrega de EPI](#21-bis-entrega-de-epi)
 21b. [Reposição e compras](#21b-reposição-e-compras)
 21c. [Notificações por e-mail](#21c-notificações-por-e-mail)
 21c-bis. [A central de Alertas](#21c-bis-a-central-de-alertas)
@@ -315,6 +316,7 @@ O bloco **Dados Técnicos** é o que transforma o cadastro em ficha de material,
 | Peso Unitário (kg) | peso de uma unidade — também é o que permite calcular rendimento quando um material sai para corte e volta transformado (ver 21.4) |
 | Dimensões | medidas do item, em texto livre |
 | NCM | classificação fiscal |
+| Nº do CA / Validade do CA | só EPI — o Certificado de Aprovação e a data até quando vale; sem CA, ou com a validade anterior a hoje, o EPI não é entregue pela tela de Entrega de EPI (21-bis) |
 | Aplicação | onde esse item é usado |
 | Especificações Técnicas / Observações Gerais | texto longo, para o que não cabe nos campos acima |
 
@@ -1348,6 +1350,7 @@ A separação entre **Almoxarife** e **Gestor** é intencional e é o desenho de
 | Editar material | ● | ● | – | – | ● | – | – | – |
 | Movimentar estoque | ● | ● | – | – | – | – | – | – |
 | Gerenciar ferramentas (emprestar, calibrar, bloquear...) | ● | ● | – | – | – | – | – | – |
+| Entregar EPI — e ver a lista, as fichas, a verificação e a lista de colaboradores da entrega de EPI | ● | ● | – | – | – | – | – | – |
 | Aprovar sucateamento (perna do almoxarifado) | ● | ● | – | – | – | – | – | – |
 | Aprovar sucateamento (perna da gestão) | ● | – | – | – | – | ● | – | – |
 | Ajustar estoque | ● | – | – | – | – | ● | – | – |
@@ -1379,6 +1382,9 @@ As leituras que essa tabela permite fazer, e que vale explicar a quem pergunta:
   hoje: ferramenta é patrimônio emprestável, não estoque (seção 21), e a permissão existe separada
   de propósito — dá para autorizar um perfil só para ferramentas, sem abrir movimentação de
   material, se um dia isso for pedido.
+- **Entregar EPI é a única ação do módulo que vale também para LER.** A lista de entregas, a ficha de EPI (com o CPF mascarado, a matrícula
+  e a imagem da assinatura), a verificação e a lista de colaboradores da entrega de EPI não são do **Visualizar** de todos: só quem entrega
+  as vê (21-bis.1).
 - **Ajustar material de cliente é mais restrito que ajustar o estoque próprio.** O Gestor acerta o saldo da GMP — pela conclusão da conferência de inventário com ajuste (13) e pelo estorno de um ajuste errado (6.10); lançar um Ajuste em Movimentações pede também **Movimentar estoque**, que o Gestor não tem —; **apenas o Administrador** ajusta o saldo de material que pertence a um cliente — e só ele **estorna** um ajuste desse material, porque o estorno devolve o saldo ao de antes (16.8), e só ele **troca o dono** de um material que já se movimentou, porque a troca leva o saldo e o histórico de um dono para o outro (16.2). O motivo é direto: aquele número é o que o cliente vai conferir e cobrar.
 - **Reservar para outra OS** é separado de **Reservar**. Qualquer requisitante reserva material para a própria ordem; transferir uma reserva de uma OS para outra é decisão de priorização, e fica com o Administrador e o Gestor. A reserva que nasceu de uma **requisição** não se transfere — ela pertence à requisição (9.5).
 - **Liberar a reserva de uma requisição** exige, além de **Reservar**, ser **quem pediu a requisição** — e só antes de a separação começar — ou ter esta permissão própria, que é do **Administrador** e do **Almoxarife** (9.6). É a única regra do módulo que olha **quem é a pessoa**, e não só o perfil: o perfil Produção reserva e libera as reservas manuais, mas não solta o material que foi separado para a requisição de outra pessoa. O **Gestor** não a tem porque não tem **Reservar** (a rota de liberar exige as duas); ele solta tudo de uma requisição pelo **Encerrar Requisição**.
@@ -1876,6 +1882,7 @@ Movimentação errada **não é excluída**. O botão de estornar (seta curva) n
 - **Motivo é obrigatório** → *"Justificativa obrigatória para cancelamento"*.
 - Exige o perfil que pode **ajustar estoque** (mais restrito que o de movimentar). O estorno de um **ajuste de material de cliente** (Ajuste, Ajuste positivo ou Ajuste negativo) exige, além disso, a permissão de ajustar material de cliente — **somente Administrador** (16.8); o Gestor recebe a recusa antes de qualquer alteração.
 - **Estorno de estorno não existe** → *"Estorno não pode ser estornado"*.
+- **A saída de uma entrega de EPI** (21-bis) não se estorna: *"Saída de entrega de EPI não pode ser estornada pelo livro — a ficha do colaborador continuaria dizendo que recebeu"*.
 - **Material inativo** → *"Material inativo não pode ser movimentado"*, para qualquer tipo de movimento: reative o material (2.11) para estornar.
 - **Estorno de entrada** vira uma saída, e por isso respeita o disponível: se a mercadoria já foi consumida, a recusa é *"Não é possível estornar: saldo disponível insuficiente (material já consumido)"*. Se a mercadoria **está no estoque mas reservada** (o físico cobre, o disponível não), a recusa diz quem a segura: *"Não é possível estornar: o material está reservado para requisições (⟨números⟩) — libere as reservas antes de estornar"* (uma reserva sem requisição aparece como *"reservas manuais"*). Em material sem lote, se a posição da entrada já não tem aquela quantidade (porque uma saída tirou dela), o estorno tira **como uma saída**: da posição da entrada primeiro, depois das outras com saldo — nenhuma posição fica negativa.
 - **O estorno também respeita o material separado na caixa de requisições** (10.2). O estorno de entrada compara com o livre fora da caixa, e as duas recusas acima ganham, no fim, o trecho *" — ⟨quantidade⟩ ⟨un⟩ estão separados para a requisição ⟨número da requisição⟩ e só saem pela entrega (…)"* quando há caixa. O estorno de um **ajuste** que **reduz** o total (o ajuste tinha subido) passa pela mesma guarda do ajuste (6.2): *"Não é possível estornar: Ajuste para ⟨t⟩ ⟨un⟩ deixaria o disponível negativo (⟨parcelas⟩, mínimo aceitável: ⟨m⟩ ⟨un⟩). Resolva a retenção antes de ajustar para menos, ou ajuste para um valor maior ou igual ao mínimo."* — com ou sem localização; o estorno que aumenta o total não tem essa guarda. O estorno de um **desbloqueio** bloqueia de novo e só cabe no livre fora da caixa (que desconta o reservado): *"Não é possível estornar o desbloqueio: saldo disponível insuficiente para bloquear de novo: ⟨n⟩ ⟨un⟩"*, com o mesmo trecho no fim quando há caixa.
@@ -3028,7 +3035,7 @@ Campos: material, quantidade, **motivo** (obrigatório), condição, destino, en
 
 O vínculo com a saída original é **opcional**. Sem ele, é uma **devolução avulsa** — o caminho para sobra antiga ou material entregue antes de o sistema existir. Nesse caso não há teto de quantidade nem lote a herdar.
 
-Quando a entrega **é** citada, o sistema valida seis coisas, cada uma com a recusa específica — uma mensagem genérica de "saída inválida" deixaria o operador sem saber se errou o material, se a entrega foi estornada ou se já devolveu tudo:
+Quando a entrega **é** citada, o sistema valida sete coisas, cada uma com a recusa específica — uma mensagem genérica de "saída inválida" deixaria o operador sem saber se errou o material, se a entrega foi estornada ou se já devolveu tudo:
 
 | Verificação | Recusa |
 |---|---|
@@ -3037,6 +3044,7 @@ Quando a entrega **é** citada, o sistema valida seis coisas, cada uma com a rec
 | É do mesmo material | *"A saída 12 é de outro material"* |
 | É de um tipo devolvível | *"A movimentação 12 é do tipo SUCATA e não é uma entrega devolvível (devolvíveis: SAIDA, SAIDA_PRODUCAO, SAIDA_MONTAGEM, SAIDA_ASSISTENCIA)"* |
 | Não é de uma requisição excluída (a exclusão já devolveu o material — 7.6) | *"A saída 12 é de uma requisição excluída — a exclusão já devolveu o material ao estoque"* |
+| Não é a saída de uma entrega de EPI (21-bis) — ela também não aparece na lista | *"Saída de entrega de EPI não pode ser devolvida — a ficha do colaborador continuaria dizendo que recebeu"* |
 | Com número de série: cada série informada saiu nesta entrega | *"A série SN-9 não saiu na saída 12 — informe as séries desta entrega (a lista mostra as que estão fora) ou registre a devolução sem citar a entrega."* |
 
 A entrega de uma requisição excluída também não aparece na lista. A série *Entregue* sem vínculo com a entrega (registro anterior a esse vínculo) é aceita; na devolução avulsa, qualquer série.
@@ -6342,6 +6350,126 @@ estoque de materiais, e vice-versa. Ler a lista de ferramentas e o histórico é
 qualquer usuário autenticado, como todo GET do módulo.
 
 Toda ação de escrita fica registrada na auditoria do módulo, com o usuário responsável.
+
+---
+
+## 21-bis. Entrega de EPI
+
+A tela é **Almoxarifado → Entrega de EPI**, com três abas: **Nova entrega**, **Entregas** e **Ficha por colaborador**. Ela registra a entrega
+de equipamento de proteção individual ao colaborador, com a **assinatura feita na tela** (tablet ou celular) e a **matrícula digitada pelo
+próprio colaborador**, e guarda isso de um jeito que permite provar depois **quem recebeu, o quê, quando, e que o registro não foi
+alterado** (NR-6).
+
+### 21-bis.1 Quem pode
+
+Só quem tem a permissão **Entregar EPI** — **Administrador** e **Almoxarife** (5.5). Ela vale para **tudo** nesta tela: registrar a entrega,
+ver a lista, verificar, abrir a ficha e a lista de colaboradores. Os outros perfis veem o item no menu e, ao abrir, só:
+*"Seu perfil não acessa a entrega de EPI — só o almoxarife e o administrador do módulo registram entregas e consultam fichas."*
+
+### 21-bis.2 O que precisa estar cadastrado
+
+- **O EPI.** Um material é tratado como EPI quando o **tipo de material** cadastrado é de EPI, ou o tipo é *epi*, ou a **categoria** é
+  *EPIs*. Só esses aparecem na lista de EPIs da tela. No cadastro do material (2.4), **Nº do CA** e **Validade do CA**.
+- **O colaborador**, na tela de colaboradores da Fábrica, **ativo** e com **matrícula**.
+
+### 21-bis.3 Registrar a entrega
+
+Na **Nova entrega**: **Colaborador** (a lista dos ativos, mostrando nome e setor — **sem** a matrícula, de propósito: é ela que o colaborador
+vai digitar), **EPI** (com a busca por código, nome ou CA; ao escolher, a tela mostra *"CA: ⟨número⟩ · validade: ⟨data⟩"*), **Quantidade**
+(inteira), e os opcionais **Tamanho** (até 20 caracteres), **Motivo** (*Primeira entrega*, *Troca*, *Perda*, *Dano*) e **Observação** (até 500).
+O colaborador assina no quadro e toca **Confirmar assinatura**, e digita a **própria matrícula** no campo **Matrícula — digitada pelo
+colaborador**. **Registrar entrega**.
+
+O sistema confere, e recusa com a mensagem:
+
+| O que confere | Mensagem |
+|---|---|
+| Assinatura enviada | *"A assinatura do colaborador é obrigatória"* |
+| A assinatura é uma imagem PNG de verdade (a tela sempre manda PNG) | *"A assinatura deve ser uma imagem PNG"* |
+| Imagem até 2 MB | *"Arquivo grande demais (máximo 2 MB)"* |
+| Quantidade inteira e maior que zero | *"Quantidade de EPI deve ser inteira"* |
+| Tamanho, motivo, observação | *"Tamanho deve ter no máximo 20 caracteres"*, *"Motivo inválido"*, *"Observação deve ter no máximo 500 caracteres"* |
+| Colaborador escolhido, existente e ativo | *"O colaborador é obrigatório"*, *"Colaborador #⟨id⟩ não encontrado"*, *"Colaborador ⟨nome⟩ não está ativo"* |
+| O colaborador tem matrícula no cadastro | *"Colaborador ⟨nome⟩ sem matrícula cadastrada — não é possível confirmar a identidade"* |
+| A matrícula foi digitada | *"O colaborador deve digitar a própria matrícula para confirmar o recebimento"* |
+| A matrícula digitada é a do cadastro (maiúscula/minúscula e espaços não contam; zero à esquerda conta) | *"A matrícula informada não confere com a do colaborador"* |
+| EPI escolhido e existente | *"O EPI é obrigatório"*, *"Material #⟨id⟩ não encontrado"* |
+| O material é EPI | *"Material ⟨código⟩ não é EPI"* |
+| EPI sem controle de série nem de lote | *"EPI ⟨código⟩ com controle de série/lote não é suportado nesta etapa"* |
+| CA cadastrado | *"EPI ⟨código⟩ sem número de CA cadastrado"* |
+| CA vigente: vencido é a validade **anterior** ao dia de hoje (Brasília); no próprio dia ainda vale; sem validade cadastrada, passa | *"O CA ⟨número⟩ do EPI ⟨código⟩ venceu em ⟨dd/mm/aaaa⟩"* |
+| Saldo | a recusa de sempre da saída (6.7), ex.: *"Saldo insuficiente. Disponível: ⟨n⟩ ⟨unidade⟩"* |
+
+A tela antecipa as recusas do CA (o aviso vermelho aparece ao escolher o EPI, e o envio não sai), a da quantidade, a da assinatura e a da
+matrícula vazia, com as mesmas frases.
+
+Aceita, a entrega: (1) **baixa o estoque** — uma **saída** com o número da entrega (*EPI-…*) no documento e a justificativa *"Entrega de EPI a
+⟨nome⟩ (⟨matrícula⟩)"*; (2) grava a **entrega** e a **evidência** — a imagem, a hora **do servidor**, quem entregou, uma cópia do nome,
+matrícula, setor e CPF do colaborador naquele momento, o CA e a validade do CA naquele momento, que a identidade foi **confirmada pela
+matrícula**, o endereço de rede e o aparelho (navegador) de onde veio; (3) responde *"Entrega ⟨número⟩ registrada para ⟨nome⟩ — ⟨matrícula⟩.
+Código de verificação: XXXX-XXXX-XXXX"*.
+
+**O registro não se edita nem se apaga** — nem pela tela, nem direto no banco (o banco recusa). A **saída** da entrega também não se desfaz
+pelas telas de sempre: o estorno (6.10) responde *"Saída de entrega de EPI não pode ser estornada pelo livro — a ficha do colaborador
+continuaria dizendo que recebeu"*, e a devolução (12) *"Saída de entrega de EPI não pode ser devolvida — a ficha do colaborador continuaria
+dizendo que recebeu"* (ela nem aparece entre as saídas que se podem devolver). Não existe devolução de EPI.
+
+**Tocar "Registrar entrega" de novo não duplica.** Cada tentativa de envio leva uma chave; se a resposta se perder (rede do galpão), a tela diz
+*"Sem resposta do servidor — a entrega pode ter sido registrada. Toque em "Registrar entrega" de novo: o reenvio não duplica."*, e o novo
+toque, se a primeira tinha chegado, responde *"Entrega ⟨número⟩ já estava registrada — o envio repetido não duplicou"* — sem uma segunda saída
+do estoque. Mexer em qualquer campo ou refazer a assinatura começa uma tentativa nova.
+
+**Quando a gravação falha no meio.** A baixa do estoque acontece antes da gravação da entrega; se a gravação falhar, o sistema desfaz a baixa
+e responde *"Não foi possível gravar a entrega de EPI — nada foi gravado: a saída do estoque foi desfeita. Pode tentar de novo. (…)"*. Se nem a
+baixa puder ser desfeita (falha do banco, ou uma devolução registrada pela integração citando aquela saída no mesmo instante — desfazer a
+saída por cima da devolução contaria o material duas vezes), a resposta é *"Não foi possível gravar a entrega de EPI e a saída do estoque NÃO
+pôde ser desfeita: a movimentação #⟨id⟩ (⟨número⟩) ficou registrada sem evidência de entrega. A assinatura foi preservada no servidor. Avise o
+administrador antes de entregar de novo. (…)"* — a saída fica no livro, sem entrega na ficha, e cabe ao administrador decidir (estornar a
+saída em Movimentações e, se o colaborador levou o EPI, registrar a entrega de novo). Se a saída for estornada por alguém no mesmo instante:
+*"A saída da entrega ⟨número⟩ foi estornada enquanto a entrega era gravada — nada foi gravado. Faça a entrega de novo."*
+
+### 21-bis.4 Como o sistema garante que o registro não foi alterado
+
+Cada entrega tem duas impressões digitais:
+
+- a **do arquivo** — calculada sobre a imagem da assinatura como foi gravada; trocar um único ponto da imagem muda essa impressão;
+- a **do registro** (o *código de verificação*; a tela mostra os 12 primeiros caracteres em grupos de 4) — calculada sobre todos os campos da
+  entrega e da evidência (quem, o quê, quanto, CA, quando, quem entregou, a confirmação pela matrícula, o endereço e o aparelho, a impressão
+  do arquivo) **com um segredo do servidor que não fica no banco de dados**. Quem tiver acesso só ao banco e aos arquivos não consegue
+  recalcular a impressão de um registro alterado.
+
+E as entregas formam uma **cadeia**: cada evidência guarda um **número de ordem** (1, 2, 3…, sem repetir) e a impressão do registro **anterior**,
+dentro da sua própria impressão. Apagar uma entrega deixa um buraco na numeração; alterar uma, mesmo com o segredo, quebra o elo da seguinte.
+
+**Verificar integridade** (aba **Entregas**, por linha) relê o arquivo e o registro e responde *"Íntegro"* ou *"Adulterado: ⟨motivo⟩"*, onde o
+motivo é *arquivo ausente*, *arquivo alterado*, *registro alterado*, *registro anterior apagado*, *elo com o anterior quebrado*, *registro
+posterior apagado* ou *elo com o posterior quebrado*.
+
+**Verificar cadeia** (aba **Entregas**, no topo) percorre todas as evidências e responde *"Cadeia íntegra — ⟨n⟩ registros"* ou *"Cadeia com
+problema — ⟨n⟩ ocorrências"*, com uma linha por problema: *"#⟨número de ordem⟩ ⟨número da entrega⟩: ⟨motivo⟩"*, onde o motivo é *registro
+apagado* (o número de ordem que falta), *elo quebrado*, *arquivo ausente*, *arquivo alterado*, *registro alterado*, *entrega sem evidência*,
+*fora da cadeia* ou *registro apagado no fim da cadeia* (a última entrega sumiu).
+
+**O segredo do servidor precisa estar no backup do servidor.** Ele fica numa variável de ambiente do servidor ou num arquivo de segredos do
+diretório de dados, e o backup do sistema (Configurações → Backup) **não** o leva — de propósito, porque o mesmo arquivo guarda a chave dos
+logins. Um servidor restaurado sem o segredo certo acusa *registro alterado* em **todas** as entregas: o registro continua lá, mas a
+verificação só volta a dizer *"Íntegro"* com o segredo de volta. Depois de toda restauração, **Verificar cadeia** tem de dizer *"Cadeia
+íntegra"*.
+
+O que a verificação **não** pega: quem tiver o banco, os arquivos **e** o segredo pode reescrever uma entrega e todas as seguintes. A matrícula
+é **confirmação** de identidade, não senha.
+
+### 21-bis.5 A lista e a ficha
+
+**Entregas** lista as entregas, das mais recentes para as mais antigas, com número, data (dia de Brasília), colaborador, EPI, CA, quantidade,
+tamanho, motivo, quem entregou e a verificação; filtra por colaborador, EPI e período (**De**/**Até**, dias de Brasília).
+
+**Ficha por colaborador** (a aba, ou **Ficha** na linha da lista): nome, matrícula, setor e CPF **mascarado** (*\*\*\*.\*\*\*.\*\*\*-NN*, só os
+dois últimos dígitos; sem CPF ou com menos de dois dígitos, *—*) e as entregas com data, EPI, CA, validade do CA, quantidade, tamanho, motivo,
+quem entregou, a **imagem da assinatura** e o código. Colaborador **excluído** do cadastro continua com ficha, pelos dados guardados na
+entrega mais recente, com o selo *"Excluído do cadastro"*. **Gerar PDF** relê a ficha (a imagem de cada assinatura abre por um link que vale
+cerca de 15 minutos) e baixa *ficha-epi-⟨nome⟩.pdf*, com a imagem e a impressão completa do registro de cada entrega; assinatura que não carrega
+sai como *"(imagem da assinatura indisponível)"* e a tela avisa quantas.
 
 ---
 

@@ -1,5 +1,10 @@
 # 16 — Ferramentas e Equipamentos de Medição
 
+> **Etapa 178 (2026-10-22): a entrega de EPI virou a feature nova [25](../25-entrega-epi/README.md)**, não esta — EPI é consumo entregue,
+> não patrimônio emprestado. O que ela deixa para esta feature: o serviço genérico de evidência de assinatura (`evidenciaAssinaturaService`,
+> HMAC com segredo fora do banco + cadeia) que o **termo de responsabilidade de ferramenta** (RN-D) vai usar — a **próxima, Etapa 180**,
+> que depende dos formulários da empresa (ver a "próxima tarefa detalhada" no plano da 178). O status desta feature não muda.
+
 > **+ Etapa 177 (2026-10-22, T1 `17ce8759`, T2 `c2bc2d37`): o retorno da manutenção com a condição do item e o destino (volta ao uso ou baixa)** — estado novo **BAIXADA**, reversível. Ver a seção "Etapa 177", no fim. O status da feature não muda (🟡 pelo lembrete de devolução e pela integração com a inspeção).
 
 > **+ Etapa 175 (2026-10-22, T1 `2a54344f`, T2 `735f7c5d`): editar a ferramenta pela tela** — o item "Edição de ferramenta pela tela" do checklist, aberto desde a 9b, foi entregue. Ver a seção "Etapa 175", no fim. A feature continua 🟡 pelo lembrete de devolução (feature 20) e pela integração com a inspeção.
