@@ -168,3 +168,64 @@ As emendas **prevalecem** sobre a tabela de RN acima quando discordarem.
 3. **A aux traz o `incluir` por consulta à parte** (acrescentado se não veio), não por `OR id = ?` dentro do `LIMIT 300`:
    com mais de 300 OS abertas uma OS antiga do `incluir` ficaria de fora.
 4. `lerPedidoParaRecebimento` (projeção do almoxarife) **não** ganhou a OS — fica para a T2 se ela precisar.
+
+### T2 — chegada e aprovação (RN-171.07, 08, 11, 12; I1–I5) — ✅ feita (`4dc8433d`)
+
+- **Módulo novo** `services/almoxarifado/reservaDaOs.js` (sem ciclo: `db`, `stockService`, `caixaSql`, `quantidade`; o
+  `pedidoCompraService` lazy, só pelo `osFechada`). Exporta `PREDICADO_RESERVA_DA_OS_SQL` (o congelado), `motivoReservaDaOs`,
+  `chaveDaOs`/`requisicaoEhDaOs`, `osIdDoPedido`, `osAbertaDoRecebimento`, `jaReservadoDaNotaParaOs`,
+  `reservarParaOsSobTrava`, `reservasDaOsParaRequisicao`, `recriarReservaDaOs`.
+- **RN-171.07:** `darEntradaEstoque` lê `pedidos_compra.os_id` uma vez e passa `os_id` ao motor na `ENTRADA_COMPRA` — mesmo
+  com a OS fechada (é a marca). Base sem a coluna (DDL própria de teste) → `null`, calado.
+- **RN-171.08 + 12(a), I1, I4:** nas três portas (`reservarChegadaParaQuemEspera` e `reservarLiberacaoParaQuemEspera`, que
+  serve inspeção e NC), com OS **aberta** lida **dentro** da seção: `distribuirParaOs` = `distribuirSemLock` com
+  `filtro` (só requisições da OS) e o resto em `reservarParaOsSobTrava` (`criarReservaSemTrava`, teto
+  `min(resto, livre de caixa)`, `semExpiracao`, `recebimento_id` da nota, `os_referencia` = número, observação e motivo
+  `Compra para a OS <numero_os>`). A fila geral não é chamada para esse material. `distribuirSemLock` passou a devolver o
+  quanto reservou (os chamadores antigos ignoram).
+- **I2:** `criarReservaSemTrava` ganhou `opcoes.semExpiracao` (ignora `expira_em` e `reserva_dias_validade`); exportada.
+- **I3:** só na porta da nota — teto = livre da nota − `jaReservadoDaNotaParaOs` (reservas de qualquer status com o
+  `recebimento_id` + material, origem REQUISICAO ou MANUAL da OS, pela quantidade **original** da movimentação `RESERVA`).
+- **RN-171.12(b):** `reservarItensAprovacao` (o laço das **três** portas de aprovação: `/aprovar`, `/aprovar-valor` e a
+  automática, todas por `prepararPosAprovacao` sob `comTravaDaRequisicao`) — requisição da OS libera as reservas da OS do
+  material (mais antigas primeiro) até a `falta`, relê o saldo e reserva como hoje. Só converte se o livre de hoje
+  (`disponivel − jaReservado − caixa dos outros`) não for negativo (senão o liberado iria para a caixa alheia: sobra solta).
+  Falhou a reserva, `aReservar ≤ 0` ou excesso de arredondamento → o pedaço volta como reserva da OS. A entrada de `reservas`
+  ganha `os_convertida` (aditivo, só quando converteu) e o `desfazerReservas` (aprovação que perde o `UPDATE`) a recria
+  depois de soltar a da requisição.
+- **RN-171.11 + I5:** `liberarParaEstorno` solta **primeiro** a reserva da OS do recebimento/material (mais novas primeiro,
+  `min(reserva, estornado)`, mesmo com disponível sobrando) e só depois as de requisição; as da OS voltam na lista com
+  `reserva_da_os: true, requisicao_id: null`. `recriarAposEstornoRecusado` recria essas pela `recriarReservaDaOs` (os_id,
+  motivo, sem expiração). O motor filtra `null` em `requisicoesDoEstorno`.
+- **Teste** `server/tests/api/recebimentoPedidoOs.api.test.js`: 16 cenários (pelas rotas; I3 pelo serviço), inclusive a
+  ponta a ponta até a **entrega** e a corrida (gancho em `reservaDaOs.reservarParaOsSobTrava` só sinaliza e segura; o
+  `/aprovar` sai do contexto do teste e tem de esperar 250 ms sem terminar). Controle positivo: 14 sabotagens, todas
+  vermelhas, restauradas por cópia e conferidas com `cmp` — S1 sem `os_id` na entrada; S2 `semExpiracao` ignorado; S3 fila
+  sem filtro de OS; S4 nota sem modo OS; S5 sem o desconto da I3; S6 sem teto de caixa; S7 sem `osFechada`; S8 inspeção/NC
+  sem modo OS; S9 aprovação sem conversão; S10 estorno sem soltar a da OS; S11 recriação sem o ramo da OS; S12
+  `comTravaDaRequisicao` sem trava (só a corrida cai); S13 `chaveDaOs` sem tirar o prefixo; S14 conversão liberando além
+  da falta.
+- Suítes: `test:api` 492/492 arquivos OK; `test:almoxarifado` 44/44; `test:validation` 4/4, `test:safealter` 3/3, `test:sqlite` 16/16.
+
+**Divergências do previsto (letra B):**
+1. **A requisição não tem `os_id`** — a Revisão da Fase 2 (C1) escreveu `r.os_id = pedido.os_id`, e
+   `requisicoes_almoxarifado` só tem `os_referencia` (texto livre, obrigatório no envio — `exigirOS`). O `reqRow.os_id` que
+   `reservarItensAprovacao` já passava ao `criarReserva` é sempre `undefined`. **Escolhido:** "requisição da OS" =
+   `os_referencia` igual ao `numero_os` pela `chaveDaOs` (sem caixa, espaços das pontas, espaços internos colapsados, prefixo
+   `OS`/`OS-`/`OS#`/`OS:` ignorado). **Descartado:** coluna `requisicoes.os_id` + select de OS na requisição (contrato novo
+   de API e tela, fora do escopo da T2) — é a evolução natural se o texto livre errar demais. Corrigido aqui o que a emenda
+   C1 afirmava.
+2. **I3 só na porta da nota.** Na inspeção e na NC a decisão é reivindicada uma vez (não há retomada), e a NC que aceita
+   depois de uma inspeção do mesmo recebimento/material libera quantidade **nova** — descontar o Σ do recebimento a zeraria.
+3. **Conversão prefere a reserva da OS ao livre:** com livre de outra origem sobrando, a requisição da OS consome primeiro
+   o que foi comprado para ela (o livre fica para os outros). Descartado: usar o livre primeiro (prenderia o comprado e
+   gastaria o estoque comum).
+4. **`liberarParaEstorno` solta a da OS das mais novas para as mais antigas** (a recriação após estorno recusado cria uma
+   linha nova; a mais nova é a mais provável de ser a que esta nota deixou).
+5. **OS que sumiu** (`ordens_servico` sem a linha) com o pedido apontando para ela: não reserva (fila geral, como pedido de estoque); a entrada guarda o `os_id` mesmo assim. A RN-171.10 da T3 impede apagar a OS com pedido.
+
+**Portas que reservam e NÃO herdam a conversão (letra D):** separação/entrega de requisição da OS **sem** reserva
+(APROVADO sem hold — ex.: barrada por valor/dono na chegada e liberada depois) não converte a reserva da OS; reserva
+manual (`POST /reservas`) e a troca de destino da reserva (`reservationService`, M4) não olham a OS. A requisição da OS
+que já estava aprovada e esperando e foi pulada na chegada (valor/dono) também não reconverte depois — só uma nova
+aprovação converte.
