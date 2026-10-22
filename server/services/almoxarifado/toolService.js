@@ -246,15 +246,49 @@ async function iniciarManutencao(db, user, ferramentaId, data) {
  * que a manutencao foi concluida) e lanca 400 com o status atual, para quem chamou saber que a
  * ferramenta nao esta disponivel e agir (ex.: reabrir uma manutencao, investigar).
  */
+/**
+ * Etapa 177 (RN-177.01..05) — como a manutencao terminou. Listas fechadas aqui (literais do contrato), como
+ * `TIPOS_OCORRENCIA`; o Zod so garante a forma. `condicao` ausente e o legado (B1140): grava NULL.
+ */
+const CONDICOES_RETORNO = ['OK', 'COM_RESTRICAO', 'INSERVIVEL'];
+const DESTINOS_RETORNO = { USO: STATUS.DISPONIVEL, BAIXA: STATUS.BAIXADA };
+
+/**
+ * Valida condicao x destino x observacoes ANTES de qualquer escrita — uma recusa aqui deixa a manutencao aberta e
+ * a ferramenta EM_MANUTENCAO, e quem chamou corrige e manda de novo. Ordem das recusas = ordem do contrato.
+ */
+function validarRetorno(data) {
+  const condicao = data.condicao == null || data.condicao === '' ? null : String(data.condicao);
+  const destino = data.destino == null || data.destino === '' ? 'USO' : String(data.destino);
+  const observacoes = String(data.observacoes || '').trim();
+  if (condicao !== null && !CONDICOES_RETORNO.includes(condicao)) {
+    throw Object.assign(new Error('Condição inválida (use OK, COM_RESTRICAO ou INSERVIVEL)'), { status: 400 });
+  }
+  if (!Object.prototype.hasOwnProperty.call(DESTINOS_RETORNO, destino)) {
+    throw Object.assign(new Error('Destino inválido (use USO ou BAIXA)'), { status: 400 });
+  }
+  if (condicao === 'INSERVIVEL' && destino === 'USO') {
+    throw Object.assign(new Error('Ferramenta inservível não volta ao uso — escolha a baixa'), { status: 400 });
+  }
+  if (condicao === 'COM_RESTRICAO' && !observacoes) {
+    throw Object.assign(new Error('Descreva a restrição nas observações'), { status: 400 });
+  }
+  if (destino === 'BAIXA' && !observacoes) {
+    throw Object.assign(new Error('Informe o motivo da baixa nas observações'), { status: 400 });
+  }
+  return { condicao, destino, statusFinal: DESTINOS_RETORNO[destino] };
+}
+
 async function concluirManutencao(db, user, manutencaoId, data = {}) {
+  const { condicao, destino, statusFinal } = validarRetorno(data);
   const claim = await dbRun(db, `UPDATE manutencoes_ferramenta_almoxarifado
-    SET data_fim = CURRENT_TIMESTAMP, observacoes = COALESCE(?, observacoes)
-    WHERE id = ? AND data_fim IS NULL`, [data.observacoes || null, manutencaoId]);
+    SET data_fim = CURRENT_TIMESTAMP, observacoes = COALESCE(?, observacoes), condicao_retorno = ?, destino = ?
+    WHERE id = ? AND data_fim IS NULL`, [data.observacoes || null, condicao, destino, manutencaoId]);
   if (claim.changes === 0) throw Object.assign(new Error('Manutenção não encontrada'), { status: 404 });
 
   const manutencao = await dbGet(db, 'SELECT * FROM manutencoes_ferramenta_almoxarifado WHERE id = ?', [manutencaoId]);
   const claimFerramenta = await dbRun(db, `UPDATE ferramentas_almoxarifado SET status = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND status = ?`, [STATUS.DISPONIVEL, manutencao.ferramenta_id, STATUS.EM_MANUTENCAO]);
+    WHERE id = ? AND status = ?`, [statusFinal, manutencao.ferramenta_id, STATUS.EM_MANUTENCAO]);
 
   if (claimFerramenta.changes === 0) {
     const atual = await dbGet(db, 'SELECT status FROM ferramentas_almoxarifado WHERE id = ?', [manutencao.ferramenta_id]);
@@ -268,8 +302,14 @@ async function concluirManutencao(db, user, manutencaoId, data = {}) {
   // Etapa 121 (C252, B784): o ato ja esta gravado — a falha da Auditoria vai ao log e nao o derruba
   await registrarAuditoriaDoAto(db, { entidade: 'ferramenta', entidade_id: manutencao.ferramenta_id, acao: 'MANUTENCAO_FIM',
     usuario_id: user.id, usuario_nome: user.nome || user.email,
-    dados_novos: { manutencao_id: Number(manutencaoId) } });
-  return { success: true };
+    dados_novos: { manutencao_id: Number(manutencaoId), condicao, destino } });
+  // RN-177.05: a baixa tem linha propria na trilha — o filtro "Baixa de ferramenta" da Auditoria a acha sem abrir cada fim de manutencao
+  if (destino === 'BAIXA') {
+    await registrarAuditoriaDoAto(db, { entidade: 'ferramenta', entidade_id: manutencao.ferramenta_id, acao: 'BAIXA',
+      usuario_id: user.id, usuario_nome: user.nome || user.email,
+      dados_novos: { manutencao_id: Number(manutencaoId), condicao, motivo: String(data.observacoes).trim() } });
+  }
+  return { success: true, status: statusFinal };
 }
 
 async function listarManutencoes(db, ferramentaId) {
@@ -289,6 +329,22 @@ async function reencontrarFerramenta(db, user, ferramentaId, data) {
   }
   // Etapa 121 (C252, B784): o ato ja esta gravado — a falha da Auditoria vai ao log e nao o derruba
   await registrarAuditoriaDoAto(db, { entidade: 'ferramenta', entidade_id: Number(ferramentaId), acao: 'REENCONTRO',
+    usuario_id: user.id, usuario_nome: user.nome || user.email,
+    dados_novos: { justificativa: data.justificativa } });
+  return { success: true };
+}
+
+/** Etapa 177 (RN-177.08, B1142): reverter a baixa — claim BAIXADA -> DISPONIVEL, justificativa obrigatoria e auditada (molde do reencontro). */
+async function reverterBaixa(db, user, ferramentaId, data) {
+  const claim = await dbRun(db, `UPDATE ferramentas_almoxarifado
+    SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = ?`,
+    [STATUS.DISPONIVEL, ferramentaId, STATUS.BAIXADA]);
+  if (claim.changes === 0) {
+    const atual = await dbGet(db, 'SELECT status FROM ferramentas_almoxarifado WHERE id = ?', [ferramentaId]);
+    if (!atual) throw Object.assign(new Error('Ferramenta não encontrada'), { status: 404 });
+    throw Object.assign(new Error(`Ferramenta não está baixada (status atual: ${atual.status})`), { status: 400 });
+  }
+  await registrarAuditoriaDoAto(db, { entidade: 'ferramenta', entidade_id: Number(ferramentaId), acao: 'REVERSAO_BAIXA',
     usuario_id: user.id, usuario_nome: user.nome || user.email,
     dados_novos: { justificativa: data.justificativa } });
   return { success: true };
@@ -524,7 +580,9 @@ async function painelCalibracoes(db, dias = 30) {
         WHERE c2.ferramenta_id = f.id
       )
     WHERE f.exige_calibracao = 1 AND f.ativo = 1
-    ORDER BY c.data_validade ASC`, [diaLocal.hojeLocalISO()]);
+      AND COALESCE(f.status, '') <> ?
+    ORDER BY c.data_validade ASC`, [diaLocal.hojeLocalISO(), STATUS.BAIXADA]);
+  // Etapa 177 (RN-177.09): a baixada nao e mais usada — no painel ela seria "vencida" para sempre.
 
   const vencidas = [];
   const a_vencer = [];
@@ -542,7 +600,7 @@ module.exports = {
   criarFerramenta, atualizarFerramenta, emprestarFerramenta, devolverFerramenta,
   listarFerramentas, listarEmprestimos, calibracaoVigente,
   registrarCalibracao, listarCalibracoes, painelCalibracoes,
-  bloquearFerramenta, desbloquearFerramenta, iniciarManutencao, concluirManutencao,
+  bloquearFerramenta, desbloquearFerramenta, iniciarManutencao, concluirManutencao, reverterBaixa,
   listarManutencoes, reencontrarFerramenta,
   registrarOcorrencia, listarOcorrencias,
 };

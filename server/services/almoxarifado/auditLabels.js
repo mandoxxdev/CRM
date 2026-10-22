@@ -231,6 +231,8 @@ const GRUPOS_ACAO = congelarGrupos([
   { rotulo: 'Calibração', verbos: ['CALIBRACAO'] },
   { rotulo: 'Início de manutenção', verbos: ['MANUTENCAO_INICIO'] },
   { rotulo: 'Fim de manutenção', verbos: ['MANUTENCAO_FIM'] },
+  { rotulo: 'Baixa de ferramenta', verbos: ['BAIXA'] }, // Etapa 177 (RN-177.05)
+  { rotulo: 'Reversão de baixa', verbos: ['REVERSAO_BAIXA'] }, // Etapa 177 (RN-177.08)
   { rotulo: 'Ocorrência', verbos: ['OCORRENCIA'] },
   { rotulo: 'Expiração', verbos: ['EXPIRACAO'] },
   { rotulo: 'Liberação por vencimento', verbos: ['LIBERACAO_VENCIMENTO'] },

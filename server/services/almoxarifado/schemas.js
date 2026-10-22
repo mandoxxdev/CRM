@@ -755,8 +755,12 @@ const ManutencaoSchema = z.object({
   descricao: z.string().min(1),
 });
 
+// Etapa 177 (RN-177.01): a lista fechada de condicao/destino e regra de negocio e mora no servico (literais do contrato),
+// como o `tipo` da ocorrencia — aqui so a forma.
 const ManutencaoConcluirSchema = z.object({
   observacoes: z.string().nullable().optional(),
+  condicao: z.string().nullable().optional(),
+  destino: z.string().optional(),
 });
 
 /**
