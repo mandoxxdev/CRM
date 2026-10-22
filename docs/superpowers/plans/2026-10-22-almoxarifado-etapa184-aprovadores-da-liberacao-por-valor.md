@@ -1,6 +1,8 @@
 # Etapa 184 — A leitura da liberação por valor para de entregar nome e e-mail dos aprovadores
 
-> **Status:** 🔧 **executada (2026-10-22): T1 `b23e60a2`, T2 `3383b4e5`, T3 `8467192f`, suítes verdes** — falta a revisão adversarial (Fase 5) e o fechamento. Feature **23**
+> **Status:** ✅ **FECHADA (2026-10-22): T1 `b23e60a2`, T2 `3383b4e5`, T3 `8467192f`; Fase 5 (0 críticos, 0 importantes, 3 menores, todos
+> corrigidos) `892228fe`, `e74961a4`; fechamento (skill `fechar-etapa`) no commit seguinte.** Próxima: **Etapa 185** (ver "Próxima tarefa
+> detalhada", no fim). Feature **23**
 > (perfis, segurança e auditoria), item aberto da spec `specs/modulo-almoxarifado/23-perfis-seguranca-auditoria/README.md:709-712`
 > (letra **D (20)** das novidades, `docs/almoxarifado-novidades-por-etapa.md:16402-16408`).
 > Antes: Etapa 183 (ficha de EPI) — **não tocar** nos arquivos dela (outra sessão revisa a 183 em paralelo).
@@ -135,11 +137,13 @@ const config = await valueApprovalService.getConfigPublica(db, req.user, {
 
 ## Tasks
 
-| # | Task | Tipo |
-|---|---|---|
-| T1 | Servidor: `getConfigPublica` + rota (RN-184.01..05, .07) | **tronco** (congela o JSON) |
-| T2 | Client: nada muda no código; testes das duas telas contra o contrato (RN-184.06) | galho (contra o contrato acima) |
-| T3 | Integração pela rota e pelo serviço, com fixture real para o client (RN-184.03/04/06) | depois de T1 e T2 |
+| # | Task | Tipo | Feita |
+|---|---|---|---|
+| T1 | Servidor: `getConfigPublica` + rota (RN-184.01..05, .07) | **tronco** (congela o JSON) | ✅ `b23e60a2` |
+| T2 | Client: nada muda no código; testes das duas telas contra o contrato (RN-184.06) | galho (contra o contrato acima) | ✅ `3383b4e5` |
+| T3 | Integração pela rota e pelo serviço, com fixture real para o client (RN-184.03/04/06) | depois de T1 e T2 | ✅ `8467192f` |
+| F5 | Fix-round da revisão adversarial (3 menores) | depois de T3 | ✅ `892228fe`, `e74961a4` |
+| — | Fechamento (`fechar-etapa`) | por último | ✅ (o commit do fechamento) |
 
 Nenhuma task toca motor de estoque, trava, migration nem `ACAO_PERFIS`. T2 só escreve testes do client — paralela à T1 sem risco, mas é tão
 pequena que pode ir em sequência no mesmo executor (preferido: um executor, T1 → T2 → T3, como a 183).
@@ -281,7 +285,72 @@ caixas marcadas), novidades (seção da Etapa 184, letra B abaixo, D (20) marcad
 
 - `test:api` 527/527 arquivos OK; `test:almoxarifado` 44/0; `test:validation` 4/0; `test:safealter` 3/0; `test:sqlite` 16/0.
 - Client: `CI=true npx react-scripts test --watchAll=false` 180 suítes, 2382/2382; `CI=true npx react-scripts build` *Compiled successfully*.
-- Próximo passo: revisão adversarial da Fase 5; depois o fechamento (skill `fechar-etapa`) — **não feito** nesta execução.
+- Próximo passo: revisão adversarial da Fase 5; depois o fechamento (skill `fechar-etapa`) — **não feito** nesta execução. *(Feitos: ver
+  as duas seções abaixo.)*
+
+## Fase 5 — revisão adversarial (2026-10-22) — 0 críticos, 0 importantes, 3 menores, todos CORRIGIDOS
+
+A revisão sabotou o código de produção e achou duas trocas que a suíte deixava passar verde (12/12 no `liberacaoValorLeitura` e 6/6 no
+`liberacaoValorLeituraIntegracao`), mais um desencontro anterior à etapa na tela de Requisições. Fix-round sequencial na main; controle positivo
+por achado — `perl` com âncora contada = 1, md5 antes/sabotado/restaurado, restauro por cópia (`fix184-*` no scratchpad), `git diff --stat`
+vazio do arquivo sabotado depois do restauro.
+
+- **Menor 1 (CORRIGIDO no teste, `892228fe`) — nada provava que `souAprovador` diz o mesmo que o portão.** Trocar o `isAprovadorValor` de
+  `getConfigPublica` por `isSystemAdmin(user) || aprovadorIds.includes(id)` passava verde, mas com `role: 'Admin'` e com o super de `role: 'user'`
+  (`is_superadmin: 1` / `isSuperAdmin: true`) a lista diria *"sou aprovador"* e `GET /requisicoes/aprovacoes-valor` responderia **403** — botão
+  que dá erro. **Correção:** três usuários novos no teste (`ADMIN_CAIXA` 31, `SUPER_ROLE_USER` 32, `SUPER_CAMEL` 33) e o caso `[RN-184.04, Fase 5]`
+  que roda os **11** usuários e exige `souAprovador === (aprovacoes-valor responde 200)`, com a premissa de **3** positivos (aprovador 7, admin do
+  sistema, super `role: 'admin'`) para o laço não ser só de 403. **Controle:** a troca acima no serviço → **12/16**: caem os três
+  `[RN-184.02, Fase 5]` (`souAprovador: true` contra `false` no `deepStrictEqual`) **e** a paridade, nomeando os três (*"role 'Admin' (caixa
+  alta): souAprovador true mas aprovacoes-valor 403 | super com role 'user' (is_superadmin: 1): … | super com role 'user' (isSuperAdmin:
+  true): …"*). A asserção que guarda o achado (a paridade) caiu.
+- **Menor 2 (CORRIGIDO no teste, `892228fe`) — nada provava a caixa do `role` no `verIds`.** Trocar `isSystemAdmin(req.user)` da rota por
+  `req.user.role === 'admin'` passava verde; com `role: 'Admin'` o client abre a aba (compara em minúsculas) e veria as caixas todas desmarcadas.
+  **Correção:** os mesmos três usuários exigem o JSON literal `{"ativo":true,"limite":800,"aprovadorIds":[7,9],"souAprovador":false}`.
+  **Controle:** a troca acima → **15/16**: cai **só** `[RN-184.02, Fase 5] role 'Admin' (caixa alta)` (`aprovadorIds` ausente no
+  `deepStrictEqual`); os dois supers seguem (são `canConfigureAlmox`), como deviam. O `liberacaoValorLeituraIntegracao` ficou 6/6 sob a
+  sabotagem — esperado: os 8 usuários dele não têm `role` em caixa alta.
+- **Menor 3 (CORRIGIDO no código, `e74961a4`; anterior à etapa) — a lista mostrava a aprovação de valor a quem o portão recusa.**
+  `RequisicoesList.js` mostrava o filtro *Aprovações de valor* (`:1374`), os botões **Aprovar Liberação**/**Reprovar** (`:1780`) e escondia o aviso
+  *"Esta requisição aguarda aprovação de um aprovador de alto valor configurado."* (`:1793`) com `souAprovadorValor || isAdmin` — e o `isAdmin` da
+  tela (`canDeleteAlmoxRequisicao`, `:272`) aceita o admin do módulo, o `role: 'Admin'` e o super de outro papel, a quem `/aprovacoes-valor`,
+  `/aprovar-valor` e `/rejeitar-valor` respondem 403. **Correção (pequena e segura):** as três condições passam a usar só `souAprovadorValor`, que
+  o servidor calcula com o mesmo critério do portão (Menor 1). O teste da Etapa 47 *"a lane de valor tambem fica desabilitada com pendencia
+  aberta"* usava `role: 'admin'` com o mock `souAprovador: false` (o servidor real responde `true` a esse usuário) — o mock dele passou a dizer
+  `true`. Jest novos (`Etapa 184 (Fase 5): a aprovação de valor segue só o souAprovador do servidor`, 4 casos): admin do módulo, `role:
+  'Admin'` e super de `role: 'user'` com `souAprovador: false` → o aviso **está** na tela (metade positiva), sem filtro, sem Aprovar
+  Liberação, sem Reprovar; `role: 'admin'` com `souAprovador: true` → filtro e botões, sem o aviso. Vermelho antes: 3/123 (caíam pelo aviso).
+  **Controles** (cada um sozinho): (A) o filtro com `|| isAdmin` → caem os 3 negativos em `botaoPorTexto('Aprovações de valor')` (`:1377`);
+  (B) os botões com `|| isAdmin` → caem os 3 em `botaoPorTexto('Aprovar Liberação')` (`:1378`); (C) o aviso com `&& !isAdmin` → caem os 3 em
+  `toContain(BANNER)` (`:1376`); (D) `false && souAprovadorValor` nos botões → caem o positivo (`:1388`, Aprovar Liberação) e o da Etapa 47
+  (`:850`). Cada controle caiu pela asserção da sua condição. md5 do pós-conserto (`5af25d50…`) de volta nos quatro. Decisão registrada como
+  **B1223** (escolhido: só `souAprovador`; descartado: manter o botão para admin).
+
+**Divergência do plano:** a Fase 0 (achado 4) dizia que `souAprovador` "tem de continuar igual ao portão real — senão a tela mostra botão
+que dá 403" e concluía que nada mudava na tela; não viu que a **própria tela** somava o `isAdmin` ao `souAprovador`. O botão que dá 403 já
+existia antes da etapa — a revisão achou, o fix-round fechou.
+
+## Verificação final (2026-10-22, uma suíte por vez, depois do fix-round)
+
+Sobre `e74961a4` (código) + os documentos do fechamento; exit 0 em todas:
+
+- `test:api` **527/527** arquivos OK (mais lento: `propostaClausulasGrava.api.test.js`, 67,5 s); `liberacaoValorLeitura` **16/16** (eram 12).
+- `test:almoxarifado` **44 passou, 0 falhou**.
+- `test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0**.
+- client **180 suítes / 2386 testes**, todos passando (eram 2382 na T3: +4 da Fase 5 — os casos de `RequisicoesList.test.js`).
+- `CI=true react-scripts build`: *Compiled successfully*.
+- `git status`: só os arquivos do fechamento antes do commit.
+
+## Retrospectiva
+
+1. **2 sabotagens de produção passavam verde** na suíte da T1/T3 (12/12 e 6/6) — os 8 usuários do contrato tinham `role` sempre em
+   minúsculas e o super sempre com `role: 'admin'`, justamente os casos em que as duas réguas (`isSystemAdmin` e `role === 'admin'` estrito)
+   coincidem. Teste de critério de acesso precisa do usuário **onde as réguas divergem**, não só dos papéis canônicos.
+2. **3 usuários novos** bastaram para os dois achados (`role: 'Admin'`, super `role: 'user'` pelos dois nomes da flag) — e a paridade
+   `souAprovador === portão` pela **rota**, não por predicado copiado, é o que impede a régua de se separar do portão de novo.
+3. **3 condições** na tela somavam `isAdmin` ao `souAprovador` desde antes da etapa; a Fase 0 mediu o servidor e o consumidor, mas leu o
+   consumidor só pelo campo (`souAprovador`), não pela expressão inteira em que ele entra.
+4. **0 mudanças de contrato de API** no fix-round — o JSON do GET continua o da T1; mudou só a tela (o que ela mostra a quem o portão recusa).
 
 ## Letra B proposta (para `docs/almoxarifado-novidades-por-etapa.md`)
 
@@ -304,9 +373,40 @@ caixas marcadas), novidades (seção da Etapa 184, letra B abaixo, D (20) marcad
   "a lista de quem aprova, com contato, para qualquer um"; o e-mail em si fica em **D (184)**. **Descartado:** fechar `/usuarios` aqui (é do núcleo
   e quebraria as abas do administrador do módulo, que leem nome da lista). Reversível.
 
-## Próxima tarefa detalhada
+- **B1223** (Fase 5, Menor 3) — A lista de requisições mostra o filtro *Aprovações de valor*, **Aprovar Liberação** e **Reprovar** só com
+  `souAprovador` (o mesmo critério do portão). **Descartado:** manter o botão para o admin do módulo, o `role: 'Admin'` e o super de outro papel
+  (o portão continua respondendo 403 a eles; dar-lhes o direito de aprovar é mudar quem aprova — B196/B1213). Reversível: três condições.
+- **B1224** — a próxima etapa (185): a tabela da ficha de EPI e o termo de ferramenta quebram por largura (B1208/C444).
 
-_(preencher no fechamento.)_
+*(B1215 a B1222 e C445 são do plano da 185, escrito em paralelo — por isso a 184 salta para B1223.)*
+
+## Próxima tarefa detalhada — Etapa 185: a tabela da ficha de EPI (e o termo de ferramenta) cabe na folha (feature 25 e ferramentas)
+
+**O plano já existe:** `docs/superpowers/plans/2026-10-22-almoxarifado-etapa185-tabela-da-ficha-epi-dentro-da-folha.md` (outra sessão, commit
+`90168815`; Fase 0 medida com o jsPDF real; **Fase 2 ainda não rodou** — é o primeiro passo). Decisões a partir de **B1215**; aviso novo **C445**
+(se for o caso). Este resumo é só o que permite retomar sem reler o código — **o plano da 185 prevalece** sobre ele.
+
+**Por que esta.** A **B1208**/**C444** (Etapa 183): na linha de cada entrega do PDF da ficha de EPI (o papel da NR-6), cada célula é cortada
+por **número de letras**, sem medir: *Entregue por* com 15 caracteres já passa da margem (198,6 mm; a margem é 196) e com 25 sai da folha; o
+*Motivo* perde texto num valor comum (*Primeira entreg*). O termo de responsabilidade de ferramenta (Etapa 180) tem o mesmo defeito.
+Não depende da empresa.
+
+**Contrato que ela consome (não há API nova nem alterada):** o descritor da ficha que o client já monta a partir de `GET /epi/ficha/:colaborador_id`
+(sem mudança) e o do termo; a mudança é só no desenho de `client/src/utils/fichaEpiPdf.js` e `client/src/utils/termoFerramentaPdf.js` — colunas
+em x = 14, 32, 82, 102, 121, 131, 143, 168; célula quebra por palavra em linhas de 4 mm; a entrega só começa na página se couber até 287 mm
+(régua da 183, agora com `4·n`).
+
+**Pontos de atenção:**
+- Medir com o **jsPDF real** (o gravador dos testes devolve `undefined` para medida — lição da 183); a régua "nenhum texto passa de 196" vale
+  para todas as fontes (14, 9, 7), não só a 7.
+- "Nada perdido" se prova por junção das linhas sem espaços = texto sem espaços — e por sabotagem que **corta** e vê o teste cair.
+- O HMAC, a API e a tela da ficha **não** mudam: o `git diff --stat` da etapa fica nos dois `*Pdf.js` e nos testes.
+
+**O que já está pronto e ela não reabre:** tudo da 184 (o GET da liberação por valor, a tela de Requisições) e as duas linhas da 183
+(matrícula confirmada e aparelho, que já quebram por largura — B1207).
+
+**Depois da 185** (medir antes de prometer): as 🟡 do mapa que não dependem da empresa — 05, 06, 01, 23 (na 23, o que falta para 🟢 continua
+B33-b, B41, B56, B853 e os laços sem transação).
 
 ## Emendas da Fase 2
 

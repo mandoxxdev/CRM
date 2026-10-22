@@ -1,17 +1,25 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-22 (Etapas 172 a 183) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-22 (Etapas 172 a 184) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182 e 183) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183 e 184) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172 a 178 e 180 a 183 ENTREGUES · próxima: Etapa 184)
+> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172 a 178 e 180 a 184 ENTREGUES · próxima: Etapa 185)
 >
-> **O desenvolvimento parou aqui: Etapa 183 fechada — 2026-10-22.** **A ficha de EPI mostra a matrícula confirmada e o aparelho de cada
+> **O desenvolvimento parou aqui: Etapa 184 fechada — 2026-10-22.** **A lista de aprovadores de valor, com nome e e-mail, deixa de ir para
+> todo mundo**: ao abrir **Almoxarifado → Requisições**, quem não configura o almoxarifado recebe do servidor só se a liberação por valor está
+> ligada, o limite e *"você é aprovador: sim/não"*; quem configura e o administrador do sistema recebem também quais usuários aprovam (sem
+> nome nem e-mail); e **Aprovações de valor**, **Aprovar Liberação** e **Reprovar** aparecem só para quem o sistema deixa aprovar (o
+> administrador do módulo deixa de ver o botão que dava erro — **C446**). Nada a rodar antes do deploy. **Próxima: Etapa 185** — a tabela da
+> ficha de EPI e o termo de ferramenta cabem na folha (ver o plano da 185).
+>
+> **Etapa 183, 2026-10-22.** **A ficha de EPI mostra a matrícula confirmada e o aparelho de cada
 > entrega**: em **Almoxarifado → Entrega de EPI → Ficha por colaborador**, a tabela ganha as colunas **Matrícula confirmada** e **Aparelho**, e o
 > PDF da ficha (o papel da pasta da NR-6) imprime, em cada entrega, *"Matrícula confirmada pelo colaborador: Sim — digitou ⟨matrícula⟩ (confere
 > com o cadastro)"* e *"Aparelho: ⟨identificação do navegador⟩"*. Nada a rodar antes do deploy; nada muda em quem abre a ficha. **Próxima: Etapa
 > 184** — a leitura da liberação por valor para de entregar nome e e-mail dos aprovadores a quem não configura (ver o plano da 184).
+> *(Feita: a 184.)*
 >
 > **Etapa 182, 2026-10-22.** **O alerta *material separado aguardando retirada***: o sistema
 > passa a guardar quando cada requisição foi liberada para retirada, e **Almoxarifado → Alertas** ganha o cartão **Separado aguardando
@@ -6908,6 +6916,55 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 184 — A lista de aprovadores de valor, com nome e e-mail, deixa de ir para todo mundo (ENTREGUE — 2026-10-22)
+
+**O que mudou, em uma frase:** ao abrir Requisições, o navegador de cada pessoa deixa de receber a lista de aprovadores de valor com nome e
+e-mail — recebe só "você é aprovador: sim ou não"; e os botões de aprovar valor aparecem só para quem pode aprovar.
+
+**O problema que ela resolve.** A tela de Requisições precisa saber se você é aprovador de valor. Para responder, o servidor mandava a
+configuração inteira, com a lista de quem aprova, **nome e e-mail** — para qualquer pessoa do almoxarifado, até o chão de fábrica, mesmo sem
+a tela mostrar. É como perguntar "eu tenho a chave do cofre?" e receber a lista de todos os donos de chave com telefone. E o administrador do
+módulo via o botão **Aprovar Liberação**, mas o sistema não o deixava aprovar: o clique dava erro.
+
+| Antes | Agora |
+|---|---|
+| Todos recebiam a lista de aprovadores com nome e e-mail | Quem não configura recebe só: ligada ou não, o limite, e se **você** é aprovador |
+| Quem configura recebia nome e e-mail | Recebe só os números dos aprovadores; os nomes da aba vêm do cadastro de usuários, como antes |
+| O administrador do módulo via **Aprovar Liberação** e levava *"Sem permissão para aprovar liberação por valor"* | Não vê o botão; vê o aviso *"Esta requisição aguarda aprovação de um aprovador de alto valor configurado."* |
+| Salvar a configuração, e quem aprova | Igual |
+
+**Antes de testar (uma vez).** Em **Almoxarifado → Configurações → Liberação por Valor**, como **Administrador do almoxarifado**: ligue
+**Habilitar liberação por valor**, ponha **800** em **Valor máximo liberação automática (R$)**, marque **um** usuário em **Aprovadores de alto
+valor** (ex.: *Ana*, que não é administradora) e **Salvar Configurações** → *"Configurações de liberação por valor salvas!"*. Tenha também um
+usuário de **Produção** (sem perfil no almoxarifado), um **Administrador do módulo** almoxarifado que **não** esteja na lista, um usuário com o
+papel de **administrador do sistema** sem perfil no almoxarifado, e uma requisição de **outra pessoa** com valor acima de R$ 800 (ela fica
+**Aguard. Aprov. Valor**).
+
+**Roteiro de teste (10 minutos).**
+
+1. **Produção recebe três campos.** Entre como o usuário de Produção, aperte **F12** → aba **Rede** (Network), abra **Almoxarifado →
+   Requisições** e clique na chamada **liberacao-valor**. A resposta é `{"ativo":true,"limite":800,"souAprovador":false}` — sem lista, sem nome,
+   sem e-mail (procure `@`: não há).
+2. **O aprovador recebe "sim" e aprova.** Entre como *Ana*. A resposta é `{"ativo":true,"limite":800,"souAprovador":true}` e aparece o botão
+   **Aprovações de valor** nos filtros. Abra a requisição acima do limite → **Aprovar Liberação** → *"Liberação por valor aprovada! O
+   almoxarifado pode prosseguir."*
+3. **Quem configura recebe os números.** Entre como o Administrador do almoxarifado, abra Requisições com o F12: a resposta traz também
+   `"aprovadorIds":[⟨número da Ana⟩]`, sem nome nem e-mail. Em **Configurações → Liberação por Valor**, a caixa da Ana está marcada.
+4. **O administrador do sistema vê a aba só leitura, marcada.** Entre como o administrador do sistema. A aba **Liberação por Valor** mostra
+   *"Somente leitura — mudar a liberação por valor e os aprovadores é do Administrador do almoxarifado ou do Super Administrador; peça a um
+   deles."*, a caixa da Ana **marcada e bloqueada**, e não há **Salvar Configurações**.
+5. **O administrador do módulo não vê o botão que dá erro.** Crie (ou use) outra requisição acima do limite e entre como o Administrador do
+   módulo. Em Requisições não há o filtro **Aprovações de valor**; na requisição, não há **Aprovar Liberação** nem **Reprovar** — aparece
+   *"Esta requisição aguarda aprovação de um aprovador de alto valor configurado."*. Para que ele aprove, marque-o na lista (passo de preparação).
+
+**O que esta etapa não cobre.** O e-mail de todo usuário continua aparecendo para qualquer pessoa logada pela lista de usuários do sistema
+(decisão **B841**, do núcleo — **B1214**). O salvar da aba ainda responde com nome e e-mail, só a quem configura (**B1212**). Quem aprova valor
+não mudou: a lista, ou o papel *admin* do sistema (**B1213**). **Nada a rodar antes do deploy.**
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos provam pelas rotas do servidor (as respostas
+dos 11 usuários de teste, sem nome nem e-mail, o "sou aprovador" igual ao que o sistema deixa fazer, a aprovação de verdade) e pelas duas telas
+em jsdom com a resposta gravada da rota real, escrito para você conferir à mão.
 
 ## Etapa 183 — A ficha de EPI mostra a matrícula confirmada e o aparelho de cada entrega (ENTREGUE — 2026-10-22)
 

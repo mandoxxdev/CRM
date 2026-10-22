@@ -1,5 +1,7 @@
 # 23 — Perfis, Segurança e Auditoria
 
+> **+ Etapa 184 (2026-10-22, `b23e60a2`, `3383b4e5`, `8467192f`, Fase 5 `892228fe`, `e74961a4`): a leitura da liberação por valor não entrega mais nome nem e-mail dos aprovadores (D (20) paga; B1210–B1214, B1223)** — ver o item marcado em "Exposição e rastro (Etapa 20)" e a seção "Etapa 184", no fim. **E o item do multer "500 opaco" estava ERRADO desde a Etapa 86** (`bf8d27fe`) — marcado dizendo isso. Status inalterado.
+
 > **+ Etapa 160 (2026-10-19, `d5cd52ea`, Fase 5 `ff3e7d78`): o filtro da aba Perfis de acesso apara e não trava com e-mail nulo (C395)** — ver a seção "Etapa 160", no fim. Nenhuma permissão mudou.
 
 > **Status:** 🟡-forte (**Etapa 25, `6209037..9027c36`: a perna *Segurança* FECHA como
@@ -706,13 +708,31 @@ Perfis da spec cobertos, regras de segurança da seção 29 aplicadas (imutabili
       revisão adversarial da Etapa 20 e **declarado em vez de consertado**: a consumidora é a
       tela de requisição (não-admin), então fechar é mudança de contrato, não uma linha. Letra
       B41, **em aberto e esperando decisão do usuário**.
-- [ ] **`GET /configuracoes/liberacao-valor` continua expondo nome e e-mail dos aprovadores** a
+- [x] ~~**`GET /configuracoes/liberacao-valor` continua expondo nome e e-mail dos aprovadores** a
       qualquer usuário do módulo (`requisitionValueApprovalService.getAprovadoresDetalhes`) — a
       lista de requisições depende dessa leitura para saber se o usuário é aprovador; reduzir o
-      payload para não-admin é mudança de contrato. Letra D das novidades.
-- [ ] **Erro de multer continua virando 500 opaco nas 5 rotas de upload** — a rota de foto saiu
+      payload para não-admin é mudança de contrato. Letra D das novidades.~~ — **RESOLVIDO NA
+      ETAPA 184** (`b23e60a2`, `3383b4e5`, `8467192f`; Fase 5 `892228fe`, `e74961a4`). O GET usa
+      `getConfigPublica`: quem não configura recebe `{ ativo, limite, souAprovador }`; quem configura
+      (`canConfigureAlmox`) ou é administrador do sistema (`isSystemAdmin`, que abre a aba só leitura)
+      recebe também `aprovadorIds`; **ninguém** recebe `aprovadores` (nome/e-mail) por esta leitura,
+      e ela não consulta mais `usuarios` (B1210, B1211). A letra **D (20)** das novidades está paga.
+      **O que ficou, e por quê:** o `PUT` continua respondendo com `aprovadores` a quem configura
+      (B1212 — outro contrato, não fecha exposição); `souAprovador` segue o critério antigo do portão
+      (`role === 'admin'` estrito ou estar na lista — B1213, a decisão B196 continua sua); e o e-mail
+      de todo usuário continua saindo por `GET /api/usuarios` a qualquer logado (B841, B1214 —
+      **D (184)**, do núcleo). A Fase 5 alinhou também a tela: a lista de requisições mostra a
+      aprovação de valor só a quem o portão aceita (B1223).
+- [x] ~~**Erro de multer continua virando 500 opaco nas 5 rotas de upload** — a rota de foto saiu
       do conjunto quanto a órfão/404/auditoria, mas **continua** neste item; o conserto é um
-      error-handler uniforme nas cinco. Segue nomeado na spec 24 (G7 / C25).
+      error-handler uniforme nas cinco. Segue nomeado na spec 24 (G7 / C25).~~ — **ESTE ITEM ESTAVA
+      ERRADO desde a Etapa 86** (`bf8d27fe`, 2026-10-08), achado na Fase 0 da Etapa 184: o
+      error-handler uniforme **já existe** — `server/services/errosApi.js:103-106` devolve **400**
+      `{ error: 'Upload inválido' }` para todo `MulterError` (o de tamanho é **413** *"Arquivo grande
+      demais (máximo 10 MB)"*, `uploadGrandeDemais.api.test.js`), provado na rota real de foto de
+      material (`errosModulosJson.api.test.js:57`) e na unidade. Ninguém voltou aqui para marcar, e a
+      linha continuou dizendo "500 opaco" por 14 dias. Marcado sem commit de código novo (o código é
+      o da 86).
 
 ### Etapa 21 — o que era do núcleo (fora desta feature, registrado aqui para fechar o laço)
 
@@ -1397,3 +1417,22 @@ Almoxarifado (nenhuma rota ignora uma chave que a tela manda; o defeito estava n
 Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa161-respostas-velhas-e-o-dia-local.md`. Consertos técnicos, sem regra de acesso nova e sem mexer em saldo; o status da feature não muda.
 
 - [x] **RN-161.10 (C400, B1030)** — `GET /almoxarifado/auditoria/opcoes`: um usuário por `usuario_id`, com o nome da linha mais recente da trilha (era `SELECT DISTINCT usuario_id, usuario_nome` — o renomeado aparecia duas vezes, com a mesma `key` no React). Portão `configurar` inalterado — `6885caf9`.
+
+## Etapa 184 — a leitura da liberação por valor sem nome nem e-mail dos aprovadores (2026-10-22)
+
+Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa184-aprovadores-da-liberacao-por-valor.md`. Fecha o item da Etapa 20 (letra **D (20)**
+das novidades) marcado acima, na perna *Segurança*. O status da feature **não muda** (🟡-forte): o que falta para 🟢 continua B33-b, B41, B56,
+B853 e os laços sem transação.
+
+- [x] **RN-184.01/02/03/07** — `GET /api/almoxarifado/configuracoes/liberacao-valor` responde por `getConfigPublica`: `{ ativo, limite, souAprovador }`
+      a quem não configura; `aprovadorIds` a mais para `canConfigureAlmox || isSystemAdmin`; nunca `aprovadores`; não lê `usuarios` — `b23e60a2`.
+- [x] **RN-184.04** — `souAprovador` é o `isAprovadorValor` de antes, e diz o mesmo que o portão de `/requisicoes/aprovacoes-valor` para os 11
+      usuários do teste (inclusive `role: 'Admin'` e super de `role: 'user'`) — `b23e60a2`, paridade pela rota na Fase 5 `892228fe`.
+- [x] **RN-184.05** — o `PUT` não muda (portão, gravação, auditoria, resposta com `aprovadores`) — `b23e60a2` (guarda de regressão).
+- [x] **RN-184.06** — as duas telas com a resposta reduzida e com a fixture gravada da rota — `3383b4e5`, `8467192f`.
+- [x] **Fase 5, Menor 3 (anterior à etapa)** — a lista de requisições mostra *Aprovações de valor*, **Aprovar Liberação** e **Reprovar** só com
+      `souAprovador`, não mais com o `isAdmin` da tela (que aceitava quem o portão recusa com 403) — `e74961a4` (B1223).
+- [ ] **O `PUT` ainda responde `aprovadores` com nome e e-mail** a quem configura — **de propósito** (B1212): a tela ignora a resposta, quem
+      configura já lê `/usuarios`, e mudar o PUT é outro contrato.
+- [ ] **O e-mail de todo usuário continua saindo por `GET /api/usuarios`** a qualquer logado — decisão B841 da Etapa 130 (as abas do
+      almoxarifado precisam da lista); do núcleo, declarado em **D (184)** (B1214).

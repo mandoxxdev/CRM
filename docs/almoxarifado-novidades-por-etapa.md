@@ -11,13 +11,21 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-22):** **Etapa 183 fechada** (**a ficha de EPI mostra a matrícula confirmada e o aparelho de cada
+> **Onde o desenvolvimento está (2026-10-22):** **Etapa 184 fechada** (**a lista de aprovadores de valor, com nome e e-mail, deixa de ir
+> para todo mundo** — ao abrir Requisições, cada pessoa do almoxarifado recebia do servidor a lista de quem aprova valor com nome e e-mail,
+> mesmo a tela não mostrando; agora recebe só se a liberação por valor está ligada, o limite e *"você é aprovador: sim/não"*; quem configura
+> o almoxarifado e o administrador do sistema recebem também quais usuários estão marcados (sem nome nem e-mail — os nomes da aba vêm do
+> cadastro de usuários, como antes); e a tela de Requisições passa a mostrar **Aprovações de valor**, **Aprovar Liberação** e **Reprovar** só
+> a quem o sistema deixa aprovar (o administrador do módulo via os botões e levava *"Sem permissão para aprovar liberação por valor"*); nada a
+> rodar antes do deploy; decisões **B1210** a **B1214** e **B1223**–**B1224**; aviso **C446**; limitações **D (184)** — o e-mail de todo
+> usuário continua saindo pela lista de usuários (decisão B841); revisão adversarial feita e corrigida). **Próxima: Etapa 185** — a tabela da
+> ficha de EPI e o termo de ferramenta quebram por largura, sem cortar nome (ver o plano da 185).
+> *(Também em 2026-10-22: **Etapa 183 fechada** (**a ficha de EPI mostra a matrícula confirmada e o aparelho de cada
 > entrega** — na tela e no PDF da ficha por colaborador (o papel da pasta da NR-6), cada entrega passa a dizer *"Matrícula confirmada pelo
 > colaborador: Sim — digitou ⟨matrícula⟩ (confere com o cadastro)"* e *"Aparelho: ⟨identificação do navegador⟩"*, lidas da prova gravada no
 > ato (a matrícula é a do dia da entrega, não a de hoje); o endereço de rede continua guardado e fora da ficha; textos longos quebram dentro da
 > folha; nada a rodar antes do deploy; quem abre a ficha não muda; decisões **B1200** a **B1209**; aviso **C444** (anterior à etapa: nomes
-> longos na linha da tabela do PDF passam da margem); revisão adversarial feita e corrigida). **Próxima: Etapa 184** — a leitura da liberação
-> por valor para de entregar nome e e-mail dos aprovadores a quem não configura (ver o plano da 184).
+> longos na linha da tabela do PDF passam da margem); revisão adversarial feita e corrigida); a próxima era a **184**.)*
 > *(Também em 2026-10-22: **Etapa 182 fechada** (**o alerta *material separado aguardando retirada*** — o sistema
 > passa a guardar **quando** cada requisição foi liberada para retirada, e a central de **Alertas** ganha o 16º cartão, **Separado aguardando
 > retirada**: as requisições liberadas há mais de **3** dias (configurável em Configurações Gerais) e ainda não retiradas, com solicitante,
@@ -4256,7 +4264,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196 e B1200 a B1209; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1223 a B1224; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -12729,6 +12737,48 @@ sem revisão própria. **Reversível**; uma etapa curta quebra as células por l
 Hoje qualquer usuário do almoxarifado (até Produção) recebe, ao abrir Requisições, a lista de aprovadores de valor com nome e e-mail, mesmo a
 tela não mostrando (**D (20)**). Não depende da empresa. O plano já está escrito:
 `docs/superpowers/plans/2026-10-22-almoxarifado-etapa184-aprovadores-da-liberacao-por-valor.md`.
+*(Feita: a Etapa 184 — B1210 a B1214, B1223 e B1224.)*
+
+**B1210 (NOVA, da Etapa 184; decisão do agente) — quem recebe a lista de QUEM aprova (só os números dos usuários, sem nome nem e-mail):
+quem configura o almoxarifado (administrador do módulo, perfil Administrador, super administrador) e o administrador do sistema** — o mesmo
+grupo que consegue abrir a aba **Configurações → Liberação por Valor** (o administrador do sistema a vê só leitura). É o que a aba usa para
+marcar as caixinhas. **Descartado:** (a) só quem pode gravar — a aba do administrador do sistema ficaria com todas as caixas desmarcadas,
+dizendo "ninguém aprova" quando há aprovadores; (b) a régua de perfil do módulo (dá quase o mesmo grupo hoje, salvo um papel escrito
+*Admin* com maiúscula, mas por outro caminho — dois critérios para a mesma aba se separariam na primeira mudança). **Reversível.** `b23e60a2`.
+
+**B1211 (NOVA, da Etapa 184; decisão do agente) — o nome e o e-mail dos aprovadores saem desta leitura PARA TODO MUNDO, inclusive para quem
+configura.** **Por quê:** nenhuma tela lia esses dois campos (a aba tira os nomes do cadastro de usuários), e a leitura deixou de depender da
+tabela de usuários — um erro nela não derruba mais a aba nem a lista de requisições. **Descartado:** manter nome e e-mail para quem configura
+(dado que ninguém lê, e mais um caminho com e-mail para vigiar). **Reversível.** `b23e60a2`.
+
+**B1212 (NOVA, da Etapa 184; decisão do agente) — o SALVAR da aba continua respondendo com nome e e-mail dos aprovadores**, só para quem
+configura (só quem configura consegue salvar). **Descartado nesta etapa:** reduzir essa resposta — a tela a ignora, mas mudar o salvar é outro
+contrato e não fecha exposição nenhuma (quem configura já lê a lista de usuários). **Reversível.**
+
+**B1213 (NOVA, da Etapa 184; decisão do agente) — quem é aprovador de valor NÃO mudou:** continua sendo quem está na lista **ou** o usuário
+com o papel *admin* do sistema. O administrador do módulo e o super administrador com outro papel **não** aprovam valor só por isso — como
+antes. **Descartado:** alinhar com "quem configura o almoxarifado" (mudaria quem aprova, não só quem lê; é a pergunta deixada em aberto na
+**B196**, que continua sua). **Reversível.**
+
+**B1214 (NOVA, da Etapa 184; decisão do agente; do núcleo) — o e-mail de todo usuário continua saindo pela lista de usuários a qualquer
+logado** (decisão **B841**, Etapa 130: as abas do almoxarifado precisam da lista com nome). Esta etapa fecha "a lista de quem aprova, com
+contato, para qualquer um"; o e-mail em si fica declarado em **D (184)**. **Descartado:** fechar a lista de usuários aqui (é do núcleo e
+quebraria as abas do administrador do módulo, que leem os nomes de lá). **Reversível.**
+
+*(B1215 a B1222 estão reservados pelo plano da Etapa 185, escrito em paralelo — por isso a 184 continua em B1223.)*
+
+**B1223 (NOVA, da Etapa 184, revisão adversarial; decisão do agente) — na tela de Requisições, *Aprovações de valor*, *Aprovar Liberação* e
+*Reprovar* aparecem só para quem o sistema deixa aprovar.** Antes da etapa, a tela mostrava os três também ao administrador do módulo, a quem
+tem o papel escrito *Admin* com maiúscula e ao super administrador com outro papel — e o sistema respondia a eles *"Sem permissão para ver
+aprovações de valor"* / *"Sem permissão para aprovar liberação por valor"*: botão que só dá erro. Agora eles veem o aviso *"Esta requisição
+aguarda aprovação de um aprovador de alto valor configurado."*, como qualquer outro. **Escolhido:** seguir só o *"você é aprovador"* que o
+servidor calcula com a mesma régua de quem libera. **Descartado:** manter o botão para administrador (continuaria dando erro; dar a eles o
+direito de aprovar é a pergunta da **B1213**/**B196**). **Reversível:** três condições na tela. Aviso de operação: **C446**. `e74961a4`.
+
+**B1224 (NOVA, da Etapa 184) — a próxima etapa (185): a tabela da ficha de EPI e o termo de ferramenta cabem na folha.** É a **B1208** /
+**C444**: na linha de cada entrega do PDF da ficha, nomes longos em *Entregue por* saem da folha e o *Motivo* perde letras; o termo de
+ferramenta tem o mesmo defeito. Não depende da empresa. O plano já está escrito:
+`docs/superpowers/plans/2026-10-22-almoxarifado-etapa185-tabela-da-ficha-epi-dentro-da-folha.md`.
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -16347,6 +16397,15 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      de uns 15 caracteres passa da margem, e com 25 (o máximo que a linha leva) o fim dele fica fora da folha (**B1208**). As duas linhas novas (matrícula
      confirmada e aparelho) **não** têm esse problema. **O que fazer:** se a ficha for para auditoria, conferir o nome de quem entregou na
      **tela** da ficha (lá ele sai inteiro); a correção é uma etapa curta (**B1208**).
+
+*(445 está reservado pelo plano da Etapa 185.)*
+
+446. **NOVO (da Etapa 184) — o administrador do módulo deixa de ver *Aprovar Liberação* e *Aprovações de valor* em Requisições.** Ele via os
+     botões, mas o sistema sempre recusou: *"Sem permissão para aprovar liberação por valor"*. Agora vê só o aviso *"Esta requisição aguarda
+     aprovação de um aprovador de alto valor configurado."* (**B1223**). Vale também para quem tem o papel escrito *Admin* com maiúscula e para
+     o super administrador cujo papel não é *admin*. **O que fazer:** se algum deles deve liberar por valor, marque-o na lista de **Aprovadores
+     de alto valor** em **Configurações → Liberação por Valor**; se ninguém da lista estiver disponível, quem tem o papel *admin* do sistema
+     continua podendo liberar.
 ### D. Limitações declaradas— são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -16462,13 +16521,18 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   Bluetooth, ele emula teclado e funciona nos campos de busca sem código novo); e não há
   demanda medida de offline. O detalhe e o descartado estão na B25.
 
-- **(20) A tela de aprovação por valor continua entregando NOME e E-MAIL dos aprovadores a
+- ~~**(20) A tela de aprovação por valor continua entregando NOME e E-MAIL dos aprovadores a
   qualquer usuário do módulo.** A configuração de alçada é lida por uma rota sem restrição de
   perfil, e ela devolve a lista de aprovadores com nome e e-mail. **Não foi fechada de propósito:**
   a lista de requisições depende dessa mesma leitura para saber se *você* é aprovador — fechar sem
   mais exige decidir o que o não-administrador passa a receber (provavelmente só um "sou
   aprovador: sim/não" e a alçada), o que é mudança de contrato de tela, não uma linha de gate.
-  Fica declarado como o irmão do B41: o mesmo tipo de decisão, esperando a mesma resposta.
+  Fica declarado como o irmão do B41: o mesmo tipo de decisão, esperando a mesma resposta.~~ —
+  **PAGA NA ETAPA 184** (2026-10-22, `b23e60a2`, `3383b4e5`, `8467192f`; revisão adversarial `892228fe`,
+  `e74961a4`). Mantido riscado para quem lembrar do corte confirmar que fechou: a leitura dá a quem não
+  configura só *ligada/desligada*, o limite e *"você é aprovador: sim/não"* (exatamente o que este item
+  previa); quem configura e o administrador do sistema recebem também os números dos aprovadores; **ninguém**
+  recebe nome nem e-mail por ela (**B1210**, **B1211**). O que sobra está em **D (184)**.
 
 - **(20) A "matriz de leitura" do módulo ficou FORA — e continua grande.** Dezenas de consultas
   operacionais (saldo, materiais, movimentações, requisições) exigem só estar logado no módulo,
@@ -17688,6 +17752,14 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   (`GET /ferramentas/:id/manutencoes`) e na Auditoria (*Fim de manutenção*). Quem empresta não fica sabendo da restrição pela tela.
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(184) A lista de aprovadores de valor sem nome nem e-mail, o que ficou de fora.** (1) O **e-mail de todo usuário** continua
+  saindo pela lista de usuários do sistema para qualquer pessoa logada — é por ela que as abas do almoxarifado mostram nomes (decisão
+  **B841**, do núcleo; **B1214**). Esta etapa fechou "quem aprova, com contato, numa leitura só", não o e-mail de alguém. (2) O **salvar** da
+  aba *Liberação por Valor* continua respondendo nome e e-mail dos aprovadores — só a quem configura (**B1212**). (3) **Quem aprova valor
+  não mudou**: a lista ou o papel *admin* do sistema; o administrador do módulo e o super administrador de outro papel não aprovam só por
+  serem administradores (**B1213**, a pergunta da **B196**). (4) Quem abre a aba e **não** recebesse os números dos aprovadores veria as
+  caixas todas desmarcadas — hoje não existe esse usuário (a régua da aba e a do servidor são a mesma), mas a tela não avisa se um dia
+  divergirem.
 - **(183) A ficha de EPI com a matrícula confirmada e o aparelho, o que ficou de fora.** (1) O **endereço de rede** (IP) não sai na ficha
   (**B1202**). (2) O aparelho não é traduzido (**B1203**) e *"digitou M-100"* é a matrícula que conferiu, não o que foi teclado (**B1206**).
   (3) O relatório **EPI por colaborador** e a aba **Entregas** não mostram as duas provas (**B1205**). (4) A linha da tabela do PDF continua
@@ -18895,6 +18967,14 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(184) Nenhum clique foi dado no navegador.** A resposta da leitura para os 11 usuários do teste (comum, Produção sem perfil, Almoxarife,
+aprovador sem configurar, administrador do sistema, perfil Administrador, administrador do módulo, super, papel *Admin* com maiúscula e dois
+supers de outro papel), a ausência de nome e e-mail, o *"você é aprovador"* igual ao que o sistema deixa fazer, e a aprovação de verdade pelo
+aprovador da lista foram provados pelas rotas no servidor de teste; as duas telas, em jsdom com a resposta **gravada da rota real**. O que
+**só o navegador** prova: o roteiro da Etapa 184 no guia — F12 → aba *Rede* → a resposta de *liberacao-valor* com três campos para quem não
+configura, a aba *Liberação por Valor* do administrador do sistema com as caixas marcadas e bloqueadas, e o administrador do módulo sem o
+botão **Aprovar Liberação**.
 
 **(183) Nenhum clique foi dado no navegador, e nenhum PDF foi aberto num leitor de PDF.** Os dois campos novos da ficha (pela rota de
 verdade, com um texto de aparelho real de 197 caracteres), o endereço de rede fora, o 403 de Produção e Gestor e a integridade depois de abrir
@@ -35737,9 +35817,83 @@ administrador do módulo registram entregas e consultam fichas."* Depois de abri
   **C444**).
 - **Nada a rodar antes do deploy.**
 
+## Etapa 184 — A lista de aprovadores de valor, com nome e e-mail, deixa de ir para todo mundo (2026-10-22)
+
+Quando uma requisição passa do limite de valor, ela espera um **aprovador de alto valor**. Para a tela de Requisições saber se *você* é um
+deles, ela perguntava ao servidor — e o servidor respondia mandando **a configuração inteira**, com a **lista de aprovadores, nome e e-mail**.
+Qualquer pessoa do almoxarifado, até o chão de fábrica, recebia essa lista no navegador ao abrir Requisições, mesmo sem a tela mostrar. É como
+perguntar "eu tenho a chave do cofre?" e receber a lista de todos os donos de chave com telefone. Agora a resposta é só **"sim" ou "não"**
+(mais se a regra está ligada e o limite); quem administra o almoxarifado recebe também **quais** usuários aprovam — sem nome nem e-mail. A
+revisão adversarial achou ainda um botão que só dava erro: o administrador do módulo via **Aprovar Liberação** e o sistema respondia que ele
+não tem permissão — agora o botão aparece só para quem pode. Nada a rodar antes do deploy. Decisões do agente: **B1210** a **B1214**, **B1223**
+e **B1224**; aviso **C446**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Abrir Requisições trazia, para qualquer pessoa do almoxarifado, a lista de aprovadores de valor com nome e e-mail | Traz só *ligada/desligada*, o limite e *"você é aprovador: sim/não"* (**B1211**) |
+| Quem configura o almoxarifado recebia a lista com nome e e-mail | Recebe os **números** dos aprovadores, sem nome nem e-mail; os nomes da aba vêm do cadastro de usuários, como antes (**B1210**, **B1211**) |
+| A aba *Liberação por Valor* do administrador do sistema (só leitura) marcava os aprovadores | Continua marcando — ele recebe os números (**B1210**) |
+| Um problema na tabela de usuários fazia a leitura falhar (a tela de Requisições achava que você não é aprovador; a aba mostrava *"Erro ao carregar configurações de liberação por valor"*) | A leitura não depende mais dela |
+| O administrador do módulo via **Aprovações de valor**, **Aprovar Liberação** e **Reprovar** — e levava *"Sem permissão…"* | Vê o aviso *"Esta requisição aguarda aprovação de um aprovador de alto valor configurado."* (**B1223**, **C446**) |
+| Salvar a aba | Igual — mesma regra de quem salva, mesma trilha (**B1212**) |
+| Quem aprova valor (a lista, ou o papel *admin* do sistema) | Igual (**B1213**) |
+
+### As regras, com o cenário exato
+
+Preparação: em **Almoxarifado → Configurações → Liberação por Valor**, como **Administrador do almoxarifado**: **Habilitar liberação por
+valor** ligado, **Valor máximo liberação automática (R$)** = **800**, e marque **um** usuário em **Aprovadores de alto valor** (ex.: *Ana*, que
+**não** é administradora). **Salvar Configurações** → *"Configurações de liberação por valor salvas!"*. Tenha também um usuário de
+**Produção** (sem perfil no almoxarifado), um **Administrador do módulo** almoxarifado que não esteja na lista, e uma requisição de outra
+pessoa acima de R$ 800 (ela fica **Aguard. Aprov. Valor**).
+
+**1. Quem não configura recebe três campos.** Entre como o usuário de Produção, abra **Almoxarifado → Requisições** com o F12 aberto (aba
+*Rede*), e clique na chamada *liberacao-valor*. A resposta é exatamente `{"ativo":true,"limite":800,"souAprovador":false}` — sem lista, sem
+nome, sem e-mail, sem `@` em lugar nenhum. O mesmo para um Almoxarife.
+
+**2. O aprovador da lista recebe "sim".** Entre como *Ana*. A resposta é `{"ativo":true,"limite":800,"souAprovador":true}`, e a tela mostra o
+botão **Aprovações de valor** nos filtros. Abra a requisição acima do limite: **Aprovar Liberação** e **Reprovar** aparecem; **Aprovar
+Liberação** → *"Liberação por valor aprovada! O almoxarifado pode prosseguir."*
+
+**3. Quem configura recebe os números, sem nome.** Entre como o Administrador do almoxarifado e abra Requisições com o F12: a resposta tem
+também `"aprovadorIds":[⟨número da Ana⟩]` — e nenhum nome nem e-mail. Na aba **Liberação por Valor**, a caixa da Ana está marcada (o nome e o
+e-mail que aparecem ao lado vêm da lista de usuários).
+
+**4. O administrador do sistema vê a aba só leitura, marcada.** Entre como um usuário com o papel de administrador do sistema que não tem
+perfil no almoxarifado. A aba mostra *"Somente leitura — mudar a liberação por valor e os aprovadores é do Administrador do almoxarifado ou
+do Super Administrador; peça a um deles."*, a caixa da Ana **marcada e bloqueada**, e nenhum botão de salvar.
+
+**5. O administrador do módulo não vê o botão que dá erro.** Entre como o Administrador do módulo (fora da lista). Em Requisições não há o
+filtro **Aprovações de valor**; na requisição acima do limite não há **Aprovar Liberação** nem **Reprovar** — aparece *"Esta requisição
+aguarda aprovação de um aprovador de alto valor configurado."* (antes, o botão aparecia e o clique dava *"Sem permissão para aprovar
+liberação por valor"*). Para ele aprovar, marque-o na lista (**C446**).
+
+**6. Salvar não mudou.** Um Almoxarife que tente gravar a configuração por integração leva *"Acesso restrito — administrador do Almoxarifado
+ou Super Administrador"*; o Administrador do almoxarifado salva e a mudança vai para a **Auditoria**, como antes.
+
+### O que esta etapa NÃO cobre
+
+- O **e-mail de todo usuário** continua saindo pela lista de usuários do sistema a qualquer pessoa logada (decisão **B841**, do núcleo —
+  **B1214**, **D (184)**).
+- O **salvar** da aba continua respondendo com nome e e-mail — só a quem configura (**B1212**).
+- **Quem aprova valor** não mudou: a lista, ou o papel *admin* do sistema (**B1213**; a pergunta da **B196** continua sua).
+- **Nada a rodar antes do deploy.**
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 184 entregue (2026-10-22):** **a lista de aprovadores de valor, com nome e e-mail, deixa de ir para todo mundo.** A leitura da
+  liberação por valor dá a quem não configura só *ligada/desligada*, o limite e *"você é aprovador: sim/não"*; quem configura e o
+  administrador do sistema recebem também os números dos aprovadores (**B1210**); ninguém recebe nome nem e-mail por ela (**B1211**); a
+  leitura não depende mais da tabela de usuários. A revisão adversarial achou dois testes que não sabiam falhar nos papéis em que as réguas
+  de administrador divergem (papel *Admin* com maiúscula, super de outro papel) — cenários acrescentados e provados por sabotagem — e o botão
+  **Aprovar Liberação** que o administrador do módulo via e que só dava erro (corrigido: **B1223**). Commits `0036a2a5`, `8ca2c38f` (plano),
+  `b23e60a2` (T1), `3383b4e5` (T2), `8467192f` (T3), `31c2aaca`, `fd08624c` (execução), a revisão adversarial `892228fe`, `e74961a4`, e o
+  fechamento. **O que é seu:** as decisões **B1210** a **B1214** e **B1223** (reversíveis); o aviso **C446** (avisar os administradores do
+  módulo); as limitações **(184)** em D e a verificação **(184)** em F. **Próxima: Etapa 185 — a tabela da ficha de EPI e o termo de
+  ferramenta cabem na folha (B1224); ver o plano da 185.**
 
 - **Etapa 183 entregue (2026-10-22):** **a ficha de EPI mostra a matrícula confirmada e o aparelho de cada entrega.** A ficha por colaborador,
   na tela e no PDF, diz em cada entrega *"Sim — digitou ⟨matrícula⟩ (confere com o cadastro)"* — a matrícula do dia da entrega (**B1200**) — e o
