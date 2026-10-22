@@ -43,6 +43,11 @@
 > a **correção** da emenda C1 do plano, que supunha `requisicoes.os_id`. O status da feature continua 🟡 (Engenharia/BOM e Produção/OP não
 > mudaram).
 >
+> **Etapa 172 (2026-10-22, `c34eab10..ffbbaae4`):** a **requisição ganha `os_id`** (OS cadastrada, opcional, ao lado do texto livre) e a
+> requisição com `os_id` casa com a reserva da OS **pelo id** (sem `os_id`, pelo texto como na 171); a reserva criada para a requisição grava o
+> `os_id` dela. Ver a seção "Etapa 172" no fim — inclusive a **correção** do cabeçalho de `reservaDaOs.js` e da "próxima tarefa" da 171. O
+> status continua 🟡 (Engenharia/BOM e Produção/OP não mudaram).
+>
 > **Etapa 122 (2026-10-16):** a tabela `pedidos_compra` (core) ganha `fechado_automaticamente_de`, escrita pelo fechamento automático, limpa pela reabertura do estorno e pela mudança manual de status do Compras (`alterarStatusPedido`, quando o status muda — comparando o status lido) (C255a, B788 — core × módulo, reversível).
 
 ## Contexto importante
@@ -915,7 +920,8 @@ OS ou estoque (B1086); OS cancelada devolve ao estoque com marca de origem (B108
   cotação/Reposição/importação sem OS; a tela da OS sem a lista de pedidos; as portas que não convertem (separação/entrega sem reserva, reserva
   manual); os declarados da Fase 5 (janela do estorno, corrida criar pedido × apagar OS, teto de 300, 409 de OS inexistente, desconto na
   retomada).
-- [ ] **A requisição com `os_id` de verdade** — não feito: contrato novo de tela e de API, fora do escopo; é a Etapa 172 (C426, B1092).
+- [x] **A requisição com `os_id` de verdade** — não feito na 171 (contrato novo de tela e de API); **feito na Etapa 172** (`f62bd21f`,
+  `033f1164`, `a2a049bd`) — opcional, ao lado do texto; a C426 continua valendo para quem só digita (ver a seção "Etapa 172").
 
 ## Regras essenciais + testes de API exigidos
 
@@ -974,3 +980,40 @@ OS ou estoque (B1086); OS cancelada devolve ao estoque com marca de origem (B108
   **Produção e Engenharia
   continuam sendo o bloqueio dos itens abertos** — e por motivo diferente: lá o dado não existe
   como entidade, aqui existe a tabela e falta a porta.
+
+## Etapa 172 (2026-10-22) — a requisição com OS cadastrada casa com a reserva da OS pelo id
+
+Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa172-requisicao-com-os-cadastrada-e-cesta-com-os.md`. Contrato da requisição na
+feature 04 (seção "Etapa 172"). Fecha a **B1092**/**C426** da 171 **para a requisição nova que escolhe a OS no seletor**; a que só digita o
+texto continua casando pelo texto (as antigas e quem digitou).
+
+> ⚠️ **CORREÇÃO (2026-10-22, T2 da Etapa 172) — o cabeçalho de `services/almoxarifado/reservaDaOs.js` dizia "A REQUISICAO NAO TEM
+> `os_id`"; era verdade até a T1 (`f62bd21f`) e ficou errado** quando a coluna entrou. Reescrito em `033f1164` dizendo que estava
+> desatualizado. **O certo é:** com `os_id`, casa só pelo id; sem, pelo texto (`requisicaoEhDaOs`, 171).
+>
+> ⚠️ **CORREÇÃO — a "próxima tarefa detalhada" da Etapa 171 pedia "select de OS na nova requisição"; como obrigatório, estava errado:
+> contrariaria a RN-A** (Etapa 33, decisão do P.O. de 16/09: o número da OS é digitado, não escolhido de cadastro). Feito opcional e ao lado
+> do texto (B1103).
+
+### Contratos (as duas portas da 171)
+
+- `reservaDaOs.requisicaoCasaComOs({ osId, osReferencia }, os)` — com `osId`, só `osId === os.id` (o texto não conta, nem quando casaria com
+  outra OS); sem, `requisicaoEhDaOs` (texto, B1092).
+- `reservasDaOsParaRequisicao(db, materialId, { osId, osReferencia })` — com `osId`, `AND os_id = ?` no SQL (redundante com a função —
+  declarado na Fase 5, mantido).
+- **Fila da chegada** (`distribuirSemLock` seleciona `r.os_id`; `distribuirParaOs` filtra pela função nova) e **conversão na aprovação**
+  (`converterReservasDaOs` recebe `{ osId, osReferencia }`), sob as travas que já seguravam — nenhuma trava nova.
+- **RN-172.05:** o `criarReserva` da fila e o da aprovação gravam o `os_id` da requisição (antes, `reqRow.os_id` de coluna inexistente —
+  sempre `null`). Efeito aceito: essas reservas passam a aparecer em `relatorioReservadoPorOS`.
+
+### Checklist
+
+- [x] RN-172.04 (I3) — casamento por `os_id` nas duas portas; semente legada `os_id 7` + texto `"42"` com a OS "42" existindo casa com a 7
+  — `033f1164`.
+- [x] RN-172.05 — a reserva da requisição grava `os_id` (fila e aprovação) — `033f1164`.
+- [x] Ponta a ponta pela porta da cesta (usuário sem módulo) → pedido da mesma OS recebido → reserva para a requisição → aprovar, separar,
+  entregar, nas duas ordens — `033f1164` (`requisicaoOsIdCasaReservaDaOs.api.test.js`, 10/10).
+- [ ] **I5 — a saída da entrega NÃO leva o `os_id`** (teste trava). Ligaria `avaliarRegrasVinculo`/`ownerRules` com a OS e poderia recusar na
+  entrega material já reservado (material de cliente de outro cliente). Consequência: o relatório **Consumo por OS** não conta o que sai por
+  requisição. **É a Etapa 174** (próxima tarefa do plano da 172).
+- [ ] **M2 — OS excluída com requisição vinculada:** tolerado (a requisição não casa com nada; o texto continua). Letra D (172).

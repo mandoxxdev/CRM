@@ -1999,7 +1999,21 @@ Os status e as passagens permitidas entre eles são fixos; qualquer tentativa fo
   **"Requisições no prazo"** (21d). Em branco, a requisição fica sem prazo. Pela API, ela tem de vir no formato
   *AAAA-MM-DD* e ser um dia que existe; fora disso — *15/09/2026*, *2026-02-30* — a criação é recusada, sem gravar nada:
   *"data_necessidade deve estar no formato AAAA-MM-DD"*.
-- **Número da OS** — texto obrigatório para enviar (o rascunho pode ficar sem). A tela recusa antes de enviar com *"Informe o numero da OS: toda saida de material precisa estar vinculada a uma OS"* (assim, sem acento); pela integração, a recusa é *"Informe o número da OS: toda saída de material precisa estar vinculada a uma OS"*. Escreva o número **como está na OS**: é por ele que a requisição leva o material comprado para aquela OS (9.3e) — maiúsculas, espaços e o prefixo *OS* não importam; zeros à esquerda e erros de digitação, sim.
+- **Número da OS** — texto obrigatório para enviar (o rascunho pode ficar sem), nas duas telas de nova requisição: a **Nova Requisição de
+  Material** e a cesta **Solicitação de material** (o **Solicitar Material** dos módulos de escritório). Qualquer texto é aceito — o número
+  não precisa existir no cadastro de OS (*MANUT 22* passa). Vazio, nada é enviado e aparece *"Informe o número da OS: toda saída de material
+  precisa estar vinculada a uma OS"* — na cesta, em vermelho embaixo do próprio campo; na Nova Requisição, num aviso. Pela integração, a recusa
+  é a mesma frase. Escreva o número **como está na OS**: sem OS cadastrada escolhida (abaixo), é por ele que a requisição leva o material
+  comprado para aquela OS (9.3e) — maiúsculas, espaços e o prefixo *OS* não importam; zeros à esquerda e erros de digitação, sim.
+- **OS cadastrada** — opcional, ao lado do **Número da OS**, nas duas telas. É uma lista das OS (número e status); escolher uma preenche o
+  **Número da OS** com o número dela e o trava; a opção *Digitar outro número* limpa a escolha e destrava o campo. Com a OS escolhida, a
+  requisição fica **ligada** àquela OS: é pelo vínculo, e não pelo texto, que ela leva o material comprado para a OS (9.3e), e o número gravado
+  é sempre o da OS. Na cesta e na Nova Requisição dos módulos, a lista traz as **300 OS abertas mais recentes** (sem as *cancelado*,
+  *cancelada*, *concluido*, *concluida* e *encerrada*); na Nova Requisição do Almoxarifado, as 300 mais recentes **de qualquer status** — a
+  requisição para uma OS já fechada é aceita. Se a lista não carregar, a tela avisa *"Não foi possível carregar as OS cadastradas — digite o
+  número abaixo."* (na cesta) ou *"… — digite o número ao lado."* (na Nova Requisição), e o envio segue pelo número digitado. Pela integração,
+  a OS cadastrada vai num campo próprio da requisição: um valor que não é número inteiro positivo é recusado com *"Dados inválidos — os_id: OS inválida"* e uma OS que
+  não existe com *"OS #⟨código interno da OS⟩ não encontrada"* — nos dois casos, antes da cobrança do número da OS, e nada é gravado.
 - **Rascunho é do dono.** Só o solicitante envia o próprio rascunho: *"Apenas o solicitante pode enviar o rascunho"*; e só rascunho pode ser enviado: *"Apenas rascunhos podem ser enviados"*.
 - **O envio confere de novo se os materiais estão ativos.** Um rascunho salvo antes de um material dele ser inativado é recusado no envio, e continua rascunho, sem e-mail nem avaliação: *"O rascunho ⟨número⟩ tem material inativo: ⟨códigos⟩. Reative o material em Materiais → Inativos (Administrador, Almoxarife ou Engenharia) ou cancele o rascunho e faça outro sem ele."* (7.8).
 - **A ordem dos itens é a do pedido.** Os itens são gravados e mostrados — no detalhe, no comprovante e na fila de separação — na ordem em que o solicitante os incluiu, tanto na tela do almoxarifado quanto na de requisição das outras áreas.
@@ -2007,7 +2021,9 @@ Os status e as passagens permitidas entre eles são fixos; qualquer tentativa fo
 **Enviar é o gatilho de tudo.** Enquanto está em Rascunho, a requisição não dispara e-mail, não é avaliada pelas regras de aprovação nem pela alçada de valor, e não é vista pelo almoxarifado. É o envio que a coloca em circulação — e é **no envio** que o sistema decide quais regras de aprovação ela precisa cumprir (8.4).
 
 Existe ainda **"Copiar como Novo Rascunho"**, que gera um rascunho novo com os mesmos itens, tipo e vínculos, sem as quantidades já entregues. A justificativa só é copiada quando o tipo é Emergencial. A urgência **não** é copiada: a cópia nasce **Normal**. A
-data de necessidade também **não** é copiada.
+data de necessidade também **não** é copiada. O **Número da OS** é copiado; a **OS cadastrada** também, se ela ainda existir (fechada inclusive) —
+se foi excluída, a cópia vem só com o número escrito. Se o sistema não conseguir conferir a OS (falha do banco), a cópia termina em erro e nada é
+gravado; basta tentar de novo.
 
 ### 7.3 Requisição emergencial — o que fura e o que não fura
 
@@ -2453,7 +2469,8 @@ Três operações põem material no disponível e o distribuem para quem esperav
 Quando o pedido de compra foi feito **para uma OS** (14b.2b), o material que chega dele é dessa OS: fica reservado para ela, só a requisição
 dela o leva, e volta ao estoque comum se a OS for cancelada ou concluída.
 
-**A requisição "da OS".** A requisição não escolhe a OS de uma lista: ela tem o campo de texto **Número da OS** (7.2). O sistema considera a
+**A requisição "da OS".** A requisição com uma **OS cadastrada** escolhida (7.2) é da OS escolhida — e só dela, qualquer que seja o texto. A
+requisição sem OS cadastrada tem só o campo de texto **Número da OS** (7.2), e o sistema considera a
 requisição **da OS** quando esse texto é igual ao número da OS, **sem diferença de maiúscula**, sem os espaços do começo e do fim, com os
 espaços do meio contados como um só e com um prefixo *OS*, *OS-*, *OS#* ou *OS:* ignorado dos dois lados. Assim, para a OS *OS-171*, servem
 *OS-171*, *os-171*, *OS 171* e *171*. **Zeros à esquerda contam**: *42* não é a OS *OS-042*. Uma requisição com o número escrito de outro
