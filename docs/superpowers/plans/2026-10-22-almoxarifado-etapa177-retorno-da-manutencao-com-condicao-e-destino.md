@@ -107,7 +107,8 @@ Este executor é um fork e não pode abrir agentes. A sessão principal deve rod
 fechada de vez. O que a releitura própria fez, traçando cada RN até o último gesto:
 
 - **Quem mais lê o status da ferramenta** (`grep 'PERDIDA'|EM_MANUTENCAO` no client e no servidor, fora do serviço, da máquina e da tela):
-  ninguém — nenhum relatório ou painel além do de calibrações, que foi tratado (RN-177.09).
+  ninguém — nenhum relatório ou painel além do de calibrações, que foi tratado (RN-177.09). **Estava errado** — a inspeção e a coluna de
+  calibração da tela usavam a ferramenta sem olhar o status; ver "Fase 5 — revisão adversarial independente" abaixo.
 - **Validação antes da escrita**: as cinco recusas novas rodam antes do claim da manutenção; a sabotagem S5 (validar depois do claim) derrubou
   os cinco cenários de "nada muda".
 - **A baixada pela integração** ainda aceita registrar calibração e ser editada — declarado em **D (177)**, a tela não oferece a calibração.
@@ -118,10 +119,40 @@ fechada de vez. O que a releitura própria fez, traçando cada RN até o último
 Controle positivo: **17 sabotagens** — servidor S1–S9 (S5 e S7 refeitas com âncora de uma linha, porque `grep -cF` conta por linha e a
 âncora de duas linhas abortou pela guarda), tela T1–T8. Cada uma derrubou o cenário dela (lido o nome do cenário). Restauro por cópia + `cmp`.
 
+## Fase 5 — revisão adversarial independente
+
+Feita depois do fechamento por um revisor independente, que montou cenários para cada achado. **A releitura própria acima dizia que, fora do
+painel, "ninguém" lia o status da ferramenta. Isso estava errado:** a inspeção usa a ferramenta como instrumento (`resolverMedidas`) sem
+olhar o status, e a coluna de calibração da tela também não olhava. A busca procurou quem lia o status quando devia procurar quem **usa** a
+ferramenta.
+
+| # | Achado (gravidade) | O que foi feito | Commit |
+|---|---|---|---|
+| 1 | **MÉDIO, reproduzido:** instrumento BAIXADA ainda medindo na inspeção (`resolverMedidas` só conferia a calibração; a tela o oferecia) | Servidor: 400 *"Ferramenta baixada não pode ser usada em medição (⟨nome⟩)"*, antes do claim de saldo (padrão da literal vizinha, que também traz o nome). Tela: *"(baixada — não mede)"*, desabilitada. **B1146:** só BAIXADA; PERDIDA/AVARIADA/EM_MANUTENCAO/BLOQUEADA continuam medindo, como antes da 177 (o teste `(10c)` fixa isso) | `f707560c` |
+| 2 | BAIXO: a coluna **Calibração** mostrava *Vigente* na baixada | mostra *"—"* | `db0e9f0a` |
+| 3 | BAIXO: baixa sem `condicao` aceita sem teste | teste que fixa o comportamento (grava NULL); B1140 explicitada nas novidades | `0f7b8a33` |
+| 4 | BAIXO: na anomalia (ferramenta fora de EM_MANUTENCAO), a manutenção ficava com `destino = 'BAIXA'` e a ferramenta em outro status, sem a trilha BAIXA | quando o claim de status falha, `destino = NULL` (o destino efetivo) e o pedido vai em `MANUTENCAO_FIM` como `destino_pedido`. Alcançado com fixture direta (status → BLOQUEADA) | `0f7b8a33` |
+| 5 | Restrição invisível (COM_RESTRICAO + USO fica DISPONIVEL igual a OK) | **não implementado** — limitação declarada em **D (177)** | — |
+| — | Testes que faltavam: 403 do PRODUCAO em `concluir` e `reverter-baixa`; a baixada com calibração **válida** fora do painel | escritos | `0f7b8a33` |
+
+**Controle positivo (8 sabotagens, cópia em `scratchpad/e177-fase5/`, âncora `grep -cF` = 1, restauro por cópia + `cmp`):**
+- S1 `resolverMedidas` compara com `'BAIXADA_X'` → caiu `(10b) … instrumento BAIXADO … recusa com 400 literal` (22/23).
+- S2 sem o `UPDATE … destino = NULL` → caiu `Fase 5: anomalia … nao grava destino BAIXA` (16/17).
+- S3 o painel com `<> ? || 'X'` (a baixada volta) → caíram `RN-177.09` e `Fase 5 / RN-177.09 … calibracao VALIDA` (15/17).
+- S4 condição obrigatória no servidor → caíram `RN-177.02 (B1140): corpo vazio` e `Fase 5 / B1140: baixa sem condicao` (15/17).
+- S5 sem `requirePermission` em `PUT /manutencoes/:id/concluir` → caiu `Fase 5 / B1143: … 403` (*expected 403, got 200*).
+- S6 sem `requirePermission` em `POST /ferramentas/:id/reverter-baixa` → caiu o mesmo cenário, na linha do reverter (o concluir, intacto, deu 403 antes).
+- T1 a coluna sem `|| f.status === 'BAIXADA'` → caiu `Fase 5: a baixada com calibração vigente mostra "—"` (29/30). *(A primeira rodada passou o `.js` do componente como padrão do jest e não rodou nenhum teste; foi refeita com o `.test.js`.)*
+- T2 `const baixada = f.status === 'BAIXADA_X'` → caiu `(5b) Etapa 177/B1146: instrumento baixado aparece desabilitado` (32/33).
+
+**Medido depois das correções:** `test:api` **502/502** arquivos; `test:almoxarifado` 44/44; `test:validation` 4/4, `test:safealter` 3/3,
+`test:sqlite` 16/16; client **175 suítes / 2264 testes**; `CI=true react-scripts build` **Compiled successfully**.
+
 ## Retro (4 números)
 
 - Rodadas de correção até verde: **1** (o teste da justificativa curta).
-- Achados de revisão: **0** de agente independente (não houve); 1 da releitura própria (asserção fraca, declarada).
+- Achados de revisão: 1 da releitura própria (asserção fraca, declarada); **5 da revisão adversarial independente** (1 médio, 3 baixos
+  corrigidos, 1 declarado), mais os testes que faltavam.
 - Paralelismo: **0** (T2 dependia do contrato da T1, executadas em sequência por um só executor).
 - Defeito que escapou: a preencher na próxima etapa que tocar ferramentas.
 
@@ -129,9 +160,7 @@ Controle positivo: **17 sabotagens** — servidor S1–S9 (S5 e S7 refeitas com 
 
 Desta frente (o pedido de ferramentas/EPI da usuária), o que falta:
 
-1. **A revisão adversarial independente da 177** (a sessão principal) — lentes: a máquina de estados com BAIXADA (algum caminho chega a
-   BAIXADA ou sai dela por fora de `concluirManutencao`/`reverterBaixa`?), a tela (o modal manda o corpo certo em cada combinação?), e "este
-   teste passaria com a feature quebrada?".
+1. ~~A revisão adversarial independente da 177~~ — **feita**, ver "Fase 5 — revisão adversarial independente" acima.
 2. **A aba de histórico da ferramenta** (manutenções com condição e destino, ocorrências, empréstimos) — o dado existe
    (`GET /ferramentas/:id/manutencoes`, `/ocorrencias`, `/emprestimos?ferramenta_id=` — **medir** este último filtro antes de prometer).
 3. **Entrega/empréstimo com assinatura (NR-6)** — espera os formulários em papel da empresa.

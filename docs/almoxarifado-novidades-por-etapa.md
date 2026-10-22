@@ -14,7 +14,9 @@
 > **Onde o desenvolvimento está (2026-10-22):** **Etapa 177 fechada** (**o retorno da manutenção com a condição do item e o destino** — concluir
 > a manutenção de uma ferramenta pede a **condição** (*Em condições de uso*, *Em uso com restrição*, *Inservível*) e o **destino** (*Volta ao
 > uso* ou *Baixa*); a baixa deixa a ferramenta **Baixada**, fora de circulação e do painel de calibrações, reversível; nada a rodar antes do
-> deploy; decisões **B1140** a **B1145** — **a B1143 pergunta** se a baixa deve passar por um gestor). A **176** está em andamento em outra
+> deploy; decisões **B1140** a **B1146** — **a B1143 pergunta** se a baixa deve passar por um gestor, **a B1146 pergunta** se instrumento
+> *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* também deve parar de medir na inspeção; a revisão adversarial independente foi
+> feita e corrigida — o instrumento *Baixado* não mede mais). A **176** está em andamento em outra
 > frente.
 > **Também em 2026-10-22: Etapa 174 fechada** (**a entrega grava a OS, e o *Consumo por OS* passa a enxergar as
 > requisições** — a entrega de requisição ligada a uma OS cadastrada entra no relatório, que ganha **Devolvido** e **Líquido**; material de
@@ -4134,7 +4136,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131 e B1140 a B1145; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131 e B1140 a B1146; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -12215,8 +12217,10 @@ detalhada" no plano da 174. As decisões que esperam vocês: as mesmas da **B111
 um olhar** (projeto e OS de clientes diferentes: qual dos dois é o certo?).
 
 **B1140 (NOVA, da Etapa 177; decisão do agente) — a condição é obrigatória na tela e opcional no servidor.** Quem já chamava a conclusão da
-manutenção pela integração sem condição continua funcionando (volta ao uso, condição em branco). **Descartado:** obrigar no servidor —
-quebraria a integração sem ganho para quem usa a tela. **Reversível:** `17ce8759`.
+manutenção pela integração sem condição continua funcionando (volta ao uso, condição em branco). **Vale também para a baixa** (explicitado na
+revisão da Fase 5): pela integração, concluir com destino *Baixa* e o motivo, sem a condição, é aceito — a ferramenta fica *Baixada* e a
+condição fica em branco (gravada vazia); a tela continua exigindo a condição. **Descartado:** obrigar no servidor — quebraria a integração
+sem ganho para quem usa a tela. **Reversível:** `17ce8759`.
 
 **B1141 (NOVA, da Etapa 177; decisão do agente) — "volta ao responsável" é volta ao uso, e entregar a alguém é o Emprestar de sempre.** A
 manutenção só começa com a ferramenta devolvida (não há empréstimo aberto para reabrir). **Descartado:** reabrir sozinho um empréstimo na
@@ -12235,6 +12239,15 @@ pediu para guardar. **Descartado:** os três. **Reversível:** `17ce8759`.
 
 **B1145 (NOVA, da Etapa 177; decisão do agente) — a baixa só sai da conclusão de uma manutenção.** A usuária descreveu o fluxo "após a
 manutenção". **Descartado:** um botão de baixa em qualquer status. **Reversível:** `17ce8759`.
+
+**B1146 (NOVA, da Etapa 177, revisão da Fase 5; decisão do agente) — na inspeção, só o instrumento *Baixado* deixa de medir.** A revisão
+adversarial achou que um instrumento baixado (inservível, descartado) continuava sendo aceito para registrar medidas na inspeção — a
+inspeção só olhava a calibração, nunca o status. Agora o sistema recusa: *"Ferramenta baixada não pode ser usada em medição (⟨nome⟩)"*, e a
+tela mostra o instrumento rotulado *"(baixada — não mede)"* e desabilitado. **Os outros status já tinham o mesmo furo antes desta etapa** e
+**continuam medindo**: um instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente ainda é aceito na
+medição. **Descartado:** recusar também esses quatro — muda uma regra de inspeção que existe desde a Etapa 27 sem que ninguém tenha pedido.
+**Pergunta:** vocês querem que instrumento *Avariado*, *Em manutenção*, *Bloqueado* ou *Perdido* também seja recusado na medição? (É uma
+linha no servidor e uma na tela.) **Reversível:** o commit da Fase 5 (ver o plano da 177).
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -17103,8 +17116,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(177) O retorno da manutenção, o que ficou de fora.** (1) A tela não lista o histórico de manutenções de uma ferramenta (a condição e o
   destino estão gravados, saem pela integração `GET /ferramentas/:id/manutencoes` e pela Auditoria). (2) Pela integração, uma ferramenta
   *Baixada* ainda aceita **registrar calibração** e ser **editada** (a tela não oferece a calibração). (3) A conclusão aceita a condição em
-  branco pela integração (**B1140**). (4) A revisão da Fase 2 e da Fase 5 por agente independente **não foi feita** nesta etapa (o executor
-  não podia abrir agentes) — releitura própria, registrada no plano.
+  branco pela integração (**B1140**) — inclusive na baixa. (4) ~~A revisão da Fase 2 e da Fase 5 por agente independente **não foi feita**
+  nesta etapa~~ — **feita depois do fechamento** (revisão adversarial independente), com os achados corrigidos; ver o plano da 177.
+  (5) **A restrição é invisível depois de gravada**: concluir com *Em uso com restrição* + *Volta ao uso* deixa a ferramenta *Disponível*,
+  exatamente igual a uma *Em condições de uso* — a lista não mostra selo, o **Emprestar** não avisa, e a restrição só aparece pela integração
+  (`GET /ferramentas/:id/manutencoes`) e na Auditoria (*Fim de manutenção*). Quem empresta não fica sabendo da restrição pela tela.
+  (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
+  é recusado (**B1146**).
 - **(174) A entrega com a OS e o Consumo por OS, o que ficou de fora.** (1) A devolução para **Quarentena** conta como devolvida (**B1113**) —
   e continua contando se a peça for **sucateada depois**, na inspeção da quarentena: o relatório não acompanha o destino final da peça. (2) A
   devolução registrada com destino **Sucata** cuja segunda perna (a ida para a sucata) foi **recusada** fica fora do devolvido, embora a peça
@@ -34558,7 +34576,8 @@ ficava *Avariada* ou *Disponível* para sempre, e se exigia calibração apareci
 **condição** (*Em condições de uso*, *Em uso com restrição*, *Inservível*) e o **destino** (*Volta ao uso* ou *Baixa (descarte)*). A baixa
 deixa a ferramenta **Baixada**: ela fica na lista e no histórico, mas não empresta, não volta à manutenção e sai do painel de calibrações. Uma
 baixa por engano se desfaz com **Reverter baixa**. *(A seção da Etapa 175 dizia que o destino depois da manutenção esperava os formulários em
-papel da empresa; **não esperava** — a regra está no pedido dela, e foi feita aqui.)* Decisões do agente: **B1140** a **B1145**.
+papel da empresa; **não esperava** — a regra está no pedido dela, e foi feita aqui.)* Decisões do agente: **B1140** a **B1146** (a **B1146**
+veio da revisão adversarial independente, feita depois do fechamento: o instrumento *Baixado* não mede mais na inspeção).
 
 ### Antes → Agora
 
@@ -34596,6 +34615,14 @@ concluída — ferramenta baixada"*, e a linha mostra o selo **Baixada**.
 ferramenta voltou a ficar disponível"*, e ela volta a *Disponível* e a emprestar. Na **Auditoria**, a trilha da ferramenta tem *Fim de
 manutenção* (com a condição e o destino), *Baixa de ferramenta* (com o motivo) e *Reversão de baixa* (com a justificativa).
 
+**6. O instrumento baixado não mede na inspeção (B1146, revisão da Fase 5).** Cadastre *PAQ-177*, que exige calibração, registre uma
+calibração com validade futura e dê baixa nele (passos 1 e 3). Num material com plano de inspeção, abra **Almoxarifado → Inspeções**,
+**Decidir** o item retido: no bloco **Medidas do plano**, o seletor de instrumento mostra *PAQ-177* com o sufixo *"(baixada — não mede)"* e
+não deixa escolher. Pela integração, mandar a medida com esse instrumento responde
+*"Ferramenta baixada não pode ser usada em medição (⟨nome do instrumento⟩)"* e nada é gravado (o item continua retido). Na aba
+**Ferramentas**, a coluna **Calibração** da baixada mostra *"—"*, não *"Vigente"*. Reverta a baixa: o instrumento volta a ser oferecido na
+inspeção.
+
 ### O que esta etapa NÃO cobre
 
 - **Baixa sem manutenção**: uma ferramenta *Avariada* chega à baixa passando por **Iniciar manutenção** e concluindo com *Baixa* (**B1145**).
@@ -34612,8 +34639,9 @@ manutenção* (com a condição e o destino), *Baixa de ferramenta* (com o motiv
 - **Etapa 177 entregue (2026-10-22):** **o retorno da manutenção com a condição do item e o destino** — o item "condição após a manutenção,
   volta ao responsável ou descarte" do pedido de ferramentas/EPI da usuária. Concluir a manutenção pede **Condição** e **Destino**; a **baixa**
   deixa a ferramenta **Baixada** (fora de circulação e do painel de calibrações, com histórico), reversível. Commits `17ce8759` (T1),
-  `c2bc2d37` (T2) e o fechamento. **O que é seu:** as decisões do agente **B1140** a **B1145** (reversíveis — **a B1143 pergunta** se a baixa
-  deve passar por um gestor); os limites em **D (177)**. A revisão por agente independente **não foi feita** (ver o plano). **Próxima desta
+  `c2bc2d37` (T2) e o fechamento. **O que é seu:** as decisões do agente **B1140** a **B1146** (reversíveis — **a B1143 pergunta** se a baixa
+  deve passar por um gestor; **a B1146 pergunta** se outros status de instrumento também param de medir); os limites em **D (177)**. A
+  revisão adversarial independente foi feita depois do fechamento e corrigida (Fase 5, ver o plano). **Próxima desta
   frente:** a assinatura na entrega/empréstimo (NR-6) espera os formulários em papel da empresa — ver o plano da 177.
 
 - **Etapa 174 entregue (2026-10-22):** **a entrega grava a OS, e o *Consumo por OS* passa a enxergar as requisições.** A saída da entrega

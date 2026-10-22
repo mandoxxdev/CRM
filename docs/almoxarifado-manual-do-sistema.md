@@ -4601,7 +4601,7 @@ Duas características com o mesmo nome no mesmo material são recusadas: *"Já e
 
 Cada medida fica gravada com o valor medido, o veredito (conforme ou não), o instrumento usado e — importante — **o nominal e a tolerância que valiam no dia da inspeção**. Editar o plano depois **não** reescreve inspeções antigas: a medida continua contando a história do momento em que foi feita.
 
-**Instrumento com calibração vencida não mede.** Se a medida declarar um instrumento que exige calibração e ele não tiver calibração vigente, a inspeção inteira é recusada — *"Ferramenta com calibração vencida ou sem calibração registrada (⟨nome do instrumento⟩)"*. A mesma frase cobre o instrumento vencido e o nunca calibrado. Instrumento inexistente ou desativado responde *"Ferramenta não encontrada"*. **Declarar o instrumento é opcional**: a medida sem instrumento é aceita, e o que a regra garante é que um instrumento *declarado* e vencido não mede.
+**Instrumento com calibração vencida não mede.** Se a medida declarar um instrumento que exige calibração e ele não tiver calibração vigente, a inspeção inteira é recusada — *"Ferramenta com calibração vencida ou sem calibração registrada (⟨nome do instrumento⟩)"*. A mesma frase cobre o instrumento vencido e o nunca calibrado. Instrumento inexistente ou desativado responde *"Ferramenta não encontrada"*. **Instrumento baixado também não mede**, mesmo com a calibração em dia: *"Ferramenta baixada não pode ser usada em medição (⟨nome do instrumento⟩)"*, e nada é gravado. Só a **Baixada** é recusada por status — um instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente ainda é aceito na medição. **Declarar o instrumento é opcional**: a medida sem instrumento é aceita, e o que a regra garante é que um instrumento *declarado* e vencido não mede.
 
 Outras recusas de medida, todas antes de qualquer efeito no saldo:
 
@@ -4621,7 +4621,7 @@ Outras recusas de medida, todas antes de qualquer efeito no saldo:
 
 **Linha sem valor é ignorada.** Não é obrigatório medir todas as características para decidir: as linhas em branco simplesmente não entram, e o instrumento sem valor medido também não.
 
-**O seletor de instrumento mostra o vencido, rotulado e desabilitado.** Instrumento com calibração vencida aparece na lista com o sufixo *"(calibração vencida)"* e não pode ser escolhido — o sistema recusaria de qualquer forma, e a tela evita o erro previsível. Instrumento que não exige calibração aparece normal.
+**O seletor de instrumento mostra o vencido, rotulado e desabilitado.** Instrumento com calibração vencida aparece na lista com o sufixo *"(calibração vencida)"* e não pode ser escolhido — o sistema recusaria de qualquer forma, e a tela evita o erro previsível. Instrumento **baixado** aparece com o sufixo *"(baixada — não mede)"*, também desabilitado. Instrumento que não exige calibração aparece normal.
 
 **A caixa "Divergência dimensional" trava assim que há medida.** Com pelo menos um valor preenchido, ela fica **desabilitada e desmarcada**, com a explicação ao lado: *"Derivada das medidas ao salvar — fora da tolerância liga sozinha"*. A marcação manual **não é enviada** nesse caso. Apagando todas as medidas, ela volta a ser clicável — e volta ao estado em que estava. Abaixo do bloco fica escrito, sempre: *"Com medidas preenchidas, a divergência dimensional é calculada só pelas características que você mediu. Divergência em algo que o plano não mede — ou numa característica do plano que você deixou em branco — vai em Observações."*
 
@@ -6235,13 +6235,18 @@ Concluir sem escolher a condição é recusado pela tela: *"Escolha a condição
 
   Com o motivo, aparece *"Manutenção concluída — ferramenta baixada"* e a ferramenta fica **Baixada**.
 
+Pela integração, a condição continua opcional — inclusive na baixa: destino *Baixa* com o motivo e sem a condição é aceito, e a condição
+fica em branco. **Em uso com restrição** com *Volta ao uso* deixa a ferramenta *Disponível* como qualquer outra: a lista e o **Emprestar** não
+mostram a restrição — ela fica na manutenção e na Auditoria.
+
 Qualquer recusa deixa a manutenção aberta e a janela com o que foi escolhido. A condição e o destino ficam gravados na manutenção, e a
 **Auditoria** mostra *Fim de manutenção* (com os dois) e, na baixa, *Baixa de ferramenta* (com o motivo). Concluir uma manutenção que já foi
 concluída (ou que não existe) recusa com `Manutenção não encontrada`.
 
 **Baixada** é o estado da ferramenta descartada. Ela continua na lista (o filtro de status tem *Baixada*) e com o histórico, mas **não
 circula**: não empresta, não entra em manutenção, não registra ocorrência e não bloqueia — a linha só oferece **Editar** e **Reverter baixa**
-—, e sai do painel de calibrações. Pela integração, emprestar uma baixada responde
+—, e sai do painel de calibrações, mesmo que a calibração dela ainda esteja válida. Na lista, a coluna **Calibração** da baixada mostra
+*"—"* (não *Vigente* nem *Vencida*). Um instrumento baixado **não mede na inspeção** (ver 15.2.1). Pela integração, emprestar uma baixada responde
 `Ferramenta não está disponível (status atual: BAIXADA)`. A baixa só acontece ao concluir uma manutenção: uma ferramenta *Avariada* vai
 para a baixa passando por **Iniciar manutenção**.
 

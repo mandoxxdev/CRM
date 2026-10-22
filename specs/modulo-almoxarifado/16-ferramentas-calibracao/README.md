@@ -196,5 +196,16 @@ Só exibição — nenhuma rota, consulta, valor gravado ou porta de saldo mudou
 - **A seção da Etapa 175 (e o plano dela) dizia que "o destino depois da manutenção (volta ao responsável ou descarte)" esperava os
   formulários em papel da empresa. Estava errado:** a regra está no pedido da usuária e foi feita aqui; só a assinatura (NR-6) espera os
   formulários.
-- Testes: `toolManutencaoRetorno.api.test.js` (13), `FerramentasAlmoxarifado.test.js` (+6). Plano:
+- **Fase 5 — revisão adversarial independente (depois do fechamento).** (1) Instrumento **BAIXADA** não mede na inspeção:
+  `inspectionService.resolverMedidas` recusa *"Ferramenta baixada não pode ser usada em medição (⟨nome⟩)"* e a tela de inspeção o mostra
+  *"(baixada — não mede)"*, desabilitado (**B1146** — só BAIXADA; os outros status medem como antes). (2) A coluna **Calibração** da lista
+  mostra *"—"* na baixada (mostrava *Vigente*). (3) Na anomalia (ferramenta fora de EM_MANUTENCAO ao concluir), a manutenção fecha com
+  `destino = NULL` — antes gravava `BAIXA` com a ferramenta em outro status e sem a trilha `BAIXA`; o pedido vai em `MANUTENCAO_FIM` como
+  `destino_pedido`. (4) Testes novos: baixa sem condição aceita (**B1140**), 403 do PRODUCAO em `concluir` e `reverter-baixa`, baixada com
+  calibração válida fora do painel. **O plano afirmava, na releitura própria, que "ninguém" além do painel lia o status da ferramenta —
+  estava errado:** a inspeção usa a ferramenta como instrumento (sem olhar o status) e a coluna de calibração da tela também; os dois foram
+  corrigidos. Limitação declarada (**D (177)**): *Em uso com restrição* + *Volta ao uso* fica DISPONIVEL igual a *OK* — a restrição não
+  aparece na lista nem no empréstimo.
+- Testes: `toolManutencaoRetorno.api.test.js` (13 + 4 da Fase 5), `FerramentasAlmoxarifado.test.js` (+6 + 1), `medidasInspecao.api.test.js`
+  (+2), `InspecoesAlmoxarifado.test.js` (+1). Plano:
   `docs/superpowers/plans/2026-10-22-almoxarifado-etapa177-retorno-da-manutencao-com-condicao-e-destino.md`.
