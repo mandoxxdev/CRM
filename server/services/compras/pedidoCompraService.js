@@ -116,6 +116,8 @@ const { registrarAuditoria } = require('../almoxarifado/audit');
 // Etapa 39 (RN-39.02): a conta do documento e a de `pedidoTotais.js` — implementador UNICO da
 // RN-03/04/05 da Etapa 32, restaurado IGUAL de `b3abc723` com os 22 testes. Ninguem soma por fora.
 const { calcularTotaisPedido } = require('./pedidoTotais');
+// Etapa 171 (I6): a MESMA literal e a MESMA normalizacao da porta HTTP, para quem chama o servico direto.
+const { OS_INVALIDA, normalizarOsIdBruto } = require('./schemas');
 
 /** Molde de erro traduzido (mesmo `erro()` dos servicos do almoxarifado: a rota le `.status`). */
 const erro = (msg, status = 400) => Object.assign(new Error(msg), { status });
@@ -236,6 +238,63 @@ function camposDoCabecalho(dados) {
     campos.push([col, bruto]);
   }
   return campos;
+}
+
+/**
+ * Etapa 171 (RN-171.01 a 03, emenda I6) — a OS do cabecalho do pedido.
+ *
+ * `os_id` NAO entra em `COLUNAS_CABECALHO`: la `null` e "nao mexe", e aqui `null` no `PUT` TIRA a OS (o comprador
+ * que volta o `<select>` para "Estoque (sem OS)" tem de conseguir desvincular). Ausente continua nao mexendo.
+ *
+ * As guardas de existencia e de OS fechada moram NO SERVICO, nao so no Zod: a cotacao (`gerarPedidoDaCotacao`), a
+ * reposicao e a importacao chamam `criarPedido` direto. `STATUS_OS_FECHADA` e o conjunto congelado da RN-171.03
+ * (comparado com `LOWER(TRIM())`); a T3 o reusa para decidir quando a OS "encerrou".
+ */
+const STATUS_OS_FECHADA = ['cancelado', 'cancelada', 'concluido', 'concluida', 'encerrada'];
+const osFechada = (status) => STATUS_OS_FECHADA.includes(String(status || '').trim().toLowerCase());
+const osNaoEncontrada = (id) => `OS #${id} não encontrada`;
+const osNaoAceitaCompra = (numero, status) => `A OS ${numero} está ${String(status || '').trim()} — não aceita compra nova`;
+
+/** `undefined` = nao mexe; `null` = sem OS; inteiro positivo = a OS; o resto -> 400 `OS inválida`. */
+function normalizarOsId(valor) {
+  const v = normalizarOsIdBruto(valor);
+  if (v === undefined || v === null) return v;
+  if (typeof v !== 'number' || !Number.isInteger(v) || v <= 0) throw erro(OS_INVALIDA);
+  return v;
+}
+
+/**
+ * RN-171.02/03 — confere a OS que o pedido vai passar a ter. `osIdAtual` e a do pedido gravado (so no `PUT`):
+ * manter a MESMA OS nao e compra nova e passa sem consulta — inclusive se ela fechou ou sumiu depois (sem isso o
+ * pedido de uma OS cancelada nao poderia mais ser editado em nada, nem para tirar a OS seria preciso, e o `<select>`
+ * da tela manda a OS atual em todo `PUT`).
+ */
+async function assertOsAceitaCompra(db, osId, osIdAtual = null) {
+  if (osId === undefined || osId === null) return;
+  if (osIdAtual !== null && osIdAtual !== undefined && Number(osIdAtual) === osId) return;
+  const os = await dbGet(db, 'SELECT id, numero_os, status FROM ordens_servico WHERE id = ?', [osId]);
+  if (!os) throw erro(osNaoEncontrada(osId));
+  if (osFechada(os.status)) throw erro(osNaoAceitaCompra(os.numero_os, os.status));
+}
+
+/**
+ * RN-171.05 (M2) — a OS lida VIVA: `{ os_numero, os_status }` da OS gravada, `null` nos dois sem OS ou com a OS
+ * sumida (quem mostra cai em `OS #<id>`). Consulta separada e SO quando ha `os_id` — e nao um `LEFT JOIN` no
+ * `SQL_PEDIDO` — porque `ordens_servico` e tabela core que o harness nao tem: um JOIN incondicional derrubaria
+ * com "no such table" todo teste de Compras que le pedido (o efeito para o usuario e o mesmo do JOIN vivo).
+ */
+async function lerOsDoPedido(db, osId) {
+  if (osId === null || osId === undefined) return { os_numero: null, os_status: null };
+  const os = await dbGet(db, 'SELECT numero_os, status FROM ordens_servico WHERE id = ?', [osId]);
+  return { os_numero: os ? os.numero_os : null, os_status: os ? os.status : null };
+}
+
+/** A mesma leitura viva para N pedidos de uma vez (a lista): `Map(os_id -> numero_os)`. */
+async function numerosDasOs(db, osIds) {
+  const ids = [...new Set(osIds.filter((id) => id !== null && id !== undefined).map(Number))];
+  if (ids.length === 0) return new Map();
+  const linhas = await dbAll(db, `SELECT id, numero_os FROM ordens_servico WHERE id IN (${ids.map(() => '?').join(', ')})`, ids);
+  return new Map(linhas.map((l) => [Number(l.id), l.numero_os]));
 }
 
 /**
@@ -418,6 +477,8 @@ async function relerPedido(db, pedidoId) {
   const { itens, totais } = calcularTotaisPedido(linhas, encargosDoPayload({}, pedido));
   return {
     ...semColunasCruas(pedido),
+    // Etapa 171 (RN-171.05): `os_id` ja vem no `p.*`; numero e status lidos vivos (M2).
+    ...(await lerOsDoPedido(db, pedido.os_id)),
     fornecedor: montarFornecedor(pedido),
     itens,
     totais,
@@ -548,6 +609,9 @@ async function criarPedido(db, dados, user) {
   if (querVincular && !can(user, 'gerenciar_reposicao')) throw erroPermissao(user, 'gerenciar_reposicao');
 
   await assertFornecedor(db, dados.fornecedor_id);
+  // Etapa 171 (RN-171.02/03): a OS conferida ANTES de qualquer escrita, como o fornecedor.
+  const osId = normalizarOsId(dados.os_id);
+  await assertOsAceitaCompra(db, osId);
 
   const itensResolvidos = await resolverItens(db, dados.itens);
 
@@ -556,6 +620,8 @@ async function criarPedido(db, dados, user) {
   const colunas = ['numero', 'fornecedor_id'];
   const valores = [null, dados.fornecedor_id];
   for (const [col, valor] of camposDoCabecalho(dados)) { colunas.push(col); valores.push(valor); }
+  // Etapa 171 (RN-171.01): so quando HA OS — sem ela a coluna fica no NULL do DDL (pedido de estoque).
+  if (osId) { colunas.push('os_id'); valores.push(osId); }
   // Etapa 39 (RN-39.04): o SNAPSHOT fiscal entra no MESMO INSERT do cabecalho — e no SERVICO, nao
   // na rota como a 32 fazia, para que a cotacao (`gerarPedidoDaCotacao`) e a importacao por
   // planilha, que chamam `criarPedido` direto, tambem emitam pedido com o fiscal congelado.
@@ -744,7 +810,7 @@ async function atualizarPedido(db, pedidoId, dados) {
   // Etapa 39 (RN-39.04): o `SELECT` passa a ler `fornecedor_id` atual, o snapshot e os encargos —
   // e o que decide se o snapshot e reescrito e o que preserva um encargo ausente no payload.
   const pedido = await dbGet(db, `SELECT id, numero, fornecedor_id, snap_fornecedor_nome, snap_fornecedor_cnpj,
-    total_icms_st, valor_frete, total_desconto FROM pedidos_compra WHERE id = ?`, [pedidoId]);
+    total_icms_st, valor_frete, total_desconto, os_id FROM pedidos_compra WHERE id = ?`, [pedidoId]);
   if (!pedido) throw erro(PEDIDO_NAO_ENCONTRADO, 404);
 
   const linhaRecebida = await linhaComRecebimento(db, pedido.id);
@@ -752,11 +818,17 @@ async function atualizarPedido(db, pedidoId, dados) {
   if (linhaRecebida || documentoVinculado) throw erro(jaTeveRecebimentoEdicao(pedido.numero));
 
   await assertFornecedor(db, dados.fornecedor_id);
+  // Etapa 171 (RN-171.04): colocar, trocar ou tirar a OS e por aqui, DEPOIS da guarda de recebimento acima (a OS nao
+  // ganha excecao). Manter a mesma OS passa mesmo fechada (RN-171.03).
+  const osId = normalizarOsId(dados.os_id);
+  await assertOsAceitaCompra(db, osId, pedido.os_id);
   const itensResolvidos = await resolverItens(db, dados.itens);
 
   const sets = ['fornecedor_id = ?'];
   const valores = [dados.fornecedor_id];
   for (const [col, valor] of camposDoCabecalho(dados)) { sets.push(`${col} = ?`); valores.push(valor); }
+  // Etapa 171 (I6): ausente nao mexe; `null` TIRA a OS (por isso fora de `camposDoCabecalho`).
+  if (osId !== undefined) { sets.push('os_id = ?'); valores.push(osId); }
   // Etapa 39 (B21): o snapshot e REESCRITO se o fornecedor mudou (a 32 nunca reescrevia — um pedido
   // editado para outro fornecedor imprimiria o fiscal do antigo) OU se esta nulo (pedido legado
   // editado deixa de ficar `origem:'cadastro'` para sempre). Editar sem trocar o fornecedor NAO
@@ -1417,6 +1489,10 @@ module.exports = {
   // o resolvedor UNICO de snapshot x cadastro.
   lerPedidoParaRecebimento,
   montarFornecedor,
+  // Etapa 171 (RN-171.03/05): o conjunto de OS fechada (T3 reusa) e a leitura viva da OS para a lista.
+  STATUS_OS_FECHADA,
+  osFechada,
+  numerosDasOs,
   CONDICOES_COMERCIAIS,
   COLUNAS_SNAPSHOT,
 };

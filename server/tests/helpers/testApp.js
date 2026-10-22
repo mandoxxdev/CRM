@@ -143,7 +143,9 @@ async function createTestApp(options = {}) {
     snap_fornecedor_email TEXT,
     snap_fornecedor_celular TEXT,
     -- Etapa 122 (C255a): o fechamento automatico do pedido (ALTERS_PEDIDOS_COMPRA do index.js).
-    fechado_automaticamente_de TEXT
+    fechado_automaticamente_de TEXT,
+    -- Etapa 171 (RN-171.01): a OS do pedido (ALTERS_PEDIDOS_COMPRA do index.js). NULL = estoque.
+    os_id INTEGER
   )`);
 
   // `cotacoes` é tabela CORE (`server/index.js:19244`). Entra no harness na Etapa 40 porque a

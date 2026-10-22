@@ -175,6 +175,27 @@ const textoCabecalhoOpcional = z.preprocess(
   z.string().nullable(),
 ).optional();
 
+/**
+ * Etapa 171 (RN-171.01, emenda I6) — a OS do cabecalho do pedido. TRES estados, e a diferenca e contrato:
+ * AUSENTE = nao mexe (o `PUT` sem a chave mantem a OS gravada); `null` e `''` = SEM OS (o `<select>` na opcao
+ * "Estoque (sem OS)" manda `''`; no `PUT` isso TIRA a OS); inteiro positivo, como numero OU string so de digitos
+ * (o `<select>` manda string) = a OS. `0`, `-1`, `1.5`, `true`, `'abc'` -> 400 `OS inválida`. Aqui HA coercao de
+ * string de digitos, ao contrario da armadilha 3 do cabecalho: `'0007'` vira 7, e o servico confere se a OS existe
+ * (RN-171.02) — nao ha como coagir para uma OS que nao exista sem 400. A MESMA regra vale para quem chama o servico
+ * direto (`normalizarOsId` em `pedidoCompraService`, com a mesma literal).
+ */
+const OS_INVALIDA = 'OS inválida';
+function normalizarOsIdBruto(v) {
+  if (v === undefined) return undefined;
+  if (v === null || v === '') return null;
+  if (typeof v === 'string' && /^\d+$/.test(v.trim())) return Number(v.trim());
+  return v;
+}
+const osIdOpcional = z.preprocess(
+  normalizarOsIdBruto,
+  z.number({ error: OS_INVALIDA }).int(OS_INVALIDA).positive(OS_INVALIDA).nullable(),
+).optional();
+
 const PedidoCompraCreateSchema = z.looseObject({
   fornecedor_id: z.number({ error: FORNECEDOR_PEDIDO_OBRIGATORIO }).int(FORNECEDOR_PEDIDO_OBRIGATORIO).positive(FORNECEDOR_PEDIDO_OBRIGATORIO),
   status: z.enum(STATUS_PEDIDO_COMPRA, { error: STATUS_PEDIDO_INVALIDO }).optional(),
@@ -188,6 +209,8 @@ const PedidoCompraCreateSchema = z.looseObject({
   total_icms_st: encargoOpcional('total_icms_st'),
   valor_frete: encargoOpcional('valor_frete'),
   total_desconto: encargoOpcional('total_desconto'),
+  // Etapa 171 (RN-171.01, I6)
+  os_id: osIdOpcional,
 });
 
 /**
@@ -359,6 +382,9 @@ module.exports = {
   STATUS_PEDIDO_INVALIDO,
   PREVISAO_ENTREGA_INVALIDA,
   DATA_PEDIDO_INVALIDA,
+  // Etapa 171 (I6): a literal e a normalizacao da OS do pedido, reusadas pelo servico.
+  OS_INVALIDA,
+  normalizarOsIdBruto,
   // Etapa 39 (RN-39.01/RN-39.05): o documento do pedido e a calculadora.
   PedidoCalcularSchema,
   CONDICOES_COMERCIAIS,

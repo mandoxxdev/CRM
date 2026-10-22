@@ -19022,6 +19022,10 @@ const ALTERS_PEDIDOS_COMPRA = [
   // pela mudanca manual (`alterarStatusPedido`). Antes o estado era a ultima trilha da Auditoria, que pode faltar com o ato
   // feito. Tambem por `safeAlter` no initSchema do modulo (o harness e a ordem do boot) — o backfill do legado mora la.
   'fechado_automaticamente_de TEXT',
+  // Etapa 171 (RN-171.01): a OS que o pedido atende, no CABECALHO (decisao 1 do Andre: um pedido = uma OS, ou estoque).
+  // NULL = compra para estoque. Sem FK de proposito: a RN-171.10 (T3) recusa excluir OS com pedido, e a leitura e por
+  // consulta viva (OS sumida sai `OS #<id>`, M2). O stub do harness ganha a coluna a mao.
+  'os_id INTEGER',
 ];
 db.run(`CREATE TABLE IF NOT EXISTS pedidos_compra (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -369,6 +369,17 @@ const CSS = `
  * @param {{ pedido: object, empresa: object, impressao?: { usuario?: string, dataHora?: Date|string } }} entrada
  * @returns {string}
  */
+/**
+ * Etapa 171 (RN-171.05, M2) — a OS do pedido no cabecalho do documento: `OS: <numero_os>`; com `os_id` gravado e a
+ * OS sumida (`os_numero` null), `OS #<id>`; pedido de estoque (sem `os_id`) nao ganha linha nenhuma.
+ */
+function linhaOs(p) {
+  if (p.os_id === null || p.os_id === undefined || p.os_id === '') return '';
+  const n = p.os_numero === null || p.os_numero === undefined ? '' : String(p.os_numero).trim();
+  const rotulo = n ? `<b>OS:</b> ${escapar(n)}` : `<b>OS</b> #${escapar(p.os_id)}`;
+  return `      <div class="campo">${rotulo}</div>\n`;
+}
+
 function gerarHTMLPedidoCompra({ pedido, empresa, impressao } = {}) {
   const p = pedido || {};
   const e = empresa || {};
@@ -412,7 +423,7 @@ function gerarHTMLPedidoCompra({ pedido, empresa, impressao } = {}) {
       <div class="campo"><b>Data do pedido:</b> ${formatarData(p.data_pedido)}</div>
       <div class="campo"><b>Situação:</b> ${rotuloStatus(p.status)}</div>
       <div class="campo"><b>Previsão de entrega:</b> ${formatarData(p.previsao_entrega)}</div>
-      <div class="campo"><b>Emissão:</b> <span class="nowrap">${emissao}</span></div>
+${linhaOs(p)}      <div class="campo"><b>Emissão:</b> <span class="nowrap">${emissao}</span></div>
       <div class="campo"><b>Usuário:</b> ${usuario}</div>
     </div>
   </header>

@@ -60,6 +60,8 @@ const { decodificarImagemBase64 } = require('../services/imagemUpload');
 // NAO por copia (decisao 7 do design) — duplicar o formatador daria dois "Dados invalidos" que
 // divergiriam na primeira edicao.
 const { validate } = require('../services/almoxarifado/validation');
+// Etapa 171 (RN-171.06): a rota aux de OS e async.
+const { dbAll } = require('../services/almoxarifado/db');
 const {
   PedidoCompraCreateSchema, PedidoStatusSchema, FornecedorSchema, CotacaoSchema,
   // Etapa 39 (RN-39.05): o schema TOLERANTE da calculadora — nunca o de gravacao (ver `/calcular`).
@@ -152,13 +154,29 @@ app.get('/api/compras/pedidos', authenticateToken, checkModulePermission('compra
     query += ' AND p.status = ?';
     params.push(status);
   }
+  // Etapa 171 (RN-171.05): os pedidos de UMA OS. So inteiro positivo liga o filtro; o resto e ignorado, como os
+  // outros filtros desta lista (nenhum deles responde 400).
+  const osFiltro = String(req.query.os_id ?? '').trim();
+  if (/^\d+$/.test(osFiltro) && Number(osFiltro) > 0) {
+    query += ' AND p.os_id = ?';
+    params.push(Number(osFiltro));
+  }
 
   query += ' ORDER BY p.created_at DESC';
 
-  db.all(query, params, (err, rows) => {
+  db.all(query, params, async (err, rows) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
+    // Etapa 171 (RN-171.05, M2): `os_numero` lido VIVO das OS dos pedidos desta pagina (uma consulta so, e so quando
+    // algum pedido tem OS — `numerosDasOs` explica por que nao e um JOIN). OS sumida -> `null`; a tela mostra `OS #<id>`.
+    let numerosOs;
+    try {
+      numerosOs = await pedidoCompraService.numerosDasOs(db, rows.map((r) => r.os_id));
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+    rows = rows.map((r) => ({ ...r, os_numero: r.os_id == null ? null : (numerosOs.get(Number(r.os_id)) ?? null) }));
     // M2 da revisao da Etapa 39: o `p.*` traz as 10 colunas cruas `snap_fornecedor_*` em toda
     // linha da lista; ninguem as le aqui (o GET /:id resolve o snapshot em `fornecedor{}`). So
     // payload, sem exposicao (gate compras) — mas 10 chaves x N pedidos a cada carregamento.
@@ -176,6 +194,34 @@ app.get('/api/compras/pedidos', authenticateToken, checkModulePermission('compra
     // Só a string '1' liga o filtro: `if (req.query.atrasados)` ligaria com '0' também.
     res.json(req.query.atrasados === '1' ? comAtraso.filter((l) => l.atrasado === 1) : comAtraso);
   });
+});
+
+/**
+ * Etapa 171 (RN-171.06) — as OS para o `<select>` do pedido de compra, no portao de COMPRAS (a
+ * `/api/almoxarifado/aux/ordens-servico` exige o modulo do almoxarifado, que o comprador pode nao ter).
+ * So as OS ABERTAS (fora de `STATUS_OS_FECHADA`, sem caixa e sem espaco), `ORDER BY id DESC LIMIT 300`; `?incluir=<id>`
+ * devolve TAMBEM essa OS mesmo fechada — o pedido que ja a tem precisa mostra-la no `<select>` da edicao. Ela e
+ * buscada a parte e acrescentada se nao veio: num `OR id = ?` dentro do LIMIT, uma OS antiga ficaria de fora com
+ * mais de 300 abertas. `incluir` que nao e inteiro positivo e ignorado.
+ * Tres segmentos e GET: o generico `app.delete('/api/compras/:tipo/:id')` nao a sombreia (verbo e aridade).
+ */
+app.get('/api/compras/aux/ordens-servico', authenticateToken, checkModulePermission('compras'), async (req, res) => {
+  try {
+    const fechadas = pedidoCompraService.STATUS_OS_FECHADA;
+    const sel = `SELECT os.id, os.numero_os, os.status, c.razao_social AS cliente_nome
+      FROM ordens_servico os LEFT JOIN clientes c ON c.id = os.cliente_id`;
+    const rows = await dbAll(db, `${sel}
+      WHERE LOWER(TRIM(COALESCE(os.status, ''))) NOT IN (${fechadas.map(() => '?').join(', ')})
+      ORDER BY os.id DESC LIMIT 300`, fechadas);
+    const incluir = String(req.query.incluir ?? '').trim();
+    if (/^\d+$/.test(incluir) && Number(incluir) > 0 && !rows.some((r) => Number(r.id) === Number(incluir))) {
+      const extra = await dbAll(db, `${sel} WHERE os.id = ?`, [Number(incluir)]);
+      rows.push(...extra);
+    }
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 /**
