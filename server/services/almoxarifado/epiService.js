@@ -378,8 +378,12 @@ INSERT INTO evidencias_assinatura_almoxarifado (contexto_id, registro_sha256, ${
 const COLUNAS_LISTA = `e.id, e.numero, e.criado_em, e.colaborador_id, e.colaborador_nome, e.matricula, e.material_id,
   e.material_codigo, e.material_nome, e.ca_numero, e.ca_validade, e.quantidade, e.tamanho, e.motivo, e.entregue_por_nome`;
 
-/** GET /epi/entregas — filtros opcionais; `de`/`ate` sao dias de Brasilia (AAAA-MM-DD). Mais recentes primeiro. */
-async function listarEntregas(db, filtros = {}) {
+/**
+ * Os filtros das entregas (alias `e`): `colaborador_id`, `material_id` e `de`/`ate` em dias de Brasilia (AAAA-MM-DD; dia em
+ * outro formato e ignorado). Fonte unica de `listarEntregas` e do relatorio `epi-colaborador` (Etapa 181, I1) — o relatorio e a
+ * tela de EPI nao podem discordar sobre o que e "entregue em 21/10".
+ */
+function filtroDasEntregas(filtros = {}) {
   const where = [];
   const params = [];
   if (filtros.colaborador_id) { where.push('e.colaborador_id = ?'); params.push(Number(filtros.colaborador_id)); }
@@ -391,6 +395,12 @@ async function listarEntregas(db, filtros = {}) {
   if (filtros.ate && dia.test(String(filtros.ate))) {
     where.push('DATE(e.criado_em, ?) <= ?'); params.push(diaLocal.modificadorDoFuso(), String(filtros.ate));
   }
+  return { where, params };
+}
+
+/** GET /epi/entregas — filtros opcionais (`filtroDasEntregas`). Mais recentes primeiro. */
+async function listarEntregas(db, filtros = {}) {
+  const { where, params } = filtroDasEntregas(filtros);
   return dbAll(db, `SELECT ${COLUNAS_LISTA} FROM entregas_epi_almoxarifado e
     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
     ORDER BY e.criado_em DESC, e.id DESC`, params);
@@ -495,5 +505,5 @@ async function listarColaboradoresAtivos(db) {
 
 module.exports = {
   CONTEXTO, MOTIVOS, ganchos, ehEpiSql, camposDoRegistro,
-  registrarEntrega, listarEntregas, fichaDoColaborador, verificarEntrega, verificarCadeia, listarColaboradoresAtivos,
+  registrarEntrega, listarEntregas, filtroDasEntregas, fichaDoColaborador, verificarEntrega, verificarCadeia, listarColaboradoresAtivos,
 };

@@ -746,3 +746,66 @@ describe('RelatoriosAlmoxarifado — parâmetro select com opções do servidor 
     expect(api.get).toHaveBeenCalledWith('/almoxarifado/relatorios/historico-movimentacoes', { params: {} });
   });
 });
+
+// Etapa 181 (RN-181.02/04, I2): o "EPI por colaborador" passou a ler as entregas de EPI. A tela e generica — nenhuma linha de
+// codigo mudou nela; este teste prova que a entrada do registro (espelhada aqui, como a fixture acima) basta: a nota aparece ao
+// selecionar e o select de colaborador carrega de `/almoxarifado/aux/colaboradores` (shape `{ id, nome, matricula, setor }`, sem
+// `ativo` — a rota so devolve ativos, entao nenhum vira "(desativado)").
+describe('RelatoriosAlmoxarifado — EPI por colaborador (Etapa 181)', () => {
+  const NOTA_EPI = 'Fonte: as entregas de EPI com assinatura feitas pela tela de EPI (Etapa 178). Toda entrega pela tela grava a '
+    + 'assinatura na mesma transação — "Não" na coluna Assinatura é anomalia; a integridade (arquivo e cadeia) se confere na '
+    + 'tela de EPI. Empréstimos de ferramenta cadastrada como EPI não entram mais aqui: continuam em "Ferramentas emprestadas".';
+  const EPI = {
+    tipo: 'epi-colaborador', titulo: 'EPI por colaborador', categoria: 'Gestão',
+    params: [
+      { nome: 'colaborador_id', rotulo: 'Colaborador', tipo: 'select', obrigatorio: false, opcoes_url: '/almoxarifado/aux/colaboradores', exemplo: 1 },
+      { nome: 'material_id', rotulo: 'EPI (id do material)', tipo: 'number', obrigatorio: false, exemplo: 1 },
+      { nome: 'de', rotulo: 'De', tipo: 'date', obrigatorio: false, exemplo: '2026-01-15' },
+      { nome: 'ate', rotulo: 'Até', tipo: 'date', obrigatorio: false, exemplo: '2026-01-15' },
+    ],
+    exportavel: true, limite: null, nota: NOTA_EPI,
+    colunas: [{ chave: 'criado_em', rotulo: 'Entregue em' }, { chave: 'colaborador_nome', rotulo: 'Colaborador' },
+      { chave: 'tem_evidencia', rotulo: 'Assinatura' }],
+  };
+  const COLABORADORES = [
+    { id: 4, nome: 'ANA', matricula: 'A-1', setor: 'Caldeiraria' },
+    { id: 8, nome: 'BRUNO', matricula: 'B-1', setor: 'Solda' },
+  ];
+
+  test('nota ao selecionar; select de colaborador carregado da rota aux; a consulta manda o id e os outros filtros', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/relatorios') return Promise.resolve({ data: { relatorios: [EPI, ...LISTA_FIXTURE] } });
+      if (url === '/almoxarifado/aux/colaboradores') return Promise.resolve({ data: COLABORADORES });
+      if (url === '/almoxarifado/relatorios/epi-colaborador') {
+        return Promise.resolve({ data: [{ criado_em: '2026-10-22 01:30:00', colaborador_nome: 'BRUNO', tem_evidencia: 'Não' }] });
+      }
+      return Promise.reject(new Error(`URL inesperada no mock: ${url}`));
+    });
+    await renderizar();
+    await selecionarRelatorio('epi-colaborador');
+
+    expect(container.querySelector('[data-testid="nota-relatorio"]').textContent).toBe(NOTA_EPI);
+    const campo = container.querySelector('#param-colaborador_id');
+    expect(campo.tagName).toBe('SELECT');
+    expect([...campo.options].map((o) => [o.value, o.textContent])).toEqual([['', 'Todos'], ['4', 'ANA'], ['8', 'BRUNO']]);
+    expect(container.querySelector('#param-material_id').type).toBe('number');
+    expect(container.querySelector('#param-de').type).toBe('date');
+
+    await act(async () => {
+      campo.value = '8';
+      campo.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await digitar(container.querySelector('#param-de'), '2026-10-21');
+    await clicar(botao('Consultar'));
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/relatorios/epi-colaborador',
+      { params: { colaborador_id: '8', de: '2026-10-21' } });
+    // C1: o servidor manda `AAAA-MM-DD HH:MM:SS` (nao o ISO cru da entrega), e a tela o le como UTC e mostra no fuso local —
+    // em Brasilia, 21/10 22:30. O ISO cru (`…T01:30:00.000Z`) nao bateria a regex e sairia como texto, com o dia UTC.
+    const tds = container.querySelectorAll('.almox-table tbody tr')[0].querySelectorAll('td');
+    expect(tds[0].textContent).toBe(new Date('2026-10-22T01:30:00Z').toLocaleString('pt-BR', {
+      day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit',
+    }));
+    expect(tds[0].textContent).not.toContain('2026-10-22');
+    expect(tds[2].textContent).toBe('Não');
+  });
+});

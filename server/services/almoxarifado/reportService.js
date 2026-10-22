@@ -558,11 +558,32 @@ async function relatorioFerramentasEmprestadas(db) {
     WHERE e.status = 'EMPRESTADA' ORDER BY e.data_retirada`);
 }
 
-async function relatorioEPIPorColaborador(db) {
-  return dbAll(db, `SELECT e.colaborador_nome, e.setor, f.nome as ferramenta, e.data_retirada
-    FROM emprestimos_ferramenta_almoxarifado e
-    JOIN ferramentas_almoxarifado f ON e.ferramenta_id = f.id
-    WHERE f.tipo = 'EPI' AND e.status = 'EMPRESTADA'`);
+/**
+ * Etapa 181 (RN-181.01/02) — EPI por colaborador le as ENTREGAS de EPI (`entregas_epi_almoxarifado`, Etapa 178). Ate a 181 lia os
+ * emprestimos em aberto de ferramenta `tipo='EPI'`: a entrega com assinatura nao aparecia no relatorio que leva o nome dela. O
+ * legado saiu daqui (continua em "Ferramentas emprestadas"); juntar as duas fontes misturaria entrega com assinatura e emprestimo
+ * sem (letra B).
+ *  - `criado_em` e ISO UTC do Node (`…T01:30:00.000Z`); a tela e a planilha so convertem `AAAA-MM-DD HH:MM:SS` para Brasilia —
+ *    o `strftime` leva ao formato do banco (C1 da revisao da Fase 2).
+ *  - `tem_evidencia` so diz se a evidencia `ENTREGA_EPI` existe (C2). Nao recalcula hash por linha: a integridade se confere na
+ *    tela de EPI (verificar a entrega / a cadeia).
+ *  - SELECT proprio (I1): `COLUNAS_LISTA` da tela de EPI nao tem `setor` nem a evidencia. Os filtros sao os de `listarEntregas`
+ *    (`filtroDasEntregas`, fonte unica).
+ * require tardio: o par de services nao deve virar ciclo por acidente (molde de relatorioSolicitacoesCompraPendentes).
+ */
+async function relatorioEPIPorColaborador(db, filtros = {}) {
+  const { filtroDasEntregas } = require('./epiService');
+  const { where, params } = filtroDasEntregas(filtros || {});
+  return dbAll(db, `SELECT strftime('%Y-%m-%d %H:%M:%S', e.criado_em) AS criado_em, e.numero, e.colaborador_nome, e.matricula,
+      e.setor, e.material_codigo, e.material_nome, e.ca_numero, e.ca_validade, e.quantidade, e.tamanho,
+      CASE e.motivo WHEN 'PRIMEIRA_ENTREGA' THEN 'Primeira entrega' WHEN 'TROCA' THEN 'Troca' WHEN 'PERDA' THEN 'Perda'
+        WHEN 'DANO' THEN 'Dano' ELSE e.motivo END AS motivo,
+      e.entregue_por_nome,
+      CASE WHEN EXISTS (SELECT 1 FROM evidencias_assinatura_almoxarifado v WHERE v.contexto = 'ENTREGA_EPI' AND v.contexto_id = e.id)
+        THEN 'Sim' ELSE 'Não' END AS tem_evidencia
+    FROM entregas_epi_almoxarifado e
+    ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+    ORDER BY e.criado_em DESC, e.id DESC`, params);
 }
 
 // Nome ficou historico (Etapa 11, Task 2): ate a Etapa 11 so trazia PENDENTE. A aba

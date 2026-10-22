@@ -469,7 +469,9 @@ const RELATORIOS = {
   'ferramentas-emprestadas': {
     titulo: 'Ferramentas emprestadas',
     categoria: 'Gestão',
-    acao: null,
+    // Etapa 181 (RN-181.03): quem esta com que ferramenta e dado de pessoa — a mesma acao de GET /emprestimos desde a 180
+    // (B1177). Era `null`: PRODUCAO lia aqui o que a tela de ferramentas ja lhe negava.
+    acao: 'gerenciar_ferramentas',
     exportavel: true,
     nota: null,
     limite: null,
@@ -487,16 +489,37 @@ const RELATORIOS = {
   'epi-colaborador': {
     titulo: 'EPI por colaborador',
     categoria: 'Gestão',
-    acao: null,
+    // Etapa 181 (RN-181.03): as entregas de EPI (nome, matricula, setor) — a mesma acao das leituras da tela de EPI (178, F5-5).
+    acao: 'entregar_epi',
     exportavel: true,
-    nota: null,
+    nota: 'Fonte: as entregas de EPI com assinatura feitas pela tela de EPI (Etapa 178). Toda entrega pela tela grava a '
+      + 'assinatura na mesma transação — "Não" na coluna Assinatura é anomalia; a integridade (arquivo e cadeia) se confere na '
+      + 'tela de EPI. Empréstimos de ferramenta cadastrada como EPI não entram mais aqui: continuam em "Ferramentas emprestadas".',
     limite: null,
-    params: [],
+    // I2/I3 da revisao da Fase 2: tipos concretos e `exemplo` em todos (a varredura manda 'x' sem ele). O select de colaborador
+    // lista so os ativos — quem saiu nao e filtravel por aqui (letra B); o EPI e por numero porque a lista de materiais nao
+    // filtra EPI (letra B). Os nomes sao os que `filtroDasEntregas` le.
+    params: [
+      { nome: 'colaborador_id', rotulo: 'Colaborador', tipo: 'select', obrigatorio: false, opcoes_url: '/almoxarifado/aux/colaboradores', exemplo: 1 },
+      { nome: 'material_id', rotulo: 'EPI (id do material)', tipo: 'number', obrigatorio: false, exemplo: 1 },
+      { nome: 'de', rotulo: 'De', tipo: 'date', obrigatorio: false, exemplo: '2026-01-15' },
+      { nome: 'ate', rotulo: 'Até', tipo: 'date', obrigatorio: false, exemplo: '2026-01-15' },
+    ],
     colunas: [
+      { chave: 'criado_em', rotulo: 'Entregue em' },
+      { chave: 'numero', rotulo: 'Número' },
       { chave: 'colaborador_nome', rotulo: 'Colaborador' },
+      { chave: 'matricula', rotulo: 'Matrícula' },
       { chave: 'setor', rotulo: 'Setor' },
-      { chave: 'ferramenta', rotulo: 'EPI' },
-      { chave: 'data_retirada', rotulo: 'Retirada em' },
+      { chave: 'material_codigo', rotulo: 'Código' },
+      { chave: 'material_nome', rotulo: 'EPI' },
+      { chave: 'ca_numero', rotulo: 'CA' },
+      { chave: 'ca_validade', rotulo: 'Validade do CA' },
+      { chave: 'quantidade', rotulo: 'Quantidade' },
+      { chave: 'tamanho', rotulo: 'Tamanho' },
+      { chave: 'motivo', rotulo: 'Motivo' },
+      { chave: 'entregue_por_nome', rotulo: 'Entregue por' },
+      { chave: 'tem_evidencia', rotulo: 'Assinatura' },
     ],
     fn: null,
   },

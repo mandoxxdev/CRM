@@ -116,8 +116,11 @@ async function criarMaterial(db, over = {}) {
     const tipos = res.body.relatorios.map((r) => r.tipo);
     assert.ok(tipos.includes('indicadores'), JSON.stringify(tipos));
     assert.ok(tipos.includes('solicitacoes-compra'), JSON.stringify(tipos));
-    assert.strictEqual(tipos.length, Object.keys(RELATORIOS).length,
-      `GESTOR deveria ver todas as ${Object.keys(RELATORIOS).length} chaves (tem inventario e gerenciar_reposicao)`);
+    // Etapa 181 (RN-181.03): epi-colaborador (entregar_epi) e ferramentas-emprestadas (gerenciar_ferramentas) sao dado de
+    // pessoa e ficam com ADMINISTRADOR e ALMOXARIFE — o GESTOR tambem nao le a tela de EPI (178, F5-5) nem GET /emprestimos (180).
+    assert.ok(!tipos.includes('epi-colaborador') && !tipos.includes('ferramentas-emprestadas'), JSON.stringify(tipos));
+    assert.strictEqual(tipos.length, Object.keys(RELATORIOS).length - 2,
+      `GESTOR deveria ver todas as chaves menos as 2 de pessoa (tem inventario e gerenciar_reposicao)`);
 
     for (const { tipo } of res.body.relatorios) {
       const qs = tipo === 'materiais-cliente' ? `?cliente_id=${clienteId}` : '';
@@ -139,8 +142,11 @@ async function criarMaterial(db, over = {}) {
     assert.ok(!tipos.includes('custo-por-projeto'), JSON.stringify(tipos));
     // Etapa 129: perdas-por-motivo nasce gated (gerenciar_reposicao, B832) — 4 gated agora.
     assert.ok(!tipos.includes('perdas-por-motivo'), JSON.stringify(tipos));
+    // Etapa 181 (RN-181.03): os dois relatorios de pessoa — 6 gated agora.
+    assert.ok(!tipos.includes('epi-colaborador'), JSON.stringify(tipos));
+    assert.ok(!tipos.includes('ferramentas-emprestadas'), JSON.stringify(tipos));
     assert.ok(tipos.includes('indicadores'), 'indicadores tem acao:null — PRODUCAO deveria ve-lo');
-    assert.strictEqual(tipos.length, Object.keys(RELATORIOS).length - 4, JSON.stringify(tipos));
+    assert.strictEqual(tipos.length, Object.keys(RELATORIOS).length - 6, JSON.stringify(tipos));
 
     for (const { tipo } of res.body.relatorios) {
       const qs = tipo === 'materiais-cliente' ? `?cliente_id=${clienteId}` : '';
