@@ -76,7 +76,7 @@ export function montarFormDataEntrega(form, assinatura, chave) {
  * Fase 5 (M2): a chave de idempotencia de uma tentativa de envio (uuid v4). `crypto.randomUUID` so existe em contexto seguro
  * (https/localhost) — o tablet que abre o CRM por http no IP da rede nao o tem; `getRandomValues` existe nos dois.
  */
-export function novaChaveIdempotencia(cr = (typeof globalThis !== 'undefined' ? globalThis.crypto : undefined)) {
+export function novaChaveIdempotencia(cr = (typeof window !== 'undefined' ? window.crypto : undefined)) {
   if (cr && typeof cr.randomUUID === 'function') {
     try { return cr.randomUUID(); } catch (e) { /* contexto inseguro: cai no getRandomValues */ }
   }
