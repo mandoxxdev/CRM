@@ -1,6 +1,6 @@
 # Etapa 184 — A leitura da liberação por valor para de entregar nome e e-mail dos aprovadores
 
-> **Status:** 📝 **plano escrito (2026-10-22)** — falta a revisão da Fase 2, a execução (T1 → T2 → T3) e o fechamento. Feature **23**
+> **Status:** 🔧 **executada (2026-10-22): T1 `b23e60a2`, T2 `3383b4e5`, T3 `8467192f`, suítes verdes** — falta a revisão adversarial (Fase 5) e o fechamento. Feature **23**
 > (perfis, segurança e auditoria), item aberto da spec `specs/modulo-almoxarifado/23-perfis-seguranca-auditoria/README.md:709-712`
 > (letra **D (20)** das novidades, `docs/almoxarifado-novidades-por-etapa.md:16402-16408`).
 > Antes: Etapa 183 (ficha de EPI) — **não tocar** nos arquivos dela (outra sessão revisa a 183 em paralelo).
@@ -225,7 +225,63 @@ caixas marcadas), novidades (seção da Etapa 184, letra B abaixo, D (20) marcad
 
 ## Execução
 
-_(vazia — preencher task a task com hash, vermelho antes, controles e suítes.)_
+### T1 — feita, `b23e60a2`
+
+- `getConfigPublica` no serviço (exportada) e a rota GET chamando-a com `verIds: canConfigureAlmox(req.user) || isSystemAdmin(req.user)`.
+  `getConfigForApi`, `saveConfig`, `isAprovadorValor` e o PUT intocados.
+- Teste novo `server/tests/api/liberacaoValorLeitura.api.test.js` (12), na ordem da M1: 8 linhas do contrato (01/04/02, cada uma com
+  `deepStrictEqual` **e** `JSON.stringify` igual ao literal — M2) → 03 (premissa `a1@x.com` antes do laço) → 05 (PUT do ALMOXARIFE com o corpo
+  da configuração-base; PUT do admin almox 200 com `aprovadores`) → ressemear → 07 (`DROP TABLE usuarios`) por último.
+- **Vermelho antes:** 2/12 — os 8 com `aprovadorIds`/`aprovadores` a mais no diff do `deepStrictEqual`, o 03 com `@`/chave/nome nos 8, o 07 com
+  `500 no such table: usuarios`; os dois do 05 verdes (guarda de regressão). **Depois:** 12/12.
+- **Controles** (perl, âncora = 1, md5 antes/sabotado/restaurado, `cmp` ok em todos): (1) rota → `getConfigForApi`: caem os 8 + 03 + 07 (2/12);
+  (2) `|| perfil ALMOXARIFE`: cai **só** `[RN-184.01] ALMOXARIFE` (11/12); (3) `|| perfil PRODUCAO`: cai **só** `[RN-184.01] PRODUCAO sem perfil`
+  — o comum CONSULTA não cai; (4) `|| isAprovadorValor`: cai **só** `[RN-184.04]`; (5) só `canConfigureAlmox`: cai **só** `[RN-184.02] admin do
+  sistema` (super segue); (6) `souAprovador = false` no serviço: caem `[RN-184.04]`, admin do sistema e super (9/12); (7) PUT sem
+  `denyUnlessAlmoxAdmin`: cai **só** o `[RN-184.05] ALMOXARIFE` (200 com `aprovadores`).
+- Vizinhos do PUT sem mudar asserção: `auditoriaConfiguracoes` 23/0, `alcadaValorDepoisDaSeparacao` 40/0, `alcadaValorDepoisDaSeparacaoIntegracao`
+  10/0. Divergências: nenhuma.
+
+### T2 — feita, `3383b4e5`
+
+- `RequisicoesList.test.js` (bloco novo "Etapa 184", 2 testes): usuário `{ id: 7, role: 'user', perfil_almoxarifado: 'GESTOR' }` (não admin),
+  `GET` → `{ ativo: true, limite: 800, souAprovador: true }` mostra *Aprovações de valor*; com `souAprovador: false` não mostra.
+- `ConfiguracoesSomenteLeitura.test.js` (1 teste): `[RN-184.06] robustez: sem aprovadorIds a aba não quebra` — nome e comentário da M3 (afirma só
+  sem `toast.error`, limite 800, a lista de usuários renderizada e a frase de somente leitura; **não** afirma caixas desmarcadas).
+- Verde de primeira (sem vermelho natural, como o plano previa). **Controles:** (A) `RequisicoesList.js` lendo
+  `res.data?.aprovadores?.length > 0` → cai **só** `[RN-184.06] lista: aprovador sem configurar … mostra` (`Received: undefined`), 117/118;
+  (B) `ConfiguracoesAlmoxarifado.js` lendo `cfgRes.data.aprovadores.map((a) => a.id)` → caem o de robustez (`toast.error` chamado 1 vez) **e**
+  os dois da Etapa 126 que já usavam o formato reduzido (`[RN-05]` caixa desmarcada, `[RN-08]` `TypeError`), 22/25. md5 restaurado e `cmp` ok
+  nos dois. Divergência: nenhuma de código; o controle (B) derruba também testes antigos — esperado, eles já mockavam sem `aprovadores`.
+
+### T3 — feita, `8467192f`
+
+- `server/tests/api/liberacaoValorLeituraIntegracao.api.test.js` (6): serviço × rota nos 8 usuários (`JSON.stringify` igual); fixture × resposta
+  real; e o fluxo pela rota com as emendas **I1** (cria e semeia `usuarios` — 7 `a1@x.com`, 9, solicitante 18401 —, premissa `a1@x.com` antes
+  dos "sem `@`"; o PUT do admin almox responde **200**) e **I2** (requisição criada pelo solicitante 18401, não pelo 7 — premissa afirmada;
+  ALMOXARIFE: GET `{"ativo":true,"limite":1,"souAprovador":false}`, `aprovacoes-valor` 403 `Sem permissão para ver aprovações de valor`,
+  `aprovar-valor` 403 `Sem permissão para aprovar liberação por valor`, status inalterado; aprovador 7: GET `souAprovador: true`, a requisição
+  na fila, `aprovar-valor` **200**, status ≠ `AGUARDANDO_APROVACAO_VALOR` e `aprovador_valor_id = 7`).
+- Fixture `client/src/components/almoxarifado/__fixtures__/liberacaoValor.rota.json` (`aprovadorSemConfigurar`, `adminDoSistema`), conferida a
+  cada execução por chaves, tipos, JSON idêntico e ausência de `@`; `CRM_GRAVAR_FIXTURE=1` regrava. Dois Jest novos importam-na
+  (`RequisicoesList.test.js`: o aprovador vê *Aprovações de valor*; `ConfiguracoesSomenteLeitura.test.js`: a caixa do 7 marcada e
+  desabilitada, a de "Outra Pessoa" desmarcada). Os dois arquivos do client: 145/145.
+- **Vermelho antes:** 5/6 — só o da fixture, `fixture ausente` (gravada em seguida com `CRM_GRAVAR_FIXTURE=1`; o resto do fluxo já passava
+  porque a T1 estava feita — o vermelho que importa vem dos controles).
+- **Controles** (perl, âncora = 1, md5, restauro por cópia + `cmp`): (a) controle (5) da T1 **sem** regravar → caem a fixture (`adminDoSistema:
+  chaves da fixture != da resposta real`) e o serviço × rota (`SISADMIN` sem `aprovadorIds`), 4/6; **regravando** → cai o Jest da aba (`[RN-184.06,
+  fixture da rota] … caixa do aprovador 7` — `Expected: true, Received: false`), 144/145; rota e fixture restauradas (md5 `a8fd639d…` da fixture
+  igual ao versionado). (b) controle (1) da T1 sem regravar → 1/6: caem serviço × rota, fixture, os dois gestos (o GET 200 com `aprovadores`)
+  e o `[RN-184.03, rota]` (`tem aprovadores` com `a1@x.com` no corpo **200** — cai pelo e-mail, não por 500, como a I1 pede). (c, extra) o
+  `isAprovadorValor` ignorando a lista → caem a fixture (`souAprovador` false) e o gesto do aprovador 7, 4/6.
+- **Divergência:** o teste serviço × rota calcula o `verIds` com o predicado do contrato, então cai também no controle (a) — o plano previa só a
+  fixture. Fica: é a mesma regra afirmada por dois caminhos.
+
+### Suítes (uma vez cada, sequencial, depois da T3)
+
+- `test:api` 527/527 arquivos OK; `test:almoxarifado` 44/0; `test:validation` 4/0; `test:safealter` 3/0; `test:sqlite` 16/0.
+- Client: `CI=true npx react-scripts test --watchAll=false` 180 suítes, 2382/2382; `CI=true npx react-scripts build` *Compiled successfully*.
+- Próximo passo: revisão adversarial da Fase 5; depois o fechamento (skill `fechar-etapa`) — **não feito** nesta execução.
 
 ## Letra B proposta (para `docs/almoxarifado-novidades-por-etapa.md`)
 
