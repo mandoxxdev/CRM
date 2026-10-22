@@ -1,5 +1,7 @@
 # 21 — Relatórios, Dashboards e Indicadores
 
+> **+ Etapa 174 (2026-10-22, `97d3012f`, Fase 5 `9d1fcd1d`, `aa053fa8`): o *Consumo por OS* ganha Devolvido e Líquido e passa a contar as entregas de requisição; o quadro do painel ignora linhas só de devolução** — ver a seção "Etapa 174", no fim; o status não muda.
+
 > **+ Etapa 162 (2026-10-20, `e2d2306c`, Fase 5 `e1ac2cfa`): os nove relatórios, o painel e o indicador *no prazo* no dia de Brasília, a planilha na hora de Brasília (C401 resolvido, B1033, B1037, B1039)** — ver a seção "Etapa 162", no fim.
 
 > **+ Etapa 160 (2026-10-19, `eaf682e9`, Fase 5 `ff3e7d78`): no *Histórico de movimentações*, o usuário sem caixa (com o escape de antes) e o tipo aparado e em maiúsculas; a nota diz a regra nova (C393, B1020)** — ver a seção "Etapa 160", no fim; o status não muda.
@@ -216,3 +218,38 @@ previsto × realizado, que depende da 22).
   do bloco diziam "dia UTC" — era a régua da época, não erro; os dois trechos ficaram marcados com a mudança.*
 - [ ] **Os indicadores do Operacional (C403)** — **não mexidos (B1034)**: estão todos no `GET /api/operacional/dashboard-mes`, cujo único
   consumidor (`DashboardMES`) não é montado pelo `App.js`; quatro tabelas sem escritor; a consulta da manutenção pede colunas que não existem.
+
+## Etapa 174 (2026-10-22) — Consumo por OS com Devolvido e Líquido
+
+Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa174-entrega-com-os-e-consumo-por-os.md`. A saída da entrega com a OS está na
+feature 22 (seção "Etapa 174").
+
+### Contrato congelado (I1) — `reportService.relatorioConsumoPorOS`
+
+Uma query, `cancelado = 0`, agrupada por `material_id, os_id`:
+- `total_consumido` = `SAIDA`, `SAIDA_PRODUCAO`, `SAIDA_MONTAGEM`, `SAIDA_ASSISTENCIA` — **sem mudança** (régua histórica);
+- `devolvido` = `tipo IN TIPOS_DEVOLUCAO` (`ENTRADA_DEVOLUCAO` e o legado `DEVOLUCAO`) **menos** a devolução de destino `SUCATA` (I2, B1113 —
+  achada por `d.id = CAST(SUBSTR(m.referencia, 5) AS INTEGER) AND m.referencia = 'DEV-' || d.id`: a busca pela chave primária é da Fase 5,
+  `9d1fcd1d`; o texto sozinho fazia `SCAN d`) **OR** `tipo = 'ENTRADA' AND requisicao_id IS NOT NULL` (o estorno da exclusão — o saldo inicial
+  não tem requisição e fica fora);
+- `liquido = total_consumido − devolvido`; cada linha pela data **dela** (C2, B1114: com período, pode ser negativo);
+- `HAVING total_consumido > 0 OR devolvido > 0` — **a suíte não o protege sozinho**: o `WHERE` já filtra o tipo e `cancelado = 0`, então
+  nenhum grupo chega 0/0 (só com quantidade zero). Mantido como defesa do contrato; o teste prova o par (sem `WHERE` de tipo **e** sem
+  `HAVING` → vermelho);
+- `ORDER BY total_consumido DESC`. Registro (`reportRegistry.js`): colunas **Devolvido** e **Líquido**; a `nota` diz a régua, a sucata e a
+  data de cada linha. A exportação projeta pelas colunas.
+
+### Checklist
+
+- [x] RN-174.03 (I1, I2, I3, C2) — `97d3012f` (`consumoPorOsDevolvido.api.test.js`).
+- [x] Ponta a ponta 8/0/8 → 8/3/5 → sucata 8/3/5 — `94d18eac`.
+- [x] **Fase 5, item 2** — o quadro *Consumo por O.S.* do painel (`AlmoxarifadoDashboard.aggregateConsumoPorOS`) ignora linha com
+  `total_consumido` 0: a OS só de devolução não aparece com "Qtd. consumida 0" e o estado vazio volta (B1117) — `aa053fa8` (2 testes Jest).
+  **Correção:** o plano da T2 dizia "o dashboard soma só `total_consumido` (o `HAVING` o protege)" — **estava errado**: o `HAVING` deixa passar
+  exatamente essas linhas.
+- [x] **Fase 5, item 3** — o `NOT EXISTS` da sucata pela chave primária — `9d1fcd1d` (`EXPLAIN QUERY PLAN`: `SCAN d` → `SEARCH d USING INTEGER
+  PRIMARY KEY`).
+- [x] **Fase 5, item 4** — o tipo legado `DEVOLUCAO` conta (10/4/6); entrega 10, devolve 5, exclui → a exclusão estorna 5 e o relatório fica
+  10/10/0 — `d087bcfc`.
+- [ ] **Fora (letra D (174)):** quarentena depois sucateada continua contando como devolvida; devolução de destino SUCATA com a perna SUCATA
+  recusada fica fora do devolvido; o *Custo por projeto* não desconta a ENTRADA da exclusão (I4, de antes).

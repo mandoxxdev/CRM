@@ -1,5 +1,7 @@
 # 22 — Integrações (Engenharia, Produção, Compras, Projetos e Custos)
 
+> **+ Etapa 174 (2026-10-22, `4b8945a1`..`c3655b0f`): a saída da entrega grava a OS da requisição e o Consumo por OS enxerga as requisições; com projeto e OS de clientes diferentes, só o projeto (B1115). A emenda I5 da 172 ESTAVA ERRADA (não havia recusa nova)** — ver a seção "Etapa 174", no fim. O status não muda.
+
 > **Status:** 🟡 — a fatia de **solicitação de compra e custo por projeto foi entregue na Etapa 14**
 > (range `b276dca..2de7944`, 2026-08-25), a **fatia Compras / criação do pedido de compra foi
 > entregue na Etapa 38** (range `be71754..0a7e5c6`, 2026-09-16 — T1–T7 + onda de correção F1–F8) e o
@@ -1013,7 +1015,45 @@ texto continua casando pelo texto (as antigas e quem digitou).
 - [x] RN-172.05 — a reserva da requisição grava `os_id` (fila e aprovação) — `033f1164`.
 - [x] Ponta a ponta pela porta da cesta (usuário sem módulo) → pedido da mesma OS recebido → reserva para a requisição → aprovar, separar,
   entregar, nas duas ordens — `033f1164` (`requisicaoOsIdCasaReservaDaOs.api.test.js`, 10/10).
-- [ ] **I5 — a saída da entrega NÃO leva o `os_id`** (teste trava). Ligaria `avaliarRegrasVinculo`/`ownerRules` com a OS e poderia recusar na
-  entrega material já reservado (material de cliente de outro cliente). Consequência: o relatório **Consumo por OS** não conta o que sai por
-  requisição. **É a Etapa 174** (próxima tarefa do plano da 172).
+- [x] ~~**I5 — a saída da entrega NÃO leva o `os_id`** (teste trava). Ligaria `avaliarRegrasVinculo`/`ownerRules` com a OS e poderia recusar na
+  entrega material já reservado (material de cliente de outro cliente).~~ **Feito na Etapa 174 (`4b8945a1`), e a justificativa ESTAVA
+  ERRADA** — ver a seção "Etapa 174" abaixo: não havia recusa nova; sem projeto, a entrega de material de cliente **já** recusava sem OS. O
+  teste que travava "a saída NÃO leva os_id" (`requisicaoOsIdCasaReservaDaOs`) foi invertido.
 - [ ] **M2 — OS excluída com requisição vinculada:** tolerado (a requisição não casa com nada; o texto continua). Letra D (172).
+
+## Etapa 174 (2026-10-22) — a entrega grava a OS e o Consumo por OS enxerga as requisições
+
+Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa174-entrega-com-os-e-consumo-por-os.md`. O relatório está na feature 21 (seção
+"Etapa 174"); a posição por cliente, na feature 13.
+
+> ⚠️ **CORREÇÃO — a emenda I5 da Etapa 172 (checklist acima e plano da 172) ESTAVA ERRADA.** Ela dizia que levar o `os_id` na saída da
+> entrega "poderia recusar na entrega material já reservado" e por isso o deixou de fora. Medido na Fase 0 da 174: `avaliarRegrasVinculo`
+> só **afrouxa** com `os_id`; `ownerRules.assertSaidaPermitida` olha o **projeto primeiro** e, sem projeto, a entrega de material de cliente
+> **já recusava** (sem OS nem projeto → *"…so pode sair com OS ou projeto DESSE cliente…"*). Com o `os_id` do **mesmo** cliente ela passa a
+> **funcionar**; com OS de outro cliente recusa como antes (só muda a frase); material próprio não muda. Não havia risco de recusa nova.
+
+### Contratos
+
+- **RN-174.01** — `requisitionService.entregarSemTrava`: a SAÍDA grava `os_id` da requisição (`osIdDaSaida`). **Fase 5 (B1115):** com
+  `projeto_id` e o cliente do projeto ≠ cliente da OS (`Number(null)` = 0 dos dois lados), a SAÍDA **não** grava `os_id` — só o projeto;
+  lido uma vez antes do laço das baixas.
+- **RN-174.02 + C1** — a ENTRADA do estorno da exclusão grava o `os_id` **da saída** que estorna (`m.os_id` no `SELECT` das saídas); ramo
+  legado: `null`.
+- **RN-174.04** — a regra do dono enxerga a OS (efeito do RN-01, sem mudança em `ownerRules`).
+- **RN-174.05** — saídas antigas não são preenchidas (casar texto com OS é proibido — P.O. 16/09).
+
+### Checklist
+
+- [x] RN-174.01/02/04 + C1 — `4b8945a1` (`entregaComOsId.api.test.js`).
+- [x] Integração pedido com OS (171) → requisição com OS (172) → entrega → devolução → relatório — `94d18eac`
+  (`consumoPorOsPontaAPonta.api.test.js`).
+- [x] **Fase 5, item 1 (B1115)** — projeto do cliente A + OS do cliente B: a saída sem `os_id`; a posição do cliente A mostra só o projeto; o
+  consumo por OS de B sem o material; a exclusão estorna com `os_id` null; controle mesmo cliente com a OS — `c3655b0f`.
+- [ ] **Fora (letra D (174)):** `passaNaRegraDoDono` da chegada e os avisos do recebimento continuam olhando só o projeto (mais conservadores
+  que a entrega — pulam requisição que a entrega aceitaria; nada é entregue errado); o Custo por projeto não desconta a ENTRADA da exclusão (I4,
+  de antes).
+- [ ] **M2** (172) continua: OS excluída com requisição vinculada é tolerada; na entrega, material de cliente recusa *"OS informada nao
+  existe"*, material próprio passa (sem FK).
+
+**Falta para 🟢 (não mudou):** Engenharia/BOM e Produção/OP. Próxima da fatia OS: **Etapa 176** — entrada de material de cliente com OS
+opcional (plano da 174, "próxima tarefa detalhada").

@@ -1,17 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-22 (Etapas 172, 173 e 175) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-22 (Etapas 172, 173, 174 e 175) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173 e 175) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174 e 175) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172, 173 e 175 ENTREGUES · em andamento: Etapa 174)
+> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172, 173, 174 e 175 ENTREGUES · próxima: Etapa 176)
+>
+> **O desenvolvimento parou aqui: Etapa 174 fechada — 2026-10-22.** **A entrega grava a OS, e o *Consumo por OS* passa a enxergar as
+> requisições**: a entrega da requisição com **OS cadastrada** entra no relatório, que ganha **Devolvido** e **Líquido** (a devolução para
+> sucata não conta; com período, o líquido pode ser negativo); material de cliente sai pela OS do próprio cliente e **Materiais de Clientes**
+> mostra a OS em **Aplicado em**. Só as entregas feitas depois desta versão contam (aviso **C429**). Nada a rodar antes do deploy.
+> **Próxima: Etapa 176** — entrada de material de cliente com OS opcional (o que entra fica reservado para a OS); ver a próxima tarefa no
+> plano da 174.
 >
 > **Etapa 175, 2026-10-22.** **Editar a ferramenta pela tela**: botão **Editar** em toda linha de **Almoxarifado → Ferramentas**, em
 > qualquer status; campo apagado apaga o gravado; patrimônio de outra ferramenta recusado. Só tela; nada a rodar antes do deploy. Próxima
 > desta frente: a assinatura na entrega/empréstimo de ferramenta e EPI, que espera os formulários da empresa.
 >
-> **O desenvolvimento parou aqui: Etapas 172 e 173 fechadas — 2026-10-22** (duas frentes em paralelo). A **Etapa 173 (F2 abre o cadastro
+> **Etapas 172 e 173 fechadas — 2026-10-22** (duas frentes em paralelo). A **Etapa 173 (F2 abre o cadastro
 > completo do fornecedor)**: no pedido de compra, na cotação e na tela do grupo homologado, a tecla **F2** ou o botão **+ Novo fornecedor F2**
 > abre a ficha completa numa janela, e o fornecedor salvo já fica escolhido sem salvar o pedido; o cadastro de 3 campos do grupo homologado
 > virou a ficha completa. Só tela; nada a rodar antes do deploy.
@@ -20,7 +27,7 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > enviar)**: a tela **Solicitar Material** dos módulos de escritório ganhou o campo **Número da OS** — sem ele, desde 16/09 nenhum envio
 > passava (aviso **C428**, resolvido); as duas telas de nova requisição ganharam a lista opcional **OS cadastrada**, que liga a requisição à OS
 > de verdade e a faz pegar o material comprado para a OS pelo vínculo. Nada a rodar antes do deploy (a coluna nova é criada no boot).
-> **Próxima: Etapa 174** (em andamento) — a saída da entrega com a OS, para o relatório **Consumo por OS**
+> **Próxima: Etapa 174** (feita) — a saída da entrega com a OS, para o relatório **Consumo por OS**
 > contar o que sai por requisição; ver a próxima tarefa no plano da 172.
 >
 > **Etapa 171, 2026-10-22.** A **Etapa 171 (pedido de compra vinculado a uma OS — a pergunta da
@@ -6857,6 +6864,49 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 174 — A entrega grava a OS, e o "Consumo por OS" passa a enxergar as requisições (ENTREGUE — 2026-10-22)
+
+**O que mudou, em uma frase:** a entrega de uma requisição ligada a uma **OS cadastrada** passa a contar no relatório **Consumo por OS**, que
+ganha as colunas **Devolvido** e **Líquido**.
+
+**O problema que ela resolve.** O relatório **Consumo por OS** só contava a saída lançada à mão em **Movimentações** com a OS. Tudo o que saía
+por requisição — o caminho normal do galpão — ficava fora: a OS parecia não ter gasto nada. E o material **do cliente** não saía por
+requisição sem projeto, mesmo com a OS do próprio cliente escolhida.
+
+| Antes | Agora |
+|---|---|
+| A entrega de requisição não aparecia em OS nenhuma do relatório | A entrega da requisição com **OS cadastrada** aparece na OS (só as entregas feitas depois desta versão) |
+| Só **Total consumido** | **Total consumido** (igual) + **Devolvido** + **Líquido** |
+| Devolver ou excluir a requisição entregue não mudava a OS | Entra em **Devolvido** (a devolução para sucata, não) |
+| Material de cliente, requisição com a OS do cliente e sem projeto: a entrega recusava | Entrega, e **Materiais de Clientes → Aplicado em** mostra a OS |
+
+**Roteiro de teste (10 minutos — com um usuário Administrador ou Almoxarife).** Prepare uma OS aberta (**Fábrica → Ordens de Serviço → Nova
+OS**, ex.: *OS-2026-074*) e um material nosso com saldo (ex.: *PARAF-M8*).
+
+1. **Almoxarifado → Requisições (almox.) → Nova Requisição**, **OS cadastrada** = *OS-2026-074*, 10 de *PARAF-M8*. Envie, aprove, separe e
+   entregue.
+2. **Almoxarifado → Relatórios → Consumo por OS**, **Consultar** sem filtro: a linha *PARAF-M8* com **Total consumido** 10, **Devolvido** 0,
+   **Líquido** 10. A coluna **OS** traz o código interno da OS (use-o no filtro **OS** para ver só ela). O rodapé termina em *"… com filtro de
+   período o líquido pode ficar negativo (saída antes do período, devolução dentro)."*
+3. **Almoxarifado → Devoluções → Nova devolução**: 3 de *PARAF-M8*, escolhendo a saída dessa entrega, destino **Estoque**. Consulte de novo:
+   10 / 3 / 7.
+4. Outra devolução de 1, destino **Sucata**: o relatório continua 10 / 3 / 7.
+5. **Exportar XLSX**: a planilha tem **Devolvido** e **Líquido** com 3 e 7.
+6. Faça outra requisição da mesma OS com 6, entregue-a e **exclua** (estoque volta): a linha soma 6 no consumido **e** 6 no devolvido.
+7. **Almoxarifado → Dashboard**, quadro **Consumo por O.S.**: a OS aparece com o consumido (16).
+8. **Material de cliente.** Um material com **Proprietário** = um cliente (ex.: *Metalúrgica X*), com saldo, e uma OS cadastrada desse
+   cliente. Requisição com essa OS, entregue: passa. **Almoxarifado → Materiais de Clientes**, *Metalúrgica X*: **Aplicado em** mostra a OS.
+   Com uma OS de **outro** cliente, a entrega recusa: *"⟨material⟩: Material ⟨código⟩ pertence ao cliente Metalúrgica X, mas a OS ⟨número⟩ e
+   do cliente ⟨outro⟩. Material de cliente so pode ser aplicado em trabalho do proprio dono — troque o vinculo, ou use o material equivalente
+   do estoque proprio."*
+
+**O que esta etapa não cobre.** As entregas feitas **antes** desta versão não ganham a OS (continuam fora do relatório — aviso **C429**). A
+requisição que só **digita** o número da OS não leva a OS. Com projeto e OS de clientes diferentes (só pela integração) a saída leva só o
+projeto (**B1115**). O **Custo por projeto** não desconta o estorno da exclusão (de antes). Nada a rodar antes do deploy.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos provam pelas rotas do servidor (e o quadro do
+Dashboard em jsdom), escrito para você conferir à mão.
 
 ## Etapa 175 — Editar a ferramenta pela tela (ENTREGUE — 2026-10-22)
 

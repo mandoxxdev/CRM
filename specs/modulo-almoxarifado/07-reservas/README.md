@@ -613,4 +613,4 @@ Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa172-requisicao-com-o
   requisição (antes `reqRow.os_id` era de coluna inexistente — sempre `null`). Efeito aceito: essas reservas entram em
   `relatorioReservadoPorOS` — `033f1164`.
 - [x] **RN-172.04** — a conversão da reserva da OS na aprovação e a fila da OS na chegada casam a requisição com `os_id` **só** pelo id — `033f1164`.
-- [ ] **Fora:** a saída da entrega não leva o `os_id` (I5, Etapa 174).
+- [x] ~~**Fora:** a saída da entrega não leva o `os_id` (I5, Etapa 174).~~ Feita na Etapa 174 (`4b8945a1`; a I5 estava errada — feature 22).

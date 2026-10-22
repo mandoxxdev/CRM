@@ -2008,7 +2008,8 @@ Os status e as passagens permitidas entre eles são fixos; qualquer tentativa fo
 - **OS cadastrada** — opcional, ao lado do **Número da OS**, nas duas telas. É uma lista das OS (número e status); escolher uma preenche o
   **Número da OS** com o número dela e o trava; a opção *Digitar outro número* limpa a escolha e destrava o campo. Com a OS escolhida, a
   requisição fica **ligada** àquela OS: é pelo vínculo, e não pelo texto, que ela leva o material comprado para a OS (9.3e), e o número gravado
-  é sempre o da OS. Na cesta e na Nova Requisição dos módulos, a lista traz as **300 OS abertas mais recentes** (sem as *cancelado*,
+  é sempre o da OS. Na entrega, a saída registra essa OS — é por ela que a entrega conta no relatório **Consumo por OS** (21d) e que o material
+  de cliente pode sair pela OS do próprio cliente (16.4). Na cesta e na Nova Requisição dos módulos, a lista traz as **300 OS abertas mais recentes** (sem as *cancelado*,
   *cancelada*, *concluido*, *concluida* e *encerrada*); na Nova Requisição do Almoxarifado, as 300 mais recentes **de qualquer status** — a
   requisição para uma OS já fechada é aceita. Se a lista não carregar, a tela avisa *"Não foi possível carregar as OS cadastradas — digite o
   número abaixo."* (na cesta) ou *"… — digite o número ao lado."* (na Nova Requisição), e o envio segue pelo número digitado. Pela integração,
@@ -5469,6 +5470,13 @@ Esta é a regra mais importante da seção, e ela é verificada **no momento da 
 
 Quando os dois lados existem, o **projeto** tem precedência sobre a OS na hora de identificar o cliente do vínculo.
 
+**Na entrega de requisição**, o vínculo é o da requisição: o projeto dela e a **OS cadastrada** escolhida nela (7.2) — o número da OS apenas
+digitado não conta como vínculo. Assim, a requisição de material de cliente com a OS cadastrada do próprio cliente entrega mesmo sem projeto;
+com a OS de outro cliente, recusa com a frase da tabela acima, precedida do nome do material (*"⟨material⟩: Material CHP-0001 pertence ao
+cliente Metalúrgica X, mas a OS 4512 e do cliente Indústria Y. …"*), e nada sai; sem OS cadastrada e sem projeto, recusa com a primeira frase
+da tabela. A OS gravada na saída é a da requisição — **exceto** quando a requisição tem projeto e o cliente do projeto é diferente do cliente
+da OS: aí a saída registra só o projeto (que é o vínculo que a regra aceitou), para que o material não apareça aplicado na OS de outro cliente.
+
 O erro que essa regra impede é o mais caro da operação, e ele **não é erro de estoque**: o número fecha perfeitamente. É erro contratual — o cliente cobra onde a chapa dele foi aplicada, e a chapa foi para o equipamento de outro.
 
 **Há uma saída que a garantia não cobre, e ela é da mesma família da devolução ao dono:** a
@@ -5548,7 +5556,7 @@ Em **Almoxarifado → Materiais de Clientes**, escolhe-se o cliente e o sistema 
 | **Consumido** | tudo que saiu por aplicação, perda, sucata, consumo em terceiro e devolução ao fornecedor |
 | **Devolvido** | o que voltou para o cliente (coluna separada, de propósito) |
 | **Saldo** | o que está no galpão agora |
-| **Aplicado em** | a lista de OS e projetos onde aquele material foi usado, com a quantidade de cada |
+| **Aplicado em** | a lista de OS e projetos onde aquele material foi usado, com a quantidade de cada — inclusive o que saiu por entrega de requisição, pela OS cadastrada e pelo projeto da requisição (16.4) |
 
 Os números **saem do livro de movimentações**, não de contadores paralelos: a conta que o cliente faz de cabeça — **recebido − consumido − devolvido = saldo** — fecha. Movimentações estornadas não contam (o estorno é visível no livro, mas não pesa na posição). Material de cliente **inativo** não aparece nesta tela nem no relatório — por isso o sistema não deixa inativar material com saldo (2.11): o caminho é devolver ao cliente antes.
 
@@ -6745,6 +6753,37 @@ permissão de um relatório simplesmente não o vê no menu; forçar o endereço
   de consumo (por OS, por período, mais consumidos) contam apenas as saídas diretas de
   produção; o indicador de giro conta tudo que debita o patrimônio (incluindo sucata e
   perda). Cada rodapé diz qual régua usa.
+
+### Consumo por OS
+
+No grupo **Movimentações**. Uma linha por material e OS, com **Código**, **Material**, **Total consumido**, **Devolvido**, **Líquido** e
+**OS** (o código interno da OS — o mesmo que se digita no filtro **OS**). Filtros opcionais: **OS**, **Data início** e **Data fim**. Ordem: do
+maior consumido para o menor.
+
+- **Total consumido** — as saídas diretas com a OS, não estornadas: a saída lançada em **Movimentações** com a OS e a **entrega de
+  requisição** ligada a uma **OS cadastrada** (7.2, 16.4). A requisição que só tem o número da OS digitado não leva a OS para a saída, e as
+  entregas registradas antes de a entrega passar a gravar a OS também não a têm — nos dois casos a saída não aparece em OS nenhuma aqui
+  (ela continua no **Extrato** do material e no **Histórico de movimentações**).
+- **Devolvido** — o que voltou daquela OS, não estornado: as devoluções com a OS (a devolução que cita uma saída herda a OS dela; a avulsa,
+  a OS informada) de destino **Estoque** ou **Quarentena**, e o estorno feito ao **excluir uma requisição entregue** (que leva a OS da saída
+  que estorna). A devolução de destino **Sucata** **não** conta: a peça não voltou a ser usável. O estorno de uma devolução a tira do
+  devolvido.
+- **Líquido** = **Total consumido** − **Devolvido**.
+- **Cada lançamento conta pela data dele.** Com período, o líquido pode ficar negativo: a saída em setembro e a devolução de 3 em outubro, consultando só outubro, dão *0 / 3 / −3*. A OS que só teve devolução no
+  período, ou só devolução avulsa (sem saída citada), aparece com consumido 0 e líquido negativo — mesmo sem filtro de período.
+
+O rodapé diz: *"Total consumido conta apenas saídas diretas (SAIDA, SAIDA_PRODUCAO, SAIDA_MONTAGEM, SAIDA_ASSISTENCIA) — régua histórica
+deste relatório; o indicador de giro conta todo débito de patrimônio. Devolvido soma as devoluções (estoque e quarentena) e o estorno da
+exclusão de requisição entregue; devolução para sucata não conta (a peça não voltou a ser usável). Líquido = consumido − devolvido. Cada
+lançamento conta pela data dele: com filtro de período o líquido pode ficar negativo (saída antes do período, devolução dentro)."* A planilha
+exportada traz as mesmas colunas.
+
+Uma devolução para **Quarentena** conta como devolvida mesmo que a peça seja sucateada depois na inspeção — o relatório olha o destino
+declarado na devolução, não o destino final da peça.
+
+O quadro **Consumo por O.S.** do **Dashboard** é um resumo deste relatório: soma só o **Total consumido** por OS, nos últimos 30 ou 90
+dias, e mostra as dez maiores. A OS que no período só teve devolução não aparece; sem nenhuma OS com consumo, o quadro diz *"Nenhum consumo
+vinculado a O.S. no período"*.
 
 ### Saldo por lote, séries e saldos comprometidos
 

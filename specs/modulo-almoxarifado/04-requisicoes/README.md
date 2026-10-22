@@ -475,7 +475,7 @@ só do Comercial; não havia 403 (a rota é cross-módulo).
   `os_id` número ou `null` — `a2a049bd` (merge `8c5f15a1`); o teste da T0 acompanhou — `8a08523f`.
 - [x] **Fase 5** — rascunho sem OS travado por teste no client — `c801e899`; regex de fonte redundantes fora — `ffbbaae4`.
 - [ ] **Fora, declarado (letra D (172)):** não há edição de requisição (I1 — RN-172.06 vale só para a cópia); a saída da entrega **não** leva o
-  `os_id` (I5 — é a Etapa 174); a lista do almoxarifado (`/almoxarifado/aux/ordens-servico`) mostra OS fechada; OS excluída com requisição
+  `os_id` (I5 — *feita na Etapa 174, `4b8945a1`; a justificativa da I5 estava errada, ver feature 22*); a lista do almoxarifado (`/almoxarifado/aux/ordens-servico`) mostra OS fechada; OS excluída com requisição
   vinculada é tolerada (M2).
 
 **Spec errada, dita:** a "próxima tarefa" da Etapa 171 pedia "select de OS na nova requisição" — **como obrigatório, contrariaria a RN-A**

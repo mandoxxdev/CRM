@@ -1,5 +1,7 @@
 # 13 — Materiais Pertencentes a Clientes
 
+> **+ Etapa 174 (2026-10-22, `4b8945a1`, Fase 5 `c3655b0f`): a posição por cliente passa a mostrar em *Aplicado em* as entregas por requisição ligadas a uma OS cadastrada; com projeto e OS de clientes diferentes, só o projeto (B1115)** — ver a seção "Etapa 174", no fim. O status não muda.
+
 > **+ Etapa 170 (2026-10-20, `3fb6aa0e`): o *Gerado em* do PDF de posição do cliente no dia de quem gera (B1082)** — ver a seção "Etapa 170", no fim. O status não muda.
 
 > **Status:** 🟢 — **Etapa 8 entregue em 2026-08-12** (`f26b635..5b5eb55`) **+ Etapa 123 (2026-10-16, `c97fe07f`): o dono do material tem de
@@ -342,3 +344,18 @@ Só exibição — nenhuma rota, consulta, valor gravado ou porta de saldo mudou
 - [x] O *Gerado em* do PDF de posição no dia do computador de quem gera — antes o dia UTC (`{ timeZone: 'UTC' }`: das 21h à meia-noite,
   o de amanhã); `geradoEm` ilegível → hoje (antes *Invalid Date* no papel). O PDF é montado no **navegador** (o fuso do servidor não entra).
   `3fb6aa0e`; do clique ao papel em `9353c1d5`.
+
+## Etapa 174 — a posição por cliente enxerga as entregas por requisição (2026-10-22)
+
+Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa174-entrega-com-os-e-consumo-por-os.md`. Nenhuma linha de
+`clienteEstoqueService.posicaoPorCliente` mudou: as **aplicações** (`mv.os_id`/`mv.projeto_id` das saídas de consumo) passam a incluir as
+entregas por requisição porque a SAÍDA da entrega agora grava o `os_id` da requisição (feature 22, RN-174.01).
+
+- [x] Material de cliente sem projeto, com a OS cadastrada do **mesmo** cliente: a entrega passa (antes recusava *"…so pode sair com OS ou
+  projeto DESSE cliente…"*) e a aplicação aparece na OS — `4b8945a1`.
+- [x] **Fase 5 (B1115)** — requisição com projeto do cliente A e OS do cliente B: o projeto vence na regra do dono e a entrega passa; antes, a
+  saída gravava a OS de B e a posição do cliente A mostrava *"aplicado na OS de B"* (e o consumo por OS de B somava material de A). Agora a
+  saída leva só o projeto; com projeto e OS do mesmo cliente, a aplicação mostra os dois — `c3655b0f` (teste pela rota
+  `GET /api/almoxarifado/materiais-cliente/posicao`, nos dois cenários).
+- [ ] **Fora:** as entregas antigas não ganham a OS (B1118) — a posição continua mostrando-as só se tinham projeto; requisição que só digita o
+  número da OS não leva a OS.

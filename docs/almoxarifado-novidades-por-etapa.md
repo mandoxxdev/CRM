@@ -11,9 +11,14 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-22):** **Etapa 175 fechada** (**editar a ferramenta pela tela** — o primeiro passo do pedido de
+> **Onde o desenvolvimento está (2026-10-22):** **Etapa 174 fechada** (**a entrega grava a OS, e o *Consumo por OS* passa a enxergar as
+> requisições** — a entrega de requisição ligada a uma OS cadastrada entra no relatório, que ganha **Devolvido** e **Líquido**; material de
+> cliente sai pela OS do próprio cliente; **Materiais de Clientes** mostra a OS onde foi aplicado; nada a rodar antes do deploy; decisões
+> **B1111** a **B1119** — **a B1115 pede um olhar** (projeto e OS de clientes diferentes); aviso de número **C429**). **Próxima: Etapa 176** —
+> entrada de material de cliente com OS opcional (**B1119**: deduzida, a pergunta ao cliente aguarda resposta).
+> *(Também em 2026-10-22: **Etapa 175 fechada** (**editar a ferramenta pela tela** — o primeiro passo do pedido de
 > ferramentas/EPI da usuária de Compras que não depende dos formulários da empresa: botão **Editar** em toda linha de **Almoxarifado →
-> Ferramentas**; só tela, nada a rodar antes do deploy; decisões **B1130** e **B1131**). A **174** está em andamento em outra frente.
+> Ferramentas**; só tela, nada a rodar antes do deploy; decisões **B1130** e **B1131**). A **174** estava em andamento em outra frente.)*
 > *(Também em 2026-10-22: **Etapa 173 fechada** (**F2 abre o cadastro completo do fornecedor** — o pedido e a
 > reclamação da usuária de Compras: no pedido de compra, na cotação e no grupo homologado, a tecla **F2** ou o botão **+ Novo fornecedor F2**
 > abre a ficha completa numa janela, e o fornecedor salvo já fica escolhido; o cadastro de 3 campos do grupo homologado saiu; só tela, nada
@@ -4124,7 +4129,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1110, B1120 a B1124 e B1130 a B1131; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124 e B1130 a B1131; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -12154,6 +12159,56 @@ material tem (Etapa 126) — cadastro de ferramenta é raro e feito por uma pess
 emprestada, bloqueada ou perdida é tão legítimo quanto de uma disponível, e a edição não toca o status (só as ações da linha o mudam).
 **Descartado:** só em *Disponível*. **Reversível:** `735f7c5d`.
 
+**B1111 (NOVA, da Etapa 174; decisão do agente) — a saída da entrega grava a OS cadastrada da requisição.** Com ela, o **Consumo por OS** conta o
+que sai por requisição, e a regra do dono do material passa a enxergar a OS: material de cliente sem projeto e com OS do **mesmo** cliente
+entrega (antes recusava por falta de vínculo); com OS de **outro** cliente recusa como antes (muda só a frase: diz a OS e o cliente dela).
+Material nosso: nada muda. A Etapa 172 tinha deixado a saída **sem** a OS por medo de recusa nova na entrega — **esse medo estava errado**
+(medido na Fase 0: sem projeto, a entrega de material de cliente já recusava; a OS só **acrescenta** um vínculo válido). **Descartado:**
+continuar sem a OS (o relatório seguiria cego para requisição). **Reversível:** `4b8945a1`.
+
+**B1112 (NOVA, da Etapa 174; decisão do agente) — a entrada do estorno da exclusão leva a OS da SAÍDA que ela estorna, não a da requisição.**
+A exclusão estorna saída por saída; a entrega feita antes desta versão tem a saída sem OS, e o estorno dela também fica sem OS. Sem isso, a
+requisição entregue antes e excluída depois daria na OS consumido 0, devolvido 10, líquido −10. O estorno da exclusão conta em **Devolvido**.
+**Descartado:** a OS da requisição. **Reversível:** `4b8945a1`, `97d3012f`.
+
+**B1113 (NOVA, da Etapa 174; decisão do agente) — devolução para SUCATA não conta como devolvida na OS.** A peça não voltou a ser usável; o
+**Líquido** da OS não cai. A devolução para **Quarentena** conta (a peça voltou ao galpão e pode ser liberada); o **Retrabalho** não gera
+devolução e fica fora. **Descartado:** contar toda devolução (o líquido diria que a OS gastou menos do que gastou). **Reversível:** `97d3012f`.
+
+**B1114 (NOVA, da Etapa 174; decisão do agente) — no relatório, cada lançamento conta pela data dele; com período, o líquido pode ficar
+negativo.** Saída em setembro e devolução em outubro, consultando só outubro: 0 / 3 / −3. Está escrito no rodapé do relatório.
+**Descartado:** atribuir a devolução à data da saída citada (não serve para o estorno da exclusão, que não cita saída; e a devolução avulsa
+não tem saída). **Reversível:** `97d3012f`.
+
+**B1115 (NOVA, da Etapa 174; decisão do agente, da revisão adversarial) — requisição com projeto e OS de clientes diferentes: a saída não
+grava a OS.** Na entrega, o projeto vence na regra do dono (a entrega passa se o projeto for do dono do material); gravar a OS do outro
+cliente fazia a tela **Materiais de Clientes** do cliente A mostrar *"aplicado na OS de B"* e o **Consumo por OS** de B somar material de A.
+Agora, com projeto e o cliente do projeto diferente do cliente da OS, a saída leva só o projeto (e o estorno da exclusão acompanha,
+**B1112**); com o mesmo cliente, ou sem projeto, grava a OS como na **B1111**. Hoje só a integração cria requisição com projeto (as telas não
+têm o campo). **Descartado:** mostrar só o projeto no relatório do cliente (esconderia a OS também no caso certo). **Reversível:** `c3655b0f`.
+
+**B1116 (NOVA, da Etapa 174; decisão do agente) — o "Total consumido" do Consumo por OS não muda de significado; Devolvido e Líquido são
+colunas novas.** O total continua sendo as saídas diretas (régua histórica do relatório), e a planilha exportada traz as duas colunas novas.
+Linhas **só de devolução** (ex.: devolução avulsa com a OS digitada) passam a aparecer, com consumido 0. **Descartado:** trocar o total pelo
+líquido (mudaria em silêncio o número que já se lia). **Reversível:** `97d3012f`.
+
+**B1117 (NOVA, da Etapa 174; decisão do agente, da revisão adversarial) — o quadro *Consumo por O.S.* do Dashboard continua só com o
+consumido.** As linhas só de devolução do relatório ficam fora (senão a OS aparecia com *Qtd. consumida 0* e o *"Nenhum consumo vinculado a
+O.S. no período"* sumia). **Descartado:** levar Devolvido/Líquido para o quadro (é um resumo; o relatório tem as colunas). **Reversível:**
+`aa053fa8`.
+
+**B1118 (NOVA, da Etapa 174) — as entregas antigas não ganham a OS.** Preencher a OS das saídas de antes exigiria casar o texto da requisição
+com a OS — proibido pela decisão do P.O. de 16/09 (o número digitado não é cadastro). Consequência: o **Consumo por OS** conta as entregas a
+partir desta versão (**C429**).
+
+**B1119 (NOVA, da Etapa 174) — a próxima etapa (176): entrada de material de cliente com OS opcional.** *(A 175 é de outra frente.)* A
+necessidade foi **deduzida** da resposta do cliente — *"industrialização = material do cliente que fica em nosso estoque; nós fazemos a mão
+de obra"* —, **não** pedida assim. A pergunta **"o material do cliente já vem para uma OS específica?"** foi feita e **aguarda resposta**: por
+isso a 176 faz o campo **OS** da entrada de material de cliente **opcional** e reversível (com a OS, o que entrou fica reservado para ela,
+como o pedido de compra com OS da 171; sem, nada muda). Se a resposta for "não", o campo fica sem uso e sai. Ver a "próxima tarefa
+detalhada" no plano da 174. As decisões que esperam vocês: as mesmas da **B1110**; a **B1111** a **B1118** são reversíveis — **a B1115 pede
+um olhar** (projeto e OS de clientes diferentes: qual dos dois é o certo?).
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -15680,6 +15735,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      estar vinculada a uma OS"* e a tela não tinha onde digitar a OS. Nada era gravado. Provado por execução na Etapa 172 (`c34eab10`) e
      corrigido (`a2a049bd`). **O que fazer:** avisar quem usa essas telas que voltou a funcionar — quem tentou nesse período pode ter pedido
      material por fora (e-mail, verbal, pela Fábrica); não há registro no sistema das tentativas recusadas.
+429. **NOVO (da Etapa 174) — mudança de número: o *Consumo por OS* passa a contar as entregas de requisição, a partir desta versão.** Depois
+     do deploy, a entrega de uma requisição ligada a uma **OS cadastrada** entra no **Total consumido** da OS — o número da OS **sobe** em
+     relação ao que se via (antes só a saída lançada à mão em Movimentações contava). As entregas **anteriores** continuam fora (**B1118**):
+     uma OS com entregas antes e depois do deploy mostra só as de depois. A requisição que só digitou o número da OS (sem **OS cadastrada**)
+     também fica fora. E há duas colunas novas, **Devolvido** e **Líquido**; com filtro de período o **Líquido** pode sair negativo
+     (**B1114**). **O que fazer:** ao comparar o consumo de uma OS com o de meses anteriores, lembrar que antes desta versão as requisições não
+     contavam; para o histórico, o **Extrato** do material e o **Histórico de movimentações** continuam mostrando as saídas de requisição.
 ### D. Limitações declaradas— são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -17011,13 +17073,24 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(174) A entrega com a OS e o Consumo por OS, o que ficou de fora.** (1) A devolução para **Quarentena** conta como devolvida (**B1113**) —
+  e continua contando se a peça for **sucateada depois**, na inspeção da quarentena: o relatório não acompanha o destino final da peça. (2) A
+  devolução registrada com destino **Sucata** cuja segunda perna (a ida para a sucata) foi **recusada** fica fora do devolvido, embora a peça
+  tenha voltado ao estoque: o relatório olha o destino declarado da devolução. (3) O **Custo por projeto** não desconta o estorno da exclusão
+  de requisição entregue (de antes desta etapa — a mesma régua que esta etapa corrigiu só no Consumo por OS). (4) A fila de reserva na chegada
+  da nota e os avisos do recebimento continuam olhando só o **projeto** para a regra do dono — ficam mais conservadores que a entrega (pulam
+  requisição que a entrega aceitaria; nada é entregue errado). (5) As entregas antigas não ganham a OS (**B1118**). (6) A coluna **OS** do
+  relatório e o filtro mostram o **código interno** da OS, não o número (como antes).
 - **(172) A requisição com OS cadastrada, o que ficou de fora.** Do plano: (1) **a saída da entrega não leva a OS** (I5) — levar ligaria as
   regras de vínculo e de dono do material à OS e poderia recusar, na entrega, material já aprovado, reservado e separado (material de cliente
   de outro cliente); consequência: o **Consumo por OS** não conta o que sai por requisição — é a Etapa 174; (2) não há edição de requisição
   (a OS só se troca cancelando e fazendo outra, ou copiando); (3) OS excluída com requisição ligada é tolerada (a requisição fica com o número
   escrito e não casa com nada). Da revisão: (4) a lista **OS cadastrada** da Nova Requisição do **Almoxarifado** usa a lista que já existia
   (a de Recebimentos) e mostra OS fechadas (inofensivo — **B1105**); (5) uma OS com número em branco (só possível por fora do sistema) não
-  sobrescreve o número digitado; (6) a lista mostra as 300 OS mais recentes (sem busca por digitação).
+  sobrescreve o número digitado; (6) a lista mostra as 300 OS mais recentes (sem busca por digitação). *(Resolvido na Etapa 174: o item (1)
+  — a saída leva a OS (**B1111**). **Correção:** "poderia recusar, na entrega, material já aprovado" **estava errado** — sem projeto, a
+  entrega de material de cliente já recusava por falta de vínculo; com a OS do mesmo cliente ela passa a entregar, e com a OS de outro
+  cliente recusa como antes, só com outra frase.)*
 - **(171) Pedido de compra vinculado a uma OS, o que ficou de fora.** Do plano: (1) a reserva da OS segura o saldo, mas uma saída que
   **consome contra ela** não confere se é da mesma OS, e trocar o destino dela na tela **Reservas** é permitido; (2) cotação → **Gerar pedido**
   e Reposição → pedido nascem **sem** OS (o comprador a coloca editando o pedido antes de receber), e a importação por planilha ignora coluna de
@@ -18151,6 +18224,11 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(174) Nenhum clique foi dado no navegador.** A entrega com a OS, a exclusão, a regra do dono, o relatório (consumido, devolvido, líquido,
+período, exportação XLSX) e a posição por cliente foram provados pelas rotas de verdade no servidor de teste — inclusive ponta a ponta, do
+pedido de compra com OS à devolução; o quadro do Dashboard, em jsdom com a resposta do servidor simulada. Vale conferir à mão o roteiro da
+Etapa 174 no guia — em especial o rodapé e as colunas novas do relatório na tela, e o **Aplicado em** de **Materiais de Clientes**.
 
 **(172) Nenhum clique foi dado no navegador.** O envio da cesta foi provado pelas rotas de verdade no servidor de teste, com o pedido exatamente
 como a tela o monta e um usuário só do Comercial (o antes: 400 nos três módulos; o depois: 201 com o número e com a OS cadastrada); as telas, em
@@ -34369,9 +34447,90 @@ empréstimo passa. Ela também aparece/sai do painel de calibrações.
 - **Trava de edição simultânea**: duas pessoas editando a mesma ferramenta, vale o último a salvar (**B1130**).
 - Nada a rodar antes do deploy.
 
+## Etapa 174 — A entrega grava a OS, e o "Consumo por OS" passa a enxergar as requisições (2026-10-22)
+
+Até aqui, o relatório **Consumo por OS** só contava a saída lançada à mão em **Movimentações** com a OS escrita — **tudo o que saía por
+requisição ficava de fora**, mesmo a requisição ligada a uma OS cadastrada (Etapa 172). Para o gestor, a OS parecia não ter gasto material
+nenhum. Agora a entrega de uma requisição ligada a uma OS registra a OS na saída, e o relatório passa a mostrar, além do **Total consumido**
+de sempre, o que **voltou** (**Devolvido**) e o que **ficou de fato** na OS (**Líquido**). E, como a saída agora diz a OS, o material **do
+cliente** que antes não saía por requisição sem projeto passa a sair quando a OS é do próprio cliente — e a tela **Materiais de Clientes**
+passa a mostrar em qual OS ele foi aplicado. Decisões do agente: **B1111** a **B1119**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Relatórios → Consumo por OS**: a entrega de requisição não aparecia em OS nenhuma | A entrega de requisição ligada a uma OS cadastrada aparece na OS (**B1111**) — só as entregas feitas **depois** desta versão (**C429**) |
+| Só a coluna **Total consumido** | **Total consumido** (igual a antes) + **Devolvido** + **Líquido** = consumido − devolvido (**B1116**) |
+| Devolver material ou excluir a requisição entregue não mudava nada na OS | A devolução (para estoque ou quarentena) e o estorno da exclusão entram em **Devolvido** (**B1112**); a devolução para **sucata** não (**B1113**) |
+| — | Com filtro de período, o **Líquido** pode ficar **negativo** (saída antes do período, devolução dentro — **B1114**) |
+| Requisição de material **de cliente** sem projeto, com OS cadastrada do próprio cliente: a entrega recusava *"…so pode sair com OS ou projeto DESSE cliente…"* | A entrega passa (a OS da requisição vale como vínculo) |
+| **Materiais de Clientes → Aplicado em**: as entregas por requisição só apareciam se tivessem projeto | Aparecem também pela OS da requisição; com projeto e OS de clientes diferentes, só o projeto (**B1115**) |
+| **Dashboard** do Almoxarifado, quadro **Consumo por O.S.** | Igual: soma só o consumido; a OS que só teve devolução não aparece (**B1117**) |
+
+### As regras, com o cenário exato
+
+Preparação: uma OS aberta (**Fábrica → Ordens de Serviço → Nova OS**, ex.: *OS-2026-074*), um material nosso com saldo (ex.: *PARAF-M8*, 50
+peças), e o código interno da OS (aparece na coluna **OS** do relatório sem filtro).
+
+**1. A entrega aparece na OS (B1111).** **Requisições (almox.) → Nova Requisição**, **OS cadastrada** = *OS-2026-074*, 10 de *PARAF-M8*;
+aprove, separe e entregue. **Almoxarifado → Relatórios → Consumo por OS**, **Consultar**: linha *PARAF-M8* com **Total consumido** 10,
+**Devolvido** 0, **Líquido** 10, e a **OS** da *OS-2026-074*.
+
+**2. Devolução (B1112).** **Devoluções → Nova devolução** de 3 *PARAF-M8* citando a saída dessa entrega, destino **Estoque**. O relatório:
+10 / 3 / 7. Para **Quarentena**, conta igual.
+
+**3. Devolução para sucata não conta (B1113).** Mais uma devolução de 1, destino **Sucata**: o relatório continua 10 / 3 / 7 — a peça não voltou
+a ser usável.
+
+**4. Excluir a requisição entregue (B1112).** Outra requisição da mesma OS, 6 peças, entregue: a linha soma 6 no consumido. Exclua essa
+requisição (o estoque volta): o Devolvido soma os 6. Com devolução parcial antes (entrega 10, devolve 5, exclui), a exclusão estorna só os 5
+que não voltaram e o relatório fica 10 / 10 / 0.
+
+**5. Período (B1114).** A saída em setembro e a devolução em outubro, consultando só outubro: **Total consumido** 0, **Devolvido** 3,
+**Líquido** −3. Setembro a outubro: 10 / 3 / 7. O rodapé do relatório diz: *"… Cada lançamento conta pela data dele: com filtro de período o
+líquido pode ficar negativo (saída antes do período, devolução dentro)."*
+
+**6. Exportar.** **Exportar XLSX** do relatório: a planilha traz **Devolvido** e **Líquido** com os mesmos números.
+
+**7. Material de cliente com a OS do cliente.** Um material de cliente (*Proprietário* = *Metalúrgica X*) e uma OS cadastrada da *Metalúrgica
+X*: a requisição com essa OS, sem projeto, **entrega** (antes recusava). Com a OS de **outro** cliente, a entrega recusa: *"⟨nome do
+material⟩: Material ⟨código⟩ pertence ao cliente Metalúrgica X, mas a OS ⟨número⟩ e do cliente ⟨outro⟩. Material de cliente so pode ser
+aplicado em trabalho do proprio dono — troque o vinculo, ou use o material equivalente do estoque proprio."* e nada sai. Sem OS nem projeto,
+recusa como antes: *"⟨nome do material⟩: Material ⟨código⟩ pertence ao cliente Metalúrgica X e so pode sair com OS ou projeto DESSE
+cliente. Informe a OS ou o projeto de Metalúrgica X."*
+
+**8. Onde foi aplicado (B1115).** Depois do cenário 7, **Almoxarifado → Materiais de Clientes**, cliente *Metalúrgica X*: **Aplicado em** mostra
+a *OS* da entrega. *(Só pela integração, porque as telas de requisição não têm campo de projeto:)* requisição com projeto da *Metalúrgica X* e OS
+de outro cliente entrega pelo projeto, e o **Aplicado em** mostra só o projeto — a OS do outro cliente não aparece, nem o material no
+**Consumo por OS** dela.
+
+**9. Dashboard (B1117).** **Almoxarifado → Dashboard**, quadro **Consumo por O.S.**: a OS do cenário 1 aparece com 10. Uma OS que só teve devolução
+avulsa não aparece; se for a única, o quadro diz *"Nenhum consumo vinculado a O.S. no período"*.
+
+### O que esta etapa NÃO cobre
+
+- **As entregas antigas** (antes desta versão) **não** ganham a OS — casar o texto da requisição com a OS é proibido (decisão do P.O. de
+  16/09); elas continuam fora do relatório (**C429**, **B1118**).
+- A requisição que só **digita** o número da OS (sem **OS cadastrada**) não leva a OS para a saída.
+- O **Custo por projeto** continua sem descontar o estorno da exclusão de requisição (de antes — **D (174)**).
+- A fila de reserva na chegada da nota e os avisos do recebimento continuam olhando só o projeto, não a OS (**D (174)**).
+- **Nada a rodar antes do deploy:** nenhuma coluna nova; muda o que é gravado nas entregas daqui em diante.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 174 entregue (2026-10-22):** **a entrega grava a OS, e o *Consumo por OS* passa a enxergar as requisições.** A saída da entrega
+  leva a OS cadastrada da requisição (**B1111**); o estorno da exclusão leva a OS da saída (**B1112**); o relatório ganha **Devolvido** (sem a
+  sucata — **B1113**) e **Líquido**, que com período pode ser negativo (**B1114**), sem mudar o **Total consumido** (**B1116**); material de
+  cliente sai pela OS do próprio cliente; com projeto e OS de clientes diferentes a saída leva só o projeto (**B1115**, da revisão
+  adversarial); o quadro do Dashboard ignora a OS só com devolução (**B1117**). Commits `1e176f7a` e `8895e0af` (plano), `4b8945a1` (T1), `97d3012f` (T2),
+  `94d18eac` (T3), `20619078` (plano), a revisão adversarial `c3655b0f`, `d087bcfc`, `9d1fcd1d`, `aa053fa8`, e o fechamento. **O que é seu:**
+  as decisões **B1111** a **B1119** (reversíveis — **a B1115 pede um olhar**); o aviso de número **C429** (o consumo da OS sobe a partir do
+  deploy); a pergunta ao cliente da **B1119** (o material do cliente já vem para uma OS?); as limitações **(174)** em D e a verificação
+  **(174)** em F. **Próxima: Etapa 176 — entrada de material de cliente com OS opcional; ver a "próxima tarefa detalhada" no plano da Etapa
+  174.**
 
 - **Etapa 175 entregue (2026-10-22):** **editar a ferramenta pela tela** — o item aberto na spec 16 desde a Etapa 9b, e o primeiro passo do
   pedido de ferramentas, EPIs e ativos da usuária de Compras que não depende dos formulários em papel da empresa. Botão **Editar** em toda
