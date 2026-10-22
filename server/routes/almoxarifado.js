@@ -4794,6 +4794,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // nunca o dono do original. Ainda assim exige `requisitar`: a cópia CRIA uma requisição,
   // então tem de pedir a mesma permissão do POST /requisicoes, senão é um caminho
   // alternativo para requisitar sem a permissão de requisitar (perfil CONSULTA/COMPRAS).
+  const osAindaExiste = async (dbx, osId) => {
+    try {
+      return !!(await dbGet(dbx, 'SELECT id FROM ordens_servico WHERE id = ?', [osId]));
+    } catch (e) {
+      return false; // sem a tabela core (ambiente parcial): copia so o texto
+    }
+  };
   app.post('/api/almoxarifado/requisicoes/:id/copiar', requirePermission('requisitar'), async (req, res) => {
     try {
       const origem = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
@@ -4813,6 +4820,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         projeto_id: origem.projeto_id || null,
         cliente_id: origem.cliente_id || null,
         os_referencia: origem.os_referencia || null,
+        // Etapa 172 (RN-172.06, I2): a OS cadastrada vai junto SO se ainda existir — a copia nunca falha por causa da OS
+        // (excluida: copia so o texto). Fechada vai (a requisicao aceita OS fechada, RN-172.02).
+        ...(origem.os_id && await osAindaExiste(db, origem.os_id) ? { os_id: origem.os_id } : {}),
         setor: origem.setor || null,
         departamento: origem.departamento || null,
         // Justificativa só é copiada para EMERGENCIAL (design: "justificativa copiada se

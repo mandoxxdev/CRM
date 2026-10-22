@@ -385,6 +385,8 @@ module.exports = {
   // Etapa 171 (I6): a literal e a normalizacao da OS do pedido, reusadas pelo servico.
   OS_INVALIDA,
   normalizarOsIdBruto,
+  // Etapa 172 (RN-172.03): a mesma regua na requisicao (`RequisicaoSchema` do almoxarifado).
+  osIdOpcional,
   // Etapa 39 (RN-39.01/RN-39.05): o documento do pedido e a calculadora.
   PedidoCalcularSchema,
   CONDICOES_COMERCIAIS,

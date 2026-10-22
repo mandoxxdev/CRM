@@ -67,6 +67,39 @@ module.exports = function registerRequisicoesMaterialRoutes(app, db, authenticat
 
 
 
+  /**
+   * Etapa 172 (RN-172.08, emenda I4) — as OS para o seletor OPCIONAL da nova requisicao (cesta e formulario fora do
+   * warehouseMode), para QUEM CRIA requisicao: o mesmo `authenticateToken` do `app.use` acima, sem portao de modulo (a
+   * `/api/almoxarifado/aux/ordens-servico` exige o modulo do almoxarifado e a de Compras o de compras). Exposicao aceita
+   * (letra B): so `id, numero_os, status` — sem cliente. OS abertas pela regua da 171 (`STATUS_OS_FECHADA`, sem caixa e
+   * sem espaco) filtradas ANTES do `LIMIT 300`; `?incluir=<id>` devolve tambem essa OS (fechada inclusive), buscada a
+   * parte para nao competir pelo LIMIT; `incluir` que nao e inteiro positivo e ignorado. Sem a tabela core -> `[]`.
+   * POSICAO: registrada antes de `GET /api/requisicoes-material/:id`, que a sombrearia (`:id` = "aux").
+   */
+  app.get('/api/requisicoes-material/aux/ordens-servico', async (req, res) => {
+    try {
+      // eslint-disable-next-line global-require
+      const fechadas = require('../services/compras/pedidoCompraService').STATUS_OS_FECHADA;
+      const sel = 'SELECT os.id, os.numero_os, os.status FROM ordens_servico os';
+      let rows;
+      try {
+        rows = await dbAll(db, `${sel}
+          WHERE LOWER(TRIM(COALESCE(os.status, ''))) NOT IN (${fechadas.map(() => '?').join(', ')})
+          ORDER BY os.id DESC LIMIT 300`, fechadas);
+      } catch (e) {
+        if (/no such table/i.test(String(e && e.message))) return res.json([]);
+        throw e;
+      }
+      const incluir = String(req.query.incluir ?? '').trim();
+      if (/^\d+$/.test(incluir) && Number(incluir) > 0 && !rows.some((r) => Number(r.id) === Number(incluir))) {
+        rows.push(...(await dbAll(db, `${sel} WHERE os.id = ?`, [Number(incluir)])));
+      }
+      res.json(rows);
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.post('/api/requisicoes-material/disponibilidade', async (req, res) => {
 
     const { itens } = req.body || {};

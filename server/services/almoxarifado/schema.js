@@ -2558,6 +2558,10 @@ async function initSchemaUmaExecucao(db) {
 
   await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN ativo INTEGER DEFAULT 1');
   await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN ultimo_lembrete_enviado DATETIME');
+  // Etapa 172 (T1, RN-172.02): a OS CADASTRADA da requisicao, opcional, ao lado do texto livre `os_referencia` (RN-A
+  // da Etapa 33 intacta). Sem FK: `ordens_servico` e tabela core e a OS excluida e tolerada (M2 — a requisicao so deixa
+  // de casar com a reserva da OS). Antes desta coluna o `criarReserva` da aprovacao lia `reqRow.os_id` e via sempre null.
+  await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN os_id INTEGER');
 
   // ── Liberação por valor ──
   await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN valor_total REAL DEFAULT 0');

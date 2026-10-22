@@ -6,6 +6,7 @@ const { TIPOS_REQUISICAO, TIPOS_MOVIMENTO, TIPOS_RETENCAO, TIPOS_DEDICADOS, TIPO
 // nao requer nada — entao nao ha ciclo aqui.
 const { DESTINOS_FINAIS } = require('./scrapDisposalStateMachine');
 const { COLUNAS_CAMPOS_LIDOS } = require('./camposLidos');
+const { osIdOpcional } = require('../compras/schemas'); // Etapa 172 (RN-172.03): uma regua so para a OS
 
 const CentroCustoSchema = z.object({
   codigo: z.string().min(1, 'codigo é obrigatório'),
@@ -353,6 +354,10 @@ const RequisicaoSchema = z.object({
   departamento: z.string().nullable().optional(),
   setor: z.string().nullable().optional(),
   os_referencia: z.string().nullable().optional(),
+  // Etapa 172 (RN-172.03): a OS cadastrada, opcional, com a MESMA regua do pedido de compra da 171 (ausente/null/'' =
+  // sem; inteiro positivo como numero ou string de digitos; o resto -> `OS inválida`). Antes o `z.object` descartava a
+  // chave calado. Existencia e o preenchimento do texto (C2) moram no servico (a copia o chama sem passar por aqui).
+  os_id: osIdOpcional,
   urgencia: z.string().nullable().optional(),
   observacoes: z.string().nullable().optional(),
   justificativa_urgencia: z.string().nullable().optional(),

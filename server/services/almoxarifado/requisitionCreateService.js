@@ -23,6 +23,7 @@ const approvalRulesService = require('./approvalRulesService');
 const { inserirComNumeroUnico } = require('./numeroDoc');
 const Q = require('./quantidade'); // Etapa 96 (Fase 5, R1)
 const { TIPOS_URGENCIA } = require('./schema');
+const { OS_INVALIDA, normalizarOsIdBruto } = require('../compras/schemas'); // Etapa 172 (RN-172.03)
 
 /**
  * Dispara as notificações pós-criação (e-mail solicitantes/almoxarifado + alerta de
@@ -161,6 +162,31 @@ function recusaFracaoDeSerie(itens) {
   return null;
 }
 
+/**
+ * Etapa 172 (RN-172.02/03, emendas C2 e I6) — a OS CADASTRADA da requisicao, opcional, ao lado do texto da RN-A.
+ * Devolve `{ osId, osReferencia }`: sem `os_id` (ausente, null, '') = `{ null, texto como veio }` (nada muda); com
+ * `os_id` = a OS tem de existir e o texto vira o `numero_os` dela (C2: sobrescreve o digitado — relatorios e e-mails
+ * mostrariam outra OS que a da reserva). OS fechada passa (requisicao de consumo de OS ja em fechamento — letra B).
+ * Regua do `os_id` = a da 171 (`normalizarOsIdBruto`, literal `OS inválida`), aqui tambem para quem chama o servico sem
+ * passar pelo Zod (a copia). Sem a tabela `ordens_servico` (ambiente parcial, harness), a OS "nao existe" — 400, nao 500.
+ */
+const osNaoEncontrada = (id) => `OS #${id} não encontrada`;
+async function resolverOsDaRequisicao(db, osIdBruto, osReferencia) {
+  const v = normalizarOsIdBruto(osIdBruto);
+  if (v === undefined || v === null) return { osId: null, osReferencia };
+  if (typeof v !== 'number' || !Number.isInteger(v) || v <= 0) {
+    throw Object.assign(new Error(OS_INVALIDA), { status: 400 });
+  }
+  let os = null;
+  try {
+    os = await dbGet(db, 'SELECT id, numero_os FROM ordens_servico WHERE id = ?', [v]);
+  } catch (e) {
+    if (!/no such table/i.test(String(e && e.message))) throw e;
+  }
+  if (!os) throw Object.assign(new Error(osNaoEncontrada(v)), { status: 400 });
+  return { osId: v, osReferencia: os.numero_os || osReferencia };
+}
+
 // eslint-disable-next-line no-unused-vars -- `modulo` faz parte do contrato da interface
 // (identifica a rota chamadora para uso futuro/auditoria); nenhuma regra de Task 1 depende dele.
 async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = false } = {}) {
@@ -169,7 +195,7 @@ async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = 
     justificativa_urgencia, itens, modulo_origem,
     tipo_requisicao, centro_custo_id, local_entrega,
     projeto_id, cliente_id, equipamento, prioridade, data_necessidade,
-    justificativa, salvar_rascunho,
+    justificativa, salvar_rascunho, os_id,
   } = payload;
 
   const isRascunho = salvar_rascunho === true || salvar_rascunho === 1;
@@ -178,9 +204,13 @@ async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = 
   // não o que veio na lista de materiais. Com a ordem invertida, quem esquecesse a OS receberia
   // "material não permitido para este setor" e iria mexer no lugar errado.
   // Rascunho pode ficar sem OS; a cobrança acontece no envio.
+  // Etapa 172 (I6, C2): ANTES da RN-A, a OS cadastrada — `os_id` inválido (400 `OS inválida`) -> OS inexistente (400
+  // `OS #<id> não encontrada`) -> com a OS, o texto passa a ser o `numero_os` dela (sobrescreve o digitado, também no
+  // rascunho) -> `exigirOS`. OS fechada NÃO é recusada (RN-172.02).
+  const { osId: osIdFinal, osReferencia } = await resolverOsDaRequisicao(db, os_id, os_referencia);
   const osFinal = isRascunho
-    ? (os_referencia == null ? null : String(os_referencia).trim() || null)
-    : exigirOS(os_referencia);
+    ? (osReferencia == null ? null : String(osReferencia).trim() || null)
+    : exigirOS(osReferencia);
 
   const setorFinal = departamento || setor || null;
 
@@ -257,14 +287,14 @@ async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = 
   // idempotente); os itens sao inseridos DEPOIS, e entrariam em duplicata se estivessem aqui.
   const { numero, resultado: insertResult } = await inserirComNumeroUnico(db, 'REQ', (num) => dbRun(db,
     `INSERT INTO requisicoes_almoxarifado
-      (numero, solicitante_id, solicitante_nome, departamento, setor, os_referencia,
+      (numero, solicitante_id, solicitante_nome, departamento, setor, os_referencia, os_id,
        urgencia, observacoes, justificativa_urgencia, modulo_origem, status,
        tipo_requisicao, centro_custo_id, local_entrega, projeto_id, cliente_id,
        equipamento, prioridade, data_necessidade, justificativa)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       num, user.id, user.nome || user.email,
-      setorFinal, setorFinal, osFinal,
+      setorFinal, setorFinal, osFinal, osIdFinal,
       urgenciaFinal, observacoes || null, justificativa_urgencia || null,
       modulo_origem || null, statusInicial,
       tipo_requisicao || 'CONSUMO', centro_custo_id || null, local_entrega || null,
@@ -304,4 +334,5 @@ async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = 
 module.exports = {
   // Exportada para a rota /enviar cobrar a MESMA regra no envio do rascunho — duas
   // cópias da condição divergiriam e o rascunho viraria a porta dos fundos da RN-A.
-  exigirOS, recusaFracaoDeSerie, createRequisicao, dispararNotificacoesCriacao, FORMATO_DATA_NECESSIDADE };
+  exigirOS, recusaFracaoDeSerie, createRequisicao, dispararNotificacoesCriacao, FORMATO_DATA_NECESSIDADE,
+  resolverOsDaRequisicao };
