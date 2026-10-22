@@ -37,6 +37,11 @@ const USERS = {
   ADMALMOX: { id: 4, role: 'user', perfil_almoxarifado: 'ADMINISTRADOR' },
   ADMMOD: { id: 6, role: 'user', admin_modulos: ['almoxarifado'] },
   SUPER: { id: 1, role: 'admin', is_superadmin: 1 },
+  // Fase 5 (Menores 1 e 2): os papeis em que `isSystemAdmin` (caixa-insensivel, aceita super com qualquer role) e
+  // `role === 'admin'` estrito (o `isAprovadorValor` do portao de `/aprovacoes-valor` e `/aprovar-valor`) divergem.
+  ADMIN_CAIXA: { id: 31, role: 'Admin' },
+  SUPER_ROLE_USER: { id: 32, role: 'user', is_superadmin: 1 },
+  SUPER_CAMEL: { id: 33, role: 'user', isSuperAdmin: true },
 };
 const CENARIOS = [
   { rn: 'RN-184.01', k: 'COMUM', rotulo: 'comum (CONSULTA)', json: '{"ativo":true,"limite":800,"souAprovador":false}' },
@@ -47,6 +52,13 @@ const CENARIOS = [
   { rn: 'RN-184.02', k: 'ADMALMOX', rotulo: 'admin almox (perfil)', json: '{"ativo":true,"limite":800,"aprovadorIds":[7,9],"souAprovador":false}' },
   { rn: 'RN-184.02', k: 'ADMMOD', rotulo: 'admin do modulo', json: '{"ativo":true,"limite":800,"aprovadorIds":[7,9],"souAprovador":false}' },
   { rn: 'RN-184.02', k: 'SUPER', rotulo: 'super', json: '{"ativo":true,"limite":800,"aprovadorIds":[7,9],"souAprovador":true}' },
+];
+// Fase 5: os tres recebem os ids (quem abre a aba no client recebe — Menor 2) e NAO sao aprovadores (o portao real
+// responde 403 a eles — Menor 1). Se um dia o criterio de aprovador mudar (B196/B1213), muda aqui e no portao juntos.
+const CENARIOS_CAIXA = [
+  { k: 'ADMIN_CAIXA', rotulo: "role 'Admin' (caixa alta)", json: '{"ativo":true,"limite":800,"aprovadorIds":[7,9],"souAprovador":false}' },
+  { k: 'SUPER_ROLE_USER', rotulo: "super com role 'user' (is_superadmin: 1)", json: '{"ativo":true,"limite":800,"aprovadorIds":[7,9],"souAprovador":false}' },
+  { k: 'SUPER_CAMEL', rotulo: "super com role 'user' (isSuperAdmin: true)", json: '{"ativo":true,"limite":800,"aprovadorIds":[7,9],"souAprovador":false}' },
 ];
 const URL = '/api/almoxarifado/configuracoes/liberacao-valor';
 const MSG_PUT_403 = 'Acesso restrito — administrador do Almoxarifado ou Super Administrador';
@@ -91,6 +103,41 @@ const MSG_PUT_403 = 'Acesso restrito — administrador do Almoxarifado ou Super 
       assert.strictEqual(JSON.stringify(r.body), c.json);
     });
   }
+
+  // ── Fase 5, Menor 2 — quem abre a aba no client (`isSystemAdmin` caixa-insensivel, super com qualquer role) recebe os ids ──
+  for (const c of CENARIOS_CAIXA) {
+    // eslint-disable-next-line no-await-in-loop
+    await test(`[RN-184.02, Fase 5] ${c.rotulo} -> 200 ${c.json}`, async () => {
+      const r = await como(c.k).get(URL);
+      assert.strictEqual(r.status, 200, `status ${r.status} ${JSON.stringify(r.body)}`);
+      assert.deepStrictEqual(r.body, JSON.parse(c.json));
+      assert.strictEqual(JSON.stringify(r.body), c.json);
+      assert.ok(!JSON.stringify(r.body).includes('@'), 'sem e-mail');
+    });
+  }
+
+  // ── Fase 5, Menor 1 — `souAprovador` diz o mesmo que o portao real (`GET /requisicoes/aprovacoes-valor`) para cada usuario ──
+  await test('[RN-184.04, Fase 5] para os 11 usuarios: souAprovador === (GET /requisicoes/aprovacoes-valor responde 200)', async () => {
+    const todos = [...CENARIOS, ...CENARIOS_CAIXA];
+    assert.strictEqual(todos.length, 11, 'premissa: 8 do contrato + 3 da Fase 5');
+    const erros = [];
+    let positivos = 0;
+    for (const c of todos) {
+      // eslint-disable-next-line no-await-in-loop
+      const g = await como(c.k).get(URL);
+      // eslint-disable-next-line no-await-in-loop
+      const p = await como(c.k).get('/api/almoxarifado/requisicoes/aprovacoes-valor');
+      if (g.status !== 200) erros.push(`${c.rotulo}: GET liberacao-valor ${g.status}`);
+      if (p.status !== 200 && p.status !== 403) erros.push(`${c.rotulo}: aprovacoes-valor ${p.status} ${JSON.stringify(p.body)}`);
+      if (p.status === 200) positivos++;
+      if (g.body.souAprovador !== (p.status === 200)) {
+        erros.push(`${c.rotulo}: souAprovador ${g.body.souAprovador} mas aprovacoes-valor ${p.status}`);
+      }
+    }
+    // Metade positiva: aprovador 7, admin do sistema e super (role admin) passam no portao — o laco nao e so de 403.
+    assert.strictEqual(positivos, 3, `premissa: 3 usuarios com aprovacoes-valor 200, veio ${positivos}`);
+    assert.deepStrictEqual(erros, [], erros.join(' | '));
+  });
 
   // ── RN-184.03 — ninguem recebe nome nem e-mail ──
   await test('[RN-184.03] os 8 usuarios: sem a chave aprovadores, sem "@", sem "Aprovador Um"/"Aprovador Dois" no JSON', async () => {
