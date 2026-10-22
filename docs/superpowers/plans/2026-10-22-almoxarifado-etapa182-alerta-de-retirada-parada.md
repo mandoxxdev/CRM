@@ -140,3 +140,23 @@ _(vazio — preencher com hash e divergências ao fechar cada task)_
 
 _(placeholder — escrever no fechamento: reler o mapa `specs/modulo-almoxarifado/README.md` pelas 🟡 que não dependem da empresa — 05,
 06, 01, 23 — e medir antes de prometer.)_
+
+---
+
+## Revisão da Fase 2 (2026-10-22) — 0 críticos, 2 importantes, 5 menores; as emendas PREVALECEM
+
+- **I1 — teste de reliberação não pode passar vazio:** antes de reliberar, envelhecer a coluna para um valor fixo antigo
+  (ex.: `'2026-01-01 00:00:00'`) e afirmar que, depois, ela **mudou** e ficou a menos de 60 s de agora.
+- **I2 — chave de dedupe com resolução de segundo:** nos testes, envelhecer cada liberação para um valor **diferente**;
+  registrar na RN-182.05 que duas liberações no mesmo segundo compartilham a chave (efeito: um e-mail a menos — aceito,
+  letra B).
+- **M1 — escritor único por TRIGGER, não por texto-fonte:** trigger SQLite `AFTER UPDATE OF status ON
+  requisicoes_almoxarifado WHEN NEW.status = 'PRONTA_PARA_RETIRADA' AND OLD.status <> 'PRONTA_PARA_RETIRADA'` que grava
+  `pronta_para_retirada_em = CURRENT_TIMESTAMP` — pega qualquer caminho, inclusive o paramétrico e o que testes semeiam.
+  A rota continua gravando no mesmo UPDATE (redundante e inofensivo). Letra B (descartado: guarda por varredura de
+  texto, que não vê `SET status=?`).
+- **M2 —** o controle positivo da migração roda o UPDATE **sem** o ledger (ou apaga a linha do ledger e reexecuta).
+- **M3 —** o 409 da T1 (perder o compare-and-set duas vezes) por stub em `requisitionService.carregarItensRequisicao`
+  que insira uma rodada a cada tentativa.
+- **M4 —** um e-mail **por liberação** (a caixa parada 30 dias recebe um só) — letra B (descartado: repetir a cada N dias).
+- **M5 —** a T4 usa material **não crítico** (o B504 limpa a conferência, B505; com crítico a reliberação recusaria).
