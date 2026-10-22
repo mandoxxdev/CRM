@@ -270,3 +270,87 @@ aprovação converte.
 - Suítes: `test:api` 495/495 arquivos OK; `test:almoxarifado` 44/44.
 - **Defeito achado pelo roteiro:** nenhum além do rótulo acima (que já era conhecido ao abrir a T5). O roteiro confirmou
   que o `PUT` do pedido exige o corpo completo (Zod) — não é defeito, é o contrato de hoje.
+
+## Fase 5 — revisão adversarial (2026-10-22) — 1 importante reproduzido e corrigido, front e testes fracos reforçados
+
+### Achados reais, corrigidos
+
+1. **(Importante, reproduzido) OS cancelada durante o processamento da nota deixava a reserva da OS ATIVA, sem expiração,
+   para uma OS fechada — para sempre.** Sonda `sonda-toctou`: a nota lê a OS aberta dentro da seção; o `PUT` da OS
+   (`UPDATE` do status + `liberarReservasDaOs`) não pega a trava (liberar não pega, B441), roda no meio, não vê a reserva
+   que ainda não existe (`liberadas = 0`), e a nota cria a reserva de 10 para a OS `cancelado`; um segundo `PUT` com o
+   mesmo status não solta (só a transição solta). A mesma janela existia em `reservaDaOs.recriarReservaDaOs` (estorno
+   recusado, `desfazerReservas` da aprovação, excesso de arredondamento). **Corrigido** (`f2f2b2ed`): `reservarParaOsSobTrava`
+   e `recriarReservaDaOs` releem a OS **depois** de criar (`soltarSeOsFechou`); fechada ou sumida, liberam na hora a
+   reserva recém-criada (`LIBERADA`, motivo `OS <numero> <status> — material volta ao estoque`, o mesmo do
+   `osEncerradaService.motivoDaLiberacao`; OS sumida → `excluída`). Sem trava nova (liberar não pega). Fecha a janela porque
+   o cancelamento grava o status **antes** de procurar as reservas: se procurou antes da criação, a releitura vê o status;
+   se procurou depois, ele mesmo solta e o `liberarReserva` da releitura perde o claim (tolerado, sem desconto em dobro).
+   Na nota, o que a reserva soltou vai para a **fila geral** (`distribuirParaOs` → `distribuirSemLock`, ainda sob a trava):
+   é o que a nota faria com a OS fechada desde o começo. Na recriação, só solta (o livre fica para a próxima chegada/aprovação).
+   **Descartado:** reler a OS antes de criar (não fecha: o cancelamento pode cair entre a releitura e o `INSERT`); fazer o
+   `PUT` da OS pegar a trava de cada material (a rota não sabe os materiais sem ler as reservas — que é justamente o que
+   ainda não existe; e o core passaria a depender da trava do módulo); marcar a reserva e varrer depois (job novo, a reserva
+   fica presa até a varredura).
+   - **Testes** (`recebimentoPedidoOs.api.test.js`, molde do CLAUDE.md: o gancho só sinaliza e segura, o cancelamento sai do
+     contexto do teste): (a) OS cancelada com a nota segurada antes de `reservarParaOsSobTrava` → reserva LIBERADA com o
+     motivo, `LIBERACAO_RESERVA` com `os_id`, a requisição geral leva 4, `{q:10, r:4}`; (b) cancelamento depois de a reserva
+     nascer e antes da releitura → uma liberação só, sem desconto em dobro (não-regressão do ramo tolerado — passa antes e
+     depois); (c) estorno recusado com a OS cancelada antes da recriação → a recriada sai LIBERADA, `{q:6, r:0}`.
+     (a) e (c) vermelhos antes da correção. Controle positivo: S15 `soltarSeOsFechou` desligado → (a) e (c) vermelhos;
+     S16 sem o repasse à fila geral → só (a) vermelho. Restaurados por cópia, conferidos com `cmp`.
+2. **(Menor) Cancelar a OS no meio de uma conversão:** o claim falha e o `PUT` responde 200 com `aviso` — fica como está; o
+   front agora mostra (item 3).
+3. **Front** (`a70b82ba`): `OSForm.js` mostra `toast.warning(aviso)` e, com `reservas_liberadas > 0`,
+   `<n> reserva(s) de material de compra liberada(s) para o estoque`; `OrdensServico.js` (em `components/operacional/`)
+   mostra o `error` do servidor na exclusão (o 409 da RN-171.10), senão o texto genérico. 5 testes Jest em
+   `Etapa171OS.test.js`; controle positivo: correção desfeita → 3 vermelhos; `> 0` → `>= 0` e fallback removido → o teste
+   certo vermelho.
+
+### Testes fracos reforçados (`f2f2b2ed` no recebimento; `c22283cd` em Compras e no 171h)
+
+- **Estorno recusado (I5):** a ativa é uma reserva **nova** (id ≠ original), a original `LIBERADA` com o motivo do estorno,
+  observação literal `Compra para a OS <n> — recriada após estorno recusado — recebimento <REC>` e a recusa literal
+  `Não é possível estornar: saldo disponível insuficiente (material já consumido)`.
+- **Corrida aprovação × nota:** a ordem não depende mais do timer — a `RESERVA` da OS nasceu com 10, a reserva da OS ficou
+  com 6, a `LIBERACAO_RESERVA` da conversão existe e o id da `RESERVA` da aprovação é maior que o da OS. S12 (sem trava na
+  aprovação) **com o assert do timer desligado** → vermelho.
+- **RN-171.04:** `PUT` de pedido já recebido com OS cancelada e com OS inexistente → 400 literal `já teve recebimento`.
+  S19 (guardas invertidas) → vermelho (`A OS E171-CANC está Cancelado…`).
+- **RN-171.12(b):** (i) aprovação que perde o `UPDATE` (requisição cancelada no meio) → 400 `Transição inválida: CANCELADA →
+  APROVADO`, reserva da requisição desfeita, a da OS volta (4 na original + 6 nova `— devolvida: aprovação recusada`, sem
+  `expira_em`); S17 (desfazer sem recriar) → vermelho. (ii) pré-condição livre ≥ 0 (semente de legado) → não converte, a
+  reserva da OS fica 10 inteira; S18 (sem a pré-condição) → vermelho (`PARCIALMENTE_RESERVADA`). (iii) aprovação
+  **automática** (`POST /requisicoes`) converte 3 (OS fica 7); S9 → vermelho.
+- **I1 pelas rotas — inalcançável, provado:** montada a caixa sem reserva pelas rotas (entrada, aprovar, separar, liberar a
+  reserva → físico 3, caixa 3, livre de caixa 0), as portas que o deixariam negativo recusam: `AJUSTE` para 1 (400 `…deixaria
+  o disponível negativo…`), `SAIDA` (400), reserva manual (compara com o livre de caixa, B492), aprovação (desconta a caixa —
+  fica `APROVADO` sem hold). As distribuições são limitadas pelo que entrou/liberou. Com livre de caixa ≥ 0 antes da nota, o
+  teto do I1 nunca morde (nota de 10 → OS 10). O teste antigo ficou rotulado **teste de FÓRMULA** (semente de legado no
+  banco, como o A48 da 97).
+- **RN-171.06:** 305 OS abertas → a lista corta em 300 e `?incluir=` de uma OS antiga (aberta ou fechada) ainda vem (301).
+  S21 (`OR os.id = ?` dentro do `LIMIT`) → vermelho. **RN-171.03:** `concluido` no POST e `cancelada` numa troca pelo `PUT`
+  → 400 literal, OS intacta; S20 (`concluido` fora do conjunto) → vermelho.
+- **Client (171h):** pedido recebido → o salvar manda **só** `PATCH /status` com `{ status }` (sem `os_id`) e nenhum `PUT`.
+  Controle positivo: `os_id` no corpo do PATCH → vermelho.
+
+### Declarados, sem correção (letra B)
+
+- **Janela do estorno que solta a reserva da OS antes do claim** — o mesmo padrão do B374 (as de requisição também são soltas
+  antes do claim e recriadas se o estorno não acontecer); a recriação agora respeita a OS fechada.
+- **Corrida criar pedido × excluir OS:** o pedido pode nascer com `os_id` de uma OS apagada entre a guarda e o `INSERT`. Efeito
+  contido: o pedido mostra `OS #<id>`, a chegada não reserva para OS sumida (fila geral).
+- **Teto de 300 OS no `<select>`** do pedido: com mais de 300 abertas as mais antigas não aparecem para escolha nova (a OS
+  já gravada vem pelo `incluir`). Descartado: busca por digitação (contrato novo de tela).
+- **`DELETE` de OS inexistente com pedido órfão responde 409** (a guarda olha os pedidos pelo `os_id` antes de ver se a OS
+  existe). Inofensivo: nada é apagado e a mensagem nomeia os pedidos.
+- **I3 descontando a reserva da inspeção na retomada da nota:** na retomada, a reserva que a inspeção criou com o mesmo
+  `recebimento_id` entra no desconto — a OS recebe menos do que podia; nada vaza nem duplica.
+- **Falsos negativos do casamento `os_referencia`** (ex.: `"42"` × `"OS-042"`: a `chaveDaOs` tira o prefixo mas não zeros à
+  esquerda) — a requisição não converte e espera como hoje. A evolução é `requisicoes.os_id` (letra B 1 da T2).
+
+### Suítes (com tudo acima)
+
+`test:api` 495/495 arquivos OK (`recebimentoPedidoOs` 23/23, `comprasPedidoOs` 28/28); `test:almoxarifado` 44/44;
+`test:validation` 4/4, `test:safealter` 3/3, `test:sqlite` 16/16; client 173/173 suítes, 2205/2205 testes; `CI=true` build
+compilou sem aviso. A sonda `sonda-toctou` agora mostra a reserva `LIBERADA`.
