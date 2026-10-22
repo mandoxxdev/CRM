@@ -3654,7 +3654,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // GET/PUT /api/almoxarifado/configuracoes/liberacao-valor
   app.get('/api/almoxarifado/configuracoes/liberacao-valor', authenticateToken, async (req, res) => {
     try {
-      const config = await valueApprovalService.getConfigForApi(db, req.user);
+      // Etapa 184 (RN-184.01..03, B1210/B1211): a leitura nao entrega nome nem e-mail de aprovador a ninguem;
+      // os ids so vao para quem abre a aba Liberacao por Valor — quem configura ou o admin do sistema (so leitura).
+      const config = await valueApprovalService.getConfigPublica(db, req.user, {
+        verIds: canConfigureAlmox(req.user) || isSystemAdmin(req.user),
+      });
       res.json(config);
     } catch (e) {
       res.status(500).json({ error: e.message });

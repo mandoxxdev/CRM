@@ -438,6 +438,17 @@ async function getConfigForApi(db, user) {
   };
 }
 
+// Etapa 184 (RN-184.01..04): a leitura do GET — sem `usuarios`, sem nome/e-mail; ids so para quem abre a aba.
+// Quem decide `verIds` e a rota (criterio de tela/autorizacao, nao de regra de valor). `getConfigForApi`
+// fica para o PUT (`saveConfig`), que segue respondendo com `aprovadores` a quem configura (B1212).
+async function getConfigPublica(db, user, { verIds = false } = {}) {
+  const config = await getConfig(db);
+  const souAprovador = user ? await isAprovadorValor(db, user) : false;
+  return verIds
+    ? { ativo: config.ativo, limite: config.limite, aprovadorIds: config.aprovadorIds, souAprovador }
+    : { ativo: config.ativo, limite: config.limite, souAprovador };
+}
+
 async function saveConfig(db, payload, userName) {
   const ativo = payload.ativo === false || payload.ativo === '0' ? '0' : '1';
   const limite = Number(payload.limite);
@@ -469,6 +480,7 @@ module.exports = {
   parseList,
   getConfig,
   getConfigForApi,
+  getConfigPublica,
   saveConfig,
   calcularValorTotal,
   avaliarRequisicaoValor,
