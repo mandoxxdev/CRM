@@ -158,6 +158,10 @@ const MaterialAlmoxarifadoForm = () => {
     aplicacao: '',
     descricao_tecnica: '',
 
+    // ── EPI (Etapa 178, RN-178.01/04): o Certificado de Aprovação que a entrega exige vigente. Vazio vira null no payload. ──
+    ca_numero: '',
+    ca_validade: '',
+
     // ── Estoque e reposição ──
     ponto_reposicao: '',
     lote_economico: '',
@@ -403,7 +407,10 @@ const MaterialAlmoxarifadoForm = () => {
 
         classe_abc: m.classe_abc || '',
         unidade_compra: m.unidade_compra || '',
-        fator_conversao_compra: m.fator_conversao_compra ?? ''
+        fator_conversao_compra: m.fator_conversao_compra ?? '',
+        ca_numero: m.ca_numero || '',
+        // O input date so aceita AAAA-MM-DD; a coluna DATE pode chegar com hora — fica o prefixo.
+        ca_validade: typeof m.ca_validade === 'string' ? m.ca_validade.slice(0, 10) : '',
         // Etapa 35: unidade_consumo/fator_conversao_consumo NÃO entram — a tela não os mostra
         // mais e a chave omitida no PUT preserva o que o material já tinha gravado.
       });
@@ -521,6 +528,9 @@ const MaterialAlmoxarifadoForm = () => {
         // continuava no state e viajava no payload (número órfão; no PUT, '' preservaria o antigo).
         // null explícito limpa nos dois casos — mesmo padrão dos FKs acima.
         fator_conversao_compra: form.unidade_compra ? form.fator_conversao_compra : null,
+        // Etapa 178 (contrato I4): vazio vira null explicito — '' no PUT cairia no "ausente" e preservaria o CA antigo.
+        ca_numero: String(form.ca_numero || '').trim() || null,
+        ca_validade: form.ca_validade || null,
       };
       delete payload.localizacao;
 
@@ -840,6 +850,16 @@ const MaterialAlmoxarifadoForm = () => {
                   <label className="almox-label">NCM</label>
                   <input className="almox-input" value={form.ncm} onChange={e => set('ncm', e.target.value)}
                     placeholder="0000.00.00" maxLength={10} />
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label" htmlFor="material-ca-numero">Nº do CA</label>
+                  <input id="material-ca-numero" className="almox-input" value={form.ca_numero}
+                    onChange={e => set('ca_numero', e.target.value)} placeholder="Só EPI — Certificado de Aprovação" />
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label" htmlFor="material-ca-validade">Validade do CA</label>
+                  <input id="material-ca-validade" className="almox-input" type="date" value={form.ca_validade}
+                    onChange={e => set('ca_validade', e.target.value)} />
                 </div>
                 <div className="almox-field almox-form-full">
                   <label className="almox-label">Aplicação</label>
