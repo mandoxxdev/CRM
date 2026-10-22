@@ -30,6 +30,36 @@
 |---|---|---|
 | T1 | `reportService`/`reportRegistry` (RN-01..04) + testes: colunas e ordem, cada filtro (com controle de que muda o resultado), `tem_evidencia` 1/0, 403 e lista sem os dois relatórios para PRODUCAO, exportação com as colunas, a varredura I1 verde. Front: só conferir que a tela genérica mostra os parâmetros (tipo do campo — select de colaborador/EPI se o registro suportar `select` com opções do servidor; senão `numero`), teste Jest se mudar algo. | tronco |
 
+## Execução
+
+- [x] **T1** — RN-181.01..04 com as emendas C1, C2, I1, I2, I3 e os menores. Commit: `3ce1d3a2`.
+  - `reportService.relatorioEPIPorColaborador(db, filtros)` com SELECT próprio sobre `entregas_epi_almoxarifado`:
+    `strftime('%Y-%m-%d %H:%M:%S', e.criado_em) AS criado_em` (C1), `motivo` por CASE (`Primeira entrega`/`Troca`/`Perda`/`Dano`),
+    `tamanho`, `tem_evidencia` `'Sim'`/`'Não'` por `EXISTS` na evidência `ENTREGA_EPI` (C2), mais recentes primeiro.
+  - Helper compartilhado: `epiService.filtroDasEntregas(filtros)` → `{ where, params }` (colaborador_id, material_id, de/ate no
+    dia de Brasília, mesma regex) — `listarEntregas` passou a usá-lo sem mudar comportamento (os `epi*` ficaram verdes sem mudar
+    asserção). `reportService` faz `require` tardio de `epiService`.
+  - Registro: `epi-colaborador` com `acao: 'entregar_epi'`, nota (RN-04), 14 colunas, params `colaborador_id` (select,
+    `opcoes_url: '/almoxarifado/aux/colaboradores'`), `material_id` (number), `de`/`ate` (date), todos com `exemplo`;
+    `ferramentas-emprestadas` com `acao: 'gerenciar_ferramentas'`.
+  - Testes: `server/tests/api/relatorioEpiPorColaborador.api.test.js` (11) e um teste Jest novo em
+    `RelatoriosAlmoxarifado.test.js` (nota, select carregado da rota aux, consulta com o id, célula de data). Client sem mudança
+    de código.
+  - Controles positivos (restauro por cópia + `cmp`): sem `strftime` → C1 e exportação vermelhos; evidência sempre `Sim` → C2 e
+    exportação; ORDER BY ASC → ordem e filtro de colaborador; fuso `0 minutes` no helper → de/ate; `ferramentas-emprestadas`
+    `acao: null` → registro e PRODUCAO; param renomeado / coluna renomeada no registro → varredura I1 vermelha; Jest: ISO cru no
+    payload → célula vermelha, `opcoes_url` errada → select vermelho.
+  - **Divergências do plano:** (1) a entrega sem evidência foi semeada por `INSERT` direto em `entregas_epi_almoxarifado` sem
+    evidência — não precisou contornar trigger (os da 178 barram só UPDATE/DELETE); (2) a data na tela é conferida no Jest pela
+    mesma conversão que a tela usa (fuso do processo), não pelo literal `21/10` — o teste antigo de data faz igual; o literal
+    `2026-10-21 22:30:00` é conferido no servidor (consulta via `instanteDoBancoNoFuso` e linha da planilha); (3) `tamanho` entrou
+    depois de `quantidade`; rótulo do material `EPI (id do material)`.
+    (4) `relatoriosJornada.api.test.js` mudou de assercao (era o unico vermelho da 1a rodada, 517/518): o GESTOR via as 26
+    chaves e PRODUCAO 22; agora GESTOR ve 24 (nao tem `entregar_epi` nem `gerenciar_ferramentas` — coerente com a tela de EPI
+    e `GET /emprestimos`, que ja lhe negavam) e PRODUCAO 20. Mudanca de contrato intencional da RN-181.03, nao regressao.
+  - Suites (2026-10-22, uma por vez): `test:api` 518/518; `test:almoxarifado` 44/0; validation 4/0; safealter 3/0;
+    sqlite 16/0; Jest 180 suites / 2355 testes verdes; `CI=true build` compilado sem warning.
+
 ## Próxima tarefa detalhada
 
 *(preencher no fechamento)*
