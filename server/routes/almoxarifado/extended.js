@@ -2022,36 +2022,39 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       }
     });
 
-  // GET /epi/entregas — leitura, portao do modulo.
-  app.get('/api/almoxarifado/epi/entregas', auth, async (req, res) => {
+  // Fase 5 (importante 5): as cinco leituras da entrega de EPI exigem `entregar_epi` (ADMINISTRADOR, ALMOXARIFE) — a ficha e a lista
+  // trazem nome, matricula, setor, CPF mascarado e a URL da assinatura; a matricula passou a confirmar a entrega. Ate a Fase 5
+  // eram do portao do modulo (PRODUCAO, o fallback de quem nao tem perfil, lia tudo).
+  // GET /epi/entregas
+  app.get('/api/almoxarifado/epi/entregas', auth, requirePermission('entregar_epi'), async (req, res) => {
     try {
       res.json(await epiService.listarEntregas(db, req.query || {}));
     } catch (e) { handleError(res, e); }
   });
 
   // GET /epi/entregas/:id/verificar — relê o arquivo e a linha (RN-178.08).
-  app.get('/api/almoxarifado/epi/entregas/:id/verificar', auth, async (req, res) => {
+  app.get('/api/almoxarifado/epi/entregas/:id/verificar', auth, requirePermission('entregar_epi'), async (req, res) => {
     try {
       res.json(await epiService.verificarEntrega(db, req.params.id, { dir: uploadsAlmoxDir, segredo: segredoDaEvidencia() }));
     } catch (e) { handleError(res, e); }
   });
 
   // GET /epi/cadeia/verificar — a cadeia inteira das evidencias (Fase 5): lacuna = registro apagado, elo quebrado, HMAC.
-  app.get('/api/almoxarifado/epi/cadeia/verificar', auth, async (req, res) => {
+  app.get('/api/almoxarifado/epi/cadeia/verificar', auth, requirePermission('entregar_epi'), async (req, res) => {
     try {
       res.json(await epiService.verificarCadeia(db, { dir: uploadsAlmoxDir, segredo: segredoDaEvidencia() }));
     } catch (e) { handleError(res, e); }
   });
 
   // GET /epi/ficha/:colaborador_id — a ficha de EPI (RN-178.09).
-  app.get('/api/almoxarifado/epi/ficha/:colaborador_id', auth, async (req, res) => {
+  app.get('/api/almoxarifado/epi/ficha/:colaborador_id', auth, requirePermission('entregar_epi'), async (req, res) => {
     try {
       res.json(await epiService.fichaDoColaborador(db, req.params.colaborador_id));
     } catch (e) { handleError(res, e); }
   });
 
-  // GET /aux/colaboradores — os ativos, sem CPF e sem salario, sob o portao do almoxarifado (RN-178.10).
-  app.get('/api/almoxarifado/aux/colaboradores', auth, async (req, res) => {
+  // GET /aux/colaboradores — os ativos, sem CPF e sem salario (RN-178.10); desde a Fase 5, so com `entregar_epi`.
+  app.get('/api/almoxarifado/aux/colaboradores', auth, requirePermission('entregar_epi'), async (req, res) => {
     try {
       res.json(await epiService.listarColaboradoresAtivos(db));
     } catch (e) { handleError(res, e); }

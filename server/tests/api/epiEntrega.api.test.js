@@ -318,8 +318,8 @@ const contar = async (db, sql, p = []) => (await dbGet(db, sql, p)).n;
     const r1 = await postEntrega(app, { colaborador_id: col.id, material_id: mat.id, quantidade: 1 });
     assert.strictEqual(r1.status, 403);
     assert.deepStrictEqual(arquivosEpi(uploadsAlmoxDir), []);
-    // a leitura e do portao do modulo: PRODUCAO le a lista
-    assert.strictEqual((await request(app).get('/api/almoxarifado/epi/entregas')).status, 200);
+    // Fase 5 (importante 5): a leitura deixou de ser do portao do modulo — PRODUCAO nao le a lista (era 200 ate a Fase 5)
+    assert.strictEqual((await request(app).get('/api/almoxarifado/epi/entregas')).status, 403);
     setUser(ALMOXARIFE);
     const r2 = await postEntrega(app, { colaborador_id: col.id, material_id: mat.id, quantidade: 1 });
     assert.strictEqual(r2.status, 201, JSON.stringify(r2.body));
