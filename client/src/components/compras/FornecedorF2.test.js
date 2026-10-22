@@ -254,6 +254,64 @@ describe('Etapa 173 — pedido de compra', () => {
     busca.remove();
   });
 
+  test('RN-173.04: "Cancelar" fecha sem gravar e o pedido fica como estava', async () => {
+    await renderEm('/compras/pedidos/novo');
+    await digitar(porTestId('pedido-fornecedor'), '312');
+    await teclar('F2');
+    await digitar(campoDaJanela('razao'), 'DESISTI LTDA');
+    const cancelar = [...janela().querySelectorAll('button')].find((b) => b.textContent.trim() === 'Cancelar');
+    await clicar(cancelar);
+    expect(janela()).toBeNull();
+    expect(postsDe('/compras/fornecedores')).toHaveLength(0);
+    expect(porTestId('pedido-fornecedor').value).toBe('312');
+  });
+
+  test('RN-173.04 (Fase 5): ao fechar, o foco volta ao campo de onde o F2 foi apertado', async () => {
+    await renderEm('/compras/pedidos/novo');
+    const select = porTestId('pedido-fornecedor');
+    act(() => { select.focus(); });
+    await teclar('F2', {}, select);
+    expect(document.activeElement).toBe(campoDaJanela('razao'));
+    await teclar('Escape', {}, campoDaJanela('razao'));
+    expect(janela()).toBeNull();
+    expect(document.activeElement).toBe(select);
+  });
+
+  test('RN-173.04 (Fase 5): o Tab não sai da janela — do último volta ao primeiro, e Shift+Tab do primeiro vai ao último', async () => {
+    await renderEm('/compras/pedidos/novo');
+    await teclar('F2');
+    const focaveis = [...janela().querySelectorAll('button, input, select')].filter((el) => !el.disabled);
+    const primeiro = focaveis[0];
+    const ultimo = focaveis[focaveis.length - 1];
+    expect(primeiro.getAttribute('aria-label')).toBe('Fechar');
+    expect(ultimo.textContent).toMatch(/Salvar/);
+
+    act(() => { ultimo.focus(); });
+    await teclar('Tab', {}, ultimo);
+    expect(document.activeElement).toBe(primeiro);
+
+    await teclar('Tab', { shiftKey: true }, primeiro);
+    expect(document.activeElement).toBe(ultimo);
+
+    // foco que escapou para o pedido (ex.: clique) volta para dentro no próximo Tab
+    const doPedido = porTestId('pedido-fornecedor');
+    act(() => { doPedido.focus(); });
+    await teclar('Tab', {}, doPedido);
+    expect(janela().contains(document.activeElement)).toBe(true);
+  });
+
+  test('RN-173.06 (Fase 5): com o guia de ajuda "?" aberto, o F2 não abre a ficha atrás dele', async () => {
+    await renderEm('/compras/pedidos/novo');
+    const guia = document.createElement('div');
+    guia.className = 'help-guide-overlay';
+    document.body.appendChild(guia);
+    await teclar('F2');
+    expect(janela()).toBeNull();
+    guia.remove();
+    await teclar('F2');
+    expect(janela()).not.toBeNull();
+  });
+
   test('RN-173.06: F2 de novo, F2 segurado e F2 com modificador não abrem outra janela', async () => {
     await renderEm('/compras/pedidos/novo');
     await teclar('F2', { repeat: true });

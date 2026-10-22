@@ -12,6 +12,9 @@ import { useEffect, useRef } from 'react';
 export const JANELAS_POR_CIMA = [
   '[aria-modal="true"]',
   '.busca-global-overlay', '.help-search-overlay', '.report-builder-overlay', '.workflow-engine-overlay',
+  // o guia do botão "?" (z-index 9999) e o tour do primeiro acesso, ambos montados pelo Layout em
+  // toda tela (achado 1 da Fase 5)
+  '.help-guide-overlay', '.onboarding-overlay',
   '.modal-grupo-overlay', '.modal-overlay', '.almox-modal-overlay',
 ].join(', ');
 
