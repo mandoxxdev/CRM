@@ -44,3 +44,40 @@
 ## Próxima tarefa detalhada
 
 *(preencher no fechamento)*
+
+---
+
+## Revisão da Fase 2 (2026-10-22) — 3 críticos, 4 importantes; as emendas PREVALECEM
+
+- **C1 — o termo é uma FOTOGRAFIA congelada:** tabela nova append-only `termos_emprestimo_ferramenta` (triggers, sem
+  FK; molde `entregas_epi`): `numero` UNIQUE (`TERMO-…`), `emprestimo_id` UNIQUE, snapshot da ferramenta (id,
+  `codigo_patrimonio`, `numero_serie`, nome), snapshot do colaborador (id, nome, matrícula, setor), `termo_versao`,
+  `texto_sha256`, `data_prevista_devolucao`, `criado_por`, `criado_por_nome`, `criado_em` (Node), `chave_idempotencia`
+  UNIQUE. O HMAC cobre **só** essa linha + a evidência (vínculo pelo `numero`, como `camposDoRegistro` do EPI). Nada
+  do empréstimo vivo nem da ferramenta viva entra no HMAC (a devolução, a ocorrência e o `PUT /ferramentas/:id` mudam
+  esses). A existência da linha é a marca "empréstimo com termo" (o 404 "anterior à exigência" da RN-180.05 sai dela).
+- **C2 — claim que falha de verdade dentro do `execEmTransacao`:** os INSERTs condicionados (`INSERT … SELECT … WHERE
+  changes() = 1` depois do `UPDATE … WHERE status='DISPONIVEL' AND ativo = 1`, ou `NOT EXISTS` de empréstimo EMPRESTADA
+  da ferramenta); depois do COMMIT, **reler pela chave/número** para distinguir 201 de 409 `A ferramenta não está
+  disponível` (molde `epiService.js:374-399`); evidência inserida por `SELECT … FROM termos_emprestimo_ferramenta WHERE
+  numero = …`.
+- **C3 — fila da cadeia:** a gravação do termo roda em `naFilaDaCadeia` com `cabecaDaCadeia` (como a do EPI) — senão
+  termo e EPI simultâneos disputam a `sequencia`.
+- **I1 — testes existentes:** ~12 arquivos (`tool*.api.test.js`, `auditoriaDoAtoCadastros`, `validadesNoDiaLocal`) e o
+  `FerramentasAlmoxarifado.test.js` mandam JSON só com `colaborador_nome` → helper de teste `emprestarComTermo` e
+  migração dos testes **na T2**; validação no serviço depois do multer (como a rota de EPI), com coerção de string.
+- **I2 — controles extras por contexto:** o registro de contexto (RN-180.01) inclui `extras(db)`; o EPI registra os
+  dele ("entrega sem evidência", cauda apagada); o termo registra "termo sem evidência".
+- **I3 — idempotência ANTES do claim** (reenvio com a mesma chave devolve o empréstimo gravado, 200).
+- **I4 — permissões:** helper `requireAlgumaPermissao([...])` para `/aux/colaboradores` e `/evidencias/cadeia/verificar`
+  (`entregar_epi` ou `gerenciar_ferramentas`); `GET /termos/FERRAMENTA` exige `gerenciar_ferramentas`; o POST de versão
+  exige `editar_termos` (só ADMINISTRADOR) e aparece em `minhas-permissoes`.
+- **Menores:** calibração vencida continua bloqueando, no serviço, antes do claim, com `limparUploadOrfaoEm` em toda saída
+  ≠ 201; colaborador **sem matrícula** é recusado no empréstimo (regra nova — letra C); setor do snapshot vem do
+  cadastro; a versão vigente é comparada **dentro** da transação; dois admins salvando juntos → 409 `Outra versão do
+  termo acabou de ser salva — recarregue`, não 500; tabela de versões **sem FK** para `usuarios`; T1 extrai
+  `colaboradorAtivo`, `conferirMatricula`, `conferirPng`, `chaveIdempotencia` para um módulo comum
+  (`services/almoxarifado/identificacaoColaborador.js`); a T3 esconde a aba Empréstimos para quem não tem
+  `gerenciar_ferramentas`.
+- **Letra D:** o relatório "EPI por colaborador" (`reportService.js:561`) lê empréstimos de ferramenta `tipo='EPI'` e
+  ignora as entregas de EPI da 178 — enganoso, pré-existente, fora desta etapa.
