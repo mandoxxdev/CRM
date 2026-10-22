@@ -60,3 +60,50 @@
 ## Próxima tarefa detalhada
 
 *(preencher no fechamento)*
+
+---
+
+## Revisão da Fase 2 (2026-10-22) — 2 críticos, 5 importantes, 4 menores; as emendas PREVALECEM
+
+- **C1 — gravação sem UPDATE:** `criado_em` é gerado **no Node** (ISO UTC) e inserido explícito (sem DEFAULT na coluna);
+  o número `EPI-…` é gerado com `gerarNumeroDocumento` **antes** da saída (desvio declarado do contrato de
+  `inserirComNumeroUnico`: colisão ~0 e a compensação cobre); ordem: validar → **saída pelo motor** → **entrega +
+  evidência num único `db.execEmTransacao`** (`sqliteConcurrency.js:267`; `exec` sem parâmetros → escapar textos) com
+  `movimentacao_id` já conhecido → falhou a transação → **estorno de compensação** da saída (`opcoesEstorno.compensacao:
+  true`). O JSON canônico usa valores **normalizados** (`Number(...)`, `Q.qtd(...)`); teste de ida e volta (insere, lê,
+  recalcula → mesmo hash).
+- **C2 — a saída de entrega de EPI não se estorna pelo livro:** `cancelarMovimentacao` recusa antes do claim quando
+  `EXISTS (SELECT 1 FROM entregas_epi_almoxarifado WHERE movimentacao_id = ?)` → 400 `Saída de entrega de EPI não pode
+  ser estornada pelo livro — a ficha do colaborador continuaria dizendo que recebeu`. Casa pelo **vínculo**, não por
+  `documento_vinculado LIKE 'EPI-%'`. A compensação (`compensacao === true`) passa. Teste na T1. A **devolução** que
+  cite a saída de EPI também é recusada nesta etapa (mesma frase trocando "estornada pelo livro" por "devolvida") — letra D:
+  devolução de EPI é etapa própria.
+- **I1 — sem FK em `criado_por`** (a exclusão de usuário, `index.js:4310-4350`, faz UPDATE em toda FK para `usuarios` e o
+  trigger abortaria; e reescreveria quem entregou). O harness roda `foreign_keys=0` — declarado.
+- **I2 — sem FK para `colaboradores`**; a ficha usa o snapshot da evidência quando o colaborador foi excluído (teste).
+- **I3 — EPI com controle de série ou lote → 400 `EPI <codigo> com controle de série/lote não é suportado nesta
+  etapa`** (letra B, reversível).
+- **I4 — a T1 inclui o backend do cadastro do material** salvando `ca_numero`/`ca_validade` (`routes/almoxarifado.js:582/601`,
+  `materialService.js:291/367`, `schemas.js:296`, `camposLidos.js`). `ca_validade` `AAAA-MM-DD` ou vazio; inválida → 400
+  `Validade do CA inválida`.
+- **I5 — só `image/png`** → senão 400 `A assinatura deve ser uma imagem PNG`.
+- **Menores:** quantidade **inteira** > 0 → senão 400 `Quantidade de EPI deve ser inteira`; CPF mascarado só com ≥ 2
+  dígitos (`***.***.***-NN` dos dígitos), senão `null`; `epiService` **não** se embrulha em `naTravaDoMaterial` (o motor
+  já pega; a compensação roda depois de a saída voltar).
+
+### Contratos congelados para a T2
+
+- `POST /api/almoxarifado/epi/entregas` 201 → `{ id, numero, movimentacao_id, evidencia: { id, arquivo_url,
+  arquivo_sha256, registro_sha256, criado_em } }`; 400 com `{ error }` (mensagens literais acima); 403 do
+  `requirePermission`.
+- `GET /api/almoxarifado/epi/entregas?colaborador_id=&material_id=&de=&ate=` → `[{ id, numero, criado_em,
+  colaborador_id, colaborador_nome, matricula, material_id, material_codigo, material_nome, ca_numero, ca_validade,
+  quantidade, tamanho, motivo, entregue_por_nome }]` (mais recentes primeiro).
+- `GET /api/almoxarifado/epi/ficha/:colaborador_id` → `{ colaborador: { id, nome, matricula, setor, cpf_mascarado,
+  excluido: bool }, entregas: [{ ...linha da lista, arquivo_url, registro_sha256 }] }`; colaborador sem entregas e
+  inexistente → 404 `Colaborador #<id> não encontrado`.
+- `GET /api/almoxarifado/epi/entregas/:id/verificar` → `{ integro: true }` | `{ integro: false, motivo }`; 404
+  `Entrega de EPI #<id> não encontrada`.
+- `GET /api/almoxarifado/aux/colaboradores` → `[{ id, nome, matricula, setor }]` (ativos, por nome).
+- Material (`GET/POST/PUT /materiais`) com `ca_numero`, `ca_validade`; a lista/busca de materiais devolve `is_epi`
+  (bool calculado pelas três marcas) para a tela filtrar.
