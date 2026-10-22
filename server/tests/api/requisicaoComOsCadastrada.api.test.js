@@ -8,8 +8,8 @@
  * - Com `os_id`, o servidor grava `os_referencia = numero_os` (C2), na criacao e no rascunho; OS fechada e aceita.
  * - Sem `os_id`, nada muda (RN-172.01: o numero livre continua — `requisicaoExigeOS` trava isso sem mudanca).
  * - `/copiar` leva o `os_id` so se a OS ainda existir (I2).
- * - `GET /api/requisicoes-material/aux/ordens-servico[?incluir=]`: so `id, numero_os, status` (I4), OS abertas pela regua
- *   `osFechada` ANTES do LIMIT 300, `incluir` por consulta a parte; para quem cria requisicao sem modulo almoxarifado.
+ * - `GET /api/requisicoes-material/aux/ordens-servico`: so `id, numero_os, status` (I4), OS abertas pela regua
+ *   `osFechada` ANTES do LIMIT 300, sem `?incluir` (removido na Fase 5 — ignorado); para quem cria requisicao sem modulo almoxarifado.
  *
  * O harness nao tem `ordens_servico` (tabela core): o teste a cria (depois de provar a rota aux sem ela).
  * Executar: cd server && node tests/api/requisicaoComOsCadastrada.api.test.js
@@ -208,18 +208,18 @@ const AUX = '/api/requisicoes-material/aux/ordens-servico';
     for (const o of r.body) assert.deepStrictEqual(Object.keys(o).sort(), ['id', 'numero_os', 'status'], JSON.stringify(o));
   });
 
-  await test('[RN-172.08, I4] ?incluir=<id da fechada> devolve tambem ela; incluir invalido e ignorado', async () => {
+  // Fase 5 da 172: o `?incluir` saiu (nenhum client usava; deixava qualquer logado ler numero e status de OS fechada
+  // por id). O parametro e IGNORADO: a fechada nao vem nem pedida pelo id. Metade positiva: a aberta continua vindo.
+  await test('[RN-172.08, I4, Fase 5] ?incluir=<id da fechada> e IGNORADO: a fechada nao vem; a aberta continua', async () => {
     const fechada = await novaOs('concluido');
+    const aberta = await novaOs('aberta');
     const r = await as(COMERCIAL, () => request(app).get(AUX).query({ incluir: String(fechada.id) }));
     assert.strictEqual(r.status, 200, JSON.stringify(r.body));
-    const achada = r.body.find((o) => Number(o.id) === fechada.id);
-    assert.deepStrictEqual({ ...achada }, { id: fechada.id, numero_os: fechada.numero, status: 'concluido' });
-    const ruim = await as(COMERCIAL, () => request(app).get(AUX).query({ incluir: 'abc' }));
-    assert.strictEqual(ruim.status, 200);
-    assert.ok(!ruim.body.some((o) => Number(o.id) === fechada.id));
+    assert.ok(!r.body.some((o) => Number(o.id) === fechada.id), 'a fechada nao vem pelo ?incluir');
+    assert.ok(r.body.some((o) => Number(o.id) === aberta.id), 'a aberta vem');
   });
 
-  await test('[I4] o filtro de fechadas vem ANTES do LIMIT 300: uma OS aberta antiga aparece com 300 fechadas mais novas; ?incluir de uma aberta fora do top nao duplica', async () => {
+  await test('[I4] o filtro de fechadas vem ANTES do LIMIT 300: uma OS aberta antiga aparece com 300 fechadas mais novas', async () => {
     const antiga = await novaOs('pendente');
     for (let i = 0; i < 301; i += 1) {
       // eslint-disable-next-line no-await-in-loop
@@ -230,9 +230,6 @@ const AUX = '/api/requisicoes-material/aux/ordens-servico';
     assert.strictEqual(semIncluir.status, 200);
     assert.ok(semIncluir.body.some((o) => Number(o.id) === antiga.id), 'a aberta antiga aparece sem precisar de incluir');
     assert.ok(semIncluir.body.every((o) => !/cancelad/i.test(o.status)), 'nenhuma fechada');
-    const r = await as(COMERCIAL, () => request(app).get(AUX).query({ incluir: String(antiga.id) }));
-    assert.strictEqual(r.status, 200);
-    assert.strictEqual(r.body.filter((o) => Number(o.id) === antiga.id).length, 1, 'a aberta antiga aparece uma vez');
   });
 
   // ══════════ a cesta com o seletor ══════════

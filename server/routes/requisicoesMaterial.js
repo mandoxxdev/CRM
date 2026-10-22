@@ -72,8 +72,9 @@ module.exports = function registerRequisicoesMaterialRoutes(app, db, authenticat
    * warehouseMode), para QUEM CRIA requisicao: o mesmo `authenticateToken` do `app.use` acima, sem portao de modulo (a
    * `/api/almoxarifado/aux/ordens-servico` exige o modulo do almoxarifado e a de Compras o de compras). Exposicao aceita
    * (letra B): so `id, numero_os, status` — sem cliente. OS abertas pela regua da 171 (`STATUS_OS_FECHADA`, sem caixa e
-   * sem espaco) filtradas ANTES do `LIMIT 300`; `?incluir=<id>` devolve tambem essa OS (fechada inclusive), buscada a
-   * parte para nao competir pelo LIMIT; `incluir` que nao e inteiro positivo e ignorado. Sem a tabela core -> `[]`.
+   * sem espaco) filtradas ANTES do `LIMIT 300`. Sem a tabela core -> `[]`. SEM `?incluir` (Fase 5 da 172): nenhum client o
+   * usava (o seletor so lista abertas; a OS de uma copia vai no `os_id` do proprio `/copiar`), e ele deixava qualquer
+   * logado ler numero e status de OS fechada por id — exposicao a mais sem consumidor. Parametro ignorado.
    * POSICAO: registrada antes de `GET /api/requisicoes-material/:id`, que a sombrearia (`:id` = "aux").
    */
   app.get('/api/requisicoes-material/aux/ordens-servico', async (req, res) => {
@@ -89,10 +90,6 @@ module.exports = function registerRequisicoesMaterialRoutes(app, db, authenticat
       } catch (e) {
         if (/no such table/i.test(String(e && e.message))) return res.json([]);
         throw e;
-      }
-      const incluir = String(req.query.incluir ?? '').trim();
-      if (/^\d+$/.test(incluir) && Number(incluir) > 0 && !rows.some((r) => Number(r.id) === Number(incluir))) {
-        rows.push(...(await dbAll(db, `${sel} WHERE os.id = ?`, [Number(incluir)])));
       }
       res.json(rows);
     } catch (e) {
