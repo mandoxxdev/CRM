@@ -1,6 +1,6 @@
 # Etapa 173 — F2 abre o cadastro completo do fornecedor numa janela
 
-> **Status:** em execução · **Branch:** `etapa-e173` (worktree `CRM-wt-e173`) · **Data:** 2026-10-22
+> **Status:** 🟢 entregue (2026-10-22) · **Branch:** `etapa-e173` (worktree `CRM-wt-e173`) · **Data:** 2026-10-22
 > **Origem:** pedido do cliente (Compras), repassado pelo André em 2026-10-22: "atalho ao apertar F2 para abrir um
 > modal com a tela de cadastro de fornecedor". Junto, a reclamação do mesmo cliente: "ao iniciar o cadastro, são
 > exibidos apenas os campos Nome, Nome Fantasia e CNPJ" — medido: é o modal **"Cadastrar novo"** do grupo homologado
@@ -94,10 +94,68 @@ worktree — paralelizar custaria mais (duas worktrees, dois jest) do que econom
 
 ## Andamento
 
-- [ ] T1
-- [ ] T2
-- [ ] T3
-- [ ] T4
-- [ ] T5
-- [ ] Revisão adversarial
-- [ ] Fechamento
+- [x] T1 — `1f889f51`: `FornecedorFicha` extraída; a suíte da 34 passa sem edição (22/22). Controle: trocar o toast da página derruba 2.
+- [x] T2 — `0cbaa535`: `FornecedorModal` (portal, Esc só com foco dentro, fundo não fecha) e `useAtalhoF2`; a ficha ganha `grupoTravado` e
+  `stopPropagation` no submit.
+- [x] T3 — `f86947bb`: pedido e cotação (botão, F2, novo no topo e escolhido, `juntarListaCarregada`, desligado com fornecedor travado e
+  enquanto carrega).
+- [x] T4 — `85b4bbdc`: grupo homologado — o modal de 3 campos saiu; a ficha completa com o grupo travado; F2 respeita `podeVincular` e os
+  outros dois modais.
+- [x] T5 — `15b8b91a`: `FornecedorF2.test.js`, 19 cenários (23 depois da Fase 5), incluindo o pedido salvo de ponta a ponta.
+- [x] Revisão adversarial — `5b67cfa8` (abaixo).
+- [x] Fechamento — novidades (seção da etapa, **B1120** a **B1124**), manual (14c.2 reescrita, 14c.4, 14c.5), guia, mapa de Compras.
+
+**Divergências do plano.**
+- A T1 foi feita antes da revisão do plano (Fase 2) voltar, por não depender dela; nada nela mudou depois.
+- **A primeira versão do plano citava a rota de fornecedor errada** (`server/routes/compras.js` com `FornecedorSchema`, que nunca roda) e um
+  exemplo de recusa que não existe ("400 CNPJ inválido"). Corrigido na Fase 2 — ver acima.
+- **O manual do sistema estava errado sobre o fornecedor desde a Etapa 34**, independente desta etapa: a 14c.2 descrevia a ficha antiga
+  (sem inscrição estadual, CEP, os dois telefones, a consulta do CNPJ) e a 14c.4 citava as recusas da rota que nunca roda (*"Dados inválidos —
+  razao_social: …"*, *"Dados inválidos — grupo_id: …"*, *"Dados inválidos — status: …"*); o certo, lido do código e da suíte
+  `comprasFornecedor.api.test.js`, é *"Razão social é obrigatória"*, *"Grupo inválido"*, *"Grupo não encontrado"*, *"Grupo desativado — …"*,
+  *"Status inválido"*. Reescrito no manual (que não guarda a versão errada à vista, pela regra dele); registrado aqui.
+- Paralelismo: zero. T3 e T4 eram galhos, mas pequenos e no mesmo client — rodaram em sequência (decisão do plano).
+
+## Fase 5 — revisão adversarial
+
+Um revisor fresco, quatro lentes. Cinco achados, todos reais; nenhum ruído:
+
+1. **Com o guia "?" aberto o F2 abria a ficha escondida atrás dele** (z-index 9999, montado em toda tela) — o guia e o tour entram em
+   `JANELAS_POR_CIMA`. Corrigido, com teste.
+2. **O Tab escapava da janela** para o pedido atrás do fundo escuro (`aria-modal` não prende foco); um Enter ali salvaria o pedido com o
+   fornecedor antigo. O Tab agora circula dentro. Corrigido, com teste.
+3. **Ao fechar, o foco caía no `<body>`.** Volta ao campo de onde o F2 foi apertado — lido no **render** que abre a janela (no efeito já
+   seria a razão social: o efeito da ficha, filha, roda antes). Corrigido, com teste — e com a sabotagem que lê no efeito (S14) derrubando-o.
+4. **"Cancelar" não tinha teste.** Escrito.
+5. **Duas guardas redundantes** (`!novoFornecedorAberto`, `!showModalAdd`) — o seletor de janelas por cima também as cobre; apagar só uma
+   não derruba teste. **Mantidas e declaradas** (proteção em dobro), como o par portal-fora-do-form + `stopPropagation`.
+
+Controle positivo da etapa: 15 sabotagens (S1–S15). S1 (só o `stopPropagation`) não derrubou nada — o defeito ficou **inalcançável** pela
+outra proteção (a janela fora do `<form>` na árvore do React); a sabotagem dupla derruba o cenário de integração. As outras 14 derrubaram
+cada uma o cenário dela (lido o nome do cenário que caiu, não só o placar).
+
+## Retro (4 números)
+
+- Rodadas de correção até verde: **1** (a Fase 5).
+- Achados: Fase 2 — **8** (2 bloqueantes, 6 menores), todos reais; Fase 5 — **5**, todos reais, 0 ruído.
+- Paralelismo: **0** galhos em paralelo (decisão: tasks pequenas no mesmo client); sem retrabalho.
+- Defeito que escapou: a preencher na próxima etapa que tocar Compras.
+
+## Próxima tarefa detalhada
+
+A próxima etapa numerada é da outra frente (a **174** está reservada para a sessão que fecha a 172). Desta frente, o que a usuária de Compras
+pediu e ainda não existe, em ordem de valor e de prontidão:
+
+1. **Ferramentas: o formulário de edição na tela** (spec `16-ferramentas-calibracao`, checklist "Edição de ferramenta pela tela").
+   `PUT /api/almoxarifado/ferramentas/:id` e o 409 de patrimônio duplicado **já existem e estão testados**
+   (`server/tests/api/toolFerramentaEdicao.api.test.js`) — falta só o formulário em `FerramentasAlmoxarifado.js`. É o primeiro passo do
+   item "ferramentas, EPIs e ativos" que ela pediu, e não depende de nada que ela precise mandar.
+2. **Entrega/empréstimo de ferramenta e EPI com assinatura** (NR-6: identificação do colaborador, registro sem edição, número do CA, ficha
+   de EPI em PDF). **Espera os formulários em papel** que a empresa usa hoje — sem eles, os campos seriam inventados. A assinatura de entrega
+   de requisição (`deliverySignatureService.js`, append-only) é o molde de gravação.
+3. **Retorno da manutenção com a condição do item e o destino (volta ao responsável ou descarte/baixa).** Hoje `concluir manutenção` só
+   devolve a ferramenta a *DISPONIVEL* (`toolService.js`); falta a condição e a baixa patrimonial.
+
+Pontos de atenção para quem pegar a 1: a tela de ferramentas usa a ação de perfil `gerenciar_ferramentas` (ADMINISTRADOR, ALMOXARIFE) nas
+escritas; o 409 de patrimônio duplicado tem literal própria no teste citado — a tela tem de mostrá-la sem reescrever. O teste prova o
+409 no **POST** e o PUT em id inexistente (404); **medir** se o PUT que duplica patrimônio também responde 409 antes de prometer a frase na tela.

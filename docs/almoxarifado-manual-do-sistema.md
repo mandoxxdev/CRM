@@ -4197,28 +4197,61 @@ inclusive — o filtro é que separa.
 
 ### 14c.2 Cadastrar e editar um fornecedor
 
-**Compras → Fornecedores → Novo Fornecedor** abre a tela **"Novo fornecedor"**; o lápis de uma linha
-abre **"Editar fornecedor"** com tudo preenchido. Os campos:
+**Compras → Fornecedores → Novo Fornecedor** abre a tela **"Novo fornecedor"** com a ficha inteira — todos
+os campos já na primeira tela, sem precisar salvar e voltar para completar; o lápis de uma linha abre
+**"Editar fornecedor"** com tudo preenchido. A ficha tem três blocos:
 
-| Campo | O que é |
-|---|---|
-| **Razão social** | **Obrigatória.** É o único campo que a tela exige |
-| **Nome fantasia**, **CNPJ**, **Contato**, **E-mail**, **Endereço** | Texto livre, opcionais. Não há validação de formato de CNPJ nem de e-mail, e dois fornecedores podem ter o mesmo CNPJ |
-| **Telefone** | Opcional; ganha máscara enquanto se digita |
-| **Grupo** | Opcional. *"Sem grupo"* ou um dos grupos de fornecedores homologados. Escolher *"Sem grupo"* na edição **tira** o fornecedor do grupo em que estava |
-| **Status** | **Só na edição.** *Ativo* ou *Inativo*. Todo fornecedor **nasce ativo** — a tela de criação não tem o campo |
+| Bloco | Campo | O que é |
+|---|---|---|
+| **Identificação** | **Razão social** | **Obrigatória.** É o único campo que a ficha exige |
+| | **Nome fantasia**, **Inscrição estadual** | Texto livre, opcionais |
+| | **CNPJ** | Opcional; ganha a máscara *00.000.000/0000-00* enquanto se digita. No cadastro **novo**, sair do campo com um CNPJ completo e válido consulta o CNPJ e **preenche** razão social, nome fantasia, endereço, cidade, estado, CEP, telefone e e-mail com o que a consulta trouxer. A **lupa** ao lado consulta a qualquer momento; na **edição** ela só preenche os campos que estão **vazios** — o que já foi digitado fica. CNPJ com dígito errado na lupa: *"CNPJ inválido. Verifique os dígitos."*; consulta que falha: *"Não foi possível consultar o CNPJ"*. O servidor não confere o CNPJ, e dois fornecedores podem ter o mesmo |
+| | **Grupo homologado** | Opcional. *"Sem grupo"* ou um dos grupos ativos. Escolher *"Sem grupo"* na edição **tira** o fornecedor do grupo. Um fornecedor de grupo que foi desativado aparece como *"Grupo desativado (#⟨número⟩)"* e continua nele ao salvar |
+| | **Status** | **Só na edição.** *Ativo* ou *Inativo*. Todo fornecedor **nasce ativo** |
+| **Contato** | **Nome do vendedor**, **E-mail** | Texto livre, opcionais |
+| | **Telefone da empresa**, **Telefone do vendedor** | Opcionais; ganham máscara enquanto se digita |
+| **Endereço** | **CEP** | Opcional. Sair do campo com os 8 dígitos (ou a lupa) consulta o CEP e preenche **endereço**, **cidade** e **estado** — só os que estão vazios. *"CEP não encontrado"* quando o CEP não existe; *"Não foi possível consultar o CEP"* quando a consulta falha |
+| | **Endereço**, **Cidade** | Texto livre, opcionais |
+| | **Estado** | Uma das 27 siglas |
 
 Salvar mostra *"Fornecedor salvo"* e volta para a lista. Salvar **sem razão social** (ou só com
-espaços) é recusado pela própria tela, antes de chamar o servidor, com a faixa vermelha
+espaços) é recusado pela própria ficha, antes de chamar o servidor, com a faixa vermelha
 **"Razão social é obrigatória"**. A edição **reenvia todos os campos**: o que estiver em branco na
-tela fica em branco no cadastro.
+ficha fica em branco no cadastro.
 
 Se o fornecedor tiver sido apagado por outra pessoa enquanto a tela estava aberta, a edição abre com a
 faixa *"Fornecedor não encontrado"*.
 
-**Os outros caminhos que também cadastram e editam fornecedor** são os modais da tela do grupo
-homologado (14c.5). Todos gravam no mesmo cadastro; a diferença é que só a tela de edição de
-**Compras → Fornecedores** tem o campo **Status**, e só o modal do grupo tem a **foto**.
+#### Cadastrar o fornecedor sem sair do pedido, da cotação ou do grupo — a tecla F2
+
+Quem está montando um **pedido de compra** ou uma **cotação** e não acha o fornecedor na lista não
+precisa sair da tela: a tecla **F2** — ou o botão **+ Novo fornecedor F2**, ao lado do campo
+**Fornecedor** — abre a janela **"Novo fornecedor"** por cima do pedido, com a **mesma ficha completa**
+de cima (o cursor já fica na razão social). Ao **Salvar**, a janela fecha, o fornecedor novo aparece
+**no topo** da lista do campo **Fornecedor** e **já fica escolhido**, e aparece *"Fornecedor ⟨razão
+social⟩ cadastrado e escolhido no pedido"* (na cotação, *"… escolhido na cotação"*). Tudo o que já estava
+no pedido ou na cotação — itens, quantidades, preços, condições — continua como estava; o pedido em si
+**não** é salvo junto: ele só é gravado quando se clica em **Salvar pedido**.
+
+Como a janela se comporta:
+
+- **Fecha sem gravar** pelo **×**, por **Cancelar** ou pela tecla **Esc**. **Clicar no fundo escuro não
+  fecha** — a ficha tem muitos campos, e um clique fora não pode jogá-los fora. Ao fechar, o cursor volta
+  para o campo onde estava quando o F2 foi apertado.
+- A tecla **Tab** circula só dentro da janela enquanto ela está aberta.
+- Se o servidor recusar o cadastro, a mensagem aparece **dentro da janela**, em vermelho, e a janela
+  continua aberta com tudo o que foi digitado (as mensagens estão em 14c.4).
+- O F2 **não faz nada** quando: o fornecedor do pedido está travado (pedido que já teve recebimento) —
+  nesse caso o botão também não aparece; a cotação já virou pedido; a tela ainda está carregando; ou já
+  há outra janela aberta por cima (a própria janela do F2, a busca do Ctrl+K, a ajuda do F1 ou do botão
+  **?**, ou outra janela da tela). Também não vale o F2 segurado nem com Ctrl, Alt, Shift ou a tecla do
+  sistema.
+
+Na tela de um **grupo homologado**, o botão **Novo fornecedor (F2)** e a tecla F2 abrem a mesma janela,
+com o **Grupo homologado** já escolhido e **travado** no grupo da tela (14c.5).
+
+O F2 existe no pedido de compra, na cotação e na tela do grupo homologado. As telas do almoxarifado que
+também escolhem fornecedor (remessas a terceiros e reposição) não têm o atalho.
 
 ### 14c.3 O que "Inativo" faz — e o que não faz
 
@@ -4246,11 +4279,21 @@ mas **não** aparece no seletor do Recebimento até ser salvo uma vez pelo lápi
 
 | Situação | O que acontece |
 |---|---|
-| Razão social vazia | A tela recusa antes do servidor: *"Razão social é obrigatória"*. Pelo servidor, a mesma regra responde *"Dados inválidos — razao_social: Razão social é obrigatória"* |
-| Grupo que não seja um número de grupo | *"Dados inválidos — grupo_id: grupo do fornecedor inválido"* (a tela só oferece grupos existentes; isto só ocorre por outro caminho) |
-| Status fora de *ativo* / *inativo* | *"Dados inválidos — status: status do fornecedor inválido (use ativo ou inativo)"* (idem) |
+| Razão social vazia (ou só espaços) | A ficha recusa antes do servidor: *"Razão social é obrigatória"*. Pelo servidor, a mesma frase |
+| Grupo que não é um número de grupo | *"Grupo inválido"* (a ficha só oferece grupos existentes; isto só ocorre por outro caminho) |
+| Grupo que não existe | *"Grupo não encontrado"* |
+| Grupo desativado (por exemplo, desativado por outra pessoa com a ficha aberta) | *"Grupo desativado — reative o grupo em Fornecedores homologados antes de vincular fornecedores"* |
+| Status fora de *ativo* / *inativo* (só na edição) | *"Status inválido"* (idem: a ficha só oferece os dois) |
 | Fornecedor que não existe (abrir ou editar) | *"Fornecedor não encontrado"* |
+| Quem não tem acesso ao módulo Compras | *"Acesso negado ao módulo"* |
 | Excluir fornecedor com pedido, cotação ou itens | As três frases de 14b.5, nessa ordem |
+
+Todas aparecem na faixa vermelha da ficha — na tela **"Novo fornecedor"**/**"Editar fornecedor"** ou dentro
+da janela do F2.
+
+**Os outros caminhos que também editam fornecedor** são os modais da tela do grupo homologado (14c.5).
+Todos gravam no mesmo cadastro; a diferença é que só a edição de **Compras → Fornecedores** tem o campo
+**Status**, e só o modal **Editar fornecedor** do grupo tem a **foto**.
 
 ### 14c.5 Grupos de fornecedores homologados
 
@@ -4266,9 +4309,11 @@ recusa da lixeira, 14b.5).
   **ativos** que ainda não estão neste grupo. Sem ninguém disponível, a frase é *"Todos os
   fornecedores ativos já estão em um grupo (inativos não podem ser vinculados) — ou cadastre um
   novo."*. Confirmar mostra *"Fornecedor adicionado ao grupo"*.
-- **Novo fornecedor** (o outro botão da tela do grupo) abre o modal *"Novo fornecedor"*, que pede
-  razão social (obrigatória: *"Razão social é obrigatória"*), nome fantasia e CNPJ, e mostra
-  *"Fornecedor cadastrado e vinculado ao grupo"* — o fornecedor nasce ativo e já dentro do grupo.
+- **Novo fornecedor (F2)** (o outro botão da tela do grupo — ou a tecla **F2**, quando nenhuma outra janela
+  está aberta) abre a janela *"Novo fornecedor"* com a **ficha completa** de 14c.2, com o **Grupo
+  homologado** já escolhido e travado no grupo da tela. Salvar mostra *"Fornecedor cadastrado e vinculado
+  ao grupo"* e a lista do grupo recarrega — o fornecedor nasce ativo e já dentro do grupo. Grupo
+  desativado não oferece o botão.
 - **Remover do grupo** pergunta *"Remover "⟨razão social⟩" deste grupo? O fornecedor continua
   cadastrado."* e, confirmado, mostra *"Fornecedor removido do grupo"* — o cartão sai do grupo e o
   fornecedor continua existindo em **Compras → Fornecedores**, sem grupo. O mesmo efeito se obtém

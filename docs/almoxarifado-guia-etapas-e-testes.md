@@ -6841,6 +6841,43 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 173 — F2 abre o cadastro completo do fornecedor sem sair do pedido, da cotação ou do grupo (ENTREGUE — 2026-10-22)
+
+**O que mudou, em uma frase:** apertar **F2** no pedido de compra, na cotação ou na tela de um grupo homologado abre a ficha completa do
+fornecedor numa janela; ao salvar, o fornecedor novo já fica escolhido e nada do que estava digitado se perde.
+
+**O problema que ela resolve.** A usuária de Compras pediu o atalho F2 e reclamou que o cadastro de fornecedor só mostrava razão social,
+nome fantasia e CNPJ, obrigando a salvar e abrir de novo para completar. Esse cadastro resumido era o do botão **Novo fornecedor** do grupo
+homologado; a ficha de **Compras → Fornecedores → Novo Fornecedor** já era completa (se em produção ela mostra três campos, falta o deploy da
+Etapa 34). E quem estava no meio de um pedido tinha de largá-lo para cadastrar o fornecedor.
+
+| Antes | Agora |
+|---|---|
+| Fornecedor fora da lista no pedido ou na cotação: sair, cadastrar, voltar e refazer | **F2** ou **+ Novo fornecedor F2** abre a ficha por cima; salvar escolhe o novo |
+| Grupo homologado → **Novo fornecedor**: só razão social, fantasia e CNPJ | A ficha completa, com o grupo da tela já escolhido e travado |
+
+**Roteiro de teste (5 minutos — com um usuário que tenha Compras, ou o administrador).**
+
+1. **Compras → Pedidos de Compra → Novo Pedido.** Escolha um fornecedor e inclua um item com quantidade e preço.
+2. Clique em qualquer campo e aperte **F2**. Abre a janela **"Novo fornecedor"** com **Identificação**, **Contato** e **Endereço**; o
+   cursor está na **Razão social**.
+3. Clique no **fundo escuro**: a janela **não** fecha. Aperte **Esc**: fecha, e nada foi gravado.
+4. Aperte **F2** de novo e clique **Salvar** sem digitar nada: a faixa vermelha *"Razão social é obrigatória"* aparece dentro da janela.
+5. Digite *ACME TESTE LTDA* (e, se quiser, um CNPJ válido — sair do campo preenche o resto) e **Salvar**. A janela fecha, aparece *"Fornecedor
+   ACME TESTE LTDA cadastrado e escolhido no pedido"*, o campo **Fornecedor** mostra o novo, e o item do passo 1 continua lá.
+6. Vá a **Compras → Pedidos de Compra** sem salvar: o pedido **não** está na lista (a janela não salva o pedido). Volte, refaça e clique
+   **Salvar pedido**: o pedido sai com o fornecedor novo.
+7. **Compras → Cotações → Nova Cotação**: o botão **+ Novo fornecedor F2** ao lado de **Fornecedor** faz o mesmo (*"… escolhido na
+   cotação"*).
+8. Abra um pedido que **já teve recebimento**: o botão não aparece e o F2 não abre nada.
+9. **Compras → Fornecedores homologados**, abra um grupo e clique **Novo fornecedor (F2)**: a ficha completa com **Grupo homologado** travado
+   no grupo. Salve: *"Fornecedor cadastrado e vinculado ao grupo"* e o cartão aparece.
+10. Com a busca **Ctrl+K** aberta, aperte **F2**: nada abre por trás dela.
+
+**O que esta etapa não cobre.** O F2 de setembro (incluir vários materiais de uma vez no pedido) não volta — a tecla agora é do fornecedor
+(**B1122** pergunta se vocês sentem falta dele). Remessas a terceiros e Reposição não ganharam o F2. A janela só cadastra; editar continua no
+lápis de Compras → Fornecedores. Nada muda no servidor; nenhuma consulta antes do deploy.
+
 ## Etapa 171 — Pedido de compra vinculado a uma OS (ENTREGUE — 2026-10-22)
 
 **O que mudou, em uma frase:** o comprador diz no pedido para qual OS é a compra, e o material que chega desse pedido fica guardado para
