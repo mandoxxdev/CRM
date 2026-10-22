@@ -287,7 +287,7 @@ caixas marcadas), novidades (seção da Etapa 184, letra B abaixo, D (20) marcad
 
 - **B1210** — Quem recebe os ids dos aprovadores: **quem configura o almoxarifado ou o administrador do sistema** — o mesmo grupo que abre a aba no
   client. **Descartado:** só `canConfigureAlmox` do servidor (a aba do administrador do sistema, só leitura desde a Etapa 126, ficaria com as
-  caixas desmarcadas mentindo "ninguém aprova"); `can(user, 'configurar')` (dá o mesmo grupo hoje, mas por outro caminho — `getPerfilFromUser`
+  caixas desmarcadas mentindo "ninguém aprova"); `can(user, 'configurar')` (dá o mesmo grupo hoje, salvo a caixa do `role` — emenda M4 —, mas por outro caminho — `getPerfilFromUser`
   compara `role === 'admin'` sensível à caixa, `isSystemAdmin` não — e o client decide pela `systemPermissions`; dois critérios para a mesma aba
   divergiriam na primeira mudança). Reversível: um `||` na rota.
 - **B1211** — `aprovadores` (nome e e-mail) sai do GET **para todo mundo**, inclusive para quem configura. **Por quê:** nenhum consumidor lê
