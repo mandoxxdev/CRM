@@ -162,8 +162,11 @@ async function relatorioReservadoPorOS(db, osId) {
 async function relatorioConsumoPorOS(db, osId, dataInicio, dataFim) {
   const ehSaida = "m.tipo IN ('SAIDA','SAIDA_PRODUCAO','SAIDA_MONTAGEM','SAIDA_ASSISTENCIA')";
   const tiposDev = TIPOS_DEVOLUCAO.map((t) => `'${t}'`).join(',');
+  // Etapa 174 (Fase 5, item 3): `m.referencia = 'DEV-' || d.id` sozinho varria a tabela de devolucoes por linha do livro
+  // (SCAN d); o `d.id = CAST(SUBSTR(...))` deixa o SQLite buscar pela chave primaria (SEARCH d USING INTEGER PRIMARY KEY), e
+  // a igualdade de texto continua conferindo — as duas juntas casam exatamente as mesmas linhas de antes.
   const ehDevolvido = `((m.tipo IN (${tiposDev}) AND NOT EXISTS (SELECT 1 FROM devolucoes_material_almoxarifado d
-        WHERE m.referencia = 'DEV-' || d.id AND d.destino = 'SUCATA'))
+        WHERE d.id = CAST(SUBSTR(m.referencia, 5) AS INTEGER) AND m.referencia = 'DEV-' || d.id AND d.destino = 'SUCATA'))
       OR (m.tipo = 'ENTRADA' AND m.requisicao_id IS NOT NULL))`;
   let sql = `SELECT m.material_id, ma.nome, ma.codigo,
       SUM(CASE WHEN ${ehSaida} THEN m.quantidade ELSE 0 END) as total_consumido,
