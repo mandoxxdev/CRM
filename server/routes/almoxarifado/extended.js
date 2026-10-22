@@ -2013,7 +2013,9 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
           { arquivo: req.file.filename, dir: uploadsAlmoxDir, segredo: segredoDaEvidencia() });
         res.status(201).json(out);
       } catch (e) {
-        limparUploadOrfaoEm(req, uploadsAlmoxDir);
+        // Fase 5 (importante 3, M3): o PNG fica quando a saida NAO pode ser desfeita ou a transacao ja commitou — a evidencia (ou o
+        // administrador que vai conferir a saida sem evidencia) precisa dele.
+        if (!(e && e.preservarArquivo)) limparUploadOrfaoEm(req, uploadsAlmoxDir);
         handleError(res, e);
       }
     });

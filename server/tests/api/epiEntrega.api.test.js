@@ -423,7 +423,7 @@ const contar = async (db, sql, p = []) => (await dbGet(db, sql, p)).n;
       if (renomeou) await dbRun(db, 'ALTER TABLE evidencias_epi_sumida RENAME TO evidencias_assinatura_almoxarifado');
     }
     assert.strictEqual(res.status, 500, JSON.stringify(res.body));
-    assert.match(res.body.error, /^Não foi possível gravar a entrega de EPI — a saída do estoque foi desfeita\./);
+    assert.match(res.body.error, /^Não foi possível gravar a entrega de EPI — nada foi gravado: a saída do estoque foi desfeita\. Pode tentar de novo\./);
     assert.ok(movDoGancho, 'o gancho nao rodou');
     const mov = await dbGet(db, 'SELECT cancelado, movimento_estorno_id FROM movimentacoes_almoxarifado WHERE id = ?', [movDoGancho]);
     assert.strictEqual(Number(mov.cancelado), 1, 'a saida nao foi estornada');

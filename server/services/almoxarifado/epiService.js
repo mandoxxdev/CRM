@@ -26,6 +26,7 @@ const { gerarNumeroDocumento } = require('./numeroDoc');
 const { materialPhotoUrl } = require('./materialPhoto');
 const { registrarAuditoriaDoAto } = require('./audit');
 const evidencia = require('./evidenciaAssinaturaService');
+const { DEVOLUCAO_VIVA_SQL } = require('./devolucaoViva');
 const diaLocal = require('../diaLocal');
 
 const CONTEXTO = 'ENTREGA_EPI';
@@ -34,7 +35,8 @@ const PNG_ASSINATURA = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x
 
 // Ganchos de teste (pelo OBJETO do modulo, como os monkeypatch de reservaChegadaService): `antesDaGravacao` roda depois da
 // saida e antes da transacao — o teste da compensacao o usa para fazer a transacao falhar de verdade.
-const ganchos = { antesDaGravacao: null };
+// Fase 5: `depoisDaGravacao` roda depois do COMMIT (o teste do M3 a usa para provar que o PNG nao e apagado dali em diante).
+const ganchos = { antesDaGravacao: null, depoisDaGravacao: null };
 
 const erro = (msg, status = 400) => Object.assign(new Error(msg), { status });
 
@@ -241,6 +243,25 @@ async function registrarEntrega(db, user, dados, { arquivo, dir, segredo }) {
   };
   let registroSha = null;
 
+  /** Desfaz a saida (estorno de compensacao). Devolve null se desfez, ou o erro. `semDevolucaoViva`: com uma devolucao viva
+   * citando a saida, o material ja voltou — estornar contaria em dobro, e a compensacao e recusada (Fase 5, P3). */
+  const compensar = async () => {
+    try {
+      await stockService.cancelarMovimentacao(db, user, movimentacaoId,
+        `Compensação: a entrega de EPI ${numeroEntrega} não foi gravada`, { compensacao: true, semDevolucaoViva: true });
+      return null;
+    } catch (eComp) {
+      console.error(`[almoxarifado-epi] COMPENSACAO FALHOU: a saida ${movimentacaoId} (${numeroEntrega}) ficou sem entrega `
+        + `— confira e estorne-a manualmente. Erro da compensacao: ${eComp.message}`);
+      return eComp;
+    }
+  };
+  /** O 500 de quando a saida NAO pode ser desfeita: diz que ela ficou, qual e, e preserva o PNG (a unica prova da assinatura). */
+  const saidaFicou = (causa, eComp) => Object.assign(erro('Não foi possível gravar a entrega de EPI e a saída do estoque NÃO pôde '
+    + `ser desfeita: a movimentação #${movimentacaoId} (${numeroEntrega}) ficou registrada sem evidência de entrega. A assinatura `
+    + `foi preservada no servidor. Avise o administrador antes de entregar de novo. (${causa}; ${eComp.message})`, 500),
+  { preservarArquivo: true });
+
   // 4. Entrega + evidencia numa transacao. A entrega so entra se a saida continua de pe (`cancelado = 0`): um estorno pelo
   // livro que ganhou a corrida antes da transacao (a recusa C2 so existe depois que a entrega existe) deixa a transacao sem
   // linha, e a evidencia so entra se a entrega entrou. Fase 5 (critico 1): na fila da cadeia — le a cabeca, poe o elo
@@ -258,28 +279,47 @@ async function registrarEntrega(db, user, dados, { arquivo, dir, segredo }) {
       const colsEv = Object.keys(ev);
       await execEmTransacao(db, `INSERT INTO entregas_epi_almoxarifado (${colsEntrega.join(', ')})
   SELECT ${colsEntrega.map((c) => L(entrega[c])).join(', ')}
-  WHERE EXISTS (SELECT 1 FROM movimentacoes_almoxarifado WHERE id = ${L(movimentacaoId)} AND COALESCE(cancelado, 0) = 0);
+  WHERE EXISTS (SELECT 1 FROM movimentacoes_almoxarifado WHERE id = ${L(movimentacaoId)} AND COALESCE(cancelado, 0) = 0)
+    AND NOT EXISTS (SELECT 1 FROM devolucoes_material_almoxarifado d
+      WHERE d.movimentacao_saida_id = ${L(movimentacaoId)} AND ${DEVOLUCAO_VIVA_SQL});
 INSERT INTO evidencias_assinatura_almoxarifado (contexto_id, registro_sha256, ${colsEv.join(', ')})
   SELECT e.id, ${L(registroSha)}, ${colsEv.map((c) => L(ev[c])).join(', ')}
   FROM entregas_epi_almoxarifado e WHERE e.numero = ${L(numeroEntrega)};`);
     });
   } catch (e) {
-    // 5. A compensacao: a saida volta. Se ela tambem falhar, a saida fica sem evidencia — o log diz qual.
-    try {
-      await stockService.cancelarMovimentacao(db, user, movimentacaoId,
-        `Compensação: a entrega de EPI ${numeroEntrega} não foi gravada`, { compensacao: true });
-    } catch (eComp) {
-      console.error(`[almoxarifado-epi] COMPENSACAO FALHOU: a saida ${movimentacaoId} (${numeroEntrega}) ficou sem entrega `
-        + `— estorne-a manualmente. Erro da gravacao: ${e.message}. Erro da compensacao: ${eComp.message}`);
-    }
-    throw erro(`Não foi possível gravar a entrega de EPI — a saída do estoque foi desfeita. (${e.message})`, 500);
+    // 5. A compensacao: a saida volta. Fase 5 (importante 3, P4): so diz "desfeita" se desfez; senao, o 500 diz que a saida
+    // FICOU, com o numero da movimentacao, e o PNG fica no disco (`preservarArquivo`).
+    const eComp = await compensar();
+    if (eComp) throw saidaFicou(e.message, eComp);
+    throw erro(`Não foi possível gravar a entrega de EPI — nada foi gravado: a saída do estoque foi desfeita. Pode tentar de novo. (${e.message})`, 500);
   }
 
-  const gravada = await dbGet(db, `SELECT e.id, v.id AS evidencia_id FROM entregas_epi_almoxarifado e
-    JOIN evidencias_assinatura_almoxarifado v ON v.contexto = ? AND v.contexto_id = e.id
-    WHERE e.numero = ?`, [CONTEXTO, numeroEntrega]);
+  // Daqui em diante a transacao COMMITOU: se a entrega entrou, a evidencia aponta para o PNG — nenhum erro apaga o arquivo (M3).
+  let gravada;
+  try {
+    gravada = await dbGet(db, `SELECT e.id, v.id AS evidencia_id FROM entregas_epi_almoxarifado e
+      JOIN evidencias_assinatura_almoxarifado v ON v.contexto = ? AND v.contexto_id = e.id
+      WHERE e.numero = ?`, [CONTEXTO, numeroEntrega]);
+    if (gravada && typeof ganchos.depoisDaGravacao === 'function') {
+      await ganchos.depoisDaGravacao({ movimentacaoId, numero: numeroEntrega });
+    }
+  } catch (e) {
+    throw Object.assign(erro(`A entrega ${numeroEntrega} foi gravada, mas a resposta falhou (${e.message}) — `
+      + 'confira a ficha do colaborador antes de entregar de novo.', 500), { preservarArquivo: true });
+  }
   if (!gravada) {
-    throw erro(`A saída da entrega ${numeroEntrega} foi estornada enquanto a entrega era gravada — nada foi gravado. `
+    // A transacao nao gravou linha: a saida foi estornada (claim) ou ganhou uma devolucao viva (P3) no meio. M1: o 409 "nada
+    // foi gravado" so quando o estorno CONCLUIU (`movimento_estorno_id` — o claim `cancelado = 1` e provisorio e volta a 0 se o
+    // estorno falhar). Qualquer outro caso tenta a compensacao (que respeita a devolucao viva) e, nao conseguindo, diz que ficou.
+    const mov = await dbGet(db, 'SELECT cancelado, movimento_estorno_id FROM movimentacoes_almoxarifado WHERE id = ?', [movimentacaoId]);
+    if (mov && Number(mov.cancelado) === 1 && mov.movimento_estorno_id != null) {
+      throw erro(`A saída da entrega ${numeroEntrega} foi estornada enquanto a entrega era gravada — nada foi gravado. `
+        + 'Faça a entrega de novo.', 409);
+    }
+    const causa = 'a saída mudou enquanto a entrega era gravada (devolução ou estorno no meio)';
+    const eComp = await compensar();
+    if (eComp) throw saidaFicou(causa, eComp);
+    throw erro(`A entrega ${numeroEntrega} não foi gravada — ${causa}; nada foi gravado: a saída do estoque foi desfeita. `
       + 'Faça a entrega de novo.', 409);
   }
 

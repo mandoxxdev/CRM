@@ -2854,7 +2854,11 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
   // devolucao 2 -> 5; estorno -> 7), em material com ou sem serie. A devolucao ja recusa a saida estornada (returnService);
   // este e o lado que faltava. A conta e a mesma da devolucao (`SUM(quantidade)` das devolucoes da saida). Antes das guardas
   // de serie: com devolucao, religar a serie (a E2) nao adiantaria. A compensacao interna nao passa.
-  if (tiposSaida.includes(mov.tipo) && opcoesEstorno.compensacao !== true) {
+  // Etapa 178 (Fase 5, importante 2): a compensacao da entrega de EPI pede `semDevolucaoViva: true` e passa por esta guarda
+  // (e pela do claim) — uma devolucao gravada entre a saida e a transacao da entrega ja devolveu o material; estornar a saida
+  // por cima contava duas vezes (medido: 10 -> 11). As outras compensacoes ficam como estavam.
+  const exigeSemDevolucao = opcoesEstorno.compensacao !== true || opcoesEstorno.semDevolucaoViva === true;
+  if (tiposSaida.includes(mov.tipo) && exigeSemDevolucao) {
     const msgDevolvida = await recusaDoEstornoDeSaidaDevolvida(db, mov, material.unidade);
     if (msgDevolvida) throw Object.assign(new Error(msgDevolvida), { status: 400 });
   }
@@ -2952,7 +2956,7 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
   // Etapa 116 (Fase 5, revisor 2): na Saida, o claim so vale se nenhuma devolucao viva cita a saida — a conferencia e a
   // gravacao num comando so. A guarda acima le fora de qualquer trava, e a devolucao concorrente (que grava a linha dela com
   // a condicao inversa, `cancelado = 0`, em returnService) passava entre as duas: 30/30 rodadas com o fisico em dobro.
-  const claimSemDevolucao = tiposSaida.includes(mov.tipo) && opcoesEstorno.compensacao !== true;
+  const claimSemDevolucao = tiposSaida.includes(mov.tipo) && exigeSemDevolucao;
   const claim = await dbRun(db, `UPDATE movimentacoes_almoxarifado
     SET cancelado = 1, cancelado_por = ?, cancelado_em = CURRENT_TIMESTAMP, cancelamento_motivo = ?, regularizacao_pendente = 0
     WHERE id = ? AND cancelado = 0${claimSemDevolucao ? ` AND NOT EXISTS (SELECT 1 FROM devolucoes_material_almoxarifado d
