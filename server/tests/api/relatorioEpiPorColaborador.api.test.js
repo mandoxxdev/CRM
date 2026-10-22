@@ -14,7 +14,7 @@ const assert = require('assert');
 const request = require('supertest');
 const XLSX = require('xlsx');
 const { createTestApp } = require('../helpers/testApp');
-const { dbRun } = require('../../services/almoxarifado/db');
+const { dbRun, dbGet } = require('../../services/almoxarifado/db');
 const { wrapDatabase } = require('../../services/sqliteConcurrency');
 const stockService = require('../../services/almoxarifado/stockService');
 const { RELATORIOS } = require('../../services/almoxarifado/reportRegistry');
@@ -154,6 +154,20 @@ const URL = '/api/almoxarifado/relatorios/epi-colaborador';
     assert.strictEqual(por('EPI-SEM-2').tamanho, '42');
     assert.strictEqual(por(NUM_API).setor, 'Caldeiraria');
     assert.strictEqual(por(NUM_API).entregue_por_nome, 'Admin Teste');
+  });
+
+  // Fase 5 (revisao adversarial, menor 3): a evidencia e GENERICA (contexto, contexto_id) — o termo de ferramenta (180) grava
+  // `TERMO_FERRAMENTA` com o id do EMPRESTIMO, que pode coincidir com o id de uma entrega. Sem o filtro por contexto, a entrega
+  // sem assinatura viraria "Sim" pela evidencia do termo.
+  await test('[C2/Fase 5] evidencia de TERMO_FERRAMENTA com o mesmo id da entrega sem assinatura -> continua "Não"', async () => {
+    const semAss = await dbGet(db, "SELECT id FROM entregas_epi_almoxarifado WHERE numero = 'EPI-SEM-2'");
+    await dbRun(db, `INSERT INTO evidencias_assinatura_almoxarifado (contexto, contexto_id, colaborador_id, colaborador_nome, arquivo,
+      arquivo_sha256, registro_sha256, criado_em) VALUES ('TERMO_FERRAMENTA', ?, ?, 'BRUNO', 'termo.png', ?, ?, '2026-10-22T12:00:00.000Z')`,
+    [semAss.id, cB, 'a'.repeat(64), 'b'.repeat(64)]);
+    const linhas = await consultar();
+    assert.strictEqual(linhas.find((x) => x.numero === 'EPI-SEM-2').tem_evidencia, 'Não');
+    // metade positiva: a da rota (ENTREGA_EPI) continua "Sim"
+    assert.strictEqual(linhas.find((x) => x.numero === NUM_API).tem_evidencia, 'Sim');
   });
 
   await test('[RN-02] colaborador_id filtra (e muda o resultado)', async () => {
