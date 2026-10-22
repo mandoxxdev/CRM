@@ -436,6 +436,25 @@ test('[RN-185.02] nenhuma letra e perdida: a juncao das linhas de cada celula e 
   expect(textosDoPdf()).toContain('Primeira entrega');
 });
 
+// Fase 5 da 185: a emenda M1 (aparar a direita cada linha da celula) nao tinha teste — tirar o aparar deixava a suite verde. Quando a
+// palavra seguinte e maior que a coluna e e partida, o splitTextToSize devolve a linha com espaco no fim; medido cru, esse espaco passa
+// da coluna. Caso achado por sonda: o EPI "EPI-MASC-SOLDA-07 — Mascara " + 18 W da 'EPI-MASC-SOLDA-07 — Mascara ' a 49,47 mm (util 49).
+test('[Fase 5 da 185, emenda M1] linha partida antes de palavra longa sai aparada: nenhuma celula termina em espaco nem passa da coluna', async () => {
+  const material = { material_codigo: 'EPI-MASC-SOLDA-07', material_nome: `Mascara ${'W'.repeat(18)}` };
+  // metade positiva: o caso exercita a M1 — cru, o jsPDF devolve uma linha com espaco final que passa do util da coluna EPI
+  const medidor = novoMedidor();
+  medidor.setFontSize(9);
+  const cruas = medidor.splitTextToSize(`${material.material_codigo} — ${material.material_nome}`, limiteDaColuna(1) - COLUNAS_FICHA[1]);
+  expect(cruas.some((l) => /\s$/.test(l) && medidor.getTextWidth(l) > limiteDaColuna(1) - COLUNAS_FICHA[1])).toBe(true);
+
+  await gerarFichaEpiPdf({ colaborador: COLABORADOR, entregas: [{ ...ENTREGA, ...material }] }, { carregarImagem: comImagem });
+  const { entregas } = recortarTabela();
+  const comEspacoNoFim = entregas.flatMap((e) => e.celulas).filter((c) => /\s$/.test(c.t)).map((c) => [c.x, c.t]);
+  expect(comEspacoNoFim).toEqual([]);
+  expect(celulasInvasoras()).toEqual([]);
+  expect(celulasDaEntrega(0)[1].length).toBeGreaterThanOrEqual(2);
+});
+
 test('[RN-185.03] colunas novas; os textos comuns cabem em UMA linha por celula; nada de fonte 9 em x = 28', async () => {
   for (const motivo of ['TROCA', 'PRIMEIRA_ENTREGA']) {
     mockChamadas.length = 0;
