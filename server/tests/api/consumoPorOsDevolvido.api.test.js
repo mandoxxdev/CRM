@@ -141,6 +141,31 @@ function binaryParser(res, callback) {
     assert.deepStrictEqual(await linhas(os), []);
   });
 
+  // Fase 5 (lacuna 4): entrega 10, devolve 5 citando a saida da entrega, exclui a requisicao -> a exclusao estorna so o
+  // que nao voltou (5). Consumido 10, devolvido 5 (devolucao) + 5 (ENTRADA da exclusao) = 10, liquido 0.
+  await test('[F5-4] entrega 10 com OS, devolucao parcial 5, exclusao: consumido 10, devolvido 10, liquido 0', async () => {
+    const os = await novaOs();
+    const m = await material();
+    const rq = await requisicaoEntregue(m, 10, os);
+    const s = (await dbGet(db, "SELECT id FROM movimentacoes_almoxarifado WHERE requisicao_id = ? AND tipo = 'SAIDA'", [rq])).id;
+    await devolver(m, s, 5);
+    assert.deepStrictEqual(await linhas(os), [[m, 10, 5, 5]], 'depois da devolucao parcial');
+    await excluir(rq);
+    const ent = await dbGet(db, "SELECT SUM(quantidade) q, COUNT(*) n FROM movimentacoes_almoxarifado WHERE requisicao_id = ? AND tipo = 'ENTRADA' AND os_id = ?", [rq, os]);
+    assert.deepStrictEqual([Number(ent.q), ent.n], [5, 1], 'a exclusao estorna so os 5 que nao voltaram, com a OS');
+    assert.deepStrictEqual(await linhas(os), [[m, 10, 10, 0]]);
+  });
+
+  // Fase 5 (lacuna 4): o tipo legado DEVOLUCAO (livro antigo; o motor de hoje grava ENTRADA_DEVOLUCAO) conta como devolvido.
+  await test('[F5-4] tipo legado DEVOLUCAO com a OS conta como devolvido: 10/4/6', async () => {
+    const os = await novaOs();
+    const m = await material();
+    await saida(m, 10, os);
+    await dbRun(db, `INSERT INTO movimentacoes_almoxarifado (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, os_id, motivo, cancelado)
+      VALUES (?, 'DEVOLUCAO', 4, 40, 44, ?, 'legado e174', 0)`, [m, os]);
+    assert.deepStrictEqual(await linhas(os), [[m, 10, 4, 6]]);
+  });
+
   await test('[C2] filtro de periodo: saida em setembro, devolucao em outubro, filtro so outubro -> liquido negativo (0/3/-3)', async () => {
     const os = await novaOs();
     const m = await material();
