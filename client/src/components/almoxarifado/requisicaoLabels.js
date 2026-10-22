@@ -84,3 +84,7 @@ export const podeEncerrar = (status, itens) => {
 };
 
 export default TIPO_REQUISICAO_LABELS;
+
+// Etapa 172 (RN-172.07): o mesmo texto do 400 de `exigirOS` (RN-A, Etapa 33) no servidor — a cesta o
+// mostra junto do campo e o formulario no toast, antes do POST.
+export const MSG_OS_OBRIGATORIA = 'Informe o número da OS: toda saída de material precisa estar vinculada a uma OS';

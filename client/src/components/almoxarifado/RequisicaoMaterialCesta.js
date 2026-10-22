@@ -6,7 +6,7 @@ import api from '../../services/api';
 import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
 import { useRequisicoesMaterialContext } from './RequisicoesMaterialContext';
 import { DisponibilidadeBadge } from '../../utils/disponibilidadeEstoque';
-import { TIPO_REQUISICAO_LABELS } from './requisicaoLabels';
+import { TIPO_REQUISICAO_LABELS, MSG_OS_OBRIGATORIA } from './requisicaoLabels';
 import '../engenhariaProjetos/SolicitacaoMaterialEscritorioCesta.css';
 
 function mapFotoUrl(material) {
@@ -31,6 +31,33 @@ export default function RequisicaoMaterialCesta() {
   const [dataNecessidade, setDataNecessidade] = useState('');
   const [sending, setSending] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
+  // Etapa 172 (RN-172.07): texto obrigatorio + seletor opcional de OS cadastrada. Com OS escolhida o
+  // texto vira o numero_os e trava (o servidor grava numero_os quando ha os_id — emenda C2).
+  const [osReferencia, setOsReferencia] = useState('');
+  const [osId, setOsId] = useState('');
+  const [osErro, setOsErro] = useState('');
+  const [ordensServico, setOrdensServico] = useState([]);
+  const [osListaFalhou, setOsListaFalhou] = useState(false);
+
+  useEffect(() => {
+    let vivo = true;
+    // Falhar aqui NAO trava o envio: o seletor e opcional e o texto continua valendo (RN-A).
+    api.get('/requisicoes-material/aux/ordens-servico')
+      .then((res) => { if (vivo) setOrdensServico(Array.isArray(res.data) ? res.data : []); })
+      .catch(() => { if (vivo) setOsListaFalhou(true); });
+    return () => { vivo = false; };
+  }, []);
+
+  const escolherOs = (valor) => {
+    setOsId(valor);
+    if (valor) {
+      const os = ordensServico.find((o) => String(o.id) === String(valor));
+      setOsReferencia(os?.numero_os || '');
+      setOsErro('');
+    } else {
+      setOsReferencia('');
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -152,6 +179,12 @@ export default function RequisicaoMaterialCesta() {
       toast.error('Justifique a requisição emergencial');
       return;
     }
+    // RN-A: cobrada no envio, pulada no rascunho (igual ao servidor).
+    if (!salvarRascunho && !osReferencia.trim()) {
+      setOsErro(MSG_OS_OBRIGATORIA);
+      return;
+    }
+    setOsErro('');
     const setSendingFlag = salvarRascunho ? setSavingDraft : setSending;
     try {
       setSendingFlag(true);
@@ -162,6 +195,8 @@ export default function RequisicaoMaterialCesta() {
         observacoes,
         tipo_requisicao: tipoRequisicao,
         justificativa,
+        os_referencia: osReferencia.trim(),
+        os_id: osId ? Number(osId) : null,
         // Etapa 67 (T4b): so quando preenchida — vazio = sem prazo (contrato do servidor).
         ...(dataNecessidade ? { data_necessidade: dataNecessidade } : {}),
         salvar_rascunho: salvarRascunho,
@@ -177,6 +212,8 @@ export default function RequisicaoMaterialCesta() {
       setObservacoes('');
       setJustificativa('');
       setDataNecessidade('');
+      setOsReferencia('');
+      setOsId('');
       navigate(listPath);
     } catch (e) {
       toast.error(e.response?.data?.error || (salvarRascunho ? 'Erro ao salvar rascunho' : 'Erro ao enviar requisição'));
@@ -347,6 +384,42 @@ export default function RequisicaoMaterialCesta() {
               <div className="engc-subtle">Requisições emergenciais exigem justificativa para liberação imediata.</div>
             </div>
           )}
+
+          <div className="engc-obs">
+            <label htmlFor="cesta-os-select">OS cadastrada</label>
+            <select id="cesta-os-select" data-testid="cesta-os-select" value={osId}
+              onChange={(e) => escolherOs(e.target.value)}>
+              <option value="">Digitar outro número</option>
+              {ordensServico.map((os) => (
+                <option key={os.id} value={String(os.id)}>
+                  {os.numero_os}{os.status ? ` (${os.status})` : ''}
+                </option>
+              ))}
+            </select>
+            {osListaFalhou ? (
+              <div className="engc-subtle" data-testid="cesta-os-aviso">
+                Não foi possível carregar as OS cadastradas — digite o número abaixo.
+              </div>
+            ) : (
+              <div className="engc-subtle">Opcional — escolher preenche o número da OS.</div>
+            )}
+          </div>
+
+          <div className="engc-obs">
+            <label htmlFor="cesta-os-numero">Número da OS *</label>
+            <input id="cesta-os-numero" data-testid="cesta-os-numero" name="os_referencia" type="text"
+              value={osReferencia} readOnly={!!osId}
+              placeholder="Ex: OS 1714"
+              aria-invalid={osErro ? 'true' : undefined}
+              onChange={(e) => { setOsReferencia(e.target.value); if (osErro) setOsErro(''); }} />
+            {osErro ? (
+              <div role="alert" data-testid="cesta-os-erro" style={{ color: '#b91c1c', fontSize: '0.8rem', marginTop: 4 }}>
+                {osErro}
+              </div>
+            ) : (
+              <div className="engc-subtle">Obrigatório — é o que permite saber em qual serviço o material foi usado.</div>
+            )}
+          </div>
 
           <div className="engc-obs">
             <label htmlFor="cesta-data-necessidade">Data de necessidade</label>

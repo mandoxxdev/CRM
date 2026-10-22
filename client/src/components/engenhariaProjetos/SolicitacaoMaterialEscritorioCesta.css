@@ -326,7 +326,8 @@
 
 .engc-obs textarea,
 .engc-obs select,
-.engc-obs input[type="date"] {
+.engc-obs input[type="date"],
+.engc-obs input[type="text"] {
   width: 100%;
   padding: 10px 12px;
   border-radius: 12px;
@@ -335,6 +336,11 @@
   color: var(--gmp-text);
   outline: none;
   font-family: inherit;
+}
+
+.engc-obs input[readonly] {
+  cursor: not-allowed;
+  opacity: 0.85;
 }
 
 .engc-btn {
