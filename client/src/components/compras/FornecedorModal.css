@@ -1,0 +1,86 @@
+/* Janela do F2 — Etapa 173. A ficha dentro dela usa FornecedorForm.css (escopado em .fornecedor-form).
+   Tokens --gmp-* do design system, com fallback literal, como a ficha. */
+
+.fornecedor-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000; /* abaixo da busca global (10000): o Ctrl+K continua aparecendo por cima */
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 4vh 16px;
+  background: rgba(0, 0, 0, 0.45);
+  overflow-y: auto;
+}
+
+.fornecedor-modal {
+  width: 100%;
+  max-width: 920px;
+  background: var(--gmp-bg, #fff);
+  color: var(--gmp-text, #121212);
+  border-radius: var(--radius-lg, 16px);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+}
+
+.fornecedor-modal-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--gmp-border, rgba(0, 0, 0, 0.1));
+}
+
+.fornecedor-modal-topo h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.fornecedor-modal-fechar {
+  border: none;
+  background: none;
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--gmp-text-light, #6a6a6a);
+}
+
+.fornecedor-modal-fechar:hover { color: var(--gmp-text, #121212); }
+
+.fornecedor-modal-corpo { padding: 18px 24px 8px; }
+
+/* No celular a janela ocupa a largura toda e a grade da ficha cai para uma coluna. */
+@media (max-width: 600px) {
+  .fornecedor-modal-overlay { padding: 0; }
+  .fornecedor-modal { border-radius: 0; min-height: 100%; }
+  .fornecedor-modal-corpo { padding: 12px 16px 4px; }
+  .fornecedor-modal .fornecedor-form .form-group.span-2 { grid-column: auto; }
+}
+
+/* O botão "Novo fornecedor (F2)" ao lado do campo Fornecedor do pedido e da cotação. */
+.btn-novo-fornecedor {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-end;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px dashed var(--gmp-primary, #4facfe);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--gmp-primary, #4facfe);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-novo-fornecedor:hover { background: rgba(79, 172, 254, 0.08); }
+
+.btn-novo-fornecedor kbd {
+  font-family: inherit;
+  font-size: 0.75rem;
+  padding: 1px 5px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+}

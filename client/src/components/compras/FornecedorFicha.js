@@ -87,7 +87,9 @@ const Campo = ({ id, label, children, obrigatorio, className }) => (
   </div>
 );
 
-const FornecedorFicha = ({ fornecedorId, grupoIdInicial, onSalvo, onCancelar, autoFocar = false }) => {
+const FornecedorFicha = ({
+  fornecedorId, grupoIdInicial, grupoTravado = false, onSalvo, onCancelar, autoFocar = false,
+}) => {
   const editando = Boolean(fornecedorId);
 
   // RN-173.08: no grupo homologado a ficha nasce com o grupo escolhido.
@@ -264,7 +266,9 @@ const FornecedorFicha = ({ fornecedorId, grupoIdInicial, onSalvo, onCancelar, au
                   value={form.inscricao_estadual} onChange={(e) => set('inscricao_estadual', e.target.value)} />
               </Campo>
               <Campo id="fornecedor-grupo" label="Grupo homologado">
-                <select id="fornecedor-grupo" data-testid="fornecedor-grupo"
+                {/* RN-173.08: aberta do grupo homologado, a ficha cadastra NAQUELE grupo — trocar aqui
+                    faria o fornecedor salvo não aparecer na lista que o usuário está olhando. */}
+                <select id="fornecedor-grupo" data-testid="fornecedor-grupo" disabled={grupoTravado}
                   value={form.grupo_id} onChange={(e) => set('grupo_id', e.target.value)}>
                   <option value="">Sem grupo</option>
                   {/* Etapa 100 (G1, RN-100.04): desativar o grupo NAO desvincula o fornecedor (B45), e a
