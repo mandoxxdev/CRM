@@ -73,6 +73,14 @@ async function renderizarComItem() {
   });
   await esperarEfeitos();
   await clicar(botao('Adicionar'));
+  // Etapa 172 (RN-172.07): a cesta passou a cobrar o numero da OS (RN-A) antes do POST. O assunto
+  // desta suite e a data de necessidade, entao a OS entra aqui como pre-condicao.
+  const os = container.querySelector('[data-testid="cesta-os-numero"]');
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+  await act(async () => {
+    setter.call(os, 'OS 1714');
+    os.dispatchEvent(new Event('input', { bubbles: true }));
+  });
 }
 const campoData = () => container.querySelector('input[type="date"][name="data_necessidade"]');
 async function digitarData(valor) {

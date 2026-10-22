@@ -6,7 +6,7 @@ import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
 import { useRequisicoesMaterialContext } from './RequisicoesMaterialContext';
-import { TIPO_REQUISICAO_LABELS } from './requisicaoLabels';
+import { TIPO_REQUISICAO_LABELS, MSG_OS_OBRIGATORIA } from './requisicaoLabels';
 import { FiPlus, FiTrash2, FiArrowLeft, FiSend, FiSearch, FiPackage, FiAlertTriangle, FiSave } from 'react-icons/fi';
 import { DisponibilidadeBadge } from '../../utils/disponibilidadeEstoque';
 import './Almoxarifado.css';
@@ -47,6 +47,28 @@ const RequisicaoForm = () => {
   const [savingDraft, setSavingDraft] = useState(false);
   const [materiaisLoading, setMateriaisLoading] = useState(true);
   const [materiaisError, setMateriaisError] = useState(null);
+  // Etapa 172 (RN-172.02/07, emenda C2): seletor OPCIONAL de OS cadastrada ao lado do texto livre
+  // (RN-A intacta). Escolher preenche o texto com o numero_os e trava; '' = "Digitar outro numero".
+  const [osId, setOsId] = useState('');
+  const [ordensServico, setOrdensServico] = useState([]);
+  const [osListaFalhou, setOsListaFalhou] = useState(false);
+  const osListaUrl = warehouseMode ? '/almoxarifado/aux/ordens-servico' : '/requisicoes-material/aux/ordens-servico';
+
+  useEffect(() => {
+    let vivo = true;
+    setOsListaFalhou(false);
+    // Falhar aqui NAO trava o envio: o texto continua valendo.
+    api.get(osListaUrl)
+      .then((res) => { if (vivo) setOrdensServico(Array.isArray(res.data) ? res.data : []); })
+      .catch(() => { if (vivo) setOsListaFalhou(true); });
+    return () => { vivo = false; };
+  }, [osListaUrl]);
+
+  const escolherOs = (valor) => {
+    setOsId(valor);
+    const os = valor ? ordensServico.find((o) => String(o.id) === String(valor)) : null;
+    setForm((f) => ({ ...f, os_referencia: os?.numero_os || '' }));
+  };
 
   const refreshDisponibilidade = useCallback(async (itensAtuais) => {
     if (warehouseMode || !itensAtuais.length) return itensAtuais;
@@ -212,7 +234,7 @@ const RequisicaoForm = () => {
     // RN-A (Etapa 33): toda saida de material precisa de OS. Pulada no rascunho, igual ao
     // servidor — quem cobra de verdade e o backend, na criacao e no envio do rascunho.
     if (!salvarRascunho && !String(form.os_referencia || '').trim()) {
-      toast.error('Informe o numero da OS: toda saida de material precisa estar vinculada a uma OS');
+      toast.error(MSG_OS_OBRIGATORIA);
       return false;
     }
     // Justificativa de urgência é regra client-only (server não exige nem no envio direto) — pulada
@@ -241,6 +263,8 @@ const RequisicaoForm = () => {
       const payload = {
         ...formSemData,
         ...(dataNecessidade ? { data_necessidade: dataNecessidade } : {}),
+        os_referencia: String(form.os_referencia || '').trim(),
+        os_id: osId ? Number(osId) : null,
         centro_custo_id: form.centro_custo_id || undefined,
         setor: form.departamento,
         modulo_origem: ctx.moduloOrigem,
@@ -321,8 +345,29 @@ const RequisicaoForm = () => {
                   )}
                 </div>
                 <div className="almox-field">
+                  <label className="almox-label" htmlFor="req-os-select">OS cadastrada</label>
+                  <select id="req-os-select" data-testid="req-os-select" className="almox-form-select" value={osId}
+                    onChange={e => escolherOs(e.target.value)}>
+                    <option value="">Digitar outro número</option>
+                    {ordensServico.map(os => (
+                      <option key={os.id} value={String(os.id)}>
+                        {os.numero_os}{os.status ? ` (${os.status})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <small data-testid={osListaFalhou ? 'req-os-aviso' : undefined}
+                    style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)' }}>
+                    {osListaFalhou
+                      ? 'Não foi possível carregar as OS cadastradas — digite o número ao lado.'
+                      : 'opcional — escolher preenche o número da OS'}
+                  </small>
+                </div>
+                <div className="almox-field">
                   <label className="almox-label">Número da OS *</label>
-                  <input className="almox-input" value={form.os_referencia} onChange={e => setForm(f => ({ ...f, os_referencia: e.target.value }))}
+                  <input className="almox-input" data-testid="req-os-numero" value={form.os_referencia}
+                    readOnly={!!osId}
+                    style={osId ? { background: 'var(--gmp-bg)', cursor: 'not-allowed' } : undefined}
+                    onChange={e => setForm(f => ({ ...f, os_referencia: e.target.value }))}
                     placeholder="Ex: OS 1714" />
                   <small style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)' }}>
                     obrigatório — é o que permite saber depois em qual serviço o material foi usado
