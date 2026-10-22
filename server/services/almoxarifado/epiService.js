@@ -222,7 +222,10 @@ async function registrarEntrega(db, user, dados, { arquivo, dir, segredo, ip = n
     tipo: 'SAIDA',
     quantidade,
     documento_vinculado: numeroEntrega,
-    justificativa: matricula ? `Entrega de EPI a ${nome} (${matricula})` : `Entrega de EPI a ${nome}`,
+    // Etapa 181 (Fase 5, I1): so o numero — o historico de movimentacoes e de qualquer usuario do modulo, e quem recebeu qual EPI
+    // e da entrega (restrita a `entregar_epi`). Ate aqui era `Entrega de EPI a <nome> (<matricula>)`; essas linhas antigas sao
+    // mascaradas na leitura (mascaraEntregaEpi.js). A justificativa nao entra no HMAC (camposDoRegistro leva o movimentacao_id).
+    justificativa: `Entrega de EPI ${numeroEntrega}`,
   });
   const movimentacaoId = saida.id;
 

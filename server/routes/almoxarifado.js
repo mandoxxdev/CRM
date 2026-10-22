@@ -193,6 +193,9 @@ function toleranciaEfetiva(valor) {
 // divergencia.js (fonte unica; a revisao final achou uma SEGUNDA copia da comparacao exata no
 // reportService e a moveu para la tambem).
 const { EPSILON_DIVERGENCIA } = require('../services/almoxarifado/divergencia');
+// Etapa 181 (Fase 5, I1): a justificativa antiga da saida da entrega de EPI ("Entrega de EPI a <nome> (<matricula>)") e
+// mascarada na leitura para quem nao tem `entregar_epi` — em toda porta que devolve a justificativa da movimentacao.
+const { mascararMovimentacoes } = require('../services/almoxarifado/mascaraEntregaEpi');
 
 module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, checkModulePermission) {
 
@@ -525,7 +528,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                         JOIN materiais_almoxarifado ma ON m.material_id = ma.id
                         ORDER BY m.created_at DESC LIMIT 10`, [], (err7, ultimas) => {
                   if (err7) return res.status(500).json({ error: err7.message });
-                  stats.ultimasMovimentacoes = ultimas;
+                  stats.ultimasMovimentacoes = mascararMovimentacoes(ultimas, req.user);
 
                   // Movimentações por dia (últimos 7 dias)
                   // Etapa 162 (RN-162.02): o dia de Brasilia, os 7 dias anteriores mais hoje (o mesmo alcance de antes, em dias locais)
@@ -1286,7 +1289,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
     db.all(sql, params, (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
-      res.json(rows);
+      res.json(mascararMovimentacoes(rows, req.user));
     });
   });
 
@@ -1338,7 +1341,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
             ORDER BY m.created_at DESC LIMIT 50`,
       [req.params.id], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
+        res.json(mascararMovimentacoes(rows, req.user));
       });
   });
 
@@ -2171,7 +2174,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // Etapa 162 (RN-162.01, B1033): o dia de Brasilia (rota sem consumidor no navegador — mudada pela regua unica)
       [diaLocal.modificadorDoFuso(), data_inicio, data_fim], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
+        res.json(mascararMovimentacoes(rows, req.user));
       });
   });
 

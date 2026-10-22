@@ -124,7 +124,8 @@ const contar = async (db, sql, p = []) => (await dbGet(db, sql, p)).n;
     assert.strictEqual(mov.tipo, 'SAIDA');
     assert.strictEqual(mov.quantidade, 2);
     assert.strictEqual(mov.documento_vinculado, res.body.numero);
-    assert.strictEqual(mov.justificativa, 'Entrega de EPI a JOAO DA SILVA (M-778)');
+    // Etapa 181 (Fase 5, I1): so o numero — o nome e a matricula ficam na entrega (restrita), nao no historico (de todos).
+    assert.strictEqual(mov.justificativa, `Entrega de EPI ${res.body.numero}`);
     assert.strictEqual(Number(mov.cancelado || 0), 0);
     assert.strictEqual((await dbGet(db, 'SELECT quantidade_atual q FROM materiais_almoxarifado WHERE id = ?', [mat.id])).q, 8);
 

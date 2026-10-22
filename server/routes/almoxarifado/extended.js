@@ -16,6 +16,8 @@ const diaLocal = require('../../services/diaLocal');
 const { canConfigureAlmox, isSystemAdmin } = require('../../services/systemPermissions');
 const { initSchema, TIPOS_MATERIAL_ENUM, TIPOS_LOCALIZACAO, AREAS_ESPECIAIS, SETORES_REQUISICAO } = require('../../services/almoxarifado/schema');
 const { requirePermission, requireAlgumaPermissao, can, getPerfilFromUser, ACAO_PERFIS, PERFIS } = require('../../services/almoxarifado/permissions');
+// Etapa 181 (Fase 5, I1): a justificativa antiga da saida da entrega de EPI e mascarada na leitura para quem nao tem `entregar_epi`.
+const { mascararMovimentacoes } = require('../../services/almoxarifado/mascaraEntregaEpi');
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
 // Etapa 33: a URL de arquivo e minada no ponto unico do modulo, nunca montada aqui.
 const { enrichMaterialRows } = require('../../services/almoxarifado/materialPhoto');
@@ -1016,7 +1018,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
           WHERE m.material_id = ? ORDER BY m.id DESC LIMIT 100`, [req.params.id]),
         dbAll(db, `SELECT * FROM reservas_material_almoxarifado WHERE material_id = ? AND status = 'ATIVA' ORDER BY created_at DESC`, [req.params.id]),
       ]);
-      res.json({ material, saldos_localizacao: saldos, movimentacoes, reservas });
+      res.json({ material, saldos_localizacao: saldos, movimentacoes: mascararMovimentacoes(movimentacoes, req.user), reservas });
     } catch (e) { handleError(res, e); }
   });
 
@@ -2581,7 +2583,9 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       if (entrada.acao !== null && !can(req.user, entrada.acao)) {
         return res.status(403).json({ error: 'Sem permissão para este relatório', acao: entrada.acao });
       }
-      res.json(await entrada.fn(db, req.query));
+      // Etapa 181 (Fase 5, I1): em TODO relatorio, nao so no historico — a mascara so toca a linha cuja `justificativa` casa a regua
+      // da entrega de EPI antiga, e um relatorio futuro que devolva a justificativa da movimentacao ja nasce coberto.
+      res.json(mascararMovimentacoes(await entrada.fn(db, req.query), req.user));
     } catch (e) { handleError(res, e); }
   });
 
@@ -2601,7 +2605,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       if (!entrada.exportavel) {
         return res.status(400).json({ error: 'Relatório sem exportação tabular' });
       }
-      const dados = await entrada.fn(db, req.query);
+      const dados = mascararMovimentacoes(await entrada.fn(db, req.query), req.user); // Etapa 181 (Fase 5, I1): a mesma do dispatcher
       // Fase 2 (C1/I9/I10 — todos medidos): QUALQUER setHeader so acontece depois desta
       // checagem — um setHeader antes do await, ou antes deste 400, estoura
       // ERR_HTTP_HEADERS_SENT quando o payload nao e tabular ou quando o gate/tipo falha.
