@@ -66,6 +66,10 @@ async function calibracaoVigente(db, ferramentaId) {
     ORDER BY date(data_validade) DESC LIMIT 1`, [ferramentaId, diaLocal.hojeLocalISO()]);
 }
 
+/**
+ * Etapa 180: a ROTA de emprestimo passou para `termoFerramentaService.emprestarComTermo` (colaborador do cadastro + termo assinado,
+ * numa transacao so). Esta funcao fica so para chamadas internas legadas; nenhuma rota a usa.
+ */
 async function emprestarFerramenta(db, user, ferramentaId, data) {
   const ferr = await dbGet(db, 'SELECT * FROM ferramentas_almoxarifado WHERE id = ? AND ativo = 1', [ferramentaId]);
   if (!ferr) throw Object.assign(new Error('Ferramenta não encontrada'), { status: 404 });
@@ -492,7 +496,9 @@ async function listarFerramentas(db, filters = {}) {
 }
 
 async function listarEmprestimos(db, filters = {}) {
-  let sql = `SELECT e.*, f.nome as ferramenta_nome, f.codigo_patrimonio
+  // Etapa 180 (RN-180.06): `tem_termo` por linha — a fotografia do termo assinado existe (anterior a exigencia: false).
+  let sql = `SELECT e.*, f.nome as ferramenta_nome, f.codigo_patrimonio,
+      EXISTS (SELECT 1 FROM termos_emprestimo_ferramenta t WHERE t.emprestimo_id = e.id) AS tem_termo
     FROM emprestimos_ferramenta_almoxarifado e
     JOIN ferramentas_almoxarifado f ON e.ferramenta_id = f.id WHERE 1=1`;
   const params = [];
@@ -515,7 +521,7 @@ async function listarEmprestimos(db, filters = {}) {
     params.push(diaLocal.hojeLocalISO());
   }
   sql += ' ORDER BY e.data_retirada DESC';
-  return dbAll(db, sql, params);
+  return (await dbAll(db, sql, params)).map((e) => ({ ...e, tem_termo: Number(e.tem_termo) === 1 }));
 }
 
 /**

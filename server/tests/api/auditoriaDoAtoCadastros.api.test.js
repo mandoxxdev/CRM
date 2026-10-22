@@ -16,6 +16,8 @@ const fs = require('fs');
 const path = require('path');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
+// Etapa 180 (I1): o emprestimo exige colaborador do cadastro + termo assinado (multipart) — o helper preserva a intencao do teste.
+const { emprestarComTermo } = require('../helpers/termoFerramenta');
 const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 
 let passed = 0; let failed = 0;
@@ -92,7 +94,7 @@ const PNG = Buffer.from('89504E470D0A1A0A0000000D4948445200000001000000010806000
     assert.strictEqual((await dbGet(db, 'SELECT nome FROM ferramentas_almoxarifado WHERE id = ?', [f])).nome, 'Furadeira de bancada');
 
     const r3 = await comAuditoriaFalhando('ferramenta', 'EMPRESTIMO',
-      () => request(app).post(`${api}/ferramentas/${f}/emprestar`).send({ colaborador_nome: 'Joao' }));
+      () => emprestarComTermo(app, db, f, { colaborador_nome: 'Joao' }));
     assert.strictEqual(r3.status, 201, `emprestar: ${corpo(r3)}`);
     assert.strictEqual(await statusFerr(f), 'EMPRESTADA');
     assert.strictEqual((await dbGet(db, 'SELECT COUNT(*) n FROM emprestimos_ferramenta_almoxarifado WHERE ferramenta_id = ?', [f])).n, 1);

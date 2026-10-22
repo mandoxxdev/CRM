@@ -8,6 +8,8 @@ const fs = require('fs');
 const path = require('path');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
+// Etapa 180 (I1): o emprestimo exige colaborador do cadastro + termo assinado (multipart) — o helper preserva a intencao do teste.
+const { emprestarComTermo } = require('../helpers/termoFerramenta');
 const { dbRun, dbAll, dbGet } = require('../../services/almoxarifado/db');
 
 const PRODUCAO_FALLBACK = { id: 50, nome: 'Chão de Fábrica', role: 'usuario', email: 'prod@test.com' };
@@ -57,8 +59,7 @@ async function novaFerramenta(db, extra = {}) {
     const { app, db, close } = await createTestApp();
     const fid = await novaFerramenta(db);
 
-    const emp = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
-      .send({ colaborador_nome: 'Joao' }).expect(201);
+    const emp = await emprestarComTermo(app, db, fid, { colaborador_nome: 'Joao' }).expect(201);
     const empId = emp.body.id;
 
     const oc = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/ocorrencias`)
@@ -76,8 +77,7 @@ async function novaFerramenta(db, extra = {}) {
     assert.strictEqual(f.status, 'PERDIDA');
 
     // ferramenta perdida nao pode ser emprestada de novo
-    const r2 = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
-      .send({ colaborador_nome: 'Maria' }).expect(400);
+    const r2 = await emprestarComTermo(app, db, fid, { colaborador_nome: 'Maria' }).expect(400);
     assert.strictEqual(r2.body.error, 'Ferramenta não está disponível (status atual: PERDIDA)');
     await close();
   });
@@ -85,8 +85,7 @@ async function novaFerramenta(db, extra = {}) {
   await test('AVARIA sobre ferramenta emprestada tambem encerra o emprestimo e aplica AVARIADA', async () => {
     const { app, db, close } = await createTestApp();
     const fid = await novaFerramenta(db);
-    const emp = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
-      .send({ colaborador_nome: 'Joao' }).expect(201);
+    const emp = await emprestarComTermo(app, db, fid, { colaborador_nome: 'Joao' }).expect(201);
 
     const oc = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/ocorrencias`)
       .field('tipo', 'AVARIA')
@@ -198,8 +197,7 @@ async function novaFerramenta(db, extra = {}) {
   await test('F2(b): emprestimo fechado por fora entre o claim da ferramenta e o empClaim nao trava a ferramenta em EMPRESTADA', async () => {
     const { app, db, close } = await createTestApp();
     const fid = await novaFerramenta(db);
-    const emp = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
-      .send({ colaborador_nome: 'Joao' }).expect(201);
+    const emp = await emprestarComTermo(app, db, fid, { colaborador_nome: 'Joao' }).expect(201);
 
     // Fecha SO o emprestimo por UPDATE direto (simula devolverFerramenta tendo vencido o proprio
     // claim do emprestimo um instante antes) sem tocar a ferramenta — ela continua EMPRESTADA no

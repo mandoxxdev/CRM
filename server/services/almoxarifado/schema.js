@@ -440,6 +440,72 @@ async function ensureEntregaEpi(db) {
   }
 }
 
+/**
+ * Etapa 180 (RN-180.02, C1 da revisao da Fase 2) — o termo de responsabilidade de ferramenta.
+ * - `termos_responsabilidade_versao`: o TEXTO do termo, versionado. Vigente = maior `versao` do `tipo`. Cada troca e uma versao
+ *   nova (o emprestimo guarda a que o colaborador assinou). Append-only (triggers); SEM FK para `usuarios` (I1 da 178: a exclusao
+ *   de usuario faz UPDATE nas FKs e o trigger abortaria). A semente v1 (FERRAMENTA) e um texto PROVISORIO marcado como tal — a
+ *   empresa nao forneceu o termo (letra B); o administrador troca pela tela.
+ * - `termos_emprestimo_ferramenta`: a FOTOGRAFIA congelada do termo assinado (C1) — snapshot da ferramenta e do colaborador, a
+ *   versao e o hash do texto, quem registrou e quando. O HMAC da evidencia cobre esta linha (nada do emprestimo vivo nem da
+ *   ferramenta viva: a devolucao, a ocorrencia e o PUT /ferramentas/:id mudam aqueles). Append-only; SEM FK nenhuma (molde
+ *   `entregas_epi_almoxarifado`). A existencia da linha e a marca "emprestimo com termo".
+ */
+const TEXTO_TERMO_PROVISORIO = 'TEXTO PROVISÓRIO — substituir pelo termo da empresa.\n\n'
+  + 'Declaro que recebi a ferramenta ou equipamento identificado neste termo, em condições de uso, e me comprometo a: '
+  + 'utilizá-lo somente nas atividades da empresa; zelar pela sua guarda e conservação; comunicar imediatamente ao '
+  + 'almoxarifado qualquer avaria, perda ou extravio; e devolvê-lo ao almoxarifado na data prevista ou quando solicitado.';
+
+async function ensureTermoFerramenta(db) {
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS termos_responsabilidade_versao (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tipo TEXT NOT NULL,
+    versao INTEGER NOT NULL,
+    texto TEXT NOT NULL,
+    texto_sha256 TEXT NOT NULL,
+    criado_por INTEGER,
+    criado_por_nome TEXT,
+    criado_em TEXT NOT NULL,
+    UNIQUE (tipo, versao)
+  )`);
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS termos_emprestimo_ferramenta (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    numero TEXT UNIQUE NOT NULL,
+    emprestimo_id INTEGER NOT NULL UNIQUE,
+    ferramenta_id INTEGER NOT NULL,
+    ferramenta_codigo_patrimonio TEXT,
+    ferramenta_numero_serie TEXT,
+    ferramenta_nome TEXT,
+    colaborador_id INTEGER NOT NULL,
+    colaborador_nome TEXT NOT NULL,
+    matricula TEXT,
+    setor TEXT,
+    termo_versao INTEGER NOT NULL,
+    texto_sha256 TEXT NOT NULL,
+    data_prevista_devolucao TEXT,
+    criado_por INTEGER,
+    criado_por_nome TEXT,
+    criado_em TEXT NOT NULL,
+    chave_idempotencia TEXT
+  )`);
+  await dbRun(db, `CREATE UNIQUE INDEX IF NOT EXISTS ux_termos_emprestimo_chave
+    ON termos_emprestimo_ferramenta (chave_idempotencia) WHERE chave_idempotencia IS NOT NULL`);
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_termos_emprestimo_colaborador
+    ON termos_emprestimo_ferramenta (colaborador_id, criado_em)`);
+  // A semente: so quando o tipo nao tem versao nenhuma (idempotente no boot; nunca sobrescreve o texto do administrador).
+  await dbRun(db, `INSERT INTO termos_responsabilidade_versao (tipo, versao, texto, texto_sha256, criado_por, criado_por_nome, criado_em)
+    SELECT 'FERRAMENTA', 1, ?, ?, NULL, 'Sistema (texto provisório)', ?
+    WHERE NOT EXISTS (SELECT 1 FROM termos_responsabilidade_versao WHERE tipo = 'FERRAMENTA')`,
+  [TEXTO_TERMO_PROVISORIO, require('crypto').createHash('sha256').update(TEXTO_TERMO_PROVISORIO).digest('hex'),
+    new Date().toISOString()]);
+  for (const tabela of ['termos_responsabilidade_versao', 'termos_emprestimo_ferramenta']) {
+    for (const [nome, evento] of [['sem_update', 'UPDATE'], ['sem_delete', 'DELETE']]) {
+      await dbRun(db, `CREATE TRIGGER IF NOT EXISTS trg_${tabela}_${nome} BEFORE ${evento} ON ${tabela}
+        BEGIN SELECT RAISE(ABORT, 'termo de responsabilidade nao pode ser alterado'); END`);
+    }
+  }
+}
+
 /** Base tables from almoxarifado.js — ensure they exist before v3 migrations (avoids startup race). */
 async function ensureBaseTables(db) {
   await dbRun(db, `CREATE TABLE IF NOT EXISTS materiais_almoxarifado (
@@ -3045,12 +3111,14 @@ async function initSchemaUmaExecucao(db) {
     ON fila_notificacoes_almoxarifado (status, proxima_tentativa_em)`);
 
   await ensureEntregaEpi(db);
+  await ensureTermoFerramenta(db);
 
   console.log('✅ Schema almoxarifado v3 inicializado');
 }
 
 module.exports = {
   initSchema,
+  TEXTO_TERMO_PROVISORIO,
   initSchemaEmVoo,
   safeAlter,
   // Exportada para o cenario (12) da Etapa 44 poder rodar a migracao DEPOIS de criar a inspecao,

@@ -35,6 +35,8 @@ const assert = require('assert');
 const crypto = require('crypto');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
+// Etapa 180 (I1): o emprestimo exige colaborador do cadastro + termo assinado (multipart) — o helper preserva a intencao do teste.
+const { emprestarComTermo } = require('../helpers/termoFerramenta');
 const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 const diaLocal = require('../../services/diaLocal');
 const toolReminderService = require('../../services/almoxarifado/toolReminderService');
@@ -105,9 +107,9 @@ async function novoEmprestimo(db, prevista) {
   await test('[RN-163.03, B1041] a calibracao que vale ate HOJE empresta e e vigente na lista; a de ONTEM recusa com a literal e nao e', async () => {
     const vale = await novaFerramenta(db, HOJE);
     const venceu = await novaFerramenta(db, ONTEM);
-    const ok = await http('post', `/api/almoxarifado/ferramentas/${vale}/emprestar`, { colaborador_nome: 'Ciclano 163' });
+    const ok = await emprestarComTermo(app, db, vale, { colaborador_nome: 'Ciclano 163' });
     assert.strictEqual(ok.status, 201, JSON.stringify(ok.body));
-    const nao = await http('post', `/api/almoxarifado/ferramentas/${venceu}/emprestar`, { colaborador_nome: 'Ciclano 163' });
+    const nao = await emprestarComTermo(app, db, venceu, { colaborador_nome: 'Ciclano 163' });
     assert.strictEqual(nao.status, 400, JSON.stringify(nao.body));
     assert.strictEqual(nao.body.error, 'Ferramenta com calibração vencida ou sem calibração registrada');
     const lista = await http('get', '/api/almoxarifado/ferramentas');

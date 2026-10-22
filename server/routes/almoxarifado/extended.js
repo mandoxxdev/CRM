@@ -79,6 +79,7 @@ const toolService = require('../../services/almoxarifado/toolService');
 const deliverySignatureService = require('../../services/almoxarifado/deliverySignatureService');
 // Etapa 178: entrega de EPI com assinatura (a evidencia generica mora em evidenciaAssinaturaService).
 const epiService = require('../../services/almoxarifado/epiService');
+const termoFerramentaService = require('../../services/almoxarifado/termoFerramentaService');
 const { resolveEvidenciaAssinaturaSecret } = require('../../services/runtimeSecrets');
 // Etapa 32: anexos de documento. O servico NAO toca em disco — quem grava e o multer daqui, quem
 // apaga o orfao e o `limparUploadOrfaoEm`.
@@ -1643,13 +1644,12 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     }
   });
 
-  app.post('/api/almoxarifado/ferramentas/:id/emprestar', auth, requirePermission('gerenciar_ferramentas'), validate(EmprestimoSchema), async (req, res) => {
-    try {
-      res.status(201).json(await toolService.emprestarFerramenta(db, req.user, req.params.id, req.body));
-    } catch (e) { handleError(res, e); }
-  });
+  // POST /ferramentas/:id/emprestar — desde a Etapa 180 e multipart com o termo assinado; registrada junto das rotas do termo,
+  // depois do multer da assinatura e do segredo da evidencia (secao "Termo de responsabilidade de ferramenta", abaixo).
 
-  app.get('/api/almoxarifado/emprestimos', auth, async (req, res) => {
+  // Etapa 180 (RN-180.06): a lista traz o nome do colaborador e se ha termo assinado — so `gerenciar_ferramentas` (era do portao
+  // do modulo: PRODUCAO, o fallback de quem nao tem perfil, lia quem esta com qual ferramenta).
+  app.get('/api/almoxarifado/emprestimos', auth, requirePermission('gerenciar_ferramentas'), async (req, res) => {
     try { res.json(await toolService.listarEmprestimos(db, req.query)); }
     catch (e) { handleError(res, e); }
   });
@@ -2065,10 +2065,76 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     } catch (e) { handleError(res, e); }
   });
 
-  // GET /aux/colaboradores — os ativos, sem CPF e sem salario (RN-178.10); desde a Fase 5, so com `entregar_epi`.
-  app.get('/api/almoxarifado/aux/colaboradores', auth, requirePermission('entregar_epi'), async (req, res) => {
+  // GET /aux/colaboradores — os ativos, sem CPF e sem salario (RN-178.10); desde a Fase 5 da 178, so com `entregar_epi`; desde a
+  // Etapa 180 (RN-180.03, I4), `entregar_epi` OU `gerenciar_ferramentas` (o emprestimo escolhe o colaborador do cadastro).
+  app.get('/api/almoxarifado/aux/colaboradores', auth, requireAlgumaPermissao(['entregar_epi', 'gerenciar_ferramentas']), async (req, res) => {
     try {
       res.json(await epiService.listarColaboradoresAtivos(db));
+    } catch (e) { handleError(res, e); }
+  });
+
+  // ── Termo de responsabilidade de ferramenta (Etapa 180, RN-D) ───────────────────────────────
+  // Plano: docs/superpowers/plans/2026-10-22-almoxarifado-etapa180-termo-de-responsabilidade-de-ferramenta.md. Multer proprio (so
+  // PNG, 2 MB), molde da entrega de EPI: auth -> requirePermission (403 sem arquivo gravado) -> multer -> servico; toda saida != 201
+  // apaga o upload, menos `preservarArquivo` (a transacao ja commitou).
+  const uploadAssinaturaTermo = multer({
+    storage: multer.diskStorage({
+      destination: (req, file, cb) => cb(null, uploadsAlmoxDir),
+      filename: (req, file, cb) => cb(null, `assinatura-termo-${Date.now()}-${Math.round(Math.random() * 1e9)}.png`),
+    }),
+    limits: { fileSize: 2 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+      if (/^image\/png$/i.test(file.mimetype)) return cb(null, true);
+      cb(erroComMensagemUsuario('A assinatura deve ser uma imagem PNG'));
+    },
+  });
+
+  // POST /ferramentas/:id/emprestar — RN-180.03/04: multipart (colaborador_id, confirmacao_matricula, termo_versao,
+  // data_prevista_devolucao?, observacoes?, chave_idempotencia?, arquivo `assinatura`). 201 novo; 200 reenvio da mesma chave.
+  app.post('/api/almoxarifado/ferramentas/:id/emprestar', auth, requirePermission('gerenciar_ferramentas'),
+    uploadAssinaturaTermo.single('assinatura'), async (req, res) => {
+      if (!req.file) return res.status(400).json({ error: 'A assinatura do colaborador é obrigatória' });
+      try {
+        const out = await termoFerramentaService.emprestarComTermo(db, req.user, req.params.id, req.body || {},
+          { arquivo: req.file.filename, dir: uploadsAlmoxDir, segredo: segredoDaEvidencia(),
+            ip: req.ip || (req.socket && req.socket.remoteAddress) || null, userAgent: req.get('user-agent') || null });
+        if (out && out.reutilizada) {
+          limparUploadOrfaoEm(req, uploadsAlmoxDir);
+          return res.status(200).json(out);
+        }
+        res.status(201).json(out);
+      } catch (e) {
+        if (!(e && e.preservarArquivo)) limparUploadOrfaoEm(req, uploadsAlmoxDir);
+        handleError(res, e);
+      }
+    });
+
+  // GET /ferramentas/emprestimos/:id/termo — RN-180.05: o emprestimo, o texto da versao ASSINADA e a evidencia.
+  app.get('/api/almoxarifado/ferramentas/emprestimos/:id/termo', auth, requirePermission('gerenciar_ferramentas'), async (req, res) => {
+    try {
+      res.json(await termoFerramentaService.obterTermoDoEmprestimo(db, req.params.id));
+    } catch (e) { handleError(res, e); }
+  });
+
+  // GET /ferramentas/emprestimos/:id/termo/verificar — RN-180.05 (molde /epi/entregas/:id/verificar).
+  app.get('/api/almoxarifado/ferramentas/emprestimos/:id/termo/verificar', auth, requirePermission('gerenciar_ferramentas'),
+    async (req, res) => {
+      try {
+        res.json(await termoFerramentaService.verificarTermo(db, req.params.id, { dir: uploadsAlmoxDir, segredo: segredoDaEvidencia() }));
+      } catch (e) { handleError(res, e); }
+    });
+
+  // GET /termos/:tipo — RN-180.02: a vigente (com `provisorio`) e o historico. Quem empresta le o texto que o colaborador assina.
+  app.get('/api/almoxarifado/termos/:tipo', auth, requirePermission('gerenciar_ferramentas'), async (req, res) => {
+    try {
+      res.json(await termoFerramentaService.obterTermo(db, req.params.tipo));
+    } catch (e) { handleError(res, e); }
+  });
+
+  // POST /termos/:tipo — RN-180.02: a proxima versao do texto (`editar_termos`, so ADMINISTRADOR). JSON { texto, versao_base? }.
+  app.post('/api/almoxarifado/termos/:tipo', auth, requirePermission('editar_termos'), async (req, res) => {
+    try {
+      res.status(201).json(await termoFerramentaService.criarVersao(db, req.user, req.params.tipo, req.body || {}));
     } catch (e) { handleError(res, e); }
   });
 

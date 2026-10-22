@@ -7,6 +7,8 @@
 const assert = require('assert');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
+// Etapa 180 (I1): o emprestimo exige colaborador do cadastro + termo assinado (multipart) — o helper preserva a intencao do teste.
+const { emprestarComTermo } = require('../helpers/termoFerramenta');
 const { dbRun, dbAll, dbGet } = require('../../services/almoxarifado/db');
 const toolService = require('../../services/almoxarifado/toolService');
 
@@ -51,8 +53,7 @@ async function novaFerramenta(db, extra = {}) {
   await test('RN-06: bloquear ferramenta emprestada recusa', async () => {
     const { app, db, close } = await createTestApp();
     const fid = await novaFerramenta(db);
-    await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
-      .send({ colaborador_nome: 'Joao' }).expect(201);
+    await emprestarComTermo(app, db, fid, { colaborador_nome: 'Joao' }).expect(201);
     const r = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/bloquear`)
       .send({ justificativa: 'tentando bloquear emprestada' }).expect(400);
     assert.strictEqual(r.body.error, 'Ferramenta não pode ser bloqueada (status atual: EMPRESTADA)');
@@ -84,8 +85,7 @@ async function novaFerramenta(db, extra = {}) {
   await test('RN-07: ferramenta emprestada nao entra em manutencao', async () => {
     const { app, db, close } = await createTestApp();
     const fid = await novaFerramenta(db);
-    await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
-      .send({ colaborador_nome: 'Joao' }).expect(201);
+    await emprestarComTermo(app, db, fid, { colaborador_nome: 'Joao' }).expect(201);
     const r = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/manutencoes`)
       .send({ descricao: 'Revisao geral' }).expect(400);
     assert.strictEqual(r.body.error, 'Ferramenta não pode entrar em manutenção (status atual: EMPRESTADA)');
@@ -111,8 +111,7 @@ async function novaFerramenta(db, extra = {}) {
     assert.strictEqual(linha.data_fim, null, 'manutencao deveria estar aberta');
 
     // emprestar durante a manutencao falha
-    const eR = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
-      .send({ colaborador_nome: 'Joao' }).expect(400);
+    const eR = await emprestarComTermo(app, db, fid, { colaborador_nome: 'Joao' }).expect(400);
     assert.strictEqual(eR.body.error, 'Ferramenta não está disponível (status atual: EM_MANUTENCAO)');
 
     // concluir preenche data_fim, ferramenta volta DISPONIVEL e passa a emprestar
@@ -123,8 +122,7 @@ async function novaFerramenta(db, extra = {}) {
     f = await dbGet(db, 'SELECT status FROM ferramentas_almoxarifado WHERE id = ?', [fid]);
     assert.strictEqual(f.status, 'DISPONIVEL');
 
-    await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
-      .send({ colaborador_nome: 'Maria' }).expect(201);
+    await emprestarComTermo(app, db, fid, { colaborador_nome: 'Maria' }).expect(201);
 
     const audit = await dbAll(db,
       "SELECT acao FROM auditoria_log_almoxarifado WHERE entidade = 'ferramenta' AND entidade_id = ?", [fid]);

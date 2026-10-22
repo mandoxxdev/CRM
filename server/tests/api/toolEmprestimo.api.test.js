@@ -6,6 +6,8 @@
 const assert = require('assert');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
+// Etapa 180 (I1): o emprestimo exige colaborador do cadastro + termo assinado (multipart) — o helper preserva a intencao do teste.
+const { emprestarComTermo } = require('../helpers/termoFerramenta');
 const { dbRun, dbAll, dbGet } = require('../../services/almoxarifado/db');
 
 let passed = 0; let failed = 0;
@@ -27,10 +29,8 @@ async function novaFerramenta(db, extra = {}) {
   await test('RN-01: emprestar ferramenta ja emprestada falha', async () => {
     const { app, db, close } = await createTestApp();
     const fid = await novaFerramenta(db);
-    await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
-      .send({ colaborador_nome: 'Joao' }).expect(201);
-    const r = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
-      .send({ colaborador_nome: 'Maria' }).expect(400);
+    await emprestarComTermo(app, db, fid, { colaborador_nome: 'Joao' }).expect(201);
+    const r = await emprestarComTermo(app, db, fid, { colaborador_nome: 'Maria' }).expect(400);
     assert.strictEqual(r.body.error, 'Ferramenta não está disponível (status atual: EMPRESTADA)');
     await close();
   });
@@ -39,11 +39,13 @@ async function novaFerramenta(db, extra = {}) {
     const { app, db, close } = await createTestApp();
     const fid = await novaFerramenta(db);
     const [a, b] = await Promise.all([
-      request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`).send({ colaborador_nome: 'A' }),
-      request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`).send({ colaborador_nome: 'B' }),
+      emprestarComTermo(app, db, fid, { colaborador_nome: 'A' }),
+      emprestarComTermo(app, db, fid, { colaborador_nome: 'B' }),
     ]);
+    // Etapa 180 (I1): o perdedor recebe 400 "nao esta disponivel (status atual: EMPRESTADA)" se chegou depois do vencedor, ou 409
+    // "A ferramenta não está disponível" se passou das conferencias junto e perdeu o claim na transacao (C2).
     const codes = [a.status, b.status].sort();
-    assert.deepStrictEqual(codes, [201, 400], `esperava 1 vitoria e 1 recusa, veio ${codes}`);
+    assert.ok(codes[0] === 201 && (codes[1] === 400 || codes[1] === 409), `esperava 1 vitoria e 1 recusa, veio ${codes}`);
     const emprestimos = await dbAll(db,
       "SELECT * FROM emprestimos_ferramenta_almoxarifado WHERE ferramenta_id = ? AND status = 'EMPRESTADA'", [fid]);
     assert.strictEqual(emprestimos.length, 1, 'a corrida gravou dois emprestimos abertos');
@@ -53,8 +55,7 @@ async function novaFerramenta(db, extra = {}) {
   await test('RN-02: emprestar ferramenta bloqueada falha', async () => {
     const { app, db, close } = await createTestApp();
     const fid = await novaFerramenta(db, { status: 'BLOQUEADA' });
-    const r = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
-      .send({ colaborador_nome: 'Joao' }).expect(400);
+    const r = await emprestarComTermo(app, db, fid, { colaborador_nome: 'Joao' }).expect(400);
     assert.strictEqual(r.body.error, 'Ferramenta não está disponível (status atual: BLOQUEADA)');
     await close();
   });
@@ -63,34 +64,29 @@ async function novaFerramenta(db, extra = {}) {
     const { app, db, close } = await createTestApp();
     const fid = await novaFerramenta(db, { exige_calibracao: 1 });
     // sem registro algum de calibracao → recusa
-    let r = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
-      .send({ colaborador_nome: 'Joao' }).expect(400);
+    let r = await emprestarComTermo(app, db, fid, { colaborador_nome: 'Joao' }).expect(400);
     assert.strictEqual(r.body.error, 'Ferramenta com calibração vencida ou sem calibração registrada');
     // calibracao VENCIDA → recusa igual
     await dbRun(db, `INSERT INTO calibracoes_ferramenta_almoxarifado
       (ferramenta_id, data_calibracao, data_validade) VALUES (?, date('now','-2 years'), date('now','-1 year'))`, [fid]);
-    r = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
-      .send({ colaborador_nome: 'Joao' }).expect(400);
+    r = await emprestarComTermo(app, db, fid, { colaborador_nome: 'Joao' }).expect(400);
     assert.strictEqual(r.body.error, 'Ferramenta com calibração vencida ou sem calibração registrada');
     // controle positivo: calibracao vigente → empresta
     await dbRun(db, `INSERT INTO calibracoes_ferramenta_almoxarifado
       (ferramenta_id, data_calibracao, data_validade) VALUES (?, date('now'), date('now','+1 year'))`, [fid]);
-    await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
-      .send({ colaborador_nome: 'Joao' }).expect(201);
+    await emprestarComTermo(app, db, fid, { colaborador_nome: 'Joao' }).expect(201);
     await close();
   });
 
   await test('RN-04: devolver ferramenta permite novo emprestimo', async () => {
     const { app, db, close } = await createTestApp();
     const fid = await novaFerramenta(db);
-    const e1 = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
-      .send({ colaborador_nome: 'Joao' }).expect(201);
+    const e1 = await emprestarComTermo(app, db, fid, { colaborador_nome: 'Joao' }).expect(201);
     await request(app).post(`/api/almoxarifado/emprestimos/${e1.body.id}/devolver`).send({}).expect(200);
     const emp = await dbGet(db, 'SELECT * FROM emprestimos_ferramenta_almoxarifado WHERE id = ?', [e1.body.id]);
     assert.strictEqual(emp.status, 'DEVOLVIDA');
     assert.ok(emp.data_devolucao_real, 'data_devolucao_real vazia');
-    await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
-      .send({ colaborador_nome: 'Maria' }).expect(201);
+    await emprestarComTermo(app, db, fid, { colaborador_nome: 'Maria' }).expect(201);
     await close();
   });
 
@@ -100,8 +96,7 @@ async function novaFerramenta(db, extra = {}) {
     setUser({ id: 7, nome: 'Chao de Fabrica', email: 'p@t.com' }); // sem perfil → PRODUCAO
     await request(app).post('/api/almoxarifado/ferramentas')
       .send({ codigo_patrimonio: 'X-1', nome: 'Furadeira' }).expect(403);
-    await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
-      .send({ colaborador_nome: 'Joao' }).expect(403);
+    await emprestarComTermo(app, db, fid, { colaborador_nome: 'Joao' }).expect(403);
     await request(app).get('/api/almoxarifado/ferramentas').expect(200);
     await close();
   });
@@ -109,8 +104,7 @@ async function novaFerramenta(db, extra = {}) {
   await test('RN-11: emprestar e devolver auditam', async () => {
     const { app, db, close } = await createTestApp();
     const fid = await novaFerramenta(db);
-    const e = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
-      .send({ colaborador_nome: 'Joao' }).expect(201);
+    const e = await emprestarComTermo(app, db, fid, { colaborador_nome: 'Joao' }).expect(201);
     await request(app).post(`/api/almoxarifado/emprestimos/${e.body.id}/devolver`).send({}).expect(200);
     // A tabela e auditoria_LOG_almoxarifado (audit.js:6, schema.js:1541) — "auditoria_almoxarifado"
     // NAO existe e ja derrubou teste nesta base (ver materialServiceCriacao.api.test.js:126).
@@ -122,11 +116,13 @@ async function novaFerramenta(db, extra = {}) {
     await close();
   });
 
-  await test('Zod: payload sem colaborador_nome recusa com 400 de validacao', async () => {
+  // Etapa 180 (I1): era "sem colaborador_nome -> 400 do Zod". O nome digitado deixou de existir (RN-180.03: o colaborador e do
+  // cadastro); a validacao e do servico, depois do multer, com a literal da 178.
+  await test('sem colaborador_id recusa com 400 literal (o colaborador e do cadastro desde a Etapa 180)', async () => {
     const { app, db, close } = await createTestApp();
     const fid = await novaFerramenta(db);
-    const r = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`).send({}).expect(400);
-    assert.ok(/Dados inválidos/.test(r.body.error), r.body.error);
+    const r = await emprestarComTermo(app, db, fid, { colaborador_id: '', confirmacao_matricula: 'X' }).expect(400);
+    assert.strictEqual(r.body.error, 'O colaborador é obrigatório');
     await close();
   });
 
@@ -134,8 +130,7 @@ async function novaFerramenta(db, extra = {}) {
     const { app, db, close } = await createTestApp();
     const semCal = await novaFerramenta(db);                       // exige_calibracao=0
     const comCal = await novaFerramenta(db, { exige_calibracao: 1 });
-    await request(app).post(`/api/almoxarifado/ferramentas/${semCal}/emprestar`)
-      .send({ colaborador_nome: 'Joao', data_prevista_devolucao: '2030-01-01' }).expect(201);
+    await emprestarComTermo(app, db, semCal, { colaborador_nome: 'Joao', data_prevista_devolucao: '2030-01-01' }).expect(201);
     const r = await request(app).get('/api/almoxarifado/ferramentas').expect(200);
     const a = r.body.find(f => f.id === semCal);
     const b = r.body.find(f => f.id === comCal);
@@ -150,10 +145,8 @@ async function novaFerramenta(db, extra = {}) {
     const { app, db, close } = await createTestApp();
     const f1 = await novaFerramenta(db);
     const f2 = await novaFerramenta(db);
-    await request(app).post(`/api/almoxarifado/ferramentas/${f1}/emprestar`)
-      .send({ colaborador_nome: 'Joao Silva' }).expect(201);
-    await request(app).post(`/api/almoxarifado/ferramentas/${f2}/emprestar`)
-      .send({ colaborador_nome: 'Maria Souza' }).expect(201);
+    await emprestarComTermo(app, db, f1, { colaborador_nome: 'Joao Silva' }).expect(201);
+    await emprestarComTermo(app, db, f2, { colaborador_nome: 'Maria Souza' }).expect(201);
     const r = await request(app).get('/api/almoxarifado/emprestimos?colaborador=Joao').expect(200);
     assert.strictEqual(r.body.length, 1, `esperava so o emprestimo do Joao, veio ${r.body.length}`);
     assert.strictEqual(r.body[0].colaborador_nome, 'Joao Silva');
@@ -195,8 +188,7 @@ async function novaFerramenta(db, extra = {}) {
   await test('F2(a): devolver com ferramenta ja tirada de EMPRESTADA por ocorrencia concorrente nao volta a DISPONIVEL', async () => {
     const { app, db, close } = await createTestApp();
     const fid = await novaFerramenta(db);
-    const e = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
-      .send({ colaborador_nome: 'Joao' }).expect(201);
+    const e = await emprestarComTermo(app, db, fid, { colaborador_nome: 'Joao' }).expect(201);
 
     // Simula a ocorrencia concorrente: ela ja fechou o mesmo emprestimo E mudou a ferramenta para
     // AVARIADA por dentro (RN-05), antes do devolver rodar. UPDATE direto na FERRAMENTA (nao no

@@ -8,6 +8,8 @@ const fs = require('fs');
 const path = require('path');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
+// Etapa 180 (I1): o emprestimo exige colaborador do cadastro + termo assinado (multipart) — o helper preserva a intencao do teste.
+const { emprestarComTermo } = require('../helpers/termoFerramenta');
 const { dbRun, dbAll, dbGet } = require('../../services/almoxarifado/db');
 const diaLocal = require('../../services/diaLocal'); // Etapa 163 (C406): o hoje das validades e o dia de Brasilia
 
@@ -34,8 +36,7 @@ async function novaFerramenta(db, extra = {}) {
     const fid = await novaFerramenta(db, { exige_calibracao: 1 });
 
     // sem calibracao alguma -> RN-03 barra
-    await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
-      .send({ colaborador_nome: 'Joao' }).expect(400);
+    await emprestarComTermo(app, db, fid, { colaborador_nome: 'Joao' }).expect(400);
 
     // registra calibracao com validade futura via multipart
     const post = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/calibracoes`)
@@ -45,8 +46,7 @@ async function novaFerramenta(db, extra = {}) {
     assert.ok(post.body.id, 'esperava {id} no 201');
 
     // agora empresta
-    await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
-      .send({ colaborador_nome: 'Joao' }).expect(201);
+    await emprestarComTermo(app, db, fid, { colaborador_nome: 'Joao' }).expect(201);
     await close();
   });
 

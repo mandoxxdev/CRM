@@ -9,6 +9,8 @@
 const assert = require('assert');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
+// Etapa 180 (I1): o emprestimo exige colaborador do cadastro + termo assinado (multipart) — o helper preserva a intencao do teste.
+const { emprestarComTermo } = require('../helpers/termoFerramenta');
 const { dbGet, dbRun } = require('../../services/almoxarifado/db');
 
 let passed = 0; let failed = 0;
@@ -134,16 +136,14 @@ async function novaFerramenta(app, extra = {}) {
   });
 
   await test('RN-175.08 (integracao): marcar "exige calibracao" pelo PUT faz o proximo emprestimo recusar; desmarcar libera', async () => {
-    const { app, close } = await createTestApp();
+    const { app, db, close } = await createTestApp();
     const a = await novaFerramenta(app);
     await request(app).put(`/api/almoxarifado/ferramentas/${a}`).send({ exige_calibracao: true }).expect(200);
-    const r = await request(app).post(`/api/almoxarifado/ferramentas/${a}/emprestar`)
-      .send({ colaborador_nome: 'Ana' }).expect(400);
+    const r = await emprestarComTermo(app, db, a, { colaborador_nome: 'Ana' }).expect(400);
     assert.strictEqual(r.body.error, 'Ferramenta com calibração vencida ou sem calibração registrada');
     // a tela manda o 0/1 que o GET devolveu quando a pessoa nao mexe no campo
     await request(app).put(`/api/almoxarifado/ferramentas/${a}`).send({ exige_calibracao: 0 }).expect(200);
-    await request(app).post(`/api/almoxarifado/ferramentas/${a}/emprestar`)
-      .send({ colaborador_nome: 'Ana' }).expect(201);
+    await emprestarComTermo(app, db, a, { colaborador_nome: 'Ana' }).expect(201);
     await close();
   });
 

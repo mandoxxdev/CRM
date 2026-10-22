@@ -106,6 +106,7 @@ const ROTULOS_ENTIDADE = Object.freeze({
   sobra: 'Sobra',
   solicitacao_compra: 'Solicitação de compra',
   sucateamento: 'Sucateamento',
+  termo_responsabilidade: 'Termo de responsabilidade', // Etapa 180 (RN-180.02)
   tipo_material: 'Tipo de material',
 });
 
@@ -151,6 +152,7 @@ const GRUPOS_ACAO = congelarGrupos([
   { rotulo: 'Regularização de séries', verbos: ['REGULARIZACAO_SERIES'] }, // Etapa 61
   { rotulo: 'Assinatura de entrega', verbos: ['ASSINATURA_ENTREGA'] },
   { rotulo: 'Entrega de EPI', verbos: ['ENTREGA_EPI'] }, // Etapa 178
+  { rotulo: 'Nova versão do termo', verbos: ['NOVA_VERSAO_TERMO'] }, // Etapa 180 (RN-180.02)
   { rotulo: 'Confirmação de recebimento', verbos: ['CONFIRMACAO_RECEBIMENTO'] },
   // Etapa 28: a separação passa a ter dono e a auditar (SEPARACAO, Task 1); a segunda
   // conferência e a liberação para retirada ganham verbo próprio (Task 2). Os três entram

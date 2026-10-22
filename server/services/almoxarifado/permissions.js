@@ -75,6 +75,11 @@ const ACAO_PERFIS = {
   // natureza diferente de `movimentar`. Concedida hoje aos MESMOS perfis de `movimentar` — o ganho e PODER restringir sem
   // reescrever nada. Entra de graca em GET /almoxarifado/minhas-permissoes.
   entregar_epi: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
+  // Etapa 180 (RN-180.02, I4): trocar o TEXTO do termo de responsabilidade (cada troca e uma versao nova que o colaborador
+  // passa a assinar). E texto com peso juridico, e quem empresta (ALMOXARIFE) nao redige o compromisso que ele mesmo colhe — so
+  // ADMINISTRADOR, como `configurar`. Acao propria (nao `configurar`) para PODER abrir ao RH/SESMT sem dar a configuracao inteira.
+  // Reversivel numa linha; letra B. Entra de graca em GET /almoxarifado/minhas-permissoes.
+  editar_termos: [PERFIS.ADMINISTRADOR],
   // Etapa 28 (C4): a SEGUNDA CONFERENCIA da separacao e acao propria, pelo mesmo criterio de
   // remessar_terceiro/gerenciar_ferramentas: concedida hoje aos MESMOS perfis de `separar_emitir`,
   // o ganho nao e restringir agora, e PODER restringir sem reescrever nada quando o cliente quiser

@@ -11,6 +11,8 @@
 const assert = require('assert');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
+// Etapa 180 (I1): o emprestimo exige colaborador do cadastro + termo assinado (multipart) — o helper preserva a intencao do teste.
+const { emprestarComTermo } = require('../helpers/termoFerramenta');
 const { dbRun } = require('../../services/almoxarifado/db');
 const toolReminderService = require('../../services/almoxarifado/toolReminderService');
 const diaLocal = require('../../services/diaLocal'); // Etapa 163 (C406): o hoje das validades e o dia de Brasilia
@@ -41,23 +43,19 @@ function isoAmanha() { return doHojeLocal(1); }
 
     // A: vencido ontem, ainda emprestado
     const fA = await novaFerramenta(db);
-    const eA = await request(app).post(`/api/almoxarifado/ferramentas/${fA}/emprestar`)
-      .send({ colaborador_nome: 'Vencido Ontem', data_prevista_devolucao: isoOntem() }).expect(201);
+    const eA = await emprestarComTermo(app, db, fA, { colaborador_nome: 'Vencido Ontem', data_prevista_devolucao: isoOntem() }).expect(201);
 
     // B: previsto para amanha, nao vencido
     const fB = await novaFerramenta(db);
-    await request(app).post(`/api/almoxarifado/ferramentas/${fB}/emprestar`)
-      .send({ colaborador_nome: 'Prazo Amanha', data_prevista_devolucao: isoAmanha() }).expect(201);
+    await emprestarComTermo(app, db, fB, { colaborador_nome: 'Prazo Amanha', data_prevista_devolucao: isoAmanha() }).expect(201);
 
     // C: sem data prevista — nunca e vencido
     const fC = await novaFerramenta(db);
-    await request(app).post(`/api/almoxarifado/ferramentas/${fC}/emprestar`)
-      .send({ colaborador_nome: 'Sem Prazo' }).expect(201);
+    await emprestarComTermo(app, db, fC, { colaborador_nome: 'Sem Prazo' }).expect(201);
 
     // D: vencido ontem, mas ja devolvido — nao conta
     const fD = await novaFerramenta(db);
-    const eD = await request(app).post(`/api/almoxarifado/ferramentas/${fD}/emprestar`)
-      .send({ colaborador_nome: 'Vencido Mas Devolvido', data_prevista_devolucao: isoOntem() }).expect(201);
+    const eD = await emprestarComTermo(app, db, fD, { colaborador_nome: 'Vencido Mas Devolvido', data_prevista_devolucao: isoOntem() }).expect(201);
     await request(app).post(`/api/almoxarifado/emprestimos/${eD.body.id}/devolver`).send({}).expect(200);
 
     // Filtro vencidos=1 via API

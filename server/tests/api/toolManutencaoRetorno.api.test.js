@@ -8,6 +8,8 @@
 const assert = require('assert');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
+// Etapa 180 (I1): o emprestimo exige colaborador do cadastro + termo assinado (multipart) — o helper preserva a intencao do teste.
+const { emprestarComTermo } = require('../helpers/termoFerramenta');
 const { dbRun, dbAll, dbGet } = require('../../services/almoxarifado/db');
 const diaLocal = require('../../services/diaLocal');
 
@@ -152,7 +154,7 @@ const concluir = (app, mid, corpo) => request(app).put(`/api/almoxarifado/manute
   await test('RN-177.07: baixada nao empresta, nao entra em manutencao, nao registra ocorrencia, nao bloqueia', async () => {
     const { app, db, close } = await createTestApp();
     const fid = await novaFerramenta(db, { status: 'BAIXADA' });
-    const e = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`).send({ colaborador_nome: 'Ana' }).expect(400);
+    const e = await emprestarComTermo(app, db, fid, { colaborador_nome: 'Ana' }).expect(400);
     assert.strictEqual(e.body.error, 'Ferramenta não está disponível (status atual: BAIXADA)');
     const m = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/manutencoes`).send({ descricao: 'x' }).expect(400);
     assert.strictEqual(m.body.error, 'Ferramenta não pode entrar em manutenção (status atual: BAIXADA)');
@@ -273,9 +275,9 @@ const concluir = (app, mid, corpo) => request(app).put(`/api/almoxarifado/manute
     const fid = await novaFerramenta(db);
     const m1 = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/manutencoes`).send({ descricao: 'Ruido no motor' }).expect(201);
     await concluir(app, m1.body.id, { condicao: 'INSERVIVEL', destino: 'BAIXA', observacoes: 'Sem conserto' }).expect(200);
-    await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`).send({ colaborador_nome: 'Ana' }).expect(400);
+    await emprestarComTermo(app, db, fid, { colaborador_nome: 'Ana' }).expect(400);
     await request(app).post(`/api/almoxarifado/ferramentas/${fid}/reverter-baixa`).send({ justificativa: 'conserto achado' }).expect(200);
-    const e = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`).send({ colaborador_nome: 'Ana' }).expect(201);
+    const e = await emprestarComTermo(app, db, fid, { colaborador_nome: 'Ana' }).expect(201);
     await request(app).post(`/api/almoxarifado/emprestimos/${e.body.id}/devolver`).send({}).expect(200);
     const m2 = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/manutencoes`).send({ descricao: 'Revisao' }).expect(201);
     await concluir(app, m2.body.id, { condicao: 'OK', destino: 'USO' }).expect(200);

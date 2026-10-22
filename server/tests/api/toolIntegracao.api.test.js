@@ -9,6 +9,8 @@
 const assert = require('assert');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
+// Etapa 180 (I1): o emprestimo exige colaborador do cadastro + termo assinado (multipart) — o helper preserva a intencao do teste.
+const { emprestarComTermo } = require('../helpers/termoFerramenta');
 const { dbAll, dbGet } = require('../../services/almoxarifado/db');
 
 let passed = 0; let failed = 0;
@@ -29,8 +31,7 @@ function test(name, fn) {
     assert.ok(fid, 'esperava {id} na criacao da ferramenta');
 
     // 2. emprestar sem calibracao alguma: RN-03, mensagem literal do contrato
-    const semCal = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
-      .send({ colaborador_nome: 'Joao' }).expect(400);
+    const semCal = await emprestarComTermo(app, db, fid, { colaborador_nome: 'Joao' }).expect(400);
     assert.strictEqual(semCal.body.error, 'Ferramenta com calibração vencida ou sem calibração registrada');
 
     // 3. registra calibracao vigente (Task 3, multipart)
@@ -41,8 +42,7 @@ function test(name, fn) {
     assert.ok(cal.body.id, 'esperava {id} no registro de calibracao');
 
     // 4. RN-08: agora empresta
-    const emp1 = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
-      .send({ colaborador_nome: 'Joao' }).expect(201);
+    const emp1 = await emprestarComTermo(app, db, fid, { colaborador_nome: 'Joao' }).expect(201);
     const emp1Id = emp1.body.id;
     assert.ok(emp1Id, 'esperava {id} no emprestimo');
 
@@ -61,8 +61,7 @@ function test(name, fn) {
     assert.strictEqual(fAvariada.status, 'AVARIADA');
 
     // 7. emprestar ferramenta avariada: RN-02, mensagem literal citando AVARIADA
-    const rnAvariada = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
-      .send({ colaborador_nome: 'Maria' }).expect(400);
+    const rnAvariada = await emprestarComTermo(app, db, fid, { colaborador_nome: 'Maria' }).expect(400);
     assert.strictEqual(rnAvariada.body.error, 'Ferramenta não está disponível (status atual: AVARIADA)');
 
     // 8. RN-07: inicia manutencao sobre AVARIADA (Task 4)
@@ -79,8 +78,7 @@ function test(name, fn) {
     assert.strictEqual(fDisponivel.status, 'DISPONIVEL');
 
     // 10. emprestar de novo: 201 -> devolver: 200 (RN-04)
-    const emp2 = await request(app).post(`/api/almoxarifado/ferramentas/${fid}/emprestar`)
-      .send({ colaborador_nome: 'Carlos' }).expect(201);
+    const emp2 = await emprestarComTermo(app, db, fid, { colaborador_nome: 'Carlos' }).expect(201);
     const emp2Id = emp2.body.id;
     assert.ok(emp2Id, 'esperava {id} no segundo emprestimo');
     await request(app).post(`/api/almoxarifado/emprestimos/${emp2Id}/devolver`).send({}).expect(200);
