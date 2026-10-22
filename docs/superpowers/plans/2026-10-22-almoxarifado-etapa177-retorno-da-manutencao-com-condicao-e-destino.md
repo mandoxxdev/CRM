@@ -1,6 +1,6 @@
 # Etapa 177 — O retorno da manutenção com a condição do item e o destino (volta ao uso ou baixa)
 
-> **Status:** em execução · **Branch:** `etapa-e177` (worktree `CRM-wt-e177`, a partir da `main` `895fd509`) · **Data:** 2026-10-22
+> **Status:** 🟢 entregue (2026-10-22) · **Branch:** `etapa-e177` (worktree `CRM-wt-e177`, a partir da `main` `895fd509`) · **Data:** 2026-10-22
 > **Origem:** pedido da usuária de Compras/almoxarifado (item 3 da "próxima tarefa detalhada" da Etapa 173): *"Registro da condição do item
 > após a manutenção, identificando se retornou ao responsável ou se deverá ser destinado ao descarte."*
 
@@ -82,8 +82,56 @@ regra de negócio e mora no serviço (molde `TIPOS_OCORRENCIA`).
 
 ## Andamento
 
-- [ ] T1
-- [ ] T2
-- [ ] T3
-- [ ] Revisão (Fase 2/5 — **sem agente independente**: este executor é um fork e não pode abrir agentes; releitura adversarial própria)
-- [ ] Fechamento
+- [x] T1 — `17ce8759`: servidor (estado BAIXADA, colunas, conclusão com condição/destino, reverter baixa, painel, rótulos de auditoria).
+  `toolManutencaoRetorno.api.test.js` 13/13; `toolManutencao` 15/15, `toolIntegracao` 1/1, `toolOcorrencia` 9/9, `toolEmprestimo` 12/12,
+  `toolCalibracao` 10/10, `auditLabels` 14/14 depois da mudança. Primeiro boot em pasta vazia: as duas colunas nascem (os dois avisos
+  "duplicate column" do boot são de `materiais_escritorio`, de antes).
+- [x] T2 — `c2bc2d37`: tela (modal com Condição e Destino, selo/filtro *Baixada*, *Reverter baixa*, botões escondidos na baixada). +6 cenários.
+- [x] T3 — o cenário de integração mora em `toolManutencaoRetorno.api.test.js` (último cenário, pela rota: manutenção → baixa → emprestar
+  recusa → reverter → emprestar → devolver → manutenção → volta ao uso, com o histórico das duas manutenções).
+- [x] Revisão — **sem agente independente** (abaixo).
+- [x] Fechamento — novidades (seção, B1140–B1145, D (177), cabeçalho, "Onde estamos"), spec 16, mapa (linha 16), guia, manual 21.5/21.6.
+
+**Medido** (sobre a `main` com a T1 da 176, merge `34151325`): `test:api` **502/502**; `test:almoxarifado` 44/44; `test:validation` 4/4,
+`test:safealter` 3/3, `test:sqlite` 16/16; client **175 suítes / 2262 testes**; `CI=true react-scripts build` **Compiled successfully**.
+
+**Divergências do plano.**
+- O contrato do *reverter baixa* não dizia que a justificativa exige **5 caracteres** (é o `JustificativaSchema` de sempre); o primeiro teste
+  mandava `'x'` e caiu no 400 de validação. Corrigido no contrato e no teste.
+- **A seção da Etapa 175 dizia que o destino depois da manutenção esperava os formulários em papel da empresa. Estava errado** — corrigido na
+  spec 16 e dito na seção da 177 das novidades.
+
+## Fase 2 e Fase 5 — releitura própria (a revisão por agente independente NÃO foi feita)
+
+Este executor é um fork e não pode abrir agentes. A sessão principal deve rodar a revisão adversarial independente antes de dar a etapa por
+fechada de vez. O que a releitura própria fez, traçando cada RN até o último gesto:
+
+- **Quem mais lê o status da ferramenta** (`grep 'PERDIDA'|EM_MANUTENCAO` no client e no servidor, fora do serviço, da máquina e da tela):
+  ninguém — nenhum relatório ou painel além do de calibrações, que foi tratado (RN-177.09).
+- **Validação antes da escrita**: as cinco recusas novas rodam antes do claim da manutenção; a sabotagem S5 (validar depois do claim) derrubou
+  os cinco cenários de "nada muda".
+- **A baixada pela integração** ainda aceita registrar calibração e ser editada — declarado em **D (177)**, a tela não oferece a calibração.
+- **Edição simultânea da conclusão**: o claim `data_fim IS NULL` continua decidindo quem conclui; o segundo leva 404, como antes.
+- Achado da própria releitura, **declarado e não corrigido**: as asserções "o painel recarrega" da tela são fracas — o painel já busca de novo
+  a cada abertura da aba (o mesmo achado da revisão da 175); o `recarregarCal()` é redundante hoje e foi mantido.
+
+Controle positivo: **17 sabotagens** — servidor S1–S9 (S5 e S7 refeitas com âncora de uma linha, porque `grep -cF` conta por linha e a
+âncora de duas linhas abortou pela guarda), tela T1–T8. Cada uma derrubou o cenário dela (lido o nome do cenário). Restauro por cópia + `cmp`.
+
+## Retro (4 números)
+
+- Rodadas de correção até verde: **1** (o teste da justificativa curta).
+- Achados de revisão: **0** de agente independente (não houve); 1 da releitura própria (asserção fraca, declarada).
+- Paralelismo: **0** (T2 dependia do contrato da T1, executadas em sequência por um só executor).
+- Defeito que escapou: a preencher na próxima etapa que tocar ferramentas.
+
+## Próxima tarefa detalhada
+
+Desta frente (o pedido de ferramentas/EPI da usuária), o que falta:
+
+1. **A revisão adversarial independente da 177** (a sessão principal) — lentes: a máquina de estados com BAIXADA (algum caminho chega a
+   BAIXADA ou sai dela por fora de `concluirManutencao`/`reverterBaixa`?), a tela (o modal manda o corpo certo em cada combinação?), e "este
+   teste passaria com a feature quebrada?".
+2. **A aba de histórico da ferramenta** (manutenções com condição e destino, ocorrências, empréstimos) — o dado existe
+   (`GET /ferramentas/:id/manutencoes`, `/ocorrencias`, `/emprestimos?ferramenta_id=` — **medir** este último filtro antes de prometer).
+3. **Entrega/empréstimo com assinatura (NR-6)** — espera os formulários em papel da empresa.

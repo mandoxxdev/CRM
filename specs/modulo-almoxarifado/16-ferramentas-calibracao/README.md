@@ -1,5 +1,7 @@
 # 16 — Ferramentas e Equipamentos de Medição
 
+> **+ Etapa 177 (2026-10-22, T1 `17ce8759`, T2 `c2bc2d37`): o retorno da manutenção com a condição do item e o destino (volta ao uso ou baixa)** — estado novo **BAIXADA**, reversível. Ver a seção "Etapa 177", no fim. O status da feature não muda (🟡 pelo lembrete de devolução e pela integração com a inspeção).
+
 > **+ Etapa 175 (2026-10-22, T1 `2a54344f`, T2 `735f7c5d`): editar a ferramenta pela tela** — o item "Edição de ferramenta pela tela" do checklist, aberto desde a 9b, foi entregue. Ver a seção "Etapa 175", no fim. A feature continua 🟡 pelo lembrete de devolução (feature 20) e pela integração com a inspeção.
 
 > **+ Etapa 170 (2026-10-20, `3fb6aa0e`): a *Retirada* dos empréstimos no dia de Brasília, no formato da tela (B1081, só exibição)** — ver a seção "Etapa 170", no fim. O status não muda.
@@ -69,6 +71,8 @@ calibração com vencimento que impede o uso. (Lembrete automático de devoluç�
 - [x] Avaria e perda: registro com foto, responsável e efeito no status — `0f89434`/`d2adfe6`
       (Task 5, RN-05)
 - [x] Bloqueio de ferramenta (não pode ser emprestada) — `b383b37` (Task 4, RN-06)
+- [x] **Retorno da manutenção com condição e destino; baixa de ferramenta** — `17ce8759` (servidor), `c2bc2d37` (tela), Etapa 177.
+      Não estava no checklist original; nasceu do pedido da usuária ("condição após a manutenção, volta ao responsável ou descarte").
 - [x] Manutenção: histórico de manutenções, ferramenta em manutenção não empresta — `b383b37`,
       compensação e claim corrigidos em `99e5dc7` (Task 4, RN-07)
 - [x] **Calibração**: data da última, validade, certificado anexo, alerta de vencimento —
@@ -173,3 +177,24 @@ Só exibição — nenhuma rota, consulta, valor gravado ou porta de saldo mudou
   recusar (RN-03) e desmarcar libera (RN-175.07/08). Antes desta etapa o 409 só era provado no POST.
 - Decisões **B1130** (sem trava de edição simultânea — vale o último) e **B1131** (editar em qualquer status).
 - Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa175-edicao-de-ferramenta-pela-tela.md`.
+
+## Etapa 177 — o retorno da manutenção com a condição e o destino (2026-10-22)
+
+- `PUT /api/almoxarifado/manutencoes/:id/concluir` aceita `condicao` (`OK`, `COM_RESTRICAO`, `INSERVIVEL`; opcional — **B1140**) e
+  `destino` (`USO` padrão, `BAIXA`). Recusas antes de qualquer escrita, nesta ordem: *"Condição inválida (use OK, COM_RESTRICAO ou
+  INSERVIVEL)"*, *"Destino inválido (use USO ou BAIXA)"*, *"Ferramenta inservível não volta ao uso — escolha a baixa"*, *"Descreva a
+  restrição nas observações"*, *"Informe o motivo da baixa nas observações"*; depois as de antes (404 *"Manutenção não encontrada"*, a
+  anomalia). Resposta `{ success, status }` (RN-177.01..05).
+- Estado novo **BAIXADA** (`toolStateMachine.js`: `EM_MANUTENCAO → BAIXADA`, `BAIXADA → DISPONIVEL`). Não empresta, não entra em
+  manutenção, não registra ocorrência, não bloqueia — as recusas de sempre com o status (RN-177.07). `POST /ferramentas/:id/reverter-baixa`
+  (justificativa ≥ 5) → DISPONIVEL; fora de BAIXADA *"Ferramenta não está baixada (status atual: ⟨S⟩)"* (RN-177.08, **B1142**).
+- Colunas `manutencoes_ferramenta_almoxarifado.condicao_retorno` e `.destino` (safeAlter aditivo; primeiro boot provado). Auditoria:
+  `MANUTENCAO_FIM` com condição/destino, `BAIXA` (motivo), `REVERSAO_BAIXA` — com rótulo (RN-177.06).
+- O painel de calibrações ignora BAIXADA (RN-177.09).
+- Tela: o modal *Concluir manutenção* com **Condição do item** e **Destino**; selo e filtro *Baixada*; **Reverter baixa**; sem *Ocorrência* e
+  *Calibração* na baixada (RN-177.10).
+- **A seção da Etapa 175 (e o plano dela) dizia que "o destino depois da manutenção (volta ao responsável ou descarte)" esperava os
+  formulários em papel da empresa. Estava errado:** a regra está no pedido da usuária e foi feita aqui; só a assinatura (NR-6) espera os
+  formulários.
+- Testes: `toolManutencaoRetorno.api.test.js` (13), `FerramentasAlmoxarifado.test.js` (+6). Plano:
+  `docs/superpowers/plans/2026-10-22-almoxarifado-etapa177-retorno-da-manutencao-com-condicao-e-destino.md`.

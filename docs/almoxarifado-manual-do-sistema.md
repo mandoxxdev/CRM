@@ -6216,8 +6216,39 @@ ferramenta **Disponível** ou **Avariada** (é o caminho de conserto de uma avar
 **emprestada** não entra em manutenção direto — devolva primeiro:
 > `Ferramenta não pode entrar em manutenção (status atual: EMPRESTADA)`
 
-Concluir a manutenção registra a data de fim e devolve a ferramenta a Disponível. Concluir uma
-manutenção que já foi concluída (ou que não existe) recusa com `Manutenção não encontrada`.
+**Concluir a manutenção** registra a data de fim e pede duas escolhas:
+
+| Campo | Opções |
+|---|---|
+| **Condição do item** (obrigatória) | *Em condições de uso*, *Em uso com restrição*, *Inservível* |
+| **Destino** | *Volta ao uso* (já marcado) ou *Baixa (descarte)* |
+
+Concluir sem escolher a condição é recusado pela tela: *"Escolha a condição do item"*. As combinações:
+
+- **Volta ao uso** devolve a ferramenta a **Disponível** — "voltar ao responsável" é isso, seguido do **Emprestar** de sempre.
+- **Em uso com restrição** exige descrever a restrição no campo, que passa a se chamar **Qual é a restrição**; sem ela:
+  > `Descreva a restrição nas observações`
+- **Inservível** não volta ao uso — escolher *Inservível* já muda o destino para a baixa; forçar *Volta ao uso*:
+  > `Ferramenta inservível não volta ao uso — escolha a baixa`
+- **Baixa (descarte)** exige o motivo, no campo **Motivo da baixa**; sem ele:
+  > `Informe o motivo da baixa nas observações`
+
+  Com o motivo, aparece *"Manutenção concluída — ferramenta baixada"* e a ferramenta fica **Baixada**.
+
+Qualquer recusa deixa a manutenção aberta e a janela com o que foi escolhido. A condição e o destino ficam gravados na manutenção, e a
+**Auditoria** mostra *Fim de manutenção* (com os dois) e, na baixa, *Baixa de ferramenta* (com o motivo). Concluir uma manutenção que já foi
+concluída (ou que não existe) recusa com `Manutenção não encontrada`.
+
+**Baixada** é o estado da ferramenta descartada. Ela continua na lista (o filtro de status tem *Baixada*) e com o histórico, mas **não
+circula**: não empresta, não entra em manutenção, não registra ocorrência e não bloqueia — a linha só oferece **Editar** e **Reverter baixa**
+—, e sai do painel de calibrações. Pela integração, emprestar uma baixada responde
+`Ferramenta não está disponível (status atual: BAIXADA)`. A baixa só acontece ao concluir uma manutenção: uma ferramenta *Avariada* vai
+para a baixa passando por **Iniciar manutenção**.
+
+**Reverter baixa** desfaz uma baixa feita por engano: pede justificativa de pelo menos 5 caracteres, devolve a ferramenta a **Disponível**
+(*"Baixa revertida — a ferramenta voltou a ficar disponível"*) e fica na Auditoria como *Reversão de baixa*. Numa ferramenta que não está
+baixada:
+> `Ferramenta não está baixada (status atual: <status>)`
 
 **Reencontrar** só vale para ferramenta **Perdida** — devolve a Disponível, com justificativa
 obrigatória. Tentar reencontrar uma ferramenta que não está perdida:
@@ -6247,7 +6278,7 @@ recusado (21.3); desmarcar libera. Se duas pessoas editarem a mesma ferramenta a
 que foi salvo por último.
 
 **Toda ação de escrita** (cadastrar, editar, emprestar, devolver, bloquear, desbloquear, manutenção,
-ocorrência, calibração, reencontrar) exige a permissão **Ferramentas** —
+baixa, reverter baixa, ocorrência, calibração, reencontrar) exige a permissão **Ferramentas** —
 Administrador ou Almoxarife (ver 5.5). Essa permissão é **independente** da permissão de
 movimentar estoque: é possível autorizar alguém a mexer em ferramentas sem autorizar a mexer no
 estoque de materiais, e vice-versa. Ler a lista de ferramentas e o histórico é livre para
