@@ -164,7 +164,7 @@ Cada task: TDD com controle positivo (quebrar a implementação e ver o vermelho
 | T5 | feito — GET /exportar.xlsx (exportacaoService), 6 abas da planilha, periodo, F2-18 | d2aaa72b |
 | T6 | a fazer (front, outro agente) | |
 | T7 | a fazer (front, outro agente) | |
-| T8 | feito — frotasPortalIntegracao: o fluxo pela rota e pelo servico, a planilha exportada e o outro motorista sem ver nem alterar | este commit ("Frota etapa 1 T8") |
+| T8 | feito — frotasPortalIntegracao: o fluxo pela rota e pelo servico, a planilha exportada e o outro motorista sem ver nem alterar | 2e591c39 |
 
 ### Notas do back (T1–T5, T8) — o que o front precisa saber, sem mudar contrato
 
