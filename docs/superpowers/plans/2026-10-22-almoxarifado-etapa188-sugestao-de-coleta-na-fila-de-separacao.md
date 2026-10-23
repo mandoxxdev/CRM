@@ -440,7 +440,29 @@ limite → vermelho.
 
 ## Execução
 
-*(vazia — nenhuma task executada.)*
+### T1 — feita (`27819165`)
+
+- Módulo novo `server/services/almoxarifado/sugestaoDeColeta.js` (puro) e teste `server/tests/api/sugestaoDeColeta.api.test.js` — **33**
+  cenários. Vermelho antes: o arquivo inteiro (`Cannot find module`). Verde: **33/0**.
+- Emendas aplicadas: **C1** (`[RN-188.01a]` × 4: planejada cobre → ela; não cobre → ela com `PLANEJADA_NAO_COBRE`, com a P-01 que
+  cobriria ao lado — a sonda `f2r188-sonda1` como cenário puro; sem livre / bloqueada → `null` + `PLANEJADA_NAO_COBRE`; pendente 0 →
+  regra normal) e "nenhum cobre → o de **maior** livre"; **I3** (`[RN-188.03] serie`: lote com as séries bloqueadas fora; séries do lote
+  descontam o planejado de outro par do mesmo lote).
+- **Divergências do plano:** (1) `caminhoDaLocalizacao` devolve `{ segmentos, temAlmoxarifado }` (não array cru) — o comparador precisa
+  saber se há almoxarifado para pôr o "sem almoxarifado" por último; o almoxarifado é o do endereço ou do ancestral mais próximo que
+  tenha. (2) `sugerirColeta` recebe também `seriesPorLote` (I3) e `hojeISO`; cada item traz `origem_separacao_id`, `lote_separacao_id` e
+  `separado_pendente` (C1). Exporta `chavePar`/`chaveLote` (as chaves dos Maps) e `AVISO`. (3) Na RN-188.02 o critério "livre maior" usa
+  o livre **visto pelo item** (já descontado dos irmãos).
+- **Controles positivos** (`scratchpad/e188-sabota.sh`: perl, âncora contada = 1, md5 antes/sabotado/restaurado iguais, restauro por
+  cópia `e188-bk-*`):
+  - (a) `localeCompare(numeric)` → comparação crua: cai **só** `[RN-188.05] A-2 antes de A-10` (no `assert.ok` do comparador). ✔
+  - (b) sem `- planejado.get(kp)`: caem `[RN-188.03] outra requisicao desconta`, `[RN-188.03] irmaos`, os dois `[RN-188.01a]` que dependem
+    do livre da planejada e `[RN-188.04] saldo zerado pelo planejado`. ✔
+  - (c) sem o teste de área efetiva: caem `[RN-188.04] quarentena (pelo pai)`, `area de cliente com material proprio` e `tudo excluido`. ✔
+  - (d) "primeiro que cobre" → `cands[0]`: cai `[RN-188.01] cobre sozinho` (L1 de 2 na frente) e os que dependem da escolha (6). ✔
+  - (C1 guarda) `if (false && temPlanejada)`: caem os três `[RN-188.01a]` (planejada cobre → P-01; não cobre → aviso `null`). ✔
+  - (C1 maior livre) `reduce` → `cands[0]`: cai **só** `[RN-188.01] nenhum cobre -> o de maior livre` (deu A-01). ✔
+  - (I3) sem o teto das séries: cai **só** `[RN-188.03] serie` (deu L1). ✔
 
 ## Próxima tarefa detalhada
 
