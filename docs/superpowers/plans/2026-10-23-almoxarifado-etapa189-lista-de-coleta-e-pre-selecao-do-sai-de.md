@@ -704,6 +704,20 @@ onde divergirem** (as Emendas da Fase 2 incorporadas):
   O ramo morto **não** foi mexido (fora do escopo; registrar na letra C do fechamento). (2) O caso 6 do plano do servidor virou dois (o I1 e o
   "entregando entre as rodadas"), como a emenda I1 pedia.
 
+### Suítes completas (2026-10-23, sobre `d1146a6e`, uma vez cada, em sequência; logs `e189-log-*.txt` no scratchpad)
+
+- `test:api` **536/536** arquivos OK (eram 534 na 188: +`sugestaoColetaRequisicao`, +`preSelecaoColetaIntegracao`); mais lento
+  `propostaSalvarGrava.api.test.js`, 68,3 s.
+- `test:almoxarifado` **44 passou, 0 falhou**; `test:validation` **4/0**; `test:safealter` **3/0** (o "ALTER falhou" do log é o caso de falha de
+  propósito); `test:sqlite` **16/0**.
+- client **186 suítes / 2531 testes**, todos passando (eram 182/2475: +4 suítes, +56 testes = 18 pré-seleção + 14 `coletaTexto` + 18
+  `listaColetaPdf` + 2 fluxo + 4 botões da fila).
+- `CI=true react-scripts build`: *Compiled successfully*.
+
+**Parou aqui:** T1–T4 feitas. Falta a **Fase 5** (revisão adversarial) e o **fechamento** (`fechar-etapa`: novidades com a letra B
+B1260–B1269 — a B1262 com o parágrafo da I1 —, a letra C com o ramo morto "Separar e entregar" da T4, spec 05, mapa, guia, manual e a
+"Próxima tarefa detalhada" deste plano).
+
 ## Próxima tarefa detalhada
 
 *(preencher no fechamento)*
