@@ -1,6 +1,7 @@
 # Etapa 187 — A ferramenta baixada não é calibrada nem editada, e a restrição da manutenção aparece na lista e no Emprestar
 
-> **Status:** 📝 **plano escrito (2026-10-22), Fase 2 ainda não rodou** — é o primeiro passo. Feature **16** (ferramentas e calibração).
+> **Status:** 📝 **plano escrito (2026-10-22); Fase 2 feita** (revisor fresco, 0 Crítico, 5 Importantes, 7 Menores — ver "Emendas da
+> Fase 2"; as emendas **valem por cima** do texto das RN, do contrato e das tasks). Próximo passo: T1. Feature **16** (ferramentas e calibração).
 > Fecha **D (177)(2)** e **D (177)(5)** de `docs/almoxarifado-novidades-por-etapa.md:17824-17832`. Origem: plano da 177
 > (`docs/superpowers/plans/2026-10-22-almoxarifado-etapa177-retorno-da-manutencao-com-condicao-e-destino.md`, "Fase 5", achado 5, e
 > "Releitura própria", 3º item).
@@ -338,6 +339,131 @@ fábrica: o selo aparece, sem botões.
 **D (187) proposta:** (1) a inspeção não avisa que o instrumento está em uso com restrição; (2) o empréstimo não grava que houve aviso
 (nem no termo, nem na auditoria); (3) `GET /ferramentas/:id/manutencoes`, `/calibracoes` e `/ocorrencias` continuam abertos a todo o
 módulo (`extended.js:1716`, `:1752`, `:1809`) — `SELECT *` com `usuario_id`; (4) B1146 segue (instrumento perdido/avariado/bloqueado mede).
+
+## Emendas da Fase 2
+
+Revisor fresco (sem o contexto de quem escreveu), sobre `e39461ec`. Leu o plano, a spec 16, os planos da 175, 177 e 180, `toolService.js`,
+`termoFerramentaService.emprestarComTermo`, `inspectionService.resolverMedidas`, as rotas de ferramentas em `extended.js` e
+`FerramentasAlmoxarifado.js` + teste. Duas afirmações foram **medidas** num SQLite em memória (`node -e`, sqlite3 do `server/`), não lidas:
+o `NULL` no `ORDER BY … DESC` e o `lastID` de um `INSERT … SELECT … WHERE EXISTS` que não insere. **As emendas abaixo valem por cima** do
+texto das RN, do contrato e das tasks; o executor não precisa reconciliar — onde divergirem, vale a emenda.
+
+### Respostas às quatro perguntas
+
+1. **Contratos, mensagens e ordem.** As frases e a ordem batem com o código: `PUT` = porta (`extended.js:1649`) → `validate` → serviço (404
+   em `toolService.js:33`; a checagem nova entra **antes** do `if (sets.length === 0)` de `:42`, então pega o corpo vazio) → o 409 só nasce do
+   `UPDATE` (`:46` + catch da rota `:1653`), **depois** da guarda. Na corrida o 400 também vence o 409: o SQLite só confere o `UNIQUE` em linha
+   que o `WHERE` casou — com `AND status <> 'BAIXADA'` não casando, não há conflito (`changes = 0`). Calibração = porta → multer → `safeParse`
+   (`:1701-1706`) → serviço (404 `:538`, baixada, data `:540`); o `limparUploadOrfaoEm` de `:1711` já cobre todo erro do serviço. O **400** é
+   coerente: todas as recusas por status das ferramentas e a da inspeção (`inspectionService.js:121-124`) são 400; o 409 do módulo é só
+   patrimônio. **Furo:** o ramo `changes === 0` do contrato só nomeia dois desfechos (I1).
+2. **RN × spec × decisões.** RN-187.05/B1244 batem com B1140 (a concluída sem condição é pulada — a etiqueta não some por omissão) e com
+   B1143 (nada muda em quem dá baixa); B1146 fica fora, como dito. A mudança da RN-175.01 **está** declarada (achado 2 da Fase 0 e B1242),
+   mas **a decisão que ela revê não está nomeada**: é a **B1131** (I3). A consequência declarada da B1244 cobre só *Inservível* — falta o
+   caminho em que a baixa **mantém** a restrição (I4).
+3. **Galhos.** T1 → T2 sequenciais (mesmo arquivo) está certo. T3 é galho de verdade: só consome o JSON congelado (`restricao` com três
+   chaves ou `null`), mock na fronteira HTTP, sem SQLite. A fixture é da T4 (depois das três) — certo. **Ressalva de execução** (I5): os
+   controles positivos da T1/T2/T4 sabotam `toolService.js`/`extended.js` na árvore compartilhada enquanto outra sessão fecha a 186 nela.
+4. **Traçado até o último gesto.** Escrito abaixo, gesto a gesto. Único escritor de `condicao_retorno`/`data_fim` é
+   `concluirManutencao` (`toolService.js:288-291`; `grep` em `server/` fora de `tests/`: nenhum outro `UPDATE`/`INSERT` na tabela além do
+   `INSERT` da abertura `:220` e do `destino = NULL` da anomalia `:301`) — a regra "última concluída que declarou condição" enxerga tudo o
+   que se grava. EMPRESTADA e EM_MANUTENCAO continuam editando e calibrando (RN-187.03) — correto e coerente com a tela, que mostra
+   **Calibração** nelas (`FerramentasAlmoxarifado.js:832`). A corrida baixa × calibração: a única baixa é o claim `EM_MANUTENCAO → BAIXADA`
+   de `concluirManutencao` (`:294`); o `INSERT … WHERE EXISTS (… status <> 'BAIXADA')` é atômico no SQLite e resolve — **desde que** o
+   `changes = 0` não caia no ramo indefinido (I1). Exposição: aceitável. O mesmo texto já sai por `GET /ferramentas/:id/manutencoes`
+   (`extended.js:1752`, só `auth`, `SELECT *` com `usuario_id`); a lista branca de três chaves expõe **menos** que isso, e o texto é
+   instrução de uso da peça. O que pesa (o histórico aberto) já está em D (187)(3).
+
+**Traçado (cada gesto depois do que a RN muda — "isto ainda aceita o que o anterior aceitou?"):**
+
+| # | Gesto | Estado depois | Aceita? |
+|---|---|---|---|
+| 1 | Concluir *Em uso com restrição* + *Volta ao uso* (`:288`) | DISPONIVEL; última com condição = COM_RESTRICAO | — |
+| 2 | `GET /ferramentas` ALMOXARIFE (objeto cru do serviço) / PRODUCAO, GESTOR (lista branca) | `restricao` de 3 chaves nos dois | sim |
+| 3 | **Emprestar** (só para quem gerencia; o modal lê `modal.ferramenta` = a linha da lista) → aviso → `emprestarComTermo` | 201, EMPRESTADA; o servidor não lê a restrição (`termoFerramentaService.js:216-241`) | sim (não bloqueia) |
+| 4 | Lista com a emprestada | selo continua (não é BAIXADA) | sim |
+| 5 | Devolver (`devolverFerramenta`) | DISPONIVEL, selo continua | sim |
+| 6 | Iniciar manutenção → concluir *Em condições de uso* | última com condição = OK → `null` | sim |
+| 7 | Iniciar → concluir *Inservível* + *Baixa* | BAIXADA, `null`; editar 400, calibrar 400 | recusa **nova e pretendida** (B1242) — a tela tira os dois botões, então nenhum gesto de tela que a anterior autorizou passa a dar erro |
+| 8 | **Reverter baixa** | DISPONIVEL, `null`; editar 200, calibrar 201 | sim |
+| 7' | Concluir *Em uso com restrição* + *Baixa* (a tela **permite** — `validarRetorno` só recusa *Inservível* + *Uso*, `:274-276`; a tela manda a combinação ao servidor, `FerramentasAlmoxarifado.js:578-583`) **ou** *Baixa* sem condição pela integração (B1140) | BAIXADA **com** `restricao` (a de agora ou a anterior) | ver I4 |
+| 8' | Reverter baixa depois do 7' | DISPONIVEL **com selo** | não declarado — I4 |
+| — | Perda → Reencontrar; Avaria → manutenção | o selo atravessa a perda (nenhuma condição nova); a avaria limpa só se a manutenção concluir OK | coerente com B1244 |
+
+### Importantes
+
+- **I1 — o ramo `changes === 0` tem um terceiro desfecho sem dono, e cair nele grava trilha falsa com 201.** Contrato, `:133` e `:137`:
+  "reler: sumiu → 404, BAIXADA → 400". Se a releitura achar a ferramenta **fora** de BAIXADA (baixada no instante da gravação e revertida
+  antes da releitura; ou o controle (5) da T1, que estreita o `WHERE` para `= 'DISPONIVEL'`), o código cai para a auditoria e o `return`.
+  **Medido:** `INSERT … SELECT … WHERE EXISTS` que não insere devolve `changes 0` e o **`lastID` do último insert da conexão** (9, de outra
+  tabela) — `registrarCalibracao` responderia **201 `{ id: 9 }`** e gravaria `CALIBRACAO` na auditoria sem calibração; `atualizarFerramenta`
+  gravaria `EDICAO` sem edição. **Emenda (contrato):** `changes === 0` → reler `SELECT nome, ativo FROM ferramentas_almoxarifado WHERE id = ?`;
+  ausente ou `ativo = 0` → 404 `Ferramenta não encontrada`; **qualquer outro caso → 400 com a frase da baixada e o nome relido** (o único
+  motivo de a guarda da gravação recusar é o status BAIXADA naquele instante). Nunca seguir para auditoria/`return` com `changes = 0`.
+  **Teste novo na T1:** `[RN-187.04b]` gancho que, na leitura inicial, grava `BAIXADA` e, no **`db.run` da gravação** (depois que ela
+  terminar com `changes = 0`), grava `DISPONIVEL` de volta → 400 literal, 0 calibrações, nenhuma `CALIBRACAO`/`EDICAO` na trilha (premissa:
+  o gancho disparou nas duas pontas). **Controle (8):** trocar o "qualquer outro → 400" por `if (relida.status === 'BAIXADA') throw …` (deixando
+  cair no `return`) → cai **só** o `[RN-187.04b]` (201). O controle (5) passa a cair com **400** nos cinco status — registrar.
+- **I2 — o controle (3) da T2 não sabe falhar.** No SQLite o `NULL` é o menor valor: no `ORDER BY data_fim DESC` a manutenção aberta vai
+  para o **fim**. **Medido:** sem `data_fim IS NOT NULL`, com uma concluída COM_RESTRICAO e uma aberta OK, volta a concluída — o
+  `[RN-187.05f]` como escrito fica verde com a cláusula tirada. **Emenda (T2, passo 1):** `[RN-187.05f]` ganha o caso discriminante: a
+  **única** linha com condição é uma manutenção **aberta** com `condicao_retorno = 'COM_RESTRICAO'` gravada à mão (nenhuma concluída com
+  condição) → `restricao === null`. **Medido:** sem a cláusula, essa linha volta (`{ id: 5, d: null, c: 'COM_RESTRICAO' }`). O controle (3)
+  passa a derrubar **este** caso; o caso antigo (aberta OK sobre concluída restrita) fica como guarda, sabendo que não discrimina.
+- **I3 — a regra revista é a B1131, e o plano não a nomeia.** `docs/almoxarifado-novidades-por-etapa.md:12301` — *"B1131 … Editar aparece
+  em qualquer status … Reversível: `735f7c5d`"* — continua valendo para quem lê a letra B, e a spec 16 repete (`:212` *"Botão Editar em toda
+  linha, em qualquer status"*, `:221` *"B1131 (editar em qualquer status)"*). Apagar em silêncio é a falha da regra 5 do CLAUDE.md.
+  **Emenda (B1242 e fechamento):** a B1242 abre com *"Revê a **B1131** (Etapa 175)"*; no fechamento, a B1131 ganha, no lugar, *"**Revista na
+  Etapa 187 (B1242):** salvo a Baixada"* (sem apagar o texto); a spec 16 `:212` e `:221` dizem *"salvo Baixada (Etapa 187, B1242)"*; o plano
+  da 175 ganha nota na linha da RN-175.01; o comentário `FerramentasAlmoxarifado.js:321` (*"em qualquer status"*) muda na T3.
+- **I4 — a baixa pode guardar a restrição, e a volta da baixa traz o selo — não declarado, e a fixture da T4 pode provar nada.** Dois caminhos
+  de rota deixam BAIXADA **com** `restricao`: (a) concluir `COM_RESTRICAO` + `BAIXA` (aceito pelo servidor e oferecido pela tela); (b) `BAIXA`
+  sem condição pela integração (B1140) depois de uma restrição. Depois de **Reverter baixa**, a ferramenta volta *Disponível* **com** o
+  selo. É coerente com a B1244 (a última condição declarada é restrição), mas a B1244 só declara o caso *Inservível* (volta sem selo).
+  **Emendas:** (1) B1244 declara os dois: *"Inservível + baixa + reverter → sem selo; Em uso com restrição + baixa (ou baixa sem condição pela
+  integração) + reverter → com o selo da restrição"*; o guia e o manual (21.5/21.6) dizem isso numa linha. (2) T2 `[RN-187.05f]` "BAIXADA com
+  restrição anterior" e a fixture da T4 "a baixada com restrição anterior" são produzidas **pela rota**, com `{ condicao: 'COM_RESTRICAO',
+  destino: 'BAIXA', observacoes: 'Só para serviço leve' }` — não por `UPDATE status`, nem por *Inservível* (que dá `restricao: null` e faria o
+  Jest "a baixada sem selo" passar **vazio**). O teste do servidor da T4 afirma `restricao !== null` nesse item **antes** de gravar/comparar a
+  fixture. (3) T4 ganha `[RN-187.05g]` pela rota: depois de (2), **Reverter baixa** → `GET` traz a mesma `restricao` (metade positiva do caso
+  *Inservível*, que volta `null`). (4) Controle **(e)** da T4: o controle (A) da T3 (selo sem `f.status !== 'BAIXADA'`) → cai o Jest "a baixada
+  sem selo" **com a fixture** (prova que a fixture tem restrição).
+- **I5 — sabotagem na árvore compartilhada com a 186.** No momento desta revisão a árvore tem `client/src/utils/pdfTexto.js` modificado
+  (outra sessão fechando a 186). Os controles da T1, T2 e T4 editam `toolService.js`/`extended.js`/`FerramentasAlmoxarifado.js`; uma suíte
+  completa da 186 rodando no meio cai por causa da sabotagem alheia, e o restauro por cópia pode apagar edição alheia (memória *sabotagem
+  concorrente contamina a suite*). **Emenda (execução):** T1, T2 e T4 rodam numa **worktree** própria (junction de `node_modules`, memória
+  *worktree com junction*), como a T3; ou, se na árvore principal, só depois de a 186 commitar o fechamento (`git status` limpo nos arquivos
+  dela). Antes de cada `git add`, só caminhos explícitos e conferir o staged.
+
+### Menores
+
+- **M1 — painel da T4.** `painelCalibracoes` (`toolService.js:579-606`) só lista vencidas ou `dias_restantes <= dias`. *"`GET
+  /calibracoes/painel` mostra a calibrada de novo"* é ambíguo: com validade a 1 ano ela **não** aparece. **Emenda:** calibrar com
+  `data_validade` = hoje (Brasília, `diaLocal`) + 10 e afirmar o item em `a_vencer` com `dias_restantes === 10`; antes do reverter, o mesmo
+  painel **sem** o item (metade positiva da RN-177.09).
+- **M2 — a anomalia de `concluirManutencao` decide.** Em `:296-306` a linha fecha com `data_fim` e `condicao_retorno`, `destino = NULL`, e a
+  rota responde 400. Pela regra, essa condição **conta** (foi declarada sobre a peça). Não é alcançável por rota (só `concluir` tira de
+  EM_MANUTENCAO), então não vira teste; **declarar** numa frase da B1244.
+- **M3 — `data_fim` é UTC** (`CURRENT_TIMESTAMP`, `:289`). O contrato diz `"AAAA-MM-DD HH:MM:SS"` sem fuso; a tela não o mostra hoje. **Emenda
+  (contrato):** *"UTC, como gravado"* — quem um dia exibir converte (Etapa 163 já pagou esse tipo de defeito no dia).
+- **M4 — terceira consulta por ferramenta e sem índice.** `restricaoVigente` soma uma consulta por linha (já são duas) e a tabela de
+  manutenções não tem índice em `ferramenta_id` (`schema.js:2493-2502`). Aceitável no tamanho do cliente; registrar em D (187), não mexer.
+- **M5 — comentários desatualizados no client.** `FerramentasAlmoxarifado.js:55` (*"calibracao nao tem restricao de status"* — falso desde
+  a 177 e mais ainda agora) e `:321` (I3). A T3 corrige os dois.
+- **M6 — numeração.** A 186 usou B1230–B1239 (plano da 186); conferir no fechamento que nenhum fix-round dela tomou B1240+ antes de gravar
+  B1240–B1248 nas novidades.
+- **M7 — gancho da RN-187.04.** O contador deve contar **disparos** (a primeira leitura), não casamentos do regex: se a releitura do `changes
+  = 0` usar o mesmo SQL, um contador de casamentos daria 2 e a premissa "= 1" falharia por motivo errado. Com a releitura da I1 (`SELECT
+  nome, ativo …`, sem `AND ativo = 1`) o regex nem casa — usar esse SQL.
+
+### Sem achado (conferido)
+
+- RN-187.03: EMPRESTADA/EM_MANUTENCAO editam e calibram — certo; nenhuma regra da spec 16 pede o contrário, e a tela os oferece.
+- RN-187.06/lista branca: ALMOXARIFE/ADMIN recebem o objeto do serviço, que já tem só as três chaves; o controle (4) é o que prova a lista
+  branca, e o (5) verde está corretamente previsto. GESTOR não tem `gerenciar_ferramentas` (`permissions.js:70`) — entra no ramo mascarado.
+- Os vizinhos que a T1 lista não editam nem calibram baixada pela rota (`medidasInspecao` grava calibração por `INSERT` direto; `toolIntegracao`
+  e `inspecaoFluxoMedidas` calibram DISPONIVEL); `toolManutencaoRetorno` não chama `PUT /ferramentas/:id` nem `POST /calibracoes`.
+- O teste do client `:825` (`botao('Editar', baixada)).toBeTruthy()`) e o nome do `:568` — emenda prevista na T3, correta.
 
 ## Execução
 
