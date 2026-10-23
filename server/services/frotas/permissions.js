@@ -26,7 +26,9 @@ function getPerfilFromUser(user) {
   const { isSuperAdmin, isModuleAdmin } = require('../systemPermissions');
   if (isSuperAdmin(user)) return PERFIS.ADMIN_FROTA;
   if (isModuleAdmin(user, 'frota')) return PERFIS.ADMIN_FROTA;
-  if (user.role === 'admin') return PERFIS.ADMIN_FROTA;
+  // Frota Etapa 3 (E5, RN-F3.12): qualquer caixa, a mesma regua de isSystemAdmin (nucleo) e de perfilFrota (tela). 'Admin' era
+  // administrador do sistema inteiro e Motorista so aqui.
+  if (String(user.role || '').toLowerCase() === 'admin') return PERFIS.ADMIN_FROTA;
   if (user.perfil_frota) return user.perfil_frota;
   return PERFIS.MOTORISTA;
 }

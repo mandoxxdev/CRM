@@ -98,7 +98,9 @@ test('RN-F2.02 a regua: forcado / explicito / padrao para cada combinacao', asyn
   assert.deepStrictEqual(v(3), ['CONSULTA', 'CONSULTA', 'explicito']);
   assert.deepStrictEqual(v(9), [null, 'MOTORISTA', 'padrao'], 'admin de OUTRO modulo nao e admin da frota');
   assert.deepStrictEqual(v(10), ['ADMIN_FROTA', 'ADMIN_FROTA', 'explicito'], 'RN-F2.07 sobra');
-  assert.deepStrictEqual(v(11), [null, 'MOTORISTA', 'padrao'], "role 'Admin' nao e 'admin' para getPerfilFromUser");
+  // Frota Etapa 3 (E5, RN-F3.12): ate a Etapa 2 o 'Admin' maiusculo saia [null, 'MOTORISTA', 'padrao'] aqui e ADMIN na tela; agora
+  // o servidor ignora a caixa, como o nucleo (isSystemAdmin) e a tela (perfilFrota)
+  assert.deepStrictEqual(v(11), [null, 'ADMIN_FROTA', 'forcado'], "role 'Admin' e administrador em qualquer caixa");
   assert.deepStrictEqual(v(12), ['consulta', 'consulta', 'explicito'], 'valor fora da lista aparece cru (Fase 2 achado 6)');
 });
 
