@@ -9,6 +9,7 @@
 
 import jsPDF from 'jspdf';
 import { formatarDataDoBanco, hojeLocalISO, lerInstanteDoBanco } from './dataLocal';
+import { utilDasColunas, quebrarCelulas, desenharCelulas, desenharQuebrado } from './pdfTexto';
 
 const num = (v) => String(Number(v || 0));
 
@@ -43,6 +44,40 @@ export function montarPosicaoClientePDF({ cliente, itens = [], aplicacoes = [], 
   };
 }
 
+// Etapa 186 (B1230, B1232, B1233, B1236; corrige a B1220 da 185) — o cliente confere o patrimonio dele por este papel. Antes cada celula
+// era cortada por CONTAGEM (34 letras nos itens, 60 nas aplicacoes) numa linha so, sem medir: o codigo de EPI de 17 letras invadia a
+// coluna Material, o nome de 71 letras perdia as ultimas 37 e o projeto de 80 perdia 20. Agora cada celula QUEBRA em quantas linhas
+// precisar (a linha fica mais alta; nenhuma letra perdida) e as colunas foram redistribuidas — medidas com o jsPDF real.
+const COLUNAS_ITENS = [14, 48, 100, 112, 132, 155, 177]; // = M, M + 34, M + 86, M + 98, M + 118, M + 141, M + 163
+const COLUNAS_APLICACOES = [14, 48, 144]; // = M, M + 34, M + 130
+const UTIL_ITENS = utilDasColunas(COLUNAS_ITENS); // [33, 51, 11, 19, 22, 21, 19]
+const UTIL_APLICACOES = utilDasColunas(COLUNAS_APLICACOES); // [33, 95, 52]
+const LARGURA_TEXTO = 182; // 196 - M
+
+/**
+ * Desenha uma tabela a partir de `y` e devolve o y depois da ultima linha. A linha cresce (B1233): 5 mm na primeira (o passo de hoje),
+ * 4 nas de continuacao; so comeca na pagina se a ULTIMA linha dela fica ate `limite` (o de hoje) — o item nao e partido entre paginas. O
+ * cabecalho e repetido depois de todo addPage (emenda I4 da Fase 2, B1234): sem ele, na pagina 2 as colunas de numero ficam sem nome.
+ */
+function desenharTabela(pdf, { cabecalho, linhas, colunas, util, limite }, yInicial) {
+  let y = yInicial;
+  const desenharCabecalho = () => {
+    cabecalho.forEach((h, i) => pdf.text(h, colunas[i], y));
+    y += 2;
+    pdf.line(colunas[0], y, 196, y);
+    y += 5;
+  };
+  desenharCabecalho();
+  for (const linha of linhas) {
+    const celulas = quebrarCelulas(pdf, linha, util);
+    const n = Math.max(...celulas.map((l) => l.length));
+    if (y + 4 * (n - 1) > limite) { pdf.addPage(); y = 18; desenharCabecalho(); }
+    desenharCelulas(pdf, celulas, colunas, y, 4);
+    y += 5 + 4 * (n - 1);
+  }
+  return y;
+}
+
 /** Desenha e dispara o download. Sem autoTable: a grade e simples e cabe em texto posicionado. */
 export function gerarPosicaoClientePDF(dados) {
   const doc = montarPosicaoClientePDF(dados);
@@ -50,24 +85,17 @@ export function gerarPosicaoClientePDF(dados) {
   const M = 14;
   let y = 18;
 
+  // O titulo traz a razao social e quebra em 182 mm (B1236): a de 69 letras (a maior do banco de hoje) ia a 233,8 mm.
   pdf.setFontSize(14);
-  pdf.text(doc.titulo, M, y);
-  y += 6;
+  y = desenharQuebrado(pdf, doc.titulo, M, y, LARGURA_TEXTO, 6);
   pdf.setFontSize(9);
   pdf.text(`Gerado em ${doc.geradoEm}`, M, y);
   y += 8;
 
-  const colsItens = [M, M + 26, M + 84, M + 96, M + 116, M + 140, M + 164];
   pdf.setFontSize(9);
-  doc.cabecalhoItens.forEach((h, i) => pdf.text(h, colsItens[i], y));
-  y += 2;
-  pdf.line(M, y, 196, y);
-  y += 5;
-  for (const linha of doc.linhasItens) {
-    if (y > 275) { pdf.addPage(); y = 18; }
-    linha.forEach((c, i) => pdf.text(String(c ?? '').slice(0, 34), colsItens[i], y));
-    y += 5;
-  }
+  y = desenharTabela(pdf, {
+    cabecalho: doc.cabecalhoItens, linhas: doc.linhasItens, colunas: COLUNAS_ITENS, util: UTIL_ITENS, limite: 275,
+  }, y);
   y += 2;
   pdf.line(M, y, 196, y);
   y += 5;
@@ -80,16 +108,9 @@ export function gerarPosicaoClientePDF(dados) {
     pdf.text('Aplicações por OS / projeto', M, y);
     y += 6;
     pdf.setFontSize(9);
-    const colsAp = [M, M + 30, M + 130];
-    doc.cabecalhoAplicacoes.forEach((h, i) => pdf.text(h, colsAp[i], y));
-    y += 2;
-    pdf.line(M, y, 196, y);
-    y += 5;
-    for (const linha of doc.linhasAplicacoes) {
-      if (y > 280) { pdf.addPage(); y = 18; }
-      linha.forEach((c, i) => pdf.text(String(c ?? '').slice(0, 60), colsAp[i], y));
-      y += 5;
-    }
+    y = desenharTabela(pdf, {
+      cabecalho: doc.cabecalhoAplicacoes, linhas: doc.linhasAplicacoes, colunas: COLUNAS_APLICACOES, util: UTIL_APLICACOES, limite: 280,
+    }, y);
   }
 
   pdf.save(`posicao-${(dados?.cliente?.razao_social || 'cliente').replace(/\W+/g, '-').toLowerCase()}.pdf`);

@@ -552,3 +552,22 @@ isso); este plano com a próxima tarefa detalhada.
   - (c7, I1) observações sem `addPage` → cai o teste dos 37 itens (última linha em y **330**, o número da emenda) e RN-186.09 (295);
   - (c8, I4) sem repetir o cabeçalho → cai **só** RN-186.04 (c) (`cabecalhos.map(pagina)` ≠ páginas com itens).
 - Divergência: nenhuma no desenho. O plano listava `cada um em 2+ text` para subtítulo e proprietário — conferido por regex na fonte 10.
+- Commit: `e0851eea`.
+
+### T3 — posição do cliente (feita)
+
+- Gravador igual ao da T2 (copiado). Vermelho: **7** dos 9 novos caem; passam a guarda `(posicao) itens curtos` (y 39, 44, 49 — o de hoje) e
+  a RN-186.11. Verde: **19/19**; com o `datasDoChat…` (sem mudança): **33/33** (2 suítes).
+- As duas tabelas passam por uma função só, `desenharTabela` (cabeçalho, quebra, altura, virada com cabeçalho repetido — I4). O recorte do
+  teste (`tabelas()`) separa itens e aplicações pela `line` que fecha a tabela, e pula o cabeçalho repetido pela string `'Código'`.
+- Controles (`e186-sab-t3cN.log`, âncora = 1, md5 restaurado = antes, `cmp` ok):
+  - (c1) `slice(0, 34)` de volta nos itens → cai **só** RN-186.06 (junção: `…SAE1045retif`, perde o fim do nome de 71);
+  - (c2) `slice(0, 60)` de volta nas aplicações → cai **só** RN-186.07 na **junção** (`…efluentesindustriais`, perde `da planta Sul fase B`).
+    Na 1ª rodada caiu antes, na contagem de linhas (60 letras cabiam em 1); a junção foi posta antes da contagem e a (c2) rodou de novo;
+  - (c3) título sem quebra → caem RN-186.08 (1 `text` de fonte 14) e RN-186.09 (fim **233,0** — a razão do teste tem 69 letras de largura
+    diferente da do plano, 233,8);
+  - (c4) colunas antigas dos itens → caem RN-186.06 (as duas: `EPI-MASC-SOLDA-07` em 2 `text`; x fora do contrato), a de 70 itens e a .09;
+  - (c5) quebra só por `y > limite` → caem as duas RN-186.04 (posição): itens em y **277/281**, aplicações em **281**;
+  - (c8, I4) sem repetir o cabeçalho → caem as duas RN-186.04 (posição) em `cabecalhos.map(pagina)`.
+- Divergência: o projeto de 80 do teste é `Ampliacao da estacao de tratamento de efluentes industriais da planta Sul fase B` (o primeiro
+  rascunho tinha 83 letras).
