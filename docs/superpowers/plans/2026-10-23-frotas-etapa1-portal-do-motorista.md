@@ -161,7 +161,16 @@ Cada task: TDD com controle positivo (quebrar a implementação e ver o vermelho
 | T2 | feito — km/L por ordem de km + vizinho (A1/A2), checklist antigo sem itens (A3), aprovar so solicitada (A4), km do retorno no PUT (A5), uma viagem em andamento (F2-10) com fila em memoria | 80362b54 |
 | T3 | feito — vinculo usuario-motorista (RN-12, F2-4, F2-5 + /usuarios-vinculaveis), escopo MOTORISTA nas listas, GET /:id e PUT (RN-14/15, F2-1, F2-2), motorista_id forcado (RN-19), painel/alertas = ver_painel e multas/documentos = gerenciar_veiculos (RN-16) | 6dd0b130 |
 | T4 | feito — portalService + /portal/inicio, /registros, /abastecimentos, /meus-registros; alerta de pendencia (7 dias) no painel | 45bf32de |
-| T5 | feito — GET /exportar.xlsx (exportacaoService), 6 abas da planilha, periodo, F2-18 | este commit ("Frota etapa 1 T5") |
+| T5 | feito — GET /exportar.xlsx (exportacaoService), 6 abas da planilha, periodo, F2-18 | d2aaa72b |
 | T6 | a fazer (front, outro agente) | |
 | T7 | a fazer (front, outro agente) | |
-| T8 | a fazer | |
+| T8 | feito — frotasPortalIntegracao: o fluxo pela rota e pelo servico, a planilha exportada e o outro motorista sem ver nem alterar | este commit ("Frota etapa 1 T8") |
+
+### Notas do back (T1–T5, T8) — o que o front precisa saber, sem mudar contrato
+
+- `registro` (resposta do portal, `GET /checklists`, `meus-registros`) traz `itens` (objeto, ou `null` em registro da tela antiga)
+  e `avarias` (array) **no lugar** de `itens_json`/`avarias_json` — o JSON cru não sai.
+- A saída grava as `observacoes` também na viagem (aparecem na coluna Observações de Viagens e KM).
+- `POST /viagens` passou a calcular `km_rodado` quando vem `km_saida` e `km_retorno` (antes só o PUT calculava).
+- Abertura/fechamento de viagem corre numa fila em memória (`services/frotas/filaDeViagens.js`, não reentrante — B13).
+- Harness: `tests/helpers/frotasTestApp.js` (`createFrotasTestApp`, `ADMIN`, `MOTORISTA`, `CONSULTA`, `MOTORISTA2`).
