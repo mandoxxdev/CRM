@@ -233,7 +233,7 @@ Os alertas, do mais grave para o menos (aparecem até 15):
 | Manutenção | Próxima revisão em até 15 dias pela data, ou faltando 500 km ou menos pelo km. Na máquina por horímetro, a "próxima revisão (KM)" é lida em **horas** e comparada com o horímetro: avisa faltando 50 h ou menos | crítico se passou; médio |
 | Multa pendente | Multa pendente vencendo em até 15 dias | alto |
 | **Checklist com pendência** | Saída, retorno ou inspeção com situação **PENDÊNCIA**, com data de hoje até 7 dias atrás | alto |
-| Consumo baixo | Média de km/L dos últimos 60 dias abaixo de 70% do consumo esperado do veículo | médio |
+| Consumo baixo | Média de km/L dos últimos 60 dias abaixo de 70% do consumo esperado do veículo. Só em km/L: a máquina por horímetro (L/h) não tem este alerta | médio |
 
 O alerta de checklist diz *"Checklist com pendência — (placa)"* e, embaixo, o que falhou e quem registrou — por exemplo
 *"Falha: Pneus e estepe · Ana Teste"*, ou *"1 avaria(s) · Ana Teste"* — e "Registrado em (data)". Ele some sozinho depois de 7 dias;
@@ -247,7 +247,7 @@ está como **Consulta**, esses botões (e o de aprovar viagem) não aparecem: a 
 | Tela | O que guardar de importante |
 |---|---|
 | **Manutenções** | Preventiva/corretiva, oficina, custo, km, próxima revisão (km e data). Criada como **em andamento**, põe o veículo em manutenção (que bloqueia a saída no portal) |
-| **Abastecimentos** | Mostra os lançados pelo portal e pelo escritório, com **Km/L**. Editar litros ou valor refaz o preço por litro. Para máquina por horímetro, use **Horímetro no abastecimento (máquina)** e deixe o KM vazio: a coluna KM mostra as horas ("125 h") e a linha fica sem km/L. O escritório pode lançar km menor que o do veículo (lançamento atrasado) sem pergunta |
+| **Abastecimentos** | Mostra os lançados pelo portal e pelo escritório, com **Km/L** (na máquina, o consumo em litros por hora, ex.: "5,00 L/h"; se a linha tem km e horímetro, os dois: "10,50 km/L · 5,00 L/h"). Editar litros ou valor refaz o preço por litro. Para máquina por horímetro, use **Horímetro no abastecimento (máquina)** e deixe o KM vazio: a coluna KM mostra as horas ("125 h") e a linha fica sem km/L. O escritório pode lançar km menor que o do veículo (lançamento atrasado) sem pergunta |
 | **Viagens** | Saída/retorno, km, origem, destino, finalidade, status. O botão **Aprovar** (✓) aparece só em viagem **solicitada**. Para máquina por horímetro: **Horímetro saída (máquina)** e **Horímetro retorno (máquina)**; a coluna KM rodado mostra as horas usadas ("6,5 h") |
 | **Checklist Diário** | Lista todos os registros (Data, Placa, **Tipo**: Saída/Retorno/Inspeção, Motorista, **KM**, **Situação**, Observações). O **Novo Checklist** daqui é o formulário simples de 7 itens sim/não (pneus, óleo, luzes, freios, extintor, documentos, limpeza), sem avarias. Não edita |
 | **Multas**, **Documentos** | Só o gestor lança e altera |
@@ -260,6 +260,8 @@ Regras das viagens (valem também para o gestor):
 | KM retorno menor que KM saída | *"KM do retorno (…) menor que o KM da saída (…). Confira o hodômetro."* |
 | Horímetro retorno menor que horímetro saída | *"Horímetro do retorno (… h) menor que o da saída (… h). Confira o painel."* |
 | Horímetro que não é número (com vírgula, letras) ou negativo, em Viagens ou Abastecimentos | *"Horímetro inválido"* (nada é gravado) |
+| Litros vazio, zero, negativo ou que não é número, ao lançar ou corrigir um abastecimento | *"Informe os litros"* (nada é gravado; litros em branco no lançamento: *"Veículo, litros e data são obrigatórios"*) |
+| Status da multa diferente de pendente, pago ou contestado (só por chamada direta; a tela oferece só os três) | *"Status de pagamento inválido"* |
 | Data/hora de retorno antes da saída | *"Data/hora do retorno anterior à saída (…)."* (se uma das duas não tem hora, compara só o dia) |
 | Pôr em andamento uma viagem de veículo que já tem outra em andamento | *"Este veículo já está em uso (saída sem retorno)."* |
 | Pôr em andamento uma viagem de motorista que já tem outra em andamento | *"Você já tem uma saída sem retorno. Registre o retorno primeiro."* |
@@ -274,16 +276,20 @@ confere se o número digitado no km de uma máquina é, na verdade, de horas.
 ### 3.5 Exportar a planilha
 
 **Exportar planilha** está no **Dashboard Frota** (tudo) e em **Relatórios** (usa o período escolhido na tela). Baixa o arquivo
-`controle-de-frota-(data de hoje).xlsx`, no formato da planilha de controle da empresa, com seis abas:
+`controle-de-frota-(data de hoje).xlsx`, no formato da planilha de controle da empresa, com as seis abas dela e uma sétima, **Multas**, no fim:
 
 | Aba | Colunas | Período |
 |---|---|---|
 | **Cadastro Frota** | Placa, Tipo, Marca, Modelo, Ano, KM Atual, Responsável, Próxima Revisão KM, Próxima Revisão Data, Situação, Horímetro Atual | sai inteira |
 | **Viagens e KM** | Data, Veículo, Condutor, Finalidade, Origem, Destino, Saída, Retorno, KM Inicial, KM Final, KM Percorrido, Status, Observações, Horímetro Inicial, Horímetro Final | pela data de saída |
 | **Checklist** | Data, Horário, Tipo, Veículo, Condutor, KM, Combustível, os 12 itens, Avarias, Status Geral, Observações, Horímetro | pela data do registro |
-| **Abastecimentos** | Data, Veículo, Condutor, KM, Litros, Valor Total R$, Preço por Litro, KM desde Abastec. Anterior, Consumo km/L, Posto, Observações, Horímetro | pela data |
+| **Abastecimentos** | Data, Veículo, Condutor, KM, Litros, Valor Total R$, Preço por Litro, KM desde Abastec. Anterior, Consumo km/L, Posto, Observações, Horímetro, Horas desde Abastec. Anterior, Consumo L/h | pela data |
 | **Manutenções** | Data, Veículo, Tipo, Serviço, Fornecedor, KM Serviço, Custo R$, Próxima Revisão KM, Próxima Revisão Data, Status, Observações | pela data |
 | **Documentos** | Veículo, Documento, Vencimento, Dias até Vencer, Status, Observações | sai inteira |
+| **Multas** | Data, Veículo, Condutor, Infração, Valor R$, Pontos, Vencimento, Status, Nº do Auto, Observações | pela data da infração (sem ela, pelo dia em que a multa foi lançada) |
+
+O período funciona com as duas datas ou com uma só: só a inicial traz dela em diante; só a final, até ela (o dia final entra inteiro).
+As abas de lançamento trazem também os veículos excluídos (é o histórico); a tela de Relatórios mostra só os veículos ativos.
 
 Como cada coluna é preenchida:
 
@@ -298,6 +304,9 @@ Como cada coluna é preenchida:
   por ponto e vírgula, no formato "Lateral esquerda: risco — descrição" (os lados saem como Lateral esquerda, Lateral direita,
   Superior, Frente, Traseira; os tipos em minúsculas: risco, amassado, trinca, quebrado, outro). **Status Geral**: OK, PENDÊNCIA ou INCOMPLETO (régua da seção 2.7).
 - **Manutenções**: Status Planejada (agendada), Em andamento, Concluída; Fornecedor = oficina.
+- **Multas**: **Data** é a data da infração (vazia se não foi preenchida); **Status** Pendente, Pago ou Contestado — a contestada
+  aparece aqui, mas não soma no custo da tela de Relatórios. **Horas desde Abastec. Anterior** e **Consumo L/h** (Abastecimentos):
+  preenchidas só nas linhas com horímetro, pela conta da seção 3.6.
 - **Documentos**: só os documentos com status **ativo** (o renovado não aparece). **Status**: VENCIDO (passou), ATENÇÃO (vence em até
   30 dias) ou EM DIA.
 
@@ -320,11 +329,60 @@ de km 10400 com 20 L: ele fica com 200 km e **10 km/L**, e o de 10600 passa a 20
 
 O método é o de "tanque cheio": a conta supõe que cada abastecimento completa o tanque.
 
+**Na máquina por horímetro, litros por hora (L/h)** — a mesma conta, com horas no lugar do km:
+
+- **Horas desde o anterior** = horímetro deste abastecimento − horímetro do abastecimento **anterior em horas** do mesmo veículo (o de
+  horímetro imediatamente menor; empate pela ordem de lançamento).
+- **Consumo (L/h)** = **litros deste** abastecimento ÷ horas desde o anterior, arredondado em 2 casas.
+- O primeiro (sem anterior) fica sem L/h; abastecimento sem horímetro não serve de anterior; horas iguais (zero) ficam sem L/h.
+- A conta é refeita toda vez que a tela, o relatório ou a planilha são abertos: lançar, corrigir ou excluir um abastecimento muda na
+  hora o L/h do seguinte. O anterior é procurado entre **todos** os abastecimentos do veículo, mesmo fora do período escolhido ou de
+  outro motorista.
+- O km/L olha só o km e o L/h só o horímetro: uma linha com os dois preenchidos tem os dois consumos.
+
+Exemplo: abastecimentos com 120 h (40 L) e 130 h (50 L) → o segundo tem 10 h desde o anterior e **5 L/h**. Lançando depois um de 125 h
+com 20 L: ele fica com 5 h e **4 L/h**, e o de 130 h passa a 5 h e **10 L/h**.
+
 ### 3.7 Relatórios
 
-**Frota → Relatórios**: custo por veículo (manutenção, combustível e multas; manutenção e combustível respeitam o período, multas
-somam tudo), consumo médio km/L por veículo, **Imprimir** e **Exportar planilha**. Vistos pelo Administrador de Frota e pelo
-Consulta.
+**Frota → Relatórios** mostra duas tabelas, com **Imprimir** e **Exportar planilha**. É vista pelo Administrador de Frota e pelo
+Consulta (o motorista não tem esta tela).
+
+**O período.** As duas datas no topo valem para as duas tabelas e para a planilha. Pode usar as duas, ou uma só: só a inicial traz
+daquele dia em diante; só a final, até aquele dia (inteiro). As tabelas se atualizam ao mudar a data. Embaixo das datas aparece o
+período aplicado — *"Período: 01/10/2026 a 31/10/2026"*, *"Período: a partir de 01/10/2026"*, *"Período: até 31/10/2026"* ou
+*"Período: tudo"* — e ele sai também na impressão.
+
+**Custos por veículo.** Uma linha por veículo ativo (o excluído não aparece), por placa:
+
+| Coluna | O que soma |
+|---|---|
+| Manutenção | custo das manutenções com data no período |
+| Combustível | valor dos abastecimentos com data no período |
+| Multas | valor das multas pela **data da infração**; multa sem data da infração conta pelo **dia em que foi lançada** (dia de Brasília). Multa **contestada não entra** (como no painel) |
+| Total | Manutenção + Combustível + Multas |
+| KM / Horímetro | o km atual do carro (*"1.800 km"*) ou, na máquina por horímetro, as horas atuais (*"125 h"*); vazio vira *"-"* |
+
+Embaixo da tabela, a linha **Total** soma Manutenção, Combustível, Multas e Total de todos os veículos. Acima, a nota *"Multas pela
+data da infração (sem ela, pelo dia do lançamento); contestadas não entram."*
+
+**Consumo médio.** Uma linha por veículo ativo que tem abastecimento no período, por placa:
+
+| Coluna | Como sai |
+|---|---|
+| Km/L | média do km/L dos abastecimentos do período que têm km/L (seção 3.6), ex.: *"10,50 km/L"*; sem nenhum, *"-"* |
+| L/h (máquina) | média do litros por hora dos abastecimentos do período que têm L/h (seção 3.6), ex.: *"5,00 L/h"*; sem nenhum, *"-"* |
+| Total litros, Total gasto, Abastecimentos | de **todos** os abastecimentos do período do veículo, tenham ou não consumo calculado (o primeiro também conta) |
+
+Sem abastecimento no período: *"Sem abastecimentos no período"*.
+
+**A tela e a planilha batem.** No mesmo período, a soma da coluna Combustível é a soma de **Valor Total R$** da aba Abastecimentos, a
+de Manutenção é a de **Custo R$** da aba Manutenções, e a de Multas é a de **Valor R$** da aba Multas sem as contestadas — contando,
+na planilha, só as placas que estão na aba Cadastro Frota (a planilha guarda também o histórico dos veículos excluídos). O **Total
+gasto** do consumo soma o mesmo que a coluna Combustível.
+
+Se uma das tabelas não carregar, aparece o aviso com a mensagem do servidor (ou *"Não foi possível carregar os relatórios"*) e só ela
+fica vazia.
 
 
 ### 3.8 Dar o perfil a cada pessoa (Perfis de acesso)

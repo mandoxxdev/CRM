@@ -1,9 +1,10 @@
 # Módulo Frota — guia do que existe hoje
 
-> **Onde paramos:** **Etapa 3 — km e horímetro confiáveis no portal — entregue em 2026-10-23** (na `main`, commits `64d85bf2`
-> a `a7427207`, com a Fase 5). O portal mostra o último km do veículo, pergunta antes de gravar um km menor, e a máquina por horímetro
-> é registrada em horas. Antes, no mesmo dia: Etapa 2 (perfil Consulta/Motorista pela tela) e Etapa 1 (portal do motorista).
-> **Próxima:** ver "Próxima tarefa detalhada" no fim do [plano da Etapa 3](../superpowers/plans/2026-10-23-frotas-etapa3-km-e-horimetro.md).
+> **Onde paramos:** **Etapa 4 — relatórios fechados — entregue em 2026-10-23** (na `main`, commits `99658314` a `bcb498a0`, com a
+> Fase 5). Relatórios e planilha no mesmo período (uma data ou duas), multas pela data da infração, a máquina com horas e litros por hora,
+> linha Total que bate com a planilha, aba Multas. Antes, no mesmo dia: Etapa 3 (km e horímetro no portal), Etapa 2 (perfil
+> Consulta/Motorista pela tela) e Etapa 1 (portal do motorista).
+> **Próxima:** Etapa 5 — foto da avaria e do cupom; ver "Próxima tarefa detalhada" no fim do [plano da Etapa 4](../superpowers/plans/2026-10-23-frotas-etapa4-relatorios.md).
 > O módulo ainda **não foi usado em produção**.
 >
 > Apresentação da etapa (com os cenários e as decisões): [`novidades-por-etapa.md`](novidades-por-etapa.md) ·
@@ -67,13 +68,13 @@ formulário, e na linha os botões **editar** (lápis) e **excluir** (lixeira). 
 | **Dashboard Frota** | 9 cartões, lista de alertas (inclui **Checklist com pendência**), custos por categoria, últimos abastecimentos. Botão **Exportar planilha** | Sim |
 | **Veículos** | Placa, marca, modelo, ano, tipo, **km** ou **horímetro**, combustível, setor, centro de custo, condutor responsável, chassi, RENAVAM | Sim |
 | **Motoristas** | Nome, CPF, CNH, telefone, e-mail, setor e **Usuário de acesso (portal do motorista)** | Sim |
-| **Abastecimentos** | Veículo, motorista, data, litros, valor, km (ou **horímetro**, na máquina), combustível, posto. O sistema sobe o km (ou o horímetro) do veículo e calcula o **km por litro** (a máquina fica fora) | Sim |
+| **Abastecimentos** | Veículo, motorista, data, litros, valor, km (ou **horímetro**, na máquina), combustível, posto. O sistema sobe o km (ou o horímetro) do veículo e calcula o **km por litro** (carro) ou os **litros por hora** (máquina) | Sim |
 | **Manutenções** | Preventiva ou corretiva, oficina, custo, peças, km, **próxima revisão**. "Em andamento" põe o veículo em manutenção | Sim |
 | **Viagens** | Saída e retorno, km (ou **horímetro**, na máquina), **origem**, destino, finalidade, setor, status. O botão **Aprovar** aparece só em viagem **solicitada** | Sim |
 | **Checklist Diário** | Lista tudo o que o motorista registrou (colunas **Tipo**, **KM**, **Situação**) e o "Novo Checklist" antigo do gestor (7 itens) | Sim. Não edita |
 | **Multas** | Data, infração, valor, pontos, vencimento, pago/pendente/contestado | Sim |
 | **Documentos** | IPVA, licenciamento, seguro, CRLV, rastreador — com vencimento e "avisar X dias antes" | Sim |
-| **Relatórios** | Custo por veículo (com período), consumo médio km/L, **Imprimir** e **Exportar planilha** (com o período da tela) | Sim |
+| **Relatórios** | Custo por veículo e consumo (km/L do carro, **litros por hora** da máquina) no **mesmo período** (uma data ou duas), com o período aplicado escrito, linha **Total**, **Imprimir** e **Exportar planilha** (mesmo período, com a aba **Multas**) | Sim |
 | **Perfis de acesso** | Só o administrador. Uma linha por usuário: **Consulta** ou **Motorista (padrão)**, o que o perfil permite e o motorista ligado; avisa quando quem vira Consulta é motorista | Sim |
 | **Portal do motorista** | O mesmo "Meu painel" do motorista (o gestor só grava se estiver ligado a um motorista) | Sim |
 | **Solicitar Material** | Pede peça/material ao almoxarifado | Sim |
@@ -84,7 +85,7 @@ formulário, e na linha os botões **editar** (lápis) e **excluir** (lixeira). 
 - CNH de motorista vencendo em até 30 dias.
 - Revisão chegando: até 15 dias pela data, ou faltando 500 km pelo km (na máquina por horímetro, faltando 50 horas pelo horímetro).
 - Multa pendente vencendo em até 15 dias.
-- **Consumo baixo**: o km/L dos últimos 60 dias ficou abaixo de 70% do esperado para o veículo.
+- **Consumo baixo**: o km/L dos últimos 60 dias ficou abaixo de 70% do esperado para o veículo (só carro; a máquina não tem este aviso).
 - **Checklist com pendência** (novo): saída, retorno ou inspeção com alguma **Falha** ou avaria, nos últimos 7 dias. Mostra o que
   falhou, quem registrou e "Registrado em DD/MM/AAAA".
 
@@ -115,6 +116,12 @@ próximo clique dela; o menu dela muda quando ela recarrega a página.
 - ~~Abastecimento lançado atrasado fica sem km/L~~ — **resolvido**: a conta é pela ordem do km, e o seguinte é refeito.
 - ~~Viagem: aprovar uma que já terminou; km de volta menor gerando km negativo~~ — **resolvido**: as duas são recusadas.
 - ~~Não sai Excel~~ — **resolvido**: Exportar planilha.
+
+**Resolvido na Etapa 4:**
+
+- ~~O custo do mês soma multas de qualquer data~~ — **resolvido**: multas pela data da infração.
+- ~~A máquina some do relatório de consumo~~ — **resolvido**: aparece com litros por hora.
+- ~~A planilha não tem multas~~ — **resolvido**: aba Multas.
 
 **Resolvido na Etapa 3:**
 
@@ -224,11 +231,35 @@ Você vai precisar do seu login (administrador) e de *ana* (motorista ligada, co
 14. **Alerta de revisão da máquina.** **Manutenções → Nova**: *EMP0001*, descrição "revisão", **Próxima revisão (KM)** **180**. No
     **Dashboard Frota**, aparece **Manutenção — EMP0001** (faltam 45 h).
 
-## O que as Etapas 1 a 3 **não** cobrem
+## Roteiro de teste manual (relatórios)
+
+Preparação: como administrador, um carro *AAA1A11* (Medição = Quilometragem) e uma máquina *EMP0001* (Medição = Horímetro, Horímetro
+Atual 100).
+
+1. **Multas.** **Frota → Multas → Nova Multa**, *AAA1A11*: R$ 100 com data da infração 10/03/2025; R$ 200 com 05/10/2026; R$ 500 com
+   06/10/2026 e Status **contestado**.
+2. **Relatórios, sem datas.** **Frota → Relatórios**: embaixo das datas, *"Período: tudo"*. Na tabela **Custos por veículo**, Multas do
+   *AAA1A11* = **R$ 300,00** (a contestada não entra). A nota acima da tabela: *"Multas pela data da infração (sem ela, pelo dia do
+   lançamento); contestadas não entram."*
+3. **Com período.** Data inicial **01/10/2026** e final **31/10/2026**: *"Período: 01/10/2026 a 31/10/2026"*; Multas = **R$ 200,00**.
+4. **Uma data só.** Apague a data final: *"Período: a partir de 01/10/2026"*; Multas = **R$ 200,00**. Apague a inicial e ponha só a final
+   **31/12/2025**: *"Período: até 31/12/2025"*; Multas = **R$ 100,00**.
+5. **Máquina.** Limpe as datas. **Frota → Abastecimentos → Novo**: *EMP0001*, **Horímetro no abastecimento (máquina)** 120, 40 litros,
+   R$ 200. Outro com 130 e 50 litros, R$ 250. Na lista, a coluna **Km/L** do segundo mostra *"5,00 L/h"*; a do primeiro, *"-"*.
+6. **Atrasado.** Um terceiro com 125 h e 20 litros: ele mostra *"4,00 L/h"* e o de 130 passa a *"10,00 L/h"*. Exclua o de 125: o de 130
+   volta a *"5,00 L/h"*.
+7. **Consumo.** Em **Relatórios**, tabela **Consumo médio**: *EMP0001* com Km/L *"-"*, L/h (máquina) *"5,00 L/h"*, Total litros
+   *"90,0 L"*, Abastecimentos **2**. Na tabela de custos, KM / Horímetro de *EMP0001* = *"130 h"*; do *AAA1A11*, o km com *"km"*.
+8. **Total.** A última linha da tabela de custos, **Total**, soma as colunas Manutenção, Combustível, Multas e Total.
+9. **Planilha.** **Exportar planilha** (com o período da tela): a última aba é **Multas** (Data, Veículo, Condutor, Infração, Valor R$,
+   Pontos, Vencimento, Status, Nº do Auto, Observações), com a contestada marcada *Contestado*. A aba Abastecimentos tem no fim **Horas
+   desde Abastec. Anterior** e **Consumo L/h**. A soma de **Valor Total R$** (Abastecimentos) é a coluna **Combustível** do Total.
+10. **Consulta e motorista.** Como Consulta, Relatórios abre igual. Como motorista, Relatórios não está no menu.
+
+## O que as Etapas 1 a 4 **não** cobrem
 
 - Dar **Administrador de Frota** pela tela de Perfis (continua no cadastro de usuário); saber **quem** mudou um perfil; lembrar o
   Consulta de quem foi administrador e deixou de ser.
 - A **seção 3** do formulário (imagem cortada), **foto** da avaria/cupom, **desenho** clicável das avarias.
-- A **pergunta do km menor nas telas do gestor**; **consumo da máquina** em litros por hora; horímetro no **relatório de custo**;
-  **multas no período** do relatório, apelido **V01/C01**.
+- A **pergunta do km menor nas telas do gestor**; o **alerta de consumo baixo** da máquina (só existe em km/L); apelido **V01/C01**.
 - O motorista **corrigir** o que lançou pelo portal (a correção é com o gestor).

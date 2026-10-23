@@ -1,4 +1,4 @@
-# Módulo Frota — referência técnica (estado em 2026-10-23, depois da Etapa 2)
+# Módulo Frota — referência técnica (estado em 2026-10-23, depois da Etapa 4)
 
 > Levantamento original lendo a `main` em `d16de90b`; **atualizado no fechamento da Etapa 1** (portal do motorista, `4ba85d16`) e no
 > **da Etapa 2** (perfil pela tela, `3aa4e088`..`805aaa3c`; plano
@@ -94,8 +94,8 @@ manda); o resto passa por `respondDbError`. Contratos completos (mensagens liter
 | GET | `/api/frotas/meta` | módulo | + `itensChecklist`, `vistasAvaria`, `tiposAvaria`, `niveisCombustivel`, `tiposRegistro` |
 | GET | `/api/frotas/dashboard` | **`ver_painel`** | cache 30 s; `?refresh=1` fura. *Era "módulo" no levantamento; mudou na Etapa 1* |
 | GET | `/api/frotas/alertas` | **`ver_painel`** | + alerta `checklist` (PENDÊNCIA, 7 dias, `dias_restantes: null`). *Era "módulo"* |
-| GET | `/api/frotas/relatorios/custos-por-veiculo?data_inicio&data_fim` | `relatorios` | multas sem filtro de período (A7) |
-| GET | `/api/frotas/relatorios/consumo?veiculo_id` | `relatorios` | |
+| GET | `/api/frotas/relatorios/custos-por-veiculo?data_inicio&data_fim` | `relatorios` | *Até a Etapa 3: "multas sem filtro de período (A7)"; mudou na Etapa 4.* Cada data opcional (`substr(data,1,10)`); multas pelo dia `diaDaMultaSql` (`COALESCE(NULLIF(substr(data_infracao,1,10),''), date(created_at, modificadorDoFuso()))`), sem as `contestado`; só `ativo = 1`; `+ tipo_medicao`, `+ horimetro_atual` |
+| GET | `/api/frotas/relatorios/consumo?veiculo_id&data_inicio&data_fim` | `relatorios` | **Etapa 4:** `[{ veiculo_id, placa, tipo_medicao, consumo_medio, consumo_litros_hora, total_litros, total_gasto, abastecimentos }]`, só `ativo = 1`, por placa; totais de **todas** as linhas do período (antes, só das com km/L) |
 | GET | `/api/frotas/portal/inicio` | módulo | **novo.** `{ motorista, viagem_aberta, veiculos[{…, status, em_uso}], itens, vistas, tipos_avaria, niveis_combustivel, perfil, pode_registrar, pode_gerir }`. **Etapa 3:** `veiculos[].horimetro_atual`; `viagem_aberta.horimetro_saida` e `tipo_medicao` (a régua com que a viagem abriu: `horimetro_saida` → horimetro; `km_saida` → km; senão a do veículo) |
 | POST | `/api/frotas/portal/registros` | `registrar_operacoes` | **novo.** `{ tipo, veiculo_id, km, data, horario, nivel_combustivel, itens, avarias, observacoes, origem, destino, finalidade }` → `201 { registro, viagem }`. **Etapa 3:** `+ horimetro` (máquina; o `km` é ignorado nela) e `+ confirmar_km_menor` (booleano). Leitura menor que a do veículo → 409 `{ error, code: 'KM_MENOR_QUE_ATUAL' \| 'HORIMETRO_MENOR_QUE_ATUAL' }`, depois das recusas duras; retorno em horas menor que a saída → 400 |
 | POST | `/api/frotas/portal/abastecimentos` | `registrar_operacoes` | **novo.** `motorista_id` = o do vínculo. **Etapa 3:** `horimetro`, `confirmar_km_menor` e os mesmos 409; máquina grava `horimetro_abastecimento` com `km_abastecimento` nulo |
@@ -103,11 +103,11 @@ manda); o resto passa por `respondDbError`. Contratos completos (mensagens liter
 | GET | `/api/frotas/usuarios-vinculaveis` | `gerenciar_motoristas` | **novo.** `[{ id, nome, email, ativo, motorista, perfil_frota }]`: ativos + o desativado ainda ligado; `perfil_frota` (efetivo) desde a Etapa 2 |
 | GET | `/api/frotas/perfis-usuario` | `configurar` | **Etapa 2.** `{ perfis: ['CONSULTA','MOTORISTA'], usuarios: [{ id, nome, email, perfil_explicito, perfil_efetivo, origem: forcado\|explicito\|padrao, motorista, viagem_aberta }] }` — ativos e não ocultos |
 | PUT | `/api/frotas/perfis-usuario/:usuarioId` | `configurar` | **Etapa 2.** `{ perfil: 'CONSULTA'\|'MOTORISTA'\|null\|'' }` → `{ usuario_id, perfil_explicito, perfil_efetivo, origem }`. 404 → 400 → 409 `PERFIL_FORCADO` → 409 `PROPRIO_PERFIL` |
-| GET | `/api/frotas/exportar.xlsx?data_inicio&data_fim` | `relatorios` | **novo.** `controle-de-frota-AAAA-MM-DD.xlsx`, 6 abas |
+| GET | `/api/frotas/exportar.xlsx?data_inicio&data_fim` | `relatorios` | **novo.** `controle-de-frota-AAAA-MM-DD.xlsx`, 6 abas; **Etapa 4:** 7ª aba `Multas` (período por `diaDaMultaSql`) e `Horas desde Abastec. Anterior`/`Consumo L/h` no fim de Abastecimentos |
 | GET/POST/PUT/DELETE | `/api/frotas/veiculos[/:id]` | GET módulo; resto `gerenciar_veiculos` | |
 | GET/POST/PUT/DELETE | `/api/frotas/motoristas[/:id]` | GET módulo (escopo); resto `gerenciar_motoristas` | aceita `usuario_id` (null desvincula) |
 | GET/POST/PUT/DELETE | `/api/frotas/manutencoes[/:id]` | POST/PUT `registrar_operacoes`; DELETE `gerenciar_veiculos` | escopo por `usuario_id` |
-| GET/POST/PUT/DELETE | `/api/frotas/abastecimentos[/:id]` | idem | + `km_desde_anterior`; recálculo do vizinho. **Etapa 3:** `horimetro_abastecimento` (PUT: ausente mantém, vazio apaga); sem a régua do km menor (B36) |
+| GET/POST/PUT/DELETE | `/api/frotas/abastecimentos[/:id]` | idem | + `km_desde_anterior`; recálculo do vizinho. **Etapa 4:** GET `+ horas_desde_anterior`, `+ consumo_litros_hora` (calculados na leitura). **Etapa 3:** `horimetro_abastecimento` (PUT: ausente mantém, vazio apaga); sem a régua do km menor (B36) |
 | GET/POST/PUT/DELETE | `/api/frotas/multas[/:id]` | **POST/PUT `gerenciar_veiculos`** | *era `registrar_operacoes`; mudou na Etapa 1* |
 | GET/POST/PUT/DELETE | `/api/frotas/documentos[/:id]` | **POST/PUT `gerenciar_veiculos`** | *idem*; GET: MOTORISTA recebe `[]` (Etapa 2) |
 | GET/POST/PUT/DELETE | `/api/frotas/viagens[/:id]` | POST/PUT `registrar_operacoes`; DELETE `gerenciar_veiculos` | fila de viagens; viagem única; km e data do retorno; RN-F1.20. **Etapa 3:** `horimetro_saida`/`horimetro_retorno` (PUT: null/ausente mantém; retorno menor que a saída → 400) |
@@ -155,6 +155,11 @@ DDL do `index.js`.
   lançados`"*. Hoje (`80362b54`): `km_desde_anterior = km − km do anterior EM KM` (ordem `km_abastecimento ASC, id ASC`, mesmo
   veículo, só linhas com km); `consumo_medio = km_desde_anterior ÷ litros`, 2 casas, `null` se a diferença ≤ 0 ou sem anterior.
   Criar, editar e excluir **recalculam o seguinte em km** (no `PUT` que muda km ou veículo, o seguinte da posição antiga e o da nova).
+- **Litros por hora (Etapa 4, RN-F4.05)**: `litrosPorHora(db, veiculoIds)` — **calculado na leitura**, sem coluna: linhas com
+  `horimetro_abastecimento` dos veículos pedidos, ordem `veiculo_id, horimetro ASC, id ASC`; `horas_desde_anterior` = h − h do anterior
+  (arredondado em 6 casas), `consumo_litros_hora` = litros ÷ horas (2 casas), nulo sem anterior, com horas ≤ 0 ou litros ≤ 0. O
+  anterior vem de **todas** as linhas do veículo (fora do período, da busca e do escopo do motorista). `comLitrosPorHora` é usado pela
+  lista, pelo relatório de consumo e pela planilha. Não olha `tipo_medicao` (como o km/L).
 - **valor por litro**: `valor_total ÷ litros` se não vier; no `PUT`, refeito quando muda `litros` ou `valor_total` sem `valor_litro`
   no corpo (Fase5-1).
 - **Manutenção `em_andamento`** na criação → veículo `status='manutencao'`. Concluir **não** devolve o veículo a `ativo`.
@@ -204,6 +209,9 @@ Etapa 3: `frotasKmHorimetro.api.test.js` **32/32** (RN-F3.01..15, ajustes da Fas
 `FrotasHorimetroGestorTela` (1) — `client/src/components/frotas`: 10 arquivos, **96/96**. A corrida da RN-F3.08 **não** se reproduz pelo
 HTTP (8 abastecimentos em paralelo passavam antes do conserto); a prova é a chamada dupla no serviço, no mesmo tique.
 
+Etapa 4: `frotasRelatorios.api.test.js` e `frotasRelatoriosIntegracao.api.test.js` (pela rota e pelo serviço; reconciliação tela ×
+planilha, RN-F4.14); `frotasExportacao` ajustado (7 abas, colunas no fim). Tela: `FrotasRelatorios.test.js`. Números no plano da Etapa 4.
+
 ## Achados
 
 Sonda executada em 2026-10-23 contra o `initSchema` e o `frotasService` reais, banco em memória.
@@ -216,7 +224,7 @@ Sonda executada em 2026-10-23 contra o `initSchema` e o `frotasService` reais, b
 | A4 | viagem `concluida` → `aprovarViagem` | 409 | `status='aprovada'` | **corrigido** `80362b54` |
 | A5 | viagem km_saida 2000 → `PUT {km_retorno: 1800}` | 400 | `km_rodado = -200` | **corrigido** `80362b54` |
 | A6 | `getPerfilFromUser({id:9, role:'usuario'})` | — | `MOTORISTA`; GETs sem filtro por dono | **corrigido** quanto ao escopo (`6dd0b130`, `9007353e`); o fallback MOTORISTA continua (Etapa 2) |
-| A7 | leitura de `relatorioCustosPorVeiculo` | período em multas | sem filtro | **aberto** |
+| A7 | leitura de `relatorioCustosPorVeiculo` | período em multas | sem filtro | **corrigido** `e841b13a` (Etapa 4): pela data da infração (sem ela, dia do lançamento), sem as contestadas |
 | A8 | abastecimento km 900 com veículo em 1800 | aviso/recusa | aceito; km/L `null` | **corrigido** `fc1328e0` (Etapa 3): o portal responde 409 `KM_MENOR_QUE_ATUAL` e grava só com `confirmar_km_menor`; as rotas do gestor seguem sem a régua (B36) |
 | A9 | `server/tests/frotas.test.js` | na suíte | fora do runner | **corrigido** `4ed19f8b` |
 | A10 | `updateHorimetroVeiculoSeMaior` | chamado nos lançamentos | sem chamador | **corrigido** `fc1328e0` (Etapa 3): portal e rotas do gestor com `horimetro_*` |

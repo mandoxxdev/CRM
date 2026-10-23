@@ -4,10 +4,9 @@
 > Para quem **usa** o sistema (sem número de etapa nem histórico), o documento é o
 > [`manual-do-sistema.md`](manual-do-sistema.md). Guia com roteiro de teste: [`README.md`](README.md).
 >
-> **Onde estamos:** **Etapa 3 (km e horímetro confiáveis no portal) entregue** em 2026-10-23, na `main` (commits `64d85bf2` a
-> `a7427207`, mais o fechamento). Antes, no mesmo dia: Etapa 2 (perfil Consulta/Motorista pela tela) e Etapa 1 (portal do motorista).
-> Próxima: **Etapa 4 — relatórios fechados** (multas no período, A7; a máquina no relatório) (B44; detalhe em "Onde estamos e o que vem
-> a seguir", no fim).
+> **Onde estamos:** **Etapa 4 (relatórios fechados) entregue** em 2026-10-23, na `main` (commits `99658314` a `bcb498a0`, mais o
+> fechamento). Antes, no mesmo dia: Etapa 3 (km e horímetro no portal), Etapa 2 (perfil Consulta/Motorista pela tela) e Etapa 1 (portal
+> do motorista). Próxima: **Etapa 5 — foto da avaria e do cupom** (B54; detalhe em "Onde estamos e o que vem a seguir", no fim).
 
 ## ⚠️ Leia antes de apresentar
 
@@ -96,6 +95,26 @@ SELECT id, nome, role FROM usuarios WHERE role <> lower(role);
 - **Alguma linha com "Admin":** essa pessoa já era administradora do sistema; no Frota ela era tratada como Motorista e via o menu de
   administrador sem conseguir usar. Agora ela usa. Se ela **não** devia ser administradora, troque o `role` dela no cadastro de usuário.
 
+**A6 — multas com status fora da lista (Etapa 4, B53).** Desde a Etapa 4 o sistema só aceita pendente, pago ou contestado. Uma multa
+gravada antes com outro texto (só por API ou SQL) continua somando no custo como se não fosse contestada.
+
+```sql
+SELECT id, veiculo_id, status_pagamento, valor FROM frotas_multas
+WHERE status_pagamento IS NULL OR status_pagamento NOT IN ('pendente', 'pago', 'contestado');
+```
+
+- **Nenhuma linha (o esperado; o banco local tem zero multas):** nada a fazer.
+- **Alguma linha:** em **Frota → Multas**, edite a multa e escolha o status certo.
+
+**A7 — abastecimentos com litros zero ou negativos (Etapa 4).** O lançamento e a correção passaram a recusar; um gravado antes entra
+no total de litros do relatório de consumo.
+
+```sql
+SELECT id, veiculo_id, data_abastecimento, litros FROM frotas_abastecimentos WHERE litros IS NULL OR litros <= 0;
+```
+
+- **Nenhuma linha (o esperado):** nada a fazer. **Alguma linha:** corrija os litros em **Frota → Abastecimentos** (ou exclua o lançamento).
+
 ### B — decisões tomadas sem consulta (todas reversíveis). O André arbitra lendo aqui.
 
 | # | Etapa | Escolhido | Descartado | Por quê |
@@ -143,6 +162,16 @@ SELECT id, nome, role FROM usuarios WHERE role <> lower(role);
 | B41 | F3 | Colunas de horímetro **no fim** das abas da planilha | ao lado das colunas de KM | não desloca as colunas que a empresa já usa (nem fórmulas de quem cola a exportação). O commit `c0af44e8` cita esta decisão como "B36" por engano — a decisão é esta |
 | B42 | F3 | E5: o servidor do Frota passou a ignorar a caixa do `role` (como o núcleo e a tela) | a tela passar a comparar `=== 'admin'` como o servidor fazia | quem tem "Admin" já é administrador do sistema inteiro no núcleo; rebaixá-lo só no Frota deixava o módulo diferente do resto. Ver **A5** |
 | B43 | F3 | A mensagem nova traz o número **no formato brasileiro e com unidade** (`1.800 km`, `1.234,5 h`), com até 6 casas (Fase 5: com 2, um km 1.800,004 aparecia como `1.800` recusando 1800); a do retorno menor que a saída (Etapa 1) continua com o número cru (`(1700)`) | reformatar também a mensagem antiga | mudar a antiga quebraria o texto que o roteiro e os testes da Etapa 1 conferem; só a nova nasceu formatada |
+| B45 | F4 | Multas entram no período pela **data da infração** | data de vencimento; data de pagamento | o custo de um veículo num mês é o que aconteceu com ele naquele mês; o vencimento e o pagamento são do financeiro. Mudar é uma expressão (`diaDaMultaSql`) |
+| B46 | F4 | Multa **sem** data da infração entra pelo **dia em que foi lançada** (dia de Brasília) | ficar fora de todo período fechado (e aparecer só em "tudo") | o campo é opcional no formulário; sem isso a multa sumiria de qualquer relatório mensal e o custo sairia menor sem aviso. A tela avisa na nota embaixo do título |
+| B47 | F4 | No consumo, **Total litros, Total gasto e Abastecimentos** contam **todos** os abastecimentos do período; a lista sai **por placa** | manter "só as linhas com km/L" e a ordem pelo km/L | o primeiro abastecimento de cada carro (e todo abastecimento de máquina) sumia dos totais; com km/L e L/h na mesma tabela, ordenar por um dos dois não faz sentido. Muda o significado da resposta — nenhuma outra tela a consome |
+| B48 | F4 (Fase 2) | Linha com km **e** horímetro mostra os dois consumos (*"10,50 km/L · 5,00 L/h"*) | usar só a régua da medição do veículo (sugerido no plano da Etapa 3) | o km/L sempre olhou só o km da linha (B39); escolher pela medição esconderia um número que o gestor digitou |
+| B49 | F4 (Fase 2) | Os dois relatórios da tela mostram **só veículos ativos**; a planilha mantém o histórico dos excluídos | relatório de consumo com os excluídos (como era); planilha só com ativos | o custo por veículo sempre foi só dos ativos; com os dois iguais, a tela fecha com ela mesma. A planilha é o histórico (as abas de lançamento nunca filtraram) e a conferência é pelas placas da aba Cadastro Frota |
+| B50 | F4 | Multa **contestada não soma** no custo por veículo (como no painel); na aba Multas ela aparece com o Status | somar como antes | contestada não é custo até ser julgada; o painel já não somava. Só nisso a régua é a do painel (o painel soma todo o tempo e os documentos) |
+| B51 | F4 | Litros por hora **calculado na leitura** (nada gravado) | duas colunas novas com recálculo do vizinho, como o km/L | sem estado gravado não há vizinho esquecido (os bugs A1/A2 do km/L eram isso); a frota é pequena e a conta é por veículo. Se pesar, gravar é uma migração |
+| B52 | F4 (Fase 2) | Aba Multas **sem** a coluna de data de pagamento | coluna "Pagamento" | o formulário de multas não tem esse campo: a coluna sairia sempre vazia |
+| B53 | F4 (Fase 5) | Status de multa fora de pendente/pago/contestado é **recusado** (400) | aceitar e normalizar a caixa ("Contestado" → contestado) | normalizar mudaria em silêncio o que alguém mandou; a tela só manda os três. Multa já gravada com status torto (só por API ou SQL) continua somando no custo — consulta **A6** |
+| B54 | F4 (fechamento) | **Próxima etapa = foto da avaria e do cupom** no portal (D1) | cadastro inicial dos 4 veículos da planilha; seção 3 do formulário; alerta de consumo da máquina (D12) | é o que mais falta no dia a dia e não depende de ninguém: a planilha da empresa tem os 4 veículos só com "V01..C01" e o tipo (sem placa, modelo, ano — o cadastro depende do André mandar), e a seção 3 depende da folha inteira. O alerta da máquina precisa de um "consumo esperado em L/h" que ninguém informou |
 | B44 | F3 (fechamento) | **Próxima etapa = relatórios fechados**: multas no período (A7), a máquina no relatório (horímetro e consumo em litros por hora) e a aba de multas na planilha | foto da avaria/cupom; seção 3 do formulário | deixa a feature 10 (Relatórios) 🟢 sem infraestrutura nova; foto exige anexo (guardar arquivo, tamanho, quem vê), que é etapa própria; a seção 3 depende da folha inteira |
 
 ### C — furos conhecidos em operação
@@ -195,8 +224,8 @@ SELECT id, nome, role FROM usuarios WHERE role <> lower(role);
 - **D1 — sem foto nem anexo.** Nem da avaria, nem do cupom do abastecimento.
 - **D2 — mapa de avarias é lista, não desenho** (B5): o motorista escolhe *onde* (lado esquerdo, lado direito, em cima, frente,
   traseira), *o que é* (risco, amassado, trinca, quebrado, outro) e uma descrição opcional.
-- **D3 — A7: o relatório de custo por veículo não filtra multas pelo período** (manutenção e combustível filtram). A planilha exportada
-  não tem aba de multas.
+- **D3 — A7 e a aba de multas (resolvidos na Etapa 4).** *Dizia: "o relatório de custo por veículo não filtra multas pelo período; a
+  planilha não tem aba de multas"* — deixou de ser verdade: multas pela data da infração (B45, B46) e aba **Multas** no fim.
 - **D4 — A10: máquina por horímetro (resolvido na Etapa 3).** O portal pedia "KM atual" para qualquer veículo e gravava como km; agora a
   máquina por horímetro pede **Horímetro atual** e grava em horas (sobe o horímetro, não toca no km).
 - **D5 — sem apelido V01/C01** (B7): o veículo é identificado pela placa.
@@ -205,10 +234,14 @@ SELECT id, nome, role FROM usuarios WHERE role <> lower(role);
 - **D7 — dar um perfil não dá acesso ao módulo.** Perfis de acesso lista todos os usuários ativos (B27). Dar **Consulta** a quem não tem o
   módulo **Frota** no cadastro de usuário não abre nada: o acesso ao módulo continua sendo dado lá.
 - **D8 — sem registro de quem mudou o perfil** (B26): só a data da última mudança fica guardada.
-- **D9 — sem consumo da máquina.** O abastecimento em horas fica sem km/L e sem "litros por hora"; o relatório de consumo e o alerta de
-  consumo baixo não olham a máquina (B44: próxima etapa).
+- **D9 — consumo da máquina (resolvido na Etapa 4, menos o alerta).** *Dizia: "o abastecimento em horas fica sem litros por hora; o
+  relatório de consumo e o alerta de consumo baixo não olham a máquina"* — o litros por hora existe (lista, relatório, planilha); o
+  **alerta** continua sem a máquina (D12).
 - **D10 — a pergunta do km menor é só do portal** (B36, B37). As rotas e telas do gestor gravam qualquer km.
-- **D11 — o relatório de custo por veículo mostra só o km** (a máquina aparece com o km dela, normalmente 0).
+- **D11 — custo por veículo só com o km (resolvido na Etapa 4).** A coluna virou **KM / Horímetro** (*"125 h"* na máquina).
+- **D12 — sem alerta de consumo baixo da máquina.** O alerta compara km/L com o "consumo esperado (km/L)" do cadastro; não existe
+  "consumo esperado em L/h". Pôr é um campo no cadastro e um ramo no alerta.
+- **D13 — "Meus registros" do motorista não mostra consumo** (nem km/L, nem L/h). Só o gestor e o Consulta veem consumo.
 
 ### E — verificações não executadas e regras não confirmadas
 
@@ -242,6 +275,13 @@ SELECT id, nome, role FROM usuarios WHERE role <> lower(role);
 - **E12 — verificação final da Etapa 3, rodada em 2026-10-23 na ponta da etapa (depois de `a7427207`):** `npm run test:api` **551/551 arquivos OK**; `test:almoxarifado` **44/44**; `test:validation` **4/4**; `test:safealter` **3/3**; `test:sqlite` **16/16**; tela **196 suítes, 2637/2637 testes**; `build` com `CI=true` **"Compiled successfully."**. Frota no servidor: 13 arquivos, **136 passaram, 0 falharam**; Frota na tela: 10 arquivos, **96/96**. Numa rodada anterior
   (interrompida, código de antes da Fase 5) dois arquivos de fora do Frota caíram com `connect EADDRINUSE` (porta efêmera ocupada com
   revisores rodando sondas em paralelo); na rodada final, sem eles, 551/551.
+- **E13 — verificação final da Etapa 4, rodada em 2026-10-23 na ponta da etapa (depois de `bcb498a0`):** `npm run test:api` **553/553 arquivos OK**; `test:almoxarifado` **44/44**; `test:validation` **4/4**; `test:safealter` **3/3**; `test:sqlite` **16/16**; tela **197 suítes, 2654/2654 testes**; `build` com `CI=true` **"Compiled successfully."**. Frota no servidor: 15 arquivos `frotas*`, **152 passaram, 0 falharam** (+ `vencimentosFrotasFinanceiroNoDiaLocal` 17/17); Frota na tela: 11 arquivos, **113/113**. A suíte `test:api` rodou sozinha, depois que os revisores terminaram.
+- **E14 — o roteiro da Etapa 4 não foi percorrido clicando no navegador** por quem escreveu este fechamento. Foi escrito lendo o código e
+  os textos da tela; a tela foi exercitada pelos testes automáticos e o servidor por um revisor com sondas. Faça o roteiro do guia
+  (*"Roteiro de teste manual (relatórios)"*) antes de apresentar.
+- **E15 — data do período fora do formato.** A tela manda só datas do calendário (`AAAA-MM-DD`). Uma data torta por chamada direta à
+  API (`?data_inicio=outubro`) não é recusada: compara como texto e o resultado sai vazio ou inteiro. Datas invertidas (início depois
+  do fim) dão tabelas vazias, e o texto do período mostra as duas como foram digitadas.
 - **E10 — o teclado do celular no campo de horímetro** (`inputMode="decimal"`, com vírgula ou ponto conforme o aparelho) não foi
   conferido num celular de verdade.
 
@@ -543,6 +583,75 @@ gravado era apagado sem aviso).
 
 ---
 
+## Etapa 4 — Relatórios fechados (2026-10-23)
+
+No fim do mês o escritório abre **Frota → Relatórios** para saber quanto cada veículo custou e quanto consumiu. Até aqui, o custo de
+outubro somava **as multas de todos os anos** (só manutenção e combustível respeitavam o período); a empilhadeira, que abastece em horas,
+**sumia** do consumo; com só a data inicial preenchida a tela mostrava tudo enquanto a planilha baixava o filtrado; e a planilha não
+tinha multas. Agora as duas tabelas e a planilha usam **o mesmo período** (com uma data ou com as duas), as multas entram pela **data da
+infração**, a máquina aparece com as **horas** e o consumo em **litros por hora**, a tela diz qual período aplicou e soma tudo numa linha
+**Total** — e essa soma bate com a planilha.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Custo por veículo de outubro somava as multas de qualquer data (A7) | Multas pela **data da infração**; sem ela, pelo **dia em que foi lançada** |
+| Multa contestada somava no custo (no painel, não) | Contestada **não soma** no custo, como no painel |
+| Só a data inicial (ou só a final): a tela ignorava o período; a planilha filtrava | As duas tabelas e a planilha filtram com uma data só |
+| O consumo nunca recebia o período | Consumo no mesmo período do custo |
+| A tela não dizia qual período estava valendo | *"Período: 01/10/2026 a 31/10/2026"* (ou *"a partir de"*, *"até"*, *"tudo"*), também na impressão |
+| Sem total geral | Linha **Total** (Manutenção, Combustível, Multas, Total) |
+| Máquina por horímetro aparecia com o km (normalmente 0) (D11) | Coluna **KM / Horímetro**: *"125 h"* na máquina, *"1.800 km"* no carro |
+| Máquina sumia do consumo; sem litros por hora (D9) | Coluna **L/h (máquina)**: *"5,00 L/h"*; também na lista de Abastecimentos e na planilha |
+| Total litros / gasto / abastecimentos do consumo contavam só os abastecimentos com km/L (o primeiro sumia) | Contam **todos** os abastecimentos do período |
+| Veículo excluído aparecia no consumo (e não no custo) | Os dois relatórios mostram só veículos ativos; a planilha guarda o histórico |
+| Erro ao carregar virava "Sem dados" calado | Aviso com a mensagem; só a tabela que falhou fica vazia |
+| A planilha não tinha multas (D3) | Aba **Multas** no fim; **Horas desde Abastec. Anterior** e **Consumo L/h** no fim de Abastecimentos |
+
+### As regras, com o cenário exato
+
+**Preparação.** Como administrador, tenha o carro *AAA1A11* (km) e a máquina *EMP0001* (Medição = Horímetro, Horímetro Atual 100).
+
+**1. Multas no período.** Em **Frota → Multas**, lance para *AAA1A11*: uma de **R$ 100** com data da infração **10/03/2025**, uma de
+**R$ 200** com **05/10/2026**, uma de **R$ 500** com **06/10/2026** e status **contestado**, e uma de **R$ 50** sem data da infração
+(lançada hoje). Em **Relatórios**, período **01/10/2026 a 31/10/2026**: a coluna Multas do *AAA1A11* mostra **R$ 200,00** (mais os
+R$ 50 se hoje for dia de outubro de 2026). Sem datas: **R$ 350,00** (todas menos a contestada).
+
+**2. Uma data só.** Limpe a data final: aparece *"Período: a partir de 01/10/2026"* e as tabelas mostram de 01/10 em diante. **Exportar
+planilha** baixa o mesmo período.
+
+**3. A máquina em litros por hora.** Em **Frota → Abastecimentos**, lance para *EMP0001*: **Horímetro no abastecimento (máquina) 120**,
+40 litros; depois **130**, 50 litros. A coluna **Km/L** do segundo mostra *"5,00 L/h"* (50 L ÷ 10 h). Lance um de **125** h com 20 litros:
+ele mostra *"4,00 L/h"* e o de 130 passa a *"10,00 L/h"* (a conta é pela ordem do horímetro). Exclua o de 125: o de 130 volta a
+*"5,00 L/h"*.
+
+**4. O relatório da máquina.** Em **Relatórios**, sem datas: na tabela **Consumo médio**, *EMP0001* aparece com **Km/L** *"-"* e
+**L/h (máquina)** *"5,00 L/h"*, **Abastecimentos 2**, **Total litros 90,0 L**. Na tabela de custos, a coluna **KM / Horímetro** mostra
+*"130 h"*.
+
+**5. A soma bate com a planilha.** Com um período escolhido, some na planilha a coluna **Valor Total R$** da aba Abastecimentos (só as
+placas da aba Cadastro Frota): é o valor da coluna **Combustível** na linha **Total** da tela. A aba **Multas** sem as linhas
+*Contestado* soma o **Multas** do Total.
+
+**6. Linha com km e horas.** Um abastecimento com **KM** e **Horímetro** preenchidos mostra os dois consumos: *"10,50 km/L · 5,00 L/h"*.
+
+**7. Litros que não valem.** Em **Abastecimentos**, edite um lançamento e ponha **0** (ou um número negativo) em Litros → **Salvar**:
+*"Informe os litros"* e nada muda. (Antes o zero e o negativo eram gravados e entravam no total de litros do relatório.)
+
+**8. Status da multa.** A tela só oferece pendente, pago e contestado. Por chamada direta, qualquer outro texto (até *"Contestado"* com
+maiúscula) recebe *"Status de pagamento inválido"* — antes era gravado e somava no custo como se não fosse contestado.
+
+### O que esta etapa não cobre
+
+- **Alerta de consumo baixo da máquina** — continua só em km/L; não há "consumo esperado em L/h" no cadastro (D12).
+- **Consumo em "Meus registros" do motorista** — a tela dele não mostra consumo (D13).
+- **Período com data digitada à mão fora do formato** — a tela só manda datas do calendário; uma data torta por chamada direta compara
+  como texto (E15).
+- O que já estava fora: seção 3 do formulário, foto, apelido V01/C01, o motorista corrigir o que lançou.
+
+---
+
 ## Onde estamos e o que vem a seguir
 
 - **Feito:** Etapa 1 — portal do motorista (vínculo usuário ↔ motorista, escopo do motorista, km/L pela ordem do km, uma viagem em
@@ -550,9 +659,11 @@ gravado era apagado sem aviso).
   **Consulta**/**Motorista** pela tela **Frota → Perfis de acesso**, Consulta só leitura nas telas de cadastro, aviso no cadastro do
   motorista, e o C7 (documentos do motorista). Etapa 3 — o portal mostra o último km/horímetro do veículo e pergunta antes de gravar um
   número menor (A8); a máquina por horímetro grava em horas (A10); o gestor e a planilha ganharam o horímetro; o "Admin" maiúsculo (E5).
-  Aberto: **A7**.
-- **Próximo: Etapa 4 — relatórios fechados** (B44): multas no período (A7), a máquina no relatório (horímetro, litros por hora) e a aba de
-  multas na planilha. Detalhe (contrato, pontos de atenção) no plano
-  [`2026-10-23-frotas-etapa3-km-e-horimetro.md`](../superpowers/plans/2026-10-23-frotas-etapa3-km-e-horimetro.md), seção
-  "Próxima tarefa detalhada".
-- **Depois, por valor:** foto da avaria/cupom, seção 3 do formulário (quando chegar a folha inteira).
+  Etapa 4 — relatórios fechados: multas no período (A7), a máquina com horas e litros por hora, o mesmo período na tela e na planilha
+  (com uma data só), linha Total que bate com a planilha, aba Multas. A7 era o último achado do levantamento ainda aberto.
+- **Próximo: Etapa 5 — foto da avaria e do cupom** (B54, D1): o motorista anexa a foto pelo celular no registro e no abastecimento; o
+  gestor vê na lista. Detalhe (contrato, pontos de atenção) no plano
+  [`2026-10-23-frotas-etapa4-relatorios.md`](../superpowers/plans/2026-10-23-frotas-etapa4-relatorios.md), seção "Próxima tarefa
+  detalhada".
+- **Depende do André:** a folha inteira do formulário (seção 3) e as placas/modelos dos 4 veículos da planilha (V01, V02, V03, C01) para
+  o cadastro inicial.
