@@ -131,6 +131,10 @@ const MovimentacaoSchema = z.object({
   // formato e julgado no motor (motivoMovimentacao.resolverMotivoDoCadastro), que tambem recebe o
   // body cru de /transferencias, para as duas rotas darem a MESMA mensagem.
   motivo_id: z.unknown().optional(),
+  // Etapa 190 (C450, B1270): a validade do lote na Entrada manual. Sem declarar aqui o z.object a descartava em silencio — a v2
+  // respondia 201 e o lote nascia sem validade (fim do FEFO, nunca vencido). Mesma regua dos `codigo_lido_*`/`motivo_id`: SEM tipo,
+  // quem julga e o motor (lotService.validarDataValidade), que tambem recebe o body cru de /transferencias — a mesma mensagem.
+  data_validade: z.unknown().optional(),
 }).superRefine((d, ctx) => {
   // quantidade 0 só é aceita para AJUSTE com localização (zera aquela localização
   // e propaga o total do material — ver stockService.registrarMovimentacao). Para

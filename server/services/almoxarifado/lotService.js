@@ -14,11 +14,54 @@ const diaLocal = require('../diaLocal');
 // Etapa 33: a URL do certificado passa a ser MINADA pelo servidor, no ponto unico do modulo.
 const { materialPhotoUrl } = require('./materialPhoto');
 const { registrarAuditoria, registrarAuditoriaDoAto } = require('./audit');
+const { validarData } = require('./auditFiltros');
 
 const STATUS_LOTE = ['ATIVO', 'BLOQUEADO', 'REPROVADO'];
 
 function erro(msg, status = 400) {
   return Object.assign(new Error(msg), { status });
+}
+
+// ── Etapa 190 (C450) — a validade do lote informada na Entrada manual ─────────────────────────────────────────────────────
+/**
+ * `AAAA-MM-DD` -> `DD/MM/AAAA` so trocando os campos (sem `new Date`: a licao da Etapa 170 — o fuso do processo nao entra numa data
+ * que e so data). Fase 2 (M-2): o recebimento nao normaliza `data_validade_lote` (pode vir `2027-03-31 00:00:00`) — o que nao casa
+ * `^\d{4}-\d{2}-\d{2}` sai como foi gravado, em vez de virar uma data inventada.
+ */
+function dataValidadeBR(valor) {
+  const s = valor == null ? '' : String(valor);
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : s;
+}
+
+/** As literais do contrato (plano da Etapa 190, "Contrato" + "Emendas da Fase 2") — o manual cita estas frases. */
+const MSG_VALIDADE = {
+  FORMATO: 'A validade do lote deve ser uma data no formato AAAA-MM-DD (ex.: 2027-03-31).',
+  SO_ENTRADA: 'A validade do lote só pode ser informada numa entrada — numa saída, transferência ou ajuste o lote já existe e a '
+    + 'validade é a dele.',
+  SEM_LOTE: 'Informe o lote para gravar a validade — a validade é do lote.',
+  CONFLITO: (codigo, dataISO) => `O lote ${codigo} já tem validade ${dataValidadeBR(dataISO)}. A validade é do lote, não da entrada: `
+    + 'deixe o campo em branco ou informe a mesma data. Se a validade gravada está errada, peça a correção do lote.',
+  AVISO_PREENCHIDA: (codigo, dataISO) => `O lote ${codigo} não tinha validade; ela foi gravada agora (${dataValidadeBR(dataISO)}) e `
+    + 'vale também para o saldo que já estava nele.',
+  AVISO_VENCIDO: (codigo, dataISO) => `O lote ${codigo} entrou já vencido (validade ${dataValidadeBR(dataISO)}). A saída para consumo `
+    + 'fica bloqueada até liberar o vencimento na tela de Lotes e Séries.',
+  AVISO_CORRIDA: (codigo, dataISO) => `A validade do lote ${codigo} foi gravada por outra operação (${dataValidadeBR(dataISO)}) enquanto `
+    + 'esta entrada era registrada; a entrada valeu e a validade do lote não foi alterada.',
+  AVISO_FALHA: (codigo, dataISO) => `A entrada foi registrada, mas a validade do lote ${codigo} não pôde ser gravada `
+    + `(${dataValidadeBR(dataISO)}). Não repita a entrada; peça a correção da validade do lote.`,
+  AVISO_REDEFINIDA: (codigo, antigaISO, novaISO) => `O lote ${codigo} estava vazio com a validade ${dataValidadeBR(antigaISO)}; ela foi `
+    + `trocada por ${dataValidadeBR(novaISO)}.`,
+};
+
+/**
+ * RN-190.02: `""`, `null` e ausente = "nao informado". Qualquer outra coisa tem de ser string `AAAA-MM-DD` de data que existe — a regua
+ * de `auditFiltros.validarData` (numero, array e `2027-02-30` recusam) — senao 400 `FORMATO`.
+ */
+function validarDataValidade(valor) {
+  if (valor === undefined || valor === null || valor === '') return { informada: false };
+  if (!validarData(valor).ok) throw erro(MSG_VALIDADE.FORMATO);
+  return { informada: true, data: valor };
 }
 
 /**
@@ -80,7 +123,11 @@ async function criarOuObterLote(db, user, dados) {
   await registrarAuditoria(db, {
     entidade: 'lote', entidade_id: criado.id, acao: 'CRIACAO',
     usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
-    dados_novos: { codigo: criado.codigo, material_id: criado.material_id, status: criado.status },
+    dados_novos: {
+      codigo: criado.codigo, material_id: criado.material_id, status: criado.status,
+      // Etapa 190 (RN-190.04): a validade com que o lote nasceu (null quando nao veio)
+      data_validade: criado.data_validade == null ? null : criado.data_validade,
+    },
     justificativa: dados.status_motivo || null,
   });
   return criado;
@@ -291,4 +338,5 @@ module.exports = {
   STATUS_LOTE, isVencido, getLote, getLotePorCodigo, criarOuObterLote, mudarStatusLote,
   vencimentoLiberado, liberarVencimento, liberarBloqueioPorCertificado, listarLotesDoMaterial,
   EPS_SALDO, residualSemLote, resumoLotesDoMaterial,
+  MSG_VALIDADE, dataValidadeBR, validarDataValidade,
 };

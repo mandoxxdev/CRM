@@ -1263,6 +1263,18 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
   // e `lote` com o codigo congelado, porque movimentacao e imutavel e precisa continuar legivel
   // se o lote for renomeado.
   const lotService = require('./lotService');
+  // Etapa 190 (C450, RN-190.02/03): a validade do lote, lida do `params` (a v2 a declara no schema sem tipo; /transferencias manda o
+  // body cru). Julgada AQUI, antes de qualquer efeito (o primeiro e a criacao do lote, logo abaixo): formato, depois "so em entrada",
+  // depois "so com lote". Roda dentro da trava do material como o resto do motor (Fase 2, M-7 — o mesmo do `motivo_id`).
+  const validadeInformada = lotService.validarDataValidade(params.data_validade);
+  if (validadeInformada.informada) {
+    if (!tiposEntrada.includes(tipo)) {
+      throw Object.assign(new Error(lotService.MSG_VALIDADE.SO_ENTRADA), { status: 400 });
+    }
+    if (!lote_id && !(lote && String(lote).trim())) {
+      throw Object.assign(new Error(lotService.MSG_VALIDADE.SEM_LOTE), { status: 400 });
+    }
+  }
   let loteResolvido = null;
   if (lote_id) {
     loteResolvido = await lotService.getLote(db, lote_id);
@@ -1275,7 +1287,10 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
     // Entrada cria o lote que ainda nao existe; saida nao pode inventar lote.
     if (!loteResolvido) {
       if (tiposEntrada.includes(tipo)) {
-        loteResolvido = await lotService.criarOuObterLote(db, user, { material_id, codigo: lote });
+        // Etapa 190 (RN-190.04): o lote novo nasce com a validade informada (era so o codigo — C450)
+        loteResolvido = await lotService.criarOuObterLote(db, user, {
+          material_id, codigo: lote, data_validade: validadeInformada.informada ? validadeInformada.data : null,
+        });
       } else {
         throw Object.assign(new Error(`Lote nao encontrado para este material: ${String(lote).trim()}`), { status: 400 });
       }
