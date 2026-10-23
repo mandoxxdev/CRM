@@ -157,8 +157,8 @@ Cada task: TDD com controle positivo (quebrar a implementação e ver o vermelho
 
 | Task | Estado | Commit |
 |---|---|---|
-| T1 | feito — harness, schema, 12 itens, situacaoDoRegistro, ver_painel; teste antigo no runner (A9) | este commit ("Frota etapa 1 T1") |
-| T2 | a fazer | |
+| T1 | feito — harness, schema, 12 itens, situacaoDoRegistro, ver_painel; teste antigo no runner (A9) | 4ed19f8b |
+| T2 | feito — km/L por ordem de km + vizinho (A1/A2), checklist antigo sem itens (A3), aprovar so solicitada (A4), km do retorno no PUT (A5), uma viagem em andamento (F2-10) com fila em memoria | este commit ("Frota etapa 1 T2") |
 | T3 | a fazer | |
 | T4 | a fazer | |
 | T5 | a fazer | |

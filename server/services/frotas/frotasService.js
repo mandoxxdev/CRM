@@ -4,6 +4,7 @@
 
 const { dbRun, dbGet, dbAll } = require('./db');
 const { hojeLocalISO } = require('../diaLocal');
+const { naFilaDeViagens } = require('./filaDeViagens');
 
 const VEICULO_JOIN = `SELECT v.*, t.nome as tipo_nome, t.categoria as tipo_categoria,
   mot.nome as motorista_nome
@@ -334,15 +335,51 @@ async function listAbastecimentos(db, { search, veiculo_id } = {}) {
   return dbAll(db, sql, params);
 }
 
-async function calcConsumoMedio(db, veiculoId, kmAtual, litros) {
-  const prev = await dbGet(db,
-    `SELECT km_abastecimento, litros FROM frotas_abastecimentos
-     WHERE veiculo_id = ? AND km_abastecimento IS NOT NULL ORDER BY data_abastecimento DESC, id DESC LIMIT 1`,
-    [veiculoId]);
-  if (!prev || prev.km_abastecimento == null || !litros) return null;
-  const kmDiff = Number(kmAtual) - Number(prev.km_abastecimento);
-  if (kmDiff <= 0) return null;
-  return Math.round((kmDiff / Number(litros)) * 100) / 100;
+/**
+ * Frotas Etapa 1 (RN-F1.11, A1, A2, F2-8): o km/L de um abastecimento conta do anterior EM KM do mesmo veiculo (ordem `km ASC, id ASC`),
+ * nao do de data mais nova. Antes: `ORDER BY data_abastecimento DESC` — um lancamento retroativo virava o "anterior" de si mesmo e o
+ * do seguinte nunca era refeito (A1); e o PUT recalculava contra o mais novo, que muitas vezes era ele proprio (kmDiff 0 -> km/L nulo, A2).
+ * Linha sem km fica com km/L e km_desde_anterior nulos e nao serve de anterior.
+ */
+async function anteriorEmKm(db, veiculoId, km, id) {
+  return dbGet(db,
+    `SELECT id, km_abastecimento FROM frotas_abastecimentos
+     WHERE veiculo_id = ? AND km_abastecimento IS NOT NULL AND id != ?
+       AND (km_abastecimento < ? OR (km_abastecimento = ? AND id < ?))
+     ORDER BY km_abastecimento DESC, id DESC LIMIT 1`,
+    [veiculoId, id, km, km, id]);
+}
+
+async function seguinteEmKm(db, veiculoId, km, id) {
+  if (km == null) return null;
+  return dbGet(db,
+    `SELECT id FROM frotas_abastecimentos
+     WHERE veiculo_id = ? AND km_abastecimento IS NOT NULL AND id != ?
+       AND (km_abastecimento > ? OR (km_abastecimento = ? AND id > ?))
+     ORDER BY km_abastecimento ASC, id ASC LIMIT 1`,
+    [veiculoId, id, km, km, id]);
+}
+
+/** Recalcula km_desde_anterior e consumo_medio de UMA linha pela regua da RN-F1.11. */
+async function recalcularConsumoDaLinha(db, id) {
+  const a = await dbGet(db, 'SELECT id, veiculo_id, km_abastecimento, litros FROM frotas_abastecimentos WHERE id = ?', [id]);
+  if (!a) return;
+  let kmDesde = null;
+  let consumo = null;
+  if (a.km_abastecimento != null) {
+    const prev = await anteriorEmKm(db, a.veiculo_id, Number(a.km_abastecimento), a.id);
+    if (prev) {
+      kmDesde = Number(a.km_abastecimento) - Number(prev.km_abastecimento);
+      if (kmDesde > 0 && Number(a.litros) > 0) consumo = Math.round((kmDesde / Number(a.litros)) * 100) / 100;
+    }
+  }
+  await dbRun(db, 'UPDATE frotas_abastecimentos SET km_desde_anterior = ?, consumo_medio = ? WHERE id = ?', [kmDesde, consumo, id]);
+}
+
+/** Recalcula o seguinte (em km) da posicao (veiculo, km, id) — a posicao pode ser a de uma linha que ja saiu dali ou foi apagada. */
+async function recalcularSeguinte(db, veiculoId, km, id) {
+  const seg = await seguinteEmKm(db, veiculoId, km, id);
+  if (seg) await recalcularConsumoDaLinha(db, seg.id);
 }
 
 async function createAbastecimento(db, user, data) {
@@ -354,20 +391,20 @@ async function createAbastecimento(db, user, data) {
   const litros = Number(data.litros);
   const valorTotal = Number(data.valor_total) || 0;
   const valorLitro = data.valor_litro != null ? Number(data.valor_litro) : (litros > 0 ? valorTotal / litros : 0);
-  const consumo = data.km_abastecimento != null
-    ? await calcConsumoMedio(db, data.veiculo_id, data.km_abastecimento, litros)
-    : null;
+  const km = data.km_abastecimento != null && data.km_abastecimento !== '' ? Number(data.km_abastecimento) : null;
   const r = await dbRun(db, `INSERT INTO frotas_abastecimentos
     (veiculo_id, motorista_id, data_abastecimento, litros, valor_total, valor_litro, posto,
      km_abastecimento, combustivel_tipo, consumo_medio, observacoes, usuario_id, usuario_nome)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
     data.veiculo_id, data.motorista_id || null, data.data_abastecimento, litros, valorTotal, valorLitro,
-    data.posto || null, data.km_abastecimento != null ? Number(data.km_abastecimento) : null,
-    data.combustivel_tipo || null, consumo, data.observacoes || null,
+    data.posto || null, km,
+    data.combustivel_tipo || null, null, data.observacoes || null,
     user?.id || null, user?.nome || user?.name || null,
   ]);
-  if (data.km_abastecimento != null) {
-    await updateKmVeiculoSeMaior(db, data.veiculo_id, data.km_abastecimento);
+  await recalcularConsumoDaLinha(db, r.lastID);
+  await recalcularSeguinte(db, data.veiculo_id, km, r.lastID);
+  if (km != null) {
+    await updateKmVeiculoSeMaior(db, data.veiculo_id, km);
   }
   return dbGet(db, 'SELECT * FROM frotas_abastecimentos WHERE id = ?', [r.lastID]);
 }
@@ -382,21 +419,31 @@ async function updateAbastecimento(db, id, data) {
   const litros = data.litros != null ? Number(data.litros) : current.litros;
   const valorTotal = data.valor_total != null ? Number(data.valor_total) : current.valor_total;
   const valorLitro = data.valor_litro != null ? Number(data.valor_litro) : current.valor_litro;
-  const km = data.km_abastecimento != null ? Number(data.km_abastecimento) : current.km_abastecimento;
+  const km = 'km_abastecimento' in data
+    ? (data.km_abastecimento != null && data.km_abastecimento !== '' ? Number(data.km_abastecimento) : null)
+    : current.km_abastecimento;
   const veiculoId = data.veiculo_id ?? current.veiculo_id;
-  const consumo = km != null ? await calcConsumoMedio(db, veiculoId, km, litros) : current.consumo_medio;
   await dbRun(db, `UPDATE frotas_abastecimentos SET
     veiculo_id=?, motorista_id=?, data_abastecimento=?, litros=?, valor_total=?, valor_litro=?,
-    posto=?, km_abastecimento=?, combustivel_tipo=?, consumo_medio=?, observacoes=? WHERE id=?`, [
+    posto=?, km_abastecimento=?, combustivel_tipo=?, observacoes=? WHERE id=?`, [
     veiculoId, data.motorista_id ?? current.motorista_id, data.data_abastecimento ?? current.data_abastecimento,
     litros, valorTotal, valorLitro, data.posto ?? current.posto, km,
-    data.combustivel_tipo ?? current.combustivel_tipo, consumo, data.observacoes ?? current.observacoes, id,
+    data.combustivel_tipo ?? current.combustivel_tipo, data.observacoes ?? current.observacoes, id,
   ]);
+  await recalcularConsumoDaLinha(db, id);
+  // F2-8: o seguinte da posicao antiga (no veiculo antigo) e o da nova (no veiculo novo)
+  if (current.km_abastecimento != null) await recalcularSeguinte(db, current.veiculo_id, Number(current.km_abastecimento), Number(id));
+  await recalcularSeguinte(db, veiculoId, km, Number(id));
+  if (km != null) await updateKmVeiculoSeMaior(db, veiculoId, km);
   return dbGet(db, 'SELECT * FROM frotas_abastecimentos WHERE id = ?', [id]);
 }
 
 async function deleteAbastecimento(db, id) {
+  const current = await dbGet(db, 'SELECT * FROM frotas_abastecimentos WHERE id = ?', [id]);
   await dbRun(db, 'DELETE FROM frotas_abastecimentos WHERE id = ?', [id]);
+  if (current && current.km_abastecimento != null) {
+    await recalcularSeguinte(db, current.veiculo_id, Number(current.km_abastecimento), Number(id));
+  }
   return { success: true };
 }
 
@@ -549,52 +596,102 @@ async function listViagens(db, { search, veiculo_id, status } = {}) {
   return dbAll(db, sql, params);
 }
 
+const MSG_VEICULO_EM_USO = 'Este veículo já está em uso (saída sem retorno).';
+const MSG_MOTORISTA_EM_VIAGEM = 'Você já tem uma saída sem retorno. Registre o retorno primeiro.';
+
+function erro(status, msg, code) {
+  const err = new Error(msg);
+  err.status = status;
+  if (code) err.code = code;
+  return err;
+}
+
+/** RN-F1.05 / F2-10: um veiculo e um motorista tem no maximo UMA viagem em andamento. `excetoId` = a propria viagem (PUT). */
+async function conferirViagemUnica(db, { veiculoId, motoristaId, excetoId = 0 }) {
+  if (veiculoId) {
+    const v = await dbGet(db, "SELECT id FROM frotas_viagens WHERE veiculo_id = ? AND status = 'em_andamento' AND id != ? LIMIT 1",
+      [veiculoId, excetoId || 0]);
+    if (v) throw erro(409, MSG_VEICULO_EM_USO);
+  }
+  if (motoristaId) {
+    const m = await dbGet(db, "SELECT id FROM frotas_viagens WHERE motorista_id = ? AND status = 'em_andamento' AND id != ? LIMIT 1",
+      [motoristaId, excetoId || 0]);
+    if (m) throw erro(409, MSG_MOTORISTA_EM_VIAGEM);
+  }
+}
+
+/** RN-F1.07 (A5): retorno abaixo da saida e a "VERIFICAR KM" da planilha. */
+function conferirKmDoRetorno(kmSaida, kmRetorno) {
+  if (kmSaida != null && kmRetorno != null && Number(kmRetorno) < Number(kmSaida)) {
+    throw erro(400, `KM do retorno (${Number(kmRetorno)}) menor que o KM da saída (${Number(kmSaida)}). Confira o hodômetro.`);
+  }
+}
+
 async function createViagem(db, user, data) {
   if (!data.veiculo_id) {
     const err = new Error('Veículo é obrigatório');
     err.status = 400;
     throw err;
   }
-  const r = await dbRun(db, `INSERT INTO frotas_viagens
-    (veiculo_id, motorista_id, data_saida, data_retorno, km_saida, km_retorno, km_rodado,
-     destino, finalidade, setor, status, observacoes, solicitante_id, solicitante_nome)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
-    data.veiculo_id, data.motorista_id || null, data.data_saida || null, data.data_retorno || null,
-    data.km_saida != null ? Number(data.km_saida) : null, data.km_retorno != null ? Number(data.km_retorno) : null,
-    data.km_rodado != null ? Number(data.km_rodado) : null, data.destino || null, data.finalidade || null,
-    data.setor || null, data.status || 'solicitada', data.observacoes || null,
-    user?.id || null, user?.nome || user?.name || null,
-  ]);
-  return dbGet(db, 'SELECT * FROM frotas_viagens WHERE id = ?', [r.lastID]);
+  const kmSaida = data.km_saida != null ? Number(data.km_saida) : null;
+  const kmRetorno = data.km_retorno != null ? Number(data.km_retorno) : null;
+  conferirKmDoRetorno(kmSaida, kmRetorno);
+  const status = data.status || 'solicitada';
+  return naFilaDeViagens(async () => {
+    if (status === 'em_andamento') {
+      await conferirViagemUnica(db, { veiculoId: data.veiculo_id, motoristaId: data.motorista_id });
+    }
+    const r = await dbRun(db, `INSERT INTO frotas_viagens
+      (veiculo_id, motorista_id, data_saida, data_retorno, km_saida, km_retorno, km_rodado,
+       destino, finalidade, setor, status, observacoes, solicitante_id, solicitante_nome, origem)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+      data.veiculo_id, data.motorista_id || null, data.data_saida || null, data.data_retorno || null,
+      kmSaida, kmRetorno,
+      data.km_rodado != null ? Number(data.km_rodado) : (kmSaida != null && kmRetorno != null ? kmRetorno - kmSaida : null),
+      data.destino || null, data.finalidade || null,
+      data.setor || null, status, data.observacoes || null,
+      user?.id || null, user?.nome || user?.name || null, data.origem || null,
+    ]);
+    if (kmRetorno != null) await updateKmVeiculoSeMaior(db, data.veiculo_id, kmRetorno);
+    return dbGet(db, 'SELECT * FROM frotas_viagens WHERE id = ?', [r.lastID]);
+  });
 }
 
 async function updateViagem(db, id, data) {
-  const current = await dbGet(db, 'SELECT * FROM frotas_viagens WHERE id = ?', [id]);
-  if (!current) {
-    const err = new Error('Viagem não encontrada');
-    err.status = 404;
-    throw err;
-  }
-  let kmRodado = data.km_rodado;
-  const kmSaida = data.km_saida != null ? Number(data.km_saida) : current.km_saida;
-  const kmRetorno = data.km_retorno != null ? Number(data.km_retorno) : current.km_retorno;
-  if (kmRodado == null && kmSaida != null && kmRetorno != null) {
-    kmRodado = kmRetorno - kmSaida;
-  }
-  await dbRun(db, `UPDATE frotas_viagens SET
-    veiculo_id=?, motorista_id=?, data_saida=?, data_retorno=?, km_saida=?, km_retorno=?, km_rodado=?,
-    destino=?, finalidade=?, setor=?, status=?, observacoes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`, [
-    data.veiculo_id ?? current.veiculo_id, data.motorista_id ?? current.motorista_id,
-    data.data_saida ?? current.data_saida, data.data_retorno ?? current.data_retorno,
-    kmSaida, kmRetorno, kmRodado != null ? kmRodado : current.km_rodado,
-    data.destino ?? current.destino, data.finalidade ?? current.finalidade, data.setor ?? current.setor,
-    data.status ?? current.status, data.observacoes ?? current.observacoes, id,
-  ]);
-  const veiculoId = data.veiculo_id ?? current.veiculo_id;
-  if (kmRetorno != null) {
-    await updateKmVeiculoSeMaior(db, veiculoId, kmRetorno);
-  }
-  return dbGet(db, 'SELECT * FROM frotas_viagens WHERE id = ?', [id]);
+  return naFilaDeViagens(async () => {
+    const current = await dbGet(db, 'SELECT * FROM frotas_viagens WHERE id = ?', [id]);
+    if (!current) {
+      const err = new Error('Viagem não encontrada');
+      err.status = 404;
+      throw err;
+    }
+    let kmRodado = data.km_rodado;
+    const kmSaida = data.km_saida != null ? Number(data.km_saida) : current.km_saida;
+    const kmRetorno = data.km_retorno != null ? Number(data.km_retorno) : current.km_retorno;
+    conferirKmDoRetorno(kmSaida, kmRetorno);
+    if (kmRodado == null && kmSaida != null && kmRetorno != null) {
+      kmRodado = kmRetorno - kmSaida;
+    }
+    const veiculoId = data.veiculo_id ?? current.veiculo_id;
+    const motoristaId = data.motorista_id ?? current.motorista_id;
+    const status = data.status ?? current.status;
+    if (status === 'em_andamento') {
+      await conferirViagemUnica(db, { veiculoId, motoristaId, excetoId: Number(id) });
+    }
+    await dbRun(db, `UPDATE frotas_viagens SET
+      veiculo_id=?, motorista_id=?, data_saida=?, data_retorno=?, km_saida=?, km_retorno=?, km_rodado=?,
+      destino=?, finalidade=?, setor=?, status=?, observacoes=?, origem=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`, [
+      veiculoId, motoristaId,
+      data.data_saida ?? current.data_saida, data.data_retorno ?? current.data_retorno,
+      kmSaida, kmRetorno, kmRodado != null ? kmRodado : current.km_rodado,
+      data.destino ?? current.destino, data.finalidade ?? current.finalidade, data.setor ?? current.setor,
+      status, data.observacoes ?? current.observacoes, data.origem ?? current.origem, id,
+    ]);
+    if (kmRetorno != null) {
+      await updateKmVeiculoSeMaior(db, veiculoId, kmRetorno);
+    }
+    return dbGet(db, 'SELECT * FROM frotas_viagens WHERE id = ?', [id]);
+  });
 }
 
 async function aprovarViagem(db, id, user) {
@@ -604,10 +701,12 @@ async function aprovarViagem(db, id, user) {
     err.status = 404;
     throw err;
   }
-  await dbRun(db, `UPDATE frotas_viagens SET status='aprovada', aprovador_id=?, aprovador_nome=?,
-    data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=?`, [
+  // RN-F1.17 (A4): aprovar uma concluida a fazia voltar para "aprovada" (e reabrir no painel). O status vai no WHERE da gravacao.
+  const r = await dbRun(db, `UPDATE frotas_viagens SET status='aprovada', aprovador_id=?, aprovador_nome=?,
+    data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=? AND status = 'solicitada'`, [
     user?.id || null, user?.nome || user?.name || null, id,
   ]);
+  if (!r.changes) throw erro(409, 'Só é possível aprovar viagem solicitada');
   return dbGet(db, 'SELECT * FROM frotas_viagens WHERE id = ?', [id]);
 }
 
@@ -617,6 +716,79 @@ async function deleteViagem(db, id) {
 }
 
 // ── Checklists ───────────────────────────────────────────────────────────────
+
+function lerJson(texto, padrao) {
+  if (texto == null || texto === '') return padrao;
+  try { return JSON.parse(texto); } catch (e) { return padrao; }
+}
+
+/** Frotas Etapa 1: a linha de frotas_checklists com `itens` (objeto) e `avarias` (array) no lugar do JSON cru. */
+function registroComItens(row) {
+  if (!row) return row;
+  const { itens_json: itensJson, avarias_json: avariasJson, ...resto } = row;
+  return { ...resto, itens: lerJson(itensJson, null), avarias: lerJson(avariasJson, []) };
+}
+
+/** RN-F1.01: chaves e respostas dos 12 itens. Lanca 400 `Item de checklist inválido: <chave>`. */
+function validarItens(itens) {
+  const { ITENS_CHECKLIST, RESPOSTAS_ITEM } = require('./schema');
+  if (itens == null) return {};
+  if (typeof itens !== 'object' || Array.isArray(itens)) {
+    const err = new Error('Item de checklist inválido: itens');
+    err.status = 400;
+    throw err;
+  }
+  const chaves = new Set(ITENS_CHECKLIST.map((i) => i.chave));
+  const limpo = {};
+  for (const [k, v] of Object.entries(itens)) {
+    if (!chaves.has(k) || !RESPOSTAS_ITEM.includes(v)) {
+      const err = new Error(`Item de checklist inválido: ${k}`);
+      err.status = 400;
+      throw err;
+    }
+    limpo[k] = v;
+  }
+  return limpo;
+}
+
+/**
+ * Grava uma linha de frotas_checklists — a rota antiga do gestor e o portal (saida/retorno/inspecao) passam por aqui.
+ * Com `itens` (os 12): situacao pela RN-F1.02 e os 7 *_ok legados derivados (FALHA -> 0, OK/NA -> 1, ausente -> nulo;
+ * extintor e limpeza, que o papel nao tem, -> 1). Sem `itens`: os 7 *_ok como vieram (ausente -> nulo, A3) e situacao pela F2-7.
+ * `aprovado` = 1 so se OK.
+ */
+async function inserirRegistro(db, user, r) {
+  const { ITENS_LEGADOS, LEGADO_DE_ITEM, situacaoDoRegistro } = require('./schema');
+  const temItens = r.itens != null;
+  let legados;
+  let situacao;
+  if (temItens) {
+    legados = Object.fromEntries(ITENS_LEGADOS.map((k) => {
+      const chave = LEGADO_DE_ITEM[k];
+      if (!chave) return [k, 1];
+      const v = r.itens[chave];
+      return [k, v === 'FALHA' ? 0 : (v === 'OK' || v === 'NA') ? 1 : null];
+    }));
+    situacao = situacaoDoRegistro({ itens: r.itens, avarias: r.avarias });
+  } else {
+    const bool = (v) => (v === 0 || v === false || v === '0' ? 0 : v === 1 || v === true || v === '1' ? 1 : null);
+    legados = Object.fromEntries(ITENS_LEGADOS.map((k) => [k, bool(r.legados?.[k])]));
+    situacao = situacaoDoRegistro({ legados });
+  }
+  const ins = await dbRun(db, `INSERT INTO frotas_checklists
+    (veiculo_id, motorista_id, data_checklist, pneus_ok, oleo_ok, luzes_ok, freios_ok,
+     extintor_ok, documentos_ok, limpeza_ok, observacoes, aprovado, usuario_id, usuario_nome,
+     tipo_registro, km, horario, nivel_combustivel, itens_json, avarias_json, status_geral, viagem_id)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+    r.veiculo_id, r.motorista_id || null, r.data_checklist,
+    ...ITENS_LEGADOS.map((k) => legados[k]), r.observacoes || null, situacao === 'OK' ? 1 : 0,
+    user?.id || null, user?.nome || user?.name || null,
+    r.tipo_registro || 'inspecao', r.km != null ? Number(r.km) : null, r.horario || null, r.nivel_combustivel || null,
+    temItens ? JSON.stringify(r.itens) : null, JSON.stringify(Array.isArray(r.avarias) ? r.avarias : []),
+    situacao, r.viagem_id || null,
+  ]);
+  return registroComItens(await dbGet(db, 'SELECT * FROM frotas_checklists WHERE id = ?', [ins.lastID]));
+}
 
 async function listChecklists(db, { search, veiculo_id } = {}) {
   let sql = `SELECT c.*, v.placa, m.nome as motorista_nome
@@ -629,8 +801,8 @@ async function listChecklists(db, { search, veiculo_id } = {}) {
   const s = buildSearchWhere(['v.placa', 'c.observacoes'], search);
   sql += s.clause;
   params.push(...s.params);
-  sql += ' ORDER BY c.data_checklist DESC, c.id DESC';
-  return dbAll(db, sql, params);
+  sql += ' ORDER BY c.data_checklist DESC, c.horario DESC, c.id DESC';
+  return (await dbAll(db, sql, params)).map(registroComItens);
 }
 
 async function createChecklist(db, user, data) {
@@ -639,19 +811,19 @@ async function createChecklist(db, user, data) {
     err.status = 400;
     throw err;
   }
-  const bool = (v, def = 1) => (v === 0 || v === false ? 0 : v === 1 || v === true ? 1 : def);
-  const items = ['pneus_ok', 'oleo_ok', 'luzes_ok', 'freios_ok', 'extintor_ok', 'documentos_ok', 'limpeza_ok'];
-  const vals = items.map((k) => bool(data[k]));
-  const aprovado = vals.every((v) => v === 1) ? 1 : 0;
-  const r = await dbRun(db, `INSERT INTO frotas_checklists
-    (veiculo_id, motorista_id, data_checklist, pneus_ok, oleo_ok, luzes_ok, freios_ok,
-     extintor_ok, documentos_ok, limpeza_ok, observacoes, aprovado, usuario_id, usuario_nome)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
-    data.veiculo_id, data.motorista_id || null, data.data_checklist,
-    ...vals, data.observacoes || null, aprovado,
-    user?.id || null, user?.nome || user?.name || null,
-  ]);
-  return dbGet(db, 'SELECT * FROM frotas_checklists WHERE id = ?', [r.lastID]);
+  const itens = data.itens != null ? validarItens(data.itens) : null;
+  const { ITENS_LEGADOS } = require('./schema');
+  return inserirRegistro(db, user, {
+    veiculo_id: data.veiculo_id,
+    motorista_id: data.motorista_id,
+    data_checklist: data.data_checklist,
+    observacoes: data.observacoes,
+    tipo_registro: 'inspecao',
+    km: data.km,
+    itens,
+    avarias: Array.isArray(data.avarias) ? data.avarias : [],
+    legados: Object.fromEntries(ITENS_LEGADOS.map((k) => [k, data[k]])),
+  });
 }
 
 async function deleteChecklist(db, id) {
