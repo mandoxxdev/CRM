@@ -667,7 +667,7 @@ onde divergirem** (as Emendas da Fase 2 incorporadas):
   `9999999999.999` (o `fmtQtd` da M4 tem 3 casas: `9999999999.9999` vira `10.000.000.000`). (4) O título da seção é f14, a linha "Fila
   carregada em…" e o subtítulo f9, o bloco "Sem endereço sugerido" f10; a parada sem endereço não é partida (mesma régua).
 
-### T4 — feita (`T4HASH`)
+### T4 — feita (`d1146a6e`)
 
 - **Servidor** — `server/tests/api/preSelecaoColetaIntegracao.api.test.js` **7/0** (cadastro e entradas pela rota, criar como S sem perfil,
   aprovar como ADMIN, separar e entregar como ALMOXARIFE; o material grava a padrão XP-01, emenda M5):
