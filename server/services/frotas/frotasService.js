@@ -136,22 +136,40 @@ async function conferirUsuarioDoVinculo(db, usuarioId, motoristaId = 0) {
   }
 }
 
+/**
+ * Fase5-9: a corrida que passou pela conferencia bate no indice unico parcial (idx_frotas_motoristas_usuario_ativo) — vira a 409
+ * do contrato, com o nome relido de quem ficou com o usuario.
+ */
+async function traduzirVinculoDuplicado(db, e, usuarioId, motoristaId = 0) {
+  if (!e || e.code !== 'SQLITE_CONSTRAINT' || !/usuario_id|idx_frotas_motoristas_usuario_ativo/.test(String(e.message))) return e;
+  const outro = await dbGet(db, 'SELECT nome FROM frotas_motoristas WHERE usuario_id = ? AND ativo = 1 AND id != ? ORDER BY id LIMIT 1',
+    [usuarioId, motoristaId || 0]);
+  if (!outro) return e;
+  const err = new Error(`Este usuário já está ligado ao motorista ${outro.nome}`);
+  err.status = 409;
+  return err;
+}
+
 function normalizarUsuarioId(v) {
   if (v === undefined || v === null || v === '') return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : v;
 }
 
-/** F2-5: todos os usuarios ativos (sem o filtro de setor de /usuarios/por-modulo), com o motorista ja ligado. */
+/**
+ * F2-5: todos os usuarios ativos (sem o filtro de setor de /usuarios/por-modulo), com o motorista ja ligado.
+ * Fase5-10: tambem o usuario DESATIVADO que segue ligado a um motorista ativo, com `ativo: false` — sem ele o select da tela
+ * mostrava "— nenhum —" para um vinculo que existe. Os demais vem com `ativo: true`.
+ */
 async function listUsuariosVinculaveis(db) {
-  const rows = await dbAll(db, `SELECT u.id, u.nome, u.email, m.id AS motorista_id, m.nome AS motorista_nome
+  const rows = await dbAll(db, `SELECT u.id, u.nome, u.email, u.ativo, m.id AS motorista_id, m.nome AS motorista_nome
     FROM usuarios u
     LEFT JOIN frotas_motoristas m ON m.usuario_id = u.id AND m.ativo = 1
-    WHERE u.ativo = 1
+    WHERE u.ativo = 1 OR m.id IS NOT NULL
     ORDER BY u.nome, u.id, m.id`);
   const vistos = new Set(); // legado com dois motoristas ativos no mesmo usuario: o primeiro
   return rows.filter((r) => (vistos.has(r.id) ? false : vistos.add(r.id))).map((r) => ({
-    id: r.id, nome: r.nome, email: r.email,
+    id: r.id, nome: r.nome, email: r.email, ativo: Number(r.ativo) === 1,
     motorista: r.motorista_id ? { id: r.motorista_id, nome: r.motorista_nome } : null,
   }));
 }
@@ -311,7 +329,7 @@ async function createMotorista(db, userOrData, maybeData) {
     data.nome, data.cpf || null, usuarioId, data.cnh_numero || null,
     data.cnh_categoria || null, data.cnh_validade || null, data.telefone || null,
     data.email || null, data.setor || null, data.status || 'ativo', data.observacoes || null,
-  ]);
+  ]).catch(async (e) => { throw await traduzirVinculoDuplicado(db, e, usuarioId); }); // Fase5-9
   return getMotorista(db, r.lastID);
 }
 
@@ -324,7 +342,10 @@ async function updateMotorista(db, id, data) {
   }
   // F2-4: `'usuario_id' in data` — null DESVINCULA (o `??` antigo ignorava o null e nao havia como desfazer o vinculo)
   const usuarioId = 'usuario_id' in data ? normalizarUsuarioId(data.usuario_id) : current.usuario_id;
-  if ('usuario_id' in data) await conferirUsuarioDoVinculo(db, usuarioId, Number(id));
+  // Fase5-10: manter o MESMO usuario ja gravado passa mesmo se ele foi desativado (antes, todo salvar dava 400 e nao havia como
+  // editar o motorista); so a troca valida existencia/ativo e o vinculo com outro motorista.
+  const mudou = 'usuario_id' in data && String(usuarioId ?? '') !== String(current.usuario_id ?? '');
+  if (mudou) await conferirUsuarioDoVinculo(db, usuarioId, Number(id));
   await dbRun(db, `UPDATE frotas_motoristas SET
     nome=?, cpf=?, usuario_id=?, cnh_numero=?, cnh_categoria=?, cnh_validade=?,
     telefone=?, email=?, setor=?, status=?, observacoes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`, [
@@ -333,7 +354,7 @@ async function updateMotorista(db, id, data) {
     data.cnh_validade ?? current.cnh_validade, data.telefone ?? current.telefone,
     data.email ?? current.email, data.setor ?? current.setor, data.status ?? current.status,
     data.observacoes ?? current.observacoes, id,
-  ]);
+  ]).catch(async (e) => { throw await traduzirVinculoDuplicado(db, e, usuarioId, Number(id)); }); // Fase5-9
   return getMotorista(db, id);
 }
 
@@ -741,6 +762,16 @@ function erro(status, msg, code) {
   return err;
 }
 
+/**
+ * RN-F1.20 (Fase5-8): so quem tem `aprovar_viagens` leva a viagem a aprovada ou cancelada. Antes o motorista aprovava a propria
+ * viagem pelo POST/PUT (sem aprovador) e cancelava a que o gestor aprovou. Sem `user` (chamada interna) passa.
+ */
+function conferirQuemDecideAViagem(user, status) {
+  if (!user || !["aprovada", "cancelada"].includes(status)) return;
+  const { can } = require('./permissions');
+  if (!can(user, 'aprovar_viagens')) throw erro(403, 'Só o gestor da frota pode aprovar ou cancelar viagem');
+}
+
 /** RN-F1.05 / F2-10: um veiculo e um motorista tem no maximo UMA viagem em andamento. `excetoId` = a propria viagem (PUT). */
 async function conferirViagemUnica(db, { veiculoId, motoristaId, excetoId = 0 }) {
   if (veiculoId) {
@@ -781,6 +812,7 @@ function conferirKmDoRetorno(kmSaida, kmRetorno) {
 
 async function createViagem(db, user, dataBruta) {
   const data = await forcarMotoristaDoVinculo(db, user, dataBruta || {}); // RN-F1.19
+  conferirQuemDecideAViagem(user, data.status); // RN-F1.20
   if (!data.veiculo_id) {
     const err = new Error('Veículo é obrigatório');
     err.status = 400;
@@ -820,6 +852,7 @@ async function updateViagem(db, id, dataBruta, user) {
       throw err;
     }
     const data = await conferirDonoPorMotorista(db, user, current, dataBruta); // RN-F1.15 / RN-F1.19
+    if (data.status != null && data.status !== current.status) conferirQuemDecideAViagem(user, data.status); // RN-F1.20
     let kmRodado = data.km_rodado;
     const kmSaida = data.km_saida != null ? Number(data.km_saida) : current.km_saida;
     const kmRetorno = data.km_retorno != null ? Number(data.km_retorno) : current.km_retorno;

@@ -282,6 +282,16 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE frotas_viagens ADD COLUMN origem TEXT');
   await safeAlter(db, 'ALTER TABLE frotas_abastecimentos ADD COLUMN km_desde_anterior REAL');
 
+  // Fase5-9 (RN-F1.12): um motorista ativo por usuario, garantido pelo banco — a conferencia SELECT + INSERT deixava 6 POST
+  // simultaneos criarem 4 vinculos. Se o banco ja tem usuario em dobro, o indice nao nasce: loga e segue (nao derruba o boot);
+  // a conferencia do servico continua valendo para os gestos novos.
+  try {
+    await dbRun(db, `CREATE UNIQUE INDEX IF NOT EXISTS idx_frotas_motoristas_usuario_ativo
+      ON frotas_motoristas(usuario_id) WHERE ativo = 1 AND usuario_id IS NOT NULL`);
+  } catch (e) {
+    console.error('Frotas: indice unico do vinculo usuario-motorista nao criado (usuario ligado a dois motoristas ativos?):', e.message);
+  }
+
   for (const [nome, categoria] of TIPOS_VEICULO_SEED) {
     await dbRun(db, 'INSERT OR IGNORE INTO frotas_tipos_veiculo (nome, categoria) VALUES (?, ?)', [nome, categoria]);
   }
