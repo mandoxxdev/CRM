@@ -259,6 +259,9 @@
 .situacao-ok { background: rgba(22, 163, 74, 0.15); color: #16a34a; }
 .situacao-pendencia { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
 .situacao-incompleto { background: rgba(245, 158, 11, 0.18); color: #d97706; }
+/* Frota Etapa 6 (RN-F6.08): pendencia tratada pelo gestor — verde/cinza discreto. */
+.situacao-tratada { background: rgba(100, 116, 139, 0.15); color: #15803d; }
+.portal-pendencia-tratada { color: #15803d; }
 
 @media (max-width: 380px) {
   .portal-opcoes-5 { grid-template-columns: repeat(3, 1fr); }

@@ -6,6 +6,9 @@ const META_CACHE_TTL_MS = 60 * 1000;
 const dashboardCache = { at: 0, data: null };
 const metaCache = { at: 0, data: null };
 const dashboardInflight = { current: null };
+// Frota Etapa 6 (Fase 2 T-1): geracao do cache do painel. Limpar incrementa; a busca que ja estava em andamento so grava no cache
+// (e so zera o "em andamento") se a geracao ainda for a dela — senao o resultado velho (com o alerta ja tratado) voltava ao cache.
+let dashboardGeracao = 0;
 const metaInflight = { current: null };
 
 /**
@@ -20,15 +23,18 @@ export async function fetchFrotasDashboard({ force = false } = {}) {
   }
 
   // Etapa 164 (Fase 2 M11): o "Atualizar" (force) fura tambem o cache de 30 s do servidor — sem isso o cartao seguia velho.
+  const geracao = dashboardGeracao;
   const promise = (force ? api.get('/frotas/dashboard', { params: { refresh: 1 } }) : api.get('/frotas/dashboard'))
     .then(({ data }) => {
-      dashboardCache.at = Date.now();
-      dashboardCache.data = data;
-      dashboardInflight.current = null;
+      if (geracao === dashboardGeracao) {
+        dashboardCache.at = Date.now();
+        dashboardCache.data = data;
+      }
+      if (dashboardInflight.current === promise) dashboardInflight.current = null;
       return data;
     })
     .catch((err) => {
-      dashboardInflight.current = null;
+      if (dashboardInflight.current === promise) dashboardInflight.current = null;
       throw err;
     });
 
@@ -62,8 +68,27 @@ export async function fetchFrotasMeta({ force = false } = {}) {
 }
 
 export function invalidateFrotasDashboardCache() {
+  dashboardGeracao += 1;
   dashboardCache.at = 0;
   dashboardCache.data = null;
+  dashboardInflight.current = null;
+}
+
+/**
+ * Frota Etapa 6 (RN-F6.02/03/09): o gestor marca a pendencia do registro como tratada, ou desfaz. Sucesso limpa o cache do painel
+ * (o alerta sai/volta na hora). `manutencao_id` vazio vai como null (o servidor aceita null, '' ou ausente).
+ */
+export async function tratarPendencia(id, { tratamento, manutencao_id } = {}) {
+  const corpo = { tratamento, manutencao_id: manutencao_id === '' || manutencao_id == null ? null : manutencao_id };
+  const { data } = await api.post(`/frotas/checklists/${id}/tratar-pendencia`, corpo);
+  invalidateFrotasDashboardCache();
+  return data;
+}
+
+export async function desfazerTratamento(id) {
+  const { data } = await api.delete(`/frotas/checklists/${id}/tratar-pendencia`);
+  invalidateFrotasDashboardCache();
+  return data;
 }
 
 /**

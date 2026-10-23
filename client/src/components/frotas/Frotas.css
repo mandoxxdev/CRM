@@ -584,3 +584,9 @@
 .frota-fotos-mais .frota-fotos-botao-mais { min-height: 40px; padding: 6px 14px; font-size: 0.9rem; }
 .frota-fotos-coluna { display: inline-flex; align-items: center; gap: 6px; }
 .frota-fotos-mais-n { font-weight: 600; font-size: 0.85rem; }
+
+/* Frota Etapa 6 (RN-F6.06/07): pendencia tratada pelo gestor — verde discreto, ao lado das situacoes. */
+.frotas-badge-situacao-tratada { background: rgba(100, 116, 139, 0.15); color: #15803d; }
+.frotas-pendencia-tratada { font-size: 0.8rem; color: var(--gmp-text-light); margin-top: 4px; max-width: 360px; white-space: normal; }
+.frotas-btn-pendencia { padding: 4px 10px; font-size: 0.8rem; white-space: nowrap; }
+.frotas-alert-item .frotas-btn-pendencia { margin-top: 6px; }

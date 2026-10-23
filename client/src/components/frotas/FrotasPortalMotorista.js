@@ -67,6 +67,11 @@ export function dataLegivel(valor) {
   return m[4] ? `${dia} às ${m[4]}:${m[5]}` : dia;
 }
 
+/** Frota Etapa 6 (RN-F6.08): "Tratada em DD/MM/AAAA às HH:MM: <texto>". */
+export function textoDaTratadaPortal(r) {
+  return `Tratada em ${dataLegivel(r.pendencia_tratada_em)}: ${r.pendencia_tratamento || ''}`;
+}
+
 const numeroOuNulo = (v) => (v === '' || v == null ? null : Number(v));
 
 /**
@@ -589,6 +594,7 @@ function MeusRegistros({ dados, podeRegistrar, onMudou }) {
         <ul className="portal-lista">
           {registros.map((r) => {
             const sit = SITUACAO[r.status_geral];
+            const tratada = !!r.pendencia_tratada_em;
             return (
               <li key={`r${r.id}`} className="portal-lista-item">
                 <div>
@@ -598,9 +604,13 @@ function MeusRegistros({ dados, podeRegistrar, onMudou }) {
                     {r.horimetro != null ? ` · ${numeroPt(r.horimetro)} h` : ''}
                     {r.horimetro == null && r.km != null ? ` · ${numeroPt(r.km)} km` : ''}
                   </div>
+                  {/* Frota Etapa 6 (RN-F6.08): o gestor tratou a pendencia — o motorista so le (sem autor nem manutencao, B63). */}
+                  {tratada && <div className="portal-lista-sub portal-pendencia-tratada">{textoDaTratadaPortal(r)}</div>}
                   <FotosDoLancamento entidade="registro" linha={r} podeRegistrar={podeRegistrar} onMudou={onMudou} />
                 </div>
-                {sit && <span className={`portal-situacao situacao-${sit.classe}`}>{sit.rotulo}</span>}
+                {tratada
+                  ? <span className="portal-situacao situacao-tratada">PENDÊNCIA · tratada</span>
+                  : sit && <span className={`portal-situacao situacao-${sit.classe}`}>{sit.rotulo}</span>}
               </li>
             );
           })}

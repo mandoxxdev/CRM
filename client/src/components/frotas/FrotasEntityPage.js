@@ -215,6 +215,8 @@ const FrotasEntityPage = ({ entityKey }) => {
                       {podeAlterar && (
                       <td>
                         <div className="frotas-actions">
+                          {/* Frota Etapa 6: acoes proprias da entidade (componente opcional; recebe a linha e o recarregar da lista). */}
+                          {config.AcoesDaLinha && <config.AcoesDaLinha row={row} recarregar={loadRows} />}
                           {!config.readOnlyEdit && (
                             <button type="button" className="frotas-action-btn" onClick={() => openEdit(row)} title="Editar">
                               <FiEdit size={14} />

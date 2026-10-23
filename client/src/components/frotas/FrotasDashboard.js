@@ -10,6 +10,7 @@ import {
   FiUsers, FiTool, FiDroplet, FiFileText, FiMap, FiClipboard, FiBarChart2, FiList, FiDownload, FiSmartphone,
 } from 'react-icons/fi';
 import FrotasPageHeader from './FrotasPageHeader';
+import { JanelaTratarPendencia } from './TratarPendencia';
 import './Frotas.css';
 
 const QUICK_LINKS = [
@@ -35,6 +36,9 @@ const PainelDoGestor = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Frota Etapa 6 (RN-F6.07): o alerta de checklist com pendencia aberto na janela de tratar (so o ADMIN_FROTA ve o botao).
+  const [tratando, setTratando] = useState(null);
+  const ehGestor = perfilFrota(getEffectiveUser(user)) === PERFIS_FROTA.ADMIN_FROTA;
 
   const load = useCallback(async (force = false) => {
     setLoading(true);
@@ -202,6 +206,11 @@ const PainelDoGestor = () => {
                         {a.dias_restantes < 0 ? `Vencido há ${Math.abs(a.dias_restantes)} dia(s)` : `${a.dias_restantes} dia(s) restantes`}
                       </div>
                     )}
+                    {a.tipo === 'checklist' && ehGestor && a.referencia_id && (
+                      <button type="button" className="frotas-btn frotas-btn-secondary frotas-btn-pendencia" onClick={() => setTratando(a)}>
+                        Tratar pendência
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -223,6 +232,16 @@ const PainelDoGestor = () => {
           </div>
         </div>
       </div>
+
+      {tratando && (
+        <JanelaTratarPendencia
+          registroId={tratando.referencia_id}
+          veiculoId={tratando.veiculo_id}
+          placa={tratando.placa}
+          onFechar={() => setTratando(null)}
+          onTratada={() => load(true)}
+        />
+      )}
 
       {data?.ultimosAbastecimentos?.length > 0 && (
         <div className="frotas-section" style={{ marginTop: 20 }}>

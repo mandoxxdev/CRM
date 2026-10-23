@@ -4,6 +4,7 @@
 
 import { hojeLocalISO } from '../../utils/dataLocal';
 import { ColunaFotos } from './FotosFrota';
+import { AcoesDaPendencia, SituacaoTratadaGestor, pendenciaTratada } from './TratarPendencia';
 
 // Etapa 164 (RN-164.06, B1048): as datas padrao dos formularios sao o dia LOCAL (antes o toISOString, o dia UTC: das 21h, amanha)
 const TIPO_REGISTRO = { saida: 'Saída', retorno: 'Retorno', inspecao: 'Inspeção' };
@@ -399,6 +400,8 @@ export const ENTITY_CONFIGS = {
     newLabel: 'Novo Checklist',
     searchPlaceholder: 'Buscar por placa...',
     readOnlyEdit: true,
+    // Frota Etapa 6 (RN-F6.06): Tratar pendência / Desfazer tratamento na linha (so ADMIN_FROTA — o componente confere).
+    AcoesDaLinha: AcoesDaPendencia,
     columns: [
       { key: 'data_checklist', label: 'Data' },
       { key: 'placa', label: 'Placa', bold: true },
@@ -408,7 +411,9 @@ export const ENTITY_CONFIGS = {
         : (r.km != null ? Number(r.km).toLocaleString('pt-BR') : '-')) },
       // Frota Etapa 1 (T7, RN-F1.02/03): as 3 situacoes da planilha. Linha anterior a etapa (sem status_geral) cai no
       // `aprovado` antigo, que so sabia sim/nao.
+      // Frota Etapa 6 (RN-F6.06): pendencia tratada -> etiqueta "PENDÊNCIA · tratada" e o texto do tratamento embaixo.
       { key: 'status_geral', label: 'Situação', render: (r) => {
+        if (pendenciaTratada(r)) return <SituacaoTratadaGestor row={r} />;
         const s = situacaoDoChecklist(r);
         return <span className={`frotas-badge frotas-badge-situacao-${s.classe}`}>{s.rotulo}</span>;
       } },
