@@ -625,7 +625,7 @@ onde divergirem** (as Emendas da Fase 2 incorporadas):
   (4) O (h) sabota `cobre` e o aviso juntos: pelo contrato, `cobre: false` sempre vem com `NENHUM_ENDERECO_COBRE`, então cada guarda sozinha é
   redundante com a outra.
 
-### T3 — feita (`T3HASH`)
+### T3 — feita (`4c1f059a`)
 
 - `client/src/utils/coletaTexto.js` (novo, puro): `fmtQtd`, `fmtData`, `textoPegarEm`, `textoAvisoPegarEm`, `textoAlertaPegarEm` (as três frases da
   188 com o fix-round, B1268). `textoPegarEm` termina em ` — já vem escolhido no 'Sai de' ao separar` com `cobre: true` **e** sem separado
@@ -666,6 +666,43 @@ onde divergirem** (as Emendas da Fase 2 incorporadas):
   `Solicitante: ⟨nome⟩ · ⟨setor⟩ · Urgência: ⟨rótulo⟩` (o plano só dizia "solicitante/setor e urgência"). (3) Qtd testada com
   `9999999999.999` (o `fmtQtd` da M4 tem 3 casas: `9999999999.9999` vira `10.000.000.000`). (4) O título da seção é f14, a linha "Fila
   carregada em…" e o subtítulo f9, o bloco "Sem endereço sugerido" f10; a parada sem endereço não é partida (mesma régua).
+
+### T4 — feita (`T4HASH`)
+
+- **Servidor** — `server/tests/api/preSelecaoColetaIntegracao.api.test.js` **7/0** (cadastro e entradas pela rota, criar como S sem perfil,
+  aprovar como ADMIN, separar e entregar como ALMOXARIFE; o material grava a padrão XP-01, emenda M5):
+  1. `[T4 rota, RN-189.08]` fila e rota nova com o **mesmo** `pegar_em` XB-01/L1 5; separar com o par → planejada XB-01/L1; entregar sem chave
+     → XB-01/L1 = 1, XP-01/L2 = 9, nenhuma linha sem lote ≠ 0, 0 trocas.
+  2. `[controle histórico]` (a sonda `f2r188-sonda2`): separar sem chave → L1 6, L2 9 e `{ loc: 'XP-01', lote: null, quantidade: -5 }` — com a
+     padrão gravada a linha sem lote nasce **na padrão** (M5).
+  3. `[RN-189.07]` dica velha: saída avulsa de 4 → 400 com a literal (`… O saldo em XB-01 (2) não cobre a quantidade (5) …`), nada gravado; sem
+     chave → 200.
+  4. `[T4 serviço]` `sugestaoDeColetaDaRequisicao` = a rota = o recorte de `listarFilaSeparacao` (e outra requisição dá outra sugestão).
+  5. `[C1/RN-189.03]` separou 3 de XA-01 → a sugestão XA-01 (1) com `PLANEJADA_NAO_COBRE`; separar 1 de XA-01 → 200, 0 trocas, planejada mantida.
+  6. `[I1 da Fase 2]` (a sonda `f2r189-sonda1`) duas rodadas sem entregar → **1 troca `SEPARACAO` automática de 3** e a linha sem lote −6 na
+     padrão (o custo da B1262); e `entregando entre as rodadas` → 0 trocas, L1 0, L2 0, nenhuma linha sem lote (a segunda rodada recebe
+     XP-01/L2 3 `cobre: true`, sem aviso — a janela pré-seleciona de novo).
+- **Tela** — `client/src/components/almoxarifado/RequisicoesPreSelecaoFluxo.test.js` **2/2** (mock HTTP com estado):
+  6. "Iniciar Separação" → o "Sai de" vem em `2:7` → o PUT leva `localizacao_origem_id: 2, lote_id: 7` → "Entregar escolhendo de onde sai…" →
+     a janela de entrega abre com `2:7` (a planejada), sem `entrega-motivo-troca-1` → o PUT da entrega `{ item_id, quantidade_atendida: 5,
+     localizacao_origem_id: 2, lote_id: 7 }`, sem `origem_automatica` nem `motivo_substituicao`.
+  7. A fila → "Imprimir lista de coleta" → o gerador **real** (jspdf com o gravador) salva `lista-coleta-REQ-007.pdf`; os endereços saem
+     ZA, ZB, ZC (a `ordem_coleta`; os itens estão ZC, ZA, ZB); nenhum `api.get` a mais.
+- Controles (mesmo harness; todos restauraram ao md5 de antes):
+  | Sabotagem | Caiu | Asserção |
+  |---|---|---|
+  | (q) a pré-seleção desligada (`if (false)` no lugar de `if (valor)`) | o 6 da tela; **o T4 do servidor continua 7/0** com a mesma sabotagem | `''` × `'2:7'` |
+  | (r) `porRequisicao = false` **e** `fila[0]` | `[T4 serviço]` e mais três cujo R não é o primeiro da fila (C1 e os dois do I1) | o recorte de outra requisição |
+  | (s) a tabela pela ordem de `itens` | o 7 da tela | a ordem dos endereços |
+- O caso 1 do servidor passou de primeira: é comportamento do servidor que já existia (T1 só acrescentou a leitura); o caso 2 é o controle
+  embutido — o mesmo fixture sem a chave dá −5 sem lote, então o 1 mede o que a pré-seleção muda. O (q) prova que só a tela (o 6) sabe se a
+  pré-seleção está ligada.
+- **Divergências:** (1) **"Separar e entregar" não existe como gesto alcançável.** O plano (e a Fase 0, `:344`/`:792-796`) contava com o ramo
+  `entregaAposSeparar` de `handleCompletarEntrega`; ele só roda quando **nada** é entregável, mas o botão "Completar Entrega" só aparece com
+  algo entregável (`temPendenteComEstoque = temEntregavel`). O caso 6 vai por "Iniciar Separação" → "Entregar escolhendo de onde sai…" (o
+  caminho que existe); a entrega de um clique ("Confirmar Entrega e Baixar Estoque") não manda origem e sai da planejada no servidor — o caso 1.
+  O ramo morto **não** foi mexido (fora do escopo; registrar na letra C do fechamento). (2) O caso 6 do plano do servidor virou dois (o I1 e o
+  "entregando entre as rodadas"), como a emenda I1 pedia.
 
 ## Próxima tarefa detalhada
 
