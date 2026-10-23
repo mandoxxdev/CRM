@@ -24,7 +24,7 @@
   .legenda i { display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
   table { border-collapse:collapse; width:100%; font-size:15px; } td, th { border-bottom:1px solid var(--linha); padding:8px; text-align:left; }
   .nota { font-size:14px; color:var(--suave); }
-  @media print { main { padding:0; } .item, figure { break-inside:avoid; } }
+  @media print { main { padding:0; } h2, h3 { break-after:avoid; } figure { break-inside:avoid; } figure img { width:auto; max-width:100%; max-height:90mm; } }
 </style>
 </head>
 <body>
@@ -97,7 +97,7 @@
     “Anexos”) para guardar o PDF ou a foto junto dele. Na remessa a terceiros, o clipe fica em cada
     item, para o certificado ir para a peça certa. Quem acaba de registrar um recebimento já cai na
     tela onde anexa a nota, com ela ainda na mão.</p>
-    <figure><img src="prints/anexos-material.png" alt="Lista de materiais com o clipe e a janela Anexos do material aberta"><figcaption>A ficha técnica guardada no próprio material.</figcaption></figure>
+    <figure><img src="prints/anexos-material.png" alt="Lista de materiais com o clipe e a janela Anexos do material aberta"><figcaption>A janela de anexos do material: escolha o tipo (certificado, ficha técnica…) e anexe o PDF ou a foto.</figcaption></figure>
   </div>
 
   <div class="item">
@@ -123,7 +123,7 @@
     GMP no topo. Toda tabela vira uma lista de cartões, com o nome da coluna ao lado de cada valor.
     A lista de Clientes foi a primeira redesenhada como aplicativo de verdade: iniciais coloridas,
     nome em destaque e os botões à mão. No computador, nada mudou.</p>
-    <figure><img src="prints/celular-clientes.png" alt="Lista de Clientes no celular com cartões e a barra de navegação embaixo"><figcaption>Clientes no celular: lista de aplicativo e barra embaixo.</figcaption></figure>
+    <figure><img style="max-width:300px" src="prints/celular-clientes.png" alt="Lista de Clientes no celular com cartões e a barra de navegação embaixo"><figcaption>Clientes no celular: lista de aplicativo e barra embaixo.</figcaption></figure>
   </div>
 
   <h2>O que fizemos por baixo — e por que importa</h2>
