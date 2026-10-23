@@ -357,6 +357,76 @@ describe('Etapa 189 (T2): a janela de separação pré-seleciona o endereço sug
     expect(selectDe(1).value).toBe('1:');
     expect(fraseDe(1).textContent).toBe(SUGERIDO);
   });
+
+  // Fase 5 da 189 (achado 1, sonda J2): o foco da janela recarrega o detalhe; se um item de OUTRO material deixa de ser separavel,
+  // a chave dos materiais muda. Antes do fix-round isso zerava todas as escolhas e a pre-selecao, e a escolha do almoxarife voltava
+  // para a sugestao, com a frase "Sugerido…" (RN-189.05 vale tambem depois de recarregar).
+  const doisMateriais = () => {
+    requisicao = aprovada([{}, { material_id: 20, material_codigo: 'MAT-2', quantidade_solicitada: 1 }]);
+    sugestaoImpl = () => Promise.resolve(sugestao(sugItem(1, pegar(PAR.B02, 5)), sugItem(2, pegar(PAR.A01, 1))));
+  };
+  const buscasSugestao = () => api.get.mock.calls.filter((c) => c[0] === '/almoxarifado/requisicoes/55/sugestao-coleta').length;
+  const outroSeparaOItem2 = async () => {
+    requisicao = { ...requisicao, itens: requisicao.itens.map((i) => (i.id === 2 ? { ...i, quantidade_separada: 1 } : i)) };
+    await act(async () => { window.dispatchEvent(new Event('focus')); });
+    await flush();
+    await flush();
+  };
+
+  test('[Fase 5, J2] recarregar com outro material saindo da janela -> a escolha do almoxarife no item 1 continua', async () => {
+    doisMateriais();
+    await renderizar();
+    await clicar('Iniciar Separação');
+    expect(selectDe(1).value).toBe('2:7');
+    expect(selectDe(2)).not.toBeNull();
+    escolher(selectDe(1), '1:');
+    expect(fraseDe(1)).toBeNull();
+    const antes = buscasSugestao();
+    await outroSeparaOItem2();
+    // Premissa: a chave mudou de verdade (o item 2 saiu e a sugestao foi buscada de novo) — senao o teste nao prova nada.
+    expect(selectDe(2)).toBeNull();
+    expect(buscasSugestao()).toBe(antes + 1);
+    expect(selectDe(1).value).toBe('1:');
+    expect(fraseDe(1)).toBeNull();
+    await clicar('Confirmar Separação');
+    expect(putsSeparacao()[0][1].itens_separados)
+      .toEqual([{ item_id: 1, quantidade_separada: 5, localizacao_origem_id: 1 }]);
+  });
+
+  test('[Fase 5, J2] recarregar com outro material saindo da janela -> o item pre-selecionado e nao tocado continua com a frase', async () => {
+    doisMateriais();
+    await renderizar();
+    await clicar('Iniciar Separação');
+    expect(selectDe(1).value).toBe('2:7');
+    const antes = buscasSugestao();
+    await outroSeparaOItem2();
+    expect(selectDe(2)).toBeNull();
+    expect(buscasSugestao()).toBe(antes + 1);
+    expect(selectDe(1).value).toBe('2:7');
+    expect(fraseDe(1).textContent).toBe(SUGERIDO);
+  });
+
+  test('[Fase 5, J2] item que saiu da janela e voltou na mesma abertura -> e decidido de novo (so fica a escolha de quem continuou)', async () => {
+    doisMateriais();
+    const orig = api.get.getMockImplementation();
+    api.get.mockImplementation((url) => (url === '/almoxarifado/estoque/20/saldos'
+      ? Promise.resolve({ data: [{ id: 9, material_id: 20, localizacao_id: 1, localizacao_codigo: 'A-01', lote_id: null, lote: null, quantidade: 5 }] })
+      : orig(url)));
+    await renderizar();
+    await clicar('Iniciar Separação');
+    expect(selectDe(2).value).toBe('1:');
+    escolher(selectDe(2), '');
+    await outroSeparaOItem2();
+    expect(selectDe(2)).toBeNull();
+    // A separacao do item 2 foi desfeita: ele volta para a janela, sem a escolha velha.
+    requisicao = { ...requisicao, itens: requisicao.itens.map((i) => (i.id === 2 ? { ...i, quantidade_separada: 0 } : i)) };
+    await act(async () => { window.dispatchEvent(new Event('focus')); });
+    await flush();
+    await flush();
+    expect(selectDe(2).value).toBe('1:');
+    expect(fraseDe(2).textContent).toBe(SUGERIDO);
+    expect(selectDe(1).value).toBe('2:7');
+  });
 });
 
 // As opções do "Sai de" como a tela as monta (linhas com endereço e quantidade > 0).

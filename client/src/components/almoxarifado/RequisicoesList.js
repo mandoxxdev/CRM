@@ -67,6 +67,13 @@ const maxQtdSeparacao = (item) => Math.min(
   Math.max(0, Number(item.quantidade_solicitada) - getSeparado(item)),
   saldoSeparavel(item)
 );
+// Etapa 189 (Fase 5, achado J2): recorta um mapa { [itemId]: … } da janela de separação aos itens que continuam nela (separável > 0).
+// Recarregar o detalhe com a janela aberta (o foco da janela) muda a chave dos materiais quando um item de outro material sai; antes,
+// isso zerava todas as escolhas e a pré-seleção voltava a escolher a sugestão por cima da escolha do almoxarife (RN-189.05).
+const soDosItensNaSeparacao = (mapa, itens) => {
+  const vivos = new Set((itens || []).filter((i) => maxQtdSeparacao(i) > 0).map((i) => String(i.id)));
+  return Object.fromEntries(Object.entries(mapa || {}).filter(([id]) => vivos.has(String(id))));
+};
 const maxQtdEntrega = (item) => {
   if (item.quantidade_entregavel != null) {
     return Math.max(0, Number(item.quantidade_entregavel) || 0);
@@ -379,6 +386,9 @@ const RequisicoesList = () => {
   const [sugestaoSeparacao, setSugestaoSeparacao] = useState(null);
   const [preSelecao, setPreSelecao] = useState({});
   const sugestaoSeqRef = useRef(0);
+  // Fase 5 da 189 (J2): a abertura da separação que cada efeito viu por último (`"<id>|S"` ou `""`).
+  const aberturaSaldosRef = useRef('');
+  const aberturaSugestaoRef = useRef('');
   const [entregaAposSeparar, setEntregaAposSeparar] = useState(false);
   const [saving, setSaving] = useState(false);
   // Etapa 15: etapa opcional de assinatura do recebedor. Guarda reqId + numero (e não o
@@ -469,13 +479,19 @@ const RequisicoesList = () => {
   let materiaisEntregaKey = '';
   if (showEntregar && detalhe) materiaisEntregaKey = `E:${materiaisDoModal((i) => maxQtdEntrega(i) > 0)}`;
   else if (showSeparar && detalhe) materiaisEntregaKey = `S:${materiaisDoModal((i) => maxQtdSeparacao(i) > 0)}`;
+  // Etapa 189 (Fase 5, J2): a chave muda também DENTRO da mesma abertura da separação (o foco recarrega o detalhe e um item sai).
+  // Mesma abertura = a anterior e a nova são a separação da mesma requisição: aí só sai a escolha dos itens que deixaram a janela.
+  // Abrir, fechar, ou passar para a entrega continua zerando tudo.
+  const aberturaSeparacao = materiaisEntregaKey.startsWith('S:') && detalhe ? `${detalhe.id}|S` : '';
   useEffect(() => {
     const seq = ++saldosEntregaSeqRef.current;
+    const mesmaAbertura = aberturaSeparacao !== '' && aberturaSeparacao === aberturaSaldosRef.current;
+    aberturaSaldosRef.current = aberturaSeparacao;
     setSaldosEntrega({});
     setSaldosEntregaFalhos({});
     setOrigensEntrega({});
     setMotivosSubstituicao({});
-    setOrigensSeparacao({});
+    setOrigensSeparacao((prev) => (mesmaAbertura ? soDosItensNaSeparacao(prev, detalhe?.itens) : {}));
     const materiais = materiaisEntregaKey.slice(2);
     if (!materiais) return;
     materiais.split(',').forEach(async (materialId) => {
@@ -492,6 +508,9 @@ const RequisicoesList = () => {
       if (falhou) setSaldosEntregaFalhos((prev) => ({ ...prev, [materialId]: true }));
       setSaldosEntrega((prev) => ({ ...prev, [materialId]: rows }));
     });
+    // `aberturaSeparacao` e `detalhe` andam com a chave (a abertura muda só quando ela muda); reagir ao detalhe recarregado seria refazer
+    // a busca a cada foco.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [materiaisEntregaKey]);
 
   // Etapa 65 (Fase 2, CRÍTICO 2): o modal de separação abria com "Sai de" automático — a rodada de um
@@ -519,8 +538,12 @@ const RequisicoesList = () => {
   const sugestaoKey = materiaisEntregaKey.startsWith('S:') && detalhe ? `${detalhe.id}|${materiaisEntregaKey}` : '';
   useEffect(() => {
     const seq = ++sugestaoSeqRef.current;
+    const aberturaSug = sugestaoKey ? sugestaoKey.split('|')[0] : '';
+    const mesmaAbertura = aberturaSug !== '' && aberturaSug === aberturaSugestaoRef.current;
+    aberturaSugestaoRef.current = aberturaSug;
     setSugestaoSeparacao(null);
-    setPreSelecao({});
+    // Fase 5 (J2): na mesma abertura, a decisão dos itens que continuam na janela fica (a pré-seleção é uma vez por abertura).
+    setPreSelecao((prev) => (mesmaAbertura ? soDosItensNaSeparacao(prev, detalhe?.itens) : {}));
     if (!sugestaoKey) return;
     const id = sugestaoKey.split('|')[0];
     (async () => {
@@ -538,6 +561,8 @@ const RequisicoesList = () => {
       if (sugestaoSeqRef.current !== seq) return;
       setSugestaoSeparacao(mapa);
     })();
+    // `detalhe` só é lido para recortar a decisão; a busca acompanha a chave, não cada recarga do detalhe.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sugestaoKey]);
 
   // Etapa 189 (T2, RN-189.02..05): com a sugestão e os saldos na mão, decide UMA vez por item e abertura. Item com chave em
