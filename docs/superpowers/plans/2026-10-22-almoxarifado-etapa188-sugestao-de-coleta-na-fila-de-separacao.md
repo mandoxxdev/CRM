@@ -1,6 +1,7 @@
 # Etapa 188 — A fila de separação sugere de onde pegar cada item e em que ordem andar
 
-> **Status:** 📝 **plano escrito (2026-10-22), Fase 2 feita (1 Crítico, 3 Importantes, 5 Menores — ver "Emendas da Fase 2"; aplicar no contrato antes de T1).** Nenhuma task executada. Feature **05** (separação e picking),
+> **Status:** 📝 **plano escrito (2026-10-22), Fase 2 feita (1 Crítico, 3 Importantes, 5 Menores — ver "Emendas da Fase 2"; aplicar no contrato antes de T1).** **T1–T4 feitas (2026-10-22, ver "Execução"); falta a Fase 5 (revisão adversarial) e o
+> fechamento.** Feature **05** (separação e picking),
 > item `specs/modulo-almoxarifado/05-separacao-picking/README.md:63` — *"Sugestão de rota (ordenar itens pela hierarquia de
 > localizações)"*.
 > Antes: Etapa 187 (ferramenta baixada) — **não tocar** nos arquivos dela (outra sessão revisa a 187 em paralelo). Esta etapa mexe em
@@ -522,6 +523,34 @@ limite → vermelho.
   - (I1) sem o sufixo do "Sai de": caem os três que comparam a linha inteira (com lote, sem lote, PLANEJADA). ✔
   - (M5) sem os parênteses do caminho: caem `linha com lote e validade` e `PLANEJADA_NAO_COBRE` (o de um segmento continua verde). ✔
   - (não reordena) `ordem_coleta` ordenada por `caminho` na tela: cai **só** `ordem de coleta com 2 paradas, na ordem do JSON`. ✔
+
+### T4 — feita (`f35321ac`)
+
+- Teste novo `server/tests/api/filaSugestaoColetaIntegracao.api.test.js` — **6** cenários, usuários reais por header (molde da 127):
+  cadastro **pela rota** (`POST /almoxarifados`, `POST /localizacoes` com `parent_id`), entrada com lote pelo motor, criar
+  (`POST /api/requisicoes-material`) e aprovar pela rota, separar por `PUT /requisicoes/:id/separacao`.
+  1. `[T4 rota]` `pegar_em` ZB-01/L1 5 `cobre` → separar o sugerido → 200, planejada (ZB-01, L1) → a fila de novo: ENTREGAR,
+     `origem_separacao_codigo` ZB-01, separável 0, `pegar_em` `null`, `ordem_coleta` `[]`.
+  2. `[T4 rota, RN-188.03]` a segunda requisição recebe ZA-03/L2 5 (caminho `ALM188 / ZA-01 / ZA-03`).
+  3. `[T4 servico]` `listarFilaSeparacao` direto = a rota (itens, `pegar_em`, aviso e `ordem_coleta`), com uma requisição de **duas
+     paradas** (ZB-01 pedida antes de ZA-01 → `ordem_coleta` invertida; a premissa lê pelo serviço).
+  4. `[T4 rota, RN-188.07]` dica velha: saída avulsa de 4 em ZB-01/V1 depois de listar → separar 5 do par → **400**
+     `E188I-n: O saldo em ZB-01 (2) não cobre a quantidade (5) — a saída tiraria de outros endereços` → a fila sugere ZA-03/V2.
+  5. `[T4 rota, C1]` a sonda `f2r188-sonda1` como teste: padrão ZP-01 20, ZA-01 4, ZB-01 10, item de 6; separa 3 de ZA-01 → a dica é
+     ZA-01 (livre 1, `cobre: false`, `PLANEJADA_NAO_COBRE`), nunca ZP-01; listar não grava substituição; **seguir a dica** (1 de ZA-01)
+     → 200 e **nenhuma** troca, planejada ZA-01 com 4; a fila de novo: separável 2, `pegar_em` `null`, `PLANEJADA_NAO_COBRE`.
+  6. `[T4 B821]` dois itens de 4 com 4 livres → separável 4 e 0 na ordem do pedido; separar 4+0 do sugerido → 200.
+- Verde de primeira (**6/0**) — esperado (integração sobre T1/T2 já feitas); por isso os controles:
+  - (j) `const planejado = new Map()` (ignorar o planejado): caem `[T4 rota, RN-188.03]` (`'ZB-01' !== 'ZA-03'`) e `[T4 rota, C1]`
+    (sem o planejado o livre de ZA-01 é 4 ≥ 3, aviso `null`). ✔
+  - (C1 guarda) `if (false && temPlanejada)`: cai **só** `[T4 rota, C1]` (aviso `null`; a dica seria a padrão). ✔
+  - (e) `ORDER BY … ir.id DESC`: cai **só** `[T4 B821]` (itens `[6, 5]`). ✔
+  - (rota) a rota devolvendo `ordem_coleta` invertida: cai **só** `[T4 servico]` na comparação rota × serviço. Na primeira versão o
+    controle **não** caiu (todas as `ordem_coleta` da fila tinham ≤ 1 parada — teste que não sabia falhar); acrescentei a requisição
+    de duas paradas, e a premissa passou a ler pelo serviço para o controle cair na asserção da comparação, não na premissa.
+- **Divergências do plano:** (1) a dica velha usa material novo no **mesmo** banco (não "banco limpo") — o saldo é por material, o
+  cadastro de endereços é o mesmo; (2) a saída avulsa precisa de `justificativa` (`movementRules`: "Saída exige OS, projeto, centro de
+  custo ou justificativa") e de `lote` (o plano já dizia); (3) a validade dos lotes é gravada por `UPDATE` (a entrada manual não grava).
 
 ## Próxima tarefa detalhada
 
