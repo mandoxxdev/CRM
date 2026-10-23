@@ -14,6 +14,7 @@ const FrotasEntityPage = ({ entityKey }) => {
   const [meta, setMeta] = useState(null);
   const [veiculos, setVeiculos] = useState([]);
   const [motoristas, setMotoristas] = useState([]);
+  const [usuarios, setUsuarios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState({});
@@ -26,11 +27,14 @@ const FrotasEntityPage = ({ entityKey }) => {
     const promises = [fetchFrotasMeta().catch(() => null)];
     if (config.needsVeiculos) promises.push(api.get('/frotas/veiculos').catch(() => ({ data: [] })));
     if (config.needsMotoristas) promises.push(api.get('/frotas/motoristas').catch(() => ({ data: [] })));
+    // Frota Etapa 1 (T7, F2-5): usuarios ativos com o motorista a que cada um ja esta ligado.
+    if (config.needsUsuariosVinculaveis) promises.push(api.get('/frotas/usuarios-vinculaveis').catch(() => ({ data: [] })));
     const results = await Promise.all(promises);
     setMeta(results[0]);
     let idx = 1;
     if (config.needsVeiculos) { setVeiculos(results[idx]?.data || []); idx += 1; }
-    if (config.needsMotoristas) { setMotoristas(results[idx]?.data || []); }
+    if (config.needsMotoristas) { setMotoristas(results[idx]?.data || []); idx += 1; }
+    if (config.needsUsuariosVinculaveis) { setUsuarios(Array.isArray(results[idx]?.data) ? results[idx].data : []); }
   }, [config]);
 
   const loadRows = useCallback(async () => {
@@ -102,7 +106,7 @@ const FrotasEntityPage = ({ entityKey }) => {
       Object.keys(payload).forEach((k) => {
         if (payload[k] === '') payload[k] = null;
       });
-      ['veiculo_id', 'motorista_id', 'tipo_id', 'ano', 'alerta_dias_antes', 'pontos', 'requisicao_almox_id', 'consumo_medio_esperado', 'horimetro_atual'].forEach((k) => {
+      ['veiculo_id', 'motorista_id', 'tipo_id', 'ano', 'alerta_dias_antes', 'pontos', 'requisicao_almox_id', 'consumo_medio_esperado', 'horimetro_atual', 'usuario_id'].forEach((k) => {
         if (payload[k] != null && payload[k] !== '') payload[k] = Number(payload[k]);
       });
       ['pneus_ok', 'oleo_ok', 'luzes_ok', 'freios_ok', 'extintor_ok', 'documentos_ok', 'limpeza_ok'].forEach((k) => {
@@ -126,6 +130,7 @@ const FrotasEntityPage = ({ entityKey }) => {
   };
 
   const renderCell = (col, row) => {
+    if (col.render) return col.render(row);
     const val = col.format ? col.format(row) : (row[col.key] ?? '-');
     if (col.badge) {
       const cls = String(row[col.key] || '').toLowerCase().replace(/\s/g, '_');
@@ -135,7 +140,7 @@ const FrotasEntityPage = ({ entityKey }) => {
     return val;
   };
 
-  const formFields = config.formFields(meta, form, setForm, veiculos, motoristas);
+  const formFields = config.formFields(meta, form, setForm, veiculos, motoristas, { usuarios, editing });
   const ehCampoTelefone = (key) => (config.camposTelefone || []).includes(key);
 
   if (!config) return <div className="frotas-page">Entidade não configurada.</div>;
@@ -265,7 +270,7 @@ const FrotasEntityPage = ({ entityKey }) => {
                             required={field.required}
                             onChange={(e) => setForm((f) => ({ ...f, [field.key]: e.target.value }))}
                           >
-                            <option value="">Selecione...</option>
+                            <option value="">{field.placeholder || 'Selecione...'}</option>
                             {(field.options || []).map((o) => (
                               <option key={o.value} value={o.value}>{o.label}</option>
                             ))}

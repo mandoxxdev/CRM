@@ -5,7 +5,18 @@
 import { hojeLocalISO } from '../../utils/dataLocal';
 
 // Etapa 164 (RN-164.06, B1048): as datas padrao dos formularios sao o dia LOCAL (antes o toISOString, o dia UTC: das 21h, amanha)
-const fmtBrl = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+const TIPO_REGISTRO = { saida: 'Saída', retorno: 'Retorno', inspecao: 'Inspeção' };
+const SITUACOES = {
+  OK: { rotulo: 'OK', classe: 'ok' },
+  PENDENCIA: { rotulo: 'PENDÊNCIA', classe: 'pendencia' },
+  INCOMPLETO: { rotulo: 'INCOMPLETO', classe: 'incompleto' },
+};
+export function situacaoDoChecklist(r) {
+  if (SITUACOES[r?.status_geral]) return SITUACOES[r.status_geral];
+  return r?.aprovado ? SITUACOES.OK : SITUACOES.PENDENCIA;
+}
+
+const fmtBrl = (v) =>new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
 export const ENTITY_CONFIGS = {
   veiculos: {
@@ -97,9 +108,11 @@ export const ENTITY_CONFIGS = {
     ],
     getDefaultForm: () => ({
       nome: '', cpf: '', cnh_numero: '', cnh_categoria: '', cnh_validade: '',
-      telefone: '', email: '', setor: '', status: 'ativo', observacoes: '',
+      telefone: '', email: '', setor: '', status: 'ativo', usuario_id: '', observacoes: '',
     }),
-    formFields: (meta) => [
+    // Frota Etapa 1 (T7, RN-F1.12): o usuario do sistema que entra no portal do motorista como este motorista.
+    needsUsuariosVinculaveis: true,
+    formFields: (meta, form, setForm, veiculos, motoristas, aux = {}) => [
       { key: 'nome', label: 'Nome *', required: true },
       { key: 'cpf', label: 'CPF' },
       { key: 'cnh_numero', label: 'Nº CNH' },
@@ -109,6 +122,18 @@ export const ENTITY_CONFIGS = {
       { key: 'email', label: 'E-mail', type: 'email' },
       { key: 'setor', label: 'Setor', type: 'select', options: (meta?.setores || []).map((s) => ({ value: s, label: s })) },
       { key: 'status', label: 'Status', type: 'select', options: [{ value: 'ativo', label: 'Ativo' }, { value: 'inativo', label: 'Inativo' }] },
+      {
+        key: 'usuario_id',
+        label: 'Usuário de acesso (portal do motorista)',
+        type: 'select',
+        // "— nenhum —" tem value '', que o handleSave troca por null: e assim que se desfaz o vinculo (F2-4).
+        placeholder: '— nenhum —',
+        options: (aux.usuarios || []).map((u) => {
+          const outro = u.motorista && u.motorista.id !== aux.editing?.id;
+          const email = u.email ? ` (${u.email})` : '';
+          return { value: u.id, label: `${u.nome}${email}${outro ? ` (ligado a ${u.motorista.nome})` : ''}` };
+        }),
+      },
       { key: 'observacoes', label: 'Observações', type: 'textarea', full: true },
     ],
   },
@@ -285,6 +310,7 @@ export const ENTITY_CONFIGS = {
       { key: 'data_saida', label: 'Saída' },
       { key: 'placa', label: 'Placa', bold: true },
       { key: 'motorista_nome', label: 'Motorista' },
+      { key: 'origem', label: 'Origem' },
       { key: 'destino', label: 'Destino' },
       { key: 'finalidade', label: 'Finalidade' },
       { key: 'km_rodado', label: 'KM rodado', format: (r) => (r.km_rodado != null ? r.km_rodado : '-') },
@@ -304,7 +330,7 @@ export const ENTITY_CONFIGS = {
     extraActions: true,
     getDefaultForm: () => ({
       veiculo_id: '', motorista_id: '', data_saida: '', data_retorno: '',
-      km_saida: '', km_retorno: '', destino: '', finalidade: '', setor: '',
+      km_saida: '', km_retorno: '', origem: '', destino: '', finalidade: '', setor: '',
       status: 'solicitada', observacoes: '',
     }),
     formFields: (meta, form, setForm, veiculos, motoristas) => [
@@ -314,6 +340,7 @@ export const ENTITY_CONFIGS = {
       { key: 'data_retorno', label: 'Data/hora retorno', type: 'datetime-local' },
       { key: 'km_saida', label: 'KM saída', type: 'number' },
       { key: 'km_retorno', label: 'KM retorno', type: 'number' },
+      { key: 'origem', label: 'Origem' },
       { key: 'destino', label: 'Destino' },
       { key: 'finalidade', label: 'Finalidade' },
       { key: 'setor', label: 'Setor', type: 'select', options: (meta?.setores || []).map((s) => ({ value: s, label: s })) },
@@ -333,8 +360,15 @@ export const ENTITY_CONFIGS = {
     columns: [
       { key: 'data_checklist', label: 'Data' },
       { key: 'placa', label: 'Placa', bold: true },
+      { key: 'tipo_registro', label: 'Tipo', format: (r) => TIPO_REGISTRO[r.tipo_registro] || '-' },
       { key: 'motorista_nome', label: 'Motorista' },
-      { key: 'aprovado', label: 'Resultado', format: (r) => (r.aprovado ? '✓ Aprovado' : '✗ Pendências') },
+      { key: 'km', label: 'KM', format: (r) => (r.km != null ? Number(r.km).toLocaleString('pt-BR') : '-') },
+      // Frota Etapa 1 (T7, RN-F1.02/03): as 3 situacoes da planilha. Linha anterior a etapa (sem status_geral) cai no
+      // `aprovado` antigo, que so sabia sim/nao.
+      { key: 'status_geral', label: 'Situação', render: (r) => {
+        const s = situacaoDoChecklist(r);
+        return <span className={`frotas-badge frotas-badge-situacao-${s.classe}`}>{s.rotulo}</span>;
+      } },
       { key: 'observacoes', label: 'Observações' },
     ],
     needsVeiculos: true,
