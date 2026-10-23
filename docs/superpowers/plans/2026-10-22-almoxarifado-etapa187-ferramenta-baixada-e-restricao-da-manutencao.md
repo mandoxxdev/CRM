@@ -167,7 +167,7 @@ res.json(ferramentas.map((f) => ({
 |---|---|---|---|
 | T1 | Servidor: a baixada não calibra nem edita (RN-187.01..04) | **tronco** | ✅ `3d45817f` |
 | T2 | Servidor: `restricao` no GET + lista branca (RN-187.05..07) | **tronco** (congela o JSON da lista; mesmo arquivo da T1 — depois dela) | ✅ `130caaca` |
-| T3 | Tela: selo, aviso no Emprestar, Editar fora da baixada (RN-187.08) | galho (contra o contrato acima; só o client) | — |
+| T3 | Tela: selo, aviso no Emprestar, Editar fora da baixada (RN-187.08) | galho (contra o contrato acima; só o client) | ✅ `c643054e` |
 | T4 | Integração pela rota e pelo serviço + fixture real para o client | depois de T1, T2, T3 | — |
 | F5 | Revisão adversarial (Fase 5) e fix-round | depois da T4 | — |
 | — | Fechamento (`fechar-etapa`) | por último | — |
@@ -516,6 +516,25 @@ texto das RN, do contrato e das tasks; o executor não precisa reconciliar — o
   - (7) `emprestarComTermo` recusando a DISPONIVEL com `restricao` → cai **só** `[RN-187.07]` (`400 {"error":"restrita"}`). ✔
 - Vizinhos sem mudar asserção: `ferramentasListaSemColaborador` 4/0, `toolManutencaoRetorno` 17/0, `termoFerramentaEmprestimo` 13/0,
   `termoFerramentaPontaAPonta` 12/0, `termoFerramentaVerificacao` 16/0, `termoFerramentaVersao` 10/0.
+
+### T3 — feita (`c643054e`)
+
+- Executada **na main, sequencial** (não em worktree): a 186 já tinha fechado (`a96546c4`) e nenhuma outra sessão sabotava os arquivos.
+- 5 testes novos no `describe('… Etapa 187 …')` de `FerramentasAlmoxarifado.test.js`: `[RN-187.08a]` (selo + texto; sem permissão
+  continua), `[RN-187.08a] baixada` (sem selo; metade positiva), `[RN-187.08b]` (aviso literal + um POST), `[RN-187.08c]` (sem restrição, sem
+  aviso — a metade positiva do 08b virou teste próprio), `[RN-187.08d]` (baixada sem Editar; os seis outros com). Emendas de teste existente:
+  `RN-177.10` (`:825` → `toBeFalsy()` com o comentário `Etapa 187 (B1242)`) e o nome do `RN-175.01` (*"… salvo Baixada"*).
+- Vermelho antes: **5 falharam / 54** — os quatro do 08a/08b/08d e o `RN-177.10` emendado; o 08c passou de primeira (é a metade negativa).
+  Verde: **59/59**.
+- Comentários corrigidos (M5/I3): o cabeçalho (*"calibracao nao tem restricao de status"*) e o de `abrirEditar` (*"em qualquer status"*).
+- Aviso do Emprestar: `<p role="note" className="almox-badge almox-badge-baixo">` (a classe só dá a cor; não é selo de teste).
+- **Controles positivos** (perl, âncora = 1, md5 `42fd66976a33` antes e restaurado em todos, `cmp`):
+  - (A) selo sem `f.status !== 'BAIXADA'` → cai **só** `[RN-187.08a] baixada`. ✔
+  - (B) aviso lendo `restricao?.texto` → cai **só** `[RN-187.08b]`. ✔
+  - (C) `confirmarEmprestar` com `if (modal.ferramenta.restricao) return;` → cai **só** `[RN-187.08b]`, na asserção `postsEmprestar()
+    toHaveLength(1)` (*Received length: 0*). ✔
+  - (D) Editar de volta em toda linha → caem `[RN-187.08d]` e o `RN-177.10` emendado. ✔
+  - (E) selo sob `podeEscrever` → cai **só** `[RN-187.08a]`, na linha da metade **sem permissão** (`:1115`, o `selo(restrita)` nulo). ✔
 
 ## Próxima tarefa detalhada
 
