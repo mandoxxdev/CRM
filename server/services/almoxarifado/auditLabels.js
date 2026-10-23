@@ -240,6 +240,8 @@ const GRUPOS_ACAO = congelarGrupos([
   { rotulo: 'Ocorrência', verbos: ['OCORRENCIA'] },
   { rotulo: 'Expiração', verbos: ['EXPIRACAO'] },
   { rotulo: 'Liberação por vencimento', verbos: ['LIBERACAO_VENCIMENTO'] },
+  { rotulo: 'Validade preenchida', verbos: ['VALIDADE_PREENCHIDA'] }, // Etapa 190 (RN-190.05): a Entrada preencheu o lote sem validade
+  { rotulo: 'Validade redefinida', verbos: ['VALIDADE_REDEFINIDA'] }, // Etapa 190 (RN-190.06b): lote vazio, validade trocada
   { rotulo: 'Reenvio', verbos: ['REENVIAR'] },
   { rotulo: 'Estorno de entrada', verbos: ['ESTORNO_ENTRADA'] },
   { rotulo: 'Estorno de saída', verbos: ['ESTORNO_SAIDA'] },

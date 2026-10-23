@@ -134,6 +134,64 @@ async function criarOuObterLote(db, user, dados) {
 }
 
 /**
+ * Etapa 190 (RN-190.05/08, B1273/B1274): a Entrada manual preenche a validade de um lote que nao tinha. Guarda `IS NULL` no WHERE:
+ * quem gravou a validade entre a leitura do motor e esta escrita vence, e a funcao devolve a que esta gravada (`atual`) em vez de
+ * sobrescrever. O motor chama POR ESTE OBJETO DO MODULO (o teste de corrida substitui a funcao). A auditoria nao derruba (o livro ja
+ * gravou a entrada). Erro do UPDATE propaga — quem chama (o motor, depois do livro) e que nao deixa a falha virar 500 (Fase 2, I-1).
+ */
+async function preencherValidadeSeVazia(db, user, loteId, dataISO, { movimentoId = null } = {}) {
+  const claim = await dbGet(db, `UPDATE lotes_almoxarifado SET data_validade = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND data_validade IS NULL RETURNING id`, [dataISO, loteId]);
+  if (!claim) {
+    const atual = await getLote(db, loteId);
+    return { preenchida: false, atual: atual ? atual.data_validade : null };
+  }
+  await registrarAuditoriaDoAto(db, {
+    entidade: 'lote', entidade_id: loteId, acao: 'VALIDADE_PREENCHIDA',
+    usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
+    dados_anteriores: { data_validade: null },
+    dados_novos: { data_validade: dataISO, movimento_id: movimentoId },
+  });
+  return { preenchida: true };
+}
+
+/**
+ * Etapa 190 (RN-190.06b, Fase 2 I-2): o lote VAZIO — nenhum movimento vivo com ele (o ESTORNO nao conta: e o desfazer de um que ja
+ * morreu), nenhuma linha de saldo diferente de zero e nenhuma serie presente. E o lote que so existe por uma entrada recusada depois
+ * de cria-lo (B1275) ou estornada: a validade dele nao esta na historia de nada, e a entrada seguinte pode corrigi-la.
+ */
+async function loteEstaVazio(db, loteId) {
+  const r = await dbGet(db, `SELECT
+      (SELECT COUNT(*) FROM movimentacoes_almoxarifado WHERE lote_id = ? AND cancelado = 0 AND tipo <> 'ESTORNO') AS movs,
+      (SELECT COUNT(*) FROM estoque_saldo_almoxarifado WHERE lote_id = ? AND ABS(quantidade) > ?) AS saldos,
+      (SELECT COUNT(*) FROM series_almoxarifado WHERE lote_id = ? AND status IN ('EM_ESTOQUE', 'BLOQUEADA')) AS series`,
+  [loteId, loteId, EPS_SALDO, loteId]);
+  return Number(r.movs) === 0 && Number(r.saldos) === 0 && Number(r.series) === 0;
+}
+
+/**
+ * Etapa 190 (RN-190.06b): troca a validade de um lote vazio, guardada contra a que o motor leu (`WHERE data_validade = antiga`). A
+ * liberacao de vencimento era DAQUELA validade (ela guarda contra a data — `liberarVencimento`), entao e zerada junto. Perdeu o
+ * UPDATE -> devolve a gravada (`atual`), como o preenchimento.
+ */
+async function redefinirValidadeDoLoteVazio(db, user, loteId, antigaISO, novaISO, { movimentoId = null } = {}) {
+  const claim = await dbGet(db, `UPDATE lotes_almoxarifado SET data_validade = ?, vencimento_liberado_em = NULL,
+      vencimento_liberado_por = NULL, vencimento_liberado_motivo = NULL, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND data_validade = ? RETURNING id`, [novaISO, loteId, antigaISO]);
+  if (!claim) {
+    const atual = await getLote(db, loteId);
+    return { redefinida: false, atual: atual ? atual.data_validade : null };
+  }
+  await registrarAuditoriaDoAto(db, {
+    entidade: 'lote', entidade_id: loteId, acao: 'VALIDADE_REDEFINIDA',
+    usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
+    dados_anteriores: { data_validade: antigaISO },
+    dados_novos: { data_validade: novaISO, movimento_id: movimentoId },
+  });
+  return { redefinida: true };
+}
+
+/**
  * Guarda no WHERE, como o resto do modulo: se o lote sumiu entre a leitura e a escrita, o UPDATE
  * nao casa e a funcao falha em vez de reportar sucesso sobre nada.
  */
@@ -338,5 +396,5 @@ module.exports = {
   STATUS_LOTE, isVencido, getLote, getLotePorCodigo, criarOuObterLote, mudarStatusLote,
   vencimentoLiberado, liberarVencimento, liberarBloqueioPorCertificado, listarLotesDoMaterial,
   EPS_SALDO, residualSemLote, resumoLotesDoMaterial,
-  MSG_VALIDADE, dataValidadeBR, validarDataValidade,
+  MSG_VALIDADE, dataValidadeBR, validarDataValidade, preencherValidadeSeVazia, loteEstaVazio, redefinirValidadeDoLoteVazio,
 };

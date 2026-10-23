@@ -569,7 +569,47 @@ manter assim; a falha seria visível (o 14 cai), não vazia.
 
 ## Execução
 
-*(vazia — nenhuma task começou)*
+Executada em 2026-10-23 na `main`, sequencial (T1 → T2 → T3 → T4), sobre `a4358a4d` + a 189 já commitada (`ba1c7bac`). Controles por
+perl `-0pi`, âncora contada = 1, md5 antes/sabotado/restaurado (restauro por cópia de `scratchpad/e190-bak-*`, todos "OK").
+
+- [x] **T1 — `ed1e6566`.** `schemas.js` (`data_validade: z.unknown().optional()`), `lotService.js` (`MSG_VALIDADE` com as **9**
+  chaves — as 7 do contrato + `AVISO_FALHA`/`AVISO_REDEFINIDA` da Fase 2 —, `dataValidadeBR`, `validarDataValidade` sobre
+  `auditFiltros.validarData`, auditoria `CRIACAO` com `data_validade`), `stockService.js` (recusas `FORMATO` → `SO_ENTRADA` →
+  `SEM_LOTE` logo depois do `require('./lotService')`, antes da resolução; lote novo com a validade). Teste
+  `validadeLoteEntradaManual.api.test.js` cenários 1–7: vermelho 0/7 antes, 7/7 depois. Controles:
+  (a) sem a linha do schema → cai o 1 na asserção **"a validade foi descartada no caminho (C450)"** (null), o 2 (serviço) **verde**,
+  3 e 7 (também pela rota) caem com a validade null, e 4/5/6 viram 201 (5: `v2 SAIDA: esperava 400, veio 201`; 6: `sem lote:
+  esperava 400, veio 201`);
+  (b) `criarOuObterLote` sem a validade → caem 1, 2, 7 (e o 3, a auditoria, que lê o lote criado);
+  (c) `validarData(...).ok` trocado pelo regex só → cai só o 4, em `valor "2027-02-30": esperava 400, veio 201`;
+  (d) `SO_ENTRADA` desligada → cai só o 5, em `v2 SAIDA: esperava 400, veio 201`.
+  **Divergências:** M-3 coberto no teste 6 (`lote: "   "` → `SEM_LOTE`); teste 4 ganhou `'2027-3-31'` e `' 2027-03-31'`; teste 5 ganhou
+  `AJUSTE` (absoluto) com a validade → `SO_ENTRADA` e um controle interno (a mesma SAIDA e a mesma transferência **sem** a validade →
+  201, prova que o 400 é da validade). Usuário: ADMIN superadmin (o `requirePermission` real; `movimentar` e `ajustar_estoque`).
+- [x] **T2 — hash no próximo item da Execução.** `lotService.js`: `preencherValidadeSeVazia` (`UPDATE … WHERE id = ? AND data_validade
+  IS NULL RETURNING id`; perdeu → `{ preenchida: false, atual }`), `loteEstaVazio` (movimento vivo não-ESTORNO, saldo ≠ 0, série
+  `EM_ESTOQUE`/`BLOQUEADA`) e `redefinirValidadeDoLoteVazio` (`WHERE data_validade = antiga`, zera as três colunas da liberação de
+  vencimento), auditorias `VALIDADE_PREENCHIDA`/`VALIDADE_REDEFINIDA` por `registrarAuditoriaDoAto`. `stockService.js`: a decisão
+  (preencher / nada / redefinir o vazio / 400 `CONFLITO`) logo depois da resolução do lote, antes de qualquer efeito; a gravação depois
+  da auditoria do lançamento, **fora** do `try` do livro, num `try/catch` próprio (I-1: falha → `console.warn` com o id +
+  `AVISO_FALHA`); `aviso_validade` = avisos unidos por espaço. Teste: cenários 8–16 + 11b, 11c, 14b, 15b e o 5 da T4 adiantado
+  ("pelo serviço"): antes da implementação 11 dos 14 novos vermelhos; os 3 que passaram de primeira são os que fixam o que **não**
+  muda (9 — recusa não preenche, com dente pelo controle (c); 10 — mesma validade sem aviso; 16 — recebimento intacto, B1277; os dois
+  últimos sem controle prescrito); 21/21 depois. Controles: (a) sem o `IS NULL` → cai só o 14, em `AVISO_PREENCHIDA` no lugar de `AVISO_CORRIDA` (sobrescreveu);
+  (b) `CONFLITO` desligada → caem o 11 (`por codigo: esperava 400, veio 201 … "estava vazio"`) e o 11c; (c) preenchimento chamado logo
+  depois de resolver o lote → cai o 9 em **"a entrada recusada preencheu a validade"** (e 8, 13, 14, 14b, 5-T4 junto); (d) `<=` no aviso
+  de vencido → cai só o 12, em **"hoje (2026-10-23) avisou como vencido"**; (e) `catch` que relança (= sem o `try`) → cai só o 14b,
+  `500 {"error":"SQLITE_BUSY: falha injetada pelo teste e190"}`; (f) "vazio" sempre verdadeiro → caem o 11 e o 11c (redefinem).
+  **Divergências:** (1) `auditLabels.js` ganhou os rótulos `Validade preenchida`/`Validade redefinida` — o plano não listava o arquivo,
+  e o `auditLabels.api.test.js` (cobertura do vocabulário) caiu com os dois verbos sem rótulo; ele também pegou `acao: 'PREENCHER'` do
+  objeto interno do motor, renomeado para `modo`. (2) O 14b injeta a falha **no processo** (`db.run`/`db.get` do teste trocados para o
+  `UPDATE lotes_almoxarifado SET data_validade`), não pelo preload `falhaSqlInjetada.js` (que é para o `index.js` filho) — mesma
+  regex, mesmo efeito. (3) O 14 segue o molde do CLAUDE.md: o gancho só sinaliza e segura; o `UPDATE` concorrente roda do contexto do
+  teste; o teste confere `chamado === 1` (a chamada pelo objeto do módulo). (4) **Aviso de vencido também na "mesma validade"**: a
+  RN-190.07 diz "validade no passado → `AVISO_VENCIDO`" e a RN-190.06 diz "mesma validade passa sem aviso"; no caso raro "lote vivo já
+  vencido + a mesma data no passado" o motor **avisa** (a entrada está pondo saldo num lote cuja saída está barrada — é exatamente o
+  que o aviso existe para dizer). O teste 10 usa data futura e continua sem aviso. Reversível: uma condição no motor. (5) O 15b
+  confere também `vencimento_liberado_por` e `_motivo` nulos. (6) O 14b confere que o log cita o id da movimentação.
 
 ## Próxima tarefa detalhada
 

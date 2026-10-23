@@ -1299,6 +1299,23 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
   const loteIdFinal = loteResolvido ? loteResolvido.id : null;
   const loteCodigoFinal = loteResolvido ? loteResolvido.codigo : (lote || null);
 
+  // Etapa 190 (RN-190.05/06/06b): o lote existente e a validade informada. Decidido AQUI, antes de qualquer efeito de estoque (o
+  // lote novo acabou de nascer com ela e cai em "mesma"): sem validade -> preencher; mesma -> nada; outra num lote VAZIO (Fase 2,
+  // I-2: so existe por uma entrada recusada ou estornada) -> redefinir; outra num lote vivo -> 400 CONFLITO. A GRAVACAO do
+  // preencher/redefinir fica para DEPOIS do livro (B1274: entrada recusada nao preenche), no trecho nao-fatal (I-1).
+  let validadeDoLote = null;
+  if (validadeInformada.informada && loteResolvido) {
+    const atual = loteResolvido.data_validade;
+    if (atual == null) {
+      validadeDoLote = { modo: 'PREENCHER' };
+    } else if (String(atual).slice(0, 10) !== validadeInformada.data) {
+      if (!(await lotService.loteEstaVazio(db, loteResolvido.id))) {
+        throw Object.assign(new Error(lotService.MSG_VALIDADE.CONFLITO(loteResolvido.codigo, atual)), { status: 400 });
+      }
+      validadeDoLote = { modo: 'REDEFINIR', antiga: atual };
+    }
+  }
+
   // ── controle_lote: exigencia declarada pelo CHAMADOR, nao deduzida pelo motor ──────────────
   // Ate o review final desta etapa a guarda valia para TODO tipo de entrada/saida, viesse a
   // chamada de onde viesse. Efeito medido: ligar "Controle por lote" tornava o material
@@ -2462,6 +2479,40 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
     console.warn(`[almoxarifado] auditoria do lancamento falhou (movimentacao ${result.lastID}): ${audErr.message}`);
   }
 
+  // Etapa 190 (RN-190.05/07/08, B1274; Fase 2 I-1): a validade do lote, DEPOIS do livro (entrada recusada nao preenche) e FORA do
+  // try do livro — o catch amplo de la desfaz fisico e series mas nao apaga a linha do livro. NAO-FATAL pelo mesmo motivo da
+  // auditoria acima (C250): a entrada ja valeu, e um 500 aqui fazia o almoxarife lancar de novo (8 no livro, 4 no predio). Falhou ->
+  // log + AVISO_FALHA. Perdeu o UPDATE (alguem gravou outra entre a leitura e a escrita) -> AVISO_CORRIDA, sem sobrescrever. Roda
+  // dentro da trava do material (o motor inteiro esta nela).
+  const avisosValidade = [];
+  if (validadeInformada.informada && loteResolvido) {
+    const msgV = lotService.MSG_VALIDADE;
+    const nova = validadeInformada.data;
+    let vigente = validadeDoLote ? null : nova; // sem acao: o lote ja tinha esta validade (ou nasceu com ela)
+    if (validadeDoLote) {
+      try {
+        const r = validadeDoLote.modo === 'PREENCHER'
+          ? await lotService.preencherValidadeSeVazia(db, user, loteIdFinal, nova, { movimentoId: result.lastID })
+          : await lotService.redefinirValidadeDoLoteVazio(db, user, loteIdFinal, validadeDoLote.antiga, nova,
+            { movimentoId: result.lastID });
+        if (r.preenchida || r.redefinida) {
+          vigente = nova;
+          avisosValidade.push(r.preenchida ? msgV.AVISO_PREENCHIDA(loteCodigoFinal, nova)
+            : msgV.AVISO_REDEFINIDA(loteCodigoFinal, validadeDoLote.antiga, nova));
+        } else if (r.atual != null && String(r.atual).slice(0, 10) === nova) {
+          vigente = nova; // a outra operacao gravou a mesma data: nada a avisar
+        } else {
+          avisosValidade.push(msgV.AVISO_CORRIDA(loteCodigoFinal, r.atual));
+        }
+      } catch (valErr) {
+        console.warn(`[almoxarifado] validade do lote nao gravada (movimentacao ${result.lastID}, lote ${loteIdFinal}): ${valErr.message}`);
+        avisosValidade.push(msgV.AVISO_FALHA(loteCodigoFinal, nova));
+      }
+    }
+    // RN-190.07 (B1271): passado = antes do hoje de Brasilia (a regua do `isVencido`); hoje nao e passado
+    if (vigente != null && vigente < diaLocal.hojeLocalISO()) avisosValidade.push(msgV.AVISO_VENCIDO(loteCodigoFinal, vigente));
+  }
+
   const verificarAlerta = async () => {
     try {
       // saldo_anterior (Etapa 12, revisao final C1): e a evidencia de "transicao observada" do
@@ -2536,6 +2587,7 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
     id: result.lastID, saldo_anterior: saldoAnteriorReal, saldo_posterior: saldoPosterior,
     ...(avisoCaixa ? { aviso_caixa: avisoCaixa } : {}),
     ...(avisoRetencao ? { aviso_retencao: avisoRetencao } : {}),
+    ...(avisosValidade.length ? { aviso_validade: avisosValidade.join(' ') } : {}),
   };
 }
 
