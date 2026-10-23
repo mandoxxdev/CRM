@@ -37,6 +37,8 @@ function dataValidadeBR(valor) {
 /** As literais do contrato (plano da Etapa 190, "Contrato" + "Emendas da Fase 2") — o manual cita estas frases. */
 const MSG_VALIDADE = {
   FORMATO: 'A validade do lote deve ser uma data no formato AAAA-MM-DD (ex.: 2027-03-31).',
+  // Fix-round da Fase 5 (achado 4): `0202-03-31` (digitacao), `0000-01-01` e `9999-12-31` passavam e o lote ficava preso com a data
+  ANO: 'A validade do lote deve ter o ano entre 2000 e 2100 — confira a data digitada (ex.: 2027-03-31).',
   SO_ENTRADA: 'A validade do lote só pode ser informada numa entrada — numa saída, transferência ou ajuste o lote já existe e a '
     + 'validade é a dele.',
   SEM_LOTE: 'Informe o lote para gravar a validade — a validade é do lote.',
@@ -46,6 +48,9 @@ const MSG_VALIDADE = {
     + 'vale também para o saldo que já estava nele.',
   AVISO_VENCIDO: (codigo, dataISO) => `O lote ${codigo} entrou já vencido (validade ${dataValidadeBR(dataISO)}). A saída para consumo `
     + 'fica bloqueada até liberar o vencimento na tela de Lotes e Séries.',
+  // Fix-round da Fase 5 (achado 1): o lote vencido que JA tem o vencimento liberado — a saida passa; dizer "fica bloqueada" era falso
+  AVISO_VENCIDO_LIBERADO: (codigo, dataISO) => `O lote ${codigo} entrou já vencido (validade ${dataValidadeBR(dataISO)}); o `
+    + 'vencimento já foi liberado para consumo.',
   AVISO_CORRIDA: (codigo, dataISO) => `A validade do lote ${codigo} foi gravada por outra operação (${dataValidadeBR(dataISO)}) enquanto `
     + 'esta entrada era registrada; a entrada valeu e a validade do lote não foi alterada.',
   AVISO_FALHA: (codigo, dataISO) => `A entrada foi registrada, mas a validade do lote ${codigo} não pôde ser gravada `
@@ -61,6 +66,9 @@ const MSG_VALIDADE = {
 function validarDataValidade(valor) {
   if (valor === undefined || valor === null || valor === '') return { informada: false };
   if (!validarData(valor).ok) throw erro(MSG_VALIDADE.FORMATO);
+  // Fix-round da Fase 5 (achado 4, B1280): ano fora de 2000-2100 e erro de digitacao, nao validade — recusa antes de qualquer efeito
+  const ano = Number(valor.slice(0, 4));
+  if (ano < 2000 || ano > 2100) throw erro(MSG_VALIDADE.ANO);
   return { informada: true, data: valor };
 }
 

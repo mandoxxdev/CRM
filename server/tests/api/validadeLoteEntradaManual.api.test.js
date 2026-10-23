@@ -39,11 +39,13 @@ const API = '/api/almoxarifado';
 const BR = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 const MSG = {
   FORMATO: 'A validade do lote deve ser uma data no formato AAAA-MM-DD (ex.: 2027-03-31).',
+  ANO: 'A validade do lote deve ter o ano entre 2000 e 2100 — confira a data digitada (ex.: 2027-03-31).',
   SO_ENTRADA: 'A validade do lote só pode ser informada numa entrada — numa saída, transferência ou ajuste o lote já existe e a validade é a dele.',
   SEM_LOTE: 'Informe o lote para gravar a validade — a validade é do lote.',
   CONFLITO: (c, d) => `O lote ${c} já tem validade ${BR(d)}. A validade é do lote, não da entrada: deixe o campo em branco ou informe a mesma data. Se a validade gravada está errada, peça a correção do lote.`,
   AVISO_PREENCHIDA: (c, d) => `O lote ${c} não tinha validade; ela foi gravada agora (${BR(d)}) e vale também para o saldo que já estava nele.`,
   AVISO_VENCIDO: (c, d) => `O lote ${c} entrou já vencido (validade ${BR(d)}). A saída para consumo fica bloqueada até liberar o vencimento na tela de Lotes e Séries.`,
+  AVISO_VENCIDO_LIBERADO: (c, d) => `O lote ${c} entrou já vencido (validade ${BR(d)}); o vencimento já foi liberado para consumo.`,
   AVISO_CORRIDA: (c, d) => `A validade do lote ${c} foi gravada por outra operação (${BR(d)}) enquanto esta entrada era registrada; a entrada valeu e a validade do lote não foi alterada.`,
   AVISO_FALHA: (c, d) => `A entrada foi registrada, mas a validade do lote ${c} não pôde ser gravada (${BR(d)}). Não repita a entrada; peça a correção da validade do lote.`,
   AVISO_REDEFINIDA: (c, a, n) => `O lote ${c} estava vazio com a validade ${BR(a)}; ela foi trocada por ${BR(n)}.`,
@@ -120,6 +122,23 @@ const MSG = {
       ok201(r, `valor ${JSON.stringify(vazio)}:`);
       assert.strictEqual((await lote(m, `L-VAZIO-${i}`)).data_validade, null);
       assert.strictEqual(r.body.aviso_validade, undefined);
+    }
+  });
+
+  await test('[Fase 5 achado 4] ano fora de 2000-2100 -> 400 ANO sem lote nem movimentacao; as bordas passam', async () => {
+    const m = await material();
+    for (const absurda of ['0000-01-01', '0202-03-31', '9999-12-31', '1999-12-31', '2101-01-01']) {
+      const lotes0 = await nLotes(); const movs0 = await nMovs();
+      const r = await entrada(m, { lote: `L-ANO-${seq}`, data_validade: absurda });
+      recusa(r, MSG.ANO, `valor ${absurda}:`);
+      assert.strictEqual(await nLotes(), lotes0, `valor ${absurda}: criou lote`);
+      assert.strictEqual(await nMovs(), movs0, `valor ${absurda}: gravou movimento`);
+    }
+    // metade positiva: as bordas do intervalo sao validades aceitas e gravadas
+    for (const borda of ['2000-01-01', '2100-12-31']) {
+      const r = await entrada(m, { lote: `L-BORDA-${borda}`, data_validade: borda });
+      ok201(r, `borda ${borda}:`);
+      assert.strictEqual((await lote(m, `L-BORDA-${borda}`)).data_validade, borda);
     }
   });
 
@@ -392,6 +411,68 @@ const MSG = {
     await require('../../services/almoxarifado/receiptService').processarNota(db, ADMIN, rec.lastID, {});
     assert.strictEqual(await fisico(m), 5, 'premissa: a nota entrou');
     assert.strictEqual((await lote(m, 'L-NF')).data_validade, null, 'o recebimento mudou de comportamento (B1277 — e a 191)');
+  });
+
+  // ── Fix-round da Fase 5 ─────────────────────────────────────────────────────────────────────────────────────────────────
+  await test('[Fase 5 achado 1] lote vencido COM vencimento liberado: o aviso nao diz "fica bloqueada"; sem liberacao diz', async () => {
+    const m = await material();
+    const r1 = await entrada(m, { quantidade: 2, lote: 'L-LIB', data_validade: ontem });
+    ok201(r1);
+    // metade "sem liberacao": a mesma data vencida num lote vivo ainda nao liberado -> AVISO_VENCIDO (a saida esta barrada)
+    const r2 = await entrada(m, { quantidade: 1, lote: 'L-LIB', data_validade: ontem });
+    ok201(r2);
+    assert.strictEqual(r2.body.aviso_validade, MSG.AVISO_VENCIDO('L-LIB', ontem), 'sem liberacao');
+    const l = await lote(m, 'L-LIB');
+    const lib = await request(app).put(`${API}/lotes/${l.id}/liberar-vencimento`).send({ justificativa: 'teste e190' });
+    assert.strictEqual(lib.status, 200, JSON.stringify(lib.body));
+    const r3 = await entrada(m, { quantidade: 2, lote: 'L-LIB', data_validade: ontem });
+    ok201(r3);
+    assert.strictEqual(r3.body.aviso_validade, MSG.AVISO_VENCIDO_LIBERADO('L-LIB', ontem), 'com liberacao: o aviso afirma bloqueio falso');
+    // o que o aviso afirma e o que acontece: a saida de consumo passa
+    ok201(await post(`${API}/movimentacoes/v2`, { material_id: m, tipo: 'SAIDA', quantidade: 1, lote_id: l.id, motivo: 'e190',
+      justificativa: 'teste e190' }), 'saida do lote liberado:');
+  });
+
+  await test('[Fase 5 achado 2] lote vazio: saldo != 0 sem movimento vivo -> CONFLITO; serie presente sem movimento vivo -> CONFLITO', async () => {
+    // Montados direto no banco: o "vazio" tem TRES pernas (movimento, saldo, serie) e so a de movimento era exercida pelos outros
+    // cenarios — olhar so movimentos passava 22/22.
+    const m = await material();
+    const rs = await entrada(m, { quantidade: 2, lote: 'L-SALDO', data_validade: '2027-03-31' });
+    ok201(rs);
+    assert.strictEqual((await estornar(rs.body.id)).status, 200, 'premissa: estorno');
+    const ls = await lote(m, 'L-SALDO');
+    // controle no proprio teste: sem a linha de saldo o lote e vazio (o que a sabotagem "so movimentos" tambem acharia)
+    assert.strictEqual(await lotService.loteEstaVazio(db, ls.id), true, 'premissa: estornado e vazio');
+    await dbRun(db, 'DELETE FROM estoque_saldo_almoxarifado WHERE lote_id = ?', [ls.id]);
+    await dbRun(db, 'INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, lote_id, quantidade) VALUES (?, NULL, ?, 3)',
+      [m, ls.id]);
+    recusa(await entrada(m, { quantidade: 1, lote: 'L-SALDO', data_validade: '2027-08-31' }), MSG.CONFLITO('L-SALDO', '2027-03-31'),
+      'saldo 3 sem movimento vivo:');
+    assert.strictEqual((await lote(m, 'L-SALDO')).data_validade, '2027-03-31');
+
+    const ms = await material({ serie: true });
+    const rr = await entrada(ms, { quantidade: 1, lote: 'L-SER', series: ['SV-1'], data_validade: '2027-03-31' });
+    ok201(rr);
+    assert.strictEqual((await estornar(rr.body.id)).status, 200, 'premissa: estorno da serie');
+    const lr = await lote(ms, 'L-SER');
+    assert.strictEqual(await lotService.loteEstaVazio(db, lr.id), true, 'premissa: estornado e vazio');
+    await dbRun(db, "INSERT INTO series_almoxarifado (material_id, numero, status, lote_id) VALUES (?, 'SV-PRESENTE', 'EM_ESTOQUE', ?)",
+      [ms, lr.id]);
+    recusa(await entrada(ms, { quantidade: 1, lote: 'L-SER', series: ['SV-2'], data_validade: '2027-08-31' }),
+      MSG.CONFLITO('L-SER', '2027-03-31'), 'serie presente sem movimento vivo:');
+    assert.strictEqual((await lote(ms, 'L-SER')).data_validade, '2027-03-31');
+  });
+
+  await test('[Fase 5 achado 3] validade gravada com hora ("2027-03-31 00:00:00", como o recebimento pode gravar) = mesma data', async () => {
+    const m = await material();
+    const l = await loteComSaldo(m, 'L-HORA', 5);
+    await dbRun(db, 'UPDATE lotes_almoxarifado SET data_validade = ? WHERE id = ?', ['2027-03-31 00:00:00', l.id]);
+    const r = await entrada(m, { quantidade: 2, lote: 'L-HORA', data_validade: '2027-03-31' });
+    ok201(r, 'a mesma data com hora deu CONFLITO:');
+    assert.strictEqual(r.body.aviso_validade, undefined);
+    assert.strictEqual(await fisico(m), 7);
+    // metade positiva: outra data no mesmo lote continua CONFLITO, e a literal mostra a data sem a hora
+    recusa(await entrada(m, { quantidade: 1, lote: 'L-HORA', data_validade: '2027-04-30' }), MSG.CONFLITO('L-HORA', '2027-03-31'));
   });
 
   await test('[RN-190.05] pelo servico: o preenchimento e o aviso sem passar pelo schema', async () => {

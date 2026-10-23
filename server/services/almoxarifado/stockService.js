@@ -2514,8 +2514,14 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
         avisosValidade.push(msgV.AVISO_FALHA(loteCodigoFinal, nova));
       }
     }
-    // RN-190.07 (B1271): passado = antes do hoje de Brasilia (a regua do `isVencido`); hoje nao e passado
-    if (vigente != null && vigente < diaLocal.hojeLocalISO()) avisosValidade.push(msgV.AVISO_VENCIDO(loteCodigoFinal, vigente));
+    // RN-190.07 (B1271): passado = antes do hoje de Brasilia (a regua do `isVencido`); hoje nao e passado. Fix-round da Fase 5
+    // (achado 1, B1281): "a saida fica bloqueada" so e verdade sem liberacao — o lote que ja tinha a mesma data e o vencimento
+    // liberado deixa a saida passar. A redefinicao zera a liberacao (era da validade antiga), entao ali nunca ha liberacao.
+    if (vigente != null && vigente < diaLocal.hojeLocalISO()) {
+      const liberado = (!validadeDoLote || validadeDoLote.modo !== 'REDEFINIR') && lotService.vencimentoLiberado(loteResolvido);
+      avisosValidade.push(liberado ? msgV.AVISO_VENCIDO_LIBERADO(loteCodigoFinal, vigente)
+        : msgV.AVISO_VENCIDO(loteCodigoFinal, vigente));
+    }
   }
 
   const verificarAlerta = async () => {
