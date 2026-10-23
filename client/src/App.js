@@ -98,6 +98,7 @@ import {
   FrotasViagens,
   FrotasChecklists,
   FrotasRelatorios,
+  FrotasPortalMotorista,
   AlmoxarifadoDashboard,
   MateriaisAlmoxarifado,
   MaterialAlmoxarifadoForm,
@@ -321,6 +322,7 @@ export function AppRoutes() {
         <Route path="viagens" element={<FrotasViagens />} />
         <Route path="checklists" element={<FrotasChecklists />} />
         <Route path="relatorios" element={<FrotasRelatorios />} />
+        <Route path="motorista" element={<FrotasPortalMotorista />} />
         <Route path="requisicoes-material" element={<RequisicoesMaterialListaPage moduloKey="frota" />} />
         <Route path="requisicoes-material/nova" element={<RequisicoesMaterialNovaPage moduloKey="frota" />} />
       </Route>

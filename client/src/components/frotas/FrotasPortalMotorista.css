@@ -1,0 +1,266 @@
+/* Portal do motorista (Frota Etapa 1, T6) — celular primeiro: uma coluna, alvos de toque de 48px ou mais. */
+
+.portal-motorista {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 16px;
+  color: var(--gmp-text);
+  font-size: 1rem;
+}
+
+.portal-titulo {
+  font-size: 1.4rem;
+  margin: 4px 0 16px;
+}
+
+.portal-dica {
+  color: var(--gmp-text-light);
+  font-size: 0.9rem;
+  margin: 4px 0 8px;
+}
+
+.portal-aviso,
+.portal-cartao {
+  background: var(--gmp-surface);
+  border: 1px solid var(--gmp-border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  line-height: 1.45;
+}
+
+.portal-aviso {
+  border-color: rgba(245, 158, 11, 0.5);
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.portal-cartao-viagem {
+  border-left: 5px solid #ea580c;
+}
+
+.portal-erro {
+  background: rgba(239, 68, 68, 0.12);
+  border: 2px solid #ef4444;
+  color: #b91c1c;
+  font-weight: 600;
+  padding: 14px 16px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+
+.portal-botoes {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.portal-botao {
+  min-height: 48px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: none;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: linear-gradient(135deg, #ea580c 0%, #b91c1c 100%);
+  color: #fff;
+  flex: 1;
+}
+
+.portal-botao.grande {
+  min-height: 64px;
+  font-size: 1.2rem;
+}
+
+.portal-botao.secundario {
+  background: var(--gmp-surface);
+  border: 1px solid var(--gmp-border);
+  color: var(--gmp-text);
+}
+
+.portal-botao:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.portal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.portal-form-titulo {
+  font-size: 1.3rem;
+  margin: 0;
+}
+
+.portal-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.portal-campo > span {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.portal-campo input,
+.portal-campo select,
+.portal-campo textarea {
+  min-height: 48px;
+  font-size: 1rem;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--gmp-border);
+  background: var(--gmp-bg);
+  color: var(--gmp-text);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.portal-linha {
+  display: flex;
+  gap: 12px;
+}
+
+.portal-grupo {
+  border: 1px solid var(--gmp-border);
+  border-radius: 12px;
+  padding: 12px;
+  margin: 0;
+  background: var(--gmp-surface);
+}
+
+.portal-grupo legend {
+  font-weight: 700;
+  padding: 0 6px;
+}
+
+.portal-opcoes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.portal-opcoes-5 {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.portal-opcao {
+  min-height: 48px;
+  border-radius: 10px;
+  border: 2px solid var(--gmp-border);
+  background: var(--gmp-bg);
+  color: var(--gmp-text);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.portal-opcao.marcada {
+  border-color: #ea580c;
+  background: rgba(234, 88, 12, 0.15);
+}
+
+.portal-opcao.resp-ok.marcada { border-color: #16a34a; background: rgba(22, 163, 74, 0.18); }
+.portal-opcao.resp-na.marcada { border-color: #64748b; background: rgba(100, 116, 139, 0.18); }
+.portal-opcao.resp-falha.marcada { border-color: #ef4444; background: rgba(239, 68, 68, 0.18); }
+
+.portal-item {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--gmp-border);
+}
+
+.portal-item:last-child { border-bottom: none; }
+
+.portal-item-rotulo {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.portal-lista-avarias {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 8px;
+}
+
+.portal-lista-avarias li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--gmp-border);
+}
+
+.portal-remover {
+  min-height: 40px;
+  border: 1px solid #ef4444;
+  color: #ef4444;
+  background: transparent;
+  border-radius: 8px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+.portal-nova-avaria {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.portal-rodape {
+  position: sticky;
+  bottom: 0;
+  background: var(--gmp-bg);
+  padding: 10px 0 12px;
+}
+
+.portal-secao h2 { font-size: 1.15rem; margin: 8px 0; }
+.portal-secao h3 { font-size: 1rem; margin: 16px 0 8px; }
+
+.portal-lista {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.portal-lista-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  border: 1px solid var(--gmp-border);
+  border-radius: 10px;
+  background: var(--gmp-surface);
+}
+
+.portal-lista-sub {
+  font-size: 0.85rem;
+  color: var(--gmp-text-light);
+  margin-top: 2px;
+}
+
+.portal-situacao {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.situacao-ok { background: rgba(22, 163, 74, 0.15); color: #16a34a; }
+.situacao-pendencia { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+.situacao-incompleto { background: rgba(245, 158, 11, 0.18); color: #d97706; }
+
+@media (max-width: 380px) {
+  .portal-opcoes-5 { grid-template-columns: repeat(3, 1fr); }
+  .portal-linha { flex-direction: column; }
+}
