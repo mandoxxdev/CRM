@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../services/api';
-import { FiBarChart2, FiRefreshCw, FiPrinter } from 'react-icons/fi';
+import { toast } from 'react-toastify';
+import { FiBarChart2, FiRefreshCw, FiPrinter, FiDownload } from 'react-icons/fi';
+import { baixarPlanilhaFrota, mensagemDoServidor } from '../../utils/frotasApi';
 import FrotasPageHeader from './FrotasPageHeader';
 import './Frotas.css';
 
@@ -9,6 +11,19 @@ const FrotasRelatorios = () => {
   const [consumo, setConsumo] = useState([]);
   const [loading, setLoading] = useState(true);
   const [periodo, setPeriodo] = useState({ data_inicio: '', data_fim: '' });
+  const [exportando, setExportando] = useState(false);
+
+  // Frota Etapa 1 (T7, RN-F1.18): a planilha no formato da que a empresa usa hoje, com o periodo desta tela.
+  const exportar = async () => {
+    setExportando(true);
+    try {
+      await baixarPlanilhaFrota(periodo);
+    } catch (err) {
+      toast.error(await mensagemDoServidor(err, 'Não foi possível gerar a planilha'));
+    } finally {
+      setExportando(false);
+    }
+  };
 
   const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
@@ -45,6 +60,9 @@ const FrotasRelatorios = () => {
         breadcrumbs={[{ label: 'Relatórios' }]}
         actions={(
           <>
+            <button type="button" className="frotas-btn frotas-btn-primary" onClick={exportar} disabled={exportando}>
+              <FiDownload /> {exportando ? 'Gerando…' : 'Exportar planilha'}
+            </button>
             <button type="button" className="frotas-btn frotas-btn-secondary" onClick={() => window.print()}>
               <FiPrinter /> Imprimir
             </button>

@@ -1,9 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
-import { fetchFrotasDashboard } from '../../utils/frotasApi';
+import { Link, Navigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
+import { fetchFrotasDashboard, baixarPlanilhaFrota, mensagemDoServidor } from '../../utils/frotasApi';
+import { useAuth } from '../../context/AuthContext';
+import { getEffectiveUser } from '../../services/permissionsCache';
+import { perfilFrota, PERFIS_FROTA } from '../../utils/systemPermissions';
 import {
   FiTruck, FiAlertTriangle, FiDollarSign, FiActivity, FiRefreshCw,
-  FiUsers, FiTool, FiDroplet, FiFileText, FiMap, FiClipboard, FiBarChart2, FiList,
+  FiUsers, FiTool, FiDroplet, FiFileText, FiMap, FiClipboard, FiBarChart2, FiList, FiDownload, FiSmartphone,
 } from 'react-icons/fi';
 import FrotasPageHeader from './FrotasPageHeader';
 import './Frotas.css';
@@ -19,9 +23,11 @@ const QUICK_LINKS = [
   { to: '/frota/multas', icon: FiAlertTriangle, label: 'Multas' },
   { to: '/frota/relatorios', icon: FiBarChart2, label: 'Relatórios' },
   { to: '/frota/requisicoes-material/nova', icon: FiList, label: 'Solicitar Material' },
+  { to: '/frota/motorista', icon: FiSmartphone, label: 'Portal do motorista' },
 ];
 
-const FrotasDashboard = () => {
+const PainelDoGestor = () => {
+  const [exportando, setExportando] = useState(false);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -49,6 +55,18 @@ const FrotasDashboard = () => {
 
   useEffect(() => { load(); }, [load]);
 
+  // Frota Etapa 1 (T7, RN-F1.18): sem periodo aqui — o periodo fica na tela de Relatorios.
+  const exportar = async () => {
+    setExportando(true);
+    try {
+      await baixarPlanilhaFrota();
+    } catch (err) {
+      toast.error(await mensagemDoServidor(err, 'Não foi possível gerar a planilha'));
+    } finally {
+      setExportando(false);
+    }
+  };
+
   const fmt = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
   if (loading) {
@@ -66,9 +84,14 @@ const FrotasDashboard = () => {
         title="Gestão de Frota"
         subtitle="Controle de veículos, manutenções, combustível e documentação — GMP Industriais"
         actions={(
-          <button type="button" className="frotas-btn frotas-btn-secondary" onClick={() => load(true)}>
-            <FiRefreshCw /> Atualizar
-          </button>
+          <>
+            <button type="button" className="frotas-btn frotas-btn-primary" onClick={exportar} disabled={exportando}>
+              <FiDownload /> {exportando ? 'Gerando…' : 'Exportar planilha'}
+            </button>
+            <button type="button" className="frotas-btn frotas-btn-secondary" onClick={() => load(true)}>
+              <FiRefreshCw /> Atualizar
+            </button>
+          </>
         )}
       />
 
@@ -218,6 +241,18 @@ const FrotasDashboard = () => {
       )}
     </div>
   );
+};
+
+/**
+ * Frota Etapa 1 (T7): o MOTORISTA nao tem painel do gestor (o servidor responde 403 em /dashboard desde a RN-F1.16); quem abre
+ * /frota com esse perfil vai direto para o portal dele. A regua e a do servidor (perfilFrota); quem decide continua sendo ele.
+ */
+const FrotasDashboard = () => {
+  const { user } = useAuth();
+  if (perfilFrota(getEffectiveUser(user)) === PERFIS_FROTA.MOTORISTA) {
+    return <Navigate to="/frota/motorista" replace />;
+  }
+  return <PainelDoGestor />;
 };
 
 export default FrotasDashboard;

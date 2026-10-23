@@ -278,6 +278,11 @@
   color: #4facfe;
 }
 
+/* Frota Etapa 1 (T7): situacao do checklist como na planilha (OK / PENDENCIA / INCOMPLETO). */
+.frotas-badge-situacao-ok { background: rgba(26, 163, 74, 0.15); color: var(--gmp-success); }
+.frotas-badge-situacao-pendencia { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+.frotas-badge-situacao-incompleto { background: rgba(245, 158, 11, 0.15); color: #d97706; }
+
 .frotas-actions {
   display: flex;
   gap: 6px;

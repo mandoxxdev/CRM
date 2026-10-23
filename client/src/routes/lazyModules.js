@@ -135,6 +135,7 @@ export const FrotasChecklists = page(
   () => import('../components/frotas/FrotasEntityPage').then((m) => ({ default: m.FrotasChecklists }))
 );
 export const FrotasRelatorios = page(() => import('../components/frotas/FrotasRelatorios'));
+export const FrotasPortalMotorista = page(() => import('../components/frotas/FrotasPortalMotorista'));
 export const AlmoxarifadoDashboard = page(() => import('../components/almoxarifado/AlmoxarifadoDashboard'));
 export const MateriaisAlmoxarifado = page(() => import('../components/almoxarifado/MateriaisAlmoxarifado'));
 export const MaterialAlmoxarifadoForm = page(() => import('../components/almoxarifado/MaterialAlmoxarifadoForm'));
@@ -206,6 +207,7 @@ export const ROUTE_PREFETCH = {
   '/chat': () => import('../components/chat/ChatPage'),
   '/frota': () => import('../components/frotas/FrotasDashboard'),
   '/frota/veiculos': () => import('../components/frotas/FrotasEntityPage'),
+  '/frota/motorista': () => import('../components/frotas/FrotasPortalMotorista'),
   '/todolist': () => import('../components/todolist/TodolistBoard'),
   '/compras/solicitacoes': () => import('../components/ComprasSolicitacoesCompra'),
   '/compras/fornecedores': () => import('../components/GruposFornecedores'),

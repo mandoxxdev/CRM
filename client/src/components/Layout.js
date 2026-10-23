@@ -6,7 +6,8 @@ import { identificarAtalho } from '../utils/atalhosTeclado';
 import api from '../services/api';
 import AvatarUsuario from './AvatarUsuario';
 import { fetchUserPermissions, getCachedUserPermissions, getEffectiveUser, seedPermissionsFromAuthUser } from '../services/permissionsCache';
-import { bypassModuleRestrictions, isSystemAdmin } from '../utils/systemPermissions';
+import { bypassModuleRestrictions, isSystemAdmin, perfilFrota } from '../utils/systemPermissions';
+import { menuFrotaDoPerfil } from './frotas/frotaMenu';
 import { MODULOS_META, modulosDoUsuario, nivelAcessoUsuario, moduloDaRota } from '../constants/modulosMeta';
 import BotaoInstalarApp from './BotaoInstalarApp';
 import BarraInferiorMobile from './BarraInferiorMobile';
@@ -299,21 +300,9 @@ const Layout = () => {
     { path: '/fabrica/requisicoes-material', icon: FiList, label: 'Minhas Requisições' },
   ];
 
-  // Menu do módulo Frota
-  const frotaMenuItems = [
-    { path: '/frota', icon: FiHome, label: 'Dashboard Frota' },
-    { path: '/frota/veiculos', icon: FiTruck, label: 'Veículos' },
-    { path: '/frota/motoristas', icon: FiUsers, label: 'Motoristas' },
-    { path: '/frota/manutencoes', icon: FiTool, label: 'Manutenções' },
-    { path: '/frota/abastecimentos', icon: FiDroplet, label: 'Abastecimentos' },
-    { path: '/frota/documentos', icon: FiFileText, label: 'Documentos' },
-    { path: '/frota/viagens', icon: FiMap, label: 'Viagens' },
-    { path: '/frota/checklists', icon: FiClipboard, label: 'Checklist Diário' },
-    { path: '/frota/multas', icon: FiAlertTriangle, label: 'Multas' },
-    { path: '/frota/relatorios', icon: FiBarChart2, label: 'Relatórios' },
-    { path: '/frota/requisicoes-material/nova', icon: FiClipboard, label: 'Solicitar Material' },
-    { path: '/frota/requisicoes-material', icon: FiList, label: 'Minhas Requisições' },
-  ];
+  // Menu do módulo Frota — por perfil (Frota Etapa 1, T7): MOTORISTA ve so "Meu painel" e as requisicoes; a lista mora em
+  // frotas/frotaMenu.js e o perfil sai de perfilFrota, a mesma regua do servidor.
+  const frotaMenuItems = menuFrotaDoPerfil(perfilFrota(effectiveUser));
 
   const todolistMenuItems = [
     { path: '/todolist', icon: FiCheckSquare, label: 'Quadro Kanban' },

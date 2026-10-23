@@ -129,3 +129,18 @@ export function shouldHideGhostUsers() {
 export function filterVisibleUsers(users) {
   return users || [];
 }
+
+// Frota Etapa 1 (T7): o perfil do modulo Frota com a MESMA regua do servidor (server/services/frotas/permissions.js,
+// getPerfilFromUser): superadmin, admin do modulo frota ou role admin -> ADMIN_FROTA; senao o perfil_frota gravado; senao
+// MOTORISTA (sem perfil e chao de fabrica, nao "sem acesso"). So serve para a tela escolher o menu e o redirecionamento;
+// quem decide o que pode continua sendo o servidor.
+export const PERFIS_FROTA = Object.freeze({ ADMIN_FROTA: 'ADMIN_FROTA', MOTORISTA: 'MOTORISTA', CONSULTA: 'CONSULTA' });
+
+export function perfilFrota(user) {
+  if (!user) return PERFIS_FROTA.CONSULTA;
+  if (isSuperAdmin(user)) return PERFIS_FROTA.ADMIN_FROTA;
+  if (isModuleAdmin(user, 'frota')) return PERFIS_FROTA.ADMIN_FROTA;
+  if (String(user.role || '').toLowerCase() === 'admin') return PERFIS_FROTA.ADMIN_FROTA;
+  if (user.perfil_frota) return user.perfil_frota;
+  return PERFIS_FROTA.MOTORISTA;
+}
