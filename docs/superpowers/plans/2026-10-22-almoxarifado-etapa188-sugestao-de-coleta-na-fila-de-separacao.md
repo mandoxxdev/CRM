@@ -1,7 +1,9 @@
 # Etapa 188 — A fila de separação sugere de onde pegar cada item e em que ordem andar
 
-> **Status:** 📝 **plano escrito (2026-10-22), Fase 2 feita (1 Crítico, 3 Importantes, 5 Menores — ver "Emendas da Fase 2"; aplicar no contrato antes de T1).** **T1–T4 feitas (2026-10-22, ver "Execução"); falta a Fase 5 (revisão adversarial) e o
-> fechamento.** Feature **05** (separação e picking),
+> **Status:** ✅ **FECHADA (2026-10-23).** Plano escrito (2026-10-22), Fase 2 feita (1 Crítico, 3 Importantes, 5 Menores — ver "Emendas da
+> Fase 2"); **T1–T4 feitas** (ver "Execução"); **Fase 5 feita e corrigida** (2 Importantes, 3 Menores corrigidos, 2 registrados — ver "F5",
+> `9efbcf4a`, `9b159c69`); **fechamento feito** (ver "Fechamento" e "Verificação final"). **Próxima: Etapa 189** (ver "Próxima tarefa
+> detalhada"). Feature **05** (separação e picking),
 > item `specs/modulo-almoxarifado/05-separacao-picking/README.md:63` — *"Sugestão de rota (ordenar itens pela hierarquia de
 > localizações)"*.
 > Antes: Etapa 187 (ferramenta baixada) — **não tocar** nos arquivos dela (outra sessão revisa a 187 em paralelo). Esta etapa mexe em
@@ -559,21 +561,173 @@ limite → vermelho.
   **16/0**.
 - Client `CI=true npx react-scripts test --watchAll=false`: **182 suítes, 2471 testes, 0 falhas**. `CI=true npx react-scripts build`:
   **Compiled successfully**.
-- Próximo passo: Fase 5 (revisão adversarial) e o fechamento (`fechar-etapa`) — não feitos nesta sessão.
+- Próximo passo (na época): Fase 5 e o fechamento — feitos em 2026-10-23 (ver "F5" e "Fechamento").
 
-## Próxima tarefa detalhada
+## F5 — Fase 5 (revisão adversarial) e fix-round (2026-10-23)
 
-**Etapa 189 — "Imprimir lista de coleta" e a dica no "Sai de" da janela de separação.**
+Revisão adversarial feita por outra sessão sobre `7e76acc6`, com cinco sondas executadas (scratchpad `rev188-s1.js` a `s5.js`). Os achados
+chegaram a esta execução assim: **2 Importantes** (I-a, I-b), **3 Menores para corrigir** (M-b, M-c, M-d), **1 Menor para registrar** (M-a) e
+**1 achado anterior para registrar** (o 6). Antes do conserto, as sondas foram rodadas de novo contra o código de `7e76acc6` e reproduziram:
+s1 (a) dica `RVP-01` com 10 em inspeção (5 boas em `RVA-01`), seguir a dica → entrega 200; s1 (b) as duas requisições recebem `RVQ-01`, a
+segunda separa e a entrega dá 400; s1 (c) lote da v2 com `data_validade: null` e a saída do "vencido" 201; s4 linha sem lote **−6**; s5 (i)
+dica certa `ZTA-01/L1 q4` (o defeito era só de teste).
 
-1. **PDF da lista de coleta** (galho de tela): botão na Fila de separação, por requisição (e, se couber, das requisições com etapa
-   SEPARAR marcadas). Consome **só** `ordem_coleta` e `itens[].pegar_em`/`pegar_em_aviso` deste contrato — nenhum campo novo no server.
-   Usar `client/src/utils/pdfTexto.js` (Etapa 186) e as regras de largura medida dela (a coluna "Pegar em" com `caminho` longo quebra
-   linha dentro da célula; nada passa da margem). Colunas: nº, caminho, material, lote/validade, quantidade, caixinha de "peguei".
-   Itens sem `pegar_em` vão num bloco "Sem endereço sugerido" no fim, com o aviso.
-2. **Dica no "Sai de" da janela de separação** (`RequisicoesList.js`, `valorPlanejadaNaSeparacao`/`origensSeparacao`, `:166-200` e
-   `:456-473`): a janela não lê a fila; ou o detalhe da requisição passa a trazer `pegar_em` (campo novo em `GET /requisicoes/:id`,
-   reusando `sugerirColeta`), ou a tela mostra a dica sem pré-selecionar. **Ponto de atenção:** pré-selecionar muda o padrão de
-   "automático" para um par — a rodada grava planejada, e a entrega de um clique passa a sair dali; item com planejada pendente
-   **continua** partindo da planejada (Etapa 65, Fase 2, crítico 2) — a dica nunca sobrescreve a planejada.
-3. Pontos de atenção herdados: B821 (não reordenar itens), B1254 (um endereço por item), e o teste de "listar não escreve" (RN-188.07)
-   tem de continuar verde.
+### I-a — a dica mandava pegar material em inspeção → CORRIGIDO (`9efbcf4a`, `9b159c69`; B1258)
+
+- **O achado:** a retenção (bloqueado, em inspeção, em terceiros) é do **material**, não do endereço (`schema.js`, comentário da
+  `estoque_saldo_almoxarifado`); `livreDe` e a padrão primeiro tratavam o saldo do endereço como livre. Com 5 boas em `RVA-01` e 10 em
+  inspeção na padrão `RVP-01`, a dica era `RVP-01`.
+- **O conserto (caminho reversível):** campo novo `itens[].pegar_em_alerta: null | "RETENCAO_NO_MATERIAL"` — `RETENCAO_NO_MATERIAL` quando há
+  dica e o material tem `retido = bloqueada + em_inspecao + em_terceiros > 0` (`lerDadosDaColeta` lê o retido; função pura
+  `sugestaoDeColeta.alertaDeRetencao`). Tela: *"Parte do saldo deste material está retida (em inspeção, bloqueada ou em terceiros) e o
+  sistema não sabe em qual endereço — confira antes de pegar."* (`fila-pegar-em-alerta-<item>`). Campo próprio, não um quinto código de
+  `pegar_em_aviso`, porque convive com os avisos (um item pode não cobrir **e** ter retenção). **Descartado:** esconder a dica; tirar a
+  padrão da frente (chute); descontar o retido de algum endereço (qual?).
+- **Testes:** `[I-a] alertaDeRetencao` (puro); `[I-a] material em inspecao na padrao (sonda rev188-s1 a)` pela rota — a sonda como teste, com
+  a metade negativa (mesmo desenho sem retenção → alerta `null`); "só acrescenta" passou a listar `pegar_em_alerta`. Jest `[I-a]`.
+- **Vermelho antes:** contra `sugestaoDeColeta.js`/`requisitionService.js` de `7e76acc6`, caem `[I-a]` (rota: `undefined !== 'RETENCAO_NO_MATERIAL'`)
+  e "só acrescenta"; o puro cai com `sc.alertaDeRetencao is not a function`.
+
+### I-b — com lote, o aviso conduzia à linha sem lote negativa → CORRIGIDO (`9b159c69`; C451)
+
+- **O achado:** `FilaSeparacao.js:110` — *"a entrega passa a sair automática"* no `PLANEJADA_NAO_COBRE`. Em material com lote, separar o resto
+  de outro par apaga a planejada e a entrega de um clique no automático baixa de uma linha sem lote (B204/C71, **anterior**): sonda s4, L1 4 e
+  L2 9 intactos, linha sem lote −6.
+- **O conserto (só texto):** com `lote_separacao_codigo`, *"Já separado de ⟨cod⟩ — lote ⟨L⟩: o resto não cabe lá. Separar de outro endereço
+  troca a origem da separação. Na entrega, escolha o lote no 'Sai de': a saída automática não escolhe lote."*; o **mesmo sufixo** no
+  `NENHUM_ENDERECO_COBRE` quando a dica tem lote (a mesma consequência — **extensão** do achado, que nomeava só o `PLANEJADA_NAO_COBRE`) e no
+  `PLANEJADA_INDISPONIVEL` com lote. Sem lote, as frases de antes ficam iguais. O defeito B204 **não** é corrigido aqui (C451).
+- **Testes:** Jest `[I-b] PLANEJADA_NAO_COBRE com lote` (com lote × sem lote) e `[I-b] NENHUM_ENDERECO_COBRE com lote` (com × sem). O cenário
+  antigo `[RN-188.08] cobre false (NENHUM_ENDERECO_COBRE)` usava a dica com lote L7 e afirmava a frase sem sufixo — **passou a usar dica sem
+  lote** (a frase com lote é a dos `[I-b]`).
+
+### M-b — o lote da planejada sem teste → TESTE (`9efbcf4a`)
+
+- **O achado:** tirar `&& idOuNulo(l.lote_id) === idOuNulo(it.lote_separacao_id)` (`sugestaoDeColeta.js:188-189`) passava verde.
+- **Teste:** `[M-b] planejada COM lote` — a sonda s5 (i): `A-01` com L2 3 (vence antes, **primeiro no array**) e L1 10; planejada A/L1 com 2;
+  separável 4 → `A-01`/L1, livre 8, sugerida 4. Já verde no código (o defeito era só de cobertura).
+
+### M-c — `hojeISO` sem teste → TESTE (`9efbcf4a`)
+
+- **O achado:** trocar `hojeISO: undefined` (`requisitionService.js:349`) por o dia UTC ou `'2000-01-01'` passava verde.
+- **Teste:** `[M-c]` pela rota em `filaSugestaoColeta.api.test.js`: o arquivo fixa `process.env.TZ = 'UTC'` antes do primeiro `Date`; o
+  cenário troca `global.Date` por um relógio parado em `2026-09-17T02:30:00Z` (23:30 de 16/09 em Brasília) e abre com **quatro guardas que
+  derrubam fora do ambiente** (fuso do processo UTC, relógio falso ativo, dia local = UTC, Brasília = 16/09). Lotes: VA vence 15/09 (vencido,
+  em `ZB-01`), VB vence 16/09 (vale hoje em Brasília, em `ZA-01`), VC dezembro. Dica: VB/`ZA-01`.
+
+### M-d — a planejada bloqueada dizia "o resto não cabe lá" → CORRIGIDO (`9efbcf4a`, `9b159c69`)
+
+- **O conserto:** código novo `PLANEJADA_INDISPONIVEL` quando a planejada não é sugerível (com linha de saldo: `candidatoSugerivel`; sem
+  linha: o endereço sozinho). Sem livre num endereço bom continua `PLANEJADA_NAO_COBRE`. Frase: *"Já separado de ⟨cod⟩, que não pode mais ser
+  sugerido (endereço bloqueado ou inativo, em área especial ou lote bloqueado/vencido). Confira antes de separar o resto: separar de outro
+  endereço troca a origem da separação (a entrega passa a sair automática)."* (com lote, o sufixo da I-b).
+- **Testes:** `[RN-188.01a] planejada sem livre … nao sugerivel` — **a asserção do caso BLQ mudou de propósito** (`PLANEJADA_NAO_COBRE` →
+  `PLANEJADA_INDISPONIVEL`); `[M-d]` puro (inativa sem linha, quarentena pelo pai, lote vencido + a metade positiva sem livre →
+  `PLANEJADA_NAO_COBRE`); `[M-d]` pela rota (separar 3 de ZB-01, premissa `PLANEJADA_NAO_COBRE`, bloquear ZB-01 → `PLANEJADA_INDISPONIVEL`);
+  Jest `[M-d]` com e sem lote.
+
+### Registrados, sem correção
+
+- **M-a → C449:** duas requisições listadas juntas recebem o mesmo endereço (a dica não desconta a de outra requisição — B1255);
+  `checarOrigemItem` (`requisitionService.js:1166`) só conta o planejado da **própria** requisição, então a segunda separa e toma 400 na
+  entrega (*"a origem da separação (RVQ-01) não serve mais (O saldo em RVQ-01 (4) …)"*). Sem erro de estoque.
+- **Achado 6 → C450 e D (188)(7):** `POST /movimentacoes/v2` descarta `data_validade` em silêncio desde `65d78fd8` (Etapa 6): o
+  `MovimentacaoSchema` (`schemas.js:87`) não declara o campo, `stockService.js:1278` chama `criarOuObterLote` sem validade e não há rota que
+  edite a validade de um lote. Lote da entrada manual fica sem validade para sempre (fim do FEFO, sem alerta de vencimento, sem bloqueio de
+  saída vencida). **Candidata à Etapa 190.**
+
+### Controles positivos do fix-round (harness `scratchpad/fix188-sab.sh`: perl, âncora contada = 1, md5 antes/sabotado/restaurado, restauro por cópia `fix188-bak-*`)
+
+Todos restauraram ao md5 pós-conserto (`sugestaoDeColeta.js` `d0aed6f9…`, `requisitionService.js` `32b1be4b…`, `FilaSeparacao.js`
+`fee10233…`); nenhum no-op (md5 sabotado sempre diferente).
+
+| Sabotagem | Caiu | Asserção |
+|---|---|---|
+| (mb) `find` sem a condição do lote | só `[M-b]` | `'L2' !== 'L1'` — na **primeira** versão caía pela asserção do aviso (`PLANEJADA_NAO_COBRE`), não pela do lote; a asserção do lote subiu para a primeira linha e o controle foi refeito |
+| (md) `if (false)` no `PLANEJADA_INDISPONIVEL` | `[RN-188.01a] … PLANEJADA_INDISPONIVEL` e `[M-d]` puro; `[M-d]` pela rota | `PLANEJADA_NAO_COBRE` no lugar de `PLANEJADA_INDISPONIVEL` |
+| (md2) sem linha → `true` | só `[M-d]` puro | o caso inativa sem linha |
+| (ia) `alertaDeRetencao` → `null` | só `[I-a]` puro | |
+| (mc1) `hojeISO: '2000-01-01'` | só `[M-c]` | *"lote vencido (15/09) nao pode ser a dica"* |
+| (mc2) `hojeISO` = `toISOString` (UTC) | só `[M-c]` | `'VC' !== 'VB'` |
+| (mc3) `hojeISO` = dia local do processo | só `[M-c]` | `'VC' !== 'VB'` (o processo em UTC) |
+| (ia1) `l.pegar_em_alerta = null` na fila | só `[I-a]` rota | `null` × `RETENCAO_NO_MATERIAL` |
+| (ia2) `0 as retido` | só `[I-a]` rota | idem |
+| (ia3) `quantidade_atual as retido` | só `[I-a]` rota | a metade **negativa** (`'RETENCAO_NO_MATERIAL'` × `null`) |
+| (ib1) PLANEJADA sem o ramo do lote | só `[I-b] PLANEJADA_NAO_COBRE com lote` | a frase com lote (veio *"(a entrega passa a sair automática)"*) |
+| (ib2) sufixo sempre no NENHUM | `[I-b] NENHUM …` e o `cobre false` antigo | a metade **sem lote** (`aviso-12`) |
+| (md tela) sem o `case 'PLANEJADA_INDISPONIVEL'` | só `[M-d]` Jest | |
+| (ia tela) alerta vazio | só `[I-a]` Jest | |
+
+Vizinhos sem mudança de asserção: `filaSugestaoColetaIntegracao` 6/0, `filaSeparacao` 11/0, `separavelDividido` 19/0. Arquivos:
+`sugestaoDeColeta` **36/0** (eram 33), `filaSugestaoColeta` **12/0** (eram 9), `FilaSeparacao.test.js` **22/22** (eram 18).
+
+## Fechamento (2026-10-23, skill `fechar-etapa`)
+
+- Novidades: seção da Etapa 188 antes de "Onde estamos" (Antes → Agora, nove cenários clicáveis com as frases lidas em `FilaSeparacao.js`,
+  o que não cobre); cabeçalho com a 188 no topo e a 187 em "Também em"; letra **B**: B1250 a B1259 (B1251 reescrita com a I1 da Fase 2;
+  B1255 com o desconto parcial da I2; B1253 com a M3 e a M-d; B1254 com a C1 e a I-b; B1258 nova — a I-a; B1259 = a 189); letra **C**:
+  C449 (M-a), C450 (achado 6, anterior), C451 (a dica sem o "Sai de"; com lote, a linha sem lote — B204); **D (188)**; **F (188)**.
+- Spec 05: status e "Última atualização"; o item *"Sugestão de rota"* virou `[x]` com os hashes e a **correção à vista** (o texto "ordenar
+  itens" estava errado — B1256); bloco "Etapa 188" no fim.
+- Mapa: linha 05 e cabeçalho. Guia: cabeçalho ("parou aqui: 188") e a seção com roteiro clicável. Manual: 10.6 ganhou "Onde pegar cada
+  item, e a ordem de coleta" (e a frase do *separável agora* "calculado para cada item sozinho — a janela é que divide" foi reescrita: a fila
+  divide na ordem do pedido desde a regra da divisão).
+
+## Verificação final
+
+Sobre `9b159c69` (código e testes do fix-round) + os documentos do fechamento; uma suíte por vez, exit 0 em todas (logs `fix188-log-*.txt` no scratchpad):
+
+- `test:api` **534/534** arquivos OK (mais lento: `propostaClausulasGrava.api.test.js`, 68,4 s).
+- `test:almoxarifado` **44 passou, 0 falhou**.
+- `test:validation` **4/0**; `test:safealter` **3/0** (os "ALTER falhou" do log são os casos de falha de propósito do teste); `test:sqlite` **16/0**.
+- client **182 suítes / 2475 testes**, todos passando (eram 2471 em `f35321ac`: +4 do fix-round — `[I-b]` × 2, `[M-d]`, `[I-a]`).
+- `CI=true react-scripts build`: *Compiled successfully*.
+- `git status`: só os arquivos do fechamento antes do commit.
+
+## Retrospectiva
+
+1. **2 testes que não sabiam falhar** (M-b, M-c), os dois numa linha de régua que a T1/T2 escreveram sem cenário próprio: o lote da
+   planejada (só havia planejada sem lote) e o `hojeISO` (todo teste usava lotes com validade longe de hoje). Régua de data sem relógio fixo
+   não é testada — o cenário da virada de dia com guardas é o molde.
+2. **1 Importante de regra** (I-a) que nenhuma das duas revisões anteriores viu: a dica lia o saldo **do endereço**, e a retenção mora no
+   **material**. O comentário do `schema.js` já dizia isso (a Fase 0 o citou); faltou perguntar "o que o saldo do endereço **não** sabe?".
+3. **37 controles positivos** na etapa (T1 7, T2 6, T3 5, T4 4, fix-round 15), **0** no-op (md5 sabotado sempre diferente); **1** controle
+   caiu pela asserção errada na primeira tentativa (o (mb), pelo aviso em vez do lote) — reordenado e refeito.
+4. **0 regressões**; **3** asserções antigas mudaram por decisão, cada uma dita no commit: o caso BLQ de `[RN-188.01a]`
+   (`PLANEJADA_NAO_COBRE` → `PLANEJADA_INDISPONIVEL`), o `cobre false` do Jest (dica com lote → sem lote) e a lista de chaves do "só
+   acrescenta" (+`pegar_em_alerta`).
+
+## Próxima tarefa detalhada — Etapa 189: a pré-seleção do "Sai de" e a lista de coleta impressa (feature 05)
+
+**O plano já existe e passou pela Fase 2 (outra sessão):**
+`docs/superpowers/plans/2026-10-23-almoxarifado-etapa189-lista-de-coleta-e-pre-selecao-do-sai-de.md`, decisões **B1260** a **B1269**. **O plano
+da 189 prevalece** sobre este resumo — mas ele foi escrito sobre `7e76acc6`, **antes** do fix-round da Fase 5 da 188. O que mudou e a 189
+precisa considerar:
+
+**Contrato que ela consome (o de `GET /api/almoxarifado/fila-separacao` depois da Fase 5):**
+- `itens[].pegar_em`: `{ localizacao_id, localizacao_codigo, caminho, lote_id, lote_codigo, lote_validade, quantidade_no_endereco,
+  quantidade_sugerida, cobre }` ou `null` — sem mudança.
+- `itens[].pegar_em_aviso`: `null | "NENHUM_ENDERECO_COBRE" | "SEM_ENDERECO_SUGERIVEL" | "PLANEJADA_NAO_COBRE" | "PLANEJADA_INDISPONIVEL"` —
+  **`PLANEJADA_INDISPONIVEL` é novo** (M-d): a planejada existe mas não é sugerível; `pegar_em` vem `null`.
+- `itens[].pegar_em_alerta`: `null | "RETENCAO_NO_MATERIAL"` — **campo novo** (I-a), só com `pegar_em` não nulo.
+- `ordem_coleta` — sem mudança. Função pura `sugestaoDeColeta.sugerirColeta` + `alertaDeRetencao` (nova).
+
+**Pontos de atenção (I-a, I-b, M-d na pré-seleção):**
+- **I-a:** com `pegar_em_alerta = RETENCAO_NO_MATERIAL`, pré-selecionar o endereço em silêncio faz o separador confiar num saldo que pode ser
+  o retido. A pré-seleção tem de **mostrar o alerta na janela** (ou não pré-selecionar); a B1265 da 189 ("a frase da fila segue a
+  pré-seleção") precisa de uma linha para esse caso.
+- **M-d:** com `PLANEJADA_INDISPONIVEL`, a janela **não** pode pré-selecionar a planejada (ela é recusada como origem se estiver bloqueada) e
+  não pode pré-selecionar outro par (troca — B1254/B1263). Fica no automático com a frase de "confira".
+- **I-b:** em material com lote, a frase de troca diz *"Na entrega, escolha o lote no 'Sai de'"*. A pré-seleção da **separação** grava a
+  planejada com lote e resolve o caso comum; o caminho "separar o resto de outro par" continua levando ao automático na entrega (B204,
+  C451). Se a 189 mudar o texto da fila (B1265), manter o sufixo do lote.
+- **As frases** moram hoje em `FilaSeparacao.js` (`textoPegarEm`, `textoAvisoPegarEm`, `textoAlertaPegarEm`); a B1268 da 189 as move para
+  `utils/coletaTexto.js` — levar **as três** e os testes `[I-a]`, `[I-b]`, `[M-d]` do `FilaSeparacao.test.js` junto.
+- Herdados: B821 (não reordenar itens), B1254 (um endereço por item), o "listar não escreve" (RN-188.07) verde, C449 (a dica não desconta a
+  de outra requisição).
+
+**O que já está pronto e ela não reabre:** a regra da dica inteira (T1–T4 e a Fase 5), as frases da fila, a ordem de coleta.
+
+**Depois da 189 — candidata à Etapa 190 (C450):** a entrada manual (`POST /movimentacoes/v2`) passa a aceitar `data_validade` do lote
+novo (o `MovimentacaoSchema` e a chamada de `criarOuObterLote`) e, se couber, uma rota para corrigir a validade de um lote existente
+(com auditoria e a permissão `inspecionar`). Cenário de partida: a sonda `rev188-s1.js` (c).

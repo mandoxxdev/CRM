@@ -11,14 +11,23 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-22):** **Etapa 187 fechada** (**a ferramenta baixada não é calibrada nem editada, e a restrição da
+> **Onde o desenvolvimento está (2026-10-23):** **Etapa 188 fechada** (**a fila de separação diz de onde pegar cada item e em que ordem
+> andar** — na **Fila de separação**, cada item que dá para separar ganha *"Pegar em ⟨endereço⟩ (⟨caminho⟩) — lote ⟨L⟩ (vence DD/MM/AAAA) ·
+> ⟨quantidade⟩ ⟨un⟩ — escolha este endereço no 'Sai de' ao separar"*, e a requisição com dois ou mais endereços ganha a lista **Ordem de
+> coleta**, pelo caminho na árvore de localizações (A-2 antes de A-10); os itens continuam na ordem do pedido; o lote que vence antes primeiro,
+> depois a padrão, depois o maior; nunca sugere endereço bloqueado, inativo, área especial, lote bloqueado ou vencido; o item já separado em
+> parte fica no mesmo endereço; material com parte retida ganha o alerta *"Parte do saldo deste material está retida …"*; é só dica — não
+> reserva, não trava, não grava; nada a rodar antes do deploy; decisões **B1250** a **B1259**; avisos **C449** (duas requisições, o mesmo
+> endereço), **C450** (o lote da Entrada manual fica sem validade — anterior) e **C451** (a dica sem escolher o **Sai de** baixa de outro
+> lugar; com lote, linha sem lote negativa); limitações **D (188)**; revisão adversarial feita e corrigida). **Próxima: Etapa 189** — a
+> pré-seleção do **Sai de** e a lista de coleta impressa (ver o plano da 189).
+> *(Também em 2026-10-22: **Etapa 187 fechada** (**a ferramenta baixada não é calibrada nem editada, e a restrição da
 > manutenção aparece na lista e no Emprestar** — a ferramenta descartada ainda aceitava registrar calibração e ser editada pela integração;
 > agora o sistema recusa com *"Ferramenta baixada não pode ser calibrada (⟨nome⟩)"* / *"… editada (⟨nome⟩)"*, e a linha da baixada perde o
 > **Editar** (para corrigir um dado, **Reverter baixa** primeiro); e a ferramenta que voltou da manutenção *Em uso com restrição* ficava igual
 > a uma perfeita: agora a lista mostra o selo **Em uso com restrição** com o texto, para todos, e o **Emprestar** avisa sem bloquear; a
 > restrição sai quando uma manutenção nova é concluída *Em condições de uso*; nada a rodar antes do deploy; decisões **B1240** a **B1248**;
-> **D (177)(2)** e **(5)** resolvidos; limitações **D (187)**; revisão adversarial feita e corrigida). **Próxima: Etapa 188** — a fila de
-> separação sugere de onde pegar cada item e em que ordem andar (ver o plano da 188).
+> **D (177)(2)** e **(5)** resolvidos; limitações **D (187)**; revisão adversarial feita e corrigida); a próxima era a **188**.)*
 > *(Também em 2026-10-22: **Etapa 186 fechada** (**o PDF da remessa a terceiros, o da posição do cliente e as etiquetas
 > cabem na folha: nada é cortado** — na remessa (o papel que volta assinado pelo terceiro) e na posição do cliente, cada texto da linha do item
 > era cortado por número de letras: o código de EPI invadia a coluna do material e o nome comprido do material perdia o fim; agora cada célula
@@ -4288,7 +4297,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -12997,6 +13006,86 @@ restrição em todos — quem esconde é a tela. **Reversível.** `c643054e`.
 aceitando outro endereço. Não depende da empresa. O plano já está escrito e revisado (Fase 2, `e9192204`):
 `docs/superpowers/plans/2026-10-22-almoxarifado-etapa188-sugestao-de-coleta-na-fila-de-separacao.md` (decisões **B1250** a **B1259**;
 **B1249** fica livre).
+*(Feita: a Etapa 188 — B1250 a B1259.)*
+
+**B1250 (NOVA, da Etapa 188; decisão do agente) — a sugestão de coleta é só de leitura e não pega trava.** Não reserva, não segura
+endereço, não grava. A trava por material é de quem lê o disponível **para reservar** ou para limitar o que outra porta reserva; exibir não é
+nenhum dos dois. A separação continua recalculando tudo sob a trava dela. Pior caso: a dica fica velha e a separação recusa com a frase de
+sempre (provado pela rota: *"⟨material⟩: O saldo em ZB-01 (2) não cobre a quantidade (5) — a saída tiraria de outros endereços"*, e a fila
+recarregada sugere outro). Listar a fila duas vezes não muda nenhuma linha de nenhuma tabela (teste). **Descartado:** reservar o endereço
+sugerido (mudaria a reserva, que é global por material — "área física, não filial") e pegar a trava na leitura da fila (serializaria a tela
+mais aberta do almoxarife sem proteger nada). **Reversível.** `e550353e`, `f35321ac`.
+
+**B1251 (NOVA, da Etapa 188; decisão do agente; reescrita na revisão do plano) — o critério: o lote que vence antes, depois a localização
+padrão, depois o endereço com mais saldo.** É a ordem do seletor de lote da movimentação (FEFO: lote com validade mais próxima primeiro; sem
+validade e sem lote por último), seguida da ordem em que o motor tira quando ninguém escolhe (a padrão, depois o maior), depois o percurso.
+**Esta decisão dizia, no plano, "a dica e o automático apontam para o mesmo lugar, exceto quando o FEFO manda outro lote" — estava errado**
+(Fase 2, I1): a saída automática **nunca escolhe lote** (B204) e, sem lote, divide começando pela padrão; com lote, separar no automático e
+entregar de um clique baixa de uma linha *sem lote* (reproduzido: L1 6 e L2 9 intactos, linha sem lote −5 na padrão). **Por isso a dica só
+vale se o separador a escolher no "Sai de"**, e a linha termina com *"— escolha este endereço no 'Sai de' ao separar"*. **Descartado:** "o
+endereço mais perto" (não há distância gravada; só a árvore) e "só o maior" (deixaria o lote vencer). **Reversível.** `27819165`, `aa41152f`.
+
+**B1252 (NOVA, da Etapa 188; decisão do agente) — a ordem de percurso é a da árvore, com número como número.** Almoxarifado, depois cada
+nível da árvore de localizações, comparando *A-2* antes de *A-10*; pai antes do filho; endereço sem almoxarifado por último; empate pelo id.
+**Descartado:** ordenar pelo código cru (põe *A-10* antes de *A-2*) e pela posição desenhada no Mapa (nem toda localização tem desenho).
+**Reversível.** `27819165`.
+
+**B1253 (NOVA, da Etapa 188; decisão do agente) — nunca é sugerido: sem endereço, bloqueado, inativo, de almoxarifado inativo, área especial,
+lote bloqueado ou vencido.** Área especial pelo molde da sugestão de entrada (Etapa 68): quarentena, expedição, sucata e devoluções nunca;
+área de cliente só para material de cliente. **Diverge da 68 num ponto:** a localização **padrão** dentro de uma área especial também não é
+sugerida (na 68 a padrão não passa pelo filtro de área). A porta **continua aceitando** separar dali (a 68 é aviso, não recusa) — só não é a
+dica; endereço inativo é aceito como origem pela separação hoje, e a porta **não muda**. Com a alçada de valor barrando a requisição, não há
+dica nenhuma (o separar recusaria). **Fase 5:** quando o endereço de onde o item **já foi separado** deixa de ser sugerível (bloqueado,
+inativo, área especial, lote bloqueado/vencido), o aviso é próprio — *"Já separado de ⟨end⟩, que não pode mais ser sugerido (…)"* — em vez de
+*"o resto não cabe lá"*, que era mentira com saldo lá (`9efbcf4a`, `9b159c69`). **Descartado:** sugerir a área especial com um aviso (mandaria
+o separador à quarentena quando há material na prateleira comum). **Reversível.** `27819165`, `e550353e`.
+
+**B1254 (NOVA, da Etapa 188; decisão do agente) — um endereço por item, nunca a combinação; e quem já separou em parte fica no mesmo
+endereço.** A separação aceita **uma** origem por item por rodada, e uma rodada com outro endereço sobre o que já está separado apaga a
+origem e grava uma **troca** (Etapa 65). Por isso: (1) quando nenhum endereço tem tudo, a dica é o de **maior** saldo (o resto que vai virar
+troca é o menor), com *"Nenhum endereço tem tudo: pegue ⟨q⟩ aqui. Separar o resto de outro endereço depois troca a origem da separação."*;
+(2) item já separado em parte (Fase 2, crítico C1): a dica é **sempre** o endereço de onde ele foi separado, mesmo que outro tenha tudo — se
+ele não cobre, *"Já separado de ⟨end⟩: o resto não cabe lá. Separar de outro endereço troca a origem da separação (a entrega passa a sair
+automática)."* (reproduzido: seguir uma dica que mandasse a outro endereço gravava a troca e o livro saía errado — sistema A 4 / P 14, físico
+A 1 / P 17). **Fase 5 (`9b159c69`):** em material **com lote**, *"a entrega passa a sair automática"* conduzia ao defeito anterior da linha
+sem lote (**C451**); com lote, as duas frases terminam em *"Na entrega, escolha o lote no 'Sai de': a saída automática não escolhe lote."*
+**Descartado:** devolver a combinação (fica para quando a separação aceitar mais de uma origem por item sem chamar isso de troca); o
+primeiro do FEFO quando nenhum cobre (podia sugerir 1 de 10). Por isso também "o primeiro que cobre" ganha do FEFO estrito: com o L1 de 2 e o
+L2 de 10 para 5, a dica é L2. **Reversível.** `27819165`, `aa41152f`.
+
+**B1255 (NOVA, da Etapa 188; decisão do agente) — o livre do endereço desconta o que já foi separado de lá com origem escolhida e não
+entregue, de qualquer requisição.** É a régua da divergência (Etapa 60), a mais estrita das duas da separação. Dentro da mesma requisição, o
+segundo item do mesmo material vê o endereço já descontado do que foi sugerido ao primeiro, na ordem do pedido (B821). Material com série:
+o livre do lote é limitado também pelas séries *Em estoque* dele (série bloqueada não conta). **O desconto é parcial** (Fase 2, I2): o
+separado **no automático** não tem endereço gravado em lugar nenhum (separar não move estoque) e **não é descontado** — se a pessoa foi à
+B-01 pela dica e separou no automático, outra requisição ainda recebe B-01 com a prateleira vazia. Some quando a pré-seleção do **Sai de**
+(Etapa 189) fizer a separação gravar o endereço. Entre requisições, a dica de uma não desconta a da outra (**C449**). **Descartado:**
+descontar a dica entre requisições (a fila de outra pessoa mudaria a minha dica). **Reversível.** `27819165`, `e550353e`.
+
+**B1256 (NOVA, da Etapa 188) — os itens continuam na ordem do pedido; a ordem de coleta é um campo novo.** A spec 05 pedia *"Sugestão de rota
+(ordenar itens pela hierarquia de localizações)"* — **isso estava errado**: reordenar os itens mudaria a divisão do separável entre itens do
+mesmo material (B821, Etapa 127), que é feita na ordem do pedido. O texto da spec foi corrigido à vista. **Reversível.** `e550353e`.
+
+**B1257 (NOVA, da Etapa 188; decisão do agente) — o PDF "Imprimir lista de coleta" e a pré-seleção no "Sai de" ficam para a Etapa 189.** O
+PDF tem regra própria de largura medida (Etapa 186) e merece etapa sua; a pré-seleção muda o que a janela de separação grava por padrão (hoje
+*"Qualquer endereço (automático)"*), que é decisão à parte — e é ela que torna a dica verdadeira (B1251, B1255, **C451**). Esta etapa ficou M.
+**Reversível.**
+
+**B1258 (NOVA, da Etapa 188, revisão adversarial; decisão do agente) — material com parte retida: a dica vem com alerta, não some.** A
+retenção (bloqueado, em inspeção, em terceiros) é guardada por **material**, não por endereço: com 5 boas em *A* e 10 em inspeção na padrão
+*P*, a dica mandava a *P* como se as 10 fossem livres (reproduzido). O sistema não sabe em qual endereço estão as retidas. **Escolhido:**
+quando o material tem retido > 0, a linha da dica ganha *"Parte do saldo deste material está retida (em inspeção, bloqueada ou em terceiros)
+e o sistema não sabe em qual endereço — confira antes de pegar."* (campo próprio no servidor, `pegar_em_alerta = RETENCAO_NO_MATERIAL`,
+porque convive com os outros avisos). **Descartado:** esconder a dica (o saldo do endereço existe e muitas vezes é o certo); tirar a padrão
+da frente (chute — a retenção pode estar em qualquer endereço); descontar o retido de algum endereço (qual?). **Reversível.** `9efbcf4a`,
+`9b159c69`.
+
+**B1259 (NOVA, da Etapa 188) — a próxima etapa (189): a pré-seleção do "Sai de" e a lista de coleta impressa.** A pré-seleção vem primeiro
+— é o que faz a dica e o estoque concordarem (B1251, **C451**). Não depende da empresa. O plano já está escrito e revisado:
+`docs/superpowers/plans/2026-10-23-almoxarifado-etapa189-lista-de-coleta-e-pre-selecao-do-sai-de.md` (decisões a partir de **B1260**). A
+pré-seleção precisa respeitar o que a revisão adversarial da 188 acrescentou: não pré-selecionar em silêncio quando houver o alerta de
+retenção (B1258), não pré-selecionar a planejada indisponível (B1253) e, em material com lote, lembrar que é o "Sai de" da **entrega** que
+escolhe o lote (**C451**).
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -16647,6 +16736,31 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      Consumido, Devolvido e Saldo continuam mostrando o número como vem do banco: *12.5*, *1250.75* — e uma conta de fração pode aparecer como
      *0.30000000000000004*. É o **mesmo** número (**B1238**). **O que fazer:** ao conferir o papel com a tela junto do cliente, ler o ponto da
      tela como vírgula; se aparecer um número com muitas casas na tela, vale o do papel (arredondado em 4 casas).
+449. **NOVO (da Etapa 188, revisão adversarial) — duas requisições abertas ao mesmo tempo recebem o mesmo endereço da Fila de separação, e a
+     segunda é recusada na entrega.** A dica de uma requisição não desconta a dica da outra (**B1255**). Com 10 em *P-01* (a padrão) e 10 em
+     *B-01*, duas requisições de 6: as duas recebem *"Pegar em P-01 …"*. A primeira separa 6 de *P-01*; **a segunda também separa 6 de P-01 e é
+     aceita** (a separação só confere o saldo do endereço contra o separado da **própria** requisição); na entrega, a primeira sai e a segunda
+     é recusada: *"⟨material⟩: a origem da separação (P-01) não serve mais (O saldo em P-01 (4) não cobre a quantidade (6) — a saída tiraria
+     de outros endereços) — entregue escolhendo de onde sai"*. **Nenhum erro de estoque** (nada sai a mais; a recusa vem antes de baixar). A
+     fila, recarregada depois da primeira separação, já manda a segunda para *B-01*. **O que fazer:** **Atualizar** a fila antes de ir à
+     prateleira (a fila é uma fotografia); se a entrega recusar assim, escolher no **Sai de** da entrega o endereço onde o material está.
+450. **NOVO (da Etapa 188, revisão adversarial; o defeito é anterior, desde a Etapa 6) — o lote criado numa Entrada manual fica sem validade
+     para sempre.** Em **Movimentações → Entrada** de um material com lote, o lote novo é criado **sem** data de validade — o servidor não
+     recebe o campo e não há tela que edite a validade de um lote. Consequência: esse lote vai para o **fim** do FEFO (na dica de coleta e no
+     seletor de lote da movimentação), **não** gera alerta de vencimento e **nunca** é recusado como vencido. Só o lote que nasce pela **nota
+     de recebimento** (campo de validade do item) tem validade. Reproduzido: entrada pela integração com validade 01/01/2026 → lote gravado
+     sem validade, e a saída desse lote em outubro de 2026 aceita. **O que fazer:** material com validade entra pela nota de recebimento; um
+     lote já criado pela entrada manual fica sem validade até a correção (candidata à etapa seguinte à 189 — **D (188)**).
+451. **NOVO (da Etapa 188) — quem pega da dica e deixa o "Sai de" no automático faz o sistema baixar de outro endereço; com lote, deixa uma
+     linha "sem lote" negativa.** A dica da Fila de separação (*"Pegar em …"*) é só orientação: a janela de separação continua abrindo em
+     *"Qualquer endereço (automático)"*. Separado no automático, a entrega de um clique baixa pela regra do motor — a localização padrão,
+     depois a de mais saldo — e, **em material com lote, de uma linha *sem lote*** (o automático não escolhe lote — **B204**; defeito
+     anterior à etapa): o lote da prateleira fica com o saldo intacto e aparece uma linha sem lote negativa (reproduzido: L1 4 e L2 9
+     intactos, linha sem lote −6). O mesmo acontece quando um item já separado de um endereço tem o resto separado de outro (a origem vira
+     automática). E o separado no automático não tem endereço, então a dica de outra requisição não o desconta (**B1255**). **O que fazer:**
+     ao separar, **escolher no Sai de o endereço da dica** (a linha diz isso); em material com lote, na entrega, escolher o lote no **Sai de**
+     (o aviso da fila diz isso). Some com a pré-seleção da **Etapa 189** (**B1259**) para a separação; a entrega no automático de material com
+     lote continua pela **B204**.
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -17998,6 +18112,16 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(188) A sugestão de coleta na Fila de separação, o que ficou de fora.** (1) **A pré-seleção do "Sai de"** — a janela de separação
+  continua abrindo no automático; a dica só vale se o separador escolher o endereço (**C451**, **B1257**) — é a Etapa 189. (2) O **PDF**
+  *"Imprimir lista de coleta"* (**B1257**) — Etapa 189. (3) A **combinação** de dois endereços para um item (**B1254**). (4) A **distância**
+  real entre prateleiras: a ordem é a da árvore de localizações (**B1252**). (5) O separado **no automático** não é descontado da dica de
+  outra requisição (**B1255**), e a dica de uma requisição não desconta a da outra (**C449**). (6) Com parte do material **retida**, a dica
+  avisa mas não sabe qual endereço tem as peças retidas (**B1258**) — a retenção é guardada por material. (7) A **validade do lote** criado
+  por **Entrada** manual não é gravada (**C450**, defeito anterior desde a Etapa 6): o servidor descarta o campo e não há rota para editar
+  a validade de um lote; candidata à etapa seguinte à 189. (8) O detalhe da requisição e a janela de separação **não** mostram a dica — só
+  a Fila (a 189 leva a dica à janela). (9) A fila faz mais 4 consultas por abertura (5 com material de série na fila), uma vez para a fila
+  inteira — aceitável no tamanho do cliente.
 - **(187) A baixada que não edita nem calibra e a restrição da manutenção, o que ficou de fora.** (1) A **inspeção** não avisa que o
   instrumento está em uso com restrição — só a lista de ferramentas e o **Emprestar** mostram. (2) O empréstimo **não grava** que houve o
   aviso (nem no termo, nem na Auditoria) — **B1246**. (3) O histórico da ferramenta pela integração (`GET /ferramentas/:id/manutencoes`,
@@ -19244,6 +19368,12 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(188) Nenhum clique foi dado no navegador.** O que os testes provam: o servidor pela rota real (a dica, a ordem de coleta, a planejada
+que não cobre e a indisponível, o alerta de retenção, o lote vencido e a virada de dia de Brasília, listar duas vezes sem gravar nada, a dica
+velha recusada pela separação, a divisão B821 intacta) e a tela com o JSON escrito à mão (as frases literais, a lista com 1 e 2 paradas, a
+resposta antiga sem os campos novos). **Não verificado à mão:** o roteiro clicável da seção da Etapa 188 (cenários 1 a 9), em especial o
+caminho entre parênteses com o almoxarifado padrão (*ALM-GERAL / B-02*) e o cenário 8 (material em inspeção pela nota). Vale 10 minutos.
 
 **(187) Nenhum clique foi dado no navegador.** O que os testes provam: o servidor pela rota real (a baixada recusa editar e calibrar, com o
 certificado apagado do disco; a restrição na lista para os quatro perfis; o gesto inteiro de restrição → empréstimo → devolução → manutenção
@@ -36404,9 +36534,110 @@ voltou a ficar disponível"*. O **Editar** e a **Calibração** voltam; editar o
   manutenção* ou *Bloqueado* ainda mede na inspeção (**B1146**).
 - **Nada a rodar antes do deploy.**
 
+## Etapa 188 — A fila de separação diz de onde pegar cada item e em que ordem andar (2026-10-23)
+
+Até aqui a **Fila de separação** dizia **o que** separar (*"a separar 5 UN (separável agora 5)"*), mas não **onde está**: o almoxarife
+abria a requisição, olhava o **Sai de** e procurava a prateleira; só depois de separar a fila mostrava *"separado de A-01"*. Agora cada item
+que dá para separar ganha uma linha **"Pegar em …"** — o endereço, o lote (com a validade) e quanto pegar ali —, e a requisição com dois ou
+mais endereços ganha a lista **Ordem de coleta**, na ordem em que se anda pelo almoxarifado (corredor A antes do B, prateleira 2 antes da 10).
+É **só uma dica**: ninguém reserva a prateleira, nada é gravado, e a separação continua aceitando outro endereço. É a lista de mercado
+escrita na ordem dos corredores — ela não segura o leite na gôndola; só evita voltar duas vezes ao corredor 1. **Atenção:** a dica só vale
+se o separador **escolher o endereço no Sai de** ao separar (a linha diz isso); deixar o **Sai de** em *"Qualquer endereço (automático)"*
+faz o sistema baixar de onde ele quiser (**C451**). A pré-seleção do **Sai de** é a **Etapa 189**. Nada a rodar antes do deploy. Decisões do
+agente: **B1250** a **B1259**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A fila dizia o que separar, não onde | *"Pegar em ⟨endereço⟩ (⟨caminho⟩) — lote ⟨L⟩ (vence DD/MM/AAAA) · ⟨quantidade⟩ ⟨un⟩ — escolha este endereço no 'Sai de' ao separar"* (**B1251**) |
+| Uma requisição com vários endereços não tinha roteiro | Lista **Ordem de coleta**, numerada, pelo caminho na árvore de localizações, com número como número (**B1252**); os itens continuam na ordem do pedido (**B1256**) |
+| — | Endereço sem saldo livre (já separado para outra requisição e não entregue) não é sugerido (**B1255**) |
+| — | Nunca é sugerido: saldo sem endereço, endereço bloqueado ou inativo, área especial, lote bloqueado ou vencido (**B1253**) |
+| — | Nenhum endereço tem tudo: a dica é o de maior saldo, com *"Nenhum endereço tem tudo: pegue ⟨q⟩ aqui. …"* (**B1254**) |
+| — | Item já separado em parte: a dica é **sempre** o endereço de onde ele já foi separado, nunca outro (**B1254**) |
+| — | Material com parte retida (em inspeção, bloqueada ou em terceiros): a dica vem com o alerta *"Parte do saldo deste material está retida …"* (**B1258**) |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Almoxarife** (ou Administrador do almoxarifado). Em **Configurações → aba Localizações**, três posições comuns
+(tipo *Prateleira*) — *A-01*, *B-02* — e uma do tipo *Área de quarentena/inspeção*, *Q-01*; todas ficam no almoxarifado padrão (*ALM-GERAL*).
+Cinco materiais **sem** controle por lote nem série, unidade *UN*: *PARAF-188* (nome *Parafuso 188*), *ARRUELA-188*, *PORCA-188*,
+*PINO-188* e *BUCHA-188* — **um por cenário**, porque a aprovação de uma requisição reserva o material e mudaria o cenário seguinte. Em
+**Movimentações → Entrada**: *PARAF-188*, *ARRUELA-188* e *BUCHA-188* com 3 em *A-01* e 10 em *B-02*; *PORCA-188* 8 em *A-01*; *PINO-188*
+10 em *B-02*. As requisições são criadas em **Requisições** e aprovadas como sempre; a fila fica em **Almoxarifado → Fila de separação** (logo
+abaixo de **Requisições (almox.)**). Clique **Atualizar** na fila depois de cada gesto. O caminho entre parênteses (*ALM-GERAL / B-02*) aparece
+porque o endereço está dentro de um almoxarifado; dentro de uma rua, ele cresce (*ALM-GERAL / A / A-01*).
+
+**1. A dica.** Requisição de *PARAF-188* 5, aprovada. Na fila, embaixo do item: *"Pegar em B-02 (ALM-GERAL / B-02) · 5 UN — escolha este
+endereço no 'Sai de' ao separar"*. Por que B-02 e não A-01: A-01 tem 3, não cobre 5; a dica é o primeiro endereço que tem tudo.
+
+**2. Nenhum endereço tem tudo.** Requisição de *ARRUELA-188* 12. A linha: *"Pegar em B-02 (ALM-GERAL / B-02) · 10 UN — escolha este endereço
+no 'Sai de' ao separar"* e, embaixo, *"Nenhum endereço tem tudo: pegue 10 aqui. Separar o resto de outro endereço depois troca a origem da
+separação."* A dica é o endereço com **mais** saldo (o resto que vai virar troca é o menor).
+
+**3. A ordem de coleta.** Uma requisição com dois itens, nesta ordem: *PINO-188* 5 e *PORCA-188* 2. Os itens continuam na ordem do pedido
+(*PINO* primeiro, com *"Pegar em B-02 …"*; *PORCA* depois, com *"Pegar em A-01 …"*), e abaixo deles aparece **Ordem de coleta**:
+*1. ALM-GERAL / A-01 — PORCA-188 · 2* e *2. ALM-GERAL / B-02 — PINO-188 · 5* — A antes de B, mesmo a *PORCA* tendo sido pedida depois. Com uma
+parada só, a lista não aparece (repetiria a linha).
+
+**4. Quem já separou em parte não é mandado para outro lugar.** Requisição de *BUCHA-188* 6. **Abrir** → **Iniciar Separação**: quantidade
+3, **Sai de** = *A-01 (3)*, **📦 Confirmar Separação**. Na fila, o item mostra *"Já separado de A-01: o resto não cabe lá. Separar de outro
+endereço troca a origem da separação (a entrega passa a sair automática)."* — e **nenhuma** linha *"Pegar em B-02"*, mesmo B-02 tendo 10.
+Separar de outro endereço agora gravaria uma troca (**B1254**).
+
+**5. O endereço de onde já se separou ficou bloqueado.** Continue o cenário 4: em **Configurações → Localizações**, edite *A-01* e marque
+**🔒 Localização bloqueada**. Na fila, o aviso do item passa a ser *"Já separado de A-01, que não pode mais ser sugerido (endereço
+bloqueado ou inativo, em área especial ou lote bloqueado/vencido). Confira antes de separar o resto: separar de outro endereço troca a
+origem da separação (a entrega passa a sair automática)."* Desmarque o bloqueio depois.
+
+**6. Material com lote: o aviso manda escolher o lote na entrega.** Num material **com** controle por lote, o mesmo cenário 4 (separar 3 do
+lote *L1* em *A-01*) mostra *"Já separado de A-01 — lote L1: o resto não cabe lá. Separar de outro endereço troca a origem da separação. Na
+entrega, escolha o lote no 'Sai de': a saída automática não escolhe lote."* (**C451**).
+
+**7. Nada sugerível.** Material com saldo só em *Q-01* (área de quarentena): o item continua com o chip **Separar** (a separação aceita),
+sem *"Pegar em"*, e com *"Sem endereço para sugerir (o saldo está sem endereço, em endereço bloqueado ou inativo, em área especial ou em
+lote bloqueado/vencido)."*
+
+**8. Material com parte retida.** Use um material que tenha quantidade **em inspeção** (uma nota recebida com a inspeção ainda não
+decidida — aparece em **Inspeções**) ou bloqueada. A dica aparece normalmente e, embaixo, *"Parte do saldo deste material está retida (em
+inspeção, bloqueada ou em terceiros) e o sistema não sabe em qual endereço — confira antes de pegar."* O sistema guarda a retenção por
+material, não por endereço: ele não sabe se as peças retidas são as da prateleira sugerida (**B1258**).
+
+**9. A dica não trava nada.** Com a fila aberta no cenário 1, outra pessoa tira 8 de *B-02* (**Movimentações → Saída** do *PARAF-188*, com
+justificativa). Separe 5 de *B-02* mesmo assim: *"Parafuso 188: O saldo em B-02 (2) não cobre a quantidade (5) — a saída tiraria de outros
+endereços"* — a recusa de sempre. **Atualizar** na fila: a dica muda.
+
+### O que esta etapa NÃO cobre
+
+- **O Sai de não vem escolhido:** a janela de separação continua abrindo em *"Qualquer endereço (automático)"*. Quem pega da dica e não
+  escolhe o endereço no **Sai de** faz o sistema baixar de outro endereço — e, com lote, deixar uma linha *sem lote* negativa (**C451**). A
+  pré-seleção é a **Etapa 189** (**B1257**, **B1259**).
+- O separado no automático não tem endereço gravado: a dica de outra requisição não o desconta (**B1255**, **C451**).
+- Duas requisições abertas ao mesmo tempo recebem o mesmo endereço; a segunda separa e é recusada **na entrega** (**C449**).
+- O PDF *"Imprimir lista de coleta"* (**B1257**); a combinação de dois endereços para um item (**B1254**); a distância real entre
+  prateleiras (só a árvore — **B1252**).
+- A validade do lote só vem da nota de recebimento: o lote criado numa **Entrada** manual fica sem validade e vai para o fim do FEFO
+  (**C450**, defeito anterior).
+- **Nada a rodar antes do deploy.**
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 188 entregue (2026-10-23):** **a fila de separação diz de onde pegar cada item e em que ordem andar.** A fila devolve, por item,
+  um endereço e lote para pegar (o lote que vence antes, a padrão, o maior — **B1251**), nunca bloqueado, inativo, área especial, lote
+  bloqueado ou vencido (**B1253**), descontando o separado de lá com origem escolhida (**B1255**), um endereço por item e, para quem já
+  separou em parte, o mesmo endereço (**B1254**); por requisição, a ordem de coleta pela árvore (**B1252**), com os itens na ordem do pedido
+  (**B1256** — a spec 05 pedia "ordenar itens" e **estava errada**). Só leitura, sem trava (**B1250**). A revisão do plano achou a dica que
+  mandava trocar a origem de quem já separou (crítico, corrigido antes de codar) e que a dica e o automático não concordam (**B1251**
+  reescrita, **C451**). A revisão adversarial achou a dica mandando pegar material em inspeção (alerta novo, **B1258**), o aviso com lote
+  conduzindo à linha sem lote negativa (frase própria, **C451**), o aviso "o resto não cabe lá" com o endereço bloqueado (aviso próprio,
+  **B1253**) e dois testes que faltavam (o lote da planejada; a virada de dia de Brasília) — corrigidos, com controles; registrou **C449** e
+  **C450** (anterior). Commits `7f08cd90` (plano), `e9192204` (Fase 2), `27819165` (T1), `e550353e` (T2), `aa41152f` (T3), `f35321ac` (T4),
+  a revisão adversarial `9efbcf4a` e `9b159c69`, e o fechamento. **O que é seu:** as decisões **B1250** a **B1258** (reversíveis); os avisos
+  **C449** a **C451**; as limitações **(188)** em D e a verificação **(188)** em F. **Próxima: Etapa 189 — a pré-seleção do "Sai de" e a
+  lista de coleta impressa (B1259); ver o plano da 189.**
 
 - **Etapa 187 entregue (2026-10-22):** **a ferramenta baixada não é calibrada nem editada, e a restrição da manutenção aparece na lista e no
   Emprestar.** O servidor recusa calibrar e editar a baixada com o nome dela (**B1240**, **B1241**, **B1242**), com a guarda na gravação

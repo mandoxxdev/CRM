@@ -1,19 +1,27 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-22 (Etapas 172 a 187) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-23 (Etapas 172 a 188) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186 e 187) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187 e 188) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172 a 178 e 180 a 187 ENTREGUES · próxima: Etapa 188)
+> ## Onde o desenvolvimento está — 2026-10-23 (Etapas 172 a 178 e 180 a 188 ENTREGUES · próxima: Etapa 189)
 >
-> **O desenvolvimento parou aqui: Etapa 187 fechada — 2026-10-22.** **A ferramenta baixada não é calibrada nem editada, e a restrição da
+> **O desenvolvimento parou aqui: Etapa 188 fechada — 2026-10-23.** **A fila de separação diz de onde pegar cada item e em que ordem
+> andar**: em **Almoxarifado → Fila de separação**, cada item que dá para separar ganha *"Pegar em ⟨endereço⟩ (⟨caminho⟩) — lote ⟨L⟩ (vence
+> DD/MM/AAAA) · ⟨quantidade⟩ ⟨un⟩ — escolha este endereço no 'Sai de' ao separar"*, e a requisição com dois ou mais endereços ganha a lista
+> **Ordem de coleta** (A antes de B, prateleira 2 antes da 10); os itens continuam na ordem do pedido. É só uma dica — não reserva nem trava
+> nada. O item já separado em parte fica no mesmo endereço; material com parte retida ganha um alerta. **A janela de separação ainda abre no
+> automático:** escolha o endereço da dica no **Sai de** (**C451**). Nada a rodar antes do deploy. **Próxima: Etapa 189** — a pré-seleção do
+> **Sai de** e a lista de coleta impressa (ver o plano da 189).
+>
+> **Etapa 187, 2026-10-22.** **A ferramenta baixada não é calibrada nem editada, e a restrição da
 > manutenção aparece na lista e no Emprestar**: em **Almoxarifado → Ferramentas**, a linha da ferramenta *Baixada* não tem mais **Editar**
 > (para corrigir um dado, **Reverter baixa** primeiro) e o sistema recusa calibrar ou editar a baixada com *"Ferramenta baixada não pode ser
 > calibrada (⟨nome⟩)"* / *"… editada (⟨nome⟩)"*; a ferramenta que voltou da manutenção *Em uso com restrição* mostra o selo amarelo **Em uso
 > com restrição** e *"Restrição: ⟨texto⟩"* para todos, e o **Emprestar** avisa sem bloquear; a restrição sai com uma manutenção nova *Em
 > condições de uso*. Nada a rodar antes do deploy. **Próxima: Etapa 188** — a fila de separação sugere de onde pegar cada item e em que ordem
-> andar (ver o plano da 188).
+> andar (ver o plano da 188). *(Feita: a 188.)*
 >
 > **Etapa 186, 2026-10-22.** **Os PDFs da remessa a terceiros e da posição do cliente cabem na
 > folha**: no **PDF da remessa** (**Almoxarifado → Remessas a Terceiros → Abrir → PDF da remessa**) e no **PDF da posição** (**Materiais de
@@ -6940,6 +6948,66 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 188 — A fila de separação diz de onde pegar cada item e em que ordem andar (ENTREGUE — 2026-10-23)
+
+**O que mudou, em uma frase:** na **Fila de separação**, cada item que dá para separar diz **onde pegar** (endereço, lote e quanto), e a
+requisição com dois ou mais endereços ganha a lista **Ordem de coleta**, na ordem em que se anda pelo almoxarifado.
+
+**O problema que ela resolve.** A fila dizia *o que* separar, mas não *onde está*: o almoxarife abria a requisição, olhava o **Sai de** e
+procurava a prateleira. Agora a fila já diz — como uma lista de mercado escrita na ordem dos corredores. É **só uma dica**: ninguém reserva a
+prateleira, nada é gravado, e a separação continua aceitando outro endereço.
+
+| Antes | Agora |
+|---|---|
+| *"a separar 5 UN (separável agora 5)"* e mais nada | Embaixo: *"Pegar em B-02 (ALM-GERAL / B-02) · 5 UN — escolha este endereço no 'Sai de' ao separar"* (com lote: *"— lote L1 (vence DD/MM/AAAA)"*) |
+| Requisição com vários endereços: o separador decidia a ordem | Lista **Ordem de coleta** (A antes de B, prateleira 2 antes da 10); os itens continuam na ordem do pedido |
+| — | Nenhum endereço tem tudo: *"Nenhum endereço tem tudo: pegue 10 aqui. Separar o resto de outro endereço depois troca a origem da separação."* |
+| — | Item já separado em parte: a dica fica no mesmo endereço, ou *"Já separado de A-01: o resto não cabe lá. …"* |
+| — | Endereço de onde já se separou ficou bloqueado: *"Já separado de A-01, que não pode mais ser sugerido (…)"* |
+| — | Material com parte em inspeção ou bloqueada: *"Parte do saldo deste material está retida (…) — confira antes de pegar."* |
+
+**Antes de testar (uma vez).** Um usuário **Almoxarife** (ou Administrador do almoxarifado). Em **Configurações → aba Localizações**, duas
+posições comuns (tipo *Prateleira*), *A-01* e *B-02*, e uma do tipo *Área de quarentena/inspeção*, *Q-01* (todas no almoxarifado padrão,
+*ALM-GERAL*). Cinco materiais **sem** lote nem série, unidade *UN*: *PARAF-188* (nome *Parafuso 188*), *ARRUELA-188*, *PORCA-188*,
+*PINO-188* e *BUCHA-188* — um por passo, porque aprovar uma requisição reserva o material. Em **Movimentações → Entrada**: *PARAF-188*,
+*ARRUELA-188* e *BUCHA-188* com 3 em *A-01* e 10 em *B-02*; *PORCA-188* 8 em *A-01*; *PINO-188* 10 em *B-02*.
+
+**Roteiro de teste (10 minutos — como Almoxarife).** A fila fica em **Almoxarifado → Fila de separação**; clique **Atualizar** depois de cada
+gesto.
+
+1. **A dica.** Em **Requisições**, crie e aprove uma requisição de *PARAF-188* 5. Na fila, embaixo do item: *"Pegar em B-02 (ALM-GERAL /
+   B-02) · 5 UN — escolha este endereço no 'Sai de' ao separar"* (A-01 tem 3, não cobre 5).
+2. **Nenhum endereço tem tudo.** Requisição de *ARRUELA-188* 12, aprovada. A linha: *"Pegar em B-02 (ALM-GERAL / B-02) · 10 UN — escolha
+   este endereço no 'Sai de' ao separar"* e, embaixo, *"Nenhum endereço tem tudo: pegue 10 aqui. Separar o resto de outro endereço depois
+   troca a origem da separação."*
+3. **A ordem de coleta.** Requisição com dois itens, nesta ordem: *PINO-188* 5 e *PORCA-188* 2, aprovada. Os itens aparecem na ordem do
+   pedido; embaixo, **Ordem de coleta**: *1. ALM-GERAL / A-01 — PORCA-188 · 2* e *2. ALM-GERAL / B-02 — PINO-188 · 5*.
+4. **Seguir a dica.** Na requisição do passo 1, **Abrir** → **Iniciar Separação**: quantidade 5, **Sai de** = *B-02 (10)*, **📦 Confirmar
+   Separação**. Na fila, o item fica *"separado de B-02"* e a linha *"Pegar em"* some (nada mais a separar).
+5. **Quem já separou em parte fica no mesmo endereço.** Requisição de *BUCHA-188* 6, aprovada. **Iniciar Separação**: quantidade 3, **Sai
+   de** = *A-01 (3)*, **Confirmar**. Na fila: *"Já separado de A-01: o resto não cabe lá. Separar de outro endereço troca a origem da separação
+   (a entrega passa a sair automática)."* — e **nenhum** *"Pegar em B-02"*, mesmo B-02 tendo 10.
+6. **O endereço ficou bloqueado.** Em **Configurações → Localizações**, edite *A-01*, marque **🔒 Localização bloqueada**, salve. Na fila, o
+   aviso do passo 5 vira *"Já separado de A-01, que não pode mais ser sugerido (endereço bloqueado ou inativo, em área especial ou lote
+   bloqueado/vencido). Confira antes de separar o resto: separar de outro endereço troca a origem da separação (a entrega passa a sair
+   automática)."* Desmarque o bloqueio.
+7. **Nada sugerível.** Um material com saldo só em *Q-01*, requisição aprovada: o chip continua **Separar**, sem *"Pegar em"*, com *"Sem
+   endereço para sugerir (o saldo está sem endereço, em endereço bloqueado ou inativo, em área especial ou em lote bloqueado/vencido)."*
+8. **Material com parte retida.** Um material com quantidade em inspeção (nota recebida com a inspeção pendente, em **Inspeções**): a dica
+   aparece e, embaixo, *"Parte do saldo deste material está retida (em inspeção, bloqueada ou em terceiros) e o sistema não sabe em qual
+   endereço — confira antes de pegar."*
+
+**O que esta etapa não cobre.** **O Sai de não vem escolhido:** a janela de separação continua em *"Qualquer endereço (automático)"*; quem
+pega da dica e não escolhe o endereço faz o sistema baixar de outro lugar — e, em material com lote, aparece uma linha *sem lote* negativa
+(**C451**). Por isso, em material com lote, os avisos dizem *"Na entrega, escolha o lote no 'Sai de': a saída automática não escolhe
+lote."* A pré-seleção e o PDF *"Imprimir lista de coleta"* são a **Etapa 189**. Duas requisições abertas ao mesmo tempo recebem o mesmo
+endereço; a segunda separa e é recusada na entrega (**C449**) — **Atualize** a fila antes de ir à prateleira. O separado no automático não é
+descontado da dica de outra requisição. O lote criado numa **Entrada** manual fica sem validade (vai para o fim do FEFO — **C450**, anterior).
+**Nada a rodar antes do deploy.**
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos provam pela rota real e pela tela (com o
+JSON escrito à mão) — escrito para você conferir à mão.
 
 ## Etapa 187 — A ferramenta baixada não é calibrada nem editada, e a restrição da manutenção aparece (ENTREGUE — 2026-10-22)
 

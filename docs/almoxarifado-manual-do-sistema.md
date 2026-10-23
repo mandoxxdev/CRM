@@ -2976,7 +2976,81 @@ fazer, assim:
 > *"a separar 5 UN (separável agora 3) · a entregar 2 UN (entregável agora 2) · disponível 3 · separado de A-01 — L-7"*
 
 Cada parte só aparece quando se aplica (*a separar* só se falta separar; *a entregar* só se há separado não entregue;
-*separado de* só se o item tem endereço de separação — 10.2). O *separável agora* é o mesmo número que o detalhe da requisição usa como máximo da separação (10.2), calculado para cada item sozinho: dois itens do mesmo material na mesma requisição mostram, cada um, o separável inteiro — a janela de separação é que divide (10.1). O *disponível* da linha é o disponível do material somado ao que a reserva do item ainda segura: ele não desconta a caixa, então uma linha pode dizer *"a separar 4 PC (separável agora 0) · disponível 4"*.
+*separado de* só se o item tem endereço de separação — 10.2). O *separável agora* é o mesmo número que a separação aceita (10.2): dois itens do mesmo material na mesma requisição dividem o livre na ordem do pedido — o primeiro leva o que dá, o segundo o que sobra (a requisição pode mostrar *Separar* e *Aguardando saldo* ao mesmo tempo). O *disponível* da linha é o disponível do material somado ao que a reserva do item ainda segura: ele não desconta a caixa, então uma linha pode dizer *"a separar 4 PC (separável agora 0) · disponível 4"*.
+
+#### Onde pegar cada item, e a ordem de coleta
+
+Embaixo de cada item que dá para separar agora, a fila diz **de onde pegar**:
+
+> *"Pegar em B-02 (ALM-GERAL / B-02) — lote L7 (vence 10/11/2026) · 5 UN — escolha este endereço no 'Sai de' ao separar"*
+
+O endereço; entre parênteses, o caminho dele na árvore de localizações (só quando há mais de um nível — o almoxarifado conta como nível);
+o lote e a validade, quando o material tem lote; e **quanto pegar ali**. É **só uma dica**: não reserva a prateleira, não grava nada e não
+impede ninguém de tirar o material de lá. A separação continua aceitando qualquer endereço que ela aceitaria, e continua recusando o que
+recusaria — se outra pessoa tirou o material depois que a fila foi aberta, separar do endereço sugerido é recusado com a frase de sempre
+(*"Parafuso: O saldo em B-02 (2) não cobre a quantidade (5) — a saída tiraria de outros endereços"*), e **Atualizar** traz uma dica nova.
+
+**A dica só vale se for escolhida no "Sai de".** A janela de separação abre com *"Qualquer endereço (automático)"*. Separado no automático,
+a entrega baixa pela regra de sempre (a localização padrão do material, depois a de mais saldo) — e, em material com lote, a saída
+automática não escolhe lote (7.5): o lote da prateleira continua com o saldo e o que saiu fica numa linha sem lote. Quem pegou da dica deve
+escolher o mesmo endereço (e lote) no **Sai de** ao separar.
+
+**Quais endereços podem ser sugeridos.** Os endereços em que o material tem saldo, **menos**:
+
+- o saldo sem endereço;
+- endereço bloqueado (3.4), inativo, ou de um almoxarifado inativo;
+- endereço que fica dentro de uma área especial (3.3b) — quarentena/inspeção, expedição, sucata e devoluções nunca; área de materiais do
+  cliente só para material de cliente. Vale **também** para a localização padrão do material. Separar dali continua aceito; só não é dica;
+- lote que não está *Ativo* (4.2) e lote vencido sem liberação de vencimento (4.3), contando o dia pelo horário de Brasília.
+
+**Quanto há livre em cada endereço.** O saldo do endereço (e lote) **menos** o que já foi separado **de lá** — com o endereço escolhido no
+**Sai de** — e ainda não foi entregue, em qualquer requisição em andamento. O separado no automático não tem endereço e não é descontado. Em
+material com série, o livre do lote é limitado também pelas séries *Em estoque* daquele lote (série bloqueada não conta), menos o separado do
+lote. Dentro da mesma requisição, dois itens do mesmo material dividem: o segundo vê o endereço já descontado do que foi sugerido ao primeiro,
+na ordem do pedido. Entre requisições diferentes, a dica de uma **não** desconta a da outra: duas requisições abertas ao mesmo tempo podem
+receber o mesmo endereço — a fila só passa a mandar a segunda para outro lugar depois que a primeira separar.
+
+**Como o endereço é escolhido.** Os endereços que sobram são postos nesta ordem:
+
+1. o lote com a **validade mais próxima** primeiro (lote sem validade e material sem lote por último);
+2. a **localização padrão** do material;
+3. o de **mais saldo livre**;
+4. a **ordem de percurso** (abaixo).
+
+A dica é o **primeiro dessa ordem que tem tudo** o que falta separar. Se nenhum tem tudo, a dica é o de **mais** saldo livre, com quanto
+pegar ali, e embaixo: *"Nenhum endereço tem tudo: pegue 10 aqui. Separar o resto de outro endereço depois troca a origem da separação."* A
+dica é sempre **um** endereço por item: separar o resto de outro endereço numa segunda vez troca a origem da separação (10.2).
+
+**Item que já tem parte separada.** Se o item já tem material separado (e não entregue) de um endereço escolhido, a dica é **sempre** esse
+mesmo endereço e lote — nunca outro, mesmo que outro tenha tudo, porque separar de outro endereço apagaria a origem e registraria uma troca
+(10.2). Quando ele não tem o resto:
+
+> *"Já separado de A-01: o resto não cabe lá. Separar de outro endereço troca a origem da separação (a entrega passa a sair automática)."*
+
+Quando ele deixou de poder ser sugerido (ficou bloqueado, inativo, numa área especial, ou o lote foi bloqueado ou venceu):
+
+> *"Já separado de A-01, que não pode mais ser sugerido (endereço bloqueado ou inativo, em área especial ou lote bloqueado/vencido).
+> Confira antes de separar o resto: separar de outro endereço troca a origem da separação (a entrega passa a sair automática)."*
+
+Em material **com lote**, as duas frases *"Já separado de …"* trazem o lote (*"Já separado de A-01 — lote L1: …"*) e, no lugar de *"(a
+entrega passa a sair automática)"*, terminam com *"Na entrega, escolha o lote no 'Sai de': a saída automática não escolhe lote."*; a de
+*"Nenhum endereço tem tudo"* ganha a mesma frase no fim.
+
+**Nada para sugerir.** Item separável sem nenhum endereço que sobre: sem a linha *"Pegar em"*, com *"Sem endereço para sugerir (o saldo está
+sem endereço, em endereço bloqueado ou inativo, em área especial ou em lote bloqueado/vencido)."* O chip continua **Separar**: a separação
+aceita. Requisição que mostra *Aguardando aprovação de valor* não recebe dica nenhuma.
+
+**Material com parte retida.** O sistema guarda o que está em inspeção, bloqueado ou em poder de terceiros **por material**, não por
+endereço: ele não sabe se as peças retidas estão na prateleira sugerida. Quando o material tem qualquer quantidade retida, a dica aparece
+normalmente e, embaixo: *"Parte do saldo deste material está retida (em inspeção, bloqueada ou em terceiros) e o sistema não sabe em qual
+endereço — confira antes de pegar."*
+
+**A ordem de coleta.** Uma requisição com dica em **dois ou mais** itens ganha, abaixo dos itens, a lista **Ordem de coleta**, numerada: uma
+linha por item, *"ALM-GERAL / A-01 — PORCA-188 · 2"* (e *" — lote L7"* quando há lote), na ordem em que se anda pelo almoxarifado. A ordem é
+a do caminho na árvore de localizações — o almoxarifado, depois cada nível até o endereço —, comparando nível a nível com **número como
+número** (*A-2* antes de *A-10*); o endereço pai vem antes dos que estão dentro dele; endereço sem almoxarifado vai por último. Dois itens no
+mesmo endereço ficam na ordem do pedido. **Os itens da requisição continuam na ordem do pedido**: a ordem de coleta é uma lista à parte. Com
+uma parada só, a lista não aparece (repetiria a linha do item).
 
 **A fila é uma fotografia.** Outra pessoa pode separar, entregar ou aprovar o mesmo material depois que a fila foi
 aberta: uma requisição que estava em *Separar* ou *Entregar* pode ser recusada no
