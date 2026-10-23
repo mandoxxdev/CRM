@@ -205,6 +205,42 @@ describe('RN-F5.09 — as fotos sobem depois do 201, uma por vez, e so entao o f
     expect(onSalvo).toHaveBeenCalledTimes(1);
   });
 
+  test.each(['registro', 'abastecimento'])('Fase5-F1/F2 (%s): enquanto as fotos sobem, "Remover foto" e "Voltar" ficam desligados', async (tipo) => {
+    let soltar;
+    api.post.mockImplementation((url) => {
+      if (url === '/frotas/portal/registros') return Promise.resolve({ data: { registro: { id: 41 } } });
+      if (url === '/frotas/portal/abastecimentos') return Promise.resolve({ data: { id: 77 } });
+      return new Promise((resolve) => { soltar = () => resolve({ data: { id: 1 } }); });
+    });
+    const onSalvo = jest.fn();
+    const onCancelar = jest.fn();
+    await act(async () => {
+      root.render(tipo === 'registro'
+        ? <RegistroForm tipo="inspecao" inicio={inicio()} onCancelar={onCancelar} onSalvo={onSalvo} onAtualizar={() => {}} />
+        : <AbastecimentoForm inicio={{ ...inicio(), viagem_aberta: { veiculo_id: 1 } }} onCancelar={onCancelar} onSalvo={onSalvo} />);
+    });
+    if (tipo === 'registro') await responderTudo();
+    else {
+      const litros = container.querySelector('input[name="litros"]');
+      const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+      await act(async () => { set.call(litros, '30'); litros.dispatchEvent(new Event('input', { bubbles: true })); });
+    }
+    await escolherArquivos(inputTirarFoto(), [foto('a.jpg'), foto('b.jpg')]);
+    // metade positiva: antes de salvar, os dois botoes estao ligados
+    expect(botoes().filter((b) => b.textContent.trim() === 'Remover foto').map((b) => b.disabled)).toEqual([false, false]);
+    expect(botao('Voltar').disabled).toBe(false);
+    await enviarFormulario();
+    expect(chamadasDeAnexo()).toHaveLength(1);
+    expect(botoes().filter((b) => b.textContent.trim() === 'Remover foto').map((b) => b.disabled)).toEqual([true, true]);
+    expect(botao('Voltar').disabled).toBe(true);
+    await clicar(botao('Voltar'));
+    expect(onCancelar).not.toHaveBeenCalled();
+    await act(async () => { soltar(); });
+    await act(async () => { soltar(); });
+    expect(chamadasDeAnexo().map(([, fd]) => fd.get('foto').name)).toEqual(['a.jpg', 'b.jpg']);
+    expect(onSalvo).toHaveBeenCalledTimes(1);
+  });
+
   test('sem foto, nao ha POST de anexo e o onSalvo vem logo depois do 201', async () => {
     api.post.mockResolvedValue({ data: { registro: { id: 41 } } });
     const onSalvo = jest.fn();

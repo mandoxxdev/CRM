@@ -445,7 +445,7 @@ export function RegistroForm({ tipo, inicio, onCancelar, onSalvo, onAtualizar })
       <div className="portal-rodape">
         {faltam > 0 && <p className="portal-dica" data-testid="faltam">Faltam {faltam} de {itens.length} itens.</p>}
         <div className="portal-linha">
-          <button type="button" className="portal-botao secundario" onClick={onCancelar}>Voltar</button>
+          <button type="button" className="portal-botao secundario" disabled={salvando} onClick={onCancelar}>Voltar</button>
           <button type="submit" className="portal-botao" disabled={!podeSalvar}>
             {salvando ? 'Salvando…' : 'Salvar'}
           </button>
@@ -556,7 +556,7 @@ export function AbastecimentoForm({ inicio, onCancelar, onSalvo, onAtualizar }) 
       </label>
       <div className="portal-rodape">
         <div className="portal-linha">
-          <button type="button" className="portal-botao secundario" onClick={onCancelar}>Voltar</button>
+          <button type="button" className="portal-botao secundario" disabled={salvando} onClick={onCancelar}>Voltar</button>
           <button type="submit" className="portal-botao" disabled={salvando}>{salvando ? 'Salvando…' : 'Salvar'}</button>
         </div>
       </div>

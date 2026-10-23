@@ -94,7 +94,8 @@ export function FotosAntesDeSalvar({ legenda, dica, fotos, onChange, desabilitad
               {f.previa
                 ? <img className="frota-fotos-miniatura" src={f.previa} alt={`Foto ${i + 1}`} />
                 : <span className="frota-fotos-miniatura frota-fotos-sem-previa">{`Foto ${i + 1}`}</span>}
-              <button type="button" className="portal-remover" onClick={() => remover(f.chave)}>Remover foto</button>
+              {/* Fase5-F1: enquanto o lancamento e as fotos sobem, nao se remove (a lista do envio ja foi lida) */}
+              <button type="button" className="portal-remover" disabled={desabilitado} onClick={() => remover(f.chave)}>Remover foto</button>
             </li>
           ))}
         </ul>
