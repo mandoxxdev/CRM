@@ -1,6 +1,6 @@
 ---
 name: relatorio-semanal
-description: Use quando o usuário pedir o relatório semanal, o resumo da semana para a empresa, "horas trabalhadas", "quanto tempo gastamos", "o que fizemos esta semana", prints das novidades para mostrar aos usuários, ou quando alguém da empresa achar que o sistema "não mudou" numa semana de trabalho no motor. Use também ao fechar a última etapa da semana (sexta-feira) ou ao planejar uma etapa que não tem nada visível na tela.
+description: Use quando o usuário pedir o relatório semanal, o resumo da semana para a empresa, "horas trabalhadas", "quanto tempo gastamos", "o que fizemos esta semana", prints das novidades para mostrar aos usuários, ou quando alguém da empresa achar que o sistema "não mudou" numa semana de trabalho no motor. Use também ao fechar a última etapa da semana ou ao planejar uma etapa que não tem nada visível na tela.
 ---
 
 # Relatório semanal para a empresa
@@ -18,9 +18,10 @@ inclusive o tempo que não aparece na tela.
 
 1. **Medir as horas** (nunca invente número):
    ```
-   node .claude/skills/relatorio-semanal/scripts/horas.js --desde AAAA-MM-DD --ate AAAA-MM-DD
+   node .claude/skills/relatorio-semanal/scripts/horas.js --semana AAAA-MM-DD
    ```
-   Padrão: últimos 7 dias. Ele separa o tempo em **tela** (`client/`), **bastidores**
+   **A semana vai de domingo a sábado.** `--semana` recebe qualquer dia e mede o domingo→sábado
+   que o contém (sem argumento: a semana corrente); `--desde`/`--ate` sobrepõem o recorte. Ele separa o tempo em **tela** (`client/`), **bastidores**
    (`server/`), **testes** e **documentação**, por pessoa e por dia, e lista os assuntos dos
    commits. `--json` para usar os números; `--autor` para uma pessoa só. É uma estimativa
    **por baixo** (sessões pelo intervalo entre commits) — diga isso no relatório, sem decimais
@@ -52,7 +53,7 @@ inclusive o tempo que não aparece na tela.
    no bloco "o que você já pode ver" — vai para "por baixo" ou fica para a próxima semana.
 
 5. **Escrever** a partir de `.claude/skills/relatorio-semanal/modelo.html`, salvando em
-   `docs/relatorios-semanais/AAAA-MM-DD/relatorio.html` (data = sexta-feira da semana).
+   `docs/relatorios-semanais/AAAA-MM-DD/relatorio.html` (data = sábado, o último dia da semana; no texto, o período é "domingo DD/MM a sábado DD/MM").
    Preencha todos os `{{...}}` e apague os blocos que sobrarem.
 
 6. **Conferir a linguagem** — obrigatório, e só entrega com saída 0:

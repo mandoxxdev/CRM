@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relatório da semana — 13 a 19 de setembro de 2026</title>
+<style>
+  :root { --tinta:#1f2a37; --suave:#5b6675; --linha:#e3e7ec; --fundo:#ffffff; --cartao:#f6f8fa;
+          --tela:#2f80ed; --bastidores:#8a5cf6; --testes:#f2994a; --doc:#9aa5b1; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--fundo); color:var(--tinta); font:16px/1.6 "Segoe UI", system-ui, sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font-size:28px; margin:0 0 4px; } h2 { font-size:21px; margin:40px 0 12px; border-bottom:2px solid var(--linha); padding-bottom:6px; }
+  h3 { font-size:17px; margin:24px 0 6px; }
+  .sub { color:var(--suave); margin:0 0 24px; }
+  .resumo { background:var(--cartao); border-left:4px solid var(--tela); padding:16px 20px; border-radius:6px; font-size:17px; }
+  .item { border:1px solid var(--linha); border-radius:8px; padding:16px 20px; margin:16px 0; }
+  .item p { margin:6px 0; } .rotulo { font-weight:600; color:var(--suave); }
+  figure { margin:12px 0; } figure img { width:100%; border:1px solid var(--linha); border-radius:6px; }
+  figcaption { color:var(--suave); font-size:14px; }
+  .barra { display:flex; height:28px; border-radius:6px; overflow:hidden; margin:12px 0 6px; }
+  .barra span { display:block; }
+  .legenda { display:flex; flex-wrap:wrap; gap:8px 20px; font-size:14px; color:var(--suave); }
+  .legenda i { display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
+  table { border-collapse:collapse; width:100%; font-size:15px; } td, th { border-bottom:1px solid var(--linha); padding:8px; text-align:left; }
+  .nota { font-size:14px; color:var(--suave); }
+  @media print { main { padding:0; } .item, figure { break-inside:avoid; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>O que fizemos no sistema esta semana</h1>
+  <p class="sub">Domingo 13/09 a sábado 19/09/2026 · CRM GMP Industriais</p>
+
+  <p class="resumo">O pedido de compra passou a ser feito, acompanhado e cobrado dentro do sistema,
+  o recebimento ganhou a conferência física e o sistema ficou usável no celular, como aplicativo.
+  Por baixo, fechamos as portas que deixavam a mesma nota fiscal entrar duas vezes e uma tela
+  dizer "não tem nada" quando, na verdade, a internet tinha caído. Na semana seguinte, o
+  celular chega às telas de Propostas e Produtos, e Fornecedores e Cotações ganham telas próprias.</p>
+
+  <h2>O que você já pode ver na tela</h2>
+
+  <div class="item">
+    <h3>Pedido de compra feito dentro do sistema, mais rápido de lançar</h3>
+    <p><span class="rotulo">Onde:</span> Compras → Pedidos de Compra → Novo Pedido. E também em
+    Almoxarifado → Reposição → Solicitações, no botão “Gerar pedido”.</p>
+    <p><span class="rotulo">Antes:</span> o botão “Novo Pedido” não abria nada. O pedido era feito
+    fora do sistema, e a solicitação de reposição do almoxarifado ficava parada como “pendente”
+    para sempre, porque não havia como transformá-la em pedido.</p>
+    <p><span class="rotulo">Agora:</span> o pedido é montado na tela, quase todo por botões:
+    condição de pagamento (com PIX, cartão, boleto e 30/60/90/120), frete, unidade, IPI e datas.
+    O que não está na lista entra pelo botão “Outro…” e passa a aparecer como botão no próximo
+    pedido. As unidades dizem o nome por extenso (G de grama, M de metro, L de litro). Pedido com
+    muitos itens se lança em lote, pela tecla F2. O número do pedido é gerado sozinho. A solicitação
+    de reposição vira pedido com um clique, já preenchida. E os pedidos que já existiam em
+    planilha podem ser importados de uma vez.</p>
+    <figure><img src="prints/pedido-compra-novo.png" alt="Tela Novo pedido de compra com os grupos de botões e itens lançados"><figcaption>O pedido de compra montado por botões, com o total calculado na tela.</figcaption></figure>
+    <figure><img src="prints/reposicao-gerar-pedido.png" alt="Solicitações da reposição com o botão Gerar pedido"><figcaption>A solicitação do almoxarifado vira pedido com um clique.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Pedido atrasado aparece em vermelho e avisa</h3>
+    <p><span class="rotulo">Onde:</span> Compras → Pedidos de Compra (coluna Previsão Entrega) e
+    Almoxarifado → Alertas.</p>
+    <p><span class="rotulo">Antes:</span> um pedido vencido havia 40 dias era igual, na lista, a um
+    pedido no prazo. Ninguém era avisado, e o pedido esquecido ficava esquecido.</p>
+    <p><span class="rotulo">Agora:</span> ao lado da data aparece o selo “Atrasado há 12 dias”. A
+    caixa “Só atrasados” deixa na lista só os que passaram do prazo, e o Excel exportado traz as
+    colunas “Atrasado” e “Dias de atraso”. Todo dia o sistema manda um e-mail para Compras por pedido
+    atrasado, e a tela de Alertas ganhou o cartão “Pedido de compra atrasado”.</p>
+    <figure><img src="prints/pedidos-atrasados.png" alt="Lista de pedidos de compra com o selo Atrasado e a caixa Só atrasados marcada"><figcaption>Os atrasados saltam aos olhos e podem ser filtrados.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Recebimento: conferir o que chegou de verdade, e receber em partes</h3>
+    <p><span class="rotulo">Onde:</span> Almoxarifado → Recebimentos.</p>
+    <p><span class="rotulo">Antes:</span> o recebimento mostrava uma quantidade só e não tinha onde
+    anotar a contagem física. No recebimento pelo pedido, não dava para dizer “chegaram 6 dos 10”:
+    o sistema dava o pedido inteiro como recebido.</p>
+    <p><span class="rotulo">Agora:</span> cada item mostra quanto era esperado e tem o campo “Qtd.
+    conferida”. Se a contagem não bate, a tela avisa na hora: “Divergência: 13 a menos que o
+    esperado”. No recebimento pelo pedido, cada linha mostra o “Saldo pendente”: digite 6 numa linha
+    de 10 e o pedido continua aberto esperando os 4 que faltam. Pedido totalmente recebido sai da
+    lista.</p>
+    <figure><img src="prints/recebimento-conferencia.png" alt="Painel do recebimento com Qtd. conferida e o aviso de divergência"><figcaption>A contagem física ao lado do esperado, com o aviso de diferença.</figcaption></figure>
+    <figure><img src="prints/recebimento-por-pedido.png" alt="Novo recebimento por pedido de compra com saldo pendente por linha"><figcaption>Recebimento parcial: o que falta continua em aberto no pedido.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Documentos presos ao registro certo: o clipe em cinco telas novas</h3>
+    <p><span class="rotulo">Onde:</span> Almoxarifado → Materiais, Requisições, Recebimentos,
+    Devoluções e Remessas a Terceiros.</p>
+    <p><span class="rotulo">Antes:</span> a ficha técnica ficava numa pasta da rede, a nota escaneada
+    no e-mail de quem recebeu, o comprovante da devolução numa gaveta, e o certificado de
+    galvanização sumia no dia seguinte à volta do material.</p>
+    <p><span class="rotulo">Agora:</span> cada um desses registros tem um clipe (ou um bloco
+    “Anexos”) para guardar o PDF ou a foto junto dele. Na remessa a terceiros, o clipe fica em cada
+    item, para o certificado ir para a peça certa. Quem acaba de registrar um recebimento já cai na
+    tela onde anexa a nota, com ela ainda na mão.</p>
+    <figure><img src="prints/anexos-material.png" alt="Lista de materiais com o clipe e a janela Anexos do material aberta"><figcaption>A ficha técnica guardada no próprio material.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Requisição de material exige o número da OS</h3>
+    <p><span class="rotulo">Onde:</span> Almoxarifado → Requisições → Nova requisição.</p>
+    <p><span class="rotulo">Antes:</span> o número da OS era opcional, e depois não dava para saber em
+    qual serviço cada material tinha sido usado.</p>
+    <p><span class="rotulo">Agora:</span> a requisição só é enviada com o número da OS preenchido —
+    pedido da gerência de Compras. É a primeira coisa que o sistema cobra, antes de qualquer outra
+    conferência, para quem esqueceu não ir mexer no lugar errado.</p>
+    <figure><img src="prints/requisicao-os-obrigatoria.png" alt="Nova requisição com o aviso de número da OS obrigatório"><figcaption>Sem OS, a requisição não sai.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>O sistema no celular, como aplicativo</h3>
+    <p><span class="rotulo">Onde:</span> em qualquer tela, aberta pelo navegador do celular. O botão
+    “Instalar aplicativo” fica no rodapé do menu.</p>
+    <p><span class="rotulo">Antes:</span> no computador estava bom, mas no celular era confuso: menu
+    que não cabia, textos espremidos e tabelas que precisavam ser roladas de lado, perdendo de vista
+    o nome de cada coluna.</p>
+    <p><span class="rotulo">Agora:</span> o sistema se instala no celular com o ícone da empresa,
+    como um aplicativo. A navegação foi para uma barra embaixo, ao alcance do polegar, com o logo da
+    GMP no topo. Toda tabela vira uma lista de cartões, com o nome da coluna ao lado de cada valor.
+    A lista de Clientes foi a primeira redesenhada como aplicativo de verdade: iniciais coloridas,
+    nome em destaque e os botões à mão. No computador, nada mudou.</p>
+    <figure><img src="prints/celular-clientes.png" alt="Lista de Clientes no celular com cartões e a barra de navegação embaixo"><figcaption>Clientes no celular: lista de aplicativo e barra embaixo.</figcaption></figure>
+  </div>
+
+  <h2>O que fizemos por baixo — e por que importa</h2>
+  <p>Parte do trabalho não muda a aparência das telas: é o “motor” que faz as contas e guarda as
+  informações. Quando ele erra, o erro aparece depois, em forma de estoque que não bate ou de
+  material que some. Esta semana, no motor:</p>
+
+  <div class="item">
+    <h3>A mesma nota fiscal não entra duas vezes</h3>
+    <p><span class="rotulo">O problema:</span> a mesma nota do mesmo fornecedor podia ser lançada duas
+    vezes. Resultado: estoque em dobro e duas contas a pagar. Também era possível receber 999 peças
+    de um pedido de 10, ou lançar quantidade zero ou negativa, sem ninguém autorizar nada.</p>
+    <p><span class="rotulo">O que fizemos:</span> a nota repetida é recusada, e a mensagem diz em qual
+    recebimento ela já está. Quantidade tem de ser maior que zero. Receber mais do que o pedido só
+    com a autorização de Compras ou do Administrador — e essa autorização fica registrada com o nome
+    de quem deu.</p>
+    <p><span class="rotulo">O que isso evita:</span> estoque inflado no papel, pagamento em dobro e
+    material “a mais” que ninguém sabe de onde veio.</p>
+  </div>
+
+  <div class="item">
+    <h3>A tela não diz “não tem nada” quando a internet caiu</h3>
+    <p><span class="rotulo">O problema:</span> se a conexão caía, a tela de Recebimentos dizia
+    “Nenhum recebimento registrado”. Quem olhava achava que a nota não tinha sido lançada e lançava
+    de novo. Ao trocar de um recebimento para outro, o painel mostrava por um instante os dados do
+    anterior com o número do novo no alto. E, em algumas telas, a coluna de botões era cortada pela
+    borda, sem barra para rolar: o botão simplesmente não aparecia.</p>
+    <p><span class="rotulo">O que fizemos:</span> a tela agora diz “Não foi possível carregar”, com o
+    botão “Tentar de novo”. O painel se esvazia na hora da troca, e a coluna de botões voltou a
+    aparecer inteira.</p>
+    <p><span class="rotulo">O que isso evita:</span> recebimento lançado em duplicidade e decisão tomada
+    olhando o registro errado.</p>
+  </div>
+
+  <div class="item">
+    <h3>As datas dos pedidos param de voltar um dia</h3>
+    <p><span class="rotulo">O problema:</span> um pedido de 16/09 aparecia como 15/09. A cada vez que o
+    Excel era exportado e importado de novo, as datas andavam mais um dia para trás. E, das 21h à
+    meia-noite, o pedido novo nascia com a data de amanhã.</p>
+    <p><span class="rotulo">O que fizemos:</span> a data mostrada é a que está no pedido, em qualquer
+    horário, e o vaivém pelo Excel devolve a mesma data.</p>
+    <p><span class="rotulo">O que isso evita:</span> cobrança de fornecedor no dia errado e atraso
+    contado a mais ou a menos.</p>
+  </div>
+
+  <div class="item">
+    <h3>Apagar um pedido não deixa pedaços soltos</h3>
+    <p><span class="rotulo">O problema:</span> excluir um pedido apagava o cabeçalho e deixava os itens
+    perdidos onde o sistema guarda as informações — ou dava um erro genérico, sem dizer o motivo.</p>
+    <p><span class="rotulo">O que fizemos:</span> o pedido sai inteiro, com os itens, e a solicitação de
+    reposição que tinha virado aquele pedido volta para a fila, pronta para virar outro. Pedido que já
+    teve recebimento não pode ser apagado, e a tela diz por quê.</p>
+    <p><span class="rotulo">O que isso evita:</span> material que some da fila de compra sem ter sido
+    comprado.</p>
+  </div>
+
+  <h2>Para onde foi o tempo</h2>
+  <p>Cerca de <strong>25 horas</strong> de desenvolvimento nesta semana.</p>
+  <div class="barra" role="img" aria-label="Divisão do tempo">
+    <span style="width:36%;background:var(--tela)"></span>
+    <span style="width:9%;background:var(--bastidores)"></span>
+    <span style="width:34%;background:var(--testes)"></span>
+    <span style="width:21%;background:var(--doc)"></span>
+  </div>
+  <div class="legenda">
+    <span><i style="background:var(--tela)"></i>Telas que você usa — 36%</span>
+    <span><i style="background:var(--bastidores)"></i>Motor do sistema — 9%</span>
+    <span><i style="background:var(--testes)"></i>Conferências automáticas — 34%</span>
+    <span><i style="background:var(--doc)"></i>Planejamento e manuais — 21%</span>
+  </div>
+  <p>Foi uma semana de tela: mais de um terço do tempo foi nas telas que você usa, a maior parte no
+  celular, de quinta a sábado. O outro terço foi nas conferências automáticas: são robôs que
+  repetem centenas de situações a cada mudança — a nota repetida, a internet que cai, o pedido
+  recebido em três partes — para que o que já funciona não quebre escondido. Foi assim que
+  pegamos, ainda na mesma semana, um recebimento pelo pedido que entrava com preço zero e
+  bagunçaria o custo médio do material. O resto foi planejar cada mudança e atualizar os manuais.</p>
+  <p class="nota">As horas são estimadas pelo registro do trabalho salvo ao longo do dia. Pesquisa,
+  conversas e testes feitos à mão não entram — o número real é maior.</p>
+
+  <h2>O que vem na próxima semana</h2>
+  <ul>
+    <li>Propostas, Produtos e o painel inicial redesenhados para o celular, no mesmo padrão da lista
+    de Clientes.</li>
+    <li>Fornecedores e Cotações ganham telas próprias para cadastrar e editar.</li>
+    <li>A cotação aprovada vira pedido de compra com um clique, com os itens já preenchidos.</li>
+  </ul>
+
+  <h2>Quer conferir?</h2>
+  <ol>
+    <li>Abra Compras → Pedidos de Compra → Novo Pedido, escolha o fornecedor e lance dois itens pelos
+    botões. Salve e veja o número gerado.</li>
+    <li>Na mesma lista, marque “Só atrasados” e veja o selo vermelho na coluna Previsão Entrega.</li>
+    <li>Abra Almoxarifado → Recebimentos → Novo recebimento → Por Pedido de Compra, escolha o pedido e
+    digite menos do que o “Saldo pendente” numa linha. Salve: o pedido continua na lista com o que
+    falta.</li>
+    <li>Abra um recebimento já registrado, preencha a “Qtd. conferida” com um número diferente do
+    esperado e veja o aviso de divergência.</li>
+    <li>Abra Almoxarifado → Materiais e clique no clipe de um material para anexar a ficha técnica.</li>
+    <li>No celular, abra o sistema no navegador, toque em “Instalar aplicativo” no menu e abra
+    Clientes pelo ícone na tela inicial.</li>
+  </ol>
+</main>
+</body>
+</html>

@@ -1,0 +1,13 @@
+Prints pendentes do relatorio de 2026-09-19 (salvar em docs/relatorios-semanais/2026-09-19/prints/)
+O app nao estava no ar (localhost:3000) quando o relatorio foi escrito, em 2026-10-23.
+Atencao: a tela de hoje ja tem mudancas posteriores a esta semana; o print mostra a versao atual.
+Formato: arquivo | tela do app (rota do React) | o que precisa estar visivel
+
+pedido-compra-novo.png | /compras/pedidos/novo | fornecedor real escolhido, grupos de botoes (condicao de pagamento, frete, unidade, IPI) e dois ou tres itens lancados com o "Total: R$ ..."
+reposicao-gerar-pedido.png | /almoxarifado/reposicao (aba Solicitacoes) | uma solicitacao PENDENTE de material real com o botao "Gerar pedido"
+pedidos-atrasados.png | /compras/pedidos | caixa "So atrasados" marcada e pelo menos dois pedidos com o selo "Atrasado ha N dias" ao lado da Previsao Entrega
+recebimento-conferencia.png | /almoxarifado/recebimentos (abrir um recebimento RECEBIDO ou EM_CONFERENCIA) | item com quantidade esperada, campo "Qtd. conferida" com numero diferente e o aviso "Divergencia: N a menos que o esperado"
+recebimento-por-pedido.png | /almoxarifado/recebimentos (Novo recebimento -> Por Pedido de Compra) | bloco "Itens do pedido" com "Saldo pendente: N" por linha e uma linha preenchida com menos que o saldo
+anexos-material.png | /almoxarifado/materiais (clicar no clipe de um material) | janela "Anexos do material" com codigo e nome do material no alto e um PDF de ficha tecnica anexado
+requisicao-os-obrigatoria.png | /almoxarifado/requisicoes (Nova requisicao) | tentativa de enviar sem o numero da OS, com o aviso de OS obrigatoria
+celular-clientes.png | /comercial/clientes no navegador em largura de celular (~390px) | lista de Clientes com iniciais coloridas, logo GMP no topo e a barra de navegacao embaixo

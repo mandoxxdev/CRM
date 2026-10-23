@@ -2,7 +2,7 @@
 // Estima horas trabalhadas a partir do historico do git e separa o tempo em
 // "tela" (client/), "bastidores" (server/), "testes" e "documentacao".
 //
-// Uso: node .claude/skills/relatorio-semanal/scripts/horas.js [--desde AAAA-MM-DD] [--ate AAAA-MM-DD]
+// Uso: node .claude/skills/relatorio-semanal/scripts/horas.js [--semana AAAA-MM-DD] [--desde AAAA-MM-DD] [--ate AAAA-MM-DD]
 //        [--autor texto] [--pausa 90] [--aquecimento 30] [--json]
 //
 // Como estima: commits do mesmo autor com menos de --pausa minutos entre si sao uma
@@ -17,11 +17,15 @@ const opt = (nome, padrao) => {
   const i = args.indexOf('--' + nome);
   return i >= 0 && args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : padrao;
 };
-const hoje = new Date();
-const seteDiasAtras = new Date(hoje.getTime() - 7 * 864e5);
+// A semana vai de domingo a sabado. --semana AAAA-MM-DD pega a semana que contem
+// esse dia; sem nada, a semana corrente. --desde/--ate sobrepoem o recorte.
 const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const desde = opt('desde', iso(seteDiasAtras));
-const ate = opt('ate', iso(hoje));
+const diaRef = opt('semana', null);
+const ref = diaRef ? new Date(`${diaRef}T12:00:00`) : new Date();
+const domingo = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() - ref.getDay());
+const sabado = new Date(domingo.getFullYear(), domingo.getMonth(), domingo.getDate() + 6);
+const desde = opt('desde', iso(domingo));
+const ate = opt('ate', iso(sabado));
 const autorFiltro = opt('autor', null);
 const pausaMin = Number(opt('pausa', 90));
 const aquecMin = Number(opt('aquecimento', 30));
