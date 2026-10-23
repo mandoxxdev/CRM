@@ -507,6 +507,22 @@ limite → vermelho.
   - `SEM_ENDERECO_SUGERIVEL`: **"Sem endereço para sugerir (o saldo está sem endereço, em endereço bloqueado ou inativo, em área
     especial ou em lote bloqueado/vencido)."**
 
+### T3 — feita (`aa41152f`)
+
+- `FilaSeparacao.js`: `textoPegarEm` e `textoAvisoPegarEm` (exportadas, puras) e, por item, `fila-pegar-em-<item>` e
+  `fila-pegar-em-aviso-<item>`; por requisição com `ordem_coleta.length >= 2`, `fila-ordem-coleta-<req>` com `<strong>Ordem de
+  coleta</strong>` e `<ol>` (cada `<li>`: `caminho — material_codigo · quantidade` + ` — lote L`). Data por `fmtData` (sem `new Date`).
+  No `PLANEJADA_NAO_COBRE` o código vem de `origem_separacao_codigo` da linha (cai para `pegar_em.localizacao_codigo`).
+- `FilaSeparacao.test.js`: **8** testes novos (os 7 do plano + PLANEJADA_NAO_COBRE com e sem `pegar_em`). Vermelho antes: **7 falharam /
+  11 passaram** (o "resposta antiga" verde de primeira — é regressão de propósito, provado pelo controle "não reordena"/(h) que derrubam
+  outros). Verde: **18/18**. Build `CI=true` compilou.
+- **Controles positivos** (mesmo harness, agora com as linhas `●` do Jest):
+  - (h) `>= 2` → `>= 1`: cai **só** `ordem de coleta com 1 parada`. ✔
+  - (i) frase do `NENHUM_ENDERECO_COBRE` trocada: cai **só** `cobre false (NENHUM_ENDERECO_COBRE)`. ✔
+  - (I1) sem o sufixo do "Sai de": caem os três que comparam a linha inteira (com lote, sem lote, PLANEJADA). ✔
+  - (M5) sem os parênteses do caminho: caem `linha com lote e validade` e `PLANEJADA_NAO_COBRE` (o de um segmento continua verde). ✔
+  - (não reordena) `ordem_coleta` ordenada por `caminho` na tela: cai **só** `ordem de coleta com 2 paradas, na ordem do JSON`. ✔
+
 ## Próxima tarefa detalhada
 
 **Etapa 189 — "Imprimir lista de coleta" e a dica no "Sai de" da janela de separação.**
