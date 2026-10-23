@@ -612,7 +612,7 @@ perl `-0pi`, âncora contada = 1, md5 antes/sabotado/restaurado (restauro por c�
   confere também `vencimento_liberado_por` e `_motivo` nulos. (6) O 14b confere que o log cita o id da movimentação.
   Rodados sem mudança, um por vez: `loteGuardasSaida` 39/39, `lotes` 8/8, `loteRotas` 9/9, `loteRecebimento` 9/9,
   `loteVencimentoLiberacao` 8/8, `loteControleObrigatorio` 12/12, `validadesNoDiaLocal` 10/10, `auditLabels` 14/14.
-- [x] **T3 — hash no próximo item da Execução.** `MovimentacoesAlmoxarifado.js`: `TEXTO_AJUDA_VALIDADE`, `data_validade: ''` no estado
+- [x] **T3 — `e1a24cc3`.** `MovimentacoesAlmoxarifado.js`: `TEXTO_AJUDA_VALIDADE`, `data_validade: ''` no estado
   inicial e no `openModal`, zerada na troca de tipo e quando o Lote fica vazio (`v.trim()`), campo `#mov-validade` (`type="date"`,
   rótulo "Validade do lote", `<small>` com a ajuda) logo abaixo do Lote só com Entrada + lote, payload só com Entrada + lote + data,
   `toast.warn(aviso_validade, { autoClose: false })` depois de `aviso_caixa`/`aviso_retencao`. Teste novo
@@ -623,6 +623,27 @@ perl `-0pi`, âncora contada = 1, md5 antes/sabotado/restaurado (restauro por c�
   `expect(toast.warn).toHaveBeenCalledTimes(2)`. **Divergência:** a primeira tentativa de editar a tela por `perl -0pi` com
   `\x{…}` re-codificou o arquivo inteiro (`Wide character`, diff de 607 linhas) — desfeita por `git checkout` do arquivo (md5 de
   volta ao de antes, `f647c1cc…`) e refeita com o Edit; CR = 0 no fim.
+- [x] **Emenda da T2 achada na T4 — `1136652b`.** O controle (b) da T4 (preenchimento que sempre perde o `UPDATE`) mostrou um terceiro
+  desfecho que o RN-190.08 não previa: `UPDATE` perdido com o lote **ainda sem validade** (ou apagado) — o motor caía no ramo da corrida
+  e respondia `A validade do lote L-B foi gravada por outra operação () …`, data vazia e afirmação falsa. Hoje nenhuma porta chega aí (o
+  `IS NULL` só perde para quem gravou uma validade), mas é o caso da I-1 visto do outro lado: agora sai `AVISO_FALHA` + log. Teste
+  **14c** (gancho devolve `{ preenchida: false, atual: null }`); controle (g): sem o ramo novo cai o 14c com a frase da corrida e o
+  "()". Arquivo T2: 22/22.
+- [x] **T4 — hash no fechamento deste plano (próximo commit).** `validadeLoteEntradaManualIntegracao.api.test.js`, 5 cenários, cada um
+  entrando pela **rota v2** e conferindo noutra porta sem mudança, cada um com o próprio controle "a mesma entrada **sem** a validade":
+  (1) `GET /materiais/:id/lotes` → `['LV','LS']` (controle `['LS','LV']`); (2) `varrerLotesVencendo` → 1 `LOTE_VENCENDO` com
+  `hash_dedupe = sha256('LOTE_VENCENDO|lote-vencendo-<id>-<hoje+10>')` (controle: 0 para o lote sem validade); (3) SAIDA → 400
+  `Lote L-VENC vencido em <ontem> nao pode sair para consumo.…`, `PUT /lotes/:id/liberar-vencimento` → 200, SAIDA → 201 (controle: o
+  mesmo lote sem validade sai direto); (4) `GET /fila-separacao` → `pegar_em` `['L-A', ZA, '2027-12-31']`; Entrada de 1 em L-B com
+  `2027-06-30` (+ `AVISO_PREENCHIDA`) → `['L-B', ZB, '2027-06-30']` (rodou com a 189 commitada, `ba1c7bac`; o formato de `pegar_em` é o
+  da 188); (5) pelo serviço → o mesmo aviso e a mesma validade. **Passou de primeira (5/5)** — a implementação já existia; controles
+  positivos: (a) sem a linha do schema → caem 1–4 (FEFO `['LS','LV']`; e-mail `0 !== 1`; saída `201 !== 400`; fila `lote_validade
+  null`), o 5 (serviço) **verde** — a prova de que os quatro medem a rota; (b) preenchimento que sempre perde → caem 4 e 5 (e expôs a
+  emenda acima). Rodados junto, um por vez: `filaSugestaoColetaIntegracao` 6/6, `preSelecaoColetaIntegracao` 7/7, `sugestaoDeColeta`
+  36/36. **Tela pelo fluxo:** não medida no navegador nesta sessão (roteiro no plano, para a letra F no fechamento).
+  **Achado para o fechamento:** `filaSugestaoColetaIntegracao.api.test.js` (188) tem o comentário "A entrada manual nao grava a validade
+  do lote (Execucao, T2): grava aqui." — falso desde esta etapa; o teste continua certo (grava por `UPDATE` direto), só o comentário
+  envelheceu. Não mexido (arquivo da 188, fora das tasks).
 
 ## Próxima tarefa detalhada
 
