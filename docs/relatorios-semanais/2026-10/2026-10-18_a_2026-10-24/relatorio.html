@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relatório da semana — 18 a 24 de outubro de 2026</title>
+<style>
+  :root { --tinta:#1f2a37; --suave:#5b6675; --linha:#e3e7ec; --fundo:#ffffff; --cartao:#f6f8fa;
+          --tela:#2f80ed; --bastidores:#8a5cf6; --testes:#f2994a; --doc:#9aa5b1; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--fundo); color:var(--tinta); font:16px/1.6 "Segoe UI", system-ui, sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font-size:28px; margin:0 0 4px; } h2 { font-size:21px; margin:40px 0 12px; border-bottom:2px solid var(--linha); padding-bottom:6px; }
+  h3 { font-size:17px; margin:24px 0 6px; }
+  .sub { color:var(--suave); margin:0 0 24px; }
+  .resumo { background:var(--cartao); border-left:4px solid var(--tela); padding:16px 20px; border-radius:6px; font-size:17px; }
+  .item { border:1px solid var(--linha); border-radius:8px; padding:16px 20px; margin:16px 0; }
+  .item p { margin:6px 0; } .rotulo { font-weight:600; color:var(--suave); }
+  figure { margin:12px 0; } figure img { width:100%; border:1px solid var(--linha); border-radius:6px; }
+  figcaption { color:var(--suave); font-size:14px; }
+  .barra { display:flex; height:28px; border-radius:6px; overflow:hidden; margin:12px 0 6px; }
+  .barra span { display:block; }
+  .legenda { display:flex; flex-wrap:wrap; gap:8px 20px; font-size:14px; color:var(--suave); }
+  .legenda i { display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
+  table { border-collapse:collapse; width:100%; font-size:15px; } td, th { border-bottom:1px solid var(--linha); padding:8px; text-align:left; }
+  .nota { font-size:14px; color:var(--suave); }
+  @media print { main { padding:0; } h2, h3 { break-after:avoid; } figure { break-inside:avoid; } figure img { width:auto; max-width:100%; max-height:90mm; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>O que foi feito no sistema nesta semana</h1>
+  <p class="sub">Semana de 18/10 a 24/10/2026 · CRM GMP Industriais</p>
+
+  <p class="resumo">O almoxarifado ganhou a entrega de EPI e o empréstimo de ferramenta com assinatura na tela,
+  uma fila de separação que diz de onde pegar cada item, e o pedido de compra passou a poder ser feito para uma OS.
+  Por baixo, as datas deixaram de pular para o dia seguinte depois das 21h, a proposta passou a guardar exatamente o
+  que aparece na tela e cada pessoa passou a ver só os dados da sua área. Foram cerca de 80 horas de trabalho, a maior
+  parte nas datas e horas do sistema inteiro, no acesso por área e nas listas e buscas.</p>
+
+  <h2>O que você já pode ver na tela</h2>
+
+  <div class="item">
+    <h3>Entrega de EPI e empréstimo de ferramenta com assinatura na tela</h3>
+    <p><span class="rotulo">Onde:</span> Almoxarifado → Entrega de EPI (tela nova, para o almoxarife e o administrador
+    do almoxarifado) e Almoxarifado → Ferramentas → botão <em>Emprestar</em>.</p>
+    <p><span class="rotulo">Antes:</span> a entrega de EPI era só no papel: o sistema não sabia quem recebeu o quê, e o
+    material não tinha o número do CA. No empréstimo de ferramenta, o nome do colaborador era digitado à mão e nada
+    provava quem levou.</p>
+    <p><span class="rotulo">Agora:</span> o almoxarife escolhe o colaborador na lista do cadastro; o colaborador assina
+    no quadro da tela e digita a própria matrícula. Na entrega de EPI, o estoque baixa sozinho, e EPI sem CA ou com CA
+    vencido não sai (o cadastro do material ganhou <em>Nº do CA</em> e <em>Validade do CA</em>). A <em>Ficha por
+    colaborador</em> sai em PDF com a assinatura de cada entrega, a confirmação da matrícula e o aparelho usado. No
+    empréstimo, o colaborador lê o termo de responsabilidade antes de assinar, e cada empréstimo tem o botão
+    <em>Termo</em> para ver e baixar o PDF. Se alguém alterar o registro ou a assinatura depois, o botão
+    <em>Verificar integridade</em> acusa. Por quê: tirar a entrega de EPI do papel com uma prova confiável, como pede a
+    NR-6, e dar um responsável assinado para cada ferramenta emprestada.</p>
+    <figure><img src="prints/entrega-epi-nova.png" alt="Tela Entrega de EPI com colaborador, EPI, quadro de assinatura e matrícula"><figcaption>Nova entrega de EPI: o colaborador assina na tela e confirma com a matrícula.</figcaption></figure>
+    <figure><img style="max-width:420px" src="prints/ferramenta-emprestar-termo.png" alt="Janela Emprestar com o texto do termo e o quadro de assinatura"><figcaption>Ao emprestar a ferramenta, o colaborador lê o termo e assina na hora.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Ferramentas: editar, voltar da manutenção e dar baixa</h3>
+    <p><span class="rotulo">Onde:</span> Almoxarifado → Ferramentas.</p>
+    <p><span class="rotulo">Antes:</span> ferramenta cadastrada com erro não se corrigia pela tela. Ao concluir a
+    manutenção, ela voltava sempre a <em>Disponível</em>, mesmo sem conserto.</p>
+    <p><span class="rotulo">Agora:</span> toda ferramenta tem o botão <em>Editar</em>. Ao concluir a manutenção,
+    informa-se a condição do item e o destino: volta ao uso ou <em>Baixa (descarte)</em>, com o motivo. Uma baixa feita
+    por engano se desfaz em <em>Reverter baixa</em>. A ferramenta que voltou <em>em uso com restrição</em> mostra a
+    restrição na lista, e o <em>Emprestar</em> avisa antes de entregar. Ferramenta baixada não é mais calibrada nem
+    editada.</p>
+    <figure><img src="prints/ferramentas-restricao-baixa.png" alt="Lista de ferramentas com selo de restrição e uma ferramenta baixada"><figcaption>A lista mostra a restrição deixada pela manutenção e a ferramenta baixada.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Separação: de onde pegar, em que ordem andar, e a caixa parada no balcão</h3>
+    <p><span class="rotulo">Onde:</span> Almoxarifado → Fila de separação; Almoxarifado → Alertas e Almoxarifado →
+    Configurações → Gerais.</p>
+    <p><span class="rotulo">Antes:</span> a fila dizia o que separar, não onde. O almoxarife procurava o endereço de
+    cabeça, e a janela de separação abria em “Qualquer endereço”. Depois de separada, a caixa podia ficar dias parada no
+    balcão sem ninguém ser cobrado.</p>
+    <p><span class="rotulo">Agora:</span> cada item diz “Pegar em (endereço) — lote (vence em…)”, sem sugerir endereço
+    bloqueado, lote vencido ou material já separado para outra requisição. Cada requisição traz a <em>Ordem de
+    coleta</em> numerada pelo caminho do almoxarifado, a janela de separação já abre no endereço sugerido, e dá para
+    imprimir a lista de coleta, de uma requisição ou de todas, com caixinha de OK para levar à prateleira. Na tela de
+    Alertas, o cartão <em>Separado aguardando retirada</em> lista as requisições prontas há mais dias do que o combinado,
+    e a lista de e-mails de alertas recebe o aviso. O número de dias fica em <em>Alerta de Retirada Parada (dias)</em>;
+    vem com 3.</p>
+    <figure><img src="prints/fila-separacao-onde-pegar.png" alt="Fila de separação com a dica de endereço e a ordem de coleta"><figcaption>A fila mostra o endereço de cada item e a ordem de coleta.</figcaption></figure>
+    <figure><img src="prints/alerta-retirada-parada.png" alt="Cartão Separado aguardando retirada na tela de Alertas"><figcaption>O cartão conta as caixas paradas no balcão há mais dias do que o combinado.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Compras: o pedido feito para uma OS, e o fornecedor novo sem sair do pedido</h3>
+    <p><span class="rotulo">Onde:</span> Compras → Pedidos de Compra → Novo Pedido (campo <em>OS</em> e tecla
+    <em>F2</em>); também em Cotações, Fornecedores homologados, Almoxarifado → Recebimentos e Solicitar Material.</p>
+    <p><span class="rotulo">Antes:</span> não havia onde dizer para qual trabalho era a compra. Quando a nota chegava, o
+    material entrava livre e a primeira requisição de qualquer trabalho levava. E um fornecedor fora da lista obrigava a
+    sair do pedido, cadastrá-lo em Fornecedores, voltar e refazer o pedido.</p>
+    <p><span class="rotulo">Agora:</span> o pedido de compra tem o campo <em>OS</em>, e a lista de pedidos mostra a
+    coluna OS. O que chega fica reservado para aquela OS, e a requisição dela é atendida primeiro; cancelar ou concluir
+    a OS devolve o material ao estoque. O recebimento sem pedido também aceita a OS (material do cliente para
+    industrialização), a requisição pode escolher a OS na lista em vez de digitar o número, e o relatório <em>Consumo
+    por OS</em> passou a mostrar o que foi entregue, o que voltou e o líquido. Para o fornecedor novo, a tecla
+    <em>F2</em> ou o botão <em>+ Novo fornecedor</em> abre a ficha completa por cima; ao salvar, ele já fica escolhido,
+    e os itens, preços e condições continuam como estavam.</p>
+    <figure><img src="prints/pedido-compra-campo-os.png" alt="Novo pedido de compra com o campo OS aberto"><figcaption>O pedido de compra diz para qual OS é a compra.</figcaption></figure>
+    <figure><img style="max-width:420px" src="prints/novo-fornecedor-f2.png" alt="Janela Novo fornecedor aberta sobre o pedido de compra"><figcaption>A ficha do fornecedor abre por cima do pedido, sem perder o que já foi lançado.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Validade do lote na Entrada manual</h3>
+    <p><span class="rotulo">Onde:</span> Almoxarifado → Movimentações → Entrada.</p>
+    <p><span class="rotulo">Antes:</span> não havia onde informar a validade. O lote ficava sem data e, por isso, nunca
+    vencia, não aparecia no e-mail de “lote vencendo” e ficava por último na ordem de quem vence antes sai antes.</p>
+    <p><span class="rotulo">Agora:</span> com o lote preenchido, aparece o campo <em>Validade do lote</em>. O lote novo
+    nasce com a data; o lote antigo sem data passa a tê-la, com um aviso. Se a data informada for diferente da que o
+    lote já tem, a entrada é recusada e a tela diz qual data está gravada.</p>
+    <figure><img style="max-width:420px" src="prints/entrada-validade-lote.png" alt="Formulário de Entrada com os campos Lote e Validade do lote"><figcaption>O campo de validade aparece assim que o lote é preenchido.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Frota: o motorista registra a saída e o retorno pelo celular</h3>
+    <p><span class="rotulo">Onde:</span> Frota → Portal do motorista (para o motorista, aparece como <em>Meu
+    painel</em>).</p>
+    <p><span class="rotulo">Antes:</span> o motorista preenchia o formulário de papel (saída, retorno e inspeção) e
+    alguém passava a limpo na planilha.</p>
+    <p><span class="rotulo">Agora:</span> o motorista registra pelo celular, numa tela de uma coluna com botões
+    grandes: KM, data e horário (já vêm com o de agora), combustível em cinco botões, os 12 itens da inspeção com OK,
+    N/A ou Falha, e as avarias. O registro só é salvo com os 12 itens respondidos. Na saída, o veículo em uso não
+    aparece; no retorno, o veículo já é o da viagem aberta. Abastecimentos também entram por ali, e <em>Meus
+    registros</em> mostra o que ele lançou. O motorista vê só o que é dele; o gestor continua vendo tudo, com a
+    situação de cada checklist (OK, pendência ou incompleto) e o botão <em>Exportar planilha</em> em Relatórios, no
+    formato da planilha de controle.</p>
+    <figure><img style="max-width:300px;display:inline-block;vertical-align:top;margin-right:12px" src="prints/portal-motorista.png" alt="Portal do motorista no celular com veículo, KM, data, horário e combustível"><img style="max-width:300px;display:inline-block;vertical-align:top" src="prints/portal-motorista-inspecao.png" alt="Portal do motorista no celular com os itens da inspeção marcados"><figcaption>O formulário de papel do motorista, agora no celular.</figcaption></figure>
+  </div>
+
+  <h2>O que foi feito por baixo — e por que importa</h2>
+  <p>Parte do trabalho não muda a aparência das telas: é o “motor” que faz as contas e guarda as
+  informações. Quando ele erra, o erro aparece depois, em forma de data errada, proposta diferente da combinada
+  ou dado na mão de quem não devia. Esta semana, no motor:</p>
+
+  <div class="item">
+    <h3>Datas e horas certas depois das 21h, em todo o sistema</h3>
+    <p><span class="rotulo">O problema:</span> o que era feito depois das 21h aparecia com a data do dia seguinte. Uma
+    mensagem das 22h30 no Chat mostrava a data de amanhã; uma movimentação das 22h30 aparecia como 01h30 do outro dia e
+    saía do filtro do dia certo; a OS prevista para hoje já aparecia como vencida; o PDF da OS imprimia as datas na
+    véspera; e o painel da produção, depois das 21h, contava a produção pelo dia de amanhã.</p>
+    <p><span class="rotulo">O que foi feito:</span> datas e horas passaram a seguir o relógio de Brasília em quase todas
+    as telas e relatórios: Chat, Atividades, Propostas, Ordens de Serviço, Tarefas, Aprovações, Compras, Financeiro,
+    Frotas, Fábrica e Almoxarifado, inclusive alertas, vencimentos, validades e os nomes dos arquivos exportados.</p>
+    <p><span class="rotulo">O que isso evita:</span> OS cobrada como atrasada antes da hora, relatório do dia com
+    lançamentos faltando e prazo contado com um dia a mais ou a menos.</p>
+  </div>
+
+  <div class="item">
+    <h3>A proposta guardada é a proposta que você vê</h3>
+    <p><span class="rotulo">O problema:</span> numa proposta com duas bombas iguais (TAG-A e TAG-B), tirar a primeira e
+    salvar fazia a que ficou mostrar TAG-A. Uma proposta de 5 itens podia ser “criada” com 4, se um falhasse no meio; a
+    cópia de uma proposta grande podia sair com parte dos itens.</p>
+    <p><span class="rotulo">O que foi feito:</span> cada item passou a ser reconhecido por ele mesmo, e não pela posição
+    na lista. Criar, salvar e copiar só dizem “pronto” depois de guardar todos os itens e cláusulas; se algo falha, nada
+    fica pela metade e a tela diz para tentar de novo. O preview editável passou a avisar quando um campo não foi
+    guardado.</p>
+    <p><span class="rotulo">O que isso evita:</span> mandar ao cliente uma proposta com o item, a tag ou a cláusula
+    errada.</p>
+  </div>
+
+  <div class="item">
+    <h3>Cada pessoa vê só os dados da sua área</h3>
+    <p><span class="rotulo">O problema:</span> por fora das telas, um usuário só do Almoxarifado conseguia ler o painel
+    do Comercial e relatórios com telefone e e-mail de clientes. A busca do topo mostrava clientes e propostas a quem não
+    podia abri-los, o histórico do almoxarifado mostrava a todos quem recebeu qual EPI, e qualquer um recebia o nome e o
+    e-mail dos aprovadores de valor.</p>
+    <p><span class="rotulo">O que foi feito:</span> cada parte do sistema passou a exigir o mesmo acesso que a tela dela
+    já exigia: propostas, clientes, projetos, oportunidades, custos de viagem, produtos e o painel do Comercial. Os
+    dados de pessoas (quem recebeu EPI, quem está com qual ferramenta, quem aprova) ficam só com quem cuida disso. A
+    busca do topo diz por que não busca para quem não tem o Comercial.</p>
+    <p><span class="rotulo">O que isso evita:</span> dado de cliente e de colaborador circulando para quem não precisa
+    dele.</p>
+  </div>
+
+  <div class="item">
+    <h3>A lista mostra o filtro que você escolheu</h3>
+    <p><span class="rotulo">O problema:</span> ao trocar o filtro rápido (procurar “bomba” e logo depois “válvula”), a
+    resposta mais lenta chegava por último e a lista mostrava bombas debaixo da palavra “válvula”. Buscar “são” na lista
+    de clientes não achava nada, porque o cadastro grava “SÃO”. O filtro <em>Segmento</em> dos Clientes e o filtro de
+    tipo dos Custos de viagem não filtravam.</p>
+    <p><span class="rotulo">O que foi feito:</span> as listas da Fábrica, do Almoxarifado e do Comercial passaram a
+    mostrar só a resposta do último pedido. As buscas acham com e sem acento, maiúscula ou minúscula, e os filtros que
+    não funcionavam voltaram a filtrar.</p>
+    <p><span class="rotulo">O que isso evita:</span> tomar decisão olhando uma lista que não corresponde ao que está
+    escrito no filtro.</p>
+  </div>
+
+  <div class="item">
+    <h3>Documentos impressos sem texto cortado</h3>
+    <p><span class="rotulo">O problema:</span> em PDFs como o da ficha de EPI, do termo de ferramenta, da remessa a terceiros,
+    da posição do cliente e nas etiquetas, nome comprido saía cortado (“Primeira entreg”), passava da borda da folha ou
+    ficava por cima da coluna do lado. Na etiqueta, o código escrevia por cima do nome.</p>
+    <p><span class="rotulo">O que foi feito:</span> o texto quebra em linhas dentro da coluna e nada se perde. Na
+    remessa, toda página nova diz de qual remessa é e repete o cabeçalho da tabela, e a assinatura não vai sozinha para
+    outra folha.</p>
+    <p><span class="rotulo">O que isso evita:</span> documento assinado ou entregue ao fornecedor com informação
+    faltando.</p>
+  </div>
+
+  <p>Além disso: abrir um custo de viagem para editar não troca mais os valores guardados; a localização do cliente fica
+  guardada no cadastro, sem consultar o mapa a cada vez; as Reservas mostram o cliente pelo nome e a OS pelo número; e a
+  cesta de requisição dos módulos de escritório voltou a enviar.</p>
+
+  <h2>Para onde foi o tempo</h2>
+  <p>Cerca de <strong>80 horas</strong> de desenvolvimento nesta semana.</p>
+  <div class="barra" role="img" aria-label="Divisão do tempo">
+    <span style="width:6%;background:var(--tela)"></span>
+    <span style="width:10%;background:var(--bastidores)"></span>
+    <span style="width:59%;background:var(--testes)"></span>
+    <span style="width:25%;background:var(--doc)"></span>
+  </div>
+  <div class="legenda">
+    <span><i style="background:var(--tela)"></i>Telas que você usa — 6%</span>
+    <span><i style="background:var(--bastidores)"></i>Motor do sistema — 10%</span>
+    <span><i style="background:var(--testes)"></i>Conferências automáticas — 59%</span>
+    <span><i style="background:var(--doc)"></i>Planejamento e manuais — 25%</span>
+  </div>
+  <h3>Tempo por atividade</h3>
+  <table>
+    <tr><th>Atividade</th><th>Horas</th></tr>
+    <tr><td>Datas e horas certas depois das 21h, em todo o sistema</td><td>20 h</td></tr>
+    <tr><td>Cada pessoa vê só os dados da sua área</td><td>16 h</td></tr>
+    <tr><td>Listas, buscas e filtros; custos de viagem e cadastro de clientes</td><td>11 h</td></tr>
+    <tr><td>Propostas: o que se vê é o que fica guardado</td><td>10 h</td></tr>
+    <tr><td>Entrega de EPI e termo de ferramenta com assinatura, e documentos impressos sem corte</td><td>7 h</td></tr>
+    <tr><td>Compra e material ligados a uma OS, e fornecedor novo pelo F2</td><td>7 h</td></tr>
+    <tr><td>Fila de separação, aviso de retirada parada e validade do lote</td><td>6 h</td></tr>
+    <tr><td>Ferramentas: editar, manutenção e baixa</td><td>2 h</td></tr>
+    <tr><td>Frota: portal do motorista</td><td>1 h</td></tr>
+    <tr><th>Total</th><th>80 h</th></tr>
+  </table>
+  <p>Mexer nas telas foi a parte rápida, mesmo com tudo o que apareceu de novo. A maior parte do tempo foi para as
+  conferências automáticas: robôs que repetem centenas de situações a cada mudança — uma mensagem enviada às 22h30,
+  uma assinatura alterada depois, duas pessoas mexendo no mesmo material ao mesmo tempo, um usuário tentando ler o
+  que não é da área dele — para que o que já funciona não quebre escondido. Esta semana mexeu em datas do sistema
+  inteiro, em assinatura com valor legal e em quem pode ver o quê, onde um erro custa caro e aparece tarde. O resto
+  foi planejar cada mudança e atualizar os manuais de uso.</p>
+  <p class="nota">As horas são estimadas pelo registro do trabalho salvo ao longo da semana. Pesquisa,
+  conversas e testes feitos à mão não entram — o número real é maior.</p>
+
+  <h2>Quer conferir?</h2>
+  <ol>
+    <li>Abra <strong>Almoxarifado → Entrega de EPI → Nova entrega</strong>, escolha um colaborador com matrícula e um EPI
+    com CA, assine no quadro, toque <em>Confirmar assinatura</em>, digite a matrícula e toque <em>Registrar
+    entrega</em>. Depois abra <em>Ficha por colaborador</em> e toque <em>Gerar PDF</em>.</li>
+    <li>Abra <strong>Almoxarifado → Ferramentas</strong>, toque <em>Emprestar</em> numa ferramenta disponível e veja o
+    termo e o quadro de assinatura. Numa ferramenta em manutenção, conclua a manutenção e veja as opções de destino.</li>
+    <li>Abra <strong>Almoxarifado → Fila de separação</strong>: cada item diz “Pegar em …”. Toque <em>Imprimir lista de
+    coleta</em> numa requisição.</li>
+    <li>Abra <strong>Almoxarifado → Movimentações</strong>, escolha <em>Entrada</em>, preencha o <em>Lote</em> e veja
+    aparecer <em>Validade do lote</em>.</li>
+    <li>Abra <strong>Compras → Pedidos de Compra → Novo Pedido</strong>: veja o campo <em>OS</em> e aperte <em>F2</em>
+    para abrir a ficha de fornecedor por cima.</li>
+    <li>No celular, abra <strong>Frota → Portal do motorista</strong> e veja o formulário de saída com os 12 itens da
+    inspeção.</li>
+  </ol>
+</main>
+</body>
+</html>
