@@ -5,7 +5,7 @@
 > - [`../exemplo_formulario_motorista.jpeg`](../exemplo_formulario_motorista.jpeg) — o formulário de papel.
 >   **A imagem está cortada:** termina no título da seção **"3. TRANSMISSAO E ITENS ESPECIFICOS"**, sem os itens. O que vier
 >   depois (seção 3, assinatura, etc.) ainda não foi visto. **Pendente: a página inteira.**
-> - [`../Controle_de_Frota_GMP.xlsx`](../Controle_de_Frota_GMP.xlsx) — a planilha centralizadora (8 abas, vazia, só o modelo).
+> - `Controle_de_Frota_GMP.xlsx` — a planilha centralizadora (8 abas, vazia, só o modelo). Removida da pasta a pedido do Andre em 2026-10-23; continua no histórico: `git show c638d201:specs/modulo-frotas/Controle_de_Frota_GMP.xlsx > planilha.xlsx`.
 
 ## O fluxo de hoje
 
