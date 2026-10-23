@@ -102,14 +102,29 @@ export const textoPegarEm = (it) => {
     + " — escolha este endereço no 'Sai de' ao separar";
 };
 
+// Etapa 188, Fase 5 (I-b): com LOTE, trocar a origem e entregar no automático deixa uma linha sem lote negativa (o automático não
+// escolhe lote — defeito anterior, B204/C71). A frase manda escolher o lote no "Sai de" da entrega em vez de prometer a saída automática.
+const NA_ENTREGA_ESCOLHA_O_LOTE = " Na entrega, escolha o lote no 'Sai de': a saída automática não escolhe lote.";
+const codigoDaPlanejada = (it) => {
+  const cod = it.origem_separacao_codigo || (it.pegar_em && it.pegar_em.localizacao_codigo) || '—';
+  return it.lote_separacao_codigo ? `${cod} — lote ${it.lote_separacao_codigo}` : cod;
+};
+
 export const textoAvisoPegarEm = (it) => {
   switch (it.pegar_em_aviso) {
     case 'NENHUM_ENDERECO_COBRE':
       return `Nenhum endereço tem tudo: pegue ${fmtQtd(it.pegar_em ? it.pegar_em.quantidade_sugerida : 0)} aqui. `
-        + 'Separar o resto de outro endereço depois troca a origem da separação.';
+        + 'Separar o resto de outro endereço depois troca a origem da separação.'
+        + (it.pegar_em && it.pegar_em.lote_codigo ? NA_ENTREGA_ESCOLHA_O_LOTE : '');
     case 'PLANEJADA_NAO_COBRE':
-      return `Já separado de ${it.origem_separacao_codigo || (it.pegar_em && it.pegar_em.localizacao_codigo) || '—'}: o resto não cabe lá. `
-        + 'Separar de outro endereço troca a origem da separação (a entrega passa a sair automática).';
+      return `Já separado de ${codigoDaPlanejada(it)}: o resto não cabe lá. `
+        + (it.lote_separacao_codigo ? `Separar de outro endereço troca a origem da separação.${NA_ENTREGA_ESCOLHA_O_LOTE}`
+          : 'Separar de outro endereço troca a origem da separação (a entrega passa a sair automática).');
+    case 'PLANEJADA_INDISPONIVEL':
+      // Fase 5 (M-d): a planejada existe mas não serve mais de dica — "o resto não cabe lá" seria mentira.
+      return `Já separado de ${codigoDaPlanejada(it)}, que não pode mais ser sugerido (endereço bloqueado ou inativo, em área `
+        + 'especial ou lote bloqueado/vencido). Confira antes de separar o resto: separar de outro endereço troca a origem da separação'
+        + (it.lote_separacao_codigo ? `.${NA_ENTREGA_ESCOLHA_O_LOTE}` : ' (a entrega passa a sair automática).');
     case 'SEM_ENDERECO_SUGERIVEL':
       return 'Sem endereço para sugerir (o saldo está sem endereço, em endereço bloqueado ou inativo, em área especial '
         + 'ou em lote bloqueado/vencido).';
@@ -117,6 +132,12 @@ export const textoAvisoPegarEm = (it) => {
       return null;
   }
 };
+
+// Fase 5 (I-a): a retenção (inspeção, bloqueio, terceiros) é do material, não do endereço — o sistema não sabe onde estão as retidas.
+export const textoAlertaPegarEm = (it) => (it.pegar_em && it.pegar_em_alerta === 'RETENCAO_NO_MATERIAL'
+  ? 'Parte do saldo deste material está retida (em inspeção, bloqueada ou em terceiros) e o sistema não sabe em qual endereço — '
+    + 'confira antes de pegar.'
+  : null);
 
 const PainelErro = ({ titulo, mensagem, onTentarNovamente, testid }) => (
   <div
@@ -206,11 +227,20 @@ const LinhaFila = ({ req, onAbrir }) => {
           {req.itens.map((it) => {
             const pegarEm = textoPegarEm(it);
             const aviso = textoAvisoPegarEm(it);
+            const alerta = textoAlertaPegarEm(it);
             return (
               <li key={it.item_id} data-testid={`fila-item-${it.item_id}`}>
                 <strong>{it.material_codigo}</strong> — {it.material_nome}: {descricaoItem(it)}
                 {pegarEm && (
                   <div data-testid={`fila-pegar-em-${it.item_id}`} style={{ marginTop: 2 }}>{pegarEm}</div>
+                )}
+                {alerta && (
+                  <div
+                    data-testid={`fila-pegar-em-alerta-${it.item_id}`}
+                    style={{ marginTop: 2, color: 'var(--gmp-warning, #b45309)' }}
+                  >
+                    {alerta}
+                  </div>
                 )}
                 {aviso && (
                   <div
