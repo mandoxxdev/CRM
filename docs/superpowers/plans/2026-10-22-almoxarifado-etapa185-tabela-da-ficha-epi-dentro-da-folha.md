@@ -1,6 +1,8 @@
 # Etapa 185 — A tabela da ficha de EPI (e o termo de ferramenta) cabe na folha: célula quebra em linhas, nada é cortado
 
-> **Status:** 🟡 **T1–T3 FEITAS (2026-10-22)** — `b194b38b`, `b76f7146`, `06ef5377`; suítes verdes (ver "Execução"). Falta a T4 (Fase 5 + fechamento). Fase 2 (revisão fresca) feita — ver "Emendas da Fase 2" (0 críticos, 3 importantes, 9 menores; prevalecem).
+> **Status:** ✅ **FECHADA (2026-10-22): T1 `b194b38b`, T2 `b76f7146`, T3 `06ef5377`; Fase 5 (0 críticos, 0 importantes, 4 menores — 2
+> corrigidos, 2 registrados) `9a5f46a0`, `c98036ac`; fechamento (skill `fechar-etapa`) no commit seguinte.** Próxima: **Etapa 186** (ver
+> "Próxima tarefa detalhada", no fim). Fase 2 (revisão fresca) feita — ver "Emendas da Fase 2" (0 críticos, 3 importantes, 9 menores; prevalecem).
 > Feature **25** (entrega de EPI) e **feature das ferramentas** (termo de responsabilidade, Etapa 180). Corrige **B1208** / **C444**
 > (registrados na Etapa 183, defeito da 178). Decisões desta etapa a partir de **B1215** (a 184 reservou até B1214).
 > Antes: Etapa 184 (aprovadores da liberação por valor) — **outra sessão revisa a 184 em paralelo: não tocar nos arquivos dela**
@@ -302,7 +304,12 @@ divergência 2 da Fase 0); este plano com a próxima tarefa detalhada.
   desta (aviso de operação novo **C445** no fechamento, se a remessa assinada pelo terceiro for considerada prova). **Reversível.**
 - **B1221 — Quantidade com 6+ dígitos quebra em 2 linhas na coluna Qtd (9 mm).** Aceito: entrega de EPI com 100 000 unidades não é plausível;
   até 99 999 cabe. **Descartado:** alargar Qtd tirando do EPI (a coluna que mais quebra). **Reversível.**
-- **B1222** — a próxima etapa (preenchida no fechamento).
+- **B1222** — a próxima etapa (preenchida no fechamento): **Etapa 186 — os PDFs de remessa a terceiros e de posição do cliente cabem na
+  folha** (a remessa é a C445; a posição tem o mesmo corte por contagem). Plano:
+  `docs/superpowers/plans/2026-10-22-almoxarifado-etapa186-pdfs-de-remessa-e-posicao-dentro-da-folha.md`.
+
+*(No fechamento, a B1217 e a B1220 foram escritas com as emendas I2 e I3 — os textos acima são os da proposta, com o fato errado da B1217
+e a C445 condicional da B1220; o que vale é o que está no documento de novidades.)*
 
 ## Emendas da Fase 2
 
@@ -505,3 +512,110 @@ teste (I1, M1, M2, M4), de texto de decisão com fato errado (I2, I3) e de contr
 - **Falta:** T4 (Fase 5 — revisão adversarial com sonda, com a pergunta "algum texto ainda é desenhado sem medida?": no termo, só os dois
   hashes de fonte 7 e o aviso fixo de imagem; na ficha, `Gerado em`, o hash, a confirmação/aparelho (já medidos, 183) e os avisos fixos —
   e o fechamento pela skill `fechar-etapa`, com as letras B1215–B1222 e as emendas I2/I3 no texto da B1217/B1220 e a C445 incondicional).
+
+## T4 — Fase 5 (revisão adversarial, 2026-10-22) — 0 críticos, 0 importantes, 4 menores: 2 CORRIGIDOS, 2 REGISTRADOS
+
+Revisão fresca com sonda executada sobre `a9759b07`: harness `rev185-harness.js` no scratchpad (os utils transpilados por sucrase, com o
+**jsPDF real** envolto num gravador de `text`/`line`/`addImage`/`addPage`), sondas `rev185-s1.js`..`rev185-s5.js`, cópias `rev185-src` /
+`rev185-src-sab`. Pergunta obrigatória — *algum texto da ficha ou do termo, em alguma fonte, ainda é desenhado sem medida?* — `grep -n
+"pdf.text("` nos dois arquivos (15 chamadas): na ficha, as células (`:177`) e o cabeçalho (`:135`) quebram por largura, o cabeçalho da tabela
+(`:150`) são 8 rótulos fixos medidos, a confirmação e o aparelho (`:184`, `:188`) são os da 183 (medidos); sem medida ficam só `Gerado em`
+(`:142`, texto fixo + data), o hash (`:180`, fonte 7, tamanho fixo — 163,2), o aviso fixo da imagem (`:197`) e o de lista vazia (`:204`). No
+termo, tudo passa por `linhasQuebradas` ou `quebrarTexto`, salvo os dois hashes de fonte 7 (`:138`, `:140`; 162,8 / 135,3) e o aviso fixo da
+imagem (`:131`). Nenhum texto de tamanho variável sem medida.
+
+Fix-round sequencial na main; controle positivo por achado — `perl` com âncora contada = 1, md5 antes/sabotado/restaurado, restauro por cópia
+(`fix185-*` no scratchpad), `git diff --stat` do arquivo sabotado vazio depois do restauro.
+
+- **Menor 1 (CORRIGIDO no código, `9a5f46a0`) — `quebrarTexto` ainda entrava em laço infinito.** A emenda M6 prometia "termina sempre", mas a
+  guarda só cobria o caractere que não cabe sozinho. Com largura negativa, ou uma régua em que `medir('') > largura` (ex.: `() => Infinity`), a
+  palavra já consumida ficava `''`, continuava "não cabendo", e o `while` empurrava linhas vazias para sempre (sonda `rev185-s5.js`: `negReal`
+  e `inf` → *Reached heap limit*). O desenho passa 182 mm e nunca chega lá, mas a função é exportada. **Correção:** `while (palavra &&
+  medir(palavra) > largura)` — cada volta consome ao menos um caractere (o `for…of` leva o primeiro) e para quando a palavra acaba; nenhuma
+  letra perdida. **Teste novo** `[Fase 5 da 185] quebrarTexto termina com qualquer largura ou regua e nao perde letra` (larguras −1, 0, −5,
+  `NaN`, `Infinity`; réguas `() => Infinity` e `() => NaN`; junção sem espaços = texto). Para o teste de laço infinito **não travar o Jest**, a
+  régua do teste tem **teto de chamadas** (`comTeto`, 5000) e lança `NAO TERMINA`; o teste da M6 passou a usar o mesmo teto — o controle da M6,
+  que na T2 rodou fora do Jest (`e185-m6-controle.js`), agora roda dentro dele. **Controles:** (a) tirar `palavra && ` → **12/13**, cai o teste
+  novo em `NAO TERMINA` (1º caso, `'a'`/−1); (b) tirar a guarda da M6 (`pedaco !== '' && `) → **11/13**, caem o teste da M6 e o novo, os dois em
+  `NAO TERMINA`. md5 pós-conserto `35ebd44d…` de volta nos dois. Sonda da revisão rodada de novo sobre o arquivo corrigido (transpilado em
+  `fix185-src`): `negReal` → `["a"]`, `inf` → `["a"]`, `zeroReal` → `["W","W"]`; sobre a cópia antiga, ainda *heap out of memory*.
+- **Menor 2 (CORRIGIDO no teste, `c98036ac`) — a emenda M1 (aparar à direita) não tinha teste.** Tirar o `.replace(/\s+$/, '')` de
+  `linhasPorLargura` (`fichaEpiPdf.js:61`) deixava a suíte verde. **Caso achado por sonda** (`fix185-m1-busca2.js`): EPI
+  `EPI-MASC-SOLDA-07 — Mascara ` + 18 `W` — cru, o `splitTextToSize` dá `'EPI-MASC-SOLDA-07 — Mascara '` com espaço final a **49,47 mm** (útil
+  49). **Teste novo** `[Fase 5 da 185, emenda M1] linha partida antes de palavra longa sai aparada…`: metade positiva (o caso exercita a M1 — a
+  linha crua termina em espaço e passa do útil), nenhuma célula desenhada termina em espaço, `celulasInvasoras()` vazio, EPI em ≥ 2 linhas.
+  **Controle:** sem o aparar → **28/29**, cai na asserção do espaço final (`[32, "EPI-MASC-SOLDA-07 — Mascara "]`); com essa asserção desligada
+  (cópia do teste), cai **sozinha** a `celulasInvasoras` (`81,47 > 81`). As duas sabem falhar. md5 `79586e47…` de volta.
+- **Menor 3 (REGISTRADO, anterior à etapa — desde a 180; C447) — o termo colapsa espaços do texto da versão.** `quebrarTexto` faz
+  `split(/\s+/)`: recuo, espaços repetidos, tab e espaço não separável (NBSP) viram **um** espaço (ou quebra). Nenhuma letra se perde (fuzz da
+  revisão, 30 000 textos), mas o papel não reproduz o texto **byte a byte**: com o PDF impresso não dá para recalcular o SHA-256 do texto da
+  versão quando ele tinha esses espaços. Quem confere o texto é o **Verificar integridade** (no servidor, sobre o texto guardado), não o papel.
+  **Não corrigido:** preservar espaços na quebra do termo é decisão de layout do documento assinado (recuo de parágrafo vira o quê numa linha
+  quebrada?) e não é regressão da 185 (a quebra por contagem da 180 já fazia o mesmo). Aviso de operação **C447**.
+- **Menor 4 (REGISTRADO — o limite da M7, confirmado por execução) — "nada passa de 287" tem limite.** Medido pela revisão: uma entrega com
+  *Entregue por* de **1000** letras é mais alta que uma página e passa do rodapé (desenho até **y = 305**); um colaborador com nome de **3500**
+  letras faz o **cabeçalho** da ficha passar da folha (**y = 442**) — o cabeçalho não tem régua de página. Nenhum dos dois é plausível (nomes do
+  cadastro sem limite, mas centenas/milhares de letras); vai na **D (185)**, como a D (183)(5) já dizia da matrícula.
+
+**Divergência do plano:** a T2 registrou o controle da M6 "fora do Jest, porque o laço infinito trava o Jest" — com a régua de teto ele roda
+dentro; e a M6 do plano ("pedaço vazio leva ao menos um caractere") não cobria a palavra vazia — a revisão achou, o fix-round fechou.
+
+## Verificação final (2026-10-22, uma suíte por vez, depois do fix-round)
+
+Sobre `c98036ac` (código e testes do fix-round) + os documentos do fechamento; exit 0 em todas:
+
+- `test:api` **527/527** arquivos OK (mais lento: `propostaClausulasGrava.api.test.js`, 68,2 s; log `fix185-log-api.txt`).
+- `test:almoxarifado` **44 passou, 0 falhou**.
+- `test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0**.
+- client **180 suítes / 2401 testes**, todos passando (eram 2399 na T3: +2 da Fase 5 — o teste novo do termo e o da M1 na ficha).
+- `CI=true react-scripts build`: *Compiled successfully*.
+- `git status`: só os arquivos do fechamento antes do commit.
+
+
+## Retrospectiva
+
+1. **2 de 4 achados eram promessas do próprio plano sem prova:** a M6 dizia "termina sempre" e a M1 dizia "apara" — uma tinha um buraco
+   (palavra vazia), a outra nenhum teste (verde com o aparar fora). Emenda que vira código precisa de controle próprio, mesmo quando o plano
+   não o prescreve (a T1 registrou "M1 sem controle próprio" como divergência — era o achado).
+2. **1 teste de laço infinito** deixou de precisar de script fora do Jest: a régua com **teto de chamadas** transforma "trava" em "cai com
+   NAO TERMINA". Molde para qualquer teste de terminação nesta base.
+3. **0 regressões** nos casos da Fase 0 — a sonda pós (`p185-sonda-pos.js`) e as réguas da T1/T3 cobriram o que a etapa prometeu; os achados
+   da revisão estão nas bordas (largura ≤ 0, régua patológica, espaço final, textos de milhares de letras).
+4. **2 limites declarados em vez de corrigidos** (espaços do termo, C447; altura acima de uma página, D (185)): os dois são anteriores ou
+   inalcançáveis com dado plausível, e corrigir mudaria o layout do documento assinado sem pedido.
+
+## Próxima tarefa detalhada — Etapa 186: os PDFs de remessa a terceiros e de posição do cliente cabem na folha (features 14 e 13)
+
+**O plano é escrito por outra sessão, em paralelo:**
+`docs/superpowers/plans/2026-10-22-almoxarifado-etapa186-pdfs-de-remessa-e-posicao-dentro-da-folha.md`. **O plano da 186 prevalece** sobre
+este resumo, que é só o que permite retomar sem reler o código. Origem: **B1220** (fora da 185 por escopo) e **B1222**; aviso **C445** (a
+remessa é prova assinada em papel e corta o nome do material).
+
+**Por que esta.** O mesmo defeito da 185, nos dois PDFs que ficaram fora: `client/src/utils/remessaPdf.js` corta cada célula da linha do item
+em **40** caracteres por contagem (`:110`, `String(c ?? '').slice(0, 40)`, colunas `[M, M + 30, M + 110, M + 126, M + 152]`, fonte 9) — medido na
+Fase 0 da 185: código de 26 car. vai a 64,3 mm (a coluna Material começa em 44) e o material perde o que passa de 40 letras; e o papel
+**volta assinado pelo terceiro** (`:121`, *"o papel volta assinado pelo terceiro, e é o que prova a entrega"*). `posicaoClientePdf.js` corta em
+**34** (`:68`, colunas `[M, M + 26, M + 84, M + 96, M + 116, M + 140, M + 164]`) e em **60** nas aplicações (`:90`, `[M, M + 30, M + 130]`) —
+código de 16 car. a 40,5 mm (coluna seguinte em 40). Não depende da empresa.
+
+**Contrato que ela consome (não há API nova nem alterada):** os descritores `montarRemessaPDF` (`remessaPdf.js:56`) e
+`montarPosicaoClientePDF` (`posicaoClientePdf.js:20`), já com os textos inteiros; a mudança é só no desenho (`gerarRemessaPDF`, `:82`;
+`gerarPosicaoClientePDF`, `:47`).
+
+**O que reaproveitar da 185:** o padrão de `fichaEpiPdf.js` — colunas medidas com folga de 1 mm, `splitTextToSize` por célula com a linha
+**aparada à direita** (M1, agora com teste), passo de 4 mm por linha, altura da linha = `4·n` (a maior célula), e a régua de página pela altura
+da linha (hoje a remessa quebra em `y > 262` e a posição em `y > 275` / `250` / `280` — limiares fixos que supõem uma linha por item). Os testes
+da 185 têm o molde das réguas: `textosForaDaFolha` (toda fonte), o recorte por **ordem** das chamadas (emenda I1, não por y), a junção sem
+espaços = texto (nada perdido), o gravador do `jspdf` que **mede** com o jsPDF real (`jest.requireActual`) e a régua com teto de chamadas para
+teste de terminação.
+
+**Pontos de atenção:**
+- `remessaPdf.test.js` e `posicaoClientePdf.test.js` existem; e `client/src/components/datasDoChatDeComprasEDoAlmoxarifadoNoDiaLocal.test.js:62`
+  usa um `FakePdf` para os dois (sem medida) — com `splitTextToSize`/`getTextWidth` no desenho, ele quebra; o gravador tem de passar a medir.
+- O encerramento e as observações da remessa já usam `splitTextToSize(…, 175)` (`:100`, `:118`), mas com `text(array)` de uma vez; o título,
+  o subtítulo e o proprietário (`:89`-`:96`) são uma linha sem medida.
+- Os campos de assinatura (`:122`-`:128`) começam com `y > 245 → addPage`; com linhas mais altas, a régua tem de contar o bloco inteiro.
+- Etiquetas (`etiquetasPdf.js`) continuam fora: já medem e cortam o nome em 2 linhas por decisão (B1220).
+
+**O que já está pronto e ela não reabre:** a ficha de EPI e o termo de ferramenta (185, inclusive a Fase 5); as linhas da confirmação e do
+aparelho (183, B1207).

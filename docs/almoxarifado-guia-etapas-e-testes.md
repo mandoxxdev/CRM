@@ -1,18 +1,25 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-22 (Etapas 172 a 184) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-22 (Etapas 172 a 185) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183 e 184) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184 e 185) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172 a 178 e 180 a 184 ENTREGUES · próxima: Etapa 185)
+> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172 a 178 e 180 a 185 ENTREGUES · próxima: Etapa 186)
 >
-> **O desenvolvimento parou aqui: Etapa 184 fechada — 2026-10-22.** **A lista de aprovadores de valor, com nome e e-mail, deixa de ir para
+> **O desenvolvimento parou aqui: Etapa 185 fechada — 2026-10-22.** **A tabela da ficha de EPI e o termo de ferramenta cabem na folha**:
+> no PDF da ficha (**Almoxarifado → Entrega de EPI → Ficha por colaborador → Gerar PDF**), cada texto da linha da entrega quebra em linhas
+> dentro da coluna — o nome de quem entregou não sai mais pela borda, o EPI comprido não invade o CA e *Primeira entrega* sai inteiro (antes,
+> *Primeira entreg*); a linha fica mais alta só quando precisa. O PDF do termo de ferramenta quebra o texto pela largura do papel. Nada muda
+> no que é gravado nem nas telas; nada a rodar antes do deploy. A remessa a terceiros ainda corta o nome do material (**C445**). **Próxima:
+> Etapa 186** — os PDFs de remessa a terceiros e de posição do cliente cabem na folha (ver o plano da 186).
+>
+> **Etapa 184, 2026-10-22.** **A lista de aprovadores de valor, com nome e e-mail, deixa de ir para
 > todo mundo**: ao abrir **Almoxarifado → Requisições**, quem não configura o almoxarifado recebe do servidor só se a liberação por valor está
 > ligada, o limite e *"você é aprovador: sim/não"*; quem configura e o administrador do sistema recebem também quais usuários aprovam (sem
 > nome nem e-mail); e **Aprovações de valor**, **Aprovar Liberação** e **Reprovar** aparecem só para quem o sistema deixa aprovar (o
 > administrador do módulo deixa de ver o botão que dava erro — **C446**). Nada a rodar antes do deploy. **Próxima: Etapa 185** — a tabela da
-> ficha de EPI e o termo de ferramenta cabem na folha (ver o plano da 185).
+> ficha de EPI e o termo de ferramenta cabem na folha (ver o plano da 185). *(Feita: a 185.)*
 >
 > **Etapa 183, 2026-10-22.** **A ficha de EPI mostra a matrícula confirmada e o aparelho de cada
 > entrega**: em **Almoxarifado → Entrega de EPI → Ficha por colaborador**, a tabela ganha as colunas **Matrícula confirmada** e **Aparelho**, e o
@@ -6917,6 +6924,62 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 185 — A tabela da ficha de EPI e o termo de ferramenta cabem na folha (ENTREGUE — 2026-10-22)
+
+**O que mudou, em uma frase:** no PDF da ficha de EPI e no do termo de ferramenta, texto comprido quebra em linhas dentro da folha — nenhum
+nome é cortado pela borda e nenhuma letra some.
+
+**O problema que ela resolve.** A ficha de EPI em PDF é o papel da pasta da NR-6, e diz **quem entregou**. Cada texto da linha da entrega era
+cortado por número de letras, sem olhar o papel: um nome como *Joao Almoxarife* já passava da margem, *Maria Aparecida dos Santos Oliveira* saía
+pela borda da folha (o fim do nome não aparecia), o nome comprido do EPI ficava por cima da coluna do CA e perdia o fim, e o motivo mais comum,
+*Primeira entrega*, saía *Primeira entreg*. É como preencher a ficha à mão com uma régua que manda parar na 15ª letra, caiba ou não. O termo
+de responsabilidade de ferramenta tinha o mesmo defeito: um texto do termo em caixa alta passava da borda.
+
+| Antes | Agora |
+|---|---|
+| *Joao Almoxarife* em **Entregue por** passava da margem (198,6 mm; a margem é 196) | Cabe numa linha (190,6 mm) |
+| *Maria Aparecida dos Santos Oliveira* saía pela borda da folha (214 mm) | Duas linhas, o nome inteiro (até 195,4 mm) |
+| Motivo *Primeira entreg* | *Primeira entrega*, inteiro |
+| EPI comprido por cima do CA, sem o fim | Quebra em 2 ou 3 linhas na própria coluna, inteiro |
+| Cada entrega tinha a mesma altura | A linha da entrega fica mais alta só quando um texto precisa de mais linhas |
+| Termo: texto em caixa alta passava da borda (210,6 mm) | Quebra em linhas (até 190,2 mm) |
+| Termo: *Registrado por* com nome comprido passava da margem | Quebra em duas linhas |
+
+**Antes de testar (uma vez).** Um usuário **Almoxarife** (ou Administrador do almoxarifado) com **nome comprido** no cadastro de usuários —
+por exemplo *Maria Aparecida dos Santos Oliveira* (é o nome que sai em *Entregue por*); um colaborador **ativo e com matrícula** em **Fábrica →
+Colaboradores**; um material de **EPI** com **Nº do CA**, validade futura e saldo, de **nome comprido** — por exemplo *Mascara de solda
+automatica escurecimento DIN 9-13* (roteiro da Etapa 178). Para o termo: um usuário **Administrador** do almoxarifado e uma ferramenta
+disponível.
+
+**Roteiro de teste (10 minutos).**
+
+1. **Entregar.** Entre com o usuário de nome comprido. **Almoxarifado → Entrega de EPI → Nova entrega**: escolha o colaborador e o EPI,
+   quantidade **1**, **Motivo** = *Primeira entrega*; o colaborador assina e toca **Confirmar assinatura**, digita a matrícula em **Matrícula —
+   digitada pelo colaborador**; **Registrar entrega**.
+2. **Gerar a ficha.** Aba **Ficha por colaborador**, escolha o colaborador, **Gerar PDF** → baixa *ficha-epi-⟨nome⟩.pdf*. Abra o arquivo.
+3. **Conferir o nome inteiro.** Na linha da entrega, a coluna **Entregue por** (a última) mostra *Maria Aparecida* e, embaixo, *dos Santos
+   Oliveira* — o nome inteiro, sem passar da margem direita. A coluna **Motivo** diz *Primeira entrega* (com o **a**). A coluna **EPI** mostra
+   o código e o nome do EPI em 2 ou 3 linhas, todas antes da coluna **CA**; nada fica por cima de outra coluna.
+4. **A linha cresce.** O código do registro (*"Entrega ⟨número⟩ · registro (HMAC-SHA256): …"*), a matrícula confirmada, o aparelho e a imagem
+   da assinatura vêm **abaixo** da célula mais alta, sem encostar nela.
+5. **O comum continua numa linha.** Entre com um usuário de nome curto e faça outra entrega, de um EPI de nome curto, **Motivo** = *Troca*.
+   Gere a ficha de novo: nessa entrega, cada coluna tem **uma** linha só.
+6. **O termo.** Entre como Administrador. **Almoxarifado → Ferramentas → Texto do termo**: escreva um texto em **CAIXA ALTA** de umas duas
+   linhas de largura e **Salvar nova versão**. Volte com o usuário de nome comprido, empreste a ferramenta (**Emprestar**: colaborador,
+   assinatura, matrícula). Aba **Empréstimos** → **Termo** → **PDF do termo** → baixa *termo-⟨número⟩.pdf*: o texto em caixa alta quebra em
+   linhas dentro da folha, e a linha *"Devolução prevista: … Registrado por: Maria Aparecida dos Santos Oliveira … Assinado em: …"* vem em duas
+   linhas, sem passar da margem.
+7. **A prova não mudou.** Aba **Entregas** → **Verificar** na entrega → *"Íntegro"*; no termo, **Verificar integridade** → *"Íntegro"*. Gerar
+   os PDFs não grava nada.
+
+**O que esta etapa não cobre.** Os PDFs da **remessa a terceiros** e da **posição do cliente** ainda cortam o nome do material por número de
+letras — são a **próxima etapa** (**B1220**, **C445**: até lá, confira os itens da remessa na tela). O termo de ferramenta junta espaços
+repetidos, recuo e tabulação do texto ao imprimir (nenhuma letra some — **C447**). Uma entrega com um nome de **mil** letras ainda passaria do
+fim da página (**D (185)**). **Nada a rodar antes do deploy.**
+
+*Nenhum clique no navegador foi dado nesta etapa, e nenhum PDF foi aberto num leitor*: o roteiro acima é o que os testes automáticos provam
+medindo cada texto no gerador de PDF real (o mesmo do navegador), pela função e pelas duas telas, escrito para você conferir à mão.
+
 ## Etapa 184 — A lista de aprovadores de valor, com nome e e-mail, deixa de ir para todo mundo (ENTREGUE — 2026-10-22)
 
 **O que mudou, em uma frase:** ao abrir Requisições, o navegador de cada pessoa deixa de receber a lista de aprovadores de valor com nome e
@@ -7015,7 +7078,8 @@ entrega tem as duas provas.
 **O que esta etapa não cobre.** O **endereço de rede** (IP) continua guardado e no lacre, mas não sai na ficha (**B1202**). O aparelho sai
 como foi gravado — não é traduzido para *"Android — Chrome"* (**B1203**). *"digitou M-100"* é a matrícula do cadastro que conferiu, não o que
 foi digitado letra a letra (**B1206**). O relatório **EPI por colaborador** e a aba **Entregas** não ganharam as colunas (**B1205**). A linha da
-tabela do PDF (EPI, Entregue por…) corta nomes longos — um *Entregue por* com mais de uns 15 caracteres passa da margem (**B1208**, **C444**).
+tabela do PDF (EPI, Entregue por…) corta nomes longos — um *Entregue por* com mais de uns 15 caracteres passa da margem (**B1208**, **C444**) —
+*resolvido na Etapa 185*.
 **Nada a rodar antes do deploy.**
 
 *Nenhum clique no navegador foi dado nesta etapa, e nenhum PDF foi aberto num leitor*: o roteiro acima é o que os testes automáticos provam

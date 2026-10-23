@@ -11,15 +11,23 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-22):** **Etapa 184 fechada** (**a lista de aprovadores de valor, com nome e e-mail, deixa de ir
+> **Onde o desenvolvimento está (2026-10-22):** **Etapa 185 fechada** (**a tabela da ficha de EPI e o termo de ferramenta cabem na folha:
+> nada é cortado** — no PDF da ficha de EPI (o papel da NR-6), cada texto da linha da entrega era cortado por número de letras: o nome de quem
+> entregou passava da margem ou saía da folha (*Maria Aparecida dos Santo*, 214 mm numa folha de 210), o EPI comprido invadia o CA e perdia o
+> fim, e *"Primeira entrega"* saía *"Primeira entreg"*; agora cada célula quebra em linhas (a linha da entrega fica mais alta), nenhuma letra
+> se perde e as colunas foram redistribuídas para o comum caber numa linha; o termo de responsabilidade de ferramenta (texto em caixa alta a
+> 210,6 mm) foi corrigido junto; nada a rodar antes do deploy; nada muda no que é gravado nem nas telas; decisões **B1215** a **B1222**;
+> avisos **C445** (a remessa a terceiros ainda corta o nome do material — é a próxima) e **C447** (o termo junta espaços do texto); **C444**
+> resolvido; limitações **D (185)**; revisão adversarial feita e corrigida). **Próxima: Etapa 186** — os PDFs de remessa a terceiros e de
+> posição do cliente cabem na folha (ver o plano da 186).
+> *(Também em 2026-10-22: **Etapa 184 fechada** (**a lista de aprovadores de valor, com nome e e-mail, deixa de ir
 > para todo mundo** — ao abrir Requisições, cada pessoa do almoxarifado recebia do servidor a lista de quem aprova valor com nome e e-mail,
 > mesmo a tela não mostrando; agora recebe só se a liberação por valor está ligada, o limite e *"você é aprovador: sim/não"*; quem configura
 > o almoxarifado e o administrador do sistema recebem também quais usuários estão marcados (sem nome nem e-mail — os nomes da aba vêm do
 > cadastro de usuários, como antes); e a tela de Requisições passa a mostrar **Aprovações de valor**, **Aprovar Liberação** e **Reprovar** só
 > a quem o sistema deixa aprovar (o administrador do módulo via os botões e levava *"Sem permissão para aprovar liberação por valor"*); nada a
 > rodar antes do deploy; decisões **B1210** a **B1214** e **B1223**–**B1224**; aviso **C446**; limitações **D (184)** — o e-mail de todo
-> usuário continua saindo pela lista de usuários (decisão B841); revisão adversarial feita e corrigida). **Próxima: Etapa 185** — a tabela da
-> ficha de EPI e o termo de ferramenta quebram por largura, sem cortar nome (ver o plano da 185).
+> usuário continua saindo pela lista de usuários (decisão B841); revisão adversarial feita e corrigida); a próxima era a **185**.)*
 > *(Também em 2026-10-22: **Etapa 183 fechada** (**a ficha de EPI mostra a matrícula confirmada e o aparelho de cada
 > entrega** — na tela e no PDF da ficha por colaborador (o papel da pasta da NR-6), cada entrega passa a dizer *"Matrícula confirmada pelo
 > colaborador: Sim — digitou ⟨matrícula⟩ (confere com o cadastro)"* e *"Aparelho: ⟨identificação do navegador⟩"*, lidas da prova gravada no
@@ -4264,7 +4272,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1223 a B1224; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -12732,6 +12740,9 @@ Entregue por), *Entregue por* com uns 15 caracteres (*Joao Almoxarife*) já pass
 (*Maria Aparecida dos Santo*) sai da folha (214 mm) — o fim do nome não aparece no papel. O EPI com nome comprido encosta na coluna do CA.
 Vem da Etapa 178. **Escolhido:** não mexer nesta etapa (a correção da revisão foi limitada às duas linhas novas). **Descartado:** corrigir junto
 sem revisão própria. **Reversível**; uma etapa curta quebra as células por largura, como a **B1207**. Aviso de operação: **C444**.
+*(✅ Resolvida na **Etapa 185** (`b194b38b`): as células quebram por largura e nada é cortado — **B1215** a **B1218**. A medida da 185 achou
+o defeito em **quatro** colunas, não só em *Entregue por* e no EPI: o **Motivo** perdia letra num valor comum (*Primeira entrega* →
+*Primeira entreg*), e **Tam.** e **CA** invadiam a coluna vizinha nos casos raros.)*
 
 **B1209 (NOVA, da Etapa 183) — a próxima etapa (184): a leitura da liberação por valor para de entregar nome e e-mail dos aprovadores.**
 Hoje qualquer usuário do almoxarifado (até Produção) recebe, ao abrir Requisições, a lista de aprovadores de valor com nome e e-mail, mesmo a
@@ -12765,7 +12776,57 @@ logado** (decisão **B841**, Etapa 130: as abas do almoxarifado precisam da list
 contato, para qualquer um"; o e-mail em si fica declarado em **D (184)**. **Descartado:** fechar a lista de usuários aqui (é do núcleo e
 quebraria as abas do administrador do módulo, que leem os nomes de lá). **Reversível.**
 
-*(B1215 a B1222 estão reservados pelo plano da Etapa 185, escrito em paralelo — por isso a 184 continua em B1223.)*
+**B1215 (NOVA, da Etapa 185; decisão do agente) — célula comprida da ficha de EPI QUEBRA em linhas (a linha da entrega cresce); nada é
+cortado.** **Escolhido:** quebrar a célula em quantas linhas precisar e contar essas linhas na altura da entrega (a régua de página da 183 —
+a entrega só começa na página se couber até o rodapé — passa a contar a célula mais alta). **Descartado:** (a) cortar com reticências
+(*Maria Aparecida dos…*) — a ficha é prova da NR-6, e o nome de quem entregou, o EPI e o CA são justamente o que a auditoria lê: um papel que
+esconde parte do nome não prova quem entregou; (b) diminuir a letra até caber — sem limite de tamanho nos cadastros, chegaria a ilegível;
+(c) folha deitada (paisagem) — muda o documento inteiro e só adia o problema. **Reversível.** `b194b38b`.
+
+**B1216 (NOVA, da Etapa 185; decisão do agente) — as colunas da tabela da ficha foram redistribuídas (medidas).** Novas posições: 14, 32, 82,
+102, 121, 131, 143, 168 mm. Data, CA, Validade, Qtd e Tam. cederam o espaço que não usavam para **Motivo** (24 mm) e **Entregue por**
+(28 mm). Assim *Primeira entrega* (antes cortado em *Primeira entreg*) e *Joao Almoxarife* cabem numa linha. **Descartado:** manter as colunas
+e só quebrar — a linha mais comum da ficha (primeira entrega) ficaria com 2 linhas em toda entrega. **Reversível.** `b194b38b`.
+
+**B1217 (NOVA, da Etapa 185; decisão do agente) — a célula quebra por PALAVRA; só palavra maior que a coluna quebra por letra.** Nome de pessoa
+e de EPI se leem melhor inteiros por palavra. Os textos das células **fazem parte do lacre** da entrega (o código HMAC é calculado sobre o
+código e o nome do material, o CA, a validade, a quantidade, o tamanho, o motivo e quem entregou), mas a tabela **nunca foi o texto literal
+do lacre**: a data sai no dia de Brasília, o motivo sai pelo rótulo (*Primeira entrega*, não o código interno), o EPI é *código — nome*, a
+validade é *dd/mm/aaaa*. Quem confere o lacre é o **Verificar integridade**, no servidor, não a leitura do papel. Já o **aparelho** é impresso
+como prova **literal** (**B1207**) — por isso lá a quebra é por letra e as linhas, juntas, são exatamente o texto gravado. **Custo aceito:** a
+quebra por palavra come **um** espaço em cada quebra (um espaço duplo no meio do nome continua dentro da linha, mas não numa quebra); nenhuma
+letra se perde. **Descartado:** cortar por letra também nas células (*Joao Almox* / *arife*). **Reversível.** `b194b38b`. *(O plano da 185
+justificava esta decisão dizendo que as células não estavam no lacre e só o aparelho estava — **estava errado**; corrigido na revisão do
+plano, antes do código.)*
+
+**B1218 (NOVA, da Etapa 185; decisão do agente) — o topo da ficha (título, nome, setor, aviso de excluído) também quebra por largura.**
+Medido: um nome de colaborador com umas 66 letras ou mais já passava da margem no título. Com nome curto, tudo fica na mesma altura de antes.
+**Descartado:** deixar para outra etapa (mesmo arquivo, mesma régua, mesmo documento de prova). **Reversível.** `b194b38b`.
+
+**B1219 (NOVA, da Etapa 185; decisão do agente) — o termo de responsabilidade de ferramenta entrou nesta etapa.** Medido: o texto do termo em
+caixa alta ia a 210,6 mm (a folha tem 210) e a linha *Registrado por* com um nome de 44 letras a 199,9. É prova assinada como a ficha. O texto
+do termo passa a quebrar pela **largura medida** no papel (não mais a cada 95 letras), e todas as linhas de identificação (ferramenta,
+colaborador, devolução prevista, matrícula confirmada, assinatura, título, versão e aviso de texto provisório) quebram por largura.
+**Descartado:** só registrar. **Reversível.** `b76f7146`; a garantia de que a quebra termina com qualquer largura, `9a5f46a0` (revisão).
+
+**B1220 (NOVA, da Etapa 185; decisão do agente) — o PDF da remessa a terceiros, o da posição do cliente e as etiquetas ficaram FORA.** Medido:
+na remessa e na posição, o código do material invade a coluna Material (64,3 mm com a coluna acabando em 44; 40,5 com 40) e o nome do material
+é cortado em 40 / 34 letras. **A remessa é prova assinada em papel** — o papel volta assinado pelo terceiro, e é o que prova a entrega —, com o
+mesmo defeito da ficha. **Motivo de ter ficado fora:** escopo — a etapa ficou na ficha e no termo, que têm a régua de página medida da 183; a
+remessa e a posição têm layout e quebra de página próprios, e entram numa etapa curta com o mesmo padrão (**B1222**). A posição do cliente não
+tem assinatura; as etiquetas já medem e cortam o nome em 2 linhas por decisão (espaço físico da etiqueta). Aviso de operação: **C445**.
+**Reversível.**
+
+**B1221 (NOVA, da Etapa 185; decisão do agente) — quantidade com 6 ou mais dígitos quebra em 2 linhas na coluna Qtd (9 mm).** Até 99 999 cabe
+numa linha. **Aceito:** uma entrega de EPI de 100 000 unidades não é plausível. **Descartado:** alargar Qtd tirando do EPI (a coluna que mais
+quebra). **Reversível.**
+
+**B1222 (NOVA, da Etapa 185) — a próxima etapa (186): os PDFs de remessa a terceiros e de posição do cliente cabem na folha.** É a **B1220** /
+**C445**: a linha do item corta por número de letras, o código invade a coluna vizinha e o nome do material perde o fim — e a remessa volta
+assinada pelo terceiro. Não depende da empresa. O plano é escrito em paralelo:
+`docs/superpowers/plans/2026-10-22-almoxarifado-etapa186-pdfs-de-remessa-e-posicao-dentro-da-folha.md`.
+
+*(B1215 a B1222 são da Etapa 185, cujo plano foi escrito em paralelo ao da 184 — por isso a 184 saltou para B1223.)*
 
 **B1223 (NOVA, da Etapa 184, revisão adversarial; decisão do agente) — na tela de Requisições, *Aprovações de valor*, *Aprovar Liberação* e
 *Reprovar* aparecem só para quem o sistema deixa aprovar.** Antes da etapa, a tela mostrava os três também ao administrador do módulo, a quem
@@ -12779,6 +12840,7 @@ direito de aprovar é a pergunta da **B1213**/**B196**). **Reversível:** três 
 **C444**: na linha de cada entrega do PDF da ficha, nomes longos em *Entregue por* saem da folha e o *Motivo* perde letras; o termo de
 ferramenta tem o mesmo defeito. Não depende da empresa. O plano já está escrito:
 `docs/superpowers/plans/2026-10-22-almoxarifado-etapa185-tabela-da-ficha-epi-dentro-da-folha.md`.
+*(Feita: a Etapa 185 — B1215 a B1222.)*
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -16392,13 +16454,22 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      16º cartão, **Separado aguardando retirada**. **O que fazer:** antes do deploy, rodar a **A109** (opcional) para ver quantas são; se forem
      muitas e antigas (caixas que ninguém vai buscar), resolver antes — entregar, ou **Devolver à prateleira** — ou avisar quem recebe a lista
      de alertas. Se a janela de 3 dias for curta para o galpão, gravar a janela antes do deploy pela linha da **A109** — pela tela, só depois de o sistema subir, e aí a primeira varredura já terá rodado com 3 (**B1189**).
-444. **NOVO (da Etapa 183; o defeito é anterior a ela, da 178) — no PDF da ficha de EPI, um nome longo em "Entregue por" sai cortado pela
-     borda da folha.** A linha de cada entrega corta os textos por número de letras, não pelo espaço do papel: o nome de quem entregou com mais
+444. **✅ RESOLVIDO NA ETAPA 185 (`b194b38b`) — NOVO (da Etapa 183; o defeito é anterior a ela, da 178) — no PDF da ficha de EPI, um nome
+     longo em "Entregue por" sai cortado pela borda da folha.** *(A 185 corrigiu: cada célula quebra em linhas, nada é cortado nem passa da
+     margem. O texto abaixo nomeava só *Entregue por*; **estava incompleto** — a medida da 185 achou o defeito também no **Motivo** (*Primeira
+     entrega* saía *Primeira entreg*, em toda primeira entrega), no **EPI** (invadia o CA e perdia o fim) e, nos casos raros, em **Tam.** e
+     **CA**. Deixado aqui, riscado, para quem lembrar do aviso conferir que fechou.)* A linha de cada entrega corta os textos por número de letras, não pelo espaço do papel: o nome de quem entregou com mais
      de uns 15 caracteres passa da margem, e com 25 (o máximo que a linha leva) o fim dele fica fora da folha (**B1208**). As duas linhas novas (matrícula
      confirmada e aparelho) **não** têm esse problema. **O que fazer:** se a ficha for para auditoria, conferir o nome de quem entregou na
      **tela** da ficha (lá ele sai inteiro); a correção é uma etapa curta (**B1208**).
 
-*(445 está reservado pelo plano da Etapa 185.)*
+445. **NOVO (da Etapa 185; o defeito é anterior a ela) — no PDF da remessa a terceiros, o nome comprido do material sai cortado, e o código
+     invade a coluna do material.** A linha de cada item da remessa corta cada texto em 40 letras, sem medir o papel: um nome de material com
+     mais de 40 letras perde o fim, e um código de material comprido (uns 26 caracteres) passa por cima da coluna **Material**. E esse papel
+     **volta assinado pelo terceiro** — é o que prova o que foi entregue a ele (**B1220**). O PDF de **posição do cliente** tem o mesmo corte
+     (34 letras), sem assinatura. **O que fazer:** até a correção (a próxima etapa — **B1222**), ao imprimir uma remessa de material de nome
+     comprido, conferir os itens na **tela** da remessa (lá o nome sai inteiro) e, se o papel for a prova, escrever à mão o que faltou antes
+     da assinatura do terceiro.
 
 446. **NOVO (da Etapa 184) — o administrador do módulo deixa de ver *Aprovar Liberação* e *Aprovações de valor* em Requisições.** Ele via os
      botões, mas o sistema sempre recusou: *"Sem permissão para aprovar liberação por valor"*. Agora vê só o aviso *"Esta requisição aguarda
@@ -16406,6 +16477,14 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      o super administrador cujo papel não é *admin*. **O que fazer:** se algum deles deve liberar por valor, marque-o na lista de **Aprovadores
      de alto valor** em **Configurações → Liberação por Valor**; se ninguém da lista estiver disponível, quem tem o papel *admin* do sistema
      continua podendo liberar.
+447. **NOVO (da Etapa 185, revisão adversarial; o comportamento é anterior a ela, da 180) — o PDF do termo de ferramenta junta os espaços do
+     texto.** Ao imprimir o texto da versão, recuo de parágrafo, espaços repetidos, tabulação e espaço não separável viram **um** espaço (ou
+     uma quebra de linha). Nenhuma letra se perde (conferido em 30 000 textos), mas o papel não é cópia **byte a byte** do texto assinado: se
+     o texto da versão tinha esses espaços, quem tentar recalcular o código *"Texto da versão ⟨n⟩ (SHA-256)"* digitando o que está no papel
+     **não** chega ao mesmo código. **O que fazer:** para conferir se o texto do termo é o assinado, usar **Verificar integridade** no termo
+     (o servidor confere sobre o texto guardado — *"Íntegro"* ou *"Adulterado: texto do termo alterado"*), não o papel. Ao escrever o texto
+     do termo (**Texto do termo**), evitar recuo com espaços e tabulação.
+
 ### D. Limitações declaradas— são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -17752,6 +17831,15 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   (`GET /ferramentas/:id/manutencoes`) e na Auditoria (*Fim de manutenção*). Quem empresta não fica sabendo da restrição pela tela.
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(185) A tabela da ficha de EPI e o termo de ferramenta dentro da folha, o que ficou de fora.** (1) Os PDFs da **remessa a terceiros** e
+  da **posição do cliente** continuam cortando por número de letras (**B1220**, **C445**) — são a próxima etapa (**B1222**); as etiquetas
+  já medem. (2) **Uma entrega mais alta que uma página inteira ainda passa do rodapé** — a régua manda a entrega para a página seguinte, mas
+  não a divide. Agora as células também contam: medido na revisão, um *Entregue por* de **1000** letras leva o desenho até **305 mm** (o
+  rodapé é 287). (3) **O topo da ficha não tem régua de página:** um colaborador com nome de **3500** letras faz o cabeçalho passar da folha
+  (**442 mm**). (2) e (3) só com nomes de centenas ou milhares de letras — o cadastro não tem tamanho máximo, mas não é dado plausível; a
+  D (183)(5) já dizia o mesmo da matrícula. (4) Quantidade de 6 ou mais dígitos quebra em 2 linhas na coluna Qtd (**B1221**). (5) O termo de
+  ferramenta junta espaços repetidos, recuo e tabulação do texto ao imprimir — o papel não é cópia byte a byte (**C447**). (6) A quebra por
+  palavra come um espaço em cada quebra; nenhuma letra se perde (**B1217**).
 - **(184) A lista de aprovadores de valor sem nome nem e-mail, o que ficou de fora.** (1) O **e-mail de todo usuário** continua
   saindo pela lista de usuários do sistema para qualquer pessoa logada — é por ela que as abas do almoxarifado mostram nomes (decisão
   **B841**, do núcleo; **B1214**). Esta etapa fechou "quem aprova, com contato, numa leitura só", não o e-mail de alguém. (2) O **salvar** da
@@ -17763,7 +17851,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(183) A ficha de EPI com a matrícula confirmada e o aparelho, o que ficou de fora.** (1) O **endereço de rede** (IP) não sai na ficha
   (**B1202**). (2) O aparelho não é traduzido (**B1203**) e *"digitou M-100"* é a matrícula que conferiu, não o que foi teclado (**B1206**).
   (3) O relatório **EPI por colaborador** e a aba **Entregas** não mostram as duas provas (**B1205**). (4) A linha da tabela do PDF continua
-  cortando por número de letras — nomes longos passam da margem (**B1208**, **C444**). (5) Uma entrega mais alta que uma página inteira (só
+  cortando por número de letras — nomes longos passam da margem (**B1208**, **C444**) — *resolvido na Etapa 185*. (5) Uma entrega mais alta que uma página inteira (só
   uma matrícula de centenas de caracteres faria isso) ainda passaria do rodapé — a régua manda a entrega para a página seguinte, mas não a
   divide. (6) Na tela, a coluna **Aparelho** mostra 40 caracteres; o resto, só ao parar o mouse em cima (em tablet, sem mouse, não aparece —
   o PDF traz o texto inteiro).
@@ -18967,6 +19055,13 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(185) Nenhum clique foi dado no navegador, e nenhum PDF foi aberto num leitor de PDF.** As posições de cada texto da ficha e do termo foram
+**medidas no gerador de PDF real** (o mesmo do navegador): nenhuma célula passa da coluna seguinte nem da margem, nenhum texto em nenhuma
+letra passa de 196 mm, nada passa do rodapé, e as linhas de cada célula, juntas, são o texto inteiro — pelo gerador direto e pelas duas telas
+(em jsdom, a ficha com a resposta **gravada da rota real**). O que **só o navegador** prova: o roteiro da Etapa 185 no guia — a ficha de uma
+entrega feita por um usuário de nome comprido, com motivo *Primeira entrega*, aberta num leitor de PDF (o nome inteiro em duas linhas, o
+*Primeira entrega* com o **a**, nada cortado pela borda e legível), e o termo de um texto em caixa alta.
 
 **(184) Nenhum clique foi dado no navegador.** A resposta da leitura para os 11 usuários do teste (comum, Produção sem perfil, Almoxarife,
 aprovador sem configurar, administrador do sistema, perfil Administrador, administrador do módulo, super, papel *Admin* com maiúscula e dois
@@ -35880,9 +35975,96 @@ ou Super Administrador"*; o Administrador do almoxarifado salva e a mudança vai
 - **Quem aprova valor** não mudou: a lista, ou o papel *admin* do sistema (**B1213**; a pergunta da **B196** continua sua).
 - **Nada a rodar antes do deploy.**
 
+## Etapa 185 — A tabela da ficha de EPI e o termo de ferramenta cabem na folha: nada é cortado (2026-10-22)
+
+A ficha de EPI em PDF é o papel da pasta da NR-6: quem recebeu, o quê, quando, com que CA e **quem entregou**. Até aqui, a linha de cada
+entrega era desenhada cortando cada texto por **número de letras**, sem olhar o espaço do papel. O resultado: o nome de quem entregou passava
+da margem (*Joao Almoxarife*) ou **saía da folha** (*Maria Aparecida dos Santo* — o fim do nome não aparecia no papel); o nome comprido do EPI
+invadia a coluna do CA e perdia o fim; e até o motivo mais comum saía errado — **"Primeira entrega" saía "Primeira entreg"**, em toda primeira
+entrega. É como preencher uma ficha à mão com uma régua que manda parar na 15ª letra, caiba ou não. Agora cada célula **quebra em quantas
+linhas precisar** (a linha da entrega fica mais alta), **nenhuma letra se perde**, nada invade a coluna vizinha nem passa da margem, e as
+colunas foram redistribuídas para os textos comuns caberem numa linha só. O **termo de responsabilidade de ferramenta** (também prova
+assinada) tinha o mesmo defeito — o texto do termo em caixa alta saía da folha — e foi corrigido junto. Nada muda no que é gravado, na
+verificação de integridade, nem nas telas: só o desenho dos dois PDFs. Nada a rodar antes do deploy. Decisões do agente: **B1215** a
+**B1222**; avisos **C445** e **C447**; o **C444** está resolvido.
+
+### Antes → Agora
+
+Medidas com o gerador de PDF real (A4 de 210 mm, margem direita em 196 mm):
+
+| Antes | Agora |
+|---|---|
+| *Entregue por* **Joao Almoxarife** terminava em **198,6 mm** (passava da margem, 196) | Termina em **190,6 mm**, numa linha só (**B1216**) |
+| *Entregue por* **Maria Aparecida dos Santo** ia a **214,0 mm** (fora da folha); *Maria Aparecida dos Santos Oliveira* perdia 10 letras | **2 linhas**, o nome inteiro, a maior termina em **195,4 mm** (**B1215**) |
+| Motivo **"Primeira entrega"** saía **"Primeira entreg"** | **"Primeira entrega"** inteiro, numa linha (termina em 166,3 mm; a coluna vai até 167) (**B1216**) |
+| EPI comprido (*EPI-MASC-SOLDA-07 — Mascara de solda automatica escurecimento DIN 9-13*) ia a **95,4 mm**, por cima do CA (que começa em 86), e **perdia 34 letras** | **3 linhas**, inteiro, até **80,6 mm** (a coluna vai até 81) (**B1217**) |
+| CA de texto livre comprido ia a **127,8 mm** (por cima da Validade); tamanho de 20 letras ia a **155,6** e perdia 11 | Quebram dentro da coluna: CA até **99,9** (limite 101), Tam. até **140,5** (limite 142) |
+| Colunas em x = 14, 34, 86, 106, 128, 140, 154, 176 mm | x = **14, 32, 82, 102, 121, 131, 143, 168** — Motivo e Entregue por ganharam o espaço que Data, CA, Validade, Qtd e Tam. não usavam (**B1216**) |
+| O título da ficha com o nome do colaborador (≈ 66+ letras) passava da margem | O título e as linhas do topo quebram por largura (**B1218**) |
+| Termo de ferramenta: o texto em **CAIXA ALTA** ia a **210,6 mm** (a folha tem 210); 200 letras largas a **329,0** | **2 linhas** até **190,2 mm**; as 200 letras em 4 linhas até **193,1** (**B1219**) |
+| Termo: a linha *Devolução prevista … Registrado por ⟨nome de 44 letras⟩ … Assinado em* ia a **199,9 mm** | **2 linhas**, até **186,8 mm** (**B1219**) |
+| Uma entrega que não cabia no fim da página ia inteira para a seguinte (183) | Igual — agora a altura conta também as linhas da célula mais alta (**B1215**) |
+| Remessa a terceiros e posição do cliente cortam por número de letras | **Iguais** — ficaram fora (**B1220**, **C445**); são a próxima etapa (**B1222**) |
+
+### As regras, com o cenário exato
+
+Preparação: um usuário **Almoxarife** (ou Administrador do almoxarifado) com **nome comprido** no cadastro de usuários — por exemplo
+*Maria Aparecida dos Santos Oliveira* (é esse nome que sai em *Entregue por*); um colaborador **ativo** com matrícula; um material de **EPI**
+com **Nº do CA** e validade futura, com saldo, e de **nome comprido** — por exemplo *Mascara de solda automatica escurecimento DIN 9-13*.
+
+**1. O nome de quem entregou sai inteiro, dentro da folha.** Entre com o usuário de nome comprido. **Almoxarifado → Entrega de EPI → Nova
+entrega**: o colaborador, o EPI, quantidade **1**, **Motivo** = *Primeira entrega*, assinatura com **Confirmar assinatura**, a matrícula em
+**Matrícula — digitada pelo colaborador**, **Registrar entrega**. Aba **Ficha por colaborador**, escolha o colaborador, **Gerar PDF** → baixa
+*ficha-epi-⟨nome⟩.pdf*. Na linha da entrega, a coluna **Entregue por** mostra *Maria Aparecida dos Santos Oliveira* em **duas linhas**
+(*Maria Aparecida* / *dos Santos Oliveira*), sem passar da margem direita — antes, sairia *Maria Aparecida dos Santo* cortado pela borda.
+
+**2. "Primeira entrega" inteiro.** Na mesma linha, a coluna **Motivo** diz *Primeira entrega* — com o **a** final (antes: *Primeira
+entreg*).
+
+**3. O EPI comprido quebra em linhas, sem invadir o CA.** A coluna **EPI** mostra *⟨código⟩ — Mascara de solda automatica escurecimento DIN
+9-13* em 2 ou 3 linhas, todas antes da coluna **CA**; juntas, as linhas são o texto inteiro. A linha da entrega fica mais alta, e o código do
+registro (*"Entrega ⟨número⟩ · registro (HMAC-SHA256): …"*), a matrícula confirmada, o aparelho e a imagem da assinatura vêm **abaixo** da
+célula mais alta.
+
+**4. O comum continua numa linha.** Entre com um usuário de nome curto (ex.: *Ana Lima*) e faça uma entrega de EPI de nome curto, motivo
+*Troca*: no PDF, cada célula é **uma** linha, como antes — a ficha só cresce quando o texto pede.
+
+**5. Fim de página.** Com várias entregas no mesmo colaborador, a entrega que não cabe inteira no fim de uma página começa na seguinte, com o
+cabeçalho da tabela (*Data, EPI, CA, Validade CA, Qtd, Tam., Motivo, Entregue por*) repetido no topo — nenhuma linha passa do rodapé.
+
+**6. O termo de ferramenta.** Como Administrador, **Almoxarifado → Ferramentas → Texto do termo**: escreva um texto em **CAIXA ALTA** com
+umas duas linhas de largura e **Salvar nova versão**. Faça um empréstimo (**Emprestar**, colaborador, assinatura, matrícula) com o usuário de
+nome comprido. Aba **Empréstimos** → **Termo** → **PDF do termo** → baixa *termo-⟨número⟩.pdf*: o texto do termo quebra em linhas dentro da
+folha (antes, a linha em caixa alta passava da borda), e a linha *"Devolução prevista: … Registrado por: Maria Aparecida dos Santos
+Oliveira … Assinado em: …"* quebra em duas, sem passar da margem.
+
+**7. Nada mudou na prova.** Aba **Entregas** → **Verificar** na entrega nova → *"Íntegro"*; **Verificar cadeia** → *"Cadeia íntegra — ⟨n⟩
+registros"*. No termo, **Verificar integridade** → *"Íntegro"*. Gerar os PDFs não grava nada.
+
+### O que esta etapa NÃO cobre
+
+- **Remessa a terceiros**, **posição do cliente** e **etiquetas** — os dois primeiros ainda cortam por número de letras (**B1220**, **C445**);
+  são a **próxima etapa** (**B1222**). As etiquetas já medem.
+- O termo de ferramenta junta espaços repetidos, recuo e tabulação do texto da versão num espaço só ao imprimir — nenhuma letra se perde, mas
+  o papel não é uma cópia byte a byte do texto (**C447**; anterior à etapa).
+- Uma entrega mais alta que uma página inteira (um nome de **mil** letras) ainda passa do rodapé; um nome de colaborador de **milhares** de
+  letras faz o topo da ficha passar da folha (**D (185)**).
+- **Nada a rodar antes do deploy.**
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 185 entregue (2026-10-22):** **a tabela da ficha de EPI e o termo de ferramenta cabem na folha — nada é cortado.** No PDF da ficha,
+  cada célula da linha da entrega quebra em linhas por largura medida (**B1215**, **B1217**), as colunas foram redistribuídas para
+  *Primeira entrega* e *Joao Almoxarife* caberem numa linha (**B1216**), o topo da ficha também quebra (**B1218**); o termo de ferramenta quebra
+  o texto e as linhas de identificação pela largura (**B1219**). Medido: *Entregue por* de 214,0 mm → 195,4; EPI de 95,4 → 80,6; o termo em
+  caixa alta de 210,6 → 190,2. A revisão adversarial achou a quebra do termo que não terminava com largura ≤ 0 (corrigido) e o aparar da linha
+  sem teste (teste acrescentado e provado por sabotagem); registrou os espaços que o termo junta (**C447**) e a entrega mais alta que uma
+  página (**D (185)**). Commits `90168815`, `f0bfd7a3` (plano), `b194b38b` (T1), `b76f7146` (T2), `06ef5377` (T3), `a9759b07` (execução), a
+  revisão adversarial `9a5f46a0`, `c98036ac`, e o fechamento. **O que é seu:** as decisões **B1215** a **B1221** (reversíveis); os avisos
+  **C445** (a remessa a terceiros ainda corta o nome do material — conferir na tela) e **C447**; as limitações **(185)** em D e a verificação
+  **(185)** em F. **Próxima: Etapa 186 — os PDFs de remessa a terceiros e de posição do cliente cabem na folha (B1222); ver o plano da 186.**
 
 - **Etapa 184 entregue (2026-10-22):** **a lista de aprovadores de valor, com nome e e-mail, deixa de ir para todo mundo.** A leitura da
   liberação por valor dá a quem não configura só *ligada/desligada*, o limite e *"você é aprovador: sim/não"*; quem configura e o

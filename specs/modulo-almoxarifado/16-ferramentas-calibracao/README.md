@@ -292,3 +292,17 @@ Só exibição — nenhuma rota, consulta, valor gravado ou porta de saldo mudou
 - Fora: **D (180)** itens (3) e (7) resolvidos; ver **D (181)**. Plano:
   `docs/superpowers/plans/2026-10-22-almoxarifado-etapa181-relatorio-epi-por-colaborador.md`. Novidades: seção "Etapa 181", **B1180** a
   **B1188**, **C440** a **C442**.
+
+## Etapa 185 — o PDF do termo de responsabilidade cabe na folha (2026-10-22)
+
+- **Desenho** (`client/src/utils/termoFerramentaPdf.js`): o texto da versão quebra pela **largura medida** na fonte 10 (182 mm), não mais a
+  cada 95 letras — `quebrarTexto(texto, largura, medir)`, com a contagem como régua padrão; título, versão, aviso de provisório e as linhas de
+  identificação (ferramenta, colaborador, devolução prevista / registrado por, matrícula confirmada, assinatura) quebram por largura
+  (**B1219**). Medido: texto em caixa alta 210,6 → 190,2 mm; *Registrado por* com nome de 44 letras 199,9 → 186,8. `b76f7146`.
+- **Descritor** (`montarTermoFerramenta`): `linhasTexto` saiu e entrou `texto` (o texto da versão, literal) — mudança interna do client,
+  intencional (RN-185.09). API, HMAC e a tela do termo: sem mudança.
+- **Fase 5** (`9a5f46a0`): `quebrarTexto` termina com qualquer largura (≤ 0, `NaN`, `Infinity`) e qualquer régua — a guarda da emenda M6 não
+  cobria a palavra vazia (laço infinito com largura negativa). Registrado sem corrigir: o termo junta espaços repetidos, recuo, tab e NBSP do
+  texto ao imprimir (anterior, desde a 180) — **C447**.
+- Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa185-tabela-da-ficha-epi-dentro-da-folha.md`. Novidades: seção "Etapa 185",
+  **B1219**, **C447**. O status da feature não muda.

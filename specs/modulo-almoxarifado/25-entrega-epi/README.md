@@ -19,6 +19,10 @@
 > ficha (tela e PDF) mostra a matrícula confirmada e o aparelho de cada entrega** — o último `[ ]` do checklist que não dependia da empresa
 > (**D (178)**, item 8). Ver a seção "Etapa 183", no fim. O status continua 🟡: o que falta para 🟢 é todo da empresa ou decisão (os
 > formulários, a devolução de EPI, a validade de uso/troca, a âncora externa, a requisição de EPI, série/lote).
+>
+> **+ Etapa 185 (2026-10-22, T1 `b194b38b`, T2 `b76f7146`, T3 `06ef5377`, Fase 5 `9a5f46a0`, `c98036ac`): a tabela do PDF da ficha cabe na
+> folha** — cada célula quebra por largura medida, nada é cortado (resolve a **B1208** / **C444**, registradas na 183, defeito da 178). Ver a
+> seção "Etapa 185", no fim. O status continua 🟡 (o que falta para 🟢 é o mesmo da 183, todo da empresa ou decisão).
 
 ## Por que é uma feature nova (25) e não a 16 nem a 05
 
@@ -85,6 +89,10 @@ A "Requisição de EPI" (5.1) **não** foi feita: fica registrada aqui como item
   matrícula **da entrega**) — `58f3f24b`; o PDF imprime as duas linhas — `399d2a0f`, quebradas por largura e com a página pela altura
   medida — `83ae8be0`, e a assinatura abaixo delas — `8e79177e`; as duas colunas na tela — `f4e5ec9f`; integração pela rota e pelo serviço,
   com a fixture do client — `52fdf3df`, com um User-Agent real de 197 caracteres — `21818eef`.
+- [x] **A linha da entrega no PDF da ficha cabe na folha — nada é cortado** (Etapa 185, **B1208**/**C444**): colunas medidas
+  (x = 14, 32, 82, 102, 121, 131, 143, 168), célula quebrada por palavra com a linha aparada à direita, altura da entrega com `4·n`, topo da
+  ficha quebrado por largura — `b194b38b`; integração pela tela com a fixture real da rota — `06ef5377`; teste do aparar (emenda M1) —
+  `c98036ac`. O termo de ferramenta (feature 16) — `b76f7146`, `9a5f46a0`.
 
 ## Correção declarada
 
@@ -101,11 +109,18 @@ não aparecia em nenhum arquivo de `client/src`, medido na Fase 0 da 183). O pla
 documento de novidades (D (178)), onde também foi corrigida, dizendo. O certo, desde a 183: a **ficha** (tela e PDF) mostra os dois; a
 verificação e a cadeia continuam só calculando.
 
+**Etapa 185 — a B1208 e a C444 (Etapa 183) nomeavam o defeito só em *Entregue por* e no EPI; estavam incompletas.** A medida da Fase 0 da 185
+achou também o **Motivo** — perda de texto num valor fixo e comum (*Primeira entrega* → *Primeira entreg*, em toda primeira entrega) — e a
+invasão da coluna vizinha em **Tam.** (até 20 caracteres no servidor) e **CA** (texto livre) nos casos raros. Corrigido nos dois documentos,
+dizendo (a B1208 e a C444 marcadas resolvidas na 185, com as quatro colunas).
+
 ## Fora (letra D da novidades, "(178)")
 
 Ver **D (178)** no documento de novidades — âncora externa, URL assinada de ~15 min, matrícula como confirmação e não senha, devolução de EPI,
 validade de uso, série/lote, requisição de EPI, ~~PDF sem a confirmação~~ (resolvido na 183), evidências de dev anteriores à Fase 5.
 Da 183: **D (183)**.
+Da 185: **D (185)** (entrega mais alta que uma página e nome de colaborador de milhares de letras ainda passam da folha; remessa e
+posição do cliente fora, **B1220**).
 
 ## Etapa 180 — a cadeia ficou multi-contexto (2026-10-22)
 
@@ -161,3 +176,21 @@ Da 183: **D (183)**.
   resposta real (chaves, tipos, sem IP e com o mesmo aparelho). `52fdf3df`, UA real de 197 caracteres `21818eef`.
 - Fora: **D (183)**. Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa183-ficha-epi-com-matricula-e-aparelho.md`. Novidades:
   seção "Etapa 183", **B1200** a **B1209**, **C444**.
+
+## Etapa 185 — a tabela do PDF da ficha cabe na folha (2026-10-22)
+
+- **Desenho** (`client/src/utils/fichaEpiPdf.js`, `gerarFichaEpiPdf`): `COLUNAS = [14, 32, 82, 102, 121, 131, 143, 168]` (eram 14, 34, 86, 106,
+  128, 140, 154, 176), útil até 1 mm antes da coluna seguinte (a última até 196) — **B1216**; cada célula por `splitTextToSize` (quebra por
+  palavra, palavra maior que a coluna partida por caractere; nenhuma letra perdida — **B1215**, **B1217**), com a linha aparada à direita
+  (emenda M1); a linha j em `y + 4·j`, a altura da entrega `4·n + 3·(conf + aparelho) + 2 + (25 | 8)` e a régua de página da 183 (`y + altura ≤
+  287`) com o `4·n`; o topo (título, nome, setor, aviso de excluído) quebra por largura (**B1218**). `b194b38b`. Some o corte por contagem
+  (`slice(0, larguras[i] * 1.4)`).
+- **Descritor** (`montarFichaEpi`): **não mudou** (os textos já eram inteiros). API, HMAC e a tela da ficha: sem mudança.
+- **Medido** (jsPDF real, `p185-sonda-pos.js`): *Entregue por* 214,0 → **195,4** mm (limite 196); EPI 95,4 → **80,6** (81); CA 127,8 → 99,9
+  (101); Tam. 155,6 → 140,5 (142); Motivo *Primeira entrega* inteiro, 166,3 (167); junção = texto em 43/43 casos.
+- **Testes:** `fichaEpiPdf.test.js` (réguas `textosForaDaFolha` em toda fonte, `celulasInvasoras` e `celulasDaEntrega` pelo recorte por
+  **ordem** das chamadas — emenda I1), `EpiAlmoxarifado.test.js` (a ficha pela tela com a fixture real `fichaEpi.rota.json`, `06ef5377`); Fase 5:
+  o aparar da M1 com teste e controle (`c98036ac`).
+- Fora: **D (185)**, **B1220** (remessa e posição do cliente — a próxima, **B1222**). Plano:
+  `docs/superpowers/plans/2026-10-22-almoxarifado-etapa185-tabela-da-ficha-epi-dentro-da-folha.md`. Novidades: seção "Etapa 185", **B1215** a
+  **B1222**, **C445**, **C447**, **C444** resolvido.

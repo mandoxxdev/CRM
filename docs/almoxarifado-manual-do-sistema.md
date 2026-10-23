@@ -6291,7 +6291,12 @@ exigência)"*). O termo mostra: **Versão do texto**, **Ferramenta**, **Colabora
 colaborador** (*"Sim — digitou ⟨matrícula⟩ (confere com o cadastro)"*; a matrícula digitada não é gravada — só que ela conferiu), **Devolução
 prevista**, **Assinado em** (com quem registrou), o **Código de verificação**, o **texto da versão assinada** (não o vigente) e a imagem da
 assinatura. **PDF do termo** relê o termo e baixa *termo-⟨número⟩.pdf* com tudo isso; se a imagem da assinatura não carregar, ela sai como
-*"(imagem da assinatura indisponível)"* e a tela avisa.
+*"(imagem da assinatura indisponível)"* e a tela avisa. No PDF, o texto do termo e as linhas de identificação (ferramenta, colaborador,
+devolução prevista, quem registrou, matrícula confirmada, assinatura) **quebram pela largura do papel** — texto longo, em caixa alta ou
+nome comprido continua na linha de baixo, sem passar da margem e sem perder letra; os parágrafos e as linhas em branco do texto são
+mantidos. Dentro de cada parágrafo, espaços repetidos, recuo e tabulação são impressos como **um** espaço: o papel não é uma cópia
+caractere a caractere do texto assinado, e por isso o código *"Texto da versão ⟨n⟩ (SHA-256)"* não se recalcula a partir do papel quando
+o texto tinha esses espaços — quem confere o texto é o **Verificar integridade**, abaixo.
 
 **Verificar integridade** (no termo) responde *"Íntegro"* ou *"Adulterado: ⟨motivo⟩"* — a mesma régua da entrega de EPI (21-bis.4): a impressão
 digital do arquivo, a do registro (com o segredo do servidor, que também tem de estar no backup do servidor) e os elos com o registro anterior
@@ -6562,6 +6567,16 @@ ficha, pelos dados guardados na entrega mais recente, com o selo *"Excluído do 
 assinatura abre por um link que vale cerca de 15 minutos) e baixa *ficha-epi-⟨nome⟩.pdf*, com a imagem e a impressão completa do registro de
 cada entrega; assinatura que não carrega sai como *"(imagem da assinatura indisponível)"* e a tela avisa quantas.
 
+**Textos longos no PDF da ficha.** A tabela de entregas do PDF tem as colunas *Data*, *EPI* (código — nome), *CA*, *Validade CA*, *Qtd*,
+*Tam.*, *Motivo* e *Entregue por*. Nenhum texto é cortado: o que não cabe na largura da coluna **continua na linha de baixo, dentro da
+mesma coluna**, quebrando entre palavras (uma palavra maior que a coluna inteira é partida entre letras). Nenhuma letra é perdida e nada
+passa por cima da coluna vizinha nem da margem da folha. A linha da entrega fica tão alta quanto a célula com mais linhas — o código do
+registro, a matrícula confirmada, o aparelho e a imagem da assinatura vêm abaixo dela. Os textos comuns cabem numa linha só: datas,
+CA como *45.678/2024*, quantidade de até 5 dígitos, *Primeira entrega* e um nome de quem entregou do tamanho de *Joao Almoxarife*; um nome
+como *Maria Aparecida dos Santos Oliveira* ocupa duas linhas. O título e as linhas do topo da ficha (nome, matrícula, setor, CPF) também
+quebram quando não cabem. Na quebra entre palavras some o espaço entre elas — o papel mostra o texto, não uma cópia caractere a caractere
+do que foi gravado; quem confere se o registro é o original é o **Verificar** da entrega (21-bis.4).
+
 **As duas provas do ato, na ficha.** Cada entrega da ficha — na tela e no PDF — diz o que a evidência guardou no momento da entrega:
 
 - **Matrícula confirmada** (no PDF, *"Matrícula confirmada pelo colaborador: …"*): *"Sim — digitou ⟨matrícula⟩ (confere com o cadastro)"*
@@ -6577,7 +6592,8 @@ cada entrega; assinatura que não carrega sai como *"(imagem da assinatura indis
 As duas linhas aparecem em todas as entregas, inclusive nas que não têm a prova (com *"Não registrada"* / *"Não registrado"*): a falta da prova
 também é informação para quem audita. O **endereço de rede** de onde veio a entrega fica guardado e dentro da impressão do registro (21-bis.4),
 mas não sai na ficha. Uma entrega do PDF não é dividida entre duas páginas: se ela não cabe inteira no fim da página, começa na seguinte
-(a exceção seria uma entrega mais alta que uma página inteira, o que só uma matrícula de centenas de caracteres produziria).
+(a exceção seria uma entrega mais alta que uma página inteira, o que só uma matrícula ou um nome de centenas de caracteres produziria; e um
+nome de colaborador de milhares de caracteres faria o topo da ficha passar da folha).
 
 ---
 
