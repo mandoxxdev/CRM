@@ -482,6 +482,38 @@
   font-size: 0.9rem;
 }
 
+/* Frota Etapa 2: aviso abaixo de um campo do form (RN-F2.09) e na linha da tela Perfis de acesso. Nao bloqueia nada. */
+.frotas-aviso-campo,
+.frotas-aviso-linha {
+  background: rgba(245, 158, 11, 0.1);
+  border-left: 3px solid #f59e0b;
+  color: var(--gmp-text);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  margin-top: 6px;
+}
+
+.frotas-ajuda {
+  color: var(--gmp-text-light);
+  font-size: 0.85rem;
+  margin: 0 0 4px;
+}
+
+.frotas-perfil-desc {
+  color: var(--gmp-text-light);
+  font-size: 0.8rem;
+  min-width: 200px;
+}
+
+.frotas-perfil-forcado {
+  color: var(--gmp-text-light);
+  font-size: 0.8rem;
+  margin-top: 4px;
+  max-width: 280px;
+}
+
 @media (max-width: 768px) {
   .frotas-page { padding: 16px; }
   .frotas-toolbar { flex-direction: column; align-items: stretch; }

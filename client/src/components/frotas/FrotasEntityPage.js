@@ -6,10 +6,17 @@ import { FiPlus, FiSearch, FiEdit, FiTrash2, FiX, FiCheck } from 'react-icons/fi
 import FrotasPageHeader from './FrotasPageHeader';
 import { ENTITY_CONFIGS } from './frotasEntityConfigs';
 import { mascararTelefoneDigitando, mascararTelefoneCompleto } from '../../utils/telefone';
+import { useAuth } from '../../context/AuthContext';
+import { getEffectiveUser } from '../../services/permissionsCache';
+import { perfilFrota, PERFIS_FROTA } from '../../utils/systemPermissions';
 import './Frotas.css';
 
 const FrotasEntityPage = ({ entityKey }) => {
   const config = ENTITY_CONFIGS[entityKey];
+  const { user } = useAuth();
+  // Frota Etapa 2 (RN-F2.14): CONSULTA so le — sem Novo, Editar, Aprovar e Excluir (ate aqui via os botoes e levava 403 ao salvar).
+  // A regua e a do servidor (perfilFrota); quem decide continua sendo ele.
+  const podeAlterar = perfilFrota(getEffectiveUser(user)) !== PERFIS_FROTA.CONSULTA;
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState(null);
   const [veiculos, setVeiculos] = useState([]);
@@ -151,11 +158,11 @@ const FrotasEntityPage = ({ entityKey }) => {
         title={config.title}
         subtitle={config.subtitle}
         breadcrumbs={[{ label: config.breadcrumb }]}
-        actions={(
+        actions={podeAlterar ? (
           <button type="button" className="frotas-btn frotas-btn-primary" onClick={openNew}>
             <FiPlus /> {config.newLabel}
           </button>
-        )}
+        ) : null}
       />
 
       <div className="frotas-toolbar">
@@ -193,18 +200,19 @@ const FrotasEntityPage = ({ entityKey }) => {
               <thead>
                 <tr>
                   {config.columns.map((c) => <th key={c.key}>{c.label}</th>)}
-                  <th>Ações</th>
+                  {podeAlterar && <th>Ações</th>}
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 ? (
-                  <tr><td colSpan={config.columns.length + 1} className="frotas-empty">Nenhum registro encontrado</td></tr>
+                  <tr><td colSpan={config.columns.length + (podeAlterar ? 1 : 0)} className="frotas-empty">Nenhum registro encontrado</td></tr>
                 ) : (
                   rows.map((row) => (
                     <tr key={row.id}>
                       {config.columns.map((c) => (
                         <td key={c.key}>{renderCell(c, row)}</td>
                       ))}
+                      {podeAlterar && (
                       <td>
                         <div className="frotas-actions">
                           {!config.readOnlyEdit && (
@@ -222,6 +230,7 @@ const FrotasEntityPage = ({ entityKey }) => {
                           </button>
                         </div>
                       </td>
+                      )}
                     </tr>
                   ))
                 )}
@@ -298,6 +307,8 @@ const FrotasEntityPage = ({ entityKey }) => {
                             onChange={(e) => setForm((f) => ({ ...f, [field.key]: e.target.value }))}
                           />
                         )}
+                        {/* Frota Etapa 2 (RN-F2.09): aviso do campo (string|null), dado pela config; nao bloqueia o salvar. */}
+                        {field.aviso && <div className="frotas-aviso-campo" role="note">{field.aviso}</div>}
                       </div>
                     );
                   })}

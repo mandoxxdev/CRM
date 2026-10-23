@@ -28,6 +28,11 @@ jest.mock('../../utils/frotasApi', () => ({
 jest.mock('react-toastify', () => ({
   toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));
+// Frota Etapa 2 (RN-F2.14): a pagina le o perfil do usuario para esconder Novo/Editar/Excluir do CONSULTA; aqui e o gestor.
+jest.mock('../../context/AuthContext', () => ({
+  useAuth: () => ({ user: { id: 1, nome: 'Gestor', role: 'user', admin_modulos: ['frota'] }, logout: jest.fn() }),
+}));
+jest.mock('../../services/permissionsCache', () => ({ getEffectiveUser: (u) => u }));
 
 const MOTORISTA_DO_BANCO = {
   id: 1,

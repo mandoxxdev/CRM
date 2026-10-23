@@ -16,6 +16,10 @@ export function situacaoDoChecklist(r) {
   return r?.aprovado ? SITUACOES.OK : SITUACOES.PENDENCIA;
 }
 
+// Frota Etapa 2 (RN-F2.09): texto literal do plano (docs/superpowers/plans/2026-10-23-frotas-etapa2-perfis-pela-tela.md).
+export const AVISO_USUARIO_CONSULTA = 'Este usuário está com o perfil Consulta no Frota: ele vê o painel, mas não consegue registrar '
+  + 'no portal. Para ele registrar, mude o perfil em Frota → Perfis de acesso.';
+
 const fmtBrl = (v) =>new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
 export const ENTITY_CONFIGS = {
@@ -138,6 +142,11 @@ export const ENTITY_CONFIGS = {
             const inativo = u.ativo === false ? ' (inativo)' : '';
             return { value: u.id, label: `${u.nome}${email}${outro ? ` (ligado a ${u.motorista.nome})` : ''}${inativo}` };
           }),
+        // Frota Etapa 2 (RN-F2.09): usuario com perfil Consulta no Frota ve o painel mas nao registra no portal. O aviso sai do
+        // form.usuario_id, entao aparece ao abrir um motorista ja ligado e ao trocar. Nao bloqueia.
+        aviso: (aux.usuarios || []).some((u) => String(u.id) === String(form?.usuario_id ?? '') && u.perfil_frota === 'CONSULTA')
+          ? AVISO_USUARIO_CONSULTA
+          : null,
       },
       { key: 'observacoes', label: 'Observações', type: 'textarea', full: true },
     ],

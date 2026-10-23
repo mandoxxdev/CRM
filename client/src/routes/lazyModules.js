@@ -136,6 +136,8 @@ export const FrotasChecklists = page(
 );
 export const FrotasRelatorios = page(() => import('../components/frotas/FrotasRelatorios'));
 export const FrotasPortalMotorista = page(() => import('../components/frotas/FrotasPortalMotorista'));
+// Frota Etapa 2 (RN-F2.10): perfis do Frota pela tela (so o ADMIN_FROTA ve no menu; o servidor recusa os outros).
+export const FrotasPerfisAcesso = page(() => import('../components/frotas/FrotasPerfisAcesso'));
 export const AlmoxarifadoDashboard = page(() => import('../components/almoxarifado/AlmoxarifadoDashboard'));
 export const MateriaisAlmoxarifado = page(() => import('../components/almoxarifado/MateriaisAlmoxarifado'));
 export const MaterialAlmoxarifadoForm = page(() => import('../components/almoxarifado/MaterialAlmoxarifadoForm'));

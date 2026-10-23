@@ -111,6 +111,27 @@ describe('menu da Frota no Layout', () => {
       '/frota/motorista', '/frota/requisicoes-material/nova', '/frota/requisicoes-material'].forEach((p) => expect(links).toContain(p));
     expect(container.querySelector('a[href="/frota/motorista"]').textContent).toContain('Portal do motorista');
   });
+
+  // Frota Etapa 2 (RN-F2.10): "Perfis de acesso" so no menu do ADMIN_FROTA. A metade positiva (o admin ve) e o que impede o
+  // negativo de passar com o item sumido para todo mundo.
+  test('ADMIN_FROTA ve "Perfis de acesso" (/frota/perfis)', async () => {
+    await renderLayout(ADMIN_MODULO);
+    expect(linksDoMenu()).toContain('/frota/perfis');
+    expect(container.querySelector('a[href="/frota/perfis"]').textContent).toContain('Perfis de acesso');
+  });
+
+  test('CONSULTA mantem o menu do gestor SEM "Perfis de acesso"', async () => {
+    await renderLayout(CONSULTA);
+    const links = linksDoMenu();
+    expect(links).toContain('/frota/veiculos');
+    expect(links).not.toContain('/frota/perfis');
+  });
+
+  test('MOTORISTA nao ve "Perfis de acesso"', async () => {
+    await renderLayout(MOTORISTA);
+    expect(linksDoMenu()).toContain('/frota/motorista');
+    expect(linksDoMenu()).not.toContain('/frota/perfis');
+  });
 });
 
 describe('/frota (dashboard) por perfil', () => {

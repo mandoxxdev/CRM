@@ -8,7 +8,7 @@
  */
 import {
   FiHome, FiTruck, FiUsers, FiTool, FiDroplet, FiFileText, FiMap, FiClipboard, FiAlertTriangle, FiBarChart2, FiList,
-  FiSmartphone,
+  FiSmartphone, FiShield,
 } from 'react-icons/fi';
 import { PERFIS_FROTA } from '../../utils/systemPermissions';
 
@@ -37,6 +37,18 @@ export const MENU_FROTA_MOTORISTA = Object.freeze([
   MINHAS,
 ]);
 
+// Frota Etapa 2 (RN-F2.10): "Perfis de acesso" so para o ADMIN_FROTA (o servidor recusa `configurar` aos outros). CONSULTA fica com o
+// menu do gestor sem ele; o MOTORISTA nao muda.
+const PERFIS = { path: '/frota/perfis', icon: FiShield, label: 'Perfis de acesso' };
+const iRelatorios = MENU_FROTA_GESTOR.findIndex((i) => i.path === '/frota/relatorios');
+export const MENU_FROTA_ADMIN = Object.freeze([
+  ...MENU_FROTA_GESTOR.slice(0, iRelatorios + 1),
+  PERFIS,
+  ...MENU_FROTA_GESTOR.slice(iRelatorios + 1),
+]);
+
 export function menuFrotaDoPerfil(perfil) {
-  return perfil === PERFIS_FROTA.MOTORISTA ? MENU_FROTA_MOTORISTA : MENU_FROTA_GESTOR;
+  if (perfil === PERFIS_FROTA.MOTORISTA) return MENU_FROTA_MOTORISTA;
+  if (perfil === PERFIS_FROTA.ADMIN_FROTA) return MENU_FROTA_ADMIN;
+  return MENU_FROTA_GESTOR;
 }
