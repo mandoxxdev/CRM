@@ -166,7 +166,7 @@ res.json(ferramentas.map((f) => ({
 | # | Task | Tipo | Feita |
 |---|---|---|---|
 | T1 | Servidor: a baixada não calibra nem edita (RN-187.01..04) | **tronco** | ✅ `3d45817f` |
-| T2 | Servidor: `restricao` no GET + lista branca (RN-187.05..07) | **tronco** (congela o JSON da lista; mesmo arquivo da T1 — depois dela) | — |
+| T2 | Servidor: `restricao` no GET + lista branca (RN-187.05..07) | **tronco** (congela o JSON da lista; mesmo arquivo da T1 — depois dela) | ✅ `130caaca` |
 | T3 | Tela: selo, aviso no Emprestar, Editar fora da baixada (RN-187.08) | galho (contra o contrato acima; só o client) | — |
 | T4 | Integração pela rota e pelo serviço + fixture real para o client | depois de T1, T2, T3 | — |
 | F5 | Revisão adversarial (Fase 5) e fix-round | depois da T4 | — |
@@ -491,6 +491,31 @@ texto das RN, do contrato e das tasks; o executor não precisa reconciliar — o
   - (8) `recusaDaGravacao` só lança se o status relido for BAIXADA (senão `return`) → cai **só** `[RN-187.04b]` ("respondeu sucesso"). ✔
 - Vizinhos sem mudar asserção: `toolFerramentaEdicao` 8/0, `toolCalibracao` 10/0, `toolManutencaoRetorno` 17/0, `toolIntegracao` 1/0,
   `medidasInspecao` 23/0.
+
+### T2 — feita (`130caaca`)
+
+- Teste novo `server/tests/api/toolRestricaoDaManutencao.api.test.js` — **13** cenários (05a–05f com os três casos do 05f, o 06 em
+  PRODUCAO, GESTOR, ALMOXARIFE e ADMIN, o 07). Vermelho antes: **0/13**, todos com `restricao` `undefined` (o 05c com "Cannot read
+  properties of undefined"). Verde: **13/0**.
+- Emendas aplicadas: **I2** — `[RN-187.05f]` ganhou o caso discriminante (a **única** com condição é uma aberta `COM_RESTRICAO` à mão → `null`);
+  o caso antigo (aberta OK sobre concluída restrita) ficou como guarda. **I4** — a baixada com restrição é feita **pela rota**
+  (`COM_RESTRICAO` + `BAIXA`), não por `UPDATE status`.
+- Contrato implementado como escrito; a rota passou a montar `emprestimo_aberto` **e** `restricao` por lista branca num `.map` só (o
+  `emprestimo_aberto: null` explícito quando não há — antes o item ia com o `null` do serviço; mesmo JSON).
+- **Controles positivos** (perl, âncora = 1, md5 antes/sabotado/restaurado, `cmp`):
+  - (1) sem `AND condicao_retorno IS NOT NULL` → cai **só** `[RN-187.05d]` (`null` no lugar da restrição). ✔
+  - (2) `id ASC` → caem `[RN-187.05e]` **e também** `[RN-187.05b]` e `[RN-187.05c]` — **divergência do previsto ("só o 05e")**: as manutenções
+    concluídas pela rota no mesmo teste caem no **mesmo segundo** de `CURRENT_TIMESTAMP`, então o desempate por `id` decide nelas também.
+    Isso reforça o controle (o desempate é exercido por rota, não só à mão).
+  - (3) sem `AND data_fim IS NOT NULL` → cai **só** o `[RN-187.05f]` da aberta `COM_RESTRICAO` (`data_fim: null` voltou) — o caso da I2; o caso
+    antigo continuou verde, como a revisão mediu.
+  - (4) `usuario_id: 1` a mais na lista branca → caem **só** `[RN-187.06] PRODUCAO` e `GESTOR` (chave a mais no `deepStrictEqual`). ✔
+  - (5) lista branca **sem** `restricao` (volta a espalhar `...f`) → **verde 13/0**, como previsto (o objeto do serviço já tem três chaves).
+  - (6) `return res.json(ferramentas)` para todos → caem `[RN-187.06] PRODUCAO` e `GESTOR`, pelo `deepStrictEqual` do `emprestimo_aberto`
+    (`colaborador_nome: 'CARLOS LIMA'` a mais) — a asserção da 181 sabe falhar (cai antes do `includes('CARLOS')`).
+  - (7) `emprestarComTermo` recusando a DISPONIVEL com `restricao` → cai **só** `[RN-187.07]` (`400 {"error":"restrita"}`). ✔
+- Vizinhos sem mudar asserção: `ferramentasListaSemColaborador` 4/0, `toolManutencaoRetorno` 17/0, `termoFerramentaEmprestimo` 13/0,
+  `termoFerramentaPontaAPonta` 12/0, `termoFerramentaVerificacao` 16/0, `termoFerramentaVersao` 10/0.
 
 ## Próxima tarefa detalhada
 
