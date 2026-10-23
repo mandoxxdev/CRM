@@ -254,6 +254,52 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(await semLoteNaoZero(m), []);
   });
 
+  // Fase 5 da 189 (achado 2, sonda SONDA-1; C449). Duas janelas: R1 e R2 abrem com a MESMA sugestao XB-01/L1 (6 cobre 4 de cada uma,
+  // a fila nao desconta outra requisicao). R1 separa 4 do par; R2 confirma o pre-selecionado com a sugestao velha. A separacao so
+  // desconta o separado pendente da PROPRIA requisicao no par (regra da Etapa 59), entao aceita o endereco ja comprometido por R1.
+  // A entrega de R2 recusa com a literal da planejada e nada de estoque se perde: a falha e segura. O controle e o automatico de antes
+  // da 189: a entrega de R2 passava e deixava a linha sem lote -4 na padrao (pior).
+  const duasJanelas = async () => {
+    const m = await material({ lote: true });
+    await entrar(m, B01.id, 6, 'L1'); await entrar(m, P01.id, 9, 'L2');
+    await validade(m, 'L1', '2026-11-10'); await validade(m, 'L2', '2026-12-20');
+    const r1 = await req([[m.id, 4]]); const r2 = await req([[m.id, 4]]);
+    const s1 = (await sugestao(r1.R)).itens[0].pegar_em; const s2 = (await sugestao(r2.R)).itens[0].pegar_em;
+    assert.deepStrictEqual([s1.localizacao_codigo, s1.lote_codigo, s1.cobre, s2.localizacao_codigo, s2.lote_codigo, s2.cobre],
+      ['XB-01', 'L1', true, 'XB-01', 'L1', true], 'premissa: as duas janelas recebem o mesmo par');
+    const a = await separar(r1.R, [{ item_id: r1.ids[0], quantidade_separada: 4, localizacao_origem_id: s1.localizacao_id, lote_id: s1.lote_id }]);
+    assert.strictEqual(a.status, 200, JSON.stringify(a.body));
+    return { m, r1, r2, s2 };
+  };
+
+  await test('[Fase 5, C449] sugestao velha: R2 separa do par ja comprometido por R1 -> 200; a entrega de R2 recusa e nada de estoque se perde', async () => {
+    const { m, r1, r2, s2 } = await duasJanelas();
+    const b = await separar(r2.R, [{ item_id: r2.ids[0], quantidade_separada: 4, localizacao_origem_id: s2.localizacao_id, lote_id: s2.lote_id }]);
+    assert.strictEqual(b.status, 200, `a separacao aceita (regra da 59): ${JSON.stringify(b.body)}`);
+    const e1 = await entregar(r1.R, [{ item_id: r1.ids[0], quantidade_atendida: 4 }]);
+    assert.strictEqual(e1.status, 200, JSON.stringify(e1.body));
+    const e2 = await entregar(r2.R, [{ item_id: r2.ids[0], quantidade_atendida: 4 }]);
+    assert.strictEqual(e2.status, 400, JSON.stringify(e2.body));
+    assert.strictEqual(e2.body.error, `${m.nome}: a origem da separação (XB-01) não serve mais (O saldo em XB-01 (2) não cobre a `
+      + 'quantidade (4) — a saída tiraria de outros endereços) — entregue escolhendo de onde sai');
+    assert.strictEqual(await saldoDe(m, 'XB-01', 'L1'), 2);
+    assert.strictEqual(await saldoDe(m, 'XP-01', 'L2'), 9);
+    assert.deepStrictEqual(await semLoteNaoZero(m), []);
+    assert.deepStrictEqual(await trocas(r2.R), []);
+  });
+
+  await test('[Fase 5, C449 controle historico] o mesmo com R2 no automatico (antes da 189) -> a entrega de R2 passa e deixa -4 sem lote na padrao', async () => {
+    const { m, r1, r2 } = await duasJanelas();
+    const b = await separar(r2.R, [{ item_id: r2.ids[0], quantidade_separada: 4 }]);
+    assert.strictEqual(b.status, 200, JSON.stringify(b.body));
+    assert.strictEqual((await entregar(r1.R, [{ item_id: r1.ids[0], quantidade_atendida: 4 }])).status, 200);
+    const e2 = await entregar(r2.R, [{ item_id: r2.ids[0], quantidade_atendida: 4 }]);
+    assert.strictEqual(e2.status, 200, JSON.stringify(e2.body));
+    assert.strictEqual(await saldoDe(m, 'XB-01', 'L1'), 2);
+    assert.strictEqual(await saldoDe(m, 'XP-01', 'L2'), 9);
+    assert.deepStrictEqual(await semLoteNaoZero(m), [{ loc: 'XP-01', lote: null, quantidade: -4 }]);
+  });
+
   await close();
   terminou = true;
   console.log(`\n${passed} passou, ${failed} falhou`);

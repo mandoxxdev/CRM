@@ -138,7 +138,8 @@ const recorte = (f) => ({
     const m = await material();
     const I = await req([[m, 1]]);
     await dbRun(db, 'UPDATE requisicoes_almoxarifado SET ativo = 0 WHERE id = ?', [I.id]);
-    for (const id of [999999, I.id, 'abc', '1.5']) {
+    // Fase 5 da 189 (sonda SONDA-3): ids estranhos que a revisao tentou; '076' e o proprio 76 (zero a esquerda, aceito) e nao entra aqui.
+    for (const id of [999999, I.id, 'abc', '1.5', '76.0', '1e3', '-1', '0', '99999999999999999999', '%2076', '76abc']) {
       // eslint-disable-next-line no-await-in-loop
       const r = await sugestao(id);
       assert.strictEqual(r.status, 404, `${id}: ${r.status} ${JSON.stringify(r.body)}`);
