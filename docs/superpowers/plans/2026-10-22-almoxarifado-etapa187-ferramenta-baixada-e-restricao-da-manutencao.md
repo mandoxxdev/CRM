@@ -1,7 +1,7 @@
 # Etapa 187 — A ferramenta baixada não é calibrada nem editada, e a restrição da manutenção aparece na lista e no Emprestar
 
 > **Status:** 📝 **plano escrito (2026-10-22); Fase 2 feita** (revisor fresco, 0 Crítico, 5 Importantes, 7 Menores — ver "Emendas da
-> Fase 2"; as emendas **valem por cima** do texto das RN, do contrato e das tasks). Próximo passo: T1. Feature **16** (ferramentas e calibração).
+> Fase 2"; as emendas **valem por cima** do texto das RN, do contrato e das tasks). T1–T4 feitas (`3d45817f`, `130caaca`, `c643054e`, `b020c10c`), suítes verdes. Próximo passo: Fase 5. Feature **16** (ferramentas e calibração).
 > Fecha **D (177)(2)** e **D (177)(5)** de `docs/almoxarifado-novidades-por-etapa.md:17824-17832`. Origem: plano da 177
 > (`docs/superpowers/plans/2026-10-22-almoxarifado-etapa177-retorno-da-manutencao-com-condicao-e-destino.md`, "Fase 5", achado 5, e
 > "Releitura própria", 3º item).
@@ -168,7 +168,7 @@ res.json(ferramentas.map((f) => ({
 | T1 | Servidor: a baixada não calibra nem edita (RN-187.01..04) | **tronco** | ✅ `3d45817f` |
 | T2 | Servidor: `restricao` no GET + lista branca (RN-187.05..07) | **tronco** (congela o JSON da lista; mesmo arquivo da T1 — depois dela) | ✅ `130caaca` |
 | T3 | Tela: selo, aviso no Emprestar, Editar fora da baixada (RN-187.08) | galho (contra o contrato acima; só o client) | ✅ `c643054e` |
-| T4 | Integração pela rota e pelo serviço + fixture real para o client | depois de T1, T2, T3 | — |
+| T4 | Integração pela rota e pelo serviço + fixture real para o client | depois de T1, T2, T3 | ✅ `b020c10c` |
 | F5 | Revisão adversarial (Fase 5) e fix-round | depois da T4 | — |
 | — | Fechamento (`fechar-etapa`) | por último | — |
 
@@ -535,6 +535,42 @@ texto das RN, do contrato e das tasks; o executor não precisa reconciliar — o
     toHaveLength(1)` (*Received length: 0*). ✔
   - (D) Editar de volta em toda linha → caem `[RN-187.08d]` e o `RN-177.10` emendado. ✔
   - (E) selo sob `podeEscrever` → cai **só** `[RN-187.08a]`, na linha da metade **sem permissão** (`:1115`, o `selo(restrita)` nulo). ✔
+
+### T4 — feita (`b020c10c`)
+
+- Teste novo `server/tests/api/toolBaixadaERestricaoIntegracao.api.test.js` — **4** cenários: `[pela rota]` (o gesto até o fim, cada passo
+  com status e corpo), `[RN-187.05g]` (emenda I4), `[pelo servico]`, `[fixture]`. Os três primeiros passaram **de primeira** (a
+  implementação já estava nas T1/T2 — é integração); o `[fixture]` caiu com "fixture ausente" até `CRM_GRAVAR_FIXTURE=1`. Provados pelos
+  controles abaixo. Verde **4/0** em duas execuções seguidas sem regravar (a fixture é determinística).
+- **M1:** a calibração inicial é curta (hoje + 5) — o empréstimo exige vigente e o painel lê a **maior** validade; depois do reverter, a de
+  hoje + 10 aparece em `a_vencer` com `dias_restantes === 10` (e o nome editado). Antes do reverter, o painel **sem** o item.
+- **Fixture** `client/src/components/almoxarifado/__fixtures__/ferramentasRestricao.rota.json`: `restritaVistaPeloProducao` e
+  `baixadaComRestricaoVistaPeloAlmoxarife`, as duas feitas **pela rota**. **Divergência do plano:** os instantes de `CURRENT_TIMESTAMP`
+  (`data_inicio`/`data_fim` da manutenção, `created_at`/`updated_at` da ferramenta) são fixados por `UPDATE` **depois** dos gestos — sem
+  isso a fixture mudaria a cada execução. O teste afirma `restricao !== null` nas duas **antes** de gravar/comparar (I4).
+- Dois Jest novos em `FerramentasAlmoxarifado.test.js` leem a fixture: a restrita (selo e texto sem permissão; aviso no Emprestar com
+  permissão) e a baixada (sem selo, sem Editar, com Reverter baixa). Client: **61/61** no arquivo.
+- **Controles positivos** (perl, âncora = 1, md5 antes/sabotado/restaurado, `cmp`):
+  - (a) controle (4) da T2 (`usuario_id` a mais na lista branca), **sem** regravar → cai o `[fixture]` (`restritaVistaPeloProducao: fixture !=
+    resposta real`) — e também o `[pela rota]` (chaves do PRODUCAO). ✔
+  - (b) controles (1) e (2) da T1 juntos → cai o `[pela rota]` em `calibrar baixada: 201 {"id":2}` — e o `[pelo servico]` (*Missing
+    expected rejection*). ✔
+  - (c) **divergência de execução:** `restricaoVigente` devolvendo sempre `null` **com** `CRM_GRAVAR_FIXTURE=1` → os 4 do servidor caem e o
+    `[fixture]` cai na **premissa** (*"a restrita tem restricao"*) **antes** de gravar — a fixture não é regravada (md5 `cf5ce19338ef`
+    igual). A guarda da I4 impede o regravar que o plano previa. Para provar o lado do Jest, a fixture foi editada à mão com a
+    `restricao: null` na restrita (o que aquele regravar gravaria) → cai **só** o Jest `[T4, fixture real] a restrita…`; e o servidor sem
+    regravar cai no `[fixture]` (*fixture != resposta real*). Fixture restaurada (`cf5ce19338ef`).
+  - (d) controle (D) da T3 → caem o Jest `[T4, fixture real] a baixada…`, o `[RN-187.08d]` e o `RN-177.10`. ✔
+  - (e) controle (A) da T3 → caem o Jest `[T4, fixture real] a baixada…` (prova que a fixture **tem** restrição) e o `[RN-187.08a] baixada`. ✔
+
+### Suítes completas depois de T1–T4 (sobre `b020c10c`, uma vez cada, sequenciais)
+
+- `npm run test:api` — **531/531** arquivos OK (exit 0).
+- `npm run test:almoxarifado` — **44/0**. `test:validation` **4/0**. `test:safealter` **3/0**. `test:sqlite` **16/0**.
+- client `CI=true npx react-scripts test --watchAll=false` — **182/182** suítes, **2460/2460** testes.
+- client `CI=true npx react-scripts build` — *Compiled successfully*.
+
+Próximo passo: **Fase 5** (revisão adversarial) e o **fechamento** (`fechar-etapa`) — não feitos nesta execução.
 
 ## Próxima tarefa detalhada
 
