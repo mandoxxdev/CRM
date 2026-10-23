@@ -18,6 +18,14 @@ jest.mock('../../services/api', () => ({
   default: { get: jest.fn(), post: jest.fn(), put: jest.fn(), delete: jest.fn() },
 }));
 
+// Etapa 189 (T3): a fronteira entre a tela e o papel — o gerador é gravado aqui (o papel é provado em utils/listaColetaPdf.test.js); o
+// filtro e os nomes de arquivo são os reais. Função comum, não jest.fn: o CRA liga `resetMocks`.
+const mockGerar = [];
+jest.mock('../../utils/listaColetaPdf', () => ({
+  ...jest.requireActual('../../utils/listaColetaPdf'),
+  gerarListaColetaPDF: (args) => { mockGerar.push(args); },
+}));
+
 const item = (over = {}) => ({
   item_id: 1, material_id: 10, material_codigo: 'MAT-1', material_nome: 'Chapa 3mm', unidade: 'PC',
   a_separar: 0, separavel: 0, a_entregar: 0, entregavel: 0, disponivel: 0,
@@ -229,6 +237,9 @@ test('erro de servidor mostra a mensagem; Atualizar recarrega', async () => {
 
 // ── Etapa 188 (T3): a sugestão de coleta — "Pegar em …", os avisos e a ordem de coleta (RN-188.08 com as emendas C1, I1, M2,
 // M5). Mock só na fronteira HTTP, com o JSON do contrato congelado no plano (Execução, T2).
+// Etapa 189 (RN-189.09, B1265): com `cobre: true` a janela de separação já abre no endereço — o fim muda (as três asserções abaixo
+// que usam JA_VEM eram SAI_DE na 188; mudaram de propósito). `cobre: false` continua SAI_DE.
+const JA_VEM = " — já vem escolhido no 'Sai de' ao separar";
 const SAI_DE = " — escolha este endereço no 'Sai de' ao separar";
 const pegar = (over = {}) => ({
   localizacao_id: 12, localizacao_codigo: 'A-03', caminho: 'ALM1 / A-01 / A-03', lote_id: 7, lote_codigo: 'L7',
@@ -244,7 +255,7 @@ test('[RN-188.08] linha com lote e validade: Pegar em código (caminho) — lote
   await montarCom([req({ id: 1, itens: [item({ item_id: 11, a_separar: 5, separavel: 5, pegar_em: pegar(), pegar_em_aviso: null })],
     ordem_coleta: [] })]);
   expect(texto('[data-testid="fila-pegar-em-11"]'))
-    .toBe(`Pegar em A-03 (ALM1 / A-01 / A-03) — lote L7 (vence 10/11/2026) · 5 PC${SAI_DE}`);
+    .toBe(`Pegar em A-03 (ALM1 / A-01 / A-03) — lote L7 (vence 10/11/2026) · 5 PC${JA_VEM}`);
   expect(q('[data-testid="fila-pegar-em-aviso-11"]')).toBeNull();
 });
 
@@ -252,7 +263,7 @@ test('[RN-188.08] sem lote e caminho de um segmento: sem lote, sem validade, sem
   await montarCom([req({ id: 1, itens: [item({ item_id: 11, a_separar: 3, separavel: 3,
     pegar_em: pegar({ localizacao_codigo: 'B-02', caminho: 'B-02', lote_id: null, lote_codigo: null, lote_validade: null,
       quantidade_sugerida: 3 }), pegar_em_aviso: null })] })]);
-  expect(texto('[data-testid="fila-pegar-em-11"]')).toBe(`Pegar em B-02 · 3 PC${SAI_DE}`);
+  expect(texto('[data-testid="fila-pegar-em-11"]')).toBe(`Pegar em B-02 · 3 PC${JA_VEM}`);
 });
 
 test('[RN-188.08] cobre false (NENHUM_ENDERECO_COBRE): a frase da emenda C1', async () => {
@@ -328,7 +339,7 @@ test('[I-a] RETENCAO_NO_MATERIAL: o alerta aparece junto da dica; sem o código,
     item({ item_id: 11, a_separar: 5, separavel: 5, pegar_em: pegar(), pegar_em_aviso: null, pegar_em_alerta: 'RETENCAO_NO_MATERIAL' }),
     item({ item_id: 12, material_id: 11, a_separar: 5, separavel: 5, pegar_em: pegar(), pegar_em_aviso: null, pegar_em_alerta: null }),
   ] })]);
-  expect(texto('[data-testid="fila-pegar-em-11"]')).toBe(`Pegar em A-03 (ALM1 / A-01 / A-03) — lote L7 (vence 10/11/2026) · 5 PC${SAI_DE}`);
+  expect(texto('[data-testid="fila-pegar-em-11"]')).toBe(`Pegar em A-03 (ALM1 / A-01 / A-03) — lote L7 (vence 10/11/2026) · 5 PC${JA_VEM}`);
   expect(texto('[data-testid="fila-pegar-em-alerta-11"]')).toBe('Parte do saldo deste material está retida (em inspeção, bloqueada '
     + 'ou em terceiros) e o sistema não sabe em qual endereço — confira antes de pegar.');
   expect(texto('[data-testid="fila-pegar-em-12"]')).not.toBeNull();
@@ -377,4 +388,62 @@ test('[RN-188.08] resposta antiga sem os campos novos não quebra e não mostra 
   expect(q('[data-testid="fila-req-30"]')).not.toBeNull();
   expect(qa('[data-testid^="fila-pegar-em"]')).toEqual([]);
   expect(qa('[data-testid^="fila-ordem-coleta"]')).toEqual([]);
+});
+
+// ── Etapa 189 (T3): imprimir a lista de coleta (RN-189.10, RN-189.11, RN-189.13). Mock só do gerador (a fronteira tela × papel).
+const comColeta = (id, over = {}) => {
+  const it = item({ item_id: id * 10, a_separar: 2, separavel: 2, pegar_em: pegar({ quantidade_sugerida: 2 }), pegar_em_aviso: null });
+  return req({ id, numero: `REQ-${id}`, itens: [it], ordem_coleta: [{ item_id: it.item_id, material_codigo: 'MAT-1', localizacao_id: 12,
+    localizacao_codigo: 'A-03', caminho: 'ALM1 / A-01 / A-03', lote_codigo: 'L7', quantidade_sugerida: 2 }], ...over });
+};
+const soAviso = (id, over = {}) => req({ id, numero: `REQ-${id}`, itens: [item({ item_id: id * 10, a_separar: 5, separavel: 5,
+  pegar_em: null, pegar_em_aviso: 'SEM_ENDERECO_SUGERIVEL' })], ordem_coleta: [], ...over });
+const clicarEm = async (sel) => { await act(async () => { q(sel).click(); }); };
+
+describe('[RN-189.10/11/13] Imprimir lista de coleta', () => {
+  beforeEach(() => { mockGerar.length = 0; });
+
+  test('[RN-189.10] o botão aparece com paradas ou com item com aviso; sem nada, não', async () => {
+    await montarCom([comColeta(1), soAviso(2), req({ id: 3, numero: 'REQ-3' })]);
+    expect(texto('[data-testid="fila-imprimir-1"]')).toContain('Imprimir lista de coleta');
+    expect(q('[data-testid="fila-imprimir-2"]')).not.toBeNull();
+    expect(q('[data-testid="fila-imprimir-3"]')).toBeNull();
+  });
+
+  test('[RN-189.10, RN-189.13] clicar gera o papel daquela requisição, com o nome e o momento da carga, sem chamar o servidor', async () => {
+    await montarCom([comColeta(1), comColeta(2)]);
+    expect(api.get).toHaveBeenCalledTimes(1);
+    await clicarEm('[data-testid="fila-imprimir-2"]');
+    expect(mockGerar).toHaveLength(1);
+    expect(mockGerar[0].requisicoes.map((r) => r.id)).toEqual([2]);
+    expect(mockGerar[0].nomeArquivo).toBe('lista-coleta-REQ-2.pdf');
+    expect(mockGerar[0].carregadaEm).toBeInstanceOf(Date);
+    expect(api.get).toHaveBeenCalledTimes(1);
+  });
+
+  test('[RN-189.11] "todas": só as com SEPARAR e algo a imprimir, na ordem da fila; nome com o dia local', async () => {
+    await montarCom([
+      comColeta(3, { etapas: ['SEPARAR', 'ENTREGAR'] }),
+      comColeta(1, { etapas: ['ENTREGAR'] }),
+      soAviso(2),
+      req({ id: 4, numero: 'REQ-4' }),
+    ]);
+    const todas = q('[data-testid="fila-imprimir-todas"]');
+    expect(todas.textContent).toContain('Imprimir lista de coleta (todas)');
+    expect(todas.disabled).toBe(false);
+    await clicarEm('[data-testid="fila-imprimir-todas"]');
+    expect(mockGerar).toHaveLength(1);
+    expect(mockGerar[0].requisicoes.map((r) => r.id)).toEqual([3, 2]);
+    const d = mockGerar[0].carregadaEm;
+    const dia = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    expect(mockGerar[0].nomeArquivo).toBe(`lista-coleta-fila-${dia}.pdf`);
+    expect(api.get).toHaveBeenCalledTimes(1);
+  });
+
+  test('[RN-189.11] "todas" desabilitado sem requisição SEPARAR imprimível', async () => {
+    await montarCom([comColeta(1, { etapas: ['ENTREGAR'] }), req({ id: 4, numero: 'REQ-4' })]);
+    expect(q('[data-testid="fila-imprimir-todas"]').disabled).toBe(true);
+    await clicarEm('[data-testid="fila-imprimir-todas"]');
+    expect(mockGerar).toHaveLength(0);
+  });
 });

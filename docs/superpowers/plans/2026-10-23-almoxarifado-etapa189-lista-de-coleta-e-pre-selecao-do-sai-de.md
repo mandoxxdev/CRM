@@ -593,7 +593,7 @@ onde divergirem** (as Emendas da Fase 2 incorporadas):
 - Vizinhos sem mudança: `filaSugestaoColeta` 12/0, `filaSugestaoColetaIntegracao` 6/0, `filaSeparacao` 11/0, `separavelDividido` 19/0.
 - Divergência: nenhuma do contrato recongelado.
 
-### T2 — feita (`T2HASH`)
+### T2 — feita (`d043224f`)
 
 - `RequisicoesList.js`: `valorSugeridoNaSeparacao` (exportada, pura), `jaNoParDosIrmaos` (a soma da M1), `fmtQtdSugestao` (M4, local);
   estado `sugestaoSeparacao` (Map ou `null`), `preSelecao` (decisão por item, uma vez por abertura) e `sugestaoSeqRef`; um efeito busca
@@ -624,6 +624,48 @@ onde divergirem** (as Emendas da Fase 2 incorporadas):
   9 abre e fecha a **mesma** requisição (respostas diferentes por abertura) em vez de "outra requisição" — o que se prova é a sequência.
   (4) O (h) sabota `cobre` e o aviso juntos: pelo contrato, `cobre: false` sempre vem com `NENHUM_ENDERECO_COBRE`, então cada guarda sozinha é
   redundante com a outra.
+
+### T3 — feita (`T3HASH`)
+
+- `client/src/utils/coletaTexto.js` (novo, puro): `fmtQtd`, `fmtData`, `textoPegarEm`, `textoAvisoPegarEm`, `textoAlertaPegarEm` (as três frases da
+  188 com o fix-round, B1268). `textoPegarEm` termina em ` — já vem escolhido no 'Sai de' ao separar` com `cobre: true` **e** sem separado
+  pendente sem planejada (`a_entregar > 0 && !origem_separacao_codigo` → M2), senão ` — escolha este endereço no 'Sai de' ao separar`.
+  `FilaSeparacao.js` importa e **re-exporta** as três (as cópias locais saíram).
+- `RequisicoesList.js` (item 7 do recongelamento): `textoAlertaPegarEm` e `fmtQtd` agora de `../../utils/coletaTexto` (o `fmtQtdSugestao` local
+  virou `= fmtQtd`) — a janela não importa mais a tela da fila.
+- `client/src/utils/listaColetaPdf.js` (novo): `montarListaColetaPDF` (descritor puro), `podeImprimirListaColeta` (RN-189.10),
+  `requisicoesParaImprimir` (RN-189.11), `nomeArquivoListaColeta`/`nomeArquivoListaColetaFila` (RN-189.13, dia local por `dataLocal.js`) e
+  `gerarListaColetaPDF`. Colunas `[14, 23, 70, 130, 160, 188]` (I2), `numericas: [0, 4]`, ☐ = `rect(189, y − 3, 3.5, 3.5)`, aviso + alerta da
+  parada em f8 a partir de x 23 com 168 mm, contado na altura da parada; seção nova só se cabe cabeçalho + primeira parada; sem paradas,
+  sem tabela (M6). Medido com o jsPDF real: `9.999.999.999,999 PC` em f7 = 24,5 mm (útil 27); cabeçalhos `Nº` 3,4, `OK` 4,6, `Endereço` 13,5.
+- `FilaSeparacao.js`: botão `fila-imprimir-<req>` ("Imprimir lista de coleta", ao lado de "Abrir") quando `podeImprimirListaColeta`;
+  `fila-imprimir-todas` ("Imprimir lista de coleta (todas)", ao lado de "Atualizar"), desabilitado sem requisição imprimível ou carregando;
+  `carregadaEm = new Date()` no fim de cada carga com sucesso. Clicar não chama o servidor.
+- Testes: `coletaTexto.test.js` **14/14** (re-export, fim por `cobre`, M2, as frases da 188 copiadas); `listaColetaPdf.test.js` **18/18**;
+  `FilaSeparacao.test.js` **26/26** (eram 22: +4 dos botões). Vermelho antes: o re-export caiu antes de mexer em `FilaSeparacao.js`
+  (`toBe` × `undefined`); os 4 dos botões caíram antes dos botões; o do PDF com o gerador fora (`Cannot find module`).
+- **Asserções da 188 que mudaram de propósito** (RN-189.09/B1265): em `FilaSeparacao.test.js`, as três que esperavam ` — escolha este
+  endereço…` com `cobre: true` (`[RN-188.08] linha com lote e validade`, `[RN-188.08] sem lote e caminho de um segmento`, `[I-a]`) passaram a
+  `JA_VEM`; a de `cobre: false` (`PLANEJADA_NAO_COBRE`) ficou `SAI_DE`.
+- Controles (mesmo harness; todos restauraram ao md5 de antes; rodando os três arquivos):
+  | Sabotagem | Caiu | Asserção |
+  |---|---|---|
+  | (j) a tabela pela ordem de `itens` | os 3 de conteúdo da RN-189.10 | a ordem das linhas (`MAT-B` primeiro) |
+  | (k) `NUMERICAS = [0]` | só o "Qtd … um text só" | 2 `text` na coluna Qtd |
+  | (l) sem o cabeçalho repetido | só o das 80 paradas | o cabeçalho da página nova (`[]` × os 6) |
+  | (m) a quebra de página sem o aviso | só a varredura do pé (nova) | `45: … y 275.5` e `y 279` — **na primeira forma não caiu nada** (ver divergências) |
+  | (n) `rect` em x 194 | os 4 que conferem a folha | `rect 194,…` em `foraDaFolha` |
+  | (o) a "todas" sem a etapa SEPARAR | os 2 da RN-189.11 no PDF e os 2 da tela | uma requisição a mais |
+  | (p) o fim antigo sempre | os 2 `cobre: true` de `coletaTexto` e os 3 `JA_VEM` da tela | ` — escolha este endereço…` × ` — já vem…` |
+  | (M2) sem a exceção do separado sem planejada | só `[M2]` de `coletaTexto` | ` — já vem…` × ` — escolha…` |
+- Regressão: `Requisicoes*` + `FilaSeparacao` + `coletaTexto` + `listaColetaPdf` + `posicaoClientePdf` + `pdfTexto`, `--runInBand`:
+  **20 suítes, 405 testes**. Build `CI=true`: *Compiled successfully*.
+- **Divergências:** (1) o controle (m) da primeira forma **não derrubou nada**: as 80 paradas nunca puseram uma parada com aviso exatamente no
+  pé. Teste novo `a parada com aviso no pé da página` varre N = 35..55 paradas simples + uma com aviso de 3 linhas, com a premissa de que pelo
+  menos um N empurrou a parada para a página seguinte **por causa do aviso** — com ela, o (m) cai em N = 45. (2) O subtítulo da seção ficou
+  `Solicitante: ⟨nome⟩ · ⟨setor⟩ · Urgência: ⟨rótulo⟩` (o plano só dizia "solicitante/setor e urgência"). (3) Qtd testada com
+  `9999999999.999` (o `fmtQtd` da M4 tem 3 casas: `9999999999.9999` vira `10.000.000.000`). (4) O título da seção é f14, a linha "Fila
+  carregada em…" e o subtítulo f9, o bloco "Sem endereço sugerido" f10; a parada sem endereço não é partida (mesma régua).
 
 ## Próxima tarefa detalhada
 

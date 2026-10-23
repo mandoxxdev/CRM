@@ -26,8 +26,8 @@ import {
 } from 'react-icons/fi';
 import useUltimoPedido from '../../hooks/useUltimoPedido';
 import { formatarInstanteDoBanco } from './instanteDoBanco';
-// Etapa 189 (T2): a frase do alerta de retenção da 188, a mesma da fila. A T3 move as frases para utils/coletaTexto.js (B1268).
-import { textoAlertaPegarEm } from './FilaSeparacao';
+// Etapa 189: a frase do alerta de retenção da 188 e a quantidade, as mesmas da fila (B1268: utils/coletaTexto.js, sem importar a tela).
+import { textoAlertaPegarEm, fmtQtd } from '../../utils/coletaTexto';
 import './Almoxarifado.css';
 
 const STATUS_INFO = {
@@ -215,11 +215,8 @@ const jaNoParDosIrmaos = (itens, item, valor, origens, quantidades) => (itens ||
   .reduce((s, i) => s
     + (origens[i.id] === valor ? Math.max(0, parseFloat((quantidades || {})[i.id]) || 0) : 0)
     + (temPlanejada(i) && valorPlanejada(i) === valor ? pendenteSeparado(i) : 0), 0);
-// M4 da Fase 2: a quantidade da frase como a fila a mostra (pt-BR, até 3 casas).
-const fmtQtdSugestao = (v) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n.toLocaleString('pt-BR', { maximumFractionDigits: 3 }) : '0';
-};
+// M4 da Fase 2: a quantidade da frase como a fila a mostra (pt-BR, até 3 casas) — o `fmtQtd` de utils/coletaTexto.js (T3).
+const fmtQtdSugestao = fmtQtd;
 const FRASE_SUGERIDO = 'Sugerido pela fila de separação. Se pegou de outro endereço, troque aqui.';
 const FRASE_PARCIAL = ' Entregue esta parte antes de separar o resto — separar o resto de outro endereço troca a origem.';
 
