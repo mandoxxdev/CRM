@@ -1,6 +1,8 @@
 # Etapa 190 — A Entrada manual grava a validade do lote
 
-> **Status:** 📝 **plano escrito (2026-10-23, sobre `2e548a9f`). Fase 2 (revisão do plano) não feita. Execução não começou.**
+> **Status:** 📝 **plano escrito (2026-10-23, sobre `2e548a9f`). Fase 2 feita (2026-10-23, sobre `bfb7d9a1`): 0 Críticos, 2
+> Importantes (I-1 preenchimento sem rede depois do livro; I-2 validade errada sem volta — RN-190.06b "lote vazio"), 8 Menores — ver
+> "Emendas da Fase 2", que valem sobre o texto das RN, do contrato e das tasks. Execução não começou.**
 > Feature **10** (lotes, séries e etiquetas). Corrige o **C450** (`docs/almoxarifado-novidades-por-etapa.md`, achado da revisão da
 > Etapa 188, sonda `rev188-s1.js` (c) da sessão de revisão — não versionada), defeito anterior **desde `65d78fd8` (Etapa 6)**.
 > **Concorrência:** outra sessão executa a **Etapa 189** em paralelo (`requisitionService.js`, `routes/almoxarifado.js`,
@@ -401,6 +403,169 @@ SELECT COUNT(*) FROM lotes_almoxarifado WHERE data_validade IS NULL AND recebime
 
 O que fazer com o resultado: para cada lote com saldo de material que vence, registrar uma Entrada do lote com a validade real depois do
 deploy (preenche, RN-190.05) — ou esperar a correção da 191.
+
+## Emendas da Fase 2
+
+Revisor fresco, 2026-10-23, sobre `bfb7d9a1`. Leu o CLAUDE.md (motor e trava por material, desfazer sob a trava), o plano, a spec 10,
+a B204/B205 e a seção da Etapa 170 das novidades; no código: `schemas.js:87-142`, `stockService.js` (`registrarMovimentacao` `:1104`,
+resolução do lote `:1258-1286`, guarda de saída vencida `:1544-1550`, livro `:2290`, catch amplo `:2306-2380`, pós-livro não-fatal
+`:2384-2525`, `cancelarMovimentacao` `:2619`), `lotService.js` (inteiro), `receiptService.js:1747-1773` e `:2115-2129` (seção da nota),
+`notificationQueueService.varrerLotesVencendo`, `sugestaoDeColeta.js:42, 100, 158-166`, `extended.js:831-884`, `permissions.js:25-26, 112`
+e `RecebimentosAlmoxarifado.js:1292`. Duas sondas executadas contra o código de hoje, banco em memória (`createTestApp`), sem tocar em
+arquivo do repositório (scratchpad, `f2r190-s1.js` e `f2r190-s2.js`):
+
+| Sonda | Gesto | Resultado medido |
+|---|---|---|
+| s1 (a) | v2 ENTRADA `lote: 'LA'`, `data_validade: '2027-03-31'` | 201, lote com validade `null` — o C450 reproduz |
+| s1 (b) | v2 ENTRADA de lote novo num material de série, 1 série para 2 un | 400 da série; **lote `LORF` criado**, 0 movimentos (B1275) |
+| s1 (b+) | controle: a mesma com a série certa | 201 |
+| s1 (c) | v2 ENTRADA que cria `LEST` + `POST /movimentacoes/:id/cancelar` | 200; lote fica, saldo 0; livro `ENTRADA cancelado=1` + `ESTORNO cancelado=0`, **os dois com `lote_id`** |
+| s1 (d) | `POST /transferencias` com `data_validade` | 201, ignorada (a RN-190.03 muda isso para 400) |
+| s1 (e) | v2 SAIDA com `data_validade` | 201, ignorada |
+| s1 (f) | v2 `DEVOLUCAO` (genérica) com lote novo | 201, **cria o lote** (é `TIPOS_ENTRADA`) |
+| s2 (g) | lote com validade 2020 → SAIDA | 400 `Lote LV vencido em 2020-01-01 …` |
+| s2 (h) | o estorno da ENTRADA desse lote vencido | 200, físico 0 — o estorno não olha validade |
+
+**Resultado: 0 Críticos, 2 Importantes, 8 Menores. O contrato muda: duas literais novas em `MSG_VALIDADE` (`AVISO_FALHA`,
+`AVISO_REDEFINIDA`) e uma ação de auditoria nova (`VALIDADE_REDEFINIDA`). A chave `aviso_validade` não muda — T3 não é afetada e pode
+começar junto com T1.** As decisões entram como complemento da B1274 (I-1) e da B1272 (I-2), sem número novo (a faixa B1270–B1279 está
+toda usada).
+
+### As quatro perguntas
+
+1. **Contrato × código — bate.** `z.unknown().optional()` tem o precedente exato (`schemas.js:128-133`); o motor recebe o body inteiro
+   da v2 (`extended.js:841`) e o cru de `/transferencias` (`:883`) — as duas rotas dão a mesma mensagem. Nenhum chamador interno passa
+   `data_validade` ao motor (grep: só o recebimento usa a chave, e na `criarOuObterLote` dele, fora do motor), então `SO_ENTRADA` não
+   acerta fluxo interno. **Ordem:** as três recusas novas vêm depois das recusas de hoje anteriores à resolução do lote (motivo do
+   cadastro, tipo, material inativo, `reserva_id`, reserva da requisição, `doBloqueado`) e antes de qualquer efeito (o primeiro efeito
+   é a criação do lote em `:1278`); `CONFLITO` vem antes do saldo, do endereço e das séries. Tudo roda **dentro** da trava do material
+   (o motor inteiro está em `naTravaDoMaterial`) — ver M-7. **Fuso:** "passado" = `< diaLocal.hojeLocalISO()` é a mesma régua do
+   `isVencido` (Etapa 163); `DD/MM/AAAA` por troca de campos, sem `new Date`, é a lição da Etapa 170. Bate.
+2. **RN × spec — batem.** Spec 10: vencimento é derivado (`isVencido`), FEFO com nulos por último (`listarLotesDoMaterial`,
+   `sugestaoDeColeta.js:42`), liberação guardada pela data (`lotService.js:182`), descarte de vencido passa. A B204/B205 só toca a A110
+   (M-5). A Etapa 170 só toca o formato das datas (acima). Nenhuma RN contradiz spec.
+3. **T1/T2 tronco, T3 galho — sim.** T1 e T2 mexem nos mesmos dois serviços e no mesmo arquivo de teste: sequenciais. T3 consome só
+   `aviso_validade` (string) e `{ error }` — as emendas acrescentam literais, não chaves. A T4.4 lê `/fila-separacao`, que é de
+   `requisitionService.js` (território da 189): rodar a T4 só com a 189 commitada (M-9).
+4. **RN traçada até o último gesto — dois achados (I-1, I-2).** O traço inteiro está abaixo, depois dos achados.
+
+### I-1 (Importante) — o preenchimento depois do livro não tem rede: falha vira 500 com a entrada gravada, e o operador repete
+
+**Onde:** RN-190.05/08 e T2 dizem "preenchimento depois do `INSERT` do livro (`:2290`), antes da resposta", e só a auditoria é
+declarada não-fatal (`registrarAuditoriaDoAto`). O `UPDATE … WHERE data_validade IS NULL` e a releitura do RN-190.08 não têm rede.
+Desde a Etapa 120 (C250, B778, comentário em `stockService.js:2427-2436`) **tudo o que roda depois do livro é não-fatal**, porque os 30
+chamadores leem a exceção como "nada aconteceu": a Entrada repetida lançava duas vezes.
+
+**Cenário:** Entrada de 4 em L1 (sem validade) com `2027-01-31`; o livro grava, o `UPDATE` do preenchimento lança (`SQLITE_BUSY`,
+disco) → 500 → o almoxarife registra de novo → **8 entradas no livro, 4 no prédio**. Pior se o preenchimento for posto **dentro** do
+`try` que termina no `INSERT` (`:2290-2305`): o catch amplo (`:2306`) desfaz o físico, a série e a linha de saldo, mas **não apaga a linha do
+livro** — livro com uma entrada que não aconteceu.
+
+**Quem desfaz:** ninguém, e é o certo. O `UPDATE` é um comando só (falhou = nada gravado); a regra do CLAUDE.md "quem desfaz subtraindo
+o que acabou de creditar tem de desfazer sob a trava" fala de crédito de estoque — aqui não há crédito a desfazer, e desfazer a entrada
+por causa da validade seria pior que a validade faltar (B447/B452: gravação que perde depois de mexer em estoque não tenta de novo).
+
+**Emenda (escolhida):** o preenchimento (e a redefinição da I-2) roda **fora** do `try` do livro, junto dos passos não-fatais (depois da
+auditoria do lançamento, `:2437-2448`, antes de `verificarAlerta`, `:2450`), num `try/catch` próprio: falha → `console.warn` com o id da
+movimentação e `aviso_validade` = **`AVISO_FALHA`** (literal nova, em `MSG_VALIDADE`):
+`A entrada foi registrada, mas a validade do lote <código> não pôde ser gravada (<DD/MM/AAAA>). Não repita a entrada; peça a correção da validade do lote.`
+Teste novo **14b** (T2): `falhaSqlInjetada` no `UPDATE lotes_almoxarifado SET data_validade` → 201, `aviso_validade === AVISO_FALHA`,
+**um** movimento no livro, físico +4, lote sem validade. Controle positivo (e): tirar o `try/catch` → o 14b cai com 500 e o livro com a
+linha. **Descartado:** 500 (C250 de novo); desfazer a entrada (estorno automático dentro do motor, fora do padrão de toda a base);
+silêncio só com log (o C450 num caso menor — o operador acha que gravou).
+
+### I-2 (Importante) — validade digitada errada não tem volta: o estorno e a recusa deixam o lote com a data, e refazer dá `CONFLITO`
+
+**Onde:** RN-190.06 (outra validade → 400) × RN-190.09 (o estorno não desfaz a validade) × B1275 (o lote nasce antes das recusas de
+depois da resolução). Cada uma está certa sozinha; o fluxo trava.
+
+**Cenários (sondas s1 (b) e (c), reproduzidos no estado de hoje; o desfecho é o da regra do plano):**
+1. Entrada de lote novo `LORF` com `2027-03-31` num material de série, séries erradas → 400 da série; o lote **já nasceu, com a
+   validade** (s1 (b): lote criado, 0 movimentos). O operador corrige as séries e percebe que a data era `2027-08-31` → **400
+   `CONFLITO`** ("o lote LORF já tem validade 31/03/2027 … peça a correção") — num lote sem saldo e sem movimento nenhum.
+2. Entrada que cria `LEST` com a data errada → o gestor estorna (s1 (c): 200; o lote fica com saldo 0, o livro com `ENTRADA
+   cancelado=1` e `ESTORNO cancelado=0`, ambos com `lote_id`) → a nova entrada com a data certa → **400 `CONFLITO`**. O estorno, que o
+   operador usa exatamente para desfazer o lançamento errado, não desfaz a parte que estava errada.
+
+O gesto posterior (refazer a entrada) recusa o que o anterior (estorno, ou a recusa) deixou para trás. A saída que sobra é **trocar o
+código do lote** — que está impresso na embalagem — ou esperar a 191. E o almoxarife nem estorna sozinho (`ajustar_estoque` é
+ADMINISTRADOR/GESTOR, `permissions.js:26`).
+
+**Emenda (escolhida, reversível) — RN-190.06b "lote vazio":** um lote **vazio** — nenhum movimento vivo com ele
+(`NOT EXISTS (SELECT 1 FROM movimentacoes_almoxarifado WHERE lote_id = ? AND cancelado = 0 AND tipo <> 'ESTORNO')`), nenhuma linha de
+saldo ≠ 0 com ele e nenhuma série presente (`EM_ESTOQUE`/`BLOQUEADA`) com ele — **não** dá `CONFLITO`: a entrada com outra validade a
+**redefine**. A decisão "vazio?" é tomada na mesma leitura que decide o `CONFLITO` (antes de qualquer efeito, dentro da trava — nenhuma
+porta põe movimento no lote fora dela); a gravação vai no mesmo ponto não-fatal da I-1:
+`UPDATE lotes_almoxarifado SET data_validade = ?, vencimento_liberado_em = NULL, vencimento_liberado_por = NULL, vencimento_liberado_motivo = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND data_validade = ? RETURNING id`
+(a liberação era daquela validade — mesmo raciocínio do ponto (1) da 191), auditoria `acao='VALIDADE_REDEFINIDA'` com antes/depois e
+`movimento_id`, `aviso_validade` = **`AVISO_REDEFINIDA`**:
+`O lote <código> estava vazio com a validade <DD/MM/AAAA antiga>; ela foi trocada por <DD/MM/AAAA nova>.`
+(função `(codigo, antigaISO, novaISO)`). `UPDATE` que não casa → o mesmo tratamento do RN-190.08 (relê; `AVISO_CORRIDA` se outra).
+Lote com **qualquer** movimento vivo (inclusive um que já saiu todo, saldo 0) continua `CONFLITO` — a história dele cita a validade.
+
+Testes novos (T2): **11b** o cenário 1 (recusa de série, depois a entrada certa com outra data → 201 + `AVISO_REDEFINIDA`, lote com a
+data nova); **15b** o cenário 2 (entrada, estorno, entrada com outra data → 201, data nova; e um lote **liberado** vencido, vazio,
+redefinido → `vencimento_liberado_em` nulo); **11c** lote com entrada e saída total (saldo 0, movimentos vivos) → `CONFLITO`. Controle
+positivo (f): a checagem de "vazio" desligada (sempre vazio) → o 11 (L2 com saldo) passa a redefinir e cai.
+
+**Descartado:** (a) desfazer a validade no estorno da entrada que a gravou — o estorno precisaria saber quem gravou (marca nova = migration,
+ou ler a auditoria, que é não-fatal e pode faltar), e seria mais um desfazer no ramo de entrada do estorno, que a Etapa 118 pôs inteiro
+sob a trava; (b) apagar o lote órfão na recusa ou no estorno — o livro o cita (`lote_id` na ENTRADA cancelada e no ESTORNO); (c) declarar
+e deixar para a 191 — deixa o erro mais comum (digitação) sem volta para quem lança. Reversível: tirar a RN-190.06b devolve o `CONFLITO`.
+
+### Menores
+
+- **M-1 — linha errada:** a recusa da separação de lote vencido está em `requisitionService.js:1192` em `bfb7d9a1` (o plano diz `:1162`,
+  em "As regras de validade" e na B1273). Corrigir nas citações do fechamento.
+- **M-2 — validade gravada pelo recebimento não é normalizada:** o servidor não valida `data_validade_lote` (só a tela usa
+  `type="date"`, `RecebimentosAlmoxarifado.js:1292`; o eco `dataDoItem`, `receiptService.js:1254-1260`, aceita hora e `DD/MM/AAAA`). Um
+  lote de nota pode ter `2027-03-31 00:00:00`. A comparação do `CONFLITO` usa `String(atual).slice(0, 10)` (a régua do `isVencido`), e o
+  formatador `<DD/MM/AAAA>` só troca os campos quando o valor casa `^\d{4}-\d{2}-\d{2}`; senão mostra o texto gravado. Sem isso: falso
+  `CONFLITO` com a mesma data, e uma literal que se contradiz.
+- **M-3 — `SEM_LOTE` na régua do motor:** "tem lote" é `lote_id` **ou** `String(lote).trim()` (`:1273`). `lote: "   "` + validade → 400
+  `SEM_LOTE` (não o silêncio de hoje). Um caso no teste 6.
+- **M-4 — a v1 continua descartando calada:** `POST /movimentacoes` (v1, `routes/almoxarifado.js:1301`) desestrutura 6 campos; uma
+  `data_validade` ali some sem 400. Não há destino (a v1 não carrega lote), mas a RN-190.03 diz "vale igual" — declarar na B1270 que vale
+  para v2 e `/transferencias`, não para a v1.
+- **M-5 — A110:** a soma de `estoque_saldo_almoxarifado` por lote é o saldo **atribuído** (B204/B205), não o físico; rotular a coluna
+  "saldo atribuído ao lote" para o leitor não somar com o físico do material.
+- **M-6 — a literal `SO_ENTRADA` cita "ajuste":** `AJUSTE_POSITIVO` é entrada e aceita a validade (teste 7). Trocar "ou ajuste" por "ou
+  ajuste de contagem (AJUSTE)" — ou aceitar a imprecisão e dizer no manual. E declarar que a recusa de saída vencida de hoje imprime a data
+  em ISO (`vencido em 2027-01-31`) enquanto as frases novas usam `DD/MM/AAAA` — não mexer na antiga nesta etapa (porta de saldo).
+- **M-7 — as recusas novas rodam dentro da trava:** o motor inteiro está sob `naTravaDoMaterial`; uma data malformada espera a fila do
+  material para tomar 400. Mesma situação do `motivo_id` e dos `codigo_lido_*` — aceitar e declarar na B1270 (a alternativa, validar no
+  schema, é a descartada lá).
+- **M-8 — preenchimento errado num lote COM saldo não tem volta até a 191:** `2025` no lugar de `2027` vence o saldo antigo na hora (a
+  RN-190.07 aceita passado) e o lote não é vazio (I-2 não socorre). Paliativo: liberar o vencimento (`inspecionar`). Declarar na
+  B1273/B1276 e no manual, e a 191 herda o caso como primeiro cenário.
+- **M-9 — T4.4 e a 189:** ler `/fila-separacao` depois de a 189 commitar (ela mexe em `requisitionService.js`); se o formato mudou, o teste
+  lê `pegar_em` pelo contrato da 188. E a suíte serial só com a 189 sem sabotagem em curso (já no plano).
+
+### RN-190.08 — a corrida existe?
+
+Não, hoje: os dois criadores de lote (`stockService.js:1278` e `receiptService.js:1755`) rodam sob a trava do material (o recebimento pela
+`comSecaoDaNota` → `comLockDosMateriais`, `receiptService.js:2120`), e não há outro `UPDATE` de `data_validade`. O `WHERE … IS NULL` é
+defesa para a 191 (rota de correção que pode não pegar a trava, como `mudarStatusLote` não pega). O teste por gancho (14) só morde se o
+motor chamar `lotService.preencherValidadeSeVazia` **pelo objeto do módulo** (o `require('./lotService')` de `:1265`), não desestruturado —
+manter assim; a falha seria visível (o 14 cai), não vazia.
+
+### O traço até o último gesto (pergunta 4)
+
+| Gesto depois da entrada com validade | Aceita o que a entrada deixou? |
+|---|---|
+| Estorno da entrada (`cancelarMovimentacao`) | Sim — não lê validade (s2 (h): estorna lote vencido). A validade fica (RN-190.09) → **I-2** |
+| Nova entrada do mesmo lote, outra data | `CONFLITO` → correto com lote vivo; **errado com lote vazio (I-2)** |
+| Nova entrada do mesmo lote, mesma data / em branco | 201, sem aviso (RN-190.06) |
+| Transferência com o campo | 400 `SO_ENTRADA` (hoje 201 calado, s1 (d)); a tela não manda (T3 zera na troca de tipo) |
+| Devolução (`returnService`) | Não passa o campo; herda o `lote_id` — sem efeito |
+| `DEVOLUCAO`/`AJUSTE_POSITIVO` pela v2 | São entrada: criam lote (s1 (f)) e aceitam a validade — coerente com a RN-190.03 |
+| `AJUSTE` (absoluto) com o campo | 400 `SO_ENTRADA` |
+| Saída de consumo do lote vencido | 400 literal de hoje (s2 (g)) — RN-190.11 |
+| Liberar vencimento | Guarda `WHERE data_validade = lida`; com a I-2, redefinir zera a liberação |
+| E-mail "Lote vencendo" | Próxima varredura; dedupe `<id>-<data>` — redefinir (I-2) reavisa, é o certo |
+| FEFO da lista e dica de coleta (188) | Leem a validade do lote na hora; lote preenchido vencido sai da dica e cai no aviso "planejada indisponível" da 188 |
+| Separação / entrega com origem no lote que virou vencido | Recusa em `requisitionService.js:1192` — honesta; o aviso de preenchimento (B1273) já avisa |
+| Recebimento do mesmo lote depois | Fica como está (B1277, teste 16) |
 
 ## Execução
 
