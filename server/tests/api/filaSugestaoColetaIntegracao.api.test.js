@@ -78,7 +78,9 @@ process.on('exit', (code) => {
       localizacao_destino_id: destino, ...(lote ? { lote } : {}) });
     assert.strictEqual(r.status, 201, `entrada: ${JSON.stringify(r.body)}`);
   };
-  // A entrada manual nao grava a validade do lote (Execucao, T2): grava aqui.
+  // A validade e gravada direto no lote. Este comentario dizia "a entrada manual nao grava a validade do lote" — era verdade na
+  // Etapa 188 e deixou de ser na 190 (C450: a Entrada grava `data_validade`). O UPDATE direto continua certo aqui: o cenario mede a
+  // fila, nao a Entrada, e precisa de validades em lotes que ja existem.
   const validade = (m, codigo, data) => dbRun(db, 'UPDATE lotes_almoxarifado SET data_validade = ? WHERE material_id = ? AND codigo = ?',
     [data, m.id, codigo]);
   const loteId = async (m, codigo) => (await dbGet(db, 'SELECT id FROM lotes_almoxarifado WHERE material_id = ? AND codigo = ?',
