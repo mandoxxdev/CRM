@@ -97,7 +97,8 @@ async function cenario() {
     veiculo_id: S.v2.id, data_checklist: '2026-08-02', pneus_ok: 1, oleo_ok: 0, luzes_ok: 1, freios_ok: 1, extintor_ok: 1, documentos_ok: 1, limpeza_ok: 1,
   });
   // abastecimentos
-  await como(MOTORISTA, 'post', '/api/frotas/portal/abastecimentos', { veiculo_id: S.v1.id, km: 1000, litros: 40, valor_total: 240, data: '2026-10-19', posto: 'Posto A' });
+  await como(MOTORISTA, 'post', '/api/frotas/portal/abastecimentos', { veiculo_id: S.v1.id, km: 1000, litros: 40, valor_total: 240, data: '2026-10-19', posto: 'Posto A',
+    confirmar_km_menor: true }); // Etapa 3 (RN-F3.02, B35): retroativo abaixo do atual (1120) pede a confirmacao
   await como(MOTORISTA, 'post', '/api/frotas/portal/abastecimentos', { veiculo_id: S.v1.id, km: 1400, litros: 40, valor_total: 260, data: '2026-10-21', posto: 'Posto B' });
   // documentos
   await como(ADMIN, 'post', '/api/frotas/documentos', { veiculo_id: S.v1.id, tipo: 'ipva', data_vencimento: somaDias(HOJE, -3), observacoes: 'pagar' });
@@ -124,20 +125,20 @@ test('RN-F1.18 as seis abas na ordem da planilha', async () => {
 
 test('RN-F1.18 (F2-18) Cadastro Frota: cabecalho, veiculos ativos e proxima revisao (menor pendente)', async () => {
   const [cab, ...linhas] = S.planilha.out['Cadastro Frota'];
-  assert.deepStrictEqual(cab, ['Placa', 'Tipo', 'Marca', 'Modelo', 'Ano', 'KM Atual', 'Responsável', 'Próxima Revisão KM', 'Próxima Revisão Data', 'Situação']);
+  assert.deepStrictEqual(cab, ['Placa', 'Tipo', 'Marca', 'Modelo', 'Ano', 'KM Atual', 'Responsável', 'Próxima Revisão KM', 'Próxima Revisão Data', 'Situação', 'Horímetro Atual']); // + Horimetro Atual no fim: Etapa 3 (RN-F3.11); o resto igual
   assert.deepStrictEqual(linhas.map((l) => l[0]), ['EXP0001', 'EXP0002'], 'o excluido fica fora');
   const v1 = linhas[0];
-  assert.deepStrictEqual(v1, ['EXP0001', 'Caminhonete', 'Fiat', 'Strada', 2022, 1400, 'Ana Motorista', 15000, somaDias(HOJE, 60), 'Ativo']);
+  assert.deepStrictEqual(v1, ['EXP0001', 'Caminhonete', 'Fiat', 'Strada', 2022, 1400, 'Ana Motorista', 15000, somaDias(HOJE, 60), 'Ativo', '']);
   assert.strictEqual(linhas[1][9], 'Em manutenção');
   assert.strictEqual(linhas[1][7], '', 'sem revisao pendente');
 });
 
 test('RN-F1.18 Viagens e KM: cabecalho e linhas (portal e gestor)', async () => {
   const [cab, ...linhas] = S.planilha.out['Viagens e KM'];
-  assert.deepStrictEqual(cab, ['Data', 'Veículo', 'Condutor', 'Finalidade', 'Origem', 'Destino', 'Saída', 'Retorno', 'KM Inicial', 'KM Final', 'KM Percorrido', 'Status', 'Observações']);
+  assert.deepStrictEqual(cab, ['Data', 'Veículo', 'Condutor', 'Finalidade', 'Origem', 'Destino', 'Saída', 'Retorno', 'KM Inicial', 'KM Final', 'KM Percorrido', 'Status', 'Observações', 'Horímetro Inicial', 'Horímetro Final']); // Etapa 3 (RN-F3.11)
   assert.strictEqual(linhas.length, 2);
   const p = linhas.find((l) => l[1] === 'EXP0001');
-  assert.deepStrictEqual(p, ['2026-10-20', 'EXP0001', 'Ana Motorista', 'Entrega', 'GMP', 'Cliente', '07:00', '18:10', 1000, 1120, 120, 'Concluída', 'freio puxando']);
+  assert.deepStrictEqual(p, ['2026-10-20', 'EXP0001', 'Ana Motorista', 'Entrega', 'GMP', 'Cliente', '07:00', '18:10', 1000, 1120, 120, 'Concluída', 'freio puxando', '', '']);
   const g = linhas.find((l) => l[1] === 'EXP0002');
   assert.strictEqual(g[0], '2026-08-01');
   assert.strictEqual(g[10], 100);
@@ -145,7 +146,7 @@ test('RN-F1.18 Viagens e KM: cabecalho e linhas (portal e gestor)', async () => 
 
 test('RN-F1.18 (F2-6) Checklist: 12 itens Conforme/Nao conforme/N/A, avarias em texto, Status Geral', async () => {
   const [cab, ...linhas] = S.planilha.out.Checklist;
-  assert.deepStrictEqual(cab, ['Data', 'Horário', 'Tipo', 'Veículo', 'Condutor', 'KM', 'Combustível', ...ROTULOS, 'Avarias', 'Status Geral', 'Observações']);
+  assert.deepStrictEqual(cab, ['Data', 'Horário', 'Tipo', 'Veículo', 'Condutor', 'KM', 'Combustível', ...ROTULOS, 'Avarias', 'Status Geral', 'Observações', 'Horímetro']); // Etapa 3 (RN-F3.11)
   assert.strictEqual(linhas.length, 3);
   const saida = linhas.find((l) => l[2] === 'Saída');
   assert.deepStrictEqual(saida.slice(0, 7), ['2026-10-20', '07:00', 'Saída', 'EXP0001', 'Ana Motorista', 1000, '1/2']);
@@ -169,10 +170,10 @@ test('RN-F1.18 (F2-6) Checklist: 12 itens Conforme/Nao conforme/N/A, avarias em 
 
 test('RN-F1.18 Abastecimentos: preco por litro, km desde o anterior e km/L', async () => {
   const [cab, ...linhas] = S.planilha.out.Abastecimentos;
-  assert.deepStrictEqual(cab, ['Data', 'Veículo', 'Condutor', 'KM', 'Litros', 'Valor Total R$', 'Preço por Litro', 'KM desde Abastec. Anterior', 'Consumo km/L', 'Posto', 'Observações']);
+  assert.deepStrictEqual(cab, ['Data', 'Veículo', 'Condutor', 'KM', 'Litros', 'Valor Total R$', 'Preço por Litro', 'KM desde Abastec. Anterior', 'Consumo km/L', 'Posto', 'Observações', 'Horímetro']); // Etapa 3 (RN-F3.11)
   assert.strictEqual(linhas.length, 2);
   const b = linhas.find((l) => l[9] === 'Posto B');
-  assert.deepStrictEqual(b, ['2026-10-21', 'EXP0001', 'Ana Motorista', 1400, 40, 260, 6.5, 400, 10, 'Posto B', '']);
+  assert.deepStrictEqual(b, ['2026-10-21', 'EXP0001', 'Ana Motorista', 1400, 40, 260, 6.5, 400, 10, 'Posto B', '', '']);
   const a = linhas.find((l) => l[9] === 'Posto A');
   assert.strictEqual(a[7], '');
   assert.strictEqual(a[8], '');

@@ -48,16 +48,20 @@ async function abaCadastro(db, hoje) {
     LEFT JOIN frotas_motoristas m ON m.id = v.motorista_id
     WHERE v.ativo = 1 ORDER BY v.placa`);
   const manut = await dbAll(db, 'SELECT veiculo_id, proxima_revisao_km, proxima_revisao_data FROM frotas_manutencoes');
-  const linhas = [['Placa', 'Tipo', 'Marca', 'Modelo', 'Ano', 'KM Atual', 'Responsável', 'Próxima Revisão KM', 'Próxima Revisão Data', 'Situação']];
+  const linhas = [['Placa', 'Tipo', 'Marca', 'Modelo', 'Ano', 'KM Atual', 'Responsável', 'Próxima Revisão KM', 'Próxima Revisão Data', 'Situação',
+    'Horímetro Atual']]; // Frota Etapa 3 (RN-F3.11): colunas novas so no FIM — a planilha da empresa nao tem horimetro (B36)
   for (const v of veiculos) {
     const doVeiculo = manut.filter((m) => m.veiculo_id === v.id);
     // F2-18: a menor revisao ainda por vir — km acima do atual, data de hoje em diante
-    const kms = doVeiculo.map((m) => m.proxima_revisao_km).filter((k) => k != null && Number(k) > Number(v.km_atual || 0)).map(Number);
+    // RN-F3.14: na maquina por horimetro a "proxima revisao" e em horas
+    const porHoras = v.tipo_medicao === 'horimetro';
+    const leitura = Number((porHoras ? v.horimetro_atual : v.km_atual) || 0);
+    const kms = doVeiculo.map((m) => m.proxima_revisao_km).filter((k) => k != null && Number(k) > leitura).map(Number);
     const datas = doVeiculo.map((m) => m.proxima_revisao_data).filter((d) => d && dia(d) >= hoje).map(dia).sort();
     linhas.push([
       v.placa, vazio(v.tipo_nome || v.tipo_texto), vazio(v.marca), vazio(v.modelo), vazio(v.ano), vazio(v.km_atual),
       vazio(v.motorista_nome || v.setor_responsavel), kms.length ? Math.min(...kms) : '', datas[0] || '',
-      SITUACAO_VEICULO[v.status] || vazio(v.status),
+      SITUACAO_VEICULO[v.status] || vazio(v.status), porHoras ? vazio(v.horimetro_atual) : '',
     ]);
   }
   return linhas;
@@ -69,7 +73,8 @@ async function abaViagens(db, periodo) {
     JOIN frotas_veiculos v ON v.id = vi.veiculo_id
     LEFT JOIN frotas_motoristas m ON m.id = vi.motorista_id
     WHERE 1=1${f.sql} ORDER BY vi.data_saida, vi.id`, f.params);
-  const linhas = [['Data', 'Veículo', 'Condutor', 'Finalidade', 'Origem', 'Destino', 'Saída', 'Retorno', 'KM Inicial', 'KM Final', 'KM Percorrido', 'Status', 'Observações']];
+  const linhas = [['Data', 'Veículo', 'Condutor', 'Finalidade', 'Origem', 'Destino', 'Saída', 'Retorno', 'KM Inicial', 'KM Final', 'KM Percorrido', 'Status', 'Observações',
+    'Horímetro Inicial', 'Horímetro Final']]; // Etapa 3 (RN-F3.11)
   for (const r of rows) {
     // Saida: a hora (o dia esta em Data). Retorno: a hora se for no mesmo dia; senao dia e hora.
     const retornoMesmoDia = r.data_retorno && dia(r.data_retorno) === dia(r.data_saida);
@@ -80,7 +85,7 @@ async function abaViagens(db, periodo) {
     linhas.push([
       dia(r.data_saida) || dia(r.created_at), r.placa, vazio(r.motorista_nome), vazio(r.finalidade), vazio(r.origem), vazio(r.destino),
       hora(r.data_saida), retorno, vazio(r.km_saida), vazio(r.km_retorno), kmRodado, STATUS_VIAGEM[r.status] || vazio(r.status),
-      vazio(r.observacoes),
+      vazio(r.observacoes), vazio(r.horimetro_saida), vazio(r.horimetro_retorno),
     ]);
   }
   return linhas;
@@ -97,7 +102,8 @@ async function abaChecklist(db, periodo) {
     JOIN frotas_veiculos v ON v.id = c.veiculo_id
     LEFT JOIN frotas_motoristas m ON m.id = c.motorista_id
     WHERE 1=1${f.sql} ORDER BY c.data_checklist, c.horario, c.id`, f.params);
-  const linhas = [['Data', 'Horário', 'Tipo', 'Veículo', 'Condutor', 'KM', 'Combustível', ...ITENS_CHECKLIST.map((i) => i.rotulo), 'Avarias', 'Status Geral', 'Observações']];
+  const linhas = [['Data', 'Horário', 'Tipo', 'Veículo', 'Condutor', 'KM', 'Combustível', ...ITENS_CHECKLIST.map((i) => i.rotulo), 'Avarias', 'Status Geral', 'Observações',
+    'Horímetro']]; // Etapa 3 (RN-F3.11)
   const itemDoLegado = Object.fromEntries(Object.entries(LEGADO_DE_ITEM).map(([legado, chave]) => [chave, legado]));
   for (const row of rows) {
     const c = registroComItens(row);
@@ -113,7 +119,7 @@ async function abaChecklist(db, periodo) {
     linhas.push([
       dia(c.data_checklist), vazio(c.horario), TIPO_REGISTRO[c.tipo_registro] || 'Inspeção', c.placa, vazio(c.motorista_nome),
       vazio(c.km), vazio(c.nivel_combustivel), ...respostas, textoAvarias(c.avarias), SITUACAO_REGISTRO[situacao] || situacao,
-      vazio(c.observacoes),
+      vazio(c.observacoes), vazio(c.horimetro),
     ]);
   }
   return linhas;
@@ -125,13 +131,14 @@ async function abaAbastecimentos(db, periodo) {
     JOIN frotas_veiculos v ON v.id = a.veiculo_id
     LEFT JOIN frotas_motoristas m ON m.id = a.motorista_id
     WHERE 1=1${f.sql} ORDER BY a.data_abastecimento, a.id`, f.params);
-  const linhas = [['Data', 'Veículo', 'Condutor', 'KM', 'Litros', 'Valor Total R$', 'Preço por Litro', 'KM desde Abastec. Anterior', 'Consumo km/L', 'Posto', 'Observações']];
+  const linhas = [['Data', 'Veículo', 'Condutor', 'KM', 'Litros', 'Valor Total R$', 'Preço por Litro', 'KM desde Abastec. Anterior', 'Consumo km/L', 'Posto', 'Observações',
+    'Horímetro']]; // Etapa 3 (RN-F3.11)
   for (const a of rows) {
     const preco = a.valor_litro != null && Number(a.valor_litro) > 0 ? Math.round(Number(a.valor_litro) * 1000) / 1000
       : (Number(a.litros) > 0 ? Math.round((Number(a.valor_total) / Number(a.litros)) * 1000) / 1000 : '');
     linhas.push([
       dia(a.data_abastecimento), a.placa, vazio(a.motorista_nome), vazio(a.km_abastecimento), vazio(a.litros), vazio(a.valor_total),
-      preco, vazio(a.km_desde_anterior), vazio(a.consumo_medio), vazio(a.posto), vazio(a.observacoes),
+      preco, vazio(a.km_desde_anterior), vazio(a.consumo_medio), vazio(a.posto), vazio(a.observacoes), vazio(a.horimetro_abastecimento),
     ]);
   }
   return linhas;

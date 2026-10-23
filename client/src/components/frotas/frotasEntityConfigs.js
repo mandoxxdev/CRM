@@ -20,6 +20,9 @@ export function situacaoDoChecklist(r) {
 export const AVISO_USUARIO_CONSULTA = 'Este usuário está com o perfil Consulta no Frota: ele vê o painel, mas não consegue registrar '
   + 'no portal. Para ele registrar, mude o perfil em Frota → Perfis de acesso.';
 
+/** Frota Etapa 3 (RN-F3.11): leitura de horas da maquina por horimetro aparece como horas ("125 h"). */
+export const horas = (n) => `${Number(n).toLocaleString('pt-BR')} h`;
+
 const fmtBrl = (v) =>new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
 export const ENTITY_CONFIGS = {
@@ -212,13 +215,14 @@ export const ENTITY_CONFIGS = {
       { key: 'valor_total', label: 'Valor', format: (r) => fmtBrl(r.valor_total) },
       { key: 'consumo_medio', label: 'Km/L', format: (r) => (r.consumo_medio != null ? r.consumo_medio : '-') },
       { key: 'posto', label: 'Posto' },
-      { key: 'km_abastecimento', label: 'KM' },
+      { key: 'km_abastecimento', label: 'KM', format: (r) => (r.horimetro_abastecimento != null ? horas(r.horimetro_abastecimento)
+        : (r.km_abastecimento != null ? r.km_abastecimento : '-')) },
     ],
     needsVeiculos: true,
     needsMotoristas: true,
     getDefaultForm: () => ({
       veiculo_id: '', motorista_id: '', data_abastecimento: hojeLocalISO(),
-      litros: '', valor_total: '', posto: '', km_abastecimento: '', combustivel_tipo: 'diesel', observacoes: '',
+      litros: '', valor_total: '', posto: '', km_abastecimento: '', horimetro_abastecimento: '', combustivel_tipo: 'diesel', observacoes: '',
     }),
     formFields: (meta, form, setForm, veiculos, motoristas) => [
       { key: 'veiculo_id', label: 'Veículo *', type: 'select', required: true, options: (veiculos || []).map((v) => ({ value: v.id, label: v.placa })) },
@@ -227,6 +231,7 @@ export const ENTITY_CONFIGS = {
       { key: 'litros', label: 'Litros *', type: 'number', required: true },
       { key: 'valor_total', label: 'Valor total (R$)', type: 'number' },
       { key: 'km_abastecimento', label: 'KM no abastecimento', type: 'number' },
+      { key: 'horimetro_abastecimento', label: 'Horímetro no abastecimento (máquina)', type: 'number' },
       { key: 'combustivel_tipo', label: 'Combustível', type: 'select', options: (meta?.combustiveis || []).map((c) => ({ value: c, label: c })) },
       { key: 'posto', label: 'Posto' },
       { key: 'observacoes', label: 'Observações', type: 'textarea', full: true },
@@ -327,7 +332,11 @@ export const ENTITY_CONFIGS = {
       { key: 'origem', label: 'Origem' },
       { key: 'destino', label: 'Destino' },
       { key: 'finalidade', label: 'Finalidade' },
-      { key: 'km_rodado', label: 'KM rodado', format: (r) => (r.km_rodado != null ? r.km_rodado : '-') },
+      { key: 'km_rodado', label: 'KM rodado', format: (r) => {
+        if (r.km_rodado != null) return r.km_rodado;
+        if (r.horimetro_saida != null && r.horimetro_retorno != null) return horas(Number(r.horimetro_retorno) - Number(r.horimetro_saida));
+        return '-';
+      } },
       { key: 'status', label: 'Status', badge: true },
     ],
     filters: [
@@ -344,7 +353,7 @@ export const ENTITY_CONFIGS = {
     extraActions: true,
     getDefaultForm: () => ({
       veiculo_id: '', motorista_id: '', data_saida: '', data_retorno: '',
-      km_saida: '', km_retorno: '', origem: '', destino: '', finalidade: '', setor: '',
+      km_saida: '', km_retorno: '', horimetro_saida: '', horimetro_retorno: '', origem: '', destino: '', finalidade: '', setor: '',
       status: 'solicitada', observacoes: '',
     }),
     formFields: (meta, form, setForm, veiculos, motoristas) => [
@@ -354,6 +363,8 @@ export const ENTITY_CONFIGS = {
       { key: 'data_retorno', label: 'Data/hora retorno', type: 'datetime-local' },
       { key: 'km_saida', label: 'KM saída', type: 'number' },
       { key: 'km_retorno', label: 'KM retorno', type: 'number' },
+      { key: 'horimetro_saida', label: 'Horímetro saída (máquina)', type: 'number' },
+      { key: 'horimetro_retorno', label: 'Horímetro retorno (máquina)', type: 'number' },
       { key: 'origem', label: 'Origem' },
       { key: 'destino', label: 'Destino' },
       { key: 'finalidade', label: 'Finalidade' },
@@ -376,7 +387,8 @@ export const ENTITY_CONFIGS = {
       { key: 'placa', label: 'Placa', bold: true },
       { key: 'tipo_registro', label: 'Tipo', format: (r) => TIPO_REGISTRO[r.tipo_registro] || '-' },
       { key: 'motorista_nome', label: 'Motorista' },
-      { key: 'km', label: 'KM', format: (r) => (r.km != null ? Number(r.km).toLocaleString('pt-BR') : '-') },
+      { key: 'km', label: 'KM', format: (r) => (r.horimetro != null ? horas(r.horimetro)
+        : (r.km != null ? Number(r.km).toLocaleString('pt-BR') : '-')) },
       // Frota Etapa 1 (T7, RN-F1.02/03): as 3 situacoes da planilha. Linha anterior a etapa (sem status_geral) cai no
       // `aprovado` antigo, que so sabia sim/nao.
       { key: 'status_geral', label: 'Situação', render: (r) => {
