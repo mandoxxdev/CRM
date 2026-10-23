@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relatório da semana — 20 a 26 de setembro de 2026</title>
+<style>
+  :root { --tinta:#1f2a37; --suave:#5b6675; --linha:#e3e7ec; --fundo:#ffffff; --cartao:#f6f8fa;
+          --tela:#2f80ed; --bastidores:#8a5cf6; --testes:#f2994a; --doc:#9aa5b1; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--fundo); color:var(--tinta); font:16px/1.6 "Segoe UI", system-ui, sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font-size:28px; margin:0 0 4px; } h2 { font-size:21px; margin:40px 0 12px; border-bottom:2px solid var(--linha); padding-bottom:6px; }
+  h3 { font-size:17px; margin:24px 0 6px; }
+  .sub { color:var(--suave); margin:0 0 24px; }
+  .resumo { background:var(--cartao); border-left:4px solid var(--tela); padding:16px 20px; border-radius:6px; font-size:17px; }
+  .item { border:1px solid var(--linha); border-radius:8px; padding:16px 20px; margin:16px 0; }
+  .item p { margin:6px 0; } .rotulo { font-weight:600; color:var(--suave); }
+  figure { margin:12px 0; } figure img { width:100%; border:1px solid var(--linha); border-radius:6px; }
+  figcaption { color:var(--suave); font-size:14px; }
+  .barra { display:flex; height:28px; border-radius:6px; overflow:hidden; margin:12px 0 6px; }
+  .barra span { display:block; }
+  .legenda { display:flex; flex-wrap:wrap; gap:8px 20px; font-size:14px; color:var(--suave); }
+  .legenda i { display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
+  table { border-collapse:collapse; width:100%; font-size:15px; } td, th { border-bottom:1px solid var(--linha); padding:8px; text-align:left; }
+  .nota { font-size:14px; color:var(--suave); }
+  @media print { main { padding:0; } h2, h3 { break-after:avoid; } figure { break-inside:avoid; } figure img { width:auto; max-width:100%; max-height:90mm; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>O que foi feito no sistema nesta semana</h1>
+  <p class="sub">Semana de 20/09 a 26/09/2026 · CRM GMP Industriais</p>
+
+  <p class="resumo">O sistema no celular ganhou cara de aplicativo de verdade: Propostas, Dashboard e
+  as listas de todos os módulos foram refeitas para a tela pequena. Em Compras, fornecedores e
+  cotações passaram a ser cadastrados pela própria tela, e a cotação aprovada vira pedido de compra
+  com um clique, sem redigitar nada. Por baixo, sumiu o aviso que travava o aplicativo ao abrir e
+  foram fechadas portas que deixavam a mesma cotação virar dois pedidos. Foram cerca de 14 horas de
+  trabalho, a maior parte no celular.</p>
+
+  <h2>O que você já pode ver na tela</h2>
+
+  <div class="item">
+    <h3>Fornecedores cadastrados e editados pela própria tela</h3>
+    <p><span class="rotulo">Onde:</span> Compras → Fornecedores → “Novo Fornecedor” ou o lápis de
+    cada linha.</p>
+    <p><span class="rotulo">Antes:</span> o botão “Novo Fornecedor” e o lápis não abriam nada — o
+    comprador clicava e voltava para a lista. Só dava para cadastrar fornecedor por uma janela
+    escondida dentro de “Fornecedores homologados”. E não havia como marcar um fornecedor como
+    inativo: o filtro “Inativo” existia, mas nunca achava ninguém.</p>
+    <p><span class="rotulo">Agora:</span> os dois botões abrem a ficha do fornecedor, com
+    identificação, contato, endereço e grupo. Na edição aparece o campo Status, com Ativo e
+    Inativo. O fornecedor inativo continua na lista com o selo “inativo”, mas deixa de ser oferecido
+    no recebimento de material do Almoxarifado e na hora de vincular a um grupo.</p>
+    <figure><img src="prints/fornecedor-ficha.png" alt="Ficha do fornecedor em edição, com o campo de situação Ativo ou Inativo"><figcaption>A ficha do fornecedor, aberta pelo lápis da lista.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Cotação com os itens cotados e o total somado sozinho</h3>
+    <p><span class="rotulo">Onde:</span> Compras → Cotações → “Nova Cotação”.</p>
+    <p><span class="rotulo">Antes:</span> não havia como cadastrar uma cotação — o botão “Novo
+    Cotação” (assim mesmo, com o gênero errado) voltava para a lista. E, mesmo que houvesse, o que foi
+    cotado (qual material, quanto, a que preço) ficava só no PDF do fornecedor.</p>
+    <p><span class="rotulo">Agora:</span> o botão “Nova Cotação” abre o formulário: número do
+    documento do fornecedor, fornecedor, data, validade e status. No bloco “Itens da cotação”, busca-se
+    o material pelo código ou pela descrição e ele entra numa tabela com quantidade, valor unitário e
+    subtotal. Com itens, o “Valor total” é somado sozinho e fica travado. Sem itens, continua sendo
+    digitado — a cotação “R$ 1.500 o lote” segue valendo. O número da cotação não se repete: a tela
+    avisa “Já existe uma cotação com o número…”.</p>
+    <figure><img src="prints/cotacao-itens.png" alt="Nova cotação com três itens lançados e o total calculado"><figcaption>Os itens cotados ficam no sistema, com o total calculado.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>A cotação vira pedido de compra com um clique</h3>
+    <p><span class="rotulo">Onde:</span> Compras → Cotações, no ícone de carrinho (“Gerar pedido”) de
+    cada linha.</p>
+    <p><span class="rotulo">Antes:</span> aprovada a cotação, o comprador abria um pedido novo e
+    redigitava tudo: fornecedor, cada material, quantidade e preço.</p>
+    <p><span class="rotulo">Agora:</span> um clique no carrinho cria o pedido de compra já com o
+    fornecedor, os itens e os preços da cotação, e abre a edição dele para conferir a previsão de
+    entrega. A lista de cotações ganhou a coluna “Pedido”, com o número do pedido gerado (clicável).
+    A cotação que já virou pedido abre travada, com o aviso “Esta cotação já gerou o pedido…”, para
+    ninguém alterar depois o que já foi comprado. O Excel exportado também traz a coluna “Pedido”.</p>
+    <figure><img src="prints/cotacoes-gerar-pedido.png" alt="Lista de cotações com a coluna Pedido e o ícone de carrinho Gerar pedido"><figcaption>Uma cotação já convertida (com o número do pedido) e outra pronta para converter.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Propostas e o menu no celular, com cara de aplicativo</h3>
+    <p><span class="rotulo">Onde:</span> Comercial → Propostas, aberto no celular. O menu abre pelo
+    botão “Menu” da barra de baixo.</p>
+    <p><span class="rotulo">Antes:</span> a lista de propostas era uma tabela de sete colunas
+    espremida, que precisava ser rolada de lado. O menu lateral abria escuro, com o topo cortado e
+    os botões “Minha Conta” e “Sair” escondidos atrás da barra de baixo.</p>
+    <p><span class="rotulo">Agora:</span> cada proposta é um cartão: número e título no alto,
+    cliente logo abaixo, valor e situação em destaque, validade e data no rodapé. “Ver” e “Editar”
+    ficam a um toque; “Assinar” e “Excluir” sobem numa folha de baixo, como em aplicativo. O menu
+    lateral desliza inteiro, com o rodapé alcançável. O aplicativo ganhou um visual novo, translúcido,
+    no azul da GMP — e ficou mais leve: as animações foram refeitas para não pesar no celular. A
+    lista de Clientes passou a mostrar o logo do cliente no lugar das iniciais, quando o logo está
+    cadastrado. No computador, nada mudou.</p>
+    <figure><img style="max-width:300px" src="prints/celular-propostas.png" alt="Lista de Propostas no celular em cartões, com a barra de navegação embaixo"><figcaption>Propostas no celular: um cartão por proposta, com o que importa em destaque.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Dashboard refeito para o celular</h3>
+    <p><span class="rotulo">Onde:</span> Comercial → Dashboard, aberto no celular.</p>
+    <p><span class="rotulo">Antes:</span> a primeira coisa na tela era uma faixa de logos de
+    clientes. Os números vinham um por linha — só dois cabiam na tela —, e o valor de cada indicador
+    estava num azul claro quase ilegível sobre o fundo branco. O título sumia da metade para a
+    direita.</p>
+    <p><span class="rotulo">Agora:</span> os indicadores aparecem em duas colunas, seis números já na
+    primeira tela, em azul escuro e bem legível. A troca Geral/Vendas e o botão Filtros ficam numa
+    linha só. A faixa de logos continua no computador.</p>
+    <figure><img style="max-width:300px" src="prints/celular-dashboard.png" alt="Dashboard no celular com os indicadores em duas colunas"><figcaption>Seis indicadores na primeira tela do celular.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Todas as listas legíveis no celular, em todos os módulos</h3>
+    <p><span class="rotulo">Onde:</span> qualquer lista aberta no celular — por exemplo,
+    Almoxarifado → Materiais.</p>
+    <p><span class="rotulo">Antes:</span> mais de 50 tabelas (Relatórios com 30 colunas, Financeiro
+    com 27, Compras com 21) viravam rolagem de lado no telefone. Quando viravam cartão, todas as
+    informações tinham o mesmo peso, e os botões eram uma fileira de oito ícones iguais, sem nome.</p>
+    <p><span class="rotulo">Agora:</span> toda tabela vira, sozinha, um cartão organizado: foto e
+    código no alto, situação no canto, nome em destaque, valor grande e o resto em letra menor. Os
+    botões mostram o nome ao lado do ícone (“Extrato”, “Requisitar”, “Ver no mapa”…). Isso vale também para as telas
+    que ainda forem criadas. As 126 telas do sistema foram percorridas no celular, no tema claro e
+    no escuro, até não sobrar nada saindo da tela.</p>
+    <figure><img style="max-width:300px" src="prints/celular-materiais.png" alt="Lista de materiais do Almoxarifado no celular, em cartões com botões nomeados"><figcaption>Materiais no celular: cartão com foto, nome em destaque e botões com legenda.</figcaption></figure>
+  </div>
+
+  <h2>O que foi feito por baixo — e por que importa</h2>
+  <p>Parte do trabalho não muda a aparência das telas: é o “motor” que faz as contas e guarda as
+  informações, e os detalhes que só aparecem quando alguém usa de verdade. Esta semana:</p>
+
+  <div class="item">
+    <h3>O aplicativo não trava mais com um aviso ao abrir</h3>
+    <p><span class="rotulo">O problema:</span> ao abrir o sistema no celular, aparecia quase sempre
+    uma janela dizendo que o sistema não estava no ar, cheia de instruções técnicas. Fechar e abrir
+    de novo resolvia. Acontecia porque o celular ainda estava reconectando à internet quando o
+    sistema fazia a primeira consulta.</p>
+    <p><span class="rotulo">O que foi feito:</span> a janela saiu. Se a primeira consulta falha, o
+    sistema tenta de novo sozinho, um segundo depois. Se falhar outra vez, a própria tela avisa, com
+    uma mensagem para quem usa.</p>
+    <p><span class="rotulo">O que isso evita:</span> a impressão de que o sistema caiu toda vez que
+    alguém abre o aplicativo.</p>
+  </div>
+
+  <div class="item">
+    <h3>A mesma cotação não vira dois pedidos</h3>
+    <p><span class="rotulo">O problema:</span> um clique duplo no “Gerar pedido”, ou duas pessoas
+    clicando ao mesmo tempo em abas diferentes, podia criar dois pedidos de compra da mesma
+    cotação — é como dois compradores fechando a mesma compra sem saber um do outro. Também, apagar
+    uma cotação com itens daria um erro genérico.</p>
+    <p><span class="rotulo">O que foi feito:</span> só um pedido é criado; quem chega depois recebe
+    o aviso “Cotação … já gerou o pedido …”, e o botão fica desativado enquanto o primeiro clique é
+    processado. A cotação com itens é apagada inteira. A que já virou pedido não pode ser apagada; se
+    o pedido for excluído, a cotação volta a ficar livre. Fornecedor inativo não vira pedido.</p>
+    <p><span class="rotulo">O que isso evita:</span> material comprado em dobro e pedido sem cotação
+    de origem.</p>
+  </div>
+
+  <div class="item">
+    <h3>Fornecedores: botões que diziam ter feito e não faziam</h3>
+    <p><span class="rotulo">O problema:</span> em Fornecedores homologados, o botão “Remover do grupo”
+    respondia “Fornecedor removido do grupo” e o fornecedor continuava lá. Excluir um fornecedor que
+    tinha cotação ou lista de preços dava só “Erro ao excluir item”, sem dizer por quê.</p>
+    <p><span class="rotulo">O que foi feito:</span> “Remover do grupo” remove de verdade (o fornecedor
+    continua cadastrado). A exclusão recusada diz o motivo: “Fornecedor possui cotações” ou “possui
+    itens cadastrados”. O fornecedor inativo aparece no grupo com um selo, em vez de sumir.</p>
+    <p><span class="rotulo">O que isso evita:</span> achar que o cadastro foi arrumado quando não foi.</p>
+  </div>
+
+  <div class="item">
+    <h3>Botões e letras que não apareciam direito, no sistema inteiro</h3>
+    <p><span class="rotulo">O problema:</span> botões só de ícone apareciam como um quadrado branco
+    vazio, em qualquer tela — o ícone existia, mas era espremido até sumir. Em 12 telas, a lupa da
+    busca ficava por cima do texto digitado. E em cinco módulos (Produção, Frota, Compras, Engenharia
+    e Administração) selos e resultados estavam num azul claro difícil de ler — na Engenharia, o
+    resultado do cálculo era a coisa menos legível da tela.</p>
+    <p><span class="rotulo">O que foi feito:</span> os ícones voltaram a aparecer, a lupa saiu de cima
+    do texto e as cores foram escurecidas até ficarem legíveis, no tema claro e no escuro.</p>
+    <p><span class="rotulo">O que isso evita:</span> botão que ninguém acha e número lido errado.</p>
+  </div>
+
+  <div class="item">
+    <h3>Cadastros da Frota e da Produção que recusavam dado preenchido</h3>
+    <p><span class="rotulo">O problema:</span> ao gravar uma multa ou um documento de veículo, uma
+    máquina, um roteiro ou um motivo de parada, o sistema respondia “campo obrigatório” com o campo
+    preenchido. Esses cinco cadastros simplesmente não gravavam.</p>
+    <p><span class="rotulo">O que foi feito:</span> os cinco voltaram a gravar. O defeito apareceu ao
+    preencher as telas com dados de exemplo para conferir o celular.</p>
+    <p><span class="rotulo">O que isso evita:</span> multa ou máquina controlada fora do sistema
+    porque o sistema “não deixava”.</p>
+  </div>
+
+  <h2>Para onde foi o tempo</h2>
+  <p>Cerca de <strong>14 horas</strong> de desenvolvimento nesta semana.</p>
+  <div class="barra" role="img" aria-label="Divisão do tempo">
+    <span style="width:63%;background:var(--tela)"></span>
+    <span style="width:7%;background:var(--bastidores)"></span>
+    <span style="width:15%;background:var(--testes)"></span>
+    <span style="width:16%;background:var(--doc)"></span>
+  </div>
+  <div class="legenda">
+    <span><i style="background:var(--tela)"></i>Telas que você usa — 63%</span>
+    <span><i style="background:var(--bastidores)"></i>Motor do sistema — 7%</span>
+    <span><i style="background:var(--testes)"></i>Conferências automáticas — 15%</span>
+    <span><i style="background:var(--doc)"></i>Planejamento e manuais — 16%</span>
+  </div>
+  <h3>Tempo por atividade</h3>
+  <table>
+    <tr><th>Atividade</th><th>Horas</th></tr>
+    <tr><td>O sistema no celular: visual, Propostas, Dashboard e revisão das 126 telas</td><td>9 h</td></tr>
+    <tr><td>Fornecedores e cotações com tela própria</td><td>3 h</td></tr>
+    <tr><td>Cotação com itens que vira pedido de compra</td><td>2 h</td></tr>
+    <tr><th>Total</th><th>14 h</th></tr>
+  </table>
+  <p>Quase dois terços do tempo foram direto nas telas que você usa, a maior parte no celular. Uma
+  parte menor foi nas conferências automáticas: são robôs que repetem centenas de situações a cada
+  mudança — o clique duplo no “Gerar pedido”, a cotação sem itens, a tabela que vira cartão só no
+  celular e nunca no computador — para que o que já funciona não quebre escondido. O resto foi
+  planejar cada mudança e atualizar os manuais.</p>
+  <p class="nota">As horas são estimadas pelo registro do trabalho salvo ao longo da semana. Pesquisa,
+  conversas e testes feitos à mão não entram — o número real é maior.</p>
+
+  <h2>Quer conferir?</h2>
+  <ol>
+    <li>Abra Compras → Fornecedores, clique no lápis de um fornecedor, troque o Status para Inativo e
+    salve. Use o filtro “Inativo” da lista para encontrá-lo.</li>
+    <li>Abra Compras → Cotações → Nova Cotação, escolha o fornecedor, busque dois materiais em “Itens da
+    cotação”, preencha quantidade e preço e veja o total se somar sozinho. Salve.</li>
+    <li>Na lista de Cotações, clique no carrinho (“Gerar pedido”) da cotação salva. O pedido abre já
+    preenchido; volte à lista e veja o número dele na coluna “Pedido”.</li>
+    <li>No celular, abra Comercial → Propostas e toque no botão “Mais ações” de uma proposta para ver a
+    folha com “Assinar” e “Excluir”.</li>
+    <li>Ainda no celular, abra Comercial → Dashboard e Almoxarifado → Materiais e compare com o
+    computador.</li>
+  </ol>
+</main>
+</body>
+</html>
