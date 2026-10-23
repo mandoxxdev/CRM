@@ -317,6 +317,8 @@ test('RN-81.04: a lista medida de montagens publicas sob /api/uploads (13 + almo
   assert.deepStrictEqual(sob, [
     '/api/uploads/almoxarifado', '/api/uploads/avatares', '/api/uploads/chat', '/api/uploads/covers',
     '/api/uploads/familias-produtos', '/api/uploads/footers', '/api/uploads/fornecedores',
+    // Frota Etapa 5 (RN-F5.06): as fotos do registro e do cupom — montagem ASSINADA (dominio frotas-anexos-v1), como avatares
+    '/api/uploads/frotas-anexos',
     '/api/uploads/grupos-compras', '/api/uploads/grupos-produtos', '/api/uploads/headers',
     '/api/uploads/logos', '/api/uploads/materiais-escritorio', '/api/uploads/produtos',
     '/api/uploads/proposta-fotos',
