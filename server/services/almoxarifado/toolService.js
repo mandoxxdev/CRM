@@ -479,6 +479,23 @@ async function listarOcorrencias(db, ferramentaId) {
     FROM ocorrencias_ferramenta_almoxarifado WHERE ferramenta_id = ? ORDER BY created_at DESC, id DESC`, [ferramentaId]);
 }
 
+/**
+ * Etapa 187 (RN-187.05, B1244): a restricao vigente da ferramenta. Decide a ultima manutencao CONCLUIDA que DECLAROU condicao
+ * (`data_fim` e `condicao_retorno` preenchidos; empate no segundo -> o id maior). COM_RESTRICAO -> { manutencao_id, observacoes,
+ * data_fim } (data_fim em UTC, como gravado — quem exibir converte); OK ou INSERVIVEL -> null. A concluida SEM condicao (integracao,
+ * B1140) nao decide: a etiqueta de seguranca nao some por omissao. A aberta nao conta (no SQLite o NULL ordena por ultimo no DESC,
+ * mas a clausula e o que impede a aberta de decidir quando ela e a unica — I2 da Fase 2). Vale em qualquer status: quem esconde na
+ * baixada e a tela (B1247).
+ */
+async function restricaoVigente(db, ferramentaId) {
+  const ult = await dbGet(db, `SELECT id, condicao_retorno, observacoes, data_fim FROM manutencoes_ferramenta_almoxarifado
+    WHERE ferramenta_id = ? AND data_fim IS NOT NULL AND condicao_retorno IS NOT NULL
+    ORDER BY data_fim DESC, id DESC LIMIT 1`, [ferramentaId]);
+  return ult && ult.condicao_retorno === 'COM_RESTRICAO'
+    ? { manutencao_id: ult.id, observacoes: ult.observacoes, data_fim: ult.data_fim }
+    : null;
+}
+
 async function listarFerramentas(db, filters = {}) {
   let sql = 'SELECT * FROM ferramentas_almoxarifado WHERE ativo = 1';
   const params = [];
@@ -511,6 +528,7 @@ async function listarFerramentas(db, filters = {}) {
       FROM emprestimos_ferramenta_almoxarifado WHERE ferramenta_id = ? AND status = 'EMPRESTADA'
       ORDER BY id DESC LIMIT 1`, [f.id]);
     f.emprestimo_aberto = aberto || null;
+    f.restricao = await restricaoVigente(db, f.id);
   }
   return ferramentas;
 }

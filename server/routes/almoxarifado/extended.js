@@ -1630,9 +1630,15 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     try {
       const ferramentas = await toolService.listarFerramentas(db, req.query);
       if (can(req.user, 'gerenciar_ferramentas')) return res.json(ferramentas);
-      res.json(ferramentas.map((f) => (f.emprestimo_aberto
-        ? { ...f, emprestimo_aberto: { id: f.emprestimo_aberto.id, data_prevista_devolucao: f.emprestimo_aberto.data_prevista_devolucao } }
-        : f)));
+      // Etapa 187 (RN-187.06, B1245): a restricao da manutencao e instrucao de uso da peca — sai para todos, tambem por lista branca
+      // (tres chaves), para um campo novo do servico (ex.: quem concluiu) nao vazar por omissao.
+      res.json(ferramentas.map((f) => ({
+        ...f,
+        emprestimo_aberto: f.emprestimo_aberto
+          ? { id: f.emprestimo_aberto.id, data_prevista_devolucao: f.emprestimo_aberto.data_prevista_devolucao } : null,
+        restricao: f.restricao
+          ? { manutencao_id: f.restricao.manutencao_id, observacoes: f.restricao.observacoes, data_fim: f.restricao.data_fim } : null,
+      })));
     } catch (e) { handleError(res, e); }
   });
 
