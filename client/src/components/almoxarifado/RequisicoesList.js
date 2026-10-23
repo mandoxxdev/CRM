@@ -26,6 +26,8 @@ import {
 } from 'react-icons/fi';
 import useUltimoPedido from '../../hooks/useUltimoPedido';
 import { formatarInstanteDoBanco } from './instanteDoBanco';
+// Etapa 189 (T2): a frase do alerta de retenção da 188, a mesma da fila. A T3 move as frases para utils/coletaTexto.js (B1268).
+import { textoAlertaPegarEm } from './FilaSeparacao';
 import './Almoxarifado.css';
 
 const STATUS_INFO = {
@@ -187,6 +189,40 @@ const valorPlanejadaNaSeparacao = (item, rows, qtdSugerida = 0, outrosMesmoMater
   return cobre ? valor : '';
 };
 
+// Etapa 189 (T2; RN-189.02/04 com as emendas M1, M2 e I3 da Fase 2; B1261): o "Sai de" da separação parte do par que a fila
+// sugere (GET /requisicoes/:id/sugestao-coleta) — só no item SEM planejada pendente e SEM separado pendente (M2: a rodada com
+// separado pendente sem planejada grava planejada nula de novo, e a frase prometeria o que não acontece), quando a sugestão cobre
+// (`cobre: true`, sem aviso), o par está nas opções e cobre a quantidade pré-preenchida somada ao que já está no mesmo par
+// (`jaNoPar`: a régua `pedidoPorOrigem` do servidor — irmãos com o par no select e o separado pendente dos irmãos planejados nele).
+// O alerta de retenção (I-a da 188) NÃO impede: o livro fica certo qualquer que seja a peça boa pega dali; a janela mostra o alerta.
+export const valorSugeridoNaSeparacao = (item, sugestao, rows, qtdSugerida = 0, outrosMesmoMaterial = 0, jaNoPar = 0) => {
+  // RN-189.03 (B1263): `temPlanejada` implica separado pendente > 0, então esta guarda (a do M2) também é a da planejada.
+  if (!sugestao || pendenteSeparado(item) > 1e-9) return '';
+  const p = sugestao.pegar_em;
+  if (!p || p.cobre !== true || sugestao.pegar_em_aviso != null) return '';
+  const valor = `${p.localizacao_id}:${p.lote_id ?? ''}`;
+  const opcao = (rows || []).find((s) => valorOrigem(s) === valor);
+  if (!opcao) return '';
+  const qtd = Number(qtdSugerida) || 0;
+  if (maxSeparavelNaTela(item, valor, rows, outrosMesmoMaterial) + 1e-9 < qtd) return '';
+  if ((Number(opcao.quantidade) || 0) + 1e-9 < (Number(jaNoPar) || 0) + qtd) return '';
+  return valor;
+};
+// O que já está no par para os IRMÃOS do mesmo material (M1): a quantidade de quem tem o par no "Sai de" agora + o separado pendente
+// de quem tem o par como planejada (o servidor soma os dois em `checarOrigemItem`).
+const jaNoParDosIrmaos = (itens, item, valor, origens, quantidades) => (itens || [])
+  .filter((i) => i.id !== item.id && Number(i.material_id) === Number(item.material_id))
+  .reduce((s, i) => s
+    + (origens[i.id] === valor ? Math.max(0, parseFloat((quantidades || {})[i.id]) || 0) : 0)
+    + (temPlanejada(i) && valorPlanejada(i) === valor ? pendenteSeparado(i) : 0), 0);
+// M4 da Fase 2: a quantidade da frase como a fila a mostra (pt-BR, até 3 casas).
+const fmtQtdSugestao = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n.toLocaleString('pt-BR', { maximumFractionDigits: 3 }) : '0';
+};
+const FRASE_SUGERIDO = 'Sugerido pela fila de separação. Se pegou de outro endereço, troque aqui.';
+const FRASE_PARCIAL = ' Entregue esta parte antes de separar o resto — separar o resto de outro endereço troca a origem.';
+
 // Etapa 61 (RN-04): material com controle de série sai dizendo QUAIS séries saem. As séries vêm de
 // GET /materiais/:id/series?status=EM_ESTOQUE; com um lote escolhido no "Sai de", só as desse lote
 // (o servidor recusa séries de lotes diferentes). O endereço da série é só dica: a transferência
@@ -341,6 +377,11 @@ const RequisicoesList = () => {
   const [motivosSeparacao, setMotivosSeparacao] = useState({});
   // Etapa 65 (RN-04): motivo da troca da planejada na separação, por item (só vai quando há troca).
   const [motivosTrocaSeparacao, setMotivosTrocaSeparacao] = useState({});
+  // Etapa 189 (T2): a sugestão da fila para esta abertura (Map item_id -> recorte, ou null: carregando/falhou/sem sugestão) e o que
+  // a pré-seleção decidiu por item ({ [itemId]: { valor, pegar_em, alerta } } — uma vez por abertura).
+  const [sugestaoSeparacao, setSugestaoSeparacao] = useState(null);
+  const [preSelecao, setPreSelecao] = useState({});
+  const sugestaoSeqRef = useRef(0);
   const [entregaAposSeparar, setEntregaAposSeparar] = useState(false);
   const [saving, setSaving] = useState(false);
   // Etapa 15: etapa opcional de assinatura do recebedor. Guarda reqId + numero (e não o
@@ -474,6 +515,67 @@ const RequisicoesList = () => {
     });
     if (Object.keys(novas).length) setOrigensSeparacao((prev) => ({ ...novas, ...prev }));
   }, [showSeparar, detalhe, saldosEntrega, origensSeparacao, quantidadesSeparacao]);
+
+  // Etapa 189 (T2, RN-189.06): ao abrir a janela de separação, busca a sugestão da fila para a requisição. A sequência descarta a
+  // resposta de uma abertura anterior. Falha (rede, 403, 404, 500) ou resposta sem `itens` em array = sem sugestão, sem toast:
+  // a separação nunca depende disto (falha aberto).
+  const sugestaoKey = materiaisEntregaKey.startsWith('S:') && detalhe ? `${detalhe.id}|${materiaisEntregaKey}` : '';
+  useEffect(() => {
+    const seq = ++sugestaoSeqRef.current;
+    setSugestaoSeparacao(null);
+    setPreSelecao({});
+    if (!sugestaoKey) return;
+    const id = sugestaoKey.split('|')[0];
+    (async () => {
+      let mapa = null;
+      try {
+        const res = await api.get(`/almoxarifado/requisicoes/${id}/sugestao-coleta`);
+        const itens = res?.data?.itens;
+        if (Array.isArray(itens)) {
+          mapa = new Map();
+          itens.forEach((s) => { if (s && s.item_id != null) mapa.set(Number(s.item_id), s); });
+        }
+      } catch (err) {
+        mapa = null;
+      }
+      if (sugestaoSeqRef.current !== seq) return;
+      setSugestaoSeparacao(mapa);
+    })();
+  }, [sugestaoKey]);
+
+  // Etapa 189 (T2, RN-189.02..05): com a sugestão e os saldos na mão, decide UMA vez por item e abertura. Item com chave em
+  // `origensSeparacao` (inclusive '') é escolha feita — do almoxarife ou da regra da 65 — e não é tocado (RN-189.05). Na ordem do
+  // pedido, o que já ficou no par conta para o irmão seguinte (RN-189.04).
+  useEffect(() => {
+    if (!showSeparar || !detalhe || !sugestaoSeparacao) return;
+    const itens = detalhe.itens || [];
+    const atuais = { ...origensSeparacao };
+    const novas = {};
+    const decididos = {};
+    itens.forEach((item) => {
+      if (maxQtdSeparacao(item) <= 0 || temPlanejada(item)) return;
+      if (Object.prototype.hasOwnProperty.call(preSelecao, item.id)) return;
+      const rows = saldosEntrega[item.material_id];
+      if (!rows) return;
+      const sug = sugestaoSeparacao.get(Number(item.id)) || null;
+      if (Object.prototype.hasOwnProperty.call(origensSeparacao, item.id)) {
+        decididos[item.id] = { valor: '', pegar_em: null, alerta: null };
+        return;
+      }
+      const p = sug && sug.pegar_em;
+      const valorDoPar = p ? `${p.localizacao_id}:${p.lote_id ?? ''}` : '';
+      const valor = valorSugeridoNaSeparacao(item, sug, rows, quantidadesSeparacao[item.id],
+        separandoOutrosDoMaterial(itens, item, quantidadesSeparacao),
+        jaNoParDosIrmaos(itens, item, valorDoPar, atuais, quantidadesSeparacao));
+      if (valor) {
+        novas[item.id] = valor;
+        atuais[item.id] = valor;
+      }
+      decididos[item.id] = { valor, pegar_em: p || null, alerta: (sug && sug.pegar_em_alerta) || null };
+    });
+    if (Object.keys(novas).length) setOrigensSeparacao((prev) => ({ ...prev, ...novas }));
+    if (Object.keys(decididos).length) setPreSelecao((prev) => ({ ...prev, ...decididos }));
+  }, [showSeparar, detalhe, sugestaoSeparacao, saldosEntrega, origensSeparacao, quantidadesSeparacao, preSelecao]);
 
   // Etapa 61 (RN-04): só no modal de entrega. O detalhe da requisição não traz `controle_serie`,
   // então pergunta ao material (GET /materiais/:id). Falha nessa busca = trata como sem série (não
@@ -2317,6 +2419,31 @@ const RequisicoesList = () => {
                         ))}
                       </select>
                     </div>
+                    {/* Etapa 189 (RN-189.09 com I1, M3 e I3): o que a pré-seleção fez com a sugestão da fila. */}
+                    {(() => {
+                      const ps = preSelecao[item.id];
+                      if (!ps || !ps.pegar_em || temPlanejada(item)) return null;
+                      let frase;
+                      if (ps.valor) {
+                        if (origensSeparacao[item.id] !== ps.valor) return null;
+                        const pendente = Math.max(0, Number(item.quantidade_solicitada) - getSeparado(item));
+                        frase = FRASE_SUGERIDO
+                          + ((parseFloat(quantidadesSeparacao[item.id]) || 0) + 1e-9 < pendente ? FRASE_PARCIAL : '');
+                      } else {
+                        const p = ps.pegar_em;
+                        const un = item.unidade || item.material_unidade;
+                        frase = `Sugestão da fila: ${p.localizacao_codigo}${p.lote_codigo ? ` — lote ${p.lote_codigo}` : ''}`
+                          + ` · ${fmtQtdSugestao(p.quantidade_sugerida)}${un ? ` ${un}` : ''}`
+                          + " — não veio escolhida; confira o saldo no 'Sai de' antes de escolher.";
+                      }
+                      const alerta = textoAlertaPegarEm({ pegar_em: ps.pegar_em, pegar_em_alerta: ps.alerta });
+                      return (
+                        <div id={`separacao-sugestao-${item.id}`} style={{ fontSize: '0.75rem', marginTop: 4, color: 'var(--gmp-text-light)' }}>
+                          {frase}
+                          {alerta && <span style={{ color: 'var(--gmp-warning, #b45309)' }}>{` ${alerta}`}</span>}
+                        </div>
+                      );
+                    })()}
                     {/* Etapa 65 (RN-04): a rodada troca a planejada do separado pendente — avisa e pede o porquê. */}
                     {(parseFloat(quantidadesSeparacao[item.id]) || 0) > 0 && trocaNaSeparacao(item, origensSeparacao[item.id]) && (
                       <div style={{ marginTop: 8 }}>

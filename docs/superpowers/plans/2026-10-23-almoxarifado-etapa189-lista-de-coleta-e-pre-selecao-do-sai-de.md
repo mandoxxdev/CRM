@@ -573,7 +573,7 @@ onde divergirem** (as Emendas da Fase 2 incorporadas):
    cobre todo item sem `pegar_em` com aviso (inclui `PLANEJADA_INDISPONIVEL`), `a separar ⟨fmtQtd(a_separar)⟩[ unidade]`; requisição sem
    paradas → sem tabela.
 
-### T1 — feita (`T1HASH`)
+### T1 — feita (`da0c2d6b`)
 
 - `listarFilaSeparacao(db, user, opcoes = {})`: `{ requisicaoId }` só acrescenta ` AND r.id = ?` à consulta de requisições; o resto byte a byte.
   `sugestaoDeColetaDaRequisicao(db, user, id)` (exportada): id conferido por `/^\d+$/` **antes** do SQL (`abc` e `1.5` → 404), requisição
@@ -592,6 +592,38 @@ onde divergirem** (as Emendas da Fase 2 incorporadas):
   | (d) `ORDER BY ir.requisicao_id, ir.id DESC` | 1 (premissa do alerta no segundo item) e 6 (`[[11,4],[10,0]]`); em `separavelDividido` `[127 RN-10]`, `RN-14`, `RN-15` | |
 - Vizinhos sem mudança: `filaSugestaoColeta` 12/0, `filaSugestaoColetaIntegracao` 6/0, `filaSeparacao` 11/0, `separavelDividido` 19/0.
 - Divergência: nenhuma do contrato recongelado.
+
+### T2 — feita (`T2HASH`)
+
+- `RequisicoesList.js`: `valorSugeridoNaSeparacao` (exportada, pura), `jaNoParDosIrmaos` (a soma da M1), `fmtQtdSugestao` (M4, local);
+  estado `sugestaoSeparacao` (Map ou `null`), `preSelecao` (decisão por item, uma vez por abertura) e `sugestaoSeqRef`; um efeito busca
+  `GET /almoxarifado/requisicoes/<id>/sugestao-coleta` ao abrir a janela (chave `"<id>|S:<materiais>"`), outro decide por item quando a
+  sugestão e os saldos chegam; a frase em `#separacao-sugestao-<item>` (o `id`, como `separacao-aviso-troca-<item>`). `handleSeparacao` não mudou.
+  `textoAlertaPegarEm` importado de `./FilaSeparacao` (item 7 do recongelamento; T3 troca para `coletaTexto`).
+- Teste `RequisicoesSeparacaoPreSelecao.test.js` **18/18**: os 9 do plano (o 6 em 6 causas: 500, `{ data: [] }`, `cobre: false`,
+  fora das opções, não cobre a quantidade, `PLANEJADA_INDISPONIVEL`) + `[RN-189.04, M1]` (o primeiro escolhido à mão), `[RN-189.09, I1]`
+  (o fim "Entregue esta parte…"), `[I3]` (pré-seleciona com o alerta, a frase do alerta depois da "Sugerido…") e `[M2]`.
+  Vermelho antes: 13 caíram (`valorSugeridoNaSeparacao is not a function`, frase ausente); os 5 que passaram são os que esperam o
+  automático (RN-189.05, M1 e três causas da 189.06) — o padrão de antes.
+- Controles (mesmo harness; todos restauraram ao md5 de antes):
+  | Sabotagem | Caiu | Asserção |
+  |---|---|---|
+  | (e) sem a guarda `pendenteSeparado > 0` na função | `[RN-189.03]` e `[M2]` | a asserção **pura** do 189.03 (`'1:'` × `''`) |
+  | (f) `jaNoPar` → 0 | `[RN-189.04]` e `[RN-189.04, M1]` | item 2 `'1:'` × `''` |
+  | (g) `if (false)` na guarda da chave presente | só `[RN-189.05]` | `'2:7'` × `''` |
+  | (h) sem `cobre !== true` **e** sem o aviso | só o `cobre: false` do 189.06 | `'2:7'` × `''` |
+  | (i) sem o descarte da sequência | só o caso 9 | `'2:7'` × `''` |
+  | (I1) o fim "Entregue esta parte…" sempre | os 5 que esperam a frase sem o fim | a frase com o fim no item que cobre tudo |
+- Regressão: os 14 `Requisicoes*.test.js` de antes + o novo, `--runInBand`: **15 suítes, 313 testes**, nenhum mudou de asserção. Build
+  `CI=true`: *Compiled successfully*.
+- **Divergências:** (1) o controle (e) da primeira forma (tirar `temPlanejada` da função) **não derrubou nada**: `temPlanejada` implica
+  separado pendente > 0, então a guarda da M2 já é a da planejada — a cláusula era código morto e saiu (comentário no lugar); o (e) foi
+  refeito sobre a guarda que existe. A tela tem ainda duas defesas da RN-189.03 que nenhum teste isola (o efeito pula item com planejada, e a
+  regra da 65 grava a chave antes): defesa em profundidade, registrada. (2) O caso 9 da primeira forma (a resposta velha chegando **depois** da
+  nova) não sabia falhar com o (i): a decisão "uma vez por abertura" já protegia. Reescrito com a velha chegando **antes** da nova. (3) O caso
+  9 abre e fecha a **mesma** requisição (respostas diferentes por abertura) em vez de "outra requisição" — o que se prova é a sequência.
+  (4) O (h) sabota `cobre` e o aviso juntos: pelo contrato, `cobre: false` sempre vem com `NENHUM_ENDERECO_COBRE`, então cada guarda sozinha é
+  redundante com a outra.
 
 ## Próxima tarefa detalhada
 
