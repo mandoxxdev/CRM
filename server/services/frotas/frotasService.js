@@ -1295,7 +1295,8 @@ async function getAlertas(db, hoje = hojeLocalISO()) {
     JOIN frotas_veiculos v ON c.veiculo_id = v.id
     LEFT JOIN frotas_motoristas m ON c.motorista_id = m.id
     WHERE c.status_geral = 'PENDENCIA' AND c.pendencia_tratada_em IS NULL AND v.ativo = 1
-    ORDER BY c.data_checklist DESC, c.id DESC`);
+    ORDER BY c.data_checklist ASC, c.id ASC`); // Fase 5 (Etapa 6): a MAIS ANTIGA primeiro — o painel corta em 15 e, com a mais nova
+  // primeiro, a falha mais atrasada era a que sumia do painel (a ordenacao final por severidade e estavel)
   pendencias.forEach((row) => {
     const c = registroComItens(row);
     const falhas = c.itens ? ITENS_CHECKLIST.filter((i) => c.itens[i.chave] === 'FALHA').map((i) => i.rotulo) : [];

@@ -13,6 +13,7 @@ const { horaLocalHHMM } = require('./portalService');
 const { registroComItens } = require('./frotasService');
 
 const LIMITE_TEXTO = 1000;
+const INVISIVEIS = /[​-‍⁠﻿]/g;
 
 const MSG = {
   DESCREVA: 'Descreva o que foi feito',
@@ -46,8 +47,10 @@ function inteiroPositivo(v) {
 /** RN-F6.02 (recusas 2-4): o corpo, antes de olhar o banco. */
 function lerCorpo(corpo) {
   const c = corpo && typeof corpo === 'object' ? corpo : {};
-  if (typeof c.tratamento !== 'string' || !c.tratamento.trim()) throw erro(400, MSG.DESCREVA);
+  if (typeof c.tratamento !== 'string') throw erro(400, MSG.DESCREVA);
   const tratamento = c.tratamento.trim();
+  // Fase 5 (Etapa 6): so caracteres invisiveis (espaco de largura zero, BOM) tambem e "vazio" — o trim() nao os tira
+  if (!tratamento.replace(INVISIVEIS, '').trim()) throw erro(400, MSG.DESCREVA);
   if (tratamento.length > LIMITE_TEXTO) throw erro(400, MSG.TEXTO_LONGO);
   let manutencaoId = null;
   if (c.manutencao_id !== undefined && c.manutencao_id !== null && c.manutencao_id !== '') {

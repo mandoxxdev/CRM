@@ -81,7 +81,9 @@ test('RN-F6.02 MOTORISTA e CONSULTA -> 403 ao tratar e ao desfazer (antes de qua
 // ── RN-F6.02 — recusas na ordem ─────────────────────────────────────────────────────────────
 test('RN-F6.02 texto: ausente, nao-texto, vazio e so espacos -> 400 "Descreva o que foi feito"; > 1000 -> 400', async () => {
   const p = await registrarFalha();
-  for (const corpo of [{}, { tratamento: null }, { tratamento: 12 }, { tratamento: ['a'] }, { tratamento: '' }, { tratamento: '   \n ' }]) {
+  // Fase 5: so invisiveis (largura zero, BOM) tambem e vazio — antes "​" gravava um tratamento invisivel
+  for (const corpo of [{}, { tratamento: null }, { tratamento: 12 }, { tratamento: ['a'] }, { tratamento: '' }, { tratamento: '   \n ' },
+    { tratamento: '​' }, { tratamento: ' ​﻿ ' }]) {
     const r = await tratar(p.id, corpo);
     assert.strictEqual(r.status, 400, JSON.stringify(corpo));
     assert.strictEqual(r.body.error, 'Descreva o que foi feito', JSON.stringify(corpo));
@@ -279,6 +281,22 @@ test('RN-F6.04 (Fase 2, 8 e T-3) o alerta traz a placa; veiculo excluido nao ger
   const lista = (await como(ADMIN, 'get', '/api/frotas/checklists')).body.find((x) => x.id === r.id);
   assert(lista, 'mas o registro continua na lista Checklist (e la pode ser tratado)');
   assert.strictEqual((await tratar(r.id, { tratamento: 'veiculo vendido' })).status, 200);
+});
+
+test('RN-F6.04 (Fase 5) com mais de 15 alertas, o painel mostra as pendencias MAIS ANTIGAS (a mais atrasada nao some do painel)', async () => {
+  const velha = await registrarFalha(MOTORISTA, { data: somaDias(HOJE, -90) });
+  for (let i = 0; i < 16; i += 1) await registrarFalha();
+  ctx.limparCacheDashboard();
+  const d = (await como(ADMIN, 'get', '/api/frotas/dashboard')).body;
+  assert(d.alertasCount > 15, `cenario: mais de 15 alertas (${d.alertasCount})`);
+  assert.strictEqual(d.alertas.length, 15);
+  assert(d.alertas.some((a) => a.tipo === 'checklist' && a.referencia_id === velha.id), 'a de 90 dias esta nos 15');
+  const datas = (await como(ADMIN, 'get', '/api/frotas/alertas')).body.filter((a) => a.tipo === 'checklist').map((a) => a.data);
+  assert.deepStrictEqual(datas, [...datas].sort(), 'pendencias da mais antiga para a mais nova');
+  // limpa para os cenarios seguintes (o do cache precisa caber nos 15)
+  for (const a of (await como(ADMIN, 'get', '/api/frotas/alertas')).body.filter((x) => x.tipo === 'checklist')) {
+    await tratar(a.referencia_id, { tratamento: 'limpeza do cenario' });
+  }
 });
 
 // ── RN-F6.09 — cache do painel ──────────────────────────────────────────────────────────────
