@@ -78,6 +78,7 @@ function situacaoDoRegistro({ itens, avarias, legados } = {}) {
   const l = legados || {};
   const valores = ITENS_LEGADOS.map((k) => l[k]);
   if (valores.some((v) => v === 0 || v === false || v === '0')) return 'PENDENCIA';
+  if (Array.isArray(avarias) && avarias.length > 0) return 'PENDENCIA'; // B22: avaria conta tambem na rota antiga
   if (valores.some((v) => v == null)) return 'INCOMPLETO';
   return 'OK';
 }

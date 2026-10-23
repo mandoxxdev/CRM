@@ -80,6 +80,9 @@ test('F2-7 situacao sem itens (rota antiga): algum *_ok = 0 -> PENDENCIA; os 7 =
   const seis = { ...sete }; delete seis.limpeza_ok;
   assert.strictEqual(situacaoDoRegistro({ legados: seis }), 'INCOMPLETO');
   assert.strictEqual(situacaoDoRegistro({ legados: {} }), 'INCOMPLETO');
+  // B22: avaria e "Nao conforme" tambem na rota antiga (a coluna Avarias da planilha) — antes saia OK, sem alerta
+  assert.strictEqual(situacaoDoRegistro({ legados: sete, avarias: [{ vista: 'frente', tipo: 'R' }] }), 'PENDENCIA');
+  assert.strictEqual(situacaoDoRegistro({ legados: sete, avarias: [] }), 'OK');
 });
 
 test('T1.c ver_painel = ADMIN_FROTA e CONSULTA (MOTORISTA nao)', async () => {

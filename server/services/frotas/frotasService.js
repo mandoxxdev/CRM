@@ -979,7 +979,7 @@ async function inserirRegistro(db, user, r) {
   } else {
     const bool = (v) => (v === 0 || v === false || v === '0' ? 0 : v === 1 || v === true || v === '1' ? 1 : null);
     legados = Object.fromEntries(ITENS_LEGADOS.map((k) => [k, bool(r.legados?.[k])]));
-    situacao = situacaoDoRegistro({ legados });
+    situacao = situacaoDoRegistro({ legados, avarias: r.avarias });
   }
   const ins = await dbRun(db, `INSERT INTO frotas_checklists
     (veiculo_id, motorista_id, data_checklist, pneus_ok, oleo_ok, luzes_ok, freios_ok,

@@ -109,7 +109,7 @@ async function abaChecklist(db, periodo) {
       return Number(c[legado]) === 0 ? 'Não conforme' : 'Conforme';
     });
     // F2-6: a mesma regua — a gravada, ou (linha anterior a Etapa 1) a calculada dos 7 *_ok
-    const situacao = c.status_geral || situacaoDoRegistro(c.itens ? { itens: c.itens, avarias: c.avarias } : { legados: c });
+    const situacao = c.status_geral || situacaoDoRegistro(c.itens ? { itens: c.itens, avarias: c.avarias } : { legados: c, avarias: c.avarias });
     linhas.push([
       dia(c.data_checklist), vazio(c.horario), TIPO_REGISTRO[c.tipo_registro] || 'Inspeção', c.placa, vazio(c.motorista_nome),
       vazio(c.km), vazio(c.nivel_combustivel), ...respostas, textoAvarias(c.avarias), SITUACAO_REGISTRO[situacao] || situacao,
