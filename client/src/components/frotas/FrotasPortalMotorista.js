@@ -14,6 +14,9 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { hojeLocalISO } from '../../utils/dataLocal';
+import { useAuth } from '../../context/AuthContext';
+import { getEffectiveUser } from '../../services/permissionsCache';
+import { perfilFrota } from '../../utils/systemPermissions';
 import './Frotas.css';
 import './FrotasPortalMotorista.css';
 
@@ -486,6 +489,10 @@ function MeusRegistros({ dados }) {
 /* ---------------------------------------------------------------- pagina */
 
 const FrotasPortalMotorista = () => {
+  const { user, refreshUser } = useAuth();
+  const userRef = useRef(user);
+  userRef.current = user;
+  const renovouRef = useRef(false);
   const [inicio, setInicio] = useState(null);
   const [meus, setMeus] = useState(null);
   const [carregando, setCarregando] = useState(true);
@@ -501,13 +508,20 @@ const FrotasPortalMotorista = () => {
         api.get('/frotas/portal/meus-registros', { params: { limite: 30 } }).catch(() => ({ data: null })),
       ]);
       setInicio(ini.data || {});
+      // Frota Etapa 2 (Fase5-2): o gestor mudou o perfil desta pessoa em Perfis de acesso; o servidor ja aplica, mas o menu do navegador
+      // dela so mudaria no F5 (nada renova o usuario dentro do Frota). O inicio traz o perfil do servidor: divergiu, renova uma vez.
+      const perfilServidor = ini.data?.perfil;
+      if (perfilServidor && refreshUser && !renovouRef.current && perfilServidor !== perfilFrota(getEffectiveUser(userRef.current))) {
+        renovouRef.current = true;
+        refreshUser();
+      }
       setMeus(reg.data);
     } catch (err) {
       setErroCarga(err.response?.data?.error || 'Não foi possível abrir o painel. Confira a internet e tente de novo.');
     } finally {
       setCarregando(false);
     }
-  }, []);
+  }, [refreshUser]);
 
   useEffect(() => { carregar(); }, [carregar]);
 

@@ -27,6 +27,10 @@ const QUICK_LINKS = [
 ];
 
 const PainelDoGestor = () => {
+  const { user, refreshUser } = useAuth();
+  const userRef = React.useRef(user);
+  userRef.current = user;
+  const renovouRef = React.useRef(false);
   const [exportando, setExportando] = useState(false);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -42,6 +46,13 @@ const PainelDoGestor = () => {
       console.error(err);
       const status = err.response?.status;
       if (status === 403) {
+        // Frota Etapa 2 (Fase5-2): o gestor tirou o Consulta desta pessoa; o servidor ja a trata pelo perfil novo (vem no 403), mas a tela
+        // ainda tem o velho. Renova o usuario: com MOTORISTA, o FrotasDashboard a leva ao portal.
+        const perfilServidor = err.response?.data?.perfil;
+        if (perfilServidor && refreshUser && !renovouRef.current && perfilServidor !== perfilFrota(getEffectiveUser(userRef.current))) {
+          renovouRef.current = true; // uma vez: sem isso, um usuario renovado que ainda divergisse recarregaria o painel em laco
+          refreshUser();
+        }
         setError('Sem permissão para acessar o módulo Frota.');
       } else if (!err.response) {
         setError('Não foi possível conectar ao servidor. Verifique se o backend está rodando.');
@@ -51,7 +62,7 @@ const PainelDoGestor = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [refreshUser]);
 
   useEffect(() => { load(); }, [load]);
 

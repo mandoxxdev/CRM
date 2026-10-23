@@ -20,8 +20,9 @@ jest.mock('../../services/api', () => ({
   default: { defaults: { baseURL: '/api' }, get: jest.fn(() => Promise.resolve({ data: {} })), post: jest.fn() },
 }));
 let mockUsuario = null;
+const mockRefreshUser = jest.fn(() => Promise.resolve(null));
 jest.mock('../../context/AuthContext', () => ({
-  useAuth: () => ({ user: mockUsuario, logout: jest.fn() }),
+  useAuth: () => ({ user: mockUsuario, logout: jest.fn(), refreshUser: mockRefreshUser }),
 }));
 jest.mock('../../services/permissionsCache', () => ({
   fetchUserPermissions: jest.fn(() => Promise.resolve({ grupos: [] })),
@@ -161,5 +162,38 @@ describe('/frota (dashboard) por perfil', () => {
     expect(container.querySelector('[data-testid="portal"]')).toBeNull();
     expect(fetchFrotasDashboard).toHaveBeenCalled();
     expect(container.textContent).toContain('Exportar planilha');
+  });
+});
+
+// Fase5-2 (revisor front x back): o gestor voltou esta pessoa de Consulta para Motorista; a tela dela ainda acha Consulta e o painel
+// dava "Sem permissão para acessar o módulo Frota." sem nada mudar ate o F5. O 403 traz o perfil do servidor: divergiu, renova.
+describe('/frota: perfil do servidor no 403 diferente do da tela (Fase5-2)', () => {
+  async function abrirPainel(user) {
+    mockUsuario = user;
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={['/frota']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <Routes><Route path="/frota" element={<FrotasDashboard />} /></Routes>
+        </MemoryRouter>
+      );
+    });
+    await act(async () => {});
+  }
+  const negado = (perfil) => Object.assign(new Error('403'), {
+    response: { status: 403, data: { error: 'Sem permissão para esta operação', acao: 'ver_painel', perfil } },
+  });
+
+  test('tela acha CONSULTA, servidor diz MOTORISTA: renova o usuario uma vez', async () => {
+    fetchFrotasDashboard.mockRejectedValue(negado('MOTORISTA'));
+    await abrirPainel(CONSULTA);
+    expect(container.textContent).toContain('Sem permissão para acessar o módulo Frota.');
+    expect(mockRefreshUser).toHaveBeenCalledTimes(1);
+  });
+
+  test('tela e servidor concordam no 403: nao renova', async () => {
+    fetchFrotasDashboard.mockRejectedValue(negado('CONSULTA'));
+    await abrirPainel(CONSULTA);
+    expect(container.textContent).toContain('Sem permissão para acessar o módulo Frota.');
+    expect(mockRefreshUser).not.toHaveBeenCalled();
   });
 });

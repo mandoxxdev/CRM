@@ -15,6 +15,11 @@ jest.mock('../../services/api', () => ({
   default: { get: jest.fn(), post: jest.fn(), put: jest.fn(), delete: jest.fn() },
 }));
 jest.mock('react-toastify', () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() } }));
+// Frota Etapa 2 (Fase5-2): o portal le o usuario do contexto para conferir o perfil com o do servidor.
+let mockUsuario = { id: 7, nome: 'Jose', role: 'usuario', perfil_frota: null };
+const mockRefreshUser = jest.fn(() => Promise.resolve(null));
+jest.mock('../../context/AuthContext', () => ({ useAuth: () => ({ user: mockUsuario, refreshUser: mockRefreshUser }) }));
+jest.mock('../../services/permissionsCache', () => ({ getEffectiveUser: (u) => u }));
 
 const ITENS = [
   ['pneus_estepe', 'Pneus e estepe'], ['farois_lanternas', 'Faróis / lanternas'], ['setas_luz_freio', 'Setas / luz de freio'],
@@ -261,5 +266,36 @@ describe('Portal do motorista', () => {
     expect(secao.textContent).toContain('22/10/2026 às 08:10');
     expect(secao.querySelector('.situacao-pendencia').textContent).toBe('PENDÊNCIA');
     expect(secao.textContent).toContain('40 L');
+  });
+});
+
+// Fase5-2 (revisor front x back): o gestor mudou o perfil, o servidor ja aplica, mas o menu do navegador da pessoa ficava o velho ate
+// o F5 (nada renova o usuario dentro do Frota). O portal ja recebe o perfil do servidor em /portal/inicio: se diverge, renova.
+describe('Portal: perfil do servidor diferente do da tela (Fase5-2)', () => {
+  test('servidor diz CONSULTA e a tela acha MOTORISTA: renova o usuario uma vez', async () => {
+    respostaInicio = inicio({ perfil: 'CONSULTA', pode_registrar: false });
+    await renderizar();
+    await act(async () => {});
+    expect(mockRefreshUser).toHaveBeenCalledTimes(1);
+  });
+
+  test('servidor e tela concordam: nao renova (e o painel aparece)', async () => {
+    respostaInicio = inicio({ perfil: 'MOTORISTA' });
+    await renderizar();
+    await act(async () => {});
+    expect(container.textContent).toContain('Jose da Silva');
+    expect(mockRefreshUser).not.toHaveBeenCalled();
+  });
+
+  test('a tela ja acha CONSULTA e o servidor voltou a MOTORISTA: renova', async () => {
+    mockUsuario = { ...mockUsuario, perfil_frota: 'CONSULTA' };
+    respostaInicio = inicio({ perfil: 'MOTORISTA' });
+    try {
+      await renderizar();
+      await act(async () => {});
+      expect(mockRefreshUser).toHaveBeenCalledTimes(1);
+    } finally {
+      mockUsuario = { ...mockUsuario, perfil_frota: null };
+    }
   });
 });
