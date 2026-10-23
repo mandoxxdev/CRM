@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relatório da semana — 27 de setembro a 3 de outubro de 2026</title>
+<style>
+  :root { --tinta:#1f2a37; --suave:#5b6675; --linha:#e3e7ec; --fundo:#ffffff; --cartao:#f6f8fa;
+          --tela:#2f80ed; --bastidores:#8a5cf6; --testes:#f2994a; --doc:#9aa5b1; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--fundo); color:var(--tinta); font:16px/1.6 "Segoe UI", system-ui, sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font-size:28px; margin:0 0 4px; } h2 { font-size:21px; margin:40px 0 12px; border-bottom:2px solid var(--linha); padding-bottom:6px; }
+  h3 { font-size:17px; margin:24px 0 6px; }
+  .sub { color:var(--suave); margin:0 0 24px; }
+  .resumo { background:var(--cartao); border-left:4px solid var(--tela); padding:16px 20px; border-radius:6px; font-size:17px; }
+  .item { border:1px solid var(--linha); border-radius:8px; padding:16px 20px; margin:16px 0; }
+  .item p { margin:6px 0; } .rotulo { font-weight:600; color:var(--suave); }
+  figure { margin:12px 0; } figure img { width:100%; border:1px solid var(--linha); border-radius:6px; }
+  figcaption { color:var(--suave); font-size:14px; }
+  .barra { display:flex; height:28px; border-radius:6px; overflow:hidden; margin:12px 0 6px; }
+  .barra span { display:block; }
+  .legenda { display:flex; flex-wrap:wrap; gap:8px 20px; font-size:14px; color:var(--suave); }
+  .legenda i { display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
+  table { border-collapse:collapse; width:100%; font-size:15px; } td, th { border-bottom:1px solid var(--linha); padding:8px; text-align:left; }
+  .nota { font-size:14px; color:var(--suave); }
+  @media print { main { padding:0; } h2, h3 { break-after:avoid; } figure { break-inside:avoid; } figure img { width:auto; max-width:100%; max-height:90mm; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>O que foi feito no sistema nesta semana</h1>
+  <p class="sub">Semana de 27/09 a 03/10/2026 · CRM GMP Industriais</p>
+
+  <p class="resumo">O almoxarifado ganhou a tela de Não Conformidades, a Fila de separação, as regras de
+  aprovação por valor, urgência e material crítico, e passou a dizer de que prateleira cada item sai e para
+  qual prateleira cada item entra. Por baixo, o material que chega do fornecedor passou a ficar com quem
+  estava esperando por ele, o pedido de compra passou a se fechar sozinho quando tudo chega, e o sistema
+  parou de dar uma prateleira como cheia quando ela já está vazia. Foram cerca de 35 horas de trabalho,
+  a maior parte no caminho da compra até a chegada do material e no tratamento do material com defeito.</p>
+
+  <h2>O que você já pode ver na tela</h2>
+
+  <div class="item">
+    <h3>Não Conformidades: o problema com o material vira um documento com número</h3>
+    <p><span class="rotulo">Onde:</span> Almoxarifado → Não Conformidades (item novo no menu).</p>
+    <p><span class="rotulo">Antes:</span> quando chegava menos material do que a nota dizia, ou quando a
+    inspeção reprovava um lote, o sistema avisava — mas a decisão (aceitar, devolver ao fornecedor,
+    sucatear) não ficava escrita em lugar nenhum. Morava no e-mail de alguém. E o material reprovado ficava
+    bloqueado para sempre, porque nada perguntava se ele já tinha ido embora.</p>
+    <p><span class="rotulo">Agora:</span> cada problema vira um documento numerado (NC-…), que nasce
+    sozinho na conferência do recebimento e na inspeção. A tela mostra quem decidiu, quando e por quê, com
+    espaço para anexar laudo e foto. A decisão faz o que diz: “Aceitar” devolve o material ao estoque na
+    hora; “Devolver ao fornecedor” espera o Compras clicar em “Registrar execução” quando a caixa sai de
+    fato, e só então tira do estoque; “Sucatear” ganhou o botão “Solicitar sucateamento”, que já vem
+    preenchido com o material e a quantidade reprovada. O filtro “Pendentes de execução” mostra o que
+    falta despachar, e documento parado sem decisão ou sem execução passa a aparecer em Alertas.</p>
+    <figure><img src="prints/nao-conformidades.png" alt="Tela Não Conformidades com documentos numerados, decisão e coluna Execução"><figcaption>Cada problema com número, decisão, responsável e o que falta fazer.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Regras de aprovação: quem precisa assinar cada requisição</h3>
+    <p><span class="rotulo">Onde:</span> Almoxarifado → Configurações → Regras de Aprovação. E, para quem
+    aprova, no topo de Almoxarifado → Requisições (almox.).</p>
+    <p><span class="rotulo">Antes:</span> só havia duas formas fixas de aprovar. Não dava para dizer “acima
+    de R$ 5.000 a Diretoria assina” ou “requisição urgente precisa do supervisor”. E a requisição mais
+    cara, a que travava por valor, avisava os aprovadores uma vez só e depois podia ficar esquecida.</p>
+    <p><span class="rotulo">Agora:</span> o administrador cadastra regras dizendo quando cada uma vale
+    (valor, quantidade, material crítico, urgência, material de cliente, centro de custo) e quem pode
+    assinar. Requisição que cai em duas regras precisa de duas assinaturas, de duas pessoas diferentes;
+    enquanto falta assinatura, os botões de aprovar ficam desligados, dizendo o motivo. Quem pode aprovar
+    vê o quadro “Requisições aguardando sua aprovação”, e quem falta assinar é cobrado por e-mail todo dia.
+    A urgência passou a ser uma lista fechada: Normal, Urgente ou Crítico.</p>
+    <figure><img src="prints/regras-aprovacao.png" alt="Aba Regras de Aprovação em Configurações com regras cadastradas"><figcaption>As regras dizem quando a requisição precisa de assinatura, e de quem.</figcaption></figure>
+    <figure><img src="prints/aguardando-aprovacao.png" alt="Quadro Requisições aguardando sua aprovação no topo da lista de requisições"><figcaption>Quem aprova vê na hora o que está esperando por ele.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Fila de separação: o que separar primeiro, e de onde cada item sai</h3>
+    <p><span class="rotulo">Onde:</span> Almoxarifado → Fila de separação (item novo no menu, logo abaixo de
+    Requisições). E nas janelas de separar e entregar de cada requisição.</p>
+    <p><span class="rotulo">Antes:</span> o almoxarife abria requisição por requisição, na lista com a mais
+    nova primeiro, para descobrir o que tinha de separar. Na entrega, o sistema não perguntava de que
+    prateleira o material saiu, nem quais peças com número de série foram entregues.</p>
+    <p><span class="rotulo">Agora:</span> a fila mostra só as requisições com trabalho, na ordem em que devem
+    ser feitas: primeiro o que dá para fazer agora, depois Crítico e Urgente, depois a data de necessidade
+    e a mais antiga. Cada uma diz o que fazer (“Separar”, “Conferir”, “Entregar” ou “Aguardando saldo”) e,
+    por item, quanto dá para fazer agora. Ao separar e entregar, cada item ganhou o campo “Sai de”, com a
+    prateleira e o lote, e a peça com número de série pede quais números saem. Se o separador pega menos
+    do que dava, a janela pergunta o porquê, e o conferente lê a resposta no detalhe.</p>
+    <figure><img src="prints/fila-separacao.png" alt="Tela Fila de separação com requisições em ordem e a ação de cada uma"><figcaption>A fila diz o que fazer e em que ordem.</figcaption></figure>
+    <figure><img src="prints/entrega-sai-de.png" alt="Janela de entrega da requisição com o campo Sai de por item"><figcaption>Na entrega, cada item diz de que prateleira sai.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Onde guardar: sugestão de prateleira, prateleira por item da nota e etiqueta da prateleira</h3>
+    <p><span class="rotulo">Onde:</span> Almoxarifado → Movimentações → Nova movimentação (tipo Entrada);
+    Almoxarifado → Recebimentos → Processar nota; e Almoxarifado → Configurações → Localizações.</p>
+    <p><span class="rotulo">Antes:</span> na entrada, a tela mostrava a lista de todas as prateleiras, sem
+    dizer qual fazia sentido. Ao processar a nota fiscal, todos os itens iam para a prateleira padrão de
+    cada material, sem perguntar. E a prateleira não tinha etiqueta.</p>
+    <p><span class="rotulo">Agora:</span> na entrada aparecem até três “Sugestões”: a prateleira padrão do
+    material, as que já têm aquele material e as vazias que aceitam aquele tipo — e a tela avisa antes de
+    salvar se a padrão não pode receber. Processar a nota abre uma janela com cada item e a prateleira de
+    destino de cada um. Cada prateleira ganhou etiqueta com QR, impressa pelo próprio sistema; quem está na
+    frente da prateleira pode ler a etiqueta para o sistema conferir se é mesmo aquela.</p>
+    <figure><img src="prints/entrada-sugestoes.png" style="max-width:420px" alt="Nova movimentação de entrada com as sugestões de localização"><figcaption>Até três sugestões de onde guardar, com o motivo de cada uma.</figcaption></figure>
+    <figure><img src="prints/processar-nota-destino.png" alt="Janela Processar nota fiscal com o destino de cada item"><figcaption>Cada item da nota vai para a prateleira escolhida.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Motivos de movimentação viram uma lista</h3>
+    <p><span class="rotulo">Onde:</span> Almoxarifado → Configurações → Motivos de Movimentação; e o campo
+    Motivo em Almoxarifado → Movimentações.</p>
+    <p><span class="rotulo">Antes:</span> o porquê de um ajuste ou de uma perda era digitado à mão a cada
+    vez: “avaria”, “Avaria”, “avaria no manuseio”, “quebrou”. Não dava para perguntar “quanto se perdeu por
+    avaria este mês”.</p>
+    <p><span class="rotulo">Agora:</span> o administrador mantém a lista de motivos e diz para quais tipos
+    de movimentação cada um vale. Na movimentação, o almoxarife escolhe o motivo da lista (ou digita, se
+    nenhum servir). O histórico de movimentações mostra o motivo e a justificativa, filtra por motivo e leva
+    os dois para o Excel.</p>
+    <figure><img src="prints/motivos-movimentacao.png" alt="Aba Motivos de Movimentação em Configurações"><figcaption>A lista de motivos, cada um com os tipos de movimentação em que vale.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Prazo da requisição, “Requisições no prazo” e relatórios novos</h3>
+    <p><span class="rotulo">Onde:</span> Almoxarifado → Dashboard; Solicitar Material; e Almoxarifado →
+    Relatórios.</p>
+    <p><span class="rotulo">Antes:</span> a requisição não tinha prazo, então não dava para saber quantas
+    foram atendidas a tempo. E perguntas de todo dia — “quanto sobrou do lote tal?”, “quanto deste material
+    está preso em reserva ou inspeção?”, “onde tem prateleira livre?”, “qual fornecedor mais erra a
+    quantidade?” — não tinham relatório.</p>
+    <p><span class="rotulo">Agora:</span> a requisição ganhou o campo “Data de necessidade”, e o painel do
+    almoxarifado ganhou o cartão “Requisições no prazo”. Em Relatórios entraram: Saldo por lote, Séries em
+    estoque, Saldos comprometidos, Localizações vazias, Ajustes por motivo e Qualidade por fornecedor. O
+    histórico de movimentações passou a filtrar por grupo (toda entrada, toda saída), por usuário e por
+    centro de custo.</p>
+    <figure><img src="prints/dashboard-no-prazo.png" alt="Painel do almoxarifado com o cartão Requisições no prazo"><figcaption>O painel mostra quanto foi atendido no prazo.</figcaption></figure>
+    <figure><img src="prints/relatorio-localizacoes-vazias.png" alt="Relatório Localizações vazias na tela de Relatórios"><figcaption>Onde há espaço livre no almoxarifado, exportável para Excel.</figcaption></figure>
+  </div>
+
+  <h2>O que foi feito por baixo — e por que importa</h2>
+  <p>Parte do trabalho não muda a aparência das telas: é o “motor” que faz as contas e guarda as
+  informações. Quando ele erra, o erro aparece depois, em forma de estoque que não bate ou de material
+  que some. Esta semana, no motor:</p>
+
+  <div class="item">
+    <h3>O material que chega fica com quem estava esperando por ele</h3>
+    <p><span class="rotulo">O problema:</span> alguém pedia um material, a requisição ficava “aguardando
+    compra” por semanas e, quando a nota chegava, ninguém avisava. Pior: uma requisição aprovada no dia
+    seguinte levava o material primeiro, e quem esperava ouvia “Máximo: 0” ao tentar separar. É como a fila
+    do açougue em que quem chega por último é atendido antes.</p>
+    <p><span class="rotulo">O que foi feito:</span> ao processar a nota — ou ao liberar o material na
+    inspeção — o sistema guarda o que chegou para quem esperava, na ordem da fila de separação, e manda um
+    e-mail dizendo quanto ficou guardado para cada um. A requisição muda sozinha para “Reservada”, e volta
+    ao status certo se a reserva for liberada ou vencer. A reserva de uma requisição só sai pela entrega
+    dela, e só pode ser liberada à mão por quem pediu, pelo almoxarife ou pelo administrador. No caminho,
+    dois cliques em “Processar” deixaram de gerar duas contas a pagar, e o item contado zero deixou de
+    entrar no estoque com a quantidade da nota.</p>
+    <p><span class="rotulo">O que isso evita:</span> material esperado há semanas indo para outra obra, e
+    requisição dizendo “reservada” sem ter nada guardado.</p>
+  </div>
+
+  <div class="item">
+    <h3>O pedido de compra se fecha sozinho — e reabre se o lançamento for desfeito</h3>
+    <p><span class="rotulo">O problema:</span> o pedido de compra só saía da lista de atrasados se alguém o
+    marcasse como recebido à mão, um por um. Pedido que recebeu 4 de 10 e parou não avisava ninguém. E a
+    solicitação de compra do almoxarifado era dada como recebida na primeira nota, mesmo de 4 de 10: o
+    sistema então sugeria comprar de novo os 6 que ainda estavam a caminho.</p>
+    <p><span class="rotulo">O que foi feito:</span> quando a última remessa chega, o pedido passa a
+    “Recebido” sozinho, e o nome de quem processou a nota fica registrado. Pedido pela metade gera o aviso
+    “Pedido de compra recebido parcialmente”, dizendo quanto falta. A solicitação só fecha quando o
+    material dela chega, mostrando “chegou 4 de 10” enquanto isso. Se a entrada da nota for desfeita, o
+    pedido e a solicitação reabrem, e a tela diz qual pedido voltou.</p>
+    <p><span class="rotulo">O que isso evita:</span> pedido entregue aparecendo como atrasado, pedido pela
+    metade esquecido e compra em dobro do que já estava vindo.</p>
+  </div>
+
+  <div class="item">
+    <h3>A prateleira que o sistema mostra é a prateleira de verdade</h3>
+    <p><span class="rotulo">O problema:</span> numa entrega de requisição, o sistema baixava o material do
+    total mas deixava a prateleira com o saldo antigo. Entrada de 100 na prateleira A, entrega de 100: o
+    material zerava e a prateleira A continuava “com 100” no Mapa. Também era possível guardar material
+    numa prateleira desativada (que nenhuma tela mostra), apagar uma prateleira ocupada — e o material
+    sumia de todas as telas — ou criar uma prateleira “nova” que, na verdade, trazia de volta uma removida.</p>
+    <p><span class="rotulo">O que foi feito:</span> a saída passou a baixar da prateleira de onde o material
+    sai. Prateleira ocupada não pode ser apagada nem desativada, prateleira desativada não recebe material,
+    e o código proposto para uma prateleira nova nunca repete o de uma removida. As áreas especiais
+    (quarentena, sucata, devoluções, expedição, material de cliente) passaram a avisar o que fazem e o que
+    não fazem.</p>
+    <p><span class="rotulo">O que isso evita:</span> procurar material numa prateleira vazia e achar que
+    está sem espaço onde há espaço.</p>
+  </div>
+
+  <div class="item">
+    <h3>Sucatear o reprovado não leva mais peça boa</h3>
+    <p><span class="rotulo">O problema:</span> chegaram 10 peças, a inspeção reprovou 3. Ao sucatear “as
+    reprovadas” pelo caminho comum, o sistema baixava 3 peças boas e deixava as 3 ruins no galpão. E
+    devolver ou sucatear o mesmo reprovado por dois caminhos diferentes podia tirá-lo duas vezes.</p>
+    <p><span class="rotulo">O que foi feito:</span> o sucateamento que nasce do documento de não
+    conformidade passa pelas mesmas duas aprovações de sempre e baixa só o material bloqueado pela
+    inspeção. Liberar, devolver e sucatear olham a mesma inspeção: o que saiu por um caminho não sai pelo
+    outro.</p>
+    <p><span class="rotulo">O que isso evita:</span> perder material bom e manter material ruim no estoque.</p>
+  </div>
+
+  <div class="item">
+    <h3>Peça com número de série: o sistema sabe qual peça saiu</h3>
+    <p><span class="rotulo">O problema:</span> a entrega e o ajuste de estoque mudavam só o número. Ajustar
+    um material de 3 para 5 peças deixava o estoque em 5 e a lista de peças com 3; a peça entregue
+    continuava marcada “em estoque”, e a próxima entrega podia escolher uma peça que já não estava lá.</p>
+    <p><span class="rotulo">O que foi feito:</span> a entrega e o ajuste pedem quais peças entram ou saem, e
+    há um jeito de acertar as peças que as entregas antigas deixaram erradas. O inventário avisa quais
+    materiais ficaram com as peças diferentes do estoque.</p>
+    <p><span class="rotulo">O que isso evita:</span> rastreio peça a peça que não bate com o que está na
+    prateleira.</p>
+  </div>
+
+  <h2>Para onde foi o tempo</h2>
+  <p>Cerca de <strong>35 horas</strong> de desenvolvimento nesta semana.</p>
+  <div class="barra" role="img" aria-label="Divisão do tempo">
+    <span style="width:3%;background:var(--tela)"></span>
+    <span style="width:19%;background:var(--bastidores)"></span>
+    <span style="width:42%;background:var(--testes)"></span>
+    <span style="width:36%;background:var(--doc)"></span>
+  </div>
+  <div class="legenda">
+    <span><i style="background:var(--tela)"></i>Telas que você usa — 3%</span>
+    <span><i style="background:var(--bastidores)"></i>Motor do sistema — 19%</span>
+    <span><i style="background:var(--testes)"></i>Conferências automáticas — 42%</span>
+    <span><i style="background:var(--doc)"></i>Planejamento e manuais — 36%</span>
+  </div>
+  <h3>Tempo por atividade</h3>
+  <table>
+    <tr><th>Atividade</th><th>Horas</th></tr>
+    <tr><td>Da compra à chegada: pedido que se fecha sozinho e material guardado para quem esperava</td><td>12 h</td></tr>
+    <tr><td>Não Conformidades: documento, decisão, devolução ao fornecedor e sucateamento</td><td>10 h</td></tr>
+    <tr><td>Prateleiras: sugestão, etiqueta, saldo certo por prateleira e áreas especiais</td><td>4 h</td></tr>
+    <tr><td>Separação e entrega: Fila de separação, “Sai de” e peças com número de série</td><td>4 h</td></tr>
+    <tr><td>Motivos de movimentação, prazo da requisição e relatórios novos</td><td>3 h</td></tr>
+    <tr><td>Regras de aprovação</td><td>2 h</td></tr>
+    <tr><th>Total</th><th>35 h</th></tr>
+  </table>
+  <p>Foi uma semana de motor. As telas novas aparecem pouco na conta porque são a parte rápida: desenhar
+  um botão leva minutos, mas decidir o que ele faz com o estoque — e garantir que não faz o que não deve —
+  leva horas. Quase metade do tempo foi nas conferências automáticas: são robôs que repetem centenas de
+  situações a cada mudança (duas pessoas mexendo no mesmo material ao mesmo tempo, a nota processada duas
+  vezes, a entrada desfeita depois da entrega) para que o que já funciona não quebre escondido. Foi assim
+  que apareceram, antes de chegar a quem usa, a peça boa sucateada no lugar da ruim e a prateleira que
+  continuava cheia depois da entrega. O resto foi planejar cada mudança e atualizar os manuais.</p>
+  <p class="nota">As horas são estimadas pelo registro do trabalho salvo ao longo da semana. Pesquisa,
+  conversas e testes feitos à mão não entram — o número real é maior.</p>
+
+  <h2>Quer conferir?</h2>
+  <ol>
+    <li>Abra Almoxarifado → Não Conformidades, marque “Pendentes de execução” e veja a coluna Execução.
+    Numa linha decidida como “Devolver ao fornecedor”, clique em “Registrar execução”.</li>
+    <li>Abra Almoxarifado → Configurações → Regras de Aprovação e crie uma regra para requisição
+    “Urgente”. Depois, em Requisições (almox.), veja o quadro “Requisições aguardando sua aprovação”.</li>
+    <li>Abra Almoxarifado → Fila de separação e veja a ordem das requisições e o que fazer em cada uma. Abra
+    uma e clique em “Entregar escolhendo de onde sai…”.</li>
+    <li>Abra Almoxarifado → Movimentações → Nova movimentação, escolha Entrada e um material: veja as
+    “Sugestões” abaixo do campo de localização.</li>
+    <li>Abra Almoxarifado → Configurações → Localizações e clique em “Etiqueta” numa linha para imprimir o QR
+    da prateleira.</li>
+    <li>Abra Almoxarifado → Relatórios → Estoque → Localizações vazias, e o Dashboard do almoxarifado para ver
+    o cartão “Requisições no prazo”.</li>
+  </ol>
+</main>
+</body>
+</html>
