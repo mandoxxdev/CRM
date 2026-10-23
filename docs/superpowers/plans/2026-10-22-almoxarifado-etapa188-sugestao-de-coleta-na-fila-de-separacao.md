@@ -552,6 +552,15 @@ limite → vermelho.
   cadastro de endereços é o mesmo; (2) a saída avulsa precisa de `justificativa` (`movementRules`: "Saída exige OS, projeto, centro de
   custo ou justificativa") e de `lote` (o plano já dizia); (3) a validade dos lotes é gravada por `UPDATE` (a entrada manual não grava).
 
+### Suítes completas (2026-10-23, sobre `f35321ac`, uma vez cada, em sequência)
+
+- `test:api` **534/534 arquivos OK** (o mais lento `propostaClausulasGrava`, 68,1 s); `test:almoxarifado` **44/0**; `test:validation`
+  **4/0**; `test:safealter` **3/0** (os dois "ALTER falhou" no log são os casos de falha de propósito do próprio teste); `test:sqlite`
+  **16/0**.
+- Client `CI=true npx react-scripts test --watchAll=false`: **182 suítes, 2471 testes, 0 falhas**. `CI=true npx react-scripts build`:
+  **Compiled successfully**.
+- Próximo passo: Fase 5 (revisão adversarial) e o fechamento (`fechar-etapa`) — não feitos nesta sessão.
+
 ## Próxima tarefa detalhada
 
 **Etapa 189 — "Imprimir lista de coleta" e a dica no "Sai de" da janela de separação.**
