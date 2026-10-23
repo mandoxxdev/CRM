@@ -273,6 +273,24 @@ describe('[RN-189.12] o papel cabe na folha', () => {
     expect(tituloR2.pagina).toBe(rectR2.pagina);
     expect(tituloR2.pagina).toBe(ultimaDeR1.pagina + 1); // premissa: R1 terminou perto do pé
   });
+  // Fase 5 da 189 (achado 3, sonda P-d): nenhum teste derrubava tirar o addPage do bloco "Sem endereço sugerido" — os cenários longos
+  // eram de paradas. Uma requisição com 80 itens sem endereço: o bloco cruza páginas e nada passa do pé da folha.
+  test('[Fase 5, P-d] 80 itens sem endereço: o bloco "Sem endereço sugerido" cruza páginas sem passar do pé', () => {
+    const itens = [];
+    for (let k = 1; k <= 80; k += 1) {
+      itens.push(item({ item_id: k, material_codigo: `M-${k}`, a_separar: 3, origem_separacao_codigo: 'A-01',
+        pegar_em_aviso: k % 2 ? 'SEM_ENDERECO_SUGERIVEL' : 'PLANEJADA_INDISPONIVEL' }));
+    }
+    gerarListaColetaPDF({ requisicoes: [req({ itens, ordem_coleta: [] })], nomeArquivo: 'x.pdf' });
+    const t = textos();
+    // premissa: os 80 itens foram desenhados
+    expect(t.filter((e) => /^M-\d+ — /.test(e.t))).toHaveLength(80);
+    // o que se prova (antes da premissa das páginas, para ser ESTA a asserção que cai sem o addPage do bloco)
+    expect(t.filter((e) => e.y > LIMITE + 1e-9).map((e) => `${e.t} y ${e.y.toFixed(1)}`)).toEqual([]);
+    expect(foraDaFolha()).toEqual([]);
+    // premissa: o bloco não coube numa página
+    expect(Math.max(...t.map((e) => e.pagina))).toBeGreaterThanOrEqual(1);
+  });
   test('a produção não chama getTextWidth nem setFont', () => {
     gerarListaColetaPDF({ requisicoes: [R], nomeArquivo: 'x.pdf' });
     expect(mockPdf.filter(([n]) => n === 'getTextWidth' || n === 'setFont')).toEqual([]);
