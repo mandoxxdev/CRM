@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relatório da semana — 11 a 17 de outubro de 2026</title>
+<style>
+  :root { --tinta:#1f2a37; --suave:#5b6675; --linha:#e3e7ec; --fundo:#ffffff; --cartao:#f6f8fa;
+          --tela:#2f80ed; --bastidores:#8a5cf6; --testes:#f2994a; --doc:#9aa5b1; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--fundo); color:var(--tinta); font:16px/1.6 "Segoe UI", system-ui, sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font-size:28px; margin:0 0 4px; } h2 { font-size:21px; margin:40px 0 12px; border-bottom:2px solid var(--linha); padding-bottom:6px; }
+  h3 { font-size:17px; margin:24px 0 6px; }
+  .sub { color:var(--suave); margin:0 0 24px; }
+  .resumo { background:var(--cartao); border-left:4px solid var(--tela); padding:16px 20px; border-radius:6px; font-size:17px; }
+  .item { border:1px solid var(--linha); border-radius:8px; padding:16px 20px; margin:16px 0; }
+  .item p { margin:6px 0; } .rotulo { font-weight:600; color:var(--suave); }
+  figure { margin:12px 0; } figure img { width:100%; border:1px solid var(--linha); border-radius:6px; }
+  figcaption { color:var(--suave); font-size:14px; }
+  .barra { display:flex; height:28px; border-radius:6px; overflow:hidden; margin:12px 0 6px; }
+  .barra span { display:block; }
+  .legenda { display:flex; flex-wrap:wrap; gap:8px 20px; font-size:14px; color:var(--suave); }
+  .legenda i { display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
+  table { border-collapse:collapse; width:100%; font-size:15px; } td, th { border-bottom:1px solid var(--linha); padding:8px; text-align:left; }
+  .nota { font-size:14px; color:var(--suave); }
+  @media print { main { padding:0; } h2, h3 { break-after:avoid; } figure { break-inside:avoid; } figure img { width:auto; max-width:100%; max-height:90mm; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>O que foi feito no sistema nesta semana</h1>
+  <p class="sub">Semana de 11/10 a 17/10/2026 · CRM GMP Industriais</p>
+
+  <p class="resumo">Na tela, o painel do Almoxarifado passou a mostrar quanto tempo um material leva da chegada até
+  entrar no estoque, os cadastros desativados ganharam o botão de reativar, e as telas passaram a mostrar só os botões
+  que funcionam para cada pessoa e cada situação. Por baixo, foi uma semana de motor: desfazer um lançamento não deixa
+  mais o estoque e os números de série sem bater, a entrega de material não baixa o estoque pela metade, um cadastro
+  salvo por uma pessoa não apaga em silêncio o que outra acabou de mudar, e um usuário desativado sai do sistema na hora.
+  Foram cerca de 44 horas de trabalho, divididas entre o desfazer de lançamentos, o cadastro de materiais, os usuários
+  e acessos, a requisição, o recebimento e as propostas.</p>
+
+  <h2>O que você já pode ver na tela</h2>
+
+  <div class="item">
+    <h3>Painel do Almoxarifado: o tempo médio de recebimento</h3>
+    <p><span class="rotulo">Onde:</span> Almoxarifado → Dashboard, na fileira de cartões do alto.</p>
+    <p><span class="rotulo">Antes:</span> o painel mostrava giro do estoque, faltas, atendimento e requisições no
+    prazo, mas nada sobre o recebimento. Não havia como saber se a nota que chega fica um dia ou uma semana parada
+    antes de virar estoque.</p>
+    <p><span class="rotulo">Agora:</span> um cartão novo, “Tempo médio de recebimento”, mostra em horas quanto tempo
+    o material leva da chegada até a entrada no estoque, com a mediana e o período considerado. Sem recebimento
+    concluído no período, o cartão diz “sem recebimentos concluídos no período”, em vez de mostrar um zero enganoso.</p>
+    <figure><img src="prints/painel-tempo-recebimento.png" alt="Dashboard do Almoxarifado com o cartão Tempo médio de recebimento"><figcaption>O cartão novo diz quanto tempo a nota leva para virar estoque. No exemplo, a única nota do período entrou no estoque no mesmo momento em que chegou, por isso o tempo aparece zerado.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Material, família e grupo de fornecedores desativados voltam com um clique</h3>
+    <p><span class="rotulo">Onde:</span> Almoxarifado → Materiais (filtro “Todos status” → “Inativos”); Almoxarifado →
+    Configurações → Famílias; Compras → Fornecedores homologados (“Mostrar grupos desativados”).</p>
+    <p><span class="rotulo">Antes:</span> o que era desativado sumia de todas as telas. Um material inativado por engano
+    não tinha volta pela tela, e o mesmo valia para a família de materiais e para o grupo de fornecedores. O botão
+    “Remover grupo” chegava a dar erro e deixar o grupo na lista.</p>
+    <p><span class="rotulo">Agora:</span> a lista de Materiais tem o filtro “Inativos”, com o selo Inativo e o botão
+    Reativar. A aba Famílias mostra as inativas no fim da lista, com o selo Inativa e o Reativar. Em Fornecedores
+    homologados, os grupos removidos ficam numa seção própria, com Reativar, e os fornecedores continuam ligados a eles.
+    E inativar um material que ainda tem saldo passou a ser recusado, com a mensagem dizendo quanto há e o que fazer
+    antes — senão aquelas peças ficavam presas, sem poder sair.</p>
+    <figure><img src="prints/materiais-inativos.png" alt="Lista de Materiais filtrada por Inativos, com o selo Inativo e o botão Reativar"><figcaption>O material inativado aparece no filtro Inativos e volta pelo Reativar.</figcaption></figure>
+    <figure><img src="prints/familias-inativas.png" alt="Configurações do Almoxarifado, aba Famílias, com uma família marcada Inativa e o botão Reativar"><figcaption>A família inativa aparece no fim da árvore, pronta para reativar.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Aprovação de desconto: só decide quem pode, e não quem pediu</h3>
+    <p><span class="rotulo">Onde:</span> Comercial → Aprovações.</p>
+    <p><span class="rotulo">Antes:</span> os botões Aprovar e Rejeitar apareciam para qualquer um — inclusive para o
+    próprio vendedor que tinha pedido o desconto — e funcionavam.</p>
+    <p><span class="rotulo">Agora:</span> só vê os botões quem tem a permissão de aprovar descontos e não é quem pediu,
+    o responsável ou quem criou a proposta. Para os outros aparece “Aguardando a decisão de quem pode aprovar descontos.
+    Quem pediu e o responsável da proposta não decidem o pedido.” Quando o documento da proposta é recusado por causa
+    do desconto, a tela passou a dizer o motivo, em vez de um “Erro ao gerar PDF” sem explicação.</p>
+    <figure><img src="prints/aprovacoes-desconto.png" style="max-width:420px" alt="Comercial, Aprovações, com o pedido de desconto e a frase Aguardando a decisão de quem pode aprovar descontos"><figcaption>Quem pediu o desconto vê o pedido, mas não decide sobre ele.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Usuário desativado vê “Sessão encerrada” e sai na hora</h3>
+    <p><span class="rotulo">Onde:</span> na tela de entrada do sistema.</p>
+    <p><span class="rotulo">Antes:</span> quem era desativado continuava usando o sistema, e até o chat, por até 24
+    horas, se já estivesse com a tela aberta. E quem errava a senha via a página recarregar com “Sessão expirada”, e a
+    mensagem sumia.</p>
+    <p><span class="rotulo">Agora:</span> na primeira ação depois de desativada, a pessoa volta à tela de entrada com
+    “Sessão encerrada — o seu usuário foi desativado ou removido. Fale com o administrador do sistema.” O chat aberto
+    cai na mesma hora. Senha errada mostra “Email ou senha inválidos”, e a mensagem fica.</p>
+    <figure><img src="prints/login-sessao-encerrada.png" style="max-width:420px" alt="Tela de entrada com o aviso Sessão encerrada"><figcaption>O aviso diz por que a pessoa saiu e com quem falar.</figcaption></figure>
+  </div>
+
+  <h2>O que foi feito por baixo — e por que importa</h2>
+  <p>Parte do trabalho não muda a aparência das telas: é o “motor” que faz as contas e guarda as
+  informações. Quando ele erra, o erro aparece depois, em forma de estoque que não bate ou de
+  material que some. Esta semana, no motor:</p>
+
+  <div class="item">
+    <h3>Desfazer um lançamento não deixa estoque nem números de série trocados</h3>
+    <p><span class="rotulo">O problema:</span> uma saída de 2 peças com número de série é devolvida e, depois, alguém
+    desfaz a saída. O sistema devolvia as 2 peças de novo: estoque 4, com só 2 peças na prateleira. Em outros casos, um
+    desfazer que falhava no meio deixava metade feita — o estoque mudava, mas o registro dizia que nada tinha
+    acontecido, e desfazer de novo mexia no estoque outra vez. E, com duas pessoas mexendo no mesmo material ao mesmo
+    tempo (uma desfazendo, outra dando saída), o estoque podia ficar negativo.</p>
+    <p><span class="rotulo">O que foi feito:</span> o sistema passou a conferir o que já voltou para o estoque, por
+    qualquer caminho, antes de devolver de novo — e diz quanto já voltou e quanto falta. Desfazer um lançamento agora é
+    tudo ou nada: se algo falha no meio, volta tudo como estava. Quem mexe no mesmo material ao mesmo tempo espera a
+    vez. E desfazer um ajuste de material de cliente passou a ser só do Administrador do almoxarifado.</p>
+    <p><span class="rotulo">O que isso evita:</span> estoque “a mais” no sistema que não existe na prateleira, e números
+    de série que dizem “em estoque” para peças que já foram embora.</p>
+  </div>
+
+  <div class="item">
+    <h3>Requisição: a entrega não baixa o estoque pela metade, e o material da caixa não some</h3>
+    <p><span class="rotulo">O problema:</span> uma requisição pede o mesmo material em duas linhas, mas só há 2 peças.
+    O almoxarife confirmava 2 + 2: o sistema entregava a primeira linha, recusava a segunda — e o estoque já tinha
+    baixado. A separação também aceitava quantidade negativa ou texto no lugar do número e respondia “Separação
+    registrada”. A requisição de um material que tinha sido inativado era aprovada e ficava parada para sempre. Uma
+    requisição “Parcialmente Atendida” com material separado na caixa podia ser encerrada, e o material da caixa sumia
+    sem registro; já a “Em Separação” com a caixa vazia ficava presa, sem botão para cancelar nem encerrar. E contar 0
+    numa prateleira que guardava material já separado para uma requisição gravava sem aviso: na hora da entrega, o
+    almoxarife encontrava “Máximo: 0” e não sabia por quê.</p>
+    <p><span class="rotulo">O que foi feito:</span> a entrega confere tudo antes de mexer no estoque; se não dá para
+    entregar tudo, recusa antes e diz o máximo possível. As janelas de separação e de entrega dividem o que há entre
+    as linhas do mesmo material. A separação recusa o que não dá para separar, sem mudar nada. Material inativo não é
+    aprovado, enviado nem separado, e a mensagem diz quem pode reativá-lo. E, se a aprovação falha no meio, nenhum
+    material fica preso à requisição. No detalhe da requisição, cada situação mostra o botão certo: com material na
+    caixa, no lugar do Encerrar aparece a frase que manda entregá-lo ou devolvê-lo à prateleira; com a caixa vazia,
+    aparece Cancelar ou Encerrar. E o ajuste que deixa uma requisição sem material grava e mostra um aviso amarelo,
+    que não some sozinho, dizendo qual requisição foi afetada.</p>
+    <p><span class="rotulo">O que isso evita:</span> estoque que não bate com a prateleira depois de uma entrega
+    recusada, requisição esquecida esperando um material que nunca vai sair, material que some da caixa sem registro e
+    o almoxarife descobrindo o problema só na hora de entregar.</p>
+  </div>
+
+  <div class="item">
+    <h3>Duas pessoas no mesmo cadastro: quem salva por último não apaga o que o outro mudou</h3>
+    <p><span class="rotulo">O problema:</span> a Ana abre o cadastro de um material para corrigir o nome. Enquanto isso,
+    o João muda a unidade de medida e salva. Quando a Ana salvava, a unidade voltava à antiga — sem ninguém perceber. O
+    mesmo acontecia com o custo que acabava de vir da nota, com a família do material e com o controle por lote ou
+    número de série. E ligar o controle por lote num material que já tinha saldo sem lote travava a saída daquelas
+    peças.</p>
+    <p><span class="rotulo">O que foi feito:</span> ao salvar, o sistema compara com o que estava na tela quando o
+    cadastro foi aberto. Se alguém mudou um campo no meio, nada é gravado, e a mensagem diz qual campo mudou e pede para
+    recarregar. Ligar lote ou série num material com saldo sem identificação, trocar o dono de um material de cliente
+    com histórico e cadastrar material já com saldo passaram a pedir a permissão certa. A organização das famílias
+    (principal e subfamília) também deixou de aceitar combinações que não fazem sentido.</p>
+    <p><span class="rotulo">O que isso evita:</span> cadastro que “desfaz sozinho” uma correção feita por outra pessoa,
+    e peças presas no estoque sem poder sair.</p>
+  </div>
+
+  <div class="item">
+    <h3>Usuários: quem foi desativado sai, e a empresa nunca fica sem administrador</h3>
+    <p><span class="rotulo">O problema:</span> um usuário desativado continuava com acesso por até 24 horas, inclusive
+    ao chat. Dois super administradores podiam rebaixar ou excluir um ao outro ao mesmo tempo, e a empresa ficava sem
+    nenhum. E qualquer pessoa logada conseguia ler o cadastro e as permissões de qualquer colega.</p>
+    <p><span class="rotulo">O que foi feito:</span> o desativado perde o acesso na primeira ação e cai do chat na hora.
+    Sempre sobra um super administrador: o segundo pedido é recusado. O cadastro e as permissões de cada pessoa ficam só
+    com ela mesma e com quem cuida dos usuários; nas listas de “responsável”, os outros veem só nome e e-mail. Os campos
+    de sim ou não do cadastro só aceitam sim ou não.</p>
+    <p><span class="rotulo">O que isso evita:</span> ex-colaborador mexendo no sistema depois de desligado, ninguém
+    conseguindo liberar acesso, e dado pessoal circulando para quem não precisa dele.</p>
+  </div>
+
+  <div class="item">
+    <h3>A proposta guardada é a proposta que você vê</h3>
+    <p><span class="rotulo">O problema:</span> salvar uma proposta pela tela apagava informações que tinham vindo da
+    cópia ou da geração automática (projeto, contatos, idioma, moeda). Uma cláusula nova incluída na visualização não
+    aparecia no PDF e sumia na edição seguinte. Ao trocar o cliente, a capa continuava com o contato do cliente anterior.
+    E uma proposta com desconto acima de 5% sem aprovação podia sair como enviada.</p>
+    <p><span class="rotulo">O que foi feito:</span> salvar grava só o que foi mudado. A cláusula nova entra no lugar
+    certo, antes da página de assinatura. Trocar o cliente troca também o contato da capa. E a proposta com desconto
+    acima de 5% só é enviada, e só gera o documento, depois da aprovação de outra pessoa.</p>
+    <p><span class="rotulo">O que isso evita:</span> mandar ao cliente uma proposta com o contato, a cláusula ou o
+    desconto errado.</p>
+  </div>
+
+  <p>Além disso: o recebimento que já deu entrada no estoque não muda mais de quantidade, lote, série ou valor pela
+  conferência ou pela nota (na tela, esses campos ficam em cinza, com o motivo); desfazer uma nota reabre o pedido de
+  compra certo; o Excel de pedidos de compra passou a levar IPI, frete e encargos, e volta com o mesmo total; e as
+  barras de abas de Administração, Minha Conta, Ordens de Serviço e Configurações do Almoxarifado ficaram iguais,
+  rolando de lado no celular.</p>
+
+  <h2>Para onde foi o tempo</h2>
+  <p>Cerca de <strong>44 horas</strong> de desenvolvimento nesta semana.</p>
+  <div class="barra" role="img" aria-label="Divisão do tempo">
+    <span style="width:1%;background:var(--tela)"></span>
+    <span style="width:9%;background:var(--bastidores)"></span>
+    <span style="width:49%;background:var(--testes)"></span>
+    <span style="width:40%;background:var(--doc)"></span>
+  </div>
+  <div class="legenda">
+    <span><i style="background:var(--tela)"></i>Telas que você usa — 1%</span>
+    <span><i style="background:var(--bastidores)"></i>Motor do sistema — 9%</span>
+    <span><i style="background:var(--testes)"></i>Conferências automáticas — 49%</span>
+    <span><i style="background:var(--doc)"></i>Planejamento e manuais — 40%</span>
+  </div>
+  <h3>Tempo por atividade</h3>
+  <table>
+    <tr><th>Atividade</th><th>Horas</th></tr>
+    <tr><td>Desfazer lançamentos e devoluções sem estoque nem séries trocados</td><td>9 h</td></tr>
+    <tr><td>Cadastro de materiais, famílias e grupos de fornecedores</td><td>9 h</td></tr>
+    <tr><td>Usuários, acessos e saída do desativado</td><td>9 h</td></tr>
+    <tr><td>Requisição: separação, entrega e aprovação</td><td>8 h</td></tr>
+    <tr><td>Recebimento, conferência e o tempo de recebimento no painel</td><td>5 h</td></tr>
+    <tr><td>Propostas: salvamento, cláusulas e aprovação de desconto</td><td>4 h</td></tr>
+    <tr><th>Total</th><th>44 h</th></tr>
+  </table>
+  <p>Foi uma semana de motor. As mudanças de tela foram pequenas e rápidas — menos de 1 hora no total —, porque o que
+  estava errado não era a aparência, e sim o que acontece por baixo quando duas pessoas mexem no mesmo material ao
+  mesmo tempo, ou quando algo falha no meio de uma operação. Esses erros quase nunca aparecem num teste feito à mão:
+  só aparecem quando a situação é repetida muitas vezes. Por isso quase metade do tempo foi para as conferências
+  automáticas — robôs que repetem centenas de situações a cada mudança (a devolução no meio de um desfazer, dois
+  administradores excluindo um ao outro, duas abas salvando o mesmo cadastro) para que o que já funciona não quebre
+  escondido. Outros 40% foram para planejar cada correção antes de mexer, revisar o que foi feito e atualizar os
+  manuais.</p>
+  <p class="nota">As horas são estimadas pelo registro do trabalho salvo ao longo da semana. Pesquisa,
+  conversas e testes feitos à mão não entram — o número real é maior.</p>
+
+  <h2>Quer conferir?</h2>
+  <ol>
+    <li>Abra Almoxarifado → Dashboard e veja o cartão “Tempo médio de recebimento”.</li>
+    <li>Abra Almoxarifado → Materiais, escolha “Inativos” no filtro “Todos status” e clique em Reativar num material.</li>
+    <li>Abra Almoxarifado → Configurações → Famílias e desça até o fim: as famílias inativas aparecem com o selo e o
+    Reativar.</li>
+    <li>Abra Compras → Fornecedores homologados e, depois de remover um grupo, clique em “Mostrar grupos desativados”.</li>
+    <li>Abra Comercial → Aprovações com o usuário que pediu um desconto: o pedido aparece com “Aguardando a decisão de
+    quem pode aprovar descontos”.</li>
+  </ol>
+</main>
+</body>
+</html>
