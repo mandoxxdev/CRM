@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Resumo do mês — {{MES_POR_EXTENSO}}</title>
+<style>
+  :root { --tinta:#1f2a37; --suave:#5b6675; --linha:#e3e7ec; --fundo:#ffffff; --cartao:#f6f8fa;
+          --tela:#2f80ed; --bastidores:#8a5cf6; --testes:#f2994a; --doc:#9aa5b1; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--fundo); color:var(--tinta); font:16px/1.6 "Segoe UI", system-ui, sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font-size:28px; margin:0 0 4px; } h2 { font-size:21px; margin:40px 0 12px; border-bottom:2px solid var(--linha); padding-bottom:6px; }
+  h3 { font-size:17px; margin:24px 0 6px; }
+  .sub { color:var(--suave); margin:0 0 24px; }
+  .resumo { background:var(--cartao); border-left:4px solid var(--tela); padding:16px 20px; border-radius:6px; font-size:17px; }
+  .item { border:1px solid var(--linha); border-radius:8px; padding:16px 20px; margin:16px 0; }
+  .item p { margin:6px 0; } .rotulo { font-weight:600; color:var(--suave); }
+  figure { margin:12px 0; } figure img { width:100%; border:1px solid var(--linha); border-radius:6px; }
+  figcaption { color:var(--suave); font-size:14px; }
+  .barra { display:flex; height:28px; border-radius:6px; overflow:hidden; margin:12px 0 6px; }
+  .barra span { display:block; }
+  .legenda { display:flex; flex-wrap:wrap; gap:8px 20px; font-size:14px; color:var(--suave); }
+  .legenda i { display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
+  table { border-collapse:collapse; width:100%; font-size:15px; } td, th { border-bottom:1px solid var(--linha); padding:8px; text-align:left; }
+  .nota { font-size:14px; color:var(--suave); }
+  @media print { main { padding:0; } h2, h3 { break-after:avoid; } figure { break-inside:avoid; } figure img { width:auto; max-width:100%; max-height:90mm; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Resumo do mês — {{MES_POR_EXTENSO}}</h1>
+  <p class="sub">{{DD/MM a DD/MM/AAAA}} · CRM GMP Industriais</p>
+
+  <!-- 4 frases: o que mudou de mais importante na tela, o que melhorou por baixo, horas do mês e
+       onde elas se concentraram. Impessoal ("foi feito"), sem dias da semana, sem promessa. -->
+  <p class="resumo">{{RESUMO_DO_MES}}</p>
+
+  <h2>Horas do mês</h2>
+  <p>Cerca de <strong>{{HORAS_DO_MES}} horas</strong> de desenvolvimento no mês.</p>
+  <!-- Percentuais de horas.js --mes AAAA-MM. -->
+  <div class="barra" role="img" aria-label="Divisão do tempo">
+    <span style="width:{{PCT_TELA}}%;background:var(--tela)"></span>
+    <span style="width:{{PCT_BASTIDORES}}%;background:var(--bastidores)"></span>
+    <span style="width:{{PCT_TESTES}}%;background:var(--testes)"></span>
+    <span style="width:{{PCT_DOC}}%;background:var(--doc)"></span>
+  </div>
+  <div class="legenda">
+    <span><i style="background:var(--tela)"></i>Telas que você usa — {{PCT_TELA}}%</span>
+    <span><i style="background:var(--bastidores)"></i>Motor do sistema — {{PCT_BASTIDORES}}%</span>
+    <span><i style="background:var(--testes)"></i>Conferências automáticas — {{PCT_TESTES}}%</span>
+    <span><i style="background:var(--doc)"></i>Planejamento e manuais — {{PCT_DOC}}%</span>
+  </div>
+
+  <h3>Horas por semana</h3>
+  <!-- Uma linha por semana do mes, contando so os dias dentro do mes (horas.js --desde/--ate
+       recortado no mes). Semana sem relatorio semanal entra igual, com "sem relatorio". Soma = total. -->
+  <table>
+    <tr><th>Semana</th><th>Horas no mês</th></tr>
+    <tr><td>{{DD/MM a DD/MM}}</td><td>{{HORAS}} h</td></tr>
+    <tr><th>Total do mês</th><th>{{HORAS_DO_MES}} h</th></tr>
+  </table>
+
+  <h3>Horas por atividade</h3>
+  <!-- horas.js --mes AAAA-MM --grupos "...", "Outros" zerado ou minimo; hora cheia; soma = total. -->
+  <table>
+    <tr><th>Atividade</th><th>Horas</th></tr>
+    <tr><td>{{ATIVIDADE}}</td><td>{{HORAS}} h</td></tr>
+    <tr><th>Total</th><th>{{HORAS_DO_MES}} h</th></tr>
+  </table>
+  <p>{{POR_QUE_O_TEMPO_FOI_PARA_ONDE_FOI}}</p>
+  <p class="nota">As horas são estimadas pelo registro do trabalho salvo ao longo do mês. Pesquisa,
+  conversas e testes feitos à mão não entram — o número real é maior.</p>
+
+  <h2>O que mudou no mês</h2>
+  <!-- Agrupado por assunto (Compras, Almoxarifado, Comercial, Celular...), no maximo 8 blocos.
+       Cada bloco: 2-4 frases do que o usuario ganhou e um print reaproveitado de um relatorio
+       semanal (src="AAAA-MM-DD_a_AAAA-MM-DD/prints/x.png"). -->
+  <div class="item">
+    <h3>{{ASSUNTO}}</h3>
+    <p>{{O_QUE_MUDOU_NO_ASSUNTO}}</p>
+    <figure><img src="{{PASTA_DA_SEMANA}}/prints/{{ARQUIVO}}.png" alt="{{DESCRICAO}}"><figcaption>{{LEGENDA}}</figcaption></figure>
+  </div>
+
+  <h2>Relatórios das semanas</h2>
+  <!-- Cada relatorio semanal do mes, na pasta ao lado deste resumo. -->
+  <ul>
+    <li>{{DD/MM a DD/MM}} — {{UMA_LINHA_DO_QUE_MARCOU_A_SEMANA}} (pasta <em>{{PASTA_DA_SEMANA}}</em>)</li>
+  </ul>
+</main>
+</body>
+</html>

@@ -2,7 +2,7 @@
 // Estima horas trabalhadas a partir do historico do git e separa o tempo em
 // "tela" (client/), "bastidores" (server/), "testes" e "documentacao".
 //
-// Uso: node .claude/skills/relatorio-semanal/scripts/horas.js [--semana AAAA-MM-DD] [--desde AAAA-MM-DD] [--ate AAAA-MM-DD]
+// Uso: node .claude/skills/relatorio-semanal/scripts/horas.js [--semana AAAA-MM-DD | --mes AAAA-MM] [--desde AAAA-MM-DD] [--ate AAAA-MM-DD]
 //        [--grupos "Rotulo=regex;..."] [--autor texto] [--pausa 90] [--aquecimento 30] [--json]
 //
 // Como estima: commits do mesmo autor com menos de --pausa minutos entre si sao uma
@@ -24,8 +24,13 @@ const diaRef = opt('semana', null);
 const ref = diaRef ? new Date(`${diaRef}T12:00:00`) : new Date();
 const domingo = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() - ref.getDay());
 const sabado = new Date(domingo.getFullYear(), domingo.getMonth(), domingo.getDate() + 6);
-const desde = opt('desde', iso(domingo));
-const ate = opt('ate', iso(sabado));
+// --mes AAAA-MM mede o mes de calendario inteiro (dia 1 ao ultimo), para o resumo do mes.
+const mes = opt('mes', null);
+const [mAno, mMes] = mes ? mes.split('-').map(Number) : [];
+const inicioPadrao = mes ? iso(new Date(mAno, mMes - 1, 1)) : iso(domingo);
+const fimPadrao = mes ? iso(new Date(mAno, mMes, 0)) : iso(sabado);
+const desde = opt('desde', inicioPadrao);
+const ate = opt('ate', fimPadrao);
 const autorFiltro = opt('autor', null);
 const pausaMin = Number(opt('pausa', 90));
 const aquecMin = Number(opt('aquecimento', 30));

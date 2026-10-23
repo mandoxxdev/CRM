@@ -1,6 +1,6 @@
 ---
 name: relatorio-semanal
-description: Use quando o usuário pedir o relatório semanal, o resumo da semana para a empresa, "horas trabalhadas", "quanto tempo gastamos", "o que fizemos esta semana", prints das novidades para mostrar aos usuários, ou quando alguém da empresa achar que o sistema "não mudou" numa semana de trabalho no motor. Use também ao fechar a última etapa da semana ou ao planejar uma etapa que não tem nada visível na tela.
+description: Use quando o usuário pedir o relatório semanal, o resumo da semana ou o resumo do mês para a empresa, "horas do mês", "horas trabalhadas", "quanto tempo gastamos", "o que fizemos esta semana", prints das novidades para mostrar aos usuários, ou quando alguém da empresa achar que o sistema "não mudou" numa semana de trabalho no motor. Use também ao fechar a última etapa da semana ou ao planejar uma etapa que não tem nada visível na tela.
 ---
 
 # Relatório semanal para a empresa
@@ -14,6 +14,36 @@ inclusive o tempo que não aparece na tela.
 
 **Anuncie ao começar:** "Usando a skill `relatorio-semanal` para montar o relatório da semana."
 
+## Onde fica cada coisa — por mês, e dentro do mês por semana
+
+```
+docs/relatorios-semanais/
+  2026-09/                              <- AAAA-MM: um diretório por mês
+    resumo-do-mes.html  resumo-do-mes.pdf   <- o RESUMÃO do mês (obrigatório, ver abaixo)
+    2026-09-13_a_2026-09-19/            <- uma pasta por semana (domingo_a_sábado)
+      relatorio.html  relatorio.pdf  prints/
+    2026-09-27_a_2026-10-03/            <- semana que cruza o mês: fica no mês em que COMEÇA
+  2026-10/
+    ...
+```
+
+- **Semana que cruza dois meses** (27/09 a 03/10) fica na pasta do mês do **domingo** em que
+  começa. Nas horas do **mês**, porém, cada dia conta no mês dele (o resumo usa o calendário).
+- **Resumo do mês — nunca esqueça.** Sempre que fizer um relatório semanal, confira:
+  1. Se o mês **anterior** já acabou e a pasta dele não tem `resumo-do-mes.pdf` → faça o
+     resumo dele **antes** de entregar (é a parte que o André mais usa para cobrar as horas).
+  2. Ao fazer a semana que **fecha** o mês (a que contém o último dia), faça o resumo do mês.
+  3. Mês em andamento pode ter resumo **parcial** quando pedirem: subtítulo "parcial, até DD/MM".
+- **Como fazer o resumo do mês:** modelo `.claude/skills/relatorio-semanal/modelo-resumo-mes.html`,
+  salvo como `docs/relatorios-semanais/AAAA-MM/resumo-do-mes.html` (+ PDF, mesmo comando do passo 7).
+  - Horas do mês: `horas.js --mes AAAA-MM` (dia 1 ao último dia; com `--grupos` para atividades).
+  - Horas por semana: `horas.js --desde X --ate Y` de cada semana **recortada no mês** (a semana
+    que cruza o mês entra só com os dias dele). A soma das linhas = total do mês, em hora cheia.
+  - Semana do mês sem relatório semanal também entra na tabela de horas (o mês é inteiro).
+  - "O que mudou no mês": até 8 blocos por assunto, reaproveitando prints das semanas
+    (`src="AAAA-MM-DD_a_AAAA-MM-DD/prints/x.png"`, caminho relativo à pasta do mês).
+  - Mesmas regras de linguagem (impessoal, sem dias, sem promessa) e `conferir-linguagem.js` com saída 0.
+
 ## Passo a passo
 
 1. **Medir as horas** (nunca invente número):
@@ -21,7 +51,7 @@ inclusive o tempo que não aparece na tela.
    node .claude/skills/relatorio-semanal/scripts/horas.js --semana AAAA-MM-DD
    ```
    **A semana vai de domingo a sábado.** `--semana` recebe qualquer dia e mede o domingo→sábado
-   que o contém (sem argumento: a semana corrente); `--desde`/`--ate` sobrepõem o recorte. Ele separa o tempo em **tela** (`client/`), **bastidores**
+   que o contém (sem argumento: a semana corrente); `--mes AAAA-MM` mede o mês de calendário; `--desde`/`--ate` sobrepõem o recorte. Ele separa o tempo em **tela** (`client/`), **bastidores**
    (`server/`), **testes** e **documentação**, por pessoa e por dia, e lista os assuntos dos
    commits com os minutos de cada um. `--json` para usar os números; `--autor` para uma pessoa só.
    **Horas por atividade:** `--grupos "Celular=celular|PWA;Pedido de compra=Etapa 3[89]|pedido"`
@@ -65,7 +95,7 @@ inclusive o tempo que não aparece na tela.
    abra a tela num `<iframe>` de 390px.
 
 5. **Escrever** a partir de `.claude/skills/relatorio-semanal/modelo.html`, salvando em
-   `docs/relatorios-semanais/<pasta>/relatorio.html`, com **`<pasta>` = `AAAA-MM-DD_a_AAAA-MM-DD`** (domingo e sábado da semana, ex.: `2026-09-13_a_2026-09-19`). No texto, o período é "Semana de DD/MM a DD/MM/AAAA".
+   `docs/relatorios-semanais/<pasta>/relatorio.html`, com **`<pasta>` = `AAAA-MM/AAAA-MM-DD_a_AAAA-MM-DD`** (o mês do domingo, e dentro dele domingo e sábado da semana, ex.: `2026-09/2026-09-13_a_2026-09-19`). No texto, o período é "Semana de DD/MM a DD/MM/AAAA".
    Preencha todos os `{{...}}` e apague os blocos que sobrarem.
 
 6. **Conferir a linguagem** — obrigatório, e só entrega com saída 0:
@@ -79,8 +109,11 @@ inclusive o tempo que não aparece na tela.
    "/c/Program Files/Google/Chrome/Application/chrome.exe" --headless=new --disable-gpu --user-data-dir="<scratchpad>/chrome-pdf" --no-pdf-header-footer --print-to-pdf="<pasta>/relatorio.pdf" "file:///<pasta>/relatorio.html"
    ```
 
-8. **Commitar** só a pasta da semana (arquivos explícitos, nunca `git add -A`) e entregar ao
-   André o caminho do PDF e do HTML.
+8. **Resumo do mês:** confira a regra da seção "Onde fica cada coisa" — mês anterior fechado sem
+   `resumo-do-mes.pdf`, ou semana que fecha o mês → faça o resumo agora.
+
+9. **Commitar** só a pasta da semana (e o resumo do mês, se fez) — arquivos explícitos, nunca
+   `git add -A` — e entregar ao André o caminho dos PDFs.
 
 ## Como escrever cada parte
 
