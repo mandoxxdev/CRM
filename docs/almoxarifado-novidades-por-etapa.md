@@ -11,15 +11,24 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-22):** **Etapa 185 fechada** (**a tabela da ficha de EPI e o termo de ferramenta cabem na folha:
+> **Onde o desenvolvimento está (2026-10-22):** **Etapa 186 fechada** (**o PDF da remessa a terceiros, o da posição do cliente e as etiquetas
+> cabem na folha: nada é cortado** — na remessa (o papel que volta assinado pelo terceiro) e na posição do cliente, cada texto da linha do item
+> era cortado por número de letras: o código de EPI invadia a coluna do material e o nome comprido do material perdia o fim; agora cada célula
+> quebra em linhas, nenhuma letra se perde, o título e as linhas do topo quebram, o cabeçalho da tabela se repete em cada página, a observação
+> da remessa não passa mais por cima da assinatura, a assinatura fica junto da última linha da observação e toda página nova da remessa diz
+> *"Remessa para terceiros — ⟨número⟩ (continuação)"*; quantidades no formato brasileiro (*0,3*, não *0.30000000000000004*) e a unidade
+> *TAMBOR* inteira; na etiqueta, o código comprido encolhe e deixa de escrever por cima do nome; nada a rodar antes do deploy; nada muda no que
+> é gravado nem nas telas; decisões **B1230** a **B1239**; aviso **C448** (o PDF mostra *12,5*, a tela *12.5*); **C445** resolvido; limitações
+> **D (186)**; revisão adversarial feita e corrigida). **Próxima: Etapa 187** — a ferramenta baixada não é calibrada nem editada, e a
+> restrição da manutenção aparece na lista e no Emprestar (ver o plano da 187).
+> *(Também em 2026-10-22: **Etapa 185 fechada** (**a tabela da ficha de EPI e o termo de ferramenta cabem na folha:
 > nada é cortado** — no PDF da ficha de EPI (o papel da NR-6), cada texto da linha da entrega era cortado por número de letras: o nome de quem
 > entregou passava da margem ou saía da folha (*Maria Aparecida dos Santo*, 214 mm numa folha de 210), o EPI comprido invadia o CA e perdia o
 > fim, e *"Primeira entrega"* saía *"Primeira entreg"*; agora cada célula quebra em linhas (a linha da entrega fica mais alta), nenhuma letra
 > se perde e as colunas foram redistribuídas para o comum caber numa linha; o termo de responsabilidade de ferramenta (texto em caixa alta a
 > 210,6 mm) foi corrigido junto; nada a rodar antes do deploy; nada muda no que é gravado nem nas telas; decisões **B1215** a **B1222**;
 > avisos **C445** (a remessa a terceiros ainda corta o nome do material — é a próxima) e **C447** (o termo junta espaços do texto); **C444**
-> resolvido; limitações **D (185)**; revisão adversarial feita e corrigida). **Próxima: Etapa 186** — os PDFs de remessa a terceiros e de
-> posição do cliente cabem na folha (ver o plano da 186).
+> resolvido; limitações **D (185)**; revisão adversarial feita e corrigida); a próxima era a **186**.)*
 > *(Também em 2026-10-22: **Etapa 184 fechada** (**a lista de aprovadores de valor, com nome e e-mail, deixa de ir
 > para todo mundo** — ao abrir Requisições, cada pessoa do almoxarifado recebia do servidor a lista de quem aprova valor com nome e e-mail,
 > mesmo a tela não mostrando; agora recebe só se a liberação por valor está ligada, o limite e *"você é aprovador: sim/não"*; quem configura
@@ -4272,7 +4281,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -12815,7 +12824,10 @@ na remessa e na posição, o código do material invade a coluna Material (64,3 
 mesmo defeito da ficha. **Motivo de ter ficado fora:** escopo — a etapa ficou na ficha e no termo, que têm a régua de página medida da 183; a
 remessa e a posição têm layout e quebra de página próprios, e entram numa etapa curta com o mesmo padrão (**B1222**). A posição do cliente não
 tem assinatura; as etiquetas já medem e cortam o nome em 2 linhas por decisão (espaço físico da etiqueta). Aviso de operação: **C445**.
-**Reversível.**
+**Reversível.** *(**Resolvido na Etapa 186** para a remessa e a posição do cliente — **B1230** a **B1236**, **B1238**. E o motivo dado às
+etiquetas — *"já medem"* — **era meia verdade**: o nome media e cabe em 2 linhas por decisão, mas o **código** comprido quebrava por
+cima do nome a partir de umas 22 letras; corrigido na mesma etapa, **B1237**. Deixado aqui como estava, para quem leu a B1220 conferir o
+que mudou.)*
 
 **B1221 (NOVA, da Etapa 185; decisão do agente) — quantidade com 6 ou mais dígitos quebra em 2 linhas na coluna Qtd (9 mm).** Até 99 999 cabe
 numa linha. **Aceito:** uma entrega de EPI de 100 000 unidades não é plausível. **Descartado:** alargar Qtd tirando do EPI (a coluna que mais
@@ -12825,6 +12837,7 @@ quebra). **Reversível.**
 **C445**: a linha do item corta por número de letras, o código invade a coluna vizinha e o nome do material perde o fim — e a remessa volta
 assinada pelo terceiro. Não depende da empresa. O plano é escrito em paralelo:
 `docs/superpowers/plans/2026-10-22-almoxarifado-etapa186-pdfs-de-remessa-e-posicao-dentro-da-folha.md`.
+*(Feita: a Etapa 186 — B1230 a B1239.)*
 
 *(B1215 a B1222 são da Etapa 185, cujo plano foi escrito em paralelo ao da 184 — por isso a 184 saltou para B1223.)*
 
@@ -12841,6 +12854,82 @@ direito de aprovar é a pergunta da **B1213**/**B196**). **Reversível:** três 
 ferramenta tem o mesmo defeito. Não depende da empresa. O plano já está escrito:
 `docs/superpowers/plans/2026-10-22-almoxarifado-etapa185-tabela-da-ficha-epi-dentro-da-folha.md`.
 *(Feita: a Etapa 185 — B1215 a B1222.)*
+
+*(B1225 a B1229 ficaram livres; a Etapa 186 usa B1230 a B1239 e a 187, B1240 em diante.)*
+
+**B1230 (NOVA, da Etapa 186; decisão do agente) — o PDF da remessa a terceiros e o da posição do cliente QUEBRAM a célula em linhas; nada é
+truncado.** A mesma regra da ficha de EPI (**B1215**): cada célula quebra em quantas linhas precisar e a linha do item fica mais alta. A
+remessa **é** prova — o papel volta assinado pelo terceiro — e a posição é o que o cliente usa para conferir o patrimônio dele. Medido antes:
+o código de EPI de 17 letras (*EPI-MASC-SOLDA-07*) invadia a coluna Material; o de 25 ia a 57,8 mm (a coluna seguinte começava em 44); o nome
+*Eixo usinado em aco SAE 1045 retificado diametro 50 mm comprimento 1200* perdia as últimas **31** letras na remessa e **37** na posição; o
+projeto de 80 letras perdia **20** nas aplicações. **Descartado:** (a) truncar com reticências — papel assinado que esconde parte do nome não
+prova o que saiu; (b) diminuir a fonte do texto até caber — sem limite de tamanho no cadastro, chega a ilegível; (c) paisagem — muda o
+documento inteiro e só adia. **Fora, como candidatos:** o relatório comercial de visitas (corta 40/60 letras dentro de uma tabela que já
+quebra sozinha, não invade) e o PDF da proposta (já mede; revisão própria). **Reversível.** `e0851eea` (remessa), `bc1ca22f` (posição).
+
+**B1231 (NOVA, da Etapa 186; decisão do agente) — a régua de quebra por largura virou uma peça só, compartilhada pelos PDFs.** A remessa e
+a posição usam a mesma conta; a ficha de EPI e o termo de ferramenta passaram a usá-la também (sem mudar o desenho — os testes deles não
+mudaram). **Descartado:** importar a régua de dentro da ficha de EPI — puxaria para a remessa o código da ficha e uma falha na ficha
+derrubaria a remessa. **Reversível.** `225ee70b`, `e8d81538`.
+
+**B1232 (NOVA, da Etapa 186; decisão do agente; emendada na revisão) — colunas redistribuídas, medidas.** Remessa: x = 14, 48, 126, 142,
+166 mm (Código 33 mm úteis, Material 77, Un. 15, Qtde 23, Peso 30). Posição, itens: x = 14, 48, 100, **115, 135, 155, 175** (Código 33,
+Material 51, Un. **14**, Recebido 19, Consumido 19, Devolvido 19, Saldo 21). Aplicações: x = 14, 48, 144 (Código 33, Aplicado em 95,
+Quantidade 52). O Código ganhou a largura de *EPI-MASC-SOLDA-07* (o padrão dos EPIs); o material da remessa cabe numa linha com 46–50
+letras. **Emenda da revisão:** a coluna Un. da posição tinha **11 mm** e partia *TAMBOR* (13,1 mm, unidade do cadastro) em *TAMBO* / *R*;
+passou a 14 mm, tirados das colunas de número — cabem as 16 unidades do cadastro. **Descartado:** manter as colunas e só quebrar — todo
+código de EPI viraria 2 linhas. **Reversível.** `e0851eea`, `bc1ca22f`, `f541130a`.
+
+**B1233 (NOVA, da Etapa 186; decisão do agente) — passo da linha: 5 mm na primeira (o de antes), 4 mm nas de continuação; o item só começa na
+página se a última linha dele fica sob o limite de antes (262 na remessa, 275 nos itens da posição, 280 nas aplicações).** Com textos curtos
+o desenho é idêntico ao de antes. **Descartado:** passo 5 em todas (linha alta demais); partir o item entre páginas (deixa de ser lido de uma
+vez). **Reversível.**
+
+**B1234 (NOVA, da Etapa 186; decisão do agente; reescrita na Fase 2 e na revisão) — o cabeçalho da tabela é repetido em toda página nova, e
+na remessa toda página nova começa dizendo de que remessa ela é.** O plano dizia **não** repetir o cabeçalho (como era); a revisão do plano
+mostrou que, na página 2, *Qtde* e *Peso* ficavam duas colunas de número sem nome num papel assinado — repetido (como na ficha de EPI). A
+revisão do código achou a **assinatura** indo sozinha para uma página sem nada que dissesse de que remessa era; a primeira correção
+identificou só essa página, e a varredura (0 a 70 itens) achou a assinatura também numa página aberta pela tabela, sem o número da remessa
+(44 a 70 itens). **Escolhido:** toda página nova da remessa — da tabela, da observação ou da assinatura — começa com *"Remessa para terceiros
+— ⟨número⟩ (continuação)"*; na tabela, o cabeçalho das colunas vem logo abaixo. **Descartado:** identificar só a página da assinatura (o
+caso acima); puxar a linha do total para junto da assinatura quando não há observação — a assinatura pode ir sozinha para a página nova,
+mas identificada. A posição do cliente (sem assinatura) repete o cabeçalho, sem a linha de identificação. **Reversível.** `e0851eea`,
+`bc1ca22f`, `f541130a`.
+
+**B1235 (NOVA, da Etapa 186; decisão do agente; emendada na revisão) — a observação da remessa avança pela altura real, com quebra de página,
+e a assinatura é medida.** Antes: a observação avançava um espaço fixo — com 7 ou mais linhas o texto passava **por cima da linha de
+assinatura**, e uma observação longa perto do fim saía da folha (até 309 mm). Agora uma linha por vez, virando a página quando precisa. **Da
+revisão:** a assinatura virava a página por um limite fixo (245 mm), sem medir — com 30 itens e 10 linhas de observação ela cabia e ia
+sozinha para a página 2; agora vira só se a linha **e** o rótulo da assinatura não cabem até 287 mm; a **última** linha da observação desce
+junto com a assinatura quando ela não cabe (a assinatura nunca fica sozinha numa página quando há observação); e o rótulo *Observações:* não
+fica mais sozinho no pé da folha (desce com a 1ª linha). **Descartado:** encolher o espaço da assinatura para caber. **Reversível.**
+`e0851eea`, `f541130a`.
+
+**B1236 (NOVA, da Etapa 186; decisão do agente) — o título e as linhas de identificação dos dois PDFs quebram em 182 mm.** Medido: a razão
+social de 69 letras (a maior do banco de hoje) levava o título da posição a **233 mm** (a folha tem 210); o proprietário da remessa passava
+da margem com 72+ letras largas, o fornecedor com 85+. **Reversível.** `e0851eea`, `bc1ca22f`.
+
+**B1237 (NOVA, da Etapa 186; decisão do agente) — etiqueta: o código encolhe (fonte 14 → 13 → 12 → 11 → 10) até caber numa linha; abaixo disso
+quebra e o nome desce. O nome continua em 2 linhas.** Antes, o código comprido quebrava **por cima do nome** a partir de umas 22 letras
+(*MP-ACO-INOX-304-CH-3MM* a 64,7 mm numa etiqueta de 55). Agora: em fonte 11 na A4 (50,8 mm) e 12 na térmica (55,5 mm); 40 letras largas em
+3 linhas de fonte 10, com o nome abaixo. *MAT-7* e *EPI-MASC-SOLDA-07* continuam em fonte 14. **Descartado:** truncar o código (é o que a
+pessoa lê na prateleira); quebrar sempre em fonte 14 (o nome fica espremido). O corte do nome em 2 linhas fica — espaço físico da etiqueta,
+e o QR identifica o material. **Reversível.** `e0bbd9ba`.
+
+**B1238 (NOVA, da Etapa 186; decisão do agente; REESCRITA na revisão) — quantidade no formato brasileiro, e a coluna de número nunca quebra.**
+O plano dizia: *"número com ruído de ponto flutuante quebra em 2 linhas; formatar é outra decisão — fora"*. **Estava errado:** a revisão
+mostrou que *0.30000000000000004* numa coluna de 19 mm saía *0.300000000* / *00000004* — duas linhas de algarismos que se leem como dois
+números, no papel que o cliente confere. **Escolhido:** o formato das telas do módulo que mostram quantidade (Alertas, Não conformidades,
+Reposição, Relatórios): brasileiro, até 4 casas — *0,3*, *99.999,125*, *1.250,75* — nas quantidades, no peso e nos totais dos dois PDFs; e o
+número que não cabe na coluna **encolhe a letra** (de 9 até 6) em vez de quebrar — numa coluna de 19 mm cabe até *9.999.999.999,9999*;
+acima disso quebra, sem perder nada (**D (186)**). **Descartado:** manter o número cru (o caso acima); alargar as colunas de número (não há
+de onde tirar sem apertar o nome do material). A tela de **Materiais de clientes** continua mostrando o número como vem (*12.5*) —
+**C448**. **Reversível.** `f541130a`.
+
+**B1239 (NOVA, da Etapa 186) — a próxima etapa (187): a ferramenta baixada não é calibrada nem editada, e a restrição da manutenção aparece na
+lista e no Emprestar.** Fecha a **D (177)(2)** (a ferramenta *Baixada* ainda aceita calibração e edição pela integração) e a **D (177)(5)**
+(*Em uso com restrição* some depois de gravada). Não depende da empresa. O plano já está escrito e revisado:
+`docs/superpowers/plans/2026-10-22-almoxarifado-etapa187-ferramenta-baixada-e-restricao-da-manutencao.md` (decisões a partir de **B1240**).
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -16463,8 +16552,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      confirmada e aparelho) **não** têm esse problema. **O que fazer:** se a ficha for para auditoria, conferir o nome de quem entregou na
      **tela** da ficha (lá ele sai inteiro); a correção é uma etapa curta (**B1208**).
 
-445. **NOVO (da Etapa 185; o defeito é anterior a ela) — no PDF da remessa a terceiros, o nome comprido do material sai cortado, e o código
-     invade a coluna do material.** A linha de cada item da remessa corta cada texto em 40 letras, sem medir o papel: um nome de material com
+445. **✅ RESOLVIDO NA ETAPA 186 (`e0851eea`, `bc1ca22f`, `f541130a`) — NOVO (da Etapa 185; o defeito é anterior a ela) — no PDF da remessa a
+     terceiros, o nome comprido do material sai cortado, e o código invade a coluna do material.** *(A 186 corrigiu, nos dois PDFs: cada célula
+     quebra em linhas, nada é cortado nem invade a coluna vizinha (**B1230**). Deixado aqui, riscado, para quem lembrar do aviso conferir que
+     fechou.)* A linha de cada item da remessa corta cada texto em 40 letras, sem medir o papel: um nome de material com
      mais de 40 letras perde o fim, e um código de material comprido (uns 26 caracteres) passa por cima da coluna **Material**. E esse papel
      **volta assinado pelo terceiro** — é o que prova o que foi entregue a ele (**B1220**). O PDF de **posição do cliente** tem o mesmo corte
      (34 letras), sem assinatura. **O que fazer:** até a correção (a próxima etapa — **B1222**), ao imprimir uma remessa de material de nome
@@ -16484,6 +16575,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      **não** chega ao mesmo código. **O que fazer:** para conferir se o texto do termo é o assinado, usar **Verificar integridade** no termo
      (o servidor confere sobre o texto guardado — *"Íntegro"* ou *"Adulterado: texto do termo alterado"*), não o papel. Ao escrever o texto
      do termo (**Texto do termo**), evitar recuo com espaços e tabulação.
+448. **NOVO (da Etapa 186) — os PDFs da remessa a terceiros e da posição do cliente mostram as quantidades no formato brasileiro; a tela de
+     Materiais de clientes não.** No papel: *12,5*, *1.250,75*, *0,3* (até 4 casas). Na tela **Materiais de clientes**, as colunas Recebido,
+     Consumido, Devolvido e Saldo continuam mostrando o número como vem do banco: *12.5*, *1250.75* — e uma conta de fração pode aparecer como
+     *0.30000000000000004*. É o **mesmo** número (**B1238**). **O que fazer:** ao conferir o papel com a tela junto do cliente, ler o ponto da
+     tela como vírgula; se aparecer um número com muitas casas na tela, vale o do papel (arredondado em 4 casas).
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -17831,9 +17927,20 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   (`GET /ferramentas/:id/manutencoes`) e na Auditoria (*Fim de manutenção*). Quem empresta não fica sabendo da restrição pela tela.
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(186) Os PDFs da remessa a terceiros, da posição do cliente e as etiquetas dentro da folha, o que ficou de fora.** (1) **Um item mais
+  alto que uma página inteira sai da folha** — a régua manda o item inteiro para a página seguinte, mas não o divide. Medido na revisão: um
+  nome de material de ~**5000** letras deixa 54 linhas abaixo do rodapé na remessa e 135 na posição. É o mesmo limite da **D (183)(5)** e da
+  **D (185)(2)**; o cadastro não tem tamanho máximo, mas não é dado plausível. (2) Número acima de *9.999.999.999,9999* numa coluna de 19 mm
+  (os da posição) quebra em 2 linhas mesmo na letra menor — nada se perde (**B1238**). (3) A posição do cliente (sem assinatura) repete o
+  cabeçalho da tabela na página nova, mas não a linha *"… (continuação)"* com o nome do cliente — só a remessa a leva (**B1234**). (4) Na
+  remessa **sem** observação, a assinatura pode ir sozinha para a página nova — identificada (**B1234**). (5) Na **etiqueta**, o nome do
+  material continua cortado em 2 linhas por decisão (espaço físico; o QR identifica o material) — **B1237**. (6) O texto de encerramento
+  da remessa (a justificativa) quebra em 175 mm como antes, sem régua de página: uma justificativa de milhares de letras passaria do
+  rodapé (uma de 500, plausível, cabe). (7) Fora: o relatório comercial de visitas e o PDF da proposta (**B1230**). (8) A tela de
+  **Materiais de clientes** mostra o número cru (**C448**).
 - **(185) A tabela da ficha de EPI e o termo de ferramenta dentro da folha, o que ficou de fora.** (1) Os PDFs da **remessa a terceiros** e
   da **posição do cliente** continuam cortando por número de letras (**B1220**, **C445**) — são a próxima etapa (**B1222**); as etiquetas
-  já medem. (2) **Uma entrega mais alta que uma página inteira ainda passa do rodapé** — a régua manda a entrega para a página seguinte, mas
+  já medem. *(Resolvido na Etapa 186 — **B1230**; e as etiquetas "já medirem" era meia verdade — **B1237**.)* (2) **Uma entrega mais alta que uma página inteira ainda passa do rodapé** — a régua manda a entrega para a página seguinte, mas
   não a divide. Agora as células também contam: medido na revisão, um *Entregue por* de **1000** letras leva o desenho até **305 mm** (o
   rodapé é 287). (3) **O topo da ficha não tem régua de página:** um colaborador com nome de **3500** letras faz o cabeçalho passar da folha
   (**442 mm**). (2) e (3) só com nomes de centenas ou milhares de letras — o cadastro não tem tamanho máximo, mas não é dado plausível; a
@@ -19055,6 +19162,14 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(186) Nenhum clique foi dado no navegador, e nenhum PDF foi aberto num leitor de PDF.** As posições de cada texto da remessa, da posição do
+cliente e da etiqueta foram **medidas no gerador de PDF real** (o mesmo do navegador): nada passa da coluna seguinte nem da margem, nada
+passa do rodapé, as linhas de cada célula, juntas, são o texto inteiro, e a assinatura da remessa (linha e rótulo) fica até 287 mm numa
+página que diz de que remessa é — numa varredura de 0 a 70 itens com observação de 0 a 16 linhas; pelas três telas, em jsdom, com a remessa e
+a posição **gravadas da rota real**. O que **só o navegador** prova: o roteiro da Etapa 186 no guia — uma remessa de 30 itens com observação
+longa aberta num leitor de PDF (o nome inteiro, a assinatura abaixo da observação, legível e dentro da folha), a posição de um cliente de
+razão social comprida (título em 2 linhas, *TAMBOR* inteiro) e a etiqueta de um material de código comprido impressa na térmica.
 
 **(185) Nenhum clique foi dado no navegador, e nenhum PDF foi aberto num leitor de PDF.** As posições de cada texto da ficha e do termo foram
 **medidas no gerador de PDF real** (o mesmo do navegador): nenhuma célula passa da coluna seguinte nem da margem, nenhum texto em nenhuma
@@ -36051,9 +36166,100 @@ registros"*. No termo, **Verificar integridade** → *"Íntegro"*. Gerar os PDFs
   letras faz o topo da ficha passar da folha (**D (185)**).
 - **Nada a rodar antes do deploy.**
 
+## Etapa 186 — O PDF da remessa a terceiros, o da posição do cliente e as etiquetas cabem na folha: nada é cortado (2026-10-22)
+
+O papel da **remessa a terceiros** acompanha o material que sai do prédio e **volta assinado pelo terceiro** — é o que prova o que foi
+entregue a ele. Até aqui, cada texto da linha do item era cortado por **número de letras**, sem olhar o espaço do papel: o código de um EPI
+(*EPI-MASC-SOLDA-07*) passava por cima da coluna do material, e o nome comprido do material **perdia o fim** — o terceiro assinava um papel
+que não dizia direito o que recebeu. Uma observação de 7 linhas passava **por cima da linha de assinatura**. O PDF de **posição do cliente**
+(o cliente confere o patrimônio dele por ele) tinha o mesmo corte, e o título com a razão social do cliente saía da folha. Agora cada célula
+**quebra em quantas linhas precisar** (a linha do item fica mais alta), **nenhuma letra se perde**, nada invade a coluna vizinha nem passa da
+margem, o cabeçalho da tabela se repete em cada página, e a assinatura da remessa fica **junto** da observação, numa página que diz de que
+remessa é. As quantidades saem no formato brasileiro (*0,3*, não *0.30000000000000004*). Nas **etiquetas**, o código comprido deixa de
+escrever por cima do nome: encolhe até caber. É como trocar a régua que mandava parar na 40ª letra por uma que mede o papel. Nada muda no que
+é gravado nem nas telas: só o desenho dos PDFs. Nada a rodar antes do deploy. Decisões do agente: **B1230** a **B1239**; aviso **C448**; o
+**C445** está resolvido.
+
+### Antes → Agora
+
+Medidas com o gerador de PDF real (A4 de 210 mm, margem direita em 196 mm, rodapé em 287 mm):
+
+| Antes | Agora |
+|---|---|
+| Remessa: o código comprido ia a **133,4 mm** (a coluna Material começa em 44); *EPI-MASC-SOLDA-07* invadia o Material | O código quebra dentro da coluna, até **46,8 mm** (limite 47); *EPI-MASC-SOLDA-07* numa linha só (**B1230**, **B1232**) |
+| Remessa: o nome de 71 letras perdia as últimas **31** (o material mais largo ia a 163,4 mm, por cima da Un.) | **2 linhas**, inteiro, até **124,1 mm** (limite 125) |
+| Posição: o código ia a **115,5 mm** (coluna seguinte em 40); o nome de 71 perdia **37** letras | Código até **46,8**; nome em **3 linhas**, até **98,7** (limite 99) |
+| Posição, aplicações: o projeto de 80 letras ia a **223,1 mm** e perdia **20** | **2 linhas**, inteiro, até **140,5 mm** (limite 143) |
+| Posição: o título com razão social de 69 letras ia a **233 mm** (a folha tem 210) | **2 linhas**, até **192,3 mm** (**B1236**) |
+| Remessa: o proprietário com nome largo ia a **322 mm** | Quebra, até **192,8 mm** (**B1236**) |
+| Remessa: a observação de 7+ linhas passava por cima da linha de assinatura; uma longa perto do fim ia a **309 mm** | Uma linha por vez, com página nova quando precisa; nada passa de 287 (**B1235**) |
+| Remessa: com 30 itens e 10 linhas de observação, a assinatura **cabia** mas ia **sozinha** para a página 2, numa folha sem identificação | Fica na **página 1** (linha em 277, rótulo em 282); se não cabe, a última linha da observação desce junto (**B1235**) |
+| Remessa: a página 2 começava sem dizer de que remessa era | Toda página nova começa com *"Remessa para terceiros — ⟨número⟩ (continuação)"* (**B1234**) |
+| Na página 2 da tabela, as colunas de número (Qtde, Peso; Recebido…Saldo) ficavam sem nome | O cabeçalho da tabela se repete em cada página (**B1234**) |
+| Remessa: o rótulo *Observações:* podia ficar sozinho no pé da folha, com o texto na página seguinte | Desce junto com a 1ª linha (**B1235**) |
+| Posição: a unidade *TAMBOR* saía *TAMBO* / *R* (coluna de 11 mm) | *TAMBOR* inteiro (coluna de 14 mm; cabem as 16 unidades do cadastro) (**B1232**) |
+| Quantidade *0.1 + 0.2* saía *0.300000000* / *00000004* — duas linhas que parecem dois números | *0,3*; *99999.125* sai *99.999,125*; número que não cabe encolhe a letra em vez de quebrar (**B1238**) |
+| Etiqueta: o código *MP-ACO-INOX-304-CH-3MM* (fonte 14, 64,7 mm numa etiqueta de 55) quebrava **por cima do nome** | Fonte 11 na A4 (50,8 mm) e 12 na térmica (55,5 mm), numa linha; 40 letras largas em 3 linhas de fonte 10, com o nome **abaixo** (**B1237**) |
+| Texto curto (código *MAT-7*, nome *Chapa 3mm*, cliente de nome curto) | **Igual** — mesmo lugar, mesma letra; o papel só cresce quando o texto pede |
+
+### As regras, com o cenário exato
+
+Preparação: um usuário **Almoxarife** (ou Administrador do almoxarifado); um fornecedor; um material de **código comprido** e **nome
+comprido** — por exemplo código *EIXO-SAE1045-D50-L1200-RT* e nome *Eixo usinado em aco SAE 1045 retificado diametro 50 mm comprimento
+1200* — com saldo; e mais uns 30 materiais quaisquer com saldo (ou a mesma remessa com 30 linhas).
+
+**1. O nome do material sai inteiro, em linhas, sem invadir a coluna vizinha.** **Almoxarifado → Remessas a terceiros → Nova remessa**:
+o fornecedor, o material de nome comprido e mais uns 29 itens, e em **Observações** um texto de umas 10 linhas. Salve. Na lista, **Abrir** na
+remessa → **PDF da remessa** → baixa *remessa-⟨número⟩.pdf*. Na linha do item, o código quebra em 2 linhas dentro da coluna **Código** e o
+nome em 2 linhas dentro de **Material**; juntas, as linhas são o texto inteiro. Os itens curtos continuam numa linha só.
+
+**2. A assinatura fica junto da observação.** No mesmo PDF, os campos *Responsável GMP* e *Recebido pelo terceiro (nome / data)* ficam
+**abaixo** da última linha da observação, na mesma página, sem passar do pé da folha. Se a observação for mais comprida e a assinatura não
+couber, a **última linha** da observação desce junto com ela para a página seguinte — a assinatura nunca fica sozinha numa folha.
+
+**3. Toda página nova diz de que remessa é.** Numa remessa com uns 45 itens (ou com observação longa), a página 2 começa com *"Remessa para
+terceiros — ⟨número⟩ (continuação)"* e, se a tabela continua, logo abaixo o cabeçalho *Código, Material, Un., Qtde, Peso (kg)*.
+
+**4. A posição do cliente com razão social comprida.** **Almoxarifado → Materiais de Clientes**, em **Selecionar cliente...** escolha um
+cliente de razão social comprida (ex.: *Industria e Comercio de Equipamentos para Saneamento Basicos Ltda EPP*) com material recebido → **PDF**.
+O título *"Posição de materiais — ⟨razão social⟩"* sai em **2 linhas**, dentro da folha. Um material com unidade **TAMBOR** mostra *TAMBOR*
+inteiro na coluna **Un.**; uma quantidade fracionada sai com vírgula (*12,5*).
+
+**5. A etiqueta de código comprido.** **Almoxarifado → Materiais**, no material de código comprido, o botão de etiqueta (*"Imprimir etiqueta
+do material"*) → janela **Imprimir etiquetas** → **Formato** = *Térmica 100×50 mm (1 por página)* → **Gerar** → *"Etiquetas geradas!"*. No
+PDF, o código sai numa linha, em letra um pouco menor, e o nome do material fica **abaixo** dele, sem nada escrito por cima. Um material de
+código curto (*MAT-7*) sai como antes, na letra grande.
+
+**6. Nada mudou no que é gravado.** Gerar os PDFs não grava nada; a remessa, a posição e o material continuam iguais na tela.
+
+### O que esta etapa NÃO cobre
+
+- Um item **mais alto que uma página inteira** (nome de material de milhares de letras) ainda sai da folha — a régua não divide o item
+  (**D (186)**).
+- Número acima de *9.999.999.999,9999* nas colunas de número da posição quebra em 2 linhas, mesmo na letra menor — nada se perde.
+- A tela de **Materiais de clientes** continua mostrando o número como vem (*12.5*); só o papel usa vírgula (**C448**).
+- Na etiqueta, o nome do material continua em **2 linhas** no máximo (decisão de espaço; o QR identifica o material).
+- O relatório comercial de visitas e o PDF da proposta ficaram fora (**B1230**).
+- **Nada a rodar antes do deploy.**
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 186 entregue (2026-10-22):** **o PDF da remessa a terceiros, o da posição do cliente e as etiquetas cabem na folha — nada é
+  cortado.** Nos dois PDFs, cada célula quebra em linhas por largura medida (**B1230**), com as colunas redistribuídas (**B1232**), o passo
+  da linha medido (**B1233**), o cabeçalho repetido em cada página (**B1234**), a observação da remessa avançando pela altura real e a
+  assinatura medida (**B1235**), e o título e as linhas do topo quebrando (**B1236**); na etiqueta, o código encolhe até caber (**B1237**);
+  as quantidades no formato brasileiro (**B1238**); a régua de quebra é uma peça só, que a ficha de EPI e o termo passaram a usar
+  (**B1231**). Medido: código da remessa de 133,4 mm → 46,8; título da posição de 233 → 192,3; o código da etiqueta de 64,7 → 50,8. A revisão
+  adversarial achou a assinatura indo sozinha para uma página sem identificação mesmo cabendo, e nenhum teste que a pusesse perto do fim
+  (corrigidos: a assinatura medida, toda página nova da remessa identificada, cenários novos e uma varredura de 0 a 70 itens, provados por
+  sabotagem), o rótulo *Observações:* órfão, *TAMBOR* partido e o número de ponto flutuante quebrado em dois (corrigidos); registrou o item
+  mais alto que uma página (**D (186)**). Commits `36208ddd`, `3088625f` (plano), `225ee70b` (T1), `e0851eea` (T2), `bc1ca22f` (T3),
+  `e0bbd9ba` (T4), `9ea04c28` (T5), `e8d81538` (T6), `5e36349d`, a revisão adversarial `f541130a`, e o fechamento. **O que é seu:** as
+  decisões **B1230** a **B1238** (reversíveis); o aviso **C448** (o papel com vírgula, a tela com ponto); as limitações **(186)** em D e a
+  verificação **(186)** em F. **Próxima: Etapa 187 — a ferramenta baixada não é calibrada nem editada, e a restrição da manutenção aparece
+  na lista e no Emprestar (B1239); ver o plano da 187.**
 
 - **Etapa 185 entregue (2026-10-22):** **a tabela da ficha de EPI e o termo de ferramenta cabem na folha — nada é cortado.** No PDF da ficha,
   cada célula da linha da entrega quebra em linhas por largura medida (**B1215**, **B1217**), as colunas foram redistribuídas para

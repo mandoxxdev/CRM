@@ -1,7 +1,9 @@
 # Etapa 186 — O PDF da remessa a terceiros e o da posição do cliente cabem na folha: célula quebra em linhas, nada é cortado
 
-> **Status:** 📝 **PLANO (2026-10-22)** — Fase 0 medida e Fase 1 escritas; **Fase 2 feita (0 críticos, 4 importantes, 8 menores — ver "Emendas da Fase 2", prevalecem)**;
-> nenhuma task executada.
+> **Status:** ✅ **FECHADA (2026-10-22): T1 `225ee70b`, T2 `e0851eea`, T3 `bc1ca22f`, T4 `e0bbd9ba`, T5 `9ea04c28`, T6 `e8d81538`, suítes
+> `5e36349d`; Fase 5 (0 críticos, 2 importantes, 4 menores — 5 corrigidos, 1 registrado) `f541130a`; fechamento (skill `fechar-etapa`) no
+> commit seguinte.** Próxima: **Etapa 187** (ver "Próxima tarefa detalhada", no fim). Fase 2 feita (0 críticos, 4 importantes, 8 menores —
+> ver "Emendas da Fase 2", prevalecem). Features **14** (remessa), **13** (posição do cliente) e **10** (etiquetas).
 > Corrige o que a Etapa 185 deixou de fora com motivo (**B1220**, **B1221** e o aviso **C445** do plano da 185 — a remessa **é** prova assinada
 > pelo terceiro, `remessaPdf.js:121`). Decisões desta etapa a partir de **B1230** (a 185 usa B1215–B1222 e a 184 B1223–B1224; B1225–B1229 ficam
 > livres para o fechamento da 185, que está em revisão).
@@ -647,4 +649,123 @@ isso); este plano com a próxima tarefa detalhada.
 - Client: Jest inteiro **182 suítes, 2441 testes, todos verdes**; `CI=true react-scripts build`: **Compiled successfully**.
 - Logs: `e186-log-{api,almoxarifado,validation,safealter,sqlite,jest,build}.txt` no scratchpad.
 
-**Próximo passo:** T7 (Fase 5 — revisão adversarial com sonda — e fechamento pela skill `fechar-etapa`). Não executada nesta rodada.
+## T7 — Fase 5 (revisão adversarial com sonda, 2026-10-22) — 0 críticos, 2 importantes, 4 menores: 5 CORRIGIDOS, 1 REGISTRADO
+
+Revisão fresca com sonda executada sobre `5e36349d`: harness `rev186-harness.js` no scratchpad (os utils transpilados por sucrase, o **jsPDF
+real** envolto num gravador de `text`/`line`/`addImage`/`addPage`), sondas `rev186-s1-remessa.js` (10 casos + varredura de 0–70 itens e de
+1–80 linhas de observação), `rev186-s2-ass.js`, `rev186-s4-pos.js`, `rev186-s5-un.js`, `rev186-s8-tambor.js` e outras (`rev186-*`).
+
+- **I-1 (CORRIGIDO, `f541130a`) — a assinatura da remessa ia sozinha para uma página sem identificação, mesmo cabendo.** `remessaPdf.js:150`
+  virava a página com `y > 245`, sem medir. Sonda `rev186-s2-ass.js 10 30`: 30 itens + 10 linhas de observação terminam em y 255; a
+  assinatura caberia (linha 277, rótulo 282 ≤ 287), mas ia para a página 2 em y 30/35 — uma folha só com as linhas de assinatura, sem dizer
+  de que remessa é, num papel que volta assinado. **Correção:** o bloco da assinatura tem altura medida (12 até a linha + 5 até o rótulo =
+  `ALTURA_ASSINATURA` 17) e vira a página só se `y + 17 > 287`; a **última** linha da observação só fica na página se a assinatura cabe abaixo
+  dela (`LIMITE_ULTIMA_OBSERVACAO = 287 − 17 − 6 − 4 = 260`), senão desce junto; e **toda** página nova da remessa — da tabela, da observação
+  ou da assinatura — começa com *"Remessa para terceiros — ⟨número⟩ (continuação)"* em y 18 (na tabela o cabeçalho das colunas vem logo
+  abaixo, em 26; a 1ª linha de itens em 33, era 25). **Divergência da correção pedida:** o pedido era identificar a página da assinatura; a
+  primeira versão fez só isso e a varredura da sonda achou a assinatura numa página aberta **pela tabela** (cabeçalho de colunas e itens,
+  sem número da remessa) em **44 a 70 itens** — por isso a identificação foi para toda página nova (B1234 reescrita). Sem observação, a
+  assinatura pode ir sozinha para a página nova — identificada (não puxa a linha do total junto; B1234).
+- **I-2 (CORRIGIDO no teste, `f541130a`) — sem o `if` de quebra da assinatura a suíte ficava verde (31/31).** Nenhum cenário punha a
+  assinatura perto do fim. Testes novos em `remessaPdf.test.js` (régua `conferirAssinatura`: a linha **e** o rótulo de cada campo, com a
+  página, contra 287; a página da assinatura identificada — o título de fonte 14 na 1ª, *"… (continuação)"* em 18 nas outras; com
+  observação, a última linha dela na mesma página; o rótulo *Observações:* na página da 1ª linha): **[I-1]** 30 itens + 10 linhas (guarda:
+  a observação termina abaixo de 245; a assinatura fica na página 1, sem `addPage`); **[I-2]** 30 itens + 16 linhas (a última linha desce
+  junto); **[I-2]** 42 itens sem observação (vira, identificada); **[M-a]** 43 itens + 3 linhas (rótulo em 26 da página 2); e a
+  **varredura** 0–70 itens × observação de 0, 1, 3, 10 e 16 linhas (355 PDFs).
+- **M-a (CORRIGIDO, `f541130a`) — *Observações:* órfão no pé da folha.** Com 43 itens o rótulo saía em y 279 da página 1 e o texto na 2.
+  Agora o rótulo só fica se a 1ª linha cabe com ele (`y + 5` contra o limite da 1ª linha).
+- **M-b (CORRIGIDO, `f541130a`) — a coluna Un. da posição (11 mm) partia `TAMBOR` em `TAMBO` / `R`.** `TAMBOR` mede **13,14 mm** em f9 (a maior
+  das 16 unidades do cadastro, `MaterialAlmoxarifadoForm.js:18`; `BALDE` 10,32). Colunas dos itens: x = 14, 48, 100, **115, 135, 155, 175**
+  (útil Un. **14**; Recebido, Consumido e Devolvido **19**; Saldo **21** — os cabeçalhos cabem: *Consumido* 15,94). Material (51) e Código
+  (33) não mudaram. Teste novo `[M-b]` com as 16 unidades. A remessa não tinha o defeito (Un. com 15 mm).
+- **M-c (CORRIGIDO, `f541130a`) — número quebrado em 2 linhas parece dois números.** `0.1 + 0.2` saía `0.30000000000000004` e, na coluna de
+  19 mm, `0.300000000` / `00000004`. **Correção:** `formatarQuantidade` (em `pdfTexto.js`) no formato das telas do módulo que mostram
+  quantidade (`formatNum` de Alertas, Não conformidades, Reposição e Relatórios: `toLocaleString('pt-BR', { maximumFractionDigits: 4 })`) —
+  `0,3`, `99.999,125`; `-0` vira `0` por regex (arredondar antes com `Math.round(n * 1e4)` desviava número grande — a sonda achou
+  `1e21` saindo `…000,1`). Na remessa: Qtde, Peso e o total; na posição: as 4 colunas, a Quantidade das aplicações e o *Saldo total*. E a
+  coluna de número **nunca quebra**: `prepararCelulas` encolhe a fonte de 9 até 6 (`fonteQueCabe`, medindo pelo `splitTextToSize` — sem
+  `getTextWidth`, RN-186.11) e só quebra, sem perder nada, se nem a 6 couber: em 19 mm cabe até **9.999.999.999,9999** (f6 18,7 mm); a sonda
+  `rev186-s4-pos.js` mostra `123.456.789.012,123` ainda em 2 linhas (D (186)). Testes novos `[M-c]` na remessa e na posição, e 3 em
+  `pdfTexto.test.js`. **Era a B1238 ("fora")** — reescrita.
+- **M-d (REGISTRADO, D (186)) — célula mais alta que uma página sai da folha.** Material de ~5000 letras (sonda `nome-5000`): 54 textos abaixo
+  de 287 na remessa, 135 na posição. A régua manda o item inteiro para a página seguinte, mas não o divide — o mesmo limite da D (183)(5) e
+  da D (185)(2). Não é dado plausível.
+
+**Controles (fix-round sequencial na main; `fix186-sab.sh`: `perl` com âncora contada = 1, md5 antes/sabotado/restaurado, restauro por cópia
+no scratchpad, logs `fix186-sab-<id>.log`; todos voltaram ao md5 pós-conserto):**
+
+| Id | Sabotagem | Caiu | Asserção que caiu |
+|---|---|---|---|
+| r1 | tirar `if (y + ALTURA_ASSINATURA > FUNDO) paginaDeContinuacao()` | [I-2] 42 itens + varredura (31/33) | *"Responsável GMP em y 291 > 287"*; na varredura, 42/43 itens sem observação (rótulo e `line` em 291) |
+| r2 | voltar `if (y > 245) { addPage; y = 18 }` | [I-1], [I-2] 42 itens, varredura (30/33) | *"assinatura na pagina 1 sem identificacao"* e *"assinatura sozinha: ultima linha da observacao na pagina 0, assinatura na 1"* |
+| r3 | última linha da observação com o limite comum (280) | [I-2] 16 linhas + varredura (31/33) | *"assinatura sozinha: …"* (27–30 itens com 16 linhas; 32 itens com 10) |
+| r4 | tirar a checagem do rótulo | [M-a] + varredura (31/33) | *"Observações: na pagina 0, 1a linha na 1"* (39–43 itens com 1 linha) |
+| r5 | página nova sem identificação (`y = 18`) | 5 (28/33): varredura, os dois [I-2], [M-a], RN-186.04 (c) | as continuações `[[1, 18], [2, 18], …]` esperadas, nenhuma gravada; *"sem identificacao"* |
+| r6 | `num` cru na remessa | [M-c], RN-186.03, RN-186.09 (30/33) | `['0,3', 9]` ≠ `['0.30000000000000004', 6]`; `99.999,125` ≠ `99999.125`; `0.3000…` fim 174,3 > 165 |
+| r7 | `NUMERICAS = []` na remessa | **só** [M-c] (32/33) | o número enorme em 2 `text`: `9.999.999.999,9` / `999` |
+| p1 | colunas antigas da posição | [M-b] e mais 7 (contrato de x) | `TAMBOR` ≠ `TAMBO`, `R` |
+| p2 | `num` cru na posição | os dois [M-c] e RN-186.06 (23/26) | `0,3` ≠ `0.300000000` (a quebra em 2 linhas) |
+| p3 | `NUMERICAS_ITENS = []` | **só** [M-c] enorme (25/26) | `9.999.999.99` + o resto em outra linha |
+| p4 | `desenharCelulasComFonte` sem voltar a fonte | **só** [M-c] enorme (25/26) | a metade positiva: o item seguinte com fonte ≠ 9 nas 7 células |
+| x1b | sem normalizar o `-0` | `formatarQuantidade` e [M-c] 0,3 da posição | `"0"` ≠ `"-0"` |
+| x2 | `fonteQueCabe` de baixo para cima (a menor que cabe) | **na 1ª rodada não caiu** — o caso testado só cabia em f6 (a maior = a menor); acrescentado `999.999.999,9999` em 20 mm (cabe em f7 e f6) | `Expected 7, Received 6` |
+
+**Sondas da revisão rodadas de novo sobre o código corrigido** (transpilado em `fix186-src`; cópias `fix186-s*.js` com o caminho trocado):
+`fix186-s1-remessa.js` (ajustada: a linha *"(continuação)"* não conta como invasão nem entra na junção da observação; checagens novas de
+página sem identificação e de assinatura além de 287) — 10 casos + 151 varreduras: **0** assinatura sem identificação, **0** além de 287,
+**0** rótulo órfão, **0** texto perdido; o único *fora* é `nome-5000` (M-d). `fix186-s2-ass.js 10 30`: assinatura na **página 1**, `line` em
+277, rótulo em 282. `fix186-s4-pos.js` (colunas novas): nada fora salvo `nome5000`; `0.1 + 0.2` → `0,3`; `-0.000001` → `0`.
+`fix186-s8-tambor.js`: `TAMBOR` inteiro, fim **113,1** (coluna seguinte em 115).
+
+Suítes do fix-round (antes do commit): `remessaPdf` **33/33** (+6), `posicaoClientePdf` + tela **26/26** (+3), `pdfTexto` **12/12** (+3); o
+conjunto `src/utils/` + telas de remessa, materiais de cliente, EPI, ferramentas e `datasDoChat…`: **35 suítes, 489 testes**, verdes.
+
+## Verificação final (2026-10-22, uma suíte por vez, depois do fix-round e dos documentos)
+
+Sobre `f541130a` (código e testes do fix-round) + os documentos do fechamento; exit 0 em todas (logs `fix186-log-*.txt` no scratchpad):
+
+- `test:api` **528/528** arquivos OK (mais lento: `propostaSalvarGrava.api.test.js`, 68,6 s).
+- `test:almoxarifado` **44 passou, 0 falhou**.
+- `test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0**.
+- client **182 suítes / 2453 testes**, todos passando (eram 2441 em `5e36349d`: +12 do fix-round — 6 na remessa, 3 na posição, 3 no
+  `pdfTexto`).
+- `CI=true react-scripts build`: *Compiled successfully*.
+- `git status`: só os arquivos do fechamento antes do commit.
+
+## Retrospectiva
+
+1. **2 de 6 achados eram a mesma régua que faltava** (a assinatura nunca foi medida, I-1, e por isso nenhum teste a punha perto do fim,
+   I-2): o plano mediu a observação (B1235) e herdou o `y > 245` da assinatura sem perguntar se ele ainda servia com linhas mais altas.
+   Limiar fixo herdado é o primeiro lugar a medir quando o desenho muda.
+2. **1 correção pedida estava incompleta e a varredura mostrou:** identificar só a página da assinatura deixava a assinatura numa página da
+   tabela sem número da remessa (44–70 itens). Corrigir para o caso da sonda e rodar a varredura de novo — não só o caso — achou o resto.
+3. **1 controle não caiu de primeira** (x2): o caso do teste tinha uma fonte só que cabia, então "a maior" e "a menor" davam o mesmo número.
+   Teste de "a maior que X" precisa de um caso em que duas cabem.
+4. **0 regressões** fora das que a etapa decidiu: os testes que mudaram foram os do contrato (colunas da posição, números em pt-BR, página
+   nova da remessa a partir de 33) — cada mudança registrada aqui e na letra B.
+
+## Próxima tarefa detalhada — Etapa 187: a ferramenta baixada não é calibrada nem editada, e a restrição da manutenção aparece (feature 16)
+
+**O plano já existe e passou pela Fase 2 (outra sessão):**
+`docs/superpowers/plans/2026-10-22-almoxarifado-etapa187-ferramenta-baixada-e-restricao-da-manutencao.md`. **O plano da 187 prevalece** sobre
+este resumo. Fecha **D (177)(2)** (a ferramenta *Baixada* ainda aceita calibração e edição pela integração) e **D (177)(5)** (a restrição
+*Em uso com restrição* some depois de gravada). Decisões a partir de **B1240** (a 186 usa B1230–B1239).
+
+**Contrato que ela consome / muda:** `PUT /api/almoxarifado/ferramentas/:id` e `POST /api/almoxarifado/ferramentas/:id/calibracoes` ganham
+um **400** novo, depois do 404 e antes do 409 / da data: *"Ferramenta baixada não pode ser editada (⟨nome⟩)"* / *"… calibrada (⟨nome⟩)"*
+(molde `inspectionService.js:121-124`); `GET /api/almoxarifado/ferramentas` ganha `restricao: null | { manutencao_id, observacoes, data_fim }`
+(a última manutenção concluída que **declarou** condição decide; montado por lista branca para quem não gerencia — Etapa 181 não regride).
+Tela: selo **"Em uso com restrição"** + *"Restrição: ⟨observações⟩"* na lista; aviso no **Emprestar**, **sem bloquear**; a baixada perde o
+**Editar**.
+
+**Pontos de atenção:**
+- A guarda vai **na gravação** (`UPDATE … AND status <> 'BAIXADA'`, `INSERT … SELECT … WHERE EXISTS`), não só na leitura (RN-187.04).
+- A RN-175.01 (*Editar em qualquer status*), o teste da 177 (`FerramentasAlmoxarifado.test.js:825`) e o guia (`:7362`) **afirmam** Editar na
+  baixada — o fechamento da 187 corrige dizendo que mudou (regra 5 do CLAUDE.md).
+- O histórico da ferramenta (`/manutencoes`, `/calibracoes`, `/ocorrencias`) é aberto a todo o módulo — achado da Fase 0 da 187, fica em
+  D (187); pesa na decisão de mostrar a restrição a todos.
+- `emprestarFerramenta` (`toolService.js:73`) não é a porta do empréstimo desde a 180 — a rota usa `termoFerramentaService.emprestarComTermo`.
+
+**O que já está pronto e ela não reabre:** os PDFs da remessa, da posição e a etiqueta (186, inclusive o fix-round); a ficha de EPI e o termo
+(185); o termo de ferramenta não muda de desenho na 187.

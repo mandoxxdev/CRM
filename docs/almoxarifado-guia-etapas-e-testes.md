@@ -1,18 +1,27 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-22 (Etapas 172 a 185) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-22 (Etapas 172 a 186) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184 e 185) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185 e 186) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172 a 178 e 180 a 185 ENTREGUES · próxima: Etapa 186)
+> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172 a 178 e 180 a 186 ENTREGUES · próxima: Etapa 187)
 >
-> **O desenvolvimento parou aqui: Etapa 185 fechada — 2026-10-22.** **A tabela da ficha de EPI e o termo de ferramenta cabem na folha**:
+> **O desenvolvimento parou aqui: Etapa 186 fechada — 2026-10-22.** **Os PDFs da remessa a terceiros e da posição do cliente cabem na
+> folha**: no **PDF da remessa** (**Almoxarifado → Remessas a Terceiros → Abrir → PDF da remessa**) e no **PDF da posição** (**Materiais de
+> Clientes**), cada texto da tabela quebra em linhas dentro da coluna — o nome comprido do material sai inteiro, o código não invade a coluna
+> vizinha, o título com a razão social quebra, *TAMBOR* sai inteiro e as quantidades saem no formato brasileiro (*0,3*). Na remessa, a
+> assinatura fica abaixo da observação e nunca sozinha numa folha, e toda página nova diz *"Remessa para terceiros — ⟨número⟩ (continuação)"*.
+> Na etiqueta, o código comprido diminui a letra e não escreve mais por cima do nome. Nada muda no que é gravado nem nas telas; nada a rodar
+> antes do deploy. O aviso **C445** (a remessa cortava o nome do material) está resolvido. **Próxima: Etapa 187** — a ferramenta baixada não é
+> calibrada nem editada, e a restrição da manutenção aparece na lista e no Emprestar (ver o plano da 187).
+>
+> **Etapa 185, 2026-10-22.** **A tabela da ficha de EPI e o termo de ferramenta cabem na folha**:
 > no PDF da ficha (**Almoxarifado → Entrega de EPI → Ficha por colaborador → Gerar PDF**), cada texto da linha da entrega quebra em linhas
 > dentro da coluna — o nome de quem entregou não sai mais pela borda, o EPI comprido não invade o CA e *Primeira entrega* sai inteiro (antes,
 > *Primeira entreg*); a linha fica mais alta só quando precisa. O PDF do termo de ferramenta quebra o texto pela largura do papel. Nada muda
-> no que é gravado nem nas telas; nada a rodar antes do deploy. A remessa a terceiros ainda corta o nome do material (**C445**). **Próxima:
-> Etapa 186** — os PDFs de remessa a terceiros e de posição do cliente cabem na folha (ver o plano da 186).
+> no que é gravado nem nas telas; nada a rodar antes do deploy. A remessa a terceiros ainda cortava o nome do material (**C445**). **Próxima:
+> Etapa 186** — os PDFs de remessa a terceiros e de posição do cliente cabem na folha (ver o plano da 186). *(Feita: a 186.)*
 >
 > **Etapa 184, 2026-10-22.** **A lista de aprovadores de valor, com nome e e-mail, deixa de ir para
 > todo mundo**: ao abrir **Almoxarifado → Requisições**, quem não configura o almoxarifado recebe do servidor só se a liberação por valor está
@@ -6924,6 +6933,73 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 186 — Os PDFs da remessa a terceiros e da posição do cliente cabem na folha (ENTREGUE — 2026-10-22)
+
+**O que mudou, em uma frase:** no PDF da remessa a terceiros e no da posição do cliente, texto comprido quebra em linhas dentro da coluna —
+nenhum nome de material é cortado e nenhum código invade a coluna vizinha; a assinatura da remessa fica no lugar certo; e, na etiqueta, o
+código comprido não escreve mais por cima do nome.
+
+**O problema que ela resolve.** O papel da **remessa a terceiros** acompanha o material que sai do prédio e **volta assinado pelo terceiro** —
+é o que prova o que foi entregue. Cada célula da tabela era cortada em 40 letras, sem olhar o papel: o nome *Eixo usinado em aco SAE 1045
+retificado diametro 50 mm comprimento 1200* saía sem as últimas 31 letras, e um código de EPI de 17 letras ficava por cima da coluna
+**Material**. O terceiro assinava um papel que não dizia o que recebeu. O PDF de **posição do cliente** (o cliente confere o patrimônio dele)
+tinha o mesmo corte, e o título com a razão social passava da borda. É como preencher uma nota à mão com uma régua que manda parar na 40ª
+letra, caiba ou não.
+
+| Antes | Agora |
+|---|---|
+| Remessa: nome do material cortado em 40 letras | O nome inteiro, em quantas linhas precisar; a linha do item fica mais alta |
+| Código de 17 a 25 letras por cima da coluna Material (até 57,8 mm; a coluna começa em 48) | Cabe na coluna (até 46,8 mm) ou quebra dentro dela |
+| Observação de 7+ linhas passava por cima da linha de assinatura; uma longa no fim da folha saía do papel | A observação desce linha a linha e vira a página se precisar; a assinatura vem abaixo dela |
+| A assinatura ia sozinha para uma página nova mesmo cabendo (bastava a observação terminar abaixo de 245 mm) | Fica na mesma página quando cabe; quando não cabe, a última linha da observação desce junto |
+| Página 2 da remessa sem nada que dissesse de que remessa era | Toda página nova começa com *"Remessa para terceiros — ⟨número⟩ (continuação)"* |
+| *Observações:* podia ficar sozinho no pé da folha, com o texto na página seguinte | O rótulo desce junto com a 1ª linha |
+| Posição: título com razão social comprida passava da borda (233 mm numa folha de 210) | Quebra em 2 linhas dentro da folha |
+| Posição: unidade *TAMBOR* saía partida (*TAMBO* / *R*) | *TAMBOR* inteiro |
+| Quantidade *0.30000000000000004*, quebrada em duas linhas que pareciam dois números | *0,3* — formato brasileiro, até 4 casas (*99.999,125*); número muito grande diminui a letra em vez de quebrar |
+| Etiqueta: código de 22+ letras escrevia a 2ª linha por cima do nome | O código diminui a letra até caber numa linha; se nem assim cabe, quebra e o nome desce |
+
+**Antes de testar (uma vez).** Um usuário **Almoxarife** (ou Administrador do almoxarifado). Um material com **nome comprido** — por exemplo
+*Eixo usinado em aco SAE 1045 retificado diametro 50 mm comprimento 1200* — e com saldo de pelo menos 30. Para a posição: um cliente com
+**razão social comprida** em **Comercial → Clientes** (por exemplo *Industria e Comercio de Equipamentos para Saneamento Basicos Ltda EPP*), um
+material de cliente (**Proprietário** = esse cliente) com **Unidade** = *TAMBOR*, e uma entrada desse material. Para a etiqueta: um material
+**sem** controle de lote nem de série com **código comprido** — por exemplo *MP-ACO-INOX-304-CH-3MM*.
+
+**Roteiro de teste (15 minutos).**
+
+1. **Remessa com 30 itens e observação longa.** **Almoxarifado → Remessas a Terceiros → Nova remessa**: **Nome do terceiro**, em
+   **Observações** um texto de umas 10 linhas (por exemplo, repita *"Material embalado em caixa de madeira lacrada, conferir lacre na
+   chegada."* dez vezes); **Material** = o de nome comprido, **Quantidade do item** = 1, **Adicionar item** — repita até ter **30 itens** (o
+   mesmo material pode entrar várias vezes). **Criar remessa**.
+2. **Gerar o PDF.** Na linha da remessa clique **Abrir** e, com ela aberta, clique **PDF da remessa** → baixa *remessa-⟨número⟩.pdf*. Abra.
+3. **O nome inteiro.** Em cada item, a coluna **Material** mostra o nome inteiro em 2 linhas, antes da coluna **Un.**; a coluna **Código** não
+   passa por cima de **Material**. As colunas **Qtde** e **Peso (kg)** mostram os números no formato brasileiro (*1*; peso *1.250,75* se você
+   informou).
+4. **Fim da tabela.** Quando os itens passam do fim da página 1, a página 2 começa com *"Remessa para terceiros — ⟨número⟩ (continuação)"* e,
+   logo abaixo, o cabeçalho da tabela (*Código, Material, Un., Qtde, Peso (kg)*) de novo.
+5. **A assinatura.** Depois da observação vêm as duas linhas de assinatura (*Responsável GMP* e *Recebido pelo terceiro (nome / data)*),
+   **abaixo** da última linha da observação e **na mesma página** dela — nunca sozinhas numa folha. Se a observação chega perto do pé da
+   folha e a assinatura não cabe, a última linha da observação desce junto para a página seguinte, que começa com *"… (continuação)"*. E o
+   rótulo *Observações:* nunca fica sozinho no pé da página.
+6. **Posição do cliente.** **Almoxarifado → Materiais de Clientes**, em **Selecionar cliente...** escolha o cliente de razão social
+   comprida, **PDF da posição** → baixa *posicao-⟨cliente⟩.pdf*. O título *"Posição de materiais — ⟨razão social⟩"* vem em 2 linhas dentro da
+   folha; a coluna **Un.** mostra *TAMBOR* inteiro; Recebido, Consumido, Devolvido e Saldo no formato brasileiro (*12,5*, não *12.5*) — se
+   você deu duas entradas de *0,1* e *0,2*, o Recebido sai *0,3*, numa linha só.
+7. **Etiqueta.** **Almoxarifado → Materiais**, na linha do material de código comprido, o ícone **Imprimir etiqueta do material** → modal
+   **Imprimir etiquetas**, **Formato** *Folha A4 (10 etiquetas por página)* → **Gerar**. Na etiqueta, o código aparece em letra um pouco
+   menor, numa linha só, e o nome do material vem **abaixo** dele, sem nada escrito por cima. Repita com *Térmica 100×50 mm (1 por página)*.
+   Um material de código curto (*MAT-7*) continua com o código no tamanho de sempre.
+
+**O que esta etapa não cobre.** Uma célula **mais alta que uma página inteira** (um nome de material de uns 5 000 caracteres) ainda passa do
+rodapé — o item vai para a página seguinte, mas não é dividido (**D (186)**). O nome do material na **etiqueta** continua em no máximo
+**2 linhas** (espaço físico; o QR identifica o material). Um número acima de *9.999.999.999,9999* numa coluna estreita da posição quebra em 2
+linhas (sem perder nada). A tela **Materiais de Clientes** continua mostrando o número como vem do sistema (*12.5*); só o PDF mostra *12,5*. Os
+relatórios comerciais e a proposta não foram tocados. **Nada a rodar antes do deploy.**
+
+*Nenhum clique no navegador foi dado nesta etapa, e nenhum PDF foi aberto num leitor*: o roteiro acima é o que os testes automáticos provam
+medindo cada texto no gerador de PDF real (o mesmo do navegador), pela função, pelas telas (com a resposta gravada da rota real) e por uma
+varredura de 0 a 70 itens com observação de 0 a 16 linhas — escrito para você conferir à mão.
+
 ## Etapa 185 — A tabela da ficha de EPI e o termo de ferramenta cabem na folha (ENTREGUE — 2026-10-22)
 
 **O que mudou, em uma frase:** no PDF da ficha de EPI e no do termo de ferramenta, texto comprido quebra em linhas dentro da folha — nenhum
@@ -6973,7 +7049,7 @@ disponível.
    os PDFs não grava nada.
 
 **O que esta etapa não cobre.** Os PDFs da **remessa a terceiros** e da **posição do cliente** ainda cortam o nome do material por número de
-letras — são a **próxima etapa** (**B1220**, **C445**: até lá, confira os itens da remessa na tela). O termo de ferramenta junta espaços
+letras — são a **próxima etapa** (**B1220**, **C445**: até lá, confira os itens da remessa na tela). *(Resolvido na Etapa 186.)* O termo de ferramenta junta espaços
 repetidos, recuo e tabulação do texto ao imprimir (nenhuma letra some — **C447**). Uma entrega com um nome de **mil** letras ainda passaria do
 fim da página (**D (185)**). **Nada a rodar antes do deploy.**
 

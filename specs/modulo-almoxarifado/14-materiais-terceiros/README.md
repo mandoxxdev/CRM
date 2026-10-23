@@ -1,5 +1,7 @@
 # 14 — Materiais Enviados a Terceiros
 
+> **+ Etapa 186 (2026-10-22, T1 `225ee70b`, T2 `e0851eea`, T5 `9ea04c28`, Fase 5 `f541130a`): o PDF da remessa cabe na folha — cada célula quebra em linhas, nada é cortado; a assinatura cabe e nunca fica sozinha nem numa página sem identificação; quantidades em formato brasileiro (B1230, B1232–B1235, B1238; resolve a C445 e a B1220 da 185)** — ver a seção "Etapa 186", no fim. O status não muda.
+
 > **+ Etapa 170 (2026-10-20, `3fb6aa0e`): o *Gerado em* do documento de remessa no dia de quem gera, e a data dos anexos do item (B1081, B1082)** — ver a seção "Etapa 170", no fim. O status não muda.
 
 > **+ Etapa 163 (2026-10-20, `6502c690`, Fase 5 `407ddfcc`): a remessa vencida pelo dia de Brasília (o selo, o filtro, a /vencidas e o aviso — C406, B1043)** — ver a seção "Etapa 163", no fim. O status não muda.
@@ -543,3 +545,28 @@ Só exibição — nenhuma rota, consulta, valor gravado ou porta de saldo mudou
 - [x] O *Gerado em* do documento de remessa no dia do computador de quem gera (antes o dia UTC); o *Prazo previsto* (coluna `DATE`) no
   dia gravado, inalterado. `3fb6aa0e`; do clique ao papel em `9353c1d5`; a prova com um instante longe de hoje em `26557862` (Fase 5 r3).
 - [x] A data dos anexos do item (o componente de anexos) no dia de Brasília — ver a spec 08. `3fb6aa0e`.
+
+## Etapa 186 — o PDF da remessa cabe na folha (2026-10-22)
+
+Só desenho do PDF — nenhuma rota, consulta, valor gravado ou porta de saldo mudou. Plano:
+`docs/superpowers/plans/2026-10-22-almoxarifado-etapa186-pdfs-de-remessa-e-posicao-dentro-da-folha.md` (`36208ddd`, emendas `3088625f`).
+
+- [x] **Cada célula quebra em linhas, nada é cortado** (`client/src/utils/remessaPdf.js`): antes cada texto era cortado em 40 letras numa
+  linha só, sem medir — o código de EPI de 17 letras invadia a coluna Material e o nome de 71 letras perdia as últimas 31. Agora a quebra é
+  por largura medida (`pdfTexto.js`, sem imports — **B1231**), colunas `x = 14, 48, 126, 142, 166` (eram 14, 44, 124, 140, 166 — **B1232**),
+  passo 5 mm na 1ª linha e 4 nas de continuação, o item só começa na página se a última linha dele fica até 262 (**B1233**) e o cabeçalho da
+  tabela é repetido em toda página nova (emenda I4, **B1234**). Observação com altura real e virada de página (antes `y += 10` fixo: 7+
+  linhas cruzavam a assinatura — **B1235**); título, subtítulo e proprietário quebram em 182 mm (**B1236**). Helper `225ee70b`; remessa
+  `e0851eea`; pela tela com a fixture gravada da rota real `9ea04c28`.
+- [x] **A assinatura cabe e nunca fica sozinha nem numa página sem identificação** (fix-round da Fase 5, `f541130a`): antes a assinatura
+  virava a página com `y > 245`, sem medir — com 30 itens e 10 linhas de observação (terminando em 255) ela cabia (277/282 ≤ 287) e ia
+  sozinha para a página 2. Agora vira só se a linha + o rótulo (17 mm) não cabem até 287; a última linha da observação só fica se a
+  assinatura cabe abaixo dela; o rótulo *Observações:* só fica com a 1ª linha; e **toda página nova** da remessa começa com
+  *"Remessa para terceiros — ⟨número⟩ (continuação)"* em y 18 (na tabela, a 1ª linha de itens da página nova sai em 33, era 25).
+- [x] **Quantidade e peso em formato brasileiro, até 4 casas; o número nunca quebra** (`f541130a`): antes `String(Number(v))` —
+  `0.1 + 0.2` saía *0.30000000000000004*. Agora *0,3*, *99.999,125*, *1.250,75* (o total também); número que não cabe na coluna encolhe a
+  fonte (9 → 6); só quebra, sem perder nada, se nem em 6 couber (acima de *9.999.999.999,9999* na Qtde de 23 mm, praticamente nunca).
+- Medido (jsPDF real): Código 133,4 → 46,8 mm (limite 47); Material 163,4 → 124,1 (125); varredura de 0 a 70 itens × observação de 0 a 80
+  linhas: zero texto além de 287, zero assinatura sem identificação.
+- Fora: célula mais alta que uma página (um nome de ~5 000 letras) ainda passa do rodapé — **D (186)**. Novidades: seção "Etapa 186",
+  **B1230** a **B1238**, **C445** resolvido.

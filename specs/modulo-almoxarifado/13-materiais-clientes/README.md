@@ -1,5 +1,7 @@
 # 13 — Materiais Pertencentes a Clientes
 
+> **+ Etapa 186 (2026-10-22, T1 `225ee70b`, T3 `bc1ca22f`, T5 `9ea04c28`, Fase 5 `f541130a`): o PDF de posição do cliente cabe na folha — cada célula quebra em linhas, nada é cortado; o título com a razão social quebra; a unidade (até *TAMBOR*) sai inteira; quantidades em formato brasileiro e o número nunca quebra (B1230, B1232–B1234, B1236, B1238; resolve a B1220 da 185)** — ver a seção "Etapa 186", no fim. O status não muda.
+
 > **+ Etapa 176 (2026-10-22, `c1c04e1b`..`928f5bd6`): o recebimento informa a OS (opcional) — o material de cliente que entra com OS fica reservado para ela; o dono é conferido (sem pedido, OS de outro cliente ou sem cliente → 400; com pedido, entra livre — B1153; e de novo sob a trava, B1154). O Objetivo abaixo ESTAVA ERRADO ("projeto e documento em toda entrada")** — ver a seção "Etapa 176", no fim. O status não muda.
 
 > **+ Etapa 174 (2026-10-22, `4b8945a1`, Fase 5 `c3655b0f`): a posição por cliente passa a mostrar em *Aplicado em* as entregas por requisição ligadas a uma OS cadastrada; com projeto e OS de clientes diferentes, só o projeto (B1115)** — ver a seção "Etapa 174", no fim. O status não muda.
@@ -391,3 +393,22 @@ isso a OS é opcional (B1150). **Não existe porta `ENTRADA_CLIENTE`**: material
   (segregado da posição de estoque próprio) — provado em `f5c75c68`, sem mudar `clienteEstoqueService`.
 - [ ] **Fora (D (176)):** a `ENTRADA_MANUAL` com OS não reserva nem confere o dono; *Aplicado em* é bruto (não abate devolução) e não mostra a
   OS da entrada; a troca de cliente da OS depois da reserva criada não a solta.
+
+## Etapa 186 — o PDF de posição do cliente cabe na folha (2026-10-22)
+
+Só desenho do PDF — nenhuma rota, consulta, valor gravado ou porta de saldo mudou. Plano:
+`docs/superpowers/plans/2026-10-22-almoxarifado-etapa186-pdfs-de-remessa-e-posicao-dentro-da-folha.md` (`36208ddd`, emendas `3088625f`).
+
+- [x] **Cada célula quebra em linhas, nada é cortado** (`client/src/utils/posicaoClientePdf.js`): antes cortada por contagem (34 letras nos
+  itens, 60 nas aplicações) numa linha só — o código de EPI de 17 letras invadia a coluna Material, o nome de 71 letras perdia 37 e o
+  projeto de 80 perdia 20. Agora a quebra é por largura medida (`pdfTexto.js` — **B1231**), as duas tabelas passam por uma função só, o item só
+  começa na página se a última linha dele fica até 275 (itens) / 280 (aplicações) (**B1233**) e o cabeçalho é repetido em toda página nova
+  (**B1234**). O título com a razão social quebra em 182 mm (a de 69 letras, a maior do banco, ia a 233 mm — **B1236**). `225ee70b`,
+  `bc1ca22f`; pela tela com a fixture gravada da rota real `9ea04c28`.
+- [x] **A unidade sai inteira e o número nunca quebra** (fix-round da Fase 5, `f541130a`): a coluna **Un.** tinha 11 mm e partia *TAMBOR*
+  (13,1 mm, unidade do cadastro) em *TAMBO* / *R*; agora colunas dos itens `x = 14, 48, 100, 115, 135, 155, 175` (Un. 14 mm, números 19, 19,
+  19 e 21 — **B1232** emendada; as das aplicações ficam `14, 48, 144`). Os números em formato brasileiro, até 4 casas (*0,3*, não
+  *0.30000000000000004* quebrado em duas linhas que pareciam dois números; o *Saldo total* também — **B1238** reescrita); número que não
+  cabe encolhe a fonte (9 → 6) e só quebra, sem perder nada, acima de *9.999.999.999,9999*.
+- A tela **Materiais de clientes** continua mostrando o número como vem do servidor (*12.5*); só o PDF formata (*12,5*).
+- Fora: célula mais alta que uma página ainda passa do rodapé — **D (186)**. Novidades: seção "Etapa 186", **B1230** a **B1238**.

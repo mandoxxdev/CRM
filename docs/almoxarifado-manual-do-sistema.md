@@ -936,7 +936,9 @@ O formato escolhido fica **lembrado** para a próxima vez (por navegador). O arq
 
 **O que vai impresso — e o que não vai.** A etiqueta é deliberadamente enxuta:
 
-- **código do material**, em fonte grande, no canto superior esquerdo;
+- **código do material**, em fonte grande, no canto superior esquerdo. Um código comprido é escrito em letra um pouco menor (o tamanho
+  desce em passos até caber numa linha só); se nem no menor tamanho ele cabe, continua na linha de baixo e o nome do material desce o mesmo
+  tanto — o código nunca fica por cima do nome e nunca é cortado;
 - **nome do material**, em corpo pequeno, cortado em no máximo duas linhas;
 - **linha de controle**, que muda conforme o tipo de etiqueta:
   - etiqueta de **material**: sem linha de controle;
@@ -5641,6 +5643,17 @@ O botão **PDF da posição** gera, no próprio navegador, um documento com:
 
 Linhas de consumo sem OS e sem projeto não entram no PDF — no documento do cliente, "aplicado em —" pareceria rastreabilidade perdida.
 
+**Textos longos e números no PDF da posição.** Nenhum texto é cortado: o que não cabe na largura da coluna **continua na linha de baixo,
+dentro da mesma coluna**, quebrando entre palavras (uma palavra maior que a coluna inteira é partida entre letras). Nenhuma letra é perdida
+e nada passa por cima da coluna vizinha nem da margem da folha; a linha do item fica tão alta quanto a célula com mais linhas. O título com
+a razão social também quebra em linhas dentro da folha. Um item nunca é partido entre duas páginas — se não cabe inteiro no fim da página,
+vai todo para a seguinte, e toda página nova repete o cabeçalho da tabela. A coluna **Un.** comporta inteira qualquer unidade do cadastro
+(inclusive *TAMBOR*). As quantidades (Recebido, Consumido, Devolvido, Saldo, a quantidade das aplicações e o saldo total) saem no **formato
+brasileiro, com até 4 casas decimais**: *12,5*, *99.999,125*, *0,3*. Um número que não cabe na largura da coluna é escrito em **letra
+menor** até caber numa linha só — ele nunca é partido em duas linhas, que leriam como dois números (só um valor acima de *9.999.999.999,9999*
+numa coluna estreita passaria para a linha de baixo, sem perder nenhum algarismo). A tela mostra o número como o sistema o guarda (*12.5*);
+só o PDF o formata.
+
 ---
 
 ## 17. Material enviado a terceiros
@@ -5682,7 +5695,26 @@ Essa última é a contrapartida de a remessa ser isenta da regra de OS/projeto: 
 
 A remessa recebe um número automático (formato `REM-…`, ver 1.1) e nasce na situação **ABERTA**.
 
-O botão **PDF da remessa** gera o documento no navegador, para acompanhar o material.
+O botão **PDF da remessa** gera o documento no navegador, para acompanhar o material. Ele só fica disponível com uma remessa aberta (é
+preciso a lista de itens).
+
+O documento traz: o título *"Remessa para terceiros — ⟨número⟩"*; o terceiro e o tipo de serviço; o prazo previsto e a situação; o
+proprietário, quando o material é de cliente (*"Material de propriedade de ⟨cliente⟩"*); a frase de encerramento, quando a remessa foi
+encerrada com baixa; a data em que foi gerado; a tabela **Código · Material · Un. · Qtde · Peso (kg)**; a linha *"⟨n⟩ item(ns) · quantidade
+total: ⟨soma⟩"*; as **Observações**; e, no fim, os dois campos de assinatura — **Responsável GMP** e **Recebido pelo terceiro (nome /
+data)**. É o papel que volta assinado pelo terceiro, por isso nada nele é cortado:
+
+- **Textos longos quebram em linhas.** O que não cabe na largura da coluna continua na linha de baixo, dentro da mesma coluna, quebrando
+  entre palavras (uma palavra maior que a coluna é partida entre letras); nenhuma letra é perdida, nada invade a coluna vizinha nem passa da
+  margem. O título, o terceiro e o proprietário também quebram. Um item nunca é partido entre duas páginas.
+- **Toda página nova diz de que remessa é.** A partir da segunda, cada página começa com *"Remessa para terceiros — ⟨número⟩
+  (continuação)"*; se a página nova continua a tabela, o cabeçalho das colunas vem logo abaixo.
+- **A assinatura fica junto do que é assinado.** A observação desce linha a linha e vira a página quando precisa; o rótulo *Observações:*
+  nunca fica sozinho no pé da página (desce junto com a primeira linha). Os campos de assinatura vêm abaixo da última linha da observação
+  e **na mesma página que ela**: se não cabem até o pé da folha, a última linha da observação desce junto com eles para a página seguinte.
+  Sem observação, os campos de assinatura passam para a página seguinte só quando não cabem — e essa página diz de que remessa é.
+- **Números no formato brasileiro**, com até 4 casas decimais (*0,3*, *1.250,75*), na quantidade, no peso e no total. Um número que não
+  cabe na coluna é escrito em letra menor até caber numa linha — nunca partido em duas.
 
 ### 17.3 As situações pelas quais a remessa passa
 

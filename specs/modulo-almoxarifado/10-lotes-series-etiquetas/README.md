@@ -1,5 +1,7 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 186 (2026-10-22, T4 `e0bbd9ba`, T5 `9ea04c28`): na etiqueta, o código comprido não escreve mais por cima do nome — encolhe a fonte (14 → 10) até caber numa linha (B1237)** — ver a seção "Etapa 186", no fim. O status não muda.
+
 > **+ Etapa 170 (2026-10-20, `3fb6aa0e`): o *(anexado em …)* do certificado do lote no dia de Brasília (B1081, só exibição)** — ver a seção "Etapa 170", no fim. O status não muda.
 
 > **+ Etapa 164 (2026-10-20, `350eaed8`): o nome do PDF de etiquetas no dia local (B1051, cosmético)** — ver a seção "Etapa 164", no fim.
@@ -993,3 +995,16 @@ Só exibição — nenhuma rota, consulta, valor gravado ou porta de saldo mudou
 
 - [x] O *(anexado em …)* do certificado do lote (`certificado_em`, o `CURRENT_TIMESTAMP`) no dia de Brasília — antes lido como hora local
   (das 21h à meia-noite, o dia de amanhã; ilegível, *Invalid Date*). `3fb6aa0e`; o cenário no teste de integração `9353c1d5`.
+
+## Etapa 186 — o código da etiqueta não escreve por cima do nome (2026-10-22)
+
+Só desenho do PDF. Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa186-pdfs-de-remessa-e-posicao-dentro-da-folha.md`.
+
+- [x] **O código comprido encolhe até caber numa linha** (`client/src/utils/etiquetasPdf.js`, **B1237**): antes o código ia em fonte 14 com
+  `maxWidth` — com 22+ letras o jsPDF quebrava em 2 linhas e a 2ª (base em y + 14,7) caía **em cima** do nome (base em y + 15). Agora a fonte
+  tenta 14, 13, 12, 11, 10 (negrito, medido) até o código caber numa linha; se nem em 10 cabe, quebra em 10 (passo 4,5 mm) e o nome desce o
+  que o código cresceu. Código que cabe em 14: o desenho de antes. Não trunca. Medido: *MP-ACO-INOX-304-CH-3MM* f14 64,7 mm → f11 50,8 (A4,
+  limite 55) / f12 55,5 (térmica, 56). `e0bbd9ba`; pelo modal **Gerar** `9ea04c28`.
+- **Correção declarada:** a B1220 (Etapa 185) dizia que as etiquetas "já medem" — **era meia verdade**: o nome (2 linhas) e a linha de
+  controle mediam; o código, não.
+- Fica como está (decisão física da etiqueta): o nome continua cortado em **2 linhas** (o QR identifica o material). Novidades: **B1237**.
