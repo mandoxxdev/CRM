@@ -1,0 +1,48 @@
+{
+  "restritaVistaPeloProducao": {
+    "id": 1,
+    "codigo_patrimonio": "FER-187-R",
+    "nome": "Torquímetro restrito",
+    "tipo": "Instrumento",
+    "setor_responsavel": null,
+    "status": "DISPONIVEL",
+    "material_id": null,
+    "observacoes": null,
+    "ativo": 1,
+    "created_at": "2026-10-22 08:00:00",
+    "updated_at": "2026-10-22 10:00:00",
+    "numero_serie": null,
+    "localizacao_id": null,
+    "exige_calibracao": 1,
+    "calibracao_vigente": false,
+    "emprestimo_aberto": null,
+    "restricao": {
+      "manutencao_id": 1,
+      "observacoes": "Só para serviço leve",
+      "data_fim": "2026-10-22 10:00:00"
+    }
+  },
+  "baixadaComRestricaoVistaPeloAlmoxarife": {
+    "id": 2,
+    "codigo_patrimonio": "FER-187-X",
+    "nome": "Torquímetro baixado",
+    "tipo": "Instrumento",
+    "setor_responsavel": null,
+    "status": "BAIXADA",
+    "material_id": null,
+    "observacoes": null,
+    "ativo": 1,
+    "created_at": "2026-10-22 08:00:00",
+    "updated_at": "2026-10-22 10:00:00",
+    "numero_serie": null,
+    "localizacao_id": null,
+    "exige_calibracao": 1,
+    "calibracao_vigente": false,
+    "emprestimo_aberto": null,
+    "restricao": {
+      "manutencao_id": 2,
+      "observacoes": "Só para serviço leve",
+      "data_fim": "2026-10-22 10:00:00"
+    }
+  }
+}

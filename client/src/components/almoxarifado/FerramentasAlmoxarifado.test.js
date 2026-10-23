@@ -1162,4 +1162,42 @@ describe('FerramentasAlmoxarifado — Etapa 187, restrição da manutenção e b
     expect(vivas).toHaveLength(6);
     vivas.forEach((l) => expect([l.textContent.slice(0, 7), !!botao('Editar', l)]).toEqual([l.textContent.slice(0, 7), true]));
   });
+
+  // T4: a resposta REAL do servidor (fixture gravada por server/tests/api/toolBaixadaERestricaoIntegracao.api.test.js, que a compara
+  // com a rota a cada execucao) — o selo e o aviso com o texto que o servidor manda, nao com o JSON escrito a mao acima.
+  const FIXTURE = require('./__fixtures__/ferramentasRestricao.rota.json');
+
+  test('[T4, fixture real] a restrita vista pelo PRODUCAO: selo e texto sem permissão; com permissão, o aviso no Emprestar', async () => {
+    const restrita = FIXTURE.restritaVistaPeloProducao;
+    expect(restrita.status).toBe('DISPONIVEL');
+    expect(restrita.restricao.observacoes).toBe('Só para serviço leve');
+    comLista([restrita]);
+    mockPode = () => false;
+    await renderizar();
+    let [linha] = linhasFerramentas();
+    expect(selo(linha).textContent).toBe('Em uso com restrição');
+    expect(linha.textContent).toContain(`Restrição: ${restrita.restricao.observacoes}`);
+    act(() => root.unmount());
+    root = createRoot(container);
+    mockPode = () => true;
+    await renderizar();
+    [linha] = linhasFerramentas();
+    await clicar(botao('Emprestar', linha));
+    expect(aviso().textContent)
+      .toBe(`Esta ferramenta voltou da manutenção em uso com restrição: ${restrita.restricao.observacoes}. Confira antes de emprestar.`);
+  });
+
+  test('[T4, fixture real] a baixada com restrição anterior vista pelo ALMOXARIFE: sem selo e sem Editar, com Reverter baixa', async () => {
+    const baixada = FIXTURE.baixadaComRestricaoVistaPeloAlmoxarife;
+    expect(baixada.status).toBe('BAIXADA');
+    expect(baixada.restricao).not.toBeNull(); // premissa (I4): sem restricao, "sem selo" passaria vazio
+    comLista([baixada]);
+    await renderizar();
+    const [linha] = linhasFerramentas();
+    expect(linha.textContent).toContain('Baixada');
+    expect(selo(linha)).toBeNull();
+    expect(linha.textContent).not.toContain('Restrição:');
+    expect(botao('Reverter baixa', linha)).toBeTruthy();
+    expect(botao('Editar', linha)).toBeFalsy();
+  });
 });
