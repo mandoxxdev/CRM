@@ -247,13 +247,15 @@ module.exports = function registerFrotasRoutes(app, db, authenticateToken, check
     try { res.json(await anexosService.apagar(db, req.user, req.params.id, pastaAnexos)); } catch (e) { handleError(res, e); }
   });
 
+  // O prefixo vai LITERAL nos dois app.use: as reguas de fonte das Etapas 148-154 leem os registros de rota como texto literal.
+  if (PASTAS.frotasAnexos.prefixo !== '/api/uploads/frotas-anexos') throw new Error('frotas: prefixo das fotos divergiu de PASTAS');
   // RN-F5.06: o arquivo so sai com a assinatura do dominio proprio (`frotas-anexos-v1`) — sem sessao e sem banco, como o almoxarifado.
   // Prefixo `/api` (o rotasModulos casa antes do catch-all do SPA); nada montado fora dele.
-  app.use(PASTAS.frotasAnexos.prefixo, assinador.middleware, express.static(pastaAnexos, {
+  app.use('/api/uploads/frotas-anexos', assinador.middleware, express.static(pastaAnexos, {
     index: false, dotfiles: 'deny', setHeaders: cabecalhosUploadSeguro,
   }));
   // FECHO obrigatorio: o static chama next() quando o arquivo nao existe — assinatura valida de nome inexistente desceria adiante.
-  app.use(PASTAS.frotasAnexos.prefixo, (req, res) => res.status(404).end());
+  app.use('/api/uploads/frotas-anexos', (req, res) => res.status(404).end());
 
   /** RN-F5.05: a lista do gestor/Consulta/motorista (ja no escopo dela) com as fotos de cada linha. */
   const comFotos = (entidade, listFn) => async (dbx, query, user) => anexosService.comAnexos(dbx, entidade, await listFn(dbx, query, user), assinar);
