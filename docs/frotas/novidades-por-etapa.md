@@ -122,9 +122,7 @@ WHERE status = 'em_andamento' AND motorista_id IS NOT NULL GROUP BY motorista_id
 - **E2 — o teste manual no navegador não foi feito por quem escreveu este fechamento.** O roteiro do guia
   ([`README.md`](README.md#roteiro-de-teste-manual-portal-do-motorista)) foi escrito lendo o código e as mensagens literais; ninguém o
   percorreu clicando. Faça antes de apresentar.
-- **E3 — no fechamento rodaram só os testes do Frota**: servidor, 9 arquivos `frotas*.api.test.js` com **82 passaram, 0 falharam**
-  (12 + 12 + 6 + 9 + 8 + 8 + 19 + 2 + 6) e o do vencimento do painel com **17/17**; tela, 5 arquivos com **37/37**. A suíte inteira
-  (`npm run test:api`) e o `build` do front **não** foram rodados neste fechamento (só documentação mudou).
+- **E3 — verificação final, rodada em 2026-10-23 na ponta da etapa:** `npm run test:api` **547/547 arquivos OK**; `test:almoxarifado` **44/44**; `test:validation` **4/4**; `test:safealter` **3/3**; `test:sqlite` **16/16**; tela **191 suítes, 2578/2578 testes**; `build` com `CI=true` **compilou sem aviso**. Depois disso só mudou o texto do aviso do retorno (C8), e os testes do Frota na tela foram rodados de novo: **37/37**. Os testes do Frota no servidor: 9 arquivos, **82 passaram, 0 falharam**.
 
 ---
 
