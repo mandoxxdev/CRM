@@ -122,7 +122,8 @@ test('[RN-170.04] gerado as 22h30 de 20/10 (01h30 de 21/10 em UTC) sai 20/10/202
 
 // ── Etapa 186 (RN-186.04, .06 a .09, .11; B1230, B1232, B1233, B1236) — o PDF da posicao do cliente cabe na folha ────────────────────
 // Reguas copiadas aqui (nao importadas de outro teste — regra da 185). As colunas sao o CONTRATO: literal, nao lido da producao.
-const COLUNAS_ITENS = [14, 48, 100, 112, 132, 155, 177];
+// fix-round da Fase 5 (M-b): Un. com 14 mm (TAMBOR inteiro); numeros com 19, 19, 19 e 21
+const COLUNAS_ITENS = [14, 48, 100, 115, 135, 155, 175];
 const COLUNAS_APLICACOES = [14, 48, 144];
 const COLUNAS_DA_TABELA = [COLUNAS_ITENS, COLUNAS_APLICACOES];
 const CABECALHOS = [
@@ -259,7 +260,7 @@ describe('[Etapa 186] o PDF da posicao do cliente cabe na folha (jsPDF real)', (
     const [t] = tabelas();
     expect(t.itens).toHaveLength(1);
     expect(t.itens[0].map((c) => c.x)).toEqual(COLUNAS_ITENS);
-    expect(t.itens[0].map((c) => c.t)).toEqual(['EPI-MASC-SOLDA-07', 'Mascara de solda', 'UN', '99999.125', '99999.125', '99999.125', '99999.125']);
+    expect(t.itens[0].map((c) => c.t)).toEqual(['EPI-MASC-SOLDA-07', 'Mascara de solda', 'UN', '99.999,125', '99.999,125', '99.999,125', '99.999,125']);
     expect(t.cabecalhos).toHaveLength(1);
     expect(t.cabecalhos[0].textos.map((c) => c.x)).toEqual(COLUNAS_ITENS);
     expect(t.cabecalhos[0].textos.map((c) => c.t)).toEqual(CABECALHOS[0]);
@@ -330,5 +331,57 @@ describe('[Etapa 186] o PDF da posicao do cliente cabe na folha (jsPDF real)', (
     expect(nomes.has('text')).toBe(true);
     expect(nomes.has('getTextWidth')).toBe(false);
     expect(nomes.has('setFont')).toBe(false);
+  });
+});
+
+// ── Fix-round da Fase 5 da 186 (M-b, M-c) — unidade inteira e numero que nunca quebra ─────────────────────────────────────────────────
+// A lista de unidades do cadastro (MaterialAlmoxarifadoForm.js, `UNIDADES`), copiada: com a coluna Un. de 11 mm, `TAMBOR` (13,1 mm) saia
+// `TAMBO` / `R`.
+const UNIDADES_DO_CADASTRO = ['UN', 'KG', 'G', 'L', 'ML', 'M', 'CM', 'M²', 'M³', 'CX', 'PC', 'PAR', 'ROLO', 'BALDE', 'TAMBOR', 'SACO'];
+
+describe('[Etapa 186, fix-round da Fase 5] posicao do cliente: unidade inteira, numero numa linha so (jsPDF real)', () => {
+  test('[M-b] cada unidade do cadastro sai num text so, inteira, ate a coluna Recebido (114)', () => {
+    gerar({ itens: UNIDADES_DO_CADASTRO.map((u, k) => ({ ...itemCurto(k), unidade: u })) });
+    const itens = linhasDaTabela(0);
+    expect(itens.map((item) => celula(item, 0, 2).map((c) => c.t))).toEqual(UNIDADES_DO_CADASTRO.map((u) => [u]));
+    for (const item of itens) {
+      const [c] = celula(item, 0, 2);
+      expect(c.x + largura(c.t, 9)).toBeLessThanOrEqual(COLUNAS_ITENS[3] - 1);
+    }
+    expect(celulasInvasoras(0)).toEqual([]);
+  });
+
+  test('[M-c] 0,1 + 0,2 sai 0,3 (fonte 9, um text) em toda coluna de numero; -0,000001 sai 0; o saldo total no mesmo formato', () => {
+    gerar({
+      itens: [{ ...itemCurto(1), recebido: 0.1 + 0.2, consumido: -0.000001, devolvido: 0, saldo: 0.1 + 0.2 }],
+      aplicacoes: [{ codigo: 'MAT-1', numero_os: '2026-00042', projeto_nome: null, quantidade: 0.1 + 0.2 }],
+    });
+    const [item] = linhasDaTabela(0);
+    expect([3, 4, 5, 6].map((col) => celula(item, 0, col).map((c) => [c.t, c.fonte]))).toEqual([
+      [['0,3', 9]], [['0', 9]], [['0', 9]], [['0,3', 9]],
+    ]);
+    const [apl] = linhasDaTabela(1);
+    expect(celula(apl, 1, 2).map((c) => [c.t, c.fonte])).toEqual([['0,3', 9]]);
+    expect(textosGravados().some((e) => e.t === 'Saldo total: 0,3')).toBe(true);
+  });
+
+  test('[M-c] 9.999.999.999,9999 em toda coluna de numero: um text so, dentro da coluna (fonte menor nas de 19-21 mm); a fonte volta a 9 depois', () => {
+    const G = 9999999999.9999;
+    gerar({
+      itens: [{ ...itemCurto(1), recebido: G, consumido: G, devolvido: G, saldo: G }, itemCurto(2)],
+      aplicacoes: [{ codigo: 'MAT-1', numero_os: '2026-00042', projeto_nome: null, quantidade: G }],
+    });
+    const [item, seguinte] = linhasDaTabela(0);
+    const checar = (cels, colunas, col, encolhe = true) => {
+      expect(cels.map((c) => c.t)).toEqual(['9.999.999.999,9999']);
+      if (encolhe) expect(cels[0].fonte).toBeLessThan(9);
+      const limite = col < colunas.length - 1 ? colunas[col + 1] - 1 : MARGEM;
+      expect(cels[0].x + largura(cels[0].t, cels[0].fonte)).toBeLessThanOrEqual(limite);
+    };
+    for (const col of [3, 4, 5, 6]) checar(celula(item, 0, col), COLUNAS_ITENS, col);
+    // a Quantidade das aplicacoes tem 52 mm: cabe na fonte 9
+    checar(celula(linhasDaTabela(1)[0], 1, 2), COLUNAS_APLICACOES, 2, false);
+    // metade positiva: o item seguinte volta a fonte 9 em todas as celulas
+    expect(seguinte.map((c) => c.fonte)).toEqual([9, 9, 9, 9, 9, 9, 9]);
   });
 });

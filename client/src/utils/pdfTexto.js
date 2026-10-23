@@ -50,3 +50,61 @@ export function desenharQuebrado(pdf, texto, x, y, largura, passo) {
   linhas.forEach((linha, j) => pdf.text(linha, x, y + passo * j));
   return y + passo * linhas.length;
 }
+
+// ── Fix-round da Fase 5 da 186 (M-c) — numero no papel ─────────────────────────────────────────────────────────────────────────────────
+// Antes o numero ia cru (`String(Number(v))`): o ruido de ponto flutuante (`0.1 + 0.2`) virava `0.30000000000000004`, que numa coluna de 19 mm
+// quebrava em `0.300000000` / `00000004` — e duas linhas de algarismos parecem DOIS numeros num papel que o cliente confere. Agora: o
+// formato das telas do modulo que mostram quantidade (`formatNum` de Alertas, Nao conformidades, Reposicao e Relatorios: pt-BR, ate 4 casas)
+// e, na tabela, o numero NUNCA quebra — encolhe a fonte ate caber (`fonteQueCabe`).
+
+/** Quantidade como as telas do modulo mostram: pt-BR, ate 4 casas (`0.1 + 0.2` -> `0,3`; `99999.125` -> `99.999,125`). Vazio/ilegivel -> `0`. */
+export function formatarQuantidade(v) {
+  const n = Number(v);
+  const s = (Number.isFinite(n) ? n : 0).toLocaleString('pt-BR', { maximumFractionDigits: 4 });
+  // `-0.000001` arredonda para `-0`; um negativo que vira zero e zero (arredondar antes, `Math.round(n * 1e4)`, desvia numero grande)
+  return /^-0(,0*)?$/.test(s) ? '0' : s;
+}
+
+/**
+ * A maior fonte, de `fonte` descendo de 1 em 1 ate `minima`, em que `texto` cabe numa linha so de `largura`; `null` se nem a `minima` cabe.
+ * Mede pelo splitTextToSize (sem getTextWidth — RN-186.11: o FakePdf da tela nao tem). Espera o `pdf` em `fonte` e o devolve em `fonte`.
+ */
+export function fonteQueCabe(pdf, texto, largura, fonte, minima = 6) {
+  if (linhasPorLargura(pdf, texto, largura).length === 1) return fonte;
+  let achada = null;
+  for (let f = fonte - 1; f >= minima && achada === null; f -= 1) {
+    pdf.setFontSize(f);
+    if (linhasPorLargura(pdf, texto, largura).length === 1) achada = f;
+  }
+  pdf.setFontSize(fonte);
+  return achada;
+}
+
+/**
+ * Como `quebrarCelulas`, mas as colunas de `numericas` nao quebram: o numero que nao cabe em `util[i]` na `fonte` encolhe (`fonteQueCabe`);
+ * so quebra (na `fonte`, nada perdido) se nem a `minima` couber. Devolve `{ linhas, fontes }` — `fontes[i]` e a fonte da celula i.
+ */
+export function prepararCelulas(pdf, celulas, util, { numericas = [], fonte, minima = 6 }) {
+  const fontes = celulas.map(() => fonte);
+  const linhas = celulas.map((c, i) => {
+    if (numericas.includes(i)) {
+      const f = fonteQueCabe(pdf, String(c ?? ''), util[i], fonte, minima);
+      if (f !== null) { fontes[i] = f; return [String(c ?? '')]; }
+    }
+    return linhasPorLargura(pdf, c, util[i]);
+  });
+  return { linhas, fontes };
+}
+
+/** `desenharCelulas` com uma fonte por celula (`prepararCelulas`): a celula numa fonte menor e desenhada nela e a `fonte` volta. */
+export function desenharCelulasComFonte(pdf, { linhas, fontes }, colunas, y, passo, fonte) {
+  let n = 1;
+  linhas.forEach((ls, i) => {
+    const outra = fontes[i] !== fonte;
+    if (outra) pdf.setFontSize(fontes[i]);
+    ls.forEach((linha, j) => pdf.text(linha, colunas[i], y + passo * j));
+    if (outra) pdf.setFontSize(fonte);
+    n = Math.max(n, ls.length);
+  });
+  return n;
+}

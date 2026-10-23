@@ -9,9 +9,13 @@
 
 import jsPDF from 'jspdf';
 import { formatarDataDoBanco, hojeLocalISO, lerInstanteDoBanco } from './dataLocal';
-import { utilDasColunas, quebrarCelulas, desenharCelulas, desenharQuebrado } from './pdfTexto';
+import {
+  utilDasColunas, prepararCelulas, desenharCelulasComFonte, desenharQuebrado, formatarQuantidade,
+} from './pdfTexto';
 
-const num = (v) => String(Number(v || 0));
+// Fix-round da Fase 5 da 186 (M-c): o formato das telas do modulo (pt-BR, ate 4 casas) — antes `String(Number(v))`, que imprimia o ruido
+// de ponto flutuante (`0.30000000000000004`) e o quebrava em `0.300000000` / `00000004`: duas linhas de algarismos parecem dois numeros.
+const num = (v) => formatarQuantidade(v);
 
 // Etapa 170 (RN-170.04, B1082): o *Gerado em* no dia LOCAL de quem gera (o `{ timeZone: 'UTC' }` imprimia o dia UTC — das 21h a
 // meia-noite, o de amanha); vazio ou ilegivel -> hoje (antes, ilegivel imprimia *Invalid Date*).
@@ -48,18 +52,25 @@ export function montarPosicaoClientePDF({ cliente, itens = [], aplicacoes = [], 
 // era cortada por CONTAGEM (34 letras nos itens, 60 nas aplicacoes) numa linha so, sem medir: o codigo de EPI de 17 letras invadia a
 // coluna Material, o nome de 71 letras perdia as ultimas 37 e o projeto de 80 perdia 20. Agora cada celula QUEBRA em quantas linhas
 // precisar (a linha fica mais alta; nenhuma letra perdida) e as colunas foram redistribuidas — medidas com o jsPDF real.
-const COLUNAS_ITENS = [14, 48, 100, 112, 132, 155, 177]; // = M, M + 34, M + 86, M + 98, M + 118, M + 141, M + 163
+// Fix-round da Fase 5 (M-b): a coluna Un. tinha 11 mm e partia `TAMBOR` (13,1 mm em f9, unidade da lista do cadastro) em `TAMBO` / `R`; agora
+// 14 mm (cabem todas as 16 unidades do cadastro), tirados das colunas de numero (19, 19, 19 e 21 mm — os cabecalhos cabem: `Consumido` 15,9).
+const COLUNAS_ITENS = [14, 48, 100, 115, 135, 155, 175]; // = M, M + 34, M + 86, M + 101, M + 121, M + 141, M + 161
 const COLUNAS_APLICACOES = [14, 48, 144]; // = M, M + 34, M + 130
-const UTIL_ITENS = utilDasColunas(COLUNAS_ITENS); // [33, 51, 11, 19, 22, 21, 19]
+const UTIL_ITENS = utilDasColunas(COLUNAS_ITENS); // [33, 51, 14, 19, 19, 19, 21]
 const UTIL_APLICACOES = utilDasColunas(COLUNAS_APLICACOES); // [33, 95, 52]
 const LARGURA_TEXTO = 182; // 196 - M
+// Colunas de numero: nunca quebram — encolhem a fonte ate caber (M-c). Itens: Recebido, Consumido, Devolvido, Saldo; aplicacoes: Quantidade.
+const NUMERICAS_ITENS = [3, 4, 5, 6];
+const NUMERICAS_APLICACOES = [2];
 
 /**
  * Desenha uma tabela a partir de `y` e devolve o y depois da ultima linha. A linha cresce (B1233): 5 mm na primeira (o passo de hoje),
  * 4 nas de continuacao; so comeca na pagina se a ULTIMA linha dela fica ate `limite` (o de hoje) — o item nao e partido entre paginas. O
  * cabecalho e repetido depois de todo addPage (emenda I4 da Fase 2, B1234): sem ele, na pagina 2 as colunas de numero ficam sem nome.
  */
-function desenharTabela(pdf, { cabecalho, linhas, colunas, util, limite }, yInicial) {
+function desenharTabela(pdf, {
+  cabecalho, linhas, colunas, util, limite, numericas,
+}, yInicial) {
   let y = yInicial;
   const desenharCabecalho = () => {
     cabecalho.forEach((h, i) => pdf.text(h, colunas[i], y));
@@ -69,10 +80,10 @@ function desenharTabela(pdf, { cabecalho, linhas, colunas, util, limite }, yInic
   };
   desenharCabecalho();
   for (const linha of linhas) {
-    const celulas = quebrarCelulas(pdf, linha, util);
-    const n = Math.max(...celulas.map((l) => l.length));
+    const celulas = prepararCelulas(pdf, linha, util, { numericas, fonte: 9 });
+    const n = Math.max(...celulas.linhas.map((l) => l.length));
     if (y + 4 * (n - 1) > limite) { pdf.addPage(); y = 18; desenharCabecalho(); }
-    desenharCelulas(pdf, celulas, colunas, y, 4);
+    desenharCelulasComFonte(pdf, celulas, colunas, y, 4, 9);
     y += 5 + 4 * (n - 1);
   }
   return y;
@@ -94,12 +105,12 @@ export function gerarPosicaoClientePDF(dados) {
 
   pdf.setFontSize(9);
   y = desenharTabela(pdf, {
-    cabecalho: doc.cabecalhoItens, linhas: doc.linhasItens, colunas: COLUNAS_ITENS, util: UTIL_ITENS, limite: 275,
+    cabecalho: doc.cabecalhoItens, linhas: doc.linhasItens, colunas: COLUNAS_ITENS, util: UTIL_ITENS, limite: 275, numericas: NUMERICAS_ITENS,
   }, y);
   y += 2;
   pdf.line(M, y, 196, y);
   y += 5;
-  pdf.text(`Saldo total: ${doc.totalSaldo}`, M, y);
+  pdf.text(`Saldo total: ${num(doc.totalSaldo)}`, M, y);
   y += 10;
 
   if (doc.linhasAplicacoes.length > 0) {
@@ -110,6 +121,7 @@ export function gerarPosicaoClientePDF(dados) {
     pdf.setFontSize(9);
     y = desenharTabela(pdf, {
       cabecalho: doc.cabecalhoAplicacoes, linhas: doc.linhasAplicacoes, colunas: COLUNAS_APLICACOES, util: UTIL_APLICACOES, limite: 280,
+      numericas: NUMERICAS_APLICACOES,
     }, y);
   }
 

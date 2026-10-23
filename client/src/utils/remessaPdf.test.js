@@ -221,6 +221,7 @@ function textosForaDaFolha() {
   return textosGravados().filter((e) => e.x + largura(e.t, e.fonte) > MARGEM || e.y > FUNDO)
     .map((e) => `${e.t} (x ${e.x}, fim ${(e.x + largura(e.t, e.fonte)).toFixed(1)}, y ${e.y.toFixed(1)}, f${e.fonte})`);
 }
+const EH_CONTINUACAO = /^Remessa para terceiros — .* \(continuação\)$/;
 // A tabela: do 1o cabecalho ('Código') ao fechamento. Cabecalho repetido na pagina nova (I4) e pulado — reconhecido pela string
 // 'Código', nao pelo x — e cada cabecalho termina na `line` dele. Itens agrupados pela SEQUENCIA: um item comeca quando o x volta a 14
 // depois de uma celula de outra coluna (o recorte por y quebra na pagina 2, I1 da 185).
@@ -231,6 +232,7 @@ function tabela() {
   let noCabecalho = false;
   const itens = [];
   const cabecalhos = [];
+  const continuacoes = [];
   let anteriorX = null;
   for (const [nome, ...args] of mockPdf) {
     if (nome === 'setFontSize') fonte = args[0];
@@ -242,6 +244,8 @@ function tabela() {
     }
     if (nome !== 'text') continue;
     const [t, x, y] = args;
+    // fix-round da Fase 5 (I-1): toda pagina nova comeca com a identificacao — nao e item da tabela
+    if (EH_CONTINUACAO.test(t)) { continuacoes.push({ t, pagina, y }); continue; }
     if (t === 'Código') { cabecalhos.push({ pagina, y, textos: [] }); noCabecalho = true; }
     if (noCabecalho) { cabecalhos[cabecalhos.length - 1].textos.push({ t, x, y, fonte }); continue; }
     if (!dentro) continue;
@@ -249,7 +253,7 @@ function tabela() {
     itens[itens.length - 1].push({ t: String(t), x, y, fonte, pagina });
     anteriorX = x;
   }
-  return { itens, cabecalhos };
+  return { itens, cabecalhos, continuacoes };
 }
 const linhasDaTabela = () => tabela().itens;
 function celulasInvasoras() {
@@ -290,7 +294,7 @@ const pagEy = (e) => e.pagina * 1000 + e.y;
 const linhasDaObservacao = (n) => {
   const textos = textosGravados();
   const iRotulo = textos.findIndex((e) => e.t === 'Observações:');
-  return textos.slice(iRotulo + 1, iRotulo + 1 + n);
+  return textos.slice(iRotulo + 1).filter((e) => !EH_CONTINUACAO.test(e.t)).slice(0, n);
 };
 
 describe('[Etapa 186] o PDF da remessa cabe na folha (jsPDF real)', () => {
@@ -309,7 +313,8 @@ describe('[Etapa 186] o PDF da remessa cabe na folha (jsPDF real)', () => {
     const { itens, cabecalhos } = tabela();
     expect(itens).toHaveLength(1);
     expect(itens[0].map((c) => c.x)).toEqual(COLUNAS_REMESSA);
-    expect(itens[0].map((c) => c.t)).toEqual(['EPI-MASC-SOLDA-07', NOME_46, 'UN', '99999.125', '1250.75']);
+    // fix-round da Fase 5 (M-c): numero no formato das telas do modulo (pt-BR, ate 4 casas)
+    expect(itens[0].map((c) => c.t)).toEqual(['EPI-MASC-SOLDA-07', NOME_46, 'UN', '99.999,125', '1.250,75']);
     expect(cabecalhos).toHaveLength(1);
     expect(cabecalhos[0].textos.map((c) => c.x)).toEqual(COLUNAS_REMESSA);
     expect(cabecalhos[0].textos.map((c) => c.t)).toEqual(['Código', 'Material', 'Un.', 'Qtde', 'Peso (kg)']);
@@ -331,7 +336,7 @@ describe('[Etapa 186] o PDF da remessa cabe na folha (jsPDF real)', () => {
 
   test('[RN-186.04] (c) 60 itens de 5 linhas: nada abaixo de 262, nenhum item partido, cabecalho repetido em cada pagina (I4)', () => {
     gerar({}, Array.from({ length: 60 }, (_, k) => alto(k)));
-    const { itens, cabecalhos } = tabela();
+    const { itens, cabecalhos, continuacoes } = tabela();
     expect(itens).toHaveLength(60);
     expect(mockPdf.filter(([n]) => n === 'addPage').length).toBeGreaterThanOrEqual(1);
     const celulas = itens.flat();
@@ -345,9 +350,11 @@ describe('[Etapa 186] o PDF da remessa cabe na folha (jsPDF real)', () => {
       expect(c.textos.map((h) => h.x)).toEqual(COLUNAS_REMESSA);
       expect(c.textos.map((h) => h.t)).toEqual(['Código', 'Material', 'Un.', 'Qtde', 'Peso (kg)']);
     }
+    // fix-round da Fase 5 (I-1): a pagina nova abre com a identificacao em 18; o cabecalho vem em 26 e a 1a linha em 26 + 7 = 33
+    expect(continuacoes.map((c) => [c.pagina, c.y])).toEqual(paginas.slice(1).map((p) => [p, 18]));
     for (const p of paginas.slice(1)) {
-      expect(itens.find((item) => item[0].pagina === p)[0].y).toBe(25);
-      expect(cabecalhos.find((c) => c.pagina === p).y).toBe(18);
+      expect(itens.find((item) => item[0].pagina === p)[0].y).toBe(33);
+      expect(cabecalhos.find((c) => c.pagina === p).y).toBe(26);
     }
   });
 
@@ -422,5 +429,100 @@ describe('[Etapa 186] o PDF da remessa cabe na folha (jsPDF real)', () => {
     expect(nomes.has('text')).toBe(true);
     expect(nomes.has('getTextWidth')).toBe(false);
     expect(nomes.has('setFont')).toBe(false);
+  });
+});
+
+// ── Fix-round da Fase 5 da 186 (I-1, I-2, M-a, M-c) — a assinatura cabe, nunca fica sozinha nem sem identificacao ─────────────────────
+// I-2: sem o `if` de quebra da assinatura a suite ficava verde (31/31) — nenhum cenario punha a assinatura perto do fim. Aqui: a linha E o
+// rotulo de cada campo de assinatura, com a pagina, medidos contra o fundo (287); a pagina dela tem de dizer de que remessa e (o titulo, na
+// 1a; `… (continuação)` em 18, nas outras); com observacao, a ultima linha dela vai junto; o rotulo `Observações:` nunca fica sem a 1a linha.
+function conferirAssinatura() {
+  const textos = textosGravados();
+  let pagina = 0;
+  const linhas = [];
+  for (const [nome, ...args] of mockPdf) {
+    if (nome === 'addPage') pagina += 1;
+    if (nome === 'line' && ((args[0] === 14 && args[2] === 89) || (args[0] === 114 && args[2] === 189))) linhas.push({ pagina, y: args[1] });
+  }
+  const rotulos = textos.filter((e) => /^(Responsável GMP|Recebido pelo terceiro)/.test(e.t));
+  const erros = [];
+  if (linhas.length !== 2 || rotulos.length !== 2) return [`assinatura com ${linhas.length} linhas e ${rotulos.length} rotulos`];
+  const pag = rotulos[0].pagina;
+  for (const e of [...linhas, ...rotulos]) {
+    if (e.pagina !== pag) erros.push(`assinatura partida: ${e.t || 'line'} na pagina ${e.pagina}, rotulo na ${pag}`);
+    if (e.y > FUNDO) erros.push(`${e.t || 'line'} em y ${e.y} > ${FUNDO}`);
+  }
+  const naPagina = textos.filter((e) => e.pagina === pag && !rotulos.includes(e));
+  const identificada = pag === 0
+    ? naPagina.some((e) => e.fonte === 14 && /^Remessa para terceiros/.test(e.t))
+    : naPagina.some((e) => e.y === 18 && EH_CONTINUACAO.test(e.t));
+  if (!identificada) erros.push(`assinatura na pagina ${pag} sem identificacao`);
+  const iRotulo = textos.findIndex((e) => e.t === 'Observações:');
+  if (iRotulo >= 0) {
+    const obs = textos.slice(iRotulo + 1).filter((e) => !EH_CONTINUACAO.test(e.t) && !rotulos.includes(e));
+    if (obs[0].pagina !== textos[iRotulo].pagina) erros.push(`Observações: na pagina ${textos[iRotulo].pagina}, 1a linha na ${obs[0].pagina}`);
+    if (obs[obs.length - 1].pagina !== pag) erros.push(`assinatura sozinha: ultima linha da observacao na pagina ${obs[obs.length - 1].pagina}, assinatura na ${pag}`);
+  }
+  return erros;
+}
+const observacaoEmLinhas = (n) => Array.from({ length: n }, (_, i) => `obs ${i}`).join('\n');
+
+describe('[Etapa 186, fix-round da Fase 5] a assinatura da remessa cabe e fica identificada (jsPDF real)', () => {
+  test('[I-1] 30 itens + observacao de 10 linhas (termina em y > 245): a assinatura CABE e fica na pagina 1, junto da observacao', () => {
+    gerar({ observacoes: observacaoEmLinhas(10) }, Array.from({ length: 30 }, (_, k) => curto(k)));
+    expect(conferirAssinatura()).toEqual([]);
+    const ultima = linhasDaObservacao(10)[9];
+    // guarda do cenario: a observacao termina abaixo de 245 (o `if` antigo mandava a assinatura sozinha para a pagina 2)
+    expect(ultima.y).toBeGreaterThan(245);
+    expect(textosGravados().find((e) => e.t === 'Responsável GMP').pagina).toBe(0);
+    expect(mockPdf.filter(([n]) => n === 'addPage')).toHaveLength(0);
+  });
+
+  test('[I-2] 30 itens + observacao de 16 linhas: a ultima linha desce com a assinatura; tudo ate 287; pagina identificada', () => {
+    gerar({ observacoes: observacaoEmLinhas(16) }, Array.from({ length: 30 }, (_, k) => curto(k)));
+    expect(conferirAssinatura()).toEqual([]);
+    expect(mockPdf.filter(([n]) => n === 'addPage')).toHaveLength(1);
+    expect(textosForaDaFolha()).toEqual([]);
+  });
+
+  test('[I-2] 42 itens sem observacao: a assinatura nao cabe ate 287 e vira a pagina — que diz de que remessa e', () => {
+    gerar({ observacoes: null }, Array.from({ length: 42 }, (_, k) => curto(k)));
+    expect(conferirAssinatura()).toEqual([]);
+    const cont = textosGravados().filter((e) => EH_CONTINUACAO.test(e.t));
+    expect(cont.map((e) => [e.pagina, e.y, e.t])).toEqual([[1, 18, 'Remessa para terceiros — REM-12345678 (continuação)']]);
+  });
+
+  test('[M-a] 43 itens + observacao de 3 linhas: o rotulo Observações: desce com a 1a linha (nao fica orfao no pe da folha)', () => {
+    gerar({ observacoes: observacaoEmLinhas(3) }, Array.from({ length: 43 }, (_, k) => curto(k)));
+    expect(conferirAssinatura()).toEqual([]);
+    const rotulo = textosGravados().find((e) => e.t === 'Observações:');
+    expect([rotulo.pagina, rotulo.y]).toEqual([1, 26]);
+  });
+
+  test('[I-1/I-2/M-a] varredura: 0 a 70 itens x observacao de 0, 1, 3, 10 e 16 linhas — nenhum caso com assinatura fora, sozinha ou sem identificacao', () => {
+    const erros = [];
+    for (let n = 0; n <= 70; n += 1) {
+      for (const linhasObs of [0, 1, 3, 10, 16]) {
+        gerar({ observacoes: linhasObs ? observacaoEmLinhas(linhasObs) : null }, Array.from({ length: n }, (_, k) => curto(k)));
+        conferirAssinatura().forEach((e) => erros.push(`${n} itens, obs ${linhasObs}: ${e}`));
+        textosForaDaFolha().forEach((e) => erros.push(`${n} itens, obs ${linhasObs}: fora ${e}`));
+      }
+    }
+    expect(erros).toEqual([]);
+  });
+
+  test('[M-c] quantidade 0,1 + 0,2 sai 0,3 numa linha; numero enorme encolhe a fonte e nao quebra; total no mesmo formato', () => {
+    gerar({}, [{ ...curto(1), quantidade: 0.1 + 0.2, peso: 0.1 + 0.2 }, { ...curto(2), quantidade: 9999999999.9999, peso: 1 }]);
+    const [a, b] = linhasDaTabela();
+    expect(celula(a, 3).map((c) => [c.t, c.fonte])).toEqual([['0,3', 9]]);
+    expect(celula(a, 4).map((c) => [c.t, c.fonte])).toEqual([['0,3', 9]]);
+    const enorme = celula(b, 3);
+    expect(enorme.map((c) => c.t)).toEqual(['9.999.999.999,9999']);
+    expect(enorme[0].fonte).toBeLessThan(9);
+    regua.setFontSize(enorme[0].fonte);
+    expect(enorme[0].x + regua.getTextWidth(enorme[0].t)).toBeLessThanOrEqual(COLUNAS_REMESSA[4] - 1);
+    // a fonte volta a 9 depois da celula encolhida
+    expect(celula(b, 4).map((c) => c.fonte)).toEqual([9]);
+    expect(textosGravados().some((e) => e.t === '2 item(ns) · quantidade total: 10.000.000.000,2999')).toBe(true);
   });
 });

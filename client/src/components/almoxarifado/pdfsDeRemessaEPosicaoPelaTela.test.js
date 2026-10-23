@@ -242,7 +242,8 @@ test('[RN-186.06/.07/.08/.09] Materiais de cliente -> PDF da posicao: nada invad
   const [itens, aplicacoes] = tabelas();
   expect(itens.itens).toHaveLength(POSICAO_ROTA.itens.length);
   expect(aplicacoes.itens).toHaveLength(POSICAO_ROTA.aplicacoes.length);
-  expect(celulasInvasoras(itens.itens, [14, 48, 100, 112, 132, 155, 177])).toEqual([]);
+  // fix-round da Fase 5 (M-b): as colunas de itens mudaram (Un. com 14 mm)
+  expect(celulasInvasoras(itens.itens, [14, 48, 100, 115, 135, 155, 175])).toEqual([]);
   expect(celulasInvasoras(aplicacoes.itens, [14, 48, 144])).toEqual([]);
   expect(textosForaDaFolha()).toEqual([]);
   // metade positiva: titulo em 2 linhas de fonte 14, com a razao inteira

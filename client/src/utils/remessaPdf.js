@@ -10,10 +10,13 @@
 import jsPDF from 'jspdf';
 import { formatarDataDoBanco, hojeLocalISO, lerInstanteDoBanco } from './dataLocal';
 import {
-  linhasPorLargura, utilDasColunas, quebrarCelulas, desenharCelulas, desenharQuebrado,
+  linhasPorLargura, utilDasColunas, prepararCelulas, desenharCelulasComFonte, desenharQuebrado, formatarQuantidade,
 } from './pdfTexto';
 
-const num = (v) => String(Number(v || 0));
+// Fix-round da Fase 5 da 186 (M-c): o formato das telas do modulo (pt-BR, ate 4 casas) — antes `String(Number(v))`, que imprimia o ruido
+// de ponto flutuante (`0.30000000000000004`) e o quebrava em duas linhas.
+const num = (v) => formatarQuantidade(v);
+const peso = (v) => (v === null || v === undefined || v === '' ? '—' : formatarQuantidade(v));
 const ou = (v, alt = '—') => (v === null || v === undefined || v === '' ? alt : String(v));
 
 // Etapa 170 (RN-170.04, B1082): o `{ timeZone: 'UTC' }` imprimia o dia UTC — o *Gerado em* (o `toISOString()` de quem clica) saia com o
@@ -74,7 +77,7 @@ export function montarRemessaPDF({ remessa = {}, itens = [], geradoEm } = {}) {
     cabecalhoItens: ['Código', 'Material', 'Un.', 'Qtde', 'Peso (kg)'],
     linhasItens: lista.map((i) => [
       ou(i.material_codigo), ou(i.material_nome), ou(i.unidade),
-      num(i.quantidade), ou(i.peso),
+      num(i.quantidade), peso(i.peso),
     ]),
     totalItens: lista.length,
     totalQuantidade: lista.reduce((a, i) => a + Number(i.quantidade || 0), 0),
@@ -89,6 +92,13 @@ export function montarRemessaPDF({ remessa = {}, itens = [], geradoEm } = {}) {
 const COLUNAS = [14, 48, 126, 142, 166]; // = M, M + 34, M + 112, M + 128, M + 152
 const UTIL = utilDasColunas(COLUNAS); // [33, 77, 15, 23, 30]: ate 1 mm antes da proxima coluna; a ultima ate a margem (196)
 const LARGURA_TEXTO = 182; // 196 - M
+const NUMERICAS = [3, 4]; // Qtde e Peso: nunca quebram — encolhem a fonte ate caber (M-c do fix-round da Fase 5)
+// Fix-round da Fase 5 (I-1, M-a): o fundo da folha e a altura do bloco de assinatura (12 ate a linha + 5 ate o rotulo), MEDIDOS — antes a
+// assinatura virava a pagina com `y > 245` e ia sozinha para uma folha sem identificacao mesmo cabendo (obs terminando em 255: caberia em 278).
+const FUNDO = 287;
+const ALTURA_ASSINATURA = 17;
+const LIMITE_OBSERVACAO = 280; // a linha comum da observacao (o de hoje)
+const LIMITE_ULTIMA_OBSERVACAO = FUNDO - ALTURA_ASSINATURA - 6 - 4; // 260: a ultima linha so fica se a assinatura cabe abaixo dela
 
 /** Desenha e dispara o download. Sem autoTable: a grade e simples e cabe em texto posicionado. */
 export function gerarRemessaPDF(dados) {
@@ -116,6 +126,14 @@ export function gerarRemessaPDF(dados) {
   }
   pdf.text(`Gerado em ${doc.geradoEm}`, M, y); y += 8;
 
+  // TODA pagina nova (da tabela, da observacao ou da assinatura) comeca dizendo de que remessa ela e (fix-round da Fase 5, I-1): o papel volta
+  // assinado, e uma folha so com as linhas de assinatura — ou so com itens — nao diz o que foi assinado. Na tabela, o cabecalho das colunas
+  // vem logo abaixo (I4): a 1a linha de itens da pagina nova sai em 33 (era 25).
+  const paginaDeContinuacao = () => {
+    pdf.addPage();
+    y = desenharQuebrado(pdf, `${doc.titulo} (continuação)`, M, 18, LARGURA_TEXTO, 5) + 3;
+  };
+
   // Cabecalho da tabela — repetido depois de todo addPage DENTRO da tabela (emenda I4 da Fase 2, B1234): sem ele, na pagina 2 Qtde e
   // Peso ficam duas colunas de numero sem nome num papel assinado.
   const cabecalho = () => {
@@ -126,28 +144,34 @@ export function gerarRemessaPDF(dados) {
   for (const linha of doc.linhasItens) {
     // A linha cresce (B1233): 5 mm na primeira (o passo de hoje), 4 nas de continuacao. So comeca na pagina se a ULTIMA linha dela fica
     // ate 262 (o limite de hoje): o item nao e partido entre paginas.
-    const linhas = quebrarCelulas(pdf, linha, UTIL);
-    const n = Math.max(...linhas.map((l) => l.length));
-    if (y + 4 * (n - 1) > 262) { pdf.addPage(); y = 18; cabecalho(); }
-    desenharCelulas(pdf, linhas, COLUNAS, y, 4);
+    const celulas = prepararCelulas(pdf, linha, UTIL, { numericas: NUMERICAS, fonte: 9 });
+    const n = Math.max(...celulas.linhas.map((l) => l.length));
+    if (y + 4 * (n - 1) > 262) { paginaDeContinuacao(); cabecalho(); }
+    desenharCelulasComFonte(pdf, celulas, COLUNAS, y, 4, 9);
     y += 5 + 4 * (n - 1);
   }
   y += 2; pdf.line(M, y, 196, y); y += 5;
-  pdf.text(`${doc.totalItens} item(ns) · quantidade total: ${doc.totalQuantidade}`, M, y); y += 8;
+  pdf.text(`${doc.totalItens} item(ns) · quantidade total: ${num(doc.totalQuantidade)}`, M, y); y += 8;
 
   if (doc.observacoes) {
     // B1235: antes `y += 10` fixo depois do bloco — com 7+ linhas a observacao cruzava a linha de assinatura, e uma longa perto do fim
     // saia da folha (309 mm). Agora uma linha por `text`, passo 4, virando a pagina se passar de 280; depois do bloco +6 (1 linha: +10).
+    // Fix-round da Fase 5: o rotulo so fica se a 1a linha cabe com ele (M-a: `Observações:` saia orfao no pe da folha, o texto na outra), e
+    // a ULTIMA linha so fica se a assinatura cabe abaixo dela — senao ela desce junto (a assinatura nunca fica sozinha, I-1).
+    const linhasObs = linhasPorLargura(pdf, doc.observacoes, 175);
+    const limite = (j) => (j === linhasObs.length - 1 ? LIMITE_ULTIMA_OBSERVACAO : LIMITE_OBSERVACAO);
+    if (y + 5 > limite(0)) paginaDeContinuacao();
     pdf.text('Observações:', M, y); y += 5;
-    for (const l of linhasPorLargura(pdf, doc.observacoes, 175)) {
-      if (y > 280) { pdf.addPage(); y = 18; }
+    linhasObs.forEach((l, j) => {
+      if (y > limite(j)) paginaDeContinuacao();
       pdf.text(l, M, y); y += 4;
-    }
+    });
     y += 6;
   }
 
-  // Campos de assinatura: o papel volta assinado pelo terceiro, e e o que prova a entrega.
-  if (y > 245) { pdf.addPage(); y = 18; }
+  // Campos de assinatura: o papel volta assinado pelo terceiro, e e o que prova a entrega. Vira a pagina so se o bloco (linha + rotulo) nao
+  // cabe ate o fundo (I-1: antes `y > 245`, sem medir).
+  if (y + ALTURA_ASSINATURA > FUNDO) paginaDeContinuacao();
   y += 12;
   pdf.line(M, y, M + 75, y);
   pdf.line(M + 100, y, M + 175, y);
