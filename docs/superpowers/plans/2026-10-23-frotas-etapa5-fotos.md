@@ -1,6 +1,6 @@
 # Frota — Etapa 5: foto da avaria e do cupom (D1)
 
-> **Status:** em execução (2026-10-23).
+> **Status:** **etapa fechada em 2026-10-23** — T1..T3 feitas, Fase 5 corrigida (`34de8111`). Próxima: **Etapa 6 — tratar a pendência do registro** ("Próxima tarefa detalhada", no fim).
 > **Origem:** "Próxima tarefa detalhada" do [plano da Etapa 4](2026-10-23-frotas-etapa4-relatorios.md) (B54).
 > **Spec:** [`specs/modulo-frotas/17-fotos/README.md`](../../../specs/modulo-frotas/17-fotos/README.md) (criada no fechamento) e o mapa
 > [`specs/modulo-frotas/README.md`](../../../specs/modulo-frotas/README.md) (D1).
@@ -135,10 +135,13 @@ Cada task: TDD com controle positivo (sabotar e ver cair **a asserção certa**)
 
 | Task | Estado | Commit |
 |---|---|---|
-| Plano + Fase 2 | em andamento | |
-| T1 | | |
-| T2 | | |
-| T3 | | |
+| Plano + Fase 2 | feito — 5 travas + 15 menores (tabela abaixo) | 786d1ec5 |
+| T1 | feito — `frotasAnexos` 19/19; 17 sabotagens: 15 derrubaram o cenário que as nomeia, 2 invisíveis por desenho (S4 filtro aceitando tudo: a checagem dos bytes recusa; S9 sem o fecho 404: o 404 padrão do Express responde igual no harness) | ff003174 |
+| T2 | feito (subagente, em paralelo com T1 contra o contrato) — `FrotasFotos` 31/31; Frota na tela 13 suítes 152/152; build limpo; 18 sabotagens, todas derrubaram o teste que as nomeia | 4cc57d79 |
+| T3 | feito — pela rota e pelo serviço, 2/2; 4 sabotagens, todas caíram | ed17bcd6 |
+| Fase5-F | feito — Remover foto e Voltar desligados durante o envio | 34de8111 |
+| Verificação | feito — prefixo literal; inventário de /api/uploads | e755ce7e, ab234a44 |
+| Fechamento (docs) | feito | commit "Frota etapa 5: fechamento nas specs, no plano e nos documentos do modulo" |
 
 ## Ajustes da Fase 2 (revisor fresco: 5 travas + 15 menores — **valem sobre o texto acima**)
 
@@ -164,3 +167,109 @@ Cada task: TDD com controle positivo (sabotar e ver cair **a asserção certa**)
 | 18 limite de requisições (500 por IP a cada 15 min, `/api` inteiro) | cada miniatura é um GET. Lista do gestor: **só a 1ª miniatura + "+N"**, `loading="lazy"` — **B58**, **C18** |
 | 19 gestor sem botão de apagar foto | **Remover** no "Meus registros" (motorista) entra na etapa (RN-F5.10); na lista do gestor, não — **D14** (o `DELETE` existe; o gestor exclui o lançamento ou pede ao motorista) |
 | 20 segurança | coberta; o **fecho 404** depois do `express.static` entra na lista do T1; nada montado fora de `/api` |
+
+## Fase 5 — revisão adversarial (dois revisores frescos em paralelo; achados só reproduzidos)
+
+Revisor 1 — segurança e autorização dos arquivos, contra o **servidor real** (`CRM_DATA_DIR` vazio, porta 5917, admin semeado; node
+morto e pasta apagada no fim): usuários, vínculos e perfis criados pelo HTTP; upload no lançamento do outro, Consulta, sem vínculo, sem
+módulo; SVG, HTML como PNG, GIF, HEIC, poliglota JPEG+HTML com nome `../../../evil.html` (aceito como `.jpg`, servido `image/jpeg` +
+`nosniff` + CSP `sandbox`); 11 MB, 2 arquivos, campo errado, 11 campos, campo de 2 KB, upload abortado 3×; `entidade_id` torto (`-1`,
+`0x1`, `1e0`, `entidade_id[]`, duplicado, `__proto__`); 11 variantes de travessia de caminho; assinatura de 4 outros domínios; URL
+vencida e `exp` além do teto; teto de 3 com 8 envios paralelos; `DELETE` duplo; exclusão × 3 envios em paralelo (35 rodadas, 0 órfão);
+28 GETs do Frota como o colega e como o sem vínculo (nenhuma URL da Ana; controle positivo: ele vê as dele). Revisor 2 — tela × servidor:
+literais letra a letra, formatos reais pelo harness × os mocks, erros (400/403/409/413, rede) até o aviso, `reduzirFoto` com HEIC/sem
+tipo/sem nome, URL absoluta (`REACT_APP_API_URL`), coluna com 0–3 fotos, outros consumidores (nenhum).
+
+| Achado | O que era | Correção | Estado | Commit |
+|---|---|---|---|---|
+| Fase5-F1 (real, revisor 2) | com o envio já em andamento, **Remover foto** seguia ativo: a miniatura sumia, mas o laço já tinha lido a lista e a foto removida subia | **Remover foto** desligado enquanto salva | corrigido | 34de8111 |
+| Fase5-F2 (real, revisor 2) | **Voltar** funcionava no meio do envio: a tela saía, Meus registros recarregava sem a foto e de novo ao terminar | **Voltar** desligado enquanto salva (registro e abastecimento) | corrigido | 34de8111 |
+| Fase5-S1 (real, informação, revisor 1) | 403 no lançamento de outro × 404 no inexistente revela que o número existe (sequencial) | mantido: é a ordem congelada e a das outras rotas do Frota — **E17** | declarado | — |
+| Não verificado | catch-all do SPA em produção (pelo código, `/uploads/...` cai no `index.html`); limite de 500 pedidos (o revisor subiu com `RATE_LIMIT_MAX=5000`); 413 atrás de proxy (**E18**); rotação EXIF em Android antigo; 120 s em rede lenta (**E16**) | — | — | — |
+
+## Fechamento (2026-10-23)
+
+### Divergências do plano
+
+| Onde | O plano dizia | O que foi feito | Por quê |
+|---|---|---|---|
+| RN-F5.02 | "até 10 MB" | **abaixo** de 10 MB (10 MB exatos = 413) | medido: o busboy dispara o limite ao **atingir** o `fileSize` (`multipart.js`: `fileSize === fileSizeLimit`) — vale para todo multer do sistema |
+| Ordem das recusas | formato (3) depois do tamanho (2) | campo/quantidade → formato → tamanho | Fase 2, 3: o filtro roda no cabeçalho do arquivo |
+| RN-F5.10 | sem texto de erro ao remover | `Não foi possível remover a foto. Confira a internet e tente de novo.`; `+ Foto`/`Remover foto` só com `pode_registrar` | escolha do executor da T2 (o plano não fixava) |
+| Fase 0 | "os três pontos de leitura seguem a RN-F1.14" | Meus registros usa o vínculo (`motoristaDoUsuario`) | Fase 2, 8 — **a Fase 0 estava imprecisa** |
+| Portal | — | **Voltar** e **Remover foto** desligados durante o envio | Fase5-F1/F2 |
+| Verificação final | — | prefixo das fotos **literal** nos dois `app.use` (`e755ce7e`) e `/api/uploads/frotas-anexos` no inventário de montagens de `uploadsProtegidos` (`ab234a44`) | a 1ª rodada do `test:api` deu **548/555**: 7 arquivos `*Portao` (Etapas 148–154) varrem o fonte e exigem caminho literal em todo `app.use`; a 2ª, **554/555**: o inventário RN-81.04 trava a lista de montagens sob `/api/uploads` (a pasta nova tem de ser vista). Nenhum dos dois estava no harness do Frota — a Fase 0 não mediu as réguas de fonte de fora do módulo |
+
+### Sabotagens que não derrubam nada (declaradas)
+
+- **S4** filtro do multer aceitando qualquer tipo: a checagem dos primeiros bytes recusa do mesmo jeito (defesa em profundidade).
+- **S9** sem o fecho 404 depois do `express.static`: o 404 padrão do Express responde igual (no harness e, pelo código, no `index.js`,
+  onde nada abaixo do `rotasModulos` atende `/api/uploads/frotas-anexos`). Mantido por ser o padrão do almoxarifado.
+- **S2** sem a comparação do dono na conferência: o upload continua 403 pelo `motorista_id = ?` do `INSERT` (só o `DELETE` cai) — as
+  duas camadas são provadas separadamente (S2 e S14).
+
+### Verificação final (medida, rodada sozinha, sem revisores com servidor)
+
+`npm run test:api` **555/555 arquivos OK** (na ponta `ab234a44`; rodadas anteriores 548/555 e 554/555 — ver divergências); `test:almoxarifado` **44/44**; `test:validation` **4/4**; `test:safealter` **3/3**; `test:sqlite` **16/16**; tela **198 suítes, 2687/2687 testes** (na ponta `34de8111`; depois só mudou servidor); `build` com `CI=true` **"Compiled successfully."**. Frota no servidor: 17 arquivos `frotas*`, **173 passaram, 0 falharam** (`frotasAnexos` 19, `frotasAnexosIntegracao` 2); Frota na tela: 12 suítes em `src/components/frotas`, **146/146** (`FrotasFotos` 33).
+
+### Retro (4 números)
+
+| Medida | Valor |
+|---|---|
+| Rodadas de correção | **1** fix-round da Fase 5 (`34de8111`) + **2** da verificação final (`e755ce7e`, `ab234a44`); nenhum teste falhou em 3 rodadas |
+| Achados da revisão | Fase 2 (plano): **5 travas + 15 menores**; Fase 5 (código): **2 reais** (F1, F2) + **1 real de informação mantido** (S1, E17) + **0 de segurança** contra o servidor real; verificação final pegou **2 réguas de fonte de fora do módulo** que nenhum revisor viu |
+| Paralelismo | T2 (tela) num subagente em paralelo com T1/T3 (servidor), contra o contrato congelado — **sem retrabalho**; os dois revisores da Fase 5 em paralelo |
+| Defeito que escapou | Da Etapa 4: nenhum descoberto nesta etapa (relatórios e planilha reconferidos na integração, RN-F5.12). Da Etapa 5: (preencher na seguinte) |
+
+## Próxima tarefa detalhada — Etapa 6: tratar a pendência do registro
+
+**Por que esta (B60):** com a foto, o ciclo da avaria tem começo (o motorista marca e fotografa) mas não tem fim. Medido nesta etapa
+(`frotasService.getAlertas`, ~linha 1286): o alerta *"Checklist com pendência — (placa)"* nasce de todo registro com `status_geral =
+'PENDENCIA'` e **some sozinho depois de 7 dias** (`date(data_checklist) >= date(hoje, '-7 days')`), consertado ou não; não existe
+coluna, rota nem tela para dizer "tratado". O gestor perde o fio: uma falha de freio de 8 dias atrás some do painel sem ninguém ter
+mexido, e uma avaria já consertada continua gritando por uma semana. Não depende de ninguém. **Descartados:** cadastro inicial dos 4
+veículos (V01–V03/C01, depende das placas/modelos/km do André) e seção 3 do formulário (depende da folha inteira); alerta de consumo
+da máquina (D12 — precisa de alguém informar o consumo esperado em L/h); botão de remover foto do gestor (D14 — pequeno, pode ir junto
+como fatia extra se sobrar).
+
+**Medido (Fase 0 adiantada):**
+- `frotas_checklists` (saída/retorno/inspeção do portal e o Novo Checklist antigo) tem `status_geral` (OK/PENDENCIA/INCOMPLETO, régua
+  única `situacaoDoRegistro` em `schema.js`) e não tem nenhum campo de tratamento. Não há `PUT /checklists` (B10: a tela antiga não edita).
+- O alerta é montado em `getAlertas` (mesma lista do painel e de `GET /alertas`, perfil `ver_painel`); o painel não tem cartão de
+  pendência (só `checklistsHoje`).
+- A coluna **Situação** da lista Checklist (`frotasEntityConfigs.situacaoDoChecklist`) e o "Meus registros" do portal (`SITUACAO`)
+  mostram a etiqueta; a planilha (`exportacaoService`, aba Checklist) tem a coluna de situação.
+- A exclusão do registro já apaga as fotos (RN-F5.08) — o tratamento não exclui nada.
+
+**Contrato proposto (congelar na Fase 1):**
+- RN-F6.01 — Colunas novas em `frotas_checklists` (`safeAlter`): `pendencia_tratada_em` (data/hora de Brasília), `pendencia_tratada_por_id`,
+  `pendencia_tratada_por_nome`, `pendencia_tratamento` (texto, obrigatório), `pendencia_manutencao_id` (opcional, a manutenção aberta
+  para o conserto). A situação gravada **não muda** (continua PENDENCIA — é o que o motorista viu); "tratada" é um estado à parte.
+- RN-F6.02 — `POST /api/frotas/checklists/:id/tratar-pendencia` `{ tratamento, manutencao_id? }`, perfil `gerenciar_veiculos` (só o
+  gestor; Consulta e motorista 403). 404 `Registro não encontrado`; 409 `Este registro não tem pendência` (situação ≠ PENDENCIA); 409
+  `Esta pendência já foi tratada` (gravação com `WHERE pendencia_tratada_em IS NULL` — dois gestores ao mesmo tempo: um só grava); 400
+  `Descreva o que foi feito` (texto vazio/só espaços); 400 `Manutenção não encontrada` / do mesmo veículo. `200` → o registro.
+- RN-F6.03 — Desfazer (`DELETE …/tratar-pendencia`, gestor) para o tratamento marcado por engano — decidir na Fase 1 (letra B).
+- RN-F6.04 — O alerta de pendência só sai para registro **não tratado**; decidir na Fase 1 se a janela de 7 dias continua (proposta:
+  **não tratada não some** — o alerta fica até alguém tratar; letra B, com a consulta A para medir quantas pendências antigas
+  apareceriam no primeiro dia).
+- RN-F6.05 — Listas: `GET /checklists` e `meus-registros` trazem `pendencia_tratada_em`, `pendencia_tratamento`,
+  `pendencia_tratada_por_nome`; a etiqueta vira **PENDÊNCIA · tratada** (ou *"TRATADA"*) na lista do gestor e no Meus registros; a
+  planilha ganha no **fim** da aba Checklist `Pendência tratada em` e `O que foi feito` (B41: colunas novas no fim).
+- RN-F6.06 — Fatia visível: botão **Tratar pendência** na linha PENDÊNCIA da lista Checklist (e no alerta do painel), com o modal de
+  texto (+ escolher a manutenção do veículo); o motorista vê *"Tratada em dd/mm: (o que foi feito)"* no Meus registros.
+
+**Pontos de atenção:**
+1. Escopo: o motorista lê o tratamento do registro dele (nada novo a esconder) e não trata; o Consulta lê e não trata.
+2. Concorrência: o "já tratada" tem de ir no `WHERE` da gravação (o padrão do teto de fotos), não num `SELECT` antes.
+3. A régua da situação (`situacaoDoRegistro`) **não** muda — relatórios, planilha (coluna de situação) e as RN-F1.02/03 continuam; quem
+   olha "tratada" é a camada nova.
+4. Data/hora do tratamento no dia de Brasília (`diaLocal`/`hojeLocalISO`), não `CURRENT_TIMESTAMP` UTC, se for exibida como dia.
+5. A tela de lista é a genérica (`FrotasEntityPage`): ação por linha precisa de um gancho novo (o mesmo que o D14 pediria) — medir antes
+   de prometer; alternativa é o botão no alerta do painel.
+6. Integração exigida: motorista registra com falha pelo portal (com foto) → alerta aparece → gestor trata pela rota → alerta some,
+   lista e Meus registros mostram tratada, planilha traz as colunas; pelo serviço, o mesmo.
+
+**Se não sobrar nada de valor alto independente depois da Etapa 6:** o que resta no mapa depende de entrada externa (cadastro dos 4
+veículos, seção 3) ou é pequeno (D14, B36 — a pergunta do km menor nas telas do gestor; C5 — a tela antiga de 7 itens). Dizer isso no
+plano da Etapa 6 em vez de inventar etapa.

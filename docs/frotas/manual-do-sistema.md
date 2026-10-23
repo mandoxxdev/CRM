@@ -10,8 +10,8 @@ O módulo tem três perfis. O perfil decide o que a pessoa vê e o que ela pode 
 | Perfil | Vê | Grava |
 |---|---|---|
 | **Administrador de Frota** (o gestor) | Tudo: painel, alertas, relatórios, todos os cadastros e lançamentos | Tudo: veículos, motoristas, manutenções, abastecimentos, viagens, checklists, multas, documentos; aprova e cancela viagem; exclui; exporta a planilha |
-| **Motorista** | Só o que é **dele**: os próprios registros, abastecimentos, viagens e multas; no cadastro de motoristas, só ele mesmo | Pelo **Meu painel**: saída, retorno, inspeção e abastecimento, sempre em nome dele |
-| **Consulta** | Painel, alertas, relatórios e todas as telas de cadastro e lançamento, só para ler (inclusive CPF e CNH dos motoristas e os valores) | Nada (só exporta a planilha). As telas aparecem sem os botões de novo, editar, aprovar e excluir |
+| **Motorista** | Só o que é **dele**: os próprios registros, abastecimentos, viagens e multas; no cadastro de motoristas, só ele mesmo | Pelo **Meu painel**: saída, retorno, inspeção e abastecimento, sempre em nome dele, com até 3 fotos em cada; manda e remove foto só dos lançamentos dele |
+| **Consulta** | Painel, alertas, relatórios e todas as telas de cadastro e lançamento, só para ler (inclusive CPF e CNH dos motoristas e os valores, e as fotos de todos) | Nada (só exporta a planilha). As telas aparecem sem os botões de novo, editar, aprovar e excluir |
 
 Como o perfil é decidido:
 
@@ -28,7 +28,7 @@ Para alguém usar o módulo, o administrador precisa dar a ele **acesso ao módu
 
 - Ver o painel do gestor e os alertas. Se tentar, o sistema responde *"Sem permissão para esta operação"* — na prática, ao abrir
   **Frota** ele é levado direto para o **Meu painel**.
-- Ver os dados dos colegas (CPF, CNH, lançamentos).
+- Ver os dados dos colegas (CPF, CNH, lançamentos, nem as fotos deles).
 - Alterar um lançamento que não é dele: *"Você só pode alterar os seus próprios registros"*.
 - Aprovar ou cancelar viagem: *"Só o gestor da frota pode aprovar ou cancelar viagem"*.
 - Lançar multa ou documento, nem ver a lista de documentos dos veículos (aberta pelo endereço, ela vem vazia).
@@ -78,12 +78,33 @@ Quando você está com um veículo, o painel mostra: "Você está com o veículo
 - **Avarias** — toque **+ Adicionar avaria**, escolha **onde** (Lado esquerdo, Lado direito, Em cima (teto), Frente, Traseira),
   **o que é** (Risco, Amassado, Trinca, Quebrado, Outro) e, se quiser, uma descrição; **Incluir avaria**. Pode haver várias; cada uma
   tem **Remover**.
+- **Fotos** — toque **Tirar foto**: o celular abre a câmera (no computador, a escolha de arquivo). Fotografe a avaria, o painel, o que
+  quiser mostrar. Cabem **até 3 fotos**; cada uma aparece em miniatura com **Remover foto**. Com 3, o botão apaga e aparece *"Limite de
+  3 fotos."*. As fotos **sobem depois** que o registro é salvo (veja "Como as fotos são enviadas", abaixo).
 - **Observações** — texto livre.
 
 O botão **Salvar** só acende quando os 12 itens estão marcados; enquanto faltar algum, o rodapé mostra "Faltam (N) de 12 itens.".
 Ao salvar, aparece "Saída registrada", "Retorno registrado" ou "Inspeção registrada" e você volta ao painel.
 
 Se o sistema recusar, a mensagem aparece em vermelho no topo do formulário e **nada é gravado**; o que você digitou continua lá.
+
+**Como as fotos são enviadas.** Ao tocar **Salvar**, o sistema grava o registro e, só depois, manda as fotos, uma de cada vez; o
+formulário fecha quando a última termina. Se alguma foto não subir (sem internet, arquivo recusado), **o registro continua salvo** e
+aparece o aviso *"Salvo, mas 1 foto não foi enviada: (motivo)"* (ou *"Salvo, mas 2 fotos não foram enviadas: (motivo)"*); sem motivo
+do servidor, o motivo é *"Confira a internet e tente de novo em Meus registros."*. A foto que faltou se manda depois, em **Meus
+registros** (2.9). Regras da foto, conferidas pelo servidor:
+
+| Situação | Mensagem |
+|---|---|
+| Arquivo que não é JPEG, PNG ou WEBP (inclusive um arquivo com nome de foto que, por dentro, não é foto) | *"Formato de imagem não suportado"* |
+| Arquivo de 10 MB ou mais | *"Arquivo grande demais (máximo 10 MB)"* |
+| O lançamento já tem 3 fotos | *"Este lançamento já tem 3 fotos"* |
+| Lançamento de outro motorista | *"Você só pode alterar os seus próprios registros"* |
+
+Uma foto com mais de 1 MB (a da câmera costuma ter de 3 a 8 MB), ou em formato que o servidor não aceita (como o HEIC do iPhone), é
+**reduzida no próprio celular** antes de subir: o lado maior fica com 1.600 pontos e ela vira JPEG. Isso a deixa leve e tira dela os
+dados do aparelho (inclusive a localização). Se o navegador não conseguir reduzir, ela vai como está — e uma foto em HEIC é recusada.
+Foto de até 1 MB em JPEG, PNG ou WEBP vai como está.
 
 ### 2.4 Sair com o veículo (Saída)
 
@@ -154,12 +175,21 @@ salvar: "Abastecimento registrado". O abastecimento de máquina por horímetro g
 
 O valor pode ficar em branco (vale zero). O preço por litro é **valor total ÷ litros**. O cálculo do km/L está em 3.6.
 
+**Foto do cupom** — o abastecimento tem o mesmo **Tirar foto** do formulário (até 3 fotos), para o cupom do posto. As fotos sobem
+depois que o abastecimento é salvo, com as mesmas regras e avisos de 2.3 ("Como as fotos são enviadas").
+
 ### 2.9 Ver os meus registros
 
 Abaixo dos botões, **Meus registros** mostra as suas últimas 30 saídas/retornos/inspeções (tipo, placa, data, hora, km — ou horas,
 como "125 h", na máquina — e a etiqueta OK / PENDÊNCIA / INCOMPLETO) e os seus últimos 30 abastecimentos (placa, litros, data, km ou
-horas, valor). É só para consulta: para corrigir um
-lançamento, fale com o gestor.
+horas, valor). Cada lançamento mostra as **miniaturas das fotos** dele; tocar numa abre a foto em outra aba. Para mandar uma foto que
+faltou (ou outra), toque **+ Foto** no lançamento (o botão some quando ele já tem 3); dá certo → *"Foto enviada"*; não dá → a
+mensagem do servidor ou *"Não foi possível enviar a foto. Confira a internet e tente de novo."*. Para tirar uma foto errada, toque
+**Remover foto** embaixo dela e confirme *"Remover esta foto?"* → *"Foto removida"* (sem internet: *"Não foi possível remover a foto.
+Confira a internet e tente de novo."*). As fotos são a única coisa que você mexe aqui: para corrigir um lançamento, fale com o gestor.
+
+O endereço de cada foto vale por cerca de **2 horas**: se a tela ficou aberta mais que isso, a miniatura não abre — saia e entre de
+novo no painel (ou recarregue a página).
 
 ### 2.10 Regras de data, hora e km que valem em todos os formulários
 
@@ -247,10 +277,16 @@ está como **Consulta**, esses botões (e o de aprovar viagem) não aparecem: a 
 | Tela | O que guardar de importante |
 |---|---|
 | **Manutenções** | Preventiva/corretiva, oficina, custo, km, próxima revisão (km e data). Criada como **em andamento**, põe o veículo em manutenção (que bloqueia a saída no portal) |
-| **Abastecimentos** | Mostra os lançados pelo portal e pelo escritório, com **Km/L** (na máquina, o consumo em litros por hora, ex.: "5,00 L/h"; se a linha tem km e horímetro, os dois: "10,50 km/L · 5,00 L/h"). Editar litros ou valor refaz o preço por litro. Para máquina por horímetro, use **Horímetro no abastecimento (máquina)** e deixe o KM vazio: a coluna KM mostra as horas ("125 h") e a linha fica sem km/L. O escritório pode lançar km menor que o do veículo (lançamento atrasado) sem pergunta |
+| **Abastecimentos** | Mostra os lançados pelo portal e pelo escritório, com **Km/L** (na máquina, o consumo em litros por hora, ex.: "5,00 L/h"; se a linha tem km e horímetro, os dois: "10,50 km/L · 5,00 L/h"). Editar litros ou valor refaz o preço por litro. Para máquina por horímetro, use **Horímetro no abastecimento (máquina)** e deixe o KM vazio: a coluna KM mostra as horas ("125 h") e a linha fica sem km/L. O escritório pode lançar km menor que o do veículo (lançamento atrasado) sem pergunta. A coluna **Fotos** mostra a foto do cupom que o motorista mandou pelo portal |
 | **Viagens** | Saída/retorno, km, origem, destino, finalidade, status. O botão **Aprovar** (✓) aparece só em viagem **solicitada**. Para máquina por horímetro: **Horímetro saída (máquina)** e **Horímetro retorno (máquina)**; a coluna KM rodado mostra as horas usadas ("6,5 h") |
-| **Checklist Diário** | Lista todos os registros (Data, Placa, **Tipo**: Saída/Retorno/Inspeção, Motorista, **KM**, **Situação**, Observações). O **Novo Checklist** daqui é o formulário simples de 7 itens sim/não (pneus, óleo, luzes, freios, extintor, documentos, limpeza), sem avarias. Não edita |
+| **Checklist Diário** | Lista todos os registros (Data, Placa, **Tipo**: Saída/Retorno/Inspeção, Motorista, **KM**, **Situação**, Observações, **Fotos**). O **Novo Checklist** daqui é o formulário simples de 7 itens sim/não (pneus, óleo, luzes, freios, extintor, documentos, limpeza), sem avarias. Não edita |
 | **Multas**, **Documentos** | Só o gestor lança e altera |
+
+**Fotos nas listas.** Em **Checklist Diário** e **Abastecimentos**, a coluna **Fotos** mostra a **primeira** foto do lançamento em
+miniatura e, se houver mais, *"+1"* ou *"+2"* (link para a seguinte); sem foto, *"-"*. Clicar abre a foto em outra aba. Quem é
+**Consulta** vê as fotos de todos; o motorista, só as dele. O endereço da foto vale por cerca de 2 horas: com a lista aberta há mais
+tempo, recarregue a página. **Excluir** um registro ou abastecimento apaga também as fotos dele. Esta tela não remove uma foto sozinha:
+para isso, o motorista usa **Remover foto** em **Meus registros**. A planilha e os relatórios não levam as fotos.
 
 Regras das viagens (valem também para o gestor):
 

@@ -1,10 +1,10 @@
 # Módulo Frota — guia do que existe hoje
 
-> **Onde paramos:** **Etapa 4 — relatórios fechados — entregue em 2026-10-23** (na `main`, commits `99658314` a `bcb498a0`, com a
-> Fase 5). Relatórios e planilha no mesmo período (uma data ou duas), multas pela data da infração, a máquina com horas e litros por hora,
-> linha Total que bate com a planilha, aba Multas. Antes, no mesmo dia: Etapa 3 (km e horímetro no portal), Etapa 2 (perfil
-> Consulta/Motorista pela tela) e Etapa 1 (portal do motorista).
-> **Próxima:** Etapa 5 — foto da avaria e do cupom; ver "Próxima tarefa detalhada" no fim do [plano da Etapa 4](../superpowers/plans/2026-10-23-frotas-etapa4-relatorios.md).
+> **Onde paramos:** **Etapa 5 — foto da avaria e do cupom — entregue em 2026-10-23** (na `main`, commits `786d1ec5` a `ab234a44`, com a
+> Fase 5, mais o fechamento). O motorista tira até 3 fotos pelo celular na Saída, no Retorno, na Inspeção e no Abastecimento; vê, reenvia e
+> remove em Meus registros; o gestor e o Consulta veem a miniatura nas listas Checklist e Abastecimentos. Antes, no mesmo dia: Etapa 4
+> (relatórios fechados), Etapa 3 (km e horímetro no portal), Etapa 2 (perfil Consulta/Motorista pela tela) e Etapa 1 (portal do motorista).
+> **Próxima:** Etapa 6 — tratar a pendência do registro; ver "Próxima tarefa detalhada" no fim do [plano da Etapa 5](../superpowers/plans/2026-10-23-frotas-etapa5-fotos.md).
 > O módulo ainda **não foi usado em produção**.
 >
 > Apresentação da etapa (com os cenários e as decisões): [`novidades-por-etapa.md`](novidades-por-etapa.md) ·
@@ -49,7 +49,7 @@ botão grande e preenche o mesmo formulário do papel — e só vê o que é del
 | Botão **Retorno** (só com viagem aberta) | Formulário do papel; fecha a viagem e calcula o km rodado |
 | Botão **Inspeção** | Formulário do papel sem viagem (inspeção periódica) |
 | Botão **Abastecimento** | Veículo, KM (ou horímetro, na máquina), litros, valor, data, posto |
-| **Meus registros** | As últimas 30 saídas/retornos/inspeções (com a situação OK / PENDÊNCIA / INCOMPLETO) e os últimos 30 abastecimentos dele |
+| **Meus registros** | As últimas 30 saídas/retornos/inspeções (com a situação OK / PENDÊNCIA / INCOMPLETO) e os últimos 30 abastecimentos dele, com as **fotos** de cada um (**+ Foto** e **Remover foto**) |
 
 O formulário de Saída/Retorno/Inspeção tem: veículo (no Retorno é o da viagem), **KM atual** (na máquina por horímetro, **Horímetro
 atual**; embaixo, *"Último registrado neste veículo: …"*), data, horário, **combustível** (Vazio, ¼,
@@ -57,6 +57,12 @@ atual**; embaixo, *"Último registrado neste veículo: …"*), data, horário, *
 (onde: lado esquerdo, lado direito, em cima, frente, traseira; o que é: risco, amassado, trinca, quebrado, outro; descrição opcional)
 e observações. O **Salvar** só acende com os 12 itens marcados. Número **menor** que o último do veículo: um aviso enquanto digita e,
 ao salvar, a pergunta com o botão **Confirmar mesmo assim** (desde a Etapa 3).
+
+**Fotos (desde a Etapa 5).** O formulário e o Abastecimento têm **Tirar foto**: abre a câmera do celular; até 3 fotos, cada uma com
+**Remover foto**. As fotos sobem **depois** que o lançamento é salvo; se alguma falhar, o lançamento fica salvo e aparece *"Salvo, mas 1
+foto não foi enviada: …"* — ela se manda de novo em **Meus registros** (**+ Foto**). Foto grande ou do iPhone (HEIC) é reduzida no
+próprio celular antes de subir. O gestor vê a primeira foto em miniatura (e *"+1"*/*"+2"*) na coluna **Fotos** das listas **Checklist
+Diário** e **Abastecimentos**.
 
 ## As telas do gestor, uma por uma
 
@@ -104,8 +110,7 @@ próximo clique dela; o menu dela muda quando ela recarrega a página.
 ## O que ainda atrapalha o uso real (em palavras simples)
 
 1. **Falta a parte 3 do formulário** ("Transmissão e itens específicos"): a imagem que recebemos está cortada.
-2. **Sem foto** da avaria ou do cupom.
-3. **O escritório não recebe a pergunta do km menor** (é ele quem lança atrasado e corrige): um km errado digitado na tela do gestor
+2. **O escritório não recebe a pergunta do km menor** (é ele quem lança atrasado e corrige): um km errado digitado na tela do gestor
    entra como antes.
 
 **Resolvidos na Etapa 1** (estavam nesta lista no levantamento):
@@ -116,6 +121,10 @@ próximo clique dela; o menu dela muda quando ela recarrega a página.
 - ~~Abastecimento lançado atrasado fica sem km/L~~ — **resolvido**: a conta é pela ordem do km, e o seguinte é refeito.
 - ~~Viagem: aprovar uma que já terminou; km de volta menor gerando km negativo~~ — **resolvido**: as duas são recusadas.
 - ~~Não sai Excel~~ — **resolvido**: Exportar planilha.
+
+**Resolvido na Etapa 5:**
+
+- ~~Sem foto da avaria ou do cupom~~ — **resolvido**: Tirar foto no portal; miniatura nas listas do gestor.
 
 **Resolvido na Etapa 4:**
 
@@ -256,10 +265,42 @@ Atual 100).
    desde Abastec. Anterior** e **Consumo L/h**. A soma de **Valor Total R$** (Abastecimentos) é a coluna **Combustível** do Total.
 10. **Consulta e motorista.** Como Consulta, Relatórios abre igual. Como motorista, Relatórios não está no menu.
 
-## O que as Etapas 1 a 4 **não** cobrem
+## Roteiro de teste manual (fotos)
+
+Preparação: como administrador, o carro *AAA1A11* e dois usuários com acesso ao módulo Frota ligados a motoristas (*Ana* e *Bruno*,
+em **Frota → Motoristas**, campo **Usuário de acesso**). Um celular (ou o navegador do computador, que abre a escolha de arquivo no
+lugar da câmera) e uma foto qualquer em JPEG, mais um arquivo que não é foto (um `.pdf`).
+
+1. **Foto da avaria.** Entre como *Ana* → **Meu painel** → **Inspeção**. Escolha *AAA1A11*, preencha o KM e os 12 itens, inclua uma
+   avaria (Lado esquerdo, Amassado). No grupo **Fotos** aparece *"Até 3 fotos (avarias, painel…). Elas sobem depois que o registro for
+   salvo."*. Toque **Tirar foto** e tire (ou escolha) uma foto: a miniatura aparece com **Remover foto**.
+2. **Limite.** Tire mais duas: o botão **Tirar foto** apaga e a dica vira *"Limite de 3 fotos."*. Toque **Remover foto** numa delas: o
+   botão volta.
+3. **Salvar.** **Salvar** → *"Inspeção registrada"*; o formulário fecha só depois de as fotos subirem. Em **Meus registros**, a inspeção
+   mostra as miniaturas; tocar numa abre a foto em outra aba.
+4. **Cupom.** **Abastecimento**: veículo, KM, litros; no grupo **Foto do cupom**, **Tirar foto** → **Salvar** → *"Abastecimento
+   registrado"*. Em **Meus registros**, o abastecimento mostra a foto.
+5. **+ Foto e Remover.** No abastecimento, toque **+ Foto** e escolha outra foto → *"Foto enviada"*. Toque **Remover foto** embaixo
+   dela → confirme *"Remover esta foto?"* → *"Foto removida"*.
+6. **Arquivo que não é foto.** No computador, **+ Foto**, troque o filtro da janela para "todos os arquivos" e escolha o `.pdf` → aparece *"Formato de imagem não suportado"* e nada é guardado.
+7. **Falha depois de salvar.** Faça uma **Inspeção** com uma foto e, antes de tocar **Salvar**, desligue a internet do celular **logo
+   depois** de tocar: o registro fica salvo e aparece *"Salvo, mas 1 foto
+   não foi enviada: …"*. Religue e mande por **+ Foto**.
+8. **O gestor vê.** Como administrador, **Frota → Checklist Diário**: a coluna **Fotos** da inspeção da Ana mostra a primeira foto e
+   *"+1"* (ou *"+2"*); clicar abre. **Frota → Abastecimentos**: a foto do cupom. Linha sem foto: *"-"*.
+9. **O colega não vê.** Entre como *Bruno*: em **Meu painel**, nada da Ana. Como **Consulta**, as listas mostram as fotos de todos.
+10. **Excluir leva as fotos.** Como administrador, guarde (botão direito → copiar endereço) o link de uma foto da inspeção da Ana,
+    exclua a inspeção em **Checklist Diário** e abra o link: a página não encontra nada (404).
+11. **O link vence.** Um link de foto copiado vale por cerca de 2 horas; depois disso abre em branco (404). Recarregar a lista gera
+    links novos.
+
+## O que as Etapas 1 a 5 **não** cobrem
 
 - Dar **Administrador de Frota** pela tela de Perfis (continua no cadastro de usuário); saber **quem** mudou um perfil; lembrar o
   Consulta de quem foi administrador e deixou de ser.
-- A **seção 3** do formulário (imagem cortada), **foto** da avaria/cupom, **desenho** clicável das avarias.
+- A **seção 3** do formulário (imagem cortada), **desenho** clicável das avarias.
+- **Fotos:** o gestor não remove uma foto sozinha na lista (o motorista remove em Meus registros, ou o gestor exclui o lançamento); a
+  foto é do registro, não de cada avaria; a tela antiga **Novo Checklist** e o formulário de abastecimento do gestor não enviam foto; a
+  planilha e os relatórios não levam foto.
 - A **pergunta do km menor nas telas do gestor**; o **alerta de consumo baixo** da máquina (só existe em km/L); apelido **V01/C01**.
 - O motorista **corrigir** o que lançou pelo portal (a correção é com o gestor).

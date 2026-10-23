@@ -4,9 +4,10 @@
 > Para quem **usa** o sistema (sem número de etapa nem histórico), o documento é o
 > [`manual-do-sistema.md`](manual-do-sistema.md). Guia com roteiro de teste: [`README.md`](README.md).
 >
-> **Onde estamos:** **Etapa 4 (relatórios fechados) entregue** em 2026-10-23, na `main` (commits `99658314` a `bcb498a0`, mais o
-> fechamento). Antes, no mesmo dia: Etapa 3 (km e horímetro no portal), Etapa 2 (perfil Consulta/Motorista pela tela) e Etapa 1 (portal
-> do motorista). Próxima: **Etapa 5 — foto da avaria e do cupom** (B54; detalhe em "Onde estamos e o que vem a seguir", no fim).
+> **Onde estamos:** **Etapa 5 (foto da avaria e do cupom) entregue** em 2026-10-23, na `main` (commits `786d1ec5` a `ab234a44`, mais o
+> fechamento). Antes, no mesmo dia: Etapa 4 (relatórios fechados), Etapa 3 (km e horímetro no portal), Etapa 2 (perfil Consulta/Motorista
+> pela tela) e Etapa 1 (portal do motorista). Próxima: **Etapa 6 — tratar a pendência do registro** (B60; detalhe em "Onde estamos e o
+> que vem a seguir", no fim).
 
 ## ⚠️ Leia antes de apresentar
 
@@ -172,6 +173,12 @@ SELECT id, veiculo_id, data_abastecimento, litros FROM frotas_abastecimentos WHE
 | B52 | F4 (Fase 2) | Aba Multas **sem** a coluna de data de pagamento | coluna "Pagamento" | o formulário de multas não tem esse campo: a coluna sairia sempre vazia |
 | B53 | F4 (Fase 5) | Status de multa fora de pendente/pago/contestado é **recusado** (400) | aceitar e normalizar a caixa ("Contestado" → contestado) | normalizar mudaria em silêncio o que alguém mandou; a tela só manda os três. Multa já gravada com status torto (só por API ou SQL) continua somando no custo — consulta **A6** |
 | B54 | F4 (fechamento) | **Próxima etapa = foto da avaria e do cupom** no portal (D1) | cadastro inicial dos 4 veículos da planilha; seção 3 do formulário; alerta de consumo da máquina (D12) | é o que mais falta no dia a dia e não depende de ninguém: a planilha da empresa tem os 4 veículos só com "V01..C01" e o tipo (sem placa, modelo, ano — o cadastro depende do André mandar), e a seção 3 depende da folha inteira. O alerta da máquina precisa de um "consumo esperado em L/h" que ninguém informou |
+| B55 | F5 | Fotos: **até 3** por lançamento, **JPEG, PNG ou WEBP**, **abaixo de 10 MB** | 1 foto só; 5 MB (o que o plano da Etapa 4 sugeria); aceitar GIF/PDF | 3 cobre avaria + painel + placa (ou o cupom e o verso); 10 MB é o teto que o almoxarifado já usa e a foto do celular é reduzida antes (B57). Mudar é uma constante (`LIMITE_FOTOS`, `LIMITE_BYTES`). Medido: a biblioteca de upload recusa ao **atingir** o limite, então 10 MB exatos já são recusados — vale para todo o sistema |
+| B56 | F5 | O endereço de cada foto vale **2 horas** (até 2,5 com o arredondamento) | 15 min (o do almoxarifado); 12 h (o das fotos da proposta); servir pela rota com login | é a vida de uma lista aberta no celular ou na mesa; a lista relida assina de novo. Servir pela rota com login custaria uma consulta por miniatura. Ver **C17** |
+| B57 | F5 (Fase 2) | A tela **reduz** no celular a foto acima de 1 MB e **converte** o que não é JPEG/PNG/WEBP (HEIC do iPhone): lado maior 1.600, JPEG 0,8. A conversão **tira os metadados** (inclusive a localização GPS); a foto de até 1 MB em JPEG/PNG/WEBP sobe como está, **com** eles | subir sempre a original; reconverter todas (tiraria o GPS de todas, mas pioraria a foto pequena) | a foto do celular tem 3–8 MB: reduzida, sobe rápido na rede ruim do pátio e não estoura o teto. Se a empresa não quiser GPS nas fotos, reconverter todas é uma linha (`precisa = true`) |
+| B58 | F5 (Fase 2) | Na lista do gestor, **só a primeira** foto em miniatura (com *"+1"*/*"+2"* em link) e carregamento sob demanda | as 3 miniaturas | cada miniatura é um pedido ao servidor e o sistema limita 500 pedidos por endereço a cada 15 min — a fábrica inteira sai pelo mesmo endereço. Ver **C18** |
+| B59 | F5 | **Remover foto** existe no **Meus registros** do motorista; o gestor não tem botão (apaga o lançamento ou pede ao motorista) | botão também na lista do gestor | a lista do gestor é a tela genérica de cadastro; mexer nela para um botão por foto ficou para depois (**D14**). O servidor já aceita o gestor remover |
+| B60 | F5 (fechamento) | **Próxima etapa = tratar a pendência do registro**: o gestor marca a falha/avaria como tratada (com o que foi feito), o alerta sai do painel e o motorista vê | cadastro dos 4 veículos e seção 3 do formulário (dependem do André); alerta de consumo da máquina (D12, depende de alguém informar o consumo em L/h); botão de remover foto do gestor (D14, pequeno) | hoje o alerta de pendência **some sozinho em 7 dias**, tratada ou não, e não há onde dizer "consertado": o gestor perde o fio do que já resolveu. Não depende de ninguém e fecha o ciclo da foto (avaria → foto → tratada) |
 | B44 | F3 (fechamento) | **Próxima etapa = relatórios fechados**: multas no período (A7), a máquina no relatório (horímetro e consumo em litros por hora) e a aba de multas na planilha | foto da avaria/cupom; seção 3 do formulário | deixa a feature 10 (Relatórios) 🟢 sem infraestrutura nova; foto exige anexo (guardar arquivo, tamanho, quem vê), que é etapa própria; a seção 3 depende da folha inteira |
 
 ### C — furos conhecidos em operação
@@ -218,10 +225,16 @@ SELECT id, veiculo_id, data_abastecimento, litros FROM frotas_abastecimentos WHE
 - **C16 — um km errado para cima faz o portal perguntar para todo mundo.** Se alguém confirma 18.000 num carro de 1.800, o carro passa a
   18.000 e todo lançamento certo depois pergunta *"KM menor que o atual do veículo (18.000 km)…"*. O gestor corrige o **KM Atual** em
   **Veículos**. O sistema não pergunta por número **muito maior** que o atual.
+- **C17 — a foto de uma tela aberta há mais de 2 horas não abre.** O endereço de cada foto vence (B56). Na lista do gestor ou no Meus
+  registros aberto desde cedo, clicar na miniatura abre uma página vazia. Recarregar a tela (F5, ou sair e entrar no painel) resolve.
+- **C18 — muitas fotos na tela contam no limite de pedidos.** O sistema aceita 500 pedidos por endereço de rede a cada 15 minutos (a
+  fábrica toda costuma sair pelo mesmo). Cada miniatura que aparece é um pedido. Por isso a lista do gestor mostra só a primeira foto de
+  cada linha (B58); se alguém receber *"Muitas requisições. Tente novamente mais tarde."*, é este limite.
 
 ### D — limitações declaradas (cortes de escopo)
 
-- **D1 — sem foto nem anexo.** Nem da avaria, nem do cupom do abastecimento.
+- **D1 — sem foto (resolvido na Etapa 5).** *Dizia: "sem foto nem anexo. Nem da avaria, nem do cupom do abastecimento"* — o portal tem
+  **Tirar foto** no registro e no abastecimento, e o gestor vê na lista.
 - **D2 — mapa de avarias é lista, não desenho** (B5): o motorista escolhe *onde* (lado esquerdo, lado direito, em cima, frente,
   traseira), *o que é* (risco, amassado, trinca, quebrado, outro) e uma descrição opcional.
 - **D3 — A7 e a aba de multas (resolvidos na Etapa 4).** *Dizia: "o relatório de custo por veículo não filtra multas pelo período; a
@@ -242,6 +255,10 @@ SELECT id, veiculo_id, data_abastecimento, litros FROM frotas_abastecimentos WHE
 - **D12 — sem alerta de consumo baixo da máquina.** O alerta compara km/L com o "consumo esperado (km/L)" do cadastro; não existe
   "consumo esperado em L/h". Pôr é um campo no cadastro e um ramo no alerta.
 - **D13 — "Meus registros" do motorista não mostra consumo** (nem km/L, nem L/h). Só o gestor e o Consulta veem consumo.
+- **D14 — o gestor não remove uma foto pela lista** (B59). Remove o motorista, em Meus registros; ou o gestor exclui o lançamento
+  inteiro (as fotos vão junto).
+- **D15 — a foto é do registro, não de cada avaria.** Um registro com duas avarias tem até 3 fotos no total, sem dizer qual é de qual.
+  A tela antiga **Novo Checklist** e o formulário de abastecimento do gestor não mandam foto; a planilha e os relatórios não levam foto.
 
 ### E — verificações não executadas e regras não confirmadas
 
@@ -282,6 +299,17 @@ SELECT id, veiculo_id, data_abastecimento, litros FROM frotas_abastecimentos WHE
 - **E15 — data do período fora do formato.** A tela manda só datas do calendário (`AAAA-MM-DD`). Uma data torta por chamada direta à
   API (`?data_inicio=outubro`) não é recusada: compara como texto e o resultado sai vazio ou inteiro. Datas invertidas (início depois
   do fim) dão tabelas vazias, e o texto do período mostra as duas como foram digitadas.
+- **E16 — o roteiro da Etapa 5 não foi percorrido clicando no navegador, nem num celular de verdade** por quem escreveu este
+  fechamento. A câmera (`capture`), a redução da foto, o HEIC do iPhone e a rotação da foto em Android antigo não foram conferidos num
+  aparelho; o servidor de verdade foi exercitado por um revisor (pasta de dados vazia, ataques de tipo, tamanho, caminho e assinatura) e
+  as telas pelos testes automáticos. Faça o roteiro do guia (*"Roteiro de teste manual (fotos)"*) num celular antes de apresentar.
+- **E17 — dá para saber se um lançamento ou uma foto existe.** Mandar foto num registro de outro motorista responde *"Você só pode
+  alterar os seus próprios registros"*; num número que não existe, *"Registro não encontrado"*. Revela só que o número existe (os
+  números são sequenciais), não o conteúdo — é a mesma ordem das outras telas do Frota. Achado da revisão; mantido.
+- **E18 — atrás de um proxy (nginx, Coolify) com limite de tamanho menor que 10 MB**, a recusa da foto grande pode chegar como página do
+  proxy, e a tela mostraria o aviso genérico de internet. Não medido (a foto sobe reduzida, então só a que não pôde ser reduzida chega
+  perto do limite).
+- **E19 — verificação final da Etapa 5, rodada em 2026-10-23 na ponta da etapa (depois de `ab234a44`), sem revisores rodando:** `npm run test:api` **555/555 arquivos OK**; `test:almoxarifado` **44/44**; `test:validation` **4/4**; `test:safealter` **3/3**; `test:sqlite` **16/16**; tela **198 suítes, 2687/2687 testes**; `build` com `CI=true` **"Compiled successfully."**. Frota no servidor: 17 arquivos `frotas*`, **173 passaram, 0 falharam**; Frota na tela: 12 suítes, **146/146**. As duas primeiras rodadas do `test:api` deram 548/555 e 554/555 (réguas de fonte de fora do Frota: caminho literal no `app.use` e o inventário das pastas de `/api/uploads`) — corrigidas em `e755ce7e` e `ab234a44`.
 - **E10 — o teclado do celular no campo de horímetro** (`inputMode="decimal"`, com vírgula ou ponto conforme o aparelho) não foi
   conferido num celular de verdade.
 
@@ -652,6 +680,76 @@ maiúscula) recebe *"Status de pagamento inválido"* — antes era gravado e som
 
 ---
 
+## Etapa 5 — Foto da avaria e do cupom (2026-10-23)
+
+O motorista marcava *"Lado esquerdo: amassado"* sem poder mostrar o amassado, e o abastecimento entrava sem o cupom — o escritório
+continuava pedindo a foto pelo WhatsApp e guardando onde dava. Agora, no **Meu painel**, o formulário de Saída, Retorno e Inspeção e o
+de Abastecimento têm **Tirar foto**: abre a câmera do celular, cabem até 3 fotos, e elas sobem logo depois que o lançamento é salvo. O
+motorista vê as dele em **Meus registros** (e manda de novo a que falhou, ou tira a errada); o gestor e o Consulta veem a foto na lista
+**Checklist Diário** e **Abastecimentos**, ao lado do lançamento. Ninguém de fora abre a foto: o endereço vale só por 2 horas e só sai
+para quem pode ver aquele lançamento.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A avaria era só texto ("Lado esquerdo: Amassado") | **Tirar foto** no formulário: até 3 fotos por registro |
+| O cupom do posto ficava no bolso do motorista | **Foto do cupom** no Abastecimento |
+| A foto ia pelo WhatsApp, separada do lançamento | A foto fica **no lançamento**: o gestor vê na coluna **Fotos** de Checklist Diário e Abastecimentos |
+| — | **Meus registros** mostra as fotos de cada lançamento, com **+ Foto** (mandar a que faltou) e **Remover foto** |
+| — | Foto grande ou do iPhone (HEIC) é reduzida no próprio celular antes de subir |
+| — | Sem internet na hora: o lançamento fica salvo e um aviso diz qual foto não foi |
+| — | Excluir um registro ou abastecimento apaga as fotos dele |
+| — | O colega não vê a foto do outro; o Consulta vê todas; a planilha e os relatórios não mudam |
+
+### As regras, com o cenário exato
+
+**Preparação.** Como administrador: o carro *AAA1A11*; dois usuários com acesso ao Frota ligados a motoristas, *Ana* e *Bruno*
+(**Frota → Motoristas**, **Usuário de acesso**). Um celular, ou o navegador do computador (que abre a escolha de arquivo no lugar da câmera).
+
+**1. A foto da avaria.** Como *Ana*, **Meu painel → Inspeção**, *AAA1A11*, KM, os 12 itens, uma avaria (Lado esquerdo, Amassado). No grupo
+**Fotos** está escrito *"Até 3 fotos (avarias, painel…). Elas sobem depois que o registro for salvo."*. **Tirar foto** → a miniatura
+aparece com **Remover foto**.
+
+**2. O limite de 3.** Tire mais duas: **Tirar foto** apaga e a dica vira *"Limite de 3 fotos."*. (Pelo servidor, a quarta foto de um
+lançamento é recusada com *"Este lançamento já tem 3 fotos"* — mesmo que quatro cheguem ao mesmo tempo.)
+
+**3. Salvar sobe as fotos.** **Salvar** → *"Inspeção registrada"*; o formulário fecha quando a última foto termina de subir, e enquanto
+sobe **Remover foto** e **Voltar** ficam apagados. Em **Meus registros** a inspeção mostra as miniaturas; tocar abre a foto.
+
+**4. O cupom.** **Abastecimento**, grupo **Foto do cupom** (*"Até 3 fotos. Elas sobem depois que o abastecimento for salvo."*) → **Tirar
+foto** → **Salvar** → *"Abastecimento registrado"*.
+
+**5. Mandar depois, tirar a errada.** Em **Meus registros**, **+ Foto** no lançamento → *"Foto enviada"* (o botão some com 3 fotos).
+**Remover foto** → *"Remover esta foto?"* → *"Foto removida"*.
+
+**6. Sem internet na hora.** Se a foto não sobe, o lançamento **continua salvo** e aparece *"Salvo, mas 1 foto não foi enviada: Confira a
+internet e tente de novo em Meus registros."* (com duas: *"Salvo, mas 2 fotos não foram enviadas: …"*; com recusa do servidor, a
+mensagem dele no lugar).
+
+**7. Arquivo que não é foto.** No computador, **+ Foto** com um PDF → *"Formato de imagem não suportado"*. O servidor confere o tipo
+declarado **e** o começo do arquivo: um arquivo com nome `.jpg` que por dentro não é foto também é recusado. Foto de 10 MB ou mais (que
+não pôde ser reduzida): *"Arquivo grande demais (máximo 10 MB)"*.
+
+**8. O gestor vê.** Como administrador, **Frota → Checklist Diário**: a coluna **Fotos** da inspeção da Ana mostra a primeira foto e
+*"+2"*; clicar abre em outra aba. **Abastecimentos**: a foto do cupom. Sem foto: *"-"*.
+
+**9. Cada um vê o que é seu.** Como *Bruno*: nada da Ana em lugar nenhum; mandar foto num registro da Ana (só por chamada direta) →
+*"Você só pode alterar os seus próprios registros"*. Como **Consulta**: as fotos de todos, sem poder mandar (*"Sem permissão para esta
+operação"*).
+
+**10. Excluir leva as fotos; o endereço vence.** Copie o endereço de uma foto, exclua a inspeção em **Checklist Diário** e abra o
+endereço: página não encontrada. Um endereço copiado também deixa de abrir depois de cerca de 2 horas (C17).
+
+### O que esta etapa não cobre
+
+- **O gestor remover uma foto pela lista** (D14) — remove o motorista, ou o gestor exclui o lançamento.
+- **Foto por avaria** (D15) — as fotos são do registro inteiro.
+- **Foto pela tela antiga Novo Checklist e pelo formulário de abastecimento do gestor**; **foto na planilha e nos relatórios**.
+- O que já estava fora: seção 3 do formulário, desenho das avarias, apelido V01/C01, o motorista corrigir o que lançou.
+
+---
+
 ## Onde estamos e o que vem a seguir
 
 - **Feito:** Etapa 1 — portal do motorista (vínculo usuário ↔ motorista, escopo do motorista, km/L pela ordem do km, uma viagem em
@@ -661,9 +759,9 @@ maiúscula) recebe *"Status de pagamento inválido"* — antes era gravado e som
   número menor (A8); a máquina por horímetro grava em horas (A10); o gestor e a planilha ganharam o horímetro; o "Admin" maiúsculo (E5).
   Etapa 4 — relatórios fechados: multas no período (A7), a máquina com horas e litros por hora, o mesmo período na tela e na planilha
   (com uma data só), linha Total que bate com a planilha, aba Multas. A7 era o último achado do levantamento ainda aberto.
-- **Próximo: Etapa 5 — foto da avaria e do cupom** (B54, D1): o motorista anexa a foto pelo celular no registro e no abastecimento; o
-  gestor vê na lista. Detalhe (contrato, pontos de atenção) no plano
-  [`2026-10-23-frotas-etapa4-relatorios.md`](../superpowers/plans/2026-10-23-frotas-etapa4-relatorios.md), seção "Próxima tarefa
-  detalhada".
+  Etapa 5 — foto da avaria e do cupom pelo celular (D1), no lançamento, em Meus registros e nas listas do gestor.
+- **Próximo: Etapa 6 — tratar a pendência do registro** (B60): o gestor marca a falha ou a avaria como tratada (o que foi feito), o
+  alerta sai do painel e o motorista vê. Detalhe (contrato, pontos de atenção) no plano
+  [`2026-10-23-frotas-etapa5-fotos.md`](../superpowers/plans/2026-10-23-frotas-etapa5-fotos.md), seção "Próxima tarefa detalhada".
 - **Depende do André:** a folha inteira do formulário (seção 3) e as placas/modelos dos 4 veículos da planilha (V01, V02, V03, C01) para
   o cadastro inicial.

@@ -1,4 +1,4 @@
-# Módulo Frota — referência técnica (estado em 2026-10-23, depois da Etapa 4)
+# Módulo Frota — referência técnica (estado em 2026-10-23, depois da Etapa 5)
 
 > Levantamento original lendo a `main` em `d16de90b`; **atualizado no fechamento da Etapa 1** (portal do motorista, `4ba85d16`) e no
 > **da Etapa 2** (perfil pela tela, `3aa4e088`..`805aaa3c`; plano
@@ -15,6 +15,7 @@
 | Rotas | `server/routes/frotas.js` | 265 | Registra `/api/frotas/*`; `crudRoutes` genérico (passa `req.user` a list/getOne/update desde a Etapa 1); cache de 30 s do dashboard (`limparCacheDashboard()` exportado para o harness) |
 | Serviço | `server/services/frotas/frotasService.js` | 1.310 | CRUD, km, consumo, alertas, dashboard, relatórios; **escopo do motorista** (`escopoDoUsuario`, `forcarMotoristaDoVinculo`, `conferirDonoPorMotorista`), vínculo, viagem única, `inserirRegistro`, `validarItens`/`validarAvarias` |
 | Portal | `server/services/frotas/portalService.js` | 235 | **Novo (Etapa 1).** `inicio`, `registrar` (saída/retorno/inspeção), `registrarAbastecimento`, `meusRegistros` |
+| Fotos | `server/services/frotas/anexosService.js` | ~200 | **Novo (Etapa 5).** `gravar` (tipo pelos primeiros bytes, dono e teto de 3 no mesmo `INSERT … WHERE EXISTS`), `apagar`, `apagarDoLancamento`, `comAnexos` (URL assinada na saída), `MSG` literais |
 | Exportação | `server/services/frotas/exportacaoService.js` | 189 | **Novo (Etapa 1).** O `.xlsx` no formato da planilha (lib `xlsx`) |
 | Fila | `server/services/frotas/filaDeViagens.js` | 17 | **Novo (Etapa 1).** `naFilaDeViagens(fn)` — fila única em memória, **não reentrante**, premissa de um processo |
 | Schema | `server/services/frotas/schema.js` | 323 | `CREATE TABLE IF NOT EXISTS` + `safeAlter` + seed; listas fixas; **`ITENS_CHECKLIST`** (os 12) e **`situacaoDoRegistro`** (a única régua da situação) |
@@ -50,6 +51,7 @@ Duas camadas, como no almoxarifado:
 | `registrar_operacoes` | ✓ | ✓ | | POST/PUT de manutenção, abastecimento, viagem, checklist; `POST /portal/registros`, `POST /portal/abastecimentos` |
 | `aprovar_viagens` | ✓ | | | `POST /viagens/:id/aprovar`; e levar a viagem a `aprovada`/`cancelada` pelo `POST`/`PUT` (RN-F1.20) |
 | `relatorios` | ✓ | | ✓ | relatórios e `GET /exportar.xlsx` |
+| (fotos) | | | | `POST /anexos` e `DELETE /anexos/:id` usam `registrar_operacoes` (ADMIN_FROTA e MOTORISTA) + o escopo por dono abaixo; Consulta 403 |
 | `configurar` | ✓ | | | `GET`/`PUT /perfis-usuario` (desde a Etapa 2) |
 
 `getPerfilFromUser`: sem usuário → `CONSULTA`; superadmin, admin do módulo `frota` ou `role` "admin" **em qualquer caixa** (desde a
@@ -99,20 +101,23 @@ manda); o resto passa por `respondDbError`. Contratos completos (mensagens liter
 | GET | `/api/frotas/portal/inicio` | módulo | **novo.** `{ motorista, viagem_aberta, veiculos[{…, status, em_uso}], itens, vistas, tipos_avaria, niveis_combustivel, perfil, pode_registrar, pode_gerir }`. **Etapa 3:** `veiculos[].horimetro_atual`; `viagem_aberta.horimetro_saida` e `tipo_medicao` (a régua com que a viagem abriu: `horimetro_saida` → horimetro; `km_saida` → km; senão a do veículo) |
 | POST | `/api/frotas/portal/registros` | `registrar_operacoes` | **novo.** `{ tipo, veiculo_id, km, data, horario, nivel_combustivel, itens, avarias, observacoes, origem, destino, finalidade }` → `201 { registro, viagem }`. **Etapa 3:** `+ horimetro` (máquina; o `km` é ignorado nela) e `+ confirmar_km_menor` (booleano). Leitura menor que a do veículo → 409 `{ error, code: 'KM_MENOR_QUE_ATUAL' \| 'HORIMETRO_MENOR_QUE_ATUAL' }`, depois das recusas duras; retorno em horas menor que a saída → 400 |
 | POST | `/api/frotas/portal/abastecimentos` | `registrar_operacoes` | **novo.** `motorista_id` = o do vínculo. **Etapa 3:** `horimetro`, `confirmar_km_menor` e os mesmos 409; máquina grava `horimetro_abastecimento` com `km_abastecimento` nulo |
-| GET | `/api/frotas/portal/meus-registros?limite=30` | módulo | **novo.** `{ registros, abastecimentos }` (máx. 200) |
+| GET | `/api/frotas/portal/meus-registros?limite=30` | módulo | **novo.** `{ registros, abastecimentos }` (máx. 200). **Etapa 5:** cada item `+ anexos` |
 | GET | `/api/frotas/usuarios-vinculaveis` | `gerenciar_motoristas` | **novo.** `[{ id, nome, email, ativo, motorista, perfil_frota }]`: ativos + o desativado ainda ligado; `perfil_frota` (efetivo) desde a Etapa 2 |
 | GET | `/api/frotas/perfis-usuario` | `configurar` | **Etapa 2.** `{ perfis: ['CONSULTA','MOTORISTA'], usuarios: [{ id, nome, email, perfil_explicito, perfil_efetivo, origem: forcado\|explicito\|padrao, motorista, viagem_aberta }] }` — ativos e não ocultos |
 | PUT | `/api/frotas/perfis-usuario/:usuarioId` | `configurar` | **Etapa 2.** `{ perfil: 'CONSULTA'\|'MOTORISTA'\|null\|'' }` → `{ usuario_id, perfil_explicito, perfil_efetivo, origem }`. 404 → 400 → 409 `PERFIL_FORCADO` → 409 `PROPRIO_PERFIL` |
 | GET | `/api/frotas/exportar.xlsx?data_inicio&data_fim` | `relatorios` | **novo.** `controle-de-frota-AAAA-MM-DD.xlsx`, 6 abas; **Etapa 4:** 7ª aba `Multas` (período por `diaDaMultaSql`) e `Horas desde Abastec. Anterior`/`Consumo L/h` no fim de Abastecimentos |
+| POST | `/api/frotas/anexos` | `registrar_operacoes` | **Etapa 5.** multipart `foto` + `entidade` (`registro`\|`abastecimento`) + `entidade_id` → `201 { id, entidade, entidade_id, url, tipo_mime, tamanho, created_at }`. `requirePermission` **antes** do multer. Recusas na ordem: 403 perfil → 400 `Envie uma foto por vez` → 400 `Formato de imagem não suportado` (MIME) → 413 `Arquivo grande demais (máximo 10 MB)` → 400 `Não foi possível ler a foto enviada` → 400 `Nenhuma foto enviada` → 400 `Tipo de lançamento inválido` → 400 `Lançamento inválido` → 404 `Registro não encontrado`/`Abastecimento não encontrado` → 409 `MOTORISTA_NAO_VINCULADO` → 403 `Você só pode alterar os seus próprios registros` → 400 formato (primeiros bytes) → 409 `LIMITE_DE_FOTOS` `Este lançamento já tem 3 fotos`. Toda recusa depois do multer apaga o arquivo |
+| DELETE | `/api/frotas/anexos/:id` | `registrar_operacoes` | **Etapa 5.** 404 `Foto não encontrada` → 409/403 (dono; lançamento sumido: só o gestor) → `{ success: true }`; o arquivo só é apagado se a linha foi |
+| GET | `/api/uploads/frotas-anexos/<arquivo>?exp&sig` | só assinatura | **Etapa 5.** `criarAssinadorUpload(JWT_SECRET, PASTAS.frotasAnexos)` — domínio `frotas-anexos-v1`, 120 min + balde 30; `express.static` com `index:false`, `dotfiles:'deny'`, `cabecalhosUploadSeguro` (nosniff, CSP sandbox, private); fecho 404. Toda falha = 404 |
 | GET/POST/PUT/DELETE | `/api/frotas/veiculos[/:id]` | GET módulo; resto `gerenciar_veiculos` | |
 | GET/POST/PUT/DELETE | `/api/frotas/motoristas[/:id]` | GET módulo (escopo); resto `gerenciar_motoristas` | aceita `usuario_id` (null desvincula) |
 | GET/POST/PUT/DELETE | `/api/frotas/manutencoes[/:id]` | POST/PUT `registrar_operacoes`; DELETE `gerenciar_veiculos` | escopo por `usuario_id` |
-| GET/POST/PUT/DELETE | `/api/frotas/abastecimentos[/:id]` | idem | + `km_desde_anterior`; recálculo do vizinho. **Etapa 4:** GET `+ horas_desde_anterior`, `+ consumo_litros_hora` (calculados na leitura). **Etapa 3:** `horimetro_abastecimento` (PUT: ausente mantém, vazio apaga); sem a régua do km menor (B36) |
+| GET/POST/PUT/DELETE | `/api/frotas/abastecimentos[/:id]` | idem | + `km_desde_anterior`; recálculo do vizinho. **Etapa 5:** GET `+ anexos`; DELETE apaga o lançamento e depois as fotos (linhas e arquivos). **Etapa 4:** GET `+ horas_desde_anterior`, `+ consumo_litros_hora` (calculados na leitura). **Etapa 3:** `horimetro_abastecimento` (PUT: ausente mantém, vazio apaga); sem a régua do km menor (B36) |
 | GET/POST/PUT/DELETE | `/api/frotas/multas[/:id]` | **POST/PUT `gerenciar_veiculos`** | *era `registrar_operacoes`; mudou na Etapa 1* |
 | GET/POST/PUT/DELETE | `/api/frotas/documentos[/:id]` | **POST/PUT `gerenciar_veiculos`** | *idem*; GET: MOTORISTA recebe `[]` (Etapa 2) |
 | GET/POST/PUT/DELETE | `/api/frotas/viagens[/:id]` | POST/PUT `registrar_operacoes`; DELETE `gerenciar_veiculos` | fila de viagens; viagem única; km e data do retorno; RN-F1.20. **Etapa 3:** `horimetro_saida`/`horimetro_retorno` (PUT: null/ausente mantém; retorno menor que a saída → 400) |
 | POST | `/api/frotas/viagens/:id/aprovar` | `aprovar_viagens` | **só `solicitada`** (409). *No levantamento "não confere o status atual"; mudou na Etapa 1* |
-| GET/POST/DELETE | `/api/frotas/checklists[/:id]` | POST `registrar_operacoes` | **sem PUT**. Lista traz `tipo_registro, km, horario, nivel_combustivel, status_geral, itens, avarias, viagem_id` |
+| GET/POST/DELETE | `/api/frotas/checklists[/:id]` | POST `registrar_operacoes` | **sem PUT**. Lista traz `tipo_registro, km, horario, nivel_combustivel, status_geral, itens, avarias, viagem_id`, **`anexos`** (Etapa 5); DELETE apaga também as fotos |
 
 Sem validação de esquema (Zod) — checagem no serviço.
 
@@ -129,12 +134,22 @@ Sem validação de esquema (Zod) — checagem no serviço.
 | `frotas_documentos` | veiculo_id, tipo, numero_documento, valor, data_vencimento, alerta_dias_antes (30), status (ativo/vencido/renovado) | física |
 | `frotas_viagens` | veiculo_id, motorista_id, data_saida/retorno (`AAAA-MM-DDTHH:MM`), km_saida/retorno/rodado, **horimetro_saida/retorno** (Etapa 3), **origem** (novo), destino, finalidade, setor, status, aprovador_*, solicitante_*, observacoes | física |
 | `frotas_checklists` | veiculo_id, motorista_id, data_checklist, 7 × `*_ok`, observacoes, aprovado, usuario_id/nome; **novas:** `tipo_registro` (saida/retorno/inspecao, padrão inspecao), `km`, `horario`, `nivel_combustivel`, `itens_json` (os 12), `avarias_json`, `status_geral` (OK/PENDENCIA/INCOMPLETO), `viagem_id`; **Etapa 3:** `horimetro` | física |
+| `frotas_anexos` (Etapa 5) | entidade (`registro`→`frotas_checklists` | `abastecimento`→`frotas_abastecimentos`, CHECK), entidade_id, arquivo (UNIQUE, só o nome), tipo_mime, tamanho, usuario_id/nome, created_at; índice `(entidade, entidade_id)`. Arquivos em `<CRM_DATA_DIR>/uploads/frotas-anexos` (entram no backup) | física, junto com o lançamento |
 | `perfil_frota_usuario` (em `index.js` e, desde a Etapa 2, também no `schema.js` do Frota) | usuario_id (PK), perfil (padrão 'MOTORISTA'), updated_at | gravada por `syncModuleAdminProfiles` (ADMIN_FROTA) e, desde a Etapa 2, por `PUT /perfis-usuario` (CONSULTA/MOTORISTA) |
 
 Saída, retorno e inspeção do portal são linhas de `frotas_checklists` (B1). Os 7 `*_ok` continuam gravados a partir dos 12:
 pneus←pneus_estepe, oleo←oleo_motor, luzes←farois_lanternas, freios←freios, documentos←documentos_equipamentos (FALHA → 0, OK/NA → 1,
 ausente → nulo); extintor e limpeza → 1. A API devolve `itens` (objeto, ou `null` em registro da tela antiga) e `avarias` (array) no
 lugar do JSON cru.
+
+
+**Injeção (Etapa 5).** `registerFrotasRoutes(app, db, auth, checkModulePermission, { dataDir, segredoUpload })` — sem os dois, **lança**.
+`index.js` passa `PERSISTENT_DATA_DIR` e `JWT_SECRET`; o harness `frotasTestApp`, uma pasta temporária por app (apagada na saída do
+processo) e um segredo de teste, nas duas montagens (`createFrotasTestApp` e `comLoginReal`); expõe `uploadsDir`, `dataDir`,
+`segredoUpload`. O multer é o embrulhado (`multerComLimiteNoErro`), com filtro próprio (jpeg/jpg/png/webp — o `filtroImagemMulter`
+aceitaria gif), nome `frota-<24 hex>` e extensão por `extensaoSegura`; o erro do multer é traduzido **na rota** pelos
+`tratarErroFormatoImagem`/`tratarArquivoGrandeDemais` (o harness não monta os handlers do `/api`). Medido: o busboy dispara o limite ao
+**atingir** o `fileSize` — 10 MB exatos já são 413 (vale para todo multer do sistema).
 
 Schema montado na primeira requisição/boot por `runInitSchemaWithRetry` (3 tentativas), depois do `SELECT 1` que espera a fila de
 DDL do `index.js`.
@@ -211,6 +226,9 @@ HTTP (8 abastecimentos em paralelo passavam antes do conserto); a prova é a cha
 
 Etapa 4: `frotasRelatorios.api.test.js` e `frotasRelatoriosIntegracao.api.test.js` (pela rota e pelo serviço; reconciliação tela ×
 planilha, RN-F4.14); `frotasExportacao` ajustado (7 abas, colunas no fim). Tela: `FrotasRelatorios.test.js`. Números no plano da Etapa 4.
+
+Etapa 5: `frotasAnexos.api.test.js` (RN-F5.01..08, corrida da exclusão, dono trocado no meio, domínio da assinatura) e
+`frotasAnexosIntegracao.api.test.js` (pela rota e pelo serviço). Tela: `FrotasFotos.test.js`. Números no plano da Etapa 5.
 
 ## Achados
 
