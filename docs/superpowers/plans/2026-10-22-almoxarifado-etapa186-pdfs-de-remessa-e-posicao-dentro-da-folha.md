@@ -619,3 +619,22 @@ isso); este plano com a próxima tarefa detalhada.
 - M7 (letra larga / texto real): o título da posição passava da margem com **48** letras largas / **54** de texto real de razão; o proprietário
   com **72** / **83** (números da Fase 0 e da Fase 2, não remedidos aqui).
 - Divergência: as suítes completas rodam uma vez no fim, depois da T6 (registro abaixo, na T6).
+- Commit: `9ea04c28`.
+
+### T6 — ficha e termo usam o helper (feita — a 185 fechou na `main` em `c90b403f`)
+
+- `fichaEpiPdf.js`: a `linhasPorLargura` privada saiu; importa `linhasPorLargura` e `utilDasColunas` de `./pdfTexto` (sem ciclo: `pdfTexto`
+  não importa nada). `UTIL_DA_COLUNA = utilDasColunas(COLUNAS)` (mesmo valor). `quebrarPorLargura` (aparelho, B1207) **ficou**.
+- `termoFerramentaPdf.js` (relido no `HEAD` do dia — emenda M5: a closure estava em `:103`): `linhasQuebradas` chama `linhasPorLargura`.
+  `quebrarTexto` e a guarda `palavra &&` (`:33`, `9a5f46a0`) **não** foram tocados. O M5 (termo importa `carregarImagemComoDataUrl` da ficha)
+  não foi tocado.
+- Diferença de comportamento possível, conferida: o helper faz `String(texto ?? '')` (a privada fazia `String(texto)`) e lança com largura
+  inválida — as chamadas da ficha e do termo passam texto já convertido e larguras constantes positivas; nenhum teste mudou.
+- Guarda: os testes da 185 (`fichaEpiPdf`, `termoFerramentaPdf`, `EpiAlmoxarifado`, `FerramentasAlmoxarifado`) **sem nenhuma mudança** + `pdfTexto`:
+  **132/132** (5 suítes).
+- Controles (`e186-sab-t6cN.log`, âncora = 1, md5 restaurado = antes, `cmp` ok):
+  - (c1, o do plano) `pdfTexto.linhasPorLargura` sem aparar → caem **2**: `[RN-186.01] aparar` (T1) e `[Fase 5 da 185, emenda M1] linha partida
+    antes de palavra longa sai aparada` (`fichaEpiPdf.test.js`) — a ficha usa o helper de verdade;
+  - (c2, a mais) o helper devolvendo só a 1ª linha → cai `[RN-185.08] linhas de identificação longas quebram por largura` (`termoFerramentaPdf.test.js`)
+    — o termo usa o helper de verdade (nenhum teste do termo depende do aparar, então a (c1) sozinha não provava o termo).
+- Divergência: a (c1) não derrubou nenhum teste do termo (não há um que dependa do M1 nele); acrescentada a (c2).

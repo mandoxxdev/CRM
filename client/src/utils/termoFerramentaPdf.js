@@ -11,6 +11,7 @@ import { formatarDataDoBanco, formatarInstanteDoBanco, hojeLocalISO, lerInstante
 import { resolveMaterialPhotoUrl } from './resolveMaterialPhotoUrl';
 import { carregarImagemComoDataUrl } from './fichaEpiPdf';
 import { matriculaConfirmadaTexto } from './termoFerramenta';
+import { linhasPorLargura } from './pdfTexto';
 
 const txt = (v) => (v === null || v === undefined || String(v).trim() === '' ? '—' : String(v));
 
@@ -100,8 +101,9 @@ export async function gerarTermoFerramentaPdf(dados, { carregarImagem = carregar
   // de margem a margem; cada linha quebrada avanca 5 mm e a ULTIMA mantem o passo de antes — com texto curto, o y e o mesmo de hoje.
   // Antes: "Registrado por" com nome de 44 letras ia a 199,9 mm (margem 196), e os nomes nao tem tamanho maximo no cadastro.
   const LARGURA_UTIL = 196 - M;
+  // Etapa 186 (T6, B1231): a medida e a `linhasPorLargura` de ./pdfTexto (a mesma conta, que estava copiada aqui).
   const linhasQuebradas = (texto, passoFinal) => {
-    const linhas = pdf.splitTextToSize(String(texto), LARGURA_UTIL).map((s) => String(s).replace(/\s+$/, ''));
+    const linhas = linhasPorLargura(pdf, texto, LARGURA_UTIL);
     linhas.forEach((s, j) => { pdf.text(s, M, y); pular(j < linhas.length - 1 ? 5 : passoFinal); });
   };
 

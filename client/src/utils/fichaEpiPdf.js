@@ -11,6 +11,8 @@ import { rotuloMotivo } from './epiEntrega';
 // Etapa 183 (RN-183.03): o MESMO texto do termo de ferramenta. De termoFerramenta (sem imports), nao de termoFerramentaPdf: aquele
 // importa carregarImagemComoDataUrl daqui e fecharia um ciclo.
 import { matriculaConfirmadaTexto } from './termoFerramenta';
+// Etapa 186 (T6, B1231): a quebra por largura vem do helper sem imports (sem ciclo: pdfTexto nao importa nada).
+import { linhasPorLargura, utilDasColunas } from './pdfTexto';
 
 const txt = (v) => (v === null || v === undefined || String(v).trim() === '' ? '—' : String(v));
 
@@ -52,13 +54,11 @@ export function quebrarPorLargura(medir, texto, { rotulo = '', largura, larguraD
 // recuo das linhas seguintes do aparelho.
 const COLUNAS = [14, 32, 82, 102, 121, 131, 143, 168]; // = M, M + 18, M + 68, M + 88, M + 107, M + 117, M + 129, M + 154
 // Largura util: ate 1 mm antes da proxima coluna; a ultima (Entregue por) ate a margem direita.
-const UTIL_DA_COLUNA = COLUNAS.map((x, i) => (i < COLUNAS.length - 1 ? COLUNAS[i + 1] - 1 : 196) - x);
+const UTIL_DA_COLUNA = utilDasColunas(COLUNAS);
 
-// Quebra por PALAVRA, medida na fonte corrente (splitTextToSize: palavra maior que a largura e partida por caractere — nenhuma letra
-// perdida; a quebra so come o espaco entre palavras). Diferente do aparelho (quebrarPorLargura, corte por letra, B1207): ali a juncao das
-// linhas tem de ser o texto literal impresso como prova. Emenda M1: a linha e aparada a direita — o splitTextToSize deixa um espaco no
-// fim quando parte a palavra seguinte, e esse espaco (que nao e tinta) passaria da coluna na medida.
-const linhasPorLargura = (pdf, texto, largura) => pdf.splitTextToSize(String(texto), largura).map((s) => String(s).replace(/\s+$/, ''));
+// Quebra por PALAVRA, medida na fonte corrente: `linhasPorLargura` de ./pdfTexto (Etapa 186, B1231 — a conta que morava aqui, com o
+// aparar a direita da emenda M1, virou o helper compartilhado com a remessa e a posicao do cliente). Diferente do aparelho
+// (quebrarPorLargura, corte por letra, B1207): ali a juncao das linhas tem de ser o texto literal impresso como prova.
 
 /** Descritor da ficha — a moeda entre a tela, o teste e o renderizador. */
 export function montarFichaEpi({ colaborador, entregas = [], geradoEm } = {}) {
