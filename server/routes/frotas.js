@@ -6,6 +6,7 @@
 const { initSchema } = require('../services/frotas/schema');
 const frotasService = require('../services/frotas/frotasService');
 const portalService = require('../services/frotas/portalService');
+const exportacaoService = require('../services/frotas/exportacaoService');
 const { requirePermission } = require('../services/frotas/permissions');
 const { respondDbError } = require('../services/sqliteConcurrency');
 
@@ -169,6 +170,18 @@ module.exports = function registerFrotasRoutes(app, db, authenticateToken, check
   // Frotas Etapa 1 (F2-5): seletor do vinculo usuario <-> motorista (todos os usuarios ativos, sem filtro de setor)
   app.get('/api/frotas/usuarios-vinculaveis', ...frotaAuth, requirePermission('gerenciar_motoristas'), async (req, res) => {
     try { res.json(await frotasService.listUsuariosVinculaveis(db)); } catch (e) { handleError(res, e); }
+  });
+
+  // Frotas Etapa 1 (RN-F1.18): tudo no formato da planilha Controle de Frota GMP
+  app.get('/api/frotas/exportar.xlsx', ...frotaAuth, requirePermission('relatorios'), async (req, res) => {
+    try {
+      const { buffer, nomeArquivo } = await exportacaoService.exportarPlanilha(db, {
+        data_inicio: req.query.data_inicio || null, data_fim: req.query.data_fim || null,
+      });
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${nomeArquivo}"`);
+      res.send(buffer);
+    } catch (e) { handleError(res, e); }
   });
 
   // ── CRUD entidades ─────────────────────────────────────────────────────────
