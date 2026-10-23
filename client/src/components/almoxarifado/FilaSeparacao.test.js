@@ -226,3 +226,98 @@ test('erro de servidor mostra a mensagem; Atualizar recarrega', async () => {
   expect(q('[data-testid="fila-erro"]')).toBeNull();
   expect(q('[data-testid="fila-req-30"]')).not.toBeNull();
 });
+
+// ── Etapa 188 (T3): a sugestão de coleta — "Pegar em …", os avisos e a ordem de coleta (RN-188.08 com as emendas C1, I1, M2,
+// M5). Mock só na fronteira HTTP, com o JSON do contrato congelado no plano (Execução, T2).
+const SAI_DE = " — escolha este endereço no 'Sai de' ao separar";
+const pegar = (over = {}) => ({
+  localizacao_id: 12, localizacao_codigo: 'A-03', caminho: 'ALM1 / A-01 / A-03', lote_id: 7, lote_codigo: 'L7',
+  lote_validade: '2026-11-10', quantidade_no_endereco: 6, quantidade_sugerida: 5, cobre: true, ...over,
+});
+const montarCom = async (reqs) => {
+  api.get.mockResolvedValue({ data: reqs });
+  await montar();
+};
+const texto = (sel) => { const n = q(sel); return n ? n.textContent : null; };
+
+test('[RN-188.08] linha com lote e validade: Pegar em código (caminho) — lote (vence) · quantidade — Sai de', async () => {
+  await montarCom([req({ id: 1, itens: [item({ item_id: 11, a_separar: 5, separavel: 5, pegar_em: pegar(), pegar_em_aviso: null })],
+    ordem_coleta: [] })]);
+  expect(texto('[data-testid="fila-pegar-em-11"]'))
+    .toBe(`Pegar em A-03 (ALM1 / A-01 / A-03) — lote L7 (vence 10/11/2026) · 5 PC${SAI_DE}`);
+  expect(q('[data-testid="fila-pegar-em-aviso-11"]')).toBeNull();
+});
+
+test('[RN-188.08] sem lote e caminho de um segmento: sem lote, sem validade, sem parênteses', async () => {
+  await montarCom([req({ id: 1, itens: [item({ item_id: 11, a_separar: 3, separavel: 3,
+    pegar_em: pegar({ localizacao_codigo: 'B-02', caminho: 'B-02', lote_id: null, lote_codigo: null, lote_validade: null,
+      quantidade_sugerida: 3 }), pegar_em_aviso: null })] })]);
+  expect(texto('[data-testid="fila-pegar-em-11"]')).toBe(`Pegar em B-02 · 3 PC${SAI_DE}`);
+});
+
+test('[RN-188.08] cobre false (NENHUM_ENDERECO_COBRE): a frase da emenda C1', async () => {
+  await montarCom([req({ id: 1, itens: [item({ item_id: 11, a_separar: 12, separavel: 12,
+    pegar_em: pegar({ quantidade_sugerida: 6, cobre: false }), pegar_em_aviso: 'NENHUM_ENDERECO_COBRE' })] })]);
+  expect(texto('[data-testid="fila-pegar-em-aviso-11"]'))
+    .toBe('Nenhum endereço tem tudo: pegue 6 aqui. Separar o resto de outro endereço depois troca a origem da separação.');
+});
+
+test('[RN-188.08] PLANEJADA_NAO_COBRE: a frase com o código da planejada, com e sem pegar_em', async () => {
+  const frase = 'Já separado de A-01: o resto não cabe lá. Separar de outro endereço troca a origem da separação '
+    + '(a entrega passa a sair automática).';
+  await montarCom([req({ id: 1, itens: [
+    item({ item_id: 11, a_separar: 3, separavel: 3, a_entregar: 3, origem_separacao_codigo: 'A-01',
+      pegar_em: pegar({ localizacao_codigo: 'A-01', caminho: 'ALM1 / A-01', lote_id: null, lote_codigo: null, lote_validade: null,
+        quantidade_sugerida: 1, cobre: false }), pegar_em_aviso: 'PLANEJADA_NAO_COBRE' }),
+    item({ item_id: 12, material_id: 11, a_separar: 2, separavel: 2, a_entregar: 1, origem_separacao_codigo: 'A-01',
+      pegar_em: null, pegar_em_aviso: 'PLANEJADA_NAO_COBRE' }),
+  ] })]);
+  expect(texto('[data-testid="fila-pegar-em-11"]')).toBe(`Pegar em A-01 (ALM1 / A-01) · 1 PC${SAI_DE}`);
+  expect(texto('[data-testid="fila-pegar-em-aviso-11"]')).toBe(frase);
+  expect(q('[data-testid="fila-pegar-em-12"]')).toBeNull();
+  expect(texto('[data-testid="fila-pegar-em-aviso-12"]')).toBe(frase);
+});
+
+test('[RN-188.08] SEM_ENDERECO_SUGERIVEL: a frase da emenda M2', async () => {
+  await montarCom([req({ id: 1, itens: [item({ item_id: 11, a_separar: 5, separavel: 5, pegar_em: null,
+    pegar_em_aviso: 'SEM_ENDERECO_SUGERIVEL' })] })]);
+  expect(q('[data-testid="fila-pegar-em-11"]')).toBeNull();
+  expect(texto('[data-testid="fila-pegar-em-aviso-11"]')).toBe('Sem endereço para sugerir (o saldo está sem endereço, em endereço '
+    + 'bloqueado ou inativo, em área especial ou em lote bloqueado/vencido).');
+});
+
+test('[RN-188.08] ordem de coleta com 2 paradas, na ordem do JSON (a tela não reordena); os itens também', async () => {
+  // O JSON põe B-01 antes de A-01 de propósito: um sort na tela apareceria.
+  await montarCom([req({ id: 1,
+    itens: [
+      item({ item_id: 21, material_codigo: 'MAT-A', a_separar: 2, separavel: 2, pegar_em: pegar({ localizacao_codigo: 'A-01', caminho: 'ALM1 / A-01', lote_codigo: null, lote_id: null, lote_validade: null, quantidade_sugerida: 2 }), pegar_em_aviso: null }),
+      item({ item_id: 22, material_codigo: 'MAT-B', a_separar: 4, separavel: 4, pegar_em: pegar({ localizacao_codigo: 'B-01', caminho: 'ALM1 / B-01', quantidade_sugerida: 4 }), pegar_em_aviso: null }),
+    ],
+    ordem_coleta: [
+      { item_id: 22, material_codigo: 'MAT-B', localizacao_id: 20, localizacao_codigo: 'B-01', caminho: 'ALM1 / B-01', lote_codigo: 'L7', quantidade_sugerida: 4 },
+      { item_id: 21, material_codigo: 'MAT-A', localizacao_id: 10, localizacao_codigo: 'A-01', caminho: 'ALM1 / A-01', lote_codigo: null, quantidade_sugerida: 2 },
+    ] })]);
+  const lista = q('[data-testid="fila-ordem-coleta-1"]');
+  expect(lista).not.toBeNull();
+  expect(lista.querySelector('h3, strong').textContent).toBe('Ordem de coleta');
+  expect(Array.from(lista.querySelectorAll('li')).map((li) => li.textContent))
+    .toEqual(['ALM1 / B-01 — MAT-B · 4 — lote L7', 'ALM1 / A-01 — MAT-A · 2']);
+  expect(lista.querySelector('ol')).not.toBeNull();
+  expect(qa('[data-testid="fila-req-1"] [data-testid^="fila-item-"]').map((n) => n.getAttribute('data-testid')))
+    .toEqual(['fila-item-21', 'fila-item-22']);
+});
+
+test('[RN-188.08] ordem de coleta com 1 parada: a lista não aparece (repetiria a linha)', async () => {
+  await montarCom([req({ id: 1, itens: [item({ item_id: 11, a_separar: 5, separavel: 5, pegar_em: pegar(), pegar_em_aviso: null })],
+    ordem_coleta: [{ item_id: 11, material_codigo: 'MAT-1', localizacao_id: 12, localizacao_codigo: 'A-03', caminho: 'ALM1 / A-01 / A-03',
+      lote_codigo: 'L7', quantidade_sugerida: 5 }] })]);
+  expect(q('[data-testid="fila-pegar-em-11"]')).not.toBeNull();
+  expect(q('[data-testid="fila-ordem-coleta-1"]')).toBeNull();
+});
+
+test('[RN-188.08] resposta antiga sem os campos novos não quebra e não mostra nada novo', async () => {
+  await montar(); // FILA do topo: sem pegar_em, pegar_em_aviso nem ordem_coleta
+  expect(q('[data-testid="fila-req-30"]')).not.toBeNull();
+  expect(qa('[data-testid^="fila-pegar-em"]')).toEqual([]);
+  expect(qa('[data-testid^="fila-ordem-coleta"]')).toEqual([]);
+});

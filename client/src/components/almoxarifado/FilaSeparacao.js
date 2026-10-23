@@ -89,6 +89,35 @@ const descricaoItem = (it) => {
   return partes.join(' · ');
 };
 
+// Etapa 188 (RN-188.08 com as emendas C1, I1, M2, M5): a dica de onde pegar. Só exibe o que o servidor calculou — a tela não
+// escolhe endereço nem reordena (B821: os itens ficam na ordem do pedido; a ordem de percurso é `ordem_coleta`).
+export const textoPegarEm = (it) => {
+  const p = it.pegar_em;
+  if (!p) return null;
+  const un = it.unidade ? ` ${it.unidade}` : '';
+  const caminho = p.caminho && String(p.caminho).includes(' / ') ? ` (${p.caminho})` : '';
+  const lote = p.lote_codigo ? ` — lote ${p.lote_codigo}` : '';
+  const vence = p.lote_codigo && p.lote_validade ? ` (vence ${fmtData(p.lote_validade)})` : '';
+  return `Pegar em ${p.localizacao_codigo}${caminho}${lote}${vence} · ${fmtQtd(p.quantidade_sugerida)}${un}`
+    + " — escolha este endereço no 'Sai de' ao separar";
+};
+
+export const textoAvisoPegarEm = (it) => {
+  switch (it.pegar_em_aviso) {
+    case 'NENHUM_ENDERECO_COBRE':
+      return `Nenhum endereço tem tudo: pegue ${fmtQtd(it.pegar_em ? it.pegar_em.quantidade_sugerida : 0)} aqui. `
+        + 'Separar o resto de outro endereço depois troca a origem da separação.';
+    case 'PLANEJADA_NAO_COBRE':
+      return `Já separado de ${it.origem_separacao_codigo || (it.pegar_em && it.pegar_em.localizacao_codigo) || '—'}: o resto não cabe lá. `
+        + 'Separar de outro endereço troca a origem da separação (a entrega passa a sair automática).';
+    case 'SEM_ENDERECO_SUGERIVEL':
+      return 'Sem endereço para sugerir (o saldo está sem endereço, em endereço bloqueado ou inativo, em área especial '
+        + 'ou em lote bloqueado/vencido).';
+    default:
+      return null;
+  }
+};
+
 const PainelErro = ({ titulo, mensagem, onTentarNovamente, testid }) => (
   <div
     data-testid={testid}
@@ -174,12 +203,39 @@ const LinhaFila = ({ req, onAbrir }) => {
       </div>
       {(req.itens || []).length > 0 && (
         <ul style={{ margin: '10px 0 0', paddingLeft: 18, fontSize: '0.88rem' }}>
-          {req.itens.map((it) => (
-            <li key={it.item_id} data-testid={`fila-item-${it.item_id}`}>
-              <strong>{it.material_codigo}</strong> — {it.material_nome}: {descricaoItem(it)}
-            </li>
-          ))}
+          {req.itens.map((it) => {
+            const pegarEm = textoPegarEm(it);
+            const aviso = textoAvisoPegarEm(it);
+            return (
+              <li key={it.item_id} data-testid={`fila-item-${it.item_id}`}>
+                <strong>{it.material_codigo}</strong> — {it.material_nome}: {descricaoItem(it)}
+                {pegarEm && (
+                  <div data-testid={`fila-pegar-em-${it.item_id}`} style={{ marginTop: 2 }}>{pegarEm}</div>
+                )}
+                {aviso && (
+                  <div
+                    data-testid={`fila-pegar-em-aviso-${it.item_id}`}
+                    style={{ marginTop: 2, color: 'var(--gmp-text-light)' }}
+                  >
+                    {aviso}
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
+      )}
+      {Array.isArray(req.ordem_coleta) && req.ordem_coleta.length >= 2 && (
+        <div data-testid={`fila-ordem-coleta-${req.id}`} style={{ marginTop: 10, fontSize: '0.88rem' }}>
+          <strong>Ordem de coleta</strong>
+          <ol style={{ margin: '4px 0 0', paddingLeft: 22 }}>
+            {req.ordem_coleta.map((p) => (
+              <li key={p.item_id}>
+                {`${p.caminho} — ${p.material_codigo} · ${fmtQtd(p.quantidade_sugerida)}${p.lote_codigo ? ` — lote ${p.lote_codigo}` : ''}`}
+              </li>
+            ))}
+          </ol>
+        </div>
       )}
     </li>
   );
