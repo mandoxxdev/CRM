@@ -165,7 +165,7 @@ res.json(ferramentas.map((f) => ({
 
 | # | Task | Tipo | Feita |
 |---|---|---|---|
-| T1 | Servidor: a baixada não calibra nem edita (RN-187.01..04) | **tronco** | — |
+| T1 | Servidor: a baixada não calibra nem edita (RN-187.01..04) | **tronco** | ✅ `3d45817f` |
 | T2 | Servidor: `restricao` no GET + lista branca (RN-187.05..07) | **tronco** (congela o JSON da lista; mesmo arquivo da T1 — depois dela) | — |
 | T3 | Tela: selo, aviso no Emprestar, Editar fora da baixada (RN-187.08) | galho (contra o contrato acima; só o client) | — |
 | T4 | Integração pela rota e pelo serviço + fixture real para o client | depois de T1, T2, T3 | — |
@@ -467,7 +467,30 @@ texto das RN, do contrato e das tasks; o executor não precisa reconciliar — o
 
 ## Execução
 
-*(vazia — preenchida pelo executor, task a task, com hash, vermelho/verde e controles.)*
+### T1 — feita (`3d45817f`)
+
+- Teste novo `server/tests/api/toolBaixadaNaoCalibraNemEdita.api.test.js` — **17** cenários. Vermelho antes: **9/8** — os 01 com `201
+  {"id":1}` e a frase da data; os 02 com `200 {"id":1}` (nome e corpo vazio) e `409` (patrimônio); os 04 com "a edição/calibração gravou";
+  o 04b com "respondeu sucesso". Os 9 do RN-187.03 verdes de primeira (guarda de regressão, provada pelos controles 5 e 6). Verde: **17/0**.
+- Implementado o contrato com a **I1**: helper `recusaDaGravacao` — com `changes === 0` relê `SELECT nome, ativo … WHERE id = ?` (M7: não
+  casa o regex do gancho); ausente/inativa → 404; qualquer outro → 400 da baixada. Nunca segue para a auditoria.
+- `[RN-187.04b]` (emenda I1): gancho que grava BAIXADA na leitura inicial e DISPONIVEL de volta depois da gravação (no callback do
+  `db.run`, preservando `this`); premissas `disparos = 1` e `restauros = 1` nas duas metades (calibração e edição).
+- **Controles positivos** (perl, âncora contada = 1, md5 antes/sabotado/restaurado, restauro por cópia em `scratchpad/e187-bkp/` + `cmp`):
+  - (1) sem a checagem cedo da calibração → cai **só** `[RN-187.01] ordem` (deu a frase da data); o 01 principal verde. ✔
+  - (2) `WHERE EXISTS` trocado por `WHERE ? IS NOT NULL AND ? IS NOT NULL` → caem `[RN-187.04] corrida calibracao` **e** `[RN-187.04b]`
+    (metade da calibração) — o 04b não existia quando o plano previu "só o 04"; esperado.
+  - (3) `AND status <> ?` → `AND ? IS NOT NULL` no `UPDATE` → caem `[RN-187.04] corrida edicao` **e** `[RN-187.04b]` (metade da edição). ✔
+  - (4) sem a checagem cedo da edição → cai **só** `[RN-187.02] corpo vazio` (`200 {"id":1}`); o `{nome}` e o patrimônio continuam 400
+    pela guarda da gravação (sem 409: o `WHERE` não casa, não há conflito). ✔
+  - (5) `status = 'DISPONIVEL'` no `UPDATE` e no `EXISTS` → cai o laço `[RN-187.03]` em **EMPRESTADA, EM_MANUTENCAO, AVARIADA, PERDIDA e
+    BLOQUEADA**, todos com **400** `Ferramenta baixada não pode ser calibrada` (como a I1 previu). A calibração cai primeiro, então a metade
+    da edição não chega a ser exercida neste controle (o 3 cobre a edição).
+  - (6) PUT sem `requirePermission('gerenciar_ferramentas')` → cai **só** `[RN-187.03] PRODUCAO` em `editar PRODUCAO: 200`. ✔
+  - (7) frase sem o nome → caem os 8 cenários que comparam a frase (01, 02, 04, 04b) pelo `strictEqual` do `error`. ✔
+  - (8) `recusaDaGravacao` só lança se o status relido for BAIXADA (senão `return`) → cai **só** `[RN-187.04b]` ("respondeu sucesso"). ✔
+- Vizinhos sem mudar asserção: `toolFerramentaEdicao` 8/0, `toolCalibracao` 10/0, `toolManutencaoRetorno` 17/0, `toolIntegracao` 1/0,
+  `medidasInspecao` 23/0.
 
 ## Próxima tarefa detalhada
 
