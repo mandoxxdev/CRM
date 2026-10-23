@@ -23,6 +23,18 @@ export const AVISO_USUARIO_CONSULTA = 'Este usuário está com o perfil Consulta
 /** Frota Etapa 3 (RN-F3.11): leitura de horas da maquina por horimetro aparece como horas ("125 h"). */
 export const horas = (n) => `${Number(n).toLocaleString('pt-BR')} h`;
 
+// Frota Etapa 4 (RN-F4.09, Fase 2 achados 5/6): um formatador so (2 casas, pt-BR) para a lista de Abastecimentos e o relatorio de
+// consumo. A linha com km e horimetro (B39) mostra os dois; so um, so ele; nenhum, "-". Antes a coluna mostrava o consumo_medio cru.
+const duasCasas = (v) => Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+export const consumoKmL = (v) => (v != null && v !== '' ? `${duasCasas(v)} km/L` : '-');
+export const consumoLh = (v) => (v != null && v !== '' ? `${duasCasas(v)} L/h` : '-');
+export function fmtConsumo(r) {
+  const partes = [];
+  if (r?.consumo_medio != null && r.consumo_medio !== '') partes.push(consumoKmL(r.consumo_medio));
+  if (r?.consumo_litros_hora != null && r.consumo_litros_hora !== '') partes.push(consumoLh(r.consumo_litros_hora));
+  return partes.length ? partes.join(' · ') : '-';
+}
+
 const fmtBrl = (v) =>new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
 export const ENTITY_CONFIGS = {
@@ -213,7 +225,7 @@ export const ENTITY_CONFIGS = {
       { key: 'placa', label: 'Placa', bold: true },
       { key: 'litros', label: 'Litros', format: (r) => `${r.litros} L` },
       { key: 'valor_total', label: 'Valor', format: (r) => fmtBrl(r.valor_total) },
-      { key: 'consumo_medio', label: 'Km/L', format: (r) => (r.consumo_medio != null ? r.consumo_medio : '-') },
+      { key: 'consumo_medio', label: 'Km/L', format: fmtConsumo },
       { key: 'posto', label: 'Posto' },
       { key: 'km_abastecimento', label: 'KM', format: (r) => (r.horimetro_abastecimento != null ? horas(r.horimetro_abastecimento)
         : (r.km_abastecimento != null ? r.km_abastecimento : '-')) },

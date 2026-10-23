@@ -521,6 +521,11 @@
   .frotas-kpis { grid-template-columns: 1fr 1fr; }
 }
 
+/* Frota Etapa 4 (RN-F4.12): periodo aplicado e nota do custo nos Relatorios */
+.frotas-periodo-aplicado { margin: -8px 0 16px; font-weight: 600; color: var(--gmp-text); }
+.frotas-nota { margin: 0 0 8px; font-size: 0.85rem; color: var(--gmp-text-light); }
+.frotas-table tfoot td { border-top: 2px solid var(--gmp-border); }
+
 @media print {
   .frotas-header-actions,
   .frotas-toolbar,
