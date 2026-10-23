@@ -176,6 +176,41 @@ const manutencaoAMao = (db, fid, { data_fim = null, condicao = null, observacoes
     });
   }
 
+  // ── RN-187.06 (Fase 5, M1) — a lista branca da rota e provada com o servico devolvendo um campo a mais ──
+  // O servico hoje devolve so as tres chaves, entao trocar a lista branca por `restricao: f.restricao` passava verde. Aqui o
+  // servico e embrulhado (o require da rota le `toolService.listarFerramentas` a cada chamada) para por `usuario_id` e
+  // `concluido_por` na restricao. Congelado, coerente com a 181 (emprestimo_aberto): quem NAO gerencia recebe exatamente as
+  // tres chaves; quem gerencia recebe o objeto do servico como veio.
+  const toolService = require('../../services/almoxarifado/toolService');
+  for (const [quem, user, gerencia] of [['PRODUCAO', PRODUCAO, false], ['GESTOR', GESTOR, false], ['ALMOXARIFE', ALMOXARIFE, true], ['ADMIN', ADMIN, true]]) {
+    await test(`[RN-187.06 M1] ${quem}: servico com campo extra na restricao -> ${gerencia ? 'objeto do servico inteiro' : 'so as tres chaves'}`, async () => {
+      const { app, db, close, setUser } = await createTestApp({ user: ADMIN });
+      const original = toolService.listarFerramentas;
+      let chamadas = 0;
+      toolService.listarFerramentas = async (...args) => {
+        const lista = await original(...args);
+        chamadas++;
+        return lista.map((f) => (f.restricao ? { ...f, restricao: { ...f.restricao, usuario_id: 77, concluido_por: 'Fulano Extra' } } : f));
+      };
+      try {
+        const fid = await novaFerramenta(db);
+        const mid = await manutencaoConcluida(app, fid, LEVE);
+        const { corpo, f } = await listar(app, setUser, user, fid);
+        assert.strictEqual(chamadas, 1, 'premissa: a rota passou pelo servico embrulhado');
+        const tres = await esperada(db, mid);
+        if (gerencia) {
+          assert.deepStrictEqual(f.restricao, { ...tres, usuario_id: 77, concluido_por: 'Fulano Extra' }, `${quem}: quem gerencia recebe o objeto do servico`);
+        } else {
+          assert.deepStrictEqual(f.restricao, tres, `${quem}: quem nao gerencia recebe so as tres chaves`);
+          assert.ok(!JSON.stringify(corpo).includes('Fulano Extra'), `${quem}: o campo extra vazou na lista`);
+        }
+      } finally {
+        toolService.listarFerramentas = original;
+        await close();
+      }
+    });
+  }
+
   // ── RN-187.07 — a restricao nao bloqueia o emprestimo ──────────────────────────────────────
   await test('[RN-187.07] emprestar a restrita -> 201, EMPRESTADA, e a lista ainda traz a restricao', async () => {
     const { app, db, close, setUser } = await createTestApp({ user: ADMIN });
