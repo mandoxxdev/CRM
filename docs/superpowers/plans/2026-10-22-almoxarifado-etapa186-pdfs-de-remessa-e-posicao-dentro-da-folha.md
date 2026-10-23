@@ -1,6 +1,7 @@
 # Etapa 186 — O PDF da remessa a terceiros e o da posição do cliente cabem na folha: célula quebra em linhas, nada é cortado
 
-> **Status:** 📝 **PLANO (2026-10-22)** — Fase 0 medida e Fase 1 escritas; **Fase 2 (revisão fresca do plano) não feita**; nenhuma task executada.
+> **Status:** 📝 **PLANO (2026-10-22)** — Fase 0 medida e Fase 1 escritas; **Fase 2 feita (0 críticos, 4 importantes, 8 menores — ver "Emendas da Fase 2", prevalecem)**;
+> nenhuma task executada.
 > Corrige o que a Etapa 185 deixou de fora com motivo (**B1220**, **B1221** e o aviso **C445** do plano da 185 — a remessa **é** prova assinada
 > pelo terceiro, `remessaPdf.js:121`). Decisões desta etapa a partir de **B1230** (a 185 usa B1215–B1222 e a 184 B1223–B1224; B1225–B1229 ficam
 > livres para o fechamento da 185, que está em revisão).
@@ -409,7 +410,111 @@ isso); este plano com a próxima tarefa detalhada.
 
 ## Emendas da Fase 2
 
-*(A fazer: revisão fresca do plano — Fase 2 da skill `desenvolver-etapa-almoxarifado` — antes da T1. Prevalece sobre as regras e as tasks acima.)*
+**Revisão fresca (2026-10-22), sobre `36208ddd`. Prevalece sobre as regras e as tasks acima.** Resultado: **0 críticos, 4 importantes,
+8 menores.** Sondas do revisor com o jsPDF real (`client/node_modules/jspdf/dist/jspdf.node.min.js`), no scratchpad
+`C:\Users\User\AppData\Local\Temp\claude\C--Users-User-projetos-CRM-main\bf36ab2c-c3a4-467f-bc1f-24a9b62a2a92\scratchpad\f2r186-sonda.js`,
+`f2r186-sonda2.js` e `f2r186-sonda3.js` (prefixo `f2r186-`).
+
+### O que foi conferido e bate
+
+- **Medidas da Fase 0, refeitas (`f2r186-sonda.js`):** `EPI-MASC-SOLDA-07` f9 = 31,53 → fim 45,53 (útil novo até 47); material de 50 letras em
+  x 48 → 124,14 (≤ 125); o de 71 → 2 linhas na remessa (77) e 3 na posição (51); hoje perde 31 (desenhado até 102,9); `EIXO-SAE1045-D50-L1200-RT`
+  em 33 → `["EIXO-SAE1045-D50-L","1200-RT"]`; 120 `W` → 5 linhas em 77 (f9), 8 em 51, **8** em 77 com f14 (a "fonte corrente" da T1 sabe
+  falhar); o literal do aparar → `'vi2s16Oms83ess-erx '` cru mede **30,54** (> 30); vazio/`null`/`undefined` → `['']`; título da posição com a
+  razão de 69 → 233,78 hoje, 2 linhas (fim 192,34) em 182. Etiqueta, negrito: `MP-ACO-INOX-304-CH-3MM` f14 64,70 / f13 60,08 / f12 55,46 /
+  f11 50,84 — `splitTextToSize` dá 1 linha em **f11** a 55 (A4) e em **f12** a 56 (térmica), e mede **no negrito corrente** (normal f14 = 64,40);
+  40 `W` em f10 → 3 linhas. `larguraTexto` conferida no código: A4 99 − 4 − 32 − 8 = **55**; térmica 100 − 4 − 32 − 8 = **56**.
+- **Referências de linha** de `remessaPdf.js` (`:89-96`, `:100`, `:110`, `:118`, `:121`), `posicaoClientePdf.js` (`:54`, `:68`, `:90`),
+  `etiquetasPdf.js` (`:165`, `:168`, `:173`), `datasDoChat…test.js` (o `FakePdf` sem `getTextWidth`/`setFont`; os testes da remessa e da posição
+  logo depois de `:384`), `EpiAlmoxarifado.test.js:43-58`, `etiquetasPdf.test.js:208` (só a linha de controle exige `maxWidth`; nenhum teste
+  exige `maxWidth` no código — tirar dele não quebra asserção de hoje) e as rotas `extended.js:2177`/`:2774`: conferem.
+- **Sem limite no servidor** (afirmação da Fase 0): `schemas.js:12-13/239/249` (`codigo`, `nome` só `min(1)`), `:417-426` (`observacoes`,
+  `tipo_servico`, `fornecedor_nome` sem `max`), `thirdPartyService.js:613` (`encerramento_justificativa` só exige não vazia). Confere.
+- **Dados reais só leitura:** `p186-dados-reais.js` abre `projetos/CRM/server/data/database.sqlite` com `sqlite3.OPEN_READONLY` e só faz
+  `SELECT`. Reexecutado pelo revisor: `database.sqlite` e `-wal` com o mesmo tamanho e a mesma hora antes e depois (só o `-shm`, índice de
+  memória do WAL, muda de hora — normal em leitor); nada da `CRM-main` foi tocado. `clientes.razao_social` máx. **69** confere. (A consulta
+  `remessas` erra o nome da tabela — `no such table` — mas o plano não usa esse número.)
+- **RN × specs e decisões:** quebra por palavra (`splitTextToSize`) na remessa é coerente com a **B1215** (ficha, também prova) e não fere a
+  **B1207** — o corte letra a letra é só para o aparelho, cuja junção tem de ser o texto gravado literal; nenhum campo da remessa/posição tem
+  essa exigência. O plano respeita a **I3** da 185 (a remessa **é** prova, C445 incondicional). As specs 13, 14 e 10 não afirmam nada do
+  desenho que a etapa contradiga.
+- **Dependência da 185 (o que o outro agente fecha agora):** a guarda de avanço de `9a5f46a0` (`palavra &&`) é **de `quebrarTexto`**, que
+  **não** se move (B1231 (c)) — o helper novo não a "herda" porque não usa aquele laço. `splitTextToSize` termina sozinho com qualquer largura
+  (sonda: `0`, `-1`, `0.1` → linhas de 1 letra e linhas vazias; `NaN`, `Infinity` → a linha inteira, sem quebrar), em 0 ms. Ver M1. A T6 já
+  está condicionada ao fechamento da 185 na `main` — confere (no momento desta revisão o fechamento da 185 está **não commitado** na árvore:
+  `docs/almoxarifado-novidades-por-etapa.md`, plano da 185, specs 16/25 e mapa modificados; a T6 **não** pode começar ainda).
+- **Galhos:** T2/T3/T4 mexem em arquivos de produção disjuntos e cada teste tem o próprio `jest.mock('jspdf')` (nenhum mock compartilhado; a
+  T5 cria o dela). RN-186.11 é coerente com o `FakePdf`: com `splitTextToSize → [t]`, `linhasPorLargura`/`desenharQuebrado` desenham a string
+  inteira num `text` — `'Prazo previsto: 21/10/2026   ·   Status: ENVIADA'` e `'Posição de materiais — CLI 170'` continuam iguais. Mas ver I2.
+- **Controles positivos** de T2 (c3: itens de 5 linhas, passo 21, a partir de y 49 → um começa em 259 e iria a 275), T3 (c5: itens de 3 linhas
+  a partir de y 39 → um começa em 273 e iria a 281), T4 (c1, c2, c3): **sabem falhar** pelo cálculo. Exceção: a observação (I1).
+
+### Importantes
+
+- **I1 — O cenário "observação de 20 linhas com 50 itens antes" (T2, `[RN-186.05]` e `[RN-186.09]` com 60 itens) não chega perto do fim da
+  folha: passa mesmo sem a quebra de página das observações.** Medido (`f2r186-sonda3.js`, o contrato só em y): com 50 itens a página 1 leva 43
+  (49 + 5·42 = 259), a 2 leva 7, o rótulo *Observações:* cai em y **68** e a última linha em **149** — com ou sem `addPage`, igual. Com 60, 118
+  → 199. O defeito da Fase 0 ("20 linhas a partir de y = 240 vão a 309,4") só aparece com **37 a 42 itens**: com 37, rótulo em **249**, sem quebra a
+  última linha vai a **330**, com quebra a **278** na página 2. **Emenda:** em T2, o cenário vira **37 itens curtos + observação de 20 linhas**
+  (asserção: `textosForaDaFolha()` vazio **e** pelo menos um `addPage` **entre** linhas da observação — metade positiva); o pior caso da
+  `[RN-186.09]` usa 37 itens (ou soma um segundo caso com 37); e um controle novo **(c7) tirar o `addPage` das observações → cai esse teste**
+  (linha em y 330 > 287). Registrar o número na Execução.
+- **I2 — "Galhos independentes" não vale para o `datasDoChat…test.js`: ele importa as duas telas (`RemessasTerceirosAlmoxarifado` e
+  `MateriaisClienteAlmoxarifado`, linhas 32-33) e, por elas, `remessaPdf.js` **e** `posicaoClientePdf.js`; também importa
+  `FerramentasAlmoxarifado` → `termoFerramentaPdf.js` → `fichaEpiPdf.js` (a 185).** O passo 5 de T2 e o de T3 rodam esse arquivo: em paralelo,
+  um arquivo do outro galho no meio da edição (erro de sintaxe, import novo ainda sem export) ou sabotado derruba o `datasDoChat` do vizinho — o
+  caso da memória *sabotagem concorrente contamina a suíte*, por um caminho que a regra "sabotagem só no próprio arquivo" não pega. **Emenda:**
+  em paralelo, o passo 5 de T2 e T3 roda **só** o teste do próprio util; o `datasDoChat…` roda **uma vez** depois que T2 **e** T3 restauraram
+  (`cmp`) e commitaram, como abertura da T5 (com o resultado citado). Se rodar sequencial (T2 → T3 → T4), vale como está.
+- **I3 — A receita da fixture (T5 passo 1) manda uma remessa com material do cliente e material próprio: a rota recusa.** `thirdPartyService.js`
+  `resolverProprietario` (`:93-107`) lança *"A remessa mistura materiais de donos diferentes"* quando os donos diferem. **Emenda:** a remessa da
+  fixture leva **dois itens do mesmo cliente** (o de razão social de 69): um material do cliente com código de 25 e nome de 71, outro comum — assim
+  a resposta real traz `proprietario_cliente_nome` com os 69 e a linha *Material de propriedade de …* é exercida com dado de rota (mede 175,75 em
+  f10 — cabe numa linha; a quebra do proprietário continua provada pelo teste de 80 `W` da T2). Material próprio fica só para a posição (não
+  entra) ou fora. O teste do servidor cria a entrada do material do cliente (com dono) antes da remessa e das saídas para OS/projeto.
+- **I4 — A B1234 (não repetir o cabeçalho da tabela na página nova) é a escolha errada para um papel de prova, e a pergunta da revisão cobre o
+  gesto "quebra de página com cabeçalho repetido".** A ficha (185) repete (`fichaEpiPdf.js:149-175`, `cabecalho()` depois do `addPage`). Na
+  remessa, Qtde e Peso são duas colunas de número lado a lado: na página 2 sem cabeçalho, quem assina não sabe qual é qual — e esta etapa
+  **aumenta** as páginas 2 (linhas mais altas). O argumento "muda o desenho além do defeito" não pesa: o desenho com uma página só fica idêntico,
+  e o custo é uma função de 2 linhas. **Emenda (reversível):** remessa e as duas tabelas da posição **repetem o cabeçalho** (fonte 9, mesmos x,
+  `y += 2`, `line`, `y += 5`) depois de todo `addPage` **dentro** da tabela. A RN-186.04 passa a dizer: depois do `addPage`, `y = 18`, cabeçalho,
+  e a linha começa em `18 + 7 = 25`. Testes: em T2 (c) e T3 (posição) — cada página com itens começa com os 5 (7, 3) cabeçalhos nos x do
+  contrato; com uma página só, um cabeçalho (o de hoje). Controle **(c8)** tirar a repetição → cai. A **B1234** é reescrita: *"O cabeçalho da
+  tabela É repetido na página nova (como a ficha, B1215). Descartado: não repetir (como era) — na página 2 Qtde e Peso ficam sem nome num papel
+  assinado."* Cuidado na `linhasDaTabela()` da T2/T3: o recorte por sequência tem de pular os cabeçalhos repetidos (são `text` de fonte 9 em
+  x = 14 — reconhecer pela string `'Código'`, não pelo x).
+
+### Menores
+
+- **M1 — O helper aceita largura degenerada em silêncio.** `splitTextToSize` com `NaN`/`Infinity` devolve a linha inteira (a `[RN-186.01] cabe`
+  falharia sem ninguém ver na produção); com `≤ 0` devolve linhas de uma letra e linhas vazias. Não trava (diferente do `quebrarTexto` da 185),
+  mas é a mesma lição de `9a5f46a0` (*"a função é exportada"*). **Emenda:** T1 ganha `[RN-186.01] largura inválida` — `linhasPorLargura` lança
+  `Error` com `largura` não finita ou `≤ 0` (`0`, `-1`, `NaN`, `Infinity`); com régua de teto não precisa (não há laço próprio). As larguras de
+  produção são constantes positivas, então nada muda no desenho.
+- **M2 — RN-186.09 "nenhum `text` com y > 287" promete mais do que o contrato cobre: o encerramento e o cabeçalho da tabela não olham a página.**
+  `encerramento_justificativa` não tem limite (`thirdPartyService.js:613`): medido, ~5 000 letras levam o bloco a y ≈ 260 e o cabeçalho da
+  tabela sai abaixo de 287 sem `addPage`. Não é plausível, mas é texto livre num papel assinado. **Emenda:** o pior caso da T2 inclui uma
+  justificativa de 500 letras (5 linhas — plausível) e a D (186) registra a limitação junto da D (183)(5) (*"cabeçalho com texto livre de
+  milhares de letras passa da folha"*). Não mexer no encerramento (fora do defeito).
+- **M3 — Etiqueta: o número de linhas do código em fonte 10 não tem teto.** 150 `W` → 10 linhas → o código vai a y + 49,5 e o nome a y + 55,5:
+  passa da térmica (50) e cobre a linha de controle (y + 45). Código de etiqueta é curto na prática (até ~26 letras cabem em f10 numa linha).
+  **Emenda:** a régua "nada sobrepõe" da T4 inclui a linha de controle (última linha do nome < y da linha de controle − 3) e um caso de 80 `W`
+  (5 linhas, nome em y + 33/36,3 < 45 na térmica); a limitação (código de 100+ letras) entra na D (186). Sem corte.
+- **M4 — Congelar o helper explicitamente.** O plano diz que nenhum galho **sabota** `pdfTexto.js`, mas não diz que nenhum galho **edita**.
+  **Emenda:** depois do commit da T1, `pdfTexto.js` e o teste dele ficam congelados; se T2/T3 precisarem de mudança nele, param, volta ao tronco
+  (sequencial) e o outro galho espera.
+- **M5 — Referências da 185 desatualizadas pela Fase 5 dela.** A Fase 0 mediu sobre `a9759b07`; `9a5f46a0` deslocou `termoFerramentaPdf.js`: a
+  closure `linhasQuebradas` está em **`:103`** (não `:101`). `fichaEpiPdf.js:61` confere. **Emenda:** a T6 relê as linhas no `HEAD` do dia e
+  **não** toca no `quebrarTexto` nem na guarda `palavra &&` (`:33`) — o teste de terminação de `9a5f46a0` continua verde sem mudança.
+- **M6 — A "assinatura abaixo da última linha da observação" (RN-186.05) tem de olhar a página.** Com a observação perto do fim, `y > 245`
+  manda a assinatura para a página seguinte, em y 30 — menor que o y da última linha da observação na página anterior. **Emenda:** a asserção
+  da T2/T5 compara **(página, y)** (contar `addPage` antes de cada chamada): ou mesma página e y maior que a última linha + 4, ou página posterior.
+- **M7 — Os limiares "a partir de N letras" da Fase 0 dependem das letras.** Com texto real (a razão de 69 do banco, repetida), o título da posição
+  passa da margem com **54** letras de razão (o plano diz 48) e o proprietário com **83** (o plano diz 72). Os números do plano valem para letra
+  larga; nada nas RN depende deles. **Emenda:** na Execução/fechamento, citar os dois (letra larga / texto real), não só um.
+- **M8 — A T7 corrige a B1220 a partir do texto final, não da proposta.** O fechamento da 185 (em curso, não commitado) reescreve a B1220 com a
+  emenda I3 dela e registra a C445 no documento de novidades. **Emenda:** a T7 lê a B1220 e a C445 **no `docs/almoxarifado-novidades-por-etapa.md`
+  da `main`** antes de corrigir; se a C445 já estiver lá, só marca *✅ RESOLVIDO NA ETAPA 186*.
 
 ## Execução
 
