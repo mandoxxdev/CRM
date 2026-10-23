@@ -23,6 +23,8 @@ const travaPorRequisicao = require('./travaPorRequisicao');
 // Etapa 114 (C229): a requisicao com item pendente de material inativo (modulo sem require de servico — sem ciclo).
 const materialInativo = require('./requisicaoMaterialInativo');
 const { can } = require('./permissions'); // Etapa 64: posso_conferir na fila
+// Etapa 188 (T1/T2): a sugestao de coleta da fila (pura; importa so quantidade/stockService/lotService — sem ciclo).
+const sugestaoDeColeta = require('./sugestaoDeColeta');
 const {
   PODE_SEPARAR, PODE_ENTREGAR, STATUS_PARCIALMENTE_RESERVADA, STATUS_TOTALMENTE_RESERVADA,
   calcularStatusPosAprovacao, validarTransicao,
@@ -296,6 +298,56 @@ function dividirSeparavel(itens) {
     out.set(it.id, separavel);
   }
   return out;
+}
+
+/**
+ * Etapa 188 (T2) — os dados da sugestao de coleta para a fila INTEIRA (consultas por chamada, nao por requisicao):
+ * (1) as linhas de saldo com endereco e quantidade > 0 dos materiais da fila, com o lote; (2) o separado pendente planejado
+ * por par, de toda requisicao ativa com caixa (emenda M1: a regua da caixa — itens_requisicao nao tem `ativo` — e o legado
+ * `quantidade_atendida`); (3) a arvore de localizacoes com o almoxarifado; (4) padrao, dono e serie dos materiais; (5) as
+ * series EM_ESTOQUE por lote, so dos materiais com serie (emenda I3). Sem trava: so le (RN-188.07).
+ */
+async function lerDadosDaColeta(db, itens) {
+  const vazio = { candidatosPorMaterial: new Map(), planejadoPorPar: new Map(), arvore: new Map(), material: new Map(),
+    seriesPorLote: new Map(), hojeISO: undefined };
+  const mats = [...new Set((itens || []).map((i) => Number(i.material_id)))];
+  if (!mats.length) return vazio;
+  const mm = mats.map(() => '?').join(',');
+  const saldos = await dbAll(db, `SELECT s.material_id, s.localizacao_id, s.lote_id, s.quantidade, lt.codigo as lote_codigo,
+      lt.status as lote_status, lt.data_validade as lote_validade, lt.vencimento_liberado_em as lote_vencimento_liberado_em
+    FROM estoque_saldo_almoxarifado s LEFT JOIN lotes_almoxarifado lt ON lt.id = s.lote_id
+    WHERE s.material_id IN (${mm}) AND s.localizacao_id IS NOT NULL AND s.quantidade > 0`, mats);
+  const statusCaixa = STATUS_COM_CAIXA.map(() => '?').join(',');
+  const planejados = await dbAll(db, `SELECT ir.material_id, ir.origem_separacao_id, ir.lote_separacao_id,
+      SUM(MAX(COALESCE(ir.quantidade_separada, 0) - COALESCE(ir.quantidade_entregue, ir.quantidade_atendida, 0), 0)) as q
+    FROM itens_requisicao_almoxarifado ir JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
+    WHERE ir.material_id IN (${mm}) AND ir.origem_separacao_id IS NOT NULL
+      AND COALESCE(r.ativo, 1) = 1 AND r.status IN (${statusCaixa})
+    GROUP BY ir.material_id, ir.origem_separacao_id, ir.lote_separacao_id`, [...mats, ...STATUS_COM_CAIXA]);
+  const locs = await dbAll(db, `SELECT l.id, l.parent_id, l.codigo, l.tipo, l.ativo, l.bloqueada, l.almoxarifado_id,
+      a.codigo as almoxarifado_codigo, a.ativo as almoxarifado_ativo
+    FROM localizacoes_almoxarifado l LEFT JOIN almoxarifados a ON a.id = l.almoxarifado_id`);
+  const materiais = await dbAll(db, `SELECT id, localizacao_padrao_id, proprietario_cliente_id, controle_serie, tipo_material
+    FROM materiais_almoxarifado WHERE id IN (${mm})`, mats);
+  const comSerie = materiais.filter((m) => Number(m.controle_serie) === 1).map((m) => Number(m.id));
+  const series = comSerie.length ? await dbAll(db, `SELECT material_id, lote_id, COUNT(*) as n FROM series_almoxarifado
+    WHERE status = 'EM_ESTOQUE' AND material_id IN (${comSerie.map(() => '?').join(',')})
+    GROUP BY material_id, lote_id`, comSerie) : [];
+  const candidatosPorMaterial = new Map();
+  for (const s of saldos) {
+    const k = Number(s.material_id);
+    if (!candidatosPorMaterial.has(k)) candidatosPorMaterial.set(k, []);
+    candidatosPorMaterial.get(k).push(s);
+  }
+  return {
+    candidatosPorMaterial,
+    planejadoPorPar: new Map(planejados.map((p) => [
+      sugestaoDeColeta.chavePar(p.material_id, p.origem_separacao_id, p.lote_separacao_id), Number(p.q) || 0])),
+    arvore: new Map(locs.map((l) => [Number(l.id), l])),
+    material: new Map(materiais.map((m) => [Number(m.id), m])),
+    seriesPorLote: new Map(series.map((s) => [sugestaoDeColeta.chaveLote(s.material_id, s.lote_id), Number(s.n) || 0])),
+    hojeISO: undefined, // isVencido le o dia de Brasilia (diaLocal) quando nao recebe
+  };
 }
 
 /** Etapa 127 (RN-15): a parte propria do teto — a reserva ativa do item que ainda nao esta na caixa. */
@@ -900,6 +952,8 @@ async function listarFilaSeparacao(db, user) {
     FROM separacoes_requisicao_almoxarifado WHERE requisicao_id IN (${marcas})
     GROUP BY requisicao_id, usuario_id`, ids);
   const podeConferirPerfil = can(user, 'conferir_separacao');
+  // Etapa 188 (T2): a sugestao de coleta — lida UMA vez para a fila inteira (sem N+1), sem trava (RN-188.07, B1250).
+  const dadosColeta = await lerDadosDaColeta(db, itens);
   const fila = [];
   for (const r of reqs) {
     const doReq = itens.filter((i) => i.requisicao_id === r.id);
@@ -969,6 +1023,21 @@ async function listarFilaSeparacao(db, user) {
       }
     }
     if (!etapas.length) continue;
+    // Etapa 188 (T2): a dica de onde pegar e a ordem de coleta. So ACRESCENTA — `linhas` continua na ordem do pedido (B821).
+    // Emenda M4: com a alcada de valor barrando, nada de "Pegar em" (o separar recusaria).
+    const coleta = bloqueioValor ? null : sugestaoDeColeta.sugerirColeta({
+      itens: doReq.map((i) => ({
+        item_id: i.id, material_id: i.material_id, material_codigo: i.material_codigo, separavel: divididos.get(i.id) || 0,
+        origem_separacao_id: i.origem_separacao_id, lote_separacao_id: i.lote_separacao_id,
+        separado_pendente: Math.max(0, getSeparado(i) - getEntregue(i)),
+      })),
+      ...dadosColeta,
+    });
+    for (const l of linhas) {
+      const s = coleta && coleta.porItem.get(l.item_id);
+      l.pegar_em = s ? s.pegar_em : null;
+      l.pegar_em_aviso = s ? s.pegar_em_aviso : null;
+    }
     const quemSeparou = separadores.filter((s) => s.requisicao_id === r.id)
       .map((s) => ({ id: s.usuario_id, nome: s.usuario_nome }));
     fila.push({
@@ -979,6 +1048,7 @@ async function listarFilaSeparacao(db, user) {
       posso_conferir: conferenciaPendente && r.status === 'EM_SEPARACAO' && podeConferirPerfil
         && !quemSeparou.some((s) => Number(s.id) === Number(user?.id)),
       itens: linhas.filter((l) => l.a_separar > 1e-9 || l.a_entregar > 1e-9),
+      ordem_coleta: coleta ? coleta.ordem_coleta : [],
     });
   }
   // Ordem (RN-02): o que dá para fazer agora primeiro; depois a prioridade (compararPrioridade).
