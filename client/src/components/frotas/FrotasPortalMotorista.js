@@ -81,6 +81,55 @@ function rotuloVeiculo(v) {
   return nome ? `${v.placa} — ${nome}` : v.placa;
 }
 
+/* ---------------------------------------------------------------- leitura: km ou horimetro (Frota Etapa 3, RN-F3.10) */
+
+const ROTULO_LEITURA = { km: 'KM atual (o que está no painel)', horimetro: 'Horímetro atual (horas no painel)' };
+const UNIDADE_LEITURA = { km: 'km', horimetro: 'h' };
+export const MSG_AVISO_MENOR = 'Menor que o último registrado. Confira o painel antes de salvar.';
+/** Os 409 da RN-F3.01/05: o mesmo corpo com `confirmar_km_menor: true` grava. Qualquer outro erro nao se confirma. */
+const CODES_LEITURA_MENOR = ['KM_MENOR_QUE_ATUAL', 'HORIMETRO_MENOR_QUE_ATUAL'];
+
+const numeroPt = (n) => Number(n).toLocaleString('pt-BR');
+/** Sem veiculo (ou medicao desconhecida) a regua e a de km, como sempre foi. */
+const medicaoDoVeiculo = (v) => (v?.tipo_medicao === 'horimetro' ? 'horimetro' : 'km');
+function ultimaLeitura(v, medicao) {
+  if (!v) return null;
+  const n = medicao === 'horimetro' ? v.horimetro_atual : v.km_atual;
+  return n == null || n === '' || Number.isNaN(Number(n)) ? null : Number(n);
+}
+const ehLeituraMenor = (err) => err?.response?.status === 409 && CODES_LEITURA_MENOR.includes(err.response?.data?.code);
+
+/** O campo de leitura do painel: rotulo pela medicao, o ultimo numero do veiculo embaixo e o aviso (nao bloqueia) se digitou menor. */
+function CampoLeitura({ medicao, ultimo, valor, onChange }) {
+  const digitado = valor === '' || valor == null ? null : Number(valor);
+  const menor = ultimo != null && digitado != null && !Number.isNaN(digitado) && digitado < ultimo;
+  return (
+    <>
+      <label className="portal-campo">
+        <span>{ROTULO_LEITURA[medicao]}</span>
+        {medicao === 'horimetro' ? (
+          <input key="horimetro" type="number" inputMode="decimal" step="any" min="0" name="horimetro" value={valor} onChange={onChange} />
+        ) : (
+          <input key="km" type="number" inputMode="numeric" min="0" name="km" value={valor} onChange={onChange} />
+        )}
+      </label>
+      {ultimo != null && (
+        <p className="portal-dica" data-testid="ultimo-registrado">
+          {`Último registrado neste veículo: ${numeroPt(ultimo)} ${UNIDADE_LEITURA[medicao]}`}
+        </p>
+      )}
+      {menor && <div className="portal-aviso" data-testid="aviso-menor">{MSG_AVISO_MENOR}</div>}
+    </>
+  );
+}
+
+function BotaoConfirmarMenor({ visivel, desabilitado, onClick }) {
+  if (!visivel) return null;
+  return (
+    <button type="button" className="portal-botao" disabled={desabilitado} onClick={onClick}>Confirmar mesmo assim</button>
+  );
+}
+
 /* ---------------------------------------------------------------- saida / retorno / inspecao */
 
 export function RegistroForm({ tipo, inicio, onCancelar, onSalvo }) {
@@ -95,7 +144,8 @@ export function RegistroForm({ tipo, inicio, onCancelar, onSalvo }) {
   const veiculos = (inicio.veiculos || []).filter((v) => tipo !== 'saida' || !v.em_uso);
 
   const [veiculoId, setVeiculoId] = useState('');
-  const [km, setKm] = useState('');
+  const [km, setKm] = useState(''); // a leitura do painel: km ou horas, conforme a medicao
+  const [podeConfirmar, setPodeConfirmar] = useState(false);
   const [data, setData] = useState(hojeLocalISO());
   const [horario, setHorario] = useState(horaAgora());
   const [combustivel, setCombustivel] = useState(null);
@@ -113,6 +163,17 @@ export function RegistroForm({ tipo, inicio, onCancelar, onSalvo }) {
   const faltam = itens.length - respondidos;
   const podeSalvar = itens.length > 0 && faltam === 0 && !salvando;
 
+  // Etapa 3 (RN-F3.07 revisada): no retorno, a regua e a com que a viagem abriu; o "ultimo registrado" e o do veiculo da viagem.
+  const veiculoDaLeitura = escolheVeiculo
+    ? veiculos.find((v) => String(v.id) === String(veiculoId))
+    : (inicio.veiculos || []).find((v) => viagem && String(v.id) === String(viagem.veiculo_id));
+  let medicao;
+  if (escolheVeiculo) medicao = medicaoDoVeiculo(veiculoDaLeitura);
+  else if (viagem?.tipo_medicao === 'horimetro' || viagem?.tipo_medicao === 'km') medicao = viagem.tipo_medicao;
+  else medicao = medicaoDoVeiculo(veiculoDaLeitura);
+  const ultimo = ultimaLeitura(veiculoDaLeitura, medicao);
+  const saidaDaViagem = medicao === 'horimetro' ? viagem?.horimetro_saida : viagem?.km_saida;
+
   const incluirAvaria = () => {
     if (!novaAvaria?.vista || !novaAvaria?.tipo) return;
     const av = { vista: novaAvaria.vista, tipo: novaAvaria.tipo };
@@ -121,14 +182,14 @@ export function RegistroForm({ tipo, inicio, onCancelar, onSalvo }) {
     setNovaAvaria(null);
   };
 
-  const salvar = async (e) => {
-    e.preventDefault();
+  const enviar = async (confirmarKmMenor) => {
     if (!podeSalvar) return;
     setErro('');
+    setPodeConfirmar(false);
     setSalvando(true);
     const corpo = {
       tipo,
-      km: numeroOuNulo(km),
+      [medicao === 'horimetro' ? 'horimetro' : 'km']: numeroOuNulo(km),
       data,
       horario,
       nivel_combustivel: combustivel,
@@ -142,26 +203,38 @@ export function RegistroForm({ tipo, inicio, onCancelar, onSalvo }) {
       if (destino.trim()) corpo.destino = destino.trim();
       if (finalidade.trim()) corpo.finalidade = finalidade.trim();
     }
+    if (confirmarKmMenor) corpo.confirmar_km_menor = true;
     try {
       await api.post('/frotas/portal/registros', corpo);
       toast.success(`${TITULO_TIPO[tipo]} ${tipo === 'retorno' ? 'registrado' : 'registrada'}`);
       onSalvo();
     } catch (err) {
       setErro(err.response?.data?.error || 'Não foi possível salvar. Confira a internet e tente de novo.');
+      setPodeConfirmar(ehLeituraMenor(err));
     } finally {
       setSalvando(false);
     }
+  };
+
+  const salvar = (e) => {
+    e.preventDefault();
+    enviar(false);
   };
 
   return (
     <form className="portal-form" onSubmit={salvar} aria-label={`Formulário de ${TITULO_TIPO[tipo]}`}>
       <h2 className="portal-form-titulo">{TITULO_TIPO[tipo]}</h2>
       <ErroDoServidor mensagem={erro} />
+      <BotaoConfirmarMenor visivel={podeConfirmar} desabilitado={!podeSalvar} onClick={() => enviar(true)} />
 
       {escolheVeiculo ? (
         <label className="portal-campo">
           <span>Veículo</span>
-          <select value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)} name="veiculo_id">
+          <select
+            value={veiculoId}
+            onChange={(e) => { setVeiculoId(e.target.value); setPodeConfirmar(false); }}
+            name="veiculo_id"
+          >
             <option value="">Escolha o veículo…</option>
             {veiculos.map((v) => {
               const indisponivel = tipo === 'saida' && v.status === 'manutencao';
@@ -176,14 +249,16 @@ export function RegistroForm({ tipo, inicio, onCancelar, onSalvo }) {
       ) : (
         <div className="portal-cartao" data-testid="veiculo-da-viagem">
           Veículo: <strong>{viagem?.placa || '-'}</strong>
-          {viagem?.km_saida != null && <> · saiu com {Number(viagem.km_saida).toLocaleString('pt-BR')} km</>}
+          {saidaDaViagem != null && <> · saiu com {numeroPt(saidaDaViagem)} {UNIDADE_LEITURA[medicao]}</>}
         </div>
       )}
 
-      <label className="portal-campo">
-        <span>KM atual (o que está no painel)</span>
-        <input type="number" inputMode="numeric" min="0" name="km" value={km} onChange={(e) => setKm(e.target.value)} />
-      </label>
+      <CampoLeitura
+        medicao={medicao}
+        ultimo={ultimo}
+        valor={km}
+        onChange={(e) => { setKm(e.target.value); setPodeConfirmar(false); }}
+      />
 
       <div className="portal-linha">
         <label className="portal-campo">
@@ -359,36 +434,53 @@ export function AbastecimentoForm({ inicio, onCancelar, onSalvo }) {
   });
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
-  const muda = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const [podeConfirmar, setPodeConfirmar] = useState(false);
+  const muda = (k) => (e) => {
+    setForm((f) => ({ ...f, [k]: e.target.value }));
+    // Etapa 3 (RN-F3.10): mudar o numero ou o veiculo desarma a confirmacao do 409 de leitura menor.
+    if (k === 'km' || k === 'veiculo_id') setPodeConfirmar(false);
+  };
 
-  const salvar = async (e) => {
-    e.preventDefault();
+  const veiculo = (inicio.veiculos || []).find((v) => String(v.id) === String(form.veiculo_id));
+  const medicao = medicaoDoVeiculo(veiculo);
+  const ultimo = ultimaLeitura(veiculo, medicao);
+
+  const enviar = async (confirmarKmMenor) => {
     setErro('');
+    setPodeConfirmar(false);
     setSalvando(true);
     const corpo = {
       veiculo_id: numeroOuNulo(form.veiculo_id),
-      km: numeroOuNulo(form.km),
+      [medicao === 'horimetro' ? 'horimetro' : 'km']: numeroOuNulo(form.km),
       litros: numeroOuNulo(form.litros),
       data: form.data,
     };
     if (form.valor_total !== '') corpo.valor_total = Number(form.valor_total);
     if (form.posto.trim()) corpo.posto = form.posto.trim();
     if (form.observacoes.trim()) corpo.observacoes = form.observacoes.trim();
+    if (confirmarKmMenor) corpo.confirmar_km_menor = true;
     try {
       await api.post('/frotas/portal/abastecimentos', corpo);
       toast.success('Abastecimento registrado');
       onSalvo();
     } catch (err) {
       setErro(err.response?.data?.error || 'Não foi possível salvar. Confira a internet e tente de novo.');
+      setPodeConfirmar(ehLeituraMenor(err));
     } finally {
       setSalvando(false);
     }
+  };
+
+  const salvar = (e) => {
+    e.preventDefault();
+    enviar(false);
   };
 
   return (
     <form className="portal-form" onSubmit={salvar} aria-label="Formulário de Abastecimento">
       <h2 className="portal-form-titulo">Abastecimento</h2>
       <ErroDoServidor mensagem={erro} />
+      <BotaoConfirmarMenor visivel={podeConfirmar} desabilitado={salvando} onClick={() => enviar(true)} />
       <label className="portal-campo">
         <span>Veículo</span>
         <select name="veiculo_id" value={form.veiculo_id} onChange={muda('veiculo_id')}>
@@ -396,10 +488,7 @@ export function AbastecimentoForm({ inicio, onCancelar, onSalvo }) {
           {(inicio.veiculos || []).map((v) => <option key={v.id} value={v.id}>{rotuloVeiculo(v)}</option>)}
         </select>
       </label>
-      <label className="portal-campo">
-        <span>KM atual (o que está no painel)</span>
-        <input type="number" inputMode="numeric" min="0" name="km" value={form.km} onChange={muda('km')} />
-      </label>
+      <CampoLeitura medicao={medicao} ultimo={ultimo} valor={form.km} onChange={muda('km')} />
       <div className="portal-linha">
         <label className="portal-campo">
           <span>Litros</span>
@@ -452,7 +541,8 @@ function MeusRegistros({ dados }) {
                   <strong>{TITULO_TIPO[r.tipo_registro] || 'Registro'}</strong> · {r.placa || '-'}
                   <div className="portal-lista-sub">
                     {dataLegivel(r.data_checklist || r.data)}{r.horario ? ` às ${r.horario}` : ''}
-                    {r.km != null ? ` · ${Number(r.km).toLocaleString('pt-BR')} km` : ''}
+                    {r.horimetro != null ? ` · ${numeroPt(r.horimetro)} h` : ''}
+                    {r.horimetro == null && r.km != null ? ` · ${numeroPt(r.km)} km` : ''}
                   </div>
                 </div>
                 {sit && <span className={`portal-situacao situacao-${sit.classe}`}>{sit.rotulo}</span>}
@@ -472,7 +562,8 @@ function MeusRegistros({ dados }) {
                 <strong>{a.placa || '-'}</strong> · {a.litros != null ? `${Number(a.litros).toLocaleString('pt-BR')} L` : '-'}
                 <div className="portal-lista-sub">
                   {dataLegivel(a.data_abastecimento || a.data)}
-                  {a.km_abastecimento != null ? ` · ${Number(a.km_abastecimento).toLocaleString('pt-BR')} km` : ''}
+                  {a.horimetro_abastecimento != null ? ` · ${numeroPt(a.horimetro_abastecimento)} h` : ''}
+                  {a.horimetro_abastecimento == null && a.km_abastecimento != null ? ` · ${numeroPt(a.km_abastecimento)} km` : ''}
                   {a.valor_total != null
                     ? ` · ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(a.valor_total)}`
                     : ''}
