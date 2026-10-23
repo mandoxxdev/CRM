@@ -1,6 +1,6 @@
 # Etapa 189 — A janela de separação já abre com o endereço sugerido, e a fila imprime a lista de coleta
 
-> **Status:** 📝 **plano escrito (2026-10-23, sobre `7e76acc6`). Fase 2 (revisão do plano) feita em 2026-10-23: 0 Crítico, 3 Importantes, 6 Menores — ver "Emendas da Fase 2" (aplicar antes de T1). Execução em andamento desde 2026-10-23 sobre `2e548a9f` (a 188 fechada): contrato recongelado no começo de "Execução" — ele prevalece.**
+> **Status:** ✅ **FECHADA em 2026-10-23** (T1–T4, Fase 5 e fix-round `940ba3c5`, `aa61d3d5`, `b2fe087e`, `43b17210`, fechamento — ver "F5", "Fechamento" e "Verificação final" no fim). Histórico: 📝 **plano escrito (2026-10-23, sobre `7e76acc6`). Fase 2 (revisão do plano) feita em 2026-10-23: 0 Crítico, 3 Importantes, 6 Menores — ver "Emendas da Fase 2" (aplicar antes de T1). Execução em andamento desde 2026-10-23 sobre `2e548a9f` (a 188 fechada): contrato recongelado no começo de "Execução" — ele prevalece.**
 > Feature **05** (separação e picking). Continua a Etapa 188 (plano
 > `docs/superpowers/plans/2026-10-22-almoxarifado-etapa188-sugestao-de-coleta-na-fila-de-separacao.md`: a "Próxima tarefa detalhada",
 > a emenda **I1** da Fase 2 — "subir a pré-seleção a item 1 da 189, ela é o que torna a dica verdadeira" — e a **B1257**).
@@ -714,10 +714,154 @@ onde divergirem** (as Emendas da Fase 2 incorporadas):
   `listaColetaPdf` + 2 fluxo + 4 botões da fila).
 - `CI=true react-scripts build`: *Compiled successfully*.
 
-**Parou aqui:** T1–T4 feitas. Falta a **Fase 5** (revisão adversarial) e o **fechamento** (`fechar-etapa`: novidades com a letra B
-B1260–B1269 — a B1262 com o parágrafo da I1 —, a letra C com o ramo morto "Separar e entregar" da T4, spec 05, mapa, guia, manual e a
-"Próxima tarefa detalhada" deste plano).
+**Parou aqui (antes da Fase 5):** T1–T4 feitas. *(Feitas depois: a Fase 5, o fix-round e o fechamento — abaixo.)*
 
-## Próxima tarefa detalhada
+## F5 — Fase 5 (revisão adversarial) e fix-round (2026-10-23)
 
-*(preencher no fechamento)*
+Revisão adversarial feita por outra sessão sobre `ba1c7bac`, numa cópia da árvore (scratchpad `rev189-repo`), com sondas executadas:
+`rev189ProbeJanela.test.js` (J1, J2, J3 — a janela em jsdom), `rev189Probe.test.js` (P-a a P-d — o PDF com o jsPDF real) e
+`rev189Sonda.api.test.js`, `rev189Sonda2.api.test.js`, `rev189Sonda3.api.test.js` (servidor pela rota). Os achados chegaram assim:
+**1 Importante para corrigir** (o 1), **1 Menor para corrigir teste** (o 3) e **2 para registrar** (o 2 e o 4). Antes do conserto, as sondas
+foram rodadas contra o código de `ba1c7bac`: J2 reproduziu (o item 1 voltou de `1:` para `2:7`); P-d — sem o `addPage` do bloco, o 18/18
+continuava; SONDA-1 — a separação da segunda requisição 200 e a entrega dela 400 (*"… a origem da separação (XB-01) não serve mais (O saldo em
+XB-01 (2) não cobre a quantidade (4) …)"*), saldos XB-01/L1 2, XP-01/L2 9, 0 trocas; o controle no automático: as duas entregas 200 e −4 sem
+lote; SONDA-3 (ids estranhos) e SONDA-4 (série + lote, dois itens) sem achado; J1 e J3 sem achado.
+
+### 1 (Importante) — a escolha do almoxarife era sobrescrita pela sugestão ao recarregar → CORRIGIDO (`940ba3c5`)
+
+**Onde:** `RequisicoesList.js`, o efeito dos saldos (Etapa 59) zerava `origensSeparacao` inteiro a cada mudança de `materiaisEntregaKey`, e o
+efeito da sugestão (T2) zerava `preSelecao`. A chave muda **dentro da mesma abertura** quando o foco da janela recarrega o detalhe e um item
+de **outro** material deixa de ser separável (outro almoxarife o separou). Resultado (J2): o almoxarife troca o item 1 de `2:7` para `1:`, a
+janela recarrega e o item volta para `2:7` com *"Sugerido pela fila…"*, sem aviso — a RN-189.05 quebrada. O mesmo zerar já apagava, desde a
+59/65, a escolha manual em item **com planejada** (a regra da 65 escolhia de novo); o conserto cobre os dois.
+
+**Conserto:** `soDosItensNaSeparacao(mapa, itens)` (módulo) recorta um mapa aos itens que continuam na janela (separável > 0). Os dois efeitos
+guardam num `ref` a abertura que viram por último (`"<id>|S"` ou `""`): na **mesma** abertura da separação (mesma requisição, `S:` antes e
+depois), `origensSeparacao` e `preSelecao` ficam recortadas; abrir, fechar ou passar para a entrega zera como antes. Descartado: um conjunto
+de "itens tocados" à parte — a chave presente em `origensSeparacao` já é essa marca desde a 65.
+
+**Testes** (`RequisicoesSeparacaoPreSelecao.test.js`, 18 → 23): `[Fase 5, J2]` × 3 — a escolha do almoxarife fica (com a **premissa** de que
+a chave mudou: o item 2 sumiu e a sugestão foi buscada de novo, `antes + 1`); o item pré-selecionado e não tocado mantém a frase; o item que
+sai e volta é decidido de novo. Vermelho antes do conserto: o primeiro (`"2:7"` × `"1:"`); os outros dois passavam antes (o segundo porque
+re-pré-selecionar dava o mesmo; o terceiro porque zerar tudo também decide de novo) — são guarda do conserto. E `43b17210`: `[Fase 5, J1]`
+(recarregar **sem** mudar a chave; a troca fica, sem busca nova) e `[Fase 5, J3]` (a sugestão chega antes dos saldos) — sem achado, guarda.
+
+### 2 (Menor, registrar) — com sugestão velha, a separação aceita endereço já comprometido por outra requisição → C449 atualizada; teste (`b2fe087e`)
+
+`requisitionService.checarOrigemItem` só soma o separado pendente da **própria** requisição no par (regra da Etapa 59). Duas janelas
+abertas com a mesma sugestão: a segunda separação é aceita do par já comprometido e a entrega dela recusa com a literal da planejada — falha
+segura, nada baixado. No automático de antes da 189 terminava pior (−4 sem lote). A pré-seleção torna o caso **mais provável** (as duas
+janelas já vêm com o par escolhido). Não corrigido: é a C449 (a separação não reserva endereço; mudar a régua da 59 é etapa própria).
+Teste novo em `preSelecaoColetaIntegracao.api.test.js` (7 → 9): `[Fase 5, C449]` e o controle histórico no automático. Passou de primeira
+(documenta comportamento que já existia); controle: tirar a saída estrita da planejada na entrega (`if (false && semEscolha …)`) derruba o
+C449 por `200 !== 400`.
+
+### 3 (Menor, corrigir teste) — o bloco "Sem endereço sugerido" sem teste de página → TESTE (`aa61d3d5`)
+
+Tirar o `addPage` de dentro do laço de `r.semEndereco` (`listaColetaPdf.js`) deixava `listaColetaPdf.test.js` 18/18. Cenário novo `[Fase 5,
+P-d]`: 80 itens sem endereço; premissa de que os 80 foram desenhados; nada abaixo de 275 nem fora da folha; premissa de que o bloco cruzou
+página. O código estava certo.
+
+### 4 (registrar em C) — "Separar e entregar" / "Completar Entrega": ramo morto anterior à 189 → C452
+
+`handleCompletarEntrega` (`RequisicoesList.js`) abre a entrega quando há entregável e só senão faz `setEntregaAposSeparar(true)` +
+`abrirModalSeparacao()`; o botão **Completar Entrega** só aparece com `temPendenteComEstoque` = `temEntregavel` — o ramo da separação (e o toast
+*"Aguardando reposição…"*) nunca roda. Anterior à 189 (`b049b9b5`, `42d2569d`, jun/2026). A T4 já tinha achado (divergência 1). Não mexido.
+
+### Achado do fix-round (registrar) → C454
+
+Ao medir o J2, a sonda `fix189tmpQtd` (jsdom, apagada depois) mostrou que o mesmo recarregar do foco desfaz as **quantidades** digitadas da
+janela de separação (`aplicarDetalhe` → `setQuantidadesSeparacao(quantidadesIniciaisSeparacao(...))`): digitado 3, depois do foco, 5.
+Anterior (Etapa 135 ou antes), fora do escopo do fix-round: **C454**, candidata a etapa pequena (a mesma régua do J2 para as quantidades; a
+janela de entrega usa o mesmo `aplicarDetalhe` — não medido).
+
+### Controles positivos do fix-round (harness `scratchpad/fix189-sab.sh`: perl, âncora contada = 1, md5 antes/sabotado/restaurado, restauro por cópia `fix189-bak-*`)
+
+Todos restauraram ao md5 pós-conserto (`RequisicoesList.js` `e285d163…`, `listaColetaPdf.js` `b4812cbf…`, `requisitionService.js`
+`10e9e9d2…`); nenhum no-op.
+
+| Sabotagem | Caiu | Asserção |
+|---|---|---|
+| (j2a) os dois efeitos voltam a zerar tudo | só o 1º `[Fase 5, J2]` | `"2:7"` × `"1:"` |
+| (j2b) só a `preSelecao` volta a zerar | só o 2º `[Fase 5, J2]` | a frase nula (`Cannot read … textContent`) |
+| (j2c) o recorte não guarda ninguém | só o 1º `[Fase 5, J2]` | `"2:7"` × `"1:"` |
+| (j2d) o recorte guarda todos (sem filtrar) | **na primeira forma não caiu nada** → teste novo (o 3º `[Fase 5, J2]`); depois, só ele | `""` × `"1:"` |
+| (pd) sem o `addPage` do bloco | só `[Fase 5, P-d]` | **na primeira forma caiu pela premissa das páginas** (`>= 1` × `0`); a asserção do pé subiu antes dela e o controle foi refeito: `M-23 … y 278.5` |
+| (c449) a entrega sem a saída estrita da planejada | `[Fase 5, C449]` (`200 !== 400`), `[RN-189.08]`, "entregando entre as rodadas" e o controle histórico | |
+| (j3) decidir sem esperar os saldos | `[Fase 5, J3]` (a frase antes dos saldos) e o 3º J2 | |
+| (j1) o efeito dos saldos reage ao detalhe e zera | **na primeira forma o J1 não caiu** (trocava para `''` — zerar também dá `''` — e o mock devolvia o mesmo objeto, sem re-render); J1 refeito (troca para `1:`, recarga com objeto novo) → cai com `""` × `"1:"` (e os três J2) | |
+
+Arquivos: `RequisicoesSeparacaoPreSelecao` **23/23** (eram 18), `listaColetaPdf` **19/19** (eram 18), `preSelecaoColetaIntegracao` **9/0**
+(eram 7), `sugestaoColetaRequisicao` **6/0** (o caso do 404 com 7 ids a mais); `Requisicoes*` **16 suítes / 318** antes do J1/J3.
+
+## Fechamento (2026-10-23, skill `fechar-etapa`)
+
+- Novidades: seção da Etapa 189 antes de "Onde estamos" (Antes → Agora, oito cenários clicáveis com as frases lidas em `RequisicoesList.js`,
+  `coletaTexto.js`, `listaColetaPdf.js` e `FilaSeparacao.js`, o que não cobre); cabeçalho com a 189 no topo e a 188 em "Também em"; letra
+  **B**: B1260 a B1269 (B1261 — o padrão do "Sai de" muda de automático para o par sugerido; B1262 com o custo e o texto de guia da Fase 2 e o
+  parágrafo da I1; B1263 com a M2; B1265 com a M3; B1259 marcada como feita); letra **C**: C449 atualizada (a pré-seleção torna mais
+  provável; falha segura), C451 resolvida para a separação de uma vez, C452 (ramo morto), C453 (duas rodadas sem entregar — I1), C454
+  (as quantidades ao recarregar — anterior); **D (189)**; **F (189)**; "Onde estamos" com a 189.
+- Spec 05: status e "Última atualização"; o item *"Sugestão de rota"* com o "pago na 189"; o item *"Lista de separação como entidade"* com a
+  nota de que a lista impressa não é ela (continua `[ ]`); bloco "Etapa 189" no fim.
+- Mapa: linha 05 e cabeçalho. Guia: cabeçalho ("parou aqui: 189"), a 188 com *(Feita: a 189.)*, a seção da 189 com roteiro clicável, e a
+  correção à vista no "não cobre" da 188 (o "Sai de não vem escolhido" mudou na 189). Manual: 10.2 ganhou "Ao abrir a separação, o Sai de já
+  vem no endereço que a Fila de separação sugere" (quando escolhe, quando não, a escolha que vale, as quantidades ao recarregar); 10.6 — o
+  exemplo da dica termina em *"já vem escolhido"*, o parágrafo "A dica só vale se for escolhida no Sai de" foi **reescrito** (deixou de ser
+  verdade) e ganhou "Imprimir a lista de coleta".
+- Divergências do plano registradas acima e em T2–T4; nada mais.
+
+## Verificação final
+
+Sobre `43b17210` (código e testes do fix-round) + os documentos do fechamento; uma suíte por vez, exit 0 em todas (logs `fix189-log-*.txt` no scratchpad):
+
+- `test:api` **538/538** arquivos OK (mais lento: `propostaClausulasGrava.api.test.js`, 68,6 s). Eram 536 em `d1146a6e`: +2 arquivos são da
+  Etapa 190 (já commitada antes deste fix-round); os dois arquivos da 189 ganharam cenários, não arquivos.
+- `test:almoxarifado` **44 passou, 0 falhou**.
+- `test:validation` **4/0**; `test:safealter` **3/0** (o "ALTER falhou" do log é o caso de falha de propósito); `test:sqlite` **16/0**.
+- client **187 suítes / 2545 testes**, todos passando (eram 187 / 2539 na 190: +6 do fix-round — `[Fase 5, J2]` × 3, `[Fase 5, J1]`,
+  `[Fase 5, J3]`, `[Fase 5, P-d]`).
+- `CI=true react-scripts build`: *Compiled successfully*.
+- `git status`: só os arquivos do fechamento antes do commit.
+
+## Retrospectiva
+
+1. **29 controles positivos** na etapa (T1 4, T2 6, T3 8, T4 3, fix-round 8), **0** no-op (md5 sabotado sempre diferente). **4** não
+   derrubaram nada na primeira forma — (e) da T2 (a guarda era código morto), (m) da T3 (nenhuma parada caía no pé), (j2d) e (j1) do
+   fix-round (faltava o cenário; o J1 trocava para o mesmo valor que o defeito produz) — e **1** caiu pela asserção errada ((pd), pela
+   premissa das páginas). Todos refeitos até cair pela asserção do achado.
+2. **1 Importante** na Fase 5 (o J2), numa régua que a T2 testou só pela metade: "uma vez por abertura" foi provada com a sugestão
+   chegando atrasada, nunca com a **chave da janela mudando dentro da mesma abertura**. O efeito da Etapa 59 já zerava tudo nesse caso
+   desde junho — a 189 só herdou e tornou visível (a pré-seleção escolhia de novo por cima). Lição: "abertura" e "mudança de chave" são
+   eventos diferentes; quem guarda escolha do usuário num efeito com chave tem de testar a chave mudando.
+3. **0 regressões**; **3** asserções antigas mudaram por decisão, todas na T3 (as três `cobre: true` de `FilaSeparacao.test.js` passaram de
+   *"escolha este endereço"* a *"já vem escolhido"*); **0** no fix-round.
+4. **3 achados anteriores** registrados sem correção: C449 ficou mais provável (a régua da Etapa 59), C452 (o ramo morto de junho), C454
+   (as quantidades que o foco desfaz — achado do próprio fix-round, ao medir o J2).
+
+## Próxima tarefa detalhada — fechar a Etapa 190 (feature 10), depois a 191
+
+**1. Fechamento da Etapa 190 — a Entrada manual grava a validade do lote.** Plano:
+`docs/superpowers/plans/2026-10-23-almoxarifado-etapa190-validade-do-lote-na-entrada-manual.md`. Estado (lido no plano dela, não
+reexecutado aqui): T1–T4 feitas (`ed1e6566..fa14e949`; última `fa14e949`), suítes completas sobre `9555ed29` (538/538, 44/44, 4/4, 3/3,
+16/16, client 187 suítes / 2539, build ok). **Falta:** a **Fase 5** (revisão adversarial — um revisor já lê a 190 numa cópia no scratchpad,
+`rev190-repo`), o fix-round e o `fechar-etapa` inteiro. Pontos de atenção para quem fechar:
+- **Numeração:** a 189 usou **B1260–B1269**, **C452–C454** e **D (189)**/**F (189)**; a 190 tem **B1270–B1279** reservadas no plano dela,
+  **A110** (conferir no título da letra A: hoje são 109) e os **C a partir de C455**.
+- **Contrato que a 190 mudou** (`POST /movimentacoes/v2`, campo `data_validade`; avisos `AVISO_PREENCHIDA`/`AVISO_FALHA`; `MSG.CONFLITO`) — o
+  manual (seção de Entrada e de lotes) e o guia precisam do campo *"Validade do lote"* da tela de Movimentações.
+- **C450** (o lote da Entrada manual sem validade) vira resolvida pela 190 — marcar à vista na letra C, como a C451 foi marcada aqui; o
+  D (188)(7) também.
+- O comentário de `server/tests/api/filaSugestaoColetaIntegracao.api.test.js` (188) "A entrada manual nao grava a validade do lote" ficou
+  falso (achado da T4 da 190) — corrigir no fechamento dela.
+- A sugestão de coleta (188/189) passa a usar a validade da Entrada manual (FEFO): o cenário 4 da T4 da 190 já prova pela fila; a
+  pré-seleção da 189 não muda (ela lê o `pegar_em`).
+
+**2. Depois: Etapa 191 — corrigir a validade de um lote** (B1276, B1277). O rascunho está na "Próxima tarefa detalhada" do plano da 190:
+`PUT /api/almoxarifado/lotes/:id/validade` com `requirePermission('inspecionar')`, corpo `{ data_validade, justificativa }`, guarda contra a
+lida, auditoria `CORRECAO_VALIDADE`; atenção à liberação de vencimento (anular com a data nova), à dedupe do e-mail (reavisa), à separação
+planejada num lote que a correção venceu (a entrega recusa) e ao recebimento passar a usar `preencherValidadeSeVazia`.
+
+**3. Candidata pequena (sem plano):** a **C454** — o foco da janela recarrega o detalhe e `aplicarDetalhe` volta
+`quantidadesSeparacao`/`quantidadesEntrega` aos iniciais com a janela aberta. A régua do J2 serve: na mesma abertura, manter a quantidade
+dos itens que continuam (e baixar ao novo máximo quando ele caiu). Medir a janela de entrega antes de prometer.

@@ -2825,6 +2825,30 @@ Quando o material é **de cliente**, o parêntese do estorno diz *"(perfil Admin
 - **Ou grava tudo, ou nada** — como a quantidade: um item recusado recusa a rodada inteira.
 - O endereço escolhido vira a **origem da separação** do item, e a entrega sai dali (7.5). Rodadas que nomeiam lugares **diferentes** para o mesmo item — outro endereço, o mesmo endereço com outro lote (ou com lote, quando a separação anterior não disse o lote), ou o **Sai de** em automático sobre material já separado de um endereço — deixam o item **sem** origem da separação, e a entrega volta a ser automática. Na separação, "o mesmo lugar" é o mesmo endereço **e** o mesmo lote.
 - **Ao ajustar a separação, o Sai de parte do lugar anterior.** Em **Ajustar Separação**, o item que tem separado de A-01 ainda não entregue abre com **A-01** (e o lote, se houver) já escolhido no **Sai de** — desde que A-01 apareça nas opções **e** tenha saldo livre para a quantidade sugerida, descontado o que já está separado dali. Se não tiver (por exemplo, A-01 só tem o que já está na caixa), o campo abre em automático. Se a lista de endereços não carregar, ou se a separação for confirmada antes de ela chegar, o campo fica em automático.
+- **Ao abrir a separação, o Sai de já vem no endereço que a Fila de separação sugere (10.6).** Ao clicar **Iniciar Separação**, o sistema
+  busca a dica da fila para a requisição e, em cada item **sem nada separado e não entregue**, escolhe no **Sai de** o endereço e o lote da
+  dica — desde que, ao mesmo tempo: a dica tenha tudo o que falta separar (sem o aviso *"Nenhum endereço tem tudo"* nem outro aviso); o
+  endereço e o lote apareçam nas opções do **Sai de**; e o saldo dali cubra a quantidade preenchida **somada** à dos outros itens do mesmo
+  material que estão com o mesmo endereço no **Sai de** e ao que já foi separado dali para eles e não entregue. Embaixo do campo aparece
+  *"Sugerido pela fila de separação. Se pegou de outro endereço, troque aqui."* Quando a quantidade preenchida é **menor** que o que falta
+  separar do item, a frase continua: *" Entregue esta parte antes de separar o resto — separar o resto de outro endereço troca a origem."*
+  (separar o resto depois, de outro endereço, sobre o que ainda está na caixa, troca a origem — abaixo). Com parte do material retida (10.6),
+  a dica é escolhida do mesmo jeito e a frase ganha o alerta *"Parte do saldo deste material está retida (em inspeção, bloqueada ou em
+  terceiros) e o sistema não sabe em qual endereço — confira antes de pegar."*
+  - **Quando não escolhe.** Item com a dica, mas sem as condições acima (o endereço não tem tudo, perdeu saldo desde que a fila foi aberta,
+    não está nas opções, ou o item já tem parte separada no automático): o **Sai de** fica em *"Qualquer endereço (automático)"* e embaixo
+    aparece *"Sugestão da fila: B-02 — lote L1 · 5 UN — não veio escolhida; confira o saldo no 'Sai de' antes de escolher."* (o lote só
+    quando há; a quantidade e a unidade são as da dica). Item com parte separada de um endereço escolhido segue a regra do item seguinte
+    (*Ao ajustar a separação…*) e nunca recebe outro endereço. Se a dica não carregar (sem rede, sem permissão, erro do servidor), nada é
+    escolhido e nada é mostrado — a separação funciona como sempre.
+  - **A escolha de quem separa vale.** Trocar o **Sai de** tira a frase *"Sugerido…"*, e a troca não é desfeita enquanto a janela estiver
+    aberta — nem quando a dica chega depois, nem quando a janela recarrega a requisição (ao voltar para a aba do navegador). Fechar e abrir
+    a janela de novo busca a dica de novo e escolhe de novo.
+  - **A dica não reserva nada.** Se o endereço perdeu saldo entre abrir a janela e confirmar, a confirmação é recusada com a frase de
+    sempre (*"Chapa 3mm: O saldo em A-01 (3) não cobre a quantidade (5) — a saída tiraria de outros endereços"*); a janela continua aberta e
+    nada é gravado — troque o **Sai de** e confirme de novo.
+  - **Atenção às quantidades.** Ao voltar para a aba do navegador com a janela aberta, as **quantidades** voltam ao valor inicial (a escolha
+    do **Sai de** fica). Confira antes de confirmar.
 - **Trocar de lugar avisa.** Com quantidade maior que zero e um **Sai de** diferente da origem da separação (inclusive automático), o item mostra *"A origem da separação anterior (A-01) deixa de valer: o que já está separado passa a sair automático na entrega."* (com *" — lote L-7"* quando houver) e o campo **"Motivo da troca (opcional)"**. O motivo não é obrigatório. Voltar ao mesmo lugar esconde o aviso.
 - **A troca fica registrada.** Quando a rodada deixa sem origem um item que tinha separado ainda não entregue, a troca aparece no bloco **"Substituições (N)"** do detalhe (10.1): quanto já estava separado, de onde, de onde veio a rodada nova, o motivo, quem e quando. Rodada do mesmo lugar, item sem origem anterior, ou com tudo o que foi separado dali já entregue, não registram nada. Rodada recusada não registra nada. O registro nunca é editado nem apagado.
 
@@ -2982,7 +3006,7 @@ Cada parte só aparece quando se aplica (*a separar* só se falta separar; *a en
 
 Embaixo de cada item que dá para separar agora, a fila diz **de onde pegar**:
 
-> *"Pegar em B-02 (ALM-GERAL / B-02) — lote L7 (vence 10/11/2026) · 5 UN — escolha este endereço no 'Sai de' ao separar"*
+> *"Pegar em B-02 (ALM-GERAL / B-02) — lote L7 (vence 10/11/2026) · 5 UN — já vem escolhido no 'Sai de' ao separar"*
 
 O endereço; entre parênteses, o caminho dele na árvore de localizações (só quando há mais de um nível — o almoxarifado conta como nível);
 o lote e a validade, quando o material tem lote; e **quanto pegar ali**. É **só uma dica**: não reserva a prateleira, não grava nada e não
@@ -2990,10 +3014,15 @@ impede ninguém de tirar o material de lá. A separação continua aceitando qua
 recusaria — se outra pessoa tirou o material depois que a fila foi aberta, separar do endereço sugerido é recusado com a frase de sempre
 (*"Parafuso: O saldo em B-02 (2) não cobre a quantidade (5) — a saída tiraria de outros endereços"*), e **Atualizar** traz uma dica nova.
 
-**A dica só vale se for escolhida no "Sai de".** A janela de separação abre com *"Qualquer endereço (automático)"*. Separado no automático,
-a entrega baixa pela regra de sempre (a localização padrão do material, depois a de mais saldo) — e, em material com lote, a saída
-automática não escolhe lote (7.5): o lote da prateleira continua com o saldo e o que saiu fica numa linha sem lote. Quem pegou da dica deve
-escolher o mesmo endereço (e lote) no **Sai de** ao separar.
+**A janela de separação já vem com a dica escolhida.** Ao **Iniciar Separação**, o **Sai de** do item ainda não separado já vem no
+endereço e lote da dica quando eles têm tudo (10.2) — por isso a linha termina com *"— já vem escolhido no 'Sai de' ao separar"*. Separar
+dali grava a origem da separação, e a entrega — inclusive a de um clique — sai do mesmo endereço e lote. A linha termina com *"— escolha este
+endereço no 'Sai de' ao separar"* quando a janela **não** vai escolher: a dica não tem tudo (*"Nenhum endereço tem tudo"*), ou o item já tem
+parte separada no automático. A fila não sabe o saldo da hora em que a janela abre: se o endereço perdeu saldo nesse meio, a janela não
+escolhe e diz *"Sugestão da fila: … — não veio escolhida; confira o saldo no 'Sai de' antes de escolher."* Quem troca o **Sai de** para
+*"Qualquer endereço (automático)"* volta à regra de sempre: a entrega baixa pela localização padrão do material, depois a de mais saldo — e,
+em material com lote, a saída automática não escolhe lote (7.5): o lote da prateleira continua com o saldo e o que saiu fica numa linha sem
+lote.
 
 **Quais endereços podem ser sugeridos.** Os endereços em que o material tem saldo, **menos**:
 
@@ -3051,6 +3080,28 @@ a do caminho na árvore de localizações — o almoxarifado, depois cada nível
 número** (*A-2* antes de *A-10*); o endereço pai vem antes dos que estão dentro dele; endereço sem almoxarifado vai por último. Dois itens no
 mesmo endereço ficam na ordem do pedido. **Os itens da requisição continuam na ordem do pedido**: a ordem de coleta é uma lista à parte. Com
 uma parada só, a lista não aparece (repetiria a linha do item).
+
+#### Imprimir a lista de coleta
+
+A fila imprime a dica em papel, para levar à prateleira:
+
+- **Imprimir lista de coleta**, ao lado de **Abrir**, em cada requisição que tem pelo menos um item com endereço sugerido ou com aviso.
+  Baixa *lista-coleta-⟨número da requisição⟩.pdf*.
+- **Imprimir lista de coleta (todas)**, ao lado de **Atualizar**: um PDF só, *lista-coleta-fila-AAAA-MM-DD.pdf*, com uma seção por requisição
+  que tem algo **a separar** e algo a imprimir, na ordem da fila. Fica desabilitado quando nenhuma requisição se encaixa, ou enquanto a fila
+  carrega. As requisições não são misturadas: cada seção é uma caixa.
+
+Cada seção traz o título *"Lista de coleta — ⟨número⟩"*, a linha *"Fila carregada em DD/MM/AAAA HH:MM — a sugestão vale para esse momento;
+recarregue a fila antes de imprimir de novo."*, o solicitante com o setor e a urgência (*"Solicitante: ⟨nome⟩ · ⟨setor⟩ · Urgência:
+Normal"*), e a tabela **Nº · Endereço · Material · Lote · Qtd · OK**, **na ordem de coleta** (não na do pedido): o endereço com o caminho
+entre parênteses (quando há mais de um nível), *"⟨código⟩ — ⟨nome⟩"*, o lote com *"vence DD/MM/AAAA"* (ou *"—"* sem lote), a quantidade a
+pegar com a unidade, e uma caixinha vazia para marcar. O aviso e o alerta do item, quando há, saem numa linha logo abaixo da parada. Os itens
+sem endereço sugerido que têm aviso vão num bloco **"Sem endereço sugerido"** no fim da seção (*"⟨código⟩ — ⟨nome⟩ · a separar ⟨q⟩ ⟨un⟩"* e
+o aviso); sem nenhuma parada, a seção não tem tabela, só esse bloco. O papel não tem assinatura: é roteiro de trabalho — quem separou fica
+registrado na separação (10.2).
+
+O papel é feito **com o que a fila já mostra**, sem perguntar de novo ao servidor: é a fotografia do momento em que a fila foi carregada.
+Clique **Atualizar** antes de imprimir de novo.
 
 **A fila é uma fotografia.** Outra pessoa pode separar, entregar ou aprovar o mesmo material depois que a fila foi
 aberta: uma requisição que estava em *Separar* ou *Entregar* pode ser recusada no

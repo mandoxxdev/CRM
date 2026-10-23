@@ -11,7 +11,17 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-23):** **Etapa 188 fechada** (**a fila de separação diz de onde pegar cada item e em que ordem
+> **Onde o desenvolvimento está (2026-10-23):** **Etapa 189 fechada** (**a janela de separação já abre no endereço sugerido, e a fila
+> imprime a lista de coleta** — ao **Iniciar Separação**, o **Sai de** de cada item ainda não separado já vem no endereço e lote que a **Fila de
+> separação** sugere, quando eles cobrem a quantidade, com *"Sugerido pela fila de separação. Se pegou de outro endereço, troque aqui."*;
+> separar dali e entregar baixa daquele endereço e lote, sem a linha *sem lote* negativa (**C451** resolvido para a separação de uma vez); a
+> fila diz *"— já vem escolhido no 'Sai de' ao separar"* e ganha **Imprimir lista de coleta** (por requisição) e **Imprimir lista de coleta
+> (todas)**, um PDF na ordem de coleta com caixinha **OK**; nada a rodar antes do deploy; decisões **B1260** a **B1269**; avisos **C449**
+> (atualizado: a pré-seleção o torna mais provável, a falha é segura), **C452** (não existe "separar e entregar" num clique), **C453**
+> (separar em duas vezes sem entregar troca a origem) e **C454** (as quantidades da janela voltam ao inicial ao recarregar — anterior);
+> limitações **D (189)**; revisão adversarial feita e corrigida). **Próxima: fechar a Etapa 190** — a Entrada manual grava a validade do
+> lote (executada, falta a revisão adversarial; ver o plano da 190) — e depois a **191** (corrigir a validade de um lote).
+> *(Também em 2026-10-23: **Etapa 188 fechada** (**a fila de separação diz de onde pegar cada item e em que ordem
 > andar** — na **Fila de separação**, cada item que dá para separar ganha *"Pegar em ⟨endereço⟩ (⟨caminho⟩) — lote ⟨L⟩ (vence DD/MM/AAAA) ·
 > ⟨quantidade⟩ ⟨un⟩ — escolha este endereço no 'Sai de' ao separar"*, e a requisição com dois ou mais endereços ganha a lista **Ordem de
 > coleta**, pelo caminho na árvore de localizações (A-2 antes de A-10); os itens continuam na ordem do pedido; o lote que vence antes primeiro,
@@ -19,8 +29,7 @@
 > parte fica no mesmo endereço; material com parte retida ganha o alerta *"Parte do saldo deste material está retida …"*; é só dica — não
 > reserva, não trava, não grava; nada a rodar antes do deploy; decisões **B1250** a **B1259**; avisos **C449** (duas requisições, o mesmo
 > endereço), **C450** (o lote da Entrada manual fica sem validade — anterior) e **C451** (a dica sem escolher o **Sai de** baixa de outro
-> lugar; com lote, linha sem lote negativa); limitações **D (188)**; revisão adversarial feita e corrigida). **Próxima: Etapa 189** — a
-> pré-seleção do **Sai de** e a lista de coleta impressa (ver o plano da 189).
+> lugar; com lote, linha sem lote negativa); limitações **D (188)**; revisão adversarial feita e corrigida); a próxima era a **189**.)*
 > *(Também em 2026-10-22: **Etapa 187 fechada** (**a ferramenta baixada não é calibrada nem editada, e a restrição da
 > manutenção aparece na lista e no Emprestar** — a ferramenta descartada ainda aceitava registrar calibração e ser editada pela integração;
 > agora o sistema recusa com *"Ferramenta baixada não pode ser calibrada (⟨nome⟩)"* / *"… editada (⟨nome⟩)"*, e a linha da baixada perde o
@@ -4297,7 +4306,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -13086,6 +13095,73 @@ da frente (chute — a retenção pode estar em qualquer endereço); descontar o
 pré-seleção precisa respeitar o que a revisão adversarial da 188 acrescentou: não pré-selecionar em silêncio quando houver o alerta de
 retenção (B1258), não pré-selecionar a planejada indisponível (B1253) e, em material com lote, lembrar que é o "Sai de" da **entrega** que
 escolhe o lote (**C451**).
+*(Feita: a Etapa 189 — B1260 a B1269.)*
+
+**B1260 (NOVA, da Etapa 189; decisão do agente) — a janela busca a sugestão numa rota nova, só de leitura, com o gate da fila.**
+`GET /api/almoxarifado/requisicoes/:id/sugestao-coleta` (perfil que separa — Almoxarife ou Administrador do almoxarifado) devolve, para uma
+requisição, exatamente o que a Fila de separação mostra para ela, pelo mesmo código (a fila filtrada por uma requisição). Requisição fora da
+fila: lista vazia. Não grava, não trava. **Descartado:** um campo novo no detalhe da requisição (o detalhe não tem gate de perfil, é aberto
+por várias telas e passaria a fazer 4–5 consultas a mais em toda abertura); a janela ler a fila inteira (avaliaria a alçada de valor de toda
+requisição da fila a cada abertura). **Reversível.** `da0c2d6b`.
+
+**B1261 (NOVA, da Etapa 189; decisão do agente) — o padrão do "Sai de" na separação muda: de "Qualquer endereço (automático)" para o
+endereço sugerido.** Só no item **sem** nada separado ainda, só quando a sugestão **cobre** a quantidade e o endereço está entre as opções
+do **Sai de** (somando os irmãos do mesmo material que ficaram no mesmo endereço). É o que torna a dica da Etapa 188 verdadeira: quem pega
+da prateleira sugerida e só clica **Confirmar** deixa o livro igual à prateleira, e o material com lote deixa de gerar a linha *sem lote*
+negativa (**C451**). A janela diz *"Sugerido pela fila de separação. Se pegou de outro endereço, troque aqui."*; o almoxarife troca quando
+quiser, e a troca dele vale até fechar a janela — inclusive se a janela recarregar sozinha (revisão adversarial, `940ba3c5`). **Descartado:**
+manter o automático com um botão "usar sugestão" (o separador segue a dica, esquece o botão e o C451 continua); pré-selecionar quando não
+cobre, baixando a quantidade para o que cabe (mudaria a quantidade padrão e abriria o "motivo da divergência" sem o usuário ter feito
+nada). **Reversível** (uma função e um efeito na tela). `d043224f`.
+
+**B1262 (NOVA, da Etapa 189; decisão do agente) — o custo aceito: mais entregas saem da origem da separação, estrita.** Separar com endereço
+grava a origem do item; se o endereço perder saldo entre separar e entregar, a janela de entrega abre no automático com a troca registrada,
+e a entrega de um clique (**Confirmar Entrega e Baixar Estoque**) recusa com *"⟨material⟩: a origem da separação (⟨endereço⟩) não serve mais
+(…) — entregue escolhendo de onde sai"*. É o comportamento de sempre para quem escolhe à mão (Etapas 59/63), e é o livro honesto (o material
+saiu de lá). **O que muda na tela:** se o **Confirmar Entrega** responder assim, clique em **Entregar escolhendo de onde sai…** e escolha
+outro endereço: a troca fica registrada no bloco **Substituições**. Material com **série**: depois de separar do endereço sugerido, a entrega
+pede séries **daquele lote**. **E separar em duas vezes sem entregar no meio:** separar uma parte do endereço sugerido e o resto **depois**,
+de outro endereço, troca a origem na segunda vez (a regra da Etapa 65 registra a troca) e a entrega sai no automático — em material com lote,
+a linha sem lote fica negativa como antes da 189 (**C453**). Por isso, quando a quantidade é menor que o que falta separar, a janela
+acrescenta *"Entregue esta parte antes de separar o resto — separar o resto de outro endereço troca a origem."* **Descartado:** uma
+pré-seleção "macia", que não grava a origem (o servidor não tem isso; seria campo novo e uma segunda régua de origem); não pré-selecionar
+quando a separação é parcial (perderia o conserto do caso parcial entregue antes da próxima rodada, o mais comum). **Reversível.**
+`d043224f`, `d1146a6e`.
+
+**B1263 (NOVA, da Etapa 189; decisão do agente) — a pré-seleção nunca troca a origem de quem já foi separado.** Item com separado pendente
+segue a regra da Etapa 65 na janela (parte da origem gravada, se ela cobre), mesmo que a sugestão aponte outro endereço — a tela não confia
+só no servidor. E item já separado **no automático** (sem origem) não é pré-selecionado: ali a sugestão não desconta o que já saiu da
+prateleira, e a separação nova não gravaria a origem; a janela mostra *"Sugestão da fila: … — não veio escolhida; confira o saldo no 'Sai
+de' antes de escolher."* **Reversível.** `d043224f`.
+
+**B1264 (NOVA, da Etapa 189; decisão do agente) — na entrega, nada novo.** A entrega já parte da origem gravada na separação (Etapa 59), e é
+ela que a pré-seleção passa a gravar. Item separado no automático continua saindo no automático: o endereço de onde ele foi pego não está
+gravado em lugar nenhum, e sugerir um na entrega seria chutar. **Descartado:** pré-selecionar a dica na entrega (na etapa *Entregar* não há
+dica; seria regra nova). **Reversível.**
+
+**B1265 (NOVA, da Etapa 189; decisão do agente) — a frase da fila segue a pré-seleção.** Com a dica que cobre, a fila diz *"— já vem
+escolhido no 'Sai de' ao separar"*; quando a dica não cobre, ou o item já foi separado no automático, continua *"— escolha este endereço no
+'Sai de' ao separar"*. A fila não sabe o saldo da hora em que a janela abre: se o endereço perdeu saldo entre a fila e a janela, a janela não
+escolhe e diz *"Sugestão da fila: … — não veio escolhida; confira o saldo no 'Sai de' antes de escolher."* — o "já vem escolhido" vale
+**quando o endereço ainda tem o saldo ao abrir a janela**. **Reversível.** `4c1f059a`.
+
+**B1266 (NOVA, da Etapa 189; decisão do agente) — lista de coleta por requisição e "todas", uma seção por requisição.** *"Imprimir lista de
+coleta"* em cada requisição da fila que tem endereço sugerido (ou aviso), e *"Imprimir lista de coleta (todas)"* com as que estão para
+separar, na ordem da fila. **Descartado:** uma lista só intercalando as requisições pelo caminho (misturaria o que vai em caixas diferentes,
+e é a "lista de separação como entidade" da feature 05, que segue aberta); caixinhas para escolher requisições na fila (mais estado de tela
+para um ganho pequeno). **Reversível.** `4c1f059a`.
+
+**B1267 (NOVA, da Etapa 189; decisão do agente) — o papel é do momento em que a fila foi carregada.** Gerado no navegador com o que já está
+na tela, sem chamada nova ao servidor; o papel diz *"Fila carregada em DD/MM/AAAA HH:MM — a sugestão vale para esse momento; recarregue a
+fila antes de imprimir de novo."* **Descartado:** recarregar a fila ao imprimir (o papel ficaria diferente da tela, e a dica envelhece de
+qualquer jeito no caminho até a prateleira — quem decide é a separação). **Reversível.** `4c1f059a`.
+
+**B1268 (NOVA, da Etapa 189; decisão do agente) — as frases da dica moram num lugar só, usado pela tela e pelo papel.** A fila, a janela de
+separação e o PDF usam as mesmas frases; mudar uma muda as três. **Reversível.** `4c1f059a`.
+
+**B1269 (NOVA, da Etapa 189; decisão do agente) — o papel tem caixinha "OK" e não tem assinatura.** É roteiro de trabalho, não documento de
+controle (a rodada de separação já registra quem separou, Etapa 28). **Descartado:** campo de assinatura (sugeriria um controle que o
+sistema não confere). **Reversível.** `4c1f059a`.
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -16744,6 +16820,15 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      de outros endereços) — entregue escolhendo de onde sai"*. **Nenhum erro de estoque** (nada sai a mais; a recusa vem antes de baixar). A
      fila, recarregada depois da primeira separação, já manda a segunda para *B-01*. **O que fazer:** **Atualizar** a fila antes de ir à
      prateleira (a fila é uma fotografia); se a entrega recusar assim, escolher no **Sai de** da entrega o endereço onde o material está.
+     **Etapa 189 (revisão adversarial) — a pré-seleção torna o caso mais provável, e a falha continua segura.** Desde a 189 a janela de
+     separação já abre no endereço da dica: duas pessoas que abrem duas requisições do mesmo material ao mesmo tempo, com a fila carregada
+     antes de qualquer uma separar, recebem **o mesmo endereço já escolhido** e só clicam **Confirmar** — a segunda separação é aceita do
+     endereço já comprometido pela primeira (a separação continua conferindo só o separado da **própria** requisição, regra da Etapa 59).
+     Reproduzido pela rota (L1 6 em *XB-01*, duas requisições de 4): a entrega da primeira sai; a da segunda é recusada com *"⟨material⟩: a
+     origem da separação (XB-01) não serve mais (O saldo em XB-01 (2) não cobre a quantidade (4) — a saída tiraria de outros endereços) —
+     entregue escolhendo de onde sai"*, com **nada** baixado e nenhuma troca gravada. No automático de antes da 189, a mesma segunda entrega
+     **passava** e deixava uma linha *sem lote* −4 (pior). Teste `preSelecaoColetaIntegracao` (`b2fe087e`). **O que fazer:** o mesmo — e,
+     na entrega recusada, **Entregar escolhendo de onde sai…** e escolher o endereço onde o material está (a troca fica registrada).
 450. **NOVO (da Etapa 188, revisão adversarial; o defeito é anterior, desde a Etapa 6) — o lote criado numa Entrada manual fica sem validade
      para sempre.** Em **Movimentações → Entrada** de um material com lote, o lote novo é criado **sem** data de validade — o servidor não
      recebe o campo e não há tela que edite a validade de um lote. Consequência: esse lote vai para o **fim** do FEFO (na dica de coleta e no
@@ -16761,6 +16846,29 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      ao separar, **escolher no Sai de o endereço da dica** (a linha diz isso); em material com lote, na entrega, escolher o lote no **Sai de**
      (o aviso da fila diz isso). Some com a pré-seleção da **Etapa 189** (**B1259**) para a separação; a entrega no automático de material com
      lote continua pela **B204**.
+     **✅ RESOLVIDO NA ETAPA 189 para a separação feita pela janela numa vez só** (`d043224f`, `d1146a6e`): a janela de separação já abre
+     com o endereço e o lote da dica escolhidos no **Sai de** quando eles cobrem a quantidade; separar dali grava a origem e a entrega de um
+     clique sai do mesmo endereço e lote — nenhuma linha sem lote negativa (reproduzido pela rota: L1 1, L2 9, nenhuma linha sem lote, 0
+     trocas; o mesmo cenário no automático deixa −5 sem lote). **Continua valendo:** (1) item que foi separado no automático antes (continua
+     saindo no automático — **B1264**); (2) separar o resto de outro endereço sem entregar a primeira parte (**C453**); (3) quem troca o
+     **Sai de** para *"Qualquer endereço (automático)"* à mão.
+452. **NOVO (da Etapa 189; o comportamento é anterior, de junho de 2026) — não existe "separar e entregar" num clique.** Na requisição
+     *Parcialmente Atendida*, o botão **Completar Entrega** só aparece quando há o que entregar, e então abre a janela de entrega. O código
+     tem um caminho que separaria primeiro e abriria a entrega em seguida, mas ele nunca roda (o botão não aparece quando só há o que
+     separar). Nenhum efeito no estoque. **O que fazer:** separar (**Iniciar Separação**) e depois entregar, em dois gestos — é o que a
+     tela permite.
+453. **NOVO (da Etapa 189) — separar uma parte do endereço sugerido e o resto de outro, sem entregar no meio, troca a origem.** A janela
+     grava a origem na primeira separação; uma segunda separação de outro endereço (ou no automático) sobre o que ainda está na caixa apaga
+     a origem e grava uma **troca** no bloco **Substituições** (regra da Etapa 65), e a entrega sai no automático — em material com lote,
+     com a linha *sem lote* negativa (reproduzido: 1 troca de 3 e −6 sem lote). O almoxarife não escolheu trocar: ele pegou 3 de um lugar e 3
+     de outro, e o sistema guarda uma origem só por item (**B1254**). A janela avisa no momento: *"Entregue esta parte antes de separar o
+     resto — separar o resto de outro endereço troca a origem."* **O que fazer:** entregar a parte separada **antes** de separar o resto
+     (reproduzido: entregando entre as duas, 0 trocas e nenhuma linha sem lote) — **B1262**.
+454. **NOVO (da Etapa 189, revisão adversarial; o comportamento é anterior) — voltar para a aba do sistema com a janela de separação aberta
+     desfaz as quantidades digitadas.** Ao voltar para a janela do navegador, o sistema recarrega a requisição (para mostrar o que outra
+     pessoa mudou) e as quantidades da janela de separação voltam ao valor inicial (medido: digitado 3, depois de voltar à aba, 5). A
+     escolha do **Sai de** não se perde (desde a 189). A janela de entrega usa o mesmo recarregamento (não medido). **O que fazer:** antes
+     de **Confirmar Separação**, conferir a quantidade de cada item se saiu da tela no meio.
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -18112,6 +18220,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(189) A pré-seleção do "Sai de" e a lista de coleta, o que ficou de fora.** (1) Item já separado **no automático** continua saindo no
+  automático na entrega — o endereço de onde foi pego não está gravado (**B1264**). (2) Separar em duas vezes de endereços diferentes sem
+  entregar no meio troca a origem (**C453**, **B1262**). (3) Duas janelas abertas ao mesmo tempo recebem o mesmo endereço; a segunda é
+  recusada na entrega, sem erro de estoque (**C449**). (4) A **lista única** intercalando várias requisições pelo caminho (**B1266**) — é a
+  "lista de separação como entidade" da feature 05, que continua aberta. (5) A **combinação** de dois endereços para um item (**B1254**).
+  (6) O papel é do momento em que a fila foi carregada (**B1267**): não se atualiza sozinho. (7) As quantidades digitadas na janela voltam
+  ao inicial quando a janela recarrega (**C454**, anterior).
 - **(188) A sugestão de coleta na Fila de separação, o que ficou de fora.** (1) **A pré-seleção do "Sai de"** — a janela de separação
   continua abrindo no automático; a dica só vale se o separador escolher o endereço (**C451**, **B1257**) — é a Etapa 189. (2) O **PDF**
   *"Imprimir lista de coleta"* (**B1257**) — Etapa 189. (3) A **combinação** de dois endereços para um item (**B1254**). (4) A **distância**
@@ -19368,6 +19483,14 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(189) Nenhum clique foi dado no navegador.** O que os testes provam: o servidor pela rota real (a rota da sugestão igual à fila, campo a
+campo; separar do par sugerido e entregar de um clique baixa do par, sem linha sem lote e sem troca; o controle no automático com −5 sem
+lote; a dica velha recusada pela separação; as duas rodadas sem entregar; as duas janelas com a mesma sugestão) e a tela em jsdom com o
+servidor de mentira (a janela abre com o par, a frase, a escolha que vence também depois de recarregar, as causas de "não veio escolhida",
+o fluxo separar → entregar com o par, e o PDF gerado pelo jsPDF de verdade, medido na folha). **Não verificado à mão:** o roteiro clicável
+da seção da Etapa 189 (cenários 1 a 8), em especial o PDF aberto num leitor de PDF (a caixinha **OK** desenhada, o *"Nº"* e o *"Endereço"*
+com acento na fonte padrão) e a janela recarregando ao voltar para a aba. Vale 10 minutos.
 
 **(188) Nenhum clique foi dado no navegador.** O que os testes provam: o servidor pela rota real (a dica, a ordem de coleta, a planejada
 que não cobre e a indisponível, o alerta de retenção, o lote vencido e a virada de dia de Brasília, listar duas vezes sem gravar nada, a dica
@@ -36621,9 +36744,100 @@ endereços"* — a recusa de sempre. **Atualizar** na fila: a dica muda.
   (**C450**, defeito anterior).
 - **Nada a rodar antes do deploy.**
 
+## Etapa 189 — A janela de separação já abre no endereço sugerido, e a fila imprime a lista de coleta (2026-10-23)
+
+Desde a Etapa 188 a **Fila de separação** diz onde pegar cada item, mas a janela de separação abria em *"Qualquer endereço
+(automático)"*: quem ia à prateleira da dica, pegava as peças e só clicava **Confirmar** fazia o sistema registrar a saída **de outro
+lugar** — a prateleira ficava com estoque no papel que não existia mais e, em material com lote, aparecia uma linha *sem lote* negativa
+(**C451**). Agora a janela **já abre com o endereço da dica escolhido** (quando ele cobre a quantidade), e o que o almoxarife confirma é o que
+o estoque registra; ele troca quando pegou de outro lugar. E a fila **imprime a lista de coleta**: um papel com os endereços na ordem em que
+se anda, com uma caixinha para marcar. É o carrinho que já chega ao caixa com o produto certo — você só tira se trocou de marca — e a lista
+do mercado no bolso. Nada a rodar antes do deploy. Decisões do agente: **B1260** a **B1269**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A janela de separação abria em *"Qualquer endereço (automático)"* | Abre com o endereço e o lote da dica escolhidos no **Sai de**, com *"Sugerido pela fila de separação. Se pegou de outro endereço, troque aqui."* (**B1261**) |
+| Seguir a dica e só confirmar baixava de outro endereço; com lote, linha *sem lote* negativa | Separar do endereço sugerido e entregar de um clique baixa **daquele** endereço e lote; nenhuma linha sem lote, nenhuma troca (**C451** resolvido para a separação de uma vez) |
+| A fila dizia *"— escolha este endereço no 'Sai de' ao separar"* | Com a dica que cobre: *"— já vem escolhido no 'Sai de' ao separar"* (**B1265**) |
+| — | Dica que não cobre: a janela fica no automático e diz *"Sugestão da fila: ⟨endereço⟩ · ⟨q⟩ ⟨un⟩ — não veio escolhida; confira o saldo no 'Sai de' antes de escolher."* |
+| — | Separar só uma parte: *"… Entregue esta parte antes de separar o resto — separar o resto de outro endereço troca a origem."* (**B1262**, **C453**) |
+| — | Material com parte retida: a janela escolhe e repete o alerta *"Parte do saldo deste material está retida …"* |
+| — | A escolha do almoxarife vale até fechar a janela, mesmo que ela recarregue sozinha ao voltar para a aba |
+| Para levar a lista à prateleira, só de cabeça | **Imprimir lista de coleta** em cada requisição e **Imprimir lista de coleta (todas)** no topo da fila: PDF na ordem de coleta, com caixinha **OK** (**B1266**, **B1269**) |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Almoxarife** (ou Administrador do almoxarifado). Em **Configurações → aba Localizações**, duas posições comuns (tipo
+*Prateleira*), *A-01* e *B-02*, no almoxarifado padrão (*ALM-GERAL*) — as mesmas da Etapa 188 servem. Três materiais, unidade *UN*:
+*COLA-189* (nome *Cola 189*) **com** controle por lote; *PARAF-189* (*Parafuso 189*) e *ARRUELA-189* (*Arruela 189*) **sem** lote nem série
+— um por cenário, porque aprovar uma requisição reserva o material. Em **Movimentações → Entrada**: *COLA-189* lote *L1* 6 em *B-02* e lote
+*L2* 3 em *A-01*; *PARAF-189* e *ARRUELA-189* com 3 em *A-01* e 10 em *B-02*. Em **Requisições**, crie e aprove três requisições: *COLA-189*
+5, *PARAF-189* 8 e *ARRUELA-189* 12. A fila fica em **Almoxarifado → Fila de separação**; clique **Atualizar** depois de cada gesto.
+
+**1. A fila diz que já vem escolhido.** No item da *COLA-189*: *"Pegar em B-02 (ALM-GERAL / B-02) — lote L1 · 5 UN — já vem escolhido no
+'Sai de' ao separar"*. Só o lote *L1* em *B-02* tem os 5 (o *L2* tem 3).
+
+**2. A lista de coleta de uma requisição.** Na requisição da *COLA-189*, ao lado de **Abrir**, clique **Imprimir lista de coleta**. Baixa o
+arquivo *lista-coleta-⟨número⟩.pdf* com: o título *"Lista de coleta — ⟨número⟩"*; *"Fila carregada em DD/MM/AAAA HH:MM — a sugestão vale
+para esse momento; recarregue a fila antes de imprimir de novo."*; *"Solicitante: ⟨nome⟩ · ⟨setor⟩ · Urgência: Normal"*; e a tabela **Nº ·
+Endereço · Material · Lote · Qtd · OK** com *1 · B-02 (ALM-GERAL / B-02) · COLA-189 — Cola 189 · L1 · 5 UN* e uma caixinha vazia. Nenhuma
+chamada ao servidor: o papel é o que a tela mostra (**B1267**).
+
+**3. A janela já abre no endereço sugerido.** **Abrir** → **Iniciar Separação**. Na janela *"📦 Separar Materiais — ⟨número⟩"*, o **Sai de**
+da *Cola 189* já está em *"B-02 — lote L1 (6)"*, quantidade 5, e embaixo: *"Sugerido pela fila de separação. Se pegou de outro endereço,
+troque aqui."* Clique **📦 Confirmar Separação**.
+
+**4. A entrega sai do lote certo.** No detalhe, **Confirmar Entrega e Baixar Estoque**. Abra o **Extrato** da *COLA-189* (tela **Materiais**,
+ícone Extrato): em **Saldos por localização**, *B-02* com o lote *L1* tem 1 e *A-01* com o lote *L2* tem 3 — **nenhuma** linha sem lote. No
+detalhe da requisição não aparece o bloco **Substituições**. *(Antes da 189, deixando o automático: L1 6, L2 3 e uma linha sem lote −5.)*
+
+**5. Separar só uma parte, e trocar.** Na requisição do *PARAF-189*: **Abrir** → **Iniciar Separação**. O **Sai de** vem em *"B-02 (10)"*
+com a frase do cenário 3. Mude a quantidade para 4: a frase ganha *" Entregue esta parte antes de separar o resto — separar o resto de outro
+endereço troca a origem."* (separar o resto depois, de outro endereço, sem entregar no meio, grava uma troca — **C453**). Agora troque o
+**Sai de** para *"Qualquer endereço (automático)"*: a frase some — a escolha é sua. Feche a janela sem confirmar.
+
+**6. A dica que não cobre não vem escolhida.** Na fila, a *ARRUELA-189* (12) mostra *"Pegar em B-02 (ALM-GERAL / B-02) · 10 UN — escolha este
+endereço no 'Sai de' ao separar"* e *"Nenhum endereço tem tudo: pegue 10 aqui. Separar o resto de outro endereço depois troca a origem da
+separação."* **Abrir** → **Iniciar Separação**: o **Sai de** fica em *"Qualquer endereço (automático)"* e embaixo: *"Sugestão da fila: B-02 ·
+10 UN — não veio escolhida; confira o saldo no 'Sai de' antes de escolher."* Feche a janela.
+
+**7. A lista de coleta de todas.** No topo da fila, **Imprimir lista de coleta (todas)**: baixa *lista-coleta-fila-AAAA-MM-DD.pdf*, uma
+seção por requisição que está para separar (a do *PARAF-189* e a da *ARRUELA-189*), na ordem da fila, cada uma com o próprio cabeçalho e a
+numeração recomeçando em 1. Sem nenhuma requisição para separar, o botão fica desabilitado.
+
+**8. Sem endereço para sugerir.** Se você tem o cenário 7 da Etapa 188 (material só na quarentena *Q-01*), a lista de coleta dessa
+requisição não tem tabela: traz o bloco *"Sem endereço sugerido"*, com *"⟨código⟩ — ⟨nome⟩ · a separar ⟨q⟩ UN"* e embaixo *"Sem endereço
+para sugerir (o saldo está sem endereço, em endereço bloqueado ou inativo, em área especial ou em lote bloqueado/vencido)."*
+
+### O que esta etapa NÃO cobre
+
+- Item já separado **no automático** continua saindo no automático na entrega — não há endereço gravado de onde ele foi pego (**B1264**).
+- Separar em duas vezes de endereços diferentes, sem entregar no meio, troca a origem (**C453**). A janela avisa.
+- Duas janelas abertas ao mesmo tempo com a mesma dica: a segunda separação é aceita e a entrega dela é recusada, sem erro de estoque
+  (**C449**). **Atualize** a fila antes de ir à prateleira.
+- Uma lista única intercalando várias requisições pelo caminho (**B1266**); a combinação de dois endereços para um item (**B1254**).
+- As quantidades digitadas na janela voltam ao inicial se ela recarregar ao voltar para a aba (**C454**, anterior).
+- **Nada a rodar antes do deploy.**
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 189 entregue (2026-10-23):** **a janela de separação já abre no endereço sugerido, e a fila imprime a lista de coleta.** A janela
+  busca a dica numa rota só de leitura (**B1260**) e escolhe no **Sai de** o endereço e o lote sugeridos quando cobrem (**B1261**), nunca
+  sobre o que já foi separado (**B1263**); separar dali e entregar de um clique baixa do par, sem linha sem lote (**C451** resolvido para a
+  separação de uma vez); o custo — mais entregas saindo da origem gravada, e a separação em duas vezes que troca a origem — está dito
+  (**B1262**, **C453**). A fila diz *"já vem escolhido"* (**B1265**) e imprime a lista de coleta por requisição e de todas (**B1266**,
+  **B1267**, **B1269**), com as frases num lugar só (**B1268**). A revisão adversarial achou a escolha do almoxarife sobrescrita pela dica
+  quando a janela recarregava (corrigido, `940ba3c5`), um teste de página que faltava no PDF (`aa61d3d5`), e registrou a C449 com a
+  pré-seleção, o "separar e entregar" que não existe (**C452**) e as quantidades que voltam ao inicial (**C454**). Commits `9652ec6a`
+  (plano), `9d6ada85` (Fase 2), `da0c2d6b` (T1), `d043224f` (T2), `4c1f059a` (T3), `d1146a6e` (T4), `794b4397`, `ba1c7bac`, a revisão
+  adversarial `940ba3c5`, `aa61d3d5`, `b2fe087e`, `43b17210`, e o fechamento. **O que é seu:** as decisões **B1260** a **B1269**
+  (reversíveis); os avisos **C449** (atualizado), **C452** a **C454**; as limitações **(189)** em D e a verificação **(189)** em F.
+  **Próxima: fechar a Etapa 190 — a Entrada manual grava a validade do lote (já executada; falta a revisão adversarial); depois a 191,
+  corrigir a validade de um lote.**
 
 - **Etapa 188 entregue (2026-10-23):** **a fila de separação diz de onde pegar cada item e em que ordem andar.** A fila devolve, por item,
   um endereço e lote para pegar (o lote que vence antes, a padrão, o maior — **B1251**), nunca bloqueado, inativo, área especial, lote
