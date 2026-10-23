@@ -19,7 +19,18 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const request = require('supertest');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { dbRun } = require('../../services/frotas/db');
+
+// Frota Etapa 5: cada app tem a sua pasta de fotos (temporaria) e o mesmo segredo de teste das URLs assinadas. As pastas sao
+// apagadas na saida do processo (os testes criam um app por cenario e nao fecham).
+const SEGREDO_UPLOAD_TESTE = 'segredo-de-teste-frotas-anexos';
+const pastasCriadas = [];
+process.on('exit', () => {
+  for (const p of pastasCriadas) { try { fs.rmSync(p, { recursive: true, force: true }); } catch (e) { /* melhor esforco */ } }
+});
 
 const ADMIN = { id: 1, nome: 'Gestor', role: 'admin' };
 const MOTORISTA = { id: 2, nome: 'Ana', role: 'usuario' }; // sem perfil_frota: o fallback e MOTORISTA
@@ -61,8 +72,10 @@ async function createFrotasTestApp() {
     req.user = { ...u };
     next();
   };
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'frotas-test-'));
+  pastasCriadas.push(dataDir);
   const registrar = require('../../routes/frotas');
-  registrar(app, db, authStub, () => (req, res, next) => next());
+  registrar(app, db, authStub, () => (req, res, next) => next(), { dataDir, segredoUpload: SEGREDO_UPLOAD_TESTE });
   registrar.limparCacheDashboard();
 
   const setUser = (u) => { usuarioAtual = u; };
@@ -80,7 +93,11 @@ async function createFrotasTestApp() {
   if (meta.status !== 200) throw new Error(`schema frotas nao subiu no harness: ${meta.status} ${JSON.stringify(meta.body)}`);
   setUser(null);
 
-  return { app, db, setUser, req, como, limparCacheDashboard: registrar.limparCacheDashboard };
+  return {
+    app, db, setUser, req, como, limparCacheDashboard: registrar.limparCacheDashboard,
+    // Frota Etapa 5: a pasta onde o multer grava as fotos deste app e o segredo raiz das URLs (o teste mina URL vencida/de outra pasta)
+    dataDir, uploadsDir: path.join(dataDir, 'uploads', 'frotas-anexos'), segredoUpload: SEGREDO_UPLOAD_TESTE,
+  };
 }
 
 /**
@@ -104,7 +121,7 @@ async function comLoginReal(ctx) {
   const app = express();
   app.use(express.json());
   const auth = criarAuthenticateToken({ jwtSecret: segredo, enrich: enrichUserFromDb(ctx.db) });
-  require('../../routes/frotas')(app, ctx.db, auth, () => (req, res, next) => next());
+  require('../../routes/frotas')(app, ctx.db, auth, () => (req, res, next) => next(), { dataDir: ctx.dataDir, segredoUpload: ctx.segredoUpload });
   const tokenDe = (id) => jwt.sign({ id }, segredo, { expiresIn: '1h' });
   const como = (id) => (metodo, url, corpo) => {
     let r = request(app)[metodo](url).set('Authorization', `Bearer ${tokenDe(id)}`);

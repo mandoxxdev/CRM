@@ -25,6 +25,11 @@ const PASTAS = Object.freeze({
   avatares: Object.freeze({
     prefixo: '/api/uploads/avatares', dominio: 'avatares-v1', minutos: 1440, baldeMinutos: 60,
   }),
+  // Frota Etapa 5 (RN-F5.06): fotos do registro e do cupom do abastecimento. 2 h (+ balde de 30 min): a vida de uma lista aberta no
+  // celular ou na mesa do gestor; a lista relida (F5, voltar ao painel) assina de novo.
+  frotasAnexos: Object.freeze({
+    prefixo: '/api/uploads/frotas-anexos', dominio: 'frotas-anexos-v1', minutos: 120, baldeMinutos: 30,
+  }),
 });
 
 // So o nome: o valor gravado e o nome do arquivo, mas um valor legado com caminho (ou com `..`)

@@ -10,6 +10,18 @@ const exportacaoService = require('../services/frotas/exportacaoService');
 const perfisService = require('../services/frotas/perfisService');
 const { requirePermission } = require('../services/frotas/permissions');
 const { respondDbError } = require('../services/sqliteConcurrency');
+// Frota Etapa 5 (RN-F5.01..08): fotos do registro e do abastecimento — o mesmo upload seguro do resto do sistema
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+const express = require('express');
+const anexosService = require('../services/frotas/anexosService');
+const { criarAssinadorUpload, extensaoSegura, cabecalhosUploadSeguro } = require('../services/almoxarifado/urlUpload');
+const { PASTAS } = require('../services/uploadsAssinadosCrm');
+const {
+  multerComLimiteNoErro, erroFormatoImagem, tratarErroFormatoImagem, tratarArquivoGrandeDemais,
+} = require('../services/imagemUpload');
+const multer = multerComLimiteNoErro(require('multer'));
 
 const DASHBOARD_CACHE_MS = parseInt(process.env.FROTAS_DASHBOARD_CACHE_MS || '30000', 10);
 let dashboardCache = { at: 0, data: null };
@@ -40,8 +52,45 @@ async function runInitSchemaWithRetry(db, retries = 3) {
   throw lastErr || new Error('Falha ao inicializar schema frotas');
 }
 
-module.exports = function registerFrotasRoutes(app, db, authenticateToken, checkModulePermission) {
+module.exports = function registerFrotasRoutes(app, db, authenticateToken, checkModulePermission, opcoes = {}) {
+  // Frota Etapa 5: a pasta das fotos e o segredo das URLs vem de quem monta (index.js: PERSISTENT_DATA_DIR e o JWT_SECRET; o harness:
+  // pasta temporaria). Sem eles o modulo NAO sobe — subir sem foto em silencio esconderia a fiacao esquecida.
+  const { dataDir, segredoUpload } = opcoes || {};
+  if (!dataDir) throw new Error('registerFrotasRoutes: opcoes.dataDir obrigatorio (pasta das fotos)');
+  if (!segredoUpload) throw new Error('registerFrotasRoutes: opcoes.segredoUpload obrigatorio (URL assinada das fotos)');
   if (!db) return;
+  const pastaAnexos = path.join(dataDir, 'uploads', 'frotas-anexos');
+  fs.mkdirSync(pastaAnexos, { recursive: true }); // o multer nao cria a pasta (ENOENT -> 500 no primeiro envio)
+  const assinador = criarAssinadorUpload(segredoUpload, PASTAS.frotasAnexos);
+  const assinar = (arquivo) => assinador.assinar(path.basename(String(arquivo || '')));
+
+  // RN-F5.02: nome aleatorio, extensao do MIME aceito (nunca do nome que o cliente mandou), 10 MB, um arquivo so no campo `foto`.
+  const uploadFoto = multer({
+    storage: multer.diskStorage({
+      destination: (req, file, cb) => cb(null, pastaAnexos),
+      filename: (req, file, cb) => cb(null, `frota-${crypto.randomBytes(12).toString('hex')}${extensaoSegura(file.mimetype)}`),
+    }),
+    limits: { fileSize: anexosService.LIMITE_BYTES, files: 1, fields: 10, fieldSize: 1024 },
+    fileFilter: (req, file, cb) => {
+      if (anexosService.MIMES_ACEITOS.includes(String(file.mimetype || '').toLowerCase())) return cb(null, true);
+      return cb(erroFormatoImagem());
+    },
+  });
+  /**
+   * O multer com as recusas do contrato. Formato e tamanho pelos handlers de sempre (`tratarErroFormatoImagem` -> 400,
+   * `tratarArquivoGrandeDemais` -> 413 "Arquivo grande demais (máximo 10 MB)"), chamados AQUI e nao pelo `/api` do index.js: o
+   * harness do Frota nao monta aqueles handlers, e a resposta tem de ser a mesma nos dois. O multer ja apaga o que gravou quando erra.
+   */
+  const receberFoto = (req, res, next) => uploadFoto.single('foto')(req, res, (err) => {
+    if (!err) return next();
+    return tratarErroFormatoImagem(err, req, res, (e1) => tratarArquivoGrandeDemais(e1, req, res, (e2) => {
+      if (e2 && (e2.code === 'LIMIT_UNEXPECTED_FILE' || e2.code === 'LIMIT_FILE_COUNT')) {
+        return res.status(400).json({ error: anexosService.MSG.UMA_POR_VEZ });
+      }
+      console.warn('[frotas] envio de foto recusado:', e2 && (e2.code || e2.message));
+      return res.status(400).json({ error: anexosService.MSG.ENVIO_TORTO });
+    }));
+  });
 
   let schemaReady = null;
   const startSchemaInit = () => {
@@ -165,8 +214,55 @@ module.exports = function registerFrotasRoutes(app, db, authenticateToken, check
   });
 
   app.get('/api/frotas/portal/meus-registros', ...frotaAuth, async (req, res) => {
-    try { res.json(await portalService.meusRegistros(db, req.user, req.query)); } catch (e) { handleError(res, e); }
+    try {
+      const meus = await portalService.meusRegistros(db, req.user, req.query);
+      // Frota Etapa 5 (RN-F5.05): as fotos de cada lancamento (o "meus" ja e so o do vinculo)
+      res.json({
+        ...meus,
+        registros: await anexosService.comAnexos(db, 'registro', meus.registros, assinar),
+        abastecimentos: await anexosService.comAnexos(db, 'abastecimento', meus.abastecimentos, assinar),
+      });
+    } catch (e) { handleError(res, e); }
   });
+
+  // ── Fotos do registro e do abastecimento (Frota Etapa 5) ───────────────────
+  // ORDEM IMPORTA: requirePermission ANTES do multer — o 403 do perfil sai sem arquivo gravado (RN-F5.04). Depois do multer, toda
+  // recusa apaga o arquivo recebido.
+  app.post('/api/frotas/anexos', ...frotaAuth, requirePermission('registrar_operacoes'), receberFoto, async (req, res) => {
+    const f = req.file;
+    try {
+      const anexo = await anexosService.gravar(db, req.user, {
+        entidade: req.body?.entidade,
+        entidade_id: req.body?.entidade_id,
+        arquivo: f ? { nome: f.filename, caminho: f.path, tipo_mime: f.mimetype, tamanho: f.size } : null,
+      });
+      res.status(201).json({ ...anexosService.paraItem(anexo, assinar), entidade: anexo.entidade, entidade_id: anexo.entidade_id });
+    } catch (e) {
+      if (f) anexosService.apagarArquivo(pastaAnexos, f.filename);
+      handleError(res, e);
+    }
+  });
+
+  app.delete('/api/frotas/anexos/:id', ...frotaAuth, requirePermission('registrar_operacoes'), async (req, res) => {
+    try { res.json(await anexosService.apagar(db, req.user, req.params.id, pastaAnexos)); } catch (e) { handleError(res, e); }
+  });
+
+  // RN-F5.06: o arquivo so sai com a assinatura do dominio proprio (`frotas-anexos-v1`) — sem sessao e sem banco, como o almoxarifado.
+  // Prefixo `/api` (o rotasModulos casa antes do catch-all do SPA); nada montado fora dele.
+  app.use(PASTAS.frotasAnexos.prefixo, assinador.middleware, express.static(pastaAnexos, {
+    index: false, dotfiles: 'deny', setHeaders: cabecalhosUploadSeguro,
+  }));
+  // FECHO obrigatorio: o static chama next() quando o arquivo nao existe — assinatura valida de nome inexistente desceria adiante.
+  app.use(PASTAS.frotasAnexos.prefixo, (req, res) => res.status(404).end());
+
+  /** RN-F5.05: a lista do gestor/Consulta/motorista (ja no escopo dela) com as fotos de cada linha. */
+  const comFotos = (entidade, listFn) => async (dbx, query, user) => anexosService.comAnexos(dbx, entidade, await listFn(dbx, query, user), assinar);
+  /** RN-F5.08 (Fase 2, T-1): apaga o lancamento PRIMEIRO — depois disso nenhum envio passa no WHERE EXISTS — e so entao as fotos. */
+  const excluindoFotos = (entidade, deleteFn) => async (dbx, id) => {
+    const r = await deleteFn(dbx, id);
+    await anexosService.apagarDoLancamento(dbx, entidade, id, pastaAnexos);
+    return r;
+  };
 
   // Frotas Etapa 1 (F2-5): seletor do vinculo usuario <-> motorista (todos os usuarios ativos, sem filtro de setor)
   app.get('/api/frotas/usuarios-vinculaveis', ...frotaAuth, requirePermission('gerenciar_motoristas'), async (req, res) => {
@@ -219,10 +315,10 @@ module.exports = function registerFrotasRoutes(app, db, authenticateToken, check
   );
 
   crudRoutes('abastecimentos',
-    frotasService.listAbastecimentos,
+    comFotos('abastecimento', frotasService.listAbastecimentos), // Frota Etapa 5 (RN-F5.05)
     frotasService.createAbastecimento,
     frotasService.updateAbastecimento,
-    frotasService.deleteAbastecimento,
+    excluindoFotos('abastecimento', frotasService.deleteAbastecimento), // RN-F5.08
     { deletePerm: 'gerenciar_veiculos' }
   );
 
@@ -256,10 +352,10 @@ module.exports = function registerFrotasRoutes(app, db, authenticateToken, check
   });
 
   crudRoutes('checklists',
-    frotasService.listChecklists,
+    comFotos('registro', frotasService.listChecklists), // Frota Etapa 5 (RN-F5.05)
     frotasService.createChecklist,
     null,
-    frotasService.deleteChecklist,
+    excluindoFotos('registro', frotasService.deleteChecklist), // RN-F5.08
     { deletePerm: 'gerenciar_veiculos' }
   );
 

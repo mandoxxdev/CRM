@@ -22549,7 +22549,8 @@ require('./routes/requisicoesMaterial')(rotasModulos, db, authenticateToken);
 require('./routes/almoxarifado')(rotasModulos, db, authenticateToken, PERSISTENT_DATA_DIR, checkModulePermission);
 
 // ── Módulo Frotas ────────────────────────────────────────────────────────────
-require('./routes/frotas')(rotasModulos, db, authenticateToken, checkModulePermission);
+// Frota Etapa 5: a pasta das fotos (dentro do PERSISTENT_DATA_DIR, fora de qualquer static publico) e o segredo raiz das URLs assinadas
+require('./routes/frotas')(rotasModulos, db, authenticateToken, checkModulePermission, { dataDir: PERSISTENT_DATA_DIR, segredoUpload: JWT_SECRET });
 
 // Módulo Produção (MES) — GMP Industriais
 require('./routes/producao')(rotasModulos, db, authenticateToken, checkModulePermission);

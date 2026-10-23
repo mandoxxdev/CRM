@@ -288,6 +288,21 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE frotas_viagens ADD COLUMN horimetro_saida REAL');
   await safeAlter(db, 'ALTER TABLE frotas_viagens ADD COLUMN horimetro_retorno REAL');
 
+  // Frota Etapa 5 (RN-F5.01): fotos do registro (frotas_checklists) e do abastecimento. O banco guarda so o nome do arquivo; a URL
+  // assinada e feita na saida. Exclusao do lancamento apaga as linhas daqui (RN-F5.08) — sem FK porque as duas tabelas-mae sao outras.
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS frotas_anexos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entidade TEXT NOT NULL CHECK (entidade IN ('registro', 'abastecimento')),
+    entidade_id INTEGER NOT NULL,
+    arquivo TEXT NOT NULL UNIQUE,
+    tipo_mime TEXT NOT NULL,
+    tamanho INTEGER NOT NULL,
+    usuario_id INTEGER,
+    usuario_nome TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_frotas_anexos_lancamento ON frotas_anexos(entidade, entidade_id)');
+
   // Frotas Etapa 2: a tabela do perfil e CORE (server/index.js cria dentro do callback do PRAGMA de usuarios); o mesmo DDL aqui,
   // idempotente, para a rota /perfis-usuario nao depender da ordem do boot (e o harness ganhar a tabela).
   await dbRun(db, `CREATE TABLE IF NOT EXISTS perfil_frota_usuario (
