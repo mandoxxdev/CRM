@@ -28,9 +28,27 @@ const FERRAMENTA_UPDATE_COLUMNS = [
   'numero_serie', 'localizacao_id', 'exige_calibracao', 'observacoes',
 ];
 
+// Etapa 187 (RN-187.01/02, B1240, B1241): a baixada nao e calibrada nem editada — 400 com o nome, molde da inspecao
+// (inspectionService.resolverMedidas). Para mexer nela, Reverter baixa primeiro.
+const baixadaNao = (verbo, nome) => Object.assign(new Error(`Ferramenta baixada não pode ser ${verbo} (${nome})`), { status: 400 });
+
+/**
+ * Etapa 187 (I1 da Fase 2, B1243): a gravacao guardada (`AND status <> 'BAIXADA'`) nao gravou. Relida: ausente ou inativa -> 404;
+ * QUALQUER outro caso -> 400 da baixada (o unico motivo de a guarda recusar e o status BAIXADA naquele instante — se ja foi
+ * revertida antes da releitura, continua sendo a recusa). Nunca seguir para a auditoria/return com changes 0: o `lastID` de um
+ * INSERT ... WHERE EXISTS que nao insere e o do ultimo insert da conexao (201 com id alheio e CALIBRACAO sem calibracao).
+ */
+async function recusaDaGravacao(db, id, verbo) {
+  const relida = await dbGet(db, 'SELECT nome, ativo FROM ferramentas_almoxarifado WHERE id = ?', [id]);
+  if (!relida || Number(relida.ativo) !== 1) throw Object.assign(new Error('Ferramenta não encontrada'), { status: 404 });
+  throw baixadaNao(verbo, relida.nome);
+}
+
 async function atualizarFerramenta(db, user, id, data) {
   const atual = await dbGet(db, 'SELECT * FROM ferramentas_almoxarifado WHERE id = ? AND ativo = 1', [id]);
   if (!atual) throw Object.assign(new Error('Ferramenta não encontrada'), { status: 404 });
+  // Etapa 187 (RN-187.02, B1242): antes do corpo vazio (que saia 200) e antes do 409 do patrimonio (que so nasce no UPDATE)
+  if (atual.status === STATUS.BAIXADA) throw baixadaNao('editada', atual.nome);
 
   const sets = [];
   const params = [];
@@ -42,8 +60,10 @@ async function atualizarFerramenta(db, user, id, data) {
   }
   if (sets.length === 0) return { id: Number(id) };
   sets.push('updated_at = CURRENT_TIMESTAMP');
-  params.push(id);
-  await dbRun(db, `UPDATE ferramentas_almoxarifado SET ${sets.join(', ')} WHERE id = ?`, params);
+  params.push(id, STATUS.BAIXADA);
+  // Etapa 187 (RN-187.04, B1243): a guarda tambem na gravacao — baixada entre a leitura e o UPDATE nao e editada
+  const r = await dbRun(db, `UPDATE ferramentas_almoxarifado SET ${sets.join(', ')} WHERE id = ? AND ativo = 1 AND status <> ?`, params);
+  if (r.changes === 0) await recusaDaGravacao(db, id, 'editada');
   // Etapa 121 (C252, B784): o ato ja esta gravado — a falha da Auditoria vai ao log e nao o derruba
   await registrarAuditoriaDoAto(db, {
     entidade: 'ferramenta', entidade_id: Number(id), acao: 'EDICAO',
@@ -536,6 +556,8 @@ async function listarEmprestimos(db, filters = {}) {
 async function registrarCalibracao(db, user, ferramentaId, data, certificadoPath) {
   const ferr = await dbGet(db, 'SELECT * FROM ferramentas_almoxarifado WHERE id = ? AND ativo = 1', [ferramentaId]);
   if (!ferr) throw Object.assign(new Error('Ferramenta não encontrada'), { status: 404 });
+  // Etapa 187 (RN-187.01, B1240): a recusa da baixada vem antes da data
+  if (ferr.status === STATUS.BAIXADA) throw baixadaNao('calibrada', ferr.nome);
 
   if (!(new Date(data.data_validade) > new Date(data.data_calibracao))) {
     throw Object.assign(new Error('Data de validade deve ser posterior à data de calibração'), { status: 400 });
@@ -543,10 +565,13 @@ async function registrarCalibracao(db, user, ferramentaId, data, certificadoPath
 
   const r = await dbRun(db, `INSERT INTO calibracoes_ferramenta_almoxarifado
     (ferramenta_id, data_calibracao, data_validade, certificado_path, observacoes, usuario_id)
-    VALUES (?,?,?,?,?,?)`, [
+    SELECT ?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM ferramentas_almoxarifado WHERE id = ? AND ativo = 1 AND status <> ?)`, [
     ferramentaId, data.data_calibracao, data.data_validade,
     certificadoPath || null, data.observacoes || null, user.id,
+    ferramentaId, STATUS.BAIXADA,
   ]);
+  // Etapa 187 (RN-187.04, B1243): a guarda tambem na gravacao — baixada entre a leitura e o INSERT nao e calibrada
+  if (r.changes === 0) await recusaDaGravacao(db, ferramentaId, 'calibrada');
 
   // Etapa 121 (C252, B784): a calibracao ja esta gravada — a falha da Auditoria nao derruba o ato (o catch da rota
   // apagava o certificado do disco e repetir gravava outra calibracao)
