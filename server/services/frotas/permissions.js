@@ -48,4 +48,24 @@ function requirePermission(acao) {
   };
 }
 
-module.exports = { PERFIS, ACAO_PERFIS, getPerfilFromUser, can, requirePermission };
+/** Frotas Etapa 2 (RN-F2.03): os perfis que a tela Perfis de acesso grava. ADMIN_FROTA nao: vem do cadastro de usuario (admin_modulos). */
+const PERFIS_ATRIBUIVEIS = [PERFIS.CONSULTA, PERFIS.MOTORISTA];
+
+/**
+ * Frotas Etapa 2 (RN-F2.02): a regua UNICA do perfil de uma linha de `usuarios` + a linha crua de `perfil_frota_usuario`.
+ * Chama o proprio getPerfilFromUser sobre o usuario como o enrich o montaria (is_superadmin, admin_modulos, role, perfil_frota) —
+ * por isso nao pode divergir do que o servidor aplica no pedido seguinte. `forcado` = sem a linha ja daria ADMIN_FROTA (superadmin,
+ * admin do modulo frota, role 'admin'): a linha seria ignorada e o sync a reescreveria.
+ */
+function classificarPerfilFrota(u, perfilExplicito) {
+  const base = { is_superadmin: u?.is_superadmin, admin_modulos: u?.admin_modulos, role: u?.role };
+  if (getPerfilFromUser({ ...base, perfil_frota: null }) === PERFIS.ADMIN_FROTA) {
+    return { efetivo: PERFIS.ADMIN_FROTA, origem: 'forcado' };
+  }
+  if (perfilExplicito) return { efetivo: getPerfilFromUser({ ...base, perfil_frota: perfilExplicito }), origem: 'explicito' };
+  return { efetivo: getPerfilFromUser({ ...base, perfil_frota: null }), origem: 'padrao' };
+}
+
+module.exports = {
+  PERFIS, ACAO_PERFIS, PERFIS_ATRIBUIVEIS, getPerfilFromUser, can, requirePermission, classificarPerfilFrota,
+};

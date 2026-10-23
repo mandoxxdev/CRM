@@ -7,6 +7,7 @@ const { initSchema } = require('../services/frotas/schema');
 const frotasService = require('../services/frotas/frotasService');
 const portalService = require('../services/frotas/portalService');
 const exportacaoService = require('../services/frotas/exportacaoService');
+const perfisService = require('../services/frotas/perfisService');
 const { requirePermission } = require('../services/frotas/permissions');
 const { respondDbError } = require('../services/sqliteConcurrency');
 
@@ -170,6 +171,14 @@ module.exports = function registerFrotasRoutes(app, db, authenticateToken, check
   // Frotas Etapa 1 (F2-5): seletor do vinculo usuario <-> motorista (todos os usuarios ativos, sem filtro de setor)
   app.get('/api/frotas/usuarios-vinculaveis', ...frotaAuth, requirePermission('gerenciar_motoristas'), async (req, res) => {
     try { res.json(await frotasService.listUsuariosVinculaveis(db)); } catch (e) { handleError(res, e); }
+  });
+
+  // Frotas Etapa 2 (RN-F2.01..05): o perfil Consulta/Motorista pela tela — so o ADMIN_FROTA (configurar)
+  app.get('/api/frotas/perfis-usuario', ...frotaAuth, requirePermission('configurar'), async (req, res) => {
+    try { res.json(await perfisService.listarPerfis(db)); } catch (e) { handleError(res, e); }
+  });
+  app.put('/api/frotas/perfis-usuario/:usuarioId', ...frotaAuth, requirePermission('configurar'), async (req, res) => {
+    try { res.json(await perfisService.definirPerfil(db, req.params.usuarioId, req.body, req.user)); } catch (e) { handleError(res, e); }
   });
 
   // Frotas Etapa 1 (RN-F1.18): tudo no formato da planilha Controle de Frota GMP

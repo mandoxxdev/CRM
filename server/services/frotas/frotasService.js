@@ -162,8 +162,12 @@ function normalizarUsuarioId(v) {
  * mostrava "— nenhum —" para um vinculo que existe. Os demais vem com `ativo: true`.
  */
 async function listUsuariosVinculaveis(db) {
-  const rows = await dbAll(db, `SELECT u.id, u.nome, u.email, u.ativo, m.id AS motorista_id, m.nome AS motorista_nome
+  // Frotas Etapa 2 (RN-F2.08): + perfil_frota (o efetivo, pela regua unica) para o aviso do cadastro do motorista
+  const { classificarPerfilFrota } = require('./permissions');
+  const rows = await dbAll(db, `SELECT u.id, u.nome, u.email, u.ativo, u.role, u.is_superadmin, u.admin_modulos,
+      p.perfil AS perfil_explicito, m.id AS motorista_id, m.nome AS motorista_nome
     FROM usuarios u
+    LEFT JOIN perfil_frota_usuario p ON p.usuario_id = u.id
     LEFT JOIN frotas_motoristas m ON m.usuario_id = u.id AND m.ativo = 1
     WHERE u.ativo = 1 OR m.id IS NOT NULL
     ORDER BY u.nome, u.id, m.id`);
@@ -171,6 +175,7 @@ async function listUsuariosVinculaveis(db) {
   return rows.filter((r) => (vistos.has(r.id) ? false : vistos.add(r.id))).map((r) => ({
     id: r.id, nome: r.nome, email: r.email, ativo: Number(r.ativo) === 1,
     motorista: r.motorista_id ? { id: r.motorista_id, nome: r.motorista_nome } : null,
+    perfil_frota: classificarPerfilFrota(r, r.perfil_explicito).efetivo,
   }));
 }
 
@@ -665,7 +670,10 @@ async function deleteMulta(db, id) {
 
 // ── Documentos ─────────────────────────────────────────────────────────────
 
-async function listDocumentos(db, { search, veiculo_id, tipo, vencendo } = {}) {
+async function listDocumentos(db, { search, veiculo_id, tipo, vencendo } = {}, user) {
+  // Frotas Etapa 2 (RN-F2.12, C7): documento e do veiculo e tem valor (IPVA, seguro); o motorista nao tem "os dele" -> lista vazia,
+  // como as outras listas dele sem vinculo. O menu ja nao mostrava Documentos; digitando o endereco ele via os de todos.
+  if (await escopoDoUsuario(db, user)) return [];
   let sql = `SELECT d.*, v.placa FROM frotas_documentos d
     JOIN frotas_veiculos v ON d.veiculo_id = v.id WHERE 1=1`;
   const params = [];

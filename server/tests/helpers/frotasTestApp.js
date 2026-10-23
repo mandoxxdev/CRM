@@ -8,7 +8,7 @@
  * ULTIMO `setUser`. `como(user)` devolve um `req` amarrado a um usuario (para varios usuarios em paralelo). O acesso ao modulo (`checkModulePermission`) fica liberado — quem decide o que cada um faz e o perfil.
  *
  * `usuarios` e tabela CORE (criada por server/index.js); aqui so o subconjunto que o modulo le (vinculo usuario<->motorista):
- * id, nome, email, ativo, role. Usuarios semeados: 1 Gestor (admin), 2 Ana, 3 Consulta, 4 Bruno, 5 Inativo (ativo = 0).
+ * id, nome, email, ativo, role (e, desde a Frotas Etapa 2, is_superadmin, admin_modulos, is_oculto — a regua do perfil). Usuarios semeados: 1 Gestor (admin), 2 Ana, 3 Consulta, 4 Bruno, 5 Inativo (ativo = 0).
  *
  * Uso:
  *   const { createFrotasTestApp, ADMIN, MOTORISTA, CONSULTA } = require('../helpers/frotasTestApp');
@@ -36,7 +36,10 @@ async function createFrotasTestApp() {
     nome TEXT NOT NULL,
     email TEXT,
     ativo INTEGER DEFAULT 1,
-    role TEXT DEFAULT 'usuario'
+    role TEXT DEFAULT 'usuario',
+    is_superadmin INTEGER DEFAULT 0,
+    admin_modulos TEXT,
+    is_oculto INTEGER DEFAULT 0
   )`);
   const semente = [
     [1, 'Gestor', 'gestor@x.com', 1, 'admin'],
@@ -80,4 +83,38 @@ async function createFrotasTestApp() {
   return { app, db, setUser, req, como, limparCacheDashboard: registrar.limparCacheDashboard };
 }
 
-module.exports = { createFrotasTestApp, ADMIN, MOTORISTA, CONSULTA, MOTORISTA2 };
+/**
+ * Frotas Etapa 2 (RN-F2.06): o MESMO banco do `ctx`, mas com o login REAL na frente das rotas — `criarAuthenticateToken` (JWT) +
+ * `enrichUserFromDb` (que roda o `finishFrotaProfile` e le `perfil_frota_usuario`). O stub do `createFrotasTestApp` injeta o perfil
+ * pronto no header e por isso NAO prova que o perfil gravado chega ao `req.user`; este app prova. O portao de modulo segue liberado.
+ *
+ * Uso: const login = await comLoginReal(ctx); await login.como(2)('get', '/api/frotas/dashboard');
+ */
+async function comLoginReal(ctx) {
+  const jwt = require('jsonwebtoken');
+  const { criarAuthenticateToken } = require('../../services/authenticateToken');
+  const { enrichUserFromDb } = require('../../services/systemPermissions');
+  // O enrich le tambem o perfil do almoxarifado (tabela do modulo almoxarifado, que este harness nao sobe): mesmo DDL de la.
+  await dbRun(ctx.db, `CREATE TABLE IF NOT EXISTS perfil_almoxarifado_usuario (
+    usuario_id INTEGER PRIMARY KEY,
+    perfil TEXT NOT NULL DEFAULT 'PRODUCAO',
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  const segredo = 'segredo-de-teste-frotas';
+  const app = express();
+  app.use(express.json());
+  const auth = criarAuthenticateToken({ jwtSecret: segredo, enrich: enrichUserFromDb(ctx.db) });
+  require('../../routes/frotas')(app, ctx.db, auth, () => (req, res, next) => next());
+  const tokenDe = (id) => jwt.sign({ id }, segredo, { expiresIn: '1h' });
+  const como = (id) => (metodo, url, corpo) => {
+    let r = request(app)[metodo](url).set('Authorization', `Bearer ${tokenDe(id)}`);
+    if (corpo !== undefined) r = r.send(corpo);
+    return r;
+  };
+  // Espera o schema (o registrador desta segunda montagem tem a propria promessa)
+  const meta = await como(1)('get', '/api/frotas/meta');
+  if (meta.status !== 200) throw new Error(`login real nao subiu: ${meta.status} ${JSON.stringify(meta.body)}`);
+  return { app, tokenDe, como };
+}
+
+module.exports = { createFrotasTestApp, comLoginReal, ADMIN, MOTORISTA, CONSULTA, MOTORISTA2 };

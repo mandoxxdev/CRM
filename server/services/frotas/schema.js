@@ -283,6 +283,14 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE frotas_viagens ADD COLUMN origem TEXT');
   await safeAlter(db, 'ALTER TABLE frotas_abastecimentos ADD COLUMN km_desde_anterior REAL');
 
+  // Frotas Etapa 2: a tabela do perfil e CORE (server/index.js cria dentro do callback do PRAGMA de usuarios); o mesmo DDL aqui,
+  // idempotente, para a rota /perfis-usuario nao depender da ordem do boot (e o harness ganhar a tabela).
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS perfil_frota_usuario (
+    usuario_id INTEGER PRIMARY KEY,
+    perfil TEXT NOT NULL DEFAULT 'MOTORISTA',
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
   // Fase5-9 (RN-F1.12): um motorista ativo por usuario, garantido pelo banco — a conferencia SELECT + INSERT deixava 6 POST
   // simultaneos criarem 4 vinculos. Se o banco ja tem usuario em dobro, o indice nao nasce: loga e segue (nao derruba o boot);
   // a conferencia do servico continua valendo para os gestos novos.
