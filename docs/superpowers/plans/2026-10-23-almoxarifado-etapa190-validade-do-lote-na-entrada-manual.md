@@ -1,8 +1,11 @@
 # Etapa 190 — A Entrada manual grava a validade do lote
 
-> **Status:** 📝 **plano escrito (2026-10-23, sobre `2e548a9f`). Fase 2 feita (2026-10-23, sobre `bfb7d9a1`): 0 Críticos, 2
-> Importantes (I-1 preenchimento sem rede depois do livro; I-2 validade errada sem volta — RN-190.06b "lote vazio"), 8 Menores — ver
-> "Emendas da Fase 2", que valem sobre o texto das RN, do contrato e das tasks. Execução não começou.**
+> **Status:** ✅ **FECHADA (2026-10-23).** T1–T4 executadas (`ed1e6566`, `267d668e`, `1136652b`, `e1a24cc3`, `9555ed29`); Fase 5 (revisão
+> adversarial) com 4 achados Menores, corrigidos no fix-round (`4fcdcb27`, `dbbdb8de`); fechamento pela `fechar-etapa` (novidades, spec 10,
+> mapa, guia, manual e este plano). Ver "Fase 5", "Fix-round", "Fechamento" e a "Próxima tarefa detalhada" (Etapa 191), no fim.
+> *(Histórico: plano escrito em 2026-10-23 sobre `2e548a9f`; Fase 2 sobre `bfb7d9a1`: 0 Críticos, 2 Importantes — I-1 preenchimento sem
+> rede depois do livro; I-2 validade errada sem volta, RN-190.06b "lote vazio" —, 8 Menores — ver "Emendas da Fase 2", que valem sobre o
+> texto das RN, do contrato e das tasks.)*
 > Feature **10** (lotes, séries e etiquetas). Corrige o **C450** (`docs/almoxarifado-novidades-por-etapa.md`, achado da revisão da
 > Etapa 188, sonda `rev188-s1.js` (c) da sessão de revisão — não versionada), defeito anterior **desde `65d78fd8` (Etapa 6)**.
 > **Concorrência:** outra sessão executa a **Etapa 189** em paralelo (`requisitionService.js`, `routes/almoxarifado.js`,
@@ -648,17 +651,158 @@ perl `-0pi`, âncora contada = 1, md5 antes/sabotado/restaurado (restauro por c�
 
 **Suítes completas (2026-10-23, sobre `9555ed29`, uma por vez):** `test:api` 538/538 arquivos OK; `test:almoxarifado` 44/44;
 `test:validation` 4/4; `test:safealter` 3/3; `test:sqlite` 16/16; client `react-scripts test` 187 suítes, 2539/2539; `CI=true build`
-"Compiled successfully". **Onde parou:** T1–T4 feitas; a Fase 5 (revisão adversarial) e o fechamento (`fechar-etapa`) **não**
-começaram.
+"Compiled successfully". *(Onde parou nesse momento: T1–T4 feitas; a Fase 5 e o fechamento vieram depois — abaixo.)*
+
+## Fase 5 — revisão adversarial (2026-10-23, sobre `fa14e949`)
+
+Revisor fresco, numa cópia do repositório (`scratchpad/rev190-repo`), com sondas executadas pela rota real
+(`zzProbe190*.api.test.js`, P1..P8 — não versionadas). Resultado: **0 Críticos, 0 Importantes, 4 Menores** — todos corrigidos no fix-round.
+
+| Sonda | Gesto | Medido antes do fix-round | Depois (`4fcdcb27`, a mesma sonda rodada de novo) |
+|---|---|---|---|
+| P1 | entrada com data de ontem → liberar vencimento (200) → nova entrada com a mesma data → saída | o aviso dizia *"A saída para consumo fica bloqueada…"*; a saída seguinte deu 201 (**achado 1**) | `AVISO_VENCIDO_LIBERADO`; a saída 201; com o campo em branco, sem aviso (B1282) |
+| P2 | duas entradas simultâneas criando o mesmo lote com datas diferentes | uma 201, a outra 400 `CONFLITO`; 1 lote, físico 2 — a trava do material serializa | igual |
+| P3 | lote sem validade, duas entradas simultâneas com datas diferentes | uma preenche (`AVISO_PREENCHIDA`), a outra 400 `CONFLITO` | igual |
+| P4 | `0000-01-01`, `9999-12-31`, `0202-03-31` | 201 — o lote nascia com a data e a entrada com `2027-03-31` dava `CONFLITO` (lote preso até a 191) (**achado 4**) | 400 `ANO` nas três; a entrada com `2027-03-31` 201 |
+| P5 | `/transferencias` com `""`, `null` e uma data | 201, 201, 400 `SO_ENTRADA` | igual |
+| P6 | `DEVOLUCAO` genérica pela v2 com data de ontem num lote vivo sem validade | 201, `AVISO_PREENCHIDA` + `AVISO_VENCIDO` | igual |
+| P7 | material de série: entrada, estorno (série `ESTORNADA`), entrada com outra data reativa a série, estorno | redefine (`AVISO_REDEFINIDA`), série volta a `EM_ESTOQUE` no mesmo lote, físico 0 no fim | igual |
+| P8 | série entregue: entrada, saída da série, estorno da entrada | estorno 400 (*"… series desta entrada ja movimentadas …"*); entrada com outra data → `CONFLITO` (o lote tem movimento vivo) | igual |
+
+Achados (leitura + sabotagem):
+
+1. **(Menor, corrigir)** o aviso de vencido afirmava bloqueio falso num lote já liberado (`stockService.js` no aviso, frase em
+   `lotService.MSG_VALIDADE.AVISO_VENCIDO`) — P1.
+2. **(Menor, corrigir teste)** `loteEstaVazio` (`lotService.js`): sabotar para olhar **só movimentos** deixava o arquivo **22/22** — as
+   pernas "saldo ≠ 0" e "série presente" não tinham cenário.
+3. **(Menor, corrigir teste)** a comparação do `CONFLITO` (`String(atual).slice(0, 10)`, Fase 2 M-2): trocar por `String(atual)` passava
+   verde — nenhum lote com validade gravada com hora.
+4. **(Menor, corrigir)** datas absurdas passavam e prendiam o lote — P4.
+
+## Fix-round da Fase 5
+
+- [x] **Achado 1 — `4fcdcb27`.** Literal nova `MSG_VALIDADE.AVISO_VENCIDO_LIBERADO` = `O lote <código> entrou já vencido (validade
+  <DD/MM/AAAA>); o vencimento já foi liberado para consumo.`; o motor usa `lotService.vencimentoLiberado(loteResolvido)` quando não houve
+  redefinição (a redefinição zera a liberação). Cenário novo `[Fase 5 achado 1]`: lote vivo vencido sem liberação → `AVISO_VENCIDO` (a
+  metade positiva), liberar → `AVISO_VENCIDO_LIBERADO`, e a saída 201. **Decisão (B1282):** campo em branco num lote vencido **não** avisa —
+  o aviso responde à data digitada, e as entradas internas (devolução, estorno de requisição, nota) passam pelo mesmo motor; descartado
+  avisar toda entrada em lote vencido.
+- [x] **Achado 4 — `4fcdcb27`.** `validarDataValidade` recusa ano fora de 2000–2100 com `MSG_VALIDADE.ANO` = `A validade do lote deve ter
+  o ano entre 2000 e 2100 — confira a data digitada (ex.: 2027-03-31).`, depois do `FORMATO`, antes de qualquer efeito (B1280; descartado:
+  aceitar qualquer ano; avisar sem recusar). Cenário `[Fase 5 achado 4]`: `0000-01-01`, `0202-03-31`, `9999-12-31`, `1999-12-31`,
+  `2101-01-01` → 400 `ANO`, nenhum lote, nenhuma movimentação; as bordas `2000-01-01` e `2100-12-31` → 201 e gravadas.
+- [x] **Achado 2 — `4fcdcb27`.** Cenário `[Fase 5 achado 2]`, montado no banco: lote estornado (vazio — conferido por `loteEstaVazio` =
+  true antes de montar) + linha de saldo 3 → 400 `CONFLITO`; material de série, lote estornado + série `EM_ESTOQUE` inserida → 400 `CONFLITO`.
+- [x] **Achado 3 — `4fcdcb27`.** Cenário `[Fase 5 achado 3]`: lote com saldo e validade `'2027-03-31 00:00:00'` + entrada com `2027-03-31` →
+  201 sem aviso, físico +2; e (metade positiva) `2027-04-30` → `CONFLITO` com `31/03/2027`.
+- [x] **O comentário velho da 188 — `dbbdb8de`.** `filaSugestaoColetaIntegracao.api.test.js` dizia "A entrada manual nao grava a validade
+  do lote" — reescrito dizendo que era verdade até a 190 (divergência registrada na T4). Só o comentário; 6/6.
+
+**Controles positivos** (perl `-0pi`, âncora contada = 1, md5 antes / sabotado / restaurado por cópia de `scratchpad/fix190-*.js`, todos de
+volta a `b5064e73…` (lotService) e `e6affccf…` (stockService); `git diff --stat` só com o conserto) — **qual asserção caiu**:
+
+| Sabotagem | Caiu | Asserção |
+|---|---|---|
+| `const liberado = false` | só o `[Fase 5 achado 1]` | `com liberacao: o aviso afirma bloqueio falso` (veio a frase de bloqueio) |
+| `loteEstaVazio` só movimentos | só o `[Fase 5 achado 2]` | `saldo 3 sem movimento vivo: esperava 400, veio 201 … "estava vazio"` |
+| `loteEstaVazio` sem a perna de saldo | só o `[Fase 5 achado 2]` | a mesma (saldo) |
+| `loteEstaVazio` sem a perna de série | só o `[Fase 5 achado 2]` | `serie presente sem movimento vivo: esperava 400, veio 201` — a asserção da série, que a sabotagem anterior não alcançava |
+| `String(atual)` sem o `slice(0, 10)` | só o `[Fase 5 achado 3]` | `a mesma data com hora deu CONFLITO: 400` |
+| recusa de `ANO` desligada | só o `[Fase 5 achado 4]` | `valor 0000-01-01: esperava 400, veio 201` |
+
+Arquivo `validadeLoteEntradaManual` **26/26** (era 22). Rodados sem mudança: `validadeLoteEntradaManualIntegracao` 5/5,
+`loteVencimentoLiberacao` 8/8, `loteGuardasSaida` 39/39, `lotes` 8/8, `validadesNoDiaLocal` 10/10, `filaSugestaoColetaIntegracao` 6/6. A
+sonda P1..P8 rodada de novo sobre o código corrigido (cópia temporária em `tests/api`, apagada): tabela acima, coluna "Depois".
+**Divergência:** os achados 1 e 4 e os testes 2 e 3 foram num commit só (`4fcdcb27`) — um assunto (o fix-round da Fase 5), mas o pedido era
+um commit por assunto; registrado.
+
+## Fechamento (skill `fechar-etapa`)
+
+- Novidades: seção da Etapa 190 antes de "Onde estamos" (Antes → Agora, 8 cenários com as literais lidas em `MSG_VALIDADE` e na tela, o que
+  não cobre); cabeçalho com a 190 no topo e a 189 em "Também em"; **A110** (com a coluna `saldo_atribuido_ao_lote`, M-5; conferida num banco
+  de teste); **B1270 a B1282** (B1272 com o complemento I-2, B1274 com o I-1, B1271 com a divergência 4 da T2, B1270 com M-4/M-6/M-7, B1273
+  com M-8; as novas do fix-round: B1280 ano, B1281 aviso com liberação, B1282 campo em branco); **C450 ✅ RESOLVIDO** (desde `65d78fd8`);
+  **C455** a **C457**; **D (190)**; **F (190)**.
+- Spec 10: faixa "+ Etapa 190" no topo; a frase "na entrada o lote continua texto livre" ganhou a validade, dizendo que até a 190 o lote
+  nascia sem (a spec não estava errada — mudou o comportamento); seção "Etapa 190" com checklist e hashes. Mapa: cabeçalho e linha da 10.
+- Guia: cabeçalho (190 parada, 189 abaixo) e seção com roteiro clicável (7 passos). Manual: 4.1 (a Entrada e o Recebimento), **4.3b** nova
+  (a validade digitada numa Entrada, com todas as literais), 6.2 (o campo na tabela).
+- **Pausa (2026-10-23):** o guia, o mapa e "Onde estamos" das novidades dizem que o desenvolvimento foi **pausado** e apontam
+  `docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md`; a 191 está com **só o plano** (`c0cce170`), Fase 2 não feita.
+- **Divergência do fechamento:** o rascunho dizia, em vários lugares (B1277, C456, D (190), spec 10, mapa, guia), que o **recebimento** era
+  da Etapa 191. O plano da 191, commitado antes deste fechamento, o deixa **fora** (B1296 dele) — corrigido para "candidato à 192", e na
+  B1277 a correção está à vista. A "Próxima tarefa detalhada" foi reescrita a partir do plano da 191 (abaixo).
+- **M-1 aplicada:** a recusa da separação de lote vencido está em `requisitionService.js:1191` (hoje); o plano citava `:1162`.
+
+## Retro (4 números)
+
+- **Achados que só a execução pegou:** 4 de 4 na Fase 5 — dois por sonda executada (o aviso falso, P1; as datas absurdas, P4) e dois por
+  sabotagem (o "lote vazio" olhando só movimentos; a validade com hora). Na T4, o controle (b) pegou o `AVISO_CORRIDA` com "()".
+- **Testes que passavam sem saber falhar:** 2 (as pernas do `loteEstaVazio`; o `slice(0, 10)`).
+- **Controles positivos rodados no fix-round:** 6, todos derrubando só o cenário do achado, na asserção do achado.
+- **Literais novas depois do contrato:** 4 (`AVISO_FALHA` e `AVISO_REDEFINIDA` na Fase 2; `ANO` e `AVISO_VENCIDO_LIBERADO` na Fase 5).
+
+## Verificação do fechamento (2026-10-23, sobre `c0cce170` + os documentos)
+
+**As suítes completas NÃO foram rodadas depois do fix-round `4fcdcb27`.** O desenvolvimento foi pausado com a máquina liberada para outro
+uso (pouca memória), e o pedido foi rodar só os arquivos da etapa e vizinhos. A última rodada completa verde é a de `9555ed29` (acima, fim
+da "Execução"): `test:api` 538/538, `test:almoxarifado` 44/0, `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 16/0, client 187
+suítes / 2539 testes, `CI=true build` OK. O fix-round mexe em `lotService.js` e `stockService.js` (o motor) — **rodar as suítes completas
+antes do próximo deploy ou como primeiro passo da retomada.** Registrado na letra **F (190)** das novidades.
+
+Rodados no fechamento, um por vez, saída lida:
+
+- `node tests/api/validadeLoteEntradaManual.api.test.js` — **26 passaram, 0 falharam**;
+- `node tests/api/validadeLoteEntradaManualIntegracao.api.test.js` — **5 passaram, 0 falharam**;
+- `node tests/api/filaSugestaoColetaIntegracao.api.test.js` — **6 passaram, 0 falharam**;
+- client `CI=true npx react-scripts test --watchAll=false Movimentacoes` — **7 suítes, 110/110** (inclui `MovimentacoesValidadeLote`).
+
+No fix-round (acima) rodaram ainda `loteVencimentoLiberacao` 8/8, `loteGuardasSaida` 39/39, `lotes` 8/8 e `validadesNoDiaLocal` 10/10.
+**Tela pelo fluxo:** nenhum clique no navegador (letra F; roteiro clicável na seção da 190 das novidades e do guia).
+
 ## Próxima tarefa detalhada
 
-*(preencher no fechamento.)* Rascunho do que o fechamento deve confirmar: **Etapa 191 — corrigir a validade de um lote** (B1276, B1277).
-Rota `PUT /api/almoxarifado/lotes/:id/validade` com `requirePermission('inspecionar')` (o perfil de `status` e `liberar-vencimento`,
-`extended.js:1256, :1307`), corpo `{ data_validade: 'AAAA-MM-DD' | null, justificativa }`, `lotService.MSG_VALIDADE.FORMATO` reaproveitada,
-`UPDATE … WHERE id = ? AND data_validade IS ?` (guarda contra a lida), auditoria `acao='CORRECAO_VALIDADE'` com antes/depois e
-justificativa. Pontos de atenção: (1) lote com `vencimento_liberado_em` — a liberação guarda contra a data (`lotService.js:182`); corrigir
-a data deve **anular** a liberação (a liberação era daquela validade) e dizer isso na resposta; (2) a dedupe do e-mail é por
-`<id>-<data>` — a correção reavisa, é o certo; (3) separação planejada num lote que a correção venceu passa a recusar na entrega
-(`requisitionService.js:1162`) — aviso; (4) o recebimento passa a usar `preencherValidadeSeVazia` (o cenário 16 da T2 muda de propósito) e
-a recusar ou avisar a nota com outra validade (decidir: a nota é documento fiscal, recusar travaria o processamento — provavelmente aviso);
-(5) botão "Corrigir validade" na tela de Lotes e Séries (`LotesAlmoxarifado.js`).
+> **Desenvolvimento PAUSADO em 2026-10-23 — para retomar, leia `docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md`.**
+
+**Etapa 191 — corrigir a validade de um lote que já tem saldo** (B1276; avisos C455 e, em parte, a A110). **O plano já existe e está
+commitado:** `docs/superpowers/plans/2026-10-23-almoxarifado-etapa191-corrigir-validade-de-lote.md` (`c0cce170`). **A Fase 2 (revisão
+adversarial do plano) NÃO foi feita** — é o primeiro passo da retomada; nenhuma linha de código foi escrita.
+
+*(Esta seção, no rascunho do fechamento, trazia um contrato "proposto" — `null` para apagar a validade, sem trava, o recebimento dentro da
+191, auditoria `CORRECAO_VALIDADE`. **Estava superado** pelo plano da 191, escrito em paralelo e commitado antes deste fechamento. O que
+vale é o plano da 191; o resumo abaixo foi lido dele.)*
+
+Resumo do contrato congelado no plano da 191 (conferir lá — o plano manda):
+
+- **Rota nova** `PUT /api/almoxarifado/lotes/:id/validade`, `auth` + `requirePermission('inspecionar')` (B1290). Corpo
+  `{ data_validade, validade_vista, justificativa }`; resposta 200 `{ lote, avisos[] }`.
+- **Recusas na ordem:** 403; 400 `OBRIGATORIA` (nova; `null` recusado — não existe "apagar a validade", B1293); 400 `FORMATO` e `ANO`
+  (**reaproveitadas da 190** — `MSG_VALIDADE.ANO` é do fix-round `4fcdcb27`, já commitado); 400 `JUSTIFICATIVA`; 400 `VISTA_OBRIGATORIA`;
+  404 `Lote nao encontrado`; 409 `MUDOU` (`validade_vista` ≠ gravada, B1294); 400 `MESMA`.
+- **Gravação** `lotService.corrigirValidadeDoLote` **sob `naTravaDoMaterial`** (B1291), com guarda `WHERE data_validade IS ?`, zerando a
+  liberação de vencimento sempre que a data muda (B1292), auditoria `VALIDADE_CORRIGIDA` (rótulo novo em `auditLabels.js` — o
+  `auditLabels.api.test.js` cai sem ele, aconteceu na T2 da 190).
+- **Avisos:** liberação anulada, corrigida para vencido, separação pendente no lote, etiqueta impressa com a data antiga.
+- **As literais `CONFLITO` e `AVISO_FALHA` da 190 trocam o fim** ("peça a correção" → "corrija-a em Lotes e Séries → \"Corrigir
+  validade\"") — o manual (4.3b) e os cenários 3 e o "raro" da seção 190 das novidades mudam junto no fechamento da 191.
+- **Tela:** botão **Corrigir validade** em **Lotes e Séries**.
+- **Fora da 191 (B1296):** o **recebimento** — o cenário `[B1277] recebimento intacto` de `validadeLoteEntradaManual.api.test.js` **continua
+  verde**; o recebimento é candidato à **Etapa 192**.
+
+O que da 190 está pronto e **não** se reabre: `validarDataValidade` (`FORMATO`, `ANO`), `dataValidadeBR`, `preencherValidadeSeVazia`
+(guarda `IS NULL`), `loteEstaVazio`, `redefinirValidadeDoLoteVazio` (zera a liberação), as auditorias `VALIDADE_PREENCHIDA`/
+`VALIDADE_REDEFINIDA` com rótulo.
+
+Pontos de atenção para a Fase 2 da 191:
+
+1. **Remedir as linhas** de `lotService.js`/`stockService.js`: a Fase 0 da 191 mediu sobre a árvore com o fix-round ainda não commitado;
+   `4fcdcb27` já está na `main`, então os números devem bater — conferir.
+2. **Liberação de vencimento** vale contra a data (`liberarVencimento` grava com `WHERE data_validade = ?`) — a 191 anula sempre que a data
+   muda; o `AVISO_VENCIDO_LIBERADO` da 190 (B1281) continua certo, porque a correção zera a liberação.
+3. **Corrida com a Entrada da 190:** a Entrada lê a validade sob a trava do material e grava depois do livro com guarda; a correção sob a
+   mesma trava faz a Entrada concorrente cair no `AVISO_CORRIDA` ou no `CONFLITO` — o teste de corrida segue o molde do CLAUDE.md (gancho só
+   sinaliza; o gesto concorrente do contexto do teste).
+4. **C457/B1282** (campo em branco num lote vencido não avisa) continuam como estão.
+
+**Numeração livre ao fechar a 190:** letra A a partir de **A111**; letra B **B1283–B1289** livres (a 191 reservou **B1290–B1299**); letra C a
+partir de **C458** (a 190 usou até **C457**).

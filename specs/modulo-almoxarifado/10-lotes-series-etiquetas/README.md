@@ -1,5 +1,7 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 190 (2026-10-23, T1 `ed1e6566`, T2 `267d668e` + `1136652b`, T3 `e1a24cc3`, T4 `9555ed29`, Fase 5 `4fcdcb27`): a Entrada manual grava a validade do lote (C450, defeito desde `65d78fd8`, Etapa 6) — campo "Validade do lote" na Entrada; lote novo nasce com ela, lote sem validade é preenchido com aviso, outra validade recusa (salvo lote vazio, que troca), vencida aceita com aviso, ano fora de 2000–2100 recusa** — ver a seção "Etapa 190", no fim. O status não muda (🟢).
+
 > **+ Etapa 186 (2026-10-22, T4 `e0bbd9ba`, T5 `9ea04c28`): na etiqueta, o código comprido não escreve mais por cima do nome — encolhe a fonte (14 → 10) até caber numa linha (B1237)** — ver a seção "Etapa 186", no fim. O status não muda.
 
 > **+ Etapa 170 (2026-10-20, `3fb6aa0e`): o *(anexado em …)* do certificado do lote no dia de Brasília (B1081, só exibição)** — ver a seção "Etapa 170", no fim. O status não muda.
@@ -157,7 +159,9 @@ Controle real por lote (validade, corrida/heat number, certificado), número de 
 - **Telas:** campo de lote/validade/**fabricação**/corrida por item no recebimento
   (`RecebimentosAlmoxarifado.js`) e seletor FEFO na saída da movimentação
   (`MovimentacoesAlmoxarifado.js`) — na entrada o lote continua texto livre, que é onde um lote
-  novo nasce. A tela de lotes (`LotesAlmoxarifado.js`) exibe a data de fabricação e oferece um
+  novo nasce; **desde a Etapa 190, com a "Validade do lote" opcional** (o lote novo nasce com ela; o lote sem validade é
+  preenchido; outra validade recusa, salvo lote vazio — ver a seção "Etapa 190", no fim). Até a 190 esta frase era verdade e o
+  lote nascia sem validade (C450). A tela de lotes (`LotesAlmoxarifado.js`) exibe a data de fabricação e oferece um
   **link para abrir o certificado** do fornecedor (até o review final do branch o arquivo era
   gravado e nunca visualizável: a tela só o lia como booleano).
 - Tabela órfã `lotes` (sem sufixo) é de lote de **produção** (`numero_lote`, `os_id`, `tipo_lote`,
@@ -1008,3 +1012,35 @@ Só desenho do PDF. Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa
 - **Correção declarada:** a B1220 (Etapa 185) dizia que as etiquetas "já medem" — **era meia verdade**: o nome (2 linhas) e a linha de
   controle mediam; o código, não.
 - Fica como está (decisão física da etiqueta): o nome continua cortado em **2 linhas** (o QR identifica o material). Novidades: **B1237**.
+
+## Etapa 190 — a Entrada manual grava a validade do lote (2026-10-23)
+
+Plano: `docs/superpowers/plans/2026-10-23-almoxarifado-etapa190-validade-do-lote-na-entrada-manual.md`. Corrige o **C450** (novidades): o
+`MovimentacaoSchema` (`z.object`) descartava `data_validade` em silêncio e `criarOuObterLote` era chamado só com o código — o lote da Entrada
+manual nascia sem validade desde `65d78fd8` (Etapa 6). Nenhuma migration; recebimento, v1, devolução e as rotas de lote sem mudança.
+
+- [x] **RN-190.01/02/03/04** — `data_validade: z.unknown().optional()` no schema (o motor julga, molde `codigo_lido_*` — B1270); no motor,
+  antes de qualquer efeito: `FORMATO` (string `AAAA-MM-DD` de data que existe; `""`/`null` = não informado), `SO_ENTRADA` (fora de
+  `TIPOS_ENTRADA`, também por `/transferencias`), `SEM_LOTE`; o lote novo nasce com a validade e a auditoria `CRIACAO` a leva — `ed1e6566`.
+- [x] **RN-190.05/06/06b/07/08/09** — lote sem validade: `preencherValidadeSeVazia` (`WHERE data_validade IS NULL`, auditoria
+  `VALIDADE_PREENCHIDA`, `AVISO_PREENCHIDA`); mesma validade: nada; outra num lote vivo: 400 `CONFLITO`; outra num lote **vazio**
+  (`loteEstaVazio`: sem movimento vivo não-ESTORNO, sem saldo ≠ 0, sem série `EM_ESTOQUE`/`BLOQUEADA`): `redefinirValidadeDoLoteVazio`
+  (zera a liberação de vencimento, auditoria `VALIDADE_REDEFINIDA`, `AVISO_REDEFINIDA`); vencida aceita com `AVISO_VENCIDO`; gravação depois
+  do livro, fora do `try` dele, não-fatal (`AVISO_FALHA`/`AVISO_CORRIDA`); o estorno não desfaz a validade — `267d668e`, `1136652b` (UPDATE
+  perdido com o lote ainda sem validade → `AVISO_FALHA`, não "outra operação ()").
+- [x] **RN-190.10** — a tela: `#mov-validade` "Validade do lote" só com Entrada + lote, zerado ao apagar o lote ou trocar de tipo, payload só
+  com data, `toast.warn(aviso_validade, { autoClose: false })` — `e1a24cc3`.
+- [x] **RN-190.11** — a validade gravada pela rota entra no FEFO da lista, no e-mail *Lote vencendo*, na saída vencida e na sugestão de coleta
+  (188), portas sem mudança — `9555ed29`.
+- [x] **Fase 5 (revisão adversarial)** — `4fcdcb27`: (1) com o vencimento **já liberado**, o aviso de vencido dizia "a saída fica bloqueada"
+  (falso) → `AVISO_VENCIDO_LIBERADO` (B1281); (2) ano fora de 2000–2100 → 400 `ANO`, na mesma porta do `FORMATO` (B1280); (3) testes que não
+  sabiam falhar: as pernas saldo e série do `loteEstaVazio` (olhar só movimentos passava 22/22) e a comparação `slice(0, 10)` com a validade
+  gravada com hora (`'2027-03-31 00:00:00'`). E `dbbdb8de`: o comentário de `filaSugestaoColetaIntegracao.api.test.js` que dizia que a Entrada
+  não grava a validade.
+- [ ] **Fora (declarado):** corrigir validade já gravada num lote vivo (Etapa 191, B1276); o recebimento preencher/conferir lote existente
+  (B1277, fixado por teste para uma etapa futura mudar de propósito — o plano da 191, `c0cce170`, o deixa de fora (B1296 dele);
+  candidato à 192); `controle_validade` obrigatório e `data_fabricacao` na Entrada (B1278 — a flag
+  continua morta, como a tabela de flags acima diz); entrada sem data num lote vencido não avisa (B1282); a v1 ignora o campo (B1270).
+
+Testes: `validadeLoteEntradaManual.api.test.js` (26), `validadeLoteEntradaManualIntegracao.api.test.js` (5),
+`client/src/components/almoxarifado/MovimentacoesValidadeLote.test.js` (8). Continua 🟢.

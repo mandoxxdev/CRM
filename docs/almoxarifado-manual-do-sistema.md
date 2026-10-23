@@ -754,11 +754,11 @@ No **Recebimento**, a checagem é feita sobre a nota inteira **antes de qualquer
 **O lote nasce em dois lugares:**
 
 1. **No Recebimento** — é onde ele deve nascer. Nos itens da nota há quatro campos: **Lote**, **Validade**, **Fabricação** e **Corrida**. Ao processar a nota, o lote é criado herdando fornecedor, número da nota fiscal, corrida, data de fabricação e validade.
-2. **Numa movimentação de Entrada**, digitando o código no campo Lote. Aqui ele nasce só com o código, sem validade nem corrida — é o caminho de regularização, não o caminho normal.
+2. **Numa movimentação de Entrada**, digitando o código no campo Lote — é o caminho de regularização, não o caminho normal. Com o Lote preenchido aparece o campo **Validade do lote** (opcional), com a ajuda *"Opcional. Se o lote já existe com validade, deixe em branco."* O lote nasce com o código e a validade digitada (sem corrida nem fabricação). As regras da validade digitada na Entrada estão em 4.3b.
 
 Na **saída**, o campo Lote deixa de ser texto livre e vira uma **lista** dos lotes daquele material, com saldo e validade de cada um. Digitar um lote inexistente numa saída não o cria: *"Lote nao encontrado para este material: L-999"*. Saída é consumo, não é nascimento.
 
-Um lote é único por material: dois materiais podem ter, cada um, um lote chamado `L-001`, e são lotes distintos. Receber duas vezes o mesmo lote do mesmo material soma saldo ao lote existente sem sobrescrever a validade original.
+Um lote é único por material: dois materiais podem ter, cada um, um lote chamado `L-001`, e são lotes distintos. Receber duas vezes o mesmo lote do mesmo material soma saldo ao lote existente sem sobrescrever a validade original. Pelo **Recebimento**, um lote que já existe fica com a validade que tem — inclusive quando não tem nenhuma: a validade da nota não é gravada nele, e nada avisa. Pela **Entrada**, a validade digitada preenche o lote que não tem (4.3b).
 
 ### 4.2 Situação do lote
 
@@ -800,6 +800,44 @@ A própria tela avisa: *"Isto não 'desvence' o lote — ele continua vencido. S
 E, como situação vem antes de validade: um lote **bloqueado e vencido** não é resolvido pela liberação de vencimento — ele continua recusado, com a mensagem de bloqueio. Primeiro resolve-se a situação.
 
 Recusas da liberação: *"justificativa obrigatoria para liberar o vencimento do lote"* e, se o lote não estiver vencido, *"Lote nao esta vencido; nao ha vencimento para liberar"*.
+
+### 4.3b A validade digitada numa Entrada
+
+**A validade é do lote, não de cada entrada.** Um lote tem uma validade só, e ela vale para todo o saldo dele. Por isso o que a Entrada faz com a data digitada depende do lote:
+
+| Situação do lote | O que acontece | O que aparece |
+|---|---|---|
+| Não existe (lote novo) | Nasce com a validade digitada | *"Movimentação registrada!"* |
+| Existe **sem** validade | A entrada é registrada e a validade é gravada no lote — vale também para o saldo que já estava nele | aviso: *"O lote ⟨L⟩ não tinha validade; ela foi gravada agora (DD/MM/AAAA) e vale também para o saldo que já estava nele."* |
+| Existe com a **mesma** validade | Nada muda no lote | — |
+| Existe com **outra** validade e tem qualquer lançamento valendo, saldo ou série presente — mesmo uma entrada já toda consumida | **Recusa**; nada é lançado | *"O lote ⟨L⟩ já tem validade DD/MM/AAAA. A validade é do lote, não da entrada: deixe o campo em branco ou informe a mesma data. Se a validade gravada está errada, peça a correção do lote."* |
+| Existe com **outra** validade e está **vazio** — nenhum lançamento valendo (só uma entrada recusada ou estornada o criou), nenhum saldo e nenhuma série presente | A entrada é registrada e a validade do lote é **trocada**; uma liberação de vencimento que o lote tivesse é desfeita (era da data antiga) | aviso: *"O lote ⟨L⟩ estava vazio com a validade DD/MM/AAAA; ela foi trocada por DD/MM/AAAA."* |
+
+**Data no passado é aceita** — a Entrada registra o que está na prateleira, e gravar a validade real é o que faz a saída barrar. "Passado" é antes do dia de hoje no horário de Brasília (a validade de hoje não é passado). O lote passa a ser vencido para todas as regras de 4.3. A resposta avisa:
+
+- sem liberação de vencimento: *"O lote ⟨L⟩ entrou já vencido (validade DD/MM/AAAA). A saída para consumo fica bloqueada até liberar o vencimento na tela de Lotes e Séries."*
+- com o vencimento já liberado: *"O lote ⟨L⟩ entrou já vencido (validade DD/MM/AAAA); o vencimento já foi liberado para consumo."*
+
+Quando a entrada preenche a validade **e** ela está no passado, aparecem os dois avisos, o de preenchimento primeiro. Os avisos ficam na tela até serem fechados.
+
+**Campo em branco:** a validade do lote não muda e nada é avisado — inclusive num lote que já está vencido.
+
+**Recusas da data** (antes de qualquer efeito — nenhum lote é criado, nada é lançado):
+
+| Situação | Mensagem |
+|---|---|
+| Data fora do formato AAAA-MM-DD ou que não existe no calendário (ex.: 30/02) | *"A validade do lote deve ser uma data no formato AAAA-MM-DD (ex.: 2027-03-31)."* |
+| Ano antes de 2000 ou depois de 2100 (ex.: *0202* digitado no lugar de *2027*) | *"A validade do lote deve ter o ano entre 2000 e 2100 — confira a data digitada (ex.: 2027-03-31)."* |
+| Validade informada numa saída, transferência ou ajuste de contagem (por integração; a tela só mostra o campo na Entrada) | *"A validade do lote só pode ser informada numa entrada — numa saída, transferência ou ajuste o lote já existe e a validade é a dele."* |
+| Validade informada numa entrada sem lote | *"Informe o lote para gravar a validade — a validade é do lote."* |
+
+**A entrada vale mesmo quando a validade não grava.** A validade é gravada depois de a entrada ser registrada. Se essa gravação falhar, a entrada fica e o aviso diz para não repetir: *"A entrada foi registrada, mas a validade do lote ⟨L⟩ não pôde ser gravada (DD/MM/AAAA). Não repita a entrada; peça a correção da validade do lote."* Se outra operação gravar uma validade no mesmo instante, a dela fica: *"A validade do lote ⟨L⟩ foi gravada por outra operação (DD/MM/AAAA) enquanto esta entrada era registrada; a entrada valeu e a validade do lote não foi alterada."*
+
+**Estornar a entrada não desfaz a validade** — o estorno desfaz quantidade, e a validade é do lote físico. Se a entrada estornada era a única do lote, o lote fica vazio e a próxima Entrada com a data certa a troca (tabela acima).
+
+**Corrigir uma validade gravada** num lote com saldo ou com lançamentos não tem tela. Confira a data antes de confirmar. Se um lote ficou vencido por uma data errada, o caminho para consumi-lo é o botão **Liberar vencimento** (4.3).
+
+Toda gravação de validade fica na auditoria do lote: a criação registra a validade com que nasceu, e o preenchimento e a troca aparecem como *Validade preenchida* e *Validade redefinida*, com a data anterior, a nova e o lançamento que as gravou.
 
 ### 4.4 FEFO
 
@@ -1609,7 +1647,7 @@ O formulário de **Nova Movimentação** oferece cinco tipos:
 
 | Tipo na tela | O que faz com o saldo | Campos que aparecem |
 |---|---|---|
-| **Entrada** | Soma ao físico | Localização de destino, Confirmar endereço lido, Lote, Custo unitário, Séries |
+| **Entrada** | Soma ao físico | Localização de destino, Confirmar endereço lido, Lote, Validade do lote (com o Lote preenchido — 4.3b), Custo unitário, Séries |
 | **Saída** | Subtrai do físico | Localização de origem, Confirmar endereço lido, Lote (seletor), Séries, Saída emergencial |
 | **Transferência** | **Não altera o físico** — move de uma localização para outra | Origem **e** destino (cada um com seu Confirmar endereço lido), Lote (seletor) |
 | **Ajuste** | Define o físico por um **valor absoluto** (o campo passa a se chamar "Novo Saldo") | Localização de destino (opcional) |

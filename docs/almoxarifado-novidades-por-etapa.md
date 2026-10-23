@@ -11,7 +11,18 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-23):** **Etapa 189 fechada** (**a janela de separação já abre no endereço sugerido, e a fila
+> **Onde o desenvolvimento está (2026-10-23):** **Etapa 190 fechada** (**a Entrada manual grava a validade do lote** — em **Movimentações →
+> Entrada**, com o Lote preenchido, aparece **Validade do lote** (opcional); o lote novo nasce com ela, o lote sem validade é preenchido
+> (*"O lote ⟨L⟩ não tinha validade; ela foi gravada agora (DD/MM/AAAA) e vale também para o saldo que já estava nele."*), o lote com outra
+> validade recusa (*"O lote ⟨L⟩ já tem validade DD/MM/AAAA. …"*) e o lote vazio troca a data; vencida é aceita com aviso; **C450**
+> resolvido; **opcional antes do deploy: A110** (os lotes que nasceram sem validade pela Entrada); decisões **B1270** a **B1282**; avisos
+> **C455** (validade errada num lote vivo não tem volta até a 191), **C456** (o recebimento continua sem preencher) e **C457** (entrada sem
+> data num lote vencido não avisa); limitações **D (190)**; revisão adversarial feita e corrigida). **Próxima: Etapa 191** — corrigir a
+> validade de um lote que já tem saldo: **só o plano está escrito e commitado** (`c0cce170`,
+> `docs/superpowers/plans/2026-10-23-almoxarifado-etapa191-corrigir-validade-de-lote.md`); a **Fase 2 (revisão do plano) não foi feita** e
+> nenhuma linha de código foi escrita.
+> **Desenvolvimento PAUSADO em 2026-10-23 — para retomar, leia docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md**
+> *(Também em 2026-10-23: **Etapa 189 fechada** (**a janela de separação já abre no endereço sugerido, e a fila
 > imprime a lista de coleta** — ao **Iniciar Separação**, o **Sai de** de cada item ainda não separado já vem no endereço e lote que a **Fila de
 > separação** sugere, quando eles cobrem a quantidade, com *"Sugerido pela fila de separação. Se pegou de outro endereço, troque aqui."*;
 > separar dali e entregar baixa daquele endereço e lote, sem a linha *sem lote* negativa (**C451** resolvido para a separação de uma vez); a
@@ -19,8 +30,7 @@
 > (todas)**, um PDF na ordem de coleta com caixinha **OK**; nada a rodar antes do deploy; decisões **B1260** a **B1269**; avisos **C449**
 > (atualizado: a pré-seleção o torna mais provável, a falha é segura), **C452** (não existe "separar e entregar" num clique), **C453**
 > (separar em duas vezes sem entregar troca a origem) e **C454** (as quantidades da janela voltam ao inicial ao recarregar — anterior);
-> limitações **D (189)**; revisão adversarial feita e corrigida). **Próxima: fechar a Etapa 190** — a Entrada manual grava a validade do
-> lote (executada, falta a revisão adversarial; ver o plano da 190) — e depois a **191** (corrigir a validade de um lote).
+> limitações **D (189)**; revisão adversarial feita e corrigida); a próxima era fechar a **190**.)*
 > *(Também em 2026-10-23: **Etapa 188 fechada** (**a fila de separação diz de onde pegar cada item e em que ordem
 > andar** — na **Fila de separação**, cada item que dá para separar ganha *"Pegar em ⟨endereço⟩ (⟨caminho⟩) — lote ⟨L⟩ (vence DD/MM/AAAA) ·
 > ⟨quantidade⟩ ⟨un⟩ — escolha este endereço no 'Sai de' ao separar"*, e a requisição com dois ou mais endereços ganha a lista **Ordem de
@@ -539,7 +549,10 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Cento e nove itens para rodar em produção ANTES do deploy — cento e quatro são consulta, três são ação fora do sistema, um é ação na tela antes de liberar o uso, e um é uma limpeza de disco que roda sozinha
+### A. Cento e dez itens para rodar em produção ANTES do deploy — cento e cinco são consulta, três são ação fora do sistema, um é ação na tela antes de liberar o uso, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-23 (Etapa 190) de cento e nove para cento e dez**, com a **A110** — os lotes que nasceram **sem validade** pela
+Entrada da tela de Movimentações (**C450**) e quanto saldo cada um tem. **Somente leitura, opcional:** a etapa não tem migration.)*
 
 *(**Atualizado em 2026-10-22 (Etapa 182) de cento e oito para cento e nove**, com a **A109** — as requisições que já estão prontas para
 retirada e há quantos dias (**C443**): quantos e-mails do alerta novo o primeiro dia vai mandar. **Somente leitura, opcional**, com a linha
@@ -4301,12 +4314,50 @@ VALUES ('alerta_retirada_parada_dias', '7', 'Dias com a requisicao liberada para
 *(Conferida num banco de teste com o esquema atual: uma requisição pronta com trilha de liberação, uma sem trilha e uma em separação — vieram
 as duas prontas, com a fonte certa em cada uma, e a em separação ficou de fora. **Não** rodada no banco de produção.)*
 
+**A110 (NOVA, da Etapa 190 — somente leitura, OPCIONAL — os lotes que nasceram sem validade pela Entrada manual).** Até a Etapa 190, o
+lote criado em **Movimentações → Entrada** nascia sem validade (**C450**) — e é por esse caminho que se regulariza estoque antigo (o par
+Entrada com o lote + Ajuste). Lote sem validade vai para o fim do FEFO, não gera o e-mail *Lote vencendo* e nunca é barrado como vencido.
+Esta consulta conta os lotes sem validade que **não** vieram de nota (`recebimento_id IS NULL`) e mostra o saldo de cada um. **Atenção:** a
+coluna é o **saldo atribuído ao lote** (a soma das linhas do lote), não o físico do material — a entrega de requisição e o ajuste total não
+baixam de lote (**B204**/**B205**); não some com o físico.
+```sql
+-- quantos
+SELECT COUNT(*) AS lotes_sem_validade_por_entrada,
+       SUM(CASE WHEN saldo_atribuido_ao_lote > 0 THEN 1 ELSE 0 END) AS com_saldo_atribuido
+FROM (
+  SELECT l.id,
+         COALESCE((SELECT SUM(s.quantidade) FROM estoque_saldo_almoxarifado s WHERE s.lote_id = l.id), 0) AS saldo_atribuido_ao_lote
+  FROM lotes_almoxarifado l
+  WHERE l.data_validade IS NULL AND l.recebimento_id IS NULL
+);
+
+-- quais (os com saldo primeiro)
+SELECT l.id, l.codigo AS lote, m.codigo AS material, m.nome, l.status, l.created_at,
+       COALESCE((SELECT SUM(s.quantidade) FROM estoque_saldo_almoxarifado s WHERE s.lote_id = l.id), 0) AS saldo_atribuido_ao_lote
+FROM lotes_almoxarifado l
+JOIN materiais_almoxarifado m ON m.id = l.material_id
+WHERE l.data_validade IS NULL AND l.recebimento_id IS NULL
+ORDER BY saldo_atribuido_ao_lote DESC, l.created_at;
+
+-- para comparar: lotes de nota sem validade (a nota não trouxe — não é o C450)
+SELECT COUNT(*) FROM lotes_almoxarifado WHERE data_validade IS NULL AND recebimento_id IS NOT NULL;
+```
+**Como ler o resultado:** **zero** — nada a fazer. **Lotes de material que não vence** (aço, parafuso) — nada a fazer. **Lotes com saldo de
+material que vence** (cola, tinta, químico) — depois do deploy, na próxima **Entrada** desse lote (a entrada soma ao estoque — não lance
+quantidade que não chegou só para gravar a data), digitar a validade real: a entrada preenche a validade e avisa *"O lote ⟨L⟩ não tinha validade; ela foi gravada agora …"*
+(**B1273**). Se a data real já passou, o lote passa a ser vencido na hora — a saída para consumo é barrada até **Liberar vencimento**.
+Não há como apagar uma validade gravada errada num lote com saldo até a Etapa 191 (**C455**): confira a data antes. Lote sem entrada nova à
+vista: espere a correção da 191.
+*(Conferida num banco de teste com o esquema atual: um lote sem validade com 5 pela Entrada, um com validade, um de nota sem validade e um sem
+movimento — vieram 2 lotes / 1 com saldo; a lista com o de 5 primeiro e o sem movimento com 0; e 1 lote de nota na comparação. **Não**
+rodada no banco de produção.)*
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -13163,6 +13214,91 @@ separação e o PDF usam as mesmas frases; mudar uma muda as três. **Reversíve
 controle (a rodada de separação já registra quem separou, Etapa 28). **Descartado:** campo de assinatura (sugeriria um controle que o
 sistema não confere). **Reversível.** `4c1f059a`.
 
+**B1270 (NOVA, da Etapa 190; decisão do agente) — a validade é julgada no motor de estoque, não na validação de formato da rota.** A rota
+de movimentação declara o campo sem tipo e o motor confere o formato, o "só em entrada" e o "só com lote" — a rota de transferências não
+passa pela validação da outra, e as duas têm de dar a **mesma** mensagem. Consequência aceita: uma data malformada espera a vez do material
+para tomar a recusa (a mesma situação do motivo cadastrado). Vale para a Entrada nova e para transferências; a movimentação antiga (v1)
+continua ignorando o campo — ela não carrega lote, não há onde gravar. A frase da recusa *"… numa saída, transferência ou ajuste …"* fala do
+**Ajuste de contagem**; o *Ajuste positivo* (pelo servidor) é entrada e aceita a validade — imprecisão aceita na frase. **Descartado:**
+conferir o formato na rota (a v2 recusaria com a mensagem genérica e a de transferências aceitaria calada). **Reversível.** `ed1e6566`.
+
+**B1271 (NOVA, da Etapa 190; decisão do agente) — validade no passado é aceita, com aviso.** A Entrada manual é o caminho de regularização:
+o lote vencido está na prateleira, e registrar a validade real é o que faz a saída barrar. "Passado" é antes do dia de Brasília (hoje não é
+passado). Recusar empurraria o operador a deixar em branco (o C450 de novo) ou a inventar uma data futura. **Complemento (execução):** o
+aviso sai também quando o lote vivo **já tinha** a mesma data vencida — a entrada está pondo saldo num lote cuja saída está barrada, que é o
+que o aviso existe para dizer. **Descartado:** recusar data passada; aceitar sem aviso. **Reversível** (uma linha no motor). `267d668e`.
+
+**B1272 (NOVA, da Etapa 190; decisão do agente) — lote com outra validade: recusa, não sobrescreve.** A validade é do lote físico; duas
+entradas não podem dar duas validades ao mesmo lote, e trocar em silêncio mudaria o FEFO e o bloqueio do saldo que já estava lá. A frase diz
+a data gravada e manda pedir a correção. A comparação olha só a data (uma validade de nota gravada com hora, *2027-03-31 00:00:00*, é a mesma
+de *2027-03-31* — teste desde a revisão adversarial, `4fcdcb27`). **Descartado:** aceitar calado mantendo a do lote (o operador acha que
+gravou); sobrescrever (sem perfil, sem auditoria de correção). **Complemento da Fase 2 (I-2) — o lote vazio troca de data.** Um lote
+**vazio** — nenhum movimento vivo com ele (o estorno não conta), nenhuma linha de saldo diferente de zero e nenhuma série presente (em
+estoque ou bloqueada) — não recusa: a entrada com outra validade a **troca**, zera a liberação de vencimento (era da data antiga), registra
+*Validade redefinida* na auditoria e avisa *"O lote ⟨L⟩ estava vazio com a validade DD/MM/AAAA; ela foi trocada por DD/MM/AAAA."* É o lote
+que só existe por uma entrada recusada depois de criá-lo (**B1275**) ou por uma entrada estornada — sem isso, a data digitada errada não tinha
+volta, nem pelo estorno. Lote com **qualquer** movimento vivo (mesmo uma entrada já toda consumida, saldo 0) continua recusando: a história
+dele cita a validade. As três pernas do "vazio" têm teste desde a revisão adversarial (`4fcdcb27`; antes, olhar só os movimentos passava
+verde). **Descartado:** o estorno desfazer a validade (precisaria saber quem gravou — coluna nova ou ler a auditoria, que pode faltar);
+apagar o lote órfão (o livro o cita); deixar para a 191. **Reversível.** `267d668e`.
+
+**B1273 (NOVA, da Etapa 190; decisão do agente) — lote existente sem validade: a entrada preenche, e avisa que vale para o saldo antigo.**
+É quem regularizou pelo par Entrada + Ajuste e agora recebe mais do mesmo lote com a etiqueta na mão. O aviso existe porque o saldo antigo
+pode virar vencido e travar uma separação planejada naquele lote (a recusa da separação de lote vencido). Data errada num lote **com saldo**
+(ex.: 2025 no lugar de 2027) vence o saldo antigo na hora e não tem volta até a 191 — paliativo: **Liberar vencimento** (**C455**).
+**Descartado:** só preencher em lote sem saldo (o lote com saldo é o que mais precisa); exigir uma tela de edição (não existe; é a 191).
+**Reversível.** `267d668e`.
+
+**B1274 (NOVA, da Etapa 190; decisão do agente) — o preenchimento grava depois do livro, com guarda "ainda sem validade".** Entrada recusada
+não preenche; se outra operação gravar a validade no meio (hoje nenhuma porta faz isso; a guarda é para a 191), a entrada vale, a validade
+gravada fica e o aviso diz *"A validade do lote ⟨L⟩ foi gravada por outra operação (…)"*. **Complemento da Fase 2 (I-1) — a gravação da
+validade nunca derruba a entrada.** Ela roda depois do lançamento, fora do trecho que desfaz o estoque, e uma falha vira aviso: *"A entrada
+foi registrada, mas a validade do lote ⟨L⟩ não pôde ser gravada (DD/MM/AAAA). Não repita a entrada; peça a correção da validade do lote."*
+(e o mesmo quando a gravação não pega e o lote continua sem validade — `1136652b`). Um erro ali fazia o almoxarife lançar de novo (8 no
+livro, 4 no prédio). **Descartado:** preencher antes do livro (entrada recusada deixaria a validade); erro 500 depois do livro (C250 de
+novo); desfazer a entrada por causa da validade. **Reversível.** `267d668e`, `1136652b`.
+
+**B1275 (NOVA, da Etapa 190; decisão do agente) — o lote novo continua nascendo antes das recusas de série, endereço e saldo, agora com a
+validade.** Um lote sem movimento (criado por entrada que depois foi recusada) já existia antes; reordenar a criação mexeria no motor inteiro
+por um efeito sem saldo. Com a **B1272** (lote vazio), a entrada certa em seguida corrige a data. **Reversível.**
+
+**B1276 (NOVA, da Etapa 190; decisão do agente) — corrigir uma validade já gravada fica para a Etapa 191.** Precisa de rota com perfil (o de
+inspeção, como status e liberação), justificativa e auditoria, e de decidir o que fazer com a liberação de vencimento já dada (ela vale contra
+a data). **Descartado:** caber aqui (dobra a etapa e mistura correção com cadastro). **Reversível.**
+
+**B1277 (NOVA, da Etapa 190; decisão do agente) — o recebimento fica como está.** Segunda nota do mesmo lote com outra validade continua
+mantendo a da primeira, calada; lote nascido sem validade pela Entrada e depois recebido com validade continua sem (**C456**). Fixado por
+teste para uma etapa futura mudar de propósito, com a mesma regra de preenchimento (o plano da 191, escrito depois, deixa o recebimento
+de fora — B1296 dele — e o aponta para a 192; esta frase dizia "a 191" até o fechamento). **Descartado:** mexer no recebimento nesta etapa (porta de saldo
+com trava e conferência próprias). **Reversível.** `267d668e`.
+
+**B1278 (NOVA, da Etapa 190; decisão do agente) — fora: "Controle de validade" obrigatório e data de fabricação na Entrada.** A opção do
+material continua só de cadastro (ligar não obriga validade); a fabricação não decide nada no sistema. **Reversível.**
+
+**B1279 (NOVA, da Etapa 190; decisão do agente) — os lotes antigos sem validade não são corrigidos pelo sistema.** A **A110** mostra quantos
+são; o caminho é uma nova Entrada do lote com a validade (**B1273**) ou a correção da 191. **Descartado:** uma migração que "adivinhe" a
+validade. **Reversível.**
+
+**B1280 (NOVA, da Etapa 190, revisão adversarial; decisão do agente) — ano fora de 2000–2100 é recusado.** *0202-03-31* (o "2027" digitado
+errado), *0000-01-01* e *9999-12-31* passavam: o lote nascia com a data e ficava preso (a entrada seguinte com a data certa dava a recusa da
+**B1272**, e não há correção até a 191). Agora: *"A validade do lote deve ter o ano entre 2000 e 2100 — confira a data digitada (ex.:
+2027-03-31)."*, na mesma conferência do formato, antes de qualquer efeito (nenhum lote criado). Bordas 2000-01-01 e 2100-12-31 aceitas.
+**Descartado:** aceitar qualquer ano (o caso real é erro de digitação); avisar sem recusar (a data errada ficaria gravada, sem volta).
+**Reversível** (uma linha). `4fcdcb27`.
+
+**B1281 (NOVA, da Etapa 190, revisão adversarial; decisão do agente) — o aviso de vencido diz a verdade sobre a liberação.** O aviso dizia
+*"A saída para consumo fica bloqueada até liberar o vencimento"* mesmo quando o lote **já** tinha o vencimento liberado (medido: entrada
+vencida, liberar, nova entrada com a mesma data → o aviso; a saída seguinte passava). Agora, com liberação: *"O lote ⟨L⟩ entrou já vencido
+(validade DD/MM/AAAA); o vencimento já foi liberado para consumo."* Na troca de data do lote vazio a liberação é zerada, então ali o aviso
+é sempre o de bloqueio. **Descartado:** não avisar o lote liberado (o lote continua vencido — a liberação não "desvence"). **Reversível.**
+`4fcdcb27`.
+
+**B1282 (NOVA, da Etapa 190, revisão adversarial; decisão do agente) — a entrada num lote vencido com o campo em branco não avisa.** O aviso
+responde à data **digitada**. O mesmo motor recebe as entradas internas (devolução, estorno de requisição, nota); um aviso novo para toda
+entrada em lote vencido vazaria para respostas que não o esperam e mudaria o que essas telas mostram. Quem lança num lote vencido vê o lote
+como *(vencido)* na saída e na tela de Lotes e Séries (**C457**). **Descartado:** avisar toda entrada em lote vencido (alcance maior que a
+etapa). **Reversível** (uma condição no motor, limitada à rota da Entrada se for o caso).
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -16836,6 +16972,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      de recebimento** (campo de validade do item) tem validade. Reproduzido: entrada pela integração com validade 01/01/2026 → lote gravado
      sem validade, e a saída desse lote em outubro de 2026 aceita. **O que fazer:** material com validade entra pela nota de recebimento; um
      lote já criado pela entrada manual fica sem validade até a correção (candidata à etapa seguinte à 189 — **D (188)**).
+     **✅ RESOLVIDO NA ETAPA 190** (`ed1e6566`, `267d668e`, `e1a24cc3`, `1136652b`, fix-round `4fcdcb27`; o defeito existia desde `65d78fd8`,
+     Etapa 6): a Entrada tem o campo **Validade do lote**; o lote novo nasce com ela, o lote sem validade é preenchido (com aviso), o lote com
+     outra validade recusa e o lote vazio troca a data. **Não** foi resolvido: (1) os lotes **já** criados sem validade — a **A110** mostra
+     quantos; a próxima entrada do lote com a data os preenche (**B1279**); (2) o recebimento num lote que já existe continua sem preencher
+     (**B1277**, **C456**); (3) corrigir uma validade já gravada num lote vivo — Etapa 191 (**C455**).
 451. **NOVO (da Etapa 188) — quem pega da dica e deixa o "Sai de" no automático faz o sistema baixar de outro endereço; com lote, deixa uma
      linha "sem lote" negativa.** A dica da Fila de separação (*"Pegar em …"*) é só orientação: a janela de separação continua abrindo em
      *"Qualquer endereço (automático)"*. Separado no automático, a entrega de um clique baixa pela regra do motor — a localização padrão,
@@ -16869,6 +17010,20 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      pessoa mudou) e as quantidades da janela de separação voltam ao valor inicial (medido: digitado 3, depois de voltar à aba, 5). A
      escolha do **Sai de** não se perde (desde a 189). A janela de entrega usa o mesmo recarregamento (não medido). **O que fazer:** antes
      de **Confirmar Separação**, conferir a quantidade de cada item se saiu da tela no meio.
+455. **NOVO (da Etapa 190) — validade digitada errada num lote com saldo não tem volta até a Etapa 191.** A Entrada preenche a validade de um
+     lote que não tinha e recusa outra data num lote que já tem (*"O lote ⟨L⟩ já tem validade DD/MM/AAAA. … Se a validade gravada está
+     errada, peça a correção do lote."*). Só o lote **vazio** (sem movimento vivo, sem saldo, sem série presente) aceita a troca. Um "2025" no
+     lugar de "2027" num lote com saldo vence o saldo antigo na hora: a saída para consumo passa a ser recusada. Ano fora de 2000–2100 já é
+     recusado (**B1280**). **O que fazer:** conferir a data antes de confirmar; se gravou errado e o lote ficou vencido por engano, **Liberar
+     vencimento** em **Lotes e Séries** (perfil de inspeção) até a correção da 191.
+456. **NOVO (da Etapa 190; o comportamento é anterior, desde a Etapa 6) — o recebimento não preenche a validade de um lote que já existe.**
+     Lote criado pela Entrada sem validade e depois recebido numa nota com validade continua sem; segunda nota do mesmo lote com outra
+     validade fica com a da primeira, sem aviso (**B1277**). **O que fazer:** para preencher, uma Entrada manual do lote com a data (quando
+     chegar mais), ou, depois da Etapa 191, **Corrigir validade** em **Lotes e Séries**. A mudança do recebimento **não** está na 191 (o
+     plano dela a deixa de fora, B1296) — candidata à Etapa 192.
+457. **NOVO (da Etapa 190) — a entrada num lote vencido sem digitar a validade não avisa.** O aviso de vencido sai só quando a data é
+     digitada (**B1282**). Com o campo em branco, a entrada é registrada calada num lote cuja saída para consumo está barrada. **O que fazer:**
+     o seletor de lote da **Saída** e a tela **Lotes e Séries** mostram o lote como *(vencido)*; para consumi-lo, **Liberar vencimento**.
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -18220,6 +18375,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(190) A validade do lote na Entrada manual, o que ficou de fora.** (1) **Corrigir** uma validade já gravada num lote vivo — rota com perfil
+  e auditoria, e o que fazer com a liberação de vencimento já dada: Etapa 191 (**B1276**, **C455**). (2) O **recebimento** continua sem
+  preencher nem conferir a validade de um lote existente (**B1277**, **C456**) — fora também da 191 (o plano dela o declara, B1296);
+  candidato à Etapa 192. (3) Os lotes antigos sem validade (**A110**,
+  **B1279**). (4) **Controle de validade** obrigatório por material e a **data de fabricação** na Entrada (**B1278**). (5) Entrada sem data
+  num lote vencido não avisa (**B1282**, **C457**). (6) A movimentação antiga (v1) ignora o campo (**B1270**). (7) Um lote órfão (criado por
+  entrada recusada depois) continua nascendo, agora com a validade (**B1275**).
 - **(189) A pré-seleção do "Sai de" e a lista de coleta, o que ficou de fora.** (1) Item já separado **no automático** continua saindo no
   automático na entrega — o endereço de onde foi pego não está gravado (**B1264**). (2) Separar em duas vezes de endereços diferentes sem
   entregar no meio troca a origem (**C453**, **B1262**). (3) Duas janelas abertas ao mesmo tempo recebem o mesmo endereço; a segunda é
@@ -19483,6 +19645,23 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(190) Nenhum clique foi dado no navegador.** O que os testes provam: o servidor pela rota real (a validade chegando ao lote novo — sem
+a declaração na rota ela some, provado por controle; as recusas de formato, ano, "só entrada", "sem lote" e "outra validade" sem efeito
+nenhum; o preenchimento com aviso e auditoria; a troca do lote vazio pelas três pernas; o aviso de vencido com e sem liberação; a falha e a
+corrida da gravação sem derrubar a entrada; o estorno que não desfaz a validade; o recebimento intacto) e, por portas que não mudaram, o
+FEFO da lista de lotes, o e-mail *Lote vencendo*, a saída vencida recusada e liberada, e a dica da Fila de separação mudando de lote; a tela
+em jsdom com o servidor de mentira (o campo aparece só com Entrada e lote, some e zera ao apagar o lote ou trocar de tipo, a data no envio
+só quando digitada, o aviso persistente, a recusa com o formulário aberto). **Não verificado à mão:** o roteiro clicável da seção da Etapa
+190 (cenários 1 a 8), em especial o campo de data do navegador (o calendário, a digitação do ano com 4 dígitos) e o aviso amarelo que não
+fecha sozinho. Vale 10 minutos.
+**(190) As suítes completas NÃO foram rodadas depois da revisão adversarial.** A última rodada completa, toda verde, foi sobre `9555ed29`
+(antes do fix-round): servidor 538/538 arquivos, serviço do almoxarifado 44/0, validação 4/0, `safealter` 3/0, `sqlite` 16/0, tela 187
+suítes / 2539 testes, build sem aviso. Depois do fix-round (`4fcdcb27`, que mexe no motor de estoque e no serviço de lotes) e no
+fechamento rodaram só os arquivos da etapa e vizinhos, um por vez: `validadeLoteEntradaManual` 26/26, `validadeLoteEntradaManualIntegracao`
+5/5, `filaSugestaoColetaIntegracao` 6/6 e, na tela, as 7 suítes de Movimentações (110/110). O fix-round rodou ainda `loteVencimentoLiberacao`
+8/8, `loteGuardasSaida` 39/39, `lotes` 8/8 e `validadesNoDiaLocal` 10/10. O desenvolvimento foi pausado com a máquina liberada para outro
+uso — **rode as suítes completas antes do próximo deploy ou da retomada.**
 
 **(189) Nenhum clique foi dado no navegador.** O que os testes provam: o servidor pela rota real (a rota da sugestão igual à fila, campo a
 campo; separar do par sugerido e entregar de um clique baixa do par, sem linha sem lote e sem troca; o controle no automático com −5 sem
@@ -36821,9 +37000,114 @@ para sugerir (o saldo está sem endereço, em endereço bloqueado ou inativo, em
 - As quantidades digitadas na janela voltam ao inicial se ela recarregar ao voltar para a aba (**C454**, anterior).
 - **Nada a rodar antes do deploy.**
 
+## Etapa 190 — A Entrada manual grava a validade do lote (2026-10-23)
+
+Quando alguém achava uma caixa de cola sem nota e a regularizava em **Movimentações → Entrada**, o lote nascia **sem validade** — a tela
+não tinha o campo e, se a data chegasse ao servidor por outro caminho, ele respondia "ok" e a jogava fora. Lote sem validade é tratado como
+"nunca vence": vai para o fim da fila do *primeiro que vence sai primeiro*, nunca dispara o e-mail *Lote vencendo* e nunca é barrado como
+vencido — a cola vencida saía para a produção sem ninguém perceber (**C450**, desde a Etapa 6). Agora a Entrada tem o campo **Validade do
+lote**, e a data vai para o lote. Se o lote já existe sem validade, a entrada a preenche (e avisa que vale para o que já estava lá); se ele já
+tem **outra** validade, a entrada é recusada, porque a validade é do lote, não de cada entrada. É a caixa de leite: antes, quem guardava na
+geladeira arrancava a etiqueta da data; agora a etiqueta fica, e se a caixa que já estava lá não tinha etiqueta, a de agora cola nas duas.
+**Opcional antes do deploy:** a **A110** mostra quantos lotes nasceram sem validade por este caminho. Decisões do agente: **B1270** a
+**B1282**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A Entrada não tinha campo de validade | Com o **Lote** preenchido, aparece **Validade do lote** (data, opcional), com *"Opcional. Se o lote já existe com validade, deixe em branco."* |
+| A validade enviada ao servidor era descartada em silêncio (201, lote sem validade) | O lote novo nasce com a validade; a auditoria da criação do lote registra a data |
+| Lote existente sem validade continuava sem | A entrada com data **preenche** a validade do lote e avisa: *"O lote ⟨L⟩ não tinha validade; ela foi gravada agora (DD/MM/AAAA) e vale também para o saldo que já estava nele."* (**B1273**) |
+| — | Lote com **outra** validade: recusa com a data gravada (**B1272**) |
+| — | Lote **vazio** (só existe por uma entrada recusada ou estornada) com outra validade: a entrada **troca** a data e avisa (**B1272**, complemento) |
+| — | Validade no passado é aceita, com aviso de que a saída para consumo fica bloqueada — ou, se o vencimento já foi liberado, dizendo isso (**B1271**, **B1281**) |
+| — | Data em formato errado, ano fora de 2000–2100, validade numa saída/transferência/ajuste ou sem lote: recusa antes de qualquer efeito (**B1270**, **B1280**) |
+| Lote sem validade ficava no fim do FEFO, fora do e-mail *Lote vencendo* e nunca vencido | Com a validade gravada, o lote entra em todas essas regras sem mudança nelas: a lista de lotes da Saída, a dica da Fila de separação, o e-mail e a recusa de saída vencida |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado** (ou Almoxarife — precisa poder movimentar). Uma posição comum *A-01*. Um material
+*COLA-190* (nome *Cola 190*), unidade *UN*, com **Controle por lote** ligado. Tudo em **Movimentações → Nova Movimentação**, tipo
+**Entrada**, material *COLA-190*, destino *A-01*, botão **Confirmar Movimentação**. Datas de exemplo: troque "ontem" pela data de ontem.
+
+**1. O campo aparece com o lote.** Com o **Lote** vazio, não há campo de validade. Digite *L-190A* no **Lote**: aparece **Validade do
+lote** e embaixo *"Opcional. Se o lote já existe com validade, deixe em branco."* Apague o lote: o campo some (e a data digitada é
+descartada). Troque o tipo para **Saída**: não há campo de validade.
+
+**2. Lote novo com validade.** Quantidade 10, Lote *L-190A*, Validade *31/03/2027* → *"Movimentação registrada!"*, sem aviso. Em **Lotes e
+Séries**, *L-190A* com validade 31/03/2027. Numa **Saída** da *COLA-190*, o seletor mostra *"L-190A — saldo 10 — vence 2027-03-31"*.
+
+**3. A mesma validade passa calada; outra é recusada.** Entrada de 2 em *L-190A* com *31/03/2027* → registrada, sem aviso. Entrada de 2 em
+*L-190A* com *30/04/2027* → recusa, o formulário continua aberto com tudo digitado:
+*"O lote L-190A já tem validade 31/03/2027. A validade é do lote, não da entrada: deixe o campo em branco ou informe a mesma data. Se a
+validade gravada está errada, peça a correção do lote."* Deixando a validade em branco, a entrada passa e o lote continua com 31/03/2027.
+
+**4. Lote sem validade é preenchido.** Entrada de 6 com Lote *L-190B* **sem** validade. Depois, entrada de 4 em *L-190B* com *31/01/2027* →
+registrada, e um aviso que não fecha sozinho: *"O lote L-190B não tinha validade; ela foi gravada agora (31/01/2027) e vale também para o
+saldo que já estava nele."* Em **Lotes e Séries**, *L-190B* com 10 e validade 31/01/2027.
+
+**5. Entrou vencido.** Entrada de 2 com Lote *L-190C* e validade de **ontem** → registrada, com o aviso *"O lote L-190C entrou já vencido
+(validade DD/MM/AAAA). A saída para consumo fica bloqueada até liberar o vencimento na tela de Lotes e Séries."* Numa **Saída** da
+*COLA-190*, o seletor mostra *"L-190C — saldo 2 — vence AAAA-MM-DD (vencido)"* desabilitado; pelo servidor, a saída é recusada com a frase de
+sempre, *"Lote L-190C vencido em AAAA-MM-DD nao pode sair para consumo. Libere o vencimento do lote
+(PUT /api/almoxarifado/lotes/:id/liberar-vencimento) com justificativa, ou baixe por SUCATA/PERDA ou corrija por AJUSTE."* (a data ali sai em
+AAAA-MM-DD). Validade de **hoje** não é passado: entra sem aviso. Lote sem validade preenchido com data de ontem mostra os dois avisos, o de
+preenchido primeiro.
+
+**6. Vencido e já liberado.** Em **Lotes e Séries**, **Liberar vencimento** de *L-190C* com uma justificativa. Nova entrada de 1 em *L-190C*
+com a mesma data de ontem → aviso *"O lote L-190C entrou já vencido (validade DD/MM/AAAA); o vencimento já foi liberado para consumo."* — e,
+na **Saída**, o seletor mostra *L-190C* com *"(vencido, liberado)"*, selecionável, e a saída passa. (Com o campo em branco, a entrada num
+lote vencido não avisa — **B1282**.)
+
+**7. Data digitada errada.** Lote *L-190D* com a validade *31/03/0202* (o "2027" virou "0202"): recusa
+*"A validade do lote deve ter o ano entre 2000 e 2100 — confira a data digitada (ex.: 2027-03-31)."* — nenhum lote criado, nada
+lançado; corrija o ano e confirme. (Pelo servidor, uma data fora de AAAA-MM-DD ou que não existe, como 30/02, dá *"A validade do lote deve
+ser uma data no formato AAAA-MM-DD (ex.: 2027-03-31)."* — pela tela o campo de data não deixa digitar assim.)
+
+**8. O lote vazio troca de data.** Entrada de 2 com Lote *L-190E* e validade *31/03/2027*. Um gestor estorna essa entrada (no livro de
+Movimentações, o ícone de estorno da linha — perfil que pode ajustar estoque) — o lote fica vazio. Nova entrada de 2 em *L-190E* com *31/08/2027* → registrada, com *"O lote L-190E estava
+vazio com a validade 31/03/2027; ela foi trocada por 31/08/2027."* (Se o lote tivesse **qualquer** movimento vivo — mesmo uma entrada já
+toda consumida —, seria a recusa do cenário 3.)
+
+**Pelo servidor, sem a tela** (integração ou chamada direta a `POST /movimentacoes/v2` e `/transferencias`): validade numa Saída,
+Transferência ou Ajuste → *"A validade do lote só pode ser informada numa entrada — numa saída, transferência ou ajuste o lote já existe e a
+validade é a dele."*; Entrada com validade e sem lote → *"Informe o lote para gravar a validade — a validade é do lote."* Raros (a entrada
+vale, a validade não): se a gravação da validade falhar depois de a entrada ser registrada, *"A entrada foi registrada, mas a validade do lote
+⟨L⟩ não pôde ser gravada (DD/MM/AAAA). Não repita a entrada; peça a correção da validade do lote."*; se outra operação gravar a validade no
+meio, *"A validade do lote ⟨L⟩ foi gravada por outra operação (DD/MM/AAAA) enquanto esta entrada era registrada; a entrada valeu e a
+validade do lote não foi alterada."*
+
+### O que esta etapa NÃO cobre
+
+- **Corrigir uma validade já gravada** num lote com saldo ou com história — não há tela nem rota; é a Etapa 191 (**B1276**). Até lá, uma
+  data errada num lote vivo fica (paliativo para vencida por engano: **Liberar vencimento**) — **C455**.
+- **O recebimento** continua como estava: lote criado pela Entrada sem validade e depois recebido com validade continua sem; segunda nota do
+  mesmo lote com outra validade fica com a da primeira, calada (**B1277**, **C456**).
+- Os lotes **antigos** sem validade não são corrigidos pelo sistema (**B1279**, **A110**): o caminho é uma nova Entrada do lote com a data.
+- **Controle de validade** obrigatório por material e a **data de fabricação** na Entrada (**B1278**).
+- A entrada num lote vencido **sem** digitar a validade não avisa (**B1282**, **C457**).
+- A movimentação antiga (v1) continua ignorando o campo (não carrega lote — **B1270**).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Desenvolvimento PAUSADO em 2026-10-23 — para retomar, leia docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md**
+
+- **Etapa 190 entregue (2026-10-23):** **a Entrada manual grava a validade do lote** (**C450** resolvido). O campo **Validade do lote** na
+  Entrada; o servidor julga a data no motor (formato, ano 2000–2100, só em entrada com lote — **B1270**, **B1280**), grava no lote novo,
+  preenche o lote sem validade com aviso (**B1273**), recusa a outra validade de um lote vivo (**B1272**) e troca a de um lote vazio
+  (complemento da **B1272**); vencida é aceita com aviso (**B1271**, **B1281**); a gravação depois do livro nunca derruba a entrada
+  (complemento da **B1274**). A revisão adversarial achou o aviso de "saída bloqueada" num lote já liberado, as datas absurdas que
+  prendiam o lote e dois testes que não sabiam falhar (o "lote vazio" por saldo e por série; a validade gravada com hora) — corrigidos, com
+  controles. Commits `bfb7d9a1` (plano), `a4358a4d` (Fase 2), `ed1e6566` (T1), `267d668e` e `1136652b` (T2), `e1a24cc3` (T3), `9555ed29`
+  (T4), `fa14e949` (plano), a revisão adversarial `4fcdcb27` e `dbbdb8de`, e o fechamento. **O que é seu:** a **A110** (opcional); as
+  decisões **B1270** a **B1282** (reversíveis); os avisos **C455** a **C457**; as limitações **(190)** em D e a verificação **(190)** em F.
+  **Próxima: Etapa 191 — corrigir a validade de um lote que já tem saldo** (rota com perfil `inspecionar`, justificativa, auditoria, a
+  liberação de vencimento anulada quando a data muda). **Só o plano existe** (`c0cce170`,
+  `docs/superpowers/plans/2026-10-23-almoxarifado-etapa191-corrigir-validade-de-lote.md`); a **Fase 2 não foi feita** e não há código. O
+  **recebimento** ficou **fora** da 191 (o plano dela o declara, B1296) — candidato à Etapa 192.
 
 - **Etapa 189 entregue (2026-10-23):** **a janela de separação já abre no endereço sugerido, e a fila imprime a lista de coleta.** A janela
   busca a dica numa rota só de leitura (**B1260**) e escolhe no **Sai de** o endereço e o lote sugeridos quando cobrem (**B1261**), nunca

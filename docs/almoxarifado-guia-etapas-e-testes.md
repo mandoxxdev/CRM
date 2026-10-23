@@ -1,19 +1,33 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-23 (Etapas 172 a 189) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-23 (Etapas 172 a 190) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188 e 189) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189 e 190) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-23 (Etapas 172 a 178 e 180 a 189 ENTREGUES · próxima: fechar a Etapa 190)
+> ## Onde o desenvolvimento está — 2026-10-23 (Etapas 172 a 178 e 180 a 190 ENTREGUES · PAUSADO · próxima: Fase 2 da Etapa 191)
 >
-> **O desenvolvimento parou aqui: Etapa 189 fechada — 2026-10-23.** **A janela de separação já abre no endereço sugerido, e a fila
+> **O desenvolvimento parou aqui: Etapa 190 fechada — 2026-10-23.** **A Entrada manual grava a validade do lote**: em **Movimentações →
+> Entrada**, com o Lote preenchido, aparece **Validade do lote** (opcional). O lote novo nasce com ela; o lote sem validade é preenchido
+> (com aviso); o lote com outra validade recusa, dizendo a data gravada; o lote vazio troca a data; data passada é aceita com aviso; ano fora
+> de 2000–2100 é recusado. **Opcional antes do deploy: A110** (os lotes que nasceram sem validade pela Entrada).
+>
+> **Desenvolvimento PAUSADO em 2026-10-23 — para retomar, leia docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md**
+>
+> **Onde parou, exatamente:** a **190 está fechada** (código, testes e documentos commitados). A **Etapa 191** (corrigir a validade de um
+> lote que já tem saldo — botão **Corrigir validade** em **Lotes e Séries**, com perfil de inspeção, justificativa e auditoria) tem **só o
+> plano** escrito e commitado (`c0cce170`, `docs/superpowers/plans/2026-10-23-almoxarifado-etapa191-corrigir-validade-de-lote.md`); a
+> **Fase 2 (revisão do plano) NÃO foi feita** e não há código. O **Recebimento** preencher o lote existente ficou **fora** da 191 (candidato
+> à 192). **As suítes completas não foram rodadas depois da revisão adversarial da 190** (só os arquivos da etapa — ver a letra F das
+> novidades): rode-as antes do próximo deploy.
+>
+> **Etapa 189, 2026-10-23.** **A janela de separação já abre no endereço sugerido, e a fila
 > imprime a lista de coleta**: ao **Iniciar Separação**, o **Sai de** de cada item ainda não separado já vem no endereço e lote que a **Fila
 > de separação** sugere (quando cobrem a quantidade), com *"Sugerido pela fila de separação. Se pegou de outro endereço, troque aqui."* —
 > separar dali e entregar baixa daquele endereço e lote, sem linha *sem lote* negativa. A fila diz *"— já vem escolhido no 'Sai de' ao
 > separar"* e imprime a lista de coleta (**Imprimir lista de coleta** e **Imprimir lista de coleta (todas)**). Nada a rodar antes do deploy.
 > **Próxima: fechar a Etapa 190** (a Entrada manual grava a validade do lote — executada, falta a revisão adversarial) e depois a **191**
-> (corrigir a validade de um lote).
+> (corrigir a validade de um lote). *(Feita: a 190.)*
 >
 > **Etapa 188, 2026-10-23.** **A fila de separação diz de onde pegar cada item e em que ordem
 > andar**: em **Almoxarifado → Fila de separação**, cada item que dá para separar ganha *"Pegar em ⟨endereço⟩ (⟨caminho⟩) — lote ⟨L⟩ (vence
@@ -6956,6 +6970,63 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 190 — A Entrada manual grava a validade do lote (ENTREGUE — 2026-10-23)
+
+**O que mudou, em uma frase:** em **Movimentações → Entrada**, com o Lote preenchido, aparece o campo **Validade do lote**, e a data vai
+para o lote.
+
+**O problema que ela resolve.** Quem regularizava uma caixa de cola sem nota pela Entrada criava um lote **sem validade** — e lote sem
+validade "nunca vence": vai para o fim da fila do *primeiro que vence sai primeiro*, não dispara o e-mail *Lote vencendo* e nunca é barrado
+como vencido. A cola vencida saía para a produção sem ninguém perceber. É a caixa de leite: antes a etiqueta da data era arrancada na hora de
+guardar; agora ela fica — e se a caixa que já estava na geladeira não tinha etiqueta, a de agora cola nas duas.
+
+| Antes | Agora |
+|---|---|
+| A Entrada não tinha campo de validade; o lote novo nascia sem | **Validade do lote** (opcional) com *"Opcional. Se o lote já existe com validade, deixe em branco."*; o lote nasce com a data |
+| Lote existente sem validade continuava sem | A entrada com data preenche e avisa *"O lote ⟨L⟩ não tinha validade; ela foi gravada agora (DD/MM/AAAA) e vale também para o saldo que já estava nele."* |
+| — | Lote com **outra** validade: recusa, dizendo a data gravada |
+| — | Lote **vazio** (entrada recusada ou estornada): a entrada troca a data e avisa |
+| — | Validade no passado: aceita, com aviso (de bloqueio da saída, ou de que o vencimento já foi liberado) |
+| — | Ano fora de 2000–2100: recusa *"A validade do lote deve ter o ano entre 2000 e 2100 — confira a data digitada (ex.: 2027-03-31)."* |
+
+**Antes de testar (uma vez).** Um usuário **Administrador do almoxarifado** (precisa poder movimentar; o passo 7 precisa de quem ajusta
+estoque, e o 5 de quem libera vencimento). Uma posição *A-01*. Um material *COLA-190* (nome *Cola 190*), unidade *UN*, com **Controle por
+lote** ligado. Onde o roteiro diz "ontem", use a data de ontem.
+
+**Roteiro de teste (10 minutos).** Tudo em **Movimentações → Nova Movimentação**, tipo **Entrada**, material *COLA-190*, destino *A-01*,
+botão **Confirmar Movimentação**.
+
+1. **Entrada com validade.** Com o **Lote** vazio, não há campo de validade. Digite *L-190A*: aparece **Validade do lote**. Quantidade 10,
+   validade *31/03/2027*, confirme → *"Movimentação registrada!"*, sem aviso. Em **Lotes e Séries**, *L-190A* com 31/03/2027. Numa **Saída**
+   da *COLA-190*, o seletor de lote mostra *"L-190A — saldo 10 — vence 2027-03-31"*. Apague o lote numa Entrada nova: o campo de validade
+   some.
+2. **Outra validade no mesmo lote → recusa.** Entrada de 2 em *L-190A* com *30/04/2027* → *"O lote L-190A já tem validade 31/03/2027. A
+   validade é do lote, não da entrada: deixe o campo em branco ou informe a mesma data. Se a validade gravada está errada, peça a correção do
+   lote."* O formulário continua aberto. Com *31/03/2027* (ou em branco), a entrada passa sem aviso.
+3. **Lote sem validade é preenchido.** Entrada de 6 em *L-190B* **sem** validade; depois, entrada de 4 em *L-190B* com *31/01/2027* → aviso
+   amarelo que não fecha sozinho: *"O lote L-190B não tinha validade; ela foi gravada agora (31/01/2027) e vale também para o saldo que já
+   estava nele."*
+4. **Entrada com data passada.** Entrada de 2 em *L-190C* com a data de **ontem** → *"O lote L-190C entrou já vencido (validade DD/MM/AAAA). A
+   saída para consumo fica bloqueada até liberar o vencimento na tela de Lotes e Séries."* Na **Saída**, *L-190C* aparece *(vencido)* e não
+   dá para escolher.
+5. **Vencido e liberado.** Em **Lotes e Séries**, **Liberar vencimento** de *L-190C* com justificativa. Entrada de 1 em *L-190C* com a mesma
+   data → *"O lote L-190C entrou já vencido (validade DD/MM/AAAA); o vencimento já foi liberado para consumo."* Na **Saída**, *L-190C* aparece
+   *(vencido, liberado)* e sai.
+6. **Ano digitado errado.** Lote *L-190D* com a validade *31/03/0202* → *"A validade do lote deve ter o ano entre 2000 e 2100 — confira a
+   data digitada (ex.: 2027-03-31)."* Nenhum lote criado: corrija para 2027 e confirme.
+7. **Lote vazio → a data é redefinida.** Entrada de 2 em *L-190E* com *31/03/2027*. No livro de Movimentações, estorne essa entrada (ícone de
+   estorno da linha). Entrada de 2 em *L-190E* com *31/08/2027* → *"O lote L-190E estava vazio com a validade 31/03/2027; ela foi trocada por
+   31/08/2027."*
+
+**O que esta etapa não cobre.** Corrigir uma validade já gravada num lote com saldo ou com história: não há tela até a Etapa 191 — confira a
+data antes de confirmar; se um lote ficou vencido por engano, **Liberar vencimento**. O **Recebimento** continua sem preencher a validade de
+um lote que já existe (nem na 191 — candidato à 192). Os lotes antigos sem validade não são corrigidos sozinhos (há uma consulta opcional, **A110**, nas novidades; a
+próxima Entrada do lote com a data os preenche). A entrada num lote vencido **sem** digitar a data não avisa. O "Controle de validade" do
+material continua não obrigando a data. **Opcional antes do deploy: A110.**
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos provam pela rota real e pela tela em jsdom —
+escrito para você conferir à mão.
 
 ## Etapa 189 — A janela de separação já abre no endereço sugerido, e a fila imprime a lista de coleta (ENTREGUE — 2026-10-23)
 
