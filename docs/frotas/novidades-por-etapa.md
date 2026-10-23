@@ -4,8 +4,9 @@
 > Para quem **usa** o sistema (sem número de etapa nem histórico), o documento é o
 > [`manual-do-sistema.md`](manual-do-sistema.md). Guia com roteiro de teste: [`README.md`](README.md).
 >
-> **Onde estamos:** **Etapa 1 (portal do motorista) entregue** em 2026-10-23, na `main` (último commit da etapa: `4ba85d16`).
-> Próxima: **Etapa 2 — dar o perfil Consulta/Motorista pela tela** (plano: ver "Onde estamos e o que vem a seguir", no fim).
+> **Onde estamos:** **Etapa 2 (perfil Consulta/Motorista pela tela) entregue** em 2026-10-23, na `main` (commits `3aa4e088` a `805aaa3c`,
+> mais o fechamento). Etapa 1 (portal do motorista) entregue antes, no mesmo dia.
+> Próxima: **Etapa 3 — km e horímetro confiáveis no portal (A8 + A10)** (B34; detalhe em "Onde estamos e o que vem a seguir", no fim).
 
 ## ⚠️ Leia antes de apresentar
 
@@ -45,6 +46,24 @@ WHERE status = 'em_andamento' AND motorista_id IS NOT NULL GROUP BY motorista_id
   "em andamento" recebe *"Este veículo já está em uso (saída sem retorno)."*. Para arrumar: em **Frota → Viagens**, edite a mais antiga,
   ponha o **KM retorno** e o status **concluida** e salve (mudar para concluída não passa por essa conferência).
 
+**A3 — perfis do Frota gravados à mão (Etapa 2).** Até a Etapa 2 a única saída para dar Consulta era SQL (C2); um valor digitado com a
+caixa errada não vale como perfil nenhum.
+
+```sql
+SELECT p.usuario_id, u.nome, p.perfil, u.admin_modulos, u.is_superadmin, u.role
+FROM perfil_frota_usuario p LEFT JOIN usuarios u ON u.id = p.usuario_id
+WHERE p.perfil NOT IN ('CONSULTA', 'MOTORISTA')
+   OR (p.perfil = 'ADMIN_FROTA' AND COALESCE(u.admin_modulos, '') NOT LIKE '%"frota"%');
+```
+
+- **Nenhuma linha (o esperado):** nada a fazer.
+- **Linha com perfil fora da lista (ex.: `consulta` minúsculo):** essa pessoa hoje não faz nada no Frota e lê só o que é dela (B33). Depois
+  do deploy, em **Frota → Perfis de acesso** a linha dela mostra *"consulta (valor inválido — escolha outro)"*: escolha **Consulta** ou
+  **Motorista (padrão)**.
+- **Linha `ADMIN_FROTA` de quem não administra o módulo:** essa pessoa age como **administradora** do Frota sem estar marcada no cadastro.
+  Se não deve ser, troque em **Frota → Perfis de acesso** (aparece como *"Administrador de Frota (gravado à parte)"*). As linhas de
+  superadmin e de `role` admin podem aparecer aqui e são inofensivas (eles são administradores de qualquer jeito).
+
 ### B — decisões tomadas sem consulta (todas reversíveis). O André arbitra lendo aqui.
 
 | # | Etapa | Escolhido | Descartado | Por quê |
@@ -73,19 +92,26 @@ WHERE status = 'em_andamento' AND motorista_id IS NOT NULL GROUP BY motorista_id
 | B22 | F1 (fechamento) | Na rota antiga do gestor (os 7 itens sim/não), **avaria conta** para a situação: com avaria o registro sai **PENDÊNCIA** e vira alerta. Corrigido em `4ba85d16` | deixar como estava (com os 7 OK e uma avaria, saía OK e sem alerta) | o fix-round da Fase 5 tinha registrado a falha e deixado sem mudar; no fechamento ela foi corrigida, porque contradizia a RN-F1.02 e a planilha (a coluna Avarias é um item "Não conforme"). Hoje a tela antiga não tem campo de avaria, então só chega por API |
 | B23 | F1 (fechamento) | **A8 (km menor que o atual passa calado) ficou fora** da Etapa 1 | incluir na etapa | o mapa do levantamento dizia que A8 entraria na primeira etapa; o plano revisado não o incluiu. Com o km/L agora contado pela **ordem do km** (A1/A2), um km digitado errado não apaga mais o consumo, mas ainda é aceito sem aviso e entra na conta. Fica aberto (ver **C6**) |
 | B24 | F1 (fechamento) | **Próxima etapa = dar o perfil Consulta/Motorista pela tela** | começar por foto da avaria, seção 3 do formulário, horímetro (A10) ou multa no período (A7) | é o que trava o uso real no primeiro dia: hoje todo não-administrador com acesso ao Frota vira Motorista (ver **C2**), então quem só acompanha (financeiro, diretoria) perde o painel. A seção 3 depende de receber a folha inteira; foto e horímetro são melhoria, não bloqueio |
+| B25 | F2 | **Administrador de Frota não se dá pela tela Perfis de acesso** — só pelo cadastro de usuário ("administra o módulo Frota"); a tela mostra o administrador com a etiqueta e sem seletor, e o servidor recusa com 409 | oferecer "Administrador de Frota" no seletor | o cadastro de usuário reescreve essa linha a cada salvar (concede ou apaga); dado por aqui, sumiria sozinho no próximo salvamento. Mesma decisão do almoxarifado |
+| B26 | F2 | **Sem trilha de auditoria** de quem mudou o perfil; fica só a data da última mudança na linha | gravar na trilha do almoxarifado; criar trilha do Frota | o Frota não tem trilha; gravar na do almoxarifado misturaria módulos na tela de auditoria de lá. Criar uma trilha é etapa própria |
+| B27 | F2 | A lista mostra **todos os usuários ativos e não ocultos**, tenham ou não acesso ao módulo Frota | listar só quem tem acesso ao Frota | quem tem acesso ao módulo é decidido por grupos e permissões do cadastro de usuário (régua do portão de módulo); copiá-la aqui duplicaria regra. O perfil sozinho não abre o módulo (ver **D7**) |
+| B28 | F2 | **Consulta vê o mesmo que o gestor** (painel, custos, CPF/CNH dos motoristas, documentos com valor, planilha), sem gravar nada | esconder CPF/CNH e valores do Consulta | é o que "Consulta" quer dizer desde a Etapa 1 (`ver_painel` e `relatorios`); esconder dado pessoal seria um terceiro tipo de escopo. Mudar é uma régua no serviço |
+| B29 | F2 | O seletor oferece só **Motorista (padrão)** e **Consulta**; "Motorista" gravado explicitamente aparece como o padrão | oferecer "Motorista" e "Motorista (padrão)" lado a lado | as duas opções têm o mesmo efeito e confundiriam o gestor; a API ainda aceita `MOTORISTA` |
+| B30 | F2 | Mudar para Consulta quem está **com saída sem retorno** é aceito; a tela **avisa** na linha | recusar a mudança | recusar travaria o gestor justamente quando ele quer tirar o acesso; o aviso diz como resolver (fechar a viagem em Viagens ou voltar o perfil) |
+| B31 | F2 | Ninguém muda **o próprio** perfil por esta tela (409) | permitir | só quem é administrador por uma linha sobrando chega a isso; rebaixar a si mesmo tiraria o acesso à própria tela no ato |
+| B32 | F2 | **C7**: o motorista que abre **Documentos** pelo endereço vê a lista **vazia** | responder "sem permissão" | as outras listas dele já vêm só com o que é dele (ou vazias sem vínculo); "sem permissão" apareceria como erro na tela |
+| B33 | F2 (Fase 5) | Perfil gravado com valor **fora da lista** (ex.: `consulta` minúsculo, por SQL) lê como Motorista (só o que é dele) | tratar a caixa (`consulta` = `CONSULTA`) | tratar a caixa mudaria quem **ganha permissão**; ler como Motorista só fecha o que ele via sem poder. A tela mostra o valor como inválido e o gestor corrige com um clique |
+| B34 | F2 (fechamento) | **Próxima etapa = km e horímetro confiáveis no portal (A8 + A10)** | foto da avaria/cupom; multas no período (A7); seção 3 do formulário | com o portal no ar, km digitado errado entra calado na conta do consumo (A8) e numa máquina por horímetro o número vai para o km (A10) — estraga o dado desde o primeiro dia. Foto exige anexo, que o módulo não tem; a seção 3 depende da folha inteira; A7 é relatório |
 
 ### C — furos conhecidos em operação
 
 - **C1 — "uma viagem em andamento por veículo" vale para um servidor só.** A regra é garantida por uma fila em memória (B13). Com o
   sistema rodando em **um** processo (como hoje), duas saídas simultâneas do mesmo carro não passam. Se um dia o servidor rodar em
   vários processos ao mesmo tempo, duas saídas no mesmo segundo podem abrir duas viagens. Mesma premissa da trava do almoxarifado.
-- **C2 — ninguém recebe o perfil Consulta ou Motorista pela tela.** A tela de usuários só sabe tornar alguém **Administrador de Frota**.
-  Todo mundo que tem acesso ao módulo Frota e não é administrador **vira Motorista automaticamente**. Consequência no primeiro dia:
-  uma pessoa do escritório que só acompanha a frota (e não é administradora) abre **Frota**, é levada para **Meu painel** e vê
-  *"Seu usuário não está ligado a um motorista. Peça ao gestor da frota para fazer o vínculo."* — sem painel, sem relatório. Saídas
-  até a Etapa 2: (a) torná-la administradora do módulo Frota na tela de usuários (ela passa a poder **tudo**, inclusive excluir); ou
-  (b) gravar o perfil direto no banco: `INSERT OR REPLACE INTO perfil_frota_usuario (usuario_id, perfil) VALUES (<id do usuário>, 'CONSULTA');`
-  (ela passa a ver painel e relatório, sem lançar nada). É a Etapa 2.
+- **C2 — ninguém recebia o perfil Consulta ou Motorista pela tela (resolvido na Etapa 2).** Até a Etapa 2, todo mundo com acesso
+  ao Frota que não era administrador virava Motorista, e quem só acompanha a frota perdia o painel. Agora o gestor dá o perfil em
+  **Frota → Perfis de acesso**. O conselho antigo de gravar o perfil direto no banco **não vale mais** — e um valor digitado com a caixa
+  errada não vale como perfil (ver **A3**).
 - **C3 — a seção 3 do formulário de papel ("Transmissão e itens específicos") não existe no sistema.** A imagem recebida está cortada
   no título dessa seção. O motorista que precisar registrar algo dela usa **Observações**.
 - **C4 — viagem esquecida aberta trava o carro.** Se o motorista não registra o **Retorno**, o carro some da lista da **Saída** de todos
@@ -97,10 +123,21 @@ WHERE status = 'em_andamento' AND motorista_id IS NOT NULL GROUP BY motorista_id
 - **C6 — km menor que o atual ainda passa calado (A8, aberto).** No abastecimento e no registro, digitar 900 com o carro em 1.800 é
   aceito sem aviso. O carro mantém o maior km; o lançamento fica com o menor e entra no cálculo do km/L pela ordem do km (o consumo
   dele e o do vizinho saem distorcidos).
-- **C7 — o motorista ainda lê a lista de Documentos se digitar o endereço.** O menu dele não mostra **Documentos**, mas quem abrir
-  `/frota/documentos` à mão vê os documentos de todos os veículos, com valor. Veículos também são legíveis (sem dado pessoal). As
-  outras listas (abastecimentos, viagens, checklists, multas, manutenções, motoristas) só trazem o que é dele.
+- **C7 — o motorista lia a lista de Documentos se digitasse o endereço (resolvido na Etapa 2).** Abrindo `/frota/documentos` à
+  mão, ele via os documentos de todos os veículos, com valor. Agora a lista dele vem vazia (B32). Veículos continuam legíveis (sem dado
+  pessoal); as outras listas só trazem o que é dele.
 - **C8 — avisos com gênero trocado (corrigido no fechamento).** O portal mostrava *"Retorno registrada"*; agora mostra *"Retorno registrado"* (*"Saída registrada"* e *"Inspeção registrada"* não mudam).
+- **C9 — dar e tirar o "administra o módulo Frota" apaga o Consulta.** Se alguém está como **Consulta** e o administrador marca, no
+  cadastro de usuário, que ele administra o módulo Frota, ele vira administrador; ao desmarcar depois, ele **volta ao padrão
+  (Motorista)**, não ao Consulta. Depois de tirar o administrador, confira em **Frota → Perfis de acesso** e dê o Consulta de novo.
+- **C10 — superadmin com Consulta gravado de antes.** Um superadmin é administrador em tudo, então a tela não deixa mudar o perfil dele
+  (409). Se um dia havia um Consulta gravado para ele, essa linha fica lá: quando ele deixar de ser superadmin, volta a ser Consulta, não
+  Motorista.
+- **C11 — quem teve o perfil mudado vê o menu novo ao recarregar a página ou ao abrir o painel.** O servidor aplica o perfil novo no
+  **próximo pedido** (sem sair e entrar de novo). O menu e os botões que ela vê se acertam quando ela **recarrega a página** (F5), ou
+  sozinhos quando ela abre **Frota** (o **Dashboard Frota** e o **Meu painel** percebem a mudança e renovam a tela — Fase5-2). Numa outra
+  tela do Frota que já estava aberta, até lá, um botão que ela não pode mais usar responde *"Sem permissão para esta operação"*.
+- **C12 — usuário oculto não aparece em Perfis de acesso.** A lista esconde os usuários marcados como ocultos (como no almoxarifado).
 
 ### D — limitações declaradas (cortes de escopo)
 
@@ -114,6 +151,9 @@ WHERE status = 'em_andamento' AND motorista_id IS NOT NULL GROUP BY motorista_id
 - **D5 — sem apelido V01/C01** (B7): o veículo é identificado pela placa.
 - **D6 — o motorista não corrige nem apaga o que lançou pelo portal.** "Meus registros" é só leitura; correção é com o gestor, nas telas
   de cadastro.
+- **D7 — dar um perfil não dá acesso ao módulo.** Perfis de acesso lista todos os usuários ativos (B27). Dar **Consulta** a quem não tem o
+  módulo **Frota** no cadastro de usuário não abre nada: o acesso ao módulo continua sendo dado lá.
+- **D8 — sem registro de quem mudou o perfil** (B26): só a data da última mudança fica guardada.
 
 ### E — verificações não executadas e regras não confirmadas
 
@@ -122,7 +162,20 @@ WHERE status = 'em_andamento' AND motorista_id IS NOT NULL GROUP BY motorista_id
 - **E2 — o teste manual no navegador não foi feito por quem escreveu este fechamento.** O roteiro do guia
   ([`README.md`](README.md#roteiro-de-teste-manual-portal-do-motorista)) foi escrito lendo o código e as mensagens literais; ninguém o
   percorreu clicando. Faça antes de apresentar.
-- **E3 — verificação final, rodada em 2026-10-23 na ponta da etapa:** `npm run test:api` **547/547 arquivos OK**; `test:almoxarifado` **44/44**; `test:validation` **4/4**; `test:safealter` **3/3**; `test:sqlite` **16/16**; tela **191 suítes, 2578/2578 testes**; `build` com `CI=true` **compilou sem aviso**. Depois disso só mudou o texto do aviso do retorno (C8), e os testes do Frota na tela foram rodados de novo: **37/37**. Os testes do Frota no servidor: 9 arquivos, **82 passaram, 0 falharam**.
+- **E3 — verificação final da Etapa 1, rodada em 2026-10-23 na ponta da etapa:** `npm run test:api` **547/547 arquivos OK**; `test:almoxarifado` **44/44**; `test:validation` **4/4**; `test:safealter` **3/3**; `test:sqlite` **16/16**; tela **191 suítes, 2578/2578 testes**; `build` com `CI=true` **compilou sem aviso**. Depois disso só mudou o texto do aviso do retorno (C8), e os testes do Frota na tela foram rodados de novo: **37/37**. Os testes do Frota no servidor: 9 arquivos, **82 passaram, 0 falharam**.
+- **E4 — o roteiro da Etapa 2 não foi percorrido clicando no navegador** por quem escreveu este fechamento. Foi escrito lendo o código e as
+  mensagens; o servidor de verdade foi exercitado por um revisor (login real, pasta de dados vazia), e as telas pelos testes
+  automáticos. Faça o roteiro do guia antes de apresentar.
+- **E5 — `role` "Admin" com maiúscula.** O servidor do Frota só reconhece o administrador do sistema escrito `admin` (minúsculo); o menu
+  da tela ignora a caixa. Um usuário gravado como `Admin` (a API de usuários aceita; a tela de usuários grava minúsculo) é Motorista no
+  servidor e vê o menu de administrador na tela (e leva *"Sem permissão para esta operação"* ao usar). No banco local, medido: só `admin`
+  e `usuario`. Para conferir em produção: `SELECT id, nome, role FROM usuarios WHERE role <> lower(role);`.
+- **E6 — perfil fora da lista na tela.** Desde a Fase 5 o servidor lê esse usuário como Motorista (B33), mas o menu da tela dele ainda
+  é o do gestor (as telas abrem vazias ou respondem *"Sem permissão para esta operação"*). Só se chega a isso gravando por SQL (ver **A3**).
+- **E7 — verificação final da Etapa 2, rodada em 2026-10-23 na ponta da etapa (depois de `805aaa3c`):** `npm run test:api` **549/549
+  arquivos OK**; `test:almoxarifado` **44/44**; `test:validation` **4/4**; `test:safealter` **3/3**; `test:sqlite` **16/16**; tela **193
+  suítes, 2605/2605 testes**; `build` com `CI=true` **compilou sem aviso** ("Compiled successfully."). Frota no servidor: 11 arquivos,
+  **102 passaram, 0 falharam** (`frotasPerfis` 17, `frotasPerfisIdaEVolta` 3); Frota na tela: 7 arquivos, **64/64**.
 
 ---
 
@@ -256,14 +309,96 @@ km/L*. Documento com status **renovado** não aparece na aba Documentos.
 
 ---
 
+## Etapa 2 — Perfil do Frota pela tela (2026-10-23)
+
+Até aqui, quem tinha acesso ao Frota e não era administrador entrava como **Motorista**: a pessoa do escritório que só acompanha a frota
+abria o módulo e caía no "Meu painel" do motorista, sem painel e sem relatório. A única saída era torná-la administradora (que libera
+tudo, até excluir) ou mexer no banco. Agora o gestor abre **Frota → Perfis de acesso**, acha a pessoa e escolhe **Consulta** (vê o
+painel, os alertas, as listas e os relatórios, exporta a planilha, mas não grava nada) ou **Motorista (padrão)**. Vale no próximo clique
+dela — não precisa sair e entrar de novo. De quebra, quem está como Consulta deixa de ver os botões de cadastrar e editar que o sistema
+ia recusar, e o motorista que digitava o endereço de **Documentos** deixa de ver os documentos de todos os carros.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Só dava para tornar alguém **Administrador de Frota**; todo o resto virava Motorista (C2) | **Frota → Perfis de acesso**: **Consulta** ou **Motorista (padrão)** para cada usuário, pela tela |
+| Quem só acompanha a frota abria o Frota e caía no portal do motorista | Com **Consulta**, abre o **Dashboard Frota**, os alertas, as listas e **Relatórios**, e exporta a planilha |
+| Para dar Consulta: SQL no banco | Um clique no seletor; mensagem *"Perfil definido: Consulta"* |
+| Consulta via **Novo**, **Editar**, **Aprovar** e **Excluir** nas telas de cadastro e levava *"Sem permissão para esta operação"* ao salvar | Consulta vê as telas **só para leitura**: os botões não aparecem |
+| Nada avisava ao ligar um motorista a um usuário que não pode registrar | No cadastro do motorista, escolher um usuário que está como Consulta mostra o aviso de que ele não vai registrar no portal |
+| O motorista via os documentos de todos os veículos (com valor) digitando `/frota/documentos` (C7) | A lista dele vem vazia |
+
+### As regras, com o cenário exato
+
+**Preparação.** Entre como administrador. Tenha três usuários de teste com acesso ao módulo **Frota** no cadastro de usuário, **sem**
+marcar "administra o módulo Frota": *bia* (vai ser Consulta), *ana* (motorista, ligada ao motorista *Ana Teste* como na Etapa 1) e um
+terceiro qualquer. Abra **Frota**: no menu do administrador há o item novo **Perfis de acesso** (logo depois de **Relatórios**).
+
+**1. A tela.** **Frota → Perfis de acesso**: título *"Perfis de acesso"*, *"Quem vê o painel e quem registra no portal"*, e os textos
+*"Ter acesso ao módulo Frota (no cadastro de usuário) permite abrir as telas; o perfil abaixo diz o que a pessoa faz dentro delas."* e
+*"Quem não tem perfil definido entra como Motorista."*. Uma linha por usuário ativo: **Usuário**, **Perfil no Frota**, **O que isso
+permite**, **Motorista ligado** (o nome do motorista, ou *"—"*). A busca filtra por nome ou e-mail.
+
+**2. Administrador não tem seletor.** A sua própria linha (e a de qualquer administrador do sistema, superadmin ou quem administra o
+módulo Frota) mostra a etiqueta **Administrador** e *"Para dar outro perfil, remova a condição de administrador no cadastro de
+usuário."*. Pelo servidor, tentar dar Consulta a um administrador: *"Este usuário já é administrador (superadmin, administrador do
+sistema ou administrador do módulo Frota) e tem acesso total à frota. Remova essa condição no cadastro de usuário antes de definir
+outro perfil."*.
+
+**3. Dar Consulta.** Na linha de *bia*, troque **Motorista (padrão)** por **Consulta** → *"Perfil definido: Consulta"*. **O que isso
+permite** passa a dizer *"Vê o painel, os alertas, as listas e os relatórios, e exporta a planilha. Não registra nem altera nada."*.
+
+**4. Vale no próximo clique dela.** Em outro navegador (ou janela anônima), entre como *bia* **antes** do passo 3: **Frota** leva ao
+**Meu painel** com *"Seu usuário não está ligado a um motorista. Peça ao gestor da frota para fazer o vínculo."*. Depois do passo 3,
+**recarregue a página** (F5): **Frota** abre o **Dashboard Frota**, o menu mostra Veículos, Motoristas, … e **Relatórios** — sem
+**Perfis de acesso**. (Sem recarregar: ao clicar em **Frota** ela cai primeiro no **Meu painel**, que percebe a mudança e troca o menu
+ sozinho; aí o **Dashboard Frota** aparece no menu — C11.)
+
+**5. Consulta só lê.** Como *bia*, abra **Veículos**: a lista aparece, mas **sem** o botão **Novo Veículo** e **sem** a coluna **Ações**
+(editar, excluir). O mesmo em Motoristas, Viagens (sem o ✓ de aprovar), Abastecimentos etc. **Relatórios → Exportar planilha** funciona.
+
+**6. Voltar ao padrão.** Como gestor, na linha de *bia*, escolha **Motorista (padrão)** → *"Perfil removido — o usuário volta ao padrão
+(Motorista)"*. *bia* recarrega e volta ao **Meu painel**.
+
+**7. Aviso de quem está ligado a um motorista.** Dê **Consulta** a *ana* (ligada a *Ana Teste*). A linha dela mostra *"Ligado ao motorista
+Ana Teste: como Consulta, não registra no portal."*. Se ela estiver com uma **saída sem retorno**, aparece também *"Tem saída sem retorno:
+como Consulta, não consegue registrar o retorno. Feche a viagem em Frota → Viagens ou volte o perfil para Motorista."* — o sistema aceita
+a mudança e só avisa (B30). Volte *ana* para **Motorista (padrão)**.
+
+**8. Aviso no cadastro do motorista.** Com *bia* como Consulta, abra **Frota → Motoristas → Novo Motorista** e escolha *bia* em **Usuário de
+acesso (portal do motorista)**: abaixo do campo, *"Este usuário está com o perfil Consulta no Frota: ele vê o painel, mas não consegue
+registrar no portal. Para ele registrar, mude o perfil em Frota → Perfis de acesso."*. O aviso não impede salvar. (Cancele.)
+
+**9. Só o administrador abre a tela.** Como *bia* (Consulta), digite o endereço `/frota/perfis`: no lugar da tabela, *"Sem permissão para
+esta operação"*. Como *ana* (Motorista), o mesmo.
+
+**10. Documentos do motorista.** Como *ana*, digite `/frota/documentos`: a lista vem **vazia** (antes mostrava os documentos de todos os
+carros, com valor). Como gestor ou *bia*, os documentos aparecem.
+
+**11. Recusas pelo servidor** (para quem testa a API): perfil fora da lista (inclusive `ADMIN_FROTA`) → *"Perfil inválido. Use CONSULTA,
+MOTORISTA ou vazio para voltar ao padrão."*; usuário inexistente ou desativado → *"Usuário não encontrado"*; mudar o próprio perfil →
+*"Você não pode mudar o seu próprio perfil por esta tela."*; quem não é administrador da frota → *"Sem permissão para esta operação"*.
+
+### O que esta etapa não cobre
+
+- **Administrador de Frota pela tela de Perfis** — continua no cadastro de usuário (B25).
+- **Quem mudou o perfil** — sem trilha; só a data da última mudança (B26, D8).
+- **Filtrar a lista por quem tem acesso ao módulo** — dar um perfil não dá acesso (B27, D7).
+- **Lembrar o Consulta depois de dar e tirar o administrador** (C9).
+- **Esconder do Consulta o CPF/CNH dos motoristas e os valores** (B28).
+- O que já estava fora da Etapa 1 e continua: seção 3 do formulário, foto, horímetro (A10), km menor que o atual (A8), multas no período
+  (A7).
+
+---
+
 ## Onde estamos e o que vem a seguir
 
-- **Feito:** Etapa 1 — portal do motorista, vínculo usuário ↔ motorista, escopo do motorista, km/L pela ordem do km, viagens com uma em
-  andamento por carro e por motorista, alerta de pendência, exportação no formato da planilha. Achados do levantamento corrigidos:
-  **A1, A2, A3, A4, A5, A6, A9**. Abertos: **A7, A8, A10**.
-- **Próximo: Etapa 2 — perfil do Frota pela tela** (B24). O administrador escolhe, para cada usuário com acesso ao Frota, **Administrador
-  de Frota**, **Consulta** ou **Motorista**. Detalhe (contrato, pontos de atenção) no plano
-  [`2026-10-23-frotas-etapa1-portal-do-motorista.md`](../superpowers/plans/2026-10-23-frotas-etapa1-portal-do-motorista.md), seção
+- **Feito:** Etapa 1 — portal do motorista (vínculo usuário ↔ motorista, escopo do motorista, km/L pela ordem do km, uma viagem em
+  andamento por carro e por motorista, alerta de pendência, exportação no formato da planilha; A1–A6 e A9 corrigidos). Etapa 2 — perfil
+  **Consulta**/**Motorista** pela tela **Frota → Perfis de acesso**, Consulta só leitura nas telas de cadastro, aviso no cadastro do
+  motorista, e o C7 (documentos do motorista). Abertos: **A7, A8, A10**.
+- **Próximo: Etapa 3 — km e horímetro confiáveis no portal (A8 + A10)** (B34). Detalhe (contrato, pontos de atenção) no plano
+  [`2026-10-23-frotas-etapa2-perfis-pela-tela.md`](../superpowers/plans/2026-10-23-frotas-etapa2-perfis-pela-tela.md), seção
   "Próxima tarefa detalhada".
-- **Depois, por valor:** seção 3 do formulário (quando chegar a folha inteira), foto da avaria/cupom, horímetro (A10), aviso de km menor
-  (A8), multas no período (A7).
+- **Depois, por valor:** foto da avaria/cupom, multas no período (A7), seção 3 do formulário (quando chegar a folha inteira).

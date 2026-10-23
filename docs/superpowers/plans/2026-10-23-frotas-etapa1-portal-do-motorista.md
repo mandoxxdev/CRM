@@ -237,7 +237,7 @@ itens OK e uma avaria saía OK e não virava alerta. O fix-round deixou registra
 | Rodadas de correção | **2** — 1 fix-round da Fase 5 (`7cebaf12`..`588329d6`) + 1 ajuste no fechamento (B22, `4ba85d16`) |
 | Achados da revisão | Fase 2 (plano): **18**; Fase 5 (código): **11 reais + 1 teste fraco** — os reais são Fase5-1..6, Fase5-8..11 (10) e a avaria da rota antiga (B22); o teste fraco é o Fase5-7 |
 | Paralelismo | back (T1–T5, T8) e front (T6, T7) em paralelo contra os contratos congelados; **sem retrabalho no merge** (`497f5e8f`) |
-| Defeito que escapou | **a preencher na próxima etapa** (o que o uso real ou a Etapa 2 achar no que a 1 entregou) |
+| Defeito que escapou | **1**, achado na Fase 5 da Etapa 2: o escopo do motorista só restringia o perfil `MOTORISTA` exato, e um perfil gravado com valor fora da lista lia CPF/CNH de todos e os documentos (Fase5-1, corrigido em `50219d5d`) |
 
 ### Testes no fechamento
 
@@ -251,6 +251,9 @@ Tela: `client/src/components/frotas` → **5 arquivos, 37/37**. A suíte inteira
 `specs/modulo-frotas/13-portal-do-motorista/README.md` (novo).
 
 ## Próxima tarefa detalhada — Etapa 2: perfil do Frota pela tela
+
+> **Executada em 2026-10-23** — plano, divergências e resultado em
+> [`2026-10-23-frotas-etapa2-perfis-pela-tela.md`](2026-10-23-frotas-etapa2-perfis-pela-tela.md). O texto abaixo é o que foi proposto.
 
 **Por que esta primeiro (B24):** é o que trava o uso real no primeiro dia. `getPerfilFromUser` cai em `MOTORISTA` para quem não é
 admin e não tem linha em `perfil_frota_usuario`, e **ninguém grava essa tabela a não ser o `syncModuleAdminProfiles`** (só

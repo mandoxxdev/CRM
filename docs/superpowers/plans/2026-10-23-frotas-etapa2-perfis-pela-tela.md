@@ -1,6 +1,6 @@
 # Frotas — Etapa 2: perfil do Frota pela tela (Consulta / Motorista)
 
-> **Status:** em execução (2026-10-23).
+> **Status:** **etapa fechada em 2026-10-23** — T1..T3 feitas, Fase 5 corrigida (`50219d5d`, `805aaa3c`). Próxima: **Etapa 3** (A8 + A10, "Próxima tarefa detalhada", no fim).
 > **Origem:** "Próxima tarefa detalhada" do [plano da Etapa 1](2026-10-23-frotas-etapa1-portal-do-motorista.md) (B24).
 > **Spec:** [`specs/modulo-frotas/15-perfis-pela-tela/README.md`](../../../specs/modulo-frotas/15-perfis-pela-tela/README.md) e o mapa
 > [`specs/modulo-frotas/README.md`](../../../specs/modulo-frotas/README.md) (linha 11).
@@ -27,7 +27,8 @@ portal). De carona (se couber): o C7 — o motorista que digita `/frota/document
   como está (não é o perfil; o perfil é do **usuário**).
 - Front: `perfilFrota(user)` (`client/src/utils/systemPermissions.js`) espelha `getPerfilFromUser`; menu por perfil em `frotaMenu.js`
   (`menuFrotaDoPerfil`: MOTORISTA → menu curto; o resto → menu do gestor); o usuário afetado recebe o perfil novo pelo `/auth/me` ao
-  recarregar a página, ou pelo `/usuarios/:id/grupos` quando o cache de 5 min vence (`AuthContext.onPermissoesGravadas`). Sem novo login.
+  recarregar a página, ou pelo `/usuarios/:id/grupos` quando o cache de 5 min vence (`AuthContext.onPermissoesGravadas`) — **estava
+  errado**: ninguém chama esse `/grupos` dentro do Frota, então o menu só mudava no F5 (Fase5-2 corrigiu pelo portal e pelo painel). Sem novo login.
 - Harness `frotasTestApp.js`: `usuarios` sem `is_superadmin`, `admin_modulos`, `is_oculto`; sem `perfil_frota_usuario`; o usuário vem
   pronto no header (o `finishFrotaProfile` **não** roda).
 - C7: `listDocumentos(db, query)` ignora o usuário; não há `GET /documentos/:id`.
@@ -120,9 +121,9 @@ Cada task: TDD com controle positivo; a lista negativa (RN-F2.11) só vale com s
 
 | Task | Estado | Commit |
 |---|---|---|
-| T1 | pendente | |
-| T2 | pendente | |
-| T3 | pendente | |
+| T1 | feito — harness (colunas), tabela no schema do Frota, `classificarPerfilFrota`, `perfisService.js`, `GET/PUT /perfis-usuario` (+ `viagem_aberta`, RN-F2.13), `perfil_frota` em `/usuarios-vinculaveis`, C7 (RN-F2.12); `frotasPerfis` 16/16 | 30ec5df3 |
+| T2 | feito — `comLoginReal` no harness (login real + `enrichUserFromDb`), `frotasPerfisIdaEVolta` 3/3: pela rota, pelo serviço e tela × servidor usuário a usuário | 6fd592c5 |
+| T3 | feito | 02a7aee3 |
 
 ## Ajustes da Fase 2 (revisor fresco: 3 travas + 20 menores — **valem sobre o texto acima**)
 
@@ -141,9 +142,9 @@ Cada task: TDD com controle positivo; a lista negativa (RN-F2.11) só vale com s
 | 14 CONSULTA vê CPF/CNH de todos os motoristas e exporta a planilha | Decisão **B28** (é o que "Consulta" quer dizer desde a Etapa 1; nada muda nesta etapa) |
 | 15 auditoria | **B26**: sem trilha; só o `updated_at` da linha |
 | 16 o aviso do motorista também ao **abrir** um motorista já ligado a um CONSULTA | O aviso sai do `form.usuario_id` (aparece ao abrir e ao trocar) |
-| 18 o usuário afetado só vê a mudança ao recarregar (ou em até 5 min) | Declarado na letra **C11** e no manual |
+| 18 o usuário afetado só vê a mudança ao recarregar (ou em até 5 min) | Declarado na letra **C11** e no manual. O "em até 5 min" **estava errado** (Fase5-2): corrigido no código (portal e painel renovam) e no texto |
 | 19 MOTORISTA sem motorista ligado | Sem aviso na linha (seria ruído: quase ninguém é motorista); a coluna **Motorista ligado** mostra "—". Declarado |
-| 20 "Motorista (padrão)" e "Motorista" explícito têm o mesmo efeito | **B29**: a tela oferece só **Motorista (padrão)** e **Consulta**; uma linha MOTORISTA explícita aparece como "Motorista (padrão)" e, ao escolher de novo, vira padrão. A API continua aceitando `MOTORISTA` |
+| 20 "Motorista (padrão)" e "Motorista" explícito têm o mesmo efeito | **B29**: a tela oferece só **Motorista (padrão)** e **Consulta**; uma linha MOTORISTA explícita aparece como "Motorista (padrão)" (mesmo efeito; escolher a opção já marcada não grava nada — o "vira padrão" que estava aqui **estava errado**, achado 4 da Fase 5). A API continua aceitando `MOTORISTA` |
 | 21 corrida PUT × sync | Inofensiva: quem é forçado continua forçado pelo `admin_modulos`; na revogação o `DELETE` só apaga ADMIN_FROTA. Registrado |
 | 22 C7: o motorista que digita `/frota/documentos` vê a lista vazia, sem explicação | Aceito; letra C7 atualizada |
 | 23 spec 15 e B25+ ainda não escritos | Escritos no fechamento |
@@ -159,3 +160,100 @@ Cada task: TDD com controle positivo; a lista negativa (RN-F2.11) só vale com s
     volte o perfil para Motorista."*
   - opção do valor fora da lista: *"{valor} (valor inválido — escolha outro)"*; linha ADMIN_FROTA não forçada: *"Administrador de Frota
     (gravado à parte)"*.
+
+## Fase 5 — revisão adversarial (dois revisores frescos em paralelo; achados só reproduzidos)
+
+Revisor 1 — regras e permissões com o **servidor real** (`CRM_DATA_DIR=<pasta vazia> PORT=5917 node index.js`, login real de 6
+usuários; o node foi morto e a pasta apagada no fim). Revisor 2 — front × back (leitura linha a linha dos dois lados + jest no scratchpad
+com `AuthProvider`, `permissionsCache` e `Layout` reais).
+
+| Achado | O que era | Correção | Estado | Commit |
+|---|---|---|---|---|
+| Fase5-1 (real, revisor 1) | Perfil com valor fora da lista (`consulta` minúsculo, por SQL — o tipo de linha que a C2 ensinava) **lia** CPF/CNH de todos, viagens e documentos com valor: o escopo só restringia `=== MOTORISTA` | escopo **fechado**: só ADMIN_FROTA e CONSULTA leem tudo (B33). Teste vermelho antes, com a metade positiva | corrigido | 50219d5d |
+| Fase5-2 (real, revisor 2, achados 1–3) | Depois do `PUT`, o menu do afetado **nunca** mudava dentro do Frota (o "em até 5 min" da Fase 0 era falso: ninguém chama `/usuarios/:id/grupos` lá dentro); quem virou Consulta caía no portal, quem voltou a Motorista via *"Sem permissão para acessar o módulo Frota."* | o portal (`perfil` do `/portal/inicio`) e o painel (`perfil` do 403) chamam `refreshUser` **uma vez** quando divergem da tela. Controle positivo: sem a chamada, os 3 cenários caem | corrigido | 805aaa3c |
+| Fase5-3 (texto, revisor 2, achado 4) | B29 dizia que escolher de novo "Motorista (padrão)" numa linha MOTORISTA explícita "vira padrão" — escolher a opção já marcada não dispara nada | texto corrigido (o efeito é o mesmo) | corrigido no texto | fechamento |
+| Ruído / declarado | `role 'Admin'` maiúsculo aceito pela API de usuários (E5: a premissa "o cadastro grava minúsculo" valia só para a tela); usuário oculto fora da lista mas aceito no `PUT` (C12); valor torto por SQL deixa o **menu** do gestor no front (E6); `FrotasEtapa2Gestor.test.js` mocka `getEffectiveUser` como identidade (baixo) | declarado | — | — |
+
+Confirmado pelo revisor 1 sem achado: 403 de CONSULTA/MOTORISTA com `acao: 'configurar'`; ida e volta com o **mesmo token** (painel
+403→200→403); 409 forçado (super, role admin, admin do módulo) e próprio (inclusive pelo id `05`); 400 antes do 409; 404 para 9 ids tortos;
+8 corpos tortos → 400; C7; o sync do cadastro de usuário (C9 confirmado; salvar sem `admin_modulos` mantém o Consulta); 40 `PUT` + 20 `GET`
+em paralelo sem 500/BUSY; primeiro boot sem a tabela → recriada, sem "no such table"; `/auth/me` e `/usuarios/:id/grupos` com o perfil novo.
+
+## Estado final das tasks
+
+| Task | Estado | Commit |
+|---|---|---|
+| Plano + Fase 2 | feito | 3aa4e088 |
+| T1 | feito (ver acima) | 30ec5df3 |
+| T2 | feito | 6fd592c5 |
+| T3 | feito — `FrotasPerfisAcesso`, rota, menu do ADMIN, aviso no motorista, Consulta só leitura; 11 sabotagens por concessão | 02a7aee3 |
+| Fase5-1 | feito | 50219d5d |
+| Fase5-2 | feito | 805aaa3c |
+| Fechamento (docs) | feito | commit "Frota etapa 2: fechamento nas specs, no plano e nos documentos do modulo" |
+
+## Fechamento (2026-10-23)
+
+### Divergências do plano
+
+| Onde | O plano dizia | O que foi feito | Por quê |
+|---|---|---|---|
+| Fase 0 | o usuário afetado vê o perfil novo "pelo `/usuarios/:id/grupos` quando o cache de 5 min vence" | **errado**; corrigido no código (Fase5-2) | ninguém chama esse `/grupos` dentro do Frota |
+| Fase 0 | "o front espelha `getPerfilFromUser`" | **errado** no `role 'Admin'` | o front minusculiza; declarado em E5 |
+| Ajustes da Fase 2, item 6 | valor fora da lista "não dá ação nenhuma" | certo para ações, **errado** para leituras | Fase5-1 |
+| B29 | "ao escolher de novo, vira padrão" | não dispara | Fase5-3 |
+| Contrato `GET /perfis-usuario` | sem `viagem_aberta` | `+ viagem_aberta` | trava T-3 da Fase 2 |
+| Contrato `PUT` | 3 erros | + 409 `PROPRIO_PERFIL` | achado 10 da Fase 2 |
+| Front | só a página nova | + Consulta só leitura (RN-F2.14), + o portal e o painel renovam o usuário (Fase5-2) | trava T-1 da Fase 2; Fase5-2 |
+
+### Retro (4 números)
+
+| Medida | Valor |
+|---|---|
+| Rodadas de correção | **1** — um fix-round da Fase 5 (Fase5-1 `50219d5d`, Fase5-2 `805aaa3c`) + correção de texto no fechamento |
+| Achados da revisão | Fase 2 (plano): **3 travas + 20 menores**. Fase 5 (código): **2 reais** (Fase5-1, Fase5-2) + 1 de texto (B29); **ruído/declarado: 4** (E5, C12, E6, mock do teste) |
+| Paralelismo | T1/T2 (servidor) e T3 (front, subagente) em paralelo contra o contrato congelado; **sem retrabalho** na integração. Os dois revisores da Fase 5 também em paralelo |
+| Defeito que escapou | **a preencher na Etapa 3** |
+
+Defeito que escapou da **Etapa 1** (a retro dela pedia): o escopo aberto para perfil fora da lista (Fase5-1) existia desde a Etapa 1 e
+nenhuma revisão dela o pegou, porque ninguém gravava perfil fora do `syncModuleAdminProfiles`. (O C7 já era conhecido e declarado.)
+
+### Testes no fechamento
+
+Ver a letra **E7** de [`docs/frotas/novidades-por-etapa.md`](../../frotas/novidades-por-etapa.md) (números lidos da saída).
+
+## Próxima tarefa detalhada — Etapa 3: km e horímetro confiáveis no portal (A8 + A10)
+
+**Por que esta (B34):** com o portal no ar, o km digitado errado entra **calado** (A8: 900 com o carro em 1.800 é aceito; o carro mantém
+o maior, o lançamento fica com o menor e entra na conta do km/L pela ordem do km, distorcendo o dele e o do vizinho), e numa máquina
+**por horímetro** o número digitado no "KM atual" vai para o **km** do veículo (A10: `updateHorimetroVeiculoSeMaior` em
+`frotasService.js:59` não tem chamador). As duas estragam o dado desde o primeiro dia. Descartados para depois: foto (o módulo não tem
+anexo), A7 (relatório), seção 3 (depende da folha inteira).
+
+**Medido (Fase 0 adiantada):**
+- Portal: `portalService.registrar` (`lerKm`, `Informe o KM atual`, `updateKmVeiculoSeMaior` nas linhas ~135/168/186) e
+  `registrarAbastecimento` (~199). `GET /portal/inicio` já devolve `veiculos[].km_atual` e `tipo_medicao`.
+- Gestor: `createAbastecimento`/`updateAbastecimento` (`updateKmVeiculoSeMaior` ~556/590), manutenção (~420), viagens (~853/894).
+- `frotas_veiculos.tipo_medicao` ∈ `km`|`horimetro` (`TIPOS_MEDICAO` no `schema.js`), `horimetro_atual`.
+- km/L pela ordem do km (RN-F1.11) — horímetro **não** entra nessa conta hoje.
+
+**Contrato proposto (congelar na Fase 1):**
+- RN-F3.01 — Portal (registros e abastecimento): km **menor** que o `km_atual` do veículo → 409
+  `KM menor que o atual do veículo (<atual>). Confira o hodômetro.` com `code: 'KM_MENOR_QUE_ATUAL'`; o corpo pode mandar
+  `confirmar_km_menor: true` para gravar mesmo assim (o motorista confirma na tela — caminho reversível; bloqueio total é letra B).
+  O retorno já tem a régua do km da saída e continua.
+- RN-F3.02 — Veículo `tipo_medicao = 'horimetro'`: o portal pede **Horímetro atual** (mensagem `Informe o horímetro atual`), grava em
+  `horimetro_atual` (`updateHorimetroVeiculoSeMaior`) e **não** mexe no km; o registro guarda o valor numa coluna nova (`safeAlter`) ou no
+  próprio `km` com a unidade — decidir na Fase 1 olhando a exportação (a planilha tem coluna de horímetro?) e o consumo (L/h?).
+- RN-F3.03 — A mesma régua nas telas do gestor (abastecimento, manutenção, viagem): **aviso** com o mesmo `confirmar` (o gestor lança
+  atrasado), não bloqueio cego.
+- Fatia visível: no portal, o campo vira "Horímetro atual" na máquina; o aviso de km menor com "Confirmar mesmo assim".
+
+**Pontos de atenção:**
+1. **Lançamento retroativo é legítimo** (RN-F1.11 recalcula o vizinho): um abastecimento de ontem com km menor que o atual é normal. A
+   régua tem de olhar a **data** (comparar com o lançamento anterior **na data**), ou só valer para lançamento de hoje. Medir com sonda.
+2. **Fila de viagens** (`filaDeViagens.js`): a conferência do km da saída roda dentro dela; a nova também, para não ler `km_atual` velho.
+3. **Exportação** (`exportacaoService.js`): ver se a planilha da empresa (`specs/modulo-frotas/Controle_de_Frota_GMP.xlsx`) tem horímetro
+   antes de decidir a coluna.
+4. **Teste de corrida:** dois abastecimentos simultâneos com km diferentes — o `km_atual` final tem de ser o maior.
+5. Harness `frotasTestApp` (`ctx.como`) e `comLoginReal` já existem; o portal tem `FrotasPortalMotorista.test.js` com a fronteira HTTP
+   (e, desde a Etapa 2, o mock de `useAuth`/`refreshUser`).

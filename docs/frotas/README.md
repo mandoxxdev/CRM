@@ -1,8 +1,9 @@
 # Módulo Frota — guia do que existe hoje
 
-> **Onde paramos:** **Etapa 1 — portal do motorista — entregue em 2026-10-23** (na `main`, último commit `4ba85d16`). O motorista
-> entra pelo celular e preenche saída, retorno, inspeção e abastecimento; o gestor vê o alerta de Falha no painel e exporta a planilha.
-> **Próxima: Etapa 2 — dar o perfil Consulta/Motorista pela tela de usuários** (hoje todo não-administrador vira Motorista).
+> **Onde paramos:** **Etapa 2 — perfil Consulta/Motorista pela tela — entregue em 2026-10-23** (na `main`, commits `3aa4e088`
+> a `805aaa3c`). O gestor dá **Consulta** (vê painel e relatórios, não grava) ou **Motorista** a cada usuário em **Frota → Perfis de
+> acesso**. A Etapa 1 (portal do motorista) foi entregue antes, no mesmo dia.
+> **Próxima: Etapa 3 — km e horímetro confiáveis no portal** (km menor que o atual deixa de passar calado; máquina por horímetro).
 > O módulo ainda **não foi usado em produção**.
 >
 > Apresentação da etapa (com os cenários e as decisões): [`novidades-por-etapa.md`](novidades-por-etapa.md) ·
@@ -14,7 +15,7 @@
 
 O sistema tem **um caderno de frota completo para o escritório** (veículos, motoristas, abastecimento, manutenção, viagens,
 checklist, multas, documentos, painel e relatório) e, desde a Etapa 1, **uma porta simples para o motorista**: ele entra, toca num
-botão grande e preenche o mesmo formulário do papel — e só vê o que é dele.
+botão grande e preenche o mesmo formulário do papel — e só vê o que é dele. Desde a Etapa 2, quem só acompanha a frota recebe o perfil **Consulta** pela tela.
 
 ## Como a empresa trabalhava × como fica
 
@@ -32,8 +33,11 @@ botão grande e preenche o mesmo formulário do papel — e só vê o que é del
    motorista)**.
 3. Na tela inicial, escolher **Frota**.
    - **Gestor** (administrador): menu com Dashboard Frota, Veículos, Motoristas, Manutenções, Abastecimentos, Documentos, Viagens,
-     Checklist Diário, Multas, Relatórios, **Portal do motorista**, Solicitar Material, Minhas Requisições.
+     Checklist Diário, Multas, Relatórios, **Perfis de acesso**, **Portal do motorista**, Solicitar Material, Minhas Requisições.
    - **Motorista**: menu com **Meu painel**, Solicitar Material e Minhas Requisições. Abrir **Frota** leva direto ao **Meu painel**.
+   - **Consulta**: o menu do gestor **sem** Perfis de acesso; as telas abrem só para leitura (sem Novo, Editar, Aprovar, Excluir).
+4. Para quem só acompanha (escritório, financeiro): o gestor abre **Frota → Perfis de acesso** e escolhe **Consulta** na linha da
+   pessoa. Quem não tem perfil escolhido entra como **Motorista**.
 
 ## O portal do motorista (Meu painel)
 
@@ -54,7 +58,7 @@ e observações. O **Salvar** só acende com os 12 itens marcados.
 ## As telas do gestor, uma por uma
 
 Todas as telas de cadastro funcionam igual: **uma tabela**, uma **busca**, às vezes um **filtro**, o botão **"Novo…"** que abre um
-formulário, e na linha os botões **editar** (lápis) e **excluir** (lixeira).
+formulário, e na linha os botões **editar** (lápis) e **excluir** (lixeira). Para quem está como **Consulta**, esses botões não aparecem.
 
 | Tela | Para que serve | Funciona? |
 |---|---|---|
@@ -68,6 +72,7 @@ formulário, e na linha os botões **editar** (lápis) e **excluir** (lixeira).
 | **Multas** | Data, infração, valor, pontos, vencimento, pago/pendente/contestado | Sim |
 | **Documentos** | IPVA, licenciamento, seguro, CRLV, rastreador — com vencimento e "avisar X dias antes" | Sim |
 | **Relatórios** | Custo por veículo (com período), consumo médio km/L, **Imprimir** e **Exportar planilha** (com o período da tela) | Sim |
+| **Perfis de acesso** | Só o administrador. Uma linha por usuário: **Consulta** ou **Motorista (padrão)**, o que o perfil permite e o motorista ligado; avisa quando quem vira Consulta é motorista | Sim |
 | **Portal do motorista** | O mesmo "Meu painel" do motorista (o gestor só grava se estiver ligado a um motorista) | Sim |
 | **Solicitar Material** | Pede peça/material ao almoxarifado | Sim |
 
@@ -87,20 +92,18 @@ formulário, e na linha os botões **editar** (lápis) e **excluir** (lixeira).
 |---|---|
 | **Administrador de Frota** | Tudo: cadastra veículo e motorista, liga motorista ao usuário, aprova e cancela viagem, lança multa e documento, vê painel e relatório, exporta, exclui |
 | **Motorista** | Só o que é **dele**: saída, retorno, inspeção e abastecimento pelo portal; vê só os próprios registros, viagens, abastecimentos e multas. **Não** vê o painel nem relatório, **não** vê CPF/CNH dos colegas, **não** lança multa nem documento, **não** aprova viagem |
-| **Consulta** | Vê painel, alertas e relatório, e exporta a planilha. Não lança nada |
+| **Consulta** | Vê painel, alertas, as listas (inclusive CPF/CNH dos motoristas) e relatório, e exporta a planilha. Não lança, não edita, não aprova, não exclui — os botões nem aparecem |
 
-Pela tela de usuários **só dá para tornar alguém Administrador de Frota**. Quem tem acesso ao Frota e não é administrador vira
-**Motorista** automaticamente. "Consulta" existe, mas **não tem botão** — é a Etapa 2.
+**Administrador de Frota** se dá na tela de usuários ("administra o módulo Frota"). **Consulta** e **Motorista** se dão em **Frota →
+Perfis de acesso** (só o administrador abre). Quem não tem perfil escolhido entra como **Motorista**. Mudou o perfil de alguém? Vale no
+próximo clique dela; o menu dela muda quando ela recarrega a página.
 
 ## O que ainda atrapalha o uso real (em palavras simples)
 
-1. **Quem só acompanha a frota perde o painel.** Como todo não-administrador vira Motorista, uma pessoa do escritório que não é
-   administradora cai no "Meu painel" com o aviso de vínculo. Até a Etapa 2: torná-la administradora, ou pedir o perfil Consulta
-   direto no banco (letra C2 das novidades).
-2. **Falta a parte 3 do formulário** ("Transmissão e itens específicos"): a imagem que recebemos está cortada.
-3. **Sem foto** da avaria ou do cupom.
-4. **km menor que o anterior ainda passa calado.** Um erro de digitação (900 em vez de 1900) é aceito sem aviso.
-5. **Máquina por horímetro** (empilhadeira): o portal pede "KM atual" e grava como km.
+1. **Falta a parte 3 do formulário** ("Transmissão e itens específicos"): a imagem que recebemos está cortada.
+2. **Sem foto** da avaria ou do cupom.
+3. **km menor que o anterior ainda passa calado.** Um erro de digitação (900 em vez de 1900) é aceito sem aviso.
+4. **Máquina por horímetro** (empilhadeira): o portal pede "KM atual" e grava como km.
 
 **Resolvidos na Etapa 1** (estavam nesta lista no levantamento):
 
@@ -110,6 +113,11 @@ Pela tela de usuários **só dá para tornar alguém Administrador de Frota**. Q
 - ~~Abastecimento lançado atrasado fica sem km/L~~ — **resolvido**: a conta é pela ordem do km, e o seguinte é refeito.
 - ~~Viagem: aprovar uma que já terminou; km de volta menor gerando km negativo~~ — **resolvido**: as duas são recusadas.
 - ~~Não sai Excel~~ — **resolvido**: Exportar planilha.
+
+**Resolvido na Etapa 2:**
+
+- ~~Quem só acompanha a frota perde o painel~~ — **resolvido**: o gestor dá **Consulta** em **Frota → Perfis de acesso**.
+- ~~O motorista vê os documentos de todos digitando o endereço~~ — **resolvido**: a lista dele vem vazia.
 
 ## Roteiro de teste manual (portal do motorista)
 
@@ -147,9 +155,37 @@ Extras, se der tempo: ligar o mesmo login *ana* a outro motorista (*"Este usuár
 *"(em manutenção — indisponível)"* na Saída. Todos os cenários com a mensagem exata estão em
 [`novidades-por-etapa.md`](novidades-por-etapa.md#as-regras-com-o-cenário-exato).
 
-## O que a Etapa 1 **não** cobre
+## Roteiro de teste manual (perfis de acesso)
 
-- Dar o perfil **Consulta** ou **Motorista** pela tela (Etapa 2).
+Você vai precisar de **três logins**: o seu (administrador), *ana* (motorista ligada a *Ana Teste*, do roteiro acima) e *bia*, com acesso
+ao módulo **Frota** no cadastro de usuário e **sem** marcar "administra o módulo Frota".
+
+1. **A tela.** Como gestor, **Frota → Perfis de acesso** (no menu, logo depois de **Relatórios**). Título *"Perfis de acesso"*. A sua
+   linha mostra a etiqueta **Administrador** e *"Para dar outro perfil, remova a condição de administrador no cadastro de usuário."*
+   — sem seletor.
+2. **Antes.** Em outro navegador (ou janela anônima), entre como *bia* e abra **Frota**: cai no **Meu painel** com *"Seu usuário não está
+   ligado a um motorista. Peça ao gestor da frota para fazer o vínculo."*.
+3. **Dar Consulta.** Como gestor, na linha de *bia*, troque **Motorista (padrão)** por **Consulta** → *"Perfil definido: Consulta"*.
+4. **Depois.** Na janela de *bia*, **recarregue** (F5) e abra **Frota**: abre o **Dashboard Frota**. O menu tem Veículos, Motoristas, …,
+   **Relatórios**, mas **não** tem **Perfis de acesso**.
+5. **Só leitura.** Como *bia*, **Veículos**: a lista aparece **sem** **Novo Veículo** e **sem** a coluna **Ações**. **Relatórios →
+   Exportar planilha** baixa o Excel.
+6. **A tela é só do gestor.** Como *bia*, digite `/frota/perfis` no endereço: aparece *"Sem permissão para esta operação"* no lugar da
+   tabela.
+7. **Aviso no cadastro do motorista.** Como gestor, **Motoristas → Novo Motorista**, escolha *bia* em **Usuário de acesso (portal do
+   motorista)**: aparece *"Este usuário está com o perfil Consulta no Frota: ele vê o painel, mas não consegue registrar no portal. Para
+   ele registrar, mude o perfil em Frota → Perfis de acesso."*. Cancele.
+8. **Aviso de quem é motorista.** Em **Perfis de acesso**, dê **Consulta** a *ana*: a linha mostra *"Ligado ao motorista Ana Teste: como
+   Consulta, não registra no portal."* (e, se ela tiver saída sem retorno, *"Tem saída sem retorno: como Consulta, não consegue registrar
+   o retorno. Feche a viagem em Frota → Viagens ou volte o perfil para Motorista."*). Volte *ana* para **Motorista (padrão)** →
+   *"Perfil removido — o usuário volta ao padrão (Motorista)"*.
+9. **Documentos do motorista.** Como *ana*, digite `/frota/documentos`: a lista vem vazia. Como *bia* ou gestor, os documentos aparecem.
+10. **Voltar ao padrão.** Como gestor, *bia* → **Motorista (padrão)**. Ela recarrega e volta ao **Meu painel**.
+
+## O que as Etapas 1 e 2 **não** cobrem
+
+- Dar **Administrador de Frota** pela tela de Perfis (continua no cadastro de usuário); saber **quem** mudou um perfil; lembrar o
+  Consulta de quem foi administrador e deixou de ser.
 - A **seção 3** do formulário (imagem cortada), **foto** da avaria/cupom, **desenho** clicável das avarias.
 - **Horímetro** para máquinas, **aviso de km menor** que o atual, **multas no período** do relatório, apelido **V01/C01**.
 - O motorista **corrigir** o que lançou pelo portal (a correção é com o gestor).

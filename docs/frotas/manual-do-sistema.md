@@ -11,13 +11,16 @@ O módulo tem três perfis. O perfil decide o que a pessoa vê e o que ela pode 
 |---|---|---|
 | **Administrador de Frota** (o gestor) | Tudo: painel, alertas, relatórios, todos os cadastros e lançamentos | Tudo: veículos, motoristas, manutenções, abastecimentos, viagens, checklists, multas, documentos; aprova e cancela viagem; exclui; exporta a planilha |
 | **Motorista** | Só o que é **dele**: os próprios registros, abastecimentos, viagens e multas; no cadastro de motoristas, só ele mesmo | Pelo **Meu painel**: saída, retorno, inspeção e abastecimento, sempre em nome dele |
-| **Consulta** | Painel, alertas e relatórios | Nada (só exporta a planilha) |
+| **Consulta** | Painel, alertas, relatórios e todas as telas de cadastro e lançamento, só para ler (inclusive CPF e CNH dos motoristas e os valores) | Nada (só exporta a planilha). As telas aparecem sem os botões de novo, editar, aprovar e excluir |
 
 Como o perfil é decidido:
 
-- É **Administrador de Frota** quem é administrador geral do sistema ou administrador do módulo Frota (marcado na tela de usuários).
-- Quem tem acesso ao módulo Frota e **não** é administrador é **Motorista**, a não ser que tenha recebido o perfil Consulta.
-- Pela tela de usuários só se marca o Administrador de Frota. O perfil Consulta ainda não tem botão na tela.
+- É **Administrador de Frota** quem é superadmin, administrador geral do sistema ou administrador do módulo Frota (marcado no
+  cadastro de usuário). Esse perfil vem só do cadastro de usuário.
+- Os outros recebem **Consulta** ou **Motorista** em **Frota → Perfis de acesso** (veja 3.8).
+- Quem tem acesso ao módulo Frota, não é administrador e não recebeu perfil nenhum é **Motorista**.
+- O perfil vale a partir do próximo clique da pessoa, sem ela sair e entrar de novo. O menu e os botões que ela vê se atualizam quando
+  ela recarrega a página, ou sozinhos quando ela abre o **Dashboard Frota** ou o **Meu painel** (eles percebem a mudança).
 
 Para alguém usar o módulo, o administrador precisa dar a ele **acesso ao módulo Frota** na tela de usuários.
 
@@ -28,7 +31,7 @@ Para alguém usar o módulo, o administrador precisa dar a ele **acesso ao módu
 - Ver os dados dos colegas (CPF, CNH, lançamentos).
 - Alterar um lançamento que não é dele: *"Você só pode alterar os seus próprios registros"*.
 - Aprovar ou cancelar viagem: *"Só o gestor da frota pode aprovar ou cancelar viagem"*.
-- Lançar multa ou documento.
+- Lançar multa ou documento, nem ver a lista de documentos dos veículos (aberta pelo endereço, ela vem vazia).
 - Lançar qualquer coisa em nome de outro motorista: o sistema sempre grava o motorista ligado ao login dele, seja qual for o
   escolhido no formulário.
 
@@ -190,6 +193,9 @@ O campo **Usuário de acesso** é o que liga o cadastro ao login. Sem ele, o mot
 - Para desfazer o vínculo, escolha **— nenhum —** e salve.
 - Se o login foi desativado depois de ligado, ele continua aparecendo **só** no motorista que o tem, com "(inativo)", e o cadastro
   salva normalmente. Trocar para um login inexistente ou desativado: *"Usuário não encontrado"*.
+- Se o login escolhido está com o perfil **Consulta**, aparece embaixo do campo: *"Este usuário está com o perfil Consulta no Frota: ele
+  vê o painel, mas não consegue registrar no portal. Para ele registrar, mude o perfil em Frota → Perfis de acesso."*. O aviso não
+  impede salvar; o motorista só vai conseguir registrar depois que o perfil voltar a Motorista.
 
 ### 3.3 Acompanhar o painel e os alertas
 
@@ -214,7 +220,8 @@ não é preciso fechar.
 
 ### 3.4 As telas de cadastro e lançamento
 
-Todas funcionam igual: tabela, busca, às vezes filtro, **Novo…**, e na linha **editar** (lápis) e **excluir** (lixeira).
+Todas funcionam igual: tabela, busca, às vezes filtro, **Novo…**, e na linha **editar** (lápis) e **excluir** (lixeira). Para quem
+está como **Consulta**, esses botões (e o de aprovar viagem) não aparecem: a tela é só para ler.
 
 | Tela | O que guardar de importante |
 |---|---|
@@ -292,6 +299,41 @@ O método é o de "tanque cheio": a conta supõe que cada abastecimento completa
 somam tudo), consumo médio km/L por veículo, **Imprimir** e **Exportar planilha**. Vistos pelo Administrador de Frota e pelo
 Consulta.
 
+
+### 3.8 Dar o perfil a cada pessoa (Perfis de acesso)
+
+**Frota → Perfis de acesso** aparece só no menu do Administrador de Frota (quem abre o endereço sem ser administrador vê *"Sem permissão
+para esta operação"*). A tela lista os usuários ativos do sistema, com busca por nome ou e-mail, em quatro colunas: **Usuário**, **Perfil
+no Frota**, **O que isso permite** e **Motorista ligado** (o motorista cujo cadastro está ligado àquele login, ou "—").
+
+- Para cada pessoa há um seletor com **Motorista (padrão)** e **Consulta**. Ao escolher, o sistema grava na hora: *"Perfil definido:
+  Consulta"*, ou, voltando ao padrão, *"Perfil removido — o usuário volta ao padrão (Motorista)"*.
+- **O que cada um permite**, como a tela escreve: Motorista — *"Registra saída, retorno, inspeção e abastecimento no portal; vê só o que
+  é dele."*; Consulta — *"Vê o painel, os alertas, as listas e os relatórios, e exporta a planilha. Não registra nem altera nada."*;
+  Administrador de Frota — *"Faz tudo no módulo, inclusive dar perfis."*.
+- **Administradores não têm seletor.** Superadmin, administrador do sistema e administrador do módulo Frota aparecem com a etiqueta
+  **Administrador** e *"Para dar outro perfil, remova a condição de administrador no cadastro de usuário."*. Se alguém tentar mesmo assim
+  (fora da tela), o sistema recusa: *"Este usuário já é administrador (superadmin, administrador do sistema ou administrador do módulo
+  Frota) e tem acesso total à frota. Remova essa condição no cadastro de usuário antes de definir outro perfil."*.
+- **Ninguém muda o próprio perfil** por esta tela: *"Você não pode mudar o seu próprio perfil por esta tela."*.
+- **Avisos na linha.** Quem está como Consulta e é motorista mostra *"Ligado ao motorista (nome): como Consulta, não registra no
+  portal."*. Se, além disso, ele está com uma saída sem retorno: *"Tem saída sem retorno: como Consulta, não consegue registrar o retorno.
+  Feche a viagem em Frota → Viagens ou volte o perfil para Motorista."*. A mudança é aceita mesmo assim; o aviso diz como resolver.
+- **Perfil gravado com valor que o sistema não conhece** aparece no seletor como "(valor) (valor inválido — escolha outro)". Enquanto
+  estiver assim, a pessoa não grava nada e só vê o que seria dela como motorista. Escolha **Consulta** ou **Motorista (padrão)**.
+  Um Administrador de Frota gravado à parte (sem estar marcado no cadastro de usuário) aparece como "Administrador de Frota (gravado à
+  parte)" e pode ser trocado da mesma forma.
+- **Perfil não é acesso.** A lista traz todos os usuários ativos; dar Consulta a quem não tem o módulo Frota no cadastro de usuário não
+  abre o módulo para ele. Usuários marcados como ocultos não aparecem na lista.
+- **Perfil não é vínculo.** Ser Motorista não liga a pessoa a um cadastro de motorista: isso se faz em **Motoristas** (3.2). Para registrar
+  no portal ela precisa das duas coisas.
+- **Quando vale:** no próximo clique da pessoa. O menu e os botões dela se acertam quando ela recarrega a página, ou sozinhos quando ela
+  abre o **Dashboard Frota** ou o **Meu painel**. Numa outra tela do Frota já aberta, até lá, um botão que ela não pode mais usar responde
+  *"Sem permissão para esta operação"*.
+- **Marcar e desmarcar o administrador do módulo apaga o Consulta.** Se alguém que está como Consulta passa a administrar o módulo Frota
+  (no cadastro de usuário) e depois deixa de administrar, volta ao padrão (Motorista). Confira esta tela depois de tirar um administrador.
+- O sistema guarda a data da última mudança de cada perfil, mas não quem mudou.
+
 ---
 
 ## 4. Situações comuns
@@ -299,7 +341,8 @@ Consulta.
 | Situação | O que fazer |
 |---|---|
 | Motorista entra e vê "Seu usuário não está ligado a um motorista…" | Gestor: **Motoristas** → editar o motorista → **Usuário de acesso** = o login dele |
-| Pessoa do escritório (não administradora) entra no Frota e cai no "Meu painel" | Ela está como Motorista. Para ver o painel, precisa ser administradora do módulo Frota ou ter o perfil Consulta (que ainda não tem botão na tela) |
+| Pessoa do escritório (não administradora) entra no Frota e cai no "Meu painel" | Ela está como Motorista. Gestor: **Perfis de acesso** → escolher **Consulta** na linha dela; ela recarrega a página |
+| Consulta não vê o botão de cadastrar ou editar | É assim: Consulta só lê. Para gravar, a pessoa precisa ser Administrador de Frota (cadastro de usuário) |
 | Veículo não aparece na Saída | Está com outro motorista (viagem sem retorno), está inativo/vendido, ou aparece como "(em manutenção — indisponível)" |
 | Motorista não consegue sair com nenhum veículo | Ele tem uma saída sem retorno: registrar o **Retorno**, ou o gestor conclui a viagem em **Viagens** |
 | Abastecimento com km/L estranho | Conferir o km digitado: um km menor que o real entra na sequência pela ordem do km e muda o km/L dele e do seguinte |

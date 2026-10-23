@@ -1,6 +1,8 @@
-# Módulo Frota — referência técnica (estado em 2026-10-23, depois da Etapa 1)
+# Módulo Frota — referência técnica (estado em 2026-10-23, depois da Etapa 2)
 
-> Levantamento original lendo a `main` em `d16de90b`; **atualizado no fechamento da Etapa 1** (portal do motorista, `4ba85d16`).
+> Levantamento original lendo a `main` em `d16de90b`; **atualizado no fechamento da Etapa 1** (portal do motorista, `4ba85d16`) e no
+> **da Etapa 2** (perfil pela tela, `3aa4e088`..`805aaa3c`; plano
+> [`2026-10-23-frotas-etapa2-perfis-pela-tela.md`](../superpowers/plans/2026-10-23-frotas-etapa2-perfis-pela-tela.md)).
 > Onde o levantamento dizia algo que deixou de ser verdade, o texto diz **"isto era assim no levantamento; mudou na Etapa 1"**.
 > Guia de usuário: [`README.md`](README.md) · manual: [`manual-do-sistema.md`](manual-do-sistema.md) · mapa de status:
 > [`specs/modulo-frotas/README.md`](../../specs/modulo-frotas/README.md) · plano com os contratos congelados:
@@ -16,14 +18,15 @@
 | Exportação | `server/services/frotas/exportacaoService.js` | 189 | **Novo (Etapa 1).** O `.xlsx` no formato da planilha (lib `xlsx`) |
 | Fila | `server/services/frotas/filaDeViagens.js` | 17 | **Novo (Etapa 1).** `naFilaDeViagens(fn)` — fila única em memória, **não reentrante**, premissa de um processo |
 | Schema | `server/services/frotas/schema.js` | 323 | `CREATE TABLE IF NOT EXISTS` + `safeAlter` + seed; listas fixas; **`ITENS_CHECKLIST`** (os 12) e **`situacaoDoRegistro`** (a única régua da situação) |
-| Perfis | `server/services/frotas/permissions.js` | 51 | `ACAO_PERFIS` (com `ver_painel` desde a Etapa 1), `getPerfilFromUser`, `can`, `requirePermission` |
+| Perfis | `server/services/frotas/permissions.js` | 71 | `ACAO_PERFIS` (com `ver_painel` desde a Etapa 1), `getPerfilFromUser`, `can`, `requirePermission`; **desde a Etapa 2** `PERFIS_ATRIBUIVEIS` e `classificarPerfilFrota(u, explicito)` (a régua da tela, que chama o próprio `getPerfilFromUser`) |
+| Perfis pela tela | `server/services/frotas/perfisService.js` | 96 | **Novo (Etapa 2).** `listarPerfis`, `definirPerfil(db, id, corpo, quemPede)` e as mensagens literais |
 | Helpers | `server/services/frotas/db.js` | 26 | `dbRun/dbGet/dbAll` promisificados |
 | Perfil no login | `server/services/systemPermissions.js` (`finishFrotaProfile`, `syncModuleAdminProfiles`), `server/services/leituraDeUsuarios.js` | — | Lê `perfil_frota_usuario`; admin do módulo vira `ADMIN_FROTA` |
-| Telas | `client/src/components/frotas/` | ~1.800 (sem testes) | `FrotasDashboard` (+ Exportar, redirect do MOTORISTA), `FrotasEntityPage` + `frotasEntityConfigs` (8 telas), `FrotasRelatorios` (+ Exportar), **`FrotasPortalMotorista`** (+ `.css`), **`frotaMenu.js`** (menu por perfil), `FrotasPageHeader`, `Frotas.css` |
+| Telas | `client/src/components/frotas/` | ~1.800 (sem testes) | `FrotasDashboard` (+ Exportar, redirect do MOTORISTA), `FrotasEntityPage` + `frotasEntityConfigs` (8 telas), `FrotasRelatorios` (+ Exportar), **`FrotasPortalMotorista`** (+ `.css`), **`frotaMenu.js`** (menu por perfil; `MENU_FROTA_ADMIN` com "Perfis de acesso" desde a Etapa 2), **`FrotasPerfisAcesso`** (Etapa 2, `/frota/perfis`), `FrotasPageHeader`, `Frotas.css` |
 | API cliente | `client/src/utils/frotasApi.js` | 117 | Cache do dashboard e do meta; `baixarPlanilhaFrota(periodo)`, `mensagemDoServidor` (lê o erro de resposta `blob`) |
 | Rotas do front | `client/src/App.js` (`/frota/*`, inclui `/frota/motorista`), menu `client/src/components/Layout.js` (`menuFrotaDoPerfil(perfilFrota(user))`) | — | protegido por `ProtectedModuleRoute modulo="frota"` |
-| Testes (servidor) | `server/tests/api/frotas*.api.test.js` (9 arquivos) + `vencimentosFrotasFinanceiroNoDiaLocal.api.test.js`; harness `server/tests/helpers/frotasTestApp.js` | — | ver "Testes" |
-| Testes (tela) | `client/src/components/frotas/*.test.js` (5 arquivos), `client/src/components/Etapa164FrotasFinanceiro.test.js` | — | — |
+| Testes (servidor) | `server/tests/api/frotas*.api.test.js` (11 arquivos) + `vencimentosFrotasFinanceiroNoDiaLocal.api.test.js`; harness `server/tests/helpers/frotasTestApp.js` | — | ver "Testes" |
+| Testes (tela) | `client/src/components/frotas/*.test.js` (7 arquivos), `client/src/components/Etapa164FrotasFinanceiro.test.js` | — | — |
 
 Isto era assim no levantamento; mudou na Etapa 1: **`server/tests/frotas.test.js` ficava fora da suíte** (o runner só descobre
 `tests/api/*.api.test.js`) — foi movido para `server/tests/api/frotasServico.api.test.js` (A9, `4ed19f8b`) e roda no `npm run test:api`.
@@ -47,13 +50,18 @@ Duas camadas, como no almoxarifado:
 | `registrar_operacoes` | ✓ | ✓ | | POST/PUT de manutenção, abastecimento, viagem, checklist; `POST /portal/registros`, `POST /portal/abastecimentos` |
 | `aprovar_viagens` | ✓ | | | `POST /viagens/:id/aprovar`; e levar a viagem a `aprovada`/`cancelada` pelo `POST`/`PUT` (RN-F1.20) |
 | `relatorios` | ✓ | | ✓ | relatórios e `GET /exportar.xlsx` |
-| `configurar` | ✓ | | | sem rota (a Etapa 2 vai usar) |
+| `configurar` | ✓ | | | `GET`/`PUT /perfis-usuario` (desde a Etapa 2) |
 
 `getPerfilFromUser`: sem usuário → `CONSULTA`; superadmin, admin do módulo `frota` ou `role === 'admin'` → `ADMIN_FROTA`; senão
-`user.perfil_frota` (de `perfil_frota_usuario`); **senão `MOTORISTA`**. A tela de usuários só grava `ADMIN_FROTA` (via
-`admin_modulos` → `syncModuleAdminProfiles`); `MOTORISTA`/`CONSULTA` **continuam sem tela** (Etapa 2). A coluna
+`user.perfil_frota` (de `perfil_frota_usuario`); **senão `MOTORISTA`**. A tela de usuários grava `ADMIN_FROTA` (via
+`admin_modulos` → `syncModuleAdminProfiles`: upsert ao conceder, `DELETE … AND perfil = 'ADMIN_FROTA'` ao revogar — o que apaga um
+Consulta que estivesse lá, C9). **Desde a Etapa 2**, `CONSULTA`/`MOTORISTA` se gravam por `PUT /perfis-usuario` (tela **Frota → Perfis
+de acesso**). Isto era assim até a Etapa 1: *"`MOTORISTA`/`CONSULTA` continuam sem tela"*. A tabela `perfil_frota_usuario` é criada
+pelo `server/index.js` e, desde a Etapa 2, também pelo `schema.js` do Frota (mesmo DDL, idempotente). A coluna
 `frotas_motoristas.perfil_frota` existe e **ninguém lê**. O front usa a mesma régua (`perfilFrota` em
-`client/src/utils/systemPermissions.js`) para o menu e para o redirect `/frota` → `/frota/motorista` do MOTORISTA.
+`client/src/utils/systemPermissions.js`) para o menu e para o redirect `/frota` → `/frota/motorista` do MOTORISTA — **com uma
+diferença**: o front minusculiza o `role` e o servidor compara `=== 'admin'` (E5 nas novidades). Desde a Etapa 2 (Fase5-2) o portal e o
+painel chamam `refreshUser` uma vez quando o `perfil` do servidor (no `/portal/inicio` ou no 403 do `/dashboard`) diverge do da tela.
 
 ### Escopo por dono (MOTORISTA)
 
@@ -63,10 +71,13 @@ não confere quem criou o registro"**. Hoje (`6dd0b130`, `9007353e`):
 - **Vínculo:** `frotas_motoristas.usuario_id` liga o login ao motorista; um motorista **ativo** por usuário (conferência no serviço +
   índice único parcial `idx_frotas_motoristas_usuario_ativo ON frotas_motoristas(usuario_id) WHERE ativo = 1 AND usuario_id IS NOT
   NULL`). Se o banco já tiver duplicata, o índice não nasce e o boot loga e segue (B21).
-- `escopoDoUsuario(db, user)` = `null` para quem não é MOTORISTA (vê tudo); para MOTORISTA, `{ motoristaId, usuarioId }`.
+- `escopoDoUsuario(db, user)` = `null` para **ADMIN_FROTA e CONSULTA** (veem tudo) ou sem usuário (chamada interna); para os demais —
+  MOTORISTA e qualquer valor fora da lista —, `{ motoristaId, usuarioId }`. Isto era "`null` para quem não é MOTORISTA" até a Fase5-1 da
+  Etapa 2 (`50219d5d`): um perfil `consulta` minúsculo gravado por SQL lia tudo.
 - **Listas filtradas** para MOTORISTA: abastecimentos, viagens, checklists e multas por `motorista_id` do vínculo; manutenções por
   `usuario_id` (quem lançou); motoristas = só ele. Sem vínculo → lista vazia. `GET /motoristas/:id` de outro → 404 `Não encontrado`.
-- **Sem filtro** para MOTORISTA: veículos e **documentos** (lista com valor — ver C7 nas novidades).
+- **Sem filtro** para MOTORISTA: veículos. **Documentos**: lista **vazia** para MOTORISTA desde a Etapa 2 (RN-F2.12, C7, `30ec5df3`);
+  até ali vinha sem filtro.
 - **Escrita:** no `POST`/`PUT` de abastecimentos, viagens e checklists, o `motorista_id` é **forçado** ao do vínculo (RN-F1.19); sem
   vínculo → 409 `MOTORISTA_NAO_VINCULADO`. `PUT` em registro de outro (abastecimento, viagem, manutenção) → 403
   `Você só pode alterar os seus próprios registros`.
@@ -87,14 +98,16 @@ manda); o resto passa por `respondDbError`. Contratos completos (mensagens liter
 | POST | `/api/frotas/portal/registros` | `registrar_operacoes` | **novo.** `{ tipo, veiculo_id, km, data, horario, nivel_combustivel, itens, avarias, observacoes, origem, destino, finalidade }` → `201 { registro, viagem }` |
 | POST | `/api/frotas/portal/abastecimentos` | `registrar_operacoes` | **novo.** `motorista_id` = o do vínculo |
 | GET | `/api/frotas/portal/meus-registros?limite=30` | módulo | **novo.** `{ registros, abastecimentos }` (máx. 200) |
-| GET | `/api/frotas/usuarios-vinculaveis` | `gerenciar_motoristas` | **novo.** `[{ id, nome, email, ativo, motorista }]`: ativos + o desativado ainda ligado |
+| GET | `/api/frotas/usuarios-vinculaveis` | `gerenciar_motoristas` | **novo.** `[{ id, nome, email, ativo, motorista, perfil_frota }]`: ativos + o desativado ainda ligado; `perfil_frota` (efetivo) desde a Etapa 2 |
+| GET | `/api/frotas/perfis-usuario` | `configurar` | **Etapa 2.** `{ perfis: ['CONSULTA','MOTORISTA'], usuarios: [{ id, nome, email, perfil_explicito, perfil_efetivo, origem: forcado\|explicito\|padrao, motorista, viagem_aberta }] }` — ativos e não ocultos |
+| PUT | `/api/frotas/perfis-usuario/:usuarioId` | `configurar` | **Etapa 2.** `{ perfil: 'CONSULTA'\|'MOTORISTA'\|null\|'' }` → `{ usuario_id, perfil_explicito, perfil_efetivo, origem }`. 404 → 400 → 409 `PERFIL_FORCADO` → 409 `PROPRIO_PERFIL` |
 | GET | `/api/frotas/exportar.xlsx?data_inicio&data_fim` | `relatorios` | **novo.** `controle-de-frota-AAAA-MM-DD.xlsx`, 6 abas |
 | GET/POST/PUT/DELETE | `/api/frotas/veiculos[/:id]` | GET módulo; resto `gerenciar_veiculos` | |
 | GET/POST/PUT/DELETE | `/api/frotas/motoristas[/:id]` | GET módulo (escopo); resto `gerenciar_motoristas` | aceita `usuario_id` (null desvincula) |
 | GET/POST/PUT/DELETE | `/api/frotas/manutencoes[/:id]` | POST/PUT `registrar_operacoes`; DELETE `gerenciar_veiculos` | escopo por `usuario_id` |
 | GET/POST/PUT/DELETE | `/api/frotas/abastecimentos[/:id]` | idem | + `km_desde_anterior`; recálculo do vizinho |
 | GET/POST/PUT/DELETE | `/api/frotas/multas[/:id]` | **POST/PUT `gerenciar_veiculos`** | *era `registrar_operacoes`; mudou na Etapa 1* |
-| GET/POST/PUT/DELETE | `/api/frotas/documentos[/:id]` | **POST/PUT `gerenciar_veiculos`** | *idem*; GET sem escopo |
+| GET/POST/PUT/DELETE | `/api/frotas/documentos[/:id]` | **POST/PUT `gerenciar_veiculos`** | *idem*; GET: MOTORISTA recebe `[]` (Etapa 2) |
 | GET/POST/PUT/DELETE | `/api/frotas/viagens[/:id]` | POST/PUT `registrar_operacoes`; DELETE `gerenciar_veiculos` | fila de viagens; viagem única; km e data do retorno; RN-F1.20 |
 | POST | `/api/frotas/viagens/:id/aprovar` | `aprovar_viagens` | **só `solicitada`** (409). *No levantamento "não confere o status atual"; mudou na Etapa 1* |
 | GET/POST/DELETE | `/api/frotas/checklists[/:id]` | POST `registrar_operacoes` | **sem PUT**. Lista traz `tipo_registro, km, horario, nivel_combustivel, status_geral, itens, avarias, viagem_id` |
@@ -114,7 +127,7 @@ Sem validação de esquema (Zod) — checagem no serviço.
 | `frotas_documentos` | veiculo_id, tipo, numero_documento, valor, data_vencimento, alerta_dias_antes (30), status (ativo/vencido/renovado) | física |
 | `frotas_viagens` | veiculo_id, motorista_id, data_saida/retorno (`AAAA-MM-DDTHH:MM`), km_saida/retorno/rodado, **origem** (novo), destino, finalidade, setor, status, aprovador_*, solicitante_*, observacoes | física |
 | `frotas_checklists` | veiculo_id, motorista_id, data_checklist, 7 × `*_ok`, observacoes, aprovado, usuario_id/nome; **novas:** `tipo_registro` (saida/retorno/inspecao, padrão inspecao), `km`, `horario`, `nivel_combustivel`, `itens_json` (os 12), `avarias_json`, `status_geral` (OK/PENDENCIA/INCOMPLETO), `viagem_id` | física |
-| `perfil_frota_usuario` (em `index.js`) | usuario_id (PK), perfil (padrão 'MOTORISTA') | — |
+| `perfil_frota_usuario` (em `index.js` e, desde a Etapa 2, também no `schema.js` do Frota) | usuario_id (PK), perfil (padrão 'MOTORISTA'), updated_at | gravada por `syncModuleAdminProfiles` (ADMIN_FROTA) e, desde a Etapa 2, por `PUT /perfis-usuario` (CONSULTA/MOTORISTA) |
 
 Saída, retorno e inspeção do portal são linhas de `frotas_checklists` (B1). Os 7 `*_ok` continuam gravados a partir dos 12:
 pneus←pneus_estepe, oleo←oleo_motor, luzes←farois_lanternas, freios←freios, documentos←documentos_equipamentos (FALHA → 0, OK/NA → 1,
@@ -150,7 +163,7 @@ DDL do `index.js`.
 
 ## Testes
 
-Rodados no fechamento da Etapa 1 (2026-10-23):
+Rodados no fechamento da Etapa 1 (2026-10-23); os da Etapa 2 estão no fim desta seção.
 
 | Arquivo | Resultado |
 |---|---|
@@ -168,7 +181,13 @@ Rodados no fechamento da Etapa 1 (2026-10-23):
 
 Harness `frotasTestApp`: express + SQLite `:memory:` + `registerFrotasRoutes` real + `requirePermission` real; usuários `ADMIN`,
 `MOTORISTA`, `CONSULTA`, `MOTORISTA2`; o usuário viaja na requisição (`x-test-user`), `ctx.como(user)(metodo, url, corpo)` para
-paralelo. **Não** roda o `finishFrotaProfile` (o perfil vem no objeto do usuário).
+paralelo. **Não** roda o `finishFrotaProfile` (o perfil vem no objeto do usuário). **Desde a Etapa 2**: `usuarios` tem `is_superadmin`,
+`admin_modulos` e `is_oculto`, e `comLoginReal(ctx)` monta o **mesmo banco** atrás do login real (`criarAuthenticateToken` +
+`enrichUserFromDb`), para provar que o perfil gravado chega ao `req.user` (`frotasPerfisIdaEVolta`).
+
+Etapa 2: `frotasPerfis.api.test.js` **17/17** e `frotasPerfisIdaEVolta.api.test.js` **3/3**; tela `FrotasPerfisAcesso.test.js`,
+`FrotasEtapa2Gestor.test.js`, mais casos em `FrotasMenuPorPerfil` e `FrotasPortalMotorista` — `client/src/components/frotas`: 7
+arquivos, **64/64**. Números da suíte inteira: letra E nas novidades.
 
 ## Achados
 
