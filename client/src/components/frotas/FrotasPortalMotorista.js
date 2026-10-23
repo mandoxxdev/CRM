@@ -141,7 +141,7 @@ export function RegistroForm({ tipo, inicio, onCancelar, onSalvo }) {
     }
     try {
       await api.post('/frotas/portal/registros', corpo);
-      toast.success(`${TITULO_TIPO[tipo]} registrada`);
+      toast.success(`${TITULO_TIPO[tipo]} ${tipo === 'retorno' ? 'registrado' : 'registrada'}`);
       onSalvo();
     } catch (err) {
       setErro(err.response?.data?.error || 'Não foi possível salvar. Confira a internet e tente de novo.');

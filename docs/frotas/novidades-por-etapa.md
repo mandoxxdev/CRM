@@ -100,8 +100,7 @@ WHERE status = 'em_andamento' AND motorista_id IS NOT NULL GROUP BY motorista_id
 - **C7 — o motorista ainda lê a lista de Documentos se digitar o endereço.** O menu dele não mostra **Documentos**, mas quem abrir
   `/frota/documentos` à mão vê os documentos de todos os veículos, com valor. Veículos também são legíveis (sem dado pessoal). As
   outras listas (abastecimentos, viagens, checklists, multas, manutenções, motoristas) só trazem o que é dele.
-- **C8 — avisos com gênero trocado.** Ao salvar, o portal mostra *"Saída registrada"*, *"Inspeção registrada"* e
-  *"Retorno registrada"* (o texto é o tipo + "registrada"). Cosmético; registrado para não parecer erro de apresentação.
+- **C8 — avisos com gênero trocado (corrigido no fechamento).** O portal mostrava *"Retorno registrada"*; agora mostra *"Retorno registrado"* (*"Saída registrada"* e *"Inspeção registrada"* não mudam).
 
 ### D — limitações declaradas (cortes de escopo)
 

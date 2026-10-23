@@ -76,7 +76,7 @@ Quando você está com um veículo, o painel mostra: "Você está com o veículo
 - **Observações** — texto livre.
 
 O botão **Salvar** só acende quando os 12 itens estão marcados; enquanto faltar algum, o rodapé mostra "Faltam (N) de 12 itens.".
-Ao salvar, aparece "Saída registrada", "Retorno registrada" ou "Inspeção registrada" e você volta ao painel.
+Ao salvar, aparece "Saída registrada", "Retorno registrado" ou "Inspeção registrada" e você volta ao painel.
 
 Se o sistema recusar, a mensagem aparece em vermelho no topo do formulário e **nada é gravado**; o que você digitou continua lá.
 

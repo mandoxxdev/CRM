@@ -131,7 +131,7 @@ administrador. Troque "hoje" pela data do dia.
 7. **Retorno com km menor.** Entrar como *ana* → **Retorno**. KM **10000**, os 12 itens OK, horário depois das 08:00. Salvar → em
    vermelho no topo: *"KM do retorno (10000) menor que o KM da saída (10050). Confira o hodômetro."*. Nada foi gravado: o cartão da
    viagem continua lá.
-8. **Retorno certo.** No mesmo formulário, KM **10120** → Salvar → *"Retorno registrada"*. O cartão some e volta o botão **Saída**.
+8. **Retorno certo.** No mesmo formulário, KM **10120** → Salvar → *"Retorno registrado"*. O cartão some e volta o botão **Saída**.
 9. **Abastecimento.** **Abastecimento**: `ABC1D23`, KM **10200**, **40** litros, valor **240**, data de hoje → *"Abastecimento
    registrado"*. Outro: KM **10600**, **40** litros → aparece em **Meus registros → Abastecimentos**.
 10. **Gestor confere.** Entrar como gestor. **Viagens**: a viagem está *concluida* com KM rodado **70**. **Abastecimentos**: o de KM
