@@ -52,9 +52,10 @@ import './Almoxarifado.css';
  * Acoes por STATUS (toolStateMachine.js, contrato congelado no design): emprestar so em
  * DISPONIVEL; devolver so em EMPRESTADA; bloquear so em DISPONIVEL; desbloquear so em BLOQUEADA;
  * iniciar manutencao em DISPONIVEL ou AVARIADA (RN-07); concluir manutencao so em EM_MANUTENCAO;
- * reencontrar so em PERDIDA. Ocorrencia (avaria/perda) e calibracao nao tem restricao de status
- * documentada no contrato — ficam disponiveis em qualquer status (calibracao so quando a
- * ferramenta EXIGE, campo `exige_calibracao`).
+ * reencontrar so em PERDIDA. Ocorrencia (avaria/perda) e calibracao ficam em qualquer status SALVO
+ * BAIXADA (Etapa 177, RN-177.10; desde a 187 o servidor tambem recusa calibrar a baixada) — calibracao
+ * so quando a ferramenta EXIGE, campo `exige_calibracao`. Editar idem: qualquer status salvo Baixada
+ * (Etapa 187, B1242).
  *
  * "Concluir manutencao" precisa do ID da manutencao ABERTA, que GET /ferramentas nao devolve
  * (so `calibracao_vigente` e `emprestimo_aberto` resumidos, por design). Por isso o clique busca
@@ -318,7 +319,8 @@ const FerramentasAlmoxarifado = () => {
   };
 
   // ── Edição (Etapa 175) ─────────────────────────────────────────────────────────────────────
-  // RN-175.01/02: em qualquer status (o PUT não toca o status — ele muda pelas ações da linha).
+  // RN-175.01/02: em qualquer status salvo Baixada (Etapa 187, B1242 — revê a B1131: o servidor recusa editar a baixada; para
+  // corrigir um dado, Reverter baixa primeiro). O PUT não toca o status — ele muda pelas ações da linha.
   // O form nasce da linha da lista: `exige_calibracao` chega 0/1 do SQLite e vira booleano aqui.
   const abrirEditar = (ferramenta, evento) => {
     if (!bloquearSeNaoPode('gerenciar_ferramentas', evento)) return;
@@ -760,7 +762,19 @@ const FerramentasAlmoxarifado = () => {
                               </div>
                             )}
                           </td>
-                          <td><span className={`almox-badge almox-badge-${info.cls}`}>{info.label}</span></td>
+                          <td>
+                            <span className={`almox-badge almox-badge-${info.cls}`}>{info.label}</span>
+                            {/* Etapa 187 (RN-187.08a, B1245/B1247): a restricao da ultima manutencao — leitura, para todos; fora da
+                                baixada (ela nao circula). Aviso, nao trava. */}
+                            {f.restricao && f.status !== 'BAIXADA' && (
+                              <>
+                                <span className="almox-badge almox-badge-baixo almox-selo-restricao" style={{ marginLeft: 6 }}>Em uso com restrição</span>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>
+                                  Restrição: {f.restricao.observacoes}
+                                </div>
+                              </>
+                            )}
+                          </td>
                           <td>{f.numero_serie || '—'}</td>
                           <td>{f.localizacao_id
                             ? (() => {
@@ -779,9 +793,12 @@ const FerramentasAlmoxarifado = () => {
                           <td>
                             {podeEscrever && (
                               <div className="almox-actions">
-                                <button className="btn-almox-secondary" onClick={(e) => abrirEditar(f, e)}>
-                                  <FiEdit2 size={13} /> Editar
-                                </button>
+                                {/* Etapa 187 (RN-187.08d, B1242): a baixada nao edita — o servidor recusa; Reverter baixa primeiro */}
+                                {f.status !== 'BAIXADA' && (
+                                  <button className="btn-almox-secondary" onClick={(e) => abrirEditar(f, e)}>
+                                    <FiEdit2 size={13} /> Editar
+                                  </button>
+                                )}
                                 {f.status === 'DISPONIVEL' && (
                                   <button className="btn-almox-secondary" onClick={(e) => abrirEmprestar(f, e)}>
                                     <FiUserCheck size={13} /> Emprestar
@@ -1112,6 +1129,12 @@ const FerramentasAlmoxarifado = () => {
             </div>
             <div className="almox-modal-body">
               <p style={{ marginTop: 0 }}><strong>{modal.ferramenta.codigo_patrimonio}</strong> — {modal.ferramenta.nome}</p>
+              {/* Etapa 187 (RN-187.08b, B1246): avisa e NAO bloqueia — o envio segue normal */}
+              {modal.ferramenta.restricao && (
+                <p role="note" className="almox-badge almox-badge-baixo" style={{ display: 'block', whiteSpace: 'normal', padding: '8px 10px' }}>
+                  Esta ferramenta voltou da manutenção em uso com restrição: {modal.ferramenta.restricao.observacoes}. Confira antes de emprestar.
+                </p>
+              )}
               <div className="almox-field">
                 <label className="almox-label" htmlFor="emprestimo-colaborador">Colaborador<span className="required">*</span></label>
                 <select id="emprestimo-colaborador" className="almox-form-select" value={formEmprestar.colaborador_id}

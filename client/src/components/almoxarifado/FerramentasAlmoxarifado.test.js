@@ -565,7 +565,8 @@ describe('FerramentasAlmoxarifado — Etapa 175, editar', () => {
   const getsDaLista = () => api.get.mock.calls.filter(([url]) => url === '/almoxarifado/ferramentas').length;
   const exigeCalibracao = () => [...container.querySelectorAll('.almox-modal input[type="checkbox"]')][0];
 
-  test('RN-175.01: "Editar" em toda linha, em qualquer status; sem permissão, em nenhuma', async () => {
+  // Etapa 187 (B1242, revê a B1131): "em qualquer status" virou "salvo Baixada" — a baixada nao edita (RN-187.08d, abaixo).
+  test('RN-175.01: "Editar" em toda linha, em qualquer status salvo Baixada; sem permissão, em nenhuma', async () => {
     await renderizar();
     const linhas = linhasFerramentas();
     expect(linhas).toHaveLength(3); // DISPONIVEL, EMPRESTADA, BLOQUEADA
@@ -822,7 +823,8 @@ describe('FerramentasAlmoxarifado — Etapa 177, retorno da manutenção (condi�
     expect(botao('Reverter baixa', baixada)).toBeTruthy();
     expect(botao('Ocorrência', baixada)).toBeFalsy();
     expect(botao('Calibração', baixada)).toBeFalsy();
-    expect(botao('Editar', baixada)).toBeTruthy();
+    // Etapa 187 (B1242): a baixada nao edita — era toBeTruthy (a 177 mostrava "Editar" e "Reverter baixa"); mudanca de regra, nao teste quebrado
+    expect(botao('Editar', baixada)).toBeFalsy();
     expect(botao('Ocorrência', emManut)).toBeTruthy();
     expect(botao('Reverter baixa', emManut)).toBeFalsy();
     // o filtro de status oferece "Baixada"
@@ -1077,5 +1079,87 @@ describe('FerramentasAlmoxarifado — texto do termo, administrador (Etapa 180, 
     expect(toast.error).toHaveBeenCalledWith('Outra versão do termo acabou de ser salva — recarregue');
     expect(container.textContent).toContain('Versão vigente: 2');
     expect($('#termo-texto-novo').value).toBe('Meu rascunho do termo');
+  });
+});
+
+// ── Etapa 187 — a restrição da manutenção aparece; a baixada não edita (RN-187.08) ──────────────
+// Contrato congelado no plano da 187: GET /ferramentas traz `restricao: null | { manutencao_id, observacoes, data_fim }`.
+describe('FerramentasAlmoxarifado — Etapa 187, restrição da manutenção e baixada sem Editar', () => {
+  const RESTRICAO = { manutencao_id: 31, observacoes: 'Só para serviço leve', data_fim: '2026-10-22 10:00:00' };
+  const AVISO = 'Esta ferramenta voltou da manutenção em uso com restrição: Só para serviço leve. Confira antes de emprestar.';
+  const RESTRITA = { ...FERRAMENTAS[0], restricao: RESTRICAO }; // id 1, DISPONIVEL (postsEmprestar olha o id 1)
+  const SEM = { ...FERRAMENTAS[0], id: 11, codigo_patrimonio: 'FER-011', nome: 'Serra tico-tico', restricao: null };
+  const BAIXADA_R = { ...FERRAMENTAS[0], id: 12, codigo_patrimonio: 'FER-012', nome: 'Lixadeira', status: 'BAIXADA', restricao: RESTRICAO };
+  const comLista = (lista) => {
+    const original = api.get.getMockImplementation();
+    api.get.mockImplementation((url, ...resto) => (url === '/almoxarifado/ferramentas'
+      ? Promise.resolve({ data: lista }) : original(url, ...resto)));
+  };
+  const selo = (linha) => linha.querySelector('.almox-selo-restricao');
+  const aviso = () => container.querySelector('.almox-modal [role="note"]');
+
+  test('[RN-187.08a] a restrita mostra o selo e "Restrição: …"; a sem restrição, não; sem permissão de escrita o selo continua', async () => {
+    comLista([RESTRITA, SEM]);
+    await renderizar();
+    let [restrita, sem] = linhasFerramentas();
+    expect(selo(restrita).textContent).toBe('Em uso com restrição');
+    expect(restrita.textContent).toContain('Restrição: Só para serviço leve');
+    expect(selo(sem)).toBeNull();
+    expect(sem.textContent).not.toContain('Restrição:');
+    act(() => root.unmount());
+    root = createRoot(container);
+    mockPode = () => false;
+    await renderizar();
+    [restrita, sem] = linhasFerramentas();
+    expect(botao('Editar', restrita)).toBeFalsy(); // premissa: de fato sem escrita
+    expect(selo(restrita).textContent).toBe('Em uso com restrição');
+    expect(restrita.textContent).toContain('Restrição: Só para serviço leve');
+    expect(selo(sem)).toBeNull();
+  });
+
+  test('[RN-187.08a] baixada com restricao: sem selo (metade positiva: a disponível com a mesma restricao tem)', async () => {
+    comLista([BAIXADA_R, RESTRITA]);
+    await renderizar();
+    const [baixada, restrita] = linhasFerramentas();
+    expect(baixada.textContent).toContain('Baixada');
+    expect(selo(baixada)).toBeNull();
+    expect(baixada.textContent).not.toContain('Restrição:');
+    expect(selo(restrita)).toBeTruthy();
+  });
+
+  test('[RN-187.08b] Emprestar a restrita: o aviso literal no modal e o envio sai (um POST, não bloqueia)', async () => {
+    comLista([RESTRITA, SEM]);
+    api.post.mockResolvedValueOnce({ data: { id: 31, termo: { numero: 'TERMO-20261022-0009', versao: 1 } } });
+    await renderizar();
+    await clicar(botao('Emprestar', linhasFerramentas()[0]));
+    expect(aviso().textContent).toBe(AVISO);
+    await preencherEmprestimo();
+    await assinar();
+    await clicar(botao('Emprestar', rodapeModal()));
+    expect(postsEmprestar()).toHaveLength(1);
+    expect(toast.success).toHaveBeenCalledWith('Ferramenta emprestada — termo TERMO-20261022-0009 assinado');
+  });
+
+  test('[RN-187.08c] Emprestar a sem restrição: nenhum aviso (metade positiva do 08b)', async () => {
+    comLista([SEM, RESTRITA]);
+    await renderizar();
+    await clicar(botao('Emprestar', linhasFerramentas()[0]));
+    expect(container.querySelector('.almox-modal h2').textContent).toBe('Emprestar ferramenta');
+    expect(aviso()).toBeNull();
+    expect(container.querySelector('.almox-modal').textContent).not.toContain('em uso com restrição');
+  });
+
+  test('[RN-187.08d] a baixada sem "Editar"; DISPONIVEL, EMPRESTADA, BLOQUEADA, EM_MANUTENCAO, AVARIADA e PERDIDA com', async () => {
+    const outros = ['DISPONIVEL', 'EMPRESTADA', 'BLOQUEADA', 'EM_MANUTENCAO', 'AVARIADA', 'PERDIDA'].map((status, i) => ({
+      ...FERRAMENTAS[0], id: 50 + i, codigo_patrimonio: `FER-0${50 + i}`, status, restricao: null,
+    }));
+    comLista([{ ...BAIXADA_R, restricao: null }, ...outros]);
+    await renderizar();
+    const [baixada, ...vivas] = linhasFerramentas();
+    expect(baixada.textContent).toContain('FER-012');
+    expect(botao('Reverter baixa', baixada)).toBeTruthy(); // premissa: a linha da baixada tem acoes
+    expect(botao('Editar', baixada)).toBeFalsy();
+    expect(vivas).toHaveLength(6);
+    vivas.forEach((l) => expect([l.textContent.slice(0, 7), !!botao('Editar', l)]).toEqual([l.textContent.slice(0, 7), true]));
   });
 });
