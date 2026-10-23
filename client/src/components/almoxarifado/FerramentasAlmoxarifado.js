@@ -17,6 +17,7 @@ import {
   erroDoNovoTexto, matriculaConfirmadaTexto,
 } from '../../utils/termoFerramenta';
 import { gerarTermoFerramentaPdf } from '../../utils/termoFerramentaPdf';
+import './Almoxarifado.css';
 
 // Etapa 170 (RN-170.03, B1081): a *Retirada* e o CURRENT_TIMESTAMP (UTC) — os 10 primeiros caracteres eram o dia UTC (das 21h a
 // meia-noite, o de amanha). O dia de Brasilia, no formato da tela (AAAA-MM-DD); so data -> o mesmo texto; ilegivel -> o corte de antes.
@@ -24,7 +25,6 @@ function diaDaRetirada(valor) {
   const d = lerDataDoBanco(valor);
   return d ? hojeLocalISO(d) : String(valor).slice(0, 10);
 }
-import './Almoxarifado.css';
 
 /**
  * Ferramentas e calibração (Etapa 9b, Task 7).
