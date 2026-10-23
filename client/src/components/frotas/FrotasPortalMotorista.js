@@ -132,7 +132,7 @@ function BotaoConfirmarMenor({ visivel, desabilitado, onClick }) {
 
 /* ---------------------------------------------------------------- saida / retorno / inspecao */
 
-export function RegistroForm({ tipo, inicio, onCancelar, onSalvo }) {
+export function RegistroForm({ tipo, inicio, onCancelar, onSalvo, onAtualizar }) {
   const itens = inicio.itens || [];
   const vistas = inicio.vistas || VISTAS_PADRAO;
   const tiposAvaria = inicio.tipos_avaria || TIPOS_AVARIA_PADRAO;
@@ -211,6 +211,9 @@ export function RegistroForm({ tipo, inicio, onCancelar, onSalvo }) {
     } catch (err) {
       setErro(err.response?.data?.error || 'Não foi possível salvar. Confira a internet e tente de novo.');
       setPodeConfirmar(ehLeituraMenor(err));
+      // Fase5 (front 1 e 2): o servidor releu o veiculo (medicao trocada pelo gestor, km lancado por outro motorista) — a tela relê o
+      // inicio para o rotulo e o "Ultimo registrado" baterem com a recusa, sem sair do formulario
+      if (onAtualizar) onAtualizar();
     } finally {
       setSalvando(false);
     }
@@ -427,7 +430,7 @@ export function RegistroForm({ tipo, inicio, onCancelar, onSalvo }) {
 
 /* ---------------------------------------------------------------- abastecimento */
 
-export function AbastecimentoForm({ inicio, onCancelar, onSalvo }) {
+export function AbastecimentoForm({ inicio, onCancelar, onSalvo, onAtualizar }) {
   const [form, setForm] = useState({
     veiculo_id: inicio.viagem_aberta?.veiculo_id ? String(inicio.viagem_aberta.veiculo_id) : '',
     km: '', litros: '', valor_total: '', data: hojeLocalISO(), posto: '', observacoes: '',
@@ -466,6 +469,9 @@ export function AbastecimentoForm({ inicio, onCancelar, onSalvo }) {
     } catch (err) {
       setErro(err.response?.data?.error || 'Não foi possível salvar. Confira a internet e tente de novo.');
       setPodeConfirmar(ehLeituraMenor(err));
+      // Fase5 (front 1 e 2): o servidor releu o veiculo (medicao trocada pelo gestor, km lancado por outro motorista) — a tela relê o
+      // inicio para o rotulo e o "Ultimo registrado" baterem com a recusa, sem sair do formulario
+      if (onAtualizar) onAtualizar();
     } finally {
       setSalvando(false);
     }
@@ -616,6 +622,14 @@ const FrotasPortalMotorista = () => {
 
   useEffect(() => { carregar(); }, [carregar]);
 
+  /** Fase5 (front 1 e 2): rele so o /inicio, sem tirar o formulario da tela (erro de rede aqui nao derruba o que foi digitado). */
+  const atualizarInicio = useCallback(async () => {
+    try {
+      const r = await api.get('/frotas/portal/inicio');
+      if (r?.data) setInicio(r.data);
+    } catch (_) { /* a mensagem do salvar ja esta na tela */ }
+  }, []);
+
   const voltarERecarregar = () => {
     setTela('inicio');
     carregar();
@@ -645,14 +659,20 @@ const FrotasPortalMotorista = () => {
   if (tela === 'saida' || tela === 'retorno' || tela === 'inspecao') {
     return (
       <div className="portal-motorista">
-        <RegistroForm tipo={tela} inicio={inicio} onCancelar={() => setTela('inicio')} onSalvo={voltarERecarregar} />
+        <RegistroForm
+          tipo={tela}
+          inicio={inicio}
+          onCancelar={voltarERecarregar}
+          onSalvo={voltarERecarregar}
+          onAtualizar={atualizarInicio}
+        />
       </div>
     );
   }
   if (tela === 'abastecimento') {
     return (
       <div className="portal-motorista">
-        <AbastecimentoForm inicio={inicio} onCancelar={() => setTela('inicio')} onSalvo={voltarERecarregar} />
+        <AbastecimentoForm inicio={inicio} onCancelar={voltarERecarregar} onSalvo={voltarERecarregar} onAtualizar={atualizarInicio} />
       </div>
     );
   }

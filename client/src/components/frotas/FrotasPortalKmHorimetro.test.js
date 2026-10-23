@@ -394,3 +394,77 @@ describe('Portal: "Meus registros" em horas', () => {
     expect(itens[3]).toContain(' · 1.790 km');
   });
 });
+
+describe('Fase 5 (front x back): a tela acompanha o servidor depois de uma recusa', () => {
+  test('front 1: o gestor trocou o veiculo para horimetro com o formulario aberto -> 400; a tela rele o inicio e o campo vira horas', async () => {
+    await renderizar();
+    await clicar(botao('Inspeção'));
+    digitar('veiculo_id', '1');
+    expect(rotuloLeitura()).toBe('KM atual (o que está no painel)');
+    digitar('km', '1900');
+    await responderItens();
+    respostaInicio = inicio({ veiculos: [{ ...CARRO, tipo_medicao: 'horimetro', horimetro_atual: 10 }, MAQUINA] });
+    api.post.mockRejectedValueOnce({ response: { status: 400, data: { error: 'Informe o horímetro atual' } } });
+    await enviar();
+    expect(container.querySelector('[role="alert"]').textContent).toBe('Informe o horímetro atual');
+    expect(rotuloLeitura()).toBe('Horímetro atual (horas no painel)');
+    expect(ultimo().textContent).toBe('Último registrado neste veículo: 10 h');
+    await enviar();
+    expect(api.post.mock.calls[1][1]).toEqual(expect.objectContaining({ horimetro: 1900 }));
+    expect('km' in api.post.mock.calls[1][1]).toBe(false);
+  });
+
+  test('front 2: outro motorista lancou depois -> o 409 e o "Ultimo registrado" passam a dizer o mesmo numero', async () => {
+    await renderizar();
+    await clicar(botao('Abastecimento'));
+    digitar('veiculo_id', '1');
+    digitar('km', '1900');
+    expect(avisoMenor()).toBeNull();
+    respostaInicio = inicio({ veiculos: [{ ...CARRO, km_atual: 2000 }, MAQUINA] });
+    api.post.mockRejectedValueOnce(conflito('KM menor que o atual do veículo (2.000 km). Confira o hodômetro antes de salvar.', 'KM_MENOR_QUE_ATUAL'));
+    await enviar();
+    expect(ultimo().textContent).toBe('Último registrado neste veículo: 2.000 km');
+    expect(avisoMenor()).not.toBeNull();
+    expect(botao('Confirmar mesmo assim')).toBeDefined();
+  });
+
+  test('lacuna A: mudar o veiculo desarma a confirmacao tambem no registro (saida/inspecao)', async () => {
+    api.post.mockRejectedValueOnce(conflito(MSG_KM, 'KM_MENOR_QUE_ATUAL'));
+    await renderizar();
+    await clicar(botao('Inspeção'));
+    digitar('veiculo_id', '1');
+    digitar('km', '900');
+    await responderItens();
+    await enviar();
+    expect(botao('Confirmar mesmo assim')).toBeDefined();
+    digitar('veiculo_id', '2');
+    expect(botao('Confirmar mesmo assim')).toBeUndefined();
+  });
+
+  test('lacuna C: a Saida da maquina manda horimetro (sem km)', async () => {
+    await renderizar();
+    await clicar(botao('Saída'));
+    digitar('veiculo_id', '2');
+    digitar('horimetro', '1240');
+    await responderItens();
+    await enviar();
+    const corpo = api.post.mock.calls[0][1];
+    expect(corpo).toEqual(expect.objectContaining({ tipo: 'saida', veiculo_id: 2, horimetro: 1240 }));
+    expect('km' in corpo).toBe(false);
+  });
+
+  test('lacuna D: depois de confirmar, volta ao painel e recarrega', async () => {
+    api.post.mockRejectedValueOnce(conflito(MSG_KM, 'KM_MENOR_QUE_ATUAL'));
+    await renderizar();
+    await clicar(botao('Inspeção'));
+    digitar('veiculo_id', '1');
+    digitar('km', '900');
+    await responderItens();
+    await enviar();
+    const getsAntes = api.get.mock.calls.filter(([u]) => u === '/frotas/portal/meus-registros').length;
+    await clicar(botao('Confirmar mesmo assim'));
+    expect(container.querySelector('form')).toBeNull();
+    expect(botao('Inspeção')).toBeDefined();
+    expect(api.get.mock.calls.filter(([u]) => u === '/frotas/portal/meus-registros').length).toBe(getsAntes + 1);
+  });
+});
