@@ -146,6 +146,13 @@ describe('RN-F4.12 custo por veiculo', () => {
     const total = linhaDa(secao('Custos por veículo'), 'Total');
     expect(total).toEqual(['Total', '', '', 'R$ 1.100,00', 'R$ 500,50', 'R$ 50,00', 'R$ 1.650,50', '']);
   });
+
+  // Fase 5 (front x back): so o Total era conferido — uma celula trocada na linha passava verde
+  test('cada coluna de custo da linha le a sua chave', async () => {
+    await render();
+    expect(linhaDa(secao('Custos por veículo'), 'ABC1D23')).toEqual(
+      ['ABC1D23', 'Strada', 'Comercial', 'R$ 100,00', 'R$ 200,50', 'R$ 50,00', 'R$ 350,50', '1.800 km']);
+  });
 });
 
 describe('RN-F4.12 consumo medio', () => {
@@ -160,6 +167,9 @@ describe('RN-F4.12 consumo medio', () => {
     const maq = linhaDa(s, 'EMP0001');
     expect(maq[1]).toBe('-');
     expect(maq[2]).toBe('5,00 L/h');
+    // Fase 5: Total litros, Total gasto e Abastecimentos de cada linha (antes so o 3 do carro era conferido)
+    expect(carro.slice(3)).toEqual(['80,0 L', 'R$ 200,50', '3']);
+    expect(maq.slice(3)).toEqual(['90,0 L', 'R$ 300,00', '2']);
   });
 
   test('vazio: "Sem abastecimentos no periodo"', async () => {
@@ -184,6 +194,42 @@ describe('RN-F4.12 + achado 7: os dois GET independentes', () => {
     expect(toast.error).toHaveBeenCalledWith('Não foi possível carregar os relatórios');
     expect(limpo(secao('Consumo médio').querySelector('tbody').textContent)).toBe('Sem abastecimentos no período');
     expect(linhaDa(secao('Custos por veículo'), 'EMP0001')[7]).toBe('125 h');
+  });
+
+  // Fase 5: os dois falhando com a mesma mensagem — um aviso so, as duas tabelas vazias
+  test('as duas falham com a mesma mensagem: um toast so', async () => {
+    respostas[URL_CUSTO] = () => Promise.reject({ response: { status: 403, data: { error: 'Sem permissão' } } });
+    respostas[URL_CONSUMO] = () => Promise.reject({ response: { status: 403, data: { error: 'Sem permissão' } } });
+    await render();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith('Sem permissão');
+    expect(limpo(secao('Custos por veículo').querySelector('tbody').textContent)).toBe('Sem dados');
+    expect(limpo(secao('Consumo médio').querySelector('tbody').textContent)).toBe('Sem abastecimentos no período');
+  });
+
+  // Fase 5: a carga roda a cada data digitada; a resposta velha que chega por ultimo nao pode sobrescrever a nova
+  test('resposta velha que chega depois da nova e descartada (periodo e linhas da ultima carga)', async () => {
+    const pendentes = [];
+    respostas[URL_CUSTO] = () => new Promise((resolve) => { pendentes.push(resolve); });
+    respostas[URL_CONSUMO] = () => Promise.resolve({ data: [] });
+    await render();
+    await setarData(0, '2026-10-01');
+    expect(pendentes).toHaveLength(2);
+    await act(async () => { pendentes[1]({ data: [MAQUINA] }); });
+    await act(async () => { pendentes[0]({ data: [CARRO] }); });
+    expect(texto()).toContain('Período: a partir de 01/10/2026');
+    const s = secao('Custos por veículo');
+    expect(linhaDa(s, 'EMP0001')[7]).toBe('125 h');
+    expect([...s.querySelectorAll('tbody tr')].some((tr) => celulas(tr)[0] === 'ABC1D23')).toBe(false);
+  });
+
+  test('limpar a data volta para "Periodo: tudo" e sem parametros', async () => {
+    await render();
+    await setarData(0, '2026-10-01');
+    await setarData(0, '');
+    expect(ultimaChamada(URL_CUSTO)[1]).toEqual({ params: {} });
+    expect(ultimaChamada(URL_CONSUMO)[1]).toEqual({ params: {} });
+    expect(texto()).toContain('Período: tudo');
   });
 
   test('as duas respondem: nenhum toast', async () => {
