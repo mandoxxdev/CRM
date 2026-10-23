@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relatório da semana — {{PERIODO}}</title>
+<style>
+  :root { --tinta:#1f2a37; --suave:#5b6675; --linha:#e3e7ec; --fundo:#ffffff; --cartao:#f6f8fa;
+          --tela:#2f80ed; --bastidores:#8a5cf6; --testes:#f2994a; --doc:#9aa5b1; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--fundo); color:var(--tinta); font:16px/1.6 "Segoe UI", system-ui, sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font-size:28px; margin:0 0 4px; } h2 { font-size:21px; margin:40px 0 12px; border-bottom:2px solid var(--linha); padding-bottom:6px; }
+  h3 { font-size:17px; margin:24px 0 6px; }
+  .sub { color:var(--suave); margin:0 0 24px; }
+  .resumo { background:var(--cartao); border-left:4px solid var(--tela); padding:16px 20px; border-radius:6px; font-size:17px; }
+  .item { border:1px solid var(--linha); border-radius:8px; padding:16px 20px; margin:16px 0; }
+  .item p { margin:6px 0; } .rotulo { font-weight:600; color:var(--suave); }
+  figure { margin:12px 0; } figure img { width:100%; border:1px solid var(--linha); border-radius:6px; }
+  figcaption { color:var(--suave); font-size:14px; }
+  .barra { display:flex; height:28px; border-radius:6px; overflow:hidden; margin:12px 0 6px; }
+  .barra span { display:block; }
+  .legenda { display:flex; flex-wrap:wrap; gap:8px 20px; font-size:14px; color:var(--suave); }
+  .legenda i { display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
+  table { border-collapse:collapse; width:100%; font-size:15px; } td, th { border-bottom:1px solid var(--linha); padding:8px; text-align:left; }
+  .nota { font-size:14px; color:var(--suave); }
+  @media print { main { padding:0; } .item, figure { break-inside:avoid; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>O que fizemos no sistema esta semana</h1>
+  <p class="sub">{{PERIODO}} · CRM GMP Industriais</p>
+
+  <p class="resumo">{{RESUMO_EM_TRES_FRASES}}</p>
+
+  <h2>O que você já pode ver na tela</h2>
+  <!-- Um bloco .item por novidade visível. Sempre com print. -->
+  <div class="item">
+    <h3>{{NOME_DA_NOVIDADE_COMO_O_USUARIO_CHAMA}}</h3>
+    <p><span class="rotulo">Onde:</span> {{MENU_E_TELA}}</p>
+    <p><span class="rotulo">Antes:</span> {{COMO_ERA}}</p>
+    <p><span class="rotulo">Agora:</span> {{COMO_FICOU}}</p>
+    <figure><img src="prints/{{ARQUIVO}}.png" alt="{{DESCRICAO}}"><figcaption>{{LEGENDA}}</figcaption></figure>
+  </div>
+
+  <h2>O que fizemos por baixo — e por que importa</h2>
+  <p>Parte do trabalho não muda a aparência das telas: é o “motor” que faz as contas e guarda as
+  informações. Quando ele erra, o erro aparece depois, em forma de estoque que não bate ou de
+  material que some. Esta semana, no motor:</p>
+  <!-- Um bloco .item por melhoria invisível. Problema que o usuário reconheceria → o que mudou → o que evita. -->
+  <div class="item">
+    <h3>{{TITULO_EM_LINGUAGEM_DO_DIA_A_DIA}}</h3>
+    <p><span class="rotulo">O problema:</span> {{SITUACAO_REAL_COM_EXEMPLO}}</p>
+    <p><span class="rotulo">O que fizemos:</span> {{O_QUE_MUDOU}}</p>
+    <p><span class="rotulo">O que isso evita:</span> {{CONSEQUENCIA_NO_DIA_A_DIA}}</p>
+  </div>
+
+  <h2>Para onde foi o tempo</h2>
+  <p>Cerca de <strong>{{HORAS}} horas</strong> de desenvolvimento nesta semana.</p>
+  <div class="barra" role="img" aria-label="Divisão do tempo">
+    <span style="width:{{PCT_TELA}}%;background:var(--tela)"></span>
+    <span style="width:{{PCT_BASTIDORES}}%;background:var(--bastidores)"></span>
+    <span style="width:{{PCT_TESTES}}%;background:var(--testes)"></span>
+    <span style="width:{{PCT_DOC}}%;background:var(--doc)"></span>
+  </div>
+  <div class="legenda">
+    <span><i style="background:var(--tela)"></i>Telas que você usa — {{PCT_TELA}}%</span>
+    <span><i style="background:var(--bastidores)"></i>Motor do sistema — {{PCT_BASTIDORES}}%</span>
+    <span><i style="background:var(--testes)"></i>Conferências automáticas — {{PCT_TESTES}}%</span>
+    <span><i style="background:var(--doc)"></i>Planejamento e manuais — {{PCT_DOC}}%</span>
+  </div>
+  <p>{{POR_QUE_O_TEMPO_FOI_PARA_ONDE_FOI}}</p>
+  <p class="nota">As horas são estimadas pelo registro do trabalho salvo ao longo do dia. Pesquisa,
+  conversas e testes feitos à mão não entram — o número real é maior.</p>
+
+  <h2>O que vem na próxima semana</h2>
+  <!-- Sempre pelo menos UMA coisa que vai aparecer na tela. -->
+  <ul>
+    <li>{{PROXIMA_NOVIDADE_VISIVEL}}</li>
+  </ul>
+
+  <h2>Quer conferir?</h2>
+  <ol>
+    <li>{{PASSO_A_PASSO_CLICAVEL}}</li>
+  </ol>
+</main>
+</body>
+</html>

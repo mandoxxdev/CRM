@@ -63,6 +63,15 @@ Documentação desatualizada é trabalho não terminado. Antes de reportar concl
 
 Onde o desenvolvimento parou tem de ficar óbvio no cabeçalho do guia do módulo.
 
+## Toda semana tem de ter algo na tela — e um relatório para a empresa
+
+Quem usa o sistema não é da área: semana só de motor parece semana parada. Ao planejar uma
+etapa, inclua sempre que possível uma **fatia visível** (um aviso, um campo, um filtro) que
+mostre o que foi feito por baixo. Toda sexta (ou quando pedirem horas/relatório), use a skill
+`relatorio-semanal` (`.claude/skills/relatorio-semanal/SKILL.md`): ela mede as horas pelo git,
+tira os prints e escreve em linguagem de usuário — **sem** spec, etapa, códigos (B476, C131),
+commit, back-end nem menção a IA. O relatório fica em `docs/relatorios-semanais/AAAA-MM-DD/`.
+
 ## Testes — rode antes de commitar, e cite o resultado real
 
 ```
