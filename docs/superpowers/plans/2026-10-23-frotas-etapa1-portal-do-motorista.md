@@ -37,6 +37,7 @@ seção 3 do formulário (a imagem recebida está cortada), apelido V01/C01.
 | RN-F1.16 | Painel e alertas (`/dashboard`, `/alertas`) passam a exigir `ver_painel` (ADMIN_FROTA, CONSULTA). Multas e documentos: criar/alterar passam a `gerenciar_veiculos` (motorista não lança multa nem documento) | MOTORISTA em `/dashboard` → 403 |
 | RN-F1.17 | "Aprovar" só vale para viagem `solicitada` (A4) | aprovar concluída → 409 |
 | RN-F1.18 | Exportação no formato da planilha: abas **Cadastro Frota, Viagens e KM, Checklist, Abastecimentos, Manutenções, Documentos**, perfil `relatorios`, período opcional sobre a data de cada aba | |
+| RN-F1.20 | (Fase 5) Perfil **sem** `aprovar_viagens`, no `POST`/`PUT /viagens`, não leva a viagem a `aprovada` nem `cancelada` → 403. No `POST`, status ausente vira `solicitada`. No `PUT` só conta a **troca** de status (mandar o mesmo status passa — B17) | MOTORISTA `POST /viagens {status:'aprovada'}` → 403 |
 
 ## Contratos de API (congelados)
 
@@ -69,11 +70,13 @@ Resposta `201 { registro: <linha de frotas_checklists com itens e avarias já co
 | saída com motorista já em viagem | 409 | `Você já tem uma saída sem retorno. Registre o retorno primeiro.` |
 | retorno sem viagem aberta do motorista | 409 | `Você não tem saída aberta para registrar o retorno.` |
 | retorno com km < km_saida | 400 | `KM do retorno (<km>) menor que o KM da saída (<km_saida>). Confira o hodômetro.` |
+| (Fase5-3) retorno com data/hora antes da saída | 400 | `Data/hora do retorno anterior à saída (<AAAA-MM-DD HH:MM da saída>).` |
+| (Fase5-5) `data` depois de hoje (Brasília) | 400 | `Data no futuro` |
 
 ### `POST /portal/abastecimentos` — `registrar_operacoes`
 Corpo: `{ veiculo_id, km, litros, valor_total, data?, posto?, combustivel_tipo?, observacoes? }`. `motorista_id` = o do vínculo
 (o corpo **não** escolhe). Mesma regra de cálculo da RN-F1.11. `201 <linha de frotas_abastecimentos>`.
-Erros: 409 vínculo (acima); 400 `Veículo, litros e data são obrigatórios` (o existente); 400 `Informe o KM atual`.
+Erros: 409 vínculo (acima); 400 `Veículo, litros e data são obrigatórios` (o existente); 400 `Informe o KM atual`; (Fase5-5) 400 `Data no futuro`.
 
 ### `GET /portal/meus-registros?limite=30` — qualquer perfil com módulo
 `200 { registros: [checklists do motorista, mais novos primeiro, com placa], abastecimentos: [os dele, com placa] }`; sem vínculo → listas vazias.
@@ -84,7 +87,14 @@ Erros: 409 vínculo (acima); 400 `Veículo, litros e data são obrigatórios` (o
 - `PUT` de manutenções, abastecimentos, multas, viagens por MOTORISTA em registro alheio → 403 `Você só pode alterar os seus próprios registros`.
 - `PUT /viagens/:id` com km_retorno < km_saida → 400 `KM do retorno (<km>) menor que o KM da saída (<km_saida>). Confira o hodômetro.`
 - `POST /viagens/:id/aprovar` fora de `solicitada` → 409 `Só é possível aprovar viagem solicitada`.
-- `POST/PUT /motoristas` aceitam `usuario_id` (número ou null); ligado a outro motorista ativo → 409 `Este usuário já está ligado ao motorista <nome>`.
+- (Fase5-3) `POST`/`PUT /viagens` com `data_retorno` antes de `data_saida` (as duas presentes, do corpo ou gravadas) → 400 `Data/hora do retorno anterior à saída (<AAAA-MM-DD HH:MM>).` (sem hora numa delas, compara o dia).
+- (RN-F1.20 / Fase5-8) `POST`/`PUT /viagens` levando a `aprovada`/`cancelada` sem `aprovar_viagens` → 403 `Só o gestor da frota pode aprovar ou cancelar viagem`.
+- (Fase5-6) `POST /checklists` com avaria malformada → 400 `Avaria inválida` (a mesma validação do portal).
+- (Fase5-1) `PUT /abastecimentos` que muda `litros` ou `valor_total` sem mandar `valor_litro` recalcula `valor_litro = valor_total / litros`.
+- `POST/PUT /motoristas` aceitam `usuario_id` (número ou null); ligado a outro motorista ativo → 409 `Este usuário já está ligado ao motorista <nome>`. (Fase5-9) Garantido também pelo índice único parcial `idx_frotas_motoristas_usuario_ativo`; a corrida que bate nele vira a mesma 409. (Fase5-10) Manter o **mesmo** `usuario_id` já gravado passa mesmo com o usuário desativado; só a troca valida `Usuário não encontrado`.
+- (Fase5-10) `GET /usuarios-vinculaveis` → `[{id, nome, email, ativo: bool, motorista}]`: os ativos (`ativo: true`) **e** o usuário desativado que segue ligado a um motorista ativo (`ativo: false`).
+- (Fase5-11) alerta `tipo: 'checklist'` sai com `dias_restantes: null` (não é vencimento).
+- (Fase5-2) exportação, aba Documentos: só documentos `status = 'ativo'` (a régua do alerta).
 - `GET /checklists` passa a trazer `tipo_registro, km, horario, nivel_combustivel, status_geral, itens, avarias, viagem_id`.
 - `GET /abastecimentos` passa a trazer `km_desde_anterior`.
 
@@ -173,4 +183,31 @@ Cada task: TDD com controle positivo (quebrar a implementação e ver o vermelho
 - A saída grava as `observacoes` também na viagem (aparecem na coluna Observações de Viagens e KM).
 - `POST /viagens` passou a calcular `km_rodado` quando vem `km_saida` e `km_retorno` (antes só o PUT calculava).
 - Abertura/fechamento de viagem corre numa fila em memória (`services/frotas/filaDeViagens.js`, não reentrante — B13).
-- Harness: `tests/helpers/frotasTestApp.js` (`createFrotasTestApp`, `ADMIN`, `MOTORISTA`, `CONSULTA`, `MOTORISTA2`).
+- Harness: `tests/helpers/frotasTestApp.js` (`createFrotasTestApp`, `ADMIN`, `MOTORISTA`, `CONSULTA`, `MOTORISTA2`). Desde a Fase5-7 o usuário
+  viaja na própria requisição (header `x-test-user`, capturado quando `req()` é chamado) e `ctx.como(user)(metodo, url, corpo)` dispara
+  como um usuário específico — antes, num `Promise.all`, todas as requisições rodavam como o último `setUser`.
+- (Fase5-10) `/usuarios-vinculaveis` traz `ativo` em cada usuário (e o inativo ligado); o select do motorista mostra o inativo só
+  no form do motorista que o tem, rotulado `(inativo)`.
+
+## Fase 5 — achados e correções (revisão adversarial, reproduzidos por sonda)
+
+Testes: `server/tests/api/frotasFase5Regras.api.test.js`, `frotasFase5Auth.api.test.js`, `frotasPortal.api.test.js` (Fase5-7),
+`client/src/components/frotas/FrotasFase5.test.js`. Todos vermelhos antes da correção; 7, 8, 9 e 11 também com controle positivo
+depois (quebrar de novo → vermelho).
+
+| Achado | O que era | Correção | Estado | Commit |
+|---|---|---|---|---|
+| Fase5-1 | `PUT /abastecimentos` mudando litros/valor mantinha o `valor_litro` (40L R$200 → 50L seguia 5/L) | sem `valor_litro` no corpo, recalcula `valor_total/litros` | corrigido | c8794fd7 |
+| Fase5-2 | aba Documentos mostrava documento `renovado` como VENCIDO | exporta só `status = 'ativo'` (régua do alerta) | corrigido | c8794fd7 |
+| Fase5-3 | retorno com data/hora antes da saída era aceito | 400 `Data/hora do retorno anterior à saída (…)` no portal, `PUT` e `POST /viagens` | corrigido | c8794fd7 |
+| Fase5-4 | saída que consome a aprovada (B8) perdia as `observacoes` | `UPDATE` grava `observacoes` (COALESCE) | corrigido | c8794fd7 |
+| Fase5-5 | portal aceitava data no futuro (alerta preso por semanas) | 400 `Data no futuro` (registros e abastecimentos) | corrigido | c8794fd7 |
+| Fase5-6 | `POST /checklists` aceitava avaria malformada (planilha "undefined: undefined") | `validarAvarias` única no `frotasService`, usada pelas duas rotas | corrigido | c8794fd7 |
+| Fase5-7 | teste de saídas simultâneas não via dois motoristas (setUser global) e engolia o 409 final | harness leva o usuário na requisição (`x-test-user`, `ctx.como`); três testes de paralelo sem engolir erro | corrigido | 7cebaf12 |
+| Fase5-8 | MOTORISTA aprovava/cancelava a própria viagem pelo POST/PUT | **RN-F1.20** → 403 | corrigido | 9007353e |
+| Fase5-9 | 6 POST simultâneos com o mesmo usuário → 4 vínculos | índice único parcial + 409 traduzida (boot segue se houver duplicata) | corrigido | 9007353e |
+| Fase5-10 | motorista ligado a usuário desativado não salvava nem desvinculava | back: mesmo `usuario_id` passa, `/usuarios-vinculaveis` traz o inativo ligado; front: opção `(inativo)` | corrigido | 9007353e, e4183f70 |
+| Fase5-11 | alerta de checklist aparecia como "Vencido há 3 dia(s)" | back `dias_restantes: null`; painel mostra "Registrado em DD/MM/AAAA" | corrigido | c8794fd7, e4183f70 |
+
+Observação (não corrigida, registrada em B22): a régua da rota antiga (F2-7, sem `itens`) não conta avaria para a situação — um
+`POST /checklists` com os 7 itens OK e uma avaria sai OK e não vira alerta.
