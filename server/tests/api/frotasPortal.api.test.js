@@ -298,17 +298,49 @@ test('RN-F1.04 (B8, F2-10) saida consome a viagem aprovada do mesmo veiculo e mo
   assert.strictEqual(fecha.status, 201);
 });
 
-test('RN-F1.05 duas saidas simultaneas do mesmo veiculo: uma passa, a outra 409', async () => {
+// Fase5-7: antes, o `setUser` global fazia as duas requisicoes do Promise.all rodarem como o ULTIMO usuario (o teste nunca viu
+// dois motoristas) e o retorno final era engolido. Agora o harness leva o usuario na propria requisicao.
+const motoristaDe = (user) => (user === MOTORISTA ? S.ma.id : S.mb.id);
+async function fecharViagem(user, km) {
+  const r = await registrar(user, { tipo: 'retorno', km });
+  assert.strictEqual(r.status, 201, `retorno de ${user.nome}: ${JSON.stringify(r.body)}`);
+}
+
+test('Fase5-7 (RN-F1.05) duas pessoas, veiculos diferentes, em paralelo: as duas saidas passam, cada uma com o seu motorista', async () => {
   const [a, b] = await Promise.all([
     registrar(MOTORISTA, { tipo: 'saida', veiculo_id: S.v6.id, km: 110 }),
-    registrar(MOTORISTA2, { tipo: 'saida', veiculo_id: S.v6.id, km: 110 }),
+    registrar(MOTORISTA2, { tipo: 'saida', veiculo_id: S.v7.id, km: 110 }),
   ]);
-  const st = [a.status, b.status].sort();
-  assert.deepStrictEqual(st, [201, 409], JSON.stringify([a.body, b.body]));
+  assert.strictEqual(a.status, 201, `Ana: ${JSON.stringify(a.body)}`);
+  assert.strictEqual(b.status, 201, `Bruno: ${JSON.stringify(b.body)}`);
+  assert.strictEqual(a.body.viagem.motorista_id, S.ma.id);
+  assert.strictEqual(b.body.viagem.motorista_id, S.mb.id);
+  await fecharViagem(MOTORISTA, 115);
+  await fecharViagem(MOTORISTA2, 115);
+});
+
+test('Fase5-7 (RN-F1.05) duas pessoas no mesmo veiculo ao mesmo tempo: uma passa (com o motorista dela), a outra 409 veiculo em uso', async () => {
+  const pedidos = [MOTORISTA, MOTORISTA2];
+  const rs = await Promise.all(pedidos.map((u) => registrar(u, { tipo: 'saida', veiculo_id: S.v6.id, km: 120 })));
+  assert.deepStrictEqual(rs.map((r) => r.status).sort(), [201, 409], JSON.stringify(rs.map((r) => r.body)));
+  const i = rs.findIndex((r) => r.status === 201);
+  assert.strictEqual(rs[i].body.viagem.motorista_id, motoristaDe(pedidos[i]), 'a viagem e de quem pediu');
+  assert.strictEqual(rs[1 - i].body.error, 'Este veículo já está em uso (saída sem retorno).');
   const abertas = (await como(ADMIN, 'get', '/api/frotas/viagens')).body.filter((v) => v.veiculo_id === S.v6.id && v.status === 'em_andamento');
   assert.strictEqual(abertas.length, 1);
-  const quem = a.status === 201 ? MOTORISTA : MOTORISTA2;
-  await registrar(quem, { tipo: 'retorno', km: 120 });
+  await fecharViagem(pedidos[i], 125);
+});
+
+test('Fase5-7 (RN-F1.05) a mesma pessoa em dois veiculos ao mesmo tempo: uma passa, a outra 409 saida sem retorno', async () => {
+  const rs = await Promise.all([S.v6, S.v7].map((v) => registrar(MOTORISTA2, { tipo: 'saida', veiculo_id: v.id, km: 130 })));
+  assert.deepStrictEqual(rs.map((r) => r.status).sort(), [201, 409], JSON.stringify(rs.map((r) => r.body)));
+  const ok = rs.find((r) => r.status === 201);
+  assert.strictEqual(ok.body.viagem.motorista_id, S.mb.id);
+  assert.strictEqual(rs.find((r) => r.status === 409).body.error, 'Você já tem uma saída sem retorno. Registre o retorno primeiro.');
+  await fecharViagem(MOTORISTA2, 135);
+  const abertas = (await como(ADMIN, 'get', '/api/frotas/viagens')).body.filter((v) => v.status === 'em_andamento'
+    && (v.veiculo_id === S.v6.id || v.veiculo_id === S.v7.id));
+  assert.strictEqual(abertas.length, 0, 'nenhuma viagem ficou aberta');
 });
 
 test('RN-F1.13 o gestor com motorista ligado usa o portal; sem vinculo a mesma 409', async () => {

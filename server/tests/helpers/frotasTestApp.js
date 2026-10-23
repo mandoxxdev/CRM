@@ -2,8 +2,10 @@
  * Harness de testes de API do modulo Frotas (Frotas Etapa 1, T1).
  *
  * express() real + SQLite :memory: + o registrador REAL `routes/frotas.js`, com o `requirePermission` real do modulo
- * (`services/frotas/permissions.js`). A autenticacao e um stub: `setUser(user)` define quem faz a proxima requisicao
- * (null -> 401). O acesso ao modulo (`checkModulePermission`) fica liberado — quem decide o que cada um faz e o perfil.
+ * (`services/frotas/permissions.js`). A autenticacao e um stub: `setUser(user)` define quem faz as proximas requisicoes
+ * (null -> 401). O usuario e lido no momento em que `req()` e chamado e viaja na propria requisicao (header `x-test-user`) —
+ * Fase5-7: antes o stub lia a variavel global na hora de atender, e as requisicoes de um `Promise.all` rodavam todas como o
+ * ULTIMO `setUser`. `como(user)` devolve um `req` amarrado a um usuario (para varios usuarios em paralelo). O acesso ao modulo (`checkModulePermission`) fica liberado — quem decide o que cada um faz e o perfil.
  *
  * `usuarios` e tabela CORE (criada por server/index.js); aqui so o subconjunto que o modulo le (vinculo usuario<->motorista):
  * id, nome, email, ativo, role. Usuarios semeados: 1 Gestor (admin), 2 Ana, 3 Consulta, 4 Bruno, 5 Inativo (ativo = 0).
@@ -12,6 +14,7 @@
  *   const { createFrotasTestApp, ADMIN, MOTORISTA, CONSULTA } = require('../helpers/frotasTestApp');
  *   const ctx = await createFrotasTestApp();   // ja espera o schema do modulo
  *   ctx.setUser(ADMIN); const r = await ctx.req('post', '/api/frotas/veiculos', { placa: 'ABC1D23' });
+ *   await Promise.all([ctx.como(MOTORISTA)('post', url, a), ctx.como(MOTORISTA2)('post', url, b)]); // dois usuarios de verdade
  */
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
@@ -48,8 +51,11 @@ async function createFrotasTestApp() {
 
   let usuarioAtual = null;
   const authStub = (req, res, next) => {
-    if (!usuarioAtual) return res.status(401).json({ error: 'Não autenticado' });
-    req.user = { ...usuarioAtual };
+    // Fase5-7: o usuario da PROPRIA requisicao (gravado em `req()`); sem o header (supertest direto no app), o global.
+    const h = req.headers['x-test-user'];
+    const u = h !== undefined ? JSON.parse(decodeURIComponent(h)) : usuarioAtual;
+    if (!u) return res.status(401).json({ error: 'Não autenticado' });
+    req.user = { ...u };
     next();
   };
   const registrar = require('../../routes/frotas');
@@ -57,11 +63,13 @@ async function createFrotasTestApp() {
   registrar.limparCacheDashboard();
 
   const setUser = (u) => { usuarioAtual = u; };
-  const req = (metodo, url, corpo) => {
-    let r = request(app)[metodo](url);
+  const reqComo = (usuario, metodo, url, corpo) => {
+    let r = request(app)[metodo](url).set('x-test-user', encodeURIComponent(JSON.stringify(usuario ?? null)));
     if (corpo !== undefined) r = r.send(corpo);
     return r;
   };
+  const req = (metodo, url, corpo) => reqComo(usuarioAtual, metodo, url, corpo);
+  const como = (usuario) => (metodo, url, corpo) => reqComo(usuario, metodo, url, corpo);
 
   // Espera o schema do modulo: o `ensureSchema` de toda rota aguarda a mesma promessa.
   setUser(ADMIN);
@@ -69,7 +77,7 @@ async function createFrotasTestApp() {
   if (meta.status !== 200) throw new Error(`schema frotas nao subiu no harness: ${meta.status} ${JSON.stringify(meta.body)}`);
   setUser(null);
 
-  return { app, db, setUser, req, limparCacheDashboard: registrar.limparCacheDashboard };
+  return { app, db, setUser, req, como, limparCacheDashboard: registrar.limparCacheDashboard };
 }
 
 module.exports = { createFrotasTestApp, ADMIN, MOTORISTA, CONSULTA, MOTORISTA2 };
