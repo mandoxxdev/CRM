@@ -89,14 +89,18 @@ async function motoristaDoUsuario(db, user) {
 }
 
 /**
- * RN-F1.14/15/19: `null` quando o usuario NAO e do perfil MOTORISTA (ve e altera tudo — ou nao ha usuario, chamada interna);
+ * RN-F1.14/15/19: `null` quando o usuario e ADMIN_FROTA ou CONSULTA (desde a Fase5-1 da Etapa 2; antes: "nao e MOTORISTA") (ve e altera tudo — ou nao ha usuario, chamada interna);
  * senao `{ motoristaId, usuarioId }` (motoristaId nulo = sem vinculo). Antes, o motorista logado listava tudo de todos — inclusive
  * CPF/CNH dos colegas (A6).
  */
 async function escopoDoUsuario(db, user) {
   if (!user) return null;
   const { getPerfilFromUser, PERFIS } = require('./permissions');
-  if (getPerfilFromUser(user) !== PERFIS.MOTORISTA) return null;
+  // Frotas Etapa 2 (Fase5-1): escopo FECHADO — so ADMIN_FROTA e CONSULTA leem tudo. Antes era "so o MOTORISTA e restrito", e uma
+  // linha com valor fora da lista (ex.: 'consulta' minusculo gravado por SQL, como a C2 ensinava) lia CPF/CNH de todos e os
+  // documentos com valor, sem poder agir em nada.
+  const perfil = getPerfilFromUser(user);
+  if (perfil === PERFIS.ADMIN_FROTA || perfil === PERFIS.CONSULTA) return null;
   const m = await motoristaDoUsuario(db, user);
   return { motoristaId: m ? m.id : null, usuarioId: user.id };
 }

@@ -12,6 +12,7 @@
  *   RN-F2.12  (C7) MOTORISTA em GET /documentos -> []
  *   RN-F2.13  (Fase 2) o proprio perfil nao se muda por esta tela -> 409 PROPRIO_PERFIL
  *   C9        (Fase 2 T-2) conceder e revogar o admin do modulo apaga o Consulta — comportamento fixado, declarado na letra C
+ *   Fase5-1   perfil com valor fora da lista (por SQL) le como MOTORISTA (escopo fechado), nao como gestor
  *
  * Plano: docs/superpowers/plans/2026-10-23-frotas-etapa2-perfis-pela-tela.md
  * Executar: cd server && node tests/api/frotasPerfis.api.test.js
@@ -275,6 +276,22 @@ test('RN-F2.12 MOTORISTA (ligado ou nao) le Documentos vazio; CONSULTA e ADMIN l
     assert.strictEqual(r.status, 200);
     assert.ok(r.body.some((d) => d.id === S.doc.id && Number(d.valor) === 1234), `${u.nome} nao ve o documento`);
   }
+});
+
+// ── Fase5-1 (revisor com servidor real): perfil com valor fora da lista lia as listas de todos ──
+test('Fase5-1 perfil fora da lista (consulta minusculo, por SQL) le como MOTORISTA, nao como gestor', async () => {
+  const CRU = { id: 12, nome: 'Joao Minusculo', role: 'usuario', perfil_frota: 'consulta' }; // como o enrich monta da linha crua
+  const docs = await como(CRU, 'get', '/api/frotas/documentos');
+  assert.strictEqual(docs.status, 200);
+  assert.deepStrictEqual(docs.body, [], 'valor cru via os documentos com valor');
+  const mot = await como(CRU, 'get', '/api/frotas/motoristas');
+  assert.deepStrictEqual(mot.body, [], 'valor cru via CPF/CNH de todos os motoristas');
+  const via = await como(CRU, 'get', '/api/frotas/viagens');
+  assert.deepStrictEqual(via.body, [], 'valor cru via as viagens de todos');
+  assert.strictEqual((await como(CRU, 'get', `/api/frotas/motoristas/${S.ma.id}`)).status, 404);
+  // metade positiva: o CONSULTA de verdade continua vendo tudo
+  assert.ok((await como(CONSULTA, 'get', '/api/frotas/motoristas')).body.some((m) => m.id === S.ma.id));
+  assert.ok((await como(CONSULTA, 'get', '/api/frotas/viagens')).body.length > 0);
 });
 
 (async () => {
