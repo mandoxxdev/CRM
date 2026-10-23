@@ -29,7 +29,7 @@
 </head>
 <body>
 <main>
-  <h1>O que fizemos no sistema esta semana</h1>
+  <h1>O que foi feito no sistema nesta semana</h1>
   <p class="sub">{{PERIODO}} · CRM GMP Industriais</p>
 
   <p class="resumo">{{RESUMO_EM_TRES_FRASES}}</p>
@@ -44,7 +44,7 @@
     <figure><img src="prints/{{ARQUIVO}}.png" alt="{{DESCRICAO}}"><figcaption>{{LEGENDA}}</figcaption></figure>
   </div>
 
-  <h2>O que fizemos por baixo — e por que importa</h2>
+  <h2>O que foi feito por baixo — e por que importa</h2>
   <p>Parte do trabalho não muda a aparência das telas: é o “motor” que faz as contas e guarda as
   informações. Quando ele erra, o erro aparece depois, em forma de estoque que não bate ou de
   material que some. Esta semana, no motor:</p>
@@ -52,7 +52,7 @@
   <div class="item">
     <h3>{{TITULO_EM_LINGUAGEM_DO_DIA_A_DIA}}</h3>
     <p><span class="rotulo">O problema:</span> {{SITUACAO_REAL_COM_EXEMPLO}}</p>
-    <p><span class="rotulo">O que fizemos:</span> {{O_QUE_MUDOU}}</p>
+    <p><span class="rotulo">O que foi feito:</span> {{O_QUE_MUDOU}}</p>
     <p><span class="rotulo">O que isso evita:</span> {{CONSEQUENCIA_NO_DIA_A_DIA}}</p>
   </div>
 
@@ -70,15 +70,16 @@
     <span><i style="background:var(--testes)"></i>Conferências automáticas — {{PCT_TESTES}}%</span>
     <span><i style="background:var(--doc)"></i>Planejamento e manuais — {{PCT_DOC}}%</span>
   </div>
+  <h3>Tempo por atividade</h3>
+  <!-- Uma linha por atividade (horas.js --grupos), em hora cheia; a soma bate com o total. -->
+  <table>
+    <tr><th>Atividade</th><th>Horas</th></tr>
+    <tr><td>{{ATIVIDADE}}</td><td>{{HORAS_DA_ATIVIDADE}} h</td></tr>
+    <tr><th>Total</th><th>{{HORAS}} h</th></tr>
+  </table>
   <p>{{POR_QUE_O_TEMPO_FOI_PARA_ONDE_FOI}}</p>
-  <p class="nota">As horas são estimadas pelo registro do trabalho salvo ao longo do dia. Pesquisa,
+  <p class="nota">As horas são estimadas pelo registro do trabalho salvo ao longo da semana. Pesquisa,
   conversas e testes feitos à mão não entram — o número real é maior.</p>
-
-  <h2>O que vem na próxima semana</h2>
-  <!-- Sempre pelo menos UMA coisa que vai aparecer na tela. -->
-  <ul>
-    <li>{{PROXIMA_NOVIDADE_VISIVEL}}</li>
-  </ul>
 
   <h2>Quer conferir?</h2>
   <ol>

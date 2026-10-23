@@ -29,14 +29,14 @@
 </head>
 <body>
 <main>
-  <h1>O que fizemos no sistema esta semana</h1>
-  <p class="sub">Domingo 13/09 a sábado 19/09/2026 · CRM GMP Industriais</p>
+  <h1>O que foi feito no sistema nesta semana</h1>
+  <p class="sub">Semana de 13/09 a 19/09/2026 · CRM GMP Industriais</p>
 
   <p class="resumo">O pedido de compra passou a ser feito, acompanhado e cobrado dentro do sistema,
   o recebimento ganhou a conferência física e o sistema ficou usável no celular, como aplicativo.
-  Por baixo, fechamos as portas que deixavam a mesma nota fiscal entrar duas vezes e uma tela
-  dizer "não tem nada" quando, na verdade, a internet tinha caído. Na semana seguinte, o
-  celular chega às telas de Propostas e Produtos, e Fornecedores e Cotações ganham telas próprias.</p>
+  Por baixo, foram fechadas as portas que deixavam a mesma nota fiscal entrar duas vezes e uma tela
+  dizer "não tem nada" quando, na verdade, a internet tinha caído. Foram cerca de 25 horas de
+  trabalho, a maior parte no recebimento, no celular e no pedido de compra.</p>
 
   <h2>O que você já pode ver na tela</h2>
 
@@ -126,7 +126,7 @@
     <figure><img style="max-width:300px" src="prints/celular-clientes.png" alt="Lista de Clientes no celular com cartões e a barra de navegação embaixo"><figcaption>Clientes no celular: lista de aplicativo e barra embaixo.</figcaption></figure>
   </div>
 
-  <h2>O que fizemos por baixo — e por que importa</h2>
+  <h2>O que foi feito por baixo — e por que importa</h2>
   <p>Parte do trabalho não muda a aparência das telas: é o “motor” que faz as contas e guarda as
   informações. Quando ele erra, o erro aparece depois, em forma de estoque que não bate ou de
   material que some. Esta semana, no motor:</p>
@@ -136,7 +136,7 @@
     <p><span class="rotulo">O problema:</span> a mesma nota do mesmo fornecedor podia ser lançada duas
     vezes. Resultado: estoque em dobro e duas contas a pagar. Também era possível receber 999 peças
     de um pedido de 10, ou lançar quantidade zero ou negativa, sem ninguém autorizar nada.</p>
-    <p><span class="rotulo">O que fizemos:</span> a nota repetida é recusada, e a mensagem diz em qual
+    <p><span class="rotulo">O que foi feito:</span> a nota repetida é recusada, e a mensagem diz em qual
     recebimento ela já está. Quantidade tem de ser maior que zero. Receber mais do que o pedido só
     com a autorização de Compras ou do Administrador — e essa autorização fica registrada com o nome
     de quem deu.</p>
@@ -151,7 +151,7 @@
     de novo. Ao trocar de um recebimento para outro, o painel mostrava por um instante os dados do
     anterior com o número do novo no alto. E, em algumas telas, a coluna de botões era cortada pela
     borda, sem barra para rolar: o botão simplesmente não aparecia.</p>
-    <p><span class="rotulo">O que fizemos:</span> a tela agora diz “Não foi possível carregar”, com o
+    <p><span class="rotulo">O que foi feito:</span> a tela agora diz “Não foi possível carregar”, com o
     botão “Tentar de novo”. O painel se esvazia na hora da troca, e a coluna de botões voltou a
     aparecer inteira.</p>
     <p><span class="rotulo">O que isso evita:</span> recebimento lançado em duplicidade e decisão tomada
@@ -163,7 +163,7 @@
     <p><span class="rotulo">O problema:</span> um pedido de 16/09 aparecia como 15/09. A cada vez que o
     Excel era exportado e importado de novo, as datas andavam mais um dia para trás. E, das 21h à
     meia-noite, o pedido novo nascia com a data de amanhã.</p>
-    <p><span class="rotulo">O que fizemos:</span> a data mostrada é a que está no pedido, em qualquer
+    <p><span class="rotulo">O que foi feito:</span> a data mostrada é a que está no pedido, em qualquer
     horário, e o vaivém pelo Excel devolve a mesma data.</p>
     <p><span class="rotulo">O que isso evita:</span> cobrança de fornecedor no dia errado e atraso
     contado a mais ou a menos.</p>
@@ -173,7 +173,7 @@
     <h3>Apagar um pedido não deixa pedaços soltos</h3>
     <p><span class="rotulo">O problema:</span> excluir um pedido apagava o cabeçalho e deixava os itens
     perdidos onde o sistema guarda as informações — ou dava um erro genérico, sem dizer o motivo.</p>
-    <p><span class="rotulo">O que fizemos:</span> o pedido sai inteiro, com os itens, e a solicitação de
+    <p><span class="rotulo">O que foi feito:</span> o pedido sai inteiro, com os itens, e a solicitação de
     reposição que tinha virado aquele pedido volta para a fila, pronta para virar outro. Pedido que já
     teve recebimento não pode ser apagado, e a tela diz por quê.</p>
     <p><span class="rotulo">O que isso evita:</span> material que some da fila de compra sem ter sido
@@ -194,22 +194,25 @@
     <span><i style="background:var(--testes)"></i>Conferências automáticas — 34%</span>
     <span><i style="background:var(--doc)"></i>Planejamento e manuais — 21%</span>
   </div>
-  <p>Foi uma semana de tela: mais de um terço do tempo foi nas telas que você usa, a maior parte no
-  celular, de quinta a sábado. O outro terço foi nas conferências automáticas: são robôs que
-  repetem centenas de situações a cada mudança — a nota repetida, a internet que cai, o pedido
-  recebido em três partes — para que o que já funciona não quebre escondido. Foi assim que
-  pegamos, ainda na mesma semana, um recebimento pelo pedido que entrava com preço zero e
-  bagunçaria o custo médio do material. O resto foi planejar cada mudança e atualizar os manuais.</p>
-  <p class="nota">As horas são estimadas pelo registro do trabalho salvo ao longo do dia. Pesquisa,
+  <h3>Tempo por atividade</h3>
+  <table>
+    <tr><th>Atividade</th><th>Horas</th></tr>
+    <tr><td>Recebimento: conferência física, recebimento em partes e nota repetida</td><td>7 h</td></tr>
+    <tr><td>O sistema no celular, como aplicativo</td><td>7 h</td></tr>
+    <tr><td>Pedido de compra: criar, acompanhar o atraso, datas e exclusão</td><td>6 h</td></tr>
+    <tr><td>Telas que escondiam a falha da internet ou mostravam o registro errado</td><td>3 h</td></tr>
+    <tr><td>Documentos anexados em cinco telas</td><td>2 h</td></tr>
+    <tr><td>Número da OS obrigatório na requisição</td><td>menos de 1 h</td></tr>
+    <tr><th>Total</th><th>25 h</th></tr>
+  </table>
+  <p>Mais de um terço do tempo foi nas telas que você usa, e outro terço nas conferências
+  automáticas: são robôs que repetem centenas de situações a cada mudança — a nota repetida, a
+  internet que cai, o pedido recebido em três partes — para que o que já funciona não quebre
+  escondido. Foi assim que apareceu, antes de chegar a quem usa, um recebimento pelo pedido que
+  entrava com preço zero e bagunçaria o custo médio do material. O resto foi planejar cada mudança
+  e atualizar os manuais.</p>
+  <p class="nota">As horas são estimadas pelo registro do trabalho salvo ao longo da semana. Pesquisa,
   conversas e testes feitos à mão não entram — o número real é maior.</p>
-
-  <h2>O que vem na próxima semana</h2>
-  <ul>
-    <li>Propostas, Produtos e o painel inicial redesenhados para o celular, no mesmo padrão da lista
-    de Clientes.</li>
-    <li>Fornecedores e Cotações ganham telas próprias para cadastrar e editar.</li>
-    <li>A cotação aprovada vira pedido de compra com um clique, com os itens já preenchidos.</li>
-  </ul>
 
   <h2>Quer conferir?</h2>
   <ol>

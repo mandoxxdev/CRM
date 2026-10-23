@@ -3,7 +3,7 @@
 // "tela" (client/), "bastidores" (server/), "testes" e "documentacao".
 //
 // Uso: node .claude/skills/relatorio-semanal/scripts/horas.js [--semana AAAA-MM-DD] [--desde AAAA-MM-DD] [--ate AAAA-MM-DD]
-//        [--autor texto] [--pausa 90] [--aquecimento 30] [--json]
+//        [--grupos "Rotulo=regex;..."] [--autor texto] [--pausa 90] [--aquecimento 30] [--json]
 //
 // Como estima: commits do mesmo autor com menos de --pausa minutos entre si sao uma
 // sessao. A sessao vale (ultimo - primeiro commit) + --aquecimento minutos (o trabalho
@@ -77,6 +77,7 @@ for (const c of filtrados) {
   const minutos = gap <= pausaMin ? gap : aquecMin;
   if (gap > pausaMin) sessoes++;
   ultimoPorAutor[c.autor] = c.ts;
+  c.minutos = minutos;
   const total = Object.values(c.linhas).reduce((s, n) => s + n, 0) || 1;
   const dia = iso(new Date(c.ts));
   porAutor[c.autor] ||= vazio();
@@ -90,6 +91,20 @@ for (const c of filtrados) {
 }
 
 const h = (m) => Math.round((m / 60) * 10) / 10;
+// --grupos "Rotulo A=regex;Rotulo B=regex": soma as horas por atividade, casando o assunto do
+// commit (sem diferenciar maiusculas) contra cada regex na ordem dada; o que nao casa vai para "Outros".
+function horasPorAtividade() {
+  const spec = opt('grupos', null);
+  if (!spec) return null;
+  const grupos = spec.split(';').filter(Boolean).map((g) => { const i = g.indexOf('='); return [g.slice(0, i).trim(), new RegExp(g.slice(i + 1), 'i')]; });
+  const soma = {};
+  for (const c of filtrados) {
+    const achou = grupos.find(([, re]) => re.test(c.assunto));
+    const k = achou ? achou[0] : 'Outros';
+    soma[k] = (soma[k] || 0) + c.minutos;
+  }
+  return Object.fromEntries(Object.entries(soma).map(([k, m]) => [k, h(m)]));
+}
 const somar = (o) => Object.values(o).reduce((s, n) => s + n, 0);
 const geral = vazio();
 for (const o of Object.values(porAutor)) for (const a of AREAS) geral[a] += o[a];
@@ -101,7 +116,8 @@ const resultado = {
   percentual: Object.fromEntries(AREAS.map((a) => [a, somar(geral) ? Math.round((geral[a] / somar(geral)) * 100) : 0])),
   porAutor: Object.fromEntries(Object.entries(porAutor).map(([k, o]) => [k, { total: h(somar(o)), ...Object.fromEntries(AREAS.map((a) => [a, h(o[a])])) }])),
   porDia: Object.fromEntries(Object.entries(porDia).map(([k, o]) => [k, { total: h(somar(o)), ...Object.fromEntries(AREAS.map((a) => [a, h(o[a])])) }])),
-  assuntos: filtrados.map((c) => `${iso(new Date(c.ts))} ${c.hash.slice(0, 8)} ${c.assunto}`),
+  assuntos: filtrados.map((c) => `${iso(new Date(c.ts))} ${c.hash.slice(0, 8)} ~${Math.round(c.minutos)}min ${c.assunto}`),
+  porAtividade: horasPorAtividade(),
 };
 
 if (comoJson) { console.log(JSON.stringify(resultado, null, 2)); process.exit(0); }
@@ -112,5 +128,9 @@ console.log('\nPor pessoa:');
 for (const [k, o] of Object.entries(resultado.porAutor)) console.log(`  ${k}: ${o.total} h  (tela ${o.tela}, bastidores ${o.bastidores}, testes ${o.testes}, doc ${o.documentacao})`);
 console.log('\nPor dia:');
 for (const [k, o] of Object.entries(resultado.porDia)) console.log(`  ${k}: ${o.total} h  (tela ${o.tela}, bastidores ${o.bastidores}, testes ${o.testes}, doc ${o.documentacao})`);
+if (resultado.porAtividade) {
+  console.log('\nPor atividade (--grupos):');
+  for (const [k, v] of Object.entries(resultado.porAtividade)) console.log(`  ${k}: ${v} h`);
+}
 console.log('\nAssuntos dos commits (materia-prima do relatorio, NAO copiar para o cliente):');
 for (const s of resultado.assuntos) console.log('  ' + s);

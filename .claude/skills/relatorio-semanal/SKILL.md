@@ -23,9 +23,16 @@ inclusive o tempo que não aparece na tela.
    **A semana vai de domingo a sábado.** `--semana` recebe qualquer dia e mede o domingo→sábado
    que o contém (sem argumento: a semana corrente); `--desde`/`--ate` sobrepõem o recorte. Ele separa o tempo em **tela** (`client/`), **bastidores**
    (`server/`), **testes** e **documentação**, por pessoa e por dia, e lista os assuntos dos
-   commits. `--json` para usar os números; `--autor` para uma pessoa só. É uma estimativa
+   commits com os minutos de cada um. `--json` para usar os números; `--autor` para uma pessoa só.
+   **Horas por atividade:** `--grupos "Celular=celular|PWA;Pedido de compra=Etapa 3[89]|pedido"`
+   soma as horas de cada atividade pelo assunto do commit (o que não casa vai para "Outros" —
+   ajuste as regex até "Outros" sumir ou ficar pequeno). É uma estimativa
    **por baixo** (sessões pelo intervalo entre commits) — diga isso no relatório, sem decimais
    falsos: arredonde para hora cheia.
+
+   **O contrato do André é de horas por semana, não de dias** (teto de **30 h semanais** neste
+   projeto). Por isso o relatório mede tempo **por atividade** e nunca diz em que dia algo foi
+   feito ("de quinta a sábado", "na segunda") — o "por dia" do script é só para você conferir.
 
 2. **Levantar o que mudou**, nesta ordem de fonte: `docs/almoxarifado-novidades-por-etapa.md`
    e `docs/compras-novidades-por-etapa.md` (parte "Antes → Agora" — o do almoxarifado registra
@@ -50,7 +57,12 @@ inclusive o tempo que não aparece na tela.
    precisa aparecer) e diga isso ao André. Antes de
    tirar, deixe a tela com dados que façam sentido (não "teste123"). Salve em
    `docs/relatorios-semanais/AAAA-MM-DD/prints/<nome-curto>.png`. Sem print, o item não entra
-   no bloco "o que você já pode ver" — vai para "por baixo" ou fica para a próxima semana.
+   no bloco "o que você já pode ver" — vai para "por baixo".
+   O André autorizou criar dados de exemplo direto (pela API, com a sessão do navegador, ou no
+   banco) para os prints, e **não** apagar depois: ele quer ver os dados quando entrar. A janela
+   do Chrome dele é maximizada — `resize_window` não muda o tamanho; recorte com `zoom` +
+   `save_to_disk` (sempre em escala 1, senão o arquivo sai pequeno) e, para print de celular,
+   abra a tela num `<iframe>` de 390px.
 
 5. **Escrever** a partir de `.claude/skills/relatorio-semanal/modelo.html`, salvando em
    `docs/relatorios-semanais/AAAA-MM-DD/relatorio.html` (data = sábado, o último dia da semana; no texto, o período é "domingo DD/MM a sábado DD/MM").
@@ -62,22 +74,29 @@ inclusive o tempo que não aparece na tela.
    ```
    E confira que nenhum `{{` sobrou: `grep -c "{{" .../relatorio.html` tem de dar 0.
 
-7. **Commitar** só a pasta da semana (arquivos explícitos, nunca `git add -A`) e entregar ao
-   André o caminho do HTML. Ele abre no navegador e, se quiser PDF, Ctrl+P → Salvar como PDF.
+7. **Gerar o PDF** com o Chrome sem janela:
+   ```
+   "/c/Program Files/Google/Chrome/Application/chrome.exe" --headless=new --disable-gpu --user-data-dir="<scratchpad>/chrome-pdf" --no-pdf-header-footer --print-to-pdf="<pasta>/relatorio.pdf" "file:///<pasta>/relatorio.html"
+   ```
+
+8. **Commitar** só a pasta da semana (arquivos explícitos, nunca `git add -A`) e entregar ao
+   André o caminho do PDF e do HTML.
 
 ## Como escrever cada parte
 
 | Parte | Regra |
 |---|---|
-| Resumo | 3 frases: o que dá para ver, o que melhorou por baixo, o que vem. |
+| Resumo | 3 frases: o que dá para ver, o que melhorou por baixo, quantas horas e em que atividades. |
 | Novidade visível | Nome como o usuário chama a tela ("Requisições", "Notas de entrada"), onde fica no menu, antes / agora, print. |
-| Item por baixo | **Problema** com exemplo real do chão de fábrica → **o que fizemos** → **o que isso evita**. Use analogia quando ajudar ("é como dois caixas vendendo o último item da prateleira ao mesmo tempo"). |
-| Para onde foi o tempo | Os números do script + uma frase honesta do motivo. "Conferências automáticas" = testes: explique que são robôs que repetem centenas de situações a cada mudança para nada quebrar escondido. |
-| Próxima semana | **Sempre** pelo menos uma coisa que vai aparecer na tela. |
+| Item por baixo | **Problema** com exemplo real do chão de fábrica → **o que foi feito** → **o que isso evita**. Use analogia quando ajudar ("é como dois caixas vendendo o último item da prateleira ao mesmo tempo"). |
+| Para onde foi o tempo | Total da semana, a barra por área, a tabela **Tempo por atividade** (`--grupos`, hora cheia, soma = total) e uma frase honesta do motivo. Nunca cite dias da semana. "Conferências automáticas" = testes: explique que são robôs que repetem centenas de situações a cada mudança para nada quebrar escondido. |
 | Quer conferir? | Passos clicáveis: "Abra Almoxarifado → Requisições → clique em…". |
 
 **Tom:** frases curtas, sem jargão, como se explicasse para alguém do almoxarifado no café. O
-"porquê" vem antes do "como".
+"porquê" vem antes do "como". **Sempre impessoal:** "o que foi feito", "foi corrigido", "a tela
+passou a mostrar" — nunca "fizemos", "corrigimos", "pegamos".
+
+**Não existe seção "o que vem na próxima semana"** — o André não quer promessa no relatório.
 
 **Troque assim:**
 
@@ -98,10 +117,9 @@ rápida, e teste de tela conta como "testes" no script. Uma semana com 6% de hor
 muita novidade visível. Se o bloco ficou **vazio ou com um item só**:
 
 - Não esconda: diga no "para onde foi o tempo" que foi uma semana de motor, e por quê.
-- Na "próxima semana", nomeie **uma entrega visível pequena** que já se apoia no que foi feito
-  por baixo (um aviso novo, um campo que agora aparece, um filtro, um relatório).
-- Registre essa entrega como próxima tarefa no plano da etapa em andamento, para que ela de fato
-  aconteça — o relatório não pode prometer o que ninguém vai fazer.
+- Registre no plano da etapa em andamento, como próxima tarefa, **uma entrega visível pequena**
+  que se apoie no que foi feito por baixo (um aviso novo, um campo, um filtro) — fora do
+  relatório, que não faz promessa.
 
 ## Erros comuns
 
@@ -110,8 +128,7 @@ muita novidade visível. Se o bloco ficou **vazio ou com um item só**:
 - **Um item por etapa.** Vira uma lista de 30 coisas técnicas. Agrupe pelo efeito.
 - **Horas com decimal ou somadas à mão.** Use o script e arredonde.
 - **Print de tela vazia ou com dado de teste.** Prepare a tela antes.
-- **Prometer na "próxima semana" algo que não está planejado.** Confira o plano em
-  `docs/superpowers/plans/` **e** se o módulo não está pausado (procure um arquivo
-  `*pausa*` em `docs/superpowers/plans/`). Módulo pausado não entra na promessa.
-- **Ler "testes 60%" como "não fizemos nada".** É o custo de não quebrar o que já funciona;
+- **Escrever na primeira pessoa ou citar dias.** "Fizemos", "de quinta a sábado" — troque por
+  "foi feito" e por horas da atividade.
+- **Ler "testes 60%" como "nada foi feito".** É o custo de não quebrar o que já funciona;
   explique assim no "para onde foi o tempo".
