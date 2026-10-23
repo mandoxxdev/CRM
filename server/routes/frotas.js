@@ -5,6 +5,7 @@
 
 const { initSchema } = require('../services/frotas/schema');
 const frotasService = require('../services/frotas/frotasService');
+const portalService = require('../services/frotas/portalService');
 const { requirePermission } = require('../services/frotas/permissions');
 const { respondDbError } = require('../services/sqliteConcurrency');
 
@@ -145,6 +146,24 @@ module.exports = function registerFrotasRoutes(app, db, authenticateToken, check
 
   app.get('/api/frotas/relatorios/consumo', ...frotaAuth, requirePermission('relatorios'), async (req, res) => {
     try { res.json(await frotasService.relatorioConsumo(db, req.query)); } catch (e) { handleError(res, e); }
+  });
+
+  // ── Portal do motorista (Frotas Etapa 1) ───────────────────────────────────
+  // Contratos congelados: docs/superpowers/plans/2026-10-23-frotas-etapa1-portal-do-motorista.md
+  app.get('/api/frotas/portal/inicio', ...frotaAuth, async (req, res) => {
+    try { res.json(await portalService.inicio(db, req.user)); } catch (e) { handleError(res, e); }
+  });
+
+  app.post('/api/frotas/portal/registros', ...frotaAuth, requirePermission('registrar_operacoes'), async (req, res) => {
+    try { res.status(201).json(await portalService.registrar(db, req.user, req.body)); } catch (e) { handleError(res, e); }
+  });
+
+  app.post('/api/frotas/portal/abastecimentos', ...frotaAuth, requirePermission('registrar_operacoes'), async (req, res) => {
+    try { res.status(201).json(await portalService.registrarAbastecimento(db, req.user, req.body)); } catch (e) { handleError(res, e); }
+  });
+
+  app.get('/api/frotas/portal/meus-registros', ...frotaAuth, async (req, res) => {
+    try { res.json(await portalService.meusRegistros(db, req.user, req.query)); } catch (e) { handleError(res, e); }
   });
 
   // Frotas Etapa 1 (F2-5): seletor do vinculo usuario <-> motorista (todos os usuarios ativos, sem filtro de setor)

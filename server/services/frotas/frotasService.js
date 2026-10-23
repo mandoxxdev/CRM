@@ -1055,6 +1055,33 @@ async function getAlertas(db, hoje = hojeLocalISO()) {
     });
   });
 
+  // Frotas Etapa 1 (RN-F1.10, B3): registro do portal (ou da tela antiga) com PENDENCIA — Falha ou avaria — nos ultimos 7 dias
+  const { ITENS_CHECKLIST } = require('./schema');
+  const pendencias = await dbAll(db, `SELECT c.*, v.placa, m.nome AS motorista_nome FROM frotas_checklists c
+    JOIN frotas_veiculos v ON c.veiculo_id = v.id
+    LEFT JOIN frotas_motoristas m ON c.motorista_id = m.id
+    WHERE c.status_geral = 'PENDENCIA' AND date(c.data_checklist) >= date(?, '-7 days')
+    ORDER BY c.data_checklist DESC, c.id DESC`, [hoje]);
+  pendencias.forEach((row) => {
+    const c = registroComItens(row);
+    const falhas = c.itens ? ITENS_CHECKLIST.filter((i) => c.itens[i.chave] === 'FALHA').map((i) => i.rotulo) : [];
+    const partes = [];
+    if (falhas.length) partes.push(`Falha: ${falhas.join(', ')}`);
+    if (c.avarias && c.avarias.length) partes.push(`${c.avarias.length} avaria(s)`);
+    if (!partes.length) partes.push('Item marcado como não conforme');
+    if (c.motorista_nome) partes.push(c.motorista_nome);
+    alertas.push({
+      tipo: 'checklist',
+      severidade: 'alto',
+      titulo: `Checklist com pendência — ${c.placa}`,
+      descricao: partes.join(' · '),
+      data: c.data_checklist,
+      dias_restantes: diasAte(c.data_checklist, hoje),
+      referencia_id: c.id,
+      veiculo_id: c.veiculo_id,
+    });
+  });
+
   const consumoAnomalo = await dbAll(db, `SELECT v.id as veiculo_id, v.placa, v.consumo_medio_esperado,
     AVG(a.consumo_medio) as consumo_recente
     FROM frotas_abastecimentos a
