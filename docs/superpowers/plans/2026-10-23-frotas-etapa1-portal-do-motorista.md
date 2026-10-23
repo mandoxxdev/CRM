@@ -1,6 +1,6 @@
 # Frotas — Etapa 1: portal do motorista (o formulário de papel dentro do sistema)
 
-> **Status:** plano escrito em 2026-10-23 · execução: ver "Estado das tasks" no fim.
+> **Status:** **etapa fechada em 2026-10-23** — T1..T8 feitas, Fase 5 corrigida, B22 corrigida no fechamento (`4ba85d16`). Próxima: **Etapa 2** (ver "Próxima tarefa detalhada", no fim).
 > **Spec:** [`specs/modulo-frotas/README.md`](../../../specs/modulo-frotas/README.md) e
 > [`00-processo-atual`](../../../specs/modulo-frotas/00-processo-atual/README.md) (formulário × planilha × sistema).
 > **Decisões tomadas sem consulta (reversíveis):** [`docs/frotas/novidades-por-etapa.md`](../../frotas/novidades-por-etapa.md), letra B.
@@ -172,9 +172,9 @@ Cada task: TDD com controle positivo (quebrar a implementação e ver o vermelho
 | T3 | feito — vinculo usuario-motorista (RN-12, F2-4, F2-5 + /usuarios-vinculaveis), escopo MOTORISTA nas listas, GET /:id e PUT (RN-14/15, F2-1, F2-2), motorista_id forcado (RN-19), painel/alertas = ver_painel e multas/documentos = gerenciar_veiculos (RN-16) | 6dd0b130 |
 | T4 | feito — portalService + /portal/inicio, /registros, /abastecimentos, /meus-registros; alerta de pendencia (7 dias) no painel | 45bf32de |
 | T5 | feito — GET /exportar.xlsx (exportacaoService), 6 abas da planilha, periodo, F2-18 | d2aaa72b |
-| T6 | a fazer (front, outro agente) | |
-| T7 | a fazer (front, outro agente) | |
-| T8 | feito — frotasPortalIntegracao: o fluxo pela rota e pelo servico, a planilha exportada e o outro motorista sem ver nem alterar | 2e591c39 |
+| T6 | feito — portal /frota/motorista (celular primeiro): Saida, Retorno, Inspecao, Abastecimento, Meus registros, aviso sem vinculo | 78fbc9f4 (merge 497f5e8f) |
+| T7 | feito — campo "Usuario de acesso" no motorista, colunas Tipo/KM/Situacao no Checklist, Origem em Viagens, "Exportar planilha" no Dashboard e em Relatorios, menu por perfil e /frota do MOTORISTA indo para /frota/motorista | 82449c5f (merge 497f5e8f) |
+| T8 | feito — frotasPortalIntegracao: o fluxo pela rota e pelo servico, a planilha exportada e o outro motorista sem ver nem alterar | 2e591c39 (+ 0d99cadb, hash no plano) |
 
 ### Notas do back (T1–T5, T8) — o que o front precisa saber, sem mudar contrato
 
@@ -209,5 +209,84 @@ depois (quebrar de novo → vermelho).
 | Fase5-10 | motorista ligado a usuário desativado não salvava nem desvinculava | back: mesmo `usuario_id` passa, `/usuarios-vinculaveis` traz o inativo ligado; front: opção `(inativo)` | corrigido | 9007353e, e4183f70 |
 | Fase5-11 | alerta de checklist aparecia como "Vencido há 3 dia(s)" | back `dias_restantes: null`; painel mostra "Registrado em DD/MM/AAAA" | corrigido | c8794fd7, e4183f70 |
 
-Observação (não corrigida, registrada em B22): a régua da rota antiga (F2-7, sem `itens`) não conta avaria para a situação — um
-`POST /checklists` com os 7 itens OK e uma avaria sai OK e não vira alerta.
+Observação (B22): a régua da rota antiga (F2-7, sem `itens`) não contava avaria para a situação — um `POST /checklists` com os 7
+itens OK e uma avaria saía OK e não virava alerta. O fix-round deixou registrado sem mudar; **corrigido no fechamento em `4ba85d16`**
+(`situacaoDoRegistro` conta a avaria nos dois caminhos; teste vermelho antes em `frotasEsquema` F2-7).
+
+## Fechamento (2026-10-23)
+
+### Divergências do plano (o que a execução fez diferente, e por quê)
+
+| Onde | O plano dizia | O que foi feito | Por quê |
+|---|---|---|---|
+| RN-F1.03 | Checklist sem itens → `INCOMPLETO` sempre | Régua dos 7 `*_ok` na rota antiga (F2-7) | a tela antiga sairia sempre INCOMPLETO; reescrita na Fase 2 |
+| T7 | Seletor do vínculo por `/api/usuarios/por-modulo/frota` | Endpoint novo `GET /api/frotas/usuarios-vinculaveis` (F2-5) | o de módulo filtra por setor e escondia usuários |
+| RN-F1.05 | (implícito) índice no banco | Fila em memória `filaDeViagens.js` (B13) | o índice falharia na migração com viagens em dobro já gravadas |
+| RN-F1.12 | Só conferência no serviço | Conferência **e** índice único parcial (Fase5-9); boot segue se houver duplicata (B21) | 6 POST simultâneos criaram 4 vínculos |
+| RN-F1.20 | Não existia | Criada na Fase 5 (Fase5-8) | o motorista aprovava a própria viagem pelo `POST`/`PUT` |
+| Contrato `POST /portal/registros` | 14 mensagens | +`Data inválida`, `Horário inválido`, `Data no futuro`, `Data/hora do retorno anterior à saída (…)`, `Veículo em manutenção. Fale com o gestor da frota.` | F2-12, F2-14, Fase5-3, Fase5-5 |
+| `GET /usuarios-vinculaveis` | `[{id, nome, email, motorista}]` só ativos | + `ativo` e o usuário desativado ainda ligado (B19) | Fase5-10 |
+| Harness | `setUser` global | usuário na própria requisição (`x-test-user`, `ctx.como`) | Fase5-7: teste de paralelo provava nada |
+| B22 | registrada como não mudada | corrigida no fechamento (`4ba85d16`) | contradizia a RN-F1.02 e a planilha |
+| Spec do mapa | "A1, A2, A6 **e A8** entram na primeira etapa" | A8 **não** entrou (B23) | o plano revisado cortou; ficou aberto. A spec dizia isso e **estava errada** — corrigida no mapa |
+
+### Retro (4 números)
+
+| Medida | Valor |
+|---|---|
+| Rodadas de correção | **2** — 1 fix-round da Fase 5 (`7cebaf12`..`588329d6`) + 1 ajuste no fechamento (B22, `4ba85d16`) |
+| Achados da revisão | Fase 2 (plano): **18**; Fase 5 (código): **11 reais + 1 teste fraco** — os reais são Fase5-1..6, Fase5-8..11 (10) e a avaria da rota antiga (B22); o teste fraco é o Fase5-7 |
+| Paralelismo | back (T1–T5, T8) e front (T6, T7) em paralelo contra os contratos congelados; **sem retrabalho no merge** (`497f5e8f`) |
+| Defeito que escapou | **a preencher na próxima etapa** (o que o uso real ou a Etapa 2 achar no que a 1 entregou) |
+
+### Testes no fechamento
+
+Servidor (Frota): 9 arquivos `frotas*.api.test.js` → **82 passaram, 0 falharam**; `vencimentosFrotasFinanceiroNoDiaLocal` **17/17**.
+Tela: `client/src/components/frotas` → **5 arquivos, 37/37**. A suíte inteira e o `build` não foram rodados no fechamento (só docs).
+
+### Documentação do fechamento
+
+`docs/frotas/novidades-por-etapa.md` (A–E e a seção da etapa), `docs/frotas/manual-do-sistema.md` (novo),
+`docs/frotas/README.md` (guia + roteiro), `docs/frotas/referencia-tecnica.md`, `specs/modulo-frotas/README.md` (mapa),
+`specs/modulo-frotas/13-portal-do-motorista/README.md` (novo).
+
+## Próxima tarefa detalhada — Etapa 2: perfil do Frota pela tela
+
+**Por que esta primeiro (B24):** é o que trava o uso real no primeiro dia. `getPerfilFromUser` cai em `MOTORISTA` para quem não é
+admin e não tem linha em `perfil_frota_usuario`, e **ninguém grava essa tabela a não ser o `syncModuleAdminProfiles`** (só
+`ADMIN_FROTA`). Desde a Etapa 1 o MOTORISTA não vê painel nem relatório — então quem só acompanha a frota perde tudo. Descartados
+para depois: seção 3 (depende da folha inteira), foto (melhoria), A10, A7, A8.
+
+**Molde pronto (não reinventar):** `GET/PUT /api/almoxarifado/perfis-usuario` em `server/routes/almoxarifado/extended.js`
+(`classificarPerfil`: forçado / explícito / padrão; 409 para admin forçado; `perfil` vazio = voltar ao padrão; auditoria lida ANTES
+de escrever) e a tela `client/src/components/almoxarifado/` "Perfis de acesso" (`PerfisAcesso.test.js`).
+
+**Contrato proposto (congelar na Fase 1):**
+
+- `GET /api/frotas/perfis-usuario` — `requirePermission('configurar')` (só ADMIN_FROTA).
+  `200 { perfis: ['CONSULTA','MOTORISTA'], usuarios: [{ id, nome, email, perfil_explicito: 'CONSULTA'|'MOTORISTA'|null,
+  perfil_efetivo: 'ADMIN_FROTA'|'CONSULTA'|'MOTORISTA', origem: 'forcado'|'explicito'|'padrao', motorista: {id, nome} | null }] }`
+  — usuários ativos, não ocultos. `forcado` = superadmin, `role === 'admin'` ou `frota` em `admin_modulos` (a mesma régua de
+  `getPerfilFromUser`/`finishFrotaProfile`).
+- `PUT /api/frotas/perfis-usuario/:usuarioId { perfil: 'CONSULTA'|'MOTORISTA'|null }` — `configurar`.
+  `200 { usuario_id, perfil_explicito, perfil_efetivo, origem }`. Erros: 404 `Usuário não encontrado`; 409 para admin forçado (texto
+  a escrever no espírito do almoxarifado: "já é administrador… remova essa condição no cadastro de usuário"); 400 perfil fora da
+  lista (`ADMIN_FROTA` **não** se grava por aqui — vem do `admin_modulos`, e o `syncModuleAdminProfiles` apaga a linha ao revogar).
+- Fatia visível: tela **Frota → Perfis de acesso** (só no menu do gestor), uma linha por usuário com o seletor e a origem; e no
+  cadastro do motorista, ao ligar um usuário que está como CONSULTA, um aviso de que ele não vai conseguir gravar no portal.
+
+**Pontos de atenção:**
+
+1. **O harness não roda o `finishFrotaProfile`.** `frotasTestApp` injeta o `perfil_frota` no usuário do stub. O teste da Etapa 2 tem
+   de provar a ida e volta: gravar pelo `PUT`, depois montar o usuário como o middleware real monta (ou chamar o enriquecimento) e ver
+   o `GET /dashboard` passar de 403 para 200.
+2. **O front lê `user.perfil_frota`** (`perfilFrota` em `client/src/utils/systemPermissions.js`; menu em `frotaMenu.js`; redirect em
+   `FrotasDashboard`). Depois do `PUT`, o usuário afetado só vê o menu novo quando o `AuthContext` renovar o `/auth/me` — conferir se
+   isso acontece sem novo login (os testes `AuthContextPerfilRetirado`/`SemPiscar` cobrem o mesmo caso no almoxarifado).
+3. **Lista negativa precisa de controle positivo**: "CONSULTA não grava no portal" e "CONSULTA não aprova viagem" passam verdes antes
+   de existir a rota. Sabotar **concedendo** e ver o cenário cair nomeando a ação (regra da skill `fechar-etapa`).
+4. **Não confundir perfil com vínculo**: dar MOTORISTA não liga ao motorista (isso é o `usuario_id` em `frotas_motoristas`). A tela
+   deve mostrar os dois lado a lado.
+5. **Auditoria:** o Frota não tem trilha própria; decidir (letra B) entre reaproveitar a do almoxarifado ou só `updated_at`.
+6. **Medir antes de prometer (Fase 0):** procurar por `perfil_frota_usuario` em todo o `server/` e `client/` — se alguma tela já grava
+   o perfil, a etapa encolhe.
