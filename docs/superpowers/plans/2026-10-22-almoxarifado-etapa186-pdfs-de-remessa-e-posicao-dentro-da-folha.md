@@ -588,3 +588,34 @@ isso); este plano com a próxima tarefa detalhada.
 - Divergência: na (c1) o caso de 40 `W` cai na contagem (1 `text` em vez de 3), não na régua de sobreposição que o plano previa — com
   `maxWidth` a quebra acontece **dentro** do `text` do jsPDF, que o gravador não desenha; a sobreposição em si é a medida da Fase 0
   (2ª linha em y + 14,7, nome em y + 15).
+- Commit: `e0bbd9ba`.
+
+### T5 — integração (rota real → fixture → tela → gerador → réguas) e sonda pós (feita)
+
+- **Abertura (emenda I2):** `datasDoChat…test.js` sem nenhuma mudança, depois de T2, T3 e T4 commitadas: **14/14**.
+- **Fixture pela rota real** (`server/tests/api/pdfsRemessaPosicaoFixture.api.test.js`): cliente com razão de 69, dois materiais **do mesmo
+  cliente** (código de 25 + nome de 71, e `EPI-MASC-SOLDA-07`) — emenda I3; entrada, saída para projeto (nome de 80) e para OS
+  `2026-00042` pela rota `/movimentacoes/v2`; remessa com os 2 itens e observação longa pela rota. Sem fixture: **2 passam, 1 falha**
+  (`fixture ausente`); gravada com `CRM_GRAVAR_FIXTURE=1` → `client/src/utils/__fixtures__/remessa.rota.json` e `posicaoCliente.rota.json`;
+  depois **3/3**. **Controle:** apagar `saldo_disponivel` de um item da fixture da posição → cai *"posicao (item): a fixture do client não é o
+  corpo do servidor"* (md5 restaurado = antes, `cmp` ok, `e186-sab-t5c1.log`).
+- **Telas** (`client/src/components/almoxarifado/pdfsDeRemessaEPosicaoPelaTela.test.js`, gravador com medidas reais e `setFont`): remessa
+  (abrir → **PDF da remessa**), posição (escolher o cliente → **PDF**) e `EtiquetasPdfModal` (sem mockar o util; `qrcode` mockado) com
+  código de 22 letras → **Gerar**. **4/4** (a 1ª é a guarda de que as fixtures têm os textos longos).
+- **Controle cruzado** (`e186-sab-t5xN.log`): a (c1) da T2 derruba **só** o teste da remessa (`EIXO-…` fim 57,8 > 47); a (c1) da T3 **só** o da
+  posição (a junção do nome de 71 na coluna Material); a (c1) da T4 **só** o do modal (fonte **14** > 13).
+- **Sonda real depois** (`p186-sonda-pos.js` → `e186-sonda-pos.txt`; lê `COLUNAS*`/cortes de `c90b403f` e da árvore, `linhasPorLargura`/
+  `utilDasColunas` de `pdfTexto.js` e `FONTES_CODIGO` de `etiquetasPdf.js`, por regex): **86 casos, 0 além do limite, 0 com texto perdido**.
+  Maior fim por coluna, antes → depois:
+  - remessa: Código 133,4 (vizinha em 44) → **46,8** (≤ 47); Material 163,4 → **124,1** (≤ 125); Un. 153,8 → 140,9; Qtde 172,3 → 163,8;
+    Peso 198,3 → 194,8;
+  - posição, itens: Código 115,5 (vizinha em 40) → **46,8**; Material 141,5 (vizinha em 98) → **98,7** (≤ 99); Un. 108,9 → 110,9; Recebido
+    142,3 → 130,4; Consumido 162,3 → 153,8; Devolvido 186,3 → 175,1; Saldo 210,3 → 195,4;
+  - aplicações: Código 133,4 → **46,8**; Aplicado em 223,1 → **140,5** (≤ 143); Quantidade 176,3 → 176,3;
+  - fora da tabela (182 mm): título com razão de 69 233,0 → 2 linhas 192,3; proprietário de 80 `W` 322,1 → 192,8; subtítulo de 135 244,8 → 182,9;
+  - etiqueta (negrito): `MP-ACO-INOX-304-CH-3MM` f14 64,7 → **f11 50,8** (A4, 55) / **f12 55,5** (térmica, 56); 25 letras f14 68,7 → f11 53,9;
+    40 `W` 185,7 → f10 em 3 linhas, 53,1; `MAT-7` e `EPI-MASC-SOLDA-07` ficam em f14.
+  - **Controle da sonda** (`--controle`, útil + 1 mm → `e186-sonda-pos-controle.txt`): **14** casos além do limite — a sonda sabe falhar.
+- M7 (letra larga / texto real): o título da posição passava da margem com **48** letras largas / **54** de texto real de razão; o proprietário
+  com **72** / **83** (números da Fase 0 e da Fase 2, não remedidos aqui).
+- Divergência: as suítes completas rodam uma vez no fim, depois da T6 (registro abaixo, na T6).

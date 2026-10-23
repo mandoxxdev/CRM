@@ -1,0 +1,53 @@
+{
+  "cliente": {
+    "id": 1,
+    "razao_social": "Industria e Comercio de Equipamentos para Saneamento Basicos Ltda EPP",
+    "nome_fantasia": null
+  },
+  "itens": [
+    {
+      "material_id": 1,
+      "codigo": "EIXO-SAE1045-D50-L1200-RT",
+      "nome": "Eixo usinado em aco SAE 1045 retificado diametro 50 mm comprimento 1200",
+      "unidade": "UN",
+      "saldo": 15,
+      "saldo_disponivel": 15,
+      "recebido": 20,
+      "consumido": 5,
+      "devolvido": 0
+    },
+    {
+      "material_id": 2,
+      "codigo": "EPI-MASC-SOLDA-07",
+      "nome": "Chapa de aco inox 304 2B 3,00 x 1250 x 3000 mm",
+      "unidade": "UN",
+      "saldo": 10,
+      "saldo_disponivel": 10,
+      "recebido": 10,
+      "consumido": 0,
+      "devolvido": 0
+    }
+  ],
+  "aplicacoes": [
+    {
+      "material_id": 1,
+      "codigo": "EIXO-SAE1045-D50-L1200-RT",
+      "nome": "Eixo usinado em aco SAE 1045 retificado diametro 50 mm comprimento 1200",
+      "os_id": null,
+      "numero_os": null,
+      "projeto_id": 1,
+      "projeto_nome": "Ampliacao da estacao de tratamento de efluentes industriais da planta Sul fase B",
+      "quantidade": 3
+    },
+    {
+      "material_id": 1,
+      "codigo": "EIXO-SAE1045-D50-L1200-RT",
+      "nome": "Eixo usinado em aco SAE 1045 retificado diametro 50 mm comprimento 1200",
+      "os_id": 1,
+      "numero_os": "2026-00042",
+      "projeto_id": null,
+      "projeto_nome": null,
+      "quantidade": 2
+    }
+  ]
+}
