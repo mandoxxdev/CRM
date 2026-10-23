@@ -1,9 +1,9 @@
 # Módulo Frota — guia do que existe hoje
 
-> **Onde paramos:** **Etapa 2 — perfil Consulta/Motorista pela tela — entregue em 2026-10-23** (na `main`, commits `3aa4e088`
-> a `805aaa3c`). O gestor dá **Consulta** (vê painel e relatórios, não grava) ou **Motorista** a cada usuário em **Frota → Perfis de
-> acesso**. A Etapa 1 (portal do motorista) foi entregue antes, no mesmo dia.
-> **Próxima: Etapa 3 — km e horímetro confiáveis no portal** (km menor que o atual deixa de passar calado; máquina por horímetro).
+> **Onde paramos:** **Etapa 3 — km e horímetro confiáveis no portal — entregue em 2026-10-23** (na `main`, commits `64d85bf2`
+> a `a7427207`, com a Fase 5). O portal mostra o último km do veículo, pergunta antes de gravar um km menor, e a máquina por horímetro
+> é registrada em horas. Antes, no mesmo dia: Etapa 2 (perfil Consulta/Motorista pela tela) e Etapa 1 (portal do motorista).
+> **Próxima:** ver "Próxima tarefa detalhada" no fim do [plano da Etapa 3](../superpowers/plans/2026-10-23-frotas-etapa3-km-e-horimetro.md).
 > O módulo ainda **não foi usado em produção**.
 >
 > Apresentação da etapa (com os cenários e as decisões): [`novidades-por-etapa.md`](novidades-por-etapa.md) ·
@@ -47,13 +47,15 @@ botão grande e preenche o mesmo formulário do papel — e só vê o que é del
 | Botão **Saída** (some enquanto há viagem aberta) | Formulário do papel; abre a viagem |
 | Botão **Retorno** (só com viagem aberta) | Formulário do papel; fecha a viagem e calcula o km rodado |
 | Botão **Inspeção** | Formulário do papel sem viagem (inspeção periódica) |
-| Botão **Abastecimento** | Veículo, KM, litros, valor, data, posto |
+| Botão **Abastecimento** | Veículo, KM (ou horímetro, na máquina), litros, valor, data, posto |
 | **Meus registros** | As últimas 30 saídas/retornos/inspeções (com a situação OK / PENDÊNCIA / INCOMPLETO) e os últimos 30 abastecimentos dele |
 
-O formulário de Saída/Retorno/Inspeção tem: veículo (no Retorno é o da viagem), **KM atual**, data, horário, **combustível** (Vazio, ¼,
+O formulário de Saída/Retorno/Inspeção tem: veículo (no Retorno é o da viagem), **KM atual** (na máquina por horímetro, **Horímetro
+atual**; embaixo, *"Último registrado neste veículo: …"*), data, horário, **combustível** (Vazio, ¼,
 ½, ¾, Cheio), origem/destino/finalidade (só na Saída), os **12 itens** do papel (cada um **OK**, **N/A** ou **Falha**), **avarias**
 (onde: lado esquerdo, lado direito, em cima, frente, traseira; o que é: risco, amassado, trinca, quebrado, outro; descrição opcional)
-e observações. O **Salvar** só acende com os 12 itens marcados.
+e observações. O **Salvar** só acende com os 12 itens marcados. Número **menor** que o último do veículo: um aviso enquanto digita e,
+ao salvar, a pergunta com o botão **Confirmar mesmo assim** (desde a Etapa 3).
 
 ## As telas do gestor, uma por uma
 
@@ -65,9 +67,9 @@ formulário, e na linha os botões **editar** (lápis) e **excluir** (lixeira). 
 | **Dashboard Frota** | 9 cartões, lista de alertas (inclui **Checklist com pendência**), custos por categoria, últimos abastecimentos. Botão **Exportar planilha** | Sim |
 | **Veículos** | Placa, marca, modelo, ano, tipo, **km** ou **horímetro**, combustível, setor, centro de custo, condutor responsável, chassi, RENAVAM | Sim |
 | **Motoristas** | Nome, CPF, CNH, telefone, e-mail, setor e **Usuário de acesso (portal do motorista)** | Sim |
-| **Abastecimentos** | Veículo, motorista, data, litros, valor, km, combustível, posto. O sistema sobe o km do veículo e calcula o **km por litro** | Sim |
+| **Abastecimentos** | Veículo, motorista, data, litros, valor, km (ou **horímetro**, na máquina), combustível, posto. O sistema sobe o km (ou o horímetro) do veículo e calcula o **km por litro** (a máquina fica fora) | Sim |
 | **Manutenções** | Preventiva ou corretiva, oficina, custo, peças, km, **próxima revisão**. "Em andamento" põe o veículo em manutenção | Sim |
-| **Viagens** | Saída e retorno, km, **origem**, destino, finalidade, setor, status. O botão **Aprovar** aparece só em viagem **solicitada** | Sim |
+| **Viagens** | Saída e retorno, km (ou **horímetro**, na máquina), **origem**, destino, finalidade, setor, status. O botão **Aprovar** aparece só em viagem **solicitada** | Sim |
 | **Checklist Diário** | Lista tudo o que o motorista registrou (colunas **Tipo**, **KM**, **Situação**) e o "Novo Checklist" antigo do gestor (7 itens) | Sim. Não edita |
 | **Multas** | Data, infração, valor, pontos, vencimento, pago/pendente/contestado | Sim |
 | **Documentos** | IPVA, licenciamento, seguro, CRLV, rastreador — com vencimento e "avisar X dias antes" | Sim |
@@ -80,7 +82,7 @@ formulário, e na linha os botões **editar** (lápis) e **excluir** (lixeira). 
 
 - Documento vencendo (no prazo configurado nele; padrão 30 dias).
 - CNH de motorista vencendo em até 30 dias.
-- Revisão chegando: até 15 dias pela data, ou faltando 500 km pelo km.
+- Revisão chegando: até 15 dias pela data, ou faltando 500 km pelo km (na máquina por horímetro, faltando 50 horas pelo horímetro).
 - Multa pendente vencendo em até 15 dias.
 - **Consumo baixo**: o km/L dos últimos 60 dias ficou abaixo de 70% do esperado para o veículo.
 - **Checklist com pendência** (novo): saída, retorno ou inspeção com alguma **Falha** ou avaria, nos últimos 7 dias. Mostra o que
@@ -102,8 +104,8 @@ próximo clique dela; o menu dela muda quando ela recarrega a página.
 
 1. **Falta a parte 3 do formulário** ("Transmissão e itens específicos"): a imagem que recebemos está cortada.
 2. **Sem foto** da avaria ou do cupom.
-3. **km menor que o anterior ainda passa calado.** Um erro de digitação (900 em vez de 1900) é aceito sem aviso.
-4. **Máquina por horímetro** (empilhadeira): o portal pede "KM atual" e grava como km.
+3. **O escritório não recebe a pergunta do km menor** (é ele quem lança atrasado e corrige): um km errado digitado na tela do gestor
+   entra como antes.
 
 **Resolvidos na Etapa 1** (estavam nesta lista no levantamento):
 
@@ -113,6 +115,11 @@ próximo clique dela; o menu dela muda quando ela recarrega a página.
 - ~~Abastecimento lançado atrasado fica sem km/L~~ — **resolvido**: a conta é pela ordem do km, e o seguinte é refeito.
 - ~~Viagem: aprovar uma que já terminou; km de volta menor gerando km negativo~~ — **resolvido**: as duas são recusadas.
 - ~~Não sai Excel~~ — **resolvido**: Exportar planilha.
+
+**Resolvido na Etapa 3:**
+
+- ~~km menor que o anterior passa calado~~ — **resolvido**: o portal mostra o último km e pergunta antes de gravar.
+- ~~Máquina por horímetro grava as horas no km~~ — **resolvido**: o portal pede o horímetro e grava em horas.
 
 **Resolvido na Etapa 2:**
 
@@ -182,10 +189,46 @@ ao módulo **Frota** no cadastro de usuário e **sem** marcar "administra o mód
 9. **Documentos do motorista.** Como *ana*, digite `/frota/documentos`: a lista vem vazia. Como *bia* ou gestor, os documentos aparecem.
 10. **Voltar ao padrão.** Como gestor, *bia* → **Motorista (padrão)**. Ela recarrega e volta ao **Meu painel**.
 
-## O que as Etapas 1 e 2 **não** cobrem
+## Roteiro de teste manual (km e horímetro)
+
+Você vai precisar do seu login (administrador) e de *ana* (motorista ligada, como no primeiro roteiro). Troque "hoje" pela data do dia.
+
+1. **Preparar.** Como administrador, **Frota → Veículos**: um carro *AAA1A11* com **Medição = Quilometragem** e **KM Atual 1800**; uma
+   máquina *EMP0001* com **Medição = Horímetro** e **Horímetro Atual 120**.
+2. **Último registrado.** Como *ana*, **Meu painel → Inspeção** → *AAA1A11*: embaixo de **KM atual (o que está no painel)** aparece
+   *"Último registrado neste veículo: 1.800 km"*.
+3. **Aviso ao digitar.** Digite **900**: aparece *"Menor que o último registrado. Confira o painel antes de salvar."*. Digite **1800**: o
+   aviso some. Volte para **900**.
+4. **A pergunta ao salvar.** Marque os 12 itens → **Salvar**: no topo, *"KM menor que o atual do veículo (1.800 km). Confira o hodômetro
+   antes de salvar."* e o botão **Confirmar mesmo assim**. Em **Meus registros** nada novo apareceu.
+5. **Mudar desarma.** Troque o km para **950**: o botão some. **Salvar** pergunta de novo, agora com o 950.
+6. **Confirmar.** **Confirmar mesmo assim** → *"Inspeção registrada"*; **Meus registros** mostra *"· 950 km"*. Como administrador, em
+   **Veículos**, *AAA1A11* continua com **1.800 km**.
+7. **Abastecimento atrasado.** Como *ana*, **Abastecimento** → *AAA1A11*, KM **1700**, 30 litros, data de ontem → **Salvar** → a
+   pergunta → **Confirmar mesmo assim** → *"Abastecimento registrado"*.
+8. **Retorno menor que a saída não se confirma.** **Saída** com *AAA1A11* em **1800**; depois **Retorno** com **1750**: *"KM do retorno
+   (1750) menor que o KM da saída (1800). Confira o hodômetro."*, sem botão de confirmar. Faça o retorno com **1850**.
+9. **A máquina.** **Inspeção** → *EMP0001*: o campo é **Horímetro atual (horas no painel)**, com *"Último registrado neste veículo:
+   120 h"*. Deixe vazio e salve: *"Informe o horímetro atual"*. Digite **125.5** → *"Inspeção registrada"*; **Meus registros** mostra
+   *"· 125,5 h"*. Como administrador, **Veículos**: *EMP0001* com **125,5 h**, km sem mudar.
+10. **Horímetro menor.** Como *ana*, **Inspeção** → *EMP0001* com **100**: *"Horímetro menor que o atual do veículo (125,5 h). Confira o
+    painel antes de salvar."*.
+11. **Viagem da máquina.** **Saída** com *EMP0001* em **126**; o **Retorno** mostra *"saiu com 126 h"*. Retorno com **125**:
+    *"Horímetro do retorno (125 h) menor que o da saída (126 h). Confira o painel."*. Retorno com **130**: registrado. Como
+    administrador, **Viagens**: **KM rodado** = *"4 h"*.
+12. **Gestor fecha viagem esquecida de máquina.** Faça outra **Saída** de *EMP0001* (131) como *ana* e não registre o retorno. Como
+    administrador, **Viagens** → editar → **Horímetro retorno (máquina)** **135**, status **concluida** → salvar. Em **Veículos**,
+    *EMP0001* com **135 h**.
+13. **Planilha.** **Dashboard Frota → Exportar planilha**: no fim das abas, **Horímetro Atual** (Cadastro Frota), **Horímetro
+    Inicial/Final** (Viagens e KM), **Horímetro** (Checklist, Abastecimentos) — preenchidas só na *EMP0001*.
+14. **Alerta de revisão da máquina.** **Manutenções → Nova**: *EMP0001*, descrição "revisão", **Próxima revisão (KM)** **180**. No
+    **Dashboard Frota**, aparece **Manutenção — EMP0001** (faltam 45 h).
+
+## O que as Etapas 1 a 3 **não** cobrem
 
 - Dar **Administrador de Frota** pela tela de Perfis (continua no cadastro de usuário); saber **quem** mudou um perfil; lembrar o
   Consulta de quem foi administrador e deixou de ser.
 - A **seção 3** do formulário (imagem cortada), **foto** da avaria/cupom, **desenho** clicável das avarias.
-- **Horímetro** para máquinas, **aviso de km menor** que o atual, **multas no período** do relatório, apelido **V01/C01**.
+- A **pergunta do km menor nas telas do gestor**; **consumo da máquina** em litros por hora; horímetro no **relatório de custo**;
+  **multas no período** do relatório, apelido **V01/C01**.
 - O motorista **corrigir** o que lançou pelo portal (a correção é com o gestor).

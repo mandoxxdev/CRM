@@ -52,15 +52,17 @@ Duas camadas, como no almoxarifado:
 | `relatorios` | ✓ | | ✓ | relatórios e `GET /exportar.xlsx` |
 | `configurar` | ✓ | | | `GET`/`PUT /perfis-usuario` (desde a Etapa 2) |
 
-`getPerfilFromUser`: sem usuário → `CONSULTA`; superadmin, admin do módulo `frota` ou `role === 'admin'` → `ADMIN_FROTA`; senão
+`getPerfilFromUser`: sem usuário → `CONSULTA`; superadmin, admin do módulo `frota` ou `role` "admin" **em qualquer caixa** (desde a
+Etapa 3, E5; até a Etapa 2 era `=== 'admin'`) → `ADMIN_FROTA`; senão
 `user.perfil_frota` (de `perfil_frota_usuario`); **senão `MOTORISTA`**. A tela de usuários grava `ADMIN_FROTA` (via
 `admin_modulos` → `syncModuleAdminProfiles`: upsert ao conceder, `DELETE … AND perfil = 'ADMIN_FROTA'` ao revogar — o que apaga um
 Consulta que estivesse lá, C9). **Desde a Etapa 2**, `CONSULTA`/`MOTORISTA` se gravam por `PUT /perfis-usuario` (tela **Frota → Perfis
 de acesso**). Isto era assim até a Etapa 1: *"`MOTORISTA`/`CONSULTA` continuam sem tela"*. A tabela `perfil_frota_usuario` é criada
 pelo `server/index.js` e, desde a Etapa 2, também pelo `schema.js` do Frota (mesmo DDL, idempotente). A coluna
 `frotas_motoristas.perfil_frota` existe e **ninguém lê**. O front usa a mesma régua (`perfilFrota` em
-`client/src/utils/systemPermissions.js`) para o menu e para o redirect `/frota` → `/frota/motorista` do MOTORISTA — **com uma
-diferença**: o front minusculiza o `role` e o servidor compara `=== 'admin'` (E5 nas novidades). Desde a Etapa 2 (Fase5-2) o portal e o
+`client/src/utils/systemPermissions.js`) para o menu e para o redirect `/frota` → `/frota/motorista` do MOTORISTA. *Até a Etapa 2
+havia uma diferença: o front minusculizava o `role` e o servidor comparava `=== 'admin'` (E5); desde a Etapa 3 os dois ignoram a caixa,
+como o `isSystemAdmin` do núcleo.* Desde a Etapa 2 (Fase5-2) o portal e o
 painel chamam `refreshUser` uma vez quando o `perfil` do servidor (no `/portal/inicio` ou no 403 do `/dashboard`) diverge do da tela.
 
 ### Escopo por dono (MOTORISTA)
@@ -94,9 +96,9 @@ manda); o resto passa por `respondDbError`. Contratos completos (mensagens liter
 | GET | `/api/frotas/alertas` | **`ver_painel`** | + alerta `checklist` (PENDÊNCIA, 7 dias, `dias_restantes: null`). *Era "módulo"* |
 | GET | `/api/frotas/relatorios/custos-por-veiculo?data_inicio&data_fim` | `relatorios` | multas sem filtro de período (A7) |
 | GET | `/api/frotas/relatorios/consumo?veiculo_id` | `relatorios` | |
-| GET | `/api/frotas/portal/inicio` | módulo | **novo.** `{ motorista, viagem_aberta, veiculos[{…, status, em_uso}], itens, vistas, tipos_avaria, niveis_combustivel, perfil, pode_registrar, pode_gerir }` |
-| POST | `/api/frotas/portal/registros` | `registrar_operacoes` | **novo.** `{ tipo, veiculo_id, km, data, horario, nivel_combustivel, itens, avarias, observacoes, origem, destino, finalidade }` → `201 { registro, viagem }` |
-| POST | `/api/frotas/portal/abastecimentos` | `registrar_operacoes` | **novo.** `motorista_id` = o do vínculo |
+| GET | `/api/frotas/portal/inicio` | módulo | **novo.** `{ motorista, viagem_aberta, veiculos[{…, status, em_uso}], itens, vistas, tipos_avaria, niveis_combustivel, perfil, pode_registrar, pode_gerir }`. **Etapa 3:** `veiculos[].horimetro_atual`; `viagem_aberta.horimetro_saida` e `tipo_medicao` (a régua com que a viagem abriu: `horimetro_saida` → horimetro; `km_saida` → km; senão a do veículo) |
+| POST | `/api/frotas/portal/registros` | `registrar_operacoes` | **novo.** `{ tipo, veiculo_id, km, data, horario, nivel_combustivel, itens, avarias, observacoes, origem, destino, finalidade }` → `201 { registro, viagem }`. **Etapa 3:** `+ horimetro` (máquina; o `km` é ignorado nela) e `+ confirmar_km_menor` (booleano). Leitura menor que a do veículo → 409 `{ error, code: 'KM_MENOR_QUE_ATUAL' \| 'HORIMETRO_MENOR_QUE_ATUAL' }`, depois das recusas duras; retorno em horas menor que a saída → 400 |
+| POST | `/api/frotas/portal/abastecimentos` | `registrar_operacoes` | **novo.** `motorista_id` = o do vínculo. **Etapa 3:** `horimetro`, `confirmar_km_menor` e os mesmos 409; máquina grava `horimetro_abastecimento` com `km_abastecimento` nulo |
 | GET | `/api/frotas/portal/meus-registros?limite=30` | módulo | **novo.** `{ registros, abastecimentos }` (máx. 200) |
 | GET | `/api/frotas/usuarios-vinculaveis` | `gerenciar_motoristas` | **novo.** `[{ id, nome, email, ativo, motorista, perfil_frota }]`: ativos + o desativado ainda ligado; `perfil_frota` (efetivo) desde a Etapa 2 |
 | GET | `/api/frotas/perfis-usuario` | `configurar` | **Etapa 2.** `{ perfis: ['CONSULTA','MOTORISTA'], usuarios: [{ id, nome, email, perfil_explicito, perfil_efetivo, origem: forcado\|explicito\|padrao, motorista, viagem_aberta }] }` — ativos e não ocultos |
@@ -105,10 +107,10 @@ manda); o resto passa por `respondDbError`. Contratos completos (mensagens liter
 | GET/POST/PUT/DELETE | `/api/frotas/veiculos[/:id]` | GET módulo; resto `gerenciar_veiculos` | |
 | GET/POST/PUT/DELETE | `/api/frotas/motoristas[/:id]` | GET módulo (escopo); resto `gerenciar_motoristas` | aceita `usuario_id` (null desvincula) |
 | GET/POST/PUT/DELETE | `/api/frotas/manutencoes[/:id]` | POST/PUT `registrar_operacoes`; DELETE `gerenciar_veiculos` | escopo por `usuario_id` |
-| GET/POST/PUT/DELETE | `/api/frotas/abastecimentos[/:id]` | idem | + `km_desde_anterior`; recálculo do vizinho |
+| GET/POST/PUT/DELETE | `/api/frotas/abastecimentos[/:id]` | idem | + `km_desde_anterior`; recálculo do vizinho. **Etapa 3:** `horimetro_abastecimento` (PUT: ausente mantém, vazio apaga); sem a régua do km menor (B36) |
 | GET/POST/PUT/DELETE | `/api/frotas/multas[/:id]` | **POST/PUT `gerenciar_veiculos`** | *era `registrar_operacoes`; mudou na Etapa 1* |
 | GET/POST/PUT/DELETE | `/api/frotas/documentos[/:id]` | **POST/PUT `gerenciar_veiculos`** | *idem*; GET: MOTORISTA recebe `[]` (Etapa 2) |
-| GET/POST/PUT/DELETE | `/api/frotas/viagens[/:id]` | POST/PUT `registrar_operacoes`; DELETE `gerenciar_veiculos` | fila de viagens; viagem única; km e data do retorno; RN-F1.20 |
+| GET/POST/PUT/DELETE | `/api/frotas/viagens[/:id]` | POST/PUT `registrar_operacoes`; DELETE `gerenciar_veiculos` | fila de viagens; viagem única; km e data do retorno; RN-F1.20. **Etapa 3:** `horimetro_saida`/`horimetro_retorno` (PUT: null/ausente mantém; retorno menor que a saída → 400) |
 | POST | `/api/frotas/viagens/:id/aprovar` | `aprovar_viagens` | **só `solicitada`** (409). *No levantamento "não confere o status atual"; mudou na Etapa 1* |
 | GET/POST/DELETE | `/api/frotas/checklists[/:id]` | POST `registrar_operacoes` | **sem PUT**. Lista traz `tipo_registro, km, horario, nivel_combustivel, status_geral, itens, avarias, viagem_id` |
 
@@ -122,11 +124,11 @@ Sem validação de esquema (Zod) — checagem no serviço.
 | `frotas_veiculos` | placa (UNIQUE, normalizada), modelo, marca, ano, tipo_id, status (ativo/manutencao/inativo/vendido), km_atual, horimetro_atual, tipo_medicao, combustivel, consumo_medio_esperado, setor_responsavel, centro_custo, motorista_id, … | lógica |
 | `frotas_motoristas` | nome, cpf, **usuario_id** (o vínculo — *"sem uso na tela" no levantamento; mudou na Etapa 1*), cnh_*, telefone, email, setor, status, perfil_frota (sem uso). Índice único parcial `idx_frotas_motoristas_usuario_ativo` | lógica |
 | `frotas_manutencoes` | veiculo_id, tipo, descricao, oficina, custo, km_manutencao, data_manutencao, proxima_revisao_km/data, status, usuario_id/nome, requisicao_almox_id | física |
-| `frotas_abastecimentos` | veiculo_id, motorista_id, data_abastecimento, litros, valor_total, valor_litro, posto, km_abastecimento, combustivel_tipo, consumo_medio, **km_desde_anterior** (novo), usuario_id/nome | física |
+| `frotas_abastecimentos` | veiculo_id, motorista_id, data_abastecimento, litros, valor_total, valor_litro, posto, km_abastecimento, combustivel_tipo, consumo_medio, **km_desde_anterior** (novo), usuario_id/nome, **horimetro_abastecimento** (Etapa 3) | física |
 | `frotas_multas` | veiculo_id, motorista_id, data_infracao, valor, pontos, status_pagamento, data_vencimento, … | física |
 | `frotas_documentos` | veiculo_id, tipo, numero_documento, valor, data_vencimento, alerta_dias_antes (30), status (ativo/vencido/renovado) | física |
-| `frotas_viagens` | veiculo_id, motorista_id, data_saida/retorno (`AAAA-MM-DDTHH:MM`), km_saida/retorno/rodado, **origem** (novo), destino, finalidade, setor, status, aprovador_*, solicitante_*, observacoes | física |
-| `frotas_checklists` | veiculo_id, motorista_id, data_checklist, 7 × `*_ok`, observacoes, aprovado, usuario_id/nome; **novas:** `tipo_registro` (saida/retorno/inspecao, padrão inspecao), `km`, `horario`, `nivel_combustivel`, `itens_json` (os 12), `avarias_json`, `status_geral` (OK/PENDENCIA/INCOMPLETO), `viagem_id` | física |
+| `frotas_viagens` | veiculo_id, motorista_id, data_saida/retorno (`AAAA-MM-DDTHH:MM`), km_saida/retorno/rodado, **horimetro_saida/retorno** (Etapa 3), **origem** (novo), destino, finalidade, setor, status, aprovador_*, solicitante_*, observacoes | física |
+| `frotas_checklists` | veiculo_id, motorista_id, data_checklist, 7 × `*_ok`, observacoes, aprovado, usuario_id/nome; **novas:** `tipo_registro` (saida/retorno/inspecao, padrão inspecao), `km`, `horario`, `nivel_combustivel`, `itens_json` (os 12), `avarias_json`, `status_geral` (OK/PENDENCIA/INCOMPLETO), `viagem_id`; **Etapa 3:** `horimetro` | física |
 | `perfil_frota_usuario` (em `index.js` e, desde a Etapa 2, também no `schema.js` do Frota) | usuario_id (PK), perfil (padrão 'MOTORISTA'), updated_at | gravada por `syncModuleAdminProfiles` (ADMIN_FROTA) e, desde a Etapa 2, por `PUT /perfis-usuario` (CONSULTA/MOTORISTA) |
 
 Saída, retorno e inspeção do portal são linhas de `frotas_checklists` (B1). Os 7 `*_ok` continuam gravados a partir dos 12:
@@ -140,8 +142,15 @@ DDL do `index.js`.
 ## Regras de cálculo
 
 - **km do veículo** (`updateKmVeiculoSeMaior`): manutenção, abastecimento, retorno de viagem **e saída/retorno/inspeção do portal**
-  sobem o `km_atual` se o lançado for maior; nunca descem. Horímetro: `updateHorimetroVeiculoSeMaior` **continua sem chamador** (A10);
-  o portal grava em km também para veículo por horímetro.
+  sobem o `km_atual` se o lançado for maior; nunca descem. **Desde a Etapa 3** é um comando só (`SET km_atual = MAX(COALESCE(km_atual,0), ?)`):
+  ler e depois gravar deixava a menor leitura por último em chamadas simultâneas. *Até a Etapa 2: "`updateHorimetroVeiculoSeMaior`
+  continua sem chamador (A10); o portal grava em km também para veículo por horímetro"* — **deixou de ser verdade**: o portal (máquina,
+  `tipo_medicao = 'horimetro'`), o retorno/abastecimento do gestor com `horimetro_*` sobem o `horimetro_atual` pelo mesmo `MAX`, sem
+  tocar no km.
+- **Régua do km menor (Etapa 3, A8)**: só no portal — `conferirMenorQueAtual` em `portalService.js`, depois das recusas duras; 409 com
+  `code`; `confirmar_km_menor === true` passa. O número da mensagem sai em `Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 })`.
+- **Revisão da máquina (Etapa 3, RN-F3.14)**: `getAlertas` e o cartão de manutenção vencida do `getDashboard` comparam
+  `proxima_revisao_km` com `horimetro_atual` quando `tipo_medicao = 'horimetro'` (folga 50, contra 500 no km); a aba Cadastro Frota idem.
 - **km/L** — isto era assim no levantamento; mudou na Etapa 1: *"`(km lançado − km do último abastecimento do veículo por data) ÷ litros
   lançados`"*. Hoje (`80362b54`): `km_desde_anterior = km − km do anterior EM KM` (ordem `km_abastecimento ASC, id ASC`, mesmo
   veículo, só linhas com km); `consumo_medio = km_desde_anterior ÷ litros`, 2 casas, `null` se a diferença ≤ 0 ou sem anterior.
@@ -189,6 +198,12 @@ Etapa 2: `frotasPerfis.api.test.js` **17/17** e `frotasPerfisIdaEVolta.api.test.
 `FrotasEtapa2Gestor.test.js`, mais casos em `FrotasMenuPorPerfil` e `FrotasPortalMotorista` — `client/src/components/frotas`: 7
 arquivos, **64/64**. Números da suíte inteira: letra E nas novidades.
 
+Etapa 3: `frotasKmHorimetro.api.test.js` **32/32** (RN-F3.01..15, ajustes da Fase 2, Fase5-R1..R4, S4/S6/S7/S9/S20/S22) e
+`frotasKmHorimetroIntegracao.api.test.js` **2/2** (pela rota e pelo serviço; colunas da planilha lidas pelo nome); os 13 arquivos
+`frotas*` somam **136 passaram, 0 falharam**. Tela: `FrotasPortalKmHorimetro` (26), `FrotasHorimetroGestor` (5),
+`FrotasHorimetroGestorTela` (1) — `client/src/components/frotas`: 10 arquivos, **96/96**. A corrida da RN-F3.08 **não** se reproduz pelo
+HTTP (8 abastecimentos em paralelo passavam antes do conserto); a prova é a chamada dupla no serviço, no mesmo tique.
+
 ## Achados
 
 Sonda executada em 2026-10-23 contra o `initSchema` e o `frotasService` reais, banco em memória.
@@ -202,9 +217,9 @@ Sonda executada em 2026-10-23 contra o `initSchema` e o `frotasService` reais, b
 | A5 | viagem km_saida 2000 → `PUT {km_retorno: 1800}` | 400 | `km_rodado = -200` | **corrigido** `80362b54` |
 | A6 | `getPerfilFromUser({id:9, role:'usuario'})` | — | `MOTORISTA`; GETs sem filtro por dono | **corrigido** quanto ao escopo (`6dd0b130`, `9007353e`); o fallback MOTORISTA continua (Etapa 2) |
 | A7 | leitura de `relatorioCustosPorVeiculo` | período em multas | sem filtro | **aberto** |
-| A8 | abastecimento km 900 com veículo em 1800 | aviso/recusa | aceito; km/L `null` | **aberto** — ainda aceito sem aviso; o km/L agora conta pela ordem do km |
+| A8 | abastecimento km 900 com veículo em 1800 | aviso/recusa | aceito; km/L `null` | **corrigido** `fc1328e0` (Etapa 3): o portal responde 409 `KM_MENOR_QUE_ATUAL` e grava só com `confirmar_km_menor`; as rotas do gestor seguem sem a régua (B36) |
 | A9 | `server/tests/frotas.test.js` | na suíte | fora do runner | **corrigido** `4ed19f8b` |
-| A10 | `updateHorimetroVeiculoSeMaior` | chamado nos lançamentos | sem chamador | **aberto** |
+| A10 | `updateHorimetroVeiculoSeMaior` | chamado nos lançamentos | sem chamador | **corrigido** `fc1328e0` (Etapa 3): portal e rotas do gestor com `horimetro_*` |
 
 Banco local (`projetos/CRM/server/data/database.sqlite`, leitura no levantamento): **0 linhas** em todas as tabelas `frotas_*` e em
 `perfil_frota_usuario`.

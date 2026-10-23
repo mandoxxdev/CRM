@@ -64,8 +64,10 @@ Quando você está com um veículo, o painel mostra: "Você está com o veículo
 É o formulário de papel na tela:
 
 - **Veículo** — na Saída e na Inspeção você escolhe; no Retorno é o da sua viagem, já preenchido ("Veículo: (placa) · saiu com
-  (km) km").
-- **KM atual** — o número do painel do veículo. Obrigatório.
+  (km) km", ou "· saiu com (horas) h" numa máquina por horímetro).
+- **KM atual (o que está no painel)** — o número do painel do veículo. Obrigatório. Numa **máquina medida por horímetro**
+  (empilhadeira, por exemplo) o campo se chama **Horímetro atual (horas no painel)** e aceita casas decimais. Embaixo do campo aparece
+  o último número registrado naquele veículo: *"Último registrado neste veículo: 1.800 km"* (ou *"… 120 h"*). Veja as regras em 2.10.
 - **Data** e **Horário** — já vêm com agora; dá para mudar.
 - **Combustível** — Vazio, ¼, ½, ¾ ou Cheio (opcional; toque de novo para desmarcar).
 - **Saindo de onde**, **Indo para onde**, **Para quê (finalidade)** — só na Saída, opcionais.
@@ -104,15 +106,19 @@ Decidir se o veículo pode rodar é do gestor.
 ### 2.5 Voltar (Retorno)
 
 O retorno fecha a **sua** viagem em andamento: grava o km e a data/hora de volta e calcula o **km rodado = km do retorno − km da
-saída**. A viagem passa a **concluída**.
+saída**. A viagem passa a **concluída**. Numa máquina por horímetro, grava o horímetro de volta (sem km rodado). O retorno pede o
+número na mesma medida em que a viagem **saiu**: se ela saiu com km, o retorno pede km, mesmo que o cadastro do veículo tenha mudado
+depois.
 
 | Situação | Mensagem |
 |---|---|
 | km do retorno menor que o da saída | *"KM do retorno (10000) menor que o KM da saída (10050). Confira o hodômetro."* (com os seus números) |
+| horímetro do retorno menor que o da saída (máquina) | *"Horímetro do retorno (124 h) menor que o da saída (125 h). Confira o painel."* (com os seus números) |
 | Data/hora do retorno antes da saída | *"Data/hora do retorno anterior à saída (2026-10-23 08:00)."* (com a data e hora da sua saída, no formato ano-mês-dia) |
 | Você não tem saída aberta | *"Você não tem saída aberta para registrar o retorno."* (na tela, o botão Retorno só aparece com viagem aberta) |
 
-km do retorno **igual** ao da saída é aceito (km rodado 0).
+km do retorno **igual** ao da saída é aceito (km rodado 0). Essas duas recusas são definitivas: o botão **Confirmar mesmo assim**
+(2.10) não passa por cima delas.
 
 ### 2.6 Inspeção
 
@@ -134,13 +140,15 @@ No checklist simples do gestor (os 7 itens sim/não, veja 3.4), a régua é a me
 
 ### 2.8 Abastecer
 
-**Abastecimento**: veículo, **KM atual**, **Litros**, **Valor total (R$)**, data (vem com hoje), posto e observações. Se você está com
-um veículo, ele já vem escolhido. O abastecimento é gravado em seu nome. Ao salvar: "Abastecimento registrado".
+**Abastecimento**: veículo, **KM atual** (ou **Horímetro atual**, numa máquina por horímetro), **Litros**, **Valor total (R$)**, data
+(vem com hoje), posto e observações. Se você está com um veículo, ele já vem escolhido. O abastecimento é gravado em seu nome. Ao
+salvar: "Abastecimento registrado". O abastecimento de máquina por horímetro guarda as horas e **não** entra no cálculo de km/L.
 
 | Situação | Mensagem |
 |---|---|
 | Sem veículo | *"Veículo, litros e data são obrigatórios"* |
 | Sem KM | *"Informe o KM atual"* |
+| Sem horímetro (máquina por horímetro) | *"Informe o horímetro atual"* |
 | Sem litros, ou litros zero | *"Informe os litros"* |
 | Valor negativo | *"Valor inválido"* |
 
@@ -148,8 +156,9 @@ O valor pode ficar em branco (vale zero). O preço por litro é **valor total ÷
 
 ### 2.9 Ver os meus registros
 
-Abaixo dos botões, **Meus registros** mostra as suas últimas 30 saídas/retornos/inspeções (tipo, placa, data, hora, km e a etiqueta
-OK / PENDÊNCIA / INCOMPLETO) e os seus últimos 30 abastecimentos (placa, litros, data, km, valor). É só para consulta: para corrigir um
+Abaixo dos botões, **Meus registros** mostra as suas últimas 30 saídas/retornos/inspeções (tipo, placa, data, hora, km — ou horas,
+como "125 h", na máquina — e a etiqueta OK / PENDÊNCIA / INCOMPLETO) e os seus últimos 30 abastecimentos (placa, litros, data, km ou
+horas, valor). É só para consulta: para corrigir um
 lançamento, fale com o gestor.
 
 ### 2.10 Regras de data, hora e km que valem em todos os formulários
@@ -160,12 +169,19 @@ lançamento, fale com o gestor.
 | Data num formato que não existe | *"Data inválida"* |
 | Horário fora de HH:MM | *"Horário inválido"* |
 | KM vazio ou negativo | *"Informe o KM atual"* |
+| Horímetro vazio ou negativo (máquina por horímetro) | *"Informe o horímetro atual"*. Casas decimais com ponto no campo numérico; texto com vírgula (`1234,5`), espaço ou letras é recusado com a mesma mensagem (o mesmo vale para o KM: *"Informe o KM atual"*) |
 | KM maior que o km do veículo | O km do veículo sobe para o novo valor |
-| KM menor que o km do veículo | É aceito sem aviso; o km do veículo continua o maior. Confira o número antes de salvar |
+| KM igual ao km do veículo | Aceito |
+| KM **menor** que o km do veículo | **Para e pergunta** (nada é gravado): *"KM menor que o atual do veículo (1.800 km). Confira o hodômetro antes de salvar."* — com o km do veículo no formato brasileiro. Se o número está certo (por exemplo, um abastecimento de ontem lançado hoje), toque **Confirmar mesmo assim**: grava, e o km do veículo continua o maior. Se mudar o número ou o veículo, o botão some e o Salvar confere de novo |
+| Horímetro menor que o do veículo | O mesmo, com *"Horímetro menor que o atual do veículo (120 h). Confira o painel antes de salvar."* |
 | Veículo inativo, vendido ou excluído | *"Veículo não encontrado"* (ele nem aparece na lista) |
 
-O motorista registra o número que está no painel em **KM atual** para qualquer veículo. Em máquina que é medida por horímetro, esse
-número é guardado como km do veículo.
+Enquanto você digita, se o número ficar menor que o último registrado no veículo, aparece logo abaixo do campo *"Menor que o último
+registrado. Confira o painel antes de salvar."* — é só um aviso; quem decide é o Salvar. O "último registrado" é o que o sistema sabia
+quando você abriu o formulário: se outro motorista lançou depois, a pergunta do Salvar usa o número novo.
+
+Na **máquina medida por horímetro** o motorista registra as horas do painel: elas atualizam o **horímetro** do veículo e não mexem no
+km. Ser máquina ou não é o campo **Medição** do cadastro do veículo (3.1).
 
 ---
 
@@ -179,6 +195,11 @@ alerta de consumo baixo), setor, centro de custo, condutor responsável, status 
 
 O status pesa no portal: **manutencao** impede a saída (a inspeção continua possível); **inativo** e **vendido** tiram o veículo da
 lista do motorista.
+
+A **Medição** decide o que o motorista digita no portal: **Quilometragem** → "KM atual"; **Horímetro** → "Horímetro atual", em horas,
+que atualiza o **Horímetro Atual** do veículo e não mexe no km. A lista de veículos mostra "KM/Horímetro" pela medição. Ao salvar o
+cadastro de um veículo, o km e o horímetro gravados são os do formulário: se um motorista lançou um número maior enquanto o formulário
+estava aberto, salvar o cadastro volta ao número do formulário.
 
 ### 3.2 Cadastrar o motorista e ligar ao login
 
@@ -209,7 +230,7 @@ Os alertas, do mais grave para o menos (aparecem até 15):
 |---|---|---|
 | Documento (IPVA, seguro…) | Documento **ativo** vencendo dentro do prazo de aviso dele (padrão 30 dias) ou vencido | crítico se vencido; alto até 7 dias; médio |
 | CNH | CNH de motorista ativo vencendo em até 30 dias, ou vencida | crítico se vencida; alto |
-| Manutenção | Próxima revisão em até 15 dias pela data, ou faltando 500 km ou menos pelo km | crítico se passou; médio |
+| Manutenção | Próxima revisão em até 15 dias pela data, ou faltando 500 km ou menos pelo km. Na máquina por horímetro, a "próxima revisão (KM)" é lida em **horas** e comparada com o horímetro: avisa faltando 50 h ou menos | crítico se passou; médio |
 | Multa pendente | Multa pendente vencendo em até 15 dias | alto |
 | **Checklist com pendência** | Saída, retorno ou inspeção com situação **PENDÊNCIA**, com data de hoje até 7 dias atrás | alto |
 | Consumo baixo | Média de km/L dos últimos 60 dias abaixo de 70% do consumo esperado do veículo | médio |
@@ -226,8 +247,8 @@ está como **Consulta**, esses botões (e o de aprovar viagem) não aparecem: a 
 | Tela | O que guardar de importante |
 |---|---|
 | **Manutenções** | Preventiva/corretiva, oficina, custo, km, próxima revisão (km e data). Criada como **em andamento**, põe o veículo em manutenção (que bloqueia a saída no portal) |
-| **Abastecimentos** | Mostra os lançados pelo portal e pelo escritório, com **Km/L**. Editar litros ou valor refaz o preço por litro |
-| **Viagens** | Saída/retorno, km, origem, destino, finalidade, status. O botão **Aprovar** (✓) aparece só em viagem **solicitada** |
+| **Abastecimentos** | Mostra os lançados pelo portal e pelo escritório, com **Km/L**. Editar litros ou valor refaz o preço por litro. Para máquina por horímetro, use **Horímetro no abastecimento (máquina)** e deixe o KM vazio: a coluna KM mostra as horas ("125 h") e a linha fica sem km/L. O escritório pode lançar km menor que o do veículo (lançamento atrasado) sem pergunta |
+| **Viagens** | Saída/retorno, km, origem, destino, finalidade, status. O botão **Aprovar** (✓) aparece só em viagem **solicitada**. Para máquina por horímetro: **Horímetro saída (máquina)** e **Horímetro retorno (máquina)**; a coluna KM rodado mostra as horas usadas ("6,5 h") |
 | **Checklist Diário** | Lista todos os registros (Data, Placa, **Tipo**: Saída/Retorno/Inspeção, Motorista, **KM**, **Situação**, Observações). O **Novo Checklist** daqui é o formulário simples de 7 itens sim/não (pneus, óleo, luzes, freios, extintor, documentos, limpeza), sem avarias. Não edita |
 | **Multas**, **Documentos** | Só o gestor lança e altera |
 
@@ -237,6 +258,8 @@ Regras das viagens (valem também para o gestor):
 |---|---|
 | Aprovar viagem que não está **solicitada** | *"Só é possível aprovar viagem solicitada"* |
 | KM retorno menor que KM saída | *"KM do retorno (…) menor que o KM da saída (…). Confira o hodômetro."* |
+| Horímetro retorno menor que horímetro saída | *"Horímetro do retorno (… h) menor que o da saída (… h). Confira o painel."* |
+| Horímetro que não é número (com vírgula, letras) ou negativo, em Viagens ou Abastecimentos | *"Horímetro inválido"* (nada é gravado) |
 | Data/hora de retorno antes da saída | *"Data/hora do retorno anterior à saída (…)."* (se uma das duas não tem hora, compara só o dia) |
 | Pôr em andamento uma viagem de veículo que já tem outra em andamento | *"Este veículo já está em uso (saída sem retorno)."* |
 | Pôr em andamento uma viagem de motorista que já tem outra em andamento | *"Você já tem uma saída sem retorno. Registre o retorno primeiro."* |
@@ -244,7 +267,9 @@ Regras das viagens (valem também para o gestor):
 Uma viagem nova sem status nasce **solicitada**. O km rodado é calculado (retorno − saída) quando os dois km estão preenchidos.
 
 **Motorista esqueceu de registrar o retorno:** o veículo fica preso como "em uso". Em **Viagens**, edite a viagem, preencha **KM
-retorno** e mude o status para **concluida**. O veículo volta a aparecer na saída.
+retorno** (numa máquina por horímetro, **Horímetro retorno (máquina)**, e deixe o KM vazio) e mude o status para **concluida**. O
+veículo volta a aparecer na saída. Os campos de km e de horímetro estão nos dois formulários para todos os veículos: o sistema não
+confere se o número digitado no km de uma máquina é, na verdade, de horas.
 
 ### 3.5 Exportar a planilha
 
@@ -253,18 +278,20 @@ retorno** e mude o status para **concluida**. O veículo volta a aparecer na sa�
 
 | Aba | Colunas | Período |
 |---|---|---|
-| **Cadastro Frota** | Placa, Tipo, Marca, Modelo, Ano, KM Atual, Responsável, Próxima Revisão KM, Próxima Revisão Data, Situação | sai inteira |
-| **Viagens e KM** | Data, Veículo, Condutor, Finalidade, Origem, Destino, Saída, Retorno, KM Inicial, KM Final, KM Percorrido, Status, Observações | pela data de saída |
-| **Checklist** | Data, Horário, Tipo, Veículo, Condutor, KM, Combustível, os 12 itens, Avarias, Status Geral, Observações | pela data do registro |
-| **Abastecimentos** | Data, Veículo, Condutor, KM, Litros, Valor Total R$, Preço por Litro, KM desde Abastec. Anterior, Consumo km/L, Posto, Observações | pela data |
+| **Cadastro Frota** | Placa, Tipo, Marca, Modelo, Ano, KM Atual, Responsável, Próxima Revisão KM, Próxima Revisão Data, Situação, Horímetro Atual | sai inteira |
+| **Viagens e KM** | Data, Veículo, Condutor, Finalidade, Origem, Destino, Saída, Retorno, KM Inicial, KM Final, KM Percorrido, Status, Observações, Horímetro Inicial, Horímetro Final | pela data de saída |
+| **Checklist** | Data, Horário, Tipo, Veículo, Condutor, KM, Combustível, os 12 itens, Avarias, Status Geral, Observações, Horímetro | pela data do registro |
+| **Abastecimentos** | Data, Veículo, Condutor, KM, Litros, Valor Total R$, Preço por Litro, KM desde Abastec. Anterior, Consumo km/L, Posto, Observações, Horímetro | pela data |
 | **Manutenções** | Data, Veículo, Tipo, Serviço, Fornecedor, KM Serviço, Custo R$, Próxima Revisão KM, Próxima Revisão Data, Status, Observações | pela data |
 | **Documentos** | Veículo, Documento, Vencimento, Dias até Vencer, Status, Observações | sai inteira |
 
 Como cada coluna é preenchida:
 
 - **Datas** saem como texto no formato ano-mês-dia (ex.: 2026-10-23).
-- **Próxima Revisão** (Cadastro Frota): a menor revisão ainda por vir entre as manutenções do veículo — km acima do km atual, data de
-  hoje em diante. **Responsável**: o condutor responsável do veículo, ou o setor.
+- **Horímetro** (colunas no fim de quatro abas, que a planilha de controle não tinha): preenchidas só para máquina por horímetro; nela
+  as colunas de KM ficam vazias. **Horímetro Atual** (Cadastro Frota) só aparece na máquina.
+- **Próxima Revisão** (Cadastro Frota): a menor revisão ainda por vir entre as manutenções do veículo — km acima do km atual (na
+  máquina, acima do horímetro atual), data de hoje em diante. **Responsável**: o condutor responsável do veículo, ou o setor.
 - **Saída** (Viagens): a hora; **Retorno**: a hora, ou dia e hora se voltou em outro dia. **KM Percorrido** = KM Final − KM Inicial.
 - **Itens** (Checklist): Conforme (OK), Não conforme (Falha), N/A, ou vazio se não respondido. No checklist simples do gestor, só os
   5 itens que existem nos dois formulários são preenchidos (pneus, faróis, óleo, freios, documentos). **Avarias**: uma por uma, separadas
@@ -345,5 +372,7 @@ no Frota**, **O que isso permite** e **Motorista ligado** (o motorista cujo cada
 | Consulta não vê o botão de cadastrar ou editar | É assim: Consulta só lê. Para gravar, a pessoa precisa ser Administrador de Frota (cadastro de usuário) |
 | Veículo não aparece na Saída | Está com outro motorista (viagem sem retorno), está inativo/vendido, ou aparece como "(em manutenção — indisponível)" |
 | Motorista não consegue sair com nenhum veículo | Ele tem uma saída sem retorno: registrar o **Retorno**, ou o gestor conclui a viagem em **Viagens** |
-| Abastecimento com km/L estranho | Conferir o km digitado: um km menor que o real entra na sequência pela ordem do km e muda o km/L dele e do seguinte |
+| Abastecimento com km/L estranho | Conferir o km digitado: um km menor que o real entra na sequência pela ordem do km e muda o km/L dele e do seguinte. O portal pergunta antes de gravar km menor que o do veículo, mas o motorista pode confirmar |
+| Motorista recebe "KM menor que o atual do veículo (…)" sem ter errado | Alguém registrou um km maior antes (às vezes um erro de digitação para cima). Se o número do painel está certo, ele toca **Confirmar mesmo assim**. Se o km do veículo está errado, o gestor corrige o **KM Atual** em **Veículos** |
+| Empilhadeira (ou outra máquina) aparece com km no lugar das horas | No cadastro do veículo, **Medição** = **Horímetro** e o **Horímetro Atual** certo; a partir daí o portal pede as horas |
 | Motorista lançou errado | Ele não corrige pelo portal; o gestor edita na tela correspondente (Abastecimentos, Viagens) |

@@ -4,9 +4,10 @@
 > Para quem **usa** o sistema (sem número de etapa nem histórico), o documento é o
 > [`manual-do-sistema.md`](manual-do-sistema.md). Guia com roteiro de teste: [`README.md`](README.md).
 >
-> **Onde estamos:** **Etapa 2 (perfil Consulta/Motorista pela tela) entregue** em 2026-10-23, na `main` (commits `3aa4e088` a `805aaa3c`,
-> mais o fechamento). Etapa 1 (portal do motorista) entregue antes, no mesmo dia.
-> Próxima: **Etapa 3 — km e horímetro confiáveis no portal (A8 + A10)** (B34; detalhe em "Onde estamos e o que vem a seguir", no fim).
+> **Onde estamos:** **Etapa 3 (km e horímetro confiáveis no portal) entregue** em 2026-10-23, na `main` (commits `64d85bf2` a
+> `a7427207`, mais o fechamento). Antes, no mesmo dia: Etapa 2 (perfil Consulta/Motorista pela tela) e Etapa 1 (portal do motorista).
+> Próxima: **Etapa 4 — relatórios fechados** (multas no período, A7; a máquina no relatório) (B44; detalhe em "Onde estamos e o que vem
+> a seguir", no fim).
 
 ## ⚠️ Leia antes de apresentar
 
@@ -64,6 +65,37 @@ WHERE p.perfil NOT IN ('CONSULTA', 'MOTORISTA')
   Se não deve ser, troque em **Frota → Perfis de acesso** (aparece como *"Administrador de Frota (gravado à parte)"*). As linhas de
   superadmin e de `role` admin podem aparecer aqui e são inofensivas (eles são administradores de qualquer jeito).
 
+**A4 — máquinas por horímetro com horas gravadas no km (Etapa 3).** Até a Etapa 3 o portal gravava o número do painel da máquina no
+**km** (A10). Depois do deploy ele grava no horímetro; o que já estava gravado fica como estava.
+
+```sql
+SELECT v.id, v.placa, v.km_atual, v.horimetro_atual,
+  (SELECT COUNT(*) FROM frotas_abastecimentos a WHERE a.veiculo_id = v.id AND a.km_abastecimento IS NOT NULL) AS abastecimentos_com_km,
+  (SELECT COUNT(*) FROM frotas_checklists c WHERE c.veiculo_id = v.id AND c.km IS NOT NULL) AS registros_com_km,
+  (SELECT COUNT(*) FROM frotas_viagens vi WHERE vi.veiculo_id = v.id AND vi.km_saida IS NOT NULL) AS viagens_com_km
+FROM frotas_veiculos v
+WHERE v.tipo_medicao = 'horimetro';
+```
+
+- **Nenhuma linha, ou todas com km 0 e contagens 0 (o esperado — o banco local tem zero máquinas):** nada a fazer.
+- **Máquina com `km_atual` maior que zero:** é o horímetro que foi parar no km. Em **Frota → Veículos**, edite a máquina: ponha o
+  número certo em **Horímetro Atual** e **0** em **KM Atual**. Sem isso o portal mostra *"Último registrado neste veículo: (o horímetro
+  velho) h"* e só pergunta quando o motorista digitar menos que ele.
+- **Abastecimentos com km na máquina:** esses abastecimentos têm km/L calculado com horas (número sem sentido) e entram no relatório de
+  consumo e no alerta de consumo baixo. Para tirá-los da conta, em **Frota → Abastecimentos** edite cada um: copie o KM para **Horímetro
+  no abastecimento (máquina)** e apague o **KM no abastecimento**. Registros e viagens antigos podem ficar (só aparecem na lista).
+
+**A5 — usuários com `role` em maiúsculas (Etapa 3, E5).** Depois do deploy, quem tem `role` "Admin" (ou outra caixa) passa a ser
+**administrador do Frota** — como já era no resto do sistema.
+
+```sql
+SELECT id, nome, role FROM usuarios WHERE role <> lower(role);
+```
+
+- **Nenhuma linha (o esperado; no banco local, só `admin` e `usuario`):** nada a fazer.
+- **Alguma linha com "Admin":** essa pessoa já era administradora do sistema; no Frota ela era tratada como Motorista e via o menu de
+  administrador sem conseguir usar. Agora ela usa. Se ela **não** devia ser administradora, troque o `role` dela no cadastro de usuário.
+
 ### B — decisões tomadas sem consulta (todas reversíveis). O André arbitra lendo aqui.
 
 | # | Etapa | Escolhido | Descartado | Por quê |
@@ -102,6 +134,16 @@ WHERE p.perfil NOT IN ('CONSULTA', 'MOTORISTA')
 | B32 | F2 | **C7**: o motorista que abre **Documentos** pelo endereço vê a lista **vazia** | responder "sem permissão" | as outras listas dele já vêm só com o que é dele (ou vazias sem vínculo); "sem permissão" apareceria como erro na tela |
 | B33 | F2 (Fase 5) | Perfil gravado com valor **fora da lista** (ex.: `consulta` minúsculo, por SQL) lê como Motorista (só o que é dele) | tratar a caixa (`consulta` = `CONSULTA`) | tratar a caixa mudaria quem **ganha permissão**; ler como Motorista só fecha o que ele via sem poder. A tela mostra o valor como inválido e o gestor corrige com um clique |
 | B34 | F2 (fechamento) | **Próxima etapa = km e horímetro confiáveis no portal (A8 + A10)** | foto da avaria/cupom; multas no período (A7); seção 3 do formulário | com o portal no ar, km digitado errado entra calado na conta do consumo (A8) e numa máquina por horímetro o número vai para o km (A10) — estraga o dado desde o primeiro dia. Foto exige anexo, que o módulo não tem; a seção 3 depende da folha inteira; A7 é relatório |
+| B35 | F3 | O portal compara a leitura sempre com a **atual do veículo** (o maior número já registrado); lançamento atrasado (abastecimento de ontem) **pergunta** e o motorista confirma | comparar com o lançamento anterior **pela data**; ou só valer para lançamento de hoje | a régua pela data precisaria cruzar registros, viagens e abastecimentos e ainda erraria com o lançamento fora de ordem; a pergunta custa um toque e mostra o número do veículo. Mudar é uma função (`conferirMenorQueAtual`) |
+| B36 | F3 | As telas do **gestor** (abastecimento, manutenção, viagem, veículo) **não** perguntam | o mesmo aviso com "confirmar" no gestor | é o escritório quem lança atrasado e corrige o erro do motorista; editar uma linha antiga sempre teria km menor que o atual e perguntaria toda vez |
+| B37 | F3 (Fase 2) | O motorista que chamar as rotas do gestor direto (`POST /api/frotas/abastecimentos`) **não** passa pela pergunta — fixado em teste | aplicar a régua nessas rotas quando quem chama é Motorista | as telas do gestor não estão no menu dele; é qualidade de dado, não segurança (ele só grava em nome dele). Ver **D10** |
+| B38 | F3 (Fase 2) | Horímetro aceita número (com ponto decimal) ou texto numérico com ponto; **vírgula como texto** (`"1234,5"`) é recusada com *"Informe o horímetro atual"* | aceitar vírgula | o campo da tela é numérico (o celular manda ponto); aceitar vírgula só no horímetro deixaria o km diferente. B15 continua valendo para inteiros |
+| B39 | F3 (Fase 2) | Os formulários do gestor mostram **KM** e **Horímetro (máquina)** para qualquer veículo; o servidor **não** recusa km digitado numa máquina | esconder o km na máquina; recusar km em máquina | a tela genérica não muda de campo pelo veículo escolhido; recusar travaria o fechamento de viagens antigas gravadas em km. Ver **C13** |
+| B40 | F3 (Fase 2) | O alerta de revisão da máquina avisa **faltando 50 h** (o do carro, 500 km) | 500 h (a mesma régua do km) | 500 horas é quase meio ano de empilhadeira; 50 h fica perto da proporção dos 500 km do carro |
+| B41 | F3 | Colunas de horímetro **no fim** das abas da planilha | ao lado das colunas de KM | não desloca as colunas que a empresa já usa (nem fórmulas de quem cola a exportação). O commit `c0af44e8` cita esta decisão como "B36" por engano — a decisão é esta |
+| B42 | F3 | E5: o servidor do Frota passou a ignorar a caixa do `role` (como o núcleo e a tela) | a tela passar a comparar `=== 'admin'` como o servidor fazia | quem tem "Admin" já é administrador do sistema inteiro no núcleo; rebaixá-lo só no Frota deixava o módulo diferente do resto. Ver **A5** |
+| B43 | F3 | A mensagem nova traz o número **no formato brasileiro e com unidade** (`1.800 km`, `1.234,5 h`), com até 6 casas (Fase 5: com 2, um km 1.800,004 aparecia como `1.800` recusando 1800); a do retorno menor que a saída (Etapa 1) continua com o número cru (`(1700)`) | reformatar também a mensagem antiga | mudar a antiga quebraria o texto que o roteiro e os testes da Etapa 1 conferem; só a nova nasceu formatada |
+| B44 | F3 (fechamento) | **Próxima etapa = relatórios fechados**: multas no período (A7), a máquina no relatório (horímetro e consumo em litros por hora) e a aba de multas na planilha | foto da avaria/cupom; seção 3 do formulário | deixa a feature 10 (Relatórios) 🟢 sem infraestrutura nova; foto exige anexo (guardar arquivo, tamanho, quem vê), que é etapa própria; a seção 3 depende da folha inteira |
 
 ### C — furos conhecidos em operação
 
@@ -120,9 +162,9 @@ WHERE p.perfil NOT IN ('CONSULTA', 'MOTORISTA')
   pôr **KM retorno**, status **concluida**, salvar.
 - **C5 — a tela antiga "Novo Checklist" do gestor continua com os 7 itens sim/não e sem avarias.** Ela grava, aparece na lista e na
   planilha (com os 5 itens que têm par no papel), mas não tem os 12 itens nem avarias. O caminho completo é o portal.
-- **C6 — km menor que o atual ainda passa calado (A8, aberto).** No abastecimento e no registro, digitar 900 com o carro em 1.800 é
-  aceito sem aviso. O carro mantém o maior km; o lançamento fica com o menor e entra no cálculo do km/L pela ordem do km (o consumo
-  dele e o do vizinho saem distorcidos).
+- **C6 — km menor que o atual passava calado (resolvido na Etapa 3, A8).** No portal, um km menor que o do veículo agora **para e
+  pergunta**; o motorista confirma ou corrige. Nas telas do gestor continua sem pergunta (B36). Um km **confirmado** errado continua
+  entrando no km/L pela ordem do km.
 - **C7 — o motorista lia a lista de Documentos se digitasse o endereço (resolvido na Etapa 2).** Abrindo `/frota/documentos` à
   mão, ele via os documentos de todos os veículos, com valor. Agora a lista dele vem vazia (B32). Veículos continuam legíveis (sem dado
   pessoal); as outras listas só trazem o que é dele.
@@ -138,6 +180,15 @@ WHERE p.perfil NOT IN ('CONSULTA', 'MOTORISTA')
   sozinhos quando ela abre **Frota** (o **Dashboard Frota** e o **Meu painel** percebem a mudança e renovam a tela — Fase5-2). Numa outra
   tela do Frota que já estava aberta, até lá, um botão que ela não pode mais usar responde *"Sem permissão para esta operação"*.
 - **C12 — usuário oculto não aparece em Perfis de acesso.** A lista esconde os usuários marcados como ocultos (como no almoxarifado).
+- **C13 — o gestor pode digitar horas no km de uma máquina.** Os formulários de Viagens e Abastecimentos têm os dois campos (B39). Horas
+  no **KM** de uma máquina sobem o km dela e, no abastecimento, entram no km/L. Use **Horímetro … (máquina)** e deixe o KM vazio.
+- **C14 — máquinas com horas no km de antes da Etapa 3.** O que o portal gravou antes continua no km (consulta **A4**).
+- **C15 — salvar o cadastro do veículo regrava o km e o horímetro do formulário.** Se um motorista lançou um número maior enquanto o
+  gestor estava com o cadastro aberto, salvar o cadastro volta ao número que estava no formulário (e o portal passa a perguntar menos).
+  Já era assim antes; ficou visível porque agora o "último registrado" aparece na tela.
+- **C16 — um km errado para cima faz o portal perguntar para todo mundo.** Se alguém confirma 18.000 num carro de 1.800, o carro passa a
+  18.000 e todo lançamento certo depois pergunta *"KM menor que o atual do veículo (18.000 km)…"*. O gestor corrige o **KM Atual** em
+  **Veículos**. O sistema não pergunta por número **muito maior** que o atual.
 
 ### D — limitações declaradas (cortes de escopo)
 
@@ -146,14 +197,18 @@ WHERE p.perfil NOT IN ('CONSULTA', 'MOTORISTA')
   traseira), *o que é* (risco, amassado, trinca, quebrado, outro) e uma descrição opcional.
 - **D3 — A7: o relatório de custo por veículo não filtra multas pelo período** (manutenção e combustível filtram). A planilha exportada
   não tem aba de multas.
-- **D4 — A10: máquina por horímetro.** O portal pede "KM atual" para qualquer veículo e grava como km. Numa empilhadeira, o número do
-  horímetro digitado ali vai para o **km** do veículo; o horímetro do cadastro nunca é atualizado por lançamento.
+- **D4 — A10: máquina por horímetro (resolvido na Etapa 3).** O portal pedia "KM atual" para qualquer veículo e gravava como km; agora a
+  máquina por horímetro pede **Horímetro atual** e grava em horas (sobe o horímetro, não toca no km).
 - **D5 — sem apelido V01/C01** (B7): o veículo é identificado pela placa.
 - **D6 — o motorista não corrige nem apaga o que lançou pelo portal.** "Meus registros" é só leitura; correção é com o gestor, nas telas
   de cadastro.
 - **D7 — dar um perfil não dá acesso ao módulo.** Perfis de acesso lista todos os usuários ativos (B27). Dar **Consulta** a quem não tem o
   módulo **Frota** no cadastro de usuário não abre nada: o acesso ao módulo continua sendo dado lá.
 - **D8 — sem registro de quem mudou o perfil** (B26): só a data da última mudança fica guardada.
+- **D9 — sem consumo da máquina.** O abastecimento em horas fica sem km/L e sem "litros por hora"; o relatório de consumo e o alerta de
+  consumo baixo não olham a máquina (B44: próxima etapa).
+- **D10 — a pergunta do km menor é só do portal** (B36, B37). As rotas e telas do gestor gravam qualquer km.
+- **D11 — o relatório de custo por veículo mostra só o km** (a máquina aparece com o km dela, normalmente 0).
 
 ### E — verificações não executadas e regras não confirmadas
 
@@ -166,8 +221,8 @@ WHERE p.perfil NOT IN ('CONSULTA', 'MOTORISTA')
 - **E4 — o roteiro da Etapa 2 não foi percorrido clicando no navegador** por quem escreveu este fechamento. Foi escrito lendo o código e as
   mensagens; o servidor de verdade foi exercitado por um revisor (login real, pasta de dados vazia), e as telas pelos testes
   automáticos. Faça o roteiro do guia antes de apresentar.
-- **E5 — `role` "Admin" com maiúscula.** O servidor do Frota só reconhece o administrador do sistema escrito `admin` (minúsculo); o menu
-  da tela ignora a caixa. Um usuário gravado como `Admin` (a API de usuários aceita; a tela de usuários grava minúsculo) é Motorista no
+- **E5 — `role` "Admin" com maiúscula (resolvido na Etapa 3, B42).** *O texto abaixo era verdade até a Etapa 2:* o servidor do Frota só
+  reconhecia o administrador do sistema escrito `admin` (minúsculo); o menu da tela ignorava a caixa. Um usuário gravado como `Admin` (a API de usuários aceita; a tela de usuários grava minúsculo) é Motorista no
   servidor e vê o menu de administrador na tela (e leva *"Sem permissão para esta operação"* ao usar). No banco local, medido: só `admin`
   e `usuario`. Para conferir em produção: `SELECT id, nome, role FROM usuarios WHERE role <> lower(role);`.
 - **E6 — perfil fora da lista na tela.** Desde a Fase 5 o servidor lê esse usuário como Motorista (B33), mas o menu da tela dele ainda
@@ -176,6 +231,19 @@ WHERE p.perfil NOT IN ('CONSULTA', 'MOTORISTA')
   arquivos OK**; `test:almoxarifado` **44/44**; `test:validation` **4/4**; `test:safealter` **3/3**; `test:sqlite` **16/16**; tela **193
   suítes, 2605/2605 testes**; `build` com `CI=true` **compilou sem aviso** ("Compiled successfully."). Frota no servidor: 11 arquivos,
   **102 passaram, 0 falharam** (`frotasPerfis` 17, `frotasPerfisIdaEVolta` 3); Frota na tela: 7 arquivos, **64/64**.
+- **E8 — o almoxarifado tem a mesma comparação exata do `role`** (`=== 'admin'` em `services/almoxarifado/permissions.js`). Um "Admin"
+  maiúsculo é administrador do sistema e não é administrador do almoxarifado. Fora do Frota; não mexido (o almoxarifado está pausado).
+- **E9 — o roteiro da Etapa 3 não foi percorrido clicando no navegador** por quem escreveu este fechamento. Foi escrito lendo o código e
+  as mensagens; as telas foram exercitadas pelos testes automáticos e o servidor por um revisor com sondas. Faça o roteiro do guia
+  (*"Roteiro de teste manual (km e horímetro)"*) antes de apresentar.
+- **E11 — o km das telas do gestor aceita texto torto desde a Etapa 1.** `"130,5"` ou `"abc"` em **KM** (abastecimento, viagem) viram
+  "não é número" e o km fica vazio, sem erro. O horímetro passou a recusar (*"Horímetro inválido"*, Fase 5 da Etapa 3); o km não foi
+  mexido para não mudar o comportamento da Etapa 1 nesta etapa. O formulário manda número, então só chega por chamada direta à API.
+- **E12 — verificação final da Etapa 3, rodada em 2026-10-23 na ponta da etapa (depois de `a7427207`):** `npm run test:api` **551/551 arquivos OK**; `test:almoxarifado` **44/44**; `test:validation` **4/4**; `test:safealter` **3/3**; `test:sqlite` **16/16**; tela **196 suítes, 2637/2637 testes**; `build` com `CI=true` **"Compiled successfully."**. Frota no servidor: 13 arquivos, **136 passaram, 0 falharam**; Frota na tela: 10 arquivos, **96/96**. Numa rodada anterior
+  (interrompida, código de antes da Fase 5) dois arquivos de fora do Frota caíram com `connect EADDRINUSE` (porta efêmera ocupada com
+  revisores rodando sondas em paralelo); na rodada final, sem eles, 551/551.
+- **E10 — o teclado do celular no campo de horímetro** (`inputMode="decimal"`, com vírgula ou ponto conforme o aparelho) não foi
+  conferido num celular de verdade.
 
 ---
 
@@ -392,13 +460,99 @@ MOTORISTA ou vazio para voltar ao padrão."*; usuário inexistente ou desativado
 
 ---
 
+## Etapa 3 — km e horímetro confiáveis no portal (2026-10-23)
+
+O motorista digita o km do painel no celular, e um dedo escorregado (900 em vez de 1.900) entrava calado: o carro continuava com o
+maior, mas o abastecimento ficava com o número errado e estragava a conta de km por litro dele e do vizinho. E numa empilhadeira (que
+se mede por horas, não por km) o portal pedia "KM atual" e jogava as horas no km da máquina. Agora o portal mostra, embaixo do campo,
+**o último número registrado** daquele veículo; se o motorista digita um número **menor**, ele avisa na hora e, ao salvar, **para e
+pergunta** — o motorista confere o painel e corrige, ou toca **Confirmar mesmo assim** (um abastecimento de ontem lançado hoje é normal).
+Na máquina, o campo vira **Horímetro atual**, as horas vão para o horímetro (o km não muda) e o consumo em km/L não conta a máquina. O
+gestor ganhou os campos de horímetro nas Viagens e nos Abastecimentos, e a planilha exportada traz as horas.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| km menor que o do veículo entrava sem aviso (C6) | O Salvar para: *"KM menor que o atual do veículo (1.800 km). Confira o hodômetro antes de salvar."* e o botão **Confirmar mesmo assim** |
+| O motorista não sabia qual era o último km do carro | Embaixo do campo: *"Último registrado neste veículo: 1.800 km"*; digitando menor, *"Menor que o último registrado. Confira o painel antes de salvar."* |
+| Máquina por horímetro: o portal pedia "KM atual" e gravava as horas no km (D4) | O campo vira **Horímetro atual (horas no painel)**; as horas vão para o **Horímetro Atual** do veículo; o km não muda |
+| As horas da máquina entravam no km/L | O abastecimento em horas fica **sem km/L** (não distorce o consumo de ninguém) |
+| O gestor só tinha campos de km para fechar a viagem esquecida de uma máquina | **Horímetro saída (máquina)** e **Horímetro retorno (máquina)** em Viagens; **Horímetro no abastecimento (máquina)** em Abastecimentos; listas mostram "125 h" |
+| O alerta de revisão da máquina comparava com o km | Compara com o **horímetro** (avisa faltando 50 h) |
+| A planilha não tinha horímetro | Colunas novas **no fim**: Cadastro Frota (Horímetro Atual), Viagens e KM (Horímetro Inicial/Final), Checklist e Abastecimentos (Horímetro) |
+| Usuário com `role` "Admin" (maiúscula) era Motorista no Frota e via o menu de administrador (E5) | É administrador da frota, como no resto do sistema |
+
+### As regras, com o cenário exato
+
+**Preparação.** Como administrador, em **Frota → Veículos**, tenha um carro *AAA1A11* com **Medição = Quilometragem** e **KM Atual
+1800**, e uma máquina *EMP0001* com **Medição = Horímetro** e **Horímetro Atual 120**. *ana* é motorista ligada (como na Etapa 1).
+
+**1. O último registrado.** Como *ana*, **Inspeção** → escolha *AAA1A11*: embaixo de **KM atual (o que está no painel)** aparece
+*"Último registrado neste veículo: 1.800 km"*.
+
+**2. km menor: o aviso enquanto digita.** Digite **900**: aparece *"Menor que o último registrado. Confira o painel antes de salvar."*.
+Digite **1800**: o aviso some.
+
+**3. km menor: o Salvar pergunta.** Volte a **900**, marque os 12 itens e **Salvar**: no topo, em vermelho, *"KM menor que o atual do
+veículo (1.800 km). Confira o hodômetro antes de salvar."* e o botão **Confirmar mesmo assim**. Nada foi gravado (Meus registros não
+mudou).
+
+**4. Confirmar.** Toque **Confirmar mesmo assim**: *"Inspeção registrada"*. Em **Veículos**, o carro continua com **1.800 km** (o km do
+veículo nunca desce).
+
+**5. Mudar o número desarma.** Repita até o passo 3 e, em vez de confirmar, troque o km para **950**: o botão some; o Salvar pergunta de
+novo (com o 950).
+
+**6. O abastecimento atrasado.** **Abastecimento** → *AAA1A11*, KM **1700**, 30 litros, data de ontem → **Salvar**: a mesma pergunta;
+**Confirmar mesmo assim** → *"Abastecimento registrado"*. O km/L dele e o do abastecimento seguinte (em km) são refeitos pela ordem do km.
+
+**7. Recusas que não se confirmam.** Com uma saída em 1.800, um **Retorno** com **1700**: *"KM do retorno (1700) menor que o KM da saída
+(1800). Confira o hodômetro."* — sem botão de confirmar.
+
+**8. A máquina.** **Inspeção** → *EMP0001*: o campo vira **Horímetro atual (horas no painel)** e embaixo *"Último registrado neste
+veículo: 120 h"*. Digite **125,5** (o teclado do celular tem vírgula; no campo, 125.5 vale) e salve: *"Inspeção registrada"*; em **Meus
+registros** aparece *"· 125,5 h"*. Em **Veículos**, *EMP0001* mostra **125,5 h** e o km não mudou. Sem o número: *"Informe o horímetro
+atual"*. Menor que o do veículo: *"Horímetro menor que o atual do veículo (125,5 h). Confira o painel antes de salvar."*.
+
+**9. Saída e retorno da máquina.** **Saída** com *EMP0001* em **126**; o cartão do **Retorno** diz *"saiu com 126 h"*. Retorno com
+**125**: *"Horímetro do retorno (125 h) menor que o da saída (126 h). Confira o painel."*. Retorno com **130**: registrado.
+
+**10. O gestor e a máquina.** Em **Frota → Viagens**, a viagem da *EMP0001* mostra em **KM rodado** *"4 h"*. Uma viagem esquecida aberta
+de máquina se fecha preenchendo **Horímetro retorno (máquina)** (deixe o KM vazio) e status **concluida**. Em **Abastecimentos**, a
+coluna KM mostra as horas (*"125 h"*) e o km/L fica vazio.
+
+**11. A planilha.** **Exportar planilha**: no fim das abas aparecem as colunas novas, preenchidas só na máquina (as de KM dela ficam
+vazias).
+
+**12. O alerta de revisão da máquina.** Lance para *EMP0001* uma manutenção com **Próxima revisão (KM) = 170**: o painel mostra o alerta
+de manutenção (faltam 40 h, menos que 50). Para o carro, a régua continua 500 km.
+
+**13. Número torto.** No portal, KM ou horímetro com espaço, letras ou vírgula como texto: *"Informe o KM atual"* / *"Informe o horímetro
+atual"*. Nas telas do gestor, horímetro com vírgula, letras ou negativo: *"Horímetro inválido"* — e nada é gravado (antes, o horímetro
+gravado era apagado sem aviso).
+
+### O que esta etapa não cobre
+
+- **A pergunta nas telas do gestor** — o escritório lança atrasado e corrige o que o motorista errou; continua sem pergunta (B36).
+- **O motorista que chamar a rota do gestor direto** (ela não está no menu dele) não passa pela pergunta (B37, D10).
+- **Consumo da máquina em litros por hora** (D9) e **horímetro no relatório de custo por veículo** (D11).
+- **Conferir se o número digitado no km de uma máquina é de horas** — o gestor tem os dois campos (B39, C13).
+- **Corrigir dados antigos** de máquina que já tinham horas no km (consulta **A4**).
+- O que já estava fora: seção 3 do formulário, foto, multas no período (A7), apelido V01/C01, o motorista corrigir o que lançou.
+
+---
+
 ## Onde estamos e o que vem a seguir
 
 - **Feito:** Etapa 1 — portal do motorista (vínculo usuário ↔ motorista, escopo do motorista, km/L pela ordem do km, uma viagem em
   andamento por carro e por motorista, alerta de pendência, exportação no formato da planilha; A1–A6 e A9 corrigidos). Etapa 2 — perfil
   **Consulta**/**Motorista** pela tela **Frota → Perfis de acesso**, Consulta só leitura nas telas de cadastro, aviso no cadastro do
-  motorista, e o C7 (documentos do motorista). Abertos: **A7, A8, A10**.
-- **Próximo: Etapa 3 — km e horímetro confiáveis no portal (A8 + A10)** (B34). Detalhe (contrato, pontos de atenção) no plano
-  [`2026-10-23-frotas-etapa2-perfis-pela-tela.md`](../superpowers/plans/2026-10-23-frotas-etapa2-perfis-pela-tela.md), seção
+  motorista, e o C7 (documentos do motorista). Etapa 3 — o portal mostra o último km/horímetro do veículo e pergunta antes de gravar um
+  número menor (A8); a máquina por horímetro grava em horas (A10); o gestor e a planilha ganharam o horímetro; o "Admin" maiúsculo (E5).
+  Aberto: **A7**.
+- **Próximo: Etapa 4 — relatórios fechados** (B44): multas no período (A7), a máquina no relatório (horímetro, litros por hora) e a aba de
+  multas na planilha. Detalhe (contrato, pontos de atenção) no plano
+  [`2026-10-23-frotas-etapa3-km-e-horimetro.md`](../superpowers/plans/2026-10-23-frotas-etapa3-km-e-horimetro.md), seção
   "Próxima tarefa detalhada".
-- **Depois, por valor:** foto da avaria/cupom, multas no período (A7), seção 3 do formulário (quando chegar a folha inteira).
+- **Depois, por valor:** foto da avaria/cupom, seção 3 do formulário (quando chegar a folha inteira).

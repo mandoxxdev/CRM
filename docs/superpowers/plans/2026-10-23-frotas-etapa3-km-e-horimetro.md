@@ -1,6 +1,7 @@
 # Frota — Etapa 3: km e horímetro confiáveis no portal (A8 + A10, e o E5)
 
-> **Status:** em execução (2026-10-23). Plano escrito; Fase 2 (revisor fresco) pendente.
+> **Status:** **etapa fechada em 2026-10-23** — T1..T4 feitas, Fase 5 corrigida (`c89397fa`, `a7427207`). Próxima: **Etapa 4 — relatórios
+> fechados** ("Próxima tarefa detalhada", no fim).
 > **Origem:** "Próxima tarefa detalhada" do [plano da Etapa 2](2026-10-23-frotas-etapa2-perfis-pela-tela.md) (B34).
 > **Spec:** [`specs/modulo-frotas/16-km-e-horimetro/README.md`](../../../specs/modulo-frotas/16-km-e-horimetro/README.md) (criada no
 > fechamento) e o mapa [`specs/modulo-frotas/README.md`](../../../specs/modulo-frotas/README.md) (A8, A10).
@@ -123,11 +124,12 @@ Cada task: TDD com controle positivo (sabotar e ver cair **a asserção certa**)
 
 | Task | Estado | Commit |
 |---|---|---|
-| Plano | escrito | — |
-| T1 | pendente | — |
-| T2 | pendente | — |
-| T3 | pendente | — |
-| T4 | pendente | — |
+| Plano + Fase 2 | feito | 64d85bf2 |
+| E5 | feito — `getPerfilFromUser` ignora a caixa do `role`; `frotasPerfis` usuário 11 vira forçado | b88778b5 |
+| T1 | feito — esquema, `MAX` atômico, `portalService` (RN-F3.01..09), rotas do gestor com horímetro (RN-F3.15), alerta da máquina (RN-F3.14); `frotasKmHorimetro` 25/25 no commit; testes antigos ajustados (retroativo confirma; `inicio` aditivo) | fc1328e0 |
+| T2 | feito — planilha (colunas no fim), listas e formulários do gestor; `FrotasHorimetroGestor` 5/5 | c0af44e8 |
+| T3 | feito (subagente) — tela do motorista; `FrotasPortalKmHorimetro` 21/21 no commit | fdfebf96 |
+| T4 | feito — integração pela rota e pelo serviço, colunas lidas pelo nome | 5f7cfa3d |
 
 ## Ajustes da Fase 2 (revisor fresco: 4 travas + 11 menores — **valem sobre o texto acima**)
 
@@ -157,3 +159,108 @@ Cada task: TDD com controle positivo (sabotar e ver cair **a asserção certa**)
 - Exportação: aba Cadastro Frota `+ Horímetro Atual` no fim.
 - RN-F3.14: alerta de revisão e cartão "manutenções vencidas" do painel usam o horímetro na máquina.
 - T2 = galho **depois** de T1 (formulários do gestor consomem o serviço novo); T3 continua galho contra o contrato.
+
+## Fase 5 — revisão adversarial (dois revisores frescos em paralelo; achados só reproduzidos)
+
+Revisor 1 — regras, por sonda executada: sonda aleatória do km/L (RN-F1.11) com **4 sementes** (20261023, 1, 777, 424242), ~1.800
+operações cada (portal com e sem confirmar, gestor POST/PUT/DELETE com e sem km, com horímetro, trocando de veículo; 3 carros e 1
+máquina), conferindo do zero depois de cada operação km/L, `km_desde_anterior`, km e horímetro do veículo (iguais ao maior, nunca
+descem), máquina sem km vindo do portal e 409 sem gravar nada: **0 divergências reais** (as marcadas eram da própria sonda: km negativo,
+que leva o 400 certo). Mais sondas dirigidas e 22 sabotagens carregadas em memória contra os `frotas*`. Revisor 2 — front × back:
+leitura dos dois lados, servidor real com pasta vazia e jest no scratchpad (sondas apagadas no fim).
+
+| Achado | O que era | Correção | Estado | Commit |
+|---|---|---|---|---|
+| Fase5-F1 (real, revisor 2) | O gestor troca o veículo para horímetro com o formulário aberto: a tela segue pedindo KM, o servidor responde *"Informe o horímetro atual"* e o **Voltar** não recarregava — o erro se repetia até o F5 | qualquer recusa ao salvar relê só o `/portal/inicio`, sem tirar o formulário (rede falhando não derruba o digitado); **Voltar** recarrega | corrigido | c89397fa |
+| Fase5-F2 (real, revisor 2) | Outro motorista lança 2.000 depois de a tela abrir com 1.800: o 409 diz 2.000 e o "Último registrado" seguia em 1.800 | a mesma releitura | corrigido | c89397fa |
+| Fase5-F3 (teste fraco, revisor 2) | Três sabotagens da tela passavam: trocar o veículo no registro não desarmava; a Saída da máquina sem teste; o pós-confirmar sem checar a volta ao painel. E o teste do gestor só lia a configuração | 3 cenários + `FrotasHorimetroGestorTela` (renderiza a página e lê o PUT) | corrigido | c89397fa |
+| Fase5-R1/R2 (real, revisor 1) | Gestor: horímetro `"130,5"`/`"abc"` virava `NaN` → NULL; no PUT da viagem **apagava** o retorno gravado (e a conferência retorno × saída deixava de proteger); negativo gravava e saía na planilha | 400 `Horímetro inválido`, antes de gravar | corrigido | a7427207 |
+| Fase5-R3 (real, revisor 1) | Portal: `" "` → 0 (numa máquina nova, gravava 0 sem passar pelo 409), `"0x10"` → 16, `"1e3"` → 1000 | texto só com dígitos e ponto (B15) | corrigido | a7427207 |
+| Fase5-R4 (real, revisor 1) | Mensagem arredondava o atual em 2 casas: km 1.800,004 aparecia como `1.800` recusando 1800 | até 6 casas (B43) | corrigido | a7427207 |
+| Fase5-R5 (testes fracos, revisor 1) | 6 sabotagens verdes: S4 (retorno em horas com o veículo trocado para km), S6 (próxima revisão da máquina na aba Cadastro), S7 (cartão de manutenção vencida), S9 (POST de viagem subindo o horímetro), S20 (gravidade/`km_restante` do alerta), S22 (PUT corrigindo `horimetro_saida`); e o 409 de horímetro no abastecimento sem contar linhas | um cenário por sabotagem; cada uma conferida derrubando a asserção certa | corrigido | a7427207 |
+| Ruído / declarado | km do gestor aceita texto torto desde a Etapa 1 (medido: `"130,5"` → 201 com km nulo) — **E11**, não mexido; apagar o horímetro da viagem no PUT mantém e o do abastecimento apaga (o mesmo do km); mudar data/observação depois do 409 e confirmar grava o novo (a RN só desarma número e veículo); rótulos do gestor com "(máquina)"; tela formata com até 3 casas e o servidor com até 6 | declarado | — | — |
+
+Controles positivos desta fase (todos com o arquivo restaurado e conferido por `md5sum`): sem a releitura (F1, F2 caem), sem o desarme
+no registro, sem o `onSalvo`; trocar a chave do campo de horímetro do gestor (o PUT da tela cai); e no servidor R1, R3, R4, S4, S6, S7,
+S9, S20, S22 — cada sabotagem derrubou o cenário que a nomeia.
+
+## Estado final das tasks
+
+| Task | Estado | Commit |
+|---|---|---|
+| Plano + Fase 2 | feito | 64d85bf2 |
+| E5 | feito | b88778b5 |
+| T1 | feito | fc1328e0 |
+| T2 | feito | c0af44e8 |
+| T3 | feito | fdfebf96 |
+| T4 | feito | 5f7cfa3d |
+| Fase5-F | feito | c89397fa |
+| Fase5-R | feito | a7427207 |
+| Fechamento (docs) | feito | commit "Frota etapa 3: fechamento nas specs, no plano e nos documentos do modulo" |
+
+## Fechamento (2026-10-23)
+
+### Divergências do plano
+
+| Onde | O plano dizia | O que foi feito | Por quê |
+|---|---|---|---|
+| RN-F3.07 | a régua do retorno é a do veículo | a da **viagem** | Fase 2, T-2 |
+| RN-F3.13 / proposta da Etapa 2 | "a mesma régua nas telas do gestor (aviso com confirmar)" | sem régua no gestor (B36) | o gestor lança atrasado; o PUT de linha antiga sempre perguntaria |
+| Contrato | só o portal tinha horímetro | `POST/PUT /viagens` e `/abastecimentos` também (RN-F3.15), com 400 `Horímetro inválido` | Fase 2, T-1; Fase5-R1/R2 |
+| Mensagem | número com até 2 casas | até 6 | Fase5-R4 |
+| `lerKm` (Etapa 1) | aceitava qualquer texto que `Number()` lê | só dígitos e ponto | Fase5-R3 |
+| RN-F3.08 | teste de corrida pelo HTTP | o HTTP **não** reproduz a corrida (8 em paralelo passaram antes do conserto); a prova é a chamada dupla no serviço | registrado para não confiar no teste HTTP |
+| Commit T2 | cita a decisão das colunas como "B36" | a decisão é a **B41** | numeração final das letras B |
+
+### Verificação final (medida)
+
+`npm run test:api` **551/551 arquivos OK**; `test:almoxarifado` **44/44**; `test:validation` **4/4**; `test:safealter` **3/3**; `test:sqlite` **16/16**; tela **196 suítes, 2637/2637 testes**; `build` com `CI=true` **"Compiled successfully."**. Frota no servidor: 13 arquivos, **136 passaram, 0 falharam**; Frota na tela: 10 arquivos, **96/96**.
+
+### Retro (4 números)
+
+| Medida | Valor |
+|---|---|
+| Rodadas de correção | **1** fix-round da Fase 5 (front `c89397fa` + regras `a7427207`); nenhum teste falhou em 3 rodadas |
+| Achados da revisão | Fase 2 (plano): **4 travas + 11 menores**; Fase 5 (código): **7 reais** (F1, F2, R1/R2, R3, R4 e os dois lotes de testes fracos F3 e R5) + **5 ruído/declarados** |
+| Paralelismo | T3 (tela) num subagente em paralelo com T1 (servidor), contra o contrato congelado — **sem retrabalho**; T2 e T4 sequenciais depois de T1 |
+| Defeito que escapou | (preencher na etapa seguinte) |
+
+## Próxima tarefa detalhada — Etapa 4: relatórios fechados (A7 + a máquina no relatório)
+
+**Por que esta (B44):** a feature 10 (Relatórios) é a única 🟡 do mapa e não precisa de infraestrutura nova. Hoje o **custo por veículo**
+filtra o período em manutenção e combustível, **não em multas** (A7: `relatorioCustosPorVeiculo` soma `frotas_multas` sem `WHERE` de
+data); a máquina por horímetro, desde a Etapa 3, grava abastecimento em horas **fora** do km/L e some do relatório de consumo e do alerta
+de consumo baixo (D9); o custo por veículo mostra só o km (D11); a planilha não tem aba de multas (D3). Descartados para depois: foto
+(anexo: guardar arquivo, tamanho, quem vê — etapa própria) e seção 3 do formulário (falta a folha inteira).
+
+**Medido (Fase 0 adiantada):**
+- `frotasService.relatorioCustosPorVeiculo(db, {data_inicio, data_fim})`: subconsultas `man` (filtro `date(data_manutencao)`), `abs`
+  (`date(data_abastecimento)`), `mul` **sem filtro**; devolve `km_atual` (sem `horimetro_atual`/`tipo_medicao`). Rota
+  `GET /api/frotas/relatorios/custos-por-veiculo` (`relatorios`). Tela `client/src/components/frotas/FrotasRelatorios.js` (período
+  `data_inicio`/`data_fim`, chama as duas rotas).
+- `frotasService.relatorioConsumo(db, {veiculo_id})`: `AVG(consumo_medio)` só de `consumo_medio IS NOT NULL` — a máquina não aparece.
+- Alerta "consumo baixo" (`getAlertas`, `consumoAnomalo`): `AVG(a.consumo_medio)` dos últimos 60 dias contra `consumo_medio_esperado`.
+- `frotas_multas`: `data_infracao`, `data_vencimento`, `data_pagamento`, `valor`, `status_pagamento`. Exportação: 6 abas, sem multas.
+- Abastecimento da máquina: `horimetro_abastecimento` preenchido, `km_abastecimento` nulo (RN-F3.04).
+
+**Contrato proposto (congelar na Fase 1):**
+- RN-F4.01 — Custo por veículo: multas filtram pelo período por **`data_infracao`** (decidir na Fase 1 se é infração ou vencimento —
+  caminho reversível + letra B). Sem período, tudo, como hoje.
+- RN-F4.02 — Consumo da máquina em **litros por hora** = litros do abastecimento ÷ (horímetro dele − horímetro do abastecimento
+  **anterior em horas** do mesmo veículo), pela mesma régua de ordem da RN-F1.11 (`horimetro ASC, id ASC`), com recálculo do vizinho ao
+  criar/editar/excluir. Colunas novas por `safeAlter` ou cálculo na leitura — decidir na Fase 1 medindo.
+- RN-F4.03 — Relatório de consumo e custo por veículo mostram a máquina em **h** e **L/h**; o alerta de consumo baixo ganha a régua da
+  máquina só se houver "consumo esperado" em L/h (campo novo no veículo) — senão fica fora (letra D).
+- RN-F4.04 — Aba **Multas** na planilha (Data, Veículo, Condutor, Infração, Valor, Pontos, Vencimento, Pagamento, Nº auto), filtrada
+  pelo período como as outras abas.
+- Fatia visível: em **Relatórios**, a coluna de multas passa a respeitar o período e a máquina aparece com "L/h".
+
+**Pontos de atenção:**
+1. **A sonda aleatória do km/L** (RN-F1.11; a da Fase 5 desta etapa, 4 sementes, 0 divergências — o script ficou no scratchpad da sessão
+   e precisa ser refeito se a sessão for outra) tem de continuar verde **e** ganhar o L/h com a mesma conferência do zero.
+2. **Linha com km e horímetro ao mesmo tempo** (o gestor pode preencher os dois, B39/C13): definir qual régua vale (provavelmente a da
+   medição do veículo) antes de calcular.
+3. **Mudança de medição do veículo** com abastecimentos dos dois tipos: o relatório agrupa por veículo; decidir se mostra os dois.
+4. Harness `frotasTestApp` (`ctx.como`), `comLoginReal`; o teste de exportação lê colunas pela posição em `frotasExportacao` — a aba nova
+   entra no fim da lista de abas para não mexer nas existentes.
+5. Perfis: relatórios são `relatorios` (ADMIN_FROTA e CONSULTA); MOTORISTA 403 — nada muda.
