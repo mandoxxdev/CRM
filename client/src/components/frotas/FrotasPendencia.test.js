@@ -184,7 +184,8 @@ describe('Lista Checklist do gestor: Tratar pendência', () => {
     await act(async () => { soltar({ data: {} }); });
   });
 
-  test('409: mostra a mensagem do servidor, a janela fica aberta e a lista nao recarrega', async () => {
+  // Fase 5 (Etapa 6): antes a janela ficava aberta e a lista velha (o botao seguia na linha e cada tentativa dava o mesmo 409)
+  test('409 (outra tela ja tratou): mensagem do servidor, fecha a janela e RECARREGA a lista', async () => {
     api.post.mockRejectedValue({ response: { status: 409, data: { error: 'Esta pendência já foi tratada', code: 'PENDENCIA_JA_TRATADA' } } });
     await render(<FrotasEntityPage entityKey="checklists" />);
     await clicar(botao('Tratar pendência', linha(0)));
@@ -193,6 +194,17 @@ describe('Lista Checklist do gestor: Tratar pendência', () => {
     await enviar();
     expect(toast.error).toHaveBeenCalledWith('Esta pendência já foi tratada');
     expect(toast.success).not.toHaveBeenCalled();
+    expect(janela()).toBeNull();
+    expect(leiturasDaLista()).toBe(antes + 1);
+  });
+
+  test('erro de rede: a janela fica aberta (para tentar de novo) e a lista nao recarrega', async () => {
+    api.post.mockRejectedValue(new Error('rede'));
+    await render(<FrotasEntityPage entityKey="checklists" />);
+    await clicar(botao('Tratar pendência', linha(0)));
+    await digitar(janela().querySelector('textarea'), 'x');
+    const antes = leiturasDaLista();
+    await enviar();
     expect(janela()).not.toBeNull();
     expect(botao('Marcar como tratada', janela()).disabled).toBe(false);
     expect(leiturasDaLista()).toBe(antes);
@@ -251,6 +263,29 @@ describe('Lista Checklist: linha tratada', () => {
     expect(leiturasDaLista()).toBe(antes + 1);
   });
 
+  test('Desfazer em andamento: o botao fica desligado (um DELETE so, mesmo com o 2o clique confirmado)', async () => {
+    jest.spyOn(window, 'confirm').mockReturnValue(true);
+    let soltar;
+    api.delete.mockImplementationOnce(() => new Promise((r) => { soltar = r; }));
+    await render(<FrotasEntityPage entityKey="checklists" />);
+    const b = botao('Desfazer tratamento', linha(3));
+    await clicar(b);
+    expect(b.disabled).toBe(true);
+    await clicar(b);
+    expect(api.delete).toHaveBeenCalledTimes(1);
+    await act(async () => { soltar({ data: {} }); });
+    expect(toast.success).toHaveBeenCalledWith('Tratamento desfeito');
+  });
+
+  test('Desfazer com 409 (outra tela ja desfez): recarrega a lista', async () => {
+    jest.spyOn(window, 'confirm').mockReturnValue(true);
+    api.delete.mockRejectedValueOnce({ response: { status: 409, data: { error: 'Esta pendência não foi tratada' } } });
+    await render(<FrotasEntityPage entityKey="checklists" />);
+    const antes = leiturasDaLista();
+    await clicar(botao('Desfazer tratamento', linha(3)));
+    expect(leiturasDaLista()).toBe(antes + 1);
+  });
+
   test('Desfazer com erro: mensagem do servidor, ou a generica', async () => {
     jest.spyOn(window, 'confirm').mockReturnValue(true);
     api.delete.mockRejectedValueOnce({ response: { status: 409, data: { error: 'Esta pendência não foi tratada' } } })
@@ -298,6 +333,19 @@ describe('Painel: Tratar pendência no alerta', () => {
   beforeEach(() => {
     const anterior = api.get.getMockImplementation();
     api.get.mockImplementation((url, cfg) => (url === '/frotas/dashboard' ? Promise.resolve({ data: PAINEL }) : anterior(url, cfg)));
+  });
+
+  test('404 (registro excluido em outra tela): mensagem do servidor, fecha e recarrega o painel sem cache', async () => {
+    api.post.mockRejectedValueOnce({ response: { status: 404, data: { error: 'Registro não encontrado' } } });
+    await render(<FrotasDashboard />);
+    await clicar(botao('Tratar pendência', container.querySelectorAll('.frotas-alert-item')[0]));
+    await digitar(janela().querySelector('textarea'), 'x');
+    const antes = leiturasDoPainel().length;
+    await enviar();
+    expect(toast.error).toHaveBeenCalledWith('Registro não encontrado');
+    expect(janela()).toBeNull();
+    expect(leiturasDoPainel().length).toBe(antes + 1);
+    expect(leiturasDoPainel()[antes][1]).toEqual({ params: { refresh: 1 } });
   });
 
   test('gestor: botao so no alerta de checklist; abre a janela do registro e ao tratar recarrega o painel sem cache', async () => {

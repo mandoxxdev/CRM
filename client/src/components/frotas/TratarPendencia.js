@@ -13,7 +13,7 @@ import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { getEffectiveUser } from '../../services/permissionsCache';
 import { perfilFrota, PERFIS_FROTA } from '../../utils/systemPermissions';
-import { tratarPendencia, desfazerTratamento } from '../../utils/frotasApi';
+import { tratarPendencia, desfazerTratamento, invalidateFrotasDashboardCache } from '../../utils/frotasApi';
 import { dataLegivel } from './FrotasPortalMotorista';
 
 export const ROTULO_TRATADA = 'PENDÊNCIA · tratada';
@@ -21,6 +21,12 @@ export const MSG_CONFIRMA_DESFAZER = 'Desfazer o tratamento desta pendência? O 
 const LIMITE_TEXTO = 1000;
 
 export const pendenciaTratada = (r) => !!r?.pendencia_tratada_em;
+
+/**
+ * Fase 5 (Etapa 6): 409 (outra tela ja tratou/desfez) e 404 (registro excluido) dizem que a tela esta VELHA — alem do toast, recarrega
+ * (e limpa o cache do painel), senao a linha seguia com o botao e cada nova tentativa dava o mesmo 409.
+ */
+export const estadoMudouNoServidor = (err) => [404, 409].includes(err?.response?.status);
 
 /** Linha do gestor: "Tratada em DD/MM/AAAA às HH:MM por <nome>: <texto>" + " (manutenção: <descrição>)" so com descricao. */
 export function textoDaTratadaGestor(r) {
@@ -66,6 +72,12 @@ export function JanelaTratarPendencia({ registroId, veiculoId, placa, onFechar, 
       if (onTratada) onTratada();
     } catch (err) {
       toast.error(err?.response?.data?.error || 'Não foi possível tratar a pendência.');
+      if (estadoMudouNoServidor(err)) {
+        invalidateFrotasDashboardCache();
+        onFechar();
+        if (onTratada) onTratada();
+        return;
+      }
       setSalvando(false);
     }
   };
@@ -115,21 +127,29 @@ export function JanelaTratarPendencia({ registroId, veiculoId, placa, onFechar, 
 export function AcoesDaPendencia({ row, recarregar }) {
   const ehGestor = useEhGestorDaFrota();
   const [aberta, setAberta] = useState(false);
+  const [desfazendo, setDesfazendo] = useState(false); // Fase 5: um DELETE por vez (o 2o clique confirmado mandava outro)
   if (!ehGestor || row?.status_geral !== 'PENDENCIA') return null;
 
   if (pendenciaTratada(row)) {
     const desfazer = async () => {
-      if (!window.confirm(MSG_CONFIRMA_DESFAZER)) return;
+      if (desfazendo || !window.confirm(MSG_CONFIRMA_DESFAZER)) return;
+      setDesfazendo(true);
       try {
         await desfazerTratamento(row.id);
         toast.success('Tratamento desfeito');
         if (recarregar) recarregar();
       } catch (err) {
         toast.error(err?.response?.data?.error || 'Não foi possível desfazer o tratamento.');
+        if (estadoMudouNoServidor(err)) {
+          invalidateFrotasDashboardCache();
+          if (recarregar) recarregar();
+        }
+      } finally {
+        setDesfazendo(false);
       }
     };
     return (
-      <button type="button" className="frotas-btn frotas-btn-secondary frotas-btn-pendencia" onClick={desfazer}>
+      <button type="button" className="frotas-btn frotas-btn-secondary frotas-btn-pendencia" onClick={desfazer} disabled={desfazendo}>
         Desfazer tratamento
       </button>
     );
