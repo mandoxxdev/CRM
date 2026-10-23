@@ -3,6 +3,7 @@
  */
 
 import { hojeLocalISO } from '../../utils/dataLocal';
+import { ColunaFotos } from './FotosFrota';
 
 // Etapa 164 (RN-164.06, B1048): as datas padrao dos formularios sao o dia LOCAL (antes o toISOString, o dia UTC: das 21h, amanha)
 const TIPO_REGISTRO = { saida: 'Saída', retorno: 'Retorno', inspecao: 'Inspeção' };
@@ -34,6 +35,9 @@ export function fmtConsumo(r) {
   if (r?.consumo_litros_hora != null && r.consumo_litros_hora !== '') partes.push(consumoLh(r.consumo_litros_hora));
   return partes.length ? partes.join(' · ') : '-';
 }
+
+// Frota Etapa 5 (RN-F5.11): coluna Fotos nas listas Checklist e Abastecimentos — so a 1a miniatura + "+N" (B58); sem foto, "-".
+const COLUNA_FOTOS = { key: 'anexos', label: 'Fotos', render: (r) => <ColunaFotos anexos={r.anexos} /> };
 
 const fmtBrl = (v) =>new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
@@ -229,6 +233,7 @@ export const ENTITY_CONFIGS = {
       { key: 'posto', label: 'Posto' },
       { key: 'km_abastecimento', label: 'KM', format: (r) => (r.horimetro_abastecimento != null ? horas(r.horimetro_abastecimento)
         : (r.km_abastecimento != null ? r.km_abastecimento : '-')) },
+      COLUNA_FOTOS,
     ],
     needsVeiculos: true,
     needsMotoristas: true,
@@ -408,6 +413,7 @@ export const ENTITY_CONFIGS = {
         return <span className={`frotas-badge frotas-badge-situacao-${s.classe}`}>{s.rotulo}</span>;
       } },
       { key: 'observacoes', label: 'Observações' },
+      COLUNA_FOTOS,
     ],
     needsVeiculos: true,
     needsMotoristas: true,

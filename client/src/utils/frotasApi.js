@@ -115,3 +115,79 @@ export async function baixarPlanilhaFrota(periodo = {}) {
     window.URL.revokeObjectURL(url);
   }
 }
+
+/* ---------------------------------------------------------------- Frota Etapa 5: fotos (RN-F5.09) */
+
+const UM_MB = 1024 * 1024;
+const LADO_MAIOR = 1600;
+const QUALIDADE_JPEG = 0.8;
+const TIPOS_QUE_O_SERVIDOR_ACEITA = ['image/jpeg', 'image/png', 'image/webp'];
+
+function decodificarImagem(file) {
+  if (typeof createImageBitmap === 'function') return createImageBitmap(file);
+  if (typeof Image === 'undefined' || typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+    return Promise.reject(new Error('sem decodificador'));
+  }
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    const fim = (fn, valor) => { try { URL.revokeObjectURL(url); } catch (_) { /* nada */ } fn(valor); };
+    // Navegador que nunca dispara load/error (ou formato que ele nao le) nao pode prender o envio: desiste e manda a original.
+    const desiste = setTimeout(() => fim(reject, new Error('tempo')), 20000);
+    img.onload = () => { clearTimeout(desiste); fim(resolve, img); };
+    img.onerror = () => { clearTimeout(desiste); fim(reject, new Error('nao decodificou')); };
+    img.src = url;
+  });
+}
+
+/**
+ * Reconverte para JPEG (lado maior 1600 px, qualidade 0,8) a foto acima de 1 MB ou fora de jpeg/png/webp (HEIC do iPhone).
+ * Qualquer falha (navegador sem canvas, formato que ele nao le) devolve o arquivo original: quem decide e o servidor (Fase 2, 16).
+ * A reconversao tira os metadados (GPS); a original abaixo de 1 MB sobe com eles (B57).
+ */
+export async function reduzirFoto(file) {
+  if (!file) return file;
+  const precisa = file.size > UM_MB || !TIPOS_QUE_O_SERVIDOR_ACEITA.includes(file.type);
+  if (!precisa) return file;
+  try {
+    if (typeof document === 'undefined') return file;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext && canvas.getContext('2d');
+    if (!ctx || typeof canvas.toBlob !== 'function') return file;
+    const imagem = await decodificarImagem(file);
+    const largura = imagem.width;
+    const altura = imagem.height;
+    if (!largura || !altura) return file;
+    const escala = Math.min(1, LADO_MAIOR / Math.max(largura, altura));
+    canvas.width = Math.round(largura * escala);
+    canvas.height = Math.round(altura * escala);
+    ctx.drawImage(imagem, 0, 0, canvas.width, canvas.height);
+    if (typeof imagem.close === 'function') imagem.close();
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', QUALIDADE_JPEG));
+    if (!blob) return file;
+    const nome = `${String(file.name || 'foto').replace(/\.[^.]*$/, '') || 'foto'}.jpg`;
+    return new File([blob], nome, { type: 'image/jpeg' });
+  } catch (_) {
+    return file;
+  }
+}
+
+/**
+ * POST /frotas/anexos (multipart: foto, entidade, entidade_id) -> 201 { id, entidade, entidade_id, url, tipo_mime, tamanho, created_at }.
+ * Timeout de 120 s (o `api` tem 30 s; foto em 3G demora — Fase 2, 15).
+ */
+export async function enviarFotoFrota(entidade, entidadeId, file) {
+  const foto = await reduzirFoto(file);
+  const fd = new FormData();
+  fd.append('entidade', entidade);
+  fd.append('entidade_id', String(entidadeId));
+  fd.append('foto', foto, foto.name || 'foto.jpg');
+  const { data } = await api.post('/frotas/anexos', fd, { timeout: 120000 });
+  return data;
+}
+
+/** DELETE /frotas/anexos/:id -> { success: true } */
+export async function removerFotoFrota(id) {
+  const { data } = await api.delete(`/frotas/anexos/${id}`);
+  return data;
+}

@@ -535,3 +535,52 @@
   .frotas-page { padding: 0; max-width: none; }
   .frotas-table { font-size: 11px; }
 }
+
+/* Frota Etapa 5 (RN-F5.09/10/11): fotos da avaria e do cupom — celular primeiro, miniatura de 64 px */
+.frota-fotos-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.frota-fotos-lista {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.frota-fotos-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.frota-fotos-miniatura {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--gmp-border);
+  background: var(--gmp-surface);
+  display: block;
+}
+.frota-fotos-miniatura.pequena { width: 40px; height: 40px; }
+.frota-fotos-sem-previa {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  color: var(--gmp-text-light);
+}
+.frota-fotos-link { display: inline-block; line-height: 0; }
+.frota-fotos-do-lancamento { margin-top: 8px; }
+.frota-fotos-mais .frota-fotos-botao-mais { min-height: 40px; padding: 6px 14px; font-size: 0.9rem; }
+.frota-fotos-coluna { display: inline-flex; align-items: center; gap: 6px; }
+.frota-fotos-mais-n { font-weight: 600; font-size: 0.85rem; }

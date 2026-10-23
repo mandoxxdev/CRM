@@ -8,6 +8,7 @@
  *   POST /frotas/portal/registros       -> saida | retorno | inspecao (um formulario so, como o papel)
  *   POST /frotas/portal/abastecimentos
  *   GET  /frotas/portal/meus-registros
+ *   POST /frotas/anexos, DELETE /frotas/anexos/:id (Etapa 5: fotos — plano 2026-10-23-frotas-etapa5-fotos.md)
  * Quem decide e o servidor: a tela so esconde o que ele recusaria e mostra a mensagem dele quando recusa.
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -17,6 +18,9 @@ import { hojeLocalISO } from '../../utils/dataLocal';
 import { useAuth } from '../../context/AuthContext';
 import { getEffectiveUser } from '../../services/permissionsCache';
 import { perfilFrota } from '../../utils/systemPermissions';
+import {
+  FotosAntesDeSalvar, MiniaturasFotos, BotaoMaisFoto, enviarFotosDoLancamento, avisoDeFalhaDasFotos, anexosDe, MSG_FALHA_FOTO_GENERICA,
+} from './FotosFrota';
 import './Frotas.css';
 import './FrotasPortalMotorista.css';
 
@@ -64,6 +68,18 @@ export function dataLegivel(valor) {
 }
 
 const numeroOuNulo = (v) => (v === '' || v == null ? null : Number(v));
+
+/**
+ * Frota Etapa 5 (RN-F5.09, Fase 2 T-4/T-5): as fotos sobem DEPOIS do 201, uma por vez, e so entao o formulario sai da tela (senao o
+ * aviso se perdia e "Meus registros" recarregava sem a foto). Falha de foto nao desfaz o lancamento: vira aviso.
+ */
+async function subirFotosEAvisar(entidade, entidadeId, fotos) {
+  if (!fotos.length) return;
+  const aviso = entidadeId
+    ? await enviarFotosDoLancamento(entidade, entidadeId, fotos)
+    : avisoDeFalhaDasFotos(fotos.length, MSG_FALHA_FOTO_GENERICA);
+  if (aviso) toast.warning(aviso);
+}
 
 function ErroDoServidor({ mensagem }) {
   const ref = useRef(null);
@@ -156,6 +172,7 @@ export function RegistroForm({ tipo, inicio, onCancelar, onSalvo, onAtualizar })
   const [avarias, setAvarias] = useState([]);
   const [novaAvaria, setNovaAvaria] = useState(null);
   const [observacoes, setObservacoes] = useState('');
+  const [fotos, setFotos] = useState([]);
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
 
@@ -205,8 +222,10 @@ export function RegistroForm({ tipo, inicio, onCancelar, onSalvo, onAtualizar })
     }
     if (confirmarKmMenor) corpo.confirmar_km_menor = true;
     try {
-      await api.post('/frotas/portal/registros', corpo);
+      const { data: salvo } = await api.post('/frotas/portal/registros', corpo);
       toast.success(`${TITULO_TIPO[tipo]} ${tipo === 'retorno' ? 'registrado' : 'registrada'}`);
+      // POST /portal/registros devolve { registro, viagem }: o id e o do registro (Fase 2, T-4)
+      await subirFotosEAvisar('registro', salvo?.registro?.id, fotos);
       onSalvo();
     } catch (err) {
       setErro(err.response?.data?.error || 'Não foi possível salvar. Confira a internet e tente de novo.');
@@ -410,6 +429,14 @@ export function RegistroForm({ tipo, inicio, onCancelar, onSalvo, onAtualizar })
         )}
       </fieldset>
 
+      <FotosAntesDeSalvar
+        legenda="Fotos"
+        dica="Até 3 fotos (avarias, painel…). Elas sobem depois que o registro for salvo."
+        fotos={fotos}
+        onChange={setFotos}
+        desabilitado={salvando}
+      />
+
       <label className="portal-campo">
         <span>Observações</span>
         <textarea name="observacoes" value={observacoes} onChange={(e) => setObservacoes(e.target.value)} rows={3} />
@@ -438,6 +465,7 @@ export function AbastecimentoForm({ inicio, onCancelar, onSalvo, onAtualizar }) 
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [podeConfirmar, setPodeConfirmar] = useState(false);
+  const [fotos, setFotos] = useState([]);
   const muda = (k) => (e) => {
     setForm((f) => ({ ...f, [k]: e.target.value }));
     // Etapa 3 (RN-F3.10): mudar o numero ou o veiculo desarma a confirmacao do 409 de leitura menor.
@@ -463,8 +491,10 @@ export function AbastecimentoForm({ inicio, onCancelar, onSalvo, onAtualizar }) 
     if (form.observacoes.trim()) corpo.observacoes = form.observacoes.trim();
     if (confirmarKmMenor) corpo.confirmar_km_menor = true;
     try {
-      await api.post('/frotas/portal/abastecimentos', corpo);
+      const { data: salvo } = await api.post('/frotas/portal/abastecimentos', corpo);
       toast.success('Abastecimento registrado');
+      // POST /portal/abastecimentos devolve a propria linha: o id e data.id (Fase 2, T-4)
+      await subirFotosEAvisar('abastecimento', salvo?.id, fotos);
       onSalvo();
     } catch (err) {
       setErro(err.response?.data?.error || 'Não foi possível salvar. Confira a internet e tente de novo.');
@@ -513,6 +543,13 @@ export function AbastecimentoForm({ inicio, onCancelar, onSalvo, onAtualizar }) 
         <span>Posto</span>
         <input type="text" name="posto" value={form.posto} onChange={muda('posto')} />
       </label>
+      <FotosAntesDeSalvar
+        legenda="Foto do cupom"
+        dica="Até 3 fotos. Elas sobem depois que o abastecimento for salvo."
+        fotos={fotos}
+        onChange={setFotos}
+        desabilitado={salvando}
+      />
       <label className="portal-campo">
         <span>Observações</span>
         <textarea name="observacoes" value={form.observacoes} onChange={muda('observacoes')} rows={3} />
@@ -529,7 +566,18 @@ export function AbastecimentoForm({ inicio, onCancelar, onSalvo, onAtualizar }) 
 
 /* ---------------------------------------------------------------- meus registros */
 
-function MeusRegistros({ dados }) {
+/** RN-F5.10: miniaturas (abrem em outra aba), "Remover foto" e "+ Foto" enquanto houver menos de 3. `anexos` ausente = [] (Fase 2, 13). */
+function FotosDoLancamento({ entidade, linha, podeRegistrar, onMudou }) {
+  const anexos = anexosDe(linha);
+  return (
+    <div className="frota-fotos-do-lancamento">
+      <MiniaturasFotos anexos={anexos} onRemovida={podeRegistrar ? onMudou : undefined} />
+      {podeRegistrar && <BotaoMaisFoto entidade={entidade} entidadeId={linha.id} quantas={anexos.length} onEnviada={onMudou} />}
+    </div>
+  );
+}
+
+function MeusRegistros({ dados, podeRegistrar, onMudou }) {
   const registros = dados?.registros || [];
   const abastecimentos = dados?.abastecimentos || [];
   return (
@@ -550,6 +598,7 @@ function MeusRegistros({ dados }) {
                     {r.horimetro != null ? ` · ${numeroPt(r.horimetro)} h` : ''}
                     {r.horimetro == null && r.km != null ? ` · ${numeroPt(r.km)} km` : ''}
                   </div>
+                  <FotosDoLancamento entidade="registro" linha={r} podeRegistrar={podeRegistrar} onMudou={onMudou} />
                 </div>
                 {sit && <span className={`portal-situacao situacao-${sit.classe}`}>{sit.rotulo}</span>}
               </li>
@@ -574,6 +623,7 @@ function MeusRegistros({ dados }) {
                     ? ` · ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(a.valor_total)}`
                     : ''}
                 </div>
+                <FotosDoLancamento entidade="abastecimento" linha={a} podeRegistrar={podeRegistrar} onMudou={onMudou} />
               </div>
             </li>
           ))}
@@ -706,7 +756,7 @@ const FrotasPortalMotorista = () => {
         </div>
       )}
 
-      <MeusRegistros dados={meus} />
+      <MeusRegistros dados={meus} podeRegistrar={podeRegistrar} onMudou={carregar} />
     </div>
   );
 };
