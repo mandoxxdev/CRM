@@ -65,10 +65,24 @@ async function updateHorimetroVeiculoSeMaior(db, veiculoId, horimetro) {
     WHERE id = ?`, [Number(horimetro), veiculoId]);
 }
 
-/** Frota Etapa 3: numero opcional vindo de formulario ('' / null / ausente -> null). */
-const numeroOpcional = (v) => (v == null || v === '' ? null : Number(v));
+/**
+ * Frota Etapa 3: horimetro opcional vindo do formulario do gestor ('' / null / ausente -> null). Fase5-R1/R2: texto que nao e numero
+ * ("130,5", "abc") virava NaN e gravava NULL — no PUT apagava a leitura gravada; negativo gravava. Agora 400.
+ */
+function numeroOpcional(v) {
+  if (v == null || v === '') return null;
+  const textoTorto = typeof v === 'string' && !/^\d+(\.\d+)?$/.test(v.trim()); // a mesma regua do portal (lerKm)
+  const n = typeof v === 'boolean' || textoTorto ? NaN : Number(v);
+  if (!Number.isFinite(n) || n < 0) {
+    const err = new Error('Horímetro inválido');
+    err.status = 400;
+    throw err;
+  }
+  return n;
+}
 
-const formatoBR = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 });
+// Fase5-R4: ate 6 casas — com 2, um atual de 1800,004 aparecia como 1.800 e contradizia a leitura 1800 recusada
+const formatoBR = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 6 });
 
 /** RN-F3.06 / RN-F3.15: retorno de maquina por horimetro abaixo da saida — dura, como a RN-F1.07 do km (portal e gestor). */
 function conferirHorimetroDoRetorno(horimetroSaida, horimetroRetorno) {

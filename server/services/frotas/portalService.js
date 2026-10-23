@@ -38,6 +38,8 @@ function horaLocalHHMM(agora = new Date()) {
 
 function lerKm(v) {
   if (v === undefined || v === null || v === '' || typeof v === 'boolean') return null;
+  // Fase5-R3 (Etapa 3): texto so com digitos e ponto decimal (B15) — Number(' ') = 0, Number('0x10') = 16 e Number('1e3') = 1000 passavam
+  if (typeof v === 'string' && !/^\d+(\.\d+)?$/.test(v.trim())) return null;
   const n = Number(v);
   if (!Number.isFinite(n) || n < 0) return null;
   return n;
@@ -75,7 +77,8 @@ function lerLeitura(b, medicao) {
   return km;
 }
 
-const formatoBR = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 });
+// Fase5-R4: ate 6 casas — com 2, um atual de 1800,004 aparecia como 1.800 e contradizia a leitura 1800 recusada
+const formatoBR = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 6 });
 const numeroBR = (n) => formatoBR.format(Number(n) || 0);
 
 /**

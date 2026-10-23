@@ -354,6 +354,108 @@ test("RN-F3.12 'Admin' ligado a motorista le todas as listas e grava no portal; 
   assert.strictEqual(reg.status, 201, JSON.stringify(reg.body));
 });
 
+// ── Fase 5 (revisor de regras, achados reproduzidos por sonda) ─────────────
+test('Fase5-R1/R2 gestor: horimetro torto ou negativo -> 400 "Horímetro inválido"; o PUT nao apaga a leitura gravada', async () => {
+  const m = (await gestor('post', '/api/frotas/veiculos', { placa: 'MAQ0020', tipo_medicao: 'horimetro', horimetro_atual: 100 })).body;
+  const v = await gestor('post', '/api/frotas/viagens', { veiculo_id: m.id, status: 'concluida', horimetro_saida: 120, horimetro_retorno: 130 });
+  assert.strictEqual(v.status, 201, JSON.stringify(v.body));
+  for (const torto of ['130,5', 'abc', -5, ' ', '0x10', true]) {
+    const r = await gestor('put', `/api/frotas/viagens/${v.body.id}`, { horimetro_retorno: torto });
+    assert.deepStrictEqual([r.status, r.body.error], [400, 'Horímetro inválido'], `PUT horimetro_retorno ${JSON.stringify(torto)}`);
+  }
+  const gravada = await dbGet(ctx.db, 'SELECT horimetro_saida, horimetro_retorno FROM frotas_viagens WHERE id = ?', [v.body.id]);
+  assert.deepStrictEqual(gravada, { horimetro_saida: 120, horimetro_retorno: 130 }, 'nada apagado');
+  const antes = await conta('SELECT COUNT(*) n FROM frotas_abastecimentos');
+  for (const torto of ['1234,5', -50]) {
+    const a = await gestor('post', '/api/frotas/abastecimentos', { veiculo_id: m.id, litros: 5, data_abastecimento: '2026-10-20', horimetro_abastecimento: torto });
+    assert.deepStrictEqual([a.status, a.body.error], [400, 'Horímetro inválido'], `POST horimetro_abastecimento ${JSON.stringify(torto)}`);
+  }
+  assert.strictEqual(await conta('SELECT COUNT(*) n FROM frotas_abastecimentos'), antes, 'nada gravado');
+  const ok = await gestor('post', '/api/frotas/abastecimentos', { veiculo_id: m.id, litros: 5, data_abastecimento: '2026-10-20', horimetro_abastecimento: '131.5' });
+  assert.deepStrictEqual([ok.status, ok.body.horimetro_abastecimento], [201, 131.5], 'metade positiva: texto com ponto vale');
+});
+
+test('Fase5-R3 portal: espaco, hexadecimal e notacao cientifica nao sao leitura (km e horimetro)', async () => {
+  const m = (await gestor('post', '/api/frotas/veiculos', { placa: 'MAQ0021', tipo_medicao: 'horimetro', horimetro_atual: 0 })).body;
+  for (const torto of [' ', '0x10', '1e3', '12a']) {
+    const r = await ana('post', '/api/frotas/portal/registros', { tipo: 'inspecao', veiculo_id: m.id, horimetro: torto, itens: todosOk(), confirmar_km_menor: true });
+    assert.deepStrictEqual([r.status, r.body.error], [400, 'Informe o horímetro atual'], `horimetro ${JSON.stringify(torto)}`);
+    const k = await ana('post', '/api/frotas/portal/abastecimentos', { veiculo_id: S.c1.id, km: torto, litros: 5, confirmar_km_menor: true });
+    assert.deepStrictEqual([k.status, k.body.error], [400, 'Informe o KM atual'], `km ${JSON.stringify(torto)}`);
+  }
+  const ok = await ana('post', '/api/frotas/portal/registros', { tipo: 'inspecao', veiculo_id: m.id, horimetro: ' 12.5 ', itens: todosOk() });
+  assert.deepStrictEqual([ok.status, ok.body.registro && ok.body.registro.horimetro], [201, 12.5], 'metade positiva: texto numerico com ponto (B15)');
+});
+
+test('Fase5-R4 a mensagem nao arredonda o atual a ponto de contradizer a leitura recusada', async () => {
+  const v = (await gestor('post', '/api/frotas/veiculos', { placa: 'KMH0030', km_atual: 1800.004 })).body;
+  const r = await ana('post', '/api/frotas/portal/registros', { tipo: 'inspecao', veiculo_id: v.id, km: 1800, itens: todosOk() });
+  assert.deepStrictEqual(r.body, { error: MSG_KM('1.800,004'), code: 'KM_MENOR_QUE_ATUAL' });
+});
+
+test('Fase5-S4 viagem aberta em horas com o veiculo trocado para km: o retorno continua pedindo horas', async () => {
+  const m = (await gestor('post', '/api/frotas/veiculos', { placa: 'MAQ0022', tipo_medicao: 'horimetro', horimetro_atual: 10 })).body;
+  const s = await bruno('post', '/api/frotas/portal/registros', { tipo: 'saida', veiculo_id: m.id, horimetro: 11, itens: todosOk() });
+  assert.strictEqual(s.status, 201, JSON.stringify(s.body));
+  await dbRun(ctx.db, "UPDATE frotas_veiculos SET tipo_medicao = 'km' WHERE id = ?", [m.id]);
+  const ini = await bruno('get', '/api/frotas/portal/inicio');
+  assert.strictEqual(ini.body.viagem_aberta.tipo_medicao, 'horimetro');
+  const soKm = await bruno('post', '/api/frotas/portal/registros', { tipo: 'retorno', km: 500, itens: todosOk() });
+  assert.deepStrictEqual([soKm.status, soKm.body.error], [400, 'Informe o horímetro atual']);
+  const ok = await bruno('post', '/api/frotas/portal/registros', { tipo: 'retorno', horimetro: 14, itens: todosOk() });
+  assert.strictEqual(ok.status, 201, JSON.stringify(ok.body));
+  assert.deepStrictEqual([ok.body.viagem.horimetro_retorno, ok.body.viagem.km_retorno], [14, null]);
+});
+
+test('Fase5-S9/S22 gestor: POST de viagem com horimetro_retorno sobe a maquina; PUT corrige o horimetro_saida', async () => {
+  const m = (await gestor('post', '/api/frotas/veiculos', { placa: 'MAQ0023', tipo_medicao: 'horimetro', horimetro_atual: 5 })).body;
+  const v = await gestor('post', '/api/frotas/viagens', { veiculo_id: m.id, status: 'concluida', horimetro_saida: 6, horimetro_retorno: 9.25 });
+  assert.strictEqual(v.status, 201, JSON.stringify(v.body));
+  assert.deepStrictEqual(await veic(m.id), { km_atual: 0, horimetro_atual: 9.25 }, 'S9: o POST sobe o horimetro');
+  const c = await gestor('put', `/api/frotas/viagens/${v.body.id}`, { horimetro_saida: 7 });
+  assert.strictEqual(c.status, 200, JSON.stringify(c.body));
+  assert.deepStrictEqual([c.body.horimetro_saida, c.body.horimetro_retorno], [7, 9.25], 'S22: o PUT corrige a saida');
+});
+
+test('Fase5-S6/S7/S20 maquina na revisao: aba Cadastro, cartao do painel e gravidade/km_restante do alerta pelo horimetro', async () => {
+  const XLSX = require('xlsx');
+  const { exportarPlanilha } = require('../../services/frotas/exportacaoService');
+  const dentro = (await gestor('post', '/api/frotas/veiculos', { placa: 'ALM0001', tipo_medicao: 'horimetro', horimetro_atual: 120, km_atual: 99999 })).body;
+  const vencida = (await gestor('post', '/api/frotas/veiculos', { placa: 'ALM0002', tipo_medicao: 'horimetro', horimetro_atual: 300, km_atual: 0 })).body;
+  await gestor('post', '/api/frotas/manutencoes', { veiculo_id: dentro.id, descricao: 'revisao', proxima_revisao_km: 160 });
+  await gestor('post', '/api/frotas/manutencoes', { veiculo_id: vencida.id, descricao: 'revisao', proxima_revisao_km: 250 });
+  const al = await gestor('get', '/api/frotas/alertas');
+  const lista = Array.isArray(al.body) ? al.body : al.body.alertas;
+  const de = (placa) => lista.find((a) => a.tipo === 'manutencao' && a.titulo === `Manutenção — ${placa}`);
+  assert.deepStrictEqual([de('ALM0001').severidade, de('ALM0001').km_restante], ['medio', 40], 'S20: faltam 40 h, nao -99839');
+  assert.deepStrictEqual([de('ALM0002').severidade, de('ALM0002').km_restante], ['critico', -50], 'S20: passou 50 h');
+  ctx.limparCacheDashboard();
+  const antes = (await gestor('get', '/api/frotas/dashboard?refresh=1')).body.manutencoesVencidas;
+  await gestor('post', '/api/frotas/manutencoes', { veiculo_id: dentro.id, descricao: 'outra', proxima_revisao_km: 130 });
+  ctx.limparCacheDashboard();
+  const depois = (await gestor('get', '/api/frotas/dashboard?refresh=1')).body.manutencoesVencidas;
+  assert.strictEqual(depois, antes, 'S7: ALM0001 (120 h) com revisao em 130 nao esta vencida, mesmo com km 99999');
+  await gestor('post', '/api/frotas/manutencoes', { veiculo_id: dentro.id, descricao: 'vencida', proxima_revisao_km: 110 });
+  ctx.limparCacheDashboard();
+  const agora = (await gestor('get', '/api/frotas/dashboard?refresh=1')).body.manutencoesVencidas;
+  assert.strictEqual(agora, depois + 1, 'S7 metade positiva: revisao em 110 com 120 h vence');
+  const { buffer } = await exportarPlanilha(ctx.db, {});
+  const wb = XLSX.read(buffer, { type: 'buffer' });
+  const [cab, ...linhas] = XLSX.utils.sheet_to_json(wb.Sheets['Cadastro Frota'], { header: 1, defval: '' });
+  const l = linhas.find((x) => x[0] === 'ALM0001');
+  assert.strictEqual(l[cab.indexOf('Próxima Revisão KM')], 130, 'S6: a menor revisao acima de 120 h (130), pelo horimetro');
+  assert.strictEqual(l[cab.indexOf('Horímetro Atual')], 120);
+});
+
+test('Fase 5 (assercao fraca) 409 de horimetro no abastecimento nao grava nada', async () => {
+  const m = (await gestor('post', '/api/frotas/veiculos', { placa: 'MAQ0024', tipo_medicao: 'horimetro', horimetro_atual: 50 })).body;
+  const antes = await conta('SELECT COUNT(*) n FROM frotas_abastecimentos');
+  const r = await ana('post', '/api/frotas/portal/abastecimentos', { veiculo_id: m.id, horimetro: 40, litros: 5 });
+  assert.deepStrictEqual([r.status, r.body.code], [409, 'HORIMETRO_MENOR_QUE_ATUAL']);
+  assert.strictEqual(await conta('SELECT COUNT(*) n FROM frotas_abastecimentos'), antes);
+  assert.strictEqual((await veic(m.id)).horimetro_atual, 50);
+});
+
 (async () => {
   ctx = await createFrotasTestApp();
   await cenario();
