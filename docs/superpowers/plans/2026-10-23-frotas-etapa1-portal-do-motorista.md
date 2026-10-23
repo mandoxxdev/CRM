@@ -113,6 +113,31 @@ Período filtra Viagens (data_saida), Checklist, Abastecimentos, Manutenções; 
   `freios` Freios / freio de estacionamento · `buzina_cintos` Buzina / cintos · `documentos_equipamentos` Documentos /
   equipamentos · `carroceria_carga` Carroceria / amarração da carga.
 
+## Ajustes da Fase 2 (revisor fresco, 18 achados — **valem sobre o texto acima**)
+
+| Achado | Ajuste no plano |
+|---|---|
+| F2-1 (trava) `crudRoutes` não passa `req.user` a list/getOne/update | T3 muda as assinaturas: `listFn(db, query, user)`, `getOne(db, id, user)`, `updateFn(db, id, body, user)` para todas as entidades |
+| F2-2 (trava) `GET /motoristas/:id` abre CPF/CNH de qualquer um | RN-F1.14 vale para `GET /:id`: MOTORISTA pedindo outro → 404 `Não encontrado` |
+| F2-3 (trava) motorista troca `motorista_id` no PUT/POST antigos | **RN-F1.19**: para MOTORISTA, `POST`/`PUT` de abastecimentos, viagens e checklists **forçam** `motorista_id` = o do vínculo (o do corpo é ignorado); sem vínculo → 409 `MOTORISTA_NAO_VINCULADO` (mensagem do contrato) |
+| F2-4 (trava) não dá para desvincular | `updateMotorista` usa `'usuario_id' in data` (null desvincula). Teste de desvincular |
+| F2-5 (trava) seletor `/usuarios/por-modulo` filtra por setor | Endpoint novo **`GET /api/frotas/usuarios-vinculaveis`** (`gerenciar_motoristas`): `200 [{id, nome, email, motorista: {id, nome} | null}]` de `usuarios WHERE ativo = 1 ORDER BY nome`. `usuario_id` inexistente/inativo no POST/PUT de motorista → 400 `Usuário não encontrado` |
+| F2-6 (trava) situação calculada em duas tasks | `situacaoDoRegistro({itens, avarias, legados})` mora em `schema.js` (T1) e é a única régua; T2/T4/T5 a importam |
+| F2-7 (trava) checklist da tela antiga sairia sempre INCOMPLETO | **RN-F1.03 reescrita:** registro **sem** `itens` (rota antiga) usa os 7 `*_ok`: algum enviado = 0 → PENDENCIA; os 7 enviados = 1 → OK; algum ausente → INCOMPLETO. `aprovado` = (OK). Com `itens` → RN-F1.02 |
+| F2-8 recálculo do km/L | RN-F1.11: ordem = `km ASC, id ASC`; linha sem km fica com km/L e km_desde_anterior nulos e não serve de "anterior"; PUT que muda km/veículo recalcula o seguinte da posição antiga e o da nova (nos dois veículos); DELETE lê a linha antes e recalcula o seguinte |
+| F2-9 viagem órfã | `em_uso` = existe viagem `em_andamento` do veículo; o gestor fecha pelo `PUT /viagens/:id {status:'concluida', km_retorno}`; teste |
+| F2-10 viagens abertas em dobro | RN-F1.05 vale também em `POST`/`PUT /viagens` que levem a `em_andamento` → 409 com as mesmas mensagens. **Saída consome** uma viagem `aprovada` do mesmo veículo e motorista (vira `em_andamento` com os dados da saída) em vez de criar outra (B8) |
+| F2-11 front não sabe quem pode gravar | `GET /portal/inicio` devolve também `perfil`, `pode_registrar` (`can(user,'registrar_operacoes')`) e `pode_gerir` (`can(user,'gerenciar_veiculos')`) |
+| F2-12 erros sem mensagem | Portal: `data` fora de `AAAA-MM-DD` → 400 `Data inválida`; `horario` fora de `HH:MM` → 400 `Horário inválido`; abastecimento: veículo inexistente/inativo → 404 `Veículo não encontrado`; `litros` ≤ 0 ou ausente → 400 `Informe os litros`; `valor_total` < 0 → 400 `Valor inválido`; data padrão = hoje (sem a mensagem antiga) |
+| F2-13 cache do painel nos testes | `routes/frotas.js` exporta `limparCacheDashboard()`; o harness chama ao criar o app; `requirePermission('ver_painel')` fica **antes** do cache |
+| F2-14 saída com veículo em manutenção | `inicio.veiculos[]` traz `status`; saída com veículo `manutencao` → 409 `Veículo em manutenção. Fale com o gestor da frota.` (inspeção e retorno aceitam) |
+| F2-15 formato da data da viagem | `data_saida`/`data_retorno` gravadas como `AAAA-MM-DDTHH:MM` (abre no `datetime-local` do gestor) |
+| F2-16 multas no "PUT alheio" | multas saem dessa lista (já são `gerenciar_veiculos`) |
+| F2-17 admin no portal | menu do ADMIN também mostra "Portal do motorista"; sem vínculo a tela mostra a mensagem do 409 |
+| F2-18 "próxima revisão" | Cadastro Frota: Próxima Revisão KM = menor `proxima_revisao_km` > `km_atual`; Data = menor `proxima_revisao_data` ≥ hoje; entre as manutenções do veículo |
+
+Galhos: T5 importa `situacaoDoRegistro` (F2-6); T6 usa `pode_registrar`/`perfil` (F2-11); T7 usa `usuarios-vinculaveis` (F2-5) e mantém "Novo Checklist" do gestor (F2-7 decidido).
+
 ## Tasks (sort topológico)
 
 | # | Task | Tipo | Depende |
