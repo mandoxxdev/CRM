@@ -9,6 +9,9 @@
 
 import jsPDF from 'jspdf';
 import { formatarDataDoBanco, hojeLocalISO, lerInstanteDoBanco } from './dataLocal';
+import {
+  linhasPorLargura, utilDasColunas, quebrarCelulas, desenharCelulas, desenharQuebrado,
+} from './pdfTexto';
 
 const num = (v) => String(Number(v || 0));
 const ou = (v, alt = '—') => (v === null || v === undefined || v === '' ? alt : String(v));
@@ -78,6 +81,15 @@ export function montarRemessaPDF({ remessa = {}, itens = [], geradoEm } = {}) {
   };
 }
 
+// Etapa 186 (B1230, B1232, B1233, B1235; corrige a B1220 e a C445 da 185) — este papel volta ASSINADO pelo terceiro (os campos de
+// assinatura, no fim): e o que prova o que foi entregue. Antes cada celula era cortada em 40 letras numa linha so, sem medir: o codigo de
+// EPI de 17 letras invadia a coluna Material e o nome do material perdia o fim (o de 71 letras saia sem as ultimas 31). Agora cada celula
+// QUEBRA em quantas linhas precisar (a linha fica mais alta; nenhuma letra perdida) e as colunas foram redistribuidas — medidas com o
+// jsPDF real — para o codigo de EPI e o nome comum de material caberem numa linha so.
+const COLUNAS = [14, 48, 126, 142, 166]; // = M, M + 34, M + 112, M + 128, M + 152
+const UTIL = utilDasColunas(COLUNAS); // [33, 77, 15, 23, 30]: ate 1 mm antes da proxima coluna; a ultima ate a margem (196)
+const LARGURA_TEXTO = 182; // 196 - M
+
 /** Desenha e dispara o download. Sem autoTable: a grade e simples e cabe em texto posicionado. */
 export function gerarRemessaPDF(dados) {
   const doc = montarRemessaPDF(dados);
@@ -85,15 +97,17 @@ export function gerarRemessaPDF(dados) {
   const M = 14;
   let y = 18;
 
+  // Linhas de identificacao (B1236): quebram em 182 mm, cada bloco avancando o passo de hoje POR LINHA (texto curto: o y de hoje). O
+  // proprietario passava da margem com razao social de 72+ letras largas (83 de texto real), o subtitulo com fornecedor de 85+.
   pdf.setFontSize(14);
-  pdf.text(doc.titulo, M, y); y += 6;
+  y = desenharQuebrado(pdf, doc.titulo, M, y, LARGURA_TEXTO, 6);
   pdf.setFontSize(10);
-  pdf.text(doc.subtitulo, M, y); y += 5;
+  y = desenharQuebrado(pdf, doc.subtitulo, M, y, LARGURA_TEXTO, 5);
   pdf.setFontSize(9);
-  pdf.text(`Prazo previsto: ${doc.prazo}   ·   Status: ${doc.status}`, M, y); y += 5;
+  y = desenharQuebrado(pdf, `Prazo previsto: ${doc.prazo}   ·   Status: ${doc.status}`, M, y, LARGURA_TEXTO, 5);
   if (doc.proprietario) {
     pdf.setFontSize(10);
-    pdf.text(doc.proprietario, M, y); y += 6;
+    y = desenharQuebrado(pdf, doc.proprietario, M, y, LARGURA_TEXTO, 6);
     pdf.setFontSize(9);
   }
   if (doc.encerramento) {
@@ -102,20 +116,34 @@ export function gerarRemessaPDF(dados) {
   }
   pdf.text(`Gerado em ${doc.geradoEm}`, M, y); y += 8;
 
-  const cols = [M, M + 30, M + 110, M + 126, M + 152];
-  doc.cabecalhoItens.forEach((h, i) => pdf.text(h, cols[i], y));
-  y += 2; pdf.line(M, y, 196, y); y += 5;
+  // Cabecalho da tabela — repetido depois de todo addPage DENTRO da tabela (emenda I4 da Fase 2, B1234): sem ele, na pagina 2 Qtde e
+  // Peso ficam duas colunas de numero sem nome num papel assinado.
+  const cabecalho = () => {
+    doc.cabecalhoItens.forEach((h, i) => pdf.text(h, COLUNAS[i], y));
+    y += 2; pdf.line(M, y, 196, y); y += 5;
+  };
+  cabecalho();
   for (const linha of doc.linhasItens) {
-    if (y > 262) { pdf.addPage(); y = 18; }
-    linha.forEach((c, i) => pdf.text(String(c ?? '').slice(0, 40), cols[i], y));
-    y += 5;
+    // A linha cresce (B1233): 5 mm na primeira (o passo de hoje), 4 nas de continuacao. So comeca na pagina se a ULTIMA linha dela fica
+    // ate 262 (o limite de hoje): o item nao e partido entre paginas.
+    const linhas = quebrarCelulas(pdf, linha, UTIL);
+    const n = Math.max(...linhas.map((l) => l.length));
+    if (y + 4 * (n - 1) > 262) { pdf.addPage(); y = 18; cabecalho(); }
+    desenharCelulas(pdf, linhas, COLUNAS, y, 4);
+    y += 5 + 4 * (n - 1);
   }
   y += 2; pdf.line(M, y, 196, y); y += 5;
   pdf.text(`${doc.totalItens} item(ns) · quantidade total: ${doc.totalQuantidade}`, M, y); y += 8;
 
   if (doc.observacoes) {
+    // B1235: antes `y += 10` fixo depois do bloco — com 7+ linhas a observacao cruzava a linha de assinatura, e uma longa perto do fim
+    // saia da folha (309 mm). Agora uma linha por `text`, passo 4, virando a pagina se passar de 280; depois do bloco +6 (1 linha: +10).
     pdf.text('Observações:', M, y); y += 5;
-    pdf.text(pdf.splitTextToSize(doc.observacoes, 175), M, y); y += 10;
+    for (const l of linhasPorLargura(pdf, doc.observacoes, 175)) {
+      if (y > 280) { pdf.addPage(); y = 18; }
+      pdf.text(l, M, y); y += 4;
+    }
+    y += 6;
   }
 
   // Campos de assinatura: o papel volta assinado pelo terceiro, e e o que prova a entrega.

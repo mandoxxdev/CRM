@@ -7,7 +7,30 @@
  *
  * Executar: cd client && CI=true npx react-scripts test src/utils/remessaPdf --watchAll=false
  */
-import { montarRemessaPDF } from './remessaPdf';
+import { montarRemessaPDF, gerarRemessaPDF } from './remessaPdf';
+
+// Etapa 186, T2 — o GERADOR, com medidas reais. `getTextWidth`, `splitTextToSize` e `setFontSize` vao para um jsPDF real (A4, mm); TODA
+// chamada e gravada em `mockPdf` (inclusive as medidas: a RN-186.11 exige que a producao nao chame `getTextWidth` nem `setFont`).
+// Funcao comum, nao jest.fn: o CRA liga `resetMocks`. Molde: components/almoxarifado/EpiAlmoxarifado.test.js.
+const mockPdf = [];
+jest.mock('jspdf', () => {
+  const erroOriginal = console.error;
+  console.error = () => {};
+  let JsPdfReal;
+  try { ({ jsPDF: JsPdfReal } = jest.requireActual('jspdf')); } finally { console.error = erroOriginal; }
+  return function JsPdfGravador() {
+    const medidor = new JsPdfReal({ format: 'a4', orientation: 'portrait', unit: 'mm' });
+    const soMedem = { getTextWidth: true, splitTextToSize: true };
+    return new Proxy({}, {
+      get: (_alvo, nome) => (...args) => {
+        mockPdf.push([nome, ...args]);
+        if (nome === 'setFontSize') medidor.setFontSize(...args);
+        if (soMedem[nome]) return medidor[nome](...args);
+        return undefined;
+      },
+    });
+  };
+});
 
 const REMESSA = {
   numero: 'REM-12345678',
@@ -159,5 +182,245 @@ describe('[RN-170.04] as datas da remessa no dia de Brasilia', () => {
     const esperado = `${String(hoje.getDate()).padStart(2, '0')}/${String(hoje.getMonth() + 1).padStart(2, '0')}/${hoje.getFullYear()}`;
     expect(montarRemessaPDF({ remessa: REMESSA, itens: ITENS }).geradoEm).toBe(esperado);
     expect(montarRemessaPDF({ remessa: REMESSA, itens: ITENS, geradoEm: 'lixo' }).geradoEm).toBe(esperado);
+  });
+});
+
+// ── Etapa 186 (RN-186.02 a .05, .09, .11; B1230, B1232-B1235) — o PDF da remessa cabe na folha ───────────────────────────────────────
+// Reguas copiadas aqui (nao importadas de outro teste — regra da 185). As colunas sao o CONTRATO: literal, nao lido da producao.
+const COLUNAS_REMESSA = [14, 48, 126, 142, 166];
+const MARGEM = 196;
+const FUNDO = 287;
+let JsPdfDoTeste;
+{
+  const erroOriginal = console.error;
+  console.error = () => {};
+  try { ({ jsPDF: JsPdfDoTeste } = jest.requireActual('jspdf')); } finally { console.error = erroOriginal; }
+}
+const regua = new JsPdfDoTeste({ format: 'a4', orientation: 'portrait', unit: 'mm' });
+const largura = (t, fonte) => { regua.setFontSize(fonte); return regua.getTextWidth(String(t)); };
+const semEspacos = (s) => String(s).replace(/\s+/g, '');
+
+// Cada `text` gravado com a fonte e a pagina correntes (pagina 0 = a primeira).
+function textosGravados() {
+  let fonte = 16;
+  let pagina = 0;
+  const saida = [];
+  for (const [nome, ...args] of mockPdf) {
+    if (nome === 'setFontSize') fonte = args[0];
+    if (nome === 'addPage') pagina += 1;
+    if (nome === 'text') {
+      const [t, x, y] = args;
+      const linhas = Array.isArray(t) ? t : [t];
+      // `text` com array (o encerramento): o jsPDF desce fonte x 1,15 pt por linha
+      linhas.forEach((l, j) => saida.push({ t: String(l), x, y: y + j * fonte * 1.15 * (25.4 / 72), fonte, pagina }));
+    }
+  }
+  return saida;
+}
+function textosForaDaFolha() {
+  return textosGravados().filter((e) => e.x + largura(e.t, e.fonte) > MARGEM || e.y > FUNDO)
+    .map((e) => `${e.t} (x ${e.x}, fim ${(e.x + largura(e.t, e.fonte)).toFixed(1)}, y ${e.y.toFixed(1)}, f${e.fonte})`);
+}
+// A tabela: do 1o cabecalho ('Código') ao fechamento. Cabecalho repetido na pagina nova (I4) e pulado — reconhecido pela string
+// 'Código', nao pelo x — e cada cabecalho termina na `line` dele. Itens agrupados pela SEQUENCIA: um item comeca quando o x volta a 14
+// depois de uma celula de outra coluna (o recorte por y quebra na pagina 2, I1 da 185).
+function tabela() {
+  let fonte = 16;
+  let pagina = 0;
+  let dentro = false;
+  let noCabecalho = false;
+  const itens = [];
+  const cabecalhos = [];
+  let anteriorX = null;
+  for (const [nome, ...args] of mockPdf) {
+    if (nome === 'setFontSize') fonte = args[0];
+    if (nome === 'addPage') pagina += 1;
+    if (nome === 'line') {
+      if (noCabecalho) { noCabecalho = false; dentro = true; anteriorX = null; continue; }
+      if (dentro) break;
+      continue;
+    }
+    if (nome !== 'text') continue;
+    const [t, x, y] = args;
+    if (t === 'Código') { cabecalhos.push({ pagina, y, textos: [] }); noCabecalho = true; }
+    if (noCabecalho) { cabecalhos[cabecalhos.length - 1].textos.push({ t, x, y, fonte }); continue; }
+    if (!dentro) continue;
+    if (x === 14 && anteriorX !== 14) itens.push([]);
+    itens[itens.length - 1].push({ t: String(t), x, y, fonte, pagina });
+    anteriorX = x;
+  }
+  return { itens, cabecalhos };
+}
+const linhasDaTabela = () => tabela().itens;
+function celulasInvasoras() {
+  const fora = [];
+  for (const item of linhasDaTabela()) {
+    for (const c of item) {
+      const i = COLUNAS_REMESSA.indexOf(c.x);
+      const limite = i < 0 ? -1 : (i < COLUNAS_REMESSA.length - 1 ? COLUNAS_REMESSA[i + 1] - 1 : MARGEM);
+      if (i < 0 || c.fonte !== 9 || c.x + largura(c.t, 9) > limite) {
+        fora.push(`${c.t} (x ${c.x}, fim ${(c.x + largura(c.t, 9)).toFixed(1)}, limite ${limite})`);
+      }
+    }
+  }
+  return fora;
+}
+const celula = (item, col) => item.filter((c) => c.x === COLUNAS_REMESSA[col]);
+
+const CODIGO_25 = 'EIXO-SAE1045-D50-L1200-RT';
+const NOME_71 = 'Eixo usinado em aco SAE 1045 retificado diametro 50 mm comprimento 1200';
+const NOME_46 = 'Chapa de aco inox 304 2B 3,00 x 1250 x 3000 mm';
+const W_120 = 'W'.repeat(120);
+const curto = (k) => ({ material_codigo: `MAT-${k}`, material_nome: `Item ${k}`, unidade: 'UN', quantidade: 1, peso: null });
+const alto = (k) => ({ material_codigo: `MAT-${k}`, material_nome: W_120, unidade: 'UN', quantidade: 1, peso: null });
+// Observacao de exatamente n linhas em 175 mm, fonte 9 (medida no jsPDF real).
+function observacaoDe(n) {
+  const frase = 'Material embalado em caixa de madeira lacrada, conferir lacre na chegada. ';
+  let t = '';
+  regua.setFontSize(9);
+  while (regua.splitTextToSize(t.trim() || 'x', 175).length < n) t += frase;
+  while (regua.splitTextToSize(t.trim(), 175).length > n) t = t.slice(0, -1);
+  return t.trim();
+}
+const gerar = (remessa, itens) => {
+  mockPdf.length = 0;
+  gerarRemessaPDF({ remessa: { ...REMESSA, ...remessa }, itens, geradoEm: '2026-10-22T15:00:00.000Z' });
+};
+const pagEy = (e) => e.pagina * 1000 + e.y;
+const linhasDaObservacao = (n) => {
+  const textos = textosGravados();
+  const iRotulo = textos.findIndex((e) => e.t === 'Observações:');
+  return textos.slice(iRotulo + 1, iRotulo + 1 + n);
+};
+
+describe('[Etapa 186] o PDF da remessa cabe na folha (jsPDF real)', () => {
+  test('[RN-186.02] codigo de 25 e nome de 71: nada invade, nada se perde; codigo em 2 linhas e material em 2', () => {
+    gerar({}, [{ material_codigo: CODIGO_25, material_nome: NOME_71, unidade: 'UN', quantidade: 2, peso: 10 }]);
+    expect(celulasInvasoras()).toEqual([]);
+    const [item] = linhasDaTabela();
+    expect(semEspacos(celula(item, 0).map((c) => c.t).join(''))).toBe(semEspacos(CODIGO_25));
+    expect(semEspacos(celula(item, 1).map((c) => c.t).join(''))).toBe(semEspacos(NOME_71));
+    expect(celula(item, 0)).toHaveLength(2);
+    expect(celula(item, 1)).toHaveLength(2);
+  });
+
+  test('[RN-186.03] item comum: cada celula e UM text; x do cabecalho e das celulas = o contrato', () => {
+    gerar({}, [{ material_codigo: 'EPI-MASC-SOLDA-07', material_nome: NOME_46, unidade: 'UN', quantidade: 99999.125, peso: '1250.75' }]);
+    const { itens, cabecalhos } = tabela();
+    expect(itens).toHaveLength(1);
+    expect(itens[0].map((c) => c.x)).toEqual(COLUNAS_REMESSA);
+    expect(itens[0].map((c) => c.t)).toEqual(['EPI-MASC-SOLDA-07', NOME_46, 'UN', '99999.125', '1250.75']);
+    expect(cabecalhos).toHaveLength(1);
+    expect(cabecalhos[0].textos.map((c) => c.x)).toEqual(COLUNAS_REMESSA);
+    expect(cabecalhos[0].textos.map((c) => c.t)).toEqual(['Código', 'Material', 'Un.', 'Qtde', 'Peso (kg)']);
+    gerar({}, [{ material_codigo: 'X', material_nome: 'Y', unidade: 'BARRA', quantidade: 1, peso: null }]);
+    expect(linhasDaTabela()[0]).toHaveLength(5);
+  });
+
+  test('[RN-186.04] (a) itens curtos: o passo de hoje (y0, y0 + 5, y0 + 10) — y0 = 49 sem proprietario', () => {
+    gerar({}, [curto(1), curto(2), curto(3)]);
+    expect(linhasDaTabela().map((item) => item[0].y)).toEqual([49, 54, 59]);
+  });
+
+  test('[RN-186.04] (b) a linha cresce: depois de um item de 5 linhas o seguinte vem em y + 5 + 16', () => {
+    gerar({}, [curto(1), alto(2), curto(3)]);
+    const itens = linhasDaTabela();
+    expect(celula(itens[1], 1).map((c) => c.y)).toEqual([54, 58, 62, 66, 70]);
+    expect(itens[2][0].y).toBe(54 + 5 + 16);
+  });
+
+  test('[RN-186.04] (c) 60 itens de 5 linhas: nada abaixo de 262, nenhum item partido, cabecalho repetido em cada pagina (I4)', () => {
+    gerar({}, Array.from({ length: 60 }, (_, k) => alto(k)));
+    const { itens, cabecalhos } = tabela();
+    expect(itens).toHaveLength(60);
+    expect(mockPdf.filter(([n]) => n === 'addPage').length).toBeGreaterThanOrEqual(1);
+    const celulas = itens.flat();
+    expect(celulas.filter((c) => c.y > 262).map((c) => `${c.t.slice(0, 8)} y ${c.y}`)).toEqual([]);
+    for (const item of itens) expect(new Set(item.map((c) => c.pagina)).size).toBe(1);
+    // I4: cada pagina com itens comeca com os 5 cabecalhos nos x do contrato; na pagina nova a 1a linha vem em 18 + 7 = 25
+    const paginas = [...new Set(celulas.map((c) => c.pagina))];
+    expect(paginas.length).toBeGreaterThanOrEqual(2);
+    expect(cabecalhos.map((c) => c.pagina)).toEqual(paginas);
+    for (const c of cabecalhos) {
+      expect(c.textos.map((h) => h.x)).toEqual(COLUNAS_REMESSA);
+      expect(c.textos.map((h) => h.t)).toEqual(['Código', 'Material', 'Un.', 'Qtde', 'Peso (kg)']);
+    }
+    for (const p of paginas.slice(1)) {
+      expect(itens.find((item) => item[0].pagina === p)[0].y).toBe(25);
+      expect(cabecalhos.find((c) => c.pagina === p).y).toBe(18);
+    }
+  });
+
+  test('[RN-186.05] proprietario de 80 W e subtitulo de 120: quebram em 2+ text e nada passa da folha', () => {
+    gerar({ proprietario_cliente_id: 9, proprietario_cliente_nome: 'W'.repeat(80), fornecedor_nome: 'Fornecedor '.repeat(11).trim() }, [curto(1)]);
+    expect(textosForaDaFolha()).toEqual([]);
+    const textos = textosGravados();
+    expect(textos.filter((e) => e.fonte === 10 && /^(Material de propriedade|W{5})/.test(e.t)).length).toBeGreaterThanOrEqual(2);
+    expect(textos.filter((e) => e.fonte === 10 && /Fornecedor/.test(e.t)).length).toBeGreaterThanOrEqual(2);
+  });
+
+  test('[RN-186.05] textos curtos: o y de hoje (Gerado em em 18 + 6 + 5 + 5 = 34)', () => {
+    gerar({}, [curto(1)]);
+    expect(textosGravados().find((e) => /^Gerado em/.test(e.t)).y).toBe(34);
+  });
+
+  test('[RN-186.05] observacao de 10 linhas: a assinatura fica abaixo da ultima linha (pagina, y — M6)', () => {
+    const obs = observacaoDe(10);
+    gerar({ observacoes: obs }, [curto(1)]);
+    const linhasObs = linhasDaObservacao(10);
+    expect(semEspacos(linhasObs.map((e) => e.t).join(''))).toBe(semEspacos(obs));
+    const ultima = linhasObs[linhasObs.length - 1];
+    // a 1a `line` da assinatura (x de 14 a 89), com a pagina corrente
+    let pagina = 0;
+    let assinatura = null;
+    for (const [nome, ...args] of mockPdf) {
+      if (nome === 'addPage') pagina += 1;
+      if (nome === 'line' && args[0] === 14 && args[2] === 89) assinatura = { pagina, y: args[1] };
+    }
+    expect(assinatura).not.toBeNull();
+    const mesmaPaginaAbaixo = assinatura.pagina === ultima.pagina && assinatura.y > ultima.y + 4;
+    expect({ assinatura, ultima: { pagina: ultima.pagina, y: ultima.y }, ok: mesmaPaginaAbaixo || assinatura.pagina > ultima.pagina })
+      .toEqual(expect.objectContaining({ ok: true }));
+  });
+
+  test('[RN-186.05] (I1) 37 itens curtos + observacao de 20 linhas: a observacao vira a pagina e nada sai da folha', () => {
+    const obs = observacaoDe(20);
+    gerar({ observacoes: obs }, Array.from({ length: 37 }, (_, k) => curto(k)));
+    expect(textosForaDaFolha()).toEqual([]);
+    const linhasObs = linhasDaObservacao(20);
+    expect(semEspacos(linhasObs.map((e) => e.t).join(''))).toBe(semEspacos(obs));
+    // metade positiva: houve addPage ENTRE linhas da observacao, e a ordem (pagina, y) cresce
+    expect(new Set(linhasObs.map((e) => e.pagina)).size).toBeGreaterThanOrEqual(2);
+    for (let j = 1; j < linhasObs.length; j += 1) expect(pagEy(linhasObs[j])).toBeGreaterThan(pagEy(linhasObs[j - 1]));
+  });
+
+  test('[RN-186.09] pior caso: campos longos, encerramento de 500 letras (M2), observacao de 20 linhas — com 60 e com 37 itens', () => {
+    const longos = {
+      fornecedor_nome: 'Fornecedor '.repeat(11).trim(),
+      tipo_servico: 'Galvanizacao a fogo '.repeat(3).trim(),
+      proprietario_cliente_id: 9,
+      proprietario_cliente_nome: 'W'.repeat(80),
+      status: 'ENCERRADA',
+      encerramento_destino: 'PERDA_NO_TERCEIRO',
+      encerramento_justificativa: 'perda registrada no terceiro '.repeat(18).slice(0, 500),
+      observacoes: observacaoDe(20),
+    };
+    const longo = (k) => ({
+      material_codigo: `${CODIGO_25}-${k}`, material_nome: `${NOME_71} ${W_120}`, unidade: 'BARRA', quantidade: 0.1 + 0.2, peso: '1250.75',
+    });
+    for (const n of [60, 37]) {
+      gerar(longos, Array.from({ length: n }, (_, k) => (n === 60 ? longo(k) : curto(k))));
+      expect(textosForaDaFolha()).toEqual([]);
+      expect(celulasInvasoras()).toEqual([]);
+      expect(linhasDaTabela()).toHaveLength(n);
+    }
+  });
+
+  test('[RN-186.11] a producao nao chama getTextWidth nem setFont (o FakePdf da tela nao tem)', () => {
+    gerar({ observacoes: observacaoDe(3), proprietario_cliente_id: 9, proprietario_cliente_nome: 'Cliente' }, [curto(1), alto(2)]);
+    const nomes = new Set(mockPdf.map(([n]) => n));
+    expect(nomes.has('text')).toBe(true);
+    expect(nomes.has('getTextWidth')).toBe(false);
+    expect(nomes.has('setFont')).toBe(false);
   });
 });

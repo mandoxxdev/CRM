@@ -528,3 +528,27 @@ isso); este plano com a próxima tarefa detalhada.
   - (c3) `desenharCelulas` com `text(array)` → cai **so** o "um `text` por linha" (`toEqual` dos `[x, y, texto]`);
   - (c4) `utilDasColunas` sem a folga → cai **so** o literal `[33, 77, 15, 23, 30]`.
 - Divergencia: a razao social de 69 do teste e `Industria e Comercio de Equipamentos para Saneamento Basicos Ltda EPP` (a do plano, sem o `s`, tem 68).
+- Commit: `225ee70b`.
+
+### T2 — remessa (feita)
+
+- Gravador (`jest.mock('jspdf')`, molde `EpiAlmoxarifado.test.js`, gravando **toda** chamada, inclusive as medidas): os 16 testes do
+  descritor de hoje rodaram verdes com ele antes da produção mudar. Vermelho: **8** dos 11 novos caem; os 3 que passam com o código de hoje são
+  guardas do "texto curto = desenho de hoje" (`(a)` y = 49, 54, 59; `Gerado em` em 34) e a RN-186.11 (hoje não chama `getTextWidth`/`setFont`).
+  Verde: **27/27**. `datasDoChat…test.js` sem mudança: **14/14**.
+- Emendas aplicadas: **I1** (37 itens curtos + observação de 20 linhas; pior caso com 60 itens longos **e** com 37), **I4** (cabeçalho repetido
+  depois de todo `addPage` da tabela; a página nova começa a linha em 25; o recorte da tabela pula o cabeçalho pela string `'Código'`), **M2**
+  (justificativa de 500 letras no pior caso), **M6** (assinatura comparada por (página, y)).
+- Controles (`e186-sab-t2cN.log`, âncora = 1, md5 restaurado = antes, `cmp` ok em todos):
+  - (c1) `slice(0, 40)` numa linha → caem RN-186.02 (`celulasInvasoras`: `EIXO-SAE1045-D50-L1200-RT` fim **57,8** > 47), RN-186.03 (material
+    `…x 1250 x 3` — perde o fim), RN-186.04 (b) e RN-186.09 (código fim 60,1 > 47; `0.30000000000000004` fim 174,3 > 165);
+  - (c2) só a 1ª linha de cada célula → cai a **junção** da RN-186.02 (`EIXO-SAE1045-D50-L` ≠ o código, linha 301) — `celulasInvasoras`
+    (linha 299) **passou** — e a (b) (1 linha em vez de 5);
+  - (c3) quebra só por `y > 262` → cai RN-186.04 (c) (células em y 263…**275**) e RN-186.09 (o total em 293, `Observações:` em 301);
+  - (c4) colunas antigas `[14, 44, 124, 140, 166]` → caem RN-186.02, **.03** (x `[14, 14, …]`: `EPI-MASC-SOLDA-07` em 2 `text`), .04 (b)/(c) e .09;
+  - (c5) observações com `y += 10` fixo → caem RN-186.05 10 linhas (assinatura em y **96**, última linha em **106,9**, mesma página), I1 (até
+    y 323,4) e RN-186.09;
+  - (c6) proprietário sem quebra → cai RN-186.05 (fonte 10, fim **322,1**) e RN-186.09;
+  - (c7, I1) observações sem `addPage` → cai o teste dos 37 itens (última linha em y **330**, o número da emenda) e RN-186.09 (295);
+  - (c8, I4) sem repetir o cabeçalho → cai **só** RN-186.04 (c) (`cabecalhos.map(pagina)` ≠ páginas com itens).
+- Divergência: nenhuma no desenho. O plano listava `cada um em 2+ text` para subtítulo e proprietário — conferido por regex na fonte 10.
