@@ -2501,6 +2501,11 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
             : msgV.AVISO_REDEFINIDA(loteCodigoFinal, validadeDoLote.antiga, nova));
         } else if (r.atual != null && String(r.atual).slice(0, 10) === nova) {
           vigente = nova; // a outra operacao gravou a mesma data: nada a avisar
+        } else if (r.atual == null) {
+          // Perdeu o UPDATE e o lote continua SEM validade (ou sumiu): nao foi "outra operacao" — a validade nao gravou. Medido no
+          // controle (b) da T4: o AVISO_CORRIDA saia com "()" no lugar da data.
+          console.warn(`[almoxarifado] validade do lote nao gravada (movimentacao ${result.lastID}, lote ${loteIdFinal}): UPDATE nao casou`);
+          avisosValidade.push(msgV.AVISO_FALHA(loteCodigoFinal, nova));
         } else {
           avisosValidade.push(msgV.AVISO_CORRIDA(loteCodigoFinal, r.atual));
         }

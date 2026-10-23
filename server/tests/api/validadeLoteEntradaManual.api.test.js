@@ -323,6 +323,23 @@ const MSG = {
     assert.strictEqual(l.data_validade, null);
   });
 
+  await test('[RN-190.08/I-1] UPDATE perdido com o lote ainda sem validade -> AVISO_FALHA (nao "outra operacao ()")', async () => {
+    const m = await material();
+    await loteComSaldo(m, 'L-PERDEU', 6);
+    const original = lotService.preencherValidadeSeVazia;
+    lotService.preencherValidadeSeVazia = async () => ({ preenchida: false, atual: null });
+    const warn = console.warn; console.warn = () => {};
+    let r;
+    try {
+      r = await entrada(m, { quantidade: 4, lote: 'L-PERDEU', data_validade: '2027-01-31' });
+    } finally {
+      lotService.preencherValidadeSeVazia = original; console.warn = warn;
+    }
+    ok201(r);
+    assert.strictEqual(r.body.aviso_validade, MSG.AVISO_FALHA('L-PERDEU', '2027-01-31'));
+    assert.strictEqual(await fisico(m), 10);
+  });
+
   await test('[RN-190.09] o estorno nao desfaz a validade preenchida', async () => {
     const m = await material();
     await loteComSaldo(m, 'L-EST', 6);
