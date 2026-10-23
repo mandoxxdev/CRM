@@ -128,11 +128,16 @@ export const ENTITY_CONFIGS = {
         type: 'select',
         // "— nenhum —" tem value '', que o handleSave troca por null: e assim que se desfaz o vinculo (F2-4).
         placeholder: '— nenhum —',
-        options: (aux.usuarios || []).map((u) => {
-          const outro = u.motorista && u.motorista.id !== aux.editing?.id;
-          const email = u.email ? ` (${u.email})` : '';
-          return { value: u.id, label: `${u.nome}${email}${outro ? ` (ligado a ${u.motorista.nome})` : ''}` };
-        }),
+        // Fase5-10: o usuario DESATIVADO que segue ligado vem do servidor com `ativo: false` — aparece so no form do motorista
+        // que o tem (rotulado), senao o select mostrava "— nenhum —" com o id guardado e todo salvar dava 400.
+        options: (aux.usuarios || [])
+          .filter((u) => u.ativo !== false || String(u.id) === String(form?.usuario_id ?? ''))
+          .map((u) => {
+            const outro = u.motorista && u.motorista.id !== aux.editing?.id;
+            const email = u.email ? ` (${u.email})` : '';
+            const inativo = u.ativo === false ? ' (inativo)' : '';
+            return { value: u.id, label: `${u.nome}${email}${outro ? ` (ligado a ${u.motorista.nome})` : ''}${inativo}` };
+          }),
       },
       { key: 'observacoes', label: 'Observações', type: 'textarea', full: true },
     ],

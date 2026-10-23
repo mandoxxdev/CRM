@@ -183,7 +183,10 @@ const PainelDoGestor = () => {
                   <div>
                     <div className="frotas-alert-title">{a.titulo}</div>
                     <div className="frotas-alert-desc">{a.descricao}</div>
-                    {a.dias_restantes != null && (
+                    {/* Fase5-11: checklist com pendencia nao vence — mostra a data do registro */}
+                    {a.tipo === 'checklist' ? (
+                      a.data && <div className="frotas-alert-desc">Registrado em {a.data.split('-').reverse().join('/')}</div>
+                    ) : a.dias_restantes != null && (
                       <div className="frotas-alert-desc">
                         {a.dias_restantes < 0 ? `Vencido há ${Math.abs(a.dias_restantes)} dia(s)` : `${a.dias_restantes} dia(s) restantes`}
                       </div>
