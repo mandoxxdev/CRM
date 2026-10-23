@@ -31,7 +31,7 @@ Telas: **`/frota/motorista`** ("Meu painel" para o motorista; "Portal do motoris
 | RN-F1.07 | km do retorno menor que o da saída → 400 (portal e `PUT /viagens`, A5) | [x] | `80362b54`, `45bf32de` |
 | RN-F1.08 | Registros e abastecimento sobem o km do veículo se maior | [x] | `45bf32de` |
 | RN-F1.09 | Inspeção grava só o registro | [x] | `45bf32de` |
-| RN-F1.10 | PENDÊNCIA vira alerta `checklist`/`alto` no painel por 7 dias, `dias_restantes: null` (Fase5-11) | [x] | `45bf32de`, `c8794fd7`, `e4183f70` |
+| RN-F1.10 | PENDÊNCIA vira alerta `checklist`/`alto` no painel por 7 dias, `dias_restantes: null` (Fase5-11). **Mudou na Etapa 6 (RN-F6.04, feature [18](../18-tratar-pendencia/README.md)):** "por 7 dias" deixou de valer — o alerta fica até o gestor tratar a pendência, e veículo excluído não gera alerta. O teste foi reescrito em `492a0d87` | [x] | `45bf32de`, `c8794fd7`, `e4183f70` |
 | RN-F1.11 | km/L pelo anterior **em km**; `km_desde_anterior`; recálculo do vizinho ao criar/editar/excluir (A1, A2) | [x] | `80362b54` |
 | RN-F1.12 | Usuário ↔ motorista, um ativo por usuário; índice único parcial (Fase5-9); desvincular com null (F2-4) | [x] | `6dd0b130`, `9007353e` |
 | RN-F1.13 | Sem vínculo → 409 `MOTORISTA_NAO_VINCULADO` | [x] | `6dd0b130`, `45bf32de` |

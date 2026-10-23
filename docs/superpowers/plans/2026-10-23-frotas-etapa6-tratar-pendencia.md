@@ -1,6 +1,6 @@
 # Frota — Etapa 6: tratar a pendência do registro
 
-> **Status:** em execução (2026-10-23) — Fase 2 feita (ajustes no fim do plano); T1 em andamento.
+> **Status:** **etapa fechada em 2026-10-23** — T1..T3 feitas, Fase 5 corrigida (`260cee25`, `8fa7ece2`). **O módulo está pronto para uso**: não há etapa grande seguinte; o que sobra depende do André ou é pequeno ("Próxima tarefa detalhada", no fim).
 > **Origem:** "Próxima tarefa detalhada" do [plano da Etapa 5](2026-10-23-frotas-etapa5-fotos.md) (B60).
 > **Spec:** `specs/modulo-frotas/18-tratar-pendencia/README.md` (criada no fechamento) e o mapa
 > [`specs/modulo-frotas/README.md`](../../../specs/modulo-frotas/README.md) (features 06, 09).
@@ -125,10 +125,10 @@ Cada task: TDD com controle positivo (sabotar e ver cair **a asserção certa**)
 
 | Task | Estado | Commit |
 |---|---|---|
-| Plano + Fase 2 | pendente | |
-| T1 | pendente | |
-| T2 | pendente | |
-| T3 | pendente | |
+| Plano + Fase 2 | feito — 3 travas + 9 menores (tabela abaixo) | 492a0d87 (o plano entrou com a T1) |
+| T1 | feito — `frotasPendencia` 21/21; `frotasPortal` RN-F1.10 reescrito (8 dias **continua**) e cabeçalho do `frotasExportacao`; 21 sabotagens, todas derrubaram a asserção que as nomeia (S8 e Sordem refeitas à mão: o harness com quebra de linha no texto de troca quebrava a sintaxe e não sabotava). `npm run test:api` logo depois: **556/556** | 492a0d87 |
+| T2 | feito (subagente, em paralelo com T1 contra o contrato) — `FrotasPendencia` 20/20; Frota na tela 13 suítes 166/166; tela inteira 199 suítes 2707/2707; build limpo; 16 sabotagens, todas caíram | 0d8b6691 |
+| T3 | feito — pela rota e pelo serviço, 2/2; 4 sabotagens, todas caíram | 7e1f7f2a |
 
 ## Ajustes da Fase 2 (revisor fresco: 3 travas + 9 menores — **valem sobre o texto acima**)
 
@@ -146,3 +146,78 @@ Cada task: TDD com controle positivo (sabotar e ver cair **a asserção certa**)
 | 10 classe CSS | `frotas-badge-situacao-tratada` (gestor) e `situacao-tratada` (portal) |
 | 11 dia e hora do mesmo `agora` | já assim (`instanteLocal(agora)`), com teste do relógio de Brasília |
 | 12 "7 dias" escrito em specs e docs | corrigir no fechamento **dizendo que mudou** (13-portal RN-F1.10, mapa linha 09, manual, guia, referência, novidades) |
+
+## Fase 5 — revisão adversarial (dois revisores frescos em paralelo; achados só reproduzidos)
+
+Revisor 1 — regras e autorização contra o **servidor real** (`server/index.js`, porta 5931, pasta de dados vazia, `RATE_LIMIT_MAX` alto,
+admin semeado; node morto e pasta apagada no fim): 6 usuários criados pelo HTTP (motoristas vinculados, Consulta pela rota de perfis, sem
+vínculo, sem módulo, gestor2), perfis nas duas rotas (403/401, perfil trocado no meio com o mesmo token), corpos tortos, 1000/1001
+caracteres com acento e emoji, `manutencao_id` em 28 formas, 15 ids tortos, corridas (20 tratar em paralelo × 5 rodadas; tratar×desfazer
+30; tratar×excluir registro 20; tratar×excluir manutenção 20), painel com cache martelado por dois usuários durante o tratar (25 rodadas,
+0 falhas), alerta (8/60 dias, OK/INCOMPLETO, veículo excluído), escopo de leitura, planilha (fórmula injetada sai como texto). Revisor 2 —
+tela × servidor: literais letra a letra, formatos reais pelo harness × o que a tela lê, cada erro até o toast, depois do 200, perfis,
+janela (duplo clique, Cancelar no envio, reabrir), Desfazer, outros consumidores do gancho, "os testes pegariam a feature quebrada?".
+
+| Achado | O que era | Correção | Estado | Commit |
+|---|---|---|---|---|
+| Fase5-1 (real; o revisor 1 classificou como informação) | o painel corta em 15 e as pendências vinham da mais nova para a mais antiga: com mais de 15 alertas, a falha **mais atrasada** sumia do painel — o que a etapa quis acabar | pendências da mais antiga para a mais nova (a ordenação por severidade é estável) — **B70** | corrigido | 8fa7ece2 |
+| Fase5-2 (real, revisor 1) | `tratamento: "​"` (só espaço de largura zero) gravava um tratamento invisível | invisíveis contam como vazio → `Descreva o que foi feito` | corrigido | 8fa7ece2 |
+| Fase5-3 (real, revisor 2) | depois de 409 (outra tela já tratou/desfez) ou 404 (registro excluído), a janela ficava aberta e a lista/painel velhos, com o botão; cada nova tentativa dava o mesmo 409 | fecha, limpa o cache do painel e recarrega; erro de rede mantém a janela aberta — **B71** | corrigido | 260cee25 |
+| Fase5-4 (real, revisor 2) | **Desfazer tratamento** seguia ligado durante o DELETE: o 2º clique confirmado mandava outro (sucesso e erro juntos) | desligado enquanto corre | corrigido | 260cee25 |
+| Fase5-5 (informação, os dois) | a B63 dizia que o motorista "não vê quem tratou", mas o nome (e os ids) chegam a ele pela API e pela lista Checklist aberta pelo endereço | mantido (o nome do gestor não é segredo); **a B63 foi reescrita dizendo que estava forte demais** | declarado | — |
+| Fase5-6 (informação, revisor 1) | o limite de 1000 conta unidades UTF-16 (emoji vale 2) | mantido: a tela (`maxLength`) conta igual — **E21** | declarado | — |
+| Ruído (revisor 2) | dois `submit` no mesmo tique mandam dois POST | não acontece com clique de verdade (1 POST); o servidor recusaria o 2º com 409 | — | — |
+
+## Fechamento (2026-10-23)
+
+### Divergências do plano
+
+| Onde | O plano dizia | O que foi feito | Por quê |
+|---|---|---|---|
+| Alerta | ordem igual à de antes | pendência mais antiga primeiro | Fase5-1 |
+| RN-F6.02 | "vazio ou só espaços" | também só invisíveis (largura zero, BOM) | Fase5-2 |
+| Tela | 409/404 só com toast | fecha e recarrega | Fase5-3 |
+| Tela | texto vazio → mensagem do servidor | botão **Marcar como tratada** desligado com o texto vazio (B69) | escolha do executor da T2 (o plano não fixava) |
+| B63 | "não vê quem tratou" | o nome chega a ele | Fase5-5 — a frase estava forte demais |
+| Harness de sabotagem | — | o script do scratchpad com quebra de linha no texto de troca escrevia `\n` literal e quebrava a sintaxe (o arquivo nem rodava, e o placar ficava **vazio**, não vermelho) — S8 e Sordem refeitas à mão | percebido porque a saída veio vazia, sem "Resultado"; texto de troca com quebra de linha vai por `perl -0pi -e` direto |
+| T1 (execução) | — | uma troca por `perl` sem âncora contada casou a **primeira** ocorrência (`listAbastecimentos`) e apagou o `const esc` de lá: 8 arquivos `frotas*` caíram; corrigido antes do commit | a regra "conte a âncora" vale também para edição, não só para sabotagem |
+
+### Verificação final (medida, rodada sozinha, sem revisores com servidor)
+
+`npm run test:api` **557/557 arquivos OK** (na ponta `8fa7ece2`; logo depois da T1, `492a0d87`: 556/556); `test:almoxarifado` **44/44**; `test:validation` **4/4**; `test:safealter` **3/3**; `test:sqlite` **16/16**; tela **199 suítes, 2711/2711 testes**; `build` com `CI=true` **"Compiled successfully."**. Frota no servidor: 19 arquivos `frotas*`, **197 passaram, 0 falharam**; Frota na tela: 13 suítes, **170/170**.
+
+### Retro (4 números)
+
+| Medida | Valor |
+|---|---|
+| Rodadas de correção | **1** fix-round da Fase 5 (`260cee25` tela, `8fa7ece2` servidor); nenhum teste falhou em 3 rodadas |
+| Achados da revisão | Fase 2 (plano): **3 travas + 9 menores** (a T-1, corrida do cache, passaria em todos os testes de unidade); Fase 5 (código): **4 reais** (Fase5-1..4) + **2 de informação declarados** + **1 ruído**; **0** de segurança contra o servidor real |
+| Paralelismo | T2 (tela) num subagente em paralelo com T1/T3 (servidor), contra o contrato congelado — **sem retrabalho**; os dois revisores da Fase 5 em paralelo |
+| Defeito que escapou | Da Etapa 5: nenhum descoberto nesta etapa (fotos reconferidas na integração). Da Etapa 6: (preencher se houver próxima) |
+
+## Próxima tarefa detalhada — não há etapa grande: o módulo está pronto para uso (B72)
+
+**Por quê.** Com a Etapa 6, o ciclo que o objetivo do módulo pedia está fechado: o motorista loga e registra (Etapa 1), o gestor dá
+Consulta a quem só acompanha (2), km e horímetro são confiáveis (3), os relatórios batem com a planilha (4), a avaria tem foto (5) e a
+pendência tem fim (6). Medido no mapa (`specs/modulo-frotas/README.md`): as features 01–18 estão todas 🟢. **Não inventar etapa grande.**
+
+**Depende do André (não começar sem ele):**
+1. **Cadastro inicial dos 4 veículos** (V01, V02, V03, C01): a planilha `docs/frotas/Controle_de_Frota_GMP.xlsx` só tem o tipo. Com placa,
+   marca/modelo, ano, km (ou horímetro) e tipo, é cadastro pela tela **Frota → Veículos** — não é etapa.
+2. **Seção 3 do formulário** ("Transmissão e itens específicos"): a imagem `exemplo_formulario_motorista.jpeg` termina no título. Com a
+   folha inteira, a etapa seria: itens novos em `ITENS_CHECKLIST` (`schema.js`; atenção à régua `situacaoDoRegistro` e às colunas por item
+   da aba Checklist da planilha — colunas novas **no fim**, B41) e no formulário do portal.
+3. **Alerta de consumo da máquina** (D12): precisa do "consumo esperado em L/h" por máquina. Contrato provável: campo novo no cadastro do
+   veículo, ramo no `getAlertas` comparando com `litrosPorHora` (Etapa 4) dos últimos 60 dias.
+
+**Backlog pequeno (cada um cabe num dia, sem etapa própria):**
+- **D14 — o gestor remover foto pela lista**: o servidor já aceita (`DELETE /api/frotas/anexos/:id`, `registrar_operacoes`); falta botão na
+  `ColunaFotos` (`client/src/components/frotas/FotosFrota.js`), que mostra só a 1ª miniatura (B58). O gancho `AcoesDaLinha` desta etapa
+  não serve direto (é por linha, não por foto).
+- **B36/D10 — a pergunta do km menor nas telas do gestor**: só o portal pergunta (`KM_MENOR_QUE_ATUAL`, Etapa 3); as rotas do gestor
+  gravam qualquer km — o escritório lança atrasado de propósito (por isso ficou fora).
+- **C5 — a tela antiga "Novo Checklist"** (7 itens sim/não, sem avarias): tirar o botão (o portal é o caminho completo) ou trocar pelos 12
+  itens. Decisão do André.
+
+**Antes de apresentar (não é código):** percorrer os roteiros do guia clicando (E2, E4, E9, E14, E16, E20) e rodar as consultas A1–A8 em
+produção.

@@ -9,7 +9,7 @@ O módulo tem três perfis. O perfil decide o que a pessoa vê e o que ela pode 
 
 | Perfil | Vê | Grava |
 |---|---|---|
-| **Administrador de Frota** (o gestor) | Tudo: painel, alertas, relatórios, todos os cadastros e lançamentos | Tudo: veículos, motoristas, manutenções, abastecimentos, viagens, checklists, multas, documentos; aprova e cancela viagem; exclui; exporta a planilha |
+| **Administrador de Frota** (o gestor) | Tudo: painel, alertas, relatórios, todos os cadastros e lançamentos | Tudo: veículos, motoristas, manutenções, abastecimentos, viagens, checklists, multas, documentos; aprova e cancela viagem; trata a pendência dos registros; exclui; exporta a planilha |
 | **Motorista** | Só o que é **dele**: os próprios registros, abastecimentos, viagens e multas; no cadastro de motoristas, só ele mesmo | Pelo **Meu painel**: saída, retorno, inspeção e abastecimento, sempre em nome dele, com até 3 fotos em cada; manda e remove foto só dos lançamentos dele |
 | **Consulta** | Painel, alertas, relatórios e todas as telas de cadastro e lançamento, só para ler (inclusive CPF e CNH dos motoristas e os valores, e as fotos de todos) | Nada (só exporta a planilha). As telas aparecem sem os botões de novo, editar, aprovar e excluir |
 
@@ -188,6 +188,9 @@ mensagem do servidor ou *"Não foi possível enviar a foto. Confira a internet e
 **Remover foto** embaixo dela e confirme *"Remover esta foto?"* → *"Foto removida"* (sem internet: *"Não foi possível remover a foto.
 Confira a internet e tente de novo."*). As fotos são a única coisa que você mexe aqui: para corrigir um lançamento, fale com o gestor.
 
+Quando o gestor resolve uma pendência sua, o registro passa a mostrar a etiqueta **PENDÊNCIA · tratada** e, embaixo, *"Tratada em
+(dia) às (hora): (o que foi feito)"*.
+
 O endereço de cada foto vale por cerca de **2 horas**: se a tela ficou aberta mais que isso, a miniatura não abre — saia e entre de
 novo no painel (ou recarregue a página).
 
@@ -262,12 +265,14 @@ Os alertas, do mais grave para o menos (aparecem até 15):
 | CNH | CNH de motorista ativo vencendo em até 30 dias, ou vencida | crítico se vencida; alto |
 | Manutenção | Próxima revisão em até 15 dias pela data, ou faltando 500 km ou menos pelo km. Na máquina por horímetro, a "próxima revisão (KM)" é lida em **horas** e comparada com o horímetro: avisa faltando 50 h ou menos | crítico se passou; médio |
 | Multa pendente | Multa pendente vencendo em até 15 dias | alto |
-| **Checklist com pendência** | Saída, retorno ou inspeção com situação **PENDÊNCIA**, com data de hoje até 7 dias atrás | alto |
+| **Checklist com pendência** | Saída, retorno ou inspeção com situação **PENDÊNCIA** que o gestor ainda **não tratou**, de veículo ativo (não importa a data do registro) | alto |
 | Consumo baixo | Média de km/L dos últimos 60 dias abaixo de 70% do consumo esperado do veículo. Só em km/L: a máquina por horímetro (L/h) não tem este alerta | médio |
 
 O alerta de checklist diz *"Checklist com pendência — (placa)"* e, embaixo, o que falhou e quem registrou — por exemplo
-*"Falha: Pneus e estepe · Ana Teste"*, ou *"1 avaria(s) · Ana Teste"* — e "Registrado em (data)". Ele some sozinho depois de 7 dias;
-não é preciso fechar.
+*"Falha: Pneus e estepe · Ana Teste"*, ou *"1 avaria(s) · Ana Teste"* — e "Registrado em (data)". Ele **fica no painel até o gestor tratar** a pendência (veja 3.4, **Tratar a pendência**); excluir o
+veículo também o tira. O painel mostra só os 15 alertas mais graves (entre as pendências, as **mais antigas primeiro**): com muitos alertas abertos, a lista
+**Checklist Diário** é o lugar de ver todas as pendências. Para o Administrador de Frota, o alerta tem o botão **Tratar pendência**, que abre a mesma janela da lista;
+ao marcar, o painel recarrega e o alerta some. O Consulta vê o alerta, sem o botão.
 
 ### 3.4 As telas de cadastro e lançamento
 
@@ -279,7 +284,7 @@ está como **Consulta**, esses botões (e o de aprovar viagem) não aparecem: a 
 | **Manutenções** | Preventiva/corretiva, oficina, custo, km, próxima revisão (km e data). Criada como **em andamento**, põe o veículo em manutenção (que bloqueia a saída no portal) |
 | **Abastecimentos** | Mostra os lançados pelo portal e pelo escritório, com **Km/L** (na máquina, o consumo em litros por hora, ex.: "5,00 L/h"; se a linha tem km e horímetro, os dois: "10,50 km/L · 5,00 L/h"). Editar litros ou valor refaz o preço por litro. Para máquina por horímetro, use **Horímetro no abastecimento (máquina)** e deixe o KM vazio: a coluna KM mostra as horas ("125 h") e a linha fica sem km/L. O escritório pode lançar km menor que o do veículo (lançamento atrasado) sem pergunta. A coluna **Fotos** mostra a foto do cupom que o motorista mandou pelo portal |
 | **Viagens** | Saída/retorno, km, origem, destino, finalidade, status. O botão **Aprovar** (✓) aparece só em viagem **solicitada**. Para máquina por horímetro: **Horímetro saída (máquina)** e **Horímetro retorno (máquina)**; a coluna KM rodado mostra as horas usadas ("6,5 h") |
-| **Checklist Diário** | Lista todos os registros (Data, Placa, **Tipo**: Saída/Retorno/Inspeção, Motorista, **KM**, **Situação**, Observações, **Fotos**). O **Novo Checklist** daqui é o formulário simples de 7 itens sim/não (pneus, óleo, luzes, freios, extintor, documentos, limpeza), sem avarias. Não edita |
+| **Checklist Diário** | Lista todos os registros (Data, Placa, **Tipo**: Saída/Retorno/Inspeção, Motorista, **KM**, **Situação**, Observações, **Fotos**). O **Novo Checklist** daqui é o formulário simples de 7 itens sim/não (pneus, óleo, luzes, freios, extintor, documentos, limpeza), sem avarias. Não edita. Na linha com **PENDÊNCIA**, o gestor tem **Tratar pendência** (veja abaixo) |
 | **Multas**, **Documentos** | Só o gestor lança e altera |
 
 **Fotos nas listas.** Em **Checklist Diário** e **Abastecimentos**, a coluna **Fotos** mostra a **primeira** foto do lançamento em
@@ -287,6 +292,33 @@ miniatura e, se houver mais, *"+1"* ou *"+2"* (link para a seguinte); sem foto, 
 **Consulta** vê as fotos de todos; o motorista, só as dele. O endereço da foto vale por cerca de 2 horas: com a lista aberta há mais
 tempo, recarregue a página. **Excluir** um registro ou abastecimento apaga também as fotos dele. Esta tela não remove uma foto sozinha:
 para isso, o motorista usa **Remover foto** em **Meus registros**. A planilha e os relatórios não levam as fotos.
+
+**Tratar a pendência.** Quando o motorista marca **Falha** num item ou uma avaria, o registro fica **PENDÊNCIA** e vira alerta no
+painel. Depois de resolver (consertar, conferir, decidir que não é nada), o Administrador de Frota toca **Tratar pendência** na linha
+do registro em **Checklist Diário** (ou no alerta do painel). Abre a janela *"Tratar pendência — (placa)"* com:
+
+- **O que foi feito *** — obrigatório, até 1.000 caracteres (ex.: "Pastilhas de freio trocadas na oficina do João");
+- **Manutenção (opcional)** — as manutenções lançadas para **o mesmo veículo** (*"— nenhuma —"* se não quiser ligar). Abra a
+  manutenção do conserto antes, em **Manutenções**, se quiser ligá-la.
+
+**Marcar como tratada** → *"Pendência tratada"*. A partir daí o alerta sai do painel, e a linha mostra a etiqueta **PENDÊNCIA ·
+tratada** e embaixo *"Tratada em (dia) às (hora) por (nome): (o que foi feito)"* — com *"(manutenção: …)"* no fim quando houver
+uma ligada (se a manutenção for excluída depois, esse trecho some). A situação continua **PENDÊNCIA**, porque é o que o motorista viu;
+"tratada" é uma marca à parte. O motorista vê o mesmo texto (sem a manutenção) em **Meus registros**.
+
+Marcou o registro errado? **Desfazer tratamento** na mesma linha, confirmando *"Desfazer o tratamento desta pendência? O alerta volta
+para o painel."* → *"Tratamento desfeito"*; o alerta volta. Só o Administrador de Frota trata e desfaz; o Consulta vê a etiqueta e o
+texto, sem os botões. Registro com situação OK ou INCOMPLETO não tem o botão.
+
+| Situação | Mensagem |
+|---|---|
+| Texto vazio (ou só espaços) | O botão **Marcar como tratada** fica apagado; por chamada direta, *"Descreva o que foi feito"* |
+| Texto com mais de 1.000 caracteres | *"O texto passou de 1000 caracteres"* |
+| Outra pessoa já tratou (duas telas abertas ao mesmo tempo) | *"Esta pendência já foi tratada"* |
+| O registro foi excluído enquanto a janela estava aberta | *"Registro não encontrado"* |
+| A manutenção escolhida foi excluída no meio | *"Manutenção não encontrada"* |
+| Desfazer o que já foi desfeito (duas telas) | *"Esta pendência não foi tratada"* |
+| Sem internet | *"Não foi possível tratar a pendência."* (ou *"Não foi possível desfazer o tratamento."*) |
 
 Regras das viagens (valem também para o gestor):
 
@@ -338,7 +370,7 @@ Como cada coluna é preenchida:
 - **Itens** (Checklist): Conforme (OK), Não conforme (Falha), N/A, ou vazio se não respondido. No checklist simples do gestor, só os
   5 itens que existem nos dois formulários são preenchidos (pneus, faróis, óleo, freios, documentos). **Avarias**: uma por uma, separadas
   por ponto e vírgula, no formato "Lateral esquerda: risco — descrição" (os lados saem como Lateral esquerda, Lateral direita,
-  Superior, Frente, Traseira; os tipos em minúsculas: risco, amassado, trinca, quebrado, outro). **Status Geral**: OK, PENDÊNCIA ou INCOMPLETO (régua da seção 2.7).
+  Superior, Frente, Traseira; os tipos em minúsculas: risco, amassado, trinca, quebrado, outro). **Status Geral**: OK, PENDÊNCIA ou INCOMPLETO (régua da seção 2.7). No fim da aba, **Pendência tratada em** (dia e hora, ex.: 2026-10-23 14:05), **Tratada por** e **O que foi feito** — vazias no registro que não foi tratado.
 - **Manutenções**: Status Planejada (agendada), Em andamento, Concluída; Fornecedor = oficina.
 - **Multas**: **Data** é a data da infração (vazia se não foi preenchida); **Status** Pendente, Pago ou Contestado — a contestada
   aparece aqui, mas não soma no custo da tela de Relatórios. **Horas desde Abastec. Anterior** e **Consumo L/h** (Abastecimentos):
@@ -470,3 +502,4 @@ no Frota**, **O que isso permite** e **Motorista ligado** (o motorista cujo cada
 | Motorista recebe "KM menor que o atual do veículo (…)" sem ter errado | Alguém registrou um km maior antes (às vezes um erro de digitação para cima). Se o número do painel está certo, ele toca **Confirmar mesmo assim**. Se o km do veículo está errado, o gestor corrige o **KM Atual** em **Veículos** |
 | Empilhadeira (ou outra máquina) aparece com km no lugar das horas | No cadastro do veículo, **Medição** = **Horímetro** e o **Horímetro Atual** certo; a partir daí o portal pede as horas |
 | Motorista lançou errado | Ele não corrige pelo portal; o gestor edita na tela correspondente (Abastecimentos, Viagens) |
+| O alerta "Checklist com pendência" continua no painel depois do conserto | Ele só sai quando alguém trata: **Checklist Diário** (ou o próprio alerta) → **Tratar pendência** → descrever o que foi feito → **Marcar como tratada** |

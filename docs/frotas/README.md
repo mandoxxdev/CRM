@@ -1,10 +1,12 @@
 # Módulo Frota — guia do que existe hoje
 
-> **Onde paramos:** **Etapa 5 — foto da avaria e do cupom — entregue em 2026-10-23** (na `main`, commits `786d1ec5` a `ab234a44`, com a
-> Fase 5, mais o fechamento). O motorista tira até 3 fotos pelo celular na Saída, no Retorno, na Inspeção e no Abastecimento; vê, reenvia e
-> remove em Meus registros; o gestor e o Consulta veem a miniatura nas listas Checklist e Abastecimentos. Antes, no mesmo dia: Etapa 4
+> **Onde paramos:** **Etapa 6 — tratar a pendência do registro — entregue em 2026-10-23** (na `main`, commits `492a0d87` a `8fa7ece2`, com a
+> Fase 5, mais o fechamento). O gestor marca a falha ou avaria como **tratada** (o que foi feito, e a manutenção se houver) na lista
+> Checklist ou no próprio alerta; o alerta sai do painel na hora e não some mais sozinho; o motorista vê em Meus registros.
+> **O módulo está pronto para uso**; os próximos passos dependem do André (placas/modelos/km dos 4 veículos; folha inteira do formulário) ou
+> são pequenos — ver "Próximo passo" no [mapa](../../specs/modulo-frotas/README.md). Antes, no mesmo dia: Etapa 5 (foto da avaria e do cupom). O motorista tira até 3 fotos pelo celular na Saída, no Retorno, na Inspeção e no Abastecimento; vê, reenvia e
+> remove em Meus registros; o gestor e o Consulta veem a miniatura nas listas Checklist e Abastecimentos. E antes: Etapa 4
 > (relatórios fechados), Etapa 3 (km e horímetro no portal), Etapa 2 (perfil Consulta/Motorista pela tela) e Etapa 1 (portal do motorista).
-> **Próxima:** Etapa 6 — tratar a pendência do registro; ver "Próxima tarefa detalhada" no fim do [plano da Etapa 5](../superpowers/plans/2026-10-23-frotas-etapa5-fotos.md).
 > O módulo ainda **não foi usado em produção**.
 >
 > Apresentação da etapa (com os cenários e as decisões): [`novidades-por-etapa.md`](novidades-por-etapa.md) ·
@@ -77,7 +79,7 @@ formulário, e na linha os botões **editar** (lápis) e **excluir** (lixeira). 
 | **Abastecimentos** | Veículo, motorista, data, litros, valor, km (ou **horímetro**, na máquina), combustível, posto. O sistema sobe o km (ou o horímetro) do veículo e calcula o **km por litro** (carro) ou os **litros por hora** (máquina) | Sim |
 | **Manutenções** | Preventiva ou corretiva, oficina, custo, peças, km, **próxima revisão**. "Em andamento" põe o veículo em manutenção | Sim |
 | **Viagens** | Saída e retorno, km (ou **horímetro**, na máquina), **origem**, destino, finalidade, setor, status. O botão **Aprovar** aparece só em viagem **solicitada** | Sim |
-| **Checklist Diário** | Lista tudo o que o motorista registrou (colunas **Tipo**, **KM**, **Situação**) e o "Novo Checklist" antigo do gestor (7 itens) | Sim. Não edita |
+| **Checklist Diário** | Lista tudo o que o motorista registrou (colunas **Tipo**, **KM**, **Situação**) e o "Novo Checklist" antigo do gestor (7 itens). Na linha com **PENDÊNCIA**, **Tratar pendência** (o que foi feito, e a manutenção se houver); tratada, **PENDÊNCIA · tratada** e **Desfazer tratamento** | Sim. Não edita |
 | **Multas** | Data, infração, valor, pontos, vencimento, pago/pendente/contestado | Sim |
 | **Documentos** | IPVA, licenciamento, seguro, CRLV, rastreador — com vencimento e "avisar X dias antes" | Sim |
 | **Relatórios** | Custo por veículo e consumo (km/L do carro, **litros por hora** da máquina) no **mesmo período** (uma data ou duas), com o período aplicado escrito, linha **Total**, **Imprimir** e **Exportar planilha** (mesmo período, com a aba **Multas**) | Sim |
@@ -92,14 +94,15 @@ formulário, e na linha os botões **editar** (lápis) e **excluir** (lixeira). 
 - Revisão chegando: até 15 dias pela data, ou faltando 500 km pelo km (na máquina por horímetro, faltando 50 horas pelo horímetro).
 - Multa pendente vencendo em até 15 dias.
 - **Consumo baixo**: o km/L dos últimos 60 dias ficou abaixo de 70% do esperado para o veículo (só carro; a máquina não tem este aviso).
-- **Checklist com pendência** (novo): saída, retorno ou inspeção com alguma **Falha** ou avaria, nos últimos 7 dias. Mostra o que
-  falhou, quem registrou e "Registrado em DD/MM/AAAA".
+- **Checklist com pendência**: saída, retorno ou inspeção com alguma **Falha** ou avaria que o gestor **ainda não tratou** (de veículo
+  ativo). Mostra o que falhou, quem registrou e "Registrado em DD/MM/AAAA"; o gestor tem o botão **Tratar pendência** ali mesmo. *Até a
+  Etapa 5 dizia "nos últimos 7 dias" — o alerta sumia sozinho; desde a Etapa 6 fica até ser tratado.*
 
 ## Quem pode o quê
 
 | Perfil | O que faz |
 |---|---|
-| **Administrador de Frota** | Tudo: cadastra veículo e motorista, liga motorista ao usuário, aprova e cancela viagem, lança multa e documento, vê painel e relatório, exporta, exclui |
+| **Administrador de Frota** | Tudo: cadastra veículo e motorista, liga motorista ao usuário, aprova e cancela viagem, lança multa e documento, **trata a pendência** dos registros, vê painel e relatório, exporta, exclui |
 | **Motorista** | Só o que é **dele**: saída, retorno, inspeção e abastecimento pelo portal; vê só os próprios registros, viagens, abastecimentos e multas. **Não** vê o painel nem relatório, **não** vê CPF/CNH dos colegas, **não** lança multa nem documento, **não** aprova viagem |
 | **Consulta** | Vê painel, alertas, as listas (inclusive CPF/CNH dos motoristas) e relatório, e exporta a planilha. Não lança, não edita, não aprova, não exclui — os botões nem aparecem |
 
@@ -294,7 +297,34 @@ lugar da câmera) e uma foto qualquer em JPEG, mais um arquivo que não é foto 
 11. **O link vence.** Um link de foto copiado vale por cerca de 2 horas; depois disso abre em branco (404). Recarregar a lista gera
     links novos.
 
-## O que as Etapas 1 a 5 **não** cobrem
+## Roteiro de teste manual (tratar a pendência)
+
+Preparação: como administrador, o carro *AAA1A11*; a motorista *Ana* ligada a um usuário (**Frota → Motoristas**, **Usuário de
+acesso**); um usuário com perfil **Consulta** (**Frota → Perfis de acesso**). Em **Manutenções**, lance *"Troca das pastilhas"* para
+*AAA1A11* (corretiva).
+
+1. **Nasce a pendência.** Entre como *Ana* → **Meu painel** → **Inspeção**, *AAA1A11*, KM, os 12 itens com **Freios** em **Falha** →
+   **Salvar**. Em **Meus registros**, a etiqueta **PENDÊNCIA**.
+2. **O alerta.** Como administrador, **Frota → Dashboard Frota**: *"Checklist com pendência — AAA1A11"*, *"Falha: Freios / freio de
+   estacionamento · Ana"*, e o botão **Tratar pendência**.
+3. **O Consulta não trata.** Entre como **Consulta**: o mesmo alerta, **sem** o botão. Em **Checklist Diário**, sem a coluna de ações.
+4. **A janela.** De volta como administrador, toque **Tratar pendência** no alerta: abre *"Tratar pendência — AAA1A11"*. Com o campo
+   **O que foi feito \*** vazio, **Marcar como tratada** fica apagado. Em **Manutenção (opcional)** aparecem *"— nenhuma —"* e a
+   manutenção *"(data) · Troca das pastilhas"* — só as do *AAA1A11*.
+5. **Tratar.** Escreva *"Pastilhas trocadas"*, escolha a manutenção → **Marcar como tratada** → *"Pendência tratada"*. O painel
+   recarrega e o alerta não está mais lá.
+6. **A marca na lista.** **Frota → Checklist Diário**: a inspeção mostra **PENDÊNCIA · tratada** e *"Tratada em (dia) às (hora) por
+   (seu nome): Pastilhas trocadas (manutenção: Troca das pastilhas)"*, com o botão **Desfazer tratamento**. Uma linha **OK** não tem
+   botão de tratar.
+7. **A motorista vê.** Como *Ana*, **Meus registros**: **PENDÊNCIA · tratada** e *"Tratada em (dia) às (hora): Pastilhas trocadas"*.
+8. **Duas abas.** Como administrador, faça outra inspeção com falha (passo 1) e abra **Checklist Diário** em duas abas. Trate na
+   primeira; na segunda, sem recarregar, tente tratar → *"Esta pendência já foi tratada"*.
+9. **Desfazer.** **Desfazer tratamento** → confirme *"Desfazer o tratamento desta pendência? O alerta volta para o painel."* →
+   *"Tratamento desfeito"*. No **Dashboard Frota**, o alerta voltou.
+10. **A planilha.** **Exportar planilha** → aba **Checklist**: as últimas colunas **Pendência tratada em**, **Tratada por** e **O que
+    foi feito** preenchidas na inspeção tratada e vazias nas outras.
+
+## O que as Etapas 1 a 6 **não** cobrem
 
 - Dar **Administrador de Frota** pela tela de Perfis (continua no cadastro de usuário); saber **quem** mudou um perfil; lembrar o
   Consulta de quem foi administrador e deixou de ser.
@@ -304,3 +334,5 @@ lugar da câmera) e uma foto qualquer em JPEG, mais um arquivo que não é foto 
   planilha e os relatórios não levam foto.
 - A **pergunta do km menor nas telas do gestor**; o **alerta de consumo baixo** da máquina (só existe em km/L); apelido **V01/C01**.
 - O motorista **corrigir** o que lançou pelo portal (a correção é com o gestor).
+- **Pendência:** tratar cada falha separadamente (o tratamento é do registro inteiro); histórico de tratamentos (fica só o último); avisar o
+  motorista quando a pendência dele é tratada (ele vê em Meus registros).

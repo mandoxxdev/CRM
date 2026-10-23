@@ -4,10 +4,10 @@
 > Para quem **usa** o sistema (sem número de etapa nem histórico), o documento é o
 > [`manual-do-sistema.md`](manual-do-sistema.md). Guia com roteiro de teste: [`README.md`](README.md).
 >
-> **Onde estamos:** **Etapa 5 (foto da avaria e do cupom) entregue** em 2026-10-23, na `main` (commits `786d1ec5` a `ab234a44`, mais o
-> fechamento). Antes, no mesmo dia: Etapa 4 (relatórios fechados), Etapa 3 (km e horímetro no portal), Etapa 2 (perfil Consulta/Motorista
-> pela tela) e Etapa 1 (portal do motorista). Próxima: **Etapa 6 — tratar a pendência do registro** (B60; detalhe em "Onde estamos e o
-> que vem a seguir", no fim).
+> **Onde estamos:** **Etapa 6 (tratar a pendência do registro) entregue** em 2026-10-23, na `main` (commits `492a0d87` a `8fa7ece2`, mais o
+> fechamento). **O módulo está pronto para uso**; o que sobra depende do André ou é pequeno (B72; "Onde estamos e o que vem a seguir", no
+> fim). Antes, no mesmo dia: Etapa 5 (foto da avaria e do cupom), Etapa 4 (relatórios fechados), Etapa 3 (km e horímetro no portal), Etapa 2 (perfil Consulta/Motorista
+> pela tela) e Etapa 1 (portal do motorista).
 
 ## ⚠️ Leia antes de apresentar
 
@@ -116,6 +116,19 @@ SELECT id, veiculo_id, data_abastecimento, litros FROM frotas_abastecimentos WHE
 
 - **Nenhuma linha (o esperado):** nada a fazer. **Alguma linha:** corrija os litros em **Frota → Abastecimentos** (ou exclua o lançamento).
 
+**A8 — pendências antigas que vão aparecer no painel (Etapa 6).** Até aqui o alerta de pendência sumia sozinho em 7 dias; agora fica
+até alguém tratar (B61). Esta consulta mostra quantas pendências antigas, nunca tratadas, vão aparecer no painel no primeiro dia.
+
+```sql
+SELECT c.id, c.data_checklist, v.placa FROM frotas_checklists c JOIN frotas_veiculos v ON v.id = c.veiculo_id
+WHERE c.status_geral = 'PENDENCIA' AND v.ativo = 1 AND date(c.data_checklist) < date('now', '-7 days')
+ORDER BY c.data_checklist;
+```
+
+- **Nenhuma linha (o esperado; o módulo não foi usado):** nada a fazer.
+- **Algumas linhas:** depois do deploy, em **Frota → Checklist Diário**, trate cada uma (*"Conferido — já resolvido"*, por exemplo) ou
+  deixe no painel até resolver. Não há tratamento em lote.
+
 ### B — decisões tomadas sem consulta (todas reversíveis). O André arbitra lendo aqui.
 
 | # | Etapa | Escolhido | Descartado | Por quê |
@@ -179,6 +192,18 @@ SELECT id, veiculo_id, data_abastecimento, litros FROM frotas_abastecimentos WHE
 | B58 | F5 (Fase 2) | Na lista do gestor, **só a primeira** foto em miniatura (com *"+1"*/*"+2"* em link) e carregamento sob demanda | as 3 miniaturas | cada miniatura é um pedido ao servidor e o sistema limita 500 pedidos por endereço a cada 15 min — a fábrica inteira sai pelo mesmo endereço. Ver **C18** |
 | B59 | F5 | **Remover foto** existe no **Meus registros** do motorista; o gestor não tem botão (apaga o lançamento ou pede ao motorista) | botão também na lista do gestor | a lista do gestor é a tela genérica de cadastro; mexer nela para um botão por foto ficou para depois (**D14**). O servidor já aceita o gestor remover |
 | B60 | F5 (fechamento) | **Próxima etapa = tratar a pendência do registro**: o gestor marca a falha/avaria como tratada (com o que foi feito), o alerta sai do painel e o motorista vê | cadastro dos 4 veículos e seção 3 do formulário (dependem do André); alerta de consumo da máquina (D12, depende de alguém informar o consumo em L/h); botão de remover foto do gestor (D14, pequeno) | hoje o alerta de pendência **some sozinho em 7 dias**, tratada ou não, e não há onde dizer "consertado": o gestor perde o fio do que já resolveu. Não depende de ninguém e fecha o ciclo da foto (avaria → foto → tratada) |
+| B61 | F6 | A pendência **não tratada fica no painel** até alguém tratar (sem a janela de 7 dias) | manter a janela de 7 dias; janela maior (30 dias) | a janela fazia uma falha de freio sumir sem ninguém ter visto; com o botão de tratar, o painel passa a ser a lista do que falta resolver. No primeiro dia aparecem as pendências antigas não tratadas — consulta **A8**. Voltar a janela é uma linha (`getAlertas`) |
+| B62 | F6 | Tratar é uma **marca à parte**: a situação continua **PENDÊNCIA** | trocar a situação para OK ao tratar | a situação é o que o motorista viu na hora (e a planilha e os relatórios a usam); apagar isso perderia o histórico da falha. A etiqueta vira **PENDÊNCIA · tratada** |
+| B63 | F6 (Fase 2, Fase 5) | O motorista **não recebe a descrição da manutenção** ligada ao tratamento. O **Meus registros** mostra o que foi feito e quando; quem tratou chega para ele pelos dados (e aparece se ele abrir a lista Checklist Diário pelo endereço, que mostra só os registros dele) | mostrar a descrição da manutenção para ele; esconder também quem tratou | ele só vê as manutenções que ele mesmo lançou; a descrição de uma manutenção do gestor seria a única exceção. Quem tratou não é segredo (o nome do gestor). *A primeira versão desta linha dizia "e não quem" — a revisão mostrou que o nome chega a ele; estava forte demais* |
+| B64 | F6 (Fase 2) | A manutenção é **opcional** e só pode ser **do mesmo veículo** — conferido no instante de tratar. Excluída depois, só o trecho *"(manutenção: …)"* some | manutenção obrigatória; travar a exclusão da manutenção ligada | nem toda pendência vira manutenção (às vezes é "conferido, sem defeito"); travar a exclusão mexeria na tela de Manutenções por um detalhe. O texto do tratamento continua |
+| B65 | F6 (Fase 2) | Veículo **excluído** não gera o alerta de pendência (como o de consumo) | manter o alerta do veículo excluído | sem a janela de 7 dias, a pendência de um carro vendido ficaria no painel para sempre. O registro continua na lista Checklist e pode ser tratado lá |
+| B66 | F6 (Fase 2) | Registro de **antes do portal** (sem a situação nova) não tem o botão, mesmo aparecendo PENDÊNCIA na lista | calcular a situação dele na hora | ele nunca gerou o alerta (o alerta só olha a situação nova), então não há o que tirar do painel; o banco não tem nenhum (o módulo não foi usado) |
+| B67 | F6 | **Desfazer** apaga o tratamento; tratar de novo grava por cima — fica **só o último** | histórico de tratamentos (tabela própria) | é o caso "marquei o registro errado"; histórico é tabela e tela a mais por um caso raro. Ver **D17** |
+| B68 | F6 | Só o **Administrador de Frota** trata e desfaz (a mesma permissão de excluir lançamentos) | o motorista marcar "resolvido"; o Consulta tratar | quem decide que o carro está seguro é o gestor; o Consulta só lê (como em todo o módulo) |
+| B69 | F6 (T2) | Com o texto vazio, **Marcar como tratada** fica apagado (o servidor recusa do mesmo jeito: *"Descreva o que foi feito"*) | deixar clicar e mostrar a mensagem do servidor | evita um clique que não faz nada; a mensagem existe para quem chama direto |
+| B70 | F6 (Fase 5) | No painel, entre os alertas de pendência, **a mais antiga vem primeiro** | a mais nova primeiro (como era) | o painel corta em 15: com a mais nova primeiro, a falha mais atrasada era justamente a que sumia do painel |
+| B71 | F6 (Fase 5) | Depois de *"Esta pendência já foi tratada"* ou *"Registro não encontrado"* a janela fecha e a lista (ou o painel) recarrega; com erro de internet, a janela fica aberta | manter a janela aberta sempre | o 409/404 quer dizer que a tela está velha; sem recarregar, o botão continuava lá e cada tentativa dava o mesmo erro |
+| B72 | F6 (fechamento) | **Depois da Etapa 6, o módulo está pronto para uso; não abrir etapa grande nova.** O que sobra depende do André ou é pequeno (backlog no plano da Etapa 6) | inventar uma Etapa 7 de valor baixo | o ciclo do motorista (registrar → foto → alerta → tratar → ver) está fechado; cadastro dos 4 veículos e seção 3 do formulário dependem de dados dele; o resto é ajuste pequeno |
 | B44 | F3 (fechamento) | **Próxima etapa = relatórios fechados**: multas no período (A7), a máquina no relatório (horímetro e consumo em litros por hora) e a aba de multas na planilha | foto da avaria/cupom; seção 3 do formulário | deixa a feature 10 (Relatórios) 🟢 sem infraestrutura nova; foto exige anexo (guardar arquivo, tamanho, quem vê), que é etapa própria; a seção 3 depende da folha inteira |
 
 ### C — furos conhecidos em operação
@@ -230,6 +255,10 @@ SELECT id, veiculo_id, data_abastecimento, litros FROM frotas_abastecimentos WHE
 - **C18 — muitas fotos na tela contam no limite de pedidos.** O sistema aceita 500 pedidos por endereço de rede a cada 15 minutos (a
   fábrica toda costuma sair pelo mesmo). Cada miniatura que aparece é um pedido. Por isso a lista do gestor mostra só a primeira foto de
   cada linha (B58); se alguém receber *"Muitas requisições. Tente novamente mais tarde."*, é este limite.
+- **C19 — o painel mostra só os 15 alertas mais graves.** Sem a janela de 7 dias, as pendências não tratadas se acumulam e podem
+  ficar fora dos 15 (atrás de documento e CNH vencidos). O cartão **Alertas ativos** conta todos; a lista **Checklist Diário** mostra
+  todas as pendências, com o botão de tratar.
+- **C20 — para corrigir o texto de um tratamento**, use **Desfazer tratamento** e trate de novo (não há editar).
 
 ### D — limitações declaradas (cortes de escopo)
 
@@ -259,6 +288,9 @@ SELECT id, veiculo_id, data_abastecimento, litros FROM frotas_abastecimentos WHE
   inteiro (as fotos vão junto).
 - **D15 — a foto é do registro, não de cada avaria.** Um registro com duas avarias tem até 3 fotos no total, sem dizer qual é de qual.
   A tela antiga **Novo Checklist** e o formulário de abastecimento do gestor não mandam foto; a planilha e os relatórios não levam foto.
+- **D16 — o tratamento é do registro inteiro**: um registro com falha nos freios e uma avaria é tratado de uma vez, com um texto só.
+- **D17 — sem histórico de tratamentos** (B67): fica só o último; desfazer apaga.
+- **D18 — o motorista não é avisado** quando a pendência dele é tratada: ele vê ao abrir **Meus registros**.
 
 ### E — verificações não executadas e regras não confirmadas
 
@@ -310,6 +342,12 @@ SELECT id, veiculo_id, data_abastecimento, litros FROM frotas_abastecimentos WHE
   proxy, e a tela mostraria o aviso genérico de internet. Não medido (a foto sobe reduzida, então só a que não pôde ser reduzida chega
   perto do limite).
 - **E19 — verificação final da Etapa 5, rodada em 2026-10-23 na ponta da etapa (depois de `ab234a44`), sem revisores rodando:** `npm run test:api` **555/555 arquivos OK**; `test:almoxarifado` **44/44**; `test:validation` **4/4**; `test:safealter` **3/3**; `test:sqlite` **16/16**; tela **198 suítes, 2687/2687 testes**; `build` com `CI=true` **"Compiled successfully."**. Frota no servidor: 17 arquivos `frotas*`, **173 passaram, 0 falharam**; Frota na tela: 12 suítes, **146/146**. As duas primeiras rodadas do `test:api` deram 548/555 e 554/555 (réguas de fonte de fora do Frota: caminho literal no `app.use` e o inventário das pastas de `/api/uploads`) — corrigidas em `e755ce7e` e `ab234a44`.
+- **E20 — o roteiro da Etapa 6 não foi percorrido clicando no navegador** por quem escreveu este fechamento. Foi escrito lendo o código e
+  os textos; o servidor de verdade foi exercitado por um revisor (pasta de dados vazia, perfis, corridas, cache do painel) e as telas pelos
+  testes automáticos. Faça o roteiro do guia (*"Roteiro de teste manual (tratar a pendência)"*) antes de apresentar.
+- **E21 — o limite de 1.000 do texto do tratamento conta como o navegador conta**: um emoji vale 2. A tela e o servidor contam igual (a
+  caixa de texto para de aceitar no mesmo ponto em que o servidor recusaria).
+- **E22 — Verificação final da Etapa 6, rodada em 2026-10-23 na ponta da etapa (depois de `8fa7ece2`), sozinha (sem revisores com servidor ativo):** `npm run test:api` **557/557 arquivos OK**; `test:almoxarifado` **44/44**; `test:validation` **4/4**; `test:safealter` **3/3**; `test:sqlite` **16/16**; tela **199 suítes, 2711/2711 testes**; `build` com `CI=true` **"Compiled successfully."**. Frota no servidor: 19 arquivos `frotas*`, **197 passaram, 0 falharam** (`frotasPendencia` 22, `frotasPendenciaIntegracao` 2); Frota na tela: 13 suítes, **170/170** (`FrotasPendencia` 24). Uma rodada antes, logo depois da T1: 556/556.
 - **E10 — o teclado do celular no campo de horímetro** (`inputMode="decimal"`, com vírgula ou ponto conforme o aparelho) não foi
   conferido num celular de verdade.
 
@@ -342,7 +380,7 @@ menor que o de ida virando km rodado negativo.
 | km de volta menor que o de ida gravava km rodado negativo (A5) | Recusado, no portal e na tela de Viagens: *"KM do retorno (10000) menor que o KM da saída (10050). Confira o hodômetro."* |
 | Volta com data/hora antes da saída era aceita | Recusada: *"Data/hora do retorno anterior à saída (2026-10-23 08:00)."* |
 | "Aprovar" funcionava em viagem de qualquer status, até concluída (A4) | Só viagem **solicitada**: *"Só é possível aprovar viagem solicitada"*. O motorista não aprova nem cancela a própria viagem |
-| Falha no checklist não avisava ninguém | Alerta **"Checklist com pendência — placa"** no painel do gestor por 7 dias, com o que falhou e quem registrou |
+| Falha no checklist não avisava ninguém | Alerta **"Checklist com pendência — placa"** no painel do gestor por 7 dias, com o que falhou e quem registrou (*desde a Etapa 6, fica até o gestor tratar — B61*) |
 | Editar um abastecimento (até só a observação) apagava o km/L (A1) | O km/L é refeito pela mesma conta e não some |
 | Abastecimento lançado atrasado ficava sem km/L e não refazia o seguinte (A2) | O km/L conta do abastecimento **anterior em km** do mesmo carro; lançar, editar ou apagar refaz o do **seguinte** |
 | Editar litros ou valor de um abastecimento mantinha o preço por litro antigo | O preço por litro é refeito (valor ÷ litros) |
@@ -377,7 +415,7 @@ etiqueta **PENDÊNCIA**.
 
 **6. O gestor vê o alerta.** Entre como gestor → **Dashboard Frota**: na lista de alertas, *"Checklist com pendência — ABC1D23"*, com
 *"Falha: Pneus e estepe · Ana Teste"* e *"Registrado em DD/MM/AAAA"*. Uma avaria no lugar da Falha dá *"1 avaria(s) · Ana Teste"*.
-O alerta fica por 7 dias contados da data do registro.
+O alerta fica por 7 dias contados da data do registro. *(Isto valeu até a Etapa 5; **mudou na Etapa 6**: o alerta fica até o gestor tratar a pendência — B61.)*
 
 **7. O carro em uso some da saída.** Com outro motorista ligado, toque **Saída**: `ABC1D23` não está na lista. Pelo servidor (duas telas
 abertas ao mesmo tempo, por exemplo), a recusa é *"Este veículo já está em uso (saída sem retorno)."*; o mesmo motorista tentando uma
@@ -750,6 +788,76 @@ endereço: página não encontrada. Um endereço copiado também deixa de abrir 
 
 ---
 
+## Etapa 6 — Tratar a pendência do registro (2026-10-23)
+
+Quando o motorista marca **Falha** num item (freio, pneu…) ou uma avaria, o gestor recebe o alerta *"Checklist com pendência —
+(placa)"* no painel. Até aqui o ciclo parava aí: não havia onde dizer "consertado", e o alerta **sumia sozinho depois de 7 dias**,
+consertado ou não. Uma falha de freio de 8 dias atrás saía do painel sem ninguém ter mexido; uma avaria consertada ontem continuava
+gritando por uma semana. Agora o gestor toca **Tratar pendência**, escreve o que foi feito (e, se quiser, liga a manutenção do
+conserto), e o alerta sai do painel na hora. A lista do gestor, o **Meus registros** do motorista e a planilha mostram que foi tratada,
+quando e por quem. O que ninguém tratou **fica no painel**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Não havia onde dizer que a falha foi resolvida | **Tratar pendência** na linha do registro (Checklist Diário) e no próprio alerta do painel |
+| O alerta sumia sozinho em 7 dias, resolvido ou não | O alerta **fica até alguém tratar**; tratado, sai na hora |
+| — | O tratamento guarda **o que foi feito**, quem, quando e (opcional) a **manutenção** do conserto |
+| A etiqueta era só **PENDÊNCIA** | **PENDÊNCIA · tratada**, com *"Tratada em … por …: …"* embaixo |
+| O motorista não sabia se alguém viu a falha dele | **Meus registros** mostra *"Tratada em …: (o que foi feito)"* |
+| — | A planilha ganha **Pendência tratada em**, **Tratada por** e **O que foi feito** no fim da aba Checklist |
+| — | Tratou o registro errado? **Desfazer tratamento** devolve o alerta |
+| A pendência de um veículo excluído ficava no painel até os 7 dias | Veículo excluído não gera mais o alerta (o registro continua na lista) |
+
+### As regras, com o cenário exato
+
+**Preparação.** Como administrador: o carro *AAA1A11* e a motorista *Ana* ligada a um usuário (**Frota → Motoristas**, **Usuário de
+acesso**). Um usuário com perfil **Consulta**.
+
+**1. Nasce a pendência.** Como *Ana*, **Meu painel → Inspeção**, *AAA1A11*, KM, os 12 itens com **Freios** em **Falha** → **Salvar**.
+Em **Meus registros**, a etiqueta **PENDÊNCIA**.
+
+**2. O alerta.** Como administrador, **Frota → Dashboard Frota**: *"Checklist com pendência — AAA1A11"*, *"Falha: Freios / freio de
+estacionamento · Ana"*, *"Registrado em (hoje)"*, e o botão **Tratar pendência**. Como **Consulta**: o mesmo alerta, **sem** o botão.
+
+**3. Tratar.** (Opcional: antes, em **Manutenções**, lance *"Troca das pastilhas"* para *AAA1A11*.) No alerta (ou em **Checklist
+Diário**, na linha da inspeção), **Tratar pendência** → janela *"Tratar pendência — AAA1A11"*. Com o texto vazio, **Marcar como tratada** fica
+apagado (por chamada direta, o servidor responde *"Descreva o que foi feito"*). Escreva *"Pastilhas trocadas"*, escolha a manutenção em **Manutenção (opcional)** (só aparecem as
+do mesmo carro) → **Marcar como tratada** → *"Pendência tratada"*. O alerta sai do painel.
+
+**4. A marca na lista.** **Checklist Diário**: a linha mostra **PENDÊNCIA · tratada** e *"Tratada em (dia) às (hora) por (seu nome):
+Pastilhas trocadas (manutenção: Troca das pastilhas)"*, e o botão **Desfazer tratamento**. Como **Consulta**: o mesmo texto, sem botão.
+A situação continua **PENDÊNCIA** (é o que a motorista viu); "tratada" é uma marca à parte.
+
+**5. A motorista vê.** Como *Ana*, **Meus registros**: **PENDÊNCIA · tratada** e *"Tratada em (dia) às (hora): Pastilhas trocadas"*.
+
+**6. Duas telas ao mesmo tempo.** Abra a mesma pendência em duas abas e trate nas duas: a segunda recebe *"Esta pendência já foi
+tratada"* (só um tratamento grava). Excluído o registro com a janela aberta: *"Registro não encontrado"*.
+
+**7. Desfazer.** **Desfazer tratamento** → confirme *"Desfazer o tratamento desta pendência? O alerta volta para o painel."* →
+*"Tratamento desfeito"*; o alerta volta ao painel.
+
+**8. Não some mais sozinho.** Uma pendência de 8 dias (ou 2 meses) atrás que ninguém tratou **continua** no painel. O painel mostra os
+15 alertas mais graves; com muitos abertos, a lista **Checklist Diário** é onde ver todos.
+
+**9. A planilha.** **Exportar planilha**: aba **Checklist**, últimas colunas **Pendência tratada em** (*2026-10-23 14:05*), **Tratada
+por** e **O que foi feito**; vazias nos registros não tratados.
+
+**10. Quem pode.** Só o Administrador de Frota trata e desfaz. Motorista e Consulta (por chamada direta) → *"Sem permissão para esta
+operação"*. Registro **OK** ou **INCOMPLETO** não tem o botão (por chamada direta: *"Este registro não tem pendência"*).
+
+### O que esta etapa não cobre
+
+- **Tratar cada falha separadamente**: o tratamento é do registro inteiro (todas as falhas e avarias dele de uma vez).
+- **Registros de antes do portal** (gravados sem a situação nova): aparecem como PENDÊNCIA na lista se tinham algum "não", mas não têm
+  o botão — e nunca geraram o alerta (B66; o banco não tem nenhum).
+- **Avisar o motorista** quando a pendência é tratada (notificação): ele vê ao abrir **Meus registros**.
+- **Histórico** de tratamentos: desfazer apaga o tratamento; um novo tratamento grava por cima. Fica só o último.
+- O que já estava fora: seção 3 do formulário, desenho das avarias, apelido V01/C01, o motorista corrigir o que lançou.
+
+---
+
 ## Onde estamos e o que vem a seguir
 
 - **Feito:** Etapa 1 — portal do motorista (vínculo usuário ↔ motorista, escopo do motorista, km/L pela ordem do km, uma viagem em
@@ -760,8 +868,12 @@ endereço: página não encontrada. Um endereço copiado também deixa de abrir 
   Etapa 4 — relatórios fechados: multas no período (A7), a máquina com horas e litros por hora, o mesmo período na tela e na planilha
   (com uma data só), linha Total que bate com a planilha, aba Multas. A7 era o último achado do levantamento ainda aberto.
   Etapa 5 — foto da avaria e do cupom pelo celular (D1), no lançamento, em Meus registros e nas listas do gestor.
-- **Próximo: Etapa 6 — tratar a pendência do registro** (B60): o gestor marca a falha ou a avaria como tratada (o que foi feito), o
-  alerta sai do painel e o motorista vê. Detalhe (contrato, pontos de atenção) no plano
-  [`2026-10-23-frotas-etapa5-fotos.md`](../superpowers/plans/2026-10-23-frotas-etapa5-fotos.md), seção "Próxima tarefa detalhada".
-- **Depende do André:** a folha inteira do formulário (seção 3) e as placas/modelos dos 4 veículos da planilha (V01, V02, V03, C01) para
-  o cadastro inicial.
+  Etapa 6 — tratar a pendência do registro: o gestor marca o que foi feito, o alerta sai do painel (e não some mais sozinho), o motorista vê.
+- **O módulo está pronto para uso** (B72). O ciclo do motorista está fechado: registrar → foto → alerta → tratar → ele vê. Não há etapa
+  grande nova planejada.
+- **Depende do André:** as placas, modelos e km dos 4 veículos da planilha (V01, V02, V03, C01) para o cadastro inicial; a folha inteira
+  do formulário (seção 3); o consumo esperado da máquina em litros por hora, se quiser o alerta de consumo dela (D12).
+- **Backlog pequeno** (sem etapa própria): o gestor remover foto pela lista (D14); a pergunta do km menor nas telas do gestor (B36);
+  a tela antiga "Novo Checklist" (C5). Detalhe no fim do plano
+  [`2026-10-23-frotas-etapa6-tratar-pendencia.md`](../superpowers/plans/2026-10-23-frotas-etapa6-tratar-pendencia.md).
+- **Antes de apresentar:** percorrer os roteiros do guia clicando (E2, E4, E9, E14, E16, E20) e rodar as consultas A1–A8 em produção.

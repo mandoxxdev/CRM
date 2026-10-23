@@ -1,13 +1,15 @@
 # Módulo Frotas — mapa de status
 
-> **Status:** **Etapa 5 (foto da avaria e do cupom) entregue** na `main` (commits `786d1ec5` a `ab234a44`), depois da **Etapa 4 (relatórios
+> **Status:** **Etapa 6 (tratar a pendência do registro) entregue** na `main` (commits `492a0d87` a `8fa7ece2`), depois da **Etapa 5 (foto da
+> avaria e do cupom)** (`786d1ec5` a `ab234a44`), da **Etapa 4 (relatórios
 > fechados)** (`99658314` a `bcb498a0`), da **Etapa 3 (km e
 > horímetro confiáveis no portal)** (`64d85bf2` a `a7427207`), da
 > **Etapa 2 (perfil Consulta/Motorista pela tela)** (`3aa4e088` a `805aaa3c`) e da **Etapa 1 (portal do motorista)** (`c638d201` a `4ba85d16`). O motorista loga e preenche saída, retorno, inspeção e abastecimento;
 > o gestor recebe o alerta, exporta a planilha e dá **Consulta** a quem só acompanha, em **Frota → Perfis de acesso**. O módulo **ainda
 > não foi usado em produção** (banco local: 0 veículos, 0 motoristas — medido em 2026-10-23 no levantamento).
-> **Última atualização:** 2026-10-23 — fechamento da Etapa 5.
-> **Onde parou / próximo:** Etapa 6 — tratar a pendência do registro (B60) (ver "Próximo passo").
+> **Última atualização:** 2026-10-23 — fechamento da Etapa 6.
+> **Onde parou / próximo:** **o módulo está pronto para uso.** Os próximos passos dependem do André (dados dos 4 veículos; folha inteira
+> do formulário) ou são pequenos (backlog no plano da Etapa 6) — ver "Próximo passo" (B72).
 > **Documentação do módulo:** [`docs/frotas/README.md`](../../docs/frotas/README.md) (guia com roteiro de teste),
 > [`docs/frotas/manual-do-sistema.md`](../../docs/frotas/manual-do-sistema.md) (manual de quem usa),
 > [`docs/frotas/novidades-por-etapa.md`](../../docs/frotas/novidades-por-etapa.md) (apresentação, decisões B1..B60) e
@@ -42,7 +44,7 @@ O formulário e a planilha ficam em [`00-processo-atual/`](00-processo-atual/REA
 | 06 | Checklist diário | 🟢 | Etapa 1 (`4ed19f8b`, `80362b54`, `4ba85d16`): 12 itens do papel OK/N/A/Falha, avarias, km, horário, combustível, situação OK/PENDÊNCIA/INCOMPLETO; item ausente não vale mais OK (A3). A tela antiga do gestor segue com os 7 itens (B10) e continua sem editar |
 | 07 | Multas | 🟢 | Valor, pontos, vencimento, status de pagamento, nº do auto. Desde a Etapa 1, só o gestor cria/altera. Desde a Etapa 4 (`bcb498a0`) o status só aceita pendente/pago/contestado, e a planilha tem a aba Multas |
 | 08 | Documentos e seguros | 🟢 | IPVA, licenciamento, seguro, CRLV, rastreador; alerta N dias antes do vencimento. Desde a Etapa 1, só o gestor cria/altera; desde a Etapa 2 (`30ec5df3`), o motorista não lê a lista (C7) |
-| 09 | Painel (dashboard) e alertas | 🟢 | 9 cartões, alertas de documento, CNH, revisão, multa, consumo anômalo e, desde a Etapa 1, **checklist com pendência** (7 dias). Só gestor e Consulta veem |
+| 09 | Painel (dashboard) e alertas | 🟢 | 9 cartões, alertas de documento, CNH, revisão, multa, consumo anômalo e, desde a Etapa 1, **checklist com pendência**. Só gestor e Consulta veem. *Dizia "(7 dias)"; mudou na Etapa 6* (feature 18): o alerta fica até o gestor **tratar** a pendência (botão no próprio alerta), só de veículo ativo, a mais antiga primeiro |
 | 10 | Relatórios | 🟢 | **Etapa 4** (`99658314`..`bcb498a0`) — [`10-relatorios/`](10-relatorios/README.md): multas pela data da infração (A7), contestada fora, o mesmo período (uma data ou duas) nas duas tabelas e na planilha, máquina com horas e **litros por hora**, linha Total que bate com a planilha, aba **Multas**. *Dizia: "Falta para 🟢: A7, a máquina no relatório e a aba de multas"; deixou de ser verdade.* Fica de fora: alerta de consumo baixo da máquina (D12) |
 | 11 | Perfis e permissões | 🟢 | Etapa 1 (`6dd0b130`, `9007353e`): o motorista só vê e só altera o que é dele; painel/alertas, multas e documentos são do gestor; só o gestor aprova/cancela viagem (A6). **Etapa 2** (`30ec5df3`..`805aaa3c`) — [`15-perfis-pela-tela/`](15-perfis-pela-tela/README.md): **Consulta**/**Motorista** pela tela **Frota → Perfis de acesso**, Consulta só leitura nas telas de cadastro, escopo fechado para perfil fora da lista. *Dizia: "falta atribuir Consulta/Motorista pela tela"; deixou de ser verdade.* Fica de fora: trilha de auditoria (B26), lembrar o Consulta ao dar e tirar o administrador (C9) |
 | 12 | Solicitar material ao almoxarifado | 🟢 | Reaproveita a requisição de material do almoxarifado (`/frota/requisicoes-material`) |
@@ -51,6 +53,7 @@ O formulário e a planilha ficam em [`00-processo-atual/`](00-processo-atual/REA
 | 15 | **Perfil do Frota pela tela** | 🟢 | **Etapa 2** — [`15-perfis-pela-tela/`](15-perfis-pela-tela/README.md). `GET/PUT /api/frotas/perfis-usuario`, tela `/frota/perfis` (só o administrador da frota), aviso no cadastro do motorista. Etapa 3 (`b88778b5`): `role` "Admin" maiúsculo é administrador (E5) |
 | 16 | **km e horímetro confiáveis no portal** | 🟢 | **Etapa 3** — [`16-km-e-horimetro/`](16-km-e-horimetro/README.md). Último km/horímetro na tela, 409 `KM_MENOR_QUE_ATUAL`/`HORIMETRO_MENOR_QUE_ATUAL` com **Confirmar mesmo assim**, máquina em horas (portal, gestor, planilha), alerta de revisão da máquina pelo horímetro. Fica de fora: a pergunta nas telas do gestor (B36), consumo L/h (D9) |
 | 17 | **Foto da avaria e do cupom** | 🟢 | **Etapa 5** (`786d1ec5`..`ab234a44`) — [`17-fotos/`](17-fotos/README.md). **Tirar foto** (câmera do celular) na Saída/Retorno/Inspeção e no Abastecimento, até 3, reduzidas no celular; Meus registros com + Foto e Remover foto; coluna **Fotos** nas listas Checklist e Abastecimentos do gestor; arquivo só por URL assinada (2 h), no escopo de cada um; excluir o lançamento leva as fotos. Fecha **D1**. Fica de fora: o gestor remover foto pela lista (D14), foto por avaria (D15) |
+| 18 | **Tratar a pendência do registro** | 🟢 | **Etapa 6** (`492a0d87`..`8fa7ece2`) — [`18-tratar-pendencia/`](18-tratar-pendencia/README.md). **Tratar pendência** (o que foi feito + manutenção opcional) na lista Checklist e no alerta; o alerta sai na hora e não some mais sozinho; **PENDÊNCIA · tratada** na lista, no Meus registros e na planilha; **Desfazer tratamento**. Fica de fora: tratar por falha (D16), histórico (D17), aviso ao motorista (D18) |
 
 ## Achados medidos (sonda executada em 2026-10-23, banco em memória com o `initSchema` real)
 
@@ -72,14 +75,16 @@ Cada um foi **rodado**, não deduzido da leitura. Script da sonda descrito em
 
 ## Próximo passo
 
-1. **Etapa 6 — tratar a pendência do registro** (B60): o gestor marca a falha/avaria como tratada (com o que foi feito), o alerta sai do
-   painel e o motorista vê; hoje o alerta some sozinho em 7 dias, tratado ou não. Contrato e pontos de atenção: "Próxima tarefa
-   detalhada" no fim do [plano da Etapa 5](../../docs/superpowers/plans/2026-10-23-frotas-etapa5-fotos.md). (A Etapa 5 — foto da
-   avaria e do cupom — está entregue: feature 17.)
-2. Depois, por valor: alerta de consumo baixo da máquina (D12, precisa de "consumo esperado em L/h"); seção 3 do formulário (quando
-   chegar a folha inteira).
-3. **André:** mandar a folha inteira do formulário (a imagem em `exemplo_formulario_motorista.jpeg` termina no título da seção 3) e as
-   placas/modelos/km dos 4 veículos da planilha (V01, V02, V03, C01 — a planilha só tem o tipo).
+**O módulo está pronto para uso** (B72). O ciclo do motorista está fechado: registrar → foto → alerta → tratar → ele vê. A Etapa 6 (tratar a
+pendência) está entregue: feature 18.
+
+1. **Depende do André:** (a) as placas, modelos e km dos 4 veículos da planilha (V01, V02, V03, C01 — a planilha só tem o tipo) para o
+   cadastro inicial; (b) a folha inteira do formulário (a imagem em `exemplo_formulario_motorista.jpeg` termina no título da seção 3) para
+   a seção 3 "Transmissão e itens específicos"; (c) o consumo esperado da máquina em litros por hora, se quiser o alerta de consumo dela
+   (D12).
+2. **Backlog pequeno** (independente, sem etapa própria — detalhe no fim do plano da Etapa 6): remover foto pela lista do gestor (D14);
+   a pergunta do km menor nas telas do gestor (B36/D10); a tela antiga "Novo Checklist" com os 12 itens ou fora do menu (C5).
+3. Antes de apresentar: percorrer os roteiros do guia clicando (E2, E4, E9, E14, E16, E20) e rodar as consultas A1–A8 em produção.
 
 ## O que **não** está no escopo (decidido no levantamento)
 

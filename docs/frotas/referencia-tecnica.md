@@ -1,4 +1,4 @@
-# Módulo Frota — referência técnica (estado em 2026-10-23, depois da Etapa 5)
+# Módulo Frota — referência técnica (estado em 2026-10-23, depois da Etapa 6)
 
 > Levantamento original lendo a `main` em `d16de90b`; **atualizado no fechamento da Etapa 1** (portal do motorista, `4ba85d16`) e no
 > **da Etapa 2** (perfil pela tela, `3aa4e088`..`805aaa3c`; plano
@@ -16,6 +16,7 @@
 | Serviço | `server/services/frotas/frotasService.js` | 1.310 | CRUD, km, consumo, alertas, dashboard, relatórios; **escopo do motorista** (`escopoDoUsuario`, `forcarMotoristaDoVinculo`, `conferirDonoPorMotorista`), vínculo, viagem única, `inserirRegistro`, `validarItens`/`validarAvarias` |
 | Portal | `server/services/frotas/portalService.js` | 235 | **Novo (Etapa 1).** `inicio`, `registrar` (saída/retorno/inspeção), `registrarAbastecimento`, `meusRegistros` |
 | Fotos | `server/services/frotas/anexosService.js` | ~200 | **Novo (Etapa 5).** `gravar` (tipo pelos primeiros bytes, dono e teto de 3 no mesmo `INSERT … WHERE EXISTS`), `apagar`, `apagarDoLancamento`, `comAnexos` (URL assinada na saída), `MSG` literais |
+| Pendência | `server/services/frotas/pendenciaService.js` | ~130 | **Novo (Etapa 6).** `tratar` e `desfazer` a pendência do registro; `gravarTratamento` (todas as condições no `WHERE`); `instanteLocal` (Brasília, `AAAA-MM-DDTHH:MM`); `MSG` literais |
 | Exportação | `server/services/frotas/exportacaoService.js` | 189 | **Novo (Etapa 1).** O `.xlsx` no formato da planilha (lib `xlsx`) |
 | Fila | `server/services/frotas/filaDeViagens.js` | 17 | **Novo (Etapa 1).** `naFilaDeViagens(fn)` — fila única em memória, **não reentrante**, premissa de um processo |
 | Schema | `server/services/frotas/schema.js` | 323 | `CREATE TABLE IF NOT EXISTS` + `safeAlter` + seed; listas fixas; **`ITENS_CHECKLIST`** (os 12) e **`situacaoDoRegistro`** (a única régua da situação) |
@@ -46,7 +47,7 @@ Duas camadas, como no almoxarifado:
 |---|---|---|---|---|
 | `visualizar` | ✓ | ✓ | ✓ | não usada em rota; os GET de cadastro só exigem o módulo (com escopo, abaixo) |
 | `ver_painel` (**novo**) | ✓ | | ✓ | `GET /dashboard`, `GET /alertas` (antes do cache) |
-| `gerenciar_veiculos` | ✓ | | | CRUD veículo; **POST/PUT de multas e documentos** (desde a Etapa 1); DELETE de todos os lançamentos |
+| `gerenciar_veiculos` | ✓ | | | CRUD veículo; **POST/PUT de multas e documentos** (desde a Etapa 1); DELETE de todos os lançamentos; **`POST`/`DELETE /checklists/:id/tratar-pendencia`** (Etapa 6) |
 | `gerenciar_motoristas` | ✓ | | | CRUD motorista; `GET /usuarios-vinculaveis` |
 | `registrar_operacoes` | ✓ | ✓ | | POST/PUT de manutenção, abastecimento, viagem, checklist; `POST /portal/registros`, `POST /portal/abastecimentos` |
 | `aprovar_viagens` | ✓ | | | `POST /viagens/:id/aprovar`; e levar a viagem a `aprovada`/`cancelada` pelo `POST`/`PUT` (RN-F1.20) |
@@ -94,8 +95,8 @@ manda); o resto passa por `respondDbError`. Contratos completos (mensagens liter
 | Método | Rota | Perfil | Observação |
 |---|---|---|---|
 | GET | `/api/frotas/meta` | módulo | + `itensChecklist`, `vistasAvaria`, `tiposAvaria`, `niveisCombustivel`, `tiposRegistro` |
-| GET | `/api/frotas/dashboard` | **`ver_painel`** | cache 30 s; `?refresh=1` fura. *Era "módulo" no levantamento; mudou na Etapa 1* |
-| GET | `/api/frotas/alertas` | **`ver_painel`** | + alerta `checklist` (PENDÊNCIA, 7 dias, `dias_restantes: null`). *Era "módulo"* |
+| GET | `/api/frotas/dashboard` | **`ver_painel`** | cache 30 s; `?refresh=1` fura. **Etapa 6:** o cache tem **geração** — `limparCacheDashboard()` (chamado ao tratar e desfazer) a incrementa, e a contagem que já estava em andamento não grava o painel velho. *Era "módulo" no levantamento; mudou na Etapa 1* |
+| GET | `/api/frotas/alertas` | **`ver_painel`** | + alerta `checklist` (PENDÊNCIA, `dias_restantes: null`). **Etapa 6:** só `pendencia_tratada_em IS NULL` e veículo `ativo = 1`, **sem a janela de 7 dias** (*era "7 dias" até a Etapa 5*); o item ganha `placa`. *Era "módulo"* |
 | GET | `/api/frotas/relatorios/custos-por-veiculo?data_inicio&data_fim` | `relatorios` | *Até a Etapa 3: "multas sem filtro de período (A7)"; mudou na Etapa 4.* Cada data opcional (`substr(data,1,10)`); multas pelo dia `diaDaMultaSql` (`COALESCE(NULLIF(substr(data_infracao,1,10),''), date(created_at, modificadorDoFuso()))`), sem as `contestado`; só `ativo = 1`; `+ tipo_medicao`, `+ horimetro_atual` |
 | GET | `/api/frotas/relatorios/consumo?veiculo_id&data_inicio&data_fim` | `relatorios` | **Etapa 4:** `[{ veiculo_id, placa, tipo_medicao, consumo_medio, consumo_litros_hora, total_litros, total_gasto, abastecimentos }]`, só `ativo = 1`, por placa; totais de **todas** as linhas do período (antes, só das com km/L) |
 | GET | `/api/frotas/portal/inicio` | módulo | **novo.** `{ motorista, viagem_aberta, veiculos[{…, status, em_uso}], itens, vistas, tipos_avaria, niveis_combustivel, perfil, pode_registrar, pode_gerir }`. **Etapa 3:** `veiculos[].horimetro_atual`; `viagem_aberta.horimetro_saida` e `tipo_medicao` (a régua com que a viagem abriu: `horimetro_saida` → horimetro; `km_saida` → km; senão a do veículo) |
@@ -117,7 +118,9 @@ manda); o resto passa por `respondDbError`. Contratos completos (mensagens liter
 | GET/POST/PUT/DELETE | `/api/frotas/documentos[/:id]` | **POST/PUT `gerenciar_veiculos`** | *idem*; GET: MOTORISTA recebe `[]` (Etapa 2) |
 | GET/POST/PUT/DELETE | `/api/frotas/viagens[/:id]` | POST/PUT `registrar_operacoes`; DELETE `gerenciar_veiculos` | fila de viagens; viagem única; km e data do retorno; RN-F1.20. **Etapa 3:** `horimetro_saida`/`horimetro_retorno` (PUT: null/ausente mantém; retorno menor que a saída → 400) |
 | POST | `/api/frotas/viagens/:id/aprovar` | `aprovar_viagens` | **só `solicitada`** (409). *No levantamento "não confere o status atual"; mudou na Etapa 1* |
-| GET/POST/DELETE | `/api/frotas/checklists[/:id]` | POST `registrar_operacoes` | **sem PUT**. Lista traz `tipo_registro, km, horario, nivel_combustivel, status_geral, itens, avarias, viagem_id`, **`anexos`** (Etapa 5); DELETE apaga também as fotos |
+| GET/POST/DELETE | `/api/frotas/checklists[/:id]` | POST `registrar_operacoes` | **sem PUT**. Lista traz `tipo_registro, km, horario, nivel_combustivel, status_geral, itens, avarias, viagem_id`, **`anexos`** (Etapa 5); DELETE apaga também as fotos. **Etapa 6:** GET `+ pendencia_tratada_em, pendencia_tratada_por_id, pendencia_tratada_por_nome, pendencia_tratamento, pendencia_manutencao_id, pendencia_manutencao_descricao` (esta, `null` para quem tem escopo) |
+| POST | `/api/frotas/checklists/:id/tratar-pendencia` | `gerenciar_veiculos` | **Etapa 6.** `{ tratamento, manutencao_id? }` (inteiro > 0 ou texto só de dígitos). Recusas na ordem: 403 perfil → 400 `Descreva o que foi feito` → 400 `O texto passou de 1000 caracteres` → 400 `Manutenção inválida` → 404 `Registro não encontrado` → 409 `SEM_PENDENCIA` `Este registro não tem pendência` → 409 `PENDENCIA_JA_TRATADA` `Esta pendência já foi tratada` → 400 `Manutenção não encontrada` → 400 `Esta manutenção é de outro veículo`. `UPDATE … WHERE status_geral = 'PENDENCIA' AND pendencia_tratada_em IS NULL AND (manutenção do mesmo veículo)`; perdeu a corrida → relê e responde a recusa do estado (sem recusa: 409 já tratada). `200` o registro (`registroComItens`). Limpa o cache do painel |
+| DELETE | `/api/frotas/checklists/:id/tratar-pendencia` | `gerenciar_veiculos` | **Etapa 6.** 404 → 409 `PENDENCIA_NAO_TRATADA` `Esta pendência não foi tratada` (`WHERE pendencia_tratada_em IS NOT NULL`) → `200` o registro com as 5 colunas nulas. Limpa o cache do painel |
 
 Sem validação de esquema (Zod) — checagem no serviço.
 
@@ -133,7 +136,7 @@ Sem validação de esquema (Zod) — checagem no serviço.
 | `frotas_multas` | veiculo_id, motorista_id, data_infracao, valor, pontos, status_pagamento, data_vencimento, … | física |
 | `frotas_documentos` | veiculo_id, tipo, numero_documento, valor, data_vencimento, alerta_dias_antes (30), status (ativo/vencido/renovado) | física |
 | `frotas_viagens` | veiculo_id, motorista_id, data_saida/retorno (`AAAA-MM-DDTHH:MM`), km_saida/retorno/rodado, **horimetro_saida/retorno** (Etapa 3), **origem** (novo), destino, finalidade, setor, status, aprovador_*, solicitante_*, observacoes | física |
-| `frotas_checklists` | veiculo_id, motorista_id, data_checklist, 7 × `*_ok`, observacoes, aprovado, usuario_id/nome; **novas:** `tipo_registro` (saida/retorno/inspecao, padrão inspecao), `km`, `horario`, `nivel_combustivel`, `itens_json` (os 12), `avarias_json`, `status_geral` (OK/PENDENCIA/INCOMPLETO), `viagem_id`; **Etapa 3:** `horimetro` | física |
+| `frotas_checklists` | veiculo_id, motorista_id, data_checklist, 7 × `*_ok`, observacoes, aprovado, usuario_id/nome; **novas:** `tipo_registro` (saida/retorno/inspecao, padrão inspecao), `km`, `horario`, `nivel_combustivel`, `itens_json` (os 12), `avarias_json`, `status_geral` (OK/PENDENCIA/INCOMPLETO), `viagem_id`; **Etapa 3:** `horimetro`; **Etapa 6:** `pendencia_tratada_em` (`AAAA-MM-DDTHH:MM`, Brasília), `pendencia_tratada_por_id`, `pendencia_tratada_por_nome`, `pendencia_tratamento`, `pendencia_manutencao_id` (sem FK) — o `status_geral` não muda ao tratar | física |
 | `frotas_anexos` (Etapa 5) | entidade (`registro`→`frotas_checklists` | `abastecimento`→`frotas_abastecimentos`, CHECK), entidade_id, arquivo (UNIQUE, só o nome), tipo_mime, tamanho, usuario_id/nome, created_at; índice `(entidade, entidade_id)`. Arquivos em `<CRM_DATA_DIR>/uploads/frotas-anexos` (entram no backup) | física, junto com o lançamento |
 | `perfil_frota_usuario` (em `index.js` e, desde a Etapa 2, também no `schema.js` do Frota) | usuario_id (PK), perfil (padrão 'MOTORISTA'), updated_at | gravada por `syncModuleAdminProfiles` (ADMIN_FROTA) e, desde a Etapa 2, por `PUT /perfis-usuario` (CONSULTA/MOTORISTA) |
 
@@ -229,6 +232,8 @@ planilha, RN-F4.14); `frotasExportacao` ajustado (7 abas, colunas no fim). Tela:
 
 Etapa 5: `frotasAnexos.api.test.js` (RN-F5.01..08, corrida da exclusão, dono trocado no meio, domínio da assinatura) e
 `frotasAnexosIntegracao.api.test.js` (pela rota e pelo serviço). Tela: `FrotasFotos.test.js`. Números no plano da Etapa 5.
+
+Etapa 6: `frotasPendencia.api.test.js` (RN-F6.01..09, recusas na ordem, corridas tratar×tratar e desfazer×desfazer, o `WHERE` da manutenção, a corrida do cache com gancho) e `frotasPendenciaIntegracao.api.test.js` (pela rota e pelo serviço); `frotasPortal` (RN-F1.10 reescrito: 8 dias atrás **continua**) e `frotasExportacao` (3 colunas no fim) ajustados. Tela: `FrotasPendencia.test.js`. Números no plano da Etapa 6.
 
 ## Achados
 
