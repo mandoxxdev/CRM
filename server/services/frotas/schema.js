@@ -34,6 +34,54 @@ const TIPOS_MANUTENCAO = ['preventiva', 'corretiva'];
 const TIPOS_DOCUMENTO = ['ipva', 'licenciamento', 'seguro', 'crlv', 'rastreador', 'outros'];
 const STATUS_VIAGEM = ['solicitada', 'aprovada', 'em_andamento', 'concluida', 'cancelada'];
 
+// ── Frotas Etapa 1 (portal do motorista) ────────────────────────────────────
+// RN-F1.01: os 12 itens do formulario de papel, na ordem do papel. Chaves fixas — ficam gravadas em itens_json.
+const ITENS_CHECKLIST = [
+  { chave: 'pneus_estepe', rotulo: 'Pneus e estepe' },
+  { chave: 'farois_lanternas', rotulo: 'Faróis / lanternas' },
+  { chave: 'setas_luz_freio', rotulo: 'Setas / luz de freio' },
+  { chave: 'parabrisa_vidros', rotulo: 'Parabrisa / vidros' },
+  { chave: 'espelhos_retrovisores', rotulo: 'Espelhos / retrovisores' },
+  { chave: 'limpadores_agua', rotulo: 'Limpadores / água' },
+  { chave: 'oleo_motor', rotulo: 'Óleo do motor / vazamentos' },
+  { chave: 'arrefecimento', rotulo: 'Arrefecimento / nível' },
+  { chave: 'freios', rotulo: 'Freios / freio de estacionamento' },
+  { chave: 'buzina_cintos', rotulo: 'Buzina / cintos' },
+  { chave: 'documentos_equipamentos', rotulo: 'Documentos / equipamentos' },
+  { chave: 'carroceria_carga', rotulo: 'Carroceria / amarração da carga' },
+];
+const RESPOSTAS_ITEM = ['OK', 'NA', 'FALHA'];
+const VISTAS_AVARIA = ['lateral_esquerda', 'lateral_direita', 'superior', 'frente', 'traseira'];
+const TIPOS_AVARIA = ['R', 'A', 'T', 'Q', 'O'];
+const NIVEIS_COMBUSTIVEL = ['vazio', '1/4', '1/2', '3/4', 'cheio'];
+const TIPOS_REGISTRO = ['saida', 'retorno', 'inspecao'];
+const ITENS_LEGADOS = ['pneus_ok', 'oleo_ok', 'luzes_ok', 'freios_ok', 'extintor_ok', 'documentos_ok', 'limpeza_ok'];
+// Os 7 *_ok antigos continuam gravados a partir dos 12 (extintor e limpeza nao estao no papel -> 1).
+const LEGADO_DE_ITEM = {
+  pneus_ok: 'pneus_estepe', oleo_ok: 'oleo_motor', luzes_ok: 'farois_lanternas', freios_ok: 'freios',
+  documentos_ok: 'documentos_equipamentos',
+};
+
+/**
+ * F2-6: a UNICA regua da situacao de um registro (portal, rota antiga, painel, exportacao).
+ *  - com `itens` (RN-F1.02): PENDENCIA se algum FALHA ou houver avaria; senao INCOMPLETO se faltar algum dos 12; senao OK.
+ *  - sem `itens` (rota antiga, F2-7 / RN-F1.03 reescrita): os 7 `*_ok` — algum enviado = 0 -> PENDENCIA; os 7 enviados = 1 -> OK;
+ *    algum ausente -> INCOMPLETO. (Antes, item ausente valia OK: um POST so com veiculo e data saia aprovado — A3.)
+ */
+function situacaoDoRegistro({ itens, avarias, legados } = {}) {
+  if (itens && typeof itens === 'object') {
+    const valores = ITENS_CHECKLIST.map((i) => itens[i.chave]);
+    if (valores.includes('FALHA') || (Array.isArray(avarias) && avarias.length > 0)) return 'PENDENCIA';
+    if (valores.some((v) => !RESPOSTAS_ITEM.includes(v))) return 'INCOMPLETO';
+    return 'OK';
+  }
+  const l = legados || {};
+  const valores = ITENS_LEGADOS.map((k) => l[k]);
+  if (valores.some((v) => v === 0 || v === false || v === '0')) return 'PENDENCIA';
+  if (valores.some((v) => v == null)) return 'INCOMPLETO';
+  return 'OK';
+}
+
 async function safeAlter(db, sql) {
   try {
     await dbRun(db, sql);
@@ -222,6 +270,18 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE frotas_manutencoes ADD COLUMN requisicao_almox_id INTEGER');
   await safeAlter(db, 'ALTER TABLE frotas_motoristas ADD COLUMN perfil_frota TEXT');
 
+  // Frotas Etapa 1 (portal do motorista): saida/retorno/inspecao reaproveitam frotas_checklists (B1)
+  await safeAlter(db, "ALTER TABLE frotas_checklists ADD COLUMN tipo_registro TEXT DEFAULT 'inspecao'");
+  await safeAlter(db, 'ALTER TABLE frotas_checklists ADD COLUMN km REAL');
+  await safeAlter(db, 'ALTER TABLE frotas_checklists ADD COLUMN horario TEXT');
+  await safeAlter(db, 'ALTER TABLE frotas_checklists ADD COLUMN nivel_combustivel TEXT');
+  await safeAlter(db, 'ALTER TABLE frotas_checklists ADD COLUMN itens_json TEXT');
+  await safeAlter(db, 'ALTER TABLE frotas_checklists ADD COLUMN avarias_json TEXT');
+  await safeAlter(db, 'ALTER TABLE frotas_checklists ADD COLUMN status_geral TEXT');
+  await safeAlter(db, 'ALTER TABLE frotas_checklists ADD COLUMN viagem_id INTEGER');
+  await safeAlter(db, 'ALTER TABLE frotas_viagens ADD COLUMN origem TEXT');
+  await safeAlter(db, 'ALTER TABLE frotas_abastecimentos ADD COLUMN km_desde_anterior REAL');
+
   for (const [nome, categoria] of TIPOS_VEICULO_SEED) {
     await dbRun(db, 'INSERT OR IGNORE INTO frotas_tipos_veiculo (nome, categoria) VALUES (?, ?)', [nome, categoria]);
   }
@@ -240,4 +300,13 @@ module.exports = {
   TIPOS_DOCUMENTO,
   TIPOS_MEDICAO,
   STATUS_VIAGEM,
+  ITENS_CHECKLIST,
+  RESPOSTAS_ITEM,
+  VISTAS_AVARIA,
+  TIPOS_AVARIA,
+  NIVEIS_COMBUSTIVEL,
+  TIPOS_REGISTRO,
+  ITENS_LEGADOS,
+  LEGADO_DE_ITEM,
+  situacaoDoRegistro,
 };

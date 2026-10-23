@@ -1,13 +1,13 @@
 /**
  * Testes do módulo Frotas
- * Executar: node server/tests/frotas.test.js
+ * Executar: cd server && node tests/api/frotasServico.api.test.js (antes: tests/frotas.test.js, fora do runner — achado A9)
  */
 const sqlite3 = require('sqlite3').verbose();
 const assert = require('assert');
-const { initSchema } = require('../services/frotas/schema');
-const { dbRun, dbGet } = require('../services/frotas/db');
-const frotasService = require('../services/frotas/frotasService');
-const { can, PERFIS } = require('../services/frotas/permissions');
+const { initSchema } = require('../../services/frotas/schema');
+const { dbRun, dbGet } = require('../../services/frotas/db');
+const frotasService = require('../../services/frotas/frotasService');
+const { can, PERFIS } = require('../../services/frotas/permissions');
 
 let passed = 0;
 let failed = 0;

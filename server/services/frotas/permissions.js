@@ -11,6 +11,8 @@ const PERFIS = {
 
 const ACAO_PERFIS = {
   visualizar: [PERFIS.ADMIN_FROTA, PERFIS.MOTORISTA, PERFIS.CONSULTA],
+  // Frotas Etapa 1 (RN-F1.16, B6): painel e alertas mostram custos e dados de todos — o motorista nao ve
+  ver_painel: [PERFIS.ADMIN_FROTA, PERFIS.CONSULTA],
   gerenciar_veiculos: [PERFIS.ADMIN_FROTA],
   gerenciar_motoristas: [PERFIS.ADMIN_FROTA],
   registrar_operacoes: [PERFIS.ADMIN_FROTA, PERFIS.MOTORISTA],

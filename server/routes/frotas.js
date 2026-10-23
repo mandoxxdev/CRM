@@ -216,3 +216,10 @@ module.exports = function registerFrotasRoutes(app, db, authenticateToken, check
 
   console.log('✅ Rotas Frotas registradas em /api/frotas/*');
 };
+
+/** Frotas Etapa 1 (F2-13): zera o cache do painel — o harness de teste chama ao criar cada app (o cache e do modulo, nao do app). */
+function limparCacheDashboard() {
+  dashboardCache = { at: 0, data: null };
+  dashboardInflight = null;
+}
+module.exports.limparCacheDashboard = limparCacheDashboard;

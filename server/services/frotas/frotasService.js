@@ -68,12 +68,18 @@ async function updateHorimetroVeiculoSeMaior(db, veiculoId, horimetro) {
 async function getMeta(db) {
   const tipos = await dbAll(db, 'SELECT * FROM frotas_tipos_veiculo WHERE ativo = 1 ORDER BY nome');
   const motoristas = await dbAll(db, "SELECT id, nome FROM frotas_motoristas WHERE ativo = 1 AND status = 'ativo' ORDER BY nome");
-  const { SETORES_GMP, CENTROS_CUSTO_GMP, STATUS_VEICULO, TIPOS_COMBUSTIVEL, TIPOS_MANUTENCAO, TIPOS_DOCUMENTO, TIPOS_MEDICAO, STATUS_VIAGEM } = require('./schema');
+  const {
+    SETORES_GMP, CENTROS_CUSTO_GMP, STATUS_VEICULO, TIPOS_COMBUSTIVEL, TIPOS_MANUTENCAO, TIPOS_DOCUMENTO, TIPOS_MEDICAO, STATUS_VIAGEM,
+    ITENS_CHECKLIST, VISTAS_AVARIA, TIPOS_AVARIA, NIVEIS_COMBUSTIVEL, TIPOS_REGISTRO,
+  } = require('./schema');
   return {
     tipos, motoristas, setores: SETORES_GMP, centrosCusto: CENTROS_CUSTO_GMP,
     statusVeiculo: STATUS_VEICULO, combustiveis: TIPOS_COMBUSTIVEL,
     tiposManutencao: TIPOS_MANUTENCAO, tiposDocumento: TIPOS_DOCUMENTO,
     tiposMedicao: TIPOS_MEDICAO, statusViagem: STATUS_VIAGEM,
+    // Frotas Etapa 1 (RN-F1.01): os 12 itens do papel e as listas do portal
+    itensChecklist: ITENS_CHECKLIST, vistasAvaria: VISTAS_AVARIA, tiposAvaria: TIPOS_AVARIA,
+    niveisCombustivel: NIVEIS_COMBUSTIVEL, tiposRegistro: TIPOS_REGISTRO,
   };
 }
 

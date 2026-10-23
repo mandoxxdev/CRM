@@ -157,4 +157,11 @@ Cada task: TDD com controle positivo (quebrar a implementação e ver o vermelho
 
 | Task | Estado | Commit |
 |---|---|---|
-| T1–T8 | a fazer | |
+| T1 | feito — harness, schema, 12 itens, situacaoDoRegistro, ver_painel; teste antigo no runner (A9) | este commit ("Frota etapa 1 T1") |
+| T2 | a fazer | |
+| T3 | a fazer | |
+| T4 | a fazer | |
+| T5 | a fazer | |
+| T6 | a fazer (front, outro agente) | |
+| T7 | a fazer (front, outro agente) | |
+| T8 | a fazer | |
