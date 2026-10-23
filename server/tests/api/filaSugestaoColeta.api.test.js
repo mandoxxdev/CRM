@@ -5,11 +5,18 @@
  * Plano: docs/superpowers/plans/2026-10-22-almoxarifado-etapa188-sugestao-de-coleta-na-fila-de-separacao.md
  *
  * Executar: cd server && node tests/api/filaSugestaoColeta.api.test.js
+ *
+ * Fase 5 (M-c): o processo roda em UTC de proposito (TZ fixado ANTES do primeiro Date). O cenario da virada de dia de Brasilia fixa o
+ * relogio em 02:30 UTC (23:30 de Brasilia do dia anterior) e abre com uma guarda que DERRUBA o teste se o fuso ou o relogio falso nao
+ * pegarem — em vez de passar verde provando nada (regra da skill fechar-etapa).
  */
+process.env.TZ = 'UTC';
 const assert = require('assert');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
-const { dbRun, dbAll } = require('../../services/almoxarifado/db');
+const { dbRun, dbAll, dbGet } = require('../../services/almoxarifado/db');
+const stockService = require('../../services/almoxarifado/stockService');
+const diaLocal = require('../../services/diaLocal');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -84,14 +91,14 @@ let seq = 0;
     assert.strictEqual(it.pegar_em_aviso, null);
   });
 
-  await test('[RN-188.01] so acrescenta: os campos que existiam continuam todos, com os dois novos', async () => {
+  await test('[RN-188.01] so acrescenta: os campos que existiam continuam todos, com os novos (pegar_em, pegar_em_aviso e, Fase 5, pegar_em_alerta)', async () => {
     const m = await material();
     await entrar(m, L.A01, 4);
     const R = await req([[m, 2]]);
     const f = await daFila(R.id);
     assert.deepStrictEqual(Object.keys(f.itens[0]).sort(), ['a_entregar', 'a_separar', 'disponivel', 'entregavel', 'item_id',
       'lote_separacao_codigo', 'material_codigo', 'material_critico', 'material_id', 'material_nome', 'origem_separacao_codigo',
-      'pegar_em', 'pegar_em_aviso', 'separavel', 'unidade']);
+      'pegar_em', 'pegar_em_alerta', 'pegar_em_aviso', 'separavel', 'unidade']);
     assert.ok(Array.isArray(f.ordem_coleta));
     assert.strictEqual(f.ordem_coleta.length, 1);
   });
@@ -184,6 +191,82 @@ let seq = 0;
       assert.deepStrictEqual(f.ordem_coleta, []);
     } finally {
       await setCfg('liberacao_valor_ativo', '0');
+    }
+  });
+
+  await test('[I-a] material em inspecao na padrao (sonda rev188-s1 a): a dica vem com RETENCAO_NO_MATERIAL; sem retencao, sem alerta', async () => {
+    const P = await loc('ZRP-01'); const A = await loc('ZRA-01');
+    const m = await material();
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET localizacao_padrao_id = ? WHERE id = ?', [P, m]);
+    await entrar(m, A, 5); await entrar(m, P, 10);
+    // 10 em inspecao: a retencao e do MATERIAL — o saldo de ZRP-01 continua 10 e o sistema nao sabe se sao as boas ou as retidas.
+    await stockService.registrarMovimentacao(db, ADMIN, { material_id: m, tipo: 'QUARENTENA', quantidade: 10, motivo: 'retido',
+      justificativa: 'retido' });
+    const mm = await dbGet(db, 'SELECT quantidade_atual, quantidade_em_inspecao FROM materiais_almoxarifado WHERE id = ?', [m]);
+    assert.deepStrictEqual([mm.quantidade_atual, mm.quantidade_em_inspecao], [15, 10], 'premissa: 15 fisicos, 10 em inspecao');
+    const R = await req([[m, 5]]);
+    const it = (await daFila(R.id)).itens[0];
+    assert.strictEqual(it.separavel, 5);
+    assert.strictEqual(it.pegar_em.localizacao_codigo, 'ZRP-01', 'a dica continua (o saldo do endereco existe)');
+    assert.strictEqual(it.pegar_em_alerta, 'RETENCAO_NO_MATERIAL');
+    // Metade positiva/controle: outro material, mesmo desenho, SEM retencao -> mesma dica, alerta null.
+    const m2 = await material();
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET localizacao_padrao_id = ? WHERE id = ?', [P, m2]);
+    await entrar(m2, A, 5); await entrar(m2, P, 10);
+    const R2 = await req([[m2, 5]]);
+    const it2 = (await daFila(R2.id)).itens[0];
+    assert.strictEqual(it2.pegar_em.localizacao_codigo, 'ZRP-01');
+    assert.strictEqual(it2.pegar_em_alerta, null);
+  });
+
+  await test('[M-d] planejada bloqueada depois de separar -> pegar_em null, PLANEJADA_INDISPONIVEL (nao "o resto nao cabe la")', async () => {
+    const m = await material();
+    await entrar(m, L.B01, 3); await entrar(m, L.B02, 10);
+    const R = await req([[m, 6]]);
+    const sep = await request(app).put(`${API}/requisicoes/${R.id}/separacao`)
+      .send({ itens_separados: [{ item_id: R.ids[0], quantidade_separada: 3, localizacao_origem_id: L.B01 }] });
+    assert.strictEqual(sep.status, 200, JSON.stringify(sep.body));
+    const antes = (await daFila(R.id)).itens[0];
+    assert.deepStrictEqual([antes.separavel, antes.pegar_em, antes.pegar_em_aviso], [3, null, 'PLANEJADA_NAO_COBRE'],
+      'premissa: ZB-01 sem livre e um endereco bom -> PLANEJADA_NAO_COBRE');
+    await dbRun(db, 'UPDATE localizacoes_almoxarifado SET bloqueada = 1 WHERE id = ?', [L.B01]);
+    try {
+      const it = (await daFila(R.id)).itens[0];
+      assert.strictEqual(it.origem_separacao_codigo, 'ZB-01');
+      assert.deepStrictEqual([it.pegar_em, it.pegar_em_aviso], [null, 'PLANEJADA_INDISPONIVEL']);
+    } finally {
+      await dbRun(db, 'UPDATE localizacoes_almoxarifado SET bloqueada = 0 WHERE id = ?', [L.B01]);
+    }
+  });
+
+  await test('[M-c] lote vencido nao e sugerido e a virada e a de Brasilia (relogio em 02:30 UTC = 23:30 do dia anterior)', async () => {
+    const DateReal = global.Date;
+    const INSTANTE = new DateReal('2026-09-17T02:30:00Z');
+    class DataFixa extends DateReal {
+      constructor(...args) { super(...(args.length ? args : [INSTANTE.getTime()])); }
+      static now() { return INSTANTE.getTime(); }
+    }
+    const m = await material({ lote: true });
+    await entrar(m, L.B01, 6, { lote: 'VA' }); await entrar(m, L.A01, 6, { lote: 'VB' }); await entrar(m, L.B02, 6, { lote: 'VC' });
+    // VA venceu ontem (15/09); VB vence HOJE em Brasilia (16/09) — no dia UTC (17/09) ja estaria vencido; VC vence em dezembro.
+    await dbRun(db, `UPDATE lotes_almoxarifado SET data_validade = CASE codigo WHEN 'VA' THEN '2026-09-15' WHEN 'VB' THEN '2026-09-16'
+      ELSE '2026-12-01' END WHERE material_id = ?`, [m]);
+    const R = await req([[m, 5]]);
+    global.Date = DataFixa;
+    try {
+      // Guarda: fora deste ambiente o cenario nao sabe falhar — derruba em vez de passar vazio.
+      assert.strictEqual(Intl.DateTimeFormat().resolvedOptions().timeZone, 'UTC', 'guarda: o processo tem de rodar em UTC');
+      assert.strictEqual(new Date().toISOString().slice(0, 10), '2026-09-17', 'guarda: o relogio falso nao pegou');
+      assert.strictEqual(new Date().getDate(), 17, 'guarda: o dia local do processo tem de ser o UTC');
+      assert.strictEqual(diaLocal.hojeLocalISO(), '2026-09-16', 'guarda: em Brasilia ainda e 16/09');
+      const it = (await daFila(R.id)).itens[0];
+      assert.strictEqual(it.separavel, 5);
+      assert.notStrictEqual(it.pegar_em.lote_codigo, 'VA', 'lote vencido (15/09) nao pode ser a dica');
+      assert.strictEqual(it.pegar_em.lote_codigo, 'VB', 'VB vence hoje em Brasilia: ainda vale e e o FEFO');
+      assert.strictEqual(it.pegar_em.localizacao_codigo, 'ZA-01');
+      assert.strictEqual(it.pegar_em.lote_validade, '2026-09-16');
+    } finally {
+      global.Date = DateReal;
     }
   });
 

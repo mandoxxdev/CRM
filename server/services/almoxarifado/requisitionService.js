@@ -327,7 +327,10 @@ async function lerDadosDaColeta(db, itens) {
   const locs = await dbAll(db, `SELECT l.id, l.parent_id, l.codigo, l.tipo, l.ativo, l.bloqueada, l.almoxarifado_id,
       a.codigo as almoxarifado_codigo, a.ativo as almoxarifado_ativo
     FROM localizacoes_almoxarifado l LEFT JOIN almoxarifados a ON a.id = l.almoxarifado_id`);
-  const materiais = await dbAll(db, `SELECT id, localizacao_padrao_id, proprietario_cliente_id, controle_serie, tipo_material
+  // Fase 5 (I-a): `retido` (bloqueado + em inspecao + em terceiros) — a retencao e do material, nao do endereco; com ela > 0 a
+  // dica ganha o alerta RETENCAO_NO_MATERIAL (sugestaoDeColeta.alertaDeRetencao).
+  const materiais = await dbAll(db, `SELECT id, localizacao_padrao_id, proprietario_cliente_id, controle_serie, tipo_material,
+      COALESCE(quantidade_bloqueada, 0) + COALESCE(quantidade_em_inspecao, 0) + COALESCE(quantidade_em_terceiros, 0) as retido
     FROM materiais_almoxarifado WHERE id IN (${mm})`, mats);
   const comSerie = materiais.filter((m) => Number(m.controle_serie) === 1).map((m) => Number(m.id));
   const series = comSerie.length ? await dbAll(db, `SELECT material_id, lote_id, COUNT(*) as n FROM series_almoxarifado
@@ -1037,6 +1040,7 @@ async function listarFilaSeparacao(db, user) {
       const s = coleta && coleta.porItem.get(l.item_id);
       l.pegar_em = s ? s.pegar_em : null;
       l.pegar_em_aviso = s ? s.pegar_em_aviso : null;
+      l.pegar_em_alerta = sugestaoDeColeta.alertaDeRetencao(l.pegar_em, dadosColeta.material.get(Number(l.material_id)));
     }
     const quemSeparou = separadores.filter((s) => s.requisicao_id === r.id)
       .map((s) => ({ id: s.usuario_id, nome: s.usuario_nome }));

@@ -109,14 +109,55 @@ test('[RN-188.01a] planejada nao cobre -> ela, PLANEJADA_NAO_COBRE, nunca outro 
   assert.strictEqual(s.pegar_em.quantidade_sugerida, 1);
   assert.strictEqual(s.pegar_em.cobre, false);
 });
-test('[RN-188.01a] planejada sem livre ou nao sugerivel -> null, PLANEJADA_NAO_COBRE', () => {
+test('[RN-188.01a] planejada sem livre -> null, PLANEJADA_NAO_COBRE; nao sugerivel -> null, PLANEJADA_INDISPONIVEL (Fase 5, M-d)', () => {
   const r1 = rodar({ itens: [item(1, 3, { origem_separacao_id: 10, lote_separacao_id: null, separado_pendente: 3 })],
     linhas: [linha(40, 20), linha(10, 3)], planejado: [[10, null, 3]] });
   assert.deepStrictEqual(de(r1, 1), { pegar_em: null, pegar_em_aviso: 'PLANEJADA_NAO_COBRE' });
+  // Ate a Fase 5 este caso (planejada em BLQ, bloqueada, com 10) dizia PLANEJADA_NAO_COBRE — "o resto nao cabe la" com 10 la.
   const r2 = rodar({ itens: [item(1, 3, { origem_separacao_id: 70, lote_separacao_id: null, separado_pendente: 3 })],
     linhas: [linha(40, 20), linha(70, 10)], planejado: [[70, null, 3]] });
-  assert.deepStrictEqual(de(r2, 1), { pegar_em: null, pegar_em_aviso: 'PLANEJADA_NAO_COBRE' });
+  assert.deepStrictEqual(de(r2, 1), { pegar_em: null, pegar_em_aviso: 'PLANEJADA_INDISPONIVEL' });
   assert.deepStrictEqual(r2.ordem_coleta, []);
+});
+test('[M-d] planejada indisponivel: inativa sem linha de saldo, area especial e lote vencido -> PLANEJADA_INDISPONIVEL', () => {
+  // Inativa (80) e sem linha de saldo: o endereco e conferido mesmo sem a linha.
+  const r1 = rodar({ itens: [item(1, 3, { origem_separacao_id: 80, lote_separacao_id: null, separado_pendente: 3 })],
+    linhas: [linha(40, 20)] });
+  assert.deepStrictEqual(de(r1, 1), { pegar_em: null, pegar_em_aviso: 'PLANEJADA_INDISPONIVEL' });
+  // Quarentena efetiva pelo pai (51), com saldo.
+  const r2 = rodar({ itens: [item(1, 3, { origem_separacao_id: 51, lote_separacao_id: null, separado_pendente: 3 })],
+    linhas: [linha(40, 20), linha(51, 10)], planejado: [[51, null, 3]] });
+  assert.deepStrictEqual(de(r2, 1), { pegar_em: null, pegar_em_aviso: 'PLANEJADA_INDISPONIVEL' });
+  // Lote vencido no endereco bom.
+  const LV = { id: 5, codigo: 'LV', validade: '2026-10-01' };
+  const r3 = rodar({ itens: [item(1, 3, { origem_separacao_id: 10, lote_separacao_id: 5, separado_pendente: 3 })],
+    linhas: [linha(40, 20), linha(10, 10, LV)], planejado: [[10, 5, 3]] });
+  assert.deepStrictEqual(de(r3, 1), { pegar_em: null, pegar_em_aviso: 'PLANEJADA_INDISPONIVEL' });
+  // Metade positiva: o mesmo endereco bom, sem saldo livre, continua PLANEJADA_NAO_COBRE (nao e "indisponivel").
+  const r4 = rodar({ itens: [item(1, 3, { origem_separacao_id: 10, lote_separacao_id: null, separado_pendente: 3 })],
+    linhas: [linha(40, 20)] });
+  assert.deepStrictEqual(de(r4, 1), { pegar_em: null, pegar_em_aviso: 'PLANEJADA_NAO_COBRE' });
+});
+test('[M-b] planejada COM lote: A tem L2 (vence antes) e L1; planejada A/L1 -> a dica e A/L1, nunca A/L2', () => {
+  // A sonda rev188-s5 (i): A-01 com L2 3 (vence antes) e L1 10; separou 2 de A-01/L1; item de 6 -> separavel 4; livre A/L1 = 8.
+  // A linha de L2 vem PRIMEIRO no array: sem a condicao do lote, o find pegaria A-01/L2 (3 < 4).
+  const L2 = { id: 2, codigo: 'L2', validade: '2027-01-01' }; const L1 = { id: 1, codigo: 'L1' };
+  const r = rodar({ itens: [item(1, 4, { origem_separacao_id: 10, lote_separacao_id: 1, separado_pendente: 2 })],
+    linhas: [linha(10, 3, L2), linha(10, 10, L1)], planejado: [[10, 1, 2]], material: { localizacao_padrao_id: 10 } });
+  const s = de(r, 1);
+  assert.strictEqual(s.pegar_em.lote_codigo, 'L1');
+  assert.strictEqual(s.pegar_em_aviso, null);
+  assert.strictEqual(s.pegar_em.localizacao_codigo, 'A-01');
+  assert.strictEqual(s.pegar_em.quantidade_no_endereco, 8);
+  assert.strictEqual(s.pegar_em.quantidade_sugerida, 4);
+});
+test('[I-a] alertaDeRetencao: retido > 0 com dica -> RETENCAO_NO_MATERIAL; sem retido ou sem dica -> null', () => {
+  const dica = { localizacao_id: 40 };
+  assert.strictEqual(sc.alertaDeRetencao(dica, { retido: 10 }), 'RETENCAO_NO_MATERIAL');
+  assert.strictEqual(sc.alertaDeRetencao(dica, { retido: 0.5 }), 'RETENCAO_NO_MATERIAL');
+  assert.strictEqual(sc.alertaDeRetencao(dica, { retido: 0 }), null);
+  assert.strictEqual(sc.alertaDeRetencao(dica, {}), null);
+  assert.strictEqual(sc.alertaDeRetencao(null, { retido: 10 }), null);
 });
 test('[RN-188.01a] planejada ja entregue (pendente 0) -> volta a regra normal', () => {
   const r = rodar({ itens: [item(1, 3, { origem_separacao_id: 10, lote_separacao_id: null, separado_pendente: 0 })],

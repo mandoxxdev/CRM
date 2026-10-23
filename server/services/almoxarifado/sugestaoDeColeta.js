@@ -30,7 +30,14 @@ const AVISO = Object.freeze({
   NENHUM_ENDERECO_COBRE: 'NENHUM_ENDERECO_COBRE',
   SEM_ENDERECO_SUGERIVEL: 'SEM_ENDERECO_SUGERIVEL',
   PLANEJADA_NAO_COBRE: 'PLANEJADA_NAO_COBRE',
+  // Fase 5 (M-d): a planejada existe mas nao pode mais ser dica (endereco bloqueado/inativo, area especial, lote bloqueado/vencido)
+  // — "o resto nao cabe la" enganava (o saldo pode estar la; o endereco e que nao serve).
+  PLANEJADA_INDISPONIVEL: 'PLANEJADA_INDISPONIVEL',
 });
+// Fase 5 (I-a): alerta que convive com o aviso (campo proprio, pegar_em_alerta). A retencao (bloqueado, em inspecao, em terceiros) e
+// do MATERIAL, nao do endereco (schema.js, comentario da estoque_saldo_almoxarifado): com retencao > 0 o sistema nao sabe se o
+// endereco sugerido tem as pecas boas ou as retidas.
+const ALERTA = Object.freeze({ RETENCAO_NO_MATERIAL: 'RETENCAO_NO_MATERIAL' });
 const EPS = 1e-9;
 const SEM_VALIDADE = '9999-12-31'; // a mesma chave do listarLotesDoMaterial
 
@@ -187,8 +194,13 @@ function sugerirColeta({ itens, candidatosPorMaterial, planejadoPorPar, arvore, 
       // RN-188.01a: so o par planejado.
       const linha = linhas.find((l) => Number(l.localizacao_id) === Number(it.origem_separacao_id)
         && idOuNulo(l.lote_id) === idOuNulo(it.lote_separacao_id));
-      const livre = linha && candidatoSugerivel(linha, ctx) ? livreDe(mat, linha) : 0;
-      if (livre > EPS) {
+      // Fase 5 (M-d): sem linha de saldo, o endereco ainda pode estar bloqueado/inativo/em area especial — confere so o endereco.
+      const sugerivel = linha ? candidatoSugerivel(linha, ctx)
+        : candidatoSugerivel({ localizacao_id: it.origem_separacao_id, lote_id: null }, ctx);
+      const livre = linha && sugerivel ? livreDe(mat, linha) : 0;
+      if (!sugerivel) {
+        aviso = AVISO.PLANEJADA_INDISPONIVEL;
+      } else if (livre > EPS) {
         escolha = { linha, livre };
         if (livre + EPS < separavel) aviso = AVISO.PLANEJADA_NAO_COBRE;
       } else {
@@ -237,6 +249,16 @@ function sugerirColeta({ itens, candidatosPorMaterial, planejadoPorPar, arvore, 
   return { porItem, ordem_coleta: ordemColeta };
 }
 
+/**
+ * Fase 5 (I-a) — o alerta de retencao de UMA linha da fila: 'RETENCAO_NO_MATERIAL' quando ha dica (pegar_em) e o material tem
+ * retido > 0 (bloqueado + em inspecao + em terceiros); senao null. A dica continua (o saldo do endereco existe), mas nao pode ser
+ * dada como certa: o sistema nao sabe em que endereco estao as pecas retidas.
+ */
+function alertaDeRetencao(pegarEm, material) {
+  if (!pegarEm || !material) return null;
+  return num(material.retido) > EPS ? ALERTA.RETENCAO_NO_MATERIAL : null;
+}
+
 module.exports = {
-  AVISO, chavePar, chaveLote, caminhoDaLocalizacao, compararCaminho, candidatoSugerivel, sugerirColeta,
+  AVISO, ALERTA, alertaDeRetencao, chavePar, chaveLote, caminhoDaLocalizacao, compararCaminho, candidatoSugerivel, sugerirColeta,
 };
