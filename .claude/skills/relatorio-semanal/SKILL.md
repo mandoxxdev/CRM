@@ -56,7 +56,7 @@ inclusive o tempo que não aparece na tela.
    navegador não responder, entregue com `prints-pendentes.txt` na pasta (arquivo, tela, o que
    precisa aparecer) e diga isso ao André. Antes de
    tirar, deixe a tela com dados que façam sentido (não "teste123"). Salve em
-   `docs/relatorios-semanais/AAAA-MM-DD/prints/<nome-curto>.png`. Sem print, o item não entra
+   `docs/relatorios-semanais/<pasta>/prints/<nome-curto>.png`. Sem print, o item não entra
    no bloco "o que você já pode ver" — vai para "por baixo".
    O André autorizou criar dados de exemplo direto (pela API, com a sessão do navegador, ou no
    banco) para os prints, e **não** apagar depois: ele quer ver os dados quando entrar. A janela
@@ -65,12 +65,12 @@ inclusive o tempo que não aparece na tela.
    abra a tela num `<iframe>` de 390px.
 
 5. **Escrever** a partir de `.claude/skills/relatorio-semanal/modelo.html`, salvando em
-   `docs/relatorios-semanais/AAAA-MM-DD/relatorio.html` (data = sábado, o último dia da semana; no texto, o período é "domingo DD/MM a sábado DD/MM").
+   `docs/relatorios-semanais/<pasta>/relatorio.html`, com **`<pasta>` = `AAAA-MM-DD_a_AAAA-MM-DD`** (domingo e sábado da semana, ex.: `2026-09-13_a_2026-09-19`). No texto, o período é "Semana de DD/MM a DD/MM/AAAA".
    Preencha todos os `{{...}}` e apague os blocos que sobrarem.
 
 6. **Conferir a linguagem** — obrigatório, e só entrega com saída 0:
    ```
-   node .claude/skills/relatorio-semanal/scripts/conferir-linguagem.js docs/relatorios-semanais/AAAA-MM-DD/relatorio.html
+   node .claude/skills/relatorio-semanal/scripts/conferir-linguagem.js docs/relatorios-semanais/<pasta>/relatorio.html
    ```
    E confira que nenhum `{{` sobrou: `grep -c "{{" .../relatorio.html` tem de dar 0.
 
