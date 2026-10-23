@@ -19,23 +19,34 @@ inclusive o tempo que não aparece na tela.
 ```
 docs/relatorios-semanais/
   2026-09/                              <- AAAA-MM: um diretório por mês
-    resumo-do-mes.html  resumo-do-mes.pdf   <- o RESUMÃO do mês (obrigatório, ver abaixo)
+    resumo-do-mes_2026-09-01_a_2026-09-30.html  .pdf   <- o RESUMÃO do mês (obrigatório, ver abaixo)
     2026-09-13_a_2026-09-19/            <- uma pasta por semana (domingo_a_sábado)
-      relatorio.html  relatorio.pdf  prints/
+      relatorio-semanal_2026-09-13_a_2026-09-19.html  .pdf  prints/
     2026-09-27_a_2026-10-03/            <- semana que cruza o mês: fica no mês em que COMEÇA
   2026-10/
+    resumo-do-mes_2026-10-01_a_2026-10-23.html  .pdf   <- resumo PARCIAL: o fim é o último dia medido
     ...
 ```
+
+**Todo arquivo leva o período no nome — sempre.** O André encaminha os PDFs para outras
+pessoas, e quem recebe não tem as pastas: um `relatorio.pdf` solto não diz de quando é.
+- Semana: `relatorio-semanal_AAAA-MM-DD_a_AAAA-MM-DD.pdf` (domingo e sábado), o `.html` com o
+  mesmo nome. Nunca `relatorio.pdf`.
+- Mês: `resumo-do-mes_AAAA-MM-01_a_AAAA-MM-<último dia>.pdf`. Resumo **parcial** vai até o dia
+  medido (`resumo-do-mes_2026-10-01_a_2026-10-23.pdf`); quando o mês fechar e o resumo for
+  refeito, renomeie (`git mv`) para o fim do mês — não deixe dois resumos do mesmo mês.
+- Dentro do resumo do mês, a lista "Relatórios das semanas" cita cada semana pelo **nome do
+  arquivo** (não pela pasta), para quem recebe saber qual PDF pedir.
 
 - **Semana que cruza dois meses** (27/09 a 03/10) fica na pasta do mês do **domingo** em que
   começa. Nas horas do **mês**, porém, cada dia conta no mês dele (o resumo usa o calendário).
 - **Resumo do mês — nunca esqueça.** Sempre que fizer um relatório semanal, confira:
-  1. Se o mês **anterior** já acabou e a pasta dele não tem `resumo-do-mes.pdf` → faça o
+  1. Se o mês **anterior** já acabou e a pasta dele não tem `resumo-do-mes_*.pdf` do mês inteiro → faça o
      resumo dele **antes** de entregar (é a parte que o André mais usa para cobrar as horas).
   2. Ao fazer a semana que **fecha** o mês (a que contém o último dia), faça o resumo do mês.
   3. Mês em andamento pode ter resumo **parcial** quando pedirem: subtítulo "parcial, até DD/MM".
 - **Como fazer o resumo do mês:** modelo `.claude/skills/relatorio-semanal/modelo-resumo-mes.html`,
-  salvo como `docs/relatorios-semanais/AAAA-MM/resumo-do-mes.html` (+ PDF, mesmo comando do passo 7).
+  salvo como `docs/relatorios-semanais/AAAA-MM/resumo-do-mes_AAAA-MM-DD_a_AAAA-MM-DD.html` (+ PDF com o mesmo nome, mesmo comando do passo 7).
   - Horas do mês: `horas.js --mes AAAA-MM` (dia 1 ao último dia; com `--grupos` para atividades).
   - Horas por semana: `horas.js --desde X --ate Y` de cada semana **recortada no mês** (a semana
     que cruza o mês entra só com os dias dele). A soma das linhas = total do mês, em hora cheia.
@@ -95,25 +106,25 @@ docs/relatorios-semanais/
    abra a tela num `<iframe>` de 390px.
 
 5. **Escrever** a partir de `.claude/skills/relatorio-semanal/modelo.html`, salvando em
-   `docs/relatorios-semanais/<pasta>/relatorio.html`, com **`<pasta>` = `AAAA-MM/AAAA-MM-DD_a_AAAA-MM-DD`** (o mês do domingo, e dentro dele domingo e sábado da semana, ex.: `2026-09/2026-09-13_a_2026-09-19`). No texto, o período é "Semana de DD/MM a DD/MM/AAAA".
+   `docs/relatorios-semanais/<pasta>/relatorio-semanal_<semana>.html` (`<semana>` = `AAAA-MM-DD_a_AAAA-MM-DD`, o mesmo da pasta), com **`<pasta>` = `AAAA-MM/AAAA-MM-DD_a_AAAA-MM-DD`** (o mês do domingo, e dentro dele domingo e sábado da semana, ex.: `2026-09/2026-09-13_a_2026-09-19`). No texto, o período é "Semana de DD/MM a DD/MM/AAAA".
    Preencha todos os `{{...}}` e apague os blocos que sobrarem.
 
 6. **Conferir a linguagem** — obrigatório, e só entrega com saída 0:
    ```
-   node .claude/skills/relatorio-semanal/scripts/conferir-linguagem.js docs/relatorios-semanais/<pasta>/relatorio.html
+   node .claude/skills/relatorio-semanal/scripts/conferir-linguagem.js docs/relatorios-semanais/<pasta>/relatorio-semanal_<semana>.html
    ```
-   E confira que nenhum `{{` sobrou: `grep -c "{{" .../relatorio.html` tem de dar 0.
+   E confira que nenhum `{{` sobrou: `grep -c "{{" .../relatorio-semanal_<semana>.html` tem de dar 0.
 
 7. **Gerar o PDF** com o Chrome sem janela:
    ```
-   "/c/Program Files/Google/Chrome/Application/chrome.exe" --headless=new --disable-gpu --user-data-dir="<scratchpad>/chrome-pdf" --no-pdf-header-footer --print-to-pdf="<pasta>/relatorio.pdf" "file:///<pasta>/relatorio.html"
+   "/c/Program Files/Google/Chrome/Application/chrome.exe" --headless=new --disable-gpu --user-data-dir="<scratchpad>/chrome-pdf" --no-pdf-header-footer --print-to-pdf="<pasta>/relatorio-semanal_<semana>.pdf" "file:///<pasta>/relatorio-semanal_<semana>.html"
    ```
 
 8. **Resumo do mês:** confira a regra da seção "Onde fica cada coisa" — mês anterior fechado sem
-   `resumo-do-mes.pdf`, ou semana que fecha o mês → faça o resumo agora.
+   `resumo-do-mes_*.pdf` do mês inteiro, ou semana que fecha o mês → faça o resumo agora.
 
 9. **Commitar** só a pasta da semana (e o resumo do mês, se fez) — arquivos explícitos, nunca
-   `git add -A` — e entregar ao André o caminho dos PDFs.
+   `git add -A` — e entregar ao André o caminho dos PDFs (confira que o nome tem o período).
 
 ## Como escrever cada parte
 
@@ -165,3 +176,6 @@ muita novidade visível. Se o bloco ficou **vazio ou com um item só**:
   "foi feito" e por horas da atividade.
 - **Ler "testes 60%" como "nada foi feito".** É o custo de não quebrar o que já funciona;
   explique assim no "para onde foi o tempo".
+- **Arquivo sem o período no nome** (`relatorio.pdf`, `resumo-do-mes.pdf`). Quem recebe o PDF
+  encaminhado não sabe de quando é. Use sempre `relatorio-semanal_AAAA-MM-DD_a_AAAA-MM-DD.pdf`
+  e `resumo-do-mes_AAAA-MM-DD_a_AAAA-MM-DD.pdf`.

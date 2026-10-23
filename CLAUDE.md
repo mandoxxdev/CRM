@@ -70,7 +70,7 @@ etapa, inclua sempre que possível uma **fatia visível** (um aviso, um campo, u
 mostre o que foi feito por baixo. Toda sexta (ou quando pedirem horas/relatório), use a skill
 `relatorio-semanal` (`.claude/skills/relatorio-semanal/SKILL.md`): ela mede as horas pelo git,
 tira os prints e escreve em linguagem de usuário — **sem** spec, etapa, códigos (B476, C131),
-commit, back-end nem menção a IA. O relatório fica em `docs/relatorios-semanais/AAAA-MM/AAAA-MM-DD_a_AAAA-MM-DD/` (pasta do mês, e dentro dela a semana de domingo a sábado), e cada mês fechado ganha um `resumo-do-mes.pdf` com as horas do mês — a skill diz quando fazer.
+commit, back-end nem menção a IA. O relatório fica em `docs/relatorios-semanais/AAAA-MM/AAAA-MM-DD_a_AAAA-MM-DD/` (pasta do mês, e dentro dela a semana de domingo a sábado), e cada mês fechado ganha um resumo com as horas do mês. Todo arquivo leva o período no nome (`relatorio-semanal_AAAA-MM-DD_a_AAAA-MM-DD.pdf`, `resumo-do-mes_AAAA-MM-DD_a_AAAA-MM-DD.pdf`), para ser encaminhado sem renomear — a skill diz quando fazer.
 
 ## Testes — rode antes de commitar, e cite o resultado real
 
