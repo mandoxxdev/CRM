@@ -119,8 +119,9 @@ test('RN-F1.18 perfil relatorios: MOTORISTA 403; CONSULTA e ADMIN 200 com o nome
   S.planilha = abas(r.body);
 });
 
-test('RN-F1.18 as seis abas na ordem da planilha', async () => {
-  assert.deepStrictEqual(S.planilha.nomes, ['Cadastro Frota', 'Viagens e KM', 'Checklist', 'Abastecimentos', 'Manutenções', 'Documentos']);
+// Frota Etapa 4 (RN-F4.10): a setima aba, Multas, entra no FIM — as seis da planilha da empresa nao mudam de lugar
+test('RN-F1.18 as seis abas na ordem da planilha (e Multas no fim, RN-F4.10)', async () => {
+  assert.deepStrictEqual(S.planilha.nomes, ['Cadastro Frota', 'Viagens e KM', 'Checklist', 'Abastecimentos', 'Manutenções', 'Documentos', 'Multas']);
 });
 
 test('RN-F1.18 (F2-18) Cadastro Frota: cabecalho, veiculos ativos e proxima revisao (menor pendente)', async () => {
@@ -170,10 +171,11 @@ test('RN-F1.18 (F2-6) Checklist: 12 itens Conforme/Nao conforme/N/A, avarias em 
 
 test('RN-F1.18 Abastecimentos: preco por litro, km desde o anterior e km/L', async () => {
   const [cab, ...linhas] = S.planilha.out.Abastecimentos;
-  assert.deepStrictEqual(cab, ['Data', 'Veículo', 'Condutor', 'KM', 'Litros', 'Valor Total R$', 'Preço por Litro', 'KM desde Abastec. Anterior', 'Consumo km/L', 'Posto', 'Observações', 'Horímetro']); // Etapa 3 (RN-F3.11)
+  assert.deepStrictEqual(cab, ['Data', 'Veículo', 'Condutor', 'KM', 'Litros', 'Valor Total R$', 'Preço por Litro', 'KM desde Abastec. Anterior', 'Consumo km/L', 'Posto', 'Observações', 'Horímetro',
+    'Horas desde Abastec. Anterior', 'Consumo L/h']); // Etapa 3 (RN-F3.11); Etapa 4 (RN-F4.11): colunas no fim
   assert.strictEqual(linhas.length, 2);
   const b = linhas.find((l) => l[9] === 'Posto B');
-  assert.deepStrictEqual(b, ['2026-10-21', 'EXP0001', 'Ana Motorista', 1400, 40, 260, 6.5, 400, 10, 'Posto B', '', '']);
+  assert.deepStrictEqual(b, ['2026-10-21', 'EXP0001', 'Ana Motorista', 1400, 40, 260, 6.5, 400, 10, 'Posto B', '', '', '', '']);
   const a = linhas.find((l) => l[9] === 'Posto A');
   assert.strictEqual(a[7], '');
   assert.strictEqual(a[8], '');

@@ -3,7 +3,7 @@
  */
 
 const { dbRun, dbGet, dbAll } = require('./db');
-const { hojeLocalISO } = require('../diaLocal');
+const { hojeLocalISO, modificadorDoFuso } = require('../diaLocal');
 const { naFilaDeViagens } = require('./filaDeViagens');
 
 const VEICULO_JOIN = `SELECT v.*, t.nome as tipo_nome, t.categoria as tipo_categoria,
@@ -510,7 +510,70 @@ async function listAbastecimentos(db, { search, veiculo_id } = {}, user) {
   sql += s.clause;
   params.push(...s.params);
   sql += ' ORDER BY a.data_abastecimento DESC, a.id DESC';
-  return dbAll(db, sql, params);
+  const rows = await dbAll(db, sql, params);
+  return comLitrosPorHora(db, rows); // Frota Etapa 4 (RN-F4.09)
+}
+
+/**
+ * Frota Etapa 4 (RN-F4.05/06/08): litros por hora da maquina, calculado NA LEITURA (nada gravado — criar, editar e excluir refazem o
+ * vizinho por construcao). A regua da RN-F1.11 com horas no lugar do km: o anterior e o abastecimento de horimetro imediatamente
+ * menor do mesmo veiculo (ordem `horimetro ASC, id ASC`, so linhas com horimetro); horas = horimetro − o do anterior; L/h = litros
+ * DESTE ÷ horas, 2 casas. Sem anterior: horas e L/h nulos; horas ≤ 0: L/h nulo. Olha so o horimetro da linha (B39): uma linha com km
+ * e horimetro tem km/L e L/h. O anterior e procurado entre TODAS as linhas do veiculo, fora do filtro de quem pede (periodo, motorista).
+ * Devolve Map id -> { horas_desde_anterior, consumo_litros_hora } das linhas com horimetro dos veiculos pedidos.
+ */
+async function litrosPorHora(db, veiculoIds) {
+  const ids = [...new Set((veiculoIds || []).map(Number).filter(Number.isFinite))];
+  const mapa = new Map();
+  if (!ids.length) return mapa;
+  const linhas = await dbAll(db, `SELECT id, veiculo_id, horimetro_abastecimento AS h, litros FROM frotas_abastecimentos
+    WHERE horimetro_abastecimento IS NOT NULL AND veiculo_id IN (${ids.map(() => '?').join(',')})
+    ORDER BY veiculo_id, horimetro_abastecimento ASC, id ASC`, ids);
+  let anterior = null;
+  for (const l of linhas) {
+    let horas = null;
+    let lph = null;
+    if (anterior && anterior.veiculo_id === l.veiculo_id) {
+      const diff = Number(l.h) - Number(anterior.h);
+      horas = Math.round(diff * 1e6) / 1e6;
+      if (horas > 0 && Number(l.litros) > 0) lph = Math.round((Number(l.litros) / horas) * 100) / 100;
+    }
+    mapa.set(l.id, { horas_desde_anterior: horas, consumo_litros_hora: lph });
+    anterior = l;
+  }
+  return mapa;
+}
+
+/** Acrescenta horas_desde_anterior e consumo_litros_hora a linhas de abastecimento (com `id` e `veiculo_id`). */
+async function comLitrosPorHora(db, rows) {
+  const mapa = await litrosPorHora(db, rows.map((r) => r.veiculo_id));
+  return rows.map((r) => {
+    const x = mapa.get(r.id);
+    return { ...r, horas_desde_anterior: x ? x.horas_desde_anterior : null, consumo_litros_hora: x ? x.consumo_litros_hora : null };
+  });
+}
+
+/**
+ * Frota Etapa 4 (RN-F4.03): filtro de periodo com cada data opcional — a regua da planilha (`substr(col,1,10)`), para a tela e a
+ * planilha mostrarem a mesma coisa. `expr` e uma expressao SQL que da o dia 'AAAA-MM-DD'.
+ */
+function filtroDoPeriodo(expr, { data_inicio: inicio, data_fim: fim } = {}) {
+  const partes = [];
+  const params = [];
+  if (inicio) { partes.push(`${expr} >= ?`); params.push(String(inicio).slice(0, 10)); }
+  if (fim) { partes.push(`${expr} <= ?`); params.push(String(fim).slice(0, 10)); }
+  return { sql: partes.length ? ` AND ${partes.join(' AND ')}` : '', params };
+}
+
+/**
+ * Frota Etapa 4 (RN-F4.01): o dia de uma multa para o periodo — a data da infracao; sem ela (nula ou ''), o dia de Brasilia em que
+ * foi lancada (`created_at` e instante UTC). `alias` e o da tabela frotas_multas na consulta. Devolve { sql, params } da expressao.
+ */
+function diaDaMultaSql(alias = 'mu') {
+  return {
+    sql: `COALESCE(NULLIF(substr(${alias}.data_infracao, 1, 10), ''), date(${alias}.created_at, ?))`,
+    params: [modificadorDoFuso()],
+  };
 }
 
 /**
@@ -1298,33 +1361,33 @@ async function getDashboard(db) {
 
 // ── Relatórios ───────────────────────────────────────────────────────────────
 
-async function relatorioCustosPorVeiculo(db, { data_inicio, data_fim } = {}) {
-  const dateFilterMan = data_inicio && data_fim
-    ? ' AND date(data_manutencao) BETWEEN date(?) AND date(?)'
-    : '';
-  const dateFilterAbs = data_inicio && data_fim
-    ? ' AND date(data_abastecimento) BETWEEN date(?) AND date(?)'
-    : '';
-  const dateParams = data_inicio && data_fim ? [data_inicio, data_fim] : [];
+async function relatorioCustosPorVeiculo(db, periodo = {}) {
+  // Frota Etapa 4: cada data opcional (RN-F4.03); multas pelo dia da infracao/lancamento e sem as contestadas (RN-F4.01/02, A7)
+  const fMan = filtroDoPeriodo('substr(data_manutencao, 1, 10)', periodo);
+  const fAbs = filtroDoPeriodo('substr(data_abastecimento, 1, 10)', periodo);
+  const dia = diaDaMultaSql('mu');
+  const fMul = filtroDoPeriodo(dia.sql, periodo);
+  const paramsMul = fMul.params.flatMap((p) => [...dia.params, p]);
 
   const rows = await dbAll(db, `SELECT
-      v.id, v.placa, v.modelo, v.marca, v.setor_responsavel, v.km_atual,
+      v.id, v.placa, v.modelo, v.marca, v.setor_responsavel, v.km_atual, v.tipo_medicao, v.horimetro_atual,
       COALESCE(man.total, 0) as custo_manutencao,
       COALESCE(abs.total, 0) as custo_combustivel,
       COALESCE(mul.total, 0) as custo_multas
     FROM frotas_veiculos v
     LEFT JOIN (
-      SELECT veiculo_id, SUM(custo) as total FROM frotas_manutencoes WHERE 1=1${dateFilterMan} GROUP BY veiculo_id
+      SELECT veiculo_id, SUM(custo) as total FROM frotas_manutencoes WHERE 1=1${fMan.sql} GROUP BY veiculo_id
     ) man ON man.veiculo_id = v.id
     LEFT JOIN (
-      SELECT veiculo_id, SUM(valor_total) as total FROM frotas_abastecimentos WHERE 1=1${dateFilterAbs} GROUP BY veiculo_id
+      SELECT veiculo_id, SUM(valor_total) as total FROM frotas_abastecimentos WHERE 1=1${fAbs.sql} GROUP BY veiculo_id
     ) abs ON abs.veiculo_id = v.id
     LEFT JOIN (
-      SELECT veiculo_id, SUM(valor) as total FROM frotas_multas GROUP BY veiculo_id
+      SELECT mu.veiculo_id, SUM(mu.valor) as total FROM frotas_multas mu
+      WHERE COALESCE(mu.status_pagamento, '') != 'contestado'${fMul.sql} GROUP BY mu.veiculo_id
     ) mul ON mul.veiculo_id = v.id
     WHERE v.ativo = 1
     ORDER BY v.placa`,
-  [...dateParams, ...dateParams]);
+  [...fMan.params, ...fAbs.params, ...paramsMul]);
 
   return rows.map((r) => ({
     id: r.id,
@@ -1337,19 +1400,41 @@ async function relatorioCustosPorVeiculo(db, { data_inicio, data_fim } = {}) {
     custo_multas: r.custo_multas || 0,
     custo_total: (r.custo_manutencao || 0) + (r.custo_combustivel || 0) + (r.custo_multas || 0),
     km_atual: r.km_atual,
+    tipo_medicao: r.tipo_medicao || 'km',
+    horimetro_atual: r.horimetro_atual,
   }));
 }
 
-async function relatorioConsumo(db, { veiculo_id } = {}) {
-  let sql = `SELECT a.veiculo_id, v.placa, AVG(a.consumo_medio) as consumo_medio,
-    SUM(a.litros) as total_litros, SUM(a.valor_total) as total_gasto, COUNT(*) as abastecimentos
+/**
+ * Frota Etapa 4 (RN-F4.07/08): uma linha por veiculo com algum abastecimento no periodo (e no `veiculo_id`); km/L = media das linhas
+ * com km/L (como antes), L/h = media das linhas com L/h (RN-F4.05, calculado sobre TODAS as linhas do veiculo); totais de todas as
+ * linhas do periodo (B47 — antes, so das linhas com km/L). Ordem por placa. So veiculos ativos (RN-F4.14).
+ */
+async function relatorioConsumo(db, { veiculo_id, data_inicio, data_fim } = {}) {
+  const f = filtroDoPeriodo('substr(a.data_abastecimento, 1, 10)', { data_inicio, data_fim });
+  let sql = `SELECT a.id, a.veiculo_id, a.litros, a.valor_total, a.consumo_medio, v.placa, v.tipo_medicao
     FROM frotas_abastecimentos a
     JOIN frotas_veiculos v ON a.veiculo_id = v.id
-    WHERE a.consumo_medio IS NOT NULL`;
-  const params = [];
+    WHERE v.ativo = 1${f.sql}`; // RN-F4.14: so ativos, como o custo por veiculo (B49)
+  const params = [...f.params];
   if (veiculo_id) { sql += ' AND a.veiculo_id = ?'; params.push(veiculo_id); }
-  sql += ' GROUP BY a.veiculo_id ORDER BY consumo_medio DESC';
-  return dbAll(db, sql, params);
+  const linhas = await comLitrosPorHora(db, await dbAll(db, sql, params));
+  const media = (xs) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null);
+  const porVeiculo = new Map();
+  for (const l of linhas) {
+    if (!porVeiculo.has(l.veiculo_id)) {
+      porVeiculo.set(l.veiculo_id, { veiculo_id: l.veiculo_id, placa: l.placa, tipo_medicao: l.tipo_medicao || 'km', kmL: [], lph: [], total_litros: 0, total_gasto: 0, abastecimentos: 0 });
+    }
+    const g = porVeiculo.get(l.veiculo_id);
+    if (l.consumo_medio != null) g.kmL.push(Number(l.consumo_medio));
+    if (l.consumo_litros_hora != null) g.lph.push(Number(l.consumo_litros_hora));
+    g.total_litros += Number(l.litros) || 0;
+    g.total_gasto += Number(l.valor_total) || 0;
+    g.abastecimentos += 1;
+  }
+  return [...porVeiculo.values()]
+    .sort((a, b) => String(a.placa).localeCompare(String(b.placa)) || a.veiculo_id - b.veiculo_id)
+    .map(({ kmL, lph, ...g }) => ({ ...g, consumo_medio: media(kmL), consumo_litros_hora: media(lph) }));
 }
 
 module.exports = {
@@ -1366,6 +1451,8 @@ module.exports = {
   listChecklists, createChecklist, deleteChecklist,
   getDashboard, getAlertas, diasAte,
   relatorioCustosPorVeiculo, relatorioConsumo,
+  // Frota Etapa 4
+  litrosPorHora, comLitrosPorHora, filtroDoPeriodo, diaDaMultaSql,
   // Frotas Etapa 1
   listUsuariosVinculaveis, motoristaDoUsuario, escopoDoUsuario, erroNaoVinculado, registroComItens, inserirRegistro,
   validarItens, conferirViagemUnica, conferirKmDoRetorno, updateKmVeiculoSeMaior, MSG_VEICULO_EM_USO, MSG_MOTORISTA_EM_VIAGEM,

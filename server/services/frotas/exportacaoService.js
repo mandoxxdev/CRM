@@ -1,6 +1,6 @@
 /**
  * Frotas Etapa 1 (RN-F1.18) — exportacao no formato da planilha "Controle de Frota GMP" que o escritorio usa hoje
- * (specs/modulo-frotas/00-processo-atual). Seis abas, na ordem da planilha. O periodo (data_inicio/data_fim, opcionais) filtra
+ * (specs/modulo-frotas/00-processo-atual). Seis abas, na ordem da planilha, e desde a Etapa 4 a setima, Multas, no fim. O periodo (data_inicio/data_fim, opcionais) filtra
  * Viagens (data_saida), Checklist, Abastecimentos e Manutencoes; Cadastro e Documentos saem inteiros.
  *
  * Datas saem como texto 'AAAA-MM-DD' (o que o banco guarda) — B11 em docs/frotas/novidades-por-etapa.md.
@@ -9,7 +9,7 @@ const XLSX = require('xlsx');
 const { dbAll } = require('./db');
 const { hojeLocalISO } = require('../diaLocal');
 const { ITENS_CHECKLIST, LEGADO_DE_ITEM, situacaoDoRegistro } = require('./schema');
-const { diasAte, registroComItens } = require('./frotasService');
+const { diasAte, registroComItens, comLitrosPorHora, diaDaMultaSql } = require('./frotasService');
 
 const SITUACAO_VEICULO = { ativo: 'Ativo', manutencao: 'Em manutenção', inativo: 'Inativo', vendido: 'Vendido' };
 const STATUS_VIAGEM = {
@@ -23,6 +23,7 @@ const SITUACAO_REGISTRO = { OK: 'OK', PENDENCIA: 'PENDÊNCIA', INCOMPLETO: 'INCO
 const VISTA = {
   lateral_esquerda: 'Lateral esquerda', lateral_direita: 'Lateral direita', superior: 'Superior', frente: 'Frente', traseira: 'Traseira',
 };
+const STATUS_MULTA = { pendente: 'Pendente', pago: 'Pago', contestado: 'Contestado' };
 const TIPO_AVARIA = { R: 'risco', A: 'amassado', T: 'trinca', Q: 'quebrado', O: 'outro' };
 
 const vazio = (v) => (v === null || v === undefined ? '' : v);
@@ -127,18 +128,20 @@ async function abaChecklist(db, periodo) {
 
 async function abaAbastecimentos(db, periodo) {
   const f = filtroPeriodo('a.data_abastecimento', periodo);
-  const rows = await dbAll(db, `SELECT a.*, v.placa, m.nome AS motorista_nome FROM frotas_abastecimentos a
+  // Frota Etapa 4 (RN-F4.11): o L/h da mesma funcao da lista e do relatorio (o anterior pode estar fora do periodo — RN-F4.08)
+  const rows = await comLitrosPorHora(db, await dbAll(db, `SELECT a.*, v.placa, m.nome AS motorista_nome FROM frotas_abastecimentos a
     JOIN frotas_veiculos v ON v.id = a.veiculo_id
     LEFT JOIN frotas_motoristas m ON m.id = a.motorista_id
-    WHERE 1=1${f.sql} ORDER BY a.data_abastecimento, a.id`, f.params);
+    WHERE 1=1${f.sql} ORDER BY a.data_abastecimento, a.id`, f.params));
   const linhas = [['Data', 'Veículo', 'Condutor', 'KM', 'Litros', 'Valor Total R$', 'Preço por Litro', 'KM desde Abastec. Anterior', 'Consumo km/L', 'Posto', 'Observações',
-    'Horímetro']]; // Etapa 3 (RN-F3.11)
+    'Horímetro', 'Horas desde Abastec. Anterior', 'Consumo L/h']]; // Etapa 3 (RN-F3.11); Etapa 4 (RN-F4.11)
   for (const a of rows) {
     const preco = a.valor_litro != null && Number(a.valor_litro) > 0 ? Math.round(Number(a.valor_litro) * 1000) / 1000
       : (Number(a.litros) > 0 ? Math.round((Number(a.valor_total) / Number(a.litros)) * 1000) / 1000 : '');
     linhas.push([
       dia(a.data_abastecimento), a.placa, vazio(a.motorista_nome), vazio(a.km_abastecimento), vazio(a.litros), vazio(a.valor_total),
       preco, vazio(a.km_desde_anterior), vazio(a.consumo_medio), vazio(a.posto), vazio(a.observacoes), vazio(a.horimetro_abastecimento),
+      vazio(a.horas_desde_anterior), vazio(a.consumo_litros_hora),
     ]);
   }
   return linhas;
@@ -174,6 +177,29 @@ async function abaDocumentos(db, hoje) {
   return linhas;
 }
 
+/**
+ * Frota Etapa 4 (RN-F4.10): multas no periodo pelo dia da RN-F4.01 (infracao; sem ela, o dia de Brasilia do lancamento) — a mesma
+ * regua do custo por veiculo. Todas as situacoes (a contestada sai com o Status; o custo da tela nao a soma, RN-F4.02). Sem coluna de
+ * data de pagamento: o formulario nao tem o campo (Fase 2, achado 12).
+ */
+async function abaMultas(db, periodo) {
+  const regua = diaDaMultaSql('mu');
+  const f = filtroPeriodo(regua.sql, periodo);
+  const paramsF = f.params.flatMap((p) => [...regua.params, p]);
+  const rows = await dbAll(db, `SELECT mu.*, v.placa, mot.nome AS motorista_nome, ${regua.sql} AS dia_regua FROM frotas_multas mu
+    JOIN frotas_veiculos v ON v.id = mu.veiculo_id
+    LEFT JOIN frotas_motoristas mot ON mot.id = mu.motorista_id
+    WHERE 1=1${f.sql} ORDER BY dia_regua, mu.id`, [...regua.params, ...paramsF]);
+  const linhas = [['Data', 'Veículo', 'Condutor', 'Infração', 'Valor R$', 'Pontos', 'Vencimento', 'Status', 'Nº do Auto', 'Observações']];
+  for (const m of rows) {
+    linhas.push([
+      dia(m.data_infracao), m.placa, vazio(m.motorista_nome), vazio(m.descricao), vazio(m.valor), vazio(m.pontos),
+      dia(m.data_vencimento), STATUS_MULTA[m.status_pagamento] || vazio(m.status_pagamento), vazio(m.numero_auto), vazio(m.observacoes),
+    ]);
+  }
+  return linhas;
+}
+
 /** Monta o .xlsx e devolve `{ buffer, nomeArquivo }`. */
 async function exportarPlanilha(db, periodo = {}) {
   const hoje = hojeLocalISO();
@@ -185,6 +211,7 @@ async function exportarPlanilha(db, periodo = {}) {
     ['Abastecimentos', await abaAbastecimentos(db, periodo)],
     ['Manutenções', await abaManutencoes(db, periodo)],
     ['Documentos', await abaDocumentos(db, hoje)],
+    ['Multas', await abaMultas(db, periodo)], // Frota Etapa 4 (RN-F4.10): no fim, para nao mexer nas abas que a empresa usa
   ];
   for (const [nome, linhas] of abas) {
     XLSX.utils.book_append_sheet(livro, XLSX.utils.aoa_to_sheet(linhas), nome);
