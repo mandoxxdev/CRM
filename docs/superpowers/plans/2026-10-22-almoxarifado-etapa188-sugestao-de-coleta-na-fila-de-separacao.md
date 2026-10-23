@@ -464,6 +464,49 @@ limite → vermelho.
   - (C1 maior livre) `reduce` → `cands[0]`: cai **só** `[RN-188.01] nenhum cobre -> o de maior livre` (deu A-01). ✔
   - (I3) sem o teto das séries: cai **só** `[RN-188.03] serie` (deu L1). ✔
 
+### T2 — feita (`e550353e`)
+
+- `listarFilaSeparacao` ganhou `lerDadosDaColeta(db, itens)` (uma vez por chamada: saldos com endereço, planejado por par, árvore com
+  almoxarifado, padrão/dono/série dos materiais e — **só** com material de série na fila — séries `EM_ESTOQUE` por lote: **4 ou 5
+  consultas por chamada**, nenhuma por requisição) e chama `sugerirColeta` por requisição. A consulta de itens, o `ORDER BY` da B821 e
+  `dividirSeparavel` ficaram byte a byte (o diff do arquivo é **só** `+`, 70 linhas). Padrão/dono/série vêm de consulta separada
+  (não como colunas na consulta de itens).
+- Emendas: **M1** (planejado com `COALESCE(r.ativo,1) = 1 AND r.status IN (STATUS_COM_CAIXA)` e
+  `COALESCE(ir.quantidade_entregue, ir.quantidade_atendida, 0)`), **M4** (`bloqueioValor` → `pegar_em: null`, aviso `null`,
+  `ordem_coleta: []`), **I3** (quinta consulta).
+- Teste novo `server/tests/api/filaSugestaoColeta.api.test.js` — **9** cenários (os 6 do plano + "só acrescenta" com a lista exata de
+  chaves do item, `[RN-188.03] serie` pela rota e `[M4]`). Vermelho antes: **7/2** (só o `[RN-188.07]` e o gate verdes — regressão
+  de propósito). Verde: **9/0**.
+- **Divergência de fixture:** a entrada manual (`POST /movimentacoes/v2`) **não grava `data_validade`** do lote (o body não tem o
+  campo); a sonda `f2r188-sonda2` mandava `data_validade` e ele foi ignorado (a conclusão da sonda — o automático não escolhe lote —
+  não depende da validade). Os testes gravam a validade por `UPDATE lotes_almoxarifado`.
+- **Controles positivos** (mesmo harness):
+  - (e) `ORDER BY ir.requisicao_id, ir.id DESC`: caem `[B821]` (itens `[11, 10]`) e `[RN-188.06]` (itens na ordem do pedido); e em
+    `separavelDividido` caem `[127 RN-10]` (`[0, 4]`), `[127 RN-14]` e `[127 RN-15]`. ✔
+  - (f) sem `ordem_coleta`: caem "só acrescenta" (`Array.isArray`), `[RN-188.04]`, `[RN-188.06]`, `[B821]` e `[M4]`. ✔
+  - (g) `itens` ordenado pelo caminho do `pegar_em`: caem `[RN-188.06]` na asserção **"itens na ordem do pedido"** e `[B821]`. ✔
+  - (I3 consulta) sem `status = 'EM_ESTOQUE'`: cai **só** `[RN-188.03] serie` (`S-L1`). ✔
+  - (M4) `false ? null :`: cai **só** `[M4]` (veio o `pegar_em`). ✔
+  - (RN-188.07) um `UPDATE estoque_saldo… SET updated_at = 'x'` na leitura: cai **só** `[RN-188.07]` (`estoque_saldo_almoxarifado mudou`). ✔
+- Vizinhos sem mudança de asserção: `filaSeparacao` 11/0, `separavelDividido` 19/0, `separacaoOrigemPorItem` 11/0.
+
+**Contrato congelado de novo (emendas aplicadas — é o que a T3 consome):**
+
+- `itens[].pegar_em`: `{ localizacao_id, localizacao_codigo, caminho, lote_id, lote_codigo, lote_validade, quantidade_no_endereco,
+  quantidade_sugerida, cobre }` ou `null`; `itens[].pegar_em_aviso`: `null | "NENHUM_ENDERECO_COBRE" | "SEM_ENDERECO_SUGERIVEL" |
+  "PLANEJADA_NAO_COBRE"`. Com `PLANEJADA_NAO_COBRE` o `pegar_em` pode vir (a planejada, `cobre: false`) ou ser `null` (sem livre / não
+  sugerível); o código da planejada está sempre em `origem_separacao_codigo` da linha.
+- `ordem_coleta`: sempre array (`[]` com alçada de valor barrando).
+- Frases da tela (RN-188.08 com C1, I1, M2, M5):
+  - linha: **`Pegar em ⟨localizacao_codigo⟩`** + ` (⟨caminho⟩)` quando o caminho tem mais de um segmento + ` — lote ⟨lote_codigo⟩` +
+    ` (vence DD/MM/AAAA)` + ` · ⟨quantidade_sugerida⟩ ⟨unidade⟩` + **` — escolha este endereço no 'Sai de' ao separar`**;
+  - `NENHUM_ENDERECO_COBRE`: **"Nenhum endereço tem tudo: pegue ⟨quantidade_sugerida⟩ aqui. Separar o resto de outro endereço depois
+    troca a origem da separação."**;
+  - `PLANEJADA_NAO_COBRE`: **"Já separado de ⟨origem_separacao_codigo⟩: o resto não cabe lá. Separar de outro endereço troca a origem
+    da separação (a entrega passa a sair automática)."**;
+  - `SEM_ENDERECO_SUGERIVEL`: **"Sem endereço para sugerir (o saldo está sem endereço, em endereço bloqueado ou inativo, em área
+    especial ou em lote bloqueado/vencido)."**
+
 ## Próxima tarefa detalhada
 
 **Etapa 189 — "Imprimir lista de coleta" e a dica no "Sai de" da janela de separação.**
