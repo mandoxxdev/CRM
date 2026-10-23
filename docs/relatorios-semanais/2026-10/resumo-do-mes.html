@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Resumo do mês — outubro de 2026 (parcial)</title>
+<style>
+  :root { --tinta:#1f2a37; --suave:#5b6675; --linha:#e3e7ec; --fundo:#ffffff; --cartao:#f6f8fa;
+          --tela:#2f80ed; --bastidores:#8a5cf6; --testes:#f2994a; --doc:#9aa5b1; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--fundo); color:var(--tinta); font:16px/1.6 "Segoe UI", system-ui, sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font-size:28px; margin:0 0 4px; } h2 { font-size:21px; margin:40px 0 12px; border-bottom:2px solid var(--linha); padding-bottom:6px; }
+  h3 { font-size:17px; margin:24px 0 6px; }
+  .sub { color:var(--suave); margin:0 0 24px; }
+  .resumo { background:var(--cartao); border-left:4px solid var(--tela); padding:16px 20px; border-radius:6px; font-size:17px; }
+  .item { border:1px solid var(--linha); border-radius:8px; padding:16px 20px; margin:16px 0; }
+  .item p { margin:6px 0; } .rotulo { font-weight:600; color:var(--suave); }
+  figure { margin:12px 0; } figure img { width:100%; border:1px solid var(--linha); border-radius:6px; }
+  figcaption { color:var(--suave); font-size:14px; }
+  .barra { display:flex; height:28px; border-radius:6px; overflow:hidden; margin:12px 0 6px; }
+  .barra span { display:block; }
+  .legenda { display:flex; flex-wrap:wrap; gap:8px 20px; font-size:14px; color:var(--suave); }
+  .legenda i { display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
+  table { border-collapse:collapse; width:100%; font-size:15px; } td, th { border-bottom:1px solid var(--linha); padding:8px; text-align:left; }
+  .nota { font-size:14px; color:var(--suave); }
+  @media print { main { padding:0; } h2, h3 { break-after:avoid; } figure { break-inside:avoid; } figure img { width:auto; max-width:100%; max-height:90mm; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Resumo do mês — outubro de 2026 (parcial)</h1>
+  <p class="sub">01/10 a 23/10/2026 · parcial · CRM GMP Industriais</p>
+
+  <p class="resumo">Em outubro, o almoxarifado ganhou a Fila de separação, que diz o que separar, de
+  onde pegar cada item e qual caixa está parada no balcão, e passou a registrar a entrega de EPI e o
+  empréstimo de ferramenta com assinatura na tela. O pedido de compra passou a sair em PDF no formato
+  da GMP e a poder ser feito para uma OS, o fornecedor ganhou uma ficha que se preenche pelo CNPJ, e o
+  motorista da frota passou a registrar saída e retorno pelo celular. Por baixo, duas pessoas mexendo
+  na mesma requisição deixaram de levar a mesma peça duas vezes, o material que chega passou a ficar
+  com quem esperava por ele, as datas deixaram de pular para o dia seguinte depois das 21h e cada
+  pessoa passou a ver só os dados da sua área. Até 23/10 foram cerca de 174 horas de trabalho,
+  concentradas na requisição de material, no acesso por área e nas datas do sistema.</p>
+
+  <h2>Horas do mês</h2>
+  <p>Cerca de <strong>174 horas</strong> de desenvolvimento no mês, até 23/10.</p>
+  <div class="barra" role="img" aria-label="Divisão do tempo">
+    <span style="width:3.9%;background:var(--tela)"></span>
+    <span style="width:11.7%;background:var(--bastidores)"></span>
+    <span style="width:51.5%;background:var(--testes)"></span>
+    <span style="width:32.9%;background:var(--doc)"></span>
+  </div>
+  <div class="legenda">
+    <span><i style="background:var(--tela)"></i>Telas que você usa — 4%</span>
+    <span><i style="background:var(--bastidores)"></i>Motor do sistema — 12%</span>
+    <span><i style="background:var(--testes)"></i>Conferências automáticas — 52%</span>
+    <span><i style="background:var(--doc)"></i>Planejamento e manuais — 33%</span>
+  </div>
+
+  <h3>Horas por semana</h3>
+  <table>
+    <tr><th>Semana</th><th>Horas no mês</th></tr>
+    <tr><td>01/10 a 03/10 (a semana começa em 27/09; os dias de setembro contam no mês de setembro)</td><td>16 h</td></tr>
+    <tr><td>04/10 a 10/10</td><td>32 h</td></tr>
+    <tr><td>11/10 a 17/10</td><td>44 h</td></tr>
+    <tr><td>18/10 a 23/10 (a semana vai até 24/10; este resumo conta até 23/10)</td><td>82 h</td></tr>
+    <tr><th>Total do mês, até 23/10</th><th>174 h</th></tr>
+  </table>
+
+  <h3>Horas por atividade</h3>
+  <table>
+    <tr><th>Atividade</th><th>Horas</th></tr>
+    <tr><td>Requisição de material: separação, entrega, caixa, reservas e aprovação</td><td>29 h</td></tr>
+    <tr><td>Usuários e acessos: quem foi desativado sai, e cada pessoa vê só a sua área</td><td>26 h</td></tr>
+    <tr><td>Datas e horas certas depois das 21h, em todo o sistema</td><td>18 h</td></tr>
+    <tr><td>Listas, buscas e filtros; custos de viagem e cadastro de clientes</td><td>15 h</td></tr>
+    <tr><td>Cadastro de materiais, famílias, fornecedores e configurações por módulo</td><td>14 h</td></tr>
+    <tr><td>Propostas: o que se vê é o que fica guardado, e a aprovação de desconto</td><td>11 h</td></tr>
+    <tr><td>Desfazer lançamentos, devoluções e estoque com casas decimais</td><td>10 h</td></tr>
+    <tr><td>Fila de separação, motivos de movimentação, sucata, indicadores e validade do lote</td><td>10 h</td></tr>
+    <tr><td>Pedido de compra: condições, documento em PDF, OS e fornecedor novo pelo F2</td><td>10 h</td></tr>
+    <tr><td>Entrega de EPI, ferramentas e documentos impressos sem corte</td><td>10 h</td></tr>
+    <tr><td>Recebimento: o pedido que fecha e reabre, e o material que fica com quem esperava</td><td>10 h</td></tr>
+    <tr><td>Documentos só com login, PDFs mais rápidos e instalação em computador novo</td><td>6 h</td></tr>
+    <tr><td>Organização dos relatórios e manuais</td><td>3 h</td></tr>
+    <tr><td>Frota: portal do motorista</td><td>2 h</td></tr>
+    <tr><th>Total</th><th>174 h</th></tr>
+  </table>
+  <p>Mexer nas telas foi a parte rápida: 4% do tempo, mesmo com todas as novidades do mês. Mais da
+  metade foi nas conferências automáticas: são robôs que repetem centenas de situações a cada mudança
+  — duas pessoas mexendo no mesmo material ao mesmo tempo, um lançamento desfeito no meio de uma
+  devolução, uma mensagem enviada às 22h30, um usuário tentando ler o que não é da área dele — para
+  que o que já funciona não quebre escondido. Esses erros quase nunca aparecem num teste feito à mão
+  e custam caro quando aparecem: viram peça entregue em dobro, estoque que não bate ou dado na mão de
+  quem não devia. O resto foi planejar cada mudança e atualizar os manuais. O ritmo cresceu ao longo
+  do mês: quase metade das horas ficou na última semana.</p>
+  <p class="nota">As horas são estimadas pelo registro do trabalho salvo ao longo do mês. Pesquisa,
+  conversas e testes feitos à mão não entram — o número real é maior.</p>
+
+  <h2>O que mudou no mês</h2>
+
+  <div class="item">
+    <h3>Requisição de material</h3>
+    <p>Duas pessoas mexendo na mesma requisição, ou no mesmo material, deixaram de separar e entregar
+    a mesma peça duas vezes: os gestos passaram a acontecer um depois do outro, e a separação não
+    aceita mais do que existe na prateleira. A peça separada que quebrou ou era a errada volta à
+    prateleira pelo botão “Devolver à prateleira”, sem precisar excluir a requisição. A entrega confere
+    tudo antes de mexer no estoque, o cancelamento funciona em todos os módulos que mostram o botão, e
+    cada situação da requisição mostra o botão certo.</p>
+    <figure><img src="2026-10-04_a_2026-10-10/prints/requisicao-devolver-prateleira.png" alt="Janela para devolver à prateleira a peça separada"><figcaption>Tirar da caixa a peça que não vai sair, dizendo quanto e por quê.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Fila de separação: o que separar e de onde pegar</h3>
+    <p>A Fila de separação mostra só as requisições com trabalho, na ordem em que devem ser feitas, e
+    diz o que fazer em cada uma. Cada item diz “Pegar em (endereço) — lote”, com a ordem de coleta pelo
+    caminho do almoxarifado e a lista de coleta para imprimir. A caixa separada que fica dias parada no
+    balcão aparece em Alertas e vai por e-mail. O painel ganhou o cartão “Requisições no prazo”, e
+    Relatórios ganhou Saldo por lote, Localizações vazias e Qualidade por fornecedor, entre outros.</p>
+    <figure><img src="2026-10-18_a_2026-10-24/prints/fila-separacao-onde-pegar.png" alt="Fila de separação com o endereço de cada item e a ordem de coleta"><figcaption>A fila mostra o endereço de cada item e a ordem de coleta.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>A chegada do material</h3>
+    <p>O material que chega pela nota, ou que sai liberado da inspeção, passou a ficar guardado para
+    quem estava esperando por ele, na ordem da fila, com e-mail avisando quanto ficou para cada um. A
+    solicitação de compra só fecha quando o material dela chega, e o pedido e a solicitação reabrem se
+    a entrada da nota for desfeita. O recebimento que já deu entrada no estoque não muda mais de
+    quantidade nem de valor, e o painel passou a mostrar quanto tempo a nota leva para virar estoque.</p>
+    <figure><img src="2026-10-11_a_2026-10-17/prints/painel-tempo-recebimento.png" alt="Cartão Tempo médio de recebimento no painel do Almoxarifado"><figcaption>O cartão novo diz quanto tempo a nota leva para virar estoque. No exemplo, a única nota do período entrou no estoque no mesmo momento em que chegou, por isso o tempo aparece zerado.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Pedido de compra e fornecedores</h3>
+    <p>O pedido de compra sai em PDF no formato do documento que a GMP manda ao fornecedor, com
+    condições de pagamento, frete, IPI, desconto e totais. Ele pode ser feito para uma OS: o que chega
+    fica reservado para aquela OS. A ficha do fornecedor se preenche pelo CNPJ e pelo CEP, com o
+    telefone da empresa e o do vendedor, e abre por cima do pedido pela tecla F2, sem perder o que já
+    foi lançado.</p>
+    <figure><img src="2026-10-04_a_2026-10-10/prints/pedido-compra-pdf.png" alt="PDF do pedido de compra no formato da GMP"><figcaption>O pedido de compra no formato do documento que a GMP manda ao fornecedor.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Cadastros e configurações</h3>
+    <p>As configurações de todos os módulos foram reunidas numa tela só, com um botão por módulo, e
+    cada pessoa vê só os módulos a que tem acesso. As famílias de material ganharam subfamílias em
+    árvore, e a unidade de compra virou a frase “1 CX contém 12 UN”. Material, família e grupo de
+    fornecedores desativados voltam com o botão Reativar. E duas pessoas editando o mesmo cadastro não
+    apagam mais, em silêncio, o que a outra acabou de mudar.</p>
+    <figure><img src="2026-10-04_a_2026-10-10/prints/configuracoes-modulos.png" alt="Tela de Configurações com a barra de módulos"><figcaption>Uma barra de módulos e, abaixo, as abas de cada um.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Movimentações e estoque que bate com a prateleira</h3>
+    <p>O motivo de um ajuste ou de uma perda passou a ser escolhido de uma lista, e o histórico filtra
+    e exporta por motivo. Desfazer um lançamento passou a ser tudo ou nada e a conferir o que já voltou
+    ao estoque, para não devolver a mesma peça duas vezes. O material em quilo, metro ou litro não é
+    mais recusado por causa de uma casa decimal, e a Entrada manual passou a guardar a validade do
+    lote.</p>
+    <figure><img src="../2026-09/2026-09-27_a_2026-10-03/prints/motivos-movimentacao.png" alt="Lista de motivos de movimentação"><figcaption>A lista de motivos, cada um com os tipos de movimentação em que vale.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Entrega de EPI e ferramentas</h3>
+    <p>A entrega de EPI saiu do papel: o colaborador assina na tela e confirma com a matrícula, o
+    estoque baixa sozinho e EPI sem CA ou com CA vencido não sai. A ficha por colaborador sai em PDF com
+    a assinatura de cada entrega. No empréstimo de ferramenta, o colaborador lê o termo de
+    responsabilidade e assina; a ferramenta ganhou Editar, a volta da manutenção com destino e a baixa
+    com motivo.</p>
+    <figure><img src="2026-10-18_a_2026-10-24/prints/entrega-epi-nova.png" alt="Nova entrega de EPI com o quadro de assinatura"><figcaption>Nova entrega de EPI: o colaborador assina na tela e confirma com a matrícula.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Acesso, datas e propostas</h3>
+    <p>O usuário desativado sai na primeira ação, com o aviso “Sessão encerrada”, e cada pessoa passou
+    a ver só os dados da sua área, inclusive na busca do topo. Datas e horas passaram a seguir o relógio
+    de Brasília em todo o sistema: o que é feito depois das 21h não aparece mais com a data do dia
+    seguinte. Na proposta, o que se vê na tela é o que fica guardado, e o desconto acima de 5% só é
+    decidido por quem pode aprovar descontos e não foi quem pediu.</p>
+    <figure><img src="2026-10-11_a_2026-10-17/prints/login-sessao-encerrada.png" alt="Tela de entrada com o aviso Sessão encerrada"><figcaption>O aviso diz por que a pessoa saiu e com quem falar.</figcaption></figure>
+  </div>
+
+  <p>Também no mês: o motorista da frota passou a registrar saída, retorno, inspeção e abastecimento
+  pelo celular, e o gestor exporta tudo no formato da planilha de controle; documentos da empresa
+  (proposta, PDF da OS, contrato, cotações, fotos) deixaram de abrir sem login; o PDF da OS ficou
+  cerca de dez vezes mais rápido; as buscas passaram a achar com e sem acento; e os documentos
+  impressos deixaram de cortar nome comprido.</p>
+
+  <h2>Relatórios das semanas</h2>
+  <ul>
+    <li>27/09 a 03/10 (na pasta de setembro) — Não Conformidades, Fila de separação, regras de
+      aprovação e o material que chega ficando com quem esperava por ele (pasta
+      <em>2026-09/2026-09-27_a_2026-10-03</em>)</li>
+    <li>04/10 a 10/10 — pedido de compra em PDF, ficha do fornecedor pelo CNPJ, configurações numa
+      tela só e duas pessoas na mesma requisição sem levar a mesma peça (pasta
+      <em>2026-10-04_a_2026-10-10</em>)</li>
+    <li>11/10 a 17/10 — desfazer lançamentos sem estoque trocado, cadastros que voltam com Reativar,
+      usuário desativado que sai na hora e a aprovação de desconto (pasta
+      <em>2026-10-11_a_2026-10-17</em>)</li>
+    <li>18/10 a 24/10 — entrega de EPI e ferramenta com assinatura, fila que diz de onde pegar,
+      pedido de compra para uma OS, portal do motorista e datas certas depois das 21h (pasta
+      <em>2026-10-18_a_2026-10-24</em>)</li>
+  </ul>
+</main>
+</body>
+</html>
