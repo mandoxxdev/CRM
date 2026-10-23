@@ -1132,7 +1132,8 @@ const FerramentasAlmoxarifado = () => {
               {/* Etapa 187 (RN-187.08b, B1246): avisa e NAO bloqueia — o envio segue normal */}
               {modal.ferramenta.restricao && (
                 <p role="note" className="almox-badge almox-badge-baixo" style={{ display: 'block', whiteSpace: 'normal', padding: '8px 10px' }}>
-                  Esta ferramenta voltou da manutenção em uso com restrição: {modal.ferramenta.restricao.observacoes}. Confira antes de emprestar.
+                  {/* Fase 5 da 187: a observacao que ja termina em . ! ? (ou reticencias) nao ganha outro ponto; o texto do usuario fica intacto */}
+                  Esta ferramenta voltou da manutenção em uso com restrição: {modal.ferramenta.restricao.observacoes}{/[.!?…]$/.test(String(modal.ferramenta.restricao.observacoes || '')) ? '' : '.'} Confira antes de emprestar.
                 </p>
               )}
               <div className="almox-field">

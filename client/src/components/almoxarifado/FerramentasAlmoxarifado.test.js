@@ -1140,6 +1140,19 @@ describe('FerramentasAlmoxarifado — Etapa 187, restrição da manutenção e b
     expect(toast.success).toHaveBeenCalledWith('Ferramenta emprestada — termo TERMO-20261022-0009 assinado');
   });
 
+  // Fase 5 (menor): a observacao do usuario que ja termina em pontuacao nao ganha outro ponto ("leve.. Confira"), e o texto dele
+  // fica como escrito (o ponto dele nao e apagado). A metade "sem ponto ganha o ponto" e o AVISO do 08b.
+  test.each([
+    ['ponto', 'Só para serviço leve.'],
+    ['exclamação', 'Não usar acima de 50 Nm!'],
+    ['interrogação', 'Torque confere?'],
+  ])('[RN-187.08b, Fase 5] observação terminada em %s: sem pontuação dupla e o texto do usuário intacto', async (_, obs) => {
+    comLista([{ ...RESTRITA, restricao: { ...RESTRICAO, observacoes: obs } }]);
+    await renderizar();
+    await clicar(botao('Emprestar', linhasFerramentas()[0]));
+    expect(aviso().textContent).toBe(`Esta ferramenta voltou da manutenção em uso com restrição: ${obs} Confira antes de emprestar.`);
+  });
+
   test('[RN-187.08c] Emprestar a sem restrição: nenhum aviso (metade positiva do 08b)', async () => {
     comLista([SEM, RESTRITA]);
     await renderizar();
