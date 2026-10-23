@@ -1,6 +1,6 @@
 # Etapa 189 — A janela de separação já abre com o endereço sugerido, e a fila imprime a lista de coleta
 
-> **Status:** 📝 **plano escrito (2026-10-23, sobre `7e76acc6`). Fase 2 (revisão do plano) não feita. Execução não começou.**
+> **Status:** 📝 **plano escrito (2026-10-23, sobre `7e76acc6`). Fase 2 (revisão do plano) feita em 2026-10-23: 0 Crítico, 3 Importantes, 6 Menores — ver "Emendas da Fase 2" (aplicar antes de T1). Execução não começou.**
 > Feature **05** (separação e picking). Continua a Etapa 188 (plano
 > `docs/superpowers/plans/2026-10-22-almoxarifado-etapa188-sugestao-de-coleta-na-fila-de-separacao.md`: a "Próxima tarefa detalhada",
 > a emenda **I1** da Fase 2 — "subir a pré-seleção a item 1 da 189, ela é o que torna a dica verdadeira" — e a **B1257**).
@@ -381,6 +381,154 @@ servidor) — o 6 é o que prova a fiação; (r) `listarFilaSeparacao` ignorando
 - **B1269 (NOVA, da Etapa 189) — o papel tem caixinha "OK" e não tem assinatura.** É roteiro de trabalho, não documento de controle (a
   rodada de separação já registra quem separou, Etapa 28). **Descartado:** campo de assinatura (sugeriria um controle que o sistema não
   confere).
+
+## Emendas da Fase 2
+
+Revisor fresco, 2026-10-23, sobre `9652ec6a`. Leu o CLAUDE.md (travas), este plano, o plano da 188 (Emendas C1/I1/I2/I3 e a
+"Próxima tarefa"), a spec 05, `requisitionService.js` (`lerDadosDaColeta`, `listarFilaSeparacao`, `checarOrigemItem`, a passada 1 da
+separação `:1295-1420`, a troca na separação `:1497-1520`, a entrega `:1700-1822`), `sugestaoDeColeta.js`, `permissions.js`
+(`requirePermission`, `separar_emitir` = ADMINISTRADOR/ALMOXARIFE), a rota do detalhe (`routes/almoxarifado.js:3836-3843`) e a da fila
+(`:4543-4550`), `RequisicoesList.js` (`:121-260`, os efeitos `:420-552`, `handleSeparacao` `:755-814`, `montarItensEntrega`, os botões de
+entrega `:1920-1960`), `FilaSeparacao.js` e `pdfTexto.js`. Duas sondas executadas (scratchpad, prefixo `f2r189-`):
+`f2r189-sonda1.js` (servidor real pelo `testApp`: duas rodadas de material com lote, com e sem o par na primeira; 403 de PRODUCAO; 404
+de `abc`) e `f2r189-sonda2.js` (jsPDF real: largura das células com as colunas sugeridas).
+
+**Atenção — a árvore de trabalho tem mudança da Fase 5 da 188 ainda não commitada** (`requisitionService.js` e `sugestaoDeColeta.js`:
+campo novo `pegar_em_alerta` = `RETENCAO_NO_MATERIAL`, aviso novo `PLANEJADA_INDISPONIVEL`). A sonda 1 rodou com ela; o cenário dela
+não passa pelas linhas mudadas (planejada sugerível; separação e entrega intocadas). Ver I3.
+
+**Resultado: 0 Crítico, 3 Importantes, 6 Menores. O contrato muda (I3: recorte com `pegar_em_alerta`; I2: colunas do PDF) — reler e
+congelar de novo depois do commit da Fase 5 da 188, antes de T1.**
+
+### I1 (Importante) — separação em duas rodadas: a pré-seleção grava uma troca que o almoxarife não fez, e o livro continua errado
+
+**Onde:** a passada 1 (`requisitionService.js:1407-1409`, "mista -> nula") e a troca na separação (`:1500-1520`), com a regra da 65 na
+tela (`RequisicoesList.js:183-188`). A RN-189.08 só vale quando o item é separado **numa rodada só** (ou entregue antes da segunda).
+
+**Cenário (sonda `f2r189-sonda1.js`, reproduzido):** material com lote, só L1 3 em YB-01; requisição de 6. Fila: `pegar_em` YB-01/L1 3,
+`cobre: true` (cobre o **separável** 3, não o pedido 6). Rodada 1 com o par (o que a janela da 189 pré-seleciona) → 200, planejada
+YB-01/L1. Chega L2 3 em YP-01. Fila: `pegar_em: null`, `PLANEJADA_NAO_COBRE`. A janela (65) abre em automático com o aviso de troca;
+confirmar → 200, planejada **nula** e **1 substituição** `SEPARACAO`, `automatica = 1`, 3. Entrega de um clique de 6 → 200: L1 3, L2 3,
+**linha sem lote −6**. O mesmo cenário com a rodada 1 automática (antes da 189): o **mesmo** saldo (L1 3, L2 3, −6) e **0**
+substituições. Isto é: a 189 não conserta o livro de quem separa em duas rodadas antes de entregar, e acrescenta no bloco
+"Substituições" uma troca que o almoxarife não escolheu (ele pegou 3 de um lugar e 3 de outro, e o sistema só guarda uma origem por item,
+B1254). A B1262 só fala da entrega.
+
+**Emenda (caminho reversível, escolhido):** manter a pré-seleção (o fluxo comum, "Separar e entregar", entrega a rodada 1 antes da 2 e
+fica certo) e dizer o custo:
+- **B1262** ganha o parágrafo: "separar uma parte do par sugerido e o resto **depois**, sem entregar no meio, troca a origem na segunda
+  rodada (a 65 registra a troca, `momento = 'SEPARACAO'`), e a entrega sai no automático — para material com lote, a linha sem lote fica
+  negativa como antes da 189. Descartado: não pré-selecionar quando a rodada é parcial (perderia o conserto do caso parcial que é entregue
+  antes da próxima rodada, o mais comum)."
+- **RN-189.09:** quando a quantidade pré-preenchida do item pré-selecionado é **menor** que o pendente de separação dele, a frase
+  "Sugerido…" ganha o fim **" Entregue esta parte antes de separar o resto — separar o resto de outro endereço troca a origem."**
+  (literal; T2 testa; controle: tirar a condição → a frase aparece no item que cobre tudo).
+- **T4 servidor, cenário novo 6** `[T4 rota, I1 da Fase 2] duas rodadas sem entregar -> 1 troca SEPARACAO automatica e a linha sem lote`
+  (o cenário da sonda) — documenta o custo pela porta real; e `[... ] entregando entre as rodadas -> 0 trocas e nenhuma linha sem lote`.
+- **Guia, "o que não cobre":** a frase da B1262 em linguagem de usuário.
+
+### I2 (Importante) — a coluna Qtd sugerida não cabe o número da RN-189.12 em linha nenhuma
+
+**Onde:** T3 item 2 (colunas `[14, 23, 75, 140, 168, 188]`, util da Qtd **19 mm**) × RN-189.10 (Qtd = `formatarQuantidade(q)` +
+` unidade`) × RN-189.12 ("Qtd `9999999999.9999`: um `text` só, dentro da coluna").
+
+**Medido (sonda `f2r189-sonda2.js`, jsPDF real):** `"9.999.999.999,9999 PC"` = 33,27 mm em f9, 29,58 f8, 25,88 f7, **22,18 f6** — não
+cabe em 19 mm nem na fonte mínima de `fonteQueCabe` (6); `prepararCelulas` (`pdfTexto.js:90-94`) cai no `linhasPorLargura` e **quebra**
+o número em duas linhas, o que a RN-186 proíbe e o teste da RN-189.12 pega. O executor só sairia disso enfraquecendo o teste ou
+mudando colunas no meio da task. (`"1.234,5678 KG"` também não cabe em f9: 21,21 mm.) Os cabeçalhos `Nº` (3,43) e `OK` (4,57) cabem nos 8.
+
+**Emenda:** colunas **`[14, 23, 70, 130, 160, 188]`** (util `[8, 46, 59, 29, 27, 8]`): o pior caso em f7 = 25,88/26,03 mm (`PC`/`UN`) ≤ 27.
+Congelar estas e manter o "medir com o jsPDF real" como conferência, não como decisão da task. Endereço 46 e Material 59 continuam
+quebrando dentro da célula (`prepararCelulas`), e o ☐ continua `rect(189, y − 3, 3.5, 3.5)`.
+
+### I3 (Importante) — o contrato da 189 não conhece o que a Fase 5 da 188 está acrescentando
+
+**Onde:** a árvore de trabalho (não commitada, outra sessão): `listarFilaSeparacao` grava `l.pegar_em_alerta` (`RETENCAO_NO_MATERIAL`
+quando o material tem bloqueado + em inspeção + em terceiros > 0) e `sugerirColeta` ganha o aviso `PLANEJADA_INDISPONIVEL` (planejada
+em endereço bloqueado/inativo/área especial ou lote bloqueado/vencido).
+
+**Consequência se nada mudar:** o recorte da RN-189.01 (`item_id, separavel, pegar_em, pegar_em_aviso`) perde o alerta — a janela
+pré-seleciona sem dizer que o sistema não sabe se ali estão as peças boas; e o PDF (que usa `textoAvisoPegarEm`) imprime linha vazia
+para `PLANEJADA_INDISPONIVEL` se a frase não existir em `coletaTexto.js`.
+
+**Emenda:** (1) RN-189.01 e o contrato: o recorte leva também **`pegar_em_alerta`** (idêntico ao da fila). (2) RN-189.02: o alerta **não**
+impede a pré-seleção (o livro fica certo qualquer que seja a peça boa pega dali; caminho reversível) e a janela mostra a frase do alerta
+da 188 abaixo do "Sai de" (mesmo testid da RN-189.09, depois da frase "Sugerido…"). (3) RN-189.10: o alerta vai na linha de aviso da
+parada (junto com o aviso, se houver), e o bloco "Sem endereço sugerido" cobre `PLANEJADA_INDISPONIVEL` sem `pegar_em`. (4) T3 move para
+`coletaTexto.js` **todas** as frases que a 188 fechar (as do aviso e a do alerta). (5) "Pré-requisito" do cabeçalho: congelar de novo
+este contrato **depois** do commit da Fase 5 da 188 (o plano já pede reler; agora se sabe o que muda).
+
+### Menores
+
+- **M1 — a soma da RN-189.04 só conta os pré-selecionados; o servidor soma todos.** `checarOrigemItem` (`:1167-1170`) soma a rodada de
+  todo irmão no mesmo par e o separado pendente de **todos** os itens da requisição planejados nele (semeado em `:1295-1313`). Cenário: o
+  almoxarife escolhe A-01 à mão no item 1 (4) antes de a sugestão chegar; o item 2 (4) é pré-selecionado em A-01 (6) → 400 "O saldo em
+  A-01 (2) não cobre a quantidade (4)". Recuperável (RN-189.07), mas evitável. **Emenda:** a soma é sobre todo item do mesmo material cujo
+  valor **atual** no "Sai de" é o par (manual, a planejada da 65 ou pré-selecionado) **mais** o separado pendente dos irmãos planejados no
+  par; T2 caso 4 ganha a variante "o primeiro escolhido à mão".
+- **M2 — item com separado pendente SEM planejada (rodada anterior no automático) é pré-selecionado e a pré-seleção não vira planejada.**
+  `temPlanejada` é falso (planejada nula), então a RN-189.02 pré-seleciona; mas `pendenteAntes > 0 && !mesmoPar` (`:1407`) grava planejada
+  nula de novo e a entrega sai no automático — a frase "Sugerido pela fila…" promete o que não acontece. E a dica, ali, é a do I2 da 188
+  (o separado no automático não é descontado: na sonda 1, cenário "antes da 189", a rodada 2 recebeu YB-01/L1 3 `cobre: true` com as 3
+  peças possivelmente já fora da prateleira). **Emenda:** RN-189.02 exige também `pendenteSeparado(item) === 0`; o item com pendente sem
+  planejada mostra a frase "Sugestão da fila: …" (sem pré-selecionar). Corrigir a frase do I2 da 188 ("some quando a 189 pré-selecionar")
+  no fechamento: some só para o que foi separado pela pré-seleção.
+- **M3 — a frase "não veio escolhida porque não cobre a quantidade desta separação" é falsa em dois dos motivos da RN-189.06** (par fora
+  das opções: busca de saldos falhou ou o saldo zerou; `cobre: false` da fila, que já disse "escolha este endereço") e a fila diz "já vem
+  escolhido" (B1265) também quando a janela não vai escolher por esses motivos. **Emenda:** frase neutra **"Sugestão da fila: ⟨…⟩ — não
+  veio escolhida; confira o saldo no 'Sai de' antes de escolher."** para todos os motivos; a B1265 diz "vem escolhido **quando o endereço
+  ainda tem o saldo ao abrir a janela**".
+- **M4 — T2 precisa formatar `quantidade_sugerida` e `RequisicoesList.js` não tem `fmtQtd`; o `coletaTexto.js` é de T3.** Se T2 importar
+  `coletaTexto`, deixa de ser galho independente. E o papel mistura dois formatos para a mesma quantidade: a coluna Qtd por
+  `formatarQuantidade` (até **4** casas) e a frase do aviso por `fmtQtd` da fila (até **3**): `0,1235` na coluna e "pegue 0,124 aqui"
+  na mesma parada. **Emenda:** T2 declara um `fmtQtd` local idêntico ao da fila (pt-BR, até 3 casas — o da tela que o almoxarife vê);
+  T3 usa o `fmtQtd` de `coletaTexto.js` também na coluna Qtd (tela = papel), e o T2 pode trocar o local pelo import num commit depois de
+  T3 (anotar na Execução). T2 e T3 continuam sem arquivo em comum.
+- **M5 — T4 cenário 2 diz "a linha sem lote −5 na padrão", e a fixture do molde não grava padrão.** O material da sonda (mesmo `INSERT` do
+  `filaSugestaoColetaIntegracao`) deixa `localizacao_padrao_id` nulo e a linha sem lote nasce com **endereço nulo** (sonda 1:
+  `{"loc":null,"lote":null,"quantidade":-6}`). **Emenda:** assertar "linha sem lote −5" sem endereço, ou gravar a padrão ZP-01 no `INSERT`
+  e então assertar o endereço.
+- **M6 — PDF de requisição com 0 paradas e só avisos, e o "a separar ⟨q⟩" sem fonte.** A RN-189.10 deixa o botão aparecer (item com
+  aviso) mas não diz se a tabela (e o cabeçalho) é desenhada vazia. **Emenda:** sem paradas, nenhuma tabela — o título, a linha "Fila
+  carregada em…", o cabeçalho da requisição e o bloco "Sem endereço sugerido"; `q` = `a_separar` do item (o número que a linha da fila
+  mostra). Teste em `listaColetaPdf.test.js`.
+
+### As quatro perguntas
+
+1. **Contrato.** O 403 é a literal de `requirePermission` (`permissions.js:292`; medido na sonda 1 pela fila: `{"error":"Sem permissão
+   para esta operação","acao":"separar_emitir","perfil":"PRODUCAO"}`); o 404 é a do detalhe (`routes/almoxarifado.js:3843`; `abc` → 404
+   medido). "Outro dono": nem a fila nem a separação filtram por dono — `separar_emitir` é do almoxarife e do administrador, que veem
+   todas; a rota nova segue (sem achado). Fora de SEPARAR: requisição só com ENTREGAR **está** na fila e volta com `itens` não vazio e
+   `pegar_em: null` (separável 0); só a que não tem etapa volta `itens: []` — coerente com a RN-189.01, mas o T1 caso 2 deve ter também a
+   variante "só ENTREGAR → itens com pegar_em null, ordem_coleta []". **O filtro não muda a fila sem filtro, nem o resultado da
+   requisição filtrada:** `sugerirColeta` é chamada por requisição, sem estado entre requisições (`sugeridoPorPar` é local à chamada);
+   `lerDadosDaColeta` lê saldos e séries **por material** e planejado/árvore **globais** — filtrar `itens` só tira materiais de outras
+   requisições, cujas linhas não entram na desta. A 404 de id não numérico tem de ser conferida **antes** do `AND r.id = ?` (o serviço
+   valida `Number.isInteger(Number(id))`; não passar `NaN` ao SQLite). Lacuna: I3 (o campo novo da 188).
+2. **RN × spec/B821/B204/65/C1.** B821: `itens` na ordem do pedido, recorte não reordena (ok). B204: a RN-189.08 é exatamente o conserto
+   do automático que não escolhe lote — vale para **uma** rodada (I1). Etapa 65: a RN-189.03 preserva a regra (a pré-seleção só em item
+   sem planejada), mas falta o item com pendente sem planejada (M2). C1 da 188: a tela não confia nela (RN-189.03, ok). Spec 05: a lista
+   impressa não é a "lista de separação como entidade" (`:56`), e o plano registra isso (ok).
+3. **Independência.** T1 → (T2 ∥ T3) → T4 é real: T2 mexe só em `RequisicoesList.js` e mocka a rota; T3 **cria** `coletaTexto.js` e
+   `listaColetaPdf.js` e mexe em `FilaSeparacao.js`; nenhum arquivo em comum. O único acoplamento escondido era a formatação de
+   quantidade (M4, resolvido sem import cruzado). T3 depende do contrato da 188 **depois** da Fase 5 dela (I3). T4 caso 6 depende de T2,
+   caso 7 de T3.
+4. **Até o último gesto.** Janela abre pré-selecionada (RN-189.02) → separar: o servidor exige que o **par** (endereço **e** lote) cubra a
+   rodada mais o pendente da requisição no par (`checarOrigemItem`, estrita; 400 mantém a janela). Série: a janela de **separação** não
+   escolhe séries (só a de entrega, `:430-470`), então a pré-seleção não precisa preencher nada; mas o lote do par vira a planejada e a
+   entrega passa a exigir séries **daquele lote** (`:1796-1801`; a janela de entrega filtra por ele, `seriesDoLote`, `:995`) — antes, no
+   automático, qualquer lote servia. A dica conta só séries EM_ESTOQUE do lote (I3 da 188), então o caso comum fecha; o custo vai na B1262
+   (texto no fim desta resposta). Segunda rodada: a pré-seleção não roda (planejada pendente → 65) e **não** cria troca falsa por si; quem cria a troca é a
+   segunda rodada de outro par/automática — I1. Entrega "Sai de": nada novo (B1264, ok); a janela de entrega parte da planejada (Etapa 59)
+   e a de um clique também sai dela (`:1784`); par que perdeu saldo → a de um clique recusa "a origem da separação (…) não serve mais (…) —
+   entregue escolhendo de onde sai" (`:1761`) e a janela abre em automático com a troca. PDF: fila vazia → "todas" desabilitado (ok);
+   requisição com 0 paradas → M6; 200 requisições: o papel é gerado do JSON já carregado, sem rede; o custo é ~5 `splitTextToSize` por
+   célula (`fonteQueCabe` desce até f6) — milhares de chamadas síncronas, ordem de grandeza de 1 s, sem achado (não prometer número sem medir
+   no fechamento).
+   - **B1262 para o usuário:** do jeito que está, não diz o que muda na tela. A emenda do I1 dá o texto; o guia precisa ainda de: "se o
+     'Confirmar Entrega' responder *a origem da separação (B-01) não serve mais … — entregue escolhendo de onde sai*, clique em **Entregar
+     escolhendo de onde sai…** e escolha outro endereço: a troca fica registrada no bloco Substituições" e "material com série: depois de
+     separar do endereço sugerido, a entrega pede séries daquele lote".
 
 ## Execução
 
