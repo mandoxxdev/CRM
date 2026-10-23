@@ -1,20 +1,28 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-22 (Etapas 172 a 186) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-22 (Etapas 172 a 187) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185 e 186) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186 e 187) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172 a 178 e 180 a 186 ENTREGUES · próxima: Etapa 187)
+> ## Onde o desenvolvimento está — 2026-10-22 (Etapas 172 a 178 e 180 a 187 ENTREGUES · próxima: Etapa 188)
 >
-> **O desenvolvimento parou aqui: Etapa 186 fechada — 2026-10-22.** **Os PDFs da remessa a terceiros e da posição do cliente cabem na
+> **O desenvolvimento parou aqui: Etapa 187 fechada — 2026-10-22.** **A ferramenta baixada não é calibrada nem editada, e a restrição da
+> manutenção aparece na lista e no Emprestar**: em **Almoxarifado → Ferramentas**, a linha da ferramenta *Baixada* não tem mais **Editar**
+> (para corrigir um dado, **Reverter baixa** primeiro) e o sistema recusa calibrar ou editar a baixada com *"Ferramenta baixada não pode ser
+> calibrada (⟨nome⟩)"* / *"… editada (⟨nome⟩)"*; a ferramenta que voltou da manutenção *Em uso com restrição* mostra o selo amarelo **Em uso
+> com restrição** e *"Restrição: ⟨texto⟩"* para todos, e o **Emprestar** avisa sem bloquear; a restrição sai com uma manutenção nova *Em
+> condições de uso*. Nada a rodar antes do deploy. **Próxima: Etapa 188** — a fila de separação sugere de onde pegar cada item e em que ordem
+> andar (ver o plano da 188).
+>
+> **Etapa 186, 2026-10-22.** **Os PDFs da remessa a terceiros e da posição do cliente cabem na
 > folha**: no **PDF da remessa** (**Almoxarifado → Remessas a Terceiros → Abrir → PDF da remessa**) e no **PDF da posição** (**Materiais de
 > Clientes**), cada texto da tabela quebra em linhas dentro da coluna — o nome comprido do material sai inteiro, o código não invade a coluna
 > vizinha, o título com a razão social quebra, *TAMBOR* sai inteiro e as quantidades saem no formato brasileiro (*0,3*). Na remessa, a
 > assinatura fica abaixo da observação e nunca sozinha numa folha, e toda página nova diz *"Remessa para terceiros — ⟨número⟩ (continuação)"*.
 > Na etiqueta, o código comprido diminui a letra e não escreve mais por cima do nome. Nada muda no que é gravado nem nas telas; nada a rodar
 > antes do deploy. O aviso **C445** (a remessa cortava o nome do material) está resolvido. **Próxima: Etapa 187** — a ferramenta baixada não é
-> calibrada nem editada, e a restrição da manutenção aparece na lista e no Emprestar (ver o plano da 187).
+> calibrada nem editada, e a restrição da manutenção aparece na lista e no Emprestar (ver o plano da 187). *(Feita: a 187.)*
 >
 > **Etapa 185, 2026-10-22.** **A tabela da ficha de EPI e o termo de ferramenta cabem na folha**:
 > no PDF da ficha (**Almoxarifado → Entrega de EPI → Ficha por colaborador → Gerar PDF**), cada texto da linha da entrega quebra em linhas
@@ -6933,6 +6941,66 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 187 — A ferramenta baixada não é calibrada nem editada, e a restrição da manutenção aparece (ENTREGUE — 2026-10-22)
+
+**O que mudou, em uma frase:** a ferramenta descartada (*Baixada*) não aceita mais calibração nem edição, e a ferramenta que voltou da
+manutenção *Em uso com restrição* ganha um selo amarelo na lista e um aviso no **Emprestar**.
+
+**O problema que ela resolve.** A baixada ainda aceitava um certificado de calibração novo e a troca do cadastro por fora da tela — dado novo
+numa peça que foi para o descarte. E a restrição da manutenção (*"Só para serviço leve"*) sumia depois de gravada: a ferramenta voltava a
+*Disponível* igual a uma perfeita, e quem a emprestava não ficava sabendo. É a etiqueta amarela na prateleira: quem pega vê, ela não tranca
+a prateleira, e sai quando a ferramenta volta boa de outro conserto.
+
+| Antes | Agora |
+|---|---|
+| A linha da baixada tinha **Editar** | Só **Reverter baixa**; editar a baixada é recusado: *"Ferramenta baixada não pode ser editada (⟨nome⟩)"* |
+| Calibrar a baixada pela integração gravava | Recusado: *"Ferramenta baixada não pode ser calibrada (⟨nome⟩)"* |
+| *Em uso com restrição* + *Volta ao uso* deixava a ferramenta igual a uma perfeita | Selo **Em uso com restrição** e *"Restrição: ⟨texto⟩"* na coluna Status, para todos os perfis |
+| **Emprestar** não dizia nada | *"Esta ferramenta voltou da manutenção em uso com restrição: ⟨texto⟩. Confira antes de emprestar."* — e empresta normalmente |
+| — | A restrição sai quando uma manutenção nova é concluída *Em condições de uso* |
+
+**Antes de testar (uma vez).** Um usuário **Almoxarife** (ou Administrador do almoxarifado) e um usuário de **chão de fábrica** (com acesso ao
+módulo, sem perfil no almoxarifado). Um colaborador ativo, com matrícula, no cadastro da Fábrica (para o empréstimo). Em **Almoxarifado →
+Ferramentas → Nova ferramenta**: código *FER-187*, nome *Torquímetro 187*, marque **Exige calibração (instrumento de medição)**, **Cadastrar**.
+Na linha dela, **Calibração**: **Data da calibração** = hoje, **Data de validade** = daqui a um ano, **Registrar** (*"Calibração registrada"*).
+
+**Roteiro de teste (10 minutos — como Almoxarife, salvo onde dito).**
+
+1. **Concluir com restrição.** Na linha da *FER-187*, **Iniciar manutenção**, **Descrição** *Revisão*, **Iniciar** (*"Manutenção iniciada"*).
+   Depois **Concluir manutenção**: **Condição do item** = *Em uso com restrição*, **Destino** = *Volta ao uso*, e no campo **Qual é a
+   restrição \*** escreva *Só para serviço leve*. **Concluir** → *"Manutenção concluída"*.
+2. **O selo na lista.** A linha fica *Disponível* com o selo amarelo **Em uso com restrição** ao lado e, embaixo, *"Restrição: Só para serviço
+   leve"*.
+3. **Para quem não gerencia.** Saia e entre como o usuário de chão de fábrica, **Almoxarifado → Ferramentas**: a *FER-187* mostra o mesmo selo
+   e o mesmo texto (sem botões). Volte ao Almoxarife.
+4. **O Emprestar avisa e empresta.** **Emprestar** na *FER-187*: logo abaixo do código e do nome aparece *"Esta ferramenta voltou da
+   manutenção em uso com restrição: Só para serviço leve. Confira antes de emprestar."* Escolha o colaborador, peça a assinatura
+   (**Confirmar assinatura**) e a matrícula digitada por ele, **Emprestar** → *"Ferramenta emprestada — termo ⟨número⟩ assinado"*. A linha fica
+   *Emprestada*, ainda com o selo.
+5. **Uma manutenção "em condições" limpa.** **Devolver** (*"Ferramenta devolvida"*). **Iniciar manutenção** → **Concluir manutenção** com
+   *Em condições de uso* / *Volta ao uso* → *"Manutenção concluída"*. O selo e o *"Restrição: …"* somem; **Emprestar** abre sem o aviso (feche
+   sem emprestar).
+6. **Baixar.** **Iniciar manutenção** de novo e, **antes de concluir**, abra uma **segunda aba** do navegador em **Almoxarifado →
+   Ferramentas**. Na **aba 2**, clique **Calibração** na *FER-187* e preencha as duas datas — **não** clique **Registrar** ainda. Na **aba 1**,
+   **Concluir manutenção** com *Inservível* (o destino vira *Baixa (descarte)* e o campo vira **Motivo da baixa \***), motivo *Motor queimado*,
+   **Concluir** → *"Manutenção concluída — ferramenta baixada"*. A linha fica **Baixada**, sem selo amarelo, com um botão só: **Reverter
+   baixa** (sem **Editar** e sem **Calibração**).
+7. **Calibrar a baixada é recusado.** Na **aba 2** (a janela de calibração ainda aberta), clique **Registrar** → *"Ferramenta baixada não pode
+   ser calibrada (Torquímetro 187)"*. Nada foi gravado. *(Do mesmo jeito, uma janela **Editar** aberta antes da baixa e salva depois dá
+   "Ferramenta baixada não pode ser editada (Torquímetro 187)" — o nome continua o de antes.)*
+8. **Reverter baixa.** Na **aba 1**, **Reverter baixa**, **Justificativa** *baixa errada*, **Confirmar** → *"Baixa revertida — a ferramenta
+   voltou a ficar disponível"*. **Editar** e **Calibração** voltam; editar o nome → *"Ferramenta atualizada"*; registrar uma calibração →
+   *"Calibração registrada"*. Sem selo (a última condição foi *Inservível*).
+
+**O que esta etapa não cobre.** A inspeção não avisa a restrição do instrumento, e o empréstimo não grava que houve o aviso. Não há botão para
+tirar a restrição à mão — ela sai com a próxima manutenção concluída *Em condições de uso*. Se a ferramenta for baixada com *Em uso com
+restrição* + *Baixa (descarte)* e depois revertida, volta **com** o selo, e o texto do selo é o motivo da baixa (a manutenção tem um campo
+só de observações). Instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* ainda mede na inspeção (**B1146**). **Nada a rodar
+antes do deploy.**
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos provam pela rota real e pela tela (com o
+JSON escrito à mão e com a resposta gravada da rota real) — escrito para você conferir à mão.
+
 ## Etapa 186 — Os PDFs da remessa a terceiros e da posição do cliente cabem na folha (ENTREGUE — 2026-10-22)
 
 **O que mudou, em uma frase:** no PDF da remessa a terceiros e no da posição do cliente, texto comprido quebra em linhas dentro da coluna —
@@ -7436,6 +7504,8 @@ vai para baixa (descarte); a baixada fica na lista, mas não circula mais.
 4. Inicie de novo; escolha *Inservível*: o **Destino** vira *Baixa (descarte)* e o campo vira **Motivo da baixa**. Conclua sem motivo: *"Informe
    o motivo da baixa nas observações"*. Escreva *Motor queimado* e conclua: *"Manutenção concluída — ferramenta baixada"*, selo **Baixada**.
 5. Na linha da baixada: só **Editar** e **Reverter baixa** (sem Emprestar, Ocorrência, Calibração). O filtro de status tem *Baixada*.
+   **Mudou na Etapa 187:** este passo dizia *"só Editar e Reverter baixa"* e valeu até a 186; **desde a 187 a baixada tem só Reverter
+   baixa** — o **Editar** saiu dela (**B1242**). Ver o roteiro da Etapa 187.
 6. **Reverter baixa**, justificativa *baixa errada*: *"Baixa revertida — a ferramenta voltou a ficar disponível"*.
 7. (Opcional) Inicie outra manutenção e conclua com *Em uso com restrição* sem descrever: *"Descreva a restrição nas observações"*.
 
@@ -7495,7 +7565,7 @@ calibração" errado não tinha como ser corrigido pela tela.
 
 | Antes | Agora |
 |---|---|
-| Só **Nova ferramenta** | **Editar** em toda linha, em qualquer status |
+| Só **Nova ferramenta** | **Editar** em toda linha, em qualquer status *(**mudou na Etapa 187:** salvo a **Baixada** — B1242)* |
 
 **Roteiro de teste (5 minutos — com um usuário Administrador ou Almoxarife).**
 

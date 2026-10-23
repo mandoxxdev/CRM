@@ -23,7 +23,7 @@
 
 | RN | Enunciado | Cenário |
 |---|---|---|
-| RN-175.01 | Toda linha da lista de ferramentas, **em qualquer status**, tem o botão **Editar** para quem pode gerenciar ferramentas; sem a permissão, não aparece (como os outros botões de escrita da linha). | Ferramenta *Emprestada* → **Editar** aparece. Usuário sem `gerenciar_ferramentas` → nenhum botão. |
+| RN-175.01 | Toda linha da lista de ferramentas, **em qualquer status**, tem o botão **Editar** *(**mudou na Etapa 187 — B1242, que revê a B1131: salvo a Baixada**; a baixada não tem Editar e o servidor recusa a edição)* para quem pode gerenciar ferramentas; sem a permissão, não aparece (como os outros botões de escrita da linha). | Ferramenta *Emprestada* → **Editar** aparece. Usuário sem `gerenciar_ferramentas` → nenhum botão. |
 | RN-175.02 | **Editar** abre **"Editar ferramenta"** com os 9 campos preenchidos da ferramenta. O **status** não é editável aqui — ele muda pelas ações (emprestar, bloquear, manutenção…). | Abrir FER-001 → código *FER-001*, nome, tipo, setor, série, localização, "Exige calibração" desmarcado. |
 | RN-175.03 | **Salvar** manda o PUT com os 9 campos; campo opcional apagado vai como `null` e **limpa** o valor gravado. Sucesso: *"Ferramenta atualizada"*, a janela fecha e a lista recarrega. | Apagar o número de série e salvar → a coluna **Série** mostra *—*. |
 | RN-175.04 | Código de patrimônio ou nome vazios (ou só espaços) são recusados na tela, sem PUT: *"Informe o código de patrimônio"* / *"Informe o nome da ferramenta"* (as mesmas do cadastro). | Apagar o nome e salvar → a frase, nada enviado. |

@@ -9,6 +9,11 @@
 > (`../README.md`) diziam **🟡**. **O 🟢 estava errado** desde a revisão final da 9b (que já registrava a edição pela tela e a inspeção como
 > pendências); vale o 🟡. O bloco antigo ficou, riscado, como histórico.
 >
+> **+ Etapa 187 (2026-10-22, T1 `3d45817f`, T2 `130caaca`, T3 `c643054e`, T4 `b020c10c`, Fase 5 `e182d42d`, `a255dadf`): a ferramenta
+> baixada não é calibrada nem editada, e a restrição da manutenção aparece na lista e no Emprestar** — fecha a **D (177)(2)** e a **D (177)(5)**.
+> **Mudou uma regra desta spec:** a RN-175.01 dizia *"Editar em qualquer status"*; desde a 187 é *"em qualquer status **salvo Baixada**"*
+> (**B1242**, que revê a **B1131**). Ver a seção "Etapa 187", no fim. O status não muda (🟡, pela integração com a inspeção).
+>
 > **+ Etapa 180 (2026-10-22, T1 `2092806d`, T2 `11ef2821`, T3 `04b9d2fb`, T4 `31fb475f`+`3d161c35`, Fase 5 `c40b1f56`, `bcd89a2f`, `003de01b`):
 > termo de responsabilidade no empréstimo (RN-D do design de 16/09)** — colaborador do cadastro, texto versionado do termo, assinatura e
 > **+ Etapa 181 (2026-10-22, T1 `3ce1d3a2`, Fase 5 `71418065`): com quem a ferramenta está passa a ser só de quem gerencia ferramentas** — o
@@ -115,6 +120,12 @@ calibração com vencimento que impede o uso. (Lembrete automático de devoluç�
       "ferramenta é patrimônio, não estoque" e precisa de decisão da empresa; a devolução continua sem termo.
 - [x] **Retorno da manutenção com condição e destino; baixa de ferramenta** — `17ce8759` (servidor), `c2bc2d37` (tela), Etapa 177.
       Não estava no checklist original; nasceu do pedido da usuária ("condição após a manutenção, volta ao responsável ou descarte").
+- [x] **A ferramenta baixada não é calibrada nem editada** (D (177)(2)) — Etapa 187: servidor `3d45817f` (400 *"Ferramenta baixada não pode
+      ser calibrada (⟨nome⟩)"* / *"… editada (⟨nome⟩)"*, guarda na gravação); a tela tira o **Editar** da baixada `c643054e`; integração
+      `b020c10c`.
+- [x] **A restrição da manutenção aparece depois de gravada** (D (177)(5)) — Etapa 187: `restricao` no `GET /ferramentas` com lista branca
+      `130caaca` (provada com o serviço devolvendo campo a mais na Fase 5, `e182d42d`); selo, *"Restrição: ⟨observações⟩"* e o aviso no
+      **Emprestar** sem bloquear `c643054e` (sem pontuação dupla, `a255dadf`); integração e fixture real `b020c10c`.
 - [x] Manutenção: histórico de manutenções, ferramenta em manutenção não empresta — `b383b37`,
       compensação e claim corrigidos em `99e5dc7` (Task 4, RN-07)
 - [x] **Calibração**: data da última, validade, certificado anexo, alerta de vencimento —
@@ -210,7 +221,9 @@ Só exibição — nenhuma rota, consulta, valor gravado ou porta de saldo mudou
 ## Etapa 175 — editar a ferramenta pela tela (2026-10-22)
 
 - Botão **Editar** em toda linha, em qualquer status, para `gerenciar_ferramentas`; o modal é o do cadastro ("Editar ferramenta"), com os
-  9 campos preenchidos (RN-175.01/02).
+  9 campos preenchidos (RN-175.01/02). **Mudou na Etapa 187 (B1242):** isto dizia *"em qualquer status"* e valeu até a 187, inclusive para a
+  *Baixada* da 177; **desde a 187 é "em qualquer status salvo Baixada"** — a linha da baixada não tem **Editar** e o servidor recusa o `PUT`
+  com *"Ferramenta baixada não pode ser editada (⟨nome⟩)"*. Para corrigir um dado da baixada, **Reverter baixa** primeiro.
 - Salvar manda os 9 campos sempre; opcional vazio vai `null` e limpa o gravado; sucesso *"Ferramenta atualizada"*, recarrega a lista e o
   painel de calibrações (RN-175.03). Código ou nome em branco recusam na tela (RN-175.04). O 409 *"Código de patrimônio já cadastrado"* e o
   404 *"Ferramenta não encontrada"* aparecem com a frase do servidor, janela aberta (RN-175.05). Material/localização gravados fora da lista
@@ -218,7 +231,8 @@ Só exibição — nenhuma rota, consulta, valor gravado ou porta de saldo mudou
 - Servidor sem mudança de código. **Medido** (`2a54344f`, `toolFerramentaEdicao.api.test.js`): o PUT que repete o patrimônio de outra →
   409; o próprio patrimônio passa; `null` limpa; o PUT não muda o status; marcar "exige calibração" pelo PUT faz o próximo empréstimo
   recusar (RN-03) e desmarcar libera (RN-175.07/08). Antes desta etapa o 409 só era provado no POST.
-- Decisões **B1130** (sem trava de edição simultânea — vale o último) e **B1131** (editar em qualquer status).
+- Decisões **B1130** (sem trava de edição simultânea — vale o último) e **B1131** (editar em qualquer status — **revista na Etapa 187,
+  B1242: salvo Baixada**).
 - Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa175-edicao-de-ferramenta-pela-tela.md`.
 
 ## Etapa 177 — o retorno da manutenção com a condição e o destino (2026-10-22)
@@ -248,7 +262,7 @@ Só exibição — nenhuma rota, consulta, valor gravado ou porta de saldo mudou
   calibração válida fora do painel. **O plano afirmava, na releitura própria, que "ninguém" além do painel lia o status da ferramenta —
   estava errado:** a inspeção usa a ferramenta como instrumento (sem olhar o status) e a coluna de calibração da tela também; os dois foram
   corrigidos. Limitação declarada (**D (177)**): *Em uso com restrição* + *Volta ao uso* fica DISPONIVEL igual a *OK* — a restrição não
-  aparece na lista nem no empréstimo.
+  aparece na lista nem no empréstimo. *(**Resolvida na Etapa 187** — o selo, o texto e o aviso no Emprestar; ver a seção "Etapa 187".)*
 - Testes: `toolManutencaoRetorno.api.test.js` (13 + 4 da Fase 5), `FerramentasAlmoxarifado.test.js` (+6 + 1), `medidasInspecao.api.test.js`
   (+2), `InspecoesAlmoxarifado.test.js` (+1). Plano:
   `docs/superpowers/plans/2026-10-22-almoxarifado-etapa177-retorno-da-manutencao-com-condicao-e-destino.md`.
@@ -306,3 +320,31 @@ Só exibição — nenhuma rota, consulta, valor gravado ou porta de saldo mudou
   texto ao imprimir (anterior, desde a 180) — **C447**.
 - Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa185-tabela-da-ficha-epi-dentro-da-folha.md`. Novidades: seção "Etapa 185",
   **B1219**, **C447**. O status da feature não muda.
+
+## Etapa 187 — a ferramenta baixada não é calibrada nem editada, e a restrição da manutenção aparece (2026-10-22)
+
+- **A baixada não calibra nem edita** (RN-187.01..04, `3d45817f`): `POST /ferramentas/:id/calibracoes` e `PUT /ferramentas/:id` em BAIXADA →
+  **400** *"Ferramenta baixada não pode ser calibrada (⟨nome⟩)"* / *"Ferramenta baixada não pode ser editada (⟨nome⟩)"* — depois do 404 e
+  antes da data inválida / do 409 de patrimônio; vale com corpo vazio (antes 200). O certificado anexado é apagado. A guarda está **na
+  gravação** (`UPDATE … AND status <> 'BAIXADA'`, `INSERT … SELECT … WHERE EXISTS`) além da checagem cedo; com `changes = 0`, a releitura
+  responde 404 (sumiu) ou o 400 da baixada — nunca segue para a auditoria (emenda I1). Os outros seis status e a revertida calibram e editam
+  como antes (**B1240**, **B1241**, **B1242**, **B1243**).
+- **`restricao` no `GET /ferramentas`** (RN-187.05..07, `130caaca`): `null | { manutencao_id, observacoes, data_fim }` (o `data_fim` em UTC,
+  como gravado). Decide a **última manutenção concluída que declarou condição** (`data_fim DESC, id DESC`); *Em uso com restrição* →
+  objeto; *Em condições de uso* ou *Inservível* → `null`; concluída **sem** condição (integração, B1140) é pulada (**B1244**). Quem não tem
+  `gerenciar_ferramentas` recebe por **lista branca** exatamente as três chaves; quem gerencia recebe o objeto do serviço — provado na Fase 5
+  com o serviço devolvendo campo a mais (`e182d42d`, **B1245**). O empréstimo **não** é bloqueado (**B1246**).
+- **Tela** (RN-187.08, `c643054e`): selo **"Em uso com restrição"** e *"Restrição: ⟨observações⟩"* na coluna Status, para todos, fora da
+  baixada (**B1247**); o modal **Emprestar** mostra *"Esta ferramenta voltou da manutenção em uso com restrição: ⟨observações⟩. Confira antes
+  de emprestar."* e envia normalmente (sem ponto a mais quando a observação já termina em `.`, `!`, `?` ou `…` — `a255dadf`); a baixada
+  **sem Editar** — **a RN-175.01 mudou** (ver a seção "Etapa 175").
+- **Integração** (`b020c10c`): o gesto inteiro pela rota (restrição → emprestar → devolver → OK limpa → baixa → editar/calibrar 400 →
+  reverter → 200/201 e o painel) e a fixture real `client/src/components/almoxarifado/__fixtures__/ferramentasRestricao.rota.json`, comparada
+  com a rota a cada execução.
+- Testes: `toolBaixadaNaoCalibraNemEdita.api.test.js` (17), `toolRestricaoDaManutencao.api.test.js` (17), `toolBaixadaERestricaoIntegracao.api.test.js`
+  (4), `FerramentasAlmoxarifado.test.js` (64 no arquivo).
+- **Fora (D (187)):** a inspeção não avisa a restrição; o empréstimo não grava que houve aviso; o histórico (`/manutencoes`, `/calibracoes`,
+  `/ocorrencias`) continua aberto a todo o módulo; B1146 segue; o ramo 404 da releitura sem teste; restrição + baixa + reverter mostra o
+  **motivo da baixa** no selo (campo de observações único). Plano:
+  `docs/superpowers/plans/2026-10-22-almoxarifado-etapa187-ferramenta-baixada-e-restricao-da-manutencao.md`. Novidades: seção "Etapa 187",
+  **B1240** a **B1248**, **D (187)**, **F (187)**. O status da feature não muda.

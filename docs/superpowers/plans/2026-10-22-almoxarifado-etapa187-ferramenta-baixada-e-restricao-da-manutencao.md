@@ -1,7 +1,9 @@
 # Etapa 187 — A ferramenta baixada não é calibrada nem editada, e a restrição da manutenção aparece na lista e no Emprestar
 
-> **Status:** 📝 **plano escrito (2026-10-22); Fase 2 feita** (revisor fresco, 0 Crítico, 5 Importantes, 7 Menores — ver "Emendas da
-> Fase 2"; as emendas **valem por cima** do texto das RN, do contrato e das tasks). T1–T4 feitas (`3d45817f`, `130caaca`, `c643054e`, `b020c10c`), suítes verdes. Próximo passo: Fase 5. Feature **16** (ferramentas e calibração).
+> **Status:** ✅ **FECHADA (2026-10-22): T1 `3d45817f`, T2 `130caaca`, T3 `c643054e`, T4 `b020c10c`; Fase 5 e fix-round `e182d42d` (M1,
+> a lista branca provada) e `a255dadf` (o aviso sem pontuação dupla); fechamento (skill `fechar-etapa`) no commit seguinte.** Próxima:
+> **Etapa 188** (ver "Próxima tarefa detalhada", no fim). Fase 2 feita (revisor fresco, 0 Crítico, 5 Importantes, 7 Menores — ver "Emendas da
+> Fase 2"; as emendas **valem por cima** do texto das RN, do contrato e das tasks). Feature **16** (ferramentas e calibração).
 > Fecha **D (177)(2)** e **D (177)(5)** de `docs/almoxarifado-novidades-por-etapa.md:17824-17832`. Origem: plano da 177
 > (`docs/superpowers/plans/2026-10-22-almoxarifado-etapa177-retorno-da-manutencao-com-condicao-e-destino.md`, "Fase 5", achado 5, e
 > "Releitura própria", 3º item).
@@ -169,8 +171,8 @@ res.json(ferramentas.map((f) => ({
 | T2 | Servidor: `restricao` no GET + lista branca (RN-187.05..07) | **tronco** (congela o JSON da lista; mesmo arquivo da T1 — depois dela) | ✅ `130caaca` |
 | T3 | Tela: selo, aviso no Emprestar, Editar fora da baixada (RN-187.08) | galho (contra o contrato acima; só o client) | ✅ `c643054e` |
 | T4 | Integração pela rota e pelo serviço + fixture real para o client | depois de T1, T2, T3 | ✅ `b020c10c` |
-| F5 | Revisão adversarial (Fase 5) e fix-round | depois da T4 | — |
-| — | Fechamento (`fechar-etapa`) | por último | — |
+| F5 | Revisão adversarial (Fase 5) e fix-round | depois da T4 | ✅ `e182d42d`, `a255dadf` |
+| — | Fechamento (`fechar-etapa`) | por último | ✅ (commit do fechamento) |
 
 T1 e T2 mexem em `toolService.js` — sequenciais (um executor, T1 → T2). T3 só toca `FerramentasAlmoxarifado.js` e o teste dele: pode ir em
 paralelo numa worktree (sem SQLite compartilhado). T4 escreve no mesmo teste do client que a T3 — só depois. Nenhuma task toca motor de
@@ -570,10 +572,106 @@ texto das RN, do contrato e das tasks; o executor não precisa reconciliar — o
 - client `CI=true npx react-scripts test --watchAll=false` — **182/182** suítes, **2460/2460** testes.
 - client `CI=true npx react-scripts build` — *Compiled successfully*.
 
-Próximo passo: **Fase 5** (revisão adversarial) e o **fechamento** (`fechar-etapa`) — não feitos nesta execução.
+## F5 — Fase 5 (revisão adversarial) e fix-round (2026-10-22)
 
-## Próxima tarefa detalhada
+Revisão adversarial feita por outra sessão sobre `122d4ca1`; os achados chegaram a esta execução assim (a contagem por gravidade não foi
+repassada, então não é escrita aqui): **M1** (corrigir teste), **um menor de tela** (corrigir, visto só por leitura) e **dois itens para
+registrar** em **D (187)**. Nenhum achado pediu mudança de servidor.
 
-*(preenchida no fechamento. Candidatos já medidos no plano da 177: a aba de histórico da ferramenta — `GET /ferramentas/:id/manutencoes`,
-`/ocorrencias`, `/emprestimos?ferramenta_id=` (`toolService.js:506` filtra por `ferramenta_id`, mas a rota exige `gerenciar_ferramentas`) —
-e as 🟡 do mapa que não dependem da empresa.)*
+### M1 — a lista branca da `restricao` na rota não era provada → CORRIGIDO (`e182d42d`)
+
+- **O achado:** trocar a lista branca (`extended.js`, o `.map` do `GET /ferramentas`) por `restricao: f.restricao` deixava
+  `toolRestricaoDaManutencao` **13/0** e a integração **4/0** — o serviço devolve só as três chaves, então o `deepStrictEqual` do RN-187.06
+  não tinha o que pegar. É o controle **(5) da T2**, que o plano previu verde e registrou como "esperado" sem escrever o cenário que o
+  discrimina.
+- **O conserto (só teste):** `[RN-187.06 M1]` em `toolRestricaoDaManutencao.api.test.js`, nos quatro perfis. O teste embrulha
+  `toolService.listarFerramentas` (a rota lê a propriedade do módulo a cada chamada — mesmo molde do stub de serviço da M3 da 182) para pôr
+  `usuario_id: 77` e `concluido_por: 'Fulano Extra'` na restrição, com premissa `chamadas === 1` (a rota passou pelo embrulho) e o original
+  restaurado no `finally`.
+- **Comportamento congelado** (coerente com a 181, `emprestimo_aberto`): quem **não** tem `gerenciar_ferramentas` (PRODUCAO, GESTOR) recebe
+  **exatamente** `{ manutencao_id, observacoes, data_fim }` e o corpo não contém `Fulano Extra`; quem gerencia (ALMOXARIFE, ADMIN) recebe o
+  objeto do serviço **como veio**, com as chaves a mais. **Descartado:** lista branca também para quem gerencia (a 181 não faz isso, e quem
+  gerencia já vê o histórico inteiro da ferramenta).
+- **Controles** (perl, âncora contada = 1, md5 `c0f0daa9…` antes e restaurado, cópia `scratchpad/fix187-extended.js`, `git diff --stat` só o
+  teste):
+  - **S4** — lista branca trocada por `? f.restricao : null` (md5 `279f83b2…`) → caem **só** `[RN-187.06 M1] PRODUCAO` e `[RN-187.06 M1]
+    GESTOR`, pela asserção *"PRODUCAO: quem nao gerencia recebe so as tres chaves"* / *"GESTOR: …"* (o `deepStrictEqual` mostra
+    `concluido_por` e `usuario_id` a mais). 15/2.
+  - **S4b** — lista branca aplicada a **todos** (`if (false) return res.json(ferramentas)`, md5 `79ed3574…`) → caem `[RN-187.06 M1] ALMOXARIFE`
+    e `ADMIN` (*"quem gerencia recebe o objeto do servico"*) e os `[RN-187.06] ALMOXARIFE`/`ADMIN` antigos (o `colaborador_nome` sumiu). 13/4.
+- Arquivo: **17/0** (eram 13).
+
+### Menor — o aviso do Emprestar com pontuação dupla → CORRIGIDO (`a255dadf`)
+
+- **O achado (por leitura):** o aviso acrescentava sempre um ponto depois da observação; *"Só para serviço leve."* virava *"… leve.. Confira
+  antes de emprestar."*. **Reproduzido antes do conserto** com Jest: três casos novos (`test.each` — ponto, exclamação, interrogação),
+  **3 falharam / 64** (*"leve.. Confira"*, *"Nm!. Confira"*, *"confere?. Confira"*).
+- **O conserto:** o ponto só entra quando a observação **não** termina em `.`, `!`, `?` ou `…`; o texto do usuário fica como foi escrito.
+  **Descartado:** apagar o ponto do usuário e pôr o nosso (trocaria *"!"* e *"?"* por *"."*). Arquivo **64/64**.
+- **Controles** (perl por script `scratchpad/fix187-sab.pl`, âncora contada = 1 dentro do script, md5 `db316216…` antes e restaurado em todos,
+  cópia `scratchpad/fix187-Ferramentas.js`):
+  - **(i)** sempre o ponto → caem os **3** casos novos.
+  - **(ii)** nunca o ponto → caem o `[RN-187.08b]` (o `AVISO` literal sem ponto) e o `[T4, fixture real] a restrita…` — a metade "sem ponto
+    ganha o ponto".
+  - **(iii)** apagar o ponto do usuário e pôr o nosso → caem **exclamação** e **interrogação**; o caso do **ponto** fica verde (esperado: o
+    resultado é o mesmo texto). É o par exclamação/interrogação que prova "o texto do usuário intacto".
+  - *A primeira tentativa do (iii), por `perl -pi` em linha de comando, foi **no-op** (md5 igual ao de antes, 64/64) — o escape do `$` da
+    regex não casou. Detectado pelo md5, refeito por script com a âncora contada dentro dele.*
+
+### Registrados, sem correção (vão para **D (187)**)
+
+- **O ramo 404 de `recusaDaGravacao` não tem teste.** Com `changes = 0`, a releitura que acha a ferramenta ausente ou `ativo = 0` responde
+  404; nenhuma rota faz `ativo = 0` em ferramenta (não há exclusão), então o ramo só é alcançável por escrita direta no banco. Não se cria
+  rota para provar um ramo defensivo.
+- **Restrição + baixa + reverter mostra o motivo da baixa no selo.** A manutenção tem **um** campo de observações: concluir *Em uso com
+  restrição* + *Baixa* grava ali o **motivo da baixa** (obrigatório), e é esse texto que volta como restrição depois do **Reverter baixa**
+  (declarado na emenda I4: a restrição atravessa a baixa). Separar "restrição" de "motivo" exigiria coluna nova.
+
+## Verificação final (2026-10-22, uma suíte por vez, depois do fix-round e dos documentos)
+
+Sobre `a255dadf` (código e testes do fix-round) + os documentos do fechamento; exit 0 em todas (logs `fix187-log-*.txt` no scratchpad):
+
+- `test:api` **531/531** arquivos OK (mais lento: `propostaClausulasGrava.api.test.js`, 69,1 s).
+- `test:almoxarifado` **44 passou, 0 falhou**.
+- `test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0**.
+- client **182 suítes / 2463 testes**, todos passando (eram 2460 em `b020c10c`: +3 do fix-round, o `test.each` da pontuação).
+- `CI=true react-scripts build`: *Compiled successfully*.
+- `git status`: só os arquivos do fechamento antes do commit.
+
+## Retrospectiva
+
+1. **1 controle "verde esperado" era falta de asserção** (M1): o controle (5) da T2 previu que tirar a lista branca passaria verde e
+   registrou isso como resultado, em vez de escrever o cenário em que ela faz diferença. Verde previsto num controle é achado, não registro:
+   ou o defeito é inalcançável (e se diz por quê), ou falta um cenário que o alcance — aqui faltava (o servidor só precisava devolver um campo
+   a mais).
+2. **1 defeito de tela com dado de usuário real** (a pontuação dupla): todos os testes usavam *"Só para serviço leve"*, sem ponto final;
+   texto de usuário termina em ponto na maioria das vezes. O texto livre do usuário entra no teste nas formas que ele escreve, não só na limpa.
+3. **30 controles positivos** na etapa (T1 8, T2 7, T3 5, T4 5, fix-round 5), **1** deles no-op na primeira tentativa (o (iii) do fix-round),
+   pego pelo md5 igual — a regra "md5 antes/sabotado" pagou de novo.
+4. **0 regressões**: os testes antigos que mudaram foram os da regra revista (o `RN-177.10` `:825` passou a afirmar *sem* Editar na baixada e
+   o nome do `RN-175.01` ganhou *"salvo Baixada"* — B1242); nenhum vizinho mudou asserção.
+
+## Próxima tarefa detalhada — Etapa 188: a fila de separação sugere de onde pegar cada item e em que ordem andar (feature 05)
+
+**O plano já existe e passou pela Fase 2 (outra sessão, `e9192204`: 1 Crítico, 3 Importantes, 5 Menores — as emendas valem antes da T1):**
+`docs/superpowers/plans/2026-10-22-almoxarifado-etapa188-sugestao-de-coleta-na-fila-de-separacao.md`. **O plano da 188 prevalece** sobre
+este resumo. Item da spec 05 (`specs/modulo-almoxarifado/05-separacao-picking/README.md:63`, *"Sugestão de rota"*). Decisões **B1250** a
+**B1259** (a 187 usou B1240–B1248; **B1249** fica livre).
+
+**Contrato que ela muda:** `GET /api/almoxarifado/fila-separacao` (gate `separar_emitir`, como hoje) **só acrescenta**: em cada item,
+`pegar_em: null | { localizacao_id, localizacao_codigo, caminho, lote_id, lote_codigo, lote_validade, quantidade_no_endereco,
+quantidade_sugerida, cobre }` e `pegar_em_aviso: null | "NENHUM_ENDERECO_COBRE" | "SEM_ENDERECO_SUGERIVEL"` (código; a frase é da tela); em
+cada requisição, `ordem_coleta: [{ item_id, material_codigo, localizacao_id, localizacao_codigo, caminho, lote_codigo, quantidade_sugerida }]`
+(sempre array). Nenhum endpoint novo, nenhuma mensagem de erro nova. Função pura nova `sugestaoDeColeta.sugerirColeta(...)`.
+
+**Pontos de atenção:**
+- A sugestão é **só leitura**: não grava, não reserva, **não pega trava** (B1250) — a separação continua decidindo e recusando como hoje. A
+  trava por material do CLAUDE.md vale para quem **reserva** ou **distribui**; uma leitura de dica não entra nela.
+- O livre do endereço desconta o separado e não entregue de **qualquer** requisição (B1255) — a mesma régua que a separação usa para limitar
+  a caixa; divergir dela faz a dica sugerir o que a separação recusa.
+- Os itens continuam na **ordem do pedido** (B821, B1256); a ordem de coleta é campo novo.
+- O PDF *"Imprimir lista de coleta"* e a pré-seleção do *"Sai de"* ficam para a **189** (B1257).
+
+**O que já está pronto e ela não reabre:** a 187 inteira — a baixada não edita nem calibra (servidor e tela), a `restricao` no
+`GET /ferramentas` com a lista branca provada, o selo e o aviso. A 188 não toca `toolService.js`, `FerramentasAlmoxarifado.js` nem a rota de
+ferramentas.

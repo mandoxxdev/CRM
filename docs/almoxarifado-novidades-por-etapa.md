@@ -11,7 +11,15 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-22):** **Etapa 186 fechada** (**o PDF da remessa a terceiros, o da posição do cliente e as etiquetas
+> **Onde o desenvolvimento está (2026-10-22):** **Etapa 187 fechada** (**a ferramenta baixada não é calibrada nem editada, e a restrição da
+> manutenção aparece na lista e no Emprestar** — a ferramenta descartada ainda aceitava registrar calibração e ser editada pela integração;
+> agora o sistema recusa com *"Ferramenta baixada não pode ser calibrada (⟨nome⟩)"* / *"… editada (⟨nome⟩)"*, e a linha da baixada perde o
+> **Editar** (para corrigir um dado, **Reverter baixa** primeiro); e a ferramenta que voltou da manutenção *Em uso com restrição* ficava igual
+> a uma perfeita: agora a lista mostra o selo **Em uso com restrição** com o texto, para todos, e o **Emprestar** avisa sem bloquear; a
+> restrição sai quando uma manutenção nova é concluída *Em condições de uso*; nada a rodar antes do deploy; decisões **B1240** a **B1248**;
+> **D (177)(2)** e **(5)** resolvidos; limitações **D (187)**; revisão adversarial feita e corrigida). **Próxima: Etapa 188** — a fila de
+> separação sugere de onde pegar cada item e em que ordem andar (ver o plano da 188).
+> *(Também em 2026-10-22: **Etapa 186 fechada** (**o PDF da remessa a terceiros, o da posição do cliente e as etiquetas
 > cabem na folha: nada é cortado** — na remessa (o papel que volta assinado pelo terceiro) e na posição do cliente, cada texto da linha do item
 > era cortado por número de letras: o código de EPI invadia a coluna do material e o nome comprido do material perdia o fim; agora cada célula
 > quebra em linhas, nenhuma letra se perde, o título e as linhas do topo quebram, o cabeçalho da tabela se repete em cada página, a observação
@@ -19,8 +27,7 @@
 > *"Remessa para terceiros — ⟨número⟩ (continuação)"*; quantidades no formato brasileiro (*0,3*, não *0.30000000000000004*) e a unidade
 > *TAMBOR* inteira; na etiqueta, o código comprido encolhe e deixa de escrever por cima do nome; nada a rodar antes do deploy; nada muda no que
 > é gravado nem nas telas; decisões **B1230** a **B1239**; aviso **C448** (o PDF mostra *12,5*, a tela *12.5*); **C445** resolvido; limitações
-> **D (186)**; revisão adversarial feita e corrigida). **Próxima: Etapa 187** — a ferramenta baixada não é calibrada nem editada, e a
-> restrição da manutenção aparece na lista e no Emprestar (ver o plano da 187).
+> **D (186)**; revisão adversarial feita e corrigida); a próxima era a **187**.)*
 > *(Também em 2026-10-22: **Etapa 185 fechada** (**a tabela da ficha de EPI e o termo de ferramenta cabem na folha:
 > nada é cortado** — no PDF da ficha de EPI (o papel da NR-6), cada texto da linha da entrega era cortado por número de letras: o nome de quem
 > entregou passava da margem ou saía da folha (*Maria Aparecida dos Santo*, 214 mm numa folha de 210), o EPI comprido invadia o CA e perdia o
@@ -4281,7 +4288,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -12309,7 +12316,9 @@ material tem (Etapa 126) — cadastro de ferramenta é raro e feito por uma pess
 
 **B1131 (NOVA, da Etapa 175; decisão do agente) — Editar aparece em qualquer status.** Corrigir o patrimônio ou a série de uma ferramenta
 emprestada, bloqueada ou perdida é tão legítimo quanto de uma disponível, e a edição não toca o status (só as ações da linha o mudam).
-**Descartado:** só em *Disponível*. **Reversível:** `735f7c5d`.
+**Descartado:** só em *Disponível*. **Reversível:** `735f7c5d`. *(**Revista na Etapa 187 (B1242): salvo a Baixada.** Desde a 187 a linha
+da baixada não tem **Editar** e o servidor recusa a edição com *"Ferramenta baixada não pode ser editada (⟨nome⟩)"*; os outros status
+continuam editando. O texto acima valeu da 175 à 186.)*
 
 **B1111 (NOVA, da Etapa 174; decisão do agente) — a saída da entrega grava a OS cadastrada da requisição.** Com ela, o **Consumo por OS** conta o
 que sai por requisição, e a regra do dono do material passa a enxergar a OS: material de cliente sem projeto e com OS do **mesmo** cliente
@@ -12930,6 +12939,64 @@ de onde tirar sem apertar o nome do material). A tela de **Materiais de clientes
 lista e no Emprestar.** Fecha a **D (177)(2)** (a ferramenta *Baixada* ainda aceita calibração e edição pela integração) e a **D (177)(5)**
 (*Em uso com restrição* some depois de gravada). Não depende da empresa. O plano já está escrito e revisado:
 `docs/superpowers/plans/2026-10-22-almoxarifado-etapa187-ferramenta-baixada-e-restricao-da-manutencao.md` (decisões a partir de **B1240**).
+*(Feita: a Etapa 187 — B1240 a B1248.)*
+
+**B1240 (NOVA, da Etapa 187; decisão do agente) — a recusa da baixada é 400.** Como todas as recusas por status das ferramentas (bloquear,
+desbloquear, manutenção, reencontrar, reverter baixa, ocorrência, empréstimo) e a da inspeção (*"Ferramenta baixada não pode ser usada em
+medição"*). **Descartado:** 409 (no módulo das ferramentas o 409 é só o patrimônio duplicado; um código diferente para a mesma família de
+recusa obrigaria a tela a tratar dois). **Reversível.** `3d45817f`.
+
+**B1241 (NOVA, da Etapa 187; decisão do agente) — as frases trazem o nome da ferramenta entre parênteses.** *"Ferramenta baixada não pode ser
+calibrada (⟨nome⟩)"* e *"Ferramenta baixada não pode ser editada (⟨nome⟩)"*, no molde da inspeção; o nome é relido no momento da recusa.
+**Descartado:** o molde *"(status atual: BAIXADA)"* dos outros gestos (a frase já diz "baixada"; o nome diz qual — útil pela integração).
+**Reversível.** `3d45817f`.
+
+**B1242 (NOVA, da Etapa 187; decisão do agente) — editar a baixada é recusado em qualquer campo, e a tela tira o Editar dela.** **Revê a
+B1131** (Etapa 175, *"Editar aparece em qualquer status"*), que ganhou a nota no lugar. Vale inclusive para o salvar sem mudança nenhuma
+(antes respondia sucesso) e para o patrimônio de outra ferramenta (a frase da baixada vem antes do *"Código de patrimônio já cadastrado"*).
+Para corrigir um dado: **Reverter baixa** primeiro. **Descartado:** deixar editar só *observações* ou *localização* (uma lista de campos
+liberados vira regra nova a manter; o pedido era fechar a D (177)(2)); deixar o botão e mostrar o erro (botão que sempre dá erro).
+**Reversível:** uma condição na tela e uma no serviço. `3d45817f`, `c643054e`.
+
+**B1243 (NOVA, da Etapa 187; decisão do agente) — a guarda mora na gravação, além da conferência antes.** Se a ferramenta é baixada no
+instante entre a leitura e a gravação, a recusa sai do mesmo jeito e nada é gravado — nem a calibração, nem a edição, nem a linha da
+auditoria. A conferência antes dá a ordem das frases (a baixada antes da data inválida) e pega o salvar sem mudança. **Descartado:** só a
+leitura antes (uma baixa concluída no meio passaria). **Reversível.** `3d45817f`.
+
+**B1244 (NOVA, da Etapa 187; decisão do agente) — quando a restrição deixa de valer.** Vale a **última manutenção concluída que declarou a
+condição do item**. Uma *Em condições de uso* mais nova apaga o selo; uma *Inservível* também (vai para a baixa); uma *Em uso com restrição*
+mais nova **substitui** o texto. A manutenção concluída **sem** condição (pela integração, **B1140**) **não apaga** — a etiqueta de segurança
+não some por omissão. Duas conclusões no mesmo segundo: vale a gravada por último. **Consequências declaradas:** *Inservível* + baixa +
+**Reverter baixa** volta **sem** selo; *Em uso com restrição* + *Baixa* (a tela aceita a combinação), ou a baixa sem condição pela
+integração depois de uma restrição, + **Reverter baixa** volta **com** o selo — e, no primeiro caso, o texto do selo é o **motivo da baixa**
+(a manutenção tem um campo só de observações — **D (187)**). A anomalia rara (ferramenta fora de *Em manutenção* ao concluir) também conta,
+porque a condição foi declarada sobre a peça. **Descartado:** (a) qualquer manutenção concluída limpar (uma chamada antiga sem condição
+apagaria um aviso de segurança em silêncio); (b) um botão *"retirar restrição"* (gesto e rota novos; o caminho natural é a próxima
+manutenção); (c) a restrição valer para sempre. **Reversível.** `130caaca`.
+
+**B1245 (NOVA, da Etapa 187; decisão do agente) — quem não gerencia ferramentas vê o selo e o texto da restrição.** É instrução de uso da
+ferramenta, não dado de pessoa, e quem a pega no chão de fábrica é quem mais precisa; o mesmo texto **já** sai a todo o módulo pelo histórico
+de manutenções da integração (**D (187)**). Sai por **lista branca** de três informações (qual manutenção, o texto e quando terminou), para que
+um campo novo (ex.: quem concluiu) não vaze por omissão, como na **B1186**; quem gerencia recebe a informação inteira, como no empréstimo em
+aberto. A revisão adversarial mostrou que a lista branca não era provada (o servidor só mandava as três) — o teste agora faz o servidor mandar
+um campo a mais e confere que só quem gerencia o recebe (`e182d42d`). **Descartado:** só o selo sem o texto para quem não gerencia (não
+protege nada e perde a informação útil); nada para quem não gerencia. **Reversível:** uma chave a menos. `130caaca`.
+
+**B1246 (NOVA, da Etapa 187; decisão do agente) — o Emprestar avisa e não bloqueia.** O servidor do empréstimo não muda. **Descartado:**
+bloquear (a usuária pediu *"em uso com restrição"* — a ferramenta **está** em uso); exigir uma caixa *"li a restrição"* (gesto a mais sem
+trilha; se for pedido, entra no termo); gravar no termo ou na auditoria que houve o aviso (**D (187)**). O aviso não acrescenta ponto a uma
+observação que já termina em ponto, exclamação ou interrogação, e não mexe no texto do usuário (revisão adversarial, `a255dadf`).
+**Reversível.** `c643054e`.
+
+**B1247 (NOVA, da Etapa 187; decisão do agente) — o selo não aparece na baixada.** Ela não circula, e o selo amarelo ao lado do vermelho
+confunde. Aparece em qualquer outro status, inclusive *Em manutenção* e *Emprestada* (é a última condição conhecida). O servidor manda a
+restrição em todos — quem esconde é a tela. **Reversível.** `c643054e`.
+
+**B1248 (NOVA, da Etapa 187) — a próxima etapa (188): a fila de separação sugere de onde pegar cada item e em que ordem andar.** Item
+*"Sugestão de rota"* da feature 05, aberto desde o planejamento. É só uma dica (não reserva, não trava, não grava); a separação continua
+aceitando outro endereço. Não depende da empresa. O plano já está escrito e revisado (Fase 2, `e9192204`):
+`docs/superpowers/plans/2026-10-22-almoxarifado-etapa188-sugestao-de-coleta-na-fila-de-separacao.md` (decisões **B1250** a **B1259**;
+**B1249** fica livre).
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -17919,14 +17986,29 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   apagando.)*
 - **(177) O retorno da manutenção, o que ficou de fora.** (1) A tela não lista o histórico de manutenções de uma ferramenta (a condição e o
   destino estão gravados, saem pela integração `GET /ferramentas/:id/manutencoes` e pela Auditoria). (2) Pela integração, uma ferramenta
-  *Baixada* ainda aceita **registrar calibração** e ser **editada** (a tela não oferece a calibração). (3) A conclusão aceita a condição em
+  *Baixada* ainda aceita **registrar calibração** e ser **editada** (a tela não oferece a calibração). *(**Resolvido na Etapa 187** —
+  `3d45817f`: as duas são recusadas com *"Ferramenta baixada não pode ser calibrada (⟨nome⟩)"* / *"… editada (⟨nome⟩)"*, e a tela tira o
+  **Editar** da baixada, `c643054e` — **B1240** a **B1243**.)* (3) A conclusão aceita a condição em
   branco pela integração (**B1140**) — inclusive na baixa. (4) ~~A revisão da Fase 2 e da Fase 5 por agente independente **não foi feita**
   nesta etapa~~ — **feita depois do fechamento** (revisão adversarial independente), com os achados corrigidos; ver o plano da 177.
   (5) **A restrição é invisível depois de gravada**: concluir com *Em uso com restrição* + *Volta ao uso* deixa a ferramenta *Disponível*,
   exatamente igual a uma *Em condições de uso* — a lista não mostra selo, o **Emprestar** não avisa, e a restrição só aparece pela integração
   (`GET /ferramentas/:id/manutencoes`) e na Auditoria (*Fim de manutenção*). Quem empresta não fica sabendo da restrição pela tela.
+  *(**Resolvido na Etapa 187** — `130caaca` (a restrição na lista do servidor), `c643054e` (o selo **Em uso com restrição**, o texto e o
+  aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(187) A baixada que não edita nem calibra e a restrição da manutenção, o que ficou de fora.** (1) A **inspeção** não avisa que o
+  instrumento está em uso com restrição — só a lista de ferramentas e o **Emprestar** mostram. (2) O empréstimo **não grava** que houve o
+  aviso (nem no termo, nem na Auditoria) — **B1246**. (3) O histórico da ferramenta pela integração (`GET /ferramentas/:id/manutencoes`,
+  `/calibracoes`, `/ocorrencias`) continua aberto a **todo** o módulo, com o usuário que registrou — o texto da restrição já saía por ali antes
+  desta etapa (**B1245**). (4) A **B1146** segue: instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* ainda mede na inspeção.
+  (5) **Restrição + baixa + reverter mostra o motivo da baixa no selo:** a manutenção tem um campo só de observações; concluir *Em uso com
+  restrição* + *Baixa* grava ali o motivo da baixa (obrigatório), e é esse texto que aparece como restrição depois do **Reverter baixa**
+  (**B1244**). Separar os dois pede uma coluna nova. (6) A recusa por *"Ferramenta não encontrada"* no instante da gravação (a ferramenta
+  sumiu entre a leitura e a gravação) **não tem teste**: nenhuma tela nem rota apaga ferramenta, então só uma escrita direta no banco chega
+  nela. (7) A lista de ferramentas faz mais uma consulta por ferramenta (são três), sem índice no histórico de manutenções — aceitável no
+  tamanho do cliente. (8) O selo não mostra **quando** a manutenção terminou (o servidor manda, a tela não usa).
 - **(186) Os PDFs da remessa a terceiros, da posição do cliente e as etiquetas dentro da folha, o que ficou de fora.** (1) **Um item mais
   alto que uma página inteira sai da folha** — a régua manda o item inteiro para a página seguinte, mas não o divide. Medido na revisão: um
   nome de material de ~**5000** letras deixa 54 linhas abaixo do rodapé na remessa e 135 na posição. É o mesmo limite da **D (183)(5)** e da
@@ -19162,6 +19244,13 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(187) Nenhum clique foi dado no navegador.** O que os testes provam: o servidor pela rota real (a baixada recusa editar e calibrar, com o
+certificado apagado do disco; a restrição na lista para os quatro perfis; o gesto inteiro de restrição → empréstimo → devolução → manutenção
+*Em condições de uso* → baixa → reverter); a tela em jsdom, com o JSON escrito à mão **e** com a resposta **gravada da rota real** (o selo, o
+texto, o aviso literal e o envio de um empréstimo só; a baixada sem selo e sem **Editar**). O que **só o navegador** prova: o roteiro da
+Etapa 187 no guia — o selo amarelo ao lado do *Disponível* legível na coluna Status, o aviso dentro do modal **Emprestar** sem empurrar o
+formulário para fora da tela, e as duas abas para ver a recusa de calibrar e de editar a baixada.
 
 **(186) Nenhum clique foi dado no navegador, e nenhum PDF foi aberto num leitor de PDF.** As posições de cada texto da remessa, da posição do
 cliente e da etiqueta foram **medidas no gerador de PDF real** (o mesmo do navegador): nada passa da coluna seguinte nem da margem, nada
@@ -36242,9 +36331,93 @@ código curto (*MAT-7*) sai como antes, na letra grande.
 - O relatório comercial de visitas e o PDF da proposta ficaram fora (**B1230**).
 - **Nada a rodar antes do deploy.**
 
+## Etapa 187 — A ferramenta baixada não é calibrada nem editada, e a restrição da manutenção aparece na lista e no Emprestar (2026-10-22)
+
+Duas pontas soltas das ferramentas. **A primeira:** a ferramenta **baixada** (descartada depois da manutenção) ainda aceitava registrar
+calibração e ter o cadastro mexido por fora da tela — um certificado novo numa peça que foi para o lixo, ou o patrimônio dela trocado, sem
+ninguém perceber. Agora o sistema recusa as duas, dizendo qual ferramenta, e a linha da baixada perde o botão **Editar**: para corrigir um
+dado dela, primeiro **Reverter baixa**. **A segunda:** quando o almoxarife concluía a manutenção com *Em uso com restrição* (por exemplo
+*"Só para serviço leve"*), a ferramenta voltava a *Disponível* exatamente igual a uma perfeita — a restrição ficava escondida no histórico, e
+quem emprestava não sabia. Agora a lista mostra o selo amarelo **Em uso com restrição** com o texto, para todo mundo, e o **Emprestar** avisa
+— sem bloquear. A restrição sai quando a ferramenta passa por outra manutenção concluída *Em condições de uso*. É a etiqueta amarela na
+prateleira: quem pega vê; ela não tranca a prateleira, e sai quando a ferramenta volta boa de outro conserto. Nada a rodar antes do deploy.
+Decisões do agente: **B1240** a **B1248**; a **D (177)(2)** e a **D (177)(5)** estão resolvidas.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Ferramenta *Baixada*: calibrar pela integração gravava a calibração | Recusado: *"Ferramenta baixada não pode ser calibrada (⟨nome⟩)"*; o certificado anexado é apagado (**B1240**, **B1241**) |
+| Ferramenta *Baixada*: editar (tela ou integração) gravava; salvar sem mudança respondia sucesso | Recusado em qualquer campo: *"Ferramenta baixada não pode ser editada (⟨nome⟩)"* (**B1242**) |
+| A linha da baixada tinha **Editar** e **Reverter baixa** | Só **Reverter baixa** — a regra *"Editar em qualquer status"* (**B1131**) passou a ser *"salvo Baixada"* |
+| Uma baixa feita no mesmo instante da calibração ou da edição deixava a gravação passar | A recusa sai do mesmo jeito e nada é gravado (**B1243**) |
+| Concluir *Em uso com restrição*: a ferramenta voltava a *Disponível* igual a uma perfeita | Selo **Em uso com restrição** e a linha *"Restrição: ⟨texto⟩"* na coluna Status, para todos os perfis (**B1245**, **B1247**) |
+| **Emprestar** não dizia nada da restrição | Aviso no modal: *"Esta ferramenta voltou da manutenção em uso com restrição: ⟨texto⟩. Confira antes de emprestar."* — e empresta normalmente (**B1246**) |
+| — | A restrição sai com uma manutenção nova *Em condições de uso* (ou *Inservível*); uma nova *Em uso com restrição* troca o texto; uma concluída sem condição pela integração **não** a apaga (**B1244**) |
+
+### As regras, com o cenário exato
+
+Preparação: um usuário **Almoxarife** (ou Administrador do almoxarifado) e um usuário de **chão de fábrica** (com acesso ao módulo, sem perfil no almoxarifado).
+Em **Almoxarifado → Ferramentas**, **Nova ferramenta**: código *FER-187*, nome *Torquímetro 187*, marque **Exige calibração (instrumento de
+medição)**, **Cadastrar** (*"Ferramenta cadastrada"*). Na linha dela, **Calibração**: **Data da calibração** = hoje, **Data de validade** =
+daqui a um ano, **Registrar** (*"Calibração registrada"*) — sem isso o **Emprestar** recusa por calibração.
+
+**1. Concluir com restrição deixa o selo.** Na linha da *FER-187*, **Iniciar manutenção**, **Descrição** *Revisão*, **Iniciar** (*"Manutenção
+iniciada"*). **Concluir manutenção**: **Condição do item** = *Em uso com restrição*, **Destino** = *Volta ao uso*; o campo de texto passa a se
+chamar **Qual é a restrição \***. Deixe em branco e **Concluir**: *"Descreva a restrição nas observações"*. Escreva *Só para serviço leve* e
+**Concluir**: *"Manutenção concluída"*. A linha fica *Disponível* com o selo amarelo **Em uso com restrição** ao lado e, embaixo,
+*"Restrição: Só para serviço leve"*.
+
+**2. Quem não gerencia ferramentas também vê.** Entre como o usuário de chão de fábrica, **Almoxarifado → Ferramentas**: a linha da
+*FER-187* mostra o mesmo selo e o mesmo texto (sem botões de ação).
+
+**3. O Emprestar avisa e empresta.** De volta como Almoxarife, **Emprestar** na *FER-187*. Logo abaixo do código e do nome, o aviso:
+*"Esta ferramenta voltou da manutenção em uso com restrição: Só para serviço leve. Confira antes de emprestar."* Preencha como sempre
+(colaborador, assinatura, **Confirmar assinatura**, a matrícula digitada pelo colaborador) e **Emprestar**: *"Ferramenta emprestada — termo
+⟨número⟩ assinado"*. A linha fica *Emprestada* **com** o selo. Se a restrição tivesse sido escrita com ponto final (*Só para serviço
+leve.*), o aviso sai com um ponto só: *"… Só para serviço leve. Confira antes de emprestar."*
+
+**4. Uma manutenção "em condições" limpa.** **Devolver** (*"Ferramenta devolvida"*). **Iniciar manutenção** de novo, **Concluir manutenção**
+com *Em condições de uso* / *Volta ao uso*, **Concluir**: *"Manutenção concluída"*. O selo e a linha *"Restrição: …"* somem; o **Emprestar**
+abre sem aviso.
+
+**5. A baixada não tem Editar.** **Iniciar manutenção** mais uma vez, **Concluir manutenção** com *Inservível* (o destino vira *Baixa
+(descarte)* e o campo vira **Motivo da baixa \***), motivo *Motor queimado*, **Concluir**: *"Manutenção concluída — ferramenta baixada"*. A
+linha fica **Baixada**, sem selo amarelo, e com um botão só: **Reverter baixa** — não há **Editar** nem **Calibração**.
+
+**6. Calibrar e editar a baixada são recusados.** Para ver as recusas pela tela, use duas abas. Reverta a baixa (passo 7) e leve a
+ferramenta de novo a *Em manutenção*. Na **aba A**, abra **Calibração** na *FER-187* e preencha as datas (não clique **Registrar**); na **aba
+B**, conclua a manutenção com *Inservível* / *Baixa (descarte)* e um motivo. Volte à **aba A** e clique **Registrar**: *"Ferramenta baixada
+não pode ser calibrada (Torquímetro 187)"*, e nada é gravado. Do mesmo jeito com **Editar** aberto na aba A
+e **Salvar** depois da baixa na aba B: *"Ferramenta baixada não pode ser editada (Torquímetro 187)"* — o nome continua o de antes.
+
+**7. Reverter baixa devolve tudo.** **Reverter baixa**, **Justificativa** *baixa errada*, **Confirmar**: *"Baixa revertida — a ferramenta
+voltou a ficar disponível"*. O **Editar** e a **Calibração** voltam; editar o nome dá *"Ferramenta atualizada"* e registrar uma calibração dá
+*"Calibração registrada"*. Sem selo (a última condição declarada foi *Inservível*). Se a baixa tivesse sido feita com *Em uso com restrição* +
+*Baixa (descarte)*, a ferramenta voltaria **com** o selo — e o texto dele seria o motivo da baixa (**B1244**, **D (187)**).
+
+### O que esta etapa NÃO cobre
+
+- A **inspeção** não avisa a restrição do instrumento; o empréstimo não grava que houve o aviso (**D (187)**).
+- Não há botão para tirar a restrição à mão: ela sai com a próxima manutenção concluída *Em condições de uso* (**B1244**).
+- O histórico da ferramenta pela integração continua aberto a todo o módulo (**D (187)**); instrumento *Perdido*, *Avariado*, *Em
+  manutenção* ou *Bloqueado* ainda mede na inspeção (**B1146**).
+- **Nada a rodar antes do deploy.**
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 187 entregue (2026-10-22):** **a ferramenta baixada não é calibrada nem editada, e a restrição da manutenção aparece na lista e no
+  Emprestar.** O servidor recusa calibrar e editar a baixada com o nome dela (**B1240**, **B1241**, **B1242**), com a guarda na gravação
+  (**B1243**); a tela tira o **Editar** da baixada (a **B1131** foi revista: *salvo a Baixada*). A lista traz a restrição da última manutenção
+  concluída que declarou condição (**B1244**), para todos os perfis por lista branca (**B1245**); selo e aviso no **Emprestar**, sem bloquear
+  (**B1246**, **B1247**). A revisão adversarial achou a lista branca sem prova (o servidor só mandava as três informações — o teste agora o faz
+  mandar uma a mais) e o aviso com pontuação dupla quando a restrição termina em ponto (corrigidos, com controles); registrou o motivo da baixa
+  no selo depois de reverter e um ramo de recusa sem teste (**D (187)**). Commits `e39461ec`, `80971a3f`, `32ed5eb7`, `b237c598`, `8f0ddf6f`,
+  `122d4ca1` (plano), `3d45817f` (T1), `130caaca` (T2), `c643054e` (T3), `b020c10c` (T4), a revisão adversarial `e182d42d` e `a255dadf`, e o
+  fechamento. **O que é seu:** as decisões **B1240** a **B1247** (reversíveis); as limitações **(187)** em D e a verificação **(187)** em F.
+  **Próxima: Etapa 188 — a fila de separação sugere de onde pegar cada item e em que ordem andar (B1248); ver o plano da 188.**
 
 - **Etapa 186 entregue (2026-10-22):** **o PDF da remessa a terceiros, o da posição do cliente e as etiquetas cabem na folha — nada é
   cortado.** Nos dois PDFs, cada célula quebra em linhas por largura medida (**B1230**), com as colunas redistribuídas (**B1232**), o passo

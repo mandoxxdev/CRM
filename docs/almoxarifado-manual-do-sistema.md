@@ -6256,6 +6256,9 @@ ferramenta) abre a janela *"Emprestar ferramenta"* com:
   descarta);
 - **Matrícula — digitada pelo colaborador** — ele digita a própria matrícula.
 
+Se a ferramenta voltou da manutenção **em uso com restrição**, a janela mostra o aviso da restrição logo abaixo do código e do nome; ele não
+impede o empréstimo (21.5).
+
 **Emprestar** muda a ferramenta para **Emprestada** e responde *"Ferramenta emprestada — termo ⟨número⟩ assinado"*. A mudança é **atômica**:
 se duas pessoas tentarem emprestar a mesma ferramenta ao mesmo instante, exatamente uma consegue — nunca as duas ficam "donas" da mesma
 ferramenta; e o empréstimo, o termo e a assinatura são gravados juntos ou nenhum é.
@@ -6354,6 +6357,8 @@ precisa de nenhuma outra ação. A data de validade tem de ser **posterior** à 
 se não for, o registro é recusado:
 > `Data de validade deve ser posterior à data de calibração`
 
+Ferramenta **baixada** não recebe calibração (21.5).
+
 O **painel de calibrações** (aba Calibrações) lista as ferramentas que exigem calibração,
 separadas em **vencidas** e **a vencer** (dentro do prazo configurável, 30 dias por padrão), com os dias que faltam contados a partir de hoje
 (a que vence hoje aparece em *a vencer* com 0 dia; a de ontem, em *vencidas* com −1). Uma
@@ -6414,16 +6419,39 @@ Concluir sem escolher a condição é recusado pela tela: *"Escolha a condição
   Com o motivo, aparece *"Manutenção concluída — ferramenta baixada"* e a ferramenta fica **Baixada**.
 
 Pela integração, a condição continua opcional — inclusive na baixa: destino *Baixa* com o motivo e sem a condição é aceito, e a condição
-fica em branco. **Em uso com restrição** com *Volta ao uso* deixa a ferramenta *Disponível* como qualquer outra: a lista e o **Emprestar** não
-mostram a restrição — ela fica na manutenção e na Auditoria.
+fica em branco.
+
+**A restrição fica à vista.** **Em uso com restrição** com *Volta ao uso* deixa a ferramenta *Disponível* (ela circula normalmente), mas a
+lista passa a mostrar, na coluna **Status**, o selo amarelo **Em uso com restrição** e, embaixo, *"Restrição: ⟨o texto escrito⟩"* — para
+**todos** os usuários do módulo, inclusive quem não tem a permissão **Ferramentas** (é instrução de uso da peça). O selo aparece em qualquer
+status (inclusive *Emprestada* e *Em manutenção*), **menos** na *Baixada*. O **Emprestar** de uma ferramenta com restrição mostra, logo
+abaixo do código e do nome:
+> *"Esta ferramenta voltou da manutenção em uso com restrição: ⟨texto⟩. Confira antes de emprestar."*
+
+O aviso **não bloqueia**: o empréstimo segue igual ao de qualquer ferramenta disponível. Se o texto já termina em ponto, exclamação ou
+interrogação, o aviso não acrescenta outro ponto.
+
+Como o sistema decide se há restrição: vale a **última manutenção concluída em que a condição do item foi informada**. Se ela foi *Em uso
+com restrição*, o selo mostra o texto dela; se foi *Em condições de uso* ou *Inservível*, não há selo. Uma manutenção concluída **sem**
+condição (só possível pela integração) **não conta** — não apaga uma restrição anterior. Manutenção ainda aberta não conta. Duas concluídas
+no mesmo segundo: vale a registrada por último. Na prática: a restrição sai quando a ferramenta passa por outra manutenção concluída *Em
+condições de uso*; uma nova *Em uso com restrição* troca o texto. Não existe botão para retirar a restrição à mão.
 
 Qualquer recusa deixa a manutenção aberta e a janela com o que foi escolhido. A condição e o destino ficam gravados na manutenção, e a
 **Auditoria** mostra *Fim de manutenção* (com os dois) e, na baixa, *Baixa de ferramenta* (com o motivo). Concluir uma manutenção que já foi
 concluída (ou que não existe) recusa com `Manutenção não encontrada`.
 
 **Baixada** é o estado da ferramenta descartada. Ela continua na lista (o filtro de status tem *Baixada*) e com o histórico, mas **não
-circula**: não empresta, não entra em manutenção, não registra ocorrência e não bloqueia — a linha só oferece **Editar** e **Reverter baixa**
-—, e sai do painel de calibrações, mesmo que a calibração dela ainda esteja válida. Na lista, a coluna **Calibração** da baixada mostra
+circula**: não empresta, não entra em manutenção, não registra ocorrência, não bloqueia, **não recebe calibração e não é editada** — a
+linha só oferece **Reverter baixa** —, e sai do painel de calibrações, mesmo que a calibração dela ainda esteja válida. Registrar uma
+calibração ou salvar uma edição de uma ferramenta baixada (por exemplo, numa janela aberta antes da baixa, ou pela integração) é recusado,
+com o nome da ferramenta entre parênteses, e nada é gravado (o certificado anexado é descartado):
+> `Ferramenta baixada não pode ser calibrada (<nome>)`
+> `Ferramenta baixada não pode ser editada (<nome>)`
+
+A recusa vale para qualquer campo, inclusive um salvar sem mudança, e vem antes das outras (a data de validade inválida, o patrimônio de
+outra ferramenta). Vale também quando a baixa acontece no mesmo instante da gravação. Para corrigir um dado de uma baixada, primeiro
+**Reverter baixa**. Na lista, a coluna **Calibração** da baixada mostra
 *"—"* (não *Vigente* nem *Vencida*). Um instrumento baixado **não mede na inspeção** (ver 15.2.1). Pela integração, emprestar uma baixada responde
 `Ferramenta não está disponível (status atual: BAIXADA)`. A baixa só acontece ao concluir uma manutenção: uma ferramenta *Avariada* vai
 para a baixa passando por **Iniciar manutenção**.
@@ -6432,6 +6460,10 @@ para a baixa passando por **Iniciar manutenção**.
 (*"Baixa revertida — a ferramenta voltou a ficar disponível"*) e fica na Auditoria como *Reversão de baixa*. Numa ferramenta que não está
 baixada:
 > `Ferramenta não está baixada (status atual: <status>)`
+
+A ferramenta revertida volta **sem** o selo de restrição quando a baixa veio de *Inservível*. Se a baixa foi feita com *Em uso com
+restrição* + *Baixa (descarte)* (ou pela integração, sem condição, depois de uma restrição), ela volta **com** o selo — e, no primeiro caso,
+o texto do selo é o **motivo da baixa**, porque a manutenção guarda um texto só (o da restrição e o do motivo são o mesmo campo).
 
 **Reencontrar** só vale para ferramenta **Perdida** — devolve a Disponível, com justificativa
 obrigatória. Tentar reencontrar uma ferramenta que não está perdida:
@@ -6444,7 +6476,7 @@ responsável, material de referência, número de série, localização, se exig
 observações) são opcionais. O código de patrimônio é único — cadastrar um repetido recusa:
 > `Código de patrimônio já cadastrado`
 
-**Editar** (botão em toda linha da lista, em qualquer status) abre **"Editar ferramenta"** com os mesmos
+**Editar** (botão em toda linha da lista, em qualquer status **menos** *Baixada* — ver 21.5) abre **"Editar ferramenta"** com os mesmos
 campos já preenchidos. **Salvar** grava todos de uma vez: o campo opcional deixado em branco **apaga** o
 valor que estava gravado. Sucesso: *"Ferramenta atualizada"*, e a lista e o painel de calibrações se
 atualizam. Código ou nome em branco são recusados na própria tela (*"Informe o código de patrimônio"*,
