@@ -44,6 +44,8 @@ function lerData(v) {
   if (!m) throw erro(400, 'Data inválida');
   const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
   if (d.toISOString().slice(0, 10) !== v) throw erro(400, 'Data inválida');
+  // Fase5-5: data adiante deixava o alerta de pendencia no painel por semanas (a janela de 7 dias conta da data do registro)
+  if (v > hojeLocalISO()) throw erro(400, 'Data no futuro');
   return v;
 }
 
@@ -59,19 +61,8 @@ function lerNivel(v) {
   return v;
 }
 
-function lerAvarias(v) {
-  if (v === undefined || v === null) return [];
-  if (!Array.isArray(v)) throw erro(400, 'Avaria inválida');
-  return v.map((a) => {
-    if (!a || typeof a !== 'object' || !VISTAS_AVARIA.includes(a.vista) || !TIPOS_AVARIA.includes(a.tipo)) {
-      throw erro(400, 'Avaria inválida');
-    }
-    if (a.descricao != null && typeof a.descricao !== 'string') throw erro(400, 'Avaria inválida');
-    const limpa = { vista: a.vista, tipo: a.tipo };
-    if (a.descricao) limpa.descricao = a.descricao;
-    return limpa;
-  });
-}
+/** Fase5-6: a validacao das avarias mora no frotasService (a rota do gestor usa a mesma). */
+const lerAvarias = (v) => frotasService.validarAvarias(v);
 
 /** Veiculo que o portal aceita: ativo = 1 e status fora de vendido/inativo. Senao 404. */
 async function veiculoDoPortal(db, veiculoId) {
@@ -158,8 +149,9 @@ async function registrar(db, user, body) {
       if (aprovada) {
         await dbRun(db, `UPDATE frotas_viagens SET status = 'em_andamento', km_saida = ?, data_saida = ?,
           origem = COALESCE(?, origem), destino = COALESCE(?, destino), finalidade = COALESCE(?, finalidade),
-          updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-        [km, dataHora, b.origem || null, b.destino || null, b.finalidade || null, aprovada.id]);
+          observacoes = COALESCE(?, observacoes), updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        // Fase5-4: as observacoes da saida iam so no INSERT — ao consumir a aprovada, se perdiam
+        [km, dataHora, b.origem || null, b.destino || null, b.finalidade || null, b.observacoes || null, aprovada.id]);
         viagemId = aprovada.id;
       } else {
         // RN-F1.04 (B4): sem aprovacao — a planilha nao tem
@@ -183,6 +175,7 @@ async function registrar(db, user, body) {
       ORDER BY id DESC LIMIT 1`, [motorista.id]);
     if (!aberta) throw erro(409, 'Você não tem saída aberta para registrar o retorno.');
     frotasService.conferirKmDoRetorno(aberta.km_saida, km); // RN-F1.07
+    frotasService.conferirDataDoRetorno(aberta.data_saida, dataHora); // Fase5-3
     const kmRodado = aberta.km_saida != null ? km - Number(aberta.km_saida) : null;
     const up = await dbRun(db, `UPDATE frotas_viagens SET km_retorno = ?, data_retorno = ?, km_rodado = ?, status = 'concluida',
       updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'em_andamento'`, [km, dataHora, kmRodado, aberta.id]);

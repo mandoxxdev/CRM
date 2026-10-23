@@ -538,7 +538,10 @@ async function updateAbastecimento(db, id, dataBruta, user) {
   const data = await conferirDonoPorMotorista(db, user, current, dataBruta); // RN-F1.15 / RN-F1.19
   const litros = data.litros != null ? Number(data.litros) : current.litros;
   const valorTotal = data.valor_total != null ? Number(data.valor_total) : current.valor_total;
-  const valorLitro = data.valor_litro != null ? Number(data.valor_litro) : current.valor_litro;
+  // Fase5-1: litros ou valor_total novos sem valor_litro no corpo -> recalcula (antes ficava o preco antigo: 40L R$200 -> 50L seguia 5/L)
+  let valorLitro = current.valor_litro;
+  if (data.valor_litro != null && data.valor_litro !== '') valorLitro = Number(data.valor_litro);
+  else if ((data.litros != null || data.valor_total != null) && litros > 0) valorLitro = (Number(valorTotal) || 0) / litros;
   const km = 'km_abastecimento' in data
     ? (data.km_abastecimento != null && data.km_abastecimento !== '' ? Number(data.km_abastecimento) : null)
     : current.km_abastecimento;
@@ -752,6 +755,23 @@ async function conferirViagemUnica(db, { veiculoId, motoristaId, excetoId = 0 })
   }
 }
 
+/** Fase5-3: `AAAA-MM-DDTHH:MM`, `AAAA-MM-DD HH:MM[:SS]` ou `AAAA-MM-DD` -> chave comparavel (`AAAA-MM-DD HH:MM` ou so o dia). */
+function momentoDaViagem(v) {
+  if (v == null || v === '') return null;
+  const m = /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2}))?/.exec(String(v));
+  if (!m) return null;
+  return { dia: m[1], hora: m[2] || null, texto: m[2] ? `${m[1]} ${m[2]}` : m[1] };
+}
+
+/** Fase5-3: retorno antes da saida -> 400. So com as duas datas; se uma delas nao tem hora, compara so o dia. */
+function conferirDataDoRetorno(dataSaida, dataRetorno) {
+  const s = momentoDaViagem(dataSaida);
+  const r = momentoDaViagem(dataRetorno);
+  if (!s || !r) return;
+  const anterior = s.hora && r.hora ? `${r.dia} ${r.hora}` < `${s.dia} ${s.hora}` : r.dia < s.dia;
+  if (anterior) throw erro(400, `Data/hora do retorno anterior à saída (${s.texto}).`);
+}
+
 /** RN-F1.07 (A5): retorno abaixo da saida e a "VERIFICAR KM" da planilha. */
 function conferirKmDoRetorno(kmSaida, kmRetorno) {
   if (kmSaida != null && kmRetorno != null && Number(kmRetorno) < Number(kmSaida)) {
@@ -769,6 +789,7 @@ async function createViagem(db, user, dataBruta) {
   const kmSaida = data.km_saida != null ? Number(data.km_saida) : null;
   const kmRetorno = data.km_retorno != null ? Number(data.km_retorno) : null;
   conferirKmDoRetorno(kmSaida, kmRetorno);
+  conferirDataDoRetorno(data.data_saida, data.data_retorno); // Fase5-3
   const status = data.status || 'solicitada';
   return naFilaDeViagens(async () => {
     if (status === 'em_andamento') {
@@ -803,6 +824,9 @@ async function updateViagem(db, id, dataBruta, user) {
     const kmSaida = data.km_saida != null ? Number(data.km_saida) : current.km_saida;
     const kmRetorno = data.km_retorno != null ? Number(data.km_retorno) : current.km_retorno;
     conferirKmDoRetorno(kmSaida, kmRetorno);
+    const dataSaida = data.data_saida ?? current.data_saida;
+    const dataRetorno = data.data_retorno ?? current.data_retorno;
+    conferirDataDoRetorno(dataSaida, dataRetorno); // Fase5-3
     if (kmRodado == null && kmSaida != null && kmRetorno != null) {
       kmRodado = kmRetorno - kmSaida;
     }
@@ -816,7 +840,7 @@ async function updateViagem(db, id, dataBruta, user) {
       veiculo_id=?, motorista_id=?, data_saida=?, data_retorno=?, km_saida=?, km_retorno=?, km_rodado=?,
       destino=?, finalidade=?, setor=?, status=?, observacoes=?, origem=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`, [
       veiculoId, motoristaId,
-      data.data_saida ?? current.data_saida, data.data_retorno ?? current.data_retorno,
+      dataSaida, dataRetorno,
       kmSaida, kmRetorno, kmRodado != null ? kmRodado : current.km_rodado,
       data.destino ?? current.destino, data.finalidade ?? current.finalidade, data.setor ?? current.setor,
       status, data.observacoes ?? current.observacoes, data.origem ?? current.origem, id,
@@ -883,6 +907,21 @@ function validarItens(itens) {
     limpo[k] = v;
   }
   return limpo;
+}
+
+/** RN-F1.01 / Fase5-6: avarias = lista de {vista, tipo, descricao?} validas; a rota do gestor e o portal usam a mesma. 400 `Avaria inválida`. */
+function validarAvarias(v) {
+  const { VISTAS_AVARIA, TIPOS_AVARIA } = require('./schema');
+  const invalida = () => erro(400, 'Avaria inválida');
+  if (v === undefined || v === null) return [];
+  if (!Array.isArray(v)) throw invalida();
+  return v.map((a) => {
+    if (!a || typeof a !== 'object' || !VISTAS_AVARIA.includes(a.vista) || !TIPOS_AVARIA.includes(a.tipo)) throw invalida();
+    if (a.descricao != null && typeof a.descricao !== 'string') throw invalida();
+    const limpa = { vista: a.vista, tipo: a.tipo };
+    if (a.descricao) limpa.descricao = a.descricao;
+    return limpa;
+  });
 }
 
 /**
@@ -962,7 +1001,7 @@ async function createChecklist(db, user, dataBruta) {
     tipo_registro: 'inspecao',
     km: data.km,
     itens,
-    avarias: Array.isArray(data.avarias) ? data.avarias : [],
+    avarias: validarAvarias(data.avarias), // Fase5-6: antes gravava qualquer coisa e a planilha saia "undefined: undefined"
     legados: Object.fromEntries(ITENS_LEGADOS.map((k) => [k, data[k]])),
   });
 }
@@ -1076,7 +1115,8 @@ async function getAlertas(db, hoje = hojeLocalISO()) {
       titulo: `Checklist com pendência — ${c.placa}`,
       descricao: partes.join(' · '),
       data: c.data_checklist,
-      dias_restantes: diasAte(c.data_checklist, hoje),
+      // Fase5-11: nao e vencimento — com dias, o painel mostrava "Vencido há 3 dia(s)" para um registro de 3 dias atras
+      dias_restantes: null,
       referencia_id: c.id,
       veiculo_id: c.veiculo_id,
     });
@@ -1218,6 +1258,8 @@ async function relatorioConsumo(db, { veiculo_id } = {}) {
 }
 
 module.exports = {
+  validarAvarias,
+  conferirDataDoRetorno,
   getMeta,
   listVeiculos, getVeiculo, createVeiculo, updateVeiculo, deleteVeiculo,
   listMotoristas, getMotorista, createMotorista, updateMotorista, deleteMotorista,

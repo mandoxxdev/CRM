@@ -156,7 +156,7 @@ async function abaManutencoes(db, periodo) {
 async function abaDocumentos(db, hoje) {
   const rows = await dbAll(db, `SELECT d.*, v.placa FROM frotas_documentos d
     JOIN frotas_veiculos v ON v.id = d.veiculo_id
-    WHERE v.ativo = 1 ORDER BY v.placa, d.data_vencimento, d.id`);
+    WHERE v.ativo = 1 AND d.status = 'ativo' ORDER BY v.placa, d.data_vencimento, d.id`); // Fase5-2: a regua do alerta (renovado nao e VENCIDO)
   const linhas = [['Veículo', 'Documento', 'Vencimento', 'Dias até Vencer', 'Status', 'Observações']];
   for (const d of rows) {
     const dias = diasAte(d.data_vencimento, hoje);
