@@ -518,4 +518,13 @@ isso); este plano com a próxima tarefa detalhada.
 
 ## Execução
 
-*(vazia — nenhuma task executada)*
+### T1 — `pdfTexto.js` (feita)
+
+- Vermelho: sem o arquivo, a suite cai no import; com o esqueleto (`[String(texto)]`), **8 de 9** caem (o `nada perdido` passa por construcao — o texto inteiro numa linha nao perde nada; a (c2) prova que ele sabe falhar). Verde: **9/9**.
+- Emenda M1 aplicada: `[RN-186.01] largura invalida` (0, -1, NaN, Infinity lancam `Error`).
+- Controles (`e186-sab-t1cN.log`, md5 restaurado = antes, `cmp` ok em todos):
+  - (c1) sem o aparar → cai **so** `aparar` (`not.toMatch(/\s$/)` com `"vi2s16Oms83ess-erx "`); os outros 8 verdes;
+  - (c2) corte por contagem → caem **5**: `cabe` (113,41 > 77 — caiu na largura antes da metade positiva), `nada perdido` (`EIXO-SAE1045-D50` ≠ o codigo), `fonte corrente` (1 linha em f14 = f9), `quebrarCelulas + desenharCelulas` e `desenharQuebrado` (dependem da quebra);
+  - (c3) `desenharCelulas` com `text(array)` → cai **so** o "um `text` por linha" (`toEqual` dos `[x, y, texto]`);
+  - (c4) `utilDasColunas` sem a folga → cai **so** o literal `[33, 77, 15, 23, 30]`.
+- Divergencia: a razao social de 69 do teste e `Industria e Comercio de Equipamentos para Saneamento Basicos Ltda EPP` (a do plano, sem o `s`, tem 68).
