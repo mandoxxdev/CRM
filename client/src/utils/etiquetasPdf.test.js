@@ -1,17 +1,29 @@
+// Etapa 186, T4 (RN-186.10): `setFont`, `setFontSize` e `splitTextToSize` passam TAMBEM a um jsPDF real — a escolha da fonte do codigo
+// depende da medida (antes `splitTextToSize` devolvia `[t]` e nada media). Toda chamada continua `jest.fn` (as assercoes de hoje nao
+// mudam) e entra, em ordem, em `doc.__seq` — para saber a fonte corrente de cada `text`. O console.error do carregamento e calado.
 jest.mock('jspdf', () => {
+  const erroOriginal = console.error;
+  console.error = () => {};
+  let JsPdfReal;
+  try { ({ jsPDF: JsPdfReal } = jest.requireActual('jspdf')); } finally { console.error = erroOriginal; }
   const instancias = [];
   function jsPDFMock(opts) {
-    const doc = { opts };
-    doc.addPage = jest.fn().mockReturnValue(doc);
-    doc.setFont = jest.fn().mockReturnValue(doc);
-    doc.setFontSize = jest.fn().mockReturnValue(doc);
-    doc.text = jest.fn().mockReturnValue(doc);
-    doc.addImage = jest.fn().mockReturnValue(doc);
-    doc.save = jest.fn().mockReturnValue(doc);
-    doc.setLineDashPattern = jest.fn().mockReturnValue(doc);
-    doc.rect = jest.fn().mockReturnValue(doc);
-    doc.setDrawColor = jest.fn().mockReturnValue(doc);
-    doc.splitTextToSize = jest.fn((t) => [t]);
+    const doc = { opts, __seq: [] };
+    const medidor = new JsPdfReal({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    const grava = (nome, impl) => jest.fn((...args) => {
+      doc.__seq.push([nome, ...args]);
+      return impl ? impl(...args) : doc;
+    });
+    doc.addPage = grava('addPage');
+    doc.setFont = grava('setFont', (...a) => { medidor.setFont(...a); return doc; });
+    doc.setFontSize = grava('setFontSize', (...a) => { medidor.setFontSize(...a); return doc; });
+    doc.text = grava('text');
+    doc.addImage = grava('addImage');
+    doc.save = grava('save');
+    doc.setLineDashPattern = grava('setLineDashPattern');
+    doc.rect = grava('rect');
+    doc.setDrawColor = grava('setDrawColor');
+    doc.splitTextToSize = grava('splitTextToSize', (t, w) => medidor.splitTextToSize(t, w));
     instancias.push(doc);
     return doc;
   }
@@ -255,5 +267,107 @@ describe('montarEtiquetaLocalizacao (Etapa 56, RN-01)', () => {
     expect(e.nome).toBe('Gaveta');
     expect(e.linhaControle).toBe('');
     expect(e.qrUrl).toBe(`${ORIGIN}/almoxarifado/mapa?loc=3&codigo=X-1`);
+  });
+});
+
+// ── Etapa 186 (RN-186.10, B1237) — o codigo da etiqueta nao escreve por cima do nome ──────────────────────────────────────────────────
+// Antes o codigo ia em fonte 14 negrito com `maxWidth`: com 22+ letras o jsPDF quebrava em 2 linhas e a 2a (base em y + 14,7) caia em
+// cima do nome (base em y + 15). Agora a fonte encolhe (14 -> 10) ate caber numa linha; abaixo disso quebra em fonte 10 e o nome desce.
+describe('[RN-186.10] etiqueta: o codigo nao sobrepoe o nome (medido no jsPDF real)', () => {
+  let JsPdfDoTeste;
+  {
+    const erroOriginal = console.error;
+    console.error = () => {};
+    try { ({ jsPDF: JsPdfDoTeste } = jest.requireActual('jspdf')); } finally { console.error = erroOriginal; }
+  }
+  const regua = new JsPdfDoTeste({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  const larguraNegrito = (t, fonte) => { regua.setFont('helvetica', 'bold'); regua.setFontSize(fonte); return regua.getTextWidth(String(t)); };
+  // slot 0 de cada formato: y da etiqueta, largura do texto (99 - 4 - 32 - 8 = 55; 100 - 4 - 32 - 8 = 56) e a altura
+  const FOLHAS = {
+    A4_GRADE: { y: 10.5, larguraTexto: 55, altura: 57 },
+    TERMICA_100x50: { y: 0, larguraTexto: 56, altura: 50 },
+  };
+  const PASSO_NOME = 8 * 1.15 * (25.4 / 72); // o nome vai num `text` com array, fonte 8: o jsPDF desce 1,15 x fonte por linha
+
+  beforeEach(() => {
+    require('jspdf').default.__instancias.length = 0;
+    jest.clearAllMocks();
+  });
+
+  // Desenha UMA etiqueta e separa os `text` dela: codigo (negrito antes do 1o 'normal'), nome (o 1o `text` em 'normal') e controle.
+  async function desenhar(formato, codigo, linhaControle = '') {
+    await gerarEtiquetasPDF({ formato, etiquetas: [{ codigo, nome: 'Chapa de aco inox 304 com certificado de corrida', linhaControle, qrUrl: 'u' }] });
+    const doc = require('jspdf').default.__instancias.at(-1);
+    let estilo = 'normal';
+    let fonte = 16;
+    let fase = 'codigo';
+    const partes = { codigo: [], nome: [], controle: [] };
+    for (const [nome, ...args] of doc.__seq) {
+      if (nome === 'setFont') {
+        estilo = args[1];
+        if (fase === 'codigo' && estilo === 'normal') fase = 'nome';
+        else if (fase === 'nome' && estilo === 'bold') fase = 'controle';
+      }
+      if (nome === 'setFontSize') fonte = args[0];
+      if (nome === 'text') partes[fase].push({ t: args[0], x: args[1], y: args[2], opcoes: args[3], fonte, estilo });
+    }
+    return partes;
+  }
+  const yDasLinhasDoNome = (nome) => {
+    const linhas = Array.isArray(nome.t) ? nome.t : [nome.t];
+    return linhas.map((_, j) => nome.y + j * PASSO_NOME);
+  };
+  const nadaSobrepoe = (partes) => {
+    const yNome = yDasLinhasDoNome(partes.nome[0]);
+    for (const c of partes.codigo) expect(yNome[0]).toBeGreaterThan(c.y);
+    if (partes.controle.length) expect(yNome[yNome.length - 1]).toBeLessThan(partes.controle[0].y - 3);
+  };
+
+  test.each(Object.keys(FOLHAS))('%s: MAT-7 cabe em 14 — o desenho de hoje (codigo em y + 9, nome em y + 15)', async (formato) => {
+    const { y } = FOLHAS[formato];
+    const partes = await desenhar(formato, 'MAT-7');
+    expect(partes.codigo).toHaveLength(1);
+    expect(partes.codigo[0]).toEqual(expect.objectContaining({ t: 'MAT-7', fonte: 14, estilo: 'bold', y: y + 9 }));
+    expect(partes.nome[0].y).toBe(y + 15);
+    nadaSobrepoe(partes);
+  });
+
+  test.each([['A4_GRADE', 11], ['TERMICA_100x50', 12]])('%s: MP-ACO-INOX-304-CH-3MM vai numa linha so, em fonte %i, dentro da largura', async (formato, fonteEsperada) => {
+    const { y, larguraTexto } = FOLHAS[formato];
+    const partes = await desenhar(formato, 'MP-ACO-INOX-304-CH-3MM');
+    expect(partes.codigo).toHaveLength(1);
+    const [c] = partes.codigo;
+    expect(c.t).toBe('MP-ACO-INOX-304-CH-3MM');
+    expect(larguraNegrito(c.t, c.fonte)).toBeLessThanOrEqual(larguraTexto);
+    expect(c.fonte).toBe(fonteEsperada);
+    expect(partes.nome[0].y).toBe(y + 15);
+    nadaSobrepoe(partes);
+  });
+
+  test.each(Object.keys(FOLHAS))('%s: 40 W nao cabe nem em 10 — quebra em 3 linhas de fonte 10 e o nome desce', async (formato) => {
+    const { y, larguraTexto, altura } = FOLHAS[formato];
+    const codigo = 'W'.repeat(40);
+    const partes = await desenhar(formato, codigo, 'SN: 123');
+    expect(partes.codigo).toHaveLength(3);
+    for (const c of partes.codigo) {
+      expect(c.fonte).toBe(10);
+      expect(typeof c.t).toBe('string');
+      expect(larguraNegrito(c.t, 10)).toBeLessThanOrEqual(larguraTexto);
+    }
+    expect(partes.codigo.map((c) => c.t).join('')).toBe(codigo);
+    expect(partes.codigo.map((c) => c.y)).toEqual([y + 9, y + 13.5, y + 18]);
+    const ultimoCodigo = partes.codigo[2].y;
+    expect(partes.nome[0].y).toBeGreaterThanOrEqual(ultimoCodigo + 4.5);
+    expect(partes.nome[0].y).toBe(y + 15 + 9);
+    expect(partes.controle[0].y).toBe(y + altura - 5);
+    nadaSobrepoe(partes);
+  });
+
+  test('(M3) 80 W na termica: 5 linhas de codigo, o nome ainda acima da linha de controle', async () => {
+    const { y } = FOLHAS.TERMICA_100x50;
+    const partes = await desenhar('TERMICA_100x50', 'W'.repeat(80), 'SN: 123');
+    expect(partes.codigo).toHaveLength(5);
+    expect(partes.nome[0].y).toBe(y + 15 + 18);
+    nadaSobrepoe(partes);
   });
 });

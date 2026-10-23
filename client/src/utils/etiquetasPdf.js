@@ -125,6 +125,9 @@ export function montarEtiquetasDoRecebimento(itens, materiais, origin) {
   return out;
 }
 
+// Etapa 186 (B1237): as fontes que o codigo tenta, da maior para a menor, ate caber numa linha.
+const FONTES_CODIGO = [14, 13, 12, 11, 10];
+
 /** Gera o PDF e dispara o download. copias > 1 repete cada etiqueta. */
 export async function gerarEtiquetasPDF({ formato, etiquetas, copias = 1 }) {
   const cfg = FORMATOS_ETIQUETA[formato];
@@ -160,13 +163,24 @@ export async function gerarEtiquetasPDF({ formato, etiquetas, copias = 1 }) {
     doc.addImage(qrs[i], 'PNG', xQr, y + (altura - ladoQr) / 2, ladoQr, ladoQr);
 
     const larguraTexto = xQr - x - 2 * PAD;
+    // Etapa 186 (RN-186.10, B1237): o codigo ia em fonte 14 com `maxWidth` — com 22+ letras o jsPDF quebrava em 2 linhas e a 2a (base em
+    // y + 14,7) caia EM CIMA do nome (base em y + 15). Agora a fonte encolhe ate o codigo caber numa linha (14 -> 10, medido no negrito
+    // corrente); se nem em 10 cabe, quebra em fonte 10 (passo 4,5) e o nome desce o que o codigo cresceu. Codigo que cabe em 14: o
+    // desenho de hoje. Nao trunca: e o que a pessoa le na prateleira.
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    doc.text(e.codigo, x + PAD, y + PAD + 5, { maxWidth: larguraTexto });
+    let linhasCodigo = null;
+    for (const fonte of FONTES_CODIGO) {
+      doc.setFontSize(fonte);
+      const linhas = doc.splitTextToSize(String(e.codigo ?? ''), larguraTexto);
+      if (linhas.length === 1) { linhasCodigo = linhas; break; }
+      if (fonte === FONTES_CODIGO[FONTES_CODIGO.length - 1]) linhasCodigo = linhas;
+    }
+    linhasCodigo.forEach((l, j) => doc.text(l, x + PAD, y + PAD + 5 + 4.5 * j));
+    const desceNome = 4.5 * (linhasCodigo.length - 1);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     const nome = doc.splitTextToSize(e.nome || '', larguraTexto).slice(0, 2);
-    doc.text(nome, x + PAD, y + PAD + 11);
+    doc.text(nome, x + PAD, y + PAD + 11 + desceNome);
     if (e.linhaControle) {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(9);

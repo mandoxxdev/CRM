@@ -571,3 +571,20 @@ isso); este plano com a próxima tarefa detalhada.
   - (c8, I4) sem repetir o cabeçalho → caem as duas RN-186.04 (posição) em `cabecalhos.map(pagina)`.
 - Divergência: o projeto de 80 do teste é `Ampliacao da estacao de tratamento de efluentes industriais da planta Sul fase B` (o primeiro
   rascunho tinha 83 letras).
+- Commit: `bc1ca22f`.
+
+### T4 — etiqueta: o código não sobrepõe o nome (feita)
+
+- Gravador: no mock de hoje, `setFont`, `setFontSize` e `splitTextToSize` passam também a um jsPDF real; tudo continua `jest.fn` e entra em
+  ordem em `doc.__seq`. Os 29 testes de hoje rodaram verdes com ele **antes** da produção mudar (inclusive o `:208`, `maxWidth` na linha de
+  controle). Vermelho: **5** dos 7 novos caem; passam os dois `MAT-7` (a guarda do desenho de hoje). Verde: **36/36**; com
+  `EtiquetasPdfModal`: **45/45** (2 suítes).
+- Emenda M3 aplicada: a régua `nadaSobrepoe` inclui a linha de controle (última linha do nome < y do controle − 3) e há o caso de 80 `W` na
+  térmica (5 linhas, nome em y + 33).
+- Controles (`e186-sab-t4cN.log`, âncora = 1, md5 restaurado = antes, `cmp` ok):
+  - (c1) `maxWidth` em fonte 14 de volta → caem os dois de 22 letras (`getTextWidth` **64,70** > 55 / > 56) e os de 40 `W` / 80 `W`;
+  - (c2) encolhe a fonte mas não desce o nome → caem **só** os de 40 `W` (nome em y + 15 = **25,5** na A4, < 33 = último código + 4,5) e o de 80 `W`;
+  - (c3) fontes começando em 10 → caem os dois `MAT-7` (fonte **10** ≠ 14) — e, como consequência da ordem invertida, os demais.
+- Divergência: na (c1) o caso de 40 `W` cai na contagem (1 `text` em vez de 3), não na régua de sobreposição que o plano previa — com
+  `maxWidth` a quebra acontece **dentro** do `text` do jsPDF, que o gravador não desenha; a sobreposição em si é a medida da Fase 0
+  (2ª linha em y + 14,7, nome em y + 15).
