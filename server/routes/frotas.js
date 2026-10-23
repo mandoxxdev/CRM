@@ -14,7 +14,8 @@ let dashboardInflight = null;
 
 function handleError(res, err) {
   if (err?.status && err.status >= 400 && err.status < 500) {
-    return res.status(err.status).json({ error: err.message });
+    // Frotas Etapa 1: `code` quando o contrato manda (ex.: MOTORISTA_NAO_VINCULADO)
+    return res.status(err.status).json(err.code ? { error: err.message, code: err.code } : { error: err.message });
   }
   return respondDbError(res, err, 'frotas');
 }
@@ -70,12 +71,12 @@ module.exports = function registerFrotasRoutes(app, db, authenticateToken, check
 
   const crudRoutes = (base, listFn, createFn, updateFn, deleteFn, opts = {}) => {
     app.get(`/api/frotas/${base}`, ...frotaAuth, async (req, res) => {
-      try { res.json(await listFn(db, req.query)); } catch (e) { handleError(res, e); }
+      try { res.json(await listFn(db, req.query, req.user)); } catch (e) { handleError(res, e); }
     });
     if (opts.getOne) {
       app.get(`/api/frotas/${base}/:id`, ...frotaAuth, async (req, res) => {
         try {
-          const row = await opts.getOne(db, req.params.id);
+          const row = await opts.getOne(db, req.params.id, req.user);
           if (!row) return res.status(404).json({ error: 'Não encontrado' });
           res.json(row);
         } catch (e) { handleError(res, e); }
@@ -93,7 +94,7 @@ module.exports = function registerFrotasRoutes(app, db, authenticateToken, check
     if (updateFn) {
       const perm = opts.updatePerm || 'registrar_operacoes';
       app.put(`/api/frotas/${base}/:id`, ...frotaAuth, requirePermission(perm), async (req, res) => {
-        try { res.json(await updateFn(db, req.params.id, req.body)); } catch (e) { handleError(res, e); }
+        try { res.json(await updateFn(db, req.params.id, req.body, req.user)); } catch (e) { handleError(res, e); }
       });
     }
     if (deleteFn) {
@@ -109,7 +110,8 @@ module.exports = function registerFrotasRoutes(app, db, authenticateToken, check
     try { res.json(await frotasService.getMeta(db)); } catch (e) { handleError(res, e); }
   });
 
-  app.get('/api/frotas/dashboard', ...frotaAuth, async (req, res) => {
+  // Frotas Etapa 1 (RN-F1.16, F2-13): ver_painel ANTES do cache — o cache e um so para todos os perfis
+  app.get('/api/frotas/dashboard', ...frotaAuth, requirePermission('ver_painel'), async (req, res) => {
     try {
       const force = req.query.refresh === '1' || req.query.refresh === 'true';
       if (!force && dashboardCache.data && Date.now() - dashboardCache.at < DASHBOARD_CACHE_MS) {
@@ -133,7 +135,7 @@ module.exports = function registerFrotasRoutes(app, db, authenticateToken, check
     } catch (e) { handleError(res, e); }
   });
 
-  app.get('/api/frotas/alertas', ...frotaAuth, async (req, res) => {
+  app.get('/api/frotas/alertas', ...frotaAuth, requirePermission('ver_painel'), async (req, res) => {
     try { res.json(await frotasService.getAlertas(db)); } catch (e) { handleError(res, e); }
   });
 
@@ -143,6 +145,11 @@ module.exports = function registerFrotasRoutes(app, db, authenticateToken, check
 
   app.get('/api/frotas/relatorios/consumo', ...frotaAuth, requirePermission('relatorios'), async (req, res) => {
     try { res.json(await frotasService.relatorioConsumo(db, req.query)); } catch (e) { handleError(res, e); }
+  });
+
+  // Frotas Etapa 1 (F2-5): seletor do vinculo usuario <-> motorista (todos os usuarios ativos, sem filtro de setor)
+  app.get('/api/frotas/usuarios-vinculaveis', ...frotaAuth, requirePermission('gerenciar_motoristas'), async (req, res) => {
+    try { res.json(await frotasService.listUsuariosVinculaveis(db)); } catch (e) { handleError(res, e); }
   });
 
   // ── CRUD entidades ─────────────────────────────────────────────────────────
@@ -178,12 +185,13 @@ module.exports = function registerFrotasRoutes(app, db, authenticateToken, check
     { deletePerm: 'gerenciar_veiculos' }
   );
 
+  // Frotas Etapa 1 (RN-F1.16, B6): multa e documento sao do gestor — o motorista nao lanca
   crudRoutes('multas',
     frotasService.listMultas,
     frotasService.createMulta,
     frotasService.updateMulta,
     frotasService.deleteMulta,
-    { deletePerm: 'gerenciar_veiculos' }
+    { createPerm: 'gerenciar_veiculos', updatePerm: 'gerenciar_veiculos', deletePerm: 'gerenciar_veiculos' }
   );
 
   crudRoutes('documentos',
@@ -191,7 +199,7 @@ module.exports = function registerFrotasRoutes(app, db, authenticateToken, check
     frotasService.createDocumento,
     frotasService.updateDocumento,
     frotasService.deleteDocumento,
-    { deletePerm: 'gerenciar_veiculos' }
+    { createPerm: 'gerenciar_veiculos', updatePerm: 'gerenciar_veiculos', deletePerm: 'gerenciar_veiculos' }
   );
 
   crudRoutes('viagens',

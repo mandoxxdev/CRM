@@ -64,6 +64,98 @@ async function updateHorimetroVeiculoSeMaior(db, veiculoId, horimetro) {
   await dbRun(db, 'UPDATE frotas_veiculos SET horimetro_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [novo, veiculoId]);
 }
 
+// ── Escopo do motorista (Frotas Etapa 1, A6) ─────────────────────────────────
+
+const MSG_NAO_VINCULADO = 'Seu usuário não está ligado a um motorista. Peça ao gestor da frota para fazer o vínculo.';
+const MSG_SO_OS_SEUS = 'Você só pode alterar os seus próprios registros';
+
+function erroNaoVinculado() {
+  const err = new Error(MSG_NAO_VINCULADO);
+  err.status = 409;
+  err.code = 'MOTORISTA_NAO_VINCULADO';
+  return err;
+}
+
+function erroSoOsSeus() {
+  const err = new Error(MSG_SO_OS_SEUS);
+  err.status = 403;
+  return err;
+}
+
+/** RN-F1.12: o motorista (ativo) ligado ao usuario, ou null. */
+async function motoristaDoUsuario(db, user) {
+  if (!user?.id) return null;
+  return dbGet(db, 'SELECT * FROM frotas_motoristas WHERE usuario_id = ? AND ativo = 1 ORDER BY id LIMIT 1', [user.id]);
+}
+
+/**
+ * RN-F1.14/15/19: `null` quando o usuario NAO e do perfil MOTORISTA (ve e altera tudo — ou nao ha usuario, chamada interna);
+ * senao `{ motoristaId, usuarioId }` (motoristaId nulo = sem vinculo). Antes, o motorista logado listava tudo de todos — inclusive
+ * CPF/CNH dos colegas (A6).
+ */
+async function escopoDoUsuario(db, user) {
+  if (!user) return null;
+  const { getPerfilFromUser, PERFIS } = require('./permissions');
+  if (getPerfilFromUser(user) !== PERFIS.MOTORISTA) return null;
+  const m = await motoristaDoUsuario(db, user);
+  return { motoristaId: m ? m.id : null, usuarioId: user.id };
+}
+
+/** RN-F1.19: para MOTORISTA, o motorista_id e sempre o do vinculo (o do corpo e ignorado); sem vinculo -> 409. */
+async function forcarMotoristaDoVinculo(db, user, data) {
+  const esc = await escopoDoUsuario(db, user);
+  if (!esc) return data;
+  if (!esc.motoristaId) throw erroNaoVinculado();
+  return { ...data, motorista_id: esc.motoristaId };
+}
+
+/** RN-F1.15 + RN-F1.19 no PUT: o registro tem de ser do motorista do vinculo. */
+async function conferirDonoPorMotorista(db, user, current, data) {
+  const esc = await escopoDoUsuario(db, user);
+  if (!esc) return data;
+  if (!esc.motoristaId) throw erroNaoVinculado();
+  if (Number(current.motorista_id) !== Number(esc.motoristaId)) throw erroSoOsSeus();
+  return { ...data, motorista_id: esc.motoristaId };
+}
+
+/** F2-5: usuario inexistente/inativo -> 400; ligado a outro motorista ativo -> 409 (RN-F1.12). */
+async function conferirUsuarioDoVinculo(db, usuarioId, motoristaId = 0) {
+  if (usuarioId == null) return;
+  const u = await dbGet(db, 'SELECT id FROM usuarios WHERE id = ? AND ativo = 1', [usuarioId]);
+  if (!u) {
+    const err = new Error('Usuário não encontrado');
+    err.status = 400;
+    throw err;
+  }
+  const outro = await dbGet(db, 'SELECT id, nome FROM frotas_motoristas WHERE usuario_id = ? AND ativo = 1 AND id != ? LIMIT 1',
+    [usuarioId, motoristaId || 0]);
+  if (outro) {
+    const err = new Error(`Este usuário já está ligado ao motorista ${outro.nome}`);
+    err.status = 409;
+    throw err;
+  }
+}
+
+function normalizarUsuarioId(v) {
+  if (v === undefined || v === null || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : v;
+}
+
+/** F2-5: todos os usuarios ativos (sem o filtro de setor de /usuarios/por-modulo), com o motorista ja ligado. */
+async function listUsuariosVinculaveis(db) {
+  const rows = await dbAll(db, `SELECT u.id, u.nome, u.email, m.id AS motorista_id, m.nome AS motorista_nome
+    FROM usuarios u
+    LEFT JOIN frotas_motoristas m ON m.usuario_id = u.id AND m.ativo = 1
+    WHERE u.ativo = 1
+    ORDER BY u.nome, u.id, m.id`);
+  const vistos = new Set(); // legado com dois motoristas ativos no mesmo usuario: o primeiro
+  return rows.filter((r) => (vistos.has(r.id) ? false : vistos.add(r.id))).map((r) => ({
+    id: r.id, nome: r.nome, email: r.email,
+    motorista: r.motorista_id ? { id: r.motorista_id, nome: r.motorista_nome } : null,
+  }));
+}
+
 // ── Meta ─────────────────────────────────────────────────────────────────────
 
 async function getMeta(db) {
@@ -176,9 +268,16 @@ async function deleteVeiculo(db, id) {
 
 // ── Motoristas ───────────────────────────────────────────────────────────────
 
-async function listMotoristas(db, { search, status } = {}) {
+async function listMotoristas(db, { search, status } = {}, user) {
   let sql = 'SELECT * FROM frotas_motoristas WHERE ativo = 1';
   const params = [];
+  // RN-F1.14: o MOTORISTA so ve a si mesmo (CPF/CNH dos colegas ficavam abertos — A6); sem vinculo, lista vazia
+  const esc = await escopoDoUsuario(db, user);
+  if (esc) {
+    if (!esc.motoristaId) return [];
+    sql += ' AND id = ?';
+    params.push(esc.motoristaId);
+  }
   const s = buildSearchWhere(['nome', 'cpf', 'cnh_numero', 'setor'], search);
   sql += s.clause;
   params.push(...s.params);
@@ -190,7 +289,10 @@ async function listMotoristas(db, { search, status } = {}) {
   return dbAll(db, sql, params);
 }
 
-async function getMotorista(db, id) {
+async function getMotorista(db, id, user) {
+  // F2-2: MOTORISTA pedindo outro -> nulo (a rota responde 404 "Não encontrado")
+  const esc = await escopoDoUsuario(db, user);
+  if (esc && Number(esc.motoristaId) !== Number(id)) return null;
   return dbGet(db, 'SELECT * FROM frotas_motoristas WHERE id = ? AND ativo = 1', [id]);
 }
 
@@ -201,10 +303,12 @@ async function createMotorista(db, userOrData, maybeData) {
     err.status = 400;
     throw err;
   }
+  const usuarioId = normalizarUsuarioId(data.usuario_id);
+  await conferirUsuarioDoVinculo(db, usuarioId); // RN-F1.12
   const r = await dbRun(db, `INSERT INTO frotas_motoristas
     (nome, cpf, usuario_id, cnh_numero, cnh_categoria, cnh_validade, telefone, email, setor, status, observacoes)
     VALUES (?,?,?,?,?,?,?,?,?,?,?)`, [
-    data.nome, data.cpf || null, data.usuario_id || null, data.cnh_numero || null,
+    data.nome, data.cpf || null, usuarioId, data.cnh_numero || null,
     data.cnh_categoria || null, data.cnh_validade || null, data.telefone || null,
     data.email || null, data.setor || null, data.status || 'ativo', data.observacoes || null,
   ]);
@@ -218,10 +322,13 @@ async function updateMotorista(db, id, data) {
     err.status = 404;
     throw err;
   }
+  // F2-4: `'usuario_id' in data` — null DESVINCULA (o `??` antigo ignorava o null e nao havia como desfazer o vinculo)
+  const usuarioId = 'usuario_id' in data ? normalizarUsuarioId(data.usuario_id) : current.usuario_id;
+  if ('usuario_id' in data) await conferirUsuarioDoVinculo(db, usuarioId, Number(id));
   await dbRun(db, `UPDATE frotas_motoristas SET
     nome=?, cpf=?, usuario_id=?, cnh_numero=?, cnh_categoria=?, cnh_validade=?,
     telefone=?, email=?, setor=?, status=?, observacoes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`, [
-    data.nome ?? current.nome, data.cpf ?? current.cpf, data.usuario_id ?? current.usuario_id,
+    data.nome ?? current.nome, data.cpf ?? current.cpf, usuarioId,
     data.cnh_numero ?? current.cnh_numero, data.cnh_categoria ?? current.cnh_categoria,
     data.cnh_validade ?? current.cnh_validade, data.telefone ?? current.telefone,
     data.email ?? current.email, data.setor ?? current.setor, data.status ?? current.status,
@@ -237,12 +344,15 @@ async function deleteMotorista(db, id) {
 
 // ── Manutenções ──────────────────────────────────────────────────────────────
 
-async function listManutencoes(db, { search, veiculo_id, tipo } = {}) {
+async function listManutencoes(db, { search, veiculo_id, tipo } = {}, user) {
   let sql = `SELECT m.*, v.placa, v.modelo as veiculo_modelo
     FROM frotas_manutencoes m
     JOIN frotas_veiculos v ON m.veiculo_id = v.id
     WHERE 1=1`;
   const params = [];
+  // RN-F1.14: manutencao nao tem motorista — o MOTORISTA ve as que ele mesmo lancou
+  const esc = await escopoDoUsuario(db, user);
+  if (esc) { sql += ' AND m.usuario_id = ?'; params.push(esc.usuarioId); }
   if (veiculo_id) {
     sql += ' AND m.veiculo_id = ?';
     params.push(veiculo_id);
@@ -285,13 +395,15 @@ async function createManutencao(db, user, data) {
   return dbGet(db, 'SELECT * FROM frotas_manutencoes WHERE id = ?', [r.lastID]);
 }
 
-async function updateManutencao(db, id, data) {
+async function updateManutencao(db, id, data, user) {
   const current = await dbGet(db, 'SELECT * FROM frotas_manutencoes WHERE id = ?', [id]);
   if (!current) {
     const err = new Error('Manutenção não encontrada');
     err.status = 404;
     throw err;
   }
+  const esc = await escopoDoUsuario(db, user); // RN-F1.15: a manutencao do MOTORISTA e a que ele lancou
+  if (esc && Number(current.usuario_id) !== Number(esc.usuarioId)) throw erroSoOsSeus();
   await dbRun(db, `UPDATE frotas_manutencoes SET
     veiculo_id=?, tipo=?, descricao=?, oficina=?, custo=?, pecas_descricao=?, km_manutencao=?,
     data_manutencao=?, proxima_revisao_km=?, proxima_revisao_data=?, status=?, observacoes=?,
@@ -317,13 +429,19 @@ async function deleteManutencao(db, id) {
 
 // ── Abastecimentos ───────────────────────────────────────────────────────────
 
-async function listAbastecimentos(db, { search, veiculo_id } = {}) {
+async function listAbastecimentos(db, { search, veiculo_id } = {}, user) {
   let sql = `SELECT a.*, v.placa, m.nome as motorista_nome
     FROM frotas_abastecimentos a
     JOIN frotas_veiculos v ON a.veiculo_id = v.id
     LEFT JOIN frotas_motoristas m ON a.motorista_id = m.id
     WHERE 1=1`;
   const params = [];
+  const esc = await escopoDoUsuario(db, user); // RN-F1.14
+  if (esc) {
+    if (!esc.motoristaId) return [];
+    sql += ' AND a.motorista_id = ?';
+    params.push(esc.motoristaId);
+  }
   if (veiculo_id) {
     sql += ' AND a.veiculo_id = ?';
     params.push(veiculo_id);
@@ -382,7 +500,8 @@ async function recalcularSeguinte(db, veiculoId, km, id) {
   if (seg) await recalcularConsumoDaLinha(db, seg.id);
 }
 
-async function createAbastecimento(db, user, data) {
+async function createAbastecimento(db, user, dataBruta) {
+  const data = await forcarMotoristaDoVinculo(db, user, dataBruta || {}); // RN-F1.19
   if (!data.veiculo_id || !data.litros || !data.data_abastecimento) {
     const err = new Error('Veículo, litros e data são obrigatórios');
     err.status = 400;
@@ -409,13 +528,14 @@ async function createAbastecimento(db, user, data) {
   return dbGet(db, 'SELECT * FROM frotas_abastecimentos WHERE id = ?', [r.lastID]);
 }
 
-async function updateAbastecimento(db, id, data) {
+async function updateAbastecimento(db, id, dataBruta, user) {
   const current = await dbGet(db, 'SELECT * FROM frotas_abastecimentos WHERE id = ?', [id]);
   if (!current) {
     const err = new Error('Abastecimento não encontrado');
     err.status = 404;
     throw err;
   }
+  const data = await conferirDonoPorMotorista(db, user, current, dataBruta); // RN-F1.15 / RN-F1.19
   const litros = data.litros != null ? Number(data.litros) : current.litros;
   const valorTotal = data.valor_total != null ? Number(data.valor_total) : current.valor_total;
   const valorLitro = data.valor_litro != null ? Number(data.valor_litro) : current.valor_litro;
@@ -449,13 +569,19 @@ async function deleteAbastecimento(db, id) {
 
 // ── Multas ───────────────────────────────────────────────────────────────────
 
-async function listMultas(db, { search, veiculo_id, status_pagamento } = {}) {
+async function listMultas(db, { search, veiculo_id, status_pagamento } = {}, user) {
   let sql = `SELECT mu.*, v.placa, mot.nome as motorista_nome
     FROM frotas_multas mu
     JOIN frotas_veiculos v ON mu.veiculo_id = v.id
     LEFT JOIN frotas_motoristas mot ON mu.motorista_id = mot.id
     WHERE 1=1`;
   const params = [];
+  const esc = await escopoDoUsuario(db, user); // RN-F1.14
+  if (esc) {
+    if (!esc.motoristaId) return [];
+    sql += ' AND mu.motorista_id = ?';
+    params.push(esc.motoristaId);
+  }
   if (veiculo_id) { sql += ' AND mu.veiculo_id = ?'; params.push(veiculo_id); }
   if (status_pagamento) { sql += ' AND mu.status_pagamento = ?'; params.push(status_pagamento); }
   const s = buildSearchWhere(['mu.descricao', 'v.placa', 'mu.numero_auto'], search);
@@ -580,13 +706,19 @@ async function deleteDocumento(db, id) {
 
 // ── Viagens ──────────────────────────────────────────────────────────────────
 
-async function listViagens(db, { search, veiculo_id, status } = {}) {
+async function listViagens(db, { search, veiculo_id, status } = {}, user) {
   let sql = `SELECT vi.*, v.placa, m.nome as motorista_nome
     FROM frotas_viagens vi
     JOIN frotas_veiculos v ON vi.veiculo_id = v.id
     LEFT JOIN frotas_motoristas m ON vi.motorista_id = m.id
     WHERE 1=1`;
   const params = [];
+  const esc = await escopoDoUsuario(db, user); // RN-F1.14
+  if (esc) {
+    if (!esc.motoristaId) return [];
+    sql += ' AND vi.motorista_id = ?';
+    params.push(esc.motoristaId);
+  }
   if (veiculo_id) { sql += ' AND vi.veiculo_id = ?'; params.push(veiculo_id); }
   if (status) { sql += ' AND vi.status = ?'; params.push(status); }
   const s = buildSearchWhere(['vi.destino', 'vi.finalidade', 'v.placa'], search);
@@ -627,7 +759,8 @@ function conferirKmDoRetorno(kmSaida, kmRetorno) {
   }
 }
 
-async function createViagem(db, user, data) {
+async function createViagem(db, user, dataBruta) {
+  const data = await forcarMotoristaDoVinculo(db, user, dataBruta || {}); // RN-F1.19
   if (!data.veiculo_id) {
     const err = new Error('Veículo é obrigatório');
     err.status = 400;
@@ -657,7 +790,7 @@ async function createViagem(db, user, data) {
   });
 }
 
-async function updateViagem(db, id, data) {
+async function updateViagem(db, id, dataBruta, user) {
   return naFilaDeViagens(async () => {
     const current = await dbGet(db, 'SELECT * FROM frotas_viagens WHERE id = ?', [id]);
     if (!current) {
@@ -665,6 +798,7 @@ async function updateViagem(db, id, data) {
       err.status = 404;
       throw err;
     }
+    const data = await conferirDonoPorMotorista(db, user, current, dataBruta); // RN-F1.15 / RN-F1.19
     let kmRodado = data.km_rodado;
     const kmSaida = data.km_saida != null ? Number(data.km_saida) : current.km_saida;
     const kmRetorno = data.km_retorno != null ? Number(data.km_retorno) : current.km_retorno;
@@ -790,13 +924,19 @@ async function inserirRegistro(db, user, r) {
   return registroComItens(await dbGet(db, 'SELECT * FROM frotas_checklists WHERE id = ?', [ins.lastID]));
 }
 
-async function listChecklists(db, { search, veiculo_id } = {}) {
+async function listChecklists(db, { search, veiculo_id } = {}, user) {
   let sql = `SELECT c.*, v.placa, m.nome as motorista_nome
     FROM frotas_checklists c
     JOIN frotas_veiculos v ON c.veiculo_id = v.id
     LEFT JOIN frotas_motoristas m ON c.motorista_id = m.id
     WHERE 1=1`;
   const params = [];
+  const esc = await escopoDoUsuario(db, user); // RN-F1.14
+  if (esc) {
+    if (!esc.motoristaId) return [];
+    sql += ' AND c.motorista_id = ?';
+    params.push(esc.motoristaId);
+  }
   if (veiculo_id) { sql += ' AND c.veiculo_id = ?'; params.push(veiculo_id); }
   const s = buildSearchWhere(['v.placa', 'c.observacoes'], search);
   sql += s.clause;
@@ -805,7 +945,8 @@ async function listChecklists(db, { search, veiculo_id } = {}) {
   return (await dbAll(db, sql, params)).map(registroComItens);
 }
 
-async function createChecklist(db, user, data) {
+async function createChecklist(db, user, dataBruta) {
+  const data = await forcarMotoristaDoVinculo(db, user, dataBruta || {}); // RN-F1.19
   if (!data.veiculo_id || !data.data_checklist) {
     const err = new Error('Veículo e data são obrigatórios');
     err.status = 400;
@@ -1061,4 +1202,7 @@ module.exports = {
   listChecklists, createChecklist, deleteChecklist,
   getDashboard, getAlertas, diasAte,
   relatorioCustosPorVeiculo, relatorioConsumo,
+  // Frotas Etapa 1
+  listUsuariosVinculaveis, motoristaDoUsuario, escopoDoUsuario, erroNaoVinculado, registroComItens, inserirRegistro,
+  validarItens, conferirViagemUnica, conferirKmDoRetorno, updateKmVeiculoSeMaior, MSG_VEICULO_EM_USO, MSG_MOTORISTA_EM_VIAGEM,
 };

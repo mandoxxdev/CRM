@@ -158,8 +158,8 @@ Cada task: TDD com controle positivo (quebrar a implementação e ver o vermelho
 | Task | Estado | Commit |
 |---|---|---|
 | T1 | feito — harness, schema, 12 itens, situacaoDoRegistro, ver_painel; teste antigo no runner (A9) | 4ed19f8b |
-| T2 | feito — km/L por ordem de km + vizinho (A1/A2), checklist antigo sem itens (A3), aprovar so solicitada (A4), km do retorno no PUT (A5), uma viagem em andamento (F2-10) com fila em memoria | este commit ("Frota etapa 1 T2") |
-| T3 | a fazer | |
+| T2 | feito — km/L por ordem de km + vizinho (A1/A2), checklist antigo sem itens (A3), aprovar so solicitada (A4), km do retorno no PUT (A5), uma viagem em andamento (F2-10) com fila em memoria | 80362b54 |
+| T3 | feito — vinculo usuario-motorista (RN-12, F2-4, F2-5 + /usuarios-vinculaveis), escopo MOTORISTA nas listas, GET /:id e PUT (RN-14/15, F2-1, F2-2), motorista_id forcado (RN-19), painel/alertas = ver_painel e multas/documentos = gerenciar_veiculos (RN-16) | este commit ("Frota etapa 1 T3") |
 | T4 | a fazer | |
 | T5 | a fazer | |
 | T6 | a fazer (front, outro agente) | |
