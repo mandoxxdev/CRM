@@ -629,7 +629,7 @@ perl `-0pi`, âncora contada = 1, md5 antes/sabotado/restaurado (restauro por c�
   `IS NULL` só perde para quem gravou uma validade), mas é o caso da I-1 visto do outro lado: agora sai `AVISO_FALHA` + log. Teste
   **14c** (gancho devolve `{ preenchida: false, atual: null }`); controle (g): sem o ramo novo cai o 14c com a frase da corrida e o
   "()". Arquivo T2: 22/22.
-- [x] **T4 — hash no fechamento deste plano (próximo commit).** `validadeLoteEntradaManualIntegracao.api.test.js`, 5 cenários, cada um
+- [x] **T4 — `9555ed29`.** `validadeLoteEntradaManualIntegracao.api.test.js`, 5 cenários, cada um
   entrando pela **rota v2** e conferindo noutra porta sem mudança, cada um com o próprio controle "a mesma entrada **sem** a validade":
   (1) `GET /materiais/:id/lotes` → `['LV','LS']` (controle `['LS','LV']`); (2) `varrerLotesVencendo` → 1 `LOTE_VENCENDO` com
   `hash_dedupe = sha256('LOTE_VENCENDO|lote-vencendo-<id>-<hoje+10>')` (controle: 0 para o lote sem validade); (3) SAIDA → 400
@@ -645,6 +645,11 @@ perl `-0pi`, âncora contada = 1, md5 antes/sabotado/restaurado (restauro por c�
   do lote (Execucao, T2): grava aqui." — falso desde esta etapa; o teste continua certo (grava por `UPDATE` direto), só o comentário
   envelheceu. Não mexido (arquivo da 188, fora das tasks).
 
+
+**Suítes completas (2026-10-23, sobre `9555ed29`, uma por vez):** `test:api` 538/538 arquivos OK; `test:almoxarifado` 44/44;
+`test:validation` 4/4; `test:safealter` 3/3; `test:sqlite` 16/16; client `react-scripts test` 187 suítes, 2539/2539; `CI=true build`
+"Compiled successfully". **Onde parou:** T1–T4 feitas; a Fase 5 (revisão adversarial) e o fechamento (`fechar-etapa`) **não**
+começaram.
 ## Próxima tarefa detalhada
 
 *(preencher no fechamento.)* Rascunho do que o fechamento deve confirmar: **Etapa 191 — corrigir a validade de um lote** (B1276, B1277).
