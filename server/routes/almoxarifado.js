@@ -4549,6 +4549,14 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       .catch((e) => res.status(e.status || 500).json({ error: e.message }));
   });
 
+  // Etapa 189 (T1, RN-189.01; B1260): a sugestao de coleta de uma requisicao — o recorte da fila, com o gate da fila. A janela de
+  // separacao le isto para ja abrir com o "Sai de" no endereco sugerido. So leitura.
+  app.get('/api/almoxarifado/requisicoes/:id/sugestao-coleta', requireSepararEmitir, (req, res) => {
+    requisitionService.sugestaoDeColetaDaRequisicao(db, req.user, req.params.id)
+      .then((r) => res.json(r))
+      .catch((e) => res.status(e.status || 500).json({ error: e.message }));
+  });
+
   // PUT /api/almoxarifado/requisicoes/:id/separacao — iniciar separação (com quantidades opcionais)
   app.put('/api/almoxarifado/requisicoes/:id/separacao', requireSepararEmitir, handleSeparacao);
   // Alias conforme especificação

@@ -1,6 +1,6 @@
 # Etapa 189 — A janela de separação já abre com o endereço sugerido, e a fila imprime a lista de coleta
 
-> **Status:** 📝 **plano escrito (2026-10-23, sobre `7e76acc6`). Fase 2 (revisão do plano) feita em 2026-10-23: 0 Crítico, 3 Importantes, 6 Menores — ver "Emendas da Fase 2" (aplicar antes de T1). Execução não começou.**
+> **Status:** 📝 **plano escrito (2026-10-23, sobre `7e76acc6`). Fase 2 (revisão do plano) feita em 2026-10-23: 0 Crítico, 3 Importantes, 6 Menores — ver "Emendas da Fase 2" (aplicar antes de T1). Execução em andamento desde 2026-10-23 sobre `2e548a9f` (a 188 fechada): contrato recongelado no começo de "Execução" — ele prevalece.**
 > Feature **05** (separação e picking). Continua a Etapa 188 (plano
 > `docs/superpowers/plans/2026-10-22-almoxarifado-etapa188-sugestao-de-coleta-na-fila-de-separacao.md`: a "Próxima tarefa detalhada",
 > a emenda **I1** da Fase 2 — "subir a pré-seleção a item 1 da 189, ela é o que torna a dica verdadeira" — e a **B1257**).
@@ -532,7 +532,66 @@ este contrato **depois** do commit da Fase 5 da 188 (o plano já pede reler; ago
 
 ## Execução
 
-*(vazia — nenhuma task começou)*
+### Recongelamento do contrato (2026-10-23, sobre `2e548a9f` — a 188 fechada com o fix-round `9efbcf4a`/`9b159c69`)
+
+Relido: "Próxima tarefa detalhada" e "F5" do plano da 188, `listarFilaSeparacao` (`requisitionService.js:932-1048`), a rota da fila
+(`routes/almoxarifado.js:4546`) e `FilaSeparacao.js` como estão em `2e548a9f`. **Isto prevalece sobre "Contrato (congelado)" e as RN acima
+onde divergirem** (as Emendas da Fase 2 incorporadas):
+
+1. **Contrato que a 189 consome (fila, depois da Fase 5 da 188):** `itens[].pegar_em` sem mudança; `itens[].pegar_em_aviso` ∈
+   `null | NENHUM_ENDERECO_COBRE | SEM_ENDERECO_SUGERIVEL | PLANEJADA_NAO_COBRE | PLANEJADA_INDISPONIVEL` (o último é novo, M-d: `pegar_em`
+   vem `null`); `itens[].pegar_em_alerta` ∈ `null | RETENCAO_NO_MATERIAL` (novo, I-a: só com `pegar_em` não nulo); `ordem_coleta` sem mudança.
+2. **`GET /requisicoes/:id/sugestao-coleta` (I3):** o recorte por item é **`{ item_id, separavel, pegar_em, pegar_em_aviso, pegar_em_alerta }`**,
+   cada valor idêntico ao da fila. Gate, 403, 404 (inclusive `abc`, conferido **antes** do SQL: `Number.isInteger(Number(id))`), 500 e o
+   resto da forma: como em "Contrato (congelado)". Requisição só com ENTREGAR → `itens` não vazio com `pegar_em: null`, `ordem_coleta: []`
+   (T1 caso 2 ganha essa variante, pergunta 1 da Fase 2).
+3. **Pré-seleção (RN-189.02 com I3, M2, M-d):** pré-seleciona só item com `!temPlanejada(item)` **e** separado pendente 0 (M2), `pegar_em` não
+   nulo, `cobre: true`, `pegar_em_aviso: null`, par nas opções e cobrindo (RN-189.04 com a soma da **M1**: todo irmão do mesmo material cujo
+   valor atual no "Sai de" é o par + o separado pendente dos irmãos planejados nele). **`pegar_em_alerta = RETENCAO_NO_MATERIAL` não impede**:
+   pré-seleciona e a janela mostra, no mesmo testid `separacao-sugestao-<item>`, depois da frase "Sugerido…", a frase do alerta da 188
+   (`textoAlertaPegarEm`, literal: *"Parte do saldo deste material está retida (em inspeção, bloqueada ou em terceiros) e o sistema não sabe
+   em qual endereço — confira antes de pegar."*). O alerta também aparece com a frase "Sugestão da fila: …" (item não pré-selecionado).
+   **`PLANEJADA_INDISPONIVEL` nunca pré-seleciona** (`pegar_em` nulo e aviso não nulo — dupla guarda; e o item tem planejada, então a 65 decide).
+   **I-b:** o único aviso com o sufixo do lote que vem com `pegar_em` é `NENHUM_ENDERECO_COBRE` (`cobre: false`) → nunca pré-selecionado.
+4. **Frases da janela (literais):** pré-selecionado → `Sugerido pela fila de separação. Se pegou de outro endereço, troque aqui.` e, quando a
+   quantidade pré-preenchida < pendente de separação do item (I1), + ` Entregue esta parte antes de separar o resto — separar o resto de outro
+   endereço troca a origem.`; não pré-selecionado (todo motivo, M3; inclusive o M2) → `Sugestão da fila: ⟨localizacao_codigo⟩[ — lote ⟨lote⟩]
+   · ⟨fmtQtd(quantidade_sugerida)⟩[ ⟨unidade⟩] — não veio escolhida; confira o saldo no 'Sai de' antes de escolher.` (a frase "porque não
+   cobre a quantidade desta separação" da RN-189.09 está **substituída**). `fmtQtd` = pt-BR até 3 casas (M4).
+5. **Fila, `textoPegarEm`:** fim `— já vem escolhido no 'Sai de' ao separar` com `cobre: true` **e sem separado pendente sem planejada**
+   (`a_entregar > 0 && !origem_separacao_codigo` → mantém "escolha este endereço", porque o M2 não pré-seleciona); senão
+   `— escolha este endereço no 'Sai de' ao separar`. O sufixo do lote (I-b) mora em `textoAvisoPegarEm` e não muda.
+6. **Frases movidas (B1268):** `textoPegarEm`, `textoAvisoPegarEm`, **`textoAlertaPegarEm`** e `fmtQtd`/`fmtData` vão para
+   `client/src/utils/coletaTexto.js`; `FilaSeparacao.js` re-exporta as três. Testes `[I-a]`, `[I-b]`, `[M-d]` e as frases da 188 copiados para
+   `coletaTexto.test.js` (o `FilaSeparacao.test.js` fica como está).
+7. **Ordem sequencial (pedido do Andre: T1 → T2 → T3 → T4 na main, sem paralelo):** T2 precisa da frase do alerta antes de T3 criar
+   `coletaTexto.js`. **Decidido:** T2 importa `textoAlertaPegarEm` de `./FilaSeparacao` (existe desde a 188) e declara `fmtQtd` local (M4);
+   T3, ao criar `coletaTexto.js`, troca os dois em `RequisicoesList.js` pelo import de `../../utils/coletaTexto` (um arquivo a mais em T3,
+   sem mudar comportamento). Descartado: copiar a frase do alerta em `RequisicoesList.js` (duas cópias da mesma literal).
+8. **PDF (I2, I3, M4, M6):** colunas `[14, 23, 70, 130, 160, 188]`; Qtd = `fmtQtd(quantidade_sugerida)` + ` unidade` (tela = papel);
+   a linha de aviso da parada leva o aviso **e** o alerta (nessa ordem, separados por espaço) quando houver; o bloco "Sem endereço sugerido"
+   cobre todo item sem `pegar_em` com aviso (inclui `PLANEJADA_INDISPONIVEL`), `a separar ⟨fmtQtd(a_separar)⟩[ unidade]`; requisição sem
+   paradas → sem tabela.
+
+### T1 — feita (`T1HASH`)
+
+- `listarFilaSeparacao(db, user, opcoes = {})`: `{ requisicaoId }` só acrescenta ` AND r.id = ?` à consulta de requisições; o resto byte a byte.
+  `sugestaoDeColetaDaRequisicao(db, user, id)` (exportada): id conferido por `/^\d+$/` **antes** do SQL (`abc` e `1.5` → 404), requisição
+  ativa ou 404 `Requisição não encontrada`, recorte `{ requisicao_id, itens: [{ item_id, separavel, pegar_em, pegar_em_aviso, pegar_em_alerta }],
+  ordem_coleta }`. Rota `GET /api/almoxarifado/requisicoes/:id/sugestao-coleta` com `requireSepararEmitir`, ao lado da fila.
+- Teste `server/tests/api/sugestaoColetaRequisicao.api.test.js` **6/0**. Vermelho antes: os 6 caíram (rota inexistente → 404; o caso 1
+  passou todas as premissas antes de cair). O caso 1 usa urgência `CRITICO` em R1 para a pedida (R2) **não** ser a primeira da fila; R1 traz
+  `RETENCAO_NO_MATERIAL` (o campo da I3). Caso 2 com a variante "só ENTREGAR". Caso 3 inclui `1.5`.
+- Controles (harness `scratchpad/e189-sab.sh`: perl `-0pi`, âncora contada = 1, md5 antes/sabotado/restaurado, restauro por cópia `e189-bak-*`;
+  todos restauraram ao md5 de antes):
+  | Sabotagem | Caiu | Asserção |
+  |---|---|---|
+  | (a) `porRequisicao = false` **e** `fila[0]` | 1, 2 e 6 | caso 1: o recorte de R2 veio com os itens de R1 (deepStrictEqual) |
+  | (b) gate → `(req, res, next) => next()` | só o 4 | `200 !== 403` |
+  | (c) `pegar_em: undefined` no recorte | 1, 2 e 6 | caso 1: `pegar_em` ausente no item de R2 |
+  | (d) `ORDER BY ir.requisicao_id, ir.id DESC` | 1 (premissa do alerta no segundo item) e 6 (`[[11,4],[10,0]]`); em `separavelDividido` `[127 RN-10]`, `RN-14`, `RN-15` | |
+- Vizinhos sem mudança: `filaSugestaoColeta` 12/0, `filaSugestaoColetaIntegracao` 6/0, `filaSeparacao` 11/0, `separavelDividido` 19/0.
+- Divergência: nenhuma do contrato recongelado.
 
 ## Próxima tarefa detalhada
 

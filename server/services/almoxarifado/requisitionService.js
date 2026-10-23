@@ -929,12 +929,16 @@ async function conferirSeparacao(db, requisicaoId, user) {
  *  - APROVACAO_VALOR   — no lugar de SEPARAR/ENTREGAR quando a requisição precisa de aprovação de valor e não
  *                        tem (pelo que está GRAVADO — a avaliação ao vivo continua sendo a do separar/entregar).
  */
-async function listarFilaSeparacao(db, user) {
+async function listarFilaSeparacao(db, user, opcoes = {}) {
   const statusFila = [...new Set([...PODE_SEPARAR, ...PODE_ENTREGAR])];
+  // Etapa 189 (T1, RN-189.01): o filtro opcional por requisicao SO acrescenta este AND — a consulta de itens, a ordem do pedido (B821),
+  // a divisao e a leitura da coleta ficam iguais. Por requisicao, o resultado so depende das linhas dela e dos dados globais.
+  const porRequisicao = opcoes.requisicaoId != null;
   const reqs = await dbAll(db, `SELECT r.id, r.numero, r.status, r.urgencia, r.data_necessidade, r.solicitante_nome,
       r.setor, r.created_at, r.conferido_por_id, r.requer_aprovacao_valor, r.data_aprovacao_valor
     FROM requisicoes_almoxarifado r
-    WHERE COALESCE(r.ativo, 1) = 1 AND r.status IN (${statusFila.map(() => '?').join(',')})`, statusFila);
+    WHERE COALESCE(r.ativo, 1) = 1 AND r.status IN (${statusFila.map(() => '?').join(',')})${porRequisicao ? ' AND r.id = ?' : ''}`,
+  porRequisicao ? [...statusFila, opcoes.requisicaoId] : statusFila);
   if (!reqs.length) return [];
   const ids = reqs.map((r) => r.id);
   const marcas = ids.map(() => '?').join(',');
@@ -1058,6 +1062,31 @@ async function listarFilaSeparacao(db, user) {
   // Ordem (RN-02): o que dá para fazer agora primeiro; depois a prioridade (compararPrioridade).
   fila.sort((a, b) => (Number(b.acionavel) - Number(a.acionavel)) || compararPrioridade(a, b));
   return fila;
+}
+
+/**
+ * Etapa 189 (T1, RN-189.01; B1260): a sugestao de coleta de UMA requisicao — o recorte que a fila devolve para ela, pelo mesmo codigo
+ * (listarFilaSeparacao filtrada pelo id). A janela de separacao le isto para pre-selecionar o "Sai de". So leitura, sem trava.
+ * Requisicao ativa fora da fila (sem etapa) -> itens [] e ordem_coleta []. Inexistente, inativa ou id nao inteiro -> 404.
+ */
+async function sugestaoDeColetaDaRequisicao(db, user, requisicaoId) {
+  const naoAchou = () => Object.assign(new Error('Requisição não encontrada'), { status: 404 });
+  // O id e conferido ANTES do SQL: 'abc' viraria NaN no bind.
+  if (!/^\d+$/.test(String(requisicaoId))) throw naoAchou();
+  const id = Number(requisicaoId);
+  const r = await dbGet(db, 'SELECT id FROM requisicoes_almoxarifado WHERE id = ? AND COALESCE(ativo, 1) = 1', [id]);
+  if (!r) throw naoAchou();
+  const fila = await listarFilaSeparacao(db, user, { requisicaoId: id });
+  const daReq = fila.find((f) => Number(f.id) === id);
+  if (!daReq) return { requisicao_id: id, itens: [], ordem_coleta: [] };
+  return {
+    requisicao_id: id,
+    itens: daReq.itens.map((l) => ({
+      item_id: l.item_id, separavel: l.separavel, pegar_em: l.pegar_em, pegar_em_aviso: l.pegar_em_aviso,
+      pegar_em_alerta: l.pegar_em_alerta,
+    })),
+    ordem_coleta: daReq.ordem_coleta,
+  };
 }
 
 /**
@@ -2591,6 +2620,7 @@ async function listarDevolucoesCaixa(db, requisicaoId) {
 
 module.exports = {
   listarFilaSeparacao,
+  sugestaoDeColetaDaRequisicao, // Etapa 189 (T1)
   compararPrioridade, // Etapa 74 (T0): a ordem unica da fila e da reserva na chegada
   listarSubstituicoes,
   num,
