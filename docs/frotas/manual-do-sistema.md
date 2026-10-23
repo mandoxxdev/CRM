@@ -1,0 +1,306 @@
+# Frota — manual do sistema
+
+Este manual descreve **como o módulo Frota funciona hoje**, para quem vai usar ou apresentar o sistema. Está organizado pelo que a
+pessoa faz. As mensagens entre aspas são as que aparecem na tela, palavra por palavra.
+
+## 1. Quem é quem (perfis)
+
+O módulo tem três perfis. O perfil decide o que a pessoa vê e o que ela pode gravar.
+
+| Perfil | Vê | Grava |
+|---|---|---|
+| **Administrador de Frota** (o gestor) | Tudo: painel, alertas, relatórios, todos os cadastros e lançamentos | Tudo: veículos, motoristas, manutenções, abastecimentos, viagens, checklists, multas, documentos; aprova e cancela viagem; exclui; exporta a planilha |
+| **Motorista** | Só o que é **dele**: os próprios registros, abastecimentos, viagens e multas; no cadastro de motoristas, só ele mesmo | Pelo **Meu painel**: saída, retorno, inspeção e abastecimento, sempre em nome dele |
+| **Consulta** | Painel, alertas e relatórios | Nada (só exporta a planilha) |
+
+Como o perfil é decidido:
+
+- É **Administrador de Frota** quem é administrador geral do sistema ou administrador do módulo Frota (marcado na tela de usuários).
+- Quem tem acesso ao módulo Frota e **não** é administrador é **Motorista**, a não ser que tenha recebido o perfil Consulta.
+- Pela tela de usuários só se marca o Administrador de Frota. O perfil Consulta ainda não tem botão na tela.
+
+Para alguém usar o módulo, o administrador precisa dar a ele **acesso ao módulo Frota** na tela de usuários.
+
+### O que o motorista não pode
+
+- Ver o painel do gestor e os alertas. Se tentar, o sistema responde *"Sem permissão para esta operação"* — na prática, ao abrir
+  **Frota** ele é levado direto para o **Meu painel**.
+- Ver os dados dos colegas (CPF, CNH, lançamentos).
+- Alterar um lançamento que não é dele: *"Você só pode alterar os seus próprios registros"*.
+- Aprovar ou cancelar viagem: *"Só o gestor da frota pode aprovar ou cancelar viagem"*.
+- Lançar multa ou documento.
+- Lançar qualquer coisa em nome de outro motorista: o sistema sempre grava o motorista ligado ao login dele, seja qual for o
+  escolhido no formulário.
+
+---
+
+## 2. Motorista
+
+### 2.1 Entrar
+
+1. Entre no sistema com o seu login e escolha **Frota**.
+2. Você cai no **Meu painel**. O menu mostra só **Meu painel**, **Solicitar Material** e **Minhas Requisições**.
+3. A tela diz "Olá, (seu nome)".
+
+Se aparecer *"Seu usuário não está ligado a um motorista. Peça ao gestor da frota para fazer o vínculo."*, o seu login ainda não foi
+ligado ao seu cadastro de motorista. Só o gestor faz isso (veja 3.2). Enquanto isso, nenhum botão de registro aparece.
+
+### 2.2 Os botões do painel
+
+| Botão | Quando aparece | O que faz |
+|---|---|---|
+| **Saída** | quando você **não** está com nenhum veículo | Preenche o formulário e abre a viagem |
+| **Retorno** | quando você **está** com um veículo | Preenche o formulário e fecha a viagem |
+| **Inspeção** | sempre | Preenche o formulário, sem viagem (inspeção periódica) |
+| **Abastecimento** | sempre | Registra o abastecimento |
+
+Quando você está com um veículo, o painel mostra: "Você está com o veículo (placa) desde (data) às (hora), destino (destino)."
+
+### 2.3 O formulário (Saída, Retorno, Inspeção)
+
+É o formulário de papel na tela:
+
+- **Veículo** — na Saída e na Inspeção você escolhe; no Retorno é o da sua viagem, já preenchido ("Veículo: (placa) · saiu com
+  (km) km").
+- **KM atual** — o número do painel do veículo. Obrigatório.
+- **Data** e **Horário** — já vêm com agora; dá para mudar.
+- **Combustível** — Vazio, ¼, ½, ¾ ou Cheio (opcional; toque de novo para desmarcar).
+- **Saindo de onde**, **Indo para onde**, **Para quê (finalidade)** — só na Saída, opcionais.
+- **Condições do veículo** — os 12 itens do papel, cada um **OK**, **N/A** (não se aplica) ou **Falha**:
+  Pneus e estepe · Faróis / lanternas · Setas / luz de freio · Parabrisa / vidros · Espelhos / retrovisores · Limpadores / água ·
+  Óleo do motor / vazamentos · Arrefecimento / nível · Freios / freio de estacionamento · Buzina / cintos · Documentos / equipamentos
+  · Carroceria / amarração da carga.
+- **Avarias** — toque **+ Adicionar avaria**, escolha **onde** (Lado esquerdo, Lado direito, Em cima (teto), Frente, Traseira),
+  **o que é** (Risco, Amassado, Trinca, Quebrado, Outro) e, se quiser, uma descrição; **Incluir avaria**. Pode haver várias; cada uma
+  tem **Remover**.
+- **Observações** — texto livre.
+
+O botão **Salvar** só acende quando os 12 itens estão marcados; enquanto faltar algum, o rodapé mostra "Faltam (N) de 12 itens.".
+Ao salvar, aparece "Saída registrada", "Retorno registrada" ou "Inspeção registrada" e você volta ao painel.
+
+Se o sistema recusar, a mensagem aparece em vermelho no topo do formulário e **nada é gravado**; o que você digitou continua lá.
+
+### 2.4 Sair com o veículo (Saída)
+
+A saída grava o formulário **e abre a viagem** do veículo, em seu nome, com o km e a data/hora informados. A viagem nasce **em
+andamento**, sem precisar de aprovação. Se o gestor já tinha aprovado uma viagem para você com esse mesmo veículo, a saída usa essa
+viagem (ela passa a "em andamento") em vez de criar outra.
+
+O que bloqueia a saída:
+
+| Situação | Mensagem |
+|---|---|
+| Você já está com um veículo | *"Você já tem uma saída sem retorno. Registre o retorno primeiro."* (na tela, o botão Saída nem aparece) |
+| O veículo está com outro motorista | *"Este veículo já está em uso (saída sem retorno)."* (na tela, o veículo nem aparece na lista) |
+| O veículo está em manutenção | *"Veículo em manutenção. Fale com o gestor da frota."* (na tela, ele aparece com "(em manutenção — indisponível)" e não pode ser escolhido) |
+| Sem veículo | *"Escolha o veículo"* |
+
+O que **não** bloqueia: marcar **Falha** num item ou registrar uma avaria. A saída é aceita e o gestor recebe um alerta (veja 3.3).
+Decidir se o veículo pode rodar é do gestor.
+
+### 2.5 Voltar (Retorno)
+
+O retorno fecha a **sua** viagem em andamento: grava o km e a data/hora de volta e calcula o **km rodado = km do retorno − km da
+saída**. A viagem passa a **concluída**.
+
+| Situação | Mensagem |
+|---|---|
+| km do retorno menor que o da saída | *"KM do retorno (10000) menor que o KM da saída (10050). Confira o hodômetro."* (com os seus números) |
+| Data/hora do retorno antes da saída | *"Data/hora do retorno anterior à saída (2026-10-23 08:00)."* (com a data e hora da sua saída, no formato ano-mês-dia) |
+| Você não tem saída aberta | *"Você não tem saída aberta para registrar o retorno."* (na tela, o botão Retorno só aparece com viagem aberta) |
+
+km do retorno **igual** ao da saída é aceito (km rodado 0).
+
+### 2.6 Inspeção
+
+Grava só o formulário, sem abrir nem fechar viagem. Serve para a inspeção periódica e pode ser feita com veículo em manutenção.
+
+### 2.7 Situação do registro: OK, PENDÊNCIA, INCOMPLETO
+
+Todo registro (saída, retorno, inspeção) recebe uma situação, decidida nesta ordem:
+
+1. **PENDÊNCIA** — se algum dos 12 itens está em **Falha**, **ou** se há pelo menos uma avaria.
+2. **INCOMPLETO** — se não é pendência e faltou responder algum dos 12 itens.
+3. **OK** — os 12 respondidos (OK ou N/A), nenhuma Falha, nenhuma avaria.
+
+**N/A** conta como respondido e não gera pendência. Pela tela do motorista não é possível salvar com item faltando, então o
+INCOMPLETO só aparece em registros feitos por outro caminho.
+
+No checklist simples do gestor (os 7 itens sim/não, veja 3.4), a régua é a mesma ideia: algum item "não" ou alguma avaria →
+**PENDÊNCIA**; algum item não informado → **INCOMPLETO**; os 7 "sim" → **OK**.
+
+### 2.8 Abastecer
+
+**Abastecimento**: veículo, **KM atual**, **Litros**, **Valor total (R$)**, data (vem com hoje), posto e observações. Se você está com
+um veículo, ele já vem escolhido. O abastecimento é gravado em seu nome. Ao salvar: "Abastecimento registrado".
+
+| Situação | Mensagem |
+|---|---|
+| Sem veículo | *"Veículo, litros e data são obrigatórios"* |
+| Sem KM | *"Informe o KM atual"* |
+| Sem litros, ou litros zero | *"Informe os litros"* |
+| Valor negativo | *"Valor inválido"* |
+
+O valor pode ficar em branco (vale zero). O preço por litro é **valor total ÷ litros**. O cálculo do km/L está em 3.6.
+
+### 2.9 Ver os meus registros
+
+Abaixo dos botões, **Meus registros** mostra as suas últimas 30 saídas/retornos/inspeções (tipo, placa, data, hora, km e a etiqueta
+OK / PENDÊNCIA / INCOMPLETO) e os seus últimos 30 abastecimentos (placa, litros, data, km, valor). É só para consulta: para corrigir um
+lançamento, fale com o gestor.
+
+### 2.10 Regras de data, hora e km que valem em todos os formulários
+
+| Situação | O que acontece |
+|---|---|
+| Data depois de hoje | Recusa: *"Data no futuro"*. Vale o dia de Brasília; um horário adiantado **no mesmo dia** é aceito |
+| Data num formato que não existe | *"Data inválida"* |
+| Horário fora de HH:MM | *"Horário inválido"* |
+| KM vazio ou negativo | *"Informe o KM atual"* |
+| KM maior que o km do veículo | O km do veículo sobe para o novo valor |
+| KM menor que o km do veículo | É aceito sem aviso; o km do veículo continua o maior. Confira o número antes de salvar |
+| Veículo inativo, vendido ou excluído | *"Veículo não encontrado"* (ele nem aparece na lista) |
+
+O motorista registra o número que está no painel em **KM atual** para qualquer veículo. Em máquina que é medida por horímetro, esse
+número é guardado como km do veículo.
+
+---
+
+## 3. Gestor (Administrador de Frota)
+
+### 3.1 Cadastrar veículos
+
+**Frota → Veículos → Novo Veículo**: placa (obrigatória, única; o sistema guarda em maiúsculas, sem traço — *"Placa já cadastrada"*
+se repetir), marca, modelo, ano, tipo, se mede por **km** ou **horímetro**, km atual, combustível, consumo esperado (km/L, usado no
+alerta de consumo baixo), setor, centro de custo, condutor responsável, status (**ativo**, **manutencao**, **inativo**, **vendido**).
+
+O status pesa no portal: **manutencao** impede a saída (a inspeção continua possível); **inativo** e **vendido** tiram o veículo da
+lista do motorista.
+
+### 3.2 Cadastrar o motorista e ligar ao login
+
+**Frota → Motoristas → Novo Motorista** (ou editar um): nome (obrigatório), CPF, CNH (número, categoria, validade), telefone, e-mail,
+setor, status e **Usuário de acesso (portal do motorista)**.
+
+O campo **Usuário de acesso** é o que liga o cadastro ao login. Sem ele, o motorista entra e vê o aviso de que não está ligado.
+
+- A lista traz os usuários ativos do sistema; quem já está ligado a outro motorista aparece com "(ligado a (nome))".
+- **Um login só pode estar ligado a um motorista ativo.** Tentar ligar o mesmo login a outro: *"Este usuário já está ligado ao
+  motorista (nome)"*.
+- Para desfazer o vínculo, escolha **— nenhum —** e salve.
+- Se o login foi desativado depois de ligado, ele continua aparecendo **só** no motorista que o tem, com "(inativo)", e o cadastro
+  salva normalmente. Trocar para um login inexistente ou desativado: *"Usuário não encontrado"*.
+
+### 3.3 Acompanhar o painel e os alertas
+
+**Frota → Dashboard Frota** mostra 9 cartões (veículos ativos, em manutenção, manutenção vencida, OS em aberto, combustível no mês,
+alertas, custo total, total de veículos, checklists hoje), a lista de alertas, custos por categoria e os últimos abastecimentos. O
+painel é visto pelo Administrador de Frota e pelo Consulta.
+
+Os alertas, do mais grave para o menos (aparecem até 15):
+
+| Alerta | Quando aparece | Gravidade |
+|---|---|---|
+| Documento (IPVA, seguro…) | Documento **ativo** vencendo dentro do prazo de aviso dele (padrão 30 dias) ou vencido | crítico se vencido; alto até 7 dias; médio |
+| CNH | CNH de motorista ativo vencendo em até 30 dias, ou vencida | crítico se vencida; alto |
+| Manutenção | Próxima revisão em até 15 dias pela data, ou faltando 500 km ou menos pelo km | crítico se passou; médio |
+| Multa pendente | Multa pendente vencendo em até 15 dias | alto |
+| **Checklist com pendência** | Saída, retorno ou inspeção com situação **PENDÊNCIA**, com data de hoje até 7 dias atrás | alto |
+| Consumo baixo | Média de km/L dos últimos 60 dias abaixo de 70% do consumo esperado do veículo | médio |
+
+O alerta de checklist diz *"Checklist com pendência — (placa)"* e, embaixo, o que falhou e quem registrou — por exemplo
+*"Falha: Pneus e estepe · Ana Teste"*, ou *"1 avaria(s) · Ana Teste"* — e "Registrado em (data)". Ele some sozinho depois de 7 dias;
+não é preciso fechar.
+
+### 3.4 As telas de cadastro e lançamento
+
+Todas funcionam igual: tabela, busca, às vezes filtro, **Novo…**, e na linha **editar** (lápis) e **excluir** (lixeira).
+
+| Tela | O que guardar de importante |
+|---|---|
+| **Manutenções** | Preventiva/corretiva, oficina, custo, km, próxima revisão (km e data). Criada como **em andamento**, põe o veículo em manutenção (que bloqueia a saída no portal) |
+| **Abastecimentos** | Mostra os lançados pelo portal e pelo escritório, com **Km/L**. Editar litros ou valor refaz o preço por litro |
+| **Viagens** | Saída/retorno, km, origem, destino, finalidade, status. O botão **Aprovar** (✓) aparece só em viagem **solicitada** |
+| **Checklist Diário** | Lista todos os registros (Data, Placa, **Tipo**: Saída/Retorno/Inspeção, Motorista, **KM**, **Situação**, Observações). O **Novo Checklist** daqui é o formulário simples de 7 itens sim/não (pneus, óleo, luzes, freios, extintor, documentos, limpeza), sem avarias. Não edita |
+| **Multas**, **Documentos** | Só o gestor lança e altera |
+
+Regras das viagens (valem também para o gestor):
+
+| Situação | Mensagem |
+|---|---|
+| Aprovar viagem que não está **solicitada** | *"Só é possível aprovar viagem solicitada"* |
+| KM retorno menor que KM saída | *"KM do retorno (…) menor que o KM da saída (…). Confira o hodômetro."* |
+| Data/hora de retorno antes da saída | *"Data/hora do retorno anterior à saída (…)."* (se uma das duas não tem hora, compara só o dia) |
+| Pôr em andamento uma viagem de veículo que já tem outra em andamento | *"Este veículo já está em uso (saída sem retorno)."* |
+| Pôr em andamento uma viagem de motorista que já tem outra em andamento | *"Você já tem uma saída sem retorno. Registre o retorno primeiro."* |
+
+Uma viagem nova sem status nasce **solicitada**. O km rodado é calculado (retorno − saída) quando os dois km estão preenchidos.
+
+**Motorista esqueceu de registrar o retorno:** o veículo fica preso como "em uso". Em **Viagens**, edite a viagem, preencha **KM
+retorno** e mude o status para **concluida**. O veículo volta a aparecer na saída.
+
+### 3.5 Exportar a planilha
+
+**Exportar planilha** está no **Dashboard Frota** (tudo) e em **Relatórios** (usa o período escolhido na tela). Baixa o arquivo
+`controle-de-frota-(data de hoje).xlsx`, no formato da planilha de controle da empresa, com seis abas:
+
+| Aba | Colunas | Período |
+|---|---|---|
+| **Cadastro Frota** | Placa, Tipo, Marca, Modelo, Ano, KM Atual, Responsável, Próxima Revisão KM, Próxima Revisão Data, Situação | sai inteira |
+| **Viagens e KM** | Data, Veículo, Condutor, Finalidade, Origem, Destino, Saída, Retorno, KM Inicial, KM Final, KM Percorrido, Status, Observações | pela data de saída |
+| **Checklist** | Data, Horário, Tipo, Veículo, Condutor, KM, Combustível, os 12 itens, Avarias, Status Geral, Observações | pela data do registro |
+| **Abastecimentos** | Data, Veículo, Condutor, KM, Litros, Valor Total R$, Preço por Litro, KM desde Abastec. Anterior, Consumo km/L, Posto, Observações | pela data |
+| **Manutenções** | Data, Veículo, Tipo, Serviço, Fornecedor, KM Serviço, Custo R$, Próxima Revisão KM, Próxima Revisão Data, Status, Observações | pela data |
+| **Documentos** | Veículo, Documento, Vencimento, Dias até Vencer, Status, Observações | sai inteira |
+
+Como cada coluna é preenchida:
+
+- **Datas** saem como texto no formato ano-mês-dia (ex.: 2026-10-23).
+- **Próxima Revisão** (Cadastro Frota): a menor revisão ainda por vir entre as manutenções do veículo — km acima do km atual, data de
+  hoje em diante. **Responsável**: o condutor responsável do veículo, ou o setor.
+- **Saída** (Viagens): a hora; **Retorno**: a hora, ou dia e hora se voltou em outro dia. **KM Percorrido** = KM Final − KM Inicial.
+- **Itens** (Checklist): Conforme (OK), Não conforme (Falha), N/A, ou vazio se não respondido. No checklist simples do gestor, só os
+  5 itens que existem nos dois formulários são preenchidos (pneus, faróis, óleo, freios, documentos). **Avarias**: uma por uma, separadas
+  por ponto e vírgula, no formato "Lateral esquerda: risco — descrição" (os lados saem como Lateral esquerda, Lateral direita,
+  Superior, Frente, Traseira; os tipos em minúsculas: risco, amassado, trinca, quebrado, outro). **Status Geral**: OK, PENDÊNCIA ou INCOMPLETO (régua da seção 2.7).
+- **Manutenções**: Status Planejada (agendada), Em andamento, Concluída; Fornecedor = oficina.
+- **Documentos**: só os documentos com status **ativo** (o renovado não aparece). **Status**: VENCIDO (passou), ATENÇÃO (vence em até
+  30 dias) ou EM DIA.
+
+Se der erro ao gerar, aparece "Não foi possível gerar a planilha" (ou a mensagem do servidor).
+
+### 3.6 Como o km/L é calculado
+
+Para cada abastecimento de um veículo:
+
+- **KM desde o anterior** = km deste abastecimento − km do abastecimento **anterior em km** do mesmo veículo (o de km imediatamente
+  menor, não o de data mais recente).
+- **Consumo (km/L)** = KM desde o anterior ÷ **litros deste** abastecimento, arredondado em 2 casas.
+- O primeiro abastecimento do veículo (sem anterior) fica sem km/L. Abastecimento sem km fica sem km/L e não serve de anterior para
+  ninguém. Se a diferença de km for zero, fica sem km/L.
+- Ao **lançar**, **editar** ou **excluir** um abastecimento, o sistema refaz o km/L dele e o do abastecimento **seguinte em km** (nas duas
+  posições, se o km ou o veículo mudou). Assim, um abastecimento lançado atrasado entra no lugar certo da sequência.
+
+Exemplo: abastecimentos com km 10200 (40 L) e 10600 (40 L) → o segundo tem 400 km desde o anterior e **10 km/L**. Lançando depois um
+de km 10400 com 20 L: ele fica com 200 km e **10 km/L**, e o de 10600 passa a 200 km e **5 km/L**.
+
+O método é o de "tanque cheio": a conta supõe que cada abastecimento completa o tanque.
+
+### 3.7 Relatórios
+
+**Frota → Relatórios**: custo por veículo (manutenção, combustível e multas; manutenção e combustível respeitam o período, multas
+somam tudo), consumo médio km/L por veículo, **Imprimir** e **Exportar planilha**. Vistos pelo Administrador de Frota e pelo
+Consulta.
+
+---
+
+## 4. Situações comuns
+
+| Situação | O que fazer |
+|---|---|
+| Motorista entra e vê "Seu usuário não está ligado a um motorista…" | Gestor: **Motoristas** → editar o motorista → **Usuário de acesso** = o login dele |
+| Pessoa do escritório (não administradora) entra no Frota e cai no "Meu painel" | Ela está como Motorista. Para ver o painel, precisa ser administradora do módulo Frota ou ter o perfil Consulta (que ainda não tem botão na tela) |
+| Veículo não aparece na Saída | Está com outro motorista (viagem sem retorno), está inativo/vendido, ou aparece como "(em manutenção — indisponível)" |
+| Motorista não consegue sair com nenhum veículo | Ele tem uma saída sem retorno: registrar o **Retorno**, ou o gestor conclui a viagem em **Viagens** |
+| Abastecimento com km/L estranho | Conferir o km digitado: um km menor que o real entra na sequência pela ordem do km e muda o km/L dele e do seguinte |
+| Motorista lançou errado | Ele não corrige pelo portal; o gestor edita na tela correspondente (Abastecimentos, Viagens) |
