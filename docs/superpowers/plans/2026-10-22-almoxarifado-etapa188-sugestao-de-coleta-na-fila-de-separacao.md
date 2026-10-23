@@ -1,6 +1,6 @@
 # Etapa 188 — A fila de separação sugere de onde pegar cada item e em que ordem andar
 
-> **Status:** 📝 **plano escrito (2026-10-22), Fase 2 ainda não feita.** Nenhuma task executada. Feature **05** (separação e picking),
+> **Status:** 📝 **plano escrito (2026-10-22), Fase 2 feita (1 Crítico, 3 Importantes, 5 Menores — ver "Emendas da Fase 2"; aplicar no contrato antes de T1).** Nenhuma task executada. Feature **05** (separação e picking),
 > item `specs/modulo-almoxarifado/05-separacao-picking/README.md:63` — *"Sugestão de rota (ordenar itens pela hierarquia de
 > localizações)"*.
 > Antes: Etapa 187 (ferramenta baixada) — **não tocar** nos arquivos dela (outra sessão revisa a 187 em paralelo). Esta etapa mexe em
@@ -301,6 +301,142 @@ roteiro clicável, o que **não** cobre: PDF, pré-seleção no "Sai de", combin
 - **B1257 (NOVA, da Etapa 188) — o PDF "Imprimir lista de coleta" e a pré-seleção no "Sai de" ficam para a Etapa 189.** O PDF tem regra
   própria de largura medida (`client/src/utils/pdfTexto.js`, Etapa 186) e merece etapa sua; a pré-seleção muda o que a janela de
   separação grava como planejada por padrão (hoje o padrão é "automático"), que é decisão à parte. Esta etapa fica M.
+
+## Emendas da Fase 2
+
+Revisor fresco, 2026-10-22, sobre `7f08cd90`. Leu o plano, a spec 05, `requisitionService.js` (fila, `dividirSeparavel`,
+`checarOrigemItem`, separação e entrega), `stockService.js` (claims do motor, `motivoRecusaEndereco`, `resolverAreaEfetiva`,
+`sugerirLocalizacaoEntrada`), `lotService.listarLotesDoMaterial`, `seriesService.mudarStatusSerie`, `caixaSql.js`, `schema.js`,
+`RequisicoesList.js` (o "Sai de") e `FilaSeparacao.js`. Duas sondas executadas (scratchpad, prefixo `f2r188-`), contra o código
+de hoje, simulando à mão o que a regra do plano sugeriria e fazendo os gestos reais.
+
+**Resultado: 1 Crítico, 3 Importantes, 5 Menores. O contrato muda (um código de aviso novo) — T3 só começa depois de T1 aplicar
+a emenda C1 no contrato congelado.**
+
+### C1 (Crítico) — a dica manda trocar a origem de quem já separou parte, e o livro sai errado
+
+**Onde:** RN-188.01/02 não olham a origem **planejada** do item. A separação aceita **uma origem por item** enquanto há separado
+pendente: rodada com outro par apaga a planejada (`requisitionService.js:1304-1305` e `:1340-1342`, "mista -> nula") e grava
+troca `momento = 'SEPARACAO'` (`:1429-1450`). A janela de separação só parte da planejada quando ela cobre
+(`RequisicoesList.js:183-188`); senão abre no automático com o aviso de troca.
+
+**Cenário (sonda `f2r188-sonda1.js`, reproduzido):** padrão P com 20, A com 4, B com 10; item de 6. Rodada 1: 3 de A (planejada A).
+A fila mostra separável 3. Pela RN-188.03 o livre de A é 4 − 3 = 1 (não cobre); a padrão P cobre → a dica seria **P**. Seguindo a
+dica: rodada 2 de 3 em P → `origem_separacao_id = null`, **uma substituição gravada** (`SEPARACAO`, 3, planejada A, saída P), e a
+entrega de um clique de 6 sai automática da padrão: **sistema A 4 / P 14; físico A 1 / P 17.** A B1254 foi escrita para evitar a
+troca falsa — e a regra reabre a mesma troca pela segunda rodada. O mesmo vale para o `NENHUM_ENDERECO_COBRE`: a frase "pegue Q
+aqui e o resto em outro" é literalmente a segunda rodada de outro par.
+
+**Emenda (caminho reversível, escolhido):**
+- **RN-188.01a (nova):** item com planejada pendente (`origem_separacao_id` não nulo e separado − entregue > 0) tem **um** candidato
+  só: o par planejado, se for sugerível pela RN-188.04. Livre dele (RN-188.03) ≥ separável → `pegar_em` nele, `cobre: true`.
+  Livre > 0 e < separável → `pegar_em` nele com `quantidade_sugerida = livre`, `cobre: false`, aviso **novo**
+  `"PLANEJADA_NAO_COBRE"`. Livre ≤ 0 ou par não sugerível → `pegar_em: null`, aviso `"PLANEJADA_NAO_COBRE"` também (a tela diz
+  o mesmo). Nunca outro par.
+- **Contrato:** `pegar_em_aviso` passa a `null | "NENHUM_ENDERECO_COBRE" | "SEM_ENDERECO_SUGERIVEL" | "PLANEJADA_NAO_COBRE"`.
+- **RN-188.08, frases literais:** `PLANEJADA_NAO_COBRE` → **"Já separado de ⟨localizacao_codigo da planejada⟩: o resto não cabe
+  lá. Separar de outro endereço troca a origem da separação (a entrega passa a sair automática)."**; `NENHUM_ENDERECO_COBRE` passa a
+  **"Nenhum endereço tem tudo: pegue ⟨q⟩ aqui. Separar o resto de outro endereço depois troca a origem da separação."**
+- **RN-188.01, nenhum cobre:** a dica é o candidato com **maior livre** (empate pela ordem da RN-188.02), não o primeiro da ordem —
+  minimiza o resto que vai virar troca. Registrar na B1254 (descartado: o primeiro do FEFO, que podia sugerir 1 de 10).
+- **Testes:** T1 `[RN-188.01a] planejada cobre -> ela`, `[RN-188.01a] planejada nao cobre -> ela, PLANEJADA_NAO_COBRE, nunca outro par`
+  (com outro endereço que cobriria — controle: tirar a guarda → vermelho), `[RN-188.01] nenhum cobre -> o de maior livre`. T4 pela rota:
+  separar 3 de A, listar → `pegar_em` A com `PLANEJADA_NAO_COBRE`; `substituicoes_origem_requisicao` sem linha nova depois de listar.
+  T3: as duas frases novas.
+
+### I1 (Importante) — a B1251 está errada: o automático nunca escolhe lote, e a dica sem a pré-seleção desalinha livro e físico
+
+**Onde:** `stockService.js:467-500` (`claimSaldoSemLote`, "Linha de LOTE nunca é tocada aqui (B204: a entrega não escolhe lote)") e
+`:1287-1326` (fluxos internos isentos de `exigeLote`). A B1251 diz "a dica e o automático apontam para o mesmo lugar, exceto quando o
+FEFO manda outro lote".
+
+**Cenário (sonda `f2r188-sonda2.js`, reproduzido):** material com `controle_lote`, L1 (vence 10/11) 6 em C, L2 (vence 20/12) 9 na
+padrão P. A dica seria C/L1. Separar 5 no automático (o padrão da janela hoje, B1257) e entregar de um clique → **200**, e o saldo
+fica L1 6, L2 9 e uma linha **sem lote −5 na padrão**. Para material com lote, a dica e o automático **nunca** concordam. Sem lote,
+também divergem quando a padrão não cobre: "o primeiro que cobre" é um endereço só; o motor drena a padrão e completa com o maior.
+
+**Consequência:** com a pré-seleção adiada para a 189, quem segue a dica fisicamente e deixa o "Sai de" no automático faz o
+sistema baixar de outro endereço/lote. A dica não piora a porta, mas passa a ser a orientação oficial do separador.
+
+**Emenda:** (1) reescrever a B1251: "o automático não escolhe lote (B204) e, sem lote, divide começando pela padrão; a dica só vale
+se o separador a escolher no 'Sai de'". (2) RN-188.08: a linha passa a terminar com **" — escolha este endereço no 'Sai de' ao
+separar"** (literal; T3 testa). (3) Guia do usuário, "o que não cobre": separar no automático depois de pegar da dica deixa o
+estoque do endereço/lote errado até a Etapa 189. (4) Na "Próxima tarefa detalhada", subir a pré-seleção a item 1 da 189 (ela é o que
+torna a dica verdadeira), mantendo a regra "a dica nunca sobrescreve a planejada" (C1).
+
+### I2 (Importante) — a B1255 só desconta o separado que tem origem planejada
+
+**Onde:** RN-188.03 lê `origem_separacao_id`. O separado no automático (planejada nula — o padrão da janela, e o resultado de
+qualquer rodada mista) não tem endereço gravado em lugar nenhum: separar não move estoque.
+
+**Cenário:** requisição R1 separa 6 de B-01 no automático (o separador foi à B-01 pela dica); R2 do mesmo material lista a fila e
+recebe B-01 com livre 6 — a prateleira está vazia. Não recusa nada (a porta e o separável global continuam certos), mas a dica
+mente. **Emenda:** sem mudança de código; a B1255 passa a dizer "desconta o que foi separado **com origem escolhida**; o separado no
+automático não tem endereço e não é descontado" e o guia repete no "o que não cobre". Some quando a 189 pré-selecionar.
+
+### I3 (Importante) — material com série: a dica pode mandar para um lote cujas séries não saem
+
+**Onde:** bloquear série (`seriesService.js:357-390`) só muda `series_almoxarifado.status` — não mexe no saldo da linha nem na
+retenção do material, então o livre do par e o separável contam a série bloqueada. A entrega com planejada exige séries do **lote
+planejado** (`requisitionService.js:1724-1729`: *"a origem da separação não serve mais (as series escolhidas nao sao do lote dela)"*).
+O endereço da série não é confiável (`stockService.js:2108` grava a padrão do material na entrada manual), então só o lote serve
+de régua.
+
+**Cenário:** material com série e lote; L1 (vence antes) 2 em C, as duas séries BLOQUEADA; L2 5 em A. Item de 2: a dica é C/L1
+(FEFO, cobre). Separar seguindo a dica → 200 e planejada C/L1; na entrega não há série EM_ESTOQUE de L1; escolher séries de L2 →
+400 com a literal acima, ou troca registrada. **Emenda:** RN-188.03 — para `controle_serie = 1`, o livre do par é limitado também
+por `COUNT(series EM_ESTOQUE do material com lote_id IS <lote do par>)` menos o planejado pendente de **todos** os pares desse lote
+(o mesmo conjunto da RN-188.03 somado por lote). Uma consulta a mais em T2 (agrupada por material e lote, só dos materiais com série
+da fila: **cinco** consultas por chamada). T1: `[RN-188.03] serie: lote com series bloqueadas nao e sugerido`; controle: tirar o
+limite → vermelho.
+
+### Menores
+
+- **M1 — RN-188.03 e T2 passo 2 citam "item ativo", e `itens_requisicao_almoxarifado` não tem coluna `ativo`** (`schema.js:627` e os
+  ALTER de `:2886-2891`): escrever `ir.ativo` dá `no such column`. E o molde da `:1325-1330` usa `COALESCE(ir.quantidade_entregue,0)`,
+  sem o legado `quantidade_atendida` que `getEntregue` (`requisitionService.js:38`) e `caixaSemReservaSql` (`caixaSql.js:36`) usam.
+  **Emenda:** T2 usa `MAX(COALESCE(ir.quantidade_separada,0) - COALESCE(ir.quantidade_entregue, ir.quantidade_atendida, 0), 0)` e
+  `COALESCE(r.ativo,1) = 1 AND r.status IN (STATUS_COM_CAIXA)` (a régua da caixa), não "item ativo".
+- **M2 — a frase de `SEM_ENDERECO_SUGERIVEL` omite endereço bloqueado e inativo**, que a RN-188.04 também exclui. **Emenda:**
+  "Sem endereço para sugerir (o saldo está sem endereço, em endereço bloqueado ou inativo, em área especial ou em lote
+  bloqueado/vencido)."
+- **M3 — a padrão em área especial deixa de ser sugerida**, e na Etapa 68 a padrão não passa pelo filtro de área
+  (`stockService.js:845`, "A PADRAO nao passa por aqui"). Material próprio com padrão numa área de expedição nunca recebe dica
+  na padrão. Aceitável (a dica de origem é outra pergunta que a de destino), mas a B1253 tem de dizer que diverge do molde da 68
+  nesse ponto.
+- **M4 — requisição em `APROVACAO_VALOR` recebe "Pegar em"** (o separável é > 0, só a alçada barra). Emenda: T2 devolve `pegar_em:
+  null` e `ordem_coleta: []` quando `bloqueioValor` (aviso `null`) — a tela não manda andar para separar o que o separar recusa com 403.
+- **M5 — `caminho` não é o rótulo do "Sai de"** (`RequisicoesList.js:125`: `codigo — lote L (q)`) nem o `endereco_completo` da
+  Etapa 53 (que inclui setor). O separador lê "ALM1 / A-01 / A-03" e procura "A-03" na lista. Emenda T3: "Pegar em ⟨localizacao_codigo⟩
+  (⟨caminho⟩)" quando o caminho tem mais de um segmento; a frase literal da RN-188.08 muda junto.
+
+### As quatro perguntas
+
+1. **Contrato:** cobre os casos de hoje, mas faltava o do item com planejada pendente (C1, código novo) e as frases precisam das
+   emendas C1/I1/M2. O JSON bate com o que o código produziria: o par vem de uma linha de `estoque_saldo_almoxarifado` (índice único
+   `(material, localizacao, lote)`, `schema.js:1165`), `Q.qtd` já existe, `itens` filtrado continua contendo todo item com
+   separável > 0 (ele tem `a_separar > 0`). A literal da dica velha em T4 confere com `checarOrigemItem:1102-1104` mais o prefixo
+   `${material_nome}: ` da `:1335`. A saída avulsa de T4 é de material com lote: tem de mandar `lote` (rota manual declara `exigeLote`).
+2. **RN × spec/B821/65/68:** B821 preservada (a ordem da `:898` e de `itens` não muda; `ordem_coleta` é campo novo) — a correção
+   B1256 da spec 05 (`README.md:63`) está **certa**. Etapa 65: furada pela C1. Etapa 68: segue `vagaComum` (`stockService.js:850-853`),
+   com a ressalva M3. B1251 errada (I1).
+3. **Independência:** T1 → T2 tronco de verdade; T3 só depende do contrato (mock na fronteira) e não lê regra do servidor — galho
+   legítimo, **depois** de o contrato emendado (C1) ser congelado de novo; T4 depende de T2. Sem conflito de arquivo com a 187.
+4. **Até o último gesto:** fila → separar do sugerido (aceito: a régua da dica é mais estrita que `checarOrigemItem`, que só desconta
+   o pendente desta requisição) → planejada gravada → entrega de um clique sai dela (`:1714-1718`). Quebra em três pontos: (i) a
+   segunda rodada de outro par (C1, reproduzido); (ii) separar no automático depois de seguir a dica (I1, reproduzido; I2);
+   (iii) séries do lote (I3).
+   - **(a)** A tabela é `itens_requisicao_almoxarifado` (`origem_separacao_id`, `lote_separacao_id`, separado − entregue). Descontar
+     todas as requisições, a própria incluída, é o certo: `checarOrigemItem` semeia o pendente da própria (`:1236-1244`) e a régua da
+     divergência soma o das outras (`:1323-1327`); a dica nunca propõe o que a porta recusa. Ver M1 e I2.
+   - **(b)** Série: I3. Inteiro: o saldo de material com série é inteiro e `min(separavel, livre)` também.
+   - **(c)** Dono: mora no **material** (`schema.js:1374`), e o saldo é por `material_id` — só aparecem endereços do mesmo dono por
+     construção; a regra de `MATERIAIS_CLIENTE` é a da 68. Sem achado.
+   - **(d)** Desempenho: 3 consultas de hoje + 1 `avaliarRequisicaoValor` por requisição com alçada (já existia) + **4** novas (5 com
+     a I3), por chamada. A função pura deve memoizar o caminho por `localizacao_id` (um `Map`), senão sobe a árvore por candidato.
+   - **(e)** Leitura sem trava: aceitável pelo CLAUDE.md — exibir não reserva nem limita o que outra porta lê para reservar; a
+     separação relê tudo sob `comTravaDaRequisicao`. As quatro leituras não são um retrato único; o pior caso é a dica velha que a porta
+     recusa (T4).
 
 ## Execução
 
