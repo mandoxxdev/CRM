@@ -623,6 +623,20 @@ async function recalcularSeguinte(db, veiculoId, km, id) {
   if (seg) await recalcularConsumoDaLinha(db, seg.id);
 }
 
+/**
+ * Frota Etapa 4 (Fase5-R2): litros do gestor — numero finito maior que zero (a regua do portal). Antes o PUT aceitava -10 e 0, e os
+ * totais do relatorio de consumo (que desde a Etapa 4 somam todas as linhas, B47) mostravam a soma torta.
+ */
+function lerLitrosDoGestor(v) {
+  const n = typeof v === 'string' && v.trim() === '' ? NaN : Number(v);
+  if (!Number.isFinite(n) || n <= 0) {
+    const err = new Error('Informe os litros');
+    err.status = 400;
+    throw err;
+  }
+  return n;
+}
+
 async function createAbastecimento(db, user, dataBruta) {
   const data = await forcarMotoristaDoVinculo(db, user, dataBruta || {}); // RN-F1.19
   if (!data.veiculo_id || !data.litros || !data.data_abastecimento) {
@@ -630,7 +644,7 @@ async function createAbastecimento(db, user, dataBruta) {
     err.status = 400;
     throw err;
   }
-  const litros = Number(data.litros);
+  const litros = lerLitrosDoGestor(data.litros);
   const valorTotal = Number(data.valor_total) || 0;
   const valorLitro = data.valor_litro != null ? Number(data.valor_litro) : (litros > 0 ? valorTotal / litros : 0);
   const km = data.km_abastecimento != null && data.km_abastecimento !== '' ? Number(data.km_abastecimento) : null;
@@ -661,7 +675,7 @@ async function updateAbastecimento(db, id, dataBruta, user) {
     throw err;
   }
   const data = await conferirDonoPorMotorista(db, user, current, dataBruta); // RN-F1.15 / RN-F1.19
-  const litros = data.litros != null ? Number(data.litros) : current.litros;
+  const litros = data.litros != null ? lerLitrosDoGestor(data.litros) : current.litros;
   const valorTotal = data.valor_total != null ? Number(data.valor_total) : current.valor_total;
   // Fase5-1: litros ou valor_total novos sem valor_litro no corpo -> recalcula (antes ficava o preco antigo: 40L R$200 -> 50L seguia 5/L)
   let valorLitro = current.valor_litro;
@@ -727,12 +741,28 @@ async function listMultas(db, { search, veiculo_id, status_pagamento } = {}, use
 // `data.veiculo_id` era sempre indefinido e a criacao respondia 400 "Veiculo e
 // obrigatorio" com o veiculo preenchido. Multa e documento nao podiam ser
 // criados pela API. Descoberto ao povoar as telas de Frota para medi-las.
+/**
+ * Frota Etapa 4 (Fase5-R1): o status da multa so pode ser um dos tres da tela. Antes gravava qualquer texto: "Contestado" (maiusculo)
+ * ou "contestado " somavam no custo por veiculo (que compara com 'contestado') e a planilha a mostrava como contestada — tela e
+ * planilha deixavam de bater (RN-F4.14). Recusa em vez de normalizar (B53). Ausente/nulo/vazio: o padrao (criar) ou o gravado (PUT).
+ */
+const STATUS_MULTA = ['pendente', 'pago', 'contestado'];
+function conferirStatusDaMulta(v) {
+  if (v == null || v === '') return;
+  if (!STATUS_MULTA.includes(v)) {
+    const err = new Error('Status de pagamento inválido');
+    err.status = 400;
+    throw err;
+  }
+}
+
 async function createMulta(db, _user, data) {
   if (!data.veiculo_id) {
     const err = new Error('Veículo é obrigatório');
     err.status = 400;
     throw err;
   }
+  conferirStatusDaMulta(data.status_pagamento);
   const r = await dbRun(db, `INSERT INTO frotas_multas
     (veiculo_id, motorista_id, data_infracao, descricao, valor, pontos, status_pagamento,
      data_vencimento, data_pagamento, numero_auto, observacoes)
@@ -751,6 +781,7 @@ async function updateMulta(db, id, data) {
     err.status = 404;
     throw err;
   }
+  conferirStatusDaMulta(data.status_pagamento);
   await dbRun(db, `UPDATE frotas_multas SET
     veiculo_id=?, motorista_id=?, data_infracao=?, descricao=?, valor=?, pontos=?,
     status_pagamento=?, data_vencimento=?, data_pagamento=?, numero_auto=?, observacoes=? WHERE id=?`, [
@@ -758,7 +789,7 @@ async function updateMulta(db, id, data) {
     data.data_infracao ?? current.data_infracao, data.descricao ?? current.descricao,
     data.valor != null ? Number(data.valor) : current.valor,
     data.pontos != null ? Number(data.pontos) : current.pontos,
-    data.status_pagamento ?? current.status_pagamento, data.data_vencimento ?? current.data_vencimento,
+    data.status_pagamento || current.status_pagamento, data.data_vencimento ?? current.data_vencimento,
     data.data_pagamento ?? current.data_pagamento, data.numero_auto ?? current.numero_auto,
     data.observacoes ?? current.observacoes, id,
   ]);

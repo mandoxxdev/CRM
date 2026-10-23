@@ -284,6 +284,44 @@ test('RN-F4.11 aba Abastecimentos com Horas desde Abastec. Anterior e Consumo L/
     [['EMP0001', 130, 10, 5], ['CAR0001', '', '', '']]);
 });
 
+// ── Fase 5 (revisor de regras, achados reproduzidos) ─────────────────────────
+
+test('Fase5-R1 status de multa fora da lista e recusado (a contestada nao pode escapar da regua por caixa ou espaco)', async () => {
+  const { gestor, car } = await montar();
+  for (const st of ['Contestado', 'contestado ', 'quitada']) {
+    const r = await gestor('post', '/api/frotas/multas', { veiculo_id: car.id, data_infracao: '2026-10-06', valor: 1000, status_pagamento: st });
+    assert.strictEqual(r.status, 400, st);
+    assert.strictEqual(r.body.error, 'Status de pagamento inválido');
+  }
+  const ok = (await gestor('post', '/api/frotas/multas', { veiculo_id: car.id, data_infracao: '2026-10-06', valor: 10 })).body;
+  assert.strictEqual(ok.status_pagamento, 'pendente');
+  const put = await gestor('put', `/api/frotas/multas/${ok.id}`, { status_pagamento: 'CONTESTADO' });
+  assert.strictEqual(put.status, 400);
+  assert.strictEqual((await gestor('put', `/api/frotas/multas/${ok.id}`, { status_pagamento: 'contestado' })).status, 200);
+  const custo = custoDe((await gestor('get', '/api/frotas/relatorios/custos-por-veiculo')).body, 'CAR0001');
+  assert.strictEqual(custo.custo_multas, 0, 'a unica gravada esta contestada');
+});
+
+test('Fase5-R2 litros zero ou negativos sao recusados no POST e no PUT do gestor; L/h com litros 0 gravado (dado antigo) e nulo', async () => {
+  const { ctx, gestor, maq } = await montar();
+  const a = (await abastecer(gestor, { veiculo_id: maq.id, horimetro_abastecimento: 100, litros: 10 })).body;
+  const b = (await abastecer(gestor, { veiculo_id: maq.id, horimetro_abastecimento: 110, litros: 20 })).body;
+  for (const l of [-10, 0, 'abc']) {
+    const r = await gestor('put', `/api/frotas/abastecimentos/${b.id}`, { litros: l });
+    assert.strictEqual(r.status, 400, String(l));
+    assert.strictEqual(r.body.error, 'Informe os litros');
+  }
+  const neg = await abastecer(gestor, { veiculo_id: maq.id, horimetro_abastecimento: 120, litros: -5 });
+  assert.strictEqual(neg.status, 400);
+  assert.strictEqual(neg.body.error, 'Informe os litros');
+  let m = await lphPorId(gestor, maq.id);
+  assert.deepStrictEqual(m[b.id], [10, 2], 'nada mudou com as recusas');
+  await dbRun(ctx.db, 'UPDATE frotas_abastecimentos SET litros = 0 WHERE id = ?', [b.id]);
+  m = await lphPorId(gestor, maq.id);
+  assert.deepStrictEqual(m[b.id], [10, null]);
+  assert.ok(a.id);
+});
+
 // ── RN-F4.13 — perfis ────────────────────────────────────────────────────────
 
 test('RN-F4.13 relatorios: gestor e Consulta 200; motorista 403', async () => {
