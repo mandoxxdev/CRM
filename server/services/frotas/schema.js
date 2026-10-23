@@ -282,6 +282,11 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE frotas_checklists ADD COLUMN viagem_id INTEGER');
   await safeAlter(db, 'ALTER TABLE frotas_viagens ADD COLUMN origem TEXT');
   await safeAlter(db, 'ALTER TABLE frotas_abastecimentos ADD COLUMN km_desde_anterior REAL');
+  // Frota Etapa 3 (A10, RN-F3.04): a leitura de horas da maquina por horimetro mora fora do km — o km/L (RN-F1.11) nao a ve
+  await safeAlter(db, 'ALTER TABLE frotas_checklists ADD COLUMN horimetro REAL');
+  await safeAlter(db, 'ALTER TABLE frotas_abastecimentos ADD COLUMN horimetro_abastecimento REAL');
+  await safeAlter(db, 'ALTER TABLE frotas_viagens ADD COLUMN horimetro_saida REAL');
+  await safeAlter(db, 'ALTER TABLE frotas_viagens ADD COLUMN horimetro_retorno REAL');
 
   // Frotas Etapa 2: a tabela do perfil e CORE (server/index.js cria dentro do callback do PRAGMA de usuarios); o mesmo DDL aqui,
   // idempotente, para a rota /perfis-usuario nao depender da ordem do boot (e o harness ganhar a tabela).

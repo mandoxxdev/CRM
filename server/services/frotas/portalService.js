@@ -20,6 +20,12 @@ function erro(status, msg) {
   return err;
 }
 
+function erroComCodigo(status, msg, code) {
+  const err = erro(status, msg);
+  err.code = code;
+  return err;
+}
+
 /** Hora de Brasilia agora, 'HH:MM' (o mesmo fuso do `hojeLocalISO`). */
 function horaLocalHHMM(agora = new Date()) {
   const { FUSO_PADRAO } = require('../almoxarifado/auditFiltros');
@@ -35,6 +41,68 @@ function lerKm(v) {
   const n = Number(v);
   if (!Number.isFinite(n) || n < 0) return null;
   return n;
+}
+
+/**
+ * Frota Etapa 3 (A10, RN-F3.04/07): a regua da leitura e a do VEICULO. Maquina por horimetro manda `horimetro` (o `km` e ignorado);
+ * veiculo por km manda `km` (o `horimetro` e ignorado). Veiculo inexistente cai na de km (e depois no 404 de sempre).
+ */
+const medicaoDe = (veiculo) => (veiculo && veiculo.tipo_medicao === 'horimetro' ? 'horimetro' : 'km');
+
+/**
+ * Fase 2 (T-2): o retorno segue a regua com que a VIAGEM abriu, nao a do veiculo de hoje (o gestor pode ter trocado a medicao no meio,
+ * ou aberto a viagem com km numa maquina): horimetro_saida -> horas; km_saida -> km; nenhum dos dois -> a do veiculo.
+ */
+function medicaoDaViagem(viagem, veiculo) {
+  if (viagem && viagem.horimetro_saida != null) return 'horimetro';
+  if (viagem && viagem.km_saida != null) return 'km';
+  return medicaoDe(veiculo);
+}
+
+async function medicaoDoVeiculo(db, veiculoId) {
+  if (!veiculoId) return 'km';
+  return medicaoDe(await dbGet(db, 'SELECT tipo_medicao FROM frotas_veiculos WHERE id = ?', [veiculoId]));
+}
+
+function lerLeitura(b, medicao) {
+  if (medicao === 'horimetro') {
+    const h = lerKm(b.horimetro);
+    if (h == null) throw erro(400, 'Informe o horímetro atual');
+    return h;
+  }
+  const km = lerKm(b.km);
+  if (km == null) throw erro(400, 'Informe o KM atual');
+  return km;
+}
+
+const formatoBR = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 });
+const numeroBR = (n) => formatoBR.format(Number(n) || 0);
+
+/**
+ * Frota Etapa 3 (A8, RN-F3.01/02/05): leitura MENOR que a atual do veiculo para e pergunta (409 com `code`); o motorista confirma com
+ * `confirmar_km_menor: true` (so o booleano) — lancamento atrasado e legitimo. Roda DEPOIS das recusas duras (RN-F3.03).
+ */
+function conferirMenorQueAtual(veiculo, medicao, leitura, confirmar) {
+  if (confirmar === true) return;
+  if (medicao === 'horimetro') {
+    const atual = Number(veiculo.horimetro_atual) || 0;
+    if (leitura < atual) {
+      throw erroComCodigo(409, `Horímetro menor que o atual do veículo (${numeroBR(atual)} h). Confira o painel antes de salvar.`,
+        'HORIMETRO_MENOR_QUE_ATUAL');
+    }
+    return;
+  }
+  const atual = Number(veiculo.km_atual) || 0;
+  if (leitura < atual) {
+    throw erroComCodigo(409, `KM menor que o atual do veículo (${numeroBR(atual)} km). Confira o hodômetro antes de salvar.`,
+      'KM_MENOR_QUE_ATUAL');
+  }
+}
+
+/** O veiculo sobe a leitura da regua dele (RN-F1.08 no km; RN-F3.04 no horimetro — o km nao muda). */
+async function subirLeitura(db, veiculoId, medicao, leitura) {
+  if (medicao === 'horimetro') await frotasService.updateHorimetroVeiculoSeMaior(db, veiculoId, leitura);
+  else await frotasService.updateKmVeiculoSeMaior(db, veiculoId, leitura);
 }
 
 /** 'AAAA-MM-DD' que existe no calendario (2026-02-30 nao). Vazio -> hoje de Brasilia. */
@@ -84,11 +152,13 @@ async function inicio(db, user) {
   const m = await frotasService.motoristaDoUsuario(db, user);
   let viagemAberta = null;
   if (m) {
-    viagemAberta = await dbGet(db, `SELECT vi.id, vi.veiculo_id, v.placa, vi.km_saida, vi.data_saida, vi.destino
+    viagemAberta = await dbGet(db, `SELECT vi.id, vi.veiculo_id, v.placa, vi.km_saida, vi.horimetro_saida,
+      CASE WHEN vi.horimetro_saida IS NOT NULL THEN 'horimetro' WHEN vi.km_saida IS NOT NULL THEN 'km'
+        ELSE COALESCE(v.tipo_medicao, 'km') END AS tipo_medicao, vi.data_saida, vi.destino
       FROM frotas_viagens vi JOIN frotas_veiculos v ON v.id = vi.veiculo_id
       WHERE vi.motorista_id = ? AND vi.status = 'em_andamento' ORDER BY vi.id DESC LIMIT 1`, [m.id]) || null;
   }
-  const veiculos = await dbAll(db, `SELECT v.id, v.placa, v.modelo, v.marca, v.km_atual, v.tipo_medicao, v.status,
+  const veiculos = await dbAll(db, `SELECT v.id, v.placa, v.modelo, v.marca, v.km_atual, v.horimetro_atual, v.tipo_medicao, v.status,
       EXISTS (SELECT 1 FROM frotas_viagens vi WHERE vi.veiculo_id = v.id AND vi.status = 'em_andamento') AS em_uso
     FROM frotas_veiculos v
     WHERE v.ativo = 1 AND COALESCE(v.status, 'ativo') NOT IN ('vendido', 'inativo')
@@ -114,8 +184,28 @@ async function registrar(db, user, body) {
   const b = body || {};
   const motorista = await motoristaObrigatorio(db, user);
   if (!TIPOS_REGISTRO.includes(b.tipo)) throw erro(400, 'Tipo deve ser saida, retorno ou inspecao');
-  const km = lerKm(b.km);
-  if (km == null) throw erro(400, 'Informe o KM atual');
+  // RN-F3.07: o veiculo do corpo (saida, inspecao) ou a VIAGEM aberta do motorista (retorno — Fase 2, T-2: a regua com que ela abriu)
+  // diz se a leitura e km ou horas. Leitura previa so para a mensagem certa; adiante o veiculo/viagem e relido e, se a medicao mudou
+  // no meio, a leitura tambem.
+  let medicao;
+  let leitura;
+  if (b.tipo === 'retorno') {
+    const aberta = await dbGet(db, `SELECT vi.km_saida, vi.horimetro_saida, v.tipo_medicao FROM frotas_viagens vi
+      LEFT JOIN frotas_veiculos v ON v.id = vi.veiculo_id
+      WHERE vi.motorista_id = ? AND vi.status = 'em_andamento' ORDER BY vi.id DESC LIMIT 1`, [motorista.id]);
+    if (aberta) {
+      medicao = medicaoDaViagem(aberta, aberta);
+      leitura = lerLeitura(b, medicao);
+    } else {
+      // Fase 2 (item 6): sem saida aberta, a leitura em qualquer campo serve — o 409 "sem saida aberta" vem adiante, na fila
+      leitura = lerKm(b.km) ?? lerKm(b.horimetro);
+      if (leitura == null) throw erro(400, 'Informe o KM atual');
+      medicao = lerKm(b.km) != null ? 'km' : 'horimetro';
+    }
+  } else {
+    medicao = await medicaoDoVeiculo(db, b.veiculo_id);
+    leitura = lerLeitura(b, medicao);
+  }
   const data = lerData(b.data);
   const horario = lerHorario(b.horario);
   const nivel = lerNivel(b.nivel_combustivel);
@@ -124,15 +214,24 @@ async function registrar(db, user, body) {
   if (b.tipo !== 'retorno' && !b.veiculo_id) throw erro(400, 'Escolha o veículo');
 
   const registroBase = {
-    motorista_id: motorista.id, data_checklist: data, km, horario, nivel_combustivel: nivel, itens, avarias,
+    motorista_id: motorista.id, data_checklist: data, horario, nivel_combustivel: nivel, itens, avarias,
     observacoes: b.observacoes || null, tipo_registro: b.tipo,
   };
+  const confirmar = b.confirmar_km_menor;
+  /** Releu o veiculo: se a medicao dele nao e a da leitura previa, le de novo pela dele (400 se o corpo nao trouxe). */
+  const acertarMedicao = (veiculo, viagem) => {
+    const m = viagem ? medicaoDaViagem(viagem, veiculo) : medicaoDe(veiculo);
+    if (m !== medicao) { medicao = m; leitura = lerLeitura(b, m); }
+  };
+  const leituras = () => (medicao === 'horimetro' ? { km: null, horimetro: leitura } : { km: leitura, horimetro: null });
   const dataHora = `${data}T${horario}`; // F2-15: abre no datetime-local da tela do gestor
 
   if (b.tipo === 'inspecao') {
     const veiculo = await veiculoDoPortal(db, b.veiculo_id);
-    const registro = await frotasService.inserirRegistro(db, user, { ...registroBase, veiculo_id: veiculo.id });
-    await frotasService.updateKmVeiculoSeMaior(db, veiculo.id, km); // RN-F1.08
+    acertarMedicao(veiculo);
+    conferirMenorQueAtual(veiculo, medicao, leitura, confirmar); // RN-F3.01/05
+    const registro = await frotasService.inserirRegistro(db, user, { ...registroBase, ...leituras(), veiculo_id: veiculo.id });
+    await subirLeitura(db, veiculo.id, medicao, leitura); // RN-F1.08 / RN-F3.04
     return { registro, viagem: null };
   }
 
@@ -142,30 +241,35 @@ async function registrar(db, user, body) {
       // F2-14 (B9): veiculo em manutencao nao sai
       if (veiculo.status === 'manutencao') throw erro(409, 'Veículo em manutenção. Fale com o gestor da frota.');
       await frotasService.conferirViagemUnica(db, { veiculoId: veiculo.id, motoristaId: motorista.id }); // RN-F1.05
+      acertarMedicao(veiculo);
+      conferirMenorQueAtual(veiculo, medicao, leitura, confirmar); // RN-F3.01/05 (dentro da fila: le o km_atual da hora)
+      const { km, horimetro } = leituras();
       // B8: a viagem ja aprovada para este veiculo e motorista vira a desta saida (em vez de uma segunda)
       const aprovada = await dbGet(db, `SELECT id FROM frotas_viagens
         WHERE veiculo_id = ? AND motorista_id = ? AND status = 'aprovada' ORDER BY id LIMIT 1`, [veiculo.id, motorista.id]);
       let viagemId;
       if (aprovada) {
-        await dbRun(db, `UPDATE frotas_viagens SET status = 'em_andamento', km_saida = ?, data_saida = ?,
+        await dbRun(db, `UPDATE frotas_viagens SET status = 'em_andamento', km_saida = ?, horimetro_saida = ?, data_saida = ?,
           origem = COALESCE(?, origem), destino = COALESCE(?, destino), finalidade = COALESCE(?, finalidade),
           observacoes = COALESCE(?, observacoes), updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
         // Fase5-4: as observacoes da saida iam so no INSERT — ao consumir a aprovada, se perdiam
-        [km, dataHora, b.origem || null, b.destino || null, b.finalidade || null, b.observacoes || null, aprovada.id]);
+        [km, horimetro, dataHora, b.origem || null, b.destino || null, b.finalidade || null, b.observacoes || null, aprovada.id]);
         viagemId = aprovada.id;
       } else {
         // RN-F1.04 (B4): sem aprovacao — a planilha nao tem
         const r = await dbRun(db, `INSERT INTO frotas_viagens
-          (veiculo_id, motorista_id, data_saida, km_saida, origem, destino, finalidade, status, observacoes,
+          (veiculo_id, motorista_id, data_saida, km_saida, horimetro_saida, origem, destino, finalidade, status, observacoes,
            solicitante_id, solicitante_nome)
-          VALUES (?,?,?,?,?,?,?,'em_andamento',?,?,?)`, [
-          veiculo.id, motorista.id, dataHora, km, b.origem || null, b.destino || null, b.finalidade || null,
+          VALUES (?,?,?,?,?,?,?,?,'em_andamento',?,?,?)`, [
+          veiculo.id, motorista.id, dataHora, km, horimetro, b.origem || null, b.destino || null, b.finalidade || null,
           b.observacoes || null, user?.id || null, user?.nome || user?.name || null,
         ]);
         viagemId = r.lastID;
       }
-      const registro = await frotasService.inserirRegistro(db, user, { ...registroBase, veiculo_id: veiculo.id, viagem_id: viagemId });
-      await frotasService.updateKmVeiculoSeMaior(db, veiculo.id, km); // RN-F1.08
+      const registro = await frotasService.inserirRegistro(db, user, {
+        ...registroBase, km, horimetro, veiculo_id: veiculo.id, viagem_id: viagemId,
+      });
+      await subirLeitura(db, veiculo.id, medicao, leitura); // RN-F1.08 / RN-F3.04
       const viagem = await dbGet(db, 'SELECT * FROM frotas_viagens WHERE id = ?', [viagemId]);
       return { registro, viagem };
     }
@@ -174,16 +278,22 @@ async function registrar(db, user, body) {
     const aberta = await dbGet(db, `SELECT * FROM frotas_viagens WHERE motorista_id = ? AND status = 'em_andamento'
       ORDER BY id DESC LIMIT 1`, [motorista.id]);
     if (!aberta) throw erro(409, 'Você não tem saída aberta para registrar o retorno.');
+    const veiculo = await dbGet(db, 'SELECT * FROM frotas_veiculos WHERE id = ?', [aberta.veiculo_id]);
+    acertarMedicao(veiculo, aberta);
+    const { km, horimetro } = leituras();
     frotasService.conferirKmDoRetorno(aberta.km_saida, km); // RN-F1.07
+    frotasService.conferirHorimetroDoRetorno(aberta.horimetro_saida, horimetro); // RN-F3.06
     frotasService.conferirDataDoRetorno(aberta.data_saida, dataHora); // Fase5-3
-    const kmRodado = aberta.km_saida != null ? km - Number(aberta.km_saida) : null;
-    const up = await dbRun(db, `UPDATE frotas_viagens SET km_retorno = ?, data_retorno = ?, km_rodado = ?, status = 'concluida',
-      updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'em_andamento'`, [km, dataHora, kmRodado, aberta.id]);
+    if (veiculo) conferirMenorQueAtual(veiculo, medicao, leitura, confirmar); // RN-F3.01/05, depois das duras (RN-F3.03)
+    const kmRodado = km != null && aberta.km_saida != null ? km - Number(aberta.km_saida) : null;
+    const up = await dbRun(db, `UPDATE frotas_viagens SET km_retorno = ?, horimetro_retorno = ?, data_retorno = ?, km_rodado = ?,
+      status = 'concluida', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'em_andamento'`,
+    [km, horimetro, dataHora, kmRodado, aberta.id]);
     if (!up.changes) throw erro(409, 'Você não tem saída aberta para registrar o retorno.');
     const registro = await frotasService.inserirRegistro(db, user, {
-      ...registroBase, veiculo_id: aberta.veiculo_id, viagem_id: aberta.id,
+      ...registroBase, km, horimetro, veiculo_id: aberta.veiculo_id, viagem_id: aberta.id,
     });
-    await frotasService.updateKmVeiculoSeMaior(db, aberta.veiculo_id, km); // RN-F1.08
+    await subirLeitura(db, aberta.veiculo_id, medicao, leitura); // RN-F1.08 / RN-F3.04
     const viagem = await dbGet(db, 'SELECT * FROM frotas_viagens WHERE id = ?', [aberta.id]);
     return { registro, viagem };
   });
@@ -195,8 +305,8 @@ async function registrarAbastecimento(db, user, body) {
   const b = body || {};
   const motorista = await motoristaObrigatorio(db, user);
   if (!b.veiculo_id) throw erro(400, 'Veículo, litros e data são obrigatórios');
-  const km = lerKm(b.km);
-  if (km == null) throw erro(400, 'Informe o KM atual');
+  let medicao = await medicaoDoVeiculo(db, b.veiculo_id); // RN-F3.07
+  let leitura = lerLeitura(b, medicao);
   const litros = Number(b.litros);
   if (b.litros == null || b.litros === '' || !Number.isFinite(litros) || litros <= 0) throw erro(400, 'Informe os litros');
   let valorTotal = 0;
@@ -206,10 +316,13 @@ async function registrarAbastecimento(db, user, body) {
   }
   const data = lerData(b.data);
   const veiculo = await veiculoDoPortal(db, b.veiculo_id);
-  // o motorista_id e o do vinculo (o corpo nao escolhe); o calculo do km/L e o da RN-F1.11
+  if (medicaoDe(veiculo) !== medicao) { medicao = medicaoDe(veiculo); leitura = lerLeitura(b, medicao); }
+  conferirMenorQueAtual(veiculo, medicao, leitura, b.confirmar_km_menor); // RN-F3.01/05
+  // o motorista_id e o do vinculo (o corpo nao escolhe); o km/L e o da RN-F1.11 — a leitura de horas fica fora dele (RN-F3.04)
+  const horas = medicao === 'horimetro';
   return frotasService.createAbastecimento(db, user, {
     veiculo_id: veiculo.id, motorista_id: motorista.id, data_abastecimento: data, litros, valor_total: valorTotal,
-    km_abastecimento: km, posto: b.posto || null, combustivel_tipo: b.combustivel_tipo || null, observacoes: b.observacoes || null,
+    km_abastecimento: horas ? null : leitura, horimetro_abastecimento: horas ? leitura : null, posto: b.posto || null, combustivel_tipo: b.combustivel_tipo || null, observacoes: b.observacoes || null,
   });
 }
 

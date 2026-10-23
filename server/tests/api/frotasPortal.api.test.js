@@ -82,7 +82,7 @@ test('F2-11 GET /portal/inicio: motorista, veiculos ativos com status/em_uso, li
   assert(placas.includes('POR0001') && placas.includes('POR0003'), 'ativo e em manutencao aparecem');
   assert(!placas.includes('POR0004') && !placas.includes('POR0005'), 'excluido e vendido nao');
   const v1 = r.body.veiculos.find((v) => v.placa === 'POR0001');
-  assert.deepStrictEqual(Object.keys(v1).sort(), ['em_uso', 'id', 'km_atual', 'marca', 'modelo', 'placa', 'status', 'tipo_medicao'].sort());
+  assert.deepStrictEqual(Object.keys(v1).sort(), ['em_uso', 'horimetro_atual', 'id', 'km_atual', 'marca', 'modelo', 'placa', 'status', 'tipo_medicao'] /* + horimetro_atual: Etapa 3, RN-F3.09 */.sort());
   assert.strictEqual(v1.em_uso, false);
   assert.strictEqual(r.body.veiculos.find((v) => v.placa === 'POR0003').status, 'manutencao');
   assert.strictEqual(r.body.itens.length, 12);
@@ -169,6 +169,7 @@ test('RN-F1.04 saida grava o registro e abre a viagem em andamento; RN-F1.08 sob
   const ini = await como(MOTORISTA, 'get', '/api/frotas/portal/inicio');
   assert.deepStrictEqual(ini.body.viagem_aberta, {
     id: viagem.id, veiculo_id: S.v1.id, placa: 'POR0001', km_saida: 1050, data_saida: '2026-10-23T07:30', destino: 'Cliente X',
+    horimetro_saida: null, tipo_medicao: 'km', // Etapa 3 (RN-F3.09): aditivo
   });
   assert.strictEqual(ini.body.veiculos.find((v) => v.id === S.v1.id).em_uso, true);
 });
@@ -344,7 +345,7 @@ test('Fase5-7 (RN-F1.05) a mesma pessoa em dois veiculos ao mesmo tempo: uma pas
 });
 
 test('RN-F1.13 o gestor com motorista ligado usa o portal; sem vinculo a mesma 409', async () => {
-  const r = await registrar(ADMIN, { tipo: 'inspecao', veiculo_id: S.v7.id, km: 100 });
+  const r = await registrar(ADMIN, { tipo: 'inspecao', veiculo_id: S.v7.id, km: 100, confirmar_km_menor: true }); // Etapa 3: a regua do km (RN-F3.01) nao e o assunto aqui
   assert.strictEqual(r.status, 201);
   assert.strictEqual(r.body.registro.motorista_id, S.mc.id);
   await dbRun(ctx.db, 'UPDATE frotas_motoristas SET usuario_id = NULL WHERE id = ?', [S.mc.id]);

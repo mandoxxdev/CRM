@@ -48,20 +48,36 @@ function buildSearchWhere(fields, search) {
   return { clause: ` AND (${parts.join(' OR ')})`, params: fields.map(() => term) };
 }
 
+/**
+ * Frota Etapa 3 (RN-F3.08): sobe a leitura do veiculo para a maior num comando so. Antes era ler e depois gravar (dois comandos):
+ * dois lancamentos em paralelo liam o mesmo valor e o de leitura MENOR podia gravar por ultimo (o veiculo descia).
+ */
 async function updateKmVeiculoSeMaior(db, veiculoId, km) {
   if (km == null || Number.isNaN(Number(km))) return;
-  const v = await dbGet(db, 'SELECT km_atual, horimetro_atual, tipo_medicao FROM frotas_veiculos WHERE id = ?', [veiculoId]);
-  if (!v) return;
-  const novoKm = Math.max(Number(v.km_atual) || 0, Number(km));
-  await dbRun(db, 'UPDATE frotas_veiculos SET km_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [novoKm, veiculoId]);
+  await dbRun(db, `UPDATE frotas_veiculos SET km_atual = MAX(COALESCE(km_atual, 0), ?), updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?`, [Number(km), veiculoId]);
 }
 
+/** Frota Etapa 3 (A10, RN-F3.04/08): o horimetro da maquina — ate aqui sem chamador. */
 async function updateHorimetroVeiculoSeMaior(db, veiculoId, horimetro) {
   if (horimetro == null || Number.isNaN(Number(horimetro))) return;
-  const v = await dbGet(db, 'SELECT horimetro_atual FROM frotas_veiculos WHERE id = ?', [veiculoId]);
-  if (!v) return;
-  const novo = Math.max(Number(v.horimetro_atual) || 0, Number(horimetro));
-  await dbRun(db, 'UPDATE frotas_veiculos SET horimetro_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [novo, veiculoId]);
+  await dbRun(db, `UPDATE frotas_veiculos SET horimetro_atual = MAX(COALESCE(horimetro_atual, 0), ?), updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?`, [Number(horimetro), veiculoId]);
+}
+
+/** Frota Etapa 3: numero opcional vindo de formulario ('' / null / ausente -> null). */
+const numeroOpcional = (v) => (v == null || v === '' ? null : Number(v));
+
+const formatoBR = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 });
+
+/** RN-F3.06 / RN-F3.15: retorno de maquina por horimetro abaixo da saida — dura, como a RN-F1.07 do km (portal e gestor). */
+function conferirHorimetroDoRetorno(horimetroSaida, horimetroRetorno) {
+  if (horimetroSaida != null && horimetroRetorno != null && Number(horimetroRetorno) < Number(horimetroSaida)) {
+    const err = new Error(`Horímetro do retorno (${formatoBR.format(Number(horimetroRetorno))} h) menor que o da saída (${
+      formatoBR.format(Number(horimetroSaida))} h). Confira o painel.`);
+    err.status = 400;
+    throw err;
+  }
 }
 
 // ── Escopo do motorista (Frotas Etapa 1, A6) ─────────────────────────────────
@@ -541,20 +557,22 @@ async function createAbastecimento(db, user, dataBruta) {
   const valorTotal = Number(data.valor_total) || 0;
   const valorLitro = data.valor_litro != null ? Number(data.valor_litro) : (litros > 0 ? valorTotal / litros : 0);
   const km = data.km_abastecimento != null && data.km_abastecimento !== '' ? Number(data.km_abastecimento) : null;
+  const horimetro = numeroOpcional(data.horimetro_abastecimento); // Frota Etapa 3 (RN-F3.04/15): fora da regua do km/L
   const r = await dbRun(db, `INSERT INTO frotas_abastecimentos
     (veiculo_id, motorista_id, data_abastecimento, litros, valor_total, valor_litro, posto,
-     km_abastecimento, combustivel_tipo, consumo_medio, observacoes, usuario_id, usuario_nome)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+     km_abastecimento, combustivel_tipo, consumo_medio, observacoes, usuario_id, usuario_nome, horimetro_abastecimento)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
     data.veiculo_id, data.motorista_id || null, data.data_abastecimento, litros, valorTotal, valorLitro,
     data.posto || null, km,
     data.combustivel_tipo || null, null, data.observacoes || null,
-    user?.id || null, user?.nome || user?.name || null,
+    user?.id || null, user?.nome || user?.name || null, horimetro,
   ]);
   await recalcularConsumoDaLinha(db, r.lastID);
   await recalcularSeguinte(db, data.veiculo_id, km, r.lastID);
   if (km != null) {
     await updateKmVeiculoSeMaior(db, data.veiculo_id, km);
   }
+  if (horimetro != null) await updateHorimetroVeiculoSeMaior(db, data.veiculo_id, horimetro);
   return dbGet(db, 'SELECT * FROM frotas_abastecimentos WHERE id = ?', [r.lastID]);
 }
 
@@ -576,18 +594,21 @@ async function updateAbastecimento(db, id, dataBruta, user) {
     ? (data.km_abastecimento != null && data.km_abastecimento !== '' ? Number(data.km_abastecimento) : null)
     : current.km_abastecimento;
   const veiculoId = data.veiculo_id ?? current.veiculo_id;
+  // Frota Etapa 3 (RN-F3.15): o gestor corrige a leitura de horas; ausente no corpo mantem, vazio apaga (como o km)
+  const horimetro = 'horimetro_abastecimento' in data ? numeroOpcional(data.horimetro_abastecimento) : current.horimetro_abastecimento;
   await dbRun(db, `UPDATE frotas_abastecimentos SET
     veiculo_id=?, motorista_id=?, data_abastecimento=?, litros=?, valor_total=?, valor_litro=?,
-    posto=?, km_abastecimento=?, combustivel_tipo=?, observacoes=? WHERE id=?`, [
+    posto=?, km_abastecimento=?, combustivel_tipo=?, observacoes=?, horimetro_abastecimento=? WHERE id=?`, [
     veiculoId, data.motorista_id ?? current.motorista_id, data.data_abastecimento ?? current.data_abastecimento,
     litros, valorTotal, valorLitro, data.posto ?? current.posto, km,
-    data.combustivel_tipo ?? current.combustivel_tipo, data.observacoes ?? current.observacoes, id,
+    data.combustivel_tipo ?? current.combustivel_tipo, data.observacoes ?? current.observacoes, horimetro, id,
   ]);
   await recalcularConsumoDaLinha(db, id);
   // F2-8: o seguinte da posicao antiga (no veiculo antigo) e o da nova (no veiculo novo)
   if (current.km_abastecimento != null) await recalcularSeguinte(db, current.veiculo_id, Number(current.km_abastecimento), Number(id));
   await recalcularSeguinte(db, veiculoId, km, Number(id));
   if (km != null) await updateKmVeiculoSeMaior(db, veiculoId, km);
+  if (horimetro != null) await updateHorimetroVeiculoSeMaior(db, veiculoId, horimetro);
   return dbGet(db, 'SELECT * FROM frotas_abastecimentos WHERE id = ?', [id]);
 }
 
@@ -833,6 +854,9 @@ async function createViagem(db, user, dataBruta) {
   const kmSaida = data.km_saida != null ? Number(data.km_saida) : null;
   const kmRetorno = data.km_retorno != null ? Number(data.km_retorno) : null;
   conferirKmDoRetorno(kmSaida, kmRetorno);
+  const horSaida = numeroOpcional(data.horimetro_saida); // Frota Etapa 3 (RN-F3.15)
+  const horRetorno = numeroOpcional(data.horimetro_retorno);
+  conferirHorimetroDoRetorno(horSaida, horRetorno);
   conferirDataDoRetorno(data.data_saida, data.data_retorno); // Fase5-3
   const status = data.status || 'solicitada';
   return naFilaDeViagens(async () => {
@@ -841,16 +865,17 @@ async function createViagem(db, user, dataBruta) {
     }
     const r = await dbRun(db, `INSERT INTO frotas_viagens
       (veiculo_id, motorista_id, data_saida, data_retorno, km_saida, km_retorno, km_rodado,
-       destino, finalidade, setor, status, observacoes, solicitante_id, solicitante_nome, origem)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+       destino, finalidade, setor, status, observacoes, solicitante_id, solicitante_nome, origem, horimetro_saida, horimetro_retorno)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
       data.veiculo_id, data.motorista_id || null, data.data_saida || null, data.data_retorno || null,
       kmSaida, kmRetorno,
       data.km_rodado != null ? Number(data.km_rodado) : (kmSaida != null && kmRetorno != null ? kmRetorno - kmSaida : null),
       data.destino || null, data.finalidade || null,
       data.setor || null, status, data.observacoes || null,
-      user?.id || null, user?.nome || user?.name || null, data.origem || null,
+      user?.id || null, user?.nome || user?.name || null, data.origem || null, horSaida, horRetorno,
     ]);
     if (kmRetorno != null) await updateKmVeiculoSeMaior(db, data.veiculo_id, kmRetorno);
+    if (horRetorno != null) await updateHorimetroVeiculoSeMaior(db, data.veiculo_id, horRetorno);
     return dbGet(db, 'SELECT * FROM frotas_viagens WHERE id = ?', [r.lastID]);
   });
 }
@@ -869,6 +894,10 @@ async function updateViagem(db, id, dataBruta, user) {
     const kmSaida = data.km_saida != null ? Number(data.km_saida) : current.km_saida;
     const kmRetorno = data.km_retorno != null ? Number(data.km_retorno) : current.km_retorno;
     conferirKmDoRetorno(kmSaida, kmRetorno);
+    // Frota Etapa 3 (RN-F3.15): como o km — null/ausente no corpo mantem o gravado (o formulario manda null em campo vazio)
+    const horSaida = numeroOpcional(data.horimetro_saida) ?? current.horimetro_saida;
+    const horRetorno = numeroOpcional(data.horimetro_retorno) ?? current.horimetro_retorno;
+    conferirHorimetroDoRetorno(horSaida, horRetorno);
     const dataSaida = data.data_saida ?? current.data_saida;
     const dataRetorno = data.data_retorno ?? current.data_retorno;
     conferirDataDoRetorno(dataSaida, dataRetorno); // Fase5-3
@@ -883,16 +912,18 @@ async function updateViagem(db, id, dataBruta, user) {
     }
     await dbRun(db, `UPDATE frotas_viagens SET
       veiculo_id=?, motorista_id=?, data_saida=?, data_retorno=?, km_saida=?, km_retorno=?, km_rodado=?,
-      destino=?, finalidade=?, setor=?, status=?, observacoes=?, origem=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`, [
+      destino=?, finalidade=?, setor=?, status=?, observacoes=?, origem=?, horimetro_saida=?, horimetro_retorno=?,
+      updated_at=CURRENT_TIMESTAMP WHERE id=?`, [
       veiculoId, motoristaId,
       dataSaida, dataRetorno,
       kmSaida, kmRetorno, kmRodado != null ? kmRodado : current.km_rodado,
       data.destino ?? current.destino, data.finalidade ?? current.finalidade, data.setor ?? current.setor,
-      status, data.observacoes ?? current.observacoes, data.origem ?? current.origem, id,
+      status, data.observacoes ?? current.observacoes, data.origem ?? current.origem, horSaida, horRetorno, id,
     ]);
     if (kmRetorno != null) {
       await updateKmVeiculoSeMaior(db, veiculoId, kmRetorno);
     }
+    if (horRetorno != null) await updateHorimetroVeiculoSeMaior(db, veiculoId, horRetorno);
     return dbGet(db, 'SELECT * FROM frotas_viagens WHERE id = ?', [id]);
   });
 }
@@ -996,14 +1027,14 @@ async function inserirRegistro(db, user, r) {
   const ins = await dbRun(db, `INSERT INTO frotas_checklists
     (veiculo_id, motorista_id, data_checklist, pneus_ok, oleo_ok, luzes_ok, freios_ok,
      extintor_ok, documentos_ok, limpeza_ok, observacoes, aprovado, usuario_id, usuario_nome,
-     tipo_registro, km, horario, nivel_combustivel, itens_json, avarias_json, status_geral, viagem_id)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+     tipo_registro, km, horario, nivel_combustivel, itens_json, avarias_json, status_geral, viagem_id, horimetro)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
     r.veiculo_id, r.motorista_id || null, r.data_checklist,
     ...ITENS_LEGADOS.map((k) => legados[k]), r.observacoes || null, situacao === 'OK' ? 1 : 0,
     user?.id || null, user?.nome || user?.name || null,
     r.tipo_registro || 'inspecao', r.km != null ? Number(r.km) : null, r.horario || null, r.nivel_combustivel || null,
     temItens ? JSON.stringify(r.itens) : null, JSON.stringify(Array.isArray(r.avarias) ? r.avarias : []),
-    situacao, r.viagem_id || null,
+    situacao, r.viagem_id || null, r.horimetro != null ? Number(r.horimetro) : null, // Frota Etapa 3 (RN-F3.04)
   ]);
   return registroComItens(await dbGet(db, 'SELECT * FROM frotas_checklists WHERE id = ?', [ins.lastID]));
 }
@@ -1063,6 +1094,10 @@ async function deleteChecklist(db, id) {
  * parametro — as colunas sao so de data (`type="date"`), entao sem modificador de fuso. Antes, `date('now')` = o dia UTC: das 21h a
  * meia-noite, o de amanha.
  */
+/** RN-F3.14: a leitura que a revisao compara — horimetro na maquina, km no resto (alias `v` = frotas_veiculos). */
+const LEITURA_SQL = "(CASE WHEN v.tipo_medicao = 'horimetro' THEN COALESCE(v.horimetro_atual, 0) ELSE v.km_atual END)";
+const FOLGA_SQL = "(CASE WHEN v.tipo_medicao = 'horimetro' THEN 50 ELSE 500 END)";
+
 async function getAlertas(db, hoje = hojeLocalISO()) {
   const alertas = [];
 
@@ -1101,10 +1136,11 @@ async function getAlertas(db, hoje = hojeLocalISO()) {
     });
   });
 
-  const manutencoes = await dbAll(db, `SELECT m.*, v.placa, v.km_atual FROM frotas_manutencoes m
+  // Frota Etapa 3 (RN-F3.14): na maquina por horimetro a "proxima revisao" e em horas — compara com o horimetro (folga 50 h, B40)
+  const manutencoes = await dbAll(db, `SELECT m.*, v.placa, ${LEITURA_SQL} AS km_atual FROM frotas_manutencoes m
     JOIN frotas_veiculos v ON m.veiculo_id = v.id
     WHERE (m.proxima_revisao_data IS NOT NULL AND date(m.proxima_revisao_data) <= date(?, '+15 days'))
-       OR (m.proxima_revisao_km IS NOT NULL AND v.km_atual >= m.proxima_revisao_km - 500)
+       OR (m.proxima_revisao_km IS NOT NULL AND ${LEITURA_SQL} >= m.proxima_revisao_km - ${FOLGA_SQL})
     ORDER BY m.proxima_revisao_data`, [hoje]);
   manutencoes.forEach((m) => {
     const dias = diasAte(m.proxima_revisao_data, hoje);
@@ -1217,7 +1253,7 @@ async function getDashboard(db) {
       FROM frotas_manutencoes m
       JOIN frotas_veiculos v ON m.veiculo_id = v.id
       WHERE (m.proxima_revisao_data IS NOT NULL AND date(m.proxima_revisao_data) < ?)
-         OR (m.proxima_revisao_km IS NOT NULL AND v.km_atual >= m.proxima_revisao_km)`, [hoje]),
+         OR (m.proxima_revisao_km IS NOT NULL AND ${LEITURA_SQL} >= m.proxima_revisao_km)`, [hoje]),
     getAlertas(db, hoje),
     dbAll(db, `SELECT a.*, v.placa FROM frotas_abastecimentos a
       JOIN frotas_veiculos v ON a.veiculo_id = v.id ORDER BY a.data_abastecimento DESC LIMIT 5`),
@@ -1319,4 +1355,6 @@ module.exports = {
   // Frotas Etapa 1
   listUsuariosVinculaveis, motoristaDoUsuario, escopoDoUsuario, erroNaoVinculado, registroComItens, inserirRegistro,
   validarItens, conferirViagemUnica, conferirKmDoRetorno, updateKmVeiculoSeMaior, MSG_VEICULO_EM_USO, MSG_MOTORISTA_EM_VIAGEM,
+  // Frota Etapa 3
+  updateHorimetroVeiculoSeMaior, conferirHorimetroDoRetorno,
 };

@@ -83,7 +83,8 @@ test('T8 pela rota: saida -> retorno -> 2 abastecimentos (um retroativo) -> o ge
   assert.strictEqual(ret.status, 201, JSON.stringify(ret.body));
   const ab1 = await como(MOTORISTA, 'post', '/api/frotas/portal/abastecimentos', { veiculo_id: v.id, km: 20180, litros: 40, valor_total: 250, data: '2026-10-22' });
   assert.strictEqual(ab1.status, 201);
-  const ab2 = await como(MOTORISTA, 'post', '/api/frotas/portal/abastecimentos', { veiculo_id: v.id, km: 20100, litros: 30, valor_total: 190, data: '2026-10-22' });
+  const ab2 = await como(MOTORISTA, 'post', '/api/frotas/portal/abastecimentos', { veiculo_id: v.id, km: 20100, litros: 30, valor_total: 190, data: '2026-10-22',
+    confirmar_km_menor: true }); // Etapa 3 (RN-F3.02, B35): o retroativo abaixo do atual pede a confirmacao
   assert.strictEqual(ab2.status, 201);
 
   // o alerta da pendencia (avaria na saida) chega ao gestor
@@ -127,7 +128,8 @@ test('T8 pelo servico: o mesmo fluxo sem HTTP da a mesma planilha', async () => 
   });
   await portalService.registrar(db, MOTORISTA, { tipo: 'retorno', km: 20180, data: '2026-10-22', horario: '16:40', itens: todosOk() });
   await portalService.registrarAbastecimento(db, MOTORISTA, { veiculo_id: v.id, km: 20180, litros: 40, valor_total: 250, data: '2026-10-22' });
-  await portalService.registrarAbastecimento(db, MOTORISTA, { veiculo_id: v.id, km: 20100, litros: 30, valor_total: 190, data: '2026-10-22' });
+  await portalService.registrarAbastecimento(db, MOTORISTA, { veiculo_id: v.id, km: 20100, litros: 30, valor_total: 190, data: '2026-10-22',
+    confirmar_km_menor: true }); // Etapa 3 (RN-F3.02, B35)
   // escopo pelo servico
   assert.deepStrictEqual(await frotasService.listAbastecimentos(db, {}, MOTORISTA2), []);
   assert.strictEqual((await frotasService.listAbastecimentos(db, {}, MOTORISTA)).length, 2);
