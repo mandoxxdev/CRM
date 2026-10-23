@@ -586,7 +586,7 @@ perl `-0pi`, âncora contada = 1, md5 antes/sabotado/restaurado (restauro por c�
   **Divergências:** M-3 coberto no teste 6 (`lote: "   "` → `SEM_LOTE`); teste 4 ganhou `'2027-3-31'` e `' 2027-03-31'`; teste 5 ganhou
   `AJUSTE` (absoluto) com a validade → `SO_ENTRADA` e um controle interno (a mesma SAIDA e a mesma transferência **sem** a validade →
   201, prova que o 400 é da validade). Usuário: ADMIN superadmin (o `requirePermission` real; `movimentar` e `ajustar_estoque`).
-- [x] **T2 — hash no próximo item da Execução.** `lotService.js`: `preencherValidadeSeVazia` (`UPDATE … WHERE id = ? AND data_validade
+- [x] **T2 — `267d668e`.** `lotService.js`: `preencherValidadeSeVazia` (`UPDATE … WHERE id = ? AND data_validade
   IS NULL RETURNING id`; perdeu → `{ preenchida: false, atual }`), `loteEstaVazio` (movimento vivo não-ESTORNO, saldo ≠ 0, série
   `EM_ESTOQUE`/`BLOQUEADA`) e `redefinirValidadeDoLoteVazio` (`WHERE data_validade = antiga`, zera as três colunas da liberação de
   vencimento), auditorias `VALIDADE_PREENCHIDA`/`VALIDADE_REDEFINIDA` por `registrarAuditoriaDoAto`. `stockService.js`: a decisão
@@ -610,6 +610,19 @@ perl `-0pi`, âncora contada = 1, md5 antes/sabotado/restaurado (restauro por c�
   vencido + a mesma data no passado" o motor **avisa** (a entrada está pondo saldo num lote cuja saída está barrada — é exatamente o
   que o aviso existe para dizer). O teste 10 usa data futura e continua sem aviso. Reversível: uma condição no motor. (5) O 15b
   confere também `vencimento_liberado_por` e `_motivo` nulos. (6) O 14b confere que o log cita o id da movimentação.
+  Rodados sem mudança, um por vez: `loteGuardasSaida` 39/39, `lotes` 8/8, `loteRotas` 9/9, `loteRecebimento` 9/9,
+  `loteVencimentoLiberacao` 8/8, `loteControleObrigatorio` 12/12, `validadesNoDiaLocal` 10/10, `auditLabels` 14/14.
+- [x] **T3 — hash no próximo item da Execução.** `MovimentacoesAlmoxarifado.js`: `TEXTO_AJUDA_VALIDADE`, `data_validade: ''` no estado
+  inicial e no `openModal`, zerada na troca de tipo e quando o Lote fica vazio (`v.trim()`), campo `#mov-validade` (`type="date"`,
+  rótulo "Validade do lote", `<small>` com a ajuda) logo abaixo do Lote só com Entrada + lote, payload só com Entrada + lote + data,
+  `toast.warn(aviso_validade, { autoClose: false })` depois de `aviso_caixa`/`aviso_retencao`. Teste novo
+  `MovimentacoesValidadeLote.test.js`, 8 casos (os 6 do plano + "trocar de tipo zera" + "sem aviso_validade: só o sucesso"): 7/8
+  vermelhos antes (o "sem data, sem chave" passa de primeira — é guarda do que não pode mudar), 8/8 depois; `Movimentacoes*` 7
+  suítes, 110/110. Controles: (a) sem a linha do payload → cai só o 2, em `toMatchObject({ … data_validade: '2027-03-31' })`;
+  (b) sem zerar na troca de lote → cai só o 4, em `expect(campoValidade().value).toBe('')`; (c) sem o `toast.warn` → cai só o 5, em
+  `expect(toast.warn).toHaveBeenCalledTimes(2)`. **Divergência:** a primeira tentativa de editar a tela por `perl -0pi` com
+  `\x{…}` re-codificou o arquivo inteiro (`Wide character`, diff de 607 linhas) — desfeita por `git checkout` do arquivo (md5 de
+  volta ao de antes, `f647c1cc…`) e refeita com o Edit; CR = 0 no fim.
 
 ## Próxima tarefa detalhada
 

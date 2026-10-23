@@ -94,6 +94,8 @@ const TIPOS = [
 // não usa nenhum destes conjuntos — continua lendo de TIPOS, que mantém SUCATA.
 const TIPOS_SAIDA_LOTE = ['SAIDA', 'PERDA'];
 const TIPOS_COM_LOTE_EXISTENTE = ['SAIDA', 'PERDA', 'TRANSFERENCIA'];
+// Etapa 190 (RN-190.10, C450): a ajuda do campo "Validade do lote" da Entrada (frase congelada no plano).
+const TEXTO_AJUDA_VALIDADE = 'Opcional. Se o lote já existe com validade, deixe em branco.';
 const TIPOS_COM_ORIGEM = ['SAIDA', 'PERDA', 'TRANSFERENCIA'];
 const TIPOS_COM_DESTINO = ['ENTRADA', 'TRANSFERENCIA'];
 
@@ -186,6 +188,7 @@ const MovimentacoesAlmoxarifado = () => {
     codigo_lido_destino: '',
     lote: '',
     lote_id: '',
+    data_validade: '',
     custo_unitario: '',
     emergencial: false,
     series: '',
@@ -515,7 +518,7 @@ const MovimentacoesAlmoxarifado = () => {
       referencia: '', observacoes: '',
       os_id: '', projeto_id: '', centro_custo_id: '', localizacao_origem_id: '', localizacao_destino_id: '',
       codigo_lido_origem: '', codigo_lido_destino: '',
-      lote: '', lote_id: '', custo_unitario: '', emergencial: false,
+      lote: '', lote_id: '', data_validade: '', custo_unitario: '', emergencial: false,
       series: '', serie_ids: []
     });
     setShowModal(true);
@@ -591,6 +594,8 @@ const MovimentacoesAlmoxarifado = () => {
       // escolhido de um já existente (lote_id), nunca digitado — evita saída registrada contra um
       // lote que não existe.
       if (form.tipo === 'ENTRADA' && form.lote) payload.lote = form.lote;
+      // Etapa 190 (RN-190.10): a validade só vai com Entrada + lote + data — sem data, a chave não vai (nem '').
+      if (form.tipo === 'ENTRADA' && form.lote && form.data_validade) payload.data_validade = form.data_validade;
       if (TIPOS_COM_LOTE_EXISTENTE.includes(form.tipo) && form.lote_id) payload.lote_id = Number(form.lote_id);
       // Série: mesma regra "só envia campo que o tipo exibe" — entrada manda a lista de texto
       // (series), saída manda os ids escolhidos (serie_ids). Igual ao lote, nasce na entrada e é
@@ -618,6 +623,9 @@ const MovimentacoesAlmoxarifado = () => {
       // acima do estoque) — o texto do servidor, literal, depois do da caixa quando os dois vêm.
       const avisoRetencao = resposta?.data?.aviso_retencao;
       if (typeof avisoRetencao === 'string' && avisoRetencao) toast.warn(avisoRetencao, { autoClose: false });
+      // Etapa 190 (RN-190.10): o lote preenchido, redefinido, vencido ou a validade que não gravou — o texto do servidor, literal.
+      const avisoValidade = resposta?.data?.aviso_validade;
+      if (typeof avisoValidade === 'string' && avisoValidade) toast.warn(avisoValidade, { autoClose: false });
       setShowModal(false);
       if (location.pathname.endsWith('/novo')) {
         navigate('/almoxarifado/movimentacoes', { replace: true });
@@ -907,6 +915,7 @@ const MovimentacoesAlmoxarifado = () => {
                           codigo_lido_origem: TIPOS_COM_ORIGEM.includes(novoTipo) ? f.codigo_lido_origem : '',
                           lote: mostraLote ? f.lote : '',
                           lote_id: mostraLote ? f.lote_id : '',
+                          data_validade: '', // Etapa 190 (RN-190.10): trocar de tipo zera a validade
                           series: novoTipo === 'ENTRADA' ? f.series : '',
                           serie_ids: TIPOS_SAIDA_LOTE.includes(novoTipo) ? f.serie_ids : []
                         }));
@@ -1165,9 +1174,21 @@ const MovimentacoesAlmoxarifado = () => {
                         </select>
                       ) : (
                         <input id="mov-lote" className="almox-input" value={form.lote}
-                          onChange={e => setForm(f => ({ ...f, lote: e.target.value }))}
+                          onChange={e => {
+                            // Etapa 190 (RN-190.10): lote apagado zera a validade (ela é do lote — sem lote, não vai)
+                            const v = e.target.value;
+                            setForm(f => ({ ...f, lote: v, data_validade: v.trim() ? f.data_validade : '' }));
+                          }}
                           placeholder="Opcional" />
                       )}
+                    </div>
+                  )}
+                  {form.tipo === 'ENTRADA' && form.lote.trim() && (
+                    <div className="almox-field">
+                      <label className="almox-label" htmlFor="mov-validade">Validade do lote</label>
+                      <input id="mov-validade" type="date" className="almox-input" value={form.data_validade}
+                        onChange={e => setForm(f => ({ ...f, data_validade: e.target.value }))} />
+                      <small style={{ color: 'var(--gmp-text-light)' }}>{TEXTO_AJUDA_VALIDADE}</small>
                     </div>
                   )}
 
