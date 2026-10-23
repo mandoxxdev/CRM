@@ -147,7 +147,8 @@ test('RN-F1.18 Viagens e KM: cabecalho e linhas (portal e gestor)', async () => 
 
 test('RN-F1.18 (F2-6) Checklist: 12 itens Conforme/Nao conforme/N/A, avarias em texto, Status Geral', async () => {
   const [cab, ...linhas] = S.planilha.out.Checklist;
-  assert.deepStrictEqual(cab, ['Data', 'Horário', 'Tipo', 'Veículo', 'Condutor', 'KM', 'Combustível', ...ROTULOS, 'Avarias', 'Status Geral', 'Observações', 'Horímetro']); // Etapa 3 (RN-F3.11)
+  assert.deepStrictEqual(cab, ['Data', 'Horário', 'Tipo', 'Veículo', 'Condutor', 'KM', 'Combustível', ...ROTULOS, 'Avarias', 'Status Geral', 'Observações', 'Horímetro',
+    'Pendência tratada em', 'Tratada por', 'O que foi feito']); // Etapa 3 (RN-F3.11); Frota Etapa 6 (RN-F6.05): as tres no fim
   assert.strictEqual(linhas.length, 3);
   const saida = linhas.find((l) => l[2] === 'Saída');
   assert.deepStrictEqual(saida.slice(0, 7), ['2026-10-20', '07:00', 'Saída', 'EXP0001', 'Ana Motorista', 1000, '1/2']);

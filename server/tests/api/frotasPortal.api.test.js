@@ -10,7 +10,7 @@
  *   RN-F1.08  o km_atual do veiculo sobe
  *   RN-F1.09  inspecao grava so o registro
  *   RN-F1.02  situacao no registro do portal
- *   RN-F1.10  registro com PENDENCIA vira alerta "alto" por 7 dias
+ *   RN-F1.10  registro com PENDENCIA vira alerta "alto" (desde a Frota Etapa 6, RN-F6.04: ate ser tratado, sem a janela de 7 dias)
  *   F2-11     /portal/inicio: perfil, pode_registrar, pode_gerir; veiculos com em_uso e status
  *   F2-12     abastecimento do portal: mensagens e o motorista do vinculo
  *   meus-registros: so os do motorista, mais novos primeiro, com placa
@@ -258,7 +258,7 @@ test('RN-F1.02 pelo portal: 11 itens = INCOMPLETO; FALHA = PENDENCIA com o legad
 });
 
 // ── RN-F1.10 ────────────────────────────────────────────────────────────────────────────────
-test('RN-F1.10 registro com PENDENCIA vira alerta "alto" (tipo checklist); o de 8 dias atras nao', async () => {
+test('RN-F1.10 registro com PENDENCIA vira alerta "alto" (tipo checklist); o de 8 dias atras TAMBEM (RN-F6.04: a janela de 7 dias caiu)', async () => {
   const velho = await registrar(MOTORISTA, {
     tipo: 'inspecao', veiculo_id: S.v2.id, km: 560, data: somaDias(hojeLocalISO(), -8), itens: { ...todosOk(), freios: 'FALHA' },
   });
@@ -271,8 +271,9 @@ test('RN-F1.10 registro com PENDENCIA vira alerta "alto" (tipo checklist); o de 
   const doChecklist = r.body.filter((a) => a.tipo === 'checklist');
   const ids = doChecklist.map((a) => a.referencia_id);
   assert(ids.includes(S.pendenciaId), 'a de hoje');
-  assert(ids.includes(limite.body.registro.id), 'a de 7 dias atras ainda conta');
-  assert(!ids.includes(velho.body.registro.id), 'a de 8 dias nao');
+  assert(ids.includes(limite.body.registro.id), 'a de 7 dias atras conta');
+  // Frota Etapa 6 (RN-F6.04): dizia "a de 8 dias nao" — a pendencia nao tratada nao some mais sozinha
+  assert(ids.includes(velho.body.registro.id), 'a de 8 dias atras, nao tratada, continua');
   const a = doChecklist.find((x) => x.referencia_id === S.pendenciaId);
   assert.strictEqual(a.severidade, 'alto');
   assert.strictEqual(a.veiculo_id, S.v2.id);

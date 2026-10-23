@@ -1148,13 +1148,16 @@ async function inserirRegistro(db, user, r) {
 }
 
 async function listChecklists(db, { search, veiculo_id } = {}, user) {
-  let sql = `SELECT c.*, v.placa, m.nome as motorista_nome
+  const esc = await escopoDoUsuario(db, user); // RN-F1.14
+  // Frota Etapa 6 (RN-F6.05): a descricao da manutencao ligada ao tratamento (null se nao ha ou se ela foi excluida). Para quem tem
+  // escopo (motorista), null: ele so ve as manutencoes que lancou (listManutencoes) — Fase 2, 6 (B63).
+  let sql = `SELECT c.*, v.placa, m.nome as motorista_nome, ${esc ? 'NULL' : 'mt.descricao'} AS pendencia_manutencao_descricao
     FROM frotas_checklists c
     JOIN frotas_veiculos v ON c.veiculo_id = v.id
     LEFT JOIN frotas_motoristas m ON c.motorista_id = m.id
+    LEFT JOIN frotas_manutencoes mt ON mt.id = c.pendencia_manutencao_id
     WHERE 1=1`;
   const params = [];
-  const esc = await escopoDoUsuario(db, user); // RN-F1.14
   if (esc) {
     if (!esc.motoristaId) return [];
     sql += ' AND c.motorista_id = ?';
@@ -1283,13 +1286,16 @@ async function getAlertas(db, hoje = hojeLocalISO()) {
     });
   });
 
-  // Frotas Etapa 1 (RN-F1.10, B3): registro do portal (ou da tela antiga) com PENDENCIA — Falha ou avaria — nos ultimos 7 dias
+  // Frotas Etapa 1 (RN-F1.10, B3): registro do portal (ou da tela antiga) com PENDENCIA — Falha ou avaria.
+  // Frota Etapa 6 (RN-F6.04): so a NAO tratada, e sem a janela de 7 dias — antes o alerta sumia sozinho em 7 dias, consertado ou nao;
+  // agora fica ate o gestor tratar (POST /checklists/:id/tratar-pendencia). Veiculo excluido (ativo = 0) nao gera mais o alerta, como no de
+  // consumo (Fase 2, 8 — sem a janela, a pendencia dele ficaria para sempre; trata-se pela lista Checklist).
   const { ITENS_CHECKLIST } = require('./schema');
   const pendencias = await dbAll(db, `SELECT c.*, v.placa, m.nome AS motorista_nome FROM frotas_checklists c
     JOIN frotas_veiculos v ON c.veiculo_id = v.id
     LEFT JOIN frotas_motoristas m ON c.motorista_id = m.id
-    WHERE c.status_geral = 'PENDENCIA' AND date(c.data_checklist) >= date(?, '-7 days')
-    ORDER BY c.data_checklist DESC, c.id DESC`, [hoje]);
+    WHERE c.status_geral = 'PENDENCIA' AND c.pendencia_tratada_em IS NULL AND v.ativo = 1
+    ORDER BY c.data_checklist DESC, c.id DESC`);
   pendencias.forEach((row) => {
     const c = registroComItens(row);
     const falhas = c.itens ? ITENS_CHECKLIST.filter((i) => c.itens[i.chave] === 'FALHA').map((i) => i.rotulo) : [];
@@ -1308,6 +1314,7 @@ async function getAlertas(db, hoje = hojeLocalISO()) {
       dias_restantes: null,
       referencia_id: c.id,
       veiculo_id: c.veiculo_id,
+      placa: c.placa, // Frota Etapa 6 (Fase 2, T-3): o titulo da janela Tratar pendencia
     });
   });
 

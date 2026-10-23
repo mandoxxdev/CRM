@@ -104,7 +104,8 @@ async function abaChecklist(db, periodo) {
     LEFT JOIN frotas_motoristas m ON m.id = c.motorista_id
     WHERE 1=1${f.sql} ORDER BY c.data_checklist, c.horario, c.id`, f.params);
   const linhas = [['Data', 'Horário', 'Tipo', 'Veículo', 'Condutor', 'KM', 'Combustível', ...ITENS_CHECKLIST.map((i) => i.rotulo), 'Avarias', 'Status Geral', 'Observações',
-    'Horímetro']]; // Etapa 3 (RN-F3.11)
+    'Horímetro', // Etapa 3 (RN-F3.11)
+    'Pendência tratada em', 'Tratada por', 'O que foi feito']]; // Frota Etapa 6 (RN-F6.05): no FIM (B41)
   const itemDoLegado = Object.fromEntries(Object.entries(LEGADO_DE_ITEM).map(([legado, chave]) => [chave, legado]));
   for (const row of rows) {
     const c = registroComItens(row);
@@ -121,6 +122,8 @@ async function abaChecklist(db, periodo) {
       dia(c.data_checklist), vazio(c.horario), TIPO_REGISTRO[c.tipo_registro] || 'Inspeção', c.placa, vazio(c.motorista_nome),
       vazio(c.km), vazio(c.nivel_combustivel), ...respostas, textoAvarias(c.avarias), SITUACAO_REGISTRO[situacao] || situacao,
       vazio(c.observacoes), vazio(c.horimetro),
+      c.pendencia_tratada_em ? String(c.pendencia_tratada_em).replace('T', ' ') : '', vazio(c.pendencia_tratada_por_nome),
+      vazio(c.pendencia_tratamento),
     ]);
   }
   return linhas;

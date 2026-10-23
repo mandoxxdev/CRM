@@ -8,6 +8,7 @@ const frotasService = require('../services/frotas/frotasService');
 const portalService = require('../services/frotas/portalService');
 const exportacaoService = require('../services/frotas/exportacaoService');
 const perfisService = require('../services/frotas/perfisService');
+const pendenciaService = require('../services/frotas/pendenciaService'); // Frota Etapa 6 (RN-F6.02/03)
 const { requirePermission } = require('../services/frotas/permissions');
 const { respondDbError } = require('../services/sqliteConcurrency');
 // Frota Etapa 5 (RN-F5.01..08): fotos do registro e do abastecimento — o mesmo upload seguro do resto do sistema
@@ -26,6 +27,9 @@ const multer = multerComLimiteNoErro(require('multer'));
 const DASHBOARD_CACHE_MS = parseInt(process.env.FROTAS_DASHBOARD_CACHE_MS || '30000', 10);
 let dashboardCache = { at: 0, data: null };
 let dashboardInflight = null;
+// Frota Etapa 6 (Fase 2, T-1): a geracao do cache. Limpar a incrementa; a contagem do painel que ja estava em andamento quando alguem
+// tratou a pendencia so grava no cache se a geracao ainda for a dela — sem isso, ela gravava o painel velho DEPOIS da limpeza.
+let dashboardGeracao = 0;
 
 function handleError(res, err) {
   if (err?.status && err.status >= 400 && err.status < 500) {
@@ -173,17 +177,19 @@ module.exports = function registerFrotasRoutes(app, db, authenticateToken, check
         const data = await dashboardInflight;
         return res.json(data);
       }
-      dashboardInflight = frotasService.getDashboard(db)
+      const geracao = dashboardGeracao;
+      const contagem = frotasService.getDashboard(db)
         .then((data) => {
-          dashboardCache = { at: Date.now(), data };
-          dashboardInflight = null;
+          if (geracao === dashboardGeracao) dashboardCache = { at: Date.now(), data };
+          if (dashboardInflight === contagem) dashboardInflight = null;
           return data;
         })
         .catch((e) => {
-          dashboardInflight = null;
+          if (dashboardInflight === contagem) dashboardInflight = null;
           throw e;
         });
-      res.json(await dashboardInflight);
+      dashboardInflight = contagem;
+      res.json(await contagem);
     } catch (e) { handleError(res, e); }
   });
 
@@ -361,6 +367,24 @@ module.exports = function registerFrotasRoutes(app, db, authenticateToken, check
     { deletePerm: 'gerenciar_veiculos' }
   );
 
+  // ── Tratar a pendencia do registro (Frota Etapa 6) ─────────────────────────
+  // RN-F6.02/03: so o gestor (gerenciar_veiculos). RN-F6.09: tratar e desfazer mudam o alerta — o cache do painel (um so para todos,
+  // 30 s) e zerado, senao o alerta tratado continuaria no painel. Caminho LITERAL (reguas de fonte das Etapas 148-154).
+  app.post('/api/frotas/checklists/:id/tratar-pendencia', ...frotaAuth, requirePermission('gerenciar_veiculos'), async (req, res) => {
+    try {
+      const r = await pendenciaService.tratar(db, req.user, req.params.id, req.body);
+      limparCacheDashboard();
+      res.json(r);
+    } catch (e) { handleError(res, e); }
+  });
+  app.delete('/api/frotas/checklists/:id/tratar-pendencia', ...frotaAuth, requirePermission('gerenciar_veiculos'), async (req, res) => {
+    try {
+      const r = await pendenciaService.desfazer(db, req.user, req.params.id);
+      limparCacheDashboard();
+      res.json(r);
+    } catch (e) { handleError(res, e); }
+  });
+
   console.log('✅ Rotas Frotas registradas em /api/frotas/*');
 };
 
@@ -368,5 +392,6 @@ module.exports = function registerFrotasRoutes(app, db, authenticateToken, check
 function limparCacheDashboard() {
   dashboardCache = { at: 0, data: null };
   dashboardInflight = null;
+  dashboardGeracao += 1;
 }
 module.exports.limparCacheDashboard = limparCacheDashboard;

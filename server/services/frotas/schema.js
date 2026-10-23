@@ -288,6 +288,14 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE frotas_viagens ADD COLUMN horimetro_saida REAL');
   await safeAlter(db, 'ALTER TABLE frotas_viagens ADD COLUMN horimetro_retorno REAL');
 
+  // Frota Etapa 6 (RN-F6.01): a pendencia tratada pelo gestor — estado A PARTE (o status_geral continua PENDENCIA, e o que o motorista
+  // viu). tratada_em no relogio de Brasilia, 'AAAA-MM-DDTHH:MM'. A manutencao e so uma referencia (sem FK: excluida, a descricao some).
+  await safeAlter(db, 'ALTER TABLE frotas_checklists ADD COLUMN pendencia_tratada_em TEXT');
+  await safeAlter(db, 'ALTER TABLE frotas_checklists ADD COLUMN pendencia_tratada_por_id INTEGER');
+  await safeAlter(db, 'ALTER TABLE frotas_checklists ADD COLUMN pendencia_tratada_por_nome TEXT');
+  await safeAlter(db, 'ALTER TABLE frotas_checklists ADD COLUMN pendencia_tratamento TEXT');
+  await safeAlter(db, 'ALTER TABLE frotas_checklists ADD COLUMN pendencia_manutencao_id INTEGER');
+
   // Frota Etapa 5 (RN-F5.01): fotos do registro (frotas_checklists) e do abastecimento. O banco guarda so o nome do arquivo; a URL
   // assinada e feita na saida. Exclusao do lancamento apaga as linhas daqui (RN-F5.08) — sem FK porque as duas tabelas-mae sao outras.
   await dbRun(db, `CREATE TABLE IF NOT EXISTS frotas_anexos (
