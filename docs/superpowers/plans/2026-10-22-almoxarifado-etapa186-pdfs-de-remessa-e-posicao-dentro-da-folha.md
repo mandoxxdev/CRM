@@ -638,3 +638,13 @@ isso); este plano com a próxima tarefa detalhada.
   - (c2, a mais) o helper devolvendo só a 1ª linha → cai `[RN-185.08] linhas de identificação longas quebram por largura` (`termoFerramentaPdf.test.js`)
     — o termo usa o helper de verdade (nenhum teste do termo depende do aparar, então a (c1) sozinha não provava o termo).
 - Divergência: a (c1) não derrubou nenhum teste do termo (não há um que dependa do M1 nele); acrescentada a (c2).
+- Commit: `e8d81538`.
+
+### Suítes no fim (T5 passo 5 — sequenciais, uma vez cada, sobre `e8d81538`)
+
+- `test:api`: **528/528 arquivos OK** (inclui o novo `pdfsRemessaPosicaoFixture.api.test.js`); `test:almoxarifado`: **44 passou, 0 falhou**;
+  `test:validation`: **4/0**; `test:safealter`: **3/0**; `test:sqlite`: **16/0**.
+- Client: Jest inteiro **182 suítes, 2441 testes, todos verdes**; `CI=true react-scripts build`: **Compiled successfully**.
+- Logs: `e186-log-{api,almoxarifado,validation,safealter,sqlite,jest,build}.txt` no scratchpad.
+
+**Próximo passo:** T7 (Fase 5 — revisão adversarial com sonda — e fechamento pela skill `fechar-etapa`). Não executada nesta rodada.
