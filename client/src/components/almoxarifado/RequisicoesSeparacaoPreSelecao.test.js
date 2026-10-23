@@ -427,6 +427,44 @@ describe('Etapa 189 (T2): a janela de separação pré-seleciona o endereço sug
     expect(fraseDe(2).textContent).toBe(SUGERIDO);
     expect(selectDe(1).value).toBe('2:7');
   });
+
+  // Fase 5 da 189 (sondas J1 e J3, sem achado — passavam antes do fix-round; ficam como guarda).
+  test('[Fase 5, J1] o foco recarrega o detalhe sem mudar a chave -> a troca do almoxarife continua, sem busca nova', async () => {
+    requisicao = aprovada();
+    sugestaoImpl = () => Promise.resolve(sugestao(sugItem(1, pegar(PAR.B02, 5))));
+    await renderizar();
+    await clicar('Iniciar Separação');
+    expect(selectDe(1).value).toBe('2:7');
+    escolher(selectDe(1), '1:');
+    const antes = buscasSugestao();
+    requisicao = { ...requisicao }; // a recarga traz um objeto novo, como o servidor
+    const detalhes = api.get.mock.calls.filter((c) => c[0] === '/almoxarifado/requisicoes/55').length;
+    await act(async () => { window.dispatchEvent(new Event('focus')); });
+    await flush();
+    // premissa: o foco recarregou o detalhe de verdade
+    expect(api.get.mock.calls.filter((c) => c[0] === '/almoxarifado/requisicoes/55').length).toBe(detalhes + 1);
+    expect(buscasSugestao()).toBe(antes);
+    expect(selectDe(1).value).toBe('1:');
+    // (trocar para um endereço, não para o automático: zerar a escolha também daria '' e o teste não saberia falhar)
+    expect(fraseDe(1)).toBeNull();
+  });
+
+  test('[Fase 5, J3] a sugestao (cobre: false) chega antes dos saldos -> automatico, com "Sugestão da fila: …"', async () => {
+    requisicao = aprovada();
+    let resolverSaldos;
+    const pSaldos = new Promise((r) => { resolverSaldos = r; });
+    const orig = api.get.getMockImplementation();
+    api.get.mockImplementation((url) => (url === '/almoxarifado/estoque/10/saldos' ? pSaldos : orig(url)));
+    sugestaoImpl = () => Promise.resolve(sugestao(sugItem(1, pegar(PAR.C03, 2, { cobre: false }), { pegar_em_aviso: 'NENHUM_ENDERECO_COBRE' })));
+    await renderizar();
+    await clicar('Iniciar Separação');
+    await flush();
+    expect(fraseDe(1)).toBeNull(); // sem saldos, nada decidido ainda
+    await act(async () => { resolverSaldos({ data: SALDOS }); await pSaldos; });
+    await flush();
+    expect(selectDe(1).value).toBe('');
+    expect(fraseDe(1).textContent).toBe(naoVeio('C-03 · 2 PC'));
+  });
 });
 
 // As opções do "Sai de" como a tela as monta (linhas com endereço e quantidade > 0).
