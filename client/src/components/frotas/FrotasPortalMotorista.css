@@ -135,9 +135,18 @@
   background: var(--gmp-surface);
 }
 
+/* O titulo do grupo fica DENTRO da caixa, nao em cima da borda (o padrao do <legend>): no celular ele parecia
+   vazando para fora do quadro. O float e o que tira o legend da borda; o clear devolve o fluxo ao que vem depois. */
 .portal-grupo legend {
+  float: left;
+  width: 100%;
   font-weight: 700;
-  padding: 0 6px;
+  padding: 0;
+  margin-bottom: 8px;
+}
+
+.portal-grupo legend + * {
+  clear: both;
 }
 
 .portal-opcoes {
@@ -160,6 +169,19 @@
   font-weight: 600;
   cursor: pointer;
   padding: 4px;
+}
+
+/* No celular, `button:not([class*="icon"]):not([class*="close"]):not(.bim-item)` (app-glass, max-width 768px) poe 12px 20px
+   em todo botao e pesa (0,3,1) — mais que `.portal-opcao`. Com 20px de cada lado, "Vazio" e "Cheio" nao cabiam nos 60px da
+   coluna (medido: padding 20px no computado). Este seletor pesa (0,4,1) e devolve o padding pequeno. */
+.portal-motorista .portal-opcoes button.portal-opcao.portal-opcao {
+  padding: 4px 2px;
+  min-width: 0;
+}
+
+/* Os tipos de avaria tem palavras longas ("Amassado", "Quebrado") que nao cabem em 5 colunas no celular: 3 colunas. */
+.portal-nova-avaria .portal-opcoes-5 {
+  grid-template-columns: repeat(3, 1fr);
 }
 
 .portal-opcao.marcada {
@@ -214,10 +236,9 @@
   gap: 12px;
 }
 
+/* Fica no fim do formulario, sem flutuar. Era `position: sticky` e, dentro do .main-content (que tem 92px de folga embaixo
+   para a barra inferior), parava 92px acima do fim da tela: flutuava no meio e cortava o campo que passava por baixo. */
 .portal-rodape {
-  position: sticky;
-  bottom: 0;
-  background: var(--gmp-bg);
   padding: 10px 0 12px;
 }
 
@@ -242,6 +263,11 @@
   background: var(--gmp-surface);
 }
 
+/* O texto da esquerda encolhe e quebra linha; a etiqueta da direita nao (ela cortava na borda: "PENDÊNCIA · tra"). */
+.portal-lista-item > :first-child {
+  min-width: 0;
+}
+
 .portal-lista-sub {
   font-size: 0.85rem;
   color: var(--gmp-text-light);
@@ -254,6 +280,7 @@
   padding: 4px 10px;
   border-radius: 20px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .situacao-ok { background: rgba(22, 163, 74, 0.15); color: #16a34a; }
