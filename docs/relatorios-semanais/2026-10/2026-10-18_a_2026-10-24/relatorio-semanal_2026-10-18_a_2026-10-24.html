@@ -33,9 +33,10 @@
   <p class="sub">Semana de 18/10 a 24/10/2026 · CRM GMP Industriais</p>
 
   <p class="resumo">O almoxarifado ganhou a entrega de EPI e o empréstimo de ferramenta com assinatura na tela,
-  uma fila de separação que diz de onde pegar cada item, e o pedido de compra passou a poder ser feito para uma OS.
+  uma fila de separação que diz de onde pegar cada item, e o pedido de compra passou a poder ser feito para uma OS. A Frota ganhou o
+  portal do motorista no celular e, para o gestor, perfis de acesso, relatórios com total e o tratamento das pendências.
   Por baixo, as datas deixaram de pular para o dia seguinte depois das 21h, a proposta passou a guardar exatamente o
-  que aparece na tela e cada pessoa passou a ver só os dados da sua área. Foram cerca de 80 horas de trabalho, a maior
+  que aparece na tela e cada pessoa passou a ver só os dados da sua área. Foram cerca de 88 horas de trabalho, a maior
   parte nas datas e horas do sistema inteiro, no acesso por área e nas listas e buscas.</p>
 
   <h2>O que você já pode ver na tela</h2>
@@ -120,7 +121,7 @@
   </div>
 
   <div class="item">
-    <h3>Frota: o motorista registra a saída e o retorno pelo celular</h3>
+    <h3>Frota: o motorista registra pelo celular, e o gestor fecha o ciclo</h3>
     <p><span class="rotulo">Onde:</span> Frota → Portal do motorista (para o motorista, aparece como <em>Meu
     painel</em>).</p>
     <p><span class="rotulo">Antes:</span> o motorista preenchia o formulário de papel (saída, retorno e inspeção) e
@@ -132,6 +133,24 @@
     registros</em> mostra o que ele lançou. O motorista vê só o que é dele; o gestor continua vendo tudo, com a
     situação de cada checklist (OK, pendência ou incompleto) e o botão <em>Exportar planilha</em> em Relatórios, no
     formato da planilha de controle.</p>
+    <p>O formulário também passou a mostrar <strong>o último km registrado</strong> do veículo. Se o motorista digita um
+    número menor (900 em vez de 1.900), a tela avisa e pergunta antes de salvar. Na empilhadeira, que se mede por horas, o
+    campo vira <em>Horímetro atual</em>. Na avaria e no abastecimento, o botão <em>Tirar foto</em> guarda até 3 fotos junto
+    do lançamento, em vez de mandar pelo WhatsApp. Por quê: um km errado estragava a conta de consumo, e a foto solta se
+    perdia.</p>
+    <p><span class="rotulo">Para o gestor:</span></p>
+    <p><em>Frota → Perfis de acesso</em> (tela nova): para cada pessoa, escolhe-se <em>Consulta</em> (vê o painel, as
+    listas e os relatórios, sem gravar nada) ou <em>Motorista</em>. Antes, quem só acompanhava a frota caía no painel do
+    motorista, ou precisava virar administrador.</p>
+    <figure><img src="prints/frota-perfis-acesso.png" alt="Tela Perfis de acesso com o perfil de cada usuário no Frota"><figcaption>O perfil de cada pessoa no Frota é escolhido pela tela.</figcaption></figure>
+    <p><em>Frota → Checklist Diário</em>: quando o motorista marca uma falha (freio, pneu), o gestor toca <em>Tratar
+    pendência</em> e escreve o que foi feito. O aviso sai do painel na hora, e o motorista vê em <em>Meus registros</em>
+    que alguém cuidou. Antes, o aviso sumia sozinho depois de 7 dias, consertado ou não.</p>
+    <figure><img src="prints/frota-pendencia-tratada.png" alt="Checklist Diário com uma pendência marcada como tratada e o que foi feito"><figcaption>A pendência tratada mostra quando, por quem e o que foi feito.</figcaption></figure>
+    <p><em>Frota → Relatórios</em>: a tela diz qual período está valendo e soma tudo numa linha <em>Total</em>, igual à
+    planilha. As multas passaram a contar pela data da infração (antes, o custo de outubro somava multas de qualquer ano),
+    e a máquina aparece com as horas e o consumo em litros por hora.</p>
+    <figure><img src="prints/frota-relatorios-total.png" alt="Relatórios de Frota com o período, a linha Total e a coluna KM / Horímetro"><figcaption>Custo por veículo com o período aplicado e a linha Total.</figcaption></figure>
     <figure><img style="max-width:300px;display:inline-block;vertical-align:top;margin-right:12px" src="prints/portal-motorista.png" alt="Portal do motorista no celular com veículo, KM, data, horário e combustível"><img style="max-width:300px;display:inline-block;vertical-align:top" src="prints/portal-motorista-inspecao.png" alt="Portal do motorista no celular com os itens da inspeção marcados"><figcaption>O formulário de papel do motorista, agora no celular.</figcaption></figure>
   </div>
 
@@ -210,18 +229,18 @@
   cesta de requisição dos módulos de escritório voltou a enviar.</p>
 
   <h2>Para onde foi o tempo</h2>
-  <p>Cerca de <strong>80 horas</strong> de desenvolvimento nesta semana.</p>
+  <p>Cerca de <strong>88 horas</strong> de desenvolvimento nesta semana.</p>
   <div class="barra" role="img" aria-label="Divisão do tempo">
     <span style="width:6%;background:var(--tela)"></span>
     <span style="width:10%;background:var(--bastidores)"></span>
-    <span style="width:59%;background:var(--testes)"></span>
-    <span style="width:25%;background:var(--doc)"></span>
+    <span style="width:56%;background:var(--testes)"></span>
+    <span style="width:28%;background:var(--doc)"></span>
   </div>
   <div class="legenda">
     <span><i style="background:var(--tela)"></i>Telas que você usa — 6%</span>
     <span><i style="background:var(--bastidores)"></i>Motor do sistema — 10%</span>
-    <span><i style="background:var(--testes)"></i>Conferências automáticas — 59%</span>
-    <span><i style="background:var(--doc)"></i>Planejamento e manuais — 25%</span>
+    <span><i style="background:var(--testes)"></i>Conferências automáticas — 56%</span>
+    <span><i style="background:var(--doc)"></i>Planejamento e manuais — 28%</span>
   </div>
   <h3>Tempo por atividade</h3>
   <table>
@@ -234,8 +253,9 @@
     <tr><td>Compra e material ligados a uma OS, e fornecedor novo pelo F2</td><td>7 h</td></tr>
     <tr><td>Fila de separação, aviso de retirada parada e validade do lote</td><td>6 h</td></tr>
     <tr><td>Ferramentas: editar, manutenção e baixa</td><td>2 h</td></tr>
-    <tr><td>Frota: portal do motorista</td><td>1 h</td></tr>
-    <tr><th>Total</th><th>80 h</th></tr>
+    <tr><td>Frota: portal do motorista, perfis, km e horímetro, relatórios, fotos e pendências</td><td>7 h</td></tr>
+    <tr><td>Relatórios para a empresa</td><td>2 h</td></tr>
+    <tr><th>Total</th><th>88 h</th></tr>
   </table>
   <p>Mexer nas telas foi a parte rápida, mesmo com tudo o que apareceu de novo. A maior parte do tempo foi para as
   conferências automáticas: robôs que repetem centenas de situações a cada mudança — uma mensagem enviada às 22h30,
@@ -261,6 +281,9 @@
     para abrir a ficha de fornecedor por cima.</li>
     <li>No celular, abra <strong>Frota → Portal do motorista</strong> e veja o formulário de saída com os 12 itens da
     inspeção.</li>
+    <li>Abra <strong>Frota → Perfis de acesso</strong> e veja o perfil de cada pessoa. Depois, em <strong>Frota →
+    Checklist Diário</strong>, toque <em>Tratar pendência</em> num registro com pendência, e em <strong>Frota →
+    Relatórios</strong> escolha um período e veja a linha <em>Total</em>.</li>
   </ol>
 </main>
 </body>
