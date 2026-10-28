@@ -228,7 +228,10 @@ export function RegistroForm({ tipo, inicio, onCancelar, onSalvo, onAtualizar })
   useEffect(() => {
     if (tipo !== 'saida') return;
     const doServidor = (inicio.destinos || []).map(destinoEnxuto);
-    const lista = [...doServidor, ...criadosAquiRef.current.filter((c) => !doServidor.some((d) => mesmoId(d.id, c.id)))];
+    // Fase 5 (rev. C, TRAVA 1): o pino so vale ate o servidor devolver o destino UMA vez — dali em diante ele segue a prop. Sem soltar,
+    // o criado aqui e depois desativado pelo gestor voltava sempre a lista e cada Salvar repetia "Destino nao encontrado".
+    criadosAquiRef.current = criadosAquiRef.current.filter((c) => !doServidor.some((d) => mesmoId(d.id, c.id)));
+    const lista = [...doServidor, ...criadosAquiRef.current];
     setDestinos(lista);
     if (destinoIdRef.current && !lista.some((d) => mesmoId(d.id, destinoIdRef.current))) {
       setDestinoId('');
@@ -317,6 +320,11 @@ export function RegistroForm({ tipo, inicio, onCancelar, onSalvo, onAtualizar })
     } catch (err) {
       setErro(err.response?.data?.error || 'Não foi possível salvar. Confira a internet e tente de novo.');
       setPodeConfirmar(ehLeituraMenor(err));
+      // Etapa 8, Fase 5 (rev. C, TRAVA 1): o servidor disse que o destino escolhido nao existe mais — se ele estava "pinado" (criado
+      // aqui e ainda nao devolvido pelo inicio), solta, para a releitura abaixo o tirar da lista e avisar.
+      if (err.response?.status === 400 && err.response?.data?.error === 'Destino não encontrado') {
+        criadosAquiRef.current = criadosAquiRef.current.filter((c) => !mesmoId(c.id, destinoIdRef.current));
+      }
       // Fase5 (front 1 e 2): o servidor releu o veiculo (medicao trocada pelo gestor, km lancado por outro motorista) — a tela relê o
       // inicio para o rotulo e o "Ultimo registrado" baterem com a recusa, sem sair do formulario
       if (onAtualizar) onAtualizar();

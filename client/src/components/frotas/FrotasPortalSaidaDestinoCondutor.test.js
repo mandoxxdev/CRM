@@ -372,6 +372,65 @@ describe('RN-F8.34b — a lista local acompanha inicio.destinos (destino desativ
     expect(selectDestino().value).toBe('7');
   });
 
+  // Fase 5 (rev. C, TRAVA 1): o pino do criado aqui ficava para sempre — desativado pelo gestor, voltava a lista e o 400 se repetia.
+  test('Fase5-C1 o criado aqui, ja devolvido pelo servidor e depois desativado, sai da lista com o aviso', async () => {
+    api.post.mockResolvedValueOnce({ data: { id: 7, nome: 'Obra Norte', endereco: null, ativo: 1 } });
+    await montar(inicio());
+    await clicar(botao('+ Novo destino'));
+    digitar('novo_destino_nome', 'Obra Norte');
+    await clicar(botao('Adicionar'));
+    await montar(inicio({ destinos: [...DESTINOS, { id: 7, nome: 'Obra Norte', endereco: null }] })); // o servidor devolveu o 7
+    expect(selectDestino().value).toBe('7');
+    await montar(inicio({ destinos: [...DESTINOS] })); // o gestor desativou o 7
+    expect(opcoesDestino()).toEqual(['', '1', '2']);
+    expect(selectDestino().value).toBe('');
+    expect(container.textContent).toContain(MSG_DESATIVADO);
+  });
+
+  test('Fase5-C1 pelo portal: criado aqui, desativado antes de o inicio o trazer, o 400 solta o pino e a selecao zera', async () => {
+    await abrirSaida();
+    api.post.mockResolvedValueOnce({ data: { id: 7, nome: 'Obra Norte', endereco: null, ativo: 1 } });
+    await clicar(botao('+ Novo destino'));
+    digitar('novo_destino_nome', 'Obra Norte');
+    await clicar(botao('Adicionar'));
+    expect(selectDestino().value).toBe('7');
+    digitar('veiculo_id', String(COMUM.id));
+    digitar('km', '1200');
+    await responderTudo();
+    api.post.mockRejectedValueOnce({ response: { status: 400, data: { error: 'Destino não encontrado' } } });
+    respostaInicio = inicio({ destinos: [...DESTINOS] }); // o 7 nunca voltou: o gestor o desativou antes
+    await enviar();
+    expect(opcoesDestino()).toEqual(['', '1', '2']);
+    expect(selectDestino().value).toBe('');
+    expect(container.textContent).toContain(MSG_DESATIVADO);
+  });
+
+  test('Fase5-C2 409 DESTINO_DUPLICADO sem a linha no corpo (servidor antigo): bloco aberto com a mensagem, selecao nao muda', async () => {
+    api.post.mockRejectedValueOnce({ response: { status: 409, data: { error: 'Destino já cadastrado', code: 'DESTINO_DUPLICADO' } } });
+    await montar(inicio());
+    digitar('destino_id', '1');
+    await clicar(botao('+ Novo destino'));
+    digitar('novo_destino_nome', 'obra x');
+    await clicar(botao('Adicionar'));
+    expect(bloco()).not.toBeNull();
+    expect(bloco().textContent).toContain('Destino já cadastrado');
+    expect(selectDestino().value).toBe('1');
+  });
+
+  test('Fase5-C3 o gestor liga "liberado" no meio: o 400 do condutor rele o inicio e o campo aparece, sem "Confirmar mesmo assim"', async () => {
+    api.post.mockRejectedValueOnce({ response: { status: 400, data: { error: 'Informe quem vai dirigir (condutor)' } } });
+    await abrirSaida();
+    digitar('veiculo_id', String(COMUM.id));
+    digitar('km', '1200');
+    await responderTudo();
+    expect(campo('condutor_nome')).toBeNull();
+    respostaInicio = inicio({ veiculos: [{ ...COMUM, uso_funcionarios: 1 }, LIBERADO] });
+    await enviar();
+    expect(container.querySelector('[role="alert"]').textContent).toBe('Informe quem vai dirigir (condutor)');
+    expect(campo('condutor_nome')).not.toBeNull();
+    expect(botao('Confirmar mesmo assim')).toBeUndefined();
+  });
+
   test('pelo portal: 400 "Destino não encontrado" rele o inicio (sem o destino) e a selecao zera com o aviso', async () => {
     api.post.mockRejectedValueOnce({ response: { status: 400, data: { error: 'Destino não encontrado' } } });
     await abrirSaida();
