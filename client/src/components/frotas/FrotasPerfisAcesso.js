@@ -5,6 +5,10 @@
  * Contrato: GET/PUT /api/frotas/perfis-usuario (plano docs/superpowers/plans/2026-10-23-frotas-etapa2-perfis-pela-tela.md, "Contrato
  * depois da Fase 2"). A regua do perfil efetivo e a do SERVIDOR (perfil_efetivo/origem vem prontos): a tela nao recalcula nada.
  * Quem decide continua sendo o servidor — a pagina aberta por quem nao e ADMIN_FROTA mostra o `error` dele (Fase 2, achado 7).
+ *
+ * Etapa 8 (G3, RN-F8.09–11): o seletor ganha "Administrador de Frota". O servidor distingue `origem 'forcado'` (superadmin/role admin —
+ * nao se mexe por aqui, etiqueta) de `'admin_modulo'` (admin_modulos com 'frota' — se da e se tira por esta tela, seletor). Dar
+ * Administrador pede `window.confirm`; tirar, nao. Contrato: docs/superpowers/plans/2026-10-28-frotas-etapa8-admin-destinos-condutor.md.
  */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'react-toastify';
@@ -25,28 +29,32 @@ const DESCRICOES = Object.freeze({
   ADMIN_FROTA: 'Faz tudo no módulo, inclusive dar perfis.',
 });
 
-const TEXTO_FORCADO = 'Para dar outro perfil, remova a condição de administrador no cadastro de usuário.';
+// Etapa 8 (RN-F8.09): so superadmin e administrador do sistema ficam fora desta tela; o administrador do modulo agora se tira aqui.
+const TEXTO_FORCADO = 'Superadmin ou administrador do sistema: não se altera por esta tela.';
+const AJUDA_ADMIN = 'Administrador de Frota pode ser dado e tirado aqui; superadmin e administrador do sistema, não.';
 const TOAST_REMOVIDO = 'Perfil removido — o usuário volta ao padrão (Motorista)';
 const AVISO_VIAGEM_ABERTA = 'Tem saída sem retorno: como Consulta, não consegue registrar o retorno. Feche a viagem em Frota → Viagens '
   + 'ou volte o perfil para Motorista.';
+const confirmacaoAdmin = (nome) => `Dar Administrador de Frota a ${nome}? A pessoa passa a fazer tudo no módulo, inclusive dar perfis.`;
 
-// B29: a tela oferece so "Motorista (padrao)" (value '' -> PUT null) e "Consulta". Uma linha MOTORISTA explicita tem o mesmo efeito do
-// padrao e aparece como ele.
+// B29: "Motorista (padrao)" (value '' -> PUT null) e "Consulta"; uma linha MOTORISTA explicita tem o mesmo efeito do padrao e aparece
+// como ele. Etapa 8 (RN-F8.09): "Administrador de Frota" entra como opcao normal (o servidor grava `frota` em admin_modulos).
 const OPCOES = [
   { value: '', label: 'Motorista (padrão)' },
   { value: 'CONSULTA', label: 'Consulta' },
+  { value: 'ADMIN_FROTA', label: 'Administrador de Frota' },
 ];
 
 function valorDoSeletor(u) {
+  if (u.origem === 'admin_modulo') return 'ADMIN_FROTA';
   if (!u.perfil_explicito || u.perfil_explicito === 'MOTORISTA') return '';
   return u.perfil_explicito;
 }
 
-// Fase 2 (achado 6 e RN-F2.07): valor gravado fora da lista (ex.: 'consulta' minusculo por SQL) ou ADMIN_FROTA sobrando num usuario
-// nao forcado aparece como opcao extra, para o gestor ver o que esta gravado e corrigir pelo PUT.
+// Fase 2 (achado 6 e RN-F2.07): valor gravado fora da lista (ex.: 'consulta' minusculo por SQL) aparece como opcao extra, para o gestor
+// ver o que esta gravado e corrigir pelo PUT. Etapa 8: ADMIN_FROTA deixou de ser caso especial — e uma das OPCOES.
 function opcaoExtra(valor) {
   if (!valor || OPCOES.some((o) => o.value === valor)) return null;
-  if (valor === 'ADMIN_FROTA') return { value: valor, label: 'Administrador de Frota (gravado à parte)' };
   return { value: valor, label: `${valor} (valor inválido — escolha outro)` };
 }
 
@@ -77,6 +85,9 @@ const FrotasPerfisAcesso = () => {
 
   const alterar = async (usuario, valor) => {
     const perfil = valor === '' ? null : valor;
+    // RN-F8.10: dar Administrador pede confirmacao; tirar (qualquer outra opcao), nao. O <select> e controlado: sem mudar o estado,
+    // o React devolve o valor anterior ao DOM — nao ha o que "voltar" na mao.
+    if (perfil === 'ADMIN_FROTA' && !window.confirm(confirmacaoAdmin(usuario.nome))) return;
     setSalvandoId(usuario.id);
     try {
       const res = await api.put(`/frotas/perfis-usuario/${usuario.id}`, { perfil });
@@ -99,6 +110,7 @@ const FrotasPerfisAcesso = () => {
   }, [usuarios, busca]);
 
   const celulaPerfil = (u) => {
+    // So 'forcado' (superadmin/administrador do sistema) fica sem seletor; 'admin_modulo' e opcao normal (RN-F8.09).
     if (u.origem === 'forcado') {
       return (
         <>
@@ -147,6 +159,7 @@ const FrotasPerfisAcesso = () => {
           Ter acesso ao módulo Frota (no cadastro de usuário) permite abrir as telas; o perfil abaixo diz o que a pessoa faz dentro delas.
         </p>
         <p className="frotas-ajuda">Quem não tem perfil definido entra como Motorista.</p>
+        <p className="frotas-ajuda">{AJUDA_ADMIN}</p>
       </FrotasPageHeader>
 
       {erro ? (
