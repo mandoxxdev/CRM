@@ -69,9 +69,26 @@ async function listarPerfis(db) {
  * RN-F2.03..05 e RN-F2.13. Ordem das conferencias: 404 -> 400 -> 409 forcado -> 409 proprio (o 409 so fala de quem pediu um perfil
  * valido). `quemPede` = o req.user (sem ele — chamada de servico — a conferencia do proprio perfil nao se aplica).
  */
+// Fase 5 (rev. A, achados 2 e 3): definirPerfil le admin_modulos e grava depois — dois PUTs simultaneos no mesmo usuario respondiam
+// "Consulta" e deixavam o banco administrador. Fila por usuario, em memoria (premissa de UM processo, como a fila de viagens).
+const filasPorUsuario = new Map();
+function naFilaDoUsuario(id, fn) {
+  const anterior = filasPorUsuario.get(id) || Promise.resolve();
+  const atual = anterior.catch(() => {}).then(fn);
+  const fim = atual.catch(() => {});
+  filasPorUsuario.set(id, fim);
+  fim.then(() => { if (filasPorUsuario.get(id) === fim) filasPorUsuario.delete(id); });
+  return atual;
+}
+
 async function definirPerfil(db, usuarioIdParam, corpo, quemPede = null) {
   const idTexto = String(usuarioIdParam ?? '');
   if (!/^\d+$/.test(idTexto) || Number(idTexto) <= 0) throw erro(404, MSG_USUARIO_NAO_ENCONTRADO);
+  return naFilaDoUsuario(Number(idTexto), () => definirPerfilNaFila(db, idTexto, corpo, quemPede));
+}
+
+async function definirPerfilNaFila(db, idTexto, corpo, quemPede) {
+  // O oculto ativo e aceito (a lista o esconde, o PUT nao) — decisao da Etapa 2 (RN-F2.05), igual ao almoxarifado
   const usuario = await dbGet(db, `
     SELECT u.id, u.role, u.is_superadmin, u.admin_modulos FROM usuarios u WHERE u.id = ? AND u.ativo = 1`, [Number(idTexto)]);
   if (!usuario) throw erro(404, MSG_USUARIO_NAO_ENCONTRADO);
@@ -95,7 +112,7 @@ async function definirPerfil(db, usuarioIdParam, corpo, quemPede = null) {
     // RN-F8.02: a fonte e admin_modulos — 'frota' entra no fim, sem repetir, preservando os outros modulos. A linha espelho usa o
     // MESMO SQL do syncModuleAdminProfiles (ramo frota), para o sync do cadastro de usuario, rodado depois com a lista atual, nao
     // ter o que desfazer (RN-F8.08).
-    const lista = modulos.includes(MODULO_FROTA) ? modulos : [...modulos, MODULO_FROTA];
+    const lista = [...new Set([...modulos, MODULO_FROTA])]; // rev. A, nota 11: deduplica o que veio gravado por fora
     await dbRun(db, 'UPDATE usuarios SET admin_modulos = ? WHERE id = ?', [JSON.stringify(lista), usuario.id]);
     await dbRun(db, `INSERT INTO perfil_frota_usuario (usuario_id, perfil, updated_at)
          VALUES (?, 'ADMIN_FROTA', CURRENT_TIMESTAMP)
@@ -103,21 +120,23 @@ async function definirPerfil(db, usuarioIdParam, corpo, quemPede = null) {
     return { usuario_id: usuario.id, perfil_explicito: PERFIS.ADMIN_FROTA, perfil_efetivo: PERFIS.ADMIN_FROTA, origem: 'admin_modulo' };
   }
 
-  let admin_modulos = usuario.admin_modulos;
-  if (antes.origem === 'admin_modulo') {
-    // RN-F8.03: tirar o Administrador de Frota = tirar 'frota' da lista (os outros modulos ficam). Quem nao e admin_modulo nao tem a
-    // coluna reescrita. A linha espelho ADMIN_FROTA some logo abaixo: o upsert a troca por CONSULTA/MOTORISTA e o `null` apaga a
-    // linha inteira — um DELETE so dela aqui (o do sync) nao teria efeito observavel (G1: a sabotagem de tira-lo nao derrubou nada).
-    const lista = modulos.filter((m) => m !== MODULO_FROTA);
-    admin_modulos = JSON.stringify(lista);
-    await dbRun(db, 'UPDATE usuarios SET admin_modulos = ? WHERE id = ?', [admin_modulos, usuario.id]);
-  }
-
+  // Fase 5 (rev. B, achado 3): a linha PRIMEIRO, admin_modulos depois. Na ordem inversa, uma falha entre as duas gravacoes deixava
+  // admin_modulos sem frota e a linha ADMIN_FROTA de pe — que sozinha ainda da administrador. Assim, falhando no meio, a pessoa fica
+  // com o perfil novo na linha e frota na lista: o GET mostra Administrador e o gestor tenta de novo.
   if (voltarAoPadrao) {
     await dbRun(db, 'DELETE FROM perfil_frota_usuario WHERE usuario_id = ?', [usuario.id]);
   } else {
     await dbRun(db, `INSERT INTO perfil_frota_usuario (usuario_id, perfil, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
       ON CONFLICT(usuario_id) DO UPDATE SET perfil = excluded.perfil, updated_at = CURRENT_TIMESTAMP`, [usuario.id, perfil]);
+  }
+
+  let admin_modulos = usuario.admin_modulos;
+  if (antes.origem === 'admin_modulo') {
+    // RN-F8.03: tirar o Administrador de Frota = tirar 'frota' da lista (os outros modulos ficam). Quem nao e admin_modulo nao tem a
+    // coluna reescrita. A linha espelho ADMIN_FROTA ja saiu acima (upsert troca, `null` apaga) — sem DELETE separado (B83).
+    const lista = modulos.filter((m) => m !== MODULO_FROTA);
+    admin_modulos = JSON.stringify(lista);
+    await dbRun(db, 'UPDATE usuarios SET admin_modulos = ? WHERE id = ?', [admin_modulos, usuario.id]);
   }
   const explicito = voltarAoPadrao ? null : perfil;
   const { efetivo, origem } = classificarPerfilFrota({ ...usuario, admin_modulos }, explicito);

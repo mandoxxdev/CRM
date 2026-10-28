@@ -97,8 +97,10 @@ const MSG_CONDUTOR_LONGO = 'Condutor: no máximo 120 caracteres';
  */
 function lerCondutor(v) {
   if (typeof v !== 'string') return null;
-  const t = v.trim();
-  if (!t) return null;
+  // Fase 5 (rev. A, achado 5): controle e largura zero fora, espacos internos colapsados (como o nome do destino) — um U+200B sozinho
+  // cumpria o "condutor obrigatorio", e uma quebra de linha ia para a planilha. Sem nenhuma letra ou digito = ausente.
+  const t = v.replace(/[\u0000-\u001F\u007F​-‍⁠﻿]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!t || !/[\p{L}\p{N}]/u.test(t)) return null;
   if (t.length > 120) throw erro(400, MSG_CONDUTOR_LONGO);
   return t;
 }
@@ -1121,9 +1123,10 @@ function normalizarEnderecoDestino(v) {
 async function traduzirDestinoDuplicado(db, e, nome) {
   if (!e || e.code !== 'SQLITE_CONSTRAINT' || !/frotas_destinos\.nome/.test(String(e.message))) return e;
   const existente = await dbGet(db, 'SELECT * FROM frotas_destinos WHERE nome = ? COLLATE NOCASE AND ativo = 1 ORDER BY id LIMIT 1', [nome]);
-  if (!existente) return e;
   const err = erro(409, MSG_DESTINO_DUP, 'DESTINO_DUPLICADO');
-  err.extra = { destino: existente };
+  // Fase 5 (rev. A, achado 6): o outro foi desativado entre o INSERT e esta releitura — continua 409 (sem a linha), nunca 500 cru
+  // rev. B, nota 8: so o que a tela usa — nao o criado_por de outra pessoa
+  if (existente) err.extra = { destino: { id: existente.id, nome: existente.nome, endereco: existente.endereco, ativo: existente.ativo } };
   return err;
 }
 
@@ -1161,7 +1164,13 @@ async function updateDestino(db, id, body) {
   const b = body || {};
   const nome = b.nome === undefined ? current.nome : normalizarNomeDestino(b.nome);
   const endereco = b.endereco === undefined ? current.endereco : normalizarEnderecoDestino(b.endereco);
-  const ativo = b.ativo === undefined ? bit01(current.ativo) : bit01(b.ativo);
+  // Fase 5 (rev. A, achado 4): null/'' (a opcao vazia "Selecione..." do formulario) mantem; fora de 0/1 -> 400. Antes, tudo que nao
+  // era 1 desativava o destino em silencio.
+  let ativo = bit01(current.ativo);
+  if (b.ativo !== undefined && b.ativo !== null && b.ativo !== '') {
+    if (![0, 1, '0', '1', true, false].includes(b.ativo)) throw erro(400, 'Status inválido. Use 1 (ativo) ou 0 (desativado).');
+    ativo = bit01(b.ativo);
+  }
   try {
     await dbRun(db, 'UPDATE frotas_destinos SET nome = ?, endereco = ?, ativo = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [nome, endereco, ativo, id]);
