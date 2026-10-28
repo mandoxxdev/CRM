@@ -136,8 +136,11 @@ const FrotasEntityPage = ({ entityKey }) => {
     }
   };
 
+  // Frota Etapa 7 (RN-F7.01/02): o render de coluna recebe o contexto da lista — o recarregar e se quem olha e o gestor
+  // (ADMIN_FROTA; o `podeAlterar` acima deixa o MOTORISTA passar). Os renders existentes ignoram o 2o argumento.
+  const ehGestor = perfilFrota(getEffectiveUser(user)) === PERFIS_FROTA.ADMIN_FROTA;
   const renderCell = (col, row) => {
-    if (col.render) return col.render(row);
+    if (col.render) return col.render(row, { recarregar: loadRows, ehGestor });
     const val = col.format ? col.format(row) : (row[col.key] ?? '-');
     if (col.badge) {
       const cls = String(row[col.key] || '').toLowerCase().replace(/\s/g, '_');

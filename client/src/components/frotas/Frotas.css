@@ -584,6 +584,13 @@
 .frota-fotos-mais .frota-fotos-botao-mais { min-height: 40px; padding: 6px 14px; font-size: 0.9rem; }
 .frota-fotos-coluna { display: inline-flex; align-items: center; gap: 6px; }
 .frota-fotos-mais-n { font-weight: 600; font-size: 0.85rem; }
+/* Frota Etapa 7 (D14): "Remover foto" do gestor na coluna, e a janela com todas as fotos do lancamento. */
+.frota-fotos-remover-gestor {
+  background: none; border: 1px solid #d1d5db; border-radius: 6px; padding: 2px 8px; font-size: 0.8rem; color: #b91c1c; cursor: pointer;
+}
+.frota-fotos-remover-gestor:hover { background: #fef2f2; border-color: #fca5a5; }
+.frota-fotos-janela .frota-fotos-lista { margin: 0; }
+.frota-fotos-janela .frota-fotos-miniatura { width: 120px; height: 120px; }
 
 /* Frota Etapa 6 (RN-F6.06/07): pendencia tratada pelo gestor — verde discreto, ao lado das situacoes. */
 .frotas-badge-situacao-tratada { background: rgba(100, 116, 139, 0.15); color: #15803d; }

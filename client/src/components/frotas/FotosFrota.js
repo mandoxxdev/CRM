@@ -6,8 +6,12 @@
  *  - enviarFotosDoLancamento: depois do 201, sobe uma por vez; devolve o texto do aviso se alguma falhou (ou null).
  *  - MiniaturasFotos / BotaoMaisFoto: "Meus registros" (ver, remover, reenviar).
  *  - ColunaFotos: lista do gestor, so a 1a miniatura + "+N" (cada miniatura e um GET no limite de requisicoes — B58).
+ *  - Frota Etapa 7 (RN-F7.01..07, D14): para o gestor a ColunaFotos ganha "Remover foto", que abre a JanelaFotosDoLancamento com
+ *    todas as fotos (MiniaturasFotos com remover). A janela guarda COPIA LOCAL das fotos e so recarrega a lista ao fechar: o
+ *    `loadRows` da pagina generica troca a tabela por "Carregando..." e desmontaria a celula (e a janela) a cada remocao (Fase 2 T-1).
+ *    O perfil vem da pagina (`ehGestor` no contexto do render) — nada de TratarPendencia e importado aqui (ciclo, Fase 2 T-2).
  */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'react-toastify';
 import { enviarFotoFrota, removerFotoFrota } from '../../utils/frotasApi';
 import { resolverUrlAssinada } from '../../utils/resolveUploadAssinadoUrl';
@@ -131,8 +135,11 @@ export async function enviarFotosDoLancamento(entidade, entidadeId, fotos) {
   return falhas ? avisoDeFalhaDasFotos(falhas, primeiraMensagem) : null;
 }
 
-/** Miniaturas de um lancamento ("Meus registros"); cada uma abre a foto em outra aba e, com `onRemovida`, tem "Remover foto". */
-export function MiniaturasFotos({ anexos, onRemovida }) {
+/**
+ * Miniaturas de um lancamento ("Meus registros" e a janela do gestor); cada uma abre a foto em outra aba e, com `onRemovida`, tem
+ * "Remover foto". Etapa 7: `onRemovida(id)` recebe o id da foto e `onFalha(err, id)` (opcional) e chamado depois do toast de erro.
+ */
+export function MiniaturasFotos({ anexos, onRemovida, onFalha }) {
   const lista = Array.isArray(anexos) ? anexos : [];
   const [removendo, setRemovendo] = useState(null);
   if (!lista.length) return null;
@@ -143,9 +150,10 @@ export function MiniaturasFotos({ anexos, onRemovida }) {
     try {
       await removerFotoFrota(id);
       toast.success('Foto removida');
-      if (onRemovida) onRemovida();
+      if (onRemovida) onRemovida(id);
     } catch (err) {
       toast.error(err?.response?.data?.error || MSG_FALHA_REMOVER);
+      if (onFalha) onFalha(err, id);
     } finally {
       setRemovendo(null);
     }
@@ -192,11 +200,57 @@ export function BotaoMaisFoto({ entidade, entidadeId, quantas, onEnviada }) {
   );
 }
 
-/** Coluna "Fotos" do gestor: so a 1a miniatura (lazy) e "+N" com link para a 2a; sem foto, "-" (RN-F5.11, Fase 2 18). */
-export function ColunaFotos({ anexos }) {
+/**
+ * Frota Etapa 7 (RN-F7.03..07): a janela "Fotos de <placa>" do gestor, com todas as fotos do lancamento e "Remover foto" em cada.
+ * Guarda copia local das fotos: no 200 (e no 404 — a foto ja nao existia) tira a foto da copia; esvaziou, fecha sozinha. 403 (o perfil
+ * mudou no meio) fecha. `onFechar(mudou)`: quem abriu recarrega a lista so se alguma foto saiu.
+ */
+export function JanelaFotosDoLancamento({ titulo, anexos, onFechar }) {
+  const [lista, setLista] = useState(() => (Array.isArray(anexos) ? anexos : []));
+  const mudouRef = useRef(false);
+  const fechar = useCallback(() => onFechar(mudouRef.current), [onFechar]);
+  const tirar = useCallback((id) => {
+    mudouRef.current = true;
+    setLista((atual) => atual.filter((a) => a.id !== id));
+  }, []);
+  const falhou = useCallback((err, id) => {
+    const status = err?.response?.status;
+    if (status === 404) tirar(id);
+    else if (status === 403) onFechar(true); // a tela esta velha: fecha E recarrega (RN-F7.07)
+  }, [tirar, onFechar]);
+  useEffect(() => { if (!lista.length) fechar(); }, [lista, fechar]);
+
+  return (
+    <div className="frotas-modal-overlay">
+      <div className="frotas-modal frota-fotos-janela" role="dialog" aria-label={titulo} data-testid="janela-fotos">
+        <div className="frotas-modal-header"><h2>{titulo}</h2></div>
+        <div className="frotas-modal-body">
+          <MiniaturasFotos anexos={lista} onRemovida={tirar} onFalha={falhou} />
+        </div>
+        <div className="frotas-modal-footer">
+          <button type="button" className="frotas-btn frotas-btn-secondary" onClick={fechar}>Fechar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Coluna "Fotos" do gestor: so a 1a miniatura (lazy) e "+N" com link para a 2a; sem foto, "-" (RN-F5.11, Fase 2 18).
+ * Etapa 7 (RN-F7.01/02): com `ehGestor` e `onRemovida` (o recarregar da lista, vindos do contexto do render da pagina generica),
+ * acrescenta "Remover foto", que abre a janela. Consulta e Motorista nao recebem `ehGestor` e veem a coluna como antes.
+ */
+export function ColunaFotos({ anexos, titulo, ehGestor, onRemovida }) {
+  // Hooks antes do `return '-'` (regra dos hooks — Fase 2 achado 3).
+  const [aberta, setAberta] = useState(false);
+  const fechar = useCallback((mudou) => {
+    setAberta(false);
+    if (mudou && onRemovida) onRemovida();
+  }, [onRemovida]);
   const lista = Array.isArray(anexos) ? anexos : [];
   if (!lista.length) return '-';
   const [primeira, segunda] = lista;
+  const podeRemover = !!(ehGestor && onRemovida);
   return (
     <span className="frota-fotos-coluna">
       <a href={urlDaFoto(primeira)} target="_blank" rel="noopener noreferrer" className="frota-fotos-link">
@@ -207,6 +261,10 @@ export function ColunaFotos({ anexos }) {
           {`+${lista.length - 1}`}
         </a>
       )}
+      {podeRemover && (
+        <button type="button" className="frota-fotos-remover-gestor" onClick={() => setAberta(true)}>Remover foto</button>
+      )}
+      {podeRemover && aberta && <JanelaFotosDoLancamento titulo={titulo} anexos={lista} onFechar={fechar} />}
     </span>
   );
 }

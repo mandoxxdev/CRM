@@ -38,7 +38,14 @@ export function fmtConsumo(r) {
 }
 
 // Frota Etapa 5 (RN-F5.11): coluna Fotos nas listas Checklist e Abastecimentos — so a 1a miniatura + "+N" (B58); sem foto, "-".
-const COLUNA_FOTOS = { key: 'anexos', label: 'Fotos', render: (r) => <ColunaFotos anexos={r.anexos} /> };
+// Frota Etapa 7 (RN-F7.01, D14): o gestor ganha "Remover foto" — o perfil e o recarregar vem do contexto do render (FrotasEntityPage).
+const COLUNA_FOTOS = {
+  key: 'anexos',
+  label: 'Fotos',
+  render: (r, ctx) => (
+    <ColunaFotos anexos={r.anexos} titulo={`Fotos de ${r.placa || '-'}`} ehGestor={ctx?.ehGestor} onRemovida={ctx?.recarregar} />
+  ),
+};
 
 const fmtBrl = (v) =>new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
