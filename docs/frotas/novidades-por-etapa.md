@@ -204,6 +204,9 @@ ORDER BY c.data_checklist;
 | B70 | F6 (Fase 5) | No painel, entre os alertas de pendência, **a mais antiga vem primeiro** | a mais nova primeiro (como era) | o painel corta em 15: com a mais nova primeiro, a falha mais atrasada era justamente a que sumia do painel |
 | B71 | F6 (Fase 5) | Depois de *"Esta pendência já foi tratada"* ou *"Registro não encontrado"* a janela fecha e a lista (ou o painel) recarrega; com erro de internet, a janela fica aberta | manter a janela aberta sempre | o 409/404 quer dizer que a tela está velha; sem recarregar, o botão continuava lá e cada tentativa dava o mesmo erro |
 | B72 | F6 (fechamento) | **Depois da Etapa 6, o módulo está pronto para uso; não abrir etapa grande nova.** O que sobra depende do André ou é pequeno (backlog no plano da Etapa 6) | inventar uma Etapa 7 de valor baixo | o ciclo do motorista (registrar → foto → alerta → tratar → ver) está fechado; cadastro dos 4 veículos e seção 3 do formulário dependem de dados dele; o resto é ajuste pequeno |
+| B73 | F7 | **A Etapa 7 é o item pequeno do backlog (D14), numerado como etapa** — plano, spec e fechamento como as outras, mas uma task só de código e nada no servidor | fazer o botão "por fora", sem plano nem registro; ou esperar o André decidir o que vem | é o único item do backlog que não depende dele; numerar mantém a trilha (plano, spec, retro). Não contraria o B72: não é etapa **grande** |
+| B74 | F7 | **Só o Administrador de Frota** vê **Remover foto** nas listas; o Motorista (que também pode apagar as dele pelo servidor) continua removendo em **Meus registros** | botão também para o motorista na lista do gestor | um caminho por perfil; a lista do gestor não é a tela do motorista. Mudar é tirar uma condição na coluna |
+| B75 | F7 | **A janela guarda a própria lista de fotos e só recarrega a lista da tela ao Fechar** (e quando a última foto sai). Removeu 3 fotos: 3 confirmações, 1 janela, 1 recarga | recarregar a lista a cada remoção (como a Etapa 6 faz ao tratar) | recarregar troca a tabela inteira por "Carregando..." e **fecharia a janela** a cada foto — o gestor abriria a janela 3 vezes para remover 3 fotos. Achado da revisão do plano (Fase 2) |
 | B44 | F3 (fechamento) | **Próxima etapa = relatórios fechados**: multas no período (A7), a máquina no relatório (horímetro e consumo em litros por hora) e a aba de multas na planilha | foto da avaria/cupom; seção 3 do formulário | deixa a feature 10 (Relatórios) 🟢 sem infraestrutura nova; foto exige anexo (guardar arquivo, tamanho, quem vê), que é etapa própria; a seção 3 depende da folha inteira |
 
 ### C — furos conhecidos em operação
@@ -259,6 +262,8 @@ ORDER BY c.data_checklist;
   ficar fora dos 15 (atrás de documento e CNH vencidos). O cartão **Alertas ativos** conta todos; a lista **Checklist Diário** mostra
   todas as pendências, com o botão de tratar.
 - **C20 — para corrigir o texto de um tratamento**, use **Desfazer tratamento** e trate de novo (não há editar).
+- **C21 — a janela de fotos do gestor mostra o que a lista tinha quando ela abriu.** Se outra pessoa removeu uma foto nesse meio tempo, ela
+  ainda aparece; ao tentar remover, *"Foto não encontrada"* e ela some da janela. A lista por trás só se atualiza ao **Fechar** (B75).
 
 ### D — limitações declaradas (cortes de escopo)
 
@@ -284,8 +289,9 @@ ORDER BY c.data_checklist;
 - **D12 — sem alerta de consumo baixo da máquina.** O alerta compara km/L com o "consumo esperado (km/L)" do cadastro; não existe
   "consumo esperado em L/h". Pôr é um campo no cadastro e um ramo no alerta.
 - **D13 — "Meus registros" do motorista não mostra consumo** (nem km/L, nem L/h). Só o gestor e o Consulta veem consumo.
-- **D14 — o gestor não remove uma foto pela lista** (B59). Remove o motorista, em Meus registros; ou o gestor exclui o lançamento
-  inteiro (as fotos vão junto).
+- **D14 — o gestor não removia uma foto pela lista (resolvido na Etapa 7).** *Dizia: "Remove o motorista, em Meus registros; ou o gestor
+  exclui o lançamento inteiro"* — desde a Etapa 7 o gestor tem **Remover foto** na coluna **Fotos** de **Checklist Diário** e
+  **Abastecimentos** (B74, B75). Continua fora: saber **quem** removeu (sem trilha).
 - **D15 — a foto é do registro, não de cada avaria.** Um registro com duas avarias tem até 3 fotos no total, sem dizer qual é de qual.
   A tela antiga **Novo Checklist** e o formulário de abastecimento do gestor não mandam foto; a planilha e os relatórios não levam foto.
 - **D16 — o tratamento é do registro inteiro**: um registro com falha nos freios e uma avaria é tratado de uma vez, com um texto só.
@@ -348,6 +354,12 @@ ORDER BY c.data_checklist;
 - **E21 — o limite de 1.000 do texto do tratamento conta como o navegador conta**: um emoji vale 2. A tela e o servidor contam igual (a
   caixa de texto para de aceitar no mesmo ponto em que o servidor recusaria).
 - **E22 — Verificação final da Etapa 6, rodada em 2026-10-23 na ponta da etapa (depois de `8fa7ece2`), sozinha (sem revisores com servidor ativo):** `npm run test:api` **557/557 arquivos OK**; `test:almoxarifado` **44/44**; `test:validation` **4/4**; `test:safealter` **3/3**; `test:sqlite` **16/16**; tela **199 suítes, 2711/2711 testes**; `build` com `CI=true` **"Compiled successfully."**. Frota no servidor: 19 arquivos `frotas*`, **197 passaram, 0 falharam** (`frotasPendencia` 22, `frotasPendenciaIntegracao` 2); Frota na tela: 13 suítes, **170/170** (`FrotasPendencia` 24). Uma rodada antes, logo depois da T1: 556/556.
+- **E23 — o roteiro da Etapa 7 não foi percorrido clicando no navegador** por quem escreveu este fechamento (o banco local tem 0 veículos).
+  Foi escrito lendo o código e os testes de tela, que simulam o servidor (os textos literais e o recarregar são conferidos neles).
+- **E24 — verificação final da Etapa 7, rodada em 2026-10-28 depois de `7bfcec6e`, sozinha:** `npm run test:api` **557/557 arquivos OK**
+  (nada em `server/` mudou); `test:almoxarifado` **44/44**; `test:validation` **4/4**; `test:safealter` **3/3**; `test:sqlite` **16/16**;
+  tela **200 suítes, 2725/2725 testes**; `build` com `CI=true` **"Compiled successfully."**. Frota na tela: 14 suítes, **184/184**
+  (`FrotasRemoverFotoGestor` 14). Controle positivo: 8 sabotagens, cada uma derrubou a asserção que a nomeia.
 - **E10 — o teclado do celular no campo de horímetro** (`inputMode="decimal"`, com vírgula ou ponto conforme o aparelho) não foi
   conferido num celular de verdade.
 
@@ -858,6 +870,66 @@ operação"*. Registro **OK** ou **INCOMPLETO** não tem o botão (por chamada d
 
 ---
 
+## Etapa 7 — O gestor remove uma foto pela lista (2026-10-28)
+
+Desde a Etapa 5 o motorista fotografa a avaria e o cupom, e o gestor vê a miniatura nas listas **Checklist Diário** e
+**Abastecimentos**. Mas uma foto errada (o cupom de outro carro, uma foto do chão) ficava lá: o gestor só podia **excluir o lançamento
+inteiro** (perdendo km, horário e itens) ou ligar para o motorista pedir que removesse em Meus registros. Agora, na coluna **Fotos**, o
+gestor toca **Remover foto**, vê todas as fotos daquele lançamento numa janela e remove a que quiser, com confirmação. Nada muda para o
+motorista nem por baixo: o servidor já aceitava o gestor apagar desde a Etapa 5 — faltava o botão.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A coluna **Fotos** só mostrava a 1ª miniatura e *"+1"*/*"+2"* | Para o gestor, ao lado disso, o botão **Remover foto** |
+| Para tirar uma foto errada, o gestor excluía o lançamento inteiro ou pedia ao motorista | Janela *"Fotos de (placa)"* com **todas** as fotos do lançamento e **Remover foto** em cada |
+| — | Removeu a última? A janela fecha sozinha e a coluna volta a *"-"* |
+| — | Fechou a janela depois de remover? A lista recarrega e mostra o que sobrou |
+
+### As regras, com o cenário exato
+
+**Preparação.** Como *Ana* (motorista ligada a um usuário), uma **Inspeção** de *AAA1A11* com **3 fotos** e um **Abastecimento** com
+**1 foto** (roteiro da Etapa 5). Um usuário com perfil **Consulta**.
+
+**1. O botão.** Como administrador, **Frota → Checklist Diário**: na linha da inspeção da Ana, a coluna **Fotos** mostra a 1ª miniatura,
+*"+2"* e o botão **Remover foto**. A linha sem foto mostra só *"-"*, sem botão. O mesmo em **Frota → Abastecimentos**.
+
+**2. Quem vê.** Como **Consulta**: a miniatura e o *"+2"*, **sem** o botão. Como *Ana*, abrindo a mesma lista: idem — ela remove as dela
+em **Meus registros**.
+
+**3. A janela.** **Remover foto** → janela *"Fotos de AAA1A11"*, com as **3** miniaturas (cada uma abre a foto em outra aba), um
+**Remover foto** embaixo de cada e o botão **Fechar**. Na lista continua só uma miniatura por linha: as outras só carregam na janela.
+
+**4. Cancelar não faz nada.** **Remover foto** na 2ª → *"Remover esta foto?"* → **Cancelar**: a foto fica, nada é enviado. **Fechar** sem
+ter removido nada: a lista **não** recarrega.
+
+**5. Remover.** De novo **Remover foto** na 2ª → **OK** → *"Foto removida"*; a janela passa a mostrar **2** fotos. A lista atrás **ainda não
+mudou** (a janela segue aberta). **Fechar** → a lista recarrega: a coluna mostra a miniatura e *"+1"*.
+
+**6. A última.** No **Abastecimento** da Ana (1 foto): **Remover foto** → **Remover foto** na janela → **OK** → *"Foto removida"*; a janela
+**fecha sozinha**, a lista recarrega e a coluna mostra *"-"*.
+
+**7. Duas telas.** Abra a janela da inspeção em duas abas. Na primeira, remova a 1ª foto. Na segunda (que ainda mostra 3), remova a
+mesma: *"Foto não encontrada"* — e a foto some da janela do mesmo jeito, porque já não existia. Se era a última, a janela fecha e a lista
+recarrega.
+
+**8. Sem internet.** Desligue a rede e remova: *"Não foi possível remover a foto. Confira a internet e tente de novo."*; a janela fica
+como estava e nada recarrega.
+
+**9. O motorista não muda.** Como *Ana*, **Meus registros**: as miniaturas, **+ Foto** e **Remover foto** continuam iguais à Etapa 5.
+
+### O que esta etapa não cobre
+
+- **Remover foto na tela do celular do gestor** fora das duas listas (painel, alerta): só pelas listas **Checklist Diário** e
+  **Abastecimentos**.
+- **Saber quem removeu** uma foto (não há trilha): a foto some, e pronto.
+- **Remover pela janela de edição** do lançamento (o lápis): a janela de fotos é a da coluna **Fotos**.
+- O que já estava fora das fotos: foto por avaria (D15), foto na tela antiga **Novo Checklist** e no formulário do gestor, planilha e
+  relatórios sem foto.
+
+---
+
 ## Onde estamos e o que vem a seguir
 
 - **Feito:** Etapa 1 — portal do motorista (vínculo usuário ↔ motorista, escopo do motorista, km/L pela ordem do km, uma viagem em
@@ -869,11 +941,12 @@ operação"*. Registro **OK** ou **INCOMPLETO** não tem o botão (por chamada d
   (com uma data só), linha Total que bate com a planilha, aba Multas. A7 era o último achado do levantamento ainda aberto.
   Etapa 5 — foto da avaria e do cupom pelo celular (D1), no lançamento, em Meus registros e nas listas do gestor.
   Etapa 6 — tratar a pendência do registro: o gestor marca o que foi feito, o alerta sai do painel (e não some mais sozinho), o motorista vê.
+  Etapa 7 (pequena, 2026-10-28) — o gestor remove uma foto pela lista (D14), sem mexer no servidor.
 - **O módulo está pronto para uso** (B72). O ciclo do motorista está fechado: registrar → foto → alerta → tratar → ele vê. Não há etapa
   grande nova planejada.
 - **Depende do André:** as placas, modelos e km dos 4 veículos da planilha (V01, V02, V03, C01) para o cadastro inicial; a folha inteira
   do formulário (seção 3); o consumo esperado da máquina em litros por hora, se quiser o alerta de consumo dela (D12).
-- **Backlog pequeno** (sem etapa própria): o gestor remover foto pela lista (D14); a pergunta do km menor nas telas do gestor (B36);
-  a tela antiga "Novo Checklist" (C5). Detalhe no fim do plano
-  [`2026-10-23-frotas-etapa6-tratar-pendencia.md`](../superpowers/plans/2026-10-23-frotas-etapa6-tratar-pendencia.md).
+- **Backlog pequeno** (sem etapa própria): a pergunta do km menor nas telas do gestor (B36); a tela antiga "Novo Checklist" (C5 —
+  decisão do André). O D14 (remover foto pela lista) saiu daqui na Etapa 7. Detalhe no fim do plano
+  [`2026-10-28-frotas-etapa7-remover-foto-pela-lista.md`](../superpowers/plans/2026-10-28-frotas-etapa7-remover-foto-pela-lista.md).
 - **Antes de apresentar:** percorrer os roteiros do guia clicando (E2, E4, E9, E14, E16, E20) e rodar as consultas A1–A8 em produção.

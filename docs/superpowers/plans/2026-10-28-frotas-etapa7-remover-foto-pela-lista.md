@@ -1,6 +1,7 @@
 # Frota — Etapa 7 (pequena): o gestor remove uma foto pela lista (D14)
 
-> **Status:** 🟡 em execução (2026-10-28). Plano escrito na Fase 1 da skill `desenvolver-etapa`.
+> **Status:** **etapa fechada em 2026-10-28** — T1 feita (`7bfcec6e`), T2 medida (ver "Fechamento"). Plano escrito na Fase 1 da skill
+> `desenvolver-etapa` (a primeira etapa sob o nome novo da skill, que desde hoje vale para todos os módulos).
 > **Origem:** "Próxima tarefa detalhada" do [plano da Etapa 6](2026-10-23-frotas-etapa6-tratar-pendencia.md) — primeiro item do
 > backlog pequeno, o único que não depende do André (B59, B60, D14).
 > **Spec:** `specs/modulo-frotas/17-fotos/README.md` (a feature 17 ganha a seção desta etapa; D14 sai do "ficou de fora") e o mapa
@@ -82,9 +83,9 @@ paralelizar sem inventar fronteira.
 
 | Task | Estado | Commit |
 |---|---|---|
-| Plano + Fase 2 | — | — |
-| T1 | — | — |
-| T2 | — | — |
+| Plano + Fase 2 | feito — 2 travas + 5 menores (tabela abaixo), todas acatadas antes de escrever código | 7bfcec6e (o plano entrou com a T1) |
+| T1 | feito — `FrotasRemoverFotoGestor` **14/14** (rodada vermelha antes: 10 falhavam, 4 passavam — os 4 de RN-F7.02, asserção negativa, cobertos pelo controle positivo S1/S2); `FrotasFotos` + `FrotasPendencia` junto: 71/71; **8 sabotagens**, cada uma derrubou **a asserção que a nomeia** (S1 e S2: só os 4 cenários de perfil; S3: 05, 06 e "404 na última"; S4: só o cancelar; S5: os dois 404; S6: 06 e "404 na última"; S7: 05 e 06; S8: só o título), md5 restaurado nos três arquivos. Uma correção na rodada verde: o 403 fechava a janela sem recarregar (RN-F7.07) | 7bfcec6e |
+| T2 | feito — ver "Verificação final" abaixo | — |
 
 ## Ajustes da Fase 2 (revisor fresco: 2 travas + 5 menores — **valem sobre o texto acima**)
 
@@ -106,6 +107,49 @@ da lista da janela do mesmo jeito (se era a última, fecha e recarrega). **403**
 **Contrato (vale este):** `MiniaturasFotos({ anexos, onRemovida, onFalha })` chama `onRemovida(id)` e `onFalha(err, id)` (o id é novo; Meus
 registros ignora). `ColunaFotos({ anexos, titulo, ehGestor, onRemovida })`: botão só com `ehGestor && onRemovida && lista.length`.
 
-## Fechamento
+## Fechamento (2026-10-28)
 
-*(preencher: divergências, verificação medida, retro de 4 números, próxima tarefa detalhada)*
+### Divergências do plano
+
+- **RN-F7.05 "Fechar recarrega":** a implementação recarrega ao Fechar **só se alguma foto saiu** (`onFechar(mudou)`); Fechar sem mexer
+  não gasta um `GET`. O texto da RN dizia "a lista recarrega ao Fechar" sem a condição — o teste RN-F7.04 trava a condição.
+- **RN-F7.07 403:** a primeira versão fechava a janela sem recarregar (passava `mudou = false`); o teste pegou, corrigido para
+  `onFechar(true)` antes do commit.
+- **Harness de sabotagem:** a primeira rodada travou 41 min por um `cat >` sem heredoc esperando stdin (erro meu, nada sabotado — conferido
+  por `grep` das trocas e por ausência de processo node). A segunda rodada derrubou tudo mas a captura do nome do teste veio vazia (o `✕`
+  não sai no pipe sem TTY); terceira rodada capturando por `● … › ` deu os nomes. Lição para a `fechar-etapa`: capturar o nome do teste
+  pela linha `●`, não pelo `✕`.
+
+### Verificação final (medida, rodada sozinha depois de `7bfcec6e`)
+
+- `cd server && npm run test:api`: **557/557 arquivos OK** (nada em `server/` mudou — RN-F7.08).
+- `test:almoxarifado` **44/44**; `test:validation` **4/4**; `test:safealter` **3/3**; `test:sqlite` **16/16**.
+- Tela: **200 suítes, 2725/2725 testes** (Etapa 6 fechou com 199 e 2711: +1 suíte, +14 testes, os desta etapa); Frota na tela **14 suítes,
+  184/184**; `CI=true npx react-scripts build` → **"Compiled successfully."** (sem aviso).
+- `git status` limpo depois do commit de fechamento.
+
+### Retro (4 números)
+
+- **Rodadas de correção até verde:** 1 (o 403 da RN-F7.07), antes do commit.
+- **Achados da revisão (Fase 2):** 7, **todos reais** (2 travas: desmontar a janela ao recarregar; ciclo de import). Sem Fase 5 (revisão
+  adversarial de código) — etapa de uma task só, sem servidor; o controle positivo de 8 sabotagens fez esse papel. Ruído: 0.
+- **Paralelismo:** 0 galhos (uma task só, por desenho); o revisor da Fase 2 rodou em paralelo com a medição da baseline. Retrabalho: 0.
+- **Defeito que escapou:** preencher na próxima etapa.
+
+### Próxima tarefa detalhada
+
+O módulo continua **pronto para uso** (B72). O que sobra, por ordem:
+
+1. **Depende do André (não começar sem ele):** cadastro dos 4 veículos (dados), seção 3 do formulário (folha inteira), alerta de consumo da
+   máquina (D12: o consumo esperado em L/h), e a decisão sobre a tela antiga **Novo Checklist** (C5: tirar o botão ou trocar pelos 12
+   itens).
+2. **B36/D10 — a pergunta do km menor nas telas do gestor.** Último item do backlog que não depende dele, mas **foi deixado de fora de
+   propósito** na Etapa 3: o escritório lança atrasado e um km menor é normal ali. Se for feito, o contrato é o do portal (409
+   `KM_MENOR_QUE_ATUAL` / `HORIMETRO_MENOR_QUE_ATUAL` com **Confirmar mesmo assim**) nas rotas `POST/PUT /viagens` e `/abastecimentos` do
+   gestor, com um `confirmar_km_menor: true` no corpo — e precisa de um teste que prove que o lançamento **atrasado** (data anterior à do km
+   atual) **não** pergunta, senão a tela vira um estorvo. Decidir antes com o André se vale a pena.
+3. **Antes de apresentar (não é código):** percorrer os roteiros do guia clicando (E2, E4, E9, E14, E16, E20, **E23**) com dados de exemplo
+   (o banco local tem 0 veículos) e rodar as consultas A1–A8 em produção.
+
+Com o Frota assim, a próxima etapa de valor **não é no Frota**: é retomar o que o André mandar (o almoxarifado está pausado por pedido dele —
+`2026-10-23-almoxarifado-pausa-e-retomada.md`).

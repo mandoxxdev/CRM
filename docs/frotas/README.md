@@ -1,8 +1,10 @@
 # Módulo Frota — guia do que existe hoje
 
-> **Onde paramos:** **Etapa 6 — tratar a pendência do registro — entregue em 2026-10-23** (na `main`, commits `492a0d87` a `8fa7ece2`, com a
-> Fase 5, mais o fechamento). O gestor marca a falha ou avaria como **tratada** (o que foi feito, e a manutenção se houver) na lista
-> Checklist ou no próprio alerta; o alerta sai do painel na hora e não some mais sozinho; o motorista vê em Meus registros.
+> **Onde paramos:** **Etapa 7 (pequena) — o gestor remove uma foto pela lista — entregue em 2026-10-28** (na `main`, `7bfcec6e`). Na coluna
+> **Fotos** de **Checklist Diário** e **Abastecimentos**, o Administrador de Frota toca **Remover foto**, vê todas as fotos do lançamento
+> numa janela e remove a que quiser. Antes: **Etapa 6 — tratar a pendência do registro — entregue em 2026-10-23** (commits `492a0d87` a
+> `8fa7ece2`, com a Fase 5, mais o fechamento). O gestor marca a falha ou avaria como **tratada** (o que foi feito, e a manutenção se
+> houver) na lista Checklist ou no próprio alerta; o alerta sai do painel na hora e não some mais sozinho; o motorista vê em Meus registros.
 > **O módulo está pronto para uso**; os próximos passos dependem do André (placas/modelos/km dos 4 veículos; folha inteira do formulário) ou
 > são pequenos — ver "Próximo passo" no [mapa](../../specs/modulo-frotas/README.md). Antes, no mesmo dia: Etapa 5 (foto da avaria e do cupom). O motorista tira até 3 fotos pelo celular na Saída, no Retorno, na Inspeção e no Abastecimento; vê, reenvia e
 > remove em Meus registros; o gestor e o Consulta veem a miniatura nas listas Checklist e Abastecimentos. E antes: Etapa 4
@@ -76,10 +78,10 @@ formulário, e na linha os botões **editar** (lápis) e **excluir** (lixeira). 
 | **Dashboard Frota** | 9 cartões, lista de alertas (inclui **Checklist com pendência**), custos por categoria, últimos abastecimentos. Botão **Exportar planilha** | Sim |
 | **Veículos** | Placa, marca, modelo, ano, tipo, **km** ou **horímetro**, combustível, setor, centro de custo, condutor responsável, chassi, RENAVAM | Sim |
 | **Motoristas** | Nome, CPF, CNH, telefone, e-mail, setor e **Usuário de acesso (portal do motorista)** | Sim |
-| **Abastecimentos** | Veículo, motorista, data, litros, valor, km (ou **horímetro**, na máquina), combustível, posto. O sistema sobe o km (ou o horímetro) do veículo e calcula o **km por litro** (carro) ou os **litros por hora** (máquina) | Sim |
+| **Abastecimentos** | Veículo, motorista, data, litros, valor, km (ou **horímetro**, na máquina), combustível, posto. O sistema sobe o km (ou o horímetro) do veículo e calcula o **km por litro** (carro) ou os **litros por hora** (máquina). Coluna **Fotos** (cupom) com **Remover foto** para o gestor | Sim |
 | **Manutenções** | Preventiva ou corretiva, oficina, custo, peças, km, **próxima revisão**. "Em andamento" põe o veículo em manutenção | Sim |
 | **Viagens** | Saída e retorno, km (ou **horímetro**, na máquina), **origem**, destino, finalidade, setor, status. O botão **Aprovar** aparece só em viagem **solicitada** | Sim |
-| **Checklist Diário** | Lista tudo o que o motorista registrou (colunas **Tipo**, **KM**, **Situação**) e o "Novo Checklist" antigo do gestor (7 itens). Na linha com **PENDÊNCIA**, **Tratar pendência** (o que foi feito, e a manutenção se houver); tratada, **PENDÊNCIA · tratada** e **Desfazer tratamento** | Sim. Não edita |
+| **Checklist Diário** | Lista tudo o que o motorista registrou (colunas **Tipo**, **KM**, **Situação**) e o "Novo Checklist" antigo do gestor (7 itens). Na linha com **PENDÊNCIA**, **Tratar pendência** (o que foi feito, e a manutenção se houver); tratada, **PENDÊNCIA · tratada** e **Desfazer tratamento**. Coluna **Fotos** com **Remover foto** para o gestor | Sim. Não edita |
 | **Multas** | Data, infração, valor, pontos, vencimento, pago/pendente/contestado | Sim |
 | **Documentos** | IPVA, licenciamento, seguro, CRLV, rastreador — com vencimento e "avisar X dias antes" | Sim |
 | **Relatórios** | Custo por veículo e consumo (km/L do carro, **litros por hora** da máquina) no **mesmo período** (uma data ou duas), com o período aplicado escrito, linha **Total**, **Imprimir** e **Exportar planilha** (mesmo período, com a aba **Multas**) | Sim |
@@ -102,7 +104,7 @@ formulário, e na linha os botões **editar** (lápis) e **excluir** (lixeira). 
 
 | Perfil | O que faz |
 |---|---|
-| **Administrador de Frota** | Tudo: cadastra veículo e motorista, liga motorista ao usuário, aprova e cancela viagem, lança multa e documento, **trata a pendência** dos registros, vê painel e relatório, exporta, exclui |
+| **Administrador de Frota** | Tudo: cadastra veículo e motorista, liga motorista ao usuário, aprova e cancela viagem, lança multa e documento, **trata a pendência** dos registros, **remove foto** de qualquer lançamento pela lista, vê painel e relatório, exporta, exclui |
 | **Motorista** | Só o que é **dele**: saída, retorno, inspeção e abastecimento pelo portal; vê só os próprios registros, viagens, abastecimentos e multas. **Não** vê o painel nem relatório, **não** vê CPF/CNH dos colegas, **não** lança multa nem documento, **não** aprova viagem |
 | **Consulta** | Vê painel, alertas, as listas (inclusive CPF/CNH dos motoristas) e relatório, e exporta a planilha. Não lança, não edita, não aprova, não exclui — os botões nem aparecem |
 
@@ -324,14 +326,31 @@ acesso**); um usuário com perfil **Consulta** (**Frota → Perfis de acesso**).
 10. **A planilha.** **Exportar planilha** → aba **Checklist**: as últimas colunas **Pendência tratada em**, **Tratada por** e **O que
     foi feito** preenchidas na inspeção tratada e vazias nas outras.
 
-## O que as Etapas 1 a 6 **não** cobrem
+## Roteiro de teste manual (remover foto pela lista)
+
+Preparação: o roteiro das fotos feito (a inspeção da *Ana* em *AAA1A11* com 3 fotos e um abastecimento com 1 foto). Um usuário
+**Consulta**.
+
+1. **O botão.** Como administrador, **Frota → Checklist Diário**: na linha da inspeção da Ana, a coluna **Fotos** mostra a 1ª miniatura,
+   *"+2"* e **Remover foto**. Linha sem foto: só *"-"*. Confira o mesmo em **Frota → Abastecimentos**.
+2. **Quem vê.** Como **Consulta**: miniatura e *"+2"*, sem botão. Como *Ana*, na mesma lista: sem botão (ela remove em Meus registros).
+3. **A janela.** **Remover foto** → *"Fotos de AAA1A11"*, com as 3 miniaturas (cada uma abre em outra aba), **Remover foto** em cada e
+   **Fechar**.
+4. **Cancelar.** **Remover foto** na 2ª → *"Remover esta foto?"* → **Cancelar**: nada muda. **Fechar**: a lista não recarrega.
+5. **Remover.** **Remover foto** na 2ª → **OK** → *"Foto removida"*; a janela fica com 2. **Fechar** → a lista recarrega e mostra *"+1"*.
+6. **A última.** No abastecimento (1 foto): **Remover foto** → **Remover foto** → **OK** → a janela fecha sozinha e a coluna mostra *"-"*.
+7. **Duas abas.** Abra a janela da inspeção em duas abas; remova a 1ª foto numa; na outra, remova a mesma: *"Foto não encontrada"* e ela
+   some da janela.
+8. **Sem internet.** Desligue a rede e remova: *"Não foi possível remover a foto. Confira a internet e tente de novo."*; a janela fica.
+
+## O que as Etapas 1 a 7 **não** cobrem
 
 - Dar **Administrador de Frota** pela tela de Perfis (continua no cadastro de usuário); saber **quem** mudou um perfil; lembrar o
   Consulta de quem foi administrador e deixou de ser.
 - A **seção 3** do formulário (imagem cortada), **desenho** clicável das avarias.
-- **Fotos:** o gestor não remove uma foto sozinha na lista (o motorista remove em Meus registros, ou o gestor exclui o lançamento); a
+- **Fotos:** saber **quem** removeu uma foto (não há trilha); remover pela janela de edição do lançamento (é pela coluna **Fotos**); a
   foto é do registro, não de cada avaria; a tela antiga **Novo Checklist** e o formulário de abastecimento do gestor não enviam foto; a
-  planilha e os relatórios não levam foto.
+  planilha e os relatórios não levam foto. *(Dizia: "o gestor não remove uma foto sozinha na lista" — resolvido na Etapa 7.)*
 - A **pergunta do km menor nas telas do gestor**; o **alerta de consumo baixo** da máquina (só existe em km/L); apelido **V01/C01**.
 - O motorista **corrigir** o que lançou pelo portal (a correção é com o gestor).
 - **Pendência:** tratar cada falha separadamente (o tratamento é do registro inteiro); histórico de tratamentos (fica só o último); avisar o

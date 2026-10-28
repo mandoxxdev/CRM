@@ -2,6 +2,9 @@
 
 > **Status:** 🟢 **entregue na Etapa 5** (2026-10-23), na `main`, commits `786d1ec5` (plano) a `ab234a44` (verificação final), mais o
 > fechamento — ver a lista abaixo. Fecha a limitação **D1** ("sem foto nem anexo") do [mapa](../README.md).
+> **Etapa 7 (pequena, 2026-10-28, `7bfcec6e`):** o gestor remove uma foto pela lista (fecha o **D14**, que esta spec listava em "ficou
+> de fora") — plano [`2026-10-28-frotas-etapa7-remover-foto-pela-lista.md`](../../../docs/superpowers/plans/2026-10-28-frotas-etapa7-remover-foto-pela-lista.md),
+> apresentação em [`novidades-por-etapa.md`](../../../docs/frotas/novidades-por-etapa.md) (Etapa 7, B73–B75, C21, D14, E23–E24).
 >
 > **Plano (contratos, Ajustes da Fase 2, Fase 5, retro):**
 > [`docs/superpowers/plans/2026-10-23-frotas-etapa5-fotos.md`](../../../docs/superpowers/plans/2026-10-23-frotas-etapa5-fotos.md)
@@ -41,10 +44,27 @@ em 2 a 2,5 horas.
 Fase 5 (revisão adversarial, dois revisores frescos): ver a tabela "Fase 5" no plano — 2 achados reais na tela (corrigidos acima), 1
 achado de informação no servidor mantido e declarado (E17), nenhum furo de segurança reproduzido contra o servidor real.
 
+## Etapa 7 — o gestor remove uma foto pela lista (D14) — checklist
+
+Só tela; o servidor não muda (`DELETE /api/frotas/anexos/:id` já aceitava o gestor, RN-F5.07). Contrato e os "Ajustes da Fase 2" no plano.
+
+| RN | Regra | Estado | Commit |
+|---|---|---|---|
+| RN-F7.01 | Coluna **Fotos** (Checklist e Abastecimentos): linha com foto mostra ao **gestor** o botão **Remover foto**; sem foto, `-` | [x] | `7bfcec6e` |
+| RN-F7.02 | Consulta e Motorista não veem o botão (a coluna fica como antes; o perfil vem da página genérica, `ehGestor` no contexto do `render`) | [x] | `7bfcec6e` |
+| RN-F7.03 | Janela **Fotos de <placa>** (`role="dialog"`) com **todas** as fotos, **Remover foto** em cada e **Fechar**; a lista segue com uma miniatura só (B58) | [x] | `7bfcec6e` |
+| RN-F7.04 | `Remover esta foto?` → Cancelar não chama o servidor; Fechar sem mexer não recarrega | [x] | `7bfcec6e` |
+| RN-F7.05 | Confirmou → `DELETE` → `Foto removida` → a janela tira a foto da **cópia local** (3 → 2) sem recarregar; **Fechar** recarrega a lista | [x] | `7bfcec6e` |
+| RN-F7.06 | Removida a última, a janela fecha sozinha, a lista recarrega e a célula volta a `-` | [x] | `7bfcec6e` |
+| RN-F7.07 | Falha: toast com a mensagem do servidor (ou `MSG_FALHA_REMOVER`); **404** tira a foto da janela mesmo assim; **403** fecha e recarrega; outro erro só avisa | [x] | `7bfcec6e` |
+| RN-F7.08 | Nada muda no portal, servidor, relatórios, painel e planilha (`test:api` 557/557 sem tocar em `server/`) | [x] | `7bfcec6e` |
+| Controle positivo | 8 sabotagens (perfil sempre gestor, gate sem perfil, cópia sem "mudou", Fechar sempre recarrega, 404 não tira, sem fechar na última, `onRemovida` sem id, título sem placa) — cada uma derrubou a asserção que a nomeia | [x] | — |
+
 ## O que ficou de fora (e por quê)
 
-- **Remover foto na lista do gestor** (D14): o gestor não tem botão; apaga o lançamento inteiro ou pede ao motorista (o servidor já
-  aceita o `DELETE` do gestor). Ficou fora para não mexer na tela genérica de cadastro nesta etapa.
+- **Remover foto na lista do gestor** (D14): *dizia "o gestor não tem botão; apaga o lançamento inteiro ou pede ao motorista … ficou fora
+  para não mexer na tela genérica de cadastro"* — **deixou de ser verdade na Etapa 7** (acima). O que continua fora: saber **quem**
+  removeu (sem trilha) e remover pela janela de edição do lançamento (só pela coluna **Fotos**).
 - **Foto por avaria** (D15): as fotos são do registro, não de cada avaria marcada.
 - **Foto na tela antiga "Novo Checklist" e no formulário de abastecimento do gestor**: só o portal envia (o gestor que quiser anexar usa
   o portal, se tiver vínculo).

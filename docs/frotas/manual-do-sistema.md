@@ -9,7 +9,7 @@ O módulo tem três perfis. O perfil decide o que a pessoa vê e o que ela pode 
 
 | Perfil | Vê | Grava |
 |---|---|---|
-| **Administrador de Frota** (o gestor) | Tudo: painel, alertas, relatórios, todos os cadastros e lançamentos | Tudo: veículos, motoristas, manutenções, abastecimentos, viagens, checklists, multas, documentos; aprova e cancela viagem; trata a pendência dos registros; exclui; exporta a planilha |
+| **Administrador de Frota** (o gestor) | Tudo: painel, alertas, relatórios, todos os cadastros e lançamentos | Tudo: veículos, motoristas, manutenções, abastecimentos, viagens, checklists, multas, documentos; aprova e cancela viagem; trata a pendência dos registros; remove foto de qualquer lançamento pela lista; exclui; exporta a planilha |
 | **Motorista** | Só o que é **dele**: os próprios registros, abastecimentos, viagens e multas; no cadastro de motoristas, só ele mesmo | Pelo **Meu painel**: saída, retorno, inspeção e abastecimento, sempre em nome dele, com até 3 fotos em cada; manda e remove foto só dos lançamentos dele |
 | **Consulta** | Painel, alertas, relatórios e todas as telas de cadastro e lançamento, só para ler (inclusive CPF e CNH dos motoristas e os valores, e as fotos de todos) | Nada (só exporta a planilha). As telas aparecem sem os botões de novo, editar, aprovar e excluir |
 
@@ -290,8 +290,20 @@ está como **Consulta**, esses botões (e o de aprovar viagem) não aparecem: a 
 **Fotos nas listas.** Em **Checklist Diário** e **Abastecimentos**, a coluna **Fotos** mostra a **primeira** foto do lançamento em
 miniatura e, se houver mais, *"+1"* ou *"+2"* (link para a seguinte); sem foto, *"-"*. Clicar abre a foto em outra aba. Quem é
 **Consulta** vê as fotos de todos; o motorista, só as dele. O endereço da foto vale por cerca de 2 horas: com a lista aberta há mais
-tempo, recarregue a página. **Excluir** um registro ou abastecimento apaga também as fotos dele. Esta tela não remove uma foto sozinha:
-para isso, o motorista usa **Remover foto** em **Meus registros**. A planilha e os relatórios não levam as fotos.
+tempo, recarregue a página. **Excluir** um registro ou abastecimento apaga também as fotos dele. A planilha e os relatórios não levam as
+fotos.
+
+**Remover uma foto pela lista (só o Administrador de Frota).** Na coluna **Fotos**, a linha que tem foto mostra o botão **Remover foto**.
+Ele abre a janela *"Fotos de (placa)"* com **todas** as fotos do lançamento (tocar numa abre em outra aba) e um **Remover foto** embaixo
+de cada. Confirme *"Remover esta foto?"* → *"Foto removida"*; a foto sai da janela e as outras ficam. **Fechar** atualiza a lista. Removeu a
+última, a janela fecha sozinha e a coluna volta a *"-"*. O Consulta e o motorista não veem o botão (o motorista remove as dele em **Meus
+registros**).
+
+| Situação | Mensagem |
+|---|---|
+| A foto já tinha sido removida por outra pessoa (duas telas abertas) | *"Foto não encontrada"* — ela some da janela do mesmo jeito |
+| O seu perfil deixou de ser Administrador de Frota com a janela aberta | *"Sem permissão para esta operação"* — a janela fecha e a lista atualiza |
+| Sem internet | *"Não foi possível remover a foto. Confira a internet e tente de novo."* — a janela fica como estava |
 
 **Tratar a pendência.** Quando o motorista marca **Falha** num item ou uma avaria, o registro fica **PENDÊNCIA** e vira alerta no
 painel. Depois de resolver (consertar, conferir, decidir que não é nada), o Administrador de Frota toca **Tratar pendência** na linha

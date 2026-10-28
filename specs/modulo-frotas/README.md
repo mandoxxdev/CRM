@@ -1,15 +1,16 @@
 # Módulo Frotas — mapa de status
 
-> **Status:** **Etapa 6 (tratar a pendência do registro) entregue** na `main` (commits `492a0d87` a `8fa7ece2`), depois da **Etapa 5 (foto da
+> **Status:** **Etapa 7 (pequena: o gestor remove uma foto pela lista, D14) entregue** na `main` em 2026-10-28 (`7bfcec6e`), depois da
+> **Etapa 6 (tratar a pendência do registro)** (commits `492a0d87` a `8fa7ece2`), da **Etapa 5 (foto da
 > avaria e do cupom)** (`786d1ec5` a `ab234a44`), da **Etapa 4 (relatórios
 > fechados)** (`99658314` a `bcb498a0`), da **Etapa 3 (km e
 > horímetro confiáveis no portal)** (`64d85bf2` a `a7427207`), da
 > **Etapa 2 (perfil Consulta/Motorista pela tela)** (`3aa4e088` a `805aaa3c`) e da **Etapa 1 (portal do motorista)** (`c638d201` a `4ba85d16`). O motorista loga e preenche saída, retorno, inspeção e abastecimento;
 > o gestor recebe o alerta, exporta a planilha e dá **Consulta** a quem só acompanha, em **Frota → Perfis de acesso**. O módulo **ainda
 > não foi usado em produção** (banco local: 0 veículos, 0 motoristas — medido em 2026-10-23 no levantamento).
-> **Última atualização:** 2026-10-23 — fechamento da Etapa 6.
+> **Última atualização:** 2026-10-28 — fechamento da Etapa 7 (pequena).
 > **Onde parou / próximo:** **o módulo está pronto para uso.** Os próximos passos dependem do André (dados dos 4 veículos; folha inteira
-> do formulário) ou são pequenos (backlog no plano da Etapa 6) — ver "Próximo passo" (B72).
+> do formulário; a tela antiga "Novo Checklist", C5) ou são pequenos (B36, no plano da Etapa 7) — ver "Próximo passo" (B72).
 > **Documentação do módulo:** [`docs/frotas/README.md`](../../docs/frotas/README.md) (guia com roteiro de teste),
 > [`docs/frotas/manual-do-sistema.md`](../../docs/frotas/manual-do-sistema.md) (manual de quem usa),
 > [`docs/frotas/novidades-por-etapa.md`](../../docs/frotas/novidades-por-etapa.md) (apresentação, decisões B1..B60) e
@@ -52,7 +53,7 @@ O formulário e a planilha ficam em [`00-processo-atual/`](00-processo-atual/REA
 | 14 | Exportação / substituir a planilha | 🟢 | **Etapa 1** (`d2aaa72b`, `c8794fd7`): `GET /api/frotas/exportar.xlsx`, abas Cadastro Frota, Viagens e KM, Checklist, Abastecimentos, Manutenções, Documentos; **Etapa 4** (`e841b13a`): + aba Multas no fim. A aba Painel da planilha não é exportada (o painel está na tela) |
 | 15 | **Perfil do Frota pela tela** | 🟢 | **Etapa 2** — [`15-perfis-pela-tela/`](15-perfis-pela-tela/README.md). `GET/PUT /api/frotas/perfis-usuario`, tela `/frota/perfis` (só o administrador da frota), aviso no cadastro do motorista. Etapa 3 (`b88778b5`): `role` "Admin" maiúsculo é administrador (E5) |
 | 16 | **km e horímetro confiáveis no portal** | 🟢 | **Etapa 3** — [`16-km-e-horimetro/`](16-km-e-horimetro/README.md). Último km/horímetro na tela, 409 `KM_MENOR_QUE_ATUAL`/`HORIMETRO_MENOR_QUE_ATUAL` com **Confirmar mesmo assim**, máquina em horas (portal, gestor, planilha), alerta de revisão da máquina pelo horímetro. Fica de fora: a pergunta nas telas do gestor (B36), consumo L/h (D9) |
-| 17 | **Foto da avaria e do cupom** | 🟢 | **Etapa 5** (`786d1ec5`..`ab234a44`) — [`17-fotos/`](17-fotos/README.md). **Tirar foto** (câmera do celular) na Saída/Retorno/Inspeção e no Abastecimento, até 3, reduzidas no celular; Meus registros com + Foto e Remover foto; coluna **Fotos** nas listas Checklist e Abastecimentos do gestor; arquivo só por URL assinada (2 h), no escopo de cada um; excluir o lançamento leva as fotos. Fecha **D1**. Fica de fora: o gestor remover foto pela lista (D14), foto por avaria (D15) |
+| 17 | **Foto da avaria e do cupom** | 🟢 | **Etapa 5** (`786d1ec5`..`ab234a44`) — [`17-fotos/`](17-fotos/README.md). **Tirar foto** (câmera do celular) na Saída/Retorno/Inspeção e no Abastecimento, até 3, reduzidas no celular; Meus registros com + Foto e Remover foto; coluna **Fotos** nas listas Checklist e Abastecimentos do gestor; arquivo só por URL assinada (2 h), no escopo de cada um; excluir o lançamento leva as fotos. Fecha **D1**. **Etapa 7** (`7bfcec6e`, 2026-10-28): o gestor remove uma foto pela coluna **Fotos** das duas listas (janela com todas as fotos; só o Administrador de Frota), fecha **D14**. *Dizia: "Fica de fora: o gestor remover foto pela lista (D14)"; deixou de ser verdade.* Fica de fora: foto por avaria (D15), saber quem removeu |
 | 18 | **Tratar a pendência do registro** | 🟢 | **Etapa 6** (`492a0d87`..`8fa7ece2`) — [`18-tratar-pendencia/`](18-tratar-pendencia/README.md). **Tratar pendência** (o que foi feito + manutenção opcional) na lista Checklist e no alerta; o alerta sai na hora e não some mais sozinho; **PENDÊNCIA · tratada** na lista, no Meus registros e na planilha; **Desfazer tratamento**. Fica de fora: tratar por falha (D16), histórico (D17), aviso ao motorista (D18) |
 
 ## Achados medidos (sonda executada em 2026-10-23, banco em memória com o `initSchema` real)
