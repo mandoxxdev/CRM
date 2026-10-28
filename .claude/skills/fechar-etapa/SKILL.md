@@ -197,6 +197,10 @@ aprendidas por falha silenciosa aqui:
   medida cai exatamente em `limite + 1e-6`), e tirar só o `WHERE ativo = 1` de um índice único
   parcial passa verde no cenário da duplicada. O que o teste ancora é **onde** a régua está, não
   o sinal que a escreve.
+- **Para ler qual teste caiu no Jest da tela, filtre pela linha `● <describe> › <teste>`, nunca pelo `✕`.** Fora do terminal
+  (saída capturada em `$(...)` ou em arquivo, sem TTY) o `✕` não aparece e a captura vem **vazia** com o placar vermelho — na Etapa 7
+  do Frota isso custou uma rodada inteira de oito sabotagens repetida só para saber os nomes. E rode o Jest com `</dev/null`: um
+  `cat >` perdido sem heredoc na mesma linha de preparação ficou 41 minutos esperando stdin, com cara de "Jest travado".
 - **Leia QUAL asserção caiu, não só o placar.** Uma sabotagem que derruba o cenário certo pela
   asserção *errada* deixa a asserção que interessa sem prova nenhuma — e o placar vermelho faz
   parecer que está tudo coberto. Aconteceu **três vezes seguidas** nesta base, sempre com o
