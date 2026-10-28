@@ -44,6 +44,44 @@ test('T1.b colunas novas existem', async () => {
   assert((await cols('frotas_abastecimentos')).includes('km_desde_anterior'));
 });
 
+// Frota Etapa 8 (T1) — plano docs/superpowers/plans/2026-10-28-frotas-etapa8-admin-destinos-condutor.md
+test('RN-F8.15/16 colunas da Etapa 8: veiculos.uso_funcionarios (padrao 0), viagens.condutor_nome e destino_id; ORIGEM_PADRAO no /meta', async () => {
+  const cols = async (t) => (await dbAll(ctx.db, `PRAGMA table_info(${t})`)).map((c) => c.name);
+  assert((await cols('frotas_veiculos')).includes('uso_funcionarios'), 'frotas_veiculos.uso_funcionarios');
+  const vi = await cols('frotas_viagens');
+  assert(vi.includes('condutor_nome'), 'frotas_viagens.condutor_nome');
+  assert(vi.includes('destino_id'), 'frotas_viagens.destino_id');
+  ctx.setUser(ADMIN);
+  const v = await ctx.req('post', '/api/frotas/veiculos', { placa: 'ESQ8A01' });
+  assert.strictEqual(v.status, 201, JSON.stringify(v.body));
+  const linha = (await dbAll(ctx.db, 'SELECT uso_funcionarios FROM frotas_veiculos WHERE id = ?', [v.body.id]))[0];
+  assert.strictEqual(linha.uso_funcionarios, 0, 'o padrao da coluna e 0');
+  const schema = require('../../services/frotas/schema');
+  assert.strictEqual(schema.ORIGEM_PADRAO, 'GMP');
+  const meta = await ctx.req('get', '/api/frotas/meta');
+  assert.strictEqual(meta.body.origemPadrao, 'GMP');
+});
+
+test('RN-F8.26 frotas_destinos existe e o indice parcial recusa dois ativos com o mesmo nome (sem distinguir caixa); desativado libera', async () => {
+  const cols = (await dbAll(ctx.db, 'PRAGMA table_info(frotas_destinos)')).map((c) => c.name);
+  for (const c of ['id', 'nome', 'endereco', 'ativo', 'criado_por_id', 'criado_por_nome', 'created_at', 'updated_at']) {
+    assert(cols.includes(c), `frotas_destinos.${c}`);
+  }
+  const idx = await dbAll(ctx.db, 'PRAGMA index_list(frotas_destinos)');
+  const unico = idx.find((i) => i.name === 'ux_frotas_destinos_nome_ativo');
+  assert(unico, 'indice ux_frotas_destinos_nome_ativo');
+  assert.strictEqual(unico.unique, 1);
+  assert.strictEqual(unico.partial, 1, 'o indice e parcial (WHERE ativo = 1)');
+  const { dbRun } = require('../../services/frotas/db');
+  await dbRun(ctx.db, "INSERT INTO frotas_destinos (nome) VALUES ('Cliente Alfa')");
+  await assert.rejects(dbRun(ctx.db, "INSERT INTO frotas_destinos (nome) VALUES ('cliente alfa')"),
+    (e) => /UNIQUE constraint failed: frotas_destinos\.nome/.test(e.message), 'o segundo ativo com o mesmo nome cai no indice');
+  await dbRun(ctx.db, "UPDATE frotas_destinos SET ativo = 0 WHERE nome = 'Cliente Alfa'");
+  await dbRun(ctx.db, "INSERT INTO frotas_destinos (nome) VALUES ('cliente alfa')"); // desativado liberou o nome
+  await assert.rejects(dbRun(ctx.db, "UPDATE frotas_destinos SET ativo = 1 WHERE nome = 'Cliente Alfa'"),
+    (e) => /UNIQUE constraint failed: frotas_destinos\.nome/.test(e.message), 'reativar com outro ativo igual tambem cai');
+});
+
 test('RN-F1.01 ITENS_CHECKLIST tem os 12 do papel em ordem, e o /meta expoe as listas', async () => {
   const schema = require('../../services/frotas/schema');
   assert.deepStrictEqual(schema.ITENS_CHECKLIST.map((i) => i.chave), CHAVES);

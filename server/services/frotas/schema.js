@@ -33,6 +33,8 @@ const TIPOS_COMBUSTIVEL = ['gasolina', 'etanol', 'flex', 'diesel', 'gnv', 'eletr
 const TIPOS_MANUTENCAO = ['preventiva', 'corretiva'];
 const TIPOS_DOCUMENTO = ['ipva', 'licenciamento', 'seguro', 'crlv', 'rastreador', 'outros'];
 const STATUS_VIAGEM = ['solicitada', 'aprovada', 'em_andamento', 'concluida', 'cancelada'];
+// Frota Etapa 8 (RN-F8.16/17): toda saida do portal e da GMP — o portal nao pergunta mais "Saindo de onde"; sem origem no corpo, grava isto.
+const ORIGEM_PADRAO = 'GMP';
 
 // ── Frotas Etapa 1 (portal do motorista) ────────────────────────────────────
 // RN-F1.01: os 12 itens do formulario de papel, na ordem do papel. Chaves fixas — ficam gravadas em itens_json.
@@ -296,6 +298,28 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE frotas_checklists ADD COLUMN pendencia_tratamento TEXT');
   await safeAlter(db, 'ALTER TABLE frotas_checklists ADD COLUMN pendencia_manutencao_id INTEGER');
 
+  // Frota Etapa 8 (RN-F8.15/16): carro liberado para funcionarios (a saida do portal pede quem vai dirigir), o condutor da viagem
+  // (texto livre: funcionario nao precisa de login) e a referencia ao destino cadastrado (o texto `destino` continua gravado).
+  await safeAlter(db, 'ALTER TABLE frotas_veiculos ADD COLUMN uso_funcionarios INTEGER DEFAULT 0');
+  await safeAlter(db, 'ALTER TABLE frotas_viagens ADD COLUMN condutor_nome TEXT');
+  await safeAlter(db, 'ALTER TABLE frotas_viagens ADD COLUMN destino_id INTEGER');
+
+  // Frota Etapa 8 (RN-F8.26): destinos que o proprio motorista cadastra pelo "+ Novo destino" da saida. Exclusao e logica (ativo = 0):
+  // a viagem guarda o nome na hora e nao aponta para linha apagada. Dois ativos com o mesmo nome (sem distinguir caixa) nao cabem; um
+  // desativado libera o nome — por isso o indice e parcial.
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS frotas_destinos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    endereco TEXT,
+    ativo INTEGER DEFAULT 1,
+    criado_por_id INTEGER,
+    criado_por_nome TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await dbRun(db, `CREATE UNIQUE INDEX IF NOT EXISTS ux_frotas_destinos_nome_ativo
+    ON frotas_destinos (nome COLLATE NOCASE) WHERE ativo = 1`);
+
   // Frota Etapa 5 (RN-F5.01): fotos do registro (frotas_checklists) e do abastecimento. O banco guarda so o nome do arquivo; a URL
   // assinada e feita na saida. Exclusao do lancamento apaga as linhas daqui (RN-F5.08) — sem FK porque as duas tabelas-mae sao outras.
   await dbRun(db, `CREATE TABLE IF NOT EXISTS frotas_anexos (
@@ -338,6 +362,7 @@ async function initSchema(db) {
 
 module.exports = {
   initSchema,
+  ORIGEM_PADRAO,
   TIPOS_VEICULO_SEED,
   SETORES_GMP,
   CENTROS_CUSTO_GMP,

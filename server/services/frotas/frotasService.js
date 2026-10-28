@@ -220,10 +220,12 @@ async function getMeta(db) {
   const motoristas = await dbAll(db, "SELECT id, nome FROM frotas_motoristas WHERE ativo = 1 AND status = 'ativo' ORDER BY nome");
   const {
     SETORES_GMP, CENTROS_CUSTO_GMP, STATUS_VEICULO, TIPOS_COMBUSTIVEL, TIPOS_MANUTENCAO, TIPOS_DOCUMENTO, TIPOS_MEDICAO, STATUS_VIAGEM,
-    ITENS_CHECKLIST, VISTAS_AVARIA, TIPOS_AVARIA, NIVEIS_COMBUSTIVEL, TIPOS_REGISTRO,
+    ITENS_CHECKLIST, VISTAS_AVARIA, TIPOS_AVARIA, NIVEIS_COMBUSTIVEL, TIPOS_REGISTRO, ORIGEM_PADRAO,
   } = require('./schema');
   return {
     tipos, motoristas, setores: SETORES_GMP, centrosCusto: CENTROS_CUSTO_GMP,
+    // Frota Etapa 8 (RN-F8.16): a origem fixa da saida do portal; a tela do gestor preenche a viagem nova com ela
+    origemPadrao: ORIGEM_PADRAO,
     statusVeiculo: STATUS_VEICULO, combustiveis: TIPOS_COMBUSTIVEL,
     tiposManutencao: TIPOS_MANUTENCAO, tiposDocumento: TIPOS_DOCUMENTO,
     tiposMedicao: TIPOS_MEDICAO, statusViagem: STATUS_VIAGEM,
