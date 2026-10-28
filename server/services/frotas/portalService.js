@@ -10,9 +10,11 @@ const { hojeLocalISO } = require('../diaLocal');
 const { naFilaDeViagens } = require('./filaDeViagens');
 const { can, getPerfilFromUser } = require('./permissions');
 const {
-  ITENS_CHECKLIST, VISTAS_AVARIA, TIPOS_AVARIA, NIVEIS_COMBUSTIVEL, TIPOS_REGISTRO,
+  ITENS_CHECKLIST, VISTAS_AVARIA, TIPOS_AVARIA, NIVEIS_COMBUSTIVEL, TIPOS_REGISTRO, ORIGEM_PADRAO,
 } = require('./schema');
 const frotasService = require('./frotasService');
+
+const MSG_CONDUTOR_OBRIGATORIO = 'Informe quem vai dirigir (condutor)';
 
 function erro(status, msg) {
   const err = new Error(msg);
@@ -157,19 +159,25 @@ async function inicio(db, user) {
   if (m) {
     viagemAberta = await dbGet(db, `SELECT vi.id, vi.veiculo_id, v.placa, vi.km_saida, vi.horimetro_saida,
       CASE WHEN vi.horimetro_saida IS NOT NULL THEN 'horimetro' WHEN vi.km_saida IS NOT NULL THEN 'km'
-        ELSE COALESCE(v.tipo_medicao, 'km') END AS tipo_medicao, vi.data_saida, vi.destino
+        ELSE COALESCE(v.tipo_medicao, 'km') END AS tipo_medicao, vi.data_saida, vi.destino, vi.condutor_nome
       FROM frotas_viagens vi JOIN frotas_veiculos v ON v.id = vi.veiculo_id
       WHERE vi.motorista_id = ? AND vi.status = 'em_andamento' ORDER BY vi.id DESC LIMIT 1`, [m.id]) || null;
   }
+  // Frota Etapa 8 (RN-F8.15): + uso_funcionarios — a tela mostra o campo do condutor so no carro liberado (o servidor confere de novo
+  // na saida, RN-F8.19)
   const veiculos = await dbAll(db, `SELECT v.id, v.placa, v.modelo, v.marca, v.km_atual, v.horimetro_atual, v.tipo_medicao, v.status,
+      v.uso_funcionarios,
       EXISTS (SELECT 1 FROM frotas_viagens vi WHERE vi.veiculo_id = v.id AND vi.status = 'em_andamento') AS em_uso
     FROM frotas_veiculos v
     WHERE v.ativo = 1 AND COALESCE(v.status, 'ativo') NOT IN ('vendido', 'inativo')
     ORDER BY v.placa`);
+  // Frota Etapa 8 (RN-F8.32): os destinos ativos para o select da saida
+  const destinos = await dbAll(db, 'SELECT id, nome, endereco FROM frotas_destinos WHERE ativo = 1 ORDER BY nome COLLATE NOCASE, id');
   return {
     motorista: m ? { id: m.id, nome: m.nome, cnh_validade: m.cnh_validade || null } : null,
     viagem_aberta: viagemAberta,
     veiculos: veiculos.map((v) => ({ ...v, em_uso: !!v.em_uso })),
+    destinos,
     itens: ITENS_CHECKLIST.map((i) => ({ chave: i.chave, rotulo: i.rotulo })),
     vistas: VISTAS_AVARIA,
     tipos_avaria: TIPOS_AVARIA,
@@ -229,6 +237,20 @@ async function registrar(db, user, body) {
   const leituras = () => (medicao === 'horimetro' ? { km: null, horimetro: leitura } : { km: leitura, horimetro: null });
   const dataHora = `${data}T${horario}`; // F2-15: abre no datetime-local da tela do gestor
 
+  /**
+   * Frota Etapa 8 (RN-F8.31, ponto 4): o destino cadastrado — resolvido DENTRO da fila (desativado no meio -> 400). `destino_id` que nao
+   * e inteiro positivo, inexistente ou desativado -> 400. Sem `destino_id`, o texto `destino` como sempre (compat); com os dois, o id manda.
+   */
+  const resolverDestino = async () => {
+    if (b.destino_id === undefined || b.destino_id === null || b.destino_id === '') return { destino: b.destino || null, destinoId: null };
+    const id = typeof b.destino_id === 'number' || (typeof b.destino_id === 'string' && /^\d+$/.test(b.destino_id.trim()))
+      ? Number(b.destino_id) : NaN;
+    if (!Number.isInteger(id) || id <= 0) throw erro(400, frotasService.MSG_DESTINO_404);
+    const d = await dbGet(db, 'SELECT id, nome FROM frotas_destinos WHERE id = ? AND ativo = 1', [id]);
+    if (!d) throw erro(400, frotasService.MSG_DESTINO_404);
+    return { destino: d.nome, destinoId: d.id };
+  };
+
   if (b.tipo === 'inspecao') {
     const veiculo = await veiculoDoPortal(db, b.veiculo_id);
     acertarMedicao(veiculo);
@@ -244,6 +266,13 @@ async function registrar(db, user, body) {
       // F2-14 (B9): veiculo em manutencao nao sai
       if (veiculo.status === 'manutencao') throw erro(409, 'Veículo em manutenção. Fale com o gestor da frota.');
       await frotasService.conferirViagemUnica(db, { veiculoId: veiculo.id, motoristaId: motorista.id }); // RN-F1.05
+      // Frota Etapa 8 (ajuste T-2): a ordem FIXA dentro da fila — destino -> tamanho do condutor -> condutor obrigatorio -> km menor.
+      // Os 400 novos vem ANTES do 409 KM_MENOR_QUE_ATUAL: se viessem depois, o motorista confirmava o km menor, levava o 400 e tinha de
+      // confirmar de novo. O veiculo aqui e o relido DENTRO da fila (RN-F8.19): a marca `uso_funcionarios` pode ter sido ligada pelo
+      // gestor um segundo antes — a tela do motorista (que nao mostrava o campo) nao decide.
+      const { destino, destinoId } = await resolverDestino(); // RN-F8.31
+      const condutor = frotasService.lerCondutor(b.condutor_nome); // RN-F8.18: > 120 -> 400
+      if (Number(veiculo.uso_funcionarios) === 1 && !condutor) throw erro(400, MSG_CONDUTOR_OBRIGATORIO); // RN-F8.18/19
       acertarMedicao(veiculo);
       conferirMenorQueAtual(veiculo, medicao, leitura, confirmar); // RN-F3.01/05 (dentro da fila: le o km_atual da hora)
       const { km, horimetro } = leituras();
@@ -252,20 +281,26 @@ async function registrar(db, user, body) {
         WHERE veiculo_id = ? AND motorista_id = ? AND status = 'aprovada' ORDER BY id LIMIT 1`, [veiculo.id, motorista.id]);
       let viagemId;
       if (aprovada) {
+        // Frota Etapa 8 (ajuste 10): a origem que o gestor digitou na aprovada vence; so sem nenhuma das duas entra o GMP.
+        // Destino, destino_id e condutor da saida entram se vieram (COALESCE); senao ficam os da aprovada.
         await dbRun(db, `UPDATE frotas_viagens SET status = 'em_andamento', km_saida = ?, horimetro_saida = ?, data_saida = ?,
-          origem = COALESCE(?, origem), destino = COALESCE(?, destino), finalidade = COALESCE(?, finalidade),
+          origem = COALESCE(?, origem, ?), destino = COALESCE(?, destino), destino_id = COALESCE(?, destino_id),
+          condutor_nome = COALESCE(?, condutor_nome), finalidade = COALESCE(?, finalidade),
           observacoes = COALESCE(?, observacoes), updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
         // Fase5-4: as observacoes da saida iam so no INSERT — ao consumir a aprovada, se perdiam
-        [km, horimetro, dataHora, b.origem || null, b.destino || null, b.finalidade || null, b.observacoes || null, aprovada.id]);
+        [km, horimetro, dataHora, b.origem || null, ORIGEM_PADRAO, destino || null, destinoId || null, condutor || null,
+          b.finalidade || null, b.observacoes || null, aprovada.id]);
         viagemId = aprovada.id;
       } else {
         // RN-F1.04 (B4): sem aprovacao — a planilha nao tem
+        // Frota Etapa 8 (RN-F8.17, ajuste 11): a saida do portal sai sempre da GMP — sem origem (ou vazia) grava ORIGEM_PADRAO; com,
+        // grava o que veio (compat com quem ainda manda)
         const r = await dbRun(db, `INSERT INTO frotas_viagens
-          (veiculo_id, motorista_id, data_saida, km_saida, horimetro_saida, origem, destino, finalidade, status, observacoes,
-           solicitante_id, solicitante_nome)
-          VALUES (?,?,?,?,?,?,?,?,'em_andamento',?,?,?)`, [
-          veiculo.id, motorista.id, dataHora, km, horimetro, b.origem || null, b.destino || null, b.finalidade || null,
-          b.observacoes || null, user?.id || null, user?.nome || user?.name || null,
+          (veiculo_id, motorista_id, data_saida, km_saida, horimetro_saida, origem, destino, destino_id, condutor_nome, finalidade,
+           status, observacoes, solicitante_id, solicitante_nome)
+          VALUES (?,?,?,?,?,?,?,?,?,?,'em_andamento',?,?,?)`, [
+          veiculo.id, motorista.id, dataHora, km, horimetro, b.origem || ORIGEM_PADRAO, destino || null, destinoId || null, condutor,
+          b.finalidade || null, b.observacoes || null, user?.id || null, user?.nome || user?.name || null,
         ]);
         viagemId = r.lastID;
       }

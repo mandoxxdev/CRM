@@ -33,8 +33,11 @@ let dashboardGeracao = 0;
 
 function handleError(res, err) {
   if (err?.status && err.status >= 400 && err.status < 500) {
-    // Frotas Etapa 1: `code` quando o contrato manda (ex.: MOTORISTA_NAO_VINCULADO)
-    return res.status(err.status).json(err.code ? { error: err.message, code: err.code } : { error: err.message });
+    // Frotas Etapa 1: `code` quando o contrato manda (ex.: MOTORISTA_NAO_VINCULADO).
+    // Frota Etapa 8 (ajuste T-1): `err.extra` (objeto) e espalhado no corpo — o 409 DESTINO_DUPLICADO leva a linha existente
+    // (`destino`) para a tela selecionar o que ja havia; antes so `error` e `code` passavam e o resto caia no chao.
+    const extra = err.extra && typeof err.extra === 'object' ? err.extra : {};
+    return res.status(err.status).json({ error: err.message, ...(err.code ? { code: err.code } : {}), ...extra });
   }
   return respondDbError(res, err, 'frotas');
 }
@@ -358,6 +361,16 @@ module.exports = function registerFrotasRoutes(app, db, authenticateToken, check
   app.post('/api/frotas/viagens/:id/aprovar', ...frotaAuth, requirePermission('aprovar_viagens'), async (req, res) => {
     try { res.json(await frotasService.aprovarViagem(db, req.params.id, req.user)); } catch (e) { handleError(res, e); }
   });
+
+  // Frota Etapa 8 (RN-F8.27..30): destinos cadastrados. O motorista cria pelo "+ Novo destino" da saida (registrar_operacoes); editar e
+  // desativar sao do gestor. Sem GET /destinos/:id (sem getOne) — declarado no plano (ajuste T-7).
+  crudRoutes('destinos',
+    frotasService.listDestinos,
+    frotasService.createDestino,
+    frotasService.updateDestino,
+    frotasService.deleteDestino,
+    { createPerm: 'registrar_operacoes', updatePerm: 'gerenciar_veiculos', deletePerm: 'gerenciar_veiculos' }
+  );
 
   crudRoutes('checklists',
     comFotos('registro', frotasService.listChecklists), // Frota Etapa 5 (RN-F5.05)

@@ -83,8 +83,9 @@ async function abaViagens(db, periodo) {
       : String(r.data_retorno).replace('T', ' ');
     const kmRodado = r.km_rodado != null ? r.km_rodado
       : (r.km_saida != null && r.km_retorno != null ? Number(r.km_retorno) - Number(r.km_saida) : '');
+    // Frota Etapa 8 (RN-F8.22): Condutor = quem dirigiu de fato (funcionario, carro liberado) quando ha; senao o motorista
     linhas.push([
-      dia(r.data_saida) || dia(r.created_at), r.placa, vazio(r.motorista_nome), vazio(r.finalidade), vazio(r.origem), vazio(r.destino),
+      dia(r.data_saida) || dia(r.created_at), r.placa, vazio(r.condutor_nome || r.motorista_nome), vazio(r.finalidade), vazio(r.origem), vazio(r.destino),
       hora(r.data_saida), retorno, vazio(r.km_saida), vazio(r.km_retorno), kmRodado, STATUS_VIAGEM[r.status] || vazio(r.status),
       vazio(r.observacoes), vazio(r.horimetro_saida), vazio(r.horimetro_retorno),
     ]);

@@ -81,6 +81,28 @@ function numeroOpcional(v) {
   return n;
 }
 
+/**
+ * Frota Etapa 8 (RN-F8.15, ajuste 9): marca 0/1 vinda da tela (checkbox manda true/false; select manda '1'/'0'; JSON manda 1/0).
+ * `true`, `'1'` e `1` viram 1; qualquer outra coisa, 0. `undefined` e tratado por quem chama (no PUT, ausente mantem).
+ */
+function bit01(v) {
+  return v === true || v === 1 || v === '1' ? 1 : 0;
+}
+
+const MSG_CONDUTOR_LONGO = 'Condutor: no máximo 120 caracteres';
+
+/**
+ * Frota Etapa 8 (RN-F8.18/20): o condutor (funcionario que dirige o carro liberado) e texto livre, aparado, ate 120. Nao-string, vazio
+ * ou so espacos -> null (ausente); quem exige (a saida em carro liberado) decide o 400 'Informe quem vai dirigir (condutor)'.
+ */
+function lerCondutor(v) {
+  if (typeof v !== 'string') return null;
+  const t = v.trim();
+  if (!t) return null;
+  if (t.length > 120) throw erro(400, MSG_CONDUTOR_LONGO);
+  return t;
+}
+
 // Fase5-R4: ate 6 casas — com 2, um atual de 1800,004 aparecia como 1.800 e contradizia a leitura 1800 recusada
 const formatoBR = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 6 });
 
@@ -272,14 +294,15 @@ async function createVeiculo(db, userOrData, maybeData) {
   const r = await dbRun(db, `INSERT INTO frotas_veiculos
     (placa, modelo, marca, ano, tipo_id, tipo_texto, status, km_atual, horimetro_atual, tipo_medicao,
      combustivel, consumo_medio_esperado, setor_responsavel, centro_custo, motorista_id,
-     cor, chassi, renavam, observacoes)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+     cor, chassi, renavam, observacoes, uso_funcionarios)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
     placa, data.modelo || null, data.marca || null, data.ano || null,
     data.tipo_id || null, data.tipo_texto || null, data.status || 'ativo',
     Number(data.km_atual) || 0, Number(data.horimetro_atual) || 0, data.tipo_medicao || 'km',
     data.combustivel || 'diesel', data.consumo_medio_esperado != null ? Number(data.consumo_medio_esperado) : null,
     data.setor_responsavel || null, data.centro_custo || null, data.motorista_id || null,
     data.cor || null, data.chassi || null, data.renavam || null, data.observacoes || null,
+    bit01(data.uso_funcionarios), // Frota Etapa 8 (RN-F8.15): carro liberado para funcionarios
   ]);
   return getVeiculo(db, r.lastID);
 }
@@ -303,7 +326,7 @@ async function updateVeiculo(db, id, data) {
   await dbRun(db, `UPDATE frotas_veiculos SET
     placa=?, modelo=?, marca=?, ano=?, tipo_id=?, tipo_texto=?, status=?, km_atual=?, horimetro_atual=?,
     tipo_medicao=?, combustivel=?, consumo_medio_esperado=?, setor_responsavel=?, centro_custo=?,
-    motorista_id=?, cor=?, chassi=?, renavam=?, observacoes=?,
+    motorista_id=?, cor=?, chassi=?, renavam=?, observacoes=?, uso_funcionarios=?,
     updated_at=CURRENT_TIMESTAMP WHERE id=?`, [
     placa, data.modelo ?? current.modelo, data.marca ?? current.marca, data.ano ?? current.ano,
     data.tipo_id ?? current.tipo_id, data.tipo_texto ?? current.tipo_texto,
@@ -315,7 +338,9 @@ async function updateVeiculo(db, id, data) {
     data.setor_responsavel ?? current.setor_responsavel, data.centro_custo ?? current.centro_custo,
     data.motorista_id ?? current.motorista_id,
     data.cor ?? current.cor, data.chassi ?? current.chassi, data.renavam ?? current.renavam,
-    data.observacoes ?? current.observacoes, id,
+    data.observacoes ?? current.observacoes,
+    // Frota Etapa 8 (RN-F8.15, ponto 5): ausente mantem; a pagina generica manda sempre 0/1
+    data.uso_funcionarios === undefined ? bit01(current.uso_funcionarios) : bit01(data.uso_funcionarios), id,
   ]);
   return getVeiculo(db, id);
 }
@@ -888,7 +913,8 @@ async function listViagens(db, { search, veiculo_id, status } = {}, user) {
   }
   if (veiculo_id) { sql += ' AND vi.veiculo_id = ?'; params.push(veiculo_id); }
   if (status) { sql += ' AND vi.status = ?'; params.push(status); }
-  const s = buildSearchWhere(['vi.destino', 'vi.finalidade', 'v.placa'], search);
+  // Frota Etapa 8 (ajuste 22): + condutor — o gestor acha a viagem por quem dirigiu
+  const s = buildSearchWhere(['vi.destino', 'vi.finalidade', 'v.placa', 'vi.condutor_nome'], search);
   sql += s.clause;
   params.push(...s.params);
   sql += ' ORDER BY vi.data_saida DESC, vi.id DESC';
@@ -968,6 +994,7 @@ async function createViagem(db, user, dataBruta) {
   const horRetorno = numeroOpcional(data.horimetro_retorno);
   conferirHorimetroDoRetorno(horSaida, horRetorno);
   conferirDataDoRetorno(data.data_saida, data.data_retorno); // Fase5-3
+  const condutor = lerCondutor(data.condutor_nome); // Frota Etapa 8 (RN-F8.20): opcional no gestor; o destino segue texto (B79)
   const status = data.status || 'solicitada';
   return naFilaDeViagens(async () => {
     if (status === 'em_andamento') {
@@ -975,14 +1002,16 @@ async function createViagem(db, user, dataBruta) {
     }
     const r = await dbRun(db, `INSERT INTO frotas_viagens
       (veiculo_id, motorista_id, data_saida, data_retorno, km_saida, km_retorno, km_rodado,
-       destino, finalidade, setor, status, observacoes, solicitante_id, solicitante_nome, origem, horimetro_saida, horimetro_retorno)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+       destino, finalidade, setor, status, observacoes, solicitante_id, solicitante_nome, origem, horimetro_saida, horimetro_retorno,
+       condutor_nome)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
       data.veiculo_id, data.motorista_id || null, data.data_saida || null, data.data_retorno || null,
       kmSaida, kmRetorno,
       data.km_rodado != null ? Number(data.km_rodado) : (kmSaida != null && kmRetorno != null ? kmRetorno - kmSaida : null),
       data.destino || null, data.finalidade || null,
       data.setor || null, status, data.observacoes || null,
       user?.id || null, user?.nome || user?.name || null, data.origem || null, horSaida, horRetorno,
+      condutor,
     ]);
     if (kmRetorno != null) await updateKmVeiculoSeMaior(db, data.veiculo_id, kmRetorno);
     if (horRetorno != null) await updateHorimetroVeiculoSeMaior(db, data.veiculo_id, horRetorno);
@@ -1017,18 +1046,21 @@ async function updateViagem(db, id, dataBruta, user) {
     const veiculoId = data.veiculo_id ?? current.veiculo_id;
     const motoristaId = data.motorista_id ?? current.motorista_id;
     const status = data.status ?? current.status;
+    // Frota Etapa 8 (RN-F8.20, ajuste 8 / B80): como o km — null, '' ou ausente mantem o gravado (a tela manda null no campo vazio);
+    // o condutor nao se apaga pela tela do gestor, corrige-se digitando outro
+    const condutor = lerCondutor(data.condutor_nome) ?? current.condutor_nome;
     if (status === 'em_andamento') {
       await conferirViagemUnica(db, { veiculoId, motoristaId, excetoId: Number(id) });
     }
     await dbRun(db, `UPDATE frotas_viagens SET
       veiculo_id=?, motorista_id=?, data_saida=?, data_retorno=?, km_saida=?, km_retorno=?, km_rodado=?,
-      destino=?, finalidade=?, setor=?, status=?, observacoes=?, origem=?, horimetro_saida=?, horimetro_retorno=?,
+      destino=?, finalidade=?, setor=?, status=?, observacoes=?, origem=?, horimetro_saida=?, horimetro_retorno=?, condutor_nome=?,
       updated_at=CURRENT_TIMESTAMP WHERE id=?`, [
       veiculoId, motoristaId,
       dataSaida, dataRetorno,
       kmSaida, kmRetorno, kmRodado != null ? kmRodado : current.km_rodado,
       data.destino ?? current.destino, data.finalidade ?? current.finalidade, data.setor ?? current.setor,
-      status, data.observacoes ?? current.observacoes, data.origem ?? current.origem, horSaida, horRetorno, id,
+      status, data.observacoes ?? current.observacoes, data.origem ?? current.origem, horSaida, horRetorno, condutor, id,
     ]);
     if (kmRetorno != null) {
       await updateKmVeiculoSeMaior(db, veiculoId, kmRetorno);
@@ -1052,6 +1084,99 @@ async function aprovarViagem(db, id, user) {
   ]);
   if (!r.changes) throw erro(409, 'Só é possível aprovar viagem solicitada');
   return dbGet(db, 'SELECT * FROM frotas_viagens WHERE id = ?', [id]);
+}
+
+// ── Destinos (Frota Etapa 8, RN-F8.27..30) ───────────────────────────────────
+
+const MSG_DESTINO_NOME = 'Informe o nome do destino';
+const MSG_DESTINO_NOME_LONGO = 'Nome do destino: no máximo 120 caracteres';
+const MSG_DESTINO_END_LONGO = 'Endereço: no máximo 255 caracteres';
+const MSG_DESTINO_404 = 'Destino não encontrado';
+const MSG_DESTINO_DUP = 'Destino já cadastrado';
+
+/** RN-F8.27 (ajuste 9): so string conta (123 / {} nao viram "123" / "[object Object]"); aparado e com os espacos internos colapsados. */
+function normalizarNomeDestino(v) {
+  if (typeof v !== 'string') throw erro(400, MSG_DESTINO_NOME);
+  const nome = v.trim().replace(/\s+/g, ' ');
+  if (!nome) throw erro(400, MSG_DESTINO_NOME);
+  if (nome.length > 120) throw erro(400, MSG_DESTINO_NOME_LONGO);
+  return nome;
+}
+
+/** Endereco opcional: nao-string = ausente (null); aparado; > 255 -> 400. */
+function normalizarEnderecoDestino(v) {
+  if (typeof v !== 'string') return null;
+  const end = v.trim();
+  if (!end) return null;
+  if (end.length > 255) throw erro(400, MSG_DESTINO_END_LONGO);
+  return end;
+}
+
+/**
+ * RN-F8.28 (ajuste T-1, ponto 7): a duplicidade e decidida pelo indice parcial `ux_frotas_destinos_nome_ativo` (UNIQUE nome COLLATE
+ * NOCASE WHERE ativo = 1) — nenhuma conferencia antes do INSERT/UPDATE, entao nao ha janela entre conferir e gravar. O
+ * SQLITE_CONSTRAINT vira o 409 do contrato com a linha existente em `extra.destino` (o handleError a espalha no corpo), para a tela
+ * selecionar o que ja havia. A mensagem do SQLite e `UNIQUE constraint failed: frotas_destinos.nome` (ajuste 17).
+ */
+async function traduzirDestinoDuplicado(db, e, nome) {
+  if (!e || e.code !== 'SQLITE_CONSTRAINT' || !/frotas_destinos\.nome/.test(String(e.message))) return e;
+  const existente = await dbGet(db, 'SELECT * FROM frotas_destinos WHERE nome = ? COLLATE NOCASE AND ativo = 1 ORDER BY id LIMIT 1', [nome]);
+  if (!existente) return e;
+  const err = erro(409, MSG_DESTINO_DUP, 'DESTINO_DUPLICADO');
+  err.extra = { destino: existente };
+  return err;
+}
+
+/** RN-F8.29: ativos por nome; `inativos` truthy ('1'/'true'/true) inclui os desativados; `search` em nome e endereco. */
+async function listDestinos(db, { search, inativos } = {}) {
+  const comInativos = inativos === true || inativos === 1 || inativos === '1' || inativos === 'true';
+  let sql = 'SELECT * FROM frotas_destinos WHERE 1=1';
+  const params = [];
+  if (!comInativos) sql += ' AND ativo = 1';
+  const s = buildSearchWhere(['nome', 'endereco'], search);
+  sql += s.clause;
+  params.push(...s.params);
+  sql += ' ORDER BY nome COLLATE NOCASE, id';
+  return dbAll(db, sql, params);
+}
+
+async function createDestino(db, user, body) {
+  const b = body || {};
+  const nome = normalizarNomeDestino(b.nome);
+  const endereco = normalizarEnderecoDestino(b.endereco);
+  let r;
+  try {
+    r = await dbRun(db, `INSERT INTO frotas_destinos (nome, endereco, ativo, criado_por_id, criado_por_nome) VALUES (?,?,1,?,?)`,
+      [nome, endereco, user?.id || null, user?.nome || user?.name || null]);
+  } catch (e) {
+    throw await traduzirDestinoDuplicado(db, e, nome);
+  }
+  return dbGet(db, 'SELECT * FROM frotas_destinos WHERE id = ?', [r.lastID]);
+}
+
+/** RN-F8.30 (ajuste T-7): inexistente -> 404; nome/endereco/ativo opcionais; reativar com o nome ja ativo em outro -> o mesmo 409. */
+async function updateDestino(db, id, body) {
+  const current = await dbGet(db, 'SELECT * FROM frotas_destinos WHERE id = ?', [id]);
+  if (!current) throw erro(404, MSG_DESTINO_404);
+  const b = body || {};
+  const nome = b.nome === undefined ? current.nome : normalizarNomeDestino(b.nome);
+  const endereco = b.endereco === undefined ? current.endereco : normalizarEnderecoDestino(b.endereco);
+  const ativo = b.ativo === undefined ? bit01(current.ativo) : bit01(b.ativo);
+  try {
+    await dbRun(db, 'UPDATE frotas_destinos SET nome = ?, endereco = ?, ativo = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [nome, endereco, ativo, id]);
+  } catch (e) {
+    throw await traduzirDestinoDuplicado(db, e, nome);
+  }
+  return dbGet(db, 'SELECT * FROM frotas_destinos WHERE id = ?', [id]);
+}
+
+/** RN-F8.30: exclusao logica — a viagem guarda o nome da hora e o historico fica; inexistente -> 404 (ajuste T-7). */
+async function deleteDestino(db, id) {
+  const current = await dbGet(db, 'SELECT id FROM frotas_destinos WHERE id = ?', [id]);
+  if (!current) throw erro(404, MSG_DESTINO_404);
+  await dbRun(db, 'UPDATE frotas_destinos SET ativo = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [id]);
+  return { success: true };
 }
 
 async function deleteViagem(db, id) {
@@ -1499,4 +1624,6 @@ module.exports = {
   validarItens, conferirViagemUnica, conferirKmDoRetorno, updateKmVeiculoSeMaior, MSG_VEICULO_EM_USO, MSG_MOTORISTA_EM_VIAGEM,
   // Frota Etapa 3
   updateHorimetroVeiculoSeMaior, conferirHorimetroDoRetorno,
+  // Frota Etapa 8
+  listDestinos, createDestino, updateDestino, deleteDestino, lerCondutor, bit01, MSG_CONDUTOR_LONGO, MSG_DESTINO_404,
 };

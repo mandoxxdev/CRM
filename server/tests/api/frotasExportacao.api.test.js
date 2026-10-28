@@ -92,6 +92,12 @@ async function cenario() {
   await como(ADMIN, 'post', '/api/frotas/viagens', {
     veiculo_id: S.v2.id, data_saida: '2026-08-01T08:00', km_saida: 100, km_retorno: 200, status: 'concluida', destino: 'Antiga',
   });
+  // Frota Etapa 8 (RN-F8.22): viagem com condutor (funcionario) E motorista — a coluna Condutor mostra o condutor. Setembro: fora dos
+  // dois periodos filtrados adiante.
+  await como(ADMIN, 'post', '/api/frotas/viagens', {
+    veiculo_id: S.v2.id, motorista_id: S.ma.id, data_saida: '2026-09-15T09:00', km_saida: 200, km_retorno: 260, status: 'concluida',
+    destino: 'Fornecedor', condutor_nome: 'Carlos',
+  });
   // checklist antigo (sem itens)
   await como(ADMIN, 'post', '/api/frotas/checklists', {
     veiculo_id: S.v2.id, data_checklist: '2026-08-02', pneus_ok: 1, oleo_ok: 0, luzes_ok: 1, freios_ok: 1, extintor_ok: 1, documentos_ok: 1, limpeza_ok: 1,
@@ -137,12 +143,28 @@ test('RN-F1.18 (F2-18) Cadastro Frota: cabecalho, veiculos ativos e proxima revi
 test('RN-F1.18 Viagens e KM: cabecalho e linhas (portal e gestor)', async () => {
   const [cab, ...linhas] = S.planilha.out['Viagens e KM'];
   assert.deepStrictEqual(cab, ['Data', 'Veículo', 'Condutor', 'Finalidade', 'Origem', 'Destino', 'Saída', 'Retorno', 'KM Inicial', 'KM Final', 'KM Percorrido', 'Status', 'Observações', 'Horímetro Inicial', 'Horímetro Final']); // Etapa 3 (RN-F3.11)
-  assert.strictEqual(linhas.length, 2);
+  assert.strictEqual(linhas.length, 3); // + a de setembro com condutor (Etapa 8, RN-F8.22)
   const p = linhas.find((l) => l[1] === 'EXP0001');
   assert.deepStrictEqual(p, ['2026-10-20', 'EXP0001', 'Ana Motorista', 'Entrega', 'GMP', 'Cliente', '07:00', '18:10', 1000, 1120, 120, 'Concluída', 'freio puxando', '', '']);
-  const g = linhas.find((l) => l[1] === 'EXP0002');
-  assert.strictEqual(g[0], '2026-08-01');
+  const g = linhas.find((l) => l[0] === '2026-08-01');
+  assert.strictEqual(g[1], 'EXP0002');
   assert.strictEqual(g[10], 100);
+});
+
+// Frota Etapa 8 (RN-F8.22): Condutor = condutor_nome quando ha; senao o motorista. Nenhuma coluna nova — o cabecalho e o de sempre.
+test('RN-F8.22 Viagens e KM: Condutor = condutor_nome quando ha, senao o motorista; cabecalho identico', async () => {
+  const [cab, ...linhas] = S.planilha.out['Viagens e KM'];
+  assert.deepStrictEqual(cab, ['Data', 'Veículo', 'Condutor', 'Finalidade', 'Origem', 'Destino', 'Saída', 'Retorno', 'KM Inicial', 'KM Final', 'KM Percorrido', 'Status', 'Observações', 'Horímetro Inicial', 'Horímetro Final']);
+  const comCondutor = linhas.find((l) => l[0] === '2026-09-15');
+  assert(comCondutor, 'a viagem de setembro esta na aba');
+  assert.strictEqual(comCondutor[1], 'EXP0002');
+  assert.strictEqual(comCondutor[2], 'Carlos', 'o condutor vence o motorista (Ana) na coluna');
+  assert.strictEqual(comCondutor[5], 'Fornecedor');
+  assert.strictEqual(comCondutor[10], 60);
+  const semCondutor = linhas.find((l) => l[0] === '2026-10-20');
+  assert.strictEqual(semCondutor[2], 'Ana Motorista', 'sem condutor, o motorista');
+  const semNinguem = linhas.find((l) => l[0] === '2026-08-01');
+  assert.strictEqual(semNinguem[2], '', 'sem condutor nem motorista: vazio');
 });
 
 test('RN-F1.18 (F2-6) Checklist: 12 itens Conforme/Nao conforme/N/A, avarias em texto, Status Geral', async () => {

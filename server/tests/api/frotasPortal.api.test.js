@@ -82,7 +82,8 @@ test('F2-11 GET /portal/inicio: motorista, veiculos ativos com status/em_uso, li
   assert(placas.includes('POR0001') && placas.includes('POR0003'), 'ativo e em manutencao aparecem');
   assert(!placas.includes('POR0004') && !placas.includes('POR0005'), 'excluido e vendido nao');
   const v1 = r.body.veiculos.find((v) => v.placa === 'POR0001');
-  assert.deepStrictEqual(Object.keys(v1).sort(), ['em_uso', 'horimetro_atual', 'id', 'km_atual', 'marca', 'modelo', 'placa', 'status', 'tipo_medicao'] /* + horimetro_atual: Etapa 3, RN-F3.09 */.sort());
+  assert.deepStrictEqual(Object.keys(v1).sort(), ['em_uso', 'horimetro_atual', 'id', 'km_atual', 'marca', 'modelo', 'placa', 'status', 'tipo_medicao', 'uso_funcionarios'] /* + horimetro_atual: Etapa 3, RN-F3.09; + uso_funcionarios: Etapa 8, RN-F8.15 */.sort());
+  assert.strictEqual(v1.uso_funcionarios, 0);
   assert.strictEqual(v1.em_uso, false);
   assert.strictEqual(r.body.veiculos.find((v) => v.placa === 'POR0003').status, 'manutencao');
   assert.strictEqual(r.body.itens.length, 12);
@@ -170,6 +171,7 @@ test('RN-F1.04 saida grava o registro e abre a viagem em andamento; RN-F1.08 sob
   assert.deepStrictEqual(ini.body.viagem_aberta, {
     id: viagem.id, veiculo_id: S.v1.id, placa: 'POR0001', km_saida: 1050, data_saida: '2026-10-23T07:30', destino: 'Cliente X',
     horimetro_saida: null, tipo_medicao: 'km', // Etapa 3 (RN-F3.09): aditivo
+    condutor_nome: null, // Etapa 8 (RN-F8.21): aditivo
   });
   assert.strictEqual(ini.body.veiculos.find((v) => v.id === S.v1.id).em_uso, true);
 });
