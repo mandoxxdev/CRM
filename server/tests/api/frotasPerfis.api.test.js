@@ -2,7 +2,7 @@
  * Frotas Etapa 2 — T1: perfil do Frota pela tela (GET/PUT /api/frotas/perfis-usuario), perfil em /usuarios-vinculaveis e o C7.
  *
  *   RN-F2.01  GET lista ativos e nao ocultos, por nome, com explicito/efetivo/origem/motorista; so `configurar`
- *   RN-F2.02  regua unica (classificarPerfilFrota sobre getPerfilFromUser): forcado / explicito / padrao
+ *   RN-F2.02  regua unica (classificarPerfilFrota sobre getPerfilFromUser): forcado / admin_modulo (Etapa 8, RN-F8.01) / explicito / padrao
  *   RN-F2.03  PUT CONSULTA|MOTORISTA grava; null/'' apaga (padrao); o resto -> 400
  *   RN-F2.04  forcado -> 409 PERFIL_FORCADO, nada gravado
  *   RN-F2.05  inexistente/desativado/id torto -> 404
@@ -25,9 +25,9 @@ let passed = 0; let failed = 0;
 const testes = [];
 function test(name, fn) { testes.push([name, fn]); }
 
-const MSG_FORCADO = 'Este usuário já é administrador (superadmin, administrador do sistema ou administrador do módulo Frota) e tem '
-  + 'acesso total à frota. Remova essa condição no cadastro de usuário antes de definir outro perfil.';
-const MSG_INVALIDO = 'Perfil inválido. Use CONSULTA, MOTORISTA ou vazio para voltar ao padrão.';
+// Etapa 8 (RN-F8.04/05): mensagens novas — o forcado e so superadmin/administrador do sistema; ADMIN_FROTA entrou na lista
+const MSG_FORCADO = 'Este usuário é superadmin ou administrador do sistema e tem acesso total à frota. Isso não se altera por esta tela.';
+const MSG_INVALIDO = 'Perfil inválido. Use CONSULTA, MOTORISTA, ADMIN_FROTA ou vazio para voltar ao padrão.';
 const URL = '/api/frotas/perfis-usuario';
 
 let ctx;
@@ -76,7 +76,7 @@ async function cenario() {
 // ── RN-F2.01 / RN-F2.02 ─────────────────────────────────────────────────────
 test('RN-F2.01 GET: perfis oferecidos, ativos e nao ocultos, por nome', async () => {
   const b = await listar();
-  assert.deepStrictEqual(b.perfis, ['CONSULTA', 'MOTORISTA']);
+  assert.deepStrictEqual(b.perfis, ['CONSULTA', 'MOTORISTA', 'ADMIN_FROTA'], 'Etapa 8 (RN-F8.05): ADMIN_FROTA entrou na lista');
   assert.deepStrictEqual(b.usuarios.map((u) => u.nome), [
     'Ana', 'Bruno', 'Consulta', 'Fabio AdminModulo', 'Gestor', 'Gil AdminAlmox', 'Helena Sobra', 'Iris RoleMaiuscula', 'Joao Minusculo', 'Super',
   ], 'Inativo (5) e Oculto (7) ficam fora');
@@ -88,11 +88,13 @@ test('RN-F2.01 GET: perfis oferecidos, ativos e nao ocultos, por nome', async ()
   assert.strictEqual(b.usuarios.find((u) => u.id === 4).viagem_aberta, false);
 });
 
-test('RN-F2.02 a regua: forcado / explicito / padrao para cada combinacao', async () => {
+test('RN-F2.02 a regua: forcado / admin_modulo / explicito / padrao para cada combinacao', async () => {
   const b = await listar();
   const v = (id) => { const u = b.usuarios.find((x) => x.id === id); return [u.perfil_explicito, u.perfil_efetivo, u.origem]; };
   assert.deepStrictEqual(v(1), [null, 'ADMIN_FROTA', 'forcado'], 'role admin');
-  assert.deepStrictEqual(v(6), ['ADMIN_FROTA', 'ADMIN_FROTA', 'forcado'], 'admin do modulo (linha do sync)');
+  // Etapa 8 (RN-F8.01): dizia forcado; a spec 19 corrigiu — o admin do modulo e `admin_modulo` (a tela da e tira) e o explicito e
+  // CALCULADO de admin_modulos (ajuste 20), nao lido da linha do sync
+  assert.deepStrictEqual(v(6), ['ADMIN_FROTA', 'ADMIN_FROTA', 'admin_modulo'], 'admin do modulo (admin_modulos com frota)');
   assert.deepStrictEqual(v(8), [null, 'ADMIN_FROTA', 'forcado'], 'superadmin');
   assert.deepStrictEqual(v(2), [null, 'MOTORISTA', 'padrao'], 'sem linha');
   assert.deepStrictEqual(v(3), ['CONSULTA', 'CONSULTA', 'explicito']);
@@ -133,7 +135,8 @@ test("RN-F2.03 PUT null e '' apagam a linha (volta ao padrao)", async () => {
 
 test('RN-F2.03 PUT com perfil fora da lista -> 400 literal e nada muda', async () => {
   await como(ADMIN, 'put', `${URL}/2`, { perfil: 'CONSULTA' });
-  for (const corpo of [{ perfil: 'ADMIN_FROTA' }, { perfil: 'consulta' }, { perfil: 'GESTOR' }, {}, { perfil: 1 }]) {
+  // Etapa 8 (RN-F8.05): { perfil: 'ADMIN_FROTA' } saiu desta lista — agora e valido (frotasPerfisAdmin.api.test.js)
+  for (const corpo of [{ perfil: 'consulta' }, { perfil: 'GESTOR' }, {}, { perfil: 1 }]) {
     const r = await como(ADMIN, 'put', `${URL}/2`, corpo);
     assert.strictEqual(r.status, 400, `${JSON.stringify(corpo)} -> ${r.status}`);
     assert.strictEqual(r.body.error, MSG_INVALIDO);
@@ -144,7 +147,9 @@ test('RN-F2.03 PUT com perfil fora da lista -> 400 literal e nada muda', async (
 
 // ── RN-F2.04 / RN-F2.05 ─────────────────────────────────────────────────────
 test('RN-F2.04 forcado -> 409 PERFIL_FORCADO e nada e gravado', async () => {
-  for (const id of [1, 6, 8]) {
+  // Etapa 8 (RN-F8.01): dizia forcado para o 6 (admin do modulo); a spec 19 corrigiu — o 409 forcado e so para superadmin (8) e
+  // role admin (1, 11). O 6 e `admin_modulo` e o PUT nele e coberto em frotasPerfisAdmin.api.test.js (RN-F8.03)
+  for (const id of [1, 8, 11]) {
     const antes = await linha(id);
     const r = await como(ADMIN, 'put', `${URL}/${id}`, { perfil: 'CONSULTA' });
     assert.strictEqual(r.status, 409, `usuario ${id}: ${JSON.stringify(r.body)}`);
@@ -154,14 +159,14 @@ test('RN-F2.04 forcado -> 409 PERFIL_FORCADO e nada e gravado', async () => {
   }
   const r = await como(ADMIN, 'put', `${URL}/1`, { perfil: null });
   assert.strictEqual(r.status, 409, 'voltar ao padrao tambem e recusado para o forcado');
-  assert.deepStrictEqual(await linha(6), { perfil: 'ADMIN_FROTA' }, 'o null nao apaga a linha do sync');
-  const r6 = await como(ADMIN, 'put', `${URL}/6`, { perfil: null });
-  assert.strictEqual(r6.status, 409);
-  assert.deepStrictEqual(await linha(6), { perfil: 'ADMIN_FROTA' });
+  const r8 = await como(ADMIN, 'put', `${URL}/8`, { perfil: 'ADMIN_FROTA' });
+  assert.strictEqual(r8.status, 409, 'ADMIN_FROTA num forcado tambem e recusado (ja tem tudo)');
+  assert.strictEqual(r8.body.code, 'PERFIL_FORCADO');
 });
 
 test('RN-F2.04 ordem: perfil invalido num forcado da 400, nao 409', async () => {
-  const r = await como(ADMIN, 'put', `${URL}/1`, { perfil: 'ADMIN_FROTA' });
+  // Etapa 8: era { perfil: 'ADMIN_FROTA' }, que agora e valido; o invalido passou a ser GESTOR
+  const r = await como(ADMIN, 'put', `${URL}/1`, { perfil: 'GESTOR' });
   assert.strictEqual(r.status, 400);
   assert.strictEqual(r.body.error, MSG_INVALIDO);
 });

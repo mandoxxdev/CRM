@@ -5,6 +5,7 @@
  *             finishFrotaProfile): /dashboard 403 -> 200 -> 403; portal recusa gravar como CONSULTA
  *   RN-F2.06  o mesmo entrando pelo SERVICO (definirPerfil direto no banco)
  *   RN-F2.02  para cada usuario da lista, o perfil_efetivo do GET == o `perfil` que o servidor aplica nele (GET /portal/inicio)
+ *   RN-F8.07  (Etapa 8) Administrador de Frota dado pela tela (admin_modulos) chega ao pedido seguinte: /perfis-usuario 200 -> 403
  *
  * O stub de createFrotasTestApp poe o perfil pronto no header — nao prova que a linha gravada chega ao req.user. O `comLoginReal`
  * (frotasTestApp.js) monta o MESMO banco atras do login de verdade; por isso este arquivo existe (ponto de atencao 1 do plano).
@@ -14,7 +15,7 @@
  */
 const assert = require('assert');
 const { createFrotasTestApp, comLoginReal, ADMIN } = require('../helpers/frotasTestApp');
-const { dbRun } = require('../../services/frotas/db');
+const { dbRun, dbGet } = require('../../services/frotas/db');
 const perfisService = require('../../services/frotas/perfisService');
 
 let passed = 0; let failed = 0;
@@ -85,12 +86,49 @@ test('RN-F2.02 a tela e o servidor concordam: perfil_efetivo do GET == perfil ap
   const lista = (await ctx.como(ADMIN)('get', '/api/frotas/perfis-usuario')).body.usuarios;
   assert.ok(lista.length >= 9, `lista curta demais: ${lista.length}`);
   const origens = new Set(lista.map((u) => u.origem));
-  assert.deepStrictEqual([...origens].sort(), ['explicito', 'forcado', 'padrao'], 'o cenario cobre as tres origens');
+  // Etapa 8 (RN-F8.01, ajuste 15): o admin do modulo (6) deixou de ser `forcado` e virou `admin_modulo`
+  assert.deepStrictEqual([...origens].sort(), ['admin_modulo', 'explicito', 'forcado', 'padrao'], 'o cenario cobre as quatro origens');
   for (const u of lista) {
     const r = await login.como(u.id)('get', '/api/frotas/portal/inicio');
     assert.strictEqual(r.status, 200, `${u.nome}: ${JSON.stringify(r.body)}`);
     assert.strictEqual(r.body.perfil, u.perfil_efetivo, `${u.nome} (${u.origem}): tela diz ${u.perfil_efetivo}, servidor aplica ${r.body.perfil}`);
   }
+});
+
+// ── Etapa 8 (RN-F8.07): Administrador de Frota dado pela tela chega ao pedido seguinte pelo login real ──
+test('RN-F8.07 pela rota: PUT ADMIN_FROTA na Ana -> ela abre /perfis-usuario e /dashboard; CONSULTA -> so o painel; null -> nada', async () => {
+  const ana = login.como(ANA);
+  const antes = await ana('get', '/api/frotas/perfis-usuario');
+  assert.strictEqual(antes.status, 403, `sem nada a Ana e MOTORISTA: ${JSON.stringify(antes.body)}`);
+
+  const r = await putPerfil(ANA, 'ADMIN_FROTA');
+  assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+  assert.deepStrictEqual(r.body, { usuario_id: ANA, perfil_explicito: 'ADMIN_FROTA', perfil_efetivo: 'ADMIN_FROTA', origem: 'admin_modulo' });
+  const perfis = await ana('get', '/api/frotas/perfis-usuario');
+  assert.strictEqual(perfis.status, 200, `o admin_modulos gravado nao chegou ao req.user (finishFrotaProfile): ${JSON.stringify(perfis.body)}`);
+  assert.strictEqual((await ana('get', '/api/frotas/dashboard')).status, 200);
+  assert.strictEqual((await ana('get', '/api/frotas/portal/inicio')).body.perfil, 'ADMIN_FROTA');
+  // A fonte e admin_modulos, nao a linha espelho: a linha sozinha ja daria ADMIN_FROTA pelo enrich (RN-F2.07, "linha sobrando") e
+  // mascararia uma gravacao errada da coluna (sabotagem 'frotas' passava aqui). Sem a linha, a Ana tem de continuar administradora.
+  const col = await dbGet(ctx.db, 'SELECT admin_modulos FROM usuarios WHERE id = ?', [ANA]);
+  assert.strictEqual(col.admin_modulos, '["frota"]');
+  await dbRun(ctx.db, 'DELETE FROM perfil_frota_usuario WHERE usuario_id = ?', [ANA]);
+  const semEspelho = await ana('get', '/api/frotas/perfis-usuario');
+  assert.strictEqual(semEspelho.status, 200, `sem a linha espelho o admin_modulos sozinho nao sustentou: ${JSON.stringify(semEspelho.body)}`);
+  await dbRun(ctx.db, "INSERT INTO perfil_frota_usuario (usuario_id, perfil) VALUES (?, 'ADMIN_FROTA')", [ANA]);
+
+  const consulta = await putPerfil(ANA, 'CONSULTA');
+  assert.strictEqual(consulta.status, 200, JSON.stringify(consulta.body));
+  assert.deepStrictEqual(consulta.body, { usuario_id: ANA, perfil_explicito: 'CONSULTA', perfil_efetivo: 'CONSULTA', origem: 'explicito' });
+  const semConfigurar = await ana('get', '/api/frotas/perfis-usuario');
+  assert.strictEqual(semConfigurar.status, 403, `tirar o administrador nao chegou ao pedido seguinte: ${JSON.stringify(semConfigurar.body)}`);
+  assert.strictEqual(semConfigurar.body.acao, 'configurar');
+  assert.strictEqual((await ana('get', '/api/frotas/dashboard')).status, 200, 'Consulta ve o painel');
+
+  const volta = await putPerfil(ANA, null);
+  assert.strictEqual(volta.status, 200);
+  assert.strictEqual((await ana('get', '/api/frotas/dashboard')).status, 403, 'voltar ao padrao devolve o 403');
+  assert.strictEqual((await ana('get', '/api/frotas/portal/inicio')).body.perfil, 'MOTORISTA');
 });
 
 (async () => {

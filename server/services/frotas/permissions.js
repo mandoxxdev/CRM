@@ -50,19 +50,26 @@ function requirePermission(acao) {
   };
 }
 
-/** Frotas Etapa 2 (RN-F2.03): os perfis que a tela Perfis de acesso grava. ADMIN_FROTA nao: vem do cadastro de usuario (admin_modulos). */
-const PERFIS_ATRIBUIVEIS = [PERFIS.CONSULTA, PERFIS.MOTORISTA];
+/**
+ * Frotas Etapa 2 (RN-F2.03): os perfis que a tela Perfis de acesso grava. Ate a Etapa 7 dizia "ADMIN_FROTA nao: vem do cadastro de
+ * usuario (admin_modulos)"; desde a Etapa 8 (RN-F8.02, spec 19) a tela tambem da e tira o Administrador de Frota — gravando o
+ * proprio `admin_modulos` (a fonte continua a mesma; so a linha espelho nao bastaria, o sync do nucleo a apagaria).
+ */
+const PERFIS_ATRIBUIVEIS = [PERFIS.CONSULTA, PERFIS.MOTORISTA, PERFIS.ADMIN_FROTA];
 
 /**
  * Frotas Etapa 2 (RN-F2.02): a regua UNICA do perfil de uma linha de `usuarios` + a linha crua de `perfil_frota_usuario`.
  * Chama o proprio getPerfilFromUser sobre o usuario como o enrich o montaria (is_superadmin, admin_modulos, role, perfil_frota) —
- * por isso nao pode divergir do que o servidor aplica no pedido seguinte. `forcado` = sem a linha ja daria ADMIN_FROTA (superadmin,
- * admin do modulo frota, role 'admin'): a linha seria ignorada e o sync a reescreveria.
+ * por isso nao pode divergir do que o servidor aplica no pedido seguinte. Sem a linha ja daria ADMIN_FROTA em dois casos, que a
+ * Etapa 8 (RN-F8.01) separa: `forcado` = superadmin ou role 'admin' (qualquer caixa) — a tela do Frota nao mexe; `admin_modulo` = so
+ * `admin_modulos` com 'frota' — a tela da e tira (RN-F8.02/03). Nos dois a linha e ignorada pelo getPerfilFromUser.
  */
 function classificarPerfilFrota(u, perfilExplicito) {
   const base = { is_superadmin: u?.is_superadmin, admin_modulos: u?.admin_modulos, role: u?.role };
   if (getPerfilFromUser({ ...base, perfil_frota: null }) === PERFIS.ADMIN_FROTA) {
-    return { efetivo: PERFIS.ADMIN_FROTA, origem: 'forcado' };
+    const { isSuperAdmin } = require('../systemPermissions');
+    const forcado = isSuperAdmin(base) || String(base.role || '').toLowerCase() === 'admin';
+    return { efetivo: PERFIS.ADMIN_FROTA, origem: forcado ? 'forcado' : 'admin_modulo' };
   }
   if (perfilExplicito) return { efetivo: getPerfilFromUser({ ...base, perfil_frota: perfilExplicito }), origem: 'explicito' };
   return { efetivo: getPerfilFromUser({ ...base, perfil_frota: null }), origem: 'padrao' };
