@@ -1,6 +1,6 @@
 ---
-name: desenvolver-etapa-almoxarifado
-description: Use ao iniciar o desenvolvimento de qualquer etapa, feature nova ou SDD de correção do CRM (especialmente do módulo almoxarifado) — antes de escrever qualquer plano ou código. Use também quando o usuário pedir "começa a etapa X", "desenvolve a feature Y", deixar specs para executar em background ou de madrugada, ou quando houver dúvida sobre quais tasks podem ir para agentes em paralelo.
+name: desenvolver-etapa
+description: Use ao iniciar o desenvolvimento de qualquer etapa, feature nova ou SDD de correção do CRM, em qualquer módulo (almoxarifado, compras, frotas, propostas, comercial…) — antes de escrever qualquer plano ou código. Use também quando o usuário pedir "começa a etapa X", "desenvolve a feature Y", deixar specs para executar em background ou de madrugada, ou quando houver dúvida sobre quais tasks podem ir para agentes em paralelo.
 ---
 
 # Desenvolver etapa — o contrato de execução deste projeto
@@ -10,23 +10,43 @@ esta garante que o **começo e o meio** não pulam. O usuário roda etapas em ba
 de madrugada, e é o único responsável pelo projeto — o fluxo não pode travar esperando ninguém
 e não pode entregar nada que não esteja **medido como verde**.
 
-**Anuncie ao começar:** "Usando a skill `desenvolver-etapa-almoxarifado` para conduzir a etapa."
+Vale para **todos os módulos** do CRM. Nasceu no almoxarifado (e por isso os exemplos são de
+lá), mas o processo é o mesmo em compras, frotas, propostas e no núcleo. Onde abaixo aparece
+`<modulo>`, leia o módulo da etapa: `modulo-almoxarifado`, `modulo-compras`, `modulo-frotas`,
+`proposta-editavel`… — o nome da pasta em `specs/`.
+
+**Anuncie ao começar:** "Usando a skill `desenvolver-etapa` para conduzir a etapa."
 
 Crie uma tarefa por fase abaixo e execute em ordem.
 
 ---
 
+## Fase 0.0 — Rotinas pessoais do André (se existirem nesta máquina)
+
+Antes de ler qualquer spec, confira se existe a skill **pessoal** `controle-horas`
+(`~/.claude/skills/controle-horas/`, fora do repositório). Se existir, **use-a primeiro**: ela
+mede a semana e devolve um ponteiro que diz se a etapa pode começar, se só cabe uma fatia curta
+ou se é hora de **parar** — e, no "parar", o que fazer antes de encerrar. **Ela tem precedência
+sobre o "NÃO PARE" do CLAUDE.md.** Nada do que ela mede entra no repositório: não cite os
+números dela em commit, plano, spec ou documento versionado.
+
+Se a skill não existir nesta máquina, siga para a Fase 0.
+
 ## Fase 0 — Ler antes de escrever qualquer coisa
 
-1. A spec da feature: `specs/modulo-almoxarifado/<NN-feature>/README.md` (e o mapa em
-   `specs/modulo-almoxarifado/README.md` para saber o estado das vizinhas).
+1. A spec da feature: `specs/<modulo>/<NN-feature>/README.md` (e o mapa em
+   `specs/<modulo>/README.md` para saber o estado das vizinhas). Módulo sem spec ainda
+   (uma task avulsa do usuário): **crie a spec antes** — cada task vira spec, como já é feito em
+   compras.
 2. O plano da etapa anterior em `docs/superpowers/plans/` — a seção "próxima tarefa detalhada"
    existe para isto: retomar sem reler o código.
-3. As regras inegociáveis (estão no CLAUDE.md, mas releia): autorização em **duas camadas**
-   (módulo abre tela, perfil autoriza ação; fallback é `PRODUCAO`, backend decide);
-   **almoxarifado é área física, não filial** (saldo global é intencional — não "corrija");
-   testes descobertos só em `server/tests/api/*.api.test.js`, harness `testApp.js` com
-   `requirePermission` real.
+3. As regras inegociáveis (estão no CLAUDE.md, mas releia). As gerais: testes descobertos só em
+   `server/tests/api/*.api.test.js`, harness `testApp.js` com `requirePermission` real; um
+   processo só, SQLite sem transação — o motor compensa. As do almoxarifado, **quando a etapa o
+   toca**: autorização em **duas camadas** (módulo abre tela, perfil autoriza ação; fallback é
+   `PRODUCAO`, backend decide); **almoxarifado é área física, não filial** (saldo global é
+   intencional — não "corrija"); e as duas travas (por material e por requisição) — leia a seção
+   do CLAUDE.md inteira antes de encostar em saldo.
 
 **Se a spec contradiz o código existente, pare e registre** — spec errada já enganou sessões
 inteiras aqui. A correção da spec faz parte da etapa (regra 5 do CLAUDE.md).
@@ -49,10 +69,12 @@ está errado em vez de escolher o seu.
 
 ## Fase 1 — Pensar: design e plano (o pensador, sequencial)
 
-Use `superpowers:brainstorming` e depois `superpowers:writing-plans`. Convenção de nomes:
+Use `superpowers:brainstorming` e depois `superpowers:writing-plans`. Convenção de nomes (o
+prefixo é o módulo curto — `almoxarifado`, `compras`, `frotas`, `crm` para o núcleo — e a
+numeração de etapa é **por módulo**; veja o último plano do módulo em `docs/superpowers/plans/`):
 
-- Design: `docs/superpowers/specs/<AAAA-MM-DD>-almoxarifado-etapaN-<tema>-design.md`
-- Plano: `docs/superpowers/plans/<AAAA-MM-DD>-almoxarifado-etapaN-<tema>.md`
+- Design: `docs/superpowers/specs/<AAAA-MM-DD>-<modulo>-etapaN-<tema>-design.md`
+- Plano: `docs/superpowers/plans/<AAAA-MM-DD>-<modulo>-etapaN-<tema>.md`
 
 O plano desta base **tem de conter**, além das tasks:
 
@@ -152,8 +174,10 @@ protegem o loop:
 ## Regras de overnight (valem em todas as fases)
 
 - **Nunca espere input.** Decisão ambígua → escolha o caminho **reversível**, registre a decisão
-  e a alternativa descartada na **letra B** do bloco `⚠️ Leia antes de apresentar`
-  (`docs/almoxarifado-novidades-por-etapa.md`). De manhã o usuário arbitra.
+  e a alternativa descartada na **letra B** do bloco `⚠️ Leia antes de apresentar` do documento
+  de novidades do módulo (`docs/<modulo>-novidades-por-etapa.md` — hoje existem o do
+  almoxarifado, que também registra etapas do núcleo, e o de compras; módulo novo ganha o seu no
+  primeiro fechamento). De manhã o usuário arbitra.
 - **Nada de pergunta no meio do fluxo** — a pergunta vira registro escrito + caminho reversível.
 - Falhou de forma irrecuperável? **Pare com relatório preciso no plano** (o que rodou, o que
   falta, por que parou). Parar legível vale mais que insistir ilegível.

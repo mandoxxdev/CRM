@@ -71,9 +71,13 @@ pessoas, e quem recebe não tem as pastas: um `relatorio.pdf` solto não diz de 
    **por baixo** (sessões pelo intervalo entre commits) — diga isso no relatório, sem decimais
    falsos: arredonde para hora cheia.
 
-   **O contrato do André é de horas por semana, não de dias** (teto de **30 h semanais** neste
-   projeto). Por isso o relatório mede tempo **por atividade** e nunca diz em que dia algo foi
-   feito ("de quinta a sábado", "na segunda") — o "por dia" do script é só para você conferir.
+   **O contrato do André é de horas por semana, não de dias.** Por isso o relatório mede tempo
+   **por atividade** e nunca diz em que dia algo foi feito ("de quinta a sábado", "na segunda")
+   — o "por dia" do script é só para você conferir. Os termos do contrato (teto, saldo da
+   semana) são **pessoais** e ficam fora do repositório, na skill pessoal `controle-horas`
+   (`~/.claude/skills/controle-horas/`, se existir nesta máquina) — **não** os escreva aqui, no
+   relatório nem em nenhum arquivo versionado. Quando essa skill mandar parar na semana, é ela
+   quem chama esta para fechar o relatório.
 
 2. **Levantar o que mudou**, nesta ordem de fonte: `docs/almoxarifado-novidades-por-etapa.md`
    e `docs/compras-novidades-por-etapa.md` (parte "Antes → Agora" — o do almoxarifado registra

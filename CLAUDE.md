@@ -23,11 +23,20 @@ opções, sem esperar aval.
 **Como escolher a próxima etapa** (nesta ordem, sem consultar ninguém):
 1. a "próxima tarefa detalhada" no fim do plano da etapa que acabou de fechar;
 2. o que o fechamento nomeou como "o que falta para 🟢" da feature que você tocou;
-3. o mapa `specs/modulo-almoxarifado/README.md` — a feature 🔴/🟡 de maior valor, medindo antes
-   de prometer (Fase 0 da skill `desenvolver-etapa-almoxarifado`).
+3. o mapa `specs/<modulo>/README.md` do módulo em que ele está trabalhando — a feature 🔴/🟡
+   de maior valor, medindo antes de prometer (Fase 0 da skill `desenvolver-etapa`, que vale
+   para **todos** os módulos).
 
 **Só pare em falha irrecuperável**, e mesmo aí pare **legível**: relatório preciso no plano
 dizendo o que rodou, o que falta e por que travou.
+
+**Única outra exceção: a skill pessoal `controle-horas`.** Ela mora fora do repositório
+(`~/.claude/skills/controle-horas/`, só na máquina do André) e é consultada no começo de toda
+etapa (`desenvolver-etapa`, Fase 0.0) e no fechamento (`fechar-etapa`, Passo 7½). Quando o
+ponteiro dela disser **parar**, obedeça: faça o que ela mandar (em geral o relatório da semana)
+e encerre o turno legível, sem começar etapa nova. O que ela mede é pessoal: **nenhum número
+dela vai para commit, plano, spec ou documento versionado.** Se a skill não existir nesta
+máquina, a regra "não pare" vale inteira.
 
 **Se ele fizer uma pergunta ("terminou?", "tem mais tasks?"), responda em uma linha e continue
 executando no mesmo turno** — a pergunta não é um pedido para parar.

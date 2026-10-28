@@ -13,7 +13,8 @@
 ## 2. Como retomar (passo a passo)
 
 1. `git log --oneline -5` na `main` — o topo deve ser o fechamento da 190 (seção 3) ou este arquivo.
-2. Leia o processo: `CLAUDE.md` da raiz, as skills `.claude/skills/desenvolver-etapa-almoxarifado/SKILL.md`
+2. Leia o processo: `CLAUDE.md` da raiz, as skills `.claude/skills/desenvolver-etapa/SKILL.md`
+   (chamava-se `desenvolver-etapa-almoxarifado` até 2026-10-28; hoje vale para todos os módulos)
    e `.claude/skills/fechar-etapa/SKILL.md`.
 3. Abra o plano da 191: `docs/superpowers/plans/2026-10-23-almoxarifado-etapa191-corrigir-validade-de-lote.md`.
    **Comece pela Fase 2** (revisor fresco do plano, as quatro perguntas da skill). Pontos que o revisor

@@ -259,18 +259,29 @@ Se algum item ficou não, **a etapa não está fechada** — termine antes de re
 
 ---
 
+## Passo 7½ (obrigatório se existir): registre o fechamento na skill pessoal `controle-horas`
+
+Se existir a skill **pessoal** `controle-horas` nesta máquina (`~/.claude/skills/controle-horas/`,
+fora do repositório), rode o registro de fechamento dela **depois do último commit da etapa** e
+leia o ponteiro que ela devolve. É ele que decide o Passo 8: se disser **parar**, o Passo 8 não
+começa etapa nova — faz o que a skill mandar (em geral o relatório da semana) e encerra
+**legível**. Isso tem precedência sobre o "NÃO PARE" do CLAUDE.md. Nenhum número dela entra em
+commit, plano ou documento versionado.
+
 ## Passo 8 (obrigatório): emende na próxima etapa, no mesmo turno
 
 **Fechar uma etapa não é o fim do trabalho — é o meio.** Este é o ponto exato em que se costuma
 parar e devolver o turno ao André, e é o que ele pediu, com irritação, para não acontecer mais:
-*"toda hora tenho que pedir pra vc continuar, nao quero que pare"*.
+*"toda hora tenho que pedir pra vc continuar, nao quero que pare"*. A única exceção é o ponteiro
+do Passo 7½ mandando parar.
 
 Depois de reportar o fechamento — **na mesma resposta, sem perguntar nada**:
 
 1. **Escolha a próxima etapa**, nesta ordem: a "próxima tarefa detalhada" que você acabou de
    escrever no plano → o que o fechamento nomeou como "falta para 🟢" → o mapa
-   `specs/modulo-almoxarifado/README.md` (a feature 🔴/🟡 de maior valor).
-2. **Comece a Fase 0** da skill `desenvolver-etapa-almoxarifado`: medir no código **antes** de
+   `specs/<modulo>/README.md` do módulo em que o André está trabalhando (a feature 🔴/🟡 de
+   maior valor; **não** troque de módulo por conta própria — módulo pausado fica pausado).
+2. **Comece a Fase 0** da skill `desenvolver-etapa`: medir no código **antes** de
    prometer. Uma sessão desta base já desenhou uma etapa inteira sobre a premissa "esta tela não
    existe" — a tela existia, estava no menu e no manual. Medir ausência exige procurar pelo nome
    do **contrato**, não pelo nome que você imagina que o consumidor usaria.
