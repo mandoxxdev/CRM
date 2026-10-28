@@ -4,9 +4,10 @@
 > Para quem **usa** o sistema (sem número de etapa nem histórico), o documento é o
 > [`manual-do-sistema.md`](manual-do-sistema.md). Guia com roteiro de teste: [`README.md`](README.md).
 >
-> **Onde estamos:** **Etapa 6 (tratar a pendência do registro) entregue** em 2026-10-23, na `main` (commits `492a0d87` a `8fa7ece2`, mais o
-> fechamento). **O módulo está pronto para uso**; o que sobra depende do André ou é pequeno (B72; "Onde estamos e o que vem a seguir", no
-> fim). Antes, no mesmo dia: Etapa 5 (foto da avaria e do cupom), Etapa 4 (relatórios fechados), Etapa 3 (km e horímetro no portal), Etapa 2 (perfil Consulta/Motorista
+> **Onde estamos:** **Etapa 8 (administrador pela tela, destinos, condutor, saída da GMP, abastecimento sem foto) entregue** em
+> 2026-10-28, na `main` (`a8a8d885` a `d38f0a71`, mais o fechamento) — os cinco pedidos da empresa daquele dia (B76–B84, C22–C23, E25).
+> Antes: Etapa 7 (pequena, 2026-10-28) e Etapa 6 (tratar a pendência do registro, 2026-10-23, `492a0d87` a `8fa7ece2`). **O módulo está
+> pronto para uso**; o que sobra depende do André ou é pequeno (B72; "Onde estamos e o que vem a seguir", no fim). Antes, em 2026-10-23: Etapa 5 (foto da avaria e do cupom), Etapa 4 (relatórios fechados), Etapa 3 (km e horímetro no portal), Etapa 2 (perfil Consulta/Motorista
 > pela tela) e Etapa 1 (portal do motorista).
 
 ## ⚠️ Leia antes de apresentar
@@ -207,6 +208,19 @@ ORDER BY c.data_checklist;
 | B73 | F7 | **A Etapa 7 é o item pequeno do backlog (D14), numerado como etapa** — plano, spec e fechamento como as outras, mas uma task só de código e nada no servidor | fazer o botão "por fora", sem plano nem registro; ou esperar o André decidir o que vem | é o único item do backlog que não depende dele; numerar mantém a trilha (plano, spec, retro). Não contraria o B72: não é etapa **grande** |
 | B74 | F7 | **Só o Administrador de Frota** vê **Remover foto** nas listas; o Motorista (que também pode apagar as dele pelo servidor) continua removendo em **Meus registros** | botão também para o motorista na lista do gestor | um caminho por perfil; a lista do gestor não é a tela do motorista. Mudar é tirar uma condição na coluna |
 | B75 | F7 | **A janela guarda a própria lista de fotos e só recarrega a lista da tela ao Fechar** (e quando a última foto sai). Removeu 3 fotos: 3 confirmações, 1 janela, 1 recarga | recarregar a lista a cada remoção (como a Etapa 6 faz ao tratar) | recarregar troca a tabela inteira por "Carregando..." e **fecharia a janela** a cada foto — o gestor abriria a janela 3 vezes para remover 3 fotos. Achado da revisão do plano (Fase 2) |
+| B76 | F8 | **Administrador de Frota pela tela Perfis de acesso escreve `frota` em `admin_modulos` do usuário** (a mesma fonte do checkbox "administra o módulo" do cadastro de usuário) e qualquer Administrador de Frota pode dar e tirar | gravar só na tabela de perfil do Frota; exigir administrador do sistema para dar | o sincronismo do núcleo apaga a linha de perfil em todo save do cadastro de usuário — a gravação só na tabela sumiria ao trocar um telefone (medido). Exigir administrador do sistema contraria o pedido ("permitir setar como admin do módulo" **na tela do módulo**). Alcance: só o item `frota`; reversível pela mesma tela ou pelo cadastro |
+| B77 | F8 | **Tirar a foto só do formulário do portal e do + Foto de Meus registros**; o servidor continua aceitando foto de abastecimento e a coluna **Fotos** da lista do gestor fica | tirar a coluna e recusar no servidor | o pedido foi sobre o **campo**; o caminho de legado (foto antiga, foto pela API) custa zero e voltar atrás é restaurar um bloco da tela |
+| B78 | F8 | **Só o portal exige o condutor** em carro liberado para funcionários; o formulário de Viagens do gestor aceita condutor opcional | exigir também no gestor | o escritório lança atrasado e nem sempre sabe quem dirigiu; na saída, ao vivo, quem registra sabe |
+| B79 | F8 | **No formulário de Viagens do gestor o Destino continua texto livre**; a lista de destinos alimenta o portal (seletor + "+ Novo destino") e tem tela própria (Frota → Destinos) | seletor também no gestor | o escritório digita o que a nota diz; o motorista é quem precisa de lista rápida. Mudar é trocar um campo da config |
+| B80 | F8 | **Condutor, origem e destino não se apagam pela tela de Viagens do gestor** (campo vazio = mantém o gravado); corrige-se digitando outro valor | tratar vazio como "limpar" | é o comportamento de hoje para origem/destino (a página converte vazio em nulo e o servidor mantém); mudar só para o condutor criaria dois comportamentos no mesmo formulário |
+| B81 | F8 | **O cadastro de usuário aberto ANTES de dar Administrador pela tela do Frota desfaz o Administrador ao salvar** (ele manda a lista de módulos que carregou). Fixado em teste e declarado, não corrigido | o núcleo mandar só o que mudou | mexer no formulário de usuário do núcleo é fora do módulo; a janela é "duas telas abertas ao mesmo tempo" e o gesto é repetível pela tela do Frota. Molde do C9 |
+| B82 | F8 | **"+ Novo destino" com o nome de um destino desativado cria outro ativo** (o índice único vale só entre ativos); reativar o antigo depois dá *"Destino já cadastrado"* | recusar e mandar reativar | o motorista não vê desativados e não pode reativar (é do gestor); recusar o deixaria sem destino na hora da saída. O gestor vê os dois em **Mostrar: Todos** |
+| B83 | F8 (G1) | **Ao tirar o Administrador pela tela, o sistema só reescreve `admin_modulos` e grava o perfil pedido**; não apaga a linha espelho `ADMIN_FROTA` em separado (o perfil novo a sobrescreve; "voltar ao padrão" a apaga inteira). Dar Administrador a quem já é → 200, sem mudar nada | o DELETE da linha espelho prescrito no plano | a sabotagem que removia esse DELETE **não derrubou teste nenhum** — era código sem efeito observável; código morto confunde a próxima sessão |
+| B84 | F8 (G2) | **`destino_id` só inteiro positivo** (`'12.5'`, `0`, `-1`, `'abc'` → *"Destino não encontrado"*); condutor que não é texto conta como ausente; **Excluir destino já desativado responde 200** (idempotente); a lista de destinos vem em ordem alfabética sem distinguir caixa | 400 "inválido" separado do 404; recusar o segundo Excluir | uma mensagem só para "não achei esse destino" é o que o motorista entende; o segundo Excluir não tem o que desfazer |
+| B85 | F8 (Fase 5) | **Na tela Destinos, "Excluir" pergunta *"Confirma a exclusão deste registro?"* e avisa *"Registro excluído"***, mas desativa (a página genérica não tem texto por tela) | dar à página genérica textos por tela | o manual diz "Excluir desativa" e **Mostrar: Todos** devolve; mudar a página genérica mexe em todas as telas do Frota |
+| B86 | F8 (Fase 5) | **Destino com acento: a duplicidade e a ordem só ignoram maiúscula em letra sem acento** ("Área Norte" e "área norte" cabem os dois; acentuados vão para o fim da lista) | coluna-chave sem acento e minúscula com o índice nela | o SQLite só sabe ignorar caixa de A–Z; a chave exige migração e normalização em três lugares. O gestor junta os repetidos pela tela Destinos |
+| B87 | F8 (Fase 5) | **A viagem aprovada que já tem condutor ainda pede o condutor na Saída** do carro liberado (o motorista digita de novo; se digitar outro, vale o novo) | aceitar o condutor da aprovada | quem sai é quem sabe quem está dirigindo agora; aprovar com condutor é raro (o gestor quase não aprova viagem — B4) |
+| B88 | F8 (Fase 5) | **A busca das listas não escapa `%` e `_`** (buscar "%" traz tudo) | escapar | é o comportamento de todas as listas do Frota desde antes da etapa; não grava nada errado |
 | B44 | F3 (fechamento) | **Próxima etapa = relatórios fechados**: multas no período (A7), a máquina no relatório (horímetro e consumo em litros por hora) e a aba de multas na planilha | foto da avaria/cupom; seção 3 do formulário | deixa a feature 10 (Relatórios) 🟢 sem infraestrutura nova; foto exige anexo (guardar arquivo, tamanho, quem vê), que é etapa própria; a seção 3 depende da folha inteira |
 
 ### C — furos conhecidos em operação
@@ -264,6 +278,20 @@ ORDER BY c.data_checklist;
 - **C20 — para corrigir o texto de um tratamento**, use **Desfazer tratamento** e trate de novo (não há editar).
 - **C21 — a janela de fotos do gestor mostra o que a lista tinha quando ela abriu.** Se outra pessoa removeu uma foto nesse meio tempo, ela
   ainda aparece; ao tentar remover, *"Foto não encontrada"* e ela some da janela. A lista por trás só se atualiza ao **Fechar** (B75).
+- **C22 — quem deixa de ser Administrador de Frota pela tela continua vendo o menu de administrador até recarregar a página.** O servidor
+  já recusa tudo no pedido seguinte (Perfis de acesso abre com *"Sem permissão para esta operação"*, salvar dá erro); só a tela demora a
+  perceber, porque o painel responde normalmente a quem virou Consulta e nada manda renovar o usuário. Quem **vira** Administrador no
+  portal vê o menu novo na hora (o portal percebe a diferença).
+- **C24 — dar Administrador de Frota a quem não tem acesso ao módulo Frota grava, mas não abre o módulo para ele.** O acesso ao módulo
+  continua no cadastro de usuário (D7 vale também para o Administrador). Confira a permissão de módulo antes.
+- **C25 — uma linha "Administrador de Frota" gravada à parte (sem a marca no cadastro de usuário, herança antiga) também dá e tira
+  Administrador pela tela.** A tela já não cria essas linhas; o banco de produção nunca usou o módulo (0 linhas). Se aparecer alguém
+  assim, escolha o perfil dele de novo na tela.
+- **C26 — dois administradores podem tirar um ao outro ao mesmo tempo** e o módulo fica sem administrador de módulo; o administrador do
+  sistema continua com acesso total e dá de novo.
+- **C23 — o motorista que digitar o endereço `/frota/destinos` na mão vê os botões Novo/Editar/Excluir**: Novo funciona (ele pode cadastrar
+  destino), Editar e Excluir dão *"Sem permissão para esta operação"*. O item não está no menu dele; ele cadastra pelo "+ Novo destino" da
+  saída.
 
 ### D — limitações declaradas (cortes de escopo)
 
@@ -360,6 +388,13 @@ ORDER BY c.data_checklist;
   (nada em `server/` mudou); `test:almoxarifado` **44/44**; `test:validation` **4/4**; `test:safealter` **3/3**; `test:sqlite` **16/16**;
   tela **200 suítes, 2725/2725 testes**; `build` com `CI=true` **"Compiled successfully."**. Frota na tela: 14 suítes, **184/184**
   (`FrotasRemoverFotoGestor` 14). Controle positivo: 8 sabotagens, cada uma derrubou a asserção que a nomeia.
+- **E26 — verificação final da Etapa 8, rodada em 2026-10-28 depois de `a1afa278`, sozinha:** `npm run test:api` **562/562 arquivos OK**;
+  `test:almoxarifado` **44/44**; `test:validation` **4/4**; `test:safealter` **3/3**; `test:sqlite` **16/16**; tela **202 suítes,
+  2774/2774**; `build` com `CI=true` **"Compiled successfully."**. Frota: servidor 24 arquivos, 251 cenários; tela 16 suítes, 233/233.
+  Controle positivo em cada galho e na Fase 5 (cada sabotagem derrubou a asserção que a nomeia).
+- **E25 — o roteiro da Etapa 8 (guia, "Roteiro de teste manual (Etapa 8…)") não foi clicado num navegador.** Foi escrito lendo o
+  código e os testes de tela, que simulam o servidor. O caminho servidor inteiro foi provado pela rota com login real
+  (`frotasEtapa8Integracao`). O "+ Novo destino" e o campo de condutor não foram vistos num celular de verdade.
 - **E10 — o teclado do celular no campo de horímetro** (`inputMode="decimal"`, com vírgula ou ponto conforme o aparelho) não foi
   conferido num celular de verdade.
 
@@ -930,6 +965,91 @@ como estava e nada recarrega.
 
 ---
 
+## Etapa 8 — Administrador pela tela, destinos cadastrados, condutor, saída da GMP e abastecimento sem foto (2026-10-28)
+
+Cinco pedidos da empresa, feitos de uma vez. (1) O gestor da frota não conseguia fazer um **substituto administrador** sem pedir ao TI:
+agora **Perfis de acesso** dá e tira **Administrador de Frota**. (2) O **Abastecimento** pedia foto do cupom e o cupom não vai pelo
+sistema: o campo saiu. (3) Toda saída é **da GMP**: o portal parou de perguntar "Saindo de onde". (4) Há **carros do setor** que
+qualquer funcionário pega para trabalho externo — o veículo ganha a marca **Liberado para funcionários** e, nele, a Saída pede **quem
+vai dirigir**; o nome vai para a viagem e para a planilha. (5) O motorista pediu para cadastrar o destino **na hora**, sem depender do
+sistema: o campo "Indo para onde" virou uma **lista** com o botão **+ Novo destino**, e o gestor ganhou a tela **Destinos**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Em **Perfis de acesso** só havia **Motorista (padrão)** e **Consulta**; Administrador de Frota só no cadastro de usuário (tela do TI) | O seletor tem **Administrador de Frota**, com confirmação ao dar; tirar é escolher outro perfil. É a mesma marca do cadastro de usuário, vista de duas telas |
+| Administrador do módulo aparecia como "Administrador", sem seletor | Só **superadmin** e **administrador do sistema** ficam sem seletor |
+| **Abastecimento** com **Tirar foto** ("Foto do cupom") e **+ Foto** em Meus registros | Sem foto no abastecimento (Saída, Retorno e Inspeção continuam com foto) |
+| **Saindo de onde** digitado em todo formulário de Saída | **Saindo de: GMP**, fixo; a viagem grava "GMP" sozinha |
+| **Indo para onde** digitado à mão, de um jeito a cada vez ("Cliente X", "cliente x", "Cl. X") | **Lista de destinos** + **+ Novo destino** (nome e endereço) que o próprio motorista alimenta; nome repetido escolhe o que existe |
+| Ninguém sabia quem dirigiu o carro do setor | Veículo **Liberado para funcionários** → a Saída pede **Quem vai dirigir (condutor)**; o nome aparece no cartão do motorista, na lista de Viagens e na planilha (coluna Condutor) |
+| — | Tela **Frota → Destinos** para o gestor corrigir, desativar e reativar; "Excluir" desativa, as viagens antigas guardam o nome |
+
+### As regras, com o cenário exato
+
+**Preparação.** Um veículo *BBB2B22*; a motorista *Ana* ligada ao login dela; os usuários *Fabio* e *Bruno* com acesso ao módulo Frota e
+sem perfil; o superadmin.
+
+**1. Dar Administrador.** Como administrador, **Frota → Perfis de acesso**: na linha do *Fabio*, o seletor mostra **Motorista (padrão)**,
+**Consulta** e **Administrador de Frota**. Escolha **Administrador de Frota** → *"Dar Administrador de Frota a Fabio? A pessoa passa a fazer
+tudo no módulo, inclusive dar perfis."* → **Cancelar**: nada é gravado. De novo → **OK** → *"Perfil definido: Administrador de Frota"*. Na
+tela de usuários do sistema, o *Fabio* aparece marcado em "administra o módulo Frota".
+
+**2. O novo administrador faz tudo.** Como *Fabio*: **Frota** → **Meu painel** (o menu vira o do gestor) → **Perfis de acesso** → dá
+**Consulta** ao *Bruno* → *"Perfil definido: Consulta"*. Tentar mudar a si mesmo é recusado: *"Você não pode mudar o seu próprio perfil por
+esta tela."* — por isso sempre sobra pelo menos um administrador.
+
+**3. Tirar.** Como administrador, na linha do *Fabio* escolha **Consulta** (sem pergunta) → *"Perfil definido: Consulta"*. O *Fabio* já não
+grava nada no clique seguinte; o menu dele muda ao recarregar a página (C22).
+
+**4. Superadmin não se mexe.** Na linha do superadmin: etiqueta **Administrador** e *"Superadmin ou administrador do sistema: não se altera
+por esta tela."*. Pela API: *"Este usuário é superadmin ou administrador do sistema e tem acesso total à frota. Isso não se altera por esta
+tela."*.
+
+**5. Abastecimento sem foto.** Como *Ana*, **Abastecimento**: não há **Tirar foto** nem "Foto do cupom"; salve; em **Meus registros** o
+abastecimento aparece sem **+ Foto**. A **Saída** continua com **Tirar foto**.
+
+**6. Carro liberado.** Como administrador, **Veículos → editar BBB2B22 → Liberado para funcionários → Salvar**: na lista, a coluna Condutor
+mostra *"Funcionários"*.
+
+**7. Saída: origem fixa, destino novo e condutor.** Como *Ana*, **Saída → BBB2B22**: aparece **Saindo de: GMP** e o campo **Quem vai dirigir
+(condutor)**. Em **Indo para onde (destino)**, **+ Novo destino** → **Adicionar** sem nome → *"Informe o nome do destino"*; *Obra Beta* →
+**Adicionar** → *"Destino adicionado"*, já selecionado. Marque os 12 itens, deixe o condutor vazio → **Salvar** → *"Informe quem vai
+dirigir (condutor)"*. *Carlos* → **Salvar** → *"Saída registrada"*; o cartão: *"Você está com o veículo BBB2B22 desde …, destino Obra
+Beta, condutor Carlos."*.
+
+**8. Km menor e sem condutor.** Repita a saída com um km menor que o do veículo e sem condutor: a resposta é *"Informe quem vai dirigir
+(condutor)"* — **não** a pergunta do km menor. Só com o condutor preenchido vem *"KM menor que o atual…"* e **Confirmar mesmo assim**.
+(Senão o motorista confirmava o km, levava a recusa do condutor e tinha de confirmar de novo.)
+
+**9. Destino repetido.** Como *Bruno* (ligado a um motorista), **Saída → + Novo destino → *obra beta*** → *"Esse destino já existia —
+selecionado."* (maiúsculas não contam).
+
+**10. O gestor vê.** **Viagens**: Origem *GMP*, Destino *Obra Beta*, Motorista *Ana*, **Condutor *Carlos***; a busca por *Carlos* acha.
+**Exportar planilha → Viagens e KM**: Condutor = *Carlos*. **Destinos**: *Obra Beta*, cadastrado por *Ana*, **Ativo**.
+
+**11. Renomear e desativar.** **Destinos → editar *Obra Beta* → *Obra Beta II***: a viagem da Ana continua *"Obra Beta"*. **Excluir** →
+some da lista; **Mostrar: Todos** → **Desativado**; **Editar → Status Ativo** reativa. Se a *Ana* estava com a Saída aberta com esse
+destino escolhido e salva depois de o gestor desativar: *"Destino não encontrado"* e a tela avisa *"O destino escolhido foi desativado.
+Escolha outro."*, com a lista já atualizada.
+
+**12. Carro comum.** Desmarque **Liberado para funcionários**: na Saída o campo de condutor não aparece (e o que estava digitado é
+descartado ao trocar de veículo).
+
+**13. Duas telas abertas (B81).** O administrador do sistema estava com o cadastro de usuário do *Fabio* aberto **antes** do passo 1 e
+salva depois: o Administrador dado no passo 1 **some** (a tela dele manda a lista de módulos que carregou). Dê de novo pela tela do Frota.
+
+### O que esta etapa não cobre
+
+- **Saber quem deu ou tirou** um perfil (não há trilha); o menu de quem **deixa** de ser administrador só muda ao recarregar (C22).
+- **Destinos:** acento conta como letra diferente ("Sao Paulo" ≠ "São Paulo"); o formulário de **Viagens** do gestor continua com destino
+  em texto (B79); sem mapa; cadastrar de novo o nome de um desativado cria outro (B82).
+- **Condutor:** texto livre, não lista de funcionários; obrigatório só na Saída do portal (B78); não há condutor no Retorno nem na Inspeção.
+- **Foto do abastecimento:** o servidor e a coluna Fotos do gestor ficaram (B77) — só o portal parou de pedir.
+
+---
+
 ## Onde estamos e o que vem a seguir
 
 - **Feito:** Etapa 1 — portal do motorista (vínculo usuário ↔ motorista, escopo do motorista, km/L pela ordem do km, uma viagem em
@@ -942,6 +1062,8 @@ como estava e nada recarrega.
   Etapa 5 — foto da avaria e do cupom pelo celular (D1), no lançamento, em Meus registros e nas listas do gestor.
   Etapa 6 — tratar a pendência do registro: o gestor marca o que foi feito, o alerta sai do painel (e não some mais sozinho), o motorista vê.
   Etapa 7 (pequena, 2026-10-28) — o gestor remove uma foto pela lista (D14), sem mexer no servidor.
+  Etapa 8 (2026-10-28) — os cinco pedidos da empresa: Administrador de Frota pela tela, abastecimento sem foto, saída da GMP, carro
+  liberado para funcionários com condutor, destinos cadastrados pelo motorista (+ Novo destino) e a tela Destinos.
 - **O módulo está pronto para uso** (B72). O ciclo do motorista está fechado: registrar → foto → alerta → tratar → ele vê. Não há etapa
   grande nova planejada.
 - **Depende do André:** as placas, modelos e km dos 4 veículos da planilha (V01, V02, V03, C01) para o cadastro inicial; a folha inteira

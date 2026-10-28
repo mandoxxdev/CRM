@@ -16,8 +16,9 @@ Pasta criada no fechamento da Etapa 5 (a feature não existia).
 ## O que é
 
 O motorista marcava uma avaria ("lado esquerdo: amassado") sem poder mostrar, e o abastecimento entrava sem o cupom — o escritório
-pedia a foto por fora. Agora, no portal, **Tirar foto** abre a câmera do celular na Saída, no Retorno, na Inspeção e no Abastecimento
-(até 3 por lançamento); as fotos sobem depois que o lançamento é salvo; o motorista as vê (e reenvia ou remove) em **Meus registros**; o
+pedia a foto por fora. Agora, no portal, **Tirar foto** abre a câmera do celular na Saída, no Retorno e na Inspeção (até 3 por
+lançamento) — *dizia "e no Abastecimento"; a Etapa 8 (feature 20) tirou o campo do abastecimento a pedido da empresa; o servidor e a
+coluna Fotos do gestor em Abastecimentos ficaram para o legado (B77)*; as fotos sobem depois que o lançamento é salvo; o motorista as vê (e reenvia ou remove) em **Meus registros**; o
 gestor e o Consulta veem a miniatura nas listas **Checklist** e **Abastecimentos**. O arquivo só abre por um endereço assinado que vence
 em 2 a 2,5 horas.
 
@@ -33,8 +34,8 @@ em 2 a 2,5 horas.
 | RN-F5.06 | O arquivo só sai com assinatura válida do domínio próprio; toda falha 404; `nosniff` + CSP `sandbox` | [x] | `ff003174` |
 | RN-F5.07 | Apagar a foto: mesma régua de quem envia; linha e arquivo | [x] | `ff003174`, `4cc57d79` (botão no Meus registros) |
 | RN-F5.08 | Excluir o lançamento apaga as fotos — o lançamento primeiro, depois as fotos (sem órfão em corrida) | [x] | `ff003174`, `ed17bcd6` |
-| RN-F5.09 | Portal: **Tirar foto** (câmera), até 3, prévia e Remover foto; reduz no navegador; sobe depois do 201; falha não desfaz | [x] | `4cc57d79` |
-| RN-F5.10 | Meus registros: miniaturas, **+ Foto** e **Remover foto** | [x] | `4cc57d79` |
+| RN-F5.09 | Portal: **Tirar foto** (câmera), até 3, prévia e Remover foto; reduz no navegador; sobe depois do 201; falha não desfaz. **Desde a Etapa 8 vale só para Saída/Retorno/Inspeção** — o Abastecimento perdeu o campo (feature [20](../20-abastecimento-sem-foto/README.md), RN-F8.12) | [x] | `4cc57d79`; Etapa 8 `ef71a1b6` |
+| RN-F5.10 | Meus registros: miniaturas, **+ Foto** e **Remover foto**. **Desde a Etapa 8 o abastecimento não tem + Foto** (miniaturas antigas e Remover foto ficam — RN-F8.13) | [x] | `4cc57d79`; Etapa 8 `ef71a1b6` |
 | RN-F5.11 | Gestor: coluna **Fotos** (1ª miniatura + "+N") em Checklist e Abastecimentos | [x] | `4cc57d79` |
 | RN-F5.12 | Relatórios, painel e planilha não mudam | [x] | `ed17bcd6` (teste) |
 | Integração | Portal → foto → Meus registros → gestor/Consulta → exclusão, pela rota e pelo serviço | [x] | `ed17bcd6` |

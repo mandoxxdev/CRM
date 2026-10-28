@@ -1,6 +1,6 @@
 # Frota — Etapa 8: administrador pela tela, destinos cadastrados, condutor, origem GMP, abastecimento sem foto
 
-> **Status:** em execução (2026-10-28). Plano escrito na Fase 1 da skill `desenvolver-etapa`; revisado por agente fresco na Fase 2
+> **Status:** **etapa fechada em 2026-10-28** — T1, G1–G5, T2 e a Fase 5 feitos (`a8a8d885` a `a1afa278`, mais o fechamento). Plano escrito na Fase 1 da skill `desenvolver-etapa`; revisado por agente fresco na Fase 2
 > (tabela "Ajustes da Fase 2" abaixo, que **vale sobre o texto**).
 > **Origem:** cinco pedidos do André em 2026-10-28 (com a sugestão do motorista). Nenhum tinha spec: as features **19, 20, 21 e 22**
 > nascem nesta etapa em `specs/modulo-frotas/`.
@@ -233,14 +233,14 @@ Tela, `src/components/frotas`: **14 suítes, 184/184**.
 
 | Task | Estado | Commit |
 |---|---|---|
-| Plano + Fase 2 | em andamento | — |
-| T1 | — | — |
-| G1 | — | — |
-| G2 | — | — |
-| G3 | — | — |
-| G4 | — | — |
-| G5 | — | — |
-| T2 | — | — |
+| Plano + Fase 2 | feito — 7 travas + 21 menores, todas acatadas antes de escrever código (tabela abaixo) | a8a8d885 (entrou com o T1) |
+| T1 | feito — `frotasEsquema` 6 → **8/8**; controle positivo: sem o ALTER de `uso_funcionarios` e sem o `WHERE` do índice, só os 2 cenários novos caem (6/8); restaurado, 8/8 | a8a8d885 |
+| G1 | feito — `frotasPerfis` 10/17 → **17/17**; `frotasPerfisIdaEVolta` 2/4 → **4/4**; novo `frotasPerfisAdmin` 3/16 → **16/16**; Escopo 12/12 e KmHorimetro 32/32 sem mudança. S1 (`'frotas'`) derrubou RN-F8.02/03/05/06/07/08; **a S2 do plano (tirar o DELETE do espelho) não derrubou nada** — o upsert CONSULTA/MOTORISTA e o DELETE do `null` já cobrem; o DELETE saiu do código (B83). S2' (tirar o `UPDATE usuarios`) derrubou RN-F8.03 e RN-F8.07. **RN-F8.07 reforçada:** apaga a linha espelho por SQL e prova que `admin_modulos` sozinho sustenta o administrador (senão a S1 não derrubava) | 99b0cf96 → `bd546050` na main |
+| G2 | feito — novo `frotasDestinos` 0/10 → **10/10**; novo `frotasSaidaCondutor` → **15/15**; `frotasPortal` 18/19 → 19/19 (também a asserção de `viagem_aberta` ~171, que o ajuste T-5 não citou); `frotasExportacao` 9/10 → 10/10; bateria 114/114. S1 (sem `ORIGEM_PADRAO`) derrubou RN-F8.17; **S2 (condutor fora da fila) não derrubou na 1ª rodada** — o `Test` do supertest é preguiçoso e a "saída esperando" só saía depois de soltar o gancho; corrigido com `.then` imediato, aí derrubou RN-F8.19; S2b (destino fora da fila) derrubou "desativado no meio"; S3 (condutor depois do 409) derrubou T-2; S4 (sem `extra`) derrubou RN-F8.28 | 210aaec6 → `d38f0a71` na main |
+| G3 | feito — `FrotasPerfisAcesso.test.js` 8 vermelhos/19 → **19/19**; as 3 suítes pedidas 44/44; S1 (sem `confirm`) derrubou "Cancelar não chama" (`confirm` 0 vezes, `put` 1 vez); S2 (etiqueta no `admin_modulo`) derrubou o cenário do seletor | dc50dd62 → `85e031e4` na main |
+| G4 | feito — novo `FrotasPortalSaidaDestinoCondutor` 21 vermelhos/22 → **22/22**; `FrotasPortalMotorista` 13/13 (1 reescrito); `FrotasFotos` 32 → **33/33** (5 cenários do abastecimento viraram negativos); `KmHorimetro` 26/26; `build` sem aviso. S1 (foto de volta) derrubou RN-F8.12; S2 (`destino` texto) derrubou RN-F8.35 e o corpo do Motorista; S3 (condutor sempre) derrubou RN-F8.23; S4 (sem `useEffect`) derrubou os 3 de RN-F8.34b. Nota: "1 POST e 0 anexos" já passava antes — o negativo que prova é "sem Tirar foto" | 5e461c5d → `ef71a1b6` na main |
+| G5 | feito — `FrotasDestinosGestor` 13 vermelhos → **13/13**; `FrotasMenuPorPerfil` 17/19 → 19/19; 7 suítes 86/86; S1 (sem `filters`) derrubou o filtro Mostrar; S2 (Destinos no motorista) derrubou 2 cenários de menu; S3 (`'-'`) derrubou a coluna Condutor. `frotas-badge-inativo` já existia — CSS zero | b430496c → `37380627` na main |
+| T2 | feito — novo `frotasEtapa8Integracao` **4/4** (RN-F8.38 pela rota com login real, 39 pelo serviço, 40 perfis pela fiação real, T-2 cruzado); bateria `frotas*` 23 arquivos, 246 cenários, 0 falhou. S1 (`ORIGEM_PADRAO → null`) caiu em `vg.origem`; S2 (sem gravar `admin_modulos`) caiu em "a fonte e admin_modulos"; S3 (Condutor = motorista) caiu na planilha. **Divergência de texto (ajuste 14):** o `syncModuleAdminProfiles` com a lista velha **sozinho não desfaz** (apaga só a linha espelho; `finishFrotaProfile` lê `admin_modulos` primeiro) — quem desfaz é o `PUT /usuarios/:id` inteiro (`admin_modulos = COALESCE(?, …)` **e depois** o sync). O teste simula os dois passos. Nenhum defeito de integração | 47f1f612 → `09a4a661` na main |
 
 ## Ajustes da Fase 2 (revisor fresco, 2026-10-28 — **7 travas + menores; valem sobre o texto acima**)
 
@@ -259,7 +259,7 @@ Tela, `src/components/frotas`: **14 suítes, 184/184**.
 | 11 | `origem: ''` → `null` → `GMP` (RN-F8.17 "grava o que veio") | Declarado: vazio = ausente = `GMP` |
 | 12 | Texto de ajuda divergia entre design e plano | Vale o plano (`…administrador do sistema, não.`); design corrigido |
 | 13 | Tabela do PUT: o **forçado** que tenta a si mesmo leva `PERFIL_FORCADO` (ordem `perfisService.js:74` antes de `:80`) | Linha do próprio = "não forçado"; a ordem 404 → 400 → forçado → próprio continua |
-| 14 | RN-F8.08 era tautologia. O risco real: `PUT /usuarios/:id` (`index.js:4104-4115`) com a lista **inteira** que o `UsuarioForm` carregou no mount — administrador do sistema com o cadastro aberto **antes** do PUT da tela do Frota salva o telefone → `admin_modulos` volta a `[]`, o sync apaga, o Administrador dado pela tela **some** | Comportamento **fixado e declarado** (B81, molde C9): a tela de usuário manda a lista que carregou. RN-F8.08 reescrita: "o sync rodado **com a lista atual** não desfaz; rodado com a lista **velha** (sem `frota`) desfaz — e isso é o que o cadastro de usuário faz se estava aberto antes". T2 cobre os dois |
+| 14 | RN-F8.08 era tautologia. O risco real: `PUT /usuarios/:id` (`index.js:4104-4115`) com a lista **inteira** que o `UsuarioForm` carregou no mount — administrador do sistema com o cadastro aberto **antes** do PUT da tela do Frota salva o telefone → `admin_modulos` volta a `[]`, o sync apaga, o Administrador dado pela tela **some** | Comportamento **fixado e declarado** (B81, molde C9): a tela de usuário manda a lista que carregou. RN-F8.08 reescrita: "o sync rodado **com a lista atual** não desfaz; o **`PUT /usuarios/:id` com a lista velha** (coluna reescrita **e** sync) desfaz — e isso é o que o cadastro de usuário faz se estava aberto antes". T2 cobre os dois. **Medido no T2:** o sync sozinho com a lista velha só apaga a linha espelho e **não** desfaz (a coluna manda); a frase "o sync desfaz" deste ajuste estava imprecisa |
 | 15 | `frotasPerfisIdaEVolta.api.test.js:88` trava `['explicito','forcado','padrao']` — quebra com `admin_modulo` | G1 corrige a asserção (lista ganha `admin_modulo`) |
 | 16 | Fabio ADMIN→CONSULTA no **painel do gestor**: `/dashboard` responde 200 (Consulta vê o painel) → nada renova o usuário; o menu dele mantém "Perfis de acesso" e `podeAlterar` mostra Novo/Editar até o F5 (o servidor recusa tudo) | Declarado (C22). A alternativa (`/dashboard` devolver `perfil` fora do cache e o painel comparar como o portal) fica para depois |
 | 17 | Mensagem do índice é `UNIQUE constraint failed: frotas_destinos.nome` (sem o nome do índice — medido no sqlite3 5.1.6 / SQLite 3.44.2) | A tradução casa `frotas_destinos.nome` |
@@ -278,6 +278,65 @@ Tela, `src/components/frotas`: **14 suítes, 184/184**.
 **RN reescritas por estes ajustes:** RN-F8.08 (ajuste 14), RN-F8.17 (11), RN-F8.19 (T-2: a ordem), RN-F8.20 (10), RN-F8.28 (T-1), RN-F8.30
 (T-7), RN-F8.34 (T-1 e **RN-F8.34b**: destino desativado no meio → aviso e seleção zerada), RN-F8.36 (T-3, 19).
 
+## Fase 5 — revisão adversarial (3 revisores frescos, lentes: RN do servidor, autorização, tela × contrato)
+
+Interrompidos pelo limite de uso no meio e retomados de onde pararam. Achados **reproduzidos** por sonda (scratchpad `sonda-rev*`):
+
+| # | Revisor | Achado | Destino |
+|---|---|---|---|
+| C1 | C | **TRAVA.** Destino criado pelo "+" e depois desativado ficava "pinado" na lista local: o 400 se repetia a cada Salvar e o aviso nunca aparecia | **corrigido** `a1afa278` (o pino solta quando o servidor devolve o destino; o 400 solta o do selecionado) |
+| A2/B4 | A, B | Dois `PUT /perfis-usuario` simultâneos: a resposta diz Consulta, o banco fica Administrador | **corrigido** `7f9fd4c0` (fila por usuário) |
+| B3 | B | Tirar o Administrador: `admin_modulos` antes da linha — falha no meio deixa a linha ADMIN_FROTA, que sozinha dá administrador | **corrigido** `7f9fd4c0` (linha primeiro) |
+| A4/C4 | A, C | `PUT /destinos` com `ativo: null` (opção vazia do formulário) desativava em silêncio | **corrigido** `7f9fd4c0` (null/'' mantém; fora de 0/1 → 400) |
+| A5/B10 | A, B | Condutor só de U+200B cumpria o obrigatório; `\n` ia para a planilha | **corrigido** `7f9fd4c0` |
+| A6, B8, A11 | A, B | 409 virava 500 cru se o outro sumisse no meio; o 409 levava o `criado_por` de outro; `frota` duplicado | **corrigido** `7f9fd4c0` |
+| B11, C2, C3 | B, C | Portas sem teste negativo (PUT /veiculos, Consulta em destinos); 409 sem `destino`; condutor aparecer depois do 400 | **testes acrescentados** (`frotasEtapa8Fase5`, `FrotasPortalSaidaDestinoCondutor`) |
+| A1, A7, A8, C5 | A, C | Acento na duplicidade; aprovada com condutor pede de novo; busca sem escapar `%`/`_`; textos de "Excluir" genéricos | **declarados** B86, B87, B88, B85 |
+| B1, B2, B5 | B | Admin sem acesso ao módulo; linha ADMIN_FROTA sobrando dá e tira admin; dois admins se tirando | **declarados** C24, C25, C26 |
+| B6 | B | `PUT` aceita usuário oculto | **descartado**: decisão fixada da Etapa 2 (RN-F2.05, igual ao almoxarifado) — corrigi e desfiz ao ver o teste que a trava |
+| A9 | A | Corrida da RN-F8.19 depende de `sleep` de 150 ms | **declarado** (a sabotagem derrubou nesta máquina; trocar por gancho é a próxima melhoria) |
+
+Rodadas de correção: 1 (nenhum teste falhou 3 vezes).
+
 ## Fechamento
 
-(preenchido no fim: divergências, verificação final medida, retro de 4 números, próxima tarefa detalhada)
+### Divergências do plano
+
+- **RN-F8.08 (ajuste 14) estava imprecisa:** "o sync com a lista velha desfaz" — medido no T2, o sync sozinho só apaga a linha espelho; quem
+  desfaz é o `PUT /usuarios/:id` inteiro (coluna reescrita + sync). Spec 19, referência técnica e plano corrigidos.
+- **G1 tirou o DELETE da linha espelho** prescrito no plano: a sabotagem que o removia não derrubou nada (B83).
+- **G2:** a corrida da RN-F8.19 não derrubou na primeira sabotagem (o `Test` do supertest é preguiçoso); corrigido no teste.
+- **T-5 subcontou:** `frotasPortal` também travava as chaves de `viagem_aberta`.
+
+### Verificação final
+
+Medida depois de `a1afa278`, sozinha:
+
+- `npm run test:api`: **562/562 arquivos OK** (557 na Etapa 7 → +5: `frotasPerfisAdmin`, `frotasDestinos`, `frotasSaidaCondutor`,
+  `frotasEtapa8Integracao`, `frotasEtapa8Fase5`). Frota no servidor: 24 arquivos, 251 cenários, 0 falhou (baseline: 19 e 197).
+- `test:almoxarifado` **44/44**; `test:validation` **4/4**; `test:safealter` **3/3**; `test:sqlite` **16/16** (rodadas com os cinco
+  galhos, antes da Fase 5, que só mexeu em `server/services/frotas`).
+- Tela: **202 suítes, 2774/2774** (Etapa 7: 200 e 2725). Frota na tela: **16 suítes, 233/233** (baseline 14 e 184).
+- `CI=true npx react-scripts build` → **"Compiled successfully."**
+
+### Retro (4 números)
+
+- **Rodadas de correção até verde:** 1 (Fase 5), mais 1 em G2 (teste de corrida que não sabia falhar).
+- **Achados da revisão:** Fase 2: 28 (7 travas), todos reais. Fase 5: 1 trava + 14 menores reais, 1 descartado por contradizer decisão
+  fixada (B6). Ruído (não reproduzido): 0.
+- **Paralelismo:** 5 galhos em paralelo de fato (G1–G5, worktrees com junction), sem retrabalho entre eles; T2 e os 3 revisores em
+  paralelo com a suíte completa. A Fase 2 ter listado os arquivos que dois galhos tocariam evitou conflito de cherry-pick (0).
+- **Defeito que escapou:** preencher na próxima etapa.
+
+### Próxima tarefa detalhada
+
+O módulo continua **pronto para uso** (B72), com os cinco pedidos de 2026-10-28 entregues. O que sobra, por ordem:
+
+1. **Depende do André:** os 4 veículos (placas, modelos, km e **quais são liberados para funcionários**); a seção 3 do formulário; o consumo
+   da máquina (D12); a tela antiga "Novo Checklist" (C5); se quiser, a lista inicial de destinos.
+2. **Pequenos, sem etapa própria:** (a) **teste da RN-F8.19 com gancho** em `naFilaDeViagens` no lugar do `sleep` (A9) — molde RN-15 do
+   CLAUDE.md; (b) **C22** — o painel devolver `perfil` no `GET /dashboard` e comparar como o portal, para quem deixa de ser administrador
+   ver o menu novo sem recarregar; (c) **B86** — coluna `nome_chave` (sem acento, minúscula) em `frotas_destinos`, com o índice único e a
+   ordenação nela, se repetidos com acento aparecerem em uso; (d) B36 — o km menor nas telas do gestor (decidir com o André).
+3. **Antes de apresentar:** clicar os roteiros E2, E4, E9, E14, E16, E20, E23 e **E25** (Etapa 8) com dados de exemplo; rodar A1–A8 em
+   produção.

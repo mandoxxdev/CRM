@@ -37,6 +37,16 @@ a saída era SQL ou dar administrador. Agora: tela `/frota/perfis` (API `GET/PUT
 | Fase5-2 | Depois do `PUT`, o menu do afetado não mudava dentro do Frota: o portal (perfil do `/portal/inicio`) e o painel (perfil do 403) renovam o usuário uma vez quando divergem | [x] | `805aaa3c` |
 | Fase5-3 | Texto da B29 ("ao escolher de novo, vira padrão") corrigido: escolher a opção já marcada não grava nada | [x] | fechamento |
 
+## O que mudou depois (Etapa 8, 2026-10-28 — feature [19](../19-admin-pela-tela/README.md))
+
+- Esta spec e `permissions.js` diziam **"ADMIN_FROTA não: vem do cadastro de usuário (admin_modulos)"** como limite de desenho. **Deixou
+  de ser verdade:** a tela Perfis de acesso dá e tira Administrador de Frota, escrevendo em `admin_modulos` (a mesma fonte). RN-F2.02
+  e RN-F2.04 mudaram junto: o admin do módulo tem `origem 'admin_modulo'` (com seletor), e o 409 `PERFIL_FORCADO` ficou só para
+  superadmin e `role` admin. RN-F2.03: o `PUT` aceita `ADMIN_FROTA` e a mensagem de inválido cita os três. RN-F2.07 ("linha ADMIN_FROTA
+  sobrando aparece crua") continua no servidor (`explicito`), mas a tela a mostra como a opção normal "Administrador de Frota".
+- O C9 ("conceder e revogar o admin do módulo apaga o Consulta") continua pelo cadastro de usuário; pela tela do Frota, tirar o
+  Administrador já grava o perfil escolhido.
+
 ## Spec que estava errada
 
 - O plano da Etapa 1 (Fase 0 desta) dizia que o front **espelha** a régua do servidor (`perfilFrota` = `getPerfilFromUser`). **Estava

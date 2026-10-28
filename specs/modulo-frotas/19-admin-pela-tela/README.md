@@ -1,6 +1,6 @@
 # 19 — Administrador de Frota pela tela Perfis de acesso
 
-> **Status:** 🔴 → **em desenvolvimento na Etapa 8** (2026-10-28). Pedido do André: "nas permissões do módulo, permitir setar como admin
+> **Status:** 🟢 **entregue na Etapa 8** (2026-10-28), na `main`, `a8a8d885` (esquema) a `09a4a661` (integração), mais o fechamento. Pedido do André: "nas permissões do módulo, permitir setar como admin
 > do módulo (além de motorista e consulta)".
 > **Plano:** [`docs/superpowers/plans/2026-10-28-frotas-etapa8-admin-destinos-condutor.md`](../../../docs/superpowers/plans/2026-10-28-frotas-etapa8-admin-destinos-condutor.md)
 > (RN-F8.01–11, 40) · **Design:** [`…/specs/2026-10-28-frotas-etapa8-admin-destinos-condutor-design.md`](../../../docs/superpowers/specs/2026-10-28-frotas-etapa8-admin-destinos-condutor-design.md) (seção A)
@@ -25,17 +25,17 @@ isso não se mexe pelo Frota.
 
 | RN | Regra | Estado | Commit |
 |---|---|---|---|
-| RN-F8.01 | `classificarPerfilFrota`: `forcado` (superadmin, role admin) ≠ `admin_modulo` (só `admin_modulos` frota) | [ ] | |
-| RN-F8.02 | `PUT ADMIN_FROTA` escreve `frota` em `admin_modulos` + linha espelho; resposta `origem 'admin_modulo'` | [ ] | |
-| RN-F8.03 | `PUT` CONSULTA/MOTORISTA/`null` num `admin_modulo` tira `frota`, apaga o espelho e grava o pedido | [ ] | |
-| RN-F8.04 | `forcado` → 409 `PERFIL_FORCADO`, mensagem nova (só superadmin/administrador do sistema) | [ ] | |
-| RN-F8.05 | Mensagem de perfil inválido e `perfis` do `GET` com os três | [ ] | |
-| RN-F8.06 | O próprio perfil → 409 `PROPRIO_PERFIL`, inclusive administrador | [ ] | |
-| RN-F8.07 | Ida e volta pelo login real: `/perfis-usuario` 200 → 403; `/dashboard` 200 → 403 | [ ] | |
-| RN-F8.08 | O sync do núcleo rodado depois não desfaz o que a tela gravou | [ ] | |
-| RN-F8.09 | Tela: três opções; `admin_modulo` com seletor; `forcado` com etiqueta | [ ] | |
-| RN-F8.10 | Escolher Administrador pede confirmação; Cancelar não chama o servidor | [ ] | |
-| RN-F8.11 | Texto de ajuda da tela | [ ] | |
+| RN-F8.01 | `classificarPerfilFrota`: `forcado` (superadmin, role admin) ≠ `admin_modulo` (só `admin_modulos` frota) | [x] | `bd546050` |
+| RN-F8.02 | `PUT ADMIN_FROTA` escreve `frota` em `admin_modulos` + linha espelho; resposta `origem 'admin_modulo'` | [x] | `bd546050` |
+| RN-F8.03 | `PUT` CONSULTA/MOTORISTA/`null` num `admin_modulo` tira `frota`, apaga o espelho e grava o pedido | [x] | `bd546050` |
+| RN-F8.04 | `forcado` → 409 `PERFIL_FORCADO`, mensagem nova (só superadmin/administrador do sistema) | [x] | `bd546050` |
+| RN-F8.05 | Mensagem de perfil inválido e `perfis` do `GET` com os três | [x] | `bd546050` |
+| RN-F8.06 | O próprio perfil → 409 `PROPRIO_PERFIL`, inclusive administrador | [x] | `bd546050` |
+| RN-F8.07 | Ida e volta pelo login real: `/perfis-usuario` 200 → 403; `/dashboard` 200 → 403 | [x] | `bd546050`, `09a4a661` |
+| RN-F8.08 | O sync do núcleo rodado com a lista **atual** não desfaz; o `PUT /usuarios/:id` com a lista **velha** (cadastro aberto antes) desfaz — fixado e declarado (B81). *O plano dizia "o sync com a lista velha desfaz"; medido: sozinho ele só apaga a linha espelho — quem desfaz é a coluna reescrita* | [x] | `bd546050` |
+| RN-F8.09 | Tela: três opções; `admin_modulo` com seletor; `forcado` com etiqueta | [x] | `85e031e4` |
+| RN-F8.10 | Escolher Administrador pede confirmação; Cancelar não chama o servidor | [x] | `85e031e4` |
+| RN-F8.11 | Texto de ajuda da tela | [x] | `85e031e4` |
 
 ## Spec que estava errada
 

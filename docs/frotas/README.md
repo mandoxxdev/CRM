@@ -1,8 +1,11 @@
 # Módulo Frota — guia do que existe hoje
 
-> **Onde paramos:** **Etapa 7 (pequena) — o gestor remove uma foto pela lista — entregue em 2026-10-28** (na `main`, `7bfcec6e`). Na coluna
-> **Fotos** de **Checklist Diário** e **Abastecimentos**, o Administrador de Frota toca **Remover foto**, vê todas as fotos do lançamento
-> numa janela e remove a que quiser. Antes: **Etapa 6 — tratar a pendência do registro — entregue em 2026-10-23** (commits `492a0d87` a
+> **Onde paramos:** **Etapa 8 — administrador pela tela, destinos cadastrados, condutor do carro de funcionário, saída da GMP e
+> abastecimento sem foto — entregue em 2026-10-28** (na `main`, `a8a8d885` a `d38f0a71`, mais o fechamento). Cinco pedidos da empresa de
+> uma vez: em **Perfis de acesso** o gestor dá e tira **Administrador de Frota**; o **Abastecimento** do portal não pede mais foto; a
+> **Saída** sai sempre **da GMP**, escolhe o destino numa **lista que o próprio motorista alimenta** (**+ Novo destino**) e, no carro
+> **liberado para funcionários**, pede **quem vai dirigir**; o gestor tem a tela **Destinos**. Antes: **Etapa 7 (pequena) — o gestor
+> remove uma foto pela lista — 2026-10-28** (`7bfcec6e`). E antes: **Etapa 6 — tratar a pendência do registro — entregue em 2026-10-23** (commits `492a0d87` a
 > `8fa7ece2`, com a Fase 5, mais o fechamento). O gestor marca a falha ou avaria como **tratada** (o que foi feito, e a manutenção se
 > houver) na lista Checklist ou no próprio alerta; o alerta sai do painel na hora e não some mais sozinho; o motorista vê em Meus registros.
 > **O módulo está pronto para uso**; os próximos passos dependem do André (placas/modelos/km dos 4 veículos; folha inteira do formulário) ou
@@ -57,12 +60,14 @@ botão grande e preenche o mesmo formulário do papel — e só vê o que é del
 
 O formulário de Saída/Retorno/Inspeção tem: veículo (no Retorno é o da viagem), **KM atual** (na máquina por horímetro, **Horímetro
 atual**; embaixo, *"Último registrado neste veículo: …"*), data, horário, **combustível** (Vazio, ¼,
-½, ¾, Cheio), origem/destino/finalidade (só na Saída), os **12 itens** do papel (cada um **OK**, **N/A** ou **Falha**), **avarias**
+½, ¾, Cheio), **Saindo de: GMP** (fixo), **Indo para onde (destino)** — uma lista com **+ Novo destino** — , **Quem vai dirigir
+(condutor)** (só no carro liberado para funcionários) e finalidade (os quatro só na Saída; desde a Etapa 8), os **12 itens** do papel (cada um **OK**, **N/A** ou **Falha**), **avarias**
 (onde: lado esquerdo, lado direito, em cima, frente, traseira; o que é: risco, amassado, trinca, quebrado, outro; descrição opcional)
 e observações. O **Salvar** só acende com os 12 itens marcados. Número **menor** que o último do veículo: um aviso enquanto digita e,
 ao salvar, a pergunta com o botão **Confirmar mesmo assim** (desde a Etapa 3).
 
-**Fotos (desde a Etapa 5).** O formulário e o Abastecimento têm **Tirar foto**: abre a câmera do celular; até 3 fotos, cada uma com
+**Fotos (desde a Etapa 5).** O formulário de Saída/Retorno/Inspeção tem **Tirar foto** (o Abastecimento tinha e **deixou de ter** na
+Etapa 8, a pedido da empresa): abre a câmera do celular; até 3 fotos, cada uma com
 **Remover foto**. As fotos sobem **depois** que o lançamento é salvo; se alguma falhar, o lançamento fica salvo e aparece *"Salvo, mas 1
 foto não foi enviada: …"* — ela se manda de novo em **Meus registros** (**+ Foto**). Foto grande ou do iPhone (HEIC) é reduzida no
 próprio celular antes de subir. O gestor vê a primeira foto em miniatura (e *"+1"*/*"+2"*) na coluna **Fotos** das listas **Checklist
@@ -76,16 +81,17 @@ formulário, e na linha os botões **editar** (lápis) e **excluir** (lixeira). 
 | Tela | Para que serve | Funciona? |
 |---|---|---|
 | **Dashboard Frota** | 9 cartões, lista de alertas (inclui **Checklist com pendência**), custos por categoria, últimos abastecimentos. Botão **Exportar planilha** | Sim |
-| **Veículos** | Placa, marca, modelo, ano, tipo, **km** ou **horímetro**, combustível, setor, centro de custo, condutor responsável, chassi, RENAVAM | Sim |
+| **Veículos** | Placa, marca, modelo, ano, tipo, **km** ou **horímetro**, combustível, setor, centro de custo, condutor responsável, **Liberado para funcionários** (o carro do setor: a Saída do portal passa a pedir quem vai dirigir; a coluna Condutor mostra "Funcionários"), chassi, RENAVAM | Sim |
 | **Motoristas** | Nome, CPF, CNH, telefone, e-mail, setor e **Usuário de acesso (portal do motorista)** | Sim |
 | **Abastecimentos** | Veículo, motorista, data, litros, valor, km (ou **horímetro**, na máquina), combustível, posto. O sistema sobe o km (ou o horímetro) do veículo e calcula o **km por litro** (carro) ou os **litros por hora** (máquina). Coluna **Fotos** (cupom) com **Remover foto** para o gestor | Sim |
 | **Manutenções** | Preventiva ou corretiva, oficina, custo, peças, km, **próxima revisão**. "Em andamento" põe o veículo em manutenção | Sim |
-| **Viagens** | Saída e retorno, km (ou **horímetro**, na máquina), **origem**, destino, finalidade, setor, status. O botão **Aprovar** aparece só em viagem **solicitada** | Sim |
+| **Viagens** | Saída e retorno, km (ou **horímetro**, na máquina), **origem** (a viagem nova já vem **GMP**), destino (texto), **condutor** (quem dirigiu o carro liberado para funcionários; opcional aqui), finalidade, setor, status. O botão **Aprovar** aparece só em viagem **solicitada** | Sim |
+| **Destinos** (Etapa 8) | A lista que o motorista escolhe na Saída: nome, endereço, quem cadastrou, status. **Excluir** desativa (as viagens antigas guardam o nome); **Mostrar: Todos** mostra os desativados para reativar | Sim |
 | **Checklist Diário** | Lista tudo o que o motorista registrou (colunas **Tipo**, **KM**, **Situação**) e o "Novo Checklist" antigo do gestor (7 itens). Na linha com **PENDÊNCIA**, **Tratar pendência** (o que foi feito, e a manutenção se houver); tratada, **PENDÊNCIA · tratada** e **Desfazer tratamento**. Coluna **Fotos** com **Remover foto** para o gestor | Sim. Não edita |
 | **Multas** | Data, infração, valor, pontos, vencimento, pago/pendente/contestado | Sim |
 | **Documentos** | IPVA, licenciamento, seguro, CRLV, rastreador — com vencimento e "avisar X dias antes" | Sim |
 | **Relatórios** | Custo por veículo e consumo (km/L do carro, **litros por hora** da máquina) no **mesmo período** (uma data ou duas), com o período aplicado escrito, linha **Total**, **Imprimir** e **Exportar planilha** (mesmo período, com a aba **Multas**) | Sim |
-| **Perfis de acesso** | Só o administrador. Uma linha por usuário: **Consulta** ou **Motorista (padrão)**, o que o perfil permite e o motorista ligado; avisa quando quem vira Consulta é motorista | Sim |
+| **Perfis de acesso** | Só o administrador. Uma linha por usuário: **Motorista (padrão)**, **Consulta** ou **Administrador de Frota** (desde a Etapa 8, com confirmação ao dar), o que o perfil permite e o motorista ligado; avisa quando quem vira Consulta é motorista | Sim |
 | **Portal do motorista** | O mesmo "Meu painel" do motorista (o gestor só grava se estiver ligado a um motorista) | Sim |
 | **Solicitar Material** | Pede peça/material ao almoxarifado | Sim |
 
@@ -108,9 +114,11 @@ formulário, e na linha os botões **editar** (lápis) e **excluir** (lixeira). 
 | **Motorista** | Só o que é **dele**: saída, retorno, inspeção e abastecimento pelo portal; vê só os próprios registros, viagens, abastecimentos e multas. **Não** vê o painel nem relatório, **não** vê CPF/CNH dos colegas, **não** lança multa nem documento, **não** aprova viagem |
 | **Consulta** | Vê painel, alertas, as listas (inclusive CPF/CNH dos motoristas) e relatório, e exporta a planilha. Não lança, não edita, não aprova, não exclui — os botões nem aparecem |
 
-**Administrador de Frota** se dá na tela de usuários ("administra o módulo Frota"). **Consulta** e **Motorista** se dão em **Frota →
-Perfis de acesso** (só o administrador abre). Quem não tem perfil escolhido entra como **Motorista**. Mudou o perfil de alguém? Vale no
-próximo clique dela; o menu dela muda quando ela recarrega a página.
+**Administrador de Frota**, **Consulta** e **Motorista** se dão em **Frota → Perfis de acesso** (só o administrador abre; desde a Etapa 8
+o Administrador também — antes só na tela de usuários, "administra o módulo Frota", que continua valendo e é a mesma marca). Superadmin
+e administrador do sistema não se mexem por ali. Quem não tem perfil escolhido entra como **Motorista**. Mudou o perfil de alguém? Vale
+no próximo clique dela; o menu dela muda quando ela recarrega a página. O motorista também **cadastra destinos** (pelo **+ Novo destino**
+da Saída).
 
 ## O que ainda atrapalha o uso real (em palavras simples)
 
@@ -343,10 +351,51 @@ Preparação: o roteiro das fotos feito (a inspeção da *Ana* em *AAA1A11* com 
    some da janela.
 8. **Sem internet.** Desligue a rede e remova: *"Não foi possível remover a foto. Confira a internet e tente de novo."*; a janela fica.
 
-## O que as Etapas 1 a 7 **não** cobrem
+## Roteiro de teste manual (Etapa 8: administrador, destinos, condutor, origem GMP, abastecimento sem foto)
 
-- Dar **Administrador de Frota** pela tela de Perfis (continua no cadastro de usuário); saber **quem** mudou um perfil; lembrar o
-  Consulta de quem foi administrador e deixou de ser.
+Preparação: um veículo *BBB2B22* e a motorista *Ana* ligada ao login dela; um usuário *Fabio* com acesso ao módulo Frota e sem perfil;
+um usuário *Bruno* idem.
+
+1. **Dar Administrador.** Como administrador, **Frota → Perfis de acesso**: na linha do *Fabio*, o seletor tem **Motorista (padrão)**,
+   **Consulta** e **Administrador de Frota**. Escolha **Administrador de Frota** → *"Dar Administrador de Frota a Fabio? A pessoa passa a
+   fazer tudo no módulo, inclusive dar perfis."* → **Cancelar**: nada muda. De novo → **OK** → *"Perfil definido: Administrador de
+   Frota"*. Na tela de usuários do sistema, o *Fabio* aparece marcado em "administra o módulo Frota".
+2. **O novo administrador age.** Como *Fabio*, abra **Frota** e o **Meu painel** (o menu vira o do gestor), depois **Perfis de acesso**: dê
+   **Consulta** ao *Bruno* → *"Perfil definido: Consulta"*. Tente mudar o próprio *Fabio*: a linha dele não aceita (*"Você não pode mudar o
+   seu próprio perfil por esta tela."* se forçar pela API).
+3. **Tirar.** Como administrador, na linha do *Fabio* escolha **Consulta** (sem pergunta) → *"Perfil definido: Consulta"*. Como *Fabio*, o
+   botão **Novo Veículo** some ao recarregar; **Perfis de acesso** responde *"Sem permissão para esta operação"*.
+4. **Superadmin.** Na linha do superadmin: etiqueta **Administrador** e *"Superadmin ou administrador do sistema: não se altera por esta
+   tela."*, sem seletor.
+5. **Abastecimento sem foto.** Como *Ana*, **Meu painel → Abastecimento**: não há **Tirar foto** nem "Foto do cupom". Salve um
+   abastecimento; em **Meus registros** ele aparece sem **+ Foto**. A **Saída** continua com **Tirar foto**.
+6. **Carro liberado.** Como administrador, **Veículos → editar BBB2B22** → marque **Liberado para funcionários** → Salvar; a coluna
+   Condutor mostra *"Funcionários"*.
+7. **Saída com destino novo e condutor.** Como *Ana*, **Saída** → veículo *BBB2B22*: aparece **Saindo de: GMP** (fixo) e o campo **Quem vai
+   dirigir (condutor)**. Em **Indo para onde (destino)** a lista está vazia → **+ Novo destino** → **Adicionar** sem nome → *"Informe o nome
+   do destino"*; digite *Obra Beta* → **Adicionar** → *"Destino adicionado"*, já selecionado. Preencha os 12 itens, deixe o condutor vazio →
+   **Salvar** → *"Informe quem vai dirigir (condutor)"*. Digite *Carlos* → **Salvar** → *"Saída registrada"*; o cartão diz *"…destino Obra
+   Beta, condutor Carlos."*.
+8. **Destino repetido.** Como *Bruno* (ligue-o a um motorista), **Saída → + Novo destino** → *obra beta* → *"Esse destino já existia —
+   selecionado."*.
+9. **O gestor vê.** **Frota → Viagens**: a linha com Origem *GMP*, Destino *Obra Beta*, Motorista *Ana*, **Condutor *Carlos***; busque
+   *Carlos* e ela aparece. **Exportar planilha**, aba **Viagens e KM**: Condutor = *Carlos*. **Frota → Destinos**: *Obra Beta*, cadastrado por
+   *Ana*, **Ativo**.
+10. **Renomear e desativar.** Em **Destinos**, edite *Obra Beta* → *Obra Beta II*: a viagem da Ana continua *"Obra Beta"*. **Excluir** →
+    some da lista; **Mostrar: Todos** → aparece **Desativado**; Editar → Status **Ativo** → volta. Como *Ana*, com a Saída aberta com o
+    destino escolhido, peça ao gestor para desativar e salve: *"Destino não encontrado"* e a tela avisa *"O destino escolhido foi
+    desativado. Escolha outro."*.
+11. **Carro comum.** Desmarque **Liberado para funcionários**; na Saída da *Ana* o campo de condutor não aparece.
+
+## O que as Etapas 1 a 8 **não** cobrem
+
+- Saber **quem** mudou um perfil (não há trilha); lembrar o Consulta de quem foi administrador **pelo cadastro de usuário** e deixou de
+  ser; o menu de quem **deixa** de ser administrador só muda ao recarregar a página. *(Dizia: "Dar Administrador de Frota pela tela de
+  Perfis" — resolvido na Etapa 8.)*
+- **Destinos:** acento conta como letra diferente ("Sao Paulo" e "São Paulo" cabem os dois); o formulário de **Viagens** do gestor
+  continua com destino em texto; não há mapa nem coordenadas.
+- **Condutor:** texto livre (não é uma lista de funcionários); só na Saída do portal é obrigatório; não há condutor no Retorno nem na
+  Inspeção.
 - A **seção 3** do formulário (imagem cortada), **desenho** clicável das avarias.
 - **Fotos:** saber **quem** removeu uma foto (não há trilha); remover pela janela de edição do lançamento (é pela coluna **Fotos**); a
   foto é do registro, não de cada avaria; a tela antiga **Novo Checklist** e o formulário de abastecimento do gestor não enviam foto; a

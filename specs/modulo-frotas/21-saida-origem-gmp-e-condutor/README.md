@@ -1,6 +1,6 @@
 # 21 — Saída: origem GMP, carro liberado para funcionários e condutor
 
-> **Status:** 🔴 → **em desenvolvimento na Etapa 8** (2026-10-28). Pedidos do André: "Carros destinados a funcionários, com saída para
+> **Status:** 🟢 **entregue na Etapa 8** (2026-10-28), na `main`, `a8a8d885` (esquema) a `09a4a661` (integração), mais o fechamento. Pedidos do André: "Carros destinados a funcionários, com saída para
 > trabalho externo. Saindo de onde, sempre será da GMP. Indo para onde — poderia ser Destino" e "Precisamos informar o condutor, para os
 > casos de veículos liberados para funcionários".
 > **Plano:** [`docs/superpowers/plans/2026-10-28-frotas-etapa8-admin-destinos-condutor.md`](../../../docs/superpowers/plans/2026-10-28-frotas-etapa8-admin-destinos-condutor.md)
@@ -18,17 +18,17 @@ lugar do motorista.
 
 | RN | Regra | Estado | Commit |
 |---|---|---|---|
-| RN-F8.15 | `frotas_veiculos.uso_funcionarios`; aceito no POST/PUT; no `/portal/inicio` | [ ] | |
-| RN-F8.16 | `frotas_viagens.condutor_nome`, `destino_id`; `ORIGEM_PADRAO = 'GMP'` no `/meta` | [ ] | |
-| RN-F8.17 | Saída do portal sem origem → `GMP`; com origem → o que veio | [ ] | |
-| RN-F8.18 | Carro liberado sem condutor → 400 `Informe quem vai dirigir (condutor)`; > 120 → 400; comum: opcional | [ ] | |
-| RN-F8.19 | A conferência relê o veículo **dentro da fila** (marca ligada um segundo antes) | [ ] | |
-| RN-F8.20 | `POST/PUT /viagens` do gestor: `condutor_nome` opcional; viagem aprovada consumida recebe condutor/origem | [ ] | |
-| RN-F8.21 | `viagem_aberta.condutor_nome` no `/portal/inicio` | [ ] | |
-| RN-F8.22 | Planilha: Condutor = condutor ou motorista; cabeçalho igual | [ ] | |
-| RN-F8.23 | Portal: `Saindo de: GMP` fixo; `Quem vai dirigir (condutor)` só em carro liberado; corpo sem `origem` | [ ] | |
-| RN-F8.24 | Cartão "Você está com o veículo…, condutor X" | [ ] | |
-| RN-F8.25 | Gestor: checkbox no veículo, "Funcionários" na coluna Condutor; Viagens com coluna/campo Condutor e Origem `GMP` | [ ] | |
+| RN-F8.15 | `frotas_veiculos.uso_funcionarios`; aceito no POST/PUT; no `/portal/inicio` | [x] | `a8a8d885` |
+| RN-F8.16 | `frotas_viagens.condutor_nome`, `destino_id`; `ORIGEM_PADRAO = 'GMP'` no `/meta` | [x] | `a8a8d885` |
+| RN-F8.17 | Saída do portal sem origem → `GMP`; com origem → o que veio | [x] | `d38f0a71` |
+| RN-F8.18 | Carro liberado sem condutor → 400 `Informe quem vai dirigir (condutor)`; > 120 → 400; comum: opcional | [x] | `d38f0a71` |
+| RN-F8.19 | A conferência relê o veículo **dentro da fila** (marca ligada um segundo antes) | [x] | `d38f0a71` |
+| RN-F8.20 | `POST/PUT /viagens` do gestor: `condutor_nome` opcional; viagem aprovada consumida recebe condutor/origem | [x] | `d38f0a71` |
+| RN-F8.21 | `viagem_aberta.condutor_nome` no `/portal/inicio` | [x] | `d38f0a71` |
+| RN-F8.22 | Planilha: Condutor = condutor ou motorista; cabeçalho igual | [x] | `d38f0a71` |
+| RN-F8.23 | Portal: `Saindo de: GMP` fixo; `Quem vai dirigir (condutor)` só em carro liberado; corpo sem `origem` | [x] | `ef71a1b6` |
+| RN-F8.24 | Cartão "Você está com o veículo…, condutor X" | [x] | `ef71a1b6` |
+| RN-F8.25 | Gestor: checkbox no veículo, "Funcionários" na coluna Condutor; Viagens com coluna/campo Condutor e Origem `GMP` | [x] | `37380627` |
 
 ## Decisões (letra B do documento de novidades)
 

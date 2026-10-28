@@ -9,14 +9,15 @@ O módulo tem três perfis. O perfil decide o que a pessoa vê e o que ela pode 
 
 | Perfil | Vê | Grava |
 |---|---|---|
-| **Administrador de Frota** (o gestor) | Tudo: painel, alertas, relatórios, todos os cadastros e lançamentos | Tudo: veículos, motoristas, manutenções, abastecimentos, viagens, checklists, multas, documentos; aprova e cancela viagem; trata a pendência dos registros; remove foto de qualquer lançamento pela lista; exclui; exporta a planilha |
-| **Motorista** | Só o que é **dele**: os próprios registros, abastecimentos, viagens e multas; no cadastro de motoristas, só ele mesmo | Pelo **Meu painel**: saída, retorno, inspeção e abastecimento, sempre em nome dele, com até 3 fotos em cada; manda e remove foto só dos lançamentos dele |
+| **Administrador de Frota** (o gestor) | Tudo: painel, alertas, relatórios, todos os cadastros e lançamentos | Tudo: veículos, motoristas, manutenções, abastecimentos, viagens, checklists, multas, documentos, **destinos**; aprova e cancela viagem; trata a pendência dos registros; remove foto de qualquer lançamento pela lista; exclui; exporta a planilha; dá e tira perfis — **inclusive Administrador de Frota** |
+| **Motorista** | Só o que é **dele**: os próprios registros, abastecimentos, viagens e multas; no cadastro de motoristas, só ele mesmo | Pelo **Meu painel**: saída, retorno, inspeção e abastecimento, sempre em nome dele, com até 3 fotos na saída, no retorno e na inspeção; manda e remove foto só dos lançamentos dele; **cadastra destinos** pelo "+ Novo destino" da saída |
 | **Consulta** | Painel, alertas, relatórios e todas as telas de cadastro e lançamento, só para ler (inclusive CPF e CNH dos motoristas e os valores, e as fotos de todos) | Nada (só exporta a planilha). As telas aparecem sem os botões de novo, editar, aprovar e excluir |
 
 Como o perfil é decidido:
 
-- É **Administrador de Frota** quem é superadmin, administrador geral do sistema ou administrador do módulo Frota (marcado no
-  cadastro de usuário). Esse perfil vem só do cadastro de usuário.
+- É **Administrador de Frota** quem é superadmin, administrador geral do sistema ou administrador do módulo Frota. O administrador do
+  módulo é marcado no cadastro de usuário **ou** dado por outro Administrador de Frota em **Frota → Perfis de acesso** (veja 3.8) — é a
+  mesma marca, vista de duas telas.
 - Os outros recebem **Consulta** ou **Motorista** em **Frota → Perfis de acesso** (veja 3.8).
 - Quem tem acesso ao módulo Frota, não é administrador e não recebeu perfil nenhum é **Motorista**.
 - O perfil vale a partir do próximo clique da pessoa, sem ela sair e entrar de novo. O menu e os botões que ela vê se atualizam quando
@@ -57,7 +58,8 @@ ligado ao seu cadastro de motorista. Só o gestor faz isso (veja 3.2). Enquanto 
 | **Inspeção** | sempre | Preenche o formulário, sem viagem (inspeção periódica) |
 | **Abastecimento** | sempre | Registra o abastecimento |
 
-Quando você está com um veículo, o painel mostra: "Você está com o veículo (placa) desde (data) às (hora), destino (destino)."
+Quando você está com um veículo, o painel mostra: "Você está com o veículo (placa) desde (data) às (hora), destino (destino), condutor
+(quem vai dirigir)." — destino e condutor só aparecem se foram informados na saída.
 
 ### 2.3 O formulário (Saída, Retorno, Inspeção)
 
@@ -70,7 +72,14 @@ Quando você está com um veículo, o painel mostra: "Você está com o veículo
   o último número registrado naquele veículo: *"Último registrado neste veículo: 1.800 km"* (ou *"… 120 h"*). Veja as regras em 2.10.
 - **Data** e **Horário** — já vêm com agora; dá para mudar.
 - **Combustível** — Vazio, ¼, ½, ¾ ou Cheio (opcional; toque de novo para desmarcar).
-- **Saindo de onde**, **Indo para onde**, **Para quê (finalidade)** — só na Saída, opcionais.
+- **Saindo de: GMP** — só na Saída, fixo: toda saída é da empresa (não há o que digitar).
+- **Indo para onde (destino)** — só na Saída, opcional: uma **lista** dos destinos já cadastrados (clientes, obras, fornecedores). Se o
+  lugar não está na lista, toque **+ Novo destino**, digite o **Nome** (e o **Endereço**, se quiser) e **Adicionar**: o destino entra na
+  lista, já escolhido, e fica disponível para todos dali em diante (*"Destino adicionado"*). Se alguém já tinha cadastrado o mesmo nome, o
+  sistema escolhe o que existe: *"Esse destino já existia — selecionado."*. Nome em branco: *"Informe o nome do destino"*. Veja 2.4.
+- **Quem vai dirigir (condutor)** — só na Saída e **só nos veículos liberados para funcionários** (carro do setor, que qualquer um pega
+  para trabalho externo): o nome de quem vai dirigir. Nesses veículos é obrigatório. Nos outros o campo nem aparece. Veja 2.4.
+- **Para quê (finalidade)** — só na Saída, opcional.
 - **Condições do veículo** — os 12 itens do papel, cada um **OK**, **N/A** (não se aplica) ou **Falha**:
   Pneus e estepe · Faróis / lanternas · Setas / luz de freio · Parabrisa / vidros · Espelhos / retrovisores · Limpadores / água ·
   Óleo do motor / vazamentos · Arrefecimento / nível · Freios / freio de estacionamento · Buzina / cintos · Documentos / equipamentos
@@ -120,6 +129,17 @@ O que bloqueia a saída:
 | O veículo está com outro motorista | *"Este veículo já está em uso (saída sem retorno)."* (na tela, o veículo nem aparece na lista) |
 | O veículo está em manutenção | *"Veículo em manutenção. Fale com o gestor da frota."* (na tela, ele aparece com "(em manutenção — indisponível)" e não pode ser escolhido) |
 | Sem veículo | *"Escolha o veículo"* |
+| Veículo **liberado para funcionários** e o campo **Quem vai dirigir (condutor)** vazio | *"Informe quem vai dirigir (condutor)"* |
+| Condutor com mais de 120 letras | *"Condutor: no máximo 120 caracteres"* |
+| O destino escolhido foi desativado pelo gestor enquanto você preenchia | *"Destino não encontrado"*; a lista se atualiza e a tela avisa *"O destino escolhido foi desativado. Escolha outro."* |
+
+**Carro liberado para funcionários.** Alguns veículos são do setor, não de um motorista: qualquer funcionário pega para trabalho
+externo. O gestor marca isso no cadastro do veículo (3.1). Nesses carros, quem registra a saída no portal (você, com o seu login)
+informa **quem vai dirigir** — o nome fica na viagem, aparece no cartão do painel e na planilha, na coluna Condutor, no lugar do seu
+nome. A viagem continua sendo sua (o retorno é seu). Nos outros veículos o campo não aparece.
+
+**De onde e para onde.** A saída é sempre **da GMP** — o sistema grava isso sozinho. O destino sai da lista de destinos (2.3); a viagem
+guarda o **nome** do destino como estava na hora: se o gestor renomear ou desativar o destino depois, as viagens antigas não mudam.
 
 O que **não** bloqueia: marcar **Falha** num item ou registrar uma avaria. A saída é aceita e o gestor recebe um alerta (veja 3.3).
 Decidir se o veículo pode rodar é do gestor.
@@ -175,18 +195,20 @@ salvar: "Abastecimento registrado". O abastecimento de máquina por horímetro g
 
 O valor pode ficar em branco (vale zero). O preço por litro é **valor total ÷ litros**. O cálculo do km/L está em 3.6.
 
-**Foto do cupom** — o abastecimento tem o mesmo **Tirar foto** do formulário (até 3 fotos), para o cupom do posto. As fotos sobem
-depois que o abastecimento é salvo, com as mesmas regras e avisos de 2.3 ("Como as fotos são enviadas").
+**Sem foto.** O abastecimento **não pede foto** (o cupom do posto não vai pelo sistema). *Dizia: "o abastecimento tem o mesmo Tirar
+foto do formulário, para o cupom"* — isso saiu a pedido da empresa; a foto continua na Saída, no Retorno e na Inspeção (2.3).
 
 ### 2.9 Ver os meus registros
 
 Abaixo dos botões, **Meus registros** mostra as suas últimas 30 saídas/retornos/inspeções (tipo, placa, data, hora, km — ou horas,
 como "125 h", na máquina — e a etiqueta OK / PENDÊNCIA / INCOMPLETO) e os seus últimos 30 abastecimentos (placa, litros, data, km ou
-horas, valor). Cada lançamento mostra as **miniaturas das fotos** dele; tocar numa abre a foto em outra aba. Para mandar uma foto que
-faltou (ou outra), toque **+ Foto** no lançamento (o botão some quando ele já tem 3); dá certo → *"Foto enviada"*; não dá → a
+horas, valor). Cada registro (saída, retorno, inspeção) mostra as **miniaturas das fotos** dele; tocar numa abre a foto em outra aba.
+Para mandar uma foto que faltou (ou outra), toque **+ Foto** no registro (o botão some quando ele já tem 3); dá certo → *"Foto enviada"*; não dá → a
 mensagem do servidor ou *"Não foi possível enviar a foto. Confira a internet e tente de novo."*. Para tirar uma foto errada, toque
 **Remover foto** embaixo dela e confirme *"Remover esta foto?"* → *"Foto removida"* (sem internet: *"Não foi possível remover a foto.
 Confira a internet e tente de novo."*). As fotos são a única coisa que você mexe aqui: para corrigir um lançamento, fale com o gestor.
+O **abastecimento** não tem **+ Foto** (ele não pede foto); se um abastecimento antigo tiver foto, a miniatura e o **Remover foto**
+continuam lá.
 
 Quando o gestor resolve uma pendência sua, o registro passa a mostrar a etiqueta **PENDÊNCIA · tratada** e, embaixo, *"Tratada em
 (dia) às (hora): (o que foi feito)"*.
@@ -224,7 +246,9 @@ km. Ser máquina ou não é o campo **Medição** do cadastro do veículo (3.1).
 
 **Frota → Veículos → Novo Veículo**: placa (obrigatória, única; o sistema guarda em maiúsculas, sem traço — *"Placa já cadastrada"*
 se repetir), marca, modelo, ano, tipo, se mede por **km** ou **horímetro**, km atual, combustível, consumo esperado (km/L, usado no
-alerta de consumo baixo), setor, centro de custo, condutor responsável, status (**ativo**, **manutencao**, **inativo**, **vendido**).
+alerta de consumo baixo), setor, centro de custo, condutor responsável, **Liberado para funcionários** (marque no carro do setor que
+qualquer funcionário pega para trabalho externo: a Saída do portal passa a pedir **quem vai dirigir** — veja 2.4; na lista, a coluna
+Condutor mostra "Funcionários" quando não há condutor responsável), status (**ativo**, **manutencao**, **inativo**, **vendido**).
 
 O status pesa no portal: **manutencao** impede a saída (a inspeção continua possível); **inativo** e **vendido** tiram o veículo da
 lista do motorista.
@@ -282,8 +306,9 @@ está como **Consulta**, esses botões (e o de aprovar viagem) não aparecem: a 
 | Tela | O que guardar de importante |
 |---|---|
 | **Manutenções** | Preventiva/corretiva, oficina, custo, km, próxima revisão (km e data). Criada como **em andamento**, põe o veículo em manutenção (que bloqueia a saída no portal) |
-| **Abastecimentos** | Mostra os lançados pelo portal e pelo escritório, com **Km/L** (na máquina, o consumo em litros por hora, ex.: "5,00 L/h"; se a linha tem km e horímetro, os dois: "10,50 km/L · 5,00 L/h"). Editar litros ou valor refaz o preço por litro. Para máquina por horímetro, use **Horímetro no abastecimento (máquina)** e deixe o KM vazio: a coluna KM mostra as horas ("125 h") e a linha fica sem km/L. O escritório pode lançar km menor que o do veículo (lançamento atrasado) sem pergunta. A coluna **Fotos** mostra a foto do cupom que o motorista mandou pelo portal |
-| **Viagens** | Saída/retorno, km, origem, destino, finalidade, status. O botão **Aprovar** (✓) aparece só em viagem **solicitada**. Para máquina por horímetro: **Horímetro saída (máquina)** e **Horímetro retorno (máquina)**; a coluna KM rodado mostra as horas usadas ("6,5 h") |
+| **Abastecimentos** | Mostra os lançados pelo portal e pelo escritório, com **Km/L** (na máquina, o consumo em litros por hora, ex.: "5,00 L/h"; se a linha tem km e horímetro, os dois: "10,50 km/L · 5,00 L/h"). Editar litros ou valor refaz o preço por litro. Para máquina por horímetro, use **Horímetro no abastecimento (máquina)** e deixe o KM vazio: a coluna KM mostra as horas ("125 h") e a linha fica sem km/L. O escritório pode lançar km menor que o do veículo (lançamento atrasado) sem pergunta. A coluna **Fotos** fica para os abastecimentos antigos que tiveram foto; o portal não pede mais foto no abastecimento |
+| **Viagens** | Saída/retorno, km, origem, destino, finalidade, **condutor**, status. A viagem nova já vem com **Origem = GMP** (dá para mudar). **Condutor (funcionário)** é quem dirigiu um carro liberado para funcionários — opcional aqui (o escritório lança atrasado); o portal exige. O **Destino** aqui é texto livre (digite o que a nota diz); a lista de destinos é do portal. Condutor, origem e destino **não se apagam** deixando o campo vazio: digite outro valor. O botão **Aprovar** (✓) aparece só em viagem **solicitada**. Para máquina por horímetro: **Horímetro saída (máquina)** e **Horímetro retorno (máquina)**; a coluna KM rodado mostra as horas usadas ("6,5 h"). A busca acha por destino, finalidade, placa e condutor |
+| **Destinos** | Os lugares de entrega e retirada que o motorista escolhe na Saída: **Nome**, **Endereço**, **Cadastrado por** (quem criou — o motorista, pelo "+ Novo destino", ou o gestor aqui), **Status**. **Excluir** não apaga: **desativa** (some da lista do motorista; as viagens antigas guardam o nome). Para ver e reativar os desativados, **Mostrar: Todos** e Editar → Status **Ativo**. Dois destinos ativos não podem ter o mesmo nome (maiúsculas e minúsculas não contam; acento conta): *"Destino já cadastrado"*. Se um motorista cadastrar de novo o nome de um destino desativado, nasce outro ativo — ao reativar o antigo o sistema recusa; fique com um |
 | **Checklist Diário** | Lista todos os registros (Data, Placa, **Tipo**: Saída/Retorno/Inspeção, Motorista, **KM**, **Situação**, Observações, **Fotos**). O **Novo Checklist** daqui é o formulário simples de 7 itens sim/não (pneus, óleo, luzes, freios, extintor, documentos, limpeza), sem avarias. Não edita. Na linha com **PENDÊNCIA**, o gestor tem **Tratar pendência** (veja abaixo) |
 | **Multas**, **Documentos** | Só o gestor lança e altera |
 
@@ -471,23 +496,29 @@ fica vazia.
 para esta operação"*). A tela lista os usuários ativos do sistema, com busca por nome ou e-mail, em quatro colunas: **Usuário**, **Perfil
 no Frota**, **O que isso permite** e **Motorista ligado** (o motorista cujo cadastro está ligado àquele login, ou "—").
 
-- Para cada pessoa há um seletor com **Motorista (padrão)** e **Consulta**. Ao escolher, o sistema grava na hora: *"Perfil definido:
-  Consulta"*, ou, voltando ao padrão, *"Perfil removido — o usuário volta ao padrão (Motorista)"*.
+- Para cada pessoa há um seletor com **Motorista (padrão)**, **Consulta** e **Administrador de Frota**. Ao escolher, o sistema grava na
+  hora: *"Perfil definido: Consulta"* / *"Perfil definido: Administrador de Frota"*, ou, voltando ao padrão, *"Perfil removido — o usuário
+  volta ao padrão (Motorista)"*.
+- **Dar Administrador de Frota** pede confirmação: *"Dar Administrador de Frota a (nome)? A pessoa passa a fazer tudo no módulo, inclusive
+  dar perfis."* — Cancelar não grava nada. Por baixo, é a mesma marca "administra o módulo Frota" do cadastro de usuário: a pessoa aparece
+  marcada lá também, e desmarcar lá tem o mesmo efeito que escolher outro perfil aqui. **Tirar** é escolher Consulta ou Motorista (padrão)
+  na linha dela — sem confirmação. Qualquer Administrador de Frota pode dar e tirar; o texto de ajuda da tela lembra: *"Administrador de
+  Frota pode ser dado e tirado aqui; superadmin e administrador do sistema, não."*.
 - **O que cada um permite**, como a tela escreve: Motorista — *"Registra saída, retorno, inspeção e abastecimento no portal; vê só o que
   é dele."*; Consulta — *"Vê o painel, os alertas, as listas e os relatórios, e exporta a planilha. Não registra nem altera nada."*;
   Administrador de Frota — *"Faz tudo no módulo, inclusive dar perfis."*.
-- **Administradores não têm seletor.** Superadmin, administrador do sistema e administrador do módulo Frota aparecem com a etiqueta
-  **Administrador** e *"Para dar outro perfil, remova a condição de administrador no cadastro de usuário."*. Se alguém tentar mesmo assim
-  (fora da tela), o sistema recusa: *"Este usuário já é administrador (superadmin, administrador do sistema ou administrador do módulo
-  Frota) e tem acesso total à frota. Remova essa condição no cadastro de usuário antes de definir outro perfil."*.
-- **Ninguém muda o próprio perfil** por esta tela: *"Você não pode mudar o seu próprio perfil por esta tela."*.
+- **Superadmin e administrador do sistema não têm seletor.** Eles aparecem com a etiqueta **Administrador** e *"Superadmin ou
+  administrador do sistema: não se altera por esta tela."*. Se alguém tentar mesmo assim (fora da tela), o sistema recusa: *"Este usuário
+  é superadmin ou administrador do sistema e tem acesso total à frota. Isso não se altera por esta tela."*. *Dizia que o administrador do
+  módulo Frota também não tinha seletor — deixou de ser verdade: ele aparece com o seletor em "Administrador de Frota".*
+- **Ninguém muda o próprio perfil** por esta tela: *"Você não pode mudar o seu próprio perfil por esta tela."* — vale também para o
+  administrador que tentasse se rebaixar (assim sempre sobra pelo menos quem está logado).
 - **Avisos na linha.** Quem está como Consulta e é motorista mostra *"Ligado ao motorista (nome): como Consulta, não registra no
   portal."*. Se, além disso, ele está com uma saída sem retorno: *"Tem saída sem retorno: como Consulta, não consegue registrar o retorno.
   Feche a viagem em Frota → Viagens ou volte o perfil para Motorista."*. A mudança é aceita mesmo assim; o aviso diz como resolver.
 - **Perfil gravado com valor que o sistema não conhece** aparece no seletor como "(valor) (valor inválido — escolha outro)". Enquanto
-  estiver assim, a pessoa não grava nada e só vê o que seria dela como motorista. Escolha **Consulta** ou **Motorista (padrão)**.
-  Um Administrador de Frota gravado à parte (sem estar marcado no cadastro de usuário) aparece como "Administrador de Frota (gravado à
-  parte)" e pode ser trocado da mesma forma.
+  estiver assim, a pessoa não grava nada e só vê o que seria dela como motorista. Escolha **Consulta**, **Motorista (padrão)** ou
+  **Administrador de Frota**.
 - **Perfil não é acesso.** A lista traz todos os usuários ativos; dar Consulta a quem não tem o módulo Frota no cadastro de usuário não
   abre o módulo para ele. Usuários marcados como ocultos não aparecem na lista.
 - **Perfil não é vínculo.** Ser Motorista não liga a pessoa a um cadastro de motorista: isso se faz em **Motoristas** (3.2). Para registrar
@@ -497,6 +528,12 @@ no Frota**, **O que isso permite** e **Motorista ligado** (o motorista cujo cada
   *"Sem permissão para esta operação"*.
 - **Marcar e desmarcar o administrador do módulo apaga o Consulta.** Se alguém que está como Consulta passa a administrar o módulo Frota
   (no cadastro de usuário) e depois deixa de administrar, volta ao padrão (Motorista). Confira esta tela depois de tirar um administrador.
+  Pela tela do Frota isso não acontece: tirar o Administrador aqui **já grava** o perfil que você escolheu no lugar.
+- **Duas telas abertas ao mesmo tempo.** Se o administrador do sistema estava com o **cadastro de usuário** de uma pessoa aberto **antes**
+  de você dar Administrador de Frota a ela aqui, e salvar o cadastro depois (mesmo sem mexer em módulo), o Administrador que você deu
+  **some** — a tela dele manda a lista de módulos que carregou. Dê de novo aqui. Quem **vira** Administrador vê o menu novo ao abrir o
+  Meu painel; quem **deixa** de ser continua vendo o menu antigo até recarregar a página (os botões já não funcionam: *"Sem permissão para
+  esta operação"*).
 - O sistema guarda a data da última mudança de cada perfil, mas não quem mudou.
 
 ---
@@ -507,7 +544,11 @@ no Frota**, **O que isso permite** e **Motorista ligado** (o motorista cujo cada
 |---|---|
 | Motorista entra e vê "Seu usuário não está ligado a um motorista…" | Gestor: **Motoristas** → editar o motorista → **Usuário de acesso** = o login dele |
 | Pessoa do escritório (não administradora) entra no Frota e cai no "Meu painel" | Ela está como Motorista. Gestor: **Perfis de acesso** → escolher **Consulta** na linha dela; ela recarrega a página |
-| Consulta não vê o botão de cadastrar ou editar | É assim: Consulta só lê. Para gravar, a pessoa precisa ser Administrador de Frota (cadastro de usuário) |
+| Consulta não vê o botão de cadastrar ou editar | É assim: Consulta só lê. Para gravar, a pessoa precisa ser Administrador de Frota: **Perfis de acesso** → **Administrador de Frota** na linha dela (ou o cadastro de usuário) |
+| O gestor vai sair de férias e precisa de um substituto | **Perfis de acesso** → **Administrador de Frota** na linha do substituto → confirmar. Na volta, escolher **Consulta** ou **Motorista (padrão)** na mesma linha |
+| Motorista não acha o cliente/obra na lista de destinos | Na Saída, **+ Novo destino** → Nome (e Endereço) → **Adicionar**. Não precisa do gestor. Se o nome já existe, o sistema escolhe o que existe |
+| A Saída pede "Quem vai dirigir (condutor)" | O veículo está marcado como **Liberado para funcionários** (carro do setor): digite o nome de quem vai dirigir. Se o carro é de um motorista fixo, o gestor desmarca em **Veículos** |
+| Um destino errado aparece na lista do motorista | Gestor: **Frota → Destinos** → **Excluir** (desativa; as viagens antigas guardam o nome). Para corrigir o nome, **Editar**. Para ver os desativados, **Mostrar: Todos** |
 | Veículo não aparece na Saída | Está com outro motorista (viagem sem retorno), está inativo/vendido, ou aparece como "(em manutenção — indisponível)" |
 | Motorista não consegue sair com nenhum veículo | Ele tem uma saída sem retorno: registrar o **Retorno**, ou o gestor conclui a viagem em **Viagens** |
 | Abastecimento com km/L estranho | Conferir o km digitado: um km menor que o real entra na sequência pela ordem do km e muda o km/L dele e do seguinte. O portal pergunta antes de gravar km menor que o do veículo, mas o motorista pode confirmar |
