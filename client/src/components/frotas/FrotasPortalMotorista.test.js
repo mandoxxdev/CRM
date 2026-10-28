@@ -30,10 +30,12 @@ const ITENS = [
 ].map(([chave, rotulo]) => ({ chave, rotulo }));
 
 const VEICULOS = [
-  { id: 1, placa: 'ABC1D23', modelo: 'Sprinter', marca: 'Mercedes', km_atual: 1000, tipo_medicao: 'km', status: 'ativo', em_uso: false },
-  { id: 2, placa: 'EMU0S01', modelo: 'Strada', marca: 'Fiat', km_atual: 500, tipo_medicao: 'km', status: 'ativo', em_uso: true },
-  { id: 3, placa: 'MAN7T00', modelo: 'Hilux', marca: 'Toyota', km_atual: 300, tipo_medicao: 'km', status: 'manutencao', em_uso: false },
+  { id: 1, placa: 'ABC1D23', modelo: 'Sprinter', marca: 'Mercedes', km_atual: 1000, tipo_medicao: 'km', status: 'ativo', em_uso: false, uso_funcionarios: 0 },
+  { id: 2, placa: 'EMU0S01', modelo: 'Strada', marca: 'Fiat', km_atual: 500, tipo_medicao: 'km', status: 'ativo', em_uso: true, uso_funcionarios: 0 },
+  { id: 3, placa: 'MAN7T00', modelo: 'Hilux', marca: 'Toyota', km_atual: 300, tipo_medicao: 'km', status: 'manutencao', em_uso: false, uso_funcionarios: 0 },
 ];
+// Frota Etapa 8 (RN-F8.32/33): o destino da saida vem de uma lista cadastrada, nao mais digitado.
+const DESTINOS = [{ id: 1, nome: 'Cliente X', endereco: null }, { id: 2, nome: 'Obra Sul', endereco: 'Rua B, 10' }];
 
 function inicio(over = {}) {
   return {
@@ -41,6 +43,7 @@ function inicio(over = {}) {
     viagem_aberta: null,
     veiculos: VEICULOS,
     itens: ITENS,
+    destinos: DESTINOS,
     vistas: ['lateral_esquerda', 'lateral_direita', 'superior', 'frente', 'traseira'],
     tipos_avaria: ['R', 'A', 'T', 'Q', 'O'],
     niveis_combustivel: ['vazio', '1/4', '1/2', '3/4', 'cheio'],
@@ -158,6 +161,9 @@ describe('Portal do motorista', () => {
     expect(opcoes.find((o) => o.value === '3').textContent).toContain('indisponível');
   });
 
+  // Frota Etapa 8 (T-6 da Fase 2): este cenario digitava `origem`/`destino` em <input> e travava `origem: 'Fabrica', destino:
+  // 'Cliente X'` no corpo. Desde a Etapa 8 a origem e fixa (GMP, gravada pelo servidor) e o destino e escolhido numa lista
+  // (`destino_id`): o corpo nao leva `origem` nem `destino` texto (RN-F8.23, RN-F8.35).
   test('corpo do POST de saida bate com o contrato', async () => {
     await renderizar();
     await clicar(botao('Saída'));
@@ -166,8 +172,10 @@ describe('Portal do motorista', () => {
     digitar('data', '2026-10-23');
     digitar('horario', '07:45');
     await clicar(botao('½'));
-    digitar('origem', 'Fabrica');
-    digitar('destino', 'Cliente X');
+    expect(container.querySelector('[name="origem"]')).toBeNull();
+    expect(container.querySelector('[name="destino"]')).toBeNull();
+    expect(container.querySelector('[data-testid="origem-fixa"]').textContent).toBe('Saindo de: GMP');
+    digitar('destino_id', '1');
     digitar('finalidade', 'Entrega');
     await responderItens(12);
     await clicar(container.querySelector(`[aria-label="${ITENS[0].rotulo}: Falha"]`));
@@ -195,8 +203,7 @@ describe('Portal do motorista', () => {
       itens: itensEsperados,
       avarias: [{ vista: 'traseira', tipo: 'A', descricao: 'para-choque' }],
       observacoes: 'tudo certo',
-      origem: 'Fabrica',
-      destino: 'Cliente X',
+      destino_id: 1,
       finalidade: 'Entrega',
     });
     expect(toast.success).toHaveBeenCalled();
@@ -216,7 +223,10 @@ describe('Portal do motorista', () => {
     await clicar(botao('Retorno'));
     expect(container.querySelector('[name="veiculo_id"]')).toBeNull();
     expect(container.querySelector('[data-testid="veiculo-da-viagem"]').textContent).toContain('ABC1D23');
-    expect(container.querySelector('[name="origem"]')).toBeNull();
+    // Etapa 8: o bloco da saida (origem fixa, destino, finalidade) nao aparece no retorno
+    expect(container.querySelector('[data-testid="origem-fixa"]')).toBeNull();
+    expect(container.querySelector('[name="destino_id"]')).toBeNull();
+    expect(container.querySelector('[name="finalidade"]')).toBeNull();
     digitar('km', '1100');
     await responderItens(12, 'NA');
     await enviar();

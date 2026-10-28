@@ -9,6 +9,9 @@
  *   POST /frotas/portal/abastecimentos
  *   GET  /frotas/portal/meus-registros
  *   POST /frotas/anexos, DELETE /frotas/anexos/:id (Etapa 5: fotos — plano 2026-10-23-frotas-etapa5-fotos.md)
+ *   POST /frotas/destinos                 (Etapa 8: "+ Novo destino" na saida — plano 2026-10-28-frotas-etapa8-admin-destinos-condutor.md)
+ * Etapa 8: o abastecimento nao tem mais foto (RN-F8.12/13); a saida sai sempre de GMP (origem fixa, gravada pelo servidor), o destino
+ * e escolhido numa lista cadastrada (`destino_id`) e o carro liberado para funcionarios pede quem vai dirigir (RN-F8.23, 33-35).
  * Quem decide e o servidor: a tela so esconde o que ele recusaria e mostra a mensagem dele quando recusa.
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -73,6 +76,12 @@ export function textoDaTratadaPortal(r) {
 }
 
 const numeroOuNulo = (v) => (v === '' || v == null ? null : Number(v));
+
+/* Frota Etapa 8 (RN-F8.33/34/34b): textos do destino cadastrado na saida. */
+export const MSG_DESTINO_DESATIVADO = 'O destino escolhido foi desativado. Escolha outro.';
+export const MSG_FALHA_DESTINO = 'Não foi possível adicionar o destino. Confira a internet e tente de novo.';
+const mesmoId = (a, b) => String(a) === String(b);
+const destinoEnxuto = (d) => ({ id: d.id, nome: d.nome, endereco: d.endereco ?? null });
 
 /**
  * Frota Etapa 5 (RN-F5.09, Fase 2 T-4/T-5): as fotos sobem DEPOIS do 201, uma por vez, e so entao o formulario sai da tela (senao o
@@ -170,8 +179,13 @@ export function RegistroForm({ tipo, inicio, onCancelar, onSalvo, onAtualizar })
   const [data, setData] = useState(hojeLocalISO());
   const [horario, setHorario] = useState(horaAgora());
   const [combustivel, setCombustivel] = useState(null);
-  const [origem, setOrigem] = useState('');
-  const [destino, setDestino] = useState('');
+  // Etapa 8 (RN-F8.23/33): a origem e fixa (GMP, o servidor grava) — nao ha estado nem campo. O destino vem de uma lista local
+  // iniciada de inicio.destinos e acrescida pelo "+ Novo destino"; o condutor so existe em carro liberado para funcionarios.
+  const [destinos, setDestinos] = useState(() => (inicio.destinos || []).map(destinoEnxuto));
+  const [destinoId, setDestinoId] = useState('');
+  const [avisoDestino, setAvisoDestino] = useState('');
+  const [novoDestino, setNovoDestino] = useState(null); // null | { nome, endereco, erro, salvando }
+  const [condutor, setCondutor] = useState('');
   const [finalidade, setFinalidade] = useState('');
   const [respostas, setRespostas] = useState({});
   const [avarias, setAvarias] = useState([]);
@@ -195,6 +209,73 @@ export function RegistroForm({ tipo, inicio, onCancelar, onSalvo, onAtualizar })
   else medicao = medicaoDoVeiculo(veiculoDaLeitura);
   const ultimo = ultimaLeitura(veiculoDaLeitura, medicao);
   const saidaDaViagem = medicao === 'horimetro' ? viagem?.horimetro_saida : viagem?.km_saida;
+
+  // Etapa 8 (RN-F8.23): o campo do condutor so aparece quando o veiculo escolhido e liberado para funcionarios.
+  const pedeCondutor = tipo === 'saida' && !!veiculoDaLeitura?.uso_funcionarios;
+  const escolherVeiculo = (id) => {
+    setVeiculoId(id);
+    setPodeConfirmar(false);
+    const v = veiculos.find((x) => mesmoId(x.id, id));
+    if (!v?.uso_funcionarios) setCondutor(''); // trocou para um carro comum: o nome digitado nao vale mais
+  };
+
+  // Etapa 8 (RN-F8.34b, ajuste T-4 da Fase 2): a lista local acompanha a prop. O 400 "Destino nao encontrado" (gestor desativou o
+  // destino com o formulario aberto) dispara onAtualizar(), o inicio volta sem ele e aqui a selecao zera com o aviso — sem isto o
+  // select ficava com o desativado e cada tentativa repetia o 400. Os criados aqui (201) que ainda nao voltaram no inicio ficam.
+  const criadosAquiRef = useRef([]);
+  const destinoIdRef = useRef(destinoId);
+  destinoIdRef.current = destinoId;
+  useEffect(() => {
+    if (tipo !== 'saida') return;
+    const doServidor = (inicio.destinos || []).map(destinoEnxuto);
+    const lista = [...doServidor, ...criadosAquiRef.current.filter((c) => !doServidor.some((d) => mesmoId(d.id, c.id)))];
+    setDestinos(lista);
+    if (destinoIdRef.current && !lista.some((d) => mesmoId(d.id, destinoIdRef.current))) {
+      setDestinoId('');
+      setAvisoDestino(MSG_DESTINO_DESATIVADO);
+    }
+  }, [inicio.destinos, tipo]);
+
+  const incluirDestinoNaLista = (d) => {
+    const enxuto = destinoEnxuto(d);
+    // So "pina" o que a lista ainda nao tem (201, ou 409 de um que outro criou depois do inicio): o que ja veio do servidor segue a prop.
+    if (!destinos.some((x) => mesmoId(x.id, enxuto.id)) && !criadosAquiRef.current.some((c) => mesmoId(c.id, enxuto.id))) {
+      criadosAquiRef.current = [...criadosAquiRef.current, enxuto];
+    }
+    setDestinos((lista) => (lista.some((x) => mesmoId(x.id, enxuto.id)) ? lista : [...lista, enxuto]));
+    setDestinoId(String(enxuto.id));
+    setAvisoDestino('');
+  };
+
+  // Etapa 8 (RN-F8.33/34): o motorista cadastra o destino sem sair da saida. 201 entra selecionado; 409 duplicado seleciona o que ja
+  // existia (o servidor manda a linha no corpo, ajuste T-1); outro erro fica no bloco, aberto, para corrigir e tentar de novo.
+  const adicionarDestino = async () => {
+    if (!novoDestino || novoDestino.salvando) return;
+    const nome = (novoDestino.nome || '').trim();
+    if (!nome) {
+      setNovoDestino((n) => n && { ...n, erro: 'Informe o nome do destino' });
+      return;
+    }
+    const corpo = { nome };
+    const endereco = (novoDestino.endereco || '').trim();
+    if (endereco) corpo.endereco = endereco;
+    setNovoDestino((n) => n && { ...n, erro: '', salvando: true });
+    try {
+      const { data: criado } = await api.post('/frotas/destinos', corpo);
+      incluirDestinoNaLista(criado);
+      setNovoDestino(null);
+      toast.success('Destino adicionado');
+    } catch (err) {
+      const dados = err.response?.data;
+      if (err.response?.status === 409 && dados?.code === 'DESTINO_DUPLICADO' && dados.destino?.id != null) {
+        incluirDestinoNaLista(dados.destino);
+        setNovoDestino(null);
+        toast.info('Esse destino já existia — selecionado.');
+        return;
+      }
+      setNovoDestino((n) => n && { ...n, salvando: false, erro: dados?.error || MSG_FALHA_DESTINO });
+    }
+  };
 
   const incluirAvaria = () => {
     if (!novaAvaria?.vista || !novaAvaria?.tipo) return;
@@ -221,8 +302,9 @@ export function RegistroForm({ tipo, inicio, onCancelar, onSalvo, onAtualizar })
     if (escolheVeiculo) corpo.veiculo_id = numeroOuNulo(veiculoId);
     if (observacoes.trim()) corpo.observacoes = observacoes.trim();
     if (tipo === 'saida') {
-      if (origem.trim()) corpo.origem = origem.trim();
-      if (destino.trim()) corpo.destino = destino.trim();
+      // Etapa 8 (RN-F8.23/35): sem `origem` (o servidor grava GMP) e nunca `destino` texto — so o id da lista.
+      if (destinoId !== '') corpo.destino_id = Number(destinoId);
+      if (pedeCondutor && condutor.trim()) corpo.condutor_nome = condutor.trim();
       if (finalidade.trim()) corpo.finalidade = finalidade.trim();
     }
     if (confirmarKmMenor) corpo.confirmar_km_menor = true;
@@ -259,7 +341,7 @@ export function RegistroForm({ tipo, inicio, onCancelar, onSalvo, onAtualizar })
           <span>Veículo</span>
           <select
             value={veiculoId}
-            onChange={(e) => { setVeiculoId(e.target.value); setPodeConfirmar(false); }}
+            onChange={(e) => escolherVeiculo(e.target.value)}
             name="veiculo_id"
           >
             <option value="">Escolha o veículo…</option>
@@ -317,14 +399,72 @@ export function RegistroForm({ tipo, inicio, onCancelar, onSalvo, onAtualizar })
 
       {tipo === 'saida' && (
         <>
-          <label className="portal-campo">
-            <span>Saindo de onde</span>
-            <input type="text" name="origem" value={origem} onChange={(e) => setOrigem(e.target.value)} />
-          </label>
-          <label className="portal-campo">
-            <span>Indo para onde</span>
-            <input type="text" name="destino" value={destino} onChange={(e) => setDestino(e.target.value)} />
-          </label>
+          <div className="portal-cartao portal-origem-fixa" data-testid="origem-fixa">Saindo de: <strong>GMP</strong></div>
+          <div className="portal-campo">
+            <span>Indo para onde (destino)</span>
+            <div className="portal-destino-linha">
+              <select
+                name="destino_id"
+                value={destinoId}
+                onChange={(e) => { setDestinoId(e.target.value); setAvisoDestino(''); }}
+              >
+                <option value="">Escolha o destino…</option>
+                {destinos.map((d) => <option key={d.id} value={d.id}>{d.nome}</option>)}
+              </select>
+              {!novoDestino && (
+                <button
+                  type="button"
+                  className="portal-botao secundario portal-botao-novo-destino"
+                  disabled={salvando}
+                  onClick={() => setNovoDestino({ nome: '', endereco: '', erro: '', salvando: false })}
+                >
+                  + Novo destino
+                </button>
+              )}
+            </div>
+            {avisoDestino && <div className="portal-aviso portal-aviso-destino" data-testid="aviso-destino">{avisoDestino}</div>}
+          </div>
+          {novoDestino && (
+            <div className="portal-novo-destino" data-testid="novo-destino">
+              <label className="portal-campo">
+                <span>Nome</span>
+                <input
+                  type="text"
+                  name="novo_destino_nome"
+                  value={novoDestino.nome}
+                  maxLength={120}
+                  disabled={novoDestino.salvando}
+                  onChange={(e) => setNovoDestino((n) => n && { ...n, nome: e.target.value })}
+                />
+              </label>
+              <label className="portal-campo">
+                <span>Endereço (opcional)</span>
+                <input
+                  type="text"
+                  name="novo_destino_endereco"
+                  value={novoDestino.endereco}
+                  maxLength={255}
+                  disabled={novoDestino.salvando}
+                  onChange={(e) => setNovoDestino((n) => n && { ...n, endereco: e.target.value })}
+                />
+              </label>
+              {novoDestino.erro && <div className="portal-erro portal-erro-destino" role="alert">{novoDestino.erro}</div>}
+              <div className="portal-linha">
+                <button type="button" className="portal-botao secundario" disabled={novoDestino.salvando} onClick={() => setNovoDestino(null)}>
+                  Cancelar
+                </button>
+                <button type="button" className="portal-botao" disabled={novoDestino.salvando} onClick={adicionarDestino}>
+                  Adicionar
+                </button>
+              </div>
+            </div>
+          )}
+          {pedeCondutor && (
+            <label className="portal-campo">
+              <span>Quem vai dirigir (condutor)</span>
+              <input type="text" name="condutor_nome" value={condutor} maxLength={120} onChange={(e) => setCondutor(e.target.value)} />
+            </label>
+          )}
           <label className="portal-campo">
             <span>Para quê (finalidade)</span>
             <input type="text" name="finalidade" value={finalidade} onChange={(e) => setFinalidade(e.target.value)} />
@@ -470,7 +610,7 @@ export function AbastecimentoForm({ inicio, onCancelar, onSalvo, onAtualizar }) 
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [podeConfirmar, setPodeConfirmar] = useState(false);
-  const [fotos, setFotos] = useState([]);
+  // Etapa 8 (RN-F8.12): o abastecimento nao tem mais "Foto do cupom" — sem estado de fotos, sem subida depois do 201.
   const muda = (k) => (e) => {
     setForm((f) => ({ ...f, [k]: e.target.value }));
     // Etapa 3 (RN-F3.10): mudar o numero ou o veiculo desarma a confirmacao do 409 de leitura menor.
@@ -496,10 +636,8 @@ export function AbastecimentoForm({ inicio, onCancelar, onSalvo, onAtualizar }) 
     if (form.observacoes.trim()) corpo.observacoes = form.observacoes.trim();
     if (confirmarKmMenor) corpo.confirmar_km_menor = true;
     try {
-      const { data: salvo } = await api.post('/frotas/portal/abastecimentos', corpo);
+      await api.post('/frotas/portal/abastecimentos', corpo);
       toast.success('Abastecimento registrado');
-      // POST /portal/abastecimentos devolve a propria linha: o id e data.id (Fase 2, T-4)
-      await subirFotosEAvisar('abastecimento', salvo?.id, fotos);
       onSalvo();
     } catch (err) {
       setErro(err.response?.data?.error || 'Não foi possível salvar. Confira a internet e tente de novo.');
@@ -548,13 +686,6 @@ export function AbastecimentoForm({ inicio, onCancelar, onSalvo, onAtualizar }) 
         <span>Posto</span>
         <input type="text" name="posto" value={form.posto} onChange={muda('posto')} />
       </label>
-      <FotosAntesDeSalvar
-        legenda="Foto do cupom"
-        dica="Até 3 fotos. Elas sobem depois que o abastecimento for salvo."
-        fotos={fotos}
-        onChange={setFotos}
-        desabilitado={salvando}
-      />
       <label className="portal-campo">
         <span>Observações</span>
         <textarea name="observacoes" value={form.observacoes} onChange={muda('observacoes')} rows={3} />
@@ -633,7 +764,12 @@ function MeusRegistros({ dados, podeRegistrar, onMudou }) {
                     ? ` · ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(a.valor_total)}`
                     : ''}
                 </div>
-                <FotosDoLancamento entidade="abastecimento" linha={a} podeRegistrar={podeRegistrar} onMudou={onMudou} />
+                {/* Etapa 8 (RN-F8.13): o abastecimento nao ganha "+ Foto"; as fotos antigas (e o Remover) continuam enquanto houver. */}
+                {anexosDe(a).length > 0 && (
+                  <div className="frota-fotos-do-lancamento">
+                    <MiniaturasFotos anexos={anexosDe(a)} onRemovida={podeRegistrar ? onMudou : undefined} />
+                  </div>
+                )}
               </div>
             </li>
           ))}
@@ -747,7 +883,9 @@ const FrotasPortalMotorista = () => {
       {viagem && (
         <div className="portal-cartao portal-cartao-viagem" data-testid="viagem-aberta">
           Você está com o veículo <strong>{viagem.placa}</strong> desde {dataLegivel(viagem.data_saida)}
-          {viagem.destino ? <>, destino <strong>{viagem.destino}</strong></> : ''}.
+          {viagem.destino ? <>, destino <strong>{viagem.destino}</strong></> : ''}
+          {/* Etapa 8 (RN-F8.24): quem esta dirigindo o carro liberado para funcionarios */}
+          {viagem.condutor_nome ? <>, condutor <strong>{viagem.condutor_nome}</strong></> : ''}.
         </div>
       )}
 

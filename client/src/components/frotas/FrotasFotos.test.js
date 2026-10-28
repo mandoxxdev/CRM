@@ -115,12 +115,14 @@ describe('RN-F5.09 — Tirar foto antes de salvar', () => {
     expect(botao('Tirar foto')).toBeDefined();
   });
 
-  test('abastecimento: legenda "Foto do cupom" e a dica dele', async () => {
+  // Etapa 8 (RN-F8.12): dizia que o abastecimento tinha foto ("Foto do cupom"); a spec 20 tirou.
+  test('abastecimento: nao ha Tirar foto nem "Foto do cupom"; o grupo de fotos nao existe', async () => {
     await abrirAbastecimento(jest.fn());
-    const grupo = container.querySelector('[data-testid="fotos-antes-de-salvar"]');
-    expect(grupo.querySelector('legend').textContent).toBe('Foto do cupom');
-    expect(dicaFotos()).toBe('Até 3 fotos. Elas sobem depois que o abastecimento for salvo.');
-    expect(inputTirarFoto().getAttribute('capture')).toBe('environment');
+    expect(container.querySelector('[data-testid="fotos-antes-de-salvar"]')).toBeNull();
+    expect(inputTirarFoto()).toBeNull();
+    expect(botao('Tirar foto')).toBeUndefined();
+    expect(container.textContent).not.toContain('Foto do cupom');
+    expect(container.querySelector('form[aria-label="Formulário de Abastecimento"]')).not.toBeNull();
   });
 
   test('miniatura de previa; Remover foto tira a previa e libera a URL', async () => {
@@ -205,26 +207,19 @@ describe('RN-F5.09 — as fotos sobem depois do 201, uma por vez, e so entao o f
     expect(onSalvo).toHaveBeenCalledTimes(1);
   });
 
-  test.each(['registro', 'abastecimento'])('Fase5-F1/F2 (%s): enquanto as fotos sobem, "Remover foto" e "Voltar" ficam desligados', async (tipo) => {
+  // Etapa 8 (RN-F8.12): dizia que o abastecimento tinha foto (era um test.each registro/abastecimento); a spec 20 tirou — so registro.
+  test('Fase5-F1/F2 (registro): enquanto as fotos sobem, "Remover foto" e "Voltar" ficam desligados', async () => {
     let soltar;
     api.post.mockImplementation((url) => {
       if (url === '/frotas/portal/registros') return Promise.resolve({ data: { registro: { id: 41 } } });
-      if (url === '/frotas/portal/abastecimentos') return Promise.resolve({ data: { id: 77 } });
       return new Promise((resolve) => { soltar = () => resolve({ data: { id: 1 } }); });
     });
     const onSalvo = jest.fn();
     const onCancelar = jest.fn();
     await act(async () => {
-      root.render(tipo === 'registro'
-        ? <RegistroForm tipo="inspecao" inicio={inicio()} onCancelar={onCancelar} onSalvo={onSalvo} onAtualizar={() => {}} />
-        : <AbastecimentoForm inicio={{ ...inicio(), viagem_aberta: { veiculo_id: 1 } }} onCancelar={onCancelar} onSalvo={onSalvo} />);
+      root.render(<RegistroForm tipo="inspecao" inicio={inicio()} onCancelar={onCancelar} onSalvo={onSalvo} onAtualizar={() => {}} />);
     });
-    if (tipo === 'registro') await responderTudo();
-    else {
-      const litros = container.querySelector('input[name="litros"]');
-      const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-      await act(async () => { set.call(litros, '30'); litros.dispatchEvent(new Event('input', { bubbles: true })); });
-    }
+    await responderTudo();
     await escolherArquivos(inputTirarFoto(), [foto('a.jpg'), foto('b.jpg')]);
     // metade positiva: antes de salvar, os dois botoes estao ligados
     expect(botoes().filter((b) => b.textContent.trim() === 'Remover foto').map((b) => b.disabled)).toEqual([false, false]);
@@ -251,22 +246,27 @@ describe('RN-F5.09 — as fotos sobem depois do 201, uma por vez, e so entao o f
     expect(onSalvo).toHaveBeenCalledTimes(1);
   });
 
-  test('abastecimento: entidade=abastecimento e o id e data.id (a propria linha)', async () => {
+  // Etapa 8 (RN-F8.12): dizia que o abastecimento subia a foto do cupom com entidade=abastecimento; a spec 20 tirou.
+  test('abastecimento: salvar faz 1 POST em /portal/abastecimentos e 0 em /anexos; onSalvo logo depois do 201', async () => {
+    const ordem = [];
     api.post.mockImplementation((url) => {
-      if (url === '/frotas/portal/abastecimentos') return Promise.resolve({ data: { id: 77, registro: { id: 5 } } });
+      ordem.push(url);
+      if (url === '/frotas/portal/abastecimentos') return Promise.resolve({ data: { id: 77 } });
       return Promise.resolve({ data: { id: 1 } });
     });
-    const onSalvo = jest.fn();
+    const onSalvo = jest.fn(() => ordem.push('onSalvo'));
     await abrirAbastecimento(onSalvo);
-    await escolherArquivos(inputTirarFoto(), [foto('cupom.jpg')]);
+    const litros = container.querySelector('input[name="litros"]');
+    const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    await act(async () => { set.call(litros, '30'); litros.dispatchEvent(new Event('input', { bubbles: true })); });
     await enviarFormulario();
-    const envios = chamadasDeAnexo();
-    expect(envios).toHaveLength(1);
-    expect(envios[0][1].get('entidade')).toBe('abastecimento');
-    expect(envios[0][1].get('entidade_id')).toBe('77');
-    expect(envios[0][1].get('foto').name).toBe('cupom.jpg');
+    expect(api.post).toHaveBeenCalledTimes(1);
+    expect(api.post.mock.calls[0][0]).toBe('/frotas/portal/abastecimentos');
+    expect(chamadasDeAnexo()).toHaveLength(0);
+    expect(ordem).toEqual(['/frotas/portal/abastecimentos', 'onSalvo']);
     expect(onSalvo).toHaveBeenCalledTimes(1);
     expect(toast.success).toHaveBeenCalledWith('Abastecimento registrado');
+    expect(toast.warning).not.toHaveBeenCalled();
   });
 
   test('falha de 1 foto: o registro fica salvo, aviso com a mensagem do servidor, e o formulario sai', async () => {
@@ -305,10 +305,12 @@ describe('RN-F5.09 — as fotos sobem depois do 201, uma por vez, e so entao o f
     expect(onSalvo).toHaveBeenCalledTimes(1);
   });
 
+  // Etapa 8 (RN-F8.12/14): dizia que o abastecimento tinha foto; a spec 20 tirou — o cenario (que e sobre a ordem das falhas) vale
+  // para o registro, que mantem as fotos.
   test('falha de 2: a mensagem e a da PRIMEIRA falha', async () => {
     let n = 0;
     api.post.mockImplementation((url) => {
-      if (url === '/frotas/portal/abastecimentos') return Promise.resolve({ data: { id: 77 } });
+      if (url === '/frotas/portal/registros') return Promise.resolve({ data: { registro: { id: 41 } } });
       n += 1;
       return Promise.reject(n === 1
         ? { response: { status: 400, data: { error: 'Formato de imagem não suportado' } } }
@@ -317,7 +319,8 @@ describe('RN-F5.09 — as fotos sobem depois do 201, uma por vez, e so entao o f
     // HEIC tenta reduzir; navegador sem canvas -> vai a original (o servidor recusa com a mensagem de formato)
     const getContext = jest.spyOn(window.HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
     try {
-      await abrirAbastecimento(jest.fn());
+      await abrirRegistro(jest.fn());
+      await responderTudo();
       await escolherArquivos(inputTirarFoto(), [foto('a.heic', 'image/heic'), foto('b.jpg')]);
       await enviarFormulario();
     } finally {
@@ -327,15 +330,17 @@ describe('RN-F5.09 — as fotos sobem depois do 201, uma por vez, e so entao o f
     expect(toast.warning).toHaveBeenCalledWith('Salvo, mas 2 fotos não foram enviadas: Formato de imagem não suportado');
   });
 
+  // Etapa 8 (RN-F8.12/14): dizia que o abastecimento tinha foto; a spec 20 tirou — o cenario vale para o registro.
   test('recusa do lancamento: nenhuma foto sobe e o formulario fica com as previas', async () => {
-    api.post.mockRejectedValueOnce({ response: { status: 400, data: { error: 'Litros inválido' } } });
+    api.post.mockRejectedValueOnce({ response: { status: 400, data: { error: 'KM inválido' } } });
     const onSalvo = jest.fn();
-    await abrirAbastecimento(onSalvo);
-    await escolherArquivos(inputTirarFoto(), [foto('cupom.jpg')]);
+    await abrirRegistro(onSalvo);
+    await responderTudo();
+    await escolherArquivos(inputTirarFoto(), [foto('painel.jpg')]);
     await enviarFormulario();
     expect(chamadasDeAnexo()).toHaveLength(0);
     expect(onSalvo).not.toHaveBeenCalled();
-    expect(container.querySelector('[role="alert"]').textContent).toBe('Litros inválido');
+    expect(container.querySelector('[role="alert"]').textContent).toBe('KM inválido');
     expect(container.querySelectorAll('[data-testid="fotos-antes-de-salvar"] img')).toHaveLength(1);
   });
 });
@@ -362,10 +367,32 @@ describe('RN-F5.10 — Meus registros', () => {
   test('+ Foto aparece com menos de 3 e some com 3; o input e de camera', async () => {
     await abrirPortal();
     const maisFoto = [...secao().querySelectorAll('button')].filter((b) => b.textContent.trim() === '+ Foto');
-    expect(maisFoto).toHaveLength(1); // so o registro (1 foto); o abastecimento ja tem 3
+    expect(maisFoto).toHaveLength(1); // so o registro (1 foto); o abastecimento nao tem + Foto desde a Etapa 8 (RN-F8.13)
     const input = inputMaisFoto();
     expect(input.getAttribute('capture')).toBe('environment');
     expect(input.getAttribute('accept')).toBe('image/*');
+  });
+
+  // Etapa 8 (RN-F8.13): dizia que o abastecimento ganhava "+ Foto" com menos de 3; a spec 20 tirou. As miniaturas antigas (e o
+  // "Remover foto") continuam; sem anexos, nao aparece bloco de fotos nenhum.
+  test('Meus registros: abastecimento com 2 anexos mostra 2 miniaturas (com Remover foto) e 0 "+ Foto"; sem anexos, nada', async () => {
+    meusRegistros = {
+      registros: [],
+      abastecimentos: [
+        { id: 9, placa: 'ABC1D23', data_abastecimento: '2026-10-21', litros: 40,
+          anexos: [41, 42].map((id) => ({ id, url: URL_A(id), tipo_mime: 'image/jpeg', tamanho: 10, created_at: '2026-10-21' })) },
+        { id: 10, placa: 'ABC1D23', data_abastecimento: '2026-10-22', litros: 30, anexos: [] },
+      ],
+    };
+    await abrirPortal();
+    const itens = [...secao().querySelectorAll('.portal-lista-item')];
+    expect(itens).toHaveLength(2);
+    expect(itens[0].querySelectorAll('img')).toHaveLength(2);
+    expect([...itens[0].querySelectorAll('button')].filter((b) => b.textContent.trim() === 'Remover foto')).toHaveLength(2);
+    expect([...secao().querySelectorAll('button')].filter((b) => b.textContent.trim() === '+ Foto')).toHaveLength(0);
+    expect(secao().querySelectorAll('input[type="file"]')).toHaveLength(0);
+    expect(itens[1].querySelectorAll('img')).toHaveLength(0);
+    expect(itens[1].querySelector('.frota-fotos-do-lancamento')).toBeNull();
   });
 
   test('+ Foto envia para o lancamento certo, avisa "Foto enviada" e recarrega', async () => {

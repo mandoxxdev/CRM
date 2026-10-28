@@ -236,6 +236,48 @@
   gap: 12px;
 }
 
+/* Frota Etapa 8 (RN-F8.23/33): a origem fixa e uma linha so, sem a folga de cartao; o select do destino divide a linha com o
+   "+ Novo destino" (o select cresce, o botao nao) e o bloco do novo destino e uma caixinha como a da nova avaria. */
+.portal-origem-fixa {
+  margin-bottom: 0;
+  padding: 12px 14px;
+}
+
+.portal-destino-linha {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.portal-destino-linha select {
+  flex: 1;
+  min-width: 0;
+}
+
+.portal-motorista .portal-destino-linha .portal-botao-novo-destino {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding: 10px 12px;
+}
+
+.portal-aviso-destino {
+  margin: 8px 0 0;
+}
+
+.portal-novo-destino {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--gmp-border);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--gmp-surface);
+}
+
+.portal-erro-destino {
+  margin-bottom: 0;
+}
+
 /* Fica no fim do formulario, sem flutuar. Era `position: sticky` e, dentro do .main-content (que tem 92px de folga embaixo
    para a barra inferior), parava 92px acima do fim da tela: flutuava no meio e cortava o campo que passava por baixo. */
 .portal-rodape {
