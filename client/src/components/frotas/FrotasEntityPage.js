@@ -341,5 +341,7 @@ export const FrotasMultas = () => <FrotasEntityPage entityKey="multas" />;
 export const FrotasDocumentos = () => <FrotasEntityPage entityKey="documentos" />;
 export const FrotasViagens = () => <FrotasEntityPage entityKey="viagens" />;
 export const FrotasChecklists = () => <FrotasEntityPage entityKey="checklists" />;
+// Frota Etapa 8 (RN-F8.36): destinos cadastrados — a tela do gestor para corrigir, desativar e reativar o que o portal cadastra.
+export const FrotasDestinos = () => <FrotasEntityPage entityKey="destinos" />;
 
 export default FrotasEntityPage;

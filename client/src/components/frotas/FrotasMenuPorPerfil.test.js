@@ -133,6 +133,22 @@ describe('menu da Frota no Layout', () => {
     expect(linksDoMenu()).toContain('/frota/motorista');
     expect(linksDoMenu()).not.toContain('/frota/perfis');
   });
+
+  // Frota Etapa 8 (RN-F8.36): "Destinos" entre Viagens e Checklist Diario no menu do gestor e do Consulta; o motorista cadastra
+  // pelo portal e nao tem o item. A metade positiva (os dois veem) e o que impede o negativo de passar com o item sumido.
+  test.each([['CONSULTA', CONSULTA], ['ADMIN (admin do modulo)', ADMIN_MODULO]])('%s ve "Destinos" entre Viagens e Checklist Diario', async (_n, user) => {
+    await renderLayout(user);
+    const links = linksDoMenu();
+    expect(links.indexOf('/frota/destinos')).toBe(links.indexOf('/frota/viagens') + 1);
+    expect(links.indexOf('/frota/checklists')).toBe(links.indexOf('/frota/destinos') + 1);
+    expect(container.querySelector('a[href="/frota/destinos"]').textContent).toContain('Destinos');
+  });
+
+  test('MOTORISTA nao ve "Destinos"', async () => {
+    await renderLayout(MOTORISTA);
+    expect(linksDoMenu()).toContain('/frota/motorista');
+    expect(linksDoMenu()).not.toContain('/frota/destinos');
+  });
 });
 
 describe('/frota (dashboard) por perfil', () => {

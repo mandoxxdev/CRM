@@ -8,7 +8,7 @@
  */
 import {
   FiHome, FiTruck, FiUsers, FiTool, FiDroplet, FiFileText, FiMap, FiClipboard, FiAlertTriangle, FiBarChart2, FiList,
-  FiSmartphone, FiShield,
+  FiSmartphone, FiShield, FiMapPin,
 } from 'react-icons/fi';
 import { PERFIS_FROTA } from '../../utils/systemPermissions';
 
@@ -23,6 +23,9 @@ export const MENU_FROTA_GESTOR = Object.freeze([
   { path: '/frota/abastecimentos', icon: FiDroplet, label: 'Abastecimentos' },
   { path: '/frota/documentos', icon: FiFileText, label: 'Documentos' },
   { path: '/frota/viagens', icon: FiMap, label: 'Viagens' },
+  // Frota Etapa 8 (RN-F8.36): destinos cadastrados — gestor e Consulta; o motorista nao tem o item (cadastra pelo portal).
+  // O MENU_FROTA_ADMIN herda (ele corta em /frota/relatorios por indice, nao por posicao fixa).
+  { path: '/frota/destinos', icon: FiMapPin, label: 'Destinos' },
   { path: '/frota/checklists', icon: FiClipboard, label: 'Checklist Diário' },
   { path: '/frota/multas', icon: FiAlertTriangle, label: 'Multas' },
   { path: '/frota/relatorios', icon: FiBarChart2, label: 'Relatórios' },

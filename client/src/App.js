@@ -97,6 +97,7 @@ import {
   FrotasDocumentos,
   FrotasViagens,
   FrotasChecklists,
+  FrotasDestinos,
   FrotasRelatorios,
   FrotasPortalMotorista,
   FrotasPerfisAcesso,
@@ -322,6 +323,7 @@ export function AppRoutes() {
         <Route path="documentos" element={<FrotasDocumentos />} />
         <Route path="viagens" element={<FrotasViagens />} />
         <Route path="checklists" element={<FrotasChecklists />} />
+        <Route path="destinos" element={<FrotasDestinos />} />
         <Route path="relatorios" element={<FrotasRelatorios />} />
         <Route path="motorista" element={<FrotasPortalMotorista />} />
         <Route path="perfis" element={<FrotasPerfisAcesso />} />

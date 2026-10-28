@@ -63,7 +63,8 @@ export const ENTITY_CONFIGS = {
       { key: 'modelo', label: 'Modelo' },
       { key: 'tipo_nome', label: 'Tipo', format: (r) => r.tipo_nome || r.tipo_texto || '-' },
       { key: 'setor_responsavel', label: 'Setor' },
-      { key: 'motorista_nome', label: 'Condutor' },
+      // Frota Etapa 8 (RN-F8.25): carro liberado para funcionarios sem responsavel fixo mostra "Funcionarios" (quem dirige varia).
+      { key: 'motorista_nome', label: 'Condutor', format: (r) => r.motorista_nome || (r.uso_funcionarios ? 'Funcionários' : '-') },
       { key: 'km_atual', label: 'KM/Horímetro', format: (r) => {
         if (r.tipo_medicao === 'horimetro') {
           return r.horimetro_atual != null ? `${Number(r.horimetro_atual).toLocaleString('pt-BR')} h` : '-';
@@ -85,7 +86,7 @@ export const ENTITY_CONFIGS = {
       placa: '', modelo: '', marca: '', ano: '', tipo_id: '', status: 'ativo',
       km_atual: 0, horimetro_atual: 0, tipo_medicao: 'km', consumo_medio_esperado: '',
       combustivel: 'diesel', setor_responsavel: '', centro_custo: '', motorista_id: '',
-      cor: '', chassi: '', renavam: '', observacoes: '',
+      cor: '', chassi: '', renavam: '', observacoes: '', uso_funcionarios: 0,
     }),
     formFields: (meta, form, setForm) => [
       { key: 'placa', label: 'Placa / Identificação *', required: true },
@@ -100,6 +101,10 @@ export const ENTITY_CONFIGS = {
       { key: 'horimetro_atual', label: 'Horímetro Atual', type: 'number' },
       { key: 'consumo_medio_esperado', label: 'Consumo esperado (km/L)', type: 'number' },
       { key: 'motorista_id', label: 'Condutor responsável', type: 'select', options: [{ value: '', label: '—' }, ...(meta?.motoristas || []).map((m) => ({ value: m.id, label: m.nome }))] },
+      // Frota Etapa 8 (RN-F8.25): a marca vai sempre no corpo (0/1) — o formulario generico manda o form inteiro (ponto 6 do plano).
+      { key: '_uso', label: 'Uso', type: 'checks', items: [
+        { key: 'uso_funcionarios', label: 'Liberado para funcionários (quem dirige varia; a saída pede o condutor)' },
+      ] },
       { key: 'setor_responsavel', label: 'Setor', type: 'select', options: (meta?.setores || []).map((s) => ({ value: s, label: s })) },
       { key: 'centro_custo', label: 'Centro de custo', type: 'select', options: (meta?.centrosCusto || []).map((c) => ({ value: c, label: c })) },
       { key: 'cor', label: 'Cor' },
@@ -354,6 +359,8 @@ export const ENTITY_CONFIGS = {
       { key: 'data_saida', label: 'Saída' },
       { key: 'placa', label: 'Placa', bold: true },
       { key: 'motorista_nome', label: 'Motorista' },
+      // Frota Etapa 8 (RN-F8.25): quem dirigiu um carro liberado para funcionarios (texto da saida); "-" quando nao houve.
+      { key: 'condutor_nome', label: 'Condutor' },
       { key: 'origem', label: 'Origem' },
       { key: 'destino', label: 'Destino' },
       { key: 'finalidade', label: 'Finalidade' },
@@ -376,14 +383,19 @@ export const ENTITY_CONFIGS = {
     needsVeiculos: true,
     needsMotoristas: true,
     extraActions: true,
+    // Frota Etapa 8 (RN-F8.25): a viagem nova ja sai de GMP (o escritorio da empresa) — e so uma sugestao, o campo continua editavel.
+    // Ajuste 18 do plano (aceito): viagem antiga com origem NULL abre com GMP preenchido e, salva, grava GMP.
+    // RN-F8.37 (B79): Destino continua texto livre no gestor; so o portal escolhe da lista de Destinos.
     getDefaultForm: () => ({
-      veiculo_id: '', motorista_id: '', data_saida: '', data_retorno: '',
-      km_saida: '', km_retorno: '', horimetro_saida: '', horimetro_retorno: '', origem: '', destino: '', finalidade: '', setor: '',
+      veiculo_id: '', motorista_id: '', condutor_nome: '', data_saida: '', data_retorno: '',
+      km_saida: '', km_retorno: '', horimetro_saida: '', horimetro_retorno: '', origem: 'GMP', destino: '', finalidade: '', setor: '',
       status: 'solicitada', observacoes: '',
     }),
     formFields: (meta, form, setForm, veiculos, motoristas) => [
       { key: 'veiculo_id', label: 'Veículo *', type: 'select', required: true, options: (veiculos || []).map((v) => ({ value: v.id, label: v.placa })) },
       { key: 'motorista_id', label: 'Motorista', type: 'select', options: [{ value: '', label: '—' }, ...(motoristas || []).map((m) => ({ value: m.id, label: m.nome }))] },
+      // B78: o gestor nao e obrigado a informar o condutor (lancamento atrasado nem sempre sabe); so o portal exige.
+      { key: 'condutor_nome', label: 'Condutor (funcionário)' },
       { key: 'data_saida', label: 'Data/hora saída', type: 'datetime-local' },
       { key: 'data_retorno', label: 'Data/hora retorno', type: 'datetime-local' },
       { key: 'km_saida', label: 'KM saída', type: 'number' },
@@ -448,6 +460,41 @@ export const ENTITY_CONFIGS = {
         { key: 'limpeza_ok', label: 'Limpeza' },
       ]},
       { key: 'observacoes', label: 'Observações / não conformidades', type: 'textarea', full: true },
+    ],
+  },
+
+  // Frota Etapa 8 (RN-F8.36): lugares que o motorista escolhe na saida pelo portal (e cadastra por la, "+ Novo destino"). O gestor
+  // corrige, desativa e reativa por aqui. Excluir DESATIVA (o servidor nao apaga: viagens antigas apontam para o destino).
+  destinos: {
+    endpoint: 'destinos',
+    title: 'Destinos',
+    subtitle: 'Lugares de entrega e retirada que o motorista escolhe na saída',
+    breadcrumb: 'Destinos',
+    newLabel: 'Novo Destino',
+    searchPlaceholder: 'Buscar por nome ou endereço...',
+    columns: [
+      { key: 'nome', label: 'Nome', bold: true },
+      { key: 'endereco', label: 'Endereço' },
+      { key: 'criado_por_nome', label: 'Cadastrado por' },
+      // Ajuste 19 do plano: `badge: true` ignoraria o format e mostraria "1"/"0" — por isso render.
+      { key: 'ativo', label: 'Status', render: (r) => (
+        <span className={`frotas-badge frotas-badge-${r.ativo ? 'ativo' : 'inativo'}`}>{r.ativo ? 'Ativo' : 'Desativado'}</span>
+      ) },
+    ],
+    // Ajuste T-3 do plano: a lista do servidor traz so ativos; sem este filtro o destino "excluido" sumia para sempre da tela.
+    // A pagina manda o filtro como query (`inativos=1`); reativar = Editar -> Status Ativo.
+    filters: [
+      { key: 'inativos', label: 'Mostrar', options: [
+        { value: '', label: 'Ativos' },
+        { value: '1', label: 'Todos' },
+      ] },
+    ],
+    getDefaultForm: () => ({ nome: '', endereco: '', ativo: 1 }),
+    formFields: () => [
+      { key: 'nome', label: 'Nome *', required: true },
+      { key: 'endereco', label: 'Endereço' },
+      // O select devolve texto ('1'/'0'); o servidor normaliza 0/1/'0'/'1'.
+      { key: 'ativo', label: 'Status', type: 'select', options: [{ value: 1, label: 'Ativo' }, { value: 0, label: 'Desativado' }] },
     ],
   },
 };

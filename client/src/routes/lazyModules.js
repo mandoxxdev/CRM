@@ -134,6 +134,10 @@ export const FrotasViagens = page(
 export const FrotasChecklists = page(
   () => import('../components/frotas/FrotasEntityPage').then((m) => ({ default: m.FrotasChecklists }))
 );
+// Frota Etapa 8 (RN-F8.36): destinos cadastrados (tela do gestor).
+export const FrotasDestinos = page(
+  () => import('../components/frotas/FrotasEntityPage').then((m) => ({ default: m.FrotasDestinos }))
+);
 export const FrotasRelatorios = page(() => import('../components/frotas/FrotasRelatorios'));
 export const FrotasPortalMotorista = page(() => import('../components/frotas/FrotasPortalMotorista'));
 // Frota Etapa 2 (RN-F2.10): perfis do Frota pela tela (so o ADMIN_FROTA ve no menu; o servidor recusa os outros).
