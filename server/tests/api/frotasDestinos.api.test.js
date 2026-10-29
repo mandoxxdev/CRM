@@ -9,11 +9,16 @@
  *   RN-F8.30  PUT/DELETE so gerenciar_veiculos (motorista 403); PUT nome/endereco/ativo com as mesmas validacoes; renomear para nome
  *             ativo -> 409; reativar um desativado cujo nome ja tem outro ativo -> 409; inexistente -> 404 (ajuste T-7); DELETE desativa
  *
+ * Frota Etapa 9 (A12): o endereco passou a ser estruturado e obrigatorio (RN-F9.02) e o `endereco` do corpo e ignorado (montado pelo
+ * servidor, RN-F9.06). Os casos daqui que criavam/editavam com `endereco` texto agora mandam o endereco estruturado e conferem o
+ * montado; o limite de 255 do `endereco` saiu (as regras do endereco estao em frotasDestinoEndereco.api.test.js).
+ *
  * Plano: docs/superpowers/plans/2026-10-28-frotas-etapa8-admin-destinos-condutor.md
  * Executar: cd server && node tests/api/frotasDestinos.api.test.js
  */
 const assert = require('assert');
 const { createFrotasTestApp, ADMIN, MOTORISTA, CONSULTA } = require('../helpers/frotasTestApp');
+const { comEndereco, ENDERECO_OK_MONTADO } = require('../helpers/frotasDestinoFixture');
 
 let passed = 0; let failed = 0;
 const testes = [];
@@ -28,30 +33,30 @@ const URL = '/api/frotas/destinos';
 
 const MSG_NOME = 'Informe o nome do destino';
 const MSG_NOME_LONGO = 'Nome do destino: no máximo 120 caracteres';
-const MSG_END_LONGO = 'Endereço: no máximo 255 caracteres';
+const MSG_RUA_LONGA = 'Rua: no máximo 150 caracteres';
 const MSG_DUP = 'Destino já cadastrado';
 const MSG_404 = 'Destino não encontrado';
 
 // ── RN-F8.27 ───────────────────────────────────────────────────────────────────────────────────
-test('RN-F8.27 motorista cria (201) com criado_por_nome; nome aparado e espacos colapsados; endereco opcional', async () => {
-  const r = await ana('post', URL, { nome: '  Cliente   Alfa  ', endereco: ' Rua A, 10 ' });
+test('RN-F8.27 motorista cria (201) com criado_por_nome; nome aparado e espacos colapsados; endereco montado (Etapa 9)', async () => {
+  const r = await ana('post', URL, comEndereco({ nome: '  Cliente   Alfa  ', logradouro: ' Rua A ', numero: '10' }));
   assert.strictEqual(r.status, 201, JSON.stringify(r.body));
   assert.strictEqual(r.body.nome, 'Cliente Alfa');
-  assert.strictEqual(r.body.endereco, 'Rua A, 10');
+  assert.strictEqual(r.body.endereco, 'Rua A, 10, Centro, São Bernardo do Campo/SP');
   assert.strictEqual(r.body.ativo, 1);
   assert.strictEqual(r.body.criado_por_id, 2);
   assert.strictEqual(r.body.criado_por_nome, 'Ana');
   assert(r.body.id > 0 && r.body.created_at && r.body.updated_at);
   S.alfa = r.body;
-  const semEnd = await gestor('post', URL, { nome: 'Obra Beta' });
+  const semEnd = await gestor('post', URL, comEndereco({ nome: 'Obra Beta' }));
   assert.strictEqual(semEnd.status, 201);
-  assert.strictEqual(semEnd.body.endereco, null);
+  assert.strictEqual(semEnd.body.endereco, ENDERECO_OK_MONTADO);
   assert.strictEqual(semEnd.body.criado_por_nome, 'Gestor');
   S.beta = semEnd.body;
-  // endereco nao-string = ausente (ajuste 9)
-  const endTorto = await gestor('post', URL, { nome: 'Deposito Gama', endereco: 123 });
+  // Etapa 9 (RN-F9.06): o `endereco` do corpo e ignorado — vale o montado
+  const endTorto = await gestor('post', URL, comEndereco({ nome: 'Deposito Gama', endereco: 'Texto que nao entra' }));
   assert.strictEqual(endTorto.status, 201);
-  assert.strictEqual(endTorto.body.endereco, null);
+  assert.strictEqual(endTorto.body.endereco, ENDERECO_OK_MONTADO);
   S.gama = endTorto.body;
 });
 
@@ -63,7 +68,7 @@ test('RN-F8.27 Consulta nao cria (403); motorista e gestor sim', async () => {
   assert(!lista.body.some((d) => d.nome === 'Nao entra'));
 });
 
-test('RN-F8.27 validacoes: nome vazio/so espacos/nao-string -> 400; > 120 -> 400; endereco > 255 -> 400', async () => {
+test('RN-F8.27 validacoes: nome vazio/so espacos/nao-string -> 400; > 120 -> 400 (o nome e conferido antes do endereco)', async () => {
   const casos = [
     [{}, MSG_NOME],
     [{ nome: '' }, MSG_NOME],
@@ -73,7 +78,6 @@ test('RN-F8.27 validacoes: nome vazio/so espacos/nao-string -> 400; > 120 -> 400
     [{ nome: {} }, MSG_NOME],
     [{ nome: ['Lista'] }, MSG_NOME],
     [{ nome: 'x'.repeat(121) }, MSG_NOME_LONGO],
-    [{ nome: 'Ok', endereco: 'y'.repeat(256) }, MSG_END_LONGO],
   ];
   for (const [corpo, msg] of casos) {
     const r = await ana('post', URL, corpo);
@@ -81,11 +85,11 @@ test('RN-F8.27 validacoes: nome vazio/so espacos/nao-string -> 400; > 120 -> 400
     assert.strictEqual(r.body.error, msg, JSON.stringify(corpo));
   }
   // os limites exatos passam
-  const ok120 = await ana('post', URL, { nome: 'z'.repeat(120), endereco: 'w'.repeat(255) });
+  const ok120 = await ana('post', URL, comEndereco({ nome: 'z'.repeat(120) }));
   assert.strictEqual(ok120.status, 201, JSON.stringify(ok120.body));
   S.longo = ok120.body;
   // espacos em volta nao contam para o limite
-  const comEspacos = await ana('post', URL, { nome: `  ${'q'.repeat(120)}  ` });
+  const comEspacos = await ana('post', URL, comEndereco({ nome: `  ${'q'.repeat(120)}  ` }));
   assert.strictEqual(comEspacos.status, 201, JSON.stringify(comEspacos.body));
   S.longo2 = comEspacos.body;
 });
@@ -118,7 +122,8 @@ test('RN-F8.29 GET: todo perfil le; ativos por nome; ?search= em nome e endereco
   assert(nomes.includes('Cliente Alfa') && nomes.includes('Obra Beta') && nomes.includes('Deposito Gama'));
   assert(c.body.every((d) => d.ativo === 1));
   assert.deepStrictEqual(Object.keys(c.body[0]).sort(),
-    ['ativo', 'created_at', 'criado_por_id', 'criado_por_nome', 'endereco', 'id', 'nome', 'updated_at']);
+    ['ativo', 'bairro', 'cep', 'cidade', 'complemento', 'created_at', 'criado_por_id', 'criado_por_nome', 'endereco', 'id', 'logradouro',
+      'nome', 'numero', 'uf', 'updated_at']);
   const m = await ana('get', URL);
   assert.strictEqual(m.status, 200);
   assert.strictEqual(m.body.length, c.body.length, 'o motorista le a mesma lista');
@@ -139,15 +144,15 @@ test('RN-F8.30 motorista PUT/DELETE -> 403; gestor PUT renomeia, muda endereco e
   assert.strictEqual(d.status, 403);
   assert.strictEqual((await gestor('get', URL)).body.find((x) => x.id === S.gama.id).nome, 'Deposito Gama', 'nada mudou');
 
-  const r = await gestor('put', `${URL}/${S.gama.id}`, { nome: '  Deposito   Gama  2 ', endereco: 'Av. B, 200' });
+  const r = await gestor('put', `${URL}/${S.gama.id}`, { nome: '  Deposito   Gama  2 ', logradouro: 'Av. B', numero: '200' });
   assert.strictEqual(r.status, 200, JSON.stringify(r.body));
   assert.strictEqual(r.body.nome, 'Deposito Gama 2');
-  assert.strictEqual(r.body.endereco, 'Av. B, 200');
+  assert.strictEqual(r.body.endereco, 'Av. B, 200, Centro, São Bernardo do Campo/SP');
   assert.strictEqual(r.body.ativo, 1);
   // so o endereco: o nome fica
-  const soEnd = await gestor('put', `${URL}/${S.gama.id}`, { endereco: 'Av. C' });
+  const soEnd = await gestor('put', `${URL}/${S.gama.id}`, { logradouro: 'Av. C' });
   assert.strictEqual(soEnd.body.nome, 'Deposito Gama 2');
-  assert.strictEqual(soEnd.body.endereco, 'Av. C');
+  assert.strictEqual(soEnd.body.endereco, 'Av. C, 200, Centro, São Bernardo do Campo/SP');
   // ativo como o select manda ('0'/'1') e como booleano
   const off = await gestor('put', `${URL}/${S.gama.id}`, { ativo: '0' });
   assert.strictEqual(off.status, 200);
@@ -164,8 +169,9 @@ test('RN-F8.30 motorista PUT/DELETE -> 403; gestor PUT renomeia, muda endereco e
   assert.strictEqual(vazio.body.error, MSG_NOME);
   const longo = await gestor('put', `${URL}/${S.gama.id}`, { nome: 'x'.repeat(121) });
   assert.strictEqual(longo.body.error, MSG_NOME_LONGO);
-  const endLongo = await gestor('put', `${URL}/${S.gama.id}`, { endereco: 'y'.repeat(256) });
-  assert.strictEqual(endLongo.body.error, MSG_END_LONGO);
+  const endLongo = await gestor('put', `${URL}/${S.gama.id}`, { logradouro: 'y'.repeat(151) });
+  assert.strictEqual(endLongo.status, 400);
+  assert.strictEqual(endLongo.body.error, MSG_RUA_LONGA);
 });
 
 test('RN-F8.30 renomear para nome ja ativo -> 409 DESTINO_DUPLICADO com a linha do outro; o proprio nome em outra caixa passa', async () => {
@@ -215,7 +221,7 @@ test('RN-F8.30/29 DELETE desativa ({ success: true }); some da lista; ?inativos=
 });
 
 test('RN-F8.28 desativado libera o nome: cria outro ativo igual (201); reativar o velho -> 409 com o novo (B82)', async () => {
-  const novo = await ana('post', URL, { nome: 'obra beta' });
+  const novo = await ana('post', URL, comEndereco({ nome: 'obra beta' }));
   assert.strictEqual(novo.status, 201, JSON.stringify(novo.body));
   assert.notStrictEqual(novo.id, S.beta.id);
   S.beta2 = novo.body;

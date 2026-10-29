@@ -195,7 +195,6 @@ const QUEM_CHAMA = {
   'OSComercialForm.js': [['projetos'], 'comercial'], 'PropostaForm.js': [['clientes', 'projetos'], 'comercial (nao montado)'],
   'OportunidadeForm.js': [['clientes'], 'comercial (nao montado)'], 'proposta/GerarPropostaModal.js': [['clientes'], 'comercial (nao montado)'],
   'proposta/PropostaForm.js': [['clientes'], 'comercial'],
-  'HelpGuide.js': [['clientes'], 'nenhum (o seletor de um passo da ajuda, [href="/clientes"] — nao chama a rota)'],
   'almoxarifado/MaterialAlmoxarifadoForm.js': [['clientes'], 'almoxarifado'], 'almoxarifado/ReservasAlmoxarifado.js': [['clientes', 'projetos'], 'almoxarifado'],
   'almoxarifado/MovimentacoesAlmoxarifado.js': [['projetos'], 'almoxarifado'], 'almoxarifado/SobrasAlmoxarifado.js': [['projetos'], 'almoxarifado'],
   'operacional/OSForm.js': [['clientes', 'projetos'], 'operacional'],

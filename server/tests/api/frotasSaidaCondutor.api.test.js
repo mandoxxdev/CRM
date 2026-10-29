@@ -21,6 +21,7 @@
  */
 const assert = require('assert');
 const { createFrotasTestApp, ADMIN, MOTORISTA, MOTORISTA2 } = require('../helpers/frotasTestApp');
+const { comEndereco } = require('../helpers/frotasDestinoFixture');
 const { dbGet, dbRun } = require('../../services/frotas/db');
 const { naFilaDeViagens } = require('../../services/frotas/filaDeViagens');
 const portalService = require('../../services/frotas/portalService');
@@ -83,11 +84,11 @@ async function cenario() {
   S.mb = (await gestor('post', '/api/frotas/motoristas', { nome: 'Bruno Motorista', usuario_id: 4 })).body;
   assert(S.ma.id && S.mb.id);
   const d = async (corpo) => {
-    const r = await ana('post', '/api/frotas/destinos', corpo);
+    const r = await ana('post', '/api/frotas/destinos', comEndereco(corpo)); // Etapa 9 (A12): endereco obrigatorio
     assert.strictEqual(r.status, 201, JSON.stringify(r.body));
     return r.body;
   };
-  S.dAlfa = await d({ nome: 'Cliente Alfa', endereco: 'Rua A, 10' });
+  S.dAlfa = await d({ nome: 'Cliente Alfa', logradouro: 'Rua A', numero: '10' });
   S.dBeta = await d({ nome: 'Obra Beta' });
   S.dDesat = await d({ nome: 'Antigo' });
   const del = await gestor('delete', `/api/frotas/destinos/${S.dDesat.id}`);
@@ -230,7 +231,8 @@ test('RN-F8.20 gestor: POST/PUT /viagens com condutor_nome (aparado, <= 120); nu
   assert.strictEqual(r.status, 201, JSON.stringify(r.body));
   assert.strictEqual(r.body.condutor_nome, 'Carlos');
   assert.strictEqual(r.body.destino_id, null);
-  assert.strictEqual(r.body.origem, null, 'o gestor nao ganha origem padrao (a tela preenche GMP)');
+  // Frota Etapa 9 (RN-F9.24): a tela do gestor nao manda mais a origem — o servidor grava o GMP (antes a tela preenchia)
+  assert.strictEqual(r.body.origem, 'GMP', 'o POST do gestor sem origem grava GMP (Etapa 9)');
   S.vg = r.body;
   const longo = await gestor('post', '/api/frotas/viagens', { veiculo_id: S.v3.id, condutor_nome: 'x'.repeat(121) });
   assert.strictEqual(longo.status, 400);
@@ -289,7 +291,7 @@ test('RN-F8.20 (ajuste 10) aprovada SEM origem consumida sem origem -> GMP; dest
     veiculo_id: S.v4.id, motorista_id: S.mb.id, status: 'aprovada', destino: 'Qualquer', condutor_nome: 'Pre',
   });
   assert.strictEqual(ap.status, 201, JSON.stringify(ap.body));
-  assert.strictEqual(ap.body.origem, null);
+  assert.strictEqual(ap.body.origem, 'GMP', 'Etapa 9 (RN-F9.24): o POST do gestor sem origem ja grava GMP');
   const v = await saidaOk(bruno, S.v4, { destino_id: S.dAlfa.id });
   assert.strictEqual(v.id, ap.body.id);
   assert.strictEqual(v.origem, 'GMP');
@@ -331,7 +333,7 @@ test('RN-F8.31 destino_id inexistente/desativado/nao numerico/zero/negativo -> 4
     await saidaRecusada(ana, S.v1, { destino_id, destino: 'Ignorado' }, 400, MSG_DESTINO);
   }
   // o destino desativado no meio da fila tambem cai (o SELECT e dentro da fila)
-  const extra = (await ana('post', '/api/frotas/destinos', { nome: 'Efemero' })).body;
+  const extra = (await ana('post', '/api/frotas/destinos', comEndereco({ nome: 'Efemero' }))).body;
   let soltar;
   const gancho = new Promise((r) => { soltar = r; });
   const segurando = naFilaDeViagens(() => gancho);
@@ -365,17 +367,20 @@ test('RN-F8.31 com destino texto E destino_id, o id manda; renomear/desativar o 
 });
 
 // ── RN-F8.32 ───────────────────────────────────────────────────────────────────────────────────
-test('RN-F8.32 /portal/inicio.destinos = ativos { id, nome, endereco } por nome (o desativado fica fora)', async () => {
+// Frota Etapa 9 (RN-F9.09, A12): + cidade e uf; o endereco e o montado pelo servidor
+test('RN-F8.32/RN-F9.09 /portal/inicio.destinos = ativos { id, nome, endereco, cidade, uf } por nome (o desativado fica fora)', async () => {
   const r = await bruno('get', '/api/frotas/portal/inicio');
   assert.strictEqual(r.status, 200);
   assert(Array.isArray(r.body.destinos));
   assert(r.body.destinos.length >= 1);
-  for (const d of r.body.destinos) assert.deepStrictEqual(Object.keys(d).sort(), ['endereco', 'id', 'nome']);
+  for (const d of r.body.destinos) assert.deepStrictEqual(Object.keys(d).sort(), ['cidade', 'endereco', 'id', 'nome', 'uf']);
   const nomes = r.body.destinos.map((d) => d.nome);
   assert.deepStrictEqual(nomes, [...nomes].sort((a, b) => a.localeCompare(b)));
   assert(!r.body.destinos.some((d) => d.id === S.dDesat.id), 'desativado fora');
   assert(!r.body.destinos.some((d) => d.id === S.dBeta.id), 'o Beta foi desativado no teste anterior');
-  assert.deepStrictEqual(r.body.destinos.find((d) => d.id === S.dAlfa.id), { id: S.dAlfa.id, nome: 'Cliente Alfa', endereco: 'Rua A, 10' });
+  assert.deepStrictEqual(r.body.destinos.find((d) => d.id === S.dAlfa.id), {
+    id: S.dAlfa.id, nome: 'Cliente Alfa', endereco: 'Rua A, 10, Centro, São Bernardo do Campo/SP', cidade: 'São Bernardo do Campo', uf: 'SP',
+  });
   // sem vinculo tambem recebe a lista (a tela monta o select antes de saber)
   const sem = await ctx.como({ id: 99, nome: 'Sem vinculo', role: 'usuario' })('get', '/api/frotas/portal/inicio');
   assert.strictEqual(sem.status, 200);
