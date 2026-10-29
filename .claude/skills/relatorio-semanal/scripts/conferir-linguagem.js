@@ -23,7 +23,7 @@ const PROIBIDOS = [
   [/\b(endpoint|API|backend|servidor|banco de dados|front-?end|SQL|SQLite|query|deadlock|race|mutex|trava por material|AsyncLocalStorage|refactor|deploy|merge|branch)\b/i, 'termo tecnico — troque por linguagem do dia a dia'],
   [/\b(server|client|services?)\/\S+/i, 'caminho de arquivo'],
   [/\.(js|jsx|md|json)\b/i, 'nome de arquivo'],
-  [/\b(fizemos|fechamos|pegamos|corrigimos|criamos|mudamos|ajustamos|colocamos|deixamos|tiramos|resolvemos|entregamos|trabalhamos|n[oó]s)\b/i, 'primeira pessoa — escreva impessoal: "foi feito", "foi corrigido"'],
+  [/\b(fizemos|fechamos|pegamos|corrigimos|criamos|mudamos|ajustamos|colocamos|deixamos|tiramos|resolvemos|entregamos|trabalhamos|vamos|faremos|iremos|n[oó]s)\b/i, 'primeira pessoa — escreva impessoal: "foi feito", "foi corrigido"'],
   [/(segunda|ter[cç]a|quarta|quinta|sexta)-feira|(^|[^\p{L}])(quinta|sexta|s[aá]bado|domingo)([^\p{L}]|$)/iu, 'dia da semana — o contrato e por horas semanais; meca por atividade'],
   [/pr[oó]xima semana|semana que vem|semana seguinte/i, 'promessa de proxima semana — o relatorio nao tem essa secao'],
 ];

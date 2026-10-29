@@ -263,6 +263,13 @@ Se algum item ficou não, **a etapa não está fechada** — termine antes de re
 
 ---
 
+## Passo 7¼ (obrigatório): estimado × gasto
+
+Feche a estimativa da etapa pela seção "No fechamento" da skill `estimativa-de-tarefas`: gasto de
+cada tarefa medido com `horas.js --grupos`, `.md` preenchido, `conclusao_*.txt` gravado, conferido
+pelo `conferir-linguagem.js` e mostrado ao André em bloco de código para o WhatsApp. Etapa sem
+estimativa gravada é falha do começo — registre no plano que faltou, não invente o estimado depois.
+
 ## Passo 7½ (obrigatório se existir): registre o fechamento na skill pessoal `controle-horas`
 
 Se existir a skill **pessoal** `controle-horas` nesta máquina (`~/.claude/skills/controle-horas/`,
@@ -285,7 +292,8 @@ Depois de reportar o fechamento — **na mesma resposta, sem perguntar nada**:
    escrever no plano → o que o fechamento nomeou como "falta para 🟢" → o mapa
    `specs/<modulo>/README.md` do módulo em que o André está trabalhando (a feature 🔴/🟡 de
    maior valor; **não** troque de módulo por conta própria — módulo pausado fica pausado).
-2. **Comece a Fase 0** da skill `desenvolver-etapa`: medir no código **antes** de
+2. **Comece a Fase 0** da skill `desenvolver-etapa` — e, antes do plano, a **estimativa** da
+   próxima etapa (Fase 0.5, skill `estimativa-de-tarefas`): medir no código **antes** de
    prometer. Uma sessão desta base já desenhou uma etapa inteira sobre a premissa "esta tela não
    existe" — a tela existia, estava no menu e no manual. Medir ausência exige procurar pelo nome
    do **contrato**, não pelo nome que você imagina que o consumidor usaria.

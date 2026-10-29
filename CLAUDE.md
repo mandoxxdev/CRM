@@ -72,6 +72,15 @@ Documentação desatualizada é trabalho não terminado. Antes de reportar concl
 
 Onde o desenvolvimento parou tem de ficar óbvio no cabeçalho do guia do módulo.
 
+## Antes de fazer qualquer alteração: estimativa de tempo (obrigatório)
+
+Desde 29/10/2026 a empresa recebe, **antes** de cada alteração, o descritivo e o tempo estimado
+de cada tarefa, pelo WhatsApp. Use a skill `estimativa-de-tarefas`
+(`.claude/skills/estimativa-de-tarefas/SKILL.md`) sempre que analisar ou planejar tarefas —
+inclusive a etapa que você escolheu sozinho para emendar. Ela grava em `docs/estimativas/`, commita
+antes do código e mostra o bloco pronto para copiar; no fechamento, o estimado × gasto. Mostrar a
+estimativa **não** é pedir aval: mostre e siga.
+
 ## Toda semana tem de ter algo na tela — e um relatório para a empresa
 
 Quem usa o sistema não é da área: semana só de motor parece semana parada. Ao planejar uma

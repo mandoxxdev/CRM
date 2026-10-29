@@ -67,6 +67,14 @@ procurei pelo nome que **imaginei** que o consumidor usaria em vez do nome do **
 trabalho que já estava feito. Quando os dois discordarem, isso é um achado — investigue qual
 está errado em vez de escolher o seu.
 
+## Fase 0.5 — Estimar o tempo ANTES de planejar (obrigatório)
+
+Use a skill **`estimativa-de-tarefas`**: cada alteração ganha descritivo em linguagem de usuário e
+tempo estimado, gravados em `docs/estimativas/AAAA-MM/`, commitados **antes** do primeiro commit de
+código e mostrados ao André num bloco pronto para o WhatsApp. É exigência da empresa (desde
+29/10/2026): o tempo é informado antes de fazer. Não espera aval — mostra e segue para a Fase 1.
+Se o plano da Fase 1/2 mudar o tamanho, a própria skill diz como reestimar.
+
 ## Fase 1 — Pensar: design e plano (o pensador, sequencial)
 
 Use `superpowers:brainstorming` e depois `superpowers:writing-plans`. Convenção de nomes (o
