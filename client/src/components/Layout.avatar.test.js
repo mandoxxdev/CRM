@@ -33,7 +33,6 @@ jest.mock('./BuscaGlobal', () => () => null);
 jest.mock('./ReportBuilder', () => () => null);
 jest.mock('./WorkflowEngine', () => () => null);
 jest.mock('./AnimatedBackground', () => () => null);
-jest.mock('./HelpGuide', () => () => null);
 jest.mock('./HelpSearch', () => () => null);
 jest.mock('./ModuleSplash', () => () => null);
 jest.mock('./BotaoInstalarApp', () => () => null);

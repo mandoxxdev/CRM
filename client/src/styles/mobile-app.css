@@ -438,13 +438,6 @@
     padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px)) !important;
   }
 
-  /* 6b. O botao flutuante de ajuda (?) ficava EM CIMA do item "Menu" depois que a
-     barra passou a flutuar. Sobe para acima da barra, no canto. */
-  .help-guide-button {
-    bottom: calc(94px + env(safe-area-inset-bottom, 0px)) !important;
-    right: 16px !important;
-  }
-
   /* 7. Chips/badges/status em pilula — detalhe pequeno, leitura premium. */
   [class*='chip'], [class*='badge'], [class*='pill'], [class*='tag'] {
     border-radius: 999px !important;

@@ -24,7 +24,6 @@ import BuscaGlobal from './BuscaGlobal';
 import ReportBuilder from './ReportBuilder';
 import WorkflowEngine from './WorkflowEngine';
 import AnimatedBackground from './AnimatedBackground';
-import HelpGuide from './HelpGuide';
 import HelpSearch from './HelpSearch';
 import ModuleSplash from './ModuleSplash';
 import ErrorBoundary from './ErrorBoundary';
@@ -629,7 +628,6 @@ const Layout = () => {
       <BuscaGlobal isOpen={buscaGlobalOpen} onClose={() => setBuscaGlobalOpen(false)} />
       <ReportBuilder isOpen={reportBuilderOpen} onClose={() => setReportBuilderOpen(false)} />
       <WorkflowEngine isOpen={workflowEngineOpen} onClose={() => setWorkflowEngineOpen(false)} />
-      <HelpGuide />
       <HelpSearch isOpen={helpSearchOpen} onClose={() => setHelpSearchOpen(false)} />
     </div>
   );

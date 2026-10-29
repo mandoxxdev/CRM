@@ -669,13 +669,8 @@
 
   .bim { z-index: 1260 !important; }
 
-  /* Enquanto a gaveta está aberta: o botão de ajuda sai da frente e a página
-     atrás para de rolar — rolar o fundo com uma gaveta aberta é o defeito
-     clássico de gaveta em celular. */
-  body.menu-lateral-aberto .help-guide-button {
-    opacity: 0 !important;
-    pointer-events: none !important;
-  }
+  /* Enquanto a gaveta está aberta a página atrás para de rolar — rolar o fundo
+     com uma gaveta aberta é o defeito clássico de gaveta em celular. */
   body.menu-lateral-aberto .main-content { overflow: hidden !important; }
 
   /* O item ativo era LARANJA (#ff6b35) — sobra de outro tema, e gritando contra
@@ -1937,55 +1932,6 @@
     gap: 10px !important;
   }
   .almox-filters > * { width: 100% !important; min-width: 0; }
-
-  /* ── 26. O botao de ajuda sai de cima do conteudo ────────────────────
-     Medido: o botao flutuante de 56px escondia 21% do valor da familia em
-     Materiais e 26% da quantidade em Movimentacoes. Aparece na foto que o
-     P.O. mandou, tapando "CONSUM…".
-
-     Encolher ou afastar nao resolve, so diminui o estrago: enquanto ele
-     flutuar sobre uma lista que usa a largura inteira, vai cobrir alguma
-     coisa. E os valores sao alinhados a direita justamente onde ele fica.
-
-     A barra de cima esta VAZIA fora o logo. Levando o botao para la ele
-     continua sempre a um toque, no canto que o polegar alcanca com o
-     aparelho na mao, e nao ha conteudo nenhum embaixo dele.
-
-     No computador nada muda: esta regra so existe dentro do @media. */
-  .help-guide-button,
-  [class*="help-guide"],
-  [class*="ajuda-flutuante"] {
-    position: fixed !important;
-    top: 12px !important;
-    right: 12px !important;
-    bottom: auto !important;
-    left: auto !important;
-    width: 40px !important;
-    height: 40px !important;
-    min-width: 40px !important;
-    min-height: 40px !important;
-    /* Acima da barra de cima, que tem z-index proprio. */
-    z-index: 1200 !important;
-    box-shadow: 0 2px 10px rgba(16, 24, 40, .18) !important;
-
-    /* O recuo TEM de ir junto com a largura.
-
-       Fixei 40px e deixei o `padding: 12px 20px` da regra global de botao:
-       com `box-sizing: border-box` isso da caixa de conteudo com ZERO de
-       largura, e o icone, que e flexivel, encolheu para nada. O botao virou
-       um circulo azul liso — medido, `svg 0x20`.
-
-       E a segunda vez nesta base que este par derruba um icone. Largura
-       pequena e recuo grande nao convivem. */
-    padding: 0 !important;
-    display: inline-flex !important;
-    align-items: center;
-    justify-content: center;
-  }
-  .help-guide-button > svg,
-  [class*="help-guide"] > svg { flex: 0 0 auto; }
-  .help-guide-button svg,
-  [class*="help-guide"] svg { width: 20px; height: 20px; }
 
   /* Quantidade movimentada no painel: verde #1AA34A sobre o cartao claro da
      ultima movimentacao — 3,04 medido, e e um NUMERO, o tipo de conteudo
