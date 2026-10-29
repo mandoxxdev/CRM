@@ -13,7 +13,7 @@ num texto que o André copia e cola direto no WhatsApp.
 **Isto é obrigatório.** Nenhuma alteração começa sem a estimativa dela escrita e mostrada ao
 André. Vale para tarefa pedida por ele, etapa do plano, correção pequena e a etapa que você
 escolheu sozinho no Passo 8 da `fechar-etapa`. "É só uma correçãozinha" não é exceção: estime
-30 min e registre.
+(mínimo 1 h) e registre.
 
 **Anuncie ao começar:** "Usando a skill `estimativa-de-tarefas` para estimar antes de fazer."
 
@@ -51,28 +51,45 @@ a, b, c (pode subdividir uma só se ela for claramente duas mudanças diferentes
    ```
    node .claude/skills/relatorio-semanal/scripts/horas.js --desde AAAA-MM-DD --ate AAAA-MM-DD --grupos "Nome=regex do assunto;..."
    ```
-   Procure 2 ou 3 entregas do mesmo porte e use o tempo delas. Referências medidas (out/2026,
-   todo o trabalho incluído — código, conferências automáticas, documentação):
+   Procure 2 ou 3 entregas do mesmo porte e use o tempo delas. **Atenção: isto mede só a
+   EXECUÇÃO** (as sessões de desenvolvimento, pelo intervalo entre commits — código, conferências
+   automáticas, documentação). Referências medidas (out/2026):
 
-   | Porte | Exemplo real | Gasto medido |
-   |---|---|---|
-   | Ajuste pontual de tela | remover o botão de ajuda flutuante; corrigir layout do celular | ~30 min |
-   | Uma mudança pequena com regra | o gestor remove uma foto pela lista | ~1 h |
-   | Etapa média (várias telas + cadastro novo) | destinos, condutor, origem, perfis pela tela | ~2 h a 2h30 |
-   | Mudança em estoque/saldo, travas, estorno | etapas do motor do almoxarifado | 3 h ou mais — meça antes |
+   | Porte | Exemplo real | Execução medida | Tempo a informar (passo 3) |
+   |---|---|---|---|
+   | Ajuste pontual de tela | remover o botão de ajuda flutuante; corrigir layout do celular | ~30 min | 1h30 |
+   | Uma mudança pequena com regra | o gestor remove uma foto pela lista | ~1 h | 2h30 |
+   | Etapa média (várias telas + cadastro novo) | destinos, condutor, origem, perfis pela tela | ~2 h a 2h30 | 4h30 a 5h30 |
+   | Mudança em estoque/saldo, travas, estorno | etapas do motor do almoxarifado | 3 h ou mais — meça antes | ×2,5 + 30 min |
 
    Atualize esta tabela quando a medida mostrar que ela envelheceu (diga de quando é a medida).
 
 ### 3. Estimar — regras
 
-- **Unidade:** múltiplos de 30 min (30 min, 1h, 1h30, 2h…). Mínimo 30 min por tarefa.
-- **Tudo incluído:** entender, fazer, conferências automáticas, revisão, documentação e manual.
-  Não existe "mais o tempo de teste" à parte.
+- **O tempo informado é o do André, não só o da execução.** A régua do passo 2 mede só as sessões
+  de desenvolvimento. O André também gasta tempo, que o git não vê, para: entender o pedido e
+  conversar com quem pediu, planejar e revisar o plano, testar na tela (em mais de um perfil, no
+  celular), conferir o resultado e pedir ajustes. A conta é:
+
+  **tempo informado = execução estimada × 2 + 30 min de análise**
+
+  - O ×2 cobre o teste, a conferência e os ajustes depois do teste: cada hora de execução gera,
+    na prática, mais ou menos uma hora dele testando e conferindo.
+  - Use **×2,5** quando o teste é mais trabalhoso: mexe em estoque/saldo, permissão por perfil,
+    tela de celular, impressão/PDF ou relatório (tem de testar vários casos ou aparelhos).
+  - Os **+30 min** viram **+1 h** quando a tarefa pede decisão de regra com quem pediu ("como deve
+    funcionar quando…").
+  - Exemplo: execução de 1 h → 1 × 2 + 0,5 = **2h30**. Ajuste de 30 min → **1h30**.
+- **Unidade:** múltiplos de 30 min (30 min, 1h, 1h30, 2h…), sempre arredondando **para cima**.
+  Mínimo 1 h por tarefa (nenhuma alteração custa menos que isso, contando o teste).
+- **Tudo incluído:** entender, planejar, fazer, conferências automáticas, testar na tela,
+  conferir, ajustar, documentação e manual. Não existe "mais o tempo de teste" à parte.
 - **Acima de 4 h, quebre** em tarefas menores que a empresa reconheça ("1ª parte: …"). Estimativa
   grande é chute grande.
 - **Incerteza declarada, não escondida:** se depende de algo que só se descobre fazendo (ex.:
   integração com sistema de fora), dê a faixa ("2h a 3h") e diga em uma frase do que depende.
-- **Não arredonde para agradar.** Se a medida diz 2 h, é 2 h. Estimativa sistematicamente baixa
+- **Não arredonde para agradar.** Aplique a conta e informe o resultado; não corte a parte do
+  André para o número parecer menor. Estimativa sistematicamente baixa
   destrói a confiança mais rápido que uma alta.
 
 ### 4. Gravar os dois arquivos
@@ -84,8 +101,8 @@ docs/estimativas/AAAA-MM/
 ```
 
 O `.txt` é o bloco abaixo, sem mais nada. O `.md` tem uma tabela
-`| # | Tarefa | Estimado | Etapa/plano | Régua usada | Gasto | Commits |` (Gasto e Commits ficam
-"—" até o fechamento) e a linha de `--grupos` que vai medir cada tarefa no fim.
+`| # | Tarefa | Execução estimada | Fator | Informado | Etapa/plano | Régua usada | Execução medida | Realizado | Commits |`
+(as quatro últimas ficam "—" até o fechamento) e a linha de `--grupos` que vai medir cada tarefa no fim.
 
 ### 5. O formato do WhatsApp (copiar e colar)
 
@@ -98,14 +115,14 @@ _<DD/MM/AAAA>_
 
 *1. <Título curto da alteração>*
 <O que muda para quem usa, em 1 ou 2 frases. Por que é feito, se não for óbvio.>
-⏱ Tempo estimado: *1h30*
+⏱ Tempo estimado: *2h30*
 
 *2. <Título>*
 <…>
-⏱ Tempo estimado: *30 min*
+⏱ Tempo estimado: *1h30*
 
-*Total estimado: 2h*
-_O tempo de cada item já inclui fazer, conferir e atualizar os manuais._
+*Total estimado: 4h*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
 ```
 
 Regras de linguagem — as mesmas do relatório semanal: impessoal ("o destino passa a ter…",
@@ -140,10 +157,13 @@ honesta antes de fazer é melhor que estouro descoberto depois.
 
 ## No fechamento (chamado pela `fechar-etapa`)
 
-1. Meça o gasto de cada tarefa com `horas.js --grupos` (a linha gravada no `.md`; os assuntos dos
-   commits da tarefa precisam casar com a regex — por isso, nos commits, cite o assunto da tarefa).
-   Arredonde para 30 min.
-2. Preencha Gasto e Commits no `.md`.
+1. Meça a **execução** de cada tarefa com `horas.js --grupos` (a linha gravada no `.md`; os
+   assuntos dos commits da tarefa precisam casar com a regex — por isso, nos commits, cite o
+   assunto da tarefa).
+2. **Realizado = execução medida + a parte do André.** A parte dele (análise, teste, conferência)
+   o git não mede: se ele informou quanto gastou, use o que ele disse; senão, use a mesma parte
+   que foi estimada (informado − execução estimada) e anote no `.md` que foi a estimada. Arredonde
+   para cima, em 30 min. Preencha Execução medida, Realizado e Commits no `.md`.
 3. Grave `docs/estimativas/AAAA-MM/conclusao_AAAA-MM-DD_<tema>.txt`, rode o
    `conferir-linguagem.js` nele, e mostre ao André em bloco de código:
 
@@ -151,19 +171,21 @@ honesta antes de fazer é melhor que estouro descoberto depois.
 *Concluído — <assunto>*
 _<DD/MM/AAAA>_
 
-1. <Título> — estimado 1h30 · gasto 1h
-2. <Título> — estimado 30 min · gasto 30 min
+1. <Título> — estimado 2h30 · realizado 2h
+2. <Título> — estimado 1h30 · realizado 1h30
 
-*Total: estimado 2h · gasto 1h30*
+*Total: estimado 4h · realizado 3h30*
 ```
 
    Se uma tarefa estourou mais de 30 min, uma frase curta em linguagem de usuário dizendo por quê.
-4. Se o estimado errou por muito, corrija a tabela de régua do passo 2 — é assim que a próxima
+4. Se a **execução** errou por muito, corrija a tabela de régua do passo 2; se o André disser
+   que a parte dele foi bem diferente do ×2, corrija o fator no passo 3 — é assim que a próxima
    estimativa melhora.
 
 ## Red flags
 
-- "É pequeno, nem precisa estimar" → precisa. 30 min, registrado.
+- "É pequeno, nem precisa estimar" → precisa. Mínimo 1 h, registrado.
+- "Informei só o tempo que a execução leva" → falta a parte do André (×2 + análise).
 - "Vou estimar depois do plano, quando souber melhor" → a estimativa vem antes; o plano pode
   **revisar** ela.
 - "Coloquei 'servidor' e 'tela' como itens separados" → bastidor; junte na alteração que o
