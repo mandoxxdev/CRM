@@ -9,7 +9,7 @@ const portalService = require('../services/frotas/portalService');
 const exportacaoService = require('../services/frotas/exportacaoService');
 const perfisService = require('../services/frotas/perfisService');
 const pendenciaService = require('../services/frotas/pendenciaService'); // Frota Etapa 6 (RN-F6.02/03)
-const { requirePermission } = require('../services/frotas/permissions');
+const { requirePermission, getPerfilFromUser } = require('../services/frotas/permissions');
 const { respondDbError } = require('../services/sqliteConcurrency');
 // Frota Etapa 5 (RN-F5.01..08): fotos do registro e do abastecimento — o mesmo upload seguro do resto do sistema
 const fs = require('fs');
@@ -170,15 +170,18 @@ module.exports = function registerFrotasRoutes(app, db, authenticateToken, check
   });
 
   // Frotas Etapa 1 (RN-F1.16, F2-13): ver_painel ANTES do cache — o cache e um so para todos os perfis
+  // Frota C22: `perfil` (o de QUEM PEDIU, a regua do /portal/inicio) vai na resposta POR PEDIDO e nunca no cache — o cache e de todos;
+  // guardado nele, o primeiro a aquecer emprestaria o perfil dele aos outros. A tela compara com o usuario que tem e renova o menu.
   app.get('/api/frotas/dashboard', ...frotaAuth, requirePermission('ver_painel'), async (req, res) => {
     try {
+      const comPerfil = (data) => ({ ...data, perfil: getPerfilFromUser(req.user) });
       const force = req.query.refresh === '1' || req.query.refresh === 'true';
       if (!force && dashboardCache.data && Date.now() - dashboardCache.at < DASHBOARD_CACHE_MS) {
-        return res.json(dashboardCache.data);
+        return res.json(comPerfil(dashboardCache.data));
       }
       if (!force && dashboardInflight) {
         const data = await dashboardInflight;
-        return res.json(data);
+        return res.json(comPerfil(data));
       }
       const geracao = dashboardGeracao;
       const contagem = frotasService.getDashboard(db)
@@ -192,7 +195,7 @@ module.exports = function registerFrotasRoutes(app, db, authenticateToken, check
           throw e;
         });
       dashboardInflight = contagem;
-      res.json(await contagem);
+      res.json(comPerfil(await contagem));
     } catch (e) { handleError(res, e); }
   });
 

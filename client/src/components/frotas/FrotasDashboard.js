@@ -46,6 +46,14 @@ const PainelDoGestor = () => {
     try {
       const data = await fetchFrotasDashboard({ force });
       setData(data);
+      // Frota C22: quem deixou de ser (ou virou) Administrador de Frota ainda tem o usuario velho no navegador, e o menu so mudaria no
+      // F5. O painel traz o perfil do servidor (so quando veio do servidor agora: o cache do navegador nao o guarda); divergiu, renova
+      // uma vez — o mesmo guarda do 403 abaixo e do portal (Fase5-2).
+      const perfilServidor = data?.perfil;
+      if (perfilServidor && refreshUser && !renovouRef.current && perfilServidor !== perfilFrota(getEffectiveUser(userRef.current))) {
+        renovouRef.current = true;
+        refreshUser();
+      }
     } catch (err) {
       console.error(err);
       const status = err.response?.status;

@@ -27,8 +27,11 @@ export async function fetchFrotasDashboard({ force = false } = {}) {
   const promise = (force ? api.get('/frotas/dashboard', { params: { refresh: 1 } }) : api.get('/frotas/dashboard'))
     .then(({ data }) => {
       if (geracao === dashboardGeracao) {
+        // Frota C22: o `perfil` e o de quem pediu, AGORA — nao entra no cache (que e do navegador, nao da pessoa: depois de sair e
+        // entrar com outra, o perfil da anterior faria a tela renovar a toa). So a resposta fresca o leva; o cache serve sem ele.
+        const { perfil, ...semPerfil } = data && typeof data === 'object' ? data : {};
         dashboardCache.at = Date.now();
-        dashboardCache.data = data;
+        dashboardCache.data = data && typeof data === 'object' ? semPerfil : data;
       }
       if (dashboardInflight.current === promise) dashboardInflight.current = null;
       return data;
