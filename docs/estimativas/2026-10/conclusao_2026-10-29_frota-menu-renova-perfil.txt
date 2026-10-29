@@ -1,0 +1,6 @@
+*Concluído — Frota: menu atualizado quando o perfil muda*
+_29/10/2026_
+
+1. Menu da Frota acompanha a troca de perfil sem recarregar a página — estimado 3h · realizado 2h30
+
+*Total: estimado 3h · realizado 2h30*
