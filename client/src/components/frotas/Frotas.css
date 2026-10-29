@@ -597,3 +597,65 @@
 .frotas-pendencia-tratada { font-size: 0.8rem; color: var(--gmp-text-light); margin-top: 4px; max-width: 360px; white-space: normal; }
 .frotas-btn-pendencia { padding: 4px 10px; font-size: 0.8rem; white-space: nowrap; }
 .frotas-alert-item .frotas-btn-pendencia { margin-top: 6px; }
+
+/* Frota Etapa 9 (RN-F9.13/17/18/24): endereco do destino, origem fixa e destino da lista nos formularios do gestor. */
+.frotas-linha-fixa {
+  padding: 8px 12px;
+  border: 1px dashed var(--gmp-border);
+  border-radius: 8px;
+  background: var(--gmp-surface);
+  color: var(--gmp-text);
+  font-size: 0.9rem;
+}
+
+.frotas-destino-linha,
+.frotas-endereco-cep-linha {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.frotas-destino-linha select,
+.frotas-endereco-cep-linha input {
+  flex: 1;
+  min-width: 0;
+}
+
+.frotas-destino-linha .frotas-btn,
+.frotas-endereco-cep-linha .frotas-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.frotas-endereco-dica {
+  font-size: 0.78rem;
+  color: var(--gmp-text-light);
+}
+
+.frotas-novo-destino {
+  border: 1px solid var(--gmp-border);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--gmp-surface);
+  gap: 10px;
+}
+
+.frotas-novo-destino-titulo {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.frotas-erro-destino {
+  background: rgba(239, 68, 68, 0.1);
+  border-left: 3px solid #ef4444;
+  color: var(--gmp-text);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.frotas-novo-destino-acoes {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

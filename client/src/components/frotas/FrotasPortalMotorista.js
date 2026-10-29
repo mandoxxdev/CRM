@@ -12,6 +12,8 @@
  *   POST /frotas/destinos                 (Etapa 8: "+ Novo destino" na saida — plano 2026-10-28-frotas-etapa8-admin-destinos-condutor.md)
  * Etapa 8: o abastecimento nao tem mais foto (RN-F8.12/13); a saida sai sempre de GMP (origem fixa, gravada pelo servidor), o destino
  * e escolhido numa lista cadastrada (`destino_id`) e o carro liberado para funcionarios pede quem vai dirigir (RN-F8.23, 33-35).
+ * Etapa 9 (plano 2026-10-29-frotas-etapa9-endereco-do-destino.md): o "+ Novo destino" pede o endereco (CEP que busca, ou a mao) pelo
+ * NovoDestinoBloco compartilhado com a Viagem do gestor; a opcao mostra "Nome — Cidade/UF"; a origem mostra o endereco da GMP.
  * Quem decide e o servidor: a tela so esconde o que ele recusaria e mostra a mensagem dele quando recusa.
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -24,6 +26,7 @@ import { perfilFrota } from '../../utils/systemPermissions';
 import {
   FotosAntesDeSalvar, MiniaturasFotos, BotaoMaisFoto, enviarFotosDoLancamento, avisoDeFalhaDasFotos, anexosDe, MSG_FALHA_FOTO_GENERICA,
 } from './FotosFrota';
+import { NovoDestinoBloco, rotuloDestino, MSG_FALHA_DESTINO as MSG_FALHA_NOVO_DESTINO } from './EnderecoDestinoCampos';
 import './Frotas.css';
 import './FrotasPortalMotorista.css';
 
@@ -79,9 +82,12 @@ const numeroOuNulo = (v) => (v === '' || v == null ? null : Number(v));
 
 /* Frota Etapa 8 (RN-F8.33/34/34b): textos do destino cadastrado na saida. */
 export const MSG_DESTINO_DESATIVADO = 'O destino escolhido foi desativado. Escolha outro.';
-export const MSG_FALHA_DESTINO = 'Não foi possível adicionar o destino. Confira a internet e tente de novo.';
+export const MSG_FALHA_DESTINO = MSG_FALHA_NOVO_DESTINO;
 const mesmoId = (a, b) => String(a) === String(b);
-const destinoEnxuto = (d) => ({ id: d.id, nome: d.nome, endereco: d.endereco ?? null });
+// Etapa 9 (A13, RN-F9.16): guarda cidade e UF para a opcao "Nome — Cidade/UF".
+const destinoEnxuto = (d) => ({
+  id: d.id, nome: d.nome, endereco: d.endereco ?? null, cidade: d.cidade ?? null, uf: d.uf ?? null,
+});
 
 /**
  * Frota Etapa 5 (RN-F5.09, Fase 2 T-4/T-5): as fotos sobem DEPOIS do 201, uma por vez, e so entao o formulario sai da tela (senao o
@@ -184,7 +190,8 @@ export function RegistroForm({ tipo, inicio, onCancelar, onSalvo, onAtualizar })
   const [destinos, setDestinos] = useState(() => (inicio.destinos || []).map(destinoEnxuto));
   const [destinoId, setDestinoId] = useState('');
   const [avisoDestino, setAvisoDestino] = useState('');
-  const [novoDestino, setNovoDestino] = useState(null); // null | { nome, endereco, erro, salvando }
+  // Etapa 9 (RN-F9.15): o bloco "+ Novo destino" (Nome + endereco com CEP) guarda o proprio estado; aqui so se esta aberto.
+  const [novoDestinoAberto, setNovoDestinoAberto] = useState(false);
   const [condutor, setCondutor] = useState('');
   const [finalidade, setFinalidade] = useState('');
   const [respostas, setRespostas] = useState({});
@@ -250,34 +257,11 @@ export function RegistroForm({ tipo, inicio, onCancelar, onSalvo, onAtualizar })
     setAvisoDestino('');
   };
 
-  // Etapa 8 (RN-F8.33/34): o motorista cadastra o destino sem sair da saida. 201 entra selecionado; 409 duplicado seleciona o que ja
-  // existia (o servidor manda a linha no corpo, ajuste T-1); outro erro fica no bloco, aberto, para corrigir e tentar de novo.
-  const adicionarDestino = async () => {
-    if (!novoDestino || novoDestino.salvando) return;
-    const nome = (novoDestino.nome || '').trim();
-    if (!nome) {
-      setNovoDestino((n) => n && { ...n, erro: 'Informe o nome do destino' });
-      return;
-    }
-    const corpo = { nome };
-    const endereco = (novoDestino.endereco || '').trim();
-    if (endereco) corpo.endereco = endereco;
-    setNovoDestino((n) => n && { ...n, erro: '', salvando: true });
-    try {
-      const { data: criado } = await api.post('/frotas/destinos', corpo);
-      incluirDestinoNaLista(criado);
-      setNovoDestino(null);
-      toast.success('Destino adicionado');
-    } catch (err) {
-      const dados = err.response?.data;
-      if (err.response?.status === 409 && dados?.code === 'DESTINO_DUPLICADO' && dados.destino?.id != null) {
-        incluirDestinoNaLista(dados.destino);
-        setNovoDestino(null);
-        toast.info('Esse destino já existia — selecionado.');
-        return;
-      }
-      setNovoDestino((n) => n && { ...n, salvando: false, erro: dados?.error || MSG_FALHA_DESTINO });
-    }
+  // Etapa 8 (RN-F8.33/34), Etapa 9 (RN-F9.15): o POST /frotas/destinos (201 entra selecionado; 409 duplicado seleciona o que ja
+  // existia; outro erro fica no bloco, aberto) mora no NovoDestinoBloco, o mesmo da Viagem do gestor. Aqui so entra na lista e fecha.
+  const destinoIncluido = (d) => {
+    incluirDestinoNaLista(d);
+    setNovoDestinoAberto(false);
   };
 
   const incluirAvaria = () => {
@@ -407,7 +391,13 @@ export function RegistroForm({ tipo, inicio, onCancelar, onSalvo, onAtualizar })
 
       {tipo === 'saida' && (
         <>
-          <div className="portal-cartao portal-origem-fixa" data-testid="origem-fixa">Saindo de: <strong>GMP</strong></div>
+          {/* Etapa 9 (RN-F9.23): o endereco da GMP (Configuracoes -> Empresa, lido pelo servidor) abaixo de "Saindo de: GMP". */}
+          <div className="portal-cartao portal-origem-fixa">
+            <div data-testid="origem-fixa">Saindo de: <strong>GMP</strong></div>
+            {inicio.origem?.endereco && (
+              <div className="portal-origem-endereco" data-testid="origem-endereco">{inicio.origem.endereco}</div>
+            )}
+          </div>
           <div className="portal-campo">
             <span>Indo para onde (destino)</span>
             <div className="portal-destino-linha">
@@ -417,14 +407,14 @@ export function RegistroForm({ tipo, inicio, onCancelar, onSalvo, onAtualizar })
                 onChange={(e) => { setDestinoId(e.target.value); setAvisoDestino(''); }}
               >
                 <option value="">Escolha o destino…</option>
-                {destinos.map((d) => <option key={d.id} value={d.id}>{d.nome}</option>)}
+                {destinos.map((d) => <option key={d.id} value={d.id}>{rotuloDestino(d)}</option>)}
               </select>
-              {!novoDestino && (
+              {!novoDestinoAberto && (
                 <button
                   type="button"
                   className="portal-botao secundario portal-botao-novo-destino"
                   disabled={salvando}
-                  onClick={() => setNovoDestino({ nome: '', endereco: '', erro: '', salvando: false })}
+                  onClick={() => setNovoDestinoAberto(true)}
                 >
                   + Novo destino
                 </button>
@@ -432,40 +422,8 @@ export function RegistroForm({ tipo, inicio, onCancelar, onSalvo, onAtualizar })
             </div>
             {avisoDestino && <div className="portal-aviso portal-aviso-destino" data-testid="aviso-destino">{avisoDestino}</div>}
           </div>
-          {novoDestino && (
-            <div className="portal-novo-destino" data-testid="novo-destino">
-              <label className="portal-campo">
-                <span>Nome</span>
-                <input
-                  type="text"
-                  name="novo_destino_nome"
-                  value={novoDestino.nome}
-                  maxLength={120}
-                  disabled={novoDestino.salvando}
-                  onChange={(e) => setNovoDestino((n) => n && { ...n, nome: e.target.value })}
-                />
-              </label>
-              <label className="portal-campo">
-                <span>Endereço (opcional)</span>
-                <input
-                  type="text"
-                  name="novo_destino_endereco"
-                  value={novoDestino.endereco}
-                  maxLength={255}
-                  disabled={novoDestino.salvando}
-                  onChange={(e) => setNovoDestino((n) => n && { ...n, endereco: e.target.value })}
-                />
-              </label>
-              {novoDestino.erro && <div className="portal-erro portal-erro-destino" role="alert">{novoDestino.erro}</div>}
-              <div className="portal-linha">
-                <button type="button" className="portal-botao secundario" disabled={novoDestino.salvando} onClick={() => setNovoDestino(null)}>
-                  Cancelar
-                </button>
-                <button type="button" className="portal-botao" disabled={novoDestino.salvando} onClick={adicionarDestino}>
-                  Adicionar
-                </button>
-              </div>
-            </div>
+          {novoDestinoAberto && (
+            <NovoDestinoBloco variante="portal" onIncluido={destinoIncluido} onCancelar={() => setNovoDestinoAberto(false)} />
           )}
           {pedeCondutor && (
             <label className="portal-campo">

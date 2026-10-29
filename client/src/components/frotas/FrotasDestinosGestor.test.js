@@ -6,7 +6,9 @@
  *   RN-F8.36  Tela Frota -> Destinos (pagina generica): Nome, Endereco, Cadastrado por, Status (Ativo/Desativado); filtro "Mostrar:
  *             Ativos/Todos" manda `inativos=1` (ajuste T-3: sem ele o destino desativado sumia para sempre); Novo/Editar/Excluir so
  *             para quem altera; Consulta so le.
- *   RN-F8.37  Viagens: Destino continua texto livre.
+ *   RN-F8.37  Viagens: Destino continua texto livre. DESFEITA na Etapa 9 (B89): o Destino da Viagem do gestor e o select dos ativos com
+ *             "+ Novo destino" e a Origem e uma linha fixa — os testes daqui foram ajustados de proposito (A13) e o detalhe esta em
+ *             FrotasViagemDestinoGestor.test.js. O Novo Destino daqui pede o endereco estruturado (RN-F9.17).
  *
  * Cada negativo tem a metade positiva no mesmo arquivo (molde FrotasEtapa2Gestor.test.js).
  *
@@ -139,21 +141,31 @@ describe('RN-F8.36 — tela Destinos do gestor', () => {
     expect(container.querySelector('.frotas-action-btn')).toBeNull();
   });
 
-  test('Novo Destino: Nome*, Endereco e Status; salvar faz POST /frotas/destinos com o nome', async () => {
+  // Etapa 9 (RN-F9.17, A13): o campo texto "Endereço" saiu; entram CEP, Rua, Número, Complemento, Bairro, Cidade e Estado (UF).
+  test('Novo Destino: Nome*, endereco estruturado e Status; salvar faz POST /frotas/destinos com o nome e as 7 chaves', async () => {
     await render(<FrotasDestinos />);
     await clicar(botaoComTexto('Novo Destino'));
     expect(grupo('Nome *').querySelector('input').required).toBe(true);
-    expect(grupo('Endereço')).toBeTruthy();
+    expect(grupo('Endereço')).toBeUndefined();
+    ['CEP', 'Rua', 'Número', 'Complemento (opcional)', 'Bairro', 'Cidade', 'Estado (UF)'].forEach((r) => expect(grupo(r)).toBeTruthy());
     const status = grupo('Status').querySelector('select');
     expect([...status.options].map((o) => o.textContent)).toEqual(expect.arrayContaining(['Ativo', 'Desativado']));
     expect(status.value).toBe('1');
     await digitar(grupo('Nome *').querySelector('input'), 'Cliente Gama');
-    await digitar(grupo('Endereço').querySelector('input'), 'Av. B, 200');
+    await digitar(grupo('Rua').querySelector('input'), 'Av. B');
+    await digitar(grupo('Número').querySelector('input'), '200');
+    await digitar(grupo('Bairro').querySelector('input'), 'Centro');
+    await digitar(grupo('Cidade').querySelector('input'), 'Santo André');
+    await escolher(grupo('Estado (UF)').querySelector('select'), 'SP');
     await salvar();
     expect(api.post).toHaveBeenCalledTimes(1);
     const [url, corpo] = api.post.mock.calls[0];
     expect(url).toBe('/frotas/destinos');
-    expect(corpo).toEqual(expect.objectContaining({ nome: 'Cliente Gama', endereco: 'Av. B, 200' }));
+    expect(corpo).toEqual(expect.objectContaining({
+      nome: 'Cliente Gama', logradouro: 'Av. B', numero: '200', bairro: 'Centro', cidade: 'Santo André', uf: 'SP',
+      cep: null, complemento: null,
+    }));
+    expect('endereco' in corpo).toBe(false);
     expect(String(corpo.ativo)).toBe('1');
   });
 
@@ -216,7 +228,7 @@ describe('RN-F8.25 — Veiculos: Liberado para funcionarios', () => {
   });
 });
 
-describe('RN-F8.25 / RN-F8.37 — Viagens: Condutor e Origem GMP', () => {
+describe('RN-F8.25 / RN-F9.18 / RN-F9.24 — Viagens: Condutor, Origem GMP e Destino da lista', () => {
   test('coluna Condutor logo depois de Motorista, com o nome ou "-"', async () => {
     await render(<FrotasEntityPage entityKey="viagens" />);
     const cab = cabecalhos();
@@ -227,24 +239,31 @@ describe('RN-F8.25 / RN-F8.37 — Viagens: Condutor e Origem GMP', () => {
     expect(celula(1, 'Motorista').textContent).toBe('Jose da Silva');
   });
 
-  test('Nova Viagem: campo "Condutor (funcionario)" depois de Motorista, Origem ja vem GMP e Destino continua texto', async () => {
+  // Etapa 9 (B89 desfaz a B79): a Origem virou linha fixa e o Destino virou o select dos destinos ativos. Antes este teste travava
+  // grupo('Origem') como <input> GMP e grupo('Destino') como texto.
+  test('Nova Viagem: campo "Condutor (funcionario)" depois de Motorista, Origem fixa GMP e Destino em lista', async () => {
     await render(<FrotasEntityPage entityKey="viagens" />);
     await clicar(botaoComTexto('Nova Viagem'));
     const rotulos = [...container.querySelectorAll('.frotas-form-group > label')].map((l) => l.textContent.trim());
     expect(rotulos[rotulos.indexOf('Motorista') + 1]).toBe('Condutor (funcionário)');
     expect(grupo('Condutor (funcionário)').querySelector('input').type).toBe('text');
-    expect(grupo('Origem').querySelector('input').value).toBe('GMP');
-    expect(grupo('Destino').querySelector('input').type).toBe('text');
-    expect(grupo('Destino').querySelector('select')).toBeNull();
+    expect(grupo('Origem').querySelector('input')).toBeNull();
+    expect(grupo('Origem').textContent).toContain('Saindo de: GMP');
+    expect(grupo('Destino').querySelector('input')).toBeNull();
+    expect(grupo('Destino').querySelector('select[name="destino_id"]')).not.toBeNull();
     await digitar(grupo('Condutor (funcionário)').querySelector('input'), 'Marcos (Compras)');
     await salvar();
     expect(api.post).toHaveBeenCalledTimes(1);
-    expect(api.post.mock.calls[0][1]).toEqual(expect.objectContaining({ origem: 'GMP', condutor_nome: 'Marcos (Compras)' }));
+    const corpo = api.post.mock.calls[0][1];
+    expect(corpo).toEqual(expect.objectContaining({ origem: 'GMP', condutor_nome: 'Marcos (Compras)', destino_id: null }));
+    expect('destino' in corpo).toBe(false);
   });
 
-  test('getDefaultForm das viagens parte de origem GMP e condutor vazio', () => {
+  test('getDefaultForm das viagens parte de origem GMP, condutor vazio e destino_id vazio (sem destino texto)', () => {
     const f = ENTITY_CONFIGS.viagens.getDefaultForm({});
     expect(f.origem).toBe('GMP');
     expect(f.condutor_nome).toBe('');
+    expect(f.destino_id).toBe('');
+    expect('destino' in f).toBe(false);
   });
 });

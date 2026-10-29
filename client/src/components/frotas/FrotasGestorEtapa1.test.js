@@ -139,12 +139,15 @@ describe('Checklist: Tipo, KM e Situacao', () => {
 });
 
 describe('Viagens: Origem', () => {
-  test('coluna e campo Origem', async () => {
+  // Frota Etapa 9 (RN-F9.24): a Origem deixou de ser campo digitavel no gestor — a viagem antiga com outra origem mostra o texto
+  // gravado (so leitura) e o mantem ao salvar. Antes este teste conferia o <input> com 'Fabrica'.
+  test('coluna Origem e, no formulario, a origem gravada (so leitura)', async () => {
     await render(<FrotasEntityPage entityKey="viagens" />);
     expect([...container.querySelectorAll('thead th')].map((th) => th.textContent)).toContain('Origem');
     expect(container.querySelector('tbody tr').textContent).toContain('Fabrica');
     await clicar(editarLinha(0));
-    expect(grupo('Origem').querySelector('input').value).toBe('Fabrica');
+    expect(grupo('Origem').querySelector('input')).toBeNull();
+    expect(grupo('Origem').querySelector('[data-testid="origem-gravada"]').textContent).toBe('Origem gravada: Fabrica');
   });
 });
 

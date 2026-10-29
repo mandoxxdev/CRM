@@ -22,6 +22,8 @@ const FrotasEntityPage = ({ entityKey }) => {
   const [veiculos, setVeiculos] = useState([]);
   const [motoristas, setMotoristas] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
+  // Frota Etapa 9 (RN-F9.18): os destinos ativos, para o select da Viagem (config.needsDestinos).
+  const [destinos, setDestinos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState({});
@@ -36,13 +38,23 @@ const FrotasEntityPage = ({ entityKey }) => {
     if (config.needsMotoristas) promises.push(api.get('/frotas/motoristas').catch(() => ({ data: [] })));
     // Frota Etapa 1 (T7, F2-5): usuarios ativos com o motorista a que cada um ja esta ligado.
     if (config.needsUsuariosVinculaveis) promises.push(api.get('/frotas/usuarios-vinculaveis').catch(() => ({ data: [] })));
+    if (config.needsDestinos) promises.push(api.get('/frotas/destinos').catch(() => ({ data: [] })));
     const results = await Promise.all(promises);
     setMeta(results[0]);
     let idx = 1;
     if (config.needsVeiculos) { setVeiculos(results[idx]?.data || []); idx += 1; }
     if (config.needsMotoristas) { setMotoristas(results[idx]?.data || []); idx += 1; }
-    if (config.needsUsuariosVinculaveis) { setUsuarios(Array.isArray(results[idx]?.data) ? results[idx].data : []); }
+    if (config.needsUsuariosVinculaveis) { setUsuarios(Array.isArray(results[idx]?.data) ? results[idx].data : []); idx += 1; }
+    if (config.needsDestinos) { setDestinos(Array.isArray(results[idx]?.data) ? results[idx].data : []); }
   }, [config]);
+
+  // Frota Etapa 9 (A9): reler so os destinos (o 400 "Destino nao encontrado" ao salvar a viagem).
+  const recarregarDestinos = useCallback(async () => {
+    try {
+      const res = await api.get('/frotas/destinos');
+      setDestinos(Array.isArray(res?.data) ? res.data : []);
+    } catch (_) { /* fica a lista que estava */ }
+  }, []);
 
   const loadRows = useCallback(async () => {
     setLoading(true);
@@ -113,7 +125,9 @@ const FrotasEntityPage = ({ entityKey }) => {
       Object.keys(payload).forEach((k) => {
         if (payload[k] === '') payload[k] = null;
       });
-      ['veiculo_id', 'motorista_id', 'tipo_id', 'ano', 'alerta_dias_antes', 'pontos', 'requisicao_almox_id', 'consumo_medio_esperado', 'horimetro_atual', 'usuario_id'].forEach((k) => {
+      ['veiculo_id', 'motorista_id', 'tipo_id', 'ano', 'alerta_dias_antes', 'pontos', 'requisicao_almox_id', 'consumo_medio_esperado', 'horimetro_atual', 'usuario_id',
+        // Frota Etapa 9 (A3): o id do destino escolhido na Viagem vai como numero (o servidor tambem aceita string de digitos).
+        'destino_id'].forEach((k) => {
         if (payload[k] != null && payload[k] !== '') payload[k] = Number(payload[k]);
       });
       ['pneus_ok', 'oleo_ok', 'luzes_ok', 'freios_ok', 'extintor_ok', 'documentos_ok', 'limpeza_ok'].forEach((k) => {
@@ -131,6 +145,8 @@ const FrotasEntityPage = ({ entityKey }) => {
       loadRows();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao salvar');
+      // Frota Etapa 9 (A9): a entidade reage a recusa (a Viagem recarrega os destinos e limpa a selecao no "Destino nao encontrado").
+      if (config.aoFalharSalvar) config.aoFalharSalvar(err, { form, setForm, editing, recarregarDestinos });
     } finally {
       setSaving(false);
     }
@@ -150,7 +166,8 @@ const FrotasEntityPage = ({ entityKey }) => {
     return val;
   };
 
-  const formFields = config.formFields(meta, form, setForm, veiculos, motoristas, { usuarios, editing });
+  const aux = { usuarios, editing, destinos, setDestinos, recarregarDestinos };
+  const formFields = config.formFields(meta, form, setForm, veiculos, motoristas, aux);
   const ehCampoTelefone = (key) => (config.camposTelefone || []).includes(key);
 
   if (!config) return <div className="frotas-page">Entidade não configurada.</div>;
@@ -256,6 +273,12 @@ const FrotasEntityPage = ({ entityKey }) => {
               <div className="frotas-modal-body">
                 <div className="frotas-form-grid">
                   {formFields.map((field) => {
+                    // Frota Etapa 9: campo que a propria entidade desenha (endereco do destino, origem e destino da viagem). O componente
+                    // devolve itens do grid (um ou mais .frotas-form-group) e mexe no form pelo setForm.
+                    if (field.type === 'componente') {
+                      const Componente = field.Componente;
+                      return <Componente key={field.key} form={form} setForm={setForm} editing={editing} aux={aux} meta={meta} />;
+                    }
                     if (field.type === 'checks') {
                       return (
                         <div key={field.key} className="frotas-form-group full">
