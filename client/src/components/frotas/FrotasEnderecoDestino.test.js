@@ -456,3 +456,114 @@ describe('RN-F9.17 / A2 — tela Destinos do gestor', () => {
     expect(campo('cep').value).toBe('');
   });
 });
+
+/* ------------------------------------------------------------------------------------------------ Fase 5 (revisao) */
+
+function tecla(nome, key = 'Enter') {
+  const el = campo(nome);
+  if (!el) throw new Error(`campo ${nome} nao encontrado`);
+  let naoImpedido;
+  act(() => { naoImpedido = el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })); });
+  return naoImpedido; // false = preventDefault chamado
+}
+
+describe('Fase 5 — revisao do C1', () => {
+  test('Fase5-F1 gestor editando destino com CEP 09700-000 e rua corrigida a mao: sair do CEP sem mudar nao consulta nem apaga a rua; mudar o CEP e sair consulta', async () => {
+    mockUsuario = ADMIN;
+    const linha = { ...DESTINOS_GESTOR[0], cep: '09700-000', logradouro: 'Rua Marechal' };
+    api.get.mockImplementation((url) => {
+      const m = /^\/cep\/(.*)$/.exec(url);
+      if (m) return respostaCep(m[1]);
+      if (url === '/frotas/destinos') return Promise.resolve({ data: [linha] });
+      return Promise.resolve({ data: [] });
+    });
+    await montar(<MemoryRouter><FrotasDestinos /></MemoryRouter>);
+    await clicar(editarLinha(0));
+    expect(campo('cep').value).toBe('09700-000');
+    digitar('logradouro', 'Rua Marechal Deodoro');
+    await sair('cep');
+    expect(chamadasCep()).toHaveLength(0);
+    expect(campo('logradouro').value).toBe('Rua Marechal Deodoro');
+    // controle: o CEP mudou -> sair consulta e substitui
+    digitar('cep', '09844100');
+    await sair('cep');
+    expect(chamadasCep()).toEqual([['/cep/09844100']]);
+    expect(campo('logradouro').value).toBe('Avenida Angelo Demarchi');
+  });
+
+  test('Fase5-F1 depois de uma busca, corrigir a rua a mao e passar de novo pelo CEP nao consulta; o botao Buscar sempre consulta', async () => {
+    await montar(<Harness inicial={PREENCHIDO} />);
+    digitar('cep', '09844100');
+    await sair('cep');
+    expect(chamadasCep()).toHaveLength(1);
+    digitar('logradouro', 'Av. Angelo Demarchi (fundos)');
+    await sair('cep');
+    expect(chamadasCep()).toHaveLength(1);
+    expect(campo('logradouro').value).toBe('Av. Angelo Demarchi (fundos)');
+    await clicar(botao('Buscar'));
+    expect(chamadasCep()).toHaveLength(2);
+    expect(campo('logradouro').value).toBe('Avenida Angelo Demarchi');
+  });
+
+  test('Fase5-F2 portal: Enter nos campos do "+ Novo destino" nao envia a saida; Enter no CEP busca', async () => {
+    respostaInicio = inicio();
+    await abrirSaida();
+    await clicar(botao('+ Novo destino'));
+    digitar('novo_destino_nome', 'Obra Norte');
+    ['novo_destino_nome', 'novo_destino_logradouro', 'novo_destino_numero', 'novo_destino_complemento', 'novo_destino_bairro',
+      'novo_destino_cidade'].forEach((n) => expect(tecla(n)).toBe(false));
+    expect(chamadasCep()).toHaveLength(0);
+    // outra tecla segue normal (controle: o teste sabe ver um keydown nao impedido)
+    expect(tecla('novo_destino_nome', 'a')).toBe(true);
+    digitar('novo_destino_cep', '09844100');
+    let r;
+    await act(async () => { r = tecla('novo_destino_cep'); });
+    await act(async () => {});
+    expect(r).toBe(false);
+    expect(chamadasCep()).toEqual([['/cep/09844100']]);
+    expect(campo('novo_destino_logradouro').value).toBe('Avenida Angelo Demarchi');
+    expect(api.post).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-testid="novo-destino"]')).not.toBeNull();
+  });
+
+  test('Fase5-F2 metade negativa: na tela Destinos do gestor o Enter nos campos de endereco segue enviando o formulario do destino', async () => {
+    await montarDestinos();
+    await clicar(editarLinha(0));
+    expect(tecla('logradouro')).toBe(true);
+    expect(tecla('cep')).toBe(true);
+    expect(chamadasCep()).toHaveLength(0);
+  });
+
+  test('Fase5-F3 com a busca do CEP correndo, "Adicionar" fica desligado e mostra "Buscando CEP…"; ao voltar, o POST leva a rua', async () => {
+    let soltar;
+    respostaCep = () => new Promise((resolve) => { soltar = () => resolve({ data: CEP_OK }); });
+    respostaInicio = inicio();
+    api.post.mockResolvedValueOnce({ data: { id: 9, nome: 'GMP Filial', cidade: 'São Bernardo do Campo', uf: 'SP', ativo: 1 } });
+    await abrirSaida();
+    await clicar(botao('+ Novo destino'));
+    digitar('novo_destino_nome', 'GMP Filial');
+    digitar('novo_destino_cep', '09844100');
+    await sair('novo_destino_cep');
+    expect(botao('Adicionar')).toBeUndefined();
+    const pendente = botao('Buscando CEP…');
+    expect(pendente.disabled).toBe(true);
+    await clicar(pendente);
+    expect(api.post).not.toHaveBeenCalled();
+    await act(async () => { soltar(); });
+    await act(async () => {});
+    expect(botao('Adicionar').disabled).toBe(false);
+    digitar('novo_destino_numero', '500');
+    await clicar(botao('Adicionar'));
+    expect(api.post).toHaveBeenCalledTimes(1);
+    expect(api.post.mock.calls[0][1]).toEqual(expect.objectContaining({ logradouro: 'Avenida Angelo Demarchi', bairro: 'Batistini' }));
+  });
+
+  test('Fase5-F5 RN-F9.13 a UF que vem minuscula da busca entra maiuscula (sp -> SP)', async () => {
+    respostaCep = () => Promise.resolve({ data: { ...CEP_OK, estado: 'sp' } });
+    await montar(<Harness inicial={PREENCHIDO} />);
+    digitar('cep', '09844100');
+    await clicar(botao('Buscar'));
+    expect(ultimoValor.uf).toBe('SP');
+    expect(campo('uf').value).toBe('SP');
+  });
+});

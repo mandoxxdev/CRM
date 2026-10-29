@@ -13,7 +13,7 @@
  * Os campos nao levam `required`: o bloco do portal fica dentro do formulario da saida (o navegador travaria o Salvar da saida com o
  * bloco aberto) e o formulario do gestor reativa destino antigo sem endereco (A2).
  */
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { somenteDigitos, formatarCEP } from '../../utils/cnpj';
@@ -59,9 +59,12 @@ const LIMITES = { logradouro: 150, numero: 20, complemento: 60, bairro: 80, cida
  * @param variante   'portal' (celular, classes portal-*) ou 'gestor' (itens do grid do modal, classes frotas-form-group)
  * @param prefixo    prefixo dos `name` dos campos (ex.: 'novo_destino_')
  * @param enderecoAntigo  A2: texto do endereco antigo (destino gravado antes da Etapa 9), mostrado so para leitura acima dos campos
+ * @param enterBusca  Fase 5 (F2): Enter no CEP busca (em vez de enviar o formulario de fora). So o "+ Novo destino" liga: na tela
+ *                    Destinos o Enter continua salvando o destino, como em qualquer formulario.
+ * @param aoMudarBusca  Fase 5 (F3): avisa o pai quando a busca do CEP comeca (true) e termina (false).
  */
 export default function EnderecoDestinoCampos({
-  valor, aoMudar, variante = 'portal', prefixo = '', desabilitado = false, enderecoAntigo = '',
+  valor, aoMudar, variante = 'portal', prefixo = '', desabilitado = false, enderecoAntigo = '', enterBusca = false, aoMudarBusca,
 }) {
   const v = { ...ENDERECO_VAZIO, ...(valor || {}) };
   const [buscando, setBuscando] = useState(false);
@@ -69,6 +72,12 @@ export default function EnderecoDestinoCampos({
   const emAndamentoRef = useRef(null); // digitos da consulta em curso (sair do campo + clicar Buscar nao consulta duas vezes)
   const cepAtualRef = useRef(somenteDigitos(v.cep));
   cepAtualRef.current = somenteDigitos(v.cep);
+  // Fase 5 (F1): o ultimo CEP consultado — de inicio, o CEP com que o formulario abriu. Sair do campo so consulta quando os 8 digitos
+  // mudaram: como a busca SUBSTITUI a rua (A6), passar pelo CEP sem mexer apagava a rua corrigida a mao. O botao Buscar sempre consulta.
+  const ultimoBuscadoRef = useRef(somenteDigitos(v.cep));
+  const aoMudarBuscaRef = useRef(aoMudarBusca);
+  aoMudarBuscaRef.current = aoMudarBusca;
+  useEffect(() => { if (aoMudarBuscaRef.current) aoMudarBuscaRef.current(buscando); }, [buscando]);
 
   const buscar = async (origem) => {
     const digitos = somenteDigitos(v.cep);
@@ -78,6 +87,8 @@ export default function EnderecoDestinoCampos({
       return;
     }
     if (emAndamentoRef.current === digitos) return;
+    if (origem === 'blur' && ultimoBuscadoRef.current === digitos) return;
+    ultimoBuscadoRef.current = digitos;
     emAndamentoRef.current = digitos;
     setBuscando(true);
     setAviso('');
@@ -118,6 +129,7 @@ export default function EnderecoDestinoCampos({
         aria-label="CEP"
         onChange={(e) => { aoMudar({ cep: formatarCEP(e.target.value.slice(0, 9)) }); setAviso(''); }}
         onBlur={() => buscar('blur')}
+        onKeyDown={enterBusca ? (e) => { if (e.key === 'Enter') { e.preventDefault(); buscar('botao'); } } : undefined}
       />
       <button
         type="button"
@@ -237,9 +249,11 @@ export function NovoDestinoBloco({
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
   const salvandoRef = useRef(false);
+  // Fase 5 (F3): Adicionar com a busca do CEP correndo mandava a rua vazia e voltava um 400 falso — fica desligado ate ela voltar.
+  const [buscandoCep, setBuscandoCep] = useState(false);
 
   const adicionar = async () => {
-    if (salvandoRef.current) return;
+    if (salvandoRef.current || buscandoCep) return;
     const corpo = corpoDoNovoDestino(nome, endereco);
     if (!corpo.nome) {
       setErro('Informe o nome do destino');
@@ -269,6 +283,10 @@ export function NovoDestinoBloco({
   };
 
   const portal = variante === 'portal';
+  // Fase 5 (F2): o bloco mora dentro do <form> da saida (portal) e do modal da viagem (gestor); Enter num campo dele enviava o formulario
+  // de fora, registrando a saida/viagem sem o destino. Aqui o Enter nao faz nada (no CEP ele busca — EnderecoDestinoCampos enterBusca).
+  const segurarEnter = (e) => { if (e.key === 'Enter' && e.target.tagName !== 'BUTTON') e.preventDefault(); };
+  const rotuloAdicionar = buscandoCep ? 'Buscando CEP…' : 'Adicionar';
   const campoNome = (
     <input
       type="text"
@@ -286,6 +304,8 @@ export function NovoDestinoBloco({
       variante={variante}
       prefixo="novo_destino_"
       desabilitado={salvando}
+      enterBusca
+      aoMudarBusca={setBuscandoCep}
     />
   );
   const erroBloco = erro
@@ -294,7 +314,7 @@ export function NovoDestinoBloco({
 
   if (portal) {
     return (
-      <div className="portal-novo-destino" data-testid="novo-destino">
+      <div className="portal-novo-destino" data-testid="novo-destino" onKeyDown={segurarEnter}>
         <label className="portal-campo">
           <span>Nome</span>
           {campoNome}
@@ -303,13 +323,13 @@ export function NovoDestinoBloco({
         {erroBloco}
         <div className="portal-linha">
           <button type="button" className="portal-botao secundario" disabled={salvando} onClick={onCancelar}>Cancelar</button>
-          <button type="button" className="portal-botao" disabled={salvando} onClick={adicionar}>Adicionar</button>
+          <button type="button" className="portal-botao" disabled={salvando || buscandoCep} onClick={adicionar}>{rotuloAdicionar}</button>
         </div>
       </div>
     );
   }
   return (
-    <div className="frotas-form-group full frotas-novo-destino" data-testid="novo-destino">
+    <div className="frotas-form-group full frotas-novo-destino" data-testid="novo-destino" onKeyDown={segurarEnter}>
       <div className="frotas-novo-destino-titulo">Novo destino</div>
       <div className="frotas-form-grid">
         <div className="frotas-form-group full">
@@ -321,7 +341,7 @@ export function NovoDestinoBloco({
       {erroBloco}
       <div className="frotas-novo-destino-acoes">
         <button type="button" className="frotas-btn frotas-btn-secondary" disabled={salvando} onClick={onCancelar}>Cancelar</button>
-        <button type="button" className="frotas-btn frotas-btn-primary" disabled={salvando} onClick={adicionar}>Adicionar</button>
+        <button type="button" className="frotas-btn frotas-btn-primary" disabled={salvando || buscandoCep} onClick={adicionar}>{rotuloAdicionar}</button>
       </div>
     </div>
   );

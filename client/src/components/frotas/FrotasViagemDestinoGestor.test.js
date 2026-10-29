@@ -276,7 +276,7 @@ describe('RN-F9.19 / A10 / A11 — Editar viagem', () => {
 });
 
 describe('A9 — 400 "Destino não encontrado" ao salvar', () => {
-  test('A9 relê os destinos, tira o desativado da lista e limpa a selecao; o toast mostra a mensagem do servidor', async () => {
+  test('A9 / Fase5-F4 relê os destinos, tira o desativado da lista e limpa a selecao (o Salvar seguinte manda destino_id null); o toast mostra a mensagem do servidor', async () => {
     api.post.mockRejectedValueOnce({ response: { status: 400, data: { error: 'Destino não encontrado' } } });
     await novaViagem();
     digitar(selectDestino(), '2');
@@ -288,6 +288,11 @@ describe('A9 — 400 "Destino não encontrado" ao salvar', () => {
     expect(opcoes()).toEqual([['', 'Escolha o destino…'], ['1', 'Cliente Alfa — Diadema/SP']]);
     expect(selectDestino().value).toBe('');
     expect(container.querySelector('.frotas-modal')).not.toBeNull();
+    // Fase5-F4: o select controlado mostra '' mesmo com a opcao sumida; o que prova a limpeza e o corpo do proximo Salvar.
+    await salvar();
+    const corpos = postsDe('/frotas/viagens');
+    expect(corpos).toHaveLength(2);
+    expect(corpos[1][1].destino_id).toBeNull();
   });
 
   test('A9 metade negativa: outro 400 nao relê os destinos nem limpa a selecao', async () => {
