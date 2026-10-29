@@ -1,0 +1,10 @@
+*Concluído — Frota: endereço do destino, destino na viagem e ajuda da tela*
+_29/10/2026_
+
+1. Destino com endereço completo — 1ª parte: celular do motorista — estimado 3h · realizado 2h30
+2. Destino com endereço completo — 2ª parte: tela de Destinos — estimado 1h30 · realizado 1h30
+3. Destino escolhido da lista na Nova Viagem — estimado 2h30 · realizado 2h
+4. Origem com o endereço da GMP — estimado 1h30 · realizado 1h30
+5. Retirada do botão de ajuda "?" do canto da tela — estimado 1h30 · realizado 1h30
+
+*Total: estimado 10h · realizado 9h*
