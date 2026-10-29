@@ -209,6 +209,10 @@ DDL do `index.js`.
 
 ## Testes
 
+**Corrida na fila de viagens (desde 2026-10-29, `b5d77cd7`):** o teste segura a fila com um gancho (`naFilaDeViagens(() => gancho)`),
+dispara a requisição e espera `esperarFilaDeViagens(2)` (`tests/helpers/esperarFilaDeViagens.js`, que lê `quantosNaFila()`) antes do gesto
+concorrente — nunca `sleep`. Se não chegar em 5 s, solta o gancho e falha (senão o arquivo trava).
+
 Rodados no fechamento da Etapa 1 (2026-10-23); os da Etapa 2 estão no fim desta seção.
 
 | Arquivo | Resultado |
