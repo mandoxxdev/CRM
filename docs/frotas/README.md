@@ -1,6 +1,10 @@
 # Módulo Frota — guia do que existe hoje
 
-> **Onde paramos:** **Etapa 8 — administrador pela tela, destinos cadastrados, condutor do carro de funcionário, saída da GMP e
+> **Onde paramos:** **Etapa 9 — endereço do destino (CEP ou à mão), destino da lista na Viagem do gestor e o endereço da GMP na
+> origem — entregue em 2026-10-29** (na `main`, `d7ba0b09` a `70e9aa76`, mais o fechamento). O "+ Novo destino", a tela **Destinos** e a **Nova Viagem** do
+> gestor pedem o endereço completo — o **CEP** preenche rua, bairro, cidade e estado; quem não sabe, digita —; a Nova Viagem escolhe o
+> destino da **lista** (antes era texto); a origem mostra **Saindo de: GMP** com o endereço de **Configurações → Empresa**. No mesmo dia
+> saiu o botão **?** de ajuda do canto da tela (`d5a9d565`). Antes: **Etapa 8 — administrador pela tela, destinos cadastrados, condutor do carro de funcionário, saída da GMP e
 > abastecimento sem foto — entregue em 2026-10-28** (na `main`, `a8a8d885` a `d38f0a71`, mais o fechamento). Cinco pedidos da empresa de
 > uma vez: em **Perfis de acesso** o gestor dá e tira **Administrador de Frota**; o **Abastecimento** do portal não pede mais foto; a
 > **Saída** sai sempre **da GMP**, escolhe o destino numa **lista que o próprio motorista alimenta** (**+ Novo destino**) e, no carro
@@ -387,7 +391,35 @@ um usuário *Bruno* idem.
     desativado. Escolha outro."*.
 11. **Carro comum.** Desmarque **Liberado para funcionários**; na Saída da *Ana* o campo de condutor não aparece.
 
-## O que as Etapas 1 a 8 **não** cobrem
+## Roteiro de teste manual (Etapa 9: endereço do destino, destino na Viagem do gestor, origem com endereço)
+
+Antes: em **Configurações → Empresa**, confira endereço, cidade, estado e CEP da GMP. Precisa de internet para a busca do CEP.
+
+1. Entre como motorista → **Meu painel → Saída** → escolha um veículo. Confira *"Saindo de: GMP"* e o endereço da GMP embaixo.
+2. **+ Novo destino** → Nome *Obra Teste* → CEP *09844100* → **Buscar**. Confira que Rua, Bairro, Cidade e Estado foram preenchidos e
+   Número e Complemento não. Digite o Número → **Adicionar** → *"Destino adicionado"*; a lista mostra *"Obra Teste — (cidade)/(UF)"*.
+3. **+ Novo destino** → Nome *Cliente Teste*, sem CEP, preencha Rua, Número *S/N*, Cidade e Estado e **deixe o Bairro vazio** →
+   **Adicionar** → *"Informe o bairro do destino"*. Preencha o Bairro → **Adicionar** → aceito.
+4. **+ Novo destino** → CEP *0984* → **Buscar** → *"CEP deve ter 8 dígitos"*; CEP *00000000* → **Buscar** → *"CEP não encontrado —
+   preencha o endereço à mão"*.
+5. **+ Novo destino** → Nome *obra teste* (minúsculas), nada mais → **Adicionar** → *"Esse destino já existia — selecionado."*.
+6. Com o bloco aberto, tecle **Enter** no campo Nome: a Saída **não** é gravada. Enter no CEP: busca o CEP.
+7. Corrija a Rua à mão, clique no CEP e saia dele sem mudar nada: a Rua corrigida **continua**.
+8. Como gestor: **Frota → Viagens → Nova Viagem**. Confira a linha *"Saindo de: GMP — (endereço)"* (não há campo Origem), escolha
+   **Destino** *Obra Teste — …* e salve. Na lista: Origem *GMP*, Destino *Obra Teste*.
+9. **Nova Viagem → + Novo destino** com *Obra Teste* → *"Esse destino já estava cadastrado — selecionamos ele."*.
+10. Edite uma viagem antiga (de antes desta etapa): confira *"Destino gravado: … Escolha da lista só se quiser trocar."* e **Manter o
+    destino gravado**; salve sem mexer → nada muda.
+11. **Destinos** → **Excluir** *Obra Teste*. Edite a viagem do passo 8: o destino aparece *"Obra Teste (desativado)"*; mude só o km → salva.
+12. **Destinos → Mostrar: Todos** → edite um destino da Etapa 8 (sem rua): aparece *"Endereço antigo: …"*. Status **Ativo** → **Salvar**
+    → reativado sem pedir endereço. Preencha só o CEP e salve → *"Informe a rua (logradouro) do destino"*.
+13. **Destinos** → busque *09844100* (sem traço) → acha *Obra Teste*.
+14. Em qualquer tela: o botão **?** do canto inferior direito não aparece mais.
+
+**Não cobre:** mapa/distância; endereço na planilha (a coluna Destino continua com o nome); conferir se o CEP é da cidade digitada;
+a origem pela API continua aceitando outro lugar (só a tela é fixa).
+
+## O que as Etapas 1 a 9 **não** cobrem
 
 - Saber **quem** mudou um perfil (não há trilha); lembrar o Consulta de quem foi administrador **pelo cadastro de usuário** e deixou de
   ser; o menu de quem **deixa** de ser administrador só muda ao recarregar a página. *(Dizia: "Dar Administrador de Frota pela tela de

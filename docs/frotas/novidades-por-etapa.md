@@ -4,8 +4,10 @@
 > Para quem **usa** o sistema (sem número de etapa nem histórico), o documento é o
 > [`manual-do-sistema.md`](manual-do-sistema.md). Guia com roteiro de teste: [`README.md`](README.md).
 >
-> **Onde estamos:** **Etapa 8 (administrador pela tela, destinos, condutor, saída da GMP, abastecimento sem foto) entregue** em
-> 2026-10-28, na `main` (`a8a8d885` a `d38f0a71`, mais o fechamento) — os cinco pedidos da empresa daquele dia (B76–B84, C22–C23, E25).
+> **Onde estamos:** **Etapa 9 (endereço do destino com CEP ou à mão, destino da lista na Viagem do gestor, endereço da GMP na origem)
+> entregue** em 2026-10-29, na `main` (`d7ba0b09` a `70e9aa76`, mais o fechamento) — pedido do André ao não achar a lista na tela do gestor
+> (B89–B99, C27–C28, D19, E27–E28); no mesmo dia saiu o botão **?** de ajuda (`d5a9d565`). Antes: **Etapa 8 (administrador pela tela,
+> destinos, condutor, saída da GMP, abastecimento sem foto) entregue** em 2026-10-28, na `main` (`a8a8d885` a `d38f0a71`, mais o fechamento) — os cinco pedidos da empresa daquele dia (B76–B84, C22–C23, E25).
 > Antes: Etapa 7 (pequena, 2026-10-28) e Etapa 6 (tratar a pendência do registro, 2026-10-23, `492a0d87` a `8fa7ece2`). **O módulo está
 > pronto para uso**; o que sobra depende do André ou é pequeno (B72; "Onde estamos e o que vem a seguir", no fim). Antes, em 2026-10-23: Etapa 5 (foto da avaria e do cupom), Etapa 4 (relatórios fechados), Etapa 3 (km e horímetro no portal), Etapa 2 (perfil Consulta/Motorista
 > pela tela) e Etapa 1 (portal do motorista).
@@ -211,8 +213,8 @@ ORDER BY c.data_checklist;
 | B76 | F8 | **Administrador de Frota pela tela Perfis de acesso escreve `frota` em `admin_modulos` do usuário** (a mesma fonte do checkbox "administra o módulo" do cadastro de usuário) e qualquer Administrador de Frota pode dar e tirar | gravar só na tabela de perfil do Frota; exigir administrador do sistema para dar | o sincronismo do núcleo apaga a linha de perfil em todo save do cadastro de usuário — a gravação só na tabela sumiria ao trocar um telefone (medido). Exigir administrador do sistema contraria o pedido ("permitir setar como admin do módulo" **na tela do módulo**). Alcance: só o item `frota`; reversível pela mesma tela ou pelo cadastro |
 | B77 | F8 | **Tirar a foto só do formulário do portal e do + Foto de Meus registros**; o servidor continua aceitando foto de abastecimento e a coluna **Fotos** da lista do gestor fica | tirar a coluna e recusar no servidor | o pedido foi sobre o **campo**; o caminho de legado (foto antiga, foto pela API) custa zero e voltar atrás é restaurar um bloco da tela |
 | B78 | F8 | **Só o portal exige o condutor** em carro liberado para funcionários; o formulário de Viagens do gestor aceita condutor opcional | exigir também no gestor | o escritório lança atrasado e nem sempre sabe quem dirigiu; na saída, ao vivo, quem registra sabe |
-| B79 | F8 | **No formulário de Viagens do gestor o Destino continua texto livre**; a lista de destinos alimenta o portal (seletor + "+ Novo destino") e tem tela própria (Frota → Destinos) | seletor também no gestor | o escritório digita o que a nota diz; o motorista é quem precisa de lista rápida. Mudar é trocar um campo da config |
-| B80 | F8 | **Condutor, origem e destino não se apagam pela tela de Viagens do gestor** (campo vazio = mantém o gravado); corrige-se digitando outro valor | tratar vazio como "limpar" | é o comportamento de hoje para origem/destino (a página converte vazio em nulo e o servidor mantém); mudar só para o condutor criaria dois comportamentos no mesmo formulário |
+| B79 | F8 | ~~**No formulário de Viagens do gestor o Destino continua texto livre**~~ — **desfeita na Etapa 9 (B89)**: o André procurou a lista justamente nesta tela e não achou. Dizia: a lista de destinos alimenta o portal (seletor + "+ Novo destino") e tem tela própria (Frota → Destinos) | seletor também no gestor | o escritório digita o que a nota diz; o motorista é quem precisa de lista rápida. Mudar é trocar um campo da config |
+| B80 | F8 | **Condutor, origem e destino não se apagam pela tela de Viagens do gestor** (desde a Etapa 9 a origem não é mais campo e o destino é lista: a regra continua — vazio mantém) (campo vazio = mantém o gravado); corrige-se digitando outro valor | tratar vazio como "limpar" | é o comportamento de hoje para origem/destino (a página converte vazio em nulo e o servidor mantém); mudar só para o condutor criaria dois comportamentos no mesmo formulário |
 | B81 | F8 | **O cadastro de usuário aberto ANTES de dar Administrador pela tela do Frota desfaz o Administrador ao salvar** (ele manda a lista de módulos que carregou). Fixado em teste e declarado, não corrigido | o núcleo mandar só o que mudou | mexer no formulário de usuário do núcleo é fora do módulo; a janela é "duas telas abertas ao mesmo tempo" e o gesto é repetível pela tela do Frota. Molde do C9 |
 | B82 | F8 | **"+ Novo destino" com o nome de um destino desativado cria outro ativo** (o índice único vale só entre ativos); reativar o antigo depois dá *"Destino já cadastrado"* | recusar e mandar reativar | o motorista não vê desativados e não pode reativar (é do gestor); recusar o deixaria sem destino na hora da saída. O gestor vê os dois em **Mostrar: Todos** |
 | B83 | F8 (G1) | **Ao tirar o Administrador pela tela, o sistema só reescreve `admin_modulos` e grava o perfil pedido**; não apaga a linha espelho `ADMIN_FROTA` em separado (o perfil novo a sobrescreve; "voltar ao padrão" a apaga inteira). Dar Administrador a quem já é → 200, sem mudar nada | o DELETE da linha espelho prescrito no plano | a sabotagem que removia esse DELETE **não derrubou teste nenhum** — era código sem efeito observável; código morto confunde a próxima sessão |
@@ -221,6 +223,17 @@ ORDER BY c.data_checklist;
 | B86 | F8 (Fase 5) | **Destino com acento: a duplicidade e a ordem só ignoram maiúscula em letra sem acento** ("Área Norte" e "área norte" cabem os dois; acentuados vão para o fim da lista) | coluna-chave sem acento e minúscula com o índice nela | o SQLite só sabe ignorar caixa de A–Z; a chave exige migração e normalização em três lugares. O gestor junta os repetidos pela tela Destinos |
 | B87 | F8 (Fase 5) | **A viagem aprovada que já tem condutor ainda pede o condutor na Saída** do carro liberado (o motorista digita de novo; se digitar outro, vale o novo) | aceitar o condutor da aprovada | quem sai é quem sabe quem está dirigindo agora; aprovar com condutor é raro (o gestor quase não aprova viagem — B4) |
 | B88 | F8 (Fase 5) | **A busca das listas não escapa `%` e `_`** (buscar "%" traz tudo) | escapar | é o comportamento de todas as listas do Frota desde antes da etapa; não grava nada errado |
+| B89 | F9 | **A Viagem do gestor escolhe o destino da lista** (com "+ Novo destino" e o mesmo endereço do portal); desfaz a B79 | manter texto livre | o André procurou a lista na tela do gestor e não achou: a B79 tinha deixado a lista só no celular. A API ainda aceita o destino em texto (integração antiga), a tela não manda mais |
+| B90 | F9 | **Endereço obrigatório em destino novo** — rua, número (ou S/N), bairro, cidade e estado — **inclusive no "+" do motorista**; CEP e complemento opcionais | endereço opcional (como na Etapa 8) | o André pediu "cadastro de endereço mais rigoroso"; o CEP fica opcional porque o motorista na rua pode não saber. Custo: o "+" ficou mais longo no celular |
+| B91 | F9 | **O sistema não consulta o CEP ao gravar nem confere CEP × cidade**: a busca é só ajuda para preencher; vale o que a pessoa confirmou | validar no gravar | consultar o correio no gravar faria a Saída depender de um serviço de fora (fora do ar = ninguém sai); CEP errado se corrige pela tela Destinos |
+| B92 | F9 | **Destino antigo (só nome / endereço texto) continua como está**; o gestor completa ao editar. Reativar ou renomear sem tocar no endereço passa; preencher **qualquer** campo do endereço exige o endereço inteiro | obrigar a completar antes de reativar | a revisão do plano mostrou que, sem isso, um destino antigo desativado nunca mais voltava pela tela (o formulário mandava os campos vazios e levava *"Informe a rua…"*) |
+| B93 | F9 | **O CEP troca rua, bairro, cidade e estado — inclusive deixando em branco o que o correio não tem**; número e complemento nunca | só preencher os vazios (como o cadastro de fornecedor) | trocar o CEP de um destino tem de trocar a rua junto; com "só os vazios", um CEP de cidade inteira deixava a rua da cidade antiga. Na Fase 5, a busca ao sair do campo passou a rodar **só quando o CEP mudou** (senão um Tab apagava a rua digitada à mão) |
+| B94 | F9 | **O endereço da origem vem de Configurações → Empresa** (o mesmo do pedido de compra), lido na hora; a viagem guarda só "GMP" | cadastrar a GMP como destino; gravar o endereço em cada viagem | um lugar só para o endereço da empresa; se ela mudar, as viagens antigas passam a mostrar o endereço novo (aceito) |
+| B95 | F9 | **A origem "fixa" é da tela**: a API continua aceitando outra origem em texto (de quem pode registrar viagem, inclusive o Motorista) e a grava | recusar origem diferente de GMP | compatibilidade com quem lança pela API e com viagens antigas que saíram de outro lugar (a tela as mostra como *"Origem gravada: …"* e mantém). Achado da revisão de permissões, declarado |
+| B96 | F9 | **Edição de viagem pela API sem `destino_id` mas com um destino em texto diferente do gravado: grava o texto e desliga a viagem da lista** (fica sem destino cadastrado) | manter o vínculo antigo | senão a viagem diria "Obra X" apontando para o cadastro "Obra Y". A tela nunca manda texto — só a API antiga cai aqui |
+| B97 | F9 | **Destino renomeado: a viagem mantém o nome que tinha; a lista da edição mostra o nome novo** (escolher a mesma opção não renomeia) | renomear a viagem junto | é a regra da Etapa 8 ("a viagem guarda o nome da hora"); o descompasso da tela de edição foi achado da Fase 5 e ficou declarado, não corrigido |
+| B98 | F9 | **Na Viagem do gestor não dá para tirar o destino**: a opção vazia da edição é **Manter o destino gravado** | permitir limpar | é a regra do condutor (B80); limpar sem querer apagaria o destino de uma viagem antiga digitada |
+| B99 | F9 | **A tela continua mandando a origem** (GMP na nova, a gravada na editada) e o servidor também grava GMP quando ela não vem ou está vazia | só o servidor decidir | os dois caminhos chegam no mesmo resultado; a tela mandando mantém o ajuste da Etapa 8 (viagem antiga sem origem ganha GMP ao salvar) mesmo com servidor antigo |
 | B44 | F3 (fechamento) | **Próxima etapa = relatórios fechados**: multas no período (A7), a máquina no relatório (horímetro e consumo em litros por hora) e a aba de multas na planilha | foto da avaria/cupom; seção 3 do formulário | deixa a feature 10 (Relatórios) 🟢 sem infraestrutura nova; foto exige anexo (guardar arquivo, tamanho, quem vê), que é etapa própria; a seção 3 depende da folha inteira |
 
 ### C — furos conhecidos em operação
@@ -293,7 +306,15 @@ ORDER BY c.data_checklist;
   destino), Editar e Excluir dão *"Sem permissão para esta operação"*. O item não está no menu dele; ele cadastra pelo "+ Novo destino" da
   saída.
 
+- **C27 — destino desativado no mesmo instante em que uma viagem é salva com ele** pode ficar gravado na viagem (a fila serializa só as
+  viagens, não o cadastro de destinos). O efeito é o mesmo de desativar um segundo depois: a viagem guarda o nome; nada se perde.
+- **C28 — o CEP da empresa em Configurações aparece como foi digitado** se não tiver 8 números ("CEP 123" sai assim na linha da origem).
+  Com 8 números, sai com traço.
+
 ### D — limitações declaradas (cortes de escopo)
+
+- **D19 — destino sem mapa, distância ou rota** (Etapa 9): o endereço é texto estruturado; a planilha continua com o **nome** do destino,
+  sem o endereço; a origem não é cadastro de endereço (vem de Configurações → Empresa).
 
 - **D1 — sem foto (resolvido na Etapa 5).** *Dizia: "sem foto nem anexo. Nem da avaria, nem do cupom do abastecimento"* — o portal tem
   **Tirar foto** no registro e no abastecimento, e o gestor vê na lista.
@@ -395,6 +416,13 @@ ORDER BY c.data_checklist;
 - **E25 — o roteiro da Etapa 8 (guia, "Roteiro de teste manual (Etapa 8…)") não foi clicado num navegador.** Foi escrito lendo o
   código e os testes de tela, que simulam o servidor. O caminho servidor inteiro foi provado pela rota com login real
   (`frotasEtapa8Integracao`). O "+ Novo destino" e o campo de condutor não foram vistos num celular de verdade.
+- **E27 — verificação final da Etapa 9, rodada em 2026-10-29 depois de `70e9aa76`, sozinha:** `npm run test:api` **565/565 arquivos OK**;
+  `test:almoxarifado` **44/44**; `test:validation` **4/4**; `test:safealter` **3/3**; `test:sqlite` **16/16**; tela **204 suítes,
+  2818/2818**; `build` com `CI=true` **"Compiled successfully."**. Controle positivo em cada parte (servidor 9, tela 8, integração 2,
+  Fase 5 com teste vermelho antes da correção); a revisão de força dos testes rodou 50 sabotagens e achou 2 que passavam (corrigidas).
+- **E28 — o roteiro da Etapa 9 (guia, "Roteiro de teste manual (Etapa 9…)") não foi clicado num navegador**, e a busca de CEP **não foi
+  feita contra o correio de verdade** nesta etapa (os testes simulam a resposta; o serviço de CEP é o mesmo do cadastro de fornecedor,
+  em uso desde as Compras). O Enter do bloco "+ Novo destino" não foi visto num celular de verdade (o "Ir" do teclado).
 - **E10 — o teclado do celular no campo de horímetro** (`inputMode="decimal"`, com vírgula ou ponto conforme o aparelho) não foi
   conferido num celular de verdade.
 
@@ -1050,6 +1078,77 @@ salva depois: o Administrador dado no passo 1 **some** (a tela dele manda a list
 
 ---
 
+## Etapa 9 — Endereço do destino (CEP ou à mão), destino da lista na Viagem do gestor e o endereço da GMP na origem (2026-10-29)
+
+O André abriu **Frota → Viagens → Nova Viagem** e não achou a lista de destinos da Etapa 8: ela só existia no celular do motorista, e
+naquela tela Origem e Destino continuavam sendo digitados. Ele pediu também um **endereço de verdade** para o destino — com o CEP
+preenchendo a rua, ou à mão para quem não sabe o CEP — e, no meio da etapa, que a **origem** mostrasse o endereço da GMP. Agora o
+destino é sempre escolhido de uma lista com endereço completo, nas três telas onde ele aparece, e a origem mostra de onde a viagem sai.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Nova Viagem** (gestor): Origem e Destino digitados | **Saindo de: GMP — (endereço da GMP)**, fixo; **Destino** escolhido da lista, com **+ Novo destino** |
+| "+ Novo destino": Nome e **Endereço (opcional)** num campo só | Nome + **CEP** (com **Buscar**) + Rua, Número, Complemento, Bairro, Cidade, Estado; obrigatórios rua, número, bairro, cidade e estado |
+| Tela **Destinos**: Nome e Endereço em texto | O mesmo formulário com CEP; destino antigo mostra *"Endereço antigo: …"* para completar |
+| Lista do motorista só com o nome ("Obra Beta") | Nome e cidade: *"Obra Beta — São Bernardo do Campo/SP"* |
+| Portal: "Saindo de: GMP" | "Saindo de: GMP" e, embaixo, o endereço cadastrado em **Configurações → Empresa** |
+| Botão **?** de ajuda flutuando no canto da tela (abria o guia "Dashboard Executivo") | Retirado de todas as telas (pedido do André; não era mais usado) |
+
+### As regras, com o cenário exato
+
+**Preparação.** Em **Configurações → Empresa**: endereço *Av. Angelo Demarchi 130, Batistini*, cidade *São Bernardo do Campo*, estado *SP*,
+CEP *09844-100*. Um veículo *BBB2B22*; a motorista *Ana* ligada ao login dela.
+
+**1. A origem mostra a GMP.** Como *Ana*, **Saída → BBB2B22**: *"Saindo de: GMP"* e, embaixo, *"Av. Angelo Demarchi 130, Batistini, São
+Bernardo do Campo/SP, CEP 09844-100"*. Apague o CEP em Configurações e recarregue: a linha termina em *"/SP"*.
+
+**2. CEP que preenche.** **+ Novo destino** → Nome *Obra Beta* → CEP *09844100* → **Buscar**: Rua, Bairro, Cidade e Estado se preenchem
+(Número e Complemento continuam em branco). Número *130* → **Adicionar** → *"Destino adicionado"*; a lista mostra *"Obra Beta — São
+Bernardo do Campo/SP"*, já escolhido.
+
+**3. Sem CEP, à mão.** **+ Novo destino** → Nome *Cliente Zeta*, sem CEP, Rua *Rua A*, Número *S/N*, Bairro *Centro*, Cidade *Diadema*,
+Estado *SP* → **Adicionar** → aceito. Repita sem o bairro → *"Informe o bairro do destino"*.
+
+**4. CEP errado.** CEP *0984* → **Buscar** → *"CEP deve ter 8 dígitos"*. CEP *00000000* → **Buscar** → *"CEP não encontrado — preencha o
+endereço à mão"*. Sem internet → *"Não foi possível consultar o CEP — preencha o endereço à mão"*. Em todos, os campos continuam
+digitáveis.
+
+**5. Nome repetido sem endereço.** **+ Novo destino** → Nome *obra beta*, nada mais → **Adicionar** → *"Esse destino já existia —
+selecionado."* (não pede o endereço: o destino já existe).
+
+**6. Enter não grava a Saída.** Com o bloco "+ Novo destino" aberto, tecle Enter no Nome: nada acontece; Enter no CEP: busca o CEP. A
+Saída só grava pelo **Salvar**.
+
+**7. Viagem do gestor.** Como administrador, **Frota → Viagens → Nova Viagem**: a linha *"Saindo de: GMP — Av. Angelo Demarchi 130,
+Batistini, São Bernardo do Campo/SP, CEP 09844-100"* (não há campo de origem); **Destino** → *Obra Beta — São Bernardo do Campo/SP*;
+salve. Na lista: Origem *GMP*, Destino *Obra Beta*. **+ Novo destino** com *Obra Beta* → *"Esse destino já estava cadastrado —
+selecionamos ele."*.
+
+**8. Viagem antiga.** Edite uma viagem anterior a esta etapa, com destino digitado: aparece *"Destino gravado: (o texto). Escolha da lista
+só se quiser trocar."* e o seletor mostra **Manter o destino gravado**; salve sem mexer → continua igual. Se ela saiu de outro lugar,
+aparece *"Origem gravada: (o texto)"* e a origem é mantida.
+
+**9. Destino desativado.** **Destinos → Excluir** *Obra Beta*. Edite a viagem do passo 7: o destino aparece como *"Obra Beta (desativado)"*;
+mude só o km → salva. Com uma **Nova Viagem** aberta e *Obra Beta* escolhida antes de desativar → **Salvar** → *"Destino não
+encontrado"*; a lista se atualiza e a escolha fica vazia.
+
+**10. Destino antigo.** **Destinos → Mostrar: Todos** → edite um destino cadastrado na Etapa 8 (só nome e endereço texto): aparece
+*"Endereço antigo: (o texto)"* acima dos campos vazios. Status **Ativo** → **Salvar** → reativado, sem pedir endereço. Preencha só o CEP
+e salve → *"Informe a rua (logradouro) do destino"* (começou a completar, tem de completar).
+
+**11. Busca.** **Destinos**, buscar *09844100* (sem traço) ou *Batistini* → acha *Obra Beta*.
+
+### O que esta etapa não cobre
+
+- Mapa, distância ou rota; o endereço na planilha (a coluna Destino continua com o nome) — D19.
+- Conferir se o CEP é da cidade digitada (B91); acento continua contando na duplicidade do nome (B86).
+- A origem pela API continua aceitando outro lugar (B95); na tela ela é fixa.
+- Renomear um destino não renomeia as viagens que já o usaram (B97).
+
+---
+
 ## Onde estamos e o que vem a seguir
 
 - **Feito:** Etapa 1 — portal do motorista (vínculo usuário ↔ motorista, escopo do motorista, km/L pela ordem do km, uma viagem em
@@ -1064,6 +1163,8 @@ salva depois: o Administrador dado no passo 1 **some** (a tela dele manda a list
   Etapa 7 (pequena, 2026-10-28) — o gestor remove uma foto pela lista (D14), sem mexer no servidor.
   Etapa 8 (2026-10-28) — os cinco pedidos da empresa: Administrador de Frota pela tela, abastecimento sem foto, saída da GMP, carro
   liberado para funcionários com condutor, destinos cadastrados pelo motorista (+ Novo destino) e a tela Destinos.
+  Etapa 9 (2026-10-29) — endereço do destino (CEP ou à mão) nas três telas, destino da lista na Viagem do gestor (desfaz a B79),
+  o endereço da GMP na origem; e o botão de ajuda "?" retirado.
 - **O módulo está pronto para uso** (B72). O ciclo do motorista está fechado: registrar → foto → alerta → tratar → ele vê. Não há etapa
   grande nova planejada.
 - **Depende do André:** as placas, modelos e km dos 4 veículos da planilha (V01, V02, V03, C01) para o cadastro inicial; a folha inteira

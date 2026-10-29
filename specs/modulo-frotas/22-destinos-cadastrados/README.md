@@ -27,11 +27,13 @@ e a planilha não muda.
 | RN-F8.34 | 201 seleciona o novo; 409 seleciona o existente e avisa; erro fica no bloco | [x] | `ef71a1b6` |
 | RN-F8.35 | O corpo da saída leva `destino_id`, nunca `destino` texto | [x] | `ef71a1b6` |
 | RN-F8.36 | Tela do gestor **Destinos** (página genérica), menu do gestor e do Consulta, não do motorista | [x] | `37380627` |
-| RN-F8.37 | Viagens do gestor: Destino continua texto (B79) | [x] | `37380627` |
+| RN-F8.37 | ~~Viagens do gestor: Destino continua texto (B79)~~ — **substituída na Etapa 9** (spec 23, B89): a Viagem do gestor escolhe da lista | [x] | `37380627` (desfeito em `97a92f56`) |
 
 ## Decisões (letra B)
 
-- **B79** — no formulário de **Viagens** do gestor o destino continua texto livre (o escritório digita o que a nota diz).
+- **B79** — *dizia: "no formulário de **Viagens** do gestor o destino continua texto livre (o escritório digita o que a nota diz)".*
+  **Estava errado para o uso real:** o André procurou a lista nessa tela e não achou. Desfeita na Etapa 9 (spec 23, B89).
+  O "Endereço (opcional)" desta spec também mudou: desde a Etapa 9 o endereço é estruturado e obrigatório (B90).
 - Quem cadastra é quem registra (`registrar_operacoes`): o motorista **não** depende do gestor — é o pedido.
 - Acento conta como letra diferente na duplicidade ("Sao Paulo" ≠ "São Paulo"); o gestor corrige pela tela.
 

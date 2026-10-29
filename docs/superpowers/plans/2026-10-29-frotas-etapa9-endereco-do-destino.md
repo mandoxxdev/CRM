@@ -1,6 +1,6 @@
 # Frota Etapa 9 — endereço estruturado do destino (CEP ou manual) e destino da lista na Viagem do gestor
 
-> **Status:** em execução (2026-10-29). **Pedido do André (29/10):** "o 5 foi feito mesmo? não aparece essa lista pra mim. A origem
+> **Status:** etapa fechada em 2026-10-29. **Pedido do André (29/10):** "o 5 foi feito mesmo? não aparece essa lista pra mim. A origem
 > e destino estão como campos de texto livre. A gente não deveria fazer um cadastro de endereço mais rigoroso com o componente de
 > cep ou o cadastro manual do endereço se ele não souber o cep?"
 > **Spec:** [`specs/modulo-frotas/23-endereco-do-destino/README.md`](../../../specs/modulo-frotas/23-endereco-do-destino/README.md)
@@ -115,6 +115,76 @@ No front: `api.get('/cep/<8 dígitos>')`.
 | S1 | tronco (servidor) | schema RN-F9.01; serviço/rotas RN-F9.02–12 e RN-F9.21/22 (origem); testes novos `frotasDestinoEndereco.api.test.js` e `frotasViagemDestinoGestor.api.test.js`; atualizar os testes da Etapa 8 que criam destino só com nome | — |
 | C1 | galho (front, contra o contrato) | componente `EnderecoDestinoCampos` (RN-F9.13/14); portal (F9.15/16); Destinos (F9.17); Viagens (F9.18/19); origem com endereço no portal e no gestor (F9.23/24); `FrotasEntityPage` ganha campo `type: 'componente'` e carrega destinos (`needsDestinos`) | — |
 | I1 | integração (depois de S1+C1) | `frotasEtapa9Integracao.api.test.js`: pela rota — cria destino com endereço → viagem do gestor com `destino_id` → desativa → edita a viagem (km) → 200 e destino mantido; pelo serviço — `createDestino` + `createViagem` com `destino_id` | — |
+
+**Estado (2026-10-29):**
+- **S1 feita** — `59b7e3a9` (merge `c0facebb`). `test:api` 564/564; validation 4/4, safealter 3/3, sqlite 16/16; 9 controles
+  positivos vermelhos. Decisões fora do texto: (1) o servidor grava `GMP` no POST de viagem sem origem e no PUT de viagem com origem
+  NULL (a tela continua mandando `origem` — compatível); (2) PUT de viagem sem `destino_id` com texto `destino` diferente do gravado →
+  grava o texto e zera `destino_id` (API antiga); (3) A2 vale quando **todas as chaves presentes** vêm vazias (não exige as 7).
+  Mais `9a5f244d`: o teste do portão das listas citava o `HelpGuide.js` apagado em `d5a9d565` (a `main` estava 561/562 — eu rodei só
+  os testes do cliente ao tirar o botão; o do servidor também lê arquivos do cliente).
+- **C1 feita** — `97a92f56` (merge `462b53e0`). Cliente 204 suítes / 2812 testes; build sem warning; 8 controles positivos.
+  Interpretações: a tela continua mandando `origem` (GMP na nova, o gravado na editada); botão Buscar com 1–7 dígitos mostra
+  `CEP deve ter 8 dígitos`; campos sem `required` (o navegador travaria a reativação de destino antigo); opção vazia da edição =
+  "Manter o destino gravado" (A11); `FrotasGestorEtapa1.test.js` mudou (conferia Origem digitável).
+- **I1 feita** — `c1781e4c`. 4 cenários: (a)–(c) pela rota com login real, (d) pelo serviço. `test:api` 565/565. Controles
+  positivos: sem a aceitação do mesmo id (RN-F9.12) → (a) e (d) vermelhos; sem a A2 → (b) vermelho. Nenhum defeito de produção.
+- Fase 4: cliente 204 suítes / 2812 testes, build "Compiled successfully." sobre o merge `462b53e0`.
+- **Fase 5 feita** — 3 revisores frescos (RN de ponta a ponta; força dos testes; permissões e dados). Correção: `70e9aa76`.
+
+### Fase 5 — achados
+
+| # | Revisor | Achado | Gravidade | Destino |
+|---|---|---|---|---|
+| 1 | RN ponta a ponta | Sair do CEP sem mudá-lo refazia a busca e apagava/trocava a rua digitada à mão (reproduzido em Jest) | Importante | corrigido `70e9aa76` (só busca no blur se os dígitos mudaram) |
+| 2 | RN ponta a ponta | Enter dentro do "+ Novo destino" enviava o formulário de fora (Saída/Viagem sem destino) | Importante | corrigido `70e9aa76` (Enter barrado; no CEP, busca) |
+| 3 | RN ponta a ponta | "Adicionar" durante a busca do CEP mandava rua vazia e mostrava 400 falso | Menor | corrigido `70e9aa76` (botão desligado, "Buscando CEP…") |
+| 4 | RN ponta a ponta | Destino renomeado: a edição mostra o nome novo, a viagem guarda o antigo | Menor | declarado B97 |
+| 5 | força dos testes | Teste do A9 passava com a limpeza da seleção removida (select controlado sem a opção mostra '') | Importante (teste) | reforçado `70e9aa76` (salva de novo e confere `destino_id: null`) |
+| 6 | força dos testes | UF maiúscula da busca do CEP sem teste | Menor | teste `70e9aa76` |
+| 7 | permissões | Origem "fixa" só na tela; a API aceita outra origem | Menor | declarado B95 |
+| 8 | permissões | Fila serializa só viagens: desativar destino no mesmo instante passa | Menor | declarado C27; RN-F9.10 corrigida na spec |
+| 9 | permissões | RN-F9.12 do plano não dizia o caso texto diferente sem id | Menor (doc) | spec corrigida dizendo que estava incompleta; B96 |
+| 10 | permissões | CEP da empresa malformado aparece cru; busca não escapa `%` | Menor | C28; B88 (já existia) |
+
+Refutados com prova (permissões): CONSULTA 403 em POST destinos/viagens; MOTORISTA 403 no PUT de destino e na viagem alheia; 10 formatos
+de `destino_id` inválidos → 400, nunca 500; `initSchema` novo 2× em sequência e 2× em paralelo sobre base da Etapa 8, linhas intactas;
+4 POST concorrentes → 1×201 + 3×409, e o caminho do índice forçado por gancho → 409; `/api/cep` aceito para quem só é motorista;
+sem injeção na busca; `enderecoDaOrigem` não vaza outras chaves de `configuracoes`.
+
+## Fechamento
+
+- **Verificação final** (2026-10-29, depois de `70e9aa76`, sozinha): `test:api` **565/565**; almoxarifado **44/44**; validation **4/4**;
+  safealter **3/3**; sqlite **16/16**; tela **204 suítes, 2818/2818**; build `CI=true` **"Compiled successfully."**.
+- **Divergências do plano:** origem — a tela continua mandando `origem` e o servidor também grava GMP (B99; a RN-F9.24 dizia que o
+  formulário não mandava — **estava errado**, corrigido na spec 23); RN-F9.12 incompleta (B96); A2 ficou "todas as chaves presentes
+  vazias" (não exige as 7); botão Buscar com 1–7 dígitos mostra `CEP deve ter 8 dígitos` (não previsto); `FrotasGestorEtapa1.test.js`
+  mudou (não estava na lista da A13). Fora da etapa: o teste do portão das listas citava o `HelpGuide.js` apagado (`9a5f244d`) — a
+  remoção do botão de ajuda rodou só os testes da tela; **lição: arquivo apagado no cliente pode estar listado num teste do servidor**.
+- **Estimativa:** feita depois de começar (a regra entrou no meio da etapa) e revisada no mesmo dia; conclusão em
+  `docs/estimativas/2026-10/`.
+
+### Retro (4 números)
+
+- **Rodadas de correção até verde:** 1 (Fase 5).
+- **Achados da revisão:** Fase 2 — 13 (3 travas), todos aceitos; Fase 5 — 10 reais (3 Importantes, 7 Menores), 0 ruído.
+- **Paralelismo:** 2 galhos (servidor e tela) em worktrees, de fato em paralelo, sem retrabalho; 3 revisores em paralelo.
+- **Defeito que escapou:** — (preencher na próxima etapa). Da etapa anterior: a B79 (decisão de escopo, não defeito de código) — o
+  André não achou a lista onde procurou.
+
+### Próxima tarefa detalhada
+
+O módulo continua **pronto para uso** (B72). O que sobra, por ordem:
+
+1. **Depende do André:** os 4 veículos (placas, modelos, km e quais são liberados para funcionários); a seção 3 do formulário; o consumo da
+   máquina (D12); a tela antiga "Novo Checklist" (C5); a lista inicial de destinos (agora com endereço); conferir o endereço e o **CEP
+   da GMP em Configurações → Empresa** (o seed vem sem CEP).
+2. **Pequenos, sem etapa própria:** (a) teste da RN-F8.19 com gancho em `naFilaDeViagens` no lugar do `sleep` — molde RN-15 do
+   CLAUDE.md; (b) C22 — o painel devolver `perfil`; (c) B86 — `nome_chave` sem acento; (d) B97 — se o André quiser, a opção da edição
+   mostrar o nome gravado quando difere do atual (`DestinoDaViagemGestor` em `client/src/components/frotas/DestinoGestor.js`: comparar
+   `editing.destino` com o nome da opção de mesmo id); (e) B36.
+3. **Antes de apresentar:** clicar os roteiros E2, E4, E9, E14, E16, E20, E23, E25 e **E28** (Etapa 9: precisa de internet para o CEP);
+   rodar A1–A8 em produção.
 
 S1 e C1 rodam em paralelo (worktrees): C1 testa contra mock **só na fronteira HTTP**, com os payloads deste contrato.
 

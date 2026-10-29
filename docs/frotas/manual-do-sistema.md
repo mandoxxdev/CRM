@@ -72,11 +72,14 @@ Quando você está com um veículo, o painel mostra: "Você está com o veículo
   o último número registrado naquele veículo: *"Último registrado neste veículo: 1.800 km"* (ou *"… 120 h"*). Veja as regras em 2.10.
 - **Data** e **Horário** — já vêm com agora; dá para mudar.
 - **Combustível** — Vazio, ¼, ½, ¾ ou Cheio (opcional; toque de novo para desmarcar).
-- **Saindo de: GMP** — só na Saída, fixo: toda saída é da empresa (não há o que digitar).
-- **Indo para onde (destino)** — só na Saída, opcional: uma **lista** dos destinos já cadastrados (clientes, obras, fornecedores). Se o
-  lugar não está na lista, toque **+ Novo destino**, digite o **Nome** (e o **Endereço**, se quiser) e **Adicionar**: o destino entra na
-  lista, já escolhido, e fica disponível para todos dali em diante (*"Destino adicionado"*). Se alguém já tinha cadastrado o mesmo nome, o
-  sistema escolhe o que existe: *"Esse destino já existia — selecionado."*. Nome em branco: *"Informe o nome do destino"*. Veja 2.4.
+- **Saindo de: GMP** — só na Saída, fixo: toda saída é da empresa (não há o que digitar). Embaixo aparece o **endereço da GMP**, o
+  mesmo cadastrado em **Configurações → Empresa** (endereço, cidade, estado e CEP); se lá estiver vazio, a linha do endereço não aparece.
+- **Indo para onde (destino)** — só na Saída, opcional: uma **lista** dos destinos já cadastrados (clientes, obras, fornecedores). Cada
+  opção mostra o nome e a cidade: *"Obra Beta — São Bernardo do Campo/SP"* (destino antigo, sem cidade, mostra só o nome). Se o lugar
+  não está na lista, toque **+ Novo destino**, digite o **Nome** e o **endereço** (veja "O endereço do destino", abaixo) e **Adicionar**:
+  o destino entra na lista, já escolhido, e fica disponível para todos dali em diante (*"Destino adicionado"*). Se alguém já tinha
+  cadastrado o mesmo nome, o sistema escolhe o que existe — mesmo que você não tenha preenchido o endereço: *"Esse destino já existia —
+  selecionado."*. Nome em branco: *"Informe o nome do destino"*. Veja 2.4.
 - **Quem vai dirigir (condutor)** — só na Saída e **só nos veículos liberados para funcionários** (carro do setor, que qualquer um pega
   para trabalho externo): o nome de quem vai dirigir. Nesses veículos é obrigatório. Nos outros o campo nem aparece. Veja 2.4.
 - **Para quê (finalidade)** — só na Saída, opcional.
@@ -91,6 +94,36 @@ Quando você está com um veículo, o painel mostra: "Você está com o veículo
   quiser mostrar. Cabem **até 3 fotos**; cada uma aparece em miniatura com **Remover foto**. Com 3, o botão apaga e aparece *"Limite de
   3 fotos."*. As fotos **sobem depois** que o registro é salvo (veja "Como as fotos são enviadas", abaixo).
 - **Observações** — texto livre.
+
+**O endereço do destino.** Todo destino novo tem endereço completo — no "+ Novo destino" da Saída, na tela **Destinos** do gestor e no
+"+ Novo destino" da **Viagem** do gestor (o mesmo formulário nos três):
+
+- **CEP** — digite os 8 números (com ou sem traço) e toque **Buscar**, ou saia do campo: o sistema consulta o CEP e preenche **Rua**,
+  **Bairro**, **Cidade** e **Estado (UF)** com o que o correio tem — e **troca** o que estava nesses quatro campos, inclusive deixando
+  em branco o que o correio não tem (CEP de cidade inteira não tem rua nem bairro: preencha à mão). **Número** e **Complemento** nunca
+  são mexidos pela busca. Sair do campo sem ter mudado o CEP não consulta de novo (o que você corrigiu à mão fica).
+- **Não sabe o CEP?** *"Não sabe o CEP? Preencha os campos à mão."* — todos os campos aceitam digitação, com ou sem busca. O CEP é
+  opcional.
+- Obrigatórios: **Rua**, **Número** (ou "S/N"), **Bairro**, **Cidade** e **Estado (UF)**. **Complemento** é opcional.
+
+| Situação | Mensagem |
+|---|---|
+| CEP com menos de 8 números, ao tocar **Buscar** (ao sair do campo, nada acontece) | *"CEP deve ter 8 dígitos"* |
+| CEP que não existe | *"CEP não encontrado — preencha o endereço à mão"* |
+| A consulta do CEP falhou (sem internet, serviço do correio fora) | *"Não foi possível consultar o CEP — preencha o endereço à mão"* |
+| Ao **Adicionar**/**Salvar**: CEP preenchido com outra quantidade de números | *"CEP deve ter 8 dígitos"* |
+| Sem rua | *"Informe a rua (logradouro) do destino"* |
+| Sem número | *"Informe o número (ou S/N)"* |
+| Sem bairro | *"Informe o bairro do destino"* |
+| Sem cidade | *"Informe a cidade do destino"* |
+| Sem estado | *"Informe o estado (UF) do destino"* |
+| Estado que não é uma das 27 siglas (minúscula vale: "sp" vira "SP") | *"Estado (UF) inválido"* |
+| Textos longos demais | *"Rua: no máximo 150 caracteres"*, *"Número: no máximo 20 caracteres"*, *"Complemento: no máximo 60 caracteres"*, *"Bairro: no máximo 80 caracteres"*, *"Cidade: no máximo 80 caracteres"* |
+
+O sistema confere na ordem: nome, CEP, rua, número, complemento, bairro, cidade, estado — a mensagem é a do primeiro problema. O
+endereço guardado é montado assim: *"Rua das Flores, 100 - Sala 2, Centro, São Bernardo do Campo/SP, CEP 09844-100"* (sem complemento,
+sem o " - Sala 2"; sem CEP, termina em "/SP"). O sistema **não** confere se o CEP é mesmo daquela cidade: vale o que foi confirmado na
+tela. Enquanto o bloco "+ Novo destino" está aberto, a tecla Enter não grava a Saída nem a Viagem (no campo CEP, Enter busca o CEP).
 
 O botão **Salvar** só acende quando os 12 itens estão marcados; enquanto faltar algum, o rodapé mostra "Faltam (N) de 12 itens.".
 Ao salvar, aparece "Saída registrada", "Retorno registrado" ou "Inspeção registrada" e você volta ao painel.
@@ -138,7 +171,9 @@ externo. O gestor marca isso no cadastro do veículo (3.1). Nesses carros, quem 
 informa **quem vai dirigir** — o nome fica na viagem, aparece no cartão do painel e na planilha, na coluna Condutor, no lugar do seu
 nome. A viagem continua sendo sua (o retorno é seu). Nos outros veículos o campo não aparece.
 
-**De onde e para onde.** A saída é sempre **da GMP** — o sistema grava isso sozinho. O destino sai da lista de destinos (2.3); a viagem
+**De onde e para onde.** A saída é sempre **da GMP** — o sistema grava isso sozinho. O endereço que aparece embaixo de "Saindo de:
+GMP" vem de **Configurações → Empresa** e é lido na hora: se a empresa mudar de endereço, basta corrigir lá (a viagem guarda só "GMP",
+então as antigas passam a mostrar o endereço novo). O destino sai da lista de destinos (2.3); a viagem
 guarda o **nome** do destino como estava na hora: se o gestor renomear ou desativar o destino depois, as viagens antigas não mudam.
 
 O que **não** bloqueia: marcar **Falha** num item ou registrar uma avaria. A saída é aceita e o gestor recebe um alerta (veja 3.3).
@@ -307,8 +342,8 @@ está como **Consulta**, esses botões (e o de aprovar viagem) não aparecem: a 
 |---|---|
 | **Manutenções** | Preventiva/corretiva, oficina, custo, km, próxima revisão (km e data). Criada como **em andamento**, põe o veículo em manutenção (que bloqueia a saída no portal) |
 | **Abastecimentos** | Mostra os lançados pelo portal e pelo escritório, com **Km/L** (na máquina, o consumo em litros por hora, ex.: "5,00 L/h"; se a linha tem km e horímetro, os dois: "10,50 km/L · 5,00 L/h"). Editar litros ou valor refaz o preço por litro. Para máquina por horímetro, use **Horímetro no abastecimento (máquina)** e deixe o KM vazio: a coluna KM mostra as horas ("125 h") e a linha fica sem km/L. O escritório pode lançar km menor que o do veículo (lançamento atrasado) sem pergunta. A coluna **Fotos** fica para os abastecimentos antigos que tiveram foto; o portal não pede mais foto no abastecimento |
-| **Viagens** | Saída/retorno, km, origem, destino, finalidade, **condutor**, status. A viagem nova já vem com **Origem = GMP** (dá para mudar). **Condutor (funcionário)** é quem dirigiu um carro liberado para funcionários — opcional aqui (o escritório lança atrasado); o portal exige. O **Destino** aqui é texto livre (digite o que a nota diz); a lista de destinos é do portal. Condutor, origem e destino **não se apagam** deixando o campo vazio: digite outro valor. O botão **Aprovar** (✓) aparece só em viagem **solicitada**. Para máquina por horímetro: **Horímetro saída (máquina)** e **Horímetro retorno (máquina)**; a coluna KM rodado mostra as horas usadas ("6,5 h"). A busca acha por destino, finalidade, placa e condutor |
-| **Destinos** | Os lugares de entrega e retirada que o motorista escolhe na Saída: **Nome**, **Endereço**, **Cadastrado por** (quem criou — o motorista, pelo "+ Novo destino", ou o gestor aqui), **Status**. **Excluir** não apaga: **desativa** (some da lista do motorista; as viagens antigas guardam o nome). Para ver e reativar os desativados, **Mostrar: Todos** e Editar → Status **Ativo**. Dois destinos ativos não podem ter o mesmo nome (maiúsculas e minúsculas não contam; acento conta): *"Destino já cadastrado"*. Se um motorista cadastrar de novo o nome de um destino desativado, nasce outro ativo — ao reativar o antigo o sistema recusa; fique com um |
+| **Viagens** | Saída/retorno, km, origem, destino, finalidade, **condutor**, status. A origem não se digita: o formulário mostra a linha fixa **Saindo de: GMP — (endereço da GMP, de Configurações → Empresa)** e a viagem grava "GMP". Viagem antiga que saiu de outro lugar mostra **Origem gravada: (o texto)** e o mantém ao salvar. **Condutor (funcionário)** é quem dirigiu um carro liberado para funcionários — opcional aqui (o escritório lança atrasado); o portal exige. O **Destino** é escolhido da **lista de destinos ativos** (cada opção mostra "Nome — Cidade/UF"), com **+ Novo destino** ao lado — o mesmo cadastro do portal, com endereço (2.3); se o nome já existe: *"Esse destino já estava cadastrado — selecionamos ele."*. É opcional. Viagem antiga com destino digitado (de antes da lista) mostra *"Destino gravado: (o texto). Escolha da lista só se quiser trocar."* e a primeira opção vira **Manter o destino gravado**; viagem cujo destino foi desativado depois mostra o nome gravado com "(desativado)" e salva normalmente. Se o destino escolhido for desativado por outra pessoa com o formulário aberto, o Salvar responde *"Destino não encontrado"*, a lista se atualiza e a escolha é limpa. A viagem guarda o **nome do destino na hora** em que foi escolhido: renomear o destino depois não renomeia a viagem (a lista mostra o nome novo; a viagem, o antigo). O destino e o condutor **não se apagam** pela tela: escolha ou digite outro. O botão **Aprovar** (✓) aparece só em viagem **solicitada**. Para máquina por horímetro: **Horímetro saída (máquina)** e **Horímetro retorno (máquina)**; a coluna KM rodado mostra as horas usadas ("6,5 h"). A busca acha por destino, finalidade, placa e condutor |
+| **Destinos** | Os lugares de entrega e retirada que o motorista escolhe na Saída e o gestor escolhe na Viagem: **Nome**, **Endereço** (o formulário tem CEP com busca, rua, número, complemento, bairro, cidade e estado — as regras estão em 2.3; a coluna mostra o endereço montado), **Cadastrado por** (quem criou — o motorista, pelo "+ Novo destino", ou o gestor aqui), **Status**. **Excluir** não apaga: **desativa** (some da lista do motorista; as viagens antigas guardam o nome). Para ver e reativar os desativados, **Mostrar: Todos** e Editar → Status **Ativo**. Destino cadastrado antes de existir o endereço completo abre com a nota *"Endereço antigo: (o texto)"* acima dos campos vazios: dá para reativar ou renomear sem preencher nada; preenchendo qualquer campo do endereço, vale a regra inteira (rua, número, bairro, cidade e estado). Num destino que já tem endereço completo, apagar o complemento ou o CEP tira essa parte; apagar um obrigatório é recusado. Dois destinos ativos não podem ter o mesmo nome (maiúsculas e minúsculas não contam; acento conta): *"Destino já cadastrado"*. Se um motorista cadastrar de novo o nome de um destino desativado, nasce outro ativo — ao reativar o antigo o sistema recusa; fique com um |
 | **Checklist Diário** | Lista todos os registros (Data, Placa, **Tipo**: Saída/Retorno/Inspeção, Motorista, **KM**, **Situação**, Observações, **Fotos**). O **Novo Checklist** daqui é o formulário simples de 7 itens sim/não (pneus, óleo, luzes, freios, extintor, documentos, limpeza), sem avarias. Não edita. Na linha com **PENDÊNCIA**, o gestor tem **Tratar pendência** (veja abaixo) |
 | **Multas**, **Documentos** | Só o gestor lança e altera |
 
@@ -546,7 +581,7 @@ no Frota**, **O que isso permite** e **Motorista ligado** (o motorista cujo cada
 | Pessoa do escritório (não administradora) entra no Frota e cai no "Meu painel" | Ela está como Motorista. Gestor: **Perfis de acesso** → escolher **Consulta** na linha dela; ela recarrega a página |
 | Consulta não vê o botão de cadastrar ou editar | É assim: Consulta só lê. Para gravar, a pessoa precisa ser Administrador de Frota: **Perfis de acesso** → **Administrador de Frota** na linha dela (ou o cadastro de usuário) |
 | O gestor vai sair de férias e precisa de um substituto | **Perfis de acesso** → **Administrador de Frota** na linha do substituto → confirmar. Na volta, escolher **Consulta** ou **Motorista (padrão)** na mesma linha |
-| Motorista não acha o cliente/obra na lista de destinos | Na Saída, **+ Novo destino** → Nome (e Endereço) → **Adicionar**. Não precisa do gestor. Se o nome já existe, o sistema escolhe o que existe |
+| Motorista não acha o cliente/obra na lista de destinos | Na Saída, **+ Novo destino** → Nome e endereço (pelo CEP ou à mão) → **Adicionar**. Não precisa do gestor. Se o nome já existe, o sistema escolhe o que existe |
 | A Saída pede "Quem vai dirigir (condutor)" | O veículo está marcado como **Liberado para funcionários** (carro do setor): digite o nome de quem vai dirigir. Se o carro é de um motorista fixo, o gestor desmarca em **Veículos** |
 | Um destino errado aparece na lista do motorista | Gestor: **Frota → Destinos** → **Excluir** (desativa; as viagens antigas guardam o nome). Para corrigir o nome, **Editar**. Para ver os desativados, **Mostrar: Todos** |
 | Veículo não aparece na Saída | Está com outro motorista (viagem sem retorno), está inativo/vendido, ou aparece como "(em manutenção — indisponível)" |
