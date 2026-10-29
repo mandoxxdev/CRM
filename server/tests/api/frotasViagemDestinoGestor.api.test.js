@@ -23,6 +23,7 @@ const { createFrotasTestApp, ADMIN, MOTORISTA } = require('../helpers/frotasTest
 const { comEndereco } = require('../helpers/frotasDestinoFixture');
 const { dbGet, dbRun } = require('../../services/frotas/db');
 const { naFilaDeViagens } = require('../../services/frotas/filaDeViagens');
+const { esperarFilaDeViagens } = require('../helpers/esperarFilaDeViagens');
 
 let passed = 0; let failed = 0;
 const testes = [];
@@ -34,7 +35,6 @@ const ana = (m, u, c) => ctx.como(MOTORISTA)(m, u, c);
 const gestor = (m, u, c) => ctx.como(ADMIN)(m, u, c);
 const VIA = '/api/frotas/viagens';
 const MSG_DESTINO = 'Destino não encontrado';
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const viagemDb = (id) => dbGet(ctx.db, 'SELECT * FROM frotas_viagens WHERE id = ?', [id]);
 const contaViagens = async () => (await dbGet(ctx.db, 'SELECT COUNT(*) n FROM frotas_viagens')).n;
 
@@ -95,7 +95,8 @@ test('RN-F9.10 o destino e resolvido DENTRO da fila: desativado enquanto o POST 
   const gancho = new Promise((r) => { soltar = r; });
   const segurando = naFilaDeViagens(() => gancho);
   const post = gestor('post', VIA, { veiculo_id: S.v.id, destino_id: efemero.id }).then((r) => r);
-  await sleep(150); // o POST ja passou das conferencias de fora e espera na fila atras do gancho
+  // o gancho que segura a fila + a requisicao, ja dentro dela (sem pausa fixa); se nao chegar, solta o gancho antes de falhar (senao a fila fica presa e o arquivo inteiro trava)
+  await esperarFilaDeViagens(2).catch((e) => { soltar(); throw e; });
   await gestor('delete', `/api/frotas/destinos/${efemero.id}`);
   soltar();
   await segurando;

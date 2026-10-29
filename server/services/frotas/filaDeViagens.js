@@ -7,11 +7,21 @@
  * `naFilaDeViagens` de novo (esperaria a si mesmo).
  */
 let cauda = Promise.resolve();
+let naFila = 0;
 
 function naFilaDeViagens(fn) {
+  naFila += 1;
   const resultado = cauda.then(() => fn());
-  cauda = resultado.catch(() => {});
+  cauda = resultado.catch(() => {}).then(() => { naFila -= 1; });
   return resultado;
 }
 
-module.exports = { naFilaDeViagens };
+/**
+ * Quantos gestos entraram na fila e ainda nao terminaram (o que esta rodando conta). So para teste de corrida: em vez de esperar um tempo
+ * fixo e supor que a requisicao ja chegou a fila, o teste espera este numero subir (molde do gancho do CLAUDE.md, RN-15).
+ */
+function quantosNaFila() {
+  return naFila;
+}
+
+module.exports = { naFilaDeViagens, quantosNaFila };

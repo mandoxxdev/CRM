@@ -24,6 +24,7 @@ const { createFrotasTestApp, ADMIN, MOTORISTA, MOTORISTA2 } = require('../helper
 const { comEndereco } = require('../helpers/frotasDestinoFixture');
 const { dbGet, dbRun } = require('../../services/frotas/db');
 const { naFilaDeViagens } = require('../../services/frotas/filaDeViagens');
+const { esperarFilaDeViagens } = require('../helpers/esperarFilaDeViagens');
 const portalService = require('../../services/frotas/portalService');
 
 let passed = 0; let failed = 0;
@@ -43,7 +44,6 @@ const MSG_DESTINO = 'Destino não encontrado';
 const conta = async (sql, p = []) => (await dbGet(ctx.db, sql, p)).n;
 const kmDe = async (id) => Number((await dbGet(ctx.db, 'SELECT km_atual FROM frotas_veiculos WHERE id = ?', [id])).km_atual) || 0;
 const viagemDb = (id) => dbGet(ctx.db, 'SELECT * FROM frotas_viagens WHERE id = ?', [id]);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Saida que tem de dar 201: km = o atual do veiculo + 1. Devolve a viagem da resposta. */
 async function saidaOk(quem, veiculo, extra = {}) {
@@ -190,7 +190,8 @@ test('RN-F8.19 CORRIDA: o gestor liga a marca enquanto a saida sem condutor espe
   // `.then` dispara o envio AGORA (o Test do supertest e preguicoso: sem isso a requisicao so sairia no `await`, depois de soltar o
   // gancho — e o teste passava sem provar a fila)
   const saida = bruno('post', REG, { tipo: 'saida', veiculo_id: S.v5.id, km: 301 }).then((r) => r);
-  await sleep(150); // a requisicao ja passou pelas validacoes de fora e esta na fila
+  // o gancho que segura a fila + a requisicao, ja dentro dela (sem pausa fixa); se nao chegar, solta o gancho antes de falhar (senao a fila fica presa e o arquivo inteiro trava)
+  await esperarFilaDeViagens(2).catch((e) => { soltar(); throw e; });
   await dbRun(ctx.db, 'UPDATE frotas_veiculos SET uso_funcionarios = 1 WHERE id = ?', [S.v5.id]); // o gestor, um segundo antes
   soltar();
   await segurando;
@@ -338,7 +339,8 @@ test('RN-F8.31 destino_id inexistente/desativado/nao numerico/zero/negativo -> 4
   const gancho = new Promise((r) => { soltar = r; });
   const segurando = naFilaDeViagens(() => gancho);
   const saida = ana('post', REG, { tipo: 'saida', veiculo_id: S.v1.id, km: (await kmDe(S.v1.id)) + 1, destino_id: extra.id }).then((r) => r);
-  await sleep(150); // envio disparado pelo `.then`; a saida espera na fila atras do gancho
+  // o gancho que segura a fila + a requisicao, ja dentro dela (sem pausa fixa); se nao chegar, solta o gancho antes de falhar (senao a fila fica presa e o arquivo inteiro trava)
+  await esperarFilaDeViagens(2).catch((e) => { soltar(); throw e; });
   await gestor('delete', `/api/frotas/destinos/${extra.id}`);
   soltar();
   await segurando;
