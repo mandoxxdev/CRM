@@ -1,0 +1,21 @@
+*Planejamento — Frota: endereço do destino, destino na viagem e ajuda da tela*
+_29/10/2026_
+
+*1. Destino com endereço completo (CEP ou à mão)*
+Ao cadastrar um destino, o CEP preenche rua, bairro, cidade e estado. Quem não sabe o CEP preenche os campos à mão. Rua, número, bairro, cidade e estado passam a ser obrigatórios, no celular do motorista e na tela de Destinos.
+⏱ Tempo estimado: *1h30*
+
+*2. Destino escolhido da lista na Nova Viagem*
+Na tela Viagens, o destino deixa de ser digitado livremente e passa a ser escolhido da lista de destinos, com o botão "+ Novo destino". Viagens antigas continuam abrindo e salvando normalmente.
+⏱ Tempo estimado: *1h*
+
+*3. Origem com o endereço da GMP*
+A saída mostra "Saindo de: GMP" com o endereço da empresa, o mesmo que está em Configurações. Se a empresa mudar de endereço, basta alterar em um lugar.
+⏱ Tempo estimado: *30 min*
+
+*4. Retirada do botão de ajuda "?" do canto da tela*
+O botão flutuante de ajuda, que não é mais usado, sai de todas as telas.
+⏱ Tempo estimado: *30 min*
+
+*Total estimado: 3h30*
+_O tempo de cada item já inclui fazer, conferir e atualizar os manuais._
