@@ -1,0 +1,9 @@
+*Planejamento — Frota: menu atualizado quando o perfil muda*
+_29/10/2026_
+
+*1. Menu da Frota acompanha a troca de perfil sem recarregar a página*
+Hoje, quando alguém deixa de ser Administrador de Frota, essa pessoa continua vendo o menu de administrador até recarregar a página (os botões já não funcionam para ela). O painel passa a perceber a troca e atualiza o menu sozinho, como o celular do motorista já faz.
+⏱ Tempo estimado: *3h*
+
+*Total estimado: 3h*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
