@@ -12,6 +12,7 @@
  */
 const assert = require('assert');
 const { createFrotasTestApp, ADMIN, MOTORISTA, CONSULTA } = require('../helpers/frotasTestApp');
+const { comEndereco, ENDERECO_OK_MONTADO } = require('../helpers/frotasDestinoFixture');
 const { dbRun, dbGet } = require('../../services/frotas/db');
 
 let passed = 0; let failed = 0;
@@ -53,7 +54,7 @@ test('Fase5-A2 dois PUT simultaneos (ADMIN_FROTA e CONSULTA): a resposta do que 
 });
 
 test('Fase5-A4 PUT /destinos com ativo null ou "" mantem; "true", 2 -> 400; 0/1 continuam', async () => {
-  const d = (await gestor('post', '/api/frotas/destinos', { nome: 'Fase5 Destino' })).body;
+  const d = (await gestor('post', '/api/frotas/destinos', comEndereco({ nome: 'Fase5 Destino' }))).body;
   for (const v of [null, '']) {
     const r = await gestor('put', `/api/frotas/destinos/${d.id}`, { nome: 'Fase5 Destino', ativo: v });
     assert.strictEqual(r.status, 200, JSON.stringify(r.body));
@@ -82,11 +83,14 @@ test('Fase5-A5 carro liberado: condutor so invisivel (U+200B, controle) -> 400; 
   assert.strictEqual(ok.body.viagem.condutor_nome, 'Car los da Silva');
 });
 
-test('Fase5-B8 o 409 DESTINO_DUPLICADO traz so id, nome, endereco e ativo do existente', async () => {
-  await ana('post', '/api/frotas/destinos', { nome: 'Fase5 Dup', endereco: 'Rua X' });
+// Frota Etapa 9 (A4/A12): o 409 ganha cidade e uf (a opcao do select mostra `Nome — Cidade/UF`); o criado_por continua fora
+test('Fase5-B8 o 409 DESTINO_DUPLICADO traz so id, nome, endereco, cidade, uf e ativo do existente (A4)', async () => {
+  await ana('post', '/api/frotas/destinos', comEndereco({ nome: 'Fase5 Dup' }));
   const r = await gestor('post', '/api/frotas/destinos', { nome: 'fase5 dup' });
   assert.strictEqual(r.status, 409);
-  assert.deepStrictEqual(Object.keys(r.body.destino).sort(), ['ativo', 'endereco', 'id', 'nome']);
+  assert.deepStrictEqual(Object.keys(r.body.destino).sort(), ['ativo', 'cidade', 'endereco', 'id', 'nome', 'uf']);
+  assert.strictEqual(r.body.destino.endereco, ENDERECO_OK_MONTADO);
+  assert.strictEqual(r.body.destino.uf, 'SP');
   assert.strictEqual(r.body.destino.nome, 'Fase5 Dup');
 });
 
@@ -96,7 +100,7 @@ test('Fase5-B11 Motorista e Consulta nao ligam uso_funcionarios (PUT /veiculos 4
     assert.strictEqual(r.status, 403, JSON.stringify(r.body));
   }
   assert.strictEqual((await dbGet(ctx.db, 'SELECT uso_funcionarios FROM frotas_veiculos WHERE id = ?', [S.v.id])).uso_funcionarios, 1);
-  const d = (await gestor('post', '/api/frotas/destinos', { nome: 'Fase5 Consulta' })).body;
+  const d = (await gestor('post', '/api/frotas/destinos', comEndereco({ nome: 'Fase5 Consulta' }))).body;
   assert.strictEqual((await consulta('put', `/api/frotas/destinos/${d.id}`, { nome: 'Outro' })).status, 403);
   assert.strictEqual((await consulta('delete', `/api/frotas/destinos/${d.id}`)).status, 403);
   assert.strictEqual((await dbGet(ctx.db, 'SELECT nome, ativo FROM frotas_destinos WHERE id = ?', [d.id])).ativo, 1);

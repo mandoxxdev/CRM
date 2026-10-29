@@ -250,6 +250,8 @@ async function getMeta(db) {
     tipos, motoristas, setores: SETORES_GMP, centrosCusto: CENTROS_CUSTO_GMP,
     // Frota Etapa 8 (RN-F8.16): a origem fixa da saida do portal; a tela do gestor preenche a viagem nova com ela
     origemPadrao: ORIGEM_PADRAO,
+    // Frota Etapa 9 (RN-F9.21/22, B94): o endereco da GMP (Configuracoes -> Empresa), lido na hora; '' se nao cadastrado
+    origemEndereco: await enderecoDaOrigem(db),
     statusVeiculo: STATUS_VEICULO, combustiveis: TIPOS_COMBUSTIVEL,
     tiposManutencao: TIPOS_MANUTENCAO, tiposDocumento: TIPOS_DOCUMENTO,
     tiposMedicao: TIPOS_MEDICAO, statusViagem: STATUS_VIAGEM,
@@ -996,29 +998,65 @@ async function createViagem(db, user, dataBruta) {
   const horRetorno = numeroOpcional(data.horimetro_retorno);
   conferirHorimetroDoRetorno(horSaida, horRetorno);
   conferirDataDoRetorno(data.data_saida, data.data_retorno); // Fase5-3
-  const condutor = lerCondutor(data.condutor_nome); // Frota Etapa 8 (RN-F8.20): opcional no gestor; o destino segue texto (B79)
+  const condutor = lerCondutor(data.condutor_nome); // Frota Etapa 8 (RN-F8.20): opcional no gestor
+  // Frota Etapa 9 (RN-F9.10/11, B89 desfaz a B79): o gestor escolhe o destino da lista. Sem destino_id, o texto como antes (compat).
+  const destinoIdPedido = lerDestinoIdDaViagem(data.destino_id);
   const status = data.status || 'solicitada';
   return naFilaDeViagens(async () => {
+    // RN-F9.10: resolvido DENTRO da fila (como o portal, RN-F8.31) — desativado no meio -> 400; com id e texto, o id manda
+    const dest = destinoIdPedido != null ? await destinoAtivoDaViagem(db, destinoIdPedido) : null;
     if (status === 'em_andamento') {
       await conferirViagemUnica(db, { veiculoId: data.veiculo_id, motoristaId: data.motorista_id });
     }
     const r = await dbRun(db, `INSERT INTO frotas_viagens
       (veiculo_id, motorista_id, data_saida, data_retorno, km_saida, km_retorno, km_rodado,
        destino, finalidade, setor, status, observacoes, solicitante_id, solicitante_nome, origem, horimetro_saida, horimetro_retorno,
-       condutor_nome)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+       condutor_nome, destino_id)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
       data.veiculo_id, data.motorista_id || null, data.data_saida || null, data.data_retorno || null,
       kmSaida, kmRetorno,
       data.km_rodado != null ? Number(data.km_rodado) : (kmSaida != null && kmRetorno != null ? kmRetorno - kmSaida : null),
-      data.destino || null, data.finalidade || null,
+      dest ? dest.nome : (data.destino || null), data.finalidade || null,
       data.setor || null, status, data.observacoes || null,
-      user?.id || null, user?.nome || user?.name || null, data.origem || null, horSaida, horRetorno,
-      condutor,
+      user?.id || null, user?.nome || user?.name || null, origemDaViagem(data.origem, null), horSaida, horRetorno,
+      condutor, dest ? dest.id : null,
     ]);
     if (kmRetorno != null) await updateKmVeiculoSeMaior(db, data.veiculo_id, kmRetorno);
     if (horRetorno != null) await updateHorimetroVeiculoSeMaior(db, data.veiculo_id, horRetorno);
     return dbGet(db, 'SELECT * FROM frotas_viagens WHERE id = ?', [r.lastID]);
   });
+}
+
+/**
+ * Frota Etapa 9 (RN-F9.24, RN-F9.20): a tela do gestor deixou de mandar `origem` (vira a linha fixa "Saindo de: GMP — <endereco>").
+ * Origem que veio (texto nao vazio) vale; senao a gravada; sem nenhuma, o texto GMP (ORIGEM_PADRAO) — no POST e na viagem antiga com
+ * origem NULL (o que a tela fazia desde o ajuste 18 da Etapa 8 passa a ser do servidor). Uma origem antiga diferente de GMP fica.
+ */
+function origemDaViagem(pedida, gravada) {
+  const { ORIGEM_PADRAO } = require('./schema');
+  if (typeof pedida === 'string' && pedida.trim()) return pedida;
+  return gravada || ORIGEM_PADRAO;
+}
+
+/**
+ * Frota Etapa 9 (RN-F9.12, A3/A5) — o destino no PUT da viagem, chamado DENTRO da fila:
+ *  - destino_id ausente/null/'' -> o texto `destino` como antes (ausente mantem); o destino_id gravado fica, salvo quando o texto
+ *    mudou (o id deixaria de nomear o destino gravado — a referencia cai);
+ *  - destino_id igual ao gravado (comparado depois de Number) -> mantem nome e id, mesmo desativado ou renomeado depois (a viagem
+ *    antiga continua editavel e nao e renomeada);
+ *  - outro id -> destino ATIVO (grava o nome da hora) ou 400 `Destino não encontrado`.
+ */
+async function destinoDoPutDaViagem(db, current, data) {
+  const pedido = lerDestinoIdDaViagem(data.destino_id);
+  if (pedido == null) {
+    const destino = data.destino ?? current.destino;
+    return { destino, destinoId: destino === current.destino ? current.destino_id : null };
+  }
+  if (current.destino_id != null && pedido === Number(current.destino_id)) {
+    return { destino: current.destino, destinoId: current.destino_id };
+  }
+  const d = await destinoAtivoDaViagem(db, pedido);
+  return { destino: d.nome, destinoId: d.id };
 }
 
 async function updateViagem(db, id, dataBruta, user) {
@@ -1051,18 +1089,20 @@ async function updateViagem(db, id, dataBruta, user) {
     // Frota Etapa 8 (RN-F8.20, ajuste 8 / B80): como o km — null, '' ou ausente mantem o gravado (a tela manda null no campo vazio);
     // o condutor nao se apaga pela tela do gestor, corrige-se digitando outro
     const condutor = lerCondutor(data.condutor_nome) ?? current.condutor_nome;
+    const { destino, destinoId } = await destinoDoPutDaViagem(db, current, data); // Frota Etapa 9 (RN-F9.10/12, A3/A5)
     if (status === 'em_andamento') {
       await conferirViagemUnica(db, { veiculoId, motoristaId, excetoId: Number(id) });
     }
     await dbRun(db, `UPDATE frotas_viagens SET
       veiculo_id=?, motorista_id=?, data_saida=?, data_retorno=?, km_saida=?, km_retorno=?, km_rodado=?,
       destino=?, finalidade=?, setor=?, status=?, observacoes=?, origem=?, horimetro_saida=?, horimetro_retorno=?, condutor_nome=?,
-      updated_at=CURRENT_TIMESTAMP WHERE id=?`, [
+      destino_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`, [
       veiculoId, motoristaId,
       dataSaida, dataRetorno,
       kmSaida, kmRetorno, kmRodado != null ? kmRodado : current.km_rodado,
-      data.destino ?? current.destino, data.finalidade ?? current.finalidade, data.setor ?? current.setor,
-      status, data.observacoes ?? current.observacoes, data.origem ?? current.origem, horSaida, horRetorno, condutor, id,
+      destino, data.finalidade ?? current.finalidade, data.setor ?? current.setor,
+      status, data.observacoes ?? current.observacoes, origemDaViagem(data.origem, current.origem), horSaida, horRetorno, condutor,
+      destinoId, id,
     ]);
     if (kmRetorno != null) {
       await updateKmVeiculoSeMaior(db, veiculoId, kmRetorno);
@@ -1088,13 +1128,18 @@ async function aprovarViagem(db, id, user) {
   return dbGet(db, 'SELECT * FROM frotas_viagens WHERE id = ?', [id]);
 }
 
-// ── Destinos (Frota Etapa 8, RN-F8.27..30) ───────────────────────────────────
+// ── Destinos (Frota Etapa 8, RN-F8.27..30; endereco estruturado na Etapa 9, RN-F9.01..08) ─────────
 
 const MSG_DESTINO_NOME = 'Informe o nome do destino';
 const MSG_DESTINO_NOME_LONGO = 'Nome do destino: no máximo 120 caracteres';
-const MSG_DESTINO_END_LONGO = 'Endereço: no máximo 255 caracteres';
 const MSG_DESTINO_404 = 'Destino não encontrado';
 const MSG_DESTINO_DUP = 'Destino já cadastrado';
+
+/** Frota Etapa 9 (RN-F9.04): as 27 siglas. */
+const UFS_BRASIL = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ',
+  'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'];
+/** RN-F9.07: as 7 chaves do endereco do destino. */
+const CHAVES_ENDERECO_DESTINO = ['cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf'];
 
 /** RN-F8.27 (ajuste 9): so string conta (123 / {} nao viram "123" / "[object Object]"); aparado e com os espacos internos colapsados. */
 function normalizarNomeDestino(v) {
@@ -1105,56 +1150,135 @@ function normalizarNomeDestino(v) {
   return nome;
 }
 
-/** Endereco opcional: nao-string = ausente (null); aparado; > 255 -> 400. */
-function normalizarEnderecoDestino(v) {
-  if (typeof v !== 'string') return null;
-  const end = v.trim();
-  if (!end) return null;
-  if (end.length > 255) throw erro(400, MSG_DESTINO_END_LONGO);
-  return end;
+/** Frota Etapa 9 (RN-F9.05): nao-string = ausente (''); aparado; espacos internos colapsados. */
+function textoDoEndereco(v) {
+  return typeof v === 'string' ? v.trim().replace(/\s+/g, ' ') : '';
+}
+
+/** RN-F9.03: so os digitos contam; nenhum digito (ex. "-") = ausente (null); 8 digitos -> `00000-000`; senao 400. */
+function normalizarCepDestino(v) {
+  const dig = textoDoEndereco(v).replace(/\D/g, '');
+  if (!dig) return null;
+  if (dig.length !== 8) throw erro(400, 'CEP deve ter 8 dígitos');
+  return `${dig.slice(0, 5)}-${dig.slice(5)}`;
+}
+
+function campoObrigatorioDoEndereco(v, msgVazio, max, msgLongo) {
+  const t = textoDoEndereco(v);
+  if (!t) throw erro(400, msgVazio);
+  if (t.length > max) throw erro(400, msgLongo);
+  return t;
+}
+
+/**
+ * Frota Etapa 9 (RN-F9.02..05): confere o endereco na ordem do contrato (cep, rua, numero, complemento, bairro, cidade, UF) e devolve
+ * as 7 colunas normalizadas (cep/complemento vazios -> null). B91: o servidor nao consulta a ViaCEP nem confere CEP x cidade.
+ */
+function validarEnderecoDestino(e) {
+  const cep = normalizarCepDestino(e.cep);
+  const logradouro = campoObrigatorioDoEndereco(e.logradouro, 'Informe a rua (logradouro) do destino', 150,
+    'Rua: no máximo 150 caracteres');
+  const numero = campoObrigatorioDoEndereco(e.numero, 'Informe o número (ou S/N)', 20, 'Número: no máximo 20 caracteres');
+  const complemento = textoDoEndereco(e.complemento) || null;
+  if (complemento && complemento.length > 60) throw erro(400, 'Complemento: no máximo 60 caracteres');
+  const bairro = campoObrigatorioDoEndereco(e.bairro, 'Informe o bairro do destino', 80, 'Bairro: no máximo 80 caracteres');
+  const cidade = campoObrigatorioDoEndereco(e.cidade, 'Informe a cidade do destino', 80, 'Cidade: no máximo 80 caracteres');
+  const uf = textoDoEndereco(e.uf).toUpperCase();
+  if (!uf) throw erro(400, 'Informe o estado (UF) do destino');
+  if (!UFS_BRASIL.includes(uf)) throw erro(400, 'Estado (UF) inválido');
+  return { cep, logradouro, numero, complemento, bairro, cidade, uf };
+}
+
+/** RN-F9.06: `Logradouro, Número[ - Complemento], Bairro, Cidade/UF[, CEP 00000-000]`. */
+function montarEnderecoDestino(e) {
+  return `${e.logradouro}, ${e.numero}${e.complemento ? ` - ${e.complemento}` : ''}, ${e.bairro}, ${e.cidade}/${e.uf}`
+    + (e.cep ? `, CEP ${e.cep}` : '');
+}
+
+async function destinoAtivoDeMesmoNome(db, nome) {
+  return dbGet(db, 'SELECT * FROM frotas_destinos WHERE nome = ? COLLATE NOCASE AND ativo = 1 ORDER BY id LIMIT 1', [nome]);
+}
+
+/**
+ * O 409 do contrato com a linha existente em `extra.destino` (o handleError a espalha no corpo), para a tela selecionar o que ja
+ * havia. So o que a tela usa (rev. B, nota 8: nao o criado_por de outra pessoa); Etapa 9 (A4): + cidade e uf.
+ */
+function erroDestinoDuplicado(existente) {
+  const err = erro(409, MSG_DESTINO_DUP, 'DESTINO_DUPLICADO');
+  if (existente) {
+    err.extra = { destino: {
+      id: existente.id, nome: existente.nome, endereco: existente.endereco, cidade: existente.cidade, uf: existente.uf,
+      ativo: existente.ativo,
+    } };
+  }
+  return err;
 }
 
 /**
  * RN-F8.28 (ajuste T-1, ponto 7): a duplicidade e decidida pelo indice parcial `ux_frotas_destinos_nome_ativo` (UNIQUE nome COLLATE
- * NOCASE WHERE ativo = 1) — nenhuma conferencia antes do INSERT/UPDATE, entao nao ha janela entre conferir e gravar. O
- * SQLITE_CONSTRAINT vira o 409 do contrato com a linha existente em `extra.destino` (o handleError a espalha no corpo), para a tela
- * selecionar o que ja havia. A mensagem do SQLite e `UNIQUE constraint failed: frotas_destinos.nome` (ajuste 17).
+ * NOCASE WHERE ativo = 1); o SQLITE_CONSTRAINT vira o 409 do contrato. A mensagem do SQLite e `UNIQUE constraint failed:
+ * frotas_destinos.nome` (ajuste 17). Desde a Etapa 9 (A8) o POST confere o nome antes do endereco; o indice fica como rede da corrida.
  */
 async function traduzirDestinoDuplicado(db, e, nome) {
   if (!e || e.code !== 'SQLITE_CONSTRAINT' || !/frotas_destinos\.nome/.test(String(e.message))) return e;
-  const existente = await dbGet(db, 'SELECT * FROM frotas_destinos WHERE nome = ? COLLATE NOCASE AND ativo = 1 ORDER BY id LIMIT 1', [nome]);
-  const err = erro(409, MSG_DESTINO_DUP, 'DESTINO_DUPLICADO');
   // Fase 5 (rev. A, achado 6): o outro foi desativado entre o INSERT e esta releitura — continua 409 (sem a linha), nunca 500 cru
-  // rev. B, nota 8: so o que a tela usa — nao o criado_por de outra pessoa
-  if (existente) err.extra = { destino: { id: existente.id, nome: existente.nome, endereco: existente.endereco, ativo: existente.ativo } };
-  return err;
+  return erroDestinoDuplicado(await destinoAtivoDeMesmoNome(db, nome));
 }
 
-/** RN-F8.29: ativos por nome; `inativos` truthy ('1'/'true'/true) inclui os desativados; `search` em nome e endereco. */
+/**
+ * RN-F8.29: ativos por nome; `inativos` truthy ('1'/'true'/true) inclui os desativados. Etapa 9 (RN-F9.08, A7): `search` em nome,
+ * endereco, cidade, bairro e CEP — o CEP tambem sem o hifen, para "09844100" achar o gravado "09844-100".
+ */
 async function listDestinos(db, { search, inativos } = {}) {
   const comInativos = inativos === true || inativos === 1 || inativos === '1' || inativos === 'true';
   let sql = 'SELECT * FROM frotas_destinos WHERE 1=1';
   const params = [];
   if (!comInativos) sql += ' AND ativo = 1';
-  const s = buildSearchWhere(['nome', 'endereco'], search);
+  const s = buildSearchWhere(['nome', 'endereco', 'cidade', 'bairro', 'cep', "REPLACE(cep, '-', '')"], search);
   sql += s.clause;
   params.push(...s.params);
   sql += ' ORDER BY nome COLLATE NOCASE, id';
   return dbAll(db, sql, params);
 }
 
+/**
+ * Frota Etapa 9 (RN-F9.02..06, A8): nome -> nome ja ativo (409 com o existente, mesmo sem endereco: o "+" do motorista seleciona o
+ * que ja havia) -> endereco. O `endereco` do corpo e ignorado: e montado aqui.
+ */
 async function createDestino(db, user, body) {
   const b = body || {};
   const nome = normalizarNomeDestino(b.nome);
-  const endereco = normalizarEnderecoDestino(b.endereco);
+  const existente = await destinoAtivoDeMesmoNome(db, nome);
+  if (existente) throw erroDestinoDuplicado(existente);
+  const e = validarEnderecoDestino(b);
   let r;
   try {
-    r = await dbRun(db, `INSERT INTO frotas_destinos (nome, endereco, ativo, criado_por_id, criado_por_nome) VALUES (?,?,1,?,?)`,
-      [nome, endereco, user?.id || null, user?.nome || user?.name || null]);
-  } catch (e) {
-    throw await traduzirDestinoDuplicado(db, e, nome);
+    r = await dbRun(db, `INSERT INTO frotas_destinos
+      (nome, endereco, cep, logradouro, numero, complemento, bairro, cidade, uf, ativo, criado_por_id, criado_por_nome)
+      VALUES (?,?,?,?,?,?,?,?,?,1,?,?)`,
+    [nome, montarEnderecoDestino(e), e.cep, e.logradouro, e.numero, e.complemento, e.bairro, e.cidade, e.uf,
+      user?.id || null, user?.nome || user?.name || null]);
+  } catch (err) {
+    throw await traduzirDestinoDuplicado(db, err, nome);
   }
   return dbGet(db, 'SELECT * FROM frotas_destinos WHERE id = ?', [r.lastID]);
+}
+
+/**
+ * Frota Etapa 9 (RN-F9.07, A1/A2). Sem nenhuma das 7 chaves (presente = `!== undefined`) o endereco nao muda (devolve null). Com
+ * alguma, o endereco final e o corpo por cima do gravado (cep/complemento null ou '' apagam; nos obrigatorios, vazio cai no
+ * `Informe...`) e passa pela regua inteira. A2 (B92): destino ANTIGO (gravado sem logradouro) com as chaves presentes todas vazias — o
+ * que a tela manda ao so renomear/reativar — fica com o endereco antigo; destino que ja tem endereco estruturado nao pode esvazia-lo.
+ */
+function enderecoDoPut(current, b) {
+  const presentes = CHAVES_ENDERECO_DESTINO.filter((k) => b[k] !== undefined);
+  if (!presentes.length) return null;
+  const antigo = !textoDoEndereco(current.logradouro);
+  const vazia = (k) => (k === 'cep' ? !textoDoEndereco(b[k]).replace(/\D/g, '') : !textoDoEndereco(b[k]));
+  if (antigo && presentes.every(vazia)) return null;
+  const final = {};
+  for (const k of CHAVES_ENDERECO_DESTINO) final[k] = b[k] !== undefined ? b[k] : current[k];
+  return validarEnderecoDestino(final);
 }
 
 /** RN-F8.30 (ajuste T-7): inexistente -> 404; nome/endereco/ativo opcionais; reativar com o nome ja ativo em outro -> o mesmo 409. */
@@ -1163,7 +1287,9 @@ async function updateDestino(db, id, body) {
   if (!current) throw erro(404, MSG_DESTINO_404);
   const b = body || {};
   const nome = b.nome === undefined ? current.nome : normalizarNomeDestino(b.nome);
-  const endereco = b.endereco === undefined ? current.endereco : normalizarEnderecoDestino(b.endereco);
+  const novo = enderecoDoPut(current, b); // Frota Etapa 9 (RN-F9.07); o `endereco` do corpo e ignorado (RN-F9.06)
+  const e = novo || current;
+  const endereco = novo ? montarEnderecoDestino(novo) : current.endereco;
   // Fase 5 (rev. A, achado 4): null/'' (a opcao vazia "Selecione..." do formulario) mantem; fora de 0/1 -> 400. Antes, tudo que nao
   // era 1 desativava o destino em silencio.
   let ativo = bit01(current.ativo);
@@ -1172,12 +1298,53 @@ async function updateDestino(db, id, body) {
     ativo = bit01(b.ativo);
   }
   try {
-    await dbRun(db, 'UPDATE frotas_destinos SET nome = ?, endereco = ?, ativo = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [nome, endereco, ativo, id]);
-  } catch (e) {
-    throw await traduzirDestinoDuplicado(db, e, nome);
+    await dbRun(db, `UPDATE frotas_destinos SET nome = ?, endereco = ?, cep = ?, logradouro = ?, numero = ?, complemento = ?,
+      bairro = ?, cidade = ?, uf = ?, ativo = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    [nome, endereco, e.cep, e.logradouro, e.numero, e.complemento, e.bairro, e.cidade, e.uf, ativo, id]);
+  } catch (err) {
+    throw await traduzirDestinoDuplicado(db, err, nome);
   }
   return dbGet(db, 'SELECT * FROM frotas_destinos WHERE id = ?', [id]);
+}
+
+/**
+ * Frota Etapa 9 (RN-F9.10/12, A3): `destino_id` da viagem do gestor. Ausente/null/'' -> null; numero ou texto so de digitos (como o
+ * `resolverDestino` do portal) -> Number; o resto (0, negativo, 1.5, 'abc', objeto) -> 400 `Destino não encontrado`.
+ */
+function lerDestinoIdDaViagem(v) {
+  if (v === undefined || v === null || v === '') return null;
+  const id = typeof v === 'number' || (typeof v === 'string' && /^\d+$/.test(v.trim())) ? Number(v) : NaN;
+  if (!Number.isInteger(id) || id <= 0) throw erro(400, MSG_DESTINO_404);
+  return id;
+}
+
+/** RN-F9.10: destino ATIVO pelo id (chamado DENTRO da fila de viagens: desativado no meio -> 400). */
+async function destinoAtivoDaViagem(db, id) {
+  const d = await dbGet(db, 'SELECT id, nome FROM frotas_destinos WHERE id = ? AND ativo = 1', [id]);
+  if (!d) throw erro(400, MSG_DESTINO_404);
+  return d;
+}
+
+/**
+ * Frota Etapa 9 (RN-F9.21, B94): o endereco da GMP, lido na hora de Configuracoes -> Empresa (o mesmo cadastro que o pedido de compra
+ * usa em `compras/opcoesPedido.enderecoDaEmpresa`, com outro formato): `<endereco>, <cidade>/<UF>, CEP <cep>`, partes vazias saem.
+ * Tabela ausente (o harness nao cria `configuracoes`) ou qualquer erro de leitura -> '' (a tela so nao mostra a linha), nunca 500.
+ */
+async function enderecoDaOrigem(db) {
+  let rows;
+  try {
+    rows = await dbAll(db, `SELECT chave, valor FROM configuracoes
+      WHERE chave IN ('empresa_endereco', 'empresa_cidade', 'empresa_estado', 'empresa_cep')`);
+  } catch (e) {
+    return '';
+  }
+  const c = Object.fromEntries(rows.map((r) => [r.chave, r.valor == null ? '' : String(r.valor).trim()]));
+  const cidade = c.empresa_cidade || '';
+  const uf = (c.empresa_estado || '').toUpperCase();
+  const cidadeUf = cidade && uf ? `${cidade}/${uf}` : (cidade || uf);
+  const digCep = (c.empresa_cep || '').replace(/\D/g, '');
+  const cep = digCep.length === 8 ? `${digCep.slice(0, 5)}-${digCep.slice(5)}` : (c.empresa_cep || '');
+  return [c.empresa_endereco || '', cidadeUf, cep ? `CEP ${cep}` : ''].filter(Boolean).join(', ');
 }
 
 /** RN-F8.30: exclusao logica — a viagem guarda o nome da hora e o historico fica; inexistente -> 404 (ajuste T-7). */
@@ -1635,4 +1802,6 @@ module.exports = {
   updateHorimetroVeiculoSeMaior, conferirHorimetroDoRetorno,
   // Frota Etapa 8
   listDestinos, createDestino, updateDestino, deleteDestino, lerCondutor, bit01, MSG_CONDUTOR_LONGO, MSG_DESTINO_404,
+  // Frota Etapa 9
+  enderecoDaOrigem, montarEnderecoDestino, UFS_BRASIL,
 };

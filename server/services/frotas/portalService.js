@@ -171,13 +171,15 @@ async function inicio(db, user) {
     FROM frotas_veiculos v
     WHERE v.ativo = 1 AND COALESCE(v.status, 'ativo') NOT IN ('vendido', 'inativo')
     ORDER BY v.placa`);
-  // Frota Etapa 8 (RN-F8.32): os destinos ativos para o select da saida
-  const destinos = await dbAll(db, 'SELECT id, nome, endereco FROM frotas_destinos WHERE ativo = 1 ORDER BY nome COLLATE NOCASE, id');
+  // Frota Etapa 8 (RN-F8.32): os destinos ativos para o select da saida; Etapa 9 (RN-F9.09/16): + cidade e uf (`Nome — Cidade/UF`)
+  const destinos = await dbAll(db, 'SELECT id, nome, endereco, cidade, uf FROM frotas_destinos WHERE ativo = 1 ORDER BY nome COLLATE NOCASE, id');
   return {
     motorista: m ? { id: m.id, nome: m.nome, cnh_validade: m.cnh_validade || null } : null,
     viagem_aberta: viagemAberta,
     veiculos: veiculos.map((v) => ({ ...v, em_uso: !!v.em_uso })),
     destinos,
+    // Frota Etapa 9 (RN-F9.22/23, B94): a origem fixa da saida com o endereco da GMP (Configuracoes -> Empresa); '' se nao cadastrado
+    origem: { nome: ORIGEM_PADRAO, endereco: await frotasService.enderecoDaOrigem(db) },
     itens: ITENS_CHECKLIST.map((i) => ({ chave: i.chave, rotulo: i.rotulo })),
     vistas: VISTAS_AVARIA,
     tipos_avaria: TIPOS_AVARIA,

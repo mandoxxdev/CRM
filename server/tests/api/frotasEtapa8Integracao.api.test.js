@@ -21,6 +21,7 @@
 const assert = require('assert');
 const XLSX = require('xlsx');
 const { createFrotasTestApp, comLoginReal, ADMIN } = require('../helpers/frotasTestApp');
+const { comEndereco, ENDERECO_OK_MONTADO } = require('../helpers/frotasDestinoFixture');
 const { dbRun, dbGet, dbAll } = require('../../services/frotas/db');
 const portalService = require('../../services/frotas/portalService');
 const frotasService = require('../../services/frotas/frotasService');
@@ -85,14 +86,17 @@ test('RN-F8.38 pela rota (login real): liberar -> inicio -> destino -> saida GMP
   assert.deepStrictEqual(ini0.body.destinos, [], 'ainda sem destinos');
 
   // a Ana cadastra o destino pelo "+ Novo destino" (RN-F8.27: registrar_operacoes)
-  const d = await ana('post', '/api/frotas/destinos', { nome: 'Obra Beta' });
+  // Frota Etapa 9 (A12): destino novo exige o endereco estruturado (RN-F9.02)
+  const d = await ana('post', '/api/frotas/destinos', comEndereco({ nome: 'Obra Beta' }));
   assert.strictEqual(d.status, 201, JSON.stringify(d.body));
   assert.strictEqual(d.body.nome, 'Obra Beta');
   assert.strictEqual(d.body.ativo, 1);
   assert.strictEqual(d.body.criado_por_id, ANA, 'o login real poe a Ana como quem cadastrou');
   S.d = d.body;
   const ini1 = await ana('get', '/api/frotas/portal/inicio');
-  assert.deepStrictEqual(ini1.body.destinos, [{ id: S.d.id, nome: 'Obra Beta', endereco: null }]);
+  // Etapa 9 (RN-F9.09): + cidade e uf; o endereco e o montado
+  assert.deepStrictEqual(ini1.body.destinos,
+    [{ id: S.d.id, nome: 'Obra Beta', endereco: ENDERECO_OK_MONTADO, cidade: 'São Bernardo do Campo', uf: 'SP' }]);
 
   // a saida: destino pelo id, condutor, SEM origem (RN-F8.17/18/31)
   const saida = await ana('post', REG, {
@@ -178,7 +182,7 @@ test('RN-F8.39 pelo servico (sem HTTP): createDestino + registrar com o carro li
   const anaUser = { id: ANA, nome: 'Ana', role: 'usuario' };
   const v = await frotasService.createVeiculo(db, { placa: 'INT8002', km_atual: 300, uso_funcionarios: true });
   assert.strictEqual(v.uso_funcionarios, 1);
-  const dest = await frotasService.createDestino(db, anaUser, { nome: ' Cliente Gama ', endereco: 'Av. G, 1' });
+  const dest = await frotasService.createDestino(db, anaUser, comEndereco({ nome: ' Cliente Gama ', logradouro: 'Av. G', numero: '1' }));
   assert.strictEqual(dest.nome, 'Cliente Gama');
   assert.strictEqual(dest.criado_por_id, ANA);
   const ini = await portalService.inicio(db, anaUser);

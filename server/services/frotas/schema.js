@@ -319,6 +319,11 @@ async function initSchema(db) {
   )`);
   await dbRun(db, `CREATE UNIQUE INDEX IF NOT EXISTS ux_frotas_destinos_nome_ativo
     ON frotas_destinos (nome COLLATE NOCASE) WHERE ativo = 1`);
+  // Frota Etapa 9 (RN-F9.01): endereco estruturado do destino. `endereco` continua e passa a ser MONTADO pelo servidor a partir
+  // destas colunas; os destinos da Etapa 8 (so nome/endereco texto) ficam como estao (B92).
+  for (const col of ['cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf']) {
+    await safeAlter(db, `ALTER TABLE frotas_destinos ADD COLUMN ${col} TEXT`);
+  }
 
   // Frota Etapa 5 (RN-F5.01): fotos do registro (frotas_checklists) e do abastecimento. O banco guarda so o nome do arquivo; a URL
   // assinada e feita na saida. Exclusao do lancamento apaga as linhas daqui (RN-F5.08) — sem FK porque as duas tabelas-mae sao outras.
