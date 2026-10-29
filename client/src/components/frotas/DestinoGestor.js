@@ -70,6 +70,13 @@ export function DestinoDaViagemGestor({ form, setForm, editing, aux }) {
   // RN-F9.19: destino texto antigo, sem destino_id — o select fica vazio e a nota diz o que esta gravado.
   const notaTextoAntigo = editing && (gravadoId == null || gravadoId === '') && gravadoTexto
     ? `Destino gravado: ${gravadoTexto}. Escolha da lista só se quiser trocar.` : '';
+  // B97: o destino da viagem foi renomeado depois — a lista mostra o nome de hoje, a viagem guarda o da epoca (o servidor nao renomeia
+  // ao salvar o mesmo id, RN-F9.12/A5). A nota diz os dois para ninguem achar que a viagem mudou.
+  const atualDoGravado = gravadoId != null && gravadoId !== '' ? destinos.find((d) => mesmoId(d.id, gravadoId)) : null;
+  const notaRenomeado = editing && atualDoGravado && gravadoTexto && String(atualDoGravado.nome).trim() !== gravadoTexto
+    && mesmoId(form.destino_id, gravadoId)
+    ? `Esta viagem guarda o nome da época: ${gravadoTexto}. O destino hoje se chama ${String(atualDoGravado.nome).trim()}; salvar não muda o nome gravado.`
+    : '';
   // A11: no gestor nao da para TIRAR o destino (vazio/null mantem o gravado) — por isso, na edicao de viagem com destino, a opcao vazia
   // diz que mantem, em vez de oferecer um "sem destino" que o servidor ignoraria.
   const temGravado = !!editing && ((gravadoId != null && gravadoId !== '') || !!gravadoTexto);
@@ -103,6 +110,7 @@ export function DestinoDaViagemGestor({ form, setForm, editing, aux }) {
           )}
         </div>
         {notaTextoAntigo && <div className="frotas-aviso-campo" role="note" data-testid="destino-gravado">{notaTextoAntigo}</div>}
+        {notaRenomeado && <div className="frotas-aviso-campo" role="note" data-testid="destino-renomeado">{notaRenomeado}</div>}
       </div>
       {novoAberto && (
         <NovoDestinoBloco

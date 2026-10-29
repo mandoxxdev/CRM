@@ -48,6 +48,8 @@ const VIAGENS = [
   { id: 12, veiculo_id: 1, placa: 'ABC1D23', origem: 'Fabrica', destino: 'Cliente Velho', destino_id: null, status: 'concluida' },
   // 2: destino da lista que o gestor desativou depois; origem NULL (antes da Etapa 8)
   { id: 13, veiculo_id: 1, placa: 'ABC1D23', origem: null, destino: 'Galpão 5', destino_id: 5, status: 'concluida' },
+  // 3: destino da lista renomeado depois (B97): a viagem guarda 'Obra Velha', o cadastro 2 hoje se chama 'Obra Antiga'
+  { id: 14, veiculo_id: 1, placa: 'ABC1D23', origem: 'GMP', destino: 'Obra Velha', destino_id: 2, status: 'concluida' },
 ];
 
 let container; let root;
@@ -272,6 +274,23 @@ describe('RN-F9.19 / A10 / A11 — Editar viagem', () => {
   test('A10 metade negativa: a Nova Viagem nao mostra opcao "(desativado)"', async () => {
     await novaViagem();
     expect(opcoes().some(([, t]) => t.includes('(desativado)'))).toBe(false);
+  });
+
+  test('B97 destino renomeado depois: a nota diz o nome gravado e o de hoje; salvar manda o mesmo id', async () => {
+    await render(<FrotasViagens />);
+    await clicar(editarLinha(3));
+    expect(selectDestino().value).toBe('2');
+    expect(container.querySelector('[data-testid="destino-renomeado"]').textContent)
+      .toBe('Esta viagem guarda o nome da época: Obra Velha. O destino hoje se chama Obra Antiga; salvar não muda o nome gravado.');
+    await salvar();
+    expect(api.put.mock.calls[0][1].destino_id).toBe(2);
+  });
+
+  test('B97 metade negativa: destino com o mesmo nome (viagem 0) nao mostra a nota de renomeado', async () => {
+    await render(<FrotasViagens />);
+    await clicar(editarLinha(0));
+    expect(selectDestino().value).toBe('1');
+    expect(container.querySelector('[data-testid="destino-renomeado"]')).toBeNull();
   });
 });
 
