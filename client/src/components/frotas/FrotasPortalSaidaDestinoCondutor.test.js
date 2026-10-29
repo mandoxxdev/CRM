@@ -3,6 +3,10 @@
  * (RN-F8.23, 24, 33, 34, 34b, 35), contra o contrato congelado em
  * docs/superpowers/plans/2026-10-28-frotas-etapa8-admin-destinos-condutor.md. So a fronteira HTTP (`api`) e mockada.
  *
+ * Etapa 9 (A13): o "+ Novo destino" perdeu o campo texto "Endereço (opcional)" (novo_destino_endereco) e ganhou o endereco
+ * estruturado (RN-F9.15); os testes que digitavam nele ou travavam o corpo `{ nome[, endereco] }` foram ajustados de proposito.
+ * O componente de endereco em si e testado em FrotasEnderecoDestino.test.js.
+ *
  * Executar: cd client && CI=true npx react-scripts test src/components/frotas/FrotasPortalSaidaDestinoCondutor --watchAll=false
  */
 import React, { act } from 'react';
@@ -203,14 +207,18 @@ describe('RN-F8.33 — seletor de destino e o bloco "+ Novo destino"', () => {
     expect(bloco()).toBeNull();
   });
 
-  test('+ Novo destino abre o bloco com Nome, Endereco (opcional), Adicionar e Cancelar; Cancelar fecha sem chamar o servidor', async () => {
+  test('+ Novo destino abre o bloco com Nome, o endereco (CEP ou a mao), Adicionar e Cancelar; Cancelar fecha sem chamar o servidor', async () => {
     await abrirSaida();
     await clicar(botao('+ Novo destino'));
     expect(bloco()).not.toBeNull();
     expect(bloco().querySelector('[name="novo_destino_nome"]')).not.toBeNull();
-    expect(bloco().querySelector('[name="novo_destino_endereco"]')).not.toBeNull();
+    // Etapa 9 (RN-F9.15): sai o "Endereço (opcional)"; entram os campos do endereco.
+    expect(bloco().querySelector('[name="novo_destino_endereco"]')).toBeNull();
+    expect(bloco().textContent).not.toContain('Endereço (opcional)');
+    ['cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf']
+      .forEach((k) => expect(bloco().querySelector(`[name="novo_destino_${k}"]`)).not.toBeNull());
     expect(bloco().textContent).toContain('Nome');
-    expect(bloco().textContent).toContain('Endereço (opcional)');
+    expect(bloco().textContent).toContain('Não sabe o CEP? Preencha os campos à mão.');
     expect(botao('Adicionar')).toBeDefined();
     expect(botao('Cancelar')).toBeDefined();
     digitar('novo_destino_nome', 'Obra Norte');
@@ -234,29 +242,41 @@ describe('RN-F8.33 — seletor de destino e o bloco "+ Novo destino"', () => {
 });
 
 describe('RN-F8.34 — Adicionar: 201, 409 duplicado e outro erro', () => {
-  test('201: POST /frotas/destinos { nome, endereco }, o destino entra na lista selecionado, o bloco fecha, toast "Destino adicionado"', async () => {
+  test('201: POST /frotas/destinos { nome + endereco estruturado }, o destino entra na lista selecionado, o bloco fecha, toast "Destino adicionado"', async () => {
     api.post.mockResolvedValueOnce({ data: { id: 7, nome: 'Obra Norte', endereco: 'Rua A', ativo: 1 } });
     await abrirSaida();
     await clicar(botao('+ Novo destino'));
     digitar('novo_destino_nome', '  Obra Norte ');
-    digitar('novo_destino_endereco', ' Rua A ');
+    digitar('novo_destino_logradouro', ' Rua A ');
+    digitar('novo_destino_numero', '10');
+    digitar('novo_destino_bairro', 'Centro');
+    digitar('novo_destino_cidade', 'Diadema');
+    digitar('novo_destino_uf', 'SP');
     await clicar(botao('Adicionar'));
     expect(api.post).toHaveBeenCalledTimes(1);
-    expect(api.post).toHaveBeenCalledWith('/frotas/destinos', { nome: 'Obra Norte', endereco: 'Rua A' });
+    expect(api.post).toHaveBeenCalledWith('/frotas/destinos', {
+      nome: 'Obra Norte', cep: '', logradouro: 'Rua A', numero: '10', complemento: '', bairro: 'Centro', cidade: 'Diadema', uf: 'SP',
+    });
     expect(opcoesDestino()).toEqual(['', '1', '2', '7']);
     expect(selectDestino().value).toBe('7');
     expect(bloco()).toBeNull();
     expect(toast.success).toHaveBeenCalledWith('Destino adicionado');
   });
 
-  test('201 sem endereco: o corpo leva so { nome }', async () => {
-    api.post.mockResolvedValueOnce({ data: { id: 8, nome: 'Porto', endereco: null, ativo: 1 } });
+  // Etapa 9 (B90): o endereco e obrigatorio, mas quem confere e o servidor — a tela manda as 7 chaves (vazias) e mostra a recusa no
+  // bloco. Antes: "201 sem endereco: o corpo leva so { nome }".
+  test('sem endereco: o corpo leva as 7 chaves vazias e o 400 do servidor fica no bloco, aberto', async () => {
+    api.post.mockRejectedValueOnce({ response: { status: 400, data: { error: 'Informe a rua (logradouro) do destino' } } });
     await abrirSaida();
     await clicar(botao('+ Novo destino'));
     digitar('novo_destino_nome', 'Porto');
     await clicar(botao('Adicionar'));
-    expect(api.post).toHaveBeenCalledWith('/frotas/destinos', { nome: 'Porto' });
-    expect(selectDestino().value).toBe('8');
+    expect(api.post).toHaveBeenCalledWith('/frotas/destinos', {
+      nome: 'Porto', cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '',
+    });
+    expect(bloco()).not.toBeNull();
+    expect(bloco().textContent).toContain('Informe a rua (logradouro) do destino');
+    expect(selectDestino().value).toBe('');
   });
 
   test('409 DESTINO_DUPLICADO: seleciona o existente (ja na lista, sem duplicar), fecha o bloco, toast.info', async () => {

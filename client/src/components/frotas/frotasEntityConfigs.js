@@ -5,6 +5,9 @@
 import { hojeLocalISO } from '../../utils/dataLocal';
 import { ColunaFotos } from './FotosFrota';
 import { AcoesDaPendencia, SituacaoTratadaGestor, pendenciaTratada } from './TratarPendencia';
+import {
+  EnderecoDoDestinoGestor, OrigemDaViagemGestor, DestinoDaViagemGestor, aoFalharSalvarViagem,
+} from './DestinoGestor';
 
 // Etapa 164 (RN-164.06, B1048): as datas padrao dos formularios sao o dia LOCAL (antes o toISOString, o dia UTC: das 21h, amanha)
 const TIPO_REGISTRO = { saida: 'Saída', retorno: 'Retorno', inspecao: 'Inspeção' };
@@ -383,12 +386,18 @@ export const ENTITY_CONFIGS = {
     needsVeiculos: true,
     needsMotoristas: true,
     extraActions: true,
-    // Frota Etapa 8 (RN-F8.25): a viagem nova ja sai de GMP (o escritorio da empresa) — e so uma sugestao, o campo continua editavel.
-    // Ajuste 18 do plano (aceito): viagem antiga com origem NULL abre com GMP preenchido e, salva, grava GMP.
-    // RN-F8.37 (B79): Destino continua texto livre no gestor; so o portal escolhe da lista de Destinos.
+    // Frota Etapa 9 (RN-F9.18, A9): o Destino e escolhido na lista dos ativos (com "+ Novo destino"); o 400 "Destino nao encontrado"
+    // recarrega a lista e limpa a selecao.
+    needsDestinos: true,
+    aoFalharSalvar: aoFalharSalvarViagem,
+    // Origem (RN-F9.24): nao e mais campo. `origem` continua no form, fora da tela: a viagem nova vai com GMP (o mesmo que o servidor
+    // grava sem origem) e a editada vai com a gravada (openEdit so troca o padrao por valor nao nulo) — a antiga com outra origem a
+    // mantem e a antiga com origem NULL ganha GMP (ajuste 18 da Etapa 8), sem depender de como o PUT trata a origem ausente.
+    // Destino (RN-F9.18/19, A11): sai o `destino` texto do form — o corpo leva so `destino_id`; vazio vira null e o servidor mantem o
+    // gravado (texto antigo inclusive). Por isso nao ha como TIRAR o destino pelo gestor, como no condutor (B80).
     getDefaultForm: () => ({
       veiculo_id: '', motorista_id: '', condutor_nome: '', data_saida: '', data_retorno: '',
-      km_saida: '', km_retorno: '', horimetro_saida: '', horimetro_retorno: '', origem: 'GMP', destino: '', finalidade: '', setor: '',
+      km_saida: '', km_retorno: '', horimetro_saida: '', horimetro_retorno: '', origem: 'GMP', destino_id: '', finalidade: '', setor: '',
       status: 'solicitada', observacoes: '',
     }),
     formFields: (meta, form, setForm, veiculos, motoristas) => [
@@ -402,8 +411,8 @@ export const ENTITY_CONFIGS = {
       { key: 'km_retorno', label: 'KM retorno', type: 'number' },
       { key: 'horimetro_saida', label: 'Horímetro saída (máquina)', type: 'number' },
       { key: 'horimetro_retorno', label: 'Horímetro retorno (máquina)', type: 'number' },
-      { key: 'origem', label: 'Origem' },
-      { key: 'destino', label: 'Destino' },
+      { key: '_origem', type: 'componente', Componente: OrigemDaViagemGestor },
+      { key: '_destino', type: 'componente', Componente: DestinoDaViagemGestor },
       { key: 'finalidade', label: 'Finalidade' },
       { key: 'setor', label: 'Setor', type: 'select', options: (meta?.setores || []).map((s) => ({ value: s, label: s })) },
       { key: 'status', label: 'Status', type: 'select', options: (meta?.statusViagem || []).map((s) => ({ value: s, label: s.replace('_', ' ') })) },
@@ -471,7 +480,7 @@ export const ENTITY_CONFIGS = {
     subtitle: 'Lugares de entrega e retirada que o motorista escolhe na saída',
     breadcrumb: 'Destinos',
     newLabel: 'Novo Destino',
-    searchPlaceholder: 'Buscar por nome ou endereço...',
+    searchPlaceholder: 'Buscar por nome, endereço, bairro, cidade ou CEP...',
     columns: [
       { key: 'nome', label: 'Nome', bold: true },
       { key: 'endereco', label: 'Endereço' },
@@ -489,10 +498,15 @@ export const ENTITY_CONFIGS = {
         { value: '1', label: 'Todos' },
       ] },
     ],
-    getDefaultForm: () => ({ nome: '', endereco: '', ativo: 1 }),
+    // Frota Etapa 9 (RN-F9.17): o endereco estruturado (CEP que busca, ou a mao); a coluna Endereco mostra o `endereco` que o servidor
+    // monta. O form manda as 7 chaves sempre (vazio vira null): destino antigo sem endereco com tudo vazio passa sem mudar o endereco
+    // (A2) e o `endereco` texto nao vai (o servidor o ignora, RN-F9.06).
+    getDefaultForm: () => ({
+      nome: '', cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '', ativo: 1,
+    }),
     formFields: () => [
-      { key: 'nome', label: 'Nome *', required: true },
-      { key: 'endereco', label: 'Endereço' },
+      { key: 'nome', label: 'Nome *', required: true, full: true },
+      { key: '_endereco', type: 'componente', Componente: EnderecoDoDestinoGestor },
       // O select devolve texto ('1'/'0'); o servidor normaliza 0/1/'0'/'1'.
       { key: 'ativo', label: 'Status', type: 'select', options: [{ value: 1, label: 'Ativo' }, { value: 0, label: 'Desativado' }] },
     ],

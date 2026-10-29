@@ -336,3 +336,49 @@
   .portal-opcoes-5 { grid-template-columns: repeat(3, 1fr); }
   .portal-linha { flex-direction: column; }
 }
+
+/* Frota Etapa 9 (RN-F9.13/23): endereco da GMP embaixo do "Saindo de"; o endereco do novo destino (CEP + Buscar na mesma linha,
+   numero/complemento e cidade/UF lado a lado, empilhados no celular estreito, como a .portal-linha). */
+.portal-origem-endereco {
+  margin-top: 4px;
+  font-size: 0.9rem;
+  color: var(--gmp-text-light);
+}
+
+.endereco-destino-portal {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.portal-motorista .endereco-cep-linha .endereco-botao-buscar {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding: 10px 14px;
+}
+
+.endereco-cep-linha input {
+  flex: 1;
+  min-width: 0;
+}
+
+.endereco-dica {
+  font-size: 0.85rem;
+  color: var(--gmp-text-light);
+}
+
+.endereco-aviso-cep {
+  margin: 0;
+}
+
+.endereco-linha-numero .portal-campo:first-child,
+.endereco-linha-cidade .portal-campo:last-child {
+  flex: 0 0 34%;
+}
+
+@media (max-width: 380px) {
+  .endereco-linha-numero .portal-campo:first-child,
+  .endereco-linha-cidade .portal-campo:last-child {
+    flex: 1 1 auto;
+  }
+}
