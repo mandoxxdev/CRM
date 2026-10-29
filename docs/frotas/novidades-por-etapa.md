@@ -291,7 +291,9 @@ ORDER BY c.data_checklist;
 - **C20 — para corrigir o texto de um tratamento**, use **Desfazer tratamento** e trate de novo (não há editar).
 - **C21 — a janela de fotos do gestor mostra o que a lista tinha quando ela abriu.** Se outra pessoa removeu uma foto nesse meio tempo, ela
   ainda aparece; ao tentar remover, *"Foto não encontrada"* e ela some da janela. A lista por trás só se atualiza ao **Fechar** (B75).
-- **C22 — quem deixa de ser Administrador de Frota pela tela continua vendo o menu de administrador até recarregar a página.** O servidor
+- **C22 — RESOLVIDO em 2026-10-29 (`1b5d087d`) para o Painel:** o Painel do Frota devolve o perfil de quem abre e, se mudou, renova o menu
+  sozinho (ao abrir ou no Atualizar; com o Painel aberto há menos de 45 s, só no Atualizar). Nas outras telas do gestor continua o abaixo
+  até abrir o Painel ou recarregar. *Dizia:* quem deixa de ser Administrador de Frota pela tela continua vendo o menu de administrador até recarregar a página. O servidor
   já recusa tudo no pedido seguinte (Perfis de acesso abre com *"Sem permissão para esta operação"*, salvar dá erro); só a tela demora a
   perceber, porque o painel responde normalmente a quem virou Consulta e nada manda renovar o usuário. Quem **vira** Administrador no
   portal vê o menu novo na hora (o portal percebe a diferença).
@@ -1029,7 +1031,7 @@ tela de usuários do sistema, o *Fabio* aparece marcado em "administra o módulo
 esta tela."* — por isso sempre sobra pelo menos um administrador.
 
 **3. Tirar.** Como administrador, na linha do *Fabio* escolha **Consulta** (sem pergunta) → *"Perfil definido: Consulta"*. O *Fabio* já não
-grava nada no clique seguinte; o menu dele muda ao recarregar a página (C22).
+grava nada no clique seguinte; o menu dele muda ao abrir o **Painel** ou recarregar a página (C22, resolvido para o Painel em 2026-10-29).
 
 **4. Superadmin não se mexe.** Na linha do superadmin: etiqueta **Administrador** e *"Superadmin ou administrador do sistema: não se altera
 por esta tela."*. Pela API: *"Este usuário é superadmin ou administrador do sistema e tem acesso total à frota. Isso não se altera por esta

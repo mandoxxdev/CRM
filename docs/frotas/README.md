@@ -422,7 +422,7 @@ a origem pela API continua aceitando outro lugar (só a tela é fixa).
 ## O que as Etapas 1 a 9 **não** cobrem
 
 - Saber **quem** mudou um perfil (não há trilha); lembrar o Consulta de quem foi administrador **pelo cadastro de usuário** e deixou de
-  ser; o menu de quem **deixa** de ser administrador só muda ao recarregar a página. *(Dizia: "Dar Administrador de Frota pela tela de
+  ser; o menu de quem **deixa** de ser administrador muda ao abrir o **Painel** (ou no Atualizar dele); nas outras telas, só ao recarregar. *(Dizia: "Dar Administrador de Frota pela tela de
   Perfis" — resolvido na Etapa 8.)*
 - **Destinos:** acento conta como letra diferente ("Sao Paulo" e "São Paulo" cabem os dois); o formulário de **Viagens** do gestor
   continua com destino em texto; não há mapa nem coordenadas.

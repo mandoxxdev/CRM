@@ -567,8 +567,9 @@ no Frota**, **O que isso permite** e **Motorista ligado** (o motorista cujo cada
 - **Duas telas abertas ao mesmo tempo.** Se o administrador do sistema estava com o **cadastro de usuário** de uma pessoa aberto **antes**
   de você dar Administrador de Frota a ela aqui, e salvar o cadastro depois (mesmo sem mexer em módulo), o Administrador que você deu
   **some** — a tela dele manda a lista de módulos que carregou. Dê de novo aqui. Quem **vira** Administrador vê o menu novo ao abrir o
-  Meu painel; quem **deixa** de ser continua vendo o menu antigo até recarregar a página (os botões já não funcionam: *"Sem permissão para
-  esta operação"*).
+  Meu painel; quem **deixa** de ser vê o menu mudar sozinho ao abrir o **Painel** do Frota (a tela de entrada do módulo) ou tocar
+  **Atualizar** nele — se tinha aberto o Painel menos de 45 segundos antes, só no **Atualizar** ou na abertura seguinte. Nas outras telas do
+  gestor o menu antigo fica até abrir o Painel ou recarregar a página, mas os botões já não funcionam: *"Sem permissão para esta operação"*.
 - O sistema guarda a data da última mudança de cada perfil, mas não quem mudou.
 
 ---

@@ -180,7 +180,8 @@ O módulo continua **pronto para uso** (B72). O que sobra, por ordem:
    máquina (D12); a tela antiga "Novo Checklist" (C5); a lista inicial de destinos (agora com endereço); conferir o endereço e o **CEP
    da GMP em Configurações → Empresa** (o seed vem sem CEP).
 2. **Pequenos, sem etapa própria:** (a) ~~teste da RN-F8.19 com gancho no lugar do `sleep`~~ **feito em `b5d77cd7`** (2026-10-29): `quantosNaFila()` + helper
-   `esperarFilaDeViagens`, nos três testes de corrida da fila (RN-F8.19, RN-F8.31, RN-F9.10); (b) C22 — o painel devolver `perfil`; (c) B86 — `nome_chave` sem acento; (d) B97 — se o André quiser, a opção da edição
+   `esperarFilaDeViagens`, nos três testes de corrida da fila (RN-F8.19, RN-F8.31, RN-F9.10); (b) ~~C22 — o painel devolver `perfil`~~ **feito em `1b5d087d`** (2026-10-29; só o Painel percebe — as outras telas do
+   gestor ainda dependem de abrir o Painel ou recarregar); (c) B86 — `nome_chave` sem acento; (d) B97 — se o André quiser, a opção da edição
    mostrar o nome gravado quando difere do atual (`DestinoDaViagemGestor` em `client/src/components/frotas/DestinoGestor.js`: comparar
    `editing.destino` com o nome da opção de mesmo id); (e) B36.
 3. **Antes de apresentar:** clicar os roteiros E2, E4, E9, E14, E16, E20, E23, E25 e **E28** (Etapa 9: precisa de internet para o CEP);
