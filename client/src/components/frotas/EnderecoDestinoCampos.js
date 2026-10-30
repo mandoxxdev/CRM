@@ -59,12 +59,13 @@ const LIMITES = { logradouro: 150, numero: 20, complemento: 60, bairro: 80, cida
  * @param variante   'portal' (celular, classes portal-*) ou 'gestor' (itens do grid do modal, classes frotas-form-group)
  * @param prefixo    prefixo dos `name` dos campos (ex.: 'novo_destino_')
  * @param enderecoAntigo  A2: texto do endereco antigo (destino gravado antes da Etapa 9), mostrado so para leitura acima dos campos
- * @param enterBusca  Fase 5 (F2): Enter no CEP busca (em vez de enviar o formulario de fora). So o "+ Novo destino" liga: na tela
- *                    Destinos o Enter continua salvando o destino, como em qualquer formulario.
+ * Enter no CEP sempre BUSCA (em vez de enviar o formulario de fora). Fase 5 (F2) ligava so no "+ Novo destino"; desde 30/10 tambem na
+ * tela Destinos (no uso real, CEP + Enter salvava o destino sem rua e o toast dizia "Informe a rua"). Nos outros campos da tela Destinos
+ * o Enter continua salvando; no "+ Novo destino" o NovoDestinoBloco segura o Enter dos outros campos.
  * @param aoMudarBusca  Fase 5 (F3): avisa o pai quando a busca do CEP comeca (true) e termina (false).
  */
 export default function EnderecoDestinoCampos({
-  valor, aoMudar, variante = 'portal', prefixo = '', desabilitado = false, enderecoAntigo = '', enterBusca = false, aoMudarBusca,
+  valor, aoMudar, variante = 'portal', prefixo = '', desabilitado = false, enderecoAntigo = '', aoMudarBusca,
 }) {
   const v = { ...ENDERECO_VAZIO, ...(valor || {}) };
   const [buscando, setBuscando] = useState(false);
@@ -129,7 +130,7 @@ export default function EnderecoDestinoCampos({
         aria-label="CEP"
         onChange={(e) => { aoMudar({ cep: formatarCEP(e.target.value.slice(0, 9)) }); setAviso(''); }}
         onBlur={() => buscar('blur')}
-        onKeyDown={enterBusca ? (e) => { if (e.key === 'Enter') { e.preventDefault(); buscar('botao'); } } : undefined}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); buscar('botao'); } }}
       />
       <button
         type="button"
@@ -284,7 +285,7 @@ export function NovoDestinoBloco({
 
   const portal = variante === 'portal';
   // Fase 5 (F2): o bloco mora dentro do <form> da saida (portal) e do modal da viagem (gestor); Enter num campo dele enviava o formulario
-  // de fora, registrando a saida/viagem sem o destino. Aqui o Enter nao faz nada (no CEP ele busca — EnderecoDestinoCampos enterBusca).
+  // de fora, registrando a saida/viagem sem o destino. Aqui o Enter nao faz nada (no CEP ele busca — EnderecoDestinoCampos).
   const segurarEnter = (e) => { if (e.key === 'Enter' && e.target.tagName !== 'BUTTON') e.preventDefault(); };
   const rotuloAdicionar = buscandoCep ? 'Buscando CEP…' : 'Adicionar';
   const campoNome = (
@@ -304,7 +305,6 @@ export function NovoDestinoBloco({
       variante={variante}
       prefixo="novo_destino_"
       desabilitado={salvando}
-      enterBusca
       aoMudarBusca={setBuscandoCep}
     />
   );

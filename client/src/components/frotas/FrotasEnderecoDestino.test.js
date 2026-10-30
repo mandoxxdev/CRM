@@ -526,12 +526,18 @@ describe('Fase 5 — revisao do C1', () => {
     expect(container.querySelector('[data-testid="novo-destino"]')).not.toBeNull();
   });
 
-  test('Fase5-F2 metade negativa: na tela Destinos do gestor o Enter nos campos de endereco segue enviando o formulario do destino', async () => {
+  // Frota 30/10 (achado no uso real, estimativa f1035fbc): na tela Destinos o Enter no CEP BUSCA (antes salvava o destino sem rua e o
+  // toast dizia "Informe a rua"); nos outros campos de endereco o Enter segue enviando o formulario do destino.
+  test('Destinos do gestor: Enter no CEP busca o endereco; Enter na rua segue enviando o formulario do destino', async () => {
     await montarDestinos();
     await clicar(editarLinha(0));
     expect(tecla('logradouro')).toBe(true);
-    expect(tecla('cep')).toBe(true);
-    expect(chamadasCep()).toHaveLength(0);
+    digitar('cep', '09844100');
+    let enviou;
+    await act(async () => { enviou = tecla('cep'); });
+    await act(async () => {});
+    expect(enviou).toBe(false);
+    expect(chamadasCep()).toHaveLength(1);
   });
 
   test('Fase5-F3 com a busca do CEP correndo, "Adicionar" fica desligado e mostra "Buscando CEP…"; ao voltar, o POST leva a rua', async () => {
