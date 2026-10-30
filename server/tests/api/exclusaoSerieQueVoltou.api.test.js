@@ -132,19 +132,27 @@ const VOLTARAM = (nome) => `${nome}: as séries desta entrega já voltaram ao es
       }
       return original.call(db, sql, params, cb);
     };
-    let r; let entrada;
+    let r; let entrada; let desligou;
     try {
       const exclusao = excluir(req).then((x) => x);
       await lido;
+      // Etapa 193 Fase 5 (T4): o desligar vai pela porta do almoxarifado com a chave ligada e o superadmin (pode desligar com
+      // series presentes) — sem a chave a rota recusava 403 calada (cadastro so no Compras) e o desligar nunca entrava na
+      // corrida; pelo Compras, desligar a serie de material com series registradas e recusado (400, R1). Disparado JUNTO com
+      // a Entrada (nao depois dela: a Entrada espera a trava, e o desligar enviado depois ja chegava com a exclusao feita).
+      process.env.ALMOX_CADASTRO_MATERIAL = 'liberado';
+      const desligar = request(app).put(`/api/almoxarifado/materiais/${m.id}`).send({ controle_serie: false }).then((x) => x);
       const e = await v2(m, { tipo: 'ENTRADA', quantidade: 2, series: ['V1', 'V2'] });
-      await request(app).put(`/api/almoxarifado/materiais/${m.id}`).send({ controle_serie: false });
       entrada = e.status;
+      desligou = await desligar;
       r = await exclusao;
-    } finally { db.all = original; }
+    } finally { db.all = original; delete process.env.ALMOX_CADASTRO_MATERIAL; }
     assert.ok(disparou, 'gancho da leitura das series nao disparou');
     assert.strictEqual(r.status, 200, JSON.stringify(r.body));
     assert.deepStrictEqual(await estado(m), { fisico: 2, presentes: 2 }, 'a exclusao creditou sem serie no meio da Entrada');
     assert.strictEqual(entrada, 400, 'a Entrada das series que a exclusao devolveu deveria recusar (ja em estoque)');
+    assert.strictEqual(desligou.status, 200, JSON.stringify(desligou.body));
+    assert.strictEqual((await dbGet(db, 'SELECT controle_serie c FROM materiais_almoxarifado WHERE id = ?', [m.id])).c, 0);
   });
 
   await test('[RN-14b] declarado (Fase 5, r1): a Entrada de volta estornada com a serie desligada -> a exclusao recusa', async () => {
