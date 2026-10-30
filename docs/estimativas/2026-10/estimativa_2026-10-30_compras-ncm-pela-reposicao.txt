@@ -1,0 +1,9 @@
+*Planejamento — Compras: NCM preenchido também no pedido aberto pela Reposição*
+_30/10/2026_
+
+*1. NCM e peso no pedido que nasce da Reposição*
+O pedido de compra aberto pelo botão da Reposição (material abaixo do mínimo) passa a trazer o NCM e o peso do cadastro do material no item, como já acontece ao incluir o material pela busca.
+Tempo estimado: *1h15*
+
+*Total estimado: 1h15*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
