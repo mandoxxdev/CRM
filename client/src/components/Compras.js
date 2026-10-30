@@ -29,6 +29,8 @@ const OPCOES_STATUS = {
 const rotuloOsDoPedido = (pedido) => {
   if (pedido.os_numero) return pedido.os_numero;
   if (pedido.os_id != null) return `OS #${pedido.os_id}`;
+  // Etapa 192 (RN-192.08): a OS DIGITADA (OS nao cadastrada), como texto.
+  if (pedido.os_texto) return pedido.os_texto;
   return '';
 };
 

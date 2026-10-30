@@ -480,6 +480,7 @@ test('(c) submeter manda UM POST com o payload exato, sem numero e sem valor_tot
   expect(payload).toEqual({
     fornecedor_id: 312,
     os_id: null, // Etapa 171 (I6): sempre presente; null = estoque
+    os_texto: null, // Etapa 192 (RN-192.07): tambem sempre presente; null = sem OS digitada
     data_pedido: '2026-09-16',
     previsao_entrega: '2026-09-30',
     status: 'pendente',
@@ -556,6 +557,7 @@ test('(e) /compras/pedidos/editar/418 carrega o GET /:id, mostra os itens e subm
   expect(chamadasPut(418)[0][1]).toEqual({
     fornecedor_id: 312,
     os_id: null, // Etapa 171 (I6): sempre presente; null = estoque
+    os_texto: null, // Etapa 192 (RN-192.07): tambem sempre presente; null = sem OS digitada
     data_pedido: '2026-09-10',
     previsao_entrega: '2026-09-25',
     status: 'aprovado',
@@ -1373,6 +1375,7 @@ describe('RN-39', () => {
     expect(payload).toEqual({
       fornecedor_id: 312,
       os_id: null, // Etapa 171 (I6): sempre presente; null = estoque
+      os_texto: null, // Etapa 192 (RN-192.07): tambem sempre presente; null = sem OS digitada
       data_pedido: '2026-09-16',
       previsao_entrega: '2026-09-30',
       status: 'pendente',
@@ -1448,6 +1451,7 @@ describe('RN-39', () => {
     expect(chamadasPut(418)[0][1]).toEqual({
       fornecedor_id: 312,
       os_id: null, // Etapa 171 (I6): sempre presente; null = estoque
+      os_texto: null, // Etapa 192 (RN-192.07): tambem sempre presente; null = sem OS digitada
       data_pedido: '2026-09-10',
       previsao_entrega: '2026-09-25',
       status: 'aprovado',
@@ -1587,6 +1591,7 @@ describe('Etapa 171 — OS no pedido de compra', () => {
     expect(select.value).toBe('');
     expect(opcoesOs()).toEqual([
       ['', 'Estoque (sem OS)'],
+      ['__digitar__', 'OS não cadastrada — digitar'], // Etapa 192 (RN-192.07)
       ['58', 'OS-2026-058 — Frigorifico Serra'],
       ['57', 'OS-2026-057 — Laticinios Vale'],
       ['55', 'OS-2026-055'],
@@ -1682,7 +1687,7 @@ describe('Etapa 171 — OS no pedido de compra', () => {
     await renderizarEm('/compras/pedidos/novo');
     expect(toast.warn).toHaveBeenCalledWith('Não foi possível carregar as OS — o pedido pode ser salvo para estoque.');
     expect(alertas()).not.toContain('falhou');
-    expect(opcoesOs()).toEqual([['', 'Estoque (sem OS)']]);
+    expect(opcoesOs()).toEqual([['', 'Estoque (sem OS)'], ['__digitar__', 'OS não cadastrada — digitar']]);
     await preencherPedidoValido();
     await submeter();
     expect(chamadasPost()[0][1].os_id).toBeNull();
@@ -1701,5 +1706,74 @@ describe('Etapa 171 — OS no pedido de compra', () => {
     expect(chamadasPatchStatus(418)).toHaveLength(1);
     expect(chamadasPatchStatus(418)[0][1]).toEqual({ status: 'recebido' });
     expect(chamadasPut(418)).toHaveLength(0);
+  });
+});
+
+/**
+ * ── Etapa 192 — OS digitada (RN-192.07/08) e NCM/peso do material na linha nova (RN-192.09) ─────────────────────
+ *
+ * Contrato: a opcao "OS não cadastrada — digitar" (valor `__digitar__`) do `<select data-testid="pedido-os">` abre o campo
+ * `pedido-os-texto` (maxLength 60). O payload leva SEMPRE `os_id` e `os_texto` — um deles `null` (no `PUT`, `null` limpa
+ * e a chave ausente nao mexe). A edicao de pedido com `os_texto` abre ja na opcao de digitar, com o texto gravado.
+ */
+describe('Etapa 192 — OS digitada e NCM do material', () => {
+  test('(192a) escolher "OS não cadastrada — digitar" abre o campo e o POST leva os_texto com os_id null', async () => {
+    await renderizarEm('/compras/pedidos/novo');
+    expect(porTestId('pedido-os-texto')).toBeNull();
+    await preencherPedidoValido();
+    await selecionar(porTestId('pedido-os'), '__digitar__');
+    const campo = porTestId('pedido-os-texto');
+    expect(campo).not.toBeNull();
+    expect(campo.getAttribute('maxlength')).toBe('60');
+    digitar(campo, 'OS 4471 (cliente)');
+    await submeter();
+
+    const payload = chamadasPost()[0][1];
+    expect(payload.os_id).toBeNull();
+    expect(payload.os_texto).toBe('OS 4471 (cliente)');
+  });
+
+  test('(192b) com OS da lista o POST leva os_texto null; "digitar" sem texto vira estoque', async () => {
+    await renderizarEm('/compras/pedidos/novo');
+    await preencherPedidoValido();
+    await selecionar(porTestId('pedido-os'), '__digitar__');
+    digitar(porTestId('pedido-os-texto'), 'OS 9');
+    await selecionar(porTestId('pedido-os'), '57');
+    expect(porTestId('pedido-os-texto')).toBeNull();
+    await submeter();
+    expect(chamadasPost()[0][1]).toMatchObject({ os_id: 57, os_texto: null });
+  });
+
+  test('(192c) a edicao de pedido com os_texto abre na opcao de digitar e o PUT devolve o texto', async () => {
+    detalhe418 = { ...PEDIDO_418, os_id: null, os_numero: null, os_texto: 'OS 4471 (cliente)' };
+    await renderizarEm('/compras/pedidos/editar/418');
+    expect(porTestId('pedido-os').value).toBe('__digitar__');
+    expect(porTestId('pedido-os-texto').value).toBe('OS 4471 (cliente)');
+    await submeter();
+    expect(chamadasPut(418)[0][1]).toMatchObject({ os_id: null, os_texto: 'OS 4471 (cliente)' });
+  });
+
+  test('(192c2) na edicao de OS digitada, trocar para a OS da lista manda os_texto null (a chave viaja)', async () => {
+    detalhe418 = { ...PEDIDO_418, os_id: null, os_numero: null, os_texto: 'OS 4471 (cliente)' };
+    await renderizarEm('/compras/pedidos/editar/418');
+    await selecionar(porTestId('pedido-os'), '58');
+    await submeter();
+    const corpo = chamadasPut(418)[0][1];
+    expect('os_texto' in corpo).toBe(true);
+    expect(corpo).toMatchObject({ os_id: 58, os_texto: null });
+  });
+
+  test('(192d) a recusa do servidor da OS digitada aparece em role=alert', async () => {
+    const literal = 'OS digitada: no máximo 60 caracteres.';
+    api.post.mockImplementation((url, corpo) => (url === '/compras/pedidos/calcular'
+      ? Promise.resolve({ data: calcularComoServidor(corpo) })
+      : Promise.reject({ response: { status: 400, data: { error: literal } } })));
+    await renderizarEm('/compras/pedidos/novo');
+    await preencherPedidoValido();
+    await selecionar(porTestId('pedido-os'), '__digitar__');
+    digitar(porTestId('pedido-os-texto'), 'OS 1');
+    await submeter();
+    expect(alertas()).toContain(literal);
+    expect(porTestId('pedido-os-texto').value).toBe('OS 1');
   });
 });

@@ -146,9 +146,10 @@ app.get('/api/compras/pedidos', authenticateToken, checkModulePermission('compra
   const params = [];
 
   if (search) {
-    query += ' AND (p.numero LIKE ? OR f.razao_social LIKE ?)';
+    // Etapa 192 (RN-192.08): a busca acha tambem pela OS digitada (`os_texto`).
+    query += ' AND (p.numero LIKE ? OR f.razao_social LIKE ? OR p.os_texto LIKE ?)';
     const searchTerm = `%${search}%`;
-    params.push(searchTerm, searchTerm);
+    params.push(searchTerm, searchTerm, searchTerm);
   }
   if (status) {
     query += ' AND p.status = ?';

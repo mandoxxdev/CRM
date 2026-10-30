@@ -668,3 +668,23 @@ describe('Etapa 171 — coluna OS na aba Pedidos', () => {
     expect(Object.keys(linhas[0]).pop()).toBe('OS');
   }, 10000);
 });
+
+// Etapa 192 (RN-192.08) — a OS DIGITADA (`os_texto`, OS nao cadastrada) aparece na coluna OS e no Excel, como texto.
+describe('Etapa 192 — OS digitada na aba Pedidos', () => {
+  const PEDIDOS_TEXTO = [
+    { ...PEDIDO_419_NO_PRAZO, id: 441, numero: 'PC-2026-441', os_id: null, os_numero: null, os_texto: 'OS 4471 (cliente)' },
+    { ...PEDIDO_419_NO_PRAZO, id: 442, numero: 'PC-2026-442', os_id: 57, os_numero: 'OS-2026-057', os_texto: null },
+  ];
+
+  test('(192a) a celula OS mostra o texto digitado, e o Excel tambem', async () => {
+    pedidosDoBanco = PEDIDOS_TEXTO;
+
+    await renderizarEm('/compras/pedidos');
+    expect(celulasDaLinha(0)[6].textContent).toBe('OS 4471 (cliente)');
+    expect(celulasDaLinha(1)[6].textContent).toBe('OS-2026-057');
+
+    await clicar(botaoPorTexto('Exportar Excel'));
+    const [linhas] = exportToExcel.mock.calls[0];
+    expect(linhas.map((l) => l['OS'])).toEqual(['OS 4471 (cliente)', 'OS-2026-057']);
+  }, 10000);
+});

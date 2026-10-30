@@ -269,7 +269,39 @@ function normalizarOsId(valor) {
  * pedido de uma OS cancelada nao poderia mais ser editado em nada, nem para tirar a OS seria preciso, e o `<select>`
  * da tela manda a OS atual em todo `PUT`).
  */
+/**
+ * Etapa 192 (RN-192.07/08) — a OS DIGITADA (`os_texto`), para a OS que nao esta cadastrada. E so texto: nao passa por
+ * `assertOsAceitaCompra`, nao reserva nada no recebimento e nao entra no encerramento nem na trava de exclusao da OS
+ * (todos leem `os_id`). Mora no SERVICO, e nao no Zod, pelo mesmo motivo da OS: cotacao e importacao chamam
+ * `criarPedido` direto — e para a literal sair inteira, sem o prefixo `Dados inválidos — os_texto:` do `validate()`.
+ * `undefined` = nao mexe; `null`/`''`/so espacos = sem texto; o resto aparado, ate 60 caracteres (contados por
+ * caractere, nao por unidade UTF-16). Numero vira texto (planilha); outro tipo -> 400.
+ */
+const OS_TEXTO_MAX = 60;
+const OS_DOIS = 'Escolha a OS da lista ou digite, não os dois.';
+const OS_TEXTO_LONGA = 'OS digitada: no máximo 60 caracteres.';
+const OS_TEXTO_INVALIDA = 'OS digitada inválida.';
+function normalizarOsTexto(valor) {
+  if (valor === undefined) return undefined;
+  if (valor === null) return null;
+  if (typeof valor !== 'string' && !(typeof valor === 'number' && Number.isFinite(valor))) throw erro(OS_TEXTO_INVALIDA);
+  const t = String(valor).trim();
+  if (t === '') return null;
+  if ([...t].length > OS_TEXTO_MAX) throw erro(OS_TEXTO_LONGA);
+  return t;
+}
+
+/**
+ * RN-192.07 — `os_id` e `os_texto` sao EXCLUSIVOS, e no ESTADO FINAL: no `PUT` a chave ausente herda o gravado, entao
+ * mandar so `os_id` num pedido de OS digitada tambem recusa (descartado: limpar o outro calado — trocaria a OS do pedido
+ * sem o payload dizer). O formulario manda as duas chaves sempre, uma delas vazia.
+ */
+function assertOsExclusiva(osId, osTexto) {
+  if (osId !== null && osId !== undefined && osTexto !== null && osTexto !== undefined) throw erro(OS_DOIS);
+}
+
 async function assertOsAceitaCompra(db, osId, osIdAtual = null) {
+
   if (osId === undefined || osId === null) return;
   if (osIdAtual !== null && osIdAtual !== undefined && Number(osIdAtual) === osId) return;
   const os = await dbGet(db, 'SELECT id, numero_os, status FROM ordens_servico WHERE id = ?', [osId]);
@@ -626,6 +658,9 @@ async function criarPedido(db, dados, user) {
   await assertFornecedor(db, dados.fornecedor_id);
   // Etapa 171 (RN-171.02/03): a OS conferida ANTES de qualquer escrita, como o fornecedor.
   const osId = normalizarOsId(dados.os_id);
+  // Etapa 192 (RN-192.07): a OS digitada, exclusiva com a da lista — conferida antes da consulta da OS.
+  const osTexto = normalizarOsTexto(dados.os_texto);
+  assertOsExclusiva(osId, osTexto);
   await assertOsAceitaCompra(db, osId);
 
   const itensResolvidos = await resolverItens(db, dados.itens);
@@ -637,6 +672,7 @@ async function criarPedido(db, dados, user) {
   for (const [col, valor] of camposDoCabecalho(dados)) { colunas.push(col); valores.push(valor); }
   // Etapa 171 (RN-171.01): so quando HA OS — sem ela a coluna fica no NULL do DDL (pedido de estoque).
   if (osId) { colunas.push('os_id'); valores.push(osId); }
+  if (osTexto) { colunas.push('os_texto'); valores.push(osTexto); }
   // Etapa 39 (RN-39.04): o SNAPSHOT fiscal entra no MESMO INSERT do cabecalho — e no SERVICO, nao
   // na rota como a 32 fazia, para que a cotacao (`gerarPedidoDaCotacao`) e a importacao por
   // planilha, que chamam `criarPedido` direto, tambem emitam pedido com o fiscal congelado.
@@ -825,7 +861,7 @@ async function atualizarPedido(db, pedidoId, dados) {
   // Etapa 39 (RN-39.04): o `SELECT` passa a ler `fornecedor_id` atual, o snapshot e os encargos —
   // e o que decide se o snapshot e reescrito e o que preserva um encargo ausente no payload.
   const pedido = await dbGet(db, `SELECT id, numero, fornecedor_id, snap_fornecedor_nome, snap_fornecedor_cnpj,
-    total_icms_st, valor_frete, total_desconto, os_id FROM pedidos_compra WHERE id = ?`, [pedidoId]);
+    total_icms_st, valor_frete, total_desconto, os_id, os_texto FROM pedidos_compra WHERE id = ?`, [pedidoId]);
   if (!pedido) throw erro(PEDIDO_NAO_ENCONTRADO, 404);
 
   const linhaRecebida = await linhaComRecebimento(db, pedido.id);
@@ -836,6 +872,9 @@ async function atualizarPedido(db, pedidoId, dados) {
   // Etapa 171 (RN-171.04): colocar, trocar ou tirar a OS e por aqui, DEPOIS da guarda de recebimento acima (a OS nao
   // ganha excecao). Manter a mesma OS passa mesmo fechada (RN-171.03).
   const osId = normalizarOsId(dados.os_id);
+  // Etapa 192 (RN-192.08): ausente nao mexe, `''`/`null` limpa; a exclusividade vale para o que FICA gravado.
+  const osTexto = normalizarOsTexto(dados.os_texto);
+  assertOsExclusiva(osId === undefined ? pedido.os_id : osId, osTexto === undefined ? pedido.os_texto : osTexto);
   await assertOsAceitaCompra(db, osId, pedido.os_id);
   const itensResolvidos = await resolverItens(db, dados.itens);
 
@@ -844,6 +883,7 @@ async function atualizarPedido(db, pedidoId, dados) {
   for (const [col, valor] of camposDoCabecalho(dados)) { sets.push(`${col} = ?`); valores.push(valor); }
   // Etapa 171 (I6): ausente nao mexe; `null` TIRA a OS (por isso fora de `camposDoCabecalho`).
   if (osId !== undefined) { sets.push('os_id = ?'); valores.push(osId); }
+  if (osTexto !== undefined) { sets.push('os_texto = ?'); valores.push(osTexto); }
   // Etapa 39 (B21): o snapshot e REESCRITO se o fornecedor mudou (a 32 nunca reescrevia — um pedido
   // editado para outro fornecedor imprimiria o fiscal do antigo) OU se esta nulo (pedido legado
   // editado deixa de ficar `origem:'cadastro'` para sempre). Editar sem trocar o fornecedor NAO
