@@ -1,6 +1,6 @@
 # Compras — várias OS no mesmo pedido de compra (planejamento)
 
-> **Status: planejado, não executado** (2026-10-30). Nenhuma linha de código foi escrita. Este documento mede quem consome a
+> **Status: planejado, não executado — **SUBSTITUÍDO em 2026-10-30** pela OS por item da Etapa 193 (sugestão do usuário aceita pelo André: a OS no pedido só justifica a compra; a OS de verdade é dada na liberação). Este plano fica como histórico; ver `2026-10-30-compras-etapa193-cadastro-so-no-compras-e-os-por-item.md`** (2026-10-30). Nenhuma linha de código foi escrita. Este documento mede quem consome a
 > OS do pedido hoje, propõe o desenho, congela o rascunho do contrato e divide a execução em partes de até 4 h informadas.
 >
 > **Atenção:** as partes 5 a 8 mexem em código do **almoxarifado**, que está **pausado desde 2026-10-23**

@@ -13,11 +13,18 @@ nem inativar; o gate aceita também Almoxarife/Engenharia/Administrador do almox
 
 | # | Tarefa | Porte | Análise | Execução | Teste e conferência | Informado | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | Almoxarifado só consulta materiais | várias telas + decisão | 30 + 30 min | 1h | 1h30 | 3h30 | — | — | — |
-| 2 | Compras completa o cadastro (foto, inativar, só o Compras) | média + perfil + decisão | 30 + 30 min | 1h | 1h + 30 min | 3h30 | — | — | — |
-| 3 | OS por item do pedido | média + impressão | 30 min | 1h | 1h + 30 min | 3h | — | — | — |
+| 1 | Almoxarifado só consulta materiais | várias telas + decisão | 30 + 30 min | 1h | 1h30 | 3h30 | rateada (ver abaixo) | 3h30 | `d08fe42d`, Fase 5 `1bf416a6` `ef76ab8a` `a3c9ab8c` `262c6bd5` |
+| 2 | Compras completa o cadastro (foto, inativar, só o Compras) | média + perfil + decisão | 30 + 30 min | 1h | 1h + 30 min | 3h30 | rateada | 3h30 | `19c69056`, Fase 5 `4aff81aa` `d750afd2` `417600ed` `400547b3` |
+| 3 | OS por item do pedido | média + impressão | 30 min | 1h | 1h + 30 min | 3h | rateada | 3h | `6a944fb5`, `506abcb4`, `d378f91d`, Fase 5 `a156987d` `7f6c5f8e` |
 
 Medição no fechamento:
 ```
 node .claude/skills/relatorio-semanal/scripts/horas.js --desde 2026-10-30 --ate 2026-10-31 --grupos "So consulta=so consulta|Etapa 193.*A;Compras cadastra=Compras completa|Etapa 193.*C;OS por item=OS por item|Etapa 193.*O"
 ```
+
+## Fechamento (2026-10-30)
+
+Execução medida (`horas.js`, commits `ae1c519f`…`cf834c27`): **~2,4 h** no total; os dois galhos rodaram em paralelo, então a medida
+por commit não separa as tarefas (ex.: `6a944fb5` ~0 min, `506abcb4` ~52 min). Rateada pela execução estimada (2,4 h ÷ 3 h ≈ 0,8 h por
+tarefa), somada à parte do André **estimada** (não informada: 2h30, 2h30 e 2h) e arredondada para cima em 30 min. A Fase 5 (5 correções
++ 5 testes) está dentro das três. Realizado total: **10h**, igual ao estimado.

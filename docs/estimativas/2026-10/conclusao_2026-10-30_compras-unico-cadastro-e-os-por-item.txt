@@ -1,0 +1,10 @@
+*Concluído — Cadastro de materiais só no Compras e OS em cada item do pedido*
+_30/10/2026_
+
+1. Almoxarifado passa a só consultar os materiais — estimado 3h30 · realizado 3h30
+2. Compras completa o cadastro de materiais — estimado 3h30 · realizado 3h30
+3. OS em cada item do pedido de compra — estimado 3h · realizado 3h
+
+*Total: estimado 10h · realizado 10h*
+
+_Junto com os itens foram feitos ajustes encontrados na conferência: pelo Compras não é mais possível desligar o controle por série ou lote de um material que já teve série ou lote (isso travava o estorno de saídas antigas), e a mensagem da requisição com material inativo passou a indicar o Compras para reativar._
