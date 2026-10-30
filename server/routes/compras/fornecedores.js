@@ -263,12 +263,20 @@ module.exports = function (app, db, authenticateToken, checkModulePermission) {
     try {
       // RN-192.03: CPF e CNPJ juntos é recusado olhando o estado FINAL — a chave ausente vale o gravado
       // (o modal do grupo manda cnpj sem cpf; um fornecedor só com CPF não pode ganhar CNPJ por ali).
-      if (temCpf || temChave(body, 'cnpj')) {
+      // Fase 5 (X3): a conferencia acima e um SELECT separado — dois PUTs juntos (um poe o CPF, o outro o CNPJ sem a chave
+      // cpf) passavam os dois e o fornecedor ficava com CPF e CNPJ. Por isso quem grava SO um dos dois exige, no proprio
+      // UPDATE, que o outro (o gravado, que ele nao manda) esteja vazio (`condDocumento`, abaixo); o SELECT fica para dar a
+      // literal no caso comum. Com as duas chaves no corpo o estado final nao depende do gravado: nada no WHERE.
+      const temCnpj = temChave(body, 'cnpj');
+      let condDocumento = null;
+      if (temCpf || temCnpj) {
         const atual = await dbGet(db, 'SELECT cnpj, cpf FROM fornecedores WHERE id = ?', [id]);
         if (!atual) return res.status(404).json({ error: NAO_ENCONTRADO });
-        const cnpjFinal = temChave(body, 'cnpj') ? textoOuNull(body.cnpj) : textoOuNull(atual.cnpj);
+        const cnpjFinal = temCnpj ? textoOuNull(body.cnpj) : textoOuNull(atual.cnpj);
         const cpfFinal = temCpf ? cpf.valor : textoOuNull(atual.cpf);
         if (cnpjFinal != null && cpfFinal != null) return res.status(400).json({ error: CPF_E_CNPJ });
+        if (temCnpj && !temCpf && cnpjFinal != null) condDocumento = "TRIM(COALESCE(cpf, '')) = ''";
+        if (temCpf && !temCnpj && cpfFinal != null) condDocumento = "TRIM(COALESCE(cnpj, '')) = ''";
       }
       // RN-103.08 (B52): só o grupo que MUDA passa pela checagem; o fornecedor inexistente responde
       // 404 antes dela. A comparação é com o valor JÁ passado por parseGrupoId ('7' da URL = 7).
@@ -300,10 +308,16 @@ module.exports = function (app, db, authenticateToken, checkModulePermission) {
         where += ` AND ${GRUPO_ATIVO_NO_COMANDO}`;
         params.push(grupoNovo);
       }
+      if (condDocumento) where += ` AND ${condDocumento}`;
       const r = await dbRun(db, `UPDATE fornecedores SET ${sets.join(', ')} ${where}`, params);
       if (r.changes === 0) {
-        if (grupoNovo != null && await dbGet(db, 'SELECT 1 AS existe FROM fornecedores WHERE id = ?', [id])) {
-          return res.status(400).json({ error: await recusaDepoisDaCorrida(grupoNovo) });
+        const existe = (grupoNovo != null || condDocumento)
+          && await dbGet(db, `SELECT 1 AS existe, ${condDocumento || '1'} AS documento_ok FROM fornecedores WHERE id = ?`, [id]);
+        if (existe) {
+          // Fase 5 (X3): o documento perdeu a corrida -> a literal da RN-192.03; senao foi o grupo (Etapa 109).
+          if (condDocumento && !Number(existe.documento_ok)) return res.status(400).json({ error: CPF_E_CNPJ });
+          if (grupoNovo != null) return res.status(400).json({ error: await recusaDepoisDaCorrida(grupoNovo) });
+          return res.status(400).json({ error: CPF_E_CNPJ });
         }
         return res.status(404).json({ error: NAO_ENCONTRADO });
       }
