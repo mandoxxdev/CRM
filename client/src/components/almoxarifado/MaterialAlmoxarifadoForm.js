@@ -99,6 +99,8 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
   // Etapa 100 (G10, RN-100.06b): a família GRAVADA no material, como veio do servidor. É ela — e
   // não `form.familia_id`, que muda quando o usuário escolhe — que decide se o select destrava.
   const [familiaGravadaId, setFamiliaGravadaId] = useState('');
+  // Fase 5 (X6): o nome do dono gravado (do detalhe), para o Compras mostrar sem pedir a lista de clientes.
+  const [donoNome, setDonoNome] = useState(null);
   const [loadingFamilias, setLoadingFamilias] = useState(true);
   const [loadingLocalizacoes, setLoadingLocalizacoes] = useState(true);
   const [localizacaoInativa, setLocalizacaoInativa] = useState(null);
@@ -204,13 +206,16 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
 
   // Flag `cancelado` (padrão do módulo): o material pode ser trocado pela navegação antes da
   // resposta chegar, e um setState depois do unmount é warning — e com CI=true, erro de build.
+  // Fase 5 (X6): no Compras (`rotas.proprietario` false) a lista nao e pedida — `GET /clientes` exige Comercial/Almoxarifado/
+  // Operacional e o comprador so com o Compras tomava erro no seletor. La o dono e so mostrado (ver a secao Propriedade).
   useEffect(() => {
+    if (!rotas.proprietario) return undefined;
     let cancelado = false;
     api.get('/clientes')
       .then((r) => { if (!cancelado) { setClientes(Array.isArray(r.data) ? r.data : []); setErroClientes(null); } })
       .catch((e) => { if (!cancelado) { setClientes([]); setErroClientes(e); } });
     return () => { cancelado = true; };
-  }, []);
+  }, [rotas.proprietario]);
 
   const loadFamilias = async () => {
     setLoadingFamilias(true);
@@ -356,6 +361,7 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
       const res = await api.get(rotas.api.material(id));
       const m = res.data;
       setFamiliaGravadaId(m.familia_id ? String(m.familia_id) : '');
+      setDonoNome(m.proprietario_cliente_nome || null);
       controlesLidosRef.current = { controle_lote: !!m.controle_lote, controle_serie: !!m.controle_serie };
       familiaLidaRef.current = {
         familia_id: m.familia_id ? Number(m.familia_id) : null,
@@ -542,6 +548,8 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
       delete payload.localizacao;
       // Etapa 192: o Compras nao lanca saldo (o campo nem aparece) — sem a chave o servidor nao ve saldo inicial.
       if (!rotas.saldoInicial) delete payload.quantidade_atual;
+      // Fase 5 (X6): o Compras nao troca o dono (so mostra) — sem a chave o servidor preserva o gravado (PUT) ou cria "nosso" (POST).
+      if (!rotas.proprietario) delete payload.proprietario_cliente_id;
 
       let res;
       if (isEdit) {
@@ -789,6 +797,20 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
               <div className="almox-form-grid">
                 <div className="almox-field">
                   <label className="almox-label" htmlFor="material-proprietario">Proprietário</label>
+                  {!rotas.proprietario ? (
+                    // Fase 5 (X6): no Compras o dono e so mostrado — trocar o dono e do Almoxarifado (com historico exige
+                    // `ajustar_material_cliente`), e a lista de clientes exige um modulo que o comprador pode nao ter.
+                    <>
+                      <div className="almox-input" data-testid="material-proprietario-somente-leitura" aria-readonly="true">
+                        {form.proprietario_cliente_id
+                          ? (donoNome || `Cliente #${form.proprietario_cliente_id}`)
+                          : 'GMP (estoque próprio)'}
+                      </div>
+                      <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem', display: 'block', marginTop: 2 }}>
+                        O proprietário é definido no Almoxarifado.
+                      </small>
+                    </>
+                  ) : (<>
                   <select
                     id="material-proprietario"
                     className="almox-form-select"
@@ -802,6 +824,7 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
                     ))}
                   </select>
                   <AvisoDaListaRecusada erro={erroClientes} nome="clientes" />
+                  </>)}
                   <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem', display: 'block', marginTop: 2 }}>
                     Material de cliente só sai com OS ou projeto desse mesmo cliente, exige número
                     de documento no recebimento e não entra na reposição, na sugestão de compra

@@ -13,6 +13,8 @@ describe('cpf (Etapa 192, RN-192.01/02)', () => {
     expect(validarCPF('529.982.247-25')).toBe(true);
     expect(validarCPF('11144477735')).toBe(true);
     expect(validarCPF('529.982.247-24')).toBe(false);
+    // Fase 5 (G2): so o 1o digito verificador errado.
+    expect(validarCPF('52998224717')).toBe(false);
     expect(validarCPF('111.111.111-11')).toBe(false);
     expect(validarCPF('123')).toBe(false);
     expect(validarCPF('')).toBe(false);

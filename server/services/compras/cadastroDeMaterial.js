@@ -8,7 +8,7 @@
  * `routes/almoxarifado.js` e `routes/almoxarifado/extended.js`): mesma validacao, mesmas mensagens, nenhuma segunda copia.
  *
  * O QUE FICA DE FORA, de proposito: excluir (inativar), foto e saldo. Excluir e foto nao tem porta aqui; o saldo inicial
- * continua exigindo `movimentar` dentro do proprio handler do POST, e o PUT do Compras recusa a chave `ativo` (inativar e
+ * e recusado na porta (400, Fase 5 X1 — abaixo), e o PUT do Compras recusa a chave `ativo` (inativar e
  * reativar sao no Almoxarifado).
  *
  * QUEM PODE: `pode(user, acao)` — o perfil do almoxarifado que tem a acao (ADMINISTRADOR, ALMOXARIFE, ENGENHARIA) OU, desde a
@@ -16,13 +16,14 @@
  * oferece o botao). So nestas portas: as rotas do almoxarifado continuam lendo so o perfil (`requirePermission`).
  * Descartado: PERFIS.COMPRAS em `criar_material`/`editar_material` de ACAO_PERFIS — `editar_material` tambem guarda o DELETE
  * (inativar) e a foto do almoxarifado, e todo comprador com o perfil COMPRAS passaria a excluir e trocar foto la. Descartado
- * tambem mapear o admin do Compras para um perfil em `getPerfilFromUser` (mudaria o perfil dele no modulo inteiro). Como o
- * perfil dele nao muda, as guardas de estoque dentro do handler (saldo inicial, ligar controle, trocar dono) seguem recusando. As leituras da tela (lista, detalhe, auxiliares) exigem `criar_material` OU
+ * tambem mapear o admin do Compras para um perfil em `getPerfilFromUser` (mudaria o perfil dele no modulo inteiro). As guardas de estoque
+ * dentro do handler (ligar controle, trocar dono) rodam com o usuario no perfil COMPRAS (`comoCompras`, Fase 5 X1) e recusam. As leituras da tela (lista, detalhe, auxiliares) exigem `criar_material` OU
  * `editar_material` — a tela e de quem cadastra; a busca somente leitura do pedido (`GET /api/compras/materiais`, Etapa 38)
  * continua aberta a todo o Compras. Quem decide e o backend; `minhasPermissoes` existe so para a tela esconder o botao antes do formulario.
  */
 const { can, getPerfilFromUser } = require('../almoxarifado/permissions');
-const { isModuleAdmin } = require('../systemPermissions');
+const { isModuleAdmin, parseAdminModulos } = require('../systemPermissions');
+const { temSaldoInicial } = require('../almoxarifado/materialService');
 
 const ACOES_DO_CADASTRO = ['criar_material', 'editar_material'];
 
@@ -57,6 +58,47 @@ function recusarAtivo(req, res, next) {
 }
 
 /**
+ * Etapa 192 Fase 5 (X1): a porta do Compras NUNCA mexe em estoque nem nos controles de estoque. A revisao achou o comprador com o
+ * modulo Compras e um perfil do almoxarifado que sobrou (ALMOXARIFE, ADMINISTRADOR) — sem o modulo almoxarifado — lancando saldo
+ * inicial (uma ENTRADA no estoque) e ligando lote / trocando dono com historico por aqui: as guardas do handler compartilhado
+ * liam o perfil dele.
+ *
+ * Duas pecas, depois da porta (`exigir`, que continua lendo o usuario de verdade — quem entra nao muda):
+ *  - `recusarSaldoInicial` (POST): saldo inicial -> 400 para TODOS, superadmin inclusive (o saldo e uma Entrada; e lancado no
+ *    Almoxarifado, onde o movimentar dele vale).
+ *  - `comoCompras` (POST e PUT): o handler roda com uma COPIA do usuario no perfil COMPRAS — sem superadmin, sem `role` admin, sem
+ *    administrar o almoxarifado e sem o perfil dele —, entao as guardas de dentro (`movimentar`, `ajustar_estoque`,
+ *    `ajustar_material_cliente`) recusam e a mensagem diz "seu perfil: COMPRAS". id, nome e email ficam (auditoria e trilha
+ *    gravam a pessoa de verdade). O superadmin e o role admin tambem caem: o gesto de estoque deles e no Almoxarifado, que eles
+ *    tem; aqui, so cadastro.
+ * Descartado: o fallback PRODUCAO (a mensagem diria "seu perfil: PRODUCAO" a quem e almoxarife ou administrador — enganoso) e
+ * recusar o PUT de controle/dono com 400 proprio (duplicaria as reguas de "tem saldo nao identificado"/"tem historico" que o
+ * handler ja calcula; ligar lote em material SEM saldo continua sendo cadastro).
+ */
+const MSG_SALDO_INICIAL_NO_COMPRAS = 'Saldo inicial é lançado no Almoxarifado.';
+function recusarSaldoInicial(req, res, next) {
+  if (temSaldoInicial(req.body)) return res.status(400).json({ error: MSG_SALDO_INICIAL_NO_COMPRAS });
+  return next();
+}
+
+function usuarioDoCompras(user) {
+  if (!user) return user;
+  const adminModulos = parseAdminModulos(user.admin_modulos).filter((m) => m !== 'almoxarifado');
+  return {
+    ...user,
+    is_superadmin: 0,
+    isSuperAdmin: false,
+    role: String(user.role || '').toLowerCase() === 'admin' ? 'usuario' : user.role,
+    admin_modulos: adminModulos,
+    perfil_almoxarifado: 'COMPRAS',
+  };
+}
+function comoCompras(req, res, next) {
+  req.user = usuarioDoCompras(req.user);
+  return next();
+}
+
+/**
  * Os middlewares das portas do Compras. As rotas sao registradas com o caminho LITERAL em `routes/almoxarifado.js` e
  * `routes/almoxarifado/extended.js` (as reguas de fonte das Etapas 148-154 leem os registros de rota e exigem caminho que e
  * texto literal), cada uma logo depois da rota do almoxarifado cujo handler reaproveita:
@@ -68,9 +110,12 @@ function criarPortaCompras({ authenticateToken, checkModulePermission }) {
   return {
     base,
     leitura: [...base, exigir(ACOES_DO_CADASTRO)],
-    escrita: (acao) => [...base, exigir(acao)],
+    escrita: (acao) => [...base, exigir(acao), ...(acao === 'criar_material' ? [recusarSaldoInicial] : []), comoCompras],
     responderMinhasPermissoes: (req, res) => res.json(minhasPermissoes(req.user)),
   };
 }
 
-module.exports = { ACOES_DO_CADASTRO, pode, exigir, minhasPermissoes, recusarAtivo, MSG_ATIVO_NO_COMPRAS, criarPortaCompras };
+module.exports = {
+  ACOES_DO_CADASTRO, pode, exigir, minhasPermissoes, recusarAtivo, MSG_ATIVO_NO_COMPRAS, criarPortaCompras,
+  recusarSaldoInicial, MSG_SALDO_INICIAL_NO_COMPRAS, usuarioDoCompras, comoCompras,
+};

@@ -50,7 +50,8 @@ const CPF_E_CNPJ = 'Preencha o CPF ou o CNPJ, não os dois.';
     assert.strictEqual((await linha(r.body.id)).cpf, '111.444.777-35');
   });
 
-  for (const ruim of ['52998224724', '111.111.111-11', '123', 'abc', '529982247250']) {
+  // Fase 5: G2 '52998224717' (so o 1o digito verificador errado) e G10 '529.982.247-25x' (letra junto do CPF valido).
+  for (const ruim of ['52998224724', '52998224717', '111.111.111-11', '123', 'abc', '529982247250', '529.982.247-25x']) {
     // eslint-disable-next-line no-await-in-loop
     await test(`POST com CPF "${ruim}" -> 400 "${CPF_INVALIDO}" e nada gravado`, async () => {
       const antes = (await dbGet(db, 'SELECT COUNT(*) AS n FROM fornecedores')).n;
@@ -179,6 +180,20 @@ const CPF_E_CNPJ = 'Preencha o CPF ou o CNPJ, não os dois.';
     assert.strictEqual(l.cidade, 'DIADEMA');
     assert.strictEqual(l.estado, 'SP');
     assert.strictEqual(l.email, 'Vendas@Pecas.com.br', 'chave ausente nao mexe');
+  });
+
+  await test('G3 PUT grava os 7 textos livres em maiusculas (razao, fantasia, IE, contato, endereco, cidade, estado)', async () => {
+    const id = (await dbRun(db, "INSERT INTO fornecedores (razao_social, status) VALUES ('g3 legado', 'ativo')")).lastID;
+    const r = await putF(id, {
+      razao_social: 'razão três', nome_fantasia: 'fantasia ção', inscricao_estadual: 'isento', contato: 'joão',
+      endereco: 'rua são paulo, 1', cidade: 'são caetano', estado: 'sp',
+    });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    const l = await linha(id);
+    assert.deepStrictEqual(
+      [l.razao_social, l.nome_fantasia, l.inscricao_estadual, l.contato, l.endereco, l.cidade, l.estado],
+      ['RAZÃO TRÊS', 'FANTASIA ÇÃO', 'ISENTO', 'JOÃO', 'RUA SÃO PAULO, 1', 'SÃO CAETANO', 'SP'],
+    );
   });
 
   await test('busca com o termo minusculo e acentuado acha o gravado em maiusculas', async () => {

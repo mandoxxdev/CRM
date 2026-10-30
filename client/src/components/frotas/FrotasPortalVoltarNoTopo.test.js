@@ -145,4 +145,24 @@ describe('RN-F10.01 — Voltar no topo do formulario do portal', () => {
     expect(voltarDoTopo().disabled).toBe(true);
     await act(async () => { soltar({ data: {} }); });
   });
+
+  // Fase 5 (G12): o mesmo para o formulario de Saida (RegistroForm — o cabecalho e outro componente que o do Abastecimento).
+  test('Saída: o Voltar do topo desliga junto com o de baixo enquanto salva', async () => {
+    let soltar;
+    api.post.mockImplementation(() => new Promise((r) => { soltar = r; }));
+    await renderizar();
+    await clicar(botao('Saída'));
+    expect(voltarDoTopo().disabled).toBe(false);
+    digitar('veiculo_id', '1');
+    digitar('km', '1200');
+    for (const it of ITENS) {
+      // eslint-disable-next-line no-await-in-loop
+      await clicar(container.querySelector(`[aria-label="${it.rotulo}: OK"]`));
+    }
+    await act(async () => { container.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+    expect(api.post).toHaveBeenCalledWith('/frotas/portal/registros', expect.anything());
+    expect(botao('Voltar').disabled).toBe(true);
+    expect(voltarDoTopo().disabled).toBe(true);
+    await act(async () => { soltar({ data: { registro: { id: 1 }, viagem: { id: 1 } } }); });
+  });
 });

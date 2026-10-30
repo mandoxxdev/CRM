@@ -688,3 +688,23 @@ describe('Etapa 192 — OS digitada na aba Pedidos', () => {
     expect(linhas.map((l) => l['OS'])).toEqual(['OS 4471 (cliente)', 'OS-2026-057']);
   }, 10000);
 });
+
+// Etapa 192 Fase 5 (G5) — fornecedor pessoa fisica: o CPF aparece na celula "CNPJ / CPF" quando nao ha CNPJ, e o Excel tem a
+// coluna CPF.
+describe('Etapa 192 — fornecedor com CPF na aba Fornecedores', () => {
+  test('(G5) a celula CNPJ / CPF mostra o CPF do fornecedor sem CNPJ; o Excel leva a coluna CPF', async () => {
+    fornecedoresDoBanco = [
+      { id: 501, razao_social: 'JOAO DA SILVA', cnpj: null, cpf: '529.982.247-25', status: 'ativo', created_at: '2026-10-30 10:00:00' },
+      { id: 502, razao_social: 'ACOS LTDA', cnpj: '54.984.382/0001-64', cpf: null, status: 'ativo', created_at: '2026-10-29 10:00:00' },
+    ];
+    await renderizarEm('/compras/fornecedores');
+    const cabecalho = [...container.querySelectorAll('table.data-table thead th')].map((th) => th.textContent);
+    expect(cabecalho[1]).toBe('CNPJ / CPF');
+    expect(celulasDaLinha(0)[1].textContent).toBe('529.982.247-25');
+    expect(celulasDaLinha(1)[1].textContent).toBe('54.984.382/0001-64');
+
+    await clicar(botaoPorTexto('Exportar Excel'));
+    const [linhas] = exportToExcel.mock.calls[0];
+    expect(linhas.map((l) => [l['CNPJ'], l['CPF']])).toEqual([['', '529.982.247-25'], ['54.984.382/0001-64', '']]);
+  }, 10000);
+});

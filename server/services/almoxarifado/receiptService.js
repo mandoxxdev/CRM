@@ -2455,7 +2455,9 @@ async function listarPedidosCompraAux(db, { search, pendentes } = {}) {
   // `.filter()`/`reduce` em JS depois da consulta, porque o filtro de `?pendentes=1` tem de rodar
   // ANTES do `LIMIT 50` (ver abaixo) — e para isso a soma precisa existir dentro do SQL.
   let sql = `SELECT p.id, p.numero, p.status, p.data_pedido, p.os_id,
-    f.razao_social as fornecedor_nome, f.cnpj as fornecedor_cnpj,
+    f.razao_social as fornecedor_nome,
+    -- Etapa 192 Fase 5 (X5): sem CNPJ, o CPF do fornecedor pessoa fisica (vai para o documento do recebimento).
+    COALESCE(NULLIF(f.cnpj, ''), f.cpf) as fornecedor_cnpj,
     COALESCE(i.total_pedido, 0) as total_pedido,
     COALESCE(i.soma_recebida, 0) as soma_recebida,
     COALESCE(i.saldo_por_material, 0) as saldo_por_material
@@ -2466,8 +2468,9 @@ async function listarPedidosCompraAux(db, { search, pendentes } = {}) {
     WHERE 1=1`;
   const params = [];
   if (search) {
-    sql += ' AND (p.numero LIKE ? OR f.razao_social LIKE ?)';
-    params.push(`%${search}%`, `%${search}%`);
+    // Etapa 192 Fase 5 (X2): a razao social do fornecedor e gravada em maiusculas com acento (RN-192.05) — a regua sem caixa.
+    const cond = condicaoDeBusca(['p.numero', 'f.razao_social'], search);
+    if (cond.sql) { sql += ` AND ${cond.sql}`; params.push(...cond.params); }
   }
   // `?pendentes=1` — a clausula e a NEGACAO da derivacao, escrita no `WHERE`, e a POSICAO dela e
   // contrato, nao detalhe: esta query termina em `ORDER BY p.created_at DESC LIMIT 50`, entao
@@ -3062,11 +3065,12 @@ async function listarFornecedoresAux(db, { search } = {}) {
     "SELECT name FROM sqlite_master WHERE type='table' AND name='fornecedores'");
   if (!tableExists) return [];
 
-  let sql = 'SELECT id, razao_social, nome_fantasia, cnpj FROM fornecedores WHERE status = ?';
+  // Etapa 192 Fase 5 (X5): o cpf do fornecedor pessoa fisica (a tela mostra e grava o CPF quando nao ha CNPJ).
+  let sql = 'SELECT id, razao_social, nome_fantasia, cnpj, cpf FROM fornecedores WHERE status = ?';
   const params = ['ativo'];
   // Etapa 161 (RN-161.09, C399): a tela passa a procurar aqui (antes ficava nos 50 primeiros). O termo aparado e sem caixa, `%`/`_` como
   // texto (a `condicaoDeBusca` com `escapar`); vazio, so espacos ou nao texto = sem filtro. Antes: `LIKE` cru.
-  const busca = condicaoDeBusca(['razao_social', 'nome_fantasia', 'cnpj'], search, { escapar: true });
+  const busca = condicaoDeBusca(['razao_social', 'nome_fantasia', 'cnpj', 'cpf'], search, { escapar: true });
   if (busca.sql) {
     sql += ` AND ${busca.sql}`;
     params.push(...busca.params);

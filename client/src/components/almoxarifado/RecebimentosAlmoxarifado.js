@@ -789,12 +789,13 @@ const RecebimentosAlmoxarifado = () => {
       setForm((prev) => ({
         ...prev,
         fornecedor_nome: f.razao_social || f.nome_fantasia,
-        fornecedor_cnpj: f.cnpj || '',
+        // Etapa 192 Fase 5 (X5): fornecedor pessoa fisica (so CPF) leva o CPF no documento do recebimento.
+        fornecedor_cnpj: f.cnpj || f.cpf || '',
       }));
       setFiscalForm((prev) => ({
         ...prev,
         fornecedor_nome: f.razao_social || f.nome_fantasia,
-        fornecedor_cnpj: f.cnpj || '',
+        fornecedor_cnpj: f.cnpj || f.cpf || '',
       }));
     }
   };
@@ -1213,7 +1214,7 @@ const RecebimentosAlmoxarifado = () => {
                   <div><span style={{ color: 'var(--gmp-text-light)', fontSize: '0.7rem' }}>Pedido de Compra</span><br />{detalhe.pedido_compra_numero || '—'}</div>
                   <div data-testid="receb-detalhe-os"><span style={{ color: 'var(--gmp-text-light)', fontSize: '0.7rem' }}>OS</span><br />{detalhe.os_numero || '—'}</div>
                   <div><span style={{ color: 'var(--gmp-text-light)', fontSize: '0.7rem' }}>Fornecedor</span><br />{detalhe.fornecedor_nome || '—'}</div>
-                  <div><span style={{ color: 'var(--gmp-text-light)', fontSize: '0.7rem' }}>CNPJ</span><br />{detalhe.fornecedor_cnpj || '—'}</div>
+                  <div><span style={{ color: 'var(--gmp-text-light)', fontSize: '0.7rem' }}>CNPJ / CPF</span><br />{detalhe.fornecedor_cnpj || '—'}</div>
                   <div><span style={{ color: 'var(--gmp-text-light)', fontSize: '0.7rem' }}>Valor Total NF</span><br />{formatMoney(detalhe.valor_total_nota)}</div>
                   <div><span style={{ color: 'var(--gmp-text-light)', fontSize: '0.7rem' }}>Chave NF-e</span><br /><span style={{ fontSize: '0.7rem', wordBreak: 'break-all' }}>{detalhe.chave_nfe || '—'}</span></div>
                 </div>
@@ -1443,7 +1444,7 @@ const RecebimentosAlmoxarifado = () => {
                       <select className="almox-select" value="" onChange={(e) => selecionarFornecedor(e.target.value)}>
                         <option value="">Digite ou selecione...</option>
                         {fornecedores.map((f) => (
-                          <option key={f.id} value={f.id}>{f.razao_social} — {f.cnpj}</option>
+                          <option key={f.id} value={f.id}>{f.razao_social} — {f.cnpj || (f.cpf ? `CPF ${f.cpf}` : '')}</option>
                         ))}
                       </select>
                       <input className="almox-input" style={{ marginTop: 6 }} value={form.fornecedor_nome}
@@ -1451,7 +1452,7 @@ const RecebimentosAlmoxarifado = () => {
                         placeholder="Nome do fornecedor" />
                     </div>
                     <div className="almox-field almox-form-full">
-                      <label className="almox-label">CNPJ do Fornecedor</label>
+                      <label className="almox-label">CNPJ / CPF do Fornecedor</label>
                       <input className="almox-input" value={form.fornecedor_cnpj}
                         onChange={(e) => setForm((f) => ({ ...f, fornecedor_cnpj: e.target.value }))} placeholder="00.000.000/0000-00" />
                     </div>
@@ -1577,7 +1578,10 @@ const RecebimentosAlmoxarifado = () => {
                           </div>
                           <div className="ped-rec-forn-nome">{documentoPedido.fornecedor?.nome || '—'}</div>
                           <div className="ped-rec-grid">
-                            <div><span>CNPJ</span><strong>{documentoPedido.fornecedor?.cnpj || '—'}</strong></div>
+                            {/* Etapa 192 Fase 5 (X5): fornecedor so com CPF mostra o CPF, com o rotulo CPF */}
+                            {!documentoPedido.fornecedor?.cnpj && documentoPedido.fornecedor?.cpf
+                              ? <div><span>CPF</span><strong>{documentoPedido.fornecedor.cpf}</strong></div>
+                              : <div><span>CNPJ</span><strong>{documentoPedido.fornecedor?.cnpj || '—'}</strong></div>}
                             <div><span>Inscrição Estadual</span><strong>{documentoPedido.fornecedor?.ie || '—'}</strong></div>
                             <div>
                               <span>Telefone / celular</span>

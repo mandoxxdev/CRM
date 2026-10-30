@@ -26,6 +26,8 @@ export const ROTAS_ALMOXARIFADO = {
   },
   foto: true,
   saldoInicial: true,
+  // Fase 5 (X6): o seletor de Proprietario (pede `GET /clientes`) so no Almoxarifado; no Compras o dono e so mostrado.
+  proprietario: true,
   linksConfiguracao: true,
 };
 
@@ -50,5 +52,6 @@ export const ROTAS_COMPRAS = {
   },
   foto: false,
   saldoInicial: false,
+  proprietario: false,
   linksConfiguracao: false,
 };
