@@ -39,3 +39,23 @@ da `main` (ex.: `003a73fb` ~1 min, `3235fdbe` ~0 min). Por isso a execução de 
 A Fase 5 (6 correções + 13 testes da revisão) está dentro dos itens 1, 2, 4, 6 e 7.
 
 Realizado total: **17h30** contra 21h30 estimadas.
+
+## Recalculo pela regua nova (2026-10-30, depois do fechamento)
+
+O André perguntou se o tempo ficou inflado. Ficou, cerca do dobro: a execucao estimada (8 h) foi ~3x a medida (2,6 h, pacote em
+paralelo) e a formula da epoca (execucao x 2 + 30 min) multiplicou o excesso — e o "realizado" herdou a parte do André estimada por ela.
+Pela tabela nova da skill (parte do André fixa pelo porte), o mesmo pacote fica:
+
+| # | Tarefa | Execucao (rateada) | Analise | Teste e conferencia | Total |
+|---|---|---|---|---|---|
+| 1 | CPF no fornecedor | 30 min | 30 min | 1h30 (documento impresso) | 2h30 |
+| 2 | Maiusculas | 20 min | 15 min | 30 min | 1h15 |
+| 3 | Voltar no topo | 10 min | 15 min | 45 min (celular) | 1h15 |
+| 4 | OS digitada | 30 min | 30 min | 1h30 (documento impresso) | 2h30 |
+| 5 | NCM/peso | 10 min | 15 min | 15 min | 45 min |
+| 6 | Materiais no Compras | 30 min | 30 min | 1 h | 2h |
+| 7 | Acesso do Compras | 20 min | 45 min (decisao) | 1 h (perfil) | 2h15 |
+| 8 | Planejamento varias OS | 10 min | 15 min | 15 min | 45 min |
+| | **Total** | | | | **13h15** |
+
+Os .txt ja enviados (21h30 estimado, 17h30 realizado) nao foram reescritos.
