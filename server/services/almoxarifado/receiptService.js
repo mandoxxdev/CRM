@@ -2466,8 +2466,9 @@ async function listarPedidosCompraAux(db, { search, pendentes } = {}) {
     WHERE 1=1`;
   const params = [];
   if (search) {
-    sql += ' AND (p.numero LIKE ? OR f.razao_social LIKE ?)';
-    params.push(`%${search}%`, `%${search}%`);
+    // Etapa 192 Fase 5 (X2): a razao social do fornecedor e gravada em maiusculas com acento (RN-192.05) — a regua sem caixa.
+    const cond = condicaoDeBusca(['p.numero', 'f.razao_social'], search);
+    if (cond.sql) { sql += ` AND ${cond.sql}`; params.push(...cond.params); }
   }
   // `?pendentes=1` — a clausula e a NEGACAO da derivacao, escrita no `WHERE`, e a POSICAO dela e
   // contrato, nao detalhe: esta query termina em `ORDER BY p.created_at DESC LIMIT 50`, entao

@@ -62,6 +62,8 @@ const { decodificarImagemBase64 } = require('../services/imagemUpload');
 const { validate } = require('../services/almoxarifado/validation');
 // Etapa 171 (RN-171.06): a rota aux de OS e async.
 const { dbAll } = require('../services/almoxarifado/db');
+// Etapa 192 Fase 5 (X2): a busca que acha o fornecedor gravado em MAIUSCULAS com acento (RN-192.05) — ver buscaSemCaixa.js.
+const { condicaoDeBusca } = require('../services/buscaSemCaixa');
 const {
   PedidoCompraCreateSchema, PedidoStatusSchema, FornecedorSchema, CotacaoSchema,
   // Etapa 39 (RN-39.05): o schema TOLERANTE da calculadora — nunca o de gravacao (ver `/calcular`).
@@ -146,10 +148,10 @@ app.get('/api/compras/pedidos', authenticateToken, checkModulePermission('compra
   const params = [];
 
   if (search) {
-    // Etapa 192 (RN-192.08): a busca acha tambem pela OS digitada (`os_texto`).
-    query += ' AND (p.numero LIKE ? OR f.razao_social LIKE ? OR p.os_texto LIKE ?)';
-    const searchTerm = `%${search}%`;
-    params.push(searchTerm, searchTerm, searchTerm);
+    // Etapa 192 (RN-192.08): a busca acha tambem pela OS digitada (`os_texto`). Fase 5 (X2): pela regua sem caixa — a razao
+    // social e gravada em maiusculas com acento (RN-192.05) e o LIKE do SQLite nao achava "AÇOS" por "aços".
+    const cond = condicaoDeBusca(['p.numero', 'f.razao_social', 'p.os_texto'], search);
+    if (cond.sql) { query += ` AND ${cond.sql}`; params.push(...cond.params); }
   }
   if (status) {
     query += ' AND p.status = ?';
@@ -523,9 +525,9 @@ app.get('/api/compras/cotacoes', authenticateToken, checkModulePermission('compr
   const params = [];
 
   if (search) {
-    query += ' AND (c.numero LIKE ? OR f.razao_social LIKE ?)';
-    const searchTerm = `%${search}%`;
-    params.push(searchTerm, searchTerm);
+    // Etapa 192 Fase 5 (X2): a razao social em maiusculas com acento (RN-192.05) — a regua sem caixa.
+    const cond = condicaoDeBusca(['c.numero', 'f.razao_social'], search);
+    if (cond.sql) { query += ` AND ${cond.sql}`; params.push(...cond.params); }
   }
   if (status) {
     query += ' AND c.status = ?';

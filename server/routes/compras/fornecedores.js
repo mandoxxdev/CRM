@@ -26,6 +26,7 @@
  */
 
 const { dbRun, dbGet, dbAll } = require('../../services/compras/db');
+const { condicaoDeBusca } = require('../../services/buscaSemCaixa');
 
 // Literal já usada pelas outras rotas de fornecedor do index.js (foto, planilha) — uma só.
 const NAO_ENCONTRADO = 'Fornecedor não encontrado';
@@ -144,14 +145,11 @@ module.exports = function (app, db, authenticateToken, checkModulePermission) {
     let sql = `SELECT ${COLUNAS_FICHA.join(', ')} FROM fornecedores WHERE 1=1`;
     const params = [];
     if (search) {
-      // Etapa 192: o CPF entra na busca (mascarado ou só dígitos — RN-192.04), e o termo vai também
-      // em maiúsculas: o LIKE do SQLite só ignora caixa em ASCII, e "são" não acharia "SÃO" gravado
-      // pela RN-192.05.
-      sql += ` AND (razao_social LIKE ? OR razao_social LIKE ? OR nome_fantasia LIKE ? OR nome_fantasia LIKE ?
-        OR cnpj LIKE ? OR cpf LIKE ? OR REPLACE(REPLACE(cpf, '.', ''), '-', '') LIKE ?)`;
-      const termo = `%${search}%`;
-      const termoMaiusculo = `%${String(search).toLocaleUpperCase('pt-BR')}%`;
-      params.push(termo, termoMaiusculo, termo, termoMaiusculo, termo, termo, termo);
+      // Etapa 192: o CPF entra na busca (mascarado ou só dígitos — RN-192.04). Fase 5 (X2): a regua sem caixa comum
+      // (buscaSemCaixa.js) no lugar da feita a mao, que so mandava o termo como veio e em maiusculas — o legado em caixa
+      // mista ("Aços Legado") nao era achado por "AÇOS".
+      const cond = condicaoDeBusca(['razao_social', 'nome_fantasia', 'cnpj', 'cpf', "REPLACE(REPLACE(cpf, '.', ''), '-', '')"], search);
+      if (cond.sql) { sql += ` AND ${cond.sql}`; params.push(...cond.params); }
     }
     if (status) {
       sql += ' AND status = ?';
