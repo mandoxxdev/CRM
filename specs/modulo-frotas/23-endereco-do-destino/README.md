@@ -59,3 +59,10 @@ quando muda), B94 (endereço da GMP de Configurações), B95 (origem fixa só na
 ## O que fica de fora
 
 Mapa, distância, rota; endereço na planilha; origem como cadastro de endereço.
+
+## Depois do fechamento
+
+- **2026-10-30 (`5f967566`, B100):** Enter no **CEP** busca também na tela **Destinos** (antes só no "+ Novo destino"; ali o Enter salvava
+  o destino sem rua). Esta spec e o teste `Fase5-F2 metade negativa` diziam que na tela Destinos o Enter no CEP "segue enviando o
+  formulário" — **estava certo como decisão da Fase 5 e foi mudado no uso real**; o teste virou *"Destinos do gestor: Enter no CEP busca o
+  endereço; Enter na rua segue enviando o formulário do destino"*.

@@ -125,7 +125,8 @@ salvo. O formulário de **Abastecimento** tem os mesmos dois.
 O sistema confere na ordem: nome, CEP, rua, número, complemento, bairro, cidade, estado — a mensagem é a do primeiro problema. O
 endereço guardado é montado assim: *"Rua das Flores, 100 - Sala 2, Centro, São Bernardo do Campo/SP, CEP 09844-100"* (sem complemento,
 sem o " - Sala 2"; sem CEP, termina em "/SP"). O sistema **não** confere se o CEP é mesmo daquela cidade: vale o que foi confirmado na
-tela. Enquanto o bloco "+ Novo destino" está aberto, a tecla Enter não grava a Saída nem a Viagem (no campo CEP, Enter busca o CEP).
+tela. No campo **CEP**, a tecla Enter **busca** o CEP, em qualquer tela (portal, Viagens e Destinos). Enquanto o bloco "+ Novo destino"
+está aberto, o Enter nos outros campos não grava a Saída nem a Viagem; na tela **Destinos**, o Enter nos outros campos salva o destino.
 
 O botão **Salvar** só acende quando os 12 itens estão marcados; enquanto faltar algum, o rodapé mostra "Faltam (N) de 12 itens.".
 Ao salvar, aparece "Saída registrada", "Retorno registrado" ou "Inspeção registrada" e você volta ao painel.
