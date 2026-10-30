@@ -562,3 +562,28 @@ describe('FornecedorForm — (l) Etapa 192: maiusculas (RN-192.05)', () => {
     });
   });
 });
+
+// Etapa 192 Fase 5 (G6) — a maiuscula "enquanto digita" e CSS: a regra tem de existir no arquivo (jsdom nao aplica CSS, entao a
+// classe na tela sozinha nao prova nada), e o modal do grupo usa o mesmo text-transform no estilo dos 4 campos livres.
+describe('Etapa 192 — G6 a regra de maiusculas no CSS e no modal do grupo', () => {
+  const fs = require('fs');
+  const path = require('path');
+  test('FornecedorForm.css: .fornecedor-maiusculas com text-transform: uppercase (e o placeholder sem)', () => {
+    const css = fs.readFileSync(path.join(__dirname, 'FornecedorForm.css'), 'utf8');
+    const bloco = css.match(/^\.fornecedor-form input\.fornecedor-maiusculas \{([^}]*)\}/m);
+    expect(bloco).not.toBeNull();
+    expect(bloco[1]).toMatch(/text-transform:\s*uppercase;/);
+    const ph = css.match(/^\.fornecedor-form input\.fornecedor-maiusculas::placeholder \{([^}]*)\}/m);
+    expect(ph && ph[1]).toMatch(/text-transform:\s*none;/);
+  });
+  test('FornecedoresDoGrupo.js: o estilo MAIUSCULAS e uppercase e vai nos 4 campos livres do modal', () => {
+    const fonte = fs.readFileSync(path.join(__dirname, '..', 'FornecedoresDoGrupo.js'), 'utf8');
+    expect(fonte).toMatch(/const MAIUSCULAS = \{ textTransform: 'uppercase' \};/);
+    for (const estado of ['editRazao', 'editFantasia', 'editContato', 'editEndereco']) {
+      // a linha do <input> do campo (uma linha so no fonte) tem o style
+      const linha = fonte.split('\n').find((l) => l.includes(`value={${estado}}`));
+      expect(linha).toBeDefined();
+      expect(linha).toContain('style={MAIUSCULAS}');
+    }
+  });
+});

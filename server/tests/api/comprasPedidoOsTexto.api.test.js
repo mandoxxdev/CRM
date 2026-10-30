@@ -171,6 +171,46 @@ const textoDoHtml = (html) => String(html).replace(/<[^>]+>/g, ' ').replace(/\s+
     assert.strictEqual(m.peso_unitario, 2.5);
   });
 
+  // ── Fase 5 (lacunas de teste G8, G9, G13) ─────────────────────────────────────────────────────────
+  await test('G8 os 60 caracteres sao contados por CARACTERE: 60 emoji passam (120 unidades UTF-16), 61 -> 400', async () => {
+    const ok = await request(app).post('/api/compras/pedidos').send(payload({ os_texto: '😀'.repeat(60) }));
+    assert.strictEqual(ok.status, 201, JSON.stringify(ok.body));
+    assert.strictEqual((await gravado(ok.body.id)).os_texto, '😀'.repeat(60));
+    const antes = await contar();
+    const r = await request(app).post('/api/compras/pedidos').send(payload({ os_texto: '😀'.repeat(61) }));
+    assert.deepStrictEqual([r.status, r.body.error], [400, OS_LONGA]);
+    assert.strictEqual(await contar(), antes);
+  });
+
+  await test('G9 os_texto objeto ou booleano -> 400 "OS digitada inválida."; numero 4471 grava "4471"', async () => {
+    for (const ruim of [{ a: 1 }, true, false, ['OS 1']]) {
+      const antes = await contar();
+      const r = await request(app).post('/api/compras/pedidos').send(payload({ os_texto: ruim }));
+      assert.deepStrictEqual([r.status, r.body.error], [400, 'OS digitada inválida.'], `${JSON.stringify(ruim)}: ${JSON.stringify(r.body)}`);
+      assert.strictEqual(await contar(), antes);
+    }
+    const n = await request(app).post('/api/compras/pedidos').send(payload({ os_texto: 4471 }));
+    assert.strictEqual(n.status, 201, JSON.stringify(n.body));
+    assert.deepStrictEqual(await gravado(n.body.id), { os_id: null, os_texto: '4471' });
+  });
+
+  await test('G13 a OS digitada nao conta como pedido da OS: nem com o numero nem com o id da OS cadastrada', async () => {
+    const osencerrada = require('../../services/almoxarifado/osEncerradaService');
+    const os = (await dbRun(db, "INSERT INTO ordens_servico (numero_os, status) VALUES ('E192-TXT-OS', 'pendente')")).lastID;
+    for (const texto of ['E192-TXT-OS', String(os)]) {
+      const r = await request(app).post('/api/compras/pedidos').send(payload({ os_texto: texto }));
+      assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    }
+    // a lista que trava a exclusao da OS (DELETE /operacional/ordens-servico/:id, index.js) e a da recusa 409
+    assert.deepStrictEqual(await osencerrada.pedidosDaOs(db, os), []);
+    // e o encerramento da OS nao tem o que soltar: nenhuma reserva nasce com o os_id dela
+    assert.strictEqual(await osencerrada.liberarReservasDaOs(db, ADMIN, os, 'concluida'), 0);
+    // controle positivo: o pedido com a OS da LISTA conta
+    const comOs = await request(app).post('/api/compras/pedidos').send(payload({ os_id: os }));
+    assert.strictEqual(comOs.status, 201, JSON.stringify(comOs.body));
+    assert.strictEqual((await osencerrada.pedidosDaOs(db, os)).length, 1);
+  });
+
   await close();
   console.log(`\n${passed} passaram, ${failed} falharam`);
   process.exit(failed === 0 ? 0 : 1);
