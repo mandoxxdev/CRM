@@ -137,6 +137,27 @@ const textoDoHtml = (html) => String(html).replace(/<[^>]+>/g, ' ').replace(/\s+
     assert.ok(!/<th[^>]*>OS<\/th>/.test(thead2), 'pedido sem OS por item ganhou a coluna');
   });
 
+  await test('Fase 5 (T3) documento: cada linha de item tem tantas celulas quanto o cabecalho — com OS, sem OS e misto', async () => {
+    const tabela = (html) => (html.match(/<table class="itens">[\s\S]*?<\/table>/) || [''])[0];
+    const celulas = (html) => {
+      const t = tabela(html);
+      const ths = ((t.match(/<thead>[\s\S]*?<\/thead>/) || [''])[0].match(/<th[\s>]/g) || []).length;
+      const corpo = (t.match(/<tbody>[\s\S]*?<\/tbody>/) || [''])[0];
+      const linhas = (corpo.match(/<tr>[\s\S]*?<\/tr>/g) || []).map((tr) => (tr.match(/<td[\s>]/g) || []).length);
+      return { ths, linhas };
+    };
+    const misto = await request(app).post('/api/compras/pedidos').send(payload([item(m1, { os_texto: 'OS 8001' }), item(m2)]));
+    const semOs = await request(app).post('/api/compras/pedidos').send(payload([item(m1), item(m2)]));
+    const casos = [['com OS', pid, 11], ['misto', misto.body.id, 11], ['sem OS', semOs.body.id, 10]];
+    for (const [nome, id, esperado] of casos) {
+      const d = await request(app).get(`/api/compras/pedidos/${id}/documento`);
+      assert.strictEqual(d.status, 200, nome);
+      const { ths, linhas } = celulas(d.text);
+      assert.strictEqual(ths, esperado, `${nome}: ${ths} colunas no cabecalho`);
+      assert.ok(linhas.length >= 2, `${nome}: premissa — achou as linhas de item (${JSON.stringify(linhas)})`);
+      assert.deepStrictEqual(linhas, linhas.map(() => ths), `${nome}: celulas por linha ${JSON.stringify(linhas)} x cabecalho ${ths}`);
+    }
+  });
 
   await test('RN-193.09 lista: a busca textual acha o pedido pela OS do item (qualquer caixa)', async () => {
     const s = await request(app).get('/api/compras/pedidos').query({ search: '5099' });
