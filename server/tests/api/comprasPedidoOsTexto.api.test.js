@@ -162,6 +162,14 @@ const textoDoHtml = (html) => String(html).replace(/<[^>]+>/g, ' ').replace(/\s+
     assert.strictEqual(linha.os_id, null);
   });
 
+  await test('RN-192.09 GET /api/compras/materiais devolve ncm e peso_unitario', async () => {
+    const r = await request(app).get('/api/compras/materiais').query({ search: 'MAT-E192' });
+    assert.strictEqual(r.status, 200);
+    const m = r.body.find((x) => x.id === mat.lastID);
+    assert.ok(m, 'material nao achado');
+    assert.strictEqual(m.ncm, '7208.51.00');
+    assert.strictEqual(m.peso_unitario, 2.5);
+  });
 
   await close();
   console.log(`\n${passed} passaram, ${failed} falharam`);

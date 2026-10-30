@@ -57,10 +57,11 @@
  *    de `POST /compras/pedidos/calcular`, chamado 300 ms depois da última tecla. A única conta
  *    local que sobrou é o aviso de "item sem preço" (`> 0`), que não é um total.
  *
- * Divergência declarada: `GET /compras/materiais` devolve só `id, codigo, descricao, unidade`,
- * então NCM e peso nascem VAZIOS na criação (`''` = "o do material", RN-39.01: o servidor completa)
- * e só na edição vêm preenchidos, do `GET /:id`. Unidade e descrição do item NÃO são editáveis
- * (não estão no contrato do POST/PUT; continuam copiadas do material pelo servidor).
+ * NCM e peso: desde a Etapa 192 (RN-192.09) `GET /compras/materiais` devolve `ncm` e `peso_unitario`, e o item novo
+ * nasce com eles (antes nasciam VAZIOS e só o servidor completava ao salvar). Material sem NCM/peso continua `''` =
+ * "o do material" (RN-39.01). A pré-carga da Reposição (`?material=`) não consulta a busca e
+ * segue nascendo vazia. Unidade e descrição do item NÃO são editáveis (não estão no contrato do POST/PUT;
+ * continuam copiadas do material pelo servidor).
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -618,7 +619,7 @@ const PedidoCompraForm = () => {
       quantidade: '1',
       valor_unitario: '',
       ipi_percentual: ipiPadrao,
-      // NCM/peso: a busca não os traz; `''` deixa o servidor completar com o do material.
+      // NCM/peso: os do cadastro, que a busca devolve desde a Etapa 192 (RN-192.09); sem eles, `''` = o servidor completa.
       ncm: material.ncm == null ? '' : String(material.ncm),
       peso_unitario: material.peso_unitario == null ? '' : String(material.peso_unitario),
     })]);

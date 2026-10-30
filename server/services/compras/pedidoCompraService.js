@@ -986,7 +986,9 @@ async function excluirPedido(db, pedidoId) {
 async function buscarMateriais(db, search) {
   const termo = search == null ? '' : String(search).trim();
   const like = `%${termo}%`;
-  return dbAll(db, `SELECT id, codigo, COALESCE(nome, descricao) as descricao, unidade
+  // Etapa 192 (RN-192.09): `ncm` e `peso_unitario` para o item novo do pedido nascer com eles (antes nasciam vazios e
+  // so o servidor completava ao salvar — a tela mostrava o placeholder "o do cadastro do material").
+  return dbAll(db, `SELECT id, codigo, COALESCE(nome, descricao) as descricao, unidade, ncm, peso_unitario
     FROM materiais_almoxarifado
     WHERE COALESCE(ativo, 1) = 1
       AND (? = '' OR codigo LIKE ? OR COALESCE(nome, '') LIKE ? OR COALESCE(descricao, '') LIKE ?)

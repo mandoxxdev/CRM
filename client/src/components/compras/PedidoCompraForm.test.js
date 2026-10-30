@@ -1235,7 +1235,7 @@ describe('RN-39', () => {
     await clicar(porTestId('detalhes-item-907'));
     await clicar(porTestId('chip-ipi-907-10'));
     expect(porTestId('chip-ipi-907-10').getAttribute('aria-pressed')).toBe('true');
-    // NCM e peso nascem VAZIOS na criacao (a busca de material nao os traz) — e sao editaveis.
+    // NCM e peso nascem VAZIOS aqui porque a fixture MATERIAIS_CHAPA nao os traz (com eles, o (192e)) — e sao editaveis.
     expect(porTestId('ncm-item-907').value).toBe('');
     expect(porTestId('peso-item-907').value).toBe('');
     digitar(porTestId('ncm-item-907'), '7208.51.00');
@@ -1775,5 +1775,27 @@ describe('Etapa 192 — OS digitada e NCM do material', () => {
     await submeter();
     expect(alertas()).toContain(literal);
     expect(porTestId('pedido-os-texto').value).toBe('OS 1');
+  });
+
+  test('(192e) o item novo nasce com o NCM e o peso que a busca de material devolve', async () => {
+    const getOriginal = api.get.getMockImplementation();
+    api.get.mockImplementation((url, config) => (url === '/compras/materiais'
+      ? Promise.resolve({ data: [
+        { id: 907, codigo: 'ALM-0907', descricao: 'Chapa Aço 3mm', unidade: 'KG', ncm: '7208.51.00', peso_unitario: 2.5 },
+        { id: 901, codigo: 'ALM-0901', descricao: 'Chapa Aço 2mm', unidade: 'KG', ncm: null, peso_unitario: null },
+      ] })
+      : getOriginal(url, config)));
+    await renderizarEm('/compras/pedidos/novo');
+    digitar(porTestId('busca-material'), 'CHAPA');
+    await clicar(porTestId('botao-buscar-material'));
+    await clicar(porTestId('adicionar-material-907'));
+    await clicar(porTestId('adicionar-material-901'));
+    await clicar(porTestId('detalhes-item-907'));
+    await clicar(porTestId('detalhes-item-901'));
+    expect(porTestId('ncm-item-907').value).toBe('7208.51.00');
+    expect(porTestId('peso-item-907').value).toBe('2.5');
+    // Sem NCM/peso no cadastro, o campo fica vazio e o placeholder explica que o servidor completa.
+    expect(porTestId('ncm-item-901').value).toBe('');
+    expect(porTestId('ncm-item-901').getAttribute('placeholder')).toBe('o do cadastro do material');
   });
 });
