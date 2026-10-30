@@ -16,16 +16,26 @@ Medido antes de estimar:
 
 | # | Tarefa | Execução estimada | Fator | Informado | Etapa/plano | Régua usada | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | CPF no fornecedor | 1h30 | ×2 + 30 min | 3h30 | avulso | etapa média (campo + validação + busca + documento) | — | — | — |
-| 2 | Fornecedor em maiúsculas | 1h | ×2 + 30 min | 2h30 | avulso | mudança pequena com regra | — | — | — |
-| 3 | Voltar no topo (Frota) | 30 min | ×2,5 + 30 min (celular) | 2h | avulso | ajuste pontual de tela | — | — | — |
-| 4 | OS digitada no pedido | 1h30 | ×2 + 30 min | 3h30 | avulso | etapa média | — | — | — |
-| 5 | NCM/peso preenchidos | 30 min | ×2 + 30 min | 1h30 | avulso | ajuste pontual | — | — | — |
-| 6 | Materiais no Compras | 1h30 | ×2 + 30 min | 3h30 | avulso | etapa média | — | — | — |
-| 7 | Acesso do Compras aos materiais | 1h | ×2,5 + 1h (perfil + decisão) | 3h30 | avulso | mudança pequena com regra | — | — | — |
-| 8 | Planejamento várias OS | 30 min | ×2 + 30 min | 1h30 | plano de planejamento | — | — | — | — |
+| 1 | CPF no fornecedor | 1h30 | ×2 + 30 min | 3h30 | avulso | etapa média (campo + validação + busca + documento) | ~proporcional (ver abaixo) | 2h30 | `ad99f567`, Fase 5 `ef5ca142` `3a293902` |
+| 2 | Fornecedor em maiúsculas | 1h | ×2 + 30 min | 2h30 | avulso | mudança pequena com regra | ~proporcional (ver abaixo) | 2h | `e8bd4374`, Fase 5 `3be6487d` |
+| 3 | Voltar no topo (Frota) | 30 min | ×2,5 + 30 min (celular) | 2h | avulso | ajuste pontual de tela | ~proporcional (ver abaixo) | 2h | `79aad18f`, `19d26c6c` |
+| 4 | OS digitada no pedido | 1h30 | ×2 + 30 min | 3h30 | avulso | etapa média | ~proporcional (ver abaixo) | 2h30 | `003a73fb`, Fase 5 `18b1bfc4` |
+| 5 | NCM/peso preenchidos | 30 min | ×2 + 30 min | 1h30 | avulso | ajuste pontual | ~proporcional (ver abaixo) | 1h30 | `3235fdbe` |
+| 6 | Materiais no Compras | 1h30 | ×2 + 30 min | 3h30 | avulso | etapa média | ~proporcional (ver abaixo) | 2h30 | `bcbd4ed2`, `8c1db785`, Fase 5 `2acd4dcc` |
+| 7 | Acesso do Compras aos materiais | 1h | ×2,5 + 1h (perfil + decisão) | 3h30 | avulso | mudança pequena com regra | ~proporcional (ver abaixo) | 3h | `950c70d8`, Fase 5 `7b2143fd` |
+| 8 | Planejamento várias OS | 30 min | ×2 + 30 min | 1h30 | plano de planejamento | — | ~proporcional (ver abaixo) | 1h30 | `633efbd4` |
 
 Medição no fechamento (os commits citam o assunto):
 ```
 node .claude/skills/relatorio-semanal/scripts/horas.js --desde 2026-10-30 --ate 2026-10-31 --grupos "CPF=CPF;Maiusculas=maiuscula;Voltar=Voltar no topo;OS digitada=OS digitada;NCM=NCM;Materiais=materiais no Compras;Acesso=acesso do Compras;Varias OS=varias OS"
 ```
+
+## Fechamento (2026-10-30)
+
+Execução medida (`horas.js --desde 2026-10-30 --ate 2026-10-31`): **~2,6 h** no total (1 sessão, 19 commits). A medida **por commit não
+separa as tarefas**: três galhos rodaram em paralelo em worktrees, então o tempo de cada um aparece comprimido no intervalo entre commits
+da `main` (ex.: `003a73fb` ~1 min, `3235fdbe` ~0 min). Por isso a execução de cada tarefa foi **rateada** pela execução estimada
+(2,6 h ÷ 8 h = 0,325 da estimada), somada à parte do André **estimada** (ele não informou a dele) e arredondada para cima em 30 min.
+A Fase 5 (6 correções + 13 testes da revisão) está dentro dos itens 1, 2, 4, 6 e 7.
+
+Realizado total: **17h30** contra 21h30 estimadas.

@@ -1,0 +1,16 @@
+*Concluído — Fornecedores, Pedido de Compra, Materiais no Compras e Frota*
+_30/10/2026_
+
+1. CPF no cadastro de fornecedor — estimado 3h30 · realizado 2h30
+2. Cadastro de fornecedor em letras maiúsculas — estimado 2h30 · realizado 2h
+3. Botão Voltar no topo das telas da Frota — estimado 2h · realizado 2h
+4. OS digitada à mão no Pedido de Compra — estimado 3h30 · realizado 2h30
+5. NCM e peso já preenchidos no item do Pedido de Compra — estimado 1h30 · realizado 1h30
+6. Cadastro de materiais dentro do módulo Compras — estimado 3h30 · realizado 2h30
+7. Acesso de quem administra o Compras ao cadastro de materiais — estimado 3h30 · realizado 3h
+8. Planejamento: várias OS no mesmo Pedido de Compra — estimado 1h30 · realizado 1h30
+
+*Total: estimado 21h30 · realizado 17h30*
+
+_Junto com os itens foram feitos ajustes encontrados na conferência: a busca de fornecedores, pedidos e cotações volta a achar nomes com acento depois das maiúsculas, e o cadastro de materiais pelo Compras nunca mexe em saldo de estoque._
+_O planejamento das várias OS ficou pronto para apresentar: 25h em oito partes, com quatro pontos a confirmar com a empresa._
