@@ -17,8 +17,10 @@ import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import { ROTAS_COMPRAS } from '../almoxarifado/rotasCadastroMaterial';
 import '../almoxarifado/Almoxarifado.css';
 
-export const AVISO_SEM_ACESSO = 'Seu acesso não permite cadastrar material. Peça a um administrador o perfil de Almoxarife '
-  + 'ou Engenharia no Almoxarifado.';
+// Etapa 192 (RN-192.11): quem cadastra pelo Compras é o administrador do módulo Compras (cadastro de usuário) ou quem tem o
+// perfil de Almoxarife ou Engenharia no Almoxarifado.
+export const AVISO_SEM_ACESSO = 'Seu acesso não permite cadastrar material. Peça a um administrador do sistema para marcar '
+  + 'você como administrador do módulo Compras (ou para lhe dar o perfil de Almoxarife ou Engenharia no Almoxarifado).';
 
 const MateriaisCompras = () => {
   const navigate = useNavigate();

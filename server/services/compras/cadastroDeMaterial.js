@@ -11,15 +11,24 @@
  * continua exigindo `movimentar` dentro do proprio handler do POST, e o PUT do Compras recusa a chave `ativo` (inativar e
  * reativar sao no Almoxarifado).
  *
- * QUEM PODE: `pode(user, acao)`. As leituras da tela (lista, detalhe, auxiliares) exigem `criar_material` OU
+ * QUEM PODE: `pode(user, acao)` — o perfil do almoxarifado que tem a acao (ADMINISTRADOR, ALMOXARIFE, ENGENHARIA) OU, desde a
+ * RN-192.11, o ADMINISTRADOR DO MODULO COMPRAS (`admin_modulos` com 'compras', `isModuleAdmin`; o cadastro de usuario ja
+ * oferece o botao). So nestas portas: as rotas do almoxarifado continuam lendo so o perfil (`requirePermission`).
+ * Descartado: PERFIS.COMPRAS em `criar_material`/`editar_material` de ACAO_PERFIS — `editar_material` tambem guarda o DELETE
+ * (inativar) e a foto do almoxarifado, e todo comprador com o perfil COMPRAS passaria a excluir e trocar foto la. Descartado
+ * tambem mapear o admin do Compras para um perfil em `getPerfilFromUser` (mudaria o perfil dele no modulo inteiro). Como o
+ * perfil dele nao muda, as guardas de estoque dentro do handler (saldo inicial, ligar controle, trocar dono) seguem recusando. As leituras da tela (lista, detalhe, auxiliares) exigem `criar_material` OU
  * `editar_material` — a tela e de quem cadastra; a busca somente leitura do pedido (`GET /api/compras/materiais`, Etapa 38)
  * continua aberta a todo o Compras. Quem decide e o backend; `minhasPermissoes` existe so para a tela esconder o botao antes do formulario.
  */
 const { can, getPerfilFromUser } = require('../almoxarifado/permissions');
+const { isModuleAdmin } = require('../systemPermissions');
 
 const ACOES_DO_CADASTRO = ['criar_material', 'editar_material'];
 
 function pode(user, acao) {
+  // RN-192.11: "quem administra o Compras" cria e edita, nao so o almoxarife.
+  if (ACOES_DO_CADASTRO.includes(acao) && isModuleAdmin(user, 'compras')) return true;
   return can(user, acao);
 }
 

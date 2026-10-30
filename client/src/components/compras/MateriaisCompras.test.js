@@ -138,6 +138,15 @@ describe('Compras → Materiais — a lista', () => {
     expect(container.querySelector('[data-testid="materiais-compras-sem-acesso"]').textContent).toContain(AVISO_SEM_ACESSO);
     expect(urlsChamadas()).not.toContain('/compras/materiais/cadastro');
     expect(container.querySelector('a[href="/compras/materiais/novo"]')).toBeNull();
+    // RN-192.11: o aviso diz o caminho de quem administra o Compras.
+    expect(AVISO_SEM_ACESSO).toContain('administrador do módulo Compras');
+  });
+
+  test('RN-192.11: o administrador do Compras (perfil de almoxarifado PRODUCAO) vê a lista e o Novo', async () => {
+    mockarGets({ perfil: 'PRODUCAO', acoes: { criar_material: true, editar_material: true } });
+    await renderizar('/compras/materiais');
+    expect(container.textContent).toContain('VLV-001');
+    expect(container.querySelector('a[href="/compras/materiais/novo"]')).not.toBeNull();
   });
 });
 
