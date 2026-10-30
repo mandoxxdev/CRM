@@ -33,6 +33,12 @@
 const assert = require('assert');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
+// Etapa 193 Fase 5 (R3b): o POST /api/almoxarifado/materiais so aceita, por padrao, o formato da sobra e da remessa (codigo,
+// nome, unidade, familia/subfamilia, categoria, proprietario) — o resto do cadastro e no Compras. Este arquivo cria material
+// com o cadastro completo (controles, saldo inicial, campos tecnicos) pela porta do almoxarifado para provar o handler, com a
+// chave de reversao ligada (`ALMOX_CADASTRO_MATERIAL=liberado`, services/compras/cadastroDeMaterial.js). A recusa:
+// cadastroSoNoCompras.
+process.env.ALMOX_CADASTRO_MATERIAL = 'liberado';
 const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 
 let passed = 0; let failed = 0;
