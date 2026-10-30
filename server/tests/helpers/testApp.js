@@ -148,7 +148,9 @@ async function createTestApp(options = {}) {
     -- Etapa 122 (C255a): o fechamento automatico do pedido (ALTERS_PEDIDOS_COMPRA do index.js).
     fechado_automaticamente_de TEXT,
     -- Etapa 171 (RN-171.01): a OS do pedido (ALTERS_PEDIDOS_COMPRA do index.js). NULL = estoque.
-    os_id INTEGER
+    os_id INTEGER,
+    -- Etapa 192 (RN-192.07): a OS digitada (ALTERS_PEDIDOS_COMPRA do index.js), exclusiva com os_id.
+    os_texto TEXT
   )`);
 
   // `cotacoes` é tabela CORE (`server/index.js:19244`). Entra no harness na Etapa 40 porque a

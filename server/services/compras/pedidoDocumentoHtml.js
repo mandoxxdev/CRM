@@ -371,10 +371,14 @@ const CSS = `
  */
 /**
  * Etapa 171 (RN-171.05, M2) — a OS do pedido no cabecalho do documento: `OS: <numero_os>`; com `os_id` gravado e a
- * OS sumida (`os_numero` null), `OS #<id>`; pedido de estoque (sem `os_id`) nao ganha linha nenhuma.
+ * OS sumida (`os_numero` null), `OS #<id>`; sem `os_id`, a OS digitada (Etapa 192) ou, sem ela, linha nenhuma.
  */
 function linhaOs(p) {
-  if (p.os_id === null || p.os_id === undefined || p.os_id === '') return '';
+  if (p.os_id === null || p.os_id === undefined || p.os_id === '') {
+    // Etapa 192 (RN-192.08): sem OS da lista, a OS DIGITADA (`os_texto`) sai como `OS: <texto>`; sem nenhuma, nada.
+    const t = p.os_texto === null || p.os_texto === undefined ? '' : String(p.os_texto).trim();
+    return t ? `      <div class="campo"><b>OS:</b> ${escapar(t)}</div>\n` : '';
+  }
   const n = p.os_numero === null || p.os_numero === undefined ? '' : String(p.os_numero).trim();
   const rotulo = n ? `<b>OS:</b> ${escapar(n)}` : `<b>OS</b> #${escapar(p.os_id)}`;
   return `      <div class="campo">${rotulo}</div>\n`;

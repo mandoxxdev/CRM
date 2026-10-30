@@ -15,7 +15,8 @@
  * coagidas: `fornecedor_id`, `material_id`, `quantidade`, `valor_unitario`, `ipi_percentual`,
  * `peso_unitario` (quando preenchido), os três encargos (e `solicitacao_id`, quando vem por query).
  * E `os_id` (Etapa 171): número, ou `null` para "Estoque (sem OS)" — sempre presente, porque no `PUT`
- * `null` TIRA a OS e a chave ausente não mexe (I6 da revisão da Fase 2).
+ * `null` TIRA a OS e a chave ausente não mexe (I6 da revisão da Fase 2). E `os_texto` (Etapa 192): a OS DIGITADA,
+ * quando a OS não está cadastrada — também sempre presente, e exclusiva com `os_id` (um dos dois vai `null`).
  *
  * ⚠️ O QUE O PAYLOAD **NÃO** LEVA, e é decisão, não esquecimento:
  * - `numero`: é gerado pelo servidor (`inserirComNumeroUnico(db, 'PC', …)`). A tela não tem campo
@@ -56,10 +57,11 @@
  *    de `POST /compras/pedidos/calcular`, chamado 300 ms depois da última tecla. A única conta
  *    local que sobrou é o aviso de "item sem preço" (`> 0`), que não é um total.
  *
- * Divergência declarada: `GET /compras/materiais` devolve só `id, codigo, descricao, unidade`,
- * então NCM e peso nascem VAZIOS na criação (`''` = "o do material", RN-39.01: o servidor completa)
- * e só na edição vêm preenchidos, do `GET /:id`. Unidade e descrição do item NÃO são editáveis
- * (não estão no contrato do POST/PUT; continuam copiadas do material pelo servidor).
+ * NCM e peso: desde a Etapa 192 (RN-192.09) `GET /compras/materiais` devolve `ncm` e `peso_unitario`, e o item novo
+ * nasce com eles (antes nasciam VAZIOS e só o servidor completava ao salvar). Material sem NCM/peso continua `''` =
+ * "o do material" (RN-39.01). A pré-carga da Reposição (`?material=`) não consulta a busca e
+ * segue nascendo vazia. Unidade e descrição do item NÃO são editáveis (não estão no contrato do POST/PUT;
+ * continuam copiadas do material pelo servidor).
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -167,10 +169,21 @@ function rotuloDaOs(os) {
   return os.cliente_nome ? `${numero} — ${os.cliente_nome}` : numero;
 }
 
+// Etapa 192 (RN-192.07): a opção do `<select>` que abre o campo da OS DIGITADA (OS não cadastrada). Não é id de OS:
+// `osIdParaPayload` a manda como `null`, e o texto vai em `os_texto`. O limite é o do servidor (60).
+const OS_DIGITAR = '__digitar__';
+const OS_TEXTO_MAX = 60;
+
 // Etapa 171 (I6): `''` (opcao "Estoque (sem OS)") vira `null` — no `PUT` isso TIRA a OS, e por
 // isso o campo viaja sempre, nunca omitido. Fora disso, NUMERO: o `<select>` devolve string.
 function osIdParaPayload(valor) {
-  return valor === '' || valor == null ? null : Number(valor);
+  return valor === '' || valor == null || valor === OS_DIGITAR ? null : Number(valor);
+}
+
+function osTextoParaPayload(osId, texto) {
+  if (osId !== OS_DIGITAR) return null;
+  const t = String(texto || '').trim();
+  return t === '' ? null : t;
 }
 
 let sequenciaLinha = 0;
@@ -365,6 +378,8 @@ const PedidoCompraForm = () => {
   // A OS gravada no pedido, como o `GET /:id` a descreve — para o `<select>` mostra-la mesmo se a
   // lista nao a trouxer (OS apagada, M2), em vez de cair calado em "Estoque".
   const [osDoPedido, setOsDoPedido] = useState(null);
+  // Etapa 192 (RN-192.07): o texto da OS digitada — vale só com `osId === OS_DIGITAR`.
+  const [osTexto, setOsTexto] = useState('');
   const [numero, setNumero] = useState('');
   const [dataPedido, setDataPedido] = useState(hojeISO());
   const [previsaoEntrega, setPrevisaoEntrega] = useState('');
@@ -482,7 +497,10 @@ const PedidoCompraForm = () => {
         setNumero(p.numero || '');
         setFornecedorId(p.fornecedor_id == null ? '' : String(p.fornecedor_id));
         // Etapa 171: a OS gravada, e a lista de OS com ela incluida (RN-171.06).
-        setOsId(p.os_id == null ? '' : String(p.os_id));
+        // Etapa 192: pedido de OS digitada (sem `os_id`, com `os_texto`) abre na opção de digitar, com o texto gravado.
+        const temOsTexto = p.os_id == null && p.os_texto != null && String(p.os_texto).trim() !== '';
+        setOsId(p.os_id == null ? (temOsTexto ? OS_DIGITAR : '') : String(p.os_id));
+        setOsTexto(temOsTexto ? String(p.os_texto) : '');
         setOsDoPedido(p.os_id == null ? null : { id: p.os_id, numero_os: p.os_numero || null });
         carregarOrdensServico(p.os_id == null ? null : p.os_id, () => vivo);
         setDataPedido((p.data_pedido || '').slice(0, 10));
@@ -601,7 +619,7 @@ const PedidoCompraForm = () => {
       quantidade: '1',
       valor_unitario: '',
       ipi_percentual: ipiPadrao,
-      // NCM/peso: a busca não os traz; `''` deixa o servidor completar com o do material.
+      // NCM/peso: os do cadastro, que a busca devolve desde a Etapa 192 (RN-192.09); sem eles, `''` = o servidor completa.
       ncm: material.ncm == null ? '' : String(material.ncm),
       peso_unitario: material.peso_unitario == null ? '' : String(material.peso_unitario),
     })]);
@@ -673,6 +691,7 @@ const PedidoCompraForm = () => {
     const payload = {
       fornecedor_id: Number(fornecedorId),
       os_id: osIdParaPayload(osId),
+      os_texto: osTextoParaPayload(osId, osTexto),
       data_pedido: dataPedido,
       previsao_entrega: previsaoEntrega,
       status,
@@ -924,6 +943,7 @@ const PedidoCompraForm = () => {
                   className="filter-select"
                 >
                   <option value="">Estoque (sem OS)</option>
+                  <option value={OS_DIGITAR}>OS não cadastrada — digitar</option>
                   {ordensServico.map((os) => (
                     <option key={os.id} value={os.id}>{rotuloDaOs(os)}</option>
                   ))}
@@ -932,6 +952,20 @@ const PedidoCompraForm = () => {
                   )}
                 </select>
               </label>
+              {osId === OS_DIGITAR && (
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  OS digitada
+                  <input
+                    data-testid="pedido-os-texto"
+                    className="pedido-form-input"
+                    maxLength={OS_TEXTO_MAX}
+                    placeholder="número da OS (não cadastrada)"
+                    value={osTexto}
+                    onChange={(ev) => setOsTexto(ev.target.value)}
+                    disabled={soStatus}
+                  />
+                </label>
+              )}
               <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 Data do pedido
                 <input

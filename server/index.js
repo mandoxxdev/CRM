@@ -19026,6 +19026,9 @@ const ALTERS_PEDIDOS_COMPRA = [
   // NULL = compra para estoque. Sem FK de proposito: a RN-171.10 (T3) recusa excluir OS com pedido, e a leitura e por
   // consulta viva (OS sumida sai `OS #<id>`, M2). O stub do harness ganha a coluna a mao.
   'os_id INTEGER',
+  // Etapa 192 (RN-192.07/08): a OS DIGITADA, quando a OS nao esta cadastrada (ate 60 caracteres, exclusiva com `os_id`).
+  // So texto: nao reserva no recebimento, nao entra no encerramento nem na trava de exclusao da OS (tudo isso le `os_id`).
+  'os_texto TEXT',
 ];
 db.run(`CREATE TABLE IF NOT EXISTS pedidos_compra (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
