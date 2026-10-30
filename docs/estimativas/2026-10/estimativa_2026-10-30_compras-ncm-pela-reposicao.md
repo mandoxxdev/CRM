@@ -7,9 +7,15 @@ com `?codigo=`, consultar a busca que já existe (`GET /compras/materiais?search
 
 | # | Tarefa | Porte | Análise | Execução | Teste e conferência | Informado | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | NCM/peso no pedido da Reposição | mudança pequena | 15 min | 30 min | 30 min | 1h15 | — | — | — |
+| 1 | NCM/peso no pedido da Reposição | mudança pequena | 15 min | 30 min | 30 min | 1h15 | ~3 min (ver abaixo) | 1h15 | `44ac519b`, `355d43e8` |
 
 Medição no fechamento:
 ```
 node .claude/skills/relatorio-semanal/scripts/horas.js --desde 2026-10-30 --ate 2026-10-31 --grupos "NCM Reposicao=NCM.*Reposicao|Reposicao.*NCM"
 ```
+
+## Fechamento (2026-10-30)
+
+O `horas.js` mediu ~3 min (o intervalo entre commits não pega o teste vermelho, a correção, o controle positivo, a suíte da tela
+inteira — 208 suítes, 2865/2865 — e o build). Usada a execução estimada (30 min) + a parte do André estimada (45 min, não informada).
+Realizado = 1h15.
