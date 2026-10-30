@@ -333,3 +333,46 @@ test('(e) voltar para "Selecione o pedido..." ou trocar para Nota Fiscal limpa o
   expect(modalNovo().textContent).not.toContain('Aços Vale Comércio');
   expect(modalNovo().textContent).not.toContain('Dados do pedido não disponíveis');
 });
+
+// ── Etapa 192 Fase 5 (X5): fornecedor pessoa fisica (so CPF) ──────────────────────────────────────
+const CPF_FORN = '529.982.247-25';
+
+test('(f) fornecedor so com CPF: o painel do pedido mostra "CPF" e o numero, nao "CNPJ —"', async () => {
+  const original = api.get.getMockImplementation();
+  api.get.mockImplementation((url, config) => (url === '/almoxarifado/recebimentos-aux/pedidos-compra/312'
+    ? Promise.resolve({ data: { ...DOC_PEDIDO[312], fornecedor: { ...DOC_PEDIDO[312].fornecedor, cnpj: null, cpf: CPF_FORN } } })
+    : original(url, config)));
+  await renderizar();
+  await escolherPedido(312);
+  const grid = painelPedido().querySelector('.ped-rec-grid');
+  const rotulos = [...grid.querySelectorAll('span')].map((s) => s.textContent);
+  expect(rotulos).toContain('CPF');
+  expect(rotulos).not.toContain('CNPJ');
+  expect(grid.textContent).toContain(CPF_FORN);
+});
+
+test('(f2) com CNPJ o painel continua mostrando "CNPJ" e o numero', async () => {
+  await renderizar();
+  await escolherPedido(312);
+  const grid = painelPedido().querySelector('.ped-rec-grid');
+  expect([...grid.querySelectorAll('span')].map((s) => s.textContent)).toContain('CNPJ');
+  expect(grid.textContent).toContain('11.111.111/0001-11');
+});
+
+test('(g) Nota Fiscal: escolher fornecedor so com CPF mostra "CPF ..." na opcao e preenche o documento com o CPF', async () => {
+  const original = api.get.getMockImplementation();
+  api.get.mockImplementation((url, config) => (url === '/almoxarifado/recebimentos-aux/fornecedores'
+    ? Promise.resolve({ data: [{ id: 77, razao_social: 'JOAO DA SILVA', nome_fantasia: null, cnpj: null, cpf: CPF_FORN }] })
+    : original(url, config)));
+  await renderizar();
+  await clicar(botaoPorTexto('Novo Recebimento'));
+  await selecionar(selectPorLabel('Forma de recebimento'), 'NOTA_FISCAL');
+  await esperarEfeitos();
+  const sel = selectPorLabel('Fornecedor');
+  const opcao = [...sel.options].find((o) => o.value === '77');
+  expect(opcao.textContent).toBe(`JOAO DA SILVA — CPF ${CPF_FORN}`);
+  await selecionar(sel, '77');
+  const campoDoc = [...container.querySelectorAll('.almox-field')]
+    .find((d) => d.querySelector('label')?.textContent === 'CNPJ / CPF do Fornecedor').querySelector('input');
+  expect(campoDoc.value).toBe(CPF_FORN);
+});

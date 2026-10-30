@@ -87,6 +87,16 @@ const ADMIN = { id: 1, nome: 'Admin', role: 'admin', is_superadmin: 1, email: 'a
     assert.strictEqual(achado.id, FN);
   });
 
+  await test('[X5] recebimento: a lista de fornecedores traz o cpf (e acha por ele) e o seletor de pedido leva o CPF no documento', async () => {
+    const f = await request(app).get('/api/almoxarifado/recebimentos-aux/fornecedores').query({ search: '529.982' });
+    assert.strictEqual(f.status, 200);
+    const achado = f.body.find((x) => x.id === FN);
+    assert.ok(achado, JSON.stringify(f.body));
+    assert.deepStrictEqual([achado.cnpj, achado.cpf], [null, '529.982.247-25']);
+    const p = await request(app).get('/api/almoxarifado/recebimentos-aux/pedidos-compra').query({ search: `PC-${FN}` });
+    assert.strictEqual(p.body[0].fornecedor_cnpj, '529.982.247-25', JSON.stringify(p.body));
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

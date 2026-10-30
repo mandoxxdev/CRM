@@ -1744,6 +1744,17 @@ describe('Etapa 192 — OS digitada e NCM do material', () => {
     expect(chamadasPost()[0][1]).toMatchObject({ os_id: 57, os_texto: null });
   });
 
+  test('(192b2) "digitar" escolhido e deixado vazio: o POST leva os_id null e os_texto null (compra para estoque)', async () => {
+    await renderizarEm('/compras/pedidos/novo');
+    await preencherPedidoValido();
+    await selecionar(porTestId('pedido-os'), '__digitar__');
+    expect(porTestId('pedido-os-texto').value).toBe('');
+    await submeter();
+    const corpo = chamadasPost()[0][1];
+    expect(corpo.os_id).toBeNull();
+    expect(corpo.os_texto).toBeNull();
+  });
+
   test('(192c) a edicao de pedido com os_texto abre na opcao de digitar e o PUT devolve o texto', async () => {
     detalhe418 = { ...PEDIDO_418, os_id: null, os_numero: null, os_texto: 'OS 4471 (cliente)' };
     await renderizarEm('/compras/pedidos/editar/418');
@@ -1797,5 +1808,28 @@ describe('Etapa 192 — OS digitada e NCM do material', () => {
     // Sem NCM/peso no cadastro, o campo fica vazio e o placeholder explica que o servidor completa.
     expect(porTestId('ncm-item-901').value).toBe('');
     expect(porTestId('ncm-item-901').getAttribute('placeholder')).toBe('o do cadastro do material');
+  });
+
+  test('(192f) NCM do cadastro com mais de 10 caracteres nao e copiado (o servidor completa); o de 10 e copiado', async () => {
+    const getOriginal = api.get.getMockImplementation();
+    api.get.mockImplementation((url, config) => (url === '/compras/materiais'
+      ? Promise.resolve({ data: [
+        { id: 907, codigo: 'ALM-0907', descricao: 'Chapa Aço 3mm', unidade: 'KG', ncm: '8481.80.95-01', peso_unitario: null },
+        { id: 908, codigo: 'ALM-0908', descricao: 'Chapa Aço 4mm', unidade: 'KG', ncm: '8481.80.95', peso_unitario: null },
+      ] })
+      : getOriginal(url, config)));
+    await renderizarEm('/compras/pedidos/novo');
+    await preencherPedidoValido();
+    await clicar(porTestId('adicionar-material-908'));
+    digitar(porTestId('qtd-item-908'), '1');
+    digitar(porTestId('valor-item-908'), '10');
+    await clicar(porTestId('detalhes-item-907'));
+    await clicar(porTestId('detalhes-item-908'));
+    expect(porTestId('ncm-item-907').value).toBe('');
+    expect(porTestId('ncm-item-908').value).toBe('8481.80.95');
+    await submeter();
+    const itens = chamadasPost()[0][1].itens;
+    expect(itens.find((i) => i.material_id === 907).ncm).toBe('');
+    expect(itens.find((i) => i.material_id === 908).ncm).toBe('8481.80.95');
   });
 });

@@ -173,6 +173,8 @@ function rotuloDaOs(os) {
 // `osIdParaPayload` a manda como `null`, e o texto vai em `os_texto`. O limite é o do servidor (60).
 const OS_DIGITAR = '__digitar__';
 const OS_TEXTO_MAX = 60;
+// Fase 5 (X4): o teto do NCM do item no servidor (`services/compras/schemas.js`, NCM_INVALIDO).
+const NCM_MAX_ITEM = 10;
 
 // Etapa 171 (I6): `''` (opcao "Estoque (sem OS)") vira `null` — no `PUT` isso TIRA a OS, e por
 // isso o campo viaja sempre, nunca omitido. Fora disso, NUMERO: o `<select>` devolve string.
@@ -620,7 +622,10 @@ const PedidoCompraForm = () => {
       valor_unitario: '',
       ipi_percentual: ipiPadrao,
       // NCM/peso: os do cadastro, que a busca devolve desde a Etapa 192 (RN-192.09); sem eles, `''` = o servidor completa.
-      ncm: material.ncm == null ? '' : String(material.ncm),
+      // Fase 5 (X4): o cadastro de material nao limita o NCM, e o item do pedido aceita ate 10 caracteres — o NCM mais longo
+      // copiado aqui fazia o salvar do pedido responder 400 "itens.0.ncm: ...". Mais longo que 10 fica `''` (o servidor
+      // completa com o do cadastro, como antes da 192).
+      ncm: material.ncm == null || String(material.ncm).length > NCM_MAX_ITEM ? '' : String(material.ncm),
       peso_unitario: material.peso_unitario == null ? '' : String(material.peso_unitario),
     })]);
   };
