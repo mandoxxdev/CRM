@@ -19,41 +19,46 @@ import { formatarErroPermissao } from '../utils/permissaoErro';
  * esconderia ações de quem tem permissão por causa de um erro de rede.
  */
 
-let cache = null;      // { perfil, acoes }
-let inflight = null;
+// Etapa 192 (RN-192.10): um cache POR ENDERECO — a tela Materiais do Compras pergunta a porta dela
+// (`/compras/materiais/aux/minhas-permissoes`), que o comprador sem o modulo almoxarifado alcanca.
+export const URL_PERMISSOES_ALMOXARIFADO = '/almoxarifado/minhas-permissoes';
+const caches = new Map();     // url -> { perfil, acoes }
+const inflights = new Map();  // url -> Promise
 
-async function carregar() {
-  if (cache) return cache;
-  if (inflight) return inflight;
-  inflight = api.get('/almoxarifado/minhas-permissoes')
+async function carregar(url) {
+  if (caches.has(url)) return caches.get(url);
+  if (inflights.has(url)) return inflights.get(url);
+  const p = api.get(url)
     .then((res) => {
-      cache = res.data || { perfil: null, acoes: {} };
-      return cache;
+      const dados = res.data || { perfil: null, acoes: {} };
+      caches.set(url, dados);
+      return dados;
     })
     .catch(() => ({ perfil: null, acoes: {} }))  // sem cache: tenta de novo na próxima
-    .finally(() => { inflight = null; });
-  return inflight;
+    .finally(() => { inflights.delete(url); });
+  inflights.set(url, p);
+  return p;
 }
 
 /** Descarta o cache — use depois de trocar o perfil de alguém. */
 export function invalidarAlmoxPermissoes() {
-  cache = null;
+  caches.clear();
 }
 
-export function useAlmoxPermissoes() {
-  const [dados, setDados] = useState(cache);
-  const [loading, setLoading] = useState(cache === null);
+export function useAlmoxPermissoes(url = URL_PERMISSOES_ALMOXARIFADO) {
+  const [dados, setDados] = useState(caches.get(url) || null);
+  const [loading, setLoading] = useState(!caches.has(url));
 
   useEffect(() => {
     let vivo = true;
-    if (cache) { setDados(cache); setLoading(false); return undefined; }
-    carregar().then((d) => {
+    if (caches.has(url)) { setDados(caches.get(url)); setLoading(false); return undefined; }
+    carregar(url).then((d) => {
       if (!vivo) return;
       setDados(d);
       setLoading(false);
     });
     return () => { vivo = false; };
-  }, []);
+  }, [url]);
 
   const perfil = dados?.perfil || null;
 

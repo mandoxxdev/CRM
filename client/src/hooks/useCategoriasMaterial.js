@@ -26,7 +26,8 @@ import api from '../services/api';
  * não precisam avisar — sem o catálogo eles só deixam de oferecer o filtro, e a lista completa
  * continua na tela.
  */
-export function useCategoriasMaterial() {
+// Etapa 192 (RN-192.10): `url` — a tela de cadastro do Compras le a mesma lista pela porta dela.
+export function useCategoriasMaterial(url = '/almoxarifado/categorias') {
   const [categorias, setCategorias] = useState([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState(false);
@@ -35,7 +36,7 @@ export function useCategoriasMaterial() {
     // Flag `vivo` (padrão do módulo): a tela pode desmontar antes da resposta, e um setState
     // depois do unmount é warning — com CI=true, erro de build.
     let vivo = true;
-    api.get('/almoxarifado/categorias')
+    api.get(url)
       .then((res) => {
         if (!vivo) return;
         // Tolera string solta além de {nome}: o GET devolve linhas, mas um endpoint que um dia
@@ -53,7 +54,7 @@ export function useCategoriasMaterial() {
       })
       .finally(() => { if (vivo) setLoading(false); });
     return () => { vivo = false; };
-  }, []);
+  }, [url]);
 
   return { categorias, loading, erro };
 }

@@ -144,7 +144,7 @@ async function runInitSchemaWithRetry(db, retries = 3) {
   }
 }
 
-module.exports = function registerExtendedRoutes(app, db, authenticateToken, uploadsAlmoxDir, uploadsAnexosDir, dataDir) {
+module.exports = function registerExtendedRoutes(app, db, authenticateToken, uploadsAlmoxDir, uploadsAnexosDir, dataDir, portaCompras = null) {
   runInitSchemaWithRetry(db).catch((e) => console.error('Falha definitiva schema almoxarifado v3:', e.message));
 
   const auth = authenticateToken;
@@ -208,7 +208,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
   // pai, bloqueio de inativacao com filhas e codigo automatico. E `categorias_material_almoxarifado`
   // TEM uma coluna `parent_id` — herdada da modelagem original e sem nenhum uso —, o que torna
   // "copiar familias" um erro facil de cometer sem perceber. Estas rotas nao a tocam.
-  app.get('/api/almoxarifado/categorias', auth, async (req, res) => {
+  const listarCategorias = async (req, res) => {
     try {
       // `?todos=1` (Etapa 26, C1): traz as INATIVAS junto. Sem ele a aba de Configuracoes nao
       // tem como REATIVAR o que desativou — a categoria desativada some da tela que a editaria e
@@ -221,7 +221,10 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       const rows = await dbAll(db, `SELECT * FROM categorias_material_almoxarifado WHERE ${where} ORDER BY nome`);
       res.json(rows);
     } catch (e) { handleError(res, e); }
-  });
+  };
+  app.get('/api/almoxarifado/categorias', auth, listarCategorias);
+  // Etapa 192 (RN-192.10): a mesma lista para a tela de cadastro de material do Compras (`routes/almoxarifado.js`).
+  if (portaCompras) app.get('/api/compras/materiais/aux/categorias', ...portaCompras.leitura, listarCategorias);
 
   // Mensagem UNICA da colisao de nome: a mesma frase no POST e no PUT. A tela mostra o
   // `error` do servidor cru, entao duas redacoes diferentes para o mesmo erro apareceriam
@@ -732,12 +735,15 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
   });
 
   // ── Almoxarifados (entidade raiz — multi-almoxarifado) ──
-  app.get('/api/almoxarifado/almoxarifados', auth, async (req, res) => {
+  const listarAlmoxarifados = async (req, res) => {
     try {
       const where = req.query.todos === '1' ? '1=1' : 'ativo = 1';
       res.json(await dbAll(db, `SELECT * FROM almoxarifados WHERE ${where} ORDER BY codigo`));
     } catch (e) { handleError(res, e); }
-  });
+  };
+  app.get('/api/almoxarifado/almoxarifados', auth, listarAlmoxarifados);
+  // Etapa 192 (RN-192.10): o filtro de apoio da localizacao no cadastro de material do Compras.
+  if (portaCompras) app.get('/api/compras/materiais/aux/almoxarifados', ...portaCompras.leitura, listarAlmoxarifados);
 
   app.post('/api/almoxarifado/almoxarifados', auth, requirePermission('configurar'), validate(AlmoxarifadoSchema), async (req, res) => {
     try {
