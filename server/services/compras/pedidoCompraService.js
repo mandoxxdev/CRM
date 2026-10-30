@@ -1249,15 +1249,23 @@ const CHAVES_IPI = ['ipi %', '% ipi', 'ipi (%)', 'ipi_percentual', 'ipi percentu
  *   planilha TEM essa coluna (a chave existe na linha — o client le com `defval: ''`, entao a celula vazia tambem chega), ela
  *   manda, mesmo vazia: o export do CRM tambem traz `OS`, que la e a OS do CABECALHO, e copia-la para cada item reimportado
  *   inventaria uma justificativa por linha que o pedido original nao tinha.
- * - Sem ela, `OS` (planilha de fora: uma coluna "OS" por linha e a OS daquele item).
+ * - Sem ela, `OS` (planilha de fora: uma coluna "OS" por linha e a OS daquele item). Fase 5 (R5): sem ela e com as colunas que so o
+ *   export do CRM tem (`CHAVES_SO_DO_EXPORT_DO_CRM`), e um export antigo: sem OS no item.
  * A OS do cabecalho NAO e importada (nunca foi, desde a 171). Mais de 60 caracteres -> AVISO e a linha entra sem OS (a OS e so
  * justificativa; perder o item inteiro por ela seria pior), como o IPI nao reconhecido.
  */
 const CHAVES_OS_DO_ITEM = ['os do item', 'os item', 'os_item', 'os_texto', 'os por item'];
 const CHAVES_OS_PLANILHA = ['os', 'o.s.', 'ordem de servico', 'ordem de serviço'];
+// Etapa 193 Fase 5 (R5): as colunas que SO o "Exportar Excel" do CRM produz (Etapa 39, `linhaExportPedido`) — existem desde
+// antes da `OS` do cabecalho (171). Planilha sem `OS do item` mas com uma delas e um export ANTIGO (171-192): ali `OS` era a do
+// cabecalho, e copia-la para cada item inventaria a justificativa por linha. Descartado: exigir todas as colunas do export
+// (o operador apaga colunas antes de reimportar) e olhar `Status`/`Valor Total` (planilha de fornecedor tambem as tem).
+const CHAVES_SO_DO_EXPORT_DO_CRM = ['atrasado', 'dias de atraso'];
 const AVISO_OS_ITEM_LONGA = 'OS do item com mais de 60 caracteres — a linha entrou sem OS';
 function osDaLinhaDaPlanilha(row) {
   const temColunaDoItem = CHAVES_OS_DO_ITEM.some((k) => Object.prototype.hasOwnProperty.call(row, k));
+  const exportDoCrm = CHAVES_SO_DO_EXPORT_DO_CRM.some((k) => Object.prototype.hasOwnProperty.call(row, k));
+  if (!temColunaDoItem && exportDoCrm) return { os: null };
   const cru = temColunaDoItem ? valorCruDoRow(row, ...CHAVES_OS_DO_ITEM) : valorCruDoRow(row, ...CHAVES_OS_PLANILHA);
   if (cru == null) return { os: null };
   try {
