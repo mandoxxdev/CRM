@@ -14,7 +14,6 @@
  */
 const Q = require('./quantidade');
 const { dbAll } = require('./db');
-const { ACAO_PERFIS } = require('./permissions');
 
 const inativo = (v) => Number(v) !== 1;
 
@@ -102,23 +101,19 @@ const SEM_MATERIAL_INATIVO_SQL = `NOT EXISTS (SELECT 1 FROM itens_requisicao_alm
 
 const numeroDe = (numero, id) => (numero == null || numero === '' ? String(id) : String(numero));
 
-// Fase 2 (R2): quem recebe a recusa nem sempre reativa (o Gestor aprova e nao edita material) — a mensagem diz QUEM
-// reativa, lido de `editar_material` (a acao que o Reativar da tela de Materiais exige), para nao envelhecer calada.
-const NOME_PERFIL = {
-  ADMINISTRADOR: 'Administrador', ALMOXARIFE: 'Almoxarife', COMPRAS: 'Compras', PRODUCAO: 'Produção',
-  ENGENHARIA: 'Engenharia', GESTOR: 'Gestor', CONSULTA: 'Consulta', QUALIDADE: 'Qualidade',
-};
-function quemReativa() {
-  const nomes = (ACAO_PERFIS.editar_material || []).map((p) => NOME_PERFIL[p] || p);
-  return nomes.length > 1 ? `${nomes.slice(0, -1).join(', ')} ou ${nomes[nomes.length - 1]}` : nomes.join('');
-}
+// Fase 2 (R2) da 114: quem recebe a recusa nem sempre reativa (o Gestor aprova e nao edita material) — a mensagem diz ONDE
+// e QUEM reativa. Ate a Etapa 192 era lido de `ACAO_PERFIS.editar_material` (o Reativar da tela de Materiais do almoxarifado).
+// Etapa 193 Fase 5 (R2): o cadastro e so do Compras (RN-193.02/04) — o Reativar mora em Compras -> Materiais, filtro Inativos, e
+// so o administrador do modulo Compras (ou do sistema) entra la (`cadastroDeMaterial.pode`). A lista de perfis dizia quem NAO
+// consegue mais. Com a chave `ALMOX_CADASTRO_MATERIAL=liberado` o almoxarifado tambem reativa, mas a mensagem fala do padrao.
+const ONDE_REATIVAR_MATERIAL = 'Compras → Materiais, filtro Inativos (administrador do módulo Compras)';
 /**
  * Etapa 124 (C231): `familias` — os grupos de `gruposFamiliaInativa` (ou, na separacao, `[[rotulo, null]]` para "do
  * material"). Com algum, a frase manda reativar a familia ANTES — e diz onde e quem (a aba Familias das Configuracoes, do
  * Administrador do almoxarifado: o portao `denyUnlessAlmoxAdmin` da rota de familia). Sem nenhum, a literal da 114.
  */
 const reativar = (familias = []) => {
-  const doMaterial = `o material em Materiais → Inativos (${quemReativa()})`;
+  const doMaterial = `o material em ${ONDE_REATIVAR_MATERIAL}`;
   if (!familias || familias.length === 0) return `Reative ${doMaterial}`;
   const quais = familias.map(([rotulo, codigos]) => (codigos ? `${rotulo} de ${codigos.join(', ')}` : `${rotulo} do material`))
     .join(' e ');

@@ -27,7 +27,7 @@ const ALMOX = { id: 3, nome: 'Almox Teste', role: 'user', email: 'almox@test.com
 const GESTOR = { id: 7, nome: 'Gestor Teste', role: 'user', email: 'gestor@test.com', perfil_almoxarifado: 'GESTOR' };
 const APROV_VALOR = { id: 8, nome: 'Aprov Valor', role: 'user', email: 'valor@test.com', perfil_almoxarifado: 'CONSULTA' };
 
-const REATIVE = 'Reative o material em Materiais → Inativos (Administrador, Almoxarife ou Engenharia)';
+const REATIVE = 'Reative o material em Compras → Materiais, filtro Inativos (administrador do módulo Compras)';
 const E1 = (n, c) => `A requisição ${n} tem material inativo: ${c}. ${REATIVE} ou rejeite a requisição.`;
 const E1V = (n, c) => `A requisição ${n} tem material inativo: ${c}. ${REATIVE} ou reprove a liberação por valor.`;
 const E2 = (n, c) => `O rascunho ${n} tem material inativo: ${c}. ${REATIVE} ou cancele o rascunho e faça outro sem ele.`;
