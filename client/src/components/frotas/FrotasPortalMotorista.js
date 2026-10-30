@@ -168,6 +168,21 @@ function BotaoConfirmarMenor({ visivel, desabilitado, onClick }) {
 
 /* ---------------------------------------------------------------- saida / retorno / inspecao */
 
+/**
+ * Frota Etapa 10 (RN-F10.01): o titulo do formulario com um "Voltar" ao lado — o motorista nao precisa rolar ate o rodape para
+ * voltar. Mesmo comportamento do Voltar de baixo (que continua): desligado enquanto salva.
+ */
+function CabecalhoDoFormulario({ titulo, salvando, onVoltar }) {
+  return (
+    <div className="portal-form-cabecalho">
+      <h2 className="portal-form-titulo">{titulo}</h2>
+      <button type="button" className="portal-botao secundario portal-voltar-topo" data-testid="voltar-topo" disabled={salvando} onClick={onVoltar}>
+        ← Voltar
+      </button>
+    </div>
+  );
+}
+
 export function RegistroForm({ tipo, inicio, onCancelar, onSalvo, onAtualizar }) {
   const itens = inicio.itens || [];
   const vistas = inicio.vistas || VISTAS_PADRAO;
@@ -324,7 +339,7 @@ export function RegistroForm({ tipo, inicio, onCancelar, onSalvo, onAtualizar })
 
   return (
     <form className="portal-form" onSubmit={salvar} aria-label={`Formulário de ${TITULO_TIPO[tipo]}`}>
-      <h2 className="portal-form-titulo">{TITULO_TIPO[tipo]}</h2>
+      <CabecalhoDoFormulario titulo={TITULO_TIPO[tipo]} salvando={salvando} onVoltar={onCancelar} />
       <ErroDoServidor mensagem={erro} />
       <BotaoConfirmarMenor visivel={podeConfirmar} desabilitado={!podeSalvar} onClick={() => enviar(true)} />
 
@@ -623,7 +638,7 @@ export function AbastecimentoForm({ inicio, onCancelar, onSalvo, onAtualizar }) 
 
   return (
     <form className="portal-form" onSubmit={salvar} aria-label="Formulário de Abastecimento">
-      <h2 className="portal-form-titulo">Abastecimento</h2>
+      <CabecalhoDoFormulario titulo="Abastecimento" salvando={salvando} onVoltar={onCancelar} />
       <ErroDoServidor mensagem={erro} />
       <BotaoConfirmarMenor visivel={podeConfirmar} desabilitado={salvando} onClick={() => enviar(true)} />
       <label className="portal-campo">

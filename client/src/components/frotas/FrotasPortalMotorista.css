@@ -382,3 +382,15 @@
     flex: 1 1 auto;
   }
 }
+
+/* Frota Etapa 10 (RN-F10.01): titulo do formulario com o Voltar do topo ao lado. */
+.portal-form-cabecalho {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.portal-voltar-topo {
+  flex: 0 0 auto;
+}
