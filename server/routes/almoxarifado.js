@@ -654,7 +654,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     }
   };
   app.post('/api/almoxarifado/materiais', requirePermission('criar_material'), validate(MaterialSchema), criarMaterial);
-  // Etapa 192 (RN-192.10): o mesmo cadastro pelo Compras — o saldo inicial continua exigindo `movimentar` (acima).
+  // Etapa 192 (RN-192.10): o mesmo cadastro pelo Compras. Fase 5 (X1): saldo inicial -> 400 na porta, e o handler roda com o
+  // usuario no perfil COMPRAS (`cadastroDeMaterial.comoCompras`): a porta do Compras nunca mexe em estoque.
   app.post('/api/compras/materiais/cadastro', ...portaCompras.escrita('criar_material'), validate(MaterialSchema), criarMaterial);
 
   // PUT /api/almoxarifado/materiais/:id — atualizar
@@ -1030,7 +1031,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   };
   app.put('/api/almoxarifado/materiais/:id', requirePermission('editar_material'), validate(MaterialUpdateSchema), editarMaterial);
   // Etapa 192 (RN-192.10): a mesma edicao pelo Compras, menos inativar/reativar (`ativo` -> 400; e o "excluir", que fica aqui
-  // no Almoxarifado). As guardas de controle, dono e saldo do handler continuam lendo o perfil do almoxarifado.
+  // no Almoxarifado). Fase 5 (X1): as guardas de controle e dono do handler leem o perfil COMPRAS (`comoCompras`) e recusam.
   app.put('/api/compras/materiais/cadastro/:id', ...portaCompras.escrita('editar_material'),
     cadastroDeMaterialCompras.recusarAtivo, validate(MaterialUpdateSchema), editarMaterial);
 

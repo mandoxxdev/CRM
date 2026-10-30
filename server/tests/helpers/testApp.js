@@ -229,6 +229,9 @@ async function createTestApp(options = {}) {
   // Camada 2 (permissão de módulo) liberada no harness; a camada 3
   // (requirePermission por perfil) roda o código REAL das rotas extended.
   const fakeCheckModulePermission = () => (req, res, next) => next();
+  // Etapa 192 Fase 5 (G1): `options.checkModulePermission` troca o liberado por um que o teste controla — para provar QUAL modulo
+  // uma porta exige (comprasMaterialSemEstoque.api.test.js). Sem a opcao, o liberado de sempre.
+  const checkModuloDoHarness = options.checkModulePermission || fakeCheckModulePermission;
 
   // Etapa 86 (RN-86.01): o mesmo desenho do `index.js` — os registradores tardios recebem um Router
   // montado no `app`, e os tres handlers de erro sao montados (abaixo) ANTES de a extended registrar
@@ -241,7 +244,7 @@ async function createTestApp(options = {}) {
   // Compras perderia aqui do mesmo jeito que perde em producao. (Revisao adversarial da 86: o
   // harness montava o Router ANTES de Compras e este comentario dizia que a ordem "nao mudava".)
   const rotasModulos = express.Router();
-  require('../../routes/almoxarifado')(rotasModulos, db, fakeAuth, dataDir, fakeCheckModulePermission);
+  require('../../routes/almoxarifado')(rotasModulos, db, fakeAuth, dataDir, checkModuloDoHarness);
   require('../../routes/requisicoesMaterial')(rotasModulos, db, fakeAuth);
   // Etapa 34 (main) — compras/fornecedores: lista com projecao nomeada (G2), GET /:id, POST e PUT
   // da ficha do fornecedor. Montado ANTES de `routes/compras.js`, na MESMA ordem do `index.js`:
@@ -249,7 +252,7 @@ async function createTestApp(options = {}) {
   // de fornecedor da Etapa 40 (que seguem dentro de `routes/compras.js`, intocadas). Integracao
   // B18: o pedido de compra da main (`routes/compras/pedidos.js`) foi DESCARTADO — o da branch
   // (`routes/compras.js` + `pedidoCompraService`) vence porque o recebimento depende dele.
-  require('../../routes/compras/fornecedores')(app, db, fakeAuth, fakeCheckModulePermission);
+  require('../../routes/compras/fornecedores')(app, db, fakeAuth, checkModuloDoHarness);
 
   // Etapa 38: o modulo CORE Compras. Ate aqui o harness montava DOIS registradores e nenhum era
   // Compras — as 26 rotas de `/api/compras/*` viviam soltas em `server/index.js`, que nenhum teste
@@ -261,7 +264,7 @@ async function createTestApp(options = {}) {
   // existe para o registrador poder ser montado, nao para ser exercido.
   const uploadsComprasDir = path.join(dataDir, 'uploads', 'compras');
   const uploadComprasStub = multer({ dest: uploadsComprasDir });
-  require('../../routes/compras')(app, db, fakeAuth, fakeCheckModulePermission, {
+  require('../../routes/compras')(app, db, fakeAuth, checkModuloDoHarness, {
     uploadGrupoCompras: uploadComprasStub,
     uploadFornecedor: uploadComprasStub,
     uploadsGruposComprasDir: uploadsComprasDir,

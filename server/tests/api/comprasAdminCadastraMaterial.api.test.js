@@ -22,7 +22,6 @@ const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet } = require('../../services/almoxarifado/db');
 const { ACAO_PERFIS, PERFIS } = require('../../services/almoxarifado/permissions');
-const materialService = require('../../services/almoxarifado/materialService');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -73,10 +72,10 @@ const LITERAL_403 = 'Sem permissão para esta operação';
     assert.strictEqual((await dbGet(db, 'SELECT ncm FROM materiais_almoxarifado WHERE id = ?', [c.body.id])).ncm, '8481.80.99');
   });
 
-  await test('[admin do Compras] saldo inicial continua de quem movimenta: 403 com a frase do almoxarifado', async () => {
+  await test('[admin do Compras] saldo inicial pelo Compras -> 400 (Fase 5 X1: o saldo e lancado no Almoxarifado)', async () => {
     const r = await as(ADMIN_COMPRAS, () => request(app).post('/api/compras/materiais/cadastro').send(corpo({ codigo: 'VLV-SALDO', quantidade_atual: 3 })));
-    assert.strictEqual(r.status, 403, JSON.stringify(r.body));
-    assert.strictEqual(r.body.error, materialService.mensagemSaldoInicialSemPermissao('PRODUCAO'));
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, 'Saldo inicial é lançado no Almoxarifado.');
     assert.strictEqual((await dbGet(db, "SELECT COUNT(*) n FROM materiais_almoxarifado WHERE codigo = 'VLV-SALDO'")).n, 0);
   });
 

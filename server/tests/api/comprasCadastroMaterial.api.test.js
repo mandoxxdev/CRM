@@ -9,7 +9,8 @@
  *    portas existirem). A prova e a leitura do `app.use('/api/almoxarifado', authenticateToken,
  *    checkModulePermission('almoxarifado'))` de `routes/almoxarifado.js` — o mesmo declarado na Etapa 38
  *    (`comprasPedidoImportar.api.test.js`, cenario 5);
- *  - que as portas do Compras exigem o modulo `compras` (`checkModulePermission('compras')` em `criarPortaCompras`).
+ *  - que as portas do Compras exigem o modulo `compras` (`checkModulePermission('compras')` em `criarPortaCompras`) — desde a
+ *    Fase 5 (G1) isso e provado em `comprasMaterialSemEstoque.api.test.js`, com a camada 2 trocada por uma que confere o modulo.
  * O que ela prova e a camada 3 (perfil/administrador do Compras), real, e que as respostas sao as mesmas do almoxarifado.
  *
  * Executar: cd server && node tests/api/comprasCadastroMaterial.api.test.js
@@ -116,12 +117,11 @@ const LITERAL_403 = 'Sem permissão para esta operação';
     }
   });
 
-  await test('[POST] as recusas sao as do almoxarifado: familia inativa, codigo repetido, Zod e saldo inicial sem movimentar', async () => {
+  await test('[POST] as recusas sao as do almoxarifado: familia inativa, codigo repetido e Zod (o saldo inicial: comprasMaterialSemEstoque)', async () => {
     const casos = [
       corpo({ codigo: 'REC-1', familia_id: FAM_MORTA }),
       corpo({ codigo: 'VLV-001' }),
       corpo({ codigo: 'REC-3', classe_abc: 'Z' }),
-      corpo({ codigo: 'REC-4', quantidade_atual: 5 }), // ENGENHARIA nao tem `movimentar`
     ];
     for (const c of casos) {
       const a = await as(ENGENHARIA, () => request(app).post('/api/compras/materiais/cadastro').send(c));
