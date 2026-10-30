@@ -1,6 +1,7 @@
 # Módulo Frota — guia do que existe hoje
 
-> **Onde paramos:** **Etapa 9 — endereço do destino (CEP ou à mão), destino da lista na Viagem do gestor e o endereço da GMP na
+> **Onde paramos:** **Etapa 10 — Voltar no topo dos formulários do portal — entregue em 2026-10-30** (`79aad18f`): Saída, Retorno,
+> Inspeção e Abastecimento têm **← Voltar** ao lado do título, além do Voltar do rodapé. Antes: **Etapa 9 — endereço do destino (CEP ou à mão), destino da lista na Viagem do gestor e o endereço da GMP na
 > origem — entregue em 2026-10-29** (na `main`, `d7ba0b09` a `70e9aa76`, mais o fechamento). O "+ Novo destino", a tela **Destinos** e a **Nova Viagem** do
 > gestor pedem o endereço completo — o **CEP** preenche rua, bairro, cidade e estado; quem não sabe, digita —; a Nova Viagem escolhe o
 > destino da **lista** (antes era texto); a origem mostra **Saindo de: GMP** com o endereço de **Configurações → Empresa**. No mesmo dia
@@ -419,7 +420,16 @@ Antes: em **Configurações → Empresa**, confira endereço, cidade, estado e C
 **Não cobre:** mapa/distância; endereço na planilha (a coluna Destino continua com o nome); conferir se o CEP é da cidade digitada;
 a origem pela API continua aceitando outro lugar (só a tela é fixa).
 
-## O que as Etapas 1 a 9 **não** cobrem
+## Roteiro de teste manual (Etapa 10: Voltar no topo)
+
+1. Entre no celular (ou na janela estreita do navegador) como motorista → **Meu painel**.
+2. Toque **Saída**: o título "Saída" tem **← Voltar** à direita. Toque nele: volta ao painel, nada gravado.
+3. Repita com **Inspeção** e **Abastecimento** (e **Retorno**, com uma viagem aberta).
+4. Abra **Abastecimento**, preencha e toque **Salvar**: enquanto aparece "Salvando…", os dois Voltar ficam apagados.
+
+**Não cobre:** as janelas do gestor (o Cancelar já fica visível).
+
+## O que as Etapas 1 a 10 **não** cobrem
 
 - Saber **quem** mudou um perfil (não há trilha); lembrar o Consulta de quem foi administrador **pelo cadastro de usuário** e deixou de
   ser; o menu de quem **deixa** de ser administrador muda ao abrir o **Painel** (ou no Atualizar dele); nas outras telas, só ao recarregar. *(Dizia: "Dar Administrador de Frota pela tela de

@@ -4,7 +4,8 @@
 > Para quem **usa** o sistema (sem número de etapa nem histórico), o documento é o
 > [`manual-do-sistema.md`](manual-do-sistema.md). Guia com roteiro de teste: [`README.md`](README.md).
 >
-> **Onde estamos:** **Etapa 9 (endereço do destino com CEP ou à mão, destino da lista na Viagem do gestor, endereço da GMP na origem)
+> **Onde estamos:** **Etapa 10 (Voltar no topo dos formulários do portal) entregue** em 2026-10-30, na `main` (`79aad18f`) — reclamação
+> do motorista de rolar até o fim para voltar. Antes: **Etapa 9 (endereço do destino com CEP ou à mão, destino da lista na Viagem do gestor, endereço da GMP na origem)
 > entregue** em 2026-10-29, na `main` (`d7ba0b09` a `70e9aa76`, mais o fechamento) — pedido do André ao não achar a lista na tela do gestor
 > (B89–B99, C27–C28, D19, E27–E28); no mesmo dia saiu o botão **?** de ajuda (`d5a9d565`). Antes: **Etapa 8 (administrador pela tela,
 > destinos, condutor, saída da GMP, abastecimento sem foto) entregue** em 2026-10-28, na `main` (`a8a8d885` a `d38f0a71`, mais o fechamento) — os cinco pedidos da empresa daquele dia (B76–B84, C22–C23, E25).
@@ -1150,6 +1151,28 @@ e salve → *"Informe a rua (logradouro) do destino"* (começou a completar, tem
 - Renomear um destino não renomeia as viagens que já o usaram (B97).
 
 ---
+
+## Etapa 10 — Voltar no topo dos formulários do portal (2026-10-30)
+
+O motorista reclamou: para desistir de uma Saída, Retorno, Inspeção ou Abastecimento no celular, tinha de rolar a tela inteira — os
+12 itens, as fotos, as observações — até o botão **Voltar** do rodapé. Agora o formulário tem um **← Voltar** também no topo, ao lado do
+título.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| "Voltar" só no rodapé do formulário | **← Voltar** no topo, ao lado do título, e o Voltar do rodapé continua |
+
+### As regras, com o cenário exato
+
+- **RN-F10.01 — os dois Voltar fazem o mesmo.** No celular, entre como motorista → **Saída** → toque **← Voltar** no topo: volta ao
+  painel sem gravar nada. Vale para **Retorno**, **Inspeção** e **Abastecimento**. Enquanto o Salvar está gravando ("Salvando…"), os
+  dois Voltar ficam apagados.
+
+### O que esta etapa não cobre
+
+- As telas do **gestor** (os formulários em janela) não mudaram: lá o Cancelar já fica visível.
 
 ## Onde estamos e o que vem a seguir
 

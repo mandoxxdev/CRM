@@ -63,7 +63,9 @@ Quando você está com um veículo, o painel mostra: "Você está com o veículo
 
 ### 2.3 O formulário (Saída, Retorno, Inspeção)
 
-É o formulário de papel na tela:
+É o formulário de papel na tela. Para desistir e voltar ao painel há dois botões **Voltar**: um no **topo**, ao lado do
+título (**← Voltar**), e outro no rodapé, ao lado do Salvar — os dois fazem o mesmo e ficam desligados enquanto o registro está sendo
+salvo. O formulário de **Abastecimento** tem os mesmos dois.
 
 - **Veículo** — na Saída e na Inspeção você escolhe; no Retorno é o da sua viagem, já preenchido ("Veículo: (placa) · saiu com
   (km) km", ou "· saiu com (horas) h" numa máquina por horímetro).
