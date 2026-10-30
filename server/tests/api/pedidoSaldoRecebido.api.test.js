@@ -229,7 +229,9 @@ async function colunas(db, tabela) {
       assert.ok(depois.includes('quantidade_recebida'),
         `banco migrado nao ganhou a coluna — colunas: ${depois.join(', ')}`);
       // Etapa 39: +5 colunas de linha (item_numero, ncm, peso_unitario, ipi_percentual, observacao) via safeAlter.
-      assert.strictEqual(depois.length, 14, `8 + 1 + 5 = 14 colunas, achei ${depois.length}`);
+      // Etapa 193 (RN-193.07): +1, a OS do item (`os_texto`) — o banco ja existente tambem a ganha pelo safeAlter.
+      assert.ok(depois.includes('os_texto'), `banco migrado nao ganhou os_texto — colunas: ${depois.join(', ')}`);
+      assert.strictEqual(depois.length, 15, `8 + 1 + 5 + 1 = 15 colunas, achei ${depois.length}`);
       const idx = (await dbAll(dbMigrado, 'PRAGMA index_list(itens_pedido_compra)')).map((i) => i.name);
       assert.ok(idx.includes('idx_itens_pedido_compra_pedido'), 'banco migrado nao ganhou o indice');
     } finally {

@@ -150,7 +150,9 @@ app.get('/api/compras/pedidos', authenticateToken, checkModulePermission('compra
   if (search) {
     // Etapa 192 (RN-192.08): a busca acha tambem pela OS digitada (`os_texto`). Fase 5 (X2): pela regua sem caixa — a razao
     // social e gravada em maiusculas com acento (RN-192.05) e o LIKE do SQLite nao achava "AÇOS" por "aços".
-    const cond = condicaoDeBusca(['p.numero', 'f.razao_social', 'p.os_texto'], search);
+    // Etapa 193 (RN-193.09): e pela OS de qualquer ITEM do pedido (a subconsulta junta as OS das linhas; sem linha com OS = '').
+    const osDosItens = "(SELECT GROUP_CONCAT(i.os_texto, ' | ') FROM itens_pedido_compra i WHERE i.pedido_id = p.id)";
+    const cond = condicaoDeBusca(['p.numero', 'f.razao_social', 'p.os_texto', osDosItens], search);
     if (cond.sql) { query += ` AND ${cond.sql}`; params.push(...cond.params); }
   }
   if (status) {

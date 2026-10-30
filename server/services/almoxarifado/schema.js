@@ -2126,6 +2126,9 @@ async function initSchemaUmaExecucao(db) {
     'peso_unitario REAL',
     'ipi_percentual REAL DEFAULT 0',
     'observacao TEXT',
+    // Etapa 193 (RN-193.07): a OS do ITEM, texto livre ate 60 (so justificativa da compra: nao reserva, nao entra no
+    // recebimento nem no encerramento/exclusao da OS, que leem `pedidos_compra.os_id`). NULL = item sem OS.
+    'os_texto TEXT',
   ];
   for (const col of itensPedidoCols) await safeAlter(db, `ALTER TABLE itens_pedido_compra ADD COLUMN ${col}`);
   // Indice em `pedido_id`: a tabela nao tinha NENHUM indice, e a partir desta etapa toda leitura

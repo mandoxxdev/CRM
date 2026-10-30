@@ -10,7 +10,7 @@
  * Entradas:
  * - `pedido`: o shape de `obterPedido` (Etapa 39) — cabecalho + 9 condicoes + encargos,
  *   `fornecedor{nome, cnpj, ie, endereco, municipio, uf, cep, telefone, celular, email, origem}`,
- *   `itens[]` (com `item_numero`, `ncm`, `peso_unitario`, `ipi_percentual`, `observacao`,
+ *   `itens[]` (com `item_numero`, `ncm`, `peso_unitario`, `ipi_percentual`, `observacao`, `os_texto` (193),
  *   `valor_linha`, `ipi_linha`) e `totais{6}`. Pedido LEGADO (pre-39, `null` por toda parte, sem
  *   `totais`) tambem entra: a conta e refeita pelo MESMO `calcularTotaisPedido` que grava — nunca
  *   uma segunda formula — e todo vazio imprime "—".
@@ -250,7 +250,11 @@ function blocoComplementares(p, descontoImpresso) {
     </section>`;
 }
 
-function linhaItem(item, indice) {
+// Etapa 193 (RN-193.09): a OS do item (texto livre). A coluna so existe quando ALGUM item tem OS; sem nenhuma, a tabela e a
+// de antes (10 colunas) — pedido de estoque nao ganha coluna vazia.
+const osDoItem = (item) => (item.os_texto == null ? '' : String(item.os_texto).trim());
+
+function linhaItem(item, indice, comOs = false) {
   const numero = numeroOuNulo(item.item_numero);
   const descricao = texto(item.descricao);
   const obs = item.observacao == null || String(item.observacao).trim() === ''
@@ -260,7 +264,8 @@ function linhaItem(item, indice) {
         <tr>
           <td class="c">${numero === null ? indice + 1 : ptBR(numero, 0)}</td>
           <td>${texto(item.codigo)}</td>
-          <td class="descricao">${descricao}${obs}</td>
+          <td class="descricao">${descricao}${obs}</td>${comOs ? `
+          <td class="c">${texto(osDoItem(item))}</td>` : ''}
           <td class="c">${texto(item.ncm)}</td>
           <td class="r">${formatarValor(item.peso_unitario, 3)}</td>
           <td class="r">${formatarQuantidade(item.quantidade)}</td>
@@ -284,14 +289,15 @@ function ordenarItens(itens) {
 }
 
 function blocoItens(itens) {
-  const linhas = itens.map(linhaItem).join('');
+  const comOs = itens.some((i) => osDoItem(i) !== '');
+  const linhas = itens.map((item, indice) => linhaItem(item, indice, comOs)).join('');
   return `
     <section class="bloco">
       <h2>Itens do pedido</h2>
       <table class="itens">
         <thead>
           <tr>
-            <th class="c">It.</th><th>Material</th><th>Descrição / Observação</th><th class="c">NCM</th>
+            <th class="c">It.</th><th>Material</th><th>Descrição / Observação</th>${comOs ? '<th class="c">OS</th>' : ''}<th class="c">NCM</th>
             <th class="r">Peso Un (kg)</th><th class="r">Qtde.</th><th class="c">Un</th>
             <th class="r">Valor Unitário</th><th class="r">% IPI</th><th class="r">Valor Total</th>
           </tr>
