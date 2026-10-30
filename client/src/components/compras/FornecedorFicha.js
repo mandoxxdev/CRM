@@ -6,6 +6,7 @@ import { mascararTelefoneDigitando, mascararTelefoneCompleto } from '../../utils
 import {
   somenteDigitos, formatarCNPJ, formatarCNPJCompleto, formatarCEP, validarCNPJ, camposDaConsultaCNPJ, mesclarSoVazios,
 } from '../../utils/cnpj';
+import { formatarCPF, validarCPF, CPF_INVALIDO, CPF_E_CNPJ } from '../../utils/cpf';
 import './FornecedorForm.css';
 
 /**
@@ -37,16 +38,17 @@ const UFS = [
 ];
 
 const FORM_VAZIO = {
-  razao_social: '', nome_fantasia: '', cnpj: '', inscricao_estadual: '', contato: '', email: '',
+  razao_social: '', nome_fantasia: '', cnpj: '', cpf: '', inscricao_estadual: '', contato: '', email: '',
   telefone: '', telefone_vendedor: '', endereco: '', cidade: '', estado: '', cep: '', grupo_id: '',
   status: 'ativo',
 };
 
-/** As 13 chaves do contrato (seção 4 do design), na ordem do contrato. */
+/** As 13 chaves do contrato (seção 4 do design), na ordem do contrato, + o `cpf` da Etapa 192. */
 const CHAVES_CONTRATO = [
-  'razao_social', 'nome_fantasia', 'cnpj', 'inscricao_estadual', 'contato', 'email', 'telefone',
+  'razao_social', 'nome_fantasia', 'cnpj', 'cpf', 'inscricao_estadual', 'contato', 'email', 'telefone',
   'telefone_vendedor', 'endereco', 'cidade', 'estado', 'cep', 'grupo_id',
 ];
+
 
 const texto = (v) => (v == null ? '' : String(v));
 
@@ -57,6 +59,7 @@ function formDoServidor(f) {
     razao_social: texto(f.razao_social),
     nome_fantasia: texto(f.nome_fantasia),
     cnpj: formatarCNPJCompleto(texto(f.cnpj)),
+    cpf: texto(f.cpf),
     inscricao_estadual: texto(f.inscricao_estadual),
     contato: texto(f.contato),
     email: texto(f.email),
@@ -206,6 +209,16 @@ const FornecedorFicha = ({
       setErro('Razão social é obrigatória');
       return;
     }
+    // Etapa 192 (RN-192.02/03): as mesmas recusas do servidor, antes de mandar.
+    const temCpf = Boolean(form.cpf.trim());
+    if (temCpf && !validarCPF(form.cpf)) {
+      setErro(CPF_INVALIDO);
+      return;
+    }
+    if (temCpf && form.cnpj.trim()) {
+      setErro(CPF_E_CNPJ);
+      return;
+    }
     const corpo = {};
     CHAVES_CONTRATO.forEach((k) => { corpo[k] = k === 'razao_social' ? form[k].trim() : form[k]; });
     if (editando) corpo.status = form.status;
@@ -260,6 +273,12 @@ const FornecedorFicha = ({
                     {buscandoCnpj ? <FiLoader className="girando" /> : <FiSearch />}
                   </button>
                 </div>
+              </Campo>
+              {/* Etapa 192 (RN-192.01): fornecedor pessoa física. CPF ou CNPJ, não os dois (RN-192.03). */}
+              <Campo id="fornecedor-cpf" label="CPF">
+                <input id="fornecedor-cpf" data-testid="fornecedor-cpf" type="text" inputMode="numeric"
+                  value={form.cpf} onChange={(e) => set('cpf', formatarCPF(e.target.value))}
+                  placeholder="000.000.000-00" maxLength={14} />
               </Campo>
               <Campo id="fornecedor-ie" label="Inscrição estadual">
                 <input id="fornecedor-ie" data-testid="fornecedor-ie" type="text"

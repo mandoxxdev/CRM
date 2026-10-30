@@ -141,7 +141,7 @@ async function submeter() {
 
 const alerta = () => container.querySelector('[role="alert"]');
 
-const CAMPOS = ['razao', 'fantasia', 'cnpj', 'ie', 'contato', 'email', 'telefone', 'telefone-vendedor',
+const CAMPOS = ['razao', 'fantasia', 'cnpj', 'cpf', 'ie', 'contato', 'email', 'telefone', 'telefone-vendedor',
   'endereco', 'cidade', 'estado', 'cep', 'grupo'];
 
 describe('FornecedorForm — (a) estrutura', () => {
@@ -197,6 +197,7 @@ describe('FornecedorForm — (c) POST exato', () => {
       razao_social: 'ACME INDUSTRIA LTDA',
       nome_fantasia: 'ACME',
       cnpj: '11.222.333/0001-81',
+      cpf: '',
       inscricao_estadual: '123456',
       contato: 'Joana',
       email: 'joana@acme.com',
@@ -245,6 +246,7 @@ describe('FornecedorForm — (d) edicao', () => {
       razao_social: 'TECNOPAR FIXADORES LTDA',
       nome_fantasia: 'TECNOPAR',
       cnpj: '54.984.382/0001-64',
+      cpf: '',
       inscricao_estadual: '799850123110',
       contato: 'Carlos',
       email: 'contato@tecnopar.com.br',
@@ -476,3 +478,55 @@ describe('FornecedorForm — (j) achados da revisao adversarial (F1, F2)', () =>
     expect(campo('endereco').value).toBe('RUA DAS FLORES, 100 - SALA 2, CENTRO');
   });
 });
+
+describe('FornecedorForm — (k) Etapa 192: CPF (RN-192.01 a 192.03)', () => {
+  test('campo CPF mascara 000.000.000-00 enquanto digita', async () => {
+    await renderEm('/compras/fornecedores/novo');
+    await digitar('cpf', '52998224725');
+    expect(campo('cpf').value).toBe('529.982.247-25');
+  });
+
+  test('CPF valido sem CNPJ vai no POST mascarado', async () => {
+    await renderEm('/compras/fornecedores/novo');
+    await digitar('razao', 'JOAO PF');
+    await digitar('cpf', '52998224725');
+    await submeter();
+    expect(api.post).toHaveBeenCalledTimes(1);
+    expect(api.post.mock.calls[0][1].cpf).toBe('529.982.247-25');
+    expect(api.post.mock.calls[0][1].cnpj).toBe('');
+  });
+
+  test('CPF com digito errado: role="alert" com a literal e NAO faz POST', async () => {
+    await renderEm('/compras/fornecedores/novo');
+    await digitar('razao', 'JOAO PF');
+    await digitar('cpf', '52998224724');
+    await submeter();
+    expect(alerta()).not.toBeNull();
+    expect(alerta().textContent).toBe('CPF inválido. Verifique os dígitos.');
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  test('CPF e CNPJ juntos: role="alert" com a literal e NAO faz POST', async () => {
+    await renderEm('/compras/fornecedores/novo');
+    await digitar('razao', 'OS DOIS');
+    await digitar('cnpj', '54984382000164');
+    await digitar('cpf', '52998224725');
+    await submeter();
+    expect(alerta()).not.toBeNull();
+    expect(alerta().textContent).toBe('Preencha o CPF ou o CNPJ, não os dois.');
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  test('edicao carrega o CPF gravado e o PUT o reenvia', async () => {
+    api.get.mockImplementation((url) => (
+      url === '/compras/fornecedores/11'
+        ? Promise.resolve({ data: { ...FORNECEDOR_7, id: 11, cnpj: null, cpf: '529.982.247-25' } })
+        : respostaPadrao(url)
+    ));
+    await renderEm('/compras/fornecedores/editar/11');
+    expect(campo('cpf').value).toBe('529.982.247-25');
+    await submeter();
+    expect(api.put.mock.calls[0][1].cpf).toBe('529.982.247-25');
+  });
+});
+

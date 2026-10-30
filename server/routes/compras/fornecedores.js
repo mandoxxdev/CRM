@@ -34,6 +34,10 @@ const STATUS_VALIDOS = ['ativo', 'inativo'];
 const GRUPO_NAO_ENCONTRADO = 'Grupo não encontrado';
 const GRUPO_DESATIVADO = 'Grupo desativado — reative o grupo em Fornecedores homologados antes de vincular fornecedores';
 
+/** Etapa 192 (RN-192.02/03) — literais do CPF (as mesmas da tela). */
+const CPF_INVALIDO = 'CPF inválido. Verifique os dígitos.';
+const CPF_E_CNPJ = 'Preencha o CPF ou o CNPJ, não os dois.';
+
 /** Colunas de texto da ficha, além de razao_social (obrigatória) e grupo_id (inteiro). */
 const CAMPOS_TEXTO = [
   'nome_fantasia', 'cnpj', 'inscricao_estadual', 'contato', 'email', 'telefone',
@@ -42,7 +46,7 @@ const CAMPOS_TEXTO = [
 
 /** Projeção do GET /:id — nomeada de propósito: `planilha_dados` é a planilha inteira em JSON. */
 const COLUNAS_FICHA = [
-  'id', 'razao_social', 'nome_fantasia', 'cnpj', 'inscricao_estadual', 'contato', 'email',
+  'id', 'razao_social', 'nome_fantasia', 'cnpj', 'cpf', 'inscricao_estadual', 'contato', 'email',
   'telefone', 'telefone_vendedor', 'celular', 'endereco', 'cidade', 'estado', 'cep', 'status',
   'grupo_id', 'foto', 'created_at', 'updated_at',
 ];
@@ -54,6 +58,29 @@ function textoOuNull(v) {
   if (v == null) return null;
   const s = String(v).trim();
   return s === '' ? null : s;
+}
+
+/** Dígitos verificadores do CPF (módulo 11); 11 dígitos iguais não valem. */
+function cpfValido(digitos) {
+  if (!/^\d{11}$/.test(digitos) || /^(\d)\1{10}$/.test(digitos)) return false;
+  for (let t = 9; t < 11; t++) {
+    let soma = 0;
+    for (let i = 0; i < t; i++) soma += Number(digitos[i]) * (t + 1 - i);
+    if (((soma * 10) % 11) % 10 !== Number(digitos[t])) return false;
+  }
+  return true;
+}
+
+/**
+ * Etapa 192 (RN-192.02) — `{ valor }` ('000.000.000-00' ou null) ou `{ erro }`. Vazio/só espaços é
+ * "sem CPF"; qualquer outra coisa tem de ter os 11 dígitos válidos (máscara opcional na entrada).
+ */
+function parseCpf(v) {
+  const t = textoOuNull(v);
+  if (t == null) return { valor: null };
+  const d = t.replace(/\D/g, '');
+  if (/[^\d.\-\s]/.test(t) || !cpfValido(d)) return { erro: CPF_INVALIDO };
+  return { valor: `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}` };
 }
 
 /** Devolve `{ valor }` (inteiro ou null) ou `{ erro }`. */
@@ -103,9 +130,11 @@ module.exports = function (app, db, authenticateToken, checkModulePermission) {
     let sql = `SELECT ${COLUNAS_FICHA.join(', ')} FROM fornecedores WHERE 1=1`;
     const params = [];
     if (search) {
-      sql += ' AND (razao_social LIKE ? OR nome_fantasia LIKE ? OR cnpj LIKE ?)';
+      // Etapa 192: o CPF entra na busca, mascarado ou só dígitos (RN-192.04).
+      sql += ` AND (razao_social LIKE ? OR nome_fantasia LIKE ? OR cnpj LIKE ?
+        OR cpf LIKE ? OR REPLACE(REPLACE(cpf, '.', ''), '-', '') LIKE ?)`;
       const termo = `%${search}%`;
-      params.push(termo, termo, termo);
+      params.push(termo, termo, termo, termo, termo);
     }
     if (status) {
       sql += ' AND status = ?';
@@ -141,16 +170,22 @@ module.exports = function (app, db, authenticateToken, checkModulePermission) {
     if (!razao_social) return res.status(400).json({ error: 'Razão social é obrigatória' });
     const grupo = parseGrupoId(body.grupo_id);
     if (grupo.erro) return res.status(400).json({ error: grupo.erro });
+    const cpf = parseCpf(body.cpf);
+    if (cpf.erro) return res.status(400).json({ error: cpf.erro });
 
     const textos = CAMPOS_TEXTO.map((k) => textoOuNull(body[k]));
+    // RN-192.03: um documento só — CPF (pessoa física) ou CNPJ.
+    if (cpf.valor != null && textos[CAMPOS_TEXTO.indexOf('cnpj')] != null) {
+      return res.status(400).json({ error: CPF_E_CNPJ });
+    }
     try {
       if (grupo.valor != null) {
         const recusa = await recusaDoGrupoNovo(grupo.valor);
         if (recusa) return res.status(400).json({ error: recusa });
       }
-      const colunas = `razao_social, ${CAMPOS_TEXTO.join(', ')}, grupo_id, status`;
-      const marcas = `?, ${CAMPOS_TEXTO.map(() => '?').join(', ')}, ?, ?`;
-      const valores = [razao_social, ...textos, grupo.valor, 'ativo'];
+      const colunas = `razao_social, ${CAMPOS_TEXTO.join(', ')}, cpf, grupo_id, status`;
+      const marcas = `?, ${CAMPOS_TEXTO.map(() => '?').join(', ')}, ?, ?, ?`;
+      const valores = [razao_social, ...textos, cpf.valor, grupo.valor, 'ativo'];
       // Etapa 109: com grupo, INSERT ... SELECT ... WHERE grupo ativo — a conferencia e a gravacao
       // sao o mesmo comando. Sem grupo, o INSERT de sempre.
       const r = grupo.valor == null
@@ -162,7 +197,7 @@ module.exports = function (app, db, authenticateToken, checkModulePermission) {
         );
       if (r.changes === 0) return res.status(400).json({ error: await recusaDepoisDaCorrida(grupo.valor) });
       res.status(201).json({
-        id: r.lastID, razao_social, nome_fantasia: textos[0], grupo_id: grupo.valor,
+        id: r.lastID, razao_social, nome_fantasia: textos[0], cpf: cpf.valor, grupo_id: grupo.valor,
       });
     } catch (err) {
       console.error('Erro ao criar fornecedor:', err);
@@ -186,6 +221,12 @@ module.exports = function (app, db, authenticateToken, checkModulePermission) {
       params.push(textoOuNull(body[k]));
     });
 
+    // Etapa 192 (RN-192.02): mesma semântica dos textos — ausente não mexe, ''/null limpa.
+    const temCpf = temChave(body, 'cpf');
+    const cpf = temCpf ? parseCpf(body.cpf) : { valor: undefined };
+    if (cpf.erro) return res.status(400).json({ error: cpf.erro });
+    if (temCpf) { sets.push('cpf = ?'); params.push(cpf.valor); }
+
     // Lido aqui (a ordem dos 400 nao muda: razao -> grupo invalido -> status), gravado abaixo.
     const temGrupo = temChave(body, 'grupo_id');
     let grupoValor = null;
@@ -205,6 +246,15 @@ module.exports = function (app, db, authenticateToken, checkModulePermission) {
     if (!id) return res.status(404).json({ error: NAO_ENCONTRADO });
 
     try {
+      // RN-192.03: CPF e CNPJ juntos é recusado olhando o estado FINAL — a chave ausente vale o gravado
+      // (o modal do grupo manda cnpj sem cpf; um fornecedor só com CPF não pode ganhar CNPJ por ali).
+      if (temCpf || temChave(body, 'cnpj')) {
+        const atual = await dbGet(db, 'SELECT cnpj, cpf FROM fornecedores WHERE id = ?', [id]);
+        if (!atual) return res.status(404).json({ error: NAO_ENCONTRADO });
+        const cnpjFinal = temChave(body, 'cnpj') ? textoOuNull(body.cnpj) : textoOuNull(atual.cnpj);
+        const cpfFinal = temCpf ? cpf.valor : textoOuNull(atual.cpf);
+        if (cnpjFinal != null && cpfFinal != null) return res.status(400).json({ error: CPF_E_CNPJ });
+      }
       // RN-103.08 (B52): só o grupo que MUDA passa pela checagem; o fornecedor inexistente responde
       // 404 antes dela. A comparação é com o valor JÁ passado por parseGrupoId ('7' da URL = 7).
       // Grupo IGUAL ao gravado não entra no SET: com a FK de produção ligada

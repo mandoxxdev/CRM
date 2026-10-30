@@ -90,7 +90,8 @@ async function createTestApp(options = {}) {
     planilha_nome TEXT,
     planilha_atualizado_em DATETIME,
     foto TEXT,
-    telefone_vendedor TEXT
+    telefone_vendedor TEXT,
+    cpf TEXT -- Etapa 192 (RN-192.01)
   )`);
 
   // `pedidos_compra` é tabela CORE (criada por server/index.js:19230 no boot), fora do initSchema
@@ -145,6 +146,7 @@ async function createTestApp(options = {}) {
     snap_fornecedor_telefone TEXT,
     snap_fornecedor_email TEXT,
     snap_fornecedor_celular TEXT,
+    snap_fornecedor_cpf TEXT, -- Etapa 192 (RN-192.04)
     -- Etapa 122 (C255a): o fechamento automatico do pedido (ALTERS_PEDIDOS_COMPRA do index.js).
     fechado_automaticamente_de TEXT,
     -- Etapa 171 (RN-171.01): a OS do pedido (ALTERS_PEDIDOS_COMPRA do index.js). NULL = estoque.

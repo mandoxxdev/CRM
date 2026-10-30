@@ -201,6 +201,16 @@ function blocoEmpresa(e, titulo) {
     </section>`;
 }
 
+/**
+ * Etapa 192 (RN-192.04) — o fornecedor pessoa fisica (so CPF) imprime `CPF` no lugar do `CNPJ`. Com CNPJ, ou sem
+ * nenhum dos dois, a linha continua `CNPJ` (o pedido de antes da etapa nao muda de cara).
+ */
+function documentoFiscal(f) {
+  const vazio = (v) => v == null || String(v).trim() === '';
+  if (vazio(f.cnpj) && !vazio(f.cpf)) return `<tr><th>CPF</th><td>${texto(f.cpf)}</td>`;
+  return `<tr><th>CNPJ</th><td>${texto(f.cnpj)}</td>`;
+}
+
 function blocoFornecedor(f) {
   const municipioUf = [f.municipio, f.uf].map((v) => (v == null ? '' : String(v).trim())).filter(Boolean).join(' / ');
   return `
@@ -208,7 +218,7 @@ function blocoFornecedor(f) {
       <h2>Dados do fornecedor</h2>
       <table class="dados">
         <tr><th>Nome</th><td colspan="3">${texto(f.nome)}</td></tr>
-        <tr><th>CNPJ</th><td>${texto(f.cnpj)}</td><th>Inscrição Estadual</th><td>${texto(f.ie)}</td></tr>
+        ${documentoFiscal(f)}<th>Inscrição Estadual</th><td>${texto(f.ie)}</td></tr>
         <tr><th>Endereço</th><td colspan="3">${texto(f.endereco)}</td></tr>
         <tr><th>Município / UF</th><td>${texto(municipioUf)}</td><th>CEP</th><td>${texto(f.cep)}</td></tr>
         <tr><th>Telefone</th><td>${texto(f.telefone)}</td><th>Celular</th><td>${texto(f.celular)}</td></tr>

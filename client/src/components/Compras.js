@@ -307,6 +307,8 @@ const Compras = () => {
             'Razão Social': f.razao_social,
             'Nome Fantasia': f.nome_fantasia || '',
             'CNPJ': f.cnpj || '',
+            // Etapa 192 (RN-192.01): fornecedor pessoa fisica.
+            'CPF': f.cpf || '',
             'Contato': f.contato || '',
             'Email': f.email || '',
             'Telefone': f.telefone || '',
@@ -375,7 +377,7 @@ const Compras = () => {
           <thead>
             <tr>
               <th>Razão Social</th>
-              <th>CNPJ</th>
+              <th>CNPJ / CPF</th>
               <th>Contato</th>
               <th>Email</th>
               <th>Telefone</th>
@@ -395,7 +397,8 @@ const Compras = () => {
                     <div className="cell-primary">{fornecedor.razao_social}</div>
                     <div className="cell-secondary">{fornecedor.nome_fantasia || ''}</div>
                   </td>
-                  <td>{fornecedor.cnpj || '-'}</td>
+                  {/* Etapa 192 (RN-192.04): o CPF aparece onde o CNPJ aparece, quando o CNPJ esta vazio. */}
+                  <td>{fornecedor.cnpj || fornecedor.cpf || '-'}</td>
                   <td>{fornecedor.contato || '-'}</td>
                   <td>{fornecedor.email || '-'}</td>
                   <td>
