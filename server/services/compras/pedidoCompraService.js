@@ -175,6 +175,8 @@ const SNAPSHOT_FORNECEDOR = {
   snap_fornecedor_telefone: 'telefone',
   snap_fornecedor_celular: 'celular',
   snap_fornecedor_email: 'email',
+  // Etapa 192 (RN-192.04): fornecedor pessoa fisica — o documento imprime CPF no lugar do CNPJ.
+  snap_fornecedor_cpf: 'cpf',
 };
 const COLUNAS_SNAPSHOT = Object.keys(SNAPSHOT_FORNECEDOR);
 
@@ -427,6 +429,7 @@ async function assertFornecedor(db, fornecedorId) {
 const SQL_PEDIDO = `SELECT p.*, f.razao_social AS fornecedor_nome,
     f.razao_social       AS forn_razao_social,
     f.cnpj               AS forn_cnpj,
+    f.cpf                AS forn_cpf,
     f.inscricao_estadual AS forn_ie,
     f.endereco           AS forn_endereco,
     f.cidade             AS forn_cidade,
@@ -452,6 +455,7 @@ function montarFornecedor(p) {
       id: p.fornecedor_id,
       nome: p.snap_fornecedor_nome,
       cnpj: p.snap_fornecedor_cnpj,
+      cpf: p.snap_fornecedor_cpf,
       ie: p.snap_fornecedor_ie,
       endereco: p.snap_fornecedor_endereco,
       municipio: p.snap_fornecedor_municipio,
@@ -467,6 +471,7 @@ function montarFornecedor(p) {
     id: p.fornecedor_id,
     nome: p.forn_razao_social || null,
     cnpj: p.forn_cnpj || null,
+    cpf: p.forn_cpf || null,
     ie: p.forn_ie || null,
     endereco: p.forn_endereco || null,
     municipio: p.forn_cidade || null,
@@ -1319,11 +1324,18 @@ async function resolverFornecedorDaLinha(db, row) {
   const texto = extrairDoRow(row, ...CHAVES_FORNECEDOR_TEXTO);
   if (!texto) return null;
   const digitos = texto.replace(/\D/g, '');
+  // Etapa 192: a ficha passou a gravar a razao/fantasia em maiusculas COM acento (RN-192.05), e o UPPER do
+  // SQLite so sobe ASCII ("aços" -> "AçOS" nao bate com "AÇOS"): a planilha tambem e comparada ja subida pelo
+  // JS. E o fornecedor pessoa fisica (RN-192.01) e achado pelo CPF na mesma coluna do documento.
+  const textoMaiusculo = texto.toLocaleUpperCase('pt-BR');
   return dbGet(db, `SELECT id FROM fornecedores
     WHERE (? <> '' AND REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(cnpj, ''), '.', ''), '/', ''), '-', ''), ' ', '') = ?)
+       OR (? <> '' AND REPLACE(REPLACE(COALESCE(cpf, ''), '.', ''), '-', '') = ?)
        OR UPPER(razao_social) = UPPER(?)
        OR UPPER(COALESCE(nome_fantasia, '')) = UPPER(?)
-    ORDER BY id LIMIT 1`, [digitos, digitos, texto, texto]);
+       OR razao_social = ?
+       OR COALESCE(nome_fantasia, '') = ?
+    ORDER BY id LIMIT 1`, [digitos, digitos, digitos, digitos, texto, texto, textoMaiusculo, textoMaiusculo]);
 }
 
 async function importarPedidos(db, corpo, user) {
@@ -1552,4 +1564,6 @@ module.exports = {
   numerosDasOs,
   CONDICOES_COMERCIAIS,
   COLUNAS_SNAPSHOT,
+  // Etapa 192: exposto para o teste do fornecedor com CPF / em maiusculas achado pela planilha.
+  resolverFornecedorDaLinha,
 };

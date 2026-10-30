@@ -18957,6 +18957,8 @@ const ALTERS_FORNECEDORES = [
   'planilha_nome TEXT',
   'planilha_atualizado_em DATETIME',
   'foto TEXT',
+  // Etapa 192 (RN-192.01): fornecedor pessoa fisica — CPF '000.000.000-00', exclusivo com o CNPJ (RN-192.03).
+  'cpf TEXT',
 ];
 db.run(`CREATE TABLE IF NOT EXISTS fornecedores (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -19017,6 +19019,8 @@ const ALTERS_PEDIDOS_COMPRA = [
   'snap_fornecedor_telefone TEXT',
   'snap_fornecedor_email TEXT',
   'snap_fornecedor_celular TEXT',
+  // Etapa 192 (RN-192.04): o CPF do fornecedor pessoa fisica tambem e congelado na emissao.
+  'snap_fornecedor_cpf TEXT',
   // Etapa 122 (C255a, B788): o status de antes do fechamento AUTOMATICO pelo almoxarifado (NULL = o `recebido` atual nao
   // e desse fechamento). Escrita no MESMO UPDATE do status por `fecharPedidosCompletos`, limpa pela reabertura do estorno e
   // pela mudanca manual (`alterarStatusPedido`). Antes o estado era a ultima trilha da Auditoria, que pode faltar com o ato

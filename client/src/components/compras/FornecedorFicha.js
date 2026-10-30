@@ -6,6 +6,7 @@ import { mascararTelefoneDigitando, mascararTelefoneCompleto } from '../../utils
 import {
   somenteDigitos, formatarCNPJ, formatarCNPJCompleto, formatarCEP, validarCNPJ, camposDaConsultaCNPJ, mesclarSoVazios,
 } from '../../utils/cnpj';
+import { formatarCPF, validarCPF, CPF_INVALIDO, CPF_E_CNPJ } from '../../utils/cpf';
 import './FornecedorForm.css';
 
 /**
@@ -37,16 +38,25 @@ const UFS = [
 ];
 
 const FORM_VAZIO = {
-  razao_social: '', nome_fantasia: '', cnpj: '', inscricao_estadual: '', contato: '', email: '',
+  razao_social: '', nome_fantasia: '', cnpj: '', cpf: '', inscricao_estadual: '', contato: '', email: '',
   telefone: '', telefone_vendedor: '', endereco: '', cidade: '', estado: '', cep: '', grupo_id: '',
   status: 'ativo',
 };
 
-/** As 13 chaves do contrato (seção 4 do design), na ordem do contrato. */
+/** As 13 chaves do contrato (seção 4 do design), na ordem do contrato, + o `cpf` da Etapa 192. */
 const CHAVES_CONTRATO = [
-  'razao_social', 'nome_fantasia', 'cnpj', 'inscricao_estadual', 'contato', 'email', 'telefone',
+  'razao_social', 'nome_fantasia', 'cnpj', 'cpf', 'inscricao_estadual', 'contato', 'email', 'telefone',
   'telefone_vendedor', 'endereco', 'cidade', 'estado', 'cep', 'grupo_id',
 ];
+
+/**
+ * Etapa 192 (RN-192.05) — os textos livres saem em maiúsculas. Na tela é o CSS (`fornecedor-maiusculas`,
+ * text-transform) que mostra em maiúsculas enquanto digita — trocar o valor a cada tecla jogaria o cursor
+ * para o fim de quem corrige no meio. No envio o corpo já vai em maiúsculas (o servidor também converte),
+ * para o pedido/cotação que abriu o F2 mostrar o nome como ficou gravado.
+ */
+const CHAVES_MAIUSCULAS = ['razao_social', 'nome_fantasia', 'inscricao_estadual', 'contato', 'endereco', 'cidade', 'estado'];
+const CLASSE_MAIUSCULAS = 'fornecedor-maiusculas';
 
 const texto = (v) => (v == null ? '' : String(v));
 
@@ -57,6 +67,7 @@ function formDoServidor(f) {
     razao_social: texto(f.razao_social),
     nome_fantasia: texto(f.nome_fantasia),
     cnpj: formatarCNPJCompleto(texto(f.cnpj)),
+    cpf: texto(f.cpf),
     inscricao_estadual: texto(f.inscricao_estadual),
     contato: texto(f.contato),
     email: texto(f.email),
@@ -206,8 +217,22 @@ const FornecedorFicha = ({
       setErro('Razão social é obrigatória');
       return;
     }
+    // Etapa 192 (RN-192.02/03): as mesmas recusas do servidor, antes de mandar.
+    const temCpf = Boolean(form.cpf.trim());
+    if (temCpf && !validarCPF(form.cpf)) {
+      setErro(CPF_INVALIDO);
+      return;
+    }
+    if (temCpf && form.cnpj.trim()) {
+      setErro(CPF_E_CNPJ);
+      return;
+    }
     const corpo = {};
-    CHAVES_CONTRATO.forEach((k) => { corpo[k] = k === 'razao_social' ? form[k].trim() : form[k]; });
+    CHAVES_CONTRATO.forEach((k) => {
+      let v = k === 'razao_social' ? form[k].trim() : form[k];
+      if (CHAVES_MAIUSCULAS.includes(k)) v = texto(v).toLocaleUpperCase('pt-BR');
+      corpo[k] = v;
+    });
     if (editando) corpo.status = form.status;
 
     setSalvando(true);
@@ -240,12 +265,12 @@ const FornecedorFicha = ({
             <h2>Identificação</h2>
             <div className="form-grid">
               <Campo id="fornecedor-razao" label="Razão social" obrigatorio className="span-2">
-                <input id="fornecedor-razao" data-testid="fornecedor-razao" type="text" ref={razaoRef}
+                <input id="fornecedor-razao" data-testid="fornecedor-razao" type="text" className={CLASSE_MAIUSCULAS} ref={razaoRef}
                   value={form.razao_social} onChange={(e) => set('razao_social', e.target.value)}
                   autoComplete="organization" />
               </Campo>
               <Campo id="fornecedor-fantasia" label="Nome fantasia">
-                <input id="fornecedor-fantasia" data-testid="fornecedor-fantasia" type="text"
+                <input id="fornecedor-fantasia" data-testid="fornecedor-fantasia" type="text" className={CLASSE_MAIUSCULAS}
                   value={form.nome_fantasia} onChange={(e) => set('nome_fantasia', e.target.value)} />
               </Campo>
               <Campo id="fornecedor-cnpj" label="CNPJ">
@@ -261,8 +286,14 @@ const FornecedorFicha = ({
                   </button>
                 </div>
               </Campo>
+              {/* Etapa 192 (RN-192.01): fornecedor pessoa física. CPF ou CNPJ, não os dois (RN-192.03). */}
+              <Campo id="fornecedor-cpf" label="CPF">
+                <input id="fornecedor-cpf" data-testid="fornecedor-cpf" type="text" inputMode="numeric"
+                  value={form.cpf} onChange={(e) => set('cpf', formatarCPF(e.target.value))}
+                  placeholder="000.000.000-00" maxLength={14} />
+              </Campo>
               <Campo id="fornecedor-ie" label="Inscrição estadual">
-                <input id="fornecedor-ie" data-testid="fornecedor-ie" type="text"
+                <input id="fornecedor-ie" data-testid="fornecedor-ie" type="text" className={CLASSE_MAIUSCULAS}
                   value={form.inscricao_estadual} onChange={(e) => set('inscricao_estadual', e.target.value)} />
               </Campo>
               <Campo id="fornecedor-grupo" label="Grupo homologado">
@@ -296,7 +327,7 @@ const FornecedorFicha = ({
             <h2>Contato</h2>
             <div className="form-grid">
               <Campo id="fornecedor-contato" label="Nome do vendedor">
-                <input id="fornecedor-contato" data-testid="fornecedor-contato" type="text"
+                <input id="fornecedor-contato" data-testid="fornecedor-contato" type="text" className={CLASSE_MAIUSCULAS}
                   value={form.contato} onChange={(e) => set('contato', e.target.value)} />
               </Campo>
               <Campo id="fornecedor-telefone" label="Telefone da empresa">
@@ -334,12 +365,12 @@ const FornecedorFicha = ({
                 </div>
               </Campo>
               <Campo id="fornecedor-endereco" label="Endereço" className="span-2">
-                <input id="fornecedor-endereco" data-testid="fornecedor-endereco" type="text"
+                <input id="fornecedor-endereco" data-testid="fornecedor-endereco" type="text" className={CLASSE_MAIUSCULAS}
                   value={form.endereco} onChange={(e) => set('endereco', e.target.value)}
                   placeholder="Logradouro, número - complemento, bairro" />
               </Campo>
               <Campo id="fornecedor-cidade" label="Cidade">
-                <input id="fornecedor-cidade" data-testid="fornecedor-cidade" type="text"
+                <input id="fornecedor-cidade" data-testid="fornecedor-cidade" type="text" className={CLASSE_MAIUSCULAS}
                   value={form.cidade} onChange={(e) => set('cidade', e.target.value)} />
               </Campo>
               <Campo id="fornecedor-estado" label="Estado">

@@ -202,7 +202,7 @@ describe('Etapa 173 — pedido de compra', () => {
     // o POST do fornecedor saiu com as 13 chaves; o do PEDIDO não (achado 1 da Fase 2)
     expect(postsDe('/compras/fornecedores')).toHaveLength(1);
     expect(Object.keys(postsDe('/compras/fornecedores')[0][1]).sort()).toEqual([
-      'cep', 'cidade', 'cnpj', 'contato', 'email', 'endereco', 'estado', 'grupo_id', 'inscricao_estadual',
+      'cep', 'cidade', 'cnpj', 'contato', 'cpf', 'email', 'endereco', 'estado', 'grupo_id', 'inscricao_estadual',
       'nome_fantasia', 'razao_social', 'telefone', 'telefone_vendedor',
     ]);
     expect(postsDe('/compras/pedidos')).toHaveLength(0);

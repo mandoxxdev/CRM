@@ -164,7 +164,7 @@ function altersDe(arquivo, nomeDoArray) {
     const ficha = await request(app).put(`/api/compras/fornecedores/${dentro}`).send({ razao_social: 'Forn dentro ficha', grupo_id: desat });
     assert.strictEqual(ficha.status, 200);
     const row = await dbGet(db, 'SELECT razao_social, grupo_id FROM fornecedores WHERE id = ?', [dentro]);
-    assert.strictEqual(row.razao_social, 'Forn dentro ficha');
+    assert.strictEqual(row.razao_social, 'FORN DENTRO FICHA'); // Etapa 192 (RN-192.05): maiusculas
     assert.strictEqual(row.grupo_id, desat);
     // "Remover do grupo" (null) continua limpando.
     const remover = await request(app).put(`/api/compras/fornecedores/${dentro}`).send({ razao_social: 'Forn dentro ficha', grupo_id: null });
@@ -240,7 +240,7 @@ function altersDe(arquivo, nomeDoArray) {
     const r = await request(papp).put(`/api/compras/fornecedores/${f}`).send({ razao_social: 'Orfao editado', grupo_id: String(g) });
     assert.strictEqual(r.status, 200, `${r.status} ${JSON.stringify(r.body)}`);
     const row = await dbGet(pdb, 'SELECT razao_social, grupo_id FROM fornecedores WHERE id = ?', [f]);
-    assert.strictEqual(row.razao_social, 'Orfao editado');
+    assert.strictEqual(row.razao_social, 'ORFAO EDITADO'); // Etapa 192 (RN-192.05): maiusculas
     assert.strictEqual(row.grupo_id, g, 'o vinculo legado continua');
     // E vincular OUTRO fornecedor a esse grupo que nao existe e 400, nao 500 da FK.
     const outro = (await dbRun(pdb, "INSERT INTO fornecedores (razao_social) VALUES ('Outro 103')")).lastID;

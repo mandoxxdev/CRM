@@ -40,7 +40,7 @@ function fichaCompleta(over = {}) {
     nome_fantasia: 'TECNOPAR',
     cnpj: '54.984.382/0001-64',
     inscricao_estadual: '799850123110',
-    contato: 'Carlos Vendedor',
+    contato: 'CARLOS VENDEDOR', // Etapa 192 (RN-192.05): o servidor grava em maiusculas
     email: 'contato@tecnopar.com.br',
     telefone: '(11) 4177-2311',
     telefone_vendedor: '(11) 98765-4321',
@@ -59,7 +59,7 @@ function corpoDoModal(grupoId) {
     razao_social: 'TECNOPAR FIXADORES LTDA',
     nome_fantasia: 'TECNOPAR',
     cnpj: '54.984.382/0001-64',
-    contato: 'Carlos Vendedor',
+    contato: 'CARLOS VENDEDOR', // Etapa 192 (RN-192.05): o servidor grava em maiusculas
     email: 'contato@tecnopar.com.br',
     telefone: '(11) 4177-2311',
     endereco: 'AV. WINSTON CHURCHILL, 596 - RUDGE RAMOS',

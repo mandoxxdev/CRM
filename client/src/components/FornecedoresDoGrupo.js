@@ -10,6 +10,10 @@ import './Loading.css';
 import FornecedorModal from './compras/FornecedorModal';
 import useAtalhoF2 from './compras/useAtalhoF2';
 
+// Etapa 192 (RN-192.05): o servidor grava razao, fantasia, contato e endereco em maiusculas; o modal de edicao
+// mostra assim enquanto digita (CSS, para o cursor nao pular para o fim a cada tecla).
+const MAIUSCULAS = { textTransform: 'uppercase' };
+
 function getFotoUrlFornecedor(foto) {
   if (!foto) return null;
   if (typeof foto === 'string' && foto.startsWith('data:')) return foto;
@@ -368,11 +372,11 @@ const FornecedoresDoGrupo = () => {
             <form onSubmit={handleSaveEdit} className="modal-grupo-form">
               <div className="modal-grupo-field">
                 <label>Razão social *</label>
-                <input type="text" value={editRazao} onChange={(e) => setEditRazao(e.target.value)} placeholder="Razão social" required />
+                <input type="text" value={editRazao} onChange={(e) => setEditRazao(e.target.value)} style={MAIUSCULAS} placeholder="Razão social" required />
               </div>
               <div className="modal-grupo-field">
                 <label>Nome fantasia</label>
-                <input type="text" value={editFantasia} onChange={(e) => setEditFantasia(e.target.value)} placeholder="Nome fantasia" />
+                <input type="text" value={editFantasia} onChange={(e) => setEditFantasia(e.target.value)} style={MAIUSCULAS} placeholder="Nome fantasia" />
               </div>
               <div className="modal-grupo-field">
                 <label>CNPJ</label>
@@ -380,7 +384,7 @@ const FornecedoresDoGrupo = () => {
               </div>
               <div className="modal-grupo-field">
                 <label>Contato</label>
-                <input type="text" value={editContato} onChange={(e) => setEditContato(e.target.value)} placeholder="Nome do contato" />
+                <input type="text" value={editContato} onChange={(e) => setEditContato(e.target.value)} style={MAIUSCULAS} placeholder="Nome do contato" />
               </div>
               <div className="modal-grupo-field">
                 <label>E-mail</label>
@@ -392,7 +396,7 @@ const FornecedoresDoGrupo = () => {
               </div>
               <div className="modal-grupo-field">
                 <label>Endereço</label>
-                <input type="text" value={editEndereco} onChange={(e) => setEditEndereco(e.target.value)} placeholder="Endereço" />
+                <input type="text" value={editEndereco} onChange={(e) => setEditEndereco(e.target.value)} style={MAIUSCULAS} placeholder="Endereço" />
               </div>
               <div className="modal-grupo-field">
                 <label>Foto (opcional)</label>

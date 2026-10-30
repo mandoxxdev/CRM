@@ -141,7 +141,7 @@ async function submeter() {
 
 const alerta = () => container.querySelector('[role="alert"]');
 
-const CAMPOS = ['razao', 'fantasia', 'cnpj', 'ie', 'contato', 'email', 'telefone', 'telefone-vendedor',
+const CAMPOS = ['razao', 'fantasia', 'cnpj', 'cpf', 'ie', 'contato', 'email', 'telefone', 'telefone-vendedor',
   'endereco', 'cidade', 'estado', 'cep', 'grupo'];
 
 describe('FornecedorForm — (a) estrutura', () => {
@@ -197,13 +197,15 @@ describe('FornecedorForm — (c) POST exato', () => {
       razao_social: 'ACME INDUSTRIA LTDA',
       nome_fantasia: 'ACME',
       cnpj: '11.222.333/0001-81',
+      cpf: '',
       inscricao_estadual: '123456',
-      contato: 'Joana',
+      // Etapa 192 (RN-192.05): os textos livres vao em maiusculas; email e telefones nao.
+      contato: 'JOANA',
       email: 'joana@acme.com',
       telefone: '(19) 3222-3333',
       telefone_vendedor: '(19) 99999-8888',
-      endereco: 'Rua A, 1',
-      cidade: 'Campinas',
+      endereco: 'RUA A, 1',
+      cidade: 'CAMPINAS',
       estado: 'SP',
       cep: '13010-000',
       grupo_id: '',
@@ -245,8 +247,9 @@ describe('FornecedorForm — (d) edicao', () => {
       razao_social: 'TECNOPAR FIXADORES LTDA',
       nome_fantasia: 'TECNOPAR',
       cnpj: '54.984.382/0001-64',
+      cpf: '',
       inscricao_estadual: '799850123110',
-      contato: 'Carlos',
+      contato: 'CARLOS',
       email: 'contato@tecnopar.com.br',
       telefone: '(11) 4177-2311',
       telefone_vendedor: '(11) 98765-4321',
@@ -474,5 +477,88 @@ describe('FornecedorForm — (j) achados da revisao adversarial (F1, F2)', () =>
     await sairDoCampo('cnpj');
     expect(consultas()).toBe(1);
     expect(campo('endereco').value).toBe('RUA DAS FLORES, 100 - SALA 2, CENTRO');
+  });
+});
+
+describe('FornecedorForm — (k) Etapa 192: CPF (RN-192.01 a 192.03)', () => {
+  test('campo CPF mascara 000.000.000-00 enquanto digita', async () => {
+    await renderEm('/compras/fornecedores/novo');
+    await digitar('cpf', '52998224725');
+    expect(campo('cpf').value).toBe('529.982.247-25');
+  });
+
+  test('CPF valido sem CNPJ vai no POST mascarado', async () => {
+    await renderEm('/compras/fornecedores/novo');
+    await digitar('razao', 'JOAO PF');
+    await digitar('cpf', '52998224725');
+    await submeter();
+    expect(api.post).toHaveBeenCalledTimes(1);
+    expect(api.post.mock.calls[0][1].cpf).toBe('529.982.247-25');
+    expect(api.post.mock.calls[0][1].cnpj).toBe('');
+  });
+
+  test('CPF com digito errado: role="alert" com a literal e NAO faz POST', async () => {
+    await renderEm('/compras/fornecedores/novo');
+    await digitar('razao', 'JOAO PF');
+    await digitar('cpf', '52998224724');
+    await submeter();
+    expect(alerta()).not.toBeNull();
+    expect(alerta().textContent).toBe('CPF inválido. Verifique os dígitos.');
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  test('CPF e CNPJ juntos: role="alert" com a literal e NAO faz POST', async () => {
+    await renderEm('/compras/fornecedores/novo');
+    await digitar('razao', 'OS DOIS');
+    await digitar('cnpj', '54984382000164');
+    await digitar('cpf', '52998224725');
+    await submeter();
+    expect(alerta()).not.toBeNull();
+    expect(alerta().textContent).toBe('Preencha o CPF ou o CNPJ, não os dois.');
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  test('edicao carrega o CPF gravado e o PUT o reenvia', async () => {
+    api.get.mockImplementation((url) => (
+      url === '/compras/fornecedores/11'
+        ? Promise.resolve({ data: { ...FORNECEDOR_7, id: 11, cnpj: null, cpf: '529.982.247-25' } })
+        : respostaPadrao(url)
+    ));
+    await renderEm('/compras/fornecedores/editar/11');
+    expect(campo('cpf').value).toBe('529.982.247-25');
+    await submeter();
+    expect(api.put.mock.calls[0][1].cpf).toBe('529.982.247-25');
+  });
+});
+
+describe('FornecedorForm — (l) Etapa 192: maiusculas (RN-192.05)', () => {
+  test('os textos livres vao em maiusculas com acento; email, telefones, CEP e CNPJ como digitados', async () => {
+    await renderEm('/compras/fornecedores/novo');
+    await digitar('razao', 'são joão peças');
+    await digitar('fantasia', 'peças');
+    await digitar('ie', 'isento');
+    await digitar('contato', 'conceição');
+    await digitar('email', 'Vendas@Pecas.com.br');
+    await digitar('endereco', 'rua ação, 10');
+    await digitar('cidade', 'são paulo');
+    await submeter();
+    const corpo = api.post.mock.calls[0][1];
+    expect(corpo.razao_social).toBe('SÃO JOÃO PEÇAS');
+    expect(corpo.nome_fantasia).toBe('PEÇAS');
+    expect(corpo.inscricao_estadual).toBe('ISENTO');
+    expect(corpo.contato).toBe('CONCEIÇÃO');
+    expect(corpo.endereco).toBe('RUA AÇÃO, 10');
+    expect(corpo.cidade).toBe('SÃO PAULO');
+    expect(corpo.email).toBe('Vendas@Pecas.com.br');
+  });
+
+  test('a tela mostra os textos livres em maiusculas enquanto digita (classe com text-transform); email nao', async () => {
+    await renderEm('/compras/fornecedores/novo');
+    ['razao', 'fantasia', 'ie', 'contato', 'endereco', 'cidade'].forEach((c) => {
+      expect(campo(c).classList.contains('fornecedor-maiusculas')).toBe(true);
+    });
+    ['email', 'cnpj', 'cpf', 'telefone', 'cep'].forEach((c) => {
+      expect(campo(c).classList.contains('fornecedor-maiusculas')).toBe(false);
+    });
   });
 });
