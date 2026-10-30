@@ -137,6 +137,7 @@ import {
 } from './routes/lazyModules';
 // Etapa 192: o formulario de material com as portas do Compras (rotas Materiais do Compras, abaixo).
 import { ROTAS_COMPRAS } from './components/almoxarifado/rotasCadastroMaterial';
+import { MaterialVer, EditarMaterialVirouVer, NovoMaterialVirouLista } from './components/almoxarifado/MaterialSoConsulta';
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -527,8 +528,11 @@ export function AppRoutes() {
         <Route index element={<AlmoxarifadoDashboard />} />
         <Route path="scanner" element={<ScannerAlmoxarifado />} />
         <Route path="materiais" element={<MateriaisAlmoxarifado />} />
-        <Route path="materiais/novo" element={<MaterialAlmoxarifadoForm />} />
-        <Route path="materiais/editar/:id" element={<MaterialAlmoxarifadoForm />} />
+        {/* Etapa 193 (RN-193.01): o cadastro de material e so do Compras — aqui so a ficha Ver; os caminhos antigos levam a ela
+            (editar) ou a lista com o aviso (novo). */}
+        <Route path="materiais/ver/:id" element={<MaterialVer />} />
+        <Route path="materiais/novo" element={<NovoMaterialVirouLista />} />
+        <Route path="materiais/editar/:id" element={<EditarMaterialVirouVer />} />
         <Route path="movimentacoes" element={<MovimentacoesAlmoxarifado />} />
         <Route path="movimentacoes/novo" element={<MovimentacoesAlmoxarifado />} />
         <Route path="conferencias" element={<ConferenciaEstoque />} />

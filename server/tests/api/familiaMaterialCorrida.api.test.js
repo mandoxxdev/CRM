@@ -218,7 +218,7 @@ const SQL_CONF_SUBS_ATIVAS = /^SELECT COUNT\(\*\) as c FROM familias_material_al
     const fa = await familia(); const fb = await familia();
     const m = await materialDireto(fa);
     injetar({ sql: SQL_CONF_FAMILIA, depois: inativarDireto(fb) });
-    const r = await request(app).put(`/api/almoxarifado/materiais/${m}`).send({ familia_id: fb, nome: 'Renomeado 110' });
+    const r = await request(app).put(`/api/compras/materiais/cadastro/${m}`).send({ familia_id: fb, nome: 'Renomeado 110' });
     conferirInjecao(1);
     assert.strictEqual(r.status, 400, `${r.status} ${JSON.stringify(r.body)}`);
     assert.strictEqual(r.body.error, L_FAM_INATIVA);
@@ -231,7 +231,7 @@ const SQL_CONF_SUBS_ATIVAS = /^SELECT COUNT\(\*\) as c FROM familias_material_al
     const f = await familia(); const s1 = await familia(1, f); const s2 = await familia(1, f);
     const m = await materialDireto(f, { sub: s1 });
     injetar({ sql: SQL_CONF_SUB, depois: inativarDireto(s2) });
-    const r = await request(app).put(`/api/almoxarifado/materiais/${m}`).send({ subfamilia_id: s2 });
+    const r = await request(app).put(`/api/compras/materiais/cadastro/${m}`).send({ subfamilia_id: s2 });
     conferirInjecao(1);
     assert.strictEqual(r.status, 400, `${r.status} ${JSON.stringify(r.body)}`);
     assert.strictEqual(r.body.error, L_SUB);
@@ -243,7 +243,7 @@ const SQL_CONF_SUBS_ATIVAS = /^SELECT COUNT\(\*\) as c FROM familias_material_al
     const m = await materialDireto(fa);
     const codigo = (await dbGet(db, 'SELECT codigo FROM materiais_almoxarifado WHERE id = ?', [m])).codigo;
     injetar({ sql: SQL_CONF_FAMILIA, depois: inativarDireto(fb) }, { sql: SQL_CONF_FAMILIA, antes: reativarDireto(fb) });
-    const r = await request(app).put(`/api/almoxarifado/materiais/${m}`).send({ familia_id: fb });
+    const r = await request(app).put(`/api/compras/materiais/cadastro/${m}`).send({ familia_id: fb });
     conferirInjecao(2);
     assert.strictEqual(r.status, 409, `${r.status} ${JSON.stringify(r.body)}`);
     assert.strictEqual(r.body.error, E4(codigo));
@@ -253,7 +253,7 @@ const SQL_CONF_SUBS_ATIVAS = /^SELECT COUNT\(\*\) as c FROM familias_material_al
   await test('[RN-07] metade positiva: PUT que nao muda familia grava mesmo com a familia gravada inativa (legado editavel, como hoje)', async () => {
     const f = await familia(0);
     const m = await materialDireto(f);
-    const r = await request(app).put(`/api/almoxarifado/materiais/${m}`).send({ nome: 'Legado editado 110', familia_id: f });
+    const r = await request(app).put(`/api/compras/materiais/cadastro/${m}`).send({ nome: 'Legado editado 110', familia_id: f });
     assert.strictEqual(r.status, 200, `${r.status} ${JSON.stringify(r.body)}`);
     assert.strictEqual((await dbGet(db, 'SELECT nome FROM materiais_almoxarifado WHERE id = ?', [m])).nome, 'Legado editado 110');
   });
@@ -408,7 +408,7 @@ const SQL_CONF_SUBS_ATIVAS = /^SELECT COUNT\(\*\) as c FROM familias_material_al
     }],
     ['PUT material (troca de familia) x DELETE da nova', async () => {
       const fa = await familia(); const fb = await familia(); const m = await materialDireto(fa);
-      return { alvo: fb, a: () => request(app).put(`/api/almoxarifado/materiais/${m}`).send({ familia_id: fb }),
+      return { alvo: fb, a: () => request(app).put(`/api/compras/materiais/cadastro/${m}`).send({ familia_id: fb }),
         b: () => request(app).delete(`/api/almoxarifado/familias/${fb}`),
         okA: [200], recusaA: [L_FAM_INATIVA], okB: [200], recusaB: [L_ITENS(1)] };
     }],

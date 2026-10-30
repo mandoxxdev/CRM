@@ -82,7 +82,7 @@ const RODADAS = 12;
     const ent = await request(app).put(`/api/almoxarifado/requisicoes/${rq}/entregar`)
       .send({ itens_atendidos: [{ item_id: it, quantidade_atendida: 2, serie_ids: sids }] });
     assert.strictEqual(ent.status, 200, JSON.stringify(ent.body));
-    const des = await request(app).put(`/api/almoxarifado/materiais/${m.id}`).send({ controle_serie: false });
+    const des = await request(app).put(`/api/compras/materiais/cadastro/${m.id}`).send({ controle_serie: false });
     assert.strictEqual(des.status, 200, JSON.stringify(des.body));
     const ex = await request(app).delete(`/api/almoxarifado/requisicoes/${rq}`).send({ justificativa: 'f116' });
     assert.strictEqual(ex.status, 400, JSON.stringify(ex.body));
@@ -91,7 +91,7 @@ const RODADAS = 12;
       + 'de série no cadastro do material e exclua de novo.');
     assert.strictEqual(await fisico(m), 0);
     assert.strictEqual((await dbGet(db, 'SELECT COALESCE(ativo, 1) a FROM requisicoes_almoxarifado WHERE id = ?', [rq])).a, 1);
-    const rel = await request(app).put(`/api/almoxarifado/materiais/${m.id}`).send({ controle_serie: true });
+    const rel = await request(app).put(`/api/compras/materiais/cadastro/${m.id}`).send({ controle_serie: true });
     assert.strictEqual(rel.status, 200, JSON.stringify(rel.body));
     const ex2 = await request(app).delete(`/api/almoxarifado/requisicoes/${rq}`).send({ justificativa: 'f116' });
     assert.strictEqual(ex2.status, 200, JSON.stringify(ex2.body));
@@ -159,7 +159,7 @@ const RODADAS = 12;
         // (AsyncLocalStorage) e passaria pela trava como se ja a tivesse — o teste provaria nada.
         estado.put = foraDaSecao(() => {
           setUserLocal(ALMOX);
-          const p = request(app).put(`/api/almoxarifado/materiais/${m.id}`).send({ controle_serie: false });
+          const p = request(app).put(`/api/compras/materiais/cadastro/${m.id}`).send({ controle_serie: false });
           p.then(() => {}, () => {});
           return p;
         });

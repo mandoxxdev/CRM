@@ -205,14 +205,14 @@ const uniq = (p) => `${p}${Date.now() % 100000}${++seq}`;
     const codigo = uniq('E23-TRILHA-');
     const mat = await criarMaterial(codigo, familia.id);
 
-    const primeira = await request(app).delete(`/api/almoxarifado/materiais/${mat.id}`);
+    const primeira = await request(app).delete(`/api/compras/materiais/cadastro/${mat.id}`);
     assert.strictEqual(primeira.status, 200, `1a desativacao: ${JSON.stringify(primeira.body)}`);
 
     const antes = await atosNaTrilha('material', mat.id);
     assert.deepStrictEqual(antes.itens.map((i) => i.acao), ['DESATIVACAO', 'CRIACAO'],
       `setup: depois da 1a desativacao a trilha devia ter a criacao e UMA desativacao — ${resumir(antes)}`);
 
-    const segunda = await request(app).delete(`/api/almoxarifado/materiais/${mat.id}`);
+    const segunda = await request(app).delete(`/api/compras/materiais/cadastro/${mat.id}`);
     assert.strictEqual(segunda.status, 200, `2a desativacao: ${JSON.stringify(segunda.body)}`);
 
     const depois = await atosNaTrilha('material', mat.id);

@@ -10,7 +10,7 @@ import { formatLocalizacaoLabel } from '../../utils/localizacaoLabel';
 import { toast } from 'react-toastify';
 import { FiSave, FiArrowLeft, FiImage, FiRefreshCw } from 'react-icons/fi';
 import AvisoDaListaRecusada, { OpcaoForaDaLista } from './AvisoDaListaRecusada';
-import { ROTAS_ALMOXARIFADO } from './rotasCadastroMaterial';
+import { ROTAS_ALMOXARIFADO, AVISO_CADASTRO_NO_COMPRAS } from './rotasCadastroMaterial';
 import './Almoxarifado.css';
 
 // Etapa 26: a lista de categorias saiu daqui (era uma de três cópias hardcoded) e passou a vir
@@ -65,7 +65,10 @@ export const AVISO_SALDO_INICIAL = 'Material com lote, série, inspeção ou de 
 
 // Etapa 192 (RN-192.10): `rotas` decide por onde o formulario fala com o servidor (ver rotasCadastroMaterial.js) — o Compras
 // usa as portas dele e esconde foto, saldo inicial e os atalhos para Configuracoes do Almoxarifado.
+// Etapa 193 (RN-193.01): `rotas.somenteLeitura` (ROTAS_ALMOXARIFADO_CONSULTA) e a ficha "Ver" do Almoxarifado — o MESMO formulario,
+// com tudo desligado (`<fieldset disabled>`), sem Salvar e sem enviar foto: o cadastro e feito em Compras -> Materiais.
 const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
+  const somenteLeitura = !!rotas.somenteLeitura;
   const { user } = useAuth();
   // Etapa 126 (C261, RN-11; Fase 2 M5): "cadastre em Configuracoes" so para quem o SERVIDOR deixa cadastrar familia e localizacao —
   // o administrador do sistema sem perfil abria a tela pelo canConfigureAlmox e recebia 403 la. Os outros: "solicite a um administrador".
@@ -99,7 +102,7 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
   // Etapa 100 (G10, RN-100.06b): a família GRAVADA no material, como veio do servidor. É ela — e
   // não `form.familia_id`, que muda quando o usuário escolhe — que decide se o select destrava.
   const [familiaGravadaId, setFamiliaGravadaId] = useState('');
-  // Fase 5 (X6): o nome do dono gravado (do detalhe), para o Compras mostrar sem pedir a lista de clientes.
+  // Fase 5 (X6): o nome do dono gravado (do detalhe), para mostrar sem pedir a lista de clientes (desde a 193, so na consulta).
   const [donoNome, setDonoNome] = useState(null);
   const [loadingFamilias, setLoadingFamilias] = useState(true);
   const [loadingLocalizacoes, setLoadingLocalizacoes] = useState(true);
@@ -206,16 +209,17 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
 
   // Flag `cancelado` (padrão do módulo): o material pode ser trocado pela navegação antes da
   // resposta chegar, e um setState depois do unmount é warning — e com CI=true, erro de build.
-  // Fase 5 (X6): no Compras (`rotas.proprietario` false) a lista nao e pedida — `GET /clientes` exige Comercial/Almoxarifado/
-  // Operacional e o comprador so com o Compras tomava erro no seletor. La o dono e so mostrado (ver a secao Propriedade).
+  // Fase 5 (X6): `GET /clientes` exige Comercial/Almoxarifado/Operacional e o comprador so com o Compras tomava erro no seletor.
+  // Etapa 193 (RN-193.05): cada porta diz de onde vem a lista (`rotas.api.clientes`; no Compras, a lista minima sob o gate do
+  // cadastro). Sem seletor (`rotas.proprietario` false — a consulta do Almoxarifado) a lista nao e pedida.
   useEffect(() => {
     if (!rotas.proprietario) return undefined;
     let cancelado = false;
-    api.get('/clientes')
+    api.get(rotas.api.clientes)
       .then((r) => { if (!cancelado) { setClientes(Array.isArray(r.data) ? r.data : []); setErroClientes(null); } })
       .catch((e) => { if (!cancelado) { setClientes([]); setErroClientes(e); } });
     return () => { cancelado = true; };
-  }, [rotas.proprietario]);
+  }, [rotas.proprietario, rotas.api.clientes]);
 
   const loadFamilias = async () => {
     setLoadingFamilias(true);
@@ -489,6 +493,7 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (somenteLeitura) return;
     if (!form.codigo || !form.nome) {
       toast.error('Código e nome são obrigatórios');
       return;
@@ -548,7 +553,8 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
       delete payload.localizacao;
       // Etapa 192: o Compras nao lanca saldo (o campo nem aparece) — sem a chave o servidor nao ve saldo inicial.
       if (!rotas.saldoInicial) delete payload.quantidade_atual;
-      // Fase 5 (X6): o Compras nao troca o dono (so mostra) — sem a chave o servidor preserva o gravado (PUT) ou cria "nosso" (POST).
+      // Fase 5 (X6): quem nao tem o seletor (desde a 193, so a consulta, que nem salva) nao manda o dono — sem a chave o servidor
+      // preserva o gravado.
       if (!rotas.proprietario) delete payload.proprietario_cliente_id;
 
       let res;
@@ -584,7 +590,7 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
     try {
       const fd = new FormData();
       fd.append('foto', file);
-      const res = await api.post(`/almoxarifado/materiais/${materialId}/foto`, fd, {
+      const res = await api.post(rotas.api.foto(materialId), fd, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setFotoPreview(resolveMaterialPhotoUrl(res.data.foto_url));
@@ -624,7 +630,7 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
     };
     reader.readAsDataURL(file);
 
-    if (isEdit && id) {
+    if (isEdit && id && !somenteLeitura) {
       uploadFoto(id, file, { previewAnterior });
     }
   };
@@ -641,7 +647,7 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
     <div className="almox-page">
       <div className="almox-header">
         <div>
-          <h1>{isEdit ? 'Editar Material' : 'Novo Material'}</h1>
+          <h1>{somenteLeitura ? 'Material' : isEdit ? 'Editar Material' : 'Novo Material'}</h1>
           <p>{rotas.subtitulo}</p>
         </div>
         <div className="almox-header-actions">
@@ -651,7 +657,17 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
         </div>
       </div>
 
+      {somenteLeitura && (
+        <div className="almox-empty" data-testid="material-somente-leitura" role="note"
+          style={{ padding: '10px 14px', marginBottom: 16, textAlign: 'left' }}>
+          {AVISO_CADASTRO_NO_COMPRAS}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit}>
+        {/* RN-193.01: na consulta, o fieldset desliga todos os campos de uma vez (o mesmo formulario, nenhum que escape). */}
+        <fieldset disabled={somenteLeitura} data-testid="material-form-campos"
+          style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 24, alignItems: 'start' }}>
 
           {/* Coluna principal */}
@@ -798,17 +814,14 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
                 <div className="almox-field">
                   <label className="almox-label" htmlFor="material-proprietario">Proprietário</label>
                   {!rotas.proprietario ? (
-                    // Fase 5 (X6): no Compras o dono e so mostrado — trocar o dono e do Almoxarifado (com historico exige
-                    // `ajustar_material_cliente`), e a lista de clientes exige um modulo que o comprador pode nao ter.
+                    // Etapa 193 (RN-193.05): so a consulta do Almoxarifado mostra o dono sem o seletor. O Compras (Fase 5 X6 da 192 o
+                    // deixava so leitura) voltou a ter o seletor, com a lista minima `/compras/materiais/aux/clientes`.
                     <>
                       <div className="almox-input" data-testid="material-proprietario-somente-leitura" aria-readonly="true">
                         {form.proprietario_cliente_id
                           ? (donoNome || `Cliente #${form.proprietario_cliente_id}`)
                           : 'GMP (estoque próprio)'}
                       </div>
-                      <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem', display: 'block', marginTop: 2 }}>
-                        O proprietário é definido no Almoxarifado.
-                      </small>
                     </>
                   ) : (<>
                   <select
@@ -1119,19 +1132,19 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
           {/* Coluna lateral — foto + ações */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'sticky', top: 80 }}>
 
-            {/* Foto (no Compras nao: a foto fica no Almoxarifado — Etapa 192) */}
+            {/* Foto — desde a Etapa 193 (RN-193.04) tambem no Compras; na consulta do Almoxarifado so a imagem, sem enviar. */}
             {rotas.foto && (
             <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 20 }}>
               <div className="almox-section-title" style={{ marginTop: 0 }}>Foto do Produto</div>
               <div className="almox-foto-upload-area">
-                <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFotoChange} />
+                {!somenteLeitura && <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFotoChange} />}
                 {fotoPreview ? (
                   <img src={fotoPreview} alt="Preview" className="almox-foto-preview" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                 ) : (
                   <div>
                     <FiImage size={32} style={{ opacity: 0.4, display: 'block', margin: '0 auto 8px' }} />
                     <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>
-                      Clique para adicionar foto<br />JPG, PNG, WEBP · max 10MB
+                      {somenteLeitura ? 'Sem foto' : (<>Clique para adicionar foto<br />JPG, PNG, WEBP · max 10MB</>)}
                     </div>
                   </div>
                 )}
@@ -1144,7 +1157,8 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
             </div>
             )}
 
-            {/* Botões */}
+            {/* Botões (na consulta nao ha o que salvar: o Voltar do cabecalho leva de volta a lista) */}
+            {!somenteLeitura && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <button type="submit" className="btn-almox-primary" disabled={saving} style={{ justifyContent: 'center' }}>
                 <FiSave size={14} /> {saving ? 'Salvando...' : isEdit ? 'Atualizar Material' : 'Cadastrar Material'}
@@ -1154,8 +1168,10 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
                 <FiArrowLeft size={14} /> Cancelar
               </button>
             </div>
+            )}
           </div>
         </div>
+        </fieldset>
       </form>
     </div>
   );

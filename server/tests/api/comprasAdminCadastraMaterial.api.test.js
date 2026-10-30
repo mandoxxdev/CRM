@@ -79,17 +79,20 @@ const LITERAL_403 = 'Sem permissão para esta operação';
     assert.strictEqual((await dbGet(db, "SELECT COUNT(*) n FROM materiais_almoxarifado WHERE codigo = 'VLV-SALDO'")).n, 0);
   });
 
-  await test('[sem alargar o almoxarifado] o admin do Compras segue 403 nas rotas do almoxarifado: criar, editar, excluir, foto', async () => {
+  // Etapa 193 (RN-193.02): editar, excluir e foto do almoxarifado recusam para TODOS com a literal do cadastro no Compras (antes,
+  // o 403 do perfil); o criar do almoxarifado continua no perfil (a sobra e a remessa o usam) e segue recusando o admin do Compras.
+  await test('[sem alargar o almoxarifado] o admin do Compras segue 403 nas rotas do almoxarifado: criar (perfil); editar, excluir, foto (Etapa 193)', async () => {
+    const SO_NO_COMPRAS = 'O cadastro de material é feito em Compras → Materiais.';
     const chamadas = [
-      ['criar_material', () => request(app).post('/api/almoxarifado/materiais').send(corpo({ codigo: 'VLV-ALM' }))],
-      ['editar_material', () => request(app).put(`/api/almoxarifado/materiais/${MAT}`).send({ ncm: '1' })],
-      ['editar_material', () => request(app).delete(`/api/almoxarifado/materiais/${MAT}`)],
-      ['editar_material', () => request(app).post(`/api/almoxarifado/materiais/${MAT}/foto`)],
+      [[LITERAL_403, 'criar_material'], () => request(app).post('/api/almoxarifado/materiais').send(corpo({ codigo: 'VLV-ALM' }))],
+      [[SO_NO_COMPRAS, undefined], () => request(app).put(`/api/almoxarifado/materiais/${MAT}`).send({ ncm: '1' })],
+      [[SO_NO_COMPRAS, undefined], () => request(app).delete(`/api/almoxarifado/materiais/${MAT}`)],
+      [[SO_NO_COMPRAS, undefined], () => request(app).post(`/api/almoxarifado/materiais/${MAT}/foto`)],
     ];
-    for (const [acao, fn] of chamadas) {
+    for (const [esperado, fn] of chamadas) {
       const r = await as(ADMIN_COMPRAS, fn);
-      assert.strictEqual(r.status, 403, `${acao}: ${r.status} ${JSON.stringify(r.body)}`);
-      assert.deepStrictEqual([r.body.error, r.body.acao], [LITERAL_403, acao]);
+      assert.strictEqual(r.status, 403, `${esperado[0]}: ${r.status} ${JSON.stringify(r.body)}`);
+      assert.deepStrictEqual([r.body.error, r.body.acao], esperado);
     }
     const m = await dbGet(db, 'SELECT ativo, ncm FROM materiais_almoxarifado WHERE id = ?', [MAT]);
     assert.deepStrictEqual(m, { ativo: 1, ncm: null });

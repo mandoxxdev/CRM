@@ -145,7 +145,8 @@ const notificacoesDe = (R) => notificados.filter((id) => id === Number(R)).lengt
   const GATILHOS = {
     entrada: async (x) => ok(await como('ADMIN').post(`${API}/movimentacoes/v2`, {
       material_id: x.m, tipo: 'ENTRADA', quantidade: 1, custo_unitario: 1000, motivo: 'nota cara 94' }), 'entrada cara'),
-    cadastro: async (x) => ok(await como('ADMIN').put(`${API}/materiais/${x.m}`, { custo_unitario: 1000 }), 'custo do cadastro'),
+    // Etapa 193 (RN-193.02): o custo do cadastro mudou de porta — o PUT do almoxarifado recusa; o mesmo handler pelo Compras.
+    cadastro: async (x) => ok(await como('ADMIN').put(`/api/compras/materiais/cadastro/${x.m}`, { custo_unitario: 1000 }), 'custo do cadastro'),
     limite: async () => {
       await como('ADMIN').put(`${API}/configuracoes/liberacao-valor`, { ativo: true, limite: 1, aprovadorIds: [2] });
       assert.strictEqual(Number(await lerConfig('liberacao_valor_limite')), 1, 'premissa: o PUT da configuracao gravou o limite');

@@ -7,13 +7,18 @@
  * com `checkModulePermission('compras')` e chamam os MESMOS handlers das rotas do almoxarifado (registrados lado a lado em
  * `routes/almoxarifado.js` e `routes/almoxarifado/extended.js`): mesma validacao, mesmas mensagens, nenhuma segunda copia.
  *
- * O QUE FICA DE FORA, de proposito: excluir (inativar), foto e saldo. Excluir e foto nao tem porta aqui; o saldo inicial
- * e recusado na porta (400, Fase 5 X1 — abaixo), e o PUT do Compras recusa a chave `ativo` (inativar e
- * reativar sao no Almoxarifado).
+ * Desde a Etapa 193 (RN-193.01..04) o cadastro e SO do Compras: as escritas de cadastro do almoxarifado (PUT, DELETE, foto)
+ * recusam com `recusarCadastroNoAlmoxarifado` (403, abaixo) e o Compras ganhou foto e inativar/reativar (DELETE e PUT `ativo`)
+ * pelos mesmos handlers. O `POST /api/almoxarifado/materiais` fica: a sobra (retalho) e a remessa criam material na operacao.
  *
- * QUEM PODE: `pode(user, acao)` — o perfil do almoxarifado que tem a acao (ADMINISTRADOR, ALMOXARIFE, ENGENHARIA) OU, desde a
- * RN-192.11, o ADMINISTRADOR DO MODULO COMPRAS (`admin_modulos` com 'compras', `isModuleAdmin`; o cadastro de usuario ja
- * oferece o botao). So nestas portas: as rotas do almoxarifado continuam lendo so o perfil (`requirePermission`).
+ * O QUE FICA DE FORA, de proposito: saldo. O saldo inicial e recusado na porta (400, Fase 5 X1 — abaixo).
+ *
+ * QUEM PODE (Etapa 193, RN-193.03): `pode(user, acao)` — SO o ADMINISTRADOR DO MODULO COMPRAS (`admin_modulos` com 'compras',
+ * `isModuleAdmin`; o cadastro de usuario ja oferece o botao) e os administradores do sistema (superadmin, role admin —
+ * `isSystemAdmin`). Ate a 192 o perfil do almoxarifado que tinha a acao (ADMINISTRADOR, ALMOXARIFE, ENGENHARIA) tambem
+ * entrava; com o cadastro so no Compras ("almoxarifado so visualiza e libera"), deixou de entrar (decisao B, reversivel:
+ * voltar o `can(user, acao)` em `pode`). Descartado manter o admin do MODULO almoxarifado: e quem administra o almoxarifado,
+ * que agora so consulta o cadastro.
  * Descartado: PERFIS.COMPRAS em `criar_material`/`editar_material` de ACAO_PERFIS — `editar_material` tambem guarda o DELETE
  * (inativar) e a foto do almoxarifado, e todo comprador com o perfil COMPRAS passaria a excluir e trocar foto la. Descartado
  * tambem mapear o admin do Compras para um perfil em `getPerfilFromUser` (mudaria o perfil dele no modulo inteiro). As guardas de estoque
@@ -21,16 +26,16 @@
  * `editar_material` — a tela e de quem cadastra; a busca somente leitura do pedido (`GET /api/compras/materiais`, Etapa 38)
  * continua aberta a todo o Compras. Quem decide e o backend; `minhasPermissoes` existe so para a tela esconder o botao antes do formulario.
  */
-const { can, getPerfilFromUser } = require('../almoxarifado/permissions');
-const { isModuleAdmin, parseAdminModulos } = require('../systemPermissions');
+const { getPerfilFromUser } = require('../almoxarifado/permissions');
+const { isModuleAdmin, isSystemAdmin, parseAdminModulos } = require('../systemPermissions');
 const { temSaldoInicial } = require('../almoxarifado/materialService');
 
 const ACOES_DO_CADASTRO = ['criar_material', 'editar_material'];
 
 function pode(user, acao) {
-  // RN-192.11: "quem administra o Compras" cria e edita, nao so o almoxarife.
-  if (ACOES_DO_CADASTRO.includes(acao) && isModuleAdmin(user, 'compras')) return true;
-  return can(user, acao);
+  // RN-193.03: so quem administra o Compras (ou o sistema). O perfil do almoxarifado nao entra mais.
+  if (!ACOES_DO_CADASTRO.includes(acao)) return false;
+  return isModuleAdmin(user, 'compras') || isSystemAdmin(user);
 }
 
 /** O mesmo corpo do 403 de `requirePermission` (o client o transforma em texto com `formatarErroPermissao`). */
@@ -50,11 +55,30 @@ function minhasPermissoes(user) {
   return { perfil: getPerfilFromUser(user), acoes };
 }
 
-/** O PUT do Compras nao inativa nem reativa: isso e "excluir", que fica no Almoxarifado. */
-const MSG_ATIVO_NO_COMPRAS = 'Inativar ou reativar material é feito no Almoxarifado.';
-function recusarAtivo(req, res, next) {
-  if (req.body && req.body.ativo !== undefined) return res.status(400).json({ error: MSG_ATIVO_NO_COMPRAS });
-  return next();
+/**
+ * Etapa 193 (RN-193.02): as escritas de CADASTRO do almoxarifado (`PUT /api/almoxarifado/materiais/:id`, `DELETE` e a foto)
+ * recusam para TODOS, superadmin inclusive — o cadastro e feito em Compras -> Materiais. Antes do `requirePermission` e do
+ * multer (a foto recusada nao chega ao disco). Ate a 192 o PUT do Compras recusava `ativo` ("Inativar ou reativar material e
+ * feito no Almoxarifado."); a recusa saiu porque inativar/reativar mudou de lado.
+ * Descartado: recusar tambem o `POST /api/almoxarifado/materiais` — a sobra (retalho, `SobrasAlmoxarifado`) e a remessa para
+ * terceiros criam material na operacao por ele; nao sao o "cadastro" que saiu do almoxarifado.
+ *
+ * CHAVE DE REVERSAO (letra B): `ALMOX_CADASTRO_MATERIAL=liberado` no ambiente devolve as tres rotas ao que eram ate a 192 (o
+ * perfil do almoxarifado decide, `requirePermission('editar_material')`, que continua na corrente logo depois desta recusa) — sem
+ * deploy, e o boot avisa. Mesmo molde do `PROPOSTAS_PORTAO_DE_MODULO=desligado` (Etapa 148, B946). Existe porque so a porta do
+ * almoxarifado alcanca as guardas de estoque do handler para quem pode (ligar lote/serie em material com saldo nao identificado e
+ * desligar a serie com series presentes exigem `ajustar_estoque`; trocar o dono de material com historico exige
+ * `ajustar_material_cliente`) — pela porta do Compras o handler roda no perfil COMPRAS (B72) e sempre recusa. Com a chave
+ * desligada (o padrao), esses tres gestos ficam sem porta (letra C, RN-193.06). Os testes dessas guardas ligam a chave.
+ * Lida a cada pedido (o teste liga e desliga no mesmo processo).
+ */
+const MSG_CADASTRO_NO_COMPRAS = 'O cadastro de material é feito em Compras → Materiais.';
+function cadastroNoAlmoxarifadoLiberado() {
+  return String(process.env.ALMOX_CADASTRO_MATERIAL || '').trim().toLowerCase() === 'liberado';
+}
+function recusarCadastroNoAlmoxarifado(req, res, next) {
+  if (cadastroNoAlmoxarifadoLiberado()) return next();
+  return res.status(403).json({ error: MSG_CADASTRO_NO_COMPRAS });
 }
 
 /**
@@ -116,6 +140,7 @@ function criarPortaCompras({ authenticateToken, checkModulePermission }) {
 }
 
 module.exports = {
-  ACOES_DO_CADASTRO, pode, exigir, minhasPermissoes, recusarAtivo, MSG_ATIVO_NO_COMPRAS, criarPortaCompras,
+  ACOES_DO_CADASTRO, pode, exigir, minhasPermissoes, criarPortaCompras,
+  recusarCadastroNoAlmoxarifado, MSG_CADASTRO_NO_COMPRAS, cadastroNoAlmoxarifadoLiberado,
   recusarSaldoInicial, MSG_SALDO_INICIAL_NO_COMPRAS, usuarioDoCompras, comoCompras,
 };

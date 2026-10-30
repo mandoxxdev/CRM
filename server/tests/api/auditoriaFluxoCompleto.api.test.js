@@ -100,7 +100,7 @@ let seq = 0;
   };
 
   const enviarFoto = (id, nomeArquivo) => request(app)
-    .post(`/api/almoxarifado/materiais/${id}/foto`)
+    .post(`/api/compras/materiais/cadastro/${id}/foto`)
     .attach('foto', PNG_1x1, nomeArquivo);
 
   // A LEITURA e sempre pela rota C1 — nunca por SELECT direto na tabela. E a rota que a tela

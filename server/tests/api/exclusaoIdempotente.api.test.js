@@ -101,7 +101,7 @@ const uniq = (p) => `${p}${Date.now() % 100000}${++seq}`;
   await test('[guarda] o usuario passa por requirePermission(editar_material) (5a rota)', async () => {
     const familia = await criarFamilia(uniq('E23 Fam Guarda '));
     const mat = await criarMaterial(uniq('E23-GUARDA-'), familia.id);
-    const res = await request(app).delete(`/api/almoxarifado/materiais/${mat.id}`);
+    const res = await request(app).delete(`/api/compras/materiais/cadastro/${mat.id}`);
     assert.strictEqual(res.status, 200, `DELETE material recusado (${res.status}): ${JSON.stringify(res.body)} `
       + '— se for 403 o gate da 5a rota e outro e os cenarios de material provariam nada');
     assert.strictEqual(await ativoDe('materiais_almoxarifado', mat.id), 0,
@@ -281,7 +281,7 @@ const uniq = (p) => `${p}${Date.now() % 100000}${++seq}`;
 
   await test('material: 1a desativacao é um ato — 200 e UMA linha DESATIVACAO', async () => {
     const mat = await criarMaterial(uniq('E23-MAT-'), familiaMat.id);
-    const res = await request(app).delete(`/api/almoxarifado/materiais/${mat.id}`);
+    const res = await request(app).delete(`/api/compras/materiais/cadastro/${mat.id}`);
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
     assert.strictEqual(await ativoDe('materiais_almoxarifado', mat.id), 0,
       'a 1a desativacao respondeu 200 sem inativar o material');
@@ -290,12 +290,12 @@ const uniq = (p) => `${p}${Date.now() % 100000}${++seq}`;
 
   await test('RN-03 material: 2a desativacao NAO audita (o corpo segue success:true, sem ja_inativo)', async () => {
     const mat = await criarMaterial(uniq('E23-MATD-'), familiaMat.id);
-    assert.strictEqual((await request(app).delete(`/api/almoxarifado/materiais/${mat.id}`)).status, 200);
+    assert.strictEqual((await request(app).delete(`/api/compras/materiais/cadastro/${mat.id}`)).status, 200);
     const antes = await linhasDe('material', 'DESATIVACAO', mat.id);
     assert.strictEqual(antes.length, 1, `setup: a 1a desativacao devia deixar 1 linha, deixou ${antes.length}`);
     assert.strictEqual(await ativoDe('materiais_almoxarifado', mat.id), 0, 'setup: o material devia estar inativo');
 
-    const res = await request(app).delete(`/api/almoxarifado/materiais/${mat.id}`);
+    const res = await request(app).delete(`/api/compras/materiais/cadastro/${mat.id}`);
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
     const depois = await linhasDe('material', 'DESATIVACAO', mat.id);
     assert.strictEqual(depois.length, 1,
@@ -311,7 +311,7 @@ const uniq = (p) => `${p}${Date.now() % 100000}${++seq}`;
   await test('[contrato inalterado] material: id INEXISTENTE segue 200 success:true e NAO audita', async () => {
     // Declarado assim na Etapa 19 e mantido de proposito: virar 404 aqui seria mudanca de
     // contrato fora do tema da Etapa 23 (as outras quatro rotas ja eram 404 antes desta task).
-    const res = await request(app).delete(`/api/almoxarifado/materiais/${ID_INEXISTENTE}`);
+    const res = await request(app).delete(`/api/compras/materiais/cadastro/${ID_INEXISTENTE}`);
     assert.strictEqual(res.status, 200, `o contrato desta rota nao muda: ${res.status} ${JSON.stringify(res.body)}`);
     assert.strictEqual(res.body.success, true, JSON.stringify(res.body));
     assert.strictEqual((await linhasDe('material', 'DESATIVACAO', ID_INEXISTENTE)).length, 0,

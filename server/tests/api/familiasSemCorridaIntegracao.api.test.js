@@ -59,7 +59,7 @@ const LEDGER = 'reparo_familia_pai_zero';
     assert.strictEqual((await dbGet(db, 'SELECT COUNT(*) AS n FROM materiais_almoxarifado WHERE codigo = ?', [fantasma.codigo])).n, 0);
 
     // o PUT do material trocando para o inexistente: 400, dono intacto
-    const troca = await request(app).put(`/api/almoxarifado/materiais/${ok.body.id}`).send({ proprietario_cliente_id: 987654 });
+    const troca = await request(app).put(`/api/compras/materiais/cadastro/${ok.body.id}`).send({ proprietario_cliente_id: 987654 });
     assert.strictEqual(troca.status, 400, JSON.stringify(troca.body));
     assert.strictEqual(troca.body.error, L_DONO(987654));
     assert.strictEqual((await dbGet(db, 'SELECT proprietario_cliente_id AS p FROM materiais_almoxarifado WHERE id = ?', [ok.body.id])).p, clienteId);

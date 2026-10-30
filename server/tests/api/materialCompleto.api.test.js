@@ -146,13 +146,13 @@ async function ultimaAuditoria(db, entidadeId) {
     assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
 
     // '' -> preprocess vira undefined -> chave "ausente" -> preserve-when-omitted mantém 'C'.
-    const resVazio = await request(app).put(`/api/almoxarifado/materiais/${criado.body.id}`)
+    const resVazio = await request(app).put(`/api/compras/materiais/cadastro/${criado.body.id}`)
       .send({ classe_abc: '' });
     assert.strictEqual(resVazio.status, 200, JSON.stringify(resVazio.body));
     assert.strictEqual(resVazio.body.classe_abc, 'C', 'classe_abc deveria ter sido preservado (não confundir "" com limpar)');
 
     // null explícito continua limpando de verdade (não pode virar "preservar").
-    const resNull = await request(app).put(`/api/almoxarifado/materiais/${criado.body.id}`)
+    const resNull = await request(app).put(`/api/compras/materiais/cadastro/${criado.body.id}`)
       .send({ classe_abc: null });
     assert.strictEqual(resNull.status, 200, JSON.stringify(resNull.body));
     assert.strictEqual(resNull.body.classe_abc, null, 'null explícito deveria limpar classe_abc');
@@ -190,7 +190,7 @@ async function ultimaAuditoria(db, entidadeId) {
     });
     assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
 
-    const res = await request(app).put(`/api/almoxarifado/materiais/${criado.body.id}`).send({
+    const res = await request(app).put(`/api/compras/materiais/cadastro/${criado.body.id}`).send({
       codigo: 'MAT-FULL-008', nome: 'Nome Novo', familia_id: familia.id, marca: 'Marca Nova',
     });
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
@@ -217,7 +217,7 @@ async function ultimaAuditoria(db, entidadeId) {
     const antesCount = await dbAll(db,
       `SELECT id FROM auditoria_log_almoxarifado WHERE entidade='material' AND entidade_id=?`, [criado.body.id]);
 
-    const res = await request(app).put(`/api/almoxarifado/materiais/${criado.body.id}`).send({
+    const res = await request(app).put(`/api/compras/materiais/cadastro/${criado.body.id}`).send({
       codigo: 'MAT-FULL-009', nome: 'Material Estavel', familia_id: familia.id,
     });
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
@@ -263,7 +263,7 @@ async function ultimaAuditoria(db, entidadeId) {
       especificacoes: '',
       observacoes: '',
     };
-    const res = await request(app).put(`/api/almoxarifado/materiais/${criado.body.id}`).send(payloadUiAtual);
+    const res = await request(app).put(`/api/compras/materiais/cadastro/${criado.body.id}`).send(payloadUiAtual);
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
     assert.strictEqual(res.body.nome, 'Material Renomeado pela UI');
     assert.strictEqual(res.body.fabricante, 'Fabricante API', 'fabricante deveria ter sido preservado');
@@ -288,7 +288,7 @@ async function ultimaAuditoria(db, entidadeId) {
       codigo: 'MAT-FULL-011', nome: 'Material PUT Classe', familia_id: familia.id,
     });
     assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
-    const res = await request(app).put(`/api/almoxarifado/materiais/${criado.body.id}`)
+    const res = await request(app).put(`/api/compras/materiais/cadastro/${criado.body.id}`)
       .send({ classe_abc: 'X' });
     assert.strictEqual(res.status, 400, JSON.stringify(res.body));
   });
@@ -336,7 +336,7 @@ async function ultimaAuditoria(db, entidadeId) {
     });
     assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
 
-    const res = await request(app).put(`/api/almoxarifado/materiais/${criado.body.id}`).send({
+    const res = await request(app).put(`/api/compras/materiais/cadastro/${criado.body.id}`).send({
       codigo: 'FORM-2',
       nome: 'Via Form Editado',
       descricao: '',
@@ -374,7 +374,7 @@ async function ultimaAuditoria(db, entidadeId) {
     assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
     assert.strictEqual(criado.body.subfamilia_id, sub.body.id);
 
-    const res = await request(app).put(`/api/almoxarifado/materiais/${criado.body.id}`)
+    const res = await request(app).put(`/api/compras/materiais/cadastro/${criado.body.id}`)
       .send({ codigo: 'FORM-3', nome: 'Material Sub Null', familia_id: raiz.id, subfamilia_id: null });
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
     assert.strictEqual(res.body.subfamilia_id, null, 'null explícito ainda precisa limpar o vínculo (não pode virar undefined/preservar)');
@@ -386,7 +386,7 @@ async function ultimaAuditoria(db, entidadeId) {
     });
     assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
 
-    const res = await request(app).put(`/api/almoxarifado/materiais/${criado.body.id}`).send({ ativo: false });
+    const res = await request(app).put(`/api/compras/materiais/cadastro/${criado.body.id}`).send({ ativo: false });
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
     assert.strictEqual(res.body.ativo, 0);
 

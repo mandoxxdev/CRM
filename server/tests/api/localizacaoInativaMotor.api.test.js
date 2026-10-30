@@ -186,14 +186,14 @@ let seq = 0;
     r = await request(app).post('/api/almoxarifado/materiais').send({ ...base, codigo: `E54-C${++seq}`, localizacao_padrao_id: A.id });
     assert.strictEqual(r.status, 201, JSON.stringify(r.body));
     const id = r.body.id;
-    const p = await request(app).put(`/api/almoxarifado/materiais/${id}`).send({ localizacao_padrao_id: I.id });
+    const p = await request(app).put(`/api/compras/materiais/cadastro/${id}`).send({ localizacao_padrao_id: I.id });
     assert.strictEqual(p.status, 400); assert.strictEqual(p.body.error, `Localização padrão ${I.codigo} está inativa`);
     // Legado: a padrão ficou inativa depois (SQL) — editar o nome, reenviando a MESMA padrão, passa.
     await desativar(A.id);
-    const n = await request(app).put(`/api/almoxarifado/materiais/${id}`).send({ nome: 'Renomeado', localizacao_padrao_id: A.id });
+    const n = await request(app).put(`/api/compras/materiais/cadastro/${id}`).send({ nome: 'Renomeado', localizacao_padrao_id: A.id });
     assert.strictEqual(n.status, 200, JSON.stringify(n.body));
     // Tirar a padrao (null) nao valida nada e passa.
-    const semPadrao = await request(app).put(`/api/almoxarifado/materiais/${id}`).send({ localizacao_padrao_id: null });
+    const semPadrao = await request(app).put(`/api/compras/materiais/cadastro/${id}`).send({ localizacao_padrao_id: null });
     assert.strictEqual(semPadrao.status, 200, JSON.stringify(semPadrao.body));
     assert.strictEqual((await dbGet(db, 'SELECT localizacao_padrao_id p FROM materiais_almoxarifado WHERE id = ?', [id])).p, null);
   });

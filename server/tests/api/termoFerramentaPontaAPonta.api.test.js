@@ -261,7 +261,7 @@ const URL_ASSINATURA = /^\/api\/uploads\/almoxarifado\/assinatura-termo-[^/?]+\.
       codigo: 'EPI-T4-OCULOS', nome: 'Oculos T4', familia_id: fam.id, categoria: 'EPIs', unidade_medida: 'UN', ca_numero: '4444' });
     assert.strictEqual(cri.status, 201, JSON.stringify(cri.body));
     const mat = await dbGet(db, "SELECT id FROM materiais_almoxarifado WHERE codigo = 'EPI-T4-OCULOS'");
-    assert.strictEqual((await request(app).put(`/api/almoxarifado/materiais/${mat.id}`).send({ ca_validade: '2099-06-30' })).status, 200);
+    assert.strictEqual((await request(app).put(`/api/compras/materiais/cadastro/${mat.id}`).send({ ca_validade: '2099-06-30' })).status, 200);
     const ent = await request(app).post('/api/almoxarifado/movimentacoes')
       .send({ material_id: mat.id, tipo: 'ENTRADA', quantidade: 5, motivo: 'carga T4' });
     assert.strictEqual(ent.status, 201, JSON.stringify(ent.body));

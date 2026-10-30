@@ -101,7 +101,7 @@ const L_SUB = 'Subfamília inválida para a família selecionada';
   await test('P4', 'PUT material troca familia E subfamilia juntas (caso feliz) -> 200 e as duas gravadas', async () => {
     const fa = await familia(); const fb = await familia(); const sb = await familia(1, fb);
     const m = (await request(app).post('/api/almoxarifado/materiais').send(corpo(fa))).body.id;
-    const r = await request(app).put(`/api/almoxarifado/materiais/${m}`).send({ familia_id: fb, subfamilia_id: sb });
+    const r = await request(app).put(`/api/compras/materiais/cadastro/${m}`).send({ familia_id: fb, subfamilia_id: sb });
     assert.strictEqual(r.status, 200, `${r.status} ${JSON.stringify(r.body)}`);
     const row = await dbGet(db, 'SELECT familia_id, subfamilia_id FROM materiais_almoxarifado WHERE id = ?', [m]);
     assert.deepStrictEqual([row.familia_id, row.subfamilia_id], [fb, sb]);

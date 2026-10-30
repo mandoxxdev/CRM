@@ -249,7 +249,7 @@ test('[INTEGRACAO] a URL que o servidor devolve para a FOTO e aceita pelo propri
 
     // Sobe a foto pela rota real — o nome no disco e escolhido pelo multer.
     const upload = await request(ctx.app)
-      .post(`/api/almoxarifado/materiais/${mat.lastID}/foto`)
+      .post(`/api/compras/materiais/cadastro/${mat.lastID}/foto`)
       .attach('foto', Buffer.from('PNG-BYTES-INTEGRACAO'), 'foto.png');
     assert.strictEqual(upload.status, 200, JSON.stringify(upload.body));
 
@@ -356,7 +356,7 @@ test('XSS: extensao vem do MIME aceito, nunca do nome — .html declarado como i
     ];
     for (const [nome, contentType, esperado] of casos) {
       const res = await request(ctx.app)
-        .post(`/api/almoxarifado/materiais/${mat.lastID}/foto`)
+        .post(`/api/compras/materiais/cadastro/${mat.lastID}/foto`)
         .attach('foto', Buffer.from('<script>alert(document.domain)</script>'),
           { filename: nome, contentType });
       assert.strictEqual(res.status, 200, `${nome}: ${JSON.stringify(res.body)}`);

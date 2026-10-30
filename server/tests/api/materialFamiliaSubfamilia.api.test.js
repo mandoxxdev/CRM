@@ -84,7 +84,7 @@ const L1 = 'A família escolhida é uma subfamília — escolha a família princ
   await test('RN-100.06 PUT que MUDA familia_id para uma subfamilia -> 400 L1; o gravado nao muda', async () => {
     const criado = await request(app).post('/api/almoxarifado/materiais').send(corpo({ familia_id: OUTRA }));
     assert.strictEqual(criado.status, 201);
-    const r = await request(app).put(`/api/almoxarifado/materiais/${criado.body.id}`).send({ familia_id: SUB });
+    const r = await request(app).put(`/api/compras/materiais/cadastro/${criado.body.id}`).send({ familia_id: SUB });
     assert.strictEqual(r.status, 400, `esperava 400: ${r.status} ${JSON.stringify(r.body)}`);
     assert.strictEqual(r.body.error, L1);
     const row = await dbGet(db, 'SELECT familia_id FROM materiais_almoxarifado WHERE id = ?', [criado.body.id]);
@@ -92,10 +92,10 @@ const L1 = 'A família escolhida é uma subfamília — escolha a família princ
   });
 
   await test('RN-100.06 LEGADO (familia_id = sub) continua editavel: omitindo e repetindo o valor -> 200', async () => {
-    const omitindo = await request(app).put(`/api/almoxarifado/materiais/${LEGADO}`).send({ nome: 'Legado renomeado' });
+    const omitindo = await request(app).put(`/api/compras/materiais/cadastro/${LEGADO}`).send({ nome: 'Legado renomeado' });
     assert.strictEqual(omitindo.status, 200, `omitindo familia_id: ${omitindo.status} ${JSON.stringify(omitindo.body)}`);
     // O formulario manda SEMPRE `familia_id` (o mesmo valor que leu).
-    const repetindo = await request(app).put(`/api/almoxarifado/materiais/${LEGADO}`).send({ nome: 'Legado de novo', familia_id: SUB });
+    const repetindo = await request(app).put(`/api/compras/materiais/cadastro/${LEGADO}`).send({ nome: 'Legado de novo', familia_id: SUB });
     assert.strictEqual(repetindo.status, 200, `repetindo familia_id: ${repetindo.status} ${JSON.stringify(repetindo.body)}`);
     const row = await dbGet(db, 'SELECT nome, familia_id FROM materiais_almoxarifado WHERE id = ?', [LEGADO]);
     assert.strictEqual(row.nome, 'Legado de novo');
@@ -103,7 +103,7 @@ const L1 = 'A família escolhida é uma subfamília — escolha a família princ
   });
 
   await test('RN-100.06 LEGADO corrigido pela tela: raiz + subfamilia -> 200 e gravado no padrao', async () => {
-    const r = await request(app).put(`/api/almoxarifado/materiais/${LEGADO}`).send({ familia_id: FAM, subfamilia_id: SUB });
+    const r = await request(app).put(`/api/compras/materiais/cadastro/${LEGADO}`).send({ familia_id: FAM, subfamilia_id: SUB });
     assert.strictEqual(r.status, 200, `corrigir o legado: ${r.status} ${JSON.stringify(r.body)}`);
     const row = await dbGet(db, 'SELECT familia_id, subfamilia_id FROM materiais_almoxarifado WHERE id = ?', [LEGADO]);
     assert.strictEqual(row.familia_id, FAM);
