@@ -202,7 +202,7 @@ const DDL_GRUPOS = `CREATE TABLE IF NOT EXISTS grupos_compras (
     assert.strictEqual((await dbGet(db, 'SELECT grupo_id FROM fornecedores WHERE id = ?', [p.body.id])).grupo_id, g, 'B45: desativar nao desvincula');
     const repete = await request(app).put(`/api/compras/fornecedores/${f}`).send({ razao_social: 'Forn positivo PUT 3', grupo_id: g });
     assert.strictEqual(repete.status, 200, `B52: ${repete.status} ${JSON.stringify(repete.body)}`);
-    assert.strictEqual((await dbGet(db, 'SELECT razao_social FROM fornecedores WHERE id = ?', [f])).razao_social, 'Forn positivo PUT 3');
+    assert.strictEqual((await dbGet(db, 'SELECT razao_social FROM fornecedores WHERE id = ?', [f])).razao_social, 'FORN POSITIVO PUT 3'); // Etapa 192 (RN-192.05): maiusculas
     const limpa = await request(app).put(`/api/compras/fornecedores/${f}`).send({ razao_social: 'Forn positivo PUT 4', grupo_id: null });
     assert.strictEqual(limpa.status, 200);
     assert.strictEqual((await dbGet(db, 'SELECT grupo_id FROM fornecedores WHERE id = ?', [f])).grupo_id, null);
@@ -212,7 +212,7 @@ const DDL_GRUPOS = `CREATE TABLE IF NOT EXISTS grupos_compras (
     const troca = await request(app).put(`/api/compras/fornecedores/${f}`).send({ razao_social: 'Forn positivo PUT 5', grupo_id: outro, cidade: 'SP' });
     assert.strictEqual(troca.status, 200);
     const row = await dbGet(db, 'SELECT razao_social, cidade, grupo_id FROM fornecedores WHERE id = ?', [f]);
-    assert.deepStrictEqual({ ...row }, { razao_social: 'Forn positivo PUT 5', cidade: 'SP', grupo_id: outro });
+    assert.deepStrictEqual({ ...row }, { razao_social: 'FORN POSITIVO PUT 5', cidade: 'SP', grupo_id: outro }); // Etapa 192: maiusculas
   });
 
   await close();

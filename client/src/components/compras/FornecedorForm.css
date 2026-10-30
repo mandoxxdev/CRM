@@ -220,3 +220,13 @@
   .fornecedor-form .form-actions { flex-direction: column-reverse; }
   .fornecedor-form .form-actions button { width: 100%; justify-content: center; }
 }
+
+/* Etapa 192 (RN-192.05): os textos livres da ficha aparecem em maiusculas enquanto se digita (o servidor
+   grava em maiusculas). CSS e nao troca de valor a cada tecla: o cursor de quem corrige no meio fica onde esta. */
+.fornecedor-form input.fornecedor-maiusculas {
+  text-transform: uppercase;
+}
+
+.fornecedor-form input.fornecedor-maiusculas::placeholder {
+  text-transform: none;
+}

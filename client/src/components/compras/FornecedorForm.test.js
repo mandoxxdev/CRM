@@ -199,12 +199,13 @@ describe('FornecedorForm — (c) POST exato', () => {
       cnpj: '11.222.333/0001-81',
       cpf: '',
       inscricao_estadual: '123456',
-      contato: 'Joana',
+      // Etapa 192 (RN-192.05): os textos livres vao em maiusculas; email e telefones nao.
+      contato: 'JOANA',
       email: 'joana@acme.com',
       telefone: '(19) 3222-3333',
       telefone_vendedor: '(19) 99999-8888',
-      endereco: 'Rua A, 1',
-      cidade: 'Campinas',
+      endereco: 'RUA A, 1',
+      cidade: 'CAMPINAS',
       estado: 'SP',
       cep: '13010-000',
       grupo_id: '',
@@ -248,7 +249,7 @@ describe('FornecedorForm — (d) edicao', () => {
       cnpj: '54.984.382/0001-64',
       cpf: '',
       inscricao_estadual: '799850123110',
-      contato: 'Carlos',
+      contato: 'CARLOS',
       email: 'contato@tecnopar.com.br',
       telefone: '(11) 4177-2311',
       telefone_vendedor: '(11) 98765-4321',
@@ -530,3 +531,34 @@ describe('FornecedorForm — (k) Etapa 192: CPF (RN-192.01 a 192.03)', () => {
   });
 });
 
+describe('FornecedorForm — (l) Etapa 192: maiusculas (RN-192.05)', () => {
+  test('os textos livres vao em maiusculas com acento; email, telefones, CEP e CNPJ como digitados', async () => {
+    await renderEm('/compras/fornecedores/novo');
+    await digitar('razao', 'são joão peças');
+    await digitar('fantasia', 'peças');
+    await digitar('ie', 'isento');
+    await digitar('contato', 'conceição');
+    await digitar('email', 'Vendas@Pecas.com.br');
+    await digitar('endereco', 'rua ação, 10');
+    await digitar('cidade', 'são paulo');
+    await submeter();
+    const corpo = api.post.mock.calls[0][1];
+    expect(corpo.razao_social).toBe('SÃO JOÃO PEÇAS');
+    expect(corpo.nome_fantasia).toBe('PEÇAS');
+    expect(corpo.inscricao_estadual).toBe('ISENTO');
+    expect(corpo.contato).toBe('CONCEIÇÃO');
+    expect(corpo.endereco).toBe('RUA AÇÃO, 10');
+    expect(corpo.cidade).toBe('SÃO PAULO');
+    expect(corpo.email).toBe('Vendas@Pecas.com.br');
+  });
+
+  test('a tela mostra os textos livres em maiusculas enquanto digita (classe com text-transform); email nao', async () => {
+    await renderEm('/compras/fornecedores/novo');
+    ['razao', 'fantasia', 'ie', 'contato', 'endereco', 'cidade'].forEach((c) => {
+      expect(campo(c).classList.contains('fornecedor-maiusculas')).toBe(true);
+    });
+    ['email', 'cnpj', 'cpf', 'telefone', 'cep'].forEach((c) => {
+      expect(campo(c).classList.contains('fornecedor-maiusculas')).toBe(false);
+    });
+  });
+});

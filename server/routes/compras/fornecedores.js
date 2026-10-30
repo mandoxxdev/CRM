@@ -38,6 +38,14 @@ const GRUPO_DESATIVADO = 'Grupo desativado — reative o grupo em Fornecedores h
 const CPF_INVALIDO = 'CPF inválido. Verifique os dígitos.';
 const CPF_E_CNPJ = 'Preencha o CPF ou o CNPJ, não os dois.';
 
+/**
+ * Etapa 192 (RN-192.05) — os textos LIVRES da ficha gravam em maiúsculas, com acento ("são" -> "SÃO").
+ * Fora de propósito: email (minúsculo é o normal), telefones, CEP, CNPJ e CPF (dígitos/máscara).
+ * Só na gravação: a leitura não converte, e o já cadastrado passa a maiúsculas quando for salvo de
+ * novo (RN-192.06 — converter em massa seria irreversível).
+ */
+const CAMPOS_MAIUSCULOS = ['razao_social', 'nome_fantasia', 'inscricao_estadual', 'contato', 'endereco', 'cidade', 'estado'];
+
 /** Colunas de texto da ficha, além de razao_social (obrigatória) e grupo_id (inteiro). */
 const CAMPOS_TEXTO = [
   'nome_fantasia', 'cnpj', 'inscricao_estadual', 'contato', 'email', 'telefone',
@@ -58,6 +66,12 @@ function textoOuNull(v) {
   if (v == null) return null;
   const s = String(v).trim();
   return s === '' ? null : s;
+}
+
+/** O texto da coluna `k` como vai para o banco: trim, '' -> NULL e, nos livres, maiúsculas. */
+function textoDaFicha(k, v) {
+  const t = textoOuNull(v);
+  return t != null && CAMPOS_MAIUSCULOS.includes(k) ? t.toLocaleUpperCase('pt-BR') : t;
 }
 
 /** Dígitos verificadores do CPF (módulo 11); 11 dígitos iguais não valem. */
@@ -130,11 +144,14 @@ module.exports = function (app, db, authenticateToken, checkModulePermission) {
     let sql = `SELECT ${COLUNAS_FICHA.join(', ')} FROM fornecedores WHERE 1=1`;
     const params = [];
     if (search) {
-      // Etapa 192: o CPF entra na busca, mascarado ou só dígitos (RN-192.04).
-      sql += ` AND (razao_social LIKE ? OR nome_fantasia LIKE ? OR cnpj LIKE ?
-        OR cpf LIKE ? OR REPLACE(REPLACE(cpf, '.', ''), '-', '') LIKE ?)`;
+      // Etapa 192: o CPF entra na busca (mascarado ou só dígitos — RN-192.04), e o termo vai também
+      // em maiúsculas: o LIKE do SQLite só ignora caixa em ASCII, e "são" não acharia "SÃO" gravado
+      // pela RN-192.05.
+      sql += ` AND (razao_social LIKE ? OR razao_social LIKE ? OR nome_fantasia LIKE ? OR nome_fantasia LIKE ?
+        OR cnpj LIKE ? OR cpf LIKE ? OR REPLACE(REPLACE(cpf, '.', ''), '-', '') LIKE ?)`;
       const termo = `%${search}%`;
-      params.push(termo, termo, termo, termo, termo);
+      const termoMaiusculo = `%${String(search).toLocaleUpperCase('pt-BR')}%`;
+      params.push(termo, termoMaiusculo, termo, termoMaiusculo, termo, termo, termo);
     }
     if (status) {
       sql += ' AND status = ?';
@@ -166,14 +183,14 @@ module.exports = function (app, db, authenticateToken, checkModulePermission) {
   // RN-34.05 — grava as 13 colunas. `status` é ignorado no POST (sempre 'ativo').
   app.post('/api/compras/fornecedores', guard, async (req, res) => {
     const body = req.body || {};
-    const razao_social = textoOuNull(body.razao_social);
+    const razao_social = textoDaFicha('razao_social', body.razao_social);
     if (!razao_social) return res.status(400).json({ error: 'Razão social é obrigatória' });
     const grupo = parseGrupoId(body.grupo_id);
     if (grupo.erro) return res.status(400).json({ error: grupo.erro });
     const cpf = parseCpf(body.cpf);
     if (cpf.erro) return res.status(400).json({ error: cpf.erro });
 
-    const textos = CAMPOS_TEXTO.map((k) => textoOuNull(body[k]));
+    const textos = CAMPOS_TEXTO.map((k) => textoDaFicha(k, body[k]));
     // RN-192.03: um documento só — CPF (pessoa física) ou CNPJ.
     if (cpf.valor != null && textos[CAMPOS_TEXTO.indexOf('cnpj')] != null) {
       return res.status(400).json({ error: CPF_E_CNPJ });
@@ -209,7 +226,7 @@ module.exports = function (app, db, authenticateToken, checkModulePermission) {
   app.put('/api/compras/fornecedores/:id', guard, async (req, res) => {
     const id = parseInt(req.params.id, 10);
     const body = req.body || {};
-    const razao_social = textoOuNull(body.razao_social);
+    const razao_social = textoDaFicha('razao_social', body.razao_social);
     if (!razao_social) return res.status(400).json({ error: 'Razão social é obrigatória' });
 
     const sets = ['razao_social = ?'];
@@ -218,7 +235,7 @@ module.exports = function (app, db, authenticateToken, checkModulePermission) {
     CAMPOS_TEXTO.forEach((k) => {
       if (!temChave(body, k)) return;
       sets.push(`${k} = ?`);
-      params.push(textoOuNull(body[k]));
+      params.push(textoDaFicha(k, body[k]));
     });
 
     // Etapa 192 (RN-192.02): mesma semântica dos textos — ausente não mexe, ''/null limpa.

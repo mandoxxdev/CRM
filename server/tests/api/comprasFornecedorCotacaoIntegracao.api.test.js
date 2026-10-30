@@ -30,13 +30,14 @@ const ADMIN = { id: 99, nome: 'Admin E40 T6', role: 'admin', is_superadmin: 1, e
     const fid = f.body.id;
     const l0 = await dbGet(db, 'SELECT grupo_id, endereco FROM fornecedores WHERE id = ?', [fid]);
     assert.strictEqual(l0.grupo_id, null);
-    assert.strictEqual(l0.endereco, 'Rua I', 'o POST passou a gravar endereco (era ignorado ate a 39) — Fase 2, M7');
+    assert.strictEqual(l0.endereco, 'RUA I', // Etapa 192 (RN-192.05): maiusculas
+      'o POST passou a gravar endereco (era ignorado ate a 39) — Fase 2, M7');
     // (2) o payload EXATO da tela de cotacao (T5)
     const c = await request(app).post('/api/compras/cotacoes').send({
       numero: 'COT-E40-INT', fornecedor_id: fid, valor_total: 99.9, data_cotacao: '2026-09-21', validade: '', status: 'em_analise', observacoes: '',
     });
     assert.strictEqual(c.status, 201, JSON.stringify(c.body));
-    assert.strictEqual(c.body.fornecedor_nome, 'Integração E40');
+    assert.strictEqual(c.body.fornecedor_nome, 'INTEGRAÇÃO E40');
     // (3) RN-E12
     const d1 = await request(app).delete(`/api/compras/fornecedores/${fid}`);
     assert.strictEqual(d1.status, 409);

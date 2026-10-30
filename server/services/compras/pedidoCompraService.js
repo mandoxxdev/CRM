@@ -1282,13 +1282,18 @@ async function resolverFornecedorDaLinha(db, row) {
   const texto = extrairDoRow(row, ...CHAVES_FORNECEDOR_TEXTO);
   if (!texto) return null;
   const digitos = texto.replace(/\D/g, '');
-  // Etapa 192: o fornecedor pessoa fisica (RN-192.01) e achado pelo CPF na mesma coluna do documento.
+  // Etapa 192: a ficha passou a gravar a razao/fantasia em maiusculas COM acento (RN-192.05), e o UPPER do
+  // SQLite so sobe ASCII ("aços" -> "AçOS" nao bate com "AÇOS"): a planilha tambem e comparada ja subida pelo
+  // JS. E o fornecedor pessoa fisica (RN-192.01) e achado pelo CPF na mesma coluna do documento.
+  const textoMaiusculo = texto.toLocaleUpperCase('pt-BR');
   return dbGet(db, `SELECT id FROM fornecedores
     WHERE (? <> '' AND REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(cnpj, ''), '.', ''), '/', ''), '-', ''), ' ', '') = ?)
        OR (? <> '' AND REPLACE(REPLACE(COALESCE(cpf, ''), '.', ''), '-', '') = ?)
        OR UPPER(razao_social) = UPPER(?)
        OR UPPER(COALESCE(nome_fantasia, '')) = UPPER(?)
-    ORDER BY id LIMIT 1`, [digitos, digitos, digitos, digitos, texto, texto]);
+       OR razao_social = ?
+       OR COALESCE(nome_fantasia, '') = ?
+    ORDER BY id LIMIT 1`, [digitos, digitos, digitos, digitos, texto, texto, textoMaiusculo, textoMaiusculo]);
 }
 
 async function importarPedidos(db, corpo, user) {
@@ -1517,6 +1522,6 @@ module.exports = {
   numerosDasOs,
   CONDICOES_COMERCIAIS,
   COLUNAS_SNAPSHOT,
-  // Etapa 192: exposto para o teste do fornecedor com CPF achado pela planilha.
+  // Etapa 192: exposto para o teste do fornecedor com CPF / em maiusculas achado pela planilha.
   resolverFornecedorDaLinha,
 };

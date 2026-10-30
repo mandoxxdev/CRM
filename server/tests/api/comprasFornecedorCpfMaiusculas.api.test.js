@@ -1,5 +1,5 @@
 /**
- * Etapa 192 (Compras), Task F1 — fornecedor com CPF. RN-192.01 a RN-192.04.
+ * Etapa 192 (Compras), Task F1 — fornecedor com CPF e textos livres em maiusculas. RN-192.01 a RN-192.06.
  * Executar: cd server && node tests/api/comprasFornecedorCpfMaiusculas.api.test.js
  *
  * A porta VIVA de gravacao do fornecedor e `routes/compras/fornecedores.js` (registrada antes de
@@ -134,6 +134,70 @@ const CPF_E_CNPJ = 'Preencha o CPF ou o CNPJ, não os dois.';
     assert.deepStrictEqual(d.body.map((f) => f.id), [idCpf]);
   });
 
+  console.log('\nRN-192.05 — textos livres em maiusculas (servidor)');
+  let idMai = null;
+  await test('POST grava os 7 textos livres em maiusculas com acento; email/telefones/cep/cnpj intactos', async () => {
+    const r = await postF({
+      razao_social: 'são joão peças ltda',
+      nome_fantasia: 'Peças do João',
+      cnpj: '54.984.382/0001-64',
+      inscricao_estadual: 'isento',
+      contato: 'Conceição',
+      email: 'Vendas@Pecas.com.br',
+      telefone: '(11) 4177-2311',
+      telefone_vendedor: '(11) 98765-4321',
+      endereco: 'rua ação, 10 - centro',
+      cidade: 'são bernardo do campo',
+      estado: 'sp',
+      cep: '09614-000',
+    });
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    assert.strictEqual(r.body.razao_social, 'SÃO JOÃO PEÇAS LTDA', 'a resposta devolve o que gravou');
+    assert.strictEqual(r.body.nome_fantasia, 'PEÇAS DO JOÃO');
+    idMai = r.body.id;
+    const l = await linha(idMai);
+    assert.strictEqual(l.razao_social, 'SÃO JOÃO PEÇAS LTDA');
+    assert.strictEqual(l.nome_fantasia, 'PEÇAS DO JOÃO');
+    assert.strictEqual(l.inscricao_estadual, 'ISENTO');
+    assert.strictEqual(l.contato, 'CONCEIÇÃO');
+    assert.strictEqual(l.endereco, 'RUA AÇÃO, 10 - CENTRO');
+    assert.strictEqual(l.cidade, 'SÃO BERNARDO DO CAMPO');
+    assert.strictEqual(l.estado, 'SP');
+    assert.strictEqual(l.email, 'Vendas@Pecas.com.br');
+    assert.strictEqual(l.telefone, '(11) 4177-2311');
+    assert.strictEqual(l.telefone_vendedor, '(11) 98765-4321');
+    assert.strictEqual(l.cep, '09614-000');
+    assert.strictEqual(l.cnpj, '54.984.382/0001-64');
+  });
+
+  await test('PUT tambem grava em maiusculas', async () => {
+    const r = await putF(idMai, { razao_social: 'nova razão', contato: 'maria', cidade: 'diadema', estado: 'sp' });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    const l = await linha(idMai);
+    assert.strictEqual(l.razao_social, 'NOVA RAZÃO');
+    assert.strictEqual(l.contato, 'MARIA');
+    assert.strictEqual(l.cidade, 'DIADEMA');
+    assert.strictEqual(l.estado, 'SP');
+    assert.strictEqual(l.email, 'Vendas@Pecas.com.br', 'chave ausente nao mexe');
+  });
+
+  await test('busca com o termo minusculo e acentuado acha o gravado em maiusculas', async () => {
+    const r = await request(app).get('/api/compras/fornecedores?search=nova razão');
+    assert.deepStrictEqual(r.body.map((f) => f.id), [idMai]);
+  });
+
+  console.log('\nRN-192.06 — os ja cadastrados nao sao convertidos; passam ao salvar de novo');
+  await test('fornecedor legado minusculo continua minusculo ate ser salvo; salvo, vira maiusculo', async () => {
+    const leg = (await dbRun(db, "INSERT INTO fornecedores (razao_social, cidade, status) VALUES ('legado ltda', 'santo andré', 'ativo')")).lastID;
+    const g = await request(app).get(`/api/compras/fornecedores/${leg}`);
+    assert.strictEqual(g.body.razao_social, 'legado ltda', 'a leitura nao converte');
+    const r = await putF(leg, { razao_social: 'legado ltda', cidade: 'santo andré' });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    const l = await linha(leg);
+    assert.strictEqual(l.razao_social, 'LEGADO LTDA');
+    assert.strictEqual(l.cidade, 'SANTO ANDRÉ');
+  });
+
   console.log('\nRN-192.04 — documento do pedido com o CPF do fornecedor (snapshot)');
   await test('pedido de fornecedor so com CPF: documento mostra "CPF" com o numero e nao a linha de CNPJ', async () => {
     const mat = (await dbRun(db, `INSERT INTO materiais_almoxarifado (codigo, nome, unidade, quantidade_atual, custo_medio, ativo)
@@ -171,7 +235,15 @@ const CPF_E_CNPJ = 'Preencha o CPF ou o CNPJ, não os dois.';
     assert.ok(!/<th>CPF<\/th>/.test(bloco.slice(0, bloco.indexOf('</table>'))));
   });
 
-  console.log('\nImportacao de pedidos — o fornecedor so com CPF e achavel');
+  console.log('\nImportacao de pedidos — o fornecedor gravado em maiusculas / so com CPF continua achavel');
+  await test('planilha com a razao minuscula acentuada acha o fornecedor gravado em maiusculas', async () => {
+    const svc = require('../../services/compras/pedidoCompraService');
+    const f = (await postF({ razao_social: 'aços são paulo' })).body.id;
+    const achado = await svc.resolverFornecedorDaLinha(db, { fornecedor: 'aços são paulo' });
+    assert.ok(achado, 'nao achou pela razao minuscula');
+    assert.strictEqual(achado.id, f);
+  });
+
   await test('planilha com o CPF (so digitos) na coluna do fornecedor acha o fornecedor so com CPF', async () => {
     const svc = require('../../services/compras/pedidoCompraService');
     const achado = await svc.resolverFornecedorDaLinha(db, { cnpj: '52998224725' });
