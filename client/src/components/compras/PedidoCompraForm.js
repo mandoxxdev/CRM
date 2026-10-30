@@ -59,8 +59,9 @@
  *
  * NCM e peso: desde a Etapa 192 (RN-192.09) `GET /compras/materiais` devolve `ncm` e `peso_unitario`, e o item novo
  * nasce com eles (antes nasciam VAZIOS e só o servidor completava ao salvar). Material sem NCM/peso continua `''` =
- * "o do material" (RN-39.01). A pré-carga da Reposição (`?material=`) não consulta a busca e
- * segue nascendo vazia. Unidade e descrição do item NÃO são editáveis (não estão no contrato do POST/PUT;
+ * "o do material" (RN-39.01). A pré-carga da Reposição (`?material=&codigo=`) consulta a mesma busca pelo código desde
+ * 30/10 e copia NCM e peso do material de mesmo id (sem `codigo` ou sem achar, nasce vazia — dizia "não consulta a busca e
+ * segue nascendo vazia", e isso mudou). Unidade e descrição do item NÃO são editáveis (não estão no contrato do POST/PUT;
  * continuam copiadas do material pelo servidor).
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -189,6 +190,12 @@ function osTextoParaPayload(osId, texto) {
 }
 
 let sequenciaLinha = 0;
+/** NCM e peso do cadastro para o item novo — da busca (RN-192.09) e da pré-carga da Reposição. NCM acima de 10 fica `''` (X4). */
+const ncmEPesoDoMaterial = (material) => ({
+  ncm: material.ncm == null || String(material.ncm).length > NCM_MAX_ITEM ? '' : String(material.ncm),
+  peso_unitario: material.peso_unitario == null ? '' : String(material.peso_unitario),
+});
+
 const novaLinha = (dados) => ({
   chave: `linha-${(sequenciaLinha += 1)}`,
   // O documento por item (RN-39.01). `''` em NCM/peso é "o do material" — a tela não inventa 0.
@@ -487,8 +494,23 @@ const PedidoCompraForm = () => {
           quantidade: params.get('quantidade') || '1',
           valor_unitario: '',
         })]);
+        // Compras 30/10: NCM e peso também aqui. Não há porta de material por id no Compras; a Reposição manda o `codigo`, e a busca
+        // por texto o encontra — só vale o material de MESMO id. Sem `codigo`, ou sem achar, fica `''` e o servidor completa ao salvar.
+        const codigoParam = params.get('codigo');
+        if (codigoParam) {
+          let vivoPre = true;
+          api.get('/compras/materiais', { params: { search: codigoParam } })
+            .then((res) => {
+              const achado = (res.data || []).find((m) => Number(m.id) === Number(materialParam));
+              if (!vivoPre || !achado) return;
+              setItens((atuais) => atuais.map((it) => (Number(it.material_id) === Number(materialParam)
+                && it.ncm === '' && it.peso_unitario === '' ? { ...it, ...ncmEPesoDoMaterial(achado) } : it)));
+            })
+            .catch(() => {});
+          return () => { vivoPre = false; };
+        }
       }
-      return;
+      return undefined;
     }
     let vivo = true;
     setCarregando(true);
@@ -625,8 +647,7 @@ const PedidoCompraForm = () => {
       // Fase 5 (X4): o cadastro de material nao limita o NCM, e o item do pedido aceita ate 10 caracteres — o NCM mais longo
       // copiado aqui fazia o salvar do pedido responder 400 "itens.0.ncm: ...". Mais longo que 10 fica `''` (o servidor
       // completa com o do cadastro, como antes da 192).
-      ncm: material.ncm == null || String(material.ncm).length > NCM_MAX_ITEM ? '' : String(material.ncm),
-      peso_unitario: material.peso_unitario == null ? '' : String(material.peso_unitario),
+      ...ncmEPesoDoMaterial(material),
     })]);
   };
 

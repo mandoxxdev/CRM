@@ -1832,4 +1832,38 @@ describe('Etapa 192 — OS digitada e NCM do material', () => {
     expect(itens.find((i) => i.material_id === 907).ncm).toBe('');
     expect(itens.find((i) => i.material_id === 908).ncm).toBe('8481.80.95');
   });
+
+  // Compras 30/10 (estimativa 9ff17be1): o pedido que nasce da Reposicao (`?material=&codigo=`) tambem traz NCM e peso, pela MESMA
+  // busca por texto (o codigo), copiando so do material de MESMO id. Sem `codigo` nao consulta nada (o (l) prova).
+  test('(192g) pre-carga da Reposicao com codigo: NCM e peso do material de mesmo id; outro id na busca nao conta', async () => {
+    const getOriginal = api.get.getMockImplementation();
+    api.get.mockImplementation((url, config) => (url === '/compras/materiais'
+      ? Promise.resolve({ data: config?.params?.search === 'ALM-0907'
+        ? [
+          { id: 9070, codigo: 'ALM-09070', descricao: 'Outra chapa', unidade: 'KG', ncm: '9999.99.99', peso_unitario: 9 },
+          { id: 907, codigo: 'ALM-0907', descricao: 'Chapa Aço 3mm', unidade: 'KG', ncm: '7208.51.00', peso_unitario: 2.5 },
+        ]
+        : [{ id: 1, codigo: 'X', descricao: 'X', unidade: 'UN', ncm: '1111.11.11', peso_unitario: 1 }] })
+      : getOriginal(url, config)));
+    await renderizarEm('/compras/pedidos/novo?solicitacao=77&material=907&quantidade=6&material_nome=Chapa%20A%C3%A7o%203mm&codigo=ALM-0907');
+    await esperarEfeitos();
+    expect(chamadasMateriais().map(([, c]) => c?.params?.search)).toEqual(['ALM-0907']);
+    await clicar(porTestId('detalhes-item-907'));
+    expect(porTestId('ncm-item-907').value).toBe('7208.51.00');
+    expect(porTestId('peso-item-907').value).toBe('2.5');
+    expect(porTestId('qtd-item-907').value).toBe('6');
+  });
+
+  test('(192h) pre-carga da Reposicao: busca sem o material de mesmo id deixa NCM e peso vazios (o servidor completa)', async () => {
+    const getOriginal = api.get.getMockImplementation();
+    api.get.mockImplementation((url, config) => (url === '/compras/materiais'
+      ? Promise.resolve({ data: [{ id: 9070, codigo: 'ALM-09070', descricao: 'Outra', unidade: 'KG', ncm: '9999.99.99', peso_unitario: 9 }] })
+      : getOriginal(url, config)));
+    await renderizarEm('/compras/pedidos/novo?solicitacao=77&material=907&quantidade=6&codigo=ALM-0907');
+    await esperarEfeitos();
+    expect(chamadasMateriais()).toHaveLength(1);
+    await clicar(porTestId('detalhes-item-907'));
+    expect(porTestId('ncm-item-907').value).toBe('');
+    expect(porTestId('peso-item-907').value).toBe('');
+  });
 });
