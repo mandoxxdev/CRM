@@ -1,0 +1,17 @@
+*Planejamento — Cadastro de materiais só no Compras e OS em cada item do pedido*
+_30/10/2026_
+
+*1. Almoxarifado passa a só consultar os materiais*
+A tela de Materiais do Almoxarifado deixa de ter Novo, Editar, Inativar e foto: passa a mostrar a lista e a ficha de cada material, só para consulta. Os atalhos de "novo material" do painel e das configurações do Almoxarifado saem. A sobra/retalho e a remessa para terceiros, que criam material na operação, continuam como estão.
+Tempo estimado: *3h30*
+
+*2. Compras completa o cadastro de materiais*
+Só quem administra o Compras inclui e edita materiais. A tela de Materiais do Compras ganha o que só existia no Almoxarifado: a foto do material e inativar ou reativar.
+Tempo estimado: *3h30*
+
+*3. OS em cada item do pedido de compra*
+Cada item do pedido ganha um campo de OS, digitado, para justificar a compra. Um mesmo pedido pode ter itens de OS diferentes. A OS aparece no pedido, no Excel e no documento impresso. Ela não separa material no estoque: a OS é definida na liberação do material.
+Tempo estimado: *3h*
+
+*Total estimado: 10h*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
