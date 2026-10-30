@@ -19,7 +19,7 @@ const assert = require('assert');
 const fs = require('fs');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
-const { dbRun, dbGet } = require('../../services/almoxarifado/db');
+const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -85,6 +85,52 @@ const ADMIN_MODULO_ALMOX = { id: 7, nome: 'Adm Modulo Almox', role: 'usuario', a
     assert.strictEqual(r.status, 201, JSON.stringify(r.body));
   });
 
+  // Fase 5 (R3b): o POST do almoxarifado so aceita o formato da operacao — os corpos LITERAIS de SobrasAlmoxarifado
+  // (cadastrarMaterialDoRetalho) e RemessasTerceirosAlmoxarifado (cadastrarMaterialResultante). O resto e cadastro (Compras).
+  const MSG_POST_OPERACIONAL = (veio) => `${MSG_SO_NO_COMPRAS} Pelo Almoxarifado, o material novo da sobra ou da remessa leva `
+    + `só código, nome, unidade, família, subfamília, categoria e proprietário (veio também: ${veio}).`;
+  await test('[Fase 5 R3b] POST do almoxarifado: os corpos da sobra e da remessa -> 201; cadastro completo -> 403 literal, nada criado', async () => {
+    const SUB = (await dbRun(db, "INSERT INTO familias_material_almoxarifado (codigo, nome, ativo, parent_id) VALUES ('K1S','Sub K1',1,?)", [FAM])).lastID;
+    const sobra = { codigo: 'RET-R3-1', codigo_auto: 1, nome: 'Retalho', unidade: 'UN', familia_id: FAM, subfamilia_id: SUB,
+      proprietario_cliente_id: CLI, categoria: 'OUTROS' };
+    const remessa = { codigo: 'RES-R3-1', codigo_auto: 1, nome: 'Resultante', unidade: 'UN', familia_id: FAM, proprietario_cliente_id: null };
+    for (const [u, b] of [[ALMOXARIFE, sobra], [ENGENHARIA, remessa]]) {
+      const r = await as(u, () => request(app).post('/api/almoxarifado/materiais').send(b));
+      assert.strictEqual(r.status, 201, `${u.nome}: ${JSON.stringify(r.body)}`);
+    }
+    for (const u of [ALMOXARIFE, SUPER]) {
+      const r = await as(u, () => request(app).post('/api/almoxarifado/materiais').send({ ...sobra, codigo: `RX-${u.id}`, codigo_auto: 0,
+        ncm: '73181500', custo_unitario: 99, descricao_tecnica: '', quantidade_minima: null }));
+      assert.deepStrictEqual([r.status, r.body.error], [403, MSG_POST_OPERACIONAL('ncm, custo_unitario')], `${u.nome}: ${JSON.stringify(r.body)}`);
+    }
+    assert.strictEqual((await dbGet(db, "SELECT COUNT(*) n FROM materiais_almoxarifado WHERE codigo LIKE 'RX-%'")).n, 0);
+    process.env.ALMOX_CADASTRO_MATERIAL = 'liberado';
+    try {
+      const r = await as(ALMOXARIFE, () => request(app).post('/api/almoxarifado/materiais').send({ ...corpo({ codigo: 'RX-CHAVE' }), ncm: '73181500' }));
+      assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    } finally {
+      delete process.env.ALMOX_CADASTRO_MATERIAL;
+    }
+  });
+
+  await test('[Fase 5 R3a] PUT /configuracoes/tipos-material (orfa) recusa como o cadastro; com a chave, grava', async () => {
+    const MAT = await material();
+    const tipo = (await dbRun(db, "INSERT INTO tipos_material_almoxarifado (nome, ativo) VALUES ('Tipo R3', 1)")).lastID;
+    const r = await as(SUPER, () => request(app).put('/api/almoxarifado/configuracoes/tipos-material')
+      .send({ materiais: [{ id: MAT, tipo_material_id: tipo }] }));
+    assert.deepStrictEqual([r.status, r.body.error], [403, MSG_SO_NO_COMPRAS], JSON.stringify(r.body));
+    assert.strictEqual((await dbGet(db, 'SELECT tipo_material_id t FROM materiais_almoxarifado WHERE id = ?', [MAT])).t, null);
+    process.env.ALMOX_CADASTRO_MATERIAL = 'liberado';
+    try {
+      const ok = await as(SUPER, () => request(app).put('/api/almoxarifado/configuracoes/tipos-material')
+        .send({ materiais: [{ id: MAT, tipo_material_id: tipo }] }));
+      assert.strictEqual(ok.status, 200, JSON.stringify(ok.body));
+    } finally {
+      delete process.env.ALMOX_CADASTRO_MATERIAL;
+    }
+    assert.strictEqual((await dbGet(db, 'SELECT tipo_material_id t FROM materiais_almoxarifado WHERE id = ?', [MAT])).t, tipo);
+  });
+
   await test('[RN-193.02, letra B] a chave ALMOX_CADASTRO_MATERIAL=liberado devolve a corrente de antes (o perfil decide); desligada, recusa de novo', async () => {
     const MAT = await material({ nome: 'Chave' });
     const PRODUCAO = { id: 8, nome: 'Producao', role: 'usuario', email: 'p@test.com' };
@@ -100,6 +146,24 @@ const ADMIN_MODULO_ALMOX = { id: 7, nome: 'Adm Modulo Almox', role: 'usuario', a
     const r = await as(ALMOXARIFE, () => request(app).put(`/api/almoxarifado/materiais/${MAT}`).send({ nome: 'Sem chave' }));
     assert.deepStrictEqual([r.status, r.body.error], [403, MSG_SO_NO_COMPRAS]);
     assert.deepStrictEqual(await dbGet(db, 'SELECT nome, ativo FROM materiais_almoxarifado WHERE id = ?', [MAT]), { nome: 'Pela chave', ativo: 1 });
+  });
+
+  await test('[Fase 5 T2] o valor da chave: so "liberado" (sem caixa, sem espacos nas pontas) libera; desligado, 0, vazio e outros recusam', async () => {
+    const MAT = await material({ nome: 'Valor da chave' });
+    const tentar = async (valor) => {
+      process.env.ALMOX_CADASTRO_MATERIAL = valor;
+      try {
+        return (await as(ALMOXARIFE, () => request(app).put(`/api/almoxarifado/materiais/${MAT}`).send({ observacoes: `v=${valor}` }))).status;
+      } finally {
+        delete process.env.ALMOX_CADASTRO_MATERIAL;
+      }
+    };
+    const vistos = {};
+    for (const v of ['desligado', '0', '', 'false', 'liberadoX', 'sim', 'LIBERADO', ' liberado ', 'Liberado']) vistos[JSON.stringify(v)] = await tentar(v);
+    assert.deepStrictEqual(vistos, {
+      '"desligado"': 403, '"0"': 403, '""': 403, '"false"': 403, '"liberadoX"': 403, '"sim"': 403,
+      '"LIBERADO"': 200, '" liberado "': 200, '"Liberado"': 200,
+    });
   });
 
   // ── RN-193.03 ────────────────────────────────────────────────────────────────────────────────────
@@ -119,6 +183,7 @@ const ADMIN_MODULO_ALMOX = { id: 7, nome: 'Adm Modulo Almox', role: 'usuario', a
 
   await test('[RN-193.03] Almoxarife, Engenharia, perfil Administrador e admin do modulo almoxarifado -> 403 no Compras', async () => {
     const MAT = await material({ nome: 'Fora do alcance' });
+    const antesArquivos = arquivos();
     for (const u of [ALMOXARIFE, ENGENHARIA, ADMIN_PERFIL_ALMOX, ADMIN_MODULO_ALMOX]) {
       const p = await as(u, () => request(app).get('/api/compras/materiais/aux/minhas-permissoes'));
       assert.deepStrictEqual(p.body.acoes, { criar_material: false, editar_material: false }, `${u.nome}: ${JSON.stringify(p.body)}`);
@@ -138,6 +203,8 @@ const ADMIN_MODULO_ALMOX = { id: 7, nome: 'Adm Modulo Almox', role: 'usuario', a
     const m = await dbGet(db, 'SELECT nome, ativo, foto FROM materiais_almoxarifado WHERE id = ?', [MAT]);
     assert.deepStrictEqual(m, { nome: 'Fora do alcance', ativo: 1, foto: null });
     assert.strictEqual((await dbGet(db, "SELECT COUNT(*) n FROM materiais_almoxarifado WHERE codigo LIKE 'NEG-%'")).n, 0);
+    // Fase 5 (T1): o gate do Compras roda antes do multer — a foto recusada nao chega ao disco.
+    assert.strictEqual(arquivos(), antesArquivos, 'a foto recusada pelo Compras foi gravada no disco');
   });
 
   // ── RN-193.04 ────────────────────────────────────────────────────────────────────────────────────
@@ -226,6 +293,91 @@ const ADMIN_MODULO_ALMOX = { id: 7, nome: 'Adm Modulo Almox', role: 'usuario', a
     const SEM_SALDO = await material();
     const ok = await as(SUPER, () => request(app).put(`/api/compras/materiais/cadastro/${SEM_SALDO}`).send({ controle_lote: 1 }));
     assert.strictEqual(ok.status, 200, JSON.stringify(ok.body));
+  });
+
+  // ── Fase 5 (R1): desligar serie/lote com historico pelo Compras ──────────────────────────────────
+  // Com a chave desligada (o padrao), o Compras desligava a serie de um material cujas series tinham saido todas (0 presentes:
+  // a guarda da 115 deixa); uma Entrada sem serie depois e o estorno da saida antiga pedia "Religue o controle...", que ninguem
+  // conseguia (Compras: 403 ajustar_estoque, perfil COMPRAS; almoxarifado: 403 cadastro so no Compras). A porta recusa antes.
+  const MSG_DESLIGAR_SERIE = (codigo) => `Não é possível desligar o controle por número de série do material ${codigo}: ele já tem `
+    + 'séries registradas. Desligado, o estorno das saídas e a exclusão das requisições que baixaram essas séries ficariam '
+    + 'travados, e pelo Compras não há como religar o controle depois que o material recebe saldo sem série. O controle continua ligado.';
+  const MSG_DESLIGAR_LOTE = (codigo) => `Não é possível desligar o controle por lote do material ${codigo}: ele já tem lotes `
+    + 'registrados. Desligado, as entradas sem lote impediriam religar o controle pelo Compras. O controle continua ligado.';
+  const v2 = (m, b) => as(SUPER, () => request(app).post('/api/almoxarifado/movimentacoes/v2').send({ material_id: m, motivo: 'r1',
+    justificativa: 'r1', documento_vinculado: 'NF-R1', ...b }));
+
+  await test('[Fase 5 R1] desligar a serie com series registradas (todas sairam) pelo Compras -> 400 literal; o estorno da saida continua possivel', async () => {
+    const MAT = await material({ codigo: 'K1-SER', controle_serie: 1 });
+    assert.strictEqual((await v2(MAT, { tipo: 'ENTRADA', quantidade: 2, series: ['R1A', 'R1B'] })).status, 201);
+    const sids = (await dbAll(db, 'SELECT id FROM series_almoxarifado WHERE material_id = ? ORDER BY numero', [MAT])).map((x) => x.id);
+    assert.strictEqual((await v2(MAT, { tipo: 'SAIDA', quantidade: 2, serie_ids: sids })).status, 201);
+    const saida = (await dbGet(db, "SELECT id FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'SAIDA'", [MAT])).id;
+    for (const u of [ADMIN_COMPRAS, SUPER]) {
+      const r = await as(u, () => request(app).put(`/api/compras/materiais/cadastro/${MAT}`).send({ controle_serie: false }));
+      assert.deepStrictEqual([r.status, r.body.error], [400, MSG_DESLIGAR_SERIE('K1-SER')], `${u.nome}: ${JSON.stringify(r.body)}`);
+    }
+    assert.strictEqual((await dbGet(db, 'SELECT controle_serie c FROM materiais_almoxarifado WHERE id = ?', [MAT])).c, 1);
+    // A armadilha nao se forma: a Entrada seguinte exige serie e o estorno da saida antiga devolve as series.
+    assert.strictEqual((await v2(MAT, { tipo: 'ENTRADA', quantidade: 3 })).status, 400);
+    const e = await as(SUPER, () => request(app).post(`/api/almoxarifado/movimentacoes/${saida}/cancelar`).send({ motivo: 'r1' }));
+    assert.strictEqual(e.status, 200, JSON.stringify(e.body));
+  });
+
+  await test('[Fase 5 R1] desligar o lote com lote registrado pelo Compras -> 400 literal; sem historico, desliga (serie e lote)', async () => {
+    const MAT = await material({ codigo: 'K1-LOT', controle_lote: 1 });
+    await dbRun(db, "INSERT INTO lotes_almoxarifado (material_id, codigo) VALUES (?, 'L-R1')", [MAT]);
+    const r = await as(ADMIN_COMPRAS, () => request(app).put(`/api/compras/materiais/cadastro/${MAT}`).send({ controle_lote: 0 }));
+    assert.deepStrictEqual([r.status, r.body.error], [400, MSG_DESLIGAR_LOTE('K1-LOT')], JSON.stringify(r.body));
+    assert.strictEqual((await dbGet(db, 'SELECT controle_lote c FROM materiais_almoxarifado WHERE id = ?', [MAT])).c, 1);
+    const LIMPO = await material({ controle_lote: 1, controle_serie: 1 });
+    const ok = await as(ADMIN_COMPRAS, () => request(app).put(`/api/compras/materiais/cadastro/${LIMPO}`)
+      .send({ controle_lote: 0, controle_serie: 0 }));
+    assert.strictEqual(ok.status, 200, JSON.stringify(ok.body));
+    assert.deepStrictEqual(await dbGet(db, 'SELECT controle_lote l, controle_serie s FROM materiais_almoxarifado WHERE id = ?', [LIMPO]),
+      { l: 0, s: 0 });
+  });
+
+  await test('[Fase 5 R1] series que entram e saem entre a leitura do historico e a gravacao: o UPDATE confere de novo -> 400, ligado', async () => {
+    const MAT = await material({ codigo: 'K1-SER3', controle_serie: 1 });
+    // O gancho so sinaliza e segura a resposta da leitura do historico; a Entrada e a Saida partem do contexto do TESTE.
+    const original = db.get; let disparou = false; let sinal; let soltar;
+    const lido = new Promise((res) => { sinal = res; });
+    const solto = new Promise((res) => { soltar = res; });
+    db.get = function (sql, params, cb) {
+      if (typeof params === 'function') { cb = params; params = []; }
+      if (!disparou && typeof sql === 'string' && sql.includes('hs.material_id = materiais_almoxarifado.id')) {
+        disparou = true;
+        return original.call(db, sql, params, (err, row) => { sinal(); solto.then(() => cb(err, row)); });
+      }
+      return original.call(db, sql, params, cb);
+    };
+    let r;
+    try {
+      const put = as(ADMIN_COMPRAS, () => request(app).put(`/api/compras/materiais/cadastro/${MAT}`).send({ controle_serie: false }))
+        .then((x) => x);
+      await lido;
+      assert.strictEqual((await v2(MAT, { tipo: 'ENTRADA', quantidade: 1, series: ['R1D'] })).status, 201);
+      const sid = (await dbGet(db, 'SELECT id FROM series_almoxarifado WHERE material_id = ?', [MAT])).id;
+      assert.strictEqual((await v2(MAT, { tipo: 'SAIDA', quantidade: 1, serie_ids: [sid] })).status, 201);
+      soltar();
+      r = await put;
+    } finally { db.get = original; }
+    assert.ok(disparou, 'gancho da leitura do historico nao disparou');
+    assert.deepStrictEqual([r.status, r.body.error], [400, MSG_DESLIGAR_SERIE('K1-SER3')], JSON.stringify(r.body));
+    assert.strictEqual((await dbGet(db, 'SELECT controle_serie c FROM materiais_almoxarifado WHERE id = ?', [MAT])).c, 1);
+  });
+
+  await test('[Fase 5 R1] pela porta do almoxarifado (chave ligada) quem pode regularizar continua desligando com historico', async () => {
+    const MAT = await material({ codigo: 'K1-SER2', controle_serie: 1 });
+    assert.strictEqual((await v2(MAT, { tipo: 'ENTRADA', quantidade: 1, series: ['R1C'] })).status, 201);
+    process.env.ALMOX_CADASTRO_MATERIAL = 'liberado';
+    try {
+      const r = await as(SUPER, () => request(app).put(`/api/almoxarifado/materiais/${MAT}`).send({ controle_serie: false }));
+      assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    } finally {
+      delete process.env.ALMOX_CADASTRO_MATERIAL;
+    }
   });
 
   await close();

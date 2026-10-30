@@ -84,7 +84,9 @@ const LITERAL_403 = 'Sem permissão para esta operação';
   await test('[sem alargar o almoxarifado] o admin do Compras segue 403 nas rotas do almoxarifado: criar (perfil); editar, excluir, foto (Etapa 193)', async () => {
     const SO_NO_COMPRAS = 'O cadastro de material é feito em Compras → Materiais.';
     const chamadas = [
-      [[LITERAL_403, 'criar_material'], () => request(app).post('/api/almoxarifado/materiais').send(corpo({ codigo: 'VLV-ALM' }))],
+      // Fase 5 (R3b): so o formato da operacao (sem o NCM do corpo) — com campo de cadastro a recusa seria a do Compras, antes do
+      // perfil; aqui a prova e que o perfil (PRODUCAO) continua sem criar_material.
+      [[LITERAL_403, 'criar_material'], () => request(app).post('/api/almoxarifado/materiais').send(corpo({ codigo: 'VLV-ALM', ncm: undefined }))],
       [[SO_NO_COMPRAS, undefined], () => request(app).put(`/api/almoxarifado/materiais/${MAT}`).send({ ncm: '1' })],
       [[SO_NO_COMPRAS, undefined], () => request(app).delete(`/api/almoxarifado/materiais/${MAT}`)],
       [[SO_NO_COMPRAS, undefined], () => request(app).post(`/api/almoxarifado/materiais/${MAT}/foto`)],

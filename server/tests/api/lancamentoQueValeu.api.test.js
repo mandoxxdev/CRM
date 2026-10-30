@@ -50,10 +50,6 @@ const E2 = (codigo, n) => `Não é possível estornar: esta saída baixou ${n} s
     return ultimo(m, body.tipo);
   };
   const estornar = (movId) => request(app).post(`/api/almoxarifado/movimentacoes/${movId}/cancelar`).send({ motivo: 'lqv120' });
-  const desligar = async (m, ligado = false) => {
-    const r = await request(app).put(`/api/almoxarifado/materiais/${m.id}`).send({ controle_serie: ligado });
-    assert.strictEqual(r.status, 200, `controle_serie ${ligado}: ${JSON.stringify(r.body)}`);
-  };
   const fisico = async (m) => (await dbGet(db, 'SELECT quantidade_atual f FROM materiais_almoxarifado WHERE id = ?', [m.id])).f;
   const livro = async (m, tipo) => (await dbGet(db, 'SELECT COUNT(*) n FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = ?',
     [m.id, tipo])).n;

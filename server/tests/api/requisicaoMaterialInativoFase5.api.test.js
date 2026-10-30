@@ -24,7 +24,7 @@ function test(name, fn) {
 const SUPER = { id: 1, nome: 'Super Teste', role: 'admin', is_superadmin: 1, email: 'super@test.com' };
 const ADM = { id: 4, nome: 'Adm Perfil', role: 'user', email: 'adm@test.com', perfil_almoxarifado: 'ADMINISTRADOR' };
 const ALMOX = { id: 3, nome: 'Almox Teste', role: 'user', email: 'almox@test.com', perfil_almoxarifado: 'ALMOXARIFE' };
-const REATIVE = 'Reative o material em Materiais → Inativos (Administrador, Almoxarife ou Engenharia)';
+const REATIVE = 'Reative o material em Compras → Materiais, filtro Inativos (administrador do módulo Compras)';
 const E1 = (n, c) => `A requisição ${n} tem material inativo: ${c}. ${REATIVE} ou rejeite a requisição.`;
 const E1V = (n, c) => `A requisição ${n} tem material inativo: ${c}. ${REATIVE} ou reprove a liberação por valor.`;
 

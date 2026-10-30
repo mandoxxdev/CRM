@@ -137,6 +137,28 @@ const textoDoHtml = (html) => String(html).replace(/<[^>]+>/g, ' ').replace(/\s+
     assert.ok(!/<th[^>]*>OS<\/th>/.test(thead2), 'pedido sem OS por item ganhou a coluna');
   });
 
+  await test('Fase 5 (T3) documento: cada linha de item tem tantas celulas quanto o cabecalho — com OS, sem OS e misto', async () => {
+    const tabela = (html) => (html.match(/<table class="itens">[\s\S]*?<\/table>/) || [''])[0];
+    const celulas = (html) => {
+      const t = tabela(html);
+      const ths = ((t.match(/<thead>[\s\S]*?<\/thead>/) || [''])[0].match(/<th[\s>]/g) || []).length;
+      const corpo = (t.match(/<tbody>[\s\S]*?<\/tbody>/) || [''])[0];
+      const linhas = (corpo.match(/<tr>[\s\S]*?<\/tr>/g) || []).map((tr) => (tr.match(/<td[\s>]/g) || []).length);
+      return { ths, linhas };
+    };
+    const misto = await request(app).post('/api/compras/pedidos').send(payload([item(m1, { os_texto: 'OS 8001' }), item(m2)]));
+    const semOs = await request(app).post('/api/compras/pedidos').send(payload([item(m1), item(m2)]));
+    const casos = [['com OS', pid, 11], ['misto', misto.body.id, 11], ['sem OS', semOs.body.id, 10]];
+    for (const [nome, id, esperado] of casos) {
+      const d = await request(app).get(`/api/compras/pedidos/${id}/documento`);
+      assert.strictEqual(d.status, 200, nome);
+      const { ths, linhas } = celulas(d.text);
+      assert.strictEqual(ths, esperado, `${nome}: ${ths} colunas no cabecalho`);
+      assert.ok(linhas.length >= 2, `${nome}: premissa — achou as linhas de item (${JSON.stringify(linhas)})`);
+      assert.deepStrictEqual(linhas, linhas.map(() => ths), `${nome}: celulas por linha ${JSON.stringify(linhas)} x cabecalho ${ths}`);
+    }
+  });
+
   await test('RN-193.09 lista: a busca textual acha o pedido pela OS do item (qualquer caixa)', async () => {
     const s = await request(app).get('/api/compras/pedidos').query({ search: '5099' });
     assert.deepStrictEqual(s.body.map((x) => x.id), [], 'a OS antiga do item 2 nao pode mais achar');
@@ -175,6 +197,20 @@ const textoDoHtml = (html) => String(html).replace(/<[^>]+>/g, ' ').replace(/\s+
     assert.ok(aviso, `sem aviso da OS longa: ${JSON.stringify(r.body.avisos)}`);
     assert.strictEqual(aviso.campo, 'os_texto');
     assert.strictEqual(aviso.motivo, 'OS do item com mais de 60 caracteres — a linha entrou sem OS');
+  });
+
+  await test('Fase 5 (R5) importacao: export ANTIGO do CRM (OS do cabecalho, sem "OS do item") nao copia a OS para os itens; de fora, "OS" vale', async () => {
+    // O export de antes da 193 (Etapas 171-192) tinha `OS` (a do cabecalho) e as colunas que so o CRM produz (`Atrasado`,
+    // `Dias de atraso`, Etapa 39) — e nao tinha `OS do item`. Com a celula vazia a chave chega tambem (o client le com defval '').
+    const r = await request(app).post('/api/compras/pedidos/importar').send({ linhas: [
+      { 'Número': 'IMP-3', 'Fornecedor': 'FORNECEDOR E193O', 'Código': 'E193O-M1', 'Quantidade': 1, 'Atrasado': 'Não', 'Dias de atraso': '', 'OS': 'OS 7001' },
+      { 'Número': 'IMP-3', 'Fornecedor': 'FORNECEDOR E193O', 'Código': 'E193O-M2', 'Quantidade': 1, 'Atrasado': 'Não', 'Dias de atraso': '', 'OS': 'OS 7001' },
+      { 'Número': 'IMP-4', 'Fornecedor': 'FORNECEDOR E193O', 'Código': 'E193O-M1', 'Quantidade': 1, 'Status': 'Pendente', 'OS': 'OS 7002' },
+    ] });
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    assert.strictEqual(r.body.pedidos.length, 2, JSON.stringify(r.body));
+    assert.deepStrictEqual(await osDasLinhas(r.body.pedidos[0].id), [null, null], 'a OS do cabecalho do export antigo virou OS de cada item');
+    assert.deepStrictEqual(await osDasLinhas(r.body.pedidos[1].id), ['OS 7002']);
   });
 
   await test('RN-193.08 almoxarifado: receber o pedido de OS por item nao reserva nada; a OS do item nao e pedido da OS', async () => {

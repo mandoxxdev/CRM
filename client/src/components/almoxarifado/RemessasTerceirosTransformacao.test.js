@@ -251,6 +251,22 @@ test('Etapa 100 (RN-100.06c): chapa LEGADA com a subfamilia no familia_id cria o
   }));
 });
 
+test('Etapa 193 Fase 5 (R4): chapa sem familia manda cadastrar o material resultante em Compras → Materiais', async () => {
+  const getPadrao = api.get.getMockImplementation();
+  api.get.mockImplementation((url, opcoes) => (url.startsWith('/almoxarifado/materiais')
+    ? Promise.resolve({ data: MATERIAIS.map((m) => (m.id === 1 ? { ...m, familia_id: null } : m)) })
+    : getPadrao(url, opcoes)));
+  await abrirTransformacao();
+  await digitar(campo('Item transformado'), '101');
+  await clicar(porTexto('Criar material resultante'));
+  await digitar(campo('Nome do novo material'), 'Peca nova');
+  await digitar(campo('Unidade do novo material'), 'UN');
+  await clicar(porTexto('Cadastrar e usar'));
+  expect(toast.error).toHaveBeenCalledWith('A chapa enviada não tem família cadastrada — o material resultante precisa ser '
+    + 'cadastrado em Compras → Materiais');
+  expect(api.post).not.toHaveBeenCalledWith('/almoxarifado/materiais', expect.anything());
+});
+
 test('o atalho de criar material e barrado por criar_material, NAO por remessar_terceiro', async () => {
   // Os gates sao DIFERENTES (permissions.js): remessar_terceiro e [ADMINISTRADOR, ALMOXARIFE];
   // criar_material e [ADMINISTRADOR, ALMOXARIFE, ENGENHARIA]. Barrar o atalho pelo gate da

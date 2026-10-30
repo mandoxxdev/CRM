@@ -72,8 +72,13 @@ const MSG_SALDO = 'Saldo inicial é lançado no Almoxarifado.';
       assert.strictEqual((await dbGet(db, 'SELECT COUNT(*) n FROM materiais_almoxarifado WHERE codigo = ?', [codigo])).n, 0);
     }
     assert.strictEqual((await dbGet(db, 'SELECT COUNT(*) n FROM movimentacoes_almoxarifado')).n, 0);
-    // controle: pela rota do almoxarifado o mesmo perfil lanca (a recusa e da porta do Compras)
-    const a = await as(PERFIL_ADM, () => request(app).post('/api/almoxarifado/materiais').send(corpo({ codigo: 'S-ALMOX', quantidade_atual: 5 })));
+    // controle: pela rota do almoxarifado o mesmo perfil lanca (a recusa e da porta do Compras). Fase 5 (R3b): saldo inicial no
+    // POST do almoxarifado so com a chave de reversao — sem ela a porta aceita so o formato da sobra/remessa.
+    process.env.ALMOX_CADASTRO_MATERIAL = 'liberado';
+    let a;
+    try {
+      a = await as(PERFIL_ADM, () => request(app).post('/api/almoxarifado/materiais').send(corpo({ codigo: 'S-ALMOX', quantidade_atual: 5 })));
+    } finally { delete process.env.ALMOX_CADASTRO_MATERIAL; }
     assert.strictEqual(a.status, 201, JSON.stringify(a.body));
   });
 

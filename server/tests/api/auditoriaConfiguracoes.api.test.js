@@ -374,6 +374,10 @@ const SEGREDO_WPP = 'token-WhatsApp-secretissimo-4K2';
   });
 
   await test('lote de tipos-material tambem audita por material alterado', async () => {
+    // Etapa 193 Fase 5 (R3a): associar tipo a material e cadastro — a rota recusa como o PUT do material (403) por padrao; a
+    // auditoria dela se prova com a chave de reversao. A recusa: cadastroSoNoCompras.
+    process.env.ALMOX_CADASTRO_MATERIAL = 'liberado';
+    try {
     const tipo = await dbRun(db,
       `INSERT INTO tipos_material_almoxarifado (nome, ativo) VALUES (?,1)`, [`E19 Tipo ${Date.now()}`]);
     const m = await novoMaterial(`E19-T-${Date.now()}`);
@@ -390,6 +394,7 @@ const SEGREDO_WPP = 'token-WhatsApp-secretissimo-4K2';
       .send({ materiais: [{ id: m, tipo_material_id: tipo.lastID }] });
     assert.strictEqual((await linhasDe('material', 'ATUALIZACAO', m)).length, 1,
       'lote identico auditou de novo');
+    } finally { delete process.env.ALMOX_CADASTRO_MATERIAL; }
   });
 
   // ── RN-02: auditoria quebrada NAO derruba o ato ─────────────────────────────────────────

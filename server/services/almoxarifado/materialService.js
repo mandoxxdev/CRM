@@ -574,6 +574,52 @@ async function seriesPresentes(db, materialId) {
 const SEM_SERIE_PRESENTE_SQL = `${PRESENTES_SQL} = 0`;
 
 /**
+ * Etapa 193 Fase 5 (R1): desligar lote ou serie PELA PORTA DO COMPRAS em material que ja tem lote/serie registrado e recusado
+ * (400). Com a chave `ALMOX_CADASTRO_MATERIAL` desligada (o padrao), o Compras e a unica porta do cadastro e roda no perfil
+ * COMPRAS, que nunca religa um controle sobre saldo nao identificado (Etapa 112, `ajustar_estoque`). Desligar a serie de um
+ * material cujas series sairam todas (0 presentes, a guarda da 115 deixa) e receber depois uma Entrada sem serie deixava o
+ * estorno da saida antiga e a exclusao da requisicao pedindo "Religue o controle..." — e ninguem conseguia religar. O lote nao
+ * trava estorno, mas a mesma porta nunca o religava depois de uma Entrada sem lote. Historico = qualquer linha em
+ * `series_almoxarifado` / `lotes_almoxarifado` do material (essas linhas nao se apagam: so o desfazer de uma insercao que
+ * falhou). Ligar continua livre sem saldo (RN-193.06). Descartado: deixar o Compras religar com saldo nao identificado (seria
+ * o `ajustar_estoque` por uma porta que nao movimenta estoque) e recusar so com Entrada posterior (a Entrada vem depois do
+ * desligar e ninguem a confere contra o cadastro).
+ */
+function controlesDesligados(gravado, merged) {
+  const desligados = [];
+  if (Number(gravado.controle_lote || 0) === 1 && Number(merged.controle_lote) !== 1) desligados.push('lote');
+  if (Number(gravado.controle_serie || 0) === 1 && Number(merged.controle_serie) !== 1) desligados.push('serie');
+  return desligados;
+}
+const HISTORICO_CONTROLE_SQL = {
+  lote: 'EXISTS (SELECT 1 FROM lotes_almoxarifado hl WHERE hl.material_id = materiais_almoxarifado.id)',
+  serie: 'EXISTS (SELECT 1 FROM series_almoxarifado hs WHERE hs.material_id = materiais_almoxarifado.id)',
+};
+/** RN da Fase 5 (R1): no WHERE do UPDATE — o desligar so grava se o historico ainda nao existe. */
+function condicaoSemHistoricoSql(controles) {
+  return controles.map((c) => `NOT ${HISTORICO_CONTROLE_SQL[c]}`).join(' AND ');
+}
+async function controlesComHistorico(db, materialId, controles) {
+  if (controles.length === 0) return [];
+  const r = await dbGet(db, `SELECT ${controles.map((c) => `${HISTORICO_CONTROLE_SQL[c]} AS ${c}`).join(', ')}
+    FROM materiais_almoxarifado WHERE id = ?`, [materialId]);
+  return controles.filter((c) => r && Number(r[c]) === 1);
+}
+function mensagemDesligarControleComHistorico(codigo, controles) {
+  const partes = [];
+  if (controles.includes('serie')) {
+    partes.push(`Não é possível desligar o controle por número de série do material ${codigo}: ele já tem séries registradas. `
+      + 'Desligado, o estorno das saídas e a exclusão das requisições que baixaram essas séries ficariam travados, e pelo '
+      + 'Compras não há como religar o controle depois que o material recebe saldo sem série. O controle continua ligado.');
+  }
+  if (controles.includes('lote')) {
+    partes.push(`Não é possível desligar o controle por lote do material ${codigo}: ele já tem lotes registrados. Desligado, `
+      + 'as entradas sem lote impediriam religar o controle pelo Compras. O controle continua ligado.');
+  }
+  return partes.join(' ');
+}
+
+/**
  * E1 da Etapa 115 (contrato congelado no plano, com as variantes da Fase 2, R1). Desligar a serie com series presentes
  * deixa-as orfas: a saida sem serie baixa o fisico e nao baixa as series, e a regularizacao de series exige o controle
  * ligado (B745). Quando ha mais series que fisico, as que sobram ja sao orfas e o caminho e outro: o Administrador baixa
@@ -760,6 +806,7 @@ module.exports = {
   mensagemSaldoInicialRecusado, mensagemSaldoInicialSemPermissao,
   controlesLigados, saldoNaoIdentificado, mensagemControleSemPermissao, condicaoSaldoIdentificadoSql,
   mudaControle, desligaSerie, seriesPresentes, SEM_SERIE_PRESENTE_SQL, mensagemDesligarSerieSemPermissao,
+  controlesDesligados, controlesComHistorico, condicaoSemHistoricoSql, mensagemDesligarControleComHistorico,
   controlesDesfeitos, mensagemControleMudadoPorOutro,
   familiaDesfeita, mensagemFamiliaMudadaPorOutro,
   camposDesfeitos, mensagemCamposMudadosPorOutro,

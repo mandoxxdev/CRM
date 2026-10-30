@@ -31,10 +31,10 @@ const SUPER = { id: 1, nome: 'Super Teste', role: 'admin', is_superadmin: 1, ema
 const ADM = { id: 4, nome: 'Adm Perfil', role: 'user', email: 'adm@test.com', perfil_almoxarifado: 'ADMINISTRADOR' };
 const ALMOX = { id: 3, nome: 'Almox Teste', role: 'user', email: 'almox@test.com', perfil_almoxarifado: 'ALMOXARIFE' };
 
-const QUEM = '(Administrador, Almoxarife ou Engenharia)';
-const REATIVE = `Reative o material em Materiais → Inativos ${QUEM}`;
+const QUEM = '(administrador do módulo Compras)';
+const REATIVE = `Reative o material em Compras → Materiais, filtro Inativos ${QUEM}`;
 const REATIVE_F = (quais) => `Reative ${quais} em Configurações → Famílias (Administrador do almoxarifado) e depois o material `
-  + `em Materiais → Inativos ${QUEM}`;
+  + `em Compras → Materiais, filtro Inativos ${QUEM}`;
 const E1 = (numero, codigos, reative) => `A requisição ${numero} tem material inativo: ${codigos}. ${reative} ou rejeite a requisição.`;
 const E1V = (numero, codigos, reative) => `A requisição ${numero} tem material inativo: ${codigos}. ${reative} `
   + 'ou reprove a liberação por valor.';

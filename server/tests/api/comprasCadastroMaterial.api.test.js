@@ -140,7 +140,8 @@ const LITERAL_403 = 'Sem permissão para esta operação';
     ];
     for (const c of casos) {
       const a = await as(ADMIN_COMPRAS, () => request(app).post('/api/compras/materiais/cadastro').send(c));
-      const b = await as(ENGENHARIA, () => request(app).post('/api/almoxarifado/materiais').send(c));
+      // Fase 5 (R3b): o cadastro completo pela porta do almoxarifado so com a chave (a comparacao e do handler compartilhado).
+      const b = await comChave(() => as(ENGENHARIA, () => request(app).post('/api/almoxarifado/materiais').send(c)));
       assert.ok(a.status >= 400, `${c.codigo}: o Compras aceitou (${a.status})`);
       assert.strictEqual(a.status, b.status, `${c.codigo}: ${a.status} x ${b.status}`);
       assert.deepStrictEqual(a.body, b.body, `${c.codigo}: mensagens diferentes`);

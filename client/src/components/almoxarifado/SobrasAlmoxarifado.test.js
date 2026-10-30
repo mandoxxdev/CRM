@@ -350,6 +350,19 @@ describe('SobrasAlmoxarifado — modal de gerar retalho', () => {
       familia_id: 4, subfamilia_id: 9,
     }));
   });
+
+  test('Etapa 193 Fase 5 (R4): origem sem familia manda cadastrar o material do retalho em Compras → Materiais', async () => {
+    await renderizar();
+    await clicar(botao('Gerar retalho'));
+    preencher(campo('Material de origem'), '103');
+    await esperarEfeitos();
+    await clicar(botao('Criar material do retalho'));
+    preencher(campo('Nome do novo material'), 'Retalho novo');
+    await clicar(botao('Cadastrar e usar'));
+    expect(toast.error).toHaveBeenCalledWith('O material de origem não tem família cadastrada — o material do retalho precisa '
+      + 'ser cadastrado em Compras → Materiais');
+    expect(api.post).not.toHaveBeenCalledWith('/almoxarifado/materiais', expect.anything());
+  });
 });
 
 // Etapa 9, Task 9 — a aba Sucateamentos e a etiqueta de retalho com QR (paga a pendencia da 6c).

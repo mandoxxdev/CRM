@@ -31,9 +31,9 @@ const ALMOX = { id: 3, nome: 'Almox Teste', role: 'user', email: 'almox@test.com
 
 const CAUDA = ' foi mudada por outra pessoa depois que você abriu o cadastro — salvar desfaria essa mudança, e nada foi '
   + 'gravado. Recarregue o material e salve de novo.';
-const QUEM = '(Administrador, Almoxarife ou Engenharia)';
+const QUEM = '(administrador do módulo Compras)';
 const REATIVE_F = (quais) => `Reative ${quais} em Configurações → Famílias (Administrador do almoxarifado) e depois o material `
-  + `em Materiais → Inativos ${QUEM}`;
+  + `em Compras → Materiais, filtro Inativos ${QUEM}`;
 
 (async () => {
   const { app, db, setUser, close } = await createTestApp({ user: SUPER });
@@ -146,7 +146,7 @@ const REATIVE_F = (quais) => `Reative ${quais} em Configurações → Famílias 
       `A requisição R-1 tem material inativo: A1, A2, B1, C1. ${REATIVE_F('a família de A1, A2 e a subfamília de B1')} `
       + 'ou rejeite a requisição.');
     assert.strictEqual(materialInativo.mensagemAprovar('R-1', ['C1']),
-      `A requisição R-1 tem material inativo: C1. Reative o material em Materiais → Inativos ${QUEM} ou rejeite a requisição.`);
+      `A requisição R-1 tem material inativo: C1. Reative o material em Compras → Materiais, filtro Inativos ${QUEM} ou rejeite a requisição.`);
     assert.strictEqual(materialInativo.mensagemSeparar('Junta', 3),
       `Junta: material inativo não pode ser separado. ${REATIVE_F('a família e a subfamília do material')} `
       + 'ou separe os outros itens com 0 neste.');
