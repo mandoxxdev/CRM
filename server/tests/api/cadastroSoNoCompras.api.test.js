@@ -148,6 +148,24 @@ const ADMIN_MODULO_ALMOX = { id: 7, nome: 'Adm Modulo Almox', role: 'usuario', a
     assert.deepStrictEqual(await dbGet(db, 'SELECT nome, ativo FROM materiais_almoxarifado WHERE id = ?', [MAT]), { nome: 'Pela chave', ativo: 1 });
   });
 
+  await test('[Fase 5 T2] o valor da chave: so "liberado" (sem caixa, sem espacos nas pontas) libera; desligado, 0, vazio e outros recusam', async () => {
+    const MAT = await material({ nome: 'Valor da chave' });
+    const tentar = async (valor) => {
+      process.env.ALMOX_CADASTRO_MATERIAL = valor;
+      try {
+        return (await as(ALMOXARIFE, () => request(app).put(`/api/almoxarifado/materiais/${MAT}`).send({ observacoes: `v=${valor}` }))).status;
+      } finally {
+        delete process.env.ALMOX_CADASTRO_MATERIAL;
+      }
+    };
+    const vistos = {};
+    for (const v of ['desligado', '0', '', 'false', 'liberadoX', 'sim', 'LIBERADO', ' liberado ', 'Liberado']) vistos[JSON.stringify(v)] = await tentar(v);
+    assert.deepStrictEqual(vistos, {
+      '"desligado"': 403, '"0"': 403, '""': 403, '"false"': 403, '"liberadoX"': 403, '"sim"': 403,
+      '"LIBERADO"': 200, '" liberado "': 200, '"Liberado"': 200,
+    });
+  });
+
   // ── RN-193.03 ────────────────────────────────────────────────────────────────────────────────────
   await test('[RN-193.03] o Compras aceita o admin do Compras, o superadmin e o role admin (lista, criar, editar)', async () => {
     const MAT = await material();
@@ -165,6 +183,7 @@ const ADMIN_MODULO_ALMOX = { id: 7, nome: 'Adm Modulo Almox', role: 'usuario', a
 
   await test('[RN-193.03] Almoxarife, Engenharia, perfil Administrador e admin do modulo almoxarifado -> 403 no Compras', async () => {
     const MAT = await material({ nome: 'Fora do alcance' });
+    const antesArquivos = arquivos();
     for (const u of [ALMOXARIFE, ENGENHARIA, ADMIN_PERFIL_ALMOX, ADMIN_MODULO_ALMOX]) {
       const p = await as(u, () => request(app).get('/api/compras/materiais/aux/minhas-permissoes'));
       assert.deepStrictEqual(p.body.acoes, { criar_material: false, editar_material: false }, `${u.nome}: ${JSON.stringify(p.body)}`);
@@ -184,6 +203,8 @@ const ADMIN_MODULO_ALMOX = { id: 7, nome: 'Adm Modulo Almox', role: 'usuario', a
     const m = await dbGet(db, 'SELECT nome, ativo, foto FROM materiais_almoxarifado WHERE id = ?', [MAT]);
     assert.deepStrictEqual(m, { nome: 'Fora do alcance', ativo: 1, foto: null });
     assert.strictEqual((await dbGet(db, "SELECT COUNT(*) n FROM materiais_almoxarifado WHERE codigo LIKE 'NEG-%'")).n, 0);
+    // Fase 5 (T1): o gate do Compras roda antes do multer — a foto recusada nao chega ao disco.
+    assert.strictEqual(arquivos(), antesArquivos, 'a foto recusada pelo Compras foi gravada no disco');
   });
 
   // ── RN-193.04 ────────────────────────────────────────────────────────────────────────────────────
