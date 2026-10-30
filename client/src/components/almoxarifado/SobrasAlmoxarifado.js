@@ -309,7 +309,7 @@ const SobrasAlmoxarifado = () => {
   const cadastrarMaterialDoRetalho = async () => {
     if (!String(novoMaterial?.nome || '').trim()) { toast.error('Informe o nome do novo material'); return; }
     if (!novoMaterial.familia_id) {
-      toast.error('O material de origem não tem família cadastrada — cadastre o material do retalho pela tela de Materiais');
+      toast.error('O material de origem não tem família cadastrada — o material do retalho precisa ser cadastrado em Compras → Materiais');
       return;
     }
     setSalvando(true);

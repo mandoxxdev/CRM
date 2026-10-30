@@ -303,7 +303,7 @@ const RemessasTerceirosAlmoxarifado = () => {
   const cadastrarMaterialResultante = async () => {
     if (!String(novoMaterial?.nome || '').trim()) { toast.error('Informe o nome do novo material'); return; }
     if (!novoMaterial.familia_id) {
-      toast.error('A chapa enviada não tem família cadastrada — cadastre o material resultante pela tela de Materiais');
+      toast.error('A chapa enviada não tem família cadastrada — o material resultante precisa ser cadastrado em Compras → Materiais');
       return;
     }
     setSalvando(true);
