@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relatório da semana — Semana de 25/10 a 31/10/2026</title>
+<style>
+  :root { --tinta:#1f2a37; --suave:#5b6675; --linha:#e3e7ec; --fundo:#ffffff; --cartao:#f6f8fa;
+          --tela:#2f80ed; --bastidores:#8a5cf6; --testes:#f2994a; --doc:#9aa5b1; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--fundo); color:var(--tinta); font:16px/1.6 "Segoe UI", system-ui, sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font-size:28px; margin:0 0 4px; } h2 { font-size:21px; margin:40px 0 12px; border-bottom:2px solid var(--linha); padding-bottom:6px; }
+  h3 { font-size:17px; margin:24px 0 6px; }
+  .sub { color:var(--suave); margin:0 0 24px; }
+  .resumo { background:var(--cartao); border-left:4px solid var(--tela); padding:16px 20px; border-radius:6px; font-size:17px; }
+  .item { border:1px solid var(--linha); border-radius:8px; padding:16px 20px; margin:16px 0; }
+  .item p { margin:6px 0; } .rotulo { font-weight:600; color:var(--suave); }
+  figure { margin:12px 0; } figure img { width:100%; border:1px solid var(--linha); border-radius:6px; }
+  figure.estreita img { width:auto; max-width:100%; max-height:560px; }
+  figcaption { color:var(--suave); font-size:14px; }
+  .barra { display:flex; height:28px; border-radius:6px; overflow:hidden; margin:12px 0 6px; }
+  .barra span { display:block; }
+  .legenda { display:flex; flex-wrap:wrap; gap:8px 20px; font-size:14px; color:var(--suave); }
+  .legenda i { display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
+  table { border-collapse:collapse; width:100%; font-size:15px; } td, th { border-bottom:1px solid var(--linha); padding:8px; text-align:left; }
+  .nota { font-size:14px; color:var(--suave); }
+  @media print { main { padding:0; } h2, h3 { break-after:avoid; } figure { break-inside:avoid; } figure img { width:auto; max-width:100%; max-height:90mm; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>O que foi feito no sistema nesta semana</h1>
+  <p class="sub">Semana de 25/10 a 31/10/2026 · CRM GMP Industriais</p>
+
+  <p class="resumo">Na Frota, os destinos ganharam endereço completo (com busca pelo CEP), a saída mostra o endereço da GMP e a lista
+  de destinos, o administrador da Frota passou a ser definido pela própria tela e o motorista tem o botão Voltar no alto dos formulários.
+  No Compras, o fornecedor pessoa física passou a ter CPF e a ficha grava tudo em maiúsculas; o pedido aceita uma OS digitada e já traz
+  o NCM do material; e quem administra o Compras cadastra materiais sem depender do almoxarifado. Foram cerca de 10 horas de
+  desenvolvimento, quase dois terços na Frota.</p>
+
+  <h2>O que você já pode ver na tela</h2>
+
+  <div class="item">
+    <h3>Destinos com endereço completo</h3>
+    <p><span class="rotulo">Onde:</span> Frota → Destinos → Novo Destino (e o "+ Novo destino" da saída e da viagem)</p>
+    <p><span class="rotulo">Antes:</span> o destino era só um nome digitado, e na tela de Viagens do escritório o destino ainda era texto livre.</p>
+    <p><span class="rotulo">Agora:</span> digite o CEP e toque <b>Buscar</b>: rua, bairro, cidade e estado se preenchem sozinhos. Quem não
+    sabe o CEP preenche à mão. A lista de destinos mostra "Nome — Cidade/UF", e a Nova Viagem do escritório escolhe o destino da mesma lista.</p>
+    <figure class="estreita"><img src="prints/frota-destino-com-cep.png" alt="Formulário Novo Destino com CEP buscado e endereço preenchido"><figcaption>O CEP preencheu rua, bairro, cidade e estado; faltou só o número.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Saída do veículo: de onde sai, para onde vai e o Voltar no alto</h3>
+    <p><span class="rotulo">Onde:</span> Frota → Meu painel (celular do motorista) → Saída</p>
+    <p><span class="rotulo">Antes:</span> origem e destino eram digitados; para desistir, o motorista rolava a tela inteira até o botão Voltar.</p>
+    <p><span class="rotulo">Agora:</span> "Saindo de: GMP" aparece fixo, com o endereço da empresa; o destino é escolhido da lista (ou
+    cadastrado na hora); em carro liberado para funcionários, o formulário pede quem vai dirigir; e o <b>← Voltar</b> está ao lado do
+    título em Saída, Retorno, Inspeção e Abastecimento. O abastecimento deixou de pedir foto.</p>
+    <figure class="estreita"><img src="prints/frota-saida-destino-voltar.png" alt="Formulário de saída com Voltar no topo, saindo da GMP e destino escolhido da lista"><figcaption>Voltar no alto, saída da GMP com endereço e o destino da lista.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Administrador da Frota definido pela tela</h3>
+    <p><span class="rotulo">Onde:</span> Frota → Perfis de acesso</p>
+    <p><span class="rotulo">Antes:</span> a tela só oferecia Motorista e Consulta; para alguém administrar a Frota era preciso pedir ajuste por fora.</p>
+    <p><span class="rotulo">Agora:</span> o perfil <b>Administrador</b> é escolhido ali mesmo, e quem deixa de ser administrador vê o menu
+    mudar ao abrir o painel da Frota.</p>
+    <figure><img src="prints/frota-perfis-administrador.png" alt="Tela Perfis de acesso da Frota"><figcaption>Cada pessoa com o perfil na Frota e o que ele permite.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Fornecedor com CPF, e tudo em maiúsculas</h3>
+    <p><span class="rotulo">Onde:</span> Compras → Fornecedores → Novo Fornecedor (e o atalho F2 do pedido e da cotação)</p>
+    <p><span class="rotulo">Antes:</span> o fornecedor pessoa física não tinha onde guardar o CPF, e cada um digitava o nome do seu jeito.</p>
+    <p><span class="rotulo">Agora:</span> campo <b>CPF</b> com conferência dos dígitos (um fornecedor tem CPF ou CNPJ, não os dois); a
+    razão social, o nome fantasia, o contato e o endereço ficam em maiúsculas enquanto se digita. O e-mail fica como foi digitado. A lista
+    mostra o CPF quando não há CNPJ, e o pedido impresso também.</p>
+    <figure><img src="prints/fornecedor-cpf-maiusculas.png" alt="Ficha de fornecedor com CPF e campos em maiúsculas"><figcaption>Digitado em minúsculas, gravado em maiúsculas; o e-mail não muda.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Pedido de compra: OS digitada e NCM já preenchido</h3>
+    <p><span class="rotulo">Onde:</span> Compras → Pedidos de Compra → Novo pedido</p>
+    <p><span class="rotulo">Antes:</span> só dava para escolher uma OS cadastrada no sistema; e o item novo aparecia com o NCM vazio e o
+    aviso "o do cadastro do material", embora o NCM já estivesse no cadastro.</p>
+    <p><span class="rotulo">Agora:</span> a opção <b>OS não cadastrada — digitar</b> abre um campo para o número da OS. Ela aparece na lista,
+    no Excel e no pedido impresso (não separa material no estoque, porque a OS não existe no sistema). E o item já entra com o NCM e o peso
+    do material.</p>
+    <figure><img src="prints/pedido-os-digitada.png" alt="Pedido com OS digitada"><figcaption>OS que não está no sistema, digitada no pedido.</figcaption></figure>
+    <figure><img src="prints/pedido-ncm-preenchido.png" alt="Detalhes do item com NCM e peso preenchidos"><figcaption>NCM e peso vindos do cadastro do material.</figcaption></figure>
+  </div>
+
+  <div class="item">
+    <h3>Cadastro de materiais dentro do Compras</h3>
+    <p><span class="rotulo">Onde:</span> Compras → Materiais</p>
+    <p><span class="rotulo">Antes:</span> material novo só era cadastrado no Almoxarifado, pelo almoxarife ou pela engenharia; o comprador ficava esperando.</p>
+    <p><span class="rotulo">Agora:</span> o Compras tem a sua tela de Materiais, para incluir e editar com o mesmo formulário. Quem
+    administra o Compras (marcado no cadastro de usuário) pode usar. Saldo, foto e exclusão continuam no Almoxarifado.</p>
+    <figure><img src="prints/compras-materiais.png" alt="Lista de materiais no módulo Compras"><figcaption>A lista de materiais no Compras, com o NCM de cada um.</figcaption></figure>
+  </div>
+
+  <h2>O que foi feito por baixo — e por que importa</h2>
+  <p>Parte do trabalho não muda a aparência das telas: é o “motor” que faz as contas e guarda as
+  informações. Quando ele erra, o erro aparece depois, em forma de cadastro duplicado ou de
+  estoque que não bate. Esta semana, no motor:</p>
+
+  <div class="item">
+    <h3>A busca continua achando nomes com acento</h3>
+    <p><span class="rotulo">O problema:</span> com os fornecedores gravados em maiúsculas, digitar "aços" na busca de pedidos, de cotações
+    ou do recebimento deixava de achar "AÇOS BRASIL" — o sistema só ignorava maiúscula e minúscula nas letras sem acento.</p>
+    <p><span class="rotulo">O que foi feito:</span> as quatro buscas que mostram fornecedor passaram a comparar sem se importar com maiúsculas,
+    também nas letras com acento e no ç.</p>
+    <p><span class="rotulo">O que isso evita:</span> o comprador achar que o fornecedor sumiu e cadastrá-lo de novo.</p>
+  </div>
+
+  <div class="item">
+    <h3>Duas pessoas editando o mesmo fornecedor</h3>
+    <p><span class="rotulo">O problema:</span> se uma pessoa gravava o CPF e outra, no mesmo instante, o CNPJ do mesmo fornecedor, ele podia
+    ficar com os dois.</p>
+    <p><span class="rotulo">O que foi feito:</span> a conferência "CPF ou CNPJ, não os dois" passou a ser feita no próprio momento de gravar.</p>
+    <p><span class="rotulo">O que isso evita:</span> fornecedor com documento duplicado e pedido impresso com o dado errado.</p>
+  </div>
+
+  <div class="item">
+    <h3>O Compras cadastra material sem mexer no estoque</h3>
+    <p><span class="rotulo">O problema:</span> a conferência antes da entrega mostrou que uma pessoa com o Compras e uma permissão antiga do
+    Almoxarifado conseguiria lançar saldo inicial pela tela nova, sem nem ter acesso ao Almoxarifado.</p>
+    <p><span class="rotulo">O que foi feito:</span> pelo Compras nunca se mexe em saldo nem em controle de estoque, seja qual for a
+    permissão; isso continua só no Almoxarifado.</p>
+    <p><span class="rotulo">O que isso evita:</span> estoque aparecendo do nada, lançado por quem não cuida do almoxarifado.</p>
+  </div>
+
+  <div class="item">
+    <h3>Frota: menu que se atualiza, aviso de destino renomeado e fotos</h3>
+    <p><span class="rotulo">O problema:</span> quem deixava de ser administrador da Frota continuava vendo o menu antigo até recarregar a
+    página; uma viagem antiga editada não dizia que o destino tinha mudado de nome; e uma foto errada só saía pedindo ajuda.</p>
+    <p><span class="rotulo">O que foi feito:</span> o painel da Frota atualiza o menu quando o perfil muda; a edição da viagem avisa os dois
+    nomes do destino; o gestor remove uma foto direto pela lista.</p>
+    <p><span class="rotulo">O que isso evita:</span> botões que aparecem e não funcionam, confusão sobre para onde a viagem foi, e foto
+    errada guardada para sempre.</p>
+  </div>
+
+  <div class="item">
+    <h3>Planejamento: um pedido de compra para várias OS</h3>
+    <p><span class="rotulo">O problema:</span> o pedido de compra hoje atende uma OS só, e a empresa quer comprar para várias de uma vez.</p>
+    <p><span class="rotulo">O que foi feito:</span> o levantamento completo do que muda (o pedido, o documento impresso, o recebimento que
+    separa o material para a OS certa e o encerramento da OS), em oito partes, com o tempo de cada uma — cerca de 25 horas no total — e
+    quatro pontos para a empresa confirmar antes de começar.</p>
+    <p><span class="rotulo">O que isso evita:</span> começar uma mudança grande sem saber o tamanho, e o material de uma OS ir parar em outra.</p>
+  </div>
+
+  <p>Também foram feitos: o ajuste do layout do celular do motorista, os guias de uso da Frota em PDF (motorista e gestor) e a retirada
+  do botão de ajuda "?" do canto da tela, que não era mais usado.</p>
+
+  <h2>Para onde foi o tempo</h2>
+  <p>Cerca de <strong>10 horas</strong> de desenvolvimento nesta semana.</p>
+  <div class="barra" role="img" aria-label="Divisão do tempo">
+    <span style="width:16%;background:var(--tela)"></span>
+    <span style="width:6%;background:var(--bastidores)"></span>
+    <span style="width:35%;background:var(--testes)"></span>
+    <span style="width:43%;background:var(--doc)"></span>
+  </div>
+  <div class="legenda">
+    <span><i style="background:var(--tela)"></i>Telas que você usa — 16%</span>
+    <span><i style="background:var(--bastidores)"></i>Motor do sistema — 6%</span>
+    <span><i style="background:var(--testes)"></i>Conferências automáticas — 35%</span>
+    <span><i style="background:var(--doc)"></i>Planejamento e manuais — 43%</span>
+  </div>
+  <h3>Tempo por atividade</h3>
+  <table>
+    <tr><th>Atividade</th><th>Horas</th></tr>
+    <tr><td>Frota — destinos com endereço, saída da GMP, condutor, perfis, fotos, celular e Voltar</td><td>6 h</td></tr>
+    <tr><td>Compras — CPF e maiúsculas no fornecedor, OS digitada, NCM, materiais no Compras e o planejamento das várias OS</td><td>3 h</td></tr>
+    <tr><td>Estimativas de tempo e organização do trabalho</td><td>1 h</td></tr>
+    <tr><th>Total</th><th>10 h</th></tr>
+  </table>
+  <p>Mais de um terço do tempo foi para as conferências automáticas: robôs que repetem centenas de situações a cada mudança — dois
+  compradores salvando o mesmo fornecedor, um CPF com um dígito errado, um destino desativado no meio da saída — para que nada que já
+  funcionava quebre escondido. Outra boa parte foi para os manuais e para as estimativas, que a empresa passou a receber antes de cada
+  alteração.</p>
+
+  <h3>Estimado × realizado</h3>
+  <p class="nota">Desde 29/10 cada alteração recebe uma estimativa antes de começar. O tempo estimado inclui análise, testes na tela,
+  conferência e manuais — por isso é maior que as horas de desenvolvimento registradas acima.</p>
+  <table>
+    <tr><th>Alteração</th><th>Estimado</th><th>Realizado</th></tr>
+    <tr><td>Frota — endereço do destino, destino na viagem do escritório e retirada do botão de ajuda</td><td>10h</td><td>9h</td></tr>
+    <tr><td>Frota — menu acompanha a troca de perfil</td><td>3h</td><td>2h30</td></tr>
+    <tr><td>Frota — conferência da saída de dois motoristas ao mesmo tempo</td><td>1h30</td><td>1h30</td></tr>
+    <tr><td>Frota — aviso de destino renomeado</td><td>1h30</td><td>1h30</td></tr>
+    <tr><td>Fornecedores, pedido de compra, materiais no Compras e Voltar da Frota (8 itens)</td><td>13h15</td><td>13h15</td></tr>
+    <tr><th>Total</th><th>29h15</th><th>27h45</th></tr>
+  </table>
+
+  <p class="nota">As horas são estimadas pelo registro do trabalho salvo ao longo da semana. Pesquisa,
+  conversas e testes feitos à mão não entram — o número real é maior.</p>
+
+  <h2>Quer conferir?</h2>
+  <ol>
+    <li>Abra <b>Frota → Destinos → Novo Destino</b>, digite um CEP e toque <b>Buscar</b>: o endereço se preenche.</li>
+    <li>No celular, entre em <b>Frota → Meu painel → Saída</b>: veja "Saindo de: GMP", a lista de destinos e o <b>← Voltar</b> no alto.</li>
+    <li>Abra <b>Frota → Perfis de acesso</b> e escolha <b>Administrador</b> para alguém.</li>
+    <li>Abra <b>Compras → Fornecedores → Novo Fornecedor</b>, digite o nome em minúsculas e um CPF: o nome fica em maiúsculas.</li>
+    <li>Abra <b>Compras → Pedidos de Compra → Novo</b>, escolha <b>OS não cadastrada — digitar</b>, inclua um material e abra os "detalhes" do item: o NCM já está lá.</li>
+    <li>Abra <b>Compras → Materiais</b> com quem administra o Compras e toque <b>Novo Material</b>.</li>
+  </ol>
+</main>
+</body>
+</html>
