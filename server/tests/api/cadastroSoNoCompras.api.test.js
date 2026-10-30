@@ -19,7 +19,7 @@ const assert = require('assert');
 const fs = require('fs');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
-const { dbRun, dbGet } = require('../../services/almoxarifado/db');
+const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -226,6 +226,91 @@ const ADMIN_MODULO_ALMOX = { id: 7, nome: 'Adm Modulo Almox', role: 'usuario', a
     const SEM_SALDO = await material();
     const ok = await as(SUPER, () => request(app).put(`/api/compras/materiais/cadastro/${SEM_SALDO}`).send({ controle_lote: 1 }));
     assert.strictEqual(ok.status, 200, JSON.stringify(ok.body));
+  });
+
+  // ── Fase 5 (R1): desligar serie/lote com historico pelo Compras ──────────────────────────────────
+  // Com a chave desligada (o padrao), o Compras desligava a serie de um material cujas series tinham saido todas (0 presentes:
+  // a guarda da 115 deixa); uma Entrada sem serie depois e o estorno da saida antiga pedia "Religue o controle...", que ninguem
+  // conseguia (Compras: 403 ajustar_estoque, perfil COMPRAS; almoxarifado: 403 cadastro so no Compras). A porta recusa antes.
+  const MSG_DESLIGAR_SERIE = (codigo) => `Não é possível desligar o controle por número de série do material ${codigo}: ele já tem `
+    + 'séries registradas. Desligado, o estorno das saídas e a exclusão das requisições que baixaram essas séries ficariam '
+    + 'travados, e pelo Compras não há como religar o controle depois que o material recebe saldo sem série. O controle continua ligado.';
+  const MSG_DESLIGAR_LOTE = (codigo) => `Não é possível desligar o controle por lote do material ${codigo}: ele já tem lotes `
+    + 'registrados. Desligado, as entradas sem lote impediriam religar o controle pelo Compras. O controle continua ligado.';
+  const v2 = (m, b) => as(SUPER, () => request(app).post('/api/almoxarifado/movimentacoes/v2').send({ material_id: m, motivo: 'r1',
+    justificativa: 'r1', documento_vinculado: 'NF-R1', ...b }));
+
+  await test('[Fase 5 R1] desligar a serie com series registradas (todas sairam) pelo Compras -> 400 literal; o estorno da saida continua possivel', async () => {
+    const MAT = await material({ codigo: 'K1-SER', controle_serie: 1 });
+    assert.strictEqual((await v2(MAT, { tipo: 'ENTRADA', quantidade: 2, series: ['R1A', 'R1B'] })).status, 201);
+    const sids = (await dbAll(db, 'SELECT id FROM series_almoxarifado WHERE material_id = ? ORDER BY numero', [MAT])).map((x) => x.id);
+    assert.strictEqual((await v2(MAT, { tipo: 'SAIDA', quantidade: 2, serie_ids: sids })).status, 201);
+    const saida = (await dbGet(db, "SELECT id FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'SAIDA'", [MAT])).id;
+    for (const u of [ADMIN_COMPRAS, SUPER]) {
+      const r = await as(u, () => request(app).put(`/api/compras/materiais/cadastro/${MAT}`).send({ controle_serie: false }));
+      assert.deepStrictEqual([r.status, r.body.error], [400, MSG_DESLIGAR_SERIE('K1-SER')], `${u.nome}: ${JSON.stringify(r.body)}`);
+    }
+    assert.strictEqual((await dbGet(db, 'SELECT controle_serie c FROM materiais_almoxarifado WHERE id = ?', [MAT])).c, 1);
+    // A armadilha nao se forma: a Entrada seguinte exige serie e o estorno da saida antiga devolve as series.
+    assert.strictEqual((await v2(MAT, { tipo: 'ENTRADA', quantidade: 3 })).status, 400);
+    const e = await as(SUPER, () => request(app).post(`/api/almoxarifado/movimentacoes/${saida}/cancelar`).send({ motivo: 'r1' }));
+    assert.strictEqual(e.status, 200, JSON.stringify(e.body));
+  });
+
+  await test('[Fase 5 R1] desligar o lote com lote registrado pelo Compras -> 400 literal; sem historico, desliga (serie e lote)', async () => {
+    const MAT = await material({ codigo: 'K1-LOT', controle_lote: 1 });
+    await dbRun(db, "INSERT INTO lotes_almoxarifado (material_id, codigo) VALUES (?, 'L-R1')", [MAT]);
+    const r = await as(ADMIN_COMPRAS, () => request(app).put(`/api/compras/materiais/cadastro/${MAT}`).send({ controle_lote: 0 }));
+    assert.deepStrictEqual([r.status, r.body.error], [400, MSG_DESLIGAR_LOTE('K1-LOT')], JSON.stringify(r.body));
+    assert.strictEqual((await dbGet(db, 'SELECT controle_lote c FROM materiais_almoxarifado WHERE id = ?', [MAT])).c, 1);
+    const LIMPO = await material({ controle_lote: 1, controle_serie: 1 });
+    const ok = await as(ADMIN_COMPRAS, () => request(app).put(`/api/compras/materiais/cadastro/${LIMPO}`)
+      .send({ controle_lote: 0, controle_serie: 0 }));
+    assert.strictEqual(ok.status, 200, JSON.stringify(ok.body));
+    assert.deepStrictEqual(await dbGet(db, 'SELECT controle_lote l, controle_serie s FROM materiais_almoxarifado WHERE id = ?', [LIMPO]),
+      { l: 0, s: 0 });
+  });
+
+  await test('[Fase 5 R1] series que entram e saem entre a leitura do historico e a gravacao: o UPDATE confere de novo -> 400, ligado', async () => {
+    const MAT = await material({ codigo: 'K1-SER3', controle_serie: 1 });
+    // O gancho so sinaliza e segura a resposta da leitura do historico; a Entrada e a Saida partem do contexto do TESTE.
+    const original = db.get; let disparou = false; let sinal; let soltar;
+    const lido = new Promise((res) => { sinal = res; });
+    const solto = new Promise((res) => { soltar = res; });
+    db.get = function (sql, params, cb) {
+      if (typeof params === 'function') { cb = params; params = []; }
+      if (!disparou && typeof sql === 'string' && sql.includes('hs.material_id = materiais_almoxarifado.id')) {
+        disparou = true;
+        return original.call(db, sql, params, (err, row) => { sinal(); solto.then(() => cb(err, row)); });
+      }
+      return original.call(db, sql, params, cb);
+    };
+    let r;
+    try {
+      const put = as(ADMIN_COMPRAS, () => request(app).put(`/api/compras/materiais/cadastro/${MAT}`).send({ controle_serie: false }))
+        .then((x) => x);
+      await lido;
+      assert.strictEqual((await v2(MAT, { tipo: 'ENTRADA', quantidade: 1, series: ['R1D'] })).status, 201);
+      const sid = (await dbGet(db, 'SELECT id FROM series_almoxarifado WHERE material_id = ?', [MAT])).id;
+      assert.strictEqual((await v2(MAT, { tipo: 'SAIDA', quantidade: 1, serie_ids: [sid] })).status, 201);
+      soltar();
+      r = await put;
+    } finally { db.get = original; }
+    assert.ok(disparou, 'gancho da leitura do historico nao disparou');
+    assert.deepStrictEqual([r.status, r.body.error], [400, MSG_DESLIGAR_SERIE('K1-SER3')], JSON.stringify(r.body));
+    assert.strictEqual((await dbGet(db, 'SELECT controle_serie c FROM materiais_almoxarifado WHERE id = ?', [MAT])).c, 1);
+  });
+
+  await test('[Fase 5 R1] pela porta do almoxarifado (chave ligada) quem pode regularizar continua desligando com historico', async () => {
+    const MAT = await material({ codigo: 'K1-SER2', controle_serie: 1 });
+    assert.strictEqual((await v2(MAT, { tipo: 'ENTRADA', quantidade: 1, series: ['R1C'] })).status, 201);
+    process.env.ALMOX_CADASTRO_MATERIAL = 'liberado';
+    try {
+      const r = await as(SUPER, () => request(app).put(`/api/almoxarifado/materiais/${MAT}`).send({ controle_serie: false }));
+      assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    } finally {
+      delete process.env.ALMOX_CADASTRO_MATERIAL;
+    }
   });
 
   await close();

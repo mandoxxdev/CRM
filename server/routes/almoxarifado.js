@@ -826,6 +826,25 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       }
     }
 
+    // Etapa 193 Fase 5 (R1): pela porta do Compras (`req.portaDoCompras`, marcado por `comoCompras`), desligar lote ou serie de
+    // material que ja tem lote/serie registrado -> 400 (ver `controlesDesligados` em materialService): ali nao ha como religar
+    // depois. Depois das guardas de perfil (a de desligar a serie com series presentes fala primeiro) e antes da familia;
+    // recusa = nada gravado. A mesma conferencia vai no WHERE do UPDATE (uma Entrada com serie no meio e vista).
+    const desligaComHistorico = req.portaDoCompras ? materialService.controlesDesligados(current, merged) : [];
+    const recusaHistorico = async () => {
+      const comHistorico = await materialService.controlesComHistorico(db, req.params.id, desligaComHistorico);
+      return comHistorico.length === 0 ? null
+        : materialService.mensagemDesligarControleComHistorico(current.codigo, comHistorico);
+    };
+    if (desligaComHistorico.length > 0) {
+      try {
+        const msg = await recusaHistorico();
+        if (msg) return res.status(400).json({ error: msg });
+      } catch (errHist) {
+        return res.status(500).json({ error: errHist.message });
+      }
+    }
+
     // Mesma semântica do T3 (comentário original preservado): só revalida quando o valor é
     // NOVO — informado explicitamente, OU a família efetiva mudou (um vínculo preservado pode
     // não ser filho da família nova). Um vínculo preservado com a MESMA família já era válido
@@ -907,6 +926,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // Etapa 115 (RN-06): desligar a serie so grava se continua sem serie presente.
       if (guardaDesligarSerie) condControle += ` AND ${materialService.SEM_SERIE_PRESENTE_SQL}`;
     }
+    // Etapa 193 Fase 5 (R1): o desligar pela porta do Compras so grava se o material continua sem lote/serie registrado.
+    if (desligaComHistorico.length > 0) condControle += ` AND ${materialService.condicaoSemHistoricoSql(desligaComHistorico)}`;
     // Etapa 113 (RN-04): inativar so grava se o saldo continua zerado — para todos.
     if (inativa) condControle += ` AND ${materialService.SEM_SALDO_SQL}`;
     // Etapa 113 (RN-04 c, R2 da Fase 2): `ativo` e gravado do lido mesmo com a chave omitida — sem isto um salvar lido antes
@@ -965,6 +986,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         if (guardaDesligarSerie) {
           const msgSerie = await recusaDesligarSerie();
           if (msgSerie) return res.status(403).json({ error: msgSerie });
+        }
+        // Etapa 193 Fase 5 (R1): depois das guardas de perfil, o historico — antes da familia.
+        if (desligaComHistorico.length > 0) {
+          const msgHist = await recusaHistorico();
+          if (msgHist) return res.status(400).json({ error: msgHist });
         }
         try {
           if (validouFamilia) await validateFamiliaAtiva(merged.familia_id);

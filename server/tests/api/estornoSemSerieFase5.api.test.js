@@ -82,7 +82,11 @@ const RODADAS = 12;
     const ent = await request(app).put(`/api/almoxarifado/requisicoes/${rq}/entregar`)
       .send({ itens_atendidos: [{ item_id: it, quantidade_atendida: 2, serie_ids: sids }] });
     assert.strictEqual(ent.status, 200, JSON.stringify(ent.body));
-    const des = await request(app).put(`/api/compras/materiais/cadastro/${m.id}`).send({ controle_serie: false });
+    // Etapa 193 Fase 5 (R1): pelo Compras, desligar a serie de material com series registradas e recusado (a armadilha que
+    // este cenario monta nao se forma ali); a guarda da exclusao continua alcancavel pela porta do almoxarifado com a chave.
+    process.env.ALMOX_CADASTRO_MATERIAL = 'liberado';
+    const des = await request(app).put(`/api/almoxarifado/materiais/${m.id}`).send({ controle_serie: false });
+    delete process.env.ALMOX_CADASTRO_MATERIAL;
     assert.strictEqual(des.status, 200, JSON.stringify(des.body));
     const ex = await request(app).delete(`/api/almoxarifado/requisicoes/${rq}`).send({ justificativa: 'f116' });
     assert.strictEqual(ex.status, 400, JSON.stringify(ex.body));
@@ -91,7 +95,9 @@ const RODADAS = 12;
       + 'de série no cadastro do material e exclua de novo.');
     assert.strictEqual(await fisico(m), 0);
     assert.strictEqual((await dbGet(db, 'SELECT COALESCE(ativo, 1) a FROM requisicoes_almoxarifado WHERE id = ?', [rq])).a, 1);
-    const rel = await request(app).put(`/api/compras/materiais/cadastro/${m.id}`).send({ controle_serie: true });
+    process.env.ALMOX_CADASTRO_MATERIAL = 'liberado';
+    const rel = await request(app).put(`/api/almoxarifado/materiais/${m.id}`).send({ controle_serie: true });
+    delete process.env.ALMOX_CADASTRO_MATERIAL;
     assert.strictEqual(rel.status, 200, JSON.stringify(rel.body));
     const ex2 = await request(app).delete(`/api/almoxarifado/requisicoes/${rq}`).send({ justificativa: 'f116' });
     assert.strictEqual(ex2.status, 200, JSON.stringify(ex2.body));
@@ -159,7 +165,10 @@ const RODADAS = 12;
         // (AsyncLocalStorage) e passaria pela trava como se ja a tivesse — o teste provaria nada.
         estado.put = foraDaSecao(() => {
           setUserLocal(ALMOX);
-          const p = request(app).put(`/api/compras/materiais/cadastro/${m.id}`).send({ controle_serie: false });
+          // Etapa 193 Fase 5: pela porta do almoxarifado com a chave (o Almoxarife nao entra no Compras: la o 403 seria o do
+          // gate, e o teste provaria nada); o 403 esperado e o da guarda de desligar com series presentes.
+          process.env.ALMOX_CADASTRO_MATERIAL = 'liberado';
+          const p = request(app).put(`/api/almoxarifado/materiais/${m.id}`).send({ controle_serie: false });
           p.then(() => {}, () => {});
           return p;
         });
@@ -168,11 +177,12 @@ const RODADAS = 12;
       return getOriginal.call(db, sql, params, cb);
     };
     let e;
-    try { e = await estornar(saidaId); } finally { db.get = getOriginal; setUserLocal(SUPER); }
+    try { e = await estornar(saidaId); } finally { db.get = getOriginal; setUserLocal(SUPER); delete process.env.ALMOX_CADASTRO_MATERIAL; }
     assert.strictEqual(estado.armado, false, 'gancho nao disparou');
     assert.strictEqual(e.status, 200, JSON.stringify(e.body));
     const p = await estado.put;
     assert.strictEqual(p.status, 403, JSON.stringify(p.body));
+    assert.ok(String(p.body.error).startsWith('Desligar o controle por número de série no material '), JSON.stringify(p.body));
     const l = await dbGet(db, 'SELECT controle_serie FROM materiais_almoxarifado WHERE id = ?', [m.id]);
     const pres = (await dbGet(db, "SELECT COUNT(*) n FROM series_almoxarifado WHERE material_id = ? AND status IN ('EM_ESTOQUE','BLOQUEADA')", [m.id])).n;
     assert.deepStrictEqual([l.controle_serie, pres], [1, 2], 'serie desligada com series Em estoque (C225 pelo estorno)');

@@ -119,6 +119,8 @@ function usuarioDoCompras(user) {
 }
 function comoCompras(req, res, next) {
   req.user = usuarioDoCompras(req.user);
+  // Etapa 193 Fase 5 (R1): o handler compartilhado sabe que veio pelo Compras (desligar lote/serie com historico -> 400).
+  req.portaDoCompras = true;
   return next();
 }
 
