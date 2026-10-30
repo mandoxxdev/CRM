@@ -499,7 +499,7 @@ test('(c) submeter manda UM POST com o payload exato, sem numero e sem valor_tot
     total_desconto: 0,
     itens: [{
       material_id: 907, quantidade: 4, valor_unitario: 25,
-      ipi_percentual: 0, ncm: '', peso_unitario: '', observacao: '',
+      ipi_percentual: 0, ncm: '', peso_unitario: '', observacao: '', os_texto: null, // Etapa 193 (RN-193.07): sempre presente; null = item sem OS
     }],
   });
   expect('numero' in payload).toBe(false);
@@ -576,7 +576,7 @@ test('(e) /compras/pedidos/editar/418 carrega o GET /:id, mostra os itens e subm
     total_desconto: 0,
     itens: [{
       material_id: 907, quantidade: 9, valor_unitario: 35,
-      ipi_percentual: 0, ncm: '', peso_unitario: '', observacao: '',
+      ipi_percentual: 0, ncm: '', peso_unitario: '', observacao: '', os_texto: null, // Etapa 193 (RN-193.07): sempre presente; null = item sem OS
     }],
   });
 });
@@ -831,7 +831,7 @@ test('(l) /novo?solicitacao&material&quantidade pre-carrega o item e manda solic
   expect(typeof chamadasPost()[0][1].solicitacao_id).toBe('number');
   expect(chamadasPost()[0][1].itens).toEqual([{
     material_id: 907, quantidade: 6, valor_unitario: 25,
-    ipi_percentual: 0, ncm: '', peso_unitario: '', observacao: '',
+    ipi_percentual: 0, ncm: '', peso_unitario: '', observacao: '', os_texto: null, // Etapa 193 (RN-193.07): sempre presente; null = item sem OS
   }]);
 });
 
@@ -1394,7 +1394,7 @@ describe('RN-39', () => {
       total_desconto: 36.5,
       itens: [{
         material_id: 907, quantidade: 4, valor_unitario: 25,
-        ipi_percentual: 0, ncm: '', peso_unitario: '', observacao: '',
+        ipi_percentual: 0, ncm: '', peso_unitario: '', observacao: '', os_texto: null, // Etapa 193 (RN-193.07): sempre presente; null = item sem OS
       }],
     });
     expect('valor_total' in payload).toBe(false);
@@ -1470,7 +1470,7 @@ describe('RN-39', () => {
       total_desconto: 36.5,
       itens: [{
         material_id: 907, quantidade: 10, valor_unitario: 35,
-        ipi_percentual: 10, ncm: '7208.51.00', peso_unitario: 2.5, observacao: 'Pintura epóxi',
+        ipi_percentual: 10, ncm: '7208.51.00', peso_unitario: 2.5, observacao: 'Pintura epóxi', os_texto: null, // Etapa 193 (RN-193.07): sempre presente; null = item sem OS
       }],
     });
   });
@@ -1865,5 +1865,76 @@ describe('Etapa 192 — OS digitada e NCM do material', () => {
     await clicar(porTestId('detalhes-item-907'));
     expect(porTestId('ncm-item-907').value).toBe('');
     expect(porTestId('peso-item-907').value).toBe('');
+  });
+});
+
+/**
+ * ── Etapa 193 — OS por item (RN-193.07 a RN-193.09) ─────────────────────────────────────────────────────────────
+ *
+ * Contrato: cada linha de item tem o campo `os-item-<material_id>` (texto, maxLength 60) com sugestoes das OS que o
+ * formulario ja carrega (`<datalist id="pedido-os-itens">`, valor = numero da OS), mas aceita qualquer texto. O payload
+ * leva SEMPRE `itens[].os_texto` — aparado, `null` quando vazio (o `PUT` substitui as linhas: a OS vai e volta com elas).
+ * A OS do cabecalho nao muda. Pedido da Reposicao nasce com os itens sem OS.
+ */
+describe('Etapa 193 — OS por item', () => {
+  test('(193a) cada item tem o campo OS com sugestoes das OS; o POST leva a OS de cada item (aparada) e null no vazio', async () => {
+    await renderizarEm('/compras/pedidos/novo');
+    await preencherPedidoValido();
+    digitar(porTestId('busca-material'), 'CHAPA');
+    await clicar(porTestId('botao-buscar-material'));
+    await clicar(porTestId('adicionar-material-901'));
+    digitar(porTestId('qtd-item-901'), '1');
+    await esperarEfeitos();
+
+    const campo = porTestId('os-item-907');
+    expect(campo).not.toBeNull();
+    expect(campo.getAttribute('maxlength')).toBe('60');
+    expect(campo.getAttribute('list')).toBe('pedido-os-itens');
+    const sugestoes = [...container.querySelectorAll('datalist#pedido-os-itens option')].map((o) => o.getAttribute('value'));
+    expect(sugestoes).toEqual(['OS-2026-058', 'OS-2026-057', 'OS-2026-055']);
+    digitar(campo, '  OS 5001 (fora da lista)  ');
+    await submeter();
+
+    const payload = chamadasPost()[0][1];
+    expect(payload.itens.map((i) => [i.material_id, i.os_texto])).toEqual([[907, 'OS 5001 (fora da lista)'], [901, null]]);
+    // a OS do cabecalho segue a de antes: estoque
+    expect(payload.os_id).toBeNull();
+    expect(payload.os_texto).toBeNull();
+  });
+
+  test('(193b) a edicao carrega a OS de cada item e o PUT a devolve; trocar a de um item manda a nova', async () => {
+    detalhe418 = {
+      ...PEDIDO_418,
+      itens: [
+        { ...PEDIDO_418.itens[0], os_texto: 'OS 5001' },
+        { id: 4182, material_id: 901, codigo: 'ALM-0901', descricao: 'Chapa 2', unidade: 'KG', quantidade: 2, valor_unitario: 10, quantidade_recebida: 0, os_texto: 'OS 5002' },
+      ],
+    };
+    await renderizarEm('/compras/pedidos/editar/418');
+    expect(porTestId('os-item-907').value).toBe('OS 5001');
+    expect(porTestId('os-item-901').value).toBe('OS 5002');
+    digitar(porTestId('os-item-901'), 'OS 5099');
+    await submeter();
+    const corpo = chamadasPut(418)[0][1];
+    expect(corpo.itens.map((i) => [i.material_id, i.os_texto])).toEqual([[907, 'OS 5001'], [901, 'OS 5099']]);
+  });
+
+  test('(193c) pedido ja recebido: o campo OS do item trava e o salvar continua so status', async () => {
+    detalhe418 = { ...PEDIDO_418_RECEBIDO, itens: [{ ...PEDIDO_418.itens[0], os_texto: 'OS 5001' }] };
+    await renderizarEm('/compras/pedidos/editar/418');
+    expect(porTestId('os-item-907').disabled).toBe(true);
+    await submeter();
+    expect(chamadasPut(418)).toHaveLength(0);
+  });
+
+  test('(193d) pre-carga da Reposicao: o item nasce sem OS', async () => {
+    await renderizarEm('/compras/pedidos/novo?solicitacao=77&material=907&quantidade=6&material_nome=Chapa');
+    await esperarEfeitos();
+    expect(porTestId('os-item-907').value).toBe('');
+    await selecionar(porTestId('pedido-fornecedor'), '312');
+    digitar(porTestId('valor-item-907'), '25');
+    await esperarEfeitos();
+    await submeter();
+    expect(chamadasPost()[0][1].itens[0].os_texto).toBeNull();
   });
 });

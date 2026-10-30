@@ -295,7 +295,10 @@ const Compras = () => {
     'ICMS-ST': detalhe && detalhe.totais ? detalhe.totais.total_icms_st : '',
     'Desconto': detalhe && detalhe.totais ? detalhe.totais.total_desconto : '',
     // Etapa 171 (RN-171.05): a OS do pedido, NO FIM (a importacao le por cabecalho e ignora esta).
-    'OS': rotuloOsDoPedido(pedido)
+    'OS': rotuloOsDoPedido(pedido),
+    // Etapa 193 (RN-193.09): a OS do ITEM, depois da do pedido. A importacao LE esta coluna (e, com ela presente, ignora `OS`,
+    // que aqui e a do cabecalho).
+    'OS do item': item ? (item.os_texto || '') : ''
   });
 
   const handleExportExcel = async () => {
