@@ -294,6 +294,25 @@ function normalizarOsTexto(valor) {
 }
 
 /**
+ * Etapa 193 (RN-193.07) — a OS de CADA ITEM (`itens_pedido_compra.os_texto`): texto livre, so a justificativa da compra. Nao e a
+ * OS do cabecalho (essa continua `os_id`/`os_texto`, 171/192) e ninguem do almoxarifado a le: nao reserva no recebimento, nao
+ * entra no encerramento nem na trava de exclusao da OS. A mesma regua da OS digitada (aparada, ate 60 por caractere, numero vira
+ * texto, outro tipo -> 400), com literais proprias para o comprador saber que o erro e de um ITEM. Sem indice na mensagem: as
+ * outras recusas de item deste servico (`Material não encontrado`) tambem nao levam. Aqui `undefined` = SEM OS (e nao "nao
+ * mexe"): o `PUT` substitui as linhas, entao nao ha linha antiga de onde herdar.
+ */
+const OS_ITEM_LONGA = 'OS do item: no máximo 60 caracteres.';
+const OS_ITEM_INVALIDA = 'OS do item inválida.';
+function normalizarOsDoItem(valor) {
+  if (valor === undefined || valor === null) return null;
+  if (typeof valor !== 'string' && !(typeof valor === 'number' && Number.isFinite(valor))) throw erro(OS_ITEM_INVALIDA);
+  const t = String(valor).trim();
+  if (t === '') return null;
+  if ([...t].length > OS_TEXTO_MAX) throw erro(OS_ITEM_LONGA);
+  return t;
+}
+
+/**
  * RN-192.07 — `os_id` e `os_texto` sao EXCLUSIVOS, e no ESTADO FINAL: no `PUT` a chave ausente herda o gravado, entao
  * mandar so `os_id` num pedido de OS digitada tambem recusa (descartado: limpar o outro calado — trocaria a OS do pedido
  * sem o payload dizer). O formulario manda as duas chaves sempre, uma delas vazia.
@@ -509,7 +528,7 @@ async function relerPedido(db, pedidoId) {
   if (!pedido) return null;
   const linhas = await dbAll(db, `SELECT id, material_id, codigo, descricao, quantidade,
       valor_unitario, unidade, quantidade_recebida,
-      item_numero, ncm, peso_unitario, ipi_percentual, observacao
+      item_numero, ncm, peso_unitario, ipi_percentual, observacao, os_texto
     FROM itens_pedido_compra WHERE pedido_id = ? ORDER BY item_numero, id`, [pedidoId]);
   const { itens, totais } = calcularTotaisPedido(linhas, encargosDoPayload({}, pedido));
   return {
@@ -601,6 +620,9 @@ async function resolverItens(db, itens) {
       peso_unitario: pesoInformado ? Number(item.peso_unitario) : (material.peso_unitario == null ? null : material.peso_unitario),
       ipi_percentual: Number(item.ipi_percentual) || 0,
       observacao: item.observacao == null || item.observacao === '' ? null : String(item.observacao),
+      // Etapa 193 (RN-193.07): a OS do item. A cotacao reusa esta funcao, mas o INSERT dela (`gravarItens`) lista colunas
+      // explicitas e nao a leva; o pedido gerado da cotacao monta os itens sem a chave (nasce sem OS).
+      os_texto: normalizarOsDoItem(item.os_texto),
     });
   }
   return resolvidos;
@@ -619,10 +641,10 @@ async function inserirLinhasDoPedido(db, pedidoId, itensResolvidos) {
     const item = itensResolvidos[i];
     await dbRun(db, `INSERT INTO itens_pedido_compra
       (pedido_id, material_id, codigo, descricao, quantidade, valor_unitario, unidade,
-       item_numero, ncm, peso_unitario, ipi_percentual, observacao)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+       item_numero, ncm, peso_unitario, ipi_percentual, observacao, os_texto)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [pedidoId, item.material_id, item.codigo, item.descricao, item.quantidade, item.valor_unitario, item.unidade,
-      i + 1, item.ncm, item.peso_unitario, item.ipi_percentual, item.observacao]);
+      i + 1, item.ncm, item.peso_unitario, item.ipi_percentual, item.observacao, item.os_texto == null ? null : item.os_texto]);
   }
 }
 
@@ -1222,6 +1244,30 @@ const CHAVES_PREVISAO = ['previsao', 'previsão', 'previsao_entrega', 'previsão
 const CHAVES_IPI = ['ipi %', '% ipi', 'ipi (%)', 'ipi_percentual', 'ipi percentual'];
 
 /**
+ * Etapa 193 (RN-193.09) — a OS do ITEM na importacao. Duas familias, e a ordem e a regra:
+ * - `OS do item` (e variantes) e a coluna que o "Exportar Excel" da aba Pedidos produz (`Compras.js`, `linhaExportPedido`). Se a
+ *   planilha TEM essa coluna (a chave existe na linha — o client le com `defval: ''`, entao a celula vazia tambem chega), ela
+ *   manda, mesmo vazia: o export do CRM tambem traz `OS`, que la e a OS do CABECALHO, e copia-la para cada item reimportado
+ *   inventaria uma justificativa por linha que o pedido original nao tinha.
+ * - Sem ela, `OS` (planilha de fora: uma coluna "OS" por linha e a OS daquele item).
+ * A OS do cabecalho NAO e importada (nunca foi, desde a 171). Mais de 60 caracteres -> AVISO e a linha entra sem OS (a OS e so
+ * justificativa; perder o item inteiro por ela seria pior), como o IPI nao reconhecido.
+ */
+const CHAVES_OS_DO_ITEM = ['os do item', 'os item', 'os_item', 'os_texto', 'os por item'];
+const CHAVES_OS_PLANILHA = ['os', 'o.s.', 'ordem de servico', 'ordem de serviço'];
+const AVISO_OS_ITEM_LONGA = 'OS do item com mais de 60 caracteres — a linha entrou sem OS';
+function osDaLinhaDaPlanilha(row) {
+  const temColunaDoItem = CHAVES_OS_DO_ITEM.some((k) => Object.prototype.hasOwnProperty.call(row, k));
+  const cru = temColunaDoItem ? valorCruDoRow(row, ...CHAVES_OS_DO_ITEM) : valorCruDoRow(row, ...CHAVES_OS_PLANILHA);
+  if (cru == null) return { os: null };
+  try {
+    return { os: normalizarOsDoItem(typeof cru === 'number' ? cru : String(cru)) };
+  } catch (e) {
+    return { os: null, aviso: AVISO_OS_ITEM_LONGA };
+  }
+}
+
+/**
  * Leitor ESTRITO para IPI e encargos (revisao do plano, achado alto 2). `numeroDaPlanilha` e
  * leniente de proposito para quantidade/preco (`'isento, ver NF'` vira 0 por `parsePrecoBackend` e
  * `'12abc'` vira 12 por `parseFloat`) — aqui isso gravaria um valor fiscal inventado SEM aviso.
@@ -1438,6 +1484,10 @@ async function importarPedidos(db, corpo, user) {
       else avisos.push({ linha: numeroDaLinha, campo, motivo: avisoEncargoNaoReconhecido(rotulo) });
     }
 
+    // Etapa 193 (RN-193.09): a OS da linha (ver `osDaLinhaDaPlanilha`). Longa demais -> aviso e a linha entra sem OS.
+    const osDaLinha = osDaLinhaDaPlanilha(row);
+    if (osDaLinha.aviso) avisos.push({ linha: numeroDaLinha, campo: 'os_texto', motivo: osDaLinha.aviso });
+
     if (!grupos.has(chaveGrupo)) grupos.set(chaveGrupo, new Map());
     const porFornecedor = grupos.get(chaveGrupo);
     if (!porFornecedor.has(fornecedor.id)) {
@@ -1449,7 +1499,7 @@ async function importarPedidos(db, corpo, user) {
       previsao: previsaoDaLinha,
       dataPedido: dataPedidoDaLinha,
       encargos: encargosDaLinha,
-      item: { material_id: material.id, quantidade, valor_unitario: valorUnitario, ipi_percentual: ipiPercentual },
+      item: { material_id: material.id, quantidade, valor_unitario: valorUnitario, ipi_percentual: ipiPercentual, os_texto: osDaLinha.os },
     });
   }
 

@@ -189,6 +189,12 @@ function osTextoParaPayload(osId, texto) {
   return t === '' ? null : t;
 }
 
+// Etapa 193 (RN-193.07): a OS do item — aparada; vazia = `null` (item sem OS).
+function osDoItemParaPayload(texto) {
+  const t = String(texto || '').trim();
+  return t === '' ? null : t;
+}
+
 let sequenciaLinha = 0;
 /** NCM e peso do cadastro para o item novo — da busca (RN-192.09) e da pré-carga da Reposição. NCM acima de 10 fica `''` (X4). */
 const ncmEPesoDoMaterial = (material) => ({
@@ -200,6 +206,8 @@ const novaLinha = (dados) => ({
   chave: `linha-${(sequenciaLinha += 1)}`,
   // O documento por item (RN-39.01). `''` em NCM/peso é "o do material" — a tela não inventa 0.
   ipi_percentual: 0, ncm: '', peso_unitario: '', observacao: '',
+  // Etapa 193 (RN-193.07): a OS do item (texto livre, só justificativa). `''` = sem OS.
+  os_texto: '',
   ...dados,
 });
 
@@ -556,6 +564,7 @@ const PedidoCompraForm = () => {
           ncm: item.ncm == null ? '' : String(item.ncm),
           peso_unitario: item.peso_unitario == null ? '' : String(item.peso_unitario),
           observacao: item.observacao || '',
+          os_texto: item.os_texto == null ? '' : String(item.os_texto),
         })));
         // O IPI padrão do pedido aberto é o que a maioria dos itens usa.
         if (itensDoServidor.length) {
@@ -734,6 +743,8 @@ const PedidoCompraForm = () => {
         ncm: String(it.ncm || '').trim(),
         peso_unitario: pesoParaPayload(it.peso_unitario),
         observacao: it.observacao || '',
+        // Etapa 193 (RN-193.07): sempre presente — o `PUT` substitui as linhas, entao a OS do item vai e volta com elas.
+        os_texto: osDoItemParaPayload(it.os_texto),
       })),
     };
     // Só na criação, e só quando veio pela Reposição: o `PUT` do servidor IGNORA `solicitacao_id`
@@ -1121,12 +1132,12 @@ const PedidoCompraForm = () => {
                 <thead>
                   <tr>
                     <th>Código</th><th>Descrição</th><th>Unidade</th>
-                    <th>Quantidade</th><th>Valor unitário</th><th>Subtotal</th><th>Detalhes</th><th>Ações</th>
+                    <th>Quantidade</th><th>Valor unitário</th><th>Subtotal</th><th title="OS que justifica a compra deste item (opcional)">OS</th><th>Detalhes</th><th>Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {itens.length === 0 ? (
-                    <tr><td colSpan="8" className="no-data">Nenhum item adicionado</td></tr>
+                    <tr><td colSpan="9" className="no-data">Nenhum item adicionado</td></tr>
                   ) : itens.map((it, idx) => {
                     const aberto = Boolean(detalhesAbertos[it.chave]);
                     const linha = linhas[idx];
@@ -1166,6 +1177,22 @@ const PedidoCompraForm = () => {
                             {linha && linha.valor_linha != null ? formatCurrency(linha.valor_linha) : '—'}
                           </td>
                           <td>
+                            {/* Etapa 193 (RN-193.07): a OS do item — só justifica a compra (não reserva nada). Sugere as OS
+                                da lista do cabeçalho, mas aceita qualquer texto (OS não cadastrada também). */}
+                            <input
+                              data-testid={`os-item-${it.material_id}`}
+                              className="pedido-form-input"
+                              list="pedido-os-itens"
+                              maxLength={OS_TEXTO_MAX}
+                              disabled={soStatus}
+                              placeholder="—"
+                              aria-label={`OS do item ${it.codigo || it.descricao || ''}`.trim()}
+                              value={it.os_texto}
+                              onChange={(ev) => alterarItem(it.chave, 'os_texto', ev.target.value)}
+                              style={{ width: 120 }}
+                            />
+                          </td>
+                          <td>
                             {/* O IPI do item fica VISÍVEL na linha fechada: se ficasse só dentro de
                                 "detalhes", ninguém repararia que um item entre cinquenta saiu com
                                 outra alíquota. */}
@@ -1198,7 +1225,7 @@ const PedidoCompraForm = () => {
                         </tr>
                         {aberto && (
                           <tr className="pedido-form-item-extra">
-                            <td colSpan="8">
+                            <td colSpan="9">
                               <Chips
                                 campo={`ipi-${it.material_id}`}
                                 label="IPI deste item"
@@ -1265,6 +1292,13 @@ const PedidoCompraForm = () => {
             {temItemSemPreco && itens.length > 0 && (
               <p style={{ color: '#b9770e' }}>{LITERAL_AVISO_PRECO}</p>
             )}
+            {/* Etapa 193 (RN-193.07): as sugestões da OS do item — o número das OS que o formulário já carregou para o
+                cabeçalho (nenhuma consulta nova). Só sugestão: o campo aceita qualquer texto. */}
+            <datalist id="pedido-os-itens">
+              {ordensServico.filter((os) => os.numero_os).map((os) => (
+                <option key={os.id} value={os.numero_os}>{rotuloDaOs(os)}</option>
+              ))}
+            </datalist>
           </section>
 
           {/* ── 3. condições ──────────────────────────────────────────────────────────────── */}

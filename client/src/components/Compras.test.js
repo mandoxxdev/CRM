@@ -377,8 +377,8 @@ test('(h) o Excel exportado leva a data do banco e as colunas Atrasado/Dias de a
   expect(Object.keys(linhas[0])).toEqual([
     'Número', 'Fornecedor', 'Código', 'Descrição', 'Unidade', 'Quantidade', 'Valor Unitário',
     'Valor Total', 'Status', 'Data', 'Previsão Entrega', 'Atrasado', 'Dias de atraso',
-    'IPI %', 'Frete', 'ICMS-ST', 'Desconto', 'OS',
-  ]); // ORDEM congelada: as duas da Etapa 39, as quatro da Etapa 100 (RN-100.08) e a OS da 171, NO FIM
+    'IPI %', 'Frete', 'ICMS-ST', 'Desconto', 'OS', 'OS do item',
+  ]); // ORDEM congelada: as duas da Etapa 39, as quatro da Etapa 100 (RN-100.08), a OS da 171 e a OS do item da 193, NO FIM
   expect(linhas[0]['OS']).toBe(''); // pedido de estoque: '' e nao null/'-' (mesma razao do (i))
 }, 10000);
 
@@ -665,7 +665,8 @@ describe('Etapa 171 — coluna OS na aba Pedidos', () => {
 
     const [linhas] = exportToExcel.mock.calls[0];
     expect(linhas.map((l) => l['OS'])).toEqual(['OS-2026-057', 'OS #58', '']);
-    expect(Object.keys(linhas[0]).pop()).toBe('OS');
+    // Etapa 193: a OS do item entrou DEPOIS da OS do pedido (a ultima)
+    expect(Object.keys(linhas[0]).slice(-2)).toEqual(['OS', 'OS do item']);
   }, 10000);
 });
 
@@ -706,5 +707,26 @@ describe('Etapa 192 — fornecedor com CPF na aba Fornecedores', () => {
     await clicar(botaoPorTexto('Exportar Excel'));
     const [linhas] = exportToExcel.mock.calls[0];
     expect(linhas.map((l) => [l['CNPJ'], l['CPF']])).toEqual([['', '529.982.247-25'], ['54.984.382/0001-64', '']]);
+  }, 10000);
+});
+
+// Etapa 193 (RN-193.09) — a OS de CADA ITEM vai no Excel numa coluna propria, "OS do item", depois da OS do pedido. Vazia = ''.
+// E a coluna que a importacao le de volta (`pedidoCompraService.osDaLinhaDaPlanilha`).
+describe('Etapa 193 — OS por item no Excel', () => {
+  test('(193a) cada linha de item leva a OS dele em "OS do item"; item sem OS sai vazio', async () => {
+    pedidosDoBanco = [{ ...PEDIDO_420_ATRASADO_3, os_id: 57, os_numero: 'OS-2026-057' }];
+    itensDoBanco[420] = [
+      { ...ITENS_420[0], os_texto: 'OS 5001' },
+      { ...ITENS_420[0], id: 4202, codigo: 'ALM-0908', os_texto: null },
+    ];
+
+    await renderizarEm('/compras/pedidos');
+    await clicar(botaoPorTexto('Exportar Excel'));
+
+    const [linhas] = exportToExcel.mock.calls[0];
+    expect(linhas.map((l) => [l['Código'], l['OS'], l['OS do item']])).toEqual([
+      ['ALM-0907', 'OS-2026-057', 'OS 5001'],
+      ['ALM-0908', 'OS-2026-057', ''],
+    ]);
   }, 10000);
 });
