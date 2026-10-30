@@ -206,16 +206,17 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
 
   // Flag `cancelado` (padrão do módulo): o material pode ser trocado pela navegação antes da
   // resposta chegar, e um setState depois do unmount é warning — e com CI=true, erro de build.
-  // Fase 5 (X6): no Compras (`rotas.proprietario` false) a lista nao e pedida — `GET /clientes` exige Comercial/Almoxarifado/
-  // Operacional e o comprador so com o Compras tomava erro no seletor. La o dono e so mostrado (ver a secao Propriedade).
+  // Fase 5 (X6): `GET /clientes` exige Comercial/Almoxarifado/Operacional e o comprador so com o Compras tomava erro no seletor.
+  // Etapa 193 (RN-193.05): cada porta diz de onde vem a lista (`rotas.api.clientes`; no Compras, a lista minima sob o gate do
+  // cadastro). Sem seletor (`rotas.proprietario` false) a lista nao e pedida.
   useEffect(() => {
     if (!rotas.proprietario) return undefined;
     let cancelado = false;
-    api.get('/clientes')
+    api.get(rotas.api.clientes)
       .then((r) => { if (!cancelado) { setClientes(Array.isArray(r.data) ? r.data : []); setErroClientes(null); } })
       .catch((e) => { if (!cancelado) { setClientes([]); setErroClientes(e); } });
     return () => { cancelado = true; };
-  }, [rotas.proprietario]);
+  }, [rotas.proprietario, rotas.api.clientes]);
 
   const loadFamilias = async () => {
     setLoadingFamilias(true);
@@ -584,7 +585,7 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
     try {
       const fd = new FormData();
       fd.append('foto', file);
-      const res = await api.post(`/almoxarifado/materiais/${materialId}/foto`, fd, {
+      const res = await api.post(rotas.api.foto(materialId), fd, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setFotoPreview(resolveMaterialPhotoUrl(res.data.foto_url));
@@ -798,8 +799,8 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
                 <div className="almox-field">
                   <label className="almox-label" htmlFor="material-proprietario">Proprietário</label>
                   {!rotas.proprietario ? (
-                    // Fase 5 (X6): no Compras o dono e so mostrado — trocar o dono e do Almoxarifado (com historico exige
-                    // `ajustar_material_cliente`), e a lista de clientes exige um modulo que o comprador pode nao ter.
+                    // Fase 5 (X6): sem o seletor, o dono e so mostrado. Etapa 193 (RN-193.05): o Compras voltou a ter o seletor, com
+                    // a lista minima `/compras/materiais/aux/clientes`.
                     <>
                       <div className="almox-input" data-testid="material-proprietario-somente-leitura" aria-readonly="true">
                         {form.proprietario_cliente_id
@@ -1119,7 +1120,7 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
           {/* Coluna lateral — foto + ações */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'sticky', top: 80 }}>
 
-            {/* Foto (no Compras nao: a foto fica no Almoxarifado — Etapa 192) */}
+            {/* Foto — desde a Etapa 193 (RN-193.04) tambem no Compras, pela porta dele (`rotas.api.foto`). */}
             {rotas.foto && (
             <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 20 }}>
               <div className="almox-section-title" style={{ marginTop: 0 }}>Foto do Produto</div>

@@ -334,6 +334,18 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // almoxarifado que ele reaproveita. Regras e o que fica de fora: `services/compras/cadastroDeMaterial.js`.
   const portaCompras = cadastroDeMaterialCompras.criarPortaCompras({ authenticateToken, checkModulePermission });
   app.get('/api/compras/materiais/aux/minhas-permissoes', ...portaCompras.base, portaCompras.responderMinhasPermissoes);
+  // Etapa 193 (RN-193.05): o dono do material so se define no cadastro (a sobra e a remessa copiam o da origem), e o cadastro
+  // agora e so do Compras — o formulario do Compras voltou a ter o Proprietario. A lista vem daqui, sob o MESMO gate do
+  // cadastro, com o minimo (id, razao social): `GET /api/clientes` exige Comercial/Almoxarifado, que o comprador pode nao ter
+  // (Fase 5 X6 da 192). Todos os clientes, como a lista do formulario do almoxarifado (`/clientes` sem filtro de status).
+  // Descartado abrir a rota core de clientes ao Compras: devolveria a ficha inteira (contato, CNPJ, enderecos) a quem so precisa do nome.
+  app.get('/api/compras/materiais/aux/clientes', ...portaCompras.leitura, async (req, res) => {
+    try {
+      res.json(await dbAll(db, 'SELECT id, razao_social FROM clientes ORDER BY razao_social COLLATE NOCASE, id'));
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -1030,10 +1042,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     }
   };
   app.put('/api/almoxarifado/materiais/:id', requirePermission('editar_material'), validate(MaterialUpdateSchema), editarMaterial);
-  // Etapa 192 (RN-192.10): a mesma edicao pelo Compras, menos inativar/reativar (`ativo` -> 400; e o "excluir", que fica aqui
-  // no Almoxarifado). Fase 5 (X1): as guardas de controle e dono do handler leem o perfil COMPRAS (`comoCompras`) e recusam.
+  // Etapa 192 (RN-192.10): a mesma edicao pelo Compras. Fase 5 (X1): as guardas de controle e dono do handler leem o perfil
+  // COMPRAS (`comoCompras`) e recusam. Etapa 193 (RN-193.04): inativar/reativar (`ativo`) passou a valer aqui — a recusa
+  // "Inativar ou reativar material e feito no Almoxarifado." saiu; as regras sao as do handler (saldo prende, familia confere).
   app.put('/api/compras/materiais/cadastro/:id', ...portaCompras.escrita('editar_material'),
-    cadastroDeMaterialCompras.recusarAtivo, validate(MaterialUpdateSchema), editarMaterial);
+    validate(MaterialUpdateSchema), editarMaterial);
 
   // DELETE /api/almoxarifado/materiais/:id — inativar (soft delete: é uma edição do
   // cadastro, daí `editar_material` e não uma ação própria).
@@ -1061,7 +1074,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // inativavam material com 5). A conferencia vai tambem no UPDATE (`SEM_SALDO_SQL` + `ativo = 1`): uma Entrada que cai
   // entre a leitura e a gravacao e vista. `changes` passa a decidir a auditoria (so quem desativou de fato audita); id
   // inexistente e material ja inativo continuam 200 `{ success: true }` (contrato da Etapa 19), agora sem escrita.
-  app.delete('/api/almoxarifado/materiais/:id', requirePermission('editar_material'), async (req, res) => {
+  //
+  // Etapa 193 (RN-193.04): o mesmo handler tambem serve o Compras (DELETE da porta dele), com as
+  // mesmas regras e mensagens (a do saldo diz "Seu perfil (COMPRAS) nao movimenta estoque", porque roda em `comoCompras`).
+  const inativarMaterial = async (req, res) => {
     try {
       const antes = await dbGet(db, `SELECT id, codigo, nome, ativo FROM materiais_almoxarifado WHERE id = ?`,
         [req.params.id]);
@@ -1108,7 +1124,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
-  });
+  };
+  app.delete('/api/almoxarifado/materiais/:id', requirePermission('editar_material'), inativarMaterial);
+  app.delete('/api/compras/materiais/cadastro/:id', ...portaCompras.escrita('editar_material'), inativarMaterial);
 
   // POST /api/almoxarifado/materiais/:id/foto — upload de foto
   // ORDEM IMPORTA: requirePermission ANTES do multer. Invertido, o multer já teria
@@ -1143,7 +1161,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   //
   // Ordem final: SELECT → 404 (+ limpa órfão) → UPDATE → unlink da anterior → auditoria →
   // resposta. A resposta é a MESMA de antes (`{ foto, foto_url }`) — a tela não muda.
-  app.post('/api/almoxarifado/materiais/:id/foto', requirePermission('editar_material'), uploadAlmox.single('foto'), async (req, res) => {
+  //
+  // Etapa 193 (RN-193.04): o Compras troca a foto com este mesmo handler, com o gate dele antes do multer.
+  const trocarFotoMaterial = async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Nenhuma foto enviada' });
 
     const filename = req.file.filename;
@@ -1206,7 +1226,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     }
 
     res.json({ foto: filename, foto_url: materialPhotoUrl(filename) });
-  });
+  };
+  app.post('/api/almoxarifado/materiais/:id/foto', requirePermission('editar_material'), uploadAlmox.single('foto'), trocarFotoMaterial);
+  app.post('/api/compras/materiais/cadastro/:id/foto', ...portaCompras.escrita('editar_material'), uploadAlmox.single('foto'),
+    trocarFotoMaterial);
 
   // POST /api/almoxarifado/lotes/:id/certificado — anexa o certificado e libera o lote se ele
   // estava bloqueado exatamente por falta dele.

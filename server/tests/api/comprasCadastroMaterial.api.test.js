@@ -13,6 +13,11 @@
  *    Fase 5 (G1) isso e provado em `comprasMaterialSemEstoque.api.test.js`, com a camada 2 trocada por uma que confere o modulo.
  * O que ela prova e a camada 3 (perfil/administrador do Compras), real, e que as respostas sao as mesmas do almoxarifado.
  *
+ * Etapa 193 (RN-193.03/04): so o administrador do modulo Compras (e o do sistema) entra nas portas — os casos que usavam
+ * ALMOXARIFE/ENGENHARIA como quem cadastra pelo Compras passaram a usar ADMIN_COMPRAS (o MESMO handler; o que se compara nao
+ * mudou). A comparacao com a edicao do almoxarifado liga a chave `ALMOX_CADASTRO_MATERIAL=liberado` so naquele pedido (sem ela o
+ * PUT do almoxarifado recusa, RN-193.02). Inativar/reativar e foto passaram a ter porta no Compras (os dois ultimos casos).
+ *
  * Executar: cd server && node tests/api/comprasCadastroMaterial.api.test.js
  */
 const assert = require('assert');
@@ -32,12 +37,19 @@ const COMPRADOR = { id: 2, nome: 'Comprador', role: 'usuario', email: 'comprador
 const CONSULTA = { id: 3, nome: 'Consulta', role: 'usuario', perfil_almoxarifado: 'CONSULTA', email: 'consulta@test.com' };
 const ALMOXARIFE = { id: 4, nome: 'Almoxarife', role: 'usuario', perfil_almoxarifado: 'ALMOXARIFE', email: 'almox@test.com' };
 const ENGENHARIA = { id: 5, nome: 'Engenharia', role: 'usuario', perfil_almoxarifado: 'ENGENHARIA', email: 'eng@test.com' };
+// Etapa 193 (RN-193.03): quem cadastra pelo Compras — o administrador do modulo Compras, sem perfil de almoxarifado.
+const ADMIN_COMPRAS = { id: 6, nome: 'Chefe de Compras', role: 'usuario', admin_modulos: ['compras'], email: 'chefe@test.com' };
 
 const LITERAL_403 = 'Sem permissão para esta operação';
 
 (async () => {
   const { app, db, setUser, close } = await createTestApp({ user: ADMIN });
   const as = async (u, fn) => { setUser(u); return fn(); };
+  // Etapa 193: a edicao do almoxarifado so existe com a chave de reversao — ligada so para o pedido de comparacao.
+  const comChave = async (fn) => {
+    process.env.ALMOX_CADASTRO_MATERIAL = 'liberado';
+    try { return await fn(); } finally { delete process.env.ALMOX_CADASTRO_MATERIAL; }
+  };
 
   const FAM = (await dbRun(db, "INSERT INTO familias_material_almoxarifado (codigo, nome, ativo) VALUES ('VLV','Valvulas',1)")).lastID;
   const FAM_MORTA = (await dbRun(db, "INSERT INTO familias_material_almoxarifado (codigo, nome, ativo) VALUES ('OLD','Morta',0)")).lastID;
@@ -58,15 +70,15 @@ const LITERAL_403 = 'Sem permissão para esta operação';
     [`/api/compras/materiais/aux/proximo-codigo?familia_id=${FAM}`, `/api/almoxarifado/proximo-codigo?familia_id=${FAM}`],
   ];
 
-  await test('[leitura] as 7 portas do Compras devolvem o MESMO corpo das rotas do almoxarifado (ALMOXARIFE)', async () => {
+  await test('[leitura] as 7 portas do Compras (admin do Compras) devolvem o MESMO corpo das rotas do almoxarifado (ALMOXARIFE)', async () => {
     for (const [compras, almox] of PARES_LEITURA) {
-      const a = await as(ALMOXARIFE, () => request(app).get(compras));
+      const a = await as(ADMIN_COMPRAS, () => request(app).get(compras));
       const b = await as(ALMOXARIFE, () => request(app).get(almox));
       assert.strictEqual(a.status, 200, `${compras}: ${a.status} ${JSON.stringify(a.body)}`);
       assert.strictEqual(b.status, 200, `${almox}: ${b.status}`);
       assert.deepStrictEqual(a.body, b.body, `${compras} difere de ${almox}`);
     }
-    const lista = await as(ALMOXARIFE, () => request(app).get('/api/compras/materiais/cadastro?search=gaveta'));
+    const lista = await as(ADMIN_COMPRAS, () => request(app).get('/api/compras/materiais/cadastro?search=gaveta'));
     assert.deepStrictEqual(lista.body.map((m) => m.codigo), ['VLV-001']);
   });
 
@@ -82,7 +94,7 @@ const LITERAL_403 = 'Sem permissão para esta operação';
   });
 
   await test('[leitura] detalhe de material inexistente -> 404 com a literal do almoxarifado', async () => {
-    const r = await as(ALMOXARIFE, () => request(app).get('/api/compras/materiais/cadastro/999999'));
+    const r = await as(ADMIN_COMPRAS, () => request(app).get('/api/compras/materiais/cadastro/999999'));
     assert.strictEqual(r.status, 404);
     assert.strictEqual(r.body.error, 'Material não encontrado');
   });
@@ -91,18 +103,21 @@ const LITERAL_403 = 'Sem permissão para esta operação';
     const c = await as(COMPRADOR, () => request(app).get('/api/compras/materiais/aux/minhas-permissoes'));
     assert.strictEqual(c.status, 200);
     assert.deepStrictEqual(c.body, { perfil: 'PRODUCAO', acoes: { criar_material: false, editar_material: false } });
+    // Etapa 193 (RN-193.03): o Almoxarife nao cadastra mais pelo Compras; o administrador do Compras sim.
     const a = await as(ALMOXARIFE, () => request(app).get('/api/compras/materiais/aux/minhas-permissoes'));
-    assert.deepStrictEqual(a.body, { perfil: 'ALMOXARIFE', acoes: { criar_material: true, editar_material: true } });
+    assert.deepStrictEqual(a.body, { perfil: 'ALMOXARIFE', acoes: { criar_material: false, editar_material: false } });
+    const ac = await as(ADMIN_COMPRAS, () => request(app).get('/api/compras/materiais/aux/minhas-permissoes'));
+    assert.deepStrictEqual(ac.body, { perfil: 'PRODUCAO', acoes: { criar_material: true, editar_material: true } });
   });
 
   // ══ Incluir ═══════════════════════════════════════════════════════════════════════════════════════════════════
 
-  await test('[POST] ENGENHARIA cria pelo Compras -> 201, com NCM, e o material aparece na busca do pedido', async () => {
-    const r = await as(ENGENHARIA, () => request(app).post('/api/compras/materiais/cadastro').send(corpo({ codigo: 'VLV-COMPRAS' })));
+  await test('[POST] o admin do Compras cria pelo Compras -> 201, com NCM, e o material aparece na busca do pedido', async () => {
+    const r = await as(ADMIN_COMPRAS, () => request(app).post('/api/compras/materiais/cadastro').send(corpo({ codigo: 'VLV-COMPRAS' })));
     assert.strictEqual(r.status, 201, JSON.stringify(r.body));
     const gravado = await dbGet(db, 'SELECT ncm, familia_id, ativo FROM materiais_almoxarifado WHERE id = ?', [r.body.id]);
     assert.deepStrictEqual(gravado, { ncm: '8481.80.95', familia_id: FAM, ativo: 1 });
-    const busca = await as(ENGENHARIA, () => request(app).get('/api/compras/materiais?search=VLV-COMPRAS'));
+    const busca = await as(ADMIN_COMPRAS, () => request(app).get('/api/compras/materiais?search=VLV-COMPRAS'));
     assert.strictEqual(busca.status, 200);
     assert.ok(busca.body.some((m) => m.id === r.body.id), JSON.stringify(busca.body));
   });
@@ -124,7 +139,7 @@ const LITERAL_403 = 'Sem permissão para esta operação';
       corpo({ codigo: 'REC-3', classe_abc: 'Z' }),
     ];
     for (const c of casos) {
-      const a = await as(ENGENHARIA, () => request(app).post('/api/compras/materiais/cadastro').send(c));
+      const a = await as(ADMIN_COMPRAS, () => request(app).post('/api/compras/materiais/cadastro').send(c));
       const b = await as(ENGENHARIA, () => request(app).post('/api/almoxarifado/materiais').send(c));
       assert.ok(a.status >= 400, `${c.codigo}: o Compras aceitou (${a.status})`);
       assert.strictEqual(a.status, b.status, `${c.codigo}: ${a.status} x ${b.status}`);
@@ -134,11 +149,12 @@ const LITERAL_403 = 'Sem permissão para esta operação';
 
   // ══ Editar ════════════════════════════════════════════════════════════════════════════════════════════════════
 
-  await test('[PUT] ALMOXARIFE edita pelo Compras -> 200 e grava; a resposta tem a forma da do almoxarifado', async () => {
-    const r = await as(ALMOXARIFE, () => request(app).put(`/api/compras/materiais/cadastro/${MAT}`).send({ ncm: '8481.80.99', nome: 'Valvula gaveta 1"' }));
+  await test('[PUT] o admin do Compras edita pelo Compras -> 200 e grava; a resposta tem a forma da do almoxarifado', async () => {
+    const r = await as(ADMIN_COMPRAS, () => request(app).put(`/api/compras/materiais/cadastro/${MAT}`).send({ ncm: '8481.80.99', nome: 'Valvula gaveta 1"' }));
     assert.strictEqual(r.status, 200, JSON.stringify(r.body));
     assert.strictEqual(r.body.ncm, '8481.80.99');
-    const b = await as(ALMOXARIFE, () => request(app).put(`/api/almoxarifado/materiais/${MAT}`).send({ ncm: '8481.80.99', nome: 'Valvula gaveta 1"' }));
+    const b = await comChave(() => as(ALMOXARIFE, () => request(app).put(`/api/almoxarifado/materiais/${MAT}`).send({ ncm: '8481.80.99', nome: 'Valvula gaveta 1"' })));
+    assert.strictEqual(b.status, 200, JSON.stringify(b.body));
     assert.deepStrictEqual(Object.keys(r.body).sort(), Object.keys(b.body).sort());
   });
 
@@ -154,30 +170,32 @@ const LITERAL_403 = 'Sem permissão para esta operação';
 
   await test('[PUT] o 409 de "mudou enquanto editava" e o 404 sao os do almoxarifado', async () => {
     const lidos = { campos_lidos: { ncm: 'valor-que-ninguem-gravou' }, ncm: '1111.11.11' };
-    const a = await as(ALMOXARIFE, () => request(app).put(`/api/compras/materiais/cadastro/${MAT}`).send(lidos));
-    const b = await as(ALMOXARIFE, () => request(app).put(`/api/almoxarifado/materiais/${MAT}`).send(lidos));
+    const a = await as(ADMIN_COMPRAS, () => request(app).put(`/api/compras/materiais/cadastro/${MAT}`).send(lidos));
+    const b = await comChave(() => as(ALMOXARIFE, () => request(app).put(`/api/almoxarifado/materiais/${MAT}`).send(lidos)));
     assert.strictEqual(a.status, 409, JSON.stringify(a.body));
     assert.deepStrictEqual([a.status, a.body], [b.status, b.body]);
-    const n = await as(ALMOXARIFE, () => request(app).put('/api/compras/materiais/cadastro/999999').send({ ncm: '1' }));
+    const n = await as(ADMIN_COMPRAS, () => request(app).put('/api/compras/materiais/cadastro/999999').send({ ncm: '1' }));
     assert.deepStrictEqual([n.status, n.body.error], [404, 'Material não encontrado']);
   });
 
-  await test('[PUT] inativar/reativar pelo Compras -> 400 com a literal, material segue ativo', async () => {
-    for (const ativo of [0, 1, false]) {
-      const r = await as(ADMIN, () => request(app).put(`/api/compras/materiais/cadastro/${MAT}`).send({ ativo }));
-      assert.strictEqual(r.status, 400, `ativo=${ativo}: ${r.status}`);
-      assert.strictEqual(r.body.error, 'Inativar ou reativar material é feito no Almoxarifado.');
-    }
+  // Etapa 193 (RN-193.04): inativar/reativar e a foto mudaram para o Compras — o que era "400 com a literal" e "404, sem porta" ate a
+  // 192 virou o gesto (as regras de saldo e familia: cadastroSoNoCompras.api.test.js).
+  await test('[PUT] inativar/reativar pelo Compras (Etapa 193) -> 200; a recusa da 192 saiu', async () => {
+    const i = await as(ADMIN_COMPRAS, () => request(app).put(`/api/compras/materiais/cadastro/${MAT}`).send({ ativo: 0 }));
+    assert.strictEqual(i.status, 200, JSON.stringify(i.body));
+    assert.strictEqual((await dbGet(db, 'SELECT ativo FROM materiais_almoxarifado WHERE id = ?', [MAT])).ativo, 0);
+    const r = await as(ADMIN_COMPRAS, () => request(app).put(`/api/compras/materiais/cadastro/${MAT}`).send({ ativo: 1 }));
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
     assert.strictEqual((await dbGet(db, 'SELECT ativo FROM materiais_almoxarifado WHERE id = ?', [MAT])).ativo, 1);
   });
 
-  await test('[fora do Compras] excluir e foto nao tem porta: DELETE e POST /foto -> 404, material intacto', async () => {
-    const d = await as(ADMIN, () => request(app).delete(`/api/compras/materiais/cadastro/${MAT}`));
-    assert.strictEqual(d.status, 404, `DELETE: ${d.status}`);
-    const f = await as(ADMIN, () => request(app).post(`/api/compras/materiais/cadastro/${MAT}/foto`));
-    assert.strictEqual(f.status, 404, `foto: ${f.status}`);
+  await test('[Compras] excluir e foto tem porta (Etapa 193): DELETE inativa; POST /foto sem arquivo -> 400 do handler', async () => {
+    const f = await as(ADMIN_COMPRAS, () => request(app).post(`/api/compras/materiais/cadastro/${MAT}/foto`));
+    assert.deepStrictEqual([f.status, f.body.error], [400, 'Nenhuma foto enviada']);
+    const d = await as(ADMIN_COMPRAS, () => request(app).delete(`/api/compras/materiais/cadastro/${MAT}`));
+    assert.deepStrictEqual([d.status, d.body], [200, { success: true }]);
     const m = await dbGet(db, 'SELECT ativo, foto FROM materiais_almoxarifado WHERE id = ?', [MAT]);
-    assert.strictEqual(m.ativo, 1);
+    assert.strictEqual(m.ativo, 0);
     assert.ok(!m.foto);
   });
 

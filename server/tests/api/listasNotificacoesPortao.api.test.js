@@ -195,7 +195,9 @@ const QUEM_CHAMA = {
   'OSComercialForm.js': [['projetos'], 'comercial'], 'PropostaForm.js': [['clientes', 'projetos'], 'comercial (nao montado)'],
   'OportunidadeForm.js': [['clientes'], 'comercial (nao montado)'], 'proposta/GerarPropostaModal.js': [['clientes'], 'comercial (nao montado)'],
   'proposta/PropostaForm.js': [['clientes'], 'comercial'],
-  'almoxarifado/MaterialAlmoxarifadoForm.js': [['clientes'], 'almoxarifado'], 'almoxarifado/ReservasAlmoxarifado.js': [['clientes', 'projetos'], 'almoxarifado'],
+  // Etapa 193 (RN-193.05): o `/clientes` do formulario de material mudou para `rotasCadastroMaterial.js` (cada porta diz de onde vem a
+  // lista; o Compras usa a lista minima sob o gate do cadastro). Mesma moldura (almoxarifado).
+  'almoxarifado/rotasCadastroMaterial.js': [['clientes'], 'almoxarifado'], 'almoxarifado/ReservasAlmoxarifado.js': [['clientes', 'projetos'], 'almoxarifado'],
   'almoxarifado/MovimentacoesAlmoxarifado.js': [['projetos'], 'almoxarifado'], 'almoxarifado/SobrasAlmoxarifado.js': [['projetos'], 'almoxarifado'],
   'operacional/OSForm.js': [['clientes', 'projetos'], 'operacional'],
   'Notificacoes.js': [['notificacoes'], 'comercial (o sino, desenhado so no Dashboard)'],
