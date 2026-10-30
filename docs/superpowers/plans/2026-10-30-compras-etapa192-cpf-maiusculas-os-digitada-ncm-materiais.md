@@ -122,6 +122,6 @@ Pontos de conflito previstos no merge: `pedidoDocumentoHtml.js` (F1 e P1), `rout
    partes 5–8 mexem na reserva do recebimento sob a trava por material. Começar pela parte 1 (OS por item, migração que copia a OS do
    cabeçalho), contrato no plano. A `os_texto` desta etapa vira por item lá.
 2. **A11** — o André marca o administrador do módulo Compras no cadastro de usuário (sem isso a tela Materiais do Compras mostra o aviso).
-3. Pendências pequenas declaradas: NCM/peso no pedido aberto pela Reposição (21b.3d) — precisaria de um `GET` de material por id no
-   Compras; CPF na **remessa** do Almoxarifado (pausado).
+3. Pendências pequenas declaradas: ~~NCM/peso no pedido aberto pela Reposição~~ — **feito em `44ac519b`** (2026-10-30, pela busca
+   por código, sem porta nova); CPF na **remessa** do Almoxarifado (pausado).
 4. Antes de apresentar: clicar os roteiros da Etapa 192 (`docs/compras-novidades-por-etapa.md`) e da Etapa 10 da Frota.

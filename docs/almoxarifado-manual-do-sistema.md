@@ -4158,7 +4158,8 @@ mais curta. Sem nenhum item, a tabela mostra *"Nenhum item adicionado"*.
 O item entra com o **NCM** e o **peso unitário** do cadastro do material já preenchidos nos "detalhes" do item (IPI, NCM, peso e
 observação); dá para mudar no pedido. O campo de NCM do pedido aceita até 10 caracteres: se o NCM do material for maior, o campo fica vazio
 e o sistema grava o do material ao salvar. Quando o campo está vazio, a dica *"o do cadastro do material"* lembra isso. O pedido aberto pela
-**Reposição** (21b.3d) entra com o NCM e o peso vazios na tela, e o sistema os completa com os do material ao salvar.
+**Reposição** (21b.3d) também entra com o NCM e o peso do material; se o material não for achado pelo código, eles ficam vazios e o
+sistema os completa ao salvar.
 
 **O total é do sistema, não seu.** Cada linha mostra o **Subtotal** (`quantidade × valor unitário`) e
 embaixo da tabela aparece **"Total: R$ …"**, que é a soma dos subtotais. Não existe campo de valor

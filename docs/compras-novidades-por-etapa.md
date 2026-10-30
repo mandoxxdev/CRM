@@ -808,8 +808,8 @@ e o sistema só o completava ao salvar.
 ### O que a etapa NÃO cobre
 
 - **Várias OS no mesmo pedido** — só planejado (acima).
-- Pedido aberto **pela Reposição** (botão de comprar o que está abaixo do mínimo) ainda nasce com NCM e peso vazios na tela; o sistema
-  completa com os do material ao salvar.
+- ~~Pedido aberto **pela Reposição** nasce com NCM e peso vazios na tela~~ — **resolvido em 2026-10-30** (`44ac519b`): a pré-carga busca
+  o material pelo código e copia NCM e peso.
 - Os fornecedores antigos **não** foram convertidos para maiúsculas.
 - A **remessa** do Almoxarifado continua mostrando só o CNPJ do fornecedor (o recebimento já mostra o CPF).
 - Excluir material, trocar foto e mexer em saldo continuam só no Almoxarifado.
