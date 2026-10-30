@@ -113,6 +113,16 @@ seção 4.
 
 Onde: **Almoxarifado → Materiais → Novo Material** (ou o ícone de edição em qualquer linha da lista).
 
+**Também pelo Compras: Compras → Materiais.** A mesma lista (código, nome, família, unidade, NCM) e o mesmo formulário, para incluir e
+editar material sem entrar no Almoxarifado. Quem pode: o **administrador do módulo Compras** (marcado no cadastro de usuário) e quem tem o
+perfil **Almoxarife**, **Engenharia** ou **Administrador** no Almoxarifado; os outros veem *"Seu acesso não permite cadastrar material. Peça
+a um administrador do sistema para marcar você como administrador do módulo Compras (ou para lhe dar o perfil de Almoxarife ou Engenharia
+no Almoxarifado)."*. Pelo Compras **não se mexe em estoque**, qualquer que seja o perfil: não há foto nem saldo inicial (enviado por outro
+caminho: *"Saldo inicial é lançado no Almoxarifado."*); ligar o controle por lote ou série num material que tem saldo e trocar o dono de
+um material que já tem histórico são recusados; inativar e reativar é só no Almoxarifado (*"Inativar ou reativar material é feito no
+Almoxarifado."*). O **Proprietário** aparece só para leitura, com *"O proprietário é definido no Almoxarifado."*, e o material incluído
+pelo Compras é estoque da GMP. Excluir e trocar a foto continuam só no Almoxarifado.
+
 O formulário é dividido em sete blocos, sempre nesta ordem:
 
 | Bloco | O que reúne |
@@ -3577,7 +3587,7 @@ Um recebimento é o documento que registra a chegada física do material no galp
 
 | Forma de recebimento | O que o sistema faz |
 |---|---|
-| **Pedido de compra** | Você escolhe o pedido numa lista; o sistema carrega **as linhas daquele pedido** com o **saldo que ainda falta receber** de cada material, e você ajusta a quantidade que chegou de verdade. Fornecedor, CNPJ e o **valor unitário** vêm do pedido |
+| **Pedido de compra** | Você escolhe o pedido numa lista; o sistema carrega **as linhas daquele pedido** com o **saldo que ainda falta receber** de cada material, e você ajusta a quantidade que chegou de verdade. Fornecedor, CNPJ (ou o **CPF**, no fornecedor pessoa física — o campo se chama *CNPJ / CPF do Fornecedor*) e o **valor unitário** vêm do pedido |
 | **Nota fiscal (sem pedido)** | Você informa a nota, o fornecedor e digita os itens um a um |
 
 > **O pedido de compra precisa existir no módulo Compras.** A lista da forma *Pedido de compra*
@@ -4145,6 +4155,11 @@ digite parte do código ou da descrição e clique em **Buscar material**; a tab
 de itens. A busca traz no máximo **50** materiais **ativos** por vez — busca mais específica, lista
 mais curta. Sem nenhum item, a tabela mostra *"Nenhum item adicionado"*.
 
+O item entra com o **NCM** e o **peso unitário** do cadastro do material já preenchidos nos "detalhes" do item (IPI, NCM, peso e
+observação); dá para mudar no pedido. O campo de NCM do pedido aceita até 10 caracteres: se o NCM do material for maior, o campo fica vazio
+e o sistema grava o do material ao salvar. Quando o campo está vazio, a dica *"o do cadastro do material"* lembra isso. O pedido aberto pela
+**Reposição** (21b.3d) entra com o NCM e o peso vazios na tela, e o sistema os completa com os do material ao salvar.
+
 **O total é do sistema, não seu.** Cada linha mostra o **Subtotal** (`quantidade × valor unitário`) e
 embaixo da tabela aparece **"Total: R$ …"**, que é a soma dos subtotais. Não existe campo de valor
 total para digitar: o valor gravado é sempre o derivado dos itens.
@@ -4182,6 +4197,12 @@ o pedido mostra o número novo); se a OS não existir mais, aparece *OS #⟨núm
 **O que acontece com o material.** Quando a nota de um pedido com OS entra no estoque, o que entrou fica **reservado para a OS** — só a
 requisição daquela OS o leva —, e se a OS for cancelada ou concluída, o material volta ao estoque comum (9.3e).
 
+**OS que não está cadastrada.** No campo **OS**, a opção **OS não cadastrada — digitar** abre um campo de texto (até 60 caracteres) para
+o número da OS como ele é conhecido. A OS digitada aparece na lista (coluna **OS**), é achada pela busca da lista, sai no Exportar Excel e
+no documento (*OS: ⟨texto⟩*). Ela é **só texto**: o pedido continua sendo, para o estoque, um pedido de **estoque** — o material que chega
+**não** fica reservado para OS nenhuma, a OS digitada não aparece no recebimento e não conta para o encerramento nem para a exclusão de
+nenhuma OS. Trocar para uma OS da lista (ou para *Estoque (sem OS)*) apaga o texto.
+
 **Pedidos que nascem de outro lugar.** O pedido gerado de uma cotação (14c.9) ou de uma solicitação da Reposição (21b.3d) nasce **sem**
 OS, e a importação por planilha (14b.6) não lê OS: para vincular, edite o pedido antes do primeiro recebimento.
 
@@ -4192,6 +4213,9 @@ OS, e a importação por planilha (14b.6) não lê OS: para vincular, edite o pe
 | Salvar **sem nenhum item** | A tela recusa antes mesmo de chamar o servidor: *"Inclua ao menos um item no pedido de compra"* |
 | Salvar **sem fornecedor** | *"Dados inválidos — fornecedor_id: fornecedor do pedido é obrigatório"* |
 | Item **sem material** | *"material do item é obrigatório"* |
+| OS digitada com mais de 60 caracteres | *"OS digitada: no máximo 60 caracteres."* |
+| OS da lista **e** OS digitada no mesmo pedido (só por outro caminho; a tela troca uma pela outra) | *"Escolha a OS da lista ou digite, não os dois."* |
+| OS digitada que não é texto (idem) | *"OS digitada inválida."* |
 | Quantidade **zero, negativa ou não numérica** | *"quantidade do item do pedido deve ser um número maior que zero"* |
 | Valor unitário **negativo** | *"valor unitário do item não pode ser negativo"* |
 | **Status** fora dos sete valores | *"status do pedido inválido (use pendente, aprovado, rejeitado, em_analise, enviado, recebido ou cancelado)"* |
@@ -4434,9 +4458,10 @@ grupos de fornecedores homologados têm tela própria, **Compras → Fornecedore
 
 ### 14c.1 A lista de fornecedores
 
-A aba mostra, por fornecedor: **Razão Social** (com o nome fantasia embaixo), **CNPJ**, **Contato**,
+A aba mostra, por fornecedor: **Razão Social** (com o nome fantasia embaixo), **CNPJ / CPF** (o CPF quando não há CNPJ), **Contato**,
 **Email**, **Telefone**, **Status** (o selo *ativo* ou *inativo*) e os botões de **editar** e
-**excluir**. Há busca por razão social, nome fantasia ou CNPJ, e o filtro de status com as opções
+**excluir**. Há busca por razão social, nome fantasia, CNPJ ou CPF (com ou sem pontos; maiúsculas, minúsculas e acentos não atrapalham:
+"aços" acha "AÇOS"), e o Exportar traz uma coluna **CPF**. O filtro de status com as opções
 **Todos os status**, **Ativo** e **Inativo**. A lista traz **todos** os fornecedores, inativos
 inclusive — o filtro é que separa.
 
@@ -4450,6 +4475,7 @@ os campos já na primeira tela, sem precisar salvar e voltar para completar; o l
 |---|---|---|
 | **Identificação** | **Razão social** | **Obrigatória.** É o único campo que a ficha exige |
 | | **Nome fantasia**, **Inscrição estadual** | Texto livre, opcionais |
+| | **CPF** | Opcional, para fornecedor **pessoa física**; máscara *000.000.000-00*. Os dígitos verificadores são conferidos. Um fornecedor tem **CPF ou CNPJ**, não os dois |
 | | **CNPJ** | Opcional; ganha a máscara *00.000.000/0000-00* enquanto se digita. No cadastro **novo**, sair do campo com um CNPJ completo e válido consulta o CNPJ e **preenche** razão social, nome fantasia, endereço, cidade, estado, CEP, telefone e e-mail com o que a consulta trouxer. A **lupa** ao lado consulta a qualquer momento; na **edição** ela só preenche os campos que estão **vazios** — o que já foi digitado fica. CNPJ com dígito errado na lupa: *"CNPJ inválido. Verifique os dígitos."*; consulta que falha: *"Não foi possível consultar o CNPJ"*. O servidor não confere o CNPJ, e dois fornecedores podem ter o mesmo |
 | | **Grupo homologado** | Opcional. *"Sem grupo"* ou um dos grupos ativos. Escolher *"Sem grupo"* na edição **tira** o fornecedor do grupo. Um fornecedor de grupo que foi desativado aparece como *"Grupo desativado (#⟨número⟩)"* e continua nele ao salvar |
 | | **Status** | **Só na edição.** *Ativo* ou *Inativo*. Todo fornecedor **nasce ativo** |
@@ -4458,6 +4484,11 @@ os campos já na primeira tela, sem precisar salvar e voltar para completar; o l
 | **Endereço** | **CEP** | Opcional. Sair do campo com os 8 dígitos (ou a lupa) consulta o CEP e preenche **endereço**, **cidade** e **estado** — só os que estão vazios. *"CEP não encontrado"* quando o CEP não existe; *"Não foi possível consultar o CEP"* quando a consulta falha |
 | | **Endereço**, **Cidade** | Texto livre, opcionais |
 | | **Estado** | Uma das 27 siglas |
+
+**Tudo em maiúsculas.** Razão social, nome fantasia, inscrição estadual, nome do vendedor (contato), endereço, cidade e estado aparecem
+em maiúsculas enquanto se digita e são gravados assim, com os acentos ("são paulo" vira "SÃO PAULO"). O **e-mail** fica como foi
+digitado; telefones, CEP, CNPJ e CPF não mudam. Um fornecedor cadastrado antes continua como estava até a ficha dele ser salva de novo —
+inclusive ao vinculá-lo ou removê-lo de um grupo, que salva a ficha.
 
 Salvar mostra *"Fornecedor salvo"* e volta para a lista. Salvar **sem razão social** (ou só com
 espaços) é recusado pela própria ficha, antes de chamar o servidor, com a faixa vermelha
@@ -4525,6 +4556,8 @@ mas **não** aparece no seletor do Recebimento até ser salvo uma vez pelo lápi
 | Situação | O que acontece |
 |---|---|
 | Razão social vazia (ou só espaços) | A ficha recusa antes do servidor: *"Razão social é obrigatória"*. Pelo servidor, a mesma frase |
+| CPF com os dígitos verificadores errados (ou com letras) | *"CPF inválido. Verifique os dígitos."* — na ficha e pelo servidor |
+| CPF **e** CNPJ preenchidos (também quando outra pessoa preencheu o outro ao mesmo tempo) | *"Preencha o CPF ou o CNPJ, não os dois."* |
 | Grupo que não é um número de grupo | *"Grupo inválido"* (a ficha só oferece grupos existentes; isto só ocorre por outro caminho) |
 | Grupo que não existe | *"Grupo não encontrado"* |
 | Grupo desativado (por exemplo, desativado por outra pessoa com a ficha aberta) | *"Grupo desativado — reative o grupo em Fornecedores homologados antes de vincular fornecedores"* |

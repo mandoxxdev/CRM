@@ -5,7 +5,9 @@
 > roteiro curto para demonstrar ao vivo. Pedido do André em 2026-10-06. O equivalente do
 > almoxarifado é `docs/almoxarifado-novidades-por-etapa.md`.
 >
-> **Onde o desenvolvimento está:** **2026-10-07 — unificação.** A branch `desenvolvimento-almoxarifado`
+> **Onde o desenvolvimento está:** **2026-10-30 — Etapa 192 entregue** (`ad99f567` a `3a293902`, na `main`): **CPF** e
+> **maiúsculas** no fornecedor, **OS digitada** e **NCM preenchido** no pedido, **Compras → Materiais** para o administrador do Compras
+> (A11, B64–B73). **Várias OS no mesmo pedido** ficou só planejada (25 h). Antes: **2026-10-07 — unificação.** A branch `desenvolvimento-almoxarifado`
 > (Etapas 0–77 do almoxarifado) foi mesclada na `main`; daqui em diante **só existe a `main`**
 > (decisão do André; detalhes e perdas em **B18**). O lote de Compras (Etapas 33–38, seções abaixo)
 > continua valendo, com uma exceção: a Etapa 33 ficou sem objeto e a Etapa 32 da `main` saiu.
@@ -142,6 +144,9 @@
   (a) **Zero linhas ou não importa:** nada a fazer. (b) **Quer o histórico uniforme:** com o servidor parado,
   `UPDATE logs_auditoria SET nome_modulo = CASE modulo WHEN 'almoxarifado' THEN 'Almoxarifado' WHEN 'engenharia_projetos' THEN 'Engenharia / Projetos' WHEN 'frota' THEN 'Frota' WHEN 'todolist' THEN 'TODOLIST' WHEN 'engenharia|engenharia_projetos' THEN 'Cálculos de Engenharia ou Engenharia / Projetos' ELSE nome_modulo END WHERE tipo = 'acesso_negado' AND nome_modulo = modulo`
   — só muda o texto exibido; o filtro da tela filtra pela chave (`modulo`), que não muda.
+- **A11 (Etapa 192) — Ação sua para a tela Compras → Materiais:** no **cadastro de usuário**, marque **administrador do módulo
+  Compras** em quem administra o Compras (ou dê a ele o perfil Almoxarife ou Engenharia no Almoxarifado). Sem isso, a tela mostra *"Seu
+  acesso não permite cadastrar material…"*. Consulta para ver quem já é: `SELECT id, nome, admin_modulos FROM usuarios WHERE admin_modulos LIKE '%compras%'`.
 
 ### B. Decisões que eu tomei e você pode reverter
 - **B1 — Esta frente vive em `main`, e `main` tem OUTRO pedido de compra.** A branch
@@ -503,6 +508,32 @@
   recebimento enxergam). Descartado: gerar o PDF a partir da tela sem salvar (o fornecedor
   receberia um pedido que não existe no sistema). Reversível: dá para desabilitar o botão enquanto
   houver alteração não salva, se confundir alguém.
+- **B64 — Etapa 192: CPF ou CNPJ, nunca os dois.** *"Preencha o CPF ou o CNPJ, não os dois."* — conferido no estado final da
+  gravação (também quando duas pessoas editam ao mesmo tempo). **Descartado:** aceitar os dois (fornecedor é pessoa física **ou**
+  jurídica; apertar depois, com dado misturado gravado, seria pior que afrouxar agora).
+- **B65 — Etapa 192: o CPF é conferido também pelo servidor; o CNPJ continua conferido só pela tela.** Coluna nova, sem legado — dá
+  para exigir certo desde o começo. O CNPJ tem legado fora do padrão (A2).
+- **B66 — Etapa 192: maiúsculas em 7 campos, e-mail fora.** Razão social, nome fantasia, inscrição estadual, contato, endereço,
+  cidade e estado. **Descartado:** e-mail em maiúsculas (é o normal em minúsculas e alguns servidores de e-mail diferenciam).
+- **B67 — Etapa 192: os fornecedores antigos não foram convertidos.** Passam a maiúsculas quando a ficha é salva — inclusive ao
+  **vincular ou remover do grupo**, que salva a ficha. **Descartado:** converter todos de uma vez (irreversível). Se quiser converter,
+  peça: é uma consulta só.
+- **B68 — Etapa 192: a tela mostra maiúsculas pelo estilo do campo e envia já convertido.** **Descartado:** trocar o texto a cada
+  tecla (o cursor pulava para o fim ao corrigir no meio).
+- **B69 — Etapa 192: o CPF fica congelado no pedido emitido**, como o CNPJ e o nome. **Descartado:** ler o CPF vivo (o documento de
+  um pedido já enviado mudaria quando a ficha mudasse). Pedido emitido antes do CPF existir continua sem ele.
+- **B70 — Etapa 192: OS digitada é só texto, uma por pedido, até 60 caracteres.** Não reserva material, não entra no encerramento nem
+  na trava de exclusão da OS. OS da lista e digitada juntas: *"Escolha a OS da lista ou digite, não os dois."*. **Descartado:**
+  limpar a outra em silêncio. Com **várias OS** (planejado), a OS digitada iria para cada item.
+- **B71 — Etapa 192: "quem administra o Compras" é o administrador do módulo Compras do cadastro de usuário.** Ele cadastra e edita
+  material **só** pelas telas do Compras. **Descartado:** dar o perfil COMPRAS às ações de material do Almoxarifado (todo comprador
+  passaria a **excluir** material e trocar foto dentro do Almoxarifado, porque a mesma permissão guarda essas ações).
+- **B72 — Etapa 192: pelo Compras nunca se mexe em estoque.** Saldo inicial (*"Saldo inicial é lançado no Almoxarifado."*), ligar
+  lote/série em material com saldo e trocar o dono de material com histórico são recusados pelo Compras **para todos**, inclusive o
+  administrador do sistema (que faz isso no Almoxarifado). Achado da revisão: alguém com o módulo Compras e um perfil antigo do
+  Almoxarifado lançava saldo sem ter o módulo Almoxarifado. **Descartado:** confiar no perfil do Almoxarifado dentro do Compras.
+- **B73 — Etapa 192: no Compras o Proprietário do material é só leitura** (*"O proprietário é definido no Almoxarifado."*); material
+  novo pelo Compras é estoque da GMP. **Descartado:** abrir a lista de clientes ao comprador (mostra nomes de clientes a quem não os via).
 
 ### D. Dúvidas para você (ou para o P.O.)
 - **D-35** — O que A, B e C significam **para a GMP**? A legenda atual é a definição genérica.
@@ -682,6 +713,107 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 192 — CPF e maiúsculas no fornecedor, OS digitada e NCM preenchido no pedido, materiais dentro do Compras (2026-10-30)
+
+**Em uma frase.** Seis pedidos da empresa de 30/10: o fornecedor **pessoa física** passa a ter **CPF**; a ficha do fornecedor grava os
+textos em **MAIÚSCULAS**; o pedido de compra aceita uma **OS digitada** quando a OS não está cadastrada; o **NCM e o peso** do material
+já aparecem no item do pedido ao incluir; e o módulo Compras ganha a tela **Materiais**, onde o **administrador do Compras** inclui e
+edita material sem depender do almoxarife. O sétimo pedido — **várias OS no mesmo pedido** — ficou só **planejado** (25 h, oito
+partes, seis perguntas para a empresa): `docs/superpowers/plans/2026-10-30-compras-varias-os-no-pedido-planejamento.md`.
+
+**O print do NCM** é a tela **Compras → Pedidos de compra → Novo pedido → item → "detalhes" (IPI, NCM, peso e observação)**: o texto
+"o do cadastro do material" era a dica do campo vazio. O NCM **estava** no material; a busca de material do pedido é que não o trazia,
+e o sistema só o completava ao salvar.
+
+### O que há de novo (visível para o usuário)
+
+- **Ficha do fornecedor:** campo **CPF** (`000.000.000-00`) ao lado do CNPJ; os textos aparecem e são gravados em maiúsculas.
+- **Lista de fornecedores:** coluna **CNPJ / CPF**; a busca acha pelo CPF (com ou sem pontos) e por nome com acento.
+- **Documento do pedido:** fornecedor só com CPF imprime **CPF** no lugar do CNPJ.
+- **Pedido de compra:** no campo OS, a opção **"OS não cadastrada — digitar"** abre um campo de texto (até 60 caracteres); a OS digitada
+  aparece na lista, na busca, no Excel e no documento (`OS: …`).
+- **Item do pedido:** NCM e peso já vêm preenchidos com os do material.
+- **Recebimento (Almoxarifado):** fornecedor só com CPF aparece com **CPF** no painel do pedido e na lista de fornecedores; o campo
+  do documento passa a se chamar **CNPJ / CPF do Fornecedor**.
+- **Compras → Materiais** (menu lateral): lista, **Novo material** e **Editar**, com o mesmo formulário do Almoxarifado (sem foto e sem
+  saldo inicial).
+- **Portal da Frota:** **← Voltar** no topo dos formulários (Etapa 10 da Frota, `docs/frotas/novidades-por-etapa.md`).
+
+### Por baixo do capô
+
+- `fornecedores.cpf` e `pedidos_compra.snap_fornecedor_cpf` (o CPF fica **congelado** no pedido emitido, como o CNPJ) — `ad99f567`.
+- Maiúsculas no servidor (`toLocaleUpperCase('pt-BR')`, acento mantido) nos 7 textos livres: razão social, nome fantasia, inscrição
+  estadual, contato, endereço, cidade, estado — `e8bd4374`.
+- `pedidos_compra.os_texto`, exclusivo com `os_id`, conferido no **estado final** do PUT — `003a73fb`.
+- `GET /api/compras/materiais` devolve `ncm` e `peso_unitario` — `3235fdbe`.
+- Rotas `/api/compras/materiais/cadastro` (lista, detalhe, incluir, editar) e `/api/compras/materiais/aux/*`, que reusam os **mesmos**
+  handlers do Almoxarifado — `bcbd4ed2`; acesso do administrador do módulo Compras — `950c70d8`.
+- Revisão adversarial (3 revisores): 6 correções e 13 testes que faltavam — `7b2143fd` (Compras nunca mexe em saldo), `3be6487d`
+  (busca com acento depois das maiúsculas: pedidos, cotações, recebimento, fornecedores), `ef5ca142` (corrida CPF × CNPJ na gravação),
+  `18b1bfc4` (NCM longo; CPF no recebimento), `2acd4dcc` (proprietário só leitura no Compras), `3a293902` (testes).
+- Teste de integração que cruza as três frentes: `comprasEtapa192Integracao.api.test.js` (5 passos).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Fornecedor pessoa física sem lugar para o CPF | Campo **CPF**, com conferência dos dígitos |
+| Ficha do fornecedor gravava como foi digitado | Textos livres gravados em **MAIÚSCULAS** (o e-mail não muda) |
+| Pedido só aceitava OS cadastrada | **"OS não cadastrada — digitar"** |
+| Item novo do pedido com NCM e peso vazios ("o do cadastro do material") | NCM e peso do material já preenchidos |
+| Só o almoxarife (ou engenharia) cadastrava material, e só pelo Almoxarifado | **Compras → Materiais**, também para o **administrador do Compras** |
+
+### As regras, com o cenário exato
+
+- **RN-192.01/02 — CPF conferido.** Compras → Fornecedores → Novo → CPF `111.111.111-11` → Salvar: *"CPF inválido. Verifique os dígitos."*.
+  Com `529.982.247-25`: grava.
+- **RN-192.03 — CPF ou CNPJ, não os dois.** Preencha os dois e salve: *"Preencha o CPF ou o CNPJ, não os dois."*. Vale também na edição
+  (um fornecedor com CPF que recebe um CNPJ sem apagar o CPF).
+- **RN-192.04 — o CPF aparece onde o CNPJ aparecia.** Na lista (coluna CNPJ / CPF), na busca (digite `52998224725`) e no documento do
+  pedido emitido para esse fornecedor (linha **CPF**).
+- **RN-192.05 — maiúsculas.** Digite `joão da silva` em Razão social e `são paulo` em Cidade: a tela já mostra `JOÃO DA SILVA` / `SÃO PAULO`
+  e é assim que fica gravado. O **e-mail** fica como foi digitado.
+- **RN-192.06 — os antigos não mudam sozinhos.** Fornecedor cadastrado antes continua como estava até alguém salvar a ficha dele (ou
+  vincular/remover do grupo, que salva a ficha).
+- **RN-192.07 — OS digitada.** Novo pedido → OS: **OS não cadastrada — digitar** → `OS 7781 externa` → Salvar. Com mais de 60 caracteres:
+  *"OS digitada: no máximo 60 caracteres."*. OS da lista e digitada ao mesmo tempo (só pela API): *"Escolha a OS da lista ou digite, não
+  os dois."*; valor que não é texto: *"OS digitada inválida."*.
+- **RN-192.08 — OS digitada é só texto.** O pedido com OS digitada é, para o recebimento, um pedido de **estoque**: o material que chega
+  **não** fica reservado para OS nenhuma, a OS digitada não aparece no Almoxarifado e não entra no encerramento da OS.
+- **RN-192.09 — NCM e peso.** Novo pedido → busque um material que tem NCM → incluir → "detalhes": o NCM e o peso já estão lá. NCM
+  com mais de 10 caracteres no cadastro do material não é copiado (o campo do pedido aceita até 10); o sistema completa ao salvar.
+- **RN-192.10 — Materiais no Compras.** Compras → Materiais → Novo material: o mesmo formulário do Almoxarifado, sem foto e sem saldo
+  inicial. Editar não inativa: *"Inativar ou reativar material é feito no Almoxarifado."* (só pela API; a tela não oferece).
+  Saldo inicial pelo Compras: *"Saldo inicial é lançado no Almoxarifado."* (para todos, inclusive o administrador do sistema). Ligar
+  controle por lote/série num material com saldo e trocar o dono de material com histórico também são recusados pelo Compras (seja
+  qual for o perfil): é trabalho de estoque. O **Proprietário** aparece só para leitura: *"O proprietário é definido no Almoxarifado."*;
+  material novo pelo Compras nasce como estoque da GMP.
+- **RN-192.11 — quem pode.** O **administrador do módulo Compras** (marcado no cadastro de usuário) e quem tem perfil **Almoxarife**,
+  **Engenharia** ou **Administrador** no Almoxarifado. Os outros veem: *"Seu acesso não permite cadastrar material. Peça a um
+  administrador do sistema para marcar você como administrador do módulo Compras (ou para lhe dar o perfil de Almoxarife ou Engenharia
+  no Almoxarifado)."*. O administrador do Compras **não** ganha nada dentro do Almoxarifado (excluir, foto, saldo continuam lá, com o
+  perfil que ele já tinha).
+
+### Roteiro de teste manual (clicável)
+
+1. **CPF:** Compras → Fornecedores → Novo → Razão social `joão teste`, CPF `529.982.247-25` → Salvar. A lista mostra `JOÃO TESTE` e o CPF.
+   Edite e preencha também um CNPJ → Salvar: aparece *"Preencha o CPF ou o CNPJ, não os dois."*.
+2. **OS digitada:** Compras → Pedidos → Novo → fornecedor `JOÃO TESTE` → OS: **OS não cadastrada — digitar** → `OS 7781` → inclua um
+   material com NCM → abra "detalhes" do item: NCM preenchido → Salvar → **Documento (PDF)**: `OS: OS 7781` e a linha **CPF**.
+3. **Materiais:** entre com um usuário **administrador do módulo Compras** (sem perfil no Almoxarifado) → Compras → **Materiais** →
+   Novo material → salve → ele aparece na busca de material do pedido.
+4. **Sem acesso:** entre com um comprador comum → Compras → Materiais: aparece o aviso de acesso.
+
+### O que a etapa NÃO cobre
+
+- **Várias OS no mesmo pedido** — só planejado (acima).
+- Pedido aberto **pela Reposição** (botão de comprar o que está abaixo do mínimo) ainda nasce com NCM e peso vazios na tela; o sistema
+  completa com os do material ao salvar.
+- Os fornecedores antigos **não** foram convertidos para maiúsculas.
+- A **remessa** do Almoxarifado continua mostrando só o CNPJ do fornecedor (o recebimento já mostra o CPF).
+- Excluir material, trocar foto e mexer em saldo continuam só no Almoxarifado.
+- A importação de pedidos por planilha não lê OS (nem cadastrada nem digitada), como antes.
 
 ## Etapa 111 — O log de acesso negado com o nome do módulo; o nome e a rota de cada módulo numa fonte só (2026-10-15)
 

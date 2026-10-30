@@ -1,6 +1,6 @@
 # Etapa 192 (Compras) + Frota Etapa 10 — CPF e maiúsculas no fornecedor, OS digitada e NCM no pedido, materiais no Compras, Voltar no topo
 
-> Status: **em execução** (2026-10-30). Estimativa: `docs/estimativas/2026-10/estimativa_2026-10-30_compras-fornecedor-pedido-e-frota.md` (`14092ab2`).
+> Status: **etapa fechada em 2026-10-30** (`14092ab2` estimativa … `3a293902` Fase 5, mais o fechamento). Estimativa: `docs/estimativas/2026-10/estimativa_2026-10-30_compras-fornecedor-pedido-e-frota.md` (`14092ab2`).
 
 Pedido do André de 30/10 (7 itens). O item 7 dele (várias OS no mesmo pedido) **não** é executado aqui: vira o plano
 `docs/superpowers/plans/2026-10-30-compras-varias-os-no-pedido-planejamento.md` (o `os_id` do pedido alimenta a reserva do
@@ -73,11 +73,55 @@ A parte da Frota é a **Etapa 10 da Frota** (`docs/frotas/novidades-por-etapa.md
 
 | Task | Itens | Onde | Estado |
 |---|---|---|---|
-| F1 | 1, 2 (RN-192.01–06) | worktree `CRM-wt-192f` | — |
-| P1 | 4, 5 (RN-192.07–09) | worktree `CRM-wt-192p` | — |
-| M1 | 6, 7 (RN-192.10–11) | worktree `CRM-wt-192m` | — |
-| V1 | 3 (RN-F10.01) | `main` | — |
-| O1 | planejamento várias OS | plano separado (sem código) | — |
-| I1 | integração: fornecedor só com CPF num pedido com OS digitada → documento mostra `CPF:` e `OS:`; material criado pelo Compras aparece na busca do pedido com NCM | `main`, depois do merge | — |
+| F1 | 1, 2 (RN-192.01–06) | worktree `CRM-wt-192f` | ✅ `ad99f567` CPF, `e8bd4374` maiúsculas (merge `8965ccbf`) |
+| P1 | 4, 5 (RN-192.07–09) | worktree `CRM-wt-192p` | ✅ `003a73fb` OS digitada, `3235fdbe` NCM (merge `c8c264c0`) |
+| M1 | 6, 7 (RN-192.10–11) | worktree `CRM-wt-192m` | ✅ `bcbd4ed2` tela/rotas, `950c70d8` acesso (merge `4f7118e4`) |
+| V1 | 3 (RN-F10.01) | `main` | ✅ `79aad18f`, docs `19d26c6c` |
+| O1 | planejamento várias OS | plano separado (sem código) | ✅ `633efbd4` (25 h, 8 partes) |
+| I1 | integração: fornecedor só com CPF num pedido com OS digitada → documento mostra `CPF:` e `OS:`; material criado pelo Compras aparece na busca do pedido com NCM | `main`, depois do merge | ✅ `8c1db785` (5 passos; controle positivo: NCM fora da busca derruba o 2, documento sempre com CNPJ derruba o 5) |
 
 Pontos de conflito previstos no merge: `pedidoDocumentoHtml.js` (F1 e P1), `routes/compras.js` (P1 e M1), `Compras.js` (M1).
+
+## Fase 5 — revisão adversarial (3 revisores frescos: regra, autorização, força dos testes)
+
+| # | Achado (reproduzido) | Correção |
+|---|---|---|
+| X1 | Médio — quem tem o módulo Compras e um perfil antigo do Almoxarifado (ALMOXARIFE/ADMINISTRADOR) **sem** o módulo Almoxarifado lançava saldo inicial (ENTRADA 5) e ligava lote pelas rotas do Compras | `7b2143fd`: saldo inicial pelo Compras → 400 `Saldo inicial é lançado no Almoxarifado.` para todos; o handler compartilhado roda com uma cópia do usuário com perfil COMPRAS (sem superadmin/admin), mantendo id/nome para a auditoria. G1: o harness aceita `checkModulePermission` e o teste prova o módulo `compras` nas 10 rotas |
+| X2 | Médio — as maiúsculas quebraram a busca com acento ("aços" não achava "AÇOS") em pedidos, cotações e recebimento | `3be6487d`: `condicaoDeBusca` nas 4 buscas (inclui a de fornecedores, no lugar da feita à mão) |
+| X3 | Médio-baixo — corrida: duas edições ao mesmo tempo deixavam CPF **e** CNPJ (16/30) | `ef5ca142`: exclusividade no `WHERE` do `UPDATE`; teste com gancho no `db.get` + 20 rodadas reais |
+| X4 | Médio-baixo — NCM do material com mais de 10 caracteres agora travava o pedido novo (400 do schema do item) | `18b1bfc4`: a tela só copia NCM de até 10 |
+| X5 | Baixo — recebimento mostrava `CNPJ —` para fornecedor só com CPF | `18b1bfc4`: CPF no painel do pedido, na lista de fornecedores e no campo `CNPJ / CPF do Fornecedor` |
+| X6 | Exibição — o formulário no Compras chamava `/clientes`, recusado a quem só tem Compras | `2acd4dcc`: Proprietário só leitura no Compras (`O proprietário é definido no Almoxarifado.`) |
+| G2–G13 | 13 sabotagens que não derrubavam nada (1º dígito do CPF, PUT dos 7 campos, busca por nome fantasia, CPF na lista/Excel, CSS, importação, 60 emoji, `os_texto` inválido, CPF com letra, OS digitada vazia, Voltar da Saída enquanto salva, OS digitada fora do encerramento) | `3a293902` (+ G1 em `7b2143fd`, G4/G7 em `3be6487d`, G11 em `18b1bfc4`) |
+
+## Fechamento (2026-10-30)
+
+**Verificação final na `main` (`0aba7241`, depois do merge da Fase 5):** `test:api` 574/574 arquivos · `test:almoxarifado` 44/0 ·
+`test:validation` 4/0 · `test:safealter` 3/0 · `test:sqlite` 16/0 · tela 208 suítes, 2863/2863 testes · build *Compiled successfully*.
+
+**Divergências do plano (o plano estava errado ou incompleto):**
+- RN-192.04 não previa **congelar o CPF no pedido** — o documento lê o retrato do fornecedor; nasceu `snap_fornecedor_cpf` (B69).
+- RN-192.05 não previa que **maiúsculas quebram a busca com acento** no SQLite — achado de F1 (busca de fornecedores e importação) e da
+  Fase 5 (pedidos, cotações, recebimento).
+- RN-192.09 dizia "a busca não traz NCM"; era só isso — a tela já copiava. Mas copiar trouxe o NCM longo (X4).
+- RN-192.10 punha as rotas em `routes/compras.js`; ficaram em `routes/almoxarifado.js`/`extended.js` ao lado dos handlers que reusam
+  (os testes de portão exigem caminho literal).
+- **RN-192.11 estava errada:** mandava pôr o perfil COMPRAS em `criar_material`/`editar_material`. `editar_material` também guarda
+  **excluir** e **foto** no Almoxarifado; todo comprador ganharia isso. O certo: o **administrador do módulo Compras** (`admin_modulos`),
+  só nas portas do Compras (B71), e pelo Compras nunca se mexe em estoque (B72).
+- Fase 2 (revisor fresco do plano) **não rodou** como passada separada: cada executor foi instruído a rastrear a RN até o último gesto e
+  reportar divergência (foi o que achou o erro da RN-192.11). A Fase 5 achou 6 defeitos reais — a Fase 2 provavelmente teria pegado X1.
+
+**Retro (4 números):** rodadas de correção até verde: **1**; achados da revisão: **6 reais + 13 lacunas de teste, 0 ruído**; paralelismo:
+**3 galhos + 1 planejador** em paralelo, sem retrabalho (merges sem conflito); defeito que escapou: — (preencher na próxima etapa).
+
+## Próxima tarefa detalhada
+
+1. **Várias OS no mesmo pedido** — só depois de a empresa responder às perguntas de
+   `docs/superpowers/plans/2026-10-30-compras-varias-os-no-pedido-planejamento.md` e de o André liberar o Almoxarifado (pausado): as
+   partes 5–8 mexem na reserva do recebimento sob a trava por material. Começar pela parte 1 (OS por item, migração que copia a OS do
+   cabeçalho), contrato no plano. A `os_texto` desta etapa vira por item lá.
+2. **A11** — o André marca o administrador do módulo Compras no cadastro de usuário (sem isso a tela Materiais do Compras mostra o aviso).
+3. Pendências pequenas declaradas: NCM/peso no pedido aberto pela Reposição (21b.3d) — precisaria de um `GET` de material por id no
+   Compras; CPF na **remessa** do Almoxarifado (pausado).
+4. Antes de apresentar: clicar os roteiros da Etapa 192 (`docs/compras-novidades-por-etapa.md`) e da Etapa 10 da Frota.
