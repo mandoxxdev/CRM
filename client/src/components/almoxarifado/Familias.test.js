@@ -285,6 +285,9 @@ describe('TabFamilias — Etapa 193 (RN-193.01): o cadastro de material saiu da 
     expect(ver.getAttribute('href')).toBe('/almoxarifado/materiais/ver/10');
     expect(ver.getAttribute('title')).toBe('Ver');
     expect(container.querySelector('a[href^="/almoxarifado/materiais/editar"]')).toBeNull();
+    // Fase 5 (T5): a sub EXPANDIDA (itens carregados) tambem nao oferece cadastro — a checagem acima rodava so antes de expandir.
+    expect(container.querySelector('a[href^="/almoxarifado/materiais/novo"]')).toBeNull();
+    expect(adicionar(subDe(rol, 'ROL-ESF'))).toHaveLength(0);
   });
 });
 
