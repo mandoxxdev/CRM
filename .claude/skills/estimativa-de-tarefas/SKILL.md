@@ -124,7 +124,7 @@ O `.txt` é o bloco abaixo, sem mais nada. O `.md` tem uma tabela
 ### 5. O formato do WhatsApp (copiar e colar)
 
 WhatsApp entende `*negrito*`, `_itálico_` e listas com `-`. **Não** use `#`, tabelas, `**` nem
-links de arquivo — viram lixo na conversa.
+links de arquivo — viram lixo na conversa. Sem emoji (nem relógio ao lado do tempo): o André pediu o texto limpo.
 
 ```
 *Planejamento — <assunto em linguagem de usuário>*
@@ -132,11 +132,11 @@ _<DD/MM/AAAA>_
 
 *1. <Título curto da alteração>*
 <O que muda para quem usa, em 1 ou 2 frases. Por que é feito, se não for óbvio.>
-⏱ Tempo estimado: *2h30*
+Tempo estimado: *2h30*
 
 *2. <Título>*
 <…>
-⏱ Tempo estimado: *1h30*
+Tempo estimado: *1h30*
 
 *Total estimado: 4h*
 _O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._

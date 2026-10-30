@@ -3,7 +3,7 @@ _29/10/2026_
 
 *1. Aviso quando o destino da viagem foi renomeado*
 Ao editar uma viagem cujo destino foi renomeado depois, a lista mostra o nome novo, mas a viagem guarda o nome da época. A tela passa a avisar os dois nomes, para ninguém achar que a viagem mudou.
-⏱ Tempo estimado: *1h30*
+Tempo estimado: *1h30*
 
 *Total estimado: 1h30*
 _O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._

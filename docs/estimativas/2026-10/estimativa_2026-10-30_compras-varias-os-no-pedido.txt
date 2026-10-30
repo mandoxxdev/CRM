@@ -4,35 +4,35 @@ _Só planejado: a decidir quando fazer._
 
 *1. Base do pedido com OS por item*
 Cada item do pedido passa a ter a sua OS (cadastrada, digitada ou estoque). Os pedidos que já existem herdam a OS que têm hoje.
-⏱ Tempo estimado: *4h*
+Tempo estimado: *4h*
 
 *2. Tela do pedido e lista*
 Escolher a OS em cada item, com atalho para aplicar a mesma OS a todos. A lista de pedidos mostra e filtra por todas as OS do pedido.
-⏱ Tempo estimado: *3h*
+Tempo estimado: *3h*
 
 *3. Pedido impresso*
 O documento mostra as OS do pedido e a OS de cada item.
-⏱ Tempo estimado: *3h*
+Tempo estimado: *3h*
 
 *4. Exclusão e encerramento da OS*
 A OS que aparece em qualquer item de um pedido não pode ser apagada; o encerramento considera todos os itens.
-⏱ Tempo estimado: *2h*
+Tempo estimado: *2h*
 
 *5. Recebimento: entrada por OS*
 Cada item que chega fica marcado com a OS do seu item no pedido.
-⏱ Tempo estimado: *4h*
+Tempo estimado: *4h*
 
 *6. Recebimento: reserva por OS*
 O material que chega fica reservado para a OS certa de cada item, inclusive depois da inspeção.
-⏱ Tempo estimado: *4h*
+Tempo estimado: *4h*
 
 *7. Tela do recebimento*
 Mostra a OS de cada item do pedido na hora de receber.
-⏱ Tempo estimado: *2h*
+Tempo estimado: *2h*
 
 *8. Teste completo e documentação*
 Do pedido com duas OS até o consumo e o encerramento de cada uma.
-⏱ Tempo estimado: *3h*
+Tempo estimado: *3h*
 
 *Total estimado: 25h*
 _O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._

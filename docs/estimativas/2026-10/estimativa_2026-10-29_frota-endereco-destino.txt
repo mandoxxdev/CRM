@@ -3,23 +3,23 @@ _29/10/2026_
 
 *1. Destino com endereço completo — 1ª parte: celular do motorista*
 No botão "+ Novo destino" da saída, o CEP preenche rua, bairro, cidade e estado. Quem não sabe o CEP preenche os campos à mão. Rua, número, bairro, cidade e estado passam a ser obrigatórios.
-⏱ Tempo estimado: *3h*
+Tempo estimado: *3h*
 
 *2. Destino com endereço completo — 2ª parte: tela de Destinos*
 O mesmo endereço com CEP ou à mão na tela de Destinos. Destinos antigos, cadastrados só com o nome, continuam funcionando e podem ser completados ao editar.
-⏱ Tempo estimado: *1h30*
+Tempo estimado: *1h30*
 
 *3. Destino escolhido da lista na Nova Viagem*
 Na tela Viagens, o destino deixa de ser digitado livremente e passa a ser escolhido da lista de destinos, com o botão "+ Novo destino". Viagens antigas continuam abrindo e salvando normalmente.
-⏱ Tempo estimado: *2h30*
+Tempo estimado: *2h30*
 
 *4. Origem com o endereço da GMP*
 A saída mostra "Saindo de: GMP" com o endereço da empresa, o mesmo que está em Configurações. Se a empresa mudar de endereço, basta alterar em um lugar.
-⏱ Tempo estimado: *1h30*
+Tempo estimado: *1h30*
 
 *5. Retirada do botão de ajuda "?" do canto da tela*
 O botão flutuante de ajuda, que não é mais usado, sai de todas as telas.
-⏱ Tempo estimado: *1h30*
+Tempo estimado: *1h30*
 
 *Total estimado: 10h*
 _O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._

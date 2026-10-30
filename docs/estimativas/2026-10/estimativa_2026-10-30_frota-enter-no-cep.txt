@@ -3,7 +3,7 @@ _30/10/2026_
 
 *1. Enter no CEP busca o endereço também na tela Destinos*
 Na tela Destinos do escritório, apertar Enter depois de digitar o CEP salvava o destino ainda sem endereço e mostrava "Informe a rua". Passa a buscar o endereço, como já acontece no celular do motorista. Em qualquer outro campo, o Enter continua salvando.
-⏱ Tempo estimado: *45 min*
+Tempo estimado: *45 min*
 
 *Total estimado: 45 min*
 _O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._

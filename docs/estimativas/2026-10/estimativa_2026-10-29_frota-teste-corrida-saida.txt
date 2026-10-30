@@ -3,7 +3,7 @@ _29/10/2026_
 
 *1. Conferência automática da saída com condutor e destino*
 As conferências automáticas que garantem que a saída recusa um veículo que passou a exigir condutor, ou um destino desativado, no mesmo instante em que o motorista salva, deixam de depender de uma pausa fixa de tempo. Assim elas não falham à toa num computador mais lento e continuam acusando qualquer quebra da regra. Nada muda na tela.
-⏱ Tempo estimado: *1h30*
+Tempo estimado: *1h30*
 
 *Total estimado: 1h30*
 _O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._

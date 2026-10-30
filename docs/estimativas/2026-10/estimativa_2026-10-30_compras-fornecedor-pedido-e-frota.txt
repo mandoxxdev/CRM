@@ -3,35 +3,35 @@ _30/10/2026_
 
 *1. CPF no cadastro de fornecedor*
 O fornecedor pessoa física passa a ter um campo de CPF, com conferência dos dígitos, ao lado do CNPJ. A busca de fornecedores e o documento do pedido passam a mostrar o CPF quando não houver CNPJ.
-⏱ Tempo estimado: *2h30*
+Tempo estimado: *2h30*
 
 *2. Cadastro de fornecedor em letras maiúsculas*
 Os campos de texto livre do cadastro de fornecedor (razão social, nome fantasia, contato, endereço, cidade, observações) passam a ser gravados em maiúsculas. O e-mail fica como foi digitado, para não atrapalhar o envio.
-⏱ Tempo estimado: *1h15*
+Tempo estimado: *1h15*
 
 *3. Botão Voltar no topo das telas de saída, retorno e abastecimento da Frota*
 O motorista passa a ter o botão Voltar também no alto da tela, sem precisar rolar até o fim.
-⏱ Tempo estimado: *1h15*
+Tempo estimado: *1h15*
 
 *4. OS digitada à mão no Pedido de Compra*
 Quando a OS não está cadastrada no sistema, o comprador pode digitar o número dela como texto. Ela aparece no pedido, na lista e no documento impresso.
-⏱ Tempo estimado: *2h30*
+Tempo estimado: *2h30*
 
 *5. NCM e peso já preenchidos no item do Pedido de Compra*
 Ao incluir um material no pedido, o NCM e o peso do cadastro do material passam a aparecer preenchidos no detalhe do item, em vez do aviso "o do cadastro do material".
-⏱ Tempo estimado: *45 min*
+Tempo estimado: *45 min*
 
 *6. Cadastro de materiais dentro do módulo Compras*
 O módulo Compras passa a ter a tela de cadastro de materiais (incluir e editar), sem precisar entrar no Almoxarifado.
-⏱ Tempo estimado: *2h*
+Tempo estimado: *2h*
 
 *7. Acesso de quem administra o Compras ao cadastro de materiais*
 Quem administra o Compras passa a poder incluir e editar materiais, e não só o almoxarife.
-⏱ Tempo estimado: *2h15*
+Tempo estimado: *2h15*
 
 *8. Planejamento: várias OS no mesmo Pedido de Compra*
 Levantamento de tudo o que muda para um pedido atender mais de uma OS (cada item ligado à sua OS, o recebimento separando o material para a OS certa, o encerramento da OS e o documento impresso), com o tempo de cada parte, para apresentar e decidir quando fazer.
-⏱ Tempo estimado: *45 min*
+Tempo estimado: *45 min*
 
 *Total estimado: 13h15*
 _O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
