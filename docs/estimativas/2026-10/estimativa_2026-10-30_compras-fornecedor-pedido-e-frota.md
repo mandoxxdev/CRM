@@ -58,4 +58,4 @@ Pela tabela nova da skill (parte do André fixa pelo porte), o mesmo pacote fica
 | 8 | Planejamento varias OS | 10 min | 15 min | 15 min | 45 min |
 | | **Total** | | | | **13h15** |
 
-Os .txt ja enviados (21h30 estimado, 17h30 realizado) nao foram reescritos.
+Os .txt (estimativa e conclusao) foram refeitos com estes tempos a pedido do André: ainda nao tinham sido enviados. Estimado = realizado porque os dois saem do mesmo recalculo, feito depois da execucao.
