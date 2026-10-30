@@ -180,6 +180,40 @@ describe('Compras → Materiais — o formulário do Almoxarifado pelas portas d
     expect(urlsDoAlmoxarifado()).toEqual([]);
   });
 
+  // Fase 5 (X6): `GET /clientes` exige Comercial/Almoxarifado/Operacional — o comprador so com o Compras tomava erro no
+  // seletor "Proprietário". No Compras o dono e so mostrado (o do cadastro), nao trocado, e a lista de clientes nao e pedida.
+  test('editar (X6): o Proprietário é só leitura no Compras — não pede /clientes e o PUT não leva proprietario_cliente_id', async () => {
+    const comDono = { ...MATERIAL, proprietario_cliente_id: 12, proprietario_cliente_nome: 'CLIENTE X LTDA' };
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => {
+      if (url === '/compras/materiais/cadastro/77') return Promise.resolve({ data: comDono });
+      if (url === '/clientes') return Promise.reject({ response: { status: 403, data: { error: 'Acesso negado ao módulo' } } });
+      return base(url, cfg);
+    });
+    await renderizar('/compras/materiais/editar/77');
+    expect(urlsChamadas()).not.toContain('/clientes');
+    expect(container.querySelector('#material-proprietario')).toBeNull();
+    const dono = container.querySelector('[data-testid="material-proprietario-somente-leitura"]');
+    expect(dono.textContent).toContain('CLIENTE X LTDA');
+    expect(container.textContent).toContain('O proprietário é definido no Almoxarifado.');
+    await submeter();
+    expect(api.put).toHaveBeenCalledTimes(1);
+    expect(api.put.mock.calls[0][1]).not.toHaveProperty('proprietario_cliente_id');
+  });
+
+  test('novo (X6): sem dono, o Compras mostra "GMP (estoque próprio)" e não pede /clientes', async () => {
+    await renderizar('/compras/materiais/novo');
+    expect(container.querySelector('[data-testid="material-proprietario-somente-leitura"]').textContent)
+      .toContain('GMP (estoque próprio)');
+    expect(urlsChamadas()).not.toContain('/clientes');
+  });
+
+  test('no Almoxarifado o seletor Proprietário continua e pede /clientes', async () => {
+    await renderizar('/almoxarifado/materiais/novo');
+    expect(container.querySelector('#material-proprietario')).not.toBeNull();
+    expect(urlsChamadas()).toContain('/clientes');
+  });
+
   test('no Almoxarifado o formulário continua nas rotas dele, com foto e saldo inicial', async () => {
     await renderizar('/almoxarifado/materiais/novo');
     expect(container.textContent).toContain('Foto do Produto');
