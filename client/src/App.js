@@ -52,6 +52,7 @@ import {
   GruposFornecedores,
   FornecedoresDoGrupo,
   CotacaoForm,
+  MateriaisCompras,
   ItensFornecedor,
   Financeiro,
   Fabrica,
@@ -134,6 +135,8 @@ import {
   MinhaConta,
   TodolistBoard,
 } from './routes/lazyModules';
+// Etapa 192: o formulario de material com as portas do Compras (rotas Materiais do Compras, abaixo).
+import { ROTAS_COMPRAS } from './components/almoxarifado/rotasCadastroMaterial';
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -395,6 +398,11 @@ export function AppRoutes() {
         {/* Etapa 40, Task 5: os dois caminhos da aba Cotações que caiam no `*` */}
         <Route path="cotacoes/nova" element={<CotacaoForm />} />
         <Route path="cotacoes/editar/:id" element={<CotacaoForm />} />
+        {/* Etapa 192 (RN-192.10): Materiais no Compras — a lista e o MESMO formulario do Almoxarifado, pelas portas do
+            Compras (ROTAS_COMPRAS). Sem estas rotas os tres caminhos cairiam no `*` (a lista de fornecedores). */}
+        <Route path="materiais" element={<MateriaisCompras />} />
+        <Route path="materiais/novo" element={<MaterialAlmoxarifadoForm rotas={ROTAS_COMPRAS} />} />
+        <Route path="materiais/editar/:id" element={<MaterialAlmoxarifadoForm rotas={ROTAS_COMPRAS} />} />
         <Route path="requisicoes-material" element={<RequisicoesMaterialListaPage moduloKey="compras" />} />
         <Route path="requisicoes-material/nova" element={<RequisicoesMaterialNovaPage moduloKey="compras" />} />
       </Route>

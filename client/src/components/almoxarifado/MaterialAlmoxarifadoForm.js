@@ -10,6 +10,7 @@ import { formatLocalizacaoLabel } from '../../utils/localizacaoLabel';
 import { toast } from 'react-toastify';
 import { FiSave, FiArrowLeft, FiImage, FiRefreshCw } from 'react-icons/fi';
 import AvisoDaListaRecusada, { OpcaoForaDaLista } from './AvisoDaListaRecusada';
+import { ROTAS_ALMOXARIFADO } from './rotasCadastroMaterial';
 import './Almoxarifado.css';
 
 // Etapa 26: a lista de categorias saiu daqui (era uma de três cópias hardcoded) e passou a vir
@@ -62,7 +63,9 @@ export const CAMPOS_LIDOS = [
 // informa (lote, série), exige inspeção ou é de cliente — o servidor recusa o saldo inicial desses (RN-02).
 export const AVISO_SALDO_INICIAL = 'Material com lote, série, inspeção ou de cliente nasce com saldo 0 — a entrada é lançada depois, em Movimentações ou pelo Recebimento.';
 
-const MaterialAlmoxarifadoForm = () => {
+// Etapa 192 (RN-192.10): `rotas` decide por onde o formulario fala com o servidor (ver rotasCadastroMaterial.js) — o Compras
+// usa as portas dele e esconde foto, saldo inicial e os atalhos para Configuracoes do Almoxarifado.
+const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
   const { user } = useAuth();
   // Etapa 126 (C261, RN-11; Fase 2 M5): "cadastre em Configuracoes" so para quem o SERVIDOR deixa cadastrar familia e localizacao —
   // o administrador do sistema sem perfil abria a tela pelo canConfigureAlmox e recebia 403 la. Os outros: "solicite a um administrador".
@@ -112,7 +115,7 @@ const MaterialAlmoxarifadoForm = () => {
   const [erroClientes, setErroClientes] = useState(null);
   // Etapa 26 (RN-01): o catálogo do cliente, ponto único de busca compartilhado com as duas
   // telas de listagem.
-  const { categorias, erro: erroCategorias } = useCategoriasMaterial();
+  const { categorias, erro: erroCategorias } = useCategoriasMaterial(rotas.api.categorias);
 
   const [form, setForm] = useState({
     codigo: '',
@@ -212,7 +215,7 @@ const MaterialAlmoxarifadoForm = () => {
   const loadFamilias = async () => {
     setLoadingFamilias(true);
     try {
-      const res = await api.get('/almoxarifado/familias');
+      const res = await api.get(rotas.api.familias);
       const lista = res.data || [];
       setFamilias(lista);
       // RN-37.07: "S fora de R → ignorada" NÃO acontece sozinho. O <select> exibiria "— nenhuma —"
@@ -231,7 +234,9 @@ const MaterialAlmoxarifadoForm = () => {
     } catch (err) {
       const status = err.response?.status;
       if (status === 403) {
-        toast.error('Sem permissão no módulo Almoxarifado. Solicite acesso a um administrador.');
+        toast.error(rotas.modulo === 'compras'
+          ? 'Sem permissão para cadastrar material. Solicite acesso a um administrador.'
+          : 'Sem permissão no módulo Almoxarifado. Solicite acesso a um administrador.');
       } else {
         toast.error('Erro ao carregar famílias. Reinicie o servidor e tente novamente.');
       }
@@ -242,7 +247,7 @@ const MaterialAlmoxarifadoForm = () => {
 
   const loadAlmoxarifados = async () => {
     try {
-      const res = await api.get('/almoxarifado/almoxarifados');
+      const res = await api.get(rotas.api.almoxarifados);
       setAlmoxarifados(res.data || []);
     } catch { /* silencioso: sem a lista o select fica vazio e a localização segue editável */ }
   };
@@ -250,7 +255,7 @@ const MaterialAlmoxarifadoForm = () => {
   const loadLocalizacoes = async () => {
     setLoadingLocalizacoes(true);
     try {
-      const res = await api.get('/almoxarifado/localizacoes');
+      const res = await api.get(rotas.api.localizacoes);
       setLocalizacoes(res.data || []);
     } catch {
       toast.error('Erro ao carregar localizações');
@@ -348,7 +353,7 @@ const MaterialAlmoxarifadoForm = () => {
   const loadMaterial = async () => {
     setLoading(true);
     try {
-      const res = await api.get(`/almoxarifado/materiais/${id}`);
+      const res = await api.get(rotas.api.material(id));
       const m = res.data;
       setFamiliaGravadaId(m.familia_id ? String(m.familia_id) : '');
       controlesLidosRef.current = { controle_lote: !!m.controle_lote, controle_serie: !!m.controle_serie };
@@ -426,7 +431,7 @@ const MaterialAlmoxarifadoForm = () => {
       setSavedId(m.id);
     } catch {
       toast.error('Erro ao carregar material');
-      navigate('/almoxarifado/materiais');
+      navigate(rotas.tela.lista);
     } finally {
       setLoading(false);
     }
@@ -435,7 +440,7 @@ const MaterialAlmoxarifadoForm = () => {
   const loadProximoCodigo = async (familiaId) => {
     try {
       const params = familiaId ? { familia_id: familiaId } : {};
-      const res = await api.get('/almoxarifado/proximo-codigo', { params });
+      const res = await api.get(rotas.api.proximoCodigo, { params });
       setForm(f => ({ ...f, codigo: res.data.codigo }));
     } catch {
       /* silently fail */
@@ -535,26 +540,28 @@ const MaterialAlmoxarifadoForm = () => {
         ca_validade: form.ca_validade || null,
       };
       delete payload.localizacao;
+      // Etapa 192: o Compras nao lanca saldo (o campo nem aparece) — sem a chave o servidor nao ve saldo inicial.
+      if (!rotas.saldoInicial) delete payload.quantidade_atual;
 
       let res;
       if (isEdit) {
         if (controlesLidosRef.current) payload.controles_lidos = controlesLidosRef.current;
         if (familiaLidaRef.current) payload.familia_lida = familiaLidaRef.current;
         if (camposLidosRef.current) payload.campos_lidos = camposLidosRef.current;
-        res = await api.put(`/almoxarifado/materiais/${id}`, payload);
+        res = await api.put(rotas.api.material(id), payload);
         toast.success('Material atualizado!');
       } else {
-        res = await api.post('/almoxarifado/materiais', payload);
+        res = await api.post(rotas.api.criar, payload);
         toast.success('Material cadastrado!');
         setSavedId(res.data.id);
       }
 
       // Upload da foto pendente
-      if (fileInputRef.current?.files?.[0] && (savedId || res.data?.id)) {
+      if (rotas.foto && fileInputRef.current?.files?.[0] && (savedId || res.data?.id)) {
         await uploadFoto(savedId || res.data.id, fileInputRef.current.files[0]);
       }
 
-      navigate('/almoxarifado/materiais');
+      navigate(rotas.tela.lista);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao salvar material');
     } finally {
@@ -627,10 +634,10 @@ const MaterialAlmoxarifadoForm = () => {
       <div className="almox-header">
         <div>
           <h1>{isEdit ? 'Editar Material' : 'Novo Material'}</h1>
-          <p>Almoxarifado · Cadastro de Materiais</p>
+          <p>{rotas.subtitulo}</p>
         </div>
         <div className="almox-header-actions">
-          <button className="btn-almox-secondary" onClick={() => navigate('/almoxarifado/materiais')}>
+          <button className="btn-almox-secondary" onClick={() => navigate(rotas.tela.lista)}>
             <FiArrowLeft size={14} /> Voltar
           </button>
         </div>
@@ -685,7 +692,7 @@ const MaterialAlmoxarifadoForm = () => {
                   ) : familiasRaiz.length === 0 ? (
                     <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', padding: '8px 12px', background: 'var(--gmp-bg)', border: '1px solid var(--gmp-border)', borderRadius: 8 }}>
                       Nenhuma família cadastrada
-                      {isAdmin ? (
+                      {isAdmin && rotas.linksConfiguracao ? (
                         <> — cadastre em{' '}
                           <Link to="/almoxarifado/configuracoes?tab=familias" style={{ color: '#4facfe' }}>Configurações → Famílias</Link>
                         </>
@@ -894,6 +901,7 @@ const MaterialAlmoxarifadoForm = () => {
                     {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
                 </div>
+                {rotas.saldoInicial && (
                 <div className="almox-field">
                   <label className="almox-label">{isEdit ? 'Quantidade Atual' : 'Saldo Inicial'}</label>
                   <input className="almox-input" type="number" min="0" step="1"
@@ -908,6 +916,7 @@ const MaterialAlmoxarifadoForm = () => {
                     </small>
                   )}
                 </div>
+                )}
                 <div className="almox-field">
                   <label className="almox-label">Estoque Mínimo</label>
                   <input className="almox-input" type="number" min="0" step="1"
@@ -937,7 +946,7 @@ const MaterialAlmoxarifadoForm = () => {
                   ) : localizacoes.length === 0 && !localizacaoInativa ? (
                     <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', padding: '8px 12px', background: 'var(--gmp-bg)', border: '1px solid var(--gmp-border)', borderRadius: 8 }}>
                       Nenhuma localização cadastrada
-                      {isAdmin ? (
+                      {isAdmin && rotas.linksConfiguracao ? (
                         <> — cadastre em{' '}
                           <Link to="/almoxarifado/configuracoes?tab=localizacoes" style={{ color: '#4facfe' }}>Configurações → Localizações</Link>
                         </>
@@ -1087,7 +1096,8 @@ const MaterialAlmoxarifadoForm = () => {
           {/* Coluna lateral — foto + ações */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'sticky', top: 80 }}>
 
-            {/* Foto */}
+            {/* Foto (no Compras nao: a foto fica no Almoxarifado — Etapa 192) */}
+            {rotas.foto && (
             <div style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, padding: 20 }}>
               <div className="almox-section-title" style={{ marginTop: 0 }}>Foto do Produto</div>
               <div className="almox-foto-upload-area">
@@ -1109,6 +1119,7 @@ const MaterialAlmoxarifadoForm = () => {
                 </div>
               )}
             </div>
+            )}
 
             {/* Botões */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1116,7 +1127,7 @@ const MaterialAlmoxarifadoForm = () => {
                 <FiSave size={14} /> {saving ? 'Salvando...' : isEdit ? 'Atualizar Material' : 'Cadastrar Material'}
               </button>
               <button type="button" className="btn-almox-secondary" style={{ justifyContent: 'center' }}
-                onClick={() => navigate('/almoxarifado/materiais')}>
+                onClick={() => navigate(rotas.tela.lista)}>
                 <FiArrowLeft size={14} /> Cancelar
               </button>
             </div>

@@ -465,6 +465,10 @@ app.get('/api/compras/materiais', authenticateToken, checkModulePermission('comp
     res.status(e.status || 500).json({ error: e.message });
   }
 });
+// Etapa 192 (RN-192.10): o CADASTRO de material pelo Compras (lista, incluir, editar e os auxiliares do formulario) NAO mora
+// aqui: `/api/compras/materiais/cadastro...` e `/api/compras/materiais/aux/...` sao registradas em `routes/almoxarifado.js` e
+// `routes/almoxarifado/extended.js`, ao lado das rotas do almoxarifado cujos handlers reaproveitam
+// (`services/compras/cadastroDeMaterial.js`). Esta busca continua sendo a somente leitura do pedido.
 
 /**
  * Etapa 39 (RN-39.05) — a PREVIA dos totais, para o formulario mostrar o valor ANTES de salvar.

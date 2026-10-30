@@ -272,6 +272,8 @@ const Layout = () => {
     { path: '/compras/fornecedores-homologados', icon: FiPackage, label: 'Fornecedores homologados' },
     { path: '/compras/pedidos', icon: FiShoppingCart, label: 'Pedidos de Compra' },
     { path: '/compras/cotacoes', icon: FiFileText2, label: 'Cotações' },
+    // Etapa 192 (RN-192.10): cadastro de material pelo Compras (lista, incluir, editar) — portas `/api/compras/materiais/...`.
+    { path: '/compras/materiais', icon: FiLayers, label: 'Materiais' },
     { path: '/compras/requisicoes-material/nova', icon: FiClipboard, label: 'Solicitar Material' },
     { path: '/compras/requisicoes-material', icon: FiList, label: 'Minhas Requisições' },
     { path: '/almoxarifado/recebimentos', icon: FiPackage, label: 'Recebimento NF/Material' },

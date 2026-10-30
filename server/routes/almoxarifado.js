@@ -14,6 +14,8 @@ const multer = multerComLimiteNoErro(require('multer'));
 const { erroComMensagemUsuario } = require('../services/errosApi');
 const { condicaoDeBusca } = require('../services/buscaSemCaixa');
 const diaLocal = require('../services/diaLocal');
+// Etapa 192 (RN-192.10): as portas do Compras para o cadastro de material (ver o comentario junto do app.use do modulo).
+const cadastroDeMaterialCompras = require('../services/compras/cadastroDeMaterial');
 const { z } = require('zod');
 const alertService = require('../services/almoxarifado/alertService');
 const notificationQueueService = require('../services/almoxarifado/notificationQueueService');
@@ -327,6 +329,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     : [authenticateToken];
   app.use('/api/almoxarifado', ...almoxMiddleware);
 
+  // Etapa 192 (RN-192.10): a tela Materiais do Compras usa portas sob `/api/compras/materiais/...` (fora do prefixo acima, que
+  // exige o modulo almoxarifado) com os MESMOS handlers das rotas abaixo — cada porta do Compras fica logo depois da rota do
+  // almoxarifado que ele reaproveita. Regras e o que fica de fora: `services/compras/cadastroDeMaterial.js`.
+  const portaCompras = cadastroDeMaterialCompras.criarPortaCompras({ authenticateToken, checkModulePermission });
+  app.get('/api/compras/materiais/aux/minhas-permissoes', ...portaCompras.base, portaCompras.responderMinhasPermissoes);
+
 
   // ════════════════════════════════════════════════════════════════════════════
   // MATERIAIS — CRUD
@@ -393,7 +401,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   }
 
   // GET /api/almoxarifado/materiais — listar
-  app.get('/api/almoxarifado/materiais', async (req, res) => {
+  const listarMateriais = async (req, res) => {
     const { search, categoria, status, familia_id, subfamilia_id, setor } = req.query;
 
     try {
@@ -473,7 +481,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
-  });
+  };
+  app.get('/api/almoxarifado/materiais', listarMateriais);
+  // Etapa 192 (RN-192.10): a lista da tela Materiais do Compras.
+  app.get('/api/compras/materiais/cadastro', ...portaCompras.leitura, listarMateriais);
 
   // GET /api/almoxarifado/materiais/dashboard — stats para o dashboard
   app.get('/api/almoxarifado/dashboard',(req, res) => {
@@ -550,7 +561,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   // GET /api/almoxarifado/materiais/:id — detalhe
-  app.get('/api/almoxarifado/materiais/:id',(req, res) => {
+  const detalheMaterial = (req, res) => {
     db.get(`SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo,
                    a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome,
                    cli.razao_social as proprietario_cliente_nome,
@@ -566,7 +577,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       if (!row) return res.status(404).json({ error: 'Material não encontrado' });
       res.json({ ...enrichMaterialRow(row), is_epi: !!row.is_epi });
     });
-  });
+  };
+  app.get('/api/almoxarifado/materiais/:id', detalheMaterial);
+  app.get('/api/compras/materiais/cadastro/:id', ...portaCompras.leitura, detalheMaterial);
 
   // Etapa 8c, Task 1: os corpos destas tres mudaram de casa
   // (services/almoxarifado/materialService.js). Os wrappers ficam porque o resto deste arquivo
@@ -626,7 +639,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   //
   // Etapa 8c, Task 1: o corpo virou materialService.createMaterial. O gate FICA AQUI de propósito
   // — os caminhos internos que chamam o serviço já passaram pelo gate deles.
-  app.post('/api/almoxarifado/materiais', requirePermission('criar_material'), validate(MaterialSchema), async (req, res) => {
+  const criarMaterial = async (req, res) => {
     // Etapa 110 (C215, RN-01): o saldo inicial e uma ENTRADA no estoque — exige `movimentar`, que a Engenharia
     // (criar_material sem movimentar) nao tem. Antes de qualquer outra validacao do corpo e antes de gravar. O gate fica
     // na rota, como o do cadastro: o servico nao checa permissao (ver o cabecalho de materialService).
@@ -639,7 +652,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     } catch (err) {
       res.status(err.status || 500).json({ error: err.message });
     }
-  });
+  };
+  app.post('/api/almoxarifado/materiais', requirePermission('criar_material'), validate(MaterialSchema), criarMaterial);
+  // Etapa 192 (RN-192.10): o mesmo cadastro pelo Compras — o saldo inicial continua exigindo `movimentar` (acima).
+  app.post('/api/compras/materiais/cadastro', ...portaCompras.escrita('criar_material'), validate(MaterialSchema), criarMaterial);
 
   // PUT /api/almoxarifado/materiais/:id — atualizar
   //
@@ -652,7 +668,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   //
   // requirePermission('editar_material') — mesma razão do POST acima (gate global só
   // checa acesso ao módulo, não perfil).
-  app.put('/api/almoxarifado/materiais/:id', requirePermission('editar_material'), validate(MaterialUpdateSchema), async (req, res) => {
+  const editarMaterial = async (req, res) => {
     let current;
     try {
       current = await dbGet(db, 'SELECT * FROM materiais_almoxarifado WHERE id = ?', [req.params.id]);
@@ -1011,7 +1027,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }
-  });
+  };
+  app.put('/api/almoxarifado/materiais/:id', requirePermission('editar_material'), validate(MaterialUpdateSchema), editarMaterial);
+  // Etapa 192 (RN-192.10): a mesma edicao pelo Compras, menos inativar/reativar (`ativo` -> 400; e o "excluir", que fica aqui
+  // no Almoxarifado). As guardas de controle, dono e saldo do handler continuam lendo o perfil do almoxarifado.
+  app.put('/api/compras/materiais/cadastro/:id', ...portaCompras.escrita('editar_material'),
+    cadastroDeMaterialCompras.recusarAtivo, validate(MaterialUpdateSchema), editarMaterial);
 
   // DELETE /api/almoxarifado/materiais/:id — inativar (soft delete: é uma edição do
   // cadastro, daí `editar_material` e não uma ação própria).
@@ -1240,14 +1261,16 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // chamadas concorrentes devolvem o MESMO número, o que MAX não resolve e nem tem como: quem
   // resolve é materialService.createMaterial, com retry sob UNIQUE quando `codigo_auto` está
   // ligado. Duas mudanças, dois lugares, porque a colisão acontece no INSERT e não aqui.
-  app.get('/api/almoxarifado/proximo-codigo', async (req, res) => {
+  const proximoCodigo = async (req, res) => {
     try {
       const codigo = await materialService.proximoCodigo(db, req.query.familia_id || null);
       res.json({ codigo });
     } catch (err) {
       res.status(err.status || 500).json({ error: err.message });
     }
-  });
+  };
+  app.get('/api/almoxarifado/proximo-codigo', proximoCodigo);
+  app.get('/api/compras/materiais/aux/proximo-codigo', ...portaCompras.leitura, proximoCodigo);
 
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -2273,7 +2296,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // LOCALIZAÇÕES
   // ════════════════════════════════════════════════════════════════════════════
 
-  app.get('/api/almoxarifado/localizacoes',(req, res) => {
+  const listarLocalizacoes = (req, res) => {
     let sql = `SELECT l.*, a.codigo as almoxarifado_codigo, p.codigo as parent_codigo
                FROM localizacoes_almoxarifado l
                LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
@@ -2304,7 +2327,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
       res.json(enriched);
     });
-  });
+  };
+  app.get('/api/almoxarifado/localizacoes', listarLocalizacoes);
+  app.get('/api/compras/materiais/aux/localizacoes', ...portaCompras.leitura, listarLocalizacoes);
 
   // tipos_material_permitidos chega do cliente como array de strings (ou ausente/null = sem
   // restrição); persistido como JSON. Array vazio ([]) tem a MESMA semântica de ausente/null —
@@ -2839,7 +2864,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     return undefined;
   }
 
-  app.get('/api/almoxarifado/familias',(req, res) => {
+  const listarFamilias = (req, res) => {
     const { ativo } = req.query;
     let sql = `SELECT f.*, p.nome as parent_nome,
                  ${QTD_ITENS_FAMILIA_SUBQUERY}
@@ -2855,7 +2880,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       if (err) return res.status(500).json({ error: err.message });
       res.json(rows);
     });
-  });
+  };
+  app.get('/api/almoxarifado/familias', listarFamilias);
+  app.get('/api/compras/materiais/aux/familias', ...portaCompras.leitura, listarFamilias);
 
   app.get('/api/almoxarifado/familias/:id',(req, res) => {
     db.get(`SELECT f.*, p.nome as parent_nome,
@@ -5076,7 +5103,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     // modo de falha exato da Etapa 25.
     // Etapa 178 (Fase 5): o 6o parametro e o PROPRIO diretorio de dados — o segredo do HMAC da evidencia de assinatura mora
     // no `.runtime-secrets.json` dele (o mesmo do jwtSecret, resolvido acima com este mesmo PERSISTENT_DATA_DIR).
-    require('./almoxarifado/extended')(app, db, authenticateToken, uploadsAlmoxDir, uploadsAnexosDir, PERSISTENT_DATA_DIR);
+    // Etapa 192 (RN-192.10): o 7o parametro e a porta do Compras (categorias e almoxarifados da tela de cadastro).
+    require('./almoxarifado/extended')(app, db, authenticateToken, uploadsAlmoxDir, uploadsAnexosDir, PERSISTENT_DATA_DIR, portaCompras);
     console.log('✅ Módulo Almoxarifado registrado (v3 — controle completo de estoque)');
   });
 
