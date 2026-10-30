@@ -669,7 +669,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       res.status(err.status || 500).json({ error: err.message });
     }
   };
-  app.post('/api/almoxarifado/materiais', requirePermission('criar_material'), validate(MaterialSchema), criarMaterial);
+  // Etapa 193 Fase 5 (R3b): so o formato da operacao (sobra e remessa); o resto do cadastro e no Compras (403, com a chave de
+  // reversao). Antes do perfil, como as outras recusas do cadastro no almoxarifado.
+  app.post('/api/almoxarifado/materiais', cadastroDeMaterialCompras.restringirCriacaoNoAlmoxarifado,
+    requirePermission('criar_material'), validate(MaterialSchema), criarMaterial);
   // Etapa 192 (RN-192.10): o mesmo cadastro pelo Compras. Fase 5 (X1): saldo inicial -> 400 na porta, e o handler roda com o
   // usuario no perfil COMPRAS (`cadastroDeMaterial.comoCompras`): a porta do Compras nunca mexe em estoque.
   app.post('/api/compras/materiais/cadastro', ...portaCompras.escrita('criar_material'), validate(MaterialSchema), criarMaterial);
@@ -3843,7 +3846,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   // PUT /api/almoxarifado/configuracoes/tipos-material — associar tipo a material em lote
-  app.put('/api/almoxarifado/configuracoes/tipos-material', authenticateToken, (req, res) => {
+  // Etapa 193 Fase 5 (R3a): associar tipo e cadastro (o Compras tem o campo) — recusa como PUT/DELETE/foto do material (403, com
+  // a chave de reversao). Mantida em vez de apagada: e orfa no client, mas tem teste de auditoria e apagar nao tem volta.
+  app.put('/api/almoxarifado/configuracoes/tipos-material', authenticateToken, cadastroDeMaterialCompras.recusarCadastroNoAlmoxarifado, (req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
     const { materiais } = req.body; // [{ id, tipo_material_id }]
     if (!Array.isArray(materiais)) return res.status(400).json({ error: 'Envie um array' });

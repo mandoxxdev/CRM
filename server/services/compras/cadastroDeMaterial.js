@@ -82,6 +82,29 @@ function recusarCadastroNoAlmoxarifado(req, res, next) {
 }
 
 /**
+ * Etapa 193 Fase 5 (R3b): o `POST /api/almoxarifado/materiais` ficou porque a sobra (retalho) e a remessa criam material na
+ * operacao — mas aceitava o cadastro inteiro (NCM, custo, fornecedor, controles, saldo inicial) de Almoxarife e Engenharia, por
+ * fora do Compras. Agora so o formato da operacao, medido nos dois chamadores do client (SobrasAlmoxarifado
+ * `cadastrarMaterialDoRetalho` e RemessasTerceirosAlmoxarifado `cadastrarMaterialResultante`): codigo, codigo_auto, nome,
+ * unidade, familia_id/subfamilia_id (`familiaDoNovoMaterial`), proprietario_cliente_id (copiado da origem) e categoria (so a
+ * sobra). Chave fora da lista com valor (null/'' contam como ausentes) -> 403 com a mensagem do cadastro e a lista do que veio,
+ * para todos (superadmin inclusive), antes do perfil — o mesmo molde de `recusarCadastroNoAlmoxarifado`, com a mesma chave de
+ * reversao. Descartado IGNORAR as chaves a mais: quem chama pela API acharia que o NCM/custo foi gravado. O dono continua aceito
+ * (a sobra e a remessa o copiam da origem; o retalho de outro dono e recusado em `gerarRetalho`, `assertMesmoDonoNoRetalho`).
+ */
+const CAMPOS_DO_MATERIAL_DA_OPERACAO = ['codigo', 'codigo_auto', 'nome', 'unidade', 'familia_id', 'subfamilia_id',
+  'proprietario_cliente_id', 'categoria'];
+const mensagemCriacaoSoDaOperacao = (veio) => `${MSG_CADASTRO_NO_COMPRAS} Pelo Almoxarifado, o material novo da sobra ou da `
+  + `remessa leva só código, nome, unidade, família, subfamília, categoria e proprietário (veio também: ${veio.join(', ')}).`;
+function restringirCriacaoNoAlmoxarifado(req, res, next) {
+  if (cadastroNoAlmoxarifadoLiberado()) return next();
+  const corpo = req.body && typeof req.body === 'object' ? req.body : {};
+  const veio = Object.keys(corpo).filter((k) => !CAMPOS_DO_MATERIAL_DA_OPERACAO.includes(k) && corpo[k] !== null && corpo[k] !== '');
+  if (veio.length > 0) return res.status(403).json({ error: mensagemCriacaoSoDaOperacao(veio) });
+  return next();
+}
+
+/**
  * Etapa 192 Fase 5 (X1): a porta do Compras NUNCA mexe em estoque nem nos controles de estoque. A revisao achou o comprador com o
  * modulo Compras e um perfil do almoxarifado que sobrou (ALMOXARIFE, ADMINISTRADOR) — sem o modulo almoxarifado — lancando saldo
  * inicial (uma ENTRADA no estoque) e ligando lote / trocando dono com historico por aqui: as guardas do handler compartilhado
@@ -144,5 +167,6 @@ function criarPortaCompras({ authenticateToken, checkModulePermission }) {
 module.exports = {
   ACOES_DO_CADASTRO, pode, exigir, minhasPermissoes, criarPortaCompras,
   recusarCadastroNoAlmoxarifado, MSG_CADASTRO_NO_COMPRAS, cadastroNoAlmoxarifadoLiberado,
+  restringirCriacaoNoAlmoxarifado, CAMPOS_DO_MATERIAL_DA_OPERACAO,
   recusarSaldoInicial, MSG_SALDO_INICIAL_NO_COMPRAS, usuarioDoCompras, comoCompras,
 };

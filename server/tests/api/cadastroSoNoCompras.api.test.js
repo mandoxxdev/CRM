@@ -85,6 +85,52 @@ const ADMIN_MODULO_ALMOX = { id: 7, nome: 'Adm Modulo Almox', role: 'usuario', a
     assert.strictEqual(r.status, 201, JSON.stringify(r.body));
   });
 
+  // Fase 5 (R3b): o POST do almoxarifado so aceita o formato da operacao — os corpos LITERAIS de SobrasAlmoxarifado
+  // (cadastrarMaterialDoRetalho) e RemessasTerceirosAlmoxarifado (cadastrarMaterialResultante). O resto e cadastro (Compras).
+  const MSG_POST_OPERACIONAL = (veio) => `${MSG_SO_NO_COMPRAS} Pelo Almoxarifado, o material novo da sobra ou da remessa leva `
+    + `só código, nome, unidade, família, subfamília, categoria e proprietário (veio também: ${veio}).`;
+  await test('[Fase 5 R3b] POST do almoxarifado: os corpos da sobra e da remessa -> 201; cadastro completo -> 403 literal, nada criado', async () => {
+    const SUB = (await dbRun(db, "INSERT INTO familias_material_almoxarifado (codigo, nome, ativo, parent_id) VALUES ('K1S','Sub K1',1,?)", [FAM])).lastID;
+    const sobra = { codigo: 'RET-R3-1', codigo_auto: 1, nome: 'Retalho', unidade: 'UN', familia_id: FAM, subfamilia_id: SUB,
+      proprietario_cliente_id: CLI, categoria: 'OUTROS' };
+    const remessa = { codigo: 'RES-R3-1', codigo_auto: 1, nome: 'Resultante', unidade: 'UN', familia_id: FAM, proprietario_cliente_id: null };
+    for (const [u, b] of [[ALMOXARIFE, sobra], [ENGENHARIA, remessa]]) {
+      const r = await as(u, () => request(app).post('/api/almoxarifado/materiais').send(b));
+      assert.strictEqual(r.status, 201, `${u.nome}: ${JSON.stringify(r.body)}`);
+    }
+    for (const u of [ALMOXARIFE, SUPER]) {
+      const r = await as(u, () => request(app).post('/api/almoxarifado/materiais').send({ ...sobra, codigo: `RX-${u.id}`, codigo_auto: 0,
+        ncm: '73181500', custo_unitario: 99, descricao_tecnica: '', quantidade_minima: null }));
+      assert.deepStrictEqual([r.status, r.body.error], [403, MSG_POST_OPERACIONAL('ncm, custo_unitario')], `${u.nome}: ${JSON.stringify(r.body)}`);
+    }
+    assert.strictEqual((await dbGet(db, "SELECT COUNT(*) n FROM materiais_almoxarifado WHERE codigo LIKE 'RX-%'")).n, 0);
+    process.env.ALMOX_CADASTRO_MATERIAL = 'liberado';
+    try {
+      const r = await as(ALMOXARIFE, () => request(app).post('/api/almoxarifado/materiais').send({ ...corpo({ codigo: 'RX-CHAVE' }), ncm: '73181500' }));
+      assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    } finally {
+      delete process.env.ALMOX_CADASTRO_MATERIAL;
+    }
+  });
+
+  await test('[Fase 5 R3a] PUT /configuracoes/tipos-material (orfa) recusa como o cadastro; com a chave, grava', async () => {
+    const MAT = await material();
+    const tipo = (await dbRun(db, "INSERT INTO tipos_material_almoxarifado (nome, ativo) VALUES ('Tipo R3', 1)")).lastID;
+    const r = await as(SUPER, () => request(app).put('/api/almoxarifado/configuracoes/tipos-material')
+      .send({ materiais: [{ id: MAT, tipo_material_id: tipo }] }));
+    assert.deepStrictEqual([r.status, r.body.error], [403, MSG_SO_NO_COMPRAS], JSON.stringify(r.body));
+    assert.strictEqual((await dbGet(db, 'SELECT tipo_material_id t FROM materiais_almoxarifado WHERE id = ?', [MAT])).t, null);
+    process.env.ALMOX_CADASTRO_MATERIAL = 'liberado';
+    try {
+      const ok = await as(SUPER, () => request(app).put('/api/almoxarifado/configuracoes/tipos-material')
+        .send({ materiais: [{ id: MAT, tipo_material_id: tipo }] }));
+      assert.strictEqual(ok.status, 200, JSON.stringify(ok.body));
+    } finally {
+      delete process.env.ALMOX_CADASTRO_MATERIAL;
+    }
+    assert.strictEqual((await dbGet(db, 'SELECT tipo_material_id t FROM materiais_almoxarifado WHERE id = ?', [MAT])).t, tipo);
+  });
+
   await test('[RN-193.02, letra B] a chave ALMOX_CADASTRO_MATERIAL=liberado devolve a corrente de antes (o perfil decide); desligada, recusa de novo', async () => {
     const MAT = await material({ nome: 'Chave' });
     const PRODUCAO = { id: 8, nome: 'Producao', role: 'usuario', email: 'p@test.com' };
