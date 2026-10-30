@@ -111,17 +111,22 @@ seção 4.
 
 ## 2. Cadastro de materiais
 
-Onde: **Almoxarifado → Materiais → Novo Material** (ou o ícone de edição em qualquer linha da lista).
+Onde: **Compras → Materiais → Novo Material** (ou **Editar** em qualquer linha). **Só o Compras cadastra material**: quem pode é o
+**administrador do módulo Compras** (marcado no cadastro de usuário) e os administradores do sistema; os outros veem *"Seu acesso não
+permite cadastrar material. Peça a um administrador do sistema para marcar você como administrador do módulo Compras."*.
 
-**Também pelo Compras: Compras → Materiais.** A mesma lista (código, nome, família, unidade, NCM) e o mesmo formulário, para incluir e
-editar material sem entrar no Almoxarifado. Quem pode: o **administrador do módulo Compras** (marcado no cadastro de usuário) e quem tem o
-perfil **Almoxarife**, **Engenharia** ou **Administrador** no Almoxarifado; os outros veem *"Seu acesso não permite cadastrar material. Peça
-a um administrador do sistema para marcar você como administrador do módulo Compras (ou para lhe dar o perfil de Almoxarife ou Engenharia
-no Almoxarifado)."*. Pelo Compras **não se mexe em estoque**, qualquer que seja o perfil: não há foto nem saldo inicial (enviado por outro
-caminho: *"Saldo inicial é lançado no Almoxarifado."*); ligar o controle por lote ou série num material que tem saldo e trocar o dono de
-um material que já tem histórico são recusados; inativar e reativar é só no Almoxarifado (*"Inativar ou reativar material é feito no
-Almoxarifado."*). O **Proprietário** aparece só para leitura, com *"O proprietário é definido no Almoxarifado."*, e o material incluído
-pelo Compras é estoque da GMP. Excluir e trocar a foto continuam só no Almoxarifado.
+**No Almoxarifado o material só se consulta.** Almoxarifado → Materiais mostra a lista com o aviso *"O cadastro de materiais é feito em
+Compras → Materiais."* e o botão **Ver**, que abre a ficha do material com tudo apagado e sem *Salvar*. Editar, inativar ou trocar a foto
+por outro caminho do Almoxarifado é recusado: *"O cadastro de material é feito em Compras → Materiais."*. A **sobra/retalho** e a
+**remessa para terceiros** continuam criando o material novo que a operação precisa, só com código, nome, unidade, família, subfamília,
+categoria e proprietário — e sem saldo inicial (o saldo entra pelas Movimentações).
+
+**Pelo Compras não se mexe em estoque.** Não há saldo inicial (*"Saldo inicial é lançado no Almoxarifado."*); ligar o controle por lote
+ou série num material com saldo, desligá-lo num material que já teve série ou lote (*"Não é possível desligar o controle por número de
+série do material X: ele já tem séries registradas. …"*) e trocar o dono de um material com histórico são recusados. **Inativar** e
+**Reativar** ficam na lista do Compras (filtro de inativos), com as mesmas regras de saldo de antes; a recusa por estoque termina com
+*"Seu perfil (COMPRAS) não movimenta estoque: peça isso ao almoxarifado."*. O **Proprietário** (GMP ou um cliente) e a **foto** são
+escolhidos no formulário do Compras.
 
 O formulário é dividido em sete blocos, sempre nesta ordem:
 
@@ -2078,7 +2083,7 @@ Os status e as passagens permitidas entre eles são fixos; qualquer tentativa fo
   a OS cadastrada vai num campo próprio da requisição: um valor que não é número inteiro positivo é recusado com *"Dados inválidos — os_id: OS inválida"* e uma OS que
   não existe com *"OS #⟨código interno da OS⟩ não encontrada"* — nos dois casos, antes da cobrança do número da OS, e nada é gravado.
 - **Rascunho é do dono.** Só o solicitante envia o próprio rascunho: *"Apenas o solicitante pode enviar o rascunho"*; e só rascunho pode ser enviado: *"Apenas rascunhos podem ser enviados"*.
-- **O envio confere de novo se os materiais estão ativos.** Um rascunho salvo antes de um material dele ser inativado é recusado no envio, e continua rascunho, sem e-mail nem avaliação: *"O rascunho ⟨número⟩ tem material inativo: ⟨códigos⟩. Reative o material em Materiais → Inativos (Administrador, Almoxarife ou Engenharia) ou cancele o rascunho e faça outro sem ele."* (7.8).
+- **O envio confere de novo se os materiais estão ativos.** Um rascunho salvo antes de um material dele ser inativado é recusado no envio, e continua rascunho, sem e-mail nem avaliação: *"O rascunho ⟨número⟩ tem material inativo: ⟨códigos⟩. Reative o material em Compras → Materiais, filtro Inativos (administrador do módulo Compras) ou cancele o rascunho e faça outro sem ele."* (7.8).
 - **A ordem dos itens é a do pedido.** Os itens são gravados e mostrados — no detalhe, no comprovante e na fila de separação — na ordem em que o solicitante os incluiu, tanto na tela do almoxarifado quanto na de requisição das outras áreas.
 
 **Enviar é o gatilho de tudo.** Enquanto está em Rascunho, a requisição não dispara e-mail, não é avaliada pelas regras de aprovação nem pela alçada de valor, e não é vista pelo almoxarifado. É o envio que a coloca em circulação — e é **no envio** que o sistema decide quais regras de aprovação ela precisa cumprir (8.4).
@@ -2197,22 +2202,22 @@ como ser atendida. O sistema recusa na hora em que alguém tentaria seguir com e
 - **Aprovar** (8.1), **aprovar por valor** (8.3) e a **aprovação automática** (8.5) recusam a requisição que tem algum item
   ainda não entregue de material inativo — inteira, sem reservar nada, nem dos outros itens. A requisição continua onde
   estava (*Pendente* ou *Aguard. Aprov. Valor*). Na aprovação comum: *"A requisição ⟨número⟩ tem material inativo:
-  ⟨códigos⟩. Reative o material em Materiais → Inativos (Administrador, Almoxarife ou Engenharia) ou rejeite a
+  ⟨códigos⟩. Reative o material em Compras → Materiais, filtro Inativos (administrador do módulo Compras) ou rejeite a
   requisição."*; na aprovação por valor, a frase termina com *"… ou reprove a liberação por valor."* A automática não
   mostra mensagem: a requisição simplesmente fica *Pendente*, e quem aprova recebe a recusa acima.
 - **Quando a família do material também está inativa**, reativar só o material não funciona (o *Reativar* recusa com *"Família
   inativa — não é possível vincular novos itens"* ou *"Subfamília inválida para a família selecionada"*). Por isso, nas quatro
-  recusas desta seção (aprovar, aprovar por valor, enviar o rascunho e separar), o trecho *"Reative o material em Materiais →
-  Inativos (…)"* vira *"Reative a família de ⟨código⟩ em Configurações → Famílias (Administrador do almoxarifado) e depois o material em Materiais → Inativos (Administrador, Almoxarife ou Engenharia)"* — com *"a subfamília de ⟨código⟩"* quando só a subfamília está inativa, *"a família e a
+  recusas desta seção (aprovar, aprovar por valor, enviar o rascunho e separar), o trecho *"Reative o material em Compras →
+  Materiais, filtro Inativos (…)"* vira *"Reative a família de ⟨código⟩ em Configurações → Famílias (Administrador do almoxarifado) e depois o material em Compras → Materiais, filtro Inativos (administrador do módulo Compras)"* — com *"a subfamília de ⟨código⟩"* quando só a subfamília está inativa, *"a família e a
   subfamília de ⟨código⟩"* quando as duas estão, e vários grupos unidos por *"e"* quando há vários materiais (os códigos na ordem
   dos itens). Na separação, que fala de um item só, a frase diz *"a família do material"*. Exemplo completo: *"A requisição
-  ⟨número⟩ tem material inativo: ⟨código⟩. Reative a família de ⟨código⟩ em Configurações → Famílias (Administrador do almoxarifado) e depois o material em Materiais → Inativos (Administrador, Almoxarife ou Engenharia) ou rejeite a requisição."* A ordem é a que funciona: a família principal,
+  ⟨número⟩ tem material inativo: ⟨código⟩. Reative a família de ⟨código⟩ em Configurações → Famílias (Administrador do almoxarifado) e depois o material em Compras → Materiais, filtro Inativos (administrador do módulo Compras) ou rejeite a requisição."* A ordem é a que funciona: a família principal,
   depois a subfamília (as duas na aba Famílias, 2.1), depois o material. O material antigo gravado com a subfamília no campo
   Família recebe a frase sem a família, porque reativar a família não o destrava — ele precisa ter o par corrigido antes.
 - **Enviar o rascunho** é recusado (7.2).
 - **Separar** (10.2): a linha de um item de material inativo com quantidade maior que zero recusa a confirmação inteira,
-  sem gravar nada: *"⟨material⟩: material inativo não pode ser separado. Reative o material em Materiais → Inativos
-  (Administrador, Almoxarife ou Engenharia) ou separe os outros itens com 0 neste."* A janela de separação já abre com 0
+  sem gravar nada: *"⟨material⟩: material inativo não pode ser separado. Reative o material em Compras → Materiais, filtro
+  Inativos (administrador do módulo Compras) ou separe os outros itens com 0 neste."* A janela de separação já abre com 0
   nesse item, e o detalhe da requisição e a fila de separação mostram 0 de separável e de entregável para ele.
 - **Entregar** um material inativo que já estava na caixa é recusado pelo motor (*"⟨material⟩: Material inativo não pode
   ser movimentado"*): reative para entregar, ou devolva o separado à prateleira (10.2b).
@@ -4161,6 +4166,12 @@ e o sistema grava o do material ao salvar. Quando o campo está vazio, a dica *"
 **Reposição** (21b.3d) também entra com o NCM e o peso do material; se o material não for achado pelo código, eles ficam vazios e o
 sistema os completa ao salvar.
 
+**A OS de cada item.** Cada item tem a coluna **OS** (opcional, até 60 caracteres): a OS que justifica a compra daquele item, digitada
+ou escolhida entre as OS cadastradas que o campo sugere. Itens do mesmo pedido podem ter OS diferentes. Ela sai no documento (coluna
+**OS**, só quando algum item tem), no Exportar Excel (coluna *OS do item*) e a busca da lista acha por ela. É **só justificativa**: não
+separa material para OS nenhuma no recebimento — a OS de verdade é dada na liberação do material. Mais de 60 caracteres: *"OS do item: no
+máximo 60 caracteres."*. Na importação por planilha, a coluna *OS do item* (ou *OS*, numa planilha de fora) vira a OS do item.
+
 **O total é do sistema, não seu.** Cada linha mostra o **Subtotal** (`quantidade × valor unitário`) e
 embaixo da tabela aparece **"Total: R$ …"**, que é a soma dos subtotais. Não existe campo de valor
 total para digitar: o valor gravado é sempre o derivado dos itens.
@@ -4177,8 +4188,9 @@ Salvo o pedido, a tela volta para a lista e o número gerado aparece na mensagem
 
 ### 14b.2b Pedido para uma OS
 
-Quando a compra é para atender uma ordem de serviço, o comprador escolhe a OS no campo **OS** do pedido. **Um pedido é de uma OS ou é de
-estoque** — não existe pedido com itens de OS diferentes; para comprar para duas OS, fazem-se dois pedidos. Pedido com *Estoque (sem OS)* é o
+Quando a compra é para atender uma ordem de serviço, o comprador escolhe a OS no campo **OS** do pedido. **Para a reserva, um pedido é de uma OS
+ou é de estoque**: é a OS do cabeçalho que separa o material que chega. Itens com OS diferentes só se registram como justificativa, na
+coluna OS de cada item (14b.2), que não reserva nada. Pedido com *Estoque (sem OS)* é o
 pedido comum, sem nenhuma diferença.
 
 **Quais OS aparecem.** O campo lista as OS **abertas** — todas menos as de status *cancelado*, *cancelada*, *concluido*, *concluida* ou

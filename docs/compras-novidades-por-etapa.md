@@ -5,7 +5,9 @@
 > roteiro curto para demonstrar ao vivo. Pedido do André em 2026-10-06. O equivalente do
 > almoxarifado é `docs/almoxarifado-novidades-por-etapa.md`.
 >
-> **Onde o desenvolvimento está:** **2026-10-30 — Etapa 192 entregue** (`ad99f567` a `3a293902`, na `main`): **CPF** e
+> **Onde o desenvolvimento está:** **2026-10-30 — Etapa 193 entregue** (`19c69056` a `262c6bd5`, na `main`): o **cadastro de
+> material passa a ser só do Compras** (o Almoxarifado consulta) e cada **item do pedido ganha a sua OS** (texto, só justificativa —
+> substitui o plano de 25 h de várias OS). A12, B74–B81, C (lote/série com saldo sem tela). Antes: **2026-10-30 — Etapa 192 entregue** (`ad99f567` a `3a293902`, na `main`): **CPF** e
 > **maiúsculas** no fornecedor, **OS digitada** e **NCM preenchido** no pedido, **Compras → Materiais** para o administrador do Compras
 > (A11, B64–B73). **Várias OS no mesmo pedido** ficou só planejada (25 h). Antes: **2026-10-07 — unificação.** A branch `desenvolvimento-almoxarifado`
 > (Etapas 0–77 do almoxarifado) foi mesclada na `main`; daqui em diante **só existe a `main`**
@@ -147,6 +149,10 @@
 - **A11 (Etapa 192) — Ação sua para a tela Compras → Materiais:** no **cadastro de usuário**, marque **administrador do módulo
   Compras** em quem administra o Compras (ou dê a ele o perfil Almoxarife ou Engenharia no Almoxarifado). Sem isso, a tela mostra *"Seu
   acesso não permite cadastrar material…"*. Consulta para ver quem já é: `SELECT id, nome, admin_modulos FROM usuarios WHERE admin_modulos LIKE '%compras%'`.
+- **A12 (Etapa 193) — o cadastro de material só no Compras tem uma chave de volta:** com `ALMOX_CADASTRO_MATERIAL=liberado` no
+  ambiente do servidor (vale maiúscula ou espaço; qualquer outro valor não libera), as rotas de cadastro do Almoxarifado voltam a gravar
+  como antes, sem instalar versão nova; o servidor avisa no início. A **tela** do Almoxarifado continua só de consulta. Não ligue sem
+  necessidade: deixe sem a variável.
 
 ### B. Decisões que eu tomei e você pode reverter
 - **B1 — Esta frente vive em `main`, e `main` tem OUTRO pedido de compra.** A branch
@@ -534,6 +540,30 @@
   Almoxarifado lançava saldo sem ter o módulo Almoxarifado. **Descartado:** confiar no perfil do Almoxarifado dentro do Compras.
 - **B73 — Etapa 192: no Compras o Proprietário do material é só leitura** (*"O proprietário é definido no Almoxarifado."*); material
   novo pelo Compras é estoque da GMP. **Descartado:** abrir a lista de clientes ao comprador (mostra nomes de clientes a quem não os via).
+- **B74 — Etapa 193: o Almoxarifado ainda cria material em dois fluxos da operação** — a **sobra/retalho** e a **remessa para terceiros**
+  —, mas só com código, nome, unidade, família, subfamília, categoria e proprietário (o mais vem do Compras). Qualquer outro campo é
+  recusado: *"O cadastro de material é feito em Compras → Materiais. Pelo Almoxarifado, o material novo da sobra ou da remessa leva só
+  código, nome, unidade, família, subfamília, categoria e proprietário (veio também: …)"*. **Descartado:** tirar a criação desses fluxos
+  (o almoxarife não registraria o retalho) e aceitar o cadastro completo (seria uma porta lateral à regra "só o Compras").
+- **B75 — Etapa 193: "só o Compras" vale para todos.** Quem cadastra é o **administrador do módulo Compras** e os administradores do
+  sistema. Almoxarife, Engenharia e o perfil Administrador **do Almoxarifado** deixaram de cadastrar (na 192 entravam pela tela do
+  Compras). **Descartado:** manter esses perfis (o pedido foi "apenas o compras").
+- **B76 — Etapa 193: a ficha do Almoxarifado é o mesmo formulário, todo desligado** (botão **Ver**). **Descartado:** uma ficha de leitura
+  separada (cada campo novo teria de ser posto em dois lugares). Endereços antigos de editar levam à ficha; o de novo leva à lista.
+- **B77 — Etapa 193: o Compras passou a ter o Proprietário** (cliente dono do material) com uma lista só de nome dos clientes, e foto e
+  inativar/reativar com as mesmas regras do Almoxarifado. **Descartado:** abrir a lista completa de clientes ao comprador.
+- **B78 — Etapa 193: estoque mínimo, máximo e ponto de pedido continuam também no Almoxarifado** (Configurações → Estoques mínimos):
+  são parâmetros de reposição, da operação. O formulário do Compras também os tem; se um mudar com o outro aberto, o Compras recebe o
+  aviso de conflito. **Descartado:** tirar do Almoxarifado (quem acompanha o mínimo é o almoxarife).
+- **B79 — Etapa 193: pelo Compras não se desliga o controle por série ou por lote de um material que já teve série ou lote**
+  (*"Não é possível desligar o controle por número de série do material X: ele já tem séries registradas. …"*). Achado da revisão:
+  desligado, um estorno de saída antiga e a exclusão de requisição ficavam travados para sempre, sem ninguém poder religar.
+  **Descartado:** deixar o Compras religar com saldo sem identificar (é ajuste de estoque, e o Compras não mexe em estoque — B72).
+- **B80 — Etapa 193: a OS de cada item é só texto, até 60 caracteres, e só justifica a compra.** Não separa material, não entra no
+  recebimento nem no encerramento da OS; a OS do **cabeçalho** do pedido continua como estava (lista ou digitada). Sugestão do usuário
+  aceita no lugar do plano de várias OS (25 h).
+- **B81 — Etapa 193: importação de planilha:** a coluna **OS do item** vira a OS do item; uma planilha de fora com coluna **OS** também.
+  Uma exportação antiga do próprio sistema (que tem a coluna OS do **pedido**) não copia essa OS para os itens.
 
 ### D. Dúvidas para você (ou para o P.O.)
 - **D-35** — O que A, B e C significam **para a GMP**? A legenda atual é a definição genérica.
@@ -713,6 +743,77 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 193 — Cadastro de material só no Compras; a OS em cada item do pedido (2026-10-30)
+
+**Em uma frase.** Dois pedidos da empresa no mesmo dia da 192: **só o Compras cadastra material** — o Almoxarifado passa a só consultar
+(e liberar, como já fazia) — e cada **item do pedido de compra ganha a sua OS**, digitada, para justificar a compra (sugestão do usuário:
+a OS de verdade é dada na liberação do material). A OS por item substituiu o plano de "várias OS" de 25 h, que mexia no recebimento.
+
+### O que há de novo (visível para o usuário)
+
+- **Almoxarifado → Materiais:** sem *Novo Material*, *Editar*, *Inativar*, *Reativar* e foto; cada linha tem **Ver** (a ficha do material
+  só para leitura) e a lista avisa *"O cadastro de materiais é feito em Compras → Materiais."*. O painel e as configurações do
+  Almoxarifado perderam os atalhos de novo material; o lápis dos itens de família virou **Ver**.
+- **Compras → Materiais:** filtro de inativos, **Inativar**/**Reativar**, **foto** e o **Proprietário**. Só o administrador do módulo
+  Compras (e os administradores do sistema) usa; os outros veem *"Seu acesso não permite cadastrar material. Peça a um administrador do
+  sistema para marcar você como administrador do módulo Compras."*
+- **Pedido de compra:** coluna **OS** em cada item (com as OS cadastradas como sugestão, mas aceita qualquer texto); a OS do item sai no
+  documento impresso (coluna OS, só quando algum item tem), no Excel (coluna *OS do item*) e a busca da lista acha por ela.
+- **Sobra e remessa:** a mensagem de material sem família agora manda cadastrar em Compras → Materiais.
+
+### Por baixo do capô
+
+- K1 `19c69056` (Compras completa: gate só admin do Compras, foto, inativar/reativar, proprietário) e `d08fe42d` (Almoxarifado só
+  consulta: 403 *"O cadastro de material é feito em Compras → Materiais."* no PUT, DELETE e foto do Almoxarifado, para todos; chave
+  `ALMOX_CADASTRO_MATERIAL`).
+- O1 `6a944fb5` (servidor: `itens_pedido_compra.os_texto`, documento, busca, Excel, importação) e `506abcb4` (formulário).
+- Integração `d378f91d`. Revisão adversarial (2 revisores): 5 correções e 5 testes — `4aff81aa` (B79), `d750afd2` (mensagem de quem
+  reativa), `1bf416a6`/`ef76ab8a` (B74 e `tipos-material`), `a3c9ab8c` (textos de sobra e remessa), `a156987d` (B81), `417600ed`,
+  `7f6c5f8e`, `400547b3`, `262c6bd5` (testes).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Material cadastrado no Almoxarifado (e, desde a 192, também no Compras) | **Só no Compras**; o Almoxarifado consulta |
+| Almoxarife, Engenharia e Administrador do Almoxarifado cadastravam | Só o **administrador do módulo Compras** (e os do sistema) |
+| Foto, inativar e proprietário só no Almoxarifado | No Compras |
+| Pedido com uma OS no cabeçalho | Além dela, **uma OS por item**, para justificar a compra |
+
+### As regras, com o cenário exato
+
+- **RN-193.01 — consulta.** Almoxarifado → Materiais → **Ver** num material: a ficha abre com tudo apagado e sem *Salvar*. Um endereço
+  antigo `…/materiais/editar/12` abre a ficha; `…/materiais/novo` volta para a lista.
+- **RN-193.02 — o sistema recusa.** Editar, inativar ou trocar a foto pelo Almoxarifado (por outro caminho que não a tela): *"O cadastro de
+  material é feito em Compras → Materiais."* — para todos, até o administrador do sistema.
+- **RN-193.03 — quem cadastra.** Entre como almoxarife → Compras → Materiais: aparece o aviso de acesso. Como administrador do Compras: a
+  lista, *Novo Material*, *Editar*.
+- **RN-193.04 — inativar pelo Compras.** Compras → Materiais → **Inativar** → confirme *"Inativar o material "…"?"*: com saldo, o sistema
+  recusa como no Almoxarifado; a mensagem termina com *"Seu perfil (COMPRAS) não movimenta estoque: peça isso ao almoxarifado."*.
+- **RN-193.06 — o Compras não mexe em estoque.** Desligar série/lote de um material que já teve série/lote: *"Não é possível desligar o
+  controle por número de série do material X: ele já tem séries registradas. …"* (B79).
+- **RN-193.07 — OS do item.** Novo pedido → dois itens → OS *OS 5101* num e *OS 5102 obra norte* no outro → salvar → **Documento (PDF)**:
+  coluna OS com as duas. Mais de 60 caracteres: *"OS do item: no máximo 60 caracteres."*.
+- **RN-193.08 — só justificativa.** Receba o pedido no Almoxarifado: nada fica reservado por causa da OS do item.
+
+### Roteiro de teste manual (clicável)
+
+1. Entre como **almoxarife** → Almoxarifado → Materiais: sem *Novo Material*; clique **Ver** num material: tudo apagado.
+2. Entre como **administrador do Compras** → Compras → Materiais → **Novo Material** → salve; **Inativar** e depois **Reativar** pelo filtro.
+3. Compras → Pedidos → Novo → dois itens com OS diferentes → salvar → Documento (PDF) e Exportar Excel: a OS de cada item aparece.
+4. Almoxarifado → Sobras → gere um retalho: continua funcionando.
+
+### O que a etapa NÃO cobre
+
+- **Ligar série/lote num material que já tem saldo sem identificação** e **trocar o dono de material com histórico** ficaram sem tela (o
+  Compras não mexe em estoque e o Almoxarifado não edita o cadastro). Se for preciso, a chave `ALMOX_CADASTRO_MATERIAL` (A12) reabre o
+  caminho pelo sistema, sem tela.
+- Material criado pelo Almoxarifado (sobra, remessa) **não leva saldo inicial**: o saldo entra pelas Movimentações.
+- A tela de estoques mínimos grava *ponto de pedido* e o Compras e a sugestão de compra usam *ponto de reposição* — diferença antiga,
+  não mexida aqui.
+- Uma falha intermitente na verificação (576/577, não reproduzida na rodada seguinte, 577/577, com outra suíte rodando ao mesmo tempo
+  na máquina) — o arquivo não foi identificado.
 
 ## Etapa 192 — CPF e maiúsculas no fornecedor, OS digitada e NCM preenchido no pedido, materiais dentro do Compras (2026-10-30)
 

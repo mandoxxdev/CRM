@@ -1,6 +1,6 @@
 # Etapa 193 (Compras) — cadastro de material só no Compras; OS por item do pedido
 
-> Status: **em execução** (2026-10-30). Estimativa: `docs/estimativas/2026-10/estimativa_2026-10-30_compras-unico-cadastro-e-os-por-item.md` (`ae1c519f`).
+> Status: **etapa fechada em 2026-10-30** (`ae1c519f` estimativa … `262c6bd5` Fase 5, mais o fechamento). Estimativa: `docs/estimativas/2026-10/estimativa_2026-10-30_compras-unico-cadastro-e-os-por-item.md` (`ae1c519f`).
 
 Pedido do André (30/10), depois da Etapa 192:
 - *"7 - Apenas compras cadastra materiais, almoxarifado só visualiza e libera. Então vamos retirar a tela de cadastro de materiais do
@@ -64,6 +64,45 @@ Pedido do André (30/10), depois da Etapa 192:
 
 | Task | Itens | Onde | Estado |
 |---|---|---|---|
-| K1 | RN-193.01–06 | `CRM-wt-193k` | — |
-| O1 | RN-193.07–09 | `CRM-wt-193o` | — |
-| I1 | integração: admin do Compras cadastra e põe foto; Almoxarifado só lê (PUT 403); pedido com 2 itens de OS diferentes → documento com as duas | `main` | — |
+| K1 | RN-193.01–06 | `CRM-wt-193k` | ✅ `19c69056` Compras completa, `d08fe42d` Almoxarifado só consulta (merge `f82c301c`) |
+| O1 | RN-193.07–09 | `CRM-wt-193o` | ✅ `6a944fb5` servidor, `506abcb4` tela (merge `7680f193`) |
+| I1 | integração: admin do Compras cadastra e põe foto; Almoxarifado só lê (PUT 403); pedido com 2 itens de OS diferentes → documento com as duas | `main` | ✅ `d378f91d` (5 passos; controle positivo: com a chave liberada o passo 2 cai) |
+
+## Fase 5 — revisão adversarial (2 revisores frescos: regra e acesso; força dos testes)
+
+| # | Achado (reproduzido) | Correção |
+|---|---|---|
+| R1 | Médio-alto — pelo Compras dava para desligar o controle por série de um material que já teve séries; depois de uma entrada sem série, o estorno da saída antiga e a exclusão da requisição ficavam travados para sempre (ninguém religava: Compras roda como COMPRAS, Almoxarifado recusa o cadastro) | `4aff81aa`: o Compras recusa desligar série/lote de material com série/lote registrado (B79), também no `WHERE` |
+| R2 | Médio — a recusa de requisição com material inativo mandava reativar "em Materiais → Inativos (Administrador, Almoxarife ou Engenharia)", que não conseguem mais | `d750afd2`: "Compras → Materiais, filtro Inativos (administrador do módulo Compras)" |
+| R3 | Médio — portas laterais: o `POST` do Almoxarifado aceitava o cadastro completo de Almoxarife/Engenharia; `configuracoes/tipos-material` gravava cadastro | `1bf416a6`, `ef76ab8a`: POST só no formato da sobra/remessa (B74); `tipos-material` recusado. Estoques mínimos ficaram (B78) |
+| R4 | Baixo — sobra e remessa mandavam cadastrar "pela tela de Materiais" | `a3c9ab8c` |
+| R5 | Baixo — reimportar exportação antiga copiava a OS do pedido para todos os itens | `a156987d` (B81) |
+| T1–T5 | Foto recusada no disco (Compras), valor da chave, células do documento, corrida RN-15 do `exclusaoSerieQueVoltou` (meio teste mudo), atalho de novo após expandir subfamília | `417600ed`, `7f6c5f8e`, `400547b3`, `262c6bd5` |
+
+## Fechamento (2026-10-30)
+
+**Verificação final** (`3ec87aec`, idêntico ao galho testado da Fase 5): `test:api` 577/577 · `test:almoxarifado` 44/0 · `test:validation`
+4/0 · `test:safealter` 3/0 · `test:sqlite` 16/0 · tela 208 suítes, 2873/2873 · build *Compiled successfully*. Antes da Fase 5, uma rodada
+deu **576/577** com o galho de correção rodando ao mesmo tempo na máquina; a rodada seguinte, com a saída inteira guardada, deu 577/577 —
+falha intermitente **não identificada** (o `run-all` não nomeia o arquivo que falha; a primeira rodada só guardou o placar).
+
+**Divergências do plano:**
+- RN-193.02 dizia "se quebrar muitos testes, ajuste a preparação": ~50 arquivos antigos foram tocados — parte passou a usar a porta do
+  Compras, parte liga a chave `ALMOX_CADASTRO_MATERIAL` no topo (testam guardas do handler que só existem atrás dela).
+- O plano não previa que o `POST` mantido para a sobra/remessa era uma porta lateral completa (R3) nem a armadilha do estorno (R1) — a
+  "consequência a declarar" da RN-193.06 era maior do que o plano dizia: não só "ligar com saldo fica sem tela", mas "desligar travava
+  estornos".
+- Fase 2 (revisor do plano) de novo não rodou como passada separada; a Fase 5 achou 5 defeitos reais.
+
+**Retro:** rodadas de correção até verde: **1**; achados: **5 reais + 5 lacunas de teste, 0 ruído**; paralelismo: **2 galhos**, sem
+conflito; defeito que escapou da 192: a 192 deixava Almoxarife/Engenharia cadastrar pelo Compras — mudou por decisão do André, não por
+defeito.
+
+## Próxima tarefa detalhada
+
+1. **A11/A12** — o André marca o administrador do módulo Compras (sem ele, ninguém cadastra material, nem o almoxarife).
+2. Pendente declarado: ligar série/lote em material com saldo sem identificação e trocar dono de material com histórico ficaram sem tela
+   (só com a chave A12, por fora). Se aparecer o caso, uma tela de "ajuste de controle" no Almoxarifado sob `ajustar_estoque` resolve.
+3. `ponto_pedido` (Configurações → Estoques mínimos) × `ponto_reposicao` (Compras e sugestão de compra): divergência antiga, medir e
+   unificar numa etapa própria.
+4. Antes de apresentar: clicar os roteiros das Etapas 192 e 193 (`docs/compras-novidades-por-etapa.md`).
