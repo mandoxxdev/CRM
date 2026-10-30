@@ -99,7 +99,7 @@ let seq = 0;
     (await dbGet(db, 'SELECT COUNT(*) as c FROM auditoria_log_almoxarifado')).c;
 
   const enviarFoto = (id, nomeArquivo) => request(app)
-    .post(`/api/almoxarifado/materiais/${id}/foto`)
+    .post(`/api/compras/materiais/cadastro/${id}/foto`)
     .attach('foto', PNG_1x1, nomeArquivo);
 
   // ══════════════════ RN-01 — material inexistente falha e nao deixa orfao ══════════════════
@@ -217,7 +217,7 @@ let seq = 0;
   await test('[regressao] sem arquivo -> 400 "Nenhuma foto enviada", nada gravado', async () => {
     const matId = await criarMaterial();
     const antes = contarArquivosUpload();
-    const res = await request(app).post(`/api/almoxarifado/materiais/${matId}/foto`);
+    const res = await request(app).post(`/api/compras/materiais/cadastro/${matId}/foto`);
     assert.strictEqual(res.status, 400, `esperava 400, veio ${res.status}: ${JSON.stringify(res.body)}`);
     assert.strictEqual(res.body.error, 'Nenhuma foto enviada', JSON.stringify(res.body));
     assert.strictEqual(await fotoDe(matId), null, 'coluna foto mexida apesar do 400');

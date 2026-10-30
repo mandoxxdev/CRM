@@ -10,8 +10,9 @@
  *  - "Nova subfamília" no cartão da raiz abre o mesmo formulário com o pai TRAVADO e o POST leva
  *    `parent_id`; editar manda PUT SEM `parent_id` (o servidor preserva); inativar passa pelo
  *    `confirm` + DELETE, e o 400 do servidor vira toast com a literal;
- *  - expandir uma subfamília pede `/familias/<sub>/itens`; "Adicionar item" da sub leva o par
- *    `familia_id=<raiz>&subfamilia_id=<sub>` na URL — é o que o form de material lê (T3).
+ *  - expandir uma subfamília pede `/familias/<sub>/itens`. (O "Adicionar item" da sub, que levava o par
+ *    `familia_id=<raiz>&subfamilia_id=<sub>` ao form de material, saiu na Etapa 193 — o cadastro de material e so do Compras;
+ *    o item listado tem "Ver", a ficha so para leitura.)
  *
  * O `api` é mockado com a FORMA REAL da rota (`parent_id`, `qtd_itens`, `codigo`, `tipo_uso`): a
  * contagem da subfamília vem do servidor (T1), a tela só exibe. Fixture com DUAS raízes, uma com
@@ -269,16 +270,21 @@ describe('TabFamilias — RN-37.08: expandir subfamília', () => {
   });
 });
 
-describe('TabFamilias — "Adicionar item" da subfamília', () => {
-  test('(f) o link leva familia_id da raiz E subfamilia_id da sub', async () => {
+describe('TabFamilias — Etapa 193 (RN-193.01): o cadastro de material saiu da aba', () => {
+  // Ate a 192 havia "Adicionar item" na raiz e na sub (com familia_id/subfamilia_id na URL) e um lapis "Editar" em cada item.
+  test('(f) nem a raiz nem a sub ativas oferecem "Adicionar item"; o item da sub tem "Ver" (a ficha só para leitura)', async () => {
     await renderAbaFamilias();
     const rol = cartaoDe('ROL');
-    const link = [...subDe(rol, 'ROL-ESF').querySelectorAll('a')].find((a) => /Adicionar item/.test(a.textContent));
-    expect(link).toBeDefined();
-    expect(link.getAttribute('href')).toBe('/almoxarifado/materiais/novo?familia_id=1&subfamilia_id=3');
-    // O da raiz continua só com familia_id.
-    const linkRaiz = [...rol.querySelector('.almox-familia-cabecalho').querySelectorAll('a')].find((a) => /Adicionar item/.test(a.textContent));
-    expect(linkRaiz.getAttribute('href')).toBe('/almoxarifado/materiais/novo?familia_id=1');
+    const adicionar = (el) => [...el.querySelectorAll('a')].filter((a) => /Adicionar item/.test(a.textContent));
+    expect(adicionar(rol.querySelector('.almox-familia-cabecalho'))).toHaveLength(0);
+    expect(adicionar(subDe(rol, 'ROL-ESF'))).toHaveLength(0);
+    expect(container.querySelector('a[href^="/almoxarifado/materiais/novo"]')).toBeNull();
+    await clicar(subDe(rol, 'ROL-ESF').querySelector('button[title="Itens da subfamília"]'));
+    const ver = container.querySelector('[data-testid="ver-item-10"]');
+    expect(ver).not.toBeNull();
+    expect(ver.getAttribute('href')).toBe('/almoxarifado/materiais/ver/10');
+    expect(ver.getAttribute('title')).toBe('Ver');
+    expect(container.querySelector('a[href^="/almoxarifado/materiais/editar"]')).toBeNull();
   });
 });
 
@@ -403,12 +409,13 @@ describe('TabFamilias — Etapa 124: as inativas aparecem e se reativam', () => 
     expect(corpo).not.toHaveProperty('ativo');
   });
 
-  test('[RN-19] as ativas continuam como hoje: Adicionar item, Nova subfamília e Inativar, sem Reativar', async () => {
+  // Etapa 193 (RN-193.01): "Adicionar item" saiu de todas (o cadastro de material e so do Compras) — a ativa nao o tem mais.
+  test('[RN-19] as ativas continuam como hoje: Nova subfamília e Inativar, sem Reativar (e, desde a 193, sem Adicionar item)', async () => {
     mock();
     await renderAbaFamilias();
     const rol = cartaoDe('ROL');
     const cab = rol.querySelector('.almox-familia-cabecalho');
-    expect(linkAdicionar(cab)).toBeTruthy();
+    expect(linkAdicionar(cab)).toBeUndefined();
     expect(cab.querySelector('button[title="Inativar"]')).not.toBeNull();
     expect(cab.querySelector('button[title="Reativar"]')).toBeNull();
     expect(botaoPorTexto(rol, /Nova subfamília/)).toBeTruthy();
@@ -430,7 +437,8 @@ describe('TabFamilias — Etapa 124: as inativas aparecem e se reativam', () => 
 
 describe('TabFamilias — Etapa 124 (Fase 5): a inativa expandida não oferece o cadastro', () => {
   const VEDACOES = { id: 20, codigo: 'VED', nome: 'Vedações', descricao: '', parent_id: null, parent_nome: null, tipo_uso: 'ambos', ativo: 0, qtd_itens: 0 };
-  test('[RN-18] expandir a raiz inativa sem itens: "Nenhum item nesta família." sem "Cadastrar primeiro item"; a ativa mantém', async () => {
+  // Etapa 193 (RN-193.01): "Cadastrar primeiro item" saiu tambem da ativa — a metade positiva virou "nenhuma oferece".
+  test('[RN-18] expandir a raiz sem itens: "Nenhum item nesta família." sem "Cadastrar primeiro item" — inativa e, desde a 193, ativa', async () => {
     api.get.mockImplementation((url) => {
       if (url === '/almoxarifado/familias?ativo=all') return Promise.resolve({ data: [...FAMILIAS, VEDACOES] });
       return Promise.resolve({ data: [] });
@@ -440,9 +448,10 @@ describe('TabFamilias — Etapa 124 (Fase 5): a inativa expandida não oferece o
     const ved = cartaoDe('VED');
     expect(ved.textContent).toMatch(/Nenhum item nesta família\./);
     expect([...ved.querySelectorAll('a')].some((a) => /Cadastrar primeiro item/.test(a.textContent))).toBe(false);
-    // metade positiva: a ativa sem itens (PAR) continua oferecendo
+    // a ativa sem itens (PAR): a mesma frase, e tambem sem o link (Etapa 193)
     await clicar(cartaoDe('PAR').querySelector('.almox-familia-cabecalho'));
-    expect([...cartaoDe('PAR').querySelectorAll('a')].some((a) => /Cadastrar primeiro item/.test(a.textContent))).toBe(true);
+    expect(cartaoDe('PAR').textContent).toMatch(/Nenhum item nesta família./);
+    expect([...cartaoDe('PAR').querySelectorAll('a')].some((a) => /Cadastrar primeiro item/.test(a.textContent))).toBe(false);
   });
 });
 

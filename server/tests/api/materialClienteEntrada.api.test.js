@@ -58,9 +58,9 @@ const codigo = () => { seq += 1; return `T8-ENT-${seq}`; };
 
   await test('PUT /materiais/:id troca e limpa o proprietario', async () => {
     const { id } = await criarMaterial();
-    await request(app).put(`/api/almoxarifado/materiais/${id}`).send({ proprietario_cliente_id: cliA });
+    await request(app).put(`/api/compras/materiais/cadastro/${id}`).send({ proprietario_cliente_id: cliA });
     assert.strictEqual((await dbGet(db, 'SELECT proprietario_cliente_id FROM materiais_almoxarifado WHERE id = ?', [id])).proprietario_cliente_id, cliA);
-    await request(app).put(`/api/almoxarifado/materiais/${id}`).send({ proprietario_cliente_id: null });
+    await request(app).put(`/api/compras/materiais/cadastro/${id}`).send({ proprietario_cliente_id: null });
     assert.strictEqual((await dbGet(db, 'SELECT proprietario_cliente_id FROM materiais_almoxarifado WHERE id = ?', [id])).proprietario_cliente_id, null,
       'null explicito tinha de limpar o dono — se preservou, o campo caiu no ramo "ausente" da coercao');
   });
@@ -70,7 +70,7 @@ const codigo = () => { seq += 1; return `T8-ENT-${seq}`; };
     // Se a omissao apagasse o dono, editar o nome de uma chapa do cliente a transformaria em
     // material nosso em silencio — exatamente o tipo de falha muda que esta etapa caca.
     const { id } = await criarMaterial({ proprietario_cliente_id: cliA });
-    await request(app).put(`/api/almoxarifado/materiais/${id}`).send({ nome: 'Chapa do cliente (renomeada)' });
+    await request(app).put(`/api/compras/materiais/cadastro/${id}`).send({ nome: 'Chapa do cliente (renomeada)' });
     assert.strictEqual((await dbGet(db, 'SELECT proprietario_cliente_id FROM materiais_almoxarifado WHERE id = ?', [id])).proprietario_cliente_id, cliA);
   });
 

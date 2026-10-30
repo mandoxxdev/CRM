@@ -307,3 +307,14 @@ describe('AlmoxarifadoDashboard — quadro "Consumo por O.S." ignora linhas só 
     expect(t).not.toContain('Nenhum consumo vinculado a O.S. no período');
   });
 });
+
+// Etapa 193 (RN-193.01): o cadastro de material e so do Compras — o painel nao oferece mais "Novo Material" (nem no cabecalho
+// nem nas acoes rapidas); os outros atalhos continuam.
+describe('AlmoxarifadoDashboard — sem atalho de cadastro de material (Etapa 193)', () => {
+  test('nenhum "Novo Material" nem link para /almoxarifado/materiais/novo; Nova Requisição continua', async () => {
+    await renderizar();
+    expect(container.textContent).not.toContain('Novo Material');
+    expect(container.querySelector('a[href^="/almoxarifado/materiais/novo"]')).toBeNull();
+    expect(container.querySelector('a[href="/almoxarifado/requisicoes/nova"]')).not.toBeNull();
+  });
+});

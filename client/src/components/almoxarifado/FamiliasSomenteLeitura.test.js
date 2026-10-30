@@ -5,7 +5,8 @@
  * aceita o administrador do sistema), mas as rotas de família (`denyUnlessAlmoxAdmin`) recusam com 403. Antes ele via *Nova
  * Família*, *Editar*, *Inativar* e *Reativar*, e cada clique respondia "Acesso restrito". Agora a aba mostra a árvore sem os gestos
  * de FAMÍLIA, com uma frase que diz de quem é; os gestos de MATERIAL (*Adicionar item*, *Cadastrar primeiro item*, editar o item)
- * ficam — o servidor deixa (Fase 2, I1).
+ * ficavam — o servidor deixava (Fase 2, I1). Desde a Etapa 193 (RN-193.01) eles sairam para TODOS (o cadastro de material e so
+ * do Compras): o que fica para o administrador do sistema e o "Ver" do item, a ficha so para leitura.
  *
  * Executar: cd client && CI=true npx react-scripts test src/components/almoxarifado/FamiliasSomenteLeitura --watchAll=false
  */
@@ -97,19 +98,19 @@ describe('C259 (Etapa 125) — RN-16/RN-17: a aba Famílias', () => {
     expect(botoes('Reativar')).toHaveLength(0);
   });
 
-  test('[RN-16, Fase 2 I1] administrador do sistema: os gestos de MATERIAL ficam (Adicionar item, editar o item)', async () => {
+  // Etapa 193 (RN-193.01): os gestos de MATERIAL sairam para todos; o item continua alcancavel pela ficha "Ver".
+  test('[RN-16, Fase 2 I1; Etapa 193] administrador do sistema: sem Adicionar item nem Cadastrar primeiro item; o item tem Ver', async () => {
     await renderAba(ADMIN_SISTEMA);
-    // os dois links, o da raiz ativa e o da sub ativa (a inativa e a orfa nao tem — o de sempre)
-    expect(porTexto('a', /Adicionar item/)).toHaveLength(2);
-    expect(container.querySelector('a[href="/almoxarifado/materiais/novo?familia_id=1"]')).not.toBeNull();
-    expect(container.querySelector('a[href="/almoxarifado/materiais/novo?familia_id=1&subfamilia_id=3"]')).not.toBeNull();
+    expect(porTexto('a', /Adicionar item/)).toHaveLength(0);
+    expect(container.querySelector('a[href^="/almoxarifado/materiais/novo"]')).toBeNull();
     await clicar(container.querySelector('button[title="Itens da subfamília"]'));
     await act(async () => { await Promise.resolve(); });
-    expect(container.querySelector('a[href="/almoxarifado/materiais/editar/10"]')).not.toBeNull();
-    // a raiz sem itens, expandida: "Cadastrar primeiro item" continua
+    expect(container.querySelector('a[href="/almoxarifado/materiais/ver/10"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/almoxarifado/materiais/editar/10"]')).toBeNull();
+    // a raiz sem itens, expandida: a frase, sem o link
     await clicar(container.querySelector('.almox-familia-cabecalho'));
     await act(async () => { await Promise.resolve(); });
-    expect(porTexto('a', /Cadastrar primeiro item/)).toHaveLength(1);
+    expect(porTexto('a', /Cadastrar primeiro item/)).toHaveLength(0);
   });
 
   test('[RN-16, Fase 5 r3] decide pelo usuario EFETIVO: logado Administrador, efetivo administrador do sistema -> somente leitura', async () => {

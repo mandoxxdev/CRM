@@ -333,6 +333,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // exige o modulo almoxarifado) com os MESMOS handlers das rotas abaixo — cada porta do Compras fica logo depois da rota do
   // almoxarifado que ele reaproveita. Regras e o que fica de fora: `services/compras/cadastroDeMaterial.js`.
   const portaCompras = cadastroDeMaterialCompras.criarPortaCompras({ authenticateToken, checkModulePermission });
+  if (cadastroDeMaterialCompras.cadastroNoAlmoxarifadoLiberado()) {
+    console.warn('⚠️ ALMOX_CADASTRO_MATERIAL=liberado: o Almoxarifado volta a editar, inativar e trocar a foto de material pelas rotas '
+      + 'dele (PUT/DELETE/foto de /api/almoxarifado/materiais), como antes da Etapa 193; o cadastro deveria ser só do Compras.');
+  }
   app.get('/api/compras/materiais/aux/minhas-permissoes', ...portaCompras.base, portaCompras.responderMinhasPermissoes);
   // Etapa 193 (RN-193.05): o dono do material so se define no cadastro (a sobra e a remessa copiam o da origem), e o cadastro
   // agora e so do Compras — o formulario do Compras voltou a ter o Proprietario. A lista vem daqui, sob o MESMO gate do
@@ -1041,7 +1045,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       return res.status(500).json({ error: err.message });
     }
   };
-  app.put('/api/almoxarifado/materiais/:id', requirePermission('editar_material'), validate(MaterialUpdateSchema), editarMaterial);
+  // Etapa 193 (RN-193.02): o cadastro e so do Compras — a edicao pelo almoxarifado recusa para todos (403), antes do perfil. Com a
+  // chave de reversao (`ALMOX_CADASTRO_MATERIAL=liberado`, ver `cadastroDeMaterial.js`) a corrente de antes segue.
+  app.put('/api/almoxarifado/materiais/:id', cadastroDeMaterialCompras.recusarCadastroNoAlmoxarifado,
+    requirePermission('editar_material'), validate(MaterialUpdateSchema), editarMaterial);
   // Etapa 192 (RN-192.10): a mesma edicao pelo Compras. Fase 5 (X1): as guardas de controle e dono do handler leem o perfil
   // COMPRAS (`comoCompras`) e recusam. Etapa 193 (RN-193.04): inativar/reativar (`ativo`) passou a valer aqui — a recusa
   // "Inativar ou reativar material e feito no Almoxarifado." saiu; as regras sao as do handler (saldo prende, familia confere).
@@ -1075,7 +1082,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // entre a leitura e a gravacao e vista. `changes` passa a decidir a auditoria (so quem desativou de fato audita); id
   // inexistente e material ja inativo continuam 200 `{ success: true }` (contrato da Etapa 19), agora sem escrita.
   //
-  // Etapa 193 (RN-193.04): o mesmo handler tambem serve o Compras (DELETE da porta dele), com as
+  // Etapa 193 (RN-193.02, RN-193.04): o handler mudou de porta — o almoxarifado recusa (403) e o Compras inativa, com as
   // mesmas regras e mensagens (a do saldo diz "Seu perfil (COMPRAS) nao movimenta estoque", porque roda em `comoCompras`).
   const inativarMaterial = async (req, res) => {
     try {
@@ -1125,7 +1132,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       res.status(500).json({ error: err.message });
     }
   };
-  app.delete('/api/almoxarifado/materiais/:id', requirePermission('editar_material'), inativarMaterial);
+  app.delete('/api/almoxarifado/materiais/:id', cadastroDeMaterialCompras.recusarCadastroNoAlmoxarifado,
+    requirePermission('editar_material'), inativarMaterial);
   app.delete('/api/compras/materiais/cadastro/:id', ...portaCompras.escrita('editar_material'), inativarMaterial);
 
   // POST /api/almoxarifado/materiais/:id/foto — upload de foto
@@ -1162,7 +1170,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // Ordem final: SELECT → 404 (+ limpa órfão) → UPDATE → unlink da anterior → auditoria →
   // resposta. A resposta é a MESMA de antes (`{ foto, foto_url }`) — a tela não muda.
   //
-  // Etapa 193 (RN-193.04): o Compras troca a foto com este mesmo handler, com o gate dele antes do multer.
+  // Etapa 193 (RN-193.02, RN-193.04): a foto mudou de porta — o almoxarifado recusa (403, antes do multer: nada no disco) e o
+  // Compras troca a foto com este mesmo handler, com o gate dele antes do multer.
   const trocarFotoMaterial = async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Nenhuma foto enviada' });
 
@@ -1227,7 +1236,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
     res.json({ foto: filename, foto_url: materialPhotoUrl(filename) });
   };
-  app.post('/api/almoxarifado/materiais/:id/foto', requirePermission('editar_material'), uploadAlmox.single('foto'), trocarFotoMaterial);
+  app.post('/api/almoxarifado/materiais/:id/foto', cadastroDeMaterialCompras.recusarCadastroNoAlmoxarifado,
+    requirePermission('editar_material'), uploadAlmox.single('foto'), trocarFotoMaterial);
   app.post('/api/compras/materiais/cadastro/:id/foto', ...portaCompras.escrita('editar_material'), uploadAlmox.single('foto'),
     trocarFotoMaterial);
 

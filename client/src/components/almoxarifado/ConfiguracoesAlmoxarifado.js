@@ -11,8 +11,9 @@ import {
   FiPackage, FiSliders, FiMapPin, FiSettings,
   FiShield, FiRefreshCw, FiArrowLeft, FiArrowRight, FiMove,
   FiLayers, FiChevronDown, FiChevronRight, FiGrid, FiBell, FiSend, FiMail, FiMessageCircle, FiUsers, FiClipboard, FiShoppingCart, FiDollarSign,
-  FiTag, FiAlertTriangle, FiRotateCcw, FiCheckSquare
+  FiTag, FiAlertTriangle, FiRotateCcw, FiCheckSquare, FiEye
 } from 'react-icons/fi';
+import { ROTAS_ALMOXARIFADO_CONSULTA } from './rotasCadastroMaterial';
 import TabRegrasAprovacao from './TabRegrasAprovacao';
 import Tabs from '../ui/Tabs';
 import { useSearchParams } from 'react-router-dom';
@@ -685,7 +686,9 @@ const TabFamilias = () => {
   const seloInativa = (fam) => ehInativa(fam) && <span className="almox-selo-inativa" style={SELO_INATIVA_STYLE}>Inativa</span>;
 
   // Tabela de itens de uma família/subfamília expandida — a mesma para os dois níveis.
-  const renderItens = (fam, linkNovo) => {
+  // Etapa 193 (RN-193.01): o cadastro de material e so do Compras — os "Adicionar item" / "Cadastrar primeiro item" sairam
+  // e o lapis de cada item virou "Ver" (a ficha so para leitura).
+  const renderItens = (fam) => {
     const itens = itensPorFamilia[fam.id] || [];
     if (loadingItens[fam.id]) {
       return <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>Carregando itens...</div>;
@@ -694,8 +697,6 @@ const TabFamilias = () => {
       return (
         <div style={{ fontSize: '0.85rem', color: 'var(--gmp-text-light)' }}>
           Nenhum item nesta {ehRaiz(fam) ? 'família' : 'subfamília'}.
-          {/* Etapa 124 (Fase 5, r1 M1): a inativa nao oferece o cadastro — o servidor recusaria (RN-18). */}
-          {!ehInativa(fam) && (<>{' '}<Link to={linkNovo} style={{ color: '#4facfe' }}>Cadastrar primeiro item</Link></>)}
         </div>
       );
     }
@@ -720,8 +721,9 @@ const TabFamilias = () => {
                 {prefixarAlmoxarifado(item.localizacao, item.almoxarifado_codigo) || '—'}
               </td>
               <td>
-                <Link to={`/almoxarifado/materiais/editar/${item.id}`} className="almox-btn-icon" title="Editar">
-                  <FiEdit2 size={13} />
+                <Link to={ROTAS_ALMOXARIFADO_CONSULTA.tela.ver(item.id)} className="almox-btn-icon" title="Ver"
+                  data-testid={`ver-item-${item.id}`}>
+                  <FiEye size={13} />
                 </Link>
               </td>
             </tr>
@@ -863,7 +865,6 @@ const TabFamilias = () => {
           {raizes.map(fam => {
             const expandida = !!expandidas[fam.id];
             const subs = subsDe(fam.id);
-            const linkNovoRaiz = `/almoxarifado/materiais/novo?familia_id=${fam.id}`;
             const raizInativa = ehInativa(fam);
             return (
               <div key={fam.id} className={`almox-familia-card${raizInativa ? ' almox-familia-inativa' : ''}`} style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, overflow: 'hidden', opacity: raizInativa ? 0.85 : 1 }}>
@@ -886,11 +887,6 @@ const TabFamilias = () => {
                   </div>
                   {/* RN-18: a inativa nao oferece Adicionar item nem Inativar — oferece Editar e Reativar. */}
                   <div style={{ display: 'flex', gap: 6 }} onClick={e => e.stopPropagation()}>
-                    {!raizInativa && (
-                      <Link to={linkNovoRaiz} className="btn-almox-secondary" style={{ fontSize: '0.75rem', padding: '6px 12px' }}>
-                        <FiPlus size={12} /> Adicionar item
-                      </Link>
-                    )}
                     {podeGravar && <button className="almox-btn-icon" onClick={() => handleEditar(fam)} title="Editar"><FiEdit2 size={13} /></button>}
                     {podeGravar && (raizInativa
                       ? botaoReativar(fam)
@@ -900,7 +896,7 @@ const TabFamilias = () => {
 
                 {expandida && (
                   <div style={{ borderTop: '1px solid var(--gmp-border)', padding: '12px 18px 16px 48px', background: 'var(--gmp-bg)' }}>
-                    {renderItens(fam, linkNovoRaiz)}
+                    {renderItens(fam)}
                   </div>
                 )}
 
@@ -922,7 +918,6 @@ const TabFamilias = () => {
                     <div style={{ borderLeft: '2px solid rgba(79,172,254,0.25)', display: 'flex', flexDirection: 'column' }}>
                       {subs.map(sub => {
                         const subExpandida = !!expandidas[sub.id];
-                        const linkNovoSub = `/almoxarifado/materiais/novo?familia_id=${fam.id}&subfamilia_id=${sub.id}`;
                         return (
                           <div key={sub.id} className="almox-subfamilia-row">
                             {/* `flexWrap` de propósito: no celular (328px úteis) as ações caem numa linha própria. */}
@@ -936,11 +931,6 @@ const TabFamilias = () => {
                               {seloTipoUso(sub)}
                               {seloInativa(sub)}
                               <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
-                                {!ehInativa(sub) && (
-                                  <Link to={linkNovoSub} className="btn-almox-secondary" style={{ fontSize: '0.72rem', padding: '4px 10px' }}>
-                                    <FiPlus size={12} /> Adicionar item
-                                  </Link>
-                                )}
                                 {podeGravar && <button className="almox-btn-icon" onClick={() => handleEditar(sub)} title="Editar"><FiEdit2 size={13} /></button>}
                                 {podeGravar && (ehInativa(sub)
                                   ? botaoReativar(sub)
@@ -950,7 +940,7 @@ const TabFamilias = () => {
                             {sub.descricao && <div style={{ fontSize: '0.72rem', color: 'var(--gmp-text-light)', paddingLeft: 42, marginTop: -4, marginBottom: 4 }}>{sub.descricao}</div>}
                             {subExpandida && (
                               <div style={{ background: 'var(--gmp-bg)', padding: '10px 12px 12px', paddingLeft: 24, marginBottom: 6 }}>
-                                {renderItens(sub, linkNovoSub)}
+                                {renderItens(sub)}
                               </div>
                             )}
                           </div>

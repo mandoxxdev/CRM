@@ -8,8 +8,10 @@
  *  3. sem permissão (minhas-permissoes do Compras), a lista não é pedida e a tela diz o que falta;
  *  4. o formulário do Almoxarifado continua nas rotas dele (o padrão de `rotas`).
  *
- * Etapa 193 (RN-193.03..05): o Compras ganhou foto, Proprietário (lista mínima `/compras/materiais/aux/clientes`) e
- * Inativar/Reativar (as mesmas mensagens da lista do Almoxarifado, Etapa 113, com as URLs do Compras).
+ * Etapa 193 (RN-193.01..05): o cadastro passou a ser SÓ do Compras. O Compras ganhou foto, Proprietário (lista mínima
+ * `/compras/materiais/aux/clientes`) e Inativar/Reativar (os testes do Inativar/Reativar que eram da lista do Almoxarifado,
+ * Etapa 113, vieram para cá com as URLs do Compras); o Almoxarifado ficou com a ficha "Ver" (só leitura) e os caminhos antigos
+ * de novo/editar levam à lista e à ficha.
  *
  * Executar: cd client && CI=true npx react-scripts test src/components/compras/MateriaisCompras --watchAll=false
  */
@@ -18,7 +20,8 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import MateriaisCompras, { AVISO_SEM_ACESSO } from './MateriaisCompras';
 import MaterialAlmoxarifadoForm from '../almoxarifado/MaterialAlmoxarifadoForm';
-import { ROTAS_COMPRAS } from '../almoxarifado/rotasCadastroMaterial';
+import { ROTAS_COMPRAS, AVISO_CADASTRO_NO_COMPRAS } from '../almoxarifado/rotasCadastroMaterial';
+import { MaterialVer, EditarMaterialVirouVer, NovoMaterialVirouLista } from '../almoxarifado/MaterialSoConsulta';
 import { invalidarAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import api from '../../services/api';
 
@@ -100,7 +103,10 @@ async function renderizar(caminho) {
           <Route path="/compras/materiais" element={<MateriaisCompras />} />
           <Route path="/compras/materiais/novo" element={<MaterialAlmoxarifadoForm rotas={ROTAS_COMPRAS} />} />
           <Route path="/compras/materiais/editar/:id" element={<MaterialAlmoxarifadoForm rotas={ROTAS_COMPRAS} />} />
-          <Route path="/almoxarifado/materiais/novo" element={<MaterialAlmoxarifadoForm />} />
+          <Route path="/almoxarifado/materiais" element={<div data-testid="lista-almox" />} />
+          <Route path="/almoxarifado/materiais/ver/:id" element={<MaterialVer />} />
+          <Route path="/almoxarifado/materiais/novo" element={<NovoMaterialVirouLista />} />
+          <Route path="/almoxarifado/materiais/editar/:id" element={<EditarMaterialVirouVer />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -340,18 +346,43 @@ describe('Compras → Materiais — Inativar e Reativar (RN-193.04)', () => {
   });
 });
 
-describe('Almoxarifado → Materiais — o formulário continua nas rotas dele', () => {
-  test('no Almoxarifado o seletor Proprietário continua e pede /clientes', async () => {
-    await renderizar('/almoxarifado/materiais/novo');
-    expect(container.querySelector('#material-proprietario')).not.toBeNull();
-    expect(urlsChamadas()).toContain('/clientes');
+// Etapa 193 (RN-193.01): no Almoxarifado o formulário é só a ficha "Ver" — nada se edita nem se salva.
+describe('Almoxarifado → Materiais: a ficha "Ver" e os caminhos antigos (RN-193.01)', () => {
+  test('ver: tudo desligado, sem Salvar, sem envio de foto, com o aviso; o dono pelo nome, sem pedir /clientes', async () => {
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => {
+      if (url === '/almoxarifado/materiais/77') {
+        return Promise.resolve({ data: { ...MATERIAL, proprietario_cliente_id: 12, proprietario_cliente_nome: 'CLIENTE X LTDA' } });
+      }
+      return base(url, cfg);
+    });
+    await renderizar('/almoxarifado/materiais/ver/77');
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/materiais/77');
+    expect(container.querySelector('[data-testid="material-somente-leitura"]').textContent).toBe(AVISO_CADASTRO_NO_COMPRAS);
+    expect(container.querySelector('[data-testid="material-form-campos"]').disabled).toBe(true);
+    expect(container.querySelector('input[placeholder="Nome completo do material"]').value).toBe('Valvula gaveta');
+    expect(container.querySelector('button[type="submit"]')).toBeNull();
+    expect(container.querySelector('input[type="file"]')).toBeNull();
+    expect(container.textContent).not.toMatch(/Atualizar Material|Cadastrar Material|Editar Material/);
+    expect(container.querySelector('[data-testid="material-proprietario-somente-leitura"]').textContent).toContain('CLIENTE X LTDA');
+    expect(urlsChamadas()).not.toContain('/clientes');
+    // Mesmo que o formulário seja submetido (Enter num campo), nada é gravado.
+    await submeter();
+    expect(api.put).not.toHaveBeenCalled();
+    expect(api.post).not.toHaveBeenCalled();
   });
 
-  test('no Almoxarifado o formulário continua nas rotas dele, com foto e saldo inicial', async () => {
-    await renderizar('/almoxarifado/materiais/novo');
-    expect(container.textContent).toContain('Foto do Produto');
-    expect(container.textContent).toContain('Saldo Inicial');
-    expect(api.get).toHaveBeenCalledWith('/almoxarifado/familias');
-    expect(urlsChamadas().filter((u) => String(u).startsWith('/compras'))).toEqual([]);
+  test('favorito antigo /almoxarifado/materiais/editar/77 leva à ficha Ver do mesmo material', async () => {
+    await renderizar('/almoxarifado/materiais/editar/77');
+    expect(local.pathname).toBe('/almoxarifado/materiais/ver/77');
+    expect(container.querySelector('[data-testid="material-somente-leitura"]')).not.toBeNull();
+  });
+
+  test('favorito antigo /almoxarifado/materiais/novo (com ?familia_id) leva à lista do Almoxarifado, sem formulário', async () => {
+    await renderizar('/almoxarifado/materiais/novo?familia_id=5');
+    expect(local.pathname).toBe('/almoxarifado/materiais');
+    expect(container.querySelector('[data-testid="lista-almox"]')).not.toBeNull();
+    expect(container.querySelector('form')).toBeNull();
+    expect(api.post).not.toHaveBeenCalled();
   });
 });

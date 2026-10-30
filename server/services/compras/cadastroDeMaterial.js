@@ -7,7 +7,9 @@
  * com `checkModulePermission('compras')` e chamam os MESMOS handlers das rotas do almoxarifado (registrados lado a lado em
  * `routes/almoxarifado.js` e `routes/almoxarifado/extended.js`): mesma validacao, mesmas mensagens, nenhuma segunda copia.
  *
- * Desde a Etapa 193 (RN-193.04) o Compras ganhou foto e inativar/reativar (DELETE e PUT `ativo`) pelos mesmos handlers.
+ * Desde a Etapa 193 (RN-193.01..04) o cadastro e SO do Compras: as escritas de cadastro do almoxarifado (PUT, DELETE, foto)
+ * recusam com `recusarCadastroNoAlmoxarifado` (403, abaixo) e o Compras ganhou foto e inativar/reativar (DELETE e PUT `ativo`)
+ * pelos mesmos handlers. O `POST /api/almoxarifado/materiais` fica: a sobra (retalho) e a remessa criam material na operacao.
  *
  * O QUE FICA DE FORA, de proposito: saldo. O saldo inicial e recusado na porta (400, Fase 5 X1 — abaixo).
  *
@@ -53,8 +55,31 @@ function minhasPermissoes(user) {
   return { perfil: getPerfilFromUser(user), acoes };
 }
 
-/** Etapa 193 (RN-193.04): ate a 192 o PUT do Compras recusava `ativo` ("Inativar ou reativar material e feito no Almoxarifado."); a
- * recusa saiu porque inativar/reativar passou a ser do Compras (as regras sao as do handler). */
+/**
+ * Etapa 193 (RN-193.02): as escritas de CADASTRO do almoxarifado (`PUT /api/almoxarifado/materiais/:id`, `DELETE` e a foto)
+ * recusam para TODOS, superadmin inclusive — o cadastro e feito em Compras -> Materiais. Antes do `requirePermission` e do
+ * multer (a foto recusada nao chega ao disco). Ate a 192 o PUT do Compras recusava `ativo` ("Inativar ou reativar material e
+ * feito no Almoxarifado."); a recusa saiu porque inativar/reativar mudou de lado.
+ * Descartado: recusar tambem o `POST /api/almoxarifado/materiais` — a sobra (retalho, `SobrasAlmoxarifado`) e a remessa para
+ * terceiros criam material na operacao por ele; nao sao o "cadastro" que saiu do almoxarifado.
+ *
+ * CHAVE DE REVERSAO (letra B): `ALMOX_CADASTRO_MATERIAL=liberado` no ambiente devolve as tres rotas ao que eram ate a 192 (o
+ * perfil do almoxarifado decide, `requirePermission('editar_material')`, que continua na corrente logo depois desta recusa) — sem
+ * deploy, e o boot avisa. Mesmo molde do `PROPOSTAS_PORTAO_DE_MODULO=desligado` (Etapa 148, B946). Existe porque so a porta do
+ * almoxarifado alcanca as guardas de estoque do handler para quem pode (ligar lote/serie em material com saldo nao identificado e
+ * desligar a serie com series presentes exigem `ajustar_estoque`; trocar o dono de material com historico exige
+ * `ajustar_material_cliente`) — pela porta do Compras o handler roda no perfil COMPRAS (B72) e sempre recusa. Com a chave
+ * desligada (o padrao), esses tres gestos ficam sem porta (letra C, RN-193.06). Os testes dessas guardas ligam a chave.
+ * Lida a cada pedido (o teste liga e desliga no mesmo processo).
+ */
+const MSG_CADASTRO_NO_COMPRAS = 'O cadastro de material é feito em Compras → Materiais.';
+function cadastroNoAlmoxarifadoLiberado() {
+  return String(process.env.ALMOX_CADASTRO_MATERIAL || '').trim().toLowerCase() === 'liberado';
+}
+function recusarCadastroNoAlmoxarifado(req, res, next) {
+  if (cadastroNoAlmoxarifadoLiberado()) return next();
+  return res.status(403).json({ error: MSG_CADASTRO_NO_COMPRAS });
+}
 
 /**
  * Etapa 192 Fase 5 (X1): a porta do Compras NUNCA mexe em estoque nem nos controles de estoque. A revisao achou o comprador com o
@@ -116,5 +141,6 @@ function criarPortaCompras({ authenticateToken, checkModulePermission }) {
 
 module.exports = {
   ACOES_DO_CADASTRO, pode, exigir, minhasPermissoes, criarPortaCompras,
+  recusarCadastroNoAlmoxarifado, MSG_CADASTRO_NO_COMPRAS, cadastroNoAlmoxarifadoLiberado,
   recusarSaldoInicial, MSG_SALDO_INICIAL_NO_COMPRAS, usuarioDoCompras, comoCompras,
 };

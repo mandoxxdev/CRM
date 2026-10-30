@@ -224,9 +224,6 @@ const AlmoxarifadoDashboard = () => {
           <Link to="/almoxarifado/movimentacoes/novo" className="btn-almox-primary">
             <FiActivity size={14} /> Nova Movimentação
           </Link>
-          <Link to="/almoxarifado/materiais/novo" className="btn-almox-primary">
-            <FiPackage size={14} /> Novo Material
-          </Link>
           <Link to="/almoxarifado/requisicoes/nova" className="btn-almox-primary">
             <FiClock size={14} /> Nova Requisição
           </Link>
@@ -235,10 +232,6 @@ const AlmoxarifadoDashboard = () => {
 
       {/* Ações rápidas */}
       <div className="almox-quick-actions">
-        <Link to="/almoxarifado/materiais/novo" className="almox-quick-action">
-          <span className="almox-quick-action-icon"><FiPackage /></span>
-          <span className="almox-quick-action-label">Novo Material</span>
-        </Link>
         <Link to="/almoxarifado/requisicoes/nova" className="almox-quick-action">
           <span className="almox-quick-action-icon"><FiClipboard /></span>
           <span className="almox-quick-action-label">Nova Requisição</span>

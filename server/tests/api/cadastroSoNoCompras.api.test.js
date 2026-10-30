@@ -1,6 +1,10 @@
 /**
- * Etapa 193 (Compras) K1 — RN-193.03 a RN-193.06: a porta do Compras para o cadastro de material.
+ * Etapa 193 (Compras) K1 — RN-193.02 a RN-193.06: o cadastro de material passa a ser SO do Compras.
  *
+ *  - RN-193.02: as escritas de CADASTRO do almoxarifado (`PUT /api/almoxarifado/materiais/:id`, `DELETE .../:id`,
+ *    `POST .../:id/foto`) recusam com 403 e a mensagem literal, para TODOS (superadmin inclusive) e sem gravar nada
+ *    (a foto nem chega ao disco: a recusa roda antes do multer). O `POST /api/almoxarifado/materiais` CONTINUA: a sobra
+ *    (retalho) e a remessa para terceiros criam material na operacao.
  *  - RN-193.03: a porta do Compras aceita so o administrador do modulo Compras e os administradores do sistema
  *    (superadmin / role admin). Almoxarife, Engenharia, o perfil Administrador do almoxarifado e o admin do modulo
  *    almoxarifado deixam de entrar.
@@ -55,6 +59,48 @@ const ADMIN_MODULO_ALMOX = { id: 7, nome: 'Adm Modulo Almox', role: 'usuario', a
     return r.lastID;
   };
   const corpo = (over = {}) => ({ nome: 'Material novo', unidade: 'PC', categoria: 'OUTROS', familia_id: FAM, ...over });
+
+  // ── RN-193.02 ────────────────────────────────────────────────────────────────────────────────────
+  await test('[RN-193.02] PUT, DELETE e foto do almoxarifado -> 403 literal para todos; nada gravado, nenhum arquivo', async () => {
+    const MAT = await material({ nome: 'Intocado' });
+    const antesArquivos = arquivos();
+    for (const u of [SUPER, ROLE_ADMIN, ADMIN_PERFIL_ALMOX, ALMOXARIFE, ADMIN_COMPRAS]) {
+      const chamadas = [
+        ['PUT', () => request(app).put(`/api/almoxarifado/materiais/${MAT}`).send({ nome: 'Mudado', ativo: 0 })],
+        ['DELETE', () => request(app).delete(`/api/almoxarifado/materiais/${MAT}`)],
+        ['foto', () => request(app).post(`/api/almoxarifado/materiais/${MAT}/foto`).attach('foto', PNG_1x1, 'f.png')],
+      ];
+      for (const [nome, fn] of chamadas) {
+        const r = await as(u, fn);
+        assert.deepStrictEqual([r.status, r.body.error], [403, MSG_SO_NO_COMPRAS], `${u.nome} ${nome}: ${r.status} ${JSON.stringify(r.body)}`);
+      }
+    }
+    const m = await dbGet(db, 'SELECT nome, ativo, foto FROM materiais_almoxarifado WHERE id = ?', [MAT]);
+    assert.deepStrictEqual(m, { nome: 'Intocado', ativo: 1, foto: null });
+    assert.strictEqual(arquivos(), antesArquivos, 'a recusa roda antes do multer: nenhum arquivo no disco');
+  });
+
+  await test('[RN-193.02] POST /api/almoxarifado/materiais continua (sobra e remessa criam material na operacao)', async () => {
+    const r = await as(ALMOXARIFE, () => request(app).post('/api/almoxarifado/materiais').send(corpo({ codigo: 'RET-K1' })));
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+  });
+
+  await test('[RN-193.02, letra B] a chave ALMOX_CADASTRO_MATERIAL=liberado devolve a corrente de antes (o perfil decide); desligada, recusa de novo', async () => {
+    const MAT = await material({ nome: 'Chave' });
+    const PRODUCAO = { id: 8, nome: 'Producao', role: 'usuario', email: 'p@test.com' };
+    process.env.ALMOX_CADASTRO_MATERIAL = 'liberado';
+    try {
+      const ok = await as(ALMOXARIFE, () => request(app).put(`/api/almoxarifado/materiais/${MAT}`).send({ nome: 'Pela chave' }));
+      assert.strictEqual(ok.status, 200, JSON.stringify(ok.body));
+      const neg = await as(PRODUCAO, () => request(app).delete(`/api/almoxarifado/materiais/${MAT}`));
+      assert.deepStrictEqual([neg.status, neg.body.error], [403, LITERAL_403], JSON.stringify(neg.body));
+    } finally {
+      delete process.env.ALMOX_CADASTRO_MATERIAL;
+    }
+    const r = await as(ALMOXARIFE, () => request(app).put(`/api/almoxarifado/materiais/${MAT}`).send({ nome: 'Sem chave' }));
+    assert.deepStrictEqual([r.status, r.body.error], [403, MSG_SO_NO_COMPRAS]);
+    assert.deepStrictEqual(await dbGet(db, 'SELECT nome, ativo FROM materiais_almoxarifado WHERE id = ?', [MAT]), { nome: 'Pela chave', ativo: 1 });
+  });
 
   // ── RN-193.03 ────────────────────────────────────────────────────────────────────────────────────
   await test('[RN-193.03] o Compras aceita o admin do Compras, o superadmin e o role admin (lista, criar, editar)', async () => {

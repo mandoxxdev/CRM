@@ -209,7 +209,7 @@ async function criarRequisicao(db, { status = 'PENDENTE', itens = [], solicitant
     // Etapa 113 (B733): inativar exige saldo zerado — o material do cenario nasce sem saldo.
     const mat = await novoMaterial(db, { qtd: 0, ativo: 1 });
 
-    const res = await request(app).delete(`/api/almoxarifado/materiais/${mat.id}`);
+    const res = await request(app).delete(`/api/compras/materiais/cadastro/${mat.id}`);
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
     assert.strictEqual(res.body.success, true, 'resposta de sucesso inalterada');
 
@@ -238,7 +238,7 @@ async function criarRequisicao(db, { status = 'PENDENTE', itens = [], solicitant
     const antes = await auditorias(db, 'material', mat.id, 'DESATIVACAO');
     assert.strictEqual(antes.length, 0, 'setup: o material nasceu inativo e sem rastro nenhum');
 
-    const res = await request(app).delete(`/api/almoxarifado/materiais/${mat.id}`);
+    const res = await request(app).delete(`/api/compras/materiais/cadastro/${mat.id}`);
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
     assert.strictEqual(res.body.success, true, 'a resposta desta rota nao muda');
 
@@ -254,7 +254,7 @@ async function criarRequisicao(db, { status = 'PENDENTE', itens = [], solicitant
     const existe = await dbGet(db, 'SELECT id FROM materiais_almoxarifado WHERE id = ?', [idFantasma]);
     assert.ok(!existe, 'pre-condicao: o id nao pode existir');
 
-    const res = await request(app).delete(`/api/almoxarifado/materiais/${idFantasma}`);
+    const res = await request(app).delete(`/api/compras/materiais/cadastro/${idFantasma}`);
     assert.strictEqual(res.status, 200, 'a resposta continua success (comportamento inalterado)');
     assert.strictEqual(res.body.success, true);
 

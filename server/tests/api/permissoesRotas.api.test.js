@@ -487,6 +487,11 @@ const saldoDe = (db, matId) => dbGet(db, 'SELECT quantidade_atual FROM materiais
     assert.strictEqual(res.status, 201, JSON.stringify(res.body));
   });
 
+  // Etapa 193 (RN-193.02): PUT, DELETE e foto do almoxarifado recusam para TODOS com "O cadastro de material e feito em Compras ->
+  // Materiais." (cadastroSoNoCompras.api.test.js). Os seis casos abaixo provam a corrente que fica ATRAS da recusa (o perfil e o gate
+  // antes do multer), que volta a valer com a chave de reversao `ALMOX_CADASTRO_MATERIAL=liberado` — ligada so neste trecho.
+  process.env.ALMOX_CADASTRO_MATERIAL = 'liberado';
+
   await test('[PUT /materiais/:id] PRODUCAO -> 403, nome inalterado', async () => {
     const matId = await criarMaterial(db);
     const antes = await dbGet(db, 'SELECT nome FROM materiais_almoxarifado WHERE id = ?', [matId]);
@@ -563,6 +568,7 @@ const saldoDe = (db, matId) => dbGet(db, 'SELECT quantidade_atual FROM materiais
     const row = await dbGet(db, 'SELECT foto FROM materiais_almoxarifado WHERE id = ?', [matId]);
     assert.ok(row.foto, 'foto deveria ter sido gravada');
   });
+  delete process.env.ALMOX_CADASTRO_MATERIAL;
 
   // ══════════════════════════ REQUISIÇÃO (requisitar) ══════════════════════════
   // PRODUCAO É um perfil válido aqui (chão de fábrica pede material) — o caso negativo

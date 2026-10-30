@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
 import { prefixarAlmoxarifado } from '../../utils/localizacaoLabel';
@@ -8,9 +8,9 @@ import { useCategoriasMaterial } from '../../hooks/useCategoriasMaterial';
 import { toast } from 'react-toastify';
 import { SkeletonTable } from '../SkeletonLoader';
 import {
-  FiPlus, FiSearch, FiEdit, FiTrash2, FiImage, FiPackage,
+  FiSearch, FiEye, FiImage, FiPackage,
   FiArrowUp, FiArrowDown, FiAlertTriangle, FiRefreshCw, FiMap, FiClipboard, FiFileText, FiTag,
-  FiCheckSquare, FiPaperclip, FiRotateCcw
+  FiCheckSquare, FiPaperclip, FiInfo
 } from 'react-icons/fi';
 import AlmoxPageHeader from './AlmoxPageHeader';
 import AnexosModal from './AnexosModal';
@@ -18,6 +18,7 @@ import ExtratoMaterialModal from './ExtratoMaterialModal';
 import EtiquetasPdfModal from './EtiquetasPdfModal';
 import PlanoInspecaoModal from './PlanoInspecaoModal';
 import SeloProprietario from './SeloProprietario';
+import { AVISO_CADASTRO_NO_COMPRAS, ROTAS_ALMOXARIFADO_CONSULTA } from './rotasCadastroMaterial';
 import { montarEtiquetaMaterial } from '../../utils/etiquetasPdf';
 import './Almoxarifado.css';
 
@@ -133,30 +134,8 @@ const MateriaisAlmoxarifado = () => {
     }
   };
 
-  const handleDelete = async (id, nome) => {
-    if (!window.confirm(`Inativar o material "${nome}"?`)) return;
-    try {
-      await api.delete(`/almoxarifado/materiais/${id}`);
-      toast.success('Material inativado');
-      loadMateriais();
-    } catch (err) {
-      // Etapa 113 (RN-07): a recusa do servidor diz o saldo que impede inativar e o caminho (zerar / devolver ao cliente).
-      toast.error(err?.response?.data?.error || 'Erro ao inativar material');
-    }
-  };
-
-  // Etapa 113 (RN-08): o filtro "Inativos" lista o que foi inativado, e daqui se reativa — sem isto um material inativado
-  // (com saldo antigo, ou com inventario/nota aberta) nao tinha volta pela tela. O servidor confere a familia (RN-05).
-  const handleReativar = async (id, nome) => {
-    if (!window.confirm(`Reativar o material "${nome}"?`)) return;
-    try {
-      await api.put(`/almoxarifado/materiais/${id}`, { ativo: 1 });
-      toast.success('Material reativado');
-      loadMateriais();
-    } catch (err) {
-      toast.error(err?.response?.data?.error || 'Erro ao reativar material');
-    }
-  };
+  // Etapa 193 (RN-193.01): Inativar e Reativar sairam daqui (o cadastro e so do Compras, que inativa e reativa com as mesmas
+  // regras — Etapa 113). O filtro "Inativos" continua: o almoxarifado consulta o que foi inativado.
 
   const openMovModal = (material, tipo) => {
     setSelectedMaterial(material);
@@ -231,20 +210,15 @@ const MateriaisAlmoxarifado = () => {
             <button className="btn-almox-secondary" onClick={loadMateriais}>
               <FiRefreshCw size={13} /> Atualizar
             </button>
-            {/* Continua sendo um Link (o botão aparece e o hover mostra a dica), mas quem não
-                pode criar material é barrado NO CLIQUE — sem isso ele só descobriria depois de
-                preencher as seis seções do formulário. O 403 do backend segue valendo. */}
-            <Link
-              to="/almoxarifado/materiais/novo"
-              className="btn-almox-primary"
-              title="Cadastra um novo material no almoxarifado (código, família, dados técnicos, unidades e localização)"
-              onClick={(e) => bloquearSeNaoPode('criar_material', e)}
-            >
-              <FiPlus size={14} /> Novo Material
-            </Link>
           </>
         }
       />
+
+      {/* Etapa 193 (RN-193.01): a lista e so consulta — quem cadastra, edita, inativa ou troca a foto e o Compras. */}
+      <div className="almox-empty" data-testid="aviso-cadastro-no-compras" role="note"
+        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', marginBottom: 12, textAlign: 'left' }}>
+        <FiInfo size={16} /> {AVISO_CADASTRO_NO_COMPRAS}
+      </div>
 
       {/* Filtros */}
       <div className="almox-filters">
@@ -429,21 +403,13 @@ const MateriaisAlmoxarifado = () => {
                           onClick={() => setAnexosMaterial(m)}>
                           <FiPaperclip />
                         </button>
-                        <button className="almox-btn-icon primary" title="Edita o cadastro deste material"
-                          onClick={(e) => { if (!bloquearSeNaoPode('editar_material', e)) return; navigate(`/almoxarifado/materiais/editar/${m.id}`); }}>
-                          <FiEdit />
+                        {/* Etapa 193 (RN-193.01): Ver no lugar de Editar/Inativar/Reativar — a ficha so para leitura, para todo perfil
+                            que abre esta tela (o cadastro em si e do Compras). */}
+                        <button className="almox-btn-icon primary" title="Ver o cadastro deste material (somente consulta)"
+                          data-testid={`ver-material-${m.id}`}
+                          onClick={() => navigate(ROTAS_ALMOXARIFADO_CONSULTA.tela.ver(m.id))}>
+                          <FiEye />
                         </button>
-                        {estaInativo(m) ? (
-                          <button className="almox-btn-icon success" title="Reativa o material (volta às listas e a movimentar)"
-                            onClick={(e) => { if (!bloquearSeNaoPode('editar_material', e)) return; handleReativar(m.id, m.nome); }}>
-                            <FiRotateCcw />
-                          </button>
-                        ) : (
-                          <button className="almox-btn-icon danger" title="Inativa o material (não apaga o histórico)"
-                            onClick={(e) => { if (!bloquearSeNaoPode('editar_material', e)) return; handleDelete(m.id, m.nome); }}>
-                            <FiTrash2 />
-                          </button>
-                        )}
                       </div>
                     </td>
                   </tr>

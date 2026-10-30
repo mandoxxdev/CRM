@@ -93,7 +93,7 @@ const ESTORNO_EPI = 'Saída de entrega de EPI não pode ser estornada pelo livro
     assert.strictEqual(cri.status, 201, JSON.stringify(cri.body));
     forma('POST /materiais 201', cri.body);
     const criado = await dbGet(db, "SELECT id FROM materiais_almoxarifado WHERE codigo = 'EPI-T3-LUVA'");
-    const put = await request(app).put(`/api/almoxarifado/materiais/${criado.id}`).send({ ca_validade: '2099-06-30' });
+    const put = await request(app).put(`/api/compras/materiais/cadastro/${criado.id}`).send({ ca_validade: '2099-06-30' });
     assert.strictEqual(put.status, 200, JSON.stringify(put.body));
     const lista = await request(app).get('/api/almoxarifado/materiais');
     assert.strictEqual(lista.status, 200);

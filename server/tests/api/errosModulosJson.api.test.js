@@ -47,7 +47,7 @@ let ctx;
 // ── 1. rotas de verdade (harness) ───────────────────────────────────────────────────────
 
 test('foto de material acima de 10 MB -> 413 JSON "maximo 10 MB" (almoxarifado.js, registro sincrono)', async () => {
-  const r = await quieto(() => request(ctx.app).post('/api/almoxarifado/materiais/1/foto')
+  const r = await quieto(() => request(ctx.app).post('/api/compras/materiais/cadastro/1/foto')
     .attach('foto', Buffer.alloc(11 * MB, 1), { filename: 'a.png', contentType: 'image/png' }));
   assert.strictEqual(r.status, 413, r.text.slice(0, 200));
   ehJson(r);
@@ -55,7 +55,7 @@ test('foto de material acima de 10 MB -> 413 JSON "maximo 10 MB" (almoxarifado.j
 });
 
 test('foto de material em campo inesperado -> 400 JSON "Upload inválido" (MulterError nao-tamanho)', async () => {
-  const r = await quieto(() => request(ctx.app).post('/api/almoxarifado/materiais/1/foto')
+  const r = await quieto(() => request(ctx.app).post('/api/compras/materiais/cadastro/1/foto')
     .attach('outro', PNG, { filename: 'a.png', contentType: 'image/png' }));
   assert.strictEqual(r.status, 400, r.text.slice(0, 200));
   ehJson(r);
@@ -63,7 +63,7 @@ test('foto de material em campo inesperado -> 400 JSON "Upload inválido" (Multe
 });
 
 test('foto de material com formato recusado -> 400 JSON com a mensagem do filtro', async () => {
-  const r = await quieto(() => request(ctx.app).post('/api/almoxarifado/materiais/1/foto')
+  const r = await quieto(() => request(ctx.app).post('/api/compras/materiais/cadastro/1/foto')
     .attach('foto', Buffer.from('<svg/>'), { filename: 'a.svg', contentType: 'image/svg+xml' }));
   assert.strictEqual(r.status, 400, r.text.slice(0, 200));
   ehJson(r);

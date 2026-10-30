@@ -73,7 +73,7 @@ let seq = 0;
     }), 201, `POST material ${rotulo}`);
     return { id: b.id, codigo };
   }
-  const mudarMinimo = async (mat, minimo) => ok(await como(ADMIN).put(`${API}/materiais/${mat.id}`)
+  const mudarMinimo = async (mat, minimo) => ok(await como(ADMIN).put(`/api/compras/materiais/cadastro/${mat.id}`)
     .send({ quantidade_minima: minimo }), 200, `PUT minimo ${minimo}`);
 
   /** As solicitacoes que o verificar-minimos abriu AGORA para este material. */

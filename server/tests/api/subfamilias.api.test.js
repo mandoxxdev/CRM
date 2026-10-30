@@ -138,11 +138,11 @@ async function criarMaterialReq(app, body) {
     });
     assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
 
-    const putInvalido = await request(app).put(`/api/almoxarifado/materiais/${criado.body.id}`)
+    const putInvalido = await request(app).put(`/api/compras/materiais/cadastro/${criado.body.id}`)
       .send({ codigo: 'MAT-SUB-004', nome: 'Material para editar', familia_id: raizA.id, subfamilia_id: subB.id });
     assert.strictEqual(putInvalido.status, 400, JSON.stringify(putInvalido.body));
 
-    const putValido = await request(app).put(`/api/almoxarifado/materiais/${criado.body.id}`)
+    const putValido = await request(app).put(`/api/compras/materiais/cadastro/${criado.body.id}`)
       .send({ codigo: 'MAT-SUB-004', nome: 'Material para editar', familia_id: raizA.id, subfamilia_id: subA.id });
     assert.strictEqual(putValido.status, 200, JSON.stringify(putValido.body));
     assert.strictEqual(putValido.body.subfamilia_id, subA.id);
@@ -187,7 +187,7 @@ async function criarMaterialReq(app, body) {
     // Corpo no formato que MaterialAlmoxarifadoForm.js manda hoje: o form nunca carregou
     // subfamilia_id no state (nem em loadMaterial, nem no payload do handleSubmit), então a
     // chave simplesmente não existe no body.
-    const res = await request(app).put(`/api/almoxarifado/materiais/${criado.body.id}`)
+    const res = await request(app).put(`/api/compras/materiais/cadastro/${criado.body.id}`)
       .send({ codigo: 'MAT-SUB-005', nome: 'Material renomeado', familia_id: raiz.id });
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
     assert.strictEqual(res.body.subfamilia_id, sub.id, 'subfamilia_id deveria ter sido preservado (PUT da UI não manda o campo)');
@@ -203,7 +203,7 @@ async function criarMaterialReq(app, body) {
     });
     assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
 
-    const res = await request(app).put(`/api/almoxarifado/materiais/${criado.body.id}`)
+    const res = await request(app).put(`/api/compras/materiais/cadastro/${criado.body.id}`)
       .send({ codigo: 'MAT-SUB-006', nome: 'Material limpar sub', familia_id: raiz.id, subfamilia_id: null });
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
     assert.strictEqual(res.body.subfamilia_id, null, 'subfamilia_id null explícito deveria limpar o vínculo');
@@ -360,7 +360,7 @@ async function criarMaterialReq(app, body) {
   });
 
   await test('E37 (e) depois de inativar o material, DELETE /familias/S passa', async () => {
-    const del = await request(app).delete(`/api/almoxarifado/materiais/${mat37.id}`);
+    const del = await request(app).delete(`/api/compras/materiais/cadastro/${mat37.id}`);
     assert.strictEqual(del.status, 200, JSON.stringify(del.body));
 
     const lista = await request(app).get('/api/almoxarifado/familias');
@@ -385,17 +385,17 @@ async function criarMaterialReq(app, body) {
     await dbRun(db, 'UPDATE familias_material_almoxarifado SET ativo = 0 WHERE id = ?', [sub.id]);
     await dbRun(db, 'UPDATE familias_material_almoxarifado SET ativo = 0 WHERE id = ?', [outraSub.id]);
     // O form manda o MESMO subfamilia_id que leu: vinculo preservado, nao e valor novo -> 200.
-    const mesma = await request(app).put('/api/almoxarifado/materiais/' + matId).send({ nome: 'Material F1 renomeado', familia_id: raiz.id, subfamilia_id: sub.id });
+    const mesma = await request(app).put('/api/compras/materiais/cadastro/' + matId).send({ nome: 'Material F1 renomeado', familia_id: raiz.id, subfamilia_id: sub.id });
     assert.strictEqual(mesma.status, 200, 'PUT com a mesma sub (inativada depois) deveria passar: ' + JSON.stringify(mesma.body));
     const row = await dbGet(db, 'SELECT nome, subfamilia_id FROM materiais_almoxarifado WHERE id = ?', [matId]);
     assert.strictEqual(row.nome, 'Material F1 renomeado');
     assert.strictEqual(Number(row.subfamilia_id), Number(sub.id), 'o vinculo com a sub inativa e preservado, nao apagado');
     // Trocar para OUTRA sub inativa e valor novo -> continua recusado.
-    const troca = await request(app).put('/api/almoxarifado/materiais/' + matId).send({ nome: 'x', familia_id: raiz.id, subfamilia_id: outraSub.id });
+    const troca = await request(app).put('/api/compras/materiais/cadastro/' + matId).send({ nome: 'x', familia_id: raiz.id, subfamilia_id: outraSub.id });
     assert.strictEqual(troca.status, 400, JSON.stringify(troca.body));
     assert.ok(/Subfamília inválida/.test(troca.body.error), troca.body.error);
     // Limpar (null) continua permitido.
-    const limpa = await request(app).put('/api/almoxarifado/materiais/' + matId).send({ nome: 'x', familia_id: raiz.id, subfamilia_id: null });
+    const limpa = await request(app).put('/api/compras/materiais/cadastro/' + matId).send({ nome: 'x', familia_id: raiz.id, subfamilia_id: null });
     assert.strictEqual(limpa.status, 200, JSON.stringify(limpa.body));
   });
 

@@ -112,7 +112,7 @@ const SQL_RELEITURA_SUBS_DELETE = /^SELECT COUNT\(\*\) AS c FROM familias_materi
   await test('[RN-06e] PUT de material sem mexer na familia, outra aba o move F1 -> F2 e inativa F1 no meio -> 409 E4, fica em F2', async () => {
     const F1 = await familia(); const F2 = await familia(); const m = await material(F1);
     injetar({ sql: SQL_LER_MATERIAL, depois: async () => { await set(M, m.id, { familia_id: F2 })(); await set(F, F1, { ativo: 0 })(); } });
-    const r = await request(srv).put(`/api/almoxarifado/materiais/${m.id}`).send({ nome: 'renomeado 06e', familia_id: F1 });
+    const r = await request(srv).put(`/api/compras/materiais/cadastro/${m.id}`).send({ nome: 'renomeado 06e', familia_id: F1 });
     conferirInjecao(1);
     assert.strictEqual(r.status, 409, `${r.status} ${JSON.stringify(r.body)}`);
     assert.strictEqual(r.body.error, E4(m.codigo));
@@ -122,7 +122,7 @@ const SQL_RELEITURA_SUBS_DELETE = /^SELECT COUNT\(\*\) AS c FROM familias_materi
   await test('[RN-06e] o formulario manda (R, S1) lidos; outra aba move para (R, S2) e S1 vira raiz no meio -> 409 E4, par (R, S2)', async () => {
     const R = await familia(); const S1 = await familia(1, R); const S2 = await familia(1, R); const m = await material(R, S1);
     injetar({ sql: SQL_LER_MATERIAL, depois: async () => { await set(M, m.id, { subfamilia_id: S2 })(); await set(F, S1, { parent_id: null })(); } });
-    const r = await request(srv).put(`/api/almoxarifado/materiais/${m.id}`).send({ nome: 'renomeado 06e2', familia_id: R, subfamilia_id: S1 });
+    const r = await request(srv).put(`/api/compras/materiais/cadastro/${m.id}`).send({ nome: 'renomeado 06e2', familia_id: R, subfamilia_id: S1 });
     conferirInjecao(1);
     assert.strictEqual(r.status, 409, `${r.status} ${JSON.stringify(r.body)}`);
     assert.strictEqual(r.body.error, E4(m.codigo));
@@ -132,7 +132,7 @@ const SQL_RELEITURA_SUBS_DELETE = /^SELECT COUNT\(\*\) AS c FROM familias_materi
 
   await test('[RN-06e] metade positiva: sem janela, renomear repetindo o par grava (200)', async () => {
     const R = await familia(); const S1 = await familia(1, R); const m = await material(R, S1);
-    const r = await request(srv).put(`/api/almoxarifado/materiais/${m.id}`).send({ nome: 'renomeado 06e ok', familia_id: R, subfamilia_id: S1 });
+    const r = await request(srv).put(`/api/compras/materiais/cadastro/${m.id}`).send({ nome: 'renomeado 06e ok', familia_id: R, subfamilia_id: S1 });
     assert.strictEqual(r.status, 200, JSON.stringify(r.body));
     assert.strictEqual((await dbGet(db, 'SELECT nome FROM materiais_almoxarifado WHERE id = ?', [m.id])).nome, 'renomeado 06e ok');
   });

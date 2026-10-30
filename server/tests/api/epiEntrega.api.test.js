@@ -504,21 +504,21 @@ const contar = async (db, sql, p = []) => (await dbGet(db, sql, p)).n;
     assert.strictEqual(get.body.ca_numero, 'CA-4321');
     assert.strictEqual(get.body.ca_validade, '2030-01-31');
     for (const invalida of ['31/01/2030', '2030-13-01', 'amanha']) {
-      const r = await request(app).put(`/api/almoxarifado/materiais/${m.id}`).send({ ca_validade: invalida });
+      const r = await request(app).put(`/api/compras/materiais/cadastro/${m.id}`).send({ ca_validade: invalida });
       assert.strictEqual(r.status, 400, `${invalida}: ${JSON.stringify(r.body)}`);
       assert.strictEqual(r.body.error, 'Validade do CA inválida');
     }
-    const pre = await request(app).put(`/api/almoxarifado/materiais/${m.id}`).send({ nome: 'Capacete aba' });
+    const pre = await request(app).put(`/api/compras/materiais/cadastro/${m.id}`).send({ nome: 'Capacete aba' });
     assert.strictEqual(pre.status, 200, JSON.stringify(pre.body));
     m = await dbGet(db, 'SELECT * FROM materiais_almoxarifado WHERE id = ?', [m.id]);
     assert.strictEqual(m.ca_validade, '2030-01-31', 'omitido nao preservou');
-    const lim = await request(app).put(`/api/almoxarifado/materiais/${m.id}`).send({ ca_numero: 'CA-5', ca_validade: '' });
+    const lim = await request(app).put(`/api/compras/materiais/cadastro/${m.id}`).send({ ca_numero: 'CA-5', ca_validade: '' });
     assert.strictEqual(lim.status, 200, JSON.stringify(lim.body));
     m = await dbGet(db, 'SELECT * FROM materiais_almoxarifado WHERE id = ?', [m.id]);
     assert.strictEqual(m.ca_numero, 'CA-5');
     assert.strictEqual(m.ca_validade, null);
     // campos_lidos (camposLidos.js): o formulario que leu o CA antigo nao desfaz o CA que outra pessoa mudou -> 409
-    const velho = await request(app).put(`/api/almoxarifado/materiais/${m.id}`)
+    const velho = await request(app).put(`/api/compras/materiais/cadastro/${m.id}`)
       .send({ nome: 'Capacete X', ca_numero: 'CA-4321', campos_lidos: { ca_numero: 'CA-4321', ca_validade: '2030-01-31' } });
     assert.strictEqual(velho.status, 409, JSON.stringify(velho.body));
     assert.ok(velho.body.error.includes('O campo "Número do CA"'), velho.body.error);
