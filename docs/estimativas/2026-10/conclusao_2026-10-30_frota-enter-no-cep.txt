@@ -1,0 +1,6 @@
+*Concluído — Frota: Enter no CEP busca o endereço*
+_30/10/2026_
+
+1. Enter no CEP busca o endereço também na tela Destinos — estimado 45 min · realizado 45 min
+
+*Total: estimado 45 min · realizado 45 min*
