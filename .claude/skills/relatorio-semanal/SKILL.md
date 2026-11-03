@@ -144,7 +144,7 @@ sendo o medidor interno (estimativas, controle-horas), mas o número dele não v
 | Resumo | 3 frases: o que dá para ver, o que melhorou por baixo, quantas horas e em que atividades. |
 | Novidade visível | Nome como o usuário chama a tela ("Requisições", "Notas de entrada"), onde fica no menu, antes / agora, print. |
 | Item por baixo | **Problema** com exemplo real do chão de fábrica → **o que foi feito** → **o que isso evita**. Use analogia quando ajudar ("é como dois caixas vendendo o último item da prateleira ao mesmo tempo"). |
-| Tempo gasto | Uma tabela só (O que foi feito | Tempo, com o Total) e uma frase embaixo. Nada de barra, porcentagem ou segunda tabela — veja "Tempo gasto" acima. Nunca cite dias da semana. |
+| Tempo gasto | Uma tabela só (colunas "O que foi feito" e "Tempo", com o Total) e uma frase embaixo. Nada de barra, porcentagem ou segunda tabela — veja "Tempo gasto" acima. Nunca cite dias da semana. |
 | Quer conferir? | Passos clicáveis: "Abra Almoxarifado → Requisições → clique em…". |
 
 **Tom:** frases curtas, sem jargão, como se explicasse para alguém do almoxarifado no café. O
