@@ -55,12 +55,12 @@ pessoas, e quem recebe não tem as pastas: um `relatorio.pdf` solto não diz de 
     (`src="AAAA-MM-DD_a_AAAA-MM-DD/prints/x.png"`, caminho relativo à pasta do mês).
   - Mesmas regras de linguagem (impessoal, sem dias, sem promessa) e `conferir-linguagem.js` com saída 0.
 
-**Tempo de cada alteração (só o realizado).** Desde 29/10/2026 cada alteração tem estimativa gravada antes de começar
-(skill `estimativa-de-tarefas`, em `docs/estimativas/AAAA-MM/`). Se a semana tem estimativas, a seção "Para onde foi o tempo"
-ganha a tabela **Tempo de cada alteração**, com **só o realizado** de cada uma (números dos `.md` de fechamento, nunca
-recalculados de cabeça). **Sem a coluna do estimado** — o André pediu em 03/11/2026 para tirar a comparação estimado × realizado
-do relatório. Diga na nota da tabela que esse tempo inclui análise, teste à mão e conferência, e que as horas registradas pelo
-`horas.js` já estão dentro dele (as duas contas não se somam; sem essa frase o leitor acha que são números conflitantes).
+**Tempo gasto: UMA tabela só, e nada mais (pedido do André, 03/11/2026).** Quem lê o relatório precisa de tudo muito simples.
+A seção de tempo se chama "Tempo gasto" e tem **uma** tabela: "O que foi feito | Tempo", uma linha por alteração com o
+**realizado** do `.md` de fechamento da estimativa (`docs/estimativas/AAAA-MM/`, nunca recalculado de cabeça), e o Total. Embaixo,
+uma frase: "O tempo inclui entender o pedido, fazer, testar e conferir." **Sem** coluna de estimado, **sem** barra por área, **sem**
+tabela de atividades, **sem** as horas do `horas.js` e sem notas. O resumo do topo cita só esse total. O `horas.js` continua
+sendo o medidor interno (estimativas, controle-horas), mas o número dele não vai para o relatório semanal.
 
 ## Passo a passo
 
@@ -144,7 +144,7 @@ do relatório. Diga na nota da tabela que esse tempo inclui análise, teste à m
 | Resumo | 3 frases: o que dá para ver, o que melhorou por baixo, quantas horas e em que atividades. |
 | Novidade visível | Nome como o usuário chama a tela ("Requisições", "Notas de entrada"), onde fica no menu, antes / agora, print. |
 | Item por baixo | **Problema** com exemplo real do chão de fábrica → **o que foi feito** → **o que isso evita**. Use analogia quando ajudar ("é como dois caixas vendendo o último item da prateleira ao mesmo tempo"). |
-| Para onde foi o tempo | Total da semana, a barra por área, a tabela **Tempo por atividade** (`--grupos`, hora cheia, soma = total) e uma frase honesta do motivo. Nunca cite dias da semana. "Conferências automáticas" = testes: explique que são robôs que repetem centenas de situações a cada mudança para nada quebrar escondido. |
+| Tempo gasto | Uma tabela só (O que foi feito | Tempo, com o Total) e uma frase embaixo. Nada de barra, porcentagem ou segunda tabela — veja "Tempo gasto" acima. Nunca cite dias da semana. |
 | Quer conferir? | Passos clicáveis: "Abra Almoxarifado → Requisições → clique em…". |
 
 **Tom:** frases curtas, sem jargão, como se explicasse para alguém do almoxarifado no café. O

@@ -37,7 +37,7 @@
   de destinos, o administrador da Frota passou a ser definido pela própria tela e o motorista tem o botão Voltar no alto dos formulários.
   No Compras, o fornecedor pessoa física passou a ter CPF e a ficha grava tudo em maiúsculas; o pedido aceita uma OS digitada, uma OS
   em cada item e já traz o NCM do material; e o cadastro de materiais passou a ser feito só no Compras — o Almoxarifado consulta.
-  Foram cerca de 12 horas de desenvolvimento, mais da metade na Frota.</p>
+  No total, 39h45 de trabalho.</p>
 
   <h2>O que você já pode ver na tela</h2>
 
@@ -162,54 +162,20 @@
   do botão de ajuda "?" do canto da tela, que não era mais usado, e, na tela Destinos da Frota, o Enter no campo CEP passou a buscar o
   endereço em vez de salvar o formulário pela metade.</p>
 
-  <h2>Para onde foi o tempo</h2>
-  <p>Cerca de <strong>12 horas</strong> de desenvolvimento registradas nesta semana: o tempo de programar, conferir e escrever os
-  manuais, contado pelo trabalho salvo. A análise de cada pedido, os testes feitos à mão na tela e a conferência antes de liberar
-  não entram nesta conta — eles estão na tabela <b>Tempo de cada alteração</b>, mais abaixo.</p>
-  <div class="barra" role="img" aria-label="Divisão do tempo">
-    <span style="width:15%;background:var(--tela)"></span>
-    <span style="width:6%;background:var(--bastidores)"></span>
-    <span style="width:39%;background:var(--testes)"></span>
-    <span style="width:40%;background:var(--doc)"></span>
-  </div>
-  <div class="legenda">
-    <span><i style="background:var(--tela)"></i>Telas que você usa — 15%</span>
-    <span><i style="background:var(--bastidores)"></i>Motor do sistema — 6%</span>
-    <span><i style="background:var(--testes)"></i>Conferências automáticas — 39%</span>
-    <span><i style="background:var(--doc)"></i>Planejamento e manuais — 40%</span>
-  </div>
-  <h3>Tempo por atividade</h3>
+  <h2>Tempo gasto</h2>
   <table>
-    <tr><th>Atividade</th><th>Horas</th></tr>
-    <tr><td>Frota — destinos com endereço, saída da GMP, condutor, perfis, fotos, celular e Voltar</td><td>7 h</td></tr>
-    <tr><td>Compras — CPF e maiúsculas no fornecedor, OS digitada e por item, NCM, cadastro de materiais só no Compras</td><td>4 h</td></tr>
-    <tr><td>Estimativas de tempo e organização do trabalho</td><td>1 h</td></tr>
-    <tr><th>Total</th><th>12 h</th></tr>
-  </table>
-  <p>Mais de um terço do tempo foi para as conferências automáticas: robôs que repetem centenas de situações a cada mudança — dois
-  compradores salvando o mesmo fornecedor, um CPF com um dígito errado, um destino desativado no meio da saída — para que nada que já
-  funcionava quebre escondido. Outra boa parte foi para os manuais e para as estimativas, que a empresa passou a receber antes de cada
-  alteração.</p>
-
-  <h3>Tempo de cada alteração</h3>
-  <p class="nota">O tempo inteiro de cada alteração: o desenvolvimento registrado acima, mais a análise do pedido, os testes feitos
-  à mão na tela e a conferência antes de liberar. Por isso o total (39h45) é maior que as 12 horas registradas acima: as 12 horas
-  já estão dentro dele.</p>
-  <table>
-    <tr><th>Alteração</th><th>Tempo</th></tr>
-    <tr><td>Frota — endereço do destino, destino na viagem do escritório e retirada do botão de ajuda</td><td>9h</td></tr>
-    <tr><td>Frota — menu acompanha a troca de perfil</td><td>2h30</td></tr>
-    <tr><td>Frota — conferência da saída de dois motoristas ao mesmo tempo</td><td>1h30</td></tr>
-    <tr><td>Frota — aviso de destino renomeado</td><td>1h30</td></tr>
-    <tr><td>Fornecedores, pedido de compra, materiais no Compras e Voltar da Frota (8 itens)</td><td>13h15</td></tr>
-    <tr><td>Frota — Enter no CEP da tela Destinos busca o endereço</td><td>45 min</td></tr>
-    <tr><td>Compras — NCM e peso no pedido aberto pela Reposição</td><td>1h15</td></tr>
-    <tr><td>Cadastro de materiais só no Compras e OS em cada item do pedido</td><td>10h</td></tr>
+    <tr><th>O que foi feito</th><th>Tempo</th></tr>
+    <tr><td>Frota — destino com endereço e CEP, e retirada do botão de ajuda</td><td>9h</td></tr>
+    <tr><td>Frota — menu muda quando muda o perfil</td><td>2h30</td></tr>
+    <tr><td>Frota — dois motoristas saindo ao mesmo tempo</td><td>1h30</td></tr>
+    <tr><td>Frota — aviso de destino que mudou de nome</td><td>1h30</td></tr>
+    <tr><td>Fornecedor com CPF, OS digitada, NCM, materiais no Compras e Voltar da Frota</td><td>13h15</td></tr>
+    <tr><td>Frota — Enter no CEP busca o endereço</td><td>45 min</td></tr>
+    <tr><td>Compras — NCM no pedido da Reposição</td><td>1h15</td></tr>
+    <tr><td>Cadastro de materiais só no Compras e OS em cada item</td><td>10h</td></tr>
     <tr><th>Total</th><th>39h45</th></tr>
   </table>
-
-  <p class="nota">As 12 horas registradas são contadas pelo trabalho salvo ao longo da semana e saem sempre para menos:
-  pesquisa e conversas não entram.</p>
+  <p>O tempo inclui entender o pedido, fazer, testar e conferir.</p>
 
   <h2>Quer conferir?</h2>
   <ol>
