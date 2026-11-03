@@ -35,9 +35,9 @@
 
   <p class="resumo">Na Frota, os destinos ganharam endereço completo (com busca pelo CEP), a saída mostra o endereço da GMP e a lista
   de destinos, o administrador da Frota passou a ser definido pela própria tela e o motorista tem o botão Voltar no alto dos formulários.
-  No Compras, o fornecedor pessoa física passou a ter CPF e a ficha grava tudo em maiúsculas; o pedido aceita uma OS digitada e já traz
-  o NCM do material; e quem administra o Compras cadastra materiais sem depender do almoxarifado. Foram cerca de 10 horas de
-  desenvolvimento, quase dois terços na Frota.</p>
+  No Compras, o fornecedor pessoa física passou a ter CPF e a ficha grava tudo em maiúsculas; o pedido aceita uma OS digitada, uma OS
+  em cada item e já traz o NCM do material; e o cadastro de materiais passou a ser feito só no Compras — o Almoxarifado consulta.
+  Foram cerca de 12 horas de desenvolvimento, mais da metade na Frota.</p>
 
   <h2>O que você já pode ver na tela</h2>
 
@@ -80,23 +80,27 @@
   </div>
 
   <div class="item">
-    <h3>Pedido de compra: OS digitada e NCM já preenchido</h3>
+    <h3>Pedido de compra: OS digitada, OS em cada item e NCM já preenchido</h3>
     <p><span class="rotulo">Onde:</span> Compras → Pedidos de Compra → Novo pedido</p>
-    <p><span class="rotulo">Antes:</span> só dava para escolher uma OS cadastrada no sistema; e o item novo aparecia com o NCM vazio e o
-    aviso "o do cadastro do material", embora o NCM já estivesse no cadastro.</p>
-    <p><span class="rotulo">Agora:</span> a opção <b>OS não cadastrada — digitar</b> abre um campo para o número da OS. Ela aparece na lista,
-    no Excel e no pedido impresso (não separa material no estoque, porque a OS não existe no sistema). E o item já entra com o NCM e o peso
-    do material.</p>
+    <p><span class="rotulo">Antes:</span> só dava para escolher uma OS cadastrada no sistema, e uma só por pedido; e o item novo aparecia
+    com o NCM vazio e o aviso "o do cadastro do material", embora o NCM já estivesse no cadastro.</p>
+    <p><span class="rotulo">Agora:</span> a opção <b>OS não cadastrada — digitar</b> abre um campo para o número da OS. Além disso, cada
+    item do pedido ganhou o seu campo <b>OS</b>: ele sugere as OS cadastradas, mas aceita qualquer texto. Assim, um pedido só pode comprar
+    para várias OS, cada item com a sua. A OS do item serve para justificar a compra: aparece no pedido impresso, no Excel e é achada pela
+    busca da lista, mas não separa material no estoque. E o item já entra com o NCM e o peso do material, inclusive no pedido aberto pela
+    Reposição.</p>
     <figure><img src="prints/pedido-os-digitada.png" alt="Pedido com OS digitada"><figcaption>OS que não está no sistema, digitada no pedido.</figcaption></figure>
     <figure><img src="prints/pedido-ncm-preenchido.png" alt="Detalhes do item com NCM e peso preenchidos"><figcaption>NCM e peso vindos do cadastro do material.</figcaption></figure>
   </div>
 
   <div class="item">
-    <h3>Cadastro de materiais dentro do Compras</h3>
-    <p><span class="rotulo">Onde:</span> Compras → Materiais</p>
+    <h3>Cadastro de materiais só no Compras; o Almoxarifado consulta</h3>
+    <p><span class="rotulo">Onde:</span> Compras → Materiais e Almoxarifado → Materiais</p>
     <p><span class="rotulo">Antes:</span> material novo só era cadastrado no Almoxarifado, pelo almoxarife ou pela engenharia; o comprador ficava esperando.</p>
-    <p><span class="rotulo">Agora:</span> o Compras tem a sua tela de Materiais, para incluir e editar com o mesmo formulário. Quem
-    administra o Compras (marcado no cadastro de usuário) pode usar. Saldo, foto e exclusão continuam no Almoxarifado.</p>
+    <p><span class="rotulo">Agora:</span> quem cadastra é o Compras. A tela <b>Compras → Materiais</b> inclui e edita materiais, com foto,
+    proprietário e o filtro de inativos para inativar e reativar. Pode usar quem administra o Compras (marcado no cadastro de usuário).
+    No Almoxarifado, a tela Materiais passou a ser só de consulta: cada material tem o botão <b>Ver</b>, que abre a ficha para leitura, e
+    a lista avisa "O cadastro de materiais é feito em Compras → Materiais." O saldo e as movimentações continuam no Almoxarifado.</p>
     <figure><img src="prints/compras-materiais.png" alt="Lista de materiais no módulo Compras"><figcaption>A lista de materiais no Compras, com o NCM de cada um.</figcaption></figure>
   </div>
 
@@ -126,9 +130,11 @@
     <h3>O Compras cadastra material sem mexer no estoque</h3>
     <p><span class="rotulo">O problema:</span> a conferência antes da entrega mostrou que uma pessoa com o Compras e uma permissão antiga do
     Almoxarifado conseguiria lançar saldo inicial pela tela nova, sem nem ter acesso ao Almoxarifado.</p>
-    <p><span class="rotulo">O que foi feito:</span> pelo Compras nunca se mexe em saldo nem em controle de estoque, seja qual for a
-    permissão; isso continua só no Almoxarifado.</p>
-    <p><span class="rotulo">O que isso evita:</span> estoque aparecendo do nada, lançado por quem não cuida do almoxarifado.</p>
+    <p><span class="rotulo">O que foi feito:</span> pelo Compras nunca se mexe em saldo, seja qual for a permissão; isso continua só no
+    Almoxarifado. E o Compras não consegue desligar o controle por número de série (ou por lote) de um material que já tem séries ou
+    lotes registrados.</p>
+    <p><span class="rotulo">O que isso evita:</span> estoque aparecendo do nada, lançado por quem não cuida do almoxarifado; e uma saída
+    antiga que não pode mais ser desfeita porque o material "esqueceu" que era controlado por série.</p>
   </div>
 
   <div class="item">
@@ -144,36 +150,39 @@
   <div class="item">
     <h3>Planejamento: um pedido de compra para várias OS</h3>
     <p><span class="rotulo">O problema:</span> o pedido de compra hoje atende uma OS só, e a empresa quer comprar para várias de uma vez.</p>
-    <p><span class="rotulo">O que foi feito:</span> o levantamento completo do que muda (o pedido, o documento impresso, o recebimento que
-    separa o material para a OS certa e o encerramento da OS), em oito partes, com o tempo de cada uma — cerca de 25 horas no total — e
-    quatro pontos para a empresa confirmar antes de começar.</p>
-    <p><span class="rotulo">O que isso evita:</span> começar uma mudança grande sem saber o tamanho, e o material de uma OS ir parar em outra.</p>
+    <p><span class="rotulo">O que foi feito:</span> primeiro, o levantamento completo do que mudaria (o pedido, o documento impresso, o
+    recebimento que separa o material para a OS certa e o encerramento da OS) — cerca de 25 horas. Com esse tamanho na mesa, a empresa
+    sugeriu um caminho mais simples: como a OS já é informada na liberação do material, no pedido ela só precisa justificar a compra. Por
+    isso foi feito o campo OS em cada item, mostrado acima, que coube em bem menos tempo.</p>
+    <p><span class="rotulo">O que isso evita:</span> começar uma mudança grande sem saber o tamanho, e gastar horas numa separação por OS
+    que a liberação do material já faz.</p>
   </div>
 
-  <p>Também foram feitos: o ajuste do layout do celular do motorista, os guias de uso da Frota em PDF (motorista e gestor) e a retirada
-  do botão de ajuda "?" do canto da tela, que não era mais usado.</p>
+  <p>Também foram feitos: o ajuste do layout do celular do motorista, os guias de uso da Frota em PDF (motorista e gestor), a retirada
+  do botão de ajuda "?" do canto da tela, que não era mais usado, e, na tela Destinos da Frota, o Enter no campo CEP passou a buscar o
+  endereço em vez de salvar o formulário pela metade.</p>
 
   <h2>Para onde foi o tempo</h2>
-  <p>Cerca de <strong>10 horas</strong> de desenvolvimento nesta semana.</p>
+  <p>Cerca de <strong>12 horas</strong> de desenvolvimento nesta semana.</p>
   <div class="barra" role="img" aria-label="Divisão do tempo">
-    <span style="width:16%;background:var(--tela)"></span>
+    <span style="width:15%;background:var(--tela)"></span>
     <span style="width:6%;background:var(--bastidores)"></span>
-    <span style="width:35%;background:var(--testes)"></span>
-    <span style="width:43%;background:var(--doc)"></span>
+    <span style="width:39%;background:var(--testes)"></span>
+    <span style="width:40%;background:var(--doc)"></span>
   </div>
   <div class="legenda">
-    <span><i style="background:var(--tela)"></i>Telas que você usa — 16%</span>
+    <span><i style="background:var(--tela)"></i>Telas que você usa — 15%</span>
     <span><i style="background:var(--bastidores)"></i>Motor do sistema — 6%</span>
-    <span><i style="background:var(--testes)"></i>Conferências automáticas — 35%</span>
-    <span><i style="background:var(--doc)"></i>Planejamento e manuais — 43%</span>
+    <span><i style="background:var(--testes)"></i>Conferências automáticas — 39%</span>
+    <span><i style="background:var(--doc)"></i>Planejamento e manuais — 40%</span>
   </div>
   <h3>Tempo por atividade</h3>
   <table>
     <tr><th>Atividade</th><th>Horas</th></tr>
-    <tr><td>Frota — destinos com endereço, saída da GMP, condutor, perfis, fotos, celular e Voltar</td><td>6 h</td></tr>
-    <tr><td>Compras — CPF e maiúsculas no fornecedor, OS digitada, NCM, materiais no Compras e o planejamento das várias OS</td><td>3 h</td></tr>
+    <tr><td>Frota — destinos com endereço, saída da GMP, condutor, perfis, fotos, celular e Voltar</td><td>7 h</td></tr>
+    <tr><td>Compras — CPF e maiúsculas no fornecedor, OS digitada e por item, NCM, cadastro de materiais só no Compras</td><td>4 h</td></tr>
     <tr><td>Estimativas de tempo e organização do trabalho</td><td>1 h</td></tr>
-    <tr><th>Total</th><th>10 h</th></tr>
+    <tr><th>Total</th><th>12 h</th></tr>
   </table>
   <p>Mais de um terço do tempo foi para as conferências automáticas: robôs que repetem centenas de situações a cada mudança — dois
   compradores salvando o mesmo fornecedor, um CPF com um dígito errado, um destino desativado no meio da saída — para que nada que já
@@ -190,7 +199,10 @@
     <tr><td>Frota — conferência da saída de dois motoristas ao mesmo tempo</td><td>1h30</td><td>1h30</td></tr>
     <tr><td>Frota — aviso de destino renomeado</td><td>1h30</td><td>1h30</td></tr>
     <tr><td>Fornecedores, pedido de compra, materiais no Compras e Voltar da Frota (8 itens)</td><td>13h15</td><td>13h15</td></tr>
-    <tr><th>Total</th><th>29h15</th><th>27h45</th></tr>
+    <tr><td>Frota — Enter no CEP da tela Destinos busca o endereço</td><td>45 min</td><td>45 min</td></tr>
+    <tr><td>Compras — NCM e peso no pedido aberto pela Reposição</td><td>1h15</td><td>1h15</td></tr>
+    <tr><td>Cadastro de materiais só no Compras e OS em cada item do pedido</td><td>10h</td><td>10h</td></tr>
+    <tr><th>Total</th><th>41h15</th><th>39h45</th></tr>
   </table>
 
   <p class="nota">As horas são estimadas pelo registro do trabalho salvo ao longo da semana. Pesquisa,
@@ -202,8 +214,9 @@
     <li>No celular, entre em <b>Frota → Meu painel → Saída</b>: veja "Saindo de: GMP", a lista de destinos e o <b>← Voltar</b> no alto.</li>
     <li>Abra <b>Frota → Perfis de acesso</b> e escolha <b>Administrador</b> para alguém.</li>
     <li>Abra <b>Compras → Fornecedores → Novo Fornecedor</b>, digite o nome em minúsculas e um CPF: o nome fica em maiúsculas.</li>
-    <li>Abra <b>Compras → Pedidos de Compra → Novo</b>, escolha <b>OS não cadastrada — digitar</b>, inclua um material e abra os "detalhes" do item: o NCM já está lá.</li>
-    <li>Abra <b>Compras → Materiais</b> com quem administra o Compras e toque <b>Novo Material</b>.</li>
+    <li>Abra <b>Compras → Pedidos de Compra → Novo</b>, escolha <b>OS não cadastrada — digitar</b>, inclua dois materiais, preencha uma OS diferente em cada item e abra os "detalhes" do item: o NCM já está lá. Salve e imprima: cada item mostra a sua OS.</li>
+    <li>Abra <b>Compras → Materiais</b> com quem administra o Compras e toque <b>Novo Material</b>; no filtro de inativos, veja os botões Inativar e Reativar.</li>
+    <li>Abra <b>Almoxarifado → Materiais</b>: não há mais Novo nem Editar; toque <b>Ver</b> em um material para abrir a ficha.</li>
   </ol>
 </main>
 </body>

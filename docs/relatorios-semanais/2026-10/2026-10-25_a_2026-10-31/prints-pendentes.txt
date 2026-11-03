@@ -1,0 +1,13 @@
+Prints pendentes (o navegador nao estava conectado quando o relatorio foi atualizado)
+
+1. prints/almoxarifado-materiais-consulta.png
+   Tela: Almoxarifado -> Materiais
+   Precisa aparecer: o aviso "O cadastro de materiais é feito em Compras → Materiais.", a lista sem Novo/Editar e o botao Ver.
+   Entra no bloco "Cadastro de materiais so no Compras; o Almoxarifado consulta".
+
+2. prints/pedido-os-por-item.png
+   Tela: Compras -> Pedidos de Compra -> Novo (ou editar um pedido)
+   Precisa aparecer: dois itens com OS diferentes no campo OS de cada item.
+   Entra no bloco "Pedido de compra: OS digitada, OS em cada item e NCM ja preenchido".
+
+3. (opcional) prints/compras-materiais.png refeito com o filtro de inativos e os botoes Inativar/Reativar.
