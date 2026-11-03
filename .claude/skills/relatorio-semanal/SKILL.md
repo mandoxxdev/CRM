@@ -55,10 +55,12 @@ pessoas, e quem recebe não tem as pastas: um `relatorio.pdf` solto não diz de 
     (`src="AAAA-MM-DD_a_AAAA-MM-DD/prints/x.png"`, caminho relativo à pasta do mês).
   - Mesmas regras de linguagem (impessoal, sem dias, sem promessa) e `conferir-linguagem.js` com saída 0.
 
-**Estimado × gasto.** Desde 29/10/2026 cada alteração tem estimativa gravada antes de começar
-(skill `estimativa-de-tarefas`, em `docs/estimativas/AAAA-MM/`). Se a semana tem estimativas, a
-seção "Para onde foi o tempo" ganha a tabela **Estimado × gasto** por alteração, com os números dos
-`.md` de fechamento (nunca recalculados de cabeça) e uma frase para cada estouro de mais de 30 min.
+**Tempo de cada alteração (só o realizado).** Desde 29/10/2026 cada alteração tem estimativa gravada antes de começar
+(skill `estimativa-de-tarefas`, em `docs/estimativas/AAAA-MM/`). Se a semana tem estimativas, a seção "Para onde foi o tempo"
+ganha a tabela **Tempo de cada alteração**, com **só o realizado** de cada uma (números dos `.md` de fechamento, nunca
+recalculados de cabeça). **Sem a coluna do estimado** — o André pediu em 03/11/2026 para tirar a comparação estimado × realizado
+do relatório. Diga na nota da tabela que esse tempo inclui análise, teste à mão e conferência, e que as horas registradas pelo
+`horas.js` já estão dentro dele (as duas contas não se somam; sem essa frase o leitor acha que são números conflitantes).
 
 ## Passo a passo
 
