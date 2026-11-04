@@ -138,10 +138,30 @@ describe('Compras → Materiais — a lista', () => {
     await renderizar('/compras/materiais');
     expect(api.get).toHaveBeenCalledWith('/compras/materiais/cadastro', { params: {} });
     expect(container.textContent).toContain('VLV-001');
-    expect(container.textContent).toContain('8481.80.00');
+    // 04/11/2026: a lista e a MESMA do Almoxarifado (era para mudar a tela de lugar, nao fazer outra) — as mesmas colunas, na ordem.
+    expect([...container.querySelectorAll('th')].map((th) => th.textContent)).toEqual(
+      ['Foto', 'Código', 'Material', 'Família', 'Categoria', 'Quantidade', 'Localização', 'Status', 'Ações']);
     expect(container.querySelector('a[href="/compras/materiais/novo"]')).not.toBeNull();
     await act(async () => { container.querySelector('[data-testid="editar-material-77"]').click(); });
     expect(local.pathname).toBe('/compras/materiais/editar/77');
+    expect(urlsDoAlmoxarifado()).toEqual([]);
+  });
+
+  test('os filtros de categoria e família do Almoxarifado, pelas portas do Compras; a subfamília vai como subfamilia_id', async () => {
+    const SUB = { id: 6, codigo: 'VLV-GAV', nome: 'Gaveta', parent_id: 5, ativo: 1 };
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => (url === '/compras/materiais/aux/familias'
+      ? Promise.resolve({ data: [FAMILIA, SUB] }) : base(url, cfg)));
+    await renderizar('/compras/materiais');
+    const [selCategoria, selFamilia] = container.querySelectorAll('.almox-filters select');
+    expect([...selCategoria.options].map((o) => o.value)).toEqual(['', 'Valvulas']);
+    expect([...selFamilia.options].map((o) => o.textContent)).toEqual(['Todas famílias', 'VLV — Valvulas', '— VLV-GAV Gaveta']);
+    preencher(selCategoria, 'Valvulas');
+    await esperar();
+    preencher(selFamilia, '6');
+    await esperar();
+    const chamadas = api.get.mock.calls.filter(([u]) => u === '/compras/materiais/cadastro');
+    expect(chamadas[chamadas.length - 1][1]).toEqual({ params: { categoria: 'Valvulas', familia_id: 5, subfamilia_id: 6 } });
     expect(urlsDoAlmoxarifado()).toEqual([]);
   });
 
@@ -264,7 +284,8 @@ describe('Compras → Materiais — Inativar e Reativar (RN-193.04)', () => {
   const listas = () => api.get.mock.calls.filter(([u]) => u === '/compras/materiais/cadastro').length;
   const filtrarInativos = async () => {
     const select = container.querySelector('[data-testid="filtro-situacao"]');
-    expect([...select.options].map((o) => [o.value, o.textContent])).toEqual([['', 'Ativos'], ['inativo', 'Inativos']]);
+    expect([...select.options].map((o) => [o.value, o.textContent])).toEqual(
+      [['', 'Todos status'], ['ok', 'OK'], ['critico', 'Crítico'], ['zerado', 'Zerado'], ['inativo', 'Inativos']]);
     preencher(select, 'inativo');
     await esperar();
   };
