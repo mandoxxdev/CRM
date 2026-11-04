@@ -15,9 +15,15 @@ Anexos: medir se a rota alcança o comprador sem o módulo Almoxarifado.
 
 | # | Tarefa | Porte | Análise | Execução | Teste e conferência | Informado | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | Lista do Compras igual à do Almoxarifado | média (uma tela) | 30 min | 1h30 | 1h | 3h | — | — | — |
+| 1 | Lista do Compras igual à do Almoxarifado | média (uma tela) | 30 min | 1h30 | 1h | 3h | ~0,6 h (ver abaixo) | 2h30 | `f99f2c7b` e a documentação |
 
 Medição no fechamento:
 ```
 node .claude/skills/relatorio-semanal/scripts/horas.js --desde 2026-11-04 --ate 2026-11-07 --grupos "Materiais Compras=Materiais.*Compras|Compras.*Materiais"
 ```
+
+## Fechamento (2026-11-04)
+
+O `horas.js` mediu ~0,6 h (o intervalo entre o commit da estimativa e o do código; não pega a leitura das duas telas antes da
+estimativa). Execução contada como 1h (a estimada era 1h30) + a parte do André estimada (análise 30 min, teste e conferência 1h, não
+informada). Realizado = 2h30. Tela 208 suítes, 2874/2874; build ok; controle positivo nos dois filtros novos.

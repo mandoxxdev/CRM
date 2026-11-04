@@ -106,3 +106,12 @@ defeito.
 3. `ponto_pedido` (Configurações → Estoques mínimos) × `ponto_reposicao` (Compras e sugestão de compra): divergência antiga, medir e
    unificar numa etapa própria.
 4. Antes de apresentar: clicar os roteiros das Etapas 192 e 193 (`docs/compras-novidades-por-etapa.md`).
+
+## Depois do fechamento (2026-11-04) — a lista do Compras era outra tela
+
+O André: *"Por que a tela de materiais do compras ficou diferente do que era no almoxarifado? Era pra ser uma migração de tela de lugar,
+nao uma tela diferente"*. **Defeito que escapou** (da 192, e a 193 não pegou): `MateriaisCompras.js` tinha sido escrita do zero
+(6 colunas, só busca e situação). Correção `f99f2c7b`: filtros e tabela em `client/src/components/almoxarifado/TabelaMateriais.js`,
+usados pelas duas telas; o Compras fica com Editar e Inativar/Reativar, o Almoxarifado com os botões da operação (B82). Retro desta
+etapa, quarto número: **1 defeito escapou** (a lista diferente). Estimativa:
+`docs/estimativas/2026-11/estimativa_2026-11-04_compras-materiais-igual-almoxarifado.md`.

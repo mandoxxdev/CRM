@@ -508,6 +508,16 @@ O "Inativar" e o "Reativar" ficam no histórico do cadastro (2.9): o primeiro co
 
 ### 2.12 A lista de materiais e as buscas do módulo
 
+**Compras → Materiais** e **Almoxarifado → Materiais** mostram a **mesma lista**: as colunas **Foto**, **Código**, **Material** (com o
+selo do dono, quando é material de cliente, e o fornecedor principal embaixo), **Família**, **Categoria**, **Quantidade** (a barra, o
+saldo, a unidade e *"Mín: … · Máx: …"*), **Localização**, **Status** e **Ações**, e os mesmos filtros: busca, **Todas categorias**,
+**Todas famílias** (cada família seguida das suas subfamílias; escolher uma subfamília mostra só os materiais dela) e **Todos status**
+(*OK*, *Crítico*, *Zerado*, *Inativos*), com **Limpar filtros** quando algum está em uso. Sem filtro de status, a lista mostra os
+materiais ativos. O status de cada linha é *Inativo* para material inativado, *Zerado* com saldo 0, *Crítico* com saldo até o mínimo,
+*Baixo* até uma vez e meia o mínimo e *OK* no resto. O que muda entre as duas telas são os botões de cada linha: no **Compras**, **Editar**
+e **Inativar** (ou **Reativar**, no material inativo); no **Almoxarifado**, os da operação — extrato, requisitar, ver no mapa, etiqueta,
+plano de inspeção, entrada e saída rápida, anexos — e **Ver**, que abre a ficha só para leitura.
+
 A busca da lista de **Materiais** (*"Buscar por nome, código ou fornecedor..."*) procura o texto no nome, no código, na descrição e no
 fornecedor principal. Como as demais buscas de texto do módulo — a dos **Retalhos** (norma, dimensões e descrição), a das **Ferramentas**
 (patrimônio e nome), a dos **Empréstimos** (o colaborador) e a do usuário do **Histórico de movimentações** (21d) —, ela ignora os espaços

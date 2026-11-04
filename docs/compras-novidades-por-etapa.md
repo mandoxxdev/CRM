@@ -564,6 +564,16 @@
   aceita no lugar do plano de várias OS (25 h).
 - **B81 — Etapa 193: importação de planilha:** a coluna **OS do item** vira a OS do item; uma planilha de fora com coluna **OS** também.
   Uma exportação antiga do próprio sistema (que tem a coluna OS do **pedido**) não copia essa OS para os itens.
+- **B82 — 04/11/2026: Compras → Materiais com a mesma lista do Almoxarifado, mas só com os botões de cadastro.** Ficam só no
+  Almoxarifado: entrada e saída rápida, requisitar, extrato, ver no mapa, etiqueta, plano de inspeção e anexos — são operação do
+  almoxarifado, falam com rotas que o comprador pode não alcançar, e o perfil do Compras não movimenta estoque. **Descartado:** trazer
+  os botões para o Compras (o servidor recusaria a maior parte deles para o comprador). Se o Compras precisar dos anexos (ficha
+  técnica), abrir uma porta de anexos no Compras.
+- **B82 — 04/11/2026: Compras → Materiais com a mesma lista do Almoxarifado, mas só com os botões de cadastro.** Ficam só no
+  Almoxarifado: entrada e saída rápida, requisitar, extrato, ver no mapa, etiqueta, plano de inspeção e anexos — são operação do
+  almoxarifado, falam com rotas que o comprador pode não alcançar, e o perfil do Compras não movimenta estoque. **Descartado:** trazer
+  os botões para o Compras (o servidor recusaria a maior parte deles para o comprador). Se o Compras precisar dos anexos (ficha
+  técnica), abrir uma porta de anexos no Compras.
 
 ### D. Dúvidas para você (ou para o P.O.)
 - **D-35** — O que A, B e C significam **para a GMP**? A legenda atual é a definição genérica.
@@ -743,6 +753,39 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Depois da Etapa 193 — Compras → Materiais com a mesma lista do Almoxarifado (2026-11-04)
+
+**Em uma frase.** O André perguntou por que **Compras → Materiais** ficou diferente da tela de Materiais do Almoxarifado: o pedido era
+**mudar a tela de lugar**, não fazer outra. A lista do Compras tinha sido escrita do zero na Etapa 192, com menos colunas e menos
+filtros, e a 193 só acrescentou inativar e reativar. Agora as duas telas usam a **mesma lista**.
+
+**A Etapa 192 errou aqui.** A RN-192.10 descrevia a lista do Compras como "a lista do cadastro de material" e o executor fez uma lista
+nova (Código, Material, Família, Unidade, NCM; só busca e situação). O pedido do André (30/10, item 6) era *"Incluir o cadastro de
+materiais na tela do módulo de compras"* — a mesma tela. Ninguém conferiu a lista nova contra a antiga.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Compras → Materiais com 6 colunas: Código, Material, Família, Unidade, NCM, Ações | As 9 colunas do Almoxarifado: Foto, Código, Material (selo do dono e fornecedor), Família, Categoria, Quantidade (barra, mín/máx), Localização, Status, Ações |
+| Filtros: busca e Ativos/Inativos | Busca, **Todas categorias**, **Todas famílias** (árvore, com subfamílias), **Todos status** (OK, Crítico, Zerado, Inativos) e **Limpar filtros** |
+| Uma lista em cada módulo, cada uma com o seu código | Uma lista só (`TabelaMateriais`), usada pelas duas telas; cada uma põe os seus botões |
+
+### Os cenários
+
+1. Entre com o administrador do módulo Compras em **Compras → Materiais**: a tela tem as mesmas colunas e filtros de **Almoxarifado →
+   Materiais**.
+2. Escolha uma **subfamília** em *Todas famílias*: só os materiais dela aparecem (como no Almoxarifado).
+3. Escolha **Inativos** em *Todos status*: as linhas têm **Reativar** em vez de **Inativar**.
+4. Os botões das linhas: no Compras, **Editar** e **Inativar/Reativar**; no Almoxarifado, os da operação (extrato, requisitar, mapa,
+   etiqueta, plano de inspeção, entrada/saída rápida, anexos) e **Ver**.
+
+### O que NÃO cobre
+
+- A coluna **NCM** saiu da lista do Compras (a do Almoxarifado nunca teve). O NCM continua no formulário do material e no pedido.
+- Os botões de estoque e os **anexos** não vieram para o Compras (B82).
+- Testes: tela 208 suítes, 2874/2874; build ok. Não foi aberta num navegador (a extensão do Chrome não estava conectada).
 
 ## Etapa 193 — Cadastro de material só no Compras; a OS em cada item do pedido (2026-10-30)
 
