@@ -371,7 +371,26 @@ ele, três arquivos de teste ficam vermelhos em 11/11.
 
 - [ ] Plano — este commit.
 - [ ] Fase 2.
-- [ ] T0.
+- [x] T0 — `ee835811`. `entregaAutomaticaPeloLote.api.test.js` 19/19 (puro + rota + servico; validades relativas); reescritas
+  verdes: `preSelecaoColetaIntegracao` 9/9 (x3 + datas relativas), `origemSeparacaoEmDuasVezesIntegracao` 9/9 (x3),
+  `loteControleObrigatorio` 12/12 (x2), `lotesResumo` 13/13 (teste 10); test:api 584/584, test:almoxarifado 44/0. Vizinhos
+  `trocaSeparacao` 11/11, `substituicaoOrigem` 7/7, `quantidadeArredondadaIntegracao` 7/7; `filaSugestaoColeta` 12/12 e
+  `filaSugestaoColetaIntegracao` 6/6 verdes hoje (data fixa so cai em 11/11 — T1). Controles (perl sobre LF, ancora = 1, md5
+  ca246ba8 -> sabotado -> ca246ba8, restauro por copia): (i) sem o ramo -> 16 dos novos + as 9 reescritas caem (achado: a exclusao do
+  `loteControleObrigatorio` nao sabia falhar — saida e estorno sem lote tambem fecham 20/0; ganhou a conferencia do lote antes de
+  excluir, e cai); (ii) sem `elegivel` -> RN-197.03 x2 (400 "Lote L2 esta bloqueado"/"vencido"); (iii) por codigo -> RN-197.02 e o
+  vencido liberado; (iv-a) lotes uma vez por item -> RN-197.07 (400 saldo insuficiente no lote L1); (iv-b) uma vez por entrega ->
+  RN-197.07 e RN-197.08; (v) entregue so no fim -> RN-197.09 (entregue 0 != 2); (vi) sem o gatilho do cadastro -> RN-197.04;
+  (vii) sem a parte guardada -> RN-197.11 x2; (viii) parte desta entrega inteira -> RN-197.11 "desta entrega"; (ix) sem inspecao ->
+  T0.2; (x) sem descartar a fatia <= folga -> o puro (3e-7). **Divergencias:** (1) RN-197.02 com os codigos trocados (L2 vence
+  antes, L1 depois) — senao o controle (iii) nao tinha como cair; (2) (vi) nao muda `trocaSeparacao`/`substituicaoOrigem`/
+  `quantidadeArredondadaIntegracao` (o plano previa: os materiais deles nao tem saldo em lote, o FEFO nao acha nada) — so a RN-197.04
+  pega; (3) no controle "sem a feature" da 196 a exclusao devolve L1 a PADRAO YP-01, nao a YB-01 (a automatica nao tem endereco no
+  livro, D (51)) — afirmado no teste; (4) teste novo nao previsto: "desta entrega" (parte guardada do proprio item ja saida na passada
+  0; a parte sai em 2 pedacos, excedente 1 + reserva 2). **Contrato para T1/T2:** `requisitionService.dividirPorLotes(lotes,
+  quantidade)` exportada (entrada `[{lote_id, saldo}]` ja em ordem FEFO; saida `{fatias:[{lote_id, quantidade}], resto}`); interno
+  `lotesParaOAutomatico(db, materialId, saiuDaOrigemPorItem)` e `plano.controleLote`; resposta de `/entregar` igual. A T0 nao tocou
+  fila, `coletaTexto`, notas nem `client/`.
 - [ ] T1.
 - [ ] T2.
 - [ ] Fase 5.
