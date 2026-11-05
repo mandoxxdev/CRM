@@ -518,6 +518,62 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(await livro(R, m), [['SAIDA', null, 'LB', 2]]);
   });
 
+  // ── Fase 5, 2o fix-round: a parte guardada da PROPRIA requisicao nao desconta do automatico dela (ela cai no finally) ────────────
+  // R1 (aprovada, reserva 4) separa 4 de ZB-01/L1; uma saida avulsa tira 1 de ZB-01 (a planejada nao serve mais); ha L1 2 em ZC-01.
+  // R1 entrega 4 com origem_automatica. Antes: SAIDA ZC-01/L1 2 + SAIDA sem lote 2 -> ZP-01/- = -2 (permite_saldo_negativo = 0) e
+  // ZB-01/L1 3 sobrando — a parte de R1 contava contra a propria entrega de R1.
+  const casoPropria = async (lote) => {
+    const m = await material({ lote });
+    await entrar(m, B01.id, 4, lote ? 'L1' : null); await entrar(m, C01.id, 2, lote ? 'L1' : null);
+    const { R, ids } = await req([[m.id, 4]]);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 4, localizacao_origem_id: B01.id,
+      ...(lote ? { lote_id: await loteId(m, 'L1') } : {}) }]);
+    await ok(como('ADMIN').post(`${API}/movimentacoes/v2`, { material_id: m.id, tipo: 'SAIDA', quantidade: 1, motivo: 'e197',
+      justificativa: 'saida avulsa e197', localizacao_origem_id: B01.id, ...(lote ? { lote_id: await loteId(m, 'L1') } : {}) }), 201);
+    assert.deepStrictEqual(await retrato(m), { linhas: [`ZB-01/${lote ? 'L1' : '-'}=3`, `ZC-01/${lote ? 'L1' : '-'}=2`], fisico: 5 }, 'premissa');
+    await entregar(R, [{ item_id: ids[0], quantidade_atendida: 4, origem_automatica: true }]);
+    return { m, R, ids };
+  };
+  await test('[Fase 5, propria parte] R1 guardou 4 em ZB-01/L1, avulsa tira 1, L1 2 em ZC-01; R1 automatico 4 -> sai tudo de L1, nenhuma linha negativa, nenhuma sem lote', async () => {
+    const { m, R } = await casoPropria(true);
+    const lv = await livro(R, m);
+    assert.ok(lv.every(([t, , lt]) => t === 'SAIDA' && lt === 'L1'), `so SAIDA de L1: ${JSON.stringify(lv)}`);
+    assert.strictEqual(lv.reduce((s2, x) => s2 + x[3], 0), 4, JSON.stringify(lv));
+    const rt = await retrato(m);
+    assert.strictEqual(rt.fisico, 1);
+    assert.strictEqual(rt.linhas.length, 1, JSON.stringify(rt));
+    assert.ok(/^Z[BC]-01\/L1=1$/.test(rt.linhas[0]), `sobra 1 em L1 num endereco: ${JSON.stringify(rt)}`);
+  });
+  await test('[Fase 5, propria parte, controle] o mesmo com material SEM controle_lote: SAIDA 4, ZC-01 = 1, sem negativa', async () => {
+    const { m, R } = await casoPropria(false);
+    assert.deepStrictEqual(await retrato(m), { linhas: ['ZC-01/-=1'], fisico: 1 });
+    assert.strictEqual((await livro(R, m)).reduce((s2, x) => s2 + x[3], 0), 4);
+  });
+  await test('[Fase 5, propria parte, misto] dois itens do mesmo material guardaram 2 + 2 em ZB-01/L1: o 1o sai da planejada, o 2o automatico -> L1 4 inteiro, nenhuma sem lote', async () => {
+    const m = await material();
+    await entrar(m, B01.id, 4, 'L1');
+    const { R, ids } = await reqDireta([[m.id, 2], [m.id, 2]]);
+    const l1 = await loteId(m, 'L1');
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 2, localizacao_origem_id: B01.id, lote_id: l1 },
+      { item_id: ids[1], quantidade_separada: 2, localizacao_origem_id: B01.id, lote_id: l1 }]);
+    await entregar(R, [{ item_id: ids[0], quantidade_atendida: 2 }, { item_id: ids[1], quantidade_atendida: 2, origem_automatica: true }]);
+    const lv = await livro(R, m);
+    assert.ok(lv.every(([t, , lt]) => t === 'SAIDA' && lt === 'L1'), `so SAIDA de L1: ${JSON.stringify(lv)}`);
+    assert.deepStrictEqual(await retrato(m), { linhas: [], fisico: 0 });
+  });
+  await test('[Fase 5, propria parte, parcial] R1 guardou 4 em ZB-01/L1, L1 3 em ZC-01; R1 automatico 2 (a parte que fica e 2) -> sai de L1; R1 entrega o resto 200 da planejada', async () => {
+    const m = await material();
+    await entrar(m, B01.id, 4, 'L1'); await entrar(m, C01.id, 3, 'L1');
+    const { R, ids } = await reqDireta([[m.id, 4]]);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 4, localizacao_origem_id: B01.id, lote_id: await loteId(m, 'L1') }]);
+    await entregar(R, [{ item_id: ids[0], quantidade_atendida: 2, origem_automatica: true }]);
+    await entregar(R, [{ item_id: ids[0], quantidade_atendida: 2 }]);
+    const lv = await livro(R, m);
+    assert.ok(lv.every(([t, , lt]) => t === 'SAIDA' && lt === 'L1'), JSON.stringify(lv));
+    const rt = await retrato(m);
+    assert.strictEqual(rt.fisico, 3); assert.ok(rt.linhas.every((x) => !x.includes('/-=') && Number(x.split('=')[1]) > 0), JSON.stringify(rt));
+  });
+
   await close();
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam\n`);

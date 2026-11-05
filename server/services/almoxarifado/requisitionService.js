@@ -1746,7 +1746,7 @@ function dividirPorLotes(lotes, quantidade) {
  *    guardada (a padrao primeiro, depois a maior). Lote sem guarda: uma fatia pelo lote, como na T0.
  * Lido dentro da secao que a entrega segura (trava por requisicao e por material): nenhuma porta nova.
  */
-async function lotesParaOAutomatico(db, materialId, saiuDaOrigemPorItem) {
+async function lotesParaOAutomatico(db, materialId, saiuDaOrigemPorItem, parteQueFicaPorItem) {
   const lotes = (await lotService.listarLotesDoMaterial(db, materialId, { apenasComSaldo: true }))
     .filter((l) => l.elegivel && Number(l.saldo) > Q.QTD_FOLGA);
   if (!lotes.length) return [];
@@ -1766,7 +1766,11 @@ async function lotesParaOAutomatico(db, materialId, saiuDaOrigemPorItem) {
   // so no total do lote deixava o automatico tirar justo do endereco guardado (R1 tomava 400 "nao serve mais")
   const guardadoPar = new Map();
   for (const g of guardadas) {
-    const q = Math.max(0, (Number(g.q) || 0) - (saiuDaOrigemPorItem.get(Number(g.id)) || 0));
+    // 2o fix-round da Fase 5: item DESTA entrega que nao sai da origem (automatico ou outro par) -> conta so a parte que FICA depois
+    // dela (`parteQueFica`: a parte menos o que a entrega consome dela; 0 quando entrega a caixa toda). Descontar a parte inteira
+    // tirava do automatico do proprio item a linha que ele mesmo guardou e o resto ia sem lote (linha negativa, lote inflado).
+    const fica = parteQueFicaPorItem ? parteQueFicaPorItem.get(Number(g.id)) : undefined;
+    const q = fica !== undefined ? fica : Math.max(0, (Number(g.q) || 0) - (saiuDaOrigemPorItem.get(Number(g.id)) || 0));
     if (q <= Q.QTD_FOLGA) continue;
     const k = `${Number(g.lote_id)}|${Number(g.loc_id)}`;
     guardadoPar.set(k, (guardadoPar.get(k) || 0) + q);
@@ -1965,6 +1969,7 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     // Etapa 63 (RN-01): SUBSTITUICAO — o item tinha separado pendente com origem planejada e a entrega
     // nao sai dela (origem no payload que difere, ou automatico pedido). Planejada sem lote = qualquer
     // lote: so o endereco conta. Comparado DEPOIS do lote derivado das series. So registro (aditivo).
+    let parteQueFica; // 2o fix-round da Fase 5: so para quem nao sai da origem — o que da parte sobrevive ao finally desta entrega
     let saiDaOrigem = planejada; // Etapa 196 (RN-196.07): a entrega tira da origem guardada (planejada ou o mesmo par escolhido)
     if (item.origem_separacao_id && parte > 1e-9 && !planejada) {
       const planOrigem = Number(item.origem_separacao_id);
@@ -1976,6 +1981,7 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
       // registrava `min(qty, caixa)`: entregar 3 de B com 3 de A na caixa gravava uma troca de 3 que nao aconteceu.
       const troca = Q.qtd(Math.max(0, Math.min(qty, pendenteSep) - (pendenteSep - parte)));
       if (!outroPar) saiDaOrigem = true;
+      else parteQueFica = Q.qtd(Math.max(0, parte - troca));
       if (outroPar && troca > 1e-9) {
         const mot = typeof entrada.motivo_substituicao === 'string' ? entrada.motivo_substituicao.trim().slice(0, 500) : '';
         substituicoes.set(item.id, {
@@ -1984,7 +1990,7 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
         });
       }
     }
-    if (item.origem_separacao_id) origemGuardada.set(item.id, { saiDaOrigem, caixaAntes: pendenteSep });
+    if (item.origem_separacao_id) origemGuardada.set(item.id, { saiDaOrigem, caixaAntes: pendenteSep, parteQueFica });
     if (!origemId && !loteId && semEscolha && !loteSeries) continue;
     // Etapa 136 (RN-03): o "so lote" (lote sem endereco) e conferido DEPOIS de todos os estritos — ele sai na passada 1, depois deles.
     if (!origemId && loteId) { soLotePendentes.push({ item, loteId, lido, qtdComOrigem }); continue; }
@@ -2255,6 +2261,10 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
   const saiuDaOrigemPorItem = () => new Map(planos
     .filter((p) => origemGuardada.get(p.item.id)?.saiDaOrigem && p.baixadoComOrigem > 0)
     .map((p) => [Number(p.item.id), p.baixadoComOrigem]));
+  // 2o fix-round da Fase 5: o item desta entrega que NAO sai da origem guardada — a parte dele so vale pelo que fica depois dela
+  const parteQueFicaPorItem = () => new Map([...origemGuardada.entries()]
+    .filter(([, og]) => !og.saiDaOrigem && og.parteQueFica !== undefined)
+    .map(([id, og]) => [Number(id), og.parteQueFica]));
 
   // Etapa 63 (Fase 5): o registro sai num finally — se um pedaco falhar depois de outro ja baixado, o livro mostra a saida e a troca nao
   // pode ficar sem registro. Etapa 136 (RN-05): o finally cobre as tres passadas — todo item que teve baixa, nao so o da vez.
@@ -2270,7 +2280,7 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
           // lotes elegiveis nao cobrem sai sem lote, como antes (pode deixar a linha sem lote negativa — C464). Revoga a B204 so aqui.
           if (!baixa.comOrigem && plano.controleLote && !seriesPorItem.has(item.id)) {
             // eslint-disable-next-line no-await-in-loop
-            const { fatias, resto } = dividirPorLotes(await lotesParaOAutomatico(db, item.material_id, saiuDaOrigemPorItem()),
+            const { fatias, resto } = dividirPorLotes(await lotesParaOAutomatico(db, item.material_id, saiuDaOrigemPorItem(), parteQueFicaPorItem()),
               baixa.quantidade);
             for (const f of fatias) {
               // eslint-disable-next-line no-await-in-loop
