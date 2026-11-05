@@ -351,6 +351,76 @@ process.on('exit', (code) => {
     }
   });
 
+  // ---------------------------------------------------------------- T3: RN-198.09, o caso do item ponta a ponta
+  // As duas janelas abrem com a MESMA sugestao XB-01/L1 (6 cobre 4 de cada). R1 separa; R2 confirma a sugestao velha -> recusa NA
+  // SEPARACAO (C1). Reaberta a janela, a sugestao de R2 aponta XP-01/L2 (cobre); R2 separa de la; as duas entregam.
+  // A tela chama PUT .../separacao (RequisicoesList, emenda 7 da Fase 2) — a mesma handleSeparacao do /separar.
+  const sugestao = async (R) => {
+    const r = await como('ALMOX').get(`${API}/requisicoes/${R}/sugestao-coleta`);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    return r.body.itens[0].pegar_em;
+  };
+  const doSugerido = (item, q, s) => ({ item_id: item, quantidade_separada: q, localizacao_origem_id: s.localizacao_id, lote_id: s.lote_id });
+  const fimDoCaso = async (m, L1, L2, r1, r2) => {
+    assert.strictEqual(await saldoDe(m, B01.id, L1), 2);
+    assert.strictEqual(await saldoDe(m, P01.id, L2), 5);
+    assert.deepStrictEqual(await semLoteNaoZero(m), []);
+    assert.deepStrictEqual(await trocas(r1.R), []);
+    assert.deepStrictEqual(await trocas(r2.R), []);
+    const livro = await dbAll(db, `SELECT mv.tipo, mv.quantidade, mv.localizacao_origem_id as loc, mv.lote_id as lote
+      FROM movimentacoes_almoxarifado mv WHERE mv.material_id = ? AND mv.tipo = 'SAIDA' ORDER BY mv.id`, [m.id]);
+    assert.deepStrictEqual(livro.map((x) => [Number(x.quantidade), x.loc, x.lote]), [[4, B01.id, L1], [4, P01.id, L2]],
+      `livro: ${JSON.stringify(livro)}`);
+  };
+
+  await test('[T3 rota, RN-198.09] sugestao velha: R2 recusa NA SEPARACAO (C1); reaberta, XP-01/L2; R2 separa de la; as duas entregam', async () => {
+    const { m, L1, L2 } = await cenario();
+    const r1 = await req([[m.id, 4]]); const r2 = await req([[m.id, 4]]);
+    const s1 = await sugestao(r1.R); const s2 = await sugestao(r2.R);
+    assert.deepStrictEqual([s1.localizacao_codigo, s1.lote_codigo, s1.cobre, s2.localizacao_codigo, s2.lote_codigo, s2.cobre],
+      ['XB-01', 'L1', true, 'XB-01', 'L1', true], 'premissa: as duas janelas recebem o mesmo par');
+    const a = await separacao(r1.R, [doSugerido(r1.ids[0], 4, s1)]);
+    assert.strictEqual(a.status, 200, JSON.stringify(a.body));
+    const b = await separacao(r2.R, [doSugerido(r2.ids[0], 4, s2)]);
+    assert.strictEqual(b.status, 400, JSON.stringify(b.body));
+    assert.strictEqual(b.body.error, c1(m, { saldo: 6, outras: 4, numeros: [await numero(r1.R)], sobra: 2, qty: 4 }));
+    assert.strictEqual(await rodadas(r2.R), 0);
+    const s2b = await sugestao(r2.R);
+    assert.deepStrictEqual([s2b.localizacao_codigo, s2b.lote_codigo, s2b.cobre], ['XP-01', 'L2', true], 'reaberta: a sugestao atual');
+    const c = await separacao(r2.R, [doSugerido(r2.ids[0], 4, s2b)]);
+    assert.strictEqual(c.status, 200, JSON.stringify(c.body));
+    const fila = await como('ALMOX').get(`${API}/fila-separacao`);
+    assert.strictEqual(fila.status, 200, JSON.stringify(fila.body));
+    for (const R of [r1.R, r2.R]) {
+      const f = fila.body.find((x) => x.id === R);
+      assert.ok(f && f.etapas.includes('ENTREGAR'), `requisicao ${R} pronta para entregar: ${JSON.stringify(f && f.etapas)}`);
+    }
+    const e1 = await entregar(r1.R, [{ item_id: r1.ids[0], quantidade_atendida: 4 }]);
+    assert.strictEqual(e1.status, 200, JSON.stringify(e1.body));
+    const e2 = await entregar(r2.R, [{ item_id: r2.ids[0], quantidade_atendida: 4 }]);
+    assert.strictEqual(e2.status, 200, JSON.stringify(e2.body));
+    await fimDoCaso(m, L1, L2, r1, r2);
+  });
+
+  await test('[T3 servico, RN-198.09] o mesmo pelo servico: separarRequisicao recusa a velha, aceita a atual; entregarRequisicao das duas', async () => {
+    const { m, L1, L2 } = await cenario();
+    const r1 = await req([[m.id, 4]]); const r2 = await req([[m.id, 4]]);
+    const pega = async (R) => (await requisitionService.sugestaoDeColetaDaRequisicao(db, ALMOX, R)).itens[0].pegar_em;
+    const s1 = await pega(r1.R); const s2 = await pega(r2.R);
+    assert.deepStrictEqual([s1.localizacao_codigo, s2.localizacao_codigo], ['XB-01', 'XB-01']);
+    await requisitionService.separarRequisicao(db, r1.R, [doSugerido(r1.ids[0], 4, s1)], ALMOX);
+    let erro = null;
+    try { await requisitionService.separarRequisicao(db, r2.R, [doSugerido(r2.ids[0], 4, s2)], ALMOX); } catch (e) { erro = e; }
+    assert.ok(erro && erro.status === 400, `a velha tinha de recusar: ${erro && erro.message}`);
+    assert.strictEqual(erro.message, c1(m, { saldo: 6, outras: 4, numeros: [await numero(r1.R)], sobra: 2, qty: 4 }));
+    const s2b = await pega(r2.R);
+    assert.deepStrictEqual([s2b.localizacao_codigo, s2b.lote_codigo, s2b.cobre], ['XP-01', 'L2', true]);
+    await requisitionService.separarRequisicao(db, r2.R, [doSugerido(r2.ids[0], 4, s2b)], ALMOX);
+    await requisitionService.entregarRequisicao(db, r1.R, [{ item_id: r1.ids[0], quantidade_atendida: 4 }], ALMOX, null);
+    await requisitionService.entregarRequisicao(db, r2.R, [{ item_id: r2.ids[0], quantidade_atendida: 4 }], ALMOX, null);
+    await fimDoCaso(m, L1, L2, r1, r2);
+  });
+
   await close();
   terminou = true;
   console.log(`\n${passed} passou, ${failed} falhou`);
