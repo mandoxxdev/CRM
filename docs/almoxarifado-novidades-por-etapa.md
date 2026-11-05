@@ -11,15 +11,24 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-05):** **Etapa 196 fechada** (**separar em duas vezes: a parte separada primeiro continua saindo
+> **Onde o desenvolvimento está (2026-11-05):** **Etapa 197 fechada** (**separar em duas vezes, 2ª parte: em material com lote, a parte
+> automática da entrega baixa do lote certo** — a parte da entrega que sai no automático, em material com controle de lote, passa a sair do
+> lote que **vence primeiro** (o mesmo critério do seletor de lote da Movimentação e da dica da fila), uma saída por lote, só de lote que pode
+> sair (nunca bloqueado, reprovado ou vencido sem liberação), sem tirar da prateleira o que outra requisição já separou; no caso real o lote
+> vai a 0 e **não aparece mais** a linha *"Sem lote atribuído"* negativa; a dica da Fila e a lista de coleta param de dizer que separar de
+> outro endereço "troca a origem"; **C451** e **C453** resolvidos na entrega de material com controle de lote, **C462** resolvido; a **B204**
+> revogada à vista só para a entrega de material com controle de lote; motor e tela; nada a rodar antes do deploy (as linhas sem lote
+> negativas que já existem ficam — **B1327**); decisões **B1320** a **B1329**; avisos **C463** a **C467**; limitações **D (197)**; verificação
+> **F (197)**; revisão (Fase 5) com dois defeitos de motor corrigidos, quatro lacunas de teste e um texto). **Próxima: a entrega recusada
+> quando outra requisição separou o mesmo endereço** (**C449**, motor); detalhada no fim do plano da 197.
+> *(Também em 2026-11-05: **Etapa 196 fechada** (**separar em duas vezes: a parte separada primeiro continua saindo
 > de onde foi separada** — o almoxarife separa 3 de um endereço, o resto chega depois em outro lugar e ele separa os outros 3 sem ter
 > entregue os primeiros: o sistema passa a lembrar **quanto** saiu do primeiro endereço; na entrega esses 3 saem de lá e só o resto vai no
 > automático; a separação **não grava mais troca** no bloco **Substituições**; o detalhe diz *"separado de A-01 (3 PC)"*; **C453** resolvido
 > na parte "o local de onde sai" — em material com lote, a parte automática ainda sai da linha *sem lote* (no caso real, de −6 para −3), que é
 > a próxima; motor e tela; nada a rodar antes do deploy (o dado antigo vale como antes, sem migração); decisões **B1313** a **B1319**; avisos
 > **C461** (a 2ª rodada de outro endereço escolhido sai no automático) e **C462** (a dica da Fila ainda diz "troca a origem"); limitações
-> **D (196)**; verificação **F (196)**; revisão (Fase 5) com um defeito corrigido e quatro lacunas cobertas). **Próxima: separar em duas
-> vezes — 2ª parte: material com lote** (**C451**/**B204**, motor); detalhada no fim do plano da 196.
+> **D (196)**; verificação **F (196)**; revisão (Fase 5) com um defeito corrigido e quatro lacunas cobertas); a próxima era a **197**.)*
 > *(Também em 2026-11-05: **Etapa 195 fechada** (**voltar para a aba não desfaz as quantidades digitadas** — com a
 > janela de **separação** ou de **entrega** aberta, sair para outra aba ou programa e voltar recarrega a requisição (o *Já separado* e o
 > *Saldo* mostram o que outra pessoa mudou), mas a quantidade digitada em cada item **fica**; item que saiu da janela no recarregamento não vai
@@ -4386,7 +4395,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -7239,6 +7248,8 @@ estoque.** O saldo de lote é o **atribuído**; as saídas sem lote ficam numa l
 é mudança de regra do estoque, com efeito em tudo que usa lote, e merece etapa própria (ver **C71**).
 *(**Etapa 58 — como ficou:** a entrega de requisição **passou a poder** escolher o lote, junto com o endereço — ver **B231**.
 Sem escolha, continua não baixando de lote.)*
+*(**Revogada à vista na Etapa 197 para a entrega de material com controle de lote** (**B1320**): a parte automática dessa entrega baixa do
+lote que vence primeiro. Para material sem controle de lote e para os outros fluxos, esta decisão continua.)*
 
 **B205 (NOVA, da Etapa 50) — a tela de Lotes ganhou um pedido NOVO ao servidor, em vez de mudar o que
 já existia.** A lista de lotes de um material alimenta, além da tela de Lotes, os **quatro seletores de
@@ -7412,6 +7423,9 @@ consequência** é o **C80**: a entrega de um clique continua sem origem.
 endereço escolhido em "Sai de" (cada opção é um endereço **e** um lote); sem escolha, a entrega faz o que sempre fez.
 O **C72** (endereço de material com lote que continua "ocupado") **só se resolve quando alguém escolhe** a origem com o
 lote. **Descartado:** escolher o lote sozinho (o mais antigo, o que vence primeiro) — é regra de estoque, não de tela.
+*(**Mudou na Etapa 197** (**B1320**): em material com controle de lote, a parte automática da entrega escolhe o lote sozinha — o que vence
+primeiro. Era "regra de estoque, não de tela"; a 197 a pôs no estoque. O "sem escolha, a entrega faz o que sempre fez" continua para material
+sem controle de lote.)*
 
 **B232 (NOVA, da Etapa 58) — excluir a requisição devolve cada saída ao lote e ao endereço de onde ela saiu.** Antes a
 exclusão devolvia tudo numa entrada só, sem lote e sem endereço — o que era simétrico enquanto a entrega também não
@@ -13570,8 +13584,66 @@ as séries mistas entre o pedaço da origem e o automático (mexe na ordem das s
 só; nenhum pedido de uso); tratar sempre como outro par (mudaria o 400 da caixa toda da origem, que é de antes). **Reversível:** uma
 condição na entrega, sem dado. `736ccb49`.
 
+**B1320 (NOVA, da Etapa 197; decisão do agente) — revoga a B204 (e o "sem escolha, continua não baixando de lote" da B231) para a entrega
+de material com controle de lote: a parte automática baixa do lote que vence primeiro.** A B204 (Etapa 49, relatório), a B205 (Etapa 50,
+tela) e a B231 (Etapa 58) adiaram por **escopo** — etapa de relatório, etapa de tela — e pediram "etapa própria"; nenhuma era uma regra de
+negócio contra o FEFO. Esta é a etapa própria. A régua é a que o sistema já usa em três lugares: o seletor de lote da Movimentação (4.4 do
+manual), a dica da Fila e o comentário do motor que chamava "FEFO na entrega" de *"o conteúdo natural de uma etapa seguinte"*. Ordem: lote
+que pode sair, validade mais próxima primeiro, sem validade por último, empate pelo código. Para material **sem** controle de lote e para os
+outros fluxos (entrega de EPI, internos), a B204 continua (**C465**). **Descartado:** o lote mais antigo por entrada (não é o critério de
+validade que o resto do sistema usa); o lote que a fila sugeriu (a sugestão não é gravada e muda com o saldo). **Reversível:** uma condição na
+entrega, sem dado. `ee835811`.
+
+**B1321 (NOVA, da Etapa 197; decisão do agente) — o gatilho é o cadastro: "Controle por lote" ligado, e item sem série.** Material com
+série continua tirando do lote das séries escolhidas (Etapa 63). **Descartado:** "qualquer material com saldo em lote" — mudaria materiais
+que o cadastro diz não controlar lote (medido: os testes da entrega desses materiais não mudariam de número, porque os materiais deles não
+têm saldo em lote, mas o comportamento sim). **Reversível.** `ee835811`.
+
+**B1322 (NOVA, da Etapa 197, com a Fase 2; decisão do agente) — só sai o lote que pode sair, e o que está em inspeção no lote fica.** A régua
+é a do motor (a mesma da lista de lotes): lote bloqueado e reprovado nunca; vencido só com o vencimento liberado — e, por vencer antes, sai
+primeiro. Do saldo de cada lote sai também o que está **em inspeção** naquele lote (recebimento com inspeção entra na linha do lote — Fase 2,
+item 2). **Descartado:** excluir também o vencido liberado (a liberação existe justamente para destravar o consumo). **Reversível.**
+`ee835811`.
+
+**B1323 (NOVA, da Etapa 197; decisão do agente) — o que nenhum lote que pode sair cobre sai sem lote, como antes.** Pode deixar a linha
+*"Sem lote atribuído"* negativa, com o lote bloqueado intacto. **Descartado:** recusar a entrega — a aprovação e a separação aceitaram pelo
+disponível do material, que conta o saldo de lote bloqueado, reprovado ou vencido; recusar só na entrega seria o gesto posterior recusando o
+anterior, e contraria a decisão do cliente de 2026-08-10 de não travar a entrega por lote. O conserto certo (o disponível descontar o lote
+que não pode sair) é etapa própria (**C464**). As notas da tela de Lotes e do relatório *Saldo por lote* dizem isso (Fase 5, `351ee457`).
+**Reversível.** `ee835811`.
+
+**B1324 (NOVA, da Etapa 197, com a Fase 2; decisão do agente) — uma saída por lote.** Cada lote vira uma linha no livro (uma SAÍDA com o
+lote), e cada pedaço da baixa — o que passa da reserva e o que a reserva segura — se divide por conta própria; com parte guardada de outra
+caixa no lote, a saída também se divide por endereço (**B1329**). Em material que **permite saldo negativo**, a saída do lote não esvazia o
+endereço de onde o material está: grava o negativo do lote na localização padrão (o total do lote fica certo, o mapa por endereço não — é o
+motor de antes, Fase 2 item 6). **Descartado:** uma SAÍDA com vários lotes (o livro tem um lote por linha; a exclusão e a devolução herdam o
+lote por saída). **Reversível.** `ee835811`.
+
+**B1325 (NOVA, da Etapa 197; decisão do agente) — a divisão mora na entrega, não no motor de estoque.** **Descartado:** uma opção nova no
+motor (ele grava um movimento por chamada; dividir lá mudaria o retorno para os 13 chamadores e abriria a entrega de EPI e os fluxos internos
+sem medir). **Reversível.** `ee835811`.
+
+**B1326 (NOVA, da Etapa 197, mudada pela Fase 2; decisão do agente) — o automático desconta dos lotes o que outra requisição já separou
+dali.** O plano dizia o contrário ("o automático não desconta") e a revisão do plano (Fase 2) achou que isso **quebrava um fluxo que hoje
+funciona**: L1 4 em XB-01 (vence antes), L2 9; R1 separa 4 de XB-01/L1; R2 entrega 4 no automático primeiro — sem o desconto, R2 tirava L1 e a
+entrega de R1 tomava 400 *"a origem da separação (XB-01) não serve mais (…)"*. Agora o saldo de cada lote, para o automático, desconta a
+parte guardada das caixas de requisições em andamento (a mesma conta da Fila) e, dos itens desta mesma entrega, o que ainda vai sair da
+origem deles. R2 tira L2 4; R1 entrega. A Fase 5 levou o desconto do lote para o **endereço** (**B1329**). **Descartado:** não descontar (o
+400 acima num fluxo que passa hoje). **Reversível.** `ee835811`, `838bb350`.
+
+**B1327 (NOVA, da Etapa 197; decisão do agente) — as baixas antigas ficam como estão, sem migração.** A linha *"Sem lote atribuído"*
+negativa que já existe não é mexida: não se sabe de que lote o material saiu fisicamente. Regulariza-se pela contagem com localização (o
+ajuste daquela prateleira absorve primeiro as negativas sem lote) ou pelo par Entrada com lote + Ajuste (3.6 e 4.5 do manual). **Nada a
+rodar antes do deploy.** **Descartado:** corrigir na subida do sistema (seria inventar um lote). Sem código: é a ausência de migração.
+
+**B1328 (NOVA, da Etapa 197; decisão do agente) — a Fila sabe se o material controla lote, para a frase dizer a verdade nos dois casos.**
+Cada item da fila ganha `controle_lote` (aditivo). Com controle de lote, as dicas terminam com *" Na entrega, o resto sai do lote que vence
+primeiro; para tirar de outro lote, escolha-o no 'Sai de'."*; sem controle (material sem lote ligado, mas com saldo em lote), continuam
+com *" Na entrega, escolha o lote no 'Sai de': a saída automática não escolhe lote."* **Descartado:** uma frase só para os dois casos (seria
+falsa para um deles). **Reversível:** só texto e um campo a mais. `58227edf`, `d8a4f1d9`.
+
 **B1329 (NOVA, da Etapa 197, Fase 5; decisão do agente) — na entrega automática pelo lote, a parte guardada de outra caixa é descontada
-no endereço, não só no lote.** (As B1320–B1328 da Etapa 197 entram aqui no fechamento dela.) O desconto da parte guardada (a origem que
+no endereço, não só no lote.** O desconto da parte guardada (a origem que
 outra requisição separou) era pelo total do lote, mas o motor tira do lote começando pela localização padrão e depois pela maior linha —
 justo a guardada: L1 com 4 guardados em um endereço e 2 em outro, a entrega automática de 2 de outra requisição tirava do endereço
 guardado e a requisição que separou dali tomava 400 ("a origem da separação não serve mais"). Agora, quando o lote tem parte guardada, cada
@@ -13581,6 +13653,14 @@ endereço e o de endereço bloqueado (o motor recusaria a origem bloqueada): o q
 sem parte guardada sai como antes (uma saída pelo lote, sem endereço no livro). **Descartado:** fatiar sempre por endereço (mudaria o livro
 e a exclusão de toda entrega automática, e saldo sem endereço não tem origem estrita); uma opção nova no motor para drenar uma linha exata
 (a saída com endereço e lote já faz isso). **Reversível:** só a entrega, sem dado. `838bb350`.
+**Complemento (2º fix-round da Fase 5, `1ed41bb8`) — a parte guardada da PRÓPRIA requisição.** Quando o item desta entrega **não** sai da
+origem dele (o automático pedido, ou outro endereço — por exemplo porque a origem não serve mais), o automático desconta só a **sobra** da
+parte do próprio item que fica depois desta entrega (a parte menos o que esta entrega consome dela; entregando a caixa toda, nada). Antes
+descontava a parte inteira: R1 separou 4 de ZB-01/L1, uma saída avulsa tirou 1 de ZB-01 (a origem não serve mais) e o L1 tinha 2 em ZC-01;
+R1 entregando 4 no automático tirava 2 de ZC-01 e 2 **sem lote** — a linha sem lote ia a −2 num material que não permite saldo negativo e o
+ZB-01/L1 ficava com 3 que já tinham saído (lote inflado). Agora sai tudo do L1, sem linha negativa. **Descartado:** não descontar nada dos
+itens desta entrega que não saem da origem — numa entrega parcial o automático esvaziaria o endereço que o resto da parte ainda vai usar na
+próxima entrega. **Reversível.** `1ed41bb8`.
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -17248,6 +17328,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      entregue escolhendo de onde sai"*, com **nada** baixado e nenhuma troca gravada. No automático de antes da 189, a mesma segunda entrega
      **passava** e deixava uma linha *sem lote* −4 (pior). Teste `preSelecaoColetaIntegracao` (`b2fe087e`). **O que fazer:** o mesmo — e,
      na entrega recusada, **Entregar escolhendo de onde sai…** e escolher o endereço onde o material está (a troca fica registrada).
+     *(Atualizado no fechamento da 197: **continua existindo**, na forma acima — duas requisições separadas do **mesmo** endereço e lote,
+     escolhido no **Sai de**, somando mais do que há lá. A separação confere o saldo do endereço sem descontar o que **outra** requisição já
+     separou dali (o desconto existe só na régua da divergência e na Fila); a entrega também. Reproduzido pelo teste
+     `preSelecaoColetaIntegracao` (*"[Fase 5, C449] sugestao velha…"*, a literal acima, com *XB-01 (2)*). **Mudou de forma:** a variante em que a
+     segunda requisição separava **no automático** e esvaziava o endereço da primeira deixou de existir — desde a 197 o automático desconta,
+     no endereço, o que outra requisição separou dali (**B1326**, **B1329**). É a **próxima** etapa (item 6 da estimativa de 05/11); onde
+     consertar está medido no fim do plano da 197.)*
 450. **NOVO (da Etapa 188, revisão adversarial; o defeito é anterior, desde a Etapa 6) — o lote criado numa Entrada manual fica sem validade
      para sempre.** Em **Movimentações → Entrada** de um material com lote, o lote novo é criado **sem** data de validade — o servidor não
      recebe o campo e não há tela que edite a validade de um lote. Consequência: esse lote vai para o **fim** do FEFO (na dica de coleta e no
@@ -17276,6 +17363,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      trocas; o mesmo cenário no automático deixa −5 sem lote). **Continua valendo:** (1) item que foi separado no automático antes (continua
      saindo no automático — **B1264**); (2) separar o resto de outro endereço sem entregar a primeira parte (**C453**); (3) quem troca o
      **Sai de** para *"Qualquer endereço (automático)"* à mão.
+     **✅ RESOLVIDO NA ETAPA 197 na entrega de material com controle de lote** (`ee835811`; Fase 5 `838bb350`, `1723b78c`, `1ed41bb8`):
+     a parte da entrega que sai no automático baixa do lote que vence primeiro, uma saída por lote, só de lote que pode sair e sem tirar o que
+     outra requisição separou (**B1320** a **B1326**, **B1329**). No caso real da 189/196: *XB-01/L1* sai com os 3 da origem, *XP-01/L2* com
+     os 3 do automático, e **nenhuma** linha *sem lote* (era −3). **Continua valendo:** (1) material **sem** controle de lote, mesmo com saldo
+     em lote (**B1321**, **C465**); (2) o que nenhum lote que pode sair cobre — lote bloqueado, reprovado ou vencido sem liberação — sai sem
+     lote (**B1323**, **C464**); (3) o automático continua sem escolher **endereço** (a padrão, depois o de mais saldo).
 452. **NOVO (da Etapa 189; o comportamento é anterior, de junho de 2026) — não existe "separar e entregar" num clique.** Na requisição
      *Parcialmente Atendida*, o botão **Completar Entrega** só aparece quando há o que entregar, e então abre a janela de entrega. O código
      tem um caminho que separaria primeiro e abriria a entrega em seguida, mas ele nunca roda (o botão não aparece quando só há o que
@@ -17299,6 +17392,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      parte continua saindo daqui; o resto sai no automático na entrega."* **Não resolvido:** em material com lote, a parte **automática**
      continua saindo da linha *sem lote* — no caso real o negativo caiu de **−6 para −3** (só a parte automática). É o **C451**/**B204**, o item 5
      da estimativa de 05/11 e a próxima etapa. E a 2ª rodada de outro endereço **escolhido** sai no automático (**C461**).
+     **✅ RESOLVIDO NA ETAPA 197 na parte do lote** (`ee835811`; Fase 5 `838bb350`, `1ed41bb8`): em material com controle de lote, a parte
+     automática sai do lote que vence primeiro — no caso real, *XP-01/L2* sai com 3 e a linha sem lote fica **0** (**C451**, **B1320**). Fica
+     o **C461** (uma origem por item) e, em material sem controle de lote, a parte automática sem lote (**C465**).
 454. **NOVO (da Etapa 189, revisão adversarial; o comportamento é anterior) — voltar para a aba do sistema com a janela de separação aberta
      desfaz as quantidades digitadas.** Ao voltar para a janela do navegador, o sistema recarrega a requisição (para mostrar o que outra
      pessoa mudou) e as quantidades da janela de separação voltam ao valor inicial (medido: digitado 3, depois de voltar à aba, 5). A
@@ -17360,6 +17456,46 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      automático (**B1313**, **B1316**). Nenhum efeito no estoque — é só texto. A janela de separação já diz a regra certa. **O que fazer:**
      seguir o aviso da janela de separação. Não consertado no fechamento (é código de tela; o fechamento só mexe em documento) — conserto de
      texto, ~15 min, candidato a ir junto com a próxima etapa.
+     **✅ RESOLVIDO NA ETAPA 197** (`d8a4f1d9`; medido ~35 min, não 15 — 32 asserções em 3 arquivos de teste): as três frases dizem a regra da
+     196. *"Nenhum endereço tem tudo: pegue ⟨q⟩ aqui. Se o resto for separado depois de outro endereço, o que sair daqui continua saindo daqui
+     na entrega."*; *"Já separado de ⟨end⟩: o resto não cabe lá. O que já foi separado continua saindo de lá; o resto, separado de outro
+     endereço, sai no automático na entrega."*; *"Já separado de ⟨end⟩, que não pode mais ser sugerido (endereço bloqueado ou inativo, em área
+     especial ou lote bloqueado/vencido). Confira antes de separar o resto: na entrega, o que já foi separado sai de lá — se lá não servir mais,
+     a entrega pede para escolher de onde sai."* — com lote, o fim da **B1328**. Na Fila e no PDF da lista de coleta.
+463. **NOVO (da Etapa 197, revisão do plano e Fase 5) — resolvido antes de entregar; o número fica para quem ler a B1326.** O plano previa
+     um furo: a parte automática tiraria de um lote que outra requisição já tinha separado (com o endereço escolhido), e a entrega da outra
+     seria recusada com *"⟨material⟩: a origem da separação (⟨end⟩) não serve mais (…) — entregue escolhendo de onde sai"*. A revisão do plano
+     mostrou que isso quebrava um fluxo que funcionava (**B1326**) e a Fase 5 achou o mesmo furo no nível do endereço (**B1329**): os dois
+     foram consertados na etapa. Reproduzido antes do conserto e verde depois (testes `entregaAutomaticaPeloLote`, *"[RN-197.11] …"* e
+     *"[Fase 5 M1, S1/S5] …"*). **O que sobra é outro caso, anterior:** duas requisições que separam do mesmo endereço **escolhido** —
+     **C449**, a próxima.
+464. **NOVO (da Etapa 197) — com o saldo só em lote bloqueado, reprovado ou vencido sem liberação, a entrega continua passando e o resto vai
+     para "sem lote atribuído", negativo.** A aprovação e a separação contam o saldo desses lotes (o lote bloqueado não retém quantidade no
+     material) e a entrega aceita — mas o automático não tira de lote que não pode sair (**B1322**), então o que os lotes que podem sair não
+     cobrem sai sem lote (**B1323**). Reproduzido: L1 2 que pode sair, L2 3 bloqueado, entrega de 4 → 2 saem de L1 e 2 sem lote; L2 continua
+     com 3; em **Lotes e Séries**, *"Sem lote atribuído"* −2. Também: a devolução **citando** essa saída sem lote não herda lote — pela tela, o
+     seletor de lote aparece e é obrigatório (*"Material com controle por lote: informe de qual lote é a devolução"*); pela integração, sem
+     lote, a recusa é *"O material ⟨código⟩ exige lote nesta movimentacao (controle por lote ligado)"* (regra da Etapa 7, anterior). **O que
+     fazer:** liberar o lote (ou o vencimento) antes de entregar, ou acertar depois pela contagem do endereço. Conserto: o disponível descontar o
+     lote que não pode sair (aprovação, separação e entrega juntas) — etapa própria.
+465. **NOVO (da Etapa 197) — a entrega de EPI e a entrega de material sem controle de lote continuam saindo sem lote, e a lista de saídas da
+     Devolução mostra menos entregas antigas.** (1) A **B204** continua nesses fluxos (**B1320**, **B1321**): a entrega de EPI e os internos
+     (terceiros, sucata, inspeção) não escolhem lote. (2) Uma entrega de requisição de material com controle de lote pode virar **várias**
+     saídas (uma por lote e pedaço — **B1324**); a lista de saídas que a tela de **Devoluções** oferece para citar mostra as **30** mais
+     recentes do material, então as antigas saem dela antes. **O que fazer:** para devolver de uma entrega antiga que não aparece, devolver sem
+     citar (avulsa, escolhendo o lote).
+466. **NOVO (da Etapa 197, revisão do plano; o comportamento é do motor) — o automático pode tirar a peça que voltou para a quarentena.** A
+     devolução para **Quarentena** citando a entrega volta ao lote dela, e o bloqueio fica só no total do material (não no lote nem no
+     endereço). Reproduzido: a entrega automática tira 3 de L1; devolve-se 1 para a Quarentena (volta ao L1, bloqueado no material); outra
+     requisição entrega 1 no automático e sai do L1, que vence primeiro — a peça que está na quarentena: o L1 vai a 0 com 1 ainda bloqueado
+     no material. O que está **em terceiros** também é contado só no material. O que está **em inspeção** num lote é descontado (**B1322**). **O que fazer:** em material com
+     lote e peça em quarentena, escolher o lote no **Sai de** da entrega (**Entregar escolhendo de onde sai…**). Conserto: o
+     bloqueio por lote (o motor não sabe hoje em que lote está o bloqueado).
+467. **NOVO (da Etapa 197, Fase 5; o comportamento é anterior) — excluir uma requisição separada não apaga o endereço de origem guardado nos
+     itens dela.** O item da requisição excluída fica com a origem e a quantidade da origem gravadas. **Nenhum efeito hoje:** toda conta que lê
+     a parte guardada (a Fila, a régua da divergência, o automático da entrega) só olha requisições **em andamento** — é esse filtro que
+     protege, e a 197 ganhou um teste que o prova (*"[Fase 5 M3] …"*: R1 separa 4 de ZB-01/L1 e é excluída; o automático de R2 tira o L1
+     normalmente). **O que fazer:** nada. Quem escrever uma conta nova da parte guardada tem de filtrar requisição em andamento.
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -18641,6 +18777,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   reproduzido e, pela revisão, inalcançável: as séries escolhidas, distintas e em estoque, limitam o pedido ao que o lote tem.
 - **(136) A saída automática sem lote** continua tirando só do saldo sem lote (a **B204**): num material só com saldo em lote, a entrega
   automática deixa o "sem lote atribuído" negativo. Com as passadas, mais entregas chegam a isso (antes paravam no meio, recusadas).
+  *— mudou na 197 para material com controle de lote: a parte automática sai do lote que vence primeiro (B1320); só o que nenhum lote que
+  pode sair cobre vai sem lote (C464).*
 - **(136) A edição de usuário** não passou pela régua de sim ou não da criação (**B879**): *ativo* "true" ou 2 na edição continua gravado
   cru (**C293**). A exclusão do último super em corrida não mudou (**C292**). Perdendo a corrida do último super com o usuário apagado no
   meio, a resposta é a do último super, não *"Usuário não encontrado"*. *(Resolvidas na Etapa 137 a edição e o inativar com "true" e a
@@ -18711,8 +18849,20 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(197) A entrega automática pelo lote, o que ficou de fora.** (1) **O que nenhum lote que pode sair cobre** sai sem lote, como antes
+  (lote bloqueado, reprovado ou vencido sem liberação nunca é baixado pelo automático) — a linha *"Sem lote atribuído"* pode ficar negativa
+  (**B1323**, **C464**); a devolução citando essa parte sem lote não herda lote (o seletor aparece; pela integração, a recusa *"O material
+  ⟨código⟩ exige lote nesta movimentacao (controle por lote ligado)"*). (2) **Material sem controle de lote**, a entrega de EPI e os fluxos
+  internos continuam sem lote (**B1321**, **C465**). (3) **A lista de saídas da Devolução** mostra as 30 mais recentes do material: com uma
+  saída por lote, as entregas antigas saem dela antes (**C465**). (4) **Bloqueio e terceiros** são contados só no material: o automático
+  pode tirar do lote a peça que voltou para a quarentena (**C466**); o que está em inspeção no lote é descontado (**B1322**). (5) **As linhas
+  sem lote negativas que já existem** ficam (**B1327**). (6) **O endereço** da parte automática continua o da regra automática (a padrão,
+  depois o de mais saldo); só quando o lote tem parte guardada de outra caixa a saída diz o endereço (**B1329**) — a saída de lote sem
+  endereço e a de endereço bloqueado ficam para o próximo lote ou para o resto sem lote. (7) **A exclusão** devolve a saída automática ao
+  lote dela, no endereço **padrão** (**D (51)**). (8) Duas requisições separadas do mesmo endereço escolhido (**C449**) — a próxima.
 - **(196) Separar em duas vezes, o que ficou de fora.** (1) **Material com lote:** a parte que sai no automático continua saindo da linha
-  *sem lote* (a **B204**): no caso real, a linha sem lote fica −3 (era −6) — é o **C451**, a próxima etapa. (2) **Uma origem por item:** a 2ª
+  *sem lote* (a **B204**): no caso real, a linha sem lote fica −3 (era −6) — é o **C451**, a próxima etapa. *— resolvido na 197 para material
+  com controle de lote (B1320): a linha sem lote fica 0.* (2) **Uma origem por item:** a 2ª
   rodada de outro endereço escolhido sai no automático (**C461**, **B1316**). (3) **O estorno da exclusão** devolve cada saída pelo que ela
   tirou; a saída **automática** volta ao endereço **padrão** do material, não ao endereço de onde o automático tirou (regra antiga, **D (51)**)
   — nos testes o retrato volta igual porque o automático tirou da padrão. (4) **Séries:** séries de dois lotes na mesma entrega continuam
@@ -20012,6 +20162,23 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(197) Nenhum clique foi dado no navegador.** O que os testes provam: pela rota real e pelo serviço — a parte automática de material com
+controle de lote sai por lote na ordem de vencimento (um lote cobre, dois lotes, o vencido liberado primeiro, o sem validade por último),
+nunca de lote bloqueado ou vencido sem liberação (o resto sem lote, com e sem reserva), descontando o que está em inspeção no lote e o que
+outra requisição separou (no lote e no endereço, inclusive a requisição excluída fora da conta), a parte da própria requisição contada uma
+vez só (inclusive na entrega parcial e com dois itens do mesmo material), a falha no meio, a exclusão e a devolução citando a saída voltando
+ao lote, e o caso real da 189/196 ponta a ponta pela Fila até a exclusão; com controles "sem a feature" (material sem controle de lote dá
+os números de antes). Na tela (jsdom) — as frases da Fila e do PDF da lista de coleta (com e sem controle de lote) e a nota da tela de
+Lotes; no servidor, a nota do relatório *Saldo por lote*. Controles positivos: cada task com as suas sabotagens (no plano), todas derrubando o
+cenário delas. A revisão (Fase 5), três revisores frescos por execução — com cerca de 440 entregas sorteadas, **0 violações** depois do
+conserto (o mesmo sorteio achava falhas antes, o que prova que ele sabe falhar) — achou **dois defeitos de motor** (a parte guardada de outra
+requisição descontada só no lote, **B1329**; a parte da própria requisição descontada inteira, complemento da **B1329**), **quatro lacunas
+de teste** e **um texto** incompleto (as notas de Lotes e do relatório), todos consertados. **Não verificado à mão:** o roteiro da seção da
+Etapa 197 (cenários 1 a 6), em especial a dica nova da Fila, o bloco *"Sem lote atribuído"* sumindo no caso real e as saídas por lote em
+**Movimentações**. Vale 10 minutos. Suítes medidas: `test:api` **585/585** (depois do 1º fix-round; depois do 2º, ver o fechamento no plano
+da 197); `entregaAutomaticaPeloLote` **32/0** e os vizinhos verdes depois do 2º; `test:almoxarifado` **44/0**; `test:validation` **4/0**;
+`test:safealter` **3/0**; `test:sqlite` **16/0**; tela **212 suítes / 2913 testes**; build sem aviso.
 
 **(196) Nenhum clique foi dado no navegador.** O que os testes provam: pela rota real e pelo serviço — as regras da parte da origem (a 1ª
 rodada vira a origem com a quantidade, o mesmo lugar soma, outro lugar não mexe, várias entradas na mesma rodada, o dado antigo sem
@@ -37834,11 +38001,105 @@ troca"* aparecendo quando o servidor não grava troca (o motivo se perdia) — c
 
 ### O que esta etapa NÃO cobre
 
-- Em material com lote, a parte automática continua saindo da linha *sem lote* (**C451**/**B204**) — é a próxima.
+- Em material com lote, a parte automática continua saindo da linha *sem lote* (**C451**/**B204**) — é a próxima. *(Feito na 197 para
+  material com controle de lote — ver a seção dela.)*
 - Mais de uma origem por item: a 2ª parte de outro endereço escolhido sai no automático (**C461**).
 - O estorno da exclusão devolve a saída automática para o endereço padrão (**D (51)**, anterior).
 - Séries de dois lotes na mesma entrega continuam recusadas — entregue em duas vezes (**B1319**).
-- A dica da Fila de separação ainda diz "troca a origem" (**C462**).
+- A dica da Fila de separação ainda diz "troca a origem" (**C462**). *(Feito na 197.)*
+- **Nada a rodar antes do deploy.**
+
+## Etapa 197 — Separar em duas vezes, 2ª parte: em material com lote, a parte automática da entrega baixa do lote certo (2026-11-05)
+
+O almoxarife separa 3 de um pedido de 6 no endereço que a fila sugeriu (*XB-01*, lote *L1*). O resto chega depois em outro endereço, no lote
+*L2*, e ele separa os outros 3 sem escolher de onde. Desde a 196 os 3 primeiros saem de *XB-01/L1* na entrega; os outros 3 saíam no
+automático — e o automático **não sabia tirar de lote**: o *L2* continuava com 3 na tela de Lotes e aparecia uma linha *"Sem lote
+atribuído"* de **−3** (**C451**). Agora o automático, em material com controle de lote, tira do lote que **vence primeiro** — o mesmo
+critério do seletor de lote da Movimentação e da dica da fila: o *L2* vai a 0 e não aparece linha negativa. É como o almoxarife que, sem
+etiqueta, pega a caixa que vence primeiro da prateleira — e anota no livro de qual caixa tirou. Ele nunca pega de um lote bloqueado nem de
+um vencido sem liberação, e não pega o que outra requisição já separou. Motor e tela; nada a rodar antes do deploy (as linhas sem lote
+negativas que já existem ficam). Decisões do agente: **B1320** a **B1329**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Material com lote, a parte automática da entrega: o lote fica com o saldo e a linha *"Sem lote atribuído"* fica negativa (o caso real: *L2* 3, sem lote −3) | Sai do lote que vence primeiro: *L2* 0, nenhuma linha sem lote (**B1320**) |
+| Em **Movimentações**, a saída automática aparecia **sem lote** | Uma saída **por lote**, com o lote (**B1324**) |
+| A devolução citando a entrega automática voltava sem lote | Volta para o lote de onde saiu (a herança da Etapa 7) |
+| Excluir a requisição devolvia a parte automática à linha sem lote | Devolve cada saída ao lote dela (no endereço padrão, **D (51)**) |
+| — | Lote bloqueado, reprovado ou vencido sem liberação **nunca** sai pelo automático; o que os outros não cobrem sai sem lote, como antes (**B1322**, **B1323**, **C464**) |
+| — | O que outra requisição separou de um endereço e lote **não** é tirado pelo automático — ela continua entregando de lá (**B1326**, **B1329**) |
+| A dica da Fila: *"… Separar de outro endereço troca a origem da separação (a entrega passa a sair automática)."* | *"… O que já foi separado continua saindo de lá; o resto, separado de outro endereço, sai no automático na entrega."* (**C462**) |
+| Com lote, a dica terminava *"Na entrega, escolha o lote no 'Sai de': a saída automática não escolhe lote."* | Em material com controle de lote: *"Na entrega, o resto sai do lote que vence primeiro; para tirar de outro lote, escolha-o no 'Sai de'."* (**B1328**) |
+| A nota da tela de Lotes e do relatório *Saldo por lote* dava a entrega de requisição como exemplo de saída que não baixa lote | A nota diz que, em material com controle de lote, o automático baixa do lote que vence primeiro, e o que os lotes que podem sair não cobrem sai sem lote |
+| Material **sem** controle de lote | **Sem mudança** (**B1321**, **C465**) |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**. Um material *PARAF-197* (nome *Parafuso 197*, unidade *PC*) com **Controle por lote**
+ligado e posição padrão *XP-01*. Em **Movimentações → Entrada**: 3 no lote *L1* em *XB-01*, com **Validade do lote** daqui a 5 dias; 3 no
+lote *L2* em *XP-01*, com validade daqui a 45 dias. Uma requisição de 6 *PARAF-197*, aprovada. Em **Almoxarifado → Requisições**, abra a
+requisição.
+
+**1. O caso real: a parte automática sai do lote.** **Iniciar Separação** → no **Sai de**, escolha *XB-01 — lote L1 (3)*, quantidade *3* →
+**📦 Confirmar Separação**. Em **Almoxarifado → Fila de separação**, o item mostra *"Já separado de XB-01 — lote L1: o resto não cabe lá. O
+que já foi separado continua saindo de lá; o resto, separado de outro endereço, sai no automático na entrega. Na entrega, o resto sai do lote
+que vence primeiro; para tirar de outro lote, escolha-o no 'Sai de'."* Volte à requisição: **Ajustar Separação** → *"Qualquer endereço
+(automático)"*, quantidade *3* → confirme. **Confirmar Entrega e Baixar Estoque**. Em **Movimentações**: uma saída de 3 de *XB-01* no lote
+*L1* e uma saída de 3 no lote *L2*. Em **Lotes e Séries**, *PARAF-197*: *L1* 0, *L2* 0, e o bloco *"Sem lote atribuído"* **não aparece**
+(era −3).
+
+**2. Mais que um lote: divide na ordem de vencimento.** Material novo, com controle de lote: 2 no lote *LB* (vence daqui a 5 dias) e 9 no
+lote *LA* (daqui a 45). Requisição de 4, separe no automático e entregue: saem 2 de *LB* e 2 de *LA* — **duas** saídas em **Movimentações**,
+*LB* 0, *LA* 7. A ordem é pelo vencimento, não pelo código: *LB* sai antes de *LA*. Lote sem validade sai por último.
+
+**3. Lote que não pode sair fica; o resto sai sem lote, como antes (C464).** Material novo, com controle de lote: 2 no lote *L1* e 3 no
+lote *L2*; em **Lotes e Séries**, mude o status de *L2* para **Bloqueado**. Requisição de 4 (a aprovação aceita: o bloqueio do lote não tira
+do disponível do material), separe no automático e entregue: a entrega passa. Saem 2 de *L1* e 2 **sem lote**; *L2* continua com 3; em **Lotes e
+Séries**, *"Sem lote atribuído"* fica **−2**. O mesmo com um lote vencido sem liberação. Um lote vencido **com** a liberação de vencimento
+sai — e sai primeiro, porque vence antes.
+
+**4. O que outra requisição separou não é tocado (B1326, B1329).** Material novo, com controle de lote: 4 no lote *L1* em *XB-01* (vence
+antes) e 9 no lote *L2*. Requisição R1 de 4: separe de *XB-01 — lote L1*. Requisição R2 de 4: separe no automático e **entregue primeiro**.
+R2 sai de *L2* (4). Entregue R1: sai de *XB-01/L1*, sem recusa. Se *L1* tiver 6 em *XB-01* e R1 separou 4, R2 leva os 2 livres de *L1* e 2 de
+*L2*. Se o *L1* estiver em dois endereços (4 separados por R1 em *XB-01* e 2 em *XC-01*), R2 tira de *XC-01* — e, em **Movimentações**, essa
+saída mostra o endereço.
+
+**5. A devolução e a exclusão voltam ao lote.** No cenário 1, em **Devoluções**, devolva 1 citando a saída do lote *L2*: o campo mostra
+*"Lote (herdado da entrega)"* com *L2*, e o 1 volta ao *L2*. Exclua a requisição: cada saída volta ao lote dela (*L1* 3, *L2* 3 — a de *L2*
+volta menos o 1 já devolvido), e nenhuma linha *sem lote* aparece.
+
+**6. Material sem controle de lote não muda.** Repita o cenário 1 com um material **sem** controle de lote mas com saldo em lote (uma
+Entrada informando o lote, por exemplo): a parte automática sai **sem lote**, como antes, e a dica da Fila termina com *"Na
+entrega, escolha o lote no 'Sai de': a saída automática não escolhe lote."*
+
+**Nas telas, as notas novas** (lidas do código). Em **Lotes e Séries**, abaixo da tabela, quando há saldo fora dos lotes: *"O saldo de
+cada lote é o atribuído a ele. Na entrega de requisição de material com controle de lote, o que sai no automático baixa do lote que vence
+primeiro — entregas anteriores a esta mudança podem estar em "sem lote atribuído", e o que os lotes que podem sair (não bloqueados,
+reprovados ou vencidos sem liberação) não cobrem também sai sem lote. Saídas que não informam lote nos outros casos (material sem controle
+de lote, entrega de EPI) e o ajuste de saldo total não baixam de lote nenhum; entradas sem lote (por exemplo, antes de ligar o controle de
+lote) também ficam fora dos lotes. Lotes + sem lote atribuído = físico total."* No relatório *Saldo por lote*, a nota diz o mesmo (*"…
+Na entrega de requisição de material com controle de lote, o automático baixa do lote que vence primeiro; o que os lotes que podem sair (não
+bloqueados, reprovados ou vencidos sem liberação) não cobrem também sai sem lote. …"*).
+
+**A revisão (Fase 5)**, três revisores frescos por execução, com cerca de 440 entregas sorteadas — **0 violações** depois do conserto, e o
+mesmo sorteio achava falhas antes. Acharam **dois defeitos de motor**: (1) **crítico** — o desconto do que outra requisição separou era só
+no total do lote, mas o motor tira do lote começando pelo endereço padrão e depois pelo maior — justo o separado; a outra requisição tomava
+400 *"a origem da separação (…) não serve mais"* (corrigido em `838bb350`, **B1329**); (2) a parte separada da **própria** requisição era
+descontada quando ela mesma pedia o automático — saía uma linha sem lote negativa num material que não permite saldo negativo, com o lote
+inflado (corrigido em `1ed41bb8`, complemento da **B1329**). E **quatro lacunas de teste** (a reserva no resto sem lote; a requisição
+excluída fora da conta — **C467**; a inspeção no 2º lote; o lote sem validade por último), cobertas em `1723b78c`, e **um texto**: as notas
+de Lotes e do relatório não diziam que o que os lotes que podem sair não cobrem sai sem lote (`351ee457`). Ruído: nenhum.
+
+### O que esta etapa NÃO cobre
+
+- O que nenhum lote que pode sair cobre sai sem lote, e a devolução citando essa parte não herda lote (**C464**).
+- Material sem controle de lote, a entrega de EPI e os fluxos internos (**C465**); a lista de saídas da Devolução com as 30 mais recentes
+  (**C465**).
+- A peça em quarentena (ou em terceiros) pode sair pelo automático: o bloqueio é do material, não do lote (**C466**).
+- As linhas sem lote negativas que já existem (**B1327**).
+- Duas requisições separadas do mesmo endereço escolhido: a segunda entrega é recusada (**C449**) — é a próxima.
 - **Nada a rodar antes do deploy.**
 
 ## Onde estamos e o que vem a seguir
@@ -37847,6 +38108,17 @@ troca"* aparecendo quando o servidor não grava troca (o motivo se perdia) — c
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 197 entregue (2026-11-05):** **separar em duas vezes, 2ª parte: em material com lote, a parte automática da entrega baixa do lote
+  certo** (**C451** e **C453** resolvidos na entrega de material com controle de lote; **C462** resolvido). A parte automática sai do lote que
+  vence primeiro, revogando a **B204** só aí (**B1320**); gatilho no cadastro (**B1321**); só lote que pode sair, descontado o que está em
+  inspeção (**B1322**); o resto sem lote como antes (**B1323**); uma saída por lote (**B1324**); a divisão na entrega, não no motor
+  (**B1325**); o que outra requisição separou é descontado (**B1326**), no endereço, e a parte da própria requisição uma vez só (**B1329**);
+  sem migração (**B1327**); a Fila sabe se o material controla lote (**B1328**). Revisão (Fase 5): dois defeitos de motor corrigidos, quatro
+  lacunas de teste e um texto. Commits `7f099fae` (plano), `b21a81f5` (Fase 2), `ee835811` e `b751b3ab` (T0), `58227edf`, `d8a4f1d9`,
+  `398d1e69` (T1), `e011affe` e `cbb2b66f` (T2), Fase 5 `838bb350`, `1723b78c`, `351ee457`, `6d4dec1d`, `1ed41bb8`, e o fechamento. **O que é
+  seu:** as decisões **B1320** a **B1329** (reversíveis); os avisos **C463** a **C467**; as limitações **(197)** em D e a verificação **(197)**
+  em F. **Próxima: a entrega recusada quando outra requisição separou o mesmo endereço** (**C449**, motor; detalhada no fim do plano da 197).
 
 - **Etapa 196 entregue (2026-11-05):** **separar em duas vezes: a parte separada primeiro continua saindo de onde foi separada** (**C453**
   resolvido na parte do endereço). O item guarda quanto saiu da origem (**B1313**); a separação não grava mais troca (**B1314**, revoga a da

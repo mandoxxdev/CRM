@@ -369,8 +369,8 @@ ele, três arquivos de teste ficam vermelhos em 11/11.
 
 ## Execução
 
-- [ ] Plano — este commit.
-- [ ] Fase 2.
+- [x] Plano — `7f099fae`.
+- [x] Fase 2 — `b21a81f5` (8 achados aplicados; o bloco "Fase 2 — correções" acima).
 - [x] T0 — `ee835811`. `entregaAutomaticaPeloLote.api.test.js` 19/19 (puro + rota + servico; validades relativas); reescritas
   verdes: `preSelecaoColetaIntegracao` 9/9 (x3 + datas relativas), `origemSeparacaoEmDuasVezesIntegracao` 9/9 (x3),
   `loteControleObrigatorio` 12/12 (x2), `lotesResumo` 13/13 (teste 10); test:api 584/584, test:almoxarifado 44/0. Vizinhos
@@ -416,5 +416,120 @@ ele, três arquivos de teste ficam vermelhos em 11/11.
   `stockService.cancelarMovimentacao`): o teste afirma a recusa e estorna a DEVOLUCAO (ENTRADA_DEVOLUCAO com lote); (3) lotes L2 1/L3 4
   em vez de L2 3 do plano — com 3 a fatia coincidia com o pedaco e nao provava a divisao dentro do pedaco; (4) a parte da origem sai
   como excedente (sem `reserva_id`) e a reserva vai para o automatico — comportamento de antes (excedente primeiro), afirmado no livro.
-- [ ] Fase 5.
-- [ ] Fechamento (spec 10 pendência (g) corrigida à vista; spec 05; mapa; guia; manual; novidades com B1320–B1328 e C463–C465).
+- [x] Fase 5 — `838bb350` (M1), `1723b78c` (M2–M5), `351ee457` (M6), `6d4dec1d` (B1329 no novidades), `1ed41bb8` (2º fix-round). Ver abaixo.
+- [x] Fechamento de documentação — commit "Etapa 197: fechamento - novidades, specs, mapa, guia, manual e planos": novidades (cabeçalho;
+  seção da 197 com Antes → Agora e 6 cenários com as literais lidas de `coletaTexto.js`, `LotesAlmoxarifado.js`, `reportRegistry.js`,
+  `DevolucoesAlmoxarifado.js` e `stockService.js`; **B1320** a **B1328** reescritas pelo que o código faz — a B1326 mudou de lado na Fase 2 —
+  e inseridas **antes** da **B1329** que a Fase 5 já tinha gravado, sem duplicar; a B1329 ganhou o complemento do 2º fix-round; a B204 e a
+  B231 anotadas à vista; **C449** atualizado (continua, mudou de forma), **C451** e **C453** resolvidos na entrega de material com controle
+  de lote, **C462** resolvido; **C463** (resolvido na etapa, o número fica), **C464**, **C465**, **C466** e **C467** (a exclusão não limpa a
+  origem guardada — o filtro de requisição ativa é a proteção, M3) novos; D (197); D (196) e D (136) anotadas; F (197)), spec 05 (status,
+  última atualização, D (136) e D (196) anotadas, bloco "Etapa 197" com checklist e hashes), spec 10 (cabeçalho; a tabela da pendência (g):
+  a linha da **exclusão** "devolve sem lote" **estava errada desde a Etapa 58** (B232) e a da entrega mudou — riscadas à vista; bloco
+  "Etapa 197"), mapa (linhas da 05 e da 10), guia (cabeçalho — onde parou: 197 fechada, próxima C449 — e seção com roteiro de 7 passos; a
+  nota da 196 anotada), manual (2.7 "onde a exigência de lote não se aplica"; 3.6 material com lote; 3.7 a posição ocupada; 4.5 o saldo do
+  lote e a nota da tela; 7.5 a regra nova da parte automática por lote; 10.6 as frases da fila e o automático; 12.4 a herança da saída
+  automática e a lista das 30; 21d a nota do Saldo por lote), este plano e o cabeçalho do plano da pausa. Verificação final, estimado ×
+  gasto e controle de horas: fora deste commit (feitos por quem fecha a etapa).
+
+## Fase 5 — três revisores frescos (2026-11-05)
+
+Três revisores frescos, por leitura e execução, sobre `cbb2b66f` — com um fuzz de **~440 entregas sorteadas** (separar no par ou no
+automático, entregar, devolver, excluir, com lotes de validades e status sorteados), conferindo físico × linhas × lotes × livro a cada passo:
+**0 violações depois do conserto**, e o **mesmo** fuzz achava falhas antes (controle positivo do fuzz). **7 achados reais, ruído 0:**
+
+- **M1 [DEFEITO, CRÍTICO]** — a RN-197.11 descontava a parte guardada (origem + lote) do total do **lote**, mas a fatia ia ao motor só com
+  `lote_id`, e o `claimSaldoDoLote` drena a localização padrão primeiro e depois a maior linha — justo a guardada. L1 4 em ZB-01 (guardados
+  por R1) e 2 em ZC-01: R2 automático 2 saía de ZB-01 e R1 tomava 400 *"a origem da separação (ZB-01) não serve mais"*; o mesmo com a parte
+  guardada na padrão. Regressão da 197 (sem controle de lote, R1 entrega 200). **Consertado em `838bb350`** (B1329): lote **com** parte
+  guardada de outra caixa volta de `lotesParaOAutomatico` com as `linhas` (lote, endereço), cada uma com o livre dela (saldo da linha − a
+  parte guardada naquele par; a inspeção desconta no nível do lote), na ordem do claim (padrão, depois a maior), pulando livre 0, a linha
+  sem endereço e a de endereço bloqueado; cada pedaço vai ao motor com `lote_id` + `localizacao_origem_id` e origem estrita. Lote sem guarda
+  segue como na T0. Controles: fatia sem endereço → 4 caem; livre sem descontar o par → 5; sem pular a bloqueada → 1.
+- **M2 [LACUNA]** — o resto sem lote **com reserva** (os RN-197.03 usavam requisição sem reserva): aprovada (reserva 4), L1 1 + L2
+  bloqueado → L1 1 + sem lote 3, as duas com a reserva; reserva 4/4. `1723b78c`. Controle: resto sem `reserva_id` → cai.
+- **M3 [LACUNA]** — o filtro de requisição ativa com caixa na parte guardada não tinha teste. **Achado lateral:** a exclusão da requisição
+  **não** limpa `origem_separacao_id`/`quantidade_origem_separacao` (a linha fica CANCELADO/ativo 0 com a origem) — não mudado; **o filtro é
+  a proteção** (registrado no **C467**). `1723b78c`. Controle: sem o filtro → cai.
+- **M4 [LACUNA]** — a inspeção no **2º** lote (o T0.2 a punha no 1º). `1723b78c`. Controles: inspeção no 1º lote e "desconta de todos" → caem.
+- **M5 [LACUNA]** — lote sem validade por último. `1723b78c`. Controle: nulos na frente (`lotService`) → cai.
+- **M6 [TEXTO]** — as notas de Lotes e do relatório *Saldo por lote* não diziam que o que os lotes elegíveis não cobrem sai sem lote
+  (B1323/C464). `351ee457` (teste novo no `relatoriosSaldos` (2g) para a nota do servidor, que não tinha). Controles: frase velha em cada
+  lado → cai o teste dela.
+- **2º fix-round [DEFEITO]** — achado ao revisar o conserto do M1: com `origem_automatica` (ou outro par), `saiDaOrigem` fica falso, o item
+  não entra em `saiuDaOrigemPorItem` e `lotesParaOAutomatico` descontava a parte guardada **inteira** do próprio item. R1 separa 4 de
+  ZB-01/L1, uma avulsa tira 1 de ZB-01, L1 2 em ZC-01; R1 entrega 4 no automático → `SAIDA ZC-01/L1 2` + `SAIDA sem lote 2`: ZP-01/− = −2 num
+  material com `permite_saldo_negativo = 0` e ZB-01/L1 3 sobrando (lote inflado). **Consertado em `1ed41bb8`**: para o item desta entrega que
+  não sai da origem, conta só `parteQueFica = parte − troca` (a conta do `finally`); quem sai da origem segue com `parte − baixadoComOrigem`.
+  Descartado: não descontar nada (na entrega parcial o automático drenaria a linha que a parte que sobra ainda usa). Vermelho antes (2:
+  própria parte e misto), verde depois; voltar a descontar a parte própria → caem os mesmos 2. **Caso anterior da própria 197** (T0), não
+  da 196.
+
+**Placar depois do 1º fix-round (sobre `351ee457`):** `test:api` **585/585**; `test:almoxarifado` **44/0**; `test:validation` **4/0**;
+`test:safealter` **3/0**; `test:sqlite` **16/0**; tela **212 suítes / 2913 testes**; build ok (`CI=true`). **Depois do 2º fix-round (sobre
+`1ed41bb8`):** `entregaAutomaticaPeloLote` **32/0** e os vizinhos verdes; `test:almoxarifado` **44/0**; `test:api`: **ver fechamento**
+(sendo reconferido por quem fecha a etapa).
+
+**Divergências do plano, em resumo:** (1) a Fase 2 mudou a RN-197.11 de "não desconta" para "desconta" (B1326) e acrescentou a inspeção, a
+fatia de resíduo, a reescrita do `lotesResumo` e as datas fixas da `filaSugestaoColeta*` (o bloco "Fase 2 — correções" manda); (2) a T0
+trocou os códigos da RN-197.02 (L2 vence antes) para o controle (iii) poder cair e achou que a exclusão do `loteControleObrigatorio` não sabia
+falhar (ganhou a conferência do lote); (3) a T1 rodou numa worktree e entrou por cherry-pick (hashes da worktree descartados); (4) a T2 usou
+L2 1 / L3 4 para provar a divisão dentro do pedaço e afirmou a recusa do estorno pelo livro da SAIDA (é de propósito); (5) a Fase 5 levou o
+desconto do lote ao par lote + endereço (M1, B1329) e corrigiu a parte do próprio item (2º fix-round) — os dois furos estavam no código da T0,
+que o plano não previa (a RN-197.11 do plano descontava "por lote"). **A spec 10 estava errada** (a exclusão "devolve sem lote", desde a
+Etapa 58): riscada à vista. As validades literais da `filaSugestaoColeta*` saíram do "O que não cobre" (feitas na T1, `58227edf`).
+
+**Retro (4 números):** rodadas de correção até verde: **2** (o fix-round da Fase 5 e o 2º); achados reais da Fase 5: **7** (2 defeitos de
+motor, 4 lacunas de teste, 1 texto), ruído **0**; paralelismo: **T0 com T1 em worktree, T2 com os 2 revisores**, sem retrabalho; defeito
+que escapou da 196: **nenhum conhecido** — o 2º fix-round achou um caso anterior da própria 197.
+
+## Próxima tarefa detalhada
+
+**"Entrega recusada quando outra requisição separou o mesmo material"** — item 6 da fila da estimativa
+`docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md` (**motor, leitura sob trava**, estimado **4h**: análise 1h,
+execução 1h, teste 2h). Fecha o **C449**. **É tronco**: a separação e a entrega rodam sob `serializarNaRequisicao` → `comTravaDaRequisicao`
+(trava por requisição por fora, por material dos itens por dentro, Etapa 95), então ler o separado das outras caixas **dentro** da seção é
+leitura sob a mesma trava que já serializa as portas do disponível — nenhuma porta nova.
+
+**O C449 ainda existe? Sim, na forma "duas requisições no mesmo par escolhido" — medido em 2026-11-05 sobre `1ed41bb8`, sem consertar.**
+- **Cenário (já é teste, e está verde afirmando o defeito):** `server/tests/api/preSelecaoColetaIntegracao.api.test.js:290` *"[Fase 5, C449]
+  sugestao velha…"* — L1 6 em XB-01 (vence antes), L2 9 em XP-01; R1 e R2 de 4 recebem a mesma sugestão XB-01/L1; R1 separa 4 de XB-01/L1;
+  **R2 separa 4 do mesmo par → 200** (a separação aceita); R1 entrega 200; **R2 entrega → 400** *"⟨material⟩: a origem da separação (XB-01)
+  não serve mais (O saldo em XB-01 (2) não cobre a quantidade (4) — a saída tiraria de outros endereços) — entregue escolhendo de onde
+  sai"*; nada baixado, nenhuma troca. A falha é segura (nada sai a mais), mas o gesto errado é a **separação** aceitar.
+- **Mudou de forma com a 196/197:** a variante "R2 no automático esvazia o par de R1" **não existe mais** — o automático da entrega desconta,
+  no par lote + endereço, a parte guardada das outras caixas (`lotesParaOAutomatico`, B1326/B1329; teste `:308` *"[Fase 5, C449 controle
+  historico; Etapa 197]"* agora tira 2 de L1 + 2 de L2 e R1 não é afetada). E desde a 196 a conta é a **parte** da origem (`PARTE_ORIGEM_SQL`),
+  não a caixa inteira. Sobra só o caso **estrito × estrito**.
+- **Onde (a causa):** `server/services/almoxarifado/requisitionService.js`:
+  - `checarOrigemItem` (`:1196`) — a régua única "este item pode sair desta origem/lote nesta quantidade", usada pela separação **e** pela
+    entrega: confere `SUM(quantidade)` das linhas do par (`:1224-1226`) menos o `pedidoPorOrigem` **da mesma chamada** (`:1228-1232`). **Não
+    desconta o que outra requisição separou dali.**
+  - **Separação:** `separarSemTrava` (`:1312`; envelope `separarRequisicao` `:1307-1309`) chama `checarOrigemItem` em `:1459` com o
+    `pedidoSeparacao`. Logo acima (`:1440-1455`) **já lê** o separado das outras no par — a query `outras` (`:1449-1452`,
+    `SUM(PARTE_ORIGEM_SQL)` com `ir.requisicao_id <> ?`) — mas só para `regua.saldoOrigem`, que alimenta a **divergência** (`:1510-1511`:
+    `maximo = min(base, saldoOrigem)`; `divergente = total < maximo`), não a aceitação. É aqui que o conserto mora.
+  - **Entrega:** `entregarSemTrava` (`:1814`), `validarOrigemDaEntrega` (`:1904-1915`) chama `checarOrigemItem` (`:1908`) — também sem
+    descontar as outras; quem entrega primeiro leva.
+- **As réguas que já contam o separado de outras caixas (reaproveitar, não inventar):**
+  - `PARTE_ORIGEM_SQL` / `parteOrigemSql` (`:68-74`, Etapa 196) — a parte da origem de um item (caixa limitada; legado `NULL` = caixa).
+  - `lerDadosDaColeta` (`:330`; `planejados` `:342-348`) — a Fila: `SUM(PARTE_ORIGEM_SQL)` por (material, origem, lote), requisição
+    `COALESCE(r.ativo,1)=1 AND r.status IN STATUS_COM_CAIXA`.
+  - `lotesParaOAutomatico` (`:1749`; `guardadas` `:1759-1762`) — o mesmo filtro, por (lote, endereço), da 197.
+  - A query `outras` da separação (`:1449-1452`) — **filtro diferente:** só `COALESCE(r.ativo,1)=1`, **sem** `r.status IN STATUS_COM_CAIXA`.
+    Ponto de atenção: unificar com a Fila (uma requisição encerrada ou cancelada com origem gravada — ver C467 — não pode comprometer o par).
+- **Caminho provável (a pesar na Fase 0/2):** na separação, para a entrada com endereço, `checarOrigemItem` (ou uma conferência ao lado,
+  só na separação) recebe o comprometido das outras no par e recusa quando `saldo do par − parte das outras − pedido da chamada < qty`, com
+  literal nova que diga quanto está separado para outra requisição e mande escolher outro endereço ou atualizar a fila. A entrega fica como
+  está (o 400 seguro continua para dado antigo já sobrecomprometido). **Decisões para a letra B:** recusar × avisar e aceitar (a divergência
+  já usa o mesmo número para pedir motivo — medir na tela, `RequisicoesList.js`, se a janela de separação já limita o "Sai de" por ele);
+  par só com endereço × também "só lote" (`origemId` nulo: a query `outras` hoje só roda com endereço); a mensagem do 400.
+- **Testes que mudam:** `preSelecaoColetaIntegracao.api.test.js:290` (a separação de R2 passa de 200 para 400 — reescrever dizendo "era");
+  medir com grep `não serve mais` e `saldoOrigem` quantos outros afirmam a separação aceita no par comprometido (`separacaoOrigemPorItem`,
+  `origemSeparacaoEmDuasVezesIntegracao`, `separacaoTetoFisico*`). Controle positivo: tirar o desconto → o cenário volta a 200.
+- **Corrida:** duas separações do mesmo material já são serializadas pela trava por material (Etapa 95, B476) — a segunda lê a parte da
+  primeira já gravada. Se o plano quiser teste de corrida, o gesto concorrente sai do contexto do teste (CLAUDE.md, molde
+  `exclusaoSerieQueVoltou` RN-15).
+
+**Já pronto, não reabrir:** a parte da origem (196), a entrega automática pelo lote e o desconto no par (197), a pré-seleção (189), a ordem
+das baixas (136), o teto físico da separação por material (95).

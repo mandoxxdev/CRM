@@ -392,7 +392,7 @@ O bloco **Controles** tem sete opções. Ligar uma delas muda o comportamento do
 
 Há ainda uma marcação fora deste bloco que tem efeito operacional: **Material crítico**, no bloco Classificação. É ela — e não a opção "Requer inspeção" — que faz a quantidade recebida entrar **retida em inspeção** no recebimento, em vez de entrar direto como disponível (ver 14.6). O material fica fisicamente no galpão, contado no saldo total, mas fora do disponível até que a inspeção decida.
 
-Onde a exigência de **lote** **não** se aplica, e isso é deliberado: entrega de requisição, estorno de requisição excluída, inspeção, ajuste puro de inventário e as movimentações de remessa a terceiros. Exigi-lo ali tornaria o material impossível de entregar. Na entrega de requisição o lote é **opcional**: escolhendo em **"Sai de"** (7.5) o endereço e o lote de onde o item sai, a baixa é daquele lote; sem escolher, fica na linha "sem lote". O preço é que a quantidade movimentada por esses caminhos fica na linha "sem lote" — o saldo total do material continua correto. A **série**, ao contrário, é pedida também na entrega de requisição: cada unidade que sai tem de ser escolhida.
+Onde a exigência de **lote** **não** se aplica, e isso é deliberado: entrega de requisição, estorno de requisição excluída, inspeção, ajuste puro de inventário e as movimentações de remessa a terceiros. Exigi-lo ali tornaria o material impossível de entregar. Na entrega de requisição o lote é **opcional**: escolhendo em **"Sai de"** (7.5) o endereço e o lote de onde o item sai, a baixa é daquele lote; sem escolher, a parte que sai pela regra automática baixa do **lote que vence primeiro** entre os que podem sair (7.5), e só o que esses lotes não cobrem fica na linha "sem lote" — a entrega nunca é recusada por falta de lote. Nos outros caminhos isentos, a quantidade movimentada fica na linha "sem lote" — o saldo total do material continua correto. A **série**, ao contrário, é pedida também na entrega de requisição: cada unidade que sai tem de ser escolhida.
 
 #### Ligar o controle por lote ou por série num material que já tem saldo
 
@@ -709,7 +709,7 @@ Há duas coisas diferentes, e confundi-las causa dúvida:
 - **A transferência** move de uma posição para outra e **exige** saldo na origem, mesmo em material que permite negativo: *"Saldo insuficiente na localização de origem"*.
 - **O ajuste de saldo total** (sem posição) define o total do material. Quando ele **aumenta**, a diferença vai para a posição padrão (ou "sem localização atribuída"), porque não há como saber onde o material apareceu. Quando ele **diminui**, as posições **cedem** (a padrão primeiro, depois as maiores) antes de qualquer conta ficar negativa.
 - **O ajuste com localização** — a **contagem daquela prateleira** — **define** (não soma) o que existe ali e recalcula o total do material pela soma de todas as posições. Se a contagem deixaria o material com saldo **negativo** (num material que não permite), o sistema primeiro zera a conta "sem localização atribuída" negativa; só recusa se nem isso bastar: *"Ajuste deixaria o saldo do material negativo (-50). O material não permite saldo negativo."* A tela de Movimentações não oferece posição no ajuste; a contagem por posição é feita pela integração.
-- **Material com lote.** O lote tem posição própria. A saída **sem** lote (como a entrega de requisição, que não escolhe lote) **não** tira de posição de lote. Nesse material, uma posição pode continuar mostrando o lote depois que ele saiu pela entrega, e a contagem daquela posição ("este lote, aqui, tem 0") põe a conta em dia.
+- **Material com lote.** O lote tem posição própria. A saída **com** lote tira das posições daquele lote (a de origem informada ou a padrão primeiro, depois as de mais saldo — 4.5). A saída **sem** lote **não** tira de posição de lote. A entrega de requisição de material com **Controle por lote** informa o lote também na parte automática (7.5); a de material **sem** controle por lote, sem escolher no **"Sai de"**, sai sem lote. Nesse último caso — e no que os lotes que podem sair não cobrem —, uma posição pode continuar mostrando o lote depois que ele saiu pela entrega, e a contagem daquela posição ("este lote, aqui, tem 0") põe a conta em dia.
 
 Duas consultas de apoio para quem está organizando o galpão, as duas em **Relatórios → Estoque**: **Materiais sem endereço** e **Localizações vazias** (ver 3.7).
 
@@ -723,7 +723,7 @@ Duas consultas de apoio para quem está organizando o galpão, as duas em **Rela
 
 - a posição **bloqueada** vazia aparece (coluna Bloqueada = 1); a posição **inativa** não;
 - uma posição **"pai"** (rua, setor) sem saldo próprio aparece mesmo com as filhas ocupadas — a coluna **Filhas ocupadas** diz quantas filhas ativas estão ocupadas; o Mapa e a lista são planos;
-- em material **com lote**, uma posição pode continuar aparecendo **ocupada** depois de a entrega de requisição retirar o material, porque a entrega não escolhe lote (ver 3.6).
+- em material **com lote**, uma posição pode continuar aparecendo **ocupada** depois de a entrega de requisição retirar o material, quando a entrega saiu sem lote — material sem **Controle por lote** entregue sem escolher no **"Sai de"**, ou a parte que os lotes que podem sair não cobriam (ver 3.6 e 7.5).
 
 **Aberto pela etiqueta da posição.** A etiqueta de uma posição (seção 4.8) abre o Mapa **já com aquela posição
 selecionada**. Dois avisos podem aparecer no topo:
@@ -985,8 +985,11 @@ Ou seja: um material com 102 unidades no total, sendo 100 no lote `L-001` e 2 no
 Quando o lote está guardado em **mais de um endereço**, a saída baixa os endereços do lote um por um — o endereço de origem informado (ou o padrão) primeiro, depois os de maior saldo — até completar a quantidade. A entrega de requisição que informa o lote faz o mesmo. Se a gravação falhar no meio (erro do banco), nenhum endereço fica baixado: o estoque do material e os endereços do lote voltam ao que eram, e a mesma saída pode ser repetida.
 
 **O saldo de um lote é o que foi atribuído a ele.** Entrada e saída que **informam** o lote movem o
-saldo daquele lote. As que **não informam** — a entrega de requisição, as saídas internas e o ajuste de
-saldo total — movem o saldo do material numa linha sem lote. Assim, a soma dos lotes pode ser maior ou
+saldo daquele lote. A entrega de requisição de material com **Controle por lote** informa o lote também na
+parte automática: tira do lote que vence primeiro (7.5). As que **não informam** — a entrega de requisição
+de material sem controle por lote, a entrega de EPI, as saídas internas, o ajuste de saldo total e, na
+entrega de material com controle por lote, o que os lotes que podem sair não cobrem — movem o saldo do
+material numa linha sem lote. Assim, a soma dos lotes pode ser maior ou
 menor que o físico do material; a diferença é o saldo **sem lote atribuído**. O relatório **Saldo por
 lote** (21d) mostra os dois e fecha a conta com o físico.
 
@@ -995,9 +998,13 @@ por lote é conferida, e o mesmo que os seletores de lote de Movimentações, De
 **Abaixo da tabela**, quando o material tem saldo fora dos lotes, aparece o bloco:
 
 > **Sem lote atribuído:** ⟨valor⟩ · **Físico total do material:** ⟨valor⟩
-> *"O saldo de cada lote é o atribuído a ele. Saídas que não informam lote (como a entrega de
-> requisição) e o ajuste de saldo total não baixam de lote nenhum; entradas sem lote (por exemplo, antes
-> de ligar o controle de lote) também ficam fora dos lotes. Lotes + sem lote atribuído = físico total."*
+> *"O saldo de cada lote é o atribuído a ele. Na entrega de requisição de material com controle de lote,
+> o que sai no automático baixa do lote que vence primeiro — entregas anteriores a esta mudança podem
+> estar em "sem lote atribuído", e o que os lotes que podem sair (não bloqueados, reprovados ou vencidos
+> sem liberação) não cobrem também sai sem lote. Saídas que não informam lote nos outros casos (material
+> sem controle de lote, entrega de EPI) e o ajuste de saldo total não baixam de lote nenhum; entradas sem
+> lote (por exemplo, antes de ligar o controle de lote) também ficam fora dos lotes. Lotes + sem lote
+> atribuído = físico total."*
 
 A conta é: **sem lote atribuído = físico do material − soma do saldo de todos os lotes existentes do
 material**, arredondada a seis casas. Ela **pode ser negativa** (saíram 30 sem lote de um material cujo
@@ -2258,10 +2265,15 @@ Regras:
 - **Tudo o que foi escolhido é conferido antes de qualquer baixa**, em todos os itens: se um item tem escolha inválida, **nenhum** item é entregue. Recusas, sempre com o nome do material na frente: *"Chapa 3mm: Localização A-01 está bloqueada"*, *"Chapa 3mm: Localização de origem não encontrada"*, *"Chapa 3mm: Lote não pertence a este material"*, *"Chapa 3mm: Lote L-7 esta bloqueado e nao pode ser utilizado"* (e a de lote vencido sem liberação, a mesma da movimentação — 4.3).
 - **Dois itens do mesmo material** saindo do mesmo endereço e lote somam: o endereço precisa cobrir a soma. Um item com **só o lote** escolhido (sem endereço) tira desse lote em qualquer endereço, **depois** dos itens que saem de um endereço do mesmo lote: o lote inteiro precisa cobrir a soma dos dois. Com o lote *L-7* só em A-01, com 2, um item com o lote *L-7* sem endereço e outro separado de A-01 no lote *L-7*, 2 cada, a entrega é recusada antes de qualquer baixa com *"Chapa 3mm: Saldo insuficiente no lote L-7. Disponível: 0 KG"* — o *Disponível* já descontado do que o outro item leva. Em material que permite saldo negativo (6.1) essa soma não é conferida.
 - **Confirmar endereço lido.** Com uma origem escolhida, o campo **"Confirmar endereço lido"** aceita a leitura da etiqueta do endereço (ou o código digitado) e confere com a origem escolhida — a mesma regra da movimentação (6.2b): *"Chapa 3mm: Endereço lido (B-02) não confere com a localização de origem (A-01) — se a etiqueta é antiga, reimprima"*. Sem origem escolhida o campo fica desabilitado, com a dica *"Para confirmar a leitura, escolha antes de onde o item sai."*
-- **A origem da separação.** Quando o item foi separado dizendo de onde (10.2), a entrega sai **dali** sem que ninguém precise escolher de novo — inclusive pelo botão **"Confirmar Entrega e Baixar Estoque"**, que entrega tudo o que foi separado em um clique. Na janela de entrega, o **Sai de** desse item já vem com a origem da separação escolhida. A origem da separação vale **para a parte que foi separada dali e ainda não foi entregue** — o item guarda o endereço (e o lote) **e quanto** saiu dele; o detalhe mostra *"separado de A-01 (3 PC)"*. Quando o item foi separado em duas vezes (3 de A-01 e 3 no automático, por exemplo — 10.2), ou quando a entrega passa do separado (depois de uma entrega parcial o teto de material comum sobe), a entrega **se divide**: a parte de A-01 sai de A-01 — com a mesma exigência de saldo da escolha exata —, e o restante sai pela regra automática. Toda entrega que sai da origem desconta da parte dela o que saiu de lá. Na janela, quando a entrega passa da parte, o **Sai de** vem em automático e o item avisa: *"3 PC sai de A-01 (o que foi separado de lá); o restante, automático. Se lá não houver mais essa quantidade, a entrega é recusada — escolha de onde sai."* (com *" — lote L-7"* quando houver); com a entrega até a parte, o **Sai de** vem na origem. Num material com série, a parte automática sai do lote das séries escolhidas. Item separado **sem** origem sai pela regra automática.
+- **A origem da separação.** Quando o item foi separado dizendo de onde (10.2), a entrega sai **dali** sem que ninguém precise escolher de novo — inclusive pelo botão **"Confirmar Entrega e Baixar Estoque"**, que entrega tudo o que foi separado em um clique. Na janela de entrega, o **Sai de** desse item já vem com a origem da separação escolhida. A origem da separação vale **para a parte que foi separada dali e ainda não foi entregue** — o item guarda o endereço (e o lote) **e quanto** saiu dele; o detalhe mostra *"separado de A-01 (3 PC)"*. Quando o item foi separado em duas vezes (3 de A-01 e 3 no automático, por exemplo — 10.2), ou quando a entrega passa do separado (depois de uma entrega parcial o teto de material comum sobe), a entrega **se divide**: a parte de A-01 sai de A-01 — com a mesma exigência de saldo da escolha exata —, e o restante sai pela regra automática. Toda entrega que sai da origem desconta da parte dela o que saiu de lá. Na janela, quando a entrega passa da parte, o **Sai de** vem em automático e o item avisa: *"3 PC sai de A-01 (o que foi separado de lá); o restante, automático. Se lá não houver mais essa quantidade, a entrega é recusada — escolha de onde sai."* (com *" — lote L-7"* quando houver); com a entrega até a parte, o **Sai de** vem na origem. Num material com série, a parte automática sai do lote das séries escolhidas; num material com **Controle por lote**, do lote que vence primeiro (abaixo). Item separado **sem** origem sai pela regra automática.
 - **Quando a origem da separação não serve mais** — o endereço perdeu saldo para outra saída, foi bloqueado, ou o lote foi bloqueado ou venceu —, a entrega é recusada **antes de qualquer baixa**, com o motivo e o caminho: *"Chapa 3mm: a origem da separação (A-01) não serve mais (O saldo em A-01 (1) não cobre a quantidade (5) — a saída tiraria de outros endereços) — entregue escolhendo de onde sai"*. Pelo botão **Entregar escolhendo de onde sai…**, escolha outro endereço ou **"Qualquer endereço (automático)"** — neste item, "automático" quer dizer **ignorar** a origem da separação. O sistema **não** troca de endereço sozinho: o histórico diria que saiu de onde não saiu. Se a lista de endereços não carregar, o **Sai de** mostra **"Planejada da separação (A-01)"** (a entrega usa a origem da separação) e "automático" continua disponível.
 - **Trocar de onde sai fica registrado.** Quando o item tem origem da separação e a entrega sai de **outro endereço** — ou do mesmo endereço com **outro lote**, quando a separação disse o lote — ou vai por **"Qualquer endereço (automático)"**, a entrega tira **primeiro** o que está na caixa e **não** veio da origem; só o que passa disso é troca. A conta: troca = a quantidade entregue (até a caixa) menos a parte da caixa que não veio da origem, nunca abaixo de zero. Com 6 na caixa, 3 deles de A-01, entregar 3 de B-02 **não** é troca (saem os 3 que não vieram de A-01, e a origem continua *"separado de A-01 (3 PC)"*); entregar 4 de B-02 é troca de 1. Quando haverá troca, a janela mostra **"Motivo da troca (opcional)"** com a dica *"Saindo de onde não foi separado — conte o porquê."*; sem troca, o campo não aparece. O motivo não é obrigatório. Com ou sem motivo, a troca fica registrada na requisição: quanto, separado de onde, saiu de onde (ou *"automático"*, com o lote quando a saída foi de um lote só), quem e quando — e aparece no bloco **"Substituições (N)"** do detalhe (10.1). Separação que não disse o lote vale para qualquer lote do endereço: sair do mesmo endereço em outro lote **não** é troca. Escolher "automático" num item com origem da separação conta como troca no que passa da parte sem origem (a conta acima), mesmo que o sistema acabe tirando do mesmo lugar. Sair da própria origem da separação não registra nada. O registro nunca é editado nem apagado — estornos e a exclusão da requisição não o desfazem.
 - **Material com número de série: a entrega diz QUAIS séries saem.** Na janela de entrega, o item com série mostra **"Séries que saem"** — as séries em estoque do material (só as do lote escolhido no **Sai de**, se houver lote), com o endereço como dica — e o contador *"0 de 2"*. O **Confirmar** só libera quando cada item com série tem **exatamente** a quantidade marcada; quando o item tem origem da separação com lote e a entrega não diz de onde sai, as séries de **outro** lote que o da origem valem como a parte da caixa que não veio da origem (sem troca; acima dela, a troca do que passa, como saída automática) — se **toda** a caixa veio da origem, a entrega é recusada com *"Chapa 3mm: a origem da separação não serve mais (as series escolhidas nao sao do lote dela) — entregue escolhendo de onde sai"*; séries de lotes diferentes no mesmo item travam com *"Escolha séries de um lote só."*. As séries marcadas saem do estoque (passam a **Entregue**) junto com o saldo; o lote da saída é o lote delas. O botão de um clique **não** tem onde escolher série: para material com série ele é recusado com *"Chapa 3mm: material com controle de serie: informe 2 serie(s) para 2 unidade(s) — recebidas 0 — entregue escolhendo as series"*. Outras recusas, todas antes de qualquer baixa: *"Chapa 3mm: serie SN-004 nao esta em estoque deste material"*, *"Chapa 3mm: serie repetida na entrega"* (inclusive a mesma série em dois itens), *"Chapa 3mm: escolha series de um lote so"*, *"Chapa 3mm: as series escolhidas nao sao do lote escolhido"* e *"Chapa 3mm: material com controle de serie exige quantidade inteira"*. Se outra entrega levou uma das séries enquanto a janela estava aberta, a recusa do servidor aparece e a lista de séries é recarregada.
+- **Material com Controle por lote: a parte automática sai do lote que vence primeiro.** Num material com **Controle por lote** ligado, num item **sem** número de série, o que sai pela regra automática (sem **Sai de**, ou o que passa da origem da separação) não sai "de lote nenhum": sai dos lotes, um de cada vez, nesta ordem — só os lotes que **podem sair** (situação *Ativo* e não vencido, ou vencido com o vencimento liberado — 4.3), com saldo; a **validade mais próxima** primeiro; lote **sem validade** por último; empate pelo código do lote. É a mesma ordem do seletor de lote da Movimentação (4.4). Cada lote tira o que tem (o que falta passa ao próximo) e vira **uma saída no histórico, com o lote** — a parte acima da reserva e a parte que a reserva segura saem em saídas próprias. Exemplo: entrega automática de 4, com 2 no lote *L2* (vence em 5 dias) e 9 no *L1* (vence em 45): uma saída de 2 do *L2* e uma de 2 do *L1*; o *L2* fica com 0 e o *L1* com 7.
+  - **O que não conta como saldo do lote para o automático:** o que está **em inspeção** naquele lote; e o que **outra requisição em andamento** já separou daquele lote, num endereço escolhido no **Sai de** (a origem da separação dela) e ainda não entregou — para que a entrega dela continue saindo de lá. Quando o lote tem parte separada assim, a saída se divide pelos **endereços** do lote — a posição padrão primeiro, depois a de mais saldo —, cada um com o que sobra nele depois dessa parte, e a saída diz o endereço; o saldo do lote **sem endereço** e o de endereço **bloqueado** não entram (o que eles têm passa ao próximo lote). Exemplo: o lote *L1* tem 4 em *XB-01*, todos separados por outra requisição, e 2 em *XC-01*: a entrega automática de 2 sai de *XC-01*, e a outra requisição entrega os 4 de *XB-01*. A parte separada do **próprio** item, quando esta entrega não sai da origem dele, só conta pelo que fica para a próxima entrega (entregando a caixa toda, não conta).
+  - **O que os lotes que podem sair não cobrem** sai **sem lote**, pela regra automática — e a linha *"Sem lote atribuído"* da tela de Lotes pode ficar negativa (4.5). Lote *Bloqueado*, *Reprovado* ou vencido sem liberação **nunca** é baixado pelo automático, mas o saldo dele conta no disponível do material — por isso a aprovação e a separação aceitam e a entrega **não é recusada**: com 2 no lote *L1* e 3 no *L2* bloqueado, a entrega de 4 tira 2 do *L1* e 2 sem lote, e o *L2* continua com 3.
+  - Os lotes são lidos na hora de cada baixa: dois itens do mesmo material na mesma entrega dividem os lotes na ordem da requisição. Em material que **permite saldo negativo**, a baixa do lote é contada na posição padrão do material (o total do lote fica certo; a posição de onde o material saiu fisicamente não baixa — acerte pela contagem da posição).
+  - Excluir a requisição devolve cada saída ao lote dela (7.6); a devolução citando a saída herda o lote (12.4). Material **sem** Controle por lote, mesmo com saldo em lote, continua saindo sem lote na parte automática; e a entrega de EPI não escolhe lote.
 - **A ordem das baixas.** Conferido tudo (acima), a entrega baixa primeiro, em todos os itens e na ordem da requisição, o que sai de um **endereço** (a origem da separação ou o endereço escolhido); depois o que sai de um **lote sem endereço**; e por último o que sai pela regra **automática** (endereço padrão, depois os de mais saldo). Assim a parte automática de um item nunca esvazia antes o endereço de onde outro item do mesmo material foi separado: com A-01 com 3 e B-02 com 2, um item separado sem origem e outro separado de A-01, 2 cada, a entrega sai inteira — o segundo leva 2 de A-01 e o automático do primeiro leva os 2 de B-02. Dentro de um item, a parte acima da reserva sai antes da parte que a reserva segura.
 - Se ainda assim uma baixa falhar no meio (um erro do banco, por exemplo), o que já saiu fica contado como entregue — e a troca de origem dos itens que já saíram fica registrada (acima).
 
@@ -3194,8 +3206,9 @@ endereço no 'Sai de' ao separar"* quando a janela **não** vai escolher: a dica
 parte separada no automático. A fila não sabe o saldo da hora em que a janela abre: se o endereço perdeu saldo nesse meio, a janela não
 escolhe e diz *"Sugestão da fila: … — não veio escolhida; confira o saldo no 'Sai de' antes de escolher."* Quem troca o **Sai de** para
 *"Qualquer endereço (automático)"* volta à regra de sempre: a entrega baixa pela localização padrão do material, depois a de mais saldo — e,
-em material com lote, a saída automática não escolhe lote (7.5): o lote da prateleira continua com o saldo e o que saiu fica numa linha sem
-lote.
+em material com **Controle por lote**, do lote que vence primeiro entre os que podem sair (7.5), que pode não ser o lote da dica; em material
+com lote mas **sem** o controle ligado, a saída automática não escolhe lote: o lote da prateleira continua com o saldo e o que saiu fica numa
+linha sem lote.
 
 **Quais endereços podem ser sugeridos.** Os endereços em que o material tem saldo, **menos**:
 
@@ -3220,25 +3233,28 @@ receber o mesmo endereço — a fila só passa a mandar a segunda para outro lug
 4. a **ordem de percurso** (abaixo).
 
 A dica é o **primeiro dessa ordem que tem tudo** o que falta separar. Se nenhum tem tudo, a dica é o de **mais** saldo livre, com quanto
-pegar ali, e embaixo: *"Nenhum endereço tem tudo: pegue 10 aqui. Separar o resto de outro endereço depois troca a origem da separação."* A
-dica é sempre **um** endereço por item. A frase fala em "troca a origem", mas o que acontece ao separar o resto de outro endereço numa
-segunda vez é a regra de 10.2: a parte já separada continua saindo do primeiro endereço, e a parte nova sai pela regra automática na entrega.
+pegar ali, e embaixo: *"Nenhum endereço tem tudo: pegue 10 aqui. Se o resto for separado depois de outro endereço, o que sair daqui
+continua saindo daqui na entrega."* A dica é sempre **um** endereço por item. Separar o resto de outro endereço numa segunda vez segue a regra
+de 10.2: a parte já separada continua saindo do primeiro endereço, e a parte nova sai pela regra automática na entrega.
 
 **Item que já tem parte separada.** Se o item já tem material separado (e não entregue) de um endereço escolhido, a dica é **sempre** esse
 mesmo endereço e lote — nunca outro, mesmo que outro tenha tudo, porque o item guarda uma origem só: o que fosse separado do outro endereço
 sairia pela regra automática na entrega, não de lá (10.2). Para contar o que está livre no endereço, a dica desconta só a parte já separada
-dali, não a caixa inteira do item. Quando ele não tem o resto (as frases abaixo também falam em "troca a origem"; vale a regra de 10.2):
+dali, não a caixa inteira do item. Quando ele não tem o resto:
 
-> *"Já separado de A-01: o resto não cabe lá. Separar de outro endereço troca a origem da separação (a entrega passa a sair automática)."*
+> *"Já separado de A-01: o resto não cabe lá. O que já foi separado continua saindo de lá; o resto, separado de outro endereço, sai no
+> automático na entrega."*
 
 Quando ele deixou de poder ser sugerido (ficou bloqueado, inativo, numa área especial, ou o lote foi bloqueado ou venceu):
 
 > *"Já separado de A-01, que não pode mais ser sugerido (endereço bloqueado ou inativo, em área especial ou lote bloqueado/vencido).
-> Confira antes de separar o resto: separar de outro endereço troca a origem da separação (a entrega passa a sair automática)."*
+> Confira antes de separar o resto: na entrega, o que já foi separado sai de lá — se lá não servir mais, a entrega pede para escolher de onde
+> sai."*
 
-Em material **com lote**, as duas frases *"Já separado de …"* trazem o lote (*"Já separado de A-01 — lote L1: …"*) e, no lugar de *"(a
-entrega passa a sair automática)"*, terminam com *"Na entrega, escolha o lote no 'Sai de': a saída automática não escolhe lote."*; a de
-*"Nenhum endereço tem tudo"* ganha a mesma frase no fim.
+Em material **com lote**, as duas frases *"Já separado de …"* trazem o lote (*"Já separado de A-01 — lote L1: …"*) e terminam com uma frase
+sobre o lote; a de *"Nenhum endereço tem tudo"*, quando a dica tem lote, também. Em material com **Controle por lote** ligado: *"Na entrega,
+o resto sai do lote que vence primeiro; para tirar de outro lote, escolha-o no 'Sai de'."* (7.5). Em material com lote e **sem** o controle
+ligado: *"Na entrega, escolha o lote no 'Sai de': a saída automática não escolhe lote."* As mesmas frases saem no PDF da lista de coleta.
 
 **Nada para sugerir.** Item separável sem nenhum endereço que sobre: sem a linha *"Pegar em"*, com *"Sem endereço para sugerir (o saldo está
 sem endereço, em endereço bloqueado ou inativo, em área especial ou em lote bloqueado/vencido)."* O chip continua **Separar**: a separação
@@ -3415,7 +3431,8 @@ O teto é conferido **no mesmo instante em que a devolução é gravada**: duas 
 
 Em material com "Controle por lote":
 
-- **Com entrega citada**, o lote é **herdado da entrega** — o campo aparece em modo leitura, com o rótulo "Lote (herdado da entrega)", sem seletor. Não há o que escolher: o material voltou do lote de onde saiu.
+- **Com entrega citada**, o lote é **herdado da entrega** — o campo aparece em modo leitura, com o rótulo "Lote (herdado da entrega)", sem seletor. Não há o que escolher: o material voltou do lote de onde saiu. Vale também para a parte automática da entrega de requisição, que sai por lote (7.5). Se a saída citada **não** tem lote (o que os lotes que podem sair não cobriam), o seletor aparece e é obrigatório, como na devolução avulsa: *"Material com controle por lote: informe de qual lote é a devolução"*; quem chama pela integração sem informar recebe *"O material ⟨código⟩ exige lote nesta movimentacao (controle por lote ligado)"*.
+- A lista de entregas que a tela oferece para citar mostra as **30** mais recentes do material. Uma entrega de requisição de material com controle de lote pode ter **várias** saídas (uma por lote), e todas contam nas 30. Entrega mais antiga que não aparece: devolva sem citar, escolhendo o lote.
 - **Sem entrega citada** (avulsa), o lote é escolhido no seletor. Sem escolher, a tela barra: *"Material com controle por lote: informe de qual lote é a devolução"*.
 - Um lote informado à mão **ganha** do herdado.
 - Em material **sem** controle de lote, o lote é herdado **só** quando a entrega citada saiu de um lote (escolhido em **"Sai de"**, 7.5) e a devolução vai para **Estoque** ou **Quarentena** — o material volta ao lote de onde saiu. Na devolução para **Retrabalho**, que é uma saída, nada é herdado. Entrega sem lote não tem o que herdar.
@@ -7531,11 +7548,21 @@ No grupo **Estoque**, visíveis para todo perfil com acesso ao módulo:
   almoxarifado, tipo, **Bloqueada** e **Filhas ocupadas**. A regra e as três leituras da nota estão em 3.7.
 - **Saldo por lote** — uma linha por lote com saldo, com **Validade**, **Status do lote**, **Saldo
   atribuído** e **Físico total do material**. O saldo de um lote é o **atribuído** a ele: as saídas
-  que não informam lote (a entrega de requisição, por exemplo) e o ajuste de saldo total não baixam de
-  lote nenhum. Por isso o relatório acrescenta, por material, a linha **"Sem lote atribuído"** =
-  físico − soma dos lotes, que **pode ser negativa**. A conta sempre fecha:
+  que não informam lote (a entrega de EPI, a entrega de requisição de material sem controle de lote) e
+  o ajuste de saldo total não baixam de lote nenhum. Na entrega de requisição de material **com**
+  controle de lote, a parte automática baixa do lote que vence primeiro, e só o que os lotes que podem
+  sair não cobrem sai sem lote (7.5). Por isso o relatório acrescenta, por material, a linha **"Sem lote
+  atribuído"** = físico − soma dos lotes, que **pode ser negativa**. A conta sempre fecha:
   **soma dos lotes + Sem lote atribuído = físico total**. Exemplo: entrada de 100 no lote A, entrega
-  de 30 sem lote → lote A **100**, Sem lote atribuído **−30**, físico **70**.
+  de EPI de 30 (sem lote) → lote A **100**, Sem lote atribuído **−30**, físico **70**. A nota do relatório diz:
+  *"O saldo de cada lote é o ATRIBUÍDO a ele. Saídas que não informam lote (a entrega de EPI, ou a de
+  requisição de material sem controle de lote) e o ajuste de saldo total não baixam de lote nenhum — elas
+  aparecem na linha "Sem lote atribuído", que pode ser negativa. Na entrega de requisição de material com
+  controle de lote, o automático baixa do lote que vence primeiro; o que os lotes que podem sair (não
+  bloqueados, reprovados ou vencidos sem liberação) não cobrem também sai sem lote. Lote + Sem lote
+  atribuído = físico total. Lote negativo aparece (material que permite saldo negativo). Material com
+  controle de lote que nunca teve lote aparece só com a linha "Sem lote atribuído". Materiais inativos
+  ficam fora."*
   Regras de quem aparece: lote com saldo **zero** não aparece; lote **negativo** aparece (material
   que permite saldo negativo); material com controle de lote que **nunca teve lote** aparece só com a
   linha "Sem lote atribuído"; material **inativo** fica fora.

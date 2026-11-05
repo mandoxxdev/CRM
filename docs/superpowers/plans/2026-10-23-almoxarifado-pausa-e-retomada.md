@@ -1,13 +1,18 @@
 # Almoxarifado — pausa de 2026-10-23 e como retomar
 
 > **✅ RETOMADO em 2026-11-05 — este arquivo agora é histórico.** O André retomou o módulo em 05/11 (estimativa
-> `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md`). **Depois: a Etapa 196 fechou** em 05/11 (plano `4c602925`,
+> `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md`). **Depois: a Etapa 197 fechou** em 05/11 (plano `7f099fae`,
+> Fase 2 `b21a81f5`, T0 `ee835811` e `b751b3ab`, T1 `58227edf`/`d8a4f1d9`/`398d1e69`, T2 `e011affe` e `cbb2b66f`, Fase 5 `838bb350`,
+> `1723b78c`, `351ee457`, `6d4dec1d`, `1ed41bb8`, e o commit "Etapa 197: fechamento") — em material com lote, a parte automática da entrega
+> baixa do lote que vence primeiro (C451 e C453 na entrega de material com controle de lote, C462; a B204 revogada só aí). Letra **B** usada
+> até **B1329** (B1320–B1329 pela 197), letra **C** até **C467** (C463–C467 pela 197), letra **A** a partir de **A111** (a 197 não usou).
+> **Próxima:** item 6 da estimativa — a entrega recusada quando outra requisição separou o mesmo material (C449, motor); detalhada no fim de
+> `docs/superpowers/plans/2026-11-05-almoxarifado-etapa197-entrega-automatica-pelo-lote.md`.
+> *(Antes: a **Etapa 196 fechou** em 05/11 (plano `4c602925`,
 > Fase 2 `8a98d548`, T0 `4cf2b6dd`, T1 `aecaadd3`, T2 `83abf7eb`, T3 `425acd91`, vizinho `f4ba735c`, T4 `e3f9b929`, T5 `1eca71f1`, Fase 5
 > `736ccb49` e `4ba2e9b4`, e o commit "Etapa 196: fechamento") — separar em duas vezes: a parte separada primeiro continua saindo de onde foi
-> separada (C453 na parte do endereço). Letra **B** usada até **B1319** (B1313–B1319 pela 196), letra **C** até **C462** (C461 e C462 pela
-> 196), letra **A** a partir de **A111** (a 196 não usou). **Próxima:** item 5 da estimativa — separar em duas vezes, 2ª parte: material com
-> lote (C451/B204, motor); detalhada no fim de
-> `docs/superpowers/plans/2026-11-05-almoxarifado-etapa196-origem-da-separacao-em-duas-vezes.md`.
+> separada (C453 na parte do endereço). Letra **B** usada até **B1319**, letra **C** até **C462**. **Próxima:** item 5 da estimativa — a
+> 197.)*
 > *(Antes: a **Etapa 195 fechou** em 05/11 (plano `f8398b40`, código e testes `650db899`, `bdc2eb74`, Fase 5 `727792a3`, e o commit
 > "Etapa 195: fechamento") — voltar para a aba não desfaz as quantidades digitadas na separação e na entrega (C454, C452). Letra **B** usada
 > até **B1312**, letra **C** até **C460**. **Próxima:** item 4 da estimativa — a 196.)*

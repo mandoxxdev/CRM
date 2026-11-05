@@ -1,5 +1,7 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 197 (2026-11-05, plano `7f099fae`, Fase 2 `b21a81f5`, T0 `ee835811`, T1 `58227edf`/`d8a4f1d9`/`398d1e69`, T2 `e011affe`, Fase 5 `838bb350`, `1723b78c`, `351ee457`, `1ed41bb8`): a entrega de requisição de material com `controle_lote` passa a baixar a parte automática por lote (FEFO, só lote elegível, uma SAIDA por lote — revoga a B204 só nesse fluxo, B1320); a pendência (g) abaixo mudou e a linha da exclusão dela estava errada desde a Etapa 58 (corrigida à vista); as notas da tela de Lotes e do relatório Saldo por lote mudaram** — ver a seção "Etapa 197", no fim. O status não muda (🟢).
+
 > **+ Etapa 194 (2026-11-05, plano `ce606d41`, Fase 2 `e6308090`, T1 `32ff286a`, T2 `e8803937`, T3 `57bdb6b2`, Fase 5 `77102677`): a validade da nota no recebimento (C456, B1296) — o lote existente mantém a validade e a nota avisa (`NOTA_DIVERGENTE`), o lote sem validade é preenchido pela nota (`preencherValidadeSeVazia`, auditoria `VALIDADE_PREENCHIDA`), prévia `avisos_validade_lote` no `GET /recebimentos/:id` e no modal Processar, `avisos_validade` na resposta só quando há aviso; o lote novo nasce com a data normalizada ou sem validade (G1)** — ver a seção "Etapa 194", no fim. O status não muda (🟢).
 
 > **+ Etapa 191 (2026-11-05, Fase 2 `018f8a35`, T1 `4fcf13b4`, T2 `140dbb77`, T3 `3b43a0a1`, T4 `d5f3376a`, Fase 5 `699e87c3` + `c64fb881`): corrigir a validade de um lote que já tem saldo (C455) — `PUT /lotes/:id/validade` com `inspecionar`, justificativa, `validade_vista` (409 `MUDOU`), auditoria `VALIDADE_CORRIGIDA`, sob a trava do material; zera a liberação de vencimento; avisos; o e-mail pendente da data antiga sai da fila; botão "Corrigir validade" na tela de Lotes e Séries só com `pode('inspecionar')`** — ver a seção "Etapa 191", no fim. O status não muda (🟢).
@@ -727,8 +729,8 @@ lote — não existe campo na tela nem parâmetro na chamada:
 
 | Fluxo | Arquivo | Tipo de movimento | O que acontece hoje |
 |---|---|---|---|
-| Entrega de requisição | `requisitionService.entregarRequisicao` | `SAIDA` | baixa sem lote; a linha de saldo debitada é a `(localização resolvida, lote NULL)` |
-| Exclusão administrativa de requisição | `requisitionService.excluirRequisicao` | `ENTRADA` (estorno) | devolve sem lote — não volta para o lote de onde saiu |
+| Entrega de requisição | `requisitionService.entregarRequisicao` | `SAIDA` | ~~baixa sem lote; a linha de saldo debitada é a `(localização resolvida, lote NULL)`~~ — **mudou duas vezes:** desde a **Etapa 58** (B231) a entrega pode escolher o lote no "Sai de" (sai daquele lote); desde a **Etapa 197** (B1320), em material com `controle_lote` e sem série, a parte **automática** sai por lote (FEFO, só lote elegível, uma SAIDA por lote; o que os elegíveis não cobrem, sem lote — B1323). "Baixa sem lote" vale só para a parte automática de material **sem** `controle_lote` |
+| Exclusão administrativa de requisição | `requisitionService.excluirRequisicao` | `ENTRADA` (estorno) | ~~devolve sem lote — não volta para o lote de onde saiu~~ — **isto estava errado desde a Etapa 58** (B232, `requisitionService.excluirSemTrava`): a exclusão devolve **por saída**, com o `lote_id` de cada uma — volta ao lote de onde saiu (e ao endereço, se ainda recebe; a saída automática, ao endereço padrão — D (51)). Só a requisição antiga cujo livro não fecha com o entregue estorna numa entrada sem lote. Corrigido à vista no fechamento da 197 |
 
 **Conferido contra o código em 2026-08-12:** a seção "Lado 2: os fluxos internos que continuam
 ISENTOS" de `loteControleObrigatorio.api.test.js` tem exatamente estes **dois** testes. O
@@ -747,6 +749,10 @@ Etapa 7 — "herdar da saída original na devolução" era exatamente o desenho 
 escolheria o lote que vence primeiro, como o seletor da tela já sugere, ou o operador escolheria na
 tela de separação, que ainda não tem campo de lote. Enquanto isso não existir, deixar a guarda
 ligada nesse caminho seria travar operação — foi exatamente o defeito corrigido em 2026-08-10.
+*(**Feito na Etapa 197** para material com `controle_lote`: a parte automática da entrega escolhe o lote que vence primeiro, na
+ordem de `lotService.listarLotesDoMaterial`, só os elegíveis (B1320–B1324). A **guarda continua desligada** nesse caminho
+(`exigeLote` não é declarado): o que os lotes elegíveis não cobrem sai sem lote, sem recusar a entrega (B1323, C464). A
+separação ganhou campo de lote (Etapa 59 — o "Sai de"), então a parte "o operador escolheria na tela de separação" também existe.)*
 
 **Não confundir com a rota v1**: o modal rápido da tela de Materiais também não carrega lote no
 contrato, mas **continua exigindo** — ali o operador tem uma porta (a tela de Movimentações, que
@@ -1141,3 +1147,23 @@ acima diz que o recebimento preencher o lote existente ficou "fora" — **feito 
 Testes: `validadeLoteRecebimento.api.test.js` (28), `validadeLoteRecebimentoIntegracao.api.test.js` (7),
 `validadeLoteEntradaManual.api.test.js` (26, o `[B1277 → RN-194.04]` mudado),
 `client/src/components/almoxarifado/RecebimentosValidadeLote.test.js` (4). Continua 🟢.
+
+## Etapa 197 — a entrega de material com controle de lote baixa a parte automática do lote certo (2026-11-05)
+
+Plano: `docs/superpowers/plans/2026-11-05-almoxarifado-etapa197-entrega-automatica-pelo-lote.md`. O bloco detalhado (checklist com hashes)
+está na spec 05 (`05-separacao-picking/README.md`, seção "Etapa 197") — a mudança mora na entrega de requisição. O que toca esta feature:
+
+- [x] **FEFO na entrega da requisição** — o "conteúdo natural da etapa seguinte" da pendência (g): em material com `controle_lote` e sem
+  série, a parte automática sai por lote, na ordem e com a régua `elegivel` de `lotService.listarLotesDoMaterial` (a mesma do seletor da
+  Movimentação), uma SAIDA por lote — `ee835811` (B1320–B1324). O saldo de cada lote desconta o que está em inspeção nele e a parte guardada
+  de outras caixas (no par lote + endereço quando há guarda, `838bb350`, B1329; a do próprio item só pelo que fica, `1ed41bb8`).
+- [x] **A tela de Lotes e o relatório Saldo por lote** — as notas deixam de dar a entrega de requisição como saída que não baixa lote e
+  dizem que o que os lotes elegíveis não cobrem sai sem lote — `398d1e69`, `351ee457` (testes: `LotesAlmoxarifado.test.js` RN-197.13,
+  `relatoriosSaldos.api.test.js` (2g)). `lotesResumo.api.test.js` (10) passou de `{70, 100, -30}` para `{70, 70, 0}` (era o resíduo da B204).
+- [ ] **Fora (declarado):** a guarda `exigeLote` continua desligada na entrega (o resto sem lote, C464); material sem `controle_lote`, EPI
+  e internos sem lote (C465); bloqueio e terceiros não têm lote — o automático pode tirar a peça que voltou para a quarentena (C466); as
+  linhas sem lote negativas antigas ficam (B1327).
+
+**Correção à vista:** a tabela da pendência (g) dizia que a exclusão da requisição "devolve sem lote — não volta para o lote de onde saiu" —
+**estava errada desde a Etapa 58** (B232: a exclusão devolve por saída, com o lote dela). A linha da entrega ("baixa sem lote") passou a
+valer só para material sem `controle_lote`. As duas ficaram riscadas, com o certo ao lado. Continua 🟢.
