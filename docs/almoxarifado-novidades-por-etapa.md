@@ -13570,6 +13570,18 @@ as séries mistas entre o pedaço da origem e o automático (mexe na ordem das s
 só; nenhum pedido de uso); tratar sempre como outro par (mudaria o 400 da caixa toda da origem, que é de antes). **Reversível:** uma
 condição na entrega, sem dado. `736ccb49`.
 
+**B1329 (NOVA, da Etapa 197, Fase 5; decisão do agente) — na entrega automática pelo lote, a parte guardada de outra caixa é descontada
+no endereço, não só no lote.** (As B1320–B1328 da Etapa 197 entram aqui no fechamento dela.) O desconto da parte guardada (a origem que
+outra requisição separou) era pelo total do lote, mas o motor tira do lote começando pela localização padrão e depois pela maior linha —
+justo a guardada: L1 com 4 guardados em um endereço e 2 em outro, a entrega automática de 2 de outra requisição tirava do endereço
+guardado e a requisição que separou dali tomava 400 ("a origem da separação não serve mais"). Agora, quando o lote tem parte guardada, cada
+endereço do lote entra com o que sobra nele (saldo menos a parte guardada **naquele** endereço; o que está em inspeção desconta no lote), na
+ordem do motor (padrão primeiro, depois o maior), e cada pedaço sai **daquele endereço** (origem estrita). Ficam de fora o saldo do lote sem
+endereço e o de endereço bloqueado (o motor recusaria a origem bloqueada): o que eles têm passa ao próximo lote ou ao resto sem lote. Lote
+sem parte guardada sai como antes (uma saída pelo lote, sem endereço no livro). **Descartado:** fatiar sempre por endereço (mudaria o livro
+e a exclusão de toda entrega automática, e saldo sem endereço não tem origem estrita); uma opção nova no motor para drenar uma linha exata
+(a saída com endereço e lote já faz isso). **Reversível:** só a entrega, sem dado. `838bb350`.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
