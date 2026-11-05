@@ -331,7 +331,27 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(await origem(ids[0]), { o: A.id, l: null, q: 1, caixa: 4 });
   });
 
-  //@@T3@@
+  // ── T3 — os leitores da fila (RN-196.09) ──────────────────────────────────────────────────────────────────────────────────────────
+  await test('[RN-196.09] fila e sugestao: outra requisicao ve A com 3 comprometidos (a parte de R1), nao 6 (a caixa) -> "Pegar em" A com 2 livres', async () => {
+    const A = await loc('FA'); const C = await loc('FC'); const m = await material();
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET localizacao_padrao_id = ? WHERE id = ?', [A.id, m.id]);
+    await entrar(m.id, A.id, 5); await entrar(m.id, C.id, 10);
+    const r1 = await req([[m.id, 6]]);
+    await ok(separar(r1.id, [{ item_id: r1.ids[0], quantidade_separada: 3, localizacao_origem_id: A.id }]));
+    await ok(separar(r1.id, [{ item_id: r1.ids[0], quantidade_separada: 3 }]));
+    const r2 = await req([[m.id, 2]]);
+    const sug = await request(app).get(`/api/almoxarifado/requisicoes/${r2.id}/sugestao-coleta`);
+    assert.strictEqual(sug.status, 200, JSON.stringify(sug.body));
+    const p = sug.body.itens[0].pegar_em;
+    assert.ok(p, JSON.stringify(sug.body));
+    assert.deepStrictEqual([p.localizacao_id, p.quantidade_no_endereco, p.quantidade_sugerida, p.cobre], [A.id, 2, 2, true]);
+    const fila = await request(app).get('/api/almoxarifado/fila-separacao');
+    assert.strictEqual(fila.status, 200, JSON.stringify(fila.body));
+    const linha = fila.body.find((x) => x.id === r2.id).itens[0];
+    assert.deepStrictEqual([linha.pegar_em.localizacao_id, linha.pegar_em.quantidade_no_endereco], [A.id, 2]);
+    // a propria R1 (origem A, parte 3, 0 a separar) — sem dica; o separado_pendente pela parte so serve ao "> 0" (NO-OP declarado)
+  });
+
 
   await close();
   terminou = true;

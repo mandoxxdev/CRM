@@ -338,8 +338,10 @@ async function lerDadosDaColeta(db, itens) {
     FROM estoque_saldo_almoxarifado s LEFT JOIN lotes_almoxarifado lt ON lt.id = s.lote_id
     WHERE s.material_id IN (${mm}) AND s.localizacao_id IS NOT NULL AND s.quantidade > 0`, mats);
   const statusCaixa = STATUS_COM_CAIXA.map(() => '?').join(',');
+  // Etapa 196 (RN-196.09): o comprometido do par planejado e a PARTE da origem (`PARTE_ORIGEM_SQL`), nao a caixa inteira — o resto
+  // da caixa saiu do automatico ou de outro par. Sem isto a dica via o par com a caixa toda e mandava para outro endereco.
   const planejados = await dbAll(db, `SELECT ir.material_id, ir.origem_separacao_id, ir.lote_separacao_id,
-      SUM(MAX(COALESCE(ir.quantidade_separada, 0) - COALESCE(ir.quantidade_entregue, ir.quantidade_atendida, 0), 0)) as q
+      SUM(${PARTE_ORIGEM_SQL}) as q
     FROM itens_requisicao_almoxarifado ir JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
     WHERE ir.material_id IN (${mm}) AND ir.origem_separacao_id IS NOT NULL
       AND COALESCE(r.ativo, 1) = 1 AND r.status IN (${statusCaixa})
@@ -1056,7 +1058,8 @@ async function listarFilaSeparacao(db, user, opcoes = {}) {
       itens: doReq.map((i) => ({
         item_id: i.id, material_id: i.material_id, material_codigo: i.material_codigo, separavel: divididos.get(i.id) || 0,
         origem_separacao_id: i.origem_separacao_id, lote_separacao_id: i.lote_separacao_id,
-        separado_pendente: Math.max(0, getSeparado(i) - getEntregue(i)),
+        // Etapa 196: a parte da origem (so serve ao "> 0" de sugestaoDeColeta; com origem, parte > 0 sse caixa > 0 — NO-OP declarado).
+        separado_pendente: parteDaOrigem(i),
       })),
       ...dadosColeta,
     });
