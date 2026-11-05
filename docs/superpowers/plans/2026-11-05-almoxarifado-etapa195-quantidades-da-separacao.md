@@ -90,4 +90,26 @@ Rodar também as suítes `RequisicoesSeparacao*`, `RequisicoesEntrega*`, `Requis
 
 ## Execução
 
-(preenchido ao executar)
+- [x] Plano — `f8398b40`.
+- [x] Código + teste — `650db899`: `manterDigitado` (helper puro), `janelasAbertasRef` (janelas abertas **e** os itens do detalhe na
+  tela, lido no render), `aplicarDetalhe` com a guarda; C452 removido (`handleCompletarEntrega` = `abrirModalEntrega()`, sem
+  `entregaAposSeparar`). Teste novo `client/src/components/almoxarifado/RequisicoesQuantidadesNoRecarregar.test.js` (7 cenários).
+- **Vermelhos medidos (antes do código):** 5 de 6 caíram no valor do campo — separação `3→5`, `2→5`, `3→5`, `4→5`; entrega `1→2`
+  (o C454 da entrega, que dizia "não medido", agora está medido). O de janela fechada (RN-195.05) passava antes, como devia.
+- **Divergência do plano, achada pela suíte:** a primeira versão mantinha o digitado de todo item que continuava na janela; o J2 da 189
+  ("item que saiu da janela e voltou na mesma abertura → decidido de novo") caiu: o item voltava com o 0 de quando saiu e a frase ganhava
+  o "Entregue esta parte…". Corrigido: só fica o digitado de item que **estava** na janela no detalhe da tela (RN-195.03 ganhou o
+  cenário "saiu e voltou", o 7º).
+- **Controles positivos** (sabotagem por Edit, restauro por Edit inverso, md5 `7f07902fe693d82b893c74cb83394140` igual ao
+  pós-implementação):
+  1. guarda tirada nas duas (`false && …`) → caem 6 (todos menos RN-195.05);
+  2. guarda só na separação → cai `[RN-195.04] entrega aberta, digita 1…`;
+  3. sem a regra "estava na janela" → caem `[RN-195.03] item que saiu da janela e voltou…` e o `[Fase 5, J2] item que saiu da janela e
+     voltou…` da 189;
+  4. mantendo o digitado de item fora da janela → cai `[RN-195.03] outra pessoa separa o item 2 no meio…`;
+  5. guarda sem olhar se a janela está aberta → cai `[RN-195.05] janela fechada: "Aprovar e Separar"…`.
+  O `mesmo` (mesmo id) não tem controle: pela tela a janela cobre a lista, então não há troca de requisição com janela aberta — a
+  condição fica por segurança (NO-OP declarado).
+- **Placar:** `src/components/almoxarifado/Requisicoes` 17 suítes / 327 testes verdes; tela inteira 211 suítes / 2893 testes verdes;
+  `CI=true npx react-scripts build` sem warning.
+- [ ] Fechamento de documentação (novidades B1309–B1312, C454/C452, guia, manual, specs) — fica para depois da revisão.
