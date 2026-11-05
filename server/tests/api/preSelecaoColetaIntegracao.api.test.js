@@ -218,21 +218,25 @@ process.on('exit', (code) => {
     return { m, ...r };
   };
 
-  await test('[T4 rota, I1 da Fase 2] duas rodadas sem entregar -> 1 troca SEPARACAO automatica e a linha sem lote -6 (o custo da B1262)', async () => {
+  // Etapa 196 (B1314, RN-196.03/06): reescrito. Era "1 troca SEPARACAO automatica de 3 e a linha sem lote -6" — a 2a rodada apagava
+  // a origem e os 6 saiam no automatico. Agora a origem XB-01/L1 fica com a parte 3, nao ha troca, e a entrega de um clique tira 3 de
+  // XB-01/L1 (estrito) e so os 3 da parte automatica pela linha sem lote (-3) — esse resto e o item 5 (C451/B204), nao esta etapa.
+  await test('[T4 rota, I1 da Fase 2; Etapa 196] duas rodadas sem entregar -> 0 trocas, XB-01/L1 sai com a parte 3 e a linha sem lote fica -3 (o resto e o item 5, C451/B204)', async () => {
     const { m, R, ids } = await duasRodadas();
     await entrar(m, P01.id, 3, 'L2');
     const s = (await sugestao(R)).itens[0];
     assert.deepStrictEqual([s.pegar_em, s.pegar_em_aviso], [null, 'PLANEJADA_NAO_COBRE']);
-    // a janela (65) abre em automatico com o aviso de troca; confirmar = separar sem chave
+    // a janela abre em automatico (a planejada nao cobre); confirmar = separar sem chave
     const s2 = await separar(R, [{ item_id: ids[0], quantidade_separada: 3 }]);
     assert.strictEqual(s2.status, 200, JSON.stringify(s2.body));
-    const t = await trocas(R);
-    assert.deepStrictEqual(t.map((x) => [x.momento, Number(x.quantidade), Number(x.automatica)]), [['SEPARACAO', 3, 1]]);
+    assert.deepStrictEqual(await trocas(R), []);
+    assert.deepStrictEqual(await planejada(ids[0]), { loc: 'XB-01', lote: 'L1' });
     const en = await entregar(R, [{ item_id: ids[0], quantidade_atendida: 6 }]);
     assert.strictEqual(en.status, 200, JSON.stringify(en.body));
-    assert.strictEqual(await saldoDe(m, 'XB-01', 'L1'), 3);
+    assert.strictEqual(await saldoDe(m, 'XB-01', 'L1'), 0);
     assert.strictEqual(await saldoDe(m, 'XP-01', 'L2'), 3);
-    assert.deepStrictEqual(await semLoteNaoZero(m), [{ loc: 'XP-01', lote: null, quantidade: -6 }]);
+    assert.deepStrictEqual(await semLoteNaoZero(m), [{ loc: 'XP-01', lote: null, quantidade: -3 }]);
+    assert.deepStrictEqual(await trocas(R), []);
   });
 
   await test('[T4 rota, I1 da Fase 2] entregando entre as rodadas -> 0 trocas e nenhuma linha sem lote', async () => {

@@ -1804,6 +1804,9 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     }
   };
   const substituicoes = new Map(); // Etapa 63: item.id -> substituicao da origem separada
+  // Etapa 196 (RN-196.07): item com origem guardada -> se esta entrega sai DELA (a parte cai pelo que saiu) ou de outro par
+  // (consome primeiro a parte sem origem; a parte so e limitada a caixa que sobra). Lido no finally.
+  const origemGuardada = new Map();
   for (const item of itens) {
     const entrada = itensAtendidos?.find((ia) => Number(ia.item_id) === Number(item.id));
     const qty = entrada ? num(entrada.quantidade_atendida) : 0;
@@ -1814,16 +1817,19 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     const semEscolha = !origemId && !loteId && (lido === undefined || lido === null || lido === '');
     let planejada = false;
     const pendenteSep = Math.max(0, getSeparado(item) - getEntregue(item));
+    // Etapa 196 (RN-196.06/10): a planejada vale ate a PARTE dela (`parteDaOrigem`; origem antiga NULL = a caixa inteira), nao
+    // ate a caixa — o resto da caixa nao saiu daquele par (rodada automatica ou de outro par) e sai no automatico.
+    const parte = Math.min(parteDaOrigem(item), pendenteSep);
     // Etapa 63 (Fase 2, critico): a planejada vale para o separado PENDENTE mesmo quando a entrega
     // passa dele — antes, acima do pendente TUDO saia automatico, inclusive o que estava na caixa
     // tirado de A (o livro dizia "saiu de B"). A baixa se divide: o pendente sai da planejada, o
     // excedente (nunca separado) automatico.
     let qtdComOrigem = qty;
-    if (semEscolha && entrada.origem_automatica !== true && item.origem_separacao_id && pendenteSep > 1e-9) {
+    if (semEscolha && entrada.origem_automatica !== true && item.origem_separacao_id && parte > 1e-9) {
       origemId = Number(item.origem_separacao_id);
       loteId = item.lote_separacao_id ? Number(item.lote_separacao_id) : null;
       planejada = true;
-      qtdComOrigem = Math.min(qty, pendenteSep);
+      qtdComOrigem = Math.min(qty, parte);
     }
     // Etapa 61: o lote das series escolhidas vale como lote da saida (e tem de bater com o escolhido).
     const infoSeries = seriesPorItem.get(item.id);
@@ -1841,19 +1847,26 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     // Etapa 63 (RN-01): SUBSTITUICAO — o item tinha separado pendente com origem planejada e a entrega
     // nao sai dela (origem no payload que difere, ou automatico pedido). Planejada sem lote = qualquer
     // lote: so o endereco conta. Comparado DEPOIS do lote derivado das series. So registro (aditivo).
-    if (item.origem_separacao_id && pendenteSep > 1e-9 && !planejada) {
+    let saiDaOrigem = planejada; // Etapa 196 (RN-196.07): a entrega tira da origem guardada (planejada ou o mesmo par escolhido)
+    if (item.origem_separacao_id && parte > 1e-9 && !planejada) {
       const planOrigem = Number(item.origem_separacao_id);
       const planLote = item.lote_separacao_id ? Number(item.lote_separacao_id) : null;
       const automatica = entrada.origem_automatica === true && !origemId;
       const outroPar = automatica || Number(origemId || 0) !== planOrigem || (planLote !== null && Number(loteId || 0) !== planLote);
-      if (outroPar) {
+      // Etapa 196 (RN-196.07, Fase 2 item 1): a entrega de outro par consome PRIMEIRO a parte sem origem da caixa — a troca e so o
+      // que passa dela (`min(qty, caixa) - (caixa - parte)`), e sem linha quando da 0 (as da origem continuam na caixa). Antes
+      // registrava `min(qty, caixa)`: entregar 3 de B com 3 de A na caixa gravava uma troca de 3 que nao aconteceu.
+      const troca = Q.qtd(Math.max(0, Math.min(qty, pendenteSep) - (pendenteSep - parte)));
+      if (!outroPar) saiDaOrigem = true;
+      if (outroPar && troca > 1e-9) {
         const mot = typeof entrada.motivo_substituicao === 'string' ? entrada.motivo_substituicao.trim().slice(0, 500) : '';
         substituicoes.set(item.id, {
           planOrigem, planLote, saiuOrigem: origemId || null, saiuLote: loteId || null, automatica,
-          quantidade: Math.min(qty, pendenteSep), motivo: mot || null,
+          quantidade: troca, motivo: mot || null,
         });
       }
     }
+    if (item.origem_separacao_id) origemGuardada.set(item.id, { saiDaOrigem, caixaAntes: pendenteSep });
     if (!origemId && !loteId && semEscolha && !loteSeries) continue;
     // Etapa 136 (RN-03): o "so lote" (lote sem endereco) e conferido DEPOIS de todos os estritos — ele sai na passada 1, depois deles.
     if (!origemId && loteId) { soLotePendentes.push({ item, loteId, lido, qtdComOrigem }); continue; }
@@ -2031,6 +2044,7 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     }
     planos.push({
       item, qtyEntregar, pedacos, movimentosDoItem: [], entregueAcumulado: getEntregue(item),
+      baixadoComOrigem: 0, // Etapa 196 (Fase 2 item 3): o que SAIU de fato pelos pedacos com origem (decrementa a parte no finally)
       // Etapa 61 (RN-02): as series se dividem entre as baixas, em ordem (a 1a baixa leva as primeiras).
       seriesRestantes: [...(seriesPorItem.get(item.id)?.ids || [])],
     });
@@ -2093,6 +2107,7 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
               requisicaoDaEntrega: requisicaoId,
             });
             plano.movimentosDoItem.push(mov.id);
+            if (baixa.comOrigem) plano.baixadoComOrigem = Q.qtd(plano.baixadoComOrigem + baixa.quantidade);
           } catch (e) {
             const err = new Error(`${item.material_nome}: ${e.message}`);
             err.status = e.status;
@@ -2139,9 +2154,23 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
       }
       // Etapa 59 (RN-04): entregue todo o separado, a origem planejada nao vale mais. Etapa 136: no finally, para todo item que teve
       // baixa (a passada de outro item pode falhar depois deste ter saido inteiro).
-      if (item.origem_separacao_id && Math.max(getSeparado(item), plano.entregueAcumulado) - plano.entregueAcumulado <= 1e-9) {
+      // Etapa 196 (RN-196.07, Fase 2 itens 1 e 3): a parte cai pelo que SAIU dela (soma dos pedacos com origem que geraram
+      // movimento — nao `qtdComOrigem`, que com falha no meio derrubaria a parte mais do que saiu); a entrega de outro par so a
+      // limita a caixa que sobra (consumiu primeiro a parte sem origem). Relativo, no banco (o SET le a linha ja com o entregue
+      // desta entrega). Parte ou caixa zerada: origem, lote e parte zeram juntos.
+      if (item.origem_separacao_id) {
+        const og = origemGuardada.get(item.id);
+        const saiuDaOrigem = og && og.saiDaOrigem ? plano.baixadoComOrigem : 0;
+        const caixaAntes = og ? og.caixaAntes : Math.max(0, getSeparado(item) - getEntregue(item));
+        const caixaSql = 'MAX(COALESCE(quantidade_separada, 0) - COALESCE(quantidade_entregue, quantidade_atendida, 0), 0)';
         // eslint-disable-next-line no-await-in-loop
-        await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET origem_separacao_id = NULL, lote_separacao_id = NULL WHERE id = ?', [item.id]);
+        await dbRun(db, `UPDATE itens_requisicao_almoxarifado SET quantidade_origem_separacao =
+            ${Q.qtdSql(`MAX(0, MIN(COALESCE(quantidade_origem_separacao, ?) - ?, ${caixaSql}))`)}
+          WHERE id = ? AND origem_separacao_id IS NOT NULL`, [caixaAntes, saiuDaOrigem, item.id]);
+        // eslint-disable-next-line no-await-in-loop
+        await dbRun(db, `UPDATE itens_requisicao_almoxarifado SET origem_separacao_id = NULL, lote_separacao_id = NULL,
+            quantidade_origem_separacao = NULL
+          WHERE id = ? AND (quantidade_origem_separacao <= ${Q.QTD_FOLGA} OR ${caixaSql} <= ${Q.QTD_FOLGA})`, [item.id]);
       }
     }
   }
@@ -2520,9 +2549,16 @@ async function devolverSemTrava(db, requisicaoId, dados, user) {
   }
 
   // (5) A origem/lote planejados zeram so quando a CAIXA do item zera (Fase 0, P7) — com resto, ele continua la.
+  // Etapa 196 (RN-196.08, B1315): a devolucao tira PRIMEIRO a parte sem origem — a parte so e limitada a caixa que sobra
+  // (`MIN(parte, caixa)`); origem antiga NULL continua NULL (vale a caixa, RN-196.10). Caixa zerada: origem, lote e parte zeram.
   for (const e of escritos) {
     // eslint-disable-next-line no-await-in-loop
-    await dbRun(db, `UPDATE itens_requisicao_almoxarifado SET origem_separacao_id = NULL, lote_separacao_id = NULL
+    await dbRun(db, `UPDATE itens_requisicao_almoxarifado SET quantidade_origem_separacao = ${Q.qtdSql(`MAX(0, MIN(quantidade_origem_separacao,
+        COALESCE(quantidade_separada, 0) - COALESCE(quantidade_entregue, quantidade_atendida, 0)))`)}
+      WHERE id = ? AND quantidade_origem_separacao IS NOT NULL`, [e.item.id]);
+    // eslint-disable-next-line no-await-in-loop
+    await dbRun(db, `UPDATE itens_requisicao_almoxarifado SET origem_separacao_id = NULL, lote_separacao_id = NULL,
+        quantidade_origem_separacao = NULL
       WHERE id = ? AND COALESCE(quantidade_separada, 0) - COALESCE(quantidade_entregue, quantidade_atendida, 0) <= ${Q.QTD_FOLGA}`,
     [e.item.id]);
   }
