@@ -399,7 +399,9 @@ const MSG = {
     assert.strictEqual(depois.vencimento_liberado_motivo, null);
   });
 
-  await test('[B1277] recebimento intacto: lote nascido sem validade pela Entrada continua sem depois da nota com validade', async () => {
+  // Etapa 194 (RN-194.04): este cenario MUDOU DE PROPOSITO — ate a 194 ele fixava o recebimento descartando a validade da nota
+  // (B1277, C456); agora a nota preenche o lote sem validade, com a mesma regra da Entrada manual.
+  await test('[B1277 → RN-194.04] o recebimento preenche o lote nascido sem validade pela Entrada', async () => {
     const m = await material();
     await loteComSaldo(m, 'L-NF', 2);
     const rec = await dbRun(db, `INSERT INTO recebimentos_material_almoxarifado
@@ -408,9 +410,10 @@ const MSG = {
     await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado
       (recebimento_id, material_id, quantidade_esperada, quantidade_recebida, lote, data_validade_lote) VALUES (?,?,?,?,?,?)`,
     [rec.lastID, m, 3, 3, 'L-NF', '2030-06-30']);
-    await require('../../services/almoxarifado/receiptService').processarNota(db, ADMIN, rec.lastID, {});
+    const r = await require('../../services/almoxarifado/receiptService').processarNota(db, ADMIN, rec.lastID, {});
     assert.strictEqual(await fisico(m), 5, 'premissa: a nota entrou');
-    assert.strictEqual((await lote(m, 'L-NF')).data_validade, null, 'o recebimento mudou de comportamento (B1277 — e a 191)');
+    assert.strictEqual((await lote(m, 'L-NF')).data_validade, '2030-06-30', 'a nota nao preencheu o lote sem validade (RN-194.04, Etapa 194)');
+    assert.deepStrictEqual(r.avisos_validade, [MSG.AVISO_PREENCHIDA('L-NF', '2030-06-30')], 'o aviso do preenchimento (Etapa 194)');
   });
 
   // ── Fix-round da Fase 5 ─────────────────────────────────────────────────────────────────────────────────────────────────

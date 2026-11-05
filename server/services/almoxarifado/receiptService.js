@@ -1251,14 +1251,9 @@ async function avancarWorkflow(db, user, recebimentoId, acao, opcoes = {}) {
  * reducao ninguem le depois da entrada: continuam aceitos (B839). Ausente (`undefined`/`null`) nao e mudanca: o COALESCE mantem.
  */
 const textoDoItem = (v) => (v === undefined || v === null ? '' : String(v).trim());
-function dataDoItem(v) {
-  const t = textoDoItem(v);
-  // Fase 5 (r1 M2): o texto INTEIRO tem de ser a data (a hora, ISO ou com espaco, e opcional) — '2027-01-31lixo' nao e eco.
-  let m = /^(\d{4}-\d{2}-\d{2})(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/.exec(t);
-  if (m) return m[1];
-  m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(t);
-  return m ? `${m[3]}-${m[2]}-${m[1]}` : t;
-}
+// Fase 5 (r1 M2): o texto INTEIRO tem de ser a data (a hora, ISO ou com espaco, e opcional) — '2027-01-31lixo' nao e eco.
+// Etapa 194 (Fase 2, achado 2): a funcao mudou para `lotService.dataDoTextoDoItem` — a regua da validade da nota usa a mesma.
+const dataDoItem = (v) => lotService.dataDoTextoDoItem(v);
 /** As series como CONJUNTO: lista, texto JSON de lista ou texto uma por linha; aparadas, sem vazias, ordenadas. */
 function seriesDoItem(v) {
   let lista = null;
@@ -1623,7 +1618,8 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id,
     FROM recebimentos_material_itens_almoxarifado ri
     JOIN materiais_almoxarifado m ON ri.material_id = m.id
     LEFT JOIN clientes cli ON m.proprietario_cliente_id = cli.id
-    WHERE ri.recebimento_id = ?`, [recebimentoId]);
+    WHERE ri.recebimento_id = ?
+    ORDER BY ri.id`, [recebimentoId]); // Etapa 194 (Fase 2, achado 7): a ordem do laco e definida — "a 1a linha vence" e a previa a simulam
 
   // ── 1. Pre-checagem: nada se move enquanto houver item invalido ──
   // Etapa 54 (RN-01/RN-02): o destino INFORMADO e um so para a nota — checado uma vez (Fase 5: dentro
@@ -1720,6 +1716,7 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id,
   // `osDoRecebimento` (a do pedido, ou a propria da nota sem pedido) — ate a 176 era so a do pedido (`osIdDaNota`, acima).
 
   // ── 2. Entrada item a item, cada um reclamado antes de mover ──
+  const avisosValidade = []; // Etapa 194 (RN-194.07): na ordem do laco; a resposta so os leva quando ha algum
   for (const item of itens) {
     // Etapa 5: a inspecao deixou de ser PRE-REQUISITO da entrada e passou a ser passo posterior.
     // O material esta fisicamente no galpao desde o descarregamento — barrar a entrada fazia o
@@ -1739,6 +1736,9 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id,
       if (!claim) continue; // este item ja entrou — reprocessar nao credita de novo
 
       let entrouFisicamente = false;
+      // Etapa 194 (RN-194.01): o que a validade da nota faz com o lote — decidido contra o lote lido aqui, sob a trava da nota
+      let decisaoValidade = null; // sem lote: nada a decidir
+      let loteDoItem = null;
       try {
         // Etapa 6: o lote nasce aqui, herdando o que a NF ja sabe. Ate esta etapa, `controle_certificado`
         // era selecionado nesta query (linha do SELECT acima) e NUNCA usado — quem auditasse por grep
@@ -1772,6 +1772,8 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id,
             status_motivo: semCertificado ? 'Certificado do fornecedor nao anexado' : null,
           });
           loteId = lote.id;
+          loteDoItem = lote;
+          decisaoValidade = lotService.avaliarValidadeDaNota(lote, item.data_validade_lote);
           await dbRun(db, 'UPDATE recebimentos_material_itens_almoxarifado SET lote_id = ? WHERE id = ?',
             [loteId, item.id]);
         }
@@ -1824,6 +1826,12 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id,
         // `exigeSerie`: o recebimento e um caminho onde o operador tem como informar as series.
         }, { exigeLote: true, exigeSerie: true });
         entrouFisicamente = true;
+        // Etapa 194 (RN-194.04/05/06; Fase 2, achado 8): logo DEPOIS da entrada fisica e ANTES dos rastros e da QUARENTENA —
+        // recusa do motor nao preenche (B1274), e um erro depois dela nao deixa o lote sem a data. Nao-fatal por dentro.
+        if (decisaoValidade && decisaoValidade.acao !== 'NADA') {
+          avisosValidade.push(...await avisosDaValidadeNaEntrada(db, user, decisaoValidade, loteDoItem,
+            movEntrada && movEntrada.id != null ? movEntrada.id : null));
+        }
         // Etapa 71 (D4/B332): QUAL movimentacao este item gerou — o estorno dela (T2) desconta a linha
         // do pedido DESTE item, e o par (recebimento, material) e ambiguo com dois itens do mesmo
         // material. Rastro, como o `localizacao_entrada_id` abaixo: falhar aqui nao desfaz a entrada.
@@ -1961,6 +1969,92 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id,
     console.warn('[recebimento] status automatico do pedido de compra falhou '
       + `(recebimento ${recebimentoId}): ${eStatus.message}`);
   }
+  return { avisosValidade };
+}
+
+/**
+ * Etapa 194 (RN-194.04/05/06, Fase 2 achados 3 e 4) — os avisos da validade da nota de UM item que acabou de entrar, e o
+ * preenchimento do lote sem validade. Roda DENTRO de `comSecaoDaNota` (o material do lote esta em `materiaisDaNota`, ja travado):
+ * nao pega trava — `naTravaDoMaterial` passaria direto, mas `comLockDoMaterial` direto prenderia a si mesmo (RN-194.09). A entrada
+ * ja valeu: nada aqui lanca (molde I-1 da 190). O preencher vai pelo OBJETO do modulo (o teste o substitui).
+ */
+async function avisosDaValidadeNaEntrada(db, user, decisao, lote, movimentoId) {
+  const M = lotService.MSG_VALIDADE;
+  const codigo = lote.codigo;
+  if (decisao.acao === 'DIVERGENTE') return [M.NOTA_DIVERGENTE(codigo, decisao.loteISO, decisao.notaISO)];
+  if (decisao.acao === 'INVALIDA') return [M.NOTA_INVALIDA(codigo, decisao.valor)];
+  if (decisao.acao === 'LEGADO') return [M.AVISO_FALHA(codigo, decisao.data)]; // a guarda do preencher e `IS NULL`: nem tenta
+  if (decisao.acao !== 'PREENCHER') return [];
+  let r;
+  try {
+    r = await lotService.preencherValidadeSeVazia(db, user, lote.id, decisao.data, { movimentoId });
+  } catch (e) {
+    console.warn(`[recebimento] preencher a validade do lote ${lote.id} falhou: ${e.message}`);
+    return [M.AVISO_FALHA(codigo, decisao.data)];
+  }
+  if (!r || !r.preenchida) {
+    console.warn(`[recebimento] a validade do lote ${lote.id} nao foi preenchida (gravada: ${r ? r.atual : '?'})`);
+    return [M.AVISO_FALHA(codigo, decisao.data)];
+  }
+  const avisos = [M.AVISO_PREENCHIDA(codigo, decisao.data)];
+  if (lotService.isVencido({ data_validade: decisao.data })) {
+    avisos.push(M.AVISO_VENCIDO(codigo, decisao.data));
+    try {
+      const n = await lotService.contarSeparadoPendenteDoLote(db, lote.id);
+      if (n > 0) avisos.push(M.AVISO_SEPARACAO(codigo, n));
+    } catch (e) {
+      console.warn(`[recebimento] contar a separacao pendente do lote ${lote.id} falhou: ${e.message}`);
+    }
+  }
+  return avisos;
+}
+
+/**
+ * Etapa 194 (RN-194.02/03, Fase 2 achado 7) — a previa da validade por item, para o `GET /recebimentos/:id`. Leitura sem trava (so
+ * informa; a decisao e refeita sob a trava ao processar). Percorre os itens NA ORDEM DO LACO (`ORDER BY ri.id`) com um mapa local
+ * lote -> validade efetiva: o lote novo nasce com a data da 1a linha, o PREENCHER atualiza o mapa — a previa diz o que o processar
+ * vai dizer. So itens que vao entrar (`quantidadeDoItem > 0`, sem `entrada_estoque_em`) e com lote. Devolve uma lista por item.
+ */
+async function previaDaValidadeDosItens(db, itens) {
+  const M = lotService.MSG_VALIDADE;
+  const avisos = itens.map(() => []);
+  const vaoEntrar = (it) => quantidadeDoItem(it) > 0 && !it.entrada_estoque_em && it.lote != null && String(it.lote).trim() !== '';
+  const chave = (it) => `${it.material_id}\u0000${String(it.lote).trim()}`;
+  const efetivo = new Map(); // chave -> { codigo, data_validade } | null (nao existe ainda)
+  const grupos = new Map(); // chave -> { idx: [], datas: Set }
+  for (let i = 0; i < itens.length; i++) {
+    const it = itens[i];
+    if (!vaoEntrar(it)) continue;
+    const k = chave(it);
+    if (!efetivo.has(k)) {
+      const l = await lotService.getLotePorCodigo(db, it.material_id, it.lote);
+      efetivo.set(k, l ? { codigo: l.codigo, data_validade: l.data_validade } : null);
+    }
+    const atual = efetivo.get(k);
+    if (!atual) {
+      // `criarOuObterLote` grava `data_validade || null` com o texto da linha
+      efetivo.set(k, { codigo: String(it.lote).trim(), data_validade: it.data_validade_lote || null });
+    } else {
+      const d = lotService.avaliarValidadeDaNota(atual, it.data_validade_lote);
+      if (d.acao === 'PREENCHER') {
+        avisos[i].push(M.PREVIA_PREENCHER(atual.codigo, d.data));
+        atual.data_validade = d.data;
+      } else if (d.acao === 'DIVERGENTE') avisos[i].push(M.PREVIA_DIVERGENTE(atual.codigo, d.loteISO, d.notaISO));
+      else if (d.acao === 'INVALIDA') avisos[i].push(M.NOTA_INVALIDA(atual.codigo, d.valor));
+      else if (d.acao === 'LEGADO') avisos[i].push(M.PREVIA_LEGADO(atual.codigo));
+    }
+    if (!grupos.has(k)) grupos.set(k, { idx: [], datas: new Set(), codigo: String(it.lote).trim() });
+    const g = grupos.get(k);
+    g.idx.push(i);
+    const dn = lotService.dataDoTextoDoItem(it.data_validade_lote);
+    if (dn) g.datas.add(dn);
+  }
+  for (const g of grupos.values()) {
+    if (g.datas.size < 2) continue;
+    const msg = M.PREVIA_DUAS_NA_NOTA(g.codigo, [...g.datas].sort());
+    for (const i of g.idx) avisos[i].push(msg);
+  }
+  return avisos;
 }
 
 async function gerarContaPagar(db, rec) {
@@ -2135,7 +2229,7 @@ async function concluirProcessamentoNota(db, user, rec, recebimentoId, opts, mar
 
 /** Etapa 91 (T2): o corpo de hoje de `concluirProcessamentoNota`, sob a trava (sem o aviso, que sai depois). */
 async function concluirProcessamentoNotaSobTrava(db, user, rec, recebimentoId, { localizacao_id, destinos }, marca, pendencia) {
-  await darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id, destinos });
+  const { avisosValidade } = await darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id, destinos });
   // Etapa 70, Fase 5: a conta a pagar e o ponto IRREVERSIVEL — so sai se a marca ainda e minha. Se
   // outra execucao assumiu (a minha venceu no meio de um processamento longo), ELA termina a nota:
   // aqui nao se cria conta nem se sobrescreve status/`contas_pagar_id`. A entrada no estoque que
@@ -2181,7 +2275,9 @@ async function concluirProcessamentoNotaSobTrava(db, user, rec, recebimentoId, {
   // Etapa 91 (T2): sob a trava; o aviso sai em `comSecaoDaNota`, depois de soltar e recalcular.
   await reservarChegadaSemFalhar(db, user, recebimentoId, pendencia);
 
-  return { success: true, status: STATUS.PROCESSADO, contas_pagar_id: contasPagarId };
+  // Etapa 194 (RN-194.07, B1304): `avisos_validade` so quando ha aviso — sem ele, a resposta e exatamente a de hoje
+  return { success: true, status: STATUS.PROCESSADO, contas_pagar_id: contasPagarId,
+    ...(avisosValidade.length ? { avisos_validade: avisosValidade } : {}) };
 }
 
 async function aprovarRecebimento(db, user, recebimentoId, opts = {}) {
@@ -2212,7 +2308,7 @@ async function concluirAprovacaoDireta(db, user, rec, recebimentoId, opts) {
 
 /** Etapa 91 (T2): o corpo de hoje de `concluirAprovacaoDireta`, sob a trava (sem o aviso, que sai depois). */
 async function concluirAprovacaoDiretaSobTrava(db, user, rec, recebimentoId, opts, pendencia) {
-  await darEntradaEstoque(db, user, rec, recebimentoId, opts);
+  const { avisosValidade } = await darEntradaEstoque(db, user, rec, recebimentoId, opts);
   await dbRun(db, `UPDATE recebimentos_material_almoxarifado
     SET status = 'APROVADO', etapa_atual = 'CONCLUIDO', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
     [recebimentoId]);
@@ -2236,7 +2332,7 @@ async function concluirAprovacaoDiretaSobTrava(db, user, rec, recebimentoId, opt
   // depois de soltar e recalcular; o ramo que DELEGA para processarNota nao chega aqui.
   await reservarChegadaSemFalhar(db, user, recebimentoId, pendencia);
 
-  return { success: true };
+  return { success: true, ...(avisosValidade.length ? { avisos_validade: avisosValidade } : {}) }; // Etapa 194 (RN-194.07)
 }
 
 async function listarRecebimentos(db, filters = {}) {
@@ -3085,7 +3181,11 @@ async function getRecebimento(db, id) {
   const itens = await dbAll(db, `SELECT ri.*, m.nome as material_nome, m.codigo as material_codigo, m.unidade
     FROM recebimentos_material_itens_almoxarifado ri
     JOIN materiais_almoxarifado m ON ri.material_id = m.id
-    WHERE ri.recebimento_id = ?`, [id]);
+    WHERE ri.recebimento_id = ?
+    ORDER BY ri.id`, [id]); // Etapa 194 (Fase 2, achado 7): a mesma ordem do laco de `darEntradaEstoque`
+  // Etapa 194 (RN-194.02/03): a previa da validade por item — sempre presente (`[]` quando nada)
+  const previa = await previaDaValidadeDosItens(db, itens);
+  itens.forEach((it, i) => { it.avisos_validade_lote = previa[i]; });
 
   let pedido_compra = null;
   if (rec.pedido_compra_id) {

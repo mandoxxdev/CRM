@@ -78,7 +78,65 @@ const MSG_VALIDADE = {
     + 'pela origem planejada vai recusar o lote vencido — libere o vencimento ou entregue escolhendo outro lote (a troca fica registrada).',
   AVISO_ETIQUETA: (codigo, antigaISO) => `As etiquetas já impressas do lote ${codigo} mostram a validade antiga `
     + `(${dataValidadeBR(antigaISO)}) — reimprima pela tela Lotes e Séries (a etiqueta do recebimento usa a data da nota).`,
+  // ── Etapa 194 — a validade da nota no recebimento (RN-194.02/03/05/06; Fase 2, achados 3, 4 e 5) ──
+  PREVIA_PREENCHER: (codigo, notaISO) => `O lote ${codigo} não tem validade; ao processar, ele recebe a validade da nota `
+    + `(${dataValidadeBR(notaISO)}). Confira a data antes de processar.`
+    + (isVencido({ data_validade: notaISO }) ? ' Essa data já venceu: o saldo do lote fica bloqueado para consumo.' : ''),
+  PREVIA_DIVERGENTE: (codigo, loteISO, notaISO) => `O lote ${codigo} já tem validade ${dataValidadeBR(loteISO)}, e a nota informa `
+    + `${dataValidadeBR(notaISO)}. Ao processar, a validade do lote é mantida — confira a data da nota em Dados fiscais; se a do lote `
+    + 'está errada, corrija-a em Lotes e Séries → "Corrigir validade".'
+    + ' A etiqueta do recebimento sai com a data da nota — imprima a do lote em Lotes e Séries.',
+  PREVIA_DUAS_NA_NOTA: (codigo, datasISO) => `Esta nota traz o lote ${codigo} com validades diferentes `
+    + `(${datasISO.map(dataValidadeBR).join(', ')}). O lote fica com uma só — confira as datas em Dados fiscais antes de processar.`,
+  PREVIA_LEGADO: (codigo) => `O lote ${codigo} tem a validade em branco (cadastro antigo) e a nota não consegue preenchê-la — `
+    + 'informe-a em Lotes e Séries → "Corrigir validade".',
+  NOTA_DIVERGENTE: (codigo, loteISO, notaISO) => `O lote ${codigo} já tinha validade ${dataValidadeBR(loteISO)}; a nota informou `
+    + `${dataValidadeBR(notaISO)}. A validade do lote foi mantida — se a da nota é a certa, corrija-a em Lotes e Séries → `
+    + '"Corrigir validade". A etiqueta do recebimento sai com a data da nota — imprima a do lote em Lotes e Séries.',
+  NOTA_INVALIDA: (codigo, valor) => `A validade da nota para o lote ${codigo} (${valor}) não é uma data válida; o lote continua sem `
+    + 'validade — informe-a em Lotes e Séries → "Corrigir validade".',
 };
+
+/**
+ * A data de lote como o item do recebimento a guarda (o `/fiscal` grava cru: `' 2027-01-31 '`, `2027-01-31 00:00:00`, `31/01/2027`
+ * passam). Apara; o texto INTEIRO tem de ser a data (hora ISO ou com espaco opcional) ou `DD/MM/AAAA` -> `AAAA-MM-DD`; o resto sai
+ * aparado como veio. Era `dataDoItem` do receiptService (Etapa 130, Fase 5 r1 M2) — mudou para ca na Etapa 194 (Fase 2, achado 2)
+ * para a regua da validade da nota usar a MESMA normalizacao do eco do `/fiscal`; o receiptService a usa por aqui.
+ */
+function dataDoTextoDoItem(v) {
+  const t = v === undefined || v === null ? '' : String(v).trim();
+  let m = /^(\d{4}-\d{2}-\d{2})(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/.exec(t);
+  if (m) return m[1];
+  m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(t);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : t;
+}
+
+/**
+ * Etapa 194 (RN-194.01, com a Fase 2, achados 2 e 3) — a regua UNICA da validade da nota contra o lote que ja existe. Pura.
+ * Os dois lados passam por `dataDoTextoDoItem`. Nesta ordem: nota vazia -> NADA; lote ausente -> NADA; lote `null` -> a nota passa
+ * em `validarDataValidade` -> PREENCHER (o ISO), senao INVALIDA (o texto como gravado); lote `''` (legado) -> LEGADO (a guarda do
+ * preencher e `IS NULL`: prometer preencher e dar AVISO_FALHA era o achado 3); iguais -> NADA; senao DIVERGENTE (`loteISO` como
+ * gravado, `notaISO` normalizada). O lote novo nasce com o texto da nota e cai em "iguais".
+ */
+// As acoes pelo objeto, e nao como literal de texto depois de "acao:": a guarda de rotulos da auditoria (auditLabels.api.test.js) varre
+// esse padrao nos servicos como verbo gravavel — estas sao decisoes da regua, nunca vao para a trilha.
+const DECISAO_VALIDADE = Object.freeze({ NADA: 'NADA', PREENCHER: 'PREENCHER', INVALIDA: 'INVALIDA', LEGADO: 'LEGADO', DIVERGENTE: 'DIVERGENTE' });
+function avaliarValidadeDaNota(lote, valorNota) {
+  const nota = dataDoTextoDoItem(valorNota);
+  if (!nota || !lote) return { acao: DECISAO_VALIDADE.NADA };
+  if (lote.data_validade === undefined || lote.data_validade === null) {
+    try {
+      validarDataValidade(nota);
+      return { acao: DECISAO_VALIDADE.PREENCHER, data: nota };
+    } catch (e) {
+      return { acao: DECISAO_VALIDADE.INVALIDA, valor: valorNota };
+    }
+  }
+  const doLote = dataDoTextoDoItem(lote.data_validade);
+  if (!doLote) return { acao: DECISAO_VALIDADE.LEGADO, data: nota };
+  if (doLote === nota) return { acao: DECISAO_VALIDADE.NADA };
+  return { acao: DECISAO_VALIDADE.DIVERGENTE, loteISO: lote.data_validade, notaISO: nota };
+}
 
 /**
  * RN-190.02: `""`, `null` e ausente = "nao informado". Qualquer outra coisa tem de ser string `AAAA-MM-DD` de data que existe — a regua
@@ -545,4 +603,5 @@ module.exports = {
   EPS_SALDO, residualSemLote, resumoLotesDoMaterial,
   MSG_VALIDADE, dataValidadeBR, validarDataValidade, preencherValidadeSeVazia, loteEstaVazio, redefinirValidadeDoLoteVazio,
   corrigirValidadeDoLote, corrigirValidadeDoLoteSemTrava, // Etapa 191
+  dataDoTextoDoItem, avaliarValidadeDaNota, contarSeparadoPendenteDoLote, // Etapa 194
 };
