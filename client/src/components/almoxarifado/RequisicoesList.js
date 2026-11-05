@@ -183,12 +183,21 @@ const VALOR_PLANEJADA_SEM_SALDOS = '__planejada__';
 // tela pede o motivo. "Qualquer endereço" SEM `automatico` (pré-seleção acima do pendente) e a opção
 // "Planejada da separação" não mandam chave: o servidor aplica a planejada — não é troca.
 const MOTIVO_SUBSTITUICAO_MAX = 500;
-const trocaDaPlanejada = (item, escolha) => {
+const outroParDaPlanejada = (item, escolha) => {
   if (!temPlanejada(item) || !escolha || escolha.valor === VALOR_PLANEJADA_SEM_SALDOS) return false;
   const origem = lerValorOrigem(escolha.valor);
   if (!origem) return !!escolha.automatico;
   if (origem.localizacao_origem_id !== Number(item.origem_separacao_id)) return true;
   return item.lote_separacao_id != null && Number(origem.lote_id || 0) !== Number(item.lote_separacao_id);
+};
+// Etapa 196 (Fase 5, K5): outro par só é troca no que passa da parte SEM origem da caixa — a régua do servidor (RN-196.07):
+// max(0, min(qtd, caixa) − (caixa − parte)). Antes o "Motivo da troca" aparecia com caixa 6, parte 3 e 3 de B: o servidor
+// dava troca 0, não gravava linha e o motivo digitado se perdia.
+const trocaDaPlanejada = (item, escolha, qtd) => {
+  if (!outroParDaPlanejada(item, escolha)) return false;
+  const caixa = pendenteSeparado(item);
+  const q = Number(qtd) || 0;
+  return Math.max(0, Math.min(q, caixa) - (caixa - pendentePlanejado(item))) > 1e-9;
 };
 
 // Etapa 65 (RN-04): a régua da SEPARAÇÃO (a do servidor na rodada) — mesmo par só com o mesmo
@@ -994,7 +1003,7 @@ const RequisicoesList = () => {
         }
         // Etapa 63 (RN-03): o motivo da troca só vai quando há troca da planejada e foi preenchido.
         const motivo = String(motivos?.[i.id] ?? '').trim();
-        if (motivo && trocaDaPlanejada(i, escolha)) item.motivo_substituicao = motivo.slice(0, MOTIVO_SUBSTITUICAO_MAX);
+        if (motivo && trocaDaPlanejada(i, escolha, item.quantidade_atendida)) item.motivo_substituicao = motivo.slice(0, MOTIVO_SUBSTITUICAO_MAX);
         // Etapa 61 (RN-04): só item de material serializado leva `serie_ids` (ids numéricos).
         const ids = seriesMap?.[i.id];
         if (ids?.length) item.serie_ids = ids.map(Number);
@@ -2616,11 +2625,12 @@ const RequisicoesList = () => {
                       {temPlanejada(item) && qtdEntregar > pendentePlanejado(item) + 1e-9
                         && !origensEntrega[item.id]?.valor && !origensEntrega[item.id]?.automatico && (
                         <div id={`entrega-dica-pendente-${item.id}`} style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)', marginTop: 4 }}>
-                          O separado pendente sai de {item.origem_separacao_codigo}{item.lote_separacao_codigo ? ` — lote ${item.lote_separacao_codigo}` : ''}; o restante, automático. Se lá não houver mais o separado, a entrega é recusada — escolha de onde sai.
+                          {/* Etapa 196 (Fase 5, K4): só a PARTE sai de lá, não o separado pendente inteiro. */}
+                          {`${fmtQtd(pendentePlanejado(item))}${(item.unidade || item.material_unidade) ? ` ${item.unidade || item.material_unidade}` : ''} sai de ${item.origem_separacao_codigo}${item.lote_separacao_codigo ? ` — lote ${item.lote_separacao_codigo}` : ''} (o que foi separado de lá); o restante, automático. Se lá não houver mais essa quantidade, a entrega é recusada — escolha de onde sai.`}
                         </div>
                       )}
                       {/* Etapa 63 (RN-03): saindo de onde não foi separado, o motivo da troca (opcional). */}
-                      {trocaDaPlanejada(item, origensEntrega[item.id]) && (
+                      {trocaDaPlanejada(item, origensEntrega[item.id], qtdEntregar) && (
                         <div style={{ marginTop: 8 }}>
                           <label className="almox-label" htmlFor={`entrega-motivo-troca-${item.id}`} style={{ fontSize: '0.8rem' }}>Motivo da troca (opcional)</label>
                           <input id={`entrega-motivo-troca-${item.id}`} className="almox-input" type="text"

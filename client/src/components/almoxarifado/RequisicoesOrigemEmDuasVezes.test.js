@@ -284,3 +284,56 @@ describe('Etapa 196 (RN-196.12): "separado de" no detalhe ganha a quantidade', (
     expect(linhaSeparadoDe().textContent).toBe('separado de B-02 — lote L-7 (2,5 PC)');
   });
 });
+
+// Etapa 196 (Fase 5): K4 — a dica diz QUANTO sai da origem (a parte), nao "o separado pendente"; K5 — o "Motivo da troca" so
+// aparece (e so vai no PUT) quando a regua do servidor da troca > 0: max(0, min(qtd, caixa) - (caixa - parte)).
+describe('Etapa 196 (Fase 5): dica da parte e motivo da troca pela régua do servidor', () => {
+  const campoMotivo = () => container.querySelector('#entrega-motivo-troca-1');
+  const qtdEntrega = () => container.querySelector('.almox-count-input');
+
+  test('K4: caixa 6, parte 3, um clique 6 — a dica diz "3 PC sai de B-02 — lote L-7 (o que foi separado de lá)"', async () => {
+    requisicao = paraEntregar();
+    await renderizar();
+    await clicar('Completar Entrega');
+    expect(dicaPendente().textContent).toBe('3 PC sai de B-02 — lote L-7 (o que foi separado de lá); o restante, automático. '
+      + 'Se lá não houver mais essa quantidade, a entrega é recusada — escolha de onde sai.');
+  });
+
+  test('K5: caixa 6, parte 3 — outro endereço para 3 cabe na parte sem origem: sem "Motivo da troca"; para 4, aparece', async () => {
+    requisicao = paraEntregar({ quantidade_entregavel: 3 });
+    await renderizar();
+    await clicar('Completar Entrega');
+    escolher(selectEntrega(), '1:');
+    expect(campoMotivo()).toBeNull();
+    escolher(selectEntrega(), '');
+    expect(campoMotivo()).toBeNull();
+    digitar(qtdEntrega(), '4');
+    expect(campoMotivo()).toBeTruthy();
+    escolher(selectEntrega(), '1:');
+    expect(campoMotivo()).toBeTruthy();
+  });
+
+  test('K5: motivo digitado com 4 e a quantidade volta a 3 — o PUT não leva motivo_substituicao (o servidor daria troca 0)', async () => {
+    requisicao = paraEntregar({ quantidade_entregavel: 4 });
+    await renderizar();
+    await clicar('Completar Entrega');
+    escolher(selectEntrega(), '1:');
+    digitar(campoMotivo(), 'mais perto');
+    digitar(qtdEntrega(), '3');
+    expect(campoMotivo()).toBeNull();
+    await clicar('✅ Confirmar Entrega');
+    expect(enviadoEm('entregar', 'itens_atendidos'))
+      .toEqual({ item_id: 1, quantidade_atendida: 3, localizacao_origem_id: 1 });
+  });
+
+  test('K5: com 4 (troca 1) o motivo vai no PUT', async () => {
+    requisicao = paraEntregar({ quantidade_entregavel: 4 });
+    await renderizar();
+    await clicar('Completar Entrega');
+    escolher(selectEntrega(), '1:');
+    digitar(campoMotivo(), 'mais perto');
+    await clicar('✅ Confirmar Entrega');
+    expect(enviadoEm('entregar', 'itens_atendidos'))
+      .toEqual({ item_id: 1, quantidade_atendida: 4, localizacao_origem_id: 1, motivo_substituicao: 'mais perto' });
+  });
+});

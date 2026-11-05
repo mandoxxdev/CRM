@@ -268,7 +268,7 @@ describe('Etapa 63: acima do separado pendente o servidor divide a baixa', () =>
     await clicar('Completar Entrega');
     expect(selectEntrega().value).toBe('');
     expect(dicaPendente()).toBeTruthy();
-    expect(dicaPendente().textContent).toBe('O separado pendente sai de B-02 — lote L-7; o restante, automático. Se lá não houver mais o separado, a entrega é recusada — escolha de onde sai.');
+    expect(dicaPendente().textContent).toBe('5 PC sai de B-02 — lote L-7 (o que foi separado de lá); o restante, automático. Se lá não houver mais essa quantidade, a entrega é recusada — escolha de onde sai.');
     expect(campoMotivo()).toBeNull();
     await clicar('✅ Confirmar Entrega');
     const item = itemEnviado();
