@@ -205,8 +205,40 @@ janela de entrega passa a recusar o que hoje entrega. **Proposta:** reestimar o 
 teste do André reduzido a **um roteiro** (o caso real: separar 3 do sugerido, 3 no automático, entregar, conferir Substituições e o saldo de
 XB-01) — 1h + 3h com o teste dentro da execução — e o cenário B1316 conferido só pela suíte.
 
+## Fase 2 — correções do revisor fresco (2026-11-05) — **MANDAM sobre o texto acima onde divergem**
+
+Revisor fresco sobre `4c602925`: nenhuma trava, 2 importantes, 3 menores, todos aceitos. Confirmado: os três únicos escritores da parte
+(separação `requisitionService.js:1514`, entrega `:2105`/`finally :2137`, devolução `:2496`) já rodam com a trava por requisição por fora e
+a por material por dentro (`:1281-1284`, `:1689-1691`, `:2435-2437`); migração no padrão (`schema.js:627` → `:2893`); exclusão, estorno e
+devolução da saída não escrevem no item; cancelar/encerrar com caixa já são recusados (`routes/almoxarifado.js:4843-4845`, `:4990`).
+
+1. **[IMPORTANTE] RN-196.07 contradizia a B1315 e gravava troca falsa.** Caixa 6, parte 3 (origem XB-01/L1); o almoxarife entrega 3 escolhendo
+   XP-01/L2 → `:1839-1850` registrava substituição de 3 que não aconteceu (as 3 de L1 continuam na caixa) e a parte zerava. **RN-196.07 passa a
+   ser:** entrega que sai da origem guardada (planejada aplicada pelo servidor, ou o mesmo par escolhido): `parte = max(0, parte − o que saiu
+   dela)`. Entrega que sai de outro par ou do automático pedido consome **primeiro a parte sem origem**: a troca registrada é
+   `max(0, min(qty, caixa) − (caixa − parte))`, e **não grava linha quando dá 0**. Depois, `parte = min(parte, caixa depois)`. Chegando a 0, ou
+   com a caixa vazia, origem e quantidade zeram. *Cenário:* caixa 6, parte 3, entrega 3 de XP-01 → 0 trocas, parte 3. **T2:** em `:1849`,
+   `quantidade: Math.max(0, Math.min(qty, pendenteSep) - (pendenteSep - parte))` e pular o `substituicoes.set` quando der 0. **Controle:** voltar
+   para "consome primeiro a parte" → cai o cenário (com série e sem série).
+2. **[IMPORTANTE] RN-196.10 sem materializar: dado antigo herdava a parte nova.** Item antigo com origem A, quantidade `NULL`, caixa 3; 2ª rodada
+   de 3 no automático → `COALESCE(NULL, separado − entregue)` = 6 → a entrega de um clique pede 6 de A, que só tem 3 → 400 `não serve mais`
+   (`:1794`). **RN-196.10 passa a ser:** toda rodada sobre item com origem guardada **grava** a quantidade: `parte = COALESCE(parte,
+   pendenteAntes)`, mais `qty` se for o mesmo par (RN-196.02), ou igual se for outro par (RN-196.03). Ninguém deixa `NULL` com origem depois de
+   uma rodada. **Controle no T1:** item antigo `NULL` + rodada automática → entrega de um clique 200, 3 de A e 3 no automático.
+3. **[MENOR] Decremento no `finally` com falha no meio:** usar o que **foi baixado** com origem (soma dos `pedacos` com origem que geraram
+   movimento), não `qtdComOrigem` — senão a parte cai mais do que saiu. Cenário no T2 com a passada 2 forçada a falhar.
+4. **[MENOR] Cenário 2 do T5 inviável:** a devolução da saída não mexe em `quantidade_entregue`, então "separar mais 1 de A" toma `não é possível
+   separar 1 un. Máximo: 0` (`:1388`). Usar requisição de **7** (ou 2ª rodada com 2). No cenário 1, "antes da 1ª entrada" → "antes da 1ª
+   **entrega**".
+5. **[MENOR] Contagens e spec:** `trocaSeparacao.api.test.js` afirma a troca da separação também em `:142`, `:170`, `:192`, `:210`, `:223`, `:242`
+   (não só as quatro linhas do T1); o `:223` (falha do INSERT da troca) fica sem objeto — apagar com justificativa no commit e no plano; o T1
+   diz "10 de 12". No fechamento, a spec 05 muda à vista na linha 68 (o "motivo (1) pago" da Etapa 65) e na 96: "revogado pela 196 (B1314)".
+   RN-196.01 diz "**par com endereço**" (só lote não vira origem, `:1443`). O `separado_pendente` de `:1038` só serve ao teste `> 0`
+   (`sugestaoDeColeta.js:192`): trocar pela parte é NO-OP, declarar. A RN-188.01a continua de propósito (sugerir B na 3ª rodada levaria ao
+   C461). Na tela (T4), por defesa, `min(parte, pendenteSeparado)`.
+
 ## Execução
 
-- [ ] Plano — este commit.
-- [ ] Fase 2 — revisor fresco (quatro perguntas, último gesto de cada RN: separar → entregar → excluir/devolver).
+- [x] Plano — `4c602925`.
+- [x] Fase 2 — revisor fresco: 0 trava, 2 importantes, 3 menores, no bloco "Fase 2 — correções" (que manda sobre o resto).
 - [ ] T0 · [ ] T1 · [ ] T2 · [ ] T3 · [ ] T4 · [ ] T5 · [ ] Fase 5 · [ ] Fechamento.
