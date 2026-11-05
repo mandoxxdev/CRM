@@ -474,7 +474,7 @@ não commitado. Esta etapa usa **B1290–B1299**.)*
 
 - [ ] T1 —
 - [ ] T2 —
-- [ ] T3 —
+- [x] T3 — `3b43a0a1`. 7 testes (o 7º, "erro sem corpo usa a frase padrao", a mais do plano), vermelhos antes e verdes depois. Controles: (a) sem `pode` → caiu "botao so com inspecionar" (`toBeUndefined`); (b) vista = nova → caiu "payload"; (c) sem `forEach` → caiu "avisos viram toast.warn" (`toHaveBeenCalledTimes(2)`); (d) fechar no `catch` → caíram "409 mantem o modal" e o 7º. md5 restaurado conferido. Tela inteira 209 suítes / 2881; build ok. Fora do plano: asterisco de obrigatório nos dois rótulos, como os outros modais. Os avisos vêm prontos do servidor (a tela só repassa).
 - [ ] T4 —
 
 ## Próxima tarefa detalhada
