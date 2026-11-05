@@ -15,7 +15,8 @@ Tempo estimado: *1h*
 
 *4. Separar em duas vezes — 1ª parte: o local de onde sai*
 Separar uma requisição em duas vezes, sem entregar no meio, faz o sistema trocar o local de onde o material sai. Passa a manter o local escolhido em cada vez.
-Tempo estimado: *4h*
+Tempo estimado: *6h*
+_Revisado: ao medir antes de fazer, a mudança precisa guardar quanto saiu de cada local e ensinar a entrega e a devolução a usar isso; não dá para separar em partes menores sem a entrega passar a recusar o que hoje entrega._
 
 *5. Separar em duas vezes — 2ª parte: material com lote*
 No mesmo caso, em material com lote, a baixa gera uma linha sem lote com saldo negativo. Passa a baixar do lote certo, sem a linha negativa.
@@ -33,5 +34,5 @@ Tempo estimado: *45 min*
 O termo impresso junta os espaços do texto. Passa a sair como foi escrito.
 Tempo estimado: *1h15*
 
-*Total estimado: 22h a 23h*
+*Total estimado: 24h a 25h*
 _O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
