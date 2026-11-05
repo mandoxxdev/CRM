@@ -707,6 +707,18 @@ describe('Etapa 50: resumo fisico x atribuido', () => {
     expect(linhas().length).toBe(4);
   });
 
+  test('[RN-197.13] a nota nao da mais a entrega de requisicao como saida que nao baixa lote', async () => {
+    await renderizar();
+    await selecionarMaterial();
+    const nota = container.querySelector('[data-testid="resumo-sem-lote-nota"]').textContent;
+    expect(nota).toBe('O saldo de cada lote é o atribuído a ele. Na entrega de requisição de material com controle de lote, o que '
+      + 'sai no automático baixa do lote que vence primeiro — entregas anteriores a esta mudança podem estar em "sem lote atribuído". '
+      + 'Saídas que não informam lote nos outros casos (material sem controle de lote, entrega de EPI) e o ajuste de saldo total não '
+      + 'baixam de lote nenhum; entradas sem lote (por exemplo, antes de ligar o controle de lote) também ficam fora dos lotes. Lotes + '
+      + 'sem lote atribuído = físico total.');
+    expect(nota).not.toContain('como a entrega de');
+  });
+
   test('residuo 0: o bloco NAO aparece — a tela fica igual a de antes (metade positiva: a tabela esta la)', async () => {
     resumoDoBanco = { fisico: 63, soma_lotes: 63, sem_lote_atribuido: 0 };
     await renderizar();

@@ -657,9 +657,12 @@ const RELATORIOS = {
     categoria: 'Estoque',
     acao: null,
     exportavel: true,
-    nota: 'O saldo de cada lote é o ATRIBUÍDO a ele. Saídas que não informam lote (a entrega de '
-      + 'requisição, por exemplo) e o ajuste de saldo total não baixam de lote nenhum — elas aparecem '
-      + 'na linha "Sem lote atribuído", que pode ser negativa. Lote + Sem lote atribuído = físico total. '
+    // Etapa 197 (T1, RN-197.13): a nota dava "a entrega de requisição" como exemplo de saída que não baixa lote (B204). Desde a
+    // 197, em material com controle de lote, o automático da entrega baixa do lote que vence primeiro (RN-197.01).
+    nota: 'O saldo de cada lote é o ATRIBUÍDO a ele. Saídas que não informam lote (a entrega de EPI, ou a de '
+      + 'requisição de material sem controle de lote) e o ajuste de saldo total não baixam de lote nenhum — elas aparecem '
+      + 'na linha "Sem lote atribuído", que pode ser negativa. Na entrega de requisição de material com controle de lote, '
+      + 'o automático baixa do lote que vence primeiro. Lote + Sem lote atribuído = físico total. '
       + 'Lote negativo aparece (material que permite saldo negativo). Material com controle de lote que '
       + 'nunca teve lote aparece só com a linha "Sem lote atribuído". Materiais inativos ficam fora.',
     limite: null,
