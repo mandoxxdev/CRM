@@ -456,6 +456,68 @@ process.on('exit', (code) => {
     }
   });
 
+  // ── Fase 5 M2: o resto sem lote leva a reserva ─────────────────────────────────────────────────────────────────────────────────
+  await test('[Fase 5 M2] aprovada (reserva 4), L1 1 elegivel e L2 3 BLOQUEADO: SAIDA L1 1 + sem lote 3, as duas com a reserva; reserva 4/4; reservado 0', async () => {
+    const m = await material();
+    await entrar(m, B01.id, 1, 'L1'); await entrar(m, P01.id, 3, 'L2');
+    const { R, ids } = await req([[m.id, 4]]);
+    const rz = await dbGet(db, "SELECT id, quantidade FROM reservas_material_almoxarifado WHERE item_requisicao_id = ? AND status = 'ATIVA'", [ids[0]]);
+    assert.strictEqual(Number(rz.quantidade), 4, 'premissa: reserva 4');
+    await dbRun(db, "UPDATE lotes_almoxarifado SET status = 'BLOQUEADO' WHERE id = ?", [await loteId(m, 'L2')]);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 4 }]);
+    await entregar(R, [{ item_id: ids[0], quantidade_atendida: 4 }]);
+    const saidas = await dbAll(db, `SELECT lt.codigo lote, mv.quantidade q, mv.reserva_id FROM movimentacoes_almoxarifado mv
+      LEFT JOIN lotes_almoxarifado lt ON lt.id = mv.lote_id WHERE mv.requisicao_id = ? AND mv.tipo = 'SAIDA' ORDER BY mv.id`, [R]);
+    assert.deepStrictEqual(saidas.map((x) => [x.lote, Number(x.q), x.reserva_id || null]), [['L1', 1, rz.id], [null, 3, rz.id]]);
+    const rz2 = await dbGet(db, 'SELECT quantidade_utilizada u FROM reservas_material_almoxarifado WHERE id = ?', [rz.id]);
+    assert.strictEqual(Number(rz2.u), 4);
+    const mat = await dbGet(db, 'SELECT quantidade_reservada q FROM materiais_almoxarifado WHERE id = ?', [m.id]);
+    assert.strictEqual(Number(mat.q || 0), 0);
+  });
+
+  // ── Fase 5 M3: a parte guardada de requisicao EXCLUIDA nao conta ──────────────────────────────────────────────────────────────
+  await test('[Fase 5 M3] R1 separa 4 de ZB-01/L1 e e excluida (a origem guardada fica na linha CANCELADO/ativo 0); R2 automatico 4 tira L1 4 (vence antes)', async () => {
+    const m = await material();
+    await entrar(m, B01.id, 4, 'L1'); await entrar(m, P01.id, 9, 'L2');
+    await validade(m, 'L1', dia(5)); await validade(m, 'L2', dia(45));
+    const r1 = await req([[m.id, 4]]);
+    await separar(r1.R, [{ item_id: r1.ids[0], quantidade_separada: 4, localizacao_origem_id: B01.id, lote_id: await loteId(m, 'L1') }]);
+    await excluir(r1.R);
+    const it = await dbGet(db, `SELECT ir.origem_separacao_id o, r.status, r.ativo FROM itens_requisicao_almoxarifado ir
+      JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id WHERE ir.id = ?`, [r1.ids[0]]);
+    assert.ok(it.o && (Number(it.ativo) === 0 || it.status === 'CANCELADO'), `premissa: a origem guardada fica na excluida ${JSON.stringify(it)}`);
+    const r2 = await req([[m.id, 4]]);
+    await separar(r2.R, [{ item_id: r2.ids[0], quantidade_separada: 4 }]);
+    await entregar(r2.R, [{ item_id: r2.ids[0], quantidade_atendida: 4 }]);
+    assert.deepStrictEqual(await livro(r2.R, m), [['SAIDA', null, 'L1', 4]]);
+  });
+
+  // ── Fase 5 M4: a inspecao desconta do lote dela ───────────────────────────────────────────────────────────────────────────────
+  await test('[Fase 5 M4] L1 3 (vence antes), L2 3 com 2 em inspecao NO L2: automatico 4 -> L1 3 + L2 1', async () => {
+    const m = await material();
+    await entrar(m, B01.id, 3, 'L1'); await entrar(m, P01.id, 3, 'L2');
+    await validade(m, 'L1', dia(5)); await validade(m, 'L2', dia(45));
+    const rec = (await dbRun(db, "INSERT INTO recebimentos_material_almoxarifado (numero, status) VALUES (?, 'CONFERIDO')", [`REC-E197-${++seq}`])).lastID;
+    await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado (recebimento_id, material_id, quantidade_esperada, quantidade_recebida,
+      lote_id, quantidade_em_inspecao) VALUES (?, ?, 3, 3, ?, 2)`, [rec, m.id, await loteId(m, 'L2')]);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_em_inspecao = 2 WHERE id = ?', [m.id]);
+    const { R, ids } = await reqDireta([[m.id, 4]]);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 4 }]);
+    await entregar(R, [{ item_id: ids[0], quantidade_atendida: 4 }]);
+    assert.deepStrictEqual(await livro(R, m), [['SAIDA', null, 'L1', 3], ['SAIDA', null, 'L2', 1]]);
+  });
+
+  // ── Fase 5 M5: lote sem validade por ultimo ───────────────────────────────────────────────────────────────────────────────────
+  await test('[Fase 5 M5] LA sem validade e LB com validade (+30): automatico 2 -> LB 2 (sem validade por ultimo)', async () => {
+    const m = await material();
+    await entrar(m, B01.id, 3, 'LA'); await entrar(m, P01.id, 3, 'LB');
+    await validade(m, 'LB', dia(30));
+    const { R, ids } = await reqDireta([[m.id, 2]]);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 2 }]);
+    await entregar(R, [{ item_id: ids[0], quantidade_atendida: 2 }]);
+    assert.deepStrictEqual(await livro(R, m), [['SAIDA', null, 'LB', 2]]);
+  });
+
   await close();
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
