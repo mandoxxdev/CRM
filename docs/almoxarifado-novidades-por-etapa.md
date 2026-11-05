@@ -11,15 +11,21 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-05):** **Etapa 194 fechada** (**a nota com o mesmo lote e outra validade: o recebimento avisa** —
+> **Onde o desenvolvimento está (2026-11-05):** **Etapa 195 fechada** (**voltar para a aba não desfaz as quantidades digitadas** — com a
+> janela de **separação** ou de **entrega** aberta, sair para outra aba ou programa e voltar recarrega a requisição (o *Já separado* e o
+> *Saldo* mostram o que outra pessoa mudou), mas a quantidade digitada em cada item **fica**; item que saiu da janela no recarregamento não vai
+> na confirmação; com a janela fechada, abre com o valor inicial como antes; e o caminho morto "separar e depois entregar" do **Completar
+> Entrega** foi removido; **C454** e **C452** resolvidos; só tela; nada a rodar antes do deploy; decisões **B1309** a **B1312**; limitações
+> **D (195)**; verificação **F (195)**; revisão (Fase 5) sem defeito, um teste acrescentado). **Próxima: separar em duas vezes — o local de
+> onde sai** (**C453**, motor); detalhada no fim do plano da 195.
+> *(Também em 2026-11-05: **Etapa 194 fechada** (**a nota com o mesmo lote e outra validade: o recebimento avisa** —
 > no **Processar nota fiscal**, embaixo de cada material, um aviso amarelo diz antes de gravar quando a validade da nota não bate com a do
 > lote que já existe, quando ela vai preencher um lote sem validade, quando não é uma data válida ou quando a mesma nota traz o lote com duas
 > datas; ao confirmar, a nota **entra sempre**, o lote **mantém** a validade que tinha (com aviso que não some sozinho, apontando
 > **Corrigir validade**), o lote sem validade **é preenchido** pela nota, e o lote novo nasce com a data da nota como data (ou sem validade,
 > com aviso, se ela não é uma data); **C456** e **B1296** resolvidos; nada a rodar antes do deploy; decisões **B1300** a **B1308**; aviso
 > **C460** (lote antigo com a validade em branco recusa a Entrada manual com a data — anterior); limitações **D (194)**; verificação
-> **F (194)**; revisão adversarial feita e corrigida). **Próxima: a separação deixa de perder as quantidades digitadas** ao voltar para a
-> aba (**C454**, com o código morto do **C452**); detalhada no fim do plano da 194.
+> **F (194)**; revisão adversarial feita e corrigida); a próxima era a **195**.)*
 > *(Também em 2026-11-05: **Etapa 191 fechada** (**corrigir a validade de um lote que já tem saldo** — em **Lotes e
 > Séries**, quem tem o perfil de inspeção (Administrador, Almoxarife, Qualidade) vê o botão **Corrigir validade** em cada lote; informa a
 > data certa e o motivo; o sistema grava, registra na auditoria *Validade corrigida* com a data antiga, a nova e o motivo, e tudo o que
@@ -4372,7 +4378,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -13477,6 +13483,30 @@ validade**, e o texto que não é data dá o aviso de data inválida acima. A pr
 **Descartado:** mudar a criação de lote compartilhada (outros caminhos a usam, e a Entrada manual da 190 já valida a data antes dela).
 **Reversível:** a normalização é uma função do recebimento. `77102677`.
 
+**B1309 (NOVA, da Etapa 195; decisão do agente) — a guarda fica em quem repõe as quantidades, não em quem recarrega.** Voltar para a aba
+continua recarregando a requisição: é o que mostra o que outra pessoa mudou, e os limites da janela (o separável, o entregável) dependem
+do detalhe fresco. O que muda é só o passo que repunha as quantidades: com a janela aberta e a mesma requisição, ele mantém o que estava
+digitado. **Descartado:** não recarregar com a janela aberta (o almoxarife veria um *Saldo* velho e confirmaria contra ele); guardar só no
+recarregamento do foco (qualquer outro recarregamento com a janela aberta apagaria igual). **Reversível.** `650db899`.
+
+**B1310 (NOVA, da Etapa 195; decisão do agente) — o que fica e o que volta ao inicial.** Fica a quantidade de cada item que **estava** na
+janela antes do recarregamento e continua nela — **mesmo acima do novo máximo**. Volta ao inicial o item que entrou na janela agora ou que
+saiu e voltou (é decidido de novo, como o **Sai de** da 189); o item que saiu da janela (outra pessoa separou tudo dele) sai do envio; o
+item que sumiu da requisição sai do estado. Acima do máximo é seguro: a confirmação é recusada com a conta inteira e a janela continua
+aberta com o digitado — *"⟨material⟩: não é possível separar ⟨X⟩ ⟨un⟩. Máximo: ⟨m⟩ (pendente: ⟨p⟩, disponível: ⟨d⟩)"* (na entrega,
+*"… não é possível entregar …"*). **Descartado:** limitar em silêncio ao novo máximo (o número mudaria sem o almoxarife ver — a Fase 5
+provou que esta escolha tinha de ter teste, e ganhou, `727792a3`); manter também o digitado de item que saiu da janela (iria no envio sem
+aparecer na tela). **Reversível.** `650db899`, `727792a3`.
+
+**B1311 (NOVA, da Etapa 195; decisão do agente) — a mesma guarda vale para a janela de entrega.** O defeito era o mesmo (medido: digitado 1,
+depois de voltar à aba, 2 — o **C454** dizia "não medido"), pelo mesmo caminho. **Descartado:** só a separação (deixaria o gêmeo).
+**Reversível.** `650db899`.
+
+**B1312 (NOVA, da Etapa 195; decisão do agente) — o "separar e depois entregar" do Completar Entrega foi removido, não consertado.** O botão
+**Completar Entrega** só aparece quando há o que entregar; o caminho que separaria antes nunca rodava (**C452**). Agora o botão abre a
+entrega direto, como já fazia na prática. **Descartado:** fazer o caminho funcionar (mudaria quando o botão aparece — fora do tamanho de
+1h, e "separar e entregar num clique" é produto, não conserto). **Reversível:** é um caminho de tela, sem dado. `650db899`.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -17176,6 +17206,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      tem um caminho que separaria primeiro e abriria a entrega em seguida, mas ele nunca roda (o botão não aparece quando só há o que
      separar). Nenhum efeito no estoque. **O que fazer:** separar (**Iniciar Separação**) e depois entregar, em dois gestos — é o que a
      tela permite.
+     **✅ RESOLVIDO NA ETAPA 195** (`650db899`): o caminho que nunca rodava foi **removido**, não consertado — **Completar Entrega** abre a
+     entrega direto, como já fazia na prática (**B1312**). Continua não existindo "separar e entregar" num clique: são dois gestos.
 453. **NOVO (da Etapa 189) — separar uma parte do endereço sugerido e o resto de outro, sem entregar no meio, troca a origem.** A janela
      grava a origem na primeira separação; uma segunda separação de outro endereço (ou no automático) sobre o que ainda está na caixa apaga
      a origem e grava uma **troca** no bloco **Substituições** (regra da Etapa 65), e a entrega sai no automático — em material com lote,
@@ -17183,11 +17215,16 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      de outro, e o sistema guarda uma origem só por item (**B1254**). A janela avisa no momento: *"Entregue esta parte antes de separar o
      resto — separar o resto de outro endereço troca a origem."* **O que fazer:** entregar a parte separada **antes** de separar o resto
      (reproduzido: entregando entre as duas, 0 trocas e nenhuma linha sem lote) — **B1262**.
+     *(Atualizado no fechamento da 195: é a **próxima** — item 4 da estimativa de 05/11, "Separar em duas vezes — o local de onde sai";
+     onde a origem é gravada e por que troca está medido no fim do plano da 195.)*
 454. **NOVO (da Etapa 189, revisão adversarial; o comportamento é anterior) — voltar para a aba do sistema com a janela de separação aberta
      desfaz as quantidades digitadas.** Ao voltar para a janela do navegador, o sistema recarrega a requisição (para mostrar o que outra
      pessoa mudou) e as quantidades da janela de separação voltam ao valor inicial (medido: digitado 3, depois de voltar à aba, 5). A
      escolha do **Sai de** não se perde (desde a 189). A janela de entrega usa o mesmo recarregamento (não medido). **O que fazer:** antes
      de **Confirmar Separação**, conferir a quantidade de cada item se saiu da tela no meio.
+     **✅ RESOLVIDO NA ETAPA 195** (`650db899`, Fase 5 `727792a3`): voltar para a aba continua recarregando a requisição, mas a quantidade
+     de cada item que estava na janela fica como foi digitada — na separação **e** na entrega (a da entrega foi medida: digitado 1 virava 2)
+     (**B1309** a **B1311**).
 455. **NOVO (da Etapa 190) — validade digitada errada num lote com saldo não tem volta até a Etapa 191.** A Entrada preenche a validade de um
      lote que não tinha e recusa outra data num lote que já tem (*"O lote ⟨L⟩ já tem validade DD/MM/AAAA. … Se a validade gravada está
      errada, peça a correção do lote."*). Só o lote **vazio** (sem movimento vivo, sem saldo, sem série presente) aceita a troca. Um "2025" no
@@ -18578,6 +18615,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(195) As quantidades que ficam ao recarregar, o que ficou de fora.** (1) Se o recarregamento mostra que a requisição saiu do status
+  (outra pessoa entregou tudo, cancelou), a janela continua aberta com o detalhe novo, como antes; a confirmação é recusada e a janela fecha
+  (Etapa 94). (2) O digitado acima do novo máximo **não** é limitado — a confirmação o recusa com a conta (**B1310**). (3) Não existe
+  "separar e entregar" num clique (**B1312**). (4) Separar em duas vezes de endereços diferentes, sem entregar no meio, ainda troca a origem
+  (**C453**, a próxima).
 - **(194) A validade da nota no recebimento, o que ficou de fora.** (1) **A etiqueta do recebimento** continua impressa com a data da
   **nota**, mesmo quando o lote manteve outra — o aviso de divergência manda imprimir a do lote em **Lotes e Séries**. (2) **O estorno** da
   entrada não desfaz o preenchimento da validade (a validade é do lote físico, como na 190 — **B1301**); corrige-se com **Corrigir
@@ -18608,7 +18650,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   recusada na entrega, sem erro de estoque (**C449**). (4) A **lista única** intercalando várias requisições pelo caminho (**B1266**) — é a
   "lista de separação como entidade" da feature 05, que continua aberta. (5) A **combinação** de dois endereços para um item (**B1254**).
   (6) O papel é do momento em que a fila foi carregada (**B1267**): não se atualiza sozinho. (7) As quantidades digitadas na janela voltam
-  ao inicial quando a janela recarrega (**C454**, anterior).
+  ao inicial quando a janela recarrega (**C454**, anterior). *— resolvido na 195 (`650db899`): as quantidades ficam.*
 - **(188) A sugestão de coleta na Fila de separação, o que ficou de fora.** (1) **A pré-seleção do "Sai de"** — a janela de separação
   continua abrindo no automático; a dica só vale se o separador escolher o endereço (**C451**, **B1257**) — é a Etapa 189. (2) O **PDF**
   *"Imprimir lista de coleta"* (**B1257**) — Etapa 189. (3) A **combinação** de dois endereços para um item (**B1254**). (4) A **distância**
@@ -19865,6 +19907,16 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(195) Nenhum clique foi dado no navegador.** O que os testes provam (jsdom, com o servidor de mentira): o recarregamento por
+`visibilitychange` e por `focus` relê o detalhe (a premissa é conferida) e o dado novo aparece (*"Saldo: 18"*, *"Já separado: 3"*), o campo
+fica com o digitado e a confirmação manda o digitado — na separação e na entrega; o item que saiu da janela não vai; o que saiu e voltou
+volta com o inicial; o digitado acima do novo máximo fica; o **Sai de** escolhido fica; com a janela fechada, o **Aprovar e Separar** abre com
+o inicial do detalhe novo. Controles positivos: seis sabotagens (`650db899` e Fase 5 `727792a3`), cada uma derrubando o cenário dela.
+**Não verificado à mão:** o roteiro da seção da Etapa 195 (cenários 1 a 7) — em especial o recarregamento real ao trocar de aba e de
+programa (o navegador dispara os dois eventos de jeitos diferentes). Vale 5 minutos. Suítes medidas: tela **211 suítes / 2894 testes**
+(sobre `727792a3`); `src/components/almoxarifado/Requisicoes` 17 / 328; build sem aviso (em `650db899`; a Fase 5 só mudou um teste). O
+servidor não foi rodado: a etapa não o toca.
 
 **(194) Nenhum clique foi dado no navegador.** O que os testes provam: o servidor pelo serviço e pela rota real — a régua (nada, preencher,
 divergente, inválida, cadastro antigo em branco; espaço, hora e *DD/MM/AAAA* sem divergência falsa), a prévia por item (só os que vão
@@ -37245,7 +37297,7 @@ para sugerir (o saldo está sem endereço, em endereço bloqueado ou inativo, em
 - Duas janelas abertas ao mesmo tempo com a mesma dica: a segunda separação é aceita e a entrega dela é recusada, sem erro de estoque
   (**C449**). **Atualize** a fila antes de ir à prateleira.
 - Uma lista única intercalando várias requisições pelo caminho (**B1266**); a combinação de dois endereços para um item (**B1254**).
-- As quantidades digitadas na janela voltam ao inicial se ela recarregar ao voltar para a aba (**C454**, anterior).
+- As quantidades digitadas na janela voltam ao inicial se ela recarregar ao voltar para a aba (**C454**, anterior). *(Feito na 195 — ver a seção dela.)*
 - **Nada a rodar antes do deploy.**
 
 ## Etapa 190 — A Entrada manual grava a validade do lote (2026-10-23)
@@ -37530,12 +37582,80 @@ Ruído: nenhum.
 - Sem e-mail, sem não conformidade, sem aviso enquanto se digita a data (**B1303**).
 - O lote antigo com a validade em branco continua sendo recusado na Entrada manual com a data (**C460**, anterior).
 
+## Etapa 195 — Voltar para a aba não desfaz as quantidades digitadas (2026-11-05)
+
+Com a janela de separação aberta, o almoxarife digita *3* num item (o sistema tinha sugerido *5*). Ele vai a outra aba do navegador — ou a
+outro programa — e volta. O sistema recarrega a requisição ao voltar, o que é bom: mostra o que outra pessoa mudou. Mas, no caminho, punha
+todas as quantidades da janela de volta no valor inicial: o *3* virava *5*, e quem não reparasse separava 5 (**C454**). Na janela de entrega
+era igual. Agora o recarregamento continua — o *Já separado* e o *Saldo* se atualizam —, e o que foi digitado **fica**. É o papel de
+anotação em cima do balcão: alguém atualizou o quadro da parede, mas ninguém apagou a sua anotação. De carona, saiu da tela um caminho que
+nunca rodava (o "separar e depois entregar" do **Completar Entrega** — **C452**). Só tela, nada a rodar antes do deploy. Decisões do
+agente: **B1309** a **B1312**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Separação aberta, digitado 3, volta para a aba → o campo voltava a 5 | Volta para a aba → o campo continua 3, e o *Saldo* e o *Já separado* mostram o detalhe novo (**B1309**) |
+| Na entrega, igual (digitado 1 virava 2) | Continua 1 (**B1311**) |
+| — | Outra pessoa separou tudo de um item no meio: ele some da janela e não vai na confirmação; os outros continuam como digitados (**B1310**) |
+| — | Digitado acima do novo máximo continua como digitado; a confirmação é recusada com a conta, e a janela fica aberta para corrigir (**B1310**) |
+| Com a janela fechada, abrir trazia o valor inicial | Igual |
+| **Completar Entrega** tinha um caminho "separar primeiro" que nunca rodava | O botão abre a entrega direto, como já fazia (**B1312**, **C452**) |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**. Um material *CHAPA-195* (nome *Chapa 195*, unidade *PC*) com 20 em estoque numa
+posição *A-01*. Uma requisição de 5 *CHAPA-195*, aprovada. Em **Almoxarifado → Requisições**, abra a requisição.
+
+**1. A separação mantém o digitado.** **Iniciar Separação** → o campo do item vem com *5*. Digite *3*. Clique em outra aba do navegador (ou
+em outro programa) e volte. O campo continua *3*. **📦 Confirmar Separação** → a rodada registra 3 (como ficou abaixo do possível, o bloco **Separação**
+mostra *"Chapa 195: separou 3 de 5 — sem motivo informado"*, ou o motivo, se digitado).
+
+**2. O detalhe novo aparece.** Com a janela aberta e *3* digitado, em **outra aba**, faça uma **Saída** de 2 *CHAPA-195* em
+**Movimentações**. Volte à aba da requisição: o *Saldo* do item passa a *18* e o campo continua *3*.
+
+**3. Outra pessoa separa no meio, acima do que você digitou.** Requisição de 5, janela aberta, digite *4*. Em **outra aba**, abra a mesma
+requisição, **Iniciar Separação**, separe *3* e confirme. Volte à primeira aba: *"Já separado: 3"*, e o campo continua *4* (o máximo agora é
+2). **📦 Confirmar Separação** → recusa: *"Chapa 195: não é possível separar 4 PC. Máximo: 2 (pendente: 2, disponível: …)"*; a janela
+continua aberta com o *4*; troque para *2* e confirme.
+
+**4. Item que saiu da janela não vai.** Requisição com dois materiais (5 *CHAPA-195* e 1 de outro). Janela aberta, digite *3* no primeiro.
+Em outra aba, separe o segundo inteiro. Volte: o segundo sumiu da janela, o primeiro continua *3*; confirmar registra só o primeiro.
+
+**5. A entrega também.** Numa requisição *Parcialmente Atendida* com 2 para entregar, **Completar Entrega** → o campo vem com *2*. Digite
+*1*, saia para outra aba e volte → continua *1*; **✅ Confirmar Entrega** entrega 1.
+
+**6. Janela fechada: valor inicial.** Feche a janela, volte para a aba e abra de novo → o campo vem com o valor inicial do detalhe novo.
+
+**7. O "Sai de" continua.** Na separação, escolha um **Sai de** e digite uma quantidade; saia e volte → os dois continuam.
+
+**A revisão (Fase 5)**, um revisor fresco por execução, não achou defeito; achou um teste que faltava (a escolha "acima do máximo fica",
+**B1310**: limitar calado passava verde) — acrescentado, `727792a3` — e uma proteção sem teste possível hoje (declarada no plano). Ruído:
+nenhum.
+
+### O que esta etapa NÃO cobre
+
+- Se o recarregamento mostra que a requisição saiu do status (outra pessoa entregou tudo), a janela continua aberta com o detalhe novo, como
+  antes; a confirmação é recusada e a janela fecha (Etapa 94).
+- Os motivos digitados (divergência, troca) nunca eram apagados pelo recarregamento; nada muda neles.
+- Não existe "separar e entregar" num clique: são dois gestos (**B1312**).
+- Separar em duas vezes de endereços diferentes, sem entregar no meio, ainda troca a origem (**C453**) — é a próxima.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 195 entregue (2026-11-05):** **voltar para a aba não desfaz as quantidades digitadas** (**C454** e **C452** resolvidos). O
+  recarregamento continua e a quantidade digitada fica (**B1309**); só fica a do item que estava na janela, mesmo acima do novo máximo —
+  a confirmação recusa com a conta (**B1310**); vale para a entrega (**B1311**); o "separar e depois entregar" que nunca rodava saiu
+  (**B1312**). Só tela. Revisão (Fase 5): nenhum defeito, um teste que faltava acrescentado. Commits `f8398b40` (plano), `650db899`
+  (código e testes), `bdc2eb74` (plano), Fase 5 `727792a3`, e o fechamento. **O que é seu:** as decisões **B1309** a **B1312**
+  (reversíveis); as limitações **(195)** em D e a verificação **(195)** em F. **Próxima: separar em duas vezes — o local de onde sai**
+  (**C453**, motor; detalhada no fim do plano da 195).
 
 - **Etapa 194 entregue (2026-11-05):** **a nota com o mesmo lote e outra validade: o recebimento avisa** (**C456** e **B1296**
   resolvidos; a **B1277** mudada de propósito). A janela **Processar nota fiscal** mostra antes de gravar o que vai acontecer com cada lote

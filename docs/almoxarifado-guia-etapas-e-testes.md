@@ -1,24 +1,36 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-11-05 (Etapas 172 a 191 e 194) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-11-05 (Etapas 172 a 191, 194 e 195) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191 e 194) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194 e 195) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-05 (Etapas 172 a 178, 180 a 191 e 194 ENTREGUES · RETOMADO em 05/11 · próxima: a separação deixa de perder as quantidades digitadas)
+> ## Onde o desenvolvimento está — 2026-11-05 (Etapas 172 a 178, 180 a 191, 194 e 195 ENTREGUES · RETOMADO em 05/11 · próxima: separar em duas vezes — o local de onde sai)
 >
-> **O desenvolvimento parou aqui: Etapa 194 fechada — 2026-11-05.** **A nota com o mesmo lote e outra validade: o recebimento avisa.** Na
+> **O desenvolvimento parou aqui: Etapa 195 fechada — 2026-11-05.** **Voltar para a aba não desfaz as quantidades digitadas.** Com a
+> janela de separação ou de entrega aberta, sair para outra aba (ou outro programa) e voltar recarrega a requisição — o *Já separado* e o
+> *Saldo* se atualizam —, mas o que foi digitado em cada item fica. O item que outra pessoa separou inteiro no meio sai da janela e não vai
+> na confirmação. Só tela; nada a rodar antes do deploy. **Nenhum clique foi dado no navegador** (só testes — roteiro na seção da 195 e
+> letra F das novidades).
+>
+> **Onde parou, exatamente:** a **195 está fechada** (código, testes e documentos commitados). A **próxima** é o item 4 da fila da
+> estimativa de 05/11: **"Separar em duas vezes — 1ª parte: o local de onde sai"** (**C453** — separar uma requisição em duas rodadas, de
+> endereços diferentes, sem entregar no meio, troca a origem e a entrega sai no automático). É motor de estoque. Só a tarefa detalhada no
+> fim do plano da 195 (`docs/superpowers/plans/2026-11-05-almoxarifado-etapa195-quantidades-da-separacao.md`, com onde a origem é gravada
+> e por que troca) e a estimativa existem, nenhum plano nem código.
+>
+> **Etapa 194, 2026-11-05.** **A nota com o mesmo lote e outra validade: o recebimento avisa.** Na
 > janela **Processar nota fiscal**, embaixo de cada material, um aviso amarelo diz antes de gravar o que vai acontecer com o lote (a nota
 > traz outra validade, vai preencher um lote sem validade, não é uma data, ou traz o mesmo lote com duas datas). A nota entra sempre; o lote
 > mantém a validade que tinha e um aviso que não fecha sozinho aponta **Corrigir validade**; o lote sem validade recebe a da nota; o lote
 > novo nasce com a data da nota (ou sem validade, com aviso, se ela não é uma data). Nada a rodar antes do deploy. **Nenhum clique foi dado
 > no navegador** (só testes — roteiro na seção da 194 e letra F das novidades).
 >
-> **Onde parou, exatamente:** a **194 está fechada** (código, testes e documentos commitados). A **próxima** é o item 3 da fila da
+> **Onde parou, na época:** a **194 está fechada** (código, testes e documentos commitados). A **próxima** é o item 3 da fila da
 > estimativa de 05/11: **"Separação: as quantidades digitadas não se perdem"** (**C454** — com a janela de separação aberta, sair da aba e
 > voltar faz as quantidades voltarem ao valor inicial; e o código morto do **C452** na mesma tela). Só a tarefa detalhada no fim do plano da
 > 194 (`docs/superpowers/plans/2026-11-05-almoxarifado-etapa194-validade-do-lote-no-recebimento.md`) e a estimativa existem, nenhum plano
-> nem código.
+> nem código. *(Feita: a 195.)*
 >
 > **Etapa 191, 2026-11-05.** **Corrigir a validade de um lote que já tem saldo**: em **Lotes e
 > Séries**, o botão **Corrigir validade** (só para Administrador, Almoxarife e Qualidade) troca a data com justificativa e auditoria; a
@@ -6995,6 +7007,45 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 195 — Voltar para a aba não desfaz as quantidades digitadas (ENTREGUE — 2026-11-05)
+
+**O que mudou, em uma frase:** com a janela de separação ou de entrega aberta, sair da aba e voltar recarrega a requisição, mas as
+quantidades que você digitou ficam.
+
+**O problema que ela resolve.** Você digitava *3* num item (o sistema sugeria *5*), ia a outra aba ver um e-mail e voltava. O sistema
+recarregava a requisição — para mostrar o que outra pessoa mudou —, mas punha as quantidades de volta no valor inicial: o *3* virava *5*, e
+quem não reparasse separava 5. Na entrega, igual. É como alguém atualizar o quadro da parede e, junto, apagar a anotação que você fez no
+papel em cima do balcão. Agora o quadro atualiza e a anotação fica.
+
+| Antes | Agora |
+|---|---|
+| Digitado 3, sai da aba e volta → 5 | Continua 3; o *Saldo* e o *Já separado* mostram o que mudou |
+| Na entrega, digitado 1 virava 2 | Continua 1 |
+| — | Item que outra pessoa separou inteiro no meio some da janela e não vai na confirmação |
+| — | Digitado acima do que agora dá para separar continua como digitado; ao confirmar, o sistema recusa com a conta e você corrige |
+| **Completar Entrega** tinha um caminho "separar antes" que nunca funcionava | Abre a entrega direto (como já fazia) |
+
+**Antes de testar (uma vez).** Um usuário **Administrador do almoxarifado**. Um material *CHAPA-195* (nome *Chapa 195*, unidade *PC*) com
+20 em estoque na posição *A-01*. Uma requisição de 5 *CHAPA-195*, aprovada. Tenha duas abas do navegador abertas no sistema.
+
+**Roteiro de teste (5 minutos).**
+
+1. **Almoxarifado → Requisições**, abra a requisição, **Iniciar Separação**. O campo vem com *5*. Digite *3*.
+2. Clique na outra aba e volte. O campo continua *3*.
+3. Na outra aba, faça uma **Saída** de 2 *CHAPA-195* em **Movimentações**. Volte: o *Saldo* do item passou a *18* e o campo continua *3*.
+4. **📦 Confirmar Separação** → a rodada registra 3.
+5. Numa requisição nova de 5, abra a separação e digite *4*. Na outra aba, abra a mesma requisição, separe *3* e confirme. Volte: *"Já
+   separado: 3"* e o campo continua *4*. **📦 Confirmar Separação** → *"Chapa 195: não é possível separar 4 PC. Máximo: 2 (pendente: 2,
+   disponível: …)"*; a janela continua aberta; troque para *2* e confirme.
+6. Na mesma requisição, agora *Parcialmente Atendida* depois de entregar uma parte, **Completar Entrega** → digite uma quantidade menor
+   que a sugerida, saia da aba e volte → continua a que você digitou.
+7. Feche a janela, saia e volte, abra de novo → vem o valor inicial.
+
+**O que esta etapa não cobre.** Se, ao voltar, a requisição já saiu do status (outra pessoa entregou tudo ou cancelou), a janela continua
+aberta com o detalhe novo; ao confirmar, o sistema recusa e a janela fecha. O número digitado acima do que dá para separar não é corrigido
+sozinho — a confirmação recusa. Não existe "separar e entregar" num clique (separe e depois entregue). E separar em duas vezes de
+endereços diferentes, sem entregar no meio, ainda troca a origem — é a próxima etapa.
+
 ## Etapa 194 — Nota com o mesmo lote e outra validade: o recebimento avisa (ENTREGUE — 2026-11-05)
 
 **O que mudou, em uma frase:** ao processar uma nota com um lote que já existe, o sistema avisa **antes** de gravar quando a validade da
@@ -7235,7 +7286,7 @@ está gravado). Separar uma parte de um endereço e o resto de outro, **sem entr
 recebem o mesmo endereço já escolhido: a segunda separação é aceita e a entrega dela é recusada com *"… a origem da separação (⟨endereço⟩) não
 serve mais (…) — entregue escolhendo de onde sai"*, sem erro de estoque — **Atualize** a fila antes de ir à prateleira e, se acontecer, use
 **Entregar escolhendo de onde sai…**. Não existe "separar e entregar" num clique: separe e depois entregue. Se você sair da aba e voltar com
-a janela aberta, as **quantidades** digitadas voltam ao valor inicial (a escolha do **Sai de** fica) — confira antes de confirmar. Uma lista
+a janela aberta, as **quantidades** digitadas voltam ao valor inicial (a escolha do **Sai de** fica) — confira antes de confirmar. *(Feito na 195: as quantidades ficam — ver a seção dela.)* Uma lista
 única intercalando várias requisições pelo caminho, e a combinação de dois endereços para um item, ficam de fora. **Nada a rodar antes do
 deploy.**
 
