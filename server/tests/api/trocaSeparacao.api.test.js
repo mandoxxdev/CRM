@@ -1,10 +1,15 @@
 /**
- * Etapa 65 — a troca de origem NA SEPARACAO fica registrada: uma rodada que apaga a origem planejada
- * (separado pendente de A, nova rodada de B / automatica / de varios pares) grava uma linha em
- * substituicoes_origem_requisicao com momento SEPARACAO. So registro: a regra da rodada nao muda,
- * exceto a planejada SEM lote, que agora vale qualquer lote do mesmo endereco (como na entrega).
+ * Etapa 65 — a troca de origem NA SEPARACAO ficava registrada: uma rodada que apagava a origem planejada
+ * (separado pendente de A, nova rodada de B / automatica / de varios pares) gravava uma linha em
+ * substituicoes_origem_requisicao com momento SEPARACAO.
  *
- * Plano: docs/superpowers/plans/2026-10-01-almoxarifado-etapa65-troca-na-separacao.md
+ * REVOGADO na separacao pela Etapa 196 (B1314): a origem guardada nao muda numa rodada — ela fica, com a
+ * quantidade que saiu dela (`quantidade_origem_separacao`), e a parte nova sai no automatico na entrega. A
+ * separacao nao grava mais troca; a troca da ENTREGA (Etapa 63) continua. Os testes abaixo dizem a regra nova
+ * nos mesmos cenarios da 65; o da falha do INSERT da troca (best-effort) foi apagado: nao ha mais INSERT.
+ *
+ * Planos: docs/superpowers/plans/2026-10-01-almoxarifado-etapa65-troca-na-separacao.md e
+ * docs/superpowers/plans/2026-11-05-almoxarifado-etapa196-origem-da-separacao-em-duas-vezes.md
  *
  * Executar: cd server && node tests/api/trocaSeparacao.api.test.js
  */
@@ -59,38 +64,31 @@ let seq = 0;
   const subs = async (reqId) => (await request(app).get(`/api/almoxarifado/requisicoes/${reqId}`)).body.substituicoes;
   const planejada = async (itemId) => dbGet(db, 'SELECT origem_separacao_id o, lote_separacao_id l FROM itens_requisicao_almoxarifado WHERE id = ?', [itemId]);
   const ok = async (p) => { const r = await p; assert.strictEqual(r.status, 200, JSON.stringify(r.body)); return r; };
+  const parte = async (itemId) => (await dbGet(db, 'SELECT quantidade_origem_separacao q FROM itens_requisicao_almoxarifado WHERE id = ?', [itemId])).q;
 
-  await test('RN-01 separou 5 de A, nova rodada de B: troca SEPARACAO (5 ja separados de A -> B), com a rodada e o motivo; o detalhe mostra', async () => {
+  await test('Etapa 196 (era RN-01 da 65): separou 5 de A, nova rodada de B com motivo — nenhuma troca; a origem A fica com 5, o motivo e ignorado', async () => {
     const A = await loc('A'); const B = await loc('B'); const m = await material();
     await entrar(m.id, A.id, 10); await entrar(m.id, B.id, 10);
     const { id, ids } = await req([[m.id, 10]]);
     await ok(separar(id, [{ item_id: ids[0], quantidade_separada: 5, localizacao_origem_id: A.id }]));
-    const r2 = await ok(separar(id, [{ item_id: ids[0], quantidade_separada: 3, localizacao_origem_id: B.id, motivo_substituicao: '  A acabou na prateleira  ' }]));
-    const s = await subs(id);
-    assert.strictEqual(s.length, 1, JSON.stringify(s));
-    assert.strictEqual(s[0].momento, 'SEPARACAO');
-    assert.strictEqual(s[0].quantidade, 5);
-    assert.strictEqual(s[0].planejada_codigo, A.codigo); assert.strictEqual(s[0].saiu_codigo, B.codigo);
-    assert.strictEqual(s[0].automatica, 0);
-    assert.strictEqual(s[0].motivo, 'A acabou na prateleira');
-    const linha = await dbGet(db, 'SELECT separacao_id, movimentacao_ids FROM substituicoes_origem_requisicao WHERE id = ?', [s[0].id]);
-    assert.strictEqual(linha.separacao_id, r2.body.rodada_id);
-    assert.strictEqual(linha.movimentacao_ids, null);
-    assert.deepStrictEqual(await planejada(ids[0]), { o: null, l: null }); // B237 inalterada
+    await ok(separar(id, [{ item_id: ids[0], quantidade_separada: 3, localizacao_origem_id: B.id, motivo_substituicao: '  A acabou na prateleira  ' }]));
+    assert.deepStrictEqual(await subs(id), []);
+    assert.deepStrictEqual(await planejada(ids[0]), { o: A.id, l: null });
+    assert.strictEqual(await parte(ids[0]), 5);
   });
 
-  await test('RN-01 rodada AUTOMATICA (sem "Sai de") sobre planejada A: troca automatica', async () => {
+  await test('Etapa 196 (era RN-01 da 65): rodada AUTOMATICA (sem "Sai de") sobre planejada A — nenhuma troca; A fica com 4', async () => {
     const A = await loc('AA'); const m = await material();
     await entrar(m.id, A.id, 10);
     const { id, ids } = await req([[m.id, 8]]);
     await ok(separar(id, [{ item_id: ids[0], quantidade_separada: 4, localizacao_origem_id: A.id }]));
     await ok(separar(id, [{ item_id: ids[0], quantidade_separada: 2 }]));
-    const s = await subs(id);
-    assert.strictEqual(s.length, 1, JSON.stringify(s));
-    assert.strictEqual(s[0].automatica, 1); assert.strictEqual(s[0].saiu_codigo, null); assert.strictEqual(s[0].quantidade, 4);
+    assert.deepStrictEqual(await subs(id), []);
+    assert.deepStrictEqual(await planejada(ids[0]), { o: A.id, l: null });
+    assert.strictEqual(await parte(ids[0]), 4);
   });
 
-  await test('RN-01 varios pares na rodada (A e B) sobre planejada C: saida nula, nao automatica', async () => {
+  await test('Etapa 196 (era RN-01 da 65): varios pares na rodada (A e B) sobre planejada C — nenhuma troca; C fica com 3', async () => {
     const A = await loc('VA'); const B = await loc('VB'); const C = await loc('VC'); const m = await material();
     await entrar(m.id, A.id, 5); await entrar(m.id, B.id, 5); await entrar(m.id, C.id, 5);
     const { id, ids } = await req([[m.id, 9]]);
@@ -100,13 +98,12 @@ let seq = 0;
       { item_id: ids[0], quantidade_separada: 1, localizacao_origem_id: A.id, motivo_substituicao: 'segundo' },
       { item_id: ids[0], quantidade_separada: 2, localizacao_origem_id: B.id, motivo_substituicao: 'terceiro' },
     ]));
-    const s = await subs(id);
-    assert.strictEqual(s.length, 1, JSON.stringify(s));
-    assert.strictEqual(s[0].saiu_codigo, null); assert.strictEqual(s[0].automatica, 0); assert.strictEqual(s[0].quantidade, 3);
-    assert.strictEqual(s[0].motivo, 'segundo'); // o primeiro NAO vazio
+    assert.deepStrictEqual(await subs(id), []);
+    assert.deepStrictEqual(await planejada(ids[0]), { o: C.id, l: null });
+    assert.strictEqual(await parte(ids[0]), 3);
   });
 
-  await test('Metade positiva: mesma origem, sem planejada antes, e A-e-B na MESMA rodada sem planejada — nada registrado', async () => {
+  await test('Metade positiva: mesma origem soma (A 3 + A 2 = 5); A-e-B na MESMA rodada sem planejada vira origem A com 2 (Etapa 196 RN-196.05) — nada registrado', async () => {
     const A = await loc('PA'); const B = await loc('PB'); const m = await material();
     await entrar(m.id, A.id, 10); await entrar(m.id, B.id, 10);
     const r1 = await req([[m.id, 8]]);
@@ -114,12 +111,15 @@ let seq = 0;
     await ok(separar(r1.id, [{ item_id: r1.ids[0], quantidade_separada: 2, localizacao_origem_id: A.id }]));
     assert.deepStrictEqual(await subs(r1.id), []);
     assert.strictEqual((await planejada(r1.ids[0])).o, A.id); // a mesma origem mantem a planejada
+    assert.strictEqual(await parte(r1.ids[0]), 5);
     const r2 = await req([[m.id, 4]]);
     await ok(separar(r2.id, [
       { item_id: r2.ids[0], quantidade_separada: 2, localizacao_origem_id: A.id },
       { item_id: r2.ids[0], quantidade_separada: 2, localizacao_origem_id: B.id },
     ]));
     assert.deepStrictEqual(await subs(r2.id), []);
+    assert.deepStrictEqual(await planejada(r2.ids[0]), { o: A.id, l: null });
+    assert.strictEqual(await parte(r2.ids[0]), 2);
   });
 
   await test('Entrada com quantidade 0 e outro "Sai de" nao conta; planejada inteira entregue antes: nada', async () => {
@@ -139,18 +139,20 @@ let seq = 0;
     assert.deepStrictEqual(await subs(id), []);
   });
 
-  await test('Quantidade = o pendente ANTES da rodada (com entrega parcial no meio); a entrega de depois nao registra outra troca', async () => {
+  await test('Etapa 196 (era "quantidade = o pendente antes" da 65): A 6, entrega 2, rodada de B 3 — nenhuma troca, A fica com 4; a entrega de um clique de 7 tira 4 de A e nao registra troca', async () => {
     const A = await loc('QA'); const B = await loc('QB'); const m = await material();
     await entrar(m.id, A.id, 10); await entrar(m.id, B.id, 10);
     const { id, ids } = await req([[m.id, 10]]);
     await ok(separar(id, [{ item_id: ids[0], quantidade_separada: 6, localizacao_origem_id: A.id }]));
     await ok(entregar(id, [{ item_id: ids[0], quantidade_atendida: 2 }]));
     await ok(separar(id, [{ item_id: ids[0], quantidade_separada: 3, localizacao_origem_id: B.id }]));
-    let s = await subs(id);
-    assert.strictEqual(s.length, 1); assert.strictEqual(s[0].quantidade, 4);
+    assert.deepStrictEqual(await subs(id), []);
+    assert.strictEqual(await parte(ids[0]), 4);
     await ok(entregar(id, [{ item_id: ids[0], quantidade_atendida: 7 }]));
-    s = await subs(id);
-    assert.strictEqual(s.length, 1, JSON.stringify(s));
+    assert.deepStrictEqual(await subs(id), []);
+    const deA = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) q FROM movimentacoes_almoxarifado
+      WHERE material_id = ? AND tipo = 'SAIDA' AND localizacao_origem_id = ?`, [m.id, A.id]);
+    assert.strictEqual(Number(deA.q), 6); // 2 da primeira entrega + 4 da parte de A
   });
 
   await test('Rodada RECUSADA na passada 1 (segundo item sem saldo na origem) nao registra troca nem apaga a planejada', async () => {
@@ -167,7 +169,8 @@ let seq = 0;
     assert.strictEqual((await planejada(ids[0])).o, A.id);
   });
 
-  await test('Fase 5: planejada SEM lote (A, —) e rodada (A, L1) e troca (par exato) — e a entrega de um clique depois funciona; lote diferente tambem e troca', async () => {
+
+  await test('Etapa 196 (era a Fase 5 da 65, par exato): planejada SEM lote (A, —) 2 e rodada (A, L1) 4 — nenhuma troca, (A, —) fica com 2; a entrega de um clique de 6 tira 2 de (A, —) e 4 no automatico', async () => {
     const A = await loc('LA'); const m = await material();
     const c1 = `L1-${seq}`; const c2 = `L2-${seq}`;
     await entrar(m.id, A.id, 2); await entrar(m.id, A.id, 10, c1); await entrar(m.id, A.id, 10, c2);
@@ -175,39 +178,40 @@ let seq = 0;
     const r1 = await req([[m.id, 6]]);
     await ok(separar(r1.id, [{ item_id: r1.ids[0], quantidade_separada: 2, localizacao_origem_id: A.id }]));
     await ok(separar(r1.id, [{ item_id: r1.ids[0], quantidade_separada: 4, localizacao_origem_id: A.id, lote_id: l1 }]));
-    const s1 = await subs(r1.id);
-    assert.strictEqual(s1.length, 1, JSON.stringify(s1));
-    assert.strictEqual(s1[0].planejada_lote, null); assert.strictEqual(s1[0].saiu_lote, c1); assert.strictEqual(s1[0].quantidade, 2);
-    assert.deepStrictEqual(await planejada(r1.ids[0]), { o: null, l: null });
-    // A sonda da Fase 5: com a planejada (A, —) mantida, esta entrega era recusada ("O saldo em A (2) nao cobre (6)").
+    assert.deepStrictEqual(await subs(r1.id), []);
+    assert.deepStrictEqual(await planejada(r1.ids[0]), { o: A.id, l: null });
+    assert.strictEqual(await parte(r1.ids[0]), 2);
+    // A sonda da Fase 5 da 65: com a planejada (A, —) aplicada a caixa inteira, esta entrega era recusada ("O saldo em A (2) nao
+    // cobre (6)") — a 65 apagava a planejada; a 196 a limita a parte.
     await ok(entregar(r1.id, [{ item_id: r1.ids[0], quantidade_atendida: 6 }]));
+    const semLote = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) q FROM estoque_saldo_almoxarifado
+      WHERE material_id = ? AND localizacao_id = ? AND lote_id IS NULL`, [m.id, A.id]);
+    assert.strictEqual(Number(semLote.q), 0);
     const r2 = await req([[m.id, 6]]);
     await ok(separar(r2.id, [{ item_id: r2.ids[0], quantidade_separada: 2, localizacao_origem_id: A.id, lote_id: l1 }]));
     await ok(separar(r2.id, [{ item_id: r2.ids[0], quantidade_separada: 2, localizacao_origem_id: A.id, lote_id: l2 }]));
-    const s = await subs(r2.id);
-    assert.strictEqual(s.length, 1, JSON.stringify(s));
-    assert.strictEqual(s[0].planejada_lote, c1); assert.strictEqual(s[0].saiu_lote, c2); assert.strictEqual(s[0].saiu_codigo, A.codigo);
+    assert.deepStrictEqual(await subs(r2.id), []);
+    assert.deepStrictEqual(await planejada(r2.ids[0]), { o: A.id, l: l1 });
+    assert.strictEqual(await parte(r2.ids[0]), 2);
   });
 
-  await test('Motivo: nao-texto ignorado, longo cortado em 500; a troca da ENTREGA continua com momento ENTREGA', async () => {
+  await test('Motivo: na separacao e ignorado (nao-texto, longo — 200, sem troca); a troca da ENTREGA continua com momento ENTREGA e o motivo cortado em 500', async () => {
     const A = await loc('MA'); const B = await loc('MB'); const m = await material();
     await entrar(m.id, A.id, 20); await entrar(m.id, B.id, 20);
     const r1 = await req([[m.id, 10]]);
     await ok(separar(r1.id, [{ item_id: r1.ids[0], quantidade_separada: 2, localizacao_origem_id: A.id }]));
     await ok(separar(r1.id, [{ item_id: r1.ids[0], quantidade_separada: 2, localizacao_origem_id: B.id, motivo_substituicao: 42 }]));
-    assert.strictEqual((await subs(r1.id))[0].motivo, null);
-    const r2 = await req([[m.id, 10]]);
-    await ok(separar(r2.id, [{ item_id: r2.ids[0], quantidade_separada: 2, localizacao_origem_id: A.id }]));
-    await ok(separar(r2.id, [{ item_id: r2.ids[0], quantidade_separada: 2, localizacao_origem_id: B.id, motivo_substituicao: 'x'.repeat(600) }]));
-    assert.strictEqual((await subs(r2.id))[0].motivo.length, 500);
+    await ok(separar(r1.id, [{ item_id: r1.ids[0], quantidade_separada: 2, localizacao_origem_id: B.id, motivo_substituicao: 'x'.repeat(600) }]));
+    assert.deepStrictEqual(await subs(r1.id), []);
     const r3 = await req([[m.id, 3]]);
     await ok(separar(r3.id, [{ item_id: r3.ids[0], quantidade_separada: 3, localizacao_origem_id: A.id }]));
-    await ok(entregar(r3.id, [{ item_id: r3.ids[0], quantidade_atendida: 3, localizacao_origem_id: B.id }]));
+    await ok(entregar(r3.id, [{ item_id: r3.ids[0], quantidade_atendida: 3, localizacao_origem_id: B.id, motivo_substituicao: 'y'.repeat(600) }]));
     const s = await subs(r3.id);
     assert.strictEqual(s.length, 1); assert.strictEqual(s[0].momento, 'ENTREGA');
+    assert.strictEqual(s[0].quantidade, 3); assert.strictEqual(s[0].motivo.length, 500);
   });
 
-  await test('Fase 5: rodada SO de lote (sem endereco) sobre planejada A: saida "do lote", NAO automatica', async () => {
+  await test('Etapa 196 (era a Fase 5 da 65): rodada SO de lote (sem endereco) sobre planejada A — nenhuma troca, A fica com 2', async () => {
     const A = await loc('OA'); const m = await material();
     const c = `LO-${seq}`;
     await entrar(m.id, A.id, 5); await entrar(m.id, A.id, 5, c);
@@ -215,38 +219,22 @@ let seq = 0;
     const { id, ids } = await req([[m.id, 6]]);
     await ok(separar(id, [{ item_id: ids[0], quantidade_separada: 2, localizacao_origem_id: A.id }]));
     await ok(separar(id, [{ item_id: ids[0], quantidade_separada: 2, lote_id: l }]));
-    const s = await subs(id);
-    assert.strictEqual(s.length, 1, JSON.stringify(s));
-    assert.strictEqual(s[0].automatica, 0); assert.strictEqual(s[0].saiu_codigo, null); assert.strictEqual(s[0].saiu_lote, c);
-  });
-
-  await test('Fase 5: o INSERT da troca falhando nao derruba a rodada (best-effort): 200, planejada apagada, sem linha', async () => {
-    const A = await loc('FA'); const B = await loc('FB'); const m = await material();
-    await entrar(m.id, A.id, 10); await entrar(m.id, B.id, 10);
-    const { id, ids } = await req([[m.id, 6]]);
-    await ok(separar(id, [{ item_id: ids[0], quantidade_separada: 2, localizacao_origem_id: A.id }]));
-    await dbRun(db, `CREATE TRIGGER e65_falha BEFORE INSERT ON substituicoes_origem_requisicao
-      WHEN NEW.requisicao_id = ${Number(id)} BEGIN SELECT RAISE(ABORT, 'falha forcada'); END`);
-    const warn = console.warn; let avisou = ''; console.warn = (msg) => { avisou += msg; };
-    try {
-      await ok(separar(id, [{ item_id: ids[0], quantidade_separada: 2, localizacao_origem_id: B.id }]));
-    } finally {
-      console.warn = warn;
-      await dbRun(db, 'DROP TRIGGER e65_falha');
-    }
-    assert.ok(/troca de origem/.test(avisou), avisou);
     assert.deepStrictEqual(await subs(id), []);
-    assert.deepStrictEqual(await planejada(ids[0]), { o: null, l: null });
+    assert.deepStrictEqual(await planejada(ids[0]), { o: A.id, l: null });
+    assert.strictEqual(await parte(ids[0]), 2);
   });
 
-  await test('Pelo SERVICO (sem a rota) tambem registra', async () => {
+  // Etapa 196: o teste "o INSERT da troca falhando nao derruba a rodada (best-effort)" foi APAGADO — a separacao nao grava mais
+  // troca (B1314), entao nao ha INSERT para falhar. A rodada continua append-only e coberta pelas suites da separacao.
+
+  await test('Pelo SERVICO (sem a rota) tambem nao registra: A 2 + B 2 -> origem A com 2', async () => {
     const A = await loc('SA'); const B = await loc('SB'); const m = await material();
     await entrar(m.id, A.id, 10); await entrar(m.id, B.id, 10);
     const { id, ids } = await req([[m.id, 6]]);
     await requisitionService.separarRequisicao(db, id, [{ item_id: ids[0], quantidade_separada: 2, localizacao_origem_id: A.id }], ADMIN);
     await requisitionService.separarRequisicao(db, id, [{ item_id: ids[0], quantidade_separada: 2, localizacao_origem_id: B.id }], ADMIN);
-    const s = await requisitionService.listarSubstituicoes(db, id);
-    assert.strictEqual(s.length, 1); assert.strictEqual(s[0].momento, 'SEPARACAO');
+    assert.deepStrictEqual(await requisitionService.listarSubstituicoes(db, id), []);
+    assert.strictEqual(await parte(ids[0]), 2);
   });
 
   await close();

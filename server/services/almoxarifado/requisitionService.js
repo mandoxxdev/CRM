@@ -1353,20 +1353,16 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
   // um deles; e a mesma entrada duas vezes no payload contava o pendente em dobro.
   // Etapa 65 (Fase 2, critico): o RETRATO da planejada antes da rodada — o `item` e mutado em memoria no
   // laco abaixo, e o pendente "antes" lido dali gravava troca falsa no "A e depois B" sem planejada.
-  const planejadaAntes = new Map(); // item.id -> { origemId, loteId, pend }
+  // Etapa 196 (RN-196.04/09): o retrato da planejada so servia a troca da separacao, que saiu; o comprometido do par e a PARTE
+  // da origem (`parteDaOrigem`), nao a caixa inteira — o resto da caixa nao esta mais naquele par (saiu do automatico ou de outro).
   for (const it of itens) {
-    const pend = Math.max(0, getSeparado(it) - getEntregue(it));
-    if (it.origem_separacao_id && pend > 1e-9) {
-      planejadaAntes.set(it.id, {
-        origemId: Number(it.origem_separacao_id), loteId: it.lote_separacao_id ? Number(it.lote_separacao_id) : null, pend,
-      });
-    }
-    if (it.origem_separacao_id && pend > 1e-9) {
+    const parte = parteDaOrigem(it);
+    if (it.origem_separacao_id && parte > 1e-9) {
       const k = `${it.material_id}|${Number(it.origem_separacao_id)}|${it.lote_separacao_id ? Number(it.lote_separacao_id) : null}`;
-      pedidoSeparacao.set(k, (pedidoSeparacao.get(k) || 0) + pend);
+      pedidoSeparacao.set(k, (pedidoSeparacao.get(k) || 0) + parte);
     }
   }
-  // Etapa 95 (T0, B468): o separado de ANTES da rodada (retrato, molde do `planejadaAntes`) — a regua da 60 usa o
+  // Etapa 95 (T0, B468): o separado de ANTES da rodada (retrato; o `planejadaAntes` da 65 saiu na 196) — a regua da 60 usa o
   // teto do inicio da rodada, porque ela ja subtrai o que os outros itens da rodada tiram do livre (`tiraDoLivre`, Etapa 127); com o teto em
   // memoria subtrairia duas vezes. E a caixa sem reserva de um item da propria requisicao, com um separado dado.
   const separadoAntes = new Map(itens.map((i) => [i.id, getSeparado(i)]));
@@ -1400,7 +1396,7 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
         maxInicial: max, pend: pendenteSeparacao(item), estoque: tetoCom((i) => separadoAntes.get(i.id)),
         // Etapa 127 (Fase 5, r1): a parte propria do teto no inicio da rodada — os irmaos so tiram dele o que passa dela.
         propria: reservaPropriaSeparavel(saldo.reservado_para_item, separadoAntes.get(item.id) - getEntregue(item)),
-        material_id: item.material_id, origens: new Set(), saldoOrigem: null, total: 0, motivo: null, motivoTroca: null,
+        material_id: item.material_id, origens: new Set(), saldoOrigem: null, total: 0, motivo: null,
       });
     }
 
@@ -1442,8 +1438,9 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
       // eslint-disable-next-line no-await-in-loop
       const so = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) as q FROM estoque_saldo_almoxarifado
         WHERE material_id = ? AND lote_id IS ? ${onde}`, [item.material_id, loteId, ...(origemId ? [origemId] : [])]);
+      // Etapa 196 (RN-196.09): o comprometido das outras no par e a PARTE da origem delas, nao a caixa inteira.
       // eslint-disable-next-line no-await-in-loop
-      const outras = origemId ? await dbGet(db, `SELECT COALESCE(SUM(MAX(COALESCE(ir.quantidade_separada,0) - COALESCE(ir.quantidade_entregue,0), 0)), 0) as q
+      const outras = origemId ? await dbGet(db, `SELECT COALESCE(SUM(${PARTE_ORIGEM_SQL}), 0) as q
         FROM itens_requisicao_almoxarifado ir JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
         WHERE ir.material_id = ? AND ir.origem_separacao_id = ? AND ir.lote_separacao_id IS ?
           AND ir.requisicao_id <> ? AND COALESCE(r.ativo, 1) = 1`, [item.material_id, origemId, loteId, requisicaoId]) : { q: 0 };
@@ -1460,16 +1457,26 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
         throw err;
       }
     }
-    // Rodada com origem diferente (ou sem origem) sobre separado pendente de outra: mista -> nula.
-    const planejada = pendenteAntes > 1e-9 && !mesmoPar ? { origemId: null, loteId: null }
-      // Fase 5: lote sem endereco nao vira planejada (a entrega exige o endereco, e ficaria preso).
-      : { origemId: origemId || null, loteId: origemId ? loteId : null };
-    // Etapa 65 (RN-01): o motivo da troca — o primeiro nao vazio do item na rodada (so texto; <= 500).
-    if (!regua.motivoTroca && typeof entrada.motivo_substituicao === 'string' && entrada.motivo_substituicao.trim()) {
-      regua.motivoTroca = entrada.motivo_substituicao.trim().slice(0, 500);
+    // Etapa 196 (RN-196.01/02/03/05/10): o item guarda UM par e QUANTO da caixa saiu dele. Revoga o "mista -> nula" da Etapa 59:
+    //  - sem origem guardada com caixa (ou caixa vazia): o par com endereco desta entrada vira a origem, com a quantidade dela
+    //    (a caixa que ja havia, sem origem, continua sem; so lote nao vira origem — a entrega exige o endereco);
+    //  - com origem guardada: mesmo par (regua exata da 65) soma; outro par, automatico ou so lote nao muda a origem nem a parte
+    //    (a parte nova sai no automatico na entrega). Sempre grava a parte — origem antiga NULL vira a caixa de antes (RN-196.10).
+    const temOrigem = !!item.origem_separacao_id && pendenteAntes > 1e-9;
+    const parteAntes = temOrigem ? parteDaOrigem(item) : 0;
+    let planejada;
+    if (!temOrigem) {
+      planejada = origemId ? { origemId, loteId, quantidade: qty } : { origemId: null, loteId: null, quantidade: null };
+    } else {
+      planejada = {
+        origemId: Number(item.origem_separacao_id), loteId: item.lote_separacao_id ? Number(item.lote_separacao_id) : null,
+        quantidade: Q.qtd(mesmoPar ? parteAntes + qty : parteAntes),
+      };
     }
+    // Etapa 196 (RN-196.04, B1318): `motivo_substituicao` na separacao e ignorado — sem troca, nao ha onde gravar.
     item.origem_separacao_id = planejada.origemId;
     item.lote_separacao_id = planejada.loteId;
+    item.quantidade_origem_separacao = planejada.quantidade;
     // Etapa 96 (C178): a soma em JS arredondada — 0,7 + 0,2 + 0,1 gravava 0.9999999999999999 e a entrega de 1 era
     // recusada com o estoque limpo (sonda 10 A da Fase 0).
     const novaSeparada = Q.qtd(getSeparado(item) + qty);
@@ -1531,9 +1538,10 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
   // PARCIALMENTE_ATENDIDA, o Encerrar). Com a rodada gravada nao devolve: EM_SEPARACAO e o estado certo.
   try {
     for (const { item, qty, novaSeparada, origemId, loteId, planejada } of validados) {
+      // Etapa 196 (RN-196.01): a parte da origem vai junto (NULL so sem origem).
       await dbRun(db, `UPDATE itens_requisicao_almoxarifado SET quantidade_separada = ?,
-          origem_separacao_id = ?, lote_separacao_id = ? WHERE id = ?`,
-      [novaSeparada, planejada.origemId, planejada.loteId, item.id]);
+          origem_separacao_id = ?, lote_separacao_id = ?, quantidade_origem_separacao = ? WHERE id = ?`,
+      [novaSeparada, planejada.origemId, planejada.loteId, planejada.quantidade, item.id]);
       tocados.push({
         item_id: item.id, material_id: item.material_id, quantidade: qty,
         ...(origemId ? { localizacao_origem_id: origemId } : {}), ...(loteId ? { lote_id: loteId } : {}),
@@ -1549,31 +1557,8 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
         [requisicaoId, user.id, nomeDoUsuario(user), tocados.length, JSON.stringify(tocados)]);
       rodadaId = ins.lastID;
 
-      // Etapa 65 (RN-01): a TROCA na separacao — item que antes da rodada tinha planejada com separado
-      // pendente e termina a rodada sem ela. Detectada sobre o retrato e a regua (so entradas com
-      // quantidade > 0), gravada DEPOIS da rodada (separacao_id); rodada recusada na passada 1 nao chega
-      // aqui. Separacao nao move estoque: sem movimentacao_ids. Best-effort como a auditoria da rodada
-      // (a rodada ja esta gravada; recusar agora deixaria o separado sem a resposta) — letra B.
-      for (const [itemId, r] of reguaDivergencia) {
-        const antes = planejadaAntes.get(itemId);
-        const item = itens.find((i) => i.id === itemId);
-        if (!antes || !item || item.origem_separacao_id) continue;
-        const pares = [...r.origens].map((k) => k.split('|').map((x) => (x === 'null' ? null : Number(x))));
-        const umPar = pares.length === 1 ? pares[0] : null;
-        try {
-          // eslint-disable-next-line no-await-in-loop
-          await dbRun(db, `INSERT INTO substituicoes_origem_requisicao
-            (requisicao_id, item_id, material_id, quantidade, localizacao_planejada_id, lote_planejado_id,
-             localizacao_saida_id, lote_saida_id, automatica, movimentacao_ids, motivo, usuario_id, usuario_nome,
-             momento, separacao_id)
-            VALUES (?,?,?,?,?,?,?,?,?,NULL,?,?,?,'SEPARACAO',?)`,
-          [requisicaoId, itemId, item.material_id, antes.pend, antes.origemId, antes.loteId,
-            umPar ? umPar[0] : null, umPar ? umPar[1] : null, umPar && !umPar[0] && !umPar[1] ? 1 : 0,
-            r.motivoTroca || null, user.id, nomeDoUsuario(user), rodadaId]);
-        } catch (e) {
-          console.warn(`[almoxarifado-separacao] Falha ao registrar a troca de origem do item ${itemId} na rodada ${rodadaId}: ${e.message}`);
-        }
-      }
+      // Etapa 196 (RN-196.04, B1314): a troca de origem NA SEPARACAO (Etapa 65) saiu — separar nao move estoque e a origem
+      // guardada nao muda numa rodada (a parte dela continua; o resto sai no automatico). As linhas antigas ficam no historico.
 
       // RN-07 como COMPARE-AND-CLEAR (fix-round 1, F4). Reler a conferência e limpar só se a linha
       // ainda for a relida (`WHERE conferido_por_id IS ?`): se alguém conferiu entre a releitura e o

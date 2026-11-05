@@ -98,7 +98,122 @@ process.on('exit', (code) => {
     assert.strictEqual(Number(r3.p), 0);
   });
 
-  //@@T1@@
+  // ── T1 — a separacao (RN-196.01..05, 196.09 na rodada, 196.10) ───────────────────────────────────────────────────────────────────
+  await test('[RN-196.01] sem nada separado, separa 3 de A -> origem A, parte 3; com 2 na caixa sem origem, separa 3 de B -> origem B, parte 3', async () => {
+    const A = await loc('A'); const B = await loc('B'); const m = await material();
+    await entrar(m.id, A.id, 10); await entrar(m.id, B.id, 10);
+    const r1 = await req([[m.id, 8]]);
+    await ok(separar(r1.id, [{ item_id: r1.ids[0], quantidade_separada: 3, localizacao_origem_id: A.id }]));
+    assert.deepStrictEqual(await origem(r1.ids[0]), { o: A.id, l: null, q: 3, caixa: 3 });
+    const r2 = await req([[m.id, 8]]);
+    await ok(separar(r2.id, [{ item_id: r2.ids[0], quantidade_separada: 2 }]));
+    assert.deepStrictEqual(await origem(r2.ids[0]), { o: null, l: null, q: null, caixa: 2 });
+    await ok(separar(r2.id, [{ item_id: r2.ids[0], quantidade_separada: 3, localizacao_origem_id: B.id }]));
+    assert.deepStrictEqual(await origem(r2.ids[0]), { o: B.id, l: null, q: 3, caixa: 5 });
+    assert.deepStrictEqual(await subs(r2.id), []);
+  });
+
+  await test('[RN-196.01] so lote (sem endereco) nao vira origem', async () => {
+    const A = await loc('SL'); const m = await material(); const c = `LS-${seq}`;
+    await entrar(m.id, A.id, 5, c);
+    const l = await loteId(m.id, c);
+    const r = await req([[m.id, 4]]);
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 2, lote_id: l }]));
+    assert.deepStrictEqual(await origem(r.ids[0]), { o: null, l: null, q: null, caixa: 2 });
+  });
+
+  await test('[RN-196.02] A 3, depois A 2 -> origem A, parte 5; nenhuma troca', async () => {
+    const A = await loc('MA'); const m = await material();
+    await entrar(m.id, A.id, 10);
+    const r = await req([[m.id, 8]]);
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 3, localizacao_origem_id: A.id }]));
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 2, localizacao_origem_id: A.id }]));
+    assert.deepStrictEqual(await origem(r.ids[0]), { o: A.id, l: null, q: 5, caixa: 5 });
+    assert.deepStrictEqual(await subs(r.id), []);
+  });
+
+  await test('[RN-196.03] o caso real: A/L1 3, depois automatico 3 -> origem A/L1, parte 3, caixa 6; outro par (B) e so lote tambem mantem', async () => {
+    const A = await loc('RA'); const B = await loc('RB'); const m = await material(); const c1 = `L1-${seq}`; const c2 = `L2-${seq}`;
+    await entrar(m.id, A.id, 3, c1); await entrar(m.id, B.id, 10, c2);
+    const l1 = await loteId(m.id, c1); const l2 = await loteId(m.id, c2);
+    const r = await req([[m.id, 12]]);
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 3, localizacao_origem_id: A.id, lote_id: l1 }]));
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 3 }]));
+    assert.deepStrictEqual(await origem(r.ids[0]), { o: A.id, l: l1, q: 3, caixa: 6 });
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 2, localizacao_origem_id: B.id, lote_id: l2 }]));
+    assert.deepStrictEqual(await origem(r.ids[0]), { o: A.id, l: l1, q: 3, caixa: 8 });
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 1, lote_id: l2 }]));
+    assert.deepStrictEqual(await origem(r.ids[0]), { o: A.id, l: l1, q: 3, caixa: 9 });
+    assert.deepStrictEqual(await subs(r.id), []);
+  });
+
+  await test('[RN-196.04] a separacao nao grava troca; motivo_substituicao e ignorado sem 400', async () => {
+    const A = await loc('TA'); const B = await loc('TB'); const m = await material();
+    await entrar(m.id, A.id, 10); await entrar(m.id, B.id, 10);
+    const r = await req([[m.id, 8]]);
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 3, localizacao_origem_id: A.id }]));
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 2, localizacao_origem_id: B.id, motivo_substituicao: 'A acabou' }]));
+    assert.deepStrictEqual(await subs(r.id), []);
+    assert.deepStrictEqual(await origem(r.ids[0]), { o: A.id, l: null, q: 3, caixa: 5 });
+  });
+
+  await test('[RN-196.05] sem origem, rodada com A 1, A 1, B 2 -> origem A, parte 2; caixa 4', async () => {
+    const A = await loc('VA'); const B = await loc('VB'); const m = await material();
+    await entrar(m.id, A.id, 5); await entrar(m.id, B.id, 5);
+    const r = await req([[m.id, 9]]);
+    await ok(separar(r.id, [
+      { item_id: r.ids[0], quantidade_separada: 1, localizacao_origem_id: A.id },
+      { item_id: r.ids[0], quantidade_separada: 1, localizacao_origem_id: A.id },
+      { item_id: r.ids[0], quantidade_separada: 2, localizacao_origem_id: B.id },
+    ]));
+    assert.deepStrictEqual(await origem(r.ids[0]), { o: A.id, l: null, q: 2, caixa: 4 });
+    assert.deepStrictEqual(await subs(r.id), []);
+  });
+
+  await test('[RN-196.09] 3a rodada de A com 2 livres la (A 3 + automatico 2 antes) passa: o comprometido de A e a parte 3, nao a caixa 5', async () => {
+    const A = await loc('PA'); const B = await loc('PB'); const m = await material();
+    await entrar(m.id, A.id, 5); await entrar(m.id, B.id, 2);
+    const r = await req([[m.id, 10]]);
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 3, localizacao_origem_id: A.id }]));
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 2 }]));
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 2, localizacao_origem_id: A.id }]));
+    assert.deepStrictEqual(await origem(r.ids[0]), { o: A.id, l: null, q: 5, caixa: 7 });
+  });
+
+  await test('[RN-196.09] a regua da divergencia de OUTRA requisicao conta a parte: A 5 com 3 comprometidos (caixa 6) -> separar 1 de A com 2 la e divergente', async () => {
+    const A = await loc('DA'); const B = await loc('DB'); const m = await material();
+    await entrar(m.id, A.id, 5); await entrar(m.id, B.id, 10);
+    const r1 = await req([[m.id, 6]]);
+    await ok(separar(r1.id, [{ item_id: r1.ids[0], quantidade_separada: 3, localizacao_origem_id: A.id }]));
+    await ok(separar(r1.id, [{ item_id: r1.ids[0], quantidade_separada: 3 }]));
+    const r2 = await req([[m.id, 2]]);
+    const s = await ok(separar(r2.id, [{ item_id: r2.ids[0], quantidade_separada: 1, localizacao_origem_id: A.id }]));
+    const rod = await dbGet(db, 'SELECT itens_json FROM separacoes_requisicao_almoxarifado WHERE id = ?', [s.body.rodada_id]);
+    const t = JSON.parse(rod.itens_json)[0];
+    assert.deepStrictEqual([t.maximo, t.divergente], [2, true], rod.itens_json);
+  });
+
+  await test('[RN-196.10] origem antiga sem quantidade (NULL, caixa 3) + rodada automatica 3 -> grava a parte 3 (nunca NULL com origem)', async () => {
+    const A = await loc('NA'); const B = await loc('NB'); const m = await material();
+    await entrar(m.id, A.id, 3); await entrar(m.id, B.id, 3);
+    const r = await req([[m.id, 6]]);
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 3, localizacao_origem_id: A.id }]));
+    await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET quantidade_origem_separacao = NULL WHERE id = ?', [r.ids[0]]);
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 3 }]));
+    assert.deepStrictEqual(await origem(r.ids[0]), { o: A.id, l: null, q: 3, caixa: 6 });
+  });
+
+  await test('[RN-196.01..03] pelo SERVICO (sem a rota): A 2 + B 2 -> origem A, parte 2, nenhuma troca', async () => {
+    const A = await loc('SA'); const B = await loc('SB'); const m = await material();
+    await entrar(m.id, A.id, 10); await entrar(m.id, B.id, 10);
+    const r = await req([[m.id, 6]]);
+    await requisitionService.separarRequisicao(db, r.id, [{ item_id: r.ids[0], quantidade_separada: 2, localizacao_origem_id: A.id }], ADMIN);
+    await requisitionService.separarRequisicao(db, r.id, [{ item_id: r.ids[0], quantidade_separada: 2, localizacao_origem_id: B.id }], ADMIN);
+    assert.deepStrictEqual(await requisitionService.listarSubstituicoes(db, r.id), []);
+    assert.deepStrictEqual(await origem(r.ids[0]), { o: A.id, l: null, q: 2, caixa: 4 });
+  });
+
+  //@@T2@@
 
   await close();
   terminou = true;
