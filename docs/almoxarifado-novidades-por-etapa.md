@@ -13506,6 +13506,16 @@ depois de voltar à aba, 2 — o **C454** dizia "não medido"), pelo mesmo camin
 **Completar Entrega** só aparece quando há o que entregar; o caminho que separaria antes nunca rodava (**C452**). Agora o botão abre a
 entrega direto, como já fazia na prática. **Descartado:** fazer o caminho funcionar (mudaria quando o botão aparece — fora do tamanho de
 1h, e "separar e entregar num clique" é produto, não conserto). **Reversível:** é um caminho de tela, sem dado. `650db899`.
+**B1319 (NOVA, da Etapa 196, Fase 5; decisão do agente) — séries de outro lote num clique: valem como a parte sem origem, se houver.**
+Item com série separado em duas vezes (3 de XB-01/L1, 3 no automático): entregar num clique, sem "Sai de", 3 séries de L2 dava 400 ("a
+origem da separação não serve mais") — antes da 196 dava 200, porque a 2ª rodada apagava a origem. Agora, quando as séries escolhidas não
+são do lote da origem **e** a caixa tem parte sem origem, a entrega vale como de outro par: consome primeiro a parte sem origem (0 trocas;
+acima dela, a troca do excedente, marcada automática). **Caixa toda da origem** (nada separado de outro lugar) continua recusando, como antes
+da 196: lá as séries de outro lote são mesmo uma troca e a tela pede "Sai de". **Séries mistas** (L1 e L2 na mesma entrega) continuam
+recusadas pela regra da Etapa 61 ("escolha séries de um lote só"), com ou sem "Sai de" — entrega-se em duas vezes. **Descartado:** dividir
+as séries mistas entre o pedaço da origem e o automático (mexe na ordem das séries por baixa e no lote do pedaço automático, que hoje é um
+só; nenhum pedido de uso); tratar sempre como outro par (mudaria o 400 da caixa toda da origem, que é de antes). **Reversível:** uma
+condição na entrega, sem dado.
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 

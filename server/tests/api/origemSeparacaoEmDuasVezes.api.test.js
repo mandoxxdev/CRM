@@ -331,6 +331,77 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(await origem(ids[0]), { o: A.id, l: null, q: 1, caixa: 4 });
   });
 
+  // ── Fase 5 (K1..K3) ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  await test('[Fase 5 K1] SERIE: parte 3 em A/L1 + 3 no automatico; entrega de um clique 3 com series de L2 (sem "Sai de") -> 200 (como antes da 196), 0 trocas, A/L1 fica com 3; um clique 3 com as de L1 tira de A/L1', async () => {
+    const A = await loc('KA'); const B = await loc('KB'); const m = await material({ serie: true });
+    const c1 = `KL1-${seq}`; const c2 = `KL2-${seq}`; const p = `K${seq}`;
+    await entrar(m.id, A.id, 3, c1, [`${p}a1`, `${p}a2`, `${p}a3`]); await entrar(m.id, B.id, 4, c2, [`${p}b1`, `${p}b2`, `${p}b3`, `${p}b4`]);
+    const l1 = await loteId(m.id, c1); const l2 = await loteId(m.id, c2);
+    const sids = async (pre) => (await dbAll(db, 'SELECT id FROM series_almoxarifado WHERE material_id = ? AND numero LIKE ? ORDER BY id', [m.id, `${p}${pre}%`])).map((x) => x.id);
+    const r = await req([[m.id, 6]]);
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 3, localizacao_origem_id: A.id, lote_id: l1 }]));
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 3 }]));
+    const bs = await sids('b');
+    // series mistas (L1 e L2 na mesma entrega): recusa clara de antes (Etapa 61), nada sai — B1319
+    const mista = await entregar(r.id, [{ item_id: r.ids[0], quantidade_atendida: 2, serie_ids: [(await sids('a'))[0], bs[0]] }]);
+    assert.strictEqual(mista.status, 400, JSON.stringify(mista.body));
+    assert.strictEqual(mista.body.error, `Mat ${m.codigo}: escolha series de um lote so`);
+    await ok(entregar(r.id, [{ item_id: r.ids[0], quantidade_atendida: 3, serie_ids: bs.slice(0, 3) }]));
+    assert.deepStrictEqual(await subs(r.id), []);
+    assert.deepStrictEqual(await origem(r.ids[0]), { o: A.id, l: l1, q: 3, caixa: 3 });
+    assert.deepStrictEqual([await saldo(m.id, A.id, l1), await saldo(m.id, B.id, l2)], [3, 1]);
+    await ok(entregar(r.id, [{ item_id: r.ids[0], quantidade_atendida: 3, serie_ids: await sids('a') }]));
+    assert.deepStrictEqual(await saidas(r.id), [[null, 3], [A.id, 3]]); // a de L2 sai pelo "so lote" (o motor acha B), como antes da 196
+    assert.deepStrictEqual([await saldo(m.id, A.id, l1), await saldo(m.id, B.id, l2)], [0, 1]);
+    assert.deepStrictEqual(await subs(r.id), []);
+    assert.deepStrictEqual(await origem(r.ids[0]), { o: null, l: null, q: null, caixa: 0 });
+  });
+
+  await test('[Fase 5 K1] SERIE: um clique 4 com series de L2 (caixa 6, parte 3) passa da parte sem origem -> troca de 1, A/L1 fica com 2; caixa toda de A/L1 + series de L2 -> 400 de antes (pede "Sai de")', async () => {
+    const A = await loc('KC'); const B = await loc('KD'); const m = await material({ serie: true });
+    const c1 = `KM1-${seq}`; const c2 = `KM2-${seq}`; const p = `KK${seq}`;
+    await entrar(m.id, A.id, 4, c1, [`${p}a1`, `${p}a2`, `${p}a3`, `${p}a4`]); await entrar(m.id, B.id, 4, c2, [`${p}b1`, `${p}b2`, `${p}b3`, `${p}b4`]);
+    const l1 = await loteId(m.id, c1); const l2 = await loteId(m.id, c2);
+    const bs = (await dbAll(db, 'SELECT id FROM series_almoxarifado WHERE material_id = ? AND numero LIKE ? ORDER BY id', [m.id, `${p}b%`])).map((x) => x.id);
+    const r = await req([[m.id, 6]]);
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 3, localizacao_origem_id: A.id, lote_id: l1 }]));
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 3 }]));
+    await ok(entregar(r.id, [{ item_id: r.ids[0], quantidade_atendida: 4, serie_ids: bs }]));
+    const s = await subs(r.id);
+    assert.deepStrictEqual(s.map((x) => [x.momento, Number(x.quantidade), x.localizacao_planejada_id, x.lote_planejado_id, x.lote_saida_id, x.automatica]),
+      [['ENTREGA', 1, A.id, l1, l2, 1]]); // um clique sem "Sai de": automatica
+    assert.deepStrictEqual(await origem(r.ids[0]), { o: A.id, l: l1, q: 2, caixa: 2 });
+    assert.deepStrictEqual([await saldo(m.id, A.id, l1), await saldo(m.id, B.id, l2)], [4, 0]);
+    // caixa toda de A/L1 (parte = caixa): series de outro lote num clique continuam recusadas, como antes da 196
+    const r2 = await req([[m.id, 1]]);
+    await ok(separar(r2.id, [{ item_id: r2.ids[0], quantidade_separada: 1, localizacao_origem_id: A.id, lote_id: l1 }]));
+    await entrar(m.id, B.id, 1, c2, [`${p}b5`]);
+    const b5 = (await dbGet(db, 'SELECT id FROM series_almoxarifado WHERE material_id = ? AND numero = ?', [m.id, `${p}b5`])).id;
+    const rec = await entregar(r2.id, [{ item_id: r2.ids[0], quantidade_atendida: 1, serie_ids: [b5] }]);
+    assert.strictEqual(rec.status, 400, JSON.stringify(rec.body));
+    assert.ok(/a origem da separação não serve mais \(as series escolhidas nao sao do lote dela\)/.test(rec.body.error), rec.body.error);
+  });
+
+  await test('[Fase 5 K2] entrega escolhendo a PROPRIA origem: 2 de A (caixa 6, parte 3) -> parte 1, caixa 4; o um clique 4 tira 1 de A e 3 no automatico', async () => {
+    const { A, id, ids } = await duasVezes();
+    await ok(entregar(id, [{ item_id: ids[0], quantidade_atendida: 2, localizacao_origem_id: A.id }]));
+    assert.deepStrictEqual(await origem(ids[0]), { o: A.id, l: null, q: 1, caixa: 4 });
+    await ok(entregar(id, [{ item_id: ids[0], quantidade_atendida: 4 }]));
+    assert.deepStrictEqual(await saidas(id), [[A.id, 2], [A.id, 1], [null, 3]]);
+    assert.deepStrictEqual(await subs(id), []);
+  });
+
+  await test('[Fase 5 K3] dado antigo (parte NULL, caixa 3): entrega de um clique 2 -> sai de A, parte 1 (a caixa de ANTES menos o que saiu)', async () => {
+    const A = await loc('KN'); const m = await material();
+    await entrar(m.id, A.id, 5);
+    const r = await req([[m.id, 3]]);
+    await ok(separar(r.id, [{ item_id: r.ids[0], quantidade_separada: 3, localizacao_origem_id: A.id }]));
+    await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET quantidade_origem_separacao = NULL WHERE id = ?', [r.ids[0]]);
+    await ok(entregar(r.id, [{ item_id: r.ids[0], quantidade_atendida: 2 }]));
+    assert.deepStrictEqual(await saidas(r.id), [[A.id, 2]]);
+    assert.deepStrictEqual(await origem(r.ids[0]), { o: A.id, l: null, q: 1, caixa: 1 });
+  });
+
   // ── T3 — os leitores da fila (RN-196.09) ──────────────────────────────────────────────────────────────────────────────────────────
   await test('[RN-196.09] fila e sugestao: outra requisicao ve A com 3 comprometidos (a parte de R1), nao 6 (a caixa) -> "Pegar em" A com 2 livres', async () => {
     const A = await loc('FA'); const C = await loc('FC'); const m = await material();

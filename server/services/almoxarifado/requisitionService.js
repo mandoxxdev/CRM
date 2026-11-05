@@ -1839,6 +1839,13 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     const loteSeries = infoSeries?.loteSeries || null;
     // Fase 5: tambem series SEM lote com lote escolhido (antes a checagem nem rodava e a recusa vinha
     // do claim do motor, generica); e, quando o lote e o da origem PLANEJADA, a mensagem diz isso.
+    // Etapa 196 (Fase 5, K1): series de OUTRO lote que o planejado, num clique, com parte SEM origem na caixa (rodada automatica
+    // ou de outro par): as series sao dessa parte — a planejada nao se aplica e a entrega vale como de outro par (RN-196.07: consome
+    // primeiro a parte sem origem; a troca e so o que passa dela). Antes da 196 a rodada automatica apagava a origem e isto era 200;
+    // a 196 aplicava A/L1 a min(qty, parte) e recusava. Caixa toda da origem (parte = caixa) continua recusando, como antes (B1319).
+    if (planejada && infoSeries && loteId && loteSeries !== loteId && pendenteSep - parte > 1e-9) {
+      origemId = null; loteId = null; planejada = false; qtdComOrigem = qty;
+    }
     if (infoSeries && loteId && loteSeries !== loteId) {
       const err = new Error(planejada
         ? `${item.material_nome}: a origem da separação não serve mais (as series escolhidas nao sao do lote dela) — entregue escolhendo de onde sai`
@@ -1854,7 +1861,7 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     if (item.origem_separacao_id && parte > 1e-9 && !planejada) {
       const planOrigem = Number(item.origem_separacao_id);
       const planLote = item.lote_separacao_id ? Number(item.lote_separacao_id) : null;
-      const automatica = entrada.origem_automatica === true && !origemId;
+      const automatica = (entrada.origem_automatica === true || semEscolha) && !origemId; // Fase 5 (K1): o um clique que deixou a planejada e automatico
       const outroPar = automatica || Number(origemId || 0) !== planOrigem || (planLote !== null && Number(loteId || 0) !== planLote);
       // Etapa 196 (RN-196.07, Fase 2 item 1): a entrega de outro par consome PRIMEIRO a parte sem origem da caixa — a troca e so o
       // que passa dela (`min(qty, caixa) - (caixa - parte)`), e sem linha quando da 0 (as da origem continuam na caixa). Antes
