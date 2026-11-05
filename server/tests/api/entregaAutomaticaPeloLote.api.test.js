@@ -304,7 +304,7 @@ process.on('exit', (code) => {
   await test('[RN-197.11] L1 6 com 4 guardados por R1: o automatico de R2 tira so os 2 livres de L1 e 2 de L2; R1 entrega 200', async () => {
     const { m, r1, r2 } = await guardada({ l1: 6 });
     await entregar(r2.R, [{ item_id: r2.ids[0], quantidade_atendida: 4 }]);
-    assert.deepStrictEqual(await livro(r2.R, m), [['SAIDA', null, 'L1', 2], ['SAIDA', null, 'L2', 2]]);
+    assert.deepStrictEqual(await livro(r2.R, m), [['SAIDA', 'ZB-01', 'L1', 2], ['SAIDA', null, 'L2', 2]], 'Fase 5 M1: com parte guardada no lote, a fatia leva o endereco');
     await entregar(r1.R, [{ item_id: r1.ids[0], quantidade_atendida: 4 }]);
     assert.deepStrictEqual(await retrato(m), { linhas: ['ZP-01/L2=7'], fisico: 7 });
   });
@@ -392,6 +392,68 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(await livro(R, m), [['SAIDA', null, 'L1', 2]]);
     assert.deepStrictEqual(await retrato(m), { linhas: ['ZP-01/L2=2'], fisico: 2 });
     assert.strictEqual(await entregue(ids[0]), 2);
+  });
+
+  // ── Fase 5 M1 (B1329): a parte guardada de outra caixa no nivel do ENDERECO ─────────────────────────────────────────────────────
+  // O desconto por lote (Fase 2 item 1) nao basta quando o lote tem saldo em dois enderecos: o claim do lote drena a padrao e depois a
+  // maior linha — justo a guardada. A fatia vai ao motor com o endereco (origem estrita) quando o lote tem parte guardada.
+  const C01 = await loc('ZC-01');
+  const enderecoGuardado = async ({ lote = true, guardadoEm, outros }) => {
+    const m = await material({ lote });
+    await entrar(m, guardadoEm.id, 4, 'L1');
+    for (const [l, q] of outros) await entrar(m, l.id, q, 'L1'); // eslint-disable-line no-await-in-loop
+    return { m, r1: await req([[m.id, 4]]) };
+  };
+  const doisEnderecos = async (opts, r2q) => {
+    const { m, r1 } = await enderecoGuardado(opts);
+    const r2 = await req([[m.id, r2q]]);
+    await separar(r1.R, [{ item_id: r1.ids[0], quantidade_separada: 4, localizacao_origem_id: opts.guardadoEm.id,
+      lote_id: await loteId(m, 'L1') }]);
+    await separar(r2.R, [{ item_id: r2.ids[0], quantidade_separada: r2q }]);
+    await entregar(r2.R, [{ item_id: r2.ids[0], quantidade_atendida: r2q }]);
+    return { m, r1, r2 };
+  };
+  await test('[Fase 5 M1, S1] L1 4 em ZB-01 (guardados por R1) e 2 em ZC-01; R2 automatico 2 -> sai de ZC-01; R1 entrega 200 de ZB-01', async () => {
+    const { m, r1, r2 } = await doisEnderecos({ guardadoEm: B01, outros: [[C01, 2]] }, 2);
+    await entregar(r1.R, [{ item_id: r1.ids[0], quantidade_atendida: 4 }]);
+    assert.deepStrictEqual(await livro(r2.R, m), [['SAIDA', 'ZC-01', 'L1', 2]]);
+    assert.deepStrictEqual(await livro(r1.R, m), [['SAIDA', 'ZB-01', 'L1', 4]]);
+    assert.deepStrictEqual(await retrato(m), { linhas: [], fisico: 0 });
+  });
+  await test('[Fase 5 M1, S5] a parte guardada na PADRAO ZP-01 (4) e L1 3 em ZC-01; R2 automatico 2 -> sai de ZC-01; R1 entrega 200 de ZP-01', async () => {
+    const { m, r1, r2 } = await doisEnderecos({ guardadoEm: P01, outros: [[C01, 3]] }, 2);
+    await entregar(r1.R, [{ item_id: r1.ids[0], quantidade_atendida: 4 }]);
+    assert.deepStrictEqual(await livro(r2.R, m), [['SAIDA', 'ZC-01', 'L1', 2]]);
+    assert.deepStrictEqual(await livro(r1.R, m), [['SAIDA', 'ZP-01', 'L1', 4]]);
+    assert.deepStrictEqual(await retrato(m), { linhas: ['ZC-01/L1=1'], fisico: 1 });
+  });
+  await test('[Fase 5 M1, S6 controle] o S1 com material SEM controle_lote: R2 sai sem lote e R1 entrega 200 (o que a 197 nao pode quebrar)', async () => {
+    const { m, r1, r2 } = await doisEnderecos({ lote: false, guardadoEm: B01, outros: [[C01, 2]] }, 2);
+    assert.deepStrictEqual(await livro(r2.R, m), [['SAIDA', null, null, 2]]);
+    await entregar(r1.R, [{ item_id: r1.ids[0], quantidade_atendida: 4 }]);
+    assert.deepStrictEqual(await livro(r1.R, m), [['SAIDA', 'ZB-01', 'L1', 4]]);
+  });
+  await test('[Fase 5 M1] a fatia atravessa dois enderecos do mesmo lote: L1 2 na padrao ZP-01, 4 guardados em ZB-01, 3 em ZC-01; R2 automatico 4 -> ZP-01 L1 2 + ZC-01 L1 2; R1 200', async () => {
+    const { m, r1, r2 } = await doisEnderecos({ guardadoEm: B01, outros: [[P01, 2], [C01, 3]] }, 4);
+    assert.deepStrictEqual(await livro(r2.R, m), [['SAIDA', 'ZP-01', 'L1', 2], ['SAIDA', 'ZC-01', 'L1', 2]]);
+    await entregar(r1.R, [{ item_id: r1.ids[0], quantidade_atendida: 4 }]);
+    assert.deepStrictEqual(await retrato(m), { linhas: ['ZC-01/L1=1'], fisico: 1 });
+  });
+
+  await test('[Fase 5 M1, endereco bloqueado] L1 4 guardados em ZB-01, 3 em ZD-01 BLOQUEADA e 2 em ZC-01; R2 automatico 2 -> pula a bloqueada (o motor recusaria a origem) e sai de ZC-01; 200', async () => {
+    const D01 = (await dbGet(db, "SELECT id FROM localizacoes_almoxarifado WHERE codigo = 'ZD-01'")) || await loc('ZD-01');
+    await dbRun(db, 'UPDATE localizacoes_almoxarifado SET bloqueada = 0 WHERE id = ?', [D01.id]);
+    const { m, r1 } = await enderecoGuardado({ guardadoEm: B01, outros: [[D01, 3], [C01, 2]] });
+    await dbRun(db, 'UPDATE localizacoes_almoxarifado SET bloqueada = 1 WHERE id = ?', [D01.id]);
+    try {
+      const r2 = await req([[m.id, 2]]);
+      await separar(r1.R, [{ item_id: r1.ids[0], quantidade_separada: 4, localizacao_origem_id: B01.id, lote_id: await loteId(m, 'L1') }]);
+      await separar(r2.R, [{ item_id: r2.ids[0], quantidade_separada: 2 }]);
+      await entregar(r2.R, [{ item_id: r2.ids[0], quantidade_atendida: 2 }]);
+      assert.deepStrictEqual(await livro(r2.R, m), [['SAIDA', 'ZC-01', 'L1', 2]]);
+    } finally {
+      await dbRun(db, 'UPDATE localizacoes_almoxarifado SET bloqueada = 0 WHERE id = ?', [D01.id]);
+    }
   });
 
   await close();

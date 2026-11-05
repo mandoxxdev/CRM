@@ -1712,8 +1712,22 @@ function dividirPorLotes(lotes, quantidade) {
     if (saldo <= Q.QTD_FOLGA) continue;
     const q = Q.qtd(Math.min(resto, saldo));
     if (q <= Q.QTD_FOLGA) continue;
-    fatias.push({ lote_id: l.lote_id, quantidade: q });
-    resto = Q.qtd(resto - q);
+    if (!Array.isArray(l.linhas)) {
+      fatias.push({ lote_id: l.lote_id, quantidade: q });
+      resto = Q.qtd(resto - q);
+      continue;
+    }
+    // Etapa 197 (Fase 5 M1, B1329): lote com parte guardada de outra caixa — a fatia se divide pelas linhas (lote, endereco) na
+    // ordem recebida, cada uma com o livre DELA; cada pedaco vai ao motor com o endereco (origem estrita).
+    let falta = q;
+    for (const ln of l.linhas) {
+      if (falta <= Q.QTD_FOLGA) break;
+      const t = Q.qtd(Math.min(falta, Number(ln.saldo) || 0));
+      if (t <= Q.QTD_FOLGA) continue;
+      fatias.push({ lote_id: l.lote_id, localizacao_id: ln.localizacao_id, quantidade: t });
+      falta = Q.qtd(falta - t);
+      resto = Q.qtd(resto - t);
+    }
   }
   return { fatias, resto: resto <= Q.QTD_FOLGA ? 0 : resto };
 }
@@ -1727,6 +1741,9 @@ function dividirPorLotes(lotes, quantidade) {
  *    com caixa — senao o automatico de R2 tirava o lote que R1 separou e a entrega de R1 tomava 400 "nao serve mais" (item 1 da Fase 2:
  *    hoje o sem lote nao toca lote e R1 entrega). Dos itens DESTA entrega desconta a parte menos o que ja saiu dela
  *    (`baixadoComOrigem`, quando a entrega sai da origem guardada): a parte so cai no finally, e descontar inteira contaria duas vezes.
+ *    Fase 5 M1 (B1329): a parte guardada desconta no PAR (lote, endereco) — o lote com guarda volta com `linhas` (o livre de cada
+ *    endereco) e a fatia vai ao motor com o endereco, origem estrita; descontar so no total do lote deixava o claim drenar a linha
+ *    guardada (a padrao primeiro, depois a maior). Lote sem guarda: uma fatia pelo lote, como na T0.
  * Lido dentro da secao que a entrega segura (trava por requisicao e por material): nenhuma porta nova.
  */
 async function lotesParaOAutomatico(db, materialId, saiuDaOrigemPorItem) {
@@ -1739,16 +1756,50 @@ async function lotesParaOAutomatico(db, materialId, saiuDaOrigemPorItem) {
     FROM recebimentos_material_itens_almoxarifado WHERE lote_id IN (${marcas}) AND COALESCE(quantidade_em_inspecao, 0) > 0
     GROUP BY lote_id`, ids);
   const statusCaixa = STATUS_COM_CAIXA.map(() => '?').join(',');
-  const guardadas = await dbAll(db, `SELECT ir.id, ir.lote_separacao_id as lote_id, ${PARTE_ORIGEM_SQL} as q
+  const guardadas = await dbAll(db, `SELECT ir.id, ir.lote_separacao_id as lote_id, ir.origem_separacao_id as loc_id, ${PARTE_ORIGEM_SQL} as q
     FROM itens_requisicao_almoxarifado ir JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
     WHERE ir.material_id = ? AND ir.origem_separacao_id IS NOT NULL AND ir.lote_separacao_id IN (${marcas})
       AND COALESCE(r.ativo, 1) = 1 AND r.status IN (${statusCaixa})`, [materialId, ...ids, ...STATUS_COM_CAIXA]);
-  const retido = new Map();
-  const somar = (lote, q) => { if (q > 0) retido.set(Number(lote), (retido.get(Number(lote)) || 0) + q); };
-  for (const x of emInspecao) somar(x.lote_id, Number(x.q) || 0);
-  for (const g of guardadas) somar(g.lote_id, Math.max(0, (Number(g.q) || 0) - (saiuDaOrigemPorItem.get(Number(g.id)) || 0)));
-  return lotes.map((l) => ({ lote_id: Number(l.id), saldo: Q.qtd(Number(l.saldo) - (retido.get(Number(l.id)) || 0)) }))
-    .filter((l) => l.saldo > Q.QTD_FOLGA);
+  const inspecao = new Map();
+  for (const x of emInspecao) inspecao.set(Number(x.lote_id), (inspecao.get(Number(x.lote_id)) || 0) + (Number(x.q) || 0));
+  // a parte guardada por (lote, endereco) — Fase 5 M1 (B1329): o claim do lote drena a padrao e depois a maior linha, entao descontar
+  // so no total do lote deixava o automatico tirar justo do endereco guardado (R1 tomava 400 "nao serve mais")
+  const guardadoPar = new Map();
+  for (const g of guardadas) {
+    const q = Math.max(0, (Number(g.q) || 0) - (saiuDaOrigemPorItem.get(Number(g.id)) || 0));
+    if (q <= Q.QTD_FOLGA) continue;
+    const k = `${Number(g.lote_id)}|${Number(g.loc_id)}`;
+    guardadoPar.set(k, (guardadoPar.get(k) || 0) + q);
+  }
+  const lotesComGuarda = new Set([...guardadoPar.keys()].map((k) => Number(k.split('|')[0])));
+  let linhas = [];
+  let padrao = null;
+  if (lotesComGuarda.size) {
+    const idsG = [...lotesComGuarda];
+    padrao = (await dbGet(db, 'SELECT localizacao_padrao_id p FROM materiais_almoxarifado WHERE id = ?', [materialId]) || {}).p || null;
+    linhas = await dbAll(db, `SELECT s.id, s.lote_id, s.localizacao_id, s.quantidade, COALESCE(lc.bloqueada, 0) as bloqueada
+      FROM estoque_saldo_almoxarifado s LEFT JOIN localizacoes_almoxarifado lc ON lc.id = s.localizacao_id
+      WHERE s.material_id = ? AND s.lote_id IN (${idsG.map(() => '?').join(',')}) AND s.quantidade > 0`, [materialId, ...idsG]);
+  }
+  return lotes.map((l) => {
+    const loteId = Number(l.id);
+    const insp = inspecao.get(loteId) || 0;
+    // Sem parte guardada no lote: como na T0 — uma fatia pelo lote, o claim escolhe a linha (o livro sem endereco, D (51)).
+    if (!lotesComGuarda.has(loteId)) return { lote_id: loteId, saldo: Q.qtd(Number(l.saldo) - insp) };
+    // Com parte guardada: o livre de cada linha = saldo da linha - a parte guardada NAQUELE (lote, endereco); a inspecao desconta no
+    // nivel do lote (nao se sabe em que linha esta). Ordem: a do claim (padrao primeiro, depois a maior), pulando o livre 0. Fica de
+    // fora a linha SEM endereco (a origem estrita precisa de um) e a de endereco BLOQUEADO (o motor recusa a origem bloqueada e
+    // derrubaria a entrega): o que elas tem vai para o proximo lote ou para o resto sem lote.
+    const doLote = linhas.filter((x) => Number(x.lote_id) === loteId)
+      .map((x) => ({ ...x, livre: Math.max(0, Number(x.quantidade) - (guardadoPar.get(`${loteId}|${Number(x.localizacao_id)}`) || 0)) }))
+      .sort((a, b) => ((b.localizacao_id === padrao) - (a.localizacao_id === padrao))
+        || (Number(b.quantidade) - Number(a.quantidade)) || (a.id - b.id));
+    const usaveis = doLote.filter((x) => x.localizacao_id != null && !Number(x.bloqueada) && x.livre > Q.QTD_FOLGA);
+    const livreDoLote = doLote.reduce((s2, x) => s2 + x.livre, 0) - insp;
+    const livreUsavel = usaveis.reduce((s2, x) => s2 + x.livre, 0);
+    return { lote_id: loteId, saldo: Q.qtd(Math.min(livreDoLote, livreUsavel)),
+      linhas: usaveis.map((x) => ({ localizacao_id: Number(x.localizacao_id), saldo: Q.qtd(x.livre) })) };
+  }).filter((l) => l.saldo > Q.QTD_FOLGA);
 }
 
 function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertService) {
@@ -2136,7 +2187,7 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
   // Etapa 197 (T0.3): o corpo de uma baixa (motor + livro do item + entregue relativo) numa funcao so — o pedaco inteiro de antes ou
   // uma FATIA por lote da parte automatica. Cada chamada grava o entregue logo depois dela (RN-197.09: falhou a 2a fatia, a 1a fica
   // baixada E contada). `loteDaFatia` so vem do automatico de material com controle de lote (sem origem, sem serie).
-  const baixar = async (plano, baixa, quantidade, loteDaFatia) => {
+  const baixar = async (plano, baixa, quantidade, loteDaFatia, enderecoDaFatia) => {
     const { item } = plano;
     try {
       const mov = await stockService.registrarMovimentacao(db, user, {
@@ -2156,6 +2207,9 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
         ...(!baixa.comOrigem && seriesPorItem.get(item.id)?.loteSeries ? { lote_id: seriesPorItem.get(item.id).loteSeries } : {}),
         // Etapa 197 (RN-197.01): a fatia da parte automatica leva o lote dela (vai ao claim do lote, nao ao sem lote).
         ...(loteDaFatia ? { lote_id: loteDaFatia } : {}),
+        // Etapa 197 (Fase 5 M1, B1329): e o endereco, quando o lote tem parte guardada de outra caixa — com origem estrita (abaixo),
+        // o claim drena so aquela linha (lote, endereco) e o motor recusa se ela nao cobrir.
+        ...(enderecoDaFatia ? { localizacao_origem_id: enderecoDaFatia } : {}),
         motivo: `Requisição ${reqRow.numero}`,
         referencia: reqRow.os_referencia || reqRow.numero,
         justificativa: `Entrega requisição ${reqRow.numero}`,
@@ -2169,7 +2223,7 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
         cliente_id: reqRow.cliente_id || undefined,
         centro_custo_id: reqRow.centro_custo_id || undefined,
       }, {
-        origemEstrita: baixa.comOrigem && !!origemPorItem.get(item.id)?.origemId,
+        origemEstrita: (baixa.comOrigem && !!origemPorItem.get(item.id)?.origemId) || !!enderecoDaFatia,
         exigeSerie: true,
         // Etapa 77 (C136): a marca que deixa o motor consumir a reserva de origem REQUISICAO
         // DESTA requisicao — sem ela o motor recusa (a reserva da requisicao so sai pela entrega).
@@ -2220,7 +2274,7 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
               baixa.quantidade);
             for (const f of fatias) {
               // eslint-disable-next-line no-await-in-loop
-              await baixar(plano, baixa, f.quantidade, f.lote_id);
+              await baixar(plano, baixa, f.quantidade, f.lote_id, f.localizacao_id || null);
             }
             // eslint-disable-next-line no-await-in-loop
             if (resto > Q.QTD_FOLGA) await baixar(plano, baixa, resto, null);
