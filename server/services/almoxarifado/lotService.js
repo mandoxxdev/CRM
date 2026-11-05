@@ -15,6 +15,10 @@ const diaLocal = require('../diaLocal');
 const { materialPhotoUrl } = require('./materialPhoto');
 const { registrarAuditoria, registrarAuditoriaDoAto } = require('./audit');
 const { validarData } = require('./auditFiltros');
+// Etapa 191 (RN-191.12): pelo OBJETO, como seriesService — os testes espiam `naTravaDoMaterial`
+const trava = require('./travaPorMaterial');
+// Etapa 191 (RN-191.10): a regua da caixa direto da maquina de estados — `requisitionService` importa este arquivo (ciclo)
+const { STATUS_COM_CAIXA } = require('./requisitionStateMachine');
 
 const STATUS_LOTE = ['ATIVO', 'BLOQUEADO', 'REPROVADO'];
 
@@ -43,7 +47,7 @@ const MSG_VALIDADE = {
     + 'validade é a dele.',
   SEM_LOTE: 'Informe o lote para gravar a validade — a validade é do lote.',
   CONFLITO: (codigo, dataISO) => `O lote ${codigo} já tem validade ${dataValidadeBR(dataISO)}. A validade é do lote, não da entrada: `
-    + 'deixe o campo em branco ou informe a mesma data. Se a validade gravada está errada, peça a correção do lote.',
+    + 'deixe o campo em branco ou informe a mesma data. Se a validade gravada está errada, corrija-a em Lotes e Séries → "Corrigir validade".', // Etapa 191 (RN-191.11, B1298): a porta existe
   AVISO_PREENCHIDA: (codigo, dataISO) => `O lote ${codigo} não tinha validade; ela foi gravada agora (${dataValidadeBR(dataISO)}) e `
     + 'vale também para o saldo que já estava nele.',
   AVISO_VENCIDO: (codigo, dataISO) => `O lote ${codigo} entrou já vencido (validade ${dataValidadeBR(dataISO)}). A saída para consumo `
@@ -54,7 +58,7 @@ const MSG_VALIDADE = {
   AVISO_CORRIDA: (codigo, dataISO) => `A validade do lote ${codigo} foi gravada por outra operação (${dataValidadeBR(dataISO)}) enquanto `
     + 'esta entrada era registrada; a entrada valeu e a validade do lote não foi alterada.',
   AVISO_FALHA: (codigo, dataISO) => `A entrada foi registrada, mas a validade do lote ${codigo} não pôde ser gravada `
-    + `(${dataValidadeBR(dataISO)}). Não repita a entrada; peça a correção da validade do lote.`,
+    + `(${dataValidadeBR(dataISO)}). Não repita a entrada; corrija a validade em Lotes e Séries → "Corrigir validade".`, // Etapa 191 (RN-191.11)
   AVISO_REDEFINIDA: (codigo, antigaISO, novaISO) => `O lote ${codigo} estava vazio com a validade ${dataValidadeBR(antigaISO)}; ela foi `
     + `trocada por ${dataValidadeBR(novaISO)}.`,
   // ── Etapa 191 — corrigir a validade de um lote que ja tem saldo (`PUT /lotes/:id/validade`, contrato do plano da 191) ──
@@ -64,6 +68,16 @@ const MSG_VALIDADE = {
   MUDOU: (codigo, atualISO) => `A validade do lote ${codigo} mudou enquanto a tela estava aberta (agora `
     + `${atualISO == null ? 'sem validade' : dataValidadeBR(atualISO)}). Recarregue e confira antes de corrigir.`,
   MESMA: (codigo, dataISO) => `O lote ${codigo} já tem a validade ${dataValidadeBR(dataISO)}. Nada a corrigir.`,
+  // Avisos da correcao (RN-191.10, nesta ordem). Fase 2, achados 2 e 3: a etiqueta do recebimento le a nota, e a entrega com
+  // origem vencida nao fica presa (outro lote, com a substituicao registrada)
+  AVISO_LIBERACAO_ANULADA: (codigo) => `O lote ${codigo} tinha o vencimento liberado para a validade anterior; a liberação foi `
+    + 'anulada. Se ele ainda pode ser usado, libere o vencimento de novo.',
+  AVISO_CORRIGIDA_VENCIDO: (codigo, dataISO) => `Com a validade corrigida (${dataValidadeBR(dataISO)}), o lote ${codigo} está `
+    + 'vencido: a saída para consumo fica bloqueada até liberar o vencimento.',
+  AVISO_SEPARACAO: (codigo, n) => `Há ${n} item(ns) de requisição separado(s) do lote ${codigo} ainda não entregue(s); a entrega `
+    + 'pela origem planejada vai recusar o lote vencido — libere o vencimento ou entregue escolhendo outro lote (a troca fica registrada).',
+  AVISO_ETIQUETA: (codigo, antigaISO) => `As etiquetas já impressas do lote ${codigo} mostram a validade antiga `
+    + `(${dataValidadeBR(antigaISO)}) — reimprima pela tela Lotes e Séries (a etiqueta do recebimento usa a data da nota).`,
 };
 
 /**
@@ -379,16 +393,57 @@ async function corrigirValidadeDoLoteSemTrava(db, user, loteFora, { nova, vista,
 }
 
 /**
+ * RN-191.10: itens separados DESTE lote e ainda nao entregues, de requisicao ativa que retem caixa — a regua de
+ * `requisitionService.lerDadosDaColeta` (separado - entregue, com o legado `quantidade_atendida`). Conta itens, nao quantidade.
+ */
+async function contarSeparadoPendenteDoLote(db, loteId) {
+  const statusCaixa = STATUS_COM_CAIXA.map(() => '?').join(',');
+  const r = await dbGet(db, `SELECT COUNT(*) as n
+    FROM itens_requisicao_almoxarifado ir JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
+    WHERE ir.lote_separacao_id = ?
+      AND COALESCE(ir.quantidade_separada, 0) - COALESCE(ir.quantidade_entregue, ir.quantidade_atendida, 0) > 0
+      AND COALESCE(r.ativo, 1) = 1 AND r.status IN (${statusCaixa})`, [loteId, ...STATUS_COM_CAIXA]);
+  return Number(r && r.n) || 0;
+}
+
+/**
+ * Fase 2, achado 5 (B1297): o e-mail "Lote vencendo" ainda PENDENTE com a data antiga sairia depois da correcao (o envio nao
+ * rele o lote) — vira FALHA com o motivo, pela dona da fila (`suprimirNotificacaoLoteVencendo`). A linha ja ENVIADA fica.
+ * Require lazy: a fila puxa o resto do modulo. Falha aqui vai ao log — a correcao ja gravou.
+ */
+async function retirarLoteVencendoPendente(db, loteId, antiga) {
+  try {
+    await require('./notificationQueueService').suprimirNotificacaoLoteVencendo(db, loteId, antiga);
+  } catch (e) {
+    console.warn(`[almoxarifado] retirar o aviso de lote vencendo pendente falhou (lote ${loteId}): ${e.message}`);
+  }
+}
+
+/**
  * RN-191.01: `PUT /lotes/:id/validade`. Payload validado fora de tudo; `:id` nao inteiro -> 404 (depois do payload: a ordem do
- * contrato). Devolve `{ lote, avisos }`.
+ * contrato). RN-191.12 (B1291): a releitura, as conferencias, o UPDATE e a auditoria rodam sob a trava do material — a validade
+ * decide qual lote pode sair, e a saida do motor, a separacao/entrega e a Entrada da 190 a leem sob a trava. A contagem de
+ * separacao, o e-mail pendente e a resposta ficam fora. Devolve `{ lote, avisos }`.
  */
 async function corrigirValidadeDoLote(db, user, loteId, payload) {
   const dados = validarPayloadCorrecao(payload || {});
   const id = Number(loteId);
   const lote = Number.isInteger(id) && id > 0 ? await getLote(db, id) : undefined;
   if (!lote) throw erro('Lote nao encontrado', 404);
-  await corrigirValidadeDoLoteSemTrava(db, user, lote, dados);
-  return { lote: await getLote(db, id), avisos: [] };
+  const { antes, liberacaoAnulada } = await trava.naTravaDoMaterial(lote.material_id,
+    () => corrigirValidadeDoLoteSemTrava(db, user, lote, dados));
+
+  if (antes.data_validade != null) await retirarLoteVencendoPendente(db, id, antes.data_validade);
+
+  const avisos = [];
+  if (liberacaoAnulada) avisos.push(MSG_VALIDADE.AVISO_LIBERACAO_ANULADA(antes.codigo));
+  if (isVencido({ data_validade: dados.nova })) {
+    avisos.push(MSG_VALIDADE.AVISO_CORRIGIDA_VENCIDO(antes.codigo, dados.nova));
+    const n = await contarSeparadoPendenteDoLote(db, id);
+    if (n > 0) avisos.push(MSG_VALIDADE.AVISO_SEPARACAO(antes.codigo, n));
+  }
+  if (antes.data_validade != null) avisos.push(MSG_VALIDADE.AVISO_ETIQUETA(antes.codigo, antes.data_validade));
+  return { lote: await getLote(db, id), avisos };
 }
 
 /**

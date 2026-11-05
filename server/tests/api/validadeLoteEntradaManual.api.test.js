@@ -42,12 +42,12 @@ const MSG = {
   ANO: 'A validade do lote deve ter o ano entre 2000 e 2100 — confira a data digitada (ex.: 2027-03-31).',
   SO_ENTRADA: 'A validade do lote só pode ser informada numa entrada — numa saída, transferência ou ajuste o lote já existe e a validade é a dele.',
   SEM_LOTE: 'Informe o lote para gravar a validade — a validade é do lote.',
-  CONFLITO: (c, d) => `O lote ${c} já tem validade ${BR(d)}. A validade é do lote, não da entrada: deixe o campo em branco ou informe a mesma data. Se a validade gravada está errada, peça a correção do lote.`,
+  CONFLITO: (c, d) => `O lote ${c} já tem validade ${BR(d)}. A validade é do lote, não da entrada: deixe o campo em branco ou informe a mesma data. Se a validade gravada está errada, corrija-a em Lotes e Séries → "Corrigir validade".`, // Etapa 191 (RN-191.11)
   AVISO_PREENCHIDA: (c, d) => `O lote ${c} não tinha validade; ela foi gravada agora (${BR(d)}) e vale também para o saldo que já estava nele.`,
   AVISO_VENCIDO: (c, d) => `O lote ${c} entrou já vencido (validade ${BR(d)}). A saída para consumo fica bloqueada até liberar o vencimento na tela de Lotes e Séries.`,
   AVISO_VENCIDO_LIBERADO: (c, d) => `O lote ${c} entrou já vencido (validade ${BR(d)}); o vencimento já foi liberado para consumo.`,
   AVISO_CORRIDA: (c, d) => `A validade do lote ${c} foi gravada por outra operação (${BR(d)}) enquanto esta entrada era registrada; a entrada valeu e a validade do lote não foi alterada.`,
-  AVISO_FALHA: (c, d) => `A entrada foi registrada, mas a validade do lote ${c} não pôde ser gravada (${BR(d)}). Não repita a entrada; peça a correção da validade do lote.`,
+  AVISO_FALHA: (c, d) => `A entrada foi registrada, mas a validade do lote ${c} não pôde ser gravada (${BR(d)}). Não repita a entrada; corrija a validade em Lotes e Séries → "Corrigir validade".`, // Etapa 191 (RN-191.11)
   AVISO_REDEFINIDA: (c, a, n) => `O lote ${c} estava vazio com a validade ${BR(a)}; ela foi trocada por ${BR(n)}.`,
 };
 

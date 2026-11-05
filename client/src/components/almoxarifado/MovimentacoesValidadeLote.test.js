@@ -38,7 +38,7 @@ jest.mock('./ExtratoMaterialModal', () => ({
 // As literais do contrato (plano da Etapa 190) — o texto do servidor, que a tela mostra como veio.
 const AVISO_PREENCHIDA = 'O lote L-1 não tinha validade; ela foi gravada agora (31/03/2027) e vale também para o saldo que já estava nele.';
 const CONFLITO = 'O lote L-1 já tem validade 31/01/2027. A validade é do lote, não da entrada: deixe o campo em branco ou informe a '
-  + 'mesma data. Se a validade gravada está errada, peça a correção do lote.';
+  + 'mesma data. Se a validade gravada está errada, corrija-a em Lotes e Séries → "Corrigir validade".'; // Etapa 191 (RN-191.11)
 const TEXTO_AJUDA = 'Opcional. Se o lote já existe com validade, deixe em branco.';
 
 let container;

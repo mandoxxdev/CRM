@@ -274,7 +274,170 @@ const CORPO = (extra = {}) => ({ data_validade: '2027-03-10', validade_vista: '2
     assert.strictEqual(JSON.parse((await auditorias(db, l1.id))[0].dados_novos).liberacao_anulada, false);
   });
 
-  // ── T2 ── (cenarios 13-19 entram aqui)
+  // ── T2 ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  let locSeq = 0;
+  const novaLoc = async () => (await dbRun(db, 'INSERT INTO localizacoes_almoxarifado (codigo, descricao, ativo) VALUES (?,?,1)',
+    [`E191-LOC-${++locSeq}`, 'loc 191'])).lastID;
+  async function loteNoEndereco({ validade, qtd = 10 }) {
+    const mat = await novoMaterial(db);
+    const loc = await novaLoc();
+    const lote = await lotService.criarOuObterLote(db, ADMIN, { material_id: mat, codigo: `LS-${seq}`, data_validade: validade });
+    await stockService.registrarMovimentacao(db, ADMIN, {
+      material_id: mat, tipo: 'ENTRADA', quantidade: qtd, lote_id: lote.id, localizacao_destino_id: loc, motivo: 'setup' });
+    return { mat, loc, lote: await lotService.getLote(db, lote.id) };
+  }
+  async function reqSeparada(mat, loc, loteId, q) {
+    const r = (await dbRun(db, `INSERT INTO requisicoes_almoxarifado (numero, solicitante_id, solicitante_nome, status)
+      VALUES (?, 1, 'Sol', 'APROVADO')`, [`REQ-E191-${++seq}`])).lastID;
+    const item = (await dbRun(db, `INSERT INTO itens_requisicao_almoxarifado
+      (requisicao_id, material_id, quantidade_solicitada, quantidade_separada, quantidade_entregue, quantidade_atendida)
+      VALUES (?,?,?,0,0,0)`, [r, mat, q])).lastID;
+    const sep = await request(app).put(`/api/almoxarifado/requisicoes/${r}/separar`)
+      .send({ itens_separados: [{ item_id: item, quantidade_separada: q, localizacao_origem_id: loc, lote_id: loteId }] });
+    assert.strictEqual(sep.status, 200, `separar: ${JSON.stringify(sep.body)}`);
+    assert.strictEqual((await dbGet(db, 'SELECT lote_separacao_id FROM itens_requisicao_almoxarifado WHERE id = ?', [item])).lote_separacao_id,
+      loteId, 'a separacao nao gravou o lote planejado');
+    return { id: r, item };
+  }
+
+  await test('[RN-191.10] avisos na ordem', async () => {
+    comoAdmin();
+    const { mat, loc, lote } = await loteNoEndereco({ validade: '2025-05-01' });
+    const lib = await request(app).put(`/api/almoxarifado/lotes/${lote.id}/liberar-vencimento`).send({ justificativa: 'uso ok' });
+    assert.strictEqual(lib.status, 200, JSON.stringify(lib.body));
+    await reqSeparada(mat, loc, lote.id, 2);
+    await reqSeparada(mat, loc, lote.id, 3);
+    const ontem = dia(-1);
+    const res = await put(app, lote.id, CORPO({ data_validade: ontem, validade_vista: '2025-05-01' }));
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    const c = lote.codigo;
+    assert.deepStrictEqual(res.body.avisos, [
+      `O lote ${c} tinha o vencimento liberado para a validade anterior; a liberação foi anulada. Se ele ainda pode ser usado, libere o vencimento de novo.`,
+      `Com a validade corrigida (${lotService.dataValidadeBR(ontem)}), o lote ${c} está vencido: a saída para consumo fica bloqueada até liberar o vencimento.`,
+      `Há 2 item(ns) de requisição separado(s) do lote ${c} ainda não entregue(s); a entrega pela origem planejada vai recusar o lote vencido — libere o vencimento ou entregue escolhendo outro lote (a troca fica registrada).`,
+      `As etiquetas já impressas do lote ${c} mostram a validade antiga (01/05/2025) — reimprima pela tela Lotes e Séries (a etiqueta do recebimento usa a data da nota).`,
+    ]);
+    assert.deepStrictEqual(res.body.avisos, [MSG_VALIDADE.AVISO_LIBERACAO_ANULADA(c), MSG_VALIDADE.AVISO_CORRIGIDA_VENCIDO(c, ontem),
+      MSG_VALIDADE.AVISO_SEPARACAO(c, 2), MSG_VALIDADE.AVISO_ETIQUETA(c, '2025-05-01')]);
+  });
+
+  await test('[RN-191.10] sem avisos', async () => {
+    comoAdmin();
+    const { lote } = await loteComSaldo(db, { validade: null });
+    const res = await put(app, lote.id, CORPO({ data_validade: dia(400), validade_vista: null }));
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.deepStrictEqual(res.body.avisos, []);
+  });
+
+  await test('[RN-191.10] hoje nao e vencido', async () => {
+    comoAdmin();
+    const { lote } = await loteComSaldo(db, { validade: '2027-01-01' });
+    const res = await put(app, lote.id, CORPO({ data_validade: hoje(), validade_vista: '2027-01-01' }));
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.deepStrictEqual(res.body.avisos, [MSG_VALIDADE.AVISO_ETIQUETA(lote.codigo, '2027-01-01')]);
+  });
+
+  await test('[RN-191.10] separacao so conta o pendente', async () => {
+    comoAdmin();
+    const { mat, loc, lote } = await loteNoEndereco({ validade: '2027-05-01' });
+    const entregue = await reqSeparada(mat, loc, lote.id, 2);
+    const ent = await request(app).put(`/api/almoxarifado/requisicoes/${entregue.id}/entregar`)
+      .send({ itens_atendidos: [{ item_id: entregue.item, quantidade_atendida: 2 }] });
+    assert.strictEqual(ent.status, 200, `entregar: ${JSON.stringify(ent.body)}`);
+    const cancelada = await reqSeparada(mat, loc, lote.id, 1);
+    await dbRun(db, "UPDATE requisicoes_almoxarifado SET status = 'CANCELADO' WHERE id = ?", [cancelada.id]);
+    await reqSeparada(mat, loc, lote.id, 1);
+    const ontem = dia(-1);
+    const res = await put(app, lote.id, CORPO({ data_validade: ontem, validade_vista: '2027-05-01' }));
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.deepStrictEqual(res.body.avisos, [MSG_VALIDADE.AVISO_CORRIGIDA_VENCIDO(lote.codigo, ontem),
+      MSG_VALIDADE.AVISO_SEPARACAO(lote.codigo, 1), MSG_VALIDADE.AVISO_ETIQUETA(lote.codigo, '2027-05-01')]);
+  });
+
+  await test('[RN-191.12] espera a trava', async () => {
+    comoAdmin();
+    const { mat, lote } = await loteComSaldo(db);
+    let abrir; const portao = new Promise((r) => { abrir = r; });
+    const segura = trava.comLockDoMaterial(mat, () => portao); // do contexto do teste, nunca de dentro da secao
+    let chegou = null;
+    const pedido = put(app, lote.id, CORPO()).then((r) => { chegou = r; return r; });
+    await new Promise((r) => setTimeout(r, 300));
+    assert.strictEqual(chegou, null, `o PUT terminou com a trava segura: ${chegou && chegou.status}`);
+    assert.strictEqual((await lotService.getLote(db, lote.id)).data_validade, '2025-03-10', 'gravou com a trava segura');
+    abrir(); await segura;
+    const res = await pedido;
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual((await lotService.getLote(db, lote.id)).data_validade, '2027-03-10');
+  });
+
+  await test('[RN-191.12] guarda do UPDATE', async () => {
+    comoAdmin();
+    // (1) a releitura dentro da secao: a outra validade e gravada enquanto a correcao espera a trava
+    const { lote } = await loteComSaldo(db);
+    const original = trava.naTravaDoMaterial;
+    let viu = false;
+    trava.naTravaDoMaterial = async (m, fn) => {
+      viu = true;
+      await dbRun(db, 'UPDATE lotes_almoxarifado SET data_validade = ? WHERE id = ?', ['2026-06-06', lote.id]);
+      return original.call(trava, m, fn);
+    };
+    let res;
+    try { res = await put(app, lote.id, CORPO()); } finally { trava.naTravaDoMaterial = original; }
+    assert.ok(viu, 'a correcao nao passou por trava.naTravaDoMaterial (pelo objeto)');
+    assert.strictEqual(res.status, 409, JSON.stringify(res.body));
+    assert.strictEqual(res.body.error, MSG_VALIDADE.MUDOU(lote.codigo, '2026-06-06'));
+    assert.strictEqual((await lotService.getLote(db, lote.id)).data_validade, '2026-06-06', 'sobrescreveu a outra');
+    assert.strictEqual((await auditorias(db, lote.id)).length, 0);
+
+    // (2) a guarda do UPDATE (`IS ?`): a outra validade entra entre a releitura e o UPDATE
+    const { lote: l2 } = await loteComSaldo(db);
+    let disparou = false;
+    const espiao = {
+      run: db.run.bind(db), all: db.all.bind(db),
+      get(sql, params, cb) {
+        if (!disparou && /^UPDATE lotes_almoxarifado SET data_validade/.test(String(sql).trim())) {
+          disparou = true;
+          return db.run('UPDATE lotes_almoxarifado SET data_validade = ? WHERE id = ?', ['2026-07-07', l2.id], () => db.get(sql, params, cb));
+        }
+        return db.get(sql, params, cb);
+      },
+    };
+    await assert.rejects(() => lotService.corrigirValidadeDoLote(espiao, ADMIN, l2.id, CORPO()),
+      (e) => e.status === 409 && e.message === MSG_VALIDADE.MUDOU(l2.codigo, '2026-07-07'));
+    assert.ok(disparou, 'o espiao nao viu o UPDATE');
+    assert.strictEqual((await lotService.getLote(db, l2.id)).data_validade, '2026-07-07', 'o UPDATE sem guarda sobrescreveu');
+  });
+
+  await test('[RN-191.11] literais da 190', async () => {
+    comoAdmin();
+    assert.ok(MSG_VALIDADE.CONFLITO('L', '2027-01-01').endsWith(
+      'deixe o campo em branco ou informe a mesma data. Se a validade gravada está errada, corrija-a em Lotes e Séries → "Corrigir validade".'),
+      MSG_VALIDADE.CONFLITO('L', '2027-01-01'));
+    assert.ok(MSG_VALIDADE.AVISO_FALHA('L', '2027-01-01').endsWith(
+      'Não repita a entrada; corrija a validade em Lotes e Séries → "Corrigir validade".'), MSG_VALIDADE.AVISO_FALHA('L', '2027-01-01'));
+    const { mat, lote } = await loteComSaldo(db, { validade: '2027-03-10' });
+    const r = await request(app).post('/api/almoxarifado/movimentacoes/v2').send({
+      material_id: mat, tipo: 'ENTRADA', quantidade: 1, motivo: 'e191', lote: lote.codigo, data_validade: '2028-01-01' });
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, MSG_VALIDADE.CONFLITO(lote.codigo, '2027-03-10'));
+    assert.ok(r.body.error.includes('"Corrigir validade"'), r.body.error);
+  });
+
+  await test('[B1297] e-mail Lote vencendo PENDENTE da data antiga vira FALHA', async () => {
+    comoAdmin();
+    const fila = require('../../services/almoxarifado/notificationQueueService');
+    const { lote } = await loteComSaldo(db, { validade: dia(5) });
+    const antiga = lote.data_validade;
+    await fila.enfileirar(db, { evento: 'LOTE_VENCENDO', destinatarios: ['x@test.com'], assunto: 'a', corpo_texto: 'b',
+      dedupe_chave: `lote-vencendo-${lote.id}-${antiga}` });
+    const res = await put(app, lote.id, CORPO({ data_validade: dia(300), validade_vista: antiga }));
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    const hash = require('crypto').createHash('sha256').update(`LOTE_VENCENDO|lote-vencendo-${lote.id}-${antiga}`).digest('hex');
+    const linha = await dbGet(db, 'SELECT status, ultimo_erro FROM fila_notificacoes_almoxarifado WHERE hash_dedupe = ?', [hash]);
+    assert.ok(linha, 'a linha nao foi enfileirada no setup');
+    assert.strictEqual(linha.status, 'FALHA');
+    assert.strictEqual(linha.ultimo_erro, 'Validade do lote corrigida antes do envio');
+  });
 
   await close();
   console.log(`\n${passed} passou, ${failed} falhou`);
