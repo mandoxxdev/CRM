@@ -1,7 +1,7 @@
 # Etapa 196 — Separar em duas vezes: a parte separada primeiro continua saindo de onde foi separada
 
 > **Tronco (motor da requisição).** Estimativa enviada: item 4 de `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.txt`
-> (**4h**: análise 1h, execução ~1h, teste 2h). **A medida diz que não cabe** — ver "Cabe em 4h?" no fim. Fecha a parte "o local de onde
+> (**4h**: análise 1h, execução ~1h, teste 2h) — **revisada para 6h** em `db5147ba` (a medida deste plano: execução ~3h; ver "Cabe em 4h?"). Fecha a parte "o local de onde
 > sai" do **C453**; a parte "material com lote" (o pedaço automático sai da linha *sem lote*, **C451**/**B204**) é o item 5 (outra etapa).
 > Plano medido sobre `7a02c149`. Spec: `specs/modulo-almoxarifado/05-separacao-picking/README.md`.
 
