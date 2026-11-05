@@ -262,7 +262,32 @@ caixa cancelada antiga — correção; `separacaoDivergencia.api.test.js:111` n�
 
 ## Execução
 
-*(preencher por task: feita, hash, divergência do previsto)*
+- **T1 — feita, `2fa621de`.** `caixaVivaSql` (Fila/sugestão, automático da entrega, separação), `parteGuardadaDeOutras` (memo por
+  chamada; a aceitação e a divergência leem a mesma), `checarOrigemItem` com o 6º parâmetro e a C1 da Fase 2 (plural, *"já contando …
+  desta requisição"*, sem o prefixo do material). TDD: a reescrita de `preSelecaoColetaIntegracao.api.test.js` `[Fase 5, C449]` ficou
+  vermelha antes (200 ≠ 400) e verde depois. **Testes que afirmavam o defeito: só esse um** — `npm run test:api` depois da T1: 585/585
+  (nenhum outro vermelho; `separacaoDivergencia.api.test.js:111` não mudou, como medido).
+- **T2 — feita, `1d24311b`.** `server/tests/api/separacaoSeparadoDeOutras.api.test.js`, 18 cenários (rota: RN-198.01 + precedência +
+  plural, .02 com fronteira, .03 entregue / cancelar com caixa → 400 (controle) / cancelada legada por SQL / excluída / parte limitada /
+  NULL legado / AGUARDANDO_APROVACAO_VALOR / entregue em parte, .05, .06, .08 ×2; serviço: .01 e .07 10×). Verdes de primeira → controles:
+  - (i) sem `outras` na aceitação → 10 caem (.01 ×3, .02, .03 parte limitada/NULL/AAV/entregue em parte, .08 com já pedido, serviço .01 e .07)
+    e a reescrita de `preSelecaoColetaIntegracao`;
+  - (ii) filtro só `ativo` → cai .03 cancelada legada (só ela);
+  - (iii) sem filtro → caem .03 cancelada legada e .03 excluída;
+  - (iv) caixa em vez de `PARTE_ORIGEM_SQL` → cai .03 parte limitada (C1 com 6 em vez de 3);
+  - (v) a própria requisição contada como outra → cai .08 (2ª rodada no mesmo par: 400 "já contando 3");
+  - (vi) `separarRequisicao` sem `comTravaDaRequisicao` → cai .07 na volta 0 (as duas 200);
+  - desconto aplicado também na entrega (`validarOrigemDaEntrega`) → cai .06 (R1 400 em vez de 200).
+  Todas: perl sobre base LF, âncora 1 (`grep -cF`), md5 base `747767fe…` → sabotado → restaurado igual. **Achado:** nenhuma sabotagem
+  derruba ".03 entregue" (a parte é 0 com qualquer régua) — fica como regressão, não como prova do filtro.
+- **T3 — feita, `00d717ad`** (no arquivo da T2, não em `preSelecaoColetaIntegracao`). RN-198.09 pela rota (`PUT …/separacao`, a da tela;
+  sugestão das duas → R1 separa → R2 com a velha 400 C1, sem rodada → sugestão de R2 XP-01/L2 `cobre` → R2 separa → fila com `ENTREGAR`
+  nas duas → entregas 200 → XB-01/L1 2, XP-01/L2 5, sem linha sem lote, 0 trocas, livro com as duas SAÍDAs por endereço/lote) e pelo
+  serviço. Controle (i) → os dois fluxos caem na separação de R2 (200 em vez de 400). Arquivo: 20/20.
+- **Suítes no fim (serial):** `test:api` 586/586 · `test:almoxarifado` 44/0 · `test:validation` 4/0 · `test:safealter` 3/0 ·
+  `test:sqlite` 16/0. Nenhuma tela mexida (`client/` intocado).
+- **Divergências do previsto:** a cancelada pela rota não se monta (Fase 2, item 2) — semeada por SQL, e a rota ganhou só o controle do
+  400; o cenário "entregue" não é sensível a nenhuma sabotagem (acima). Nada mais.
 
 ## Próxima tarefa detalhada
 
