@@ -241,4 +241,27 @@ devolução da saída não escrevem no item; cancelar/encerrar com caixa já sã
 
 - [x] Plano — `4c602925`.
 - [x] Fase 2 — revisor fresco: 0 trava, 2 importantes, 3 menores, no bloco "Fase 2 — correções" (que manda sobre o resto).
-- [ ] T0 · [ ] T1 · [ ] T2 · [ ] T3 · [ ] T4 · [ ] T5 · [ ] Fase 5 · [ ] Fechamento.
+- [x] **T0** — `4cf2b6dd`. `safeAlter` da coluna (ao lado de `lote_separacao_id`), `parteDaOrigem`/`parteOrigemSql`/`PARTE_ORIGEM_SQL`.
+  Testes [T0] 2/2. Controle: ALTER com nome sabotado → cai "[T0] banco novo". Primeiro boot em pasta vazia (`CRM_DATA_DIR`, `node index.js`)
+  duas vezes: coluna `REAL` presente, 0 `no such table`/`no column named` (o 1º boot mostra 2 `duplicate column` de `materiais_escritorio`,
+  resíduo antigo, fora desta etapa).
+- [x] **T1** — `aecaadd3`. Regra nova no lugar do "mista → nula"; grava a parte; troca da separação removida; `motivo_substituicao` ignorado.
+  `trocaSeparacao.api.test.js`: 10 de 12 reescritos, o `:223` (falha do INSERT da troca) **apagado** — sem INSERT, sem objeto; 11/11.
+  Controles (todos caíram): mista → nula → RN-196.03/04/05/09/10 e o do serviço; somar com outro par → RN-196.03 (parte 6); `pedidoSeparacao`
+  pela caixa → a 3ª rodada de A (400 "saldo em A (0)"); `outras` pela caixa → a régua (máximo 0, não divergente); NULL preservado → RN-196.10.
+  *Divergência:* o teste da régua (`outras`) passava antes da T1 (a regra velha apagava a origem de R1); vale pelo controle. Entre T1 e T2,
+  dois do `trocaSeparacao` e a reprodução da 189 ficaram vermelhos (dependiam da entrega pela parte) — dito no commit.
+- [x] **T2** — `83abf7eb`. Entrega pela parte; decremento pelo **baixado** com origem (`baixadoComOrigem`); outro par consome primeiro a parte
+  sem origem (troca `max(0, min(qty, caixa) − (caixa − parte))`, sem linha quando 0); devolução `MIN(parte, caixa)`; reprodução da 189
+  (`preSelecaoColetaIntegracao`) reescrita aqui (0 trocas, XB-01/L1 0, sem lote −3 — o resto é o item 5), não na T5.
+  Controles (todos caíram): entrega pelo pendente da caixa → RN-196.06/10 e o da falha no meio; sem decremento → RN-196.07 (3 em vez de 0/1);
+  devolução sem MIN → RN-196.08; COALESCE tirado → RN-196.10 (e o [T0]); "consome primeiro a parte" → os três de outro par (com e sem série);
+  decremento por `qtdComOrigem` → o da falha no meio (origem zerada com 1 dela na caixa).
+- [x] **T3** — `425acd91`. `planejados` da fila por `PARTE_ORIGEM_SQL`; `separado_pendente` por `parteDaOrigem`. Controle: fila pela caixa → cai
+  "Pegar em A com 2" (vai para C com 10). `separado_pendente` pela caixa → **nada cai**: NO-OP declarado no plano (só o `> 0`), confirmado.
+  `lotService.js:466` intocado (NO-OP declarado).
+- [x] **Vizinho fora do plano** — `f4ba735c`. `separacaoOrigemPorItem.api.test.js` RN-02 afirmava "planejada nula" (regra da 59) e a Fase 0 não o
+  listou; reescrito (A fica com 3; entrega tira 3 de A, padrão 20 → 17). Vizinhos (separação, entrega, troca, devolução, fila, sugestão,
+  exclusão, travas, gestos concorrentes): todos verdes. `test:api` **582/582**; `test:almoxarifado` **44/44**.
+- Contrato: inalterado (`quantidade_origem_separacao` número ou `null`, via `ir.*`).
+- [ ] T4 (outro executor) · [ ] T5 · [ ] Fase 5 · [ ] Fechamento.
