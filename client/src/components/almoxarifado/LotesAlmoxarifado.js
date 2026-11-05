@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
-import { FiRefreshCw, FiSliders, FiUnlock, FiUpload, FiLock, FiTag } from 'react-icons/fi';
+import { FiRefreshCw, FiSliders, FiUnlock, FiUpload, FiLock, FiTag, FiCalendar } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import EtiquetasPdfModal from './EtiquetasPdfModal';
@@ -133,6 +133,12 @@ const LotesAlmoxarifado = () => {
   const [vencimentoTarget, setVencimentoTarget] = useState(null);
   const [vencimentoJustificativa, setVencimentoJustificativa] = useState('');
   const [vencimentoSaving, setVencimentoSaving] = useState(false);
+
+  // Etapa 191 (RN-191.13): corrigir a validade de um lote que ja tem saldo.
+  const [validadeTarget, setValidadeTarget] = useState(null);
+  const [validadeNova, setValidadeNova] = useState('');
+  const [validadeJustificativa, setValidadeJustificativa] = useState('');
+  const [validadeSaving, setValidadeSaving] = useState(false);
 
   const [certificadoTarget, setCertificadoTarget] = useState(null);
   const [certificadoArquivo, setCertificadoArquivo] = useState(null);
@@ -302,6 +308,35 @@ const LotesAlmoxarifado = () => {
       toast.error(err.response?.data?.error || 'Erro ao liberar vencimento do lote');
     } finally {
       setVencimentoSaving(false);
+    }
+  };
+
+  const abrirValidade = (l) => {
+    setValidadeTarget(l);
+    setValidadeNova('');
+    setValidadeJustificativa('');
+  };
+
+  // `validade_vista` e a validade do lote COMO A LISTA CARREGOU — e ela que deixa o servidor
+  // detectar a correcao feita por outra aba (409 MUDOU). Os avisos e os erros vem prontos do
+  // servidor; no erro o modal fica aberto com o que foi digitado.
+  const confirmarValidade = async () => {
+    if (!validadeNova || !validadeJustificativa.trim()) return;
+    setValidadeSaving(true);
+    try {
+      const r = await api.put(`/almoxarifado/lotes/${validadeTarget.id}/validade`, {
+        data_validade: validadeNova,
+        validade_vista: validadeTarget.data_validade ? String(validadeTarget.data_validade).slice(0, 10) : null,
+        justificativa: validadeJustificativa.trim(),
+      });
+      toast.success('Validade do lote corrigida!');
+      (r.data?.avisos || []).forEach((a) => toast.warn(a, { autoClose: false }));
+      setValidadeTarget(null);
+      loadLotes();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao corrigir a validade do lote');
+    } finally {
+      setValidadeSaving(false);
     }
   };
 
@@ -518,6 +553,14 @@ const LotesAlmoxarifado = () => {
                           <button className="almox-btn-icon" title="Liberar vencimento para consumo"
                             onClick={(e) => { if (!bloquearSeNaoPode('inspecionar', e)) return; abrirVencimento(l); }}>
                             <FiUnlock />
+                          </button>
+                        )}
+                        {/* Etapa 191 (RN-191.13): some so quando o perfil nao tem `inspecionar` (falha
+                            aberto enquanto carrega); quem decide e o servidor. */}
+                        {pode('inspecionar') && (
+                          <button className="almox-btn-icon" title="Corrigir validade" aria-label="Corrigir validade"
+                            onClick={(e) => { if (!bloquearSeNaoPode('inspecionar', e)) return; abrirValidade(l); }}>
+                            <FiCalendar />
                           </button>
                         )}
                         <button className="almox-btn-icon" title="Anexar certificado do fornecedor"
@@ -775,6 +818,44 @@ const LotesAlmoxarifado = () => {
               <button className="btn-almox-primary" disabled={vencimentoSaving || !vencimentoJustificativa.trim()}
                 onClick={confirmarVencimento}>
                 {vencimentoSaving ? 'Salvando...' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal — corrigir validade (Etapa 191, RN-191.13) */}
+      {validadeTarget && (
+        <div className="almox-modal-overlay" onClick={() => { if (!validadeSaving) setValidadeTarget(null); }}>
+          <div className="almox-modal almox-modal-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="almox-modal-header">
+              <h2>Corrigir validade</h2>
+              <button className="almox-modal-close" onClick={() => setValidadeTarget(null)}>✕</button>
+            </div>
+            <div className="almox-modal-body">
+              <p style={{ marginTop: 0 }}>
+                Lote {validadeTarget.codigo} — validade atual: {formatData(validadeTarget.data_validade) || 'sem validade'}
+              </p>
+              <div className="almox-field">
+                <label className="almox-label" htmlFor="lote-validade-nova">Nova validade<span className="required">*</span></label>
+                <input id="lote-validade-nova" className="almox-input" type="date" value={validadeNova}
+                  onChange={(e) => setValidadeNova(e.target.value)} />
+              </div>
+              <div className="almox-field">
+                <label className="almox-label" htmlFor="lote-validade-justificativa">Justificativa<span className="required">*</span></label>
+                <textarea id="lote-validade-justificativa" className="almox-input" rows={2} value={validadeJustificativa}
+                  placeholder="Por que a validade gravada está errada? (ex.: a NF diz 03/2027)"
+                  onChange={(e) => setValidadeJustificativa(e.target.value)} />
+              </div>
+              <div className="almox-badge almox-badge-baixo" style={{ display: 'block', padding: '8px 10px', lineHeight: 1.4 }}>
+                A validade vale para todo o saldo do lote. Se ele tinha o vencimento liberado, a liberação cai.
+              </div>
+            </div>
+            <div className="almox-modal-footer">
+              <button className="btn-almox-secondary" onClick={() => setValidadeTarget(null)}>Cancelar</button>
+              <button className="btn-almox-primary" disabled={validadeSaving || !validadeNova || !validadeJustificativa.trim()}
+                onClick={confirmarValidade}>
+                {validadeSaving ? 'Salvando...' : 'Corrigir'}
               </button>
             </div>
           </div>
