@@ -12,6 +12,7 @@ import * as daFila from '../components/almoxarifado/FilaSeparacao';
 const JA_VEM = " — já vem escolhido no 'Sai de' ao separar";
 const ESCOLHA = " — escolha este endereço no 'Sai de' ao separar";
 const ESCOLHA_O_LOTE = " Na entrega, escolha o lote no 'Sai de': a saída automática não escolhe lote.";
+const LOTE_AUTOMATICO = " Na entrega, o resto sai do lote que vence primeiro; para tirar de outro lote, escolha-o no 'Sai de'.";
 const item = (over = {}) => ({
   item_id: 1, unidade: 'PC', a_separar: 5, separavel: 5, a_entregar: 0, origem_separacao_codigo: null, lote_separacao_codigo: null,
   pegar_em: null, pegar_em_aviso: null, pegar_em_alerta: null, ...over,
@@ -56,34 +57,58 @@ describe('[RN-189.09, B1265] o fim de textoPegarEm segue a pré-seleção da jan
   });
 });
 
-describe('as frases da 188, iguais (cópia de FilaSeparacao.test.js)', () => {
+// Etapa 197 (T1, C462, RN-197.12): as três frases diziam "separar de outro endereço troca a origem da separação (a entrega passa a sair
+// automática)" — regra revogada pela 196 (B1314: a parte separada da origem continua saindo dela). E o "escolha o lote" só continua
+// verdade para material SEM controle de lote; com controle, o automático da entrega baixa do lote que vence primeiro (RN-197.01).
+const NENHUM = (q) => `Nenhum endereço tem tudo: pegue ${q} aqui. Se o resto for separado depois de outro endereço, o que sair daqui `
+  + 'continua saindo daqui na entrega.';
+const NAO_COBRE = (cod) => `Já separado de ${cod}: o resto não cabe lá. O que já foi separado continua saindo de lá; o resto, separado `
+  + 'de outro endereço, sai no automático na entrega.';
+const INDISPONIVEL = (cod) => `Já separado de ${cod}, que não pode mais ser sugerido (endereço bloqueado ou inativo, em área especial ou `
+  + 'lote bloqueado/vencido). Confira antes de separar o resto: na entrega, o que já foi separado sai de lá — se lá não servir mais, a '
+  + 'entrega pede para escolher de onde sai.';
+
+describe('[C462] as frases do aviso (a 188 com a regra da 196 e o lote da 197)', () => {
+  test('nenhuma frase diz mais que separar de outro endereço troca a origem', () => {
+    const frases = [
+      item({ pegar_em: pegar({ cobre: false }), pegar_em_aviso: 'NENHUM_ENDERECO_COBRE' }),
+      item({ origem_separacao_codigo: 'A-01', pegar_em_aviso: 'PLANEJADA_NAO_COBRE' }),
+      item({ origem_separacao_codigo: 'A-01', lote_separacao_codigo: 'L1', pegar_em_aviso: 'PLANEJADA_INDISPONIVEL', controle_lote: true }),
+    ].map(textoAvisoPegarEm);
+    frases.forEach((f) => { expect(f).not.toMatch(/troca a origem|passa a sair automática/); });
+  });
   test('[RN-188.08] NENHUM_ENDERECO_COBRE sem lote', () => {
     expect(textoAvisoPegarEm(item({ pegar_em: pegar({ ...SEM_LOTE, quantidade_sugerida: 6, cobre: false }),
-      pegar_em_aviso: 'NENHUM_ENDERECO_COBRE' })))
-      .toBe('Nenhum endereço tem tudo: pegue 6 aqui. Separar o resto de outro endereço depois troca a origem da separação.');
+      pegar_em_aviso: 'NENHUM_ENDERECO_COBRE' }))).toBe(NENHUM(6));
   });
-  test('[I-b] NENHUM_ENDERECO_COBRE com lote ganha o "escolha o lote"', () => {
-    expect(textoAvisoPegarEm(item({ pegar_em: pegar({ quantidade_sugerida: 6, cobre: false }), pegar_em_aviso: 'NENHUM_ENDERECO_COBRE' })))
-      .toBe(`Nenhum endereço tem tudo: pegue 6 aqui. Separar o resto de outro endereço depois troca a origem da separação.${ESCOLHA_O_LOTE}`);
+  test('[RN-197.12] NENHUM_ENDERECO_COBRE com lote e controle de lote -> "sai do lote que vence primeiro"', () => {
+    expect(textoAvisoPegarEm(item({ controle_lote: true, pegar_em: pegar({ quantidade_sugerida: 6, cobre: false }),
+      pegar_em_aviso: 'NENHUM_ENDERECO_COBRE' }))).toBe(`${NENHUM(6)}${LOTE_AUTOMATICO}`);
+  });
+  test('[I-b] NENHUM_ENDERECO_COBRE com lote SEM controle de lote mantém "escolha o lote"', () => {
+    expect(textoAvisoPegarEm(item({ controle_lote: false, pegar_em: pegar({ quantidade_sugerida: 6, cobre: false }),
+      pegar_em_aviso: 'NENHUM_ENDERECO_COBRE' }))).toBe(`${NENHUM(6)}${ESCOLHA_O_LOTE}`);
   });
   test('[RN-188.08] PLANEJADA_NAO_COBRE sem lote, com e sem pegar_em', () => {
-    const frase = 'Já separado de A-01: o resto não cabe lá. Separar de outro endereço troca a origem da separação '
-      + '(a entrega passa a sair automática).';
-    expect(textoAvisoPegarEm(item({ origem_separacao_codigo: 'A-01', pegar_em_aviso: 'PLANEJADA_NAO_COBRE' }))).toBe(frase);
+    expect(textoAvisoPegarEm(item({ origem_separacao_codigo: 'A-01', pegar_em_aviso: 'PLANEJADA_NAO_COBRE' }))).toBe(NAO_COBRE('A-01'));
     expect(textoAvisoPegarEm(item({ pegar_em: pegar({ localizacao_codigo: 'A-01', ...SEM_LOTE }), pegar_em_aviso: 'PLANEJADA_NAO_COBRE' })))
-      .toBe(frase);
+      .toBe(NAO_COBRE('A-01'));
   });
-  test('[I-b] PLANEJADA_NAO_COBRE com lote', () => {
-    expect(textoAvisoPegarEm(item({ origem_separacao_codigo: 'ZSA-01', lote_separacao_codigo: 'L1', pegar_em_aviso: 'PLANEJADA_NAO_COBRE' })))
-      .toBe(`Já separado de ZSA-01 — lote L1: o resto não cabe lá. Separar de outro endereço troca a origem da separação.${ESCOLHA_O_LOTE}`);
+  test('[RN-197.12] PLANEJADA_NAO_COBRE com lote: com controle -> lote que vence primeiro; sem -> escolha o lote', () => {
+    const base = { origem_separacao_codigo: 'ZSA-01', lote_separacao_codigo: 'L1', pegar_em_aviso: 'PLANEJADA_NAO_COBRE' };
+    expect(textoAvisoPegarEm(item({ ...base, controle_lote: true }))).toBe(`${NAO_COBRE('ZSA-01 — lote L1')}${LOTE_AUTOMATICO}`);
+    expect(textoAvisoPegarEm(item({ ...base, controle_lote: false }))).toBe(`${NAO_COBRE('ZSA-01 — lote L1')}${ESCOLHA_O_LOTE}`);
   });
-  test('[M-d] PLANEJADA_INDISPONIVEL com e sem lote', () => {
-    const meio = ', que não pode mais ser sugerido (endereço bloqueado ou inativo, em área especial ou lote bloqueado/vencido). '
-      + 'Confira antes de separar o resto: separar de outro endereço troca a origem da separação';
+  test('[M-d] PLANEJADA_INDISPONIVEL sem lote, e com lote com e sem controle', () => {
     expect(textoAvisoPegarEm(item({ origem_separacao_codigo: 'ZB-01', pegar_em_aviso: 'PLANEJADA_INDISPONIVEL' })))
-      .toBe(`Já separado de ZB-01${meio} (a entrega passa a sair automática).`);
-    expect(textoAvisoPegarEm(item({ origem_separacao_codigo: 'ZB-02', lote_separacao_codigo: 'L9', pegar_em_aviso: 'PLANEJADA_INDISPONIVEL' })))
-      .toBe(`Já separado de ZB-02 — lote L9${meio}.${ESCOLHA_O_LOTE}`);
+      .toBe(INDISPONIVEL('ZB-01'));
+    const base = { origem_separacao_codigo: 'ZB-02', lote_separacao_codigo: 'L9', pegar_em_aviso: 'PLANEJADA_INDISPONIVEL' };
+    expect(textoAvisoPegarEm(item({ ...base, controle_lote: true }))).toBe(`${INDISPONIVEL('ZB-02 — lote L9')}${LOTE_AUTOMATICO}`);
+    expect(textoAvisoPegarEm(item({ ...base, controle_lote: false }))).toBe(`${INDISPONIVEL('ZB-02 — lote L9')}${ESCOLHA_O_LOTE}`);
+  });
+  test('sem lote nenhum, controle_lote não acrescenta sufixo', () => {
+    expect(textoAvisoPegarEm(item({ controle_lote: true, origem_separacao_codigo: 'A-01', pegar_em_aviso: 'PLANEJADA_NAO_COBRE' })))
+      .toBe(NAO_COBRE('A-01'));
   });
   test('[RN-188.08] SEM_ENDERECO_SUGERIVEL e sem aviso', () => {
     expect(textoAvisoPegarEm(item({ pegar_em_aviso: 'SEM_ENDERECO_SUGERIVEL' }))).toBe('Sem endereço para sugerir (o saldo está sem '

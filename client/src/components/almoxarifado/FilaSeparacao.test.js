@@ -266,17 +266,30 @@ test('[RN-188.08] sem lote e caminho de um segmento: sem lote, sem validade, sem
   expect(texto('[data-testid="fila-pegar-em-11"]')).toBe(`Pegar em B-02 · 3 PC${JA_VEM}`);
 });
 
-test('[RN-188.08] cobre false (NENHUM_ENDERECO_COBRE): a frase da emenda C1', async () => {
-  // Sem lote: com lote a frase ganha o "escolha o lote no Sai de" (Fase 5, I-b — ver os [I-b] abaixo).
+// Etapa 197 (T1, C462, RN-197.12): as frases abaixo diziam "separar de outro endereço troca a origem da separação (a entrega passa a
+// sair automática)" — regra revogada pela 196 (B1314: o que foi separado da origem continua saindo dela na entrega). E o "escolha o
+// lote no Sai de" (I-b da 188) só continua verdade para material SEM controle de lote: com controle, o automático da entrega baixa do
+// lote que vence primeiro (RN-197.01). A fila manda `controle_lote` por item.
+const NENHUM = (q) => `Nenhum endereço tem tudo: pegue ${q} aqui. Se o resto for separado depois de outro endereço, o que sair daqui `
+  + 'continua saindo daqui na entrega.';
+const NAO_COBRE = (cod) => `Já separado de ${cod}: o resto não cabe lá. O que já foi separado continua saindo de lá; o resto, separado `
+  + 'de outro endereço, sai no automático na entrega.';
+const INDISPONIVEL = (cod) => `Já separado de ${cod}, que não pode mais ser sugerido (endereço bloqueado ou inativo, em área especial ou `
+  + 'lote bloqueado/vencido). Confira antes de separar o resto: na entrega, o que já foi separado sai de lá — se lá não servir mais, a '
+  + 'entrega pede para escolher de onde sai.';
+const ESCOLHA_O_LOTE = " Na entrega, escolha o lote no 'Sai de': a saída automática não escolhe lote.";
+const LOTE_AUTOMATICO = " Na entrega, o resto sai do lote que vence primeiro; para tirar de outro lote, escolha-o no 'Sai de'.";
+
+test('[RN-188.08] cobre false (NENHUM_ENDERECO_COBRE): a frase da emenda C1, com a regra da 196', async () => {
+  // Sem lote: com lote a frase ganha um sufixo de lote (ver os [RN-197.12] abaixo).
   await montarCom([req({ id: 1, itens: [item({ item_id: 11, a_separar: 12, separavel: 12,
     pegar_em: pegar({ lote_id: null, lote_codigo: null, lote_validade: null, quantidade_sugerida: 6, cobre: false }), pegar_em_aviso: 'NENHUM_ENDERECO_COBRE' })] })]);
-  expect(texto('[data-testid="fila-pegar-em-aviso-11"]'))
-    .toBe('Nenhum endereço tem tudo: pegue 6 aqui. Separar o resto de outro endereço depois troca a origem da separação.');
+  const frase = texto('[data-testid="fila-pegar-em-aviso-11"]');
+  expect(frase).toBe(NENHUM(6));
+  expect(frase).not.toContain('troca a origem');
 });
 
 test('[RN-188.08] PLANEJADA_NAO_COBRE: a frase com o código da planejada, com e sem pegar_em', async () => {
-  const frase = 'Já separado de A-01: o resto não cabe lá. Separar de outro endereço troca a origem da separação '
-    + '(a entrega passa a sair automática).';
   await montarCom([req({ id: 1, itens: [
     item({ item_id: 11, a_separar: 3, separavel: 3, a_entregar: 3, origem_separacao_codigo: 'A-01',
       pegar_em: pegar({ localizacao_codigo: 'A-01', caminho: 'ALM1 / A-01', lote_id: null, lote_codigo: null, lote_validade: null,
@@ -285,53 +298,55 @@ test('[RN-188.08] PLANEJADA_NAO_COBRE: a frase com o código da planejada, com e
       pegar_em: null, pegar_em_aviso: 'PLANEJADA_NAO_COBRE' }),
   ] })]);
   expect(texto('[data-testid="fila-pegar-em-11"]')).toBe(`Pegar em A-01 (ALM1 / A-01) · 1 PC${SAI_DE}`);
-  expect(texto('[data-testid="fila-pegar-em-aviso-11"]')).toBe(frase);
+  expect(texto('[data-testid="fila-pegar-em-aviso-11"]')).toBe(NAO_COBRE('A-01'));
   expect(q('[data-testid="fila-pegar-em-12"]')).toBeNull();
-  expect(texto('[data-testid="fila-pegar-em-aviso-12"]')).toBe(frase);
+  expect(texto('[data-testid="fila-pegar-em-aviso-12"]')).toBe(NAO_COBRE('A-01'));
 });
 
-// Fase 5 (I-b): material COM lote — trocar a origem e entregar no automático deixa linha sem lote negativa (B204/C71, anterior à
-// etapa). Com lote a frase manda escolher o lote no "Sai de" da entrega; sem lote continua a de antes (metade positiva).
-const ESCOLHA_O_LOTE = " Na entrega, escolha o lote no 'Sai de': a saída automática não escolhe lote.";
-test('[I-b] PLANEJADA_NAO_COBRE com lote: escolher o lote no Sai de, nunca "a entrega passa a sair automática"', async () => {
+test('[RN-197.12] PLANEJADA_NAO_COBRE com lote: com controle de lote -> "o resto sai do lote que vence primeiro"; sem controle -> "escolha o lote"; sem lote, sem sufixo', async () => {
   await montarCom([req({ id: 1, itens: [
     item({ item_id: 11, a_separar: 2, separavel: 2, a_entregar: 4, origem_separacao_codigo: 'ZSA-01', lote_separacao_codigo: 'L1',
-      pegar_em: null, pegar_em_aviso: 'PLANEJADA_NAO_COBRE' }),
+      controle_lote: true, pegar_em: null, pegar_em_aviso: 'PLANEJADA_NAO_COBRE' }),
     item({ item_id: 12, material_id: 11, a_separar: 2, separavel: 2, a_entregar: 4, origem_separacao_codigo: 'ZSA-02',
-      lote_separacao_codigo: null, pegar_em: null, pegar_em_aviso: 'PLANEJADA_NAO_COBRE' }),
+      lote_separacao_codigo: null, controle_lote: true, pegar_em: null, pegar_em_aviso: 'PLANEJADA_NAO_COBRE' }),
+    item({ item_id: 13, material_id: 12, a_separar: 2, separavel: 2, a_entregar: 4, origem_separacao_codigo: 'ZSA-03',
+      lote_separacao_codigo: 'L3', controle_lote: false, pegar_em: null, pegar_em_aviso: 'PLANEJADA_NAO_COBRE' }),
   ] })]);
-  const comLote = texto('[data-testid="fila-pegar-em-aviso-11"]');
-  expect(comLote).toBe(`Já separado de ZSA-01 — lote L1: o resto não cabe lá. Separar de outro endereço troca a origem da separação.${ESCOLHA_O_LOTE}`);
-  expect(comLote).not.toContain('sair automática');
-  expect(texto('[data-testid="fila-pegar-em-aviso-12"]')).toBe('Já separado de ZSA-02: o resto não cabe lá. Separar de outro '
-    + 'endereço troca a origem da separação (a entrega passa a sair automática).');
+  const comControle = texto('[data-testid="fila-pegar-em-aviso-11"]');
+  expect(comControle).toBe(`${NAO_COBRE('ZSA-01 — lote L1')}${LOTE_AUTOMATICO}`);
+  expect(comControle).not.toContain('troca a origem');
+  expect(texto('[data-testid="fila-pegar-em-aviso-12"]')).toBe(NAO_COBRE('ZSA-02'));
+  expect(texto('[data-testid="fila-pegar-em-aviso-13"]')).toBe(`${NAO_COBRE('ZSA-03 — lote L3')}${ESCOLHA_O_LOTE}`);
 });
 
-test('[I-b] NENHUM_ENDERECO_COBRE com lote: a frase ganha o "escolha o lote no Sai de"; sem lote, não', async () => {
+test('[RN-197.12] NENHUM_ENDERECO_COBRE com lote: sufixo pelo controle de lote; sem lote, nenhum', async () => {
   await montarCom([req({ id: 1, itens: [
-    item({ item_id: 11, a_separar: 12, separavel: 12, pegar_em: pegar({ quantidade_sugerida: 6, cobre: false }),
+    item({ item_id: 11, a_separar: 12, separavel: 12, controle_lote: true, pegar_em: pegar({ quantidade_sugerida: 6, cobre: false }),
       pegar_em_aviso: 'NENHUM_ENDERECO_COBRE' }),
     item({ item_id: 12, material_id: 11, a_separar: 12, separavel: 12, pegar_em: pegar({ lote_id: null, lote_codigo: null,
       lote_validade: null, quantidade_sugerida: 6, cobre: false }), pegar_em_aviso: 'NENHUM_ENDERECO_COBRE' }),
+    item({ item_id: 13, material_id: 12, a_separar: 12, separavel: 12, controle_lote: false,
+      pegar_em: pegar({ quantidade_sugerida: 6, cobre: false }), pegar_em_aviso: 'NENHUM_ENDERECO_COBRE' }),
   ] })]);
-  const base = 'Nenhum endereço tem tudo: pegue 6 aqui. Separar o resto de outro endereço depois troca a origem da separação.';
-  expect(texto('[data-testid="fila-pegar-em-aviso-11"]')).toBe(`${base}${ESCOLHA_O_LOTE}`);
-  expect(texto('[data-testid="fila-pegar-em-aviso-12"]')).toBe(base);
+  expect(texto('[data-testid="fila-pegar-em-aviso-11"]')).toBe(`${NENHUM(6)}${LOTE_AUTOMATICO}`);
+  expect(texto('[data-testid="fila-pegar-em-aviso-12"]')).toBe(NENHUM(6));
+  expect(texto('[data-testid="fila-pegar-em-aviso-13"]')).toBe(`${NENHUM(6)}${ESCOLHA_O_LOTE}`);
 });
 
-test('[M-d] PLANEJADA_INDISPONIVEL: frase própria (não "o resto não cabe lá"), com e sem lote', async () => {
+test('[M-d] PLANEJADA_INDISPONIVEL: frase própria (não "o resto não cabe lá"), sem lote e com lote com e sem controle', async () => {
   await montarCom([req({ id: 1, itens: [
     item({ item_id: 11, a_separar: 3, separavel: 3, a_entregar: 3, origem_separacao_codigo: 'ZB-01', pegar_em: null,
       pegar_em_aviso: 'PLANEJADA_INDISPONIVEL' }),
     item({ item_id: 12, material_id: 11, a_separar: 3, separavel: 3, a_entregar: 3, origem_separacao_codigo: 'ZB-02',
-      lote_separacao_codigo: 'L9', pegar_em: null, pegar_em_aviso: 'PLANEJADA_INDISPONIVEL' }),
+      lote_separacao_codigo: 'L9', controle_lote: true, pegar_em: null, pegar_em_aviso: 'PLANEJADA_INDISPONIVEL' }),
+    item({ item_id: 13, material_id: 12, a_separar: 3, separavel: 3, a_entregar: 3, origem_separacao_codigo: 'ZB-03',
+      lote_separacao_codigo: 'L8', controle_lote: false, pegar_em: null, pegar_em_aviso: 'PLANEJADA_INDISPONIVEL' }),
   ] })]);
-  const meio = ', que não pode mais ser sugerido (endereço bloqueado ou inativo, em área especial ou lote bloqueado/vencido). '
-    + 'Confira antes de separar o resto: separar de outro endereço troca a origem da separação';
   const semLote = texto('[data-testid="fila-pegar-em-aviso-11"]');
-  expect(semLote).toBe(`Já separado de ZB-01${meio} (a entrega passa a sair automática).`);
+  expect(semLote).toBe(INDISPONIVEL('ZB-01'));
   expect(semLote).not.toContain('não cabe lá');
-  expect(texto('[data-testid="fila-pegar-em-aviso-12"]')).toBe(`Já separado de ZB-02 — lote L9${meio}.${ESCOLHA_O_LOTE}`);
+  expect(texto('[data-testid="fila-pegar-em-aviso-12"]')).toBe(`${INDISPONIVEL('ZB-02 — lote L9')}${LOTE_AUTOMATICO}`);
+  expect(texto('[data-testid="fila-pegar-em-aviso-13"]')).toBe(`${INDISPONIVEL('ZB-03 — lote L8')}${ESCOLHA_O_LOTE}`);
 });
 
 test('[I-a] RETENCAO_NO_MATERIAL: o alerta aparece junto da dica; sem o código, não aparece', async () => {

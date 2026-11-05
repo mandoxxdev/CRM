@@ -39,27 +39,35 @@ export const textoPegarEm = (it) => {
 
 // Etapa 188, Fase 5 (I-b): com LOTE, trocar a origem e entregar no automático deixa uma linha sem lote negativa (o automático não
 // escolhe lote — defeito anterior, B204/C71). A frase manda escolher o lote no "Sai de" da entrega em vez de prometer a saída automática.
+// Etapa 197 (T1, RN-197.12, B1328): a frase acima só continua verdade para material SEM controle de lote. Com controle, o automático
+// da entrega baixa do lote que vence primeiro (RN-197.01) — a fila manda `controle_lote` por item e o sufixo segue o cadastro.
 const NA_ENTREGA_ESCOLHA_O_LOTE = " Na entrega, escolha o lote no 'Sai de': a saída automática não escolhe lote.";
+const NA_ENTREGA_LOTE_AUTOMATICO = " Na entrega, o resto sai do lote que vence primeiro; para tirar de outro lote, escolha-o no 'Sai de'.";
+const sufixoDoLote = (it) => (it.controle_lote ? NA_ENTREGA_LOTE_AUTOMATICO : NA_ENTREGA_ESCOLHA_O_LOTE);
 const codigoDaPlanejada = (it) => {
   const cod = it.origem_separacao_codigo || (it.pegar_em && it.pegar_em.localizacao_codigo) || '—';
   return it.lote_separacao_codigo ? `${cod} — lote ${it.lote_separacao_codigo}` : cod;
 };
 
+// Etapa 197 (T1, C462): as três frases abaixo diziam "separar de outro endereço troca a origem da separação (a entrega passa a sair
+// automática)" — regra revogada pela 196 (B1314: o que foi separado da origem continua saindo dela na entrega; só o resto sai no
+// automático, e se a origem não servir mais a entrega pede para escolher de onde sai).
 export const textoAvisoPegarEm = (it) => {
   switch (it.pegar_em_aviso) {
     case 'NENHUM_ENDERECO_COBRE':
       return `Nenhum endereço tem tudo: pegue ${fmtQtd(it.pegar_em ? it.pegar_em.quantidade_sugerida : 0)} aqui. `
-        + 'Separar o resto de outro endereço depois troca a origem da separação.'
-        + (it.pegar_em && it.pegar_em.lote_codigo ? NA_ENTREGA_ESCOLHA_O_LOTE : '');
+        + 'Se o resto for separado depois de outro endereço, o que sair daqui continua saindo daqui na entrega.'
+        + (it.pegar_em && it.pegar_em.lote_codigo ? sufixoDoLote(it) : '');
     case 'PLANEJADA_NAO_COBRE':
       return `Já separado de ${codigoDaPlanejada(it)}: o resto não cabe lá. `
-        + (it.lote_separacao_codigo ? `Separar de outro endereço troca a origem da separação.${NA_ENTREGA_ESCOLHA_O_LOTE}`
-          : 'Separar de outro endereço troca a origem da separação (a entrega passa a sair automática).');
+        + 'O que já foi separado continua saindo de lá; o resto, separado de outro endereço, sai no automático na entrega.'
+        + (it.lote_separacao_codigo ? sufixoDoLote(it) : '');
     case 'PLANEJADA_INDISPONIVEL':
       // Fase 5 (M-d): a planejada existe mas não serve mais de dica — "o resto não cabe lá" seria mentira.
       return `Já separado de ${codigoDaPlanejada(it)}, que não pode mais ser sugerido (endereço bloqueado ou inativo, em área `
-        + 'especial ou lote bloqueado/vencido). Confira antes de separar o resto: separar de outro endereço troca a origem da separação'
-        + (it.lote_separacao_codigo ? `.${NA_ENTREGA_ESCOLHA_O_LOTE}` : ' (a entrega passa a sair automática).');
+        + 'especial ou lote bloqueado/vencido). Confira antes de separar o resto: na entrega, o que já foi separado sai de lá — '
+        + 'se lá não servir mais, a entrega pede para escolher de onde sai.'
+        + (it.lote_separacao_codigo ? sufixoDoLote(it) : '');
     case 'SEM_ENDERECO_SUGERIVEL':
       return 'Sem endereço para sugerir (o saldo está sem endereço, em endereço bloqueado ou inativo, em área especial '
         + 'ou em lote bloqueado/vencido).';

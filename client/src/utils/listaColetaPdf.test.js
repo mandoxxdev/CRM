@@ -129,9 +129,19 @@ describe('[RN-189.10] o conteúdo por requisição', () => {
   test('aviso e alerta da parada (as frases da tela, nessa ordem); bloco "Sem endereço sugerido"; sem pegar_em e sem aviso fora', () => {
     const r = montarListaColetaPDF({ requisicoes: [R] }).requisicoes[0];
     expect([...r.avisos.keys()]).toEqual([2]);
-    expect(r.avisos.get(2)).toBe('Nenhum endereço tem tudo: pegue 4 aqui. Separar o resto de outro endereço depois troca a origem da '
-      + "separação. Na entrega, escolha o lote no 'Sai de': a saída automática não escolhe lote. Parte do saldo deste material está "
-      + 'retida (em inspeção, bloqueada ou em terceiros) e o sistema não sabe em qual endereço — confira antes de pegar.');
+    // Etapa 197 (T1, C462): era "Separar o resto de outro endereço depois troca a origem da separação." (revogada pela 196, B1314).
+    // I1 não traz controle_lote: o sufixo continua o "escolha o lote" (material sem controle de lote, B204).
+    expect(r.avisos.get(2)).toBe('Nenhum endereço tem tudo: pegue 4 aqui. Se o resto for separado depois de outro endereço, o que sair '
+      + "daqui continua saindo daqui na entrega. Na entrega, escolha o lote no 'Sai de': a saída automática não escolhe lote. Parte do "
+      + 'saldo deste material está retida (em inspeção, bloqueada ou em terceiros) e o sistema não sabe em qual endereço — confira antes '
+      + 'de pegar.');
+    // RN-197.12: com controle de lote, o PDF diz o mesmo que a tela — o resto sai do lote que vence primeiro.
+    const comControle = montarListaColetaPDF({ requisicoes: [req({ itens: [{ ...I1, controle_lote: true }], ordem_coleta: [parada(I1)] })] })
+      .requisicoes[0];
+    expect(comControle.avisos.get(0)).toBe('Nenhum endereço tem tudo: pegue 4 aqui. Se o resto for separado depois de outro endereço, o '
+      + 'que sair daqui continua saindo daqui na entrega. Na entrega, o resto sai do lote que vence primeiro; para tirar de outro lote, '
+      + "escolha-o no 'Sai de'. Parte do saldo deste material está retida (em inspeção, bloqueada ou em terceiros) e o sistema não sabe "
+      + 'em qual endereço — confira antes de pegar.');
     expect(r.semEndereco).toEqual([{
       texto: 'MAT-Q — Mola · a separar 5 PC',
       aviso: 'Sem endereço para sugerir (o saldo está sem endereço, em endereço bloqueado ou inativo, em área especial ou em lote '
