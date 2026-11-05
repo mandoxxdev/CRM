@@ -1,5 +1,7 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 191 (2026-11-05, Fase 2 `018f8a35`, T1 `4fcf13b4`, T2 `140dbb77`, T3 `3b43a0a1`, T4 `d5f3376a`, Fase 5 `699e87c3` + `c64fb881`): corrigir a validade de um lote que já tem saldo (C455) — `PUT /lotes/:id/validade` com `inspecionar`, justificativa, `validade_vista` (409 `MUDOU`), auditoria `VALIDADE_CORRIGIDA`, sob a trava do material; zera a liberação de vencimento; avisos; o e-mail pendente da data antiga sai da fila; botão "Corrigir validade" na tela de Lotes e Séries só com `pode('inspecionar')`** — ver a seção "Etapa 191", no fim. O status não muda (🟢).
+
 > **+ Etapa 190 (2026-10-23, T1 `ed1e6566`, T2 `267d668e` + `1136652b`, T3 `e1a24cc3`, T4 `9555ed29`, Fase 5 `4fcdcb27`): a Entrada manual grava a validade do lote (C450, defeito desde `65d78fd8`, Etapa 6) — campo "Validade do lote" na Entrada; lote novo nasce com ela, lote sem validade é preenchido com aviso, outra validade recusa (salvo lote vazio, que troca), vencida aceita com aviso, ano fora de 2000–2100 recusa** — ver a seção "Etapa 190", no fim. O status não muda (🟢).
 
 > **+ Etapa 186 (2026-10-22, T4 `e0bbd9ba`, T5 `9ea04c28`): na etiqueta, o código comprido não escreve mais por cima do nome — encolhe a fonte (14 → 10) até caber numa linha (B1237)** — ver a seção "Etapa 186", no fim. O status não muda.
@@ -1037,10 +1039,51 @@ manual nascia sem validade desde `65d78fd8` (Etapa 6). Nenhuma migration; recebi
   sabiam falhar: as pernas saldo e série do `loteEstaVazio` (olhar só movimentos passava 22/22) e a comparação `slice(0, 10)` com a validade
   gravada com hora (`'2027-03-31 00:00:00'`). E `dbbdb8de`: o comentário de `filaSugestaoColetaIntegracao.api.test.js` que dizia que a Entrada
   não grava a validade.
-- [ ] **Fora (declarado):** corrigir validade já gravada num lote vivo (Etapa 191, B1276); o recebimento preencher/conferir lote existente
+- [ ] **Fora (declarado):** corrigir validade já gravada num lote vivo (Etapa 191, B1276); *(**feito na Etapa 191**, `4fcf13b4` — ver a seção dela)* o recebimento preencher/conferir lote existente
   (B1277, fixado por teste para uma etapa futura mudar de propósito — o plano da 191, `c0cce170`, o deixa de fora (B1296 dele);
-  candidato à 192); `controle_validade` obrigatório e `data_fabricacao` na Entrada (B1278 — a flag
+  candidato à 192 — *isto dizia "192"; **estava errado**: a 192 e a 193 foram usadas pelo Compras; a candidata é a **194***); `controle_validade` obrigatório e `data_fabricacao` na Entrada (B1278 — a flag
   continua morta, como a tabela de flags acima diz); entrada sem data num lote vencido não avisa (B1282); a v1 ignora o campo (B1270).
 
 Testes: `validadeLoteEntradaManual.api.test.js` (26), `validadeLoteEntradaManualIntegracao.api.test.js` (5),
 `client/src/components/almoxarifado/MovimentacoesValidadeLote.test.js` (8). Continua 🟢.
+
+## Etapa 191 — corrigir a validade de um lote que já tem saldo (2026-11-05)
+
+Plano: `docs/superpowers/plans/2026-10-23-almoxarifado-etapa191-corrigir-validade-de-lote.md` (escrito em `c0cce170`, revisão do plano
+`018f8a35`). Fecha o **C455** (novidades), a **B1276** e o M-8 / Menor 4 da 190: até aqui a validade só mudava num lote vazio
+(`redefinirValidadeDoLoteVazio`), e a recusa `CONFLITO` mandava "pedir a correção" a uma porta que não existia. Nenhuma migration; nenhuma
+ação nova em `ACAO_PERFIS`; recebimento, `liberar-vencimento`, `status` e o motor (fora duas literais) sem mudança.
+
+- [x] **RN-191.01/02/03/04/05/06/09** — `PUT /api/almoxarifado/lotes/:id/validade` (`routes/almoxarifado/extended.js`, gate
+  `requirePermission('inspecionar')` — ADMINISTRADOR, ALMOXARIFE, QUALIDADE; GESTOR e PRODUCAO 403, B1290) →
+  `lotService.corrigirValidadeDoLote`. Recusas de payload antes de ler o lote, na ordem `OBRIGATORIA` → `FORMATO` → `ANO` →
+  `JUSTIFICATIVA` → `VISTA_OBRIGATORIA`; depois 404 `Lote nao encontrado`, 409 `MUDOU`, 400 `MESMA`. A `validade_vista` não é validada como
+  data (gravada pode ser lixo do recebimento) e é comparada por `slice(0, 10)`. `UPDATE … WHERE id = ? AND data_validade IS ?` que sempre
+  zera as três colunas da liberação (B1292). Auditoria `VALIDADE_CORRIGIDA` (antes: validade + as três da liberação; novos: validade,
+  `liberacao_anulada`, `desvencido` — B1289), rótulo "Validade corrigida" em `auditLabels.js` — `4fcf13b4`.
+- [x] **RN-191.10/11/12** — releitura, `MUDOU`/`MESMA`, `UPDATE` com guarda e auditoria sob `trava.naTravaDoMaterial` (B1291); avisos na
+  ordem `AVISO_LIBERACAO_ANULADA` → `AVISO_CORRIGIDA_VENCIDO` (régua `<`, hoje não vence) → `AVISO_SEPARACAO` (itens com
+  `lote_separacao_id` = o lote, separado − entregue > 0, requisição ativa em `STATUS_COM_CAIXA`) → `AVISO_ETIQUETA`; o e-mail "Lote vencendo"
+  PENDENTE da data antiga vira `FALHA` por `notificationQueueService.suprimirNotificacaoLoteVencendo` (B1297); `CONFLITO` e `AVISO_FALHA`
+  da 190 nomeiam o botão (B1298) — `140dbb77`.
+- [x] **RN-191.13** — tela: botão "Corrigir validade" (`FiCalendar`) em `LotesAlmoxarifado.js`, visível só com `pode('inspecionar')` (falha
+  aberto) e com `bloquearSeNaoPode` no clique (B1299); janela com a validade atual, "Nova validade", "Justificativa", "Corrigir"
+  desabilitado sem data ou com justificativa vazia; avisos em `toast.warn(…, { autoClose: false })`; erro mantém a janela aberta —
+  `3b43a0a1`.
+- [x] **RN-191.07/14** — integração por portas que não mudaram (saída desbarrada e barrada, FEFO da lista, varredura do e-mail, liberação
+  de novo, entrega da separação planejada recusada e destravada, `pegar_em` da fila, e pelo serviço) — `d5f3376a`. O cenário 16 de
+  `validadeLoteEntradaManual` (recebimento intacto, B1296) continua verde.
+- [x] **Fase 5 (revisão adversarial, dois revisores)** — `699e87c3`: (F1) a supressão do e-mail mantinha o `hash_dedupe` (UNIQUE) e o
+  vai-e-volta A→B→A perdia o aviso da volta → a `FALHA` libera a chave com o sufixo `':suprimida:' || id`; (F2) uma liberação gravada entre a
+  releitura e o `UPDATE` era zerada com `liberacao_anulada: false` → guarda `AND vencimento_liberado_em IS ?` (não casar = 409 `MUDOU`), e um
+  cenário prova que a releitura dentro da seção vê a liberação gravada antes dela; (F3) `data_validade = ''` legado tomava 409 com a vista
+  `null` → `''` conta como sem validade (`validadeNormalizada`); (F4) asserções que faltavam (`usuario_id` na auditoria, requisição
+  `ativo = 0`, linha legada entregue, ENVIADA continua ENVIADA). `c64fb881`: (F5) `formatData` da tela mostrava "Invalid Date" para validade
+  fora do formato → mostra o texto gravado, na coluna e na janela. Ruído: 0.
+- [ ] **Fora (declarado):** o recebimento conferir a validade da nota contra a do lote existente (B1296, C456 — candidata à Etapa 194,
+  para avisar); linha `FALHA` por outro motivo reenviada à mão com a data velha (B1297, D (191)); a entrega com `origem_automatica` de um
+  item separado do lote vencido sai sem lote (comportamento da Etapa 63, C451/B204 da fila); marcador "validade corrigida" na lista (B1289).
+  Achado anterior registrado e não consertado: a rota antiga `POST /api/almoxarifado/movimentacoes` não repassa `lote_id` ao motor (C458).
+
+Testes: `corrigirValidadeLote.api.test.js` (23 cenários), `corrigirValidadeLoteIntegracao.api.test.js` (8),
+`client/src/components/almoxarifado/LotesCorrigirValidade.test.js` (8). Continua 🟢.

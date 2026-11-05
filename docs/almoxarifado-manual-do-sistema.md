@@ -783,7 +783,7 @@ No **Recebimento**, a checagem é feita sobre a nota inteira **antes de qualquer
 
 Na **saída**, o campo Lote deixa de ser texto livre e vira uma **lista** dos lotes daquele material, com saldo e validade de cada um. Digitar um lote inexistente numa saída não o cria: *"Lote nao encontrado para este material: L-999"*. Saída é consumo, não é nascimento.
 
-Um lote é único por material: dois materiais podem ter, cada um, um lote chamado `L-001`, e são lotes distintos. Receber duas vezes o mesmo lote do mesmo material soma saldo ao lote existente sem sobrescrever a validade original. Pelo **Recebimento**, um lote que já existe fica com a validade que tem — inclusive quando não tem nenhuma: a validade da nota não é gravada nele, e nada avisa. Pela **Entrada**, a validade digitada preenche o lote que não tem (4.3b).
+Um lote é único por material: dois materiais podem ter, cada um, um lote chamado `L-001`, e são lotes distintos. Receber duas vezes o mesmo lote do mesmo material soma saldo ao lote existente sem sobrescrever a validade original. Pelo **Recebimento**, um lote que já existe fica com a validade que tem — inclusive quando não tem nenhuma: a validade da nota não é gravada nele, e nada avisa (para trocar a validade do lote, 4.3c). Pela **Entrada**, a validade digitada preenche o lote que não tem (4.3b).
 
 ### 4.2 Situação do lote
 
@@ -835,7 +835,7 @@ Recusas da liberação: *"justificativa obrigatoria para liberar o vencimento do
 | Não existe (lote novo) | Nasce com a validade digitada | *"Movimentação registrada!"* |
 | Existe **sem** validade | A entrada é registrada e a validade é gravada no lote — vale também para o saldo que já estava nele | aviso: *"O lote ⟨L⟩ não tinha validade; ela foi gravada agora (DD/MM/AAAA) e vale também para o saldo que já estava nele."* |
 | Existe com a **mesma** validade | Nada muda no lote | — |
-| Existe com **outra** validade e tem qualquer lançamento valendo, saldo ou série presente — mesmo uma entrada já toda consumida | **Recusa**; nada é lançado | *"O lote ⟨L⟩ já tem validade DD/MM/AAAA. A validade é do lote, não da entrada: deixe o campo em branco ou informe a mesma data. Se a validade gravada está errada, peça a correção do lote."* |
+| Existe com **outra** validade e tem qualquer lançamento valendo, saldo ou série presente — mesmo uma entrada já toda consumida | **Recusa**; nada é lançado | *"O lote ⟨L⟩ já tem validade DD/MM/AAAA. A validade é do lote, não da entrada: deixe o campo em branco ou informe a mesma data. Se a validade gravada está errada, corrija-a em Lotes e Séries → "Corrigir validade"."* |
 | Existe com **outra** validade e está **vazio** — nenhum lançamento valendo (só uma entrada recusada ou estornada o criou), nenhum saldo e nenhuma série presente | A entrada é registrada e a validade do lote é **trocada**; uma liberação de vencimento que o lote tivesse é desfeita (era da data antiga) | aviso: *"O lote ⟨L⟩ estava vazio com a validade DD/MM/AAAA; ela foi trocada por DD/MM/AAAA."* |
 
 **Data no passado é aceita** — a Entrada registra o que está na prateleira, e gravar a validade real é o que faz a saída barrar. "Passado" é antes do dia de hoje no horário de Brasília (a validade de hoje não é passado). O lote passa a ser vencido para todas as regras de 4.3. A resposta avisa:
@@ -856,13 +856,61 @@ Quando a entrada preenche a validade **e** ela está no passado, aparecem os doi
 | Validade informada numa saída, transferência ou ajuste de contagem (por integração; a tela só mostra o campo na Entrada) | *"A validade do lote só pode ser informada numa entrada — numa saída, transferência ou ajuste o lote já existe e a validade é a dele."* |
 | Validade informada numa entrada sem lote | *"Informe o lote para gravar a validade — a validade é do lote."* |
 
-**A entrada vale mesmo quando a validade não grava.** A validade é gravada depois de a entrada ser registrada. Se essa gravação falhar, a entrada fica e o aviso diz para não repetir: *"A entrada foi registrada, mas a validade do lote ⟨L⟩ não pôde ser gravada (DD/MM/AAAA). Não repita a entrada; peça a correção da validade do lote."* Se outra operação gravar uma validade no mesmo instante, a dela fica: *"A validade do lote ⟨L⟩ foi gravada por outra operação (DD/MM/AAAA) enquanto esta entrada era registrada; a entrada valeu e a validade do lote não foi alterada."*
+**A entrada vale mesmo quando a validade não grava.** A validade é gravada depois de a entrada ser registrada. Se essa gravação falhar, a entrada fica e o aviso diz para não repetir: *"A entrada foi registrada, mas a validade do lote ⟨L⟩ não pôde ser gravada (DD/MM/AAAA). Não repita a entrada; corrija a validade em Lotes e Séries → "Corrigir validade"."* Se outra operação gravar uma validade no mesmo instante, a dela fica: *"A validade do lote ⟨L⟩ foi gravada por outra operação (DD/MM/AAAA) enquanto esta entrada era registrada; a entrada valeu e a validade do lote não foi alterada."*
 
 **Estornar a entrada não desfaz a validade** — o estorno desfaz quantidade, e a validade é do lote físico. Se a entrada estornada era a única do lote, o lote fica vazio e a próxima Entrada com a data certa a troca (tabela acima).
 
-**Corrigir uma validade gravada** num lote com saldo ou com lançamentos não tem tela. Confira a data antes de confirmar. Se um lote ficou vencido por uma data errada, o caminho para consumi-lo é o botão **Liberar vencimento** (4.3).
+**Uma validade gravada errada** num lote com saldo ou com lançamentos se corrige pelo botão **Corrigir validade**, em **Lotes e Séries** (4.3c) — não por uma nova Entrada.
 
-Toda gravação de validade fica na auditoria do lote: a criação registra a validade com que nasceu, e o preenchimento e a troca aparecem como *Validade preenchida* e *Validade redefinida*, com a data anterior, a nova e o lançamento que as gravou.
+Toda gravação de validade fica na auditoria do lote: a criação registra a validade com que nasceu, e o preenchimento e a troca aparecem como *Validade preenchida* e *Validade redefinida*, com a data anterior, a nova e o lançamento que as gravou. A correção aparece como *Validade corrigida* (4.3c).
+
+### 4.3c Corrigir a validade de um lote
+
+Quando a validade gravada num lote está errada — um *2025* digitado no lugar de *2027*, ou uma nota que veio com a data errada —, ela é corrigida em **Lotes e Séries**, na linha do lote, pelo botão **Corrigir validade** (ícone de calendário). Vale para **qualquer** lote: com saldo ou vazio, com lançamentos ou não, sem validade nenhuma, em qualquer situação (Ativo, Bloqueado, Reprovado), de material ativo ou inativo. Nenhuma Entrada nova é necessária, e o saldo do lote não muda.
+
+**Quem pode:** os perfis que decidem sobre o vencimento do lote — **Administrador**, **Almoxarife** e **Qualidade** (os mesmos que liberam vencimento e mudam a situação do lote). Para os outros perfis o botão **não aparece**; se a integração tentar, a resposta é *"Sem permissão para esta operação"* e nada é gravado. Enquanto as permissões da tela carregam, o botão pode aparecer — quem decide é sempre o servidor.
+
+**A janela** mostra *"Lote ⟨L⟩ — validade atual: DD/MM/AAAA"* (ou *sem validade*; uma validade gravada fora do formato de data aparece como está gravada), e pede:
+
+- **Nova validade** — a data certa;
+- **Justificativa** — por que a gravada está errada (ex.: *a NF diz 03/2027*). Vai para a auditoria.
+
+Embaixo: *"A validade vale para todo o saldo do lote. Se ele tinha o vencimento liberado, a liberação cai."* O botão **Corrigir** só fica ativo com a data e com uma justificativa que não seja só espaços. Deu certo: *"Validade do lote corrigida!"*, a janela fecha e a lista recarrega. Deu errado: a mensagem aparece e a janela **continua aberta** com o que foi digitado.
+
+**O efeito é imediato em todas as regras de validade**, sem que nenhuma delas mude: a saída de consumo de lote vencido (4.3), a ordem da lista de lotes (4.4), a dica de onde pegar da Fila de separação, a separação e a entrega, e o aviso *Lote vencendo*. Corrigir para o futuro tira o lote do vencido; corrigir para antes de hoje (horário de Brasília) o torna vencido — a validade de hoje não é vencida. **Data no passado é aceita.** **Não é possível apagar a validade**: a correção sempre exige uma data.
+
+**A liberação de vencimento cai.** Uma liberação é uma decisão sobre **aquela** validade. Se o lote tinha o vencimento liberado e a data muda, a liberação é desfeita — inclusive quando a nova data também está no passado. Se o lote ainda pode ser usado, libera-se de novo, com nova justificativa.
+
+**Os avisos** (amarelos, ficam na tela até serem fechados), nesta ordem, quando cabem:
+
+| Quando | Aviso |
+|---|---|
+| O lote tinha o vencimento liberado | *"O lote ⟨L⟩ tinha o vencimento liberado para a validade anterior; a liberação foi anulada. Se ele ainda pode ser usado, libere o vencimento de novo."* |
+| A nova validade é antes de hoje | *"Com a validade corrigida (DD/MM/AAAA), o lote ⟨L⟩ está vencido: a saída para consumo fica bloqueada até liberar o vencimento."* |
+| A nova validade é antes de hoje **e** há itens de requisição separados deste lote ainda não entregues (em requisição ativa) | *"Há ⟨n⟩ item(ns) de requisição separado(s) do lote ⟨L⟩ ainda não entregue(s); a entrega pela origem planejada vai recusar o lote vencido — libere o vencimento ou entregue escolhendo outro lote (a troca fica registrada)."* |
+| O lote tinha uma validade antes | *"As etiquetas já impressas do lote ⟨L⟩ mostram a validade antiga (DD/MM/AAAA) — reimprima pela tela Lotes e Séries (a etiqueta do recebimento usa a data da nota)."* |
+
+Sem nenhum desses casos (ex.: um lote sem validade recebendo uma data futura), aparece só a confirmação.
+
+**Recusas** (nada é gravado):
+
+| Situação | Mensagem |
+|---|---|
+| A nova data é igual à gravada | *"O lote ⟨L⟩ já tem a validade DD/MM/AAAA. Nada a corrigir."* |
+| Outra pessoa (ou outra aba) mudou a validade — ou a liberação de vencimento — do lote depois que a tela foi carregada | *"A validade do lote ⟨L⟩ mudou enquanto a tela estava aberta (agora DD/MM/AAAA). Recarregue e confira antes de corrigir."* (ou *"agora sem validade"*). Recarregue a lista e corrija de novo, se ainda for o caso. |
+| Ano antes de 2000 ou depois de 2100 | *"A validade do lote deve ter o ano entre 2000 e 2100 — confira a data digitada (ex.: 2027-03-31)."* |
+| Pela integração: sem a nova data | *"Informe a nova validade do lote (AAAA-MM-DD)."* |
+| Pela integração: data fora do formato AAAA-MM-DD ou que não existe | *"A validade do lote deve ser uma data no formato AAAA-MM-DD (ex.: 2027-03-31)."* |
+| Pela integração: sem justificativa | *"Informe a justificativa da correção da validade — ela fica na auditoria do lote."* |
+| Pela integração: sem a validade que a tela mostrava | *"Informe a validade que a tela mostrava (validade_vista: AAAA-MM-DD, ou null se o lote não tinha validade)."* |
+| Pela integração: lote que não existe | *"Lote nao encontrado"* |
+
+**O aviso por e-mail *Lote vencendo*** da data antiga que ainda não foi enviado é retirado da fila (fica registrado como não enviado, com o motivo *"Validade do lote corrigida antes do envio"*); a data nova gera o seu aviso, se estiver dentro da janela. Um aviso já enviado fica como está.
+
+**Auditoria:** cada correção aparece como *Validade corrigida*, com a validade anterior e a liberação que havia, a nova validade, se a liberação foi anulada, se o lote **deixou de estar vencido** com a correção, a justificativa e quem corrigiu. A lista de lotes não mostra que a validade foi corrigida — isso está na auditoria.
+
+**O que a correção não faz:** não reimprime etiquetas (o aviso lembra); não muda as séries (a série segue a validade do lote); não muda o que o **Recebimento** faz — uma nota do mesmo lote com outra validade continua ficando com a do lote, sem aviso (4.1). Duas correções do mesmo lote ao mesmo tempo não se atropelam: a segunda espera e, se a tela dela estava velha, é recusada (tabela acima).
+
 
 ### 4.4 FEFO
 
@@ -7129,7 +7177,7 @@ falha do servidor de e-mail nunca trava uma movimentação, uma devolução ou u
   totalmente reservado ainda está na prateleira e não conta como zerado.
 - **Lote vencendo** — varredura diária dos lotes ativos com saldo cuja validade está dentro da
   janela configurada (30 dias de fábrica, contados de hoje), **incluindo lotes já vencidos com saldo**. Um aviso
-  por validade: mudou a validade do lote, pode avisar de novo; no mesmo dia seguinte, não.
+  por validade: mudou a validade do lote, pode avisar de novo; no mesmo dia seguinte, não. Quando a validade é corrigida (4.3c), o aviso ainda não enviado da data antiga sai da fila.
   Lote cujo vencimento foi **liberado** por decisão registrada não entra.
 - **Remessa a terceiro vencida** — varredura diária pela mesma régua da tela de remessas.
 - **Pedido de compra atrasado** — varredura diária dos pedidos de compra com previsão de entrega
