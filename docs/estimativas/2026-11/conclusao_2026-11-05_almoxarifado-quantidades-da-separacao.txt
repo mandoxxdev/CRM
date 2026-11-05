@@ -1,0 +1,8 @@
+*Concluído — Almoxarifado: separação sem perder as quantidades digitadas*
+_05/11/2026_
+
+3. Separação: as quantidades digitadas não se perdem — estimado 1h · realizado 1h
+
+*Total: estimado 1h · realizado 1h*
+
+Com a janela de separação ou de entrega aberta, trocar de aba e voltar continua atualizando a requisição, mas as quantidades digitadas ficam como estavam. A janela de entrega tinha o mesmo problema e foi resolvida junto.
