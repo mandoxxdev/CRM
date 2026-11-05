@@ -370,6 +370,124 @@ const MSG = {
     assert.deepStrictEqual((await receiptService.getRecebimento(db, rec)).itens.map((i) => i.avisos_validade_lote), [[], []]);
   });
 
+  // ── Fase 5 da 194 (fix-round) ─────────────────────────────────────────────────────────────────────────────────────────────
+  await test("[Fase 5 G1] lote NOVO com '15/12/2030': nasce '2030-12-15', previa e processar sem aviso, a saida passa", async () => {
+    const m = await material();
+    const { rec } = await nota([{ m, lote: 'LZ', val: '15/12/2030' }]);
+    assert.deepStrictEqual(await previa(rec), [[]]);
+    const r = await processar(rec);
+    assert.ok(!('avisos_validade' in r), JSON.stringify(r.avisos_validade));
+    const l = await lote(m, 'LZ');
+    assert.strictEqual(l.data_validade, '2030-12-15', 'o lote novo nasce com o ISO');
+    const s = await stockService.registrarMovimentacao(db, ADMIN, { material_id: m, tipo: 'SAIDA', quantidade: 1, lote_id: l.id,
+      motivo: 'saida e194 f5', justificativa: 'teste da Fase 5' });
+    assert.ok(s && s.id, 'a saida do lote nao e recusada por "vencido"');
+    assert.strictEqual(await fisico(m), 2);
+  });
+
+  await test("[Fase 5 G1/G3] lote NOVO com '   ' + 2a linha 2027-06-30: previa e processar coerentes, sem 'cadastro antigo'", async () => {
+    const m = await material();
+    const { rec } = await nota([{ m, lote: 'LB', val: '   ' }, { m, lote: 'LB', val: '2027-06-30' }]);
+    assert.deepStrictEqual(await previa(rec), [[], [MSG.PREVIA_PREENCHER('LB', '2027-06-30')]]);
+    const r = await processar(rec);
+    assert.deepStrictEqual(r.avisos_validade, [MSG.AVISO_PREENCHIDA('LB', '2027-06-30')]);
+    assert.strictEqual((await lote(m, 'LB')).data_validade, '2027-06-30');
+  });
+
+  await test("[Fase 5 G1] lote NOVO com 'lixo': nasce sem validade e o item leva o aviso de data invalida (previa = processar)", async () => {
+    const m = await material();
+    const { rec } = await nota([{ m, lote: 'LL', val: 'lixo' }]);
+    assert.deepStrictEqual(await previa(rec), [[MSG.NOTA_INVALIDA('LL', 'lixo')]]);
+    const r = await processar(rec);
+    assert.deepStrictEqual(r.avisos_validade, [MSG.NOTA_INVALIDA('LL', 'lixo')]);
+    assert.strictEqual((await lote(m, 'LL')).data_validade, null);
+    assert.strictEqual(await fisico(m), 3);
+  });
+
+  await test('[Fase 5 G2/achado 8] o preencher roda antes dos rastros e da QUARENTENA: a falha depois deixa o lote com a data', async () => {
+    await dbRun(db, `INSERT INTO configuracoes_almoxarifado (chave, valor) VALUES ('inspecao_material_critico', '1')
+      ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor`);
+    try {
+      // (a) a QUARENTENA do material critico lanca
+      const m = await material();
+      await dbRun(db, 'UPDATE materiais_almoxarifado SET material_critico = 1 WHERE id = ?', [m]);
+      const l = await loteComSaldo(m, 'L-Q', null);
+      const { rec } = await nota([{ m, lote: 'L-Q', val: '2030-06-30' }]);
+      await dbRun(db, `CREATE TRIGGER t194_quarentena BEFORE INSERT ON movimentacoes_almoxarifado WHEN NEW.tipo = 'QUARENTENA'
+        BEGIN SELECT RAISE(ABORT, 'quarentena caiu (teste)'); END`);
+      try { await assert.rejects(() => processar(rec), /quarentena caiu/); } finally { await dbRun(db, 'DROP TRIGGER t194_quarentena'); }
+      assert.strictEqual(await fisico(m), 5, 'premissa: a entrada fisica aconteceu');
+      assert.strictEqual((await lote(m, 'L-Q')).data_validade, '2030-06-30', 'o lote ja tem a validade da nota');
+      assert.strictEqual((await auditoriasPreenchida(l.id)).length, 1, 'auditoria VALIDADE_PREENCHIDA');
+      // (b) o primeiro rastro lanca para fora (o aviso dele lanca): o preencher ja tinha rodado
+      const m2 = await material();
+      const l2 = await loteComSaldo(m2, 'L-R', null);
+      const b = await nota([{ m: m2, lote: 'L-R', val: '2030-06-30' }]);
+      await dbRun(db, `CREATE TRIGGER t194_rastro BEFORE UPDATE OF movimentacao_entrada_id ON recebimentos_material_itens_almoxarifado
+        WHEN NEW.movimentacao_entrada_id IS NOT NULL BEGIN SELECT RAISE(ABORT, 'rastro caiu (teste)'); END`);
+      const warn = console.warn;
+      console.warn = (...a) => { if (a.join(' ').includes('rastro caiu')) throw new Error('o aviso do rastro caiu (teste)'); warn(...a); };
+      try { await assert.rejects(() => processar(b.rec), /o aviso do rastro caiu/); } finally {
+        console.warn = warn; await dbRun(db, 'DROP TRIGGER t194_rastro');
+      }
+      assert.strictEqual(await fisico(m2), 5, 'premissa (b): a entrada fisica aconteceu');
+      assert.strictEqual((await lote(m2, 'L-R')).data_validade, '2030-06-30', '(b) o lote ja tem a validade da nota');
+      assert.strictEqual((await auditoriasPreenchida(l2.id)).length, 1, '(b) auditoria VALIDADE_PREENCHIDA');
+    } finally {
+      await dbRun(db, "UPDATE configuracoes_almoxarifado SET valor = '0' WHERE chave = 'inspecao_material_critico'");
+    }
+  });
+
+  await test('[Fase 5 G4] lote 31/03/2027 e duas linhas com 30/06/2027: um aviso so em avisos_validade (a previa segue por item)', async () => {
+    const m = await material();
+    await loteComSaldo(m, 'L-2X', '2027-03-31');
+    const { rec } = await nota([{ m, lote: 'L-2X', val: '2027-06-30' }, { m, lote: 'L-2X', val: '2027-06-30' }]);
+    const div = MSG.PREVIA_DIVERGENTE('L-2X', '2027-03-31', '2027-06-30');
+    assert.deepStrictEqual(await previa(rec), [[div], [div]]);
+    const r = await processar(rec);
+    assert.deepStrictEqual(r.avisos_validade, [MSG.NOTA_DIVERGENTE('L-2X', '2027-03-31', '2027-06-30')]);
+  });
+
+  await test('[Fase 5 G4] o dedup mantem a ordem da 1a ocorrencia e nao junta avisos diferentes', async () => {
+    const m = await material(); const m2 = await material();
+    await loteComSaldo(m, 'L-O1', '2027-03-31');
+    await loteComSaldo(m2, 'L-O2', null);
+    const { rec } = await nota([{ m, lote: 'L-O1', val: '2027-06-30' }, { m: m2, lote: 'L-O2', val: '2030-01-01' },
+      { m, lote: 'L-O1', val: '2027-06-30' }]);
+    const r = await processar(rec);
+    assert.deepStrictEqual(r.avisos_validade, [MSG.NOTA_DIVERGENTE('L-O1', '2027-03-31', '2027-06-30'),
+      MSG.AVISO_PREENCHIDA('L-O2', '2030-01-01')]);
+  });
+
+  await test('[Fase 5 G5a] validade = hoje num lote sem validade: so AVISO_PREENCHIDA, previa sem "ja venceu"', async () => {
+    const m = await material();
+    await loteComSaldo(m, 'L-HJ', null);
+    const { rec } = await nota([{ m, lote: 'L-HJ', val: hoje }]);
+    assert.deepStrictEqual(await previa(rec), [[MSG.PREVIA_PREENCHER('L-HJ', hoje)]]);
+    const r = await processar(rec);
+    assert.deepStrictEqual(r.avisos_validade, [MSG.AVISO_PREENCHIDA('L-HJ', hoje)]);
+  });
+
+  await test('[Fase 5 G5b] o preencher devolve { preenchida: false }: AVISO_FALHA', async () => {
+    const m = await material();
+    await loteComSaldo(m, 'L-PF', null);
+    const { rec } = await nota([{ m, lote: 'L-PF', val: '2030-06-30' }]);
+    const original = lotService.preencherValidadeSeVazia;
+    const warn = console.warn;
+    lotService.preencherValidadeSeVazia = async () => ({ preenchida: false, atual: '2031-01-01' });
+    console.warn = () => {};
+    let r;
+    try { r = await processar(rec); } finally { lotService.preencherValidadeSeVazia = original; console.warn = warn; }
+    assert.deepStrictEqual(r.avisos_validade, [MSG.AVISO_FALHA('L-PF', '2030-06-30')]);
+  });
+
+  await test('[Fase 5 G5c] o mesmo codigo de lote em dois materiais: o mapa da previa separa por material', async () => {
+    const m1 = await material(); const m2 = await material();
+    await loteComSaldo(m1, 'L-MM', '2027-03-31');
+    const { rec } = await nota([{ m: m1, lote: 'L-MM', val: '2027-03-31' }, { m: m2, lote: 'L-MM', val: '2027-06-30' }]);
+    assert.deepStrictEqual(await previa(rec), [[], []]);
+  });
+
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
   process.exit(failed > 0 ? 1 : 0);

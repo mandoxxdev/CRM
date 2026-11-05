@@ -1762,7 +1762,9 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id,
             // e NINGUEM a escrevia. Este e o escritor — o quarto campo de lote da tela do
             // recebimento (Lote / Validade / Fabricacao / Corrida).
             data_fabricacao: item.data_fabricacao_lote,
-            data_validade: item.data_validade_lote,
+            // Etapa 194 (Fase 5, G1): o lote NOVO nasce com a data normalizada (ISO) ou sem validade — nunca com o texto cru
+            // ("15/12/2030" virava validade e a saida o dava por vencido). O lote que ja existe e devolvido sem tocar.
+            data_validade: validadeDoLoteNovo(item.data_validade_lote),
             nota_fiscal: rec.nota_fiscal,
             recebimento_id: recebimentoId,
             recebimento_item_id: item.id,
@@ -1969,7 +1971,20 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id,
     console.warn('[recebimento] status automatico do pedido de compra falhou '
       + `(recebimento ${recebimentoId}): ${eStatus.message}`);
   }
-  return { avisosValidade };
+  // Etapa 194 (Fase 5, G4): strings identicas uma vez so (duas linhas do mesmo lote abriam dois toasts iguais), na ordem da 1a
+  return { avisosValidade: [...new Set(avisosValidade)] };
+}
+
+/**
+ * Etapa 194 (Fase 5, G1/G3) — a validade com que um lote NOVO nasce no recebimento: a data da nota normalizada por
+ * `lotService.dataDoTextoDoItem` se for uma validade valida (`validarDataValidade`); texto que a regua nao reconhece, ou so espacos,
+ * -> `null` (o lote nasce sem validade e a regua da o aviso de data invalida, RN-194.06). Decisao reversivel: so o recebimento
+ * normaliza aqui; `criarOuObterLote` segue gravando o que recebe para os outros chamadores (a Entrada manual da 190 ja valida).
+ */
+function validadeDoLoteNovo(v) {
+  const d = lotService.dataDoTextoDoItem(v);
+  if (!d) return null;
+  try { lotService.validarDataValidade(d); return d; } catch (e) { return null; }
 }
 
 /**
@@ -2030,19 +2045,20 @@ async function previaDaValidadeDosItens(db, itens) {
       const l = await lotService.getLotePorCodigo(db, it.material_id, it.lote);
       efetivo.set(k, l ? { codigo: l.codigo, data_validade: l.data_validade } : null);
     }
-    const atual = efetivo.get(k);
+    let atual = efetivo.get(k);
     if (!atual) {
-      // `criarOuObterLote` grava `data_validade || null` com o texto da linha
-      efetivo.set(k, { codigo: String(it.lote).trim(), data_validade: it.data_validade_lote || null });
-    } else {
-      const d = lotService.avaliarValidadeDaNota(atual, it.data_validade_lote);
-      if (d.acao === 'PREENCHER') {
-        avisos[i].push(M.PREVIA_PREENCHER(atual.codigo, d.data));
-        atual.data_validade = d.data;
-      } else if (d.acao === 'DIVERGENTE') avisos[i].push(M.PREVIA_DIVERGENTE(atual.codigo, d.loteISO, d.notaISO));
-      else if (d.acao === 'INVALIDA') avisos[i].push(M.NOTA_INVALIDA(atual.codigo, d.valor));
-      else if (d.acao === 'LEGADO') avisos[i].push(M.PREVIA_LEGADO(atual.codigo));
+      // Etapa 194 (Fase 5, G1): o lote novo nasce com `validadeDoLoteNovo` (ISO ou null), como no processar — e a regua roda
+      // contra ele: data valida -> NADA, texto invalido -> INVALIDA, so espacos -> NADA (e a linha seguinte pode PREENCHER)
+      atual = { codigo: String(it.lote).trim(), data_validade: validadeDoLoteNovo(it.data_validade_lote) };
+      efetivo.set(k, atual);
     }
+    const d = lotService.avaliarValidadeDaNota(atual, it.data_validade_lote);
+    if (d.acao === 'PREENCHER') {
+      avisos[i].push(M.PREVIA_PREENCHER(atual.codigo, d.data));
+      atual.data_validade = d.data;
+    } else if (d.acao === 'DIVERGENTE') avisos[i].push(M.PREVIA_DIVERGENTE(atual.codigo, d.loteISO, d.notaISO));
+    else if (d.acao === 'INVALIDA') avisos[i].push(M.NOTA_INVALIDA(atual.codigo, d.valor));
+    else if (d.acao === 'LEGADO') avisos[i].push(M.PREVIA_LEGADO(atual.codigo));
     if (!grupos.has(k)) grupos.set(k, { idx: [], datas: new Set(), codigo: String(it.lote).trim() });
     const g = grupos.get(k);
     g.idx.push(i);

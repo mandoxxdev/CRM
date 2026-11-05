@@ -116,7 +116,8 @@ function dataDoTextoDoItem(v) {
  * Os dois lados passam por `dataDoTextoDoItem`. Nesta ordem: nota vazia -> NADA; lote ausente -> NADA; lote `null` -> a nota passa
  * em `validarDataValidade` -> PREENCHER (o ISO), senao INVALIDA (o texto como gravado); lote `''` (legado) -> LEGADO (a guarda do
  * preencher e `IS NULL`: prometer preencher e dar AVISO_FALHA era o achado 3); iguais -> NADA; senao DIVERGENTE (`loteISO` como
- * gravado, `notaISO` normalizada). O lote novo nasce com o texto da nota e cai em "iguais".
+ * gravado, `notaISO` normalizada). O lote novo nasce com a data da nota NORMALIZADA (ou sem validade, se ela nao e valida) e cai em
+ * "iguais" ou INVALIDA — ate a Fase 5 da 194 este comentario dizia "com o texto da nota": era o texto cru, e "15/12/2030" virava validade (G1).
  */
 // As acoes pelo objeto, e nao como literal de texto depois de "acao:": a guarda de rotulos da auditoria (auditLabels.api.test.js) varre
 // esse padrao nos servicos como verbo gravavel — estas sao decisoes da regua, nunca vao para a trilha.
