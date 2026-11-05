@@ -426,11 +426,15 @@ async function suprimirNotificacaoMovimentacao(db, movimentacaoId) {
  * Etapa 191 (Fase 2, achado 5, B1297): a validade do lote foi corrigida — o aviso "Lote vencendo" ainda PENDENTE com a data
  * antiga sairia com a data errada (o envio nao rele o lote). Mesmo molde de cima: PENDENTE vira FALHA com o motivo; ENVIADA fica.
  * A chave e a de `varrerLotesVencendo` (`lote-vencendo-<id>-<data_validade>`, a data como gravada).
+ * Fase 5 (F1): a FALHA LIBERA a chave (sufixo `:suprimida:<id>`, UNIQUE continua) — sem isto, o vai-e-volta A -> B -> A dava
+ * DUPLICADA no INSERT OR IGNORE da volta e o lote vencia sem e-mail. So a PENDENTE: a ENVIADA guarda a chave (o e-mail saiu).
+ * Descartado: apagar a linha (perde o historico, D4) e um indice UNIQUE parcial (mexe no schema de todas as filas).
  */
 async function suprimirNotificacaoLoteVencendo(db, loteId, dataValidadeAntiga) {
   const hash = hashDedupe('LOTE_VENCENDO', `lote-vencendo-${loteId}-${dataValidadeAntiga}`);
   const r = await dbRun(db, `UPDATE fila_notificacoes_almoxarifado
-    SET status = 'FALHA', ultimo_erro = 'Validade do lote corrigida antes do envio'
+    SET status = 'FALHA', ultimo_erro = 'Validade do lote corrigida antes do envio',
+      hash_dedupe = hash_dedupe || ':suprimida:' || id
     WHERE hash_dedupe = ? AND status = 'PENDENTE'`, [hash]);
   return { suprimida: r.changes > 0 };
 }

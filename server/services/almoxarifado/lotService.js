@@ -66,7 +66,7 @@ const MSG_VALIDADE = {
   JUSTIFICATIVA: 'Informe a justificativa da correção da validade — ela fica na auditoria do lote.',
   VISTA_OBRIGATORIA: 'Informe a validade que a tela mostrava (validade_vista: AAAA-MM-DD, ou null se o lote não tinha validade).',
   MUDOU: (codigo, atualISO) => `A validade do lote ${codigo} mudou enquanto a tela estava aberta (agora `
-    + `${atualISO == null ? 'sem validade' : dataValidadeBR(atualISO)}). Recarregue e confira antes de corrigir.`,
+    + `${atualISO == null || atualISO === '' ? 'sem validade' : dataValidadeBR(atualISO)}). Recarregue e confira antes de corrigir.`,
   MESMA: (codigo, dataISO) => `O lote ${codigo} já tem a validade ${dataValidadeBR(dataISO)}. Nada a corrigir.`,
   // Avisos da correcao (RN-191.10, nesta ordem). Fase 2, achados 2 e 3: a etiqueta do recebimento le a nota, e a entrega com
   // origem vencida nao fica presa (outro lote, com a substituicao registrada)
@@ -204,6 +204,9 @@ async function loteEstaVazio(db, loteId) {
  * UPDATE -> devolve a gravada (`atual`), como o preenchimento.
  */
 async function redefinirValidadeDoLoteVazio(db, user, loteId, antigaISO, novaISO, { movimentoId = null } = {}) {
+  // Fase 5 (F2): a guarda tambem contra a liberacao lida — `liberarVencimento` nao pega a trava, e uma liberacao gravada entre a
+  // releitura e o UPDATE seria zerada sem constar na auditoria (`liberacao_anulada: false`) nem no aviso. Nao casar = 409 `MUDOU`.
+  // Descartado: `liberarVencimento` sob a trava (porta antiga, fora do escopo desta etapa; a guarda basta para nao apagar calado).
   const claim = await dbGet(db, `UPDATE lotes_almoxarifado SET data_validade = ?, vencimento_liberado_em = NULL,
       vencimento_liberado_por = NULL, vencimento_liberado_motivo = NULL, updated_at = CURRENT_TIMESTAMP
     WHERE id = ? AND data_validade = ? RETURNING id`, [novaISO, loteId, antigaISO]);
@@ -335,7 +338,7 @@ async function liberarVencimento(db, user, loteId, justificativa) {
 // ── Etapa 191 — corrigir a validade de um lote (com saldo ou nao) ────────────────────────────────────────────────────────────
 /** A regua do `isVencido`: so a parte de data. `null`/ausente fica `null` (so casa `null`). */
 function validadeNormalizada(valor) {
-  return valor === undefined || valor === null ? null : String(valor).slice(0, 10);
+  return valor === undefined || valor === null || valor === '' ? null : String(valor).slice(0, 10); // Fase 5 (F3): '' legado = sem validade
 }
 
 /**
@@ -369,7 +372,8 @@ async function corrigirValidadeDoLoteSemTrava(db, user, loteFora, { nova, vista,
 
   const claim = await dbGet(db, `UPDATE lotes_almoxarifado SET data_validade = ?, vencimento_liberado_em = NULL,
       vencimento_liberado_por = NULL, vencimento_liberado_motivo = NULL, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND data_validade IS ? RETURNING id`, [nova, loteId, antes.data_validade]);
+    WHERE id = ? AND data_validade IS ? AND vencimento_liberado_em IS ? RETURNING id`,
+    [nova, loteId, antes.data_validade, antes.vencimento_liberado_em]);
   if (!claim) {
     const atual = await getLote(db, loteId);
     throw erro(MSG_VALIDADE.MUDOU(antes.codigo, atual ? atual.data_validade : null), 409);
@@ -433,7 +437,7 @@ async function corrigirValidadeDoLote(db, user, loteId, payload) {
   const { antes, liberacaoAnulada } = await trava.naTravaDoMaterial(lote.material_id,
     () => corrigirValidadeDoLoteSemTrava(db, user, lote, dados));
 
-  if (antes.data_validade != null) await retirarLoteVencendoPendente(db, id, antes.data_validade);
+  if (validadeNormalizada(antes.data_validade) != null) await retirarLoteVencendoPendente(db, id, antes.data_validade);
 
   const avisos = [];
   if (liberacaoAnulada) avisos.push(MSG_VALIDADE.AVISO_LIBERACAO_ANULADA(antes.codigo));
@@ -442,7 +446,7 @@ async function corrigirValidadeDoLote(db, user, loteId, payload) {
     const n = await contarSeparadoPendenteDoLote(db, id);
     if (n > 0) avisos.push(MSG_VALIDADE.AVISO_SEPARACAO(antes.codigo, n));
   }
-  if (antes.data_validade != null) avisos.push(MSG_VALIDADE.AVISO_ETIQUETA(antes.codigo, antes.data_validade));
+  if (validadeNormalizada(antes.data_validade) != null) avisos.push(MSG_VALIDADE.AVISO_ETIQUETA(antes.codigo, antes.data_validade));
   return { lote: await getLote(db, id), avisos };
 }
 

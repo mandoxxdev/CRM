@@ -236,6 +236,8 @@ const CORPO = (extra = {}) => ({ data_validade: '2027-03-10', validade_vista: '2
     assert.strictEqual(lista.length, 1);
     const [a] = lista;
     assert.strictEqual(a.justificativa, 'NF 1234 diz 03/2027');
+    assert.strictEqual(a.usuario_id, ADMIN.id, 'Fase 5 F4: quem corrigiu');
+    assert.strictEqual(a.usuario_nome, ADMIN.nome);
     assert.deepStrictEqual(JSON.parse(a.dados_anteriores), {
       data_validade: '2025-03-10', vencimento_liberado_em: null, vencimento_liberado_por: null, vencimento_liberado_motivo: null });
     assert.deepStrictEqual(JSON.parse(a.dados_novos), { data_validade: '2027-03-10', liberacao_anulada: false, desvencido: true });
@@ -346,6 +348,11 @@ const CORPO = (extra = {}) => ({ data_validade: '2027-03-10', validade_vista: '2
     assert.strictEqual(ent.status, 200, `entregar: ${JSON.stringify(ent.body)}`);
     const cancelada = await reqSeparada(mat, loc, lote.id, 1);
     await dbRun(db, "UPDATE requisicoes_almoxarifado SET status = 'CANCELADO' WHERE id = ?", [cancelada.id]);
+    // Fase 5 F4: requisicao excluida (ativo = 0) nao conta; linha legada (entregue NULL, atendida = separada) e entregue
+    const inativa = await reqSeparada(mat, loc, lote.id, 1);
+    await dbRun(db, 'UPDATE requisicoes_almoxarifado SET ativo = 0 WHERE id = ?', [inativa.id]);
+    const legada = await reqSeparada(mat, loc, lote.id, 1);
+    await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET quantidade_entregue = NULL, quantidade_atendida = 1 WHERE id = ?', [legada.item]);
     await reqSeparada(mat, loc, lote.id, 1);
     const ontem = dia(-1);
     const res = await put(app, lote.id, CORPO({ data_validade: ontem, validade_vista: '2027-05-01' }));
@@ -428,15 +435,91 @@ const CORPO = (extra = {}) => ({ data_validade: '2027-03-10', validade_vista: '2
     const fila = require('../../services/almoxarifado/notificationQueueService');
     const { lote } = await loteComSaldo(db, { validade: dia(5) });
     const antiga = lote.data_validade;
-    await fila.enfileirar(db, { evento: 'LOTE_VENCENDO', destinatarios: ['x@test.com'], assunto: 'a', corpo_texto: 'b',
+    const enf = await fila.enfileirar(db, { evento: 'LOTE_VENCENDO', destinatarios: ['x@test.com'], assunto: 'a', corpo_texto: 'b',
       dedupe_chave: `lote-vencendo-${lote.id}-${antiga}` });
+    assert.ok(enf.enfileirada, 'a linha nao foi enfileirada no setup');
     const res = await put(app, lote.id, CORPO({ data_validade: dia(300), validade_vista: antiga }));
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
-    const hash = require('crypto').createHash('sha256').update(`LOTE_VENCENDO|lote-vencendo-${lote.id}-${antiga}`).digest('hex');
-    const linha = await dbGet(db, 'SELECT status, ultimo_erro FROM fila_notificacoes_almoxarifado WHERE hash_dedupe = ?', [hash]);
-    assert.ok(linha, 'a linha nao foi enfileirada no setup');
+    const hashDe = (l, d) => require('crypto').createHash('sha256').update(`LOTE_VENCENDO|lote-vencendo-${l}-${d}`).digest('hex');
+    // Fase 5 F1: por id — a FALHA libera a chave (sufixo :suprimida:<id>) para a volta a esta data enfileirar de novo
+    const linha = await dbGet(db, 'SELECT status, ultimo_erro, hash_dedupe FROM fila_notificacoes_almoxarifado WHERE id = ?', [enf.id]);
     assert.strictEqual(linha.status, 'FALHA');
     assert.strictEqual(linha.ultimo_erro, 'Validade do lote corrigida antes do envio');
+    assert.strictEqual(linha.hash_dedupe, `${hashDe(lote.id, antiga)}:suprimida:${enf.id}`);
+
+    // Fase 5 F4: a metade positiva — a linha ja ENVIADA da data antiga continua ENVIADA, com a chave (o e-mail saiu)
+    const { lote: l2 } = await loteComSaldo(db, { validade: dia(6) });
+    const env = await fila.enfileirar(db, { evento: 'LOTE_VENCENDO', destinatarios: ['x@test.com'], assunto: 'a', corpo_texto: 'b',
+      dedupe_chave: `lote-vencendo-${l2.id}-${l2.data_validade}` });
+    await dbRun(db, "UPDATE fila_notificacoes_almoxarifado SET status = 'ENVIADA' WHERE id = ?", [env.id]);
+    assert.strictEqual((await put(app, l2.id, CORPO({ data_validade: dia(300), validade_vista: l2.data_validade }))).status, 200);
+    const enviada = await dbGet(db, 'SELECT status, ultimo_erro, hash_dedupe FROM fila_notificacoes_almoxarifado WHERE id = ?', [env.id]);
+    assert.strictEqual(enviada.status, 'ENVIADA', 'a ENVIADA virou FALHA');
+    assert.strictEqual(enviada.ultimo_erro, null);
+    assert.strictEqual(enviada.hash_dedupe, hashDe(l2.id, l2.data_validade));
+  });
+
+  // ── Fase 5 ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  await test('[Fase 5 F2] liberacao gravada entre a releitura e o UPDATE: 409, a liberacao fica', async () => {
+    comoAdmin();
+    const { lote } = await loteComSaldo(db, { validade: '2025-02-02' });
+    let disparou = false;
+    const espiao = {
+      run: db.run.bind(db), all: db.all.bind(db),
+      get(sql, params, cb) {
+        if (!disparou && /^UPDATE lotes_almoxarifado SET data_validade/.test(String(sql).trim())) {
+          disparou = true;
+          return lotService.liberarVencimento(db, QUALIDADE, lote.id, 'laudo no meio').then(() => db.get(sql, params, cb), cb);
+        }
+        return db.get(sql, params, cb);
+      },
+    };
+    await assert.rejects(() => lotService.corrigirValidadeDoLote(espiao, ADMIN, lote.id, CORPO({ validade_vista: '2025-02-02' })),
+      (e) => e.status === 409 && e.message === MSG_VALIDADE.MUDOU(lote.codigo, '2025-02-02'));
+    assert.ok(disparou, 'o espiao nao viu o UPDATE');
+    const banco = await lotService.getLote(db, lote.id);
+    assert.strictEqual(banco.data_validade, '2025-02-02');
+    assert.ok(banco.vencimento_liberado_em, 'o UPDATE zerou a liberacao nova');
+    assert.strictEqual(banco.vencimento_liberado_motivo, 'laudo no meio');
+    assert.strictEqual((await auditorias(db, lote.id)).length, 0);
+  });
+
+  await test('[Fase 5 F2] liberacao gravada depois da leitura de fora e antes da secao: a releitura ve e anula', async () => {
+    comoAdmin();
+    const { lote } = await loteComSaldo(db, { validade: '2025-02-03' });
+    const original = trava.naTravaDoMaterial;
+    let viu = false;
+    trava.naTravaDoMaterial = async (m, fn) => {
+      viu = true;
+      await lotService.liberarVencimento(db, QUALIDADE, lote.id, 'laudo antes da secao');
+      return original.call(trava, m, fn);
+    };
+    let res;
+    try { res = await put(app, lote.id, CORPO({ validade_vista: '2025-02-03' })); } finally { trava.naTravaDoMaterial = original; }
+    assert.ok(viu, 'a correcao nao passou por trava.naTravaDoMaterial (pelo objeto)');
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(res.body.avisos[0], MSG_VALIDADE.AVISO_LIBERACAO_ANULADA(lote.codigo), JSON.stringify(res.body.avisos));
+    const a = (await auditorias(db, lote.id))[0];
+    assert.strictEqual(JSON.parse(a.dados_novos).liberacao_anulada, true);
+    assert.strictEqual(JSON.parse(a.dados_anteriores).vencimento_liberado_motivo, 'laudo antes da secao');
+    assert.strictEqual((await lotService.getLote(db, lote.id)).vencimento_liberado_em, null);
+  });
+
+  await test('[Fase 5 F3] lote legado com data_validade vazia e tratado como sem validade', async () => {
+    comoAdmin();
+    const { lote } = await loteComSaldo(db, { validade: null });
+    await dbRun(db, "UPDATE lotes_almoxarifado SET data_validade = '' WHERE id = ?", [lote.id]);
+    const res = await put(app, lote.id, CORPO({ data_validade: dia(400), validade_vista: null }));
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.deepStrictEqual(res.body.avisos, [], 'sem aviso de etiqueta: nao havia validade antiga');
+    assert.strictEqual((await lotService.getLote(db, lote.id)).data_validade, dia(400));
+
+    const { lote: l2 } = await loteComSaldo(db, { validade: null });
+    await dbRun(db, "UPDATE lotes_almoxarifado SET data_validade = '' WHERE id = ?", [l2.id]);
+    const r2 = await put(app, l2.id, CORPO({ validade_vista: '2025-03-10' }));
+    assert.strictEqual(r2.status, 409, JSON.stringify(r2.body));
+    assert.strictEqual(r2.body.error, MSG_VALIDADE.MUDOU(l2.codigo, null));
+    assert.ok(r2.body.error.includes('(agora sem validade)'), r2.body.error);
   });
 
   await close();

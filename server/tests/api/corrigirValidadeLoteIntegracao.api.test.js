@@ -153,9 +153,8 @@ const hashLoteVencendo = (id, data) => crypto.createHash('sha256').update(`LOTE_
     const longe = dias(200);
     await entrada(m, { quantidade: 3, lote: 'L-MAIL', data_validade: longe });
     const id = await loteId(m, 'L-MAIL');
-    const doLote = async () => (await dbAll(db, `SELECT hash_dedupe, status, ultimo_erro FROM fila_notificacoes_almoxarifado
-      WHERE evento = 'LOTE_VENCENDO' ORDER BY id`)).filter((l) => l.hash_dedupe === hashLoteVencendo(id, longe)
-      || l.hash_dedupe === hashLoteVencendo(id, dias(10)) || l.hash_dedupe === hashLoteVencendo(id, dias(12)));
+    const doLote = async () => (await dbAll(db, `SELECT id, hash_dedupe, status, ultimo_erro FROM fila_notificacoes_almoxarifado
+      WHERE evento = 'LOTE_VENCENDO' ORDER BY id`)).filter((l) => [longe, dias(10), dias(12)].some((d) => l.hash_dedupe.startsWith(hashLoteVencendo(id, d)))); // Fase 5 F1: a suprimida ganha sufixo
     await queueService.varrerLotesVencendo(db);
     assert.strictEqual((await doLote()).length, 0, 'controle: fora da janela, sem a correcao, nenhum aviso');
     await queueService.varrerLotesVencendo(db);
@@ -172,12 +171,37 @@ const hashLoteVencendo = (id, data) => crypto.createHash('sha256').update(`LOTE_
     await queueService.varrerLotesVencendo(db);
     linhas = await doLote();
     assert.strictEqual(linhas.length, 2, `mais 1 (chave nova): ${JSON.stringify(linhas)}`);
-    const antiga = linhas.find((l) => l.hash_dedupe === hashLoteVencendo(id, dias(10)));
+    const antiga = linhas.find((l) => l.hash_dedupe === `${hashLoteVencendo(id, dias(10))}:suprimida:${l.id}`);
     const nova = linhas.find((l) => l.hash_dedupe === hashLoteVencendo(id, dias(12)));
     assert.ok(antiga && nova, JSON.stringify(linhas));
     assert.strictEqual(antiga.status, 'FALHA', 'a PENDENTE da data anterior continuou PENDENTE (o e-mail errado sairia)');
     assert.strictEqual(antiga.ultimo_erro, 'Validade do lote corrigida antes do envio');
     assert.strictEqual(nova.status, 'PENDENTE');
+  });
+
+  // ── 4b. Vai-e-volta A -> B -> A (Fase 5, F1) ──────────────────────────────────────────────────────────────────────────────
+  await test('[B1297 / Fase 5 F1] vai-e-volta A -> B -> A: a volta para A enfileira de novo (a FALHA antiga nao segura a chave)', async () => {
+    const m = await material();
+    const A = dias(10); const B = dias(200);
+    await entrada(m, { quantidade: 3, lote: 'L-VV', data_validade: A });
+    const id = await loteId(m, 'L-VV');
+    const doLote = async () => (await dbAll(db, `SELECT id, hash_dedupe, status, ultimo_erro, payload FROM fila_notificacoes_almoxarifado
+      WHERE evento = 'LOTE_VENCENDO' ORDER BY id`)).filter((l) => l.payload && JSON.parse(l.payload).lote_id === id);
+    await queueService.varrerLotesVencendo(db);
+    let linhas = await doLote();
+    assert.strictEqual(linhas.length, 1, `premissa: A na janela enfileira: ${JSON.stringify(linhas)}`);
+    assert.strictEqual(linhas[0].status, 'PENDENTE');
+    await corrigir(id, B, A);
+    await corrigir(id, A, B);
+    await queueService.varrerLotesVencendo(db);
+    linhas = await doLote();
+    assert.strictEqual(linhas.length, 2, `a volta para A nao enfileirou (o lote venceria sem e-mail): ${JSON.stringify(linhas)}`);
+    assert.strictEqual(linhas[0].status, 'FALHA');
+    assert.strictEqual(linhas[0].ultimo_erro, 'Validade do lote corrigida antes do envio');
+    assert.strictEqual(linhas[1].status, 'PENDENTE');
+    assert.strictEqual(linhas[1].hash_dedupe, hashLoteVencendo(id, A), 'a nova tem a chave de A');
+    await queueService.varrerLotesVencendo(db);
+    assert.strictEqual((await doLote()).length, 2, 'varrer de novo nao duplica a PENDENTE de A');
   });
 
   // ── 5. Liberacao anulada ──────────────────────────────────────────────────────────────────────────────────────────────────
