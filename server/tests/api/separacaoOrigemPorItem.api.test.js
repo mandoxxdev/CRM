@@ -106,16 +106,20 @@ let seq = 0;
     assert.strictEqual((await itemRow(ids[0])).origem_separacao_id, A.id);
   });
 
-  await test('RN-02 rodadas com origens DIFERENTES: planejada nula -> entrega automatica', async () => {
+  // Etapa 196 (RN-196.03/06): reescrito. Era "planejada nula -> entrega automatica" (a regra "mista -> nula" da 59, revogada): a
+  // origem A fica com a parte 3; a entrega de um clique tira 3 de A e so os 3 de B (que ficaram sem origem) no automatico.
+  await test('RN-02 (Etapa 196) rodadas com origens DIFERENTES: a origem A fica com a parte 3 -> a entrega tira 3 de A e 3 no automatico', async () => {
     const P = await loc('MP'); const A = await loc('MA'); const B = await loc('MB'); const m = await material(P.id);
     await entrar(m.id, A.id, 5); await entrar(m.id, B.id, 5); await entrar(m.id, P.id, 20);
     const { id, ids } = await req([[m.id, 6]]);
     await separar(id, [{ item_id: ids[0], quantidade_separada: 3, localizacao_origem_id: A.id }]);
     await separar(id, [{ item_id: ids[0], quantidade_separada: 3, localizacao_origem_id: B.id }]);
-    assert.strictEqual((await itemRow(ids[0])).origem_separacao_id, null);
+    const row = await itemRow(ids[0]);
+    assert.deepStrictEqual([row.origem_separacao_id, row.quantidade_origem_separacao], [A.id, 3]);
     const r = await entregar(id, [{ item_id: ids[0], quantidade_atendida: 6 }]);
     assert.strictEqual(r.status, 200, JSON.stringify(r.body));
-    assert.strictEqual(await saldoEm(m.id, P.id), 14, 'automatico drena a padrao primeiro');
+    assert.strictEqual(await saldoEm(m.id, A.id), 2, 'a parte de A sai de A');
+    assert.strictEqual(await saldoEm(m.id, P.id), 17, 'o resto automatico drena a padrao primeiro');
   });
 
   await test('RN-03 origem no payload vence a planejada; origem_automatica ignora a planejada', async () => {
