@@ -467,7 +467,7 @@ automático, entregar, devolver, excluir, com lotes de validades e status sortea
 
 **Placar depois do 1º fix-round (sobre `351ee457`):** `test:api` **585/585**; `test:almoxarifado` **44/0**; `test:validation` **4/0**;
 `test:safealter` **3/0**; `test:sqlite` **16/0**; tela **212 suítes / 2913 testes**; build ok (`CI=true`). **Depois do 2º fix-round (sobre
-`1ed41bb8`):** `entregaAutomaticaPeloLote` **32/0** e os vizinhos verdes; `test:almoxarifado` **44/0**; `test:api`: **ver fechamento**
+`1ed41bb8`):** `entregaAutomaticaPeloLote` **32/0** e os vizinhos verdes; `test:almoxarifado` **44/0**; `test:api` **585/585** (rodado sozinho depois do `1ed41bb8`; a falha de `superPadraoNoBoot` com `SQLITE_READONLY` na rodada do executor não se repetiu)
 (sendo reconferido por quem fecha a etapa).
 
 **Divergências do plano, em resumo:** (1) a Fase 2 mudou a RN-197.11 de "não desconta" para "desconta" (B1326) e acrescentou a inspeção, a

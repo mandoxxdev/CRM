@@ -1,0 +1,8 @@
+*Concluído — Almoxarifado: separar em duas vezes, material com lote*
+_05/11/2026_
+
+5. Separar em duas vezes — 2ª parte: material com lote — estimado 4h a 5h · realizado 5h30
+
+*Total: estimado 4h a 5h · realizado 5h30*
+
+Na entrega, a parte que sai pela escolha automática passa a baixar do lote que vence primeiro, sem criar a linha sem lote com saldo negativo, e sem tirar o material que outra requisição já separou de um local. O tempo passou do previsto porque a revisão encontrou dois casos em que uma entrega podia tirar o que outra requisição tinha separado; os dois foram resolvidos antes de entregar.
