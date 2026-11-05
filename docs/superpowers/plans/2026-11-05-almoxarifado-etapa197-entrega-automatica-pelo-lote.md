@@ -391,7 +391,30 @@ ele, três arquivos de teste ficam vermelhos em 11/11.
   quantidade)` exportada (entrada `[{lote_id, saldo}]` ja em ordem FEFO; saida `{fatias:[{lote_id, quantidade}], resto}`); interno
   `lotesParaOAutomatico(db, materialId, saiuDaOrigemPorItem)` e `plano.controleLote`; resposta de `/entregar` igual. A T0 nao tocou
   fila, `coletaTexto`, notas nem `client/`.
-- [ ] T1.
-- [ ] T2.
+- [x] T1 — feita numa worktree e integrada na main por cherry-pick: `58227edf` (campo `controle_lote` na fila, servidor aditivo, e as
+  validades dos testes `filaSugestaoColeta*` relativas a hoje — achado 5 da Fase 2), `d8a4f1d9` (C462 em `coletaTexto.js`: a dica e a
+  lista de coleta param de dizer que separar de outro endereco troca a origem; sufixo `controle_lote ? NA_ENTREGA_LOTE_AUTOMATICO :
+  NA_ENTREGA_ESCOLHA_O_LOTE`), `398d1e69` (notas da tela de Lotes e do relatorio Saldo por lote). Os hashes da worktree
+  (3e00dc31/81ad8602/5cc3fc7a) nao existem mais. Medido na worktree: `filaSugestaoColeta` 13/0, `filaSugestaoColetaIntegracao` 6/0,
+  `relatoriosSaldos` 16/0, `integracaoRelatoriosSaldos` 6/0, `lotesResumo` 13/0, tela 212/2913, build ok. Na main (rodada da T2): tela
+  212/2913 e build ok — a T1 integrada confirma.
+- [x] T2 — `e011affe`. `entregaAutomaticaPeloLoteIntegracao.api.test.js` 8/0 (isolado): pela rota, fila (`controle_lote: true`,
+  `pegar_em` WB-01/L1 3, depois `PLANEJADA_NAO_COBRE`) -> 1a rodada no par sugerido -> chegam L2 1 (+20) e L3 4 (+45) -> 2a rodada sem
+  "Sai de" -> entrega de um clique: `WB-01 L1 3` estrita + `— L2 1` + `— L3 1` (excedente, dividido dentro do pedaco) + `— L3 3`
+  (reserva); resumo `{0,0,0}`, relatorio sem linha nao zero, rastreio de L2 pelo extrato `[ENTRADA 1, SAIDA 1 com a requisicao]`,
+  extrato x fisico x linhas; devolucao de 1 citando a SAIDA de L3 volta ao L3; estorno pelo livro da SAIDA de L2 -> 400 (vinculada a
+  requisicao); exclusao devolve cada saida ao seu lote, liquida da devolucao (`L3 2`), saldos = os de antes; estorno da DEVOLUCAO tira
+  do L3 e a exclusao devolve a saida inteira. Pelo servico: reserva 4 + excedente 2, L1 3 e L2 3 -> `L1 2`/`L1 1 R`/`L2 3 R`, reserva
+  4/4, exclusao por lote (na padrao, D (51)). Controle "sem a feature" em cada um (material sem `controle_lote`): sem lote -5 / -6, lotes
+  intactos, o lote nao ve a requisicao. Controles positivos (perl sobre LF, ancora = 1, md5 4159c297 -> sabotado -> 4159c297, restauro
+  por perl inverso): (S1) sem o ramo da T0 -> os 4 com lote caem, os 4 controles ficam verdes (o (i) do plano); (S2) fila com
+  `controle_lote: false` -> os 3 fluxos da rota com lote; (S3) exclusao sem o lote da saida -> 5 (os de exclusao, inclusive 2 controles:
+  a saida estrita de L1 tem lote); (S4) exclusao sem descontar a devolucao -> os 2 de devolucao viva. Rodada serial na main: test:api
+  585/585 arquivos, test:almoxarifado 44/0, test:validation 4/0, test:safealter 3/0, test:sqlite 16/0, tela 212/2913, build ok.
+  **Defeitos de producao:** nenhum. **Divergencias:** (1) nao ha rota de "rastreio do lote": o rastreio e o extrato do material
+  filtrado pelo `lote_id` (cada movimento traz `requisicao_id`); (2) a SAIDA da entrega nao se estorna pelo livro (400 de proposito,
+  `stockService.cancelarMovimentacao`): o teste afirma a recusa e estorna a DEVOLUCAO (ENTRADA_DEVOLUCAO com lote); (3) lotes L2 1/L3 4
+  em vez de L2 3 do plano — com 3 a fatia coincidia com o pedaco e nao provava a divisao dentro do pedaco; (4) a parte da origem sai
+  como excedente (sem `reserva_id`) e a reserva vai para o automatico — comportamento de antes (excedente primeiro), afirmado no livro.
 - [ ] Fase 5.
 - [ ] Fechamento (spec 10 pendência (g) corrigida à vista; spec 05; mapa; guia; manual; novidades com B1320–B1328 e C463–C465).
