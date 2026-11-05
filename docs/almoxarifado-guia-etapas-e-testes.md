@@ -1,23 +1,27 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-11-05 (Etapas 172 a 191, 194 e 195) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-11-05 (Etapas 172 a 191, 194, 195 e 196) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194 e 195) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195 e 196) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-05 (Etapas 172 a 178, 180 a 191, 194 e 195 ENTREGUES · RETOMADO em 05/11 · próxima: separar em duas vezes — o local de onde sai)
+> ## Onde o desenvolvimento está — 2026-11-05 (Etapas 172 a 178, 180 a 191, 194, 195 e 196 ENTREGUES · RETOMADO em 05/11 · próxima: separar em duas vezes — material com lote)
 >
-> **O desenvolvimento parou aqui: Etapa 195 fechada — 2026-11-05.** **Voltar para a aba não desfaz as quantidades digitadas.** Com a
-> janela de separação ou de entrega aberta, sair para outra aba (ou outro programa) e voltar recarrega a requisição — o *Já separado* e o
-> *Saldo* se atualizam —, mas o que foi digitado em cada item fica. O item que outra pessoa separou inteiro no meio sai da janela e não vai
-> na confirmação. Só tela; nada a rodar antes do deploy. **Nenhum clique foi dado no navegador** (só testes — roteiro na seção da 195 e
-> letra F das novidades).
+> **O desenvolvimento parou aqui: Etapa 196 fechada — 2026-11-05.** **Separar em duas vezes: a parte separada primeiro continua saindo de
+> onde foi separada.** Separou 3 de um endereço e, depois, o resto de outro lugar, sem entregar no meio: o sistema lembra quanto saiu do
+> primeiro endereço (*"separado de A-01 (3 PC)"*), a entrega tira esses 3 de lá e só o resto no automático, e nenhuma troca é gravada no
+> bloco **Substituições**. Em material com lote, a parte automática ainda sai da linha *sem lote* (no caso real, −3 em vez de −6). Motor e
+> tela; nada a rodar antes do deploy. **Nenhum clique foi dado no navegador** (só testes — roteiro na seção da 196 e letra F das novidades).
 >
-> **Onde parou, exatamente:** a **195 está fechada** (código, testes e documentos commitados). A **próxima** é o item 4 da fila da
-> estimativa de 05/11: **"Separar em duas vezes — 1ª parte: o local de onde sai"** (**C453** — separar uma requisição em duas rodadas, de
-> endereços diferentes, sem entregar no meio, troca a origem e a entrega sai no automático). É motor de estoque. Só a tarefa detalhada no
-> fim do plano da 195 (`docs/superpowers/plans/2026-11-05-almoxarifado-etapa195-quantidades-da-separacao.md`, com onde a origem é gravada
-> e por que troca) e a estimativa existem, nenhum plano nem código.
+> **Onde parou, exatamente:** a **196 está fechada** (código, testes e documentos commitados). A **próxima** é o item 5 da fila da
+> estimativa de 05/11: **"Separar em duas vezes — 2ª parte: material com lote"** (**C451**/**B204** — em material com lote, a parte da
+> entrega que sai no automático tira da linha *sem lote*, que fica negativa, e o lote da prateleira fica intacto). É motor de estoque. Só a
+> tarefa detalhada no fim do plano da 196 (`docs/superpowers/plans/2026-11-05-almoxarifado-etapa196-origem-da-separacao-em-duas-vezes.md`,
+> com onde o automático escolhe de onde tirar e por que cai na linha sem lote) e a estimativa existem, nenhum plano nem código.
+>
+> **Etapa 195, 2026-11-05.** **Voltar para a aba não desfaz as quantidades digitadas.** Com a janela de separação ou de entrega aberta, sair
+> para outra aba (ou outro programa) e voltar recarrega a requisição — o *Já separado* e o *Saldo* se atualizam —, mas o que foi digitado em
+> cada item fica. Só tela.
 >
 > **Etapa 194, 2026-11-05.** **A nota com o mesmo lote e outra validade: o recebimento avisa.** Na
 > janela **Processar nota fiscal**, embaixo de cada material, um aviso amarelo diz antes de gravar o que vai acontecer com o lote (a nota
@@ -7007,6 +7011,57 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 196 — Separar em duas vezes: a parte separada primeiro continua saindo de onde foi separada (ENTREGUE — 2026-11-05)
+
+**O que mudou, em uma frase:** separou uma parte de um endereço e o resto de outro lugar, sem entregar no meio — a primeira parte continua
+saindo do primeiro endereço, e nenhuma troca é gravada.
+
+**O problema que ela resolve.** Você separava 3 de uma requisição de 6 no endereço *A-01*. O resto chegava depois em outro lugar e você
+separava os outros 3. O sistema "esquecia" de onde vieram os primeiros 3: gravava uma **troca** no bloco **Substituições** (que você não
+fez) e, na entrega, tirava os 6 pela regra automática — e em material com lote a linha *sem lote* ficava negativa. É como a etiqueta da
+caixa dizer só "veio de A-01": quando entra coisa de outro lugar, ninguém sabe mais quanto é de A-01, e o sistema apagava a etiqueta. Agora
+a etiqueta diz "3 vieram de A-01".
+
+| Antes | Agora |
+|---|---|
+| 3 de A-01 + 3 no automático → uma troca de 3 em **Substituições** | Nenhuma troca; o detalhe diz *"separado de A-01 (3 PC)"* |
+| Na entrega, os 6 saíam no automático | 3 saem de A-01 e 3 no automático |
+| Separar o resto de outro lugar pedia *"Motivo da troca"* | Só avisa: *"Já separado de A-01: 3 PC, que continuam saindo de lá. Esta parte sai no automático na entrega."* |
+| Entregar de outro endereço gravava troca mesmo quando saíam só os que não vieram de A-01 | Não grava; o *"Motivo da troca"* só aparece quando haverá troca |
+| Material com lote, o caso real: linha *sem lote* −6 | −3 (só a parte automática — é a próxima etapa) |
+
+**Antes de testar (uma vez).** Um usuário **Administrador do almoxarifado**. Um material *CHAPA-196* (nome *Chapa 196*, unidade *PC*,
+**sem** lote), com 3 em estoque na posição *A-01* e 10 na posição padrão dele, *B-02*. Uma requisição de 6 *CHAPA-196*, aprovada.
+
+**Roteiro de teste (10 minutos).**
+
+1. **Almoxarifado → Requisições**, abra a requisição, **Iniciar Separação**. No **Sai de**, escolha *A-01 (3)*; quantidade *3*. **📦
+   Confirmar Separação**. O detalhe mostra *"separado de A-01 (3 PC)"*.
+2. **Ajustar Separação** → o **Sai de** vem em *"Qualquer endereço (automático)"*; quantidade *3*. Aparece *"Já separado de A-01: 3 PC, que
+   continuam saindo de lá. Esta parte sai no automático na entrega."* e **não** aparece *"Motivo da troca"*. Confirme. O detalhe continua
+   *"separado de A-01 (3 PC)"*; o bloco **Substituições** não ganhou linha.
+3. **Entregar escolhendo de onde sai…**, quantidade *6*: o **Sai de** vem em automático e embaixo *"3 PC sai de A-01 (o que foi separado de
+   lá); o restante, automático. Se lá não houver mais essa quantidade, a entrega é recusada — escolha de onde sai."* Confirme. Em
+   **Movimentações**: 3 saíram de *A-01* e 3 de *B-02*. **Substituições**: nada.
+4. Numa requisição nova (A-01 de volta a 3), repita 1 e 2. Na entrega, escolha *B-02* com *3*: o *"Motivo da troca (opcional)"* **não**
+   aparece; confirme — nenhuma troca, o detalhe continua *"separado de A-01 (3 PC)"*. Entregue de novo *B-02* com *3*: agora o *"Motivo da
+   troca (opcional)"* aparece, e a troca de 3 é gravada.
+5. Numa requisição nova, repita 1 e 2 e **Devolver à prateleira** 3: continua *"separado de A-01 (3 PC)"*. Devolva mais 1: *"(2 PC)"*.
+6. Numa requisição nova, repita 1 e, no 2, escolha *B-02* no **Sai de**: o mesmo aviso. A entrega de um clique tira 3 de A-01 e 3 pela regra
+   automática (para escolher de onde sai essa parte, use **Entregar escolhendo de onde sai…**).
+7. **Com lote:** material com controle de lote, 3 no lote *L1* em *XB-01*. Separe 3 de *XB-01 — lote L1*; dê entrada de 3 no lote *L2* em
+   outro endereço; separe o resto no automático; entregue. *XB-01/L1* sai com 3; em **Lotes e Séries**, *"Sem lote atribuído"* fica **−3**
+   (antes, −6). Esses −3 são a próxima etapa.
+
+**O que esta etapa não cobre.** Em material com lote, a parte que sai no automático ainda tira da linha *sem lote* — é a próxima etapa. A
+segunda parte separada de outro endereço **escolhido** sai no automático na entrega (o item guarda um endereço só) — se precisa sair de lá,
+escolha no **Sai de** da entrega. A dica da **Fila de separação** ainda diz que separar de outro endereço "troca a origem": siga o aviso da
+janela de separação, que diz a regra de agora. Séries de dois lotes na mesma entrega continuam recusadas (entregue em duas vezes).
+**Nada a rodar antes do deploy.**
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos provam pela rota real, pelo serviço e pela
+tela — escrito para você conferir à mão.
+
 ## Etapa 195 — Voltar para a aba não desfaz as quantidades digitadas (ENTREGUE — 2026-11-05)
 
 **O que mudou, em uma frase:** com a janela de separação ou de entrega aberta, sair da aba e voltar recarrega a requisição, mas as
@@ -7044,7 +7099,7 @@ papel em cima do balcão. Agora o quadro atualiza e a anotação fica.
 **O que esta etapa não cobre.** Se, ao voltar, a requisição já saiu do status (outra pessoa entregou tudo ou cancelou), a janela continua
 aberta com o detalhe novo; ao confirmar, o sistema recusa e a janela fecha. O número digitado acima do que dá para separar não é corrigido
 sozinho — a confirmação recusa. Não existe "separar e entregar" num clique (separe e depois entregue). E separar em duas vezes de
-endereços diferentes, sem entregar no meio, ainda troca a origem — é a próxima etapa.
+endereços diferentes, sem entregar no meio, ainda troca a origem — é a próxima etapa. *(Feito na 196 — ver a seção dela.)*
 
 ## Etapa 194 — Nota com o mesmo lote e outra validade: o recebimento avisa (ENTREGUE — 2026-11-05)
 
@@ -7282,7 +7337,7 @@ gesto.
 
 **O que esta etapa não cobre.** Item já separado **no automático** continua saindo no automático na entrega (o endereço de onde foi pego não
 está gravado). Separar uma parte de um endereço e o resto de outro, **sem entregar no meio**, troca a origem e grava uma troca no bloco
-**Substituições** — a janela avisa; entregue a primeira parte antes. Duas pessoas que abrem ao mesmo tempo duas requisições do mesmo material
+**Substituições** — a janela avisa; entregue a primeira parte antes. *(Mudou na 196: a parte já separada continua saindo do primeiro endereço e nenhuma troca é gravada — ver a seção dela.)* Duas pessoas que abrem ao mesmo tempo duas requisições do mesmo material
 recebem o mesmo endereço já escolhido: a segunda separação é aceita e a entrega dela é recusada com *"… a origem da separação (⟨endereço⟩) não
 serve mais (…) — entregue escolhendo de onde sai"*, sem erro de estoque — **Atualize** a fila antes de ir à prateleira e, se acontecer, use
 **Entregar escolhendo de onde sai…**. Não existe "separar e entregar" num clique: separe e depois entregue. Se você sair da aba e voltar com

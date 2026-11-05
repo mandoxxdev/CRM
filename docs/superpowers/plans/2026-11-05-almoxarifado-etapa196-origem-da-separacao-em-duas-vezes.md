@@ -266,4 +266,106 @@ devolução da saída não escrevem no item; cancelar/encerrar com caixa já sã
 - Contrato: inalterado (`quantidade_origem_separacao` número ou `null`, via `ir.*`).
 - [x] T4 — `e3f9b929`. Tela: `pendentePlanejado(item)` = `min(parte, separado − entregue)` (null = caixa) nos quatro pontos da RN-196.11; literais novas do aviso, `FRASE_PARCIAL` e "separado de … (q un)". RequisicoesOrigemEmDuasVezes 13 testes (10 vermelhos antes); `Requisicoes*` 18 / 339; tela 212 / 2905; build ok. Controles: `:679` pela caixa → cai "entrega com parte 3 e caixa 6 abre no automático"; aviso velho da 65 → caem 3 + 2; sem o `min` → cai "min(9, 6) = 6". Divergências: a separação parou de mandar `motivo_substituicao` (campo removido; 4 testes de motivo apagados com justificativa); a dica `entrega-dica-pendente` ficou com o texto antigo (Fase 5, K4).
 - [x] T5 — `1eca71f1`. origemSeparacaoEmDuasVezesIntegracao 9/9; test:api 583/583. Cenários: caso real da 189 pela rota até a exclusão (saldos voltam); pedido de 7 com entrega parcial, devolução da saída e exclusão; pedido de 10 com a 3ª rodada de A pela fila; dado antigo NULL; pelo serviço; controles "sem a feature" com os números de antes. Sabotagens: "mista → nula" → caem 1–5; entrega pela caixa → 1–5; fila pela caixa → 3. Defeitos: nenhum. Divergências: arquivo próprio de integração; a exclusão lança ENTRADA por saída (não grava `movimento_estorno_id`); a ENTRADA do estorno do automático vai para o endereço padrão (D (51), já declarado) — por isso o automático tira da padrão nos cenários 2 e 4.
-- [ ] Fase 5 · [ ] Fechamento.
+- [x] Fase 5 — `736ccb49`, `4ba2e9b4` (ver abaixo).
+- [x] Fechamento de documentação — commit "Etapa 196: fechamento - novidades, specs, mapa, guia, manual e planos": novidades (cabeçalho;
+  seção da 196 com Antes → Agora e 7 cenários; **B1313** a **B1318** inseridas antes da **B1319** que o fix-round já tinha gravado; **C453**
+  resolvido na parte do endereço; **C461** e **C462** novos; D (196); F (196) — nenhum clique no navegador), spec 05 (status, última
+  atualização, a linha 68 — o "motivo (1) pago" da Etapa 65 — e a 96 da tabela **revogadas à vista** com "revogado pela 196 (B1314)", e o
+  bloco "Etapa 196" com checklist e hashes), mapa (linha da 05), guia (cabeçalho, seção com roteiro de 7 passos, a nota da 189 e a da 195
+  anotadas), manual (7.5: a origem com a quantidade, a dica nova, a troca da entrega pela parte sem origem, as séries de outro lote; 10.1: a
+  linha *"separado de A-01 (3 PC)"*; 10.2: as regras de separar em mais de uma vez, o aviso novo, separar não grava troca; 10.2b: a
+  devolução tira primeiro a parte sem origem; 10.6: a dica da fila desconta a parte e a frase "troca a origem" explicada), este plano e o
+  cabeçalho do plano da pausa. Verificação final e estimado × gasto: fora deste commit (feitos por quem fecha a etapa).
+
+## Fase 5 — dois revisores frescos (2026-11-05)
+
+Dois revisores, por leitura e execução, sobre `1eca71f1`: um do **motor** (com um fuzz de ~250 sequências aleatórias de separar, entregar,
+devolver à prateleira e excluir, conferindo as contas a cada passo — **0 violações**) e um da **tela**. **1 defeito, 4 lacunas/textos,
+ruído 0** — todos consertados:
+
+- **K1 [DEFEITO]** — material com série separado em duas vezes (3 de A/L1, 3 no automático): entregar 3 sem "Sai de" com as 3 séries de L2
+  dava 400 *"⟨material⟩: a origem da separação não serve mais (as series escolhidas nao sao do lote dela) — entregue escolhendo de onde sai"*;
+  antes da 196 dava 200 (a 2ª rodada apagava a origem e as séries de L2 saíam pelo "só lote"). **Consertado em `736ccb49`**
+  (`requisitionService.js`, condição `planejada && infoSeries && loteId && loteSeries !== loteId && pendenteSep - parte > 1e-9`): com séries de
+  outro lote **e** parte sem origem na caixa, a planejada não se aplica e a entrega vale como de outro par (RN-196.07 — 0 trocas; acima da
+  parte sem origem, a troca do excedente, marcada automática). Caixa toda da origem continua no 400; séries mistas continuam recusadas pela
+  regra da Etapa 61. Decisão **B1319**. Vermelho antes do conserto (400); controles: sem a condição "parte sem origem" e sem o "automática" →
+  caem.
+- **K2 [LACUNA]** — a entrega escolhendo a **própria** origem decrementa a parte (o ramo `if (!outroPar) saiDaOrigem = true` não tinha
+  teste): coberto em `736ccb49`; apagar o ramo → cai.
+- **K3 [LACUNA]** — dado antigo (parte `NULL`, caixa 3) com entrega parcial 2 → parte 1: coberto em `736ccb49`; o `COALESCE` pela caixa de
+  depois → cai.
+- **K4 [TEXTO]** — a dica `entrega-dica-pendente` dizia *"O separado pendente sai de B-02"*, mas só a parte sai de lá. **Consertado em
+  `4ba2e9b4`**: *"⟨q⟩ ⟨un⟩ sai de ⟨end⟩⟨ — lote L⟩ (o que foi separado de lá); o restante, automático. Se lá não houver mais essa quantidade, a
+  entrega é recusada — escolha de onde sai."* (`RequisicoesList.js:2629`). Controle: frase antiga → cai o K4 e o da Etapa 63.
+- **K5 [TEXTO/UX]** — o "Motivo da troca (opcional)" da entrega aparecia em qualquer outro par; com caixa 6, parte 3 e 3 de outro endereço o
+  servidor dá troca 0 e o motivo digitado se perdia. **Consertado em `4ba2e9b4`**: o campo e o envio do motivo seguem a régua do servidor
+  (`trocaDaPlanejada`, `RequisicoesList.js:194-201`, `max(0, min(qtd, caixa) − (caixa − parte)) > 0`). Controles: régua sem a quantidade →
+  caem os dois K5 de campo; envio sem a quantidade → cai "volta a 3 não leva motivo".
+
+**Placar depois da Fase 5 (sobre `4ba2e9b4`):** `test:api` **583/583**; `test:almoxarifado` **44/0**; tela **212 suítes / 2909 testes**;
+build ok (`CI=true`). `test:validation`, `test:safealter`, `test:sqlite`: ver fechamento.
+
+**Achado do fechamento (não consertado — o fechamento só mexe em documento):** a dica da **Fila de separação** e do PDF da lista de coleta
+(`client/src/utils/coletaTexto.js:49-62`, `textoAvisoPegarEm`, casos `NENHUM_ENDERECO_COBRE`, `PLANEJADA_NAO_COBRE`,
+`PLANEJADA_INDISPONIVEL`; usada por `FilaSeparacao.js` e `listaColetaPdf.js`) ainda diz *"… de outro endereço … troca a origem da separação
+(a entrega passa a sair automática)"* — a regra de antes da 196. Nenhum efeito no estoque. Registrado como **C462**; o manual (10.6) explica
+a frase. Conserto de texto (~15 min, com `FilaSeparacao.test.js:274-330`), candidato a ir junto com a próxima etapa.
+
+**Divergências do plano, em resumo:** (1) a Fase 2 mudou RN-196.07 e RN-196.10 (o bloco "Fase 2 — correções" manda); (2) o `:223` do
+`trocaSeparacao` foi apagado (sem objeto); (3) a reprodução da 189 foi reescrita na T2, não na T5; (4) `separacaoOrigemPorItem` RN-02 era
+um vizinho fora do plano (`f4ba735c`); (5) a T5 ficou em arquivo próprio de integração, a exclusão lança ENTRADA por saída (não grava
+`movimento_estorno_id`) e a ENTRADA do automático vai para a padrão (D (51)); (6) a tela parou de mandar `motivo_substituicao` na separação
+e a dica da entrega ficou para a Fase 5 (K4); (7) a Fase 5 achou K1 (defeito que a 196 introduziu e a suíte não pegava: nenhum teste de
+série de outro lote com parte sem origem). **A spec 05 estava errada** (o "motivo (1) pago" da Etapa 65 e a linha da tabela): riscada à vista.
+
+**Retro (4 números):** rodadas de correção até verde: **1** (Fase 5); achados reais da Fase 5: **5** (1 defeito + 4 lacunas/textos), ruído
+**0**; paralelismo: **T4 em paralelo com T0–T3, T5 com os 2 revisores**, sem retrabalho; defeito que escapou da 195: **nenhum conhecido**.
+
+## Próxima tarefa detalhada
+
+**"Separar em duas vezes — 2ª parte: material com lote"** — item 5 da fila da estimativa
+`docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md` (**motor**, estimado **4h a 5h**: análise 1h, execução 1h a 2h,
+teste 2h). Fecha o **C451**/**B204** na entrega: em material com lote, a parte da entrega que sai **no automático** tira da linha *sem lote*,
+que fica negativa, e o lote da prateleira fica intacto (no caso real da 189, depois da 196: *XB-01/L1* sai com os 3, *XP-01/L2* fica com 3
+intacto, a linha sem lote **−3**). **É tronco**: motor de estoque; a entrega roda sob `serializarNaRequisicao` → `comTravaDaRequisicao`, e o
+motor sob `naTravaDoMaterial` (não aninha fora de `comLockDosMateriais`).
+
+**Onde o automático escolhe de onde tirar (medido em 2026-11-05, sobre `4ba2e9b4`, sem consertar):**
+- **Quem chama:** `server/services/almoxarifado/requisitionService.js`, `entregarSemTrava` (`:1702`). A baixa se divide em pedaços
+  (`:2037-2054`): o "com origem" (estrito, passada 0 ou 1) e o **automático** (`comOrigem: false`, passada 2). A chamada ao motor
+  (`:2085-2099`) só manda `localizacao_origem_id`/`lote_id` no pedaço **com origem** (`:2091-2095`); o automático só leva `lote_id` quando
+  o item tem **série** (`:2099`, o lote das séries — Etapa 63, Fase 5). **Material com lote e sem série: o pedaço automático vai sem lote.**
+  `requisitionService.js` não lê `controle_lote` em lugar nenhum (grep: 0 ocorrências).
+- **O motor:** `server/services/almoxarifado/stockService.js`, `registrarMovimentacaoSemTrava` (`:1109`). O lote só vem do payload
+  (`:1278-1299`: `lote_id` ou `lote`; sem eles `loteIdFinal = null`) — o motor não deduz lote. A exigência de lote (`opcoes.exigeLote`,
+  `:1319-1345`) **isenta** a entrega de requisição por decisão do cliente de 2026-08-10 (o comentário já cita "FEFO na entrega" como "o
+  conteúdo natural de uma etapa seguinte"). Na saída: com lote, `claimSaldoDoLote` (`:2216-2238`, drena as linhas daquele lote, a preferida
+  primeiro); **sem lote, `claimSaldoSemLote`** (`:2239-2246`).
+- **A causa:** `claimSaldoSemLote` (`:467-472`) só lê linhas com `lote_id IS NULL AND quantidade > 0` — *"Linha de LOTE nunca é tocada aqui
+  (B204: a entrega não escolhe lote)"* (docstring `:440-466`). Num material só com saldo em lote não há linha sem lote com saldo: **o resto
+  inteiro vai para a linha da localização resolvida (padrão ou `NULL`) com lote `NULL`, que fica negativa**; o físico cai, os lotes ficam
+  intactos. É o "sem lote atribuído" negativo da B204/B205 e da D (136).
+- **Causa em uma frase:** o automático da entrega não diz o lote, e o motor, sem lote, só drena linhas sem lote — por decisão antiga
+  (**B204**, Etapa 49; mantida na B205; a B231 deu à entrega o **direito** de escolher lote, mas o automático continua sem escolher), não por
+  esquecimento.
+
+**Caminho provável (a pesar na Fase 0/2):** o chamador declara (no molde de `exigeLote`/`origemEstrita`) que o pedaço automático de material
+com `controle_lote` sai **por lote** — o motor (ou a entrega) escolhe os lotes (FEFO: validade mais próxima, depois o mais antigo; nunca
+bloqueado ou vencido) e baixa cada um por `claimSaldoDoLote`, uma saída por lote (a exclusão já devolve por saída com o `lote_id` dela —
+`requisitionService.js:2376-2384` usa `parte.lote_id`). O ramo sem lote fica para material sem controle de lote. **Pontos de atenção:**
+(1) B204/B205 são decisões registradas — mudar é decisão de negócio na letra B (reversível: uma opção do chamador); (2) a reserva da
+requisição é do material, não do lote — a baixa por lote não pode deixar a reserva sem consumir (`baixasReserva`, `:2024-2035`); (3) lote
+vencido ou bloqueado não pode ser escolhido pelo automático (a régua do `pegar_em` da 188, `sugestaoDeColeta.js`, já escolhe FEFO com essas
+exclusões — medir se dá para reaproveitar); (4) ~6 arquivos de teste da entrega leem a linha sem lote (`preSelecaoColetaIntegracao`,
+`origemSeparacaoEmDuasVezesIntegracao`, `substituicaoOrigem`, `trocaSeparacao`, `quantidadeArredondadaIntegracao` e os da D (136)) e podem
+mudar de número — contar antes de prometer; (5) a frase da fila `NA_ENTREGA_ESCOLHA_O_LOTE` (`client/src/utils/coletaTexto.js:42`, *"Na
+entrega, escolha o lote no 'Sai de': a saída automática não escolhe lote."*) deixa de ser verdade — mudar junto, com o **C462** (a mesma
+função); (6) material que **permite saldo negativo** com lote segue outro ramo (`stockService.js:2247-2255`) — decidir se entra; (7) teste
+de corrida só se a nova escolha ler saldo para limitar outra porta (CLAUDE.md: o gesto concorrente disparado do contexto do teste).
+**Tamanho:** a mudança do motor é localizada (uma opção do chamador, um laço sobre `claimSaldoDoLote`), mas a régua FEFO, a reserva e as
+reescritas de teste tornam os **4h a 5h** da estimativa plausíveis; passa de 2h de execução se a reserva por material exigir partir a baixa
+da reserva entre lotes.
+
+**Já pronto, não reabrir:** a parte da origem (196), a pré-seleção (189), as quantidades que ficam ao recarregar (195), a ordem das baixas
+(136).

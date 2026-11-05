@@ -11,13 +11,21 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-05):** **Etapa 195 fechada** (**voltar para a aba não desfaz as quantidades digitadas** — com a
+> **Onde o desenvolvimento está (2026-11-05):** **Etapa 196 fechada** (**separar em duas vezes: a parte separada primeiro continua saindo
+> de onde foi separada** — o almoxarife separa 3 de um endereço, o resto chega depois em outro lugar e ele separa os outros 3 sem ter
+> entregue os primeiros: o sistema passa a lembrar **quanto** saiu do primeiro endereço; na entrega esses 3 saem de lá e só o resto vai no
+> automático; a separação **não grava mais troca** no bloco **Substituições**; o detalhe diz *"separado de A-01 (3 PC)"*; **C453** resolvido
+> na parte "o local de onde sai" — em material com lote, a parte automática ainda sai da linha *sem lote* (no caso real, de −6 para −3), que é
+> a próxima; motor e tela; nada a rodar antes do deploy (o dado antigo vale como antes, sem migração); decisões **B1313** a **B1319**; avisos
+> **C461** (a 2ª rodada de outro endereço escolhido sai no automático) e **C462** (a dica da Fila ainda diz "troca a origem"); limitações
+> **D (196)**; verificação **F (196)**; revisão (Fase 5) com um defeito corrigido e quatro lacunas cobertas). **Próxima: separar em duas
+> vezes — 2ª parte: material com lote** (**C451**/**B204**, motor); detalhada no fim do plano da 196.
+> *(Também em 2026-11-05: **Etapa 195 fechada** (**voltar para a aba não desfaz as quantidades digitadas** — com a
 > janela de **separação** ou de **entrega** aberta, sair para outra aba ou programa e voltar recarrega a requisição (o *Já separado* e o
 > *Saldo* mostram o que outra pessoa mudou), mas a quantidade digitada em cada item **fica**; item que saiu da janela no recarregamento não vai
 > na confirmação; com a janela fechada, abre com o valor inicial como antes; e o caminho morto "separar e depois entregar" do **Completar
 > Entrega** foi removido; **C454** e **C452** resolvidos; só tela; nada a rodar antes do deploy; decisões **B1309** a **B1312**; limitações
-> **D (195)**; verificação **F (195)**; revisão (Fase 5) sem defeito, um teste acrescentado). **Próxima: separar em duas vezes — o local de
-> onde sai** (**C453**, motor); detalhada no fim do plano da 195.
+> **D (195)**; verificação **F (195)**; revisão (Fase 5) sem defeito, um teste acrescentado); a próxima era a **196**.)*
 > *(Também em 2026-11-05: **Etapa 194 fechada** (**a nota com o mesmo lote e outra validade: o recebimento avisa** —
 > no **Processar nota fiscal**, embaixo de cada material, um aviso amarelo diz antes de gravar quando a validade da nota não bate com a do
 > lote que já existe, quando ela vai preencher um lote sem validade, quando não é uma data válida ou quando a mesma nota traz o lote com duas
@@ -4378,7 +4386,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -13506,6 +13514,51 @@ depois de voltar à aba, 2 — o **C454** dizia "não medido"), pelo mesmo camin
 **Completar Entrega** só aparece quando há o que entregar; o caminho que separaria antes nunca rodava (**C452**). Agora o botão abre a
 entrega direto, como já fazia na prática. **Descartado:** fazer o caminho funcionar (mudaria quando o botão aparece — fora do tamanho de
 1h, e "separar e entregar num clique" é produto, não conserto). **Reversível:** é um caminho de tela, sem dado. `650db899`.
+
+**B1313 (NOVA, da Etapa 196; decisão do agente) — o item guarda UM endereço de origem, agora com a QUANTIDADE que saiu dele.** Separar 3 de
+XB-01 e depois 3 no automático: o item continua com uma origem só (XB-01, com o lote), mais **quanto** da caixa saiu dela (3). Rodada do
+mesmo endereço e lote soma; rodada de outro lugar, no automático ou só com o lote não mexe na origem nem na quantidade — a parte nova sai no
+automático na entrega. **Descartado:** (a) refazer a conta pela trilha das rodadas (teria de repassar rodadas, entregas e devoluções à
+prateleira em ordem, sem um "quando a caixa esvaziou" gravado — frágil); (b) vários endereços por item (todas as contas da fila, da
+separação e da entrega mudariam, a entrega teria N pedaços estritos por item e a série exige um lote só — fica para "mais de uma origem
+por item", **B1254**, e o **C461**); (c) a rodada no automático herdar a origem (não resolve o caso real: a origem não tem o resto e a entrega
+recusaria *"a origem da separação (XB-01) não serve mais (…)"*). **Reversível:** uma coluna aditiva; apagá-la volta à conta de antes.
+`4cf2b6dd`, `aecaadd3`, `83abf7eb`, `425acd91`.
+
+**B1314 (NOVA, da Etapa 196; decisão do agente) — a separação deixa de gravar troca. Revoga a regra da Etapa 65 na separação.** Separar não
+move estoque: a parte já separada de XB-01 continua na caixa e continua saindo de XB-01 — a "troca" que a Etapa 65 gravava era efeito de o
+item guardar o endereço sem a quantidade. As trocas antigas da separação continuam no bloco **Substituições**. A troca da **entrega** (Etapa
+63) continua, limitada ao que passa da parte sem origem (**B1315**). Na janela de separação, escolher outro endereço sobre item com origem
+não pede mais *"Motivo da troca"*: avisa *"Já separado de ⟨end⟩: ⟨q⟩ ⟨un⟩, que continuam saindo de lá. Esta parte sai no automático na
+entrega."* **Descartado:** gravar uma "troca de 0" para manter o histórico (registro sem fato). **Reversível.** `aecaadd3`, `e3f9b929`.
+
+**B1315 (NOVA, da Etapa 196, com a Fase 2 e a Fase 5; decisão do agente) — a entrega consome primeiro a parte da origem; a devolução à
+prateleira tira primeiro a parte sem origem; a entrega de outro lugar tira primeiro a parte sem origem.** Entrega sem escolha (um clique,
+ou o **Sai de** na origem): sai da origem até a parte dela e o resto no automático; a parte cai pelo que **saiu** de lá. Entrega escolhendo
+**outro** endereço (ou o automático): sai primeiro a parte que não veio da origem — com caixa 6 e 3 dela de XB-01, entregar 3 de outro
+endereço não grava troca e os 3 de XB-01 continuam valendo; a troca só registra o que passa disso. Devolver à prateleira tira primeiro a
+parte sem origem: com caixa 6 e parte 3, devolver 3 deixa *"separado de XB-01 (3 PC)"*. Na janela de entrega, o campo *"Motivo da troca
+(opcional)"* só aparece quando haverá troca, pela mesma conta do servidor (Fase 5). **Descartado:** a ordem inversa (perderia a origem
+conhecida antes da desconhecida; a Fase 2 provou que gravava uma troca de 3 que não aconteceu); mostrar o motivo sempre e avisar que não
+será gravado (texto a mais para um caso sem nada a registrar). **Reversível.** `83abf7eb`, `4ba2e9b4`.
+
+**B1316 (NOVA, da Etapa 196; decisão do agente) — a 2ª rodada de OUTRO endereço escolhido de propósito sai no automático na entrega.** Com
+3 já separados de A-01 e o almoxarife escolhendo B-02 para os outros 3, a origem continua A-01 (3); os 3 de B-02 saem pela regra automática
+(endereço padrão, depois os de mais saldo) — a janela avisa. **Descartado:** trocar a origem pela nova (perde a primeira, que é o caso
+medido); recusar a rodada (bloqueia um gesto legítimo); guardar as duas (é o caminho (b) da **B1313**). O que fazer está no **C461**.
+**Reversível.** `aecaadd3`.
+
+**B1317 (NOVA, da Etapa 196, com a Fase 2; decisão do agente) — a origem antiga, sem quantidade, vale a caixa inteira; sem migração.** Item
+separado antes da 196 com origem tem a quantidade em branco, e vale como antes: toda a caixa sai da origem. A primeira rodada nova sobre
+ele grava a quantidade (a caixa de antes, mais a rodada se for o mesmo lugar) — senão herdaria a parte nova e a entrega de um clique pediria
+6 de um endereço com 3 (Fase 2, achado 2). **Descartado:** preencher a coluna na subida do sistema (a conta já é feita na leitura). **Nada a
+rodar antes do deploy.** **Reversível.** `4cf2b6dd`, `aecaadd3`, `83abf7eb`.
+
+**B1318 (NOVA, da Etapa 196; decisão do agente) — o motivo da troca enviado na separação passa a ser ignorado, sem recusa.** Uma janela de
+separação aberta durante a atualização do sistema ainda manda o motivo; o servidor aceita e não grava (não há mais troca na separação). A
+tela nova não manda mais. **Descartado:** recusar com 400 (quebraria a janela aberta durante a atualização). **Reversível.** `aecaadd3`,
+`e3f9b929`.
+
 **B1319 (NOVA, da Etapa 196, Fase 5; decisão do agente) — séries de outro lote num clique: valem como a parte sem origem, se houver.**
 Item com série separado em duas vezes (3 de XB-01/L1, 3 no automático): entregar num clique, sem "Sai de", 3 séries de L2 dava 400 ("a
 origem da separação não serve mais") — antes da 196 dava 200, porque a 2ª rodada apagava a origem. Agora, quando as séries escolhidas não
@@ -13515,7 +13568,7 @@ da 196: lá as séries de outro lote são mesmo uma troca e a tela pede "Sai de"
 recusadas pela regra da Etapa 61 ("escolha séries de um lote só"), com ou sem "Sai de" — entrega-se em duas vezes. **Descartado:** dividir
 as séries mistas entre o pedaço da origem e o automático (mexe na ordem das séries por baixa e no lote do pedaço automático, que hoje é um
 só; nenhum pedido de uso); tratar sempre como outro par (mudaria o 400 da caixa toda da origem, que é de antes). **Reversível:** uma
-condição na entrega, sem dado.
+condição na entrega, sem dado. `736ccb49`.
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -17227,6 +17280,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      (reproduzido: entregando entre as duas, 0 trocas e nenhuma linha sem lote) — **B1262**.
      *(Atualizado no fechamento da 195: é a **próxima** — item 4 da estimativa de 05/11, "Separar em duas vezes — o local de onde sai";
      onde a origem é gravada e por que troca está medido no fim do plano da 195.)*
+     **✅ RESOLVIDO NA ETAPA 196 na parte "o local de onde sai"** (`4cf2b6dd`, `aecaadd3`, `83abf7eb`, `425acd91`, `e3f9b929`, `1eca71f1`;
+     Fase 5 `736ccb49`, `4ba2e9b4`): o item guarda quanto saiu da origem; a 2ª rodada de outro lugar não apaga a origem nem grava troca; na
+     entrega a parte da origem sai de lá e só o resto vai no automático (reproduzido pela rota: 0 trocas, XB-01/L1 sai com os 3) — **B1313** a
+     **B1318**. O aviso da janela citado acima (*"Entregue esta parte antes…"*) saiu; a frase nova é *" Se o resto vier de outro endereço, esta
+     parte continua saindo daqui; o resto sai no automático na entrega."* **Não resolvido:** em material com lote, a parte **automática**
+     continua saindo da linha *sem lote* — no caso real o negativo caiu de **−6 para −3** (só a parte automática). É o **C451**/**B204**, o item 5
+     da estimativa de 05/11 e a próxima etapa. E a 2ª rodada de outro endereço **escolhido** sai no automático (**C461**).
 454. **NOVO (da Etapa 189, revisão adversarial; o comportamento é anterior) — voltar para a aba do sistema com a janela de separação aberta
      desfaz as quantidades digitadas.** Ao voltar para a janela do navegador, o sistema recarrega a requisição (para mostrar o que outra
      pessoa mudou) e as quantidades da janela de separação voltam ao valor inicial (medido: digitado 3, depois de voltar à aba, 5). A
@@ -17274,6 +17334,20 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      **Corrigir validade** em **Lotes e Séries** (a correção da 191 trata o branco como "sem validade") e repetir a Entrada sem a data ou com
      a mesma. *(O número 459 ficou sem uso: a C459 que o plano da 194 propunha — "a nota com validade vencida não avisa" — foi resolvida
      antes do código, na revisão do plano; ver **B1301**.)*
+461. **NOVO (da Etapa 196) — separar a 2ª vez de OUTRO endereço escolhido faz essa parte sair no automático na entrega.** O item guarda uma
+     origem só (**B1313**): com 3 separados de A-01 e os outros 3 separados escolhendo B-02, a entrega tira 3 de A-01 e os 3 restantes pela
+     regra automática (endereço padrão, depois os de mais saldo) — não necessariamente de B-02 (**B1316**). A janela avisa na separação: *"Já
+     separado de A-01: 3 PC, que continuam saindo de lá. Esta parte sai no automático na entrega."* **O que fazer:** na entrega, escolher B-02
+     no **Sai de** para essa parte (**Entregar escolhendo de onde sai…**), ou entregar a 1ª parte antes de separar a 2ª. Conserto: vários
+     endereços por item (o caminho (b) da **B1313**, a "mais de uma origem por item" da **B1254**).
+462. **NOVO (do fechamento da Etapa 196; a frase é da Etapa 188) — a dica da Fila de separação ainda diz que separar de outro endereço
+     "troca a origem".** As frases *"Nenhum endereço tem tudo: pegue ⟨q⟩ aqui. Separar o resto de outro endereço depois troca a origem da
+     separação."*, *"Já separado de ⟨end⟩: o resto não cabe lá. Separar de outro endereço troca a origem da separação (a entrega passa a sair
+     automática)."* e a de *"… que não pode mais ser sugerido …"* (também no PDF da lista de coleta) descrevem a regra de antes da 196. Desde a
+     196, separar o resto de outro endereço **não** troca a origem: a parte já separada continua saindo dela e só a parte nova sai no
+     automático (**B1313**, **B1316**). Nenhum efeito no estoque — é só texto. A janela de separação já diz a regra certa. **O que fazer:**
+     seguir o aviso da janela de separação. Não consertado no fechamento (é código de tela; o fechamento só mexe em documento) — conserto de
+     texto, ~15 min, candidato a ir junto com a próxima etapa.
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -18625,11 +18699,20 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(196) Separar em duas vezes, o que ficou de fora.** (1) **Material com lote:** a parte que sai no automático continua saindo da linha
+  *sem lote* (a **B204**): no caso real, a linha sem lote fica −3 (era −6) — é o **C451**, a próxima etapa. (2) **Uma origem por item:** a 2ª
+  rodada de outro endereço escolhido sai no automático (**C461**, **B1316**). (3) **O estorno da exclusão** devolve cada saída pelo que ela
+  tirou; a saída **automática** volta ao endereço **padrão** do material, não ao endereço de onde o automático tirou (regra antiga, **D (51)**)
+  — nos testes o retrato volta igual porque o automático tirou da padrão. (4) **Séries:** séries de dois lotes na mesma entrega continuam
+  recusadas (*"⟨material⟩: escolha series de um lote so"*, Etapa 61), com ou sem **Sai de** — entregue em duas vezes (**B1319**); e a série não
+  tem endereço controlado (o lote vem das séries; o endereço da parte automática, da regra automática). (5) As trocas da separação gravadas
+  antes da 196 continuam no bloco **Substituições** (não são apagadas nem corrigidas). (6) A dica da Fila ainda fala em "troca a origem"
+  (**C462**).
 - **(195) As quantidades que ficam ao recarregar, o que ficou de fora.** (1) Se o recarregamento mostra que a requisição saiu do status
   (outra pessoa entregou tudo, cancelou), a janela continua aberta com o detalhe novo, como antes; a confirmação é recusada e a janela fecha
   (Etapa 94). (2) O digitado acima do novo máximo **não** é limitado — a confirmação o recusa com a conta (**B1310**). (3) Não existe
   "separar e entregar" num clique (**B1312**). (4) Separar em duas vezes de endereços diferentes, sem entregar no meio, ainda troca a origem
-  (**C453**, a próxima).
+  (**C453**, a próxima). *— resolvido na 196 na parte do endereço (B1313–B1318); a parte do lote é o C451.*
 - **(194) A validade da nota no recebimento, o que ficou de fora.** (1) **A etiqueta do recebimento** continua impressa com a data da
   **nota**, mesmo quando o lote manteve outra — o aviso de divergência manda imprimir a do lote em **Lotes e Séries**. (2) **O estorno** da
   entrada não desfaz o preenchimento da validade (a validade é do lote físico, como na 190 — **B1301**); corrige-se com **Corrigir
@@ -19917,6 +20000,21 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(196) Nenhum clique foi dado no navegador.** O que os testes provam: pela rota real e pelo serviço — as regras da parte da origem (a 1ª
+rodada vira a origem com a quantidade, o mesmo lugar soma, outro lugar não mexe, várias entradas na mesma rodada, o dado antigo sem
+quantidade), a entrega pela parte (um clique, a própria origem escolhida, outro endereço sem troca falsa, falha no meio), a devolução à
+prateleira, a fila e a dica contando a parte, o caso real da 189 até a exclusão da requisição (o retrato de cada endereço e lote volta ao de
+antes da 1ª entrega), e as séries de outro lote (**B1319**); na tela (jsdom, servidor de mentira) — o aviso novo da separação sem
+*"Motivo da troca"*, a janela de entrega abrindo no automático quando a entrega passa da parte, a dica com a quantidade, o motivo só com
+troca de verdade e a linha *"separado de A-01 (3 PC)"*. Controles positivos: cada task com as suas sabotagens (no plano), todas derrubando o
+cenário delas. A revisão (Fase 5), dois revisores por execução — um deles com cerca de 250 sequências aleatórias de separar, entregar e
+devolver sem nenhuma conta quebrada — achou um defeito (as séries de outro lote num clique davam recusa; antes da 196 passavam — corrigido,
+**B1319**) e quatro lacunas (dois testes, um texto enganoso da dica da entrega e o motivo da troca fora da régua do servidor), cobertas em
+`736ccb49` e `4ba2e9b4`. **Não verificado à mão:** o roteiro da seção da Etapa 196 (cenários 1 a 7), em especial o aviso amarelo da
+separação, a dica da entrega e o bloco **Substituições** sem linha nova. Vale 10 minutos. Suítes medidas: `test:api` **583/583**;
+`test:almoxarifado` **44/0**; tela **212 suítes / 2909 testes**; build sem aviso; `test:validation`, `test:safealter` e `test:sqlite`: ver o
+fechamento no plano da 196.
 
 **(195) Nenhum clique foi dado no navegador.** O que os testes provam (jsdom, com o servidor de mentira): o recarregamento por
 `visibilitychange` e por `focus` relê o detalhe (a premissa é conferida) e o dado novo aparece (*"Saldo: 18"*, *"Já separado: 3"*), o campo
@@ -37650,7 +37748,86 @@ nenhum.
   antes; a confirmação é recusada e a janela fecha (Etapa 94).
 - Os motivos digitados (divergência, troca) nunca eram apagados pelo recarregamento; nada muda neles.
 - Não existe "separar e entregar" num clique: são dois gestos (**B1312**).
-- Separar em duas vezes de endereços diferentes, sem entregar no meio, ainda troca a origem (**C453**) — é a próxima.
+- Separar em duas vezes de endereços diferentes, sem entregar no meio, ainda troca a origem (**C453**) — é a próxima. *(Feito na 196 na parte
+  do endereço — ver a seção dela.)*
+
+## Etapa 196 — Separar em duas vezes: a parte separada primeiro continua saindo de onde foi separada (2026-11-05)
+
+O almoxarife separa 3 de uma requisição de 6 no endereço que a fila sugeriu (*XB-01*, lote *L1*). O resto chega depois em outro endereço e ele
+separa os outros 3, sem ter entregue os primeiros. Até aqui o sistema "esquecia" de onde vieram os primeiros 3: gravava uma **troca** no bloco
+**Substituições** (que ninguém fez — separar não tira nada da prateleira) e, na entrega, tirava os 6 pela regra automática; em material com
+lote, a linha *sem lote* ficava −6 (**C453**). Agora ele lembra **quanto** saiu de cada origem: os 3 primeiros saem de *XB-01/L1*, os outros 3
+saem no automático, e nenhuma troca é gravada. É a etiqueta na caixa: antes dizia só "veio de XB-01"; agora diz "3 vieram de XB-01". Motor e
+tela; nada a rodar antes do deploy (separações antigas valem como antes). Decisões do agente: **B1313** a **B1319**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| 3 de A-01 + 3 no automático → uma troca de 3 no bloco **Substituições** | Nenhuma troca; o detalhe diz *"separado de A-01 (3 PC)"* (**B1313**, **B1314**) |
+| Na entrega, os 6 saíam no automático | 3 saem de A-01, 3 no automático (**B1313**) |
+| Material com lote, o caso real: linha *sem lote* −6, *XB-01/L1* intacto | *XB-01/L1* sai com 3; a linha sem lote fica −3 — só a parte automática (**C451**, a próxima) |
+| Na separação, outro endereço avisava *"A origem da separação anterior (A-01) deixa de valer…"* e pedia **Motivo da troca** | Avisa *"Já separado de A-01: 3 PC, que continuam saindo de lá. Esta parte sai no automático na entrega."*, sem motivo (**B1314**) |
+| A frase da sugestão: *"Entregue esta parte antes de separar o resto — separar o resto de outro endereço troca a origem."* | *"Se o resto vier de outro endereço, esta parte continua saindo daqui; o resto sai no automático na entrega."* |
+| Na entrega, a dica: *"O separado pendente sai de A-01; o restante, automático. …"* | *"3 PC sai de A-01 (o que foi separado de lá); o restante, automático. Se lá não houver mais essa quantidade, a entrega é recusada — escolha de onde sai."* |
+| Entregar 3 de outro endereço com 3 de A-01 e 3 do automático na caixa → troca de 3 e o *"Motivo da troca"* | Nenhuma troca: saem primeiro os que não vieram de A-01; o campo de motivo só aparece quando haverá troca (**B1315**) |
+| Devolver 3 à prateleira de uma caixa de 6 (3 de A-01) | Saem primeiro os sem origem; continua *"separado de A-01 (3 PC)"* (**B1315**) |
+| Série de outro lote, entrega sem **Sai de**, com parte separada no automático → 400 *"a origem da separação não serve mais …"* (só no meio da 196; antes dela passava) | Passa, como a parte sem origem (**B1319**) |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**. Um material *CHAPA-196* (nome *Chapa 196*, unidade *PC*, **sem** lote), com 3 em
+estoque na posição *A-01* e 10 na posição padrão dele, *B-02*. Uma requisição de 6 *CHAPA-196*, aprovada. Em **Almoxarifado →
+Requisições**, abra a requisição.
+
+**1. A 1ª parte vira a origem, com a quantidade.** **Iniciar Separação** → no **Sai de**, escolha *A-01 (3)*, quantidade *3* → **📦 Confirmar
+Separação**. No detalhe, o item mostra *"separado de A-01 (3 PC)"*.
+
+**2. A 2ª parte de outro lugar não troca nada.** **Ajustar Separação** → o **Sai de** abre em *"Qualquer endereço (automático)"* (A-01 não
+tem mais livre). Quantidade *3*. Embaixo aparece *"Já separado de A-01: 3 PC, que continuam saindo de lá. Esta parte sai no automático na
+entrega."* — e **não** aparece *"Motivo da troca"*. **📦 Confirmar Separação**. O detalhe continua *"separado de A-01 (3 PC)"* e o bloco
+**Substituições** não ganha linha.
+
+**3. A entrega tira 3 de cada lugar.** **Entregar escolhendo de onde sai…** (a janela de entrega), quantidade *6*: o **Sai de** do item vem em automático e embaixo
+aparece *"3 PC sai de A-01 (o que foi separado de lá); o restante, automático. Se lá não houver mais essa quantidade, a entrega é recusada —
+escolha de onde sai."* **✅ Confirmar Entrega**. Em **Movimentações**: uma saída de 3 de *A-01* e uma de 3 de *B-02* (a padrão). *A-01* fica
+com 0, *B-02* com 7. **Substituições**: nada.
+
+**4. Entregar de outro endereço não grava troca falsa.** Refaça 1 e 2 numa requisição nova (com A-01 de volta a 3). Na entrega, **Entregar
+escolhendo de onde sai…** → *B-02*, quantidade *3*: **não** aparece *"Motivo da troca (opcional)"*; confirme → nenhuma troca, e o detalhe
+continua *"separado de A-01 (3 PC)"* (saíram os 3 que não vieram de A-01). Na entrega seguinte, escolha *B-02* com *3* de novo: agora aparece
+o *"Motivo da troca (opcional)"* com a dica *"Saindo de onde não foi separado — conte o porquê."*, e confirmar grava a troca de 3.
+
+**5. Devolver à prateleira tira primeiro a parte sem origem.** Refaça 1 e 2. **Devolver à prateleira** 3 (com motivo): o detalhe continua
+*"separado de A-01 (3 PC)"*. Devolva mais 1: *"separado de A-01 (2 PC)"*.
+
+**6. A 2ª parte de outro endereço escolhido sai no automático (C461).** Refaça 1 e, no 2, escolha *B-02* no **Sai de**: o mesmo aviso do
+passo 2 aparece. Na entrega de um clique, 3 saem de A-01 e 3 pela regra automática (aqui, a padrão *B-02*). Para garantir de onde sai, use
+**Entregar escolhendo de onde sai…**.
+
+**7. Material com lote (a fronteira, C451).** Com um material com controle de lote, 3 no lote *L1* em *XB-01*, separe 3 de *XB-01 — lote L1*;
+dê entrada de 3 no lote *L2* em outro endereço e separe o resto no automático; entregue. *XB-01/L1* sai com os 3; em **Lotes e Séries**, a
+linha *"Sem lote atribuído"* fica **−3** (era −6). Esses −3 são a parte automática: o automático não escolhe lote — é a próxima etapa.
+
+**Séries de outro lote (B1319, provado pelos testes).** Material com série separado em duas vezes (3 de *A/L1*, 3 no automático): entregar 3
+sem **Sai de** com séries do lote *L2* passa como a parte sem origem (sem troca). Com a caixa toda da origem, a mesma entrega é recusada,
+como antes da 196: *"⟨material⟩: a origem da separação não serve mais (as series escolhidas nao sao do lote dela) — entregue escolhendo de
+onde sai"*. Séries de dois lotes na mesma entrega: *"⟨material⟩: escolha series de um lote so"*.
+
+**A revisão (Fase 5)**, dois revisores frescos por execução — um sobre o motor, com cerca de 250 sequências aleatórias de separar, entregar e
+devolver, sem nenhuma conta quebrada; outro sobre a tela. Acharam **um defeito** (as séries de outro lote, acima: davam 400 no meio da 196 —
+corrigido em `736ccb49`, **B1319**) e **quatro lacunas**: dois testes que faltavam (a entrega escolhendo a própria origem; o dado antigo com
+entrega parcial), a dica da entrega com texto enganoso (dizia que "o separado pendente" sai da origem — só a parte sai) e o *"Motivo da
+troca"* aparecendo quando o servidor não grava troca (o motivo se perdia) — cobertas em `736ccb49` e `4ba2e9b4`. Ruído: nenhum.
+
+### O que esta etapa NÃO cobre
+
+- Em material com lote, a parte automática continua saindo da linha *sem lote* (**C451**/**B204**) — é a próxima.
+- Mais de uma origem por item: a 2ª parte de outro endereço escolhido sai no automático (**C461**).
+- O estorno da exclusão devolve a saída automática para o endereço padrão (**D (51)**, anterior).
+- Séries de dois lotes na mesma entrega continuam recusadas — entregue em duas vezes (**B1319**).
+- A dica da Fila de separação ainda diz "troca a origem" (**C462**).
+- **Nada a rodar antes do deploy.**
 
 ## Onde estamos e o que vem a seguir
 
@@ -37658,6 +37835,17 @@ nenhum.
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 196 entregue (2026-11-05):** **separar em duas vezes: a parte separada primeiro continua saindo de onde foi separada** (**C453**
+  resolvido na parte do endereço). O item guarda quanto saiu da origem (**B1313**); a separação não grava mais troca (**B1314**, revoga a da
+  Etapa 65); a entrega e a devolução à prateleira consomem as partes na ordem certa e o motivo da troca só aparece com troca de verdade
+  (**B1315**); a 2ª rodada de outro endereço escolhido sai no automático (**B1316**, **C461**); dado antigo vale como antes, sem migração
+  (**B1317**); o motivo enviado na separação é ignorado (**B1318**); séries de outro lote num clique valem como a parte sem origem (**B1319**).
+  Revisão (Fase 5): um defeito corrigido e quatro lacunas cobertas. Commits `4c602925` (plano), `8a98d548` (Fase 2), `4cf2b6dd` (T0),
+  `aecaadd3` (T1), `83abf7eb` (T2), `425acd91` (T3), `f4ba735c` (teste vizinho), `e3f9b929` (T4 tela), `1eca71f1` (T5 integração), Fase 5
+  `736ccb49` e `4ba2e9b4`, e o fechamento. **O que é seu:** as decisões **B1313** a **B1319** (reversíveis); os avisos **C461** e **C462**; as
+  limitações **(196)** em D e a verificação **(196)** em F. **Próxima: separar em duas vezes — 2ª parte: material com lote** (**C451**/**B204**,
+  motor; detalhada no fim do plano da 196).
 
 - **Etapa 195 entregue (2026-11-05):** **voltar para a aba não desfaz as quantidades digitadas** (**C454** e **C452** resolvidos). O
   recarregamento continua e a quantidade digitada fica (**B1309**); só fica a do item que estava na janela, mesmo acima do novo máximo —

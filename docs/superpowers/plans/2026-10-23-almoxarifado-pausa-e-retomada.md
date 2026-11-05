@@ -1,11 +1,16 @@
 # Almoxarifado — pausa de 2026-10-23 e como retomar
 
 > **✅ RETOMADO em 2026-11-05 — este arquivo agora é histórico.** O André retomou o módulo em 05/11 (estimativa
-> `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md`). **Depois: a Etapa 195 fechou** em 05/11 (plano `f8398b40`, código e testes `650db899`, `bdc2eb74`, Fase 5 `727792a3`, e o commit
+> `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md`). **Depois: a Etapa 196 fechou** em 05/11 (plano `4c602925`,
+> Fase 2 `8a98d548`, T0 `4cf2b6dd`, T1 `aecaadd3`, T2 `83abf7eb`, T3 `425acd91`, vizinho `f4ba735c`, T4 `e3f9b929`, T5 `1eca71f1`, Fase 5
+> `736ccb49` e `4ba2e9b4`, e o commit "Etapa 196: fechamento") — separar em duas vezes: a parte separada primeiro continua saindo de onde foi
+> separada (C453 na parte do endereço). Letra **B** usada até **B1319** (B1313–B1319 pela 196), letra **C** até **C462** (C461 e C462 pela
+> 196), letra **A** a partir de **A111** (a 196 não usou). **Próxima:** item 5 da estimativa — separar em duas vezes, 2ª parte: material com
+> lote (C451/B204, motor); detalhada no fim de
+> `docs/superpowers/plans/2026-11-05-almoxarifado-etapa196-origem-da-separacao-em-duas-vezes.md`.
+> *(Antes: a **Etapa 195 fechou** em 05/11 (plano `f8398b40`, código e testes `650db899`, `bdc2eb74`, Fase 5 `727792a3`, e o commit
 > "Etapa 195: fechamento") — voltar para a aba não desfaz as quantidades digitadas na separação e na entrega (C454, C452). Letra **B** usada
-> até **B1312** (B1309–B1312 pela 195), letra **C** até **C460** (a 195 não abriu nenhuma), letra **A** a partir de **A111**. **Próxima:**
-> item 4 da estimativa — separar em duas vezes, o local de onde sai (C453, motor); detalhada no fim de
-> `docs/superpowers/plans/2026-11-05-almoxarifado-etapa195-quantidades-da-separacao.md`.
+> até **B1312**, letra **C** até **C460**. **Próxima:** item 4 da estimativa — a 196.)*
 > *(Antes: a **Etapa 194 fechou** em 05/11 (plano `ce606d41`,
 > Fase 2 `e6308090`, T1 `32ff286a`, T2 `e8803937`, T3 `57bdb6b2`, Fase 5 `77102677`, e o commit "Etapa 194: fechamento") — o recebimento
 > avisa a outra validade e preenche o lote sem validade. Letra **B** usada até **B1308** (B1300–B1308 pela 194), letra **C** até **C460**
