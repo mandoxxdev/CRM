@@ -117,6 +117,20 @@ const quantidadesIniciaisEntrega = (itens) => {
 const entregandoOutrosDoMaterial = (itens, item, quantidades) => (itens || [])
   .filter((i) => i.id !== item.id && Number(i.material_id) === Number(item.material_id))
   .reduce((s, i) => s + tiraDoLivreNaEntrega(i, Math.max(0, parseFloat((quantidades || {})[i.id]) || 0)), 0);
+// Etapa 195 (C454, RN-195.01/03): recarregar o detalhe com a janela aberta mantém o que estava digitado em cada item que continua na
+// janela (`naJanela` no detalhe que estava na tela E no novo); item que saiu dela volta ao inicial (nada escondido vai no envio), item
+// que entrou ou voltou recebe o inicial (é decidido de novo, como o "Sai de" da 189), item sumido sai. Digitado acima do novo máximo fica
+// como está (B1310): nada muda sem o almoxarife ver.
+const manterDigitado = (anteriores, iniciais, itens, itensNaTela, naJanela) => {
+  const estavam = new Set((itensNaTela || []).filter(naJanela).map((i) => String(i.id)));
+  const qtds = {};
+  (itens || []).forEach((item) => {
+    if (naJanela(item) && estavam.has(String(item.id)) && Object.prototype.hasOwnProperty.call(anteriores || {}, item.id)) {
+      qtds[item.id] = anteriores[item.id];
+    } else if (Object.prototype.hasOwnProperty.call(iniciais, item.id)) qtds[item.id] = iniciais[item.id];
+  });
+  return qtds;
+};
 const temEntregavel = (itens) => (itens || []).some((i) => maxQtdEntrega(i) > 0);
 const totalPendente = (itens) => (itens || []).reduce((s, i) => s + getPendente(i), 0);
 const temPendenteComEstoque = (itens) => temEntregavel(itens);
@@ -389,7 +403,10 @@ const RequisicoesList = () => {
   // Fase 5 da 189 (J2): a abertura da separação que cada efeito viu por último (`"<id>|S"` ou `""`).
   const aberturaSaldosRef = useRef('');
   const aberturaSugestaoRef = useRef('');
-  const [entregaAposSeparar, setEntregaAposSeparar] = useState(false);
+  // Etapa 195 (C454): que janela está aberta, para `aplicarDetalhe` (useCallback sem dependências) não apagar o digitado nela.
+  // E o detalhe que a janela mostra agora: só fica o digitado de item que já estava nela (o que saiu e voltou é decidido de novo).
+  const janelasAbertasRef = useRef({ separar: false, entregar: false, itens: [] });
+  janelasAbertasRef.current = { separar: showSeparar, entregar: showEntregar, itens: detalhe?.itens || [] };
   const [saving, setSaving] = useState(false);
   // Etapa 15: etapa opcional de assinatura do recebedor. Guarda reqId + numero (e não o
   // detalhe) porque a entrega total fecha o painel de detalhe antes de a assinatura abrir.
@@ -676,11 +693,19 @@ const RequisicoesList = () => {
   }, [showEntregar, detalhe, saldosEntrega, saldosEntregaFalhos, origensEntrega, quantidadesEntrega]);
 
   const aplicarDetalhe = useCallback((data, id) => {
+    // Etapa 195 (C454): o mesmo detalhe relido com a janela aberta (voltar para a aba) não apaga o digitado. Com a janela fechada,
+    // o inicial como antes — o "Aprovar e Separar" carrega e só depois abre, contando com isto (RN-195.05).
+    const mesmo = loadedDetalheIdRef.current === id;
+    const { separar, entregar, itens: itensNaTela } = janelasAbertasRef.current;
     setDetalhe(data);
     loadedDetalheIdRef.current = id;
     // Etapa 135 (RN-06): dividido entre irmãos.
-    setQuantidadesEntrega(quantidadesIniciaisEntrega(data.itens));
-    setQuantidadesSeparacao(quantidadesIniciaisSeparacao(data.itens));
+    const iniciaisEntrega = quantidadesIniciaisEntrega(data.itens);
+    const iniciaisSeparacao = quantidadesIniciaisSeparacao(data.itens);
+    setQuantidadesEntrega((prev) => (mesmo && entregar
+      ? manterDigitado(prev, iniciaisEntrega, data.itens, itensNaTela, (i) => maxQtdEntrega(i) > 0) : iniciaisEntrega));
+    setQuantidadesSeparacao((prev) => (mesmo && separar
+      ? manterDigitado(prev, iniciaisSeparacao, data.itens, itensNaTela, (i) => maxQtdSeparacao(i) > 0) : iniciaisSeparacao));
   }, []);
 
   // O descarte e `return` (nunca throw): os chamadores com `await` continuam recebendo uma promessa que resolve.
@@ -913,11 +938,8 @@ const RequisicoesList = () => {
       await api.put(`/almoxarifado/requisicoes/${detalhe.id}/separacao`, { itens_separados });
       toast.success('Separação registrada!');
       setShowSeparar(false);
-      const abrirEntrega = entregaAposSeparar;
-      setEntregaAposSeparar(false);
-      const updated = await abrirDetalhe(detalhe.id, { force: true });
+      await abrirDetalhe(detalhe.id, { force: true });
       await loadRequisicoes();
-      if (abrirEntrega && updated) abrirModalEntrega(updated);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao separar');
       // Etapa 94 (B463): 409 = o status mudou enquanto a separação era conferida (V1 da 94: alçada de valor; X1 da
@@ -930,7 +952,6 @@ const RequisicoesList = () => {
         || (err.response?.status === 403 && err.response?.data?.code === 'AGUARDANDO_APROVACAO_VALOR');
       if (statusMudou) {
         setShowSeparar(false);
-        setEntregaAposSeparar(false);
         await abrirDetalhe(detalhe.id, { force: true });
         loadRequisicoes();
       }
@@ -1093,20 +1114,9 @@ const RequisicoesList = () => {
     }
   };
 
-  const handleCompletarEntrega = () => {
-    if (!detalhe) return;
-    if (temEntregavel(detalhe.itens)) {
-      abrirModalEntrega();
-      return;
-    }
-    const precisaSeparar = detalhe.itens.some((i) => maxQtdSeparacao(i) > 0 && getPendente(i) > 0);
-    if (precisaSeparar) {
-      setEntregaAposSeparar(true);
-      abrirModalSeparacao();
-    } else {
-      toast.error('Aguardando reposição de estoque para itens pendentes.');
-    }
-  };
+  // Etapa 195 (C452, B1312): o botão "Completar Entrega" só aparece com algo entregável (`temPendenteComEstoque` = `temEntregavel`),
+  // então o ramo "separar e depois entregar" que morava aqui nunca rodava — saiu, com o estado `entregaAposSeparar`.
+  const handleCompletarEntrega = () => abrirModalEntrega();
 
   // Etapa 61 (RN-04): as séries que valem para o item — só as do lote escolhido no "Sai de" (trocar
   // o lote não apaga a escolha, mas as de outro lote deixam de contar e de ir no PUT).
