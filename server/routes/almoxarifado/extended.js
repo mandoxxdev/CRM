@@ -1318,6 +1318,14 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     } catch (e) { handleError(res, e); }
   });
 
+  // Etapa 191: corrigir a validade de um lote que ja tem saldo (a validade digitada errada deixava o lote preso). Mesmo gate de
+  // liberar vencimento e mudar status (`inspecionar`, B1290). Responde `{ lote, avisos }`.
+  app.put('/api/almoxarifado/lotes/:id/validade', auth, requirePermission('inspecionar'), async (req, res) => {
+    try {
+      res.json(await lotService.corrigirValidadeDoLote(db, req.user, req.params.id, req.body || {}));
+    } catch (e) { handleError(res, e); }
+  });
+
   // ── Series (Etapa 6b, Task 7) ──
   app.get('/api/almoxarifado/materiais/:id/series', auth, requirePermission('visualizar'), async (req, res) => {
     try {

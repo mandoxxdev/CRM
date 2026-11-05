@@ -57,6 +57,13 @@ const MSG_VALIDADE = {
     + `(${dataValidadeBR(dataISO)}). Não repita a entrada; peça a correção da validade do lote.`,
   AVISO_REDEFINIDA: (codigo, antigaISO, novaISO) => `O lote ${codigo} estava vazio com a validade ${dataValidadeBR(antigaISO)}; ela foi `
     + `trocada por ${dataValidadeBR(novaISO)}.`,
+  // ── Etapa 191 — corrigir a validade de um lote que ja tem saldo (`PUT /lotes/:id/validade`, contrato do plano da 191) ──
+  OBRIGATORIA: 'Informe a nova validade do lote (AAAA-MM-DD).',
+  JUSTIFICATIVA: 'Informe a justificativa da correção da validade — ela fica na auditoria do lote.',
+  VISTA_OBRIGATORIA: 'Informe a validade que a tela mostrava (validade_vista: AAAA-MM-DD, ou null se o lote não tinha validade).',
+  MUDOU: (codigo, atualISO) => `A validade do lote ${codigo} mudou enquanto a tela estava aberta (agora `
+    + `${atualISO == null ? 'sem validade' : dataValidadeBR(atualISO)}). Recarregue e confira antes de corrigir.`,
+  MESMA: (codigo, dataISO) => `O lote ${codigo} já tem a validade ${dataValidadeBR(dataISO)}. Nada a corrigir.`,
 };
 
 /**
@@ -311,6 +318,79 @@ async function liberarVencimento(db, user, loteId, justificativa) {
   return atualizado;
 }
 
+// ── Etapa 191 — corrigir a validade de um lote (com saldo ou nao) ────────────────────────────────────────────────────────────
+/** A regua do `isVencido`: so a parte de data. `null`/ausente fica `null` (so casa `null`). */
+function validadeNormalizada(valor) {
+  return valor === undefined || valor === null ? null : String(valor).slice(0, 10);
+}
+
+/**
+ * Recusas de payload ANTES de ler o lote (molde `mudarStatusLote`/`liberarVencimento`), na ordem do contrato: data obrigatoria ->
+ * formato -> ano -> justificativa -> `validade_vista` presente. A vista NAO e validada como data (Fase 2, achado 1): a gravada pode
+ * ser lixo do recebimento (`31/03/2027`) e a correcao existe justamente para ela.
+ */
+function validarPayloadCorrecao({ data_validade, validade_vista, justificativa } = {}) {
+  if (data_validade === undefined || data_validade === null || data_validade === '') throw erro(MSG_VALIDADE.OBRIGATORIA);
+  const { data } = validarDataValidade(data_validade);
+  const motivo = justificativa == null ? '' : String(justificativa).trim();
+  if (!motivo) throw erro(MSG_VALIDADE.JUSTIFICATIVA);
+  if (validade_vista === undefined || (validade_vista !== null && typeof validade_vista !== 'string')) {
+    throw erro(MSG_VALIDADE.VISTA_OBRIGATORIA);
+  }
+  return { nova: data, vista: validadeNormalizada(validade_vista), motivo };
+}
+
+/**
+ * Dentro da secao do material: rele o lote (404), confere a vista (409 `MUDOU`) e a mesma data (400 `MESMA`), grava com guarda
+ * contra a lida (`IS ?` — casa `NULL`) e audita. Mudar a data SEMPRE zera a liberacao de vencimento (RN-191.08, B1292): ela era
+ * uma assinatura sobre a data antiga — se nao havia, zerar nulo e inocuo.
+ */
+async function corrigirValidadeDoLoteSemTrava(db, user, loteFora, { nova, vista, motivo }) {
+  const loteId = loteFora.id;
+  const antes = await getLote(db, loteId); // releitura dentro da secao: o lido fora pode ter mudado na fila da trava
+  if (!antes) throw erro('Lote nao encontrado', 404);
+  const gravada = validadeNormalizada(antes.data_validade);
+  if (gravada !== vista) throw erro(MSG_VALIDADE.MUDOU(antes.codigo, antes.data_validade), 409);
+  if (gravada === nova) throw erro(MSG_VALIDADE.MESMA(antes.codigo, antes.data_validade));
+
+  const claim = await dbGet(db, `UPDATE lotes_almoxarifado SET data_validade = ?, vencimento_liberado_em = NULL,
+      vencimento_liberado_por = NULL, vencimento_liberado_motivo = NULL, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND data_validade IS ? RETURNING id`, [nova, loteId, antes.data_validade]);
+  if (!claim) {
+    const atual = await getLote(db, loteId);
+    throw erro(MSG_VALIDADE.MUDOU(antes.codigo, atual ? atual.data_validade : null), 409);
+  }
+
+  const liberacaoAnulada = !!antes.vencimento_liberado_em;
+  // Fase 2, achado 4 (B1289): sem segundo aprovador, o rastro de "estava vencido e voltou a sair" fica na auditoria
+  const desvencido = isVencido(antes) && !isVencido({ data_validade: nova });
+  // Etapa 121 (C252): a validade ja mudou — a falha da Auditoria vai ao log e nao derruba o ato
+  await registrarAuditoriaDoAto(db, {
+    entidade: 'lote', entidade_id: loteId, acao: 'VALIDADE_CORRIGIDA',
+    usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
+    dados_anteriores: {
+      data_validade: antes.data_validade, vencimento_liberado_em: antes.vencimento_liberado_em,
+      vencimento_liberado_por: antes.vencimento_liberado_por, vencimento_liberado_motivo: antes.vencimento_liberado_motivo,
+    },
+    dados_novos: { data_validade: nova, liberacao_anulada: liberacaoAnulada, desvencido },
+    justificativa: motivo,
+  });
+  return { antes, liberacaoAnulada };
+}
+
+/**
+ * RN-191.01: `PUT /lotes/:id/validade`. Payload validado fora de tudo; `:id` nao inteiro -> 404 (depois do payload: a ordem do
+ * contrato). Devolve `{ lote, avisos }`.
+ */
+async function corrigirValidadeDoLote(db, user, loteId, payload) {
+  const dados = validarPayloadCorrecao(payload || {});
+  const id = Number(loteId);
+  const lote = Number.isInteger(id) && id > 0 ? await getLote(db, id) : undefined;
+  if (!lote) throw erro('Lote nao encontrado', 404);
+  await corrigirValidadeDoLoteSemTrava(db, user, lote, dados);
+  return { lote: await getLote(db, id), avisos: [] };
+}
+
 /**
  * Ordem FEFO: elegiveis primeiro, depois validade crescente com nulos por ultimo, depois codigo.
  * Lote nao elegivel (bloqueado, reprovado, vencido) NAO some da lista — vai para o fim. Esconder
@@ -405,4 +485,5 @@ module.exports = {
   vencimentoLiberado, liberarVencimento, liberarBloqueioPorCertificado, listarLotesDoMaterial,
   EPS_SALDO, residualSemLote, resumoLotesDoMaterial,
   MSG_VALIDADE, dataValidadeBR, validarDataValidade, preencherValidadeSeVazia, loteEstaVazio, redefinirValidadeDoLoteVazio,
+  corrigirValidadeDoLote, corrigirValidadeDoLoteSemTrava, // Etapa 191
 };
