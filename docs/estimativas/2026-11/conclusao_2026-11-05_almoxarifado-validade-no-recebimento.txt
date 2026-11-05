@@ -1,0 +1,8 @@
+*Concluído — Almoxarifado: nota com o mesmo lote e outra validade*
+_05/11/2026_
+
+2. Nota com o mesmo lote e outra validade — estimado 3h · realizado 3h15
+
+*Total: estimado 3h · realizado 3h15*
+
+O recebimento passa a avisar, antes de confirmar a nota, quando a validade da nota é diferente da que o lote já tem. Lote que ainda não tinha validade recebe a data da nota. Na revisão também foi resolvido um caso em que a data escrita como dia/mês/ano deixava um lote novo com aparência de vencido.
