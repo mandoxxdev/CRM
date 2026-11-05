@@ -215,6 +215,21 @@ describe('Etapa 191 — corrigir validade do lote (tela)', () => {
     expect(botaoModal('Corrigir').disabled).toBe(false);
   });
 
+  test('[Fase 5 F5] validade gravada fora do formato aparece como esta, nao "Invalid Date"', async () => {
+    const LOTE_LIXO = { ...LOTE_ERRADO, id: 303, codigo: 'L-LIXO', data_validade: '31/03/2027', vencido: false };
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: [MATERIAL] });
+      if (url === `/almoxarifado/materiais/${MATERIAL.id}/lotes`) return Promise.resolve({ data: [LOTE_LIXO] });
+      return Promise.resolve({ data: [] });
+    });
+    await renderizarComMaterial();
+    expect(linhas()[0].textContent).toContain('31/03/2027');
+    expect(linhas()[0].textContent).not.toContain('Invalid Date');
+    await abrirCorrigir(0);
+    expect(modal().textContent).toContain('Lote L-LIXO — validade atual: 31/03/2027');
+    expect(modal().textContent).not.toContain('Invalid Date');
+  });
+
   test('[RN-191.13] erro sem corpo usa a frase padrao', async () => {
     api.put.mockRejectedValueOnce(new Error('Network Error'));
     await renderizarComMaterial();

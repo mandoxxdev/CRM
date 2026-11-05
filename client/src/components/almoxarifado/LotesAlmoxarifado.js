@@ -75,7 +75,13 @@ const proximoStatusSugerido = (atual) => (atual === 'ATIVO' ? 'BLOQUEADO' : 'ATI
 // que casa a mesma substring no WHERE).
 const bloqueadoPorCertificado = (l) => l.status === 'BLOQUEADO' && /certificado/i.test(l.status_motivo || '');
 
-const formatData = (d) => (d ? new Date(`${String(d).slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR') : null);
+// Etapa 191 (Fase 5, F5): data que nao parseia (lixo do recebimento, ex.: '31/03/2027') aparece como foi gravada — e justamente
+// o lote que precisa de "Corrigir validade"; antes virava "Invalid Date" na coluna e no modal.
+const formatData = (d) => {
+  if (!d) return null;
+  const dt = new Date(`${String(d).slice(0, 10)}T12:00:00`);
+  return Number.isNaN(dt.getTime()) ? String(d) : dt.toLocaleDateString('pt-BR');
+};
 
 // Badges da aba Séries — molde de STATUS_LOTE/statusInfo acima. EM_ESTOQUE e BLOQUEADA são as
 // únicas duas transições que `mudarStatusSerie` (servidor) aceita; ENTREGUE/SUCATEADA/ESTORNADA
