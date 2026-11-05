@@ -965,7 +965,7 @@ async function listarFilaSeparacao(db, user, opcoes = {}) {
   const ids = reqs.map((r) => r.id);
   const marcas = ids.map(() => '?').join(',');
   const itens = await dbAll(db, `SELECT ir.*, ma.codigo as material_codigo, ma.nome as material_nome, ma.unidade,
-      ma.material_critico, ma.ativo as material_ativo,
+      ma.material_critico, ma.ativo as material_ativo, ma.controle_lote, -- Etapa 197 (T1, RN-197.12): a dica diz o que a entrega faz com o lote
       ${Q.qtdSql(`${disponivelSql('ma')} + ${RESERVADO_PARA_ITEM_SQL}`)} as saldo_disponivel,
       ${RESERVADO_PARA_ITEM_SQL} as reservado_para_item,
       ${caixaSemReservaSql('ir.material_id', 'AND ix.id <> ir.id')} as caixa_outros,
@@ -1029,6 +1029,9 @@ async function listarFilaSeparacao(db, user, opcoes = {}) {
           num(i.saldo_disponivel) - num(i.reservado_para_item), i.reservado_para_item, Number(i.motor_permite_negativo) === 1)))),
         disponivel: Q.qtd(num(i.saldo_disponivel)), origem_separacao_codigo: i.origem_separacao_codigo || null,
         lote_separacao_codigo: i.lote_separacao_codigo || null, material_critico: Number(i.material_critico) === 1,
+        // Etapa 197 (T1, RN-197.12, B1328): o CADASTRO do material (nao o saldo em lote) — com controle, o automatico da entrega
+        // baixa do lote que vence primeiro (RN-197.01); sem, nao escolhe lote (B204). A dica da fila (coletaTexto) muda a frase por ele.
+        controle_lote: Number(i.controle_lote) === 1,
       };
     });
     const etapas = [];

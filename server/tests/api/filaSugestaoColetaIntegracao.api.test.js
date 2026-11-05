@@ -14,6 +14,16 @@ const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 const { PERFIS } = require('../../services/almoxarifado/permissions');
 const requisitionService = require('../../services/almoxarifado/requisitionService');
+const diaLocal = require('../../services/diaLocal');
+
+// Etapa 197 (T1, achado 5 da Fase 2): validades RELATIVAS a hoje (+5 e +45 dias). Eram '2026-11-10' e '2026-12-20' literais: em
+// 11/11 o L1/V1 vencia, a dica deixava de apontar ZB-01 e os cenarios da rota caiam sozinhos.
+function diaRelativo(dias) {
+  const d = new Date(`${diaLocal.hojeLocalISO()}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + dias);
+  return d.toISOString().slice(0, 10);
+}
+const VENCE_ANTES = diaRelativo(5); const VENCE_DEPOIS = diaRelativo(45);
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -114,7 +124,7 @@ process.on('exit', (code) => {
   const m1 = await material({ lote: true });
   await entrar(m1, B01.id, 6, 'L1');
   await entrar(m1, A03.id, 9, 'L2');
-  await validade(m1, 'L1', '2026-11-10'); await validade(m1, 'L2', '2026-12-20');
+  await validade(m1, 'L1', VENCE_ANTES); await validade(m1, 'L2', VENCE_DEPOIS);
   const L1 = await loteId(m1, 'L1'); const L2 = await loteId(m1, 'L2');
   const r1 = await req([[m1.id, 5]]);
   await aprovar(r1.R);
@@ -126,7 +136,7 @@ process.on('exit', (code) => {
     assert.strictEqual(it.separavel, 5);
     assert.deepStrictEqual(it.pegar_em, {
       localizacao_id: B01.id, localizacao_codigo: 'ZB-01', caminho: 'ALM188 / ZB-01', lote_id: L1, lote_codigo: 'L1',
-      lote_validade: '2026-11-10', quantidade_no_endereco: 6, quantidade_sugerida: 5, cobre: true,
+      lote_validade: VENCE_ANTES, quantidade_no_endereco: 6, quantidade_sugerida: 5, cobre: true,
     });
     assert.strictEqual(it.pegar_em_aviso, null);
     const s = await separar(r1.R, [{ item_id: it.item_id, quantidade_separada: it.pegar_em.quantidade_sugerida,
@@ -176,7 +186,7 @@ process.on('exit', (code) => {
     const m = await material({ lote: true });
     await entrar(m, B01.id, 6, 'V1');
     await entrar(m, A03.id, 9, 'V2');
-    await validade(m, 'V1', '2026-11-10'); await validade(m, 'V2', '2026-12-20');
+    await validade(m, 'V1', VENCE_ANTES); await validade(m, 'V2', VENCE_DEPOIS);
     const V1 = await loteId(m, 'V1');
     const r = await req([[m.id, 5]]);
     await aprovar(r.R);

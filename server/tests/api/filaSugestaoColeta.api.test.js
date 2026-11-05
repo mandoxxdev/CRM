@@ -17,6 +17,13 @@ const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbAll, dbGet } = require('../../services/almoxarifado/db');
 const stockService = require('../../services/almoxarifado/stockService');
 const diaLocal = require('../../services/diaLocal');
+// Etapa 197 (T1, achado 5 da Fase 2): validade RELATIVA a hoje. Era '2026-11-10' literal: em 11/11 o S-L1 vencia e o cenario
+// de serie mudava sozinho (a sugestao ia para S-L2 sem bloqueio nenhum).
+function diaRelativo(dias) {
+  const d = new Date(`${diaLocal.hojeLocalISO()}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + dias);
+  return d.toISOString().slice(0, 10);
+}
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -96,7 +103,7 @@ let seq = 0;
     await entrar(m, L.A01, 4);
     const R = await req([[m, 2]]);
     const f = await daFila(R.id);
-    assert.deepStrictEqual(Object.keys(f.itens[0]).sort(), ['a_entregar', 'a_separar', 'disponivel', 'entregavel', 'item_id',
+    assert.deepStrictEqual(Object.keys(f.itens[0]).sort(), ['a_entregar', 'a_separar', 'controle_lote', 'disponivel', 'entregavel', 'item_id',
       'lote_separacao_codigo', 'material_codigo', 'material_critico', 'material_id', 'material_nome', 'origem_separacao_codigo',
       'pegar_em', 'pegar_em_alerta', 'pegar_em_aviso', 'separavel', 'unidade']);
     assert.ok(Array.isArray(f.ordem_coleta));
@@ -130,7 +137,8 @@ let seq = 0;
     await entrar(m, L.B01, 2, { lote: 'S-L1', series: ['S1A', 'S1B'] });
     await entrar(m, L.A01, 3, { lote: 'S-L2', series: ['S2A', 'S2B', 'S2C'] });
     // A entrada manual nao grava a validade do lote: grava aqui (L1 vence antes).
-    await dbRun(db, "UPDATE lotes_almoxarifado SET data_validade = CASE codigo WHEN 'S-L1' THEN '2026-11-10' ELSE '2026-12-20' END WHERE material_id = ?", [m]);
+    await dbRun(db, "UPDATE lotes_almoxarifado SET data_validade = CASE codigo WHEN 'S-L1' THEN ? ELSE ? END WHERE material_id = ?",
+      [diaRelativo(5), diaRelativo(45), m]);
     const R = await req([[m, 2]]);
     const antes = (await daFila(R.id)).itens[0].pegar_em;
     assert.strictEqual(antes.lote_codigo, 'S-L1', 'premissa: sem bloqueio o FEFO da L1');
@@ -268,6 +276,16 @@ let seq = 0;
     } finally {
       global.Date = DateReal;
     }
+  });
+
+  await test('[RN-197.12] cada item da fila diz se o material controla lote: controle_lote true com controle, false sem (mesmo com saldo em lote)', async () => {
+    const comLote = await material({ lote: true }); const semLote = await material();
+    await entrar(comLote, L.B01, 4, { lote: 'C197' });
+    // Material sem controle de lote, mas com saldo em lote: o campo segue o CADASTRO (B1321), nao o saldo.
+    await entrar(semLote, L.B02, 4, { lote: 'S197' });
+    const R = await req([[comLote, 2], [semLote, 2]]);
+    const f = await daFila(R.id);
+    assert.deepStrictEqual(f.itens.map((i) => [i.item_id, i.controle_lote]), [[R.ids[0], true], [R.ids[1], false]]);
   });
 
   await test('Gate: sem separar_emitir -> 403 (nao muda)', async () => {
