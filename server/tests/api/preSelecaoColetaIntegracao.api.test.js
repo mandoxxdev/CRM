@@ -287,20 +287,24 @@ process.on('exit', (code) => {
     return { m, r1, r2, s2 };
   };
 
-  await test('[Fase 5, C449] sugestao velha: R2 separa do par ja comprometido por R1 -> 200; a entrega de R2 recusa e nada de estoque se perde', async () => {
+  // Etapa 198 (RN-198.01): era 200 na separacao e 400 na entrega (C449) — a separacao so descontava o separado pendente da PROPRIA
+  // requisicao no par e aceitava o endereco ja comprometido por R1; a recusa so vinha na entrega de R2 ("nao serve mais", sem motivo
+  // claro). Agora a separacao de R2 recusa com a conta a vista (C1) e nada e gravado: sem rodada, status e caixa iguais.
+  await test('[Fase 5, C449; Etapa 198 RN-198.01] sugestao velha: R2 separa do par ja comprometido por R1 -> 400 C1 na separacao, R2 sem rodada', async () => {
     const { m, r1, r2, s2 } = await duasJanelas();
+    const antes = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [r2.R]);
     const b = await separar(r2.R, [{ item_id: r2.ids[0], quantidade_separada: 4, localizacao_origem_id: s2.localizacao_id, lote_id: s2.lote_id }]);
-    assert.strictEqual(b.status, 200, `a separacao aceita (regra da 59): ${JSON.stringify(b.body)}`);
-    const e1 = await entregar(r1.R, [{ item_id: r1.ids[0], quantidade_atendida: 4 }]);
-    assert.strictEqual(e1.status, 200, JSON.stringify(e1.body));
-    const e2 = await entregar(r2.R, [{ item_id: r2.ids[0], quantidade_atendida: 4 }]);
-    assert.strictEqual(e2.status, 400, JSON.stringify(e2.body));
-    assert.strictEqual(e2.body.error, `${m.nome}: a origem da separação (XB-01) não serve mais (O saldo em XB-01 (2) não cobre a `
-      + 'quantidade (4) — a saída tiraria de outros endereços) — entregue escolhendo de onde sai');
-    assert.strictEqual(await saldoDe(m, 'XB-01', 'L1'), 2);
+    assert.strictEqual(b.status, 400, JSON.stringify(b.body));
+    const n1 = (await dbGet(db, 'SELECT numero FROM requisicoes_almoxarifado WHERE id = ?', [r1.R])).numero;
+    assert.strictEqual(b.body.error, `${m.nome}: em XB-01, lote L1 há 6 para esta separação, mas 4 já está separado dali para outra `
+      + `requisição (${n1}); sobra 2, que não cobre a quantidade (4). Escolha outro endereço ou reabra a janela para ver a sugestão atual`);
+    assert.strictEqual((await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [r2.R])).status, antes.status);
+    assert.strictEqual(Number((await dbGet(db, 'SELECT COUNT(*) as n FROM separacoes_requisicao_almoxarifado WHERE requisicao_id = ?',
+      [r2.R])).n), 0, 'nenhuma rodada de R2');
+    const it2 = await dbGet(db, 'SELECT quantidade_separada, origem_separacao_id FROM itens_requisicao_almoxarifado WHERE id = ?', [r2.ids[0]]);
+    assert.deepStrictEqual([Number(it2.quantidade_separada || 0), it2.origem_separacao_id], [0, null]);
+    assert.strictEqual(await saldoDe(m, 'XB-01', 'L1'), 6);
     assert.strictEqual(await saldoDe(m, 'XP-01', 'L2'), 9);
-    assert.deepStrictEqual(await semLoteNaoZero(m), []);
-    assert.deepStrictEqual(await trocas(r2.R), []);
   });
 
   // Etapa 197 (RN-197.02): era "L1 2, L2 9 e -4 sem lote na padrao" (B204). Agora o automatico de R2 divide pelos lotes na ordem

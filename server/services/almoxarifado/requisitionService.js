@@ -74,6 +74,36 @@ function parteOrigemSql(a = 'ir') {
 const PARTE_ORIGEM_SQL = parteOrigemSql('ir');
 
 /**
+ * Etapa 198 (RN-198.04, B1331): a regua UNICA de "caixa viva" — requisicao ativa (a exclusao zera `ativo`, C467) e num status que
+ * ainda tem caixa (`STATUS_COM_CAIXA`; o cancelamento grava CANCELADO sem zerar `ativo`, e a caixa legada de uma cancelada voltou a
+ * prateleira sem movimento). Usada pela Fila/sugestao, pelo automatico da entrega e pela separacao (aceitacao e divergencia). Antes a
+ * separacao filtrava so `ativo` e contava caixa de cancelada — a aceitacao nova recusaria separar por causa de uma caixa morta.
+ */
+function caixaVivaSql(alias = 'r') {
+  return {
+    sql: `COALESCE(${alias}.ativo, 1) = 1 AND ${alias}.status IN (${STATUS_COM_CAIXA.map(() => '?').join(',')})`,
+    params: [...STATUS_COM_CAIXA],
+  };
+}
+
+/**
+ * Etapa 198 (RN-198.01/03/08): a PARTE guardada (`PARTE_ORIGEM_SQL`, nao a caixa) das OUTRAS requisicoes com caixa viva no par
+ * (material, endereco, lote). `numeros` = as requisicoes com parte > folga, na ordem do id (GROUP_CONCAT nao garante ordem). Lida
+ * dentro da secao da separacao (trava por requisicao e por material): nenhuma porta nova.
+ */
+async function parteGuardadaDeOutras(db, materialId, origemId, loteId, requisicaoId) {
+  const viva = caixaVivaSql('r');
+  const rows = await dbAll(db, `SELECT r.id, r.numero, SUM(${PARTE_ORIGEM_SQL}) as q
+    FROM itens_requisicao_almoxarifado ir JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
+    WHERE ir.material_id = ? AND ir.origem_separacao_id = ? AND ir.lote_separacao_id IS ?
+      AND ir.requisicao_id <> ? AND ${viva.sql}
+    GROUP BY r.id, r.numero HAVING SUM(${PARTE_ORIGEM_SQL}) > ?`,
+  [materialId, origemId, loteId, requisicaoId, ...viva.params, Q.QTD_FOLGA]);
+  rows.sort((a, b) => Number(a.id) - Number(b.id));
+  return { q: Q.qtd(rows.reduce((acc, x) => acc + (Number(x.q) || 0), 0)), numeros: rows.map((x) => x.numero) };
+}
+
+/**
  * `estoque` aqui é o saldo DISPONÍVEL (quantidade_atual − reservada − bloqueada −
  * em_inspecao), não mais o físico (Etapa 3, Task 3 — fecha o bypass de
  * entregarRequisicao/excluirRequisicao que baixava/estornava direto no físico sem passar
@@ -337,15 +367,15 @@ async function lerDadosDaColeta(db, itens) {
       lt.status as lote_status, lt.data_validade as lote_validade, lt.vencimento_liberado_em as lote_vencimento_liberado_em
     FROM estoque_saldo_almoxarifado s LEFT JOIN lotes_almoxarifado lt ON lt.id = s.lote_id
     WHERE s.material_id IN (${mm}) AND s.localizacao_id IS NOT NULL AND s.quantidade > 0`, mats);
-  const statusCaixa = STATUS_COM_CAIXA.map(() => '?').join(',');
+  const viva = caixaVivaSql('r');
   // Etapa 196 (RN-196.09): o comprometido do par planejado e a PARTE da origem (`PARTE_ORIGEM_SQL`), nao a caixa inteira — o resto
   // da caixa saiu do automatico ou de outro par. Sem isto a dica via o par com a caixa toda e mandava para outro endereco.
   const planejados = await dbAll(db, `SELECT ir.material_id, ir.origem_separacao_id, ir.lote_separacao_id,
       SUM(${PARTE_ORIGEM_SQL}) as q
     FROM itens_requisicao_almoxarifado ir JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
     WHERE ir.material_id IN (${mm}) AND ir.origem_separacao_id IS NOT NULL
-      AND COALESCE(r.ativo, 1) = 1 AND r.status IN (${statusCaixa})
-    GROUP BY ir.material_id, ir.origem_separacao_id, ir.lote_separacao_id`, [...mats, ...STATUS_COM_CAIXA]);
+      AND ${viva.sql}
+    GROUP BY ir.material_id, ir.origem_separacao_id, ir.lote_separacao_id`, [...mats, ...viva.params]);
   const locs = await dbAll(db, `SELECT l.id, l.parent_id, l.codigo, l.tipo, l.ativo, l.bloqueada, l.almoxarifado_id,
       a.codigo as almoxarifado_codigo, a.ativo as almoxarifado_ativo
     FROM localizacoes_almoxarifado l LEFT JOIN almoxarifados a ON a.id = l.almoxarifado_id`);
@@ -1192,8 +1222,11 @@ async function listarSeparacoes(db, requisicaoId) {
  * Etapa 58/59 — a regra ÚNICA de "este item pode sair desta origem/lote nesta quantidade", usada
  * pela entrega e pela separação. Lança com a mensagem SEM o prefixo do material (quem chama prefixa).
  * `pedidoPorOrigem` acumula o que a mesma chamada já pediu do mesmo material/origem/lote.
+ * Etapa 198 (RN-198.01, B1330/B1334): `outras` ({ q, numeros }, de `parteGuardadaDeOutras`) — a parte guardada das OUTRAS caixas
+ * vivas no par. So a separacao com endereco passa; a entrega nao passa (B1333: comportamento de antes, bit a bit). Precedencia: se o
+ * fisico sozinho nao cobre, a literal de antes; se cobre e o que sobra depois das outras nao, a C1 com a conta e os numeros.
  */
-async function checarOrigemItem(db, item, { origemId, loteId, lidoNorm }, qty, pedidoPorOrigem) {
+async function checarOrigemItem(db, item, { origemId, loteId, lidoNorm }, qty, pedidoPorOrigem, outras = null) {
   if (lidoNorm && !origemId) {
     throw Object.assign(new Error('Para confirmar a origem pela leitura, informe a localização de origem'), { status: 400 });
   }
@@ -1234,6 +1267,18 @@ async function checarOrigemItem(db, item, { origemId, loteId, lidoNorm }, qty, p
       ? `O saldo em ${codigoOrigem} (${Math.round(saldo * 1e6) / 1e6}) não cobre a quantidade (${qty}) — a saída tiraria de outros endereços`
       : `Saldo insuficiente no lote ${loteCodigo}. Disponível: ${Math.round(saldo * 1e6) / 1e6} ${item.unidade || ''}`.trim()),
     { status: 400 });
+  }
+  const outrasQ = outras && origemId ? (Number(outras.q) || 0) : 0;
+  if (outrasQ > 1e-9 && saldo - outrasQ + 1e-9 < qty) {
+    const r6 = (x) => Math.round(x * 1e6) / 1e6;
+    const cod = loteCodigo ? `${codigoOrigem}, lote ${loteCodigo}` : codigoOrigem;
+    const numeros = outras.numeros || [];
+    const plural = numeros.length > 1;
+    const contando = jaPedido > 1e-9 ? ` (já contando ${r6(jaPedido)} desta requisição)` : '';
+    throw Object.assign(new Error(`em ${cod} há ${r6(saldo)}${contando} para esta separação, mas ${r6(outrasQ)} `
+      + `${plural ? 'já estão separados dali para outras requisições' : 'já está separado dali para outra requisição'} `
+      + `(${numeros.join(', ')}); sobra ${r6(Math.max(0, saldo - outrasQ))}, que não cobre a quantidade (${qty}). `
+      + 'Escolha outro endereço ou reabra a janela para ver a sugestão atual'), { status: 400 });
   }
   return codigoOrigem;
 }
@@ -1352,6 +1397,13 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
   // separação é tudo ou nada: ou todas as entradas cabem, ou nenhuma é gravada.
   const validados = []; // [{ item, qty, novaSeparada }] — só item existente com qty > 0
   const pedidoSeparacao = new Map();
+  // Etapa 198 (RN-198.04): a parte guardada das outras por par, lida uma vez por chamada (a aceitacao e a divergencia usam a mesma).
+  const outrasPorPar = new Map();
+  const outrasDoPar = async (materialId, origemId, loteId) => {
+    const k = `${materialId}|${origemId}|${loteId}`;
+    if (!outrasPorPar.has(k)) outrasPorPar.set(k, await parteGuardadaDeOutras(db, materialId, origemId, loteId, requisicaoId));
+    return outrasPorPar.get(k);
+  };
   const reguaDivergencia = new Map(); // Etapa 60: item.id -> { maxInicial, origens, saldoOrigem, total, motivo }
   // Etapa 59 (Fase 5): o separado ainda nao entregue de TODOS os itens com origem planejada continua
   // fisicamente la — entra no acumulado desde o inicio. Antes so o do proprio item contava (mesmoPar):
@@ -1445,18 +1497,21 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
       const so = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) as q FROM estoque_saldo_almoxarifado
         WHERE material_id = ? AND lote_id IS ? ${onde}`, [item.material_id, loteId, ...(origemId ? [origemId] : [])]);
       // Etapa 196 (RN-196.09): o comprometido das outras no par e a PARTE da origem delas, nao a caixa inteira.
+      // Etapa 198 (RN-198.04): a mesma leitura da aceitacao (`parteGuardadaDeOutras`, caixa viva) — antes so `ativo`, e a caixa de
+      // uma cancelada legada entrava na divergencia.
       // eslint-disable-next-line no-await-in-loop
-      const outras = origemId ? await dbGet(db, `SELECT COALESCE(SUM(${PARTE_ORIGEM_SQL}), 0) as q
-        FROM itens_requisicao_almoxarifado ir JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
-        WHERE ir.material_id = ? AND ir.origem_separacao_id = ? AND ir.lote_separacao_id IS ?
-          AND ir.requisicao_id <> ? AND COALESCE(r.ativo, 1) = 1`, [item.material_id, origemId, loteId, requisicaoId]) : { q: 0 };
+      const outras = origemId ? await outrasDoPar(item.material_id, origemId, loteId) : { q: 0 };
       regua.saldoOrigem = (Number(so.q) || 0) - (Number(outras.q) || 0)
         - (pedidoSeparacao.get(`${item.material_id}|${origemId}|${loteId}`) || 0);
     }
     if (origemId || loteId) {
       try {
         // eslint-disable-next-line no-await-in-loop
-        await checarOrigemItem(db, item, { origemId, loteId, lidoNorm: null }, qty, pedidoSeparacao);
+        // Etapa 198 (RN-198.01): com endereco, a parte guardada das outras caixas vivas no par entra na aceitacao.
+        // eslint-disable-next-line no-await-in-loop
+        const outrasAqui = origemId ? await outrasDoPar(item.material_id, origemId, loteId) : null;
+        // eslint-disable-next-line no-await-in-loop
+        await checarOrigemItem(db, item, { origemId, loteId, lidoNorm: null }, qty, pedidoSeparacao, outrasAqui);
       } catch (e) {
         const err = new Error(`${item.material_nome}: ${e.message}`);
         err.status = e.status || 400;
@@ -1755,11 +1810,11 @@ async function lotesParaOAutomatico(db, materialId, saiuDaOrigemPorItem, parteQu
   const emInspecao = await dbAll(db, `SELECT lote_id, COALESCE(SUM(quantidade_em_inspecao), 0) as q
     FROM recebimentos_material_itens_almoxarifado WHERE lote_id IN (${marcas}) AND COALESCE(quantidade_em_inspecao, 0) > 0
     GROUP BY lote_id`, ids);
-  const statusCaixa = STATUS_COM_CAIXA.map(() => '?').join(',');
+  const viva = caixaVivaSql('r');
   const guardadas = await dbAll(db, `SELECT ir.id, ir.lote_separacao_id as lote_id, ir.origem_separacao_id as loc_id, ${PARTE_ORIGEM_SQL} as q
     FROM itens_requisicao_almoxarifado ir JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
     WHERE ir.material_id = ? AND ir.origem_separacao_id IS NOT NULL AND ir.lote_separacao_id IN (${marcas})
-      AND COALESCE(r.ativo, 1) = 1 AND r.status IN (${statusCaixa})`, [materialId, ...ids, ...STATUS_COM_CAIXA]);
+      AND ${viva.sql}`, [materialId, ...ids, ...viva.params]);
   const inspecao = new Map();
   for (const x of emInspecao) inspecao.set(Number(x.lote_id), (inspecao.get(Number(x.lote_id)) || 0) + (Number(x.q) || 0));
   // a parte guardada por (lote, endereco) — Fase 5 M1 (B1329): o claim do lote drena a padrao e depois a maior linha, entao descontar
