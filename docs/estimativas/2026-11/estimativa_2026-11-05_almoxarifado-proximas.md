@@ -13,7 +13,7 @@ Régua de execução: etapas do almoxarifado de 20 a 23/10, cada uma com Fase 2,
 
 | # | Tarefa | Porte | Análise | Execução | Teste e conferência | Informado | Etapa/plano | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 | Corrigir a validade de um lote | média + decisão de regra + perfis | 1h | 1h30 | 1h30 | 4h | 191 (plano `c0cce170`, Fase 2 pendente) | — | — | — |
+| 1 | Corrigir a validade de um lote | média + decisão de regra + perfis | 1h | 1h30 | 1h30 | 4h | 191 (plano `c0cce170`, Fase 2 pendente) | 2 h (horas.js --grupos "Validade=Etapa 191\|validade do lote", 05 a 07/11) | 4h30 (2 h + análise 1 h + teste 1h30, da tabela — não informado pelo André) | 018f8a35, 3b43a0a1, 4fcf13b4, 140dbb77, d5f3376a, 699e87c3, c64fb881 + fechamento |
 | 2 | Nota com o mesmo lote e outra validade | média + decisão de regra | 1h | 1h | 1h | 3h | 192 candidata (cenário 16 da 190) | — | — | — |
 | 3 | Separação: quantidades não se perdem | ajuste de tela | 15 min | 30 min | 15 min | 1h | C454 (+ C452, código morto na mesma tela, entra junto) | — | — | — |
 | 4 | Separar em duas vezes — local de onde sai | motor | 1h | 1h | 2h | 4h | C453 | — | — | — |

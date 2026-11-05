@@ -1,0 +1,10 @@
+*Concluído — Almoxarifado: corrigir a validade de um lote*
+_05/11/2026_
+
+1. Corrigir a validade de um lote — estimado 4h · realizado 4h30
+
+*Total: estimado 4h · realizado 4h30*
+
+A revisão encontrou dois casos raros que foram resolvidos antes de entregar: um aviso de vencimento que podia deixar de ser enviado quando a correção era desfeita, e uma liberação de vencimento que podia ser apagada se feita no mesmo instante da correção.
+
+Os outros 7 itens do planejamento seguem na ordem enviada.
