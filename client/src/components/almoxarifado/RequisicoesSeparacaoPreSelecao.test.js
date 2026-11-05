@@ -79,7 +79,8 @@ const sugItem = (item_id, pegar_em, extra = {}) => ({
 const sugestao = (...itens) => ({ data: { requisicao_id: 55, itens, ordem_coleta: [] } });
 
 const SUGERIDO = 'Sugerido pela fila de separação. Se pegou de outro endereço, troque aqui.';
-const PARCIAL = ' Entregue esta parte antes de separar o resto — separar o resto de outro endereço troca a origem.';
+// Etapa 196 (RN-196.12): a frase da 189 dizia "separar o resto de outro endereço troca a origem" — deixou de valer (B1314).
+const PARCIAL = ' Se o resto vier de outro endereço, esta parte continua saindo daqui; o resto sai no automático na entrega.';
 const ALERTA = 'Parte do saldo deste material está retida (em inspeção, bloqueada ou em terceiros) e o sistema não sabe em qual '
   + 'endereço — confira antes de pegar.';
 const naoVeio = (texto) => `Sugestão da fila: ${texto} — não veio escolhida; confira o saldo no 'Sai de' antes de escolher.`;
@@ -307,7 +308,7 @@ describe('Etapa 189 (T2): a janela de separação pré-seleciona o endereço sug
     expect(fraseDe(1).textContent).toBe(SUGERIDO);
   });
 
-  test('[RN-189.09, I1] separar so uma parte do pendente -> "Entregue esta parte antes de separar o resto…"', async () => {
+  test('[RN-189.09, I1] separar so uma parte do pendente -> "Se o resto vier de outro endereço, esta parte continua saindo daqui…" (196)', async () => {
     // 8 pedidos, saldo 5: a janela abre com 5 < 8.
     requisicao = aprovada([{ quantidade_solicitada: 8, saldo_atual: 5 }]);
     sugestaoImpl = () => Promise.resolve(sugestao(sugItem(1, pegar(PAR.B02, 5))));

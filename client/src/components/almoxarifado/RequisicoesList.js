@@ -161,6 +161,15 @@ const temPlanejada = (item) => !!item.origem_separacao_id && getSeparado(item) >
 const valorPlanejada = (item) => `${item.origem_separacao_id}:${item.lote_separacao_id ?? ''}`;
 // O servidor só aplica a planejada até o separado ainda não entregue; acima disso é automático.
 const pendenteSeparado = (item) => Math.max(0, getSeparado(item) - getEntregue(item));
+// Etapa 196 (RN-196.11, Fase 2 item 5): o que da caixa saiu da origem guardada — a PARTE (`quantidade_origem_separacao`). null com
+// origem = dado antigo, vale a caixa inteira (RN-196.10). Por defesa, nunca acima da caixa: min(parte, separado − entregue).
+const pendentePlanejado = (item) => {
+  const caixa = pendenteSeparado(item);
+  const parte = item.quantidade_origem_separacao;
+  if (parte == null || parte === '') return caixa;
+  const n = Number(parte);
+  return Number.isFinite(n) ? Math.max(0, Math.min(n, caixa)) : caixa;
+};
 // Etapa 98 (T4): a caixa do item na régua do servidor (`Q.qtd`, 6 casas) — o que o "Devolver à prateleira" pode tirar.
 const caixaDoItem = (item) => Math.round(pendenteSeparado(item) * 1e6) / 1e6;
 const MOTIVO_DEVOLUCAO_MAX = 500;
@@ -189,6 +198,8 @@ const trocaDaPlanejada = (item, escolha) => {
 // qualquer lote do endereço, e há `automatico` e a opção sem saldos).
 // Fase 5 da Etapa 65: a versão "planejada sem lote vale qualquer lote" também na separação foi
 // descartada no servidor (quebrava a entrega de um clique); a tela segue a régua estrita.
+// Etapa 196 (RN-196.03/12, B1314): a rodada de outro par NÃO apaga mais a planejada nem grava troca — a régua continua só para
+// decidir o aviso "esta parte sai no automático na entrega" (sem motivo). O nome ficou pela história.
 const trocaNaSeparacao = (item, valor) => {
   if (!temPlanejada(item)) return false;
   const origem = lerValorOrigem(valor);
@@ -235,11 +246,12 @@ const jaNoParDosIrmaos = (itens, item, valor, origens, quantidades) => (itens ||
   .filter((i) => i.id !== item.id && Number(i.material_id) === Number(item.material_id))
   .reduce((s, i) => s
     + (origens[i.id] === valor ? Math.max(0, parseFloat((quantidades || {})[i.id]) || 0) : 0)
-    + (temPlanejada(i) && valorPlanejada(i) === valor ? pendenteSeparado(i) : 0), 0);
+    + (temPlanejada(i) && valorPlanejada(i) === valor ? pendentePlanejado(i) : 0), 0);
 // M4 da Fase 2: a quantidade da frase como a fila a mostra (pt-BR, até 3 casas) — o `fmtQtd` de utils/coletaTexto.js (T3).
 const fmtQtdSugestao = fmtQtd;
 const FRASE_SUGERIDO = 'Sugerido pela fila de separação. Se pegou de outro endereço, troque aqui.';
-const FRASE_PARCIAL = ' Entregue esta parte antes de separar o resto — separar o resto de outro endereço troca a origem.';
+// Etapa 196 (RN-196.12): separar o resto de outro endereço não troca mais a origem — a parte já separada continua saindo dela.
+const FRASE_PARCIAL = ' Se o resto vier de outro endereço, esta parte continua saindo daqui; o resto sai no automático na entrega.';
 
 // Etapa 61 (RN-04): material com controle de série sai dizendo QUAIS séries saem. As séries vêm de
 // GET /materiais/:id/series?status=EM_ESTOQUE; com um lote escolhido no "Sai de", só as desse lote
@@ -264,8 +276,9 @@ const maxSeparavelNaTela = (item, valorOrigemEscolhida, saldos, outrosMesmoMater
   if (!valorOrigemEscolhida) return base;
   const opcao = (saldos || []).find((s) => valorOrigem(s) === valorOrigemEscolhida);
   if (!opcao) return base;
+  // Etapa 196 (RN-196.09/11): o comprometido no par é a parte da origem, não a caixa inteira.
   const jaPlanejadoNoPar = temPlanejada(item) && valorPlanejada(item) === valorOrigemEscolhida
-    ? pendenteSeparado(item) : 0;
+    ? pendentePlanejado(item) : 0;
   return Math.min(base, Math.max(0, (Number(opcao.quantidade) || 0) - jaPlanejadoNoPar));
 };
 // Etapa 73 (RN-07, B358): dizia "a chegada do material não muda o status". DEIXOU DE VALER na Etapa 74:
@@ -393,8 +406,6 @@ const RequisicoesList = () => {
   const [origensSeparacao, setOrigensSeparacao] = useState({});
   const [quantidadesSeparacao, setQuantidadesSeparacao] = useState({});
   const [motivosSeparacao, setMotivosSeparacao] = useState({});
-  // Etapa 65 (RN-04): motivo da troca da planejada na separação, por item (só vai quando há troca).
-  const [motivosTrocaSeparacao, setMotivosTrocaSeparacao] = useState({});
   // Etapa 189 (T2): a sugestão da fila para esta abertura (Map item_id -> recorte, ou null: carregando/falhou/sem sugestão) e o que
   // a pré-seleção decidiu por item ({ [itemId]: { valor, pegar_em, alerta } } — uma vez por abertura).
   const [sugestaoSeparacao, setSugestaoSeparacao] = useState(null);
@@ -676,7 +687,9 @@ const RequisicoesList = () => {
       const rows = saldosEntrega[item.material_id];
       if (!rows) return;
       const qtd = parseFloat(quantidadesEntrega[item.id] ?? maxQtdEntrega(item)) || 0;
-      if (qtd > pendenteSeparado(item)) {
+      // Etapa 196 (RN-196.11): o servidor aplica a planejada só até a PARTE da origem (o resto da caixa sai no automático);
+      // pré-selecionar acima dela mandaria estrito o que lá não está separado e o servidor recusaria.
+      if (qtd > pendentePlanejado(item)) {
         novas[item.id] = { valor: '', codigo: '', automatico: false };
         return;
       }
@@ -898,7 +911,6 @@ const RequisicoesList = () => {
     if (!detalhe) return;
     setQuantidadesSeparacao(quantidadesIniciaisSeparacao(detalhe.itens));
     setMotivosSeparacao({});
-    setMotivosTrocaSeparacao({});
     setShowSeparar(true);
   };
 
@@ -926,12 +938,8 @@ const RequisicoesList = () => {
             const motivo = String(motivosSeparacao[i.id] || '').trim().slice(0, MOTIVO_DIVERGENCIA_MAX);
             return motivo ? { motivo_divergencia: motivo } : {};
           })(),
-          // Etapa 65 (RN-04): o motivo da troca só vai quando a rodada troca a planejada e foi preenchido.
-          ...(() => {
-            if (!trocaNaSeparacao(i, origensSeparacao[i.id])) return {};
-            const motivo = String(motivosTrocaSeparacao[i.id] || '').trim().slice(0, MOTIVO_SUBSTITUICAO_MAX);
-            return motivo ? { motivo_substituicao: motivo } : {};
-          })(),
+          // Etapa 196 (RN-196.04/12, B1314): a separação não grava mais troca — `motivo_substituicao` não vai (o servidor o
+          // ignoraria). O motivo da troca da Etapa 65 saiu da janela de separação; o da entrega (Etapa 63) fica.
         }))
         .filter((i) => i.quantidade_separada > 0);
 
@@ -1724,6 +1732,10 @@ const RequisicoesList = () => {
                           <div data-testid={`separado-de-${item.id}`}>
                             separado de <strong>{item.origem_separacao_codigo}</strong>
                             {item.lote_separacao_codigo ? ` — lote ${item.lote_separacao_codigo}` : ''}
+                            {/* Etapa 196 (RN-196.12): quanto da caixa saiu dali, quando o servidor guardou (dado antigo: sem). */}
+                            {item.quantidade_origem_separacao != null
+                              ? ` (${fmtQtd(pendentePlanejado(item))}${(item.unidade || item.material_unidade) ? ` ${item.unidade || item.material_unidade}` : ''})`
+                              : ''}
                           </div>
                         )}
                         <div>Entregue: <strong style={{ color: getEntregue(item) > 0 ? 'var(--gmp-success)' : 'inherit' }}>{getEntregue(item)}</strong></div>
@@ -2476,22 +2488,18 @@ const RequisicoesList = () => {
                         </div>
                       );
                     })()}
-                    {/* Etapa 65 (RN-04): a rodada troca a planejada do separado pendente — avisa e pede o porquê. */}
-                    {(parseFloat(quantidadesSeparacao[item.id]) || 0) > 0 && trocaNaSeparacao(item, origensSeparacao[item.id]) && (
-                      <div style={{ marginTop: 8 }}>
-                        <div id={`separacao-aviso-troca-${item.id}`} className="almox-hint-banner" style={{ fontSize: '0.75rem' }}>
-                          {`A origem da separação anterior (${item.origem_separacao_codigo}${item.lote_separacao_codigo ? ` — lote ${item.lote_separacao_codigo}` : ''}) deixa de valer: o que já está separado passa a sair automático na entrega.`}
+                    {/* Etapa 196 (RN-196.12): outro par (ou automático) sobre item com origem não é mais troca — a parte já
+                        separada continua saindo da origem; só avisa que esta parte sai no automático. Sem motivo. */}
+                    {(parseFloat(quantidadesSeparacao[item.id]) || 0) > 0 && trocaNaSeparacao(item, origensSeparacao[item.id]) && (() => {
+                      const un = item.unidade || item.material_unidade;
+                      return (
+                        <div style={{ marginTop: 8 }}>
+                          <div id={`separacao-aviso-origem-${item.id}`} className="almox-hint-banner" style={{ fontSize: '0.75rem' }}>
+                            {`Já separado de ${item.origem_separacao_codigo}${item.lote_separacao_codigo ? ` — lote ${item.lote_separacao_codigo}` : ''}: ${fmtQtd(pendentePlanejado(item))}${un ? ` ${un}` : ''}, que continuam saindo de lá. Esta parte sai no automático na entrega.`}
+                          </div>
                         </div>
-                        <label className="almox-label" htmlFor={`separacao-motivo-troca-${item.id}`} style={{ fontSize: '0.8rem', marginTop: 6 }}>Motivo da troca (opcional)</label>
-                        <input id={`separacao-motivo-troca-${item.id}`} className="almox-input" type="text"
-                          maxLength={MOTIVO_SUBSTITUICAO_MAX}
-                          value={motivosTrocaSeparacao[item.id] || ''}
-                          onChange={e => {
-                            const valor = e.target.value;
-                            setMotivosTrocaSeparacao(m => ({ ...m, [item.id]: valor }));
-                          }} />
-                      </div>
-                    )}
+                      );
+                    })()}
                     {/* Etapa 60 (RN-04): abaixo do máximo separável, pede o porquê — sem obrigar. */}
                     {separacaoDivergente(
                       quantidadesSeparacao[item.id],
@@ -2605,7 +2613,7 @@ const RequisicoesList = () => {
                         dica={lerValorOrigem(origensEntrega[item.id]?.valor) ? null :'Para confirmar a leitura, escolha antes de onde o item sai.'}
                       />
                       {/* Etapa 63: acima do separado pendente, sem escolha, o servidor divide a baixa. */}
-                      {temPlanejada(item) && qtdEntregar > pendenteSeparado(item) + 1e-9
+                      {temPlanejada(item) && qtdEntregar > pendentePlanejado(item) + 1e-9
                         && !origensEntrega[item.id]?.valor && !origensEntrega[item.id]?.automatico && (
                         <div id={`entrega-dica-pendente-${item.id}`} style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)', marginTop: 4 }}>
                           O separado pendente sai de {item.origem_separacao_codigo}{item.lote_separacao_codigo ? ` — lote ${item.lote_separacao_codigo}` : ''}; o restante, automático. Se lá não houver mais o separado, a entrega é recusada — escolha de onde sai.

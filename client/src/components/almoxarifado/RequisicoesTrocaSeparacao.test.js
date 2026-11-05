@@ -8,6 +8,9 @@
  *   "Sai de" (se o par exato está entre as opções); senão, automático. "Sai de" diferente da planejada
  *   pela régua da separação (mesmo endereço E mesmo lote; sem lote só casa com sem lote) → aviso + "Motivo da
  *   troca (opcional)", que vai como motivo_substituicao só quando há troca.
+ *   Etapa 196 (RN-196.12, B1314): REVOGADO na separação — outro par não é mais troca: o aviso diz que a parte já
+ *   separada continua saindo da origem e esta parte sai no automático; sem "Motivo da troca", sem motivo_substituicao.
+ *   As linhas antigas com momento SEPARACAO continuam aparecendo em "Substituições" (bloco abaixo, intacto).
  *
  * Executar: cd client && CI=true npx react-scripts test src/components/almoxarifado/RequisicoesTrocaSeparacao --watchAll=false
  */
@@ -74,7 +77,8 @@ const SALDOS = [
   { id: 5, material_id: 10, localizacao_id: 2, localizacao_codigo: 'B-02', lote_id: 8, lote: 'L-8', quantidade: 6 },
 ];
 
-const AVISO_LOTE = 'A origem da separação anterior (B-02 — lote L-7) deixa de valer: o que já está separado passa a sair automático na entrega.';
+// Etapa 196 (RN-196.12): a literal da 65 ("A origem da separação anterior … deixa de valer …") deixou de valer.
+const AVISO_LOTE = 'Já separado de B-02 — lote L-7: 5 PC, que continuam saindo de lá. Esta parte sai no automático na entrega.';
 
 let container;
 let root;
@@ -141,7 +145,7 @@ const digitar = (input, valor) => {
 
 const selectSeparacao = () => container.querySelector('#separacao-origem-1');
 const quantidadeSeparacao = () => container.querySelector('.almox-modal input.almox-count-input');
-const aviso = () => container.querySelector('#separacao-aviso-troca-1');
+const aviso = () => container.querySelector('#separacao-aviso-origem-1');
 const campoMotivo = () => container.querySelector('#separacao-motivo-troca-1');
 
 const itemEnviado = () => {
@@ -255,41 +259,42 @@ describe('Etapa 65 (CRÍTICO 2): o "Sai de" da separação parte da planejada', 
   });
 });
 
-describe('Etapa 65 (RN-04): aviso e motivo da troca na separação', () => {
-  test('trocar o "Sai de" mostra o aviso e o motivo; voltar ao mesmo par some', async () => {
+// Etapa 196 (RN-196.12, B1314): este bloco dizia "aviso e motivo da troca" — a separação não grava mais troca. O aviso ficou
+// (com a literal nova e a parte da origem; aqui sem `quantidade_origem_separacao` = dado antigo, a caixa inteira 5) e o
+// "Motivo da troca" saiu: os testes de motivo (trim, só espaços, voltar à planejada, reabrir limpa) ficaram sem objeto.
+describe('Etapa 65 → 196 (RN-196.12): aviso na separação de outro par, sem motivo', () => {
+  test('trocar o "Sai de" mostra o aviso, sem motivo; voltar ao mesmo par some', async () => {
     await abrirSeparacao(PLANEJADA);
     escolher(selectSeparacao(), '1:');
     expect(aviso()).toBeTruthy();
     expect(aviso().textContent).toBe(AVISO_LOTE);
-    expect(campoMotivo()).toBeTruthy();
-    expect(container.querySelector('label[for="separacao-motivo-troca-1"]').textContent).toBe('Motivo da troca (opcional)');
-    expect(campoMotivo().maxLength).toBe(500);
+    expect(campoMotivo()).toBeNull();
+    expect(container.querySelector('label[for="separacao-motivo-troca-1"]')).toBeNull();
 
     escolher(selectSeparacao(), '2:7');
     expect(aviso()).toBeNull();
-    expect(campoMotivo()).toBeNull();
   });
 
-  test('mesmo endereço, outro lote (planejada com lote) é troca', async () => {
+  test('mesmo endereço, outro lote (planejada com lote) avisa', async () => {
     await abrirSeparacao(PLANEJADA);
     escolher(selectSeparacao(), '2:8');
     expect(aviso()).toBeTruthy();
   });
 
-  test('"Qualquer endereço (automático)" é troca', async () => {
+  test('"Qualquer endereço (automático)" avisa', async () => {
     await abrirSeparacao(PLANEJADA);
     escolher(selectSeparacao(), '');
     expect(aviso()).toBeTruthy();
   });
 
-  test('planejada sem lote: lote do mesmo endereço É troca (aviso sem lote); a opção sem lote não', async () => {
+  test('planejada sem lote: lote do mesmo endereço avisa (aviso sem lote); a opção sem lote não', async () => {
     saldos = [...SALDOS, { id: 6, material_id: 10, localizacao_id: 2, localizacao_codigo: 'B-02', lote_id: null, lote: null, quantidade: 10 }];
     await abrirSeparacao({ ...PLANEJADA, ...SEM_LOTE });
     expect(selectSeparacao().value).toBe('2:');
     expect(aviso()).toBeNull();
     escolher(selectSeparacao(), '2:8');
     expect(aviso()).toBeTruthy();
-    expect(aviso().textContent).toBe('A origem da separação anterior (B-02) deixa de valer: o que já está separado passa a sair automático na entrega.');
+    expect(aviso().textContent).toBe('Já separado de B-02: 5 PC, que continuam saindo de lá. Esta parte sai no automático na entrega.');
     escolher(selectSeparacao(), '2:');
     expect(aviso()).toBeNull();
   });
@@ -302,43 +307,20 @@ describe('Etapa 65 (RN-04): aviso e motivo da troca na separação', () => {
     expect(aviso()).toBeNull();
   });
 
-  test('troca com motivo: vai com trim no PUT', async () => {
+  test('outro par: o PUT leva a origem escolhida e nunca motivo_substituicao', async () => {
     await abrirSeparacao(PLANEJADA);
     escolher(selectSeparacao(), '1:');
-    digitar(campoMotivo(), '  B-02 interditado  ');
     await clicar('Confirmar Separação');
-    expect(itemEnviado()).toEqual({
-      item_id: 1, quantidade_separada: 5, localizacao_origem_id: 1, motivo_substituicao: 'B-02 interditado',
-    });
+    expect(itemEnviado()).toEqual({ item_id: 1, quantidade_separada: 5, localizacao_origem_id: 1 });
   });
 
-  test('troca com motivo só de espaços: não vai a chave', async () => {
+  test('ir a outro par e voltar à planejada: o PUT leva a planejada, sem motivo', async () => {
     await abrirSeparacao(PLANEJADA);
     escolher(selectSeparacao(), '1:');
-    digitar(campoMotivo(), '   ');
-    await clicar('Confirmar Separação');
-    expect(itemEnviado()).not.toHaveProperty('motivo_substituicao');
-  });
-
-  test('motivo digitado e depois volta à planejada: não vai a chave', async () => {
-    await abrirSeparacao(PLANEJADA);
-    escolher(selectSeparacao(), '1:');
-    digitar(campoMotivo(), 'mudei de ideia');
     escolher(selectSeparacao(), '2:7');
     await clicar('Confirmar Separação');
     const item = itemEnviado();
     expect(item).toMatchObject({ localizacao_origem_id: 2, lote_id: 7 });
     expect(item).not.toHaveProperty('motivo_substituicao');
-  });
-
-  test('reabrir o modal limpa o motivo', async () => {
-    await abrirSeparacao(PLANEJADA);
-    escolher(selectSeparacao(), '1:');
-    digitar(campoMotivo(), 'esquecido');
-    await act(async () => { container.querySelector('.almox-modal-footer .btn-almox-secondary').click(); });
-    expect(selectSeparacao()).toBeNull();
-    await clicar('Ajustar Separação');
-    escolher(selectSeparacao(), '1:');
-    expect(campoMotivo().value).toBe('');
   });
 });
