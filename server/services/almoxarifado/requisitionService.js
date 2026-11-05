@@ -54,6 +54,26 @@ function pendenteSeparacao(item) {
 }
 
 /**
+ * Etapa 196 (RN-196.01/09/10): a PARTE da caixa do item que saiu da origem planejada — quem conta o comprometido do par conta
+ * esta parte, nao a caixa inteira. Sem origem: 0. Origem com quantidade: a quantidade, limitada a caixa. Origem antiga sem
+ * quantidade (NULL): a caixa inteira, como antes (RN-196.10, sem migracao).
+ */
+function parteDaOrigem(item) {
+  if (!item || !item.origem_separacao_id) return 0;
+  const caixa = Math.max(0, getSeparado(item) - getEntregue(item));
+  const q = item.quantidade_origem_separacao;
+  return Q.qtd(Math.max(0, Math.min(q === null || q === undefined ? caixa : num(q), caixa)));
+}
+
+/** Etapa 196: a mesma conta do `parteDaOrigem`, em SQL, sobre o alias do item (a caixa e a do getEntregue). */
+function parteOrigemSql(a = 'ir') {
+  const caixa = `(COALESCE(${a}.quantidade_separada, 0) - COALESCE(${a}.quantidade_entregue, ${a}.quantidade_atendida, 0))`;
+  return `(CASE WHEN ${a}.origem_separacao_id IS NULL THEN 0
+    ELSE MAX(MIN(COALESCE(${a}.quantidade_origem_separacao, ${caixa}), ${caixa}), 0) END)`;
+}
+const PARTE_ORIGEM_SQL = parteOrigemSql('ir');
+
+/**
  * `estoque` aqui é o saldo DISPONÍVEL (quantidade_atual − reservada − bloqueada −
  * em_inspecao), não mais o físico (Etapa 3, Task 3 — fecha o bypass de
  * entregarRequisicao/excluirRequisicao que baixava/estornava direto no físico sem passar
@@ -2628,6 +2648,8 @@ module.exports = {
   getSeparado,
   pendenteEntrega,
   pendenteSeparacao,
+  parteDaOrigem, // Etapa 196 (T0)
+  parteOrigemSql, // Etapa 196 (T0)
   maxSeparar,
   maxEntregar,
   entregavelPeloMotor, // Etapa 98 (T3, B509)

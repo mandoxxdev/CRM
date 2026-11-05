@@ -2890,8 +2890,12 @@ async function initSchemaUmaExecucao(db) {
   await safeAlter(db, 'ALTER TABLE itens_requisicao_almoxarifado ADD COLUMN quantidade_entregue REAL DEFAULT 0');
   // Etapa 59: a origem PLANEJADA na separacao (endereco + lote de onde o separador tirou). Nula quando
   // nao informada ou quando rodadas diferentes nomearam origens diferentes (mista -> automatico).
+  // Etapa 196: o "mista -> nula" foi revogado — a origem fica, com a quantidade dela (coluna abaixo).
   await safeAlter(db, 'ALTER TABLE itens_requisicao_almoxarifado ADD COLUMN origem_separacao_id INTEGER');
   await safeAlter(db, 'ALTER TABLE itens_requisicao_almoxarifado ADD COLUMN lote_separacao_id INTEGER');
+  // Etapa 196 (RN-196.01): QUANTO da caixa saiu da origem planejada. NULL com origem = dado antigo, vale a caixa inteira
+  // (RN-196.10, sem migracao); toda rodada nova grava a quantidade.
+  await safeAlter(db, 'ALTER TABLE itens_requisicao_almoxarifado ADD COLUMN quantidade_origem_separacao REAL');
   await dbRun(db, `UPDATE itens_requisicao_almoxarifado
     SET quantidade_entregue = quantidade_atendida
     WHERE COALESCE(quantidade_entregue, 0) = 0 AND COALESCE(quantidade_atendida, 0) > 0`);
