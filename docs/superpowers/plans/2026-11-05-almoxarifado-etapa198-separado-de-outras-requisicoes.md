@@ -231,6 +231,35 @@ mostrar o `error` do 400 sem fechar (medir em `RequisicoesList.js` antes de exec
 recusada não deixa gravação que a entrega depois leia; (d) a fronteira com a C468 não deixar uma porta posterior recusando o que a
 separação aceitou.
 
+## Fase 2 — correções do revisor fresco (2026-11-05) — **MANDAM sobre o texto acima onde divergem**
+
+Revisor fresco sobre `0affc3df`: 0 trava, 2 importantes, 5 menores, todos aceitos. Confirmado: a separação roda sob `serializarNaRequisicao` +
+`comTravaDaRequisicao` (`requisitionService.js:1307-1309`); quem grava parte/caixa (separação, entrega, devolução `:2636`, exclusão) está sob a
+trava por material; cancelar e encerrar com caixa são recusados (M1, B700); fora da trava só se diminui a parte das outras (B441, seguro). Trocar a
+Fila (`:340-348`) e o automático (`:1758-1762`) para `caixaVivaSql` é mecânico; a única mudança real é a divergência (`:1452`) deixar de contar
+caixa cancelada antiga — correção; `separacaoDivergencia.api.test.js:111` não muda.
+
+1. **[IMPORTANTE] A literal C1 se contradizia** ("O saldo (6) não cobre a quantidade (4)" quando 6 ≥ 4). **Contrato C1 passa a ser:**
+   `` `${material_nome}: em ${cod} há ${saldo} para esta separação, mas ${outras} ${plural ? 'já estão separados dali para outras requisições' : 'já está separado dali para outra requisição'} (${numeros}); sobra ${sobra}, que não cobre a quantidade (${qty}). Escolha outro endereço ou reabra a janela para ver a sugestão atual` ``
+   (`plural` = mais de um número). O `checarOrigemItem` lança **sem** o prefixo do material — quem chama já põe (`:1462`), senão o nome duplica.
+   Com `jaPedido > 0` (vários itens do mesmo par na mesma chamada), acrescentar `" (já contando ${jaPedido} desta requisição)"` depois de `${saldo}`
+   (achado 6).
+2. **[IMPORTANTE] RN-198.03 "cancelada pela rota" não se monta** (a rota recusa cancelar com caixa — M1; cancelando depois de devolver, a origem já
+   foi limpa, `:2725`). **T2:** cancelada **com caixa semeada por SQL** (`status='CANCELADO'`, `ativo=1`, origem e parte gravadas — o legado da
+   docstring de `STATUS_COM_CAIXA`); a rota de cancelar com caixa ganha só um teste de controle do 400. A citação `routes/almoxarifado.js:2196` era o
+   cancelamento de **conferência** — trocar por `:5029`.
+3. **[MENOR]** Todo cenário da C1 tem **estoque em outro endereço** (molde `duasJanelas`, XP-01 9), senão o teto do item ("não é possível separar 4…
+   Máximo: 2") bate antes e a sabotagem (i) passa verde.
+4. **[MENOR]** Controle novo (vi): `separarRequisicao` chamando `separarSemTrava` direto, sem `comTravaDaRequisicao` → a RN-198.07 (corrida) cai (as
+   duas 200, soma 8 > 6).
+5. **[MENOR]** Ordem dos números: `SELECT r.id, r.numero, SUM(parte) q … GROUP BY r.id HAVING q > folga`, ordenar por `r.id` no JS e somar `q`
+   (`GROUP_CONCAT` não garante ordem; `numero` é `NOT NULL`, `schema.js:609`).
+6. **[MENOR]** coberto no item 1 (`jaPedido`).
+7. **[MENOR]** A tela chama `PUT …/separacao` (`RequisicoesList.js:955`), não `/separar` (as duas vão a `handleSeparacao`); o 400 vira **toast com a
+   janela aberta** (`:960-970`), a sugestão só atualiza reabrindo. Fase 0: "toast, janela aberta"; a T3 usa `/separacao`.
+8. **C468** ganha a frase: "contorna a recusa da 198 (automático na separação + 'Sai de' à mão na entrega)". Seguro deixar fora: nada é baixado
+   errado; R1 entrega escolhendo outro endereço.
+
 ## Execução
 
 *(preencher por task: feita, hash, divergência do previsto)*
