@@ -1,6 +1,6 @@
 # Etapa 194 — Nota com o mesmo lote e outra validade: o recebimento avisa
 
-> **Status:** 📝 **plano escrito (2026-11-05, sobre `0a26e91c`)** — Fases 0 e 1. Falta: Fase 2 (revisor fresco), execução, Fase 5,
+> **Status:** 📝 **plano escrito (2026-11-05, sobre `0a26e91c`)** — Fases 0 e 1; **Fase 2 feita** (9 achados aplicados no bloco "Fase 2 — correções", que manda sobre o resto). Falta: execução, Fase 5,
 > fechamento. Feature **10** (lotes, séries e etiquetas). Fecha a **B1296** da 191, a **B1277** e o **C456** da 190.
 > Estimativa enviada à empresa: `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.txt`, **item 2, 3h**
 > ("Passa a avisar no recebimento, para a pessoa conferir a data antes de gravar"). **Medida desta Fase 0: cabe no limite (3h a 3h30)** —
@@ -300,6 +300,50 @@ tela ~15 linhas, três arquivos de teste. Execução T1 ~1h, T2 ~25 min (em para
 estas Fases 0/1. **Cabe nas 3h informadas no limite; o mais provável é 3h a 3h30.** O que estoura: a Fase 5 achar algo na prévia (a
 leitura fora da trava) ou a T3 de trava pedir mais de uma rodada. Se pedirem o aviso também enquanto digitam no modal Dados fiscais
 (B1303), +1h.
+
+## Fase 2 — correções do revisor fresco (2026-11-05) — **MANDAM sobre o texto acima onde divergem**
+
+Revisor fresco sobre `ce606d41`: 9 achados (1 trava, 5 importantes, 3 menores), todos aceitos. Executor: onde uma RN, contrato ou
+controle acima contradiz este bloco, vale **este bloco**. Cada item tem o nº do achado para rastrear.
+
+1. **[TRAVA] RN-194.09 e o controle (a) da T3 partiam de premissa falsa.** `naTravaDoMaterial` chamado de dentro de uma seção que já
+   segura o material **passa direto** (`travaPorMaterial.js:153`: `if (secao && secao.materiais.has(m)) return fn();`) — não há deadlock.
+   Quem prende a si mesmo é `comLockDoMaterial`/`comLockDosMateriais` direto (`:71-73`). **RN-194.09 passa a ser:** o preenchimento roda
+   dentro de `comSecaoDaNota` (o material do lote está em `materiaisDaNota`, `receiptService.js:2093`, travado em `:2120`) e não pega
+   trava; proibido é `comLockDoMaterial` direto. **Controle (a) da T3, novo:** mover o preencher para depois de `comSecaoDaNota` → um
+   `PUT /lotes/:id/validade` (191) cabe no meio e o teste cai. O controle (b) fica.
+2. **[IMPORTANTE] A régua comparava o texto cru da nota.** O `/fiscal` grava cru (`receiptService.js:1452,1463`; `' 2027-01-31 '` e
+   `31/01/2027` passam). **RN-194.01:** os dois lados passam por `dataDoItem` (`receiptService.js:1254` — apara, aceita hora e DD/MM/AAAA);
+   PREENCHER grava o ISO resultante. **RN-194.06:** `31/03/2027` vira PREENCHER `2027-03-31`; INVALIDA fica para o que `dataDoItem` não
+   reconhece e para ano fora de 2000–2100. Controle novo na T1: `' 2027-01-31 '` × `2027-01-31` = NADA (sabotar a normalização → cai).
+3. **[IMPORTANTE] Lote legado com `''`:** a prévia prometia preencher e o processar dava AVISO_FALHA (a guarda é `data_validade IS NULL`,
+   `lotService.js:173`). **RN-194.01 (2)** vale só para `null`; `''` vira a ação **`LEGADO`**, com
+   `PREVIA_LEGADO: (codigo) => \`O lote ${codigo} tem a validade em branco (cadastro antigo) e a nota não consegue preenchê-la — informe-a em Lotes e Séries → "Corrigir validade".\``.
+   No processar, `LEGADO` emite `AVISO_FALHA` sem chamar o preencher. (A 191 já trata `''` como sem validade na correção.)
+4. **[IMPORTANTE] Preencher com data já vencida bloqueia o saldo antigo calado.** **RN-194.04:** se `isVencido({ data_validade: data })`,
+   a resposta empurra também `AVISO_VENCIDO`; se `contarSeparadoPendenteDoLote > 0`, também `AVISO_SEPARACAO` (leituras; podem rodar na
+   seção). A prévia de PREENCHER ganha o fim `' Essa data já venceu: o saldo do lote fica bloqueado para consumo.'` quando vencida. Isso
+   **resolve a C459 proposta** (a nota com validade vencida passa a avisar) — não abrir a C459.
+5. **[IMPORTANTE] A etiqueta do recebimento contradiz o lote na divergência** (`client/src/utils/etiquetasPdf.js:120` lê
+   `item.data_validade_lote`). `NOTA_DIVERGENTE` (e a prévia correspondente) termina com
+   `' A etiqueta do recebimento sai com a data da nota — imprima a do lote em Lotes e Séries.'`. Limitação em D (194).
+6. **[IMPORTANTE] Estorno:** o preenchimento **fica** quando a entrada é estornada (`cancelarMovimentacao` não toca validade — mesma regra
+   da 190). Registrar na **B1301** (complemento): a data se corrige pela 191. Passo novo na T3: estornar → o lote mantém a data e a
+   auditoria `VALIDADE_PREENCHIDA` aponta o `movimento_id` estornado.
+7. **[MENOR] A prévia não simulava o laço.** A prévia percorre os itens **na ordem do laço** com um mapa local lote→validade efetiva (lote
+   novo nasce com a data da linha; PREENCHER atualiza o mapa). `ORDER BY ri.id` nos dois SELECTs (`receiptService.js:1617-1626`,
+   `:3085-3088`) — "a 1ª linha vence" passa a ter ordem definida. Cenário: lote sem validade + linhas A e B → prévia e processar dizem o
+   mesmo (PREENCHER(A) e NOTA_DIVERGENTE(A,B)).
+8. **[MENOR] Posição no laço:** o preencher vai logo depois de `entrouFisicamente = true` (`receiptService.js:1826`), antes dos rastros e
+   da QUARENTENA (material crítico que lança erro depois do motor não pode deixar o lote sem a data e a resposta sem aviso).
+9. **[MENOR] Concorrência e lote mudando entre a prévia e o Processar** — teste na T3: (i) duas `/processar` concorrentes do mesmo lote
+   inexistente (uma sem data, outra com), nas duas ordens → lote final e avisos de cada uma conferem (a decisão é refeita sob a trava);
+   (ii) prévia DIVERGENTE → Corrigir validade (191) para a data da nota → `/processar` devolve exatamente a resposta de hoje
+   (`deepStrictEqual`).
+
+**Tamanho:** os itens 2, 3, 4 e 7 somam régua e cenários; a medida vai de 3h–3h30 para **3h30–4h**. Diferença < 1 h e < 50% da
+estimativa enviada (3h): sem reestimar agora; se o realizado passar, a conclusão diz por quê (a revisão do plano achou casos que a
+estimativa não via).
 
 ## Execução
 
