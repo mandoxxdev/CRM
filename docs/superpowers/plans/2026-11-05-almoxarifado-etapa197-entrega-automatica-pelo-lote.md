@@ -329,6 +329,44 @@ fatia? (2) `listarLotesDoMaterial` conta linhas em localização bloqueada/área
 `stockService.js:356-367`); a soma bate com o que o claim tira? (3) seguir cada RN até o último gesto: entrega parcial → devolução à
 prateleira → nova separação → entrega; exclusão; devolução citando a saída; estorno pelo livro de uma SAIDA automática com lote.
 
+## Fase 2 — correções do revisor fresco (2026-11-05) — **MANDAM sobre o texto acima onde divergem**
+
+Revisor fresco sobre `7f099fae`: 1 trava, 4 importantes, 3 menores, todos aceitos. A resposta da entrega (`{success,status,parcial,entregas}`,
+`requisitionService.js:2187,2228`) não traz id de movimento: tela e PDF não mudam com N SAIDAs; só os testes que leem o livro.
+
+1. **[TRAVA] RN-197.11 quebrava um fluxo que hoje funciona.** L1 4 em XB-01 (vence antes), L2 9. R1 separa 4 de XB-01/L1 (origem guardada); R2
+   entrega 4 no automático primeiro. Hoje o automático só lê `lote_id IS NULL` (`stockService.js:467-471`) e R1 entrega com 200; com o FEFO, R2
+   tiraria L1 e R1 tomaria 400 `não serve mais` — e o livro erraria o recall nos dois sentidos. **RN-197.11 passa a ser:** o saldo FEFO de cada
+   lote **desconta a parte guardada de outras caixas**: `SUM(PARTE_ORIGEM_SQL)` dos itens com `lote_separacao_id = L`, requisição ativa em
+   `STATUS_COM_CAIXA` (a consulta de `requisitionService.js:343-348`). Dos itens **desta** entrega, desconta a parte menos
+   `plano.baixadoComOrigem` (a parte só cai no `finally`, `:2177` — senão desconta duas vezes). *Cenário:* R2 tira L2 4 e R1 entrega 200. Na
+   **B1326**, o descartado passa a ser "não descontar". O **C463** encolhe para o conflito de par (L1 em dois endereços; o claim drena XB-01
+   primeiro — `claimSaldoDoLote` resolve a localização e depois a maior linha).
+2. **[IMPORTANTE] O FEFO escolhia lote retido.** (A) criado pela própria 197: entrega automática sai L1 3 → devolução de 1 para QUARENTENA citando
+   a saída herda L1 (`returnService.js:140-141`) — ENTRADA_DEVOLUCAO em L1 + BLOQUEIO só no material (`:334-337`; `stockService.js:1677`) → R2
+   entrega 1 no automático e o FEFO escolhe a peça da quarentena. (B) recebimento com inspeção entra na linha do lote (`receiptService.js:1817`),
+   `quantidade_em_inspecao` no material. **T0.2:** saldo FEFO do lote = `saldo − SUM(ri.quantidade_em_inspecao WHERE ri.lote_id = L)`. Bloqueio e
+   terceiros não têm lote: **C466** (limitação), com teste que documenta o cenário A.
+3. **[IMPORTANTE] Reescrita faltando na tabela "contados":** `server/tests/api/lotesResumo.api.test.js:163-184` (teste 10, `E50-REAL`) afirma
+   `{fisico:70, soma_lotes:100, sem_lote_atribuido:-30}` e passa a `{70, 70, 0}` — nome novo: "a entrega pela rota baixa do lote (era o resíduo da
+   B204)". Entra na T0.5.
+4. **[IMPORTANTE] Resíduo de ponto flutuante vira fatia zero e derruba a entrega no meio** (`listarLotesDoMaterial` filtra `saldo > 0`,
+   `lotService.js:549`). **Contrato do `dividirPorLotes`:** entrada filtrada por `elegivel && saldo > Q.QTD_FOLGA`; cada fatia =
+   `Q.qtd(min(resto, saldo))`, descartada se `<= Q.QTD_FOLGA`; `resto = Q.qtd(q − Σfatias)`. Teste puro: lote com 3e-7 → zero fatias.
+5. **[IMPORTANTE] Data fixa estoura em 6 dias também em** `filaSugestaoColeta.api.test.js:133` e `filaSugestaoColetaIntegracao.api.test.js:117,129,179`
+   (gravam `2026-11-10` e leem a fila real; em 11/11 caem `:136`/`:129` e `:185`). `sugestaoDeColeta.api.test.js` está a salvo (injeta `HOJE`). **T1:**
+   datas relativas (+5 e +45 dias), cada lugar nominado. Sai do "O que não cobre".
+6. **[MENOR]** Material com lote e negativo permitido: a fatia cai no `else` (`stockService.js:2248-2253`), grava −q em (padrão, L) e não drena XB-01
+   (total do lote certo, mapa por endereço não). Um teste + frase na **B1324** ("com negativo permitido, a fatia não drena o endereço — o motor de hoje").
+7. **[MENOR]** `listarSaidasElegiveis` tem `LIMIT 30` (`returnService.js:524`): com N saídas por entrega as antigas somem antes da lista de
+   devolução — registrar no **C465** e no guia. A parte `resto` sem lote continua dando 400 na devolução citada — dizer no **C464**.
+8. **[MENOR]** Fechamento: o manual muda em `docs/almoxarifado-manual-do-sistema.md:395`, `:712`, `:726` ("não escolhe lote", "linha sem lote",
+   "posição ocupada").
+
+**Tamanho:** a T0 sobe ~25 min → ~5h40 (estimado enviado: 4h a 5h). Diferença < 1 h do teto: sem reestimar agora; se o realizado passar de 5h, a
+conclusão diz por quê. Corte disponível se preciso: a T1 (só texto) vira etapa própria — **mas o achado 5 (data fixa) não pode ser cortado**: sem
+ele, três arquivos de teste ficam vermelhos em 11/11.
+
 ## Execução
 
 - [ ] Plano — este commit.
