@@ -501,7 +501,7 @@ não commitado. Esta etapa usa **B1290–B1299**.)*
   status='PENDENTE'`, `usuario_id` null; na tela, sem o fallback do `formatData` — cada um derruba o seu cenário.
   Placares no fim da Fase 5: `corrigirValidadeLote` **23** cenários e `corrigirValidadeLoteIntegracao` **8** (contados nos arquivos; verdes
   na Fase 5), `test:api` **579/579** arquivos; tela **209 suítes / 2882 testes**; `CI=true react-scripts build` ok.
-  Suítes almoxarifado/validation/safealter/sqlite: ver fechamento.
+  Suítes medidas depois do fix-round (sobre `c64fb881`): test:almoxarifado 44/0, test:validation 4/0, test:safealter 3/0, test:sqlite 16/0.
 - [x] **Fechamento** — commit "Etapa 191: fechamento - novidades, specs, mapa, guia, manual e planos": novidades (seção da 191, B1289–B1299,
   C455 resolvido, C456 atualizado, C458 novo, D (191), F (191), as literais da 190 anotadas com a frase nova), spec 10 (linha no topo,
   seção com checklist e hashes; a nota da 190 que dizia "candidato à 192" **estava errada** — 192/193 são do Compras — corrigida à vista),
