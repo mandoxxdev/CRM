@@ -1,13 +1,19 @@
 # Almoxarifado — pausa de 2026-10-23 e como retomar
 
 > **✅ RETOMADO em 2026-11-05 — este arquivo agora é histórico.** O André retomou o módulo em 05/11 (estimativa
-> `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md`). A **Etapa 191 fechou** em 05/11 (Fase 2 `018f8a35`, T1
+> `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md`). **Depois: a Etapa 194 fechou** em 05/11 (plano `ce606d41`,
+> Fase 2 `e6308090`, T1 `32ff286a`, T2 `e8803937`, T3 `57bdb6b2`, Fase 5 `77102677`, e o commit "Etapa 194: fechamento") — o recebimento
+> avisa a outra validade e preenche o lote sem validade. Letra **B** usada até **B1308** (B1300–B1308 pela 194), letra **C** até **C460**
+> (C459 sem uso), letra **A** a partir de **A111**. **Próxima:** item 3 da estimativa — a separação deixa de perder as quantidades
+> digitadas (C454, + C452); detalhada no fim de
+> `docs/superpowers/plans/2026-11-05-almoxarifado-etapa194-validade-do-lote-no-recebimento.md`.
+> *(Antes: a **Etapa 191 fechou** em 05/11 (Fase 2 `018f8a35`, T1
 > `4fcf13b4`, T2 `140dbb77`, T3 `3b43a0a1`, T4 `d5f3376a`, Fase 5 `699e87c3` + `c64fb881`, e o commit "Etapa 191: fechamento").
 > Os números da seção 5 andaram: letra **B** usada até **B1299** (B1289–B1299 pela 191; B1283–B1288 continuam soltos), letra **C** até
 > **C458**, letra **A** a partir de **A111** (a 191 não usou). **Próxima:** Etapa 194 (192 e 193 foram do Compras) — a nota com o mesmo lote
 > e outra validade passa a avisar no recebimento; detalhada no fim de
 > `docs/superpowers/plans/2026-10-23-almoxarifado-etapa191-corrigir-validade-de-lote.md`. Onde o módulo está: o cabeçalho de
-> `docs/almoxarifado-guia-etapas-e-testes.md`.
+> `docs/almoxarifado-guia-etapas-e-testes.md`.)*
 
 > **Leia isto primeiro** se você é a sessão que vai continuar o módulo almoxarifado.
 > O desenvolvimento foi **pausado a pedido do André em 2026-10-23**, para começar outro

@@ -1,6 +1,9 @@
 # Etapa 194 — Nota com o mesmo lote e outra validade: o recebimento avisa
 
-> **Status:** 📝 **plano escrito (2026-11-05, sobre `0a26e91c`)** — Fases 0 e 1; **Fase 2 feita** (9 achados aplicados no bloco "Fase 2 — correções", que manda sobre o resto). Falta: execução, Fase 5,
+> **Status:** ✅ **FECHADA em 2026-11-05** — plano `ce606d41`, Fase 2 `e6308090`, T1 `32ff286a`, T2 `e8803937`, T3 `57bdb6b2`,
+> Fase 5 `77102677`, fechamento (novidades, specs, mapa, guia, manual e este plano) no commit "Etapa 194: fechamento". Ver "Execução" e
+> "Próxima tarefa detalhada" no fim. Letra B usada: **B1300–B1308** (a B1308 nasceu na Fase 5); letra C: **C460** (a C459 não foi aberta).
+> Histórico: 📝 **plano escrito (2026-11-05, sobre `0a26e91c`)** — Fases 0 e 1; **Fase 2 feita** (9 achados aplicados no bloco "Fase 2 — correções", que manda sobre o resto). Falta: execução, Fase 5,
 > fechamento. Feature **10** (lotes, séries e etiquetas). Fecha a **B1296** da 191, a **B1277** e o **C456** da 190.
 > Estimativa enviada à empresa: `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.txt`, **item 2, 3h**
 > ("Passa a avisar no recebimento, para a pessoa conferir a data antes de gravar"). **Medida desta Fase 0: cabe no limite (3h a 3h30)** —
@@ -352,9 +355,100 @@ estimativa não via).
 - [x] T2 — `e8803937`. RecebimentosValidadeLote 4 cenários ((iv) verde antes, esperado: ausência do campo); filtro Recebimento 6 suítes / 62; tela inteira 210 / 2886; build ok. Controles (a) `autoClose` padrão → (iii); (b) só o 1º aviso → (i) e (ii); (c) `res.data.avisos` → (iii). Divergência: o botão do modal é **Confirmar** (`confirmar-processar`), não "Processar".
 - [x] T3 — `57bdb6b2`. validadeLoteRecebimentoIntegracao 7/7 (fiscal → prévia → corrige → Processar; /workflow + estorno mantém a data, achado 6; /aprovar direto; a trava contra o Corrigir validade da 191; duas /processar concorrentes nas duas ordens; prévia → correção → resposta de hoje com `deepStrictEqual`). Controles (a) preencher fora da seção → cai o 4 (409 no meio); (b) `materiaisDaNota` sem o material → caem o 4 e os de concorrência; (c) `/aprovar` sem `avisos_validade` → cai o 3; (d) GET sem prévia → caem os 4 que leem a prévia. Defeito de produção: nenhum. Divergências: nota criada no banco (validade pelo `/fiscal`); a correção da 191 roda com ADMIN.
 - [x] Fase 4 — sobre `57bdb6b2`: test:api 581/581, almoxarifado 44/0, validation 4/0, safealter 3/0, sqlite 16/0; tela 210 / 2886 e build ok na T2.
-- [ ] Fase 5 — revisores frescos (RN, trava, "o teste passaria com a feature quebrada?").
-- [ ] T4 — fechamento.
+- [x] Fase 5 — `77102677`. Dois revisores frescos em paralelo (RN e trava; "o teste passaria com a feature quebrada?"), por execução.
+  Seis achados reais, ruído 0:
+  - **G1** (importante, B1308): o lote **novo** nascido no recebimento gravava a validade crua (`criarOuObterLote` faz `data_validade ||
+    null`): nota com lote novo e `'15/12/2030'` → prévia `[]`, processar 200 sem aviso, o lote ficava `'15/12/2030'` e a saída recusava
+    *"Lote LZ vencido em 15/12/2030"* (a `isVencido` compara texto); `'lixo'` nascia sem aviso. Agora `validadeDoLoteNovo`
+    (`receiptService.js`): ISO por `lotService.dataDoTextoDoItem` quando `validarDataValidade` aceita, senão `null` — e a régua dá
+    `NOTA_INVALIDA`. A prévia simula igual. **Só o recebimento normaliza** — descartado mexer em `criarOuObterLote` (outros chamadores; a
+    Entrada da 190 já valida antes). O comentário da régua em `lotService.js` dizia "o lote novo nasce com o texto da nota" — certo sobre o
+    código, **errado como regra**; reescrito dizendo que mudou.
+  - **G3** (fechado pelo G1): lote nascido nesta nota com `'   '` ficava `''` e a 2ª linha tomava o `LEGADO` falso; agora nasce `null` e a 2ª
+    linha preenche.
+  - **G4** (menor, B1304): lote 31/03/2027 + duas linhas com 30/06/2027 → duas strings idênticas em `avisos_validade` e dois toasts fixos
+    iguais. `darEntradaEstoque` devolve sem repetição, na ordem da 1ª ocorrência; a prévia continua por item. Descartado: deduplicar na tela.
+  - **G2** (teste, achado 8 da Fase 2): material crítico com a QUARENTENA forçada a lançar (trigger) e o 1º rastro lançando → processar
+    rejeita, mas o lote já tem a validade e a auditoria. Mover o preencher para depois dos rastros/quarentena agora cai.
+  - **G5** (testes): validade = hoje num lote sem validade (só `AVISO_PREENCHIDA`, prévia sem "já venceu" — `<=` na `isVencido` cai);
+    `{ preenchida: false }` → `AVISO_FALHA` (`!r` sozinho cai); mesmo código de lote em dois materiais → prévia `[[], []]` (chave sem
+    material cai).
+  - **G6** (declarado, **não consertado** → D (194)): se **outro** item da mesma nota falha no motor (ex.: item 2 com série já em estoque), o
+    `throw` descarta a lista de avisos; o lote do item 1 já foi preenchido (e auditado) e o reprocessar responde sem aviso. Reproduzido por
+    sonda. Consertar pede devolver os avisos junto do erro (contrato de erro novo nas três portas) — fora do tamanho.
+  Controles positivos: 8 sabotagens por perl, âncora única, md5 restaurado; cada uma derruba o teste novo correspondente.
+  Placares finais: `test:api` **581/581** arquivos (sobre `77102677`); `validadeLoteRecebimento` 28/0, `validadeLoteRecebimentoIntegracao`
+  7/0, `validadeLoteEntradaManual` 26/0; `test:almoxarifado` 44/0, `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 16/0 (sobre
+  `57bdb6b2` — a Fase 5 só mexeu no recebimento e nos testes dele); tela 210 suítes / 2886 testes e build ok (T2 — a Fase 5 não tocou a
+  tela).
+- [x] T4 — fechamento: commit "Etapa 194: fechamento - novidades, specs, mapa, guia, manual e planos": novidades (cabeçalho, seção da 194
+  com Antes → Agora e 6 cenários clicáveis com as literais lidas de `lotService.MSG_VALIDADE` e de `RecebimentosAlmoxarifado.js`; B1300 a
+  B1307 do plano reescritas pelo que o código faz — a B1306 mudou pela Fase 2 (achado 2) e pela Fase 5 —, e a **B1308** nova do G1; B1277 e
+  B1296 anotadas; **C456** resolvido; **C460** novo; a C459 proposta **não** foi aberta (resolvida pela Fase 2, achado 4 — o número fica
+  sem uso, dito no C460); D (194) com o G6; F (194)), spec 10 (linha no topo, seção com checklist e hashes, a correção à vista do "nasce
+  com o texto"), mapa, guia (cabeçalho e seção com roteiro de 7 passos), manual (4.3d nova "A validade da nota no Recebimento"; 4.1, 4.3c e
+  14.5 reescritos onde diziam que o recebimento não avisava), este plano, o plano da 191 (o "defeito que escapou" da retro) e o cabeçalho
+  do plano da pausa. Verificação final e estimado × gasto: fora deste commit (feitos por quem fecha a etapa).
+
+**Divergências do plano, em resumo:** (1) a régua lê a nota por `dataDoTextoDoItem` (Fase 2, achado 2) — a RN-194.06 do texto acima
+("`31/03/2027` → INVALIDA") **não vale**: `DD/MM/AAAA` vira data; (2) ação `LEGADO` nova (achado 3), que devolve `{ acao, data }`;
+(3) os fins de frase de vencida e de etiqueta nos literais (achados 4 e 5) e a C459 resolvida antes do código; (4) o botão do modal é
+**Confirmar**, não "Processar" (T2); (5) o controle (a) da trava da T3 trocado (achado 1 — `naTravaDoMaterial` passa direto); (6) a
+"D (194) — lote novo com data inválida nasce com o texto" do plano **caiu** na Fase 5 (G1, B1308); (7) os avisos saem sem repetição (G4),
+o contrato dizia "um por item no máximo"; (8) `/workflow processar` só sai de `EM_ENTRADA_NF` (T1).
+
+**Retro (4 números):** rodadas de correção até verde: **1** (o fix-round da Fase 5); achados reais da Fase 5: **6** (G1–G5 consertados +
+G6 declarado), ruído **0**; paralelismo: T1 e T2 em paralelo, T3 com os dois revisores em paralelo, **sem retrabalho**; defeito que escapou
+da 191: **nenhum conhecido** (anotado também na retro da 191).
 
 ## Próxima tarefa detalhada
 
-*(a preencher no fechamento — candidata: item 3 da estimativa de 05/11, "Separação: as quantidades digitadas não se perdem", C454.)*
+**"Separação: as quantidades digitadas não se perdem"** — item 3 da fila da estimativa
+`docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md` (ajuste de tela, **1h** informado: análise 15 min, execução
+30 min, teste 15 min). Fecha o **C454** (novidades, da revisão adversarial da 189) e leva junto o **C452** (código morto na mesma tela).
+Só tela: `client/src/components/almoxarifado/RequisicoesList.js`; nenhum contrato de API muda, nenhum servidor.
+
+**O que acontece hoje (medido em 2026-11-05, sobre `77102677`, sem consertar):**
+- **O recarregamento ao voltar para a aba:** `useEffect` em `RequisicoesList.js:762-776` — com `warehouseMode && selectedId`, registra
+  `refetchDetalhe` em `window` `focus` **e** em `document` `visibilitychange`; se `document.visibilityState === 'visible'`, chama
+  `abrirDetalhe(selectedIdRef.current, { force: true })`. Não olha se há janela aberta.
+- **Onde as quantidades são zeradas:** `abrirDetalhe` (`:715-754`) → `aplicarDetalhe(res.data, id)` (`:678-684`), que faz **sempre**
+  `setDetalhe(data)`, `setQuantidadesEntrega(quantidadesIniciaisEntrega(data.itens))` e
+  `setQuantidadesSeparacao(quantidadesIniciaisSeparacao(data.itens))` (`quantidadesIniciaisSeparacao` em `:277`). É a causa do C454:
+  com `showSeparar` aberto, o foco volta, o detalhe é relido e o estado da janela (`quantidadesSeparacao`, `:380`) volta ao inicial
+  (digitado 3 → 5, medido na 189). A janela de entrega usa o mesmo caminho (`quantidadesEntrega`, `:363`) — o C454 diz "não medido".
+- **Por que a origem não se perde:** `origensSeparacao` (`:379`) não é tocado por `aplicarDetalhe`; os efeitos da pré-seleção (`:521-533`,
+  `:571-600`) só preenchem item **sem** chave em `origensSeparacao` (`hasOwnProperty`, RN-189.05). As quantidades não têm essa guarda.
+- **Outros que zeram as quantidades (de propósito):** `abrirModalSeparacao` (`:871-877`, ao abrir a janela), `abrirModalEntrega`
+  (`:1050-1062`) e `handleConfirmarEntrega` (`:1064-…`). Esses ficam.
+- **C452, o código morto:** `handleCompletarEntrega` (`:1096-1109`) tem o ramo `precisaSeparar` → `setEntregaAposSeparar(true)` +
+  `abrirModalSeparacao()`; e `handleSeparacao` (`:916-920`) lê `entregaAposSeparar` para abrir a entrega depois de separar (também
+  `:933`, no erro). O botão **Completar Entrega** (`:2104-2108`) só renderiza com `podeEntregar = temPendenteComEstoque(detalhe.itens)`
+  (`:2096`), e `temPendenteComEstoque` = `temEntregavel` (`:120-122`) — a mesma condição do primeiro `if` de `handleCompletarEntrega`.
+  Logo o ramo de separar nunca roda, e o estado `entregaAposSeparar` (`:392`) é sempre `false`.
+
+**Caminho provável (a confirmar na Fase 0/2):**
+- Em `aplicarDetalhe`, preservar as quantidades **já digitadas** quando a janela correspondente está aberta e o detalhe é o mesmo id
+  (refetch do mesmo detalhe): só repor o inicial para itens que não estão no estado (ou que mudaram de forma — ex.: item novo/sumido, ou o
+  máximo separável caiu abaixo do digitado; decidir se limita ao novo teto ou mantém e deixa a validação de hoje recusar). Alternativa a
+  pesar: o `refetchDetalhe` não recarregar com janela aberta — **descartável**, porque o recarregamento existe para mostrar o que outra
+  pessoa mudou e as guardas de teto (`maxSeparavelNaTela`, `:898`) dependem do detalhe fresco.
+- `aplicarDetalhe` é `useCallback([])` — ler `showSeparar`/`showEntregar` por ref (como `selectedIdRef`), ou mover a decisão para quem
+  chama; não aumentar as dependências sem medir (o efeito do listener depende de `abrirDetalhe`, que depende de `aplicarDetalhe`).
+- C452: remover o ramo `precisaSeparar`, o estado `entregaAposSeparar` e as leituras em `handleSeparacao` (`:916-920`, `:933`), deixando o
+  `else` com o `toast.error('Aguardando reposição de estoque para itens pendentes.')` se ainda for alcançável (medir: com o botão gated por
+  `temEntregavel`, o `else` também é inalcançável pela tela). Atualizar o C452 dizendo que o código foi removido, não "consertado".
+
+**Pontos de atenção:**
+- **Molde de teste que já dispara o foco:** `RequisicoesSeparacaoPreSelecao.test.js:371`, `:423`, `:442`
+  (`window.dispatchEvent(new Event('focus'))` dentro de `act`) — o teste novo digita uma quantidade, dispara o foco (e o
+  `visibilitychange`), espera o GET do detalhe e confere que o campo manteve o digitado; metade positiva: o detalhe fresco **foi** aplicado
+  (ex.: um campo que o servidor mudou aparece). Controle positivo: voltar `aplicarDetalhe` a repor sempre → cai.
+- **Entrega também:** decidir se a mesma guarda vale para `quantidadesEntrega` (o C454 diz "não medido") — medir primeiro com o mesmo teste.
+- Telas e regras da 189 (pré-seleção, `origensSeparacao`) e da 135 (dividido entre irmãos, `quantidadesIniciais*`) não podem mudar: rodar
+  as suítes `RequisicoesSeparacao*`, `RequisicoesEntrega*`, `RequisicoesPreSelecaoFluxo`, `RequisicoesSeparavelDividido`,
+  `RequisicoesEntregavelDividido` e `RequisicoesList.test.js`.
+- **Fatia visível:** a própria correção é visível (a quantidade digitada fica); para o relatório, o roteiro "digite 3, troque de aba, volte".
+
+**O que já está pronto e não precisa reabrir:** o servidor da separação e da entrega (trava por requisição e por material, Etapas 93/95);
+a pré-seleção do **Sai de** (189) e a guarda dela contra o recarregamento; os tetos da tela (`maxSeparavelNaTela`).

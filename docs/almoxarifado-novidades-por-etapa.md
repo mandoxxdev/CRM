@@ -11,15 +11,23 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-05):** **Etapa 191 fechada** (**corrigir a validade de um lote que já tem saldo** — em **Lotes e
+> **Onde o desenvolvimento está (2026-11-05):** **Etapa 194 fechada** (**a nota com o mesmo lote e outra validade: o recebimento avisa** —
+> no **Processar nota fiscal**, embaixo de cada material, um aviso amarelo diz antes de gravar quando a validade da nota não bate com a do
+> lote que já existe, quando ela vai preencher um lote sem validade, quando não é uma data válida ou quando a mesma nota traz o lote com duas
+> datas; ao confirmar, a nota **entra sempre**, o lote **mantém** a validade que tinha (com aviso que não some sozinho, apontando
+> **Corrigir validade**), o lote sem validade **é preenchido** pela nota, e o lote novo nasce com a data da nota como data (ou sem validade,
+> com aviso, se ela não é uma data); **C456** e **B1296** resolvidos; nada a rodar antes do deploy; decisões **B1300** a **B1308**; aviso
+> **C460** (lote antigo com a validade em branco recusa a Entrada manual com a data — anterior); limitações **D (194)**; verificação
+> **F (194)**; revisão adversarial feita e corrigida). **Próxima: a separação deixa de perder as quantidades digitadas** ao voltar para a
+> aba (**C454**, com o código morto do **C452**); detalhada no fim do plano da 194.
+> *(Também em 2026-11-05: **Etapa 191 fechada** (**corrigir a validade de um lote que já tem saldo** — em **Lotes e
 > Séries**, quem tem o perfil de inspeção (Administrador, Almoxarife, Qualidade) vê o botão **Corrigir validade** em cada lote; informa a
 > data certa e o motivo; o sistema grava, registra na auditoria *Validade corrigida* com a data antiga, a nova e o motivo, e tudo o que
 > depende da validade (saída barrada, ordem "o que vence primeiro sai primeiro", dica de coleta, e-mail *Lote vencendo*) passa a usar a data
 > nova na hora; a liberação de vencimento que o lote tinha cai; a resposta avisa se o lote ficou vencido, se há itens separados dele esperando
 > entrega e que as etiquetas impressas mostram a data antiga; **C455** resolvido; nada a rodar antes do deploy; decisões **B1289** a
 > **B1299**; aviso **C458** (a movimentação antiga pela integração sai sem lote — anterior); limitações **D (191)**; verificação **F (191)**;
-> revisão adversarial feita e corrigida). **Próxima: Etapa 194** (192 e 193 foram do Compras) — a nota com o mesmo lote e outra validade
-> passa a **avisar** no recebimento (**B1296**, **C456**); detalhada no fim do plano da 191.
+> revisão adversarial feita e corrigida); a próxima era a **194**.)*
 > **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05 — o histórico da pausa está em
 > docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
 > *(Também em 2026-10-23: **Etapa 190 fechada** (**a Entrada manual grava a validade do lote** — em **Movimentações →
@@ -4364,7 +4372,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -13277,7 +13285,7 @@ a data). **Descartado:** caber aqui (dobra a etapa e mistura correção com cada
 mantendo a da primeira, calada; lote nascido sem validade pela Entrada e depois recebido com validade continua sem (**C456**). Fixado por
 teste para uma etapa futura mudar de propósito, com a mesma regra de preenchimento (o plano da 191, escrito depois, deixa o recebimento
 de fora — B1296 dele — e o aponta para a 192; esta frase dizia "a 191" até o fechamento). **Descartado:** mexer no recebimento nesta etapa (porta de saldo
-com trava e conferência próprias). **Reversível.** `267d668e`.
+com trava e conferência próprias). **Reversível.** `267d668e`. *(**Mudada de propósito na Etapa 194** (`32ff286a`): o recebimento passa a preencher o lote sem validade e a avisar a outra validade — **B1300**, **B1301**; o teste que fixava o comportamento antigo foi renomeado para `[B1277 → RN-194.04]` e espera a data gravada.)*
 
 **B1278 (NOVA, da Etapa 190; decisão do agente) — fora: "Controle de validade" obrigatório e data de fabricação na Entrada.** A opção do
 material continua só de cadastro (ligar não obriga validade); a fabricação não decide nada no sistema. **Reversível.**
@@ -13367,7 +13375,7 @@ primeira, calada; lote sem validade recebido com validade continua sem (**B1277*
 verde). O resultado dos dois agora tem conserto (**Corrigir validade**). Mudar a porta do recebimento é decidir o que fazer com um
 documento fiscal que contradiz o lote (recusar travaria o processamento da nota; avisar exige canal de aviso no processamento) — outro
 tamanho de revisão. **Descartado:** caber aqui (dobra a etapa e mistura correção manual com regra de entrada fiscal). **Candidata à Etapa
-194** (192 e 193 foram do Compras), já estimada como **avisar**, não recusar. **Reversível.**
+194** (192 e 193 foram do Compras), já estimada como **avisar**, não recusar. **Reversível.** *(**Resolvida na Etapa 194** (`32ff286a`, `e8803937`, `57bdb6b2`, Fase 5 `77102677`) — o recebimento avisa a outra validade e preenche o lote sem validade; ver **B1300** a **B1308**.)*
 
 **B1297 (NOVA, da Etapa 191; decisão do agente) — o e-mail "Lote vencendo" ainda na fila com a data antiga é retirado.** A varredura só
 enfileira e o envio não relê o lote: um aviso com a data errada que já estava na fila sairia depois da correção. Agora a correção gera
@@ -13392,6 +13400,82 @@ adversarial:** a validade gravada fora do formato (ex.: *31/03/2027*, vinda do r
 janela — justamente no lote que precisa da correção; agora aparece o texto como está gravado. **Descartado:** mostrar o botão sempre (um
 perfil de consulta veria um botão que só serve para tomar a recusa); interpretar *DD/MM/AAAA* (adivinhar a data é o que a correção existe
 para evitar). **Reversível.** `3b43a0a1`, `c64fb881`.
+
+**B1300 (NOVA, da Etapa 194; decisão do agente) — a nota com outra validade avisa, nunca é recusada.** A nota fiscal é um documento que
+entra de qualquer jeito; recusar por validade divergente travaria o processamento inteiro (estoque, conta a pagar, pedido, reserva de quem
+espera) por um dado que a Qualidade decide depois. A estimativa enviada prometeu aviso. O lote **mantém** a validade que tinha, a nota
+entra, e a resposta avisa *"O lote ⟨L⟩ já tinha validade DD/MM/AAAA; a nota informou DD/MM/AAAA. A validade do lote foi mantida — se a da
+nota é a certa, corrija-a em Lotes e Séries → "Corrigir validade". A etiqueta do recebimento sai com a data da nota — imprima a do lote em
+Lotes e Séries."* (o fim da etiqueta entrou na revisão do plano: a etiqueta do recebimento lê a data da nota, não a do lote — ver D (194)).
+**Descartado:** recusar como a Entrada manual recusa (lá o operador digita a data e pode apagá-la; aqui a data é da nota); recusar com um
+"forçar". **Reversível:** virar recusa é trocar o aviso por um erro. `32ff286a`.
+
+**B1301 (NOVA, da Etapa 194; decisão do agente) — o lote sem validade é preenchido pela nota.** A mesma regra da Entrada manual da 190 — a
+**B1277** já dizia "com a mesma regra de preenchimento". A nota é a melhor fonte que existe para a data; deixar o lote sem validade com a
+data na mão era o **C456**. Com o aviso *"O lote ⟨L⟩ não tinha validade; ela foi gravada agora (DD/MM/AAAA) e vale também para o saldo que
+já estava nele."* e a auditoria *Validade preenchida*, que aponta o lançamento da entrada. O preenchimento roda **depois** de a entrada
+valer e **antes** dos passos seguintes do item (rastros, quarentena) — uma falha depois dele não deixa o lote sem a data; e nunca derruba a
+nota: se não gravar, *"A entrada foi registrada, mas a validade do lote ⟨L⟩ não pôde ser gravada (DD/MM/AAAA). Não repita a entrada;
+corrija a validade em Lotes e Séries → "Corrigir validade"."* **Complementos da revisão do plano:** (1) a data já vencida avisa também
+*"O lote ⟨L⟩ entrou já vencido (validade DD/MM/AAAA). A saída para consumo fica bloqueada até liberar o vencimento na tela de Lotes e
+Séries."* e, se há itens separados do lote esperando entrega, o aviso de quantos (o saldo antigo era bloqueado calado — e por isso a C459
+que o plano propunha, "a nota com validade vencida não avisa", **não foi aberta**: foi resolvida antes do código); (2) o lote antigo gravado
+com a validade **em branco** (texto vazio, não ausente) não é preenchido — a prévia diz *"O lote ⟨L⟩ tem a validade em branco (cadastro
+antigo) e a nota não consegue preenchê-la — informe-a em Lotes e Séries → "Corrigir validade"."* e o processar dá o aviso de falha acima
+(prometer preencher e não preencher era o defeito); (3) **o estorno da entrada não desfaz o preenchimento** — a validade é do lote físico,
+como na 190; se estava errada, **Corrigir validade**. **Descartado:** só avisar (obrigaria a Qualidade a redigitar uma data que o sistema já
+tem). **Reversível:** tirar o ramo de preenchimento; o que já foi gravado tem a correção da 191. `32ff286a`, `57bdb6b2`.
+
+**B1302 (NOVA, da Etapa 194; decisão do agente) — lote vazio com outra validade: só avisa, não troca.** A Entrada manual da 190 troca a
+data de um lote vazio. No recebimento, decidir "vazio" exigiria uma leitura antes da entrada e uma troca depois — mais um ramo para um caso
+raro (lote de nota estornada) que a correção da 191 resolve com um clique. **Descartado:** trocar como a 190. **Reversível:** um ramo a
+mais na régua. `32ff286a`.
+
+**B1303 (NOVA, da Etapa 194; decisão do agente) — o aviso sai antes de gravar, no Processar nota fiscal.** "Conferir antes de gravar" pede o
+aviso **antes** do clique: o detalhe do recebimento já é relido depois de salvar os dados fiscais, e a janela **Processar nota fiscal** é o
+último gesto antes de gravar. Cada material mostra embaixo, em amarelo, o que vai acontecer com o lote; o **Confirmar** continua habilitado
+(é aviso, não trava). A prévia é do momento da leitura; a decisão de verdade é refeita na hora de gravar, dentro da fila do material, e por
+isso a resposta do processar é a que vale (duas notas do mesmo lote processadas ao mesmo tempo, ou uma correção no meio, mudam a resposta,
+não a prévia). **Descartado:** avisar só depois de processar (não cumpre "antes de gravar"); uma rota nova de prévia (mais contrato para o
+mesmo dado); conferir enquanto se digita a data na janela dos dados fiscais (consulta por tecla, ~+1h — candidata se pedirem); e-mail à
+Qualidade ou não conformidade automática (outro dono, outro tamanho). **Reversível:** o campo é aditivo. `32ff286a`, `e8803937`.
+
+**B1304 (NOVA, da Etapa 194; decisão do agente) — os avisos aparecem na resposta só quando existem.** Três suítes (e qualquer integração)
+comparam a resposta inteira do processar; sem aviso ela continua **idêntica** à de antes. Na tela, cada aviso vira um balão amarelo que
+**não fecha sozinho**, depois da confirmação verde. **Descartado:** o campo sempre presente, vazio (mudaria o contrato de quem compara a
+resposta). Na prévia o campo está sempre presente (nenhum leitor compara o item inteiro). **Complemento da revisão adversarial:** com o lote
+em *31/03/2027* e duas linhas da nota em *30/06/2027*, a resposta trazia **duas** frases idênticas e a tela abria dois balões iguais; agora
+os avisos repetidos saem uma vez só, na ordem da primeira ocorrência (a prévia continua por linha). **Descartado:** tirar a repetição na tela
+(o contrato é do servidor, e as três portas do processar recebem a mesma lista). **Reversível.** `32ff286a`, `77102677`.
+
+**B1305 (NOVA, da Etapa 194; decisão do agente) — a divergência não ganha linha na auditoria.** A data da nota fica guardada no item do
+recebimento e a do lote no lote: a divergência é reconstituível. **Descartado:** uma ação de auditoria própria (rótulo novo, filtro,
+manual — custo sem leitor hoje). **Reversível.** `32ff286a`.
+
+**B1306 (NOVA, da Etapa 194; decisão do agente) — a data da nota que não é data não preenche.** Antes de comparar, a data da nota é lida
+pela mesma régua do eco dos dados fiscais: espaços nas pontas, hora junto (*2027-03-31 00:00:00*) e *DD/MM/AAAA* viram a data; o que sobra
+e não é data, ou tem o ano fora de 2000–2100, não preenche o lote e avisa *"A validade da nota para o lote ⟨L⟩ (⟨o texto da nota⟩) não é uma
+data válida; o lote continua sem validade — informe-a em Lotes e Séries → "Corrigir validade"."* *(O plano dizia que *31/03/2027* era
+inválida e que o lote novo nasceria com o texto da nota; **as duas coisas mudaram**: a revisão do plano mandou ler *DD/MM/AAAA* como data —
+senão a mesma data escrita de dois jeitos virava "divergência" falsa —, e o lote novo passou a nascer normalizado na revisão adversarial,
+**B1308**.)* **Descartado:** recusar a nota pela data (B1300). **Reversível.** `32ff286a`.
+
+**B1307 (NOVA, da Etapa 194; decisão do agente) — duas linhas do mesmo lote com datas diferentes: avisa antes, a primeira linha vence.** As
+linhas entram na ordem em que foram lançadas na nota; a primeira cria (ou preenche) o lote com a data dela e a segunda cai na divergência.
+A prévia avisa as duas linhas: *"Esta nota traz o lote ⟨L⟩ com validades diferentes (DD/MM/AAAA, DD/MM/AAAA). O lote fica com uma só —
+confira as datas em Dados fiscais antes de processar."* — e a segunda leva também o aviso de divergência, o mesmo que o processar dará.
+**Descartado:** recusar a nota (B1300); escolher a data que vence primeiro (o sistema decidiria pela Qualidade). **Reversível.**
+`32ff286a`.
+
+**B1308 (NOVA, da Etapa 194, revisão adversarial; decisão do agente) — o lote que nasce no recebimento nasce com a data da nota como data,
+ou sem validade.** Achado da revisão: o lote **novo** gravava o texto da nota como veio. Uma nota com o lote novo e a validade
+*15/12/2030* (texto, pela integração) passava sem aviso nenhum, o lote ficava com *15/12/2030* gravado e a saída o recusava como **vencido**
+(*"Lote LZ vencido em 15/12/2030 …"*, porque o texto não é comparado como data); três espaços viravam uma validade em branco e a segunda
+linha do mesmo lote tomava o aviso falso de "cadastro antigo"; e um texto qualquer nascia como validade, sem aviso. Agora o lote novo nasce
+com a data lida pela régua da **B1306** (*15/12/2030* → 15/12/2030 como data); texto que não é data, ou só espaços, faz o lote nascer **sem
+validade**, e o texto que não é data dá o aviso de data inválida acima. A prévia simula igual. **Só o recebimento normaliza.**
+**Descartado:** mudar a criação de lote compartilhada (outros caminhos a usam, e a Entrada manual da 190 já valida a data antes dela).
+**Reversível:** a normalização é uma função do recebimento. `77102677`.
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -17121,6 +17205,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      plano dela a deixa de fora, B1296) — candidata à Etapa 192.
      *(Atualizado no fechamento da 191: o **Corrigir validade** existe (`4fcf13b4`); a mudança do recebimento é a candidata à **Etapa 194**
      — 192 e 193 foram do Compras —, estimada para **avisar** quando a nota traz outra validade, não recusar (**B1296**).)*
+     **✅ RESOLVIDO NA ETAPA 194** (`32ff286a`, `e8803937`, `57bdb6b2`, Fase 5 `77102677`): o recebimento preenche o lote sem validade
+     com a data da nota (**B1301**) e, quando a nota traz outra validade, mantém a do lote e avisa — antes de gravar, na janela **Processar
+     nota fiscal**, e depois, num aviso que não fecha sozinho apontando **Corrigir validade** (**B1300**, **B1303**).
 457. **NOVO (da Etapa 190) — a entrada num lote vencido sem digitar a validade não avisa.** O aviso de vencido sai só quando a data é
      digitada (**B1282**). Com o campo em branco, a entrada é registrada calada num lote cuja saída para consumo está barrada. **O que fazer:**
      o seletor de lote da **Saída** e a tela **Lotes e Séries** mostram o lote como *(vencido)*; para consumi-lo, **Liberar vencimento**.
@@ -17132,6 +17219,14 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      integração direto — o modal da tela de Materiais **não** manda lote. **O que fazer:** integrações que movimentam por lote usam a
      movimentação nova; a parte *sem lote* negativa aparece em **Lotes e Séries** (*"Sem lote atribuído"*) e no relatório *Saldo por lote*.
      Não consertado na 191 (porta antiga, fora do escopo).
+460. **NOVO (da Etapa 194, revisão do plano; o comportamento é anterior, da Etapa 190) — lote antigo com a validade em branco recusa a
+     Entrada manual com a data, dizendo uma data vazia.** Um lote gravado com a validade **em branco** (texto vazio, não ausente — só
+     cadastro antigo; a revisão adversarial da 191 achou um) é tratado pela Entrada manual como se já tivesse validade: uma Entrada nesse
+     lote, com saldo, informando a validade é recusada com *"O lote ⟨L⟩ já tem validade . A validade é do lote, não da entrada: …"* (a data
+     sai em branco). Não consertado na 194 (o recebimento já trata o branco como "sem validade" e avisa — **B1301**). **O que fazer:**
+     **Corrigir validade** em **Lotes e Séries** (a correção da 191 trata o branco como "sem validade") e repetir a Entrada sem a data ou com
+     a mesma. *(O número 459 ficou sem uso: a C459 que o plano da 194 propunha — "a nota com validade vencida não avisa" — foi resolvida
+     antes do código, na revisão do plano; ver **B1301**.)*
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -18483,8 +18578,17 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(194) A validade da nota no recebimento, o que ficou de fora.** (1) **A etiqueta do recebimento** continua impressa com a data da
+  **nota**, mesmo quando o lote manteve outra — o aviso de divergência manda imprimir a do lote em **Lotes e Séries**. (2) **O estorno** da
+  entrada não desfaz o preenchimento da validade (a validade é do lote físico, como na 190 — **B1301**); corrige-se com **Corrigir
+  validade**. (3) **Nota que falha no meio:** se **outro** item da mesma nota é recusado ao entrar (ex.: o item 2 com um número de série que
+  já está em estoque), a nota responde com o erro e **os avisos de validade dos itens que já entraram se perdem** — o lote do item 1 já foi
+  preenchido (e auditado), e o reprocessar responde sem aviso, porque o lote já tem a data. Reproduzido na revisão adversarial; não
+  consertado (a auditoria *Validade preenchida* e a tela **Lotes e Séries** mostram o que foi gravado). (4) O lote **vazio** com outra
+  validade só avisa, não troca (**B1302**). (5) Nada vai por e-mail nem abre não conformidade; o aviso enquanto se digita a data nos dados
+  fiscais ficou de fora (**B1303**). (6) A prévia é do momento da leitura; a resposta do processar é a que vale (**B1303**).
 - **(191) Corrigir a validade de um lote, o que ficou de fora.** (1) O **recebimento** continua sem conferir a validade da nota contra a
-  do lote que já existe (**B1296**, **C456**) — candidato à Etapa 194, para **avisar**. (2) Um e-mail *Lote vencendo* da data antiga que já
+  do lote que já existe (**B1296**, **C456**) — candidato à Etapa 194, para **avisar**. *— resolvido na 194 (`32ff286a`): avisa e preenche.* (2) Um e-mail *Lote vencendo* da data antiga que já
   estava em **falha por outro motivo** pode ser reenviado à mão com a data velha — o reenvio manual não relê o lote (**B1297**). (3) A
   entrega de um item separado de um lote que a correção venceu, feita no **automático** (*"Qualquer endereço"*), sai **sem lote** — é o
   comportamento de antes (Etapa 63) e é o **C451**/**B204** da fila; escolher o lote à mão no **Sai de** sai do lote escolhido, com a troca
@@ -18493,7 +18597,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   anterior).
 - **(190) A validade do lote na Entrada manual, o que ficou de fora.** (1) **Corrigir** uma validade já gravada num lote vivo — rota com perfil
   e auditoria, e o que fazer com a liberação de vencimento já dada: Etapa 191 (**B1276**, **C455**) — *resolvido na 191 (`4fcf13b4`).* (2) O **recebimento** continua sem
-  preencher nem conferir a validade de um lote existente (**B1277**, **C456**) — fora também da 191 (o plano dela o declara, B1296);
+  preencher nem conferir a validade de um lote existente (**B1277**, **C456**) — fora também da 191 (o plano dela o declara, B1296); *(resolvido na 194, `32ff286a` — **B1300**, **B1301**)*
   candidato à Etapa 192. (3) Os lotes antigos sem validade (**A110**,
   **B1279**). (4) **Controle de validade** obrigatório por material e a **data de fabricação** na Entrada (**B1278**). (5) Entrada sem data
   num lote vencido não avisa (**B1282**, **C457**). (6) A movimentação antiga (v1) ignora o campo (**B1270**). (7) Um lote órfão (criado por
@@ -19761,6 +19865,22 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(194) Nenhum clique foi dado no navegador.** O que os testes provam: o servidor pelo serviço e pela rota real — a régua (nada, preencher,
+divergente, inválida, cadastro antigo em branco; espaço, hora e *DD/MM/AAAA* sem divergência falsa), a prévia por item (só os que vão
+entrar, com lote; a ordem da nota; duas datas do mesmo lote; mesmo código de lote em dois materiais sem aviso cruzado), o preenchimento
+com a auditoria apontando a entrada, os avisos de vencida e de separação, a falha que não derruba a nota, a recusa da entrada que não
+preenche, o preenchimento que fica mesmo com um erro depois dele no mesmo item, os avisos sem repetição, o lote novo nascendo com a data
+normalizada ou sem validade, as três portas do processar (a resposta igual à de antes quando não há aviso), o fluxo inteiro dados fiscais
+→ prévia → corrige → prévia vazia → processar → **Corrigir validade** da 191, a fila do material contra a correção concorrente, duas notas
+do mesmo lote ao mesmo tempo nas duas ordens, e o estorno que mantém a data; a tela em jsdom com o servidor de mentira (os avisos embaixo do
+material com o **Confirmar** habilitado, nada quando não há aviso ou o servidor é antigo, os balões que não fecham sozinhos, na ordem).
+**Não verificado à mão:** o roteiro clicável da seção da Etapa 194 no guia (cenários 1 a 6) — em especial os avisos amarelos na janela
+**Processar nota fiscal** com nomes longos, os balões que não fecham sozinhos depois do verde e o caminho até **Corrigir validade**. Vale 10
+minutos. Suítes medidas: servidor **581/581** arquivos (sobre `77102677`), `validadeLoteRecebimento` 28/0, `validadeLoteRecebimentoIntegracao`
+7/0, `validadeLoteEntradaManual` 26/0; serviço do almoxarifado 44/0, validação 4/0, `safealter` 3/0, `sqlite` 16/0 (sobre `57bdb6b2` — a
+revisão adversarial só mexeu no recebimento e nos testes dele); tela **210 suítes / 2886 testes** e build sem aviso (na T2; a revisão
+adversarial não tocou a tela).
 
 **(191) Nenhum clique foi dado no navegador.** O que os testes provam: o servidor pela rota real (quem pode e quem toma a recusa de
 permissão; cada recusa de data, justificativa e validade mostrada, na ordem, sem efeito; a gravação com auditoria; a liberação anulada; os
@@ -37211,7 +37331,7 @@ validade do lote não foi alterada."*
 - **Corrigir uma validade já gravada** num lote com saldo ou com história — não há tela nem rota; é a Etapa 191 (**B1276**). Até lá, uma
   data errada num lote vivo fica (paliativo para vencida por engano: **Liberar vencimento**) — **C455**.
 - **O recebimento** continua como estava: lote criado pela Entrada sem validade e depois recebido com validade continua sem; segunda nota do
-  mesmo lote com outra validade fica com a da primeira, calada (**B1277**, **C456**).
+  mesmo lote com outra validade fica com a da primeira, calada (**B1277**, **C456**). *(Resolvido na 194: o recebimento avisa e preenche — ver a seção dela.)*
 - Os lotes **antigos** sem validade não são corrigidos pelo sistema (**B1279**, **A110**): o caminho é uma nova Entrada do lote com a data.
 - **Controle de validade** obrigatório por material e a **data de fabricação** na Entrada (**B1278**).
 - A entrada num lote vencido **sem** digitar a validade não avisa (**B1282**, **C457**).
@@ -37313,12 +37433,102 @@ em branco que não corrigia pela tela (**B1295**); quatro conferências que falt
 ### O que esta etapa NÃO cobre
 
 - **O recebimento** continua como estava: a nota do mesmo lote com outra validade fica com a da primeira, calada (**B1296**, **C456**) —
-  candidato à **Etapa 194**, para **avisar**.
+  candidato à **Etapa 194**, para **avisar**. *(Feito na 194 — ver a seção dela.)*
 - Um e-mail *Lote vencendo* da data antiga que já estava em falha por outro motivo pode ser reenviado à mão com a data velha (**B1297**).
 - A entrega no **automático** de um item separado do lote que a correção venceu sai sem lote — comportamento anterior (**C451**/**B204**);
   escolhendo o lote no **Sai de**, sai do escolhido.
 - A lista de lotes não mostra que a validade foi corrigida — só a Auditoria (**B1289**).
 - As etiquetas impressas não mudam: a resposta manda reimprimir.
+
+## Etapa 194 — Nota com o mesmo lote e outra validade: o recebimento avisa (2026-11-05)
+
+Quando chegava uma nota com um lote que **já existia** no sistema, a validade escrita na nota era **jogada fora, calada**. Se o lote já
+tinha validade e a nota trazia outra, ficava a primeira e ninguém ficava sabendo que a nota dizia outra coisa. Se o lote **não tinha**
+validade (nasceu por uma Entrada sem a data), continuava sem — com a data da nota na mão (**C456**). Agora o sistema avisa **antes** de
+gravar: na janela **Processar nota fiscal**, embaixo de cada material, aparece em amarelo o que vai acontecer com o lote. A nota **entra
+sempre** (nunca é recusada por isso); o lote **mantém** a validade que tinha, e o aviso aponta **Corrigir validade** (a porta da Etapa 191)
+se a da nota é a certa; o lote sem validade **recebe** a da nota. É a caixa que já tem etiqueta de validade: chega outra caixa do mesmo lote
+com outra data na nota. Antes, o almoxarife guardava sem olhar; agora o sistema diz "as datas não batem" antes de guardar — e não troca a
+etiqueta sozinho. Nada a rodar antes do deploy. Decisões do agente: **B1300** a **B1308**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A janela **Processar nota fiscal** não dizia nada sobre a validade | Embaixo de cada material, em amarelo, o que vai acontecer com o lote (outra data, preencher, data inválida, duas datas na nota, cadastro antigo em branco) — o **Confirmar** continua habilitado (**B1303**) |
+| Nota com outra validade: a do lote ficava, calada | A do lote fica, e um aviso que não fecha sozinho diz as duas datas e aponta **Corrigir validade** (**B1300**) |
+| Lote sem validade continuava sem, mesmo com a data na nota | O lote recebe a validade da nota, com aviso e auditoria *Validade preenchida* (**B1301**) |
+| — | Se a data que preenche já venceu: aviso de vencido (e de itens separados esperando entrega, se houver) |
+| — | Duas linhas do mesmo lote com datas diferentes: aviso nas duas antes; a primeira linha vence (**B1307**) |
+| Lote novo nascia com o texto da nota como veio (*15/12/2030* virava um lote "vencido") | Nasce com a data lida como data; texto que não é data → nasce sem validade, com aviso (**B1306**, **B1308**) |
+| — | Avisos iguais aparecem uma vez só (**B1304**) |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado** (recebe, movimenta e inspeciona). Uma posição comum *A-01*. Um material *COLA-194*
+(nome *Cola 194*), unidade *UN*, com **Controle por lote** ligado. Em **Movimentações → Nova Movimentação → Entrada**, material *COLA-194*,
+destino *A-01*: entrada de 10 com Lote *L-194A* e **Validade do lote** *31/03/2027*; e entrada de 5 com Lote *L-194B* **sem** validade.
+Para cada cenário, um recebimento novo da *COLA-194* levado até **Encaminhado para Faturamento** pelo caminho de sempre (**Iniciar
+Conferência** → **Finalizar Conferência** → **Encaminhar para Compras** → **Encaminhar para Faturamento**). No detalhe do recebimento,
+nos campos do item, preencha **Lote** e **Validade**; depois **Preencher Dados da NF (Faturamento)** → **Salvar Dados Fiscais** (o
+processamento lê o que está salvo). Por fim **Processar Nota — Estoque + Contas a Pagar**, que abre a janela **Processar nota fiscal**.
+
+**1. Outra validade: avisa antes, mantém e avisa depois.** Item com Lote *L-194A* e Validade *30/06/2027*. Na janela **Processar nota
+fiscal**, embaixo de *COLA-194*: *"O lote L-194A já tem validade 31/03/2027, e a nota informa 30/06/2027. Ao processar, a validade do lote é
+mantida — confira a data da nota em Dados fiscais; se a do lote está errada, corrija-a em Lotes e Séries → "Corrigir validade". A etiqueta
+do recebimento sai com a data da nota — imprima a do lote em Lotes e Séries."* **Confirmar** → *"Nota processada — estoque atualizado!"*
+(ou *"… e conta a pagar gerada!"*) e um aviso amarelo que não fecha sozinho: *"O lote L-194A já tinha validade 31/03/2027; a nota informou
+30/06/2027. A validade do lote foi mantida — se a da nota é a certa, corrija-a em Lotes e Séries → "Corrigir validade". A etiqueta do
+recebimento sai com a data da nota — imprima a do lote em Lotes e Séries."* Em **Lotes e Séries**, *L-194A* continua *31/03/2027*, com o
+saldo somado. **Corrigir validade** (191) para *30/06/2027* troca a data.
+
+**2. Conferir antes de gravar.** Repita o 1 até a janela mostrar o aviso; **Cancelar**, troque a Validade do item para *31/03/2027*,
+**Salvar Dados Fiscais** e abra a janela de novo → nenhum aviso; **Confirmar** → só a confirmação verde.
+
+**3. Lote sem validade: a nota preenche.** Item com Lote *L-194B* e Validade *31/01/2028*. Na janela: *"O lote L-194B não tem validade; ao
+processar, ele recebe a validade da nota (31/01/2028). Confira a data antes de processar."* **Confirmar** → *"O lote L-194B não tinha
+validade; ela foi gravada agora (31/01/2028) e vale também para o saldo que já estava nele."* *L-194B* passa a *31/01/2028*, e a
+**Auditoria** mostra *Validade preenchida*.
+
+**4. Preencher com uma data que já venceu.** Outra Entrada de 2 em *L-194C* sem validade. Recebimento com *L-194C* e a Validade de
+**ontem**. Na janela, a frase do 3 com o fim *" Essa data já venceu: o saldo do lote fica bloqueado para consumo."* **Confirmar** → o aviso
+de preenchido e *"O lote L-194C entrou já vencido (validade DD/MM/AAAA). A saída para consumo fica bloqueada até liberar o vencimento na
+tela de Lotes e Séries."* (se houver itens de requisição separados do lote esperando entrega, um terceiro aviso diz quantos).
+
+**5. Duas linhas do mesmo lote na mesma nota.** Recebimento com **dois** itens da *COLA-194*, os dois com Lote *L-194D* (novo), um com
+*31/03/2027* e outro com *30/06/2027*. Na janela, nas duas linhas: *"Esta nota traz o lote L-194D com validades diferentes (31/03/2027,
+30/06/2027). O lote fica com uma só — confira as datas em Dados fiscais antes de processar."*; a segunda linha leva também o aviso de outra
+validade do cenário 1 (31/03/2027 × 30/06/2027). **Confirmar** → o lote nasce com *31/03/2027* (a primeira linha) e vem o aviso de outra
+validade.
+
+**6. Avisos iguais, uma vez só.** Recebimento com dois itens em *L-194A* (que está com *31/03/2027*), os dois com *30/06/2027* → depois de
+**Confirmar**, **um** aviso amarelo de outra validade, não dois.
+
+**Pelo servidor, sem a tela** (integração, `PUT /recebimentos/:id/fiscal` e `POST /recebimentos/:id/processar`; o campo de data da tela só
+manda datas): validade da nota *31/03/2027* com espaços, com hora (*2027-03-31 00:00:00*) ou escrita *31/03/2027* é a mesma data — sem
+aviso num lote de *31/03/2027*. Um texto que não é data num lote sem validade (ou no lote novo, que nasce sem validade) → *"A validade da
+nota para o lote ⟨L⟩ (⟨o texto⟩) não é uma data válida; o lote continua sem validade — informe-a em Lotes e Séries → "Corrigir
+validade"."*; o ano fora de 2000–2100 também. Um lote antigo gravado com a validade em branco → na prévia *"O lote ⟨L⟩ tem a validade em
+branco (cadastro antigo) e a nota não consegue preenchê-la — informe-a em Lotes e Séries → "Corrigir validade"."* e, ao processar,
+*"A entrada foi registrada, mas a validade do lote ⟨L⟩ não pôde ser gravada (DD/MM/AAAA). Não repita a entrada; corrija a validade em
+Lotes e Séries → "Corrigir validade"."* A resposta do processar (e a do `/workflow` com `processar` e a do `/aprovar`) ganha
+`avisos_validade` só quando há aviso; sem aviso, é igual à de antes.
+
+**A revisão adversarial** (dois revisores independentes, por execução) achou um defeito real e três testes que faltavam, todos corrigidos
+antes do fechamento (`77102677`): o lote **novo** que nascia com o texto da nota — *15/12/2030* virava um lote dado por vencido, três espaços
+viravam o aviso falso de "cadastro antigo", e um texto qualquer nascia sem aviso (**B1308**); os avisos repetidos (**B1304**); e as
+conferências que faltavam (o preenchimento antes dos passos seguintes do item, validade de hoje não "venceu", o preenchimento que não pega,
+o mesmo código de lote em dois materiais). E declarou um limite, não consertado: a nota que falha no meio perde os avisos (**D (194)**).
+Ruído: nenhum.
+
+### O que esta etapa NÃO cobre
+
+- A **etiqueta do recebimento** continua com a data da nota (o aviso manda imprimir a do lote em **Lotes e Séries**).
+- O **estorno** da entrada não desfaz o preenchimento (**B1301**).
+- A nota que **falha no meio** (outro item recusado) perde os avisos dos itens que já entraram; o reprocessar não os repete (**D (194)**).
+- O lote **vazio** com outra validade só avisa (**B1302**).
+- Sem e-mail, sem não conformidade, sem aviso enquanto se digita a data (**B1303**).
+- O lote antigo com a validade em branco continua sendo recusado na Entrada manual com a data (**C460**, anterior).
 
 ## Onde estamos e o que vem a seguir
 
@@ -37326,6 +37536,20 @@ em branco que não corrigia pela tela (**B1295**); quatro conferências que falt
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 194 entregue (2026-11-05):** **a nota com o mesmo lote e outra validade: o recebimento avisa** (**C456** e **B1296**
+  resolvidos; a **B1277** mudada de propósito). A janela **Processar nota fiscal** mostra antes de gravar o que vai acontecer com cada lote
+  (**B1303**); a nota entra sempre e o lote mantém a validade, com aviso apontando **Corrigir validade** (**B1300**); o lote sem validade é
+  preenchido pela nota, com auditoria, aviso de vencida e de separação pendente (**B1301**); lote vazio só avisa (**B1302**); os avisos
+  aparecem na resposta só quando existem, sem repetição (**B1304**); sem auditoria nova (**B1305**); a data da nota é lida como data e o
+  que não é data não preenche (**B1306**); duas linhas do mesmo lote — a primeira vence (**B1307**); o lote novo nasce com a data
+  normalizada ou sem validade (**B1308**, da revisão adversarial). A revisão do plano achou nove pontos (aplicados antes do código, entre
+  eles o controle de trava que não provava nada e o aviso de vencida — a C459 proposta não foi aberta); a revisão adversarial, um defeito
+  real e três testes que faltavam, corrigidos, e um limite declarado (a nota que falha no meio perde os avisos). Commits `ce606d41`
+  (plano), `e6308090` (Fase 2), `32ff286a` (T1), `e8803937` (T2), `57bdb6b2` (T3), a revisão adversarial `77102677`, e o fechamento.
+  **O que é seu:** as decisões **B1300** a **B1308** (reversíveis); o aviso **C460** (anterior); as limitações **(194)** em D e a
+  verificação **(194)** em F. **Próxima: a separação deixa de perder as quantidades digitadas** ao voltar para a aba (**C454**, e o
+  código morto do **C452** junto; detalhada no fim do plano da 194).
 
 - **Etapa 191 entregue (2026-11-05):** **corrigir a validade de um lote que já tem saldo** (**C455** resolvido). Botão **Corrigir
   validade** em **Lotes e Séries**, só para o perfil de inspeção (**B1290**, **B1299**); a correção espera a fila do material (**B1291**),

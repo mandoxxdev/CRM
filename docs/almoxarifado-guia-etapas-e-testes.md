@@ -1,22 +1,35 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-11-05 (Etapas 172 a 191) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-11-05 (Etapas 172 a 191 e 194) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190 e 191) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191 e 194) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-05 (Etapas 172 a 178 e 180 a 191 ENTREGUES · RETOMADO em 05/11 · próxima: Etapa 194, o recebimento avisa a outra validade)
+> ## Onde o desenvolvimento está — 2026-11-05 (Etapas 172 a 178, 180 a 191 e 194 ENTREGUES · RETOMADO em 05/11 · próxima: a separação deixa de perder as quantidades digitadas)
 >
-> **O desenvolvimento parou aqui: Etapa 191 fechada — 2026-11-05.** **Corrigir a validade de um lote que já tem saldo**: em **Lotes e
+> **O desenvolvimento parou aqui: Etapa 194 fechada — 2026-11-05.** **A nota com o mesmo lote e outra validade: o recebimento avisa.** Na
+> janela **Processar nota fiscal**, embaixo de cada material, um aviso amarelo diz antes de gravar o que vai acontecer com o lote (a nota
+> traz outra validade, vai preencher um lote sem validade, não é uma data, ou traz o mesmo lote com duas datas). A nota entra sempre; o lote
+> mantém a validade que tinha e um aviso que não fecha sozinho aponta **Corrigir validade**; o lote sem validade recebe a da nota; o lote
+> novo nasce com a data da nota (ou sem validade, com aviso, se ela não é uma data). Nada a rodar antes do deploy. **Nenhum clique foi dado
+> no navegador** (só testes — roteiro na seção da 194 e letra F das novidades).
+>
+> **Onde parou, exatamente:** a **194 está fechada** (código, testes e documentos commitados). A **próxima** é o item 3 da fila da
+> estimativa de 05/11: **"Separação: as quantidades digitadas não se perdem"** (**C454** — com a janela de separação aberta, sair da aba e
+> voltar faz as quantidades voltarem ao valor inicial; e o código morto do **C452** na mesma tela). Só a tarefa detalhada no fim do plano da
+> 194 (`docs/superpowers/plans/2026-11-05-almoxarifado-etapa194-validade-do-lote-no-recebimento.md`) e a estimativa existem, nenhum plano
+> nem código.
+>
+> **Etapa 191, 2026-11-05.** **Corrigir a validade de um lote que já tem saldo**: em **Lotes e
 > Séries**, o botão **Corrigir validade** (só para Administrador, Almoxarife e Qualidade) troca a data com justificativa e auditoria; a
 > saída, a ordem dos lotes, a dica de coleta e o e-mail *Lote vencendo* usam a data nova na hora; a liberação de vencimento cai; os avisos
 > dizem se o lote ficou vencido, se há itens separados dele e que a etiqueta impressa está velha. Nada a rodar antes do deploy. **Nenhum
 > clique foi dado no navegador** (só testes — roteiro na seção da 191 e letra F das novidades).
 >
-> **Onde parou, exatamente:** a **191 está fechada** (código, testes e documentos commitados). A **próxima é a Etapa 194** (192 e 193 foram
+> **Onde parou, na época:** a **191 está fechada** (código, testes e documentos commitados). A **próxima é a Etapa 194** (192 e 193 foram
 > do Compras): a nota de recebimento com o mesmo lote e outra validade passa a **avisar** (hoje fica calada com a do lote — B1296); só a
 > tarefa detalhada no fim do plano da 191 (`docs/superpowers/plans/2026-10-23-almoxarifado-etapa191-corrigir-validade-de-lote.md`) e a
-> estimativa existem, nenhum plano nem código.
+> estimativa existem, nenhum plano nem código. *(Feita: a 194.)*
 >
 > **Etapa 190, 2026-10-23.** **A Entrada manual grava a validade do lote**: em **Movimentações →
 > Entrada**, com o Lote preenchido, aparece **Validade do lote** (opcional). O lote novo nasce com ela; o lote sem validade é preenchido
@@ -6982,6 +6995,71 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 194 — Nota com o mesmo lote e outra validade: o recebimento avisa (ENTREGUE — 2026-11-05)
+
+**O que mudou, em uma frase:** ao processar uma nota com um lote que já existe, o sistema avisa **antes** de gravar quando a validade da
+nota não bate com a do lote — e o lote sem validade passa a receber a da nota.
+
+**O problema que ela resolve.** A validade escrita na nota era jogada fora, calada, quando o lote já existia: se o lote tinha outra data,
+ficava a dele e ninguém sabia que a nota dizia outra coisa; se o lote não tinha data, continuava sem. É a caixa que já tem etiqueta de
+validade: chega outra caixa do mesmo lote com outra data na nota. Antes, o almoxarife guardava sem olhar; agora o sistema diz "as datas não
+batem" antes de guardar — e não troca a etiqueta sozinho.
+
+| Antes | Agora |
+|---|---|
+| A janela **Processar nota fiscal** não dizia nada sobre a validade | Embaixo de cada material, em amarelo, o que vai acontecer com o lote; o **Confirmar** continua habilitado |
+| Nota com outra validade: a do lote ficava, calada | A do lote fica, e um aviso que não fecha sozinho mostra as duas datas e aponta **Corrigir validade** |
+| Lote sem validade continuava sem | Recebe a validade da nota, com aviso e registro *Validade preenchida* na Auditoria |
+| — | Data que preenche já vencida: aviso de vencido |
+| — | Duas linhas do mesmo lote com datas diferentes: aviso nas duas; a primeira linha vence |
+| Lote novo podia nascer com a data escrita como texto (e ser tratado como vencido) | Nasce com a data como data, ou sem validade, com aviso, se o que veio não é uma data |
+| — | Avisos repetidos aparecem uma vez só |
+
+**Antes de testar (uma vez).** Um usuário **Administrador do almoxarifado** (recebe, movimenta e inspeciona). Uma posição *A-01*. Um
+material *COLA-194* (nome *Cola 194*), unidade *UN*, com **Controle por lote** ligado. Em **Movimentações → Nova Movimentação → Entrada**,
+material *COLA-194*, destino *A-01*: entrada de 10 em *L-194A* com a validade *31/03/2027*; entrada de 5 em *L-194B* **sem** validade; e
+entrada de 2 em *L-194C* **sem** validade. Onde o roteiro diz "ontem", use a data de ontem.
+
+**Como chegar à janela (em cada passo).** **Almoxarifado → Recebimentos**, um recebimento novo da *COLA-194*, levado até **Encaminhado para
+Faturamento** pelo caminho de sempre (**Iniciar Conferência** → **Finalizar Conferência** → **Encaminhar para Compras** → **Encaminhar para
+Faturamento**). No detalhe, nos campos do item, preencha **Lote** e **Validade**; clique em **Preencher Dados da NF (Faturamento)** e
+**Salvar Dados Fiscais** (o processamento lê o que está salvo). Depois **Processar Nota — Estoque + Contas a Pagar** abre a janela
+**Processar nota fiscal**.
+
+**Roteiro de teste (10 minutos).**
+
+1. **Outra validade.** Item com *L-194A* e Validade *30/06/2027*. Na janela, embaixo de *COLA-194*: *"O lote L-194A já tem validade
+   31/03/2027, e a nota informa 30/06/2027. Ao processar, a validade do lote é mantida — confira a data da nota em Dados fiscais; se a do
+   lote está errada, corrija-a em Lotes e Séries → "Corrigir validade". A etiqueta do recebimento sai com a data da nota — imprima a do lote
+   em Lotes e Séries."* **Confirmar** → *"Nota processada — estoque atualizado!"* (ou *"… e conta a pagar gerada!"*) e um aviso amarelo que
+   **não fecha sozinho**: *"O lote L-194A já tinha validade 31/03/2027; a nota informou 30/06/2027. A validade do lote foi mantida — se a da
+   nota é a certa, corrija-a em Lotes e Séries → "Corrigir validade". A etiqueta do recebimento sai com a data da nota — imprima a do lote em
+   Lotes e Séries."* Em **Lotes e Séries**, *L-194A* continua *31/03/2027* com o saldo somado.
+2. **Conferir antes de gravar.** Repita o 1 até ver o aviso na janela; **Cancelar**; troque a Validade do item para *31/03/2027*, **Salvar
+   Dados Fiscais**, abra a janela de novo → sem aviso; **Confirmar** → só a confirmação verde.
+3. **Lote sem validade.** Item com *L-194B* e *31/01/2028*. Na janela: *"O lote L-194B não tem validade; ao processar, ele recebe a validade
+   da nota (31/01/2028). Confira a data antes de processar."* **Confirmar** → *"O lote L-194B não tinha validade; ela foi gravada agora
+   (31/01/2028) e vale também para o saldo que já estava nele."* Em **Lotes e Séries**, *L-194B* mostra *31/01/2028*; na **Auditoria**, a
+   ação *Validade preenchida*.
+4. **Data já vencida.** Item com *L-194C* e a validade de **ontem**. Na janela, a frase do 3 terminando em *"Essa data já venceu: o saldo do
+   lote fica bloqueado para consumo."* **Confirmar** → o aviso de preenchido e *"O lote L-194C entrou já vencido (validade DD/MM/AAAA). A
+   saída para consumo fica bloqueada até liberar o vencimento na tela de Lotes e Séries."* Na **Saída**, *L-194C* aparece *(vencido)*.
+5. **Duas linhas do mesmo lote.** Recebimento com **dois** itens da *COLA-194*, os dois com o lote novo *L-194D*, um com *31/03/2027* e o
+   outro com *30/06/2027*. Na janela, nas duas linhas: *"Esta nota traz o lote L-194D com validades diferentes (31/03/2027, 30/06/2027). O
+   lote fica com uma só — confira as datas em Dados fiscais antes de processar."*; a segunda também com o aviso de outra validade.
+   **Confirmar** → *L-194D* nasce com *31/03/2027* e vem o aviso de outra validade.
+6. **Sem repetição.** Recebimento com dois itens em *L-194A*, os dois com *30/06/2027* → depois de **Confirmar**, **um** aviso amarelo, não
+   dois.
+7. **Corrigir depois.** Depois do 1, em **Lotes e Séries**, **Corrigir validade** de *L-194A* para *30/06/2027* com uma justificativa →
+   *"Validade do lote corrigida!"* e a linha mostra *30/06/2027*.
+
+**O que esta etapa não cobre.** A **etiqueta do recebimento** continua saindo com a data da nota (o aviso manda imprimir a do lote). O
+**estorno** da entrada não desfaz a validade preenchida (corrige-se com **Corrigir validade**). Se **outro item** da mesma nota for recusado
+ao entrar, a nota mostra o erro e os avisos de validade dos itens que já entraram **não aparecem** — e, ao reprocessar, também não (o lote
+já está com a data): confira em **Lotes e Séries**. O lote **vazio** com outra validade só avisa, não troca. Nada vai por e-mail, e não há
+aviso enquanto se digita a data. E o lote antigo gravado com a validade em branco continua sendo recusado pela Entrada manual com a data —
+use **Corrigir validade** (**C460**, anterior).
+
 ## Etapa 191 — Corrigir a validade de um lote que já tem saldo (ENTREGUE — 2026-11-05)
 
 **O que mudou, em uma frase:** em **Lotes e Séries**, o botão **Corrigir validade** troca a validade de um lote — mesmo cheio —, com
@@ -7040,7 +7118,7 @@ saída para consumo fica bloqueada até liberar o vencimento na tela de Lotes e 
     justificativa e quem corrigiu.
 
 **O que esta etapa não cobre.** O **Recebimento** continua como estava: uma nota do mesmo lote com outra validade fica com a do lote, sem
-aviso — é a próxima, a **Etapa 194**, para **avisar**. Um e-mail *Lote vencendo* da data antiga que já estava em falha por outro motivo
+aviso — é a próxima, a **Etapa 194**, para **avisar**. *(Feita — ver a seção da 194.)* Um e-mail *Lote vencendo* da data antiga que já estava em falha por outro motivo
 pode ser reenviado à mão com a data velha. A entrega no automático de um item separado de um lote que ficou vencido sai sem lote (como
 antes); escolhendo o lote no **Sai de**, sai do escolhido. A lista de lotes não mostra que a validade foi corrigida — só a Auditoria. As
 etiquetas impressas não mudam sozinhas. E a movimentação antiga pela integração (a do modal rápido da tela de Materiais) continua tirando

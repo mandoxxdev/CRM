@@ -516,7 +516,7 @@ C451/B204 da fila); o texto do `AVISO_SEPARACAO` continua verdadeiro para a esco
 
 **Retro (4 números):** rodadas de correção até verde: **1** (o fix-round da Fase 5); achados reais: **5** (+ 1 anterior registrado, C458),
 ruído **0**; paralelismo: T3 em paralelo com T1/T2 e os dois revisores em paralelo com a T4, **sem retrabalho**; defeito que escapou: *a
-preencher na próxima etapa* (o que a 194 ou o uso acharem desta).
+preencher na próxima etapa* (o que a 194 ou o uso acharem desta). *(Preenchido no fechamento da 194: **nenhum conhecido** — a 194 mexeu no recebimento e usou a correção da 191 nos testes de integração sem achar defeito dela.)*
 
 ## Próxima tarefa detalhada
 

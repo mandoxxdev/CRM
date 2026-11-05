@@ -1,5 +1,7 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 194 (2026-11-05, plano `ce606d41`, Fase 2 `e6308090`, T1 `32ff286a`, T2 `e8803937`, T3 `57bdb6b2`, Fase 5 `77102677`): a validade da nota no recebimento (C456, B1296) — o lote existente mantém a validade e a nota avisa (`NOTA_DIVERGENTE`), o lote sem validade é preenchido pela nota (`preencherValidadeSeVazia`, auditoria `VALIDADE_PREENCHIDA`), prévia `avisos_validade_lote` no `GET /recebimentos/:id` e no modal Processar, `avisos_validade` na resposta só quando há aviso; o lote novo nasce com a data normalizada ou sem validade (G1)** — ver a seção "Etapa 194", no fim. O status não muda (🟢).
+
 > **+ Etapa 191 (2026-11-05, Fase 2 `018f8a35`, T1 `4fcf13b4`, T2 `140dbb77`, T3 `3b43a0a1`, T4 `d5f3376a`, Fase 5 `699e87c3` + `c64fb881`): corrigir a validade de um lote que já tem saldo (C455) — `PUT /lotes/:id/validade` com `inspecionar`, justificativa, `validade_vista` (409 `MUDOU`), auditoria `VALIDADE_CORRIGIDA`, sob a trava do material; zera a liberação de vencimento; avisos; o e-mail pendente da data antiga sai da fila; botão "Corrigir validade" na tela de Lotes e Séries só com `pode('inspecionar')`** — ver a seção "Etapa 191", no fim. O status não muda (🟢).
 
 > **+ Etapa 190 (2026-10-23, T1 `ed1e6566`, T2 `267d668e` + `1136652b`, T3 `e1a24cc3`, T4 `9555ed29`, Fase 5 `4fcdcb27`): a Entrada manual grava a validade do lote (C450, defeito desde `65d78fd8`, Etapa 6) — campo "Validade do lote" na Entrada; lote novo nasce com ela, lote sem validade é preenchido com aviso, outra validade recusa (salvo lote vazio, que troca), vencida aceita com aviso, ano fora de 2000–2100 recusa** — ver a seção "Etapa 190", no fim. O status não muda (🟢).
@@ -1040,7 +1042,7 @@ manual nascia sem validade desde `65d78fd8` (Etapa 6). Nenhuma migration; recebi
   gravada com hora (`'2027-03-31 00:00:00'`). E `dbbdb8de`: o comentário de `filaSugestaoColetaIntegracao.api.test.js` que dizia que a Entrada
   não grava a validade.
 - [ ] **Fora (declarado):** corrigir validade já gravada num lote vivo (Etapa 191, B1276); *(**feito na Etapa 191**, `4fcf13b4` — ver a seção dela)* o recebimento preencher/conferir lote existente
-  (B1277, fixado por teste para uma etapa futura mudar de propósito — o plano da 191, `c0cce170`, o deixa de fora (B1296 dele);
+  (B1277, fixado por teste para uma etapa futura mudar de propósito — *mudado de propósito na **Etapa 194**, `32ff286a`: o teste virou `[B1277 → RN-194.04]`* — o plano da 191, `c0cce170`, o deixa de fora (B1296 dele);
   candidato à 192 — *isto dizia "192"; **estava errado**: a 192 e a 193 foram usadas pelo Compras; a candidata é a **194***); `controle_validade` obrigatório e `data_fabricacao` na Entrada (B1278 — a flag
   continua morta, como a tabela de flags acima diz); entrada sem data num lote vencido não avisa (B1282); a v1 ignora o campo (B1270).
 
@@ -1081,9 +1083,61 @@ ação nova em `ACAO_PERFIS`; recebimento, `liberar-vencimento`, `status` e o mo
   `ativo = 0`, linha legada entregue, ENVIADA continua ENVIADA). `c64fb881`: (F5) `formatData` da tela mostrava "Invalid Date" para validade
   fora do formato → mostra o texto gravado, na coluna e na janela. Ruído: 0.
 - [ ] **Fora (declarado):** o recebimento conferir a validade da nota contra a do lote existente (B1296, C456 — candidata à Etapa 194,
-  para avisar); linha `FALHA` por outro motivo reenviada à mão com a data velha (B1297, D (191)); a entrega com `origem_automatica` de um
+  para avisar); *(**feito na Etapa 194**, `32ff286a` — ver a seção dela)* linha `FALHA` por outro motivo reenviada à mão com a data velha (B1297, D (191)); a entrega com `origem_automatica` de um
   item separado do lote vencido sai sem lote (comportamento da Etapa 63, C451/B204 da fila); marcador "validade corrigida" na lista (B1289).
   Achado anterior registrado e não consertado: a rota antiga `POST /api/almoxarifado/movimentacoes` não repassa `lote_id` ao motor (C458).
 
 Testes: `corrigirValidadeLote.api.test.js` (23 cenários), `corrigirValidadeLoteIntegracao.api.test.js` (8),
 `client/src/components/almoxarifado/LotesCorrigirValidade.test.js` (8). Continua 🟢.
+
+## Etapa 194 — a validade da nota no recebimento (2026-11-05)
+
+Plano: `docs/superpowers/plans/2026-11-05-almoxarifado-etapa194-validade-do-lote-no-recebimento.md` (escrito em `ce606d41`, revisão do plano
+`e6308090` — o bloco "Fase 2 — correções" manda sobre o texto anterior). Fecha o **C456** (novidades), a **B1296** da 191 e muda de propósito
+a **B1277** da 190: `darEntradaEstoque` chamava `criarOuObterLote`, que devolve o lote existente sem tocar, e a validade da nota era
+descartada calada. Nenhuma migration; nenhum código de recusa novo; `criarOuObterLote`, `preencherValidadeSeVazia`, o motor, a Entrada
+manual (190), a correção (191) e o `PUT /fiscal` sem mudança.
+
+- [x] **RN-194.01** — `lotService.avaliarValidadeDaNota(lote, valorNota)` (pura): `NADA` / `PREENCHER { data }` / `INVALIDA { valor }` /
+  `LEGADO { data }` / `DIVERGENTE { loteISO, notaISO }`, pelas constantes `DECISAO_VALIDADE` (literal depois de `acao:` era lida pela
+  varredura de `auditLabels` como verbo de auditoria). Os dois lados passam por `lotService.dataDoTextoDoItem` (era `dataDoItem` do
+  `receiptService`; mudou para o `lotService` para ser uma régua só com o eco do `/fiscal` — apara, aceita hora e `DD/MM/AAAA`). Lote `''`
+  legado = `LEGADO` (a guarda do preencher é `IS NULL`) — `32ff286a`.
+- [x] **RN-194.02/03** — `GET /recebimentos/:id`: cada item ganha `avisos_validade_lote: string[]` (sempre presente), por
+  `previaDaValidadeDosItens` — só itens que vão entrar e com lote, na ordem do laço (`ORDER BY ri.id` nos dois SELECTs), com mapa local
+  lote → validade efetiva (o lote novo nasce com a 1ª linha; `PREENCHER` atualiza o mapa); `PREVIA_DUAS_NA_NOTA` por `material_id` + lote
+  aparado com duas ou mais datas normalizadas. Leitura sem trava — `32ff286a`.
+- [x] **RN-194.04/05/06/07/09** — no laço de `darEntradaEstoque`, a decisão depois de `criarOuObterLote` e `avisosDaValidadeNaEntrada` logo
+  depois de `entrouFisicamente = true`, antes dos rastros e da QUARENTENA (Fase 2, achado 8): `DIVERGENTE` → `NOTA_DIVERGENTE` (validade
+  intacta, com saldo ou vazio — B1302); `INVALIDA` → `NOTA_INVALIDA`; `LEGADO` → `AVISO_FALHA` sem chamar o preencher; `PREENCHER` →
+  `preencherValidadeSeVazia(…, { movimentoId })` não-fatal (`AVISO_PREENCHIDA`; falha ou `preenchida: false` → `AVISO_FALHA`), vencida →
+  `AVISO_VENCIDO` + `AVISO_SEPARACAO` (`contarSeparadoPendenteDoLote`, exportada). Tudo dentro de `comSecaoDaNota`, sem trava nova.
+  `darEntradaEstoque` devolve `{ avisosValidade }`; `processarNota` e o ramo direto de `/aprovar` espalham `avisos_validade` **só** quando há
+  aviso (B1304). O `[B1277]` de `validadeLoteEntradaManual` virou `[B1277 → RN-194.04]` e espera a data gravada — `32ff286a`.
+- [x] **RN-194.08** — tela: em `RecebimentosAlmoxarifado.js`, os avisos da prévia embaixo do material no modal **Processar nota fiscal**
+  (`aviso-validade-${id}`, um `<div>` por aviso; **Confirmar** habilitado) e `toast.warn(a, { autoClose: false })` por
+  `res.data.avisos_validade` depois do `toast.success` — `e8803937`.
+- [x] **Integração cruzando as portas** — `/fiscal` → prévia → `/fiscal` corrige → prévia vazia → `/processar` → `PUT /lotes/:id/validade`
+  (191) → `GET /materiais/:id/lotes`; `/workflow processar` preenche e o estorno mantém a data; `/aprovar` direto; a trava contra a correção
+  da 191 (gancho só sinalizando, gesto disparado do contexto do teste); duas `/processar` do mesmo lote nas duas ordens; prévia →
+  correção → resposta de hoje (`deepStrictEqual`) — `57bdb6b2`.
+- [x] **Fase 5 (revisão adversarial, dois revisores)** — `77102677`: (G1) o lote **novo** nascia com o texto cru da nota (`criarOuObterLote`
+  faz `data_validade || null`): `'15/12/2030'` ficava gravado e a saída o dava por vencido, `'   '` virava `''` e a 2ª linha tomava o
+  `LEGADO` falso (G3), `'lixo'` nascia sem aviso → `validadeDoLoteNovo` no `receiptService` (ISO pela `dataDoTextoDoItem` se
+  `validarDataValidade` aceita, senão `null`, e a régua dá `NOTA_INVALIDA`); a prévia simula igual (B1308 — só o recebimento normaliza;
+  `criarOuObterLote` não muda para os outros chamadores). (G4) avisos idênticos deduplicados em `avisos_validade` (B1304). (G2, G5) testes:
+  material crítico com a QUARENTENA e o rastro lançando depois do preencher; validade = hoje; `{ preenchida: false }`; mesmo código de lote
+  em dois materiais. Ruído: 0.
+- [ ] **Fora (declarado):** (G6, D (194)) se **outro** item da mesma nota falha no motor, o `throw` descarta a lista de avisos — o lote do
+  item que entrou já foi preenchido e o reprocessar responde sem aviso (reproduzido por sonda; não consertado). A etiqueta do recebimento
+  lê `data_validade_lote` do item (a data da nota); o estorno não desfaz o preenchimento (B1301); lote vazio com outra validade só avisa
+  (B1302); sem e-mail, sem não conformidade, sem prévia por tecla (B1303). Anterior, registrado e não consertado: lote `''` legado recusa a
+  Entrada manual com a data em branco (`stockService` trata `''` como gravada — C460).
+
+**Correção à vista:** o comentário da régua em `lotService.js` e a RN-194.06 do plano diziam que o lote novo nasce "com o texto da nota" — era
+verdade sobre o código e **estava errado como regra** (G1); o comentário foi reescrito dizendo que mudou na Fase 5. E a seção da Etapa 190
+acima diz que o recebimento preencher o lote existente ficou "fora" — **feito na 194**.
+
+Testes: `validadeLoteRecebimento.api.test.js` (28), `validadeLoteRecebimentoIntegracao.api.test.js` (7),
+`validadeLoteEntradaManual.api.test.js` (26, o `[B1277 → RN-194.04]` mudado),
+`client/src/components/almoxarifado/RecebimentosValidadeLote.test.js` (4). Continua 🟢.

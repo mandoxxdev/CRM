@@ -778,12 +778,12 @@ No **Recebimento**, a checagem é feita sobre a nota inteira **antes de qualquer
 
 **O lote nasce em dois lugares:**
 
-1. **No Recebimento** — é onde ele deve nascer. Nos itens da nota há quatro campos: **Lote**, **Validade**, **Fabricação** e **Corrida**. Ao processar a nota, o lote é criado herdando fornecedor, número da nota fiscal, corrida, data de fabricação e validade.
+1. **No Recebimento** — é onde ele deve nascer. Nos itens da nota há quatro campos: **Lote**, **Validade**, **Fabricação** e **Corrida**. Ao processar a nota, o lote é criado herdando fornecedor, número da nota fiscal, corrida, data de fabricação e validade. A validade da nota é gravada como data; o que a nota faz com um lote que já existe está em 4.3d.
 2. **Numa movimentação de Entrada**, digitando o código no campo Lote — é o caminho de regularização, não o caminho normal. Com o Lote preenchido aparece o campo **Validade do lote** (opcional), com a ajuda *"Opcional. Se o lote já existe com validade, deixe em branco."* O lote nasce com o código e a validade digitada (sem corrida nem fabricação). As regras da validade digitada na Entrada estão em 4.3b.
 
 Na **saída**, o campo Lote deixa de ser texto livre e vira uma **lista** dos lotes daquele material, com saldo e validade de cada um. Digitar um lote inexistente numa saída não o cria: *"Lote nao encontrado para este material: L-999"*. Saída é consumo, não é nascimento.
 
-Um lote é único por material: dois materiais podem ter, cada um, um lote chamado `L-001`, e são lotes distintos. Receber duas vezes o mesmo lote do mesmo material soma saldo ao lote existente sem sobrescrever a validade original. Pelo **Recebimento**, um lote que já existe fica com a validade que tem — inclusive quando não tem nenhuma: a validade da nota não é gravada nele, e nada avisa (para trocar a validade do lote, 4.3c). Pela **Entrada**, a validade digitada preenche o lote que não tem (4.3b).
+Um lote é único por material: dois materiais podem ter, cada um, um lote chamado `L-001`, e são lotes distintos. Receber duas vezes o mesmo lote do mesmo material soma saldo ao lote existente sem sobrescrever a validade original. Pelo **Recebimento**, um lote que já existe mantém a validade que tem — se a nota traz outra, o sistema avisa antes e depois de processar; se o lote não tem validade, recebe a da nota (4.3d). Pela **Entrada**, a validade digitada preenche o lote que não tem (4.3b).
 
 ### 4.2 Situação do lote
 
@@ -909,8 +909,58 @@ Sem nenhum desses casos (ex.: um lote sem validade recebendo uma data futura), a
 
 **Auditoria:** cada correção aparece como *Validade corrigida*, com a validade anterior e a liberação que havia, a nova validade, se a liberação foi anulada, se o lote **deixou de estar vencido** com a correção, a justificativa e quem corrigiu. A lista de lotes não mostra que a validade foi corrigida — isso está na auditoria.
 
-**O que a correção não faz:** não reimprime etiquetas (o aviso lembra); não muda as séries (a série segue a validade do lote); não muda o que o **Recebimento** faz — uma nota do mesmo lote com outra validade continua ficando com a do lote, sem aviso (4.1). Duas correções do mesmo lote ao mesmo tempo não se atropelam: a segunda espera e, se a tela dela estava velha, é recusada (tabela acima).
+**O que a correção não faz:** não reimprime etiquetas (o aviso lembra); não muda as séries (a série segue a validade do lote); não muda o que o **Recebimento** faz — uma nota do mesmo lote com outra validade continua ficando com a do lote, com aviso (4.3d). Duas correções do mesmo lote ao mesmo tempo não se atropelam: a segunda espera e, se a tela dela estava velha, é recusada (tabela acima).
 
+
+### 4.3d A validade da nota no Recebimento
+
+**A validade é do lote, e a nota não a troca.** Quando a nota traz um lote que **já existe**, o processamento compara a validade da nota com
+a do lote e **nunca recusa a nota** por causa disso — a nota entra no estoque como sempre. O que acontece com o lote:
+
+| Situação | O que acontece com o lote | Aviso depois de processar |
+|---|---|---|
+| A nota não traz validade | Nada muda | — |
+| A validade da nota é a mesma do lote | Nada muda | — |
+| O lote **não tem** validade | Recebe a validade da nota, que vale também para o saldo que já estava nele (fica na auditoria como *Validade preenchida*, apontando o lançamento da entrada) | *"O lote ⟨L⟩ não tinha validade; ela foi gravada agora (DD/MM/AAAA) e vale também para o saldo que já estava nele."* |
+| O lote **não tem** validade e a data da nota já passou | Recebe a data e passa a ser vencido (4.3) | o aviso acima e *"O lote ⟨L⟩ entrou já vencido (validade DD/MM/AAAA). A saída para consumo fica bloqueada até liberar o vencimento na tela de Lotes e Séries."* — e, se há itens de requisição separados do lote ainda não entregues, *"Há ⟨n⟩ item(ns) de requisição separado(s) do lote ⟨L⟩ ainda não entregue(s); a entrega pela origem planejada vai recusar o lote vencido — libere o vencimento ou entregue escolhendo outro lote (a troca fica registrada)."* |
+| O lote **tem outra** validade — com saldo ou vazio | **Mantém** a validade que tinha | *"O lote ⟨L⟩ já tinha validade DD/MM/AAAA; a nota informou DD/MM/AAAA. A validade do lote foi mantida — se a da nota é a certa, corrija-a em Lotes e Séries → "Corrigir validade". A etiqueta do recebimento sai com a data da nota — imprima a do lote em Lotes e Séries."* |
+| A validade da nota não é uma data, ou tem o ano fora de 2000–2100, e o lote não tem validade | Continua sem validade | *"A validade da nota para o lote ⟨L⟩ (⟨o que veio na nota⟩) não é uma data válida; o lote continua sem validade — informe-a em Lotes e Séries → "Corrigir validade"."* |
+| O lote é um cadastro antigo com a validade **em branco** | Continua em branco | *"A entrada foi registrada, mas a validade do lote ⟨L⟩ não pôde ser gravada (DD/MM/AAAA). Não repita a entrada; corrija a validade em Lotes e Séries → "Corrigir validade"."* |
+
+**O lote novo** — o que nasce nesta nota — nasce com a validade da nota lida como data. Se o que veio na nota não é uma data, o lote nasce
+**sem validade** e aparece o aviso de data inválida da tabela; se veio só espaço, nasce sem validade, sem aviso.
+
+**Como a data da nota é lida:** espaços nas pontas não contam, a hora junto da data é ignorada (*2027-03-31 00:00:00* é 31/03/2027) e a
+data escrita *DD/MM/AAAA* vale como data. A mesma data escrita de jeitos diferentes não é divergência. (Na tela, o campo **Validade** do
+item já é um campo de data; os outros formatos só chegam pela integração.)
+
+**Antes de gravar, a janela avisa.** Na janela **Processar nota fiscal**, embaixo de cada material que vai entrar, aparece em amarelo o que
+o processamento vai fazer — a pessoa pode **Cancelar**, conferir a data do item, **Salvar Dados Fiscais** e abrir a janela de novo:
+
+| Situação | Aviso na janela |
+|---|---|
+| Lote sem validade | *"O lote ⟨L⟩ não tem validade; ao processar, ele recebe a validade da nota (DD/MM/AAAA). Confira a data antes de processar."* — com *"Essa data já venceu: o saldo do lote fica bloqueado para consumo."* no fim quando a data já passou |
+| Lote com outra validade | *"O lote ⟨L⟩ já tem validade DD/MM/AAAA, e a nota informa DD/MM/AAAA. Ao processar, a validade do lote é mantida — confira a data da nota em Dados fiscais; se a do lote está errada, corrija-a em Lotes e Séries → "Corrigir validade". A etiqueta do recebimento sai com a data da nota — imprima a do lote em Lotes e Séries."* |
+| Data da nota que não é data | o mesmo aviso de data inválida da tabela acima |
+| Cadastro antigo com a validade em branco | *"O lote ⟨L⟩ tem a validade em branco (cadastro antigo) e a nota não consegue preenchê-la — informe-a em Lotes e Séries → "Corrigir validade"."* |
+| A mesma nota traz o mesmo lote do mesmo material com datas diferentes | *"Esta nota traz o lote ⟨L⟩ com validades diferentes (DD/MM/AAAA, DD/MM/AAAA). O lote fica com uma só — confira as datas em Dados fiscais antes de processar."* — em cada linha desse lote |
+
+O botão **Confirmar** continua habilitado: é aviso, não trava. A janela só avisa os itens que ainda vão entrar e que têm lote.
+
+**Duas linhas do mesmo lote na mesma nota:** as linhas entram na ordem em que foram lançadas; a primeira cria (ou preenche) o lote com a data
+dela, e a seguinte com outra data recebe o aviso de outra validade — na janela e depois de processar.
+
+**Depois de processar,** a confirmação verde (*"Nota processada — estoque atualizado!"* ou *"Nota processada — estoque atualizado e conta a
+pagar gerada!"*) vem seguida de um aviso amarelo por situação, que **fica na tela até ser fechado**. Avisos iguais aparecem uma vez só. O que
+vale é o aviso depois de processar: a janela mostra o que estava gravado quando foi aberta, e o processamento decide de novo na hora de
+gravar (se outra nota do mesmo lote, ou uma correção, entrou no meio, o resultado é o do momento da gravação).
+
+**O que o Recebimento não faz com a validade:**
+- não troca a validade de um lote que já tem uma — para isso, **Corrigir validade** (4.3c);
+- não desfaz a validade preenchida quando a entrada é estornada — a validade é do lote físico;
+- a **etiqueta do recebimento** sai com a data da **nota**, mesmo quando o lote manteve outra — imprima a do lote em **Lotes e Séries**;
+- se outro item da mesma nota é recusado ao entrar, a nota mostra a recusa e os avisos de validade dos itens que já entraram não aparecem —
+  a validade preenchida fica gravada; confira em **Lotes e Séries**.
 
 ### 4.4 FEFO
 
@@ -4041,7 +4091,7 @@ O carimbo só é devolvido quando **nada** chegou a entrar naquele item. Depois 
 
 Ao processar a nota, além de somar a quantidade ao saldo do material, o sistema:
 
-- **cria o lote** quando o campo Lote foi preenchido, herdando da nota o fornecedor, a corrida, a data de fabricação, a validade e o número da nota fiscal;
+- **cria o lote** quando o campo Lote foi preenchido, herdando da nota o fornecedor, a corrida, a data de fabricação, a validade e o número da nota fiscal; num lote que já existe, a validade dele é mantida (ou preenchida, se ele não tinha), com aviso — 4.3d;
 - **cria os números de série** informados, cada um vinculado ao lote e à localização de entrada;
 - **alimenta o custo médio** do material com o valor unitário do item da nota (fórmula em 21.2) — quando a nota traz valor. Nota sem valor (conserto, amostra, brinde, material de cliente) entra normalmente e **não mexe no custo**;
 - **gera a conta a pagar** com a descrição "NF ⟨número⟩/⟨série⟩ — ⟨número do recebimento⟩";
