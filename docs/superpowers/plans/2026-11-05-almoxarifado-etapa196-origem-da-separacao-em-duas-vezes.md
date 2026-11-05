@@ -304,7 +304,7 @@ ruído 0** — todos consertados:
   caem os dois K5 de campo; envio sem a quantidade → cai "volta a 3 não leva motivo".
 
 **Placar depois da Fase 5 (sobre `4ba2e9b4`):** `test:api` **583/583**; `test:almoxarifado` **44/0**; tela **212 suítes / 2909 testes**;
-build ok (`CI=true`). `test:validation`, `test:safealter`, `test:sqlite`: ver fechamento.
+build ok (`CI=true`). `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 16/0 (sobre `fa930a16`).
 
 **Achado do fechamento (não consertado — o fechamento só mexe em documento):** a dica da **Fila de separação** e do PDF da lista de coleta
 (`client/src/utils/coletaTexto.js:49-62`, `textoAvisoPegarEm`, casos `NENHUM_ENDERECO_COBRE`, `PLANEJADA_NAO_COBRE`,

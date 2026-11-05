@@ -1,0 +1,8 @@
+*Concluído — Almoxarifado: separar em duas vezes mantém o local de onde sai*
+_05/11/2026_
+
+4. Separar em duas vezes — 1ª parte: o local de onde sai — estimado 6h · realizado 5h
+
+*Total: estimado 6h · realizado 5h*
+
+Ao separar uma requisição em duas vezes, a parte separada primeiro continua saindo do local de onde foi separada, e só o restante sai pela escolha automática. A entrega e a devolução à prateleira passam a respeitar isso. A troca de local só fica registrada quando acontece de verdade.
