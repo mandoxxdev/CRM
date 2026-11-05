@@ -148,7 +148,14 @@ async function criarRequisicao(db, materialId, quantidade) {
 
   // ── Lado 2: os fluxos internos que continuam ISENTOS ────────────────────────────────────────
 
-  await test('[requisicao] entrega de material com controle_lote passa SEM lote', async () => {
+  // Etapa 197 (RN-197.01): o nome era "passa SEM lote" (B204) e passou a mentir — a entrega continua isenta de `exigeLote` (a decisao de
+  // 2026-08-10: 200 sem informar lote), mas a parte automatica agora baixa do lote que vence primeiro. A conferencia do lote entra.
+  const saldoDoLote = async (loteId) => Number((await dbGet(db,
+    'SELECT COALESCE(SUM(quantidade), 0) q FROM estoque_saldo_almoxarifado WHERE lote_id = ?', [loteId])).q);
+  const semLote = async (mat) => Number((await dbGet(db,
+    'SELECT COALESCE(SUM(quantidade), 0) q FROM estoque_saldo_almoxarifado WHERE material_id = ? AND lote_id IS NULL', [mat])).q);
+
+  await test('[requisicao] entrega de material com controle_lote passa sem INFORMAR lote e baixa do lote (Etapa 197)', async () => {
     const mat = await novoMaterial(db, true);
     const lote = await lotService.criarOuObterLote(db, ADMIN, { material_id: mat, codigo: 'CTL-REQ' });
     await stockService.registrarMovimentacao(db, ADMIN, {
@@ -161,9 +168,11 @@ async function criarRequisicao(db, materialId, quantidade) {
     assert.strictEqual(res.status, 200,
       `a entrega travou em material com controle_lote (nao ha campo de lote na requisicao): ${JSON.stringify(res.body)}`);
     assert.strictEqual(await totalDoMaterial(db, mat), 15);
+    assert.strictEqual(await saldoDoLote(lote.id), 15, 'Etapa 197: a parte automatica sai do lote');
+    assert.strictEqual(await semLote(mat), 0, 'Etapa 197: nenhuma linha sem lote');
   });
 
-  await test('[requisicao] exclusao administrativa (ENTRADA de estorno) passa SEM lote', async () => {
+  await test('[requisicao] exclusao administrativa (ENTRADA de estorno) passa sem informar lote e devolve ao lote da saida (Etapa 197)', async () => {
     const mat = await novoMaterial(db, true);
     const lote = await lotService.criarOuObterLote(db, ADMIN, { material_id: mat, codigo: 'CTL-EXC' });
     await stockService.registrarMovimentacao(db, ADMIN, {
@@ -173,12 +182,16 @@ async function criarRequisicao(db, materialId, quantidade) {
     const entrega = await request(app).put(`/api/almoxarifado/requisicoes/${reqId}/entregar`)
       .send({ itens_atendidos: [{ item_id: itemId, quantidade_atendida: 5 }] });
     assert.strictEqual(entrega.status, 200, JSON.stringify(entrega.body));
+    // Etapa 197 (controle i): sem esta conferencia a reescrita nao sabia falhar — saida sem lote + estorno sem lote tambem fecham 20/0.
+    assert.strictEqual(await saldoDoLote(lote.id), 15, 'Etapa 197: a entrega saiu do lote');
 
     const res = await request(app).delete(`/api/almoxarifado/requisicoes/${reqId}`)
       .send({ justificativa: 'exclusao de teste' });
     assert.strictEqual(res.status, 200,
       `o estorno da exclusao travou em material com controle_lote: ${JSON.stringify(res.body)}`);
     assert.strictEqual(await totalDoMaterial(db, mat), 20, 'o estorno nao devolveu o saldo');
+    assert.strictEqual(await saldoDoLote(lote.id), 20, 'Etapa 197: o estorno volta ao lote da saida (B232)');
+    assert.strictEqual(await semLote(mat), 0);
   });
 
   // ── Comportamentos que nao mudaram ──────────────────────────────────────────────────────────

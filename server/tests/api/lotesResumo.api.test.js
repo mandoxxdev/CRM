@@ -160,7 +160,9 @@ const PRODUCAO = { id: 9, nome: 'Producao', role: 'usuario' };
       'tela e relatorio arredondam diferente');
   });
 
-  await test('(10) T3 — a ENTREGA DE REQUISICAO pela rota real produz o residuo que a tela mostra', async () => {
+  // Etapa 197 (RN-197.01, Fase 2 item 3): era "produz o residuo que a tela mostra" ({70, 100, -30}) — o residuo da B204. Agora a parte
+  // automatica da entrega de material com controle de lote baixa do lote: {70, 70, 0}, e tela e relatorio continuam iguais.
+  await test('(10) T3; Etapa 197 — a entrega pela rota baixa do lote (era o residuo da B204): fisico 70, lote 70, sem lote 0', async () => {
     const m = await material('E50-REAL');
     const a = await lotService.criarOuObterLote(db, ADMIN, { material_id: m, codigo: 'A' });
     assert.strictEqual((await entrada(m, a.id, 100)).status, 201);
@@ -180,7 +182,7 @@ const PRODUCAO = { id: 9, nome: 'Producao', role: 'usuario' };
     const ent = await request(app).put(`/api/almoxarifado/requisicoes/${cr.body.id}/entregar`)
       .send({ itens_atendidos: [{ item_id: itemId, quantidade_atendida: 30 }] });
     assert.strictEqual(ent.status, 200, JSON.stringify(ent.body));
-    await confere(m, 'E50-REAL', { fisico: 70, soma_lotes: 100, sem_lote_atribuido: -30 });
+    await confere(m, 'E50-REAL', { fisico: 70, soma_lotes: 70, sem_lote_atribuido: 0 });
   });
 
   await close();

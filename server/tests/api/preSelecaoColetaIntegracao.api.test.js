@@ -15,6 +15,10 @@ const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 const { PERFIS } = require('../../services/almoxarifado/permissions');
 const requisitionService = require('../../services/almoxarifado/requisitionService');
+const diaLocal = require('../../services/diaLocal');
+
+// Etapa 197 (Fase 0, bomba-relogio): as validades eram literais (L1 2026-11-10) e venciam sozinhas em 11/11 — relativas a hoje.
+const dia = (n) => diaLocal.somarDiasISO(diaLocal.hojeLocalISO(), n);
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -116,7 +120,7 @@ process.on('exit', (code) => {
   const cenarioLote = async () => {
     const m = await material({ lote: true });
     await entrar(m, B01.id, 6, 'L1'); await entrar(m, P01.id, 9, 'L2');
-    await validade(m, 'L1', '2026-11-10'); await validade(m, 'L2', '2026-12-20');
+    await validade(m, 'L1', dia(5)); await validade(m, 'L2', dia(45));
     const r = await req([[m.id, 5]]);
     return { m, ...r };
   };
@@ -140,15 +144,21 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(await trocas(R), []);
   });
 
-  await test('[T4 rota, controle historico] o mesmo cenario separando SEM chave (o automatico de antes da 189) -> L1 6, L2 9 e a linha sem lote -5 na padrao', async () => {
+  // Etapa 197 (RN-197.01): era "L1 6, L2 9 e a linha sem lote -5 na padrao" (B204: o automatico nao baixava de lote). Agora o
+  // automatico de material com controle de lote tira do lote que vence primeiro: 5 de L1. O controle historico continua mostrando a
+  // diferenca para o RN-189.08 no LIVRO (sem endereco: nao saiu estrita do par).
+  await test('[T4 rota, controle historico; Etapa 197] o mesmo cenario separando SEM chave (o automatico) -> o FEFO tira 5 de L1 (vence antes): L1 1, L2 9, nenhuma linha sem lote, a SAIDA sem endereco', async () => {
     const { m, R, ids } = await cenarioLote();
     const sep = await separar(R, [{ item_id: ids[0], quantidade_separada: 5 }]);
     assert.strictEqual(sep.status, 200, JSON.stringify(sep.body));
     const en = await entregar(R, [{ item_id: ids[0], quantidade_atendida: 5 }]);
     assert.strictEqual(en.status, 200, JSON.stringify(en.body));
-    assert.strictEqual(await saldoDe(m, 'XB-01', 'L1'), 6);
+    assert.strictEqual(await saldoDe(m, 'XB-01', 'L1'), 1);
     assert.strictEqual(await saldoDe(m, 'XP-01', 'L2'), 9);
-    assert.deepStrictEqual(await semLoteNaoZero(m), [{ loc: 'XP-01', lote: null, quantidade: -5 }]);
+    assert.deepStrictEqual(await semLoteNaoZero(m), []);
+    const sai = await dbAll(db, `SELECT mv.localizacao_origem_id o, lt.codigo lote, mv.quantidade q FROM movimentacoes_almoxarifado mv
+      LEFT JOIN lotes_almoxarifado lt ON lt.id = mv.lote_id WHERE mv.requisicao_id = ? AND mv.tipo = 'SAIDA'`, [R]);
+    assert.deepStrictEqual(sai.map((x) => [x.o, x.lote, Number(x.q)]), [[null, 'L1', 5]]);
   });
 
   await test('[T4 rota, RN-189.07] dica velha: listar a sugestao; saida avulsa de 4 em XB-01/L1; separar 5 do par -> 400 com a literal; sem chave -> 200', async () => {
@@ -221,7 +231,8 @@ process.on('exit', (code) => {
   // Etapa 196 (B1314, RN-196.03/06): reescrito. Era "1 troca SEPARACAO automatica de 3 e a linha sem lote -6" — a 2a rodada apagava
   // a origem e os 6 saiam no automatico. Agora a origem XB-01/L1 fica com a parte 3, nao ha troca, e a entrega de um clique tira 3 de
   // XB-01/L1 (estrito) e so os 3 da parte automatica pela linha sem lote (-3) — esse resto e o item 5 (C451/B204), nao esta etapa.
-  await test('[T4 rota, I1 da Fase 2; Etapa 196] duas rodadas sem entregar -> 0 trocas, XB-01/L1 sai com a parte 3 e a linha sem lote fica -3 (o resto e o item 5, C451/B204)', async () => {
+  // Etapa 197 (RN-197.01): era "XP-01/L2 3 e a linha sem lote -3" (o item 5, C451/B204). Agora a parte automatica sai do lote L2.
+  await test('[T4 rota, I1 da Fase 2; Etapas 196 e 197] duas rodadas sem entregar -> 0 trocas, XB-01/L1 sai com a parte 3 e o automatico tira 3 de L2: nenhuma linha sem lote', async () => {
     const { m, R, ids } = await duasRodadas();
     await entrar(m, P01.id, 3, 'L2');
     const s = (await sugestao(R)).itens[0];
@@ -234,8 +245,8 @@ process.on('exit', (code) => {
     const en = await entregar(R, [{ item_id: ids[0], quantidade_atendida: 6 }]);
     assert.strictEqual(en.status, 200, JSON.stringify(en.body));
     assert.strictEqual(await saldoDe(m, 'XB-01', 'L1'), 0);
-    assert.strictEqual(await saldoDe(m, 'XP-01', 'L2'), 3);
-    assert.deepStrictEqual(await semLoteNaoZero(m), [{ loc: 'XP-01', lote: null, quantidade: -3 }]);
+    assert.strictEqual(await saldoDe(m, 'XP-01', 'L2'), 0);
+    assert.deepStrictEqual(await semLoteNaoZero(m), []);
     assert.deepStrictEqual(await trocas(R), []);
   });
 
@@ -266,7 +277,7 @@ process.on('exit', (code) => {
   const duasJanelas = async () => {
     const m = await material({ lote: true });
     await entrar(m, B01.id, 6, 'L1'); await entrar(m, P01.id, 9, 'L2');
-    await validade(m, 'L1', '2026-11-10'); await validade(m, 'L2', '2026-12-20');
+    await validade(m, 'L1', dia(5)); await validade(m, 'L2', dia(45));
     const r1 = await req([[m.id, 4]]); const r2 = await req([[m.id, 4]]);
     const s1 = (await sugestao(r1.R)).itens[0].pegar_em; const s2 = (await sugestao(r2.R)).itens[0].pegar_em;
     assert.deepStrictEqual([s1.localizacao_codigo, s1.lote_codigo, s1.cobre, s2.localizacao_codigo, s2.lote_codigo, s2.cobre],
@@ -292,16 +303,18 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(await trocas(r2.R), []);
   });
 
-  await test('[Fase 5, C449 controle historico] o mesmo com R2 no automatico (antes da 189) -> a entrega de R2 passa e deixa -4 sem lote na padrao', async () => {
+  // Etapa 197 (RN-197.02): era "L1 2, L2 9 e -4 sem lote na padrao" (B204). Agora o automatico de R2 divide pelos lotes na ordem
+  // FEFO: os 2 que sobraram em L1 (vence antes) e 2 de L2.
+  await test('[Fase 5, C449 controle historico; Etapa 197] o mesmo com R2 no automatico -> a entrega de R2 passa e tira 2 de L1 + 2 de L2: L1 0, L2 7, nenhuma linha sem lote', async () => {
     const { m, r1, r2 } = await duasJanelas();
     const b = await separar(r2.R, [{ item_id: r2.ids[0], quantidade_separada: 4 }]);
     assert.strictEqual(b.status, 200, JSON.stringify(b.body));
     assert.strictEqual((await entregar(r1.R, [{ item_id: r1.ids[0], quantidade_atendida: 4 }])).status, 200);
     const e2 = await entregar(r2.R, [{ item_id: r2.ids[0], quantidade_atendida: 4 }]);
     assert.strictEqual(e2.status, 200, JSON.stringify(e2.body));
-    assert.strictEqual(await saldoDe(m, 'XB-01', 'L1'), 2);
-    assert.strictEqual(await saldoDe(m, 'XP-01', 'L2'), 9);
-    assert.deepStrictEqual(await semLoteNaoZero(m), [{ loc: 'XP-01', lote: null, quantidade: -4 }]);
+    assert.strictEqual(await saldoDe(m, 'XB-01', 'L1'), 0);
+    assert.strictEqual(await saldoDe(m, 'XP-01', 'L2'), 7);
+    assert.deepStrictEqual(await semLoteNaoZero(m), []);
   });
 
   await close();

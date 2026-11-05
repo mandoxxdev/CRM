@@ -134,30 +134,41 @@ process.on('exit', (code) => {
     return { m, R, ids, antes };
   };
 
-  await test('[T5 rota, cenario 1] o caso real: 0 trocas, origem YB-01/L1 parte 3 -> entrega de um clique 6 -> livro: 3 de YB-01/L1, 3 no automatico (sem lote -3, item 5) -> excluir: o estorno devolve por saida e nenhum saldo difere do de antes da 1a entrega', async () => {
+  // Etapa 197 (RN-197.01/10): era "3 no automatico sem lote, YP-01/-=-3" (B204, o item 5). Agora a parte automatica sai do lote L2 e a
+  // exclusao a devolve ao L2 (B232, por saida).
+  await test('[T5 rota, cenario 1; Etapa 197] o caso real: 0 trocas, origem YB-01/L1 parte 3 -> entrega de um clique 6 -> livro: 3 de YB-01/L1, 3 no automatico do lote L2 (nenhuma linha sem lote) -> excluir: o estorno devolve por saida e nenhum saldo difere do de antes da 1a entrega', async () => {
     const { m, R, ids, antes } = await casoReal();
     assert.deepStrictEqual(await trocas(R), []);
     assert.deepStrictEqual(await origem(ids[0]), { loc: 'YB-01', lote: 'L1', q: 3, caixa: 6 });
     await entregar(R, [{ item_id: ids[0], quantidade_atendida: 6 }]);
-    assert.deepStrictEqual(await livro(R, m), [['SAIDA', 'YB-01', 'L1', 3], ['SAIDA', null, null, 3]]);
-    assert.deepStrictEqual(await retrato(m), { linhas: ['YP-01/-=-3', 'YP-01/L2=3'], fisico: 0 });
+    assert.deepStrictEqual(await livro(R, m), [['SAIDA', 'YB-01', 'L1', 3], ['SAIDA', null, 'L2', 3]]);
+    assert.deepStrictEqual(await retrato(m), { linhas: [], fisico: 0 });
     assert.deepStrictEqual(await trocas(R), []);
     assert.deepStrictEqual(await origem(ids[0]), { loc: null, lote: null, q: null, caixa: 0 });
     await excluir(R);
     // o estorno da exclusao e por SAIDA (Etapa 58): uma ENTRADA para cada, com o endereco/lote dela; a automatica, sem endereco no
-    // livro, volta sem endereco informado — o motor credita na padrao YP-01 sem lote (D (51)), de onde ela tirou. A exclusao nao grava movimento_estorno_id nas saidas (isso e o estorno pelo livro).
-    assert.deepStrictEqual(await livro(R, m), [['SAIDA', 'YB-01', 'L1', 3], ['SAIDA', null, null, 3],
-      ['ENTRADA', 'YB-01', 'L1', 3], ['ENTRADA', null, null, 3]]);
+    // livro, volta sem endereco informado — o motor credita na padrao YP-01 no lote dela (L2; D (51) — Etapa 197: era sem lote). A exclusao nao grava movimento_estorno_id nas saidas (isso e o estorno pelo livro).
+    assert.deepStrictEqual(await livro(R, m), [['SAIDA', 'YB-01', 'L1', 3], ['SAIDA', null, 'L2', 3],
+      ['ENTRADA', 'YB-01', 'L1', 3], ['ENTRADA', null, 'L2', 3]]);
     assert.deepStrictEqual(await retrato(m), antes);
   });
 
-  await test('[T5 rota, cenario 1 — controle sem a feature] a mesma conferencia com a origem apagada depois da 2a rodada (a regra velha) da os numeros de antes: 6 no automatico, YB-01/L1 fica com 3, sem lote -6', async () => {
+  // Etapa 197 (RN-197.01): era "YB-01/L1 fica com 3, sem lote -6" (B204). Com o automatico pelo lote os saldos finais dos dois mundos
+  // coincidem (L1 e L2 zeram); a prova da 196 passa a ser o LIVRO: sem a origem nenhuma saida e estrita de YB-01 (o excedente 3, sem
+  // reserva, tira L1 — sem validade, empate pelo codigo; a reserva 3, L2).
+  await test('[T5 rota, cenario 1 — controle sem a feature; Etapa 197] a mesma conferencia com a origem apagada depois da 2a rodada (a regra velha): 6 no automatico por lote (L1 3, L2 3), nenhuma saida estrita de YB-01', async () => {
     const { m, R, ids, antes } = await casoReal({ semFeature: true });
     await entregar(R, [{ item_id: ids[0], quantidade_atendida: 6 }]);
-    assert.deepStrictEqual(await livro(R, m), [['SAIDA', null, null, 3], ['SAIDA', null, null, 3]], 'sem a origem, tudo no automatico');
-    assert.deepStrictEqual(await retrato(m), { linhas: ['YB-01/L1=3', 'YP-01/-=-6', 'YP-01/L2=3'], fisico: 0 });
+    assert.deepStrictEqual(await livro(R, m), [['SAIDA', null, 'L1', 3], ['SAIDA', null, 'L2', 3]],
+      'sem a origem, tudo no automatico (sem endereco no livro)');
+    assert.deepStrictEqual(await retrato(m), { linhas: [], fisico: 0 });
     await excluir(R);
-    assert.deepStrictEqual(await retrato(m), antes, 'a exclusao devolve igual nos dois mundos (por saida)');
+    // Etapa 197: era `antes` (as saidas sem lote voltavam a linha sem lote da padrao, que zerava). Agora cada saida volta ao LOTE dela
+    // (B232), mas a automatica nao tem endereco no livro e a ENTRADA vai para a padrao (D (51), declarado): L1 volta em YP-01, nao em
+    // YB-01 — o lote certo, o endereco nao. No mundo com a feature (acima) L1 saiu estrita de YB-01 e volta la.
+    assert.deepStrictEqual(antes, { linhas: ['YB-01/L1=3', 'YP-01/L2=3'], fisico: 6 });
+    assert.deepStrictEqual(await retrato(m), { linhas: ['YP-01/L1=3', 'YP-01/L2=3'], fisico: 6 },
+      'a exclusao devolve por saida: o lote volta, o endereco da automatica e a padrao');
   });
 
   // ── Cenario 2 (Fase 2 item 4: requisicao de 7) — sem lote, A 3 + B 3 escolhido de proposito ────────────────────────────────────
@@ -279,7 +290,8 @@ process.on('exit', (code) => {
   });
 
   // ── Cenario 5: pelo SERVICO (sem rota), o caso real ────────────────────────────────────────────────────────────────────────────
-  await test('[T5 servico, cenario 5] separarRequisicao + entregarRequisicao + excluirRequisicao direto: A/L1 3 + automatico 3 -> 0 trocas, 3 de A/L1, 3 automatico, sem lote -3; excluir volta tudo', async () => {
+  // Etapa 197 (RN-197.01/10): era "3 automatico, sem lote -3" (B204). Agora o automatico tira 3 do lote L2.
+  await test('[T5 servico, cenario 5; Etapa 197] separarRequisicao + entregarRequisicao + excluirRequisicao direto: A/L1 3 + automatico 3 -> 0 trocas, 3 de A/L1, 3 automatico do lote L2, nenhuma linha sem lote; excluir volta tudo', async () => {
     const m = await material({ lote: true });
     await entrar(m, B01.id, 3, 'L1'); await entrar(m, P01.id, 3, 'L2');
     const l1 = (await dbGet(db, "SELECT id FROM lotes_almoxarifado WHERE material_id = ? AND codigo = 'L1'", [m.id])).id;
@@ -294,8 +306,8 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(await requisitionService.listarSubstituicoes(db, R), []);
     assert.deepStrictEqual(await origem(it), { loc: 'YB-01', lote: 'L1', q: 3, caixa: 6 });
     await requisitionService.entregarRequisicao(db, R, [{ item_id: it, quantidade_atendida: 6 }], USERS.ADMIN);
-    assert.deepStrictEqual(await livro(R, m), [['SAIDA', 'YB-01', 'L1', 3], ['SAIDA', null, null, 3]]);
-    assert.deepStrictEqual(await retrato(m), { linhas: ['YP-01/-=-3', 'YP-01/L2=3'], fisico: 0 });
+    assert.deepStrictEqual(await livro(R, m), [['SAIDA', 'YB-01', 'L1', 3], ['SAIDA', null, 'L2', 3]]);
+    assert.deepStrictEqual(await retrato(m), { linhas: [], fisico: 0 });
     assert.deepStrictEqual(await requisitionService.listarSubstituicoes(db, R), []);
     await requisitionService.excluirRequisicao(db, R, USERS.ADMIN, 'e196i', null);
     assert.deepStrictEqual(await retrato(m), antes);
