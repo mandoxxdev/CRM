@@ -637,6 +637,9 @@ const RecebimentosAlmoxarifado = () => {
       toast.success(res.data.contas_pagar_id
         ? 'Nota processada — estoque atualizado e conta a pagar gerada!'
         : 'Nota processada — estoque atualizado!');
+      // Etapa 194 (RN-194.08): a validade da nota que divergiu do lote, a que preencheu o lote ou a que nao valeu. O texto vem do
+      // servidor; o toast nao some sozinho porque pede uma conferencia (molde da 191).
+      (res.data?.avisos_validade || []).forEach((a) => toast.warn(a, { autoClose: false }));
       fecharProcessar();
       abrirDetalhe(detalhe.id);
       loadRecebimentos();
@@ -1841,6 +1844,13 @@ const RecebimentosAlmoxarifado = () => {
                         <tr key={it.id} data-testid={`processar-item-${it.id}`}>
                           <td>
                             <strong>{it.material_codigo}</strong> — {it.material_nome}
+                            {/* Etapa 194 (RN-194.08): a previa da validade do lote — aviso, nao trava o Confirmar. */}
+                            {(it.avisos_validade_lote || []).map((a, i) => (
+                              <div key={i} className="almox-hint" data-testid={`aviso-validade-${it.id}`}
+                                style={{ fontSize: '0.75rem', color: '#b45309', marginTop: 4 }}>
+                                {a}
+                              </div>
+                            ))}
                           </td>
                           <td>{quantidadeQueEntra(it)} {it.unidade || ''}</td>
                           <td>
