@@ -144,6 +144,12 @@ const ADMIN = { id: 1, nome: 'Admin Teste', role: 'admin' };
     assert.ok(!(await rel('saldos-comprometidos')).some((l) => l.material_codigo === 'E49-INATIVO'));
   });
 
+  await test('(2g) Etapa 197 Fase 5 (M6): a nota do saldo por lote diz que o que os lotes elegiveis nao cobrem sai sem lote (C464)', async () => {
+    const { nota } = RELATORIOS['saldo-por-lote'];
+    assert.ok(nota.includes('o automático baixa do lote que vence primeiro; o que os lotes que podem sair (não bloqueados, '
+      + 'reprovados ou vencidos sem liberação) não cobrem também sai sem lote.'), nota);
+  });
+
   await test('(3) series em estoque: presentes (EM_ESTOQUE, BLOQUEADA) aparecem; ENTREGUE nao', async () => {
     const m = await material('E49-SERIE');
     for (const [numero, status] of [['S1', 'EM_ESTOQUE'], ['S2', 'BLOQUEADA'], ['S3', 'ENTREGUE']]) {

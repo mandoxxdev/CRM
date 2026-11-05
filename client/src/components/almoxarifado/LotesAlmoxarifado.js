@@ -603,11 +603,13 @@ const LotesAlmoxarifado = () => {
           </div>
           {/* Etapa 197 (T1, RN-197.13): a nota dava a entrega de requisição como exemplo de saída que não
               baixa lote (B204/B205). Desde a 197, em material com controle de lote, o automático da entrega
-              baixa do lote que vence primeiro (RN-197.01); as entregas antigas continuam em "sem lote" (B1327). */}
+              baixa do lote que vence primeiro (RN-197.01); as entregas antigas continuam em "sem lote" (B1327). Fase 5 (M6):
+              o que os lotes que podem sair não cobrem também sai sem lote (B1323, C464). */}
           <div data-testid="resumo-sem-lote-nota" style={{ marginTop: 4, color: 'var(--gmp-text-light)' }}>
             {'O saldo de cada lote é o atribuído a ele. Na entrega de requisição de material com controle de lote, '
               + 'o que sai no automático baixa do lote que vence primeiro — entregas anteriores a esta mudança podem '
-              + 'estar em "sem lote atribuído". Saídas que não informam lote nos outros casos (material sem controle '
+              + 'estar em "sem lote atribuído", e o que os lotes que podem sair (não bloqueados, reprovados ou vencidos sem '
+              + 'liberação) não cobrem também sai sem lote. Saídas que não informam lote nos outros casos (material sem controle '
               + 'de lote, entrega de EPI) e o ajuste de saldo total não baixam de lote nenhum; entradas sem lote (por '
               + 'exemplo, antes de ligar o controle de lote) também ficam fora dos lotes. Lotes + sem lote atribuído '
               + '= físico total.'}

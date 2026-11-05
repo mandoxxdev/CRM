@@ -712,7 +712,8 @@ describe('Etapa 50: resumo fisico x atribuido', () => {
     await selecionarMaterial();
     const nota = container.querySelector('[data-testid="resumo-sem-lote-nota"]').textContent;
     expect(nota).toBe('O saldo de cada lote é o atribuído a ele. Na entrega de requisição de material com controle de lote, o que '
-      + 'sai no automático baixa do lote que vence primeiro — entregas anteriores a esta mudança podem estar em "sem lote atribuído". '
+      + 'sai no automático baixa do lote que vence primeiro — entregas anteriores a esta mudança podem estar em "sem lote atribuído", '
+      + 'e o que os lotes que podem sair (não bloqueados, reprovados ou vencidos sem liberação) não cobrem também sai sem lote. '
       + 'Saídas que não informam lote nos outros casos (material sem controle de lote, entrega de EPI) e o ajuste de saldo total não '
       + 'baixam de lote nenhum; entradas sem lote (por exemplo, antes de ligar o controle de lote) também ficam fora dos lotes. Lotes + '
       + 'sem lote atribuído = físico total.');
