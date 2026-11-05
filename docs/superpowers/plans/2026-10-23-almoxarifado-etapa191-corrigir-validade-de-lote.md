@@ -1,7 +1,8 @@
 # Etapa 191 — Corrigir a validade de um lote que já tem saldo
 
 > **Status:** 📝 **plano escrito (2026-10-23, sobre `1ccb47f4` + o fix-round da Fase 5 da 190 ainda não commitado na árvore).
-> Fase 2 não feita. Execução não começou.**
+> Fase 2 feita em 2026-11-05 (revisor fresco sobre `e10707ca`: 6 achados — 1 trava, 3 importantes, 2 menores — todos aplicados neste
+> plano, marcados "Fase 2, achado N"). Módulo retomado em 05/11 a pedido do André (estimativa `e10707ca`, item 1: 4h).**
 > Feature **10** (lotes, séries e etiquetas). Herda a **B1276** (corrigir validade fica para a 191), o **M-8** da Fase 2 da 190
 > (preenchimento errado num lote com saldo não tem volta) e o **Menor 4** da Fase 5 da 190 (ano digitado errado deixava o lote preso —
 > a 190 fechou a porta de entrada com a literal `ANO`, B1280; o que já entrou errado continua preso até esta etapa).
@@ -43,7 +44,7 @@ porque a nota diz 2027".
 
 **Fora desta etapa (declarado, B1296):** o **recebimento** continua como está — segunda nota do mesmo lote com outra validade mantém a
 da primeira, calada; lote nascido sem validade e depois recebido com validade continua sem. O remédio para o resultado desses dois casos
-passa a existir (esta rota); a mudança da porta do recebimento é candidata à Etapa 192.
+passa a existir (esta rota); a mudança da porta do recebimento é candidata a uma etapa futura (192 e 193 foram usadas pelo Compras).
 
 ## Fase 0 (medido em 2026-10-23, sobre `1ccb47f4` + árvore da 190)
 
@@ -157,7 +158,7 @@ herda o `AsyncLocalStorage` e passa direto pela trava).
 | **RN-191.06** | **Mesma data** (nova === gravada, mesma régua) → 400 `MESMA`, nada gravado, sem auditoria. | L1 `2027-03-10` → PUT `2027-03-10` → 400. |
 | **RN-191.07** | **Efeito imediato em todas as regras de hoje, sem mudar nenhuma delas:** saída de consumo (`stockService.js:1576`), separação e entrega (`requisitionService.js:1191`), FEFO da lista, dica de coleta, e-mail de vencendo. Corrigir para o passado **vence** o lote; corrigir para o futuro **desvence**. | T4. |
 | **RN-191.08** | **Liberação de vencimento:** se a data **muda** e o lote tinha `vencimento_liberado_em`, as três colunas da liberação são **zeradas no mesmo `UPDATE`** (a liberação era da data antiga — mesmo raciocínio da `redefinirValidadeDoLoteVazio`), e a resposta traz `AVISO_LIBERACAO_ANULADA`. Vale também quando a nova data continua no passado: liberar de novo, com nova justificativa. | L2 vencido `2025-01-10`, liberado; corrigir para `2025-01-20` → 200, `vencimento_liberado_em` nulo, saída → 400; liberar → 200; saída → 201. |
-| **RN-191.09** | **Auditoria** `entidade='lote'`, `acao='VALIDADE_CORRIGIDA'`, `dados_anteriores { data_validade, vencimento_liberado_em, vencimento_liberado_por, vencimento_liberado_motivo }`, `dados_novos { data_validade, liberacao_anulada: bool }`, `justificativa`. Por `registrarAuditoriaDoAto` (falha não derruba — a correção já gravou). Rótulo **"Validade corrigida"** em `auditLabels.js`. | Linha de auditoria com antes/depois e o motivo literal. |
+| **RN-191.09** | **Auditoria** `entidade='lote'`, `acao='VALIDADE_CORRIGIDA'`, `dados_anteriores { data_validade, vencimento_liberado_em, vencimento_liberado_por, vencimento_liberado_motivo }`, `dados_novos { data_validade, liberacao_anulada: bool, desvencido: bool }` (`desvencido` = vencido pela data lida e não pela nova — Fase 2, achado 4, B1289), `justificativa`. Por `registrarAuditoriaDoAto` (falha não derruba — a correção já gravou). Rótulo **"Validade corrigida"** em `auditLabels.js`. | Linha de auditoria com antes/depois e o motivo literal. |
 | **RN-191.10** | **Avisos** (`avisos: string[]` na resposta, na ordem): `AVISO_LIBERACAO_ANULADA` (se havia liberação) → `AVISO_VENCIDO` (se a nova < hoje de Brasília) → `AVISO_SEPARACAO` (se vencido **e** há itens com `lote_separacao_id` = o lote, separado − entregue > 0, requisição ativa em `STATUS_COM_CAIXA` — a régua de `lerDadosDaColeta` `:321-326`) → `AVISO_ETIQUETA` (se a validade antiga não era nula). Sem nenhum → `[]`. | L3 com 2 itens separados não entregues, corrigido para ontem → `avisos` = [VENCIDO, SEPARACAO(2), ETIQUETA]. |
 | **RN-191.11** | As literais `CONFLITO` e `AVISO_FALHA` da 190 deixam de mandar "pedir a correção" e passam a nomear o botão **"Corrigir validade" na tela de Lotes e Séries**. Só texto; a regra da 190 não muda. | O 400 `CONFLITO` da Entrada cita o botão. |
 | **RN-191.12** | **Trava:** a correção roda sob `trava.naTravaDoMaterial(lote.material_id)` — releitura do lote, conferências `MUDOU`/`MESMA`, `UPDATE` com guarda e auditoria dentro da seção; a contagem de separação e a resposta fora. O `UPDATE` guarda `WHERE id = ? AND data_validade IS ?` (a lida) mesmo sob a trava (defesa; não casar → 409 `MUDOU`). | Corrida: trava do material segura pelo teste (do contexto do teste) → o PUT **espera**; soltou → 200. Controle: sem a trava, o PUT termina com a trava segura. |
@@ -168,7 +169,7 @@ herda o `AsyncLocalStorage` e passa direto pela trava).
 
 ### `PUT /api/almoxarifado/lotes/:id/validade` (novo)
 
-Gate: `auth, requirePermission('inspecionar')` (`routes/almoxarifado/extended.js`, logo depois de `PUT /lotes/:id/status`, `:1307`).
+Gate: `auth, requirePermission('inspecionar')` (`routes/almoxarifado/extended.js`, logo depois de `PUT /lotes/:id/status`, `:1313` — Fase 2: as rotas desceram 6 linhas com a 192 do Compras).
 `:id` → `Number(req.params.id)` (não inteiro/inexistente → 404).
 
 Payload:
@@ -192,7 +193,7 @@ Resposta 200:
 | 2 | 400 | `FORMATO` (190) | não é `AAAA-MM-DD` de data que existe | `A validade do lote deve ser uma data no formato AAAA-MM-DD (ex.: 2027-03-31).` |
 | 3 | 400 | `ANO` (190, B1280) | ano fora de 2000–2100 | `A validade do lote deve ter o ano entre 2000 e 2100 — confira a data digitada (ex.: 2027-03-31).` |
 | 4 | 400 | `JUSTIFICATIVA` (nova) | vazia depois do `trim` | `Informe a justificativa da correção da validade — ela fica na auditoria do lote.` |
-| 5 | 400 | `VISTA_OBRIGATORIA` (nova) | chave `validade_vista` ausente (`undefined`), ou presente e nem `null` nem `AAAA-MM-DD` válido | `Informe a validade que a tela mostrava (validade_vista: AAAA-MM-DD, ou null se o lote não tinha validade).` |
+| 5 | 400 | `VISTA_OBRIGATORIA` (nova) | chave `validade_vista` ausente (`undefined`), ou presente e nem `null` nem string. **A string não é validada como data** (Fase 2, achado 1): a gravada pode ser lixo do recebimento (`"31/03/2027"`, `RecebimentoItemSchema` é `looseObject`, `schemas.js:846`) e a correção existe justamente para ela — compara-se `String(gravada).slice(0,10) === String(vista).slice(0,10)` | `Informe a validade que a tela mostrava (validade_vista: AAAA-MM-DD, ou null se o lote não tinha validade).` |
 | 6 | 404 | — (existente) | lote não existe (antes da trava; e de novo na releitura dentro dela) | `Lote nao encontrado` |
 | 7 | 409 | `MUDOU` (nova, função `(codigo, atualISO)`) | `validade_vista` ≠ gravada; ou o `UPDATE` com guarda não casou | `A validade do lote <código> mudou enquanto a tela estava aberta (agora <DD/MM/AAAA ou "sem validade">). Recarregue e confira antes de corrigir.` |
 | 8 | 400 | `MESMA` (nova, `(codigo, dataISO)`) | nova === gravada | `O lote <código> já tem a validade <DD/MM/AAAA>. Nada a corrigir.` |
@@ -203,8 +204,12 @@ Avisos (`avisos[]`, ordem fixa da RN-191.10):
 |---|---|
 | `AVISO_LIBERACAO_ANULADA` `(codigo)` | `O lote <código> tinha o vencimento liberado para a validade anterior; a liberação foi anulada. Se ele ainda pode ser usado, libere o vencimento de novo.` |
 | `AVISO_CORRIGIDA_VENCIDO` `(codigo, dataISO)` | `Com a validade corrigida (<DD/MM/AAAA>), o lote <código> está vencido: a saída para consumo fica bloqueada até liberar o vencimento.` |
-| `AVISO_SEPARACAO` `(codigo, n)` | `Há <n> item(ns) de requisição separado(s) do lote <código> ainda não entregue(s); a entrega vai recusar o lote vencido até liberar o vencimento ou separar de outro lote.` |
-| `AVISO_ETIQUETA` `(codigo, antigaISO)` | `As etiquetas já impressas do lote <código> mostram a validade antiga (<DD/MM/AAAA>) — reimprima.` |
+| `AVISO_SEPARACAO` `(codigo, n)` | `Há <n> item(ns) de requisição separado(s) do lote <código> ainda não entregue(s); a entrega pela origem planejada vai recusar o lote vencido — libere o vencimento ou entregue escolhendo outro lote (a troca fica registrada).` |
+| `AVISO_ETIQUETA` `(codigo, antigaISO)` | `As etiquetas já impressas do lote <código> mostram a validade antiga (<DD/MM/AAAA>) — reimprima pela tela Lotes e Séries (a etiqueta do recebimento usa a data da nota).` |
+
+*(Fase 2, achados 2 e 3: a etiqueta do Recebimento lê `item.data_validade_lote`, não o lote — `etiquetasPdf.js:120`; a entrega com
+origem vencida não fica presa — `origem_automatica`/outro lote com substituição registrada, `requisitionService.js:1785-1848`; "separar de
+outro lote" não serve para item já separado.)*
 
 `<DD/MM/AAAA>` = `dataValidadeBR`. "sem validade" é o texto quando a validade de agora é `null` (só no `MUDOU`).
 
@@ -221,6 +226,10 @@ Avisos (`avisos[]`, ordem fixa da RN-191.10):
   `UPDATE lotes_almoxarifado SET data_validade = ?, vencimento_liberado_em = NULL, vencimento_liberado_por = NULL, vencimento_liberado_motivo = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND data_validade IS ? RETURNING id`
   (zerar a liberação sempre que a data muda — RN-191.08; se não havia, zerar nulo é inócuo), 409 `MUDOU` se não casou, auditoria.
   Fora da seção: a contagem de separação (só se vencido), a montagem dos avisos, o `getLote` final.
+- **E-mail pendente com a data antiga** (Fase 2, achado 5 — B1297 passa de limitação a feito): depois do `UPDATE`, se havia validade
+  antiga, `UPDATE fila_notificacoes … SET status = 'FALHA', ultimo_erro = 'Validade do lote corrigida antes do envio' WHERE hash_dedupe =
+  hashDedupe('LOTE_VENCENDO', 'lote-vencendo-<id>-<antiga>') AND status = 'PENDENTE'` — molde `suprimirNotificacaoMovimentacao`
+  (`notificationQueueService.js:417`); conferir o nome real da tabela e da função de hash no código. Falha aqui vai ao log, não derruba.
 - Nenhuma mudança em `criarOuObterLote`, `preencherValidadeSeVazia`, `redefinirValidadeDoLoteVazio`, `liberarVencimento`.
 
 ### Sem mudança
@@ -271,11 +280,11 @@ Teste novo `server/tests/api/corrigirValidadeLote.api.test.js` (runner próprio;
 7. `[RN-191.04] justificativa` — ausente, `""`, `"   "` → `JUSTIFICATIVA`.
 8. `[RN-191.05] validade_vista` — ausente → `VISTA_OBRIGATORIA`; `"lixo"` → `VISTA_OBRIGATORIA`; diferente da gravada → 409 `MUDOU`
    literal com `DD/MM/AAAA`; lote sem validade e `validade_vista: '2027-01-01'` → 409 com "sem validade"; gravada `2027-03-10 00:00:00`
-   (M-2, recebimento) e vista `2027-03-10` → **não** é 409 (régua `slice(0,10)`).
+   (M-2, recebimento) e vista `2027-03-10` → **não** é 409 (régua `slice(0,10)`). E (Fase 2, achado 1) lote gravado com `"31/03/2027"` direto no banco e vista `"31/03/2027"` → **200** (a vista não é validada como data).
 9. `[RN-191.06] mesma data` → 400 `MESMA`, sem auditoria nova.
 10. `[RN-191.0x] ordem` — payload inválido **e** lote inexistente → 400 do payload (não 404); payload válido e lote inexistente → 404
     `Lote nao encontrado`; `/lotes/abc/validade` → 404.
-11. `[RN-191.09] auditoria` — `acao = 'VALIDADE_CORRIGIDA'`, `dados_anteriores`/`dados_novos`/`justificativa` como a RN.
+11. `[RN-191.09] auditoria` — `acao = 'VALIDADE_CORRIGIDA'`, `dados_anteriores`/`dados_novos`/`justificativa` como a RN. `desvencido: true` ao corrigir um lote vencido para o futuro; `false` nos outros.
 12. `[RN-191.08] liberacao anulada` — L2 vencido liberado → corrigir para outra data passada → 200, três colunas nulas,
     `liberacao_anulada: true` na auditoria; corrigir L1 (não liberado) → `liberacao_anulada: false`.
 
@@ -368,11 +377,13 @@ correção":
 3. `[RN-191.07] FEFO` — LA `2027-06-30` e LB `2027-12-31` → `GET /materiais/:id/lotes` = `[LA, LB]`; corrigir LB para `2027-01-31` →
    `[LB, LA]`.
 4. `[RN-191.07] e-mail Lote vencendo` (molde `validadesNoDiaLocal`) — L com validade fora da janela → `varrerLotesVencendo` 0; corrigir
-   para hoje+10 → 1 `LOTE_VENCENDO` com a dedupe `lote-vencendo-<id>-<hoje+10>`; corrigir de novo para hoje+12 → **mais 1** (chave nova).
+   para hoje+10 → 1 `LOTE_VENCENDO` com a dedupe `lote-vencendo-<id>-<hoje+10>`; corrigir de novo para hoje+12 → **mais 1** (chave nova). E a linha PENDENTE da data anterior vira `FALHA` com `Validade do lote corrigida antes do envio` (achado 5).
 5. `[RN-191.08] liberacao` — L vencido `2025-01-10` liberado (`PUT liberar-vencimento`) → SAIDA 201; PUT validade `2025-01-20` → 200 +
    `AVISO_LIBERACAO_ANULADA` + `AVISO_CORRIGIDA_VENCIDO`; SAIDA → 400; liberar de novo → 200; SAIDA → 201.
 6. `[RN-191.07/10] separacao planejada` — requisição aprovada, separada pela rota com origem no lote L-S (`2027-…`); PUT para ontem → 200
    com `AVISO_SEPARACAO(1)`; entregar pela rota → 400 com a literal de `requisitionService.js:1191`; liberar vencimento → entregar → 200.
+   A recusa da entrega é a embrulhada de `requisitionService.js:1785-1797` (`includes("não serve mais")` + o trecho de `:1192`), não a
+   literal crua. Passo novo (Fase 2, achado 3): **sem** liberar, entregar com `origem_automatica: true` → 200 e a substituição gravada.
    E `GET /fila-separacao` de outra requisição do mesmo material deixa de sugerir L-S (`pegar_em`).
 7. `[RN-191.14] pelo servico` — o 1 por `lotService.corrigirValidadeDoLote` + `stockService.registrarMovimentacao` (sem rota).
 
@@ -393,7 +404,7 @@ Rodar a suíte inteira serial (os cinco comandos do CLAUDE.md).
 - `docs/almoxarifado-manual-do-sistema.md`: a seção de lotes (perto da liberação de vencimento) ganha "Corrigir validade" com as
   literais; a frase da 190 que diz "peça a correção" muda junto (RN-191.11).
 - `docs/almoxarifado-guia-etapas-e-testes.md`: seção da 191, "Antes → Agora", roteiro clicável, o que não cobre.
-- Este plano: Execução e Próxima tarefa detalhada (candidata: Etapa 192 — o recebimento na régua da validade, B1296).
+- Este plano: Execução e Próxima tarefa detalhada (candidata: próxima etapa livre — o recebimento na régua da validade, B1296).
 
 ## Letra B proposta (para `docs/almoxarifado-novidades-por-etapa.md`)
 
@@ -436,11 +447,19 @@ não commitado. Esta etapa usa **B1290–B1299**.)*
 - **B1296 (NOVA) — o recebimento continua fora.** Segunda nota do mesmo lote com outra validade mantém a da primeira; lote sem validade
   recebido com validade continua sem (B1277; cenário 16 da 190 continua verde). O resultado dos dois agora tem conserto (esta rota). Mudar
   a porta é decidir o que fazer com um documento fiscal que contradiz o lote (recusar travaria o processamento da nota; avisar exige
-  canal de aviso no processamento) e mexer no `receiptService` sob `comSecaoDaNota` — outro tamanho de revisão. Candidata à **Etapa 192**.
+  canal de aviso no processamento) e mexer no `receiptService` sob `comSecaoDaNota` — outro tamanho de revisão. Candidata a uma etapa futura (192 e 193 foram usadas pelo Compras).
   **Descartado:** caber aqui (dobra a etapa e mistura correção manual com regra de entrada fiscal).
-- **B1297 (NOVA) — o e-mail "Lote vencendo" já enfileirado com a data errada não é retirado.** A varredura só enfileira; o envio não relê o
-  lote. A correção gera chave nova (reavisa com a data certa), mas não cancela o pendente. Declarado como limitação (D). **Descartado:**
-  cancelar pendentes da fila pelo `payload.lote_id` (mexe no `notificationQueueService`, outro dono, por um caso raro).
+- **B1297 (NOVA) — o e-mail "Lote vencendo" PENDENTE com a data antiga é retirado da fila.** A varredura só enfileira e o envio não relê o
+  lote (`processarFila`, `notificationQueueService.js:96-150`). A correção gera chave nova (reavisa com a data certa) e marca `FALHA`, com
+  o motivo, a linha **PENDENTE** da chave antiga (molde `suprimirNotificacaoMovimentacao`). *(O plano original declarava isto como
+  limitação, com o descarte "outro dono"; a Fase 2 mostrou que o precedente existe e custa poucas linhas.)* **Fica de fora:** uma linha
+  já em `FALHA` por outro motivo pode ser reenviada à mão com a data velha (o reenvio manual só protege `MOVIMENTACAO`, `:228`) — limitação
+  em D. **Descartado:** cancelar por `payload.lote_id` (o hash da chave é exato e já indexado).
+- **B1289 (NOVA) — corrigir um vencido para o futuro não exige segundo aprovador.** Quem corrige já precisa de `inspecionar`, os mesmos
+  perfis de quem libera o vencimento: exigir mais seria mais rígido que a própria liberação. O que se perderia é o rastro visível (a linha
+  "VENCIDO (liberado) — por… — motivo" some quando a data vai para o futuro); por isso a auditoria grava `desvencido: true` com a data
+  antiga, a nova e o motivo. **Descartado:** segundo aprovador; ação própria (B1290). **Candidato:** um marcador "validade corrigida" na
+  linha da lista (exige ler a auditoria na listagem). Reversível.
 - **B1298 (NOVA) — as literais `CONFLITO` e `AVISO_FALHA` da 190 passam a nomear o botão.** "Peça a correção" mandava a uma porta que não
   existia; agora existe. Só texto. **Descartado:** deixar a frase antiga (manda o operador procurar alguém em vez do botão).
 - **B1299 (NOVA) — o botão some para quem não tem `inspecionar`, ao contrário dos irmãos.** Os outros botões da linha aparecem sempre e
