@@ -163,6 +163,18 @@ describe('Etapa 195 — as quantidades digitadas na janela não voltam ao inicia
     expect(inputs().map((i) => i.value)).toEqual(['3', '2']);
   });
 
+  test('[RN-195.03, B1310] digitado 4 com máximo 5; outra pessoa separa 3 (máximo 2) -> o campo continua 4, sem limitar em silêncio', async () => {
+    requisicao = comItens('APROVADO', [{}]);
+    await renderizar();
+    await clicar('Iniciar Separação');
+    expect(inputs().map((i) => i.value)).toEqual(['5']);
+    await digitar(inputs()[0], '4');
+    requisicao = { ...requisicao, itens: requisicao.itens.map((i) => ({ ...i, quantidade_separada: 3 })) };
+    await focarJanela();
+    expect(textoDoModal()).toContain('Já separado: 3'); // metade positiva: o detalhe novo (máximo 2) foi aplicado
+    expect(inputs().map((i) => i.value)).toEqual(['4']);
+  });
+
   test('[RN-195.06] "Sai de" escolhido e quantidade digitada -> os dois continuam depois de recarregar', async () => {
     requisicao = comItens('APROVADO', [{}]);
     await renderizar();
