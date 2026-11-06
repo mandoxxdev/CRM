@@ -104,6 +104,36 @@ async function parteGuardadaDeOutras(db, materialId, origemId, loteId, requisica
 }
 
 /**
+ * Etapa 200 (T1): o memo por chamada de `parteGuardadaDeOutras` (extraido da separacao, Etapa 198) — a separacao e a entrega leem
+ * uma vez por par (material, endereco, lote), dentro da propria secao.
+ */
+function memoParteGuardadaDeOutras(db, requisicaoId) {
+  const porPar = new Map();
+  return async (materialId, origemId, loteId) => {
+    const k = `${materialId}|${origemId}|${loteId}`;
+    if (!porPar.has(k)) porPar.set(k, await parteGuardadaDeOutras(db, materialId, origemId, loteId, requisicaoId));
+    return porPar.get(k);
+  };
+}
+
+/**
+ * Etapa 198 (C1) + Etapa 200 (E1, B1339): a frase unica do "separado dali para outras requisicoes". `gesto` 'separacao' (C1, letra
+ * por letra a da 198) ou 'entrega' (E1: "desta entrega", "para esta entrega" e o conselho do automatico). `saldo` = fisico do par
+ * menos o ja pedido nesta chamada.
+ */
+function mensagemSeparadoDeOutras({ gesto = 'separacao', cod, saldo, jaPedido, outrasQ, numeros = [], qty }) {
+  const r6 = (x) => Math.round(x * 1e6) / 1e6;
+  const entrega = gesto === 'entrega';
+  const plural = numeros.length > 1;
+  const contando = jaPedido > 1e-9 ? ` (já contando ${r6(jaPedido)} ${entrega ? 'desta entrega' : 'desta requisição'})` : '';
+  return `em ${cod} há ${r6(saldo)}${contando} ${entrega ? 'para esta entrega' : 'para esta separação'}, mas ${r6(outrasQ)} `
+    + `${plural ? 'já estão separados dali para outras requisições' : 'já está separado dali para outra requisição'} `
+    + `(${numeros.join(', ')}); sobra ${r6(Math.max(0, saldo - outrasQ))}, que não cobre a quantidade (${qty}). `
+    + (entrega ? 'Escolha outro endereço ou deixe "Qualquer endereço (automático)"'
+      : 'Escolha outro endereço ou reabra a janela para ver a sugestão atual');
+}
+
+/**
  * `estoque` aqui é o saldo DISPONÍVEL (quantidade_atual − reservada − bloqueada −
  * em_inspecao), não mais o físico (Etapa 3, Task 3 — fecha o bypass de
  * entregarRequisicao/excluirRequisicao que baixava/estornava direto no físico sem passar
@@ -1270,15 +1300,9 @@ async function checarOrigemItem(db, item, { origemId, loteId, lidoNorm }, qty, p
   }
   const outrasQ = outras && origemId ? (Number(outras.q) || 0) : 0;
   if (outrasQ > 1e-9 && saldo - outrasQ + 1e-9 < qty) {
-    const r6 = (x) => Math.round(x * 1e6) / 1e6;
     const cod = loteCodigo ? `${codigoOrigem}, lote ${loteCodigo}` : codigoOrigem;
-    const numeros = outras.numeros || [];
-    const plural = numeros.length > 1;
-    const contando = jaPedido > 1e-9 ? ` (já contando ${r6(jaPedido)} desta requisição)` : '';
-    throw Object.assign(new Error(`em ${cod} há ${r6(saldo)}${contando} para esta separação, mas ${r6(outrasQ)} `
-      + `${plural ? 'já estão separados dali para outras requisições' : 'já está separado dali para outra requisição'} `
-      + `(${numeros.join(', ')}); sobra ${r6(Math.max(0, saldo - outrasQ))}, que não cobre a quantidade (${qty}). `
-      + 'Escolha outro endereço ou reabra a janela para ver a sugestão atual'), { status: 400 });
+    throw Object.assign(new Error(mensagemSeparadoDeOutras({ gesto: outras.gesto || 'separacao', cod, saldo, jaPedido, outrasQ,
+      numeros: outras.numeros || [], qty })), { status: 400 });
   }
   return codigoOrigem;
 }
@@ -1398,12 +1422,7 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
   const validados = []; // [{ item, qty, novaSeparada }] — só item existente com qty > 0
   const pedidoSeparacao = new Map();
   // Etapa 198 (RN-198.04): a parte guardada das outras por par, lida uma vez por chamada (a aceitacao e a divergencia usam a mesma).
-  const outrasPorPar = new Map();
-  const outrasDoPar = async (materialId, origemId, loteId) => {
-    const k = `${materialId}|${origemId}|${loteId}`;
-    if (!outrasPorPar.has(k)) outrasPorPar.set(k, await parteGuardadaDeOutras(db, materialId, origemId, loteId, requisicaoId));
-    return outrasPorPar.get(k);
-  };
+  const outrasDoPar = memoParteGuardadaDeOutras(db, requisicaoId); // Etapa 200 (T1): o memo extraido, o mesmo da entrega
   const reguaDivergencia = new Map(); // Etapa 60: item.id -> { maxInicial, origens, saldoOrigem, total, motivo }
   // Etapa 59 (Fase 5): o separado ainda nao entregue de TODOS os itens com origem planejada continua
   // fisicamente la — entra no acumulado desde o inicio. Antes so o do proprio item contava (mesmoPar):
@@ -1957,10 +1976,16 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
   const origemPorItem = new Map();
   const pedidoPorOrigem = new Map();
   const soLotePendentes = []; // Etapa 136 (RN-03)
-  const validarOrigemDaEntrega = async (item, { origemId, loteId, lido }, qtdComOrigem, planejada) => {
+  // Etapa 200 (RN-200.01, B1338): os itens do caso (c) — "Sai de" a mao que NAO e a origem guardada do item (outro par, ou item sem
+  // origem). O laco so confere o fisico (literal de antes, precedencia); o separado das outras requisicoes e conferido numa passada
+  // DEPOIS do laco, com o `pedidoPorOrigem` completo (Fase 2, item 1: conferido no laco, um item (c) antes de um irmao do caso (b) no
+  // mesmo par passava e o par ia a zero — o C468 voltava conforme a ordem dos ids).
+  const casoC = [];
+  const validarOrigemDaEntrega = async (item, { origemId, loteId, lido }, qtdComOrigem, planejada, contarOutras = false) => {
     try {
       const lidoNorm = stockService.normalizarCodigoLido(lido);
       await checarOrigemItem(db, item, { origemId, loteId, lidoNorm }, qtdComOrigem, pedidoPorOrigem);
+      if (contarOutras) casoC.push({ item, origemId, loteId, qtdComOrigem });
       origemPorItem.set(item.id, { origemId, loteId, lido: lidoNorm, qtdComOrigem });
     } catch (e) {
       let msg = `${item.material_nome}: ${e.message}`;
@@ -2049,7 +2074,33 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     if (!origemId && !loteId && semEscolha && !loteSeries) continue;
     // Etapa 136 (RN-03): o "so lote" (lote sem endereco) e conferido DEPOIS de todos os estritos — ele sai na passada 1, depois deles.
     if (!origemId && loteId) { soLotePendentes.push({ item, loteId, lido, qtdComOrigem }); continue; }
-    await validarOrigemDaEntrega(item, { origemId, loteId, lido }, qtdComOrigem, planejada);
+    await validarOrigemDaEntrega(item, { origemId, loteId, lido }, qtdComOrigem, planejada, !!origemId && !saiDaOrigem);
+  }
+  // Etapa 200 (RN-200.01/06, B1338-B1340): a passada do caso (c). `ja` = o que os OUTROS itens desta entrega pedem do par (todos, antes
+  // ou depois na ordem); E1 quando o fisico menos isso menos a parte guardada das outras caixas vivas nao cobre. So le — sob a trava
+  // por material da entrega (`comTravaDaRequisicao`), antes da previa e da alcada: a recusa nao grava nada.
+  const outrasDoPar = memoParteGuardadaDeOutras(db, requisicaoId);
+  for (const c of casoC) {
+    // eslint-disable-next-line no-await-in-loop
+    const outras = await outrasDoPar(c.item.material_id, c.origemId, c.loteId);
+    const outrasQ = Number(outras.q) || 0;
+    if (outrasQ <= 1e-9) continue;
+    // eslint-disable-next-line no-await-in-loop
+    const s = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) as q FROM estoque_saldo_almoxarifado
+      WHERE material_id = ? AND lote_id IS ? AND localizacao_id = ?`, [c.item.material_id, c.loteId, c.origemId]);
+    const ja = (pedidoPorOrigem.get(`${c.item.material_id}|${c.origemId}|${c.loteId}`) || 0) - c.qtdComOrigem;
+    const saldo = (Number(s.q) || 0) - ja;
+    if (saldo - outrasQ + 1e-9 < c.qtdComOrigem) {
+      // eslint-disable-next-line no-await-in-loop
+      const loc = await dbGet(db, 'SELECT codigo FROM localizacoes_almoxarifado WHERE id = ?', [c.origemId]);
+      // eslint-disable-next-line no-await-in-loop
+      const lote = c.loteId ? await dbGet(db, 'SELECT codigo FROM lotes_almoxarifado WHERE id = ?', [c.loteId]) : null;
+      const cod = lote ? `${loc.codigo}, lote ${lote.codigo}` : loc.codigo;
+      const err = new Error(`${c.item.material_nome}: ${mensagemSeparadoDeOutras({ gesto: 'entrega', cod, saldo, jaPedido: ja, outrasQ,
+        numeros: outras.numeros || [], qty: c.qtdComOrigem })}`);
+      err.status = 400;
+      throw err;
+    }
   }
   // Etapa 136 (RN-03; V7b da Fase 0): o so lote tira do lote em qualquer endereco DEPOIS que os estritos (endereco, mesmo lote) sairam —
   // a chave `m|null|L` do `pedidoPorOrigem` recebe o que eles pedem. Antes as duas chaves eram conferidas separadas: L so em A 2, o so
