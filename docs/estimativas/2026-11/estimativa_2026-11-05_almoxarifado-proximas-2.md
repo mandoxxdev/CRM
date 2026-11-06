@@ -12,7 +12,7 @@ motor erra para os dois lados, ±1h); tela 195 30 min → 30 min, 199 15+15 → 
 
 | # | Tarefa | Porte | Análise | Execução | Teste e conferência | Informado | Etapa/plano | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 | Entrega à mão respeita o separado das outras (C468) | motor (leitura sob trava já existente) | 1h | 1h30 | 2h | 4h30 | — | — | — | — |
+| 1 | Entrega à mão respeita o separado das outras (C468) | motor (leitura sob trava já existente) | 1h | 1h30 | 2h | 4h30 | 200 (plano `fd1daad2`) | 1,2 h (horas.js --grupos "E200=Etapa 200", 05/11) → 1h15 | 4h15 (1h15 + análise 1 h + teste 2 h, da tabela — não informado pelo André) | fd1daad2 … 5bc921e4, 80612648 |
 | 2 | Separação: o local mostra quanto sobra (C469) | média (campo novo na leitura + tela) | 30 min | 1h | 1h | 2h30 | — | — | — | — |
 | 3 | Movimentação por integração respeita o lote (C458) | média (sem tela; regra já existe) | 30 min | 1h | 1h | 2h30 | — | — | — | — |
 | 4 | Requisição excluída limpa o local separado (C467) | pequena com regra | 15 min | 30 min | 30 min | 1h15 | — | — | — | — |

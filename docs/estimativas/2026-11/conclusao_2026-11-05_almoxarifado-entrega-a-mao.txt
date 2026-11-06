@@ -1,0 +1,8 @@
+*Concluído — Almoxarifado: entrega escolhendo o local à mão*
+_05/11/2026_
+
+1. Entrega escolhendo o local à mão respeita o que outra requisição separou — estimado 4h30 · realizado 4h15
+
+*Total: estimado 4h30 · realizado 4h15*
+
+Na entrega, quando a pessoa escolhe à mão um local diferente do que foi separado, o sistema passa a descontar o que outras requisições em andamento já separaram ali. Se o que sobra não cobre, a entrega é recusada na hora, com a mesma mensagem clara da separação: quanto há, quanto já está separado e para quais requisições.
