@@ -45,7 +45,8 @@ function predicadoLoteImpedidoSql(l, hojeISO = diaLocal.hojeLocalISO()) {
 function loteImpedidoSql(m, hojeISO = diaLocal.hojeLocalISO()) {
   const pred = predicadoLoteImpedidoSql('lim_l', hojeValidado(hojeISO));
   const soma = `COALESCE((SELECT SUM(MAX(0,
-      COALESCE((SELECT SUM(lim_s.quantidade) FROM estoque_saldo_almoxarifado lim_s WHERE lim_s.lote_id = lim_l.id), 0)
+      COALESCE((SELECT SUM(lim_s.quantidade) FROM estoque_saldo_almoxarifado lim_s
+                WHERE lim_s.material_id = ${m}.id AND lim_s.lote_id = lim_l.id), 0)
       - COALESCE((SELECT SUM(lim_ri.quantidade_em_inspecao) FROM recebimentos_material_itens_almoxarifado lim_ri
                   WHERE lim_ri.lote_id = lim_l.id AND COALESCE(lim_ri.quantidade_em_inspecao,0) > 0), 0)))
     FROM lotes_almoxarifado lim_l WHERE lim_l.material_id = ${m}.id AND ${pred}), 0)`;

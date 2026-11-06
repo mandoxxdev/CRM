@@ -236,6 +236,17 @@ process.on('exit', (code) => {
     assert.ok(mordeu >= 10, `premissa: o sem lote negativo mordeu em ${mordeu} sorteios`);
   });
 
+  // ── Fase 5 (P2, B1380): o plano de consulta usa indice em todas as tabelas — sem SCAN (antes: SCAN lim_s, lim_ri e lim_ri2, a
+  // tabela inteira por item; 200 leituras com 30 mil linhas de saldo e 20 mil itens de recebimento levavam ~1,8 s) ──
+  await test('[Fase 5 P2] EXPLAIN QUERY PLAN do fragmento: nenhum SCAN; os itens de recebimento pelo idx_receb_itens_almox_lote', async () => {
+    const plano = (await dbAll(db, `EXPLAIN QUERY PLAN SELECT ${mod.loteImpedidoSql('ma')} FROM materiais_almoxarifado ma WHERE ma.id = ?`, [1]))
+      .map((r) => r.detail);
+    assert.ok(plano.length > 3, `premissa: o plano veio (${plano.length} linhas)`);
+    assert.deepStrictEqual(plano.filter((d) => /^SCAN\b/.test(d)), [], plano.join(' | '));
+    assert.ok(plano.some((d) => /lim_ri USING (COVERING )?INDEX idx_receb_itens_almox_lote/.test(d)), plano.join(' | '));
+    assert.ok(plano.some((d) => /lim_s USING (COVERING )?INDEX idx_saldo_almox_chave/.test(d)), plano.join(' | '));
+  });
+
   await close();
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam\n`);

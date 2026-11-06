@@ -2089,6 +2089,10 @@ async function initSchemaUmaExecucao(db) {
   ];
   for (const col of recebItemCols) await safeAlter(db, `ALTER TABLE recebimentos_material_itens_almoxarifado ADD COLUMN ${col}`);
   await migrateBackfillItemQuantidadeEmInspecao(db);
+  // Etapa 205 (Fase 5 P2, B1380): o desconto do lote impedido (`loteImpedido.js`) le a inspecao por lote em toda aprovacao, separacao
+  // e linha da fila; sem indice era a tabela inteira por item. Depois do safeAlter de `lote_id` (banco antigo nao tinha a coluna).
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_receb_itens_almox_lote
+    ON recebimentos_material_itens_almoxarifado(lote_id)`);
 
   await dbRun(db, `CREATE TABLE IF NOT EXISTS itens_pedido_compra (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

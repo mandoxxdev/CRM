@@ -641,7 +641,10 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Cento e dez itens para rodar em produção ANTES do deploy — cento e cinco são consulta, três são ação fora do sistema, um é ação na tela antes de liberar o uso, e um é uma limpeza de disco que roda sozinha
+### A. Cento e onze itens para rodar em produção ANTES do deploy — cento e seis são consulta, três são ação fora do sistema, um é ação na tela antes de liberar o uso, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-11-06 (Etapa 205, Fase 5) de cento e dez para cento e onze**, com a **A111** — o índice novo dos itens de recebimento
+por lote (**B1380**), que o boot cria sozinho. **Somente leitura, opcional.**)*
 
 *(**Atualizado em 2026-10-23 (Etapa 190) de cento e nove para cento e dez**, com a **A110** — os lotes que nasceram **sem validade** pela
 Entrada da tela de Movimentações (**C450**) e quanto saldo cada um tem. **Somente leitura, opcional:** a etapa não tem migration.)*
@@ -4443,6 +4446,26 @@ vista: espere a correção da 191.
 *(Conferida num banco de teste com o esquema atual: um lote sem validade com 5 pela Entrada, um com validade, um de nota sem validade e um sem
 movimento — vieram 2 lotes / 1 com saldo; a lista com o de 5 primeiro e o sem movimento com 0; e 1 lote de nota na comparação. **Não**
 rodada no banco de produção.)*
+
+**A111 (NOVA, da Etapa 205, Fase 5 — somente leitura, OPCIONAL — o índice novo dos itens de recebimento por lote, B1380).** O índice nasce
+sozinho no primeiro boot depois do deploy (`CREATE INDEX IF NOT EXISTS`), sem migration e sem mexer em dado. A tabela de itens de
+recebimento costuma ter poucos milhares de linhas: a criação leva menos de um segundo. Antes do deploy, para saber o tamanho; depois do
+primeiro boot, para conferir que ele existe e que a conta do lote impedido o usa:
+```sql
+-- antes: quantas linhas o indice vai cobrir
+SELECT COUNT(*) AS itens_de_recebimento, SUM(CASE WHEN lote_id IS NOT NULL THEN 1 ELSE 0 END) AS com_lote
+FROM recebimentos_material_itens_almoxarifado;
+
+-- depois do primeiro boot: o indice existe (esperado: 1 linha)
+SELECT name, sql FROM sqlite_master WHERE type = 'index' AND name = 'idx_receb_itens_almox_lote';
+
+-- depois: a leitura por lote usa o indice (esperado: "SEARCH ... USING INDEX idx_receb_itens_almox_lote (lote_id=?)", nunca "SCAN")
+EXPLAIN QUERY PLAN SELECT SUM(quantidade_em_inspecao) FROM recebimentos_material_itens_almoxarifado WHERE lote_id = 1;
+```
+**Como ler o resultado:** índice presente e o plano com `SEARCH` — nada a fazer. **Sem a linha do índice** — o boot não chegou a criá-lo
+(procure no log do servidor um erro com `idx_receb_itens_almox_lote`) e a aprovação/separação fica lenta com muitos recebimentos, mas
+**não erra conta**. *(Conferida num banco novo criado pelo boot (`CRM_DATA_DIR` em pasta vazia, duas vezes): o índice veio na primeira e a
+segunda não duplicou. **Não** rodada no banco de produção.)*
 
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
@@ -13951,6 +13974,15 @@ acima do disponível (a conta não fica negativa) — provado por sorteio de 150
 outro lote impedido, o que a RN-205.02 (d) recusa de propósito; e abater também lote elegível negativo (não é saída de lote impedido).
 **Risco aceito:** se o sem lote negativo veio de outra coisa (um legado), a conta trava menos do que devia — no pior caso igual a antes da
 Etapa 205. **Reversível** (um termo em `loteImpedido.js`).
+
+**B1380 (NOVA, da Etapa 205, Fase 5 P2; decisão do agente) — um índice novo nos itens de recebimento, por lote.** A conta do lote impedido
+roda em toda aprovação, separação e linha da fila de separação, sob a trava do material. Ela lia o saldo e a inspeção de cada lote varrendo
+as tabelas inteiras (o índice do saldo começa pelo material e a consulta filtrava só pelo lote; os itens de recebimento não tinham índice
+por lote): 200 leituras com 30 mil linhas de saldo e 20 mil itens de recebimento levavam **~1,8 s**; depois, **~35 ms**. **Escolhido:** o
+filtro do saldo ganhou o material (usa o índice que já existia) e `idx_receb_itens_almox_lote` em
+`recebimentos_material_itens_almoxarifado(lote_id)`, criado no boot (`IF NOT EXISTS`, depois da coluna). **Descartado:** índice parcial só
+com inspeção > 0 (a consulta usa `COALESCE(...) > 0` e o SQLite não o escolheria) e índice composto (lote, inspeção) (ganho pequeno, mais
+escrita). **Reversível** (`DROP INDEX idx_receb_itens_almox_lote`). Conferência em produção: **A111**.
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
