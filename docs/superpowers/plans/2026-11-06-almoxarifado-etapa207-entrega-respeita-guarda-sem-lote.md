@@ -1,6 +1,7 @@
 # Etapa 207 — a entrega respeita a guarda sem lote (almoxarifado)
 
-> **PLANO (Fase 0 + Fase 1), 2026-11-06.** Nada executado ainda. Próximo passo: F2 (revisor fresco do plano), depois T0.
+> **PLANO (Fase 0 + Fase 1), 2026-11-06.** F2 e T0–T4 executados (ver **Execução**). Próximo passo: Fase 5 (revisão adversarial), depois T5
+> (fechamento).
 
 > partida: "Próxima tarefa detalhada" de `docs/superpowers/plans/2026-11-06-almoxarifado-etapa206-entrega-recusa-lote-impedido.md`
 > (`:397` em diante), conferida contra o código em `bb6a0c5e` — bate, com **três achados a mais** (abaixo). Aviso **C490** da 206. Estimativa
@@ -309,12 +310,34 @@ pelas fatias — registrar no D (207).
 
 ## Execução
 
-- [ ] F2 — revisor fresco do plano (antes da T0)
-- [ ] T0 — o vermelho de partida (`entregaGuardaSemLote.api.test.js`: RN-207.01/.03/.04/.07 vermelhos; .02 a, .05, .06 controle verdes)
-- [ ] T1 — `guardaQueConta` + `fatiasSemLoteParaOAutomatico` + `baixarSemLote` na passada 2; controles (i)–(v); `test:api` inteiro
-- [ ] T2 — RN-207.06 (exclusão devolve a cada endereço; controle com a SAIDA sem endereço)
-- [ ] T3 — integração pela rota e pelo serviço (`entregaGuardaSemLoteIntegracao.api.test.js`)
-- [ ] T4 — sorteio RN-207.08 (G/N/L/F, premissas, controles (i) e (ii) com os números)
+- [x] F2 — revisor fresco do plano (antes da T0) — `7e2708d7`
+- [x] T0 — o vermelho de partida — `08e1070c`. Sobre o código de hoje: RN-207.01/.03/.04/.07 **vermelhos** (cai o livro da 1ª entrega —
+  uma SAIDA sem endereço que leva a guarda —, antes da 2ª recusar); RN-207.02 a/c/d e .05 a/b **verdes** (5/9). A (d) é a V1 da 136 (Fase 2
+  I3); a .06 ficou para a T2 (M3).
+- [x] T1 — `guardaQueConta` + `fatiasSemLoteParaOAutomatico` + `baixarSemLote` na passada 2 — `842567ca`. T0 9/9. Controles (sabotagem,
+  restauro por **cópia** com md5 — o plano dizia `git checkout`, trocado porque o conserto não estava commitado): (i) `return null` →
+  .01/.03/.04/.07 vermelhos; (ii) sem o "sem guarda → null" → .02 a **e d**; (iii) fatias + resto sem endereço → .05 a e b; (iv) filtro
+  por requisição → .04; (v) sem `parteQueFicaPorItem` → .07. **Livro idêntico** (material sem controle de lote e sem guarda): o mesmo
+  roteiro sorteado (300 casos, 163 aceitos; linhas sem endereço, com lote, negativo permitido, 2ª entrega) contra o serviço de `4d8fb611`
+  → 300/300 iguais (livro, linhas, itens); com a sabotagem (ii), 159 diferem. Arquivos de entrega/separação/origem rodados um a um,
+  verdes; `test:api` inteiro no fim (abaixo).
+- [x] T2 — RN-207.06 — `3db19406`. **Divergência:** o controle dizia "a ENTRADA com destino P"; medido, a ENTRADA da exclusão de uma SAIDA
+  sem endereço vai **sem** endereço no livro e o motor credita na padrão (retrato P 3) — o teste afirma o medido.
+- [x] T3 — integração pela rota e pelo serviço (`entregaGuardaSemLoteIntegracao.api.test.js`) — `8a99e628`. 2/2; com a sabotagem (i), 0/2.
+  O histórico usado é `GET /movimentacoes?material_id=` (o `localizacao_origem_id` de cada SAIDA).
+- [x] T4 — sorteio RN-207.08 — `fddeb5ee` (+ `147dbf6b`). **Divergência:** **400** casos (não 120): com 120, a premissa T ≥ 10 da Fase 2
+  não fechava (0 a 6 nas tentativas) — a linha ruim só vira T quando o automático passa do livre usável, e a separação sem origem não conta o
+  endereço bloqueado (o bloqueado quase nunca gera T; a linha sem endereço gera). ~4 s. Medição por espiões (`registrarMovimentacao` e
+  `db.all`, só na entrega medida): cada chamada da régua abre um bloco; **T** = bloco sem guarda é uma baixa sem endereço, bloco com guarda é
+  só fatias **ou** uma baixa sem endereço, nunca misturado; **G/N** só nas entregas em que todo bloco cobriu (I1). Fora do G/N a entrega com
+  origem **escolhida** além da parte do item (1 caso; passada 0, não tocada aqui — achado com a semente 1: tira a guarda do irmão no mesmo
+  endereço, comportamento anterior). Semente 207: 356 casos montados, 243 entregas medidas, 221 aceitas, 131 com guarda sem lote viva, L 90,
+  T 13, 78 blocos cobriram, N 99 testes; **0** violações. Controles: (i) `return null` → G 13 + N 8 (e 161 órfãs); (ii) fatiar sempre → L 52;
+  (iii) fatias + resto → T 11. Revisão "passaria quebrada?": sem `lc.id IS NOT NULL` (M1) a suíte passava 12/12 → **RN-207.05 c** (linha
+  num endereço apagado: como hoje; sabotado, 400 "Localização de origem não encontrada"); sem `caixaVivaSql` só o sorteio caía, por acaso →
+  **RN-207.04 b** (guarda de requisição cancelada não conta). Arquivo: 14/14.
+- [x] Suítes, uma vez cada, serial (sobre `147dbf6b`): `test:api` **600/600 arquivos OK**; `test:almoxarifado` 44/0; `test:validation` 4/0;
+  `test:safealter` 3/0; `test:sqlite` 16/0. Fechamento de documentação (T5) **não** feito: vem depois da Fase 5.
 - [ ] Fase 5 — revisão adversarial
 - [ ] T5 — fechamento (`fechar-etapa`) e as cinco suítes, serial
 
