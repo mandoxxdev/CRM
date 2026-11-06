@@ -181,6 +181,61 @@ process.on('exit', (code) => {
     assert.strictEqual(s.disponivel_material, 10);
   });
 
+  // ── Fase 5 (P1, B1379): o saldo NEGATIVO sem lote (o que a entrega deixa ao sair de lote impedido, RN-205.10) abate o impedido ──
+  // A conta: max(0, conta de antes - max(0, -SOMA das linhas sem lote)). So o sem lote LIQUIDO negativo abate: lote impedido negativo
+  // continua sem abater o outro (RN-205.02 d) e lote elegivel negativo tambem nao. Linhas por SQL, quantidade_atual = soma das linhas.
+  const linhasDiretas = async (m, linhas) => {
+    let total = 0;
+    for (const [codigo, q, st] of linhas) { // eslint-disable-line no-restricted-syntax
+      let lote = null;
+      if (codigo) {
+        lote = (await dbRun(db, 'INSERT INTO lotes_almoxarifado (material_id, codigo, status) VALUES (?,?,?)', [m.id, codigo, st || 'ATIVO'])).lastID; // eslint-disable-line no-await-in-loop
+      }
+      await dbRun(db, 'INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, lote_id, quantidade) VALUES (?,?,?,?)', [m.id, P01.id, lote, q]); // eslint-disable-line no-await-in-loop
+      total += q;
+    }
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ? WHERE id = ?', [total, m.id]);
+  };
+  await test('[RN-205.02 i, Fase 5 P1] L1 BLOQUEADO 10, sem lote -6, L3 ATIVO 5 -> lote_impedido 4, disponivel_liberado 5 (antes 10 e -1)', async () => {
+    const m = await material(); await linhasDiretas(m, [['L1', 10, 'BLOQUEADO'], [null, -6], ['L3', 5]]);
+    assert.deepStrictEqual(conta(await saldo(m)), { disponivel: 9, lote_impedido: 4, disponivel_liberado: 5 });
+  });
+  await test('[RN-205.02 j, Fase 5 P1] o negativo sem lote maior que o impedido: L1 BLOQUEADO 3, sem lote -6, L3 ATIVO 5 -> 0 (o liberado nunca passa do disponivel)', async () => {
+    const m = await material(); await linhasDiretas(m, [['L1', 3, 'BLOQUEADO'], [null, -6], ['L3', 5]]);
+    assert.deepStrictEqual(conta(await saldo(m)), { disponivel: 2, lote_impedido: 0, disponivel_liberado: 2 });
+  });
+  await test('[RN-205.02 k, Fase 5 P1] sem lote POSITIVO (legado) e livre e nao muda a conta: L1 BLOQUEADO 6, sem lote 2, L3 ATIVO 4 -> 6', async () => {
+    const m = await material(); await linhasDiretas(m, [['L1', 6, 'BLOQUEADO'], [null, 2], ['L3', 4]]);
+    assert.deepStrictEqual(conta(await saldo(m)), { disponivel: 12, lote_impedido: 6, disponivel_liberado: 6 });
+  });
+  await test('[Fase 5 P1, sorteio] 150 materiais sorteados: o impedido e o modelo (a conta antiga menos o sem lote liquido negativo), nunca passa do saldo dos lotes impedidos nem deixa o liberado acima do disponivel', async () => {
+    let semente = 205;
+    const rnd = () => { semente = (semente * 1103515245 + 12345) % 2147483648; return semente / 2147483648; };
+    const STS = ['ATIVO', 'ATIVO', 'BLOQUEADO', 'REPROVADO'];
+    let mordeu = 0;
+    for (let k = 0; k < 150; k++) { // eslint-disable-line no-restricted-syntax
+      const m = await material(); // eslint-disable-line no-await-in-loop
+      const linhas = []; const n = 1 + Math.floor(rnd() * 4);
+      for (let j = 0; j < n; j++) linhas.push([`L${j}`, Math.floor(rnd() * 13) - 3, STS[Math.floor(rnd() * STS.length)]]);
+      if (rnd() < 0.7) linhas.push([null, Math.floor(rnd() * 15) - 10]);
+      await linhasDiretas(m, linhas); // eslint-disable-line no-await-in-loop
+      const bloq = rnd() < 0.3 ? Math.floor(rnd() * 3) : 0;
+      await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = ? WHERE id = ?', [bloq, m.id]); // eslint-disable-line no-await-in-loop
+      const imp = linhas.filter(([c, , st]) => c && st !== 'ATIVO');
+      const somaImp = imp.reduce((a, [, q]) => a + Math.max(0, q), 0);
+      const semLote = linhas.filter(([c]) => !c).reduce((a, [, q]) => a + q, 0);
+      const antiga = Math.max(0, somaImp - bloq);
+      const modelo = Math.max(0, antiga - Math.max(0, -semLote));
+      if (modelo < antiga) mordeu++;
+      const s = await saldo(m); // eslint-disable-line no-await-in-loop
+      const ctx = JSON.stringify({ linhas, bloq, s: conta(s) });
+      assert.strictEqual(s.lote_impedido, modelo, ctx);
+      assert.ok(s.lote_impedido >= 0 && s.lote_impedido <= somaImp + 1e-9, ctx);
+      assert.ok(s.disponivel_liberado <= s.disponivel + 1e-9, ctx);
+    }
+    assert.ok(mordeu >= 10, `premissa: o sem lote negativo mordeu em ${mordeu} sorteios`);
+  });
+
   await close();
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam\n`);

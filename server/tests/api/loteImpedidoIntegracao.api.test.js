@@ -192,6 +192,32 @@ const MSG_5 = (nome) => `${nome}: não é possível separar 5 un. Máximo: 4 (pe
     assert.deepStrictEqual(await linhas(m), ['-=-10', 'L1=10']);
   });
 
+  // Fase 5 (P1, B1379): o "Sem lote atribuido" negativo que a propria entrega gera (RN-205.10) e saldo que SAIU do lote impedido — a
+  // conta o abate (o teto `quantidade_atual - livres`). Antes: disponivel 9, impedido 10, liberado -1, R2 AGUARDANDO_ESTOQUE sem
+  // reserva e a separacao recusava os 5 de L3 ("Maximo: 0 ... Nao entram 9 un").
+  await test('[Fase 5 P1] R1 entrega 6 de L1 bloqueado (sem lote -6); entra L3 ATIVO 5: R2 de 5 reserva 5, a fila e o detalhe mostram 5 e a separacao de 5 passa', async () => {
+    const m = await material(); await entrar(m, 10, 'L1');
+    const a = await criar(m, 6);
+    await ok(como('ADMIN').put(`${API}/requisicoes/${a.R}/aprovar`, {}));
+    await statusRota(m, 'L1', 'BLOQUEADO');
+    await ok(como('ALMOX').put(`${API}/requisicoes/${a.R}/separacao`, { itens_separados: [{ item_id: a.item, quantidade_separada: 6 }] }));
+    await ok(como('ALMOX').put(`${API}/requisicoes/${a.R}/entregar`, { itens_atendidos: [{ item_id: a.item, quantidade_atendida: 6 }] }));
+    await entrar(m, 5, 'L3');
+    assert.deepStrictEqual(await linhas(m), ['-=-6', 'L1=10', 'L3=5'], 'premissa: o sem lote negativo da entrega');
+    const b = await criar(m, 5);
+    const it = await dbGet(db, 'SELECT * FROM itens_requisicao_almoxarifado WHERE id = ?', [b.item]);
+    const s = await requisitionService.saldoDisponivelParaItem(db, it);
+    assert.deepStrictEqual([s.disponivel, s.lote_impedido, s.disponivel_liberado], [9, 4, 5]);
+    assert.strictEqual((await ok(como('ADMIN').put(`${API}/requisicoes/${b.R}/aprovar`, {}))).body.status, 'TOTALMENTE_RESERVADA');
+    assert.deepStrictEqual(await reservas(b.R), [[5, 'ATIVA']]);
+    const fila = (await ok(como('ALMOX').get(`${API}/fila-separacao`))).body.find((f) => Number(f.id) === Number(b.R));
+    assert.strictEqual(fila.itens[0].separavel, 5, JSON.stringify(fila.itens[0]));
+    const det = (await ok(como('ADMIN').get(`${API}/requisicoes/${b.R}`))).body.itens[0];
+    assert.strictEqual(det.quantidade_separavel, 5); assert.strictEqual(det.lote_impedido, 4);
+    await ok(como('ALMOX').put(`${API}/requisicoes/${b.R}/separacao`, { itens_separados: [{ item_id: b.item, quantidade_separada: 5 }] }));
+    assert.deepStrictEqual(await ultimaRodada(b.R, b.item), { maximo: 5, divergente: false });
+  });
+
   await close();
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam\n`);

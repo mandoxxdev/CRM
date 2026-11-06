@@ -13940,6 +13940,18 @@ A tela tem o mesmo 30 escrito, com um aviso no código apontando para o servidor
 clicar "carregar mais" várias vezes, mas pede um campo de busca na tela e uma busca por texto no servidor — não cabia nas 2h30 junto com o
 cursor. Vira o aviso **C477**. O cursor resolve sozinho: toda entrega devolvível passa a ser alcançável. **Reversível.**
 
+**B1379 (NOVA, da Etapa 205, Fase 5 P1; decisão do agente) — o "Sem lote atribuído" negativo abate o saldo em lote impedido.** Quando a
+entrega tira peças de um lote bloqueado, reprovado ou vencido, ela baixa a linha *Sem lote atribuído* (fica negativa) e o lote continua
+com o saldo cheio (RN-205.10). A conta do lote impedido somava o lote cheio: com L1 10 bloqueado, sem lote −6 e L3 ATIVO 5, ela dizia
+impedido 10 e livre −1 — a aprovação deixava a requisição de 5 sem reserva e a separação recusava os 5 de L3. Agora a conta tira também o
+**negativo líquido** das linhas sem lote: impedido 4, livre 5, reserva e separa 5. **Escolhido:** só o sem lote líquido (a soma das linhas
+sem lote do material, se negativa). Nunca desconta mais que o saldo dos lotes impedidos (só diminui a conta de antes) e nunca deixa o livre
+acima do disponível (a conta não fica negativa) — provado por sorteio de 150 materiais. **Descartado:** limitar o impedido a
+`quantidade_atual − linhas livres` (a sugestão do revisor) — com o físico coerente, ela faz um lote impedido negativo abater o saldo de
+outro lote impedido, o que a RN-205.02 (d) recusa de propósito; e abater também lote elegível negativo (não é saída de lote impedido).
+**Risco aceito:** se o sem lote negativo veio de outra coisa (um legado), a conta trava menos do que devia — no pior caso igual a antes da
+Etapa 205. **Reversível** (um termo em `loteImpedido.js`).
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
