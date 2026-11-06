@@ -305,6 +305,30 @@ estourar em mais de 30 min: corte da B1414 (a tela → C499; depois a T4 mínima
 - **Teste de corrida:** nenhum gesto novo concorrente (B1412). Sem gancho.
 - **Restauro da sabotagem** por cópia com md5 (ou `git checkout -- <arquivo>` se o conserto já estiver commitado), um controle por vez.
 
+## Fase 2 — correções do revisor fresco (2026-11-06) — **MANDAM sobre o texto acima onde divergem**
+
+Revisor fresco sobre `025d7109`: 1 trava (conta errada no plano), 3 importantes, 3 menores, todos aceitos. Confirmado: sem irmão a E1 e a C1
+saem idênticas às de hoje (RN-200.06 (ii)/(iii) verdes); o irmão que sai na mesma entrega não conta em dobro (`ja` + `fica` = a parte dele); a
+álgebra do excesso está certa; NULL vale a caixa inteira; `parteQueFicaPorItem` só lê o que o laço já preencheu; "só lote" cai em `outroPar`; T2 é
+galho de verdade; T0 → T1 → T3/T4.
+
+1. **[TRAVA] RN-208.02, fronteira corrigida:** "A 4 → 200 (sobra 2 cobre 2); A 3,999999 → 400 (sobra 1,999999)" (a regra é
+   `saldo − outrasQ − irm.q + 1e-9 < qtdComOrigem`, `requisitionService.js:2417`; o exemplo de 3,000001 estava errado — não mexa no código por ele).
+2. **[IMPORTANTE] As duas peças juntas (o jeito normal da tela):** a pré-seleção (`RequisicoesList.js:725-742`) manda o item 2 com A explícito (caso (b));
+   a conferência física percorre por id (`requisitionService.js:2329-2402`) e a recusa caía no item 2, que a pessoa não mexeu. **Decisão (B nova,
+   reversível): na T1, adiar a chamada de `validarOrigemDaEntrega` dos itens marcados (c) para depois do laço** — os (a)/(b) sem excesso garantem o
+   físico primeiro e a recusa cai em quem escolheu à mão; nenhuma literal muda. **RN-208.12 — as duas peças juntas:** (a) A 4: item 1 Sai de A 2 + item 2
+   com A explícito 2 → 200, A 0; (b) A 3, a mesma entrega → 400 **no item 1** (a E1 estendida, "para outra peça desta requisição"), nada gravado; nas duas
+   ordens de id (molde `caso3` da RN-200.06 (iii)). Controle: sem o adiamento → na ordem item1 < item2 a recusa cai no item 2 com a literal física. Se o
+   adiamento mudar outra recusa existente (teste da 200/198 vermelho), PARE nele, registre como C e siga com o C497 declarado (guia "o que não cobre").
+3. **[IMPORTANTE] RN-200.06 (i) reescrito** ganha, depois do `entOk(… 2 …)`: item 1 num clique 2 → 200; R1 num clique 2 → 200; XB-01/L1 = 0.
+4. **[IMPORTANTE] O sorteio (T4) cobre a 2ª forma:** no gerador, `else if (md < 0.4) { const ir = its.find((x) => x.id !== i.id && x.origem_separacao_id && x.material_id === i.material_id); if (ir) { e.localizacao_origem_id = ir.origem_separacao_id; if (ir.lote_separacao_id) e.lote_id = ir.lote_separacao_id; } }`;
+   premissa ≥ 10 casos desse modo; o controle (ii) (`irm.q` = 0) com G ou N ≥ 3.
+5. **[MENOR]** No contrato da literal, manter os ramos `entrega ? … : …` de hoje; trocar só o trecho entre `mas ` e `; sobra` (`requisitionService.js:149-160`).
+6. **[MENOR] RN-208.09:** "item 1 sem origem"; mais o caso com o item 1 guardando 1 de A → o item 2 mostra "A (sobra 2 de 3; 1 desta)"; renomear
+   `[RN-201.07/06] … rotula sem "desta"` (`RequisicoesSaiDeSobra.test.js:266`) para "(item único)".
+7. **[MENOR]** RN-208.03 (a) e a T3 com a variante do item 2 com `localizacao_origem_id` = a origem dele (o que a tela manda).
+
 ## Execução
 
 - [ ] **F2** — revisor fresco sobre o commit deste plano.
