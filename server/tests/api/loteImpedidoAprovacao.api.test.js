@@ -183,6 +183,21 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(await reservas(R2), []);
   });
 
+  // ── revisao "passaria quebrado?": a releitura depois da conversao da reserva da OS (Etapa 171) tambem le o liberado ────────────
+  // Sem este cenario, voltar so a 2a leitura para `disponivel` passava verde (nenhum teste convertia reserva da OS).
+  await test('[RN-205.03, conversao da OS] L1 4, L2 BLOQUEADO 6, reserva da OS 3: a requisicao da OS de 10 converte os 3 e reserva 4 (nao 10)', async () => {
+    const m = await l1l2();
+    const rid = (await dbRun(db, `INSERT INTO reservas_material_almoxarifado (material_id, quantidade, quantidade_utilizada, status, origem,
+        os_id, os_referencia, recebimento_id) VALUES (?, 3, 0, 'ATIVA', 'MANUAL', 20599, 'OS-205X', 20599)`, [m])).lastID;
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_reservada = COALESCE(quantidade_reservada,0) + 3 WHERE id = ?', [m]);
+    const r = await como('SOL').post(`${API}/requisicoes`, { os_referencia: 'OS-205X', itens: [{ material_id: m, quantidade: 10 }] });
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    assert.strictEqual((await aprovar(r.body.id)).body.status, 'PARCIALMENTE_RESERVADA');
+    assert.strictEqual((await dbGet(db, 'SELECT status FROM reservas_material_almoxarifado WHERE id = ?', [rid])).status, 'LIBERADA',
+      'premissa: a reserva da OS foi convertida');
+    assert.deepStrictEqual(await reservas(r.body.id), [[4, 'ATIVA']]);
+  });
+
   await close();
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
