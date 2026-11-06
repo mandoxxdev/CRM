@@ -63,11 +63,11 @@ process.on('exit', (code) => {
   };
   const A = await loc('GZ-A'); const B = await loc('GZ-B'); const P = await loc('GZ-P');
 
-  const material = async ({ lote = false, serie = false } = {}) => {
+  const material = async ({ lote = false, serie = false, padrao = P.id } = {}) => {
     const c = `E207-${++seq}`;
     const id = (await dbRun(db, `INSERT INTO materiais_almoxarifado (codigo, nome, unidade, quantidade_atual, quantidade_minima, ativo,
         material_critico, custo_unitario, controle_lote, controle_serie, permite_saldo_negativo, localizacao_padrao_id)
-        VALUES (?, ?, 'un', 0, 0, 1, 0, 0.1, ?, ?, 0, ?)`, [c, c, lote ? 1 : 0, serie ? 1 : 0, P.id])).lastID;
+        VALUES (?, ?, 'un', 0, 0, 1, 0, 0.1, ?, ?, 0, ?)`, [c, c, lote ? 1 : 0, serie ? 1 : 0, padrao])).lastID;
     return { id, nome: c };
   };
   const entrar = async (m, destino, q, lote, extra = {}) => ok(como('ADMIN').post(`${API}/movimentacoes/v2`, { material_id: m.id,
@@ -249,6 +249,33 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(await retrato(m), { linhas: [], fisico: 0 });
   });
 
+  // ── RN-207.09: o claim de hoje nao levaria a guarda -> como hoje (Fase 5 S1, B1406) ────────────────────────────────────────────
+  // O claim do motor drena a linha preferida primeiro (sem padrao: a SEM endereco; com padrao: a padrao) e depois a maior — a linha sem
+  // endereco entra nele. A fatia so vale quando o claim de hoje levaria guarda; senao a fatia tirava de A o livre que a outra requisicao
+  // ia escolher (R3 tomava 400 "sobra 0").
+  const cenario09 = async (padrao, semEndereco) => {
+    const m = await material({ padrao });
+    await linhaSql(m, null, semEndereco); await entrar(m, A.id, 3);
+    const r1 = await reqDireta([[m.id, 2]]); const r2 = await reqDireta([[m.id, 1]]); const r3 = await reqDireta([[m.id, 1]]);
+    await separar(r1.R, [{ item_id: r1.ids[0], quantidade_separada: 2, localizacao_origem_id: A.id }]);
+    await separar(r2.R, [{ item_id: r2.ids[0], quantidade_separada: 1 }]);
+    await separar(r3.R, [{ item_id: r3.ids[0], quantidade_separada: 1 }]);
+    return { m, r1, r2, r3 };
+  };
+  for (const [nome, padrao, semEndereco] of [['a', null, 2], ['b', 'P', 5]]) {
+    // eslint-disable-next-line no-await-in-loop
+    await test(`[RN-207.09 ${nome}] ${padrao ? 'padrao P vazia' : 'sem padrao'}, sem endereco ${semEndereco} + A 3 (R1 guarda 2): R2 (1) automatico sai da linha sem endereco (uma SAIDA, como hoje); R3 escolhendo A 200`, async () => {
+      const { m, r1, r2, r3 } = await cenario09(padrao ? P.id : null, semEndereco);
+      await entregar(r2.R, [{ item_id: r2.ids[0], quantidade_atendida: 1 }]);
+      assert.deepStrictEqual(await livro(r2.R, m), [['SAIDA', null, null, 1]]);
+      assert.deepStrictEqual(await retrato(m), { linhas: [`-/-=${semEndereco - 1}`, 'GZ-A/-=3'], fisico: semEndereco + 2 });
+      await entregar(r3.R, [{ item_id: r3.ids[0], quantidade_atendida: 1, localizacao_origem_id: A.id }]);
+      assert.deepStrictEqual(await livro(r3.R, m), [['SAIDA', 'GZ-A', null, 1]]);
+      await entregar(r1.R, [{ item_id: r1.ids[0], quantidade_atendida: 2 }]);
+      assert.deepStrictEqual(await retrato(m), { linhas: [`-/-=${semEndereco - 1}`], fisico: semEndereco - 1 });
+    });
+  }
+
   // ── RN-207.06: o livro e o desfazer (B1402, Achado 1) ───────────────────────────────────────────────────────────────────────────
   const excluir = (R) => ok(como('ADMIN').del(`${API}/requisicoes/${R}`, { justificativa: 'e207' }));
   await test('[RN-207.06] depois da 1a entrega da RN-207.01, excluir pela rota: cada ENTRADA volta ao endereco da SAIDA (A 3, B 2, P 0)', async () => {
@@ -286,6 +313,8 @@ process.on('exit', (code) => {
   //  N — (idem) a proxima entrega de cada item com guarda, num clique, nao toma "nao serve mais";
   //  L — material sem guarda sem lote viva antes: nenhuma SAIDA sem lote COM endereco fora da origem planejada (B1397);
   //  F — fisico = soma das linhas.
+  // Fase 5 S1: um bloco que le as linhas e baixa como hoje so isenta G e N (o C492) quando o livre usavel nao cobria; se cobria, a baixa de
+  // hoje veio do "o claim nao leva guarda" (B1406) e G e N valem (claimSemGuarda).
   const stockService = require('../../services/almoxarifado/stockService');
   const C = await loc('GZ-C'); const X = await loc('GZ-X');
   await dbRun(db, 'UPDATE localizacoes_almoxarifado SET bloqueada = 1 WHERE id = ?', [X.id]);
@@ -296,7 +325,8 @@ process.on('exit', (code) => {
     const ri = (a, b) => a + Math.floor(rnd() * (b - a + 1));
     const pick = (arr) => arr[Math.floor(rnd() * arr.length)];
     const st = { casos: 0, medidos: 0, aceitos: 0, recusas: 0, comLote: 0, i2: 0, guardaSL: 0, L: 0, T: 0, cobriu: 0, semGuardaBloco: 0,
-      explicitaAlem: 0, G_viol: 0, N_testes: 0, N_viol: 0, L_viol: 0, T_viol: 0, F_viol: 0, orfas: 0 };
+      explicitaAlem: 0, G_viol: 0, N_testes: 0, N_viol: 0, L_viol: 0, T_viol: 0, F_viol: 0, orfas: 0,
+      claimSemGuarda: 0 };
     const ex = [];
     const PARTE = requisitionService.parteOrigemSql('ir');
     for (let caso = 0; caso < CASOS; caso++) {
@@ -382,17 +412,24 @@ process.on('exit', (code) => {
       const antes = await cobre();
       const temGuardaSL = (await guardas()).some((g) => g.lote == null && Number(g.q) > 1e-9);
       const desde = (await dbGet(db, 'SELECT COALESCE(MAX(id), 0) x FROM movimentacoes_almoxarifado')).x;
-      // espioes, so durante a entrega medida
+      // espioes, so durante a entrega medida (Fase 5: as leituras da regua guardam as linhas lidas e cada SAIDA a quantidade)
       const ev = [];
       const origAll = db.all; const origReg = stockService.registrarMovimentacao;
       db.all = function (sql, ...rest) {
-        if (typeof sql === 'string' && sql.includes('ir.lote_separacao_id IS NULL AND') && sql.includes('as loc_id') && rest[0] && rest[0][0] === m) ev.push('GQ');
-        else if (typeof sql === 'string' && sql.includes('lc.id as lc_id') && rest[0] && rest[0][0] === m) ev.push('LQ');
+        let k = null;
+        if (typeof sql === 'string' && sql.includes('ir.lote_separacao_id IS NULL AND') && sql.includes('as loc_id') && rest[0] && rest[0][0] === m) k = 'GQ';
+        else if (typeof sql === 'string' && sql.includes('lc.id as lc_id') && rest[0] && rest[0][0] === m) k = 'LQ';
+        if (k) {
+          const e = { k, rows: [] }; ev.push(e);
+          const cb = rest[rest.length - 1];
+          if (typeof cb === 'function') rest[rest.length - 1] = function (err, rows) { e.rows = rows || []; return cb.call(this, err, rows); };
+        }
         return origAll.call(this, sql, ...rest);
       };
       stockService.registrarMovimentacao = async (dbx, user, p, ...r) => {
         if (p && p.tipo === 'SAIDA' && Number(p.requisicao_id) === Number(R)) {
-          ev.push(p.serie_ids ? 'SERIE' : ('codigo_lido_origem' in p) ? 'ORIGEM' : p.lote_id ? 'FLOTE' : p.localizacao_origem_id ? 'FSL' : 'FALLBACK');
+          ev.push({ k: p.serie_ids ? 'SERIE' : ('codigo_lido_origem' in p) ? 'ORIGEM' : p.lote_id ? 'FLOTE' : p.localizacao_origem_id ? 'FSL' : 'FALLBACK',
+            q: Number(p.quantidade) });
         }
         return origReg(dbx, user, p, ...r);
       };
@@ -406,17 +443,24 @@ process.on('exit', (code) => {
       // T: os blocos da regua
       const blocos = []; let cur = null;
       for (const e of ev) {
-        if (e === 'GQ') { cur = { lq: false, calls: [] }; blocos.push(cur); continue; }
-        if (e === 'LQ') { if (cur) cur.lq = true; continue; }
-        if (e === 'FSL' || e === 'FALLBACK') { if (cur) cur.calls.push(e); else st.orfas++; continue; }
+        if (e.k === 'GQ') { cur = { gq: e, lq: null, calls: [] }; blocos.push(cur); continue; }
+        if (e.k === 'LQ') { if (cur) cur.lq = e; continue; }
+        if (e.k === 'FSL' || e.k === 'FALLBACK') { if (cur) cur.calls.push(e); else st.orfas++; continue; }
         cur = null;
       }
       let naoCobriu = false; let tviol = false;
       for (const b of blocos) {
-        const nF = b.calls.filter((x) => x === 'FSL').length; const nB = b.calls.filter((x) => x === 'FALLBACK').length;
+        const nF = b.calls.filter((x) => x.k === 'FSL').length; const nB = b.calls.filter((x) => x.k === 'FALLBACK').length;
         if (!b.lq) { st.semGuardaBloco++; if (!(nB === 1 && nF === 0)) tviol = true; } else if (nB === 0 && nF >= 1) st.cobriu++;
-        else if (nB === 1 && nF === 0) naoCobriu = true;
-        else tviol = true;
+        else if (nB === 1 && nF === 0) {
+          // Fase 5 S1: a baixa de hoje depois da leitura. So e o C492 (G e N nao valem) se o livre usavel — com a parte guardada INTEIRA,
+          // que e >= a que a regua desconta — nao cobria; se cobria, a baixa de hoje veio do "o claim nao leva guarda" e G e N valem.
+          const g = new Map();
+          for (const x of b.gq.rows) if (Number(x.q) > 1e-9) g.set(Number(x.loc_id), (g.get(Number(x.loc_id)) || 0) + Number(x.q));
+          const usavel = b.lq.rows.filter((x) => x.localizacao_id != null && x.lc_id != null && !Number(x.bloqueada))
+            .reduce((s, x) => s + Math.max(0, Number(x.quantidade) - (g.get(Number(x.localizacao_id)) || 0)), 0);
+          if (usavel + 1e-9 >= b.calls[0].q) st.claimSemGuarda++; else naoCobriu = true;
+        } else tviol = true;
       }
       if (naoCobriu) st.T++;
       if (tviol) { st.T_viol++; if (ex.length < 6) ex.push({ caso, k: 'T', ev }); }
@@ -450,7 +494,7 @@ process.on('exit', (code) => {
     }
     return { st, ex };
   };
-  await test(`[RN-207.08, sorteio] ${CASOS} casos, semente ${SEMENTE}: T, G, N, L, F sem violacao; premissas (guarda sem lote >= 30, L >= 20, T >= 10)`, async () => {
+  await test(`[RN-207.08, sorteio] ${CASOS} casos, semente ${SEMENTE}: T, G, N, L, F sem violacao; premissas (guarda sem lote >= 30, L >= 20, T >= 10, claim sem guarda >= 20)`, async () => {
     const { st, ex } = await sorteio();
     console.log(`    sorteio: ${JSON.stringify(st)}`);
     if (ex.length) console.log(`    exemplos: ${JSON.stringify(ex).slice(0, 1500)}`);
@@ -460,6 +504,7 @@ process.on('exit', (code) => {
     assert.ok(st.L >= 20, `premissa: >= 20 casos do L (${st.L})`);
     assert.ok(st.T >= 10, `premissa: >= 10 casos de T, o livre nao cobriu (${st.T})`);
     assert.ok(st.cobriu >= 10, `premissa: >= 10 blocos que cobriram com fatias (${st.cobriu})`);
+    assert.ok(st.claimSemGuarda >= 20, `premissa: >= 20 blocos em que o claim de hoje nao levava guarda (${st.claimSemGuarda})`);
   });
 
   void requisitionService;

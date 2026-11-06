@@ -1984,9 +1984,12 @@ async function lotesParaOAutomatico(db, materialId, saiuDaOrigemPorItem, parteQu
 /**
  * Etapa 207 (B1396-B1399, Fase 2 I3/M1) — as fatias por endereco da parte automatica SEM lote (material sem controle de lote, ou o resto
  * sem lote do que tem). A guarda sem lote (`lote_separacao_id IS NULL`) das caixas vivas do material — de TODAS as requisicoes (B1399) —
- * desconta por endereco das linhas sem lote com saldo; se o livre usavel cobre `quantidade`, devolve as fatias `{ localizacao_id,
- * quantidade }` na ordem do claim (padrao, maior linha, id — a mesma de `lotesParaOAutomatico`), e cada uma vai ao motor com o endereco e
- * origem estrita (`baixar(..., enderecoDaFatia)`). `null` = o chamador baixa como hoje (uma SAIDA sem endereco):
+ * desconta por endereco das linhas sem lote com saldo; se o claim de hoje levaria guarda e o livre usavel cobre `quantidade`, devolve as
+ * fatias `{ localizacao_id, quantidade }` na ordem do claim sem as linhas que ficam de fora (padrao, maior linha, id — a mesma de
+ * `lotesParaOAutomatico`), e cada uma vai ao motor com o endereco e origem estrita (`baixar(..., enderecoDaFatia)`). `null` = o chamador
+ * baixa como hoje (uma SAIDA sem endereco):
+ *  - o claim de hoje (simulado sobre TODAS as linhas sem lote, a sem endereco e a bloqueada inclusive) nao tira de nenhum endereco mais do
+ *    que o livre dele (Fase 5 S1, B1406) — a baixa de hoje nao leva guarda;
  *  - nenhuma guarda com `guardaQueConta > folga` (B1397) — decidido ANTES de ler o saldo, pela conta da entrega (nao pela parte gravada
  *    no banco, que so cai no finally): a V1 da 136 (o irmao sai inteiro da origem na mesma entrega) fica byte a byte como hoje;
  *  - o livre usavel nao cobre (B1398: tudo ou como hoje — fatias + resto sem endereco voltaria ao mesmo poco e levaria a guarda, e com a
@@ -2012,10 +2015,24 @@ async function fatiasSemLoteParaOAutomatico(db, materialId, quantidade, saiuDaOr
   const linhas = await dbAll(db, `SELECT s.id, s.localizacao_id, s.quantidade, lc.id as lc_id, COALESCE(lc.bloqueada, 0) as bloqueada
     FROM estoque_saldo_almoxarifado s LEFT JOIN localizacoes_almoxarifado lc ON lc.id = s.localizacao_id
     WHERE s.material_id = ? AND s.lote_id IS NULL AND s.quantidade > 0`, [materialId]);
-  const usaveis = linhas
-    .map((x) => ({ ...x, livre: Math.max(0, Number(x.quantidade) - (guardadoLoc.get(Number(x.localizacao_id)) || 0)) }))
+  // Fase 5 S1 (B1406): a ordem do claim de hoje (`claimSaldoSemLote`: a preferida — a padrao, ou a SEM endereco quando nao ha padrao —,
+  // depois a maior, depois o id) sobre TODAS as linhas sem lote com saldo, inclusive a sem endereco e a bloqueada (o claim nao as pula).
+  const ordemDoClaim = linhas.map((x) => ({ ...x, livre: Math.max(0, Number(x.quantidade) - (guardadoLoc.get(Number(x.localizacao_id)) || 0)) }))
     .sort((a, b) => ((b.localizacao_id === padrao) - (a.localizacao_id === padrao))
-      || (Number(b.quantidade) - Number(a.quantidade)) || (a.id - b.id))
+      || (Number(b.quantidade) - Number(a.quantidade)) || (a.id - b.id));
+  // Simula o claim: se nenhuma retirada passa do livre do seu endereco, a baixa de hoje nao leva guarda -> null (uma SAIDA, como hoje).
+  // Sem isto a fatia pulava a linha sem endereco que o claim baixaria primeiro e tirava de outro endereco o livre que outra requisicao ia
+  // escolher (R3 "sobra 0"). O que sobra do claim vai negativo na preferida: nao leva guarda que ainda esteja na prateleira.
+  let restaDoClaim = alvo;
+  let claimLevaGuarda = false;
+  for (const x of ordemDoClaim) {
+    if (restaDoClaim <= Q.QTD_FOLGA) break;
+    const take = Q.qtd(Math.min(restaDoClaim, Number(x.quantidade)));
+    if (take > x.livre + Q.QTD_FOLGA) { claimLevaGuarda = true; break; }
+    restaDoClaim = Q.qtd(restaDoClaim - take);
+  }
+  if (!claimLevaGuarda) return null;
+  const usaveis = ordemDoClaim
     .filter((x) => x.localizacao_id != null && x.lc_id != null && !Number(x.bloqueada) && x.livre > Q.QTD_FOLGA);
   if (usaveis.reduce((s2, x) => s2 + x.livre, 0) + Q.QTD_FOLGA < alvo) return null; // B1398: nao cobre — como hoje
   const fatias = [];
