@@ -2484,6 +2484,8 @@ const RequisicoesList = () => {
                     <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{item.material_nome}</div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>
                       Solicitado: {item.quantidade_solicitada} · Já separado: {getSeparado(item)} · Saldo: {item.saldo_atual}
+                      {/* Etapa 205 (Fase 2 I4): o saldo que a separação não conta (lote bloqueado, reprovado ou vencido) */}
+                      {Number(item.lote_impedido) > 0 && ` · Em lote bloqueado/reprovado/vencido: ${item.lote_impedido}`}
                     </div>
                     {/* Etapa 59 (RN-05): de onde o separador tirou — opcional. Com origem escolhida, a
                         entrega sem escolha sai dela (a origem planejada). */}
