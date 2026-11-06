@@ -480,8 +480,17 @@ async function listarDevolucoes(db, filters = {}) {
  * Leitura agregada de tres tabelas: a movimentacao (a entrega), a soma das devolucoes que ja
  * citam aquela movimentacao, e as series que sairam nela. Linha ja devolvida por inteiro VOLTA
  * na lista, com saldo 0 — "ja devolvido por inteiro" e informacao util, nao ruido, e a tela a
- * mostra desabilitada. As 30 mais recentes: quem devolve devolve o que saiu ha pouco; lista
- * infinita rolando no modal atrapalha mais do que ajuda.
+ * mostra desabilitada. Paginas de 30 (as mais recentes primeiro), com cursor `antes_de` desde a Etapa 204. Este comentario
+ * dizia "As 30 mais recentes: quem devolve devolve o que saiu ha pouco" e ficou velho: material que sai todo dia passava de
+ * 30 entregas em semanas e a entrega antiga sumia da lista (C465). Lista infinita rolando no modal continua recusada — a
+ * tela pede a pagina seguinte com "Carregar entregas mais antigas".
+ *
+ * Etapa 204 (B1363-B1366): `antesDeId` = id da ultima entrega da pagina anterior. Cursor composto (data + id) sobre o
+ * MESMO `COALESCE(created_at,'')` do ORDER BY: empate no mesmo segundo nao pula nem repete, created_at NULL vem por
+ * ultimo. O cursor so ancora — tem de ser movimentacao deste material, mas nao precisa ser elegivel (a entrega estornada
+ * entre dois cliques continua servindo, B1365). Sem `antesDeId`, a resposta e a de antes. Ordem das recusas: material
+ * inexistente -> cursor invalido -> cursor nao achado. A pagina e fixa em 30 e so o servidor a decide (B1366; a tela tem a
+ * constante PAGINA_SAIDAS e deduz "ha mais" da pagina cheia — mudar um sem o outro faz o botao sumir cedo ou sobrar).
  *
  * Etapa 117 (C236, RN-03): as duas pontas somam so a devolucao viva (`devolucaoViva.js`).
  * Etapa 121 (C253, B783): e descontam as series que voltaram por uma entrada que nao cita a saida (`quantidade_reentrada`,
@@ -495,10 +504,23 @@ async function listarDevolucoes(db, filters = {}) {
  * (`tests/api/devolucaoVinculo.api.test.js`) e um deles le o numero DAQUI para bater contra a
  * validacao na mesma execucao.
  */
-async function listarSaidasElegiveis(db, materialId, { limite = 30 } = {}) {
+const MSG_ANTES_DE_INVALIDO = 'antes_de inválido — informe o id da última entrega da lista';
+const msgEntregaNaoEncontrada = (id) => `Entrega ${id} não encontrada neste material`;
+
+async function listarSaidasElegiveis(db, materialId, { limite = 30, antesDeId } = {}) {
   const material = await dbGet(db,
     'SELECT id, controle_serie FROM materiais_almoxarifado WHERE id = ?', [materialId]);
   if (!material) throw erro400('Material não encontrado');
+
+  // Etapa 204: o cursor. Ausente = undefined, null ou '' (a query `?antes_de=`); repetido chega como array e vira "1,2".
+  let cursor = null;
+  if (antesDeId !== undefined && antesDeId !== null && antesDeId !== '') {
+    const texto = String(antesDeId);
+    if (!/^[1-9][0-9]*$/.test(texto)) throw erro400(MSG_ANTES_DE_INVALIDO);
+    cursor = await dbGet(db, `SELECT id, COALESCE(created_at,'') AS c FROM movimentacoes_almoxarifado
+                               WHERE id = ? AND material_id = ?`, [Number(texto), materialId]);
+    if (!cursor) throw erro400(msgEntregaNaoEncontrada(texto));
+  }
 
   const marcadores = TIPOS_SAIDA_DEVOLVIVEL.map(() => '?').join(',');
   const saidas = await dbAll(db, `
@@ -514,8 +536,9 @@ async function listarSaidasElegiveis(db, materialId, { limite = 30 } = {}) {
        AND ${requisicaoNaoExcluidaSql('mv')}
        -- Etapa 178 (C2): a saida de entrega de EPI nao e devolvivel nesta etapa — nao aparece para escolher.
        AND NOT EXISTS (SELECT 1 FROM entregas_epi_almoxarifado ee WHERE ee.movimentacao_id = mv.id)
-     ORDER BY mv.created_at DESC, mv.id DESC
-     LIMIT ?`, [materialId, ...TIPOS_SAIDA_DEVOLVIVEL, limite]);
+       ${cursor ? "AND (COALESCE(mv.created_at,'') < ? OR (COALESCE(mv.created_at,'') = ? AND mv.id < ?))" : ''}
+     ORDER BY COALESCE(mv.created_at,'') DESC, mv.id DESC
+     LIMIT ?`, [materialId, ...TIPOS_SAIDA_DEVOLVIVEL, ...(cursor ? [cursor.c, cursor.c, cursor.id] : []), limite]);
 
   const out = [];
   for (const s of saidas) {
@@ -537,6 +560,6 @@ async function listarSaidasElegiveis(db, materialId, { limite = 30 } = {}) {
 }
 
 module.exports = {
-  MOTIVOS, DESTINOS, TIPOS_SAIDA_DEVOLVIVEL,
+  MOTIVOS, DESTINOS, TIPOS_SAIDA_DEVOLVIVEL, MSG_ANTES_DE_INVALIDO, msgEntregaNaoEncontrada,
   registrarDevolucao, listarDevolucoes, listarSaidasElegiveis,
 };
