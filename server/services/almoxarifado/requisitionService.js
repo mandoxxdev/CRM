@@ -18,6 +18,8 @@ const travaPorMaterial = require('./travaPorMaterial');
 const reservaDaOs = require('./reservaDaOs');
 // Etapa 117 (C236, B759): a devolucao viva (a entrada nao estornada) — a mesma regua do estorno e da tela de Devolucoes.
 const { DEVOLUCAO_VIVA_SQL } = require('./devolucaoViva');
+// Etapa 205 (B1368): o saldo de lote impedido (modulo so com quantidade e diaLocal — sem ciclo).
+const { loteImpedidoSql, fraseLoteImpedido } = require('./loteImpedido');
 // Etapa 93 (T0, B443): a trava POR REQUISICAO das portas do almoxarife (outra trava; ordem requisicao -> material).
 const travaPorRequisicao = require('./travaPorRequisicao');
 // Etapa 114 (C229): a requisicao com item pendente de material inativo (modulo sem require de servico — sem ciclo).
@@ -501,10 +503,18 @@ async function saldoDisponivelParaItem(db, item) {
       ${caixaSemReservaSql('ma.id', 'AND ix.id <> ?')} as caixa_outros_itens,
       COALESCE(ma.quantidade_bloqueada, 0) as bloqueada, COALESCE(ma.quantidade_em_inspecao, 0) as em_inspecao,
       COALESCE(ma.quantidade_em_terceiros, 0) as em_terceiros,
-      ${permiteNegativoSql('ma')} as permite_negativo
+      ${permiteNegativoSql('ma')} as permite_negativo,
+      -- Etapa 205 (B1368): o saldo de lote impedido do material (loteImpedido.js), so lido — o disponivel acima fica igual
+      ${loteImpedidoSql('ma')} as lote_impedido
     FROM materiais_almoxarifado ma WHERE ma.id = ?`, [item.id, item.requisicao_id, item.id, item.material_id]);
+  const disponivel = num(row?.saldo_disponivel) + num(row?.reservado_para_item);
+  const loteImpedido = Math.max(0, num(row?.lote_impedido));
   return {
-    disponivel: num(row?.saldo_disponivel) + num(row?.reservado_para_item),
+    disponivel,
+    // Etapa 205 (B1368, B1370): aditivos. A aprovacao e a separacao leem o liberado (o disponivel sem o saldo de lote bloqueado,
+    // reprovado ou vencido); a entrega continua lendo `disponivel`/`disponivel_material` (item 7). Pode ser < 0: quem usa aplica max(0, …).
+    lote_impedido: Q.qtd(loteImpedido),
+    disponivel_liberado: Q.qtd(disponivel - loteImpedido),
     reservado_para_item: num(row?.reservado_para_item),
     // Etapa 98 (T3, B509): o disponivel do material SEM a reserva do item, as retencoes e a regra do motor — a previa
     // da entrega diz com eles o que o motor deixa sair (entregavelPeloMotor) e a recusa os nomeia (E190).
