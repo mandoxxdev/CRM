@@ -348,14 +348,14 @@ process.on('exit', (code) => {
   const stockService = require('../../services/almoxarifado/stockService');
   const C = await loc('GZ-C'); const X = await loc('GZ-X');
   await dbRun(db, 'UPDATE localizacoes_almoxarifado SET bloqueada = 1 WHERE id = ?', [X.id]);
-  const SEMENTE = Number(process.env.SEMENTE207 || 207); const CASOS = 400;
+  const SEMENTE = Number(process.env.SEMENTE207 || 207); const CASOS = 2000;
   const sorteio = async () => {
     let seed = SEMENTE;
     const rnd = () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
     const ri = (a, b) => a + Math.floor(rnd() * (b - a + 1));
     const pick = (arr) => arr[Math.floor(rnd() * arr.length)];
     const st = { casos: 0, medidos: 0, aceitos: 0, recusas: 0, comLote: 0, i2: 0, guardaSL: 0, L: 0, T: 0, cobriu: 0, semGuardaBloco: 0,
-      explicitaAlem: 0, G_viol: 0, N_testes: 0, N_viol: 0, L_viol: 0, T_viol: 0, F_viol: 0, orfas: 0,
+      explicitaAlem: 0, modoIrmao: 0, irmaoMedido: 0, G_viol: 0, N_testes: 0, N_viol: 0, L_viol: 0, T_viol: 0, F_viol: 0, orfas: 0,
       claimSemGuarda: 0, recusaMaximo: 0, recusaEscolhida: 0, recusaRoubada: 0, R_viol: 0, S_viol: 0 };
     const ex = [];
     const PARTE = requisitionService.parteOrigemSql('ir');
@@ -411,7 +411,7 @@ process.on('exit', (code) => {
       if (!['EM_SEPARACAO', 'PRONTA_RETIRADA', 'PARCIALMENTE_ATENDIDA', 'SEPARADA', 'PRONTO_RETIRADA'].includes(reqSt)) continue;
       st.casos++;
       const its = await requisitionService.carregarItensRequisicao(db, R);
-      const payload = []; let explicitaAlem = false;
+      const payload = []; let explicitaAlem = false; let modoIrmao = false;
       for (const i of its) {
         const caixa = Math.max(0, requisitionService.getSeparado(i) - requisitionService.getEntregue(i)); if (caixa <= 0 && rnd() < 0.7) continue;
         if (i2 && i.origem_separacao_id && rnd() < 0.8) continue; // I2: a guarda fica viva para o automatico do irmao
@@ -419,13 +419,19 @@ process.on('exit', (code) => {
         const e = { item_id: i.id, quantidade_atendida: q }; const md = rnd();
         if (md < 0.2) e.origem_automatica = true;
         else if (md < 0.3 && i.origem_separacao_id) { e.localizacao_origem_id = i.origem_separacao_id; if (i.lote_separacao_id) e.lote_id = i.lote_separacao_id; }
-        // a origem ESCOLHIDA alem da parte guardada do item tira do endereco o que o irmao guardou ali — escolha de quem entrega, na
-        // passada 0 (que esta etapa nao toca): fora do G e do N (que medem o automatico)
+        // Etapa 208 (Fase 2, item 4): a 2a forma do C496 — o "Sai de" a mao no par que OUTRO item desta requisicao guardou
+        else if (md < 0.4) {
+          const ir = its.find((x) => x.id !== i.id && x.origem_separacao_id && x.material_id === i.material_id);
+          if (ir) { e.localizacao_origem_id = ir.origem_separacao_id; if (ir.lote_separacao_id) e.lote_id = ir.lote_separacao_id; modoIrmao = true; }
+        }
+        // a origem ESCOLHIDA alem da parte guardada do item: desde a Etapa 208 (B1408) a E1 confere o excesso — G e N valem tambem aqui
+        // (antes ficava fora deles: a passada 0 levava o que o irmao guardou, o C496)
         if (e.localizacao_origem_id && q > requisitionService.parteDaOrigem(i) + 1e-9) explicitaAlem = true;
         payload.push(e);
       }
       if (!payload.length) continue;
       st.medidos++;
+      if (modoIrmao) st.modoIrmao++;
       const guardas = async () => dbAll(db, `SELECT ir.id, ir.origem_separacao_id loc, ir.lote_separacao_id lote, ${PARTE} q
         FROM itens_requisicao_almoxarifado ir JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id WHERE ir.material_id = ?
           AND ir.origem_separacao_id IS NOT NULL AND COALESCE(r.ativo, 1) = 1 AND r.status NOT IN ('CANCELADO', 'ENTREGUE', 'ENCERRADA', 'REJEITADO')`, [m]);
@@ -534,7 +540,8 @@ process.on('exit', (code) => {
         (SELECT COALESCE(SUM(quantidade), 0) FROM estoque_saldo_almoxarifado WHERE material_id = ?) soma`, [m, m]);
       if (Math.abs(Number(f.fis) - Number(f.soma)) > 1e-9) { st.F_viol++; if (ex.length < 6) ex.push({ caso, k: 'F', f }); }
       if (naoCobriu) continue; // o C492: G e N nao valem (I1)
-      if (explicitaAlem) { st.explicitaAlem++; continue; }
+      if (explicitaAlem) st.explicitaAlem++; // Etapa 208 (RN-208.10): conta, nao exclui
+      if (modoIrmao) st.irmaoMedido++;
       // G
       const depois = await cobre();
       const vg = Object.entries(depois).filter(([k, x]) => x.have + 1e-9 < x.need && (!antes[k] || antes[k].have + 1e-9 >= antes[k].need));
@@ -552,7 +559,7 @@ process.on('exit', (code) => {
     }
     return { st, ex };
   };
-  await test(`[RN-207.08, sorteio] ${CASOS} casos, semente ${SEMENTE}: T, G, N, L, F, S, R sem violacao; premissas (guarda sem lote >= 30, L >= 20, T >= 10, claim sem guarda >= 20)`, async () => {
+  await test(`[RN-207.08, sorteio] ${CASOS} casos, semente ${SEMENTE}: T, G, N, L, F, S, R sem violacao; premissas (guarda sem lote >= 30, L >= 20, T >= 10, claim sem guarda >= 20; Etapa 208: alem da parte >= 10, par do irmao >= 10)`, async () => {
     const { st, ex } = await sorteio();
     console.log(`    sorteio: ${JSON.stringify(st)}`);
     if (ex.length) console.log(`    exemplos: ${JSON.stringify(ex).slice(0, 1500)}`);
@@ -562,6 +569,8 @@ process.on('exit', (code) => {
     assert.ok(st.L >= 20, `premissa: >= 20 casos do L (${st.L})`);
     assert.ok(st.T >= 10, `premissa: >= 10 casos de T, o livre nao cobriu (${st.T})`);
     assert.ok(st.cobriu >= 10, `premissa: >= 10 blocos que cobriram com fatias (${st.cobriu})`);
+    assert.ok(st.explicitaAlem >= 10, `premissa (Etapa 208): >= 10 casos aceitos com a origem escolhida alem da parte, medidos por G e N (${st.explicitaAlem})`);
+    assert.ok(st.irmaoMedido >= 10, `premissa (Etapa 208): >= 10 casos aceitos com o Sai de no par do irmao, medidos por G e N (${st.irmaoMedido})`);
     assert.ok(st.claimSemGuarda >= 20, `premissa: >= 20 blocos em que o claim de hoje nao levava guarda (${st.claimSemGuarda})`);
   });
 
