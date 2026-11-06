@@ -11,7 +11,15 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-06):** **Etapa 207 fechada** (**a entrega respeita a peça separada sem lote** — numa requisição
+> **Onde o desenvolvimento está (2026-11-06):** **Etapa 208 fechada** (**o "Sai de" da entrega respeita a peça que o irmão separou** — numa
+> requisição com duas peças do mesmo material, entregar uma escolhendo à mão o endereço de onde a outra foi separada (ou o mesmo endereço da
+> própria separação acima da parte) levava a peça da outra, e a entrega seguinte dela era recusada com *"… não serve mais"*. Agora a entrega
+> é recusada na hora, com a conta, e o **Sai de** da janela de entrega mostra o que as outras peças separaram ali (*"A (sobra 1 de 3; 2
+> desta)"*). **C470**, **C472** e **C496** resolvidos; servidor e uma linha na janela; nada a rodar antes do deploy; decisões **B1407** a
+> **B1415** (a **B1340** revertida na parte do irmão; o corte da B1414 não foi preciso); avisos **C497** e **C498** (C499 sem uso); limitações
+> **D (208)**; verificação **F (208)**). **Próxima: os itens 8 e 9 do 2º pacote — peça em quarentena com lote (C466)**, 1ª parte *"o
+> bloqueio passa a saber o lote"*; detalhada no fim do plano da 208.
+> *(Antes, 2026-11-06:)* **Etapa 207 fechada** (**a entrega respeita a peça separada sem lote** — numa requisição
 > com duas peças do mesmo material sem lote, a entrega da peça separada sem dizer de onde podia esvaziar justamente a prateleira de onde a
 > outra peça foi separada, e a entrega seguinte dela era recusada com *"a origem da separação … não serve mais"*. Agora, quando a baixa de
 > sempre levaria a peça separada e os outros endereços cobrem a entrega, ela sai em pedaços por endereço, pulando o que está separado — e o
@@ -4497,7 +4505,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -13845,6 +13853,7 @@ a conferência roda depois de ler todos os itens (na primeira redação era item
 itens, o endereço ia a zero e a outra requisição tomava *"não serve mais"*). A parte guardada de **outro item da mesma requisição** que não sai
 nesta entrega não é protegida (**C472**). **Descartado:** contar a parte desse irmão (tem de excluir o próprio item e muda a conta da
 planejada — mais cenários do que cabia). **Reversível.** `d7ff9a39`.
+*(**Revertida na Etapa 208, na parte do irmão** — **B1413**: a parte que outro item desta requisição deixa separada no endereço passou a contar (**B1407**), sem somá-la ao já pedido (o descartado acima continua descartado). A soma dos itens da mesma entrega continua valendo.)*
 
 **B1341 (NOVA, da Etapa 200; decisão do agente) — automático, planejada e só lote não mudam.** **Descartado:** conferir o só lote — quem
 escolhe o endereço dele é o motor de estoque (o endereço de mais saldo do lote), sem olhar o que está separado; mexer é no motor, que todas
@@ -14265,6 +14274,57 @@ outra requisição ia escolher. Cenário: sem padrão, *sem endereço* 2 e *A* 3
 saída sem endereço); só fatia quando levaria a peça separada. **Descartado:** fatia sem endereço (não tem origem estrita e o motor começa
 pela padrão — não dá para mirar a linha); mudar a baixa do motor (todas as portas de saída a usam). **Reversível**
 (`fatiasSemLoteParaOAutomatico`). `730a8a00`.
+
+**B1407 (NOVA, da Etapa 208; decisão do agente) — o caminho: a parte que outro item desta requisição deixa separada no endereço entra na
+conta da entrega com "Sai de" escolhido à mão.** Na conferência da escolha à mão (a da Etapa 200), para o endereço e lote escolhidos,
+soma-se a parte separada de cada **outro** item desta requisição com a origem da separação **naquele** endereço e lote — o item que não sai
+nesta entrega, pela parte ainda não entregue; o que sai nesta entrega da própria origem, só pelo que sobra dela depois (o que ele leva já
+está no *"já contando … desta entrega"*); o próprio item fica fora. Recusa se o saldo do endereço menos o já pedido nesta entrega, menos o
+separado das outras requisições, menos o dos outros itens não cobre a quantidade. Mesma régua do automático da 206/207 (`guardaQueConta`).
+**Descartados:** (a) somar a parte dos irmãos ao "já pedido" desta entrega (a forma descartada na B1340) — mudaria a recusa física e o item
+que sai da própria origem veria a parte dele em dobro; (b) tirar o filtro "outras requisições" da régua de sempre — mudaria a separação e o
+rótulo do **Sai de** da separação, e contaria o próprio item. **Reversível** (`guardaDosIrmaosNoPar`). `227334f1` (Fase 5: o filtro de
+material ganhou teste, RN-208.06 e).
+
+**B1408 (NOVA, da Etapa 208; decisão do agente) — o mesmo endereço da separação do item, acima da parte separada de lá, também passa pela
+conta (fecha o C470).** Conferir só o excesso sobre a parte é a mesma conta de conferir a quantidade inteira (a parte própria cancela), e a
+recusa mostra números que o usuário reconhece. Só quando a quantidade passa da parte: até a parte, nada muda (o dado antigo em que duas
+partes somam mais que o endereço — B1338 — continua saindo para quem entrega primeiro). A conta desconta as outras requisições também.
+**Descartados:** (a) só os irmãos no excesso — duas réguas para o mesmo excesso, e o C470 ficaria aberto; (b) conferir sempre o mesmo
+endereço — recusaria o dado antigo (RN-208.04 b). **Reversível.** `227334f1`.
+
+**B1409 (NOVA, da Etapa 208; decisão do agente) — a frase: a recusa da Etapa 200 estendida, igual letra por letra sem irmão.** Sem parte
+de outro item desta requisição, a recusa da entrega e a da separação saem idênticas às de antes. Com: *"… mas 2 já está separado dali para
+outra peça desta requisição; sobra 1, …"* (*"… já estão separados dali para outras peças desta requisição …"* com dois ou mais itens); com
+outras requisições também, as duas parcelas unidas por *" e "*: *"… para outra requisição (⟨número⟩) e 2 para outra peça desta
+requisição; …"*. **Descartados:** (a) uma frase própria — duplicaria a conta do "sobra"; (b) dizer qual peça pela posição — a tela não
+mostra número de item estável. **Reversível.** `227334f1` (Fase 5: o plural da forma mista ganhou teste, RN-208.06 d).
+
+**B1410 (NOVA, da Etapa 208; decisão do agente) — o endereço e o lote têm de bater exatos.** A parte de outro item só conta quando o
+endereço **e** o lote da separação dele são os escolhidos. A parte separada **sem lote** (*"qualquer lote em A"*) num material com lote
+não conta quando o **Sai de** escolhe (A, L1) — o mesmo limite que a conta já tinha para outras requisições → **C498**. **Reversível.**
+`227334f1` (RN-208.07).
+
+**B1411 (NOVA, da Etapa 208; decisão do agente) — a tela: o "Sai de" da janela de entrega desconta o que os outros itens desta requisição
+separaram ali.** A opção passa a mostrar *"A (sobra 1 de 3; 2 desta)"* (a mesma forma da janela de separação), com o próprio item fora — o
+item que separou de A continua vendo *"A (3)"*. O número supõe que o outro item **não** sai nesta entrega: quando ele sai junto, a
+conferência conta só o que ele leva, e a opção pode prometer menos do que cabe, nunca mais. A rota da lista de saldos não muda.
+**Descartados:** (a) um campo novo na lista de saldos (mudança de contrato; a tela já tem os itens); (b) não mudar — a janela ofereceria o
+que a entrega recusa. **Reversível** (`irmaosNoPar`). `5c60c868`.
+
+**B1412 (NOVA, da Etapa 208; decisão do agente) — sem trava nova.** A leitura nova roda dentro das duas travas que a entrega já segura; a
+separação de outro item da mesma requisição pega a mesma trava por requisição. Nenhum gesto concorrente novo. **Reversível.**
+
+**B1413 (NOVA, da Etapa 208; decisão do agente) — a B1340 da Etapa 200, na parte do irmão, foi REVERTIDA.** A B1340 decidiu não proteger a
+parte de outro item da mesma requisição (C472) por **tamanho**, não por regra; o teste que afirmava isso de propósito (*"[RN-200.06 (i)]"*:
+item 2 com **Sai de** onde o item 1 e outra requisição guardaram 2 cada, 6 no endereço, entregando 3 → passava) foi reescrito: agora recusa
+com a frase mista (*"… há 6 …, mas 2 já está separado dali para outra requisição (⟨número⟩) e 2 para outra peça desta requisição; sobra 2,
+que não cobre a quantidade (3). …"*), e com 2 passa; depois o item 1 e a outra requisição saem num clique. A parte da B1340 sobre os itens
+da **mesma entrega** (que somam) continua valendo. **Reversível.** `575174c0`, `227334f1`.
+
+**B1414 (NOVA, da Etapa 208; decisão do agente) — o corte, se passasse de 4h em mais de 30 min, não foi preciso.** O plano previa tirar a
+tela (a **B1411**, registrada como **C499**) e depois reduzir o sorteio. **Não aconteceu:** a tela entrou (`5c60c868`) e o sorteio também
+(`53fd0fae`); o número **C499** ficou sem uso.
 
 **B1415 (NOVA, da Etapa 208, Fase 5; decisão do agente) — a conferência física de quem escolheu à mão roda depois da dos outros itens, e isso
 troca QUAL recusa aparece em algumas entregas.** Para a recusa cair em quem escolheu à mão (e não na peça que ninguém mexeu, Fase 2 item 2),
@@ -18189,6 +18249,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      parte — passa ao automático com o aviso *"… o restante, automático"*). **Nenhum erro de estoque**; a entrega da outra requisição é que
      toma *"… não serve mais …"*. **O que fazer:** acima da parte, deixar o **Sai de** que a janela traz. Conserto: a conta do excesso sobre a
      parte, com o dado antigo — ~45 min a 1h (**B1338**).
+     *(**Resolvido na Etapa 208** — `227334f1`: o mesmo endereço acima da parte passa pela conta da escolha à mão e desconta o que outras requisições e outras peças desta separaram ali (**B1408**). **O "o que fazer" acima deixou de ser preciso.**)*
 471. **NOVO (da Etapa 200; o comportamento é anterior) — a entrega com só o lote escolhido (sem endereço) tira do endereço de mais saldo do
      lote, sem olhar o que está separado ali para outra requisição.** **O que fazer:** escolher o endereço junto com o lote. Conserto: no motor
      de estoque, que todas as saídas usam — ~2h (**B1341**).
@@ -18196,6 +18257,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      Dois itens do mesmo material numa requisição: um separado de *XB-01*; o outro, entregue sozinho com **Sai de** *XB-01*, pode levar as
      peças do primeiro, e a entrega do primeiro depois toma *"… não serve mais …"*. **Nenhum erro de estoque.** **O que fazer:** entregar os
      dois itens juntos (a mesma entrega soma os dois) ou o segundo pelo automático (**B1340**).
+     *(**Resolvido na Etapa 208** — `227334f1`, tela `5c60c868`: a entrega com **Sai de** à mão desconta a parte que fica dos outros itens desta requisição (**B1407**, a **B1340** revertida nessa parte — **B1413**); a janela mostra *"(sobra 1 de 3; 2 desta)"* (**B1411**). Fica: a parte sem lote num lote escolhido (**C498**).)*
 473. **NOVO (da Etapa 201) — o "sobra" do "Sai de" é o de quando a janela abriu.** A lista é lida ao abrir a janela de separação ou de entrega;
      se outra requisição separa do mesmo endereço enquanto ela está aberta, o rótulo continua com o número antigo (*"sobra 2 de 6"* quando já
      sobra 0). **Nenhum erro de estoque:** quem decide é a recusa na hora de confirmar (*"… sobra 0, que não cobre a quantidade (2) …"*), que
@@ -18322,6 +18384,19 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      escolhendo *A* → 200 e *A* fica com 1; o item 2, num clique, toma 400 *"a origem da separação (A) não serve mais (O saldo em A (1) não
      cobre a quantidade (2) …)"*. Igual antes e depois da 207. **O que fazer:** entregar o item 2 escolhendo outro endereço (*B*). Conserto:
      a conferência da origem escolhida descontar também a parte separada dos irmãos da mesma requisição naquele endereço (2 h a 3 h).
+     *(**Resolvido na Etapa 208** — `227334f1` (servidor), `5c60c868` (tela), Fase 5 `d88a53bc`: os dois casos agora são recusados na hora com *"… mas 2 já está separado dali para outra peça desta requisição; sobra 1, que não cobre a quantidade (2). …"* (**B1407** a **B1409**). No cenário acima: entregar 2 do item 1 escolhendo *A* → recusado, nada gravado; com 1 → aceito, e o item 2 sai num clique. **O "o que fazer" acima deixou de ser preciso.** Ficam: **C497** e **C498**.)*
+497. **NOVO (da Etapa 208, plano; o comportamento é anterior) — MENOR: com duas peças no mesmo endereço e o saldo não cobrindo as duas, a
+     recusa de saldo pode não dizer quem pediu a mais.** Na mesma entrega, item 1 com **Sai de** escolhido à mão no endereço que o item 2
+     separou e o item 2 com a origem dele: quando o saldo não cobre os dois, vale a recusa de saldo (*"⟨material⟩: O saldo em A (1) não cobre
+     a quantidade (3) — a saída tiraria de outros endereços"*), não a da parte separada. Desde a Fase 2 da 208 ela cai no item escolhido à
+     mão (o certo — **B1415**); a frase continua sem dizer que o resto do endereço é do item 2. **Nada gravado**, nenhum erro de estoque.
+     **O que fazer:** escolher outro endereço para o item 1. Conserto: uma frase própria para o excesso (pequeno; não medido).
+498. **NOVO (da Etapa 208; corte declarado, B1410) — a parte separada sem lote não conta quando o "Sai de" escolhe um lote no mesmo
+     endereço.** Material com lote, um item (desta ou de outra requisição) separado de *A* sem dizer o lote; outro item entregando com **Sai
+     de** (*A*, *L1*): a parte do primeiro não é descontada, e a entrega dele depois pode tomar *"… a origem da separação (A) não serve mais
+     …"*. **Nenhum erro de estoque.** **O que fazer:** entregar primeiro o item separado, ou escolher outro endereço. Conserto: contar a parte
+     sem lote em todo lote do endereço (precisa decidir quanto de cada lote ela ocupa; não medido).
+499. *(Número sem uso: era reservado ao corte da **B1414**, que não aconteceu.)*
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -19678,6 +19753,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(208) O "Sai de" que respeita a peça do irmão, o que ficou de fora.** (1) **O par é exato:** a parte separada sem lote de outro item não
+  conta quando o **Sai de** escolhe um lote no mesmo endereço (**B1410**, **C498**). (2) **A recusa de saldo** com as duas peças no mesmo
+  endereço cai no item escolhido à mão, mas não diz de quem é o resto (**C497**, **B1415**). (3) **O rótulo do Sai de** supõe que a outra
+  peça não sai junto (pode prometer menos do que cabe, nunca mais — **B1411**) e é o de quando a janela abriu (**C473**). (4) **Dentro da
+  parte separada**, o mesmo endereço da separação do item não confere nada (o dado antigo em que duas partes somam mais que o endereço sai
+  para quem entrega primeiro — **B1408**, RN-208.04 b). (5) **QUAL recusa aparece** mudou em algumas entregas com várias peças no mesmo
+  endereço (**B1415**) — nenhum texto novo além do da **B1409**, nenhuma entrega certa recusada (diferencial de ~2.900 entregas).
 - **(207) A entrega que respeita a peça separada sem lote, o que ficou de fora.** (1) **Tudo ou como antes:** quando os outros endereços não
   cobrem a parte automática (linha sem endereço antiga, endereço bloqueado, parte separada maior que o endereço), a entrega sai numa baixa só
   e pode levar a peça separada (**B1398**, **C492**). (2) **Série:** item com número de série fica como antes (**B1404**, **C493**). (3) O
@@ -19686,7 +19768,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   era recusada (*"Localização ⟨padrão⟩ está bloqueada"*), passa a sair pelos pedaços de outros endereços — uma recusa a menos, não uma a mais;
   **sem teste explícito** (verificação manual em **F (207)**). (5) A tela não mudou: o detalhe e a Fila mostram os mesmos números (**B1401**),
   e a troca para o automático continua dizendo *"automático"* (**C495**). (6) **Anterior, registrado e não consertado:** entregar escolhendo no
-  **Sai de** o endereço que o irmão da mesma requisição separou leva a peça dele (**C496**, a próxima etapa).
+  **Sai de** o endereço que o irmão da mesma requisição separou leva a peça dele (**C496**, a próxima etapa) *(— resolvido na 208)*.
 - **(207, Fase 5) A saída fatiada é citada fatia por fatia na devolução.** Quando a parte automática sai em fatias (uma saída por endereço,
   **B1402**), a devolução que cita a saída fica limitada à fatia: na RN-207.01 a entrega de 3 vira *A* 1 + *B* 2, e devolver 3 citando a
   primeira recusa *"Devolução acima do entregue: a saída … entregou 1, já foram devolvidos 0 e restam 1"* — devolve-se 1 citando uma e 2
@@ -19731,6 +19813,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   parte** dele (**C470**). (2) **O só lote** (**C471**, **B1341**). (3) **A parte de outro item da mesma requisição** que não sai nesta entrega
   (**C472**, **B1340**). (4) **O "Sai de" da janela** continua mostrando o saldo do endereço sem o separado das outras (**C469**, **B1342**) —
   a próxima. (5) **A planejada** continua com a guarda *"não serve mais"* (dado antigo, estoque que saiu do endereço depois — **B1333**).
+  *(**Desde a Etapa 208**, os itens (1) e (3) estão resolvidos — **B1407**, **B1408**, C470 e C472.)*
 - **(199) A vírgula na tela e os espaços do termo, o que ficou de fora.** (1) No termo, a **tabulação** sai como 4 espaços (não como parada
   de coluna) e espaço largo/fino como espaço comum; os espaços onde a linha quebra ficam na quebra; espaço no fim de linha não aparece
   (**B1337**) — com isso, o papel de um texto com tabulação ainda não recalcula o código *SHA-256*: quem confere é o **Verificar
@@ -21058,6 +21141,22 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(208) Nenhum clique foi dado.** A tela **mudou** — o rótulo do **Sai de** da janela de entrega passou a mostrar o que as outras peças
+desta requisição separaram ali (*"A (sobra 1 de 3; 2 desta)"*) — e isso foi provado só pelo Jest da tela (`RequisicoesSaiDeSobra`, três
+casos, com controle positivo), **não** no navegador. O que os testes provam, pela rota real e pelo serviço: a recusa do item sem origem no
+endereço do irmão e a do mesmo endereço acima da parte, com a literal e nada gravado; o que sobra passa e o irmão sai depois num clique; a
+fronteira (*A* 4 passa, *A* 3,999999 recusa); o irmão que sai na mesma entrega não conta em dobro (pela origem dele, por outro endereço);
+sem excesso nada muda (inclusive o dado antigo entre irmãos); o excesso desconta as outras requisições (a literal de antes, letra por
+letra); a forma mista, o plural (as duas formas) e o *"já contando"*; outro material no mesmo endereço não conta; o lote exato; a
+precedência da recusa de saldo; as duas peças juntas nas duas ordens; a integração pela rota e pelo serviço (mesmos números e mesma literal);
+e o sorteio da 207 sem a isenção da escolha à mão (2.000 casos; semente 207: 1.798 casos, 997 aceitos, 0 violações). Controles positivos:
+os seis da T1, o da tela, o da integração, os dois do sorteio, os dois da revisão "passaria quebrado?" e os dois do fix-round da Fase 5,
+cada um derrubando o seu teste. Diferencial antigo × novo da Fase 5: ~**2.900** entregas, **nenhuma recusa nova de entrega certa**, controle
+positivo nos dois sentidos. **Não verificado à mão:** o roteiro da seção da Etapa 208 (em especial o rótulo *"A (sobra 1 de 3; 2 desta)"* do
+item 1 e o *"A (3)"* do item 2 na janela de entrega, e a recusa do cenário 2 aparecendo com a janela aberta). Suítes medidas: `test:api`
+**602/602 arquivos** na execução e **602/602 arquivos** depois da Fase 5, `test:almoxarifado` **44/0**, `test:validation` **4/0**,
+`test:safealter` **3/0**, `test:sqlite` **16/0**, Jest da tela **214 suítes / 2948 testes**, `build` *"Compiled successfully"*.
 
 **(207) Nenhum clique foi dado.** A tela **não mudou** (o endereço de cada pedaço aparece no histórico de movimentações, que já mostrava a
 origem da saída) e o Jest da tela **não foi rodado** nesta etapa — nenhum arquivo da tela foi tocado. O que os testes provam, pela rota real
@@ -39778,6 +39877,71 @@ entregue: a saída ⟨n⟩ entregou 1, já foram devolvidos 0 e restam 1"*. Devo
 - **Anterior, achado na revisão, não consertado:** entregar escolhendo no **Sai de** o mesmo endereço da separação **além** da parte
   separada, ou um item sem separação escolhendo o endereço do irmão, leva a peça do irmão da **mesma** requisição (**C496** — a próxima).
 - Com a padrão bloqueada, a entrega que antes era recusada pode passar pelos pedaços — uma recusa a menos, sem teste próprio (**D (207)**).
+- **Antes do deploy:** nada.
+
+## Etapa 208 — O "Sai de" da entrega respeita a peça que o irmão separou (2026-11-06)
+
+Uma requisição com duas peças do mesmo material: a peça 2 foi separada da prateleira *A*. Quem entregava a peça 1 escolhendo à mão
+**Sai de: A** podia levar o que estava separado para a peça 2 — o sistema só descontava o que **outras requisições** tinham separado ali.
+Depois a peça 2 não saía mais: *"a origem da separação (A) não serve mais"*. O mesmo acontecia quando a peça 1 tinha sido separada de *A* e
+a entrega pedia **mais** do que essa parte. Agora a entrega da peça 1 é recusada na hora, com a conta: quanto há em *A*, quanto está
+separado para a outra peça e quanto sobra. Se a peça 2 sai na **mesma** entrega, nada é recusado por causa dela. E a janela de entrega já
+mostra, no **Sai de**, o que as outras peças desta requisição separaram ali: *"A (sobra 1 de 3; 2 desta)"*. Servidor e uma linha na janela.
+Nada a rodar antes do deploy. Decisões do agente: **B1407** a **B1415** (a **B1340** da Etapa 200 revertida na parte do irmão — **B1413**;
+o corte da **B1414** não foi preciso). **C470**, **C472** e **C496** resolvidos; avisos **C497** e **C498** (**C499** sem uso).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Entregar uma peça com **Sai de** no endereço que a outra peça desta requisição separou passava, e a outra peça depois tomava *"… não serve mais"* | **Recusado** na hora, com a conta: *"… 2 já está separado dali para outra peça desta requisição; sobra 1 …"* |
+| Escolher o **mesmo** endereço da separação da peça pedindo **mais** que a parte separada dali passava, mesmo levando o que outra requisição separou | **Recusado** com a mesma conta (desconta as outras requisições e as outras peças) |
+| No **Sai de** da janela de entrega, a opção mostrava só o que outras requisições separaram (*"A (3)"*) | Mostra também o das outras peças desta requisição: *"A (sobra 1 de 3; 2 desta)"* |
+| Com as duas peças na mesma entrega e o saldo não cobrindo as duas, a recusa de saldo podia cair na peça que ninguém mexeu | Cai na peça escolhida à mão (**B1415**) |
+| A outra peça sai **junto**, na mesma entrega; ou a quantidade está dentro da parte separada; ou outro material | **Igual** — nada recusado |
+| A separação e o **Sai de** da janela de separação | **Iguais** |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**. Um material *Parafuso 208* **sem** controle por lote, sem série, não crítico, unidade
+*un*, com uma **localização padrão** *P* vazia. **Movimentações → Entrada** de 3 em *A* e de 5 em *B*. Nova requisição com **dois itens** de
+*Parafuso 208*, 2 e 2, aprovada. **Iniciar Separação**: o item 1 (2) **sem** escolher **Sai de**; o item 2 (2) com **Sai de** = *A*.
+
+**1. A janela mostra o que a outra peça separou.** **Entregar escolhendo de onde sai…**: no **Sai de** do item 1, a opção *A* aparece
+como *"A (sobra 1 de 3; 2 desta)"*; no do item 2, *"A (3)"* (o que ele mesmo separou não entra).
+
+**2. A recusa.** Item 1 com **2** e **Sai de** = *A*, item 2 com **0** → *"Parafuso 208: em A há 3 para esta entrega, mas 2 já está separado
+dali para outra peça desta requisição; sobra 1, que não cobre a quantidade (2). Escolha outro endereço ou deixe "Qualquer endereço
+(automático)""*. Nada é gravado; a janela continua aberta. (Antes: a entrega passava, *A* ficava com 1, e o item 2 num clique tomava
+*"Parafuso 208: a origem da separação (A) não serve mais (O saldo em A (1) não cobre a quantidade (2) — a saída tiraria de outros endereços)
+— entregue escolhendo de onde sai"*.)
+
+**3. O que sobra passa.** Item 1 com **1** e **Sai de** = *A* → aceita; depois **Confirmar Entrega e Baixar Estoque** → o item 2 sai de *A*
+(*A* 0).
+
+**4. As duas peças juntas.** Refaça a preparação com **4** em *A*. Na mesma entrega, item 1 com 2 e **Sai de** = *A* e item 2 com 2 (a janela
+já traz *A*) → aceita, *A* 0. Com 3 em *A* e o item 1 pedindo 3 → *"Parafuso 208: O saldo em A (1) não cobre a quantidade (3) — a saída
+tiraria de outros endereços"* — no item 1, o escolhido à mão (**C497**: a frase não diz que o resto é do item 2).
+
+**5. O mesmo endereço acima da parte.** Separe o item 1 em duas vezes: 1 com **Sai de** = *A*, depois 1 sem **Sai de**; o item 2, 2 de *A*.
+Entregar o item 1 com 2 e **Sai de** = *A* → a recusa do cenário 2 (há 3, 2 para outra peça, sobra 1, quantidade 2). Com 1 → aceita (dentro
+da parte, não confere).
+
+**6. Outra requisição e outra peça juntas.** *A* 6 (com lote *L1*, material com controle por lote): R1 separou 2 de (*A*, *L1*); na
+requisição R2, o item 1 separou 2 de lá e o item 2 entrega 3 com **Sai de** (*A*, *L1*) → *"⟨material⟩: em A, lote L1 há 6 para esta
+entrega, mas 2 já está separado dali para outra requisição (⟨R1⟩) e 2 para outra peça desta requisição; sobra 2, que não cobre a quantidade
+(3). Escolha outro endereço ou deixe "Qualquer endereço (automático)""*. Com 2 → aceita. Com duas outras peças: *"… e 2 para outras peças
+desta requisição …"*.
+
+**7. O lote é exato.** Material com lote, *A/L1* 4 e *A/L2* 3; o item 2 separou 2 de (*A*, *L1*). Item 1 com 3 e **Sai de** (*A*, *L1*) →
+recusa (há 4, 2, sobra 2); com **Sai de** (*A*, *L2*) → aceita.
+
+### O que esta etapa NÃO cobre
+
+- A peça separada **sem lote** (*"qualquer lote em A"*) não conta quando o **Sai de** escolhe um lote em *A* (**C498**).
+- Com as duas peças no mesmo endereço e o saldo não cobrindo, a recusa de saldo não diz de quem é o resto (**C497**).
+- O número do **Sai de** é o de quando a janela abriu (**C473**), e supõe que a outra peça não sai junto — pode mostrar menos do que cabe,
+  nunca mais (**B1411**).
 - **Antes do deploy:** nada.
 
 ## Onde estamos e o que vem a seguir

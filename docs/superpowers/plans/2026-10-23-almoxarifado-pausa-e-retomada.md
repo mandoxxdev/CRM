@@ -1,14 +1,20 @@
 # Almoxarifado — pausa de 2026-10-23 e como retomar
 
 > **✅ RETOMADO em 2026-11-05 — este arquivo agora é histórico.** O André retomou o módulo em 05/11 (estimativa
-> `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md`). **Depois: a Etapa 207 fechou** em 06/11 (fora do 2º pacote: o aviso
+> `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md`). **Depois: a Etapa 208 fechou** em 06/11 (fora do 2º pacote: o
+> aviso C496 da 207, estimativa `0f1fb344`; `025d7109` (plano), `4301c74b` (Fase 2), `575174c0` (T0), `227334f1` (T1), `5c60c868` (T2), `f170693f` (T3), `53fd0fae` (T4), `05b6e567` (execução), Fase 5 `d88a53bc`, e o commit "Etapa 208: fechamento") — o "Sai de" da entrega respeita
+> a guarda do irmão da mesma requisição (C496, C472 e C470 resolvidos). Letra **B** usada até **B1415** (B1407–B1415 pela 208), letra **C**
+> até **C499** (C497 e C498 pela 208; C499 sem uso), letra **A** até **A111** (a 208 não usou — a próxima é **A112**). **Próxima:** os itens
+> 8 e 9 do 2º pacote (peça em quarentena com lote — **C466**), já estimados; detalhada no fim de
+> `docs/superpowers/plans/2026-11-06-almoxarifado-etapa208-sai-de-respeita-guarda-do-irmao.md`.
+> *(Antes: a **Etapa 207 fechou** em 06/11 (fora do 2º pacote: o aviso
 > C490 da 206, estimativa `bb6a0c5e`; plano `4d8fb611`, Fase 2 `7e2708d7`, T0 `08e1070c`, T1 `842567ca`, T2 `3db19406`, T3 `8a99e628`, T4
 > `fddeb5ee`, `147dbf6b`, execução `4431a83d`, Fase 5 `730a8a00`, `12ca0500`, `2d668f2c`, e o commit "Etapa 207: fechamento") — a entrega
 > respeita a guarda sem lote (C490 resolvido). Letra **B** usada até **B1406** (B1396–B1406 pela 207), letra **C** até **C496**
 > (C492, C493, C495 e C496 pela 207; C494 sem uso), letra **A** até **A111** (a 207 não usou — a próxima é **A112**). **Próxima:** o aviso
 > **C496** (entregar escolhendo de onde sai leva a guarda do irmão da mesma requisição — anterior, achado na Fase 5 da 207), ainda sem
 > estimativa; detalhada no fim de `docs/superpowers/plans/2026-11-06-almoxarifado-etapa207-entrega-respeita-guarda-sem-lote.md`. Depois,
-> os itens 8 e 9 do 2º pacote (C466), já estimados.
+> os itens 8 e 9 do 2º pacote (C466), já estimados.)*
 > *(Antes: a **Etapa 206 fechou** em 06/11 (2º pacote da
 > estimativa, item 7; plano `7f210f62`, Fase 2 `7159f344`, T0 `df1de701`, T1 `ccbce184`, T2 `62c3dc79`, T3 `a286ba46`, execução `7d21a13c`,
 > Fase 5 `31aca1a3`, `00d9e24a`, `0996c3c2`, e o commit "Etapa 206: fechamento") — a entrega recusa lote bloqueado, reprovado ou vencido

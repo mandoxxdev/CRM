@@ -355,10 +355,47 @@ galho de verdade; T0 → T1 → T3/T4.
   unidade**, não na conta); (b) o lote não exato (`IS ? OR 1`) → .07 e o "outro par" vermelhos.
 - [x] **Suítes finais (serial):** `test:api` 602/602, `test:almoxarifado` 44/44, `test:validation` 4/4, `test:safealter` 3/3,
   `test:sqlite` 16/16, cliente 214 suítes / 2948 testes, `build` "Compiled successfully".
-- [ ] **Fase 5** — revisão adversarial.
-- [ ] **T5** — fechamento (`fechar-etapa`), estimado × gasto.
+- [x] **Fase 5** (`d88a53bc`) — revisão adversarial por **um** revisor fresco: **0 defeitos**; diferencial antigo × novo sorteado de ~**2.900**
+  entregas, **0 recusas novas de entrega certa**, com controle positivo nos dois sentidos. Achados
+  aceitos, os três consertados no mesmo commit:
+  1. **[IMPORTANTE, teste]** o filtro de material de `guardaDosIrmaosNoPar` não era testado — `ir.material_id = ?` → `? IS NOT NULL` deixava
+     `test:api` 602/602 verde. Teste novo **[RN-208.06 (e)]**: M1 sem origem e M2 (outro material) com 2 guardados em A, mesma requisição; M1
+     entrega 2 com Sai de A → 200 (a sonda do revisor, `probe15.js`), mais a prova de unidade `{ q: 0, n: 0 }` **depois** do 200 (na 1ª
+     versão a unidade vinha antes e a sabotagem caía nela — a asserção da rota nunca rodava; reordenado). Controle: a sabotagem → cai **pelo
+     200** (400 com *"… há 2 … 2 … para outra peça desta requisição; sobra 0 …"*).
+  2. **[MENOR, teste]** o plural da forma mista (`irmaosN > 1 ? 'outras peças' : 'outra peça'`) não era testado (o RN-208.06 (b) só prova o
+     plural sem outras). Teste novo **[RN-208.06 (d)]**: R1 guardou 1 em A (4), dois irmãos 1 + 1, item sem origem Sai de A 2 → 400 *"… (R1)
+     e 2 para outras peças desta requisição; sobra 1 …"*. Controle: sempre `'outra peça'` → cai pela literal.
+  3. **[MENOR, texto]** o comentário do adiamento dizia "Nenhuma literal muda" — **estava errado** (e o item 2 da Fase 2 deste plano também:
+     *"nenhuma literal muda"*). Nenhum texto é novo, mas QUAL recusa sai muda: o mesmo par acima da parte agora é (c) e é adiado; com dois
+     itens no par a recusa física troca de item e de números (antes *"O saldo em FZ-A (0) não cobre a quantidade (1)"*, agora *"(3) … (4)"*,
+     do sorteio do revisor); com lote, o irmão num clique que tomava *"não serve mais"* deixa de tomá-la e a física cai no item à mão.
+     Comentário corrigido; decisão **B1415** no documento de novidades (a próxima livre depois da B1414, conferido por `grep`).
+  Sabotagens por `perl -0pi`, âncora `grep -cF` = 1, md5 `10371fe7…` → sabotado → `10371fe7…`; restauro por `git checkout --` do arquivo
+  de produção (commitado; só o teste e o comentário mudaram depois). `entregaSaiDeGuardaDoIrmao` **24/24**; `test:api` **602/602 arquivos**.
+- [x] **T5** — fechamento (`fechar-etapa`): novidades (B1407–B1415, C470/C472/C496 resolvidos, C497–C498 novos, C499 sem uso, a B1340
+  revertida, D (208), F (208), seção da etapa), spec 05, mapa, guia, manual (7.5), este plano e o de pausa — commit "Etapa 208:
+  fechamento". **O estimado × gasto não foi feito aqui** (fica com o André, como na 207).
+
+### Divergências do plano (registradas no fechamento)
+
+- **C499** reservado para o corte da B1414 — o corte não aconteceu (a tela entrou em `5c60c868`, o sorteio em `53fd0fae`): **sem uso**.
+- **C497** ficou em uso como o plano previa; com o adiamento da Fase 2 a recusa física passou a cair no item à mão (melhor do que o plano
+  descrevia), mas a frase continua sem dizer de quem é o resto — o C497 descreve o que ficou.
+- **C498** em uso como previsto (B1410).
+- O sorteio precisou de **2.000** casos (o plano não dizia; com 400 a premissa T caía a 9) — já na Execução.
+- O "nenhuma literal muda" da Fase 2 item 2 **estava errado** (Fase 5 item 3, B1415).
+
+### Retro (4 números)
+
+- **Rodadas até verde na Fase 5:** 1.
+- **Achados reais:** 2 lacunas de teste + 1 texto errado; **0 defeitos**.
+- **Paralelismo:** nenhum na execução (a T2 era galho, mas rodou em sequência na mesma árvore).
+- **Defeito que escapou da 207:** nenhum conhecido.
 
 ## Próxima tarefa detalhada
+
+*(Conferida no fechamento: a medida mínima abaixo é de `0f1fb344`; a 208 não tocou o bloqueio nem o `stockService` (`git diff --stat 0f1fb344..HEAD -- server client`: só `requisitionService.js`, `RequisicoesList.js` e testes) — os números de linha continuam valendo fora de `requisitionService.js`. Lá, `lotesParaOAutomatico` está agora em `:1953` (o `:1925` abaixo é de antes da 208).)*
 
 **Os itens 8 e 9 do 2º pacote — peça em quarentena com lote (C466)**, já estimados em
 `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas-2.txt` (`:32-38`): *"1ª parte: o bloqueio passa a saber o lote"*
