@@ -1,0 +1,11 @@
+*Concluído — Almoxarifado: número com vírgula e espaços do termo*
+_05/11/2026_
+
+7. Materiais de clientes: número com vírgula — estimado 45 min · realizado 45 min
+8. Termo de ferramenta: espaços do texto — estimado 1h15 · realizado 1h15
+
+*Total: estimado 2h · realizado 2h*
+
+A tela de Materiais de clientes passa a mostrar as quantidades no mesmo formato do documento impresso (12,5). O termo de responsabilidade de ferramenta passa a sair com os espaços e recuos do texto como foi escrito; a conferência de integridade do termo continua a mesma.
+
+Com isso, os 8 itens do planejamento enviado em 05/11 estão concluídos: estimado 24h a 25h (já com a revisão do item 4) · realizado 25h45.

@@ -19,8 +19,8 @@ Régua de execução: etapas do almoxarifado de 20 a 23/10, cada uma com Fase 2,
 | 4 | Separar em duas vezes — local de onde sai | motor | 1h | **3h** (revisado: era 1h) | 2h | **6h** (revisado em 05/11: era 4h) | 196 — C453 (plano `4c602925`) | 1,9 h (horas.js --grupos "E196=Etapa 196", 05/11) → 2h | 5h (2h + análise 1 h + teste 2 h, da tabela — não informado pelo André) | 4c602925 … 4ba2e9b4, fa930a16 |
 | 5 | Separar em duas vezes — material com lote | motor | 1h | 1h a 2h | 2h | 4h a 5h | 197 — C451 / B204 (+ C462) | 2,5 h (horas.js --grupos "E197=Etapa 197", 05/11) → 2h30 | 5h30 (2h30 + análise 1 h + teste 2 h, da tabela — não informado pelo André). Estouro de 30 min: dois fix-rounds da Fase 5 (o endereço guardado de outra requisição; a parte da própria) | 7f099fae … 1ed41bb8, 034e9269 |
 | 6 | Entrega recusada com separado de outra requisição | motor (leitura sob trava) | 1h | 1h | 2h | 4h | 198 — C449 (plano `0affc3df`) | 1,3 h (horas.js --grupos "E198=Etapa 198", 05/11) → 1h30 | 4h30 (1h30 + análise 1 h + teste 2 h, da tabela — não informado pelo André) | 0affc3df … 75da9211, d0b97689 |
-| 7 | Materiais de clientes: número com vírgula | ajuste de tela | 15 min | 15 min | 15 min | 45 min | C448 | — | — | — |
-| 8 | Termo de ferramenta: espaços do texto | ajuste + impressão | 15 min | 15 min | 45 min | 1h15 | C447 (pouco ganho; último da fila) | — | — | — |
+| 7 | Materiais de clientes: número com vírgula | ajuste de tela | 15 min | 15 min | 15 min | 45 min | 199 — C448 (plano `3f5b8690`) | ~15 min (pacote 199: 0,2 h no horas.js para os dois itens) | 45 min (15 + análise 15 + teste 15, da tabela) | eb3a48c3 |
+| 8 | Termo de ferramenta: espaços do texto | ajuste + impressão | 15 min | 15 min | 45 min | 1h15 | 199 — C447 (plano `3f5b8690`) | ~15 min (pacote 199) | 1h15 (15 + análise 15 + teste 45, da tabela) | 0da1e81b, 41b7fa28 |
 
 Total: 24h a 25h (revisado em 05/11: o item 4 passou de 4h para 6h — o plano `4c602925` mediu ~3h de execução: coluna nova com a quantidade da origem, separação, entrega, devolução e as contas da fila; não há corte que caiba em 1h sem a janela de entrega passar a recusar o que hoje entrega).
 
