@@ -21,13 +21,25 @@ const txt = (v) => (v === null || v === undefined || String(v).trim() === '' ? '
  * MEDIDA no jsPDF (getTextWidth, em mm, na fonte corrente). Por contagem, 95 letras em CAIXA ALTA iam a 210,6 mm (a folha tem 210).
  * Palavra maior que a linha e cortada por medida, caractere a caractere (for...of: nao parte par substituto); nada e perdido.
  */
+// Etapa 199 (C447, RN-199.03 a 199.06): antes cada paragrafo era partido com split(/\s+/) e as palavras reunidas com UM espaco — o recuo,
+// os espacos repetidos e a tabulacao do texto da versao sumiam do papel. Agora cada palavra leva a sequencia de espacos que vinha antes
+// dela (o recuo vai grudado na primeira, e se nao couber e cortado por medida como palavra longa); onde a linha quebra, essa sequencia e
+// consumida pela quebra (B1217) e o fim da linha e aparado. Tabulacao vira 4 espacos e outro espaco unicode vira espaco: a fonte padrao do
+// jsPDF nao tem tabulacao (B1337). So o DESENHO muda: o texto do descritor e o do hash continuam literais (RN-199.07).
+const TABULACAO = '    ';
+
 export function quebrarTexto(texto, largura = 95, medir = (s) => s.length) {
   const saida = [];
-  String(texto ?? '').replace(/\r\n?/g, '\n').split('\n').forEach((paragrafo) => {
-    const palavras = paragrafo.split(/\s+/).filter(Boolean);
-    if (palavras.length === 0) { saida.push(''); return; }
+  String(texto ?? '').replace(/\r\n?/g, '\n').split('\n').forEach((bruto) => {
+    const paragrafo = bruto.replace(/\t/g, TABULACAO).replace(/[^\S  ]/g, ' ').replace(/\s+$/, '');
+    if (paragrafo === '') { saida.push(''); return; }
+    // [recuo + 1a palavra, sep, palavra, sep, palavra...] — o split com grupo devolve os separadores nas posicoes impares
+    const partes = paragrafo.split(/(\s+)/);
+    if (partes[0] === '') partes.splice(0, 3, partes[1] + partes[2]); // recuo: gruda na primeira palavra
     let linha = '';
-    palavras.forEach((p) => {
+    partes.forEach((p, k) => {
+      if (k % 2 === 1) return; // separador: lido junto com a palavra seguinte
+      const sep = k > 0 ? partes[k - 1] : '';
       let palavra = p;
       // Fase 5 da 185: `palavra &&` na guarda — com largura <= 0 (ou uma regua que mede '' > largura) a palavra vazia "nao cabia" e o laco
       // empurrava linhas vazias para sempre. Cada volta consome ao menos um caractere (o for...of leva o 1o) e para quando acaba a palavra.
@@ -39,12 +51,12 @@ export function quebrarTexto(texto, largura = 95, medir = (s) => s.length) {
           if (pedaco !== '' && medir(pedaco + ch) > largura) break;
           pedaco += ch;
         }
-        saida.push(pedaco);
+        saida.push(pedaco.replace(/\s+$/, ''));
         palavra = palavra.slice(pedaco.length);
       }
       if (!palavra) return;
       if (!linha) linha = palavra;
-      else if (medir(`${linha} ${palavra}`) <= largura) linha += ` ${palavra}`;
+      else if (medir(`${linha}${sep}${palavra}`) <= largura) linha += `${sep}${palavra}`;
       else { saida.push(linha); linha = palavra; }
     });
     if (linha) saida.push(linha);

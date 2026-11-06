@@ -281,3 +281,73 @@ test('[RN-185.08] linhas de identificacao longas quebram por largura: nada passa
   expect(juncaoDe('Devolução prevista: ', frases[2][1]).length).toBeGreaterThanOrEqual(2);
   expect(juncaoDe('Matrícula confirmada', frases[3][1]).length).toBeGreaterThanOrEqual(2);
 });
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Etapa 199 (C447) — o termo juntava os espacos do texto da versao: `quebrarTexto` partia cada paragrafo com split(/\s+/) e reunia as
+// palavras com UM espaco, apagando o recuo, os espacos repetidos e a tabulacao. Agora sai como foi escrito; onde a linha quebra, a
+// sequencia de espacos daquele ponto e consumida pela quebra (B1217), e nada passa da largura. O texto do hash nao muda (RN-199.07).
+test('[RN-199.03] quebrarTexto mantem o recuo do paragrafo e os espacos repetidos', () => {
+  expect(quebrarTexto('    Recuo  dois   tres', 1000)).toEqual(['    Recuo  dois   tres']);
+  expect(quebrarTexto('Titulo\n\n  1.  Primeira   clausula', 1000)).toEqual(['Titulo', '', '  1.  Primeira   clausula']);
+  expect(quebrarTexto('    Recuo  dois', LARGURA_UTIL, medirFonte10)).toEqual(['    Recuo  dois']);
+});
+
+test('[RN-199.04] tabulacao sai como 4 espacos, no recuo e no meio', () => {
+  expect(quebrarTexto('a\tb', 1000)).toEqual(['a    b']);
+  expect(quebrarTexto('\tRecuo', 1000)).toEqual(['    Recuo']);
+});
+
+test('[RN-199.05] onde a linha quebra, os espacos daquele ponto sao consumidos; espaco no fim da linha nao e desenhado', () => {
+  expect(quebrarTexto('aaa     bbb', 5)).toEqual(['aaa', 'bbb']);
+  expect(quebrarTexto('aa  bb  cc', 6)).toEqual(['aa  bb', 'cc']);
+  expect(quebrarTexto('fim   \n   ', 1000)).toEqual(['fim', '']);
+  const texto = `  ${'palavra   '.repeat(60)}`;
+  const linhas = quebrarTexto(texto, 40);
+  expect(linhas.length).toBeGreaterThan(1);
+  linhas.forEach((l, j) => {
+    expect(l.length).toBeLessThanOrEqual(40);
+    expect(/\s$/.test(l)).toBe(false);
+    if (j > 0) expect(/^\s/.test(l)).toBe(false);
+  });
+  expect(linhas[0].startsWith('  palavra   palavra')).toBe(true);
+  expect(semEspaco(linhas.join(''))).toBe(semEspaco(texto));
+});
+
+test('[RN-199.06] recuo maior que a linha e 200 espacos entre palavras: nada passa de 182 mm, termina e nao perde letra', () => {
+  for (const texto of [`${' '.repeat(300)}palavra`, `a${' '.repeat(200)}b`, `${'\t'.repeat(60)}x y`]) {
+    const linhas = quebrarTexto(texto, LARGURA_UTIL, comTeto(medirFonte10));
+    linhas.forEach((l) => expect([l.length, medirFonte10(l) <= LARGURA_UTIL]).toEqual([l.length, true]));
+    expect(semEspaco(linhas.join(''))).toBe(semEspaco(texto));
+  }
+  expect(quebrarTexto(`a${' '.repeat(200)}b`, LARGURA_UTIL, medirFonte10)).toEqual(['a', 'b']);
+});
+
+test('[RN-199.03, RN-199.07] o PDF desenha o texto da versao com os espacos; os hashes sao os do servidor; nada sai da folha', async () => {
+  const texto = '    Clausula 1.  O colaborador   recebe a ferramenta.\n\tItem a';
+  const doc = await gerarTermoFerramentaPdf({ ...DADOS, termo: { ...DADOS.termo, texto } },
+    { carregarImagem: async () => 'data:image/png;base64,AAAA' });
+  const doTexto = textosNaFonte(10);
+  expect(doTexto).toEqual(['    Clausula 1.  O colaborador   recebe a ferramenta.', '    Item a']);
+  expect(doc.texto).toBe(texto); // o descritor leva o texto literal (RN-185.09)
+  expect([doc.hashTexto, doc.hashRegistro]).toEqual(['cd'.repeat(32), HASH]);
+  expect(textosForaDaFolha()).toEqual([]);
+});
+
+// T3 da 199: trocar o `quebrarTexto` do desenho pela `linhasPorLargura` (splitTextToSize, a regua das linhas de identificacao) passava
+// verde em todos os testes acima — inclusive num paragrafo longo com sequencias de 3 espacos (o splitTextToSize parte em ' ' e as
+// consome na quebra). Medido: ele so erra quando a quebra cai DENTRO de uma sequencia mais longa que o resto da linha — 'a' + 200
+// espacos + 'b' sai 'a' / '                 b', a continuacao com 17 espacos na frente. Pelo PDF, com a regua real.
+test('[RN-199.05] pelo PDF: paragrafo longo com espacos repetidos quebra sem linha comecando ou terminando em espaco; recuo so na 1a', async () => {
+  const texto = `    ${'obrigacao   do   colaborador   '.repeat(12)}fim${' '.repeat(200)}b`;
+  await gerarTermoFerramentaPdf({ ...DADOS, termo: { ...DADOS.termo, texto } },
+    { carregarImagem: async () => 'data:image/png;base64,AAAA' });
+  const doTexto = textosNaFonte(10);
+  expect(doTexto.length).toBeGreaterThanOrEqual(3);
+  expect(doTexto[0].startsWith('    obrigacao   do   colaborador')).toBe(true);
+  doTexto.forEach((l, j) => {
+    expect([j, /\s$/.test(l)]).toEqual([j, false]);
+    if (j > 0) expect([j, /^\s/.test(l)]).toEqual([j, false]);
+  });
+  expect(semEspaco(doTexto.join(''))).toBe(semEspaco(texto));
+  expect(textosForaDaFolha()).toEqual([]);
+});
