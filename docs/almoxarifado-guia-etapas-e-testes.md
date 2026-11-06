@@ -1,21 +1,26 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-11-06 (Etapas 172 a 191, 194 a 203) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-11-06 (Etapas 172 a 191, 194 a 204) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202 e 203) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203 e 204) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-06 (Etapas 172 a 178, 180 a 191, 194 a 203 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-06 (Etapas 172 a 178, 180 a 191, 194 a 204 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
-> **O desenvolvimento parou aqui: Etapa 203 fechada — 2026-11-06.** **A exclusão da requisição apaga o local separado.** Quem excluía uma
+> **O desenvolvimento parou aqui: Etapa 204 fechada — 2026-11-06.** **A Devolução acha as entregas antigas.** O campo *Entrega de
+> origem* da tela **Devoluções** mostrava só as 30 entregas mais recentes do material; a antiga sumia e a pessoa caía na devolução avulsa
+> (sem vínculo nem lote). Agora, abaixo do campo, **"Carregar entregas mais antigas"** traz as 30 anteriores a cada clique. Tela e servidor;
+> nada a rodar antes do deploy. **Nenhum clique foi dado** (testes da rota e Jest da tela — roteiro na seção da 204 e letra F das novidades).
+>
+> **Onde parou, exatamente:** a **204 está fechada** (código, testes e documentos commitados). A **próxima** é o item 6 do 2º pacote da
+> estimativa de 05/11: **"Lote bloqueado, reprovado ou vencido — 1ª parte: aprovação e separação"** (**C464** — a aprovação e a separação
+> contam como disponível o saldo de lote que não pode sair). Só a tarefa detalhada no fim do plano da 204
+> (`docs/superpowers/plans/2026-11-06-almoxarifado-etapa204-devolucao-acha-entregas-antigas.md`) e a estimativa existem, nenhum plano nem código.
+>
+> *(Antes:)* **Etapa 203, 2026-11-06.** **A exclusão da requisição apaga o local separado.** Quem excluía uma
 > requisição com material já separado via o estoque voltar, mas cada item continuava anotado *"separado de XB-01, lote L1"*. Nenhuma conta
 > lia essa anotação; agora ela é apagada junto. Só servidor; a tela não muda; nada a rodar antes do deploy. **Nenhum clique foi dado** (só
 > testes — roteiro na seção da 203 e letra F das novidades).
->
-> **Onde parou, exatamente:** a **203 está fechada** (código, testes e documentos commitados). A **próxima** é o item 5 do 2º pacote da
-> estimativa de 05/11 (`docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas-2.txt`): **"Devolução: encontrar entregas
-> antigas"** (**C465** — a lista de saídas da tela Devoluções mostra só as 30 mais recentes do material). Só a tarefa detalhada no fim do plano
-> da 203 (`docs/superpowers/plans/2026-11-06-almoxarifado-etapa203-exclusao-limpa-a-origem.md`) e a estimativa existem, nenhum plano nem código.
 >
 > **Etapa 202, 2026-11-06.** **A movimentação antiga respeita o lote informado.** Um sistema de fora
 > que lançava pela movimentação antiga (a mesma do modal rápido da tela Materiais) "tire 1 do lote *LV*", com o *LV* vencido, recebia OK: a
@@ -7069,6 +7074,44 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 204 — A Devolução acha as entregas antigas (ENTREGUE — 2026-11-06)
+
+**O que mudou, em uma frase:** na tela **Devoluções**, abaixo do campo *Entrega de origem*, aparece **"Carregar entregas mais antigas"** —
+cada clique traz as 30 entregas anteriores, até a primeira do material.
+
+**O problema que ela resolve.** O campo mostrava só as 30 entregas mais recentes do material. Um material que sai todo dia (parafuso, fita,
+lixa) passa de 30 entregas em poucas semanas — e a entrega de três semanas atrás, justamente a que a pessoa queria devolver, não aparecia. Sem
+ela, a pessoa escolhia *"Devolução avulsa"*: o material voltava sem o vínculo com a entrega, sem limite de quantidade e sem herdar o lote.
+
+| Antes | Agora |
+|---|---|
+| A entrega antiga (além das 30 mais recentes) não aparecia | **"Carregar entregas mais antigas"** traz as 30 anteriores a cada clique |
+| Devolver de uma entrega antiga só pela avulsa (sem vínculo nem lote) | A entrega antiga é escolhida e devolve com limite e lote herdado |
+| Lista curta (menos de 30) | **Igual** — sem botão |
+| Entrega já devolvida por inteiro | **Igual** — continua na lista, desabilitada |
+
+**Antes de testar (uma vez).** Um usuário com perfil que movimenta (ex.: **Administrador do almoxarifado**). Um material *FITA-204* com 35
+entregas registradas (**Movimentações → Saída**, 1 cada; para testar o lote, um material com **Controle por lote** em que a entrega mais
+antiga saiu do lote *L1* e as outras 30 do lote *L2*).
+
+**Roteiro de teste (5 minutos).**
+
+1. **Devoluções → Nova Devolução**, material *FITA-204*. O campo *Entrega de origem* lista 30 entregas; abaixo dele, o botão **"Carregar
+   entregas mais antigas"**.
+2. Escolha uma entrega da lista. Clique no botão → enquanto busca, ele mostra *"Carregando…"*; depois, 5 entregas novas entram no fim da lista,
+   a escolhida continua escolhida, o botão some e aparece *"Não há entregas mais antigas deste material."*
+3. Troque o material e volte para *FITA-204* → a lista recomeça das 30 mais recentes, com o botão.
+4. *(Lote.)* No material com lote, carregue as mais antigas, escolha a entrega do *L1* (a última), quantidade 2, motivo, destino *Estoque*, **Registrar devolução** →
+   *"Devolução registrada!"*; em **Lotes e Séries**, o *L1* sobe 2. Abra **Nova Devolução** de novo, mesmo material, carregue as antigas → a
+   entrega do *L1* mostra *"devolvível 2"*.
+5. *(Limite.)* Escolha essa entrega, quantidade 3, motivo, **Registrar devolução** → *"Esta entrega ainda aceita 2 de devolução"*.
+
+**O que esta etapa não cobre.** Não há busca por número da requisição, OS ou data (aviso **C477** das novidades): para uma entrega muito
+antiga é preciso clicar até ela. **Nada a rodar antes do deploy.**
+
+*Nenhum clique foi dado nesta etapa*: o roteiro acima é o que os testes automáticos provam (pela rota real e pela tela no Jest) — escrito para
+você conferir.
 
 ## Etapa 203 — A exclusão da requisição apaga o local separado (ENTREGUE — 2026-11-06)
 

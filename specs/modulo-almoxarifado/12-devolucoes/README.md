@@ -89,7 +89,9 @@ seção da Etapa 7). No **banco de desenvolvimento a checagem foi feita: 0 devol
   (`registrarAuditoria`).
 - **`GET /devolucoes/saidas-elegiveis?material_id=X`** (`4d5f79f`) — as entregas daquele material
   que uma devolução pode citar: tipos `SAIDA`/`SAIDA_PRODUCAO`/`SAIDA_MONTAGEM`/`SAIDA_ASSISTENCIA`,
-  não canceladas, as 30 mais recentes, cada uma com data, lote, requisição/OS/projeto, quem retirou,
+  não canceladas, ~~as 30 mais recentes~~ **em páginas de 30 com "carregar mais" (cursor `antes_de`, Etapa 204)** —
+  *(esta linha dizia "as 30 mais recentes" e **ficou velha** na 204: sem jeito de ir além das 30, a entrega antiga de material que
+  sai todo dia sumia da lista e a pessoa caía na devolução avulsa, sem vínculo nem lote — C465; ver a seção da Etapa 204 no fim)* —, cada uma com data, lote, requisição/OS/projeto, quem retirou,
   `quantidade_devolvida`, `saldo_devolvivel` e as `series` entregues naquela saída. `SUCATA`, `PERDA`
   e `AJUSTE_NEGATIVO` ficam fora **de propósito**: não se devolve o que foi descartado ou corrigido.
   Linha já devolvida por inteiro **volta** na lista com saldo 0 — "já devolvido por inteiro" é
@@ -452,3 +454,26 @@ Continua 🟢. Testes: `devolucaoDoQueVoltou.api.test.js` (15), `oQueJaVoltouInt
 Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa161-respostas-velhas-e-o-dia-local.md`. Consertos técnicos, sem regra de acesso nova e sem mexer em saldo; o status da feature não muda.
 
 - [x] **Fase 5 (r1, resíduo de antes, C397)** — a data da lista, das opções de saída de origem e dos anexos (o `created_at` da devolução e o da movimentação, `CURRENT_TIMESTAMP`) pelo leitor de instante — era lida como hora local (à noite, o dia de amanhã) — `84353119`.
+
+## Etapa 204 — a Devolução acha as entregas antigas (2026-11-06)
+
+Plano: `docs/superpowers/plans/2026-11-06-almoxarifado-etapa204-devolucao-acha-entregas-antigas.md`. **C465** (a parte da lista) resolvido.
+
+**Correção à vista:** a descrição da rota (`:90` em diante) dizia *"as 30 mais recentes"* — **ficou velha** nesta etapa. A frase do
+comentário de `listarSaidasElegiveis` (*"As 30 mais recentes: quem devolve devolve o que saiu ha pouco"*) também, e foi reescrita dizendo
+isso. O certo agora: **páginas de 30**, na mesma ordem (`COALESCE(created_at,'') DESC, id DESC`), e `antes_de=<id da última entrega
+mostrada>` traz as 30 anteriores. A linha devolvida por inteiro **continua** na lista com saldo 0 (o caminho "filtrar só as com saldo" foi
+descartado: não resolve a entrega nunca devolvida, que tem saldo cheio para sempre, e contradiria esta spec).
+
+- [x] **`antes_de` opcional na rota e no serviço, cursor composto (data + id) com `COALESCE`** (RN-204.01 a .03; B1363, B1366) —
+  `fb9d257e`. Sem o parâmetro, a resposta é a de antes (os 9 arquivos da API que chamam a rota passaram sem edição).
+- [x] **Recusas do cursor, na ordem** `material_id é obrigatório` → `Material não encontrado` → *"antes_de inválido — informe o id da última
+  entrega da lista"* → *"Entrega ⟨id⟩ não encontrada neste material"*; cursor estornado continua âncora (RN-204.04; B1365) — `fb9d257e`.
+- [x] **A entrega antiga achada na página 2 devolve com o vínculo e herda o lote**, pela rota e pelo serviço (RN-204.05) — `46943500`.
+- [x] **Tela: "Carregar entregas mais antigas"**, *"Carregando…"*, *"Não há entregas mais antigas deste material."*, toast *"Erro ao
+  carregar entregas mais antigas"*; guarda por geração na troca de material; reabrir depois de devolver começa da página 1 (RN-204.06 a
+  .08; B1364) — `280c4d5e`.
+- [ ] **Fora: busca por número da requisição, OS ou data** — **C477** (B1367). O cursor sozinho já torna toda entrega alcançável.
+- [ ] **Fora: a tela não foi clicada no navegador** — só Jest (letra F (204) das novidades).
+
+Continua 🟢. Testes: `devolucaoEntregasAntigas.api.test.js` (7), `DevolucoesAlmoxarifado.test.js` (8 novos, 24 no total).

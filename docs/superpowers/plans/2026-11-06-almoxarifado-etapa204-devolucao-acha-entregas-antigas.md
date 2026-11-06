@@ -157,18 +157,18 @@ Constante `PAGINA_SAIDAS = 30` com comentário apontando para `returnService.js`
 
 ## Tasks
 
-- [ ] **T1 (tronco)** — `server/tests/api/devolucaoEntregasAntigas.api.test.js` com RN-204.01 a .04 pela **rota** e RN-204.04 também pelo
+- [x] **T1 (tronco)** (`fb9d257e`) — `server/tests/api/devolucaoEntregasAntigas.api.test.js` com RN-204.01 a .04 pela **rota** e RN-204.04 também pelo
   **serviço** (mesmas literais), vermelho; depois o cursor em `listarSaidasElegiveis` e o repasse de `req.query.antes_de` na rota
   (`extended.js:1470`); verde. Atualizar o comentário de `returnService.js:480-497` ("as 30 mais recentes" → "páginas de 30, cursor
   `antes_de`"). Rodar os 9 arquivos isolados: verdes **sem edição** (RN-204.01). Semear as saídas pelo motor (`registrarMovimentacao` ou a
   rota de saída) e regravar `created_at` por SQL só onde o cenário pede empate/NULL.
-- [ ] **T2 (galho — depende só do contrato acima, não do código de T1)** — `DevolucoesAlmoxarifado.test.js` com RN-204.06 a .08 (o mock de
+- [x] **T2** (`280c4d5e`) **(galho — depende só do contrato acima, não do código de T1)** — `DevolucoesAlmoxarifado.test.js` com RN-204.06 a .08 (o mock de
   `:73` passa a distinguir `antes_de` na URL **só nos testes novos**; os de hoje continuam com o mock genérico e < 30 linhas, sem botão), vermelho;
   depois o componente; verde. Jest completo da tela e `CI=true npx react-scripts build`.
-- [ ] **T3 (integração, cruza rota e serviço)** — RN-204.05 no arquivo de T1: (i) pela rota: `GET` página 1 → `GET` página 2 → `POST
+- [x] **T3** (`46943500`) **(integração, cruza rota e serviço)** — RN-204.05 no arquivo de T1: (i) pela rota: `GET` página 1 → `GET` página 2 → `POST
   /devolucoes` citando a 31ª → `GET` página 2 de novo; (ii) pelo serviço, o mesmo encadeamento, com os mesmos números. Prova de que a página 2
   não é uma leitura à parte que diverge da validação.
-- [ ] **T4** — controles positivos (abaixo), revisão "passaria com a feature quebrada?", as cinco suítes em série, fechamento
+- [x] **T4** (fechamento) — controles positivos (abaixo), revisão "passaria com a feature quebrada?", as cinco suítes em série, fechamento
   (`fechar-etapa`): spec 12 `:90-96` (dizia "as 30 mais recentes" — passa a "páginas de 30 com 'carregar mais'", **dizendo** que a frase
   antiga ficou velha) e checklist, mapa, guia (Antes → Agora: *"a entrega antiga não aparecia — agora 'Carregar entregas mais antigas'"*),
   manual, novidades (B1363-B1367, C477) e este plano.
@@ -224,21 +224,91 @@ com `auth` (`extended.js:1466`); a spec 12 (`README.md:91`) e o comentário de `
 
 ## Execução
 
-- [ ] Plano — este commit (antes do código).
-- [ ] T1
-- [ ] T2
-- [ ] T3
-- [ ] T4
+- [x] Plano — `3eddf0a5`; Fase 2 (revisor fresco, 6 achados) — `4dce6f26`.
+- [x] **T1** — `fb9d257e`. TDD: `devolucaoEntregasAntigas.api.test.js` 1/6 vermelho (só a RN-204.01, que é o comportamento de hoje, passava
+  — de propósito) → 5/5 verde depois do cursor (o arquivo do commit da T1 tem as 5 da T1; a T3 entrou depois). Os 9 arquivos da API que chamam
+  a rota, isolados e **sem edição**: `devolucaoDoQueVoltou` 15/0, `devolucaoVinculo` 30/0, `devolucaoViva` 27/0, `devolucaoVivaFase5` 10/0,
+  `devolucaoVivaIntegracao` 3/0, `epiEntrega` 29/0, `estornoQueFalhaIntegracao` 4/0, `oQueJaValeuIntegracao` 2/0, `oQueJaVoltouIntegracao` 2/0.
+  O comentário de `returnService.js` (*"As 30 mais recentes…"*) reescrito dizendo que ficou velho.
+- [x] **T2** — `280c4d5e`. TDD: Jest da tela 7 vermelhos de 8 novos (o 8º, *"primeira página curta: nem botão nem nota"*, é negativo e passa
+  antes — tem a metade positiva, `idsDaLista() == ['5']`, e é protegido pelos controles abaixo) → 24/24 (16 de antes sem edição + 8 novos).
+- [x] **T3** — `46943500`. RN-204.05 (i) rota e (ii) serviço; 7/7. **Divergência:** a T3 foi escrita junto com a T1 (mesmo arquivo) e
+  commitada **antes** da T2 — a ordem dos commits é T1 → T3 → T2. Sem efeito: T2 não depende do código de T1/T3.
+- [x] **T4** — controles, revisão, suítes e fechamento (este commit).
+
+### Controles positivos (sobre a base pós-conserto; servidor por `perl -0pi`, âncora = 1, restauro por cópia, md5 de volta a `475b6bd3…` / `d9e821fd…`; tela por Edit e Edit inverso, md5 de volta a `2cad7006…`)
+
+| # | Sabotagem | Caiu |
+|---|---|---|
+| (a) | `antesDeId = undefined` antes do cursor (ignorar) | 6 de 7: RN-204.02, .03, .04 rota, .04 serviço, .05 (i), .05 (ii) — *"a pagina 2 nao e a continuacao"*, *"tamanhos 30,30,30,30"* |
+| (b) | cursor sem desempate (`created_at < c OR (? IS NULL AND ? IS NULL)`) | RN-204.03, *"tamanhos 30,29,0"* (as do mesmo segundo somem) |
+| (c) | desempate com `mv.id <= ?` | RN-204.02, .03 (*"30,30,7,1"*), .04 serviço, .05 (i), (ii) — repete a do cursor |
+| (d) | sem `COALESCE` no cursor, na âncora e no `ORDER BY` | RN-204.03, *"tamanhos 30,30,4,0"* (a de `created_at` NULL nunca vem) |
+| (e) | âncora exigindo `COALESCE(cancelado,0) = 0` | RN-204.04 rota: *"Entrega 14 não encontrada neste material" 400* (cursor estornado) |
+| (f1) | front sem dedupe (`vistos \|\| …`) | RN-204.06 *"pagina cheia…"* e *"pagina de 30 mantem o botao…"* |
+| (f2) | front sem a guarda de geração no `then` | RN-204.07, os dois (*"A -> vazio -> A"* e *"outro material"*) |
+| (g) | `setSaidas([])` no `catch` do "carregar mais" | RN-204.08 |
+| (F2-1) | o efeito da troca de material sem zerar `paginacao` | *"Fase 2: depois de devolver … reabre na pagina 1"* (a nota velha aparecia ao reabrir) |
+| (F2-6) | cursor tirado de uma linha que não é a última da resposta | *"pagina de 30 mantem o botao; antes_de e o da ultima linha da RESPOSTA…"* |
+
+**Revisão "passaria com a feature quebrada?"** (sabotagens a mais): (r1) a rota sem repassar `req.query.antes_de` → caíram RN-204.02, .03,
+.04 rota e .05 (i) (o serviço sozinho passaria; a rota é coberta); (r2) desempate `mv.id ASC` no `ORDER BY` → RN-204.03 (*"30,30,4,0"*);
+(r3) nota de fim só com página **vazia** (`fim: novas.length === 0`, contra a Fase 2 #5) → *"pagina cheia…"* e *"Fase 2…"*. Nenhuma passou
+verde — nenhuma asserção nova foi precisa. **Observação:** a (F2-1) não derrubou o *"A -> vazio -> A"* da RN-204.07, porque a primeira página
+do material de volta reescreve a paginação; quem a pega é o reabrir do modal (que fica em `''` sem nova resposta).
+
+### Suítes (uma vez cada, em série, depois de T1-T3)
+
+- `cd server && npm run test:api` — **592/592 arquivos** (exit 0; 591 da 203 + `devolucaoEntregasAntigas`).
+- `npm run test:almoxarifado` — **44/0**; `test:validation` — **4/0**; `test:safealter` — **3/0**; `test:sqlite` — **16/0**.
+- `cd client && CI=true npx react-scripts test --watchAll=false` — **213/213 suítes, 2942/2942 testes**.
+- `CI=true npx react-scripts build` — **Compiled successfully** (exit 0).
+- Nenhum READONLY/BUSY nesta rodada; nada rodado duas vezes.
+
+### Retro
+
+- O plano estava certo no contrato e nos números de linha; a Fase 2 pegou os dois pontos que os testes de tela mais precisaram (geração e o
+  reabrir). O cenário "falha" do roteiro de usuário é difícil de reproduzir à mão (exige derrubar o servidor no meio) — fica só no Jest.
+- Na Fase 0 da próxima, medir antes de prometer foi o que permitiu dizer o tamanho do C464 abaixo.
 
 ## Próxima tarefa detalhada
 
-Depois da 204, o **item 6 do 2º pacote** (`docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas-2.txt:24-26`, **4h30 a
-5h**): *"Lote bloqueado, reprovado ou vencido — 1ª parte: aprovação e separação"* — a aprovação e a separação contam como disponível o saldo
-de lote que não pode sair. A Fase 0 da 205 tem de medir, antes de prometer: quantas contas de disponível existem hoje (aprovação —
-`requisitionService` sob `comTravaDaRequisicao`; separação — o teto da caixa; o automático da entrega), qual régua de "lote que pode sair" já
-existe (`lotService` — elegibilidade usada pela entrega e pela devolução, `materiais/:id/lotes?com_saldo=1` devolve `elegivel`), e quantas
-telas de saldo leem a mesma conta (é o que faz a estimativa variar de 4h30 a 5h). Ponto de atenção: o disponível é lido para **reservar**,
-então a conta nova roda sob a trava por material (CLAUDE.md, seção da trava) — e a aprovação automática também.
+**Item 6 do 2º pacote** (`docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas-2.txt:24-26`, **4h30 a 5h**): *"Lote
+bloqueado, reprovado ou vencido — 1ª parte: aprovação e separação"* — **C464** (novidades, `:17767` depois do fechamento da 204). A aprovação e a separação contam
+como disponível o saldo de lote que não pode sair; a entrega aceita, o automático não tira desse lote (B1322) e o resto sai sem lote
+(*"Sem lote atribuído"* negativo, B1323).
 
-Se a 204 fechar com sobra, a **C477** (busca da entrega por número da requisição/OS na tela Devoluções) é aditiva ao cursor desta etapa:
-mais um parâmetro opcional no mesmo `WHERE`, sem mudar a ordem nem a página.
+### Medido no fim da 204 (sobre `280c4d5e`, sem consertar) — confira de novo na Fase 0
+
+- **A conta de hoje.** O disponível do material é uma expressão só, `availabilitySql.disponivelSql` (físico − reservado − bloqueado − em
+  inspeção − em terceiros), usada em **36 pontos de 21 arquivos** (`grep -rn "disponivelSql(" services routes`). **O lote bloqueado não é
+  coluna de retenção**: o status do lote (`lotes_almoxarifado.status`, `BLOQUEADO`/`REPROVADO`) e o vencimento não tiram nada do material — é
+  por isso que todas as 36 leituras contam esse saldo como livre. Mexer em `disponivelSql` mudaria todas as telas de saldo de uma vez
+  (stockService 12, reportService 3, requisitionService 3, rotas 3, mais 14 serviços) — **fora** da 1ª parte.
+- **Aprovação** (as três portas: `/aprovar`, `/aprovar-valor` e a automática, `routes/almoxarifado.js:4083`, `:4337`, `:4483`, todas por
+  `prepararPosAprovacao` → `reservarItensAprovacao`, `requisitionService.js:625`): lê `saldoDisponivelParaItem` (`:486-511`, que usa
+  `disponivelSql('ma')` + a reserva do item + a caixa dos outros) em `:672` e `:690`, e reserva `aReservar = min(falta, disponível − já
+  reservado − caixa dos outros)` em `:704`. O status depois da aprovação vem de `requisitionStateMachine.calcularStatusPosAprovacao`
+  (`:274-282`, também `disponivelSql`) — **segunda** leitura a acertar, senão a requisição sai *Aprovada* sem reserva em vez de *Aguardando
+  estoque*.
+- **Separação**: `requisitionService.js:1485` lê o mesmo `saldoDisponivelParaItem` e limita pelo `tetoSeparacao` (`:375-378`).
+- **Entrega** (prévia e gravação, `:2138`, `:2170`, `:2226`): mesma função — é a 2ª parte do C464, **não** a 1ª, mas como a função é
+  compartilhada, a mudança nela atinge a entrega junto (decidir na Fase 0: parâmetro só para aprovação/separação, ou aceitar e provar a
+  entrega também).
+- **A régua "lote que pode sair" já existe**: `lotService.listarLotesDoMaterial` (`:524`), `elegivel = status === 'ATIVO' && (!vencido ||
+  liberado)` (`:541`), a mesma ordem de checagem do motor; o automático da entrega já filtra por ela (`requisitionService.js:1834-1848`).
+  Falta uma versão em SQL (soma do `estoque_saldo_almoxarifado` por lote não elegível do material) para descontar dentro de
+  `saldoDisponivelParaItem`, sem cópia da régua (molde: `devolucaoViva.js`, uma régua só).
+- **Tamanho:** o caminho barato é **uma** função (`saldoDisponivelParaItem`) e **uma** leitura de status (`calcularStatusPosAprovacao`), com
+  as telas de saldo intocadas (elas continuam mostrando o disponível do material — declarar em D). Cabe nas 4h30 se a entrega aceitar a mesma
+  conta sem quebrar a suíte; vai a 5h se for preciso separar o parâmetro.
+
+### Pontos de atenção
+
+- O disponível é lido para **reservar**: a conta nova roda sob a trava por material (CLAUDE.md, seção da trava; `comTravaDaRequisicao`), e a
+  aprovação automática também. Ler o saldo por lote fora da seção reabre a C131.
+- Vencimento depende do dia: fixe a data nos testes (TZ e hoje) e abra com uma guarda que derrube o teste fora do ambiente esperado.
+- Sabotagem de posição, não de operador: tirar o desconto (não trocar `<` por `<=`) e provar que a aprovação volta a reservar o lote bloqueado.
+
+Se sobrar tempo depois do item 6, a **C477** (busca da entrega por número da requisição/OS na tela Devoluções) é aditiva ao cursor desta
+etapa: mais um parâmetro opcional no mesmo `WHERE`, sem mudar a ordem nem a página.

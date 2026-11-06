@@ -11,7 +11,14 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-06):** **Etapa 203 fechada** (**a exclusão da requisição apaga o local separado dos itens** — quem
+> **Onde o desenvolvimento está (2026-11-06):** **Etapa 204 fechada** (**a Devolução acha as entregas antigas** — o campo *Entrega de origem*
+> da tela **Devoluções** mostrava só as 30 entregas mais recentes do material; a entrega antiga sumia e a pessoa caía na devolução avulsa, sem
+> vínculo nem lote. Agora **"Carregar entregas mais antigas"** traz as 30 anteriores a cada clique. **C465** resolvido (a parte da lista);
+> tela e servidor; nada a rodar antes do deploy; decisões **B1363** a **B1367**; aviso **C477** (sem busca por requisição/OS); limitações
+> **D (204)**; verificação **F (204)**). **Próxima: Lote bloqueado, reprovado ou vencido — 1ª parte: aprovação e separação** (**C464**, item
+> 6 do 2º pacote da estimativa de 05/11); detalhada no fim do plano da 204.
+> *(Antes, 2026-11-06:)* **Etapa 203 fechada**
+ (**a exclusão da requisição apaga o local separado dos itens** — quem
 > excluía uma requisição com material já separado via o estoque voltar, mas cada item continuava anotado *"separado de XB-01, lote L1"*. Nenhuma
 > conta lia essa anotação (todas olham só requisição em andamento); agora ela é apagada junto. **C467** resolvido; só servidor; nada a rodar
 > antes do deploy; decisões **B1358** a **B1362**; aviso **C476** (o cancelamento não apaga, mas não deixa caixa); limitações **D (203)**;
@@ -4442,7 +4449,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -13908,6 +13915,31 @@ automático no banco ao subir o servidor (mexe em dado de produção só por arr
 provavam o filtro excluindo pela tela e conferindo que o local separado ficava; agora ele some, e o filtro passou a ser provado pela excluída
 **antiga** (montada direto no banco, com o local gravado). Os testes pela tela conferem que o local foi apagado. `c28f7d37`.
 
+**B1363 (NOVA, da Etapa 204; decisão do agente) — "carregar mais" por cursor.** A lista de entregas da tela **Devoluções** ganha a página
+seguinte pelo id da última entrega mostrada (`antes_de`), na mesma ordem de sempre (mais nova primeiro; empate no mesmo segundo pela ordem de
+gravação; data vazia por último). Sem o parâmetro, a resposta é a de antes. **Descartados:** (a) mostrar só as entregas com saldo — não resolve
+o caso comum (a entrega nunca devolvida tem saldo cheio para sempre: com 31 entregas comuns a mais antiga já some) e contradiz a regra de
+manter a já devolvida por inteiro na lista; paginação por número de página — uma entrega nova entre dois cliques desloca tudo e a página
+seguinte repete uma linha; aumentar o limite — só adia o corte. **Reversível.** `fb9d257e`.
+
+**B1364 (NOVA, da Etapa 204; decisão do agente) — a resposta continua uma lista simples; a tela deduz "há mais" da página cheia.** **Preço
+declarado:** quando o total é múltiplo exato de 30, o último clique volta vazio e a tela diz *"Não há entregas mais antigas deste material."*
+**Descartado:** responder com um envelope (*itens* + *tem mais*) — mudaria o formato para nove arquivos de teste e para a tela por um clique.
+**Reversível.** `fb9d257e`, `280c4d5e`.
+
+**B1365 (NOVA, da Etapa 204; decisão do agente) — o cursor só marca a posição.** Ele tem de ser uma movimentação **deste** material (senão
+*"Entrega ⟨id⟩ não encontrada neste material"*), mas não precisa ser devolvível: a entrega que estava na tela e foi estornada (ou teve a
+requisição excluída) entre dois cliques continua servindo de ponto de partida. **Descartado:** exigir entrega devolvível (o "carregar mais"
+quebraria por causa de um estorno de outra pessoa). **Reversível.** `fb9d257e`.
+
+**B1366 (NOVA, da Etapa 204; decisão do agente) — a página é fixa em 30 e quem decide é o servidor.** Não há como pedir uma página maior.
+A tela tem o mesmo 30 escrito, com um aviso no código apontando para o servidor (mudar um sem o outro faz o botão sumir cedo ou sobrar).
+**Descartado:** aceitar o tamanho da página na chamada (abriria a lista sem fim que a spec recusou de propósito). **Reversível.** `fb9d257e`.
+
+**B1367 (NOVA, da Etapa 204; decisão do agente) — a busca por número da requisição, OS ou data fica para depois.** Seria mais rápida que
+clicar "carregar mais" várias vezes, mas pede um campo de busca na tela e uma busca por texto no servidor — não cabia nas 2h30 junto com o
+cursor. Vira o aviso **C477**. O cursor resolve sozinho: toda entrega devolvível passa a ser alcançável. **Reversível.**
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -17747,6 +17779,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      saídas (uma por lote e pedaço — **B1324**); a lista de saídas que a tela de **Devoluções** oferece para citar mostra as **30** mais
      recentes do material, então as antigas saem dela antes. **O que fazer:** para devolver de uma entrega antiga que não aparece, devolver sem
      citar (avulsa, escolhendo o lote).
+     *(**Resolvido na Etapa 204 — a parte (2), a lista** — `fb9d257e`, `280c4d5e`: abaixo do campo *Entrega de origem*, **"Carregar entregas
+     mais antigas"** traz as 30 anteriores a cada clique, até a primeira entrega do material (**B1363** a **B1366**); a entrega antiga achada
+     devolve com o vínculo e herda o lote. A busca por requisição/OS ficou como **C477**. A parte (1) — a entrega de EPI e os internos sem lote —
+     **não** muda.)*
 466. **NOVO (da Etapa 197, revisão do plano; o comportamento é do motor) — o automático pode tirar a peça que voltou para a quarentena.** A
      devolução para **Quarentena** citando a entrega volta ao lote dela, e o bloqueio fica só no total do material (não no lote nem no
      endereço). Reproduzido: a entrega automática tira 3 de L1; devolve-se 1 para a Quarentena (volta ao L1, bloqueado no material); outra
@@ -17828,6 +17864,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      prateleira ou entregar antes), e devolver à prateleira já apaga o local quando a caixa zera; só uma cancelada **antiga** com caixa (de
      antes dessa recusa) guarda o local — e o filtro por status a deixa fora de toda conta (testes *"cancelada legada"* da 198, 200 e 201).
      **O que fazer:** nada. O plano da 203 supunha que o cancelamento já apagava — **não apaga**; quem apaga é o devolver à prateleira.
+477. **NOVO (da Etapa 204; corte declarado) — a tela Devoluções não busca a entrega por número da requisição, OS ou data.** Para devolver de
+     uma entrega muito antiga, é preciso clicar **"Carregar entregas mais antigas"** até ela aparecer (30 por clique). **O que fazer:** clicar
+     até chegar; a entrega aparece com a data, a requisição ou OS e quem retirou. Conserto (se valer): um campo de busca somado ao "carregar
+     mais", sem mudar a ordem nem a página (**B1367**) — ~1h30, tela e servidor.
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -19181,6 +19221,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(204) A Devolução com entregas antigas, o que ficou de fora.** (1) **Sem busca** por número da requisição, OS ou data (**C477**,
+  **B1367**). (2) Página fixa de 30, sem escolha de tamanho (**B1366**). (3) Com total múltiplo exato de 30, o último clique volta vazio
+  (**B1364**). (4) A lista continua sendo lida fora da fila do material: no pior caso mostra um saldo que a gravação recusa com a mensagem de
+  sempre (*"Devolução acima do entregue: …"*) — igual a antes.
 - **(203) A exclusão que apaga o local separado, o que ficou de fora.** (1) As requisições excluídas **antes** da etapa continuam com o local
   gravado (**B1361**) — sem efeito em conta. (2) O **cancelamento** não apaga (**C476**) — sem efeito, porque não cancela com caixa. (3) A
   quantidade separada e o histórico das rodadas da excluída ficam (**B1360**). (4) Se o apagar falhar, só o log do servidor registra
@@ -20526,6 +20570,15 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(204) Nenhum clique foi dado.** A tela **mudou** (o botão **"Carregar entregas mais antigas"**), mas foi provada só pelo Jest, não clicada
+no navegador. O que os testes provam, pela rota real: sem o cursor a resposta é a de sempre (30, a zerada incluída); com ele, as 31ª-35ª sem
+estornada, sem requisição excluída e sem EPI, e o saldo da página 2 é o que a gravação aplica; 65 entregas (12 no mesmo segundo na divisa,
+uma sem data) percorridas em 30 + 30 + 5, cada uma uma vez; as quatro recusas na ordem, com a literal; o cursor estornado serve; a entrega do
+lote *L1* achada na página 2 devolve com o vínculo e o *L1* sobe 2 (rota e serviço). Pela tela (Jest): o botão, o *"Carregando…"*, as novas no
+fim sem repetir e sem perder a escolha, a nota de fim, a troca de material com o clique em voo, a falha que não apaga a lista e o reabrir
+depois de devolver. Controles positivos: sete do plano, duas da Fase 2 e quatro de revisão (no plano). **Não verificado à mão:** o roteiro da
+seção da Etapa 204. Suítes medidas: `devolucaoEntregasAntigas` **7/0**; `test:api` **592/592 arquivos**; `test:almoxarifado` **44/0**; `test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0**; Jest da tela **213/213 suítes, 2942/2942 testes** (Devoluções 24/24); build **Compiled successfully**.
 
 **(203) Nenhum clique foi dado.** A etapa **não mudou a tela**: só a exclusão da requisição no servidor. O que os testes provam, pela rota
 real (as duas portas de exclusão): a requisição separada excluída fica com o endereço, o lote e a quantidade "separado de" apagados, com a
@@ -38904,6 +38957,50 @@ e exclua → aceito.
 - A quantidade separada e o histórico das rodadas da excluída continuam (**B1360**).
 - **Nada a rodar antes do deploy.**
 
+## Etapa 204 — A Devolução acha as entregas antigas (2026-11-06)
+
+Na tela **Devoluções**, ao escolher o material, o campo *Entrega de origem* lista as entregas de onde ele saiu. Mostrava só as **30 mais
+recentes**. Um material que sai todo dia (parafuso, fita, lixa) passa de 30 entregas em poucas semanas — e a entrega de três semanas atrás, que é
+justamente a que a pessoa quer devolver, não aparecia. Sem ela, a pessoa escolhia *"Devolução avulsa"*: o material voltava sem o vínculo, sem
+limite de quantidade e **sem herdar o lote**. Agora, abaixo da lista, **"Carregar entregas mais antigas"** traz as 30 anteriores a cada
+clique, até a primeira entrega do material. Tela e servidor. Nada a rodar antes do deploy. Decisões do agente: **B1363** a **B1367**. **C465**
+resolvido (a parte da lista); **C477** registrado.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A entrega além das 30 mais recentes não aparecia | **"Carregar entregas mais antigas"** traz as 30 anteriores a cada clique |
+| Devolver de entrega antiga só pela avulsa (sem vínculo, sem limite, sem lote) | A entrega antiga é escolhida e devolve com limite e lote herdado |
+| Lista com menos de 30 | **Igual** — sem botão |
+| Entrega já devolvida por inteiro | **Igual** — continua na lista, desabilitada |
+| A conta do devolvível e a gravação | **Iguais** |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**. Um material *FITA-204* com 35 saídas de 1 (**Movimentações → Saída**).
+
+**1. O botão.** **Devoluções → Nova Devolução**, material *FITA-204* → o campo *Entrega de origem* lista 30 entregas e, abaixo, o botão
+**"Carregar entregas mais antigas"**. Escolha uma entrega. Clique → *"Carregando…"* (desabilitado) → 5 entregas entram no fim, a escolhida
+continua escolhida, o botão some e aparece *"Não há entregas mais antigas deste material."*
+
+**2. Lista curta.** Um material com 3 entregas → nem botão nem frase.
+
+**3. A entrega antiga devolve com o lote.** Material com **Controle por lote**, 31 entregas (a mais antiga do lote *L1*, as outras do *L2*).
+Carregue as mais antigas, escolha a do *L1*, quantidade 2, motivo, destino *Estoque*, **Registrar devolução** → *"Devolução registrada!"*; o
+*L1* sobe 2. Reabra e carregue → a entrega mostra *"devolvível 2"*; com 3 → *"Esta entrega ainda aceita 2 de devolução"*.
+
+**4. Falha.** Sem conexão com o servidor, clicar o botão → *"Erro ao carregar entregas mais antigas"*; a lista e a escolha ficam.
+
+**Pela integração** (quem chama a lista direto): *"antes_de inválido — informe o id da última entrega da lista"* (cursor que não é número
+inteiro positivo) e *"Entrega ⟨id⟩ não encontrada neste material"* (cursor de outro material ou inexistente).
+
+### O que esta etapa NÃO cobre
+
+- Busca por número da requisição, OS ou data (**C477**, **B1367**).
+- A entrega de EPI e os internos continuam sem lote (a parte (1) do **C465**).
+- **Nada a rodar antes do deploy.**
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
@@ -38911,6 +39008,12 @@ e exclua → aceito.
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
 
+- **Etapa 204 entregue (2026-11-06):** **a Devolução acha as entregas antigas** (**C465** resolvido, a parte da lista). Cursor `antes_de` na
+  lista (**B1363**), lista simples com "há mais" deduzido da página cheia (**B1364**), cursor só como posição (**B1365**), página fixa em 30
+  (**B1366**), busca cortada (**B1367** → **C477**). Commits `3eddf0a5` e `4dce6f26` (plano), `fb9d257e` (T1), `280c4d5e` (T2), `46943500`
+  (T3) e o fechamento. **O que é seu:** as decisões **B1363** a **B1367** (reversíveis); o aviso **C477**; as limitações **(204)** em D e a
+  verificação **(204)** em F. **Próxima:** *Lote bloqueado, reprovado ou vencido — 1ª parte: aprovação e separação* (**C464**), item 6 do 2º
+  pacote da estimativa de 05/11 — detalhada no fim do plano da 204.
 - **Etapa 203 entregue (2026-11-06):** **a exclusão da requisição apaga o local separado dos itens** (**C467** resolvido). Logo depois de
   excluir, dentro das filas da requisição e dos materiais (**B1358**); falha só vai ao log, sem nova tentativa (**B1359**); a quantidade
   separada e o histórico das rodadas ficam (**B1360**); sem acerto das excluídas antigas (**B1361**); os testes do filtro montam a excluída
