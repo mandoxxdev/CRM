@@ -276,6 +276,33 @@ process.on('exit', (code) => {
     });
   }
 
+  // ── RN-207.10: a fatia leva so o que falta (Fase 5 S2) e RN-207.11: a padrao primeiro (Fase 5 S3) ───────────────────────────────
+  const somaSaidas = async (R, m) => (await livro(R, m)).filter((x) => x[0] === 'SAIDA').reduce((s, x) => s + x[3], 0);
+  const entregue = async (id) => Number((await dbGet(db, 'SELECT quantidade_entregue q FROM itens_requisicao_almoxarifado WHERE id = ?', [id])).q);
+  await test('[RN-207.10] P 3 (R1 guarda 2 na padrao) + B 5: R2 (3) automatico -> P 1 + B 2; o livro, o item e a queda do fisico = 3', async () => {
+    const m = await material();
+    await entrar(m, P.id, 3); await entrar(m, B.id, 5);
+    const r1 = await reqDireta([[m.id, 2]]); const r2 = await reqDireta([[m.id, 3]]);
+    await separar(r1.R, [{ item_id: r1.ids[0], quantidade_separada: 2, localizacao_origem_id: P.id }]);
+    await separar(r2.R, [{ item_id: r2.ids[0], quantidade_separada: 3 }]);
+    await entregar(r2.R, [{ item_id: r2.ids[0], quantidade_atendida: 3 }]);
+    assert.deepStrictEqual(await livro(r2.R, m), [['SAIDA', 'GZ-P', null, 1], ['SAIDA', 'GZ-B', null, 2]]);
+    assert.deepStrictEqual([await somaSaidas(r2.R, m), await entregue(r2.ids[0])], [3, 3]);
+    assert.deepStrictEqual(await retrato(m), { linhas: ['GZ-B/-=3', 'GZ-P/-=2'], fisico: 5 });
+  });
+  await test('[RN-207.11] P 2 + A 5 (R1 guarda 4) + B 3: R2 (4) automatico -> P 2 primeiro (a padrao, mesmo menor), depois A 1 e B 1', async () => {
+    const m = await material();
+    await entrar(m, P.id, 2); await entrar(m, A.id, 5); await entrar(m, B.id, 3);
+    const r1 = await reqDireta([[m.id, 4]]); const r2 = await reqDireta([[m.id, 4]]);
+    await separar(r1.R, [{ item_id: r1.ids[0], quantidade_separada: 4, localizacao_origem_id: A.id }]);
+    await separar(r2.R, [{ item_id: r2.ids[0], quantidade_separada: 4 }]);
+    await entregar(r2.R, [{ item_id: r2.ids[0], quantidade_atendida: 4 }]);
+    assert.deepStrictEqual(await livro(r2.R, m), [['SAIDA', 'GZ-P', null, 2], ['SAIDA', 'GZ-A', null, 1], ['SAIDA', 'GZ-B', null, 1]]);
+    assert.deepStrictEqual(await retrato(m), { linhas: ['GZ-A/-=4', 'GZ-B/-=2'], fisico: 6 });
+    await entregar(r1.R, [{ item_id: r1.ids[0], quantidade_atendida: 4 }]);
+    assert.deepStrictEqual(await retrato(m), { linhas: ['GZ-B/-=2'], fisico: 2 });
+  });
+
   // ── RN-207.06: o livro e o desfazer (B1402, Achado 1) ───────────────────────────────────────────────────────────────────────────
   const excluir = (R) => ok(como('ADMIN').del(`${API}/requisicoes/${R}`, { justificativa: 'e207' }));
   await test('[RN-207.06] depois da 1a entrega da RN-207.01, excluir pela rota: cada ENTRADA volta ao endereco da SAIDA (A 3, B 2, P 0)', async () => {
@@ -312,7 +339,10 @@ process.on('exit', (code) => {
   //  G — (entrega sem bloco "nao cobriu") toda guarda viva (endereco, lote — INCLUSIVE lote nulo) que cobria antes cobre depois;
   //  N — (idem) a proxima entrega de cada item com guarda, num clique, nao toma "nao serve mais";
   //  L — material sem guarda sem lote viva antes: nenhuma SAIDA sem lote COM endereco fora da origem planejada (B1397);
-  //  F — fisico = soma das linhas.
+  //  F — fisico = soma das linhas;
+  //  S — (Fase 5 S2) o pedido = a soma das SAIDAs = o que os itens receberam = a queda do fisico;
+  //  R — (Fase 5 S4) recusa so da conferencia de antes ("Maximo"), da origem ESCOLHIDA (cita o endereco) ou da guarda ja levada ("nao serve
+  //      mais"); outra recusa do motor e regressao.
   // Fase 5 S1: um bloco que le as linhas e baixa como hoje so isenta G e N (o C492) quando o livre usavel nao cobria; se cobria, a baixa de
   // hoje veio do "o claim nao leva guarda" (B1406) e G e N valem (claimSemGuarda).
   const stockService = require('../../services/almoxarifado/stockService');
@@ -326,7 +356,7 @@ process.on('exit', (code) => {
     const pick = (arr) => arr[Math.floor(rnd() * arr.length)];
     const st = { casos: 0, medidos: 0, aceitos: 0, recusas: 0, comLote: 0, i2: 0, guardaSL: 0, L: 0, T: 0, cobriu: 0, semGuardaBloco: 0,
       explicitaAlem: 0, G_viol: 0, N_testes: 0, N_viol: 0, L_viol: 0, T_viol: 0, F_viol: 0, orfas: 0,
-      claimSemGuarda: 0 };
+      claimSemGuarda: 0, recusaMaximo: 0, recusaEscolhida: 0, recusaRoubada: 0, R_viol: 0, S_viol: 0 };
     const ex = [];
     const PARTE = requisitionService.parteOrigemSql('ir');
     for (let caso = 0; caso < CASOS; caso++) {
@@ -414,6 +444,8 @@ process.on('exit', (code) => {
       const desde = (await dbGet(db, 'SELECT COALESCE(MAX(id), 0) x FROM movimentacoes_almoxarifado')).x;
       // espioes, so durante a entrega medida (Fase 5: as leituras da regua guardam as linhas lidas e cada SAIDA a quantidade)
       const ev = [];
+      const fotoAntes = await dbGet(db, `SELECT (SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?) fis,
+        (SELECT COALESCE(SUM(COALESCE(quantidade_entregue, 0)), 0) FROM itens_requisicao_almoxarifado WHERE requisicao_id = ?) ent`, [m, R]);
       const origAll = db.all; const origReg = stockService.registrarMovimentacao;
       db.all = function (sql, ...rest) {
         let k = null;
@@ -437,9 +469,35 @@ process.on('exit', (code) => {
       try { await requisitionService.entregarRequisicao(db, R, payload, { ...USERS.ADMIN }, null); } catch (e) { erro = e; } finally {
         db.all = origAll; stockService.registrarMovimentacao = origReg;
       }
-      if (erro) { st.recusas++; continue; }
+      if (erro) {
+        st.recusas++;
+        // Fase 5 S4: recusa so e legitima quando vem da conferencia de antes (o "Maximo" da caixa) ou cita o endereco ESCOLHIDO no payload;
+        // a guarda ja levada antes (C492 / origem escolhida alem da parte) -> "nao serve mais", contada a parte. Qualquer outra recusa do
+        // motor (endereco bloqueado, nao encontrado, saldo que nao cobre numa fatia) e regressao: a entrega de hoje passava.
+        const msg = String(erro.message);
+        const escolhidos = [];
+        for (const e of payload) {
+          if (!e.localizacao_origem_id) continue;
+          // eslint-disable-next-line no-await-in-loop
+          escolhidos.push((await dbGet(db, 'SELECT codigo FROM localizacoes_almoxarifado WHERE id = ?', [e.localizacao_origem_id])).codigo);
+        }
+        if (/não é possível entregar .* Máximo:/.test(msg)) st.recusaMaximo++;
+        else if (escolhidos.some((cod) => msg.includes(cod))) st.recusaEscolhida++;
+        else if (/não serve mais/.test(msg)) st.recusaRoubada++;
+        else { st.R_viol++; if (ex.length < 6) ex.push({ caso, k: 'R', payload, msg: msg.slice(0, 200) }); }
+        continue;
+      }
       st.aceitos++;
       if (temGuardaSL) st.guardaSL++;
+      // S (Fase 5 S2): o pedido = o que sai = o que o item recebe = a queda do fisico (as tres ultimas sozinhas andam juntas: a fatia que
+      // leva a mais tambem conta no item — so o pedido as prende)
+      const fotoDepois = await dbGet(db, `SELECT (SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?) fis,
+        (SELECT COALESCE(SUM(COALESCE(quantidade_entregue, 0)), 0) FROM itens_requisicao_almoxarifado WHERE requisicao_id = ?) ent,
+        (SELECT COALESCE(SUM(quantidade), 0) FROM movimentacoes_almoxarifado WHERE material_id = ? AND requisicao_id = ? AND id > ? AND tipo = 'SAIDA') sai`,
+      [m, R, m, R, desde]);
+      const pedido = payload.reduce((s, e) => s + Number(e.quantidade_atendida), 0);
+      const tripla = [pedido, Number(fotoDepois.sai), Number(fotoDepois.ent) - Number(fotoAntes.ent), Number(fotoAntes.fis) - Number(fotoDepois.fis)];
+      if (tripla.some((x) => Math.abs(x - pedido) > 1e-9)) { st.S_viol++; if (ex.length < 6) ex.push({ caso, k: 'S', tripla }); }
       // T: os blocos da regua
       const blocos = []; let cur = null;
       for (const e of ev) {
@@ -494,12 +552,12 @@ process.on('exit', (code) => {
     }
     return { st, ex };
   };
-  await test(`[RN-207.08, sorteio] ${CASOS} casos, semente ${SEMENTE}: T, G, N, L, F sem violacao; premissas (guarda sem lote >= 30, L >= 20, T >= 10, claim sem guarda >= 20)`, async () => {
+  await test(`[RN-207.08, sorteio] ${CASOS} casos, semente ${SEMENTE}: T, G, N, L, F, S, R sem violacao; premissas (guarda sem lote >= 30, L >= 20, T >= 10, claim sem guarda >= 20)`, async () => {
     const { st, ex } = await sorteio();
     console.log(`    sorteio: ${JSON.stringify(st)}`);
     if (ex.length) console.log(`    exemplos: ${JSON.stringify(ex).slice(0, 1500)}`);
-    assert.deepStrictEqual({ G: st.G_viol, N: st.N_viol, L: st.L_viol, T: st.T_viol, F: st.F_viol, orfas: st.orfas },
-      { G: 0, N: 0, L: 0, T: 0, F: 0, orfas: 0 }, 'violacoes');
+    assert.deepStrictEqual({ G: st.G_viol, N: st.N_viol, L: st.L_viol, T: st.T_viol, F: st.F_viol, R: st.R_viol, S: st.S_viol, orfas: st.orfas },
+      { G: 0, N: 0, L: 0, T: 0, F: 0, R: 0, S: 0, orfas: 0 }, 'violacoes');
     assert.ok(st.guardaSL >= 30, `premissa: >= 30 entregas aceitas com guarda sem lote viva (${st.guardaSL})`);
     assert.ok(st.L >= 20, `premissa: >= 20 casos do L (${st.L})`);
     assert.ok(st.T >= 10, `premissa: >= 10 casos de T, o livre nao cobriu (${st.T})`);
