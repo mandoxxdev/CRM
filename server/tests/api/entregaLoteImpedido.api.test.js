@@ -470,6 +470,64 @@ valueApprovalService.notificarAprovadoresValor = async (db, req) => { notificado
   await test('[RN-206.14 a] guarda do proprio item na passada 2, com lote impedido: 200, a guarda que fica (1) nao e tomada, a segunda entrega do item 1 sai', () => guardaDoProprio(true));
   await test('[RN-206.14 b] o mesmo SEM lote impedido (o defeito era anterior a 206): 200 e a segunda entrega sai', () => guardaDoProprio(false));
 
+  // ── Fase 5 (revisao de testes): cada um derruba uma sabotagem que a suite deixava verde ────────────────────────────────────────────
+  await test('[RN-206.15 a] dois materiais na mesma entrega, o impedido em SEGUNDO -> 400 do segundo, nada baixado tambem do primeiro', async () => {
+    const a = await material(); await entrar(a, A01.id, 4, 'L1');
+    const b = await material(); await entrar(b, A01.id, 2, 'L1'); await entrar(b, P01.id, 3, 'L2');
+    const { R, ids } = await reqDireta([[a.id, 2], [b.id, 4]]);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 2 }, { item_id: ids[1], quantidade_separada: 4 }]);
+    await bloquearL2(b);
+    const fa = await foto(R, a);
+    await recusa(R, b, [{ item_id: ids[0], quantidade_atendida: 2 }, { item_id: ids[1], quantidade_atendida: 4 }],
+      frase(b.nome, 4, 'un', 2, [L('L2', 'BLOQUEADO', 3)]));
+    assert.deepStrictEqual(await foto(R, a), fa, 'nada baixado de A');
+  });
+  await test('[RN-206.15 b] caixa 4 = parte 2 em (A, L1) + 2 sem origem, origem_automatica 4, A/L1 4, L2 BLOQUEADO 3 -> 200, sai L1 4 (parteQueFica chega a conferencia)', async () => {
+    const m = await material();
+    await entrar(m, A01.id, 4, 'L1'); await entrar(m, P01.id, 3, 'L2');
+    const { R, ids } = await reqDireta([[m.id, 4]]);
+    const l1 = await loteId(m, 'L1');
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 2, localizacao_origem_id: A01.id, lote_id: l1 }]);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 2 }]);
+    await bloquearL2(m);
+    await ok(entregar(R, [{ item_id: ids[0], quantidade_atendida: 4, origem_automatica: true }]));
+    assert.deepStrictEqual((await livro(R, m)).map((x) => [x[2], x[3]]), [['L1', 4]]);
+    assert.strictEqual(await negativas(m), 0);
+  });
+  await test('[RN-206.15 c] falta vinda de inspecao no lote bom, SEM lote impedido (permite negativo) -> 200 como hoje (C485), sem recusa de lista vazia', async () => {
+    const m = await material({ negativo: true });
+    await entrar(m, A01.id, 4, 'L1');
+    const { R, ids } = await reqDireta([[m.id, 4]]);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 4 }]);
+    const rec = (await dbRun(db, "INSERT INTO recebimentos_material_almoxarifado (numero, status) VALUES (?, 'CONFERIDO')", [`REC-E206-${++seq}`])).lastID;
+    await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado (recebimento_id, material_id, quantidade_esperada, quantidade_recebida,
+      lote_id, quantidade_em_inspecao) VALUES (?, ?, 4, 4, ?, 2)`, [rec, m.id, await loteId(m, 'L1')]);
+    await ok(entregar(R, [{ item_id: ids[0], quantidade_atendida: 4 }]));
+  });
+  await test('[RN-206.15 d] sem lote +2 em P01 e legado -1 em B01, L2 BLOQUEADO 3: entrega de 2 -> 200 (o positivo cobre; a negativa nao soma)', async () => {
+    const m = await material({ lote: false });
+    await entrar(m, P01.id, 2, null);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET controle_lote = 1 WHERE id = ?', [m.id]);
+    await entrar(m, P01.id, 3, 'L2');
+    const { R, ids } = await reqDireta([[m.id, 2]]);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 2 }]);
+    await bloquearL2(m);
+    await dbRun(db, 'INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, lote_id, quantidade) VALUES (?, ?, NULL, -1)', [m.id, B01.id]);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = quantidade_atual - 1 WHERE id = ?', [m.id]);
+    await ok(entregar(R, [{ item_id: ids[0], quantidade_atendida: 2 }]));
+    assert.deepStrictEqual(await livro(R, m), [['SAIDA', null, null, 2]]);
+  });
+  await test('[RN-206.15 e] item 1 3 a mao de (A, L1) + item 2 automatico 2, L1 3, L2 BLOQUEADO 5 -> "entregue 2 un a menos" (a parte a mao sai: nao e "nada sai")', async () => {
+    const m = await material();
+    await entrar(m, A01.id, 3, 'L1'); await entrar(m, P01.id, 5, 'L2');
+    const { R, ids } = await reqDireta([[m.id, 3], [m.id, 2]]);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 3 }, { item_id: ids[1], quantidade_separada: 2 }]);
+    await bloquearL2(m);
+    const r = await recusa(R, m, [{ item_id: ids[0], quantidade_atendida: 3, localizacao_origem_id: A01.id, lote_id: await loteId(m, 'L1') },
+      { item_id: ids[1], quantidade_atendida: 2 }], frase(m.nome, 2, 'un', 2, [L('L2', 'BLOQUEADO', 5)], false));
+    assert.ok(r.body.error.endsWith('ou entregue 2 un a menos.'), r.body.error);
+  });
+
   await close();
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
