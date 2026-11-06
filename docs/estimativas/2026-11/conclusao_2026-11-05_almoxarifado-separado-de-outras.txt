@@ -1,0 +1,8 @@
+*Concluído — Almoxarifado: separação conta o que outras requisições já separaram*
+_05/11/2026_
+
+6. Entrega recusada quando outra requisição separou o mesmo material — estimado 4h · realizado 4h30
+
+*Total: estimado 4h · realizado 4h30*
+
+Ao separar escolhendo de onde sai, o sistema passa a descontar o que outras requisições em andamento já separaram daquele local. Se o que sobra não cobre, a separação é recusada na hora, com uma mensagem que diz quanto há, quanto já está separado e para quais requisições — em vez de a entrega da segunda requisição ser recusada depois, sem motivo claro.
