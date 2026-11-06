@@ -1,13 +1,19 @@
 # Almoxarifado — pausa de 2026-10-23 e como retomar
 
 > **✅ RETOMADO em 2026-11-05 — este arquivo agora é histórico.** O André retomou o módulo em 05/11 (estimativa
-> `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md`). **Depois: a Etapa 198 fechou** em 05/11 (plano `0affc3df`,
+> `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md`). **Depois: a Etapa 199 fechou** em 05/11 (plano `3f5b8690`,
+> item 7 `eb3a48c3`, item 8 `0da1e81b`, e o commit "Etapa 199: fechamento") — a tela Materiais de clientes com vírgula (C448) e o PDF do
+> termo de ferramenta com os espaços do texto (C447). Letra **B** usada até **B1337** (B1336–B1337 pela 199), letra **C** até **C469** (a 199
+> não abriu nenhum), letra **A** a partir de **A111** (a 199 não usou). **A fila da estimativa de 05/11 acabou** (itens 1 a 8 desta fila
+> feitos: 191, 194 a 199). **Próxima:** o item 9 da seção 4 abaixo (depende de resposta da empresa) ou um dos avisos C abertos de maior valor
+> — **C468**, **C469**, **C464**, **C466**, **C458**, **C465**, **C467** —, com o tamanho de cada um no fim de
+> `docs/superpowers/plans/2026-11-05-almoxarifado-etapa199-virgula-e-espacos-do-termo.md`; estimar antes de começar.
+> *(Antes: a **Etapa 198 fechou** em 05/11 (plano `0affc3df`,
 > Fase 2 `0eb953f0`, T1 `2fa621de`, T2 `1d24311b`, T3 `00d717ad`, execução `97d7e0ef`, Fase 5 `75da9211`, e o commit "Etapa 198:
 > fechamento") — a separação com "Sai de" conta o que já está separado para outras requisições no mesmo endereço e lote e recusa com a
 > conta à vista (C449 resolvido na separação; C467 coberto por teste). Letra **B** usada até **B1335** (B1330–B1335 pela 198), letra **C**
 > até **C469** (C468 e C469 pela 198), letra **A** a partir de **A111** (a 198 não usou). **Próxima:** item 7 da estimativa — Materiais de
-> clientes: número com vírgula (C448, tela); detalhada no fim de
-> `docs/superpowers/plans/2026-11-05-almoxarifado-etapa198-separado-de-outras-requisicoes.md`.
+> clientes: número com vírgula (C448, tela) — a 199.)*
 > *(Antes: a **Etapa 197 fechou** em 05/11 (plano `7f099fae`,
 > Fase 2 `b21a81f5`, T0 `ee835811` e `b751b3ab`, T1 `58227edf`/`d8a4f1d9`/`398d1e69`, T2 `e011affe` e `cbb2b66f`, Fase 5 `838bb350`,
 > `1723b78c`, `351ee457`, `6d4dec1d`, `1ed41bb8`, e o commit "Etapa 197: fechamento") — em material com lote, a parte automática da entrega
@@ -107,9 +113,9 @@ sem código.** Antes de abrir etapa em ferramentas, confira com ela (a 187 foi c
    com lote, a saída automática gera linha sem lote negativa. Defeito antigo do motor; mexe no motor
    (tronco, revisão pesada).
 6. **C449** — `checarOrigemItem` não desconta o separado de outras requisições (falha segura: 400 na entrega).
-7. **C448** — a tela "Materiais de clientes" mostra `12.5` enquanto o PDF mostra `12,5`.
+7. **C448** — a tela "Materiais de clientes" mostra `12.5` enquanto o PDF mostra `12,5`. *(Feito: Etapa 199, `eb3a48c3`.)*
 8. **C447** — o termo de ferramenta colapsa espaços do texto da versão (pouco ganho; o "Verificar
-   integridade" já resolve).
+   integridade" já resolve). *(Feito: Etapa 199, `0da1e81b` — recuo e espaços saem como escritos; tab = 4 espaços.)*
 9. Feature 05: a "lista de separação como entidade" segue `[ ]`. Feature 01, 06, 16, 21, 22, 23, 25:
    o que falta para 🟢 está no mapa `specs/modulo-almoxarifado/README.md` — a maioria depende de
    resposta da empresa (seção 5).

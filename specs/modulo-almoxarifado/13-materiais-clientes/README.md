@@ -1,5 +1,7 @@
 # 13 — Materiais Pertencentes a Clientes
 
+> **+ Etapa 199 (2026-11-05, `eb3a48c3`): a tela Materiais de clientes mostra as quantidades no formato do papel (*12,5*, *1.250,75*, *0,3*; vazio *0*) — C448 resolvido, B1336** — ver a seção "Etapa 199", no fim. O status não muda.
+
 > **+ Etapa 186 (2026-10-22, T1 `225ee70b`, T3 `bc1ca22f`, T5 `9ea04c28`, Fase 5 `f541130a`): o PDF de posição do cliente cabe na folha — cada célula quebra em linhas, nada é cortado; o título com a razão social quebra; a unidade (até *TAMBOR*) sai inteira; quantidades em formato brasileiro e o número nunca quebra (B1230, B1232–B1234, B1236, B1238; resolve a B1220 da 185)** — ver a seção "Etapa 186", no fim. O status não muda.
 
 > **+ Etapa 176 (2026-10-22, `c1c04e1b`..`928f5bd6`): o recebimento informa a OS (opcional) — o material de cliente que entra com OS fica reservado para ela; o dono é conferido (sem pedido, OS de outro cliente ou sem cliente → 400; com pedido, entra livre — B1153; e de novo sob a trava, B1154). O Objetivo abaixo ESTAVA ERRADO ("projeto e documento em toda entrada")** — ver a seção "Etapa 176", no fim. O status não muda.
@@ -410,5 +412,17 @@ Só desenho do PDF — nenhuma rota, consulta, valor gravado ou porta de saldo m
   19 e 21 — **B1232** emendada; as das aplicações ficam `14, 48, 144`). Os números em formato brasileiro, até 4 casas (*0,3*, não
   *0.30000000000000004* quebrado em duas linhas que pareciam dois números; o *Saldo total* também — **B1238** reescrita); número que não
   cabe encolhe a fonte (9 → 6) e só quebra, sem perder nada, acima de *9.999.999.999,9999*.
-- A tela **Materiais de clientes** continua mostrando o número como vem do servidor (*12.5*); só o PDF formata (*12,5*).
+- A tela **Materiais de clientes** continua mostrando o número como vem do servidor (*12.5*); só o PDF formata (*12,5*). *(Feito na 199 — `eb3a48c3`.)*
 - Fora: célula mais alta que uma página ainda passa do rodapé — **D (186)**. Novidades: seção "Etapa 186", **B1230** a **B1238**.
+
+## Etapa 199 — a tela com vírgula (2026-11-05)
+
+Só tela — nenhuma rota, consulta ou valor gravado mudou. Plano:
+`docs/superpowers/plans/2026-11-05-almoxarifado-etapa199-virgula-e-espacos-do-termo.md` (`3f5b8690`).
+
+- [x] **Recebido, Consumido, Devolvido, Saldo, a quantidade de cada aplicação e o saldo do rótulo da janela de devolução no formato do
+  papel** (`MateriaisClienteAlmoxarifado.js` com `formatarQuantidade` de `utils/pdfTexto.js`, a mesma do PDF — RN-199.01, **B1336**):
+  *12,5*, *0,3*, *1.250,75*; vazio → *0*. A cor do selo e o botão **Devolver** continuam pelo número (RN-199.02). `eb3a48c3`.
+- Testes `[RN-199.01]` em `MateriaisClienteAlmoxarifado.test.js` (3), com controle positivo; a lacuna "vazio vira travessão" achada na
+  revisão e coberta.
+- **C448** resolvido. Fora: as outras telas do módulo com o formato delas — **D (199)**. Novidades: seção "Etapa 199", **B1336**.

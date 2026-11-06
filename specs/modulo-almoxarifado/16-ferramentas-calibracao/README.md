@@ -9,6 +9,8 @@
 > (`../README.md`) diziam **🟡**. **O 🟢 estava errado** desde a revisão final da 9b (que já registrava a edição pela tela e a inspeção como
 > pendências); vale o 🟡. O bloco antigo ficou, riscado, como histórico.
 >
+> **+ Etapa 199 (2026-11-05, `0da1e81b`): o PDF do termo de responsabilidade imprime o texto da versão como foi escrito — recuo e espaços repetidos ficam, tabulação como 4 espaços, nada passa da folha; o hash e o Verificar integridade não mudam (C447 resolvido, B1337)** — ver a seção "Etapa 199", no fim. O status não muda.
+>
 > **+ Etapa 187 (2026-10-22, T1 `3d45817f`, T2 `130caaca`, T3 `c643054e`, T4 `b020c10c`, Fase 5 `e182d42d`, `a255dadf`): a ferramenta
 > baixada não é calibrada nem editada, e a restrição da manutenção aparece na lista e no Emprestar** — fecha a **D (177)(2)** e a **D (177)(5)**.
 > **Mudou uma regra desta spec:** a RN-175.01 dizia *"Editar em qualquer status"*; desde a 187 é *"em qualquer status **salvo Baixada**"*
@@ -317,7 +319,7 @@ Só exibição — nenhuma rota, consulta, valor gravado ou porta de saldo mudou
   intencional (RN-185.09). API, HMAC e a tela do termo: sem mudança.
 - **Fase 5** (`9a5f46a0`): `quebrarTexto` termina com qualquer largura (≤ 0, `NaN`, `Infinity`) e qualquer régua — a guarda da emenda M6 não
   cobria a palavra vazia (laço infinito com largura negativa). Registrado sem corrigir: o termo junta espaços repetidos, recuo, tab e NBSP do
-  texto ao imprimir (anterior, desde a 180) — **C447**.
+  texto ao imprimir (anterior, desde a 180) — **C447**. *(Resolvido na 199 — `0da1e81b`. Desde a 199 o NBSP também fica.)*
 - Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa185-tabela-da-ficha-epi-dentro-da-folha.md`. Novidades: seção "Etapa 185",
   **B1219**, **C447**. O status da feature não muda.
 
@@ -348,3 +350,18 @@ Só exibição — nenhuma rota, consulta, valor gravado ou porta de saldo mudou
   **motivo da baixa** no selo (campo de observações único). Plano:
   `docs/superpowers/plans/2026-10-22-almoxarifado-etapa187-ferramenta-baixada-e-restricao-da-manutencao.md`. Novidades: seção "Etapa 187",
   **B1240** a **B1248**, **D (187)**, **F (187)**. O status da feature não muda.
+
+## Etapa 199 — o termo imprime os espaços do texto (2026-11-05)
+
+Só o desenho do PDF — API, HMAC, o texto gravado e a tela do termo sem mudança (RN-199.07). Plano:
+`docs/superpowers/plans/2026-11-05-almoxarifado-etapa199-virgula-e-espacos-do-termo.md` (`3f5b8690`).
+
+- [x] **Causa medida:** `quebrarTexto` (`client/src/utils/termoFerramentaPdf.js`) partia cada parágrafo com `split(/s+/)` e reunia as
+  palavras com **um** espaço — recuo, espaços repetidos e tabulação sumiam. Agora cada palavra leva a sequência de espaços de antes dela (o
+  recuo gruda na primeira e, se não couber, é cortado por medida como palavra longa); onde a linha quebra, a sequência é consumida (B1217);
+  o fim da linha é aparado; tab → 4 espaços, espaço unicode que não é NBSP → espaço (**B1337**). Régua: `getTextWidth` na fonte 10, 182 mm.
+  `0da1e81b`.
+- Testes `[RN-199.03]` a `[RN-199.07]` em `termoFerramentaPdf.test.js` (6), os da 185 sem mudança; controle positivo; a lacuna "desenhar
+  pelo `splitTextToSize`" achada na revisão e coberta (ele leva uma sequência longa de espaços para o começo da linha de baixo — medido).
+- **C447** resolvido. Fora: tabulação não é parada de coluna; recuo mais largo que a linha sai como linha em branco — **D (199)**.
+  Novidades: seção "Etapa 199", **B1337**. O status da feature não muda.

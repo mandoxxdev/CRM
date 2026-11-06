@@ -6000,8 +6000,10 @@ vai todo para a seguinte, e toda página nova repete o cabeçalho da tabela. A c
 (inclusive *TAMBOR*). As quantidades (Recebido, Consumido, Devolvido, Saldo, a quantidade das aplicações e o saldo total) saem no **formato
 brasileiro, com até 4 casas decimais**: *12,5*, *99.999,125*, *0,3*. Um número que não cabe na largura da coluna é escrito em **letra
 menor** até caber numa linha só — ele nunca é partido em duas linhas, que leriam como dois números (só um valor acima de *9.999.999.999,9999*
-numa coluna estreita passaria para a linha de baixo, sem perder nenhum algarismo). A tela mostra o número como o sistema o guarda (*12.5*);
-só o PDF o formata.
+numa coluna estreita passaria para a linha de baixo, sem perder nenhum algarismo). **A tela mostra os mesmos números no mesmo formato** —
+Recebido, Consumido, Devolvido, Saldo, a quantidade de cada linha de **Aplicado em** e o saldo do rótulo *"Quantidade (saldo: ⟨n⟩ ⟨un⟩)"* da
+janela **Devolver ao cliente**: *12,5*, *1.250,75*, *0,3*; um valor vazio aparece como *0*, como no papel. O campo de quantidade da janela
+de devolução é digitado como qualquer campo numérico do navegador.
 
 ---
 
@@ -6678,9 +6680,12 @@ assinatura. **PDF do termo** relê o termo e baixa *termo-⟨número⟩.pdf* com
 *"(imagem da assinatura indisponível)"* e a tela avisa. No PDF, o texto do termo e as linhas de identificação (ferramenta, colaborador,
 devolução prevista, quem registrou, matrícula confirmada, assinatura) **quebram pela largura do papel** — texto longo, em caixa alta ou
 nome comprido continua na linha de baixo, sem passar da margem e sem perder letra; os parágrafos e as linhas em branco do texto são
-mantidos. Dentro de cada parágrafo, espaços repetidos, recuo e tabulação são impressos como **um** espaço: o papel não é uma cópia
-caractere a caractere do texto assinado, e por isso o código *"Texto da versão ⟨n⟩ (SHA-256)"* não se recalcula a partir do papel quando
-o texto tinha esses espaços — quem confere o texto é o **Verificar integridade**, abaixo.
+mantidos. Dentro de cada parágrafo, o texto sai **como foi escrito**: o recuo do começo do parágrafo e os espaços repetidos entre as
+palavras são impressos como estão. Três ajustes do papel: a **tabulação** sai como **quatro espaços** (a letra do PDF não tem tabulação);
+onde uma linha longa continua na de baixo, os espaços daquele ponto ficam na quebra (a linha de baixo começa na palavra); e espaço no fim de
+uma linha não aparece. Por isso o papel não é uma cópia caractere a caractere do texto assinado quando o texto tem tabulação ou quebra no
+meio de espaços repetidos, e o código *"Texto da versão ⟨n⟩ (SHA-256)"* não se recalcula a partir do papel — quem confere o texto é o
+**Verificar integridade**, abaixo.
 
 **Verificar integridade** (no termo) responde *"Íntegro"* ou *"Adulterado: ⟨motivo⟩"* — a mesma régua da entrega de EPI (21-bis.4): a impressão
 digital do arquivo, a do registro (com o segredo do servidor, que também tem de estar no backup do servidor) e os elos com o registro anterior

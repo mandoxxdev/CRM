@@ -81,7 +81,57 @@ PDF com o jsPDF real medindo).
 
 ## Execução
 
-- [ ] T1
-- [ ] T2
-- [ ] T3
-- [ ] T4
+- [x] **Plano** — `3f5b8690`.
+- [x] **T1 (item 7)** — `eb3a48c3`. Vermelho medido (2 cenários: `- Expected - 4` na tabela, *"Quantidade (saldo: 11.2 PC)*"* no
+  rótulo). Os seis pontos da tela passam por `formatarQuantidade`; verde 15/15. Controle positivo: *consumido* e rótulo crus → os dois
+  `[RN-199.01]` caem pela linha `●`; restaurado por Edit inverso, md5 `afb25214…` de volta.
+- [x] **T2 (item 8)** — `0da1e81b`. Vermelho medido (5 cenários novos). `quebrarTexto` leva a sequência de espaços de antes de cada palavra
+  (recuo grudado na primeira), consome a sequência onde quebra, apara o fim; tab → 4 espaços, espaço unicode que não é NBSP → espaço. Os
+  testes da 185 passaram sem mudança. Controle positivo: voltar a juntar com um espaço (`${linha} ${palavra}`) → os 5 novos caem; md5
+  `4e09e9f7…` de volta.
+- [x] **T3 (revisão "passaria com a feature quebrada?")** — duas lacunas achadas, as duas cobertas nos commits acima:
+  - **Item 7:** um formato "vazio vira travessão" (os `formatNum` locais) na coluna Devolvido passava **verde** (15/15) — a fixture tinha
+    todos os números. Acrescentado `[RN-199.01] numero vazio aparece como 0` (vermelho com a sabotagem, verde sem).
+  - **Item 8:** desenhar o texto pela `linhasPorLargura` (o `splitTextToSize` das linhas de identificação, com o tab trocado) passava
+    **verde** em todos os testes, inclusive num parágrafo longo com sequências de 3 espaços. Sonda (`sonda199.js`, scratchpad): o
+    `splitTextToSize` parte em `' '` e preserva espaços; só erra quando a quebra cai **dentro** de uma sequência longa — *a* + 200 espaços
+    + *b* sai *a* / 17 espaços + *b*. O teste pelo PDF `[RN-199.05] pelo PDF…` ganhou esse caso e cai com a sabotagem.
+- [x] **T4** — tela inteira **212 suítes / 2922 testes** verdes; `CI=true npx react-scripts build` → *Compiled successfully* (sobre
+  `0da1e81b`). Servidor não tocado, não rodado. Fechamento: commit "Etapa 199: fechamento".
+
+### Divergências do plano
+
+- Nenhuma de regra. O plano não dizia o que fazer com espaço unicode que não é NBSP (espaço largo, fino): virou espaço comum, porque a fonte
+  do PDF não os tem (antes também viravam um espaço) — na **B1337**.
+
+### Retro (4 números)
+
+- Rodadas de correção até verde: **0** (cada item verde na primeira implementação).
+- Achados da revisão: **2 reais** (as duas lacunas de teste da T3), **0 ruído**; nenhum defeito de código.
+- Paralelismo: **0** galhos em paralelo (dois itens pequenos, sequenciais; sem retrabalho).
+- Defeito que escapou: preencher na próxima etapa.
+
+## Próxima tarefa detalhada
+
+**A fila da estimativa de 05/11 acabou** (`docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.txt`, itens 1 a 8 feitos:
+191, 194, 195, 196, 197, 198 e 199). A próxima sai do **item 9 da fila de pausa** (`docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md`,
+seção 4): a feature 05 (a "lista de separação como entidade" segue `[ ]`) e o que falta para 🟢 nas features 01, 06, 16, 21, 22, 23 e 25
+(mapa `specs/modulo-almoxarifado/README.md`) — **a maioria depende de resposta da empresa** (seção 5 do mesmo plano); não começar sem ela.
+
+Os avisos **C** abertos de maior valor, que não dependem da empresa (tamanho em uma frase, sem estimativa — estimar antes de começar):
+
+- **C468** — a entrega com "Sai de" escolhido à mão não desconta o que outra requisição separou dali: pequeno, uma régua na entrega com
+  escolha à mão (a mesma conta da 198 na separação), literal própria e cuidado com o dado antigo.
+- **C469** — o "Sai de" da separação mostra o saldo do endereço sem descontar o separado das outras: médio, campo novo na lista de saldos por
+  endereço, que a Movimentação também usa (**B1335**).
+- **C464** — saldo só em lote bloqueado, reprovado ou vencido: a entrega passa e o resto vai a "sem lote" negativo: grande, o disponível
+  descontar o lote que não pode sair na aprovação, na separação e na entrega juntas (motor, tronco).
+- **C466** — o automático pode tirar a peça que voltou para a quarentena: grande, bloqueio por lote no motor (hoje só no total do material).
+- **C458** — a movimentação antiga pela integração tira material sem lote, inclusive de lote vencido: médio, a rota antiga repassar o lote ao
+  motor (ou ser aposentada).
+- **C465** — a entrega de EPI e a de material sem controle de lote saem sem lote, e a Devolução lista só as 30 saídas recentes: médio, mais
+  produto que conserto (a B204 continua nesses fluxos).
+- **C467** — a requisição excluída guarda a origem nos itens: pequeno, sem efeito hoje (coberto por teste nas duas portas); limpar na
+  exclusão é higiene.
+
+Pontos de atenção para qualquer um deles: os C468/C469/C464/C466 mexem em saldo — releia a seção das travas do `CLAUDE.md` inteira antes.

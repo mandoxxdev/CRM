@@ -327,6 +327,8 @@ defeitos**, ruído **0**; paralelismo: **nenhum** — T1, T2 e T3 todas tronco, 
 
 ## Próxima tarefa detalhada
 
+*(Feita: Etapa 199, `eb3a48c3` — plano `docs/superpowers/plans/2026-11-05-almoxarifado-etapa199-virgula-e-espacos-do-termo.md`.)*
+
 **"Materiais de clientes: número com vírgula"** — item 7 da fila da estimativa
 `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md` (**ajuste de tela**, estimado **45 min**: análise 15, execução 15,
 teste 15). Fecha o **C448** (novidades): a tela **Materiais de clientes** mostra *12.5* (e *1250.75*, e o ruído *0.30000000000000004*)

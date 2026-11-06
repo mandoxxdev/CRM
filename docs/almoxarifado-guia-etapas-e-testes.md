@@ -1,24 +1,36 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-11-05 (Etapas 172 a 191, 194 a 198) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-11-05 (Etapas 172 a 191, 194 a 199) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197 e 198) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198 e 199) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-05 (Etapas 172 a 178, 180 a 191, 194 a 198 ENTREGUES · RETOMADO em 05/11 · próxima: Materiais de clientes — número com vírgula)
+> ## Onde o desenvolvimento está — 2026-11-05 (Etapas 172 a 178, 180 a 191, 194 a 199 ENTREGUES · RETOMADO em 05/11 · a fila da estimativa de 05/11 acabou)
 >
-> **O desenvolvimento parou aqui: Etapa 198 fechada — 2026-11-05.** **A separação conta o que já está separado para outras requisições.**
+> **O desenvolvimento parou aqui: Etapa 199 fechada — 2026-11-05.** **Materiais de clientes com vírgula, e o termo de ferramenta com os
+> espaços do texto.** A tela **Materiais de clientes** mostra *12,5* (antes *12.5*), como o papel da posição; o PDF do **termo de
+> responsabilidade** de ferramenta imprime o recuo e os espaços do texto como foram escritos (tabulação como 4 espaços), sem passar da folha
+> — o texto assinado e o **Verificar integridade** não mudaram. Só tela e PDF; nada a rodar antes do deploy. **Nenhum clique foi dado no
+> navegador** (só testes — roteiro na seção da 199 e letra F das novidades).
+>
+> **Onde parou, exatamente:** a **199 está fechada** (código, testes e documentos commitados). **A fila da estimativa de 05/11 acabou**
+> (itens 1 a 8). Não há próxima etapa planejada: o fim do plano da 199
+> (`docs/superpowers/plans/2026-11-05-almoxarifado-etapa199-virgula-e-espacos-do-termo.md`) lista o item 9 da fila de pausa (depende de
+> resposta da empresa) e os avisos abertos de maior valor (**C468**, **C469**, **C464**, **C466**, **C458**, **C465**, **C467**), com o tamanho
+> de cada um — a próxima começa por estimar um deles.
+>
+> **Etapa 198, 2026-11-05.** **A separação conta o que já está separado para outras requisições.**
 > Duas requisições do mesmo material, as duas janelas de separação abertas no mesmo endereço: a primeira separa; a segunda, se o que sobra
 > lá não cobre, é **recusada na hora**, com a conta (quanto há, quanto já está separado para outra requisição e qual, quanto sobra) — antes era
 > aceita e a recusa só vinha na entrega. Reaberta a janela, a sugestão já aponta o outro endereço. Só motor (a mensagem aparece na janela de
 > separação, que fica aberta); nada a rodar antes do deploy. **Nenhum clique foi dado no navegador** (só testes — roteiro na seção da 198 e
 > letra F das novidades).
 >
-> **Onde parou, exatamente:** a **198 está fechada** (código, testes e documentos commitados). A **próxima** é o item 7 da fila da
+> **Onde parou, na época:** a **198 está fechada** (código, testes e documentos commitados). A **próxima** é o item 7 da fila da
 > estimativa de 05/11: **"Materiais de clientes: número com vírgula"** (**C448** — a tela **Materiais de clientes** mostra *12.5* enquanto o
 > PDF da posição do cliente mostra *12,5*). É tela. Só a tarefa detalhada no fim do plano da 198
 > (`docs/superpowers/plans/2026-11-05-almoxarifado-etapa198-separado-de-outras-requisicoes.md`, com a tela, as linhas e o formatador do PDF
-> a reaproveitar) e a estimativa existem, nenhum plano nem código.
+> a reaproveitar) e a estimativa existem, nenhum plano nem código. *(Feita: a 199.)*
 >
 > **Etapa 197, 2026-11-05.** **Em material com lote, a parte automática da entrega baixa do lote certo.** O que sai no automático na entrega
 > de um material com controle de lote sai do lote que **vence primeiro** — nunca de lote bloqueado ou vencido sem liberação, e sem tirar o que
@@ -7019,6 +7031,45 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 199 — Materiais de clientes com vírgula, e o termo de ferramenta com os espaços do texto (ENTREGUE — 2026-11-05)
+
+**O que mudou, em uma frase:** a tela **Materiais de clientes** escreve os números como o papel (*12,5*), e o PDF do termo de ferramenta
+imprime o texto com os espaços que ele tem.
+
+**O problema que ela resolve.** (1) Na frente do cliente, a tela dizia *12.5* e o papel dele dizia *12,5* — o mesmo número, mas parecia
+outro. (2) A empresa escreve o texto do termo com recuo e espaços para alinhar; o PDF juntava tudo num espaço só, e o papel não parecia o
+texto que foi escrito.
+
+| Antes | Agora |
+|---|---|
+| Materiais de clientes: *12.5*, *1250.75*, às vezes *0.30000000000000004* | *12,5*, *1.250,75*, *0,3* — vazio é *0*, como no papel |
+| Janela **Devolver ao cliente**: *"Quantidade (saldo: 11.2 PC)"* | *"Quantidade (saldo: 11,2 PC)"* |
+| PDF do termo: recuo e espaços repetidos viravam um espaço | Saem como escritos; a tabulação vira 4 espaços |
+| **Verificar integridade** do termo | Igual |
+
+**Antes de testar (uma vez).** Um usuário **Administrador do almoxarifado**. Um cliente com um material dele (unidade *M*) que recebeu
+**12,5** e teve uma saída de **1,25** numa OS desse cliente. Uma ferramenta disponível para empréstimo e um colaborador.
+
+**Roteiro de teste (5 minutos).**
+
+1. **Almoxarifado → Materiais de Clientes**, escolha o cliente: Recebido *12,5*, Consumido *1,25*, Devolvido *0*, Saldo *11,25*; em
+   **Aplicado em**, *OS ⟨número⟩ — 1,25*.
+2. **PDF da posição**: os mesmos números.
+3. **Devolver** na linha: o rótulo diz *"Quantidade (saldo: 11,25 M)"*. Feche.
+4. **Almoxarifado → Ferramentas**, aba **Texto do termo**: escreva um parágrafo com **quatro espaços** no começo e **dois espaços** depois de
+   um ponto; cole de um editor de texto uma linha que comece com tabulação (no campo, a tecla **Tab** pula para o próximo campo). **Salvar
+   nova versão**.
+5. Empreste a ferramenta (o colaborador assina) e, no termo, **PDF do termo**: o parágrafo sai recuado, com os dois espaços; a linha da
+   tabulação sai recuada como quatro espaços; um parágrafo longo continua na linha de baixo sem passar da margem.
+6. No termo, **Verificar integridade** → *"Íntegro"*.
+
+**O que esta etapa não cobre.** A tabulação é impressa como 4 espaços, não como parada de coluna; com ela, o papel não serve para
+recalcular o código do texto — quem confere é o **Verificar integridade**. As outras telas do módulo continuam com o formato delas (vazio
+como *—*). **Nada a rodar antes do deploy.**
+
+*Nenhum clique no navegador foi dado nesta etapa e nenhum PDF foi aberto num leitor*: o roteiro acima é o que os testes automáticos provam
+(a tela montada e o gerador do PDF com a medida real da letra) — escrito para você conferir à mão.
 
 ## Etapa 198 — A separação conta o que já está separado para outras requisições (ENTREGUE — 2026-11-05)
 

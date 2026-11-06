@@ -11,7 +11,15 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-05):** **Etapa 198 fechada** (**separado de outras requisições no mesmo local: a separação conta o
+> **Onde o desenvolvimento está (2026-11-05):** **Etapa 199 fechada** (**Materiais de clientes com vírgula, e o termo de ferramenta com os
+> espaços do texto** — a tela **Materiais de clientes** passa a mostrar as quantidades como o papel da posição: *12,5*, *1.250,75*, *0,3*;
+> vazio é *0*; e o PDF do **termo de responsabilidade** de ferramenta imprime o texto da versão como foi escrito — o recuo e os espaços
+> repetidos ficam, a tabulação sai como 4 espaços, nada passa da folha; o texto assinado, o código dele e o **Verificar integridade** não
+> mudam; **C448** e **C447** resolvidos; só tela e PDF; nada a rodar antes do deploy; decisões **B1336** e **B1337**; limitações **D (199)**;
+> verificação **F (199)**; revisão "passaria com a feature quebrada?" achou duas lacunas de teste, cobertas). **A fila da estimativa de 05/11
+> acabou** (itens 1 a 8); a próxima sai do item 9 da fila de pausa (depende de resposta da empresa) ou dos avisos **C468**, **C469**,
+> **C464**, **C466**, **C458**, **C465** e **C467** — listados com tamanho no fim do plano da 199.
+> *(Também em 2026-11-05: **Etapa 198 fechada** (**separado de outras requisições no mesmo local: a separação conta o
 > que já está separado para as outras** — duas requisições pedem 4 do mesmo material e as duas janelas de separação abrem sugerindo o mesmo
 > endereço e lote, onde há 6; a primeira separa 4 de lá; a segunda, com a janela ainda aberta, confirmava 4 do mesmo lugar e era **aceita**,
 > e a recusa só vinha na entrega dela (*"… a origem da separação (XB-01) não serve mais …"*). Agora a separação da segunda é **recusada na
@@ -19,8 +27,7 @@
 > a sugestão já aponta o outro endereço. **C449** resolvido na separação; **C467** coberto por teste; só motor (a mensagem aparece na janela
 > de separação, que fica aberta); nada a rodar antes do deploy; decisões **B1330** a **B1335**; avisos **C468** (a entrega com "Sai de"
 > escolhido à mão ainda não desconta) e **C469** (o "Sai de" mostra o saldo do endereço sem descontar o separado das outras); limitações
-> **D (198)**; verificação **F (198)**; revisão (Fase 5) com zero defeitos e três lacunas de teste cobertas). **Próxima: Materiais de
-> clientes — número com vírgula** (**C448**, tela); detalhada no fim do plano da 198.
+> **D (198)**; verificação **F (198)**; revisão (Fase 5) com zero defeitos e três lacunas de teste cobertas); a próxima era a **199**.)*
 > *(Também em 2026-11-05: **Etapa 197 fechada** (**separar em duas vezes, 2ª parte: em material com lote, a parte
 > automática da entrega baixa do lote certo** — a parte da entrega que sai no automático, em material com controle de lote, passa a sair do
 > lote que **vence primeiro** (o mesmo critério do seletor de lote da Movimentação e da dica da fila), uma saída por lote, só de lote que pode
@@ -4404,7 +4411,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -13710,6 +13717,21 @@ janela de separação **aberta** (as quantidades digitadas ficam); reabrir a jan
 saldo já descontado do separado das outras — exige campo novo na lista de saldos por endereço, que a Movimentação também usa (**C469**).
 **Reversível.** Sem código de tela.
 
+**B1336 (NOVA, da Etapa 199; decisão do agente) — a tela de Materiais de clientes usa o formato do papel, não o das outras telas.** Recebido,
+Consumido, Devolvido, Saldo, a quantidade de cada aplicação e o saldo do rótulo da janela **Devolver ao cliente** passam pela **mesma**
+conta do PDF da posição (pt-BR, até 4 casas; vazio → *0*). **Descartado:** os formatadores locais de Alertas, Reposição e Relatórios — mostram
+*—* para vazio, e o papel mostra *0*: a tela e o papel voltariam a discordar. O campo de quantidade da devolução não muda (é campo numérico do
+navegador). **Reversível:** só tela. `eb3a48c3`.
+
+**B1337 (NOVA, da Etapa 199; decisão do agente) — no PDF do termo, o texto sai como foi escrito, com três ajustes de papel.** O recuo e os
+espaços repetidos são impressos como estão. (1) A **tabulação** sai como **4 espaços**, e um espaço especial (largo, fino) como espaço comum —
+a letra do PDF não os tem; o espaço não separável fica. (2) Onde uma linha longa continua na de baixo, a sequência de espaços daquele ponto
+fica na quebra (a linha de baixo começa na palavra), como já era a regra da quebra (**B1217**). (3) Espaço no fim de linha não é desenhado.
+**Descartado:** tabulação como parada de coluna (o texto é corrido, não tabela); letra de largura fixa (mudaria a aparência do termo
+inteiro); a quebra do `splitTextToSize` usada nas linhas de identificação (com uma sequência longa de espaços ela leva os espaços para o
+começo da linha de baixo — medido). O texto gravado, o código *SHA-256* e o **Verificar integridade** não mudam. **Reversível:** só o
+desenho do PDF. `0da1e81b`.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -17354,11 +17376,17 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      **não** chega ao mesmo código. **O que fazer:** para conferir se o texto do termo é o assinado, usar **Verificar integridade** no termo
      (o servidor confere sobre o texto guardado — *"Íntegro"* ou *"Adulterado: texto do termo alterado"*), não o papel. Ao escrever o texto
      do termo (**Texto do termo**), evitar recuo com espaços e tabulação.
+     **✅ RESOLVIDO NA ETAPA 199** (`0da1e81b`): o recuo e os espaços repetidos saem no papel como foram escritos, sem passar da folha. Três
+     ajustes de papel continuam (**B1337**): tabulação vira 4 espaços (e espaço largo/fino, espaço comum); os espaços onde a linha quebra
+     ficam na quebra; espaço no fim de linha não aparece. Por isso, com tabulação ou quebra no meio de espaços, o papel ainda não recalcula o
+     código — **Verificar integridade** continua sendo quem confere (não mudou).
 448. **NOVO (da Etapa 186) — os PDFs da remessa a terceiros e da posição do cliente mostram as quantidades no formato brasileiro; a tela de
      Materiais de clientes não.** No papel: *12,5*, *1.250,75*, *0,3* (até 4 casas). Na tela **Materiais de clientes**, as colunas Recebido,
      Consumido, Devolvido e Saldo continuam mostrando o número como vem do banco: *12.5*, *1250.75* — e uma conta de fração pode aparecer como
      *0.30000000000000004*. É o **mesmo** número (**B1238**). **O que fazer:** ao conferir o papel com a tela junto do cliente, ler o ponto da
      tela como vírgula; se aparecer um número com muitas casas na tela, vale o do papel (arredondado em 4 casas).
+     **✅ RESOLVIDO NA ETAPA 199** (`eb3a48c3`): a tela mostra *12,5*, *1.250,75*, *0,3* — a mesma conta do papel, nas quatro colunas, na
+     quantidade de cada **Aplicado em** e no saldo do rótulo da janela **Devolver ao cliente**; vazio é *0* nos dois (**B1336**).
 449. **NOVO (da Etapa 188, revisão adversarial) — duas requisições abertas ao mesmo tempo recebem o mesmo endereço da Fila de separação, e a
      segunda é recusada na entrega.** A dica de uma requisição não desconta a dica da outra (**B1255**). Com 10 em *P-01* (a padrão) e 10 em
      *B-01*, duas requisições de 6: as duas recebem *"Pegar em P-01 …"*. A primeira separa 6 de *P-01*; **a segunda também separa 6 de P-01 e é
@@ -18922,6 +18950,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(199) A vírgula na tela e os espaços do termo, o que ficou de fora.** (1) No termo, a **tabulação** sai como 4 espaços (não como parada
+  de coluna) e espaço largo/fino como espaço comum; os espaços onde a linha quebra ficam na quebra; espaço no fim de linha não aparece
+  (**B1337**) — com isso, o papel de um texto com tabulação ainda não recalcula o código *SHA-256*: quem confere é o **Verificar
+  integridade**. (2) Um recuo mais largo que a linha inteira (centenas de espaços) sai como linha(s) em branco antes da palavra — nada se
+  perde, não é dado plausível. (3) Outras telas do módulo que mostram quantidade continuam com o formato delas (vazio como *—*); só
+  **Materiais de clientes** passou a seguir o papel (**B1336**). (4) O campo de quantidade da janela de devolução continua campo numérico do
+  navegador (aceita o que o navegador aceita).
 - **(198) A separação com "Sai de" que conta as outras requisições, o que ficou de fora.** (1) **A entrega com "Sai de" escolhido à mão** não
   desconta o que outra requisição separou dali (**C468**). (2) **O "Sai de" da janela** mostra o saldo do endereço sem o separado das outras
   (**C469**, **B1335**). (3) **A entrega planejada** não mudou: com separação gravada antes desta etapa, a segunda entrega continua recusada
@@ -19016,7 +19051,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   material continua cortado em 2 linhas por decisão (espaço físico; o QR identifica o material) — **B1237**. (6) O texto de encerramento
   da remessa (a justificativa) quebra em 175 mm como antes, sem régua de página: uma justificativa de milhares de letras passaria do
   rodapé (uma de 500, plausível, cabe). (7) Fora: o relatório comercial de visitas e o PDF da proposta (**B1230**). (8) A tela de
-  **Materiais de clientes** mostra o número cru (**C448**).
+  **Materiais de clientes** mostra o número cru (**C448**). *(O (8) foi resolvido na 199 — `eb3a48c3`, **B1336**.)*
 - **(185) A tabela da ficha de EPI e o termo de ferramenta dentro da folha, o que ficou de fora.** (1) Os PDFs da **remessa a terceiros** e
   da **posição do cliente** continuam cortando por número de letras (**B1220**, **C445**) — são a próxima etapa (**B1222**); as etiquetas
   já medem. *(Resolvido na Etapa 186 — **B1230**; e as etiquetas "já medirem" era meia verdade — **B1237**.)* (2) **Uma entrega mais alta que uma página inteira ainda passa do rodapé** — a régua manda a entrega para a página seguinte, mas
@@ -19025,7 +19060,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   (**442 mm**). (2) e (3) só com nomes de centenas ou milhares de letras — o cadastro não tem tamanho máximo, mas não é dado plausível; a
   D (183)(5) já dizia o mesmo da matrícula. (4) Quantidade de 6 ou mais dígitos quebra em 2 linhas na coluna Qtd (**B1221**). (5) O termo de
   ferramenta junta espaços repetidos, recuo e tabulação do texto ao imprimir — o papel não é cópia byte a byte (**C447**). (6) A quebra por
-  palavra come um espaço em cada quebra; nenhuma letra se perde (**B1217**).
+  palavra come um espaço em cada quebra; nenhuma letra se perde (**B1217**). *(O (5) foi resolvido na 199 — `0da1e81b`: recuo e espaços
+  repetidos saem como escritos; ficam os ajustes da **B1337**.)*
 - **(184) A lista de aprovadores de valor sem nome nem e-mail, o que ficou de fora.** (1) O **e-mail de todo usuário** continua
   saindo pela lista de usuários do sistema para qualquer pessoa logada — é por ela que as abas do almoxarifado mostram nomes (decisão
   **B841**, do núcleo; **B1214**). Esta etapa fechou "quem aprova, com contato, numa leitura só", não o e-mail de alguém. (2) O **salvar** da
@@ -20241,6 +20277,16 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(199) Nenhum clique foi dado no navegador e nenhum PDF foi aberto num leitor.** O que os testes provam: a tela **Materiais de clientes**
+montada (jsdom, servidor de mentira) mostra *12,5*, *0,3*, *1.250,75*, *11,2*, a aplicação *OS OS-DEC — 2,5*, vazio como *0* e o rótulo
+*"(saldo: 11,2 PC)"*; no termo, `quebrarTexto` mantém recuo e espaços, troca a tabulação por 4 espaços, consome os espaços na quebra e
+nunca passa de 182 mm (medido com o jsPDF real, fonte 10); o gerador do PDF desenha *"    Clausula 1.  O colaborador   recebe a
+ferramenta."* e *"    Item a"* e os códigos continuam os do servidor. Controles positivos: três sabotagens derrubando os cenários delas, e
+duas lacunas achadas na revisão (vazio como *—*; quebra pelo `splitTextToSize`) cobertas. **Não verificado à mão:** o roteiro da seção da
+Etapa 199 — em especial **abrir o PDF do termo** num leitor e conferir o alinhamento do recuo e dos espaços (a largura do espaço no papel é a
+da letra do PDF). Vale 5 minutos. Suítes medidas: tela **212 suítes / 2922 testes**; build *Compiled successfully* (sobre `0da1e81b`). O
+servidor não foi rodado: a etapa não o toca.
 
 **(198) Nenhum clique foi dado no navegador.** A etapa **não mudou a tela**: a mensagem nova aparece no aviso vermelho, com a janela de
 separação aberta (lido no código da janela, não clicado). O que os testes provam, pela rota real (inclusive a rota que a tela chama) e pelo
@@ -37361,7 +37407,7 @@ registros"*. No termo, **Verificar integridade** → *"Íntegro"*. Gerar os PDFs
 - **Remessa a terceiros**, **posição do cliente** e **etiquetas** — os dois primeiros ainda cortam por número de letras (**B1220**, **C445**);
   são a **próxima etapa** (**B1222**). As etiquetas já medem.
 - O termo de ferramenta junta espaços repetidos, recuo e tabulação do texto da versão num espaço só ao imprimir — nenhuma letra se perde, mas
-  o papel não é uma cópia byte a byte do texto (**C447**; anterior à etapa).
+  o papel não é uma cópia byte a byte do texto (**C447**; anterior à etapa). *(Feito na 199 — ver a seção dela.)*
 - Uma entrega mais alta que uma página inteira (um nome de **mil** letras) ainda passa do rodapé; um nome de colaborador de **milhares** de
   letras faz o topo da ficha passar da folha (**D (185)**).
 - **Nada a rodar antes do deploy.**
@@ -37437,7 +37483,7 @@ código curto (*MAT-7*) sai como antes, na letra grande.
 - Um item **mais alto que uma página inteira** (nome de material de milhares de letras) ainda sai da folha — a régua não divide o item
   (**D (186)**).
 - Número acima de *9.999.999.999,9999* nas colunas de número da posição quebra em 2 linhas, mesmo na letra menor — nada se perde.
-- A tela de **Materiais de clientes** continua mostrando o número como vem (*12.5*); só o papel usa vírgula (**C448**).
+- A tela de **Materiais de clientes** continua mostrando o número como vem (*12.5*); só o papel usa vírgula (**C448**). *(Feito na 199 — ver a seção dela.)*
 - Na etiqueta, o nome do material continua em **2 linhas** no máximo (decisão de espaço; o QR identifica o material).
 - O relatório comercial de visitas e o PDF da proposta ficaram fora (**B1230**).
 - **Nada a rodar antes do deploy.**
@@ -38259,12 +38305,72 @@ nenhum.
 - Separações gravadas antes desta etapa que já somam mais do que o endereço tem: a segunda entrega continua recusada (**B1333**).
 - **Nada a rodar antes do deploy.**
 
+## Etapa 199 — Materiais de clientes com vírgula, e o termo de ferramenta com os espaços do texto (2026-11-05)
+
+Dois ajustes pequenos de leitura, os dois últimos da lista de 05/11. **(1)** Na tela **Materiais de clientes**, o saldo de uma chapa aparecia
+como *12.5*, e o papel da posição que vai para o cliente dizia *12,5*. Quem conferia um contra o outro na frente do cliente via dois números
+(**C448**). Agora a tela escreve *12,5*, como o papel. **(2)** O texto do **termo de responsabilidade** de ferramenta é escrito pela empresa,
+às vezes com recuo no começo do parágrafo e espaços para alinhar. O PDF juntava tudo num espaço só (**C447**). Agora sai como foi escrito —
+sem passar da folha. O texto assinado, o código dele e o **Verificar integridade** não mudaram: só o desenho do papel. Só tela e PDF, nada a
+rodar antes do deploy. Decisões do agente: **B1336** e **B1337**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Materiais de clientes**: Recebido *12.5*, Devolvido *1250.75*, e às vezes *0.30000000000000004* | *12,5*, *1.250,75*, *0,3* — o mesmo do PDF da posição (**B1336**) |
+| **Aplicado em**: *OS 123 — 2.5* | *OS 123 — 2,5* |
+| Janela **Devolver ao cliente**: *"Quantidade (saldo: 11.2 PC)"* | *"Quantidade (saldo: 11,2 PC)"* |
+| PDF do termo: recuo, espaços repetidos e tabulação viravam **um** espaço | Saem como escritos; a tabulação vira 4 espaços (**B1337**) |
+| Linha longa com espaços repetidos | Continua na de baixo sem passar da margem; a linha de baixo começa na palavra |
+| Código *"Texto da versão ⟨n⟩ (SHA-256)"* e **Verificar integridade** | Iguais — nada mudou no que é gravado ou conferido |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**. Um cliente com um material dele (unidade *M*) que recebeu **12,5** e teve uma
+saída de **1,25** numa OS desse cliente.
+
+**1. A tabela com vírgula.** **Almoxarifado → Materiais de Clientes**, escolha o cliente. Na linha do material: Recebido *12,5*, Consumido
+*1,25*, Devolvido *0*, Saldo *11,25*; em **Aplicado em**, *OS ⟨número⟩ — 1,25*. Clique em **PDF da posição**: os mesmos números.
+
+**2. A janela de devolução.** Na mesma linha, **Devolver** → o rótulo diz *"Quantidade (saldo: 11,25 M)"*. Digite a quantidade normalmente
+no campo.
+
+**3. O termo com recuo e espaços.** **Almoxarifado → Ferramentas**, aba **Texto do termo**. Escreva, por exemplo:
+*"␣␣␣␣1.␣␣O colaborador recebe a ferramenta."* (quatro espaços antes do 1 e dois depois do ponto) e uma segunda linha que comece com
+tabulação — **colada** de um editor de texto (no campo, a tecla **Tab** pula para o próximo campo, não escreve). **Salvar nova versão**. Empreste uma ferramenta (o colaborador assina) e, no termo, clique em **PDF do termo**: o primeiro parágrafo
+sai com o recuo e os dois espaços; a linha do Tab sai recuada como quatro espaços.
+
+**4. Linha longa.** Um parágrafo de várias linhas com espaços repetidos entre as palavras: no PDF, nada passa da margem e cada linha de
+continuação começa na palavra.
+
+**5. Nada mudou na prova.** No termo, **Verificar integridade** → *"Íntegro"*. Gerar o PDF não grava nada.
+
+**A revisão** ("este teste passaria com a feature quebrada?") achou duas lacunas, as duas cobertas: um formato que mostrasse *—* para vazio
+passava (agora há o cenário "vazio aparece como 0"); e desenhar o termo pela quebra das linhas de identificação passava — ela só erra com
+uma sequência longa de espaços, e o teste pelo PDF ganhou esse caso. Nenhum defeito de código.
+
+### O que esta etapa NÃO cobre
+
+- No termo, a tabulação vira 4 espaços (não é parada de coluna); com tabulação, o papel ainda não recalcula o código — quem confere é o
+  **Verificar integridade** (**B1337**, **D (199)**).
+- Outras telas do módulo que mostram quantidade continuam com o formato delas (vazio como *—*) (**B1336**).
+- **Nada a rodar antes do deploy.**
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 199 entregue (2026-11-05):** **Materiais de clientes com vírgula, e o termo de ferramenta com os espaços do texto** (**C448** e
+  **C447** resolvidos). A tela usa a conta do papel (**B1336**); o termo imprime recuo e espaços como escritos, tabulação como 4 espaços
+  (**B1337**); o texto assinado e a verificação não mudam. Revisão: duas lacunas de teste cobertas, nenhum defeito. Commits `3f5b8690`
+  (plano), `eb3a48c3` (item 7), `0da1e81b` (item 8) e o fechamento. **O que é seu:** as decisões **B1336** e **B1337** (reversíveis); as
+  limitações **(199)** em D e a verificação **(199)** em F. **A fila da estimativa de 05/11 acabou;** a próxima sai do item 9 da fila de
+  pausa (depende da empresa) ou dos avisos **C468**, **C469**, **C464**, **C466**, **C458**, **C465**, **C467** — com tamanho no fim do
+  plano da 199.
 
 - **Etapa 198 entregue (2026-11-05):** **separado de outras requisições no mesmo local: a separação conta o que já está separado para as
   outras** (**C449** resolvido na separação; **C467** coberto por teste). A separação com **Sai de** recusa o endereço já separado para outras
