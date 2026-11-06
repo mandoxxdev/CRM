@@ -310,12 +310,34 @@ passa a recusar (`max(0, r − c)` no teto, RN-205.07).
 
 ## Execução
 
-- [ ] T0 — `loteImpedido.js` + `saldoDisponivelParaItem` com `lote_impedido`/`disponivel_liberado` (RN-205.01, .02)
-- [ ] T1 — aprovação (três portas) e `calcularStatusPosAprovacao` (RN-205.03 a .07)
-- [ ] T2 — porta da separação, fila, detalhe e a literal (RN-205.07, .08, .09)
-- [ ] T3 — integração pela rota e pelo serviço + RN-205.10 (entrega fixada)
-- [ ] F2 — revisor fresco do plano (antes da T0)
-- [ ] T4 — fechamento (`fechar-etapa`) e estimado × gasto
+- [x] F2 — revisor fresco do plano, **antes** da T0 (`422b8e90`). Esta linha estava depois da T3 e dizia "(antes da T0)": a ordem era a errada
+  (M3), corrigida aqui.
+- [x] T0 — `loteImpedido.js` + `saldoDisponivelParaItem` com `lote_impedido`/`disponivel_liberado` (RN-205.01, .02 a–h) — `8bebd3ce`
+- [x] T1 — aprovação (três portas) e `calcularStatusPosAprovacao` (RN-205.03 a .07) — `f736cc71`
+- [x] T2 — porta da separação, fila, detalhe e a literal (RN-205.07, .08, .09; I3, M1) — `82ae8664`
+- [x] T2b — a linha do lote impedido no modal de separação (Fase 2 I4) — `18b41f47`
+- [x] T3 — integração pela rota e pelo serviço + RN-205.10 (entrega fixada, com a segunda rodada) — `e989ec54`
+- [x] Revisão "passaria com a feature quebrada?" — 2 sabotagens a mais, as duas passavam verdes e ganharam asserção: o teto inteiro do
+  `normalizarItem` (segunda rodada, no `e989ec54`) e a releitura depois da conversão da reserva da OS (`33328089`)
+- [ ] T4 — fechamento (`fechar-etapa`) e estimado × gasto — **não feito de propósito**: há revisão adversarial antes
+
+### Notas da execução (para o fechamento)
+
+- **Rota da separação:** o plano diz `PUT /separar`; os testes usam `PUT /requisicoes/:id/separacao` (as duas rotas existem e chamam o mesmo
+  `handleSeparacao`, `routes/almoxarifado.js:4680-4682`).
+- **Divergência do contrato (M2 estendida):** a liberação do vencimento no predicado é `COALESCE(vencimento_liberado_em,'') = ''`, não
+  `IS NULL` — o `elegivel` testa a verdade do campo (`''` não libera). `status` também por `COALESCE(status,'') <> 'ATIVO'` (NULL não é ATIVO).
+- **I2 — a premissa do revisor estava errada em parte:** a devolução para Quarentena grava **`BLOQUEIO`** (`returnService.js:333-338`) → vai
+  para `quantidade_bloqueada`, que a conta já abatia; não soma em `quantidade_em_inspecao`. O termo da I2 (inspeção do material sem item de
+  recebimento) foi mantido — cobre o `QUARENTENA` sem recebimento — e tem teste próprio por SQL (RN-205.02 h); o caso pela rota da devolução
+  (h, pela rota) passa pela bloqueada.
+- **I4:** `lote_impedido` fica no JSON do detalhe (o contrato original mandava tirar; a Fase 2 manda manter).
+- **Fila com 200 itens:** ~60 ms com 210 requisições (o fragmento por linha não pesa).
+- **Quebra esperada achada pela suíte:** `entregaAutomaticaPeloLote` RN-197.03 separava 4 com só 2 em lote elegível — desde a T2 a separação
+  recusa. O helper passou a separar **antes** de tornar o lote impedido (o caso que chega à entrega); livro e retrato iguais (`9bf6ccd6`).
+- **Suíte (uma vez cada, serial):** `test:api` 595/596 — a 1 era a RN-197.03 acima; depois do ajuste o arquivo 33/33 (a suíte inteira não foi
+  rodada de novo); `test:almoxarifado` 44/0; `test:validation` 4/0; `test:safealter` 3/0; `test:sqlite` 16/0; Jest 214 suítes, 2944/2944;
+  `CI=true` build OK.
 
 ## Próxima tarefa detalhada
 
