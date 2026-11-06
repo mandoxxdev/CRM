@@ -1,13 +1,19 @@
 # Almoxarifado — pausa de 2026-10-23 e como retomar
 
 > **✅ RETOMADO em 2026-11-05 — este arquivo agora é histórico.** O André retomou o módulo em 05/11 (estimativa
-> `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md`). **Depois: a Etapa 197 fechou** em 05/11 (plano `7f099fae`,
+> `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md`). **Depois: a Etapa 198 fechou** em 05/11 (plano `0affc3df`,
+> Fase 2 `0eb953f0`, T1 `2fa621de`, T2 `1d24311b`, T3 `00d717ad`, execução `97d7e0ef`, Fase 5 `75da9211`, e o commit "Etapa 198:
+> fechamento") — a separação com "Sai de" conta o que já está separado para outras requisições no mesmo endereço e lote e recusa com a
+> conta à vista (C449 resolvido na separação; C467 coberto por teste). Letra **B** usada até **B1335** (B1330–B1335 pela 198), letra **C**
+> até **C469** (C468 e C469 pela 198), letra **A** a partir de **A111** (a 198 não usou). **Próxima:** item 7 da estimativa — Materiais de
+> clientes: número com vírgula (C448, tela); detalhada no fim de
+> `docs/superpowers/plans/2026-11-05-almoxarifado-etapa198-separado-de-outras-requisicoes.md`.
+> *(Antes: a **Etapa 197 fechou** em 05/11 (plano `7f099fae`,
 > Fase 2 `b21a81f5`, T0 `ee835811` e `b751b3ab`, T1 `58227edf`/`d8a4f1d9`/`398d1e69`, T2 `e011affe` e `cbb2b66f`, Fase 5 `838bb350`,
 > `1723b78c`, `351ee457`, `6d4dec1d`, `1ed41bb8`, e o commit "Etapa 197: fechamento") — em material com lote, a parte automática da entrega
 > baixa do lote que vence primeiro (C451 e C453 na entrega de material com controle de lote, C462; a B204 revogada só aí). Letra **B** usada
 > até **B1329** (B1320–B1329 pela 197), letra **C** até **C467** (C463–C467 pela 197), letra **A** a partir de **A111** (a 197 não usou).
-> **Próxima:** item 6 da estimativa — a entrega recusada quando outra requisição separou o mesmo material (C449, motor); detalhada no fim de
-> `docs/superpowers/plans/2026-11-05-almoxarifado-etapa197-entrega-automatica-pelo-lote.md`.
+> **Próxima:** item 6 da estimativa — a 198.)*
 > *(Antes: a **Etapa 196 fechou** em 05/11 (plano `4c602925`,
 > Fase 2 `8a98d548`, T0 `4cf2b6dd`, T1 `aecaadd3`, T2 `83abf7eb`, T3 `425acd91`, vizinho `f4ba735c`, T4 `e3f9b929`, T5 `1eca71f1`, Fase 5
 > `736ccb49` e `4ba2e9b4`, e o commit "Etapa 196: fechamento") — separar em duas vezes: a parte separada primeiro continua saindo de onde foi

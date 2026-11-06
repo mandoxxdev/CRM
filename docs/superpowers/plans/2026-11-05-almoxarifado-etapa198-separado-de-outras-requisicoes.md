@@ -289,6 +289,71 @@ caixa cancelada antiga — correção; `separacaoDivergencia.api.test.js:111` n�
 - **Divergências do previsto:** a cancelada pela rota não se monta (Fase 2, item 2) — semeada por SQL, e a rota ganhou só o controle do
   400; o cenário "entregue" não é sensível a nenhuma sabotagem (acima). Nada mais.
 
+## Fase 5 — um revisor fresco (2026-11-05)
+
+Um revisor fresco, por leitura e execução, sobre `97d7e0ef`: **0 defeitos, 3 lacunas de teste, ruído 0** — cada lacuna provada por uma
+sabotagem que passava **verde** (20/20). Fix-round `75da9211` (só teste, `server/tests/api/separacaoSeparadoDeOutras.api.test.js`, +3 cenários;
+o código de produção não mudou):
+
+- **(a) [IMPORTANTE] a régua da divergência deixou de contar caixa cancelada (RN-198.04 ponto 2) sem teste.** Sabotagem: na divergência
+  (`requisitionService.js:1503`), `outrasDoPar(...)` trocado pela query antiga (`SUM(PARTE_ORIGEM_SQL)` com só `COALESCE(r.ativo,1)=1`).
+  Cenário novo *"[Fase 5, RN-198.04 divergencia]"*: XB-01/L1 6; R1 separa 4 de lá e é gravada `CANCELADO` com `ativo = 1`; R2 (pede 4)
+  separa 2 do par → o `itens_json` da rodada de R2 tem `maximo` 4 e `divergente` true. Com a sabotagem: `maximo` 2, `divergente` false → **cai**
+  (só ele, 22/1).
+- **(b) [MENOR] material sem lote.** Sabotagem: `parteGuardadaDeOutras` (`:98`) com `ir.lote_separacao_id = ?` em vez de `IS ?` (NULL nunca
+  casa). Cenário novo *"[Fase 5, sem lote]"*: `controle_lote = 0`, XB-01 6 e XP-01 9; R1 separa 4 de XB-01; R2 pede 4 → 400 com a C1 sem o
+  trecho *", lote"* (*"em XB-01 há 6 … sobra 2 …"*). Com a sabotagem: 200 → **cai** (só ele, 22/1).
+- **(c) [MENOR] a sobra nunca negativa.** Sabotagem: tirar o `Math.max(0, …)` da sobra na C1 (`:1280`). Cenário novo *"[Fase 5, sobra nunca
+  negativa]"*: dado antigo 4 + 4 guardados em XB-01/L1 (6) — R1 separa 4 do par, R2 no automático e a origem dela gravada por SQL; R3 pede 1
+  → C1 plural com *"sobra 0"* (texto inteiro). Com a sabotagem: *"sobra -2"* → **cai** (só ele, 22/1). (O cenário *"NULL legado"* já tinha
+  sobra 0, mas por 6 − 6, não por um negativo cortado — não era sensível.)
+
+Harness: `perl -0pi` com âncora única (cada script `or die "ancora"`), md5 base `747767fe…` → sabotado (`6acc69db…`, `61bfc2c9…`,
+`44554174…`, 1 linha mudada cada) → restaurado por `git checkout -- server/services/almoxarifado/requisitionService.js` (produção commitada;
+só o teste muda) → `747767fe…` de novo. Arquivo isolado: **23/23**. `test:api` (uma vez, depois do fix-round): **586/586**.
+
+**Placar final (fechamento):** `separacaoSeparadoDeOutras` **23/0**; `test:api` **586/586** (sobre `75da9211`); `test:almoxarifado` **44/0**;
+`test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0** (estes quatro sobre `00d717ad`, da Execução; a Fase 5 só mexeu
+em teste). Tela: `client/` intocado na etapa — não rodada.
+
+**Divergências do plano, em resumo:** (1) a Fase 2 trocou a literal C1 (a primeira se contradizia), a cancelada pela rota (não se monta — M1:
+semeada por SQL, a rota ganhou só o controle do 400) e pôs estoque em outro endereço em todo cenário da C1 (senão o teto do item batia antes);
+(2) a T3 ficou no arquivo da T2, não em `preSelecaoColetaIntegracao`; (3) o cenário "entregue" não é sensível a nenhuma sabotagem (a parte é
+0 com qualquer régua) — fica como regressão; (4) a Fase 5 achou três lacunas e nenhum defeito. **O C467 estava impreciso** (a régua da
+divergência não filtrava status): anotado à vista no novidades e na spec 05.
+
+**Retro (4 números):** rodadas de correção até verde: **1** (o fix-round da Fase 5, só teste); achados reais da Fase 5: **3 lacunas, 0
+defeitos**, ruído **0**; paralelismo: **nenhum** — T1, T2 e T3 todas tronco, um executor; defeito que escapou da 197: **nenhum conhecido**.
+
 ## Próxima tarefa detalhada
 
-*(preencher no fechamento — candidata: C468, a entrega com "Sai de" escolhido à mão descontando a parte guardada das outras.)*
+**"Materiais de clientes: número com vírgula"** — item 7 da fila da estimativa
+`docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md` (**ajuste de tela**, estimado **45 min**: análise 15, execução 15,
+teste 15). Fecha o **C448** (novidades): a tela **Materiais de clientes** mostra *12.5* (e *1250.75*, e o ruído *0.30000000000000004*)
+enquanto o PDF da posição do cliente mostra *12,5* (**B1238**, Etapa 186). **É galho de tela** (nenhum motor, nenhuma trava, nenhum
+contrato de API mudado). Medido em 2026-11-05 sobre `75da9211`:
+
+- **A tela:** `client/src/components/almoxarifado/MateriaisClienteAlmoxarifado.js` (253 linhas). As quantidades vão cruas do
+  `GET /api/almoxarifado/materiais-cliente/posicao?cliente_id=…` (`:61`) para o JSX:
+  - tabela da posição — `:175` `{i.recebido}`, `:176` `{i.consumido}`, `:177` `{i.devolvido}`, `:181` `{i.saldo}` (dentro do selo
+    `almox-badge`);
+  - coluna "onde foi aplicado" — `:186` `… — {a.quantidade}`;
+  - janela de devolução — `:224` `Quantidade (saldo: {devTarget.saldo} {devTarget.unidade})`.
+  A lista de clientes (`:131`) mostra só a contagem de itens (inteiro) — não muda. `temSaldo = Number(i.saldo) > 0` (`:169`) continua com o
+  número cru (não formatar a conta, só a exibição).
+- **O formatador do PDF (reaproveitar o mesmo):** `formatarQuantidade` em `client/src/utils/pdfTexto.js:61` — `toLocaleString('pt-BR',
+  { maximumFractionDigits: 4 })`, `-0` → `0`, vazio/ilegível → `0`. É o que `client/src/utils/posicaoClientePdf.js:18` usa
+  (`const num = (v) => formatarQuantidade(v)`). `pdfTexto.js` não tem import (função pura; importar na tela não puxa o jsPDF). As outras telas
+  têm cópias locais `formatNum` (Alertas `:82`, Não conformidades `:210`, Reposição `:39`) que devolvem `—` para `null` — **não** usar essas:
+  o C448 é "a tela igual ao papel", e o papel usa `formatarQuantidade` (vazio → `0`).
+- **Testes:** `MateriaisClienteAlmoxarifado.test.js` — os fixtures são inteiros (100, 50, 10, 40), que o formatador devolve iguais; acrescentar
+  um item com `recebido: 12.5`, `consumido: 1250.75` (→ `1.250,75`), `devolvido: 0.1 + 0.2` (→ `0,3`) e uma aplicação `quantidade: 2.5`, e
+  conferir as células (e o *"saldo: 12,5 …"* da janela de devolução). Controle positivo: voltar a `{i.recebido}` cru → o cenário cai.
+- **Pontos de atenção:** o campo de quantidade da devolução (`type="number"`) **não** muda (o navegador exige ponto no `value`); só o rótulo.
+  Rodar `CI=true npx react-scripts test --watchAll=false` e `CI=true npx react-scripts build` (warning vira erro).
+- **Fatia visível:** é a própria tela (antes 12.5, agora 12,5) — print para o relatório da semana.
+
+**Já pronto, não reabrir:** o formato dos dois PDFs (186, B1238); a regra da posição do cliente (as contas do servidor).
+
+Depois dele, o item 8 da fila (C447, termo de ferramenta — espaços do texto). A C468 (a entrega com "Sai de" à mão) é candidata a entrar
+na estimativa seguinte (~1h a 1h30, motor).

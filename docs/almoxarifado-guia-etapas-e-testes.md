@@ -1,25 +1,28 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-11-05 (Etapas 172 a 191, 194 a 197) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-11-05 (Etapas 172 a 191, 194 a 198) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196 e 197) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197 e 198) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-05 (Etapas 172 a 178, 180 a 191, 194 a 197 ENTREGUES · RETOMADO em 05/11 · próxima: entrega recusada quando outra requisição separou o mesmo endereço)
+> ## Onde o desenvolvimento está — 2026-11-05 (Etapas 172 a 178, 180 a 191, 194 a 198 ENTREGUES · RETOMADO em 05/11 · próxima: Materiais de clientes — número com vírgula)
 >
-> **O desenvolvimento parou aqui: Etapa 197 fechada — 2026-11-05.** **Em material com lote, a parte automática da entrega baixa do lote
-> certo.** O que sai no automático na entrega de um material com controle de lote passa a sair do lote que **vence primeiro** — nunca de lote
-> bloqueado ou vencido sem liberação, e sem tirar o que outra requisição já separou. No caso real, o lote vai a 0 e a linha *"Sem lote
-> atribuído"* negativa não aparece mais. A dica da **Fila de separação** parou de dizer que separar de outro endereço "troca a origem". Motor
-> e tela; nada a rodar antes do deploy. **Nenhum clique foi dado no navegador** (só testes — roteiro na seção da 197 e letra F das
-> novidades).
+> **O desenvolvimento parou aqui: Etapa 198 fechada — 2026-11-05.** **A separação conta o que já está separado para outras requisições.**
+> Duas requisições do mesmo material, as duas janelas de separação abertas no mesmo endereço: a primeira separa; a segunda, se o que sobra
+> lá não cobre, é **recusada na hora**, com a conta (quanto há, quanto já está separado para outra requisição e qual, quanto sobra) — antes era
+> aceita e a recusa só vinha na entrega. Reaberta a janela, a sugestão já aponta o outro endereço. Só motor (a mensagem aparece na janela de
+> separação, que fica aberta); nada a rodar antes do deploy. **Nenhum clique foi dado no navegador** (só testes — roteiro na seção da 198 e
+> letra F das novidades).
 >
-> **Onde parou, exatamente:** a **197 está fechada** (código, testes e documentos commitados; o placar final do `test:api` depois do 2º
-> fix-round fica no plano da 197). A **próxima** é o item 6 da fila da estimativa de 05/11: **"Entrega recusada quando outra requisição
-> separou o mesmo material"** (**C449** — duas requisições separadas do mesmo endereço e lote escolhidos, somando mais do que há lá: a
-> separação aceita as duas e a segunda entrega é recusada). É motor de estoque. Só a tarefa detalhada no fim do plano da 197
-> (`docs/superpowers/plans/2026-11-05-almoxarifado-etapa197-entrega-automatica-pelo-lote.md`, com onde a separação confere o endereço e qual
-> conta já existe) e a estimativa existem, nenhum plano nem código.
+> **Onde parou, exatamente:** a **198 está fechada** (código, testes e documentos commitados). A **próxima** é o item 7 da fila da
+> estimativa de 05/11: **"Materiais de clientes: número com vírgula"** (**C448** — a tela **Materiais de clientes** mostra *12.5* enquanto o
+> PDF da posição do cliente mostra *12,5*). É tela. Só a tarefa detalhada no fim do plano da 198
+> (`docs/superpowers/plans/2026-11-05-almoxarifado-etapa198-separado-de-outras-requisicoes.md`, com a tela, as linhas e o formatador do PDF
+> a reaproveitar) e a estimativa existem, nenhum plano nem código.
+>
+> **Etapa 197, 2026-11-05.** **Em material com lote, a parte automática da entrega baixa do lote certo.** O que sai no automático na entrega
+> de um material com controle de lote sai do lote que **vence primeiro** — nunca de lote bloqueado ou vencido sem liberação, e sem tirar o que
+> outra requisição já separou. Motor e tela.
 >
 > **Etapa 196, 2026-11-05.** **Separar em duas vezes: a parte separada primeiro continua saindo de onde foi separada.** Separou 3 de um
 > endereço e, depois, o resto de outro lugar, sem entregar no meio: o sistema lembra quanto saiu do primeiro endereço (*"separado de A-01 (3
@@ -7017,6 +7020,47 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 198 — A separação conta o que já está separado para outras requisições (ENTREGUE — 2026-11-05)
+
+**O que mudou, em uma frase:** ao separar de um endereço escolhido no **Sai de**, o sistema desconta o que outras requisições já separaram
+dali — e, se o que sobra não cobre, recusa na hora, dizendo a conta.
+
+**O problema que ela resolve.** Há 6 peças em *XB-01*. Duas requisições pedem 4 e as duas janelas de separação abrem sugerindo *XB-01*. A
+primeira separa 4. A segunda, com a janela aberta desde antes, também confirmava 4 de *XB-01* — e passava, embora lá só sobrassem 2 livres. O
+erro só aparecia na **entrega** da segunda, com uma mensagem que não dizia o porquê (*"a origem da separação (XB-01) não serve mais …"*). É
+como duas pessoas pegando da mesma prateleira com a mesma lista: agora a segunda já vê, na hora, que 4 daquelas peças estão reservadas na
+caixa de outro pedido.
+
+| Antes | Agora |
+|---|---|
+| A segunda separação do mesmo endereço era aceita; a recusa vinha na entrega | Recusada na separação, com a conta: quanto há, quanto está separado para outra requisição (o número) e quanto sobra |
+| — | A janela continua aberta; reabrindo, o **Sai de** já vem no outro endereço |
+| Separação automática, com só o lote, e a entrega | Iguais a antes |
+
+**Antes de testar (uma vez).** Um usuário **Administrador do almoxarifado**. Um material *PARAF-198* (nome *Parafuso 198*, unidade *PC*) com
+**Controle por lote** ligado e posição padrão *XP-01*. Em **Movimentações → Entrada**: 6 no lote *L1* em *XB-01*, com **Validade do lote**
+daqui a 5 dias, e 9 no lote *L2* em *XP-01*, com validade daqui a 45 dias. Duas requisições de 4 *PARAF-198* (R1 e R2), aprovadas.
+
+**Roteiro de teste (5 minutos).**
+
+1. **Almoxarifado → Requisições**: abra R1 numa aba e R2 noutra. Nas duas, **Iniciar Separação** — o **Sai de** vem em *XB-01 — lote L1
+   (6)*, quantidade *4*.
+2. Em R1, **📦 Confirmar Separação**: *"Separação registrada!"*.
+3. Em R2 (a janela aberta antes), **📦 Confirmar Separação**: aviso vermelho e a janela **continua aberta**: *"Parafuso 198: em XB-01, lote L1
+   há 6 para esta separação, mas 4 já está separado dali para outra requisição (⟨número de R1⟩); sobra 2, que não cobre a quantidade (4).
+   Escolha outro endereço ou reabra a janela para ver a sugestão atual"*. Nada foi gravado em R2.
+4. Feche e reabra a janela de R2: o **Sai de** vem em *XP-01 — lote L2 (9)*. Confirme.
+5. Entregue R1 e R2. Em **Lotes e Séries** → *PARAF-198*: *L1* 2, *L2* 5.
+6. **O que sobra cabe:** repita até o passo 3 com material novo e, em R2, troque a quantidade para *2* (o que sobra em *XB-01*): passa.
+
+**O que esta etapa não cobre.** Na **entrega**, escolher à mão no **Sai de** o endereço que outra requisição separou ainda leva o material
+dela — e a entrega da outra é que toma *"… não serve mais …"* (aviso **C468** das novidades). O **Sai de** da janela de separação continua
+mostrando o saldo do endereço sem descontar o separado das outras; a mensagem diz a conta (**C469**). Separações feitas antes desta etapa que
+já somam mais do que o endereço tem continuam recusadas na entrega, como antes. **Nada a rodar antes do deploy.**
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos provam pela rota real (a mesma que a tela
+chama) e pelo serviço — escrito para você conferir à mão.
+
 ## Etapa 197 — Em material com lote, a parte automática da entrega baixa do lote certo (ENTREGUE — 2026-11-05)
 
 **O que mudou, em uma frase:** em material com controle de lote, o que sai no automático na entrega da requisição passa a sair do lote que
@@ -7066,6 +7110,7 @@ automático (o bloqueio é do material, não do lote) — escolha o lote no **Sa
 mostra as 30 mais recentes do material, e agora uma entrega pode virar várias saídas. As linhas *sem lote* negativas que já existem ficam
 (acerte pela contagem). Duas requisições separadas do **mesmo** endereço escolhido, somando mais do que há lá, continuam: a segunda entrega é
 recusada com *"… a origem da separação (⟨endereço⟩) não serve mais (…) — entregue escolhendo de onde sai"* — é a próxima etapa.
+*(Feito na 198: a segunda é recusada já na separação, com a conta — ver a seção dela.)*
 **Nada a rodar antes do deploy.**
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos provam pela rota real, pelo serviço e pela
