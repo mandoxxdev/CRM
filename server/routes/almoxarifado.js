@@ -29,6 +29,7 @@ const requisicaoMaterialInativo = require('../services/almoxarifado/requisicaoMa
 const { proximoCodigoLocalizacao } = require('../services/almoxarifado/localizacaoCodigo');
 const deliverySignatureService = require('../services/almoxarifado/deliverySignatureService');
 const { disponivelSql } = require('../services/almoxarifado/availabilitySql');
+const { loteImpedidoSql } = require('../services/almoxarifado/loteImpedido'); // Etapa 205: o separavel do detalhe
 const { valorEstoqueSql, custoUnitarioSql } = require('../services/almoxarifado/custoSql');
 const requisitionCreateService = require('../services/almoxarifado/requisitionCreateService');
 const requisitionStateMachine = require('../services/almoxarifado/requisitionStateMachine');
@@ -3979,6 +3980,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                      -- Etapa 98 (T3, B509): a regra do motor (flag do material ou global) — normalizarItem calcula com ela
                      -- o quantidade_entregavel que o motor deixa sair (disponivel do material negativo da 0).
                      ${requisitionService.permiteNegativoSql('ma')} as motor_permite_negativo,
+                     -- Etapa 205 (B1368, RN-205.09; Fase 2 I4): o saldo de lote impedido do material — normalizarItem desconta do
+                     -- separavel (nao do entregavel nem do saldo_atual) e o campo fica no JSON para o modal de separacao.
+                     ${loteImpedidoSql('ma')} as lote_impedido,
                      ma.foto, ma.material_critico,
                      -- Etapa 114 (RN-08): material inativo -> separavel e entregavel 0 no detalhe (normalizarItem), aditivo.
                      ma.ativo as material_ativo,

@@ -299,6 +299,12 @@ function normalizarItem(item) {
   const teto = temCaixa
     ? (inativo ? 0 : tetoSeparacao(estoque - reservaItem, reservaItem, separado - entregue, item.caixa_sem_reserva_outros))
     : undefined;
+  // Etapa 205 (B1368, RN-205.09): o SEPARAVEL desconta o saldo de lote impedido (a coluna `lote_impedido` do detalhe, aditiva) — o numero
+  // da porta. O `teto` acima continua alimentando o entregavel da segunda rodada (a entrega e o item 7, RN-205.10).
+  const loteImpedido = Math.max(0, num(item.lote_impedido));
+  const tetoSeparavel = temCaixa
+    ? (inativo ? 0 : tetoSeparacao(estoque - loteImpedido - reservaItem, reservaItem, separado - entregue, item.caixa_sem_reserva_outros))
+    : undefined;
   // Etapa 98 (T3, B509): o entregavel e o que o motor deixa sair — so o argumento `estoque` de maxEntregar muda
   // (o disponivel do material negativo da 0); `teto` (o separavel) e `saldo_atual` ficam como antes.
   const entregavelSozinho = inativo ? 0 : maxEntregar(item,
@@ -330,7 +336,7 @@ function normalizarItem(item) {
     // Etapa 127 (RN-15): `saldo_separavel_reserva` — a parte do teto que e reserva propria (nao e dividida entre os irmaos); o modal
     // desconta dos irmaos so o que passa dela. Aditivo; 0 no inativo (como o teto).
     ...camposEntregavel,
-    ...(temCaixa ? { saldo_separavel: teto, quantidade_separavel: maxSeparar(item, teto),
+    ...(temCaixa ? { saldo_separavel: tetoSeparavel, quantidade_separavel: maxSeparar(item, tetoSeparavel),
       saldo_separavel_reserva: inativo ? 0 : reservaPropriaSeparavel(reservaItem, separado - entregue) } : {}),
   };
 }
@@ -1065,6 +1071,7 @@ async function listarFilaSeparacao(db, user, opcoes = {}) {
       ${RESERVADO_PARA_ITEM_SQL} as reservado_para_item,
       ${caixaSemReservaSql('ir.material_id', 'AND ix.id <> ir.id')} as caixa_outros,
       ${permiteNegativoSql('ma')} as motor_permite_negativo, -- Etapa 98 (T3): a regra do motor para o entregavel
+      ${loteImpedidoSql('ma')} as lote_impedido, -- Etapa 205 (B1368, RN-205.09): so o teto de separacao o desconta
       lsep.codigo as origem_separacao_codigo, ltsep.codigo as lote_separacao_codigo
     FROM itens_requisicao_almoxarifado ir
     JOIN materiais_almoxarifado ma ON ir.material_id = ma.id
@@ -1103,7 +1110,9 @@ async function listarFilaSeparacao(db, user, opcoes = {}) {
       const separa = podeSep && !materialInativo.materialInativo(i.material_ativo);
       return {
         id: i.id, material_id: i.material_id, pendente: pendenteSeparacao(i),
-        teto: separa ? tetoSeparacao(num(i.saldo_disponivel) - num(i.reservado_para_item), i.reservado_para_item,
+        // Etapa 205 (RN-205.09): o teto sem o saldo de lote impedido — o mesmo numero da porta. O `entregavel` e o `disponivel` da
+        // linha (abaixo) ficam como hoje (B1374; a entrega e o item 7).
+        teto: separa ? tetoSeparacao(num(i.saldo_disponivel) - num(i.lote_impedido) - num(i.reservado_para_item), i.reservado_para_item,
           getSeparado(i) - getEntregue(i), i.caixa_outros) : 0,
         propria: separa ? reservaPropriaSeparavel(i.reservado_para_item, getSeparado(i) - getEntregue(i)) : 0,
       };
@@ -1496,8 +1505,10 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
     // eslint-disable-next-line no-await-in-loop
     const saldo = await saldoDisponivelParaItem(db, item);
     const irmaos = itens.filter((o) => o.id !== item.id && Number(o.material_id) === Number(item.material_id));
-    const tetoCom = (separadoDe) => tetoSeparacao(saldo.disponivel - saldo.reservado_para_item, saldo.reservado_para_item,
-      separadoDe(item) - getEntregue(item),
+    // Etapa 205 (B1368, RN-205.08): o teto sai do LIBERADO (sem o saldo de lote bloqueado, reprovado ou vencido). A parte propria
+    // (a reserva do item fora da caixa) nao desconta (B1372, RN-205.07): `tetoSeparacao` a soma por fora do livre.
+    const tetoCom = (separadoDe, disp = saldo.disponivel_liberado) => tetoSeparacao(disp - saldo.reservado_para_item,
+      saldo.reservado_para_item, separadoDe(item) - getEntregue(item),
       saldo.caixa_outras_requisicoes + irmaos.reduce((acc, o) => acc + caixaSemReservaDe(o, separadoDe(o)), 0));
     const teto = tetoCom(getSeparado);
     const max = maxSeparar(item, teto);
@@ -1514,9 +1525,14 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
 
     // Etapa 95 (Fase 2, I2): epsilon do modulo — o teto ja vem arredondado a 1e-6.
     if (qty > max + 1e-9) {
+      // Etapa 205 (Fase 2 I3): a 2a frase diz so o que o lote impedido CORTOU do teto (o teto com o disponivel de antes menos o de
+      // agora), e so quando o maximo fica abaixo do pendente — sem lote impedido, ou quando o pendente e quem limita, a literal de hoje.
+      const cortadoPeloLote = Q.qtd(Math.max(0, tetoCom(getSeparado, saldo.disponivel) - teto));
+      const sufixo = (cortadoPeloLote > 1e-9 && max < pendenteSeparacao(item) - 1e-9)
+        ? `. ${fraseLoteImpedido(cortadoPeloLote, item.unidade)}` : '';
       const err = new Error(
         `${item.material_nome}: não é possível separar ${qty} ${item.unidade || ''}. `
-        + `Máximo: ${max} (pendente: ${pendenteSeparacao(item)}, disponível: ${teto})`
+        + `Máximo: ${max} (pendente: ${pendenteSeparacao(item)}, disponível: ${teto})${sufixo}`
       );
       err.status = 400;
       throw err;
