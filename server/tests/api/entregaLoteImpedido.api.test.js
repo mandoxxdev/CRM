@@ -346,6 +346,52 @@ valueApprovalService.notificarAprovadoresValor = async (db, req) => { notificado
     } finally { await cfg('liberacao_valor_ativo', '0'); }
   });
 
+  // ── RN-206.11: detalhe e fila batem com a porta (B1390) ───────────────────────────────────────────────────────────────────────
+  // (a RN-206.06 bloqueada — 0 e 0 — e a segunda rodada com o lote impedido — caixa + tetoSeparavel — estao em loteImpedidoIntegracao)
+  const detalhe = async (R) => (await ok(como('ADMIN').get(`${API}/requisicoes/${R}`))).body.itens;
+  const fila = async (R) => {
+    const f = (await ok(como('ALMOX').get(`${API}/fila-separacao`))).body.find((x) => Number(x.id) === Number(R));
+    assert.ok(f, `a requisicao ${R} na fila`);
+    return f.itens;
+  };
+  await test('[RN-206.11] montagem da RN-206.01: detalhe quantidade_entregavel 2 e saldo_entregavel 2; fila entregavel 2 — e a porta aceita os 2', async () => {
+    const { R, ids } = await montagem(bloquearL2);
+    const [d] = await detalhe(R);
+    assert.deepStrictEqual([d.quantidade_entregavel, d.saldo_entregavel, d.lote_impedido], [2, 2, 3], JSON.stringify(d));
+    const [f] = await fila(R);
+    assert.strictEqual(f.entregavel, 2, JSON.stringify(f));
+    await ok(entregar(R, [{ item_id: ids[0], quantidade_atendida: d.quantidade_entregavel }]));
+  });
+  await test('[RN-206.11 d] o negativo legado do C484 (sem lote -10 por SQL) com L1 BLOQUEADO 10: o entregavel e 0 (piso), nao -10', async () => {
+    const m = await material();
+    await entrar(m, P01.id, 10, 'L1');
+    const { R } = await reqDireta([[m.id, 6]]);
+    await separar(R, [{ item_id: (await dbGet(db, 'SELECT id FROM itens_requisicao_almoxarifado WHERE requisicao_id = ?', [R])).id, quantidade_separada: 6 }]);
+    await statusRota(m, 'L1', 'BLOQUEADO');
+    await dbRun(db, 'INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, lote_id, quantidade) VALUES (?, ?, NULL, -10)', [m.id, P01.id]);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = quantidade_atual - 10 WHERE id = ?', [m.id]);
+    const [d] = await detalhe(R);
+    assert.deepStrictEqual([d.quantidade_entregavel, d.saldo_entregavel], [0, 0], JSON.stringify(d));
+    const [f] = await fila(R);
+    assert.strictEqual(f.entregavel, 0, JSON.stringify(f));
+  });
+  await test('[RN-206.11] sem lote impedido os numeros de hoje: primeira rodada 4/4 e fila 4; segunda rodada (caixa 4 + teto 3) 7/7 e fila 4', async () => {
+    const m = await material();
+    await entrar(m, P01.id, 5, 'L1');
+    const { R, ids } = await reqDireta([[m.id, 10]]);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 4 }]);
+    let [d] = await detalhe(R);
+    assert.deepStrictEqual([d.quantidade_entregavel, d.saldo_entregavel, d.lote_impedido], [4, 4, 0], JSON.stringify(d));
+    assert.strictEqual((await fila(R))[0].entregavel, 4);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 1 }]);
+    await ok(entregar(R, [{ item_id: ids[0], quantidade_atendida: 1 }]));
+    await entrar(m, P01.id, 3, 'L2');
+    [d] = await detalhe(R);
+    // entregue 1, caixa 4, saldo 7: teto = tetoSeparacao(7, 0, 4, 0) = 3 -> saldo_entregavel 4 + 3; entregavel min(9, 7, 7)
+    assert.deepStrictEqual([d.quantidade_entregavel, d.saldo_entregavel], [7, 7], JSON.stringify(d));
+    assert.strictEqual((await fila(R))[0].entregavel, 4);
+  });
+
   // ── RN-206.12: permite_saldo_negativo nao isenta (B1391) ──────────────────────────────────────────────────────────────────────
   await test('[RN-206.12] a RN-206.01 com permite_saldo_negativo = 1 -> o mesmo 400', async () => {
     const { m, R, ids } = await montagem(bloquearL2, { negativo: true });

@@ -296,19 +296,20 @@ function normalizarItem(item) {
   // separavel e o entregavel do detalhe sao 0 (o mesmo numero da porta, B472). Sem isto o modal pre-preenchia o item com
   // o maximo e o Confirmar recusava a rodada inteira. So quem traz a coluna (`in`: NULL tambem e inativo).
   const inativo = Object.prototype.hasOwnProperty.call(item, 'material_ativo') && materialInativo.materialInativo(item.material_ativo);
-  const teto = temCaixa
-    ? (inativo ? 0 : tetoSeparacao(estoque - reservaItem, reservaItem, separado - entregue, item.caixa_sem_reserva_outros))
-    : undefined;
   // Etapa 205 (B1368, RN-205.09): o SEPARAVEL desconta o saldo de lote impedido (a coluna `lote_impedido` do detalhe, aditiva) — o numero
-  // da porta. O `teto` acima continua alimentando o entregavel da segunda rodada (a entrega e o item 7, RN-205.10).
+  // da porta. Etapa 206 (B1390, RN-206.11): tambem o teto do ENTREGAVEL da segunda rodada (o `teto` sem o lote impedido saiu — sem uso).
   const loteImpedido = Math.max(0, num(item.lote_impedido));
   const tetoSeparavel = temCaixa
     ? (inativo ? 0 : tetoSeparacao(estoque - loteImpedido - reservaItem, reservaItem, separado - entregue, item.caixa_sem_reserva_outros))
     : undefined;
   // Etapa 98 (T3, B509): o entregavel e o que o motor deixa sair — so o argumento `estoque` de maxEntregar muda
-  // (o disponivel do material negativo da 0); `teto` (o separavel) e `saldo_atual` ficam como antes.
+  // (o disponivel do material negativo da 0); `saldo_atual` fica como antes.
+  // Etapa 206 (B1390, RN-206.11; Fase 2 item 2): o entregavel desconta o lote impedido — a entrega recusa o que so lote impedido cobre
+  // (B1383) e o modal pre-preenchia o que ela recusaria. Com piso: o negativo legado do C484 dava -10. Conta aproximada da B1370 (a
+  // bloqueada assumida dentro do lote impedido): no pior caso promete MAIS do que a porta aceita — D (206).
   const entregavelSozinho = inativo ? 0 : maxEntregar(item,
-    entregavelPeloMotor(estoque - reservaItem, reservaItem, Number(item.motor_permite_negativo) === 1), teto);
+    Math.max(0, entregavelPeloMotor(estoque - reservaItem, reservaItem, Number(item.motor_permite_negativo) === 1) - loteImpedido),
+    tetoSeparavel);
   // Etapa 135 (RN-02b, C286; Fase 2 I3): material CRITICO so sai ate a caixa (a porta recusa acima dela — o F2 da Etapa 28); o detalhe
   // prometia a segunda rodada inteira (2 com a caixa vazia) e a porta recusava.
   const caixa = Q.qtd(Math.max(0, separado - entregue));
@@ -320,7 +321,7 @@ function normalizarItem(item) {
   // dividem (a conta da 127, dividirSeparavel). Fora dela (e no critico, e com nada a entregar) os dois sao o entregavel: nada a dividir.
   const segundaRodada = !critico && entregavel > Q.QTD_FOLGA && entregue > 0 && caixa < pendente;
   const camposEntregavel = !temCaixa ? {} : (segundaRodada
-    ? { saldo_entregavel: Q.qtd(caixa + teto), saldo_entregavel_proprio: Q.qtd(Math.max(caixa, Math.max(0, reservaItem))) }
+    ? { saldo_entregavel: Q.qtd(caixa + tetoSeparavel), saldo_entregavel_proprio: Q.qtd(Math.max(caixa, Math.max(0, reservaItem))) }
     : { saldo_entregavel: entregavel, saldo_entregavel_proprio: entregavel });
   // Etapa 95 (Fase 5): a coluna crua da consulta do detalhe e insumo do teto, nao contrato — nao vai para o JSON.
   // Etapa 98 (T3): idem a regra do motor (insumo do entregavel).
@@ -1137,7 +1138,7 @@ async function listarFilaSeparacao(db, user, opcoes = {}) {
       return {
         id: i.id, material_id: i.material_id, pendente: pendenteSeparacao(i),
         // Etapa 205 (RN-205.09): o teto sem o saldo de lote impedido — o mesmo numero da porta. O `entregavel` e o `disponivel` da
-        // linha (abaixo) ficam como hoje (B1374; a entrega e o item 7).
+        // linha ficavam como hoje (B1374); desde a Etapa 206 o `entregavel` tambem desconta (B1390), o `disponivel` nao.
         teto: separa ? tetoSeparacao(num(i.saldo_disponivel) - num(i.lote_impedido) - num(i.reservado_para_item), i.reservado_para_item,
           getSeparado(i) - getEntregue(i), i.caixa_outros) : 0,
         propria: separa ? reservaPropriaSeparavel(i.reservado_para_item, getSeparado(i) - getEntregue(i)) : 0,
@@ -1155,8 +1156,10 @@ async function listarFilaSeparacao(db, user, opcoes = {}) {
         // Etapa 96 (Fase 2, I5): a caixa e uma diferenca — arredondada (separa 0,3, entrega 0,1 -> 0,2, nao 0.1999…).
         // Etapa 98 (T3, B509): o disponivel e o que o MOTOR deixa sair (entregavelPeloMotor) — com o disponivel do
         // material negativo, 0 e a etapa vira AGUARDANDO_SALDO; antes a fila dizia ENTREGAR e o motor recusava tudo.
+        // Etapa 206 (B1390, RN-206.11): menos o saldo de lote impedido — o numero da porta (a entrega recusa o que so ele cobre).
         entregavel: inativo ? 0 : Q.qtd(Math.min(Math.max(0, getSeparado(i) - getEntregue(i)), Math.max(0, entregavelPeloMotor(
-          num(i.saldo_disponivel) - num(i.reservado_para_item), i.reservado_para_item, Number(i.motor_permite_negativo) === 1)))),
+          num(i.saldo_disponivel) - num(i.reservado_para_item), i.reservado_para_item, Number(i.motor_permite_negativo) === 1)
+          - num(i.lote_impedido)))),
         disponivel: Q.qtd(num(i.saldo_disponivel)), origem_separacao_codigo: i.origem_separacao_codigo || null,
         lote_separacao_codigo: i.lote_separacao_codigo || null, material_critico: Number(i.material_critico) === 1,
         // Etapa 197 (T1, RN-197.12, B1328): o CADASTRO do material (nao o saldo em lote) — com controle, o automatico da entrega
