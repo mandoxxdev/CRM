@@ -286,9 +286,37 @@ declarado no guia) e o resto fica. **Não cortar** o campo da tela: sem ele a RN
   receber M1 — **procurar na T0** (`grep -l "QUARENTENA" server/tests/api/*.api.test.js` e cruzar com `desbloquear`); cada um reescrito com o
   `lote_id`, registrado como mudança de regra, não em silêncio.
 
+## Fase 2 — correções do revisor fresco (2026-11-06) — **MANDAM sobre o texto acima onde divergem**
+
+Revisor fresco sobre `5708b830`: 1 trava, 2 importantes, 5 menores, todos aceitos. Confirmado: a 205 (`loteImpedido.js:57`) e a 197
+(`lotesParaOAutomatico`) continuam lendo o material — nenhum número de tela muda; a liberação avulsa de hoje continua aceita (sem bloqueio por
+lote: igual; bloqueio antigo: cai em "Sem lote"), salvo o caso da trava abaixo; T5 e T6 são galhos independentes depois da T1; perfil da rota ok
+(`desbloquear` pede `ajustar_estoque`, `extended.js:1268`; o GET pede `visualizar`).
+
+1. **[TRAVA] RN-209.12:** a janela Desbloquear chama `GET /bloqueado-por-lote` para **todo** material escolhido; o campo Lote aparece quando
+   `lotes.length > 0`, com ou sem `controle_lote`; sem lotes, a janela fica como hoje; se o GET falhar, fica como hoje e o servidor decide (M1). (Um
+   material com `controle_lote = 0` pode sair com lote — Etapa 58 — e a devolução para Quarentena herda o lote, `returnService.js:139-140`; com o campo
+   só para `controle_lote`, a peça ficava presa na quarentena.) **RN-209.02b:** material sem controle de lote, saída com L1, devolução para Quarentena
+   → `BLOQUEIO` com L1 → a tela mostra o campo. Teste de cliente dos dois casos.
+2. **[IMPORTANTE] Estorno da `ENTRADA_DEVOLUCAO` da Quarentena** (`stockService.js:3210-3240`) não estorna o `BLOQUEIO`: linha 15 na tabela da Fase 0
+   — "não muda: o `BLOQUEIO` continua vivo; a soma bate com o total, mas o lote pode ficar com bloqueado maior que o saldo dele (**C504**)". Na
+   Fronteira com o item 9: "o que o limite tira de um lote volta para o desconto do material, junto com o sem lote — nunca some". Um teste da RN-209.09
+   com o cenário (L1 0 e L2 5; voltam 2 de L1; estorno → físico 5 todo em L2, a soma diz L1 2 bloqueado).
+3. **[IMPORTANTE] RN-209.06 (a):** o estorno do DESBLOQUEIO de um lote (`stockService.js:3527-3541`) "aceita como hoje; L1 pode ficar com bloqueado maior
+   que o saldo (C504, o limite do item 9)".
+4. **[MENOR] Guarda M3:** fica **lida antes do claim do material** (não no `WHERE`); ordem das recusas: total insuficiente → a literal de hoje (`:3522`);
+   total cobre e o lote não → M3.
+5. **[MENOR]** `bloqueadoDoLoteSql('materiais_almoxarifado.id', '?')` com o valor como parâmetro.
+6. **[MENOR]** com `lotes: []` e `sem_lote: 0`, a tela não exige o campo (só exige quando há opção) — senão "Selecione o lote" esconde a mensagem do
+   servidor.
+7. **[MENOR] Guia:** material com controle de lote só com bloqueio antigo → um clique a mais em "Sem lote — N"; a opção "Sem lote — N" inclui a parcela
+   da inspeção reprovada (que tem lote pelo documento — C501).
+8. **[MENOR] Execução:** os controles positivos que sabotam `stockService.js`/`returnService.js` só depois de integrar a T5 (sabotagem concorrente
+   contamina a suíte do galho aberto).
+
 ## Execução
 
-- [ ] Fase 2 — revisor fresco sobre este plano; correções registradas numa seção "Fase 2" acima da Execução (mandam sobre o texto)
+- [x] Fase 2 — revisor fresco sobre este plano; correções registradas numa seção "Fase 2" acima da Execução (mandam sobre o texto) — feita em 06/11 (1 trava, 2 importantes, 5 menores; bloco "Fase 2 — correções").
 - [ ] T0 — testes vermelhos (`bloqueioSabeOLote.api.test.js`) + varredura dos testes de hoje afetados pela M1
 - [ ] T1 — `bloqueioPorLote.js`
 - [ ] T2 — `returnService` passa o lote ao `BLOQUEIO`
