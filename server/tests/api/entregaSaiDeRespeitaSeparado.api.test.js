@@ -289,14 +289,21 @@ process.on('exit', (code) => {
   });
 
   // ---------------------------------------------------------------- RN-200.06
-  await test('[RN-200.06 (i)] a propria requisicao nao e "outra": R1 guardou 2, R2 item 1 guardou 2, item 2 (auto) entrega 3 de XB-01/L1 -> 200', async () => {
-    const { m, L1 } = await cenario();
+  // Etapa 208 (B1413): a B1340 revertida — o irmao da mesma requisicao passa a contar (a guarda que FICA dele, B1407). Antes este teste
+  // afirmava 200 (so a parte de R1 era "outra": 6 - 2 = 4 cobria 3) e o item 1 depois tomava "nao serve mais" (o C472). A B1340 foi corte
+  // de tamanho, nao regra (plano da 208, Achado 2).
+  await test('[RN-200.06 (i), RN-208.06 (a)] R1 guardou 2, R2 item 1 guardou 2, item 2 (auto) Sai de XB-01/L1 3 -> 400 E1 mista; 2 -> 200; o irmao e R1 saem', async () => {
+    const { m, L1, L2 } = await cenario();
     const r1 = await req([[m.id, 2]]); const r2 = await req([[m.id, 2], [m.id, 3]]);
     await sepOk(r1.R, [doPar(r1.ids[0], 2, L1)]);
     await sepOk(r2.R, [doPar(r2.ids[0], 2, L1), auto(r2.ids[1], 3)]);
-    // so a parte de R1 (2) e "outra": 6 - 2 = 4 cobre 3 (contando o irmao, 6 - 4 = 2 nao cobriria — C472, B1340).
-    await entOk(r2.R, [saiDe(r2.ids[1], 3, L1)]);
-    assert.strictEqual(await saldoDe(m, B01.id, L1), 3);
+    await recusaSemGravar(m, r2, L1, L2, [saiDe(r2.ids[1], 3, L1)], `${m.nome}: em XB-01, lote L1 há 6 para esta entrega, mas 2 já está `
+      + `separado dali para outra requisição (${await numero(r1.R)}) e 2 para outra peça desta requisição; sobra 2, que não cobre a quantidade (3). `
+      + 'Escolha outro endereço ou deixe "Qualquer endereço (automático)"');
+    await entOk(r2.R, [saiDe(r2.ids[1], 2, L1)]);
+    await entOk(r2.R, [{ item_id: r2.ids[0], quantidade_atendida: 2 }]);
+    await entOk(r1.R, [{ item_id: r1.ids[0], quantidade_atendida: 2 }]);
+    assert.strictEqual(await saldoDe(m, B01.id, L1), 0);
   });
 
   await test('[RN-200.06 (ii)] R1 guardou 4; R2 entrega dois itens 1 + 2 de XB-01/L1 -> E1 no primeiro "(ja contando 2 desta entrega)"', async () => {
