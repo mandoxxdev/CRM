@@ -15,6 +15,8 @@ const { disponivelSql, COLUNAS_RETENCAO } = require('./availabilitySql');
 const caixaSql = require('./caixaSql');
 // Etapa 96 (C176): a regra unica de quantidade — namespace de proposito (ha `const qtd` locais neste arquivo).
 const Q = require('./quantidade');
+// Etapa 209 (T3): o bloqueado por lote, derivado do livro — modulo sem `require` deste arquivo (sem ciclo).
+const bloqueioPorLote = require('./bloqueioPorLote');
 // Etapa 45 (fix-round): a regua de "isto e diferenca de verdade", dona unica desde a Etapa 10b.
 // Usada SO no claim de `baixandoBloqueado` (`DEVOLUCAO_FORNECEDOR` e, desde a Etapa 69, a `SUCATA`
 // com `doBloqueado`), e o raio pequeno e deliberado — ver o comentario
@@ -1684,14 +1686,32 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
   } else if (tipo === 'DESBLOQUEIO') {
     // Guarda no WHERE em vez de MAX(0,...): saturar em silencio devolve ao disponivel menos do
     // que o pedido sem ninguem saber, e foi exatamente o bug corrigido em liberarReserva.
+    // Etapa 209 (T3, B1417, B1420): o lote no mesmo WHERE (a soma por lote e lida dentro da secao da trava do material).
+    // Com lote: o lote tem de cobrir q (M2). Sem lote: so tira do "sem lote" = total - Σ dos lotes (M1) — liberar sem dizer o
+    // lote nao pode comer a parcela de um lote (o sistema adivinharia qual peca saiu da quarentena).
+    const guardaDoLote = loteIdFinal
+      ? `AND ${bloqueioPorLote.bloqueadoDoLoteSql('materiais_almoxarifado.id', '?')} >= ? ${Q.FOLGA_SQL}`
+      : `AND COALESCE(quantidade_bloqueada,0) - ${bloqueioPorLote.bloqueadoComLoteSql('materiais_almoxarifado.id')} >= ? ${Q.FOLGA_SQL}`;
     const claim = await dbGet(db, `UPDATE materiais_almoxarifado
       SET quantidade_bloqueada = ${Q.qtdSql('COALESCE(quantidade_bloqueada,0) - ?')}, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND COALESCE(quantidade_bloqueada,0) >= ? ${Q.FOLGA_SQL}
-      RETURNING id`, [quantidade, material_id, quantidade]);
+      WHERE id = ? AND COALESCE(quantidade_bloqueada,0) >= ? ${Q.FOLGA_SQL} ${guardaDoLote}
+      RETURNING id`, [quantidade, material_id, quantidade, ...(loteIdFinal ? [loteIdFinal] : []), quantidade]);
     if (!claim) {
-      throw Object.assign(
-        new Error(`Quantidade bloqueada insuficiente: ${Q.qtd(material.quantidade_bloqueada || 0)}`),
-        { status: 400 });
+      // Ordem das recusas (B1420): o total do material primeiro (a literal de hoje), depois a do lote (M2) ou a do sem lote (M1).
+      const porLote = await bloqueioPorLote.bloqueadoPorLote(db, material_id);
+      if (!porLote || !Q.cabe(quantidade, porLote.total)) {
+        throw Object.assign(
+          new Error(`Quantidade bloqueada insuficiente: ${Q.qtd(porLote ? porLote.total : (material.quantidade_bloqueada || 0))}`),
+          { status: 400 });
+      }
+      if (loteIdFinal) {
+        const noLote = await dbGet(db, `SELECT ${bloqueioPorLote.bloqueadoDoLoteSql('?', '?')} AS n`, [material_id, loteIdFinal]);
+        throw Object.assign(new Error(`Quantidade bloqueada insuficiente no lote ${loteResolvido.codigo}: `
+          + `${Q.qtd(Number(noLote.n))} ${material.unidade}`), { status: 400 });
+      }
+      const lista = porLote.lotes.map((l) => `${l.codigo}: ${Q.qtd(l.quantidade)}`).join('; ');
+      throw Object.assign(new Error(`Informe o lote: só ${Q.qtd(porLote.sem_lote)} ${material.unidade} bloqueado(s) sem lote`
+        + ` — o resto está em lote (${lista})`), { status: 400 });
     }
     retencaoAplicada = { bloqueada: -quantidade, emInspecao: 0 };
     saldoPosterior = saldoAnterior;
@@ -3513,6 +3533,22 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
           // seguinte do DESBLOQUEIO somava 10 de volta: quantidade_bloqueada = 10 sem NENHUM
           // bloqueio vivo por trás, a dois cliques na tela do livro. Recusando aqui, o BLOQUEIO
           // continua vivo — e o catch abaixo desfaz o claim, então ele não fica preso como cancelado.
+          // Etapa 209 (T3, M3; Fase 2 item 4): BLOQUEIO com lote — o lote tem de ter o que este bloqueio pos. Lido ANTES do
+          // claim do material, dentro da secao (a mesma trava do material). O claim `cancelado = 1` do livro ja rodou (Achado 3,
+          // conferido na T3 com log descartavel: cancelado = 1 aqui), entao a soma ja exclui este BLOQUEIO: a guarda e
+          // `noLote >= -folga`. Ordem: total insuficiente -> a literal de hoje (abaixo); total cobre e o lote nao -> M3.
+          // Sem ela, L1 2 + sem lote 2, desbloqueio de L1 2 e o estorno deste BLOQUEIO passava no total e deixava L1 em -2.
+          if (mov.lote_id) {
+            const atual = await dbGet(db, `SELECT COALESCE(quantidade_bloqueada,0) AS total,
+                ${bloqueioPorLote.bloqueadoDoLoteSql('?', '?')} AS no_lote
+              FROM materiais_almoxarifado WHERE id = ?`, [mov.material_id, mov.lote_id, mov.material_id]);
+            if (atual && Q.cabe(mov.quantidade, Number(atual.total)) && Number(atual.no_lote) < -Q.QTD_FOLGA) {
+              const lt = await dbGet(db, 'SELECT codigo FROM lotes_almoxarifado WHERE id = ?', [mov.lote_id]);
+              throw Object.assign(new Error(`Não é possível estornar: o bloqueio do lote ${lt ? lt.codigo : mov.lote_id} já foi desfeito `
+                + `(bloqueado no lote: ${Q.qtd(Math.max(0, Number(atual.no_lote) + Number(mov.quantidade)))} ${material.unidade})`),
+              { status: 400 });
+            }
+          }
           const claim = await dbGet(db, `UPDATE materiais_almoxarifado
             SET quantidade_bloqueada = ${Q.qtdSql('COALESCE(quantidade_bloqueada,0) - ?')}, updated_at = CURRENT_TIMESTAMP
             WHERE id = ? AND COALESCE(quantidade_bloqueada,0) >= ? ${Q.FOLGA_SQL}

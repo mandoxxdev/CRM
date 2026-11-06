@@ -264,6 +264,31 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(com, sem);
   });
 
+  // ── T3 (o motor confere o lote no DESBLOQUEIO e no estorno do BLOQUEIO) — vindos do bloqueioSabeOLote.pendente-t3.js ─────────
+  const M1 = (semLote, lista) => `Informe o lote: só ${semLote} UN bloqueado(s) sem lote — o resto está em lote (${lista})`;
+  const quarentena = async (m, q, codigo = 'L1') => {
+    await entrar(m, 5 + q, codigo);
+    const s = await sair(m, q, codigo);
+    await returnService.registrarDevolucao(db, ADMIN, { material_id: m.id, quantidade: q, motivo: 'DEFEITO', destino: 'QUARENTENA',
+      movimentacao_saida_id: s.id, localizacao_id: P01.id });
+    return loteId(m, codigo);
+  };
+  const desbloquear = (m, corpo) => post(`${API}/materiais/${m.id}/desbloquear`, { justificativa: 'libera 209', ...corpo });
+  const recusou = (r, msg) => { assert.strictEqual(r.status, 400, JSON.stringify(r.body)); assert.strictEqual(r.body.error, msg); };
+  const contaDesbloqueios = async (m) => Number((await dbGet(db,
+    "SELECT COUNT(*) n FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'DESBLOQUEIO'", [m.id])).n);
+
+  // RN-209.05: sem lote so do "sem lote" (B1417) e a ordem das recusas (B1420)
+  await test('[RN-209.05] total 5 = L1 2 + sem lote 3: sem lote q=4 -> M1; q=6 -> a literal de hoje; q=3 -> 200 (L1 fica 2)', async () => {
+    const m = await material(); const L1 = await quarentena(m, 2);
+    await inspectionService.bloquearMaterial(db, ADMIN, m.id, { quantidade: 3, justificativa: 'avulso' });
+    recusou(await desbloquear(m, { quantidade: 4 }), M1(3, 'L1: 2'));
+    recusou(await desbloquear(m, { quantidade: 6 }), 'Quantidade bloqueada insuficiente: 5');
+    assert.strictEqual(await contaDesbloqueios(m), 0);
+    assert.strictEqual((await desbloquear(m, { quantidade: 3 })).status, 200);
+    assert.deepStrictEqual(await porLote(m), { material_id: m.id, total: 2, sem_lote: 0, lotes: [{ lote_id: L1, codigo: 'L1', quantidade: 2 }] });
+  });
+
   await close();
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
   terminou = true;
