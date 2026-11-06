@@ -14266,6 +14266,20 @@ saída sem endereço); só fatia quando levaria a peça separada. **Descartado:*
 pela padrão — não dá para mirar a linha); mudar a baixa do motor (todas as portas de saída a usam). **Reversível**
 (`fatiasSemLoteParaOAutomatico`). `730a8a00`.
 
+**B1415 (NOVA, da Etapa 208, Fase 5; decisão do agente) — a conferência física de quem escolheu à mão roda depois da dos outros itens, e isso
+troca QUAL recusa aparece em algumas entregas.** Para a recusa cair em quem escolheu à mão (e não na peça que ninguém mexeu, Fase 2 item 2),
+a conferência de saldo dos itens que escolhem no **Sai de** um endereço que não é o da própria separação — e, desde a **B1408**, também dos
+que escolhem o **próprio** endereço pedindo **mais** que a parte separada — roda depois da dos outros itens da mesma entrega. Nenhum texto
+de recusa é novo, mas o plano e o código diziam *"nenhuma literal muda"*, e **estava errado**: (1) no mesmo endereço acima da parte, o item
+agora é conferido por último; (2) com dois itens no mesmo endereço, a recusa física pode trocar de item e de números — num caso do sorteio
+da revisão, antes *"O saldo em ⟨A⟩ (0) não cobre a quantidade (1)"* (no item seguinte, depois de o primeiro já ter levado o saldo), agora
+*"O saldo em ⟨A⟩ (3) não cobre a quantidade (4)"* (no item escolhido à mão, com o saldo inteiro); (3) com lote, o irmão de um clique, que
+antes tomava *"a origem da separação (…) não serve mais"*, deixa de tomá-la e a recusa física cai no item escolhido à mão — o item certo.
+Em nenhum caso uma entrega que passava passa a ser recusada (o diferencial da Fase 5, ~2.900 entregas: 0 recusas novas de entrega certa).
+**Descartado:** voltar a conferir na ordem dos itens (a recusa voltaria a cair na peça que a pessoa não mexeu); escrever uma frase nova para
+dizer de quem é o excesso (C497 — anterior e pequeno). Comentário do código corrigido no commit da Fase 5. **Reversível** (a fila
+`casoCAdiados` em `entregarSemTrava`).
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente

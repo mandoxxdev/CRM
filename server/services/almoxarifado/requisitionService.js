@@ -2432,7 +2432,10 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     // antigo sobrecomprometido, B1338). `parte` e a de antes da baixa (`:parte` acima).
     const marcaC = !!origemId && (!saiDaOrigem || (!!item.origem_separacao_id && qtdComOrigem - parte > Q.QTD_FOLGA));
     // Etapa 208 (Fase 2, item 2): o fisico dos itens (c) e conferido DEPOIS dos (a)/(b) sem excesso — com as duas pecas juntas (a tela
-    // pre-seleciona a origem do irmao) a recusa fisica cai em quem escolheu a mao, nao no irmao que ninguem mexeu. Nenhuma literal muda.
+    // pre-seleciona a origem do irmao) a recusa fisica cai em quem escolheu a mao, nao no irmao que ninguem mexeu. Nenhum TEXTO de recusa
+    // e novo, mas QUAL recusa sai muda em algumas entregas (Fase 5, B1415): o mesmo par acima da parte agora e (c) e e adiado tambem; com
+    // dois itens no par, a recusa fisica pode trocar de item e de numeros (antes "O saldo em A (0) nao cobre a quantidade (1)", agora
+    // "(3) ... (4)" no item a mao); com lote, o irmao num clique que tomava "nao serve mais" deixa de toma-la e a fisica cai no item a mao.
     if (marcaC) { casoCAdiados.push({ item, origemId, loteId, lido, qtdComOrigem, planejada }); continue; }
     await validarOrigemDaEntrega(item, { origemId, loteId, lido }, qtdComOrigem, planejada, false);
   }

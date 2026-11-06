@@ -283,6 +283,31 @@ process.on('exit', (code) => {
     await recusaSemGravar(m, R, [saiDe(ids[0], 1), saiDe(ids[1], 1)],
       e1(m, { saldo: 2, contando: 1, irmaos: { q: 2, n: 1 }, sobra: 0, qty: 1 }));
   });
+  // Fase 5 (achado 2): o plural do texto MISTO ("e N para outras pecas desta requisicao") — o (b) acima so prova o plural sem outras.
+  await test('[RN-208.06 (d)] misto e plural: R1 guardou 1 em A (4), dois irmaos 1 + 1 -> E1 "... (R1) e 2 para outras pecas desta requisicao"', async () => {
+    const m = await material();
+    await entrar(m, A.id, 4); await entrar(m, B.id, 5);
+    const r1 = await reqDireta([[m.id, 1]]);
+    await separar(r1.R, [deA(r1.ids[0], 1)]);
+    const { R, ids } = await reqDireta([[m.id, 2], [m.id, 1], [m.id, 1]]);
+    await separar(R, [semOrigem(ids[0], 2), deA(ids[1], 1), deA(ids[2], 1)]);
+    const esperado = e1(m, { saldo: 4, outras: { q: 1, numeros: [await numero(r1.R)] }, irmaos: { q: 2, n: 2 }, sobra: 1, qty: 2 });
+    assert.ok(esperado.includes('e 2 para outras peças desta requisição; sobra 1'), `premissa: a literal mista no plural (${esperado})`);
+    await recusaSemGravar(m, R, [saiDe(ids[0], 2)], esperado);
+  });
+
+  // Fase 5 (achado 1): a guarda do irmao e do MESMO material — um item de outro material com guarda no mesmo endereco nao conta.
+  await test('[RN-208.06 (e)] outro material: M2 guardou 2 em A, o item M1 (sem origem) entrega 2 com Sai de A -> 200', async () => {
+    const m1 = await material(); const m2 = await material();
+    await entrar(m1, A.id, 2); await entrar(m2, A.id, 2);
+    const { R, ids } = await reqDireta([[m1.id, 2], [m2.id, 2]]);
+    await separar(R, [semOrigem(ids[0], 2), deA(ids[1], 2)]);
+    await entOk(R, [saiDe(ids[0], 2)]);
+    const g = await requisitionService.guardaDosIrmaosNoPar(db, R, ids[0], m1.id, A.id, null, new Map());
+    assert.deepStrictEqual(g, { q: 0, n: 0 }, 'a guarda do item M2 nao e do par de M1');
+    assert.deepStrictEqual(await retrato(m1), { linhas: [], fisico: 0 });
+    assert.deepStrictEqual(await retrato(m2), { linhas: ['GI-A/-=2'], fisico: 2 });
+  });
 
   // ── RN-208.07: com lote, o par e exato (B1410) ──────────────────────────────────────────────────────────────────────────────────
   const cenario07 = async (loteGuarda) => {
