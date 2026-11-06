@@ -65,11 +65,11 @@ process.on('exit', (code) => {
   };
   const B01 = await loc('XB-01'); const P01 = await loc('XP-01');
 
-  const material = async () => {
+  const material = async ({ lote = 1 } = {}) => {
     const c = `E198-${++seq}`;
     const id = (await dbRun(db, `INSERT INTO materiais_almoxarifado (codigo, nome, unidade, quantidade_atual, quantidade_minima, ativo,
-        material_critico, custo_unitario, controle_lote, localizacao_padrao_id) VALUES (?, ?, 'PC', 0, 0, 1, 0, 0.1, 1, ?)`,
-    [c, c, P01.id])).lastID;
+        material_critico, custo_unitario, controle_lote, localizacao_padrao_id) VALUES (?, ?, 'PC', 0, 0, 1, 0, 0.1, ?, ?)`,
+    [c, c, lote, P01.id])).lastID;
     return { id, nome: c };
   };
   const entrar = async (m, destino, q, lote) => {
@@ -310,6 +310,45 @@ process.on('exit', (code) => {
     await sepOk(r1.R, [doPar(r1.ids[0], 2, L1)]);
     await recusaSemGravar(r2, [doPar(r2.ids[0], 2, L1), doPar(r2.ids[1], 3, L1)],
       c1(m, { saldo: 4, contando: 2, outras: 2, numeros: [await numero(r1.R)], sobra: 2, qty: 3 }));
+  });
+
+  // ---------------------------------------------------------------- Fase 5 (lacunas provadas por sabotagem)
+  await test('[Fase 5, RN-198.04 divergencia] cancelada legada nao entra na regua da divergencia: R2 separa 2 do par -> maximo 4, divergente', async () => {
+    const { m, L1 } = await cenario();
+    const r1 = await req([[m.id, 4]]); const r2 = await req([[m.id, 4]]);
+    await sepOk(r1.R, [doPar(r1.ids[0], 4, L1)]);
+    await dbRun(db, "UPDATE requisicoes_almoxarifado SET status = 'CANCELADO', ativo = 1 WHERE id = ?", [r1.R]);
+    await sepOk(r2.R, [{ ...doPar(r2.ids[0], 2, L1), motivo_divergencia: 'f5 198' }]);
+    const rod = await dbAll(db, 'SELECT itens_json FROM separacoes_requisicao_almoxarifado WHERE requisicao_id = ? ORDER BY id', [r2.R]);
+    assert.strictEqual(rod.length, 1, 'uma rodada');
+    const it = JSON.parse(rod[0].itens_json).find((x) => Number(x.item_id) === r2.ids[0]);
+    assert.ok(it, `item na rodada: ${rod[0].itens_json}`);
+    assert.deepStrictEqual([it.maximo, it.divergente], [4, true], `itens_json: ${rod[0].itens_json}`);
+  });
+
+  await test('[Fase 5, sem lote] controle_lote=0: R1 separou 4 de XB-01 (6); R2 pede 4 -> C1 sem ", lote" (lote NULL casa por IS)', async () => {
+    const m = await material({ lote: 0 });
+    await entrar(m, B01.id, 6); await entrar(m, P01.id, 9);
+    const r1 = await req([[m.id, 4]]); const r2 = await req([[m.id, 4]]);
+    const doEnd = (item, q) => ({ item_id: item, quantidade_separada: q, localizacao_origem_id: B01.id });
+    await sepOk(r1.R, [doEnd(r1.ids[0], 4)]);
+    await recusaSemGravar(r2, [doEnd(r2.ids[0], 4)],
+      `${m.nome}: em XB-01 há 6 para esta separação, mas 4 já está separado dali para outra requisição (${await numero(r1.R)}); `
+      + 'sobra 2, que não cobre a quantidade (4). Escolha outro endereço ou reabra a janela para ver a sugestão atual');
+  });
+
+  await test('[Fase 5, sobra nunca negativa] dado antigo 4 + 4 guardados em XB-01/L1 (6); R3 pede 1 -> C1 com "sobra 0"', async () => {
+    const { m, L1 } = await cenario();
+    const r1 = await req([[m.id, 4]]); const r2 = await req([[m.id, 4]]);
+    await sepOk(r1.R, [doPar(r1.ids[0], 4, L1)]);
+    await sepOk(r2.R, [{ item_id: r2.ids[0], quantidade_separada: 4 }]);
+    await dbRun(db, `UPDATE itens_requisicao_almoxarifado SET origem_separacao_id = ?, lote_separacao_id = ?, quantidade_origem_separacao = 4
+      WHERE id = ?`, [B01.id, L1, r2.ids[0]]);
+    const r3 = await req([[m.id, 1]]);
+    await recusaSemGravar(r3, [doPar(r3.ids[0], 1, L1)],
+      `${m.nome}: em XB-01, lote L1 há 6 para esta separação, mas 8 já estão separados dali para outras requisições `
+      + `(${await numero(r1.R)}, ${await numero(r2.R)}); sobra 0, que não cobre a quantidade (1). `
+      + 'Escolha outro endereço ou reabra a janela para ver a sugestão atual');
   });
 
   // ---------------------------------------------------------------- pelo servico
