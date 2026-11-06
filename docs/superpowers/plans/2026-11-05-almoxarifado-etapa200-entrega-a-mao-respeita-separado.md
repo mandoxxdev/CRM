@@ -264,6 +264,68 @@ muda se o `gesto` decide os dois pedaços ("desta requisição"/"desta entrega" 
 - **Suítes finais (serial, sobre `71783dc8`):** `test:api` **587/587** arquivos; `test:almoxarifado` 44/0; `test:validation` 4/0;
   `test:safealter` 3/0; `test:sqlite` 16/0. `client/` intocado.
 
+## Fase 5 — revisão adversarial (um revisor fresco, sobre `52ae600e`)
+
+**0 defeitos; 3 lacunas de teste**, cada uma provada por uma sabotagem que passava **verde** no arquivo de 21 cenários; os três cenários
+entraram no fim de `entregaSaiDeRespeitaSeparado.api.test.js` em `5bc921e4` (arquivo **24/24**). Harness: `perl -0pi` sobre base LF, âncora
+contada (= 1), md5 `64cf3e5b` antes → sabotado → restaurado igual (`git checkout --` do serviço: a produção está commitada, só o teste
+estava aberto).
+
+| # | Lacuna | Sabotagem (verde antes) | Cenário novo | O que caiu |
+|---|---|---|---|---|
+| P1 [IMPORTANTE] | vários itens (c) na mesma entrega | `continue` → `break` na passada do caso (c) (`if (outrasQ <= 1e-9)`), md5 `dbc275cf` | R1 guardou 4 em XB-01/L1 (6); R2 entrega item 1 "Sai de" XP-01/L2 1 e item 2 "Sai de" XB-01/L1 4 → E1 no item 2 (há 6, 4, sobra 2) | só *"[Fase 5 P1, varios itens]"* (200 em vez de 400), 23/24 |
+| P2 [IMPORTANTE] | o físico do par é por lote | tirar `lote_id IS ?` da leitura do físico na passada, md5 `ff144819` | XB-01 com L1 6 e L3 5; R1 guardou 4 de L1; R2 "Sai de" XB-01/L1 4 → E1 com *"há 6"* (lia 11) | só *"[Fase 5 P2, fisico por lote]"* (200), 23/24 |
+| P3 [MENOR] | entrega com séries (B1338) | `&& !infoSeries` na marca do caso (c) (`validarOrigemDaEntrega(…, !!origemId && !saiDaOrigem)`), md5 `c9c81942` | material com série: 6 séries A em XB-01/L1, 9 B em XP-01/L2; R1 guardou 4; R2 entrega 4 séries A com "Sai de" XB-01 → E1 | só *"[Fase 5 P3, series]"* (200), 23/24 |
+
+`npm run test:api` depois da Fase 5: **587/587 arquivos**.
+
+## Placar final
+
+- `entregaSaiDeRespeitaSeparado.api.test.js` **24/24** (19 da T2 + 2 da T3 + 3 da Fase 5).
+- `test:api` **587/587 arquivos** (depois da Fase 5); **587/587** sobre `71783dc8` (Execução).
+- `test:almoxarifado` **44/0**; `test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0** — sobre `71783dc8` (a Fase 5 só
+  mexeu em teste).
+- `client/` intocado: Jest e build da tela não rodados nesta etapa.
+
+## Retro (4 números)
+
+- **Rodadas de correção até verde:** 1 (a Fase 5; nenhuma correção de código).
+- **Achados reais da Fase 5:** 3 lacunas de teste, 0 defeitos.
+- **Paralelismo:** nenhum (um executor; tudo mexia na régua compartilhada da entrega).
+- **Defeito que escapou da 199:** nenhum conhecido.
+
 ## Próxima tarefa detalhada
 
-*(a preencher no fechamento — candidato: item 2 do 2º pacote, C469, "o local mostra quanto realmente sobra", 2h30.)*
+**Item 2 do 2º pacote** (`docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas-2.txt`, **2h30**): **"Separação: o local
+mostra quanto realmente sobra"** — o **C469** (`docs/almoxarifado-novidades-por-etapa.md`): o "Sai de" da janela de **separação** — e o da
+**entrega** (anotado no fechamento da 200) — mostra o saldo físico do endereço, não o que sobra depois do separado de outras requisições.
+Medido no fechamento da 200 (sobre `5bc921e4`):
+
+- **A rota que a janela lê:** `GET /api/almoxarifado/estoque/:materialId/saldos` (`server/routes/almoxarifado/extended.js:830-835`), só
+  `auth`, devolve `stockService.consultarSaldosPorLocalizacao(db, materialId)` cru (`stockService.js:3929-3948`: `s.*` +
+  `localizacao_codigo`/`descricao`/`tipo`, `almoxarifado_codigo`/`nome`, `lote`). **Não recebe a requisição** — para excluir a caixa da
+  própria requisição a tela teria de mandar `?requisicao_id=`.
+- **Quem consome:** no `client/`, **só** `RequisicoesList.js:538` (o efeito de `materiaisEntregaKey`, `:523-551`, para as duas janelas;
+  `opcoesOrigem` `:149-150` filtra endereço e `quantidade > 0`). A B1335 e o C469 diziam "a Movimentação também usa" — **estava errado**
+  (anotado no C469 e na spec 05). A mesma **função** `consultarSaldosPorLocalizacao` é usada pelo extrato do material
+  (`extended.js:1021`) — **não** mexer nela; acrescentar o campo **na rota** (ou numa função nova), para o extrato não mudar.
+- **O rótulo:** `rotuloOrigem` (`RequisicoesList.js:148`: `` `${codigo}${lote ? ` — lote ${lote}` : ''} (${s.quantidade})` ``), usado nas
+  opções da separação (`:2471`) e da entrega (`:2614`). **Cuidado:** `s.quantidade` também alimenta contas — `maxSeparavelNaTela`
+  (`:279-292`, o teto do campo na separação: `opcao.quantidade − jaPlanejadoNoPar`), `valorPlanejadaNaSeparacao` (`:226`) e o filtro
+  `opcoesOrigem`. Trocar `quantidade` mudaria o teto e as opções; o caminho seguro é **campo novo** (ex.: `separado_outras`) só no rótulo —
+  *"XB-01 — lote L1 (6; 4 separados para outra requisição)"* ou *"(sobra 2 de 6)"* — e decidir à parte se o teto do campo também desconta
+  (o servidor já recusa com a C1/E1; o teto da tela descontar evita digitar o que vai ser recusado).
+- **A régua sem duplicar:** `memoParteGuardadaDeOutras(db, requisicaoId)` (`requisitionService.js:110`) é **por par** (uma consulta por
+  endereço + lote) e não é exportado; `parteGuardadaDeOutras` (`:94-104`) também não. Para a lista inteira de um material, o natural é uma
+  função nova **no mesmo arquivo**, montada com as mesmas peças — `PARTE_ORIGEM_SQL` (`:74`) e `caixaVivaSql` (`:82-87`) — agrupando por
+  `origem_separacao_id, lote_separacao_id` (`requisicao_id <> ?`), exportada e chamada pela rota. Reusar o memo par a par também serve (N
+  consultas, N = linhas de saldo do material), mas a régua continua uma só nos dois jeitos. `requisitionService` é importado por
+  `server/routes/almoxarifado.js:26`, mas **não** por `extended.js` (só `stockService`, `:58`): `require` novo, sem ciclo (o serviço da
+  requisição importa `stockService`, não as rotas).
+- **Contrato a congelar:** `GET /estoque/:id/saldos` ganha, por linha, o campo novo (0 quando nada separado por outras); `?requisicao_id=`
+  opcional (sem ele, conta todas as caixas vivas — o que serve para quem não está numa requisição). Payloads de separação e entrega
+  **inalterados**; a C1 e a E1 continuam as recusas.
+- **Pontos de atenção:** a pré-seleção da separação (sugestão de coleta, `:589`) já desconta e não muda; o "Sai de" pré-escolhido na
+  entrega é a origem do próprio item (caso b) — o separado do **próprio** item não entra (por isso `requisicao_id`); o teste é de tela (Jest
+  de `RequisicoesList`) + rota (`api.test` do campo novo, com caixa viva, excluída, cancelada legada e a parte limitada — a mesma lista da
+  RN-198.05/RN-200.05). Fatia visível: o próprio rótulo.

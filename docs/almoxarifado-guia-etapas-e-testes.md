@@ -1,23 +1,34 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-11-05 (Etapas 172 a 191, 194 a 199) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-11-05 (Etapas 172 a 191, 194 a 200) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198 e 199) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199 e 200) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-05 (Etapas 172 a 178, 180 a 191, 194 a 199 ENTREGUES · RETOMADO em 05/11 · a fila da estimativa de 05/11 acabou)
+> ## Onde o desenvolvimento está — 2026-11-05 (Etapas 172 a 178, 180 a 191, 194 a 200 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
-> **O desenvolvimento parou aqui: Etapa 199 fechada — 2026-11-05.** **Materiais de clientes com vírgula, e o termo de ferramenta com os
-> espaços do texto.** A tela **Materiais de clientes** mostra *12,5* (antes *12.5*), como o papel da posição; o PDF do **termo de
-> responsabilidade** de ferramenta imprime o recuo e os espaços do texto como foram escritos (tabulação como 4 espaços), sem passar da folha
-> — o texto assinado e o **Verificar integridade** não mudaram. Só tela e PDF; nada a rodar antes do deploy. **Nenhum clique foi dado no
-> navegador** (só testes — roteiro na seção da 199 e letra F das novidades).
+> **O desenvolvimento parou aqui: Etapa 200 fechada — 2026-11-05.** **A entrega com "Sai de" escolhido à mão respeita o que outra
+> requisição separou dali.** Na janela de entrega, escolher à mão o endereço de onde **outra** requisição separou era aceito — e a outra é que
+> tomava a recusa na entrega dela. Agora a entrega de quem escolheu é **recusada na hora**, com a conta (quanto há, quanto está separado para
+> outra requisição e qual, quanto sobra) e o conselho de escolher outro endereço ou o automático. O **Sai de** que a janela já traz não muda.
+> Só motor (a mensagem aparece com a janela de entrega aberta); nada a rodar antes do deploy. **Nenhum clique foi dado no navegador** (só
+> testes — roteiro na seção da 200 e letra F das novidades).
 >
-> **Onde parou, exatamente:** a **199 está fechada** (código, testes e documentos commitados). **A fila da estimativa de 05/11 acabou**
-> (itens 1 a 8). Não há próxima etapa planejada: o fim do plano da 199
-> (`docs/superpowers/plans/2026-11-05-almoxarifado-etapa199-virgula-e-espacos-do-termo.md`) lista o item 9 da fila de pausa (depende de
-> resposta da empresa) e os avisos abertos de maior valor (**C468**, **C469**, **C464**, **C466**, **C458**, **C465**, **C467**), com o tamanho
-> de cada um — a próxima começa por estimar um deles.
+> **Onde parou, exatamente:** a **200 está fechada** (código, testes e documentos commitados). A **próxima** é o item 2 do 2º pacote da
+> estimativa de 05/11 (`docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas-2.txt`): **"Separação: o local mostra quanto
+> realmente sobra"** (**C469** — o **Sai de** das janelas de separação e de entrega mostra o saldo do endereço sem descontar o separado das
+> outras requisições). Só a tarefa detalhada no fim do plano da 200
+> (`docs/superpowers/plans/2026-11-05-almoxarifado-etapa200-entrega-a-mao-respeita-separado.md`, com a rota, as linhas da tela e a régua a
+> reaproveitar) e a estimativa existem, nenhum plano nem código.
+>
+> **Etapa 199, 2026-11-05.** **Materiais de clientes com vírgula, e o termo de ferramenta com os espaços do texto.** A tela **Materiais de
+> clientes** mostra *12,5* (antes *12.5*), como o papel da posição; o PDF do **termo de responsabilidade** de ferramenta imprime o recuo e os
+> espaços do texto como foram escritos (tabulação como 4 espaços), sem passar da folha — o texto assinado e o **Verificar integridade** não
+> mudaram. Só tela e PDF; nada a rodar antes do deploy. **Nenhum clique foi dado no navegador** (só testes — roteiro na seção da 199 e letra F
+> das novidades).
+>
+> **Onde parou, na época:** a **199 está fechada**. **A fila da estimativa de 05/11 acabou** (itens 1 a 8); a próxima saiu do 2º pacote da
+> estimativa (item 1, **C468**) — a 200.
 >
 > **Etapa 198, 2026-11-05.** **A separação conta o que já está separado para outras requisições.**
 > Duas requisições do mesmo material, as duas janelas de separação abertas no mesmo endereço: a primeira separa; a segunda, se o que sobra
@@ -7031,6 +7042,47 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 200 — A entrega com "Sai de" escolhido à mão respeita o que outra requisição separou dali (ENTREGUE — 2026-11-05)
+
+**O que mudou, em uma frase:** na entrega, escolher à mão no **Sai de** um endereço de onde outra requisição separou passa a descontar o
+que está separado para ela — e, se o que sobra não cobre, a entrega é recusada na hora, dizendo a conta.
+
+**O problema que ela resolve.** Há 6 peças em *XB-01*. A requisição R1 separou 4 de lá. A R2 separou 4 no automático. Na entrega de R2, o
+almoxarife escolhia **"Sai de: XB-01"** — e passava, levando as peças da caixa de R1. Depois, a entrega de R1 é que era recusada (*"… a origem
+da separação (XB-01) não serve mais …"*), sem culpa nenhuma. É como pegar da prateleira a caixa que já tem a etiqueta de outro pedido: agora
+o sistema lê a etiqueta também na entrega.
+
+| Antes | Agora |
+|---|---|
+| A entrega com **Sai de** num endereço separado por outra requisição era aceita; a outra é que tomava a recusa | Recusada na entrega de quem escolheu, com a conta: quanto há, quanto está separado para outra requisição (o número) e quanto sobra |
+| — | A janela continua aberta; escolhendo outro endereço (ou o automático), a entrega passa |
+| O **Sai de** que a janela já traz, o automático e o só lote | Iguais a antes |
+
+**Antes de testar (uma vez).** Um usuário **Administrador do almoxarifado**. Um material *PARAF-200* (nome *Parafuso 200*, unidade *PC*) com
+**Controle por lote** ligado e posição padrão *XP-01*. Em **Movimentações → Entrada**: 6 no lote *L1* em *XB-01*, com **Validade do lote**
+daqui a 5 dias, e 9 no lote *L2* em *XP-01*, com validade daqui a 45 dias. Duas requisições de 4 *PARAF-200* (R1 e R2), aprovadas.
+
+**Roteiro de teste (5 minutos).**
+
+1. **Almoxarifado → Requisições**: abra R1, **Iniciar Separação** — o **Sai de** vem em *XB-01 — lote L1 (6)*, quantidade *4* — e **📦
+   Confirmar Separação**.
+2. Abra R2, **Iniciar Separação**, troque o **Sai de** para *"Qualquer endereço (automático)"* e confirme.
+3. Em R2, **Entregar escolhendo de onde sai…**: no **Sai de**, escolha *XB-01 — lote L1 (6)*, quantidade *4*, e **✅ Confirmar Entrega**. Aviso
+   vermelho e a janela **continua aberta**: *"Parafuso 200: em XB-01, lote L1 há 6 para esta entrega, mas 4 já está separado dali para outra
+   requisição (⟨número de R1⟩); sobra 2, que não cobre a quantidade (4). Escolha outro endereço ou deixe "Qualquer endereço (automático)""*.
+   Nada foi baixado.
+4. Na mesma janela, troque o **Sai de** para *XP-01 — lote L2 (9)* e confirme: passa.
+5. Em R1, **Confirmar Entrega e Baixar Estoque**: passa (sai de *XB-01*). Em **Lotes e Séries** → *PARAF-200*: *L1* 2, *L2* 5.
+6. **O que sobra cabe:** repita até o passo 3 com material novo e, em R2, troque a quantidade para *2* (o que sobra em *XB-01*): passa.
+
+**O que esta etapa não cobre.** O **Sai de** da janela continua mostrando o saldo do endereço sem descontar o separado das outras; a
+mensagem diz a conta (aviso **C469** das novidades — a próxima etapa). Na entrega, ainda passam: o **mesmo** endereço de onde o item foi
+separado, com quantidade **acima** do que foi separado de lá (**C470**); a escolha de **só o lote**, sem endereço (**C471**); e o endereço
+separado por **outro item da mesma requisição** que não sai nesta entrega (**C472**). **Nada a rodar antes do deploy.**
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos provam pela rota real (a mesma que a tela
+chama, com o mesmo pedido que a janela monta) e pelo serviço — escrito para você conferir à mão.
 
 ## Etapa 199 — Materiais de clientes com vírgula, e o termo de ferramenta com os espaços do texto (ENTREGUE — 2026-11-05)
 

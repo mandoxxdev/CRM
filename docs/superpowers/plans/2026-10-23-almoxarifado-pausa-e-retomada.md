@@ -1,13 +1,21 @@
 # Almoxarifado — pausa de 2026-10-23 e como retomar
 
 > **✅ RETOMADO em 2026-11-05 — este arquivo agora é histórico.** O André retomou o módulo em 05/11 (estimativa
-> `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md`). **Depois: a Etapa 199 fechou** em 05/11 (plano `3f5b8690`,
+> `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md`). **Depois: a Etapa 200 fechou** em 05/11 (2º pacote da
+> estimativa, `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas-2.txt`, item 1; plano `fd1daad2`, Fase 2 `e22db079`, T1
+> `d7ff9a39`, T2 `943a486e`, T3 `71783dc8`, execução `52ae600e`, Fase 5 `5bc921e4`, e o commit "Etapa 200: fechamento") — a entrega com "Sai
+> de" escolhido à mão desconta o que outras requisições separaram do endereço e recusa com a conta à vista (C468 resolvido no "Sai de" de outro
+> endereço). Letra **B** usada até **B1342** (B1338–B1342 pela 200), letra **C** até **C472** (C470–C472 pela 200), letra **A** a partir de
+> **A111** (a 200 não usou). **Próxima:** item 2 do 2º pacote — Separação: o local mostra quanto realmente sobra (C469); detalhada no fim de
+> `docs/superpowers/plans/2026-11-05-almoxarifado-etapa200-entrega-a-mao-respeita-separado.md`.
+> *(Antes: a **Etapa 199 fechou** em 05/11 (plano `3f5b8690`,
 > item 7 `eb3a48c3`, item 8 `0da1e81b`, e o commit "Etapa 199: fechamento") — a tela Materiais de clientes com vírgula (C448) e o PDF do
 > termo de ferramenta com os espaços do texto (C447). Letra **B** usada até **B1337** (B1336–B1337 pela 199), letra **C** até **C469** (a 199
 > não abriu nenhum), letra **A** a partir de **A111** (a 199 não usou). **A fila da estimativa de 05/11 acabou** (itens 1 a 8 desta fila
 > feitos: 191, 194 a 199). **Próxima:** o item 9 da seção 4 abaixo (depende de resposta da empresa) ou um dos avisos C abertos de maior valor
 > — **C468**, **C469**, **C464**, **C466**, **C458**, **C465**, **C467** —, com o tamanho de cada um no fim de
-> `docs/superpowers/plans/2026-11-05-almoxarifado-etapa199-virgula-e-espacos-do-termo.md`; estimar antes de começar.
+> `docs/superpowers/plans/2026-11-05-almoxarifado-etapa199-virgula-e-espacos-do-termo.md`; estimar antes de começar — a 200 (item 1 do 2º
+> pacote, C468).)*
 > *(Antes: a **Etapa 198 fechou** em 05/11 (plano `0affc3df`,
 > Fase 2 `0eb953f0`, T1 `2fa621de`, T2 `1d24311b`, T3 `00d717ad`, execução `97d7e0ef`, Fase 5 `75da9211`, e o commit "Etapa 198:
 > fechamento") — a separação com "Sai de" conta o que já está separado para outras requisições no mesmo endereço e lote e recusa com a

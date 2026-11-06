@@ -11,14 +11,24 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-05):** **Etapa 199 fechada** (**Materiais de clientes com vírgula, e o termo de ferramenta com os
+> **Onde o desenvolvimento está (2026-11-05):** **Etapa 200 fechada** (**a entrega com "Sai de" escolhido à mão respeita o que outra
+> requisição separou dali** — há 6 peças em *XB-01* (lote *L1*) e 9 em *XP-01*; R1 separou 4 de *XB-01*; R2 separou 4 no automático; na
+> **entrega** de R2, escolher à mão **"Sai de: XB-01"** era **aceito** e tirava dali as peças de R1, e quem tomava a recusa era R1 (*"… a
+> origem da separação (XB-01) não serve mais …"*). Agora a entrega de R2 é **recusada na hora**, com a conta à vista: quanto há, quanto está
+> separado dali para outra requisição (o número dela) e quanto sobra — e o conselho de escolher outro endereço ou o automático. O **Sai de**
+> que a janela já traz (a origem da separação do próprio item) não muda. **C468** resolvido no "Sai de" de outro endereço; só motor (a
+> mensagem aparece com a janela de entrega aberta); nada a rodar antes do deploy; decisões **B1338** a **B1342**; avisos **C470** (o mesmo
+> endereço, acima da parte do item), **C471** (só o lote escolhido) e **C472** (outro item da mesma requisição); limitações **D (200)**;
+> verificação **F (200)**; revisão (Fase 5) com zero defeitos e três lacunas de teste cobertas). **Próxima: Separação — o local mostra quanto
+> realmente sobra** (**C469**, item 2 do 2º pacote da estimativa de 05/11); detalhada no fim do plano da 200.
+> *(Também em 2026-11-05: **Etapa 199 fechada** (**Materiais de clientes com vírgula, e o termo de ferramenta com os
 > espaços do texto** — a tela **Materiais de clientes** passa a mostrar as quantidades como o papel da posição: *12,5*, *1.250,75*, *0,3*;
 > vazio é *0*; e o PDF do **termo de responsabilidade** de ferramenta imprime o texto da versão como foi escrito — o recuo e os espaços
 > repetidos ficam, a tabulação sai como 4 espaços, nada passa da folha; o texto assinado, o código dele e o **Verificar integridade** não
 > mudam; **C448** e **C447** resolvidos; só tela e PDF; nada a rodar antes do deploy; decisões **B1336** e **B1337**; limitações **D (199)**;
 > verificação **F (199)**; revisão "passaria com a feature quebrada?" achou duas lacunas de teste, cobertas). **A fila da estimativa de 05/11
 > acabou** (itens 1 a 8); a próxima sai do item 9 da fila de pausa (depende de resposta da empresa) ou dos avisos **C468**, **C469**,
-> **C464**, **C466**, **C458**, **C465** e **C467** — listados com tamanho no fim do plano da 199.
+> **C464**, **C466**, **C458**, **C465** e **C467** — listados com tamanho no fim do plano da 199; a próxima foi a **200**.)*
 > *(Também em 2026-11-05: **Etapa 198 fechada** (**separado de outras requisições no mesmo local: a separação conta o
 > que já está separado para as outras** — duas requisições pedem 4 do mesmo material e as duas janelas de separação abrem sugerindo o mesmo
 > endereço e lote, onde há 6; a primeira separa 4 de lá; a segunda, com a janela ainda aberta, confirmava 4 do mesmo lugar e era **aceita**,
@@ -4411,7 +4421,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -13715,7 +13725,8 @@ motivo claro"). **Reversível:** só texto. `2fa621de`.
 **B1335 (NOVA, da Etapa 198; decisão do agente) — sem mudança de tela: a fatia visível é a mensagem.** A recusa aparece no aviso vermelho com a
 janela de separação **aberta** (as quantidades digitadas ficam); reabrir a janela traz a sugestão atual. **Descartado:** o **Sai de** mostrar o
 saldo já descontado do separado das outras — exige campo novo na lista de saldos por endereço, que a Movimentação também usa (**C469**).
-**Reversível.** Sem código de tela.
+**Reversível.** Sem código de tela. *(Fechamento da 200: "que a Movimentação também usa" **estava errado** — só as janelas de
+separação e de entrega da requisição leem essa lista; ver o C469.)*
 
 **B1336 (NOVA, da Etapa 199; decisão do agente) — a tela de Materiais de clientes usa o formato do papel, não o das outras telas.** Recebido,
 Consumido, Devolvido, Saldo, a quantidade de cada aplicação e o saldo do rótulo da janela **Devolver ao cliente** passam pela **mesma**
@@ -13731,6 +13742,41 @@ fica na quebra (a linha de baixo começa na palavra), como já era a regra da qu
 inteiro); a quebra do `splitTextToSize` usada nas linhas de identificação (com uma sequência longa de espaços ela leva os espaços para o
 começo da linha de baixo — medido). O texto gravado, o código *SHA-256* e o **Verificar integridade** não mudam. **Reversível:** só o
 desenho do PDF. `0da1e81b`.
+
+**B1338 (NOVA, da Etapa 200, com a Fase 2; decisão do agente) — a entrega desconta o separado das outras só quando o "Sai de" escolhido não é
+a origem guardada do item.** Na entrega com endereço escolhido à mão (**Sai de**) que **não** é a origem da separação do próprio item — outro
+endereço; o mesmo endereço com outro lote quando a separação guardou o lote; ou item separado **sem** origem (automático) —, o sistema
+desconta do saldo daquele endereço e lote o que **outras** requisições em andamento separaram dali (a parte da origem delas, a mesma régua da
+198) e, se a sobra não cobre a quantidade, recusa com 400 e **nada gravado**. Vale também com **séries** escolhidas (as séries não dizem de
+qual caixa são — o lote vem delas, o endereço do **Sai de**). O só lote (lote sem endereço) fica fora (**C471**). A origem guardada do
+próprio item (a planejada sem escolha, ou o **Sai de** igual a ela, que é o que a janela já traz) **não** desconta. **Descartado:**
+descontar em todo **Sai de** à mão — a tela manda a planejada como escolha explícita e, no dado antigo comprometido demais, prenderia as
+duas requisições pela tela (o que a **B1333** evitou). O mesmo endereço **acima** da própria parte fica (**C470**). **Reversível:** uma
+condição a mais na conferência da origem, sem dado. `d7ff9a39` (testes `943a486e`, `71783dc8`, Fase 5 `5bc921e4`).
+
+**B1339 (NOVA, da Etapa 200; decisão do agente) — a mensagem da entrega é própria, no molde da da separação.** *"⟨material⟩: em ⟨endereço⟩,
+lote ⟨lote⟩ há ⟨saldo⟩ para esta entrega, mas ⟨n⟩ já está separado dali para outra requisição (⟨número⟩); sobra ⟨sobra⟩, que não cobre a
+quantidade (⟨quantidade⟩). Escolha outro endereço ou deixe "Qualquer endereço (automático)""* — plural com mais de uma requisição (*"já estão
+separados dali para outras requisições"*); sem lote, sem o trecho *", lote …"*; com outros itens da mesma entrega no mesmo endereço e lote,
+*" (já contando ⟨n⟩ desta entrega)"* depois do saldo; a sobra nunca é negativa. Uma frase só no código para as duas (a da separação sai
+igual, letra por letra). **Descartado:** reusar a da separação (diz *"para esta separação"* e *"reabra a janela para ver a sugestão atual"* —
+errado no gesto da entrega); prometer que o automático desconta (não vale para material sem controle de lote, **B1321**). **Reversível:** só
+texto. `d7ff9a39`.
+
+**B1340 (NOVA, da Etapa 200, com a Fase 2; decisão do agente) — a própria requisição não é "outra"; os itens da mesma entrega somam, todos.**
+O que os itens da mesma entrega pedem do mesmo endereço e lote entra na conta (*"já contando … desta entrega"*), **antes ou depois** na ordem —
+a conferência roda depois de ler todos os itens (na primeira redação era item a item, e a revisão do plano mostrou que, conforme a ordem dos
+itens, o endereço ia a zero e a outra requisição tomava *"não serve mais"*). A parte guardada de **outro item da mesma requisição** que não sai
+nesta entrega não é protegida (**C472**). **Descartado:** contar a parte desse irmão (tem de excluir o próprio item e muda a conta da
+planejada — mais cenários do que cabia). **Reversível.** `d7ff9a39`.
+
+**B1341 (NOVA, da Etapa 200; decisão do agente) — automático, planejada e só lote não mudam.** **Descartado:** conferir o só lote — quem
+escolhe o endereço dele é o motor de estoque (o endereço de mais saldo do lote), sem olhar o que está separado; mexer é no motor, que todas
+as saídas usam (**C471**). **Reversível.** `d7ff9a39`.
+
+**B1342 (NOVA, da Etapa 200; decisão do agente) — sem mudança de tela: a fatia visível é a mensagem.** A recusa aparece no aviso vermelho com a
+janela de entrega **aberta** (as quantidades e as escolhas ficam). **Descartado:** o **Sai de** da entrega mostrar o que sobra — é o mesmo
+campo novo da lista de saldos do **C469**, que é a próxima etapa. **Reversível.** Sem código de tela.
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -17592,11 +17638,34 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      entrega, preferir o **Sai de** que a janela já traz; se a outra requisição for recusada assim, entregá-la escolhendo outro endereço onde o
      material está. Conserto: a entrega com escolha à mão descontar a parte guardada das outras, com literal própria e cuidado com o dado
      antigo — candidata a etapa própria (~1h a 1h30).
+     **✅ RESOLVIDO NA ETAPA 200 no "Sai de" de outro endereço** (`d7ff9a39`; testes `943a486e`, `71783dc8`; Fase 5 `5bc921e4`): a entrega com
+     **Sai de** escolhido à mão que não é a origem da separação do próprio item (outro endereço, outro lote, ou item separado no automático)
+     desconta o que outras requisições separaram dali e, se não cobre, é **recusada na entrega dela**, nada gravado: *"⟨material⟩: em XB-01,
+     lote L1 há 6 para esta entrega, mas 4 já está separado dali para outra requisição (⟨número⟩); sobra 2, que não cobre a quantidade (4).
+     Escolha outro endereço ou deixe "Qualquer endereço (automático)""* (**B1338**, **B1339**). Vale também com séries escolhidas. **O que
+     sobra dele:** o mesmo endereço da origem do item **acima** da parte dele (**C470**), o só lote (**C471**) e a parte de outro item da
+     mesma requisição (**C472**).
 469. **NOVO (da Etapa 198) — o "Sai de" da janela de separação mostra o saldo do endereço sem descontar o que está separado para outras
      requisições.** A opção *"XB-01 — lote L1 (6)"* mostra o físico do endereço; se outra requisição já separou 4 de lá, confirmar 4 é recusado
      com a conta (*"… mas 4 já está separado dali para outra requisição (⟨número⟩); sobra 2 …"*, **B1334**). **O que fazer:** ler a mensagem e
      escolher outro endereço, ou fechar e reabrir a janela — a sugestão (o endereço que já vem escolhido) já desconta o separado das outras.
      Conserto: campo novo na lista de saldos por endereço (usada também pela Movimentação) — fora da 198 (**B1335**).
+     *(Fechamento da 200: vale também para o **Sai de** da janela de **entrega** — mostra o saldo do endereço sem o separado das outras; a
+     recusa nova da entrega (**C468**, **B1339**) diz a conta. E a frase "usada também pela Movimentação" **estava errada**: medido no
+     fechamento da 200, a lista de saldos por endereço só é lida pelas janelas de separação e de entrega da requisição (o extrato do material
+     usa a mesma consulta por outra rota). É a **próxima** etapa; onde consertar está medido no fim do plano da 200.)*
+470. **NOVO (da Etapa 200; o comportamento é anterior) — na entrega, o "Sai de" igual à origem da separação do item, com quantidade acima da
+     parte dele, tira o excesso do que outra requisição separou ali.** Só escolhendo à mão (a janela não pré-seleciona a origem acima da
+     parte — passa ao automático com o aviso *"… o restante, automático"*). **Nenhum erro de estoque**; a entrega da outra requisição é que
+     toma *"… não serve mais …"*. **O que fazer:** acima da parte, deixar o **Sai de** que a janela traz. Conserto: a conta do excesso sobre a
+     parte, com o dado antigo — ~45 min a 1h (**B1338**).
+471. **NOVO (da Etapa 200; o comportamento é anterior) — a entrega com só o lote escolhido (sem endereço) tira do endereço de mais saldo do
+     lote, sem olhar o que está separado ali para outra requisição.** **O que fazer:** escolher o endereço junto com o lote. Conserto: no motor
+     de estoque, que todas as saídas usam — ~2h (**B1341**).
+472. **NOVO (da Etapa 200) — a entrega com "Sai de" à mão não protege a parte separada de outro item da mesma requisição no mesmo endereço.**
+     Dois itens do mesmo material numa requisição: um separado de *XB-01*; o outro, entregue sozinho com **Sai de** *XB-01*, pode levar as
+     peças do primeiro, e a entrega do primeiro depois toma *"… não serve mais …"*. **Nenhum erro de estoque.** **O que fazer:** entregar os
+     dois itens juntos (a mesma entrega soma os dois) ou o segundo pelo automático (**B1340**).
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -18950,6 +19019,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(200) A entrega com "Sai de" que conta as outras requisições, o que ficou de fora.** (1) **O mesmo endereço da origem do item acima da
+  parte** dele (**C470**). (2) **O só lote** (**C471**, **B1341**). (3) **A parte de outro item da mesma requisição** que não sai nesta entrega
+  (**C472**, **B1340**). (4) **O "Sai de" da janela** continua mostrando o saldo do endereço sem o separado das outras (**C469**, **B1342**) —
+  a próxima. (5) **A planejada** continua com a guarda *"não serve mais"* (dado antigo, estoque que saiu do endereço depois — **B1333**).
 - **(199) A vírgula na tela e os espaços do termo, o que ficou de fora.** (1) No termo, a **tabulação** sai como 4 espaços (não como parada
   de coluna) e espaço largo/fino como espaço comum; os espaços onde a linha quebra ficam na quebra; espaço no fim de linha não aparece
   (**B1337**) — com isso, o papel de um texto com tabulação ainda não recalcula o código *SHA-256*: quem confere é o **Verificar
@@ -20277,6 +20350,21 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(200) Nenhum clique foi dado no navegador.** A etapa **não mudou a tela**: a mensagem nova aparece no aviso vermelho, com a janela de
+entrega aberta (lido no código da janela, não clicado). O que os testes provam, pela rota real (inclusive a rota de separação que a tela
+chama e o pedido de entrega que a janela monta) e pelo serviço: a recusa com a conta (singular, plural, *"já contando … desta entrega"*),
+outro endereço e outro lote, o item separado no automático, a precedência da mensagem de sempre, a fronteira (2 cabe, 2,000001 recusa), só
+caixa viva conta (excluída, cancelada antiga, a parte e não a caixa, o dado antigo sem quantidade), a origem do próprio item que não desconta
+(sem escolha, o mesmo endereço e lote que a tela manda, a origem sem lote), a própria requisição não é "outra", os itens da mesma entrega
+somando nas duas ordens, o automático e o só lote sem mudança, nada gravado na recusa, uma separação e uma entrega ao mesmo tempo (uma
+passa, 10 vezes, as duas ordens) e o caso do item ponta a ponta até as duas entregas. Controles positivos: cada regra com a sua sabotagem (no
+plano), todas derrubando o cenário delas. A revisão (Fase 5), um revisor fresco: **zero defeitos** e **três lacunas de teste** (vários itens,
+o saldo por lote, as séries — cada uma provada por sabotagem que passava verde), cobertas em `5bc921e4`. **Não verificado à mão:** o roteiro da
+seção da Etapa 200 (a mensagem no aviso, a janela continuando aberta e a troca de endereço na mesma janela). Vale 5 minutos. Suítes medidas:
+`entregaSaiDeRespeitaSeparado` **24/0**; `test:api` **587/587 arquivos** (depois da Fase 5); `test:almoxarifado` **44/0**; `test:validation` **4/0**;
+`test:safealter` **3/0**; `test:sqlite` **16/0** (estas quatro sobre `71783dc8`; a Fase 5 só mexeu em teste). Tela não rodada: `client/`
+intocado.
 
 **(199) Nenhum clique foi dado no navegador e nenhum PDF foi aberto num leitor.** O que os testes provam: a tela **Materiais de clientes**
 montada (jsdom, servidor de mentira) mostra *12,5*, *0,3*, *1.250,75*, *11,2*, a aplicação *OS OS-DEC — 2,5*, vazio como *0* e o rótulo
@@ -38357,12 +38445,91 @@ uma sequência longa de espaços, e o teste pelo PDF ganhou esse caso. Nenhum de
 - Outras telas do módulo que mostram quantidade continuam com o formato delas (vazio como *—*) (**B1336**).
 - **Nada a rodar antes do deploy.**
 
+## Etapa 200 — Entrega com "Sai de" escolhido à mão respeita o que outra requisição separou dali (2026-11-05)
+
+Há 6 peças no endereço *XB-01*, lote *L1*, e 9 em *XP-01*, lote *L2*. A requisição R1 separou 4 de *XB-01*. A R2 separou 4 sem dizer de onde
+(automático). Na **entrega** de R2, o almoxarife escolhia à mão **"Sai de: XB-01"** — e o sistema **aceitava**, tirando dali as peças que
+estavam na caixa de R1. Quem levava a culpa era R1: a entrega dela era recusada com *"… a origem da separação (XB-01) não serve mais …"*, uma
+recusa no pedido errado (**C468**). Agora a entrega de R2 é recusada **na hora**, com a conta à vista: quanto há em *XB-01*, quanto está
+separado dali para R1 e quanto sobra — e o conselho de escolher outro endereço ou o automático. É a etiqueta na caixa da prateleira de novo
+(a 198 a pôs na separação): agora a entrega também a lê. O **Sai de** que a janela já traz (de onde o próprio item foi separado) não muda. Só
+motor; a mensagem aparece com a janela de entrega aberta. Nada a rodar antes do deploy. Decisões do agente: **B1338** a **B1342**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Na entrega, escolher à mão no **Sai de** o endereço e lote de onde **outra** requisição separou era **aceito**; a outra é que tomava *"… não serve mais …"* na entrega dela | Recusada **na entrega de quem escolheu**, nada gravado, com a conta: quanto há, quanto está separado para outra requisição (o número) e quanto sobra (**B1338**, **B1339**) |
+| — | Escolhendo outro endereço (ou o automático) na mesma janela, a entrega passa; a outra requisição entrega pela origem dela |
+| Com séries escolhidas e o **Sai de** nesse endereço, a mesma brecha | A mesma recusa (**B1338**) |
+| O **Sai de** que a janela já traz (a origem da separação do item), o automático, o só lote | **Sem mudança** (**B1338**, **B1341**) |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**. Um material *PARAF-200* (nome *Parafuso 200*, unidade *PC*) com **Controle por lote**
+ligado e posição padrão *XP-01*. Em **Movimentações → Entrada**: 6 no lote *L1* em *XB-01*, com **Validade do lote** daqui a 5 dias; 9 no lote
+*L2* em *XP-01*, com validade daqui a 45 dias. Duas requisições de 4 *PARAF-200* cada (R1 e R2), aprovadas.
+
+**1. O caso do item: a entrega de R2 é recusada.** Em R1, **Iniciar Separação**: o **Sai de** vem em *XB-01 — lote L1 (6)*, quantidade *4* —
+**📦 Confirmar Separação**. Em R2, **Iniciar Separação**, troque o **Sai de** para *"Qualquer endereço (automático)"* e confirme. Em R2,
+**Entregar escolhendo de onde sai…**, escolha no **Sai de** *XB-01 — lote L1 (6)*, quantidade *4*, **✅ Confirmar Entrega** → aviso vermelho, a
+janela continua aberta e nada é gravado: *"Parafuso 200: em XB-01, lote L1 há 6 para esta entrega, mas 4 já está separado dali para outra
+requisição (⟨número de R1⟩); sobra 2, que não cobre a quantidade (4). Escolha outro endereço ou deixe "Qualquer endereço (automático)""*. Na
+mesma janela, troque o **Sai de** para *XP-01 — lote L2 (9)* → passa. Em R1, **Confirmar Entrega e Baixar Estoque** → passa (sai de *XB-01*).
+*XB-01/L1* fica com 2, *XP-01/L2* com 5.
+
+**2. O que sobra cabe.** No cenário 1, em vez de trocar de endereço, entregue R2 com *XB-01 — lote L1* e quantidade *2* → passa (os 2 que
+sobram); depois R1 entrega os 4 dela de *XB-01* → passa (*XB-01/L1* 0). Com *2,000001* → a recusa do cenário 1 com *"sobra 2, que não cobre a
+quantidade (2.000001)"*.
+
+**3. Quando o endereço sozinho já não cobre, vale a mensagem de sempre.** R2 de 7: entregar 7 de *XB-01 — lote L1* (há 6) → *"Parafuso 200: O
+saldo em XB-01 (6) não cobre a quantidade (7) — a saída tiraria de outros endereços"*.
+
+**4. Mais de uma requisição separada dali.** R1 e R3 separaram 2 cada de *XB-01/L1*; R2 entrega 4 de lá → *"… mas 4 já estão separados dali
+para outras requisições (⟨R1⟩, ⟨R3⟩); sobra 2, que não cobre a quantidade (4). …"* (na ordem em que as requisições foram criadas).
+
+**5. Dois itens na mesma entrega somam.** R2 com dois itens de *PARAF-200* (1 e 2), os dois separados no automático; na entrega, os dois com
+**Sai de** *XB-01 — lote L1* → *"Parafuso 200: em XB-01, lote L1 há 4 (já contando 2 desta entrega) para esta entrega, mas 4 já está separado
+dali para outra requisição (⟨R1⟩); sobra 0, que não cobre a quantidade (1). …"*. Com um item em *XP-01 — lote L2* e o outro (4) em *XB-01 —
+lote L1*, a recusa vem no segundo.
+
+**6. O que a janela já traz não muda.** A entrega de R1 com o **Sai de** que vem pré-escolhido (a origem da separação dela) não desconta nada
+de outra requisição. Só conta o que ainda está separado: se R1 foi **excluída**, R2 entrega de *XB-01* normalmente; se R1
+separou 3 de *XB-01/L1* e 3 no automático, só os 3 de *XB-01* contam.
+
+**7. Com séries.** Material com **Controle por série**: 6 séries no lote *L1* em *XB-01* e 9 no *L2* em *XP-01*; R1 separou 4 de *XB-01*; na
+entrega de R2, **Sai de** *XB-01* com 4 séries do *L1* → a mesma recusa.
+
+**8. O automático e o só lote não mudam.** Entregar R2 em *"Qualquer endereço (automático)"* → passa (sai do que não está separado: 2 de *L1*
+e 2 de *L2*). Com só o lote *L1* escolhido, sem endereço, também passa — é o aviso **C471**.
+
+**A revisão (Fase 5)**, um revisor fresco: **zero defeitos**; **três lacunas de teste**, cada uma provada por uma sabotagem que passava verde
+— a conferência parando no primeiro item sem separado de outras (vários itens), o saldo do endereço lido somando todos os lotes, e a entrega
+com séries ficando de fora — cobertas em `5bc921e4`.
+
+### O que esta etapa NÃO cobre
+
+- O mesmo endereço da origem do item, com quantidade **acima** da parte dele, ainda tira o excesso do separado das outras (**C470**).
+- A entrega com **só o lote** escolhido (**C471**) e a parte de **outro item da mesma requisição** (**C472**).
+- O **Sai de** das janelas de separação e de entrega mostra o saldo do endereço sem descontar o separado das outras; a mensagem diz a conta
+  (**C469** — a próxima).
+- **Nada a rodar antes do deploy.**
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 200 entregue (2026-11-05):** **a entrega com "Sai de" escolhido à mão respeita o que outra requisição separou dali** (**C468**
+  resolvido no "Sai de" de outro endereço). A entrega desconta a parte separada das outras requisições só quando o endereço escolhido não é a
+  origem do próprio item (**B1338**), com mensagem própria (**B1339**); os itens da mesma entrega somam (**B1340**); automático, planejada e
+  só lote não mudam (**B1341**); sem tela (**B1342**). Revisão: três lacunas de teste cobertas, nenhum defeito. Commits `fd1daad2` (plano),
+  `e22db079` (Fase 2), `d7ff9a39` (T1), `943a486e` (T2), `71783dc8` (T3), `52ae600e` (execução), `5bc921e4` (Fase 5) e o fechamento. **O que
+  é seu:** as decisões **B1338** a **B1342** (reversíveis); os avisos **C470**, **C471** e **C472**; as limitações **(200)** em D e a
+  verificação **(200)** em F. **Próxima:** *Separação — o local mostra quanto realmente sobra* (**C469**), item 2 do 2º pacote da estimativa
+  de 05/11 — detalhada no fim do plano da 200.
 
 - **Etapa 199 entregue (2026-11-05):** **Materiais de clientes com vírgula, e o termo de ferramenta com os espaços do texto** (**C448** e
   **C447** resolvidos). A tela usa a conta do papel (**B1336**); o termo imprime recuo e espaços como escritos, tabulação como 4 espaços
