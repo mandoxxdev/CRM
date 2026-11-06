@@ -63,11 +63,11 @@ process.on('exit', (code) => {
   };
   const B01 = await loc('XB-01'); const P01 = await loc('XP-01');
 
-  const material = async () => {
+  const material = async ({ lote = 1 } = {}) => {
     const c = `E201-${++seq}`;
     const id = (await dbRun(db, `INSERT INTO materiais_almoxarifado (codigo, nome, unidade, quantidade_atual, quantidade_minima, ativo,
-        material_critico, custo_unitario, controle_lote, localizacao_padrao_id) VALUES (?, ?, 'PC', 0, 0, 1, 0, 0.1, 1, ?)`,
-    [c, c, P01.id])).lastID;
+        material_critico, custo_unitario, controle_lote, localizacao_padrao_id) VALUES (?, ?, 'PC', 0, 0, 1, 0, 0.1, ?, ?)`,
+    [c, c, lote, P01.id])).lastID;
     return { id, nome: c };
   };
   const entrar = async (m, destino, q, lote) => {
@@ -228,6 +228,21 @@ process.on('exit', (code) => {
     const r1 = await req([[m.id, 4]]); const r2 = await req([[m.id, 4]]);
     await caixa(r1.ids[0], { sep: 4, origem: B01.id, lote: L1, parte: 4 });
     assert.deepStrictEqual(par(await saldos(m, `?requisicao_id=${r2.R}`), B01.id, L1), [2, 4, 0]);
+  });
+
+  // Fase 5 (item 1): o filtro de material da regua agrupada. Sem lote dos dois lados, o par (XB-01, NULL) e o MESMO para os dois
+  // materiais — so `ir.material_id = ?` separa o que R1 guardou de A do que a linha de B mostra.
+  await test('[RN-201.03 outro material] A e B sem lote em XB-01; R1 separa A dali -> a linha de B diz separado_outras 0', async () => {
+    const A = await material({ lote: 0 }); const B = await material({ lote: 0 });
+    await entrar(A, B01.id, 6); await entrar(A, P01.id, 9); await entrar(B, B01.id, 5);
+    const r1 = await req([[A.id, 4]]); const r2 = await req([[B.id, 2]]);
+    await sepOk(r1.R, [doPar(r1.ids[0], 4, null)]);
+    const rowsB = await saldos(B, `?requisicao_id=${r2.R}`);
+    assert.deepStrictEqual(par(rowsB, B01.id, null), [5, 0, 5]);
+    const rowsA = await saldos(A, `?requisicao_id=${r2.R}`);
+    assert.deepStrictEqual(par(rowsA, B01.id, null), [6, 4, 2], 'premissa: R1 guardou 4 de A em XB-01 sem lote');
+    await equivalente(A, rowsA, r2.R);
+    await equivalente(B, rowsB, r2.R);
   });
 
   // ---------------------------------------------------------------- RN-201.04
