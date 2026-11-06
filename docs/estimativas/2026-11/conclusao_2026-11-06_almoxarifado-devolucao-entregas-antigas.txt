@@ -1,0 +1,8 @@
+*Concluído — Almoxarifado: devolução acha entregas antigas*
+_06/11/2026_
+
+5. Devolução: encontrar entregas antigas — estimado 2h30 · realizado 2h15
+
+*Total: estimado 2h30 · realizado 2h15*
+
+Na tela Devoluções, a lista de entregas do material continua mostrando as 30 mais recentes, e ganhou o botão "Carregar entregas mais antigas", que traz as 30 anteriores a cada clique. Assim dá para devolver uma peça de uma entrega antiga com o vínculo e o lote certos, sem precisar fazer uma devolução avulsa.
