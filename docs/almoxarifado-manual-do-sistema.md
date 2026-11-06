@@ -382,7 +382,7 @@ O bloco **Controles** tem sete opções. Ligar uma delas muda o comportamento do
 
 | Opção | O que passa a exigir na prática |
 |---|---|
-| **Controle por lote** | Toda entrada, saída e transferência feita pelas telas que têm campo de lote passa a **exigir o lote informado**. Sem ele, a operação é recusada com *"O material CHP-001 exige lote nesta movimentacao (controle por lote ligado)"*. Nas telas: Movimentações, o modal rápido de entrada/saída da tela de Materiais, Recebimentos, Transferências e Devoluções para estoque ou quarentena. |
+| **Controle por lote** | Toda entrada, saída e transferência feita pelas telas que têm campo de lote passa a **exigir o lote informado**. Sem ele, a operação é recusada com *"O material CHP-001 exige lote nesta movimentacao (controle por lote ligado)"*. Nas telas: Movimentações, o modal rápido de entrada/saída da tela de Materiais, Recebimentos, Transferências e Devoluções para estoque ou quarentena. O modal rápido não tem campo de lote, então nele o material com controle por lote é sempre recusado — use a tela Movimentações; uma integração que chama a mesma porta informando o lote é aceita (ver 4.3). |
 | **Controle por número de série** | Cada unidade passa a ter identidade própria. Na **entrada**, é preciso informar **um número de série por unidade** — 5 unidades exigem 5 números. Na **saída**, é preciso **escolher quais séries** saem. O próprio formulário avisa: *"Exigirá um número de série por unidade na entrada e na saída"*. Duas recusas típicas: *"material com controle de serie exige quantidade inteira"* (não existe meia unidade serializada) e *"material com controle de serie: informe 5 serie(s) para 5 unidade(s) — recebidas 3"*. |
 | **Requer certificado** | No recebimento, o lote **nasce bloqueado**, com o motivo *"Certificado do fornecedor nao anexado"*. Atenção ao que isso significa: **o material entra normalmente no estoque físico** — o que fica travado é a **saída**, até que alguém anexe o certificado na tela Lotes e Séries (ver 4.6). Como a trava vive no lote, ela depende de haver lote: ligue esta opção **junto com Controle por lote**, senão um recebimento sem lote informado entra sem bloqueio nenhum. |
 | **Requer inspeção** | Registro de cadastro. Quem determina a retenção para inspeção no recebimento é a marcação **Material crítico** (bloco Classificação), não esta opção. |
@@ -825,6 +825,14 @@ A própria tela avisa: *"Isto não 'desvence' o lote — ele continua vencido. S
 E, como situação vem antes de validade: um lote **bloqueado e vencido** não é resolvido pela liberação de vencimento — ele continua recusado, com a mensagem de bloqueio. Primeiro resolve-se a situação.
 
 Recusas da liberação: *"justificativa obrigatoria para liberar o vencimento do lote"* e, se o lote não estiver vencido, *"Lote nao esta vencido; nao ha vencimento para liberar"*.
+
+**As mesmas regras valem para quem movimenta pela integração, por qualquer das duas portas.** Além da movimentação da tela **Movimentações**, existe a movimentação rápida (a do modal de entrada/saída da tela de **Materiais**), que integrações também chamam. O modal não tem campo de lote; quem chama essa porta por integração pode informar o lote (pelo código ou pelo número) e a validade, e recebe exatamente as mesmas respostas da tela Movimentações:
+
+- uma saída citando um lote **vencido** e sem liberação é recusada com a mensagem acima; citando um lote **bom**, a peça sai **daquele lote** — e a parte *"Sem lote atribuído"* não muda;
+- lote inexistente: *"Lote nao encontrado para este material: ⟨código⟩"* (pelo número: *"Lote nao encontrado"*); lote de outro material: *"O lote informado pertence a outro material"*; lote bloqueado ou reprovado: a mensagem de situação acima; mais do que o lote tem: *"Saldo insuficiente no lote ⟨código⟩. Disponível: ⟨n⟩ ⟨unidade⟩"*;
+- uma entrada (ou devolução) com um lote que ainda não existe cria o lote, com a validade informada; as regras da validade são as da seção 4.3b;
+- o lote vazio, só com espaços ou nulo conta como "sem lote"; o número do lote que não é um inteiro positivo, ou o código que não é texto, é recusado com *"Dados inválidos — lote_id: …"* / *"Dados inválidos — lote: …"*;
+- o **Ajuste** por essa porta não leva o lote: ele ajusta o total do material, sem mexer na divisão por lote.
 
 ### 4.3b A validade digitada numa Entrada
 

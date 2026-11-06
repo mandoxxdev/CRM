@@ -1,25 +1,31 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-11-05 (Etapas 172 a 191, 194 a 201) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-11-06 (Etapas 172 a 191, 194 a 202) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200 e 201) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201 e 202) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-05 (Etapas 172 a 178, 180 a 191, 194 a 201 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-06 (Etapas 172 a 178, 180 a 191, 194 a 202 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
-> **O desenvolvimento parou aqui: Etapa 201 fechada — 2026-11-05.** **O "Sai de" mostra o que sobra depois do separado para outras
+> **O desenvolvimento parou aqui: Etapa 202 fechada — 2026-11-06.** **A movimentação antiga respeita o lote informado.** Um sistema de fora
+> que lançava pela movimentação antiga (a mesma do modal rápido da tela Materiais) "tire 1 do lote *LV*", com o *LV* vencido, recebia OK: a
+> peça saía sem lote e o relatório *Saldo por lote* ficava com *"Sem lote atribuído"* negativo. Agora a recusa é a mesma da tela
+> **Movimentações**, e o lote bom sai do lote. Só servidor; a tela não muda; nada a rodar antes do deploy. **Nenhuma chamada à mão foi feita**
+> (só testes — roteiro na seção da 202 e letra F das novidades).
+>
+> **Onde parou, exatamente:** a **202 está fechada** (código, testes e documentos commitados). A **próxima** é o item 4 do 2º pacote da
+> estimativa de 05/11 (`docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas-2.txt`): **"Requisição excluída deixa de guardar o
+> local separado"** (**C467**). Só a tarefa detalhada no fim do plano da 202
+> (`docs/superpowers/plans/2026-11-05-almoxarifado-etapa202-rota-antiga-respeita-o-lote.md`) e a estimativa existem, nenhum plano nem código.
+>
+> **Etapa 201, 2026-11-05.** **O "Sai de" mostra o que sobra depois do separado para outras
 > requisições.** Na janela de separação e na de entrega, o endereço de onde outra requisição já separou aparecia com o saldo cheio
 > (*"XB-01 — lote L1 (6)"*), e a pessoa só descobria ao confirmar. Agora a lista diz *"XB-01 — lote L1 (sobra 2 de 6; 4 para outras)"*; na
 > separação, o que a própria requisição já separou dali também entra (*"…, 1 desta)"*). Separar tudo o que sobra não pede mais motivo de
 > divergência. Tela e uma leitura nova no servidor; nada a rodar antes do deploy. **Nenhum clique foi dado no navegador** (só testes —
 > roteiro na seção da 201 e letra F das novidades).
 >
-> **Onde parou, exatamente:** a **201 está fechada** (código, testes e documentos commitados). A **próxima** é o item 3 do 2º pacote da
-> estimativa de 05/11 (`docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas-2.txt`): **"Movimentação por integração respeita
-> o lote informado"** (**C458** — a movimentação antiga, a do modal rápido da tela de Materiais e de integrações, não repassa o lote ao
-> estoque). Só a tarefa detalhada no fim do plano da 201
-> (`docs/superpowers/plans/2026-11-05-almoxarifado-etapa201-sai-de-mostra-o-que-sobra.md`, com a rota, o motor, a rota nova a imitar e quem
-> chama) e a estimativa existem, nenhum plano nem código.
+> *(Depois da 201 veio a 202 — "Movimentação por integração respeita o lote informado", **C458** — entregue em 06/11, acima.)*
 >
 > **Etapa 200, 2026-11-05.** **A entrega com "Sai de" escolhido à mão respeita o que outra
 > requisição separou dali.** Na janela de entrega, escolher à mão o endereço de onde **outra** requisição separou era aceito — e a outra é que
@@ -7056,6 +7062,48 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 202 — A movimentação antiga respeita o lote informado (ENTREGUE — 2026-11-06)
+
+**O que mudou, em uma frase:** quem lança uma movimentação pela porta antiga (a do modal rápido da tela **Materiais**, que as integrações
+também usam) citando um lote recebe a mesma resposta da tela **Movimentações** — lote vencido é recusado, lote bom sai do lote.
+
+**O problema que ela resolve.** Um sistema de fora mandava "tire 1 peça do lote *LV*", e o *LV* estava vencido. A porta antiga ignorava o lote:
+aceitava, tirava a peça "de lugar nenhum", e o relatório *Saldo por lote* ficava com *"Sem lote atribuído"* em −1 enquanto o *LV* continuava
+dizendo 5. É como a nota de saída que diz de qual caixa a peça saiu — antes a caixa era ignorada e a conta das caixas não fechava.
+
+| Antes | Agora |
+|---|---|
+| Saída citando o lote vencido *LV*: aceita, sem lote | Recusada: *"Lote LV vencido em 2020-01-01 nao pode sair para consumo. …"* |
+| Saída citando o lote bom *LB*: saía sem lote | Sai do *LB*; *"Sem lote atribuído"* não muda |
+| Lote inexistente, de outro material, bloqueado ou sem saldo: aceita, sem lote | Recusada, com a mensagem da tela Movimentações |
+| Entrada citando lote novo e validade: entrava sem lote | Cria o lote com a validade |
+| Ajuste citando lote | **Igual:** sem lote |
+| O modal rápido da tela Materiais | **Igual** |
+
+**Antes de testar (uma vez).** Um usuário **Administrador do almoxarifado** e um cliente HTTP (por exemplo *Postman*) com o token dele. Um
+material *PARAF-202* **sem** controle de lote. Em **Movimentações → Entrada**: 5 no lote *LV* com **Validade do lote** *01/01/2020* (a tela
+avisa que entrou vencido), 5 no lote *LB* com validade *31/12/2099* e 3 sem lote. Anote o número do material.
+
+**Roteiro de teste (5 minutos).**
+
+1. Chame `POST /api/almoxarifado/movimentacoes` com `{ "material_id": ⟨número⟩, "tipo": "SAIDA", "quantidade": 1, "motivo": "consumo",
+   "lote": "LV" }` → recusa: *"Lote LV vencido em 2020-01-01 nao pode sair para consumo. Libere o vencimento do lote (PUT
+   /api/almoxarifado/lotes/:id/liberar-vencimento) com justificativa, ou baixe por SUCATA/PERDA ou corrija por AJUSTE."*.
+2. **Relatórios → Saldo por lote**: *LV* 5, *LB* 5, *"Sem lote atribuído"* 3 — nada mudou.
+3. Repita o passo 1 com `"lote": "LB"` → OK. **Saldo por lote**: *LB* 4; *"Sem lote atribuído"* continua 3.
+4. Com `"lote": "NAOEXISTE"` → *"Lote nao encontrado para este material: NAOEXISTE"*. Com `"lote_id": "12"` (texto) → *"Dados inválidos —
+   lote_id: Invalid input: expected number, received string"*.
+5. Entrada com `{ "tipo": "ENTRADA", "quantidade": 2, "lote": "LN", "data_validade": "2027-03-31" }` → OK; em **Lotes e Séries**, *LN* com
+   validade *31/03/2027*.
+6. Em **Lotes e Séries**, **Liberar vencimento** do *LV* com justificativa; repita o passo 1 → OK; *Saldo por lote*: *LV* 4.
+7. Em **Materiais**, o modal rápido de saída de *PARAF-202* continua funcionando como antes (sem lote).
+
+**O que esta etapa não cobre.** O Ajuste pela porta antiga continua sem lote (o Ajuste com lote da tela nova deixa o lote negativo — aviso
+**C475** das novidades). Endereço, séries e reserva continuam fora dessa porta; material com **Controle por série** continua recusado nela. O
+modal rápido não ganhou campo de lote. **Nada a rodar antes do deploy.**
+
+*Nenhuma chamada à mão foi feita nesta etapa*: o roteiro acima é o que os testes automáticos provam pela rota real — escrito para você conferir.
 
 ## Etapa 201 — O "Sai de" mostra o que sobra depois do separado para outras requisições (ENTREGUE — 2026-11-05)
 

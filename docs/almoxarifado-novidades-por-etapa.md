@@ -11,7 +11,13 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-05):** **Etapa 201 fechada** (**o "Sai de" mostra o que sobra depois do separado para outras
+> **Onde o desenvolvimento está (2026-11-06):** **Etapa 202 fechada** (**a movimentação antiga respeita o lote informado** — um sistema de
+> fora que pedia "tire 1 do lote *LV*" (vencido) pela movimentação antiga recebia 201, a peça saía sem lote e *"Sem lote atribuído"* ficava
+> negativo. Agora a recusa é a mesma da tela **Movimentações**, e o lote bom sai do lote. **C458** resolvido; só servidor; nada a rodar antes
+> do deploy; decisões **B1350** a **B1357**; **C474** (resolvido na etapa) e **C475** (Ajuste com lote, anterior); limitações **D (202)**;
+> verificação **F (202)**). **Próxima: Requisição excluída deixa de guardar o local separado** (**C467**, item 4 do 2º pacote da estimativa
+> de 05/11); detalhada no fim do plano da 202.
+> *(Antes, 2026-11-05:)* **Etapa 201 fechada** (**o "Sai de" mostra o que sobra depois do separado para outras
 > requisições** — há 6 peças em *XB-01* (lote *L1*); R1 separou 4 de lá; quem abria a separação de R2 via *"XB-01 — lote L1 (6)"*, digitava 4
 > e só ao confirmar descobria que não podia. Agora a lista diz *"XB-01 — lote L1 (sobra 2 de 6; 4 para outras)"* — na janela de separação e na
 > de entrega; na separação, o que **esta** requisição já separou dali também entra (*"…, 1 desta)"*), e o número da lista é o número da
@@ -4430,7 +4436,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -13833,6 +13839,46 @@ requisição sai junto, não é descontado). **Descartado:** *"(sobra 5 de 6; 0 
 no celular); deixar como estava (o número da lista e o da recusa não batiam justo para quem já separou dali). **Reversível:** só texto.
 `ab1d6246` (teste `298a3d72`).
 
+**B1350 (NOVA, da Etapa 202, com a Fase 2; decisão do agente) — a movimentação antiga repassa o lote, não o recusa.** A movimentação antiga
+(a do modal rápido da tela de **Materiais**, e a que as integrações chamam) passa a levar `lote`, `lote_id` e `data_validade` ao estoque. Para
+quem chama de fora: a saída que cita um lote inexistente, de outro material, bloqueado, vencido ou sem saldo nele — que respondia 201 e saía
+"sem lote" — passa a 400 com a mesma mensagem da tela **Movimentações**. Também passam a 400: lote/lote_id com o tipo errado e a validade em
+formato errado, fora de entrada, sem lote ou em conflito com a validade de um lote com saldo (as regras da Etapa 190). É a correção, não
+quebra. **Descartado:** recusar com *"use a movimentação nova"* sempre que viesse lote (quebraria a integração que manda um lote **bom** e
+recebe 201); continuar ignorando em silêncio (é o **C458**). **Reversível:** uma linha da rota. `00ec247e`.
+
+**B1351 (NOVA, da Etapa 202; decisão do agente) — a forma do lote é julgada pela régua da movimentação nova, só nas duas chaves.** *"lote_id"*
+em texto, zero ou fracionário e *"lote"* que não é texto recebem as mesmas mensagens da movimentação nova (ex.: *"Dados inválidos — lote_id:
+Invalid input: expected number, received string"*). Essa conferência vem **depois** das de tipo e de motivo, que não mudam. **Descartado:**
+aplicar a régua inteira da movimentação nova (mudaria as recusas de quantidade, material e tipo que o modal e as integrações já conhecem).
+**Reversível.** `00ec247e`.
+
+**B1352 (NOVA, da Etapa 202, com a Fase 2; decisão do agente) — vazio é sem lote.** `null`, texto vazio e lote só de espaços contam como "sem
+lote" (e o livro grava sem lote, nunca os espaços). Quem hoje serializa campo vazio como `null` continua recebendo 201. **Descartado:** recusar
+`null` como a movimentação nova (quebraria quem já manda, sem ganho de estoque). **Reversível.** `00ec247e`.
+
+**B1353 (NOVA, da Etapa 202; decisão do agente) — a entrada (e a devolução) com lote novo cria o lote**, como a tela **Movimentações**.
+**Descartado:** só aceitar lote existente nessa porta (regra que a tela não tem; a integração que dá entrada de um lote novo cairia de novo no
+"sem lote"). **Reversível.** `00ec247e`.
+
+**B1354 (NOVA, da Etapa 202; decisão do agente) — a validade vai junto.** O lote criado por essa porta nasce com a validade informada; sem ela,
+nasceria sem validade (o **C450** de novo, por outra porta). **Reversível.** `00ec247e`.
+
+**B1355 (NOVA, da Etapa 202; decisão do agente) — endereço, séries e reserva ficam de fora.** Essa porta continua sem endereço de origem/
+destino, séries, reserva e custo. A saída com lote sem endereço tira do conjunto das linhas do lote. Material com **Controle por série**
+continua recusado nela. **Reversível:** é escopo.
+
+**B1356 (NOVA, da Etapa 202, mudada na Fase 2; decisão do agente) — a resposta 201 tem as mesmas chaves de antes e o aviso de validade quando
+há.** As nove chaves de sempre e, só quando o estoque avisa (lote que não tinha validade e ganhou; lote que entrou já vencido), a chave
+`aviso_validade` com o texto da tela (*"O lote LV entrou já vencido (validade 01/01/2020). A saída para consumo fica bloqueada até liberar o
+vencimento na tela de Lotes e Séries."*). **Descartado:** devolver também o lote gravado (o estoque não o devolve; teria de ler o livro, sem
+leitor). **Reversível.** `00ec247e`.
+
+**B1357 (NOVA, da Etapa 202, Fase 2; decisão do agente) — o Ajuste por essa porta continua sem lote.** O Ajuste com lote, medido pela tela
+**Movimentações** (o mesmo estoque), deixa a linha do lote negativa (**C475**). Para não abrir esse defeito por mais uma porta, a movimentação
+antiga **não** leva o lote no Ajuste: fica igual a antes da etapa. **Descartado:** levar também no Ajuste (abriria o **C475** por aqui);
+recusar o Ajuste com lote (mudaria a resposta de quem já chama). **Reversível:** uma condição da rota. `00ec247e`.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -17619,6 +17665,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      integração direto — o modal da tela de Materiais **não** manda lote. **O que fazer:** integrações que movimentam por lote usam a
      movimentação nova; a parte *sem lote* negativa aparece em **Lotes e Séries** (*"Sem lote atribuído"*) e no relatório *Saldo por lote*.
      Não consertado na 191 (porta antiga, fora do escopo).
+     *(**Resolvido na Etapa 202** — `00ec247e`: a movimentação antiga leva o lote ao estoque; a saída citando *LV* vencido é recusada com a
+     mesma mensagem da tela **Movimentações**, e a citando um lote bom sai do lote — **B1350** a **B1357**. O Ajuste por essa porta continua
+     sem lote, **C475**.)*
 460. **NOVO (da Etapa 194, revisão do plano; o comportamento é anterior, da Etapa 190) — lote antigo com a validade em branco recusa a
      Entrada manual com a data, dizendo uma data vazia.** Um lote gravado com a validade **em branco** (texto vazio, não ausente — só
      cadastro antigo; a revisão adversarial da 191 achou um) é tratado pela Entrada manual como se já tivesse validade: uma Entrada nesse
@@ -17731,6 +17780,17 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      sobra 0). **Nenhum erro de estoque:** quem decide é a recusa na hora de confirmar (*"… sobra 0, que não cobre a quantidade (2) …"*), que
      lê o momento. **O que fazer:** se a recusa disser um número diferente do da lista, fechar e reabrir a janela — a lista e a sugestão vêm
      atualizadas. Conserto (se valer): reler a lista ao receber a recusa — ~30 min, só tela.
+474. **NOVO (da Etapa 202, revisão do plano) — o número do material em texto dava "o lote pertence a outro material".** Pela movimentação
+     antiga e pela transferência (que não exigem número no material), mandar o material como texto (*"7"*) com o lote do próprio material 7
+     respondia *"O lote informado pertence a outro material"* — mensagem errada, nada gravado. **Resolvido na própria Etapa 202**
+     (`00ec247e`): a comparação passou a ser por número; o lote de **outro** material continua recusado.
+475. **NOVO (da Etapa 202, revisão do plano; o comportamento é anterior, desde a Etapa 6) — o Ajuste com lote deixa a linha do lote
+     negativa.** Pela movimentação nova (a da tela **Movimentações**, chamada por integração), um Ajuste que cita o lote baixa a diferença
+     da linha do lote mesmo sem saldo nela. Medido: lote *LB* com 5 e 3 sem lote (físico 8), Ajuste para 1 citando *LB* → 201, físico 1, e o relatório *Saldo por
+     lote* mostra *LB* com **−2** e *"Sem lote atribuído"* com 3. **Nenhuma peça some** (o físico está certo); a divisão por lote fica errada.
+     **Quem alcança:** só a integração — a tela **Movimentações** não mostra o campo de lote no Ajuste. **O que fazer:** ajustar sem citar o
+     lote. A movimentação antiga
+     **não** leva o lote no Ajuste (**B1357**). Conserto (se valer): o Ajuste com lote limitar a baixa ao saldo do lote — ~1h30, motor.
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -19084,6 +19144,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(202) A movimentação antiga com lote, o que ficou de fora.** (1) **O Ajuste** por essa porta continua sem lote (**B1357**; o defeito do
+  Ajuste com lote na movimentação nova é o **C475**). (2) **Endereço, séries, reserva e custo** continuam fora dessa porta; material com
+  **Controle por série** continua recusado nela (**B1355**). (3) A resposta 201 não diz de qual lote saiu (**B1356**) — está no livro.
+  (4) O **modal rápido** da tela de Materiais não ganhou campo de lote: quem cita lote é a integração; o material com **Controle por lote**
+  continua recusado no modal.
 - **(201) O "Sai de" com a sobra, o que ficou de fora.** (1) O número é o de **quando a janela abriu** (**C473**). (2) Na **entrega**, o rótulo
   não desconta o separado da própria requisição (sai junto) e não há teto por endereço na janela — a recusa da entrega continua decidindo
   (**B1349**). (3) O campo de **quantidade** da separação não é limitado pela sobra (**B1346**). (4) O **"Saldo:"** do cabeçalho de cada item
@@ -20420,6 +20485,15 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(202) Nenhum clique e nenhuma chamada à mão.** A etapa **não mudou a tela**: só a movimentação antiga no servidor e uma comparação do
+estoque (**C474**). O que os testes provam, pela rota real: a saída citando lote vencido recusada (por número e por código) sem gravar nada; a
+citando lote bom saindo **do lote** (o livro com o lote, a linha sem lote igual); as recusas de lote e de validade chegando com a mesma
+mensagem da movimentação nova (paridade, 11 corpos); `null`, vazio e espaços como sem lote; a ordem das recusas (tipo e motivo antes da forma
+do lote); o material com controle por lote (sem lote recusa, com lote passa); o lote novo nascendo com a validade; as chaves da resposta e o
+aviso de validade; o Ajuste sem lote; e o caminho inteiro (entrada vencida → recusa → liberar vencimento → saída do lote → relatório *Saldo
+por lote* → estorno de volta ao lote). Controles positivos: cada regra com a sua sabotagem (no plano). **Não verificado à mão:** o roteiro da
+seção da Etapa 202 (uma chamada com um cliente HTTP). Suítes medidas: sobre `6aed6213`: `movimentacaoV1Lote` **37/0**; `movimentacaoV1LoteIntegracao` **14/0**; `test:api` **589/590 arquivos** (o que caiu, `superPadraoNoBoot`, com `SQLITE_READONLY` no boot de usuários, nada desta etapa; isolado **14/0**); `test:almoxarifado` **44/0**; `test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0**. Jest da tela e build não rodados (a etapa não toca `client/`).
 
 **(201) Nenhum clique foi dado no navegador.** A etapa **mudou a tela** (o rótulo do **Sai de** nas janelas de separação e de entrega, o
 aviso de divergência e a pré-seleção da separação), mas só foi vista pela janela montada nos testes (jsdom, servidor de mentira na fronteira
@@ -38668,12 +38742,90 @@ desta requisição contada como caixa inteira ou somando outro material (`298a3d
 - Ficam os avisos da entrega **C470**, **C471** e **C472**.
 - **Nada a rodar antes do deploy.**
 
+## Etapa 202 — A movimentação antiga respeita o lote informado (2026-11-06)
+
+Um sistema de fora lança uma saída no almoxarifado dizendo "tire 1 peça do lote *LV*". O lote *LV* está vencido. Até aqui o pedido passava: a
+movimentação antiga (a mesma do modal rápido de entrada/saída da tela **Materiais**) **ignorava** o lote, tirava a peça "de lugar nenhum", e o
+relatório *Saldo por lote* ficava com *"Sem lote atribuído"* em −1 enquanto *LV* continuava dizendo 5. A tela **Movimentações** já recusava.
+Agora a movimentação antiga dá a **mesma** recusa — e, se o lote estiver bom, a peça sai **do lote** citado. É como a nota de saída que diz
+de qual caixa a peça saiu: antes a caixa era ignorada e a conta das caixas não fechava. Só servidor; a tela não muda. Nada a rodar antes do
+deploy. Decisões do agente: **B1350** a **B1357**. **C458** resolvido; **C474** aberto e resolvido na própria etapa; **C475** registrado.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Saída pela movimentação antiga citando o lote vencido *LV*: aceita, saía sem lote, *"Sem lote atribuído"* −1 | Recusada: *"Lote LV vencido em 2020-01-01 nao pode sair para consumo. …"* (a da tela Movimentações) — **B1350** |
+| Saída citando um lote bom *LB*: saía sem lote (o *LB* não baixava) | Sai do *LB*; o livro grava o lote; a linha sem lote não muda |
+| Lote inexistente, de outro material, bloqueado ou sem saldo: aceita, sem lote | Recusada com a mensagem da tela Movimentações |
+| Entrada citando um lote novo com validade: entrava sem lote | Cria o lote com a validade (**B1353**, **B1354**) |
+| Material com **Controle por lote**: sempre recusado nessa porta | Recusado só se não citar o lote |
+| Material como texto (*"7"*) com o lote dele: *"O lote informado pertence a outro material"* | Aceito (**C474**) |
+| Ajuste citando lote | **Igual:** sai sem lote (**B1357**, **C475**) |
+| O modal rápido da tela Materiais (não manda lote) | **Igual** |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado** e um cliente HTTP (ex.: o do próprio navegador, ou *Postman*) com o token dele, chamando
+`POST /api/almoxarifado/movimentacoes`. Um material *PARAF-202* **sem** controle de lote. Em **Movimentações → Entrada**: 5 no lote *LV* com
+**Validade do lote** *01/01/2020* (aviso de lote já vencido), 5 no lote *LB* com validade *31/12/2099* e 3 sem lote.
+
+**1. Lote vencido é recusado.** Corpo `{ "material_id": ⟨id⟩, "tipo": "SAIDA", "quantidade": 1, "motivo": "consumo", "lote": "LV" }` → 400
+*"Lote LV vencido em 2020-01-01 nao pode sair para consumo. Libere o vencimento do lote (PUT /api/almoxarifado/lotes/:id/liberar-vencimento)
+com justificativa, ou baixe por SUCATA/PERDA ou corrija por AJUSTE."*. Nada muda no *Saldo por lote*.
+
+**2. Lote bom sai do lote.** O mesmo corpo com `"lote": "LB"` → 201. *Saldo por lote*: *LB* 4, *LV* 5, *"Sem lote atribuído"* 3.
+
+**3. As outras recusas de lote.** `"lote": "NAOEXISTE"` → *"Lote nao encontrado para este material: NAOEXISTE"*; `"lote_id": 99999999` →
+*"Lote nao encontrado"*; o `lote_id` de um lote de outro material → *"O lote informado pertence a outro material"*; lote bloqueado em **Lotes e
+Séries** → *"Lote LB esta bloqueado e nao pode ser utilizado"*; `"quantidade": 6` com *LB* (5) → *"Saldo insuficiente no lote LB. Disponível:
+5 UN"*. Todas 400, nada gravado.
+
+**4. A forma do lote.** `"lote_id": "12"` → *"Dados inválidos — lote_id: Invalid input: expected number, received string"*; `"lote_id": 0` →
+*"Dados inválidos — lote_id: Too small: expected number to be >0"*; `"lote": 5` → *"Dados inválidos — lote: Invalid input: expected string,
+received number"*. `"lote": null`, `""` ou `"   "` → sem lote, como antes (201).
+
+**5. A validade.** Entrada com `"lote": "LN", "data_validade": "2027-03-31"` → 201 e o lote *LN* nasce com a validade *31/03/2027*. Com
+`"data_validade": "31/03/2027"` → *"A validade do lote deve ser uma data no formato AAAA-MM-DD (ex.: 2027-03-31)."*; numa saída → *"A validade
+do lote só pode ser informada numa entrada — numa saída, transferência ou ajuste o lote já existe e a validade é a dele."*; sem lote →
+*"Informe o lote para gravar a validade — a validade é do lote."*. Entrada de um lote já vencido: a resposta 201 traz `aviso_validade`.
+
+**6. Liberar e sair.** Em **Lotes e Séries**, **Liberar vencimento** do *LV* com justificativa; repita o corpo do cenário 1 → 201, *LV* 4 no
+*Saldo por lote*. Na lista de **Movimentações**, o botão de estorno da linha dessa saída (com motivo) devolve ao *LV* (5).
+
+**7. O Ajuste continua sem lote.** `{ "tipo": "AJUSTE", "quantidade": 12, "motivo": "contagem", "lote_id": ⟨LB⟩ }` → 201, sem lote (como antes
+da etapa — **B1357**).
+
+**8. O modal rápido não muda.** Em **Materiais**, o modal de entrada/saída dá o mesmo resultado de antes; material com **Controle por lote**
+continua recusado: *"O material ⟨código⟩ exige lote nesta movimentacao (controle por lote ligado)"*.
+
+**A revisão do plano (Fase 2)**, um revisor fresco: o Ajuste com lote deixa a linha do lote negativa no estoque (**C475**) — por isso a porta
+antiga não leva o lote no Ajuste (**B1357**); a lista de recusas novas incluía as de validade (**B1350**); a resposta passou a ecoar o aviso
+de validade (**B1356**); lote só de espaços grava sem lote (**B1352**); e o **C474** foi consertado aqui.
+
+### O que esta etapa NÃO cobre
+
+- O Ajuste com lote (**C475**, **B1357**).
+- Endereço, séries, reserva e custo pela movimentação antiga (**B1355**); a resposta não diz de qual lote saiu (está no livro).
+- O modal rápido da tela de Materiais continua sem campo de lote.
+- **Nada a rodar antes do deploy.**
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 202 entregue (2026-11-06):** **a movimentação antiga respeita o lote informado** (**C458** resolvido). Ela repassa lote, lote_id e
+  validade ao estoque, com as mesmas recusas da tela Movimentações (**B1350**); forma do lote pela régua da movimentação nova, depois de tipo
+  e motivo (**B1351**); vazio é sem lote (**B1352**); entrada com lote novo cria o lote com a validade (**B1353**, **B1354**); endereço,
+  séries e reserva fora (**B1355**); a resposta com o aviso de validade (**B1356**); o Ajuste continua sem lote (**B1357**, Fase 2). O
+  **C474** (material em texto) consertado na própria etapa; o **C475** (Ajuste com lote deixa o lote negativo) registrado. Commits `2ebaf8f5`,
+  `681d7f4a` (plano), `3d7b53c2` (Fase 2), `00ec247e` (T1), `6aed6213` (T2), `8717ddf8` (execução) e o fechamento. **O que é seu:** as decisões **B1350**
+  a **B1357** (reversíveis); os avisos **C474** (resolvido) e **C475**; as limitações **(202)** em D e a verificação **(202)** em F.
+  **Próxima:** *Requisição excluída deixa de guardar o local separado* (**C467**), item 4 do 2º pacote da estimativa de 05/11 — detalhada no
+  fim do plano da 202.
 
 - **Etapa 201 entregue (2026-11-05):** **o "Sai de" mostra o que sobra depois do separado para outras requisições** (**C469** resolvido). A
   lista de saldos por endereço ganha o separado das outras e a sobra, sem mudar o extrato (**B1343**), com a conta da recusa provada igual

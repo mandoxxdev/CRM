@@ -1,5 +1,7 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 202 (2026-11-06, Fase 2 `3d7b53c2`, T1 `00ec247e`, T2 `6aed6213`): a rota antiga de movimentação (v1) repassa `lote`, `lote_id` e `data_validade` ao motor (C458) — fora do `AJUSTE` (B1357, C475); forma pela régua da v2; `null`/vazio = sem lote; `aviso_validade` na resposta; C474 (`material_id` em texto) consertado no motor; a tabela do alcance de `controle_lote` e o parágrafo "Não confundir com a rota v1" valiam só até a 202 (anotados)** — ver a seção "Etapa 202", no fim. O status não muda (🟢).
+
 > **+ Etapa 197 (2026-11-05, plano `7f099fae`, Fase 2 `b21a81f5`, T0 `ee835811`, T1 `58227edf`/`d8a4f1d9`/`398d1e69`, T2 `e011affe`, Fase 5 `838bb350`, `1723b78c`, `351ee457`, `1ed41bb8`): a entrega de requisição de material com `controle_lote` passa a baixar a parte automática por lote (FEFO, só lote elegível, uma SAIDA por lote — revoga a B204 só nesse fluxo, B1320); a pendência (g) abaixo mudou e a linha da exclusão dela estava errada desde a Etapa 58 (corrigida à vista); as notas da tela de Lotes e do relatório Saldo por lote mudaram** — ver a seção "Etapa 197", no fim. O status não muda (🟢).
 
 > **+ Etapa 194 (2026-11-05, plano `ce606d41`, Fase 2 `e6308090`, T1 `32ff286a`, T2 `e8803937`, T3 `57bdb6b2`, Fase 5 `77102677`): a validade da nota no recebimento (C456, B1296) — o lote existente mantém a validade e a nota avisa (`NOTA_DIVERGENTE`), o lote sem validade é preenchido pela nota (`preencherValidadeSeVazia`, auditoria `VALIDADE_PREENCHIDA`), prévia `avisos_validade_lote` no `GET /recebimentos/:id` e no modal Processar, `avisos_validade` na resposta só quando há aviso; o lote novo nasce com a data normalizada ou sem validade (G1)** — ver a seção "Etapa 194", no fim. O status não muda (🟢).
@@ -214,7 +216,7 @@ preso numa reserva que **nunca podia ser consumida**.
 | Caminho | Exige lote? | Onde |
 |---|---|---|
 | Movimentação manual — rota v2 (tela de Movimentações) | ✅ sim | `POST /movimentacoes/v2` declara `{ exigeLote: true }` |
-| Movimentação manual — rota v1 (modal rápido da tela de Materiais) | ✅ sim | `POST /movimentacoes` declara `{ exigeLote: true }` |
+| Movimentação manual — rota v1 (modal rápido da tela de Materiais) | ✅ sim | `POST /movimentacoes` declara `{ exigeLote: true }`; **desde a Etapa 202** (`00ec247e`) a v1 carrega `lote`/`lote_id`/`data_validade` (fora do `AJUSTE`, B1357) — quem cita o lote passa, quem não cita (o modal) continua recusado |
 | Recebimento (processar nota) | ✅ sim | `receiptService.darEntradaEstoque` declara, e a pré-checagem recusa a nota inteira antes de mover |
 | Devolução (tela de Devoluções) | ✅ sim — **desde a Etapa 7** | `returnService.registrarDevolucao` declara `{ exigeLote: true }`; herda o lote da saída original ou usa o seletor da tela na devolução avulsa (`38d2391`) |
 | Transferência | ✅ sim — **desde a Etapa 7** | `POST /transferencias` e o formulário de Movimentações; exigiu citar `TRANSFERENCIA` na condição do `if`, porque é ramo próprio do motor (`5a1e188`) |
@@ -757,6 +759,10 @@ separação ganhou campo de lote (Etapa 59 — o "Sai de"), então a parte "o op
 **Não confundir com a rota v1**: o modal rápido da tela de Materiais também não carrega lote no
 contrato, mas **continua exigindo** — ali o operador tem uma porta (a tela de Movimentações, que
 tem o campo). Os quatro acima não têm porta nenhuma.
+*(**Etapa 202 — este parágrafo vale só até a 202.** "A v1 não carrega lote no contrato" era verdade, e era o defeito: a integração
+que citava lote saía **sem lote**, inclusive de lote vencido (C458). Desde `00ec247e` a v1 carrega
+`lote`, `lote_id` e `data_validade` (fora do `AJUSTE`, B1357). O **modal** continua sem o campo — e por isso continua recusado no
+material com `controle_lote`.)*
 
 ## Pendências abertas depois da Etapa 6b (números de série)
 
@@ -1050,7 +1056,7 @@ manual nascia sem validade desde `65d78fd8` (Etapa 6). Nenhuma migration; recebi
 - [ ] **Fora (declarado):** corrigir validade já gravada num lote vivo (Etapa 191, B1276); *(**feito na Etapa 191**, `4fcf13b4` — ver a seção dela)* o recebimento preencher/conferir lote existente
   (B1277, fixado por teste para uma etapa futura mudar de propósito — *mudado de propósito na **Etapa 194**, `32ff286a`: o teste virou `[B1277 → RN-194.04]`* — o plano da 191, `c0cce170`, o deixa de fora (B1296 dele);
   candidato à 192 — *isto dizia "192"; **estava errado**: a 192 e a 193 foram usadas pelo Compras; a candidata é a **194***); `controle_validade` obrigatório e `data_fabricacao` na Entrada (B1278 — a flag
-  continua morta, como a tabela de flags acima diz); entrada sem data num lote vencido não avisa (B1282); a v1 ignora o campo (B1270).
+  continua morta, como a tabela de flags acima diz); entrada sem data num lote vencido não avisa (B1282); a v1 ignora o campo (B1270) — *até a **Etapa 202**: desde `00ec247e` a v1 repassa `data_validade` (B1354; ver a seção dela).*
 
 Testes: `validadeLoteEntradaManual.api.test.js` (26), `validadeLoteEntradaManualIntegracao.api.test.js` (5),
 `client/src/components/almoxarifado/MovimentacoesValidadeLote.test.js` (8). Continua 🟢.
@@ -1091,7 +1097,7 @@ ação nova em `ACAO_PERFIS`; recebimento, `liberar-vencimento`, `status` e o mo
 - [ ] **Fora (declarado):** o recebimento conferir a validade da nota contra a do lote existente (B1296, C456 — candidata à Etapa 194,
   para avisar); *(**feito na Etapa 194**, `32ff286a` — ver a seção dela)* linha `FALHA` por outro motivo reenviada à mão com a data velha (B1297, D (191)); a entrega com `origem_automatica` de um
   item separado do lote vencido sai sem lote (comportamento da Etapa 63, C451/B204 da fila); marcador "validade corrigida" na lista (B1289).
-  Achado anterior registrado e não consertado: a rota antiga `POST /api/almoxarifado/movimentacoes` não repassa `lote_id` ao motor (C458).
+  Achado anterior registrado e não consertado: a rota antiga `POST /api/almoxarifado/movimentacoes` não repassa `lote_id` ao motor (C458). *(**Consertado na Etapa 202**, `00ec247e` — ver a seção dela.)*
 
 Testes: `corrigirValidadeLote.api.test.js` (23 cenários), `corrigirValidadeLoteIntegracao.api.test.js` (8),
 `client/src/components/almoxarifado/LotesCorrigirValidade.test.js` (8). Continua 🟢.
@@ -1167,3 +1173,31 @@ está na spec 05 (`05-separacao-picking/README.md`, seção "Etapa 197") — a m
 **Correção à vista:** a tabela da pendência (g) dizia que a exclusão da requisição "devolve sem lote — não volta para o lote de onde saiu" —
 **estava errada desde a Etapa 58** (B232: a exclusão devolve por saída, com o lote dela). A linha da entrega ("baixa sem lote") passou a
 valer só para material sem `controle_lote`. As duas ficaram riscadas, com o certo ao lado. Continua 🟢.
+
+## Etapa 202 — a rota antiga de movimentação (v1) respeita o lote informado (2026-11-06)
+
+Plano: `docs/superpowers/plans/2026-11-05-almoxarifado-etapa202-rota-antiga-respeita-o-lote.md` (Fase 2 `3d7b53c2`). Fecha o **C458**.
+
+- [x] **A v1 repassa `lote`, `lote_id` e `data_validade` ao motor** (`POST /api/almoxarifado/movimentacoes`) — saída de lote vencido,
+  bloqueado, inexistente, de outro material ou sem saldo no lote recusa com a literal do motor; lote bom sai do lote (livro com `lote_id` e
+  `lote`); entrada/devolução com lote novo cria o lote com a validade; as recusas de validade da 190 chegam pela v1 — `00ec247e` (B1350,
+  B1353, B1354).
+- [x] **Forma de `lote`/`lote_id` pela régua da v2** (`LoteDaMovimentacaoV1Schema`, do `.shape` de `MovimentacaoSchema` — o `.pick()` lança
+  com `superRefine`), **depois** de tipo e motivo — `00ec247e` (B1351).
+- [x] **`null`, vazio e só espaços = sem lote** (o livro grava `lote` NULL) — `00ec247e` (B1352).
+- [x] **`AJUSTE` não repassa nada** (Fase 2): o AJUSTE com lote deixa a linha do lote negativa no motor (C475, documentado por teste pela
+  v2) — `00ec247e` (B1357).
+- [x] **Resposta 201:** as 9 chaves de antes + `aviso_validade` só quando o motor avisa — `00ec247e` (B1356, mudada na Fase 2).
+- [x] **C474 consertado** (`stockService.js`, a comparação do dono do lote por `Number`): `material_id` em texto com o lote do próprio
+  material dava "pertence a outro material" (vale também para `/transferencias`) — `00ec247e`.
+- [x] **Integração cruzando rotas** — v1 → liberar vencimento → saída do lote → relatório `saldo-por-lote` → estorno de volta ao lote;
+  paridade v1 × v2 em 11 corpos de recusa; o mesmo corpo pelo serviço — `6aed6213`.
+- [ ] **Fora (declarado):** o AJUSTE com lote (C475; a v1 não o abre, B1357); endereço, séries, reserva e custo na v1 (B1355; material com
+  `controle_serie` continua recusado nela); a resposta não ecoa o lote; o modal rápido da tela de Materiais continua sem campo de lote.
+
+**Correção à vista:** a linha da v1 na tabela "O alcance REAL de `controle_lote`" e o parágrafo "Não confundir com a rota v1" diziam que a
+v1 não carrega lote — **valia até a 202** (e era o C458); anotados com o certo. A Fase 0 do plano dizia que o AJUSTE com lote na v1 seria
+"igual à v2" como coisa boa — **estava errado** (a v2 deixa a linha do lote negativa, C475); a v1 não repassa lote no AJUSTE.
+
+Testes: `movimentacaoV1Lote.api.test.js` (37), `movimentacaoV1LoteIntegracao.api.test.js` (14); os 16 arquivos que fazem `POST` na v1
+verdes sem mudança. Continua 🟢.
