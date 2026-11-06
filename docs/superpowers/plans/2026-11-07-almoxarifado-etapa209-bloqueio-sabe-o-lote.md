@@ -369,7 +369,21 @@ lote: igual; bloqueio antigo: cai em "Sem lote"), salvo o caso da trava abaixo; 
   `bloqueioPorLote.bloqueadoPorLote(db, req.params.id)`; `null` → 404 `{ error: 'Material não encontrado' }` (pelo `handleError` da rota);
   (3) mover os dois testes para `bloqueioSabeOLote.api.test.js` (os helpers `quarentena`/`desbloquear` já estão lá) e **apagar** o pendente;
   (4) T6 (tela, contra o contrato, com a Fase 2 itens 1 e 6) e T7; os controles (1), (5), (6) já rodaram na T2, os (2), (3), (4) na T3/T4.
-- [ ] T5 — rota `GET /materiais/:id/bloqueado-por-lote`
+- **Onde parou (2ª fatia):** superado pelo "Onde parou" da 3ª fatia, abaixo da T5.
+- [x] T5 — rota `GET /materiais/:id/bloqueado-por-lote` — `4bdf0a09`. Em `extended.js`, junto do `desbloquear`: `auth` +
+  `requirePermission('visualizar')`, chama `bloqueioPorLote.bloqueadoPorLote(db, req.params.id)`; `null` → 404 `{ error: 'Material não encontrado' }`
+  (inline, como as outras rotas de material do arquivo; erro inesperado pelo `handleError`). Id em texto não casa com material → o mesmo 404
+  (o contrato só pede o 404; descartado um 400 à parte). Vermelho real antes: **0/2** (404). Os dois testes (RN-209.08 e .07 pela rota)
+  movidos para `bloqueioSabeOLote.api.test.js` (**24/24**) e o `pendente-t3.js` **apagado** — nenhum teste fora do runner. Controle positivo
+  (perl sobre base LF, âncora = 1, md5 conferido e restaurado por cópia): gate trocado → 403, os dois caem; rota sem chamar o helper → 404, os
+  dois caem. `test:api` **603/603 arquivos OK** (sobre a T5).
+- **Onde parou (sessão de 06/11, 3ª fatia):** T0-T5 fechadas e commitadas. **A próxima sessão começa pela T6** (tela, `client/`, contra o
+  contrato): a janela Desbloquear chama `GET /almoxarifado/materiais/:id/bloqueado-por-lote` para **todo** material escolhido (Fase 2 item 1,
+  a TRAVA da RN-209.12 — com ou sem `controle_lote`); o campo **Lote** aparece quando `lotes.length > 0`; sem lotes (ou GET falhou), a janela
+  fica como hoje e o servidor decide (M1); com `lotes: []` e `sem_lote: 0` **não exige** o campo (item 6); teste de cliente dos dois casos
+  (com e sem `controle_lote`, RN-209.02b). Depois **T7** (integração pela rota e pelo serviço — a RN-209.07 pelas duas portas já está verde no
+  arquivo; conferir o que falta da T7 contra o plano), os controles finais 1-6, as suítes completas **incluindo o cliente** (`CI=true` test e
+  build), a Fase 5 (revisores frescos) e o fechamento (`fechar-etapa`).
 - [ ] T6 — tela: campo Lote no Desbloquear + teste de cliente
 - [ ] T7 — integração pela rota e pelo serviço (RN-209.07)
 - [ ] Controles positivos 1-6 — (1), (5), (6) na T2; (2), (3), (4) na T3/T4; falta só refazer no fim, depois da T5-T7 integradas
