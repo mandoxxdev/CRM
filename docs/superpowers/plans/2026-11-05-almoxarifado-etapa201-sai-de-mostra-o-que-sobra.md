@@ -223,3 +223,39 @@ T3 independentes; na entrega a E1 do caso (c) usa `saldo − outras`, o mesmo n�
 As quatro perguntas da skill, com atenção a: (1) a chave `` `${origemId}|${loteId ?? ''}` `` casa `lote_id` `NULL` da linha com
 `lote_separacao_id` `NULL` do item; (2) a RN-201.08 traçada até a gravação (a pré-seleção que fica automática, o motivo que não aparece, e o
 `motivo_divergencia` de `:944` coerente com o campo de `:2515`); (3) se a T2 cobre a fronteira da folga (parte exatamente 1e-9) dos dois lados da equivalência.
+
+## Execução
+
+Executada em série (T1 → T2 → T3 → T4), sobre `1fc07cbf`, com as três correções da Fase 2 aplicadas desde o primeiro código.
+
+- [x] **T1** — `1b04ad38`. `parteGuardadaDeOutrasPorPar` ao lado de `parteGuardadaDeOutras` (que não mudou; só passou a ser exportada).
+  Rota: `requisicao_id` presente e (`typeof !== 'string'` ou não casa `/^[1-9]\d*$/`) → 400 `requisicao_id inválido` (Fase 2 item 3);
+  `separado_outras`/`sobra` montados na rota; `consultarSaldosPorLocalizacao` (a do extrato) **intocada** (`git diff 855e7404 -- server/services/almoxarifado/stockService.js` vazio).
+  **Vermelho** antes do código: 10/11 do arquivo da T2 caíam (só o .05 passava — como devia). O próprio arquivo pegou um `\d` perdido na regex
+  (400 para id válido) antes do commit.
+- [x] **T2** — `4b62f20c`. `server/tests/api/saldosSobraDeOutras.api.test.js`, 11 cenários (.01, .02, .03 ×6, .04 ×2 com o array e `' 1'`/`'01'`,
+  .05). A equivalência compara, em cada cenário, a rota, `parteGuardadaDeOutrasPorPar` e `parteGuardadaDeOutras` par a par (folga 1e-9 dos
+  dois lados: as duas dão 0). Controles (perl `-0pi` sobre base LF, âncora `grep -cF` = 1, md5 antes → sabotado → restaurado igual):
+  (i) `requisicao_id <> ?` → `? IS NOT NULL` → cai .02; (ii) `caixaVivaSql` → `(1 OR …)` → caem excluída e cancelada; (iii) caixa no lugar da
+  parte → caem parte limitada e folga; (iv) chave da rota sem o lote → caem três pares e mais 8; (v) validação desligada → cai .04 inválidos;
+  (vi) `0 as separado_outras` em `consultarSaldosPorLocalizacao` → cai .05.
+- [x] **T3** — `f089c284`. URL `?requisicao_id=${detalhe.id}` nas duas janelas; `rotuloOrigem(s, propriaNoPar)` com a L1 nova (a sobra
+  primeiro; "N desta" só na separação — `propriaNoPar` = soma de `pendentePlanejado` dos itens do material com a planejada no par);
+  `sobraDaOpcao` em `maxSeparavelNaTela` e no teste de cobertura do sugerido; comentário "outras requisições a tela não conhece" corrigido.
+  Jest novo `RequisicoesSaiDeSobra.test.js` **9/9** (vermelho antes: 7/9 caíam). Controles (Edit e Edit inverso, md5 `1df2decc` igual nos
+  quatro): (a) URL sem o parâmetro → 7 caem; (b) `sobraDaOpcao` = `quantidade` → 5 caem (motivo, planejada em automático, rótulos);
+  (c) rótulo de hoje → os 3 de rótulo; (d) rótulo da separação sem `propriaNoPar` → só o "1 desta".
+- [x] **T4** — `b3727231`. RN-201.09 pela rota (dois cenários: o do plano e o da Fase 2 "R2 separa 1, lê sobra 1, tenta 2 → C1 com sobra 1")
+  e pelo serviço. Arquivo: **14/14**. Controles: sabotagem (i) → caem os 3 da T4 (R1 se conta; a rota de R2 dá 5 e a sobra deixa de bater com
+  a C1) e o .02; a sobra da separação sem a parte própria (no ajudante do teste) → cai só o da Fase 2 (2 contra o "sobra 1" da C1).
+
+**Divergências do texto do plano (registradas aqui, reversíveis):**
+- O rótulo L1 só aparece com `separado_outras > 1e-9` (RN-201.06 como escrita): com **só** a própria no par (outras 0) fica o rótulo de hoje,
+  sem "desta". Descartado mostrar "sobra X de Y; 0 para outras, N desta" — não é o C469 e mudaria o rótulo de quem não tem disputa.
+- O Jest foi num arquivo novo (`RequisicoesSaiDeSobra.test.js`, molde de `RequisicoesSeparacaoDivergencia.test.js`), não em
+  `RequisicoesList.test.js`: este não tem a janela de separação montada. Os mocks de saldos de **dez** arquivos comparavam a URL exata e foram
+  ajustados para `?requisicao_id=55` (só a fronteira HTTP; nenhuma asserção de comportamento mudou).
+- O `npm run test:api` foi rodado uma vez, no fim (não depois da T1), por ordem do coordenador.
+
+**Suítes finais (serial, sobre `b3727231`):** `test:api` **588/588 arquivos**; `test:almoxarifado` **44/0**; Jest da tela inteira **213/213
+suítes, 2931/2931 testes**; `CI=true npx react-scripts build` **compilou** (exit 0).
