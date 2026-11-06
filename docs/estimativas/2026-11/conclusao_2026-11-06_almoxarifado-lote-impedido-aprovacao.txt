@@ -1,0 +1,8 @@
+*Concluído — Almoxarifado: lote que não pode sair — aprovação e separação*
+_06/11/2026_
+
+6. Lote bloqueado, reprovado ou vencido — 1ª parte: aprovação e separação — estimado 4h30 a 5h · realizado 5h30
+
+*Total: estimado 4h30 a 5h · realizado 5h30*
+
+A aprovação e a separação passam a não contar como disponível o saldo de lote bloqueado, reprovado ou vencido: o sistema não aprova nem separa o que não pode ser entregue, e a janela de separação diz quanto está nesses lotes. O tempo passou do previsto porque a revisão encontrou casos em que a conta descontava mais do que devia (material com terceiros e com devolução em quarentena) e uma consulta que ficaria lenta com muitos dados; os dois foram resolvidos antes de entregar.
