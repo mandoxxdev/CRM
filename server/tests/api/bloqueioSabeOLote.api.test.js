@@ -9,8 +9,8 @@
  * ENTRADA_DEVOLUCAO da Fase 2 item 2, C504).
  *
  * Desde a T3/T4 cobre tambem o motor (M1/M2 no DESBLOQUEIO, M3 no estorno do BLOQUEIO) e o `lote_id` no desbloqueio avulso
- * (B1422): RN-209.04 a-d, .05, .06 a/c, .10 e .07 pelo servico. Os dois que chamam a rota GET (RN-209.08 e .07 pela rota, T5)
- * continuam em `bloqueioSabeOLote.pendente-t3.js` — fora do runner (que so descobre *.api.test.js) ate a T5.
+ * (B1422): RN-209.04 a-d, .05, .06 a/c, .10 e .07 pelo servico. Desde a T5, os dois que chamam a rota GET (RN-209.08 e .07 pela
+ * rota) tambem estao aqui; o `bloqueioSabeOLote.pendente-t3.js` foi apagado (nenhum teste fora do runner).
  *
  * Plano: docs/superpowers/plans/2026-11-07-almoxarifado-etapa209-bloqueio-sabe-o-lote.md
  * Executar: cd server && node tests/api/bloqueioSabeOLote.api.test.js
@@ -370,6 +370,36 @@ process.on('exit', (code) => {
     const l = await dbAll(db, `SELECT tipo, lote_id FROM movimentacoes_almoxarifado WHERE material_id = ?
       AND tipo IN ('ENTRADA_DEVOLUCAO','BLOQUEIO','DESBLOQUEIO','SUCATA') ORDER BY id`, [m.id]);
     assert.deepStrictEqual(l.map((x) => [x.tipo, x.lote_id]), [['ENTRADA_DEVOLUCAO', L1], ['BLOQUEIO', L1], ['DESBLOQUEIO', L1], ['SUCATA', L1]]);
+    assert.deepStrictEqual((await bloqueadoPorLote(db, m.id)).lotes, []);
+  });
+
+  // ── RN-209.08: a rota GET (T5) — vindo do pendente ───────────────────────────────────────────────────────────────────────────────────────────────
+  await test('[RN-209.08] GET /materiais/:id/bloqueado-por-lote -> o contrato; inexistente -> 404', async () => {
+    const m = await material(); const L1 = await quarentena(m, 2);
+    await inspectionService.bloquearMaterial(db, ADMIN, m.id, { quantidade: 3, justificativa: 'avulso' });
+    const r = await request(app).get(`${API}/materiais/${m.id}/bloqueado-por-lote`);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.deepStrictEqual(r.body, { material_id: m.id, total: 5, sem_lote: 3, lotes: [{ lote_id: L1, codigo: 'L1', quantidade: 2 }] });
+    const n = await request(app).get(`${API}/materiais/999999/bloqueado-por-lote`);
+    assert.strictEqual(n.status, 404); assert.strictEqual(n.body.error, 'Material não encontrado');
+  });
+
+
+  // ── RN-209.07: o descarte da peca em quarentena fica no lote (T7) — vindo do pendente ────────────────────────────────────────────────────────────
+  await test('[RN-209.07, rota] devolucao Q de L1 2 -> GET -> desbloquear L1 2 -> PERDA de L1 2 na v2: saldo de L1 desce 2, bloqueado L1 0, quatro linhas com L1', async () => {
+    const m = await material(); const L1 = await quarentena(m, 2);
+    const g = await request(app).get(`${API}/materiais/${m.id}/bloqueado-por-lote`);
+    assert.deepStrictEqual(g.body.lotes, [{ lote_id: L1, codigo: 'L1', quantidade: 2 }]);
+    assert.strictEqual((await desbloquear(m, { quantidade: 2, lote_id: L1 })).status, 200);
+    const antes = Number((await dbGet(db, 'SELECT SUM(quantidade) q FROM estoque_saldo_almoxarifado WHERE lote_id = ?', [L1])).q);
+    const p = await post(`${API}/movimentacoes/v2`, { material_id: m.id, tipo: 'PERDA', quantidade: 2, motivo: 'descarte 209',
+      justificativa: 'peca da quarentena', localizacao_origem_id: P01.id, lote_id: L1 });
+    assert.strictEqual(p.status, 201, JSON.stringify(p.body));
+    const depois = Number((await dbGet(db, 'SELECT SUM(quantidade) q FROM estoque_saldo_almoxarifado WHERE lote_id = ?', [L1])).q);
+    assert.strictEqual(antes - depois, 2);
+    const l = await dbAll(db, `SELECT tipo, lote_id FROM movimentacoes_almoxarifado WHERE material_id = ?
+      AND tipo IN ('ENTRADA_DEVOLUCAO','BLOQUEIO','DESBLOQUEIO','PERDA') ORDER BY id`, [m.id]);
+    assert.deepStrictEqual(l.map((x) => [x.tipo, x.lote_id]), [['ENTRADA_DEVOLUCAO', L1], ['BLOQUEIO', L1], ['DESBLOQUEIO', L1], ['PERDA', L1]]);
     assert.deepStrictEqual((await bloqueadoPorLote(db, m.id)).lotes, []);
   });
 

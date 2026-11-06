@@ -71,6 +71,7 @@ const receiptService = require('../../services/almoxarifado/receiptService');
 // (`lerPedidoParaRecebimento`) — um unico resolvedor de snapshot x cadastro, nao uma copia aqui.
 const pedidoCompraService = require('../../services/compras/pedidoCompraService');
 const inspectionService = require('../../services/almoxarifado/inspectionService');
+const bloqueioPorLote = require('../../services/almoxarifado/bloqueioPorLote');
 // Etapa 43: a nao conformidade numerada. O servico ja valida enum, id e estado, e lanca com
 // `.status` + a mensagem literal do contrato — as rotas abaixo NAO revalidam nada (duplicar a
 // regua e como a mensagem literal se parte em duas).
@@ -1269,6 +1270,17 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
   app.post('/api/almoxarifado/materiais/:id/desbloquear', auth, requirePermission('ajustar_estoque'), async (req, res) => {
     try { res.json(await inspectionService.desbloquearMaterial(db, req.user, req.params.id, req.body)); }
     catch (e) { handleError(res, e); }
+  });
+
+  // Etapa 209 (RN-209.08) — quanto do bloqueado de cada lote a janela Desbloquear pode oferecer. So leitura: `visualizar`
+  // basta (a tela de Inspecoes abre com ela); quem decide se o desbloqueio passa e o motor (M1/M2), sob a trava do material.
+  // Id que nao casa com material nenhum (inclusive texto) -> 404, como as outras rotas de material deste arquivo.
+  app.get('/api/almoxarifado/materiais/:id/bloqueado-por-lote', auth, requirePermission('visualizar'), async (req, res) => {
+    try {
+      const r = await bloqueioPorLote.bloqueadoPorLote(db, req.params.id);
+      if (!r) return res.status(404).json({ error: 'Material não encontrado' });
+      res.json(r);
+    } catch (e) { handleError(res, e); }
   });
 
   // Task 3b (extra, Etapa 6): liberacao de vencimento para uso — reaproveita o fluxo de
