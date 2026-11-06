@@ -314,18 +314,22 @@ function normalizarItem(item) {
   // prometia a segunda rodada inteira (2 com a caixa vazia) e a porta recusava.
   const caixa = Q.qtd(Math.max(0, separado - entregue));
   const critico = Number(item.material_critico) === 1;
-  const entregavel = critico ? Q.qtd(Math.min(entregavelSozinho, caixa)) : entregavelSozinho;
+  // Etapa 206 (Fase 5, R1, B1395): o teto pela regua da conferencia (`tetoDaEntregaPeloLote`, anotado pela rota do detalhe) — a parte
+  // guardada de um irmao no lote bom tambem sai do entregavel. So quando a rota o anota (lote impedido, controle de lote, sem serie).
+  const tetoLote = item.teto_entrega_lote === undefined || item.teto_entrega_lote === null ? Infinity : Math.max(0, num(item.teto_entrega_lote));
+  const entregavel = Q.qtd(Math.min(critico ? Math.min(entregavelSozinho, caixa) : entregavelSozinho, tetoLote));
   // Etapa 135 (RN-02): o teto e a parte PROPRIA do entregavel (aditivos, so o detalhe — quem traz a caixa sem reserva). Na segunda rodada
   // (a unica em que a entrega passa da caixa) o teto e a caixa + o teto de separacao (= max(c, r) + o livre do material depois de toda a
   // caixa sem reserva) e a propria e max(c, r): a caixa e a reserva do item sao dele; so o que passa delas sai do livre que os irmaos
   // dividem (a conta da 127, dividirSeparavel). Fora dela (e no critico, e com nada a entregar) os dois sao o entregavel: nada a dividir.
   const segundaRodada = !critico && entregavel > Q.QTD_FOLGA && entregue > 0 && caixa < pendente;
   const camposEntregavel = !temCaixa ? {} : (segundaRodada
-    ? { saldo_entregavel: Q.qtd(caixa + tetoSeparavel), saldo_entregavel_proprio: Q.qtd(Math.max(caixa, Math.max(0, reservaItem))) }
+    ? { saldo_entregavel: Q.qtd(Math.min(caixa + tetoSeparavel, tetoLote)),
+      saldo_entregavel_proprio: Q.qtd(Math.min(Math.max(caixa, Math.max(0, reservaItem)), tetoLote)) }
     : { saldo_entregavel: entregavel, saldo_entregavel_proprio: entregavel });
   // Etapa 95 (Fase 5): a coluna crua da consulta do detalhe e insumo do teto, nao contrato — nao vai para o JSON.
   // Etapa 98 (T3): idem a regra do motor (insumo do entregavel).
-  const { caixa_sem_reserva_outros: _caixaCrua, motor_permite_negativo: _permiteCru, ...resto } = item; // eslint-disable-line no-unused-vars
+  const { caixa_sem_reserva_outros: _caixaCrua, motor_permite_negativo: _permiteCru, teto_entrega_lote: _tetoLoteCru, ...resto } = item; // eslint-disable-line no-unused-vars
   return {
     ...resto,
     quantidade_entregue: entregue,
@@ -1112,6 +1116,14 @@ async function listarFilaSeparacao(db, user, opcoes = {}) {
   const podeConferirPerfil = can(user, 'conferir_separacao');
   // Etapa 188 (T2): a sugestao de coleta — lida UMA vez para a fila inteira (sem N+1), sem trava (RN-188.07, B1250).
   const dadosColeta = await lerDadosDaColeta(db, itens);
+  // Etapa 206 (Fase 5, R1, B1395): o teto do entregavel pela regua da conferencia da entrega (`tetoDaEntregaPeloLote`, o mesmo do
+  // detalhe) — so os itens com saldo em lote impedido leem algo a mais.
+  const tetosLote = new Map();
+  for (const i of itens) {
+    // eslint-disable-next-line no-await-in-loop
+    const t = await tetoDaEntregaPeloLote(db, i);
+    if (t !== null) tetosLote.set(i.id, t);
+  }
   const fila = [];
   for (const r of reqs) {
     const doReq = itens.filter((i) => i.requisicao_id === r.id);
@@ -1159,7 +1171,7 @@ async function listarFilaSeparacao(db, user, opcoes = {}) {
         // Etapa 206 (B1390, RN-206.11): menos o saldo de lote impedido — o numero da porta (a entrega recusa o que so ele cobre).
         entregavel: inativo ? 0 : Q.qtd(Math.min(Math.max(0, getSeparado(i) - getEntregue(i)), Math.max(0, entregavelPeloMotor(
           num(i.saldo_disponivel) - num(i.reservado_para_item), i.reservado_para_item, Number(i.motor_permite_negativo) === 1)
-          - num(i.lote_impedido)))),
+          - num(i.lote_impedido)), tetosLote.has(i.id) ? tetosLote.get(i.id) : Infinity)),
         disponivel: Q.qtd(num(i.saldo_disponivel)), origem_separacao_codigo: i.origem_separacao_codigo || null,
         lote_separacao_codigo: i.lote_separacao_codigo || null, material_critico: Number(i.material_critico) === 1,
         // Etapa 197 (T1, RN-197.12, B1328): o CADASTRO do material (nao o saldo em lote) — com controle, o automatico da entrega
@@ -1979,6 +1991,63 @@ function fraseEntregaLoteImpedido(nomeMaterial, qtyDoItem, unidade, falta, imped
     + `Libere o lote (mude o status ou libere o vencimento) ou ${nada ? 'nada sai deste material' : `entregue ${qu(falta, unidade)} a menos`}.`;
 }
 
+/** Etapa 206 (Fase 5, R1): o `cabe(m)` da conferencia (a formula abaixo), fora dela — o detalhe e a fila usam a mesma conta. So le. */
+async function cabeDoAutomaticoPeloLote(db, materialId, itensDaEntrega, origemPorItem, saiuSimulado, parteQueFicaPorItem) {
+  const k = String(materialId);
+  const pedidoLote = new Map();
+  let pedidoSemLote = 0;
+  for (const x of itensDaEntrega) {
+    if (String(x.item.material_id) !== k) continue;
+    const o = origemPorItem.get(x.item.id);
+    if (!o || num(o.qtdComOrigem) <= Q.QTD_FOLGA) continue;
+    if (o.loteId) pedidoLote.set(Number(o.loteId), (pedidoLote.get(Number(o.loteId)) || 0) + num(o.qtdComOrigem));
+    else pedidoSemLote += num(o.qtdComOrigem);
+  }
+  const lotes = await lotesParaOAutomatico(db, materialId, saiuSimulado, parteQueFicaPorItem);
+  let cabe = 0;
+  for (const l of lotes) cabe += Math.max(0, num(l.saldo) - (pedidoLote.get(Number(l.lote_id)) || 0));
+  const sl = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) as q FROM estoque_saldo_almoxarifado
+    WHERE material_id = ? AND lote_id IS NULL AND quantidade > 0`, [materialId]);
+  cabe += Math.max(0, num(sl && sl.q) - pedidoSemLote);
+  return Math.round(cabe * 1e6) / 1e6;
+}
+
+/**
+ * Etapa 206 (Fase 5, R1, B1395) — o teto do ENTREGAVEL do detalhe e da fila pela regua da conferencia: o item entregando sozinho, num
+ * clique (a parte guardada sai da origem, o resto e automatico), cabe `parte + cabe` com o mesmo `cabeDoAutomaticoPeloLote` da porta.
+ * Antes o detalhe e a fila descontavam so o saldo de lote impedido e nao a parte guardada de um irmao no lote bom (que a conferencia
+ * desconta via `lotesParaOAutomatico`): ofereciam 3 e a porta recusava "nada sai deste material". So quando a conferencia pode recusar
+ * (B1386: material com controle de lote, sem serie — C486 —, com saldo em lote impedido); fora disso null (o numero de antes). So le.
+ */
+async function tetoDaEntregaPeloLote(db, item) {
+  if (!(num(item.lote_impedido) > Q.QTD_FOLGA)) return null;
+  const mat = await dbGet(db, 'SELECT controle_lote, controle_serie FROM materiais_almoxarifado WHERE id = ?', [item.material_id]);
+  if (!mat || Number(mat.controle_lote) !== 1 || Number(mat.controle_serie) === 1) return null;
+  const caixa = Math.max(0, getSeparado(item) - getEntregue(item));
+  const parte = Q.qtd(Math.min(parteDaOrigem(item), caixa));
+  const origemPorItem = new Map();
+  const saiu = new Map();
+  const fica = new Map();
+  if (parte > Q.QTD_FOLGA) { // o um clique da entrega: a planejada sai inteira (min(qty, parte) = parte) — saiDaOrigem, guarda que fica 0
+    origemPorItem.set(item.id, { origemId: Number(item.origem_separacao_id), loteId: item.lote_separacao_id ? Number(item.lote_separacao_id) : null,
+      qtdComOrigem: parte });
+    saiu.set(Number(item.id), parte);
+    fica.set(Number(item.id), 0);
+  }
+  const cabe = await cabeDoAutomaticoPeloLote(db, item.material_id, [{ item }], origemPorItem, saiu, fica);
+  return Q.qtd(parte + cabe);
+}
+
+/** Etapa 206 (Fase 5, R1): anota `teto_entrega_lote` nos itens do detalhe (insumo de normalizarItem, nao vai para o JSON). */
+async function anotarTetoDaEntregaPeloLote(db, itens) {
+  for (const item of itens || []) {
+    // eslint-disable-next-line no-await-in-loop
+    const t = await tetoDaEntregaPeloLote(db, item);
+    if (t !== null) item.teto_entrega_lote = t;
+  }
+  return itens;
+}
+
 /**
  * Etapa 206 (B1383-B1387, Fase 2 item 1) — a conferencia da parte AUTOMATICA da entrega contra o que os lotes elegiveis cobrem, ANTES da
  * alcada e de qualquer baixa. Le, nao grava; roda na previa, dentro das duas travas que a entrega segura (B1392: sem trava nova).
@@ -2022,22 +2091,7 @@ async function conferirAutomaticoPeloLote(db, itensDaEntrega /* [{ item, qty, te
   const cabeDe = async (materialId) => {
     const k = String(materialId);
     if (cabePorMaterial.has(k)) return cabePorMaterial.get(k);
-    const pedidoLote = new Map();
-    let pedidoSemLote = 0;
-    for (const x of itensDaEntrega) {
-      if (String(x.item.material_id) !== k) continue;
-      const o = origemPorItem.get(x.item.id);
-      if (!o || num(o.qtdComOrigem) <= Q.QTD_FOLGA) continue;
-      if (o.loteId) pedidoLote.set(Number(o.loteId), (pedidoLote.get(Number(o.loteId)) || 0) + num(o.qtdComOrigem));
-      else pedidoSemLote += num(o.qtdComOrigem);
-    }
-    const lotes = await lotesParaOAutomatico(db, materialId, saiuSimulado, parteQueFicaPorItem);
-    let cabe = 0;
-    for (const l of lotes) cabe += Math.max(0, num(l.saldo) - (pedidoLote.get(Number(l.lote_id)) || 0));
-    const sl = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) as q FROM estoque_saldo_almoxarifado
-      WHERE material_id = ? AND lote_id IS NULL AND quantidade > 0`, [materialId]);
-    cabe += Math.max(0, num(sl && sl.q) - pedidoSemLote);
-    cabe = Math.round(cabe * 1e6) / 1e6;
+    const cabe = await cabeDoAutomaticoPeloLote(db, materialId, itensDaEntrega, origemPorItem, saiuSimulado, parteQueFicaPorItem);
     cabePorMaterial.set(k, cabe);
     return cabe;
   };
@@ -3172,6 +3226,8 @@ module.exports = {
   dividirPorLotes, // Etapa 197 (T0)
   fraseEntregaLoteImpedido, // Etapa 206 (B1388)
   conferirAutomaticoPeloLote, // Etapa 206 (B1383)
+  tetoDaEntregaPeloLote, // Etapa 206 (Fase 5, R1)
+  anotarTetoDaEntregaPeloLote, // Etapa 206 (Fase 5, R1)
   maxSeparar,
   maxEntregar,
   entregavelPeloMotor, // Etapa 98 (T3, B509)

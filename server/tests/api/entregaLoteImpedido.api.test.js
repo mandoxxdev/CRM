@@ -425,6 +425,26 @@ valueApprovalService.notificarAprovadoresValor = async (db, req) => { notificado
     await recusa(R, m, [{ item_id: ids[0], quantidade_atendida: 4 }], frase(m.nome, 4, 'un', 2, [L('L2', 'BLOQUEADO', 3)]));
   });
 
+  // ── Fase 5 (fix-round): R1 — o detalhe e a fila usam a regua da conferencia (a parte guardada de um irmao no lote bom) ───────────
+  // L1 5 vencido na padrao, L2 3 em B; item 1 separado 3 de (B, L2), item 2 separado 3 sem origem. A conferencia desconta a guarda do
+  // item 1 (lotesParaOAutomatico) e recusa os 3 do item 2; o detalhe e a fila descontavam so o lote impedido e ofereciam 3.
+  await test('[RN-206.13] guarda do irmao no lote bom: detalhe e fila oferecem 0 ao item sem origem (a porta recusa) e 3 ao item guardado (a porta aceita)', async () => {
+    const m = await material();
+    await entrar(m, P01.id, 5, 'L1'); await entrar(m, B01.id, 3, 'L2');
+    const { R, ids } = await reqDireta([[m.id, 3], [m.id, 3]]);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 3, localizacao_origem_id: B01.id, lote_id: await loteId(m, 'L2') }]);
+    await separar(R, [{ item_id: ids[1], quantidade_separada: 3 }]);
+    await validade(m, 'L1', dia(-1));
+    const d = await detalhe(R);
+    assert.deepStrictEqual(d.map((x) => [x.saldo_entregavel, x.quantidade_entregavel]), [[3, 3], [0, 0]], JSON.stringify(d));
+    const f = await fila(R);
+    assert.deepStrictEqual(f.map((x) => x.entregavel), [3, 0], JSON.stringify(f));
+    // a porta: os 3 do item 2 recusam (o numero antigo da tela); os 3 do item 1 saem da guarda
+    await recusa(R, m, [{ item_id: ids[1], quantidade_atendida: 3 }], frase(m.nome, 3, 'un', 3, [L('L1', 'ATIVO', 5, dia(-1))]));
+    await ok(entregar(R, [{ item_id: ids[0], quantidade_atendida: d[0].saldo_entregavel }]));
+    assert.deepStrictEqual(await livro(R, m), [['SAIDA', 'Z206B-01', 'L2', 3]]);
+  });
+
   // ── Fase 5 (fix-round): R2 — a passada 2 desconta UMA vez a parte guardada do proprio item (ler antes = ler depois) ────────────────
   // B/L2 4, B sem lote 3; item 1 separado 3 de (B, L2), item 2 separado 3 sem origem. Entrega: item 1 2 (um clique), item 2 3 automatico.
   // A guarda do item 1 que fica e 1. A passada 2 lia a parte DEPOIS da baixa (min(parte, caixa) ja com o entregue novo = 1) e ainda tirava

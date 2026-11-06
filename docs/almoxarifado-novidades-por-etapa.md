@@ -14101,6 +14101,14 @@ em A e 4 em B; sem lote 2 em B; itens 3 em (B, L2), 4 sem origem e 2 em (A, L2);
 certo: o automático pede 5 e, sem tocar nas guardas que ficam (1 do item 1, 1 do item 3), os lotes que podem sair e o sem lote dão 4 — o
 200 de antes da 206 tirava a guarda do item 1. **Reversível** (`parteQueFicaPorItem` em `entregarSemTrava`).
 
+**B1395 (NOVA, da Etapa 206, Fase 5 R1; decisão do agente) — o "entregável" do detalhe e da Fila sai da mesma conta da conferência da
+entrega.** Antes o detalhe e a Fila descontavam só o saldo de lote impedido (B1390); a conferência desconta também a parte guardada de um
+irmão no lote bom. Cenário: L1 5 vencido na padrão, L2 3 em B; item 1 separado 3 de (B, L2), item 2 separado 3 sem origem → a tela oferecia
+*Entregar 3* ao item 2 e a entrega recusava *"faltam 3 un … nada sai deste material"*. Agora, quando há lote impedido (material com controle
+de lote, sem série), o entregável de cada item é limitado pelo que ele entregaria sozinho num clique (`parte guardada + o que cabe no
+automático`, a mesma função `cabeDoAutomaticoPeloLote` da porta): item 2 → 0, item 1 → 3. Sem lote impedido, os números de antes.
+**Descartado:** dividir o teto entre os irmãos na tela (é a conferência que confere a soma, sem baixar nada — **C489**); copiar a conta
+para o detalhe (duas réguas voltariam a divergir). **Reversível** (`tetoDaEntregaPeloLote`, anotado pela rota do detalhe e lido pela Fila).
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -18065,6 +18073,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      saldo do lote com um ajuste (baixar de L1 as 6 que de fato saíram e zerar o sem lote), e a requisição volta a reservar. **A causa** é a
      entrega sair de lote impedido; o item 7 da fila (C464, 2ª parte) passa a recusar essa entrega, e o negativo deixa de nascer. Por que
      não descontar o negativo de um lote impedido: veja **B1379** (abatia, e deixava sair peça bloqueada de outro lote).
+485–488. *(Reservados à Etapa 206 — entram no fechamento dela.)*
+489. **NOVO (da Etapa 206, Fase 5) — com lote impedido, o "entregável" de cada item é o dele sozinho.** O detalhe e a Fila mostram, item a
+     item, quanto ele entregaria sozinho num clique (**B1395**). Dois itens do mesmo material que disputam o mesmo lote bom podem mostrar,
+     cada um, o máximo; entregando os dois juntos pelo máximo, a entrega recusa **sem baixar nada** e diz quanto falta (*"faltam N un … ou
+     entregue N un a menos"*). **O que fazer:** entregar a menos, como a frase diz, ou um item por vez. Conserto: dividir o teto entre os
+     irmãos na tela, como a separação já faz (Etapa 127) — não medido.
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 

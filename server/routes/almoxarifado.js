@@ -4018,6 +4018,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
             separacoes = await requisitionService.listarSeparacoes(db, req.params.id);
             substituicoes = await requisitionService.listarSubstituicoes(db, req.params.id);
             devolucoesCaixa = await requisitionService.listarDevolucoesCaixa(db, req.params.id);
+            // Etapa 206 (Fase 5, R1): o teto do entregavel pela regua da conferencia da entrega (so le; so com lote impedido)
+            await requisitionService.anotarTetoDaEntregaPeloLote(db, itens);
           } catch (e) {
             return res.status(500).json({ error: e.message });
           }
