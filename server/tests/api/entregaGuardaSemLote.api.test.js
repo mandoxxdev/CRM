@@ -187,7 +187,27 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(await retrato(m), { linhas: [], fisico: 0 });
   });
 
+  await test('[RN-207.04 b] a guarda de requisicao CANCELADA nao conta (caixaVivaSql): R1 guardou 2 em A e foi cancelada; R2 (3) -> o livro de hoje', async () => {
+    const m = await material();
+    await entrar(m, A.id, 3); await entrar(m, B.id, 2);
+    const r1 = await reqDireta([[m.id, 2]]); const r2 = await reqDireta([[m.id, 3]]);
+    await separar(r1.R, [{ item_id: r1.ids[0], quantidade_separada: 2, localizacao_origem_id: A.id }]);
+    await separar(r2.R, [{ item_id: r2.ids[0], quantidade_separada: 3 }]);
+    await dbRun(db, "UPDATE requisicoes_almoxarifado SET status = 'CANCELADO' WHERE id = ?", [r1.R]);
+    await entregar(r2.R, [{ item_id: r2.ids[0], quantidade_atendida: 3 }]);
+    assert.deepStrictEqual(await livro(r2.R, m), [['SAIDA', null, null, 3]]);
+  });
+
   // ── RN-207.05: o livre por endereco nao cobre -> como hoje (B1398, o C492 visivel) ──────────────────────────────────────────────
+  await test('[RN-207.05 c] linha sem lote num endereco que NAO EXISTE mais (Fase 2 M1) fica fora das fatias: livre usavel 1 < 3 -> o livro de hoje, 200', async () => {
+    const m = await material();
+    await entrar(m, A.id, 3); await linhaSql(m, 987654, 5);
+    const { R, ids } = await reqDireta([[m.id, 3], [m.id, 2]]);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 3 }]);
+    await separar(R, [{ item_id: ids[1], quantidade_separada: 2, localizacao_origem_id: A.id }]);
+    await entregar(R, [{ item_id: ids[0], quantidade_atendida: 3 }]);
+    assert.deepStrictEqual(await livro(R, m), [['SAIDA', null, null, 3]]);
+  });
   await test('[RN-207.05 a] A 3 (guarda 2) + linha SEM endereco 2: livre usavel 1 < 3 -> uma SAIDA sem endereco (hoje); A 0 e o item 2 recusa (C492)', async () => {
     const m = await material();
     await entrar(m, A.id, 3); await linhaSql(m, null, 2);
