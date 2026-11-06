@@ -243,12 +243,60 @@ nenhum dos 16 testes que fazem POST na v1 manda lote/lote_id/data_validade.
 
 ## Execução
 
-- [ ] T0 — Fase 2: revisão do plano
-- [ ] T1 — tronco: a v1 repassa o lote (`movimentacaoV1Lote.api.test.js`, `schemas.js`, `routes/almoxarifado.js`)
-- [ ] T2 — tronco: integração v1 → liberar vencimento → relatório → estorno; paridade v1 × v2; serviço
-- [ ] T3 — suíte completa + controles positivos (a)–(e)
-- [ ] T4 — Fase 5: revisão adversarial
-- [ ] T5 — fechamento (`fechar-etapa`)
+- [x] T0 — Fase 2: revisão do plano — `3d7b53c2` (5 achados aplicados, bloco "Fase 2" acima).
+- [x] T1 — tronco: a v1 repassa o lote (`movimentacaoV1Lote.api.test.js`, `schemas.js`, `routes/almoxarifado.js`, e o `Number` do C474 em
+  `stockService.js`) — `00ec247e`. TDD: o arquivo novo rodou **11 verdes / 26 vermelhos** antes do código (os 11 verdes são os de regressão:
+  `null`/vazio, ordem, `exige lote` sem lote, AJUSTE e o C475 pela v2; 3 dos 26 eram defeito do próprio teste — as chaves `undefined`,
+  divergência 1 — corrigidos antes do código); depois da rota, **36/1** (só o C474); depois do `Number`, **37/0**. Os 16 arquivos que
+  fazem `POST` na v1 rodados isolados, sem mudança: todos verdes (configuracoesGerais 15, epiPontaAPonta 11, loteControleObrigatorio 12,
+  materialClienteAjuste 10, minhasPermissoes 12, motivosMovimentacaoUso 11, movimentacaoV1Permissao 6, movimentacoes 17, movimentoRegras 9,
+  pedidoReabreIntegracao 10, perfisUsuario 14, permissoesRotas 51, portasAvulsasCaixaIntegracao 13, recebimentoAvisoEntradaIntegracao 6,
+  serieControleObrigatorio 8, termoFerramentaPontaAPonta 12 — todos com 0 falhas).
+- [x] T2 — tronco: integração v1 → liberar vencimento → relatório → estorno; paridade v1 × v2 (11 corpos de recusa + o lote bom); serviço —
+  `6aed6213`, **14/0**. Passou de primeira (o código já estava no T1); controle: sem o `...loteCru` no repasse caem **13 de 14** (só o (c), que
+  não passa pela rota, fica verde — esperado).
+- [x] T3 — suíte completa + controles positivos (a)–(e) e os da Fase 2 (f)–(i) — abaixo. Suítes: sobre `6aed6213`: `movimentacaoV1Lote` **37/0**; `movimentacaoV1LoteIntegracao` **14/0**; `test:api` **589/590 arquivos** (o que caiu, `superPadraoNoBoot`, com `SQLITE_READONLY` no boot de usuarios, nada desta etapa; isolado **14/0**); `test:almoxarifado` **44/0**; `test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0**. Jest da tela e build nao rodados (a etapa nao toca `client/`).
+- [x] T4 — Fase 5: revisão "este teste passaria com a feature quebrada?" (feita pelo executor, não por agente fresco) — abaixo.
+- [x] T5 — fechamento (`fechar-etapa`) — novidades, spec 10, mapa, guia, manual, este plano, estimativa (o commit de fechamento).
+
+### Controles positivos (perl `-0pi` sobre base LF, âncora `grep -cF` = 1, md5 antes/sabotado/restaurado por cópia no scratchpad — todos voltaram ao md5 pós-conserto, CR = 0)
+
+| # | Sabotagem | O que caiu (asserção que guarda a regra) |
+|---|---|---|
+| (a) | repasse sem `lote_id` | 11: RN-202.01 por id (201 ≠ 400), RN-202.02 por id (*"a peca nao saiu do lote LB"*), as 3 de `lote_id` da RN-202.03, as 3 de `lote_id` da RN-202.04, RN-202.05 (`exige lote`), as 2 do C474 |
+| (b) | sem tirar `null` | 2: `lote = null` e `lote_id = null` (400 do zod ≠ 201) |
+| (c) | repasse sem `data_validade` | 7: as 5 do B1350 (FORMATO, SO_ENTRADA, SEM_LOTE, espaços, CONFLITO), RN-202.06 (validade `null` ≠ `2027-03-31`), o eco do `aviso_validade` |
+| (d) | schema → `z.any()` | 4: as 4 da forma (`"12"` vira *"pertence a outro material"*, `0` vira 201, `1.5` vira *"Lote nao encontrado"*, `5` vira *"…para este material: 5"*) |
+| (e) | forma antes do tipo | 3: `[ordem]` tipo inválido e motivo ausente com `lote_id` texto (vem a do zod), e o AJUSTE com `lote_id` texto (400 ≠ 201) |
+| (f) | AJUSTE repassa (`if (true)`) | 2: AJUSTE v1 com `lote_id` (400 SO_ENTRADA ≠ 201) e com `lote_id` texto (400 ≠ 201) |
+| (g) | sem descartar o lote só de espaços | 1: `lote = "   "` (*"o livro gravou lote '   '"*) |
+| (h) | sem o eco do `aviso_validade` | 1 + 1: RN-202.08 aviso (chaves) e o (a) da integração (`aviso_validade` undefined) |
+| (i) | sem o `Number` (C474) | 1: `material_id` em texto + lote do próprio material (*"pertence a outro material"*) |
+
+### Revisão "este teste passaria com a feature quebrada?" (T4) — três sabotagens plausíveis a mais
+
+- **X1 — o AJUSTE tira só a `data_validade` e repassa `lote`/`lote_id`** (quem lê "SO_ENTRADA" e acha que o problema é só a validade). Caiu:
+  `[Fase 2, AJUSTE]` pela asserção do livro (*"o AJUSTE da v1 repassou o lote (C475 aberto pela v1)" — 66 !== null*), não pelo status — a
+  asserção que guarda a B1357 é a que caiu. (Aplicada sozinha sobre o código certo ela é no-op, porque o `if (tipo !== 'AJUSTE')` já tira
+  tudo; foi aplicada junto do `if (true)`.)
+- **X2 — o filtro de ausente por "verdadeiro"** (`if (req.body[k])`, que também some com `0`). Caiu: `lote_id = 0` (201 ≠ 400).
+- **X3 — repassar só em ENTRADA/SAIDA** (esquecer a DEVOLUCAO). Caiu: `[RN-202.06] DEVOLUCAO v1 com lote novo` (*"o lote nao foi criado"*).
+  A integração (T2) fica verde — ela não usa DEVOLUCAO.
+
+Nenhuma passou verde; nenhuma asserção acrescentada.
+
+### Divergências do plano
+
+1. **RN-202.08 "chaves exatamente":** o JSON não leva chave `undefined`, e a resposta de antes também omitia `referencia`/`observacoes`
+   quando não vinham. Os cenários de chave mandam `motivo`, `referencia` e `observacoes` para as 9 aparecerem; a regra continua "as 9 de antes
+   + `aviso_validade` só quando o motor avisa".
+2. **AJUSTE (Fase 2, B1357):** além de não repassar, a v1 **não julga a forma** de `lote`/`lote_id` no AJUSTE (`lote_id: "abc"` → 201, como
+   antes) — "fica igual a hoje" levado ao pé da letra; teste próprio.
+3. **Spec 22** não cita a v1 (grep sem resultado) — não mudou.
+4. **T4** foi feito pelo executor (revisão "passaria com a feature quebrada?", três sabotagens), não por agente fresco com as três lentes.
+5. **C475 medido:** *LB* 5 + 3 sem lote, AJUSTE para 1 com *LB* pela v2 → 201, físico 1, linha do *LB* **−2**, sem lote 3 (o relatório
+   *Saldo por lote* mostra os dois). A tela **Movimentações** não mostra o campo de lote no AJUSTE (`TIPOS_COM_LOTE_EXISTENTE`), então só a
+   integração alcança.
 
 ## Próxima tarefa detalhada
 
