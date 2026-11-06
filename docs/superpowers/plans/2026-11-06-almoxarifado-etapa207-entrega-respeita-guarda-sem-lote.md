@@ -283,6 +283,30 @@ mais de 30 min: corta a RN-207.03 e o ramo com lote (B1405 → C494); o sorteio 
 - **Restauro da sabotagem por `git checkout -- <arquivo>`**, um controle por vez, suíte só depois de restaurar (memória: sabotagem concorrente
   contamina a suíte).
 
+## Fase 2 — correções do revisor fresco (2026-11-06) — **MANDAM sobre o texto acima onde divergem**
+
+Revisor fresco sobre `4d8fb611`: 0 trava, 3 importantes, 3 menores, todos aceitos. Confirmado: a B1398 é aceitável (o claim drena padrão e
+depois a maior linha sem saber da guarda, `stockService.js:470-472`; não há caminho barato sem opção nova no motor, descartada na 136); o livro
+com endereço é seguro na exclusão (`requisitionService.js:2816-2828`), no estorno e nos relatórios (nenhum agrupa SAIDA por endereço); a
+conferência da 206 (`:1995-2013`) e o teto (`:2024-2025`, só com controle de lote) não recusam por endereço — cair mais vezes no "como hoje" não
+recusa nada; área especial só avisa (`:721-745`); a separação de outra requisição conta a guarda sem lote igual (`:96-105`); nenhuma entrega que
+hoje dá 200 passa a 400, salvo dado legado (M1). **No sentido contrário**, a padrão bloqueada com guarda de irmão, que hoje recusa, passa a sair
+pelas fatias — registrar no D (207).
+
+1. **[IMPORTANTE] I1 — T4, o invariante G:** G e N valem só quando, antes da entrega, `Σ livre usável ≥ parte automática`. Quando não cobre (C492),
+   afirmar o contrário: as SAIDAs sem lote daquele pedaço são **uma só**, sem endereço — invariante **T** (tudo ou como hoje). Premissa: ≥ 10 casos
+   de T.
+2. **[IMPORTANTE] I2 — o sorteio** ganha, em 25% dos casos, uma linha sem lote **sem endereço** (por SQL, com `quantidade_atual` acertado) ou um
+   endereço com `bloqueada = 1`. Controle positivo (iii) no sorteio: T ≥ 5.
+3. **[IMPORTANTE] I3 — contrato:** a função devolve null quando **nenhuma** guarda tem `guardaQueConta(g, saiu, fica) > Q.QTD_FOLGA` — decidido
+   antes de ler `estoque_saldo_almoxarifado` (não pela parte gravada no banco, que só cai no finally, `:2700`). T0 ganha **RN-207.02(d)**: a V1 da
+   Etapa 136 (A 3, B 2, item 2 de A entregue na mesma entrega) com o livro de hoje (sem endereço).
+4. **[MENOR] M1:** filtro das linhas usáveis com `lc.id IS NOT NULL` (localização que não existe mais → o motor recusaria "Localização de origem não
+   encontrada", `stockService.js:762`).
+5. **[MENOR] M2:** **C495** — a troca automática não grava o endereço que o livro mostra (`localizacao_saida_id = s.saiuOrigem` null, `:2317`,
+   `:2689`); não é regressão.
+6. **[MENOR] M3:** a T0 não cita a RN-207.06 (quem a escreve é a T2).
+
 ## Execução
 
 - [ ] F2 — revisor fresco do plano (antes da T0)
