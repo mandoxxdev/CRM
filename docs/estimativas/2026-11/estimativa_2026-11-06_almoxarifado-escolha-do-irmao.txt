@@ -1,0 +1,9 @@
+*Planejamento — Almoxarifado: entrega escolhendo o local de outra peça*
+_06/11/2026_
+
+*1. Entrega escolhendo o local respeita o que outra peça da mesma requisição separou*
+Quando a pessoa escolhe à mão, na entrega, o local de onde o material sai, o sistema já respeita o que outras requisições separaram ali, mas não o que outra peça da mesma requisição separou. A entrega pode levar esse material e depois a outra peça não consegue mais ser entregue. Passa a recusar na hora, dizendo quanto está separado para a outra peça e quanto sobra.
+Tempo estimado: *4h*
+
+*Total estimado: 4h*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
