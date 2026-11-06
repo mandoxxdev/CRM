@@ -319,7 +319,11 @@ passa a recusar (`max(0, r − c)` no teto, RN-205.07).
 - [x] T3 — integração pela rota e pelo serviço + RN-205.10 (entrega fixada, com a segunda rodada) — `e989ec54`
 - [x] Revisão "passaria com a feature quebrada?" — 2 sabotagens a mais, as duas passavam verdes e ganharam asserção: o teto inteiro do
   `normalizarItem` (segunda rodada, no `e989ec54`) e a releitura depois da conversão da reserva da OS (`33328089`)
-- [ ] T4 — fechamento (`fechar-etapa`) e estimado × gasto — **não feito de propósito**: há revisão adversarial antes
+- [x] Fase 5 — três revisões adversariais (2 revisores em paralelo no 1º fix-round, 1 no 2º): **5 achados reais + 1 regressão do próprio
+  conserto**, ruído 0. Detalhe na seção "Fase 5" abaixo. `689bfa7d`, `65a19db6` (desfeito), `17fb5202`, `52fa9328`, `0516c933`, `13fe3691`.
+- [x] T4 — fechamento (`fechar-etapa`): novidades (seção da 205, B1368–B1378 antes das B1379–B1382 que a Fase 5 já tinha escrito, C464
+  anotado, C478–C481, C482–C483 sem uso, D (205), F (205), cabeçalho e "onde estamos"), specs 05, 07 e 10, mapa, guia, manual, este plano e
+  o de pausa/retomada — o commit "Etapa 205: fechamento". O estimado × gasto do item 6 fica com o André (fora deste commit).
 
 ### Notas da execução (para o fechamento)
 
@@ -339,21 +343,91 @@ passa a recusar (`max(0, r − c)` no teto, RN-205.07).
   rodada de novo); `test:almoxarifado` 44/0; `test:validation` 4/0; `test:safealter` 3/0; `test:sqlite` 16/0; Jest 214 suítes, 2944/2944;
   `CI=true` build OK.
 
+## Fase 5 — revisões adversariais (2026-11-06)
+
+Três revisões (1º fix-round: 2 revisores em paralelo; 2º fix-round: 1 revisor fresco sobre o conserto). **5 achados reais + 1 regressão do
+próprio conserto; ruído 0.**
+
+- **P1 — material travado por negativo sem lote (real; o conserto se mostrou inseguro e foi DESFEITO).** A entrega que sai de lote impedido
+  (RN-205.10) deixa *"Sem lote atribuído"* negativo e o lote cheio; a conta somava o lote cheio e ignorava o negativo (L1 10 bloqueado, sem
+  lote −6, L3 ATIVO 5 → liberado −1: R2 de 5 sem reserva e a separação recusada, com 5 bons em L3). Conserto `65a19db6` (o negativo abatia o
+  impedido). **Regressão achada no 2º fix-round:** o negativo é anônimo — no cenário do revisor (L1 10, R1 entrega 6 de L1 bloqueado, L1 volta a
+  ATIVO, entra L2 6 bloqueado) o abatimento dava liberado 10 e a entrega tirava as 6 bloqueadas de L2 com o livro dizendo L1. **Desfeito** em
+  `13fe3691`; fica a falha **segura** (promete menos do que há, nunca mais) — **C484**, **B1379** reescrita à vista. A causa (a entrega sair
+  de lote impedido) é o item 7 abaixo.
+- **P2 — desempenho (real).** O fragmento varria três tabelas (o saldo filtrava só por `lote_id`; os itens de recebimento sem índice por lote):
+  200 leituras com 30 mil linhas de saldo e 20 mil itens, **1815 ms → 35 ms** depois do filtro por material e do índice
+  `idx_receb_itens_almox_lote` — `17fb5202` (**B1380**, **A111**). Primeiro boot provado em pasta vazia (duas vezes, sem duplicar) e numa
+  cópia do banco de desenvolvimento (`VACUUM INTO`): sem índice antes, com depois, 0 erros. **O que conferir em produção:** a A111.
+- **P3 — lacuna de teste (real).** A régua da divergência gravada na rodada não era conferida (trocar o default do `tetoCom` pelo `disponivel`
+  gravava "máximo 10, divergente" para quem separou os 4 que podia). Asserção na rota e no serviço — `689bfa7d`.
+- **P4 — texto do modal (real).** *"Saldo: 10 · Em lote …: 10"* com o campo em 6 induzia 10 − 10 = 0. Unidade e *"; a reserva desta
+  requisição continua valendo"* — `0516c933` (**B1382**).
+- **P5 — a conversão da reserva da OS com o liberado negativo (real).** A requisição da OS ficava *Aguard. Estoque* para sempre com 4 bons
+  reservados para ela. Abono `osNoImpedido` — `52fa9328` (**B1381**).
+
+**Suítes finais** (uma vez cada, serial): `test:api` **596/596** e `test:almoxarifado` **44/0** sobre `13fe3691`; `test:validation` **4/0**,
+`test:safealter` **3/0**, `test:sqlite` **16/0**, Jest **214 suítes / 2945 testes**, `CI=true` build OK sobre `0516c933` (o 2º fix-round só
+mexeu no servidor e em testes do servidor). **Não verificado:** a tela clicada no navegador (F (205)); o boot no banco de produção (A111).
+
+### Divergências do plano (resumo para quem retomar)
+
+- A F2 veio **antes** da T0 (M3); a rota de separação dos testes é `PUT /requisicoes/:id/separacao` (a mesma `handleSeparacao`).
+- O predicado usa `COALESCE(...,'')` na liberação e no status, não `IS NULL` (M2 estendida).
+- A I2 partia de premissa errada em parte (a devolução para Quarentena é `BLOQUEIO`, não inspeção); o termo ficou e cobre o `QUARENTENA` sem
+  recebimento.
+- `lote_impedido` **fica** no JSON do detalhe (o contrato original mandava tirar; a Fase 2 I4 manda manter); a B1374 dizia "sem front" — a
+  tela ganhou a linha (T2b).
+- O corte da B1378 não aconteceu: o C482 ficou sem uso (e o C483 também; o aviso do 2º fix-round é o C484).
+- RN-197.03 (`entregaAutomaticaPeloLote`) passou a separar antes de bloquear — quebra esperada (`9bf6ccd6`).
+
+### Retro (4 números)
+
+- **Rodadas de correção até verde:** 2 (1º fix-round P1–P5; 2º fix-round, que desfez o P1).
+- **Achados reais da Fase 5:** 5 (P1–P5) + 1 regressão do próprio conserto (o P1, desfeito). **Ruído:** 0.
+- **Paralelismo:** nenhum na execução (T0→T3 em série, tronco); 2 revisores em paralelo no 1º fix-round.
+- **Defeito que escapou da 204:** nenhum conhecido.
+
 ## Próxima tarefa detalhada
 
-**Item 7 do 2º pacote** (`docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas-2.txt:28-30`, **4h a 4h30**): *"Lote bloqueado,
-reprovado ou vencido — 2ª parte: entrega"* — a 2ª parte do **C464**. Quando só sobra saldo em lote impedido, a entrega passa e a diferença vai para
-*"Sem lote atribuído"*, negativo (B1323). A entrega passa a recusar, dizendo qual lote está impedido.
+**Item 7 do 2º pacote** (`docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas-2.txt:28-30`, **4h a 4h30**, já commitada):
+*"Lote bloqueado, reprovado ou vencido — 2ª parte: entrega"* — a 2ª parte do **C464**, e a **causa do C484**. Quando só sobra saldo em lote
+impedido, a entrega passa e a diferença vai para *"Sem lote atribuído"*, negativo (B1323). A entrega passa a recusar, dizendo qual lote está
+impedido. Medido sobre `13fe3691` (sem consertar):
 
-- **O que esta etapa deixa pronto:** `saldoDisponivelParaItem` devolve `lote_impedido` e `disponivel_liberado` (B1368); o fragmento
-  `loteImpedidoSql`/`predicadoLoteImpedidoSql` (`loteImpedido.js`). A entrega lê hoje `disponivel_material` (`requisitionService.js:2170`, `:2226`)
-  e `tetoDaLeitura` (`:270-273`) — é ali que a recusa entra, e no resto do automático (`lotesParaOAutomatico` `:1846`; o que sobra sem lote, B1323).
-- **RN-205.10 fica vermelho de propósito** no item 7: ele fixa o comportamento de hoje (sai sem lote). Editar o teste é o primeiro passo da SDD.
-- **Decisão de negócio a registrar em B:** a B1323 cita *"a decisão do cliente de 2026-08-10 de não travar a entrega por lote"*
-  (`docs/almoxarifado-novidades-por-etapa.md:13665`); recusar a entrega a contraria — o caminho reversível é recusar só a parte que **nenhum** lote
-  elegível nem o saldo sem lote cobre, e registrar.
-- **A reserva que já existe** (B1372) é o caso que chega à entrega: a requisição aprovada antes do bloqueio separa (parte própria) e só a entrega
-  descobre. A recusa tem de nomear o lote (`Lote <codigo> esta bloqueado…`, as literais do motor, `stockService.js:1548-1583`).
-- Atenção à trava: a entrega já roda sob a trava por requisição e `comTravaDaRequisicao` (Etapa 95); a leitura do lote vai dentro.
-- Se sobrar tempo: **C478** (a chegada da nota reserva lote bloqueado sem certificado) é a vizinha mais barata — o mesmo fragmento no teto de
-  `reservarChegadaParaQuemEspera`.
+- **Onde a entrega cai no sem lote.** `requisitionService.entregarSemTrava` (`:1965`), laço das passadas (`:2455-2477`): na parte
+  **automática** de material com `controle_lote` sem série (`!baixa.comOrigem && plano.controleLote && !seriesPorItem.has(item.id)`, `:2465`),
+  `dividirPorLotes(await lotesParaOAutomatico(...), baixa.quantidade)` (`:2466`; `dividirPorLotes` `:1857`, `lotesParaOAutomatico` `:1900`, que
+  já filtra `elegivel` e desconta inspeção e parte guardada) e **`if (resto > Q.QTD_FOLGA) await baixar(plano, baixa, resto, null)`
+  (`:2473`) — é esta linha que cria o negativo.** `baixar` (`:2379`) chama o motor com lote `null`; o motor não exige lote na entrega
+  (`stockService.js:1321-1343`, decisão do cliente de 2026-08-10: `exigeLote` só onde há campo de lote) e drena a linha sem lote, que pode
+  ficar negativa.
+- **A recusa tem de vir antes da primeira baixa.** As passadas 0/1 (origem da separação, "Sai de") baixam **antes** da passada do automático
+  e não há transação: recusar em `:2473` deixaria a entrega meio baixada. O lugar é a conferência da requisição inteira (Etapa 135):
+  `saldoAjustadoPelosIrmaos(await saldoDisponivelParaItem(...))` + `maxEntregar(item, disponivel, tetoDaLeitura(item, saldo))` (`:2224-2228`;
+  o segundo caminho `:2280-2284`; `tetoDaLeitura` `:273`). Ali a parte automática que nenhum lote elegível **nem saldo sem lote positivo**
+  cobre é conhecida antes de baixar. `saldoDisponivelParaItem` já devolve `lote_impedido`/`disponivel_liberado` (B1368).
+- **A mensagem nomeia o lote.** Usar as literais do motor (`stockService.js:1550` *"Lote ⟨código⟩ esta ⟨bloqueado|reprovado⟩ e nao pode ser
+  utilizado"*, `:1580` *"Lote ⟨código⟩ vencido em ⟨data⟩ nao pode sair para consumo. …"*) ou uma frase própria com o material na frente, no
+  molde das recusas da entrega (*"⟨material⟩: não é possível entregar …"*). Ler `listarLotesDoMaterial` (que já dá `elegivel` por lote).
+- **O teste que fixa o de hoje vai ficar vermelho de propósito.** `loteImpedidoIntegracao.api.test.js:156` (`[RN-205.10]`, entrega de 6 sai
+  sem lote, sem lote −6) e `:179` (`[RN-205.10, segunda rodada]`, −10). Também caem: `entregaAutomaticaPeloLote.api.test.js` RN-197.03 (os dois
+  testes do `naoElegivel`, `:201-218`, que esperam `['SAIDA', null, null, 2]`) e os cenários do C484 em `loteImpedidoIntegracao`
+  (`[Fase 5 P1 desfeito]` e o do revisor), que **montam o negativo pela entrega** — vão precisar montá-lo por SQL (o negativo legado continua
+  existindo no banco). Editar esses testes é o primeiro passo da SDD.
+- **Material sem controle de lote: nada muda.** O ramo de fora (`:2477`, `baixar(plano, baixa, baixa.quantidade, null)`) não olha lote — e não
+  deve (B1371). A régua de "impedido" só existe com `controle_lote = 1`.
+- **Pontos de atenção.** (1) **A tela promete o que a porta recusaria** (o Achado 1 da 205, agora na entrega): o detalhe dá
+  `saldo_entregavel`/`quantidade_entregavel` com o `teto` de hoje (`normalizarItem`, que alimenta a janela de entrega e o botão de um clique) —
+  descontar ali também, senão a janela vem com 6 e a entrega recusa. (2) **A decisão do cliente de 2026-08-10** de não travar a entrega por
+  lote (B1323 cita; `docs/almoxarifado-novidades-por-etapa.md`, buscar "2026-08-10"): recusar a contraria — o caminho reversível é recusar só a
+  parte que **nenhum** lote elegível **nem** o saldo sem lote positivo cobre, e registrar em B. (3) **A reserva de antes do bloqueio** (B1372)
+  é o caso que chega à entrega: a requisição separa a parte própria e só a entrega descobre — a recusa tem de dizer o que fazer (liberar o
+  lote, ou devolver à prateleira e liberar a reserva). (4) **A origem da separação num lote que ficou impedido** depois de separar (passada 0):
+  não medido — o motor já recusa com a literal do lote (o lote vai explícito); conferir se a entrega inteira toma 400 antes de baixar algo.
+  (5) Trava: a entrega já roda sob a trava por requisição e `comTravaDaRequisicao` (Etapa 95); a leitura do lote vai dentro. (6) Depois do
+  item 7 o **C484** deixa de nascer, mas o negativo antigo fica: dizer na letra C o que fazer com ele (ajuste).
+- **O que está pronto e não precisa reabrir:** a régua e a conta (`loteImpedido.js`), os dois campos de `saldoDisponivelParaItem`, a aprovação,
+  a separação, a fila, o detalhe do separável e o índice.
+- **Se sobrar tempo:** **C478** (as três portas que distribuem para quem espera reservam lote impedido) — o mesmo fragmento no teto de
+  `reservaChegadaService` (`reservarChegadaParaQuemEspera`, `distribuirSemLock`).

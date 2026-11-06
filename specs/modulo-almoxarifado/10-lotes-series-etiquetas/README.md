@@ -1,5 +1,7 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 205 (2026-11-06, T0 `8bebd3ce`, T1 `f736cc71`, T2 `82ae8664`, T2b `18b41f47`, Fase 5 `17fb5202`, `13fe3691`): lote BLOQUEADO, REPROVADO ou vencido sem liberação deixa de contar na aprovação e na separação de material com `controle_lote` (C464, 1ª parte) — a régua `predicadoLoteImpedidoSql` é o contrário de `elegivel`; a entrega não muda (C464 2ª parte, item 7)** — ver a seção "Etapa 205", no fim. O status não muda.
+
 > **+ Etapa 202 (2026-11-06, Fase 2 `3d7b53c2`, T1 `00ec247e`, T2 `6aed6213`): a rota antiga de movimentação (v1) repassa `lote`, `lote_id` e `data_validade` ao motor (C458) — fora do `AJUSTE` (B1357, C475); forma pela régua da v2; `null`/vazio = sem lote; `aviso_validade` na resposta; C474 (`material_id` em texto) consertado no motor; a tabela do alcance de `controle_lote` e o parágrafo "Não confundir com a rota v1" valiam só até a 202 (anotados)** — ver a seção "Etapa 202", no fim. O status não muda (🟢).
 
 > **+ Etapa 197 (2026-11-05, plano `7f099fae`, Fase 2 `b21a81f5`, T0 `ee835811`, T1 `58227edf`/`d8a4f1d9`/`398d1e69`, T2 `e011affe`, Fase 5 `838bb350`, `1723b78c`, `351ee457`, `1ed41bb8`): a entrega de requisição de material com `controle_lote` passa a baixar a parte automática por lote (FEFO, só lote elegível, uma SAIDA por lote — revoga a B204 só nesse fluxo, B1320); a pendência (g) abaixo mudou e a linha da exclusão dela estava errada desde a Etapa 58 (corrigida à vista); as notas da tela de Lotes e do relatório Saldo por lote mudaram** — ver a seção "Etapa 197", no fim. O status não muda (🟢).
@@ -1201,3 +1203,22 @@ v1 não carrega lote — **valia até a 202** (e era o C458); anotados com o cer
 
 Testes: `movimentacaoV1Lote.api.test.js` (37), `movimentacaoV1LoteIntegracao.api.test.js` (14); os 16 arquivos que fazem `POST` na v1
 verdes sem mudança. Continua 🟢.
+
+## Etapa 205 — lote bloqueado, reprovado ou vencido não conta na aprovação e na separação (2026-11-06)
+
+Plano: `docs/superpowers/plans/2026-11-06-almoxarifado-etapa205-lote-impedido-na-aprovacao-e-separacao.md`. O checklist com hashes está na
+spec 05 (separação) e na 07 (aprovação). O que toca esta feature:
+
+- [x] **A régua do lote impedido em SQL** (`services/almoxarifado/loteImpedido.js`) — `COALESCE(status,'') <> 'ATIVO'` ou vencido
+  (`COALESCE(data_validade,'') <> ''`, `substr(...,1,10) <` hoje de Brasília) sem `vencimento_liberado_em` (`COALESCE(...,'') = ''`: o `''`
+  não libera, como no `elegivel`). Conferida lote a lote contra `listarLotesDoMaterial` (RN-205.01, oito lotes) — `8bebd3ce`. Divergência do
+  contrato do plano (que dizia `IS NULL`/`IS NOT NULL`), declarada no plano e no comentário do arquivo.
+- [x] **Índice `idx_receb_itens_almox_lote`** em `recebimentos_material_itens_almoxarifado(lote_id)`, `IF NOT EXISTS` no boot — `17fb5202`
+  (B1380, A111; primeiro boot em pasta vazia e numa cópia do banco de desenvolvimento).
+- [ ] **A pendência C464 — dividida:** a 1ª parte (aprovação e separação) está feita; a **2ª parte (a entrega)** continua: o resto que os
+  lotes elegíveis não cobrem sai sem lote (B1323), deixando *"Sem lote atribuído"* negativo — e esse negativo, anônimo, deixa o material
+  com menos livre que o real até um ajuste (**C484**; o abatimento que o resolvia foi desfeito por ser inseguro, B1379). É o item 7.
+- [ ] **Fora:** liberar o lote (`mudarStatusLote`, `liberarVencimento`, certificado) não recalcula nem distribui (**C480**); as telas de saldo
+  continuam contando o lote impedido (**C481**).
+
+Continua 🟢.

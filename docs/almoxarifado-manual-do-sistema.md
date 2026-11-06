@@ -804,6 +804,8 @@ Mudar a situação é feito em **Almoxarifado → Lotes e Séries**, botão **Mu
 
 Repare que **"Vencido" não é uma situação**. Vencimento é calculado na hora da leitura, comparando a data de validade com a data de hoje — o dia do horário de Brasília: o lote fica vencido a partir do dia **seguinte** ao da validade, então o lote que vence hoje ainda sai até a meia-noite — e é um eixo independente da situação. Um lote pode estar Ativo e vencido, ou Bloqueado e vencido, ao mesmo tempo.
 
+**O lote que não pode sair não conta para aprovar nem para separar.** Em material com **controle por lote**, o saldo de um lote **impedido** — Bloqueado, Reprovado, ou vencido sem a liberação de vencimento — continua no físico e no disponível de todas as telas de saldo (Materiais, Estoque, relatórios), mas a **aprovação** não o reserva (9.3) e a **separação** não o oferece (10.2). O vencido **com** liberação e o que vence hoje contam normalmente. Material **sem** controle por lote não tem esse desconto. A entrega da requisição continua como descrita em 7.5.
+
 ### 4.3 Validade, material vencido e liberação de vencimento
 
 A ordem de verificação importa e é sempre a mesma: **primeiro a situação, depois o vencimento.**
@@ -2568,6 +2570,20 @@ O "já tem reservado" faz a reserva nunca dobrar: um item que já segura saldo d
 
 A **caixa sem reserva dos outros itens** (10.2) é o material separado e ainda não entregue, sem reserva que o cubra, para os outros pedidos do mesmo material — de qualquer requisição em andamento, inclusive outros itens da mesma requisição. Ele ainda está na prateleira e conta no disponível, mas já foi separado para outro pedido: a aprovação não o reserva. A caixa do próprio item não é descontada — a reserva nova a cobre. A conta é arredondada a 6 casas decimais e nunca é negativa. Com 6 na prateleira e 4 na caixa sem reserva de outra requisição, um pedido de 4 reserva 2 e fica **Parcialmente Reservada**. Com todo o disponível na caixa de outros pedidos, a aprovação não reserva nada: a requisição fica **Aprovado** (o status da aprovação olha o disponível do material, que não desconta a caixa) e a Fila de separação a mostra com **Aguardando saldo** (10.6) até chegar material ou a caixa sair (10.2).
 
+**Lote que não pode sair não é reservado.** Em material com **controle por lote**, o *disponível do material* da conta acima é o disponível **menos o saldo em lote impedido** (Bloqueado, Reprovado, ou vencido sem liberação — 4.2). O saldo em lote impedido é:
+
+```
+saldo em lote impedido = máximo(0, soma, pelos lotes impedidos, de máximo(0, saldo do lote − em inspeção no lote)
+                                − bloqueado do material − em poder de terceiros
+                                − em inspeção do material que não veio de recebimento com lote)
+```
+
+O bloqueado, o em poder de terceiros e o em inspeção já saem do disponível e não dizem de que lote são; a conta supõe que estão **dentro** do lote impedido, para nunca tirar a mesma peça duas vezes (um lote sem certificado de material crítico fica bloqueado **e** em inspeção). Por isso, quando a peça bloqueada está num lote que pode sair, o desconto fica menor que o real — nunca maior. O resultado é arredondado a 6 casas. Exemplos: lote L1 Ativo com 4 e lote L2 Bloqueado com 6, pedido de 10 → reserva **4**, **Parcialmente Reservada**; só o lote Bloqueado com 6, pedido de 3 → nada reservado, **Aguard. Estoque** (ou **Aguard. Compra**, com compra a caminho) — nunca *Aprovado* sem reserva; só um lote Ativo vencido ontem com 5 → **Aguard. Estoque**, e depois de **Liberar vencimento** uma requisição de 5 fica **Totalmente Reservada**.
+
+**A reserva que já existe fica.** Bloquear um lote não solta a reserva de ninguém: a requisição aprovada antes do bloqueio continua com a reserva, aprovar de novo não mexe nela, e a separação aceita a parte dela (10.2). A próxima requisição do material é que não reserva nada do lote bloqueado. **Liberar o lote** (anexar o certificado, voltar a *Ativo*, liberar o vencimento) não reserva para a requisição que ficou esperando nem muda o status dela — a separação já enxerga o lote liberado.
+
+**A reserva manual** (tela **Reservas**, 9.6) e a reserva para quem espera **na chegada** da nota, da inspeção ou da não conformidade e no encerramento da OS (9.3b, 9.3c, 9.3e) **não** têm esse desconto: usam o disponível de sempre.
+
 As reservas são criadas **uma a uma**, relendo o disponível a cada uma — dois itens do mesmo material não reservam o mesmo saldo duas vezes.
 
 O status final da requisição sai daí:
@@ -2576,7 +2592,7 @@ O status final da requisição sai daí:
 |---|---|
 | Todo item pendente saiu com o pedido **inteiro** reservado | **Totalmente Reservada** |
 | Alguma coisa foi reservada, mas não tudo | **Parcialmente Reservada** |
-| Nada foi reservado, e nenhum item tinha saldo | **Aguard. Compra** ou **Aguard. Estoque** (7.1) |
+| Nada foi reservado, e nenhum item tinha saldo (o saldo em lote impedido não conta) | **Aguard. Compra** ou **Aguard. Estoque** (7.1) |
 | Nada foi reservado, mas algum item tinha saldo — a reserva falhou, ou todo o disponível estava na caixa sem reserva de outros pedidos | **Aprovado** |
 | Nada foi reservado porque outra aprovação levou o último saldo ao mesmo tempo | O sistema relê o saldo e grava **Aguard. Compra** ou **Aguard. Estoque** |
 
@@ -2710,6 +2726,12 @@ até o que falta para o item e reserva para a requisição como sempre. No livro
 na requisição ⟨REQ⟩"*. O que a requisição não usou continua reservado para a OS. Se a aprovação não se confirmar (a requisição foi cancelada no
 mesmo instante, por exemplo), a reserva da OS é refeita com o que tinha sido convertido. A conversão acontece **só na aprovação**: a requisição
 da OS que já estava aprovada e sem reserva quando chega à separação ou à entrega não converte — ela usa só o disponível comum.
+
+**Com lote impedido** (9.3), a conversão olha só o que pode sair. Como a reserva da OS e a requisição da OS são da mesma dona, o que a
+reserva da OS segura é contado **primeiro** sobre o saldo em lote impedido: com L1 Ativo 4, L2 Bloqueado 6 e uma reserva da OS de 8, a
+requisição da OS de 4 converte 4 e fica **Totalmente Reservada**, e a reserva da OS fica com 4. A requisição converte só o que vai
+reservar (pedindo 8, converte 4 e a reserva da OS fica com 4) e, com todo o material em lote impedido, não converte nada — fica **Aguard.
+Estoque** e a reserva da OS fica inteira.
 
 **O que a reserva da OS segura.** Como toda reserva, ela tira o material do **disponível** (9.1): nenhuma outra requisição, saída avulsa ou
 reserva manual o leva. Uma saída que **consome contra a reserva** (9.4, citando a reserva) consome dela sem conferir se é da mesma OS. Na tela
@@ -2877,6 +2899,8 @@ No modal de separação, cada item mostra **Solicitado · Já separado · Saldo*
 
 O "Saldo" mostrado é o **disponível do material somado ao que a própria requisição já reservou** — o que a aprovação reservou é dela e não pode barrá-la. Ele **não** desconta o material separado e ainda não entregue (a caixa — 10.2); o separável desconta.
 
+Em material com controle por lote, quando há saldo em lote impedido (9.3), a linha do item ganha, depois do *Saldo*, *"· Em lote bloqueado/reprovado/vencido: ⟨quantidade⟩ ⟨unidade⟩"* — o *Saldo* continua contando esse lote; o separável (o número do campo), não. Quando o campo vem **maior** que *Saldo − impedido* — a reserva desta requisição foi feita antes do bloqueio e continua valendo (10.2) —, a linha termina com *"; a reserva desta requisição continua valendo"*. Exemplos: *"Saldo: 10 · Em lote bloqueado/reprovado/vencido: 6 un"* com o campo em 4; *"Saldo: 10 · Em lote bloqueado/reprovado/vencido: 10 un; a reserva desta requisição continua valendo"* com o campo em 6. Sem lote impedido, a linha não aparece.
+
 ### 10.2 Iniciar separação
 
 Registra a quantidade separada por item e leva a requisição para **Em Separação**. Cada confirmação do formulário com pelo menos um item de quantidade maior que zero é uma **rodada de separação**, registrada com quem, quando e quais itens — a separação pode acontecer em várias rodadas, por pessoas diferentes, e cada rodada fica guardada; nenhuma apaga a anterior.
@@ -2908,7 +2932,7 @@ separável = máximo(0, reserva − caixa)
           + máximo(0, livre − caixa sem reserva dos outros − máximo(0, caixa − reserva))
 ```
 
-- **livre** é o disponível do material (6.1) — físico menos reservado, bloqueado, em inspeção e em poder de terceiros —, que já não conta nenhuma reserva, nem a do próprio item;
+- **livre** é o disponível do material (6.1) — físico menos reservado, bloqueado, em inspeção e em poder de terceiros — e, em material com controle por lote, menos o saldo em lote impedido (9.3) —, que já não conta nenhuma reserva, nem a do próprio item;
 - **reserva** é o que a reserva da própria requisição ainda segura para o item (9.3);
 - **caixa** é o que o item tem separado e ainda não entregue;
 - **caixa sem reserva dos outros** é a soma, pelos **outros** itens do mesmo material, do que cada um tem separado e não entregue além da sua própria reserva (`máximo(0, caixa − reserva)` de cada um) — de qualquer requisição em andamento, **inclusive outros itens da mesma requisição**. A parte da caixa que a reserva cobre não entra: ela já saiu do livre pela reserva e não é descontada duas vezes.
@@ -2920,6 +2944,8 @@ Exemplos, todos com material comum:
 - Pedido de 6, 4 na prateleira, a aprovação reservou 4. Antes de separar: separável 4. Separados os 4: separável 0 — os 2 que faltam esperam material.
 - Duas requisições sem reserva, de 4 cada, e 4 na prateleira. A primeira separa 4; a segunda fica com separável 0, e a tentativa de separar é recusada com *"Porca: não é possível separar 4 PC. Máximo: 0 (pendente: 4, disponível: 0)"*.
 - Uma requisição com reserva de 4 e os 4 já na caixa, e 8 na prateleira: outra requisição separa 4 — a caixa coberta pela reserva não é descontada de novo.
+
+**Lote que não pode sair não é separado.** Em material com controle por lote, o saldo em lote impedido (Bloqueado, Reprovado, ou vencido sem liberação — 9.3) sai do **livre**; a reserva do próprio item não (a parte `máximo(0, reserva − caixa)` continua do item, mesmo que a reserva tenha sido feita antes de o lote ser bloqueado). Quando é o lote impedido que corta o máximo, e o máximo fica abaixo do que falta separar, a recusa ganha uma segunda frase com o quanto o lote cortou: com L1 Ativo 4, L2 Bloqueado 6 e um pedido de 10 reservado em 4, separar 5 é recusado com *"Pino: não é possível separar 5 un. Máximo: 4 (pendente: 10, disponível: 4). Não entram 6 un em lote bloqueado, reprovado ou vencido."* — e separar 4 é aceito sem pedir motivo de divergência (o máximo é 4). Sem lote impedido, ou quando quem limita é o que falta separar, a recusa é só a primeira frase. A janela de separação, o detalhe e a Fila de separação mostram o mesmo número; com todo o saldo em lote impedido, o item não aparece na janela e a Fila mostra **Aguardando saldo** (10.6).
 
 **Quem segura a caixa.** Só conta como caixa o separado e não entregue de requisição em andamento: *Aprovado*, *Aguard. Estoque*, *Aguard. Compra*, *Parcialmente Reservada*, *Totalmente Reservada*, *Em Separação*, *Pronta p/ Retirada*, *Parcialmente Atendida* e *Aguard. Aprov. Valor*. Quando a requisição é cancelada, rejeitada ou excluída, o que ela tinha separado e não entregou deixa de ser descontado e volta a contar como livre — sem nenhum movimento de estoque, porque nada tinha saído. Na prateleira, esse material precisa voltar ao lugar (10.5). Encerrar não entra nessa lista: com material na caixa o encerramento é recusado (7.6). Uma requisição *Entregue* ou *Encerrada* não segura caixa — se os números de uma delas mostrarem separado acima do entregue (registro antigo), esse excedente já conta como livre.
 
@@ -3164,7 +3190,7 @@ Totalmente Reservada, Parcialmente Reservada, Em Separação, Parcialmente Atend
 | Chip | Quando aparece | Dá para agir agora? |
 |---|---|---|
 | **Separar** | Algum item é **separável agora**: o menor entre o que falta separar e o separável do item (10.2) é maior que zero — o mesmo número que a separação aceita | Sim |
-| **Aguardando saldo** | Algum item falta separar e o separável dele é zero — falta material, o que está na prateleira já está na caixa de outros pedidos (10.2), ou o que há do material já vai para um item anterior da mesma requisição (a divisão de 10.2 — então a mesma requisição pode mostrar *Separar* e *Aguardando saldo*); ou há separado a entregar, mas nada **entregável agora** — inclusive quando o disponível do material está negativo e nada dele sai pela entrega (7.5) | Não |
+| **Aguardando saldo** | Algum item falta separar e o separável dele é zero — falta material, o que está na prateleira já está na caixa de outros pedidos (10.2), o que há está em lote bloqueado, reprovado ou vencido (9.3), ou o que há do material já vai para um item anterior da mesma requisição (a divisão de 10.2 — então a mesma requisição pode mostrar *Separar* e *Aguardando saldo*); ou há separado a entregar, mas nada **entregável agora** — inclusive quando o disponível do material está negativo e nada dele sai pela entrega (7.5) | Não |
 | **Conferir** | Material crítico separado sem a segunda conferência (10.3), com a requisição *Em Separação*. Para quem separou, o chip diz **"Conferir — você separou, peça a outra pessoa"** | Sim |
 | **Separar de novo para conferir** | A mesma conferência pendente, num estado de separação que não é *Em Separação* (por exemplo, *Parcialmente Atendida*): o caminho é o botão **Separar de novo para conferir** (ou **Ajustar Separação** confirmado sem mudar nada), que volta a *Em Separação* (10.3) | Sim |
 | **Conferência pendente — peça ao administrador** | A mesma conferência pendente com a requisição *Pronta p/ Retirada*, de onde a separação não reabre — devolver à prateleira (10.2b) leva a requisição de volta a *Em Separação* | Não |

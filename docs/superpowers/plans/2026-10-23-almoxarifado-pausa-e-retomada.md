@@ -1,13 +1,22 @@
 # Almoxarifado — pausa de 2026-10-23 e como retomar
 
 > **✅ RETOMADO em 2026-11-05 — este arquivo agora é histórico.** O André retomou o módulo em 05/11 (estimativa
-> `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md`). **Depois: a Etapa 201 fechou** em 05/11 (2º pacote da
+> `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md`). **Depois: a Etapa 205 fechou** em 06/11 (2º pacote da
+> estimativa, item 6; plano `88f18de5`, Fase 2 `422b8e90`, T0 `8bebd3ce`, T1 `f736cc71`, T2 `82ae8664`, T2b `18b41f47`, T3 `e989ec54`,
+> `33328089`, `9bf6ccd6`, execução `aedfd999`, Fase 5 `689bfa7d`, `65a19db6` (desfeito), `17fb5202`, `52fa9328`, `0516c933`, `13fe3691`, e o
+> commit "Etapa 205: fechamento") — lote bloqueado, reprovado ou vencido não conta na aprovação e na separação (C464 resolvido na 1ª parte).
+> Letra **B** usada até **B1382** (B1368–B1382 pela 205), letra **C** até **C484** (C478–C481 e C484 pela 205; C482 e C483 sem uso), letra
+> **A** até **A111** (a A111 pela 205 — a próxima é **A112**). As Etapas 202 a 204 fecharam sem atualizar este arquivo (B até B1367, C até
+> C477; o histórico delas está no cabeçalho do guia e nos planos). **Próxima:** item 7 do 2º pacote — Lote bloqueado, reprovado ou vencido,
+> 2ª parte: entrega (C464 2ª parte, causa do C484); detalhada no fim de
+> `docs/superpowers/plans/2026-11-06-almoxarifado-etapa205-lote-impedido-na-aprovacao-e-separacao.md`.
+> *(Antes: a **Etapa 201 fechou** em 05/11 (2º pacote da
 > estimativa, item 2; plano `855e7404`, Fase 2 `1fc07cbf`, T1 `1b04ad38`, T2 `4b62f20c`, T3 `f089c284`, T4 `b3727231`, execução `65902725`,
 > Fase 5 `dfffe96b`, `ab1d6246`, `298a3d72`, e o commit "Etapa 201: fechamento") — o "Sai de" das janelas de separação e de entrega mostra o
 > que sobra depois do separado para outras requisições (C469 resolvido). Letra **B** usada até **B1349** (B1343–B1349 pela 201), letra **C**
 > até **C473** (C473 pela 201), letra **A** a partir de **A111** (a 201 não usou). **Próxima:** item 3 do 2º pacote — Movimentação por
 > integração respeita o lote informado (C458); detalhada no fim de
-> `docs/superpowers/plans/2026-11-05-almoxarifado-etapa201-sai-de-mostra-o-que-sobra.md`.
+> `docs/superpowers/plans/2026-11-05-almoxarifado-etapa201-sai-de-mostra-o-que-sobra.md`.)*
 > *(Antes: a **Etapa 200 fechou** em 05/11 (2º pacote da
 > estimativa, `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas-2.txt`, item 1; plano `fd1daad2`, Fase 2 `e22db079`, T1
 > `d7ff9a39`, T2 `943a486e`, T3 `71783dc8`, execução `52ae600e`, Fase 5 `5bc921e4`, e o commit "Etapa 200: fechamento") — a entrega com "Sai

@@ -1,5 +1,7 @@
 # 07 — Reservas de Estoque
 
+> **+ Etapa 205 (2026-11-06, T1 `f736cc71`, Fase 5 `52fa9328`): a aprovação reserva só o que está em lote que pode sair (C464, 1ª parte, B1368–B1372, B1381)** — as três portas leem `disponivel_liberado` e `calcularStatusPosAprovacao` desconta `loteImpedidoSql`; a requisição da OS converte a reserva da OS acima do liberado. Ver a seção "Etapa 205", no fim. O status não muda.
+
 > **+ Etapa 176 (2026-10-22, `c1c04e1b`, Fase 5 `eb82e52b`): a reserva da OS nasce também da NF sem pedido com OS, e o dono do material é conferido sob a trava antes de reservar (B1154)** — ver a seção "Etapa 176", no fim. O status não muda.
 
 > **Status:** 🟢 Etapa 4 completa — backend (2026-08-05) e tela (2026-08-06) ·
@@ -631,3 +633,22 @@ Plano: `docs/superpowers/plans/2026-10-22-almoxarifado-etapa176-recebimento-com-
   do teto de quantidade; não casa → não reserva (o material fica livre) e loga — `eb82e52b`. Teste: a OS troca de cliente entre a chegada e a
   inspeção → a inspeção não reserva.
 - [ ] **Fora (D (176)):** a OS que troca de cliente **depois** de a reserva nascer não a solta (liberar à mão em **Reservas**).
+
+## Etapa 205 — a aprovação reserva só o que pode sair (2026-11-06)
+
+Plano: `docs/superpowers/plans/2026-11-06-almoxarifado-etapa205-lote-impedido-na-aprovacao-e-separacao.md` (Fase 2 `422b8e90`). A conta do
+lote impedido (`loteImpedido.js`, `8bebd3ce`) e a parte da separação estão na spec 05 (seção "Etapa 205"). Nenhuma coluna nova em
+`reservas_material_almoxarifado`, nenhuma trava nova (B1375). Continua 🟢.
+
+- [x] **RN-205.03** — `reservarItensAprovacao` lê `disponivel_liberado` (as três portas: `/aprovar`, `/aprovar-valor`, a automática): L1 ATIVO 4,
+  L2 BLOQUEADO 6, requisição de 10 → reserva 4, `PARCIALMENTE_RESERVADA` — `f736cc71`.
+- [x] **RN-205.04** — `calcularStatusPosAprovacao` subtrai `loteImpedidoSql('ma')`: só lote impedido → `AGUARDANDO_ESTOQUE` (ou
+  `AGUARDANDO_COMPRA`), não `APROVADO` sem reserva; o recálculo da chegada herda (B1377) — `f736cc71`.
+- [x] **RN-205.05 / .06** — vencido conta como impedido, o vencimento liberado volta a contar; sem `controle_lote` igual a antes — `f736cc71`.
+- [x] **RN-205.07** — a reserva que já existe não é revogada; reaprovar não mexe nela; a R2 depois do bloqueio não reserva (B1372) — `f736cc71`.
+- [x] **Fase 5 P5 (B1381)** — a requisição da OS converte a reserva da OS mesmo com o liberado negativo: o que sobra da reserva da OS conta
+  primeiro sobre o lote impedido (`osNoImpedido`), a requisição converte só o que vai reservar e só se reservar algo; a soma das reservas
+  não muda; sem lote impedido a regra da 171 fica byte a byte — `52fa9328`. Testes `loteImpedidoAprovacao.api.test.js` (a, b, c); suítes da
+  OS (171/172/176) verdes.
+- [ ] **Fora:** a reserva manual (`criarReserva`) conta lote impedido (**C479**); as três portas que distribuem para quem espera (nota,
+  inspeção/NC, OS encerrada) também (**C478**); liberar o lote não distribui (**C480**).
