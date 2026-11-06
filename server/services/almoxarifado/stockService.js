@@ -1279,7 +1279,9 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
   if (lote_id) {
     loteResolvido = await lotService.getLote(db, lote_id);
     if (!loteResolvido) throw Object.assign(new Error('Lote nao encontrado'), { status: 400 });
-    if (loteResolvido.material_id !== material_id) {
+    // Etapa 202 (C474): Number dos dois lados — a v1 (e /transferencias) nao tipa material_id; `"7" !== 7` dava "pertence a outro
+    // material" para o lote do proprio material (mensagem errada para um tipo errado)
+    if (Number(loteResolvido.material_id) !== Number(material_id)) {
       throw Object.assign(new Error('O lote informado pertence a outro material'), { status: 400 });
     }
   } else if (lote && String(lote).trim()) {

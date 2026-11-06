@@ -74,8 +74,8 @@ const { dbRun, dbGet, dbAll } = require('../services/almoxarifado/db');
 // rota de foto de material vinha deixando orfao em toda saida != 200. Aqui o nome pode ser o
 // direto: nao ha funcao local homonima (diferente da extended, que importa com alias).
 const { limparUploadOrfao } = require('../services/almoxarifado/uploadCleanup');
-const { validate } = require('../services/almoxarifado/validation');
-const { MaterialSchema, MaterialUpdateSchema, RequisicaoSchema } = require('../services/almoxarifado/schemas');
+const { validate, formatZodError } = require('../services/almoxarifado/validation');
+const { MaterialSchema, MaterialUpdateSchema, RequisicaoSchema, LoteDaMovimentacaoV1Schema } = require('../services/almoxarifado/schemas');
 const { registrarAuditoria } = require('../services/almoxarifado/audit');
 // Etapa 31: o numero de documento do modulo vem de UM gerador so (INV/REQ/REC/REM). Antes desta
 // etapa a rota de conferencia montava o `INV-` inline, com o milissegundo fatiado em DECIMAL (os
@@ -1394,11 +1394,31 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       return res.status(400).json({ error: 'Motivo é obrigatório para saída e ajuste' });
     }
 
+    // Etapa 202 (C458, B1350): o lote citado vai ao motor — antes a v1 o descartava e a saida de um lote vencido passava "sem lote",
+    // deixando a linha "Sem lote atribuido" negativa. `null` e ausente (B1352: quem serializa vazio como null continua com 201), e o
+    // `lote` so de espacos tambem (senao o livro gravaria '  ' como codigo). AJUSTE NAO repassa nada (Fase 2, C475): o AJUSTE com lote
+    // deixa a linha do lote negativa no motor — fica igual a antes da 202 ate o motor ser consertado.
+    const loteCru = {};
+    if (tipo !== 'AJUSTE') {
+      for (const k of ['lote', 'lote_id', 'data_validade']) {
+        if (req.body[k] !== undefined && req.body[k] !== null) loteCru[k] = req.body[k];
+      }
+      if (typeof loteCru.lote === 'string' && !loteCru.lote.trim()) delete loteCru.lote;
+    }
+    // A forma de `lote`/`lote_id` e a da v2 (B1351), depois de tipo e motivo (a ordem de recusas de antes nao muda). So as chaves
+    // presentes vao ao safeParse.
+    const forma = LoteDaMovimentacaoV1Schema.safeParse(
+      Object.fromEntries(['lote', 'lote_id'].filter((k) => k in loteCru).map((k) => [k, loteCru[k]])));
+    if (!forma.success) {
+      return res.status(400).json({ error: `Dados inválidos — ${formatZodError(forma.error)}` });
+    }
+
     try {
       // `exigeLote: true` — esta rota tambem e movimentacao MANUAL (o modal rapido da tela de
       // Materiais), entao um material com `controle_lote` continua sendo recusado aqui, como era
-      // antes do review final. O contrato v1 nao carrega lote: a recusa e o comportamento certo,
-      // e a saida do operador e a tela de Movimentacoes, que tem o campo. Tirar a exigencia daqui
+      // antes do review final. Desde a Etapa 202 o contrato v1 CARREGA lote (`lote`/`lote_id`/`data_validade`, acima): quem
+      // cita o lote movimenta o material controlado como na v2; quem NAO cita (o modal, que nao tem o campo) continua
+      // recusado — e a saida do operador e a tela de Movimentacoes, que tem o campo. Tirar a exigencia daqui
       // abriria um bypass silencioso da flag por um formulario que o usuario ja tem na mao — o
       // oposto do que a isencao dos fluxos internos resolve (aqueles nao tem NENHUMA porta).
       // `exigeSerie: true` (Etapa 6b): mesma logica — este corpo tambem nao carrega `series`, entao
@@ -1407,11 +1427,14 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       const result = await stockService.registrarMovimentacao(db, req.user, {
         material_id, tipo, quantidade, motivo, referencia, observacoes,
         justificativa: motivo || null,
+        ...loteCru,
       }, { exigeLote: true, exigeSerie: true });
       res.status(201).json({
         id: result.id, material_id, tipo, quantidade,
         saldo_anterior: result.saldo_anterior, saldo_posterior: result.saldo_posterior,
         motivo, referencia, observacoes,
+        // Etapa 202 (Fase 2, B1356): o aviso de validade do motor (lote preenchido, entrou vencido) — so quando ele avisa
+        ...(result.aviso_validade ? { aviso_validade: result.aviso_validade } : {}),
       });
     } catch (e) {
       res.status(e.status || 500).json({ error: e.message });

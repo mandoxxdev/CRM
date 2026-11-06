@@ -145,6 +145,15 @@ const MovimentacaoSchema = z.object({
   }
 });
 
+// Etapa 202 (B1351): a rota antiga (v1, POST /movimentacoes) julga a FORMA de `lote`/`lote_id` pela mesma regua da v2 — so estas
+// duas chaves. `MovimentacaoSchema.pick()` lanca (o objeto tem superRefine, zod 4), entao o par sai do `.shape`. O schema inteiro na
+// v1 mudaria as recusas de quantidade/material/tipo que o modal e os testes da v1 conhecem; `data_validade` fica fora (na v2 ela e
+// z.unknown(): quem julga e o motor).
+const LoteDaMovimentacaoV1Schema = z.object({
+  lote: MovimentacaoSchema.shape.lote,
+  lote_id: MovimentacaoSchema.shape.lote_id,
+});
+
 const RegularizacaoSchema = z.object({
   os_id: z.number().int().optional(),
   projeto_id: z.number().int().optional(),
@@ -861,6 +870,8 @@ const RecebimentoFiscalSchema = z.looseObject({
 
 module.exports = {
   CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, TIPOS_MOVIMENTO_ROTA,
+  LoteDaMovimentacaoV1Schema, // Etapa 202 (B1351): a v1 o usa; lista fechada — sem esta linha a v1 morre em undefined.safeParse
+
   RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema,
   MaterialSchema, MaterialUpdateSchema, RequisicaoSchema, ItemRequisicaoSchema,
   ItemRemessaTerceiroSchema, RemessaTerceiroSchema, RetornoRemessaSchema,
