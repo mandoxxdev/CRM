@@ -331,8 +331,11 @@ async function registrarDevolucao(db, user, data) {
         justificativa: observacoes, referencia,
       }, opcoesEntrada);
       if (destinoFinal === 'QUARENTENA') {
+        // Etapa 209 (T2, B1416): o BLOQUEIO leva o MESMO lote da ENTRADA_DEVOLUCAO (o informado ou o herdado da saida) — sem
+        // ele o sistema sabia "1 bloqueado" mas nao de qual lote (C466); o bloqueado por lote e somado do livro
+        // (`bloqueioPorLote.js`). Sem lote continua sem lote (`undefined`, o motor grava NULL).
         await registrarMovimentacao(db, user, {
-          material_id, tipo: 'BLOQUEIO', quantidade, motivo: 'Devolução para quarentena',
+          material_id, tipo: 'BLOQUEIO', quantidade, motivo: 'Devolução para quarentena', lote_id: loteFinalId || undefined,
           justificativa: 'Devolução recebida em quarentena para inspeção', referencia,
         });
       }
