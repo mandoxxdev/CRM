@@ -229,6 +229,30 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(await retrato(m), { linhas: [], fisico: 0 });
   });
 
+  // ── RN-207.06: o livro e o desfazer (B1402, Achado 1) ───────────────────────────────────────────────────────────────────────────
+  const excluir = (R) => ok(como('ADMIN').del(`${API}/requisicoes/${R}`, { justificativa: 'e207' }));
+  await test('[RN-207.06] depois da 1a entrega da RN-207.01, excluir pela rota: cada ENTRADA volta ao endereco da SAIDA (A 3, B 2, P 0)', async () => {
+    const { m, R, ids } = await cenario01();
+    await entregar(R, [{ item_id: ids[0], quantidade_atendida: 3 }]);
+    await excluir(R);
+    assert.deepStrictEqual(await livro(R, m), [['SAIDA', 'GZ-A', null, 1], ['SAIDA', 'GZ-B', null, 2],
+      ['ENTRADA', 'GZ-A', null, 1], ['ENTRADA', 'GZ-B', null, 2]]);
+    const destinos = await dbAll(db, `SELECT localizacao_destino_id d FROM movimentacoes_almoxarifado WHERE requisicao_id = ? AND material_id = ?
+      AND tipo = 'ENTRADA' ORDER BY id`, [R, m.id]);
+    assert.deepStrictEqual(destinos.map((x) => x.d), [A.id, B.id]);
+    assert.deepStrictEqual(await retrato(m), { linhas: ['GZ-A/-=3', 'GZ-B/-=2'], fisico: 5 });
+  });
+  await test('[RN-207.06 controle] a SAIDA sem endereco da RN-207.02 a: a exclusao devolve para a padrao P (o teste distingue)', async () => {
+    const m = await material();
+    await entrar(m, A.id, 3); await entrar(m, B.id, 2);
+    const { R, ids } = await reqDireta([[m.id, 3]]);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 3 }]);
+    await entregar(R, [{ item_id: ids[0], quantidade_atendida: 3 }]);
+    await excluir(R);
+    assert.deepStrictEqual(await livro(R, m), [['SAIDA', null, null, 3], ['ENTRADA', null, null, 3]], 'a ENTRADA sem endereco no livro: o motor credita na padrao');
+    assert.deepStrictEqual(await retrato(m), { linhas: ['GZ-B/-=2', 'GZ-P/-=3'], fisico: 5 });
+  });
+
   void requisitionService;
   await close();
   terminou = true;
