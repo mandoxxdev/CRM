@@ -13984,6 +13984,18 @@ filtro do saldo ganhou o material (usa o índice que já existia) e `idx_receb_i
 com inspeção > 0 (a consulta usa `COALESCE(...) > 0` e o SQLite não o escolheria) e índice composto (lote, inspeção) (ganho pequeno, mais
 escrita). **Reversível** (`DROP INDEX idx_receb_itens_almox_lote`). Conferência em produção: **A111**.
 
+**B1381 (NOVA, da Etapa 205, Fase 5 P5; decisão do agente) — a requisição da OS converte a reserva da OS mesmo quando a reserva passa do
+que pode sair.** Exemplo: L1 ATIVO 4, L2 bloqueado 6, a OS tem reserva de 8 (feita antes do bloqueio). Desde a T1 a aprovação lê só o que
+pode sair (4) e a reserva da OS já toma esses 4: o livre ficava −4, a conversão da reserva da OS não acontecia e a requisição da própria
+OS ficava *Aguardando estoque* para sempre, com 4 peças boas na prateleira reservadas para ela (antes da Etapa 205 convertia). **Escolhido:**
+como a reserva da OS e a requisição são da **mesma dona**, o que sobra da reserva da OS é contado primeiro sobre o lote impedido (até o
+impedido); a requisição dela converte e reserva o que pode sair — **só o que vai reservar** (não libera 8 para devolver 4) e só se a
+previsão reservar algo (com tudo bloqueado a reserva da OS fica inteira, sem ser partida). Para os outros não muda nada: a soma das
+reservas é a mesma antes e depois, e a requisição da OS nunca passa de *o que pode sair − as outras reservas − a caixa alheia*. Sem lote
+impedido a regra é a da Etapa 171, intacta. **Descartado:** deixar como estava e mandar ajustar a reserva da OS à mão (é o defeito que
+travava a OS); converter pelo disponível de antes da 205 (reservaria peça de lote bloqueado quando tudo está bloqueado). **Reversível**
+(o abono `osNoImpedido` em `reservarItensAprovacao`).
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente

@@ -198,6 +198,48 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(await reservas(r.body.id), [[4, 'ATIVA']]);
   });
 
+  // ── Fase 5 (P5, B1381): a conversao da reserva da OS com o liberado NEGATIVO (a reserva da OS passa do que pode sair). O que sobra
+  // da reserva da OS fica no lote impedido (mesma dona); a requisicao dela pega o que pode sair, sem tirar dos outros ─────────────────
+  const reservaDaOs = async (m, q) => {
+    const rid = (await dbRun(db, `INSERT INTO reservas_material_almoxarifado (material_id, quantidade, quantidade_utilizada, status, origem,
+        os_id, os_referencia, recebimento_id) VALUES (?, ?, 0, 'ATIVA', 'MANUAL', 20598, 'OS-205Y', 20598)`, [m, q])).lastID;
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_reservada = COALESCE(quantidade_reservada,0) + ? WHERE id = ?', [q, m]);
+    return rid;
+  };
+  const daOs = async (m) => (await dbAll(db, `SELECT quantidade, status FROM reservas_material_almoxarifado WHERE material_id = ?
+    AND os_referencia = 'OS-205Y' AND requisicao_id IS NULL ORDER BY id`, [m])).map((x) => [Number(x.quantidade), x.status]);
+  const reqDaOs = async (m, q) => {
+    const r = await como('SOL').post(`${API}/requisicoes`, { os_referencia: 'OS-205Y', itens: [{ material_id: m, quantidade: q }] });
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    return r.body.id;
+  };
+  await test('[Fase 5 P5 a] L1 ATIVO 4, L2 BLOQUEADO 6, reserva da OS 8 (liberado -4): a requisicao da OS de 4 converte 4 dos 8 (antes: nao convertia, AGUARDANDO_ESTOQUE com 4 bons na prateleira)', async () => {
+    const m = await l1l2(); await reservaDaOs(m, 8);
+    const R = await reqDaOs(m, 4);
+    assert.strictEqual((await aprovar(R)).body.status, 'TOTALMENTE_RESERVADA');
+    assert.deepStrictEqual(await reservas(R), [[4, 'ATIVA']]);
+    assert.deepStrictEqual(await daOs(m), [[4, 'ATIVA']], 'a OS fica com os 4 que cabem no lote impedido');
+    // neutro para os outros: a requisicao comum continua sem nada (antes e depois, as reservas somam 8 sobre 4 que podem sair)
+    const R3 = (await criar(m, 1)).id;
+    assert.strictEqual((await aprovar(R3)).body.status, 'AGUARDANDO_ESTOQUE');
+    assert.deepStrictEqual(await reservas(R3), []);
+  });
+  await test('[Fase 5 P5 b] L1 e L2 BLOQUEADOS (10), reserva da OS 8: a requisicao da OS de 4 nao converte (nada pode sair)', async () => {
+    const m = await l1l2(); await status(m, 'L1', 'BLOQUEADO'); await reservaDaOs(m, 8);
+    const R = await reqDaOs(m, 4);
+    assert.strictEqual((await aprovar(R)).body.status, 'AGUARDANDO_ESTOQUE');
+    assert.deepStrictEqual(await reservas(R), []);
+    assert.deepStrictEqual(await daOs(m), [[8, 'ATIVA']], 'a reserva da OS fica inteira, sem partir');
+  });
+
+  await test('[Fase 5 P5 c] L1 ATIVO 4, L2 BLOQUEADO 6, reserva da OS 8: a requisicao da OS de 8 fica com 4 e os outros 4 voltam para a OS', async () => {
+    const m = await l1l2(); await reservaDaOs(m, 8);
+    const R = await reqDaOs(m, 8);
+    assert.strictEqual((await aprovar(R)).body.status, 'PARCIALMENTE_RESERVADA');
+    assert.deepStrictEqual(await reservas(R), [[4, 'ATIVA']]);
+    assert.deepStrictEqual(await daOs(m), [[4, 'ATIVA']], 'converte so os 4 que reserva (sem liberar 8 e devolver 4)');
+  });
+
   await close();
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam\n`);

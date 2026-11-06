@@ -687,10 +687,24 @@ async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}, { rec
       // Etapa 205 (B1368, RN-205.03): a aprovacao le o LIBERADO — o disponivel sem o saldo de lote bloqueado, reprovado ou vencido
       // (loteImpedido.js); a conversao da OS e o `aReservar` abaixo herdam. A reserva que o item ja tem fica (B1372).
       // eslint-disable-next-line no-await-in-loop
-      let { disponivel_liberado: disponivel, reservado_para_item: jaReservado, caixa_outros_itens: caixaOutros } = await saldoDisponivelParaItem(db, item);
+      let { disponivel_liberado: disponivel, reservado_para_item: jaReservado, caixa_outros_itens: caixaOutros, lote_impedido: impedido } = await saldoDisponivelParaItem(db, item);
       const falta = pendente - jaReservado;
       if (jaReservado > 0) algumSeguro = true;
       if (falta <= 1e-9) continue; // o item ja esta todo seguro
+      // Etapa 205 (Fase 5 P5, B1381): a reserva da OS e da MESMA dona da requisicao — o que dela cabe no lote impedido fica para a OS,
+      // e a requisicao dela pega o que pode sair. Sem isto, com a reserva da OS acima do que pode sair (L1 ATIVO 4, L2 BLOQUEADO 6, OS 8:
+      // liberado -4), a conversao nao acontecia e a requisicao da OS esperava para sempre com 4 bons na prateleira (antes da 205 convertia).
+      // So soma quando a conversao acontece (`osNoImpedido` volta a 0 sem ela): reservar sem converter seria reservar duas vezes.
+      let osTotal = 0;
+      if (daOs && impedido > 1e-9) {
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          osTotal = (await reservaDaOs.reservasDaOsParaRequisicao(db, item.material_id, osDaRequisicao)).reduce((s2, l) => s2 + l.saldo, 0);
+        } catch (e) {
+          osTotal = 0; // a leitura falhou: o de antes (sem o abono), a conversao le de novo e avisa
+        }
+      }
+      let osNoImpedido = 0;
       // Etapa 171 (T2, RN-171.12 b): requisicao da OS converte primeiro a reserva da OS do material (ate a falta), sob a
       // trava que a aprovacao ja segura. Calculado ANTES: com o livre de hoje negativo (caixa de outros acima do
       // disponivel), o liberado iria para a caixa alheia e nao para esta reserva — nao converte (nao deixa sobra solta).
@@ -698,19 +712,29 @@ async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}, { rec
       // Etapa 176 (M1): so converte se a SAIDA da entrega passaria na regra do dono (a mesma pergunta da fila, I3 — projeto
       // primeiro, depois a OS). Material do cliente A com projeto do cliente B e OS de A: a entrega recusaria (o projeto vence)
       // e a reserva da OS seria tirada da OS para uma requisicao que nunca leva o material.
-      // eslint-disable-next-line no-await-in-loop
-      if (daOs && disponivel - jaReservado - caixaOutros >= -1e-9 && await donoDeixaConverter(db, item.material_id, osDaReq)) {
+      // Com o abono, so converte se a previsao reserva algo (F + min(impedido + convertido, reserva da OS) > 0): com tudo impedido a
+      // conversao so partiria a reserva da OS em duas e a devolveria (sem abono a regra e a da 171, intacta).
+      const livreAntes = disponivel - jaReservado - caixaOutros;
+      const abono = Math.min(impedido, osTotal);
+      // e converte so o que vai reservar (sem abono: a falta, como na 171) — nada de liberar 8 para devolver 4
+      const previsto = livreAntes + Math.min(impedido + Math.min(falta, osTotal), osTotal);
+      const aConverter = abono > 1e-9 ? Math.min(falta, Q.qtd(Math.max(0, previsto))) : falta;
+      if (daOs && livreAntes + abono >= -1e-9 && aConverter > 1e-9
         // eslint-disable-next-line no-await-in-loop
-        convertidas = await converterReservasDaOs(db, user, item.material_id, osDaRequisicao, falta, rotuloReq);
+        && await donoDeixaConverter(db, item.material_id, osDaReq)) {
+        // eslint-disable-next-line no-await-in-loop
+        convertidas = await converterReservasDaOs(db, user, item.material_id, osDaRequisicao, aConverter, rotuloReq);
         if (convertidas.length) {
           try {
             // eslint-disable-next-line no-await-in-loop
-            ({ disponivel_liberado: disponivel, reservado_para_item: jaReservado, caixa_outros_itens: caixaOutros } = await saldoDisponivelParaItem(db, item));
+            ({ disponivel_liberado: disponivel, reservado_para_item: jaReservado, caixa_outros_itens: caixaOutros, lote_impedido: impedido } = await saldoDisponivelParaItem(db, item));
           } catch (e) {
             // eslint-disable-next-line no-await-in-loop
             await recriarConvertidas(db, user, convertidas, rotuloReq);
             throw e;
           }
+          // o que SOBROU da reserva da OS (fora o convertido) e o que pode morar no lote impedido
+          osNoImpedido = Math.min(impedido, Math.max(0, osTotal - convertidas.reduce((s2, c) => s2 + c.quantidade, 0)));
         }
       }
       // Etapa 95 (T2, B469): o livre que a aprovacao reserva desconta a caixa sem reserva dos OUTROS itens ativos do
@@ -719,7 +743,9 @@ async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}, { rec
       // item nao entra (Fase 2, B2): a reserva nova a cobre, e desconta-la reservava de menos (P5b: 2 em vez de 6).
       // Etapa 95 (Fase 5): arredondado a 1e-6, como o teto da separacao (B471/I2). Sem isso fisico 0,3 com 0,1 na
       // caixa de outra reservava 0.19999999999999998 para um pedido de 0,2 e deixava PARCIALMENTE_RESERVADA.
-      const aReservar = Math.min(falta, Math.round(Math.max(0, disponivel - jaReservado - caixaOutros) * 1e6) / 1e6);
+      // Etapa 205 (Fase 5 P5): `+ osNoImpedido` — nunca passa de `pode sair - outras reservas - caixa alheia` (o abono so desconta a
+      // reserva da propria OS, ate o impedido); o que a conversao liberou a mais volta para a OS (devolverExcessoDaConversao).
+      const aReservar = Math.min(falta, Math.round(Math.max(0, disponivel - jaReservado - caixaOutros + osNoImpedido) * 1e6) / 1e6);
       if (aReservar <= 0) {
         algumFaltou = true;
         // eslint-disable-next-line no-await-in-loop
