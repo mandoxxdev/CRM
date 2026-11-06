@@ -1,0 +1,8 @@
+*Concluído — Almoxarifado: o local mostra quanto realmente sobra*
+_05/11/2026_
+
+2. Separação: o local mostra quanto realmente sobra — estimado 2h30 · realizado 2h45
+
+*Total: estimado 2h30 · realizado 2h45*
+
+Nas janelas de separação e de entrega, cada local da lista passa a mostrar quanto sobra de fato, por exemplo "XB-01 — lote L1 (sobra 2 de 6; 4 para outras)". O número é o mesmo que o sistema usa para aceitar ou recusar, então a pessoa vê antes de confirmar se a quantidade cabe.
