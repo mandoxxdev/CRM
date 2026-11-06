@@ -472,15 +472,20 @@ process.on('exit', (code) => {
   });
 
   // ── Fase 5 M2: o resto sem lote leva a reserva ─────────────────────────────────────────────────────────────────────────────────
-  await test('[Fase 5 M2] aprovada (reserva 4), L1 1 elegivel e L2 3 BLOQUEADO: SAIDA L1 1 + sem lote 3, as duas com a reserva; reserva 4/4; reservado 0', async () => {
+  // Etapa 206 (B1385): o resto sem lote que sai e o do saldo sem lote POSITIVO (estoque de antes de ligar o controle, montado por SQL) —
+  // o resto que iria NEGATIVO com o saldo em lote impedido recusa (RN-206.01; o cenario de antes, L2 3 BLOQUEADO, ficou como o segundo
+  // teste abaixo: 400, a reserva intacta).
+  await test('[Fase 5 M2] aprovada (reserva 4), L1 1 elegivel e sem lote +3 (legado): SAIDA L1 1 + sem lote 3, as duas com a reserva; reserva 4/4; reservado 0', async () => {
     const m = await material();
-    await entrar(m, B01.id, 1, 'L1'); await entrar(m, P01.id, 3, 'L2');
+    await entrar(m, B01.id, 1, 'L1');
+    await dbRun(db, 'INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, lote_id, quantidade) VALUES (?, ?, NULL, 3)', [m.id, P01.id]);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = quantidade_atual + 3 WHERE id = ?', [m.id]);
     const { R, ids } = await req([[m.id, 4]]);
     const rz = await dbGet(db, "SELECT id, quantidade FROM reservas_material_almoxarifado WHERE item_requisicao_id = ? AND status = 'ATIVA'", [ids[0]]);
     assert.strictEqual(Number(rz.quantidade), 4, 'premissa: reserva 4');
-    await dbRun(db, "UPDATE lotes_almoxarifado SET status = 'BLOQUEADO' WHERE id = ?", [await loteId(m, 'L2')]);
     await separar(R, [{ item_id: ids[0], quantidade_separada: 4 }]);
     await entregar(R, [{ item_id: ids[0], quantidade_atendida: 4 }]);
+    assert.deepStrictEqual(await retrato(m), { linhas: [], fisico: 0 }, 'o sem lote positivo saiu e nao ficou negativo');
     const saidas = await dbAll(db, `SELECT lt.codigo lote, mv.quantidade q, mv.reserva_id FROM movimentacoes_almoxarifado mv
       LEFT JOIN lotes_almoxarifado lt ON lt.id = mv.lote_id WHERE mv.requisicao_id = ? AND mv.tipo = 'SAIDA' ORDER BY mv.id`, [R]);
     assert.deepStrictEqual(saidas.map((x) => [x.lote, Number(x.q), x.reserva_id || null]), [['L1', 1, rz.id], [null, 3, rz.id]]);
@@ -488,6 +493,21 @@ process.on('exit', (code) => {
     assert.strictEqual(Number(rz2.u), 4);
     const mat = await dbGet(db, 'SELECT quantidade_reservada q FROM materiais_almoxarifado WHERE id = ?', [m.id]);
     assert.strictEqual(Number(mat.q || 0), 0);
+  });
+  await test('[Fase 5 M2 -> RN-206.01] aprovada (reserva 4), L1 1 elegivel e L2 3 BLOQUEADO depois: 400 "faltam 3", nada baixado, reserva 4 ATIVA sem uso', async () => {
+    const m = await material();
+    await entrar(m, B01.id, 1, 'L1'); await entrar(m, P01.id, 3, 'L2');
+    const { R, ids } = await req([[m.id, 4]]);
+    const rz = await dbGet(db, "SELECT id, quantidade FROM reservas_material_almoxarifado WHERE item_requisicao_id = ? AND status = 'ATIVA'", [ids[0]]);
+    assert.strictEqual(Number(rz.quantidade), 4, 'premissa: reserva 4');
+    await dbRun(db, "UPDATE lotes_almoxarifado SET status = 'BLOQUEADO' WHERE id = ?", [await loteId(m, 'L2')]);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 4 }]);
+    const r = await entregar(R, [{ item_id: ids[0], quantidade_atendida: 4 }], 400);
+    assert.strictEqual(r.body.error, requisitionService.fraseEntregaLoteImpedido(m.nome, 4, 'PC', 3,
+      [{ codigo: 'L2', status: 'BLOQUEADO', data_validade: null, quantidade: 3 }]));
+    assert.deepStrictEqual(await livro(R, m), []);
+    const rz2 = await dbGet(db, 'SELECT status, COALESCE(quantidade_utilizada, 0) u FROM reservas_material_almoxarifado WHERE id = ?', [rz.id]);
+    assert.deepStrictEqual([rz2.status, Number(rz2.u)], ['ATIVA', 0]);
   });
 
   // ── Fase 5 M3: a parte guardada de requisicao EXCLUIDA nao conta ──────────────────────────────────────────────────────────────

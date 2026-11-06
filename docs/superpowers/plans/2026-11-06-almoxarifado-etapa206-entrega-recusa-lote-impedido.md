@@ -77,6 +77,10 @@ item 2 automático 2, L2 bloqueado 5 → a prévia veria 4 livres, passaria, e a
   controle) **continuam verdes** — são controles da fronteira.
 - `loteImpedido.api.test.js` RN-205.02 (i, j, l) já montam o negativo por SQL — não mudam.
 - A varredura completa (`npm run test:api`) roda na T1 com a conferência ligada; quebra fora desta lista entra no plano antes de editar.
+- **Quebra fora da lista (achada na T1):** `entregaAutomaticaPeloLote.api.test.js` `[Fase 5 M2]` (`:475`) — "o resto sem lote leva a
+  reserva" montava o resto com L2 3 BLOQUEADO (o resto ia negativo: a recusa nova o pega, 400 "faltam 3"). O que ele prova (as fatias e o
+  resto sem lote citam a reserva) passa a ser montado com o saldo sem lote **positivo** de antes do controle (B1385, linha +3 por SQL); o
+  cenário antigo virou o teste seguinte, `[Fase 5 M2 -> RN-206.01]` (400, livro vazio, reserva ATIVA sem uso).
 
 ## Decisões (letra B — reversíveis; livres depois de B1382, conferido: o maior hoje é B1382; C a partir de C485 — C482 e C483 ficaram
 reservados sem uso na 205, o maior usado é C484)

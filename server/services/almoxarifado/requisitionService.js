@@ -1957,6 +1957,121 @@ async function lotesParaOAutomatico(db, materialId, saiuDaOrigemPorItem, parteQu
   }).filter((l) => l.saldo > Q.QTD_FOLGA);
 }
 
+/**
+ * Etapa 206 (B1388, Fase 2 item 5) — a recusa da entrega que tiraria de lote impedido: o material, o item, quanto falta (o total do
+ * material), cada lote impedido com o motivo e o saldo, e o que fazer. O motivo segue a regua do motor: o STATUS primeiro (minusculo); se
+ * ATIVO, "vencido em DD/MM/AAAA" (a data de tela, nao o ISO). `nadaSai` (omitido: falta = quantidade do item) troca o "entregue N a menos"
+ * por "nada sai deste material" — quando o automatico deste material nao tem de onde tirar nada.
+ */
+function fraseEntregaLoteImpedido(nomeMaterial, qtyDoItem, unidade, falta, impedidos, nadaSai) {
+  const qu = (q, un) => [Q.qtd(num(q)), un].filter((x) => x !== undefined && x !== null && x !== '').join(' ');
+  const motivoDoLote = (l) => {
+    if (l.status !== 'ATIVO') return String(l.status).toLowerCase();
+    const [aaaa, mm, dd] = String(l.data_validade || '').substr(0, 10).split('-');
+    return `vencido em ${dd}/${mm}/${aaaa}`;
+  };
+  const nada = nadaSai === undefined ? Math.abs(num(falta) - num(qtyDoItem)) <= Q.QTD_FOLGA : !!nadaSai;
+  return `${nomeMaterial}: não é possível entregar ${qu(qtyDoItem, unidade)} — faltam ${qu(falta, unidade)} em lote que pode sair. `
+    + `Em lote impedido: ${impedidos.map((l) => `${l.codigo} (${motivoDoLote(l)}, ${qu(l.quantidade, unidade)})`).join(', ')}. `
+    + `Libere o lote (mude o status ou libere o vencimento) ou ${nada ? 'nada sai deste material' : `entregue ${qu(falta, unidade)} a menos`}.`;
+}
+
+/**
+ * Etapa 206 (B1383-B1387, Fase 2 item 1) — a conferencia da parte AUTOMATICA da entrega contra o que os lotes elegiveis cobrem, ANTES da
+ * alcada e de qualquer baixa. Le, nao grava; roda na previa, dentro das duas travas que a entrega segura (B1392: sem trava nova).
+ * Por material com `controle_lote = 1`, o que o automatico vai achar (a regua do proprio automatico, `lotesParaOAutomatico`, B1384):
+ *   cabe(m) = Σ_L max(0, saldo_L - pedido_L) + max(0, semLotePositivo - pedidoComOrigemSemLote)
+ * com `saiuSimulado` (item -> qtdComOrigem dos itens que saem da origem guardada: o que a passada 2 vera em `saiuDaOrigemPorItem`),
+ * `pedido_L` = Σ qtdComOrigem de TODO item desta entrega com origem no lote L (com ou sem `saiDaOrigem` — as passadas 0/1 tiram dele antes
+ * do automatico, Achado 2) e `semLotePositivo` = as linhas sem lote > 0 que o claim sem lote drena antes de negativar (B1385). Fase 2
+ * item 1: partir do `pedidoPorOrigem` contava em dobro a semeadura do "so lote" e nao media a parte guardada consumida alem dela.
+ * Devolve null (cabe) ou { item, qty, falta, impedidos, nadaSai } do PRIMEIRO item, na ordem do laco, em que a soma automatica do material
+ * passa de `cabe` — so quando ha saldo em lote impedido (B1386; sem ele a falta segue como antes, C485). `falta` e o total do material.
+ * Material sem controle de lote e item com serie (C486) ficam fora.
+ */
+async function conferirAutomaticoPeloLote(db, itensDaEntrega /* [{ item, qty, temSerie }] na ordem do laco */, origemPorItem,
+  origemGuardada, parteQueFicaPorItem) {
+  const comOrigem = (item) => {
+    const o = origemPorItem.get(item.id);
+    return o ? num(o.qtdComOrigem) : 0;
+  };
+  const autoDe = (x) => {
+    const a = Q.qtd(x.qty - comOrigem(x.item));
+    return a > Q.QTD_FOLGA ? a : 0;
+  };
+  const porMaterial = new Map(); // material_id -> { totalAuto, totalPedido, controleLote }
+  for (const x of itensDaEntrega) {
+    const k = String(x.item.material_id);
+    if (!porMaterial.has(k)) {
+      // eslint-disable-next-line no-await-in-loop
+      const mat = await dbGet(db, 'SELECT controle_lote FROM materiais_almoxarifado WHERE id = ?', [x.item.material_id]);
+      porMaterial.set(k, { totalAuto: 0, totalPedido: 0, controleLote: Number(mat && mat.controle_lote) === 1 });
+    }
+    const pm = porMaterial.get(k);
+    pm.totalPedido = Q.qtd(pm.totalPedido + x.qty);
+    if (!x.temSerie) pm.totalAuto = Q.qtd(pm.totalAuto + autoDe(x));
+  }
+  const saiuSimulado = new Map();
+  for (const x of itensDaEntrega) {
+    if (origemGuardada.get(x.item.id)?.saiDaOrigem && comOrigem(x.item) > Q.QTD_FOLGA) saiuSimulado.set(Number(x.item.id), comOrigem(x.item));
+  }
+  const cabePorMaterial = new Map();
+  const cabeDe = async (materialId) => {
+    const k = String(materialId);
+    if (cabePorMaterial.has(k)) return cabePorMaterial.get(k);
+    const pedidoLote = new Map();
+    let pedidoSemLote = 0;
+    for (const x of itensDaEntrega) {
+      if (String(x.item.material_id) !== k) continue;
+      const o = origemPorItem.get(x.item.id);
+      if (!o || num(o.qtdComOrigem) <= Q.QTD_FOLGA) continue;
+      if (o.loteId) pedidoLote.set(Number(o.loteId), (pedidoLote.get(Number(o.loteId)) || 0) + num(o.qtdComOrigem));
+      else pedidoSemLote += num(o.qtdComOrigem);
+    }
+    const lotes = await lotesParaOAutomatico(db, materialId, saiuSimulado, parteQueFicaPorItem);
+    let cabe = 0;
+    for (const l of lotes) cabe += Math.max(0, num(l.saldo) - (pedidoLote.get(Number(l.lote_id)) || 0));
+    const sl = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) as q FROM estoque_saldo_almoxarifado
+      WHERE material_id = ? AND lote_id IS NULL AND quantidade > 0`, [materialId]);
+    cabe += Math.max(0, num(sl && sl.q) - pedidoSemLote);
+    cabe = Math.round(cabe * 1e6) / 1e6;
+    cabePorMaterial.set(k, cabe);
+    return cabe;
+  };
+  const acumulado = new Map();
+  const vistos = new Set();
+  for (const x of itensDaEntrega) {
+    const k = String(x.item.material_id);
+    const pm = porMaterial.get(k);
+    if (!pm.controleLote || x.temSerie || vistos.has(k)) continue;
+    const auto = autoDe(x);
+    if (auto <= 0) continue;
+    acumulado.set(k, Q.qtd((acumulado.get(k) || 0) + auto));
+    // eslint-disable-next-line no-await-in-loop
+    const cabe = await cabeDe(x.item.material_id);
+    if (acumulado.get(k) <= cabe + Q.QTD_FOLGA) continue;
+    vistos.add(k); // o primeiro item que cruza decide a mensagem; a falta e o total do material
+    const falta = Q.qtd(pm.totalAuto - cabe);
+    if (falta <= Q.QTD_FOLGA) continue;
+    // eslint-disable-next-line no-await-in-loop
+    const naoElegiveis = (await lotService.listarLotesDoMaterial(db, x.item.material_id, { apenasComSaldo: true })).filter((l) => !l.elegivel);
+    if (!naoElegiveis.length) continue;
+    const ids = naoElegiveis.map((l) => Number(l.id));
+    // eslint-disable-next-line no-await-in-loop
+    const insp = await dbAll(db, `SELECT lote_id, COALESCE(SUM(quantidade_em_inspecao), 0) as q
+      FROM recebimentos_material_itens_almoxarifado WHERE lote_id IN (${ids.map(() => '?').join(',')})
+        AND COALESCE(quantidade_em_inspecao, 0) > 0 GROUP BY lote_id`, ids);
+    const inspecao = new Map(insp.map((r) => [Number(r.lote_id), num(r.q)]));
+    const impedidos = naoElegiveis
+      .map((l) => ({ codigo: l.codigo, status: l.status, data_validade: l.data_validade,
+        quantidade: Q.qtd(Math.max(0, num(l.saldo) - (inspecao.get(Number(l.id)) || 0))) }))
+      .filter((l) => l.quantidade > Q.QTD_FOLGA);
+    if (!impedidos.length) continue; // B1386: falta sem lote impedido segue como antes (C485)
+    return { item: x.item, qty: x.qty, falta, impedidos, nadaSai: Math.abs(falta - pm.totalPedido) <= Q.QTD_FOLGA };
+  }
+  return null;
+}
+
 function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertService) {
   return travaPorRequisicao.serializarNaRequisicao(requisicaoId,
     () => comTravaDaRequisicao(db, requisicaoId, () => entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertService)));
@@ -2214,12 +2329,18 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
   // levam — o que o laco de baixa vera na leitura fresca depois de cada baixa, sob a mesma trava. Antes cada irmao era lido sozinho: dois
   // na segunda rodada no mesmo livre passavam aqui e o laco baixava o primeiro e recusava o segundo (400 com metade da entrega feita).
   const efeitoDosIrmaos = new Map(); // material_id -> { disponivel, caixaSemReserva } ja levados nesta previa
+  const itensDaEntrega = []; // Etapa 206: os itens desta entrega na ordem do laco, para a conferencia do automatico pelo lote
+  // 2o fix-round da Fase 5: o item desta entrega que NAO sai da origem guardada — a parte dele so vale pelo que fica depois dela
+  const parteQueFicaPorItem = () => new Map([...origemGuardada.entries()]
+    .filter(([, og]) => !og.saiDaOrigem && og.parteQueFica !== undefined)
+    .map(([id, og]) => [Number(id), og.parteQueFica]));
   for (const item of itens) {
     const entrada = itensAtendidos?.find((ia) => Number(ia.item_id) === Number(item.id));
     // Etapa 96 (Fase 2, M4): a quantidade arredondada antes de comparar (a previa nao passa pela porta do motor).
     const qty = entrada ? Q.qtd(num(entrada.quantidade_atendida)) : 0;
     if (qty <= 0) continue;
     algoAEntregar = true;
+    itensDaEntrega.push({ item, qty, temSerie: seriesPorItem.has(item.id) });
     // eslint-disable-next-line no-await-in-loop
     const saldo = saldoAjustadoPelosIrmaos(await saldoDisponivelParaItem(db, item), efeitoDosIrmaos.get(String(item.material_id)));
     // Etapa 98 (T3, B509): o que o motor deixa sair — com o disponivel do material negativo, 0 (e a recusa E190
@@ -2239,6 +2360,13 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     const antes = efeitoDosIrmaos.get(String(item.material_id)) || { disponivel: 0, caixaSemReserva: 0 };
     efeitoDosIrmaos.set(String(item.material_id), { disponivel: antes.disponivel + efeito.disponivel,
       caixaSemReserva: antes.caixaSemReserva + efeito.caixaSemReserva });
+  }
+  // Etapa 206 (B1383): depois do E1 de todos (RN-206.10 a) e ANTES da alcada (B464, RN-206.10 b) — a parte automatica que os lotes
+  // elegiveis nao cobrem, com saldo em lote impedido, recusa a entrega inteira (B1387); antes ela saia sem lote e negativava (C484).
+  const faltaNoLote = await conferirAutomaticoPeloLote(db, itensDaEntrega, origemPorItem, origemGuardada, parteQueFicaPorItem());
+  if (faltaNoLote) {
+    const { item: it, qty: q, falta, impedidos, nadaSai } = faltaNoLote;
+    throw Object.assign(new Error(fraseEntregaLoteImpedido(it.material_nome, q, it.unidade, falta, impedidos, nadaSai)), { status: 400 });
   }
   if (!algoAEntregar) {
     const err = new Error('Informe ao menos uma quantidade maior que zero para entregar');
@@ -2444,10 +2572,7 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
   const saiuDaOrigemPorItem = () => new Map(planos
     .filter((p) => origemGuardada.get(p.item.id)?.saiDaOrigem && p.baixadoComOrigem > 0)
     .map((p) => [Number(p.item.id), p.baixadoComOrigem]));
-  // 2o fix-round da Fase 5: o item desta entrega que NAO sai da origem guardada — a parte dele so vale pelo que fica depois dela
-  const parteQueFicaPorItem = () => new Map([...origemGuardada.entries()]
-    .filter(([, og]) => !og.saiDaOrigem && og.parteQueFica !== undefined)
-    .map(([id, og]) => [Number(id), og.parteQueFica]));
+  // (Etapa 206, Fase 2 item 4: parteQueFicaPorItem declarado antes da previa — a conferencia do automatico o usa)
 
   // Etapa 63 (Fase 5): o registro sai num finally — se um pedaco falhar depois de outro ja baixado, o livro mostra a saida e a troca nao
   // pode ficar sem registro. Etapa 136 (RN-05): o finally cobre as tres passadas — todo item que teve baixa, nao so o da vez.
@@ -3035,6 +3160,8 @@ module.exports = {
   parteGuardadaDeOutrasPorPar, // Etapa 201 (T1)
   parteGuardadaDeOutras, // Etapa 201 (T1): exportada para a prova de equivalencia
   dividirPorLotes, // Etapa 197 (T0)
+  fraseEntregaLoteImpedido, // Etapa 206 (B1388)
+  conferirAutomaticoPeloLote, // Etapa 206 (B1383)
   maxSeparar,
   maxEntregar,
   entregavelPeloMotor, // Etapa 98 (T3, B509)
