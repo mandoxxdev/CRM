@@ -104,6 +104,29 @@ async function parteGuardadaDeOutras(db, materialId, origemId, loteId, requisica
 }
 
 /**
+ * Etapa 201 (T1, RN-201.01/03, B1344): a mesma regua de `parteGuardadaDeOutras` (as mesmas pecas: `PARTE_ORIGEM_SQL`,
+ * `caixaVivaSql`, a folga por requisicao) para TODOS os pares do material numa consulta so — o "Sai de" das janelas de separacao e de
+ * entrega (`GET /estoque/:id/saldos`) mostra a sobra de cada linha. Chave `${origemId}|${loteId ?? ''}` (lote NULL casa com NULL).
+ * `requisicaoId` null = conta todas. A C1/E1 continuam lendo `parteGuardadaDeOutras` (bit a bit); a equivalencia das duas e testada
+ * (saldosSobraDeOutras.api.test.js). Leitura de momento, sem trava (como a sugestao-coleta): quem decide e a C1/E1 na gravacao.
+ */
+async function parteGuardadaDeOutrasPorPar(db, materialId, requisicaoId = null) {
+  const viva = caixaVivaSql('r');
+  const rid = requisicaoId === null || requisicaoId === undefined ? null : Number(requisicaoId);
+  const rows = await dbAll(db, `SELECT origem_id, lote_id, SUM(q) as q FROM (
+      SELECT ir.origem_separacao_id as origem_id, ir.lote_separacao_id as lote_id, r.id as rid, SUM(${PARTE_ORIGEM_SQL}) as q
+      FROM itens_requisicao_almoxarifado ir JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
+      WHERE ir.material_id = ? AND ir.origem_separacao_id IS NOT NULL
+        AND (? IS NULL OR ir.requisicao_id <> ?) AND ${viva.sql}
+      GROUP BY ir.origem_separacao_id, ir.lote_separacao_id, r.id HAVING SUM(${PARTE_ORIGEM_SQL}) > ?
+    ) GROUP BY origem_id, lote_id`,
+  [materialId, rid, rid, ...viva.params, Q.QTD_FOLGA]);
+  const porPar = new Map();
+  for (const x of rows) porPar.set(`${Number(x.origem_id)}|${x.lote_id === null ? '' : Number(x.lote_id)}`, Q.qtd(Number(x.q) || 0));
+  return porPar;
+}
+
+/**
  * Etapa 200 (T1): o memo por chamada de `parteGuardadaDeOutras` (extraido da separacao, Etapa 198) — a separacao e a entrega leem
  * uma vez por par (material, endereco, lote), dentro da propria secao.
  */
@@ -2942,6 +2965,8 @@ module.exports = {
   pendenteSeparacao,
   parteDaOrigem, // Etapa 196 (T0)
   parteOrigemSql, // Etapa 196 (T0)
+  parteGuardadaDeOutrasPorPar, // Etapa 201 (T1)
+  parteGuardadaDeOutras, // Etapa 201 (T1): exportada para a prova de equivalencia
   dividirPorLotes, // Etapa 197 (T0)
   maxSeparar,
   maxEntregar,

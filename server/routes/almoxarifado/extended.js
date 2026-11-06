@@ -56,6 +56,10 @@ const audit = require('../../services/almoxarifado/audit');
 const auditLabels = require('../../services/almoxarifado/auditLabels');
 const auditFiltros = require('../../services/almoxarifado/auditFiltros');
 const stockService = require('../../services/almoxarifado/stockService');
+// Etapa 201 (T1): a regua do separado de outras (parteGuardadaDeOutrasPorPar) para o "Sai de". Sem ciclo: o servico nao importa rotas
+// (e ja foi carregado por routes/almoxarifado.js antes desta extensao).
+const requisitionService = require('../../services/almoxarifado/requisitionService');
+const Q = require('../../services/almoxarifado/quantidade');
 const lotService = require('../../services/almoxarifado/lotService');
 const seriesService = require('../../services/almoxarifado/seriesService');
 const reservationService = require('../../services/almoxarifado/reservationService');
@@ -829,8 +833,20 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
 
   app.get('/api/almoxarifado/estoque/:materialId/saldos', auth, async (req, res) => {
     try {
+      // Etapa 201 (T1, RN-201.04, B1345): `requisicao_id` opcional — presente tem de ser um inteiro positivo em texto (o array de
+      // `?requisicao_id=1&requisicao_id=2` tambem e 400). Inexistente conta todas (nao ha caixa dela para tirar).
+      const rq = req.query.requisicao_id;
+      if (rq !== undefined && (typeof rq !== 'string' || !/^[1-9]\d*$/.test(rq))) {
+        return res.status(400).json({ error: 'requisicao_id inválido' });
+      }
       const rows = await stockService.consultarSaldosPorLocalizacao(db, req.params.materialId);
-      res.json(rows);
+      // Etapa 201 (T1, RN-201.01/02, B1343): por linha, a parte guardada das caixas vivas de OUTRAS requisicoes no par da linha e o que
+      // sobra do fisico. Montado AQUI, nao na funcao (o extrato tambem a usa, RN-201.05); `quantidade` continua o fisico cru.
+      const porPar = await requisitionService.parteGuardadaDeOutrasPorPar(db, req.params.materialId, rq === undefined ? null : Number(rq));
+      res.json(rows.map((s) => {
+        const outras = s.localizacao_id == null ? 0 : (porPar.get(`${Number(s.localizacao_id)}|${s.lote_id == null ? '' : Number(s.lote_id)}`) || 0);
+        return { ...s, separado_outras: outras, sobra: Q.qtd(Math.max(0, (Number(s.quantidade) || 0) - outras)) };
+      }));
     } catch (e) { handleError(res, e); }
   });
 
