@@ -1,5 +1,7 @@
 # Etapa 206 — a entrega recusa lote impedido (almoxarifado)
 
+> **FECHADA em 2026-11-06** (Fase 5 `31aca1a3`, `00d9e24a`, `0996c3c2`; commit "Etapa 206: fechamento"). Próxima: **C490**, detalhada no fim.
+
 > partida: "Próxima tarefa detalhada" de `docs/superpowers/plans/2026-11-06-almoxarifado-etapa205-lote-impedido-na-aprovacao-e-separacao.md`
 > (`:391` em diante), conferida contra o código em `9a5611a0` — bate, com **dois achados a mais** (abaixo: o lote planejado impedido já
 > recusa antes de baixar; a conferência tem de descontar o que as passadas 0/1 tiram à mão do mesmo lote). Item 7 do 2º pacote
@@ -327,23 +329,103 @@ provar a recusa; o fluxo recusa → entregar a menos → PARCIALMENTE_ATENDIDA �
 - [x] T3 — integração pela rota e pelo serviço — `a286ba46`. Revisão "passaria quebrado?": inspeção no saldo do impedido e falta do item
   no lugar da do material passavam verdes → RN-206.01b e RN-206.08b. Suíte (uma vez cada, serial): `test:api` 598/598 arquivos;
   `test:almoxarifado` 44/0; `test:validation` 4/0; `test:safealter` 3/0; `test:sqlite` 16/0.
-- [ ] Fase 5 — revisão adversarial
-- [ ] T4 — fechamento (`fechar-etapa`) + suíte completa (os cinco comandos) + estimado × gasto do item 7
+- [x] Fase 5 — três revisões adversariais (2 revisores em paralelo na 1ª — correção da RN e "passaria com a feature quebrada?" —, 1 no
+  fix-round, 1 na 3ª): **7 achados reais** (R1, R2 e 5 lacunas de teste) + **2 avisos anteriores** registrados sem conserto (C490, C491);
+  ruído 0. Detalhe na seção "Fase 5" abaixo. `31aca1a3` (R2), `00d9e24a` (R1), `0996c3c2` (T1–T5).
+- [x] T4 — fechamento (`fechar-etapa`): novidades (cabeçalho, seção da 206, B1383–B1393 antes das B1394–B1395 que a Fase 5 já tinha
+  escrito, C464 e C484 anotados, C485–C487, C488 sem uso, C490 e C491 novos, D (206), F (206), "onde estamos"), specs 05, 07 e 10, mapa,
+  guia, manual, este plano e o de pausa/retomada — o commit "Etapa 206: fechamento". O estimado × gasto do item 7 fica com o André (fora deste
+  commit). Suítes **não** rodadas de novo no fechamento (só documentos): valem as da Fase 5, abaixo.
+
+## Fase 5 — revisões adversariais (2026-11-06)
+
+Três revisões: a 1ª com 2 revisores em paralelo (correção da RN; "passaria com a feature quebrada?" sobre os testes), o fix-round com 1
+revisor sobre os consertos, e uma 3ª sobre o conjunto. **7 achados reais + 2 avisos anteriores; ruído 0.**
+
+- **R2 — a passada 2 contava duas vezes a guarda do próprio item (real; defeito anterior, desde a 197).** `lotesParaOAutomatico` relia a
+  parte guardada no banco (`PARTE_ORIGEM_SQL`, `min(parte, caixa)`) **depois** que `baixar` já tinha subido o entregue e ainda subtraía o que
+  saiu da origem: a guarda que fica virava 0 e o automático do irmão a levava (B/L2 4, B sem lote 3; item 1 separado 3 de (B, L2), item 2 3
+  sem origem; entrega 2 + 3 → saíam 2 de B/L2 para o item 2 e a 2ª entrega do item 1 tomava "não serve mais"). Com ou sem lote impedido.
+  Conserto: `parteQueFicaPorItem` cobre também quem sai da origem, com a parte de **antes** da baixa menos `qtdComOrigem` — o mesmo número da
+  conferência — `31aca1a3` (**B1394**). RN-206.14 a/b.
+- **R1 — o detalhe e a Fila ofereciam o que a porta recusava (real).** Descontavam só o saldo de lote impedido (B1390); a conferência desconta
+  também a guarda de um irmão no lote bom (L1 5 vencido, L2 3 em B; item 1 separado 3 de (B, L2), item 2 3 sem origem → ofereciam 3 ao item 2
+  e a entrega recusava "nada sai"). `cabeDoAutomaticoPeloLote` sai da conferência; `tetoDaEntregaPeloLote` (anotado pela rota do detalhe,
+  `anotarTetoDaEntregaPeloLote`, lido pela Fila) — `00d9e24a` (**B1395**, **C489**: o teto é do item sozinho). RN-206.13.
+- **T1–T5 — cinco lacunas de teste (reais).** Sabotagens da conferência que ficavam verdes: só conferir o material do 1º item; `new Map()` no
+  lugar de `parteQueFicaPorItem`; tirar os dois "lista vazia → continue"; somar as negativas no sem lote positivo; comparar com `totalAuto`
+  no `nadaSai`. Cada teste novo derruba a sua — `0996c3c2` (RN-206.15 a–e). O comportamento já era o certo: regressão, não regra nova.
+- **Aviso anterior (a) — IMPORTANTE, não consertado → C490.** Em material **sem** controle de lote (e em guarda numa linha sem lote dentro
+  de material com lote), a parte guardada de um item pode ser levada pelo automático de outro item da mesma entrega: `lotesParaOAutomatico`
+  (`requisitionService.js:1915`) só protege guarda com lote (`ir.lote_separacao_id IN (…)`, `:1927`) e a passada 2 só o chama com
+  `plano.controleLote` (`:2653`; senão `baixar(…, null)`, `:2666`). Cenário: sem controle de lote, A=3, B=2; item 1 separou 3 sem origem,
+  item 2 separou 2 de A; entregar os 3 do item 1 leva todo A; a próxima entrega do item 2 → 400 *"a origem da separação (…) não serve
+  mais"*. Igual antes da 206 (vem da 196). É a próxima tarefa (abaixo).
+- **Aviso anterior (b) — MENOR, não consertado → C491.** Quando o lote da **própria** guarda fica bloqueado/vencido, `tetoDaEntregaPeloLote`
+  ainda soma a parte (não olha o lote dela) e a entrega de um clique recusa com *"… não serve mais (Lote … esta bloqueado e nao pode ser
+  utilizado) — entregue escolhendo de onde sai"* (B1389), não com a frase da 206. Nada baixado.
+
+**Sorteios (fuzz).** 1ª revisão: **615** entregas aleatórias — P (negativo sem lote nascido com lote impedido) 0, Q (detalhe/Fila ≠ porta)
+0; controle positivo com o serviço antigo, P **38**. Fix-round: ~**430** — P 0, Q 0; controle P **39**. 3ª revisão: ~**1000** (G/N) — o
+controle pegou o estado de antes do R2.
+
+**Suítes finais** (uma vez cada, serial, sobre `0996c3c2`): `test:api` **598/598**; `test:almoxarifado` **44/0**; `test:validation`
+**4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0**. A tela não mudou nesta etapa: Jest e build **não** rodados (últimos números, da
+205, sobre `0516c933`: 214 suítes / 2945 testes, build OK). **Não verificado:** a tela clicada no navegador (F (206)).
+
+**C484:** a causa (a entrega sair de lote impedido) está fechada pela 206; o negativo legado continua até um ajuste (**C487**).
+
+### Divergências do plano (resumo para quem retomar)
+
+- A conta da B1384 trocou de base antes do código (Fase 2 item 1, a trava): `origemPorItem` + `saiuSimulado`, não `pedidoPorOrigem`.
+- `fraseEntregaLoteImpedido` ganhou o 6º argumento opcional `nadaSai` (falta total pode igualar o item sem que nada deixe de sair).
+- O controle `new Map()` da RN-206.09b (b) cai pela literal (recusa a mais), não por 200 com −1; o −1 aparece tirando o `pedido_L`.
+- RN-206.10 b por espião: pela entrega a alçada nunca grava desde a Etapa 94.
+- Quebra fora da lista: `[Fase 5 M2]` de `entregaAutomaticaPeloLote` (refeito com o sem lote positivo; o cenário antigo virou a recusa).
+- RN-206.06 ficou em `loteImpedidoIntegracao` (T0), não no arquivo novo.
+- A B1390 (desconto só do lote impedido no detalhe/Fila) não bastava: a Fase 5 somou o teto da conferência (R1, B1395).
+- A Fase 5 achou um defeito anterior no automático (R2, B1394) e consertou dentro da etapa — ele afetava a régua que a conferência reusa.
+- O corte da B1393 não aconteceu: C488 sem uso.
+
+### Retro (4 números)
+
+- **Rodadas de correção até verde:** 1 (o fix-round de R1, R2 e T1–T5).
+- **Achados reais da Fase 5:** 7 (R1, R2, T1–T5) + 2 anteriores registrados sem conserto (C490, C491). **Ruído:** 0.
+- **Paralelismo:** 2 revisores em paralelo na 1ª revisão; execução T0→T3 em série (tronco).
+- **Defeito que escapou da 205:** nenhum conhecido.
 
 ## Próxima tarefa detalhada
 
-**T0 desta etapa** (depois da F2): editar os seis testes listados em "Quem depende do comportamento de hoje", na ordem:
+**O aviso C490 — a parte guardada sem lote levada pelo automático de outro item** (defeito de motor anterior, desde a 196, com cenário
+pronto). **Não estimado:** a estimativa (skill `estimativa-de-tarefas`) vem antes do plano. Tamanho provável **~3h30 a 4h30** (tronco,
+motor da entrega; o molde é a B1329 da 197, que fez o mesmo para guarda com lote). Medido sobre `0996c3c2`, sem consertar:
 
-1. `server/tests/api/entregaAutomaticaPeloLote.api.test.js:201-218` — o helper `naoElegivel` passa a esperar
-   `assert.rejects` com status 400 e `fraseEntregaLoteImpedido(nome, 4, 'un', 2, [{ codigo: 'L2', status, data_validade, quantidade: 3 }])`,
-   livro `[]` e retrato igual ao de antes da entrega (`ZP-01/L1=2`, `ZP-01/L2=3`). Enquanto a função não existe, o teste importa e falha por
-   `undefined` — vermelho certo.
-2. `server/tests/api/loteImpedidoIntegracao.api.test.js:156` e `:179` → RN-206.06 e RN-206.11 (segunda rodada): a entrega recusa; o detalhe dá 0
-   (e `caixa + tetoSeparavel` na segunda rodada).
-3. `server/tests/api/loteImpedidoIntegracao.api.test.js:198` e `:223` → o negativo montado por SQL (`INSERT INTO estoque_saldo_almoxarifado
-   (material_id, localizacao_id, lote_id, quantidade) VALUES (?, ?, NULL, -6)` + `UPDATE materiais_almoxarifado SET quantidade_atual =
-   quantidade_atual - 6`), as asserções da 205 iguais.
+- **O cenário (o teste vermelho de partida).** Material **sem** `controle_lote`, A 3 e B 2 (Entrada v2 com localização); requisição com item
+  1 de 3 separado **sem** origem e item 2 de 2 separado de A (`PUT /requisicoes/:id/separacao` com `localizacao_origem_id`); `PUT
+  /entregar` só o item 1 (3) → hoje o automático leva os 3 de A; a próxima entrega do item 2 → 400 *"⟨material⟩: a origem da separação (A) não
+  serve mais (…) — entregue escolhendo de onde sai"*. Esperado depois: o item 1 leva 2 de B + 1 de A **ou** recusa dizendo que o resto está
+  guardado (decidir na B — o C485 é o mesmo dilema em material com lote). Variante: material **com** lote e a guarda numa linha **sem lote**
+  (`lote_separacao_id` NULL).
+- **Onde.** `lotesParaOAutomatico` (`requisitionService.js:1915`): a consulta `guardadas` filtra `ir.lote_separacao_id IN (…)` (`:1927`) —
+  guarda sem lote nunca entra. Passada 2 (`:2645-2667`): com `controleLote` usa `lotesParaOAutomatico` + `dividirPorLotes` (`:1872`) e as
+  fatias vão ao motor com endereço (origem estrita); sem, `baixar(plano, baixa, baixa.quantidade, null)` (`:2666`) — o motor escolhe a linha
+  (padrão, depois a de mais saldo) sem saber da guarda. A guarda que fica de cada item desta entrega já é `parteQueFicaPorItem` (`:2396`,
+  correta desde o R2).
+- **Conserto provável.** Estender a régua de `lotesParaOAutomatico` às linhas **sem lote**: ler também a guarda com `lote_separacao_id IS
+  NULL` por (endereço, NULL), descontá-la das linhas sem lote e, havendo guarda, mandar o automático por endereço (as fatias com
+  `localizacao_id`, como a B1329), pulando a linha guardada; sem guarda, uma fatia só, como hoje (o claim escolhe). Chamar isso também na
+  passada 2 de material **sem** `controle_lote`. Reusar a régua — não escrever uma segunda.
+- **Pontos de atenção.** (1) A guarda de **outra requisição** sem lote provavelmente sofre o mesmo (o filtro é por material, não por
+  requisição) — medir na Fase 0 antes de prometer. (2) `cabeDoAutomaticoPeloLote` soma o sem lote positivo inteiro: se a guarda sem lote
+  sair do automático, o `cabe` tem de descontá-la também (senão a conferência da 206 deixa passar e nasce negativo). (3) Endereço
+  bloqueado e linha sem endereço (fora, como na B1329). (4) `permite_saldo_negativo` (a baixa na posição padrão). (5) O detalhe e a Fila de
+  material sem lote não descontam a guarda do irmão (o `tetoDaEntregaPeloLote` só roda com lote impedido) — decidir se entra. (6) A trava
+  já é a da entrega (nenhuma nova). (7) O **C491** (o teto que conta a parte da própria origem cujo lote ficou impedido) é vizinho e barato
+  — pode entrar como fatia.
+- **Moldes de teste.** `entregaAutomaticaPeloLote.api.test.js` `[RN-197.11]` e `[Fase 5 M1, S1/S5]` (guarda por endereço com lote);
+  `entregaLoteImpedido.api.test.js` RN-206.14 (`guardaDoProprio`); o fuzz da Fase 5 desta etapa (P/Q) com material sem lote.
 
-Depois, a T1 com o contrato acima. **Se sobrar tempo depois do fechamento:** **C478** (as três portas que distribuem para quem espera reservam
-lote impedido — o mesmo fragmento no teto de `reservaChegadaService.reservarChegadaParaQuemEspera`/`distribuirSemLock`) ou **C486** (série em
-lote impedido recusar antes da primeira baixa — é uma conferência de `lotService.listarLotesDoMaterial` no laço das séries, `:2018-2047`).
+**Depois dela:** os itens **8** e **9** do 2º pacote (`docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas-2.txt`, já
+estimados: *"Peça em quarentena — 1ª parte: o bloqueio passa a saber o lote"*, 4h30 a 5h30; *"2ª parte: a entrega não tira a peça
+bloqueada"*, 4h a 5h) — **C466**. Vizinhos baratos, se sobrar tempo: **C478** (as portas que distribuem reservam lote impedido) e **C486**
+(série em lote impedido recusada antes da primeira baixa).

@@ -11,7 +11,15 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-06):** **Etapa 205 fechada** (**lote bloqueado, reprovado ou vencido não conta na aprovação e na
+> **Onde o desenvolvimento está (2026-11-06):** **Etapa 206 fechada** (**a entrega recusa lote bloqueado, reprovado ou vencido** — quando
+> o material só tinha saldo em lote que não pode sair, a entrega passava, a diferença saía como *"Sem lote atribuído"* negativo e o lote ruim
+> continuava cheio. Agora, em material com controle por lote, a entrega **recusa antes de baixar qualquer coisa**, dizendo qual lote está
+> impedido, por quê e quanto, e o que fazer; a janela de entrega e a Fila oferecem só o que a entrega aceita. **C464** resolvido (2ª parte) e
+> a causa do **C484** fechada; só servidor (a tela não mudou — a mensagem e o número chegam sozinhos); nada a rodar antes do deploy; decisões
+> **B1383** a **B1395**; avisos **C485** a **C487**, **C489**, **C490** e **C491** (C488 sem uso); limitações **D (206)**; verificação
+> **F (206)**). **Próxima: a parte guardada sem lote levada pelo automático de outro item** (**C490**, defeito anterior com cenário pronto);
+> detalhada no fim do plano da 206. Depois, os itens 8 e 9 do 2º pacote (peça em quarentena com lote — **C466**).
+> *(Antes, 2026-11-06:)* **Etapa 205 fechada** (**lote bloqueado, reprovado ou vencido não conta na aprovação e na
 > separação** — a aprovação reservava e a separação deixava separar peça de lote que não pode sair, e só a entrega descobria. Agora, em
 > material com controle por lote, as duas descontam esse saldo: a requisição fica *Parcialmente Reservada* ou *Aguard. Estoque*, a fila e a
 > janela de separação mostram só o que pode sair, e a separação acima disso recusa dizendo quanto está em lote impedido. **C464** resolvido
@@ -4480,7 +4488,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -14088,6 +14096,78 @@ do bloqueio continua valendo, RN-205.07) — quem lê faz 10 − 10 = 0 e acha q
 **Descartado:** esconder a linha quando a reserva cobre (some a informação de que há lote impedido); mostrar a conta inteira (polui a
 linha). **Reversível** (texto da tela).
 
+**B1383 (NOVA, da Etapa 206; decisão do agente) — o caminho: uma conferência nova antes de qualquer baixa, por material.** A entrega
+confere, depois das recusas que já existiam (crítico, séries, origem, "Sai de" de outro par, só lote e a conta do máximo de cada item) e
+**antes** da alçada de valor (que grava status e manda e-mail), quanto a parte **automática** dos itens de cada material com controle por
+lote vai pedir e quanto o próprio automático vai achar nos lotes que podem sair. Passou do que cabe **e** há saldo em lote impedido → 400,
+nada baixado, nada gravado. A linha que manda o resto para "sem lote" na hora da baixa fica como estava (rede para a corrida da **B1392**).
+**Descartados:** (a) recusar na hora da baixa — os itens anteriores já teriam saído, sem transação: entrega pela metade; (b) trocar o
+*disponível* da conta do máximo pelo disponível sem o lote impedido — a mensagem não nomearia o lote e a conta aproximada da **B1370**
+recusaria o que o automático faria certo; (c) conferir depois da alçada — ela grava (**B464**); (d) obrigar a pessoa a escolher o lote —
+contraria a decisão do cliente de 10/08 (lote só onde há campo). **Reversível.** `ccbce184`.
+
+**B1384 (NOVA, da Etapa 206, com a correção da Fase 2; decisão do agente) — o que cabe é a régua do próprio automático.** Por material:
+*cabe* = soma, pelos lotes que podem sair, de máximo(0, o que o automático acha no lote − o que os itens desta entrega com origem tiram
+desse lote) + máximo(0, saldo **positivo** sem lote − o que sai com origem sem lote), arredondado a 6 casas. "O que o automático acha" é a
+mesma conta da Etapa 197 (o saldo do lote menos a inspeção no lote e menos a parte guardada das caixas vivas, por endereço), já simulando o
+que sai da origem guardada dos itens desta entrega. **O plano dizia** partir do "pedido por origem"; a revisão do plano (Fase 2, a trava)
+mostrou que ele contava em dobro o "só lote" (recusaria o que cabe) e não media a parte guardada que a entrega consome além dela (deixaria
+nascer o negativo) — trocado antes do código. **Descartado:** reescrever a conta em SQL (duas réguas para o mesmo automático).
+**Reversível.** `7159f344`, `ccbce184`.
+
+**B1385 (NOVA, da Etapa 206; decisão do agente; revisa a B1323) — o saldo sem lote positivo continua saindo.** Material com controle por
+lote e saldo sem lote **positivo** (estoque de antes de ligar o controle): o automático tira dele depois dos lotes, como a **B1323** dizia.
+**A B1323 fica revisada, não revogada:** só a parte que iria **negativa** é recusada. Linha sem lote negativa (legado) não soma no que cabe.
+**Descartado:** recusar todo saldo sem lote em material com controle — travaria o estoque legado sem caminho na tela. **Reversível.**
+`ccbce184` (testes RN-206.04 e RN-206.15 d).
+
+**B1386 (NOVA, da Etapa 206; decisão do agente) — só recusa quando o que falta está em lote impedido.** Falta sem saldo em lote impedido
+(por exemplo, o lote bom está em inspeção ou na parte guardada de outra caixa) segue como antes: sai sem lote, negativo — **C485**.
+**Descartado:** recusar toda falta — mudaria uma regra que a etapa não mediu, e a mensagem não teria lote para nomear. **Reversível.**
+`ccbce184` (teste RN-206.15 c).
+
+**B1387 (NOVA, da Etapa 206; decisão do agente) — recusa a entrega inteira; não entrega sozinha a parte que cabe.** É a regra que a entrega
+já usa quando falta saldo (a recusa com o *Máximo*): a pessoa reenvia com menos, e a frase diz quanto a menos. Com dois itens do mesmo
+material, nenhum sai. **Descartado:** cortar em silêncio para o que cabe — o 200 com menos do que foi pedido some com a diferença na tela.
+**Reversível.**
+
+**B1388 (NOVA, da Etapa 206, com a correção da Fase 2; decisão do agente) — a mensagem.** Literal: *"⟨material⟩: não é possível entregar
+⟨quantidade do item⟩ ⟨un⟩ — faltam ⟨falta⟩ ⟨un⟩ em lote que pode sair. Em lote impedido: ⟨lote⟩ (⟨motivo⟩, ⟨saldo⟩ ⟨un⟩), … . Libere o
+lote (mude o status ou libere o vencimento) ou entregue ⟨falta⟩ ⟨un⟩ a menos."* O item é o **primeiro** que cruza o que cabe, na ordem da
+requisição; a **falta é o total do material** (Fase 2: com a falta só do item, a pessoa reenviaria e tomaria outra recusa); quando nada do
+pedido do material cabe, o fim vira *"… ou nada sai deste material."*. Motivo pela régua do motor: a situação primeiro (*bloqueado*,
+*reprovado*, minúsculo); se *Ativo*, *vencido em DD/MM/AAAA*. Cada lote impedido com o saldo menos o que está em inspeção nele, na ordem do
+seletor de lote (validade, depois código); lote com saldo zero fica de fora. **Descartado:** reusar a frase do motor (*"Lote X esta
+bloqueado e nao pode ser utilizado"*) — fala de um lote só e não diz que a entrega inteira foi recusada nem quanto. **Divergência do
+contrato:** a função ganhou um 6º argumento opcional (o "nada sai"), porque com irmãos a falta total pode igualar o item sem que nada deixe
+de sair. **Reversível** (texto). `ccbce184`, `a286ba46`.
+
+**B1389 (NOVA, da Etapa 206; decisão do agente) — a origem da separação em lote impedido: a recusa de antes fica.** O item separado de um
+endereço cujo lote foi bloqueado ou venceu continua recusado com *"⟨material⟩: a origem da separação (⟨endereço⟩) não serve mais (Lote ⟨lote⟩
+esta bloqueado e nao pode ser utilizado) — entregue escolhendo de onde sai"*, igual. O passo seguinte — **Entregar escolhendo de onde sai…**
+com *"Qualquer endereço (automático)"* — passa pela conferência nova: sai de outro lote bom, ou recusa com a frase da **B1388**.
+**Reversível.**
+
+**B1390 (NOVA, da Etapa 206, com a correção da Fase 2; ampliada pela B1395; decisão do agente) — o detalhe e a Fila descontam o lote
+impedido do entregável.** O *entregável* do detalhe da requisição (o que a janela de entrega e o botão de um clique pré-preenchem) e o da
+Fila de separação passam a ser o de antes **menos o saldo em lote impedido**, com piso 0 (sem o piso, o negativo legado do **C484** dava −10
+e o modal pré-preencheria −10); na segunda rodada, a caixa + o separável (que já descontava o lote impedido desde a 205). É a conta
+aproximada da **B1370** (supõe a peça bloqueada dentro do lote impedido): no pior caso promete **mais** do que a entrega aceita — e a entrega
+recusa com a frase, sem baixar. Declarado em **D (206)**. A Fase 5 somou a parte guardada de um irmão (**B1395**). **Reversível.** `62c3dc79`.
+
+**B1391 (NOVA, da Etapa 206; decisão do agente) — "permite saldo negativo" não isenta.** O saldo existe; está em lote impedido. Negativar o
+sem lote com o lote cheio é o defeito, com ou sem a permissão. **Descartado:** isentar — o material com negativo permitido continuaria
+criando o **C484**. **Reversível.** `ccbce184` (teste RN-206.12).
+
+**B1392 (NOVA, da Etapa 206; decisão do agente) — sem trava nova.** A conferência roda dentro das duas travas que a entrega já segura. Mudar
+a situação do lote não pega trava (**B1375**): bloquear um lote entre a conferência e a baixa faz a baixa (que relê os lotes) mandar a
+diferença para o sem lote, como antes — janela de milissegundos, declarada em **D (206)**. **Descartado:** pegar a trava do material ao
+mudar a situação do lote — outra porta, outra etapa. **Reversível.**
+
+**B1393 (NOVA, da Etapa 206; decisão do agente) — o corte, se passasse de 4h30 em mais de 30 min, não foi preciso.** O plano previa tirar o
+desconto do que os itens com origem tiram à mão do mesmo lote (a conferência ficaria conservadora) e registrar o corte como **C488**. **Não
+aconteceu:** o desconto entrou (testes RN-206.09 e RN-206.09b) e o número **C488** ficou sem uso.
+
 **B1394 (NOVA, da Etapa 206, Fase 5 R2; decisão do agente; o defeito é anterior, desde a Etapa 197) — na entrega, a parte guardada do
 próprio item conta uma vez só.** A entrega tira primeiro o que sai da origem guardada (passadas 0 e 1) e depois o automático (passada 2). Na
 passada 2 a conta da guarda que fica relia o banco **depois** da baixa (a caixa já tinha encolhido) e ainda subtraía o que tinha saído: a
@@ -17949,6 +18029,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      a **B1374**). "Aprovação, separação e entrega juntas" **não** foi o caminho: foram divididas em duas etapas. **A 2ª parte — a entrega —
      continua aberta:** a requisição com reserva de antes do bloqueio (**B1372**) separa a parte dela e a entrega ainda sai sem lote; é o
      item 7 do 2º pacote, e é também a causa do **C484**.)*
+     *(**Resolvido na Etapa 206 — a 2ª parte, a entrega** — `ccbce184`, `62c3dc79`, Fase 5 `31aca1a3`, `00d9e24a`: em material com controle
+     por lote, a entrega cuja parte automática só lote impedido cobriria é **recusada antes de baixar**, com *"⟨material⟩: não é possível
+     entregar ⟨n⟩ ⟨un⟩ — faltam ⟨f⟩ ⟨un⟩ em lote que pode sair. Em lote impedido: ⟨lote⟩ (⟨motivo⟩, ⟨saldo⟩ ⟨un⟩). Libere o lote (mude o
+     status ou libere o vencimento) ou entregue ⟨f⟩ ⟨un⟩ a menos."* (**B1383** a **B1391**); o detalhe e a Fila oferecem só o que a entrega
+     aceita (**B1390**, **B1395**). **O "o que fazer" acima deixou de valer:** a entrega já não passa. Ficam: sem lote impedido o negativo
+     ainda nasce (**C485**); série em lote impedido (**C486**); o negativo antigo (**C487**). A parte da devolução citando a saída sem lote
+     continua igual — só não nascem mais saídas sem lote por este caminho.)*
 465. **NOVO (da Etapa 197) — a entrega de EPI e a entrega de material sem controle de lote continuam saindo sem lote, e a lista de saídas da
      Devolução mostra menos entregas antigas.** (1) A **B204** continua nesses fluxos (**B1320**, **B1321**): a entrega de EPI e os internos
      (terceiros, sucata, inspeção) não escolhem lote. (2) Uma entrega de requisição de material com controle de lote pode virar **várias**
@@ -18073,12 +18160,45 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      saldo do lote com um ajuste (baixar de L1 as 6 que de fato saíram e zerar o sem lote), e a requisição volta a reservar. **A causa** é a
      entrega sair de lote impedido; o item 7 da fila (C464, 2ª parte) passa a recusar essa entrega, e o negativo deixa de nascer. Por que
      não descontar o negativo de um lote impedido: veja **B1379** (abatia, e deixava sair peça bloqueada de outro lote).
-485–488. *(Reservados à Etapa 206 — entram no fechamento dela.)*
+     *(**A causa foi fechada na Etapa 206** — `ccbce184`: a entrega que tiraria de lote impedido é recusada antes de baixar, e esse negativo
+     deixa de nascer. **O negativo que já existe continua** e o material continua prometendo menos até o ajuste acima (**C487**). Ainda
+     nasce negativo, sem lote impedido, quando o lote bom está em inspeção ou na parte guardada de outra caixa (**C485**).)*
+485. **NOVO (da Etapa 206; corte declarado, B1386) — sem lote impedido, o automático de material com lote ainda deixa "Sem lote atribuído"
+     negativo.** Quando o que falta não está em lote bloqueado, reprovado ou vencido — o lote bom está **em inspeção**, ou todo na **parte
+     guardada** da caixa de outra requisição —, a entrega não recusa: o que os lotes que podem sair não cobrem sai sem lote, como antes, e a
+     linha fica negativa. Reproduzido no teste *"[RN-206.15 c]"* (falta vinda de inspeção no lote bom). **O que fazer:** esperar a inspeção
+     ou entregar a outra requisição antes; acertar depois por **Ajuste** com localização (**C487**). Conserto: recusar toda falta da parte
+     automática em material com lote — muda uma regra que a etapa não mediu (a parte guardada da 197); não medido.
+486. **NOVO (da Etapa 206; o comportamento é anterior) — série em lote impedido é recusada só na hora da baixa.** A conferência das séries da
+     entrega não olha o lote; quem recusa a série de um lote bloqueado é o motor, na baixa — com vários itens, **depois** de outros já terem
+     saído (entrega pela metade). Item com série fica fora da conferência nova. **O que fazer:** em material com série, não marcar série de
+     lote bloqueado, reprovado ou vencido (a situação aparece em **Lotes e Séries**). Conserto: conferir o lote de cada série junto da
+     conferência das séries, antes da primeira baixa (~1h30, não medido a fundo).
+487. **NOVO (da Etapa 206) — o "Sem lote atribuído" negativo que já existe não some.** A etapa para de **criar** o negativo pela entrega de
+     lote impedido (a causa do **C484**); o negativo gravado antes continua, e o material continua prometendo menos do que há (**C484**).
+     **O que fazer:** **Ajuste** com localização do lote que de fato perdeu as peças (o ajuste absorve a linha sem lote negativa, regra da
+     Etapa 51): baixar do lote as peças que saíram e zerar o sem lote. Sem conserto automático de propósito: o negativo é anônimo (**B1379**).
+488. *(Número sem uso: era reservado ao corte da **B1393**, que não aconteceu.)*
 489. **NOVO (da Etapa 206, Fase 5) — com lote impedido, o "entregável" de cada item é o dele sozinho.** O detalhe e a Fila mostram, item a
      item, quanto ele entregaria sozinho num clique (**B1395**). Dois itens do mesmo material que disputam o mesmo lote bom podem mostrar,
      cada um, o máximo; entregando os dois juntos pelo máximo, a entrega recusa **sem baixar nada** e diz quanto falta (*"faltam N un … ou
      entregue N un a menos"*). **O que fazer:** entregar a menos, como a frase diz, ou um item por vez. Conserto: dividir o teto entre os
      irmãos na tela, como a separação já faz (Etapa 127) — não medido.
+490. **NOVO (da Etapa 206, 3ª revisão da Fase 5; o comportamento é anterior, desde a Etapa 196) — IMPORTANTE: a parte guardada de um item,
+     sem lote, pode ser levada pelo automático de outro item da mesma entrega.** O automático da entrega só protege a parte guardada (o que
+     foi separado de um endereço escolhido) quando ela tem **lote**: em material **sem** controle por lote — e na guarda numa linha **sem
+     lote** dentro de material com lote — a parte que o item 2 separou de um endereço é saldo livre para o automático do item 1. Cenário:
+     material sem controle por lote, endereço *A* com 3 e *B* com 2; item 1 separado 3 sem origem, item 2 separado 2 de *A*; entregar os 3
+     do item 1 → o automático (endereço padrão, depois o de mais saldo) leva os 3 de *A*; a próxima entrega do item 2 → *"⟨material⟩: a origem da
+     separação (A) não serve mais (…) — entregue escolhendo de onde sai"*. **Nenhum erro de estoque** (o total sai certo); o que se perde é o lugar guardado. Igual antes da 206. **O que fazer:**
+     entregar primeiro o item separado do endereço, ou escolher no **Sai de** do outro item um endereço que não seja o guardado. Conserto:
+     estender a proteção da guarda às linhas sem lote — a **próxima etapa** (detalhada no fim do plano da 206).
+491. **NOVO (da Etapa 206, 3ª revisão da Fase 5; o comportamento é anterior) — MENOR: quando o lote da própria guarda fica impedido, o
+     entregável do detalhe ainda conta essa parte.** Item separado de (*A*, *L1*) e depois *L1* bloqueado ou vencido: o detalhe e a Fila
+     ainda oferecem a parte guardada (o teto da **B1395** soma a parte sem olhar o lote dela), e a entrega de um clique recusa com a frase
+     da origem — *"… a origem da separação (A) não serve mais (Lote L1 esta bloqueado e nao pode ser utilizado) — entregue escolhendo de onde
+     sai"* (**B1389**) —, não com a frase da 206. Nada é baixado. **O que fazer:** o que a frase diz — **Entregar escolhendo de onde sai…**
+     com outro lote ou automático. Conserto: o teto do detalhe não contar a parte cujo lote está impedido (pequeno; não medido).
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -19432,6 +19552,16 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(206) A entrega que recusa lote impedido, o que ficou de fora.** (1) **Sem lote impedido** a falta da parte automática ainda sai sem
+  lote, negativa — lote bom em inspeção ou na parte guardada de outra caixa (**B1386**, **C485**). (2) **Série** em lote impedido: recusada
+  só na baixa (**C486**). (3) O **negativo antigo** fica até um ajuste (**C487**). (4) O entregável do detalhe e da Fila é **aproximado**: com
+  a peça bloqueada num lote bom, pode prometer mais do que a entrega aceita — a entrega recusa sem baixar (**B1390**); dois irmãos podem
+  mostrar, cada um, o máximo dele sozinho (**C489**). (5) **Sem trava nova:** bloquear um lote no mesmo instante da entrega (entre a
+  conferência e a baixa) ainda manda a diferença para o sem lote (**B1392**). (6) O **"Sai de"** continua oferecendo o lote bloqueado
+  (escolhê-lo dá a recusa do motor, *"Lote ⟨lote⟩ esta bloqueado e nao pode ser utilizado"*), e a Fila mostra *Aguardando saldo* quando
+  todo o saldo está em lote impedido — coerentes com a entrega (Fase 2). (7) **Anteriores, registrados e não consertados:** a parte
+  guardada **sem lote** levada pelo automático de outro item da mesma entrega (**C490**, a próxima etapa) e o entregável que ainda conta a
+  parte da própria origem cujo lote ficou impedido (**C491**). (8) A tela não mudou: a frase chega pela recusa de sempre.
 - **(205) Lote impedido na aprovação e na separação, o que ficou de fora.** (1) **A entrega não muda** (RN-205.10): com só lote impedido ela
   ainda passa e tira "sem lote" — a 2ª parte do **C464**, a próxima etapa; o teste que fixa isso vai ficar vermelho de propósito nela. (2) As
   **telas de saldo** continuam contando o lote impedido (**C481**). (3) A **reserva manual** (**C479**) e as **três portas que distribuem para
@@ -20788,6 +20918,21 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(206) Nenhum clique foi dado.** A tela **não mudou** (a frase chega pela recusa de sempre, e o número da janela de entrega e da Fila
+vem do servidor), e o Jest da tela **não foi rodado** nesta etapa — nenhum arquivo da tela foi tocado. O que os testes provam, pela rota
+real e pelo serviço: a recusa antes de baixar, com a literal (bloqueado, reprovado, vencido com a data, bloqueado e vencido, dois lotes, a
+inspeção fora do saldo da frase); a parte que cabe sai do lote bom; o sem lote positivo sai e o negativo não soma; material sem controle
+igual; a reserva de antes do bloqueio fica e sai depois de liberar; a origem planejada impedida com a recusa de antes e o automático depois
+dela; irmãos (a falta do material, nada baixado de nenhum); o que sai à mão do mesmo lote descontado; a recusa do máximo primeiro e a alçada
+nem chamada; *permite saldo negativo* não isenta; detalhe, Fila e entrega com o mesmo número (inclusive a guarda de um irmão no lote bom,
+**B1395**); a guarda do próprio item contada uma vez (**B1394**); dois materiais, o impedido em segundo. Controles positivos: os do plano
+(i–v), os da revisão "passaria quebrado?" (2 que passavam verdes) e os cinco da Fase 5 (T1–T5, cada teste derrubando a sua sabotagem).
+Sorteios da Fase 5: **615** entregas na 1ª revisão (nenhum negativo nascido, nenhuma divergência; o controle com o serviço antigo achou 38),
+~**430** no conserto (0 e 0; controle 39) e ~**1000** na 3ª (o controle pegou o defeito de antes do R2). **Não verificado à mão:** o
+roteiro da seção da Etapa 206. Suítes medidas sobre `0996c3c2` (o último commit da etapa): `test:api` **598/598 arquivos**,
+`test:almoxarifado` **44/0**, `test:validation` **4/0**, `test:safealter` **3/0**, `test:sqlite` **16/0**. Jest e build da tela: não
+rodados (tela intocada desde a 205: **214/214 suítes, 2945/2945 testes**, build OK, sobre `0516c933`).
 
 **(205) Nenhum clique foi dado.** A tela **mudou** (a linha *"· Em lote bloqueado/reprovado/vencido: ⟨n⟩ ⟨un⟩"* na janela de separação, e
 o número que a fila e a janela mostram), mas foi provada só pelo Jest, não clicada no navegador. O que os testes provam, pela rota real e
@@ -39319,6 +39464,92 @@ disso o material fica com menos livre do que o real até um ajuste (**C484**).
   duas vezes, e no pior caso desconta menos do que o real (**B1370**, **C466**).
 - **Antes do deploy:** só a **A111** (opcional, o índice novo).
 
+## Etapa 206 — A entrega recusa lote bloqueado, reprovado ou vencido (2026-11-06)
+
+Desde a Etapa 205, a aprovação e a separação já não contam o lote **bloqueado**, **reprovado** ou **vencido** sem liberação. Mas a
+requisição que tinha separado **antes** do bloqueio ainda chegava à entrega — e a entrega passava: o que nenhum lote bom cobria saía como
+*"Sem lote atribuído"*, que ficava **negativo**, e o lote ruim continuava cheio na tela de Lotes. O estoque por lote deixava de bater e o
+material travava na conta de aprovação e separação (**C484**). Agora, em material com **controle por lote**, a entrega **recusa antes de
+baixar qualquer coisa**, dizendo qual lote está impedido, por quê, quanto, e o que fazer: liberar o lote ou entregar a menos. A janela de
+entrega, o botão de um clique e a Fila de separação passam a oferecer só o que a entrega aceita. Só servidor — a tela não mudou; a mensagem
+e o número chegam sozinhos. Nada a rodar antes do deploy. Decisões do agente: **B1383** a **B1395**. **C464** resolvido (2ª parte); a causa
+do **C484** fechada (o negativo antigo continua — **C487**); avisos **C485**, **C486**, **C487**, **C489**, **C490** e **C491**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Entrega de material com saldo só em lote impedido: passava, *"Sem lote atribuído"* ficava negativo e o lote ruim cheio | **Recusada antes de baixar**, com a frase que nomeia o lote, o motivo e o saldo |
+| A janela de entrega e o botão de um clique ofereciam também o que só lote impedido cobria | Oferecem só o que pode sair; o um clique entrega o lote bom e a requisição fica *Parcialmente Atendida* |
+| A Fila de separação dizia *"entregável agora"* contando o lote impedido | Desconta — o mesmo número que a entrega aceita |
+| Dois itens do mesmo material, o primeiro cabe e o segundo não | **Nenhum sai**; a frase diz o item que cruzou e quanto falta no material |
+| Material com **permite saldo negativo** | **Igual aos outros** — também recusa (o saldo existe; está no lote impedido) |
+| Saldo **sem lote positivo** (de antes de ligar o controle) | **Igual** — continua saindo |
+| Lote vencido **com** *Liberar vencimento*; material **sem** controle por lote | **Iguais** |
+| A origem da separação num lote que ficou impedido | **Igual** — a recusa *"a origem da separação … não serve mais"*; o "automático" depois dela passa pela regra nova |
+| O *"Sem lote atribuído"* negativo que já existia | **Igual** — continua até um ajuste (**C487**) |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**. Um material *Pino 206* com **Controle por lote** ligado, não crítico, sem série,
+unidade *un*. **Movimentações → Entrada** de 2 no lote *L1* e de 3 no lote *L2*. Nova requisição de 4 *Pino 206*, aprovada (*Totalmente
+Reservada*, 4) e **Iniciar Separação** de 4 sem escolher **Sai de** (o separado sai pelo automático). Só **depois**, em **Lotes e Séries**,
+**Mudar status** do *L2* para *Bloqueado*, com justificativa. (É o caso que chega à entrega: separado antes do bloqueio.)
+
+**1. A janela e a Fila oferecem só o que pode sair.** Abra a requisição: a janela de entrega (**Completar Entrega** ou **Entregar escolhendo
+de onde sai…**) vem com **2**. Na **Fila de separação**, o item diz *"a entregar 4 un (entregável agora 2)"*. Antes: 4.
+
+**2. A entrega acima disso é recusada, sem baixar nada.** Para chegar a ela pela tela: faça a preparação **até a separação** (o *L2*
+ainda *Ativo*), abra a janela de entrega (vem com 4), bloqueie o *L2* em outra aba, volte (a janela recarrega e mantém o 4) e
+**Confirmar** → *"Pino 206: não é possível entregar 4 un — faltam 2 un em lote que pode
+sair. Em lote impedido: L2 (bloqueado, 3 un). Libere o lote (mude o status ou libere o vencimento) ou entregue 2 un a menos."*. Em **Lotes e
+Séries**: *L1* 2, *L2* 3, *"Sem lote atribuído"* sem mudança; a reserva continua.
+
+**3. A parte que cabe sai.** **Confirmar Entrega e Baixar Estoque** (um clique) → entrega **2**, do *L1*; a requisição fica **Parcialmente
+Atendida**; nenhuma linha negativa.
+
+**4. Liberar o lote libera a entrega.** *L2* de volta a *Ativo* (**Mudar status**) → a entrega dos 2 que faltam sai do *L2*; a requisição
+fica **Entregue**.
+
+**5. O motivo segue a situação do lote.** Com o *L2* *Reprovado*: *"… Em lote impedido: L2 (reprovado, 3 un). …"*. Com o *L2* *Ativo* e
+validade de 3 dias atrás, sem liberação: *"… L2 (vencido em DD/MM/AAAA, 3 un) …"* (a data da validade). *Bloqueado* **e** vencido: diz
+*bloqueado* (a situação primeiro). Com **Liberar vencimento**, a entrega sai do lote. Dois lotes impedidos aparecem os dois, separados por
+vírgula, na ordem do seletor de lote. O que está **em inspeção** no lote não entra no saldo da frase (*L2* 5 com 2 em inspeção → *"L2
+(bloqueado, 3 un)"*).
+
+**6. Nada sai do material.** Material com *L1* *Ativo* 10, requisição de 6 aprovada e separada; depois *L1* → *Bloqueado*. Entregar 6 →
+*"⟨material⟩: não é possível entregar 6 un — faltam 6 un em lote que pode sair. Em lote impedido: L1 (bloqueado, 10 un). Libere o lote (mude
+o status ou libere o vencimento) ou nada sai deste material."*. A reserva continua (6). *L1* → *Ativo* → a mesma entrega sai do *L1*.
+
+**7. Dois itens do mesmo material.** Uma requisição com dois itens do mesmo material, 2 e 3, *L1* *Ativo* 3, *L2* *Bloqueado* 3 → recusa no
+**segundo** item: *"⟨material⟩: não é possível entregar 3 un — faltam 2 un em lote que pode sair. Em lote impedido: L2 (bloqueado, 3 un).
+Libere o lote (mude o status ou libere o vencimento) ou entregue 2 un a menos."* — e **nenhum** dos dois sai. A falta é a do material
+inteiro: com *L1* 1, *L2* *Bloqueado* 4 e dois itens de 2, a recusa vem no primeiro item com *"faltam 3 un"* e *"entregue 3 un a menos"*.
+
+**8. A origem da separação em lote impedido.** Separe 4 escolhendo no **Sai de** o endereço *A* no lote *L1*; depois *L1* → *Bloqueado*;
+*L2* *Ativo* 4 em *B*. Um clique → *"⟨material⟩: a origem da separação (A) não serve mais (Lote L1 esta bloqueado e nao pode ser utilizado)
+— entregue escolhendo de onde sai"* (igual a antes). **Entregar escolhendo de onde sai…** com *"Qualquer endereço (automático)"* → sai do
+*L2*, com a troca registrada. Sem o *L2*, o automático é recusado com a frase nova (*"L1 (bloqueado, 4 un)"*, *"nada sai deste material"*).
+
+**9. O que não muda.** Material **sem** controle por lote com um lote bloqueado: a entrega sai sem lote, como sempre. Saldo sem lote
+**positivo** de antes de ligar o controle: sai. Material com **permite saldo negativo**: a mesma recusa do cenário 2. A recusa de
+**máximo** (*"… Máximo: …"*) continua vindo primeiro quando o pedido passa dele.
+
+### O que esta etapa NÃO cobre
+
+- **Sem lote impedido**, quando o lote bom está em inspeção ou na parte guardada de outra caixa, o automático ainda deixa *"Sem lote
+  atribuído"* negativo (**C485**).
+- **Série** em lote impedido é recusada só na baixa — com vários itens, depois de outros saírem (**C486**).
+- O **negativo que já existe** não some: regulariza-se por **Ajuste** com localização (**C487**, **C484**).
+- Dois itens do mesmo material podem mostrar, cada um, o máximo dele sozinho; entregando os dois pelo máximo, a entrega recusa sem baixar
+  (**C489**).
+- **A parte guardada sem lote** (material sem controle por lote, ou linha sem lote em material com lote) pode ser levada pelo automático de
+  outro item da mesma entrega — anterior (desde a Etapa 196), não consertado aqui; é a próxima etapa (**C490**).
+- Quando o lote da **própria** origem fica impedido, o detalhe ainda oferece essa parte e o um clique recusa com a frase da origem, não com a
+  desta etapa (**C491**).
+- As telas de saldo, a reserva manual, as portas que distribuem para quem espera e liberar o lote: como na 205 (**C478** a **C481**).
+- **Antes do deploy:** nada.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
@@ -39326,6 +39557,16 @@ disso o material fica com menos livre do que o real até um ajuste (**C484**).
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
 
+- **Etapa 206 entregue (2026-11-06):** **a entrega recusa lote bloqueado, reprovado ou vencido** (**C464** resolvido na 2ª parte; a causa do
+  **C484** fechada). A conferência nova antes de qualquer baixa e da alçada (**B1383**), com a régua do próprio automático (**B1384**); o sem
+  lote positivo sai (**B1385**, a B1323 revisada); só recusa com saldo em lote impedido (**B1386**); recusa a entrega inteira (**B1387**); a
+  frase (**B1388**); a origem impedida com a recusa de antes (**B1389**); o detalhe e a Fila descontam (**B1390**, **B1395**); *permite
+  saldo negativo* não isenta (**B1391**); sem trava nova (**B1392**); o corte da **B1393** não foi preciso; a guarda do próprio item conta
+  uma vez (**B1394**, defeito da 197). Commits `7f210f62` (plano), `7159f344` (Fase 2), `df1de701` (T0), `ccbce184` (T1), `62c3dc79` (T2),
+  `a286ba46` (T3), `7d21a13c` (execução); Fase 5 `31aca1a3`, `00d9e24a`, `0996c3c2`; e o fechamento. **O que é seu:** as decisões **B1383**
+  a **B1395** (reversíveis); os avisos **C485** a **C487**, **C489** e os dois anteriores achados na 3ª revisão, **C490** (importante) e
+  **C491**; as limitações **(206)** em D e a verificação **(206)** em F. **Próxima:** *a parte guardada sem lote levada pelo automático*
+  (**C490**) — detalhada no fim do plano da 206; depois os itens 8 e 9 do 2º pacote (peça em quarentena com lote, **C466**).
 - **Etapa 205 entregue (2026-11-06):** **lote bloqueado, reprovado ou vencido não conta na aprovação e na separação** (**C464** resolvido na
   1ª parte). Dois campos novos no saldo do item, nada muda de nome (**B1368**); a régua do impedido é a do *elegível* (**B1369**); a conta sem
   tirar duas vezes (**B1370**); só material com lote (**B1371**); a reserva que já existe fica (**B1372**); a segunda frase da separação

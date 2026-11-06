@@ -1,24 +1,28 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-11-06 (Etapas 172 a 191, 194 a 205) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-11-06 (Etapas 172 a 191, 194 a 206) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204 e 205) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205 e 206) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-06 (Etapas 172 a 178, 180 a 191, 194 a 205 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-06 (Etapas 172 a 178, 180 a 191, 194 a 206 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
-> **O desenvolvimento parou aqui: Etapa 205 fechada — 2026-11-06.** **Lote bloqueado, reprovado ou vencido não conta na aprovação e na
-> separação.** A aprovação reservava e a separação deixava separar peça de lote que não pode sair; só a entrega descobria. Agora, em material
-> com controle por lote, a aprovação reserva só o que pode sair (*Parcialmente Reservada* ou *Aguard. Estoque*), a Fila e a janela de
-> separação mostram só isso (a janela diz quanto está em lote impedido) e a separação acima recusa com a conta. Servidor e uma linha na
-> janela; antes do deploy só a **A111** (opcional, índice que nasce sozinho). **Nenhum clique foi dado** (testes da rota, do serviço e Jest da
-> tela — roteiro na seção da 205 e letra F das novidades).
+> **O desenvolvimento parou aqui: Etapa 206 fechada — 2026-11-06.** **A entrega recusa lote bloqueado, reprovado ou vencido.** Quando o
+> material só tinha saldo em lote que não pode sair, a entrega passava e deixava *"Sem lote atribuído"* negativo, com o lote ruim cheio.
+> Agora, em material com controle por lote, ela recusa **antes de baixar**, dizendo qual lote, por quê, quanto e o que fazer; a janela de
+> entrega e a Fila oferecem só o que a entrega aceita. Só servidor (a tela não mudou); nada a rodar antes do deploy. **Nenhum clique foi
+> dado** (testes da rota e do serviço — roteiro na seção da 206 e letra F das novidades).
 >
-> **Onde parou, exatamente:** a **205 está fechada** (código, testes e documentos commitados). A **próxima** é o item 7 do 2º pacote da
-> estimativa de 05/11: **"Lote bloqueado, reprovado ou vencido — 2ª parte: entrega"** (**C464**, 2ª parte — a entrega ainda passa e tira
-> "sem lote" quando só sobra lote impedido; é também a causa do **C484**). Só a tarefa detalhada no fim do plano da 205
-> (`docs/superpowers/plans/2026-11-06-almoxarifado-etapa205-lote-impedido-na-aprovacao-e-separacao.md`) e a estimativa existem, nenhum plano
-> nem código.
+> **Onde parou, exatamente:** a **206 está fechada** (código, testes e documentos commitados; o estimado × gasto do item 7 fica com o André).
+> A **próxima** é o aviso **C490**, anterior, achado na revisão da 206: **"a parte separada sem lote levada pelo automático de outro item"**
+> (em material sem controle por lote, a entrega automática de um item pode levar o que outro item da mesma requisição separou de um
+> endereço, e a entrega seguinte dele é recusada). Só a tarefa detalhada no fim do plano da 206
+> (`docs/superpowers/plans/2026-11-06-almoxarifado-etapa206-entrega-recusa-lote-impedido.md`) existe — sem estimativa, plano nem código.
+> Depois: os itens 8 e 9 do 2º pacote da estimativa de 05/11 (peça em quarentena com lote — **C466**), já estimados.
+>
+> *(Antes:)* **Etapa 205, 2026-11-06.** **Lote bloqueado, reprovado ou vencido não conta na aprovação e na separação.** A aprovação reserva
+> só o que pode sair, a Fila e a janela de separação mostram só isso e a separação acima recusa com a conta. Servidor e uma linha na janela;
+> antes do deploy só a **A111** (opcional). **Nenhum clique foi dado** (roteiro na seção da 205 e letra F das novidades).
 >
 > *(Antes:)* **Etapa 204, 2026-11-06.** **A Devolução acha as entregas antigas.** O campo *Entrega de origem* da tela **Devoluções**
 > mostrava só as 30 entregas mais recentes do material; agora **"Carregar entregas mais antigas"** traz as 30 anteriores a cada clique. Tela
@@ -7081,6 +7085,56 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 206 — A entrega recusa lote bloqueado, reprovado ou vencido (ENTREGUE — 2026-11-06)
+
+**O que mudou, em uma frase:** em material com controle por lote, quando a entrega só teria de onde tirar em lote bloqueado, reprovado ou
+vencido (sem liberação), ela é **recusada antes de baixar qualquer coisa**, dizendo qual lote, por quê, quanto e o que fazer.
+
+**O problema que ela resolve.** Desde a Etapa 205 a aprovação e a separação não contam o lote impedido — mas a requisição separada **antes**
+do bloqueio ainda chegava à entrega, e a entrega passava: o que nenhum lote bom cobria saía como *"Sem lote atribuído"*, que ficava
+negativo, e o lote ruim continuava cheio. O estoque por lote deixava de bater e o material ficava prometendo menos do que tinha.
+
+| Antes | Agora |
+|---|---|
+| A entrega passava e deixava *"Sem lote atribuído"* negativo, com o lote ruim cheio | Recusa antes de baixar, com a frase que nomeia o lote |
+| A janela de entrega, o botão de um clique e a Fila ofereciam o que só lote impedido cobria | Oferecem só o que a entrega aceita |
+| Dois itens do mesmo material: um cabia, o outro não | Nenhum sai; a frase diz quanto falta no material |
+| Saldo sem lote positivo (de antes de ligar o controle); vencido com **Liberar vencimento**; material sem controle por lote | **Iguais** |
+| O *"Sem lote atribuído"* negativo que já existia | **Igual** — acerta-se por **Ajuste** com localização |
+
+**Antes de testar (uma vez).** Usuário **Administrador do almoxarifado**. Um material *Pino 206* com **Controle por lote** ligado, não
+crítico, sem série, unidade *un*. **Movimentações → Entrada** de 2 no lote *L1* e de 3 no lote *L2*. **Requisições → Nova requisição** de 4
+*Pino 206*, aprovada (fica *Totalmente Reservada*), e **Iniciar Separação** de 4, sem escolher **Sai de**.
+
+**Roteiro de teste (10 minutos).**
+
+1. Abra a requisição e clique **Completar Entrega** (ou **Entregar escolhendo de onde sai…**): a janela vem com **4**. **Não confirme** —
+   deixe a janela aberta.
+2. Em outra aba, **Lotes e Séries** → **Mudar status** do *L2* para *Bloqueado*, com justificativa.
+3. Volte à aba da requisição (a janela recarrega e mantém o 4) e **Confirmar** → aparece *"Pino 206: não é possível entregar 4 un — faltam
+   2 un em lote que pode sair. Em lote impedido: L2 (bloqueado, 3 un). Libere o lote (mude o status ou libere o vencimento) ou entregue 2 un
+   a menos."*. Em **Lotes e Séries**: *L1* 2, *L2* 3, *"Sem lote atribuído"* sem mudança.
+4. Feche a janela e abra de novo → agora ela vem com **2**. Na **Fila de separação**, o item diz *"entregável agora 2"*.
+5. **Confirmar Entrega e Baixar Estoque** (um clique) → saem **2**, do *L1*; a requisição fica **Parcialmente Atendida**.
+6. *L2* de volta a *Ativo* (**Mudar status**) → entregue os 2 que faltam → saem do *L2*; a requisição fica **Entregue**; nenhuma linha
+   negativa em **Lotes e Séries**.
+7. *(Motivo.)* Repita com o *L2* *Reprovado* → a frase diz *"L2 (reprovado, 3 un)"*; com o *L2* *Ativo* vencido há 3 dias, sem liberação →
+   *"L2 (vencido em DD/MM/AAAA, 3 un)"*.
+8. *(Nada sai.)* Material com *L1* *Ativo* 10; requisição de 6 aprovada e separada; *L1* → *Bloqueado*; entregar 6 → a frase termina em
+   *"… ou nada sai deste material."*; a reserva continua (6). *L1* → *Ativo* → a mesma entrega sai.
+9. *(Sem controle por lote.)* O mesmo do passo 2 num material com **Controle por lote** desligado → a entrega sai, como sempre.
+
+**O que esta etapa não cobre.** Sem lote impedido (o lote bom está em inspeção ou separado para outra requisição) a entrega ainda pode
+deixar *"Sem lote atribuído"* negativo (**C485**). Série de lote bloqueado só é recusada na baixa (**C486**). O negativo que já existe
+continua até um **Ajuste** com localização (**C487**). Dois itens do mesmo material podem mostrar, cada um, o máximo dele sozinho — juntos,
+a entrega recusa sem baixar (**C489**). Dois avisos **anteriores**, achados agora e **não** consertados: a parte separada de um endereço,
+sem lote, pode ser levada pela entrega automática de outro item da mesma requisição, e a entrega seguinte do item recusa com *"a origem da
+separação … não serve mais"* (**C490** — é a próxima etapa); e quando o lote da própria origem fica impedido, a janela ainda oferece essa
+parte e o um clique recusa com a frase da origem (**C491**). **Antes do deploy:** nada.
+
+*Nenhum clique foi dado nesta etapa*: o roteiro acima é o que os testes automáticos provam (pela rota real e pelo serviço; a tela não
+mudou) — escrito para você conferir.
 
 ## Etapa 205 — Lote bloqueado, reprovado ou vencido não conta na aprovação e na separação (ENTREGUE — 2026-11-06)
 

@@ -1,5 +1,7 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 206 (2026-11-06, T1 `ccbce184`, T2 `62c3dc79`, Fase 5 `31aca1a3`, `00d9e24a`): a entrega de requisição de material com `controle_lote` deixa de mandar para "sem lote" (negativo) o que só lote impedido cobriria — recusa antes de baixar (C464 2ª parte resolvida; a causa do C484 fechada); a B1323 revisada (só o sem lote positivo sai); a nota da guarda desligada (Etapa 197, abaixo) anotada** — ver a seção "Etapa 206", no fim. O status não muda.
+
 > **+ Etapa 205 (2026-11-06, T0 `8bebd3ce`, T1 `f736cc71`, T2 `82ae8664`, T2b `18b41f47`, Fase 5 `17fb5202`, `13fe3691`): lote BLOQUEADO, REPROVADO ou vencido sem liberação deixa de contar na aprovação e na separação de material com `controle_lote` (C464, 1ª parte) — a régua `predicadoLoteImpedidoSql` é o contrário de `elegivel`; a entrega não muda (C464 2ª parte, item 7)** — ver a seção "Etapa 205", no fim. O status não muda.
 
 > **+ Etapa 202 (2026-11-06, Fase 2 `3d7b53c2`, T1 `00ec247e`, T2 `6aed6213`): a rota antiga de movimentação (v1) repassa `lote`, `lote_id` e `data_validade` ao motor (C458) — fora do `AJUSTE` (B1357, C475); forma pela régua da v2; `null`/vazio = sem lote; `aviso_validade` na resposta; C474 (`material_id` em texto) consertado no motor; a tabela do alcance de `controle_lote` e o parágrafo "Não confundir com a rota v1" valiam só até a 202 (anotados)** — ver a seção "Etapa 202", no fim. O status não muda (🟢).
@@ -733,7 +735,7 @@ lote — não existe campo na tela nem parâmetro na chamada:
 
 | Fluxo | Arquivo | Tipo de movimento | O que acontece hoje |
 |---|---|---|---|
-| Entrega de requisição | `requisitionService.entregarRequisicao` | `SAIDA` | ~~baixa sem lote; a linha de saldo debitada é a `(localização resolvida, lote NULL)`~~ — **mudou duas vezes:** desde a **Etapa 58** (B231) a entrega pode escolher o lote no "Sai de" (sai daquele lote); desde a **Etapa 197** (B1320), em material com `controle_lote` e sem série, a parte **automática** sai por lote (FEFO, só lote elegível, uma SAIDA por lote; o que os elegíveis não cobrem, sem lote — B1323). "Baixa sem lote" vale só para a parte automática de material **sem** `controle_lote` |
+| Entrega de requisição | `requisitionService.entregarRequisicao` | `SAIDA` | ~~baixa sem lote; a linha de saldo debitada é a `(localização resolvida, lote NULL)`~~ — **mudou duas vezes:** desde a **Etapa 58** (B231) a entrega pode escolher o lote no "Sai de" (sai daquele lote); desde a **Etapa 197** (B1320), em material com `controle_lote` e sem série, a parte **automática** sai por lote (FEFO, só lote elegível, uma SAIDA por lote; o que os elegíveis não cobrem, sem lote — B1323; **desde a Etapa 206** só até o saldo sem lote positivo: a parte que iria negativa com lote impedido é recusada antes de baixar, B1385). "Baixa sem lote" vale só para a parte automática de material **sem** `controle_lote` |
 | Exclusão administrativa de requisição | `requisitionService.excluirRequisicao` | `ENTRADA` (estorno) | ~~devolve sem lote — não volta para o lote de onde saiu~~ — **isto estava errado desde a Etapa 58** (B232, `requisitionService.excluirSemTrava`): a exclusão devolve **por saída**, com o `lote_id` de cada uma — volta ao lote de onde saiu (e ao endereço, se ainda recebe; a saída automática, ao endereço padrão — D (51)). Só a requisição antiga cujo livro não fecha com o entregue estorna numa entrada sem lote. Corrigido à vista no fechamento da 197 |
 
 **Conferido contra o código em 2026-08-12:** a seção "Lado 2: os fluxos internos que continuam
@@ -757,6 +759,9 @@ ligada nesse caminho seria travar operação — foi exatamente o defeito corrig
 ordem de `lotService.listarLotesDoMaterial`, só os elegíveis (B1320–B1324). A **guarda continua desligada** nesse caminho
 (`exigeLote` não é declarado): o que os lotes elegíveis não cobrem sai sem lote, sem recusar a entrega (B1323, C464). A
 separação ganhou campo de lote (Etapa 59 — o "Sai de"), então a parte "o operador escolheria na tela de separação" também existe.)*
+*(**Mudou na Etapa 206** (`ccbce184`): "sem recusar a entrega" **deixou de valer** quando a falta está em lote impedido — a entrega recusa
+antes de baixar (B1383–B1388). A guarda `exigeLote` continua desligada; o que ainda sai sem lote é o saldo sem lote **positivo** (B1385) e
+a falta sem lote impedido (B1386, C485).)*
 
 **Não confundir com a rota v1**: o modal rápido da tela de Materiais também não carrega lote no
 contrato, mas **continua exigindo** — ali o operador tem uma porta (a tela de Movimentações, que
@@ -1215,10 +1220,30 @@ spec 05 (separação) e na 07 (aprovação). O que toca esta feature:
   contrato do plano (que dizia `IS NULL`/`IS NOT NULL`), declarada no plano e no comentário do arquivo.
 - [x] **Índice `idx_receb_itens_almox_lote`** em `recebimentos_material_itens_almoxarifado(lote_id)`, `IF NOT EXISTS` no boot — `17fb5202`
   (B1380, A111; primeiro boot em pasta vazia e numa cópia do banco de desenvolvimento).
-- [ ] **A pendência C464 — dividida:** a 1ª parte (aprovação e separação) está feita; a **2ª parte (a entrega)** continua: o resto que os
+- [ ] **A pendência C464 — dividida:** *(**a 2ª parte foi feita na Etapa 206** — `ccbce184`; ver a seção "Etapa 206". O texto a seguir
+  valia até ela.)* A 1ª parte (aprovação e separação) está feita; a **2ª parte (a entrega)** continua: o resto que os
   lotes elegíveis não cobrem sai sem lote (B1323), deixando *"Sem lote atribuído"* negativo — e esse negativo, anônimo, deixa o material
   com menos livre que o real até um ajuste (**C484**; o abatimento que o resolvia foi desfeito por ser inseguro, B1379). É o item 7.
 - [ ] **Fora:** liberar o lote (`mudarStatusLote`, `liberarVencimento`, certificado) não recalcula nem distribui (**C480**); as telas de saldo
   continuam contando o lote impedido (**C481**).
+
+Continua 🟢.
+
+## Etapa 206 — a entrega recusa lote impedido (2026-11-06)
+
+Plano: `docs/superpowers/plans/2026-11-06-almoxarifado-etapa206-entrega-recusa-lote-impedido.md`. O checklist com hashes está na spec 05
+(seção "Etapa 206"). O que toca esta feature:
+
+- [x] **A pendência C464, 2ª parte** — a parte automática da entrega de material com `controle_lote` que só lote impedido cobriria é
+  recusada antes de baixar (`conferirAutomaticoPeloLote`, `fraseEntregaLoteImpedido`); o motivo pela régua do motor (`stockService.js`, a
+  situação primeiro, depois o vencimento sem liberação), o saldo de cada lote impedido menos a inspeção nele — `ccbce184`. Com isso o C464
+  está **resolvido** nas duas partes.
+- [x] **B1323 revisada** (B1385) — o que os lotes elegíveis não cobrem só sai sem lote até o saldo sem lote **positivo**; a parte que iria
+  negativa com lote impedido é recusada. A linha da tabela de alcance (entrega de requisição) e a nota da guarda desligada (Etapa 197) foram
+  anotadas à vista — `ccbce184`.
+- [x] **A causa do C484 fechada** — a entrega deixa de criar o negativo sem lote a partir de lote impedido. O negativo que já existe fica
+  (**C487**: regulariza-se por Ajuste com localização, que absorve a linha sem lote negativa).
+- [ ] **Fora:** a série de lote impedido (**C486**); a falta sem lote impedido ainda negativa (**C485**); a guarda numa linha sem lote não é
+  protegida do automático (**C490**, anterior).
 
 Continua 🟢.

@@ -1,5 +1,7 @@
 # 07 — Reservas de Estoque
 
+> **+ Etapa 206 (2026-11-06, T0 `df1de701`, T1 `ccbce184`): a reserva de antes do bloqueio continua e a entrega dela recusa enquanto o lote estiver impedido (RN-206.06, B1372 mantida)** — ver a seção "Etapa 206", no fim. O status não muda.
+
 > **+ Etapa 205 (2026-11-06, T1 `f736cc71`, Fase 5 `52fa9328`): a aprovação reserva só o que está em lote que pode sair (C464, 1ª parte, B1368–B1372, B1381)** — as três portas leem `disponivel_liberado` e `calcularStatusPosAprovacao` desconta `loteImpedidoSql`; a requisição da OS converte a reserva da OS acima do liberado. Ver a seção "Etapa 205", no fim. O status não muda.
 
 > **+ Etapa 176 (2026-10-22, `c1c04e1b`, Fase 5 `eb82e52b`): a reserva da OS nasce também da NF sem pedido com OS, e o dono do material é conferido sob a trava antes de reservar (B1154)** — ver a seção "Etapa 176", no fim. O status não muda.
@@ -652,3 +654,15 @@ lote impedido (`loteImpedido.js`, `8bebd3ce`) e a parte da separação estão na
   OS (171/172/176) verdes.
 - [ ] **Fora:** a reserva manual (`criarReserva`) conta lote impedido (**C479**); as três portas que distribuem para quem espera (nota,
   inspeção/NC, OS encerrada) também (**C478**); liberar o lote não distribui (**C480**).
+
+## Etapa 206 — a reserva de antes do bloqueio na entrega (2026-11-06)
+
+Plano: `docs/superpowers/plans/2026-11-06-almoxarifado-etapa206-entrega-recusa-lote-impedido.md`. O checklist com hashes está na spec 05
+(seção "Etapa 206"). O que toca esta feature:
+
+- [x] **RN-206.06** — a reserva feita antes do bloqueio (B1372) **continua**: a entrega dela recusa enquanto o lote estiver impedido (*"…
+  nada sai deste material."*), a reserva fica ATIVA com o mesmo número, e liberar o lote faz a mesma entrega sair dele, consumindo a reserva
+  — `df1de701`, `ccbce184` (`loteImpedidoIntegracao.api.test.js`). Nenhuma reserva é solta nem mudada pela recusa (nada grava).
+- [x] **A alçada não é chamada** quando a recusa vem (RN-206.10 b, por espião) — `ccbce184`.
+
+Nenhuma coluna nova, nenhuma trava nova. Continua 🟢.
