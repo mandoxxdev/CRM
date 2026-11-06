@@ -2485,7 +2485,9 @@ const RequisicoesList = () => {
                     <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>
                       Solicitado: {item.quantidade_solicitada} · Já separado: {getSeparado(item)} · Saldo: {item.saldo_atual}
                       {/* Etapa 205 (Fase 2 I4): o saldo que a separação não conta (lote bloqueado, reprovado ou vencido) */}
-                      {Number(item.lote_impedido) > 0 && ` · Em lote bloqueado/reprovado/vencido: ${item.lote_impedido}`}
+                      {/* Etapa 205 (Fase 5 P4): com a unidade, e — quando o campo passa de saldo − impedido (RN-205.07: a reserva
+                          feita antes do bloqueio) — dizendo por quê; sem isso "Saldo: 10 · …: 10" e o campo com 6 induzia 10 − 10 = 0. */}
+                      {Number(item.lote_impedido) > 0 && ` · Em lote bloqueado/reprovado/vencido: ${item.lote_impedido}${(item.unidade || item.material_unidade) ? ` ${item.unidade || item.material_unidade}` : ''}${saldoSeparavel(item) > Number(item.saldo_atual) - Number(item.lote_impedido) + 1e-9 ? '; a reserva desta requisição continua valendo' : ''}`}
                     </div>
                     {/* Etapa 59 (RN-05): de onde o separador tirou — opcional. Com origem escolhida, a
                         entrega sem escolha sai dela (a origem planejada). */}

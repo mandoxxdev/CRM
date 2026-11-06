@@ -75,12 +75,23 @@ const inputs = () => [...container.querySelectorAll('.almox-modal input.almox-co
 const textoDoModal = () => container.querySelector('.almox-modal').textContent;
 
 describe('Etapa 205 — a janela de separação mostra o saldo em lote impedido', () => {
-  test('[Fase 2 I4] lote_impedido 6 -> "Saldo: 10 · Em lote bloqueado/reprovado/vencido: 6" e o campo vem com o separável 4', async () => {
+  test('[Fase 2 I4, Fase 5 P4] lote_impedido 6 -> "Saldo: 10 · Em lote bloqueado/reprovado/vencido: 6 un" e o campo vem com o separável 4', async () => {
     requisicao = comItem({ lote_impedido: 6, saldo_separavel: 4, quantidade_separavel: 4, saldo_separavel_reserva: 0 });
     await renderizar();
     await clicar('Iniciar Separação');
-    expect(textoDoModal()).toContain('Saldo: 10 · Em lote bloqueado/reprovado/vencido: 6');
+    expect(textoDoModal()).toContain('Saldo: 10 · Em lote bloqueado/reprovado/vencido: 6 un');
+    expect(textoDoModal()).not.toContain('a reserva desta requisição continua valendo'); // 4 = 10 - 6: nada a explicar
     expect(inputs().map((i) => i.value)).toEqual(['4']);
+  });
+
+  // Fase 5 (P4): RN-205.07 — o lote ficou impedido DEPOIS da reserva; a reserva do proprio item continua valendo (separavel 6 com
+  // saldo 10 e impedido 10). Sem a 2a parte a linha induzia 10 - 10 = 0 e o campo vinha com 6.
+  test('[Fase 5 P4] RN-205.07: saldo 10, impedido 10, separável 6 pela reserva -> "…: 10 un; a reserva desta requisição continua valendo" e o campo com 6', async () => {
+    requisicao = comItem({ quantidade_solicitada: 6, lote_impedido: 10, saldo_separavel: 6, quantidade_separavel: 6, saldo_separavel_reserva: 6 });
+    await renderizar();
+    await clicar('Iniciar Separação');
+    expect(textoDoModal()).toContain('Saldo: 10 · Em lote bloqueado/reprovado/vencido: 10 un; a reserva desta requisição continua valendo');
+    expect(inputs().map((i) => i.value)).toEqual(['6']);
   });
 
   test('[Fase 2 I4] lote_impedido 0 (ou ausente) -> a linha de hoje, sem a frase do lote', async () => {

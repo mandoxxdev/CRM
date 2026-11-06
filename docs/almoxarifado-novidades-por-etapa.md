@@ -13996,6 +13996,13 @@ impedido a regra é a da Etapa 171, intacta. **Descartado:** deixar como estava 
 travava a OS); converter pelo disponível de antes da 205 (reservaria peça de lote bloqueado quando tudo está bloqueado). **Reversível**
 (o abono `osNoImpedido` em `reservarItensAprovacao`).
 
+**B1382 (NOVA, da Etapa 205, Fase 5 P4; decisão do agente) — a linha do lote impedido na janela de separação diz a unidade e, quando é o
+caso, por que o campo vem maior.** Antes: *"Saldo: 10 · Em lote bloqueado/reprovado/vencido: 10"* e o campo com 6 (a reserva feita antes
+do bloqueio continua valendo, RN-205.07) — quem lê faz 10 − 10 = 0 e acha que é erro. Agora: *"… Em lote bloqueado/reprovado/vencido:
+10 un; a reserva desta requisição continua valendo"*; a segunda parte só aparece quando o campo passa de *saldo − impedido*.
+**Descartado:** esconder a linha quando a reserva cobre (some a informação de que há lote impedido); mostrar a conta inteira (polui a
+linha). **Reversível** (texto da tela).
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
