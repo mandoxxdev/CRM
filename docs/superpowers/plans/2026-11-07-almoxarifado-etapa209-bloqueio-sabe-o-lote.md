@@ -317,9 +317,34 @@ lote: igual; bloqueio antigo: cai em "Sem lote"), salvo o caso da trava abaixo; 
 ## Execução
 
 - [x] Fase 2 — revisor fresco sobre este plano; correções registradas numa seção "Fase 2" acima da Execução (mandam sobre o texto) — feita em 06/11 (1 trava, 2 importantes, 5 menores; bloco "Fase 2 — correções").
-- [ ] T0 — testes vermelhos (`bloqueioSabeOLote.api.test.js`) + varredura dos testes de hoje afetados pela M1
-- [ ] T1 — `bloqueioPorLote.js`
-- [ ] T2 — `returnService` passa o lote ao `BLOQUEIO`
+- [x] T0 — testes vermelhos + varredura M1 — `0999f06f`. Dois arquivos: `server/tests/api/bloqueioSabeOLote.api.test.js` (13 testes da fatia
+  T1+T2: RN-209.01 a/b/c, .02, .02b, .03, .06 b, .09 e o cenário do estorno da `ENTRADA_DEVOLUCAO`/C504; no código de `c2b66af0` **0/13**, cada
+  um por motivo real — o livro com `BLOQUEIO.lote_id` null, ou o módulo ausente só nos que não têm livro a conferir) e
+  `server/tests/api/bloqueioSabeOLote.pendente-t3.js` (11 testes de T3/T4/T5/T7: RN-209.04 a-d, .05, .06 a/c, .08, .10, .07 rota e serviço) —
+  **fora do runner de propósito** (`run-all.js` só descobre `*.api.test.js`), para o `test:api` não ficar vermelho. Varredura M1: **nenhum** teste
+  de hoje faz desbloqueio sem lote depois de uma devolução para Quarentena com lote (`devolucaoVinculo`, `entregaAutomaticaPeloLote`,
+  `loteImpedido` devolvem com lote e não desbloqueiam; `bloqueioGuardas` devolve sem saída citada, logo sem lote) — a T3 não reescreve nenhum.
+  **O plano estava errado na T7:** `POST /movimentacoes/v2` **recusa** `SUCATA` (tipo dedicado, `schemas.js:72` — dupla aprovação na aba
+  Sucateamentos). A RN-209.07 pela rota usa `PERDA` na v2; pelo serviço, `registrarMovimentacao` `SUCATA` direto no motor.
+  RN-209.09 compara `loteImpedidoSql`, `saldoDisponivelParaItem` e `listarLotesDoMaterial` (a entrada de `lotesParaOAutomatico`, que não é
+  exportada) com o `BLOQUEIO` com L1 e com `lote_id` zerado por `UPDATE` só da linha do livro.
+- [x] T1 — `bloqueioPorLote.js` — `9a3dcad9` + fix `8ff95f59`: a consulta do material passava `bloqueadoComLoteSql('id')` sem apelido e, dentro da
+  subconsulta, `id` era o `bpl.id` do livro (soma com lote 0, `sem_lote` = total). Invisível na T1 (nenhum `BLOQUEIO` tinha lote), pego pelos
+  testes da T2. **Para o item 9: `materialExpr` sempre qualificada.**
+- [x] T2 — `returnService` passa o lote ao `BLOQUEIO` (`lote_id: loteFinalId || undefined`, dentro das mesmas pernas sob `naTravaDoMaterial`) —
+  `e10f8c04`. `bloqueioSabeOLote` **13/13**. Controles positivos (um por vez, `perl -0pi` sobre LF, âncora = 1, restauro por cópia, md5
+  conferido): **(1)** sem o `lote_id` no `BLOQUEIO` → 8 vermelhos (RN-209.01 a/b/c, .02b, .03, .06 b, .09 ×2 — premissa/livro); **(5)** helper sem
+  `cancelado = 0` → RN-209.06 b vermelho (L1 2 depois do estorno); **(6)** `loteImpedidoSql` somando `bloqueadoComLoteSql` → RN-209.09 (o
+  primeiro) vermelho (`lote_impedido` 4 × 2). O cenário C504 não cai no (6) porque nenhum lote dele é impedido — quem carrega o controle é o
+  primeiro. Fase 2 item 8 (sabotagem só depois da T5): não havia galho aberto (execução em série, sem worktree), então o controle (1) em
+  `returnService.js` rodou já; nada concorrente para contaminar.
+- **Onde parou (sessão de 06/11):** T0, T1, T2 fechadas e commitadas; `test:api` **603/603 arquivos OK** e `test:almoxarifado` **44 passou, 0 falhou** (sobre `e10f8c04`; o pendente fora do runner).
+  **A próxima sessão começa pela T3:** (1) rodar `cd server && node tests/api/bloqueioSabeOLote.pendente-t3.js` — hoje **1/11** (só a RN-209.06 a
+  passa, e **por acaso**: o desbloqueio ainda ignora `lote_id`, então o `DESBLOQUEIO` sai sem lote; ela só prova algo depois da T4); (2) conferir o
+  Achado 3 com `console.log` descartável no ramo do estorno do `BLOQUEIO` (`stockService.js` ~`:3509`); (3) M1/M2 no `WHERE` do `DESBLOQUEIO`
+  com `bloqueadoDoLoteSql('materiais_almoxarifado.id', '?')` (Fase 2 item 5) e M3 **lida antes** do claim do material, ordem total → M3 (Fase 2
+  item 4); (4) T4 (`lote_id` em `desbloquearMaterial`, B1422) e T5 (rota GET); (5) com T3-T5 verdes, **mover** os testes do `pendente-t3.js` para
+  `bloqueioSabeOLote.api.test.js` e apagar o pendente — não deixar teste fora do runner.
 - [ ] T3 — motor: M1/M2 no `DESBLOQUEIO`, M3 no estorno do `BLOQUEIO` (Achado 3 conferido)
 - [ ] T4 — `desbloquearMaterial` aceita `lote_id`
 - [ ] T5 — rota `GET /materiais/:id/bloqueado-por-lote`
