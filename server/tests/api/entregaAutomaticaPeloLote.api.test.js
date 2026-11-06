@@ -476,20 +476,30 @@ process.on('exit', (code) => {
   });
 
   // ── Fase 5 M3: a parte guardada de requisicao EXCLUIDA nao conta ──────────────────────────────────────────────────────────────
-  await test('[Fase 5 M3] R1 separa 4 de ZB-01/L1 e e excluida (a origem guardada fica na linha CANCELADO/ativo 0); R2 automatico 4 tira L1 4 (vence antes)', async () => {
+  // Etapa 203 (C467, B1362): a exclusao passou a limpar a origem — pela rota a origem some; o filtro da excluida (a parte guardada de
+  // excluida nao conta) e provado pela versao por SQL (a excluida de antes da 203, com a origem gravada, B1361).
+  const m3 = async (excluirComo) => {
     const m = await material();
     await entrar(m, B01.id, 4, 'L1'); await entrar(m, P01.id, 9, 'L2');
     await validade(m, 'L1', dia(5)); await validade(m, 'L2', dia(45));
     const r1 = await req([[m.id, 4]]);
     await separar(r1.R, [{ item_id: r1.ids[0], quantidade_separada: 4, localizacao_origem_id: B01.id, lote_id: await loteId(m, 'L1') }]);
-    await excluir(r1.R);
+    await excluirComo(r1.R);
     const it = await dbGet(db, `SELECT ir.origem_separacao_id o, r.status, r.ativo FROM itens_requisicao_almoxarifado ir
       JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id WHERE ir.id = ?`, [r1.ids[0]]);
-    assert.ok(it.o && (Number(it.ativo) === 0 || it.status === 'CANCELADO'), `premissa: a origem guardada fica na excluida ${JSON.stringify(it)}`);
     const r2 = await req([[m.id, 4]]);
     await separar(r2.R, [{ item_id: r2.ids[0], quantidade_separada: 4 }]);
     await entregar(r2.R, [{ item_id: r2.ids[0], quantidade_atendida: 4 }]);
     assert.deepStrictEqual(await livro(r2.R, m), [['SAIDA', null, 'L1', 4]]);
+    return it;
+  };
+  await test('[Fase 5 M3 -> RN-203.06] R1 separa 4 de ZB-01/L1 e e excluida (a origem e limpa); R2 automatico 4 tira L1 4 (vence antes)', async () => {
+    const it = await m3(excluir);
+    assert.ok(it.o === null && Number(it.ativo) === 0 && it.status === 'CANCELADO', `a exclusao limpa a origem (Etapa 203) ${JSON.stringify(it)}`);
+  });
+  await test('[Fase 5 M3 legada, por SQL, RN-203.06] excluida de antes da 203 (ativo 0, CANCELADO, a origem gravada): R2 automatico 4 tira L1 4', async () => {
+    const it = await m3((R) => dbRun(db, "UPDATE requisicoes_almoxarifado SET ativo = 0, status = 'CANCELADO' WHERE id = ?", [R]));
+    assert.ok(it.o && Number(it.ativo) === 0, `premissa: a origem guardada fica na excluida legada ${JSON.stringify(it)}`);
   });
 
   // ── Fase 5 M4: a inspecao desconta do lote dela ───────────────────────────────────────────────────────────────────────────────

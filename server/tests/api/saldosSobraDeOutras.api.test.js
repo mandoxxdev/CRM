@@ -159,6 +159,22 @@ process.on('exit', (code) => {
     const d = await como('ADMIN').del(`${API}/requisicoes/${r1.R}`, { justificativa: 'exclusao 201' });
     assert.strictEqual(d.status, 200, JSON.stringify(d.body));
     assert.strictEqual(Number((await dbGet(db, 'SELECT ativo FROM requisicoes_almoxarifado WHERE id = ?', [r1.R])).ativo), 0, 'premissa: ativo 0');
+    // Etapa 203 (C467, B1362): a exclusao limpa a origem — o 0 aqui vem da origem vazia; o filtro e provado pela versao por SQL abaixo.
+    assert.strictEqual((await dbGet(db, 'SELECT origem_separacao_id o FROM itens_requisicao_almoxarifado WHERE id = ?', [r1.ids[0]])).o, null,
+      'a exclusao limpa a origem (Etapa 203)');
+    const rows = await saldos(m, `?requisicao_id=${r2.R}`);
+    assert.deepStrictEqual(par(rows, B01.id, L1), [6, 0, 6]);
+    await equivalente(m, rows, r2.R);
+  });
+
+  await test('[RN-201.03 excluida legada, por SQL, RN-203.06] ativo 0 e CANCELADO com a origem gravada (antes da 203) -> 0', async () => {
+    const { m, L1 } = await cenario();
+    const r1 = await req([[m.id, 4]]); const r2 = await req([[m.id, 4]]);
+    await sepOk(r1.R, [doPar(r1.ids[0], 4, L1)]);
+    assert.deepStrictEqual(par(await saldos(m, `?requisicao_id=${r2.R}`), B01.id, L1), [6, 4, 2], 'premissa: contava antes');
+    await dbRun(db, "UPDATE requisicoes_almoxarifado SET ativo = 0, status = 'CANCELADO' WHERE id = ?", [r1.R]);
+    assert.strictEqual((await dbGet(db, 'SELECT origem_separacao_id o FROM itens_requisicao_almoxarifado WHERE id = ?', [r1.ids[0]])).o, B01.id,
+      'premissa: a origem gravada');
     const rows = await saldos(m, `?requisicao_id=${r2.R}`);
     assert.deepStrictEqual(par(rows, B01.id, L1), [6, 0, 6]);
     await equivalente(m, rows, r2.R);

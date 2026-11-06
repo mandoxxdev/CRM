@@ -231,11 +231,28 @@ process.on('exit', (code) => {
   });
 
   // ---------------------------------------------------------------- RN-200.05
-  await test('[RN-200.05 excluida] R1 guardou 4 e foi excluida (DELETE; a origem fica gravada): R2 entrega 4 de XB-01/L1 -> 200', async () => {
+  await test('[RN-200.05 excluida] R1 guardou 4 e foi excluida (DELETE; Etapa 203: a origem e limpa): R2 entrega 4 de XB-01/L1 -> 200', async () => {
     const { m, L1, r1, r2 } = await c468();
     const d = await como('ADMIN').del(`${API}/requisicoes/${r1.R}`, { justificativa: 'exclusao 200' });
     assert.strictEqual(d.status, 200, JSON.stringify(d.body));
-    assert.strictEqual((await itemDe(r1.ids[0])).origem_separacao_id, B01.id, 'premissa C467: a origem fica');
+    // Etapa 203 (C467, B1362): a exclusao limpa a origem; o filtro da excluida e provado pela versao por SQL logo abaixo.
+    assert.strictEqual((await itemDe(r1.ids[0])).origem_separacao_id, null, 'a exclusao limpa a origem (Etapa 203)');
+    await entOk(r2.R, [saiDe(r2.ids[0], 4, L1)]);
+    assert.strictEqual(await saldoDe(m, B01.id, L1), 2);
+  });
+
+  await test('[RN-200.05 excluida legada, por SQL, RN-203.06] ativo 0 e CANCELADO com a origem gravada (antes da 203) nao compromete: R2 entrega 4 -> 200', async () => {
+    const { m, L1, r1, r2 } = await c468();
+    await dbRun(db, "UPDATE requisicoes_almoxarifado SET ativo = 0, status = 'CANCELADO' WHERE id = ?", [r1.R]);
+    assert.strictEqual((await itemDe(r1.ids[0])).origem_separacao_id, B01.id, 'premissa: a origem gravada');
+    await entOk(r2.R, [saiDe(r2.ids[0], 4, L1)]);
+    assert.strictEqual(await saldoDe(m, B01.id, L1), 2);
+  });
+
+  await test('[RN-200.05 excluida legada, por SQL, controle] so ativo 0 (status com caixa) tambem nao compromete — o filtro olha ativo', async () => {
+    const { m, L1, r1, r2 } = await c468();
+    await dbRun(db, 'UPDATE requisicoes_almoxarifado SET ativo = 0 WHERE id = ?', [r1.R]);
+    assert.strictEqual((await itemDe(r1.ids[0])).origem_separacao_id, B01.id, 'premissa: a origem gravada');
     await entOk(r2.R, [saiDe(r2.ids[0], 4, L1)]);
     assert.strictEqual(await saldoDe(m, B01.id, L1), 2);
   });

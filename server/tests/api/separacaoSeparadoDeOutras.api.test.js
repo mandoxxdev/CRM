@@ -206,15 +206,37 @@ process.on('exit', (code) => {
     await sepOk(r2.R, [doPar(r2.ids[0], 4, L1)]);
   });
 
-  await test('[RN-198.03 excluida, C467] R1 separou 4 e foi excluida (a origem fica gravada): R2 pede 4 -> 200', async () => {
+  // Etapa 203 (C467, B1362): a exclusao passou a limpar a origem — pela rota, o 200 de R2 vem da origem vazia; o filtro da excluida
+  // (ativo 0) e provado pela versao por SQL (a excluida de antes da 203, com a origem gravada, B1361).
+  await test('[RN-198.03 excluida, C467 -> RN-203.06] R1 separou 4 e foi excluida (a origem e limpa, a caixa fica): R2 pede 4 -> 200', async () => {
     const { m, L1 } = await cenario();
     const r1 = await req([[m.id, 4]]); const r2 = await req([[m.id, 4]]);
     await sepOk(r1.R, [doPar(r1.ids[0], 4, L1)]);
     const d = await como('ADMIN').del(`${API}/requisicoes/${r1.R}`, { justificativa: 'exclusao 198' });
     assert.strictEqual(d.status, 200, JSON.stringify(d.body));
     const it1 = await itemDe(r1.ids[0]);
-    assert.strictEqual(it1.origem_separacao_id, B01.id, 'premissa C467: a exclusao nao limpa a origem');
-    assert.ok(Number(it1.quantidade_separada) > 0, 'premissa C467: a caixa fica no item');
+    assert.deepStrictEqual([it1.origem_separacao_id, it1.lote_separacao_id, it1.quantidade_origem_separacao], [null, null, null],
+      'a exclusao limpa a origem (Etapa 203)');
+    assert.ok(Number(it1.quantidade_separada) > 0, 'a caixa fica no item');
+    await sepOk(r2.R, [doPar(r2.ids[0], 4, L1)]);
+  });
+
+  await test('[RN-198.03 excluida legada, por SQL, RN-203.06] ativo 0 e CANCELADO com a origem gravada (antes da 203) nao compromete: R2 pede 4 -> 200', async () => {
+    const { m, L1 } = await cenario();
+    const r1 = await req([[m.id, 4]]); const r2 = await req([[m.id, 4]]);
+    await sepOk(r1.R, [doPar(r1.ids[0], 4, L1)]);
+    await dbRun(db, "UPDATE requisicoes_almoxarifado SET ativo = 0, status = 'CANCELADO' WHERE id = ?", [r1.R]);
+    const it1 = await itemDe(r1.ids[0]);
+    assert.deepStrictEqual([it1.origem_separacao_id, Number(it1.quantidade_origem_separacao)], [B01.id, 4], 'premissa: a origem gravada');
+    await sepOk(r2.R, [doPar(r2.ids[0], 4, L1)]);
+  });
+
+  await test('[RN-198.03 excluida legada, por SQL, controle] so ativo 0 (status EM_SEPARACAO) tambem nao compromete — o filtro olha ativo', async () => {
+    const { m, L1 } = await cenario();
+    const r1 = await req([[m.id, 4]]); const r2 = await req([[m.id, 4]]);
+    await sepOk(r1.R, [doPar(r1.ids[0], 4, L1)]);
+    await dbRun(db, 'UPDATE requisicoes_almoxarifado SET ativo = 0 WHERE id = ?', [r1.R]);
+    assert.strictEqual(await statusDe(r1.R), 'EM_SEPARACAO', 'premissa: status com caixa');
     await sepOk(r2.R, [doPar(r2.ids[0], 4, L1)]);
   });
 

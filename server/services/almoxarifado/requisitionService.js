@@ -2716,6 +2716,19 @@ async function excluirSemTrava(db, requisicaoId, user, justificativa, alertServi
     throw err;
   }
 
+  // Etapa 203 (C467, B1358/B1359/B1360): a origem planejada da caixa (endereco, lote e parte) zera nos itens da excluida. Nenhuma
+  // conta le a origem de excluida (todas filtram `caixaVivaSql`), mas o dado morto enganava quem lesse a tabela. So DEPOIS do UPDATE
+  // que venceu e dentro das travas: antes do estorno, uma ENTRADA recusada deixaria a requisicao viva sem o plano da caixa. A caixa e
+  // o historico das rodadas (`itens_json`) ficam. Best-effort, como a liberacao abaixo: a exclusao ja aconteceu e o estorno tambem —
+  // falhar aqui nao lanca nem tenta de novo (B447/B452: refazer estornaria de novo).
+  await dbRun(db, `UPDATE itens_requisicao_almoxarifado SET origem_separacao_id = NULL, lote_separacao_id = NULL,
+      quantidade_origem_separacao = NULL
+    WHERE requisicao_id = ? AND (origem_separacao_id IS NOT NULL OR lote_separacao_id IS NOT NULL
+      OR quantidade_origem_separacao IS NOT NULL)`, [requisicaoId])
+    .catch((e) => {
+      console.warn(`[almoxarifado-exclusao] Falha ao limpar a origem separada dos itens da requisição ${requisicaoId}: ${e.message}`);
+    });
+
   // Task 6 — a exclusão deixava o hold preso. O /cancelar solta as reservas desde a Etapa 4;
   // o DELETE não soltava, e as duas rotas terminam no mesmo status CANCELADO. Como a expiração
   // é opt-in por config, na configuração padrão o saldo ficava reservado para uma requisição
