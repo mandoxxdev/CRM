@@ -8,8 +8,9 @@
  * BLOQUEIO com o lote intacto zera o lote pelo `cancelado = 1`), RN-209.09 (quem le nao muda — inclusive o cenario do estorno da
  * ENTRADA_DEVOLUCAO da Fase 2 item 2, C504).
  *
- * Os testes que dependem do motor (M1/M2/M3, T3), do `lote_id` no desbloqueio (T4) e da rota GET (T5) estao em
- * `bloqueioSabeOLote.pendente-t3.js` — fora do runner (que so descobre *.api.test.js) ate a T3 comecar.
+ * Desde a T3/T4 cobre tambem o motor (M1/M2 no DESBLOQUEIO, M3 no estorno do BLOQUEIO) e o `lote_id` no desbloqueio avulso
+ * (B1422): RN-209.04 a-d, .05, .06 a/c, .10 e .07 pelo servico. Os dois que chamam a rota GET (RN-209.08 e .07 pela rota, T5)
+ * continuam em `bloqueioSabeOLote.pendente-t3.js` — fora do runner (que so descobre *.api.test.js) ate a T5.
  *
  * Plano: docs/superpowers/plans/2026-11-07-almoxarifado-etapa209-bloqueio-sabe-o-lote.md
  * Executar: cd server && node tests/api/bloqueioSabeOLote.api.test.js
@@ -287,6 +288,89 @@ process.on('exit', (code) => {
     assert.strictEqual(await contaDesbloqueios(m), 0);
     assert.strictEqual((await desbloquear(m, { quantidade: 3 })).status, 200);
     assert.deepStrictEqual(await porLote(m), { material_id: m.id, total: 2, sem_lote: 0, lotes: [{ lote_id: L1, codigo: 'L1', quantidade: 2 }] });
+  });
+
+  // ── T4 (o desbloqueio avulso aceita lote_id, B1422) + o motor da T3 pelo lote — vindos do pendente ───────────────────────────
+  const M2 = (codigo, noLote) => `Quantidade bloqueada insuficiente no lote ${codigo}: ${noLote} UN`;
+  // M3: o numero e MAX(0, noLote + q) = o que o lote tinha bloqueado antes do estorno (contrato do plano). O T0 esperava 2 no
+  // cenario da RN-209.06 c, mas ali L1 ja tinha sido todo liberado (0) — o teste estava errado contra o contrato (corrigido na T4).
+  const M3 = (codigo, n) => `Não é possível estornar: o bloqueio do lote ${codigo} já foi desfeito (bloqueado no lote: ${n} UN)`;
+  const B1422 = 'lote_id deve ser um número inteiro positivo';
+  const estornar = (id) => post(`${API}/movimentacoes/${id}/cancelar`, { motivo: 'estorno 209' });
+  const bloqueadoPorLote = (dbx, id) => helper().bloqueadoPorLote(dbx, id);
+
+  await test('[RN-209.04 a] desbloquear L1 2 de L1 2: 200, DESBLOQUEIO com L1, total e L1 descem', async () => {
+    const m = await material(); const L1 = await quarentena(m, 2);
+    const r = await desbloquear(m, { quantidade: 2, lote_id: L1 });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    const d = await dbGet(db, "SELECT lote_id FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'DESBLOQUEIO'", [m.id]);
+    assert.strictEqual(d.lote_id, L1);
+    assert.deepStrictEqual(await bloqueadoPorLote(db, m.id), { material_id: m.id, total: 0, sem_lote: 0, lotes: [] });
+  });
+
+  await test('[RN-209.04 b] L1 2 + avulso 3: desbloquear 3 de L1 -> 400 M2, nada gravado', async () => {
+    const m = await material(); const L1 = await quarentena(m, 2);
+    await inspectionService.bloquearMaterial(db, ADMIN, m.id, { quantidade: 3, justificativa: 'avulso' });
+    recusou(await desbloquear(m, { quantidade: 3, lote_id: L1 }), M2('L1', 2));
+    assert.strictEqual(await contaDesbloqueios(m), 0); assert.strictEqual(await bloqueada(m), 5);
+  });
+
+  await test('[RN-209.04 c] lote de outro material / inexistente -> as literais do motor', async () => {
+    const m = await material(); await quarentena(m, 2);
+    const outro = await material(); await entrar(outro, 1, 'LX');
+    recusou(await desbloquear(m, { quantidade: 1, lote_id: await loteId(outro, 'LX') }), 'O lote informado pertence a outro material');
+    recusou(await desbloquear(m, { quantidade: 1, lote_id: 999999 }), 'Lote nao encontrado');
+    assert.strictEqual(await contaDesbloqueios(m), 0);
+  });
+
+  await test('[RN-209.04 d, B1422] lote_id "x" / 0 / 1.5 -> 400; vazio e null = sem lote', async () => {
+    const m = await material(); await entrar(m, 5, 'L1');
+    await inspectionService.bloquearMaterial(db, ADMIN, m.id, { quantidade: 3, justificativa: 'avulso' });
+    for (const v of ['x', 0, 1.5, -2]) recusou(await desbloquear(m, { quantidade: 1, lote_id: v }), B1422); // eslint-disable-line no-await-in-loop
+    assert.strictEqual((await desbloquear(m, { quantidade: 1, lote_id: '' })).status, 200);
+    assert.strictEqual((await desbloquear(m, { quantidade: 1, lote_id: null })).status, 200);
+    assert.strictEqual(await bloqueada(m), 1);
+  });
+
+  await test('[RN-209.06 a] estornar o DESBLOQUEIO de L1 -> L1 volta (cancelado = 1), sem guarda nova', async () => {
+    const m = await material(); const L1 = await quarentena(m, 2);
+    assert.strictEqual((await desbloquear(m, { quantidade: 2, lote_id: L1 })).status, 200);
+    const d = await dbGet(db, "SELECT id FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'DESBLOQUEIO'", [m.id]);
+    assert.strictEqual((await estornar(d.id)).status, 200);
+    assert.deepStrictEqual((await bloqueadoPorLote(db, m.id)).lotes, [{ lote_id: L1, codigo: 'L1', quantidade: 2 }]);
+  });
+
+  await test('[RN-209.06 c] L1 2 + sem lote 2, desbloqueia L1 2, estorna o BLOQUEIO de L1 -> 400 M3; BLOQUEIO vivo, sem ESTORNO, total 2 = sem lote 2', async () => {
+    const m = await material(); const L1 = await quarentena(m, 2);
+    await inspectionService.bloquearMaterial(db, ADMIN, m.id, { quantidade: 2, justificativa: 'avulso' });
+    assert.strictEqual((await desbloquear(m, { quantidade: 2, lote_id: L1 })).status, 200);
+    const bl = await dbGet(db, "SELECT id FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'BLOQUEIO' AND lote_id = ?", [m.id, L1]);
+    recusou(await estornar(bl.id), M3('L1', 0));
+    const depois = await dbGet(db, 'SELECT cancelado FROM movimentacoes_almoxarifado WHERE id = ?', [bl.id]);
+    assert.strictEqual(Number(depois.cancelado), 0, 'o BLOQUEIO continua vivo');
+    assert.strictEqual(Number((await dbGet(db, "SELECT COUNT(*) n FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'ESTORNO'", [m.id])).n), 0);
+    assert.deepStrictEqual(await bloqueadoPorLote(db, m.id), { material_id: m.id, total: 2, sem_lote: 2, lotes: [] });
+  });
+
+  await test('[RN-209.10] dois desbloqueios simultaneos de L1 2 (total 4) pedindo 2 cada: um 200, um 400 M2; total 2, L1 0', async () => {
+    const m = await material(); const L1 = await quarentena(m, 2);
+    await inspectionService.bloquearMaterial(db, ADMIN, m.id, { quantidade: 2, justificativa: 'avulso' });
+    const rs = await Promise.allSettled([1, 2].map(() => inspectionService.desbloquearMaterial(db, ADMIN, m.id,
+      { quantidade: 2, lote_id: L1, justificativa: 'corrida' })));
+    assert.deepStrictEqual(rs.map((x) => x.status).sort(), ['fulfilled', 'rejected']);
+    assert.strictEqual(rs.find((x) => x.status === 'rejected').reason.message, M2('L1', 0));
+    assert.deepStrictEqual(await bloqueadoPorLote(db, m.id), { material_id: m.id, total: 2, sem_lote: 2, lotes: [] });
+  });
+
+  await test('[RN-209.07, servico] registrarDevolucao -> desbloquearMaterial(L1) -> registrarMovimentacao SUCATA L1 2', async () => {
+    const m = await material(); const L1 = await quarentena(m, 2);
+    await inspectionService.desbloquearMaterial(db, ADMIN, m.id, { quantidade: 2, lote_id: L1, justificativa: 'descarte' });
+    await stockService.registrarMovimentacao(db, ADMIN, { material_id: m.id, tipo: 'SUCATA', quantidade: 2, motivo: 'descarte 209',
+      justificativa: 'peca da quarentena', localizacao_origem_id: P01.id, lote_id: L1 });
+    const l = await dbAll(db, `SELECT tipo, lote_id FROM movimentacoes_almoxarifado WHERE material_id = ?
+      AND tipo IN ('ENTRADA_DEVOLUCAO','BLOQUEIO','DESBLOQUEIO','SUCATA') ORDER BY id`, [m.id]);
+    assert.deepStrictEqual(l.map((x) => [x.tipo, x.lote_id]), [['ENTRADA_DEVOLUCAO', L1], ['BLOQUEIO', L1], ['DESBLOQUEIO', L1], ['SUCATA', L1]]);
+    assert.deepStrictEqual((await bloqueadoPorLote(db, m.id)).lotes, []);
   });
 
   await close();

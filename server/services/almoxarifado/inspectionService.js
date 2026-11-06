@@ -507,9 +507,19 @@ async function desbloquearMaterial(db, user, materialId, data = {}) {
   if (!justificativa) {
     throw Object.assign(new Error('Justificativa é obrigatória para desbloqueio'), { status: 400 });
   }
+  // Etapa 209 (T4, B1422): a liberacao da quarentena diz de qual lote libera. Vazio/null/ausente = sem lote (o motor so tira do
+  // "sem lote", M1); nao inteiro positivo -> 400; inteiro de lote inexistente ou de outro material -> as literais do motor.
+  // Sem Zod na rota hoje: a validacao mora aqui (as duas portas — a rota e quem chama o servico — passam por ela).
+  let loteId;
+  if (data.lote_id !== undefined && data.lote_id !== null && data.lote_id !== '') {
+    loteId = Number(data.lote_id);
+    if (!Number.isInteger(loteId) || loteId <= 0) {
+      throw Object.assign(new Error('lote_id deve ser um número inteiro positivo'), { status: 400 });
+    }
+  }
   await registrarMovimentacao(db, user, {
     material_id: materialId, tipo: 'DESBLOQUEIO', quantidade, justificativa,
-    motivo: 'Desbloqueio avulso',
+    motivo: 'Desbloqueio avulso', lote_id: loteId,
   });
   return { success: true };
 }
