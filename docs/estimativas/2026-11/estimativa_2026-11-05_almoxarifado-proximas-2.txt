@@ -1,0 +1,41 @@
+*Planejamento — próximas alterações do Almoxarifado (2º pacote)*
+_05/11/2026_
+
+*1. Entrega escolhendo o local à mão respeita o que outra requisição separou*
+Na entrega, escolher à mão o local de onde o material sai ainda pode levar o que outra requisição já separou ali; a entrega da outra é que acaba recusada. Passa a recusar na hora, dizendo quanto está separado para a outra e quanto sobra.
+Tempo estimado: *4h30*
+
+*2. Separação: o local mostra quanto realmente sobra*
+Na janela de separação, a lista de locais mostra o saldo total do local, mesmo quando parte dele já está separada para outra requisição; a pessoa só descobre ao confirmar. Cada local passa a mostrar quanto sobra de fato.
+Tempo estimado: *2h30*
+
+*3. Movimentação por integração respeita o lote informado*
+Uma saída lançada por integração com outro sistema não leva em conta o lote informado: pode tirar material de lote vencido e deixar a linha "Sem lote atribuído" negativa. Passa a seguir a mesma regra da tela Movimentações, que recusa lote vencido.
+Tempo estimado: *2h30*
+
+*4. Requisição excluída deixa de guardar o local separado*
+Ao excluir uma requisição já separada, os itens dela continuam com o local de origem anotado. Hoje isso não afeta nenhuma conta, mas a anotação passa a ser apagada junto, para não confundir no futuro.
+Tempo estimado: *1h15*
+
+*5. Devolução: encontrar entregas antigas*
+A lista de entregas que a tela Devoluções oferece para escolher mostra só as 30 mais recentes do material; como uma entrega de material com lote pode virar várias saídas, as antigas somem da lista cedo. Passa a ser possível chegar às entregas mais antigas.
+Tempo estimado: *2h30*
+
+*6. Lote bloqueado, reprovado ou vencido — 1ª parte: aprovação e separação*
+A aprovação e a separação contam como disponível o saldo de lote bloqueado, reprovado ou vencido, que não pode sair. Passam a descontar esse saldo, para não aprovar nem separar o que não pode ser entregue.
+Tempo estimado: *4h30 a 5h* (depende de quantas telas de saldo usam a mesma conta)
+
+*7. Lote bloqueado, reprovado ou vencido — 2ª parte: entrega*
+Quando só sobra saldo em lote que não pode sair, a entrega passa e a diferença vai para "Sem lote atribuído", negativo. A entrega passa a recusar, dizendo qual lote está impedido.
+Tempo estimado: *4h a 4h30* (depende do que aparecer ao conferir as entregas já feitas)
+
+*8. Peça em quarentena — 1ª parte: o bloqueio passa a saber o lote*
+Hoje o material bloqueado (quarentena, terceiros) é contado só no total do material, sem saber de qual lote é. Passa a ficar registrado o lote de cada peça bloqueada, na devolução para quarentena, na liberação e no descarte.
+Tempo estimado: *4h30 a 5h30* (depende de quantos caminhos de bloqueio e liberação precisam guardar o lote)
+
+*9. Peça em quarentena — 2ª parte: a entrega não tira a peça bloqueada*
+Na entrega automática, o sistema pode tirar do lote justamente a peça que voltou para a quarentena. Passa a descontar do lote o que está bloqueado nele.
+Tempo estimado: *4h a 5h* (depende do resultado da 1ª parte)
+
+*Total estimado: 30h15 a 33h15*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
