@@ -1,7 +1,10 @@
 # Almoxarifado — pausa de 2026-10-23 e como retomar
 
 > **✅ RETOMADO em 2026-11-05 — este arquivo agora é histórico.** O André retomou o módulo em 05/11 (estimativa
-> `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md`). **Depois: a Etapa 208 fechou** em 06/11 (fora do 2º pacote: o
+> `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md`). **EM ANDAMENTO: a Etapa 209** (item 8 do 2º pacote, o bloqueio
+> passa a saber o lote — C466 1ª parte). Plano `5708b830`, Fase 2 `c2b66af0`, T0–T5 feitas e verdes (test:api 603/603) — parou na semana de
+> 01–07/11 pelo teto de horas, numa divisa limpa. **Retome pela T6 (a tela)**: o "Onde parou" da seção Execução de
+> `docs/superpowers/plans/2026-11-07-almoxarifado-etapa209-bloqueio-sabe-o-lote.md` diz o primeiro passo. **Antes: a Etapa 208 fechou** em 06/11 (fora do 2º pacote: o
 > aviso C496 da 207, estimativa `0f1fb344`; `025d7109` (plano), `4301c74b` (Fase 2), `575174c0` (T0), `227334f1` (T1), `5c60c868` (T2), `f170693f` (T3), `53fd0fae` (T4), `05b6e567` (execução), Fase 5 `d88a53bc`, e o commit "Etapa 208: fechamento") — o "Sai de" da entrega respeita
 > a guarda do irmão da mesma requisição (C496, C472 e C470 resolvidos). Letra **B** usada até **B1415** (B1407–B1415 pela 208), letra **C**
 > até **C499** (C497 e C498 pela 208; C499 sem uso), letra **A** até **A111** (a 208 não usou — a próxima é **A112**). **Próxima:** os itens
