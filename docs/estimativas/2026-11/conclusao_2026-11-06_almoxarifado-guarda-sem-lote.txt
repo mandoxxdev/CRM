@@ -1,0 +1,8 @@
+*Concluído — Almoxarifado: correção na entrega de material sem lote*
+_06/11/2026_
+
+1. Entrega não leva o que outra peça da mesma requisição tinha separado — estimado 4h a 4h30 · realizado 5h30
+
+*Total: estimado 4h a 4h30 · realizado 5h30*
+
+Em material sem controle de lote, a entrega passa a respeitar o local que cada peça da requisição separou: quando a entrega automática de uma peça levaria o material separado para outra, ela tira de outro local. Quando não há como, a entrega sai como antes, sem nenhuma recusa nova. O tempo passou do previsto porque a revisão encontrou um caso em que a mudança trocava o local de saída sem necessidade, e foi preciso fazer a entrega imitar exatamente a escolha de local de hoje; isso foi conferido com milhares de entregas sorteadas antes de entregar.

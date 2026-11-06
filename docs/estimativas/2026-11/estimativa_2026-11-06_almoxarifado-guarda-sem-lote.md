@@ -10,7 +10,7 @@ Régua: Etapas 196 (2h de execução), 197 (2h30), 206 (2h) — motor da entrega
 
 | # | Tarefa | Porte | Análise | Execução | Teste e conferência | Informado | Etapa/plano | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 | Entrega não leva a guarda sem lote de outro item (C490) | motor | 1h | 1h a 1h30 | 2h | 4h a 4h30 | — | — | — | — |
+| 1 | Entrega não leva a guarda sem lote de outro item (C490) | motor | 1h | 1h a 1h30 | 2h | 4h a 4h30 | 207 (plano `4d8fb611`) | 2,3 h (horas.js --grupos "E207=Etapa 207", 06/11) → 2h30 | 5h30 (2h30 + análise 1 h + teste 2 h, da tabela — não informado pelo André). Estouro de 1 h: a regressão S1 da Fase 5 (a fatia ignorava a linha sem endereço que a baixa de hoje tira primeiro) pediu simular a baixa de hoje e uma revisão extra do conserto | 4d8fb611 … 2d668f2c, e8c16856 |
 
 Medição no fechamento:
 ```
