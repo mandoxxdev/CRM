@@ -298,6 +298,8 @@ Nenhuma passou verde; nenhuma asserção acrescentada.
    *Saldo por lote* mostra os dois). A tela **Movimentações** não mostra o campo de lote no AJUSTE (`TIPOS_COM_LOTE_EXISTENTE`), então só a
    integração alcança.
 
+- Suíte reconferida sozinha depois do fechamento (06/11): `test:api` **590/590**. A queda de `superPadraoNoBoot` com `SQLITE_READONLY` na rodada do executor (e na do 2º fix-round da 197) só aparece com outra suíte rodando ao mesmo tempo; sozinha passa — não é defeito desta etapa.
+
 ## Próxima tarefa detalhada
 
 **Item 4 do 2º pacote** (`docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas-2.txt`, **1h15**): **"Requisição excluída
