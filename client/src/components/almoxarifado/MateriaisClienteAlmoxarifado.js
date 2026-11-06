@@ -5,6 +5,9 @@ import { FiRefreshCw, FiFileText, FiCornerUpLeft } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import { gerarPosicaoClientePDF } from '../../utils/posicaoClientePdf';
+// Etapa 199 (RN-199.01, C448): a quantidade no formato do papel da posicao (pt-BR, ate 4 casas, vazio -> 0). Nao os formatNum locais de
+// outras telas: mostram um travessao para vazio, e o papel mostra 0.
+import { formatarQuantidade } from '../../utils/pdfTexto';
 import './Almoxarifado.css';
 
 /**
@@ -172,18 +175,18 @@ const MateriaisClienteAlmoxarifado = () => {
                     <td>{i.codigo}</td>
                     <td>{i.nome}</td>
                     <td>{i.unidade}</td>
-                    <td>{i.recebido}</td>
-                    <td>{i.consumido}</td>
-                    <td>{i.devolvido}</td>
+                    <td>{formatarQuantidade(i.recebido)}</td>
+                    <td>{formatarQuantidade(i.consumido)}</td>
+                    <td>{formatarQuantidade(i.devolvido)}</td>
                     <td>
                       {/* `ok` e `zerado` existem em Almoxarifado.css — classe inventada aqui sairia
                           sem cor nenhuma e nenhum teste pegaria (aconteceu na Etapa 7). */}
-                      <span className={`almox-badge almox-badge-${temSaldo ? 'ok' : 'zerado'}`}>{i.saldo}</span>
+                      <span className={`almox-badge almox-badge-${temSaldo ? 'ok' : 'zerado'}`}>{formatarQuantidade(i.saldo)}</span>
                     </td>
                     <td style={{ fontSize: '0.8rem' }}>
                       {aplicacoes.length === 0 ? '—' : aplicacoes.map((a, k) => (
                         <div key={k}>
-                          {a.numero_os ? `OS ${a.numero_os}` : (a.projeto_nome || '—')} — {a.quantidade}
+                          {a.numero_os ? `OS ${a.numero_os}` : (a.projeto_nome || '—')} — {formatarQuantidade(a.quantidade)}
                         </div>
                       ))}
                     </td>
@@ -221,7 +224,7 @@ const MateriaisClienteAlmoxarifado = () => {
               </p>
               <div className="almox-field">
                 <label className="almox-label">
-                  Quantidade (saldo: {devTarget.saldo} {devTarget.unidade})<span className="required">*</span>
+                  Quantidade (saldo: {formatarQuantidade(devTarget.saldo)} {devTarget.unidade})<span className="required">*</span>
                 </label>
                 <input className="almox-input" type="number" min="0" value={devQtd}
                   onChange={(e) => setDevQtd(e.target.value)} />

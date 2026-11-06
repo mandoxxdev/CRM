@@ -196,6 +196,57 @@ describe('MateriaisClienteAlmoxarifado', () => {
     expect(textoDaTela()).not.toContain('CHP-ALFA');
   });
 
+  // Etapa 199 (C448): a tela mostrava o numero cru (12.5) e o papel da posicao, 12,5 — quem confere um contra o outro via dois numeros.
+  const POSICAO_DECIMAL = {
+    cliente: { id: 1, razao_social: 'Cliente Alfa LTDA' },
+    itens: [{ material_id: 31, codigo: 'FIO-DEC', nome: 'Fio decimal', unidade: 'PC', recebido: 12.5, consumido: 0.1 + 0.2,
+      devolvido: 1250.75, saldo: 11.2, saldo_disponivel: 11.2 }],
+    aplicacoes: [{ material_id: 31, codigo: 'FIO-DEC', os_id: 7, numero_os: 'OS-DEC', projeto_id: null, projeto_nome: null, quantidade: 2.5 }],
+  };
+  const comPosicaoDecimal = () => api.get.mockImplementation((url) => {
+    if (url === '/almoxarifado/materiais-cliente/clientes') return Promise.resolve({ data: CLIENTES });
+    if (url.includes('/materiais-cliente/posicao?cliente_id=1')) return Promise.resolve({ data: POSICAO_DECIMAL });
+    return Promise.resolve({ data: [] });
+  });
+
+  test('[RN-199.01] a tabela mostra a quantidade no formato do papel: 12,5, 0,3, 1.250,75, 11,2 e a aplicacao 2,5', async () => {
+    comPosicaoDecimal();
+    await renderizar();
+    await selecionarCliente(1);
+    const linha = linhas().find((tr) => tr.textContent.includes('FIO-DEC'));
+    const celulas = [...linha.querySelectorAll('td')].map((td) => td.textContent.trim());
+    expect(celulas.slice(0, 7)).toEqual(['FIO-DEC', 'Fio decimal', 'PC', '12,5', '0,3', '1.250,75', '11,2']);
+    expect(celulas[7]).toBe('OS OS-DEC — 2,5');
+    expect(textoDaTela()).not.toContain('12.5');
+  });
+
+  // T3 da 199: com os numeros todos preenchidos, um formato "vazio vira travessao" (os formatNum locais de outras telas) passava verde.
+  test('[RN-199.01] numero vazio aparece como 0, como no papel — nao travessao', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/materiais-cliente/clientes') return Promise.resolve({ data: CLIENTES });
+      if (url.includes('/materiais-cliente/posicao?cliente_id=1')) {
+        return Promise.resolve({ data: { ...POSICAO_DECIMAL, aplicacoes: [],
+          itens: [{ ...POSICAO_DECIMAL.itens[0], consumido: undefined, devolvido: null }] } });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    await selecionarCliente(1);
+    const linha = linhas().find((tr) => tr.textContent.includes('FIO-DEC'));
+    const celulas = [...linha.querySelectorAll('td')].map((td) => td.textContent.trim());
+    expect(celulas.slice(3, 7)).toEqual(['12,5', '0', '0', '11,2']);
+  });
+
+  test('[RN-199.01] o rotulo da janela de devolucao mostra o saldo com virgula', async () => {
+    comPosicaoDecimal();
+    await renderizar();
+    await selecionarCliente(1);
+    const linha = linhas().find((tr) => tr.textContent.includes('FIO-DEC'));
+    await clicar(botaoPorTexto('Devolver', linha));
+    const rotulo = [...container.querySelectorAll('.almox-modal label')].find((l) => l.textContent.includes('Quantidade'));
+    expect(rotulo.textContent).toContain('(saldo: 11,2 PC)');
+  });
+
   test('mostra onde cada material foi aplicado, separando OS de projeto', async () => {
     await renderizar();
     await selecionarCliente(1);
