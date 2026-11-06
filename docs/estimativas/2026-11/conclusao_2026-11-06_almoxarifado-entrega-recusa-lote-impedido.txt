@@ -1,0 +1,8 @@
+*Concluído — Almoxarifado: lote que não pode sair — entrega*
+_06/11/2026_
+
+7. Lote bloqueado, reprovado ou vencido — 2ª parte: entrega — estimado 4h a 4h30 · realizado 5h
+
+*Total: estimado 4h a 4h30 · realizado 5h*
+
+Quando só sobra saldo em lote que não pode sair, a entrega passa a ser recusada antes de baixar qualquer coisa, dizendo qual lote está impedido, quanto falta e o que fazer (liberar o lote ou entregar menos). A tela da requisição passa a oferecer só o que a entrega aceita. O tempo passou do previsto porque a revisão encontrou uma conta que podia contar em dobro e um caso antigo em que a entrega levava a parte que outra peça da mesma requisição tinha guardado; os dois foram resolvidos antes de entregar.
