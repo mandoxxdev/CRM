@@ -102,7 +102,7 @@ beforeEach(() => {
     }
     if (url === '/almoxarifado/requisicoes/55') return Promise.resolve({ data: requisicao });
     if (url === '/almoxarifado/configuracoes/liberacao-valor') return Promise.resolve({ data: { souAprovador: false } });
-    if (url === '/almoxarifado/estoque/10/saldos') return Promise.resolve({ data: saldos });
+    if (url === '/almoxarifado/estoque/10/saldos?requisicao_id=55') return Promise.resolve({ data: saldos });
     if (url === '/almoxarifado/requisicoes/55/sugestao-coleta') return sugestaoImpl();
     return Promise.resolve({ data: [] });
   });
@@ -410,7 +410,7 @@ describe('Etapa 189 (T2): a janela de separação pré-seleciona o endereço sug
   test('[Fase 5, J2] item que saiu da janela e voltou na mesma abertura -> e decidido de novo (so fica a escolha de quem continuou)', async () => {
     doisMateriais();
     const orig = api.get.getMockImplementation();
-    api.get.mockImplementation((url) => (url === '/almoxarifado/estoque/20/saldos'
+    api.get.mockImplementation((url) => (url === '/almoxarifado/estoque/20/saldos?requisicao_id=55'
       ? Promise.resolve({ data: [{ id: 9, material_id: 20, localizacao_id: 1, localizacao_codigo: 'A-01', lote_id: null, lote: null, quantidade: 5 }] })
       : orig(url)));
     await renderizar();
@@ -455,7 +455,7 @@ describe('Etapa 189 (T2): a janela de separação pré-seleciona o endereço sug
     let resolverSaldos;
     const pSaldos = new Promise((r) => { resolverSaldos = r; });
     const orig = api.get.getMockImplementation();
-    api.get.mockImplementation((url) => (url === '/almoxarifado/estoque/10/saldos' ? pSaldos : orig(url)));
+    api.get.mockImplementation((url) => (url === '/almoxarifado/estoque/10/saldos?requisicao_id=55' ? pSaldos : orig(url)));
     sugestaoImpl = () => Promise.resolve(sugestao(sugItem(1, pegar(PAR.C03, 2, { cobre: false }), { pegar_em_aviso: 'NENHUM_ENDERECO_COBRE' })));
     await renderizar();
     await clicar('Iniciar Separação');

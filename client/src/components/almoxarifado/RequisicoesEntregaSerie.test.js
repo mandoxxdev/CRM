@@ -85,7 +85,7 @@ beforeEach(() => {
     }
     if (url === '/almoxarifado/requisicoes/55') return Promise.resolve({ data: REQUISICAO });
     if (url === '/almoxarifado/configuracoes/liberacao-valor') return Promise.resolve({ data: { souAprovador: false } });
-    if (url === '/almoxarifado/estoque/10/saldos') return Promise.resolve({ data: SALDOS });
+    if (url === '/almoxarifado/estoque/10/saldos?requisicao_id=55') return Promise.resolve({ data: SALDOS });
     if (url === '/almoxarifado/materiais/10') return materialImpl();
     if (url === '/almoxarifado/materiais/10/series?status=EM_ESTOQUE') return seriesImpl();
     return Promise.resolve({ data: [] });

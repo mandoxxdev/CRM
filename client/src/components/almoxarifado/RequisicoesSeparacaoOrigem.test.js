@@ -96,7 +96,7 @@ beforeEach(() => {
     }
     if (url === '/almoxarifado/requisicoes/55') return Promise.resolve({ data: requisicao });
     if (url === '/almoxarifado/configuracoes/liberacao-valor') return Promise.resolve({ data: { souAprovador: false } });
-    if (url === '/almoxarifado/estoque/10/saldos') return saldosImpl();
+    if (url === '/almoxarifado/estoque/10/saldos?requisicao_id=55') return saldosImpl();
     return Promise.resolve({ data: [] });
   });
   api.put.mockResolvedValue({ data: { parcial: true } });
@@ -151,7 +151,7 @@ describe('Etapa 59: "Sai de" no modal de separação', () => {
   test('opções iguais às da entrega (com e sem lote)', async () => {
     await renderizar();
     await clicar('Iniciar Separação');
-    expect(api.get).toHaveBeenCalledWith('/almoxarifado/estoque/10/saldos');
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/estoque/10/saldos?requisicao_id=55');
     expect([...selectSeparacao().options].map((o) => o.textContent)).toEqual([
       'Qualquer endereço (automático)',
       'A-01 (10)',

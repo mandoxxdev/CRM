@@ -95,7 +95,7 @@ beforeEach(() => {
     }
     if (url === '/almoxarifado/requisicoes/55') return Promise.resolve({ data: requisicao });
     if (url === '/almoxarifado/configuracoes/liberacao-valor') return Promise.resolve({ data: { souAprovador: false } });
-    if (url === '/almoxarifado/estoque/10/saldos') return Promise.resolve({ data: saldos });
+    if (url === '/almoxarifado/estoque/10/saldos?requisicao_id=55') return Promise.resolve({ data: saldos });
     return Promise.resolve({ data: [] });
   });
   api.put.mockResolvedValue({ data: {} });

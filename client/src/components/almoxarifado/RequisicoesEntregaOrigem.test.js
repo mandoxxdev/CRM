@@ -77,7 +77,7 @@ beforeEach(() => {
     }
     if (url === '/almoxarifado/requisicoes/55') return Promise.resolve({ data: REQUISICAO });
     if (url === '/almoxarifado/configuracoes/liberacao-valor') return Promise.resolve({ data: { souAprovador: false } });
-    if (url === '/almoxarifado/estoque/10/saldos') return saldosImpl();
+    if (url === '/almoxarifado/estoque/10/saldos?requisicao_id=55') return saldosImpl();
     return Promise.resolve({ data: [] });
   });
   api.put.mockResolvedValue({ data: { parcial: true } });
@@ -148,7 +148,7 @@ describe('Etapa 58: "Sai de" no modal de entrega', () => {
   test('opções: só endereço com saldo positivo; rótulo com e sem lote', async () => {
     await renderizar();
     await abrirModal();
-    expect(api.get).toHaveBeenCalledWith('/almoxarifado/estoque/10/saldos');
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/estoque/10/saldos?requisicao_id=55');
     expect(textosOpcoes()).toEqual([
       'Qualquer endereço (automático)',
       'A-01 (10)',

@@ -145,7 +145,22 @@ const URGENCIA_INFO = {
 // só linhas com endereço e saldo positivo (saldo sem endereço não é lugar de onde ir buscar).
 // O value leva endereço e lote juntos porque o mesmo endereço pode ter dois lotes do material.
 const valorOrigem = (s) => `${s.localizacao_id}:${s.lote_id ?? ''}`;
-const rotuloOrigem = (s) => `${s.localizacao_codigo}${s.lote ? ` — lote ${s.lote}` : ''} (${s.quantidade})`;
+// Etapa 201 (RN-201.06/08, B1346): o servidor manda, por linha, o separado de OUTRAS requisições no par (`separado_outras`) e a
+// `sobra` (físico − separado das outras). Servidor sem os campos: 0 e o físico — a conta de antes.
+const numeroDoServidor = (x) => (typeof x === 'number' && Number.isFinite(x) ? x : null);
+const outrasDaOpcao = (s) => numeroDoServidor(s.separado_outras) ?? 0;
+const sobraDaOpcao = (s) => numeroDoServidor(s.sobra) ?? (Number(s.quantidade) || 0);
+const r6 = (x) => Math.round(x * 1e6) / 1e6;
+// Etapa 201 (RN-201.06 com a Fase 2): com separado de outras, a sobra primeiro (cabe no celular). `propriaNoPar` só na SEPARAÇÃO: o que
+// esta requisição já guardou no par (a C1 desconta, `jaPedido`); a entrega não desconta (o separado da própria sai junto).
+const rotuloOrigem = (s, propriaNoPar = 0) => {
+  const base = `${s.localizacao_codigo}${s.lote ? ` — lote ${s.lote}` : ''}`;
+  const outras = outrasDaOpcao(s);
+  if (!(outras > 1e-9)) return `${base} (${s.quantidade})`;
+  const propria = Number(propriaNoPar) || 0;
+  const sobra = Math.max(0, sobraDaOpcao(s) - propria);
+  return `${base} (sobra ${r6(sobra)} de ${s.quantidade}; ${r6(outras)} para outras${propria > 1e-9 ? `, ${r6(propria)} desta` : ''})`;
+};
 const opcoesOrigem = (rows) => (Array.isArray(rows) ? rows : [])
   .filter((s) => s.localizacao_id != null && Number(s.quantidade) > 0);
 const lerValorOrigem = (valor) => {
@@ -246,7 +261,8 @@ export const valorSugeridoNaSeparacao = (item, sugestao, rows, qtdSugerida = 0, 
   if (!opcao) return '';
   const qtd = Number(qtdSugerida) || 0;
   if (maxSeparavelNaTela(item, valor, rows, outrosMesmoMaterial) + 1e-9 < qtd) return '';
-  if ((Number(opcao.quantidade) || 0) + 1e-9 < (Number(jaNoPar) || 0) + qtd) return '';
+  // Etapa 201 (RN-201.08): a sobra (o físico menos o separado das outras), não o físico — a C1 recusaria o resto.
+  if (sobraDaOpcao(opcao) + 1e-9 < (Number(jaNoPar) || 0) + qtd) return '';
   return valor;
 };
 // O que já está no par para os IRMÃOS do mesmo material (M1): a quantidade de quem tem o par no "Sai de" agora + o separado pendente
@@ -256,6 +272,11 @@ const jaNoParDosIrmaos = (itens, item, valor, origens, quantidades) => (itens ||
   .reduce((s, i) => s
     + (origens[i.id] === valor ? Math.max(0, parseFloat((quantidades || {})[i.id]) || 0) : 0)
     + (temPlanejada(i) && valorPlanejada(i) === valor ? pendentePlanejado(i) : 0), 0);
+// Etapa 201 (Fase 2, RN-201.06): o que ESTA requisição já guardou no par da opção — a parte planejada de todos os itens do material
+// com aquela planejada (a mesma conta do `pedidoSeparacao` do servidor). Só o rótulo da separação desconta.
+const propriaNoPar = (itens, materialId, valor) => (itens || [])
+  .filter((i) => Number(i.material_id) === Number(materialId) && temPlanejada(i) && valorPlanejada(i) === valor)
+  .reduce((s, i) => s + pendentePlanejado(i), 0);
 // M4 da Fase 2: a quantidade da frase como a fila a mostra (pt-BR, até 3 casas) — o `fmtQtd` de utils/coletaTexto.js (T3).
 const fmtQtdSugestao = fmtQtd;
 const FRASE_SUGERIDO = 'Sugerido pela fila de separação. Se pegou de outro endereço, troque aqui.';
@@ -272,7 +293,8 @@ const seriesDoLote = (info, loteId) => (info?.series || [])
 // Etapa 60 (RN-01/04): o máximo separável que a tela conhece, na mesma régua do servidor:
 // base = min(pendente de separação, saldo − o que OUTROS itens do mesmo material separam nesta
 // rodada); com um "Sai de" escolhido, também a quantidade da opção menos o separado pendente de quem
-// já planejou o mesmo par — aqui só o do próprio item (outras requisições a tela não conhece).
+// já planejou o mesmo par — aqui só o do próprio item. Dizia "outras requisições a tela não conhece": deixou de valer na Etapa 201
+// (RN-201.08) — a opção traz a `sobra` (físico menos o separado das outras) e a régua usa ela.
 // O servidor recalcula na hora (é ele quem grava `maximo`/`divergente`); aqui só decide quando
 // pedir o motivo, que é opcional.
 const MOTIVO_DIVERGENCIA_MAX = 500;
@@ -288,7 +310,8 @@ const maxSeparavelNaTela = (item, valorOrigemEscolhida, saldos, outrosMesmoMater
   // Etapa 196 (RN-196.09/11): o comprometido no par é a parte da origem, não a caixa inteira.
   const jaPlanejadoNoPar = temPlanejada(item) && valorPlanejada(item) === valorOrigemEscolhida
     ? pendentePlanejado(item) : 0;
-  return Math.min(base, Math.max(0, (Number(opcao.quantidade) || 0) - jaPlanejadoNoPar));
+  // Etapa 201 (RN-201.08, B1346): a sobra da opção (o servidor já desconta as outras no máximo gravado, `:1511-1524`).
+  return Math.min(base, Math.max(0, sobraDaOpcao(opcao) - jaPlanejadoNoPar));
 };
 // Etapa 73 (RN-07, B358): dizia "a chegada do material não muda o status". DEIXOU DE VALER na Etapa 74:
 // a nota que chega RESERVA o que entrou livre para quem esperava e a requisição vai a
@@ -535,7 +558,8 @@ const RequisicoesList = () => {
       let rows = [];
       let falhou = false;
       try {
-        const res = await api.get(`/almoxarifado/estoque/${materialId}/saldos`);
+        // Etapa 201 (RN-201.07): com a requisição aberta, o separado dela não entra no `separado_outras`.
+        const res = await api.get(`/almoxarifado/estoque/${materialId}/saldos?requisicao_id=${detalhe.id}`);
         rows = opcoesOrigem(res?.data);
       } catch (err) {
         rows = [];
@@ -2468,7 +2492,9 @@ const RequisicoesList = () => {
                         }}>
                         <option value="">Qualquer endereço (automático)</option>
                         {(saldosEntrega[item.material_id] || []).map(s => (
-                          <option key={valorOrigem(s)} value={valorOrigem(s)}>{rotuloOrigem(s)}</option>
+                          <option key={valorOrigem(s)} value={valorOrigem(s)}>
+                            {rotuloOrigem(s, propriaNoPar(detalhe.itens, item.material_id, valorOrigem(s)))}
+                          </option>
                         ))}
                       </select>
                     </div>
