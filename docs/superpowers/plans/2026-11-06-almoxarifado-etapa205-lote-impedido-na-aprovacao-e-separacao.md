@@ -1,0 +1,302 @@
+# Etapa 205 — lote impedido não conta na aprovação e na separação (C464, 1ª parte)
+
+> partida: "Próxima tarefa detalhada" de `docs/superpowers/plans/2026-11-06-almoxarifado-etapa204-devolucao-acha-entregas-antigas.md`
+> (`:274` em diante), conferida contra o código em `73d87280` — bate, com **três achados a mais** (abaixo: a fila e o detalhe também
+> calculam o separável; o lote sem certificado de material crítico está retido duas vezes; a chegada da nota também reserva lote bloqueado).
+> Item 6 do 2º pacote (`docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas-2.txt:24-26`, **4h30 a 5h**, estimativa já
+> commitada). Mexe em saldo lido para **reservar** — tronco, sob as travas que as portas já seguram. Sem front (B1374).
+
+## Objetivo (em linguagem simples)
+
+Quando um lote é bloqueado, reprovado ou vence, o material dele continua na prateleira e o sistema continua contando esse saldo como
+"disponível". Resultado: a **aprovação** reserva para a requisição um material que não pode sair, e a **separação** deixa separar esse
+material. A pessoa só descobre na entrega. Depois desta etapa, em material com controle de lote, a aprovação e a separação **descontam** o
+saldo dos lotes que não podem sair: a requisição fica *Parcialmente reservada* ou *Aguardando estoque*, a fila de separação mostra só o que dá
+para separar, e a separação recusa dizendo quanto ficou de fora por estar em lote impedido.
+
+**Fronteira:** a **entrega** não muda nesta etapa (item 7, outra etapa). As telas de saldo (Materiais, Estoque, relatórios) também não.
+
+## Fase 0 — medido em 2026-11-06 (sobre `73d87280`)
+
+### A conta de hoje
+
+- `availabilitySql.disponivelSql` (`server/services/almoxarifado/availabilitySql.js:55-59`) = `quantidade_atual` − reservado − bloqueado −
+  em inspeção − em terceiros (`COLUNAS_RETENCAO`, `:34-39`). **O status do lote não entra.** Lote: `lotes_almoxarifado.status` ∈
+  `STATUS_LOTE = ['ATIVO','BLOQUEADO','REPROVADO']` (`lotService.js:23`) — **não existe status "em inspeção" de lote**; vencido não é status,
+  é `data_validade < hoje de Brasília` (`lotService.isVencido`, `:160-164`; `schema.js:1509`), destravado por `vencimento_liberado_em`
+  (`vencimentoLiberado`, `:356-358`).
+- A régua "lote que pode sair": `listarLotesDoMaterial` (`lotService.js:524-559`), `elegivel = status === 'ATIVO' && (!vencido || liberado)`
+  (`:541`), a mesma ordem do motor (`stockService.js:1547-1584`). Saldo do lote = `SUM(estoque_saldo_almoxarifado.quantidade)` do lote
+  (`:526-528`). Já a usam: o automático FEFO da 197 (`requisitionService.js:1846-1848`, `lotesParaOAutomatico`, que também desconta o **em
+  inspeção do lote** por `recebimentos_material_itens_almoxarifado.quantidade_em_inspecao` — `:1849-1861`), a sugestão de coleta da 188
+  (`sugestaoDeColeta.js:99-103`) e a separação com lote escolhido (`requisitionService.js:1297-1307`, literais do motor).
+
+### Quem lê o disponível para aprovar e separar (quatro leituras, não duas)
+
+1. **`saldoDisponivelParaItem`** (`requisitionService.js:486-520`): `disponivelSql('ma')` + reserva do item + caixas + retenções. Chamadores:
+   aprovação `:672` e `:690` (dentro de `reservarItensAprovacao`, `:625`; conversão da OS na condição `:684`; `aReservar` em `:704`);
+   separação `:1485` (teto em `:1487`, literal da recusa em `:1505-1507`); entrega `:2138` (só `permite_negativo`), `:2170` e `:2226`
+   (usam `disponivel_material` e `tetoDaLeitura` `:270-273`, que lê `saldo.disponivel`).
+2. **`calcularStatusPosAprovacao`** (`requisitionStateMachine.js:274-316`; `disponivelSql` em `:277`, decisão em `:282`) — chamada por
+   `prepararPosAprovacao` (`requisitionService.js:785-791`, as três portas) **e** por `reservaChegadaService.recalcularStatusDeReserva`
+   (`:145`, fora da trava, só status).
+3. **Fila de separação** — `listarFilaSeparacao` (`requisitionService.js:1037`): `saldo_disponivel` em `:1052`, teto em `:1094`,
+   `dividirSeparavel` em `:1090`, etapa `AGUARDANDO_SALDO` em `:1123`. Rota `GET /api/almoxarifado/fila-separacao` (`routes/almoxarifado.js:4661`).
+   Também alimenta o detalhe por requisição (`requisitionService.js:1188`).
+4. **Detalhe da requisição** — `GET /api/almoxarifado/requisicoes/:id` (`routes/almoxarifado.js:3951`; SQL `:3965-3995`, `saldo_atual` com
+   `disponivelSql`) → `normalizarItem` (`requisitionService.js:276-334`; teto `:297-299`, `saldo_separavel`/`quantidade_separavel` `:331-332`;
+   o **mesmo** `teto` alimenta `saldo_entregavel` da segunda rodada `:318-320`). O modal pré-preenche com `saldo_separavel`
+   (`client/src/components/almoxarifado/RequisicoesList.js:56-64`).
+
+**Achado 1 (o brief não tinha):** as leituras 3 e 4 também calculam o separável. Mudar só a porta faria a fila dizer *Separar 10* e o modal
+pré-preencher 10 para a porta recusar — o gesto posterior recusando o anterior. Entram as quatro.
+
+### As portas e as travas
+
+- Aprovação: `PUT /requisicoes/:id/aprovar` (`routes/almoxarifado.js:4275`, `prepararPosAprovacao` em `:4337`), `PUT /requisicoes/:id/aprovar-valor`
+  (`:4441`, em `:4483`, `recusarInativo: false`) e a automática (`POST /requisicoes` `:4129` e `POST /requisicoes/:id/enviar` `:4172`, em `:4083`).
+  As três seguram `comTravaDaRequisicao` (`requisitionService.js:806-830`, trava **por material**) em volta de `prepararPosAprovacao` e do
+  `UPDATE`; `reservarItensAprovacao` confere `materiaisForaDaSecao` (`:628-631`).
+- Separação: `PUT /requisicoes/:id/separar` (`routes/almoxarifado.js:4678`), sob a trava por requisição e, por dentro, `comTravaDaRequisicao`
+  (CLAUDE.md, Etapa 95). A leitura nova roda **dentro** das seções que já existem — nenhuma porta nova.
+- Quem muda o status do lote (`lotService.mudarStatusLote` `:289-314`, `liberarVencimento` `:367`, liberação por certificado `:316-345`)
+  **não** pega trava e **não** distribui.
+
+### Achado 2 — o mesmo saldo retido duas vezes
+
+O recebimento de material **sem certificado** cria o lote `BLOQUEADO` (`receiptService.js:1773`) e, se o material é crítico, o mesmo `qtd` vai
+para `QUARENTENA` → `quantidade_em_inspecao` do material (`:1932-1946`, `stockService.js:1696-1701`). A reprovação da inspeção passa o retido
+para `quantidade_bloqueada` **sem lote** (`stockService.js:1702-1722`). Descontar o saldo bruto do lote impedido **por cima** do
+`disponivelSql` tiraria duas vezes: lote L1 ATIVO 10 + L2 sem certificado 10 em inspeção → disponível hoje 10 (certo), bruto daria 0. A
+conta tem de abater o que já está retido (B1370).
+
+### Achado 3 — a chegada da nota também reserva lote bloqueado (fora)
+
+`reservaChegadaService.reservarChegadaParaQuemEspera` (`:205-245`) conta como livre o item da nota que não ficou em inspeção — inclusive o que
+entrou em lote `BLOQUEADO` por falta de certificado — e reserva para quem espera. Não é aprovação nem separação: **C478**, fora.
+
+### Quem depende do contrato de hoje
+
+- A literal da separação (`requisitionService.js:1505-1507`) é conferida por regex em 6 arquivos (`grep -rln "não é possível separar"
+  server/tests/api`), p.ex. `ajusteEnderecoCaixa.api.test.js:182` (`/Máximo: 2 /`). O sufixo novo só aparece com lote impedido (nenhum
+  desses tem) e vem **depois** do parêntese — as regex continuam casando.
+- Molde de testes com lote: `server/tests/api/entregaAutomaticaPeloLote.api.test.js` (validades **relativas** a hoje por `diaLocal`, helpers
+  `material`/`entrar`/`loteId`/`validade` `:83-95`, usuários por header).
+
+## Decisões (letra B — reversíveis; livres depois de B1367, conferido: o maior hoje é B1367; C a partir de C478, o maior hoje é C477)
+
+- **B1368 — o caminho: dois campos novos, nada muda de nome.** `saldoDisponivelParaItem` passa a devolver também `lote_impedido` (o desconto,
+  B1370) e `disponivel_liberado` (= `disponivel − lote_impedido`); **`disponivel` e `disponivel_material` ficam byte a byte**. A aprovação e a
+  separação passam a ler `disponivel_liberado`; a entrega continua lendo os de sempre. As leituras 2, 3 e 4 ganham o mesmo fragmento SQL.
+  **Descartados:** (a) mudar `disponivelSql` — 36 pontos em 21 arquivos, todas as telas de saldo, o motor e a entrega de uma vez; (b) mudar o
+  `disponivel` da função — atinge a entrega (`tetoDaLeitura`, `:270`), antecipando o item 7 sem a mensagem que nomeia o lote: a segunda rodada
+  passaria a recusar sem dizer por quê; (c) parâmetro opt-in na função — dois formatos de retorno para o mesmo nome.
+- **B1369 — "impedido" é o contrário de `elegivel`:** `status <> 'ATIVO'` (BLOQUEADO, REPROVADO), **ou** vencido (`substr(data_validade,1,10) <
+  hoje de Brasília`) **sem** `vencimento_liberado_em`. Vencido **com** liberação conta como disponível (é para isso que a liberação existe,
+  B1322). **Lote em inspeção:** não há status de lote para isso; o retido em inspeção já é retenção do material (`quantidade_em_inspecao`) e já sai
+  do `disponivelSql` — nada a acrescentar (só não pode ser descontado de novo, B1370). Quarentena sem lote é a **C466**, fora.
+- **B1370 — a conta, sem tirar duas vezes:** `lote_impedido = max(0, Σ_{lotes impedidos do material} max(0, saldo do lote − em inspeção no lote)
+  − quantidade_bloqueada do material)`, arredondado a 1e-6. O "em inspeção no lote" é a régua da 197 (`recebimentos_material_itens_almoxarifado
+  .quantidade_em_inspecao` por `lote_id`). A bloqueada do material (quarentena, reprovação de inspeção) não sabe o lote: a conta assume que ela
+  está **dentro** do lote impedido — nunca desconta mais do que o certo. **Preço declarado:** quando a bloqueada é de peça num lote que pode sair,
+  o desconto fica menor que o real (no pior caso, igual ao de hoje — nunca pior). Exato só com o lote da peça bloqueada (**C466**, itens 8/9).
+  **Descartados:** o saldo bruto (Achado 2: zera a aprovação do lote bom de material crítico sem certificado); abater também `em_terceiros`
+  (não está no prédio, não está em lote nenhum).
+- **B1371 — só material com controle de lote** (`materiais_almoxarifado.controle_lote = 1`), o gatilho da 197 (B1321). Material sem controle com
+  lote legado bloqueado: nada muda — a entrega dele não escolhe lote.
+- **B1372 — a reserva que já existe não é revogada.** Requisição aprovada antes da etapa (ou antes de o lote ser bloqueado) mantém a reserva
+  ATIVA; a reaprovação idempotente (Etapa 73) não mexe nela; o teto da separação mantém a parte própria (`max(0, r − c)`, `tetoSeparacao`
+  `:375-378`) e só o livre (a parte dividida) desconta. Bloquear um lote não solta reserva de ninguém. **Descartado:** soltar a reserva coberta só
+  por lote impedido — é gesto de outra porta (mudar status do lote), que não pega trava nem conhece requisição.
+- **B1373 — mensagens.** A aprovação **não recusa** por falta de saldo (aprova com status): o aviso é o status de hoje — *Parcialmente
+  reservada* (com o aviso que `RequisicoesList` já mostra) ou *Aguardando estoque*/*Aguardando compra*. Nenhuma frase nova. A **separação** ganha
+  um sufixo literal, só quando `lote_impedido > 0` (contrato abaixo). **Descartado:** aviso novo no modal/fila — pede tela; fora do tempo.
+- **B1374 — sem front; a fatia visível é o número.** A fila e o modal já leem o separável do servidor (`saldo_separavel`, `separavel`): com a
+  conta nova eles mostram o número certo e a etapa *Aguardando saldo* aparece sozinha. `disponivel` (fila), `saldo_atual` (detalhe) e os
+  entregáveis ficam como hoje.
+- **B1375 — sem trava nova.** A leitura do lote roda dentro das seções que as três portas de aprovação e a separação já seguram. Mudar o status
+  do lote, liberar vencimento ou anexar certificado **não** pegam a trava: bloquear só diminui o livre (no pior caso a aprovação concorrente
+  reserva o que acabou de ser bloqueado — o mesmo estado de bloquear logo depois, B1372); desbloquear aumenta o livre sem distribuir (B441).
+- **B1376 — "hoje" lido na hora, por `diaLocal.hojeLocalISO()`** (`server/services/diaLocal.js:21`), embutido no SQL como literal **validada**
+  (`/^\d{4}-\d{2}-\d{2}$/`, senão lança). **Descartado:** parâmetro `?` — as quatro consultas têm arrays de parâmetros diferentes e a ordem é
+  frágil (o detalhe usa `db.all` com `?` posicionais).
+- **B1377 — o recálculo da chegada herda a conta.** `recalcularStatusDeReserva` (`reservaChegadaService.js:145`) usa
+  `calcularStatusPosAprovacao`: requisição sem hold cujo único saldo está em lote impedido não vai para *Aprovado*. Aceito (é o mesmo rótulo
+  certo da aprovação). Sem teste próprio; coberto pela unidade de `calcularStatusPosAprovacao` (RN-205.04).
+- **B1378 — corte se estourar 5h:** o sufixo da mensagem da separação (RN-205.08 b) sai e vira **C482**; a conta (RN-205.01 a .07, .09) fica.
+
+### Fora (C novos)
+
+- **C478** — a distribuição da chegada da nota (`reservaChegadaService.js:205-245`) reserva o que entrou em lote `BLOQUEADO` sem certificado
+  (material não crítico: não fica em inspeção, conta como livre).
+- **C479** — a reserva manual (tela Reservas, `stockService.criarReserva`) conta o saldo de lote impedido.
+- **C480** — liberar o lote (certificado, `ATIVO`, liberar vencimento) não recalcula o status nem distribui: a requisição fica *Aguardando estoque*
+  sem reserva até alguém separar (a separação aceita *Aguardando estoque*, `PODE_SEPARAR`, `requisitionStateMachine.js:98`).
+- **C481** — as telas de saldo (as 36 leituras de `disponivelSql`) continuam mostrando como disponível o saldo de lote impedido. Informação, não
+  gesto; vai à **D (205)**.
+
+## Regras de negócio
+
+Montagem padrão: material **com** controle de lote, não crítico, unidade `un`; lotes por Entrada v2; status do lote por `mudarStatusLote`;
+validade **relativa** a hoje (`diaLocal`), nunca data fixa.
+
+- **RN-205.01 — a régua do impedido é a de `elegivel`.** Material com oito lotes, cada um com saldo: ATIVO sem validade; ATIVO vence hoje;
+  ATIVO venceu ontem; ATIVO venceu ontem **com** vencimento liberado; BLOQUEADO; REPROVADO; BLOQUEADO vencido com liberação; ATIVO vence amanhã.
+  Para cada lote, "entra no desconto" (o predicado SQL do fragmento) == `!elegivel` de `listarLotesDoMaterial` — os oito, comparados lote a lote.
+  (Impedidos: venceu ontem sem liberação, BLOQUEADO, REPROVADO, BLOQUEADO vencido liberado.)
+- **RN-205.02 — a conta do desconto** (pelo serviço, `saldoDisponivelParaItem` do item de uma requisição qualquer do material):
+  - (a) L1 ATIVO 4, L2 BLOQUEADO 6 → `lote_impedido` 6, `disponivel_liberado` 4, `disponivel` 10 (igual a hoje);
+  - (b) L2 BLOQUEADO 6 inteiro em inspeção (recebimento com 6 retidos no item do L2; `quantidade_em_inspecao` do material 6) → `lote_impedido` 0,
+    `disponivel` 4 (já sem os 6);
+  - (c) L2 REPROVADO 6, `quantidade_bloqueada` do material 2 → `lote_impedido` 4;
+  - (d) L2 BLOQUEADO com saldo −1 (linha negativa legada por SQL) e L3 BLOQUEADO 3 → `lote_impedido` 3 (o negativo não abate);
+  - (e) o mesmo de (a) com `controle_lote = 0` → `lote_impedido` 0, `disponivel_liberado` = `disponivel` = 10;
+  - (f) frações: L2 BLOQUEADO 0,3 com bloqueada 0,1 → 0,2 (não `0.19999999999999998`).
+- **RN-205.03 — a aprovação reserva só o que pode sair, pelas três portas.** L1 ATIVO 4, L2 BLOQUEADO 6, requisição de 10:
+  `PUT /aprovar` → 200, uma reserva ATIVA de **4**, status `PARCIALMENTE_RESERVADA`. O mesmo pela aprovação automática (`POST /requisicoes`
+  com a regra de auto-aprovação) e por `PUT /aprovar-valor` (requisição acima do limite). Controle positivo: sem o desconto (sabotagem
+  T1), a reserva volta a 10 e o status a `TOTALMENTE_RESERVADA`.
+- **RN-205.04 — só lote impedido: não fica "Aprovado".** Só L2 BLOQUEADO 6, requisição de 3, sem solicitação de compra → 200, nenhuma reserva,
+  status `AGUARDANDO_ESTOQUE` (hoje sai `APROVADO` sem reserva). Com solicitação de compra a caminho → `AGUARDANDO_COMPRA`. Pela unidade:
+  `calcularStatusPosAprovacao` devolve `AGUARDANDO_ESTOQUE` no mesmo banco.
+- **RN-205.05 — vencido conta como impedido; liberado volta a contar.** Só L1 ATIVO 5 vencido ontem → aprovação de 5 sem reserva,
+  `AGUARDANDO_ESTOQUE`. `PUT /lotes/:id/liberar-vencimento` com justificativa → nova requisição de 5 reserva 5, `TOTALMENTE_RESERVADA`.
+- **RN-205.06 — sem controle de lote nada muda.** Montagem de RN-205.03 com `controle_lote = 0` → reserva 10, `TOTALMENTE_RESERVADA` (igual
+  hoje).
+- **RN-205.07 — a reserva que já existe fica.** L1 ATIVO 10, requisição R1 de 6 aprovada (reserva 6); depois L1 → BLOQUEADO. A reserva de R1
+  continua ATIVA 6; `prepararPosAprovacao` de novo em R1 (idempotente) não cria nem solta nada; o separável de R1 (porta, fila e detalhe) é **6**
+  (a parte própria); uma R2 de 4 aprovada agora não reserva nada (`AGUARDANDO_ESTOQUE`).
+- **RN-205.08 — a separação limita pelo que pode sair.** L1 ATIVO 4, L2 BLOQUEADO 6, requisição R de 5 em `AGUARDANDO_ESTOQUE` sem reserva
+  (aprovada com estoque 0, os lotes entraram depois por Entrada v2, que não distribui):
+  - (a) `PUT /separar` com 4 → 200; com 5 → 400;
+  - (b) a literal do 400: `<nome>: não é possível separar 5 un. Máximo: 4 (pendente: 5, disponível: 4). Não entram 6 un em lote bloqueado,
+    reprovado ou vencido.` — sem lote impedido, a literal é **a de hoje**, byte a byte (sem a segunda frase).
+- **RN-205.09 — a fila e o detalhe batem com a porta.** Montagem de RN-205.08: `GET /fila-separacao` → `separavel` 4 no item, etapa `SEPARAR`;
+  `GET /requisicoes/:id` → `saldo_separavel` 4 e `quantidade_separavel` 4. `disponivel` (fila) e `saldo_atual` (detalhe) continuam **10**
+  (B1374). Só L2 BLOQUEADO 6: `separavel` 0 e a etapa `AGUARDANDO_SALDO`.
+- **RN-205.10 — a entrega não muda (fronteira com o item 7).** R1 de RN-205.07 (reserva 6, L1 bloqueado depois, nada separado; material não
+  crítico): a prévia e a gravação da entrega de 6 dão o mesmo resultado de hoje — 200, e a parte que nenhum lote elegível cobre sai sem lote
+  (B1323, *"Sem lote atribuído"* −6). `saldo_entregavel` do detalhe igual ao calculado com o `teto` de hoje. É o defeito que o item 7 conserta —
+  o teste o **fixa** para o item 7 encontrá-lo vermelho de propósito.
+
+## Contrato (congelado)
+
+### Fragmento SQL — `server/services/almoxarifado/loteImpedido.js` (novo; molde `devolucaoViva.js`: uma régua só, sem `require` do app)
+
+```js
+// requires: ./quantidade (Q) e ../diaLocal. Nada mais (requisitionStateMachine o importa: sem ciclo).
+predicadoLoteImpedidoSql(aliasLote, hojeISO)        // "(<l>.status <> 'ATIVO' OR (<l>.data_validade IS NOT NULL
+                                                    //   AND substr(<l>.data_validade,1,10) < '<hoje>' AND <l>.vencimento_liberado_em IS NULL))"
+loteImpedidoSql(aliasMaterial, hojeISO = diaLocal.hojeLocalISO())
+  // => "(CASE WHEN COALESCE(<m>.controle_lote,0) = 1 THEN ROUND(MAX(0, COALESCE((
+  //       SELECT SUM(MAX(0, COALESCE((SELECT SUM(s.quantidade) FROM estoque_saldo_almoxarifado s WHERE s.lote_id = li.id), 0)
+  //                       - COALESCE((SELECT SUM(ri.quantidade_em_inspecao) FROM recebimentos_material_itens_almoxarifado ri
+  //                                   WHERE ri.lote_id = li.id AND COALESCE(ri.quantidade_em_inspecao,0) > 0), 0)))
+  //       FROM lotes_almoxarifado li WHERE li.material_id = <m>.id AND <predicado('li')>), 0)
+  //     - COALESCE(<m>.quantidade_bloqueada,0)), 6) ELSE 0 END)"
+MSG_HOJE_INVALIDO = 'loteImpedidoSql: hoje inválido'  // lança Error se hojeISO não casar /^\d{4}-\d{2}-\d{2}$/
+```
+
+O arredondamento é `Q.qtdSql` (`quantidade.js:52-54`, `ROUND((expr), 6)`). Nenhuma query escreve a subtração do `disponivelSql`
+à mão (a varredura de `saldoEmTerceiros.api.test.js` continua verde): o fragmento é **subtraído** de `disponivelSql(...)`, nunca o substitui.
+
+### `saldoDisponivelParaItem(db, item)` — aditivo
+
+Devolve tudo o que devolve hoje, igual, mais `lote_impedido: number` (≥ 0) e `disponivel_liberado: number` (= `disponivel − lote_impedido`, pode
+ser < 0; quem usa já aplica `max(0, …)`).
+
+### Quem passa a ler o liberado
+
+| Leitor | Antes | Agora |
+|---|---|---|
+| `reservarItensAprovacao` `:672`, `:690` (e a condição da OS `:684`, `aReservar` `:704`) | `disponivel` | `disponivel_liberado` (destructure `disponivel_liberado: disponivel`) |
+| porta da separação `:1485-1487` | `saldo.disponivel` no `tetoCom` | `saldo.disponivel_liberado` |
+| `calcularStatusPosAprovacao` `:277/:282` | `disponivelSql('ma') > 0` | `disponivelSql('ma') − loteImpedidoSql('ma') > 0` |
+| fila `:1052`, teto `:1094` | `saldo_disponivel` | coluna nova `lote_impedido` subtraída **só** no `teto` (não no `entregavel` `:1112`, não em `disponivel` `:1113`) |
+| detalhe `routes/almoxarifado.js:3965` + `normalizarItem` `:297-299` | `estoque` | coluna nova `lote_impedido` (aditiva, como `caixa_sem_reserva_outros`); `normalizarItem` calcula `tetoSeparavel` com `estoque − lote_impedido` para `saldo_separavel`/`quantidade_separavel`/`saldo_separavel_reserva`; o `teto` de hoje continua alimentando `saldo_entregavel` (`:318-320`) e `maxEntregar` (`:303`). A coluna crua sai do JSON (como `_caixaCrua`, `:324`). |
+| entrega `:2138`, `:2170`, `:2226`, `tetoDaLeitura` `:270` | — | **sem mudança** |
+
+### Literal da separação (`requisitionService.js:1505-1507`)
+
+```
+`${item.material_nome}: não é possível separar ${qty} ${item.unidade || ''}. Máximo: ${max} (pendente: ${pend}, disponível: ${teto})`
+  + (saldo.lote_impedido > 1e-9 ? `. Não entram ${Q.qtd(saldo.lote_impedido)}${item.unidade ? ` ${item.unidade}` : ''} em lote bloqueado, reprovado ou vencido.` : '')
+```
+
+Exportar a função da segunda frase (`fraseLoteImpedido(n, unidade)`) para os testes não redigitarem. Rotas e códigos HTTP: **nenhum novo**.
+
+## Tasks
+
+Todas **tronco** e sequenciais: as três mexem em `requisitionService.js` e na mesma conta compartilhada (regra da Fase 3: erro de interpretação
+na T0 exige retrabalho nas outras). Sem worktree, sem galho.
+
+- **T0 (tronco) — a régua e a conta.** `loteImpedido.js` (contrato acima) + `server/tests/api/loteImpedido.api.test.js`: RN-205.01 (cruzado com
+  `listarLotesDoMaterial`, oito lotes) e RN-205.02 (a)–(f) pelo serviço — `saldoDisponivelParaItem` já devolvendo os dois campos novos.
+  **Controle positivo:** tirar o abatimento da inspeção → (b) vermelho; tirar o `- quantidade_bloqueada` → (c) vermelho; trocar o `CASE` por
+  sempre → (e) vermelho. ~45 min.
+- **T1 (tronco, depois da T0) — aprovação e status.** `reservarItensAprovacao` lê o liberado; `calcularStatusPosAprovacao` desconta. Testes em
+  `server/tests/api/loteImpedidoAprovacao.api.test.js`: RN-205.03 (as três portas, pela rota), RN-205.04 (rota + unidade), RN-205.05, RN-205.06,
+  RN-205.07 (a parte da aprovação). **Sabotagem de posição:** tirar o desconto só em `reservarItensAprovacao` → RN-205.03 vermelho com status
+  certo e reserva 10; tirar só em `calcularStatusPosAprovacao` → RN-205.04 vermelho (`APROVADO`). ~50 min.
+- **T2 (tronco, depois da T1) — separação, fila e detalhe.** Porta `:1485`, fila `:1052/:1094`, detalhe `:3965` + `normalizarItem`; literal.
+  Testes em `server/tests/api/loteImpedidoSeparacao.api.test.js`: RN-205.08, RN-205.09, RN-205.07 (o separável 6). **Sabotagem:** tirar o desconto
+  só da fila → RN-205.09 vermelho com a porta verde (prova que são leituras separadas). ~45 min.
+- **T3 (integração, rota E serviço) — `server/tests/api/loteImpedidoIntegracao.api.test.js`.** Fluxo pela **rota**: Entrada v2 em L1 (4) e L2 (6)
+  → `PUT /lotes/:id/status` L2 BLOQUEADO → `POST /requisicoes` 10 → `PUT /aprovar` (reserva 4, `PARCIALMENTE_RESERVADA`) → `GET /fila-separacao`
+  (`separavel` 4) → `GET /requisicoes/:id` (`quantidade_separavel` 4) → `PUT /separar` 5 (400, literal de RN-205.08 b) → `PUT /separar` 4 (200) →
+  entrega 4 (200, sai de L1, livro da 197) → L2 volta a ATIVO → R2 de 6 aprovada reserva 6. O **mesmo** pelo **serviço**
+  (`prepararPosAprovacao` dentro de `comTravaDaRequisicao` → `listarFilaSeparacao(db, user, { requisicaoId })` → a porta da separação →
+  `entregarRequisicao`), mesmos números. Mais RN-205.10 (a entrega inalterada, fixada). ~40 min.
+- **F2 — revisor fresco** com as quatro perguntas da `desenvolver-etapa` (a quarta: cada RN até o último gesto — aprovar → fila → modal → separar
+  → entregar → devolver/estornar a entrega de lote).
+- **T4 — fechamento** (`fechar-etapa`): specs 07-reservas, 05-separacao-picking e 10-lotes (a pendência C464 dividida: 1ª parte feita, 2ª é o
+  item 7); mapa; guia (Antes → Agora: *"a aprovação reservava material de lote bloqueado"*); novidades B1368–B1378, C478–C481 (+C482 se o corte
+  da B1378 acontecer) e D (205) com a C481; plano; estimado × gasto do item 6. Suíte completa (os cinco comandos).
+
+## Cabe nas 4h30–5h?
+
+Análise e plano ~1h (esta). Execução: T0 45 min + T1 50 + T2 45 + T3 40 ≈ **3h**, das quais ~2h são testes — o teto de 5h fecha com ~30 min de
+F2 e fechamento **apertados**. Cabe no teto, não no piso. Se a T2 passar de 1h (o detalhe tem a forma mais frágil: o mesmo `teto` serve ao
+separável e ao entregável), corta-se o sufixo da mensagem (B1378 → C482) e se mantém a conta nas quatro leituras — sem ela a fila e o modal
+prometeriam o que a porta recusa.
+
+## Pontos de atenção
+
+- **Não troque o `teto` do `normalizarItem` inteiro:** ele alimenta também `saldo_entregavel` da segunda rodada (`:318-320`). Trocar ali muda a
+  entrega (item 7) — RN-205.10 pega.
+- **A fila tem duas contas na mesma linha** (`teto` `:1094` e `entregavel` `:1112`, ambas de `saldo_disponivel`): o desconto entra só no primeiro.
+- **`disponivel_liberado` inclui a reserva do item** (como `disponivel`): no `tetoCom` continua `disponivel_liberado − reservado_para_item`.
+- O fragmento roda **por linha** da fila (subselect correlacionado por material, várias requisições): conferir o tempo da fila com 200 itens na
+  T2 (o molde: a fila já tem `caixaSemReservaSql` correlacionado por linha).
+- Validades relativas (`diaLocal`) e o caso "vence hoje" (não vencido): a régua é `<`, não `<=` — a sabotagem é de **posição** (tirar o
+  desconto), não de operador.
+- `mudarStatusLote` exige justificativa e guarda o status no `WHERE`; rotas: `PUT /api/almoxarifado/lotes/:id/status`
+  (`routes/almoxarifado/extended.js:1329`) e `PUT /lotes/:id/liberar-vencimento` (`:1278`), as duas `requirePermission('inspecionar')`.
+
+## Execução
+
+- [ ] T0 — `loteImpedido.js` + `saldoDisponivelParaItem` com `lote_impedido`/`disponivel_liberado` (RN-205.01, .02)
+- [ ] T1 — aprovação (três portas) e `calcularStatusPosAprovacao` (RN-205.03 a .07)
+- [ ] T2 — porta da separação, fila, detalhe e a literal (RN-205.07, .08, .09)
+- [ ] T3 — integração pela rota e pelo serviço + RN-205.10 (entrega fixada)
+- [ ] F2 — revisor fresco do plano (antes da T0)
+- [ ] T4 — fechamento (`fechar-etapa`) e estimado × gasto
+
+## Próxima tarefa detalhada
+
+**Item 7 do 2º pacote** (`docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas-2.txt:28-30`, **4h a 4h30**): *"Lote bloqueado,
+reprovado ou vencido — 2ª parte: entrega"* — a 2ª parte do **C464**. Quando só sobra saldo em lote impedido, a entrega passa e a diferença vai para
+*"Sem lote atribuído"*, negativo (B1323). A entrega passa a recusar, dizendo qual lote está impedido.
+
+- **O que esta etapa deixa pronto:** `saldoDisponivelParaItem` devolve `lote_impedido` e `disponivel_liberado` (B1368); o fragmento
+  `loteImpedidoSql`/`predicadoLoteImpedidoSql` (`loteImpedido.js`). A entrega lê hoje `disponivel_material` (`requisitionService.js:2170`, `:2226`)
+  e `tetoDaLeitura` (`:270-273`) — é ali que a recusa entra, e no resto do automático (`lotesParaOAutomatico` `:1846`; o que sobra sem lote, B1323).
+- **RN-205.10 fica vermelho de propósito** no item 7: ele fixa o comportamento de hoje (sai sem lote). Editar o teste é o primeiro passo da SDD.
+- **Decisão de negócio a registrar em B:** a B1323 cita *"a decisão do cliente de 2026-08-10 de não travar a entrega por lote"*
+  (`docs/almoxarifado-novidades-por-etapa.md:13665`); recusar a entrega a contraria — o caminho reversível é recusar só a parte que **nenhum** lote
+  elegível nem o saldo sem lote cobre, e registrar.
+- **A reserva que já existe** (B1372) é o caso que chega à entrega: a requisição aprovada antes do bloqueio separa (parte própria) e só a entrega
+  descobre. A recusa tem de nomear o lote (`Lote <codigo> esta bloqueado…`, as literais do motor, `stockService.js:1548-1583`).
+- Atenção à trava: a entrega já roda sob a trava por requisição e `comTravaDaRequisicao` (Etapa 95); a leitura do lote vai dentro.
+- Se sobrar tempo: **C478** (a chegada da nota reserva lote bloqueado sem certificado) é a vizinha mais barata — o mesmo fragmento no teto de
+  `reservarChegadaParaQuemEspera`.
