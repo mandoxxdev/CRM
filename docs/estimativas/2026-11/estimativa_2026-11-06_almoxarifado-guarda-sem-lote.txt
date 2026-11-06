@@ -1,0 +1,9 @@
+*Planejamento — Almoxarifado: correção na entrega de material sem lote*
+_06/11/2026_
+
+*1. Entrega não leva o que outra peça da mesma requisição tinha separado*
+Em material sem controle de lote, quando uma requisição tem duas peças do mesmo material e uma delas foi separada de um local, a entrega da outra peça pode levar justamente o material desse local; depois a primeira peça não consegue mais ser entregue. A entrega passa a respeitar o que cada peça separou.
+Tempo estimado: *4h a 4h30* (depende de quantos caminhos da entrega usam a mesma escolha de local)
+
+*Total estimado: 4h a 4h30*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
