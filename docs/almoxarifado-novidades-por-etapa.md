@@ -4488,7 +4488,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1406 (Etapa 207, Fase 5 — as B1396 a B1405 da etapa entram no fechamento); as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -14190,6 +14190,17 @@ automático`, a mesma função `cabeDoAutomaticoPeloLote` da porta): item 2 → 
 **Descartado:** dividir o teto entre os irmãos na tela (é a conferência que confere a soma, sem baixar nada — **C489**); copiar a conta
 para o detalhe (duas réguas voltariam a divergir). **Reversível** (`tetoDaEntregaPeloLote`, anotado pela rota do detalhe e lido pela Fila).
 
+**B1406 (NOVA, da Etapa 207, Fase 5 S1; decisão do agente) — a parte automática sem lote só sai em fatias quando a baixa de hoje levaria
+a peça separada.** A baixa de hoje (o motor) tira primeiro da linha preferida — a padrão, ou a linha **sem endereço** quando o material não
+tem padrão — e depois da maior. A primeira versão das fatias pulava a linha sem endereço e tirava de outro endereço o que sobrava ali, que
+outra requisição ia escolher. Cenário: sem padrão, *sem endereço* 2 e *A* 3, R1 separou 2 de *A*; R2 entrega 1 no automático e R3 entrega
+1 escolhendo *A* — antes da 207 as duas passam (R2 sai da linha sem endereço); com a primeira versão R2 saía de *A* e R3 tomava *"em A há 2
+… sobra 0"*. O mesmo com padrão vazia e a linha sem endereço maior. Agora a entrega simula a baixa de hoje sobre todas as linhas sem lote
+(as sem endereço e as bloqueadas também, como o motor); se ela não tira de nenhum endereço mais do que o livre dele, sai como hoje (uma
+saída sem endereço); só fatia quando levaria a peça separada. **Descartado:** fatia sem endereço (não tem origem estrita e o motor começa
+pela padrão — não dá para mirar a linha); mudar a baixa do motor (todas as portas de saída a usam). **Reversível**
+(`fatiasSemLoteParaOAutomatico`). `730a8a00`.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -18200,6 +18211,14 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      sai"* (**B1389**) —, não com a frase da 206. Nada é baixado. **O que fazer:** o que a frase diz — **Entregar escolhendo de onde sai…**
      com outro lote ou automático. Conserto: o teto do detalhe não contar a parte cujo lote está impedido (pequeno; não medido).
 
+496. **NOVO (da Etapa 207, revisão da Fase 5; o comportamento é anterior à etapa) — IMPORTANTE: entregar escolhendo de onde sai pode levar
+     a peça que o irmão da mesma requisição separou.** Dois casos: escolher o **mesmo** endereço da separação do item **além** da parte
+     separada dali, ou um item **sem** separação escolher o endereço do irmão. A conferência de "já está separado dali" só olha **outras**
+     requisições. Cenário: *A* 3, *B* 5; item 1 separado 1 de *A* + 1 sem origem; item 2 separado 2 de *A*; entregar 2 do item 1
+     escolhendo *A* → 200 e *A* fica com 1; o item 2, num clique, toma 400 *"a origem da separação (A) não serve mais (O saldo em A (1) não
+     cobre a quantidade (2) …)"*. Igual antes e depois da 207. **O que fazer:** entregar o item 2 escolhendo outro endereço (*B*). Conserto:
+     a conferência da origem escolhida descontar também a parte separada dos irmãos da mesma requisição naquele endereço (2 h a 3 h).
+
 ### D. Limitações declaradas— são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -19552,6 +19571,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(207, Fase 5) A saída fatiada é citada fatia por fatia na devolução.** Quando a parte automática sai em fatias (uma saída por endereço,
+  **B1402**), a devolução que cita a saída fica limitada à fatia: na RN-207.01 a entrega de 3 vira *A* 1 + *B* 2, e devolver 3 citando a
+  primeira recusa *"Devolução acima do entregue: a saída … entregou 1, já foram devolvidos 0 e restam 1"* — devolve-se 1 citando uma e 2
+  citando a outra (antes da 207, uma saída de 3). O mesmo da Etapa 197 com as fatias por lote.
+
 - **(206) A entrega que recusa lote impedido, o que ficou de fora.** (1) **Sem lote impedido** a falta da parte automática ainda sai sem
   lote, negativa — lote bom em inspeção ou na parte guardada de outra caixa (**B1386**, **C485**). (2) **Série** em lote impedido: recusada
   só na baixa (**C486**). (3) O **negativo antigo** fica até um ajuste (**C487**). (4) O entregável do detalhe e da Fila é **aproximado**: com
