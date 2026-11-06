@@ -198,7 +198,27 @@ cabeçalho do item na janela (`:2457`, é o do material inteiro); o extrato.
 pré-seleção com `quantidade` crua em mock sem `sobra` (a compat da RN-201.08 os protege; medido só na T3). **Corte se estourar:** a RN-201.08
 (B1346) sai para uma etapa seguinte (vira C474) e fica só o rótulo — economiza ~20 min.
 
-## Fase 2 — revisão do plano (a fazer, revisor fresco)
+## Fase 2 — correções do revisor fresco (2026-11-05) — **MANDAM sobre o texto acima onde divergem**
+
+Revisor fresco sobre `855e7404`: 0 trava, 1 importante, 2 menores, todos aceitos. Confirmado: a chave `${origemId}|${loteId ?? ''}` casa NULL com
+NULL; linha sem endereço dá 0 (a C1 também só age com endereço, `requisitionService.js:1300`); o NULL legado bate com `parteOrigemSql`
+(`:69-73`); a resposta só traz somas (sem números de requisição); a pré-seleção com a sobra só deixa de pré-selecionar o que a C1 já recusava; T2 ∥
+T3 independentes; na entrega a E1 do caso (c) usa `saldo − outras`, o mesmo número do rótulo.
+
+1. **[IMPORTANTE] Na janela de SEPARAÇÃO a sobra do rótulo ignorava o que a própria requisição já separou no par.** XB-01/L1 6; R1 separou 4; R2
+   já separou 1 ali (pendente); R2 reabre e vê "sobra 2", digita 2, e a C1 recusa "há 5 (já contando 1 desta requisição)… sobra 1". A C1 desconta
+   `jaPedido` (`:1440-1446`, `:1293`); a régua da tela também (`jaPlanejadoNoPar`, `RequisicoesList.js:289-291`). **RN-201.06 (só na separação):**
+   sobra do rótulo = `max(0, sobraDaOpcao(s) − propriaNoPar)`, `propriaNoPar` = soma de `pendentePlanejado(i)` dos itens do material com
+   `valorPlanejada(i) === valorOrigem(s)` (a mesma conta do `pedidoSeparacao`). Com `propriaNoPar > 1e-9` o rótulo diz também "N desta". A entrega
+   usa o rótulo sem esse desconto (o separado da própria sai junto). **RN-201.09** ganha: "R2 separa 1, lê sobra 1, tenta 2 → C1 com sobra 1";
+   controle: rótulo sem `propriaNoPar` → cai.
+2. **[MENOR] Rótulo cortado no celular** (`Almoxarifado.css:569-580`, select a 100%, ~40 caracteres visíveis). **Literal L1 nova, a sobra primeiro:**
+   `` `${cod}${lote} (sobra ${r6(sobra)} de ${s.quantidade}; ${r6(outras)} para outras)` `` → "XB-01 — lote L1 (sobra 2 de 6; 4 para outras)"; na
+   separação com a própria: "XB-01 — lote L1 (sobra 1 de 6; 4 para outras, 1 desta)". Ajustar os exemplos e a B1348.
+3. **[MENOR] RN-201.04:** `requisicao_id` presente e (`typeof !== 'string'` ou não casa `/^[1-9]\d*$/`) → 400; teste com o array
+   (`?requisicao_id=1&requisicao_id=2`).
+
+## Fase 2 — revisão do plano (feita — ver o bloco acima)
 
 As quatro perguntas da skill, com atenção a: (1) a chave `` `${origemId}|${loteId ?? ''}` `` casa `lote_id` `NULL` da linha com
 `lote_separacao_id` `NULL` do item; (2) a RN-201.08 traçada até a gravação (a pré-seleção que fica automática, o motivo que não aparece, e o
