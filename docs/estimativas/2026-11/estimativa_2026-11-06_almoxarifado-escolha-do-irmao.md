@@ -11,7 +11,7 @@ Régua: Etapa 200 (o caso (c) com a E1, execução 1h15) — mesmo porte, reapro
 
 | # | Tarefa | Porte | Análise | Execução | Teste e conferência | Informado | Etapa/plano | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 | Entrega com "Sai de" respeita a guarda do irmão (C496) | motor (leitura sob trava já existente) | 1h | 1h | 2h | 4h | — | — | — | — |
+| 1 | Entrega com "Sai de" respeita a guarda do irmão (C496) | motor (leitura sob trava já existente) | 1h | 1h | 2h | 4h | 208 (plano `025d7109`) | 2,6 h (horas.js --grupos "E208=Etapa 208", 06/11) → 3h | 6h (3h + análise 1 h + teste 2 h, da tabela — não informado pelo André). Estouro de 2 h: a Fase 2 achou que no fluxo normal da tela a recusa caía na peça errada (adiamento da conferência física), a tela entrou, e o sorteio subiu de 400 para 2000 casos para cobrir a 2ª forma | 025d7109 … d88a53bc, 5fd09e22 |
 
 Medição no fechamento:
 ```

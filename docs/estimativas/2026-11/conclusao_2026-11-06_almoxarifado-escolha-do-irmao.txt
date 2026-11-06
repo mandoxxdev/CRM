@@ -1,0 +1,8 @@
+*Concluído — Almoxarifado: entrega escolhendo o local de outra peça*
+_06/11/2026_
+
+1. Entrega escolhendo o local respeita o que outra peça da mesma requisição separou — estimado 4h · realizado 6h
+
+*Total: estimado 4h · realizado 6h*
+
+Na entrega, quando a pessoa escolhe à mão um local onde outra peça da mesma requisição separou material, o sistema passa a recusar na hora, dizendo quanto está separado para a outra peça e quanto sobra. A janela de entrega mostra esse número junto de cada local. O tempo passou do previsto porque a revisão do plano mostrou que, no jeito normal de usar a tela (as duas peças entregues juntas), a recusa cairia na peça errada; foi preciso mudar a ordem da conferência e conferir com milhares de entregas sorteadas que nenhuma entrega que hoje sai certo passou a ser recusada.
