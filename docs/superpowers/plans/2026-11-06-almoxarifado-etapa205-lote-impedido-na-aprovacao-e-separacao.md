@@ -273,6 +273,41 @@ prometeriam o que a porta recusa.
 - `mudarStatusLote` exige justificativa e guarda o status no `WHERE`; rotas: `PUT /api/almoxarifado/lotes/:id/status`
   (`routes/almoxarifado/extended.js:1329`) e `PUT /lotes/:id/liberar-vencimento` (`:1278`), as duas `requirePermission('inspecionar')`.
 
+## Fase 2 — correções do revisor fresco (2026-11-06) — **MANDAM sobre o texto acima onde divergem**
+
+Revisor fresco sobre `88f18de5`: 0 trava, 4 importantes, 3 menores, todos aceitos. A F2 foi feita **antes** da T0 (a linha do checklist de Execução
+que a punha depois da T3 está errada — M3). Confirmado: vencido com liberação, sem validade e saldo sem lote contam como liberado; o "hoje" é o
+`diaLocal` do `isVencido`; o FEFO da 197 usa o mesmo `elegivel` e o mesmo desconto de inspeção; T0→T3 em série; a requisição aprovada antes não
+passa a recusar (`max(0, r − c)` no teto, RN-205.07).
+
+1. **[IMPORTANTE] I1 — terceiros:** `REMESSA_TERCEIRO` é retenção e não sai da linha do lote (`stockService.js:1751-1765`, `:1893`). **B1370 e contrato:**
+   abater também `COALESCE(<m>.quantidade_em_terceiros,0)` junto com a bloqueada; sai da lista de descartados. Caso novo **RN-205.02 (g)**: L1 ATIVO
+   4, L2 BLOQUEADO 6, `em_terceiros` 3 → `lote_impedido` 3, `disponivel_liberado` 4.
+2. **[IMPORTANTE] I2 — inspeção sem recebimento** (devolução para Quarentena herda o lote, `returnService.js:140`, `:333`, e soma em
+   `quantidade_em_inspecao` do material, `stockService.js:1698-1701`): no fim da conta, abater também a inspeção do material que nenhum item de
+   recebimento explica: `- MAX(0, COALESCE(<m>.quantidade_em_inspecao,0) - COALESCE((SELECT SUM(ri2.quantidade_em_inspecao) FROM recebimentos_material_itens_almoxarifado ri2 JOIN lotes_almoxarifado l2 ON l2.id = ri2.lote_id WHERE l2.material_id = <m>.id AND COALESCE(ri2.quantidade_em_inspecao,0) > 0), 0))`.
+   Caso novo **RN-205.02 (h)**: L1 ATIVO 4; devolução de 2 para Quarentena volta para L2 vencido sem liberação → `lote_impedido` 0.
+3. **[IMPORTANTE] I3 — a frase nova da separação** (`requisitionService.js:1505`) passa a usar só o que o lote **cortou** do teto, e só quando o
+   máximo fica abaixo do pendente:
+   ```js
+   const tetoBruto = tetoSeparacao(saldo.disponivel - saldo.reservado_para_item, saldo.reservado_para_item,
+     getSeparado(item) - getEntregue(item), saldo.caixa_outras_requisicoes + irmaos.reduce((a, o) => a + caixaSemReservaDe(o, getSeparado(o)), 0));
+   const cortadoPeloLote = Q.qtd(Math.max(0, tetoBruto - teto));
+   const sufixo = (cortadoPeloLote > 1e-9 && max < pendenteSeparacao(item) - 1e-9) ? fraseLoteImpedido(cortadoPeloLote, item.unidade) : '';
+   ```
+   RN-205.08 (b) segue 6. Dois testes novos: (a) R1 com reserva 6, L1 (10) bloqueado, pede 7 → "Não entram 4 un"; (b) pendente 3, liberado 20,
+   impedido 6 → a mensagem de hoje, sem a 2ª frase.
+4. **[IMPORTANTE] I4 — a tela:** `lote_impedido` fica no JSON do detalhe (campo aditivo); o modal de separação (`RequisicoesList.js:2486`) ganha
+   ``{Number(item.lote_impedido) > 0 && ` · Em lote bloqueado/reprovado/vencido: ${item.lote_impedido}`}`` (a literal entre crases é a frase congelada).
+   Teste Jest (a linha aparece com impedido > 0; não aparece com 0) + controle. Vira task **T2b (galho de tela)**, depois da T2.
+5. **C478 reescrita:** "as três portas que distribuem para quem espera (nota, inspeção/NC — `inspectionService.js:441`, `nonConformityService.js:1010`
+   —, OS encerrada — `osEncerradaService.js:92`) reservam saldo de lote impedido" (`reservaChegadaService.js:365`, `:551`, `distribuirSemLock`).
+6. **[MENOR] M1:** a B1370 diz que reserva e caixa contam como direito sobre o que pode sair (L1 ATIVO 4, L2 ATIVO 6, outra separou 6 de L2 sem reserva,
+   L2 bloqueado → R separa 0, hoje 4); teste que fixa isso.
+7. **[MENOR] M2:** no predicado SQL de vencido, `COALESCE(<l>.data_validade,'') <> ''` no lugar de `IS NOT NULL` (régua do `isVencido`, `lotService.js:161`).
+
+**Tamanho:** I1–I4 somam ~30–45 min → ~5h30 (estimado 4h30 a 5h). Diferença < 1 h do teto: sem reestimar; a conclusão diz por quê se passar.
+
 ## Execução
 
 - [ ] T0 — `loteImpedido.js` + `saldoDisponivelParaItem` com `lote_impedido`/`disponivel_liberado` (RN-205.01, .02)
