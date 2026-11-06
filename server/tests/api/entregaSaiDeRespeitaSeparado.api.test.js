@@ -366,6 +366,52 @@ process.on('exit', (code) => {
     console.log(`    ordens: separacao venceu ${ordens.separacaoPrimeiro}, entrega venceu ${ordens.entregaPrimeiro}`);
   });
 
+  // ---------------------------------------------------------------- T3: RN-200.09, o caso do item ponta a ponta
+  // R1 separa de XB-01/L1 (PUT .../separacao, a da tela); R2 separa no automatico; R2 entrega com "Sai de" XB-01/L1 -> E1; com XP-01/L2
+  // -> 200; R1 entrega mandando o mesmo par como a tela (montarItensEntrega: localizacao_origem_id + lote_id) -> 200.
+  const fimDoCaso = async (m, L1, L2, r1, r2) => {
+    assert.strictEqual(await saldoDe(m, B01.id, L1), 2);
+    assert.strictEqual(await saldoDe(m, P01.id, L2), 5);
+    assert.deepStrictEqual(await semLoteNaoZero(m), []);
+    assert.deepStrictEqual(await trocas(r1.R), []);
+    assert.deepStrictEqual(await trocas(r2.R), []);
+    const livro = await dbAll(db, `SELECT mv.quantidade, mv.localizacao_origem_id as loc, mv.lote_id as lote
+      FROM movimentacoes_almoxarifado mv WHERE mv.material_id = ? AND mv.tipo = 'SAIDA' ORDER BY mv.id`, [m.id]);
+    assert.deepStrictEqual(livro.map((x) => [Number(x.quantidade), x.loc, x.lote]), [[4, P01.id, L2], [4, B01.id, L1]],
+      `livro: ${JSON.stringify(livro)}`);
+    assert.strictEqual(await statusDe(r1.R), 'ENTREGUE');
+    assert.strictEqual(await statusDe(r2.R), 'ENTREGUE');
+  };
+
+  await test('[T3 rota, RN-200.09] R1 separa de XB-01/L1 (/separacao); R2 automatico; R2 "Sai de" XB-01/L1 -> E1; XP-01/L2 -> 200; R1 pelo par -> 200', async () => {
+    const { m, L1, L2 } = await cenario();
+    const r1 = await req([[m.id, 4]]); const r2 = await req([[m.id, 4]]);
+    const a = await separacao(r1.R, [doPar(r1.ids[0], 4, L1)]);
+    assert.strictEqual(a.status, 200, JSON.stringify(a.body));
+    const b = await separacao(r2.R, [auto(r2.ids[0], 4)]);
+    assert.strictEqual(b.status, 200, JSON.stringify(b.body));
+    await recusaSemGravar(m, r2, L1, L2, [saiDe(r2.ids[0], 4, L1)],
+      e1(m, { saldo: 6, outras: 4, numeros: [await numero(r1.R)], sobra: 2, qty: 4 }));
+    await entOk(r2.R, [saiDe(r2.ids[0], 4, L2, P01.id)]);
+    await entOk(r1.R, [saiDe(r1.ids[0], 4, L1)]);
+    await fimDoCaso(m, L1, L2, r1, r2);
+  });
+
+  await test('[T3 servico, RN-200.09] o mesmo pelo servico: separarRequisicao / entregarRequisicao', async () => {
+    const { m, L1, L2 } = await cenario();
+    const r1 = await req([[m.id, 4]]); const r2 = await req([[m.id, 4]]);
+    await requisitionService.separarRequisicao(db, r1.R, [doPar(r1.ids[0], 4, L1)], ALMOX);
+    await requisitionService.separarRequisicao(db, r2.R, [auto(r2.ids[0], 4)], ALMOX);
+    let erro = null;
+    try { await requisitionService.entregarRequisicao(db, r2.R, [saiDe(r2.ids[0], 4, L1)], ALMOX, null); } catch (e) { erro = e; }
+    assert.ok(erro && erro.status === 400, `R2 em XB-01/L1 tinha de recusar: ${erro && erro.message}`);
+    assert.strictEqual(erro.message, e1(m, { saldo: 6, outras: 4, numeros: [await numero(r1.R)], sobra: 2, qty: 4 }));
+    assert.strictEqual(await saldoDe(m, B01.id, L1), 6);
+    await requisitionService.entregarRequisicao(db, r2.R, [saiDe(r2.ids[0], 4, L2, P01.id)], ALMOX, null);
+    await requisitionService.entregarRequisicao(db, r1.R, [saiDe(r1.ids[0], 4, L1)], ALMOX, null);
+    await fimDoCaso(m, L1, L2, r1, r2);
+  });
+
   await close();
   terminou = true;
   console.log(`\n${passed} passou, ${failed} falhou`);
