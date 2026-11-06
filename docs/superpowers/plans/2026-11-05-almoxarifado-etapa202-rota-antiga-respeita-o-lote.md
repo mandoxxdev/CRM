@@ -220,6 +220,27 @@ código ~15 linhas. **Corte, se estourar:** primeiro a parte (c) da integração
 - Cuidado com teste vazio: conferir `lote_id` gravado no livro (`movimentacoes_almoxarifado.lote_id`), não só o status 201 — hoje a saída com
   lote bom **também** dá 201 (sai sem lote); só o livro e a linha do lote distinguem.
 
+## Fase 2 — correções do revisor fresco (2026-11-06) — **MANDAM sobre o texto acima onde divergem**
+
+Revisor fresco sobre `681d7f4a`: 0 trava, 2 importantes, 3 menores, todos aceitos. Confirmado: v1 (`routes/almoxarifado.js:1387`) e v2
+(`extended.js:853`) têm o mesmo `requirePermission('movimentar')`; o motor já pega `naTravaDoMaterial`; estorno da saída volta à linha do lote
+(`stockService.js:3390-3398`); devolução herda o lote (`returnService.js:140-141`); lote novo nasce mesmo com `controle_lote = 0` (`:1290-1295`);
+nenhum dos 16 testes que fazem POST na v1 manda lote/lote_id/data_validade.
+
+1. **[IMPORTANTE] AJUSTE com lote deixa a linha do lote negativa** (medido pela v2, mesmo motor: LB 5 + 3 sem lote, AJUSTE 1 com LB → 201, LB −2;
+   `syncSaldoLocalizacaoPadrao`, `:551-580`, só drena sem lote; chamada com o lote em `:2318`). **Decisão (B nova, reversível):** a v1 **não repassa**
+   lote/lote_id/data_validade quando o tipo é `AJUSTE` — fica igual a hoje; o defeito do AJUSTE com lote (v2 desde a Etapa 6) vira **C475**, registrado,
+   não consertado. A frase de `:52` ("AJUSTE com lote … igual à v2") sai. Teste: v1 AJUSTE com `lote_id` → mesmas linhas de hoje (sem lote), e a v2 no
+   mesmo cenário documenta o C475.
+2. **[IMPORTANTE] B1350 incompleta** — acrescentar: "Também passam a 400: lote/lote_id com tipo errado (zod) e data_validade em formato errado, fora
+   de entrada, sem lote ou em conflito com a validade de um lote vivo (regras da 190: `MSG_VALIDADE.FORMATO`/`SO_ENTRADA`/`SEM_LOTE`/`CONFLITO`,
+   `lotService.js:146-152`, `stockService.js:1266-1277`). É a mesma recusa da tela Movimentações." Cada uma com um cenário na T1.
+3. **[MENOR] B1356 / RN-202.08:** a resposta 201 da v1 ecoa `...(result.aviso_validade ? { aviso_validade: result.aviso_validade } : {})`
+   (`stockService.js:2522`, `:2601`); RN-202.08 = "as 9 chaves de hoje + `aviso_validade` só quando o motor avisa".
+4. **[MENOR]** `lote: '  '` → descartar no `loteCru` o `lote` vazio depois do `trim`; o teste asserta `lote IS NULL` no livro.
+5. **[MENOR] C474 consertado aqui (uma linha):** `stockService.js:1282` → `Number(loteResolvido.material_id) !== Number(material_id)` (protege também
+   `/transferencias`). Teste: `material_id` em texto com `lote_id` → 201; controle: sem o `Number` → cai.
+
 ## Execução
 
 - [ ] T0 — Fase 2: revisão do plano
