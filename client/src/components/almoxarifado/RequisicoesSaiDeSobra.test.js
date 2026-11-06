@@ -275,3 +275,38 @@ describe('Etapa 201: o "Sai de" da entrega mostra o que sobra (sem descontar a p
     ]);
   });
 });
+
+// Fase 5 (item 3): `propriaNoPar` além do caso trivial. XB-01 sem lote, 10 no físico, 4 de outras (sobra 6). Item 1: caixa 5 com parte 1
+// no par (os outros 4 vieram de outro endereço); item 2, do mesmo material: caixa 2, parte 2 no par; item 3, de OUTRO material, também
+// planejado em XB-01 sem lote. A C1 desconta 1 + 2 = 3 (o `pedidoSeparacao` soma a PARTE dos itens do material no par): sobra 6 − 3 = 3.
+// Trocar a parte pela caixa (pendenteSeparado) daria 5 + 2 = 7 desta; tirar o filtro de material, 1 + 2 + 1 = 4.
+const NO_PAR = { origem_separacao_id: 2, lote_separacao_id: null, origem_separacao_codigo: 'XB-01', lote_separacao_codigo: null };
+const DOIS_ITENS_NO_PAR = {
+  ...REQ_BASE, status: 'EM_SEPARACAO',
+  itens: [
+    { ...ITEM_BASE, ...NO_PAR, quantidade_solicitada: 8, quantidade_separada: 5, quantidade_origem_separacao: 1,
+      quantidade_entregue: 0, quantidade_atendida: 0 },
+    { ...ITEM_BASE, ...NO_PAR, id: 2, quantidade_solicitada: 4, quantidade_separada: 2, quantidade_origem_separacao: 2,
+      quantidade_entregue: 0, quantidade_atendida: 0 },
+    { ...ITEM_BASE, ...NO_PAR, id: 3, material_id: 11, material_codigo: 'MAT-2', material_nome: 'Parafuso', quantidade_solicitada: 3,
+      quantidade_separada: 1, quantidade_origem_separacao: 1, quantidade_entregue: 0, quantidade_atendida: 0 },
+  ],
+};
+const SALDOS_SEM_LOTE = [
+  { id: 1, material_id: 10, localizacao_id: 1, localizacao_codigo: 'A-01', lote_id: null, lote: null, quantidade: 10,
+    separado_outras: 0, sobra: 10 },
+  { id: 6, material_id: 10, localizacao_id: 2, localizacao_codigo: 'XB-01', lote_id: null, lote: null, quantidade: 10,
+    separado_outras: 4, sobra: 6 },
+];
+
+describe('Etapa 201 (Fase 5): a própria no par é a PARTE dos itens DO MATERIAL', () => {
+  beforeEach(() => { requisicao = DOIS_ITENS_NO_PAR; saldos = SALDOS_SEM_LOTE; });
+
+  test('[RN-201.06 Fase 5] parte 1 de caixa 5 + irmão com 2 no par (+ outro material no par): "sobra 3 de 10; 4 para outras, 3 desta"', async () => {
+    await renderizar();
+    await clicar('Ajustar Separação');
+    const esperado = 'XB-01 (sobra 3 de 10; 4 para outras, 3 desta)';
+    expect(textos(selectSeparacao())).toEqual(['Qualquer endereço (automático)', 'A-01 (10)', esperado]);
+    expect(textos(container.querySelector('#separacao-origem-2'))[2]).toBe(esperado);
+  });
+});
