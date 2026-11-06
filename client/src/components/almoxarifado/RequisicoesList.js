@@ -153,13 +153,18 @@ const sobraDaOpcao = (s) => numeroDoServidor(s.sobra) ?? (Number(s.quantidade) |
 const r6 = (x) => Math.round(x * 1e6) / 1e6;
 // Etapa 201 (RN-201.06 com a Fase 2): com separado de outras, a sobra primeiro (cabe no celular). `propriaNoPar` só na SEPARAÇÃO: o que
 // esta requisição já guardou no par (a C1 desconta, `jaPedido`); a entrega não desconta (o separado da própria sai junto).
+// Fase 5 (B1349): só a própria no par (outras 0) também mostra a sobra — "XB-01 — lote L1 (sobra 5 de 6; 1 desta)" —, o mesmo número da
+// recusa física do servidor (físico − jaPedido); antes ficava o físico "(6)" e com 0,000001 de outras o rótulo pulava para "sobra 4…".
 const rotuloOrigem = (s, propriaNoPar = 0) => {
   const base = `${s.localizacao_codigo}${s.lote ? ` — lote ${s.lote}` : ''}`;
   const outras = outrasDaOpcao(s);
-  if (!(outras > 1e-9)) return `${base} (${s.quantidade})`;
   const propria = Number(propriaNoPar) || 0;
+  const temOutras = outras > 1e-9;
+  const temPropria = propria > 1e-9;
+  if (!temOutras && !temPropria) return `${base} (${s.quantidade})`;
   const sobra = Math.max(0, sobraDaOpcao(s) - propria);
-  return `${base} (sobra ${r6(sobra)} de ${s.quantidade}; ${r6(outras)} para outras${propria > 1e-9 ? `, ${r6(propria)} desta` : ''})`;
+  const partes = [temOutras ? `${r6(outras)} para outras` : null, temPropria ? `${r6(propria)} desta` : null].filter(Boolean);
+  return `${base} (sobra ${r6(sobra)} de ${s.quantidade}; ${partes.join(', ')})`;
 };
 const opcoesOrigem = (rows) => (Array.isArray(rows) ? rows : [])
   .filter((s) => s.localizacao_id != null && Number(s.quantidade) > 0);

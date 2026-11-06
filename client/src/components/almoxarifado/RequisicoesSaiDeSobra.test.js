@@ -224,6 +224,27 @@ describe('Etapa 201 (Fase 2): a separação desconta o que esta requisição já
     ]);
   });
 
+  // Fase 5 (B1349): só a própria no par — o rótulo mostra a sobra (a recusa física do servidor é físico − jaPedido: "O saldo em
+  // XB-01 (5)…"), não o físico; com um fio de outras (0,000001) a frase não pula de número.
+  test('[RN-201.06 Fase 5] só a própria no par (outras 0): "sobra 5 de 6; 1 desta"; sem outras e sem própria, o de hoje', async () => {
+    saldos = SALDOS.map((s) => (s.localizacao_id === 2 ? { ...s, separado_outras: 0, sobra: 6 } : s));
+    await renderizar();
+    await clicar('Ajustar Separação');
+    expect(textos(selectSeparacao())).toEqual([
+      'Qualquer endereço (automático)',
+      'A-01 (10)',
+      'XB-01 — lote L1 (sobra 5 de 6; 1 desta)',
+      'C-03 — lote L9 (sobra 2 de 3; 1 para outras)',
+    ]);
+  });
+
+  test('[RN-201.06 Fase 5] um fio de outras (0,000001) não pula: "sobra 4.999999 de 6; 0.000001 para outras, 1 desta"', async () => {
+    saldos = SALDOS.map((s) => (s.localizacao_id === 2 ? { ...s, separado_outras: 0.000001, sobra: 5.999999 } : s));
+    await renderizar();
+    await clicar('Ajustar Separação');
+    expect(textos(selectSeparacao())[2]).toBe('XB-01 — lote L1 (sobra 4.999999 de 6; 0.000001 para outras, 1 desta)');
+  });
+
   test('[RN-201.08] a planejada que a sobra não cobre (1 contra 4) abre em automático', async () => {
     await renderizar();
     await clicar('Ajustar Separação');
