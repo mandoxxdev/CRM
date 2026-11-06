@@ -90,6 +90,12 @@ const MSG_5 = (nome) => `${nome}: não é possível separar 5 un. Máximo: 4 (pe
   const linhas = async (m) => (await dbAll(db, `SELECT lt.codigo as lote, SUM(s.quantidade) q FROM estoque_saldo_almoxarifado s
       LEFT JOIN lotes_almoxarifado lt ON lt.id = s.lote_id WHERE s.material_id = ? GROUP BY lt.codigo ORDER BY lt.codigo`, [m.id]))
     .filter((x) => Math.abs(Number(x.q)) > 1e-9).map((x) => `${x.lote || '-'}=${Number(x.q)}`);
+  // Fase 5 (P3): a regua da divergencia da ultima rodada — quem separou tudo o que o LIBERADO deixa nao e divergente.
+  const ultimaRodada = async (R, item) => {
+    const r = await dbGet(db, "SELECT itens_json FROM separacoes_requisicao_almoxarifado WHERE requisicao_id = ? ORDER BY id DESC LIMIT 1", [R]);
+    const x = JSON.parse(r.itens_json).find((i) => Number(i.item_id) === Number(item));
+    return { maximo: x.maximo, divergente: x.divergente };
+  };
   const montar = async () => {
     const m = await material(); await entrar(m, 4, 'L1'); await entrar(m, 6, 'L2');
     return m;
@@ -111,6 +117,7 @@ const MSG_5 = (nome) => `${nome}: não é possível separar 5 un. Máximo: 4 (pe
     assert.strictEqual(r5.status, 400, JSON.stringify(r5.body));
     assert.strictEqual(r5.body.error, MSG_5(m.nome));
     await ok(como('ALMOX').put(`${API}/requisicoes/${R}/separacao`, { itens_separados: [{ item_id: item, quantidade_separada: 4 }] }));
+    assert.deepStrictEqual(await ultimaRodada(R, item), { maximo: 4, divergente: false }, 'a regua e o liberado (4), nao o disponivel (10)');
     await ok(como('ALMOX').put(`${API}/requisicoes/${R}/entregar`, { itens_atendidos: [{ item_id: item, quantidade_atendida: 4 }] }));
     assert.deepStrictEqual(await livro(R, m), [['SAIDA', 'L1', 4]], 'saiu de L1 (o automatico da 197 nao toca L2)');
     assert.deepStrictEqual(await linhas(m), ['L2=6']);
@@ -138,6 +145,7 @@ const MSG_5 = (nome) => `${nome}: não é possível separar 5 un. Máximo: 4 (pe
     await assert.rejects(requisitionService.separarRequisicao(db, R, [{ item_id: item, quantidade_separada: 5 }], USERS.ALMOX),
       (e) => e.status === 400 && e.message === MSG_5(m.nome));
     await requisitionService.separarRequisicao(db, R, [{ item_id: item, quantidade_separada: 4 }], USERS.ALMOX);
+    assert.deepStrictEqual(await ultimaRodada(R, item), { maximo: 4, divergente: false });
     await requisitionService.entregarRequisicao(db, R, [{ item_id: item, quantidade_atendida: 4 }], USERS.ALMOX, null);
     assert.deepStrictEqual(await livro(R, m), [['SAIDA', 'L1', 4]]);
     assert.deepStrictEqual(await linhas(m), ['L2=6']);
