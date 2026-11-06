@@ -272,6 +272,38 @@ corta-se a RN-206.09 (B1393 → C488); a conferência, a literal e o detalhe/fil
 - `mudarStatusLote` exige justificativa; rotas `PUT /api/almoxarifado/lotes/:id/status` e `PUT /lotes/:id/liberar-vencimento`
   (`routes/almoxarifado/extended.js`, `requirePermission('inspecionar')`).
 
+## Fase 2 — correções do revisor fresco (2026-11-06) — **MANDAM sobre o texto acima onde divergem**
+
+Revisor fresco sobre `7f210f62`: 1 trava, 2 importantes, 4 menores, todos aceitos. Confirmado: a ordem das recusas (crítico → séries → origem →
+caso (c) → só lote → E1 → **nova** → alçada) é coerente; o RN-197.03 refeito ainda prova "lote não elegível nunca sai"; a RN-205.10 passa a
+provar a recusa; o fluxo recusa → entregar a menos → PARCIALMENTE_ATENDIDA → L2 ATIVO → entrega → exclusão fecha.
+
+1. **[TRAVA] A conta da B1384 partia de `pedidoPorOrigem`, que não mede o que sai de cada lote.** (a) conta em dobro: a semeadura do "só lote"
+   (`requisitionService.js:2203-2208`) soma os estritos de novo na chave `m|null|L` (item 1 tira 2 de (A, L1) à mão + item 2 "só lote" L1 2 + item 3
+   automático 1; L1 5, L2 BLOQUEADO 3 → soma 6, sai 4 → recusa o item 3 que a baixa cumpriria: regressão). (b) com o mesmo par da origem e q > parte
+   (`qtdComOrigem = qty` sem limite à parte, `:2104`, `:2141`): caixa 4, parte 2 em (A, L1), pessoa escolhe (A, L1) para os 4; A 5 em L1, L2 BLOQUEADO 3,
+   item 2 automático 2 → a conferência passa, e depois da passada 0 a guarda vira `max(0, 2 − 4) = 0` (`:1922`), o livre é 1 e nasce **sem lote −1**.
+   **B1384 e contrato passam a ser:** usar `origemPorItem` + `origemGuardada`:
+   `cabe(m) = Σ_L max(0, saldo_L de lotesParaOAutomatico(db, m, saiuSimulado, parteQueFica) − pedido_L) + max(0, semLotePositivo − pedidoComOrigemSemLote)`,
+   com `pedido_L` = Σ `qtdComOrigem` de **todo** item de `origemPorItem` com `loteId = L` (com ou sem `saiDaOrigem`) e `saiuSimulado` = Map(item →
+   `qtdComOrigem`) dos itens com `origemGuardada.saiDaOrigem` (o mesmo valor que `saiuDaOrigemPorItem()` passa na passada 2). **RN-206.09b**: o
+   cenário (b), controle positivo com o `new Map()` de hoje; e o cenário (a) como regressão (passa).
+2. **[IMPORTANTE] B1390, piso no entregável:** `maxEntregar(item, Math.max(0, entregavelPeloMotor(...) − loteImpedido), tetoSeparavel)` (sem piso dava
+   −10 com o legado do C484 e o modal pré-preenchia −10, `:187`). Teste **RN-206.11 (d)**: o negativo montado por SQL → 0.
+3. **[IMPORTANTE] T0 de `loteImpedidoIntegracao.api.test.js:198-205` e `:223-229`:** tirar a R1 inteira (criar, aprovar, separar e entregar) e montar só
+   `entrar(L1 10)` + `INSERT … lote_id NULL, -6` + `UPDATE quantidade_atual −6` + o status — senão a reserva 6 e a caixa ficam vivas e `[9,10,-1]` /
+   `[10,6,4]` quebram. A premissa `linhas(m)` fica igual.
+4. **[MENOR]** `parteQueFicaPorItem` (`const` em `:2451`) chamado em `:2242` dá ReferenceError (TDZ): subir a declaração para antes da prévia, ou montar
+   o Map ali a partir de `origemGuardada`.
+5. **[MENOR] Literal:** o `falta` é o **total do material** (`Σ auto − cabe`), mantendo o primeiro item que cruza; quando `falta = qty` (RN-206.07c), a
+   frase final diz "nada sai deste material" no lugar de "entregue N un a menos". Ao lado do C485, registrar que inspeção/parte guardada fora da
+   trava também mantêm o negativo.
+6. **[MENOR]** os dois testes de `:156`/`:179` editados na T0 afirmam o detalhe 0, que só a T2 entrega — vermelhos **esperados** entre a T1 e a T2.
+7. **[MENOR] D (206) e guia:** o "Sai de" (`/estoque/:id/saldos`, `extended.js:834`) continua oferecendo o lote bloqueado (escolhê-lo dá a literal do
+   motor); a fila cai em `AGUARDANDO_SALDO` (`:1181-1184`) com o saldo inteiro em lote bloqueado — coerentes com a porta, declarados.
+
+**Tamanho:** a trava soma ~30 min → ~5h (estimado 4h a 4h30). Diferença < 1 h do teto: sem reestimar; a conclusão diz por quê se passar.
+
 ## Execução
 
 - [ ] F2 — revisor fresco do plano (antes da T0)
