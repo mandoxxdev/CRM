@@ -3,7 +3,7 @@
 > **Tronco só (uma rota + um teste de unidade + um de integração; sem galho de tela).** Estimativa enviada: item 3 de
 > `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas-2.txt` (**2h30**). Fecha o **C458**
 > (`docs/almoxarifado-novidades-por-etapa.md`; achado F6 da revisão adversarial da 191, reproduzido em
-> `docs/superpowers/plans/2026-11-05-almoxarifado-etapa191-*.md:495`). Plano medido sobre `2f3b660c` (linhas abaixo são de hoje).
+> `docs/superpowers/plans/2026-10-23-almoxarifado-etapa191-corrigir-validade-de-lote.md:495`). Plano medido sobre `2f3b660c` (linhas abaixo são de hoje).
 > Spec: `specs/modulo-almoxarifado/10-lotes-series-etiquetas/README.md` (e `22-integracoes` para a frase de quem chama de fora). Ponto de
 > partida: "Próxima tarefa detalhada" de `docs/superpowers/plans/2026-11-05-almoxarifado-etapa201-sai-de-mostra-o-que-sobra.md` (`:289` em
 > diante) — conferida linha a linha, bate (uma correção na contagem de testes, abaixo).
@@ -232,7 +232,7 @@ código ~15 linhas. **Corte, se estourar:** primeiro a parte (c) da integração
 ## Próxima tarefa detalhada
 
 **Item 4 do 2º pacote** (`docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas-2.txt`, **1h15**): **"Requisição excluída
-deixa de guardar o local separado"** — o **C467** (listado no plano da 199, `docs/superpowers/plans/2026-11-05-almoxarifado-etapa199-*.md:134`:
+deixa de guardar o local separado"** — o **C467** (listado no plano da 199, `docs/superpowers/plans/2026-11-05-almoxarifado-etapa199-virgula-e-espacos-do-termo.md:134`:
 *"a requisição excluída guarda a origem nos itens: pequeno, sem efeito hoje (coberto por teste nas duas portas); limpar na exclusão é
 higiene"*). Ponto de partida a medir na Fase 0 da 203: a exclusão é `requisitionService.excluirSemTrava` (`server/services/almoxarifado/
 requisitionService.js:2531`, roda por dentro de `comTravaDaRequisicao` e da trava por requisição — ordem requisição → material); as colunas
