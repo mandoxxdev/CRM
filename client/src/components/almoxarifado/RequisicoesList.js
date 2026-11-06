@@ -152,7 +152,7 @@ const outrasDaOpcao = (s) => numeroDoServidor(s.separado_outras) ?? 0;
 const sobraDaOpcao = (s) => numeroDoServidor(s.sobra) ?? (Number(s.quantidade) || 0);
 const r6 = (x) => Math.round(x * 1e6) / 1e6;
 // Etapa 201 (RN-201.06 com a Fase 2): com separado de outras, a sobra primeiro (cabe no celular). `propriaNoPar` só na SEPARAÇÃO: o que
-// esta requisição já guardou no par (a C1 desconta, `jaPedido`); a entrega não desconta (o separado da própria sai junto).
+// esta requisição já guardou no par (a C1 desconta, `jaPedido`); na entrega, desde a Etapa 208, só o dos OUTROS itens (`irmaosNoPar`).
 // Fase 5 (B1349): só a própria no par (outras 0) também mostra a sobra — "XB-01 — lote L1 (sobra 5 de 6; 1 desta)" —, o mesmo número da
 // recusa física do servidor (físico − jaPedido); antes ficava o físico "(6)" e com 0,000001 de outras o rótulo pulava para "sobra 4…".
 const rotuloOrigem = (s, propriaNoPar = 0) => {
@@ -282,6 +282,10 @@ const jaNoParDosIrmaos = (itens, item, valor, origens, quantidades) => (itens ||
 const propriaNoPar = (itens, materialId, valor) => (itens || [])
   .filter((i) => Number(i.material_id) === Number(materialId) && temPlanejada(i) && valorPlanejada(i) === valor)
   .reduce((s, i) => s + pendentePlanejado(i), 0);
+// Etapa 208 (B1411): na ENTREGA, o separado pelas outras peças desta requisição no par (o próprio item fora) — a E1 do servidor desconta
+// a guarda dos irmãos (B1407). Estático: se o irmão sai nesta mesma entrega a porta conta o que ele pede, e o rótulo pode prometer menos,
+// nunca mais.
+const irmaosNoPar = (itens, item, valor) => propriaNoPar((itens || []).filter((i) => Number(i.id) !== Number(item.id)), item.material_id, valor);
 // M4 da Fase 2: a quantidade da frase como a fila a mostra (pt-BR, até 3 casas) — o `fmtQtd` de utils/coletaTexto.js (T3).
 const fmtQtdSugestao = fmtQtd;
 const FRASE_SUGERIDO = 'Sugerido pela fila de separação. Se pegou de outro endereço, troque aqui.';
@@ -2646,7 +2650,7 @@ const RequisicoesList = () => {
                         )}
                         <option value="">Qualquer endereço (automático)</option>
                         {(saldosEntrega[item.material_id] || []).map(s => (
-                          <option key={valorOrigem(s)} value={valorOrigem(s)}>{rotuloOrigem(s)}</option>
+                          <option key={valorOrigem(s)} value={valorOrigem(s)}>{rotuloOrigem(s, irmaosNoPar(detalhe.itens, item, valorOrigem(s)))}</option>
                         ))}
                       </select>
                       <CampoCodigoLido

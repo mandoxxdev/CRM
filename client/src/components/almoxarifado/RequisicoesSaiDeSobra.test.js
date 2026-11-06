@@ -263,7 +263,7 @@ describe('Etapa 201 (Fase 2): a separação desconta o que esta requisição já
 describe('Etapa 201: o "Sai de" da entrega mostra o que sobra (sem descontar a própria)', () => {
   beforeEach(() => { requisicao = PARCIAL; });
 
-  test('[RN-201.07/06] a entrega pede com requisicao_id e rotula sem "desta"', async () => {
+  test('[RN-201.07/06] a entrega pede com requisicao_id e rotula sem "desta" (item único)', async () => {
     await renderizar();
     await clicar('Completar Entrega');
     expect(api.get).toHaveBeenCalledWith('/almoxarifado/estoque/10/saldos?requisicao_id=55');
@@ -308,5 +308,49 @@ describe('Etapa 201 (Fase 5): a própria no par é a PARTE dos itens DO MATERIAL
     const esperado = 'XB-01 (sobra 3 de 10; 4 para outras, 3 desta)';
     expect(textos(selectSeparacao())).toEqual(['Qualquer endereço (automático)', 'A-01 (10)', esperado]);
     expect(textos(container.querySelector('#separacao-origem-2'))[2]).toBe(esperado);
+  });
+});
+
+// Etapa 208 (RN-208.09, B1411): na ENTREGA o "Sai de" desconta o que as OUTRAS peças desta requisição separaram no par (a E1 do servidor
+// desconta a guarda dos irmãos) — o próprio item fora. GZ-A sem lote, 3 no físico. Item 1 sem origem (caixa 2); item 2 guardou 2 em GZ-A.
+const PAR_A = { origem_separacao_id: 2, lote_separacao_id: null, origem_separacao_codigo: 'GZ-A', lote_separacao_codigo: null };
+const IRMAOS_NA_ENTREGA = (item1 = {}) => ({
+  ...REQ_BASE, status: 'PARCIALMENTE_ATENDIDA',
+  itens: [
+    { ...ITEM_BASE, quantidade_solicitada: 3, quantidade_separada: 3, quantidade_entregue: 1, quantidade_atendida: 1,
+      quantidade_entregavel: 2, ...item1 },
+    { ...ITEM_BASE, ...PAR_A, id: 2, quantidade_solicitada: 2, quantidade_separada: 2, quantidade_origem_separacao: 2,
+      quantidade_entregue: 0, quantidade_atendida: 0, quantidade_entregavel: 2 },
+  ],
+});
+const SALDOS_A = (outras = 0) => [
+  { id: 8, material_id: 10, localizacao_id: 2, localizacao_codigo: 'GZ-A', lote_id: null, lote: null, quantidade: 3,
+    separado_outras: outras, sobra: 3 - outras },
+];
+const selectEntregaDo = (id) => container.querySelector(`#entrega-origem-${id}`);
+
+describe('Etapa 208: o "Sai de" da entrega desconta o que as outras peças desta requisição separaram', () => {
+  test('[RN-208.09] item 2 guardou 2 em GZ-A (3): o item 1 (sem origem) vê "sobra 1 de 3; 2 desta"; o item 2 vê "GZ-A (3)"', async () => {
+    requisicao = IRMAOS_NA_ENTREGA(); saldos = SALDOS_A();
+    await renderizar();
+    await clicar('Completar Entrega');
+    expect(textos(selectEntregaDo(1))).toEqual(['Qualquer endereço (automático)', 'GZ-A (sobra 1 de 3; 2 desta)']);
+    expect(textos(selectEntregaDo(2))).toEqual(['Qualquer endereço (automático)', 'GZ-A (3)']);
+  });
+
+  test('[RN-208.09 outras] com 1 de outra requisição: o item 1 vê "sobra 0 de 3; 1 para outras, 2 desta"', async () => {
+    requisicao = IRMAOS_NA_ENTREGA(); saldos = SALDOS_A(1);
+    await renderizar();
+    await clicar('Completar Entrega');
+    expect(textos(selectEntregaDo(1))[1]).toBe('GZ-A (sobra 0 de 3; 1 para outras, 2 desta)');
+    expect(textos(selectEntregaDo(2))[1]).toBe('GZ-A (sobra 2 de 3; 1 para outras)');
+  });
+
+  test('[RN-208.09 os dois guardam] item 1 guardou 1 em GZ-A: o item 2 vê "sobra 2 de 3; 1 desta"; o item 1, "sobra 1 de 3; 2 desta"', async () => {
+    requisicao = IRMAOS_NA_ENTREGA({ ...PAR_A, quantidade_origem_separacao: 1 }); saldos = SALDOS_A();
+    await renderizar();
+    await clicar('Completar Entrega');
+    expect(textos(selectEntregaDo(2))[1]).toBe('GZ-A (sobra 2 de 3; 1 desta)');
+    expect(textos(selectEntregaDo(1))[1]).toBe('GZ-A (sobra 1 de 3; 2 desta)');
   });
 });
