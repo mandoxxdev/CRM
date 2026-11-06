@@ -242,7 +242,27 @@ muda se o `gesto` decide os dois pedaços ("desta requisição"/"desta entrega" 
 
 ## Execução
 
-*(a preencher)*
+- [x] **T1** — `d7ff9a39`. `memoParteGuardadaDeOutras` e `mensagemSeparadoDeOutras` extraídos (a separação usa os dois; C1 igual —
+  `separacaoSeparadoDeOutras` 23/23 e `preSelecaoColetaIntegracao` 9/9 sem edição). `validarOrigemDaEntrega(…, contarOutras)` só confere o
+  físico e marca o item (c) (`!!origemId && !saiDaOrigem`); a E1 sai de **uma passada depois do laço**, antes do só lote, com
+  `ja = pedidoPorOrigem.get(par) − qtdComOrigem` (Fase 2, item 1). `npm run test:api` depois da T1: **586/586** — nenhum teste antigo
+  afirmava a entrega à mão no par comprometido (0 reescritas).
+- [x] **T2** — `943a486e`. `server/tests/api/entregaSaiDeRespeitaSeparado.api.test.js`, 19 cenários. **Vermelho** contra o serviço de
+  `e22db079`: 11/19 caem (os 8 que passam são os que não mudam: .03, .04 a/b/b', .05 excluída/cancelada, .06 (i), .07).
+- [x] **T3** — `71783dc8`. RN-200.09 pela rota (`PUT …/separacao` + `PUT …/entregar` com o payload de `montarItensEntrega`) e pelo serviço.
+  Arquivo: **21/21**.
+- **Controles** (perl `-0pi` sobre base LF, âncora `grep -cF` = 1, md5 `64cf3e5b…` antes → sabotado → restaurado igual por cópia):
+  (i) `contarOutras` sempre `false` → 11/19 caem (.01 ×3, .02, .05 parte/NULL, .06 ii/iii ×2, serviço, corrida "volta 0: as duas passaram");
+  na T3 os dois RN-200.09 caem na entrega de R2 em XB-01/L1 (200 em vez de 400 — o C468); (ii) sempre `true` → .04 a, b, b' (E1 no lugar);
+  (iii) `!planejada` → .04 b e b'; (iv) `gesto` da separação → as 11 literais E1; (v) `entregarRequisicao` sem `comTravaDaRequisicao` → só a
+  corrida (volta 0, as duas passaram); (vi) a conta dentro do laço → .06 (iii) A antes de B (200) e .06 (ii) (contando 1 em vez de 2).
+- **Corrida RN-200.08** (alternando quem é lançado primeiro, par/ímpar): **separação venceu 5, entrega venceu 5** — em todas as 10 voltas
+  venceu a lançada primeiro (a trava serializa na ordem de chegada); nunca as duas.
+- **Divergência do texto anterior (a Fase 2 manda):** RN-200.06 (ii) — com a passada depois do laço, a E1 cai no **primeiro** item
+  (*"há 4 (já contando 2 desta entrega) … sobra 0, que não cobre a quantidade (1)"*), não no segundo com "já contando 1". As duas formas
+  recusam a mesma entrega; a nova vê o pedido completo dos irmãos. O controle (iii) derruba também o (b'), além do (b) previsto.
+- **Suítes finais (serial, sobre `71783dc8`):** `test:api` **587/587** arquivos; `test:almoxarifado` 44/0; `test:validation` 4/0;
+  `test:safealter` 3/0; `test:sqlite` 16/0. `client/` intocado.
 
 ## Próxima tarefa detalhada
 
