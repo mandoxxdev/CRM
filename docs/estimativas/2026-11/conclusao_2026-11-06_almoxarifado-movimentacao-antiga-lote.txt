@@ -1,0 +1,8 @@
+*Concluído — Almoxarifado: a movimentação por integração respeita o lote*
+_06/11/2026_
+
+3. Movimentação por integração respeita o lote — estimado 2h30 · realizado 2h30
+
+*Total: estimado 2h30 · realizado 2h30*
+
+Quando um sistema de fora lança uma saída citando um lote, o almoxarifado agora dá a mesma resposta da tela Movimentações: lote vencido, bloqueado ou sem saldo é recusado, e lote bom tem a peça baixada daquele lote. Antes o lote era ignorado e o relatório de saldo por lote ficava com a parte "sem lote" negativa.
