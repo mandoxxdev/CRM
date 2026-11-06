@@ -13963,17 +13963,23 @@ A tela tem o mesmo 30 escrito, com um aviso no código apontando para o servidor
 clicar "carregar mais" várias vezes, mas pede um campo de busca na tela e uma busca por texto no servidor — não cabia nas 2h30 junto com o
 cursor. Vira o aviso **C477**. O cursor resolve sozinho: toda entrega devolvível passa a ser alcançável. **Reversível.**
 
-**B1379 (NOVA, da Etapa 205, Fase 5 P1; decisão do agente) — o "Sem lote atribuído" negativo abate o saldo em lote impedido.** Quando a
-entrega tira peças de um lote bloqueado, reprovado ou vencido, ela baixa a linha *Sem lote atribuído* (fica negativa) e o lote continua
-com o saldo cheio (RN-205.10). A conta do lote impedido somava o lote cheio: com L1 10 bloqueado, sem lote −6 e L3 ATIVO 5, ela dizia
-impedido 10 e livre −1 — a aprovação deixava a requisição de 5 sem reserva e a separação recusava os 5 de L3. Agora a conta tira também o
-**negativo líquido** das linhas sem lote: impedido 4, livre 5, reserva e separa 5. **Escolhido:** só o sem lote líquido (a soma das linhas
-sem lote do material, se negativa). Nunca desconta mais que o saldo dos lotes impedidos (só diminui a conta de antes) e nunca deixa o livre
-acima do disponível (a conta não fica negativa) — provado por sorteio de 150 materiais. **Descartado:** limitar o impedido a
-`quantidade_atual − linhas livres` (a sugestão do revisor) — com o físico coerente, ela faz um lote impedido negativo abater o saldo de
-outro lote impedido, o que a RN-205.02 (d) recusa de propósito; e abater também lote elegível negativo (não é saída de lote impedido).
-**Risco aceito:** se o sem lote negativo veio de outra coisa (um legado), a conta trava menos do que devia — no pior caso igual a antes da
-Etapa 205. **Reversível** (um termo em `loteImpedido.js`).
+**B1379 (REESCRITA no 2º fix-round da Etapa 205, Fase 5; decisão do coordenador, reversível) — o "Sem lote atribuído" negativo NÃO abate
+o saldo em lote impedido.** **Este item dizia o contrário:** *"o 'Sem lote atribuído' negativo abate o saldo em lote impedido … Agora a conta
+tira também o negativo líquido das linhas sem lote: impedido 4, livre 5, reserva e separa 5"* (Fase 5 P1, commit 65a19db6). **Estava errado.**
+O negativo sem lote é **anônimo**: ele não diz de qual lote as peças saíram, então abatê-lo de qualquer lote impedido supõe uma origem que
+ninguém gravou. O revisor fresco reproduziu pela rota: Entrada L1 10; a requisição R1 de 6 aprovada; L1 bloqueado; R1 separa e entrega 6
+(sem lote −6, L1 continua 10 — RN-205.10); L1 volta a ATIVO; entra L2 6 e L2 é bloqueado. Fisicamente saem 4 (de L1); as 6 de L2 estão
+bloqueadas. Com o abatimento a conta dizia impedido 0 e livre 10: a requisição de 10 reservava 10, separava 10 e a entrega tirava 10 com o
+livro dizendo **"SAÍDA L1 10"** — as 6 peças bloqueadas de L2 saíram e o registro aponta outro lote. **O certo (escolhido):** a conta volta a
+ser só os lotes impedidos (sem o termo do sem lote): no cenário do revisor, impedido 6, livre 4, a aprovação reserva 4 (parcialmente) e a
+separação de 10 é recusada ("Máximo: 4 … Não entram 6 un"). No cenário que motivou o P1 (L1 10 bloqueado, sem lote −6, L3 ATIVO 5) o livre
+volta a ser −1, tratado como 0: a requisição de 5 fica aguardando estoque e a separação de 5 é recusada — erro do lado **seguro** (menos
+do que o real, nunca mais), registrado como **C484**. **Descartado:** abater o negativo sem lote (o P1) — inseguro pelo cenário acima; e
+continuam descartados o teto `quantidade_atual − linhas livres` (lote impedido negativo abateria outro, RN-205.02 d) e abater lote elegível
+negativo. A causa de fundo — a entrega criar o negativo sem lote ao sair de lote impedido — é o item 7 da fila (C464, 2ª parte), que vai
+recusar essa entrega. Testes: `loteImpedido.api.test.js` RN-205.02 i/j/l e o sorteio de 150 materiais (o modelo não supõe que o negativo é
+de um lote impedido); `loteImpedidoIntegracao.api.test.js` os dois cenários pela rota. **Reversível** (um termo em `loteImpedido.js`).
+
 
 **B1380 (NOVA, da Etapa 205, Fase 5 P2; decisão do agente) — um índice novo nos itens de recebimento, por lote.** A conta do lote impedido
 roda em toda aprovação, separação e linha da fila de separação, sob a trava do material. Ela lia o saldo e a inspeção de cada lote varrendo
@@ -17931,6 +17937,15 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      uma entrega muito antiga, é preciso clicar **"Carregar entregas mais antigas"** até ela aparecer (30 por clique). **O que fazer:** clicar
      até chegar; a entrega aparece com a data, a requisição ou OS e quem retirou. Conserto (se valer): um campo de busca somado ao "carregar
      mais", sem mudar a ordem nem a página (**B1367**) — ~1h30, tela e servidor.
+484. **NOVO (da Etapa 205, 2º fix-round da Fase 5; o comportamento é anterior, desde a Etapa 205) — material com "Sem lote atribuído"
+     negativo fica com o livre menor que o real até um ajuste.** Quando uma entrega tira peças de um lote bloqueado, reprovado ou vencido, a
+     linha *Sem lote atribuído* fica negativa e o lote continua com o saldo cheio (RN-205.10). A conta do lote impedido não sabe de qual lote
+     o negativo saiu (ele é anônimo) e por isso não o desconta: com L1 10 bloqueado, sem lote −6 e L3 ATIVO 5, ela diz que nada está livre
+     (5 reais em L3). **Na tela:** a requisição fica *aguardando estoque* e a separação recusa ("Máximo: 0 … Não entram 9 un em lote
+     bloqueado, reprovado ou vencido"). É erro do lado seguro: o sistema promete menos do que há, nunca mais. **O que fazer:** corrigir o
+     saldo do lote com um ajuste (baixar de L1 as 6 que de fato saíram e zerar o sem lote), e a requisição volta a reservar. **A causa** é a
+     entrega sair de lote impedido; o item 7 da fila (C464, 2ª parte) passa a recusar essa entrega, e o negativo deixa de nascer. Por que
+     não descontar o negativo de um lote impedido: veja **B1379** (abatia, e deixava sair peça bloqueada de outro lote).
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 

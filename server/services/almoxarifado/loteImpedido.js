@@ -12,10 +12,11 @@
  *
  * A conta (B1370 + Fase 2 I1/I2), so em material com `controle_lote = 1` (B1371):
  *   max(0, SOMA_{lotes impedidos} max(0, saldo do lote - em inspecao no lote)
- *          - bloqueada - em terceiros - max(0, em inspecao do material - em inspecao de itens de recebimento com lote do material)
- *          - max(0, -SOMA das linhas sem lote))                                                    (Fase 5 P1, B1379)
- * O sem lote liquido negativo e o que a entrega tirou de lote impedido sem baixar a linha do lote (RN-205.10): sem abater, um material
- * com L1 10 bloqueado, sem lote -6 e L3 ATIVO 5 ficava com impedido 10 e liberado -1 (nao reservava nem separava os 5 de L3).
+ *          - bloqueada - em terceiros - max(0, em inspecao do material - em inspecao de itens de recebimento com lote do material))
+ * O "Sem lote atribuido" negativo (o que a entrega deixa ao sair de lote impedido, RN-205.10) NAO abate o impedido. A Fase 5 P1 (B1379)
+ * abatia e foi desfeita no 2o fix-round: o negativo e anonimo (nao diz de qual lote saiu) — com L1 ATIVO 10, sem lote -6 e L2 BLOQUEADO 6
+ * ele abatia o L2 e deixava sair 10 (as 6 bloqueadas, com o livro dizendo L1). Sem abater, o pior caso e o liberado menor que o real
+ * (recusa segura) ate um ajuste; a causa (a entrega sair de lote impedido) e o item 7 da fila (C464, 2a parte).
  * O que ja esta retido no material (bloqueada, terceiros, a inspecao que nenhum recebimento explica) ja sai do `disponivelSql` e nao sabe
  * o lote: a conta assume que esta DENTRO do lote impedido — nunca desconta duas vezes (Achado 2); no pior caso desconta menos do que o
  * certo (igual a hoje). Arredondado a 1e-6 (`Q.qtdSql`).
@@ -53,12 +54,8 @@ function loteImpedidoSql(m, hojeISO = diaLocal.hojeLocalISO()) {
   const inspecaoSemRecebimento = `MAX(0, COALESCE(${m}.quantidade_em_inspecao,0) - COALESCE((SELECT SUM(lim_ri2.quantidade_em_inspecao)
       FROM recebimentos_material_itens_almoxarifado lim_ri2 JOIN lotes_almoxarifado lim_l2 ON lim_l2.id = lim_ri2.lote_id
       WHERE lim_l2.material_id = ${m}.id AND COALESCE(lim_ri2.quantidade_em_inspecao,0) > 0), 0))`;
-  // Fase 5 (P1, B1379): o "Sem lote atribuido" LIQUIDO negativo e saldo que saiu de lote impedido sem baixar a linha dele (a entrega
-  // de RN-205.10) — abate o impedido. So o sem lote: lote impedido negativo nao abate o outro (RN-205.02 d), elegivel negativo tambem nao.
-  const semLoteNegativo = `MAX(0, -COALESCE((SELECT SUM(lim_n.quantidade) FROM estoque_saldo_almoxarifado lim_n
-      WHERE lim_n.material_id = ${m}.id AND lim_n.lote_id IS NULL), 0))`;
   const conta = `MAX(0, ${soma} - COALESCE(${m}.quantidade_bloqueada,0) - COALESCE(${m}.quantidade_em_terceiros,0)`
-    + ` - ${inspecaoSemRecebimento} - ${semLoteNegativo})`;
+    + ` - ${inspecaoSemRecebimento})`;
   return `(CASE WHEN COALESCE(${m}.controle_lote,0) = 1 THEN ${Q.qtdSql(conta)} ELSE 0 END)`;
 }
 

@@ -181,9 +181,9 @@ process.on('exit', (code) => {
     assert.strictEqual(s.disponivel_material, 10);
   });
 
-  // ── Fase 5 (P1, B1379): o saldo NEGATIVO sem lote (o que a entrega deixa ao sair de lote impedido, RN-205.10) abate o impedido ──
-  // A conta: max(0, conta de antes - max(0, -SOMA das linhas sem lote)). So o sem lote LIQUIDO negativo abate: lote impedido negativo
-  // continua sem abater o outro (RN-205.02 d) e lote elegivel negativo tambem nao. Linhas por SQL, quantidade_atual = soma das linhas.
+  // ── Fase 5 (P1, B1379) DESFEITO no 2o fix-round (C484): o saldo NEGATIVO sem lote (o que a entrega deixa ao sair de lote impedido,
+  // RN-205.10) NAO abate o impedido — o negativo e anonimo, nao diz de qual lote saiu (o cenario l: abatendo, o L2 bloqueado sairia).
+  // Sem abater, o pior caso e o liberado menor que o real (recusa segura). Linhas por SQL, quantidade_atual = soma das linhas.
   const linhasDiretas = async (m, linhas) => {
     let total = 0;
     for (const [codigo, q, st] of linhas) { // eslint-disable-line no-restricted-syntax
@@ -196,19 +196,23 @@ process.on('exit', (code) => {
     }
     await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ? WHERE id = ?', [total, m.id]);
   };
-  await test('[RN-205.02 i, Fase 5 P1] L1 BLOQUEADO 10, sem lote -6, L3 ATIVO 5 -> lote_impedido 4, disponivel_liberado 5 (antes 10 e -1)', async () => {
+  await test('[RN-205.02 i, P1 desfeito] L1 BLOQUEADO 10, sem lote -6, L3 ATIVO 5 -> lote_impedido 10, disponivel_liberado -1 (o lado seguro: nada reserva)', async () => {
     const m = await material(); await linhasDiretas(m, [['L1', 10, 'BLOQUEADO'], [null, -6], ['L3', 5]]);
-    assert.deepStrictEqual(conta(await saldo(m)), { disponivel: 9, lote_impedido: 4, disponivel_liberado: 5 });
+    assert.deepStrictEqual(conta(await saldo(m)), { disponivel: 9, lote_impedido: 10, disponivel_liberado: -1 });
   });
-  await test('[RN-205.02 j, Fase 5 P1] o negativo sem lote maior que o impedido: L1 BLOQUEADO 3, sem lote -6, L3 ATIVO 5 -> 0 (o liberado nunca passa do disponivel)', async () => {
+  await test('[RN-205.02 j, P1 desfeito] o negativo sem lote maior que o impedido: L1 BLOQUEADO 3, sem lote -6, L3 ATIVO 5 -> impedido 3 (nada abate)', async () => {
     const m = await material(); await linhasDiretas(m, [['L1', 3, 'BLOQUEADO'], [null, -6], ['L3', 5]]);
-    assert.deepStrictEqual(conta(await saldo(m)), { disponivel: 2, lote_impedido: 0, disponivel_liberado: 2 });
+    assert.deepStrictEqual(conta(await saldo(m)), { disponivel: 2, lote_impedido: 3, disponivel_liberado: -1 });
   });
-  await test('[RN-205.02 k, Fase 5 P1] sem lote POSITIVO (legado) e livre e nao muda a conta: L1 BLOQUEADO 6, sem lote 2, L3 ATIVO 4 -> 6', async () => {
+  await test('[RN-205.02 k, P1 desfeito] sem lote POSITIVO (legado) e livre e nao muda a conta: L1 BLOQUEADO 6, sem lote 2, L3 ATIVO 4 -> 6', async () => {
     const m = await material(); await linhasDiretas(m, [['L1', 6, 'BLOQUEADO'], [null, 2], ['L3', 4]]);
     assert.deepStrictEqual(conta(await saldo(m)), { disponivel: 12, lote_impedido: 6, disponivel_liberado: 6 });
   });
-  await test('[Fase 5 P1, sorteio] 150 materiais sorteados: o impedido e o modelo (a conta antiga menos o sem lote liquido negativo), nunca passa do saldo dos lotes impedidos nem deixa o liberado acima do disponivel', async () => {
+  await test('[RN-205.02 l, P1 desfeito, cenario do revisor] L1 ATIVO 10, sem lote -6 (saiu de L1), L2 BLOQUEADO 6 -> impedido 6, liberado 4 (abatendo: 0 e 10, as 6 de L2 sairiam)', async () => {
+    const m = await material(); await linhasDiretas(m, [['L1', 10], [null, -6], ['L2', 6, 'BLOQUEADO']]);
+    assert.deepStrictEqual(conta(await saldo(m)), { disponivel: 10, lote_impedido: 6, disponivel_liberado: 4 });
+  });
+  await test('[Fase 5, sorteio] 150 materiais sorteados: o impedido e o modelo (so os lotes impedidos, o sem lote negativo NAO entra: e anonimo), nunca passa do saldo dos lotes impedidos nem deixa o liberado acima do disponivel', async () => {
     let semente = 205;
     const rnd = () => { semente = (semente * 1103515245 + 12345) % 2147483648; return semente / 2147483648; };
     const STS = ['ATIVO', 'ATIVO', 'BLOQUEADO', 'REPROVADO'];
@@ -224,16 +228,16 @@ process.on('exit', (code) => {
       const imp = linhas.filter(([c, , st]) => c && st !== 'ATIVO');
       const somaImp = imp.reduce((a, [, q]) => a + Math.max(0, q), 0);
       const semLote = linhas.filter(([c]) => !c).reduce((a, [, q]) => a + q, 0);
-      const antiga = Math.max(0, somaImp - bloq);
-      const modelo = Math.max(0, antiga - Math.max(0, -semLote));
-      if (modelo < antiga) mordeu++;
+      // o modelo nao supoe que o negativo sem lote pertence a algum lote impedido (2o fix-round: o P1 supunha e era inseguro)
+      const modelo = Math.max(0, somaImp - bloq);
+      if (semLote < 0 && modelo > 0) mordeu++;
       const s = await saldo(m); // eslint-disable-line no-await-in-loop
       const ctx = JSON.stringify({ linhas, bloq, s: conta(s) });
       assert.strictEqual(s.lote_impedido, modelo, ctx);
       assert.ok(s.lote_impedido >= 0 && s.lote_impedido <= somaImp + 1e-9, ctx);
       assert.ok(s.disponivel_liberado <= s.disponivel + 1e-9, ctx);
     }
-    assert.ok(mordeu >= 10, `premissa: o sem lote negativo mordeu em ${mordeu} sorteios`);
+    assert.ok(mordeu >= 10, `premissa: sem lote negativo com lote impedido em ${mordeu} sorteios (onde o P1 abatia)`);
   });
 
   // ── Fase 5 (P2, B1380): o plano de consulta usa indice em todas as tabelas — sem SCAN (antes: SCAN lim_s, lim_ri e lim_ri2, a
