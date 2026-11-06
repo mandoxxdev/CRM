@@ -310,11 +310,23 @@ provar a recusa; o fluxo recusa → entregar a menos → PARCIALMENTE_ATENDIDA �
 
 ## Execução
 
-- [ ] F2 — revisor fresco do plano (antes da T0)
-- [ ] T0 — SDD: os seis testes que fixam o de hoje viram a regra nova (quatro vermelhos, dois do C484 por SQL verdes)
-- [ ] T1 — `conferirAutomaticoPeloLote` + `fraseEntregaLoteImpedido` na prévia (RN-206.01 a .10, .12) + `test:api` inteiro
-- [ ] T2 — detalhe e fila descontam o lote impedido do entregável (RN-206.11)
-- [ ] T3 — integração pela rota e pelo serviço
+- [x] F2 — revisor fresco do plano (antes da T0) — `7159f344`
+- [x] T0 — SDD: os seis testes que fixam o de hoje viram a regra nova (quatro vermelhos, dois do C484 por SQL verdes) — `df1de701`.
+  Vermelhos de propósito: `entregaAutomaticaPeloLote` os dois RN-197.03 (bloqueado, vencido) e `loteImpedidoIntegracao` RN-205.10 → RN-206.06 e
+  a segunda rodada → RN-206.11 (estes dois só ficam verdes na T2: o detalhe). A segunda rodada foi **refeita** com entrega parcial antes do bloqueio
+  e L1 6 + L2 4 — com o lote inteiro bloqueado o entregável é 0 e a segunda rodada nem existe (não testaria `caixa + tetoSeparavel`).
+- [x] T1 — `conferirAutomaticoPeloLote` + `fraseEntregaLoteImpedido` na prévia (RN-206.01 a .10, .12) + `test:api` inteiro — `ccbce184`.
+  Controles (i)–(iv) e o RN-206.09b com `new Map()` caíram (ver o commit). **Divergências:** (1) a frase ganhou o 6º argumento opcional
+  `nadaSai` (omitido: falta = quantidade do item) — com irmãos a falta total pode igualar o item sem que nada deixe de sair; a conferência passa
+  `falta = pedido total do material`. (2) Com a fórmula da Fase 2 o `new Map()` não deixa a RN-206.09b (b) passar com 200: ele lê a guarda
+  inteira e **recusa a mais** (falta 2 em vez de 1) — o controle cai pela literal; o 200 com −1 aparece tirando o `pedido_L` (controle ii).
+  (3) RN-206.10 b por **espião**: desde a Etapa 94 a alçada só reavalia sem nada separado nem entregue, e sem caixa o E1 já recusa — pela
+  entrega ela nunca grava; o espião prova a ordem (não é chamada). (4) Quebra fora da lista: `[Fase 5 M2]` (Fase 0, acima). (5) RN-206.06
+  ficou em `loteImpedidoIntegracao` (T0), não no arquivo novo.
+- [x] T2 — detalhe e fila descontam o lote impedido do entregável (RN-206.11) — `62c3dc79`. O `teto` saiu do `normalizarItem` (sem uso).
+- [x] T3 — integração pela rota e pelo serviço — `a286ba46`. Revisão "passaria quebrado?": inspeção no saldo do impedido e falta do item
+  no lugar da do material passavam verdes → RN-206.01b e RN-206.08b. Suíte (uma vez cada, serial): `test:api` 598/598 arquivos;
+  `test:almoxarifado` 44/0; `test:validation` 4/0; `test:safealter` 3/0; `test:sqlite` 16/0.
 - [ ] Fase 5 — revisão adversarial
 - [ ] T4 — fechamento (`fechar-etapa`) + suíte completa (os cinco comandos) + estimado × gasto do item 7
 
