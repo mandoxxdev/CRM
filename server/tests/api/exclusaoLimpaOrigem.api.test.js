@@ -196,6 +196,7 @@ process.on('exit', (code) => {
     try {
       const rec = await como('ADMIN').del(`${API}/requisicoes/${r1.R}`, { justificativa: 'e203 destino bloqueado' });
       assert.strictEqual(rec.status, 400, JSON.stringify(rec.body));
+      assert.strictEqual(rec.body.error, `${m.nome}: Localização YXP-01 está bloqueada`, "a origem bloqueada cai na padrao, tambem bloqueada");
       assert.deepStrictEqual(await itemDe(r1.ids[0]), antes, '400 nao limpa (tudo ou nada)');
       assert.deepStrictEqual([Number((await linha(r1.R)).ativo), await entradasDaReq(r1.R)], [1, []], 'nada estornado, ativa');
     } finally {
