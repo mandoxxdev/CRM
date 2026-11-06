@@ -197,8 +197,8 @@ process.on('exit', (code) => {
     assert.strictEqual(Number(mat.q || 0), 0, 'a reserva saiu com as fatias');
   });
 
-  // ── RN-197.03: lote nao elegivel nunca; o resto sem lote ──────────────────────────────────────────────────────────────────────
-  const naoElegivel = async (tornar) => {
+  // ── RN-197.03: lote nao elegivel nunca; o resto sem lote (Etapa 206: o resto que iria NEGATIVO recusa) ──────────────────────────────────────────────────────────────────────
+  const naoElegivel = async (tornar, motivoEsperado) => {
     const m = await material();
     await entrar(m, B01.id, 2, 'L1'); await entrar(m, P01.id, 3, 'L2');
     // Etapa 205 (RN-205.08): com o lote ja impedido a separacao de 4 recusa (so 2 podem sair). O automatico da entrega so encontra lote
@@ -207,15 +207,27 @@ process.on('exit', (code) => {
     const { R, ids } = await reqDireta([[m.id, 4]]);
     await separar(R, [{ item_id: ids[0], quantidade_separada: 4 }]);
     await tornar(m);
-    await entregar(R, [{ item_id: ids[0], quantidade_atendida: 4 }]);
-    assert.deepStrictEqual(await livro(R, m), [['SAIDA', null, 'L1', 2], ['SAIDA', null, null, 2]]);
-    assert.deepStrictEqual(await retrato(m), { linhas: ['ZP-01/-=-2', 'ZP-01/L2=3'], fisico: 1 });
+    // Etapa 206 (RN-206.01/03, B1383): a entrega que tiraria do lote impedido RECUSA antes de baixar — antes saia L1 2 + sem lote 2
+    // (a linha sem lote ficava -2 e L2 continuava 3: o C484). "Lote nao elegivel nunca sai" continua provado: L2 intacto.
+    const antes = await retrato(m);
+    assert.deepStrictEqual(antes, { linhas: ['ZB-01/L1=2', 'ZP-01/L2=3'], fisico: 5 }, 'premissa');
+    const l2 = await dbGet(db, 'SELECT codigo, status, data_validade FROM lotes_almoxarifado WHERE id = ?', [await loteId(m, 'L2')]);
+    const r = await entregar(R, [{ item_id: ids[0], quantidade_atendida: 4 }], 400);
+    assert.strictEqual(r.body.error, requisitionService.fraseEntregaLoteImpedido(m.nome, 4, 'PC', 2,
+      [{ codigo: 'L2', status: l2.status, data_validade: l2.data_validade, quantidade: 3 }]));
+    assert.ok(r.body.error.includes(`L2 (${motivoEsperado}, 3 PC)`), r.body.error);
+    assert.ok(r.body.error.includes('faltam 2 PC') && r.body.error.includes('entregue 2 PC a menos'), r.body.error);
+    assert.deepStrictEqual(await livro(R, m), [], 'nada baixado');
+    assert.deepStrictEqual(await retrato(m), antes);
+    assert.strictEqual(await entregue(ids[0]), 0);
   };
-  await test('[RN-197.03] L1 2 elegivel, L2 3 BLOQUEADO, automatico 4 -> SAIDA L1 2 + SAIDA sem lote 2; L2 intacto; sem lote -2 na padrao; 200', async () => {
-    await naoElegivel(async (m) => dbRun(db, "UPDATE lotes_almoxarifado SET status = 'BLOQUEADO' WHERE id = ?", [await loteId(m, 'L2')]));
+  await test('[RN-197.03 -> RN-206.01] L1 2 elegivel, L2 3 BLOQUEADO, automatico 4 -> 400 nomeando L2 (bloqueado, 3 PC), nada baixado, L2 intacto, nenhuma linha sem lote', async () => {
+    await naoElegivel(async (m) => dbRun(db, "UPDATE lotes_almoxarifado SET status = 'BLOQUEADO' WHERE id = ?", [await loteId(m, 'L2')]),
+      'bloqueado');
   });
-  await test('[RN-197.03] o mesmo com L2 VENCIDO sem liberacao (validade de 3 dias atras)', async () => {
-    await naoElegivel(async (m) => { await validade(m, 'L1', dia(30)); await validade(m, 'L2', dia(-3)); });
+  await test('[RN-197.03 -> RN-206.03 a] o mesmo com L2 VENCIDO sem liberacao (validade de 3 dias atras) -> "vencido em DD/MM/AAAA"', async () => {
+    const [a, mm, d] = dia(-3).split('-');
+    await naoElegivel(async (m) => { await validade(m, 'L1', dia(30)); await validade(m, 'L2', dia(-3)); }, `vencido em ${d}/${mm}/${a}`);
   });
   await test('[RN-197.03, cenario 2] L2 vencido COM liberacao e L1 valido -> L2 sai primeiro (vence antes)', async () => {
     const m = await material();

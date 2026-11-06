@@ -1,6 +1,6 @@
 /**
  * Etapa 205 (T3) — integracao: o lote impedido do comeco ao fim, pela ROTA e pelo SERVICO, com os mesmos numeros; e a entrega
- * inalterada (RN-205.10, fixada de proposito para o item 7 encontra-la vermelha).
+ * (RN-205.10 — fixada na 205 para o item 7; desde a Etapa 206 a entrega recusa o lote impedido, RN-206.06/11).
  *
  * Fluxo: Entrada v2 em L1 (4) e L2 (6) -> L2 BLOQUEADO -> requisicao de 10 -> aprovar (reserva 4, PARCIALMENTE_RESERVADA) -> fila
  * (separavel 4) -> detalhe (quantidade_separavel 4) -> separar 5 (400, a literal com "Nao entram 6 un") -> separar 4 (200) -> entregar 4
@@ -152,56 +152,72 @@ const MSG_5 = (nome) => `${nome}: não é possível separar 5 un. Máximo: 4 (pe
     assert.strictEqual(await st(R), 'PARCIALMENTE_ATENDIDA');
   });
 
-  // ── RN-205.10: a entrega nao muda (fixada para o item 7) ───────────────────────────────────────────────────────────────────────
-  await test('[RN-205.10] R1 reserva 6, L1 (10) bloqueado depois: separa 6 (a propria), o entregavel do detalhe e o de hoje e a entrega de 6 sai SEM lote (L1 10, sem lote -6)', async () => {
+  // ── RN-205.10 -> RN-206.06/11 (Etapa 206): a entrega que tiraria do lote impedido recusa, e o detalhe ja nao a promete ──────────
+  // Ate a 205 estes dois cenarios fixavam a entrega de hoje (sai sem lote, -6 e -10) para o item 7 encontra-la vermelha. Desde a 206 a
+  // entrega recusa antes de baixar (B1383) e o entregavel do detalhe desconta o lote impedido (B1390).
+  await test('[RN-205.10 -> RN-206.06] R1 reserva 6, L1 (10) bloqueado depois: separa 6, o detalhe entrega 0 e a entrega de 6 recusa nomeando L1 (nada sai, a reserva fica); L1 ATIVO -> a mesma entrega sai de L1', async () => {
     const m = await material(); await entrar(m, 10, 'L1');
     const { R, item } = await criar(m, 6);
     assert.strictEqual((await ok(como('ADMIN').put(`${API}/requisicoes/${R}/aprovar`, {}))).body.status, 'TOTALMENTE_RESERVADA');
     await statusRota(m, 'L1', 'BLOQUEADO');
     await ok(como('ALMOX').put(`${API}/requisicoes/${R}/separacao`, { itens_separados: [{ item_id: item, quantidade_separada: 6 }] }));
+    const r6 = await como('ALMOX').put(`${API}/requisicoes/${R}/entregar`, { itens_atendidos: [{ item_id: item, quantidade_atendida: 6 }] });
+    assert.strictEqual(r6.status, 400, JSON.stringify(r6.body));
+    assert.strictEqual(r6.body.error, requisitionService.fraseEntregaLoteImpedido(m.nome, 6, 'un', 6,
+      [{ codigo: 'L1', status: 'BLOQUEADO', data_validade: null, quantidade: 10 }]));
+    assert.ok(r6.body.error.includes('L1 (bloqueado, 10 un)') && r6.body.error.includes('faltam 6 un'), r6.body.error);
+    assert.deepStrictEqual(await livro(R, m), [], 'nada baixado');
+    assert.deepStrictEqual(await linhas(m), ['L1=10'], 'nenhuma linha sem lote');
+    assert.deepStrictEqual(await reservas(R), [[6, 'ATIVA']], 'a reserva continua');
+    // RN-206.11 (T2): o detalhe nao promete o que a porta recusa (vermelho esperado entre a T1 e a T2)
     const det = (await ok(como('ADMIN').get(`${API}/requisicoes/${R}`))).body.itens[0];
-    // o entregavel com o teto de hoje: o mesmo item com lote_impedido 0 pela mesma normalizarItem
-    const cru = await dbGet(db, `SELECT ir.*, 0 as caixa_sem_reserva_outros, 0 as motor_permite_negativo, 1 as material_ativo,
-        0 as material_critico, ? as saldo_atual, 6 as quantidade_reservada_item FROM itens_requisicao_almoxarifado ir WHERE ir.id = ?`,
-    [det.saldo_atual, item]);
-    const hoje = requisitionService.normalizarItem({ ...cru, lote_impedido: 0 });
-    assert.strictEqual(det.quantidade_entregavel, hoje.quantidade_entregavel, JSON.stringify(det));
-    assert.strictEqual(det.saldo_entregavel, hoje.saldo_entregavel);
-    assert.strictEqual(det.quantidade_entregavel, 6, 'premissa do item 7: o detalhe promete entregar 6');
+    assert.strictEqual(det.quantidade_entregavel, 0, JSON.stringify(det));
+    assert.strictEqual(det.saldo_entregavel, 0);
+    await statusRota(m, 'L1', 'ATIVO');
     await ok(como('ALMOX').put(`${API}/requisicoes/${R}/entregar`, { itens_atendidos: [{ item_id: item, quantidade_atendida: 6 }] }));
-    assert.deepStrictEqual(await livro(R, m), [['SAIDA', null, 6]], 'a parte que nenhum lote elegivel cobre sai sem lote (B1323)');
-    assert.deepStrictEqual(await linhas(m), ['-=-6', 'L1=10'], '"Sem lote atribuido" -6 — o defeito que o item 7 conserta');
+    assert.deepStrictEqual(await livro(R, m), [['SAIDA', 'L1', 6]]);
+    assert.deepStrictEqual(await linhas(m), ['L1=4']);
   });
 
-  // A segunda rodada e o unico lugar em que o `teto` do normalizarItem limita a entrega (maxEntregar e saldo_entregavel): trocar o teto
-  // inteiro pelo separavel (com o lote impedido) mudaria a entrega — o ponto de atencao do plano. Revisao "passaria quebrado?": sem
-  // este cenario a sabotagem passava verde.
-  await test('[RN-205.10, segunda rodada] R1 de 10 com reserva 6, L1 10 bloqueado, separa 6, entrega 2: o detalhe promete 8 (caixa 4 + teto 4, o de hoje) e a entrega de 8 sai sem lote', async () => {
+  // A segunda rodada e o unico lugar em que o teto do normalizarItem limita a entrega (maxEntregar e saldo_entregavel). Desde a 206 o
+  // teto dela e o SEPARAVEL (com o lote impedido): R de 10, reserva 6, L1 6 + L2 4, separa 6, entrega 2 (de L1, antes do bloqueio), L2
+  // BLOQUEADO -> caixa 4, tetoSeparavel 0: o detalhe promete 4 (com o teto de hoje prometeria 8 = caixa 4 + teto 4).
+  await test('[RN-205.10 segunda rodada -> RN-206.11] R de 10 com reserva 6, entrega 2 antes, L2 (4) bloqueado: o detalhe promete 4 (caixa + tetoSeparavel), a entrega de 8 recusa "faltam 4" e a de 4 sai de L1', async () => {
     const m = await material(); await entrar(m, 6, 'L1');
     const { R, item } = await criar(m, 10);
     assert.strictEqual((await ok(como('ADMIN').put(`${API}/requisicoes/${R}/aprovar`, {}))).body.status, 'PARCIALMENTE_RESERVADA');
-    await entrar(m, 4, 'L1'); await statusRota(m, 'L1', 'BLOQUEADO');
+    await entrar(m, 4, 'L2');
     await ok(como('ALMOX').put(`${API}/requisicoes/${R}/separacao`, { itens_separados: [{ item_id: item, quantidade_separada: 6 }] }));
     await ok(como('ALMOX').put(`${API}/requisicoes/${R}/entregar`, { itens_atendidos: [{ item_id: item, quantidade_atendida: 2 }] }));
+    assert.deepStrictEqual(await livro(R, m), [['SAIDA', 'L1', 2]], 'premissa: a primeira entrega saiu de L1');
+    await statusRota(m, 'L2', 'BLOQUEADO');
+    const r8 = await como('ALMOX').put(`${API}/requisicoes/${R}/entregar`, { itens_atendidos: [{ item_id: item, quantidade_atendida: 8 }] });
+    assert.strictEqual(r8.status, 400, JSON.stringify(r8.body));
+    assert.strictEqual(r8.body.error, requisitionService.fraseEntregaLoteImpedido(m.nome, 8, 'un', 4,
+      [{ codigo: 'L2', status: 'BLOQUEADO', data_validade: null, quantidade: 4 }]));
+    // RN-206.11 (T2): vermelho esperado entre a T1 e a T2
     const det = (await ok(como('ADMIN').get(`${API}/requisicoes/${R}`))).body.itens[0];
-    assert.strictEqual(det.saldo_entregavel, 8, JSON.stringify(det));
-    assert.strictEqual(det.quantidade_entregavel, 8);
+    assert.strictEqual(det.saldo_entregavel, 4, JSON.stringify(det));
+    assert.strictEqual(det.quantidade_entregavel, 4);
     assert.strictEqual(det.saldo_separavel, 0, 'o separavel desconta o lote impedido (a parte propria esta na caixa)');
-    await ok(como('ALMOX').put(`${API}/requisicoes/${R}/entregar`, { itens_atendidos: [{ item_id: item, quantidade_atendida: 8 }] }));
-    assert.deepStrictEqual(await livro(R, m), [['SAIDA', null, 2], ['SAIDA', null, 4], ['SAIDA', null, 4]]);
-    assert.deepStrictEqual(await linhas(m), ['-=-10', 'L1=10']);
+    await ok(como('ALMOX').put(`${API}/requisicoes/${R}/entregar`, { itens_atendidos: [{ item_id: item, quantidade_atendida: 4 }] }));
+    assert.deepStrictEqual(await livro(R, m), [['SAIDA', 'L1', 2], ['SAIDA', 'L1', 4]]);
+    assert.deepStrictEqual(await linhas(m), ['L2=4'], 'nenhuma linha sem lote');
   });
 
-  // Fase 5, 2o fix-round (desfaz o P1, B1379 reescrita, C484): o "Sem lote atribuido" negativo que a entrega gera (RN-205.10) NAO abate
-  // o lote impedido — ele e anonimo, nao diz de qual lote saiu. O P1 abatia; o cenario do revisor abaixo mostra por que era inseguro.
-  // Sem abater, o cenario original do P1 falha do lado SEGURO: o liberado fica menor que o real (-1, tratado como 0) e nada sai.
-  await test('[Fase 5 P1 desfeito] R1 entrega 6 de L1 bloqueado (sem lote -6); entra L3 ATIVO 5: disponivel 9, impedido 10, liberado -1 -> R2 de 5 AGUARDANDO_ESTOQUE sem reserva e a separacao de 5 recusada (lado seguro, C484)', async () => {
+  // Fase 5, 2o fix-round (desfaz o P1, B1379 reescrita, C484): o "Sem lote atribuido" negativo NAO abate o lote impedido — ele e anonimo,
+  // nao diz de qual lote saiu. O P1 abatia; o cenario do revisor abaixo mostra por que era inseguro. Sem abater, o cenario original do P1
+  // falha do lado SEGURO: o liberado fica menor que o real (-1, tratado como 0) e nada sai.
+  // Etapa 206 (Fase 2 item 3): a entrega nao gera mais esse negativo — os dois cenarios o montam por SQL (o legado continua no banco, C487).
+  const negativoLegado = async (m, q) => {
+    await dbRun(db, 'INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, lote_id, quantidade) VALUES (?, ?, NULL, ?)',
+      [m.id, P01.id, -q]);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = quantidade_atual - ? WHERE id = ?', [q, m.id]);
+  };
+  await test('[Fase 5 P1 desfeito] L1 BLOQUEADO 10 + sem lote -6 (legado, por SQL); entra L3 ATIVO 5: disponivel 9, impedido 10, liberado -1 -> R2 de 5 AGUARDANDO_ESTOQUE sem reserva e a separacao de 5 recusada (lado seguro, C484)', async () => {
     const m = await material(); await entrar(m, 10, 'L1');
-    const a = await criar(m, 6);
-    await ok(como('ADMIN').put(`${API}/requisicoes/${a.R}/aprovar`, {}));
+    await negativoLegado(m, 6);
     await statusRota(m, 'L1', 'BLOQUEADO');
-    await ok(como('ALMOX').put(`${API}/requisicoes/${a.R}/separacao`, { itens_separados: [{ item_id: a.item, quantidade_separada: 6 }] }));
-    await ok(como('ALMOX').put(`${API}/requisicoes/${a.R}/entregar`, { itens_atendidos: [{ item_id: a.item, quantidade_atendida: 6 }] }));
     await entrar(m, 5, 'L3');
     assert.deepStrictEqual(await linhas(m), ['-=-6', 'L1=10', 'L3=5'], 'premissa: o sem lote negativo da entrega');
     const b = await criar(m, 5);
@@ -222,12 +238,7 @@ const MSG_5 = (nome) => `${nome}: não é possível separar 5 un. Máximo: 4 (pe
   // as 6 de L2 bloqueadas com o livro dizendo "SAIDA L1 10". Sem abater: liberado 4, PARCIALMENTE 4, a separacao de 10 recusada.
   await test('[Fase 5 P1 desfeito, cenario do revisor] sem lote -6 de L1 (de volta a ATIVO 10) e L2 BLOQUEADO 6: R2 de 10 -> liberado 4, PARCIALMENTE_RESERVADA 4, separar 10 recusa "Maximo: 4 ... Nao entram 6 un"', async () => {
     const m = await material(); await entrar(m, 10, 'L1');
-    const a = await criar(m, 6);
-    await ok(como('ADMIN').put(`${API}/requisicoes/${a.R}/aprovar`, {}));
-    await statusRota(m, 'L1', 'BLOQUEADO');
-    await ok(como('ALMOX').put(`${API}/requisicoes/${a.R}/separacao`, { itens_separados: [{ item_id: a.item, quantidade_separada: 6 }] }));
-    await ok(como('ALMOX').put(`${API}/requisicoes/${a.R}/entregar`, { itens_atendidos: [{ item_id: a.item, quantidade_atendida: 6 }] }));
-    await statusRota(m, 'L1', 'ATIVO');
+    await negativoLegado(m, 6);
     await entrar(m, 6, 'L2'); await statusRota(m, 'L2', 'BLOQUEADO');
     assert.deepStrictEqual(await linhas(m), ['-=-6', 'L1=10', 'L2=6'], 'premissa: as linhas do revisor');
     const b = await criar(m, 10);
