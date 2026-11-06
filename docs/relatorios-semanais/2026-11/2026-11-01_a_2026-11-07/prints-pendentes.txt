@@ -1,4 +1,4 @@
-Prints pendentes (o Chrome respondeu, mas o sistema em http://localhost:3000 estava na tela de login - sem sessao aberta)
+Prints pendentes (de manha o sistema em http://localhost:3000 estava na tela de login; na atualizacao, havia dois navegadores ligados e nenhum escolhido para esta sessao - os prints nao foram tirados)
 
 Sem print, estes itens foram para "O que mudou - e por que importa". Com os prints, voltam para "O que voce ja pode ver na tela".
 
@@ -23,3 +23,15 @@ Sem print, estes itens foram para "O que mudou - e por que importa". Com os prin
 5. (opcional) prints/materiais-clientes-virgula.png
    Tela: Almoxarifado -> Materiais de clientes
    Precisa aparecer: uma quantidade com casa decimal mostrada com virgula (ex.: 12,5).
+
+6. prints/separacao-lote-impedido.png
+   Tela: Almoxarifado -> Requisicoes (almox.) -> requisicao aprovada de material com controle por lote e um lote bloqueado -> Iniciar Separacao
+   Precisa aparecer: a linha do item com "Saldo: ... · Em lote bloqueado/reprovado/vencido: 6 un".
+
+7. prints/entrega-sobra-desta.png
+   Tela: Almoxarifado -> Requisicoes (almox.) -> requisicao com duas pecas do mesmo material separadas de locais diferentes -> entrega
+   Precisa aparecer: a lista "Sai de" com um local como "A (sobra 1 de 3; 2 desta)".
+
+8. prints/devolucao-entregas-antigas.png
+   Tela: Almoxarifado -> Devolucoes -> Nova Devolucao -> material com mais de 30 entregas
+   Precisa aparecer: o campo "Entrega de origem" e, embaixo, o botao "Carregar entregas mais antigas".

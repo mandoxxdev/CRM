@@ -26,9 +26,10 @@
   <p class="sub">Semana de 01/11 a 07/11/2026 · CRM GMP Industriais</p>
 
   <p class="resumo">No Almoxarifado, a data de validade de um lote passou a poder ser corrigida, e a nota fiscal avisa quando a data
-  dela não bate com a do lote. Na separação e na entrega, o material que já está separado para uma requisição não é mais levado por
-  outra, e a tela mostra quanto sobra em cada local; no Compras, a tela Materiais ficou igual à do Almoxarifado. No total,
-  38h45 de trabalho.</p>
+  dela não bate com a do lote; no Compras, a tela Materiais ficou igual à do Almoxarifado. Por baixo, o material separado para uma
+  requisição (ou para outra peça da mesma requisição) não é mais levado por engano, cada peça sai do lugar onde foi separada, e peça de
+  lote bloqueado, reprovado ou vencido não é mais aprovada, separada nem entregue. No total, 64h15 de trabalho, quase todo na
+  separação e na entrega do Almoxarifado.</p>
 
   <h2>O que mudou — e por que importa</h2>
   <p>Cada item abaixo conta o problema, o que foi feito e o que isso evita no dia a dia.</p>
@@ -47,26 +48,43 @@
   </div>
 
   <div class="item">
-    <h3>O que já está separado para uma requisição não vai para outra</h3>
+    <h3>O sistema não deixa sair peça de lote bloqueado, reprovado ou vencido</h3>
+    <p><span class="rotulo">O problema:</span> o lote estava bloqueado pela qualidade, mas a requisição era aprovada como se a peça
+    estivesse lá para sair. A separação aceitava separar dele, e a entrega passava e deixava o saldo "sem lote" negativo. Um sistema de
+    fora também conseguia lançar saída de lote vencido.</p>
+    <p><span class="rotulo">O que foi feito:</span> a aprovação, a separação e a entrega passaram a contar só o que está em lote que pode
+    sair. A janela de separação mostra, ao lado do saldo, quanto está "Em lote bloqueado/reprovado/vencido". Quando só sobra lote
+    impedido, a entrega é recusada antes de baixar qualquer coisa, dizendo qual lote, quanto falta e o que fazer (liberar o lote ou
+    entregar menos). A saída lançada por outro sistema tem a mesma resposta da tela Movimentações.</p>
+    <p><span class="rotulo">O que isso evita:</span> peça bloqueada ou vencida indo para a produção, e saldo por lote que não fecha.</p>
+  </div>
+
+  <div class="item">
+    <h3>O que já está separado não vai para outra requisição — nem para outra peça da mesma</h3>
     <p><span class="rotulo">O problema:</span> havia 6 peças num local. Uma requisição separava 4 de lá. Outra requisição também
-    conseguia separar 4 do mesmo local, ou escolher esse local na entrega. O erro só aparecia depois, na hora de entregar, com uma
+    conseguia separar 4 do mesmo local, ou escolher esse local na entrega. O mesmo acontecia dentro de uma requisição só: a entrega de
+    uma peça, com o local escolhido à mão, levava o que tinha sido separado para outra peça. O erro só aparecia depois, com uma
     mensagem que ninguém entendia. É como dois caixas vendendo o último item da prateleira ao mesmo tempo.</p>
     <p><span class="rotulo">O que foi feito:</span> a separação e a entrega passaram a contar o que já está separado para as outras
-    requisições. Se não cabe, a recusa vem na hora, dizendo quanto há, quanto já está separado e para qual requisição. E a lista
-    "Sai de" já mostra a conta antes de escolher, por exemplo: "XB-01 — lote L1 (sobra 2 de 6; 4 para outras)".</p>
-    <p><span class="rotulo">O que isso evita:</span> uma requisição levar a peça da outra, e o almoxarife descobrir o problema só no
+    requisições e para as outras peças da mesma. Se não cabe, a recusa vem na hora, dizendo quanto está separado e quanto sobra. E a
+    lista "Sai de" já mostra a conta antes de escolher, por exemplo: "XB-01 — lote L1 (sobra 2 de 6; 4 para outras)" na separação, e
+    "A (sobra 1 de 3; 2 desta)" na entrega.</p>
+    <p><span class="rotulo">O que isso evita:</span> uma peça levar o material da outra, e o almoxarife descobrir o problema só no
     balcão.</p>
   </div>
 
   <div class="item">
-    <h3>Separar em duas vezes: cada parte sai do lugar certo</h3>
+    <h3>Cada peça da requisição sai do lugar onde foi separada</h3>
     <p><span class="rotulo">O problema:</span> o almoxarife separava 3 peças de um local e, mais tarde, as outras 3 de outro. O
     sistema esquecia de onde vieram as 3 primeiras e anotava uma troca que ninguém fez. Em material com lote, a saída não baixava do
-    lote e o saldo "sem lote" ficava negativo.</p>
-    <p><span class="rotulo">O que foi feito:</span> o sistema passou a lembrar quanto foi separado de cada lugar. Na entrega, a primeira
-    parte sai de onde foi separada. O resto, em material com lote, sai do lote que vence primeiro, sem pegar lote vencido, bloqueado
-    ou separado para outra requisição.</p>
-    <p><span class="rotulo">O que isso evita:</span> estoque por lote que não bate e trocas falsas no histórico da requisição.</p>
+    lote e o saldo "sem lote" ficava negativo. Em material sem lote, a entrega automática de uma peça podia esvaziar a prateleira que
+    tinha sido separada para outra.</p>
+    <p><span class="rotulo">O que foi feito:</span> o sistema passou a lembrar quanto foi separado de cada lugar. Na entrega, cada parte
+    sai de onde foi separada. O resto sai de outros lugares, sem pegar o que foi separado para outra peça e, em material com lote, do
+    lote que vence primeiro. Quando a saída é dividida, o histórico mostra uma saída por local, e excluir a requisição devolve cada
+    pedaço ao local de onde saiu.</p>
+    <p><span class="rotulo">O que isso evita:</span> estoque por lugar e por lote que não bate, e trocas falsas no histórico da
+    requisição.</p>
   </div>
 
   <div class="item">
@@ -79,18 +97,11 @@
     <p><span class="rotulo">O que isso evita:</span> o comprador ter de aprender outra tela para a mesma coisa.</p>
   </div>
 
-  <div class="item">
-    <h3>Saída lançada por outro sistema respeita o lote</h3>
-    <p><span class="rotulo">O problema:</span> quando um sistema de fora lançava uma saída dizendo "tire do lote LV", o lote era
-    ignorado. Saía até de lote vencido, e o relatório de saldo por lote ficava com um "sem lote" negativo.</p>
-    <p><span class="rotulo">O que foi feito:</span> essa saída passou a ter a mesma resposta da tela Movimentações: lote vencido,
-    bloqueado ou sem saldo é recusado, e lote bom tem a peça baixada dele.</p>
-    <p><span class="rotulo">O que isso evita:</span> material vencido saindo sem ninguém ver e saldo por lote que não fecha.</p>
-  </div>
-
-  <p>Também foram feitos: na separação e na entrega, trocar de aba do navegador e voltar não apaga mais as quantidades digitadas; a
-  tela Materiais de clientes mostra os números com vírgula (12,5), igual ao papel entregue ao cliente; e o termo de responsabilidade
-  de ferramenta sai com os recuos e espaços do texto como foi escrito.</p>
+  <p>Também foram feitos: em Devoluções, o botão "Carregar entregas mais antigas" traz entregas além das 30 mais recentes, para
+  devolver uma peça antiga com o lote certo; ao excluir uma requisição já separada, a anotação de onde o material tinha sido separado
+  é apagada junto; na separação e na entrega, trocar de aba do navegador e voltar não apaga mais as quantidades digitadas; a tela
+  Materiais de clientes mostra os números com vírgula (12,5), igual ao papel entregue ao cliente; e o termo de responsabilidade de
+  ferramenta sai com os recuos e espaços do texto como foi escrito.</p>
 
   <h2>Tempo gasto</h2>
   <table>
@@ -107,8 +118,14 @@
     <tr><td>Entrega escolhendo o local à mão respeita o que outra requisição separou</td><td>4h15</td></tr>
     <tr><td>O local mostra quanto realmente sobra</td><td>2h45</td></tr>
     <tr><td>Saída lançada por outro sistema respeita o lote</td><td>2h30</td></tr>
+    <tr><td>Requisição excluída apaga a anotação do local separado</td><td>1h15</td></tr>
+    <tr><td>Devolução: encontrar entregas antigas</td><td>2h15</td></tr>
+    <tr><td>Lote bloqueado, reprovado ou vencido: aprovação e separação</td><td>5h30</td></tr>
+    <tr><td>Lote bloqueado, reprovado ou vencido: entrega</td><td>5h</td></tr>
+    <tr><td>Entrega não leva o que outra peça da mesma requisição separou (material sem lote)</td><td>5h30</td></tr>
+    <tr><td>Entrega escolhendo o local respeita o que outra peça da mesma requisição separou</td><td>6h</td></tr>
     <tr><td>Relatório da semana de 25/10 a 31/10 e resumo de outubro</td><td>1h</td></tr>
-    <tr><th>Total</th><th>38h45</th></tr>
+    <tr><th>Total</th><th>64h15</th></tr>
   </table>
   <p>O tempo inclui entender o pedido, fazer, testar e conferir. O do relatório anterior e do resumo de outubro foi medido pelo
   registro do trabalho e é uma conta por baixo.</p>
@@ -120,7 +137,12 @@
     <li>Abra <b>Almoxarifado → Recebimentos</b>, numa nota com um lote que já existe e outra data de validade, clique em
     <b>Processar Nota</b>: o aviso amarelo aparece embaixo do material antes de confirmar.</li>
     <li>Abra <b>Almoxarifado → Requisições (almox.)</b>, uma requisição aprovada, <b>Iniciar Separação</b>: a lista "Sai de" mostra
-    quanto sobra em cada local e quanto está separado para outras requisições.</li>
+    quanto sobra em cada local e quanto está separado para outras requisições. Num material com um lote bloqueado, a janela mostra,
+    ao lado do saldo, quanto está "Em lote bloqueado/reprovado/vencido".</li>
+    <li>Na mesma tela, numa requisição com duas peças do mesmo material separadas de locais diferentes, abra a entrega: a lista
+    "Sai de" mostra junto de cada local quanto sobra e quanto está separado para a outra peça ("sobra 1 de 3; 2 desta").</li>
+    <li>Abra <b>Almoxarifado → Devoluções → Nova Devolução</b> e escolha um material com mais de 30 entregas: embaixo da lista de
+    entregas aparece o botão <b>Carregar entregas mais antigas</b>.</li>
     <li>Abra <b>Compras → Materiais</b> e <b>Almoxarifado → Materiais</b> lado a lado: as colunas e os filtros são os mesmos.</li>
     <li>Abra <b>Almoxarifado → Materiais de clientes</b>: as quantidades aparecem com vírgula.</li>
   </ol>
