@@ -412,6 +412,47 @@ process.on('exit', (code) => {
     await fimDoCaso(m, L1, L2, r1, r2);
   });
 
+  // ---------------------------------------------------------------- Fase 5: tres lacunas provadas por sabotagem verde
+  // P1: a passada do caso (c) segue para o proximo item quando um nao tem separado de outras (`continue`, nao `break`).
+  await test('[Fase 5 P1, varios itens] item1 "Sai de" XP-01/L2 1 (livre), item2 "Sai de" XB-01/L1 4 -> E1 no item2', async () => {
+    const { m, L1, L2 } = await cenario();
+    const r1 = await req([[m.id, 4]]); const r2 = await req([[m.id, 1], [m.id, 4]]);
+    await sepOk(r1.R, [doPar(r1.ids[0], 4, L1)]);
+    await sepOk(r2.R, [auto(r2.ids[0], 1), auto(r2.ids[1], 4)]);
+    await recusaSemGravar(m, r2, L1, L2, [saiDe(r2.ids[0], 1, L2, P01.id), saiDe(r2.ids[1], 4, L1)],
+      e1(m, { saldo: 6, outras: 4, numeros: [await numero(r1.R)], sobra: 2, qty: 4 }));
+  });
+  // P2: o fisico do par e por lote — outro lote no mesmo endereco nao entra na conta (sem `lote_id IS ?` lia 11 e passava).
+  await test('[Fase 5 P2, fisico por lote] XB-01 com L1 6 e L3 5; R1 guardou 4 de L1; R2 "Sai de" XB-01/L1 4 -> E1 com "ha 6"', async () => {
+    const { m, L1, L2 } = await cenario();
+    await entrar(m, B01.id, 5, 'L3'); await validade(m, 'L3', dia(60));
+    const r1 = await req([[m.id, 4]]); const r2 = await req([[m.id, 4]]);
+    await sepOk(r1.R, [doPar(r1.ids[0], 4, L1)]);
+    await sepOk(r2.R, [auto(r2.ids[0], 4)]);
+    await recusaSemGravar(m, r2, L1, L2, [saiDe(r2.ids[0], 4, L1)],
+      e1(m, { saldo: 6, outras: 4, numeros: [await numero(r1.R)], sobra: 2, qty: 4 }));
+  });
+  // P3 (B1338): entrega com series tambem entra no caso (c) — o lote vem das series, o "Sai de" so traz o endereco.
+  await test('[Fase 5 P3, series] material com serie: R1 guardou 4 em XB-01/L1 (6); R2 entrega 4 series A com "Sai de" XB-01 -> E1', async () => {
+    const m = await material();
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET controle_serie = 1 WHERE id = ?', [m.id]);
+    const ea = await como('ADMIN').post(`${API}/movimentacoes/v2`, { material_id: m.id, tipo: 'ENTRADA', quantidade: 6, motivo: 'e200',
+      localizacao_destino_id: B01.id, lote: 'L1', series: ['A1', 'A2', 'A3', 'A4', 'A5', 'A6'] });
+    assert.strictEqual(ea.status, 201, JSON.stringify(ea.body));
+    const eb = await como('ADMIN').post(`${API}/movimentacoes/v2`, { material_id: m.id, tipo: 'ENTRADA', quantidade: 9, motivo: 'e200',
+      localizacao_destino_id: P01.id, lote: 'L2', series: ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9'] });
+    assert.strictEqual(eb.status, 201, JSON.stringify(eb.body));
+    await validade(m, 'L1', dia(5)); await validade(m, 'L2', dia(45));
+    const L1 = await loteId(m, 'L1'); const L2 = await loteId(m, 'L2');
+    const r1 = await req([[m.id, 4]]); const r2 = await req([[m.id, 4]]);
+    await sepOk(r1.R, [doPar(r1.ids[0], 4, L1)]);
+    await sepOk(r2.R, [auto(r2.ids[0], 4)]);
+    const s = (await dbAll(db, "SELECT id FROM series_almoxarifado WHERE material_id = ? AND numero LIKE 'A%' ORDER BY numero", [m.id]))
+      .map((x) => x.id);
+    await recusaSemGravar(m, r2, L1, L2, [{ item_id: r2.ids[0], quantidade_atendida: 4, localizacao_origem_id: B01.id, serie_ids: s.slice(0, 4) }],
+      e1(m, { saldo: 6, outras: 4, numeros: [await numero(r1.R)], sobra: 2, qty: 4 }));
+  });
+
   await close();
   terminou = true;
   console.log(`\n${passed} passou, ${failed} falhou`);
