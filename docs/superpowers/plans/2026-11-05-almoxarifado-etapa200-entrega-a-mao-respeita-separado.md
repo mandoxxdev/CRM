@@ -220,6 +220,26 @@ cenários); (b) a condição `origemId && !saiDaOrigem` cobrir o item **sem** or
 pegar o caso (b) com a planejada sem lote; (c) seguir cada RN até o último gesto: a entrega de R1 depois da recusa de R2, a devolução e a
 exclusão de R2 (a recusa não grava nada que elas leiam); (d) a extração de `mensagemSeparadoDeOutras` não mudar a C1 em nenhum caractere.
 
+## Fase 2 — correções do revisor fresco (2026-11-05) — **MANDAM sobre o texto acima onde divergem**
+
+Revisor fresco sobre `fd1daad2`: 0 trava, 1 importante, 2 menores, todos aceitos. Confirmado: E1 bem formada (plural, números ordenados `:102`,
+prefixo uma vez só — o item (c) nunca é `planejada`, `:1966-1969`); "desta entrega" é o certo (o `pedidoPorOrigem` começa vazio, `:1959`); a C1 não
+muda se o `gesto` decide os dois pedaços ("desta requisição"/"desta entrega" e "para esta separação"/"para esta entrega"); a condição
+`!!origemId && !saiDaOrigem` cobre exatamente o (c) (o K1 da 196 zera `origemId` e cai no só lote — C471); a tela nunca manda o (c) sozinha
+(`RequisicoesList.js:695-711`); a conta nova roda sob `comTravaDaRequisicao`; a recusa vem antes da prévia (`:2084`) e da alçada (`:2121`).
+
+1. **[IMPORTANTE] O C468 voltava conforme a ordem dos itens.** XB-01/L1 com 4 (e estoque em outro endereço); R1 guardou 2 ali; R2 tem item A (id
+   menor, automático, "Sai de" XB-01/L1 à mão, 2) e item B (id maior, guardou 2 ali, vai pela pré-seleção — caso b, 2). A conferido primeiro: 4 −
+   2 de R1 = 2, cabe; B: 4 − 2 = 2, cabe → o par vai a 0 e R1 toma "não serve mais". Com os ids trocados, A toma a E1. **T1.2 passa a ser:** no caso
+   (c), `checarOrigemItem` faz só a conta física (sem `outras`); a E1 sai de **uma passada depois do laço** e antes do "só lote", com
+   `pedidoPorOrigem` completo: para cada item (c), `ja = pedidoPorOrigem.get(chave) − qtdComOrigem` e o físico do par; E1 se
+   `físico − ja − outras.q < qtdComOrigem` (e `outras.q > 1e-9`), com `contando = ja`. Nenhuma literal de (a)/(b) muda de lugar. **RN-200.06 (iii):**
+   o cenário acima, nas duas ordens de id → E1 no item A nas duas. **Controle (vi):** a conta dentro do laço → cai a (iii) na ordem A antes de B.
+   +15–20 min na T1.
+2. **[MENOR] RN-200.08 (corrida):** alternar quem é lançado primeiro (par/ímpar das 10 repetições) e registrar no plano quantas terminaram em cada
+   ordem — senão o `Promise.all` vira sequencial e o controle (v) só cai por sorte.
+3. **[MENOR] B1338** ganha: "vale também com `serie_ids` (as séries não dizem de qual caixa são); o K1 (só lote) fica fora (C471)".
+
 ## Execução
 
 *(a preencher)*
