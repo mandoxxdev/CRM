@@ -38,8 +38,8 @@ function bloqueadoComLoteSql(materialExpr) {
  * id. Material inexistente -> null (a rota decide o 404).
  */
 async function bloqueadoPorLote(db, materialId) {
-  const mat = await dbGet(db, `SELECT id, COALESCE(quantidade_bloqueada, 0) AS total, ${bloqueadoComLoteSql('id')} AS com_lote
-    FROM materiais_almoxarifado WHERE id = ?`, [materialId]);
+  const mat = await dbGet(db, `SELECT id, COALESCE(quantidade_bloqueada, 0) AS total, ${bloqueadoComLoteSql('mbl.id')} AS com_lote
+    FROM materiais_almoxarifado mbl WHERE mbl.id = ?`, [materialId]);
   if (!mat) return null;
   const linhas = await dbAll(db, `SELECT bpl.lote_id, l.codigo, ${Q.qtdSql(SOMA_SQL)} AS quantidade
     FROM movimentacoes_almoxarifado bpl JOIN lotes_almoxarifado l ON l.id = bpl.lote_id
