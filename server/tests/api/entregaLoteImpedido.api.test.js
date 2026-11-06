@@ -281,6 +281,33 @@ valueApprovalService.notificarAprovadoresValor = async (db, req) => { notificado
     assert.ok(r.body.error.includes('entregar 3 un — faltam 2 un') && r.body.error.includes('entregue 2 un a menos'), r.body.error);
   });
 
+  // Revisao "passaria com a feature quebrada?" (Fase 2 item 5): a falta e o TOTAL do material, com o PRIMEIRO item que cruza. Aqui o
+  // primeiro item ja cruza (2 > 1) e a falta do material e 3 — com a falta do item a frase diria "faltam 1" e a pessoa reenviaria 3 (recusa de novo).
+  await test('[RN-206.08b] dois itens, 2 e 2, L1 ATIVO 1, L2 BLOQUEADO 4 -> 400 no PRIMEIRO item com a falta do material ("entregar 2 un — faltam 3 un", "entregue 3 un a menos")', async () => {
+    const m = await material();
+    await entrar(m, P01.id, 1, 'L1'); await entrar(m, P01.id, 4, 'L2');
+    const { R, ids } = await reqDireta([[m.id, 2], [m.id, 2]]);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 2 }, { item_id: ids[1], quantidade_separada: 2 }]);
+    await bloquearL2(m);
+    const r = await recusa(R, m, [{ item_id: ids[0], quantidade_atendida: 2 }, { item_id: ids[1], quantidade_atendida: 2 }],
+      frase(m.nome, 2, 'un', 3, [L('L2', 'BLOQUEADO', 4)]));
+    assert.ok(r.body.error.includes('entregue 3 un a menos'), r.body.error);
+  });
+  // Revisao "passaria com a feature quebrada?": o saldo do lote impedido na frase desconta o que esta EM INSPECAO no lote (a regua da 197).
+  await test('[RN-206.01b] L2 BLOQUEADO 5 com 2 em inspecao no lote -> a frase diz "L2 (bloqueado, 3 un)"', async () => {
+    const m = await material();
+    await entrar(m, A01.id, 2, 'L1'); await entrar(m, P01.id, 5, 'L2');
+    const { R, ids } = await reqDireta([[m.id, 4]]);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 4 }]);
+    const rec = (await dbRun(db, "INSERT INTO recebimentos_material_almoxarifado (numero, status) VALUES (?, 'CONFERIDO')", [`REC-E206-${++seq}`])).lastID;
+    await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado (recebimento_id, material_id, quantidade_esperada, quantidade_recebida,
+      lote_id, quantidade_em_inspecao) VALUES (?, ?, 5, 5, ?, 2)`, [rec, m.id, await loteId(m, 'L2')]);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_em_inspecao = 2 WHERE id = ?', [m.id]);
+    await bloquearL2(m);
+    const r = await recusa(R, m, [{ item_id: ids[0], quantidade_atendida: 4 }], frase(m.nome, 4, 'un', 2, [L('L2', 'BLOQUEADO', 3)]));
+    assert.ok(r.body.error.includes('L2 (bloqueado, 3 un)'), r.body.error);
+  });
+
   // ── RN-206.09: origem a mao no mesmo lote (Achado 2) ──────────────────────────────────────────────────────────────────────────
   await test('[RN-206.09] L1 ATIVO 4 em A, L2 BLOQUEADO 5: item 1 sai de (A, L1) 3 a mao, item 2 automatico 2 -> 400 no item 2 ("faltam 1 un")', async () => {
     const m = await material();
