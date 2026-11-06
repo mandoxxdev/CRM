@@ -335,3 +335,170 @@ describe('DevolucoesAlmoxarifado — anexos da devolução (Etapa 34)', () => {
     expect(container.querySelectorAll('.almox-table thead th')).toHaveLength(colsEsqueleto);
   });
 });
+
+// ── Etapa 204 (C465; B1363-B1366): "Carregar entregas mais antigas" ─────────────────────────────────────────────────
+// O servidor pagina de 30 em 30 (cursor `antes_de` = id da ultima linha da resposta anterior). A tela deduz "ha mais" da
+// pagina cheia. O mock distingue `antes_de` na URL SO nestes testes; os de cima seguem com o mock generico e < 30 linhas.
+describe('DevolucoesAlmoxarifado — entregas mais antigas (Etapa 204)', () => {
+  const saida = (id) => ({ ...SAIDA_COM_SALDO, id, requisicao_numero: `REQ-${id}` });
+  const pagina = (primeiro, n) => Array.from({ length: n }, (_, i) => saida(primeiro - i));
+  const PAG1 = pagina(1000, 30); // 1000..971
+  let respostaAntesDe; // (antesDe) => Promise
+  let chamadasAntesDe;
+
+  beforeEach(() => {
+    chamadasAntesDe = [];
+    respostaAntesDe = () => Promise.resolve({ data: pagina(970, 5) });
+    const original = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => {
+      if (url.startsWith('/almoxarifado/devolucoes/saidas-elegiveis')) {
+        const m = /antes_de=([^&]*)/.exec(url);
+        if (m) { chamadasAntesDe.push(url); return respostaAntesDe(m[1]); }
+        return Promise.resolve({ data: url.includes('material_id=10') ? PAG1 : [saida(5)] });
+      }
+      return original(url, cfg);
+    });
+  });
+
+  const botao = () => container.querySelector('[data-testid="dev-saidas-mais-antigas"]');
+  const nota = () => container.querySelector('[data-testid="dev-saidas-fim"]');
+  const idsDaLista = () => [...campo('dev-saida').querySelectorAll('option')].map((o) => o.value).filter(Boolean);
+  async function clicar(el) {
+    await act(async () => { el.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    await esperarEfeitos();
+  }
+
+  test('RN-204.06 pagina cheia mostra o botao; o clique pede antes_de da ultima e acrescenta no fim, sem repetir nem perder a escolha', async () => {
+    respostaAntesDe = () => Promise.resolve({ data: [saida(971), ...pagina(970, 5)] }); // 971 repetida
+    await abrirModal();
+    await escolherMaterial(MATERIAL.id);
+    expect(botao().textContent).toBe('Carregar entregas mais antigas');
+    expect(nota()).toBeNull();
+    preencher(campo('dev-saida'), '985');
+    await clicar(botao());
+    expect(chamadasAntesDe).toEqual(['/almoxarifado/devolucoes/saidas-elegiveis?material_id=10&antes_de=971']);
+    const ids = idsDaLista();
+    expect(ids).toHaveLength(35);
+    expect(new Set(ids).size).toBe(35);
+    expect(ids.slice(30)).toEqual(['970', '969', '968', '967', '966']);
+    expect(campo('dev-saida').value).toBe('985');
+    // Pagina com menos de 30: o botao some e a nota aparece.
+    expect(botao()).toBeNull();
+    expect(nota().textContent).toBe('Não há entregas mais antigas deste material.');
+  });
+
+  test('RN-204.06 primeira pagina curta: nem botao nem nota', async () => {
+    await abrirModal();
+    await escolherMaterial(MATERIAL_LOTE.id);
+    expect(idsDaLista()).toEqual(['5']);
+    expect(botao()).toBeNull();
+    expect(nota()).toBeNull();
+  });
+
+  test('RN-204.06 pagina de 30 mantem o botao; antes_de e o da ultima linha da RESPOSTA; o clique que volta vazio diz que acabou', async () => {
+    // A 2a resposta termina numa linha repetida (971): o proximo cursor e ela, nao a ultima do array sem repeticao.
+    const segunda = [...pagina(970, 29), saida(971)];
+    const respostas = [segunda, []];
+    respostaAntesDe = () => Promise.resolve({ data: respostas.shift() });
+    await abrirModal();
+    await escolherMaterial(MATERIAL.id);
+    await clicar(botao());
+    expect(idsDaLista()).toHaveLength(59);
+    expect(botao()).not.toBeNull();
+    expect(nota()).toBeNull();
+    await clicar(botao());
+    expect(chamadasAntesDe[1]).toBe('/almoxarifado/devolucoes/saidas-elegiveis?material_id=10&antes_de=971');
+    expect(botao()).toBeNull();
+    expect(nota().textContent).toBe('Não há entregas mais antigas deste material.');
+    expect(idsDaLista()).toHaveLength(59);
+  });
+
+  test('RN-204.06 enquanto carrega, o botao fica desabilitado com "Carregando…"', async () => {
+    let liberar;
+    respostaAntesDe = () => new Promise((r) => { liberar = () => r({ data: pagina(970, 5) }); });
+    await abrirModal();
+    await escolherMaterial(MATERIAL.id);
+    await clicar(botao());
+    expect(botao().disabled).toBe(true);
+    expect(botao().textContent).toBe('Carregando…');
+    await act(async () => { liberar(); await new Promise((r) => setTimeout(r, 0)); });
+    expect(idsDaLista()).toHaveLength(35);
+  });
+
+  test('RN-204.07 trocar de material com o clique em voo: a resposta velha nao entra (A -> vazio -> A)', async () => {
+    let liberar;
+    respostaAntesDe = () => new Promise((r) => { liberar = () => r({ data: pagina(970, 5) }); });
+    await abrirModal();
+    await escolherMaterial(MATERIAL.id);
+    await clicar(botao());
+    expect(botao().textContent).toBe('Carregando…');
+    await escolherMaterial('');
+    await escolherMaterial(MATERIAL.id);
+    await act(async () => { liberar(); await new Promise((r) => setTimeout(r, 0)); });
+    expect(idsDaLista()).toEqual(PAG1.map((s) => String(s.id)));
+    expect(botao().disabled).toBe(false);
+    expect(botao().textContent).toBe('Carregar entregas mais antigas');
+    expect(nota()).toBeNull();
+  });
+
+  test('RN-204.07 trocar para outro material com o clique em voo: a lista do novo nao recebe as velhas', async () => {
+    let liberar;
+    respostaAntesDe = () => new Promise((r) => { liberar = () => r({ data: pagina(970, 5) }); });
+    await abrirModal();
+    await escolherMaterial(MATERIAL.id);
+    await clicar(botao());
+    await escolherMaterial(MATERIAL_LOTE.id);
+    await act(async () => { liberar(); await new Promise((r) => setTimeout(r, 0)); });
+    expect(idsDaLista()).toEqual(['5']);
+    expect(botao()).toBeNull();
+    expect(nota()).toBeNull();
+  });
+
+  test('RN-204.08 falha ao carregar mais: toast, a lista e a escolha ficam, o botao volta', async () => {
+    const { toast } = require('react-toastify');
+    respostaAntesDe = () => Promise.reject(new Error('rede'));
+    await abrirModal();
+    await escolherMaterial(MATERIAL.id);
+    preencher(campo('dev-saida'), '990');
+    await clicar(botao());
+    expect(toast.error).toHaveBeenCalledWith('Erro ao carregar entregas mais antigas');
+    expect(idsDaLista()).toHaveLength(30);
+    expect(campo('dev-saida').value).toBe('990');
+    expect(botao().disabled).toBe(false);
+    expect(botao().textContent).toBe('Carregar entregas mais antigas');
+    expect(nota()).toBeNull();
+  });
+
+  test('Fase 2: depois de devolver o modal fecha e reabre na pagina 1; se o POST falha, as paginas ficam', async () => {
+    const { toast } = require('react-toastify');
+    await abrirModal();
+    await escolherMaterial(MATERIAL.id);
+    await clicar(botao());
+    preencher(campo('dev-saida'), '968');
+    preencher(campo('dev-quantidade'), '1');
+    preencher(campo('dev-motivo'), 'SOBRA_PROJETO');
+    const enviar = async () => {
+      const form = container.querySelector('.almox-modal form');
+      await act(async () => { form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+      await esperarEfeitos();
+    };
+    api.post.mockRejectedValueOnce({ response: { data: { error: 'Devolução acima do entregue: literal do servidor' } } });
+    await enviar();
+    expect(toast.error).toHaveBeenCalledWith('Devolução acima do entregue: literal do servidor');
+    expect(container.querySelector('.almox-modal')).not.toBeNull();
+    expect(idsDaLista()).toHaveLength(35);
+    expect(nota()).not.toBeNull();
+    await enviar();
+    expect(api.post).toHaveBeenLastCalledWith('/almoxarifado/devolucoes', expect.objectContaining({ movimentacao_saida_id: 968 }));
+    expect(container.querySelector('.almox-modal')).toBeNull();
+    const botaoNova = [...container.querySelectorAll('.almox-header-actions button')].find((b) => b.textContent.includes('Nova Devolução'));
+    await clicar(botaoNova);
+    expect(nota()).toBeNull();
+    expect(botao()).toBeNull();
+    await escolherMaterial(MATERIAL.id);
+    expect(idsDaLista()).toEqual(PAG1.map((s) => String(s.id)));
+    expect(nota()).toBeNull();
+    expect(botao().textContent).toBe('Carregar entregas mais antigas');
+    expect(chamadasAntesDe).toHaveLength(1);
+  });
+});

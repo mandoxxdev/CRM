@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { FiCornerUpLeft, FiPaperclip, FiRefreshCw } from 'react-icons/fi';
@@ -63,11 +63,24 @@ const FORM_VAZIO = {
 // e, das 21h a meia-noite, o ato de hoje aparecia com o dia de amanha. So a data, como antes.
 const formatData = (d) => formatarInstanteDoBanco(d);
 
+// Etapa 204 (B1364, B1366): o tamanho da página da lista de entregas. Quem decide é o servidor
+// (`listarSaidasElegiveis` em server/services/almoxarifado/returnService.js, `limite = 30`); a tela só deduz "há mais" da
+// página cheia. Mudar um sem o outro faz o botão "Carregar entregas mais antigas" sumir cedo ou sobrar.
+const PAGINA_SAIDAS = 30;
+// temMais: a última página veio cheia; fim: um clique trouxe menos de 30 (inclusive 0); ultimoId: o cursor — o id da
+// última linha da RESPOSTA anterior, não do array sem repetição (Fase 2 da 204).
+const PAGINACAO_VAZIA = { temMais: false, fim: false, carregando: false, ultimoId: null };
+
 const DevolucoesAlmoxarifado = () => {
   const { bloquearSeNaoPode } = useAlmoxPermissoes();
   const [devolucoes, setDevolucoes] = useState([]);
   const [materiais, setMateriais] = useState([]);
   const [saidas, setSaidas] = useState([]);
+  const [paginacao, setPaginacao] = useState(PAGINACAO_VAZIA);
+  // Etapa 204 (RN-204.07): a geração da lista. Cada troca de material (inclusive para vazio) a incrementa; o "carregar
+  // mais" guarda a sua antes do GET e descarta then/catch se ela mudou — senão a resposta atrasada do material anterior
+  // (ou do mesmo material numa abertura anterior) entraria na lista atual.
+  const geracaoSaidas = useRef(0);
   const [lotes, setLotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -103,13 +116,52 @@ const DevolucoesAlmoxarifado = () => {
   // Guarda `cancelado` (molde de LotesAlmoxarifado): trocar de material antes da resposta chegar
   // precisa descartá-la, senão a lista de saídas do material anterior pinta a do atual.
   useEffect(() => {
+    geracaoSaidas.current += 1;
+    setPaginacao(PAGINACAO_VAZIA);
     if (!form.material_id) { setSaidas([]); return undefined; }
     let cancelado = false;
     api.get(`/almoxarifado/devolucoes/saidas-elegiveis?material_id=${form.material_id}`)
-      .then((res) => { if (!cancelado) setSaidas(res.data || []); })
+      .then((res) => {
+        if (cancelado) return;
+        const linhas = res.data || [];
+        setSaidas(linhas);
+        setPaginacao({
+          ...PAGINACAO_VAZIA,
+          temMais: linhas.length >= PAGINA_SAIDAS,
+          ultimoId: linhas.length ? linhas[linhas.length - 1].id : null,
+        });
+      })
       .catch(() => { if (!cancelado) setSaidas([]); });
     return () => { cancelado = true; };
   }, [form.material_id]);
+
+  // Etapa 204 (C465, B1363): a página seguinte, pelo cursor `antes_de`. As novas entram no fim, sem repetir id; a
+  // escolha do campo fica (o `<select>` seleciona por String(s.id) no mesmo array). Falha não apaga a lista (RN-204.08).
+  const carregarMaisAntigas = async () => {
+    const geracao = geracaoSaidas.current;
+    const antes = paginacao.ultimoId;
+    setPaginacao((p) => ({ ...p, carregando: true }));
+    try {
+      const res = await api.get(
+        `/almoxarifado/devolucoes/saidas-elegiveis?material_id=${form.material_id}&antes_de=${antes}`);
+      if (geracao !== geracaoSaidas.current) return;
+      const novas = res.data || [];
+      setSaidas((atual) => {
+        const vistos = new Set(atual.map((s) => String(s.id)));
+        return [...atual, ...novas.filter((s) => !vistos.has(String(s.id)))];
+      });
+      setPaginacao({
+        temMais: novas.length >= PAGINA_SAIDAS,
+        fim: novas.length < PAGINA_SAIDAS,
+        carregando: false,
+        ultimoId: novas.length ? novas[novas.length - 1].id : antes,
+      });
+    } catch (e) {
+      if (geracao !== geracaoSaidas.current) return;
+      toast.error('Erro ao carregar entregas mais antigas');
+      setPaginacao((p) => ({ ...p, carregando: false }));
+    }
+  };
 
   useEffect(() => {
     if (!form.material_id) { setLotes([]); return undefined; }
@@ -305,6 +357,18 @@ const DevolucoesAlmoxarifado = () => {
                         <option key={s.id} value={s.id} disabled={s.saldo_devolvivel <= 0}>{rotuloSaida(s)}</option>
                       ))}
                     </select>
+                    {paginacao.temMais && (
+                      <button type="button" className="btn-almox-secondary" data-testid="dev-saidas-mais-antigas"
+                        style={{ alignSelf: 'flex-start', marginTop: '0.35rem' }}
+                        disabled={paginacao.carregando} onClick={carregarMaisAntigas}>
+                        {paginacao.carregando ? 'Carregando…' : 'Carregar entregas mais antigas'}
+                      </button>
+                    )}
+                    {paginacao.fim && (
+                      <small data-testid="dev-saidas-fim" style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                        Não há entregas mais antigas deste material.
+                      </small>
+                    )}
                     <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
                       Avulsa serve para sobra antiga ou material entregue antes do sistema — sem entrega, não há
                       limite de quantidade nem lote a herdar.
