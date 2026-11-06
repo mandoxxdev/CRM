@@ -201,6 +201,27 @@ dentro disso (T1, T3 e o Jest de T2), como a estimativa previa.
 - A tela seleciona por `String(s.id)`: as páginas novas entram no mesmo array `saidas`, então `saidaSelecionada`/`maxDevolvivel` funcionam
   para a entrega antiga sem mudança.
 
+## Fase 2 — correções do revisor fresco (2026-11-06) — **MANDAM sobre o texto acima onde divergem**
+
+Revisor fresco sobre `3eddf0a5`: 0 trava, 2 importantes, 4 menores, todos aceitos. Confirmado: a ordem é `mv.created_at DESC, mv.id DESC`
+(`returnService.js:517`); nenhum caminho grava data retroativa (o `INSERT` do motor, `stockService.js:2324-2329`, não passa `created_at`); cursor
+composto (data + id) com `COALESCE` não pula nem repete; trocar o `ORDER BY` para `COALESCE(created_at,'') DESC` não muda a ordem de hoje; a rota segue
+com `auth` (`extended.js:1466`); a spec 12 (`README.md:91`) e o comentário de `returnService.js:483-484` mudam na T4, dizendo que estavam velhos;
+`validarSaidaOriginal` (`:37-96`) não tem limite de idade; T2 é galho de verdade.
+
+1. **[IMPORTANTE] RN-204.07, a guarda do "carregar mais":** é um `useRef` de **geração**, incrementado no `useEffect` de `DevolucoesAlmoxarifado.js:105-112`
+   a cada troca de material (inclusive para vazio); o mesmo efeito zera `carregando`, `fim` e o estado do botão. O handler guarda a geração antes do `GET`
+   e descarta `then`, `catch` e `finally` se ela mudou. Teste: A → carregar mais pendente → trocar para '' → A de novo → a resposta velha não altera lista
+   nem botão.
+2. **[IMPORTANTE] RN-204.06, depois de devolver:** depois do 201 o modal fecha (`:179`); reabrir começa da página 1 (`FORM_VAZIO`, `:125`), sem a nota de
+   fim nem páginas antigas. Se o `POST` falhar, o modal fica aberto com as páginas já carregadas; o servidor é a autoridade e a literal vem no toast. **Não**
+   reler só a página 2.
+3. **[MENOR] Contrato > 400:** a âncora é lida como `SELECT id, COALESCE(created_at,'') AS c …` e `c` vai como parâmetro, nunca `null`.
+4. **[MENOR] RN-204.04, ordem das recusas:** `material_id é obrigatório` → `Material não encontrado` → `antes_de inválido…` → `Entrega <id> não encontrada…`.
+5. **[MENOR] Nota de fim:** aparece quando a página trazida por clique tem **menos de 30** linhas (inclusive 0); página de 30 mantém o botão (B1364: com
+   exatamente 30, o clique traz `[]` e a tela diz "Não há entregas mais antigas deste material.").
+6. **[MENOR]** o `antes_de` é o id da última linha da **resposta** anterior, não do array deduplicado.
+
 ## Execução
 
 - [ ] Plano — este commit (antes do código).
