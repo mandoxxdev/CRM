@@ -1899,6 +1899,16 @@ function dividirPorLotes(lotes, quantidade) {
 }
 
 /**
+ * Etapa 207 (B1396): a parte de UMA guarda (`{ id, q }`, q = PARTE_ORIGEM_SQL) que o automatico tem de pular — extraida de
+ * `lotesParaOAutomatico` sem mudar a conta (uma regua so para o lote e o sem lote). Item desta entrega com `fica` (o mapa fixado antes da
+ * previa, B1394): o que fica; senao a parte do banco menos o que ja saiu da origem nesta entrega.
+ */
+function guardaQueConta(g, saiuDaOrigemPorItem, parteQueFicaPorItem) {
+  const fica = parteQueFicaPorItem ? parteQueFicaPorItem.get(Number(g.id)) : undefined;
+  return fica !== undefined ? fica : Math.max(0, (Number(g.q) || 0) - (saiuDaOrigemPorItem.get(Number(g.id)) || 0));
+}
+
+/**
  * Etapa 197 (RN-197.01/03/11, Fase 2 itens 1 e 2) — os lotes que a parte automatica da entrega pode baixar, em ordem FEFO, com o saldo
  * que sobra para ela. So `elegivel` (a regua do motor: ATIVO e nao vencido, ou vencido com liberacao) — lote retido o motor recusaria e
  * derrubaria a entrega inteira. Do saldo do lote (soma das linhas, qualquer endereco — o mesmo que o claim do lote drena) saem:
@@ -1935,10 +1945,9 @@ async function lotesParaOAutomatico(db, materialId, saiuDaOrigemPorItem, parteQu
     // 2o fix-round da Fase 5: item DESTA entrega que nao sai da origem (automatico ou outro par) -> conta so a parte que FICA depois
     // dela (`parteQueFica`: a parte menos o que a entrega consome dela; 0 quando entrega a caixa toda). Descontar a parte inteira
     // tirava do automatico do proprio item a linha que ele mesmo guardou e o resto ia sem lote (linha negativa, lote inflado).
-    const fica = parteQueFicaPorItem ? parteQueFicaPorItem.get(Number(g.id)) : undefined;
-    const q = fica !== undefined ? fica : Math.max(0, (Number(g.q) || 0) - (saiuDaOrigemPorItem.get(Number(g.id)) || 0));
+    const q = guardaQueConta(g, saiuDaOrigemPorItem, parteQueFicaPorItem);
     if (q <= Q.QTD_FOLGA) continue;
-    const k = `${Number(g.lote_id)}|${Number(g.loc_id)}`;
+    const k =`${Number(g.lote_id)}|${Number(g.loc_id)}`;
     guardadoPar.set(k, (guardadoPar.get(k) || 0) + q);
   }
   const lotesComGuarda = new Set([...guardadoPar.keys()].map((k) => Number(k.split('|')[0])));
@@ -1970,6 +1979,55 @@ async function lotesParaOAutomatico(db, materialId, saiuDaOrigemPorItem, parteQu
     return { lote_id: loteId, saldo: Q.qtd(Math.min(livreDoLote, livreUsavel)),
       linhas: usaveis.map((x) => ({ localizacao_id: Number(x.localizacao_id), saldo: Q.qtd(x.livre) })) };
   }).filter((l) => l.saldo > Q.QTD_FOLGA);
+}
+
+/**
+ * Etapa 207 (B1396-B1399, Fase 2 I3/M1) — as fatias por endereco da parte automatica SEM lote (material sem controle de lote, ou o resto
+ * sem lote do que tem). A guarda sem lote (`lote_separacao_id IS NULL`) das caixas vivas do material — de TODAS as requisicoes (B1399) —
+ * desconta por endereco das linhas sem lote com saldo; se o livre usavel cobre `quantidade`, devolve as fatias `{ localizacao_id,
+ * quantidade }` na ordem do claim (padrao, maior linha, id — a mesma de `lotesParaOAutomatico`), e cada uma vai ao motor com o endereco e
+ * origem estrita (`baixar(..., enderecoDaFatia)`). `null` = o chamador baixa como hoje (uma SAIDA sem endereco):
+ *  - nenhuma guarda com `guardaQueConta > folga` (B1397) — decidido ANTES de ler o saldo, pela conta da entrega (nao pela parte gravada
+ *    no banco, que so cai no finally): a V1 da 136 (o irmao sai inteiro da origem na mesma entrega) fica byte a byte como hoje;
+ *  - o livre usavel nao cobre (B1398: tudo ou como hoje — fatias + resto sem endereco voltaria ao mesmo poco e levaria a guarda, e com a
+ *    padrao bloqueada recusaria depois das fatias baixadas). Usavel = endereco que existe (M1: `lc.id` nao nulo), nao bloqueado, livre >
+ *    folga; a linha sem endereco e a bloqueada ficam de fora (C492).
+ * So le; dentro das duas travas da entrega (B1403).
+ */
+async function fatiasSemLoteParaOAutomatico(db, materialId, quantidade, saiuDaOrigemPorItem, parteQueFicaPorItem) {
+  const viva = caixaVivaSql('r');
+  const guardas = await dbAll(db, `SELECT ir.id, ir.origem_separacao_id as loc_id, ${PARTE_ORIGEM_SQL} as q
+    FROM itens_requisicao_almoxarifado ir JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
+    WHERE ir.material_id = ? AND ir.origem_separacao_id IS NOT NULL AND ir.lote_separacao_id IS NULL AND ${viva.sql}`,
+  [materialId, ...viva.params]);
+  const guardadoLoc = new Map();
+  for (const g of guardas) {
+    const q = guardaQueConta(g, saiuDaOrigemPorItem, parteQueFicaPorItem);
+    if (q <= Q.QTD_FOLGA) continue;
+    guardadoLoc.set(Number(g.loc_id), (guardadoLoc.get(Number(g.loc_id)) || 0) + q);
+  }
+  if (!guardadoLoc.size) return null; // B1397: sem guarda sem lote que conte — como hoje, sem ler o saldo
+  const alvo = Q.qtd(quantidade);
+  const padrao = (await dbGet(db, 'SELECT localizacao_padrao_id p FROM materiais_almoxarifado WHERE id = ?', [materialId]) || {}).p || null;
+  const linhas = await dbAll(db, `SELECT s.id, s.localizacao_id, s.quantidade, lc.id as lc_id, COALESCE(lc.bloqueada, 0) as bloqueada
+    FROM estoque_saldo_almoxarifado s LEFT JOIN localizacoes_almoxarifado lc ON lc.id = s.localizacao_id
+    WHERE s.material_id = ? AND s.lote_id IS NULL AND s.quantidade > 0`, [materialId]);
+  const usaveis = linhas
+    .map((x) => ({ ...x, livre: Math.max(0, Number(x.quantidade) - (guardadoLoc.get(Number(x.localizacao_id)) || 0)) }))
+    .sort((a, b) => ((b.localizacao_id === padrao) - (a.localizacao_id === padrao))
+      || (Number(b.quantidade) - Number(a.quantidade)) || (a.id - b.id))
+    .filter((x) => x.localizacao_id != null && x.lc_id != null && !Number(x.bloqueada) && x.livre > Q.QTD_FOLGA);
+  if (usaveis.reduce((s2, x) => s2 + x.livre, 0) + Q.QTD_FOLGA < alvo) return null; // B1398: nao cobre — como hoje
+  const fatias = [];
+  let falta = alvo;
+  for (const x of usaveis) {
+    if (falta <= Q.QTD_FOLGA) break;
+    const t = Q.qtd(Math.min(falta, x.livre));
+    if (t <= Q.QTD_FOLGA) continue;
+    fatias.push({ localizacao_id: Number(x.localizacao_id), quantidade: t });
+    falta = Q.qtd(falta - t);
+  }
+  return fatias;
 }
 
 /**
@@ -2637,6 +2695,17 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     .filter((p) => origemGuardada.get(p.item.id)?.saiDaOrigem && p.baixadoComOrigem > 0)
     .map((p) => [Number(p.item.id), p.baixadoComOrigem]));
   // (Etapa 206, Fase 2 item 4: parteQueFicaPorItem declarado antes da previa — a conferencia do automatico o usa)
+  // Etapa 207 (B1396-B1398, B1402): a parte automatica SEM lote. Sem guarda sem lote que conte, ou o livre usavel nao cobre: uma baixa so,
+  // sem endereco, como hoje (o motor escolhe a linha). Cobre: uma SAIDA por fatia, com o endereco (origem estrita) e o reserva_id do pedaco.
+  const baixarSemLote = async (plano, baixa, q) => {
+    const fs = await fatiasSemLoteParaOAutomatico(db, plano.item.material_id, q, saiuDaOrigemPorItem(), parteQueFicaPorItem());
+    if (!fs) return baixar(plano, baixa, q, null);
+    for (const f of fs) {
+      // eslint-disable-next-line no-await-in-loop
+      await baixar(plano, baixa, f.quantidade, null, f.localizacao_id);
+    }
+    return undefined;
+  };
 
   // Etapa 63 (Fase 5): o registro sai num finally — se um pedaco falhar depois de outro ja baixado, o livro mostra a saida e a troca nao
   // pode ficar sem registro. Etapa 136 (RN-05): o finally cobre as tres passadas — todo item que teve baixa, nao so o da vez.
@@ -2658,8 +2727,15 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
               // eslint-disable-next-line no-await-in-loop
               await baixar(plano, baixa, f.quantidade, f.lote_id, f.localizacao_id || null);
             }
+            // Etapa 207 (B1400): o resto sem lote passa pela regua da guarda sem lote (cobre -> fatias com endereco; senao como hoje)
             // eslint-disable-next-line no-await-in-loop
-            if (resto > Q.QTD_FOLGA) await baixar(plano, baixa, resto, null);
+            if (resto > Q.QTD_FOLGA) await baixarSemLote(plano, baixa, resto);
+            continue;
+          }
+          // Etapa 207 (B1396/B1397): material sem controle de lote, sem serie — a mesma regua; com serie, como hoje (B1404, C493)
+          if (!baixa.comOrigem && !seriesPorItem.has(item.id)) {
+            // eslint-disable-next-line no-await-in-loop
+            await baixarSemLote(plano, baixa, baixa.quantidade);
             continue;
           }
           // eslint-disable-next-line no-await-in-loop
@@ -3224,6 +3300,8 @@ module.exports = {
   parteGuardadaDeOutrasPorPar, // Etapa 201 (T1)
   parteGuardadaDeOutras, // Etapa 201 (T1): exportada para a prova de equivalencia
   dividirPorLotes, // Etapa 197 (T0)
+  guardaQueConta, // Etapa 207 (B1396)
+  fatiasSemLoteParaOAutomatico, // Etapa 207 (B1396)
   fraseEntregaLoteImpedido, // Etapa 206 (B1388)
   conferirAutomaticoPeloLote, // Etapa 206 (B1383)
   tetoDaEntregaPeloLote, // Etapa 206 (Fase 5, R1)
