@@ -253,6 +253,195 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(await retrato(m), { linhas: ['GZ-B/-=2', 'GZ-P/-=3'], fisico: 5 });
   });
 
+  // ── RN-207.08: sorteio com invariantes (o fuzz da 196/197/206, modo G do revisor da 206) ────────────────────────────────────────
+  // Semente fixa (mulberry32). Cada caso: material sem lote (70%) ou com lote + linhas sem lote por SQL (30%); linhas em 2-3 enderecos
+  // + padrao as vezes; em 25% uma linha sem lote SEM endereco ou num endereco BLOQUEADO (Fase 2 I2); 0-1 guarda de outra requisicao;
+  // 2-3 itens com guarda (60%) ou sem; 1a entrega aleatoria as vezes; depois uma entrega aleatoria (origem_automatica e origem planejada
+  // as vezes). Espioes: `stockService.registrarMovimentacao` (cada SAIDA desta requisicao: da origem, fatia por lote, fatia sem lote com
+  // endereco, ou a baixa sem endereco) e `db.all` (as duas leituras de `fatiasSemLoteParaOAutomatico`: guardas e linhas) — cada chamada da
+  // regua abre um BLOCO. Invariantes depois de cada entrega ACEITA:
+  //  T — tudo ou como hoje: bloco sem a leitura das linhas (sem guarda) = uma baixa sem endereco; bloco com a leitura = so fatias com
+  //      endereco OU uma baixa sem endereco (o C492, nao cobriu), nunca misturado (Fase 2 I1);
+  //  G — (entrega sem bloco "nao cobriu") toda guarda viva (endereco, lote — INCLUSIVE lote nulo) que cobria antes cobre depois;
+  //  N — (idem) a proxima entrega de cada item com guarda, num clique, nao toma "nao serve mais";
+  //  L — material sem guarda sem lote viva antes: nenhuma SAIDA sem lote COM endereco fora da origem planejada (B1397);
+  //  F — fisico = soma das linhas.
+  const stockService = require('../../services/almoxarifado/stockService');
+  const C = await loc('GZ-C'); const X = await loc('GZ-X');
+  await dbRun(db, 'UPDATE localizacoes_almoxarifado SET bloqueada = 1 WHERE id = ?', [X.id]);
+  const SEMENTE = Number(process.env.SEMENTE207 || 207); const CASOS = 400;
+  const sorteio = async () => {
+    let seed = SEMENTE;
+    const rnd = () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    const ri = (a, b) => a + Math.floor(rnd() * (b - a + 1));
+    const pick = (arr) => arr[Math.floor(rnd() * arr.length)];
+    const st = { casos: 0, medidos: 0, aceitos: 0, recusas: 0, comLote: 0, i2: 0, guardaSL: 0, L: 0, T: 0, cobriu: 0, semGuardaBloco: 0,
+      explicitaAlem: 0, G_viol: 0, N_testes: 0, N_viol: 0, L_viol: 0, T_viol: 0, F_viol: 0, orfas: 0 };
+    const ex = [];
+    const PARTE = requisitionService.parteOrigemSql('ir');
+    for (let caso = 0; caso < CASOS; caso++) {
+      const cl = rnd() < 0.3 ? 1 : 0; if (cl) st.comLote++;
+      const c = `S207-${caso}`;
+      const m = (await dbRun(db, `INSERT INTO materiais_almoxarifado (codigo, nome, unidade, quantidade_atual, quantidade_minima, ativo,
+        material_critico, custo_unitario, controle_lote, controle_serie, permite_saldo_negativo, localizacao_padrao_id)
+        VALUES (?, ?, 'un', 0, 0, 1, 0, 0.1, ?, 0, 0, ?)`, [c, c, cl, P.id])).lastID;
+      const i2 = rnd() < 0.25; // Fase 2 I2: linha sem lote sem endereco ou em endereco bloqueado (e as boas pequenas: o livre usavel nao cobre)
+      const qb = (a, b) => (i2 ? ri(2, 3) : ri(a, b));
+      const ends = [A.id, B.id, C.id].sort(() => rnd() - 0.5).slice(0, ri(2, 3));
+      if (rnd() < 0.4) ends.push(P.id);
+      const ins = (l, lote, q) => dbRun(db, 'INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, lote_id, quantidade) VALUES (?,?,?,?)', [m, l, lote, q]);
+      if (cl) {
+        for (let k = 0; k < ri(1, 2); k++) {
+          const lid = (await dbRun(db, "INSERT INTO lotes_almoxarifado (material_id, codigo, status) VALUES (?, ?, 'ATIVO')", [m, `L${k + 1}`])).lastID;
+          for (const l of [...ends].sort(() => rnd() - 0.5).slice(0, ri(1, 2))) await ins(l, lid, ri(1, 4));
+        }
+        for (const l of [...ends].sort(() => rnd() - 0.5).slice(0, ri(1, 2))) await ins(l, null, qb(1, 4));
+      } else for (const l of ends) await ins(l, null, qb(1, 5));
+      if (i2) { st.i2++; if (rnd() < 0.7) await ins(null, null, ri(4, 8)); else await ins(X.id, null, ri(4, 8)); }
+      await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = (SELECT COALESCE(SUM(quantidade),0) FROM estoque_saldo_almoxarifado WHERE material_id = ?) WHERE id = ?', [m, m]);
+      const linhasBoas = async () => dbAll(db, `SELECT localizacao_id loc, lote_id lote, quantidade q FROM estoque_saldo_almoxarifado
+        WHERE material_id = ? AND quantidade >= 1 AND localizacao_id IS NOT NULL AND localizacao_id <> ?`, [m, X.id]);
+      const novaReq = async (qs) => {
+        const R = (await dbRun(db, "INSERT INTO requisicoes_almoxarifado (numero, solicitante_id, solicitante_nome, status) VALUES (?, 1, 'S', 'APROVADO')",
+          [`RS207-${caso}-${++seq}`])).lastID;
+        const ids = [];
+        for (const q of qs) ids.push((await dbRun(db, `INSERT INTO itens_requisicao_almoxarifado (requisicao_id, material_id, quantidade_solicitada,
+          quantidade_separada, quantidade_entregue, quantidade_atendida) VALUES (?,?,?,0,0,0)`, [R, m, q])).lastID);
+        return { R, ids };
+      };
+      const sepGuarda = async (R, id, q, ln) => requisitionService.separarRequisicao(db, R, [{ item_id: id, quantidade_separada: q,
+        localizacao_origem_id: ln.loc, lote_id: ln.lote || undefined }], { ...USERS.ADMIN });
+      if (rnd() < 0.35 || i2) { const ln = pick(await linhasBoas()); if (ln) { const g = i2 ? 1 : ri(1, Math.floor(ln.q)); const o = await novaReq([g]);
+        try { await sepGuarda(o.R, o.ids[0], g, ln); } catch (e) { /* teto: sem guarda */ } } }
+      const { R, ids } = await novaReq(Array.from({ length: ri(2, 3) }, () => (i2 ? ri(3, 5) : ri(1, 5))));
+      const comGuarda = rnd() < 0.4 || i2;
+      for (const id of ids) {
+        const it = await dbGet(db, 'SELECT quantidade_solicitada q FROM itens_requisicao_almoxarifado WHERE id = ?', [id]);
+        const sq = i2 ? it.q : ri(1, it.q); const ln = pick(await linhasBoas());
+        const gq = comGuarda && (rnd() < 0.7 || (i2 && id === ids[0])) && ln ? Math.min(sq, i2 ? 1 : Math.floor(ln.q)) : 0;
+        try {
+          if (gq > 0) await sepGuarda(R, id, gq, ln);
+          if (sq - gq > 0 && (i2 || rnd() < 0.5)) await requisitionService.separarRequisicao(db, R, [{ item_id: id, quantidade_separada: sq - gq }], { ...USERS.ADMIN });
+        } catch (e) { /* teto */ }
+      }
+      if (rnd() < 0.3 && !i2) { const its = await requisitionService.carregarItensRequisicao(db, R);
+        const pl = its.map((i) => ({ item_id: i.id, quantidade_atendida: ri(0, Math.max(0, requisitionService.getSeparado(i) - requisitionService.getEntregue(i))) }));
+        try { await requisitionService.entregarRequisicao(db, R, pl, { ...USERS.ADMIN }, null); } catch (e) { /* */ } }
+      const reqSt = (await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [R])).status;
+      if (!['EM_SEPARACAO', 'PRONTA_RETIRADA', 'PARCIALMENTE_ATENDIDA', 'SEPARADA', 'PRONTO_RETIRADA'].includes(reqSt)) continue;
+      st.casos++;
+      const its = await requisitionService.carregarItensRequisicao(db, R);
+      const payload = []; let explicitaAlem = false;
+      for (const i of its) {
+        const caixa = Math.max(0, requisitionService.getSeparado(i) - requisitionService.getEntregue(i)); if (caixa <= 0 && rnd() < 0.7) continue;
+        if (i2 && i.origem_separacao_id && rnd() < 0.8) continue; // I2: a guarda fica viva para o automatico do irmao
+        const q = i2 && rnd() < 0.7 ? Math.ceil(caixa) : ri(0, Math.ceil(caixa) + (rnd() < 0.2 ? 1 : 0)); if (q === 0) continue;
+        const e = { item_id: i.id, quantidade_atendida: q }; const md = rnd();
+        if (md < 0.2) e.origem_automatica = true;
+        else if (md < 0.3 && i.origem_separacao_id) { e.localizacao_origem_id = i.origem_separacao_id; if (i.lote_separacao_id) e.lote_id = i.lote_separacao_id; }
+        // a origem ESCOLHIDA alem da parte guardada do item tira do endereco o que o irmao guardou ali — escolha de quem entrega, na
+        // passada 0 (que esta etapa nao toca): fora do G e do N (que medem o automatico)
+        if (e.localizacao_origem_id && q > requisitionService.parteDaOrigem(i) + 1e-9) explicitaAlem = true;
+        payload.push(e);
+      }
+      if (!payload.length) continue;
+      st.medidos++;
+      const guardas = async () => dbAll(db, `SELECT ir.id, ir.origem_separacao_id loc, ir.lote_separacao_id lote, ${PARTE} q
+        FROM itens_requisicao_almoxarifado ir JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id WHERE ir.material_id = ?
+          AND ir.origem_separacao_id IS NOT NULL AND COALESCE(r.ativo, 1) = 1 AND r.status NOT IN ('CANCELADO', 'ENTREGUE', 'ENCERRADA', 'REJEITADO')`, [m]);
+      const cobre = async () => {
+        const gs = await guardas();
+        const ls = await dbAll(db, 'SELECT localizacao_id loc, lote_id lote, SUM(quantidade) q FROM estoque_saldo_almoxarifado WHERE material_id = ? GROUP BY localizacao_id, lote_id', [m]);
+        const v = new Map();
+        for (const g of gs) { if (!(Number(g.q) > 1e-9)) continue; const k = `${g.loc}|${g.lote ?? ''}`; v.set(k, (v.get(k) || 0) + Number(g.q)); }
+        const res = {};
+        for (const [k, need] of v) { const [lc, lt] = k.split('|'); const have = ls.filter((x) => String(x.loc) === lc && String(x.lote ?? '') === lt)
+          .reduce((s, x) => s + Number(x.q), 0); res[k] = { need, have }; }
+        return res;
+      };
+      const antes = await cobre();
+      const temGuardaSL = (await guardas()).some((g) => g.lote == null && Number(g.q) > 1e-9);
+      const desde = (await dbGet(db, 'SELECT COALESCE(MAX(id), 0) x FROM movimentacoes_almoxarifado')).x;
+      // espioes, so durante a entrega medida
+      const ev = [];
+      const origAll = db.all; const origReg = stockService.registrarMovimentacao;
+      db.all = function (sql, ...rest) {
+        if (typeof sql === 'string' && sql.includes('ir.lote_separacao_id IS NULL AND') && sql.includes('as loc_id') && rest[0] && rest[0][0] === m) ev.push('GQ');
+        else if (typeof sql === 'string' && sql.includes('lc.id as lc_id') && rest[0] && rest[0][0] === m) ev.push('LQ');
+        return origAll.call(this, sql, ...rest);
+      };
+      stockService.registrarMovimentacao = async (dbx, user, p, ...r) => {
+        if (p && p.tipo === 'SAIDA' && Number(p.requisicao_id) === Number(R)) {
+          ev.push(p.serie_ids ? 'SERIE' : ('codigo_lido_origem' in p) ? 'ORIGEM' : p.lote_id ? 'FLOTE' : p.localizacao_origem_id ? 'FSL' : 'FALLBACK');
+        }
+        return origReg(dbx, user, p, ...r);
+      };
+      let erro = null;
+      try { await requisitionService.entregarRequisicao(db, R, payload, { ...USERS.ADMIN }, null); } catch (e) { erro = e; } finally {
+        db.all = origAll; stockService.registrarMovimentacao = origReg;
+      }
+      if (erro) { st.recusas++; continue; }
+      st.aceitos++;
+      if (temGuardaSL) st.guardaSL++;
+      // T: os blocos da regua
+      const blocos = []; let cur = null;
+      for (const e of ev) {
+        if (e === 'GQ') { cur = { lq: false, calls: [] }; blocos.push(cur); continue; }
+        if (e === 'LQ') { if (cur) cur.lq = true; continue; }
+        if (e === 'FSL' || e === 'FALLBACK') { if (cur) cur.calls.push(e); else st.orfas++; continue; }
+        cur = null;
+      }
+      let naoCobriu = false; let tviol = false;
+      for (const b of blocos) {
+        const nF = b.calls.filter((x) => x === 'FSL').length; const nB = b.calls.filter((x) => x === 'FALLBACK').length;
+        if (!b.lq) { st.semGuardaBloco++; if (!(nB === 1 && nF === 0)) tviol = true; } else if (nB === 0 && nF >= 1) st.cobriu++;
+        else if (nB === 1 && nF === 0) naoCobriu = true;
+        else tviol = true;
+      }
+      if (naoCobriu) st.T++;
+      if (tviol) { st.T_viol++; if (ex.length < 6) ex.push({ caso, k: 'T', ev }); }
+      // L
+      if (!temGuardaSL) {
+        st.L++;
+        const ruins = await dbAll(db, `SELECT id FROM movimentacoes_almoxarifado WHERE material_id = ? AND id > ? AND tipo = 'SAIDA'
+          AND lote_id IS NULL AND localizacao_origem_id IS NOT NULL`, [m, desde]);
+        if (ruins.length) { st.L_viol++; if (ex.length < 6) ex.push({ caso, k: 'L', ev }); }
+      }
+      // F
+      const f = await dbGet(db, `SELECT (SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?) fis,
+        (SELECT COALESCE(SUM(quantidade), 0) FROM estoque_saldo_almoxarifado WHERE material_id = ?) soma`, [m, m]);
+      if (Math.abs(Number(f.fis) - Number(f.soma)) > 1e-9) { st.F_viol++; if (ex.length < 6) ex.push({ caso, k: 'F', f }); }
+      if (naoCobriu) continue; // o C492: G e N nao valem (I1)
+      if (explicitaAlem) { st.explicitaAlem++; continue; }
+      // G
+      const depois = await cobre();
+      const vg = Object.entries(depois).filter(([k, x]) => x.have + 1e-9 < x.need && (!antes[k] || antes[k].have + 1e-9 >= antes[k].need));
+      if (vg.length) { st.G_viol++; if (ex.length < 6) ex.push({ caso, k: 'G', payload, vg, ev }); }
+      // N
+      for (const i of await requisitionService.carregarItensRequisicao(db, R)) {
+        if (!i.origem_separacao_id) continue;
+        const q = requisitionService.parteDaOrigem(i);
+        if (!(q > 1e-9)) continue;
+        st.N_testes++;
+        try { await requisitionService.entregarRequisicao(db, R, [{ item_id: i.id, quantidade_atendida: q }], { ...USERS.ADMIN }, null); } catch (e) {
+          if (/não serve mais/.test(e.message)) { st.N_viol++; if (ex.length < 6) ex.push({ caso, k: 'N', item: i.id, lote: i.lote_separacao_id, msg: e.message.slice(0, 160) }); }
+        }
+      }
+    }
+    return { st, ex };
+  };
+  await test(`[RN-207.08, sorteio] ${CASOS} casos, semente ${SEMENTE}: T, G, N, L, F sem violacao; premissas (guarda sem lote >= 30, L >= 20, T >= 10)`, async () => {
+    const { st, ex } = await sorteio();
+    console.log(`    sorteio: ${JSON.stringify(st)}`);
+    if (ex.length) console.log(`    exemplos: ${JSON.stringify(ex).slice(0, 1500)}`);
+    assert.deepStrictEqual({ G: st.G_viol, N: st.N_viol, L: st.L_viol, T: st.T_viol, F: st.F_viol, orfas: st.orfas },
+      { G: 0, N: 0, L: 0, T: 0, F: 0, orfas: 0 }, 'violacoes');
+    assert.ok(st.guardaSL >= 30, `premissa: >= 30 entregas aceitas com guarda sem lote viva (${st.guardaSL})`);
+    assert.ok(st.L >= 20, `premissa: >= 20 casos do L (${st.L})`);
+    assert.ok(st.T >= 10, `premissa: >= 10 casos de T, o livre nao cobriu (${st.T})`);
+    assert.ok(st.cobriu >= 10, `premissa: >= 10 blocos que cobriram com fatias (${st.cobriu})`);
+  });
+
   void requisitionService;
   await close();
   terminou = true;
