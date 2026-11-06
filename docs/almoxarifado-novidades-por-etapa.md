@@ -14088,6 +14088,20 @@ do bloqueio continua valendo, RN-205.07) — quem lê faz 10 − 10 = 0 e acha q
 **Descartado:** esconder a linha quando a reserva cobre (some a informação de que há lote impedido); mostrar a conta inteira (polui a
 linha). **Reversível** (texto da tela).
 
+**B1394 (NOVA, da Etapa 206, Fase 5 R2; decisão do agente; o defeito é anterior, desde a Etapa 197) — na entrega, a parte guardada do
+próprio item conta uma vez só.** A entrega tira primeiro o que sai da origem guardada (passadas 0 e 1) e depois o automático (passada 2). Na
+passada 2 a conta da guarda que fica relia o banco **depois** da baixa (a caixa já tinha encolhido) e ainda subtraía o que tinha saído: a
+guarda que fica virava 0 e o automático do irmão a levava. Cenário: B/L2 4 e B sem lote 3; item 1 separado 3 de (B, L2), item 2 separado 3
+sem origem; entregar 2 do item 1 (um clique) e 3 do item 2 (automático) → saíam 2 de B/L2 para o item 2, e a segunda entrega do item 1 (1)
+tomava *"a origem da separação não serve mais"*. Agora a guarda que fica é a parte de **antes** da baixa menos o que sai da origem — o mesmo
+número que a conferência da entrega (B1383) já usava: o item 2 leva 1 de B/L2 e 2 sem lote, e a segunda entrega do item 1 sai. Vale com ou
+sem lote impedido. **Descartado:** reler o banco e não subtrair (a falha no meio da passada 0 deixaria a conta diferente da conferência);
+mudar a conferência para o número da passada 2 (ela passaria a aceitar entrega que rouba guarda). O cenário do revisor (L1 5 vencido; L2 2
+em A e 4 em B; sem lote 2 em B; itens 3 em (B, L2), 4 sem origem e 2 em (A, L2); entregar 2, 4 e 1) continua **400 "faltam 1 un"**, e é o
+certo: o automático pede 5 e, sem tocar nas guardas que ficam (1 do item 1, 1 do item 3), os lotes que podem sair e o sem lote dão 4 — o
+200 de antes da 206 tirava a guarda do item 1. **Reversível** (`parteQueFicaPorItem` em `entregarSemTrava`).
+
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente

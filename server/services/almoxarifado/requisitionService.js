@@ -2265,7 +2265,7 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
         });
       }
     }
-    if (item.origem_separacao_id) origemGuardada.set(item.id, { saiDaOrigem, caixaAntes: pendenteSep, parteQueFica });
+    if (item.origem_separacao_id) origemGuardada.set(item.id, { saiDaOrigem, caixaAntes: pendenteSep, parteQueFica, parte }); // R2: `parte` antes da baixa
     if (!origemId && !loteId && semEscolha && !loteSeries) continue;
     // Etapa 136 (RN-03): o "so lote" (lote sem endereco) e conferido DEPOIS de todos os estritos — ele sai na passada 1, depois deles.
     if (!origemId && loteId) { soLotePendentes.push({ item, loteId, lido, qtdComOrigem }); continue; }
@@ -2333,10 +2333,17 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
   // na segunda rodada no mesmo livre passavam aqui e o laco baixava o primeiro e recusava o segundo (400 com metade da entrega feita).
   const efeitoDosIrmaos = new Map(); // material_id -> { disponivel, caixaSemReserva } ja levados nesta previa
   const itensDaEntrega = []; // Etapa 206: os itens desta entrega na ordem do laco, para a conferencia do automatico pelo lote
-  // 2o fix-round da Fase 5: o item desta entrega que NAO sai da origem guardada — a parte dele so vale pelo que fica depois dela
+  // 2o fix-round da Fase 5: o item desta entrega que NAO sai da origem guardada — a parte dele so vale pelo que fica depois dela.
+  // Etapa 206 (Fase 5, R2, B1394): e o que SAI dela tambem — a parte de ANTES da baixa menos o que sai da origem (`qtdComOrigem`, o que a
+  // passada 2 ve em `saiuDaOrigemPorItem`). Antes `lotesParaOAutomatico` lia a parte no banco (`PARTE_ORIGEM_SQL`, min(parte, caixa)) e
+  // tirava o que saiu: na conferencia (antes da baixa) dava certo, mas na passada 2 o entregue ja tinha subido e a caixa encolhido — o que
+  // saiu contava duas vezes, a guarda que fica virava 0 e o automatico do irmao a levava (a segunda entrega do item: "nao serve mais").
+  // Agora a conferencia e a baixa leem o MESMO numero, fixado antes de baixar.
   const parteQueFicaPorItem = () => new Map([...origemGuardada.entries()]
-    .filter(([, og]) => !og.saiDaOrigem && og.parteQueFica !== undefined)
-    .map(([id, og]) => [Number(id), og.parteQueFica]));
+    .filter(([, og]) => (og.saiDaOrigem ? og.parte !== undefined : og.parteQueFica !== undefined))
+    .map(([id, og]) => [Number(id), og.saiDaOrigem
+      ? Q.qtd(Math.max(0, og.parte - num(origemPorItem.get(id)?.qtdComOrigem)))
+      : og.parteQueFica]));
   for (const item of itens) {
     const entrada = itensAtendidos?.find((ia) => Number(ia.item_id) === Number(item.id));
     // Etapa 96 (Fase 2, M4): a quantidade arredondada antes de comparar (a previa nao passa pela porta do motor).

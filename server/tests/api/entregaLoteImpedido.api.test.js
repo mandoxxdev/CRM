@@ -425,6 +425,31 @@ valueApprovalService.notificarAprovadoresValor = async (db, req) => { notificado
     await recusa(R, m, [{ item_id: ids[0], quantidade_atendida: 4 }], frase(m.nome, 4, 'un', 2, [L('L2', 'BLOQUEADO', 3)]));
   });
 
+  // ── Fase 5 (fix-round): R2 — a passada 2 desconta UMA vez a parte guardada do proprio item (ler antes = ler depois) ────────────────
+  // B/L2 4, B sem lote 3; item 1 separado 3 de (B, L2), item 2 separado 3 sem origem. Entrega: item 1 2 (um clique), item 2 3 automatico.
+  // A guarda do item 1 que fica e 1. A passada 2 lia a parte DEPOIS da baixa (min(parte, caixa) ja com o entregue novo = 1) e ainda tirava
+  // o que saiu (2): via guarda 0, o automatico do item 2 levava 2 de B/L2 e a segunda entrega do item 1 tomava 400 "nao serve mais".
+  const guardaDoProprio = async (comImpedido) => {
+    const m = await material({ lote: false });
+    await entrar(m, B01.id, 3, null); // sem lote +3 (controle desligado), depois o controle liga
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET controle_lote = 1 WHERE id = ?', [m.id]);
+    await entrar(m, B01.id, 4, 'L2');
+    if (comImpedido) await entrar(m, P01.id, 5, 'L1');
+    const { R, ids } = await reqDireta([[m.id, 3], [m.id, 3]]);
+    await separar(R, [{ item_id: ids[0], quantidade_separada: 3, localizacao_origem_id: B01.id, lote_id: await loteId(m, 'L2') }]);
+    await separar(R, [{ item_id: ids[1], quantidade_separada: 3 }]);
+    if (comImpedido) await validade(m, 'L1', dia(-1));
+    await ok(entregar(R, [{ item_id: ids[0], quantidade_atendida: 2 }, { item_id: ids[1], quantidade_atendida: 3, origem_automatica: true }]));
+    assert.deepStrictEqual(await livro(R, m), [['SAIDA', 'Z206B-01', 'L2', 2], ['SAIDA', 'Z206B-01', 'L2', 1], ['SAIDA', null, null, 2]]);
+    const g = await dbGet(db, 'SELECT origem_separacao_id o, quantidade_origem_separacao p FROM itens_requisicao_almoxarifado WHERE id = ?', [ids[0]]);
+    assert.deepStrictEqual([Number(g.o), Number(g.p)], [B01.id, 1], 'a guarda do item 1 que fica');
+    await ok(entregar(R, [{ item_id: ids[0], quantidade_atendida: 1 }]));
+    assert.strictEqual(await negativas(m), 0);
+    assert.deepStrictEqual(await retrato(m), { linhas: comImpedido ? ['Z206B-01/-=1', 'Z206P-01/L1=5'] : ['Z206B-01/-=1'], fisico: comImpedido ? 6 : 1 });
+  };
+  await test('[RN-206.14 a] guarda do proprio item na passada 2, com lote impedido: 200, a guarda que fica (1) nao e tomada, a segunda entrega do item 1 sai', () => guardaDoProprio(true));
+  await test('[RN-206.14 b] o mesmo SEM lote impedido (o defeito era anterior a 206): 200 e a segunda entrega sai', () => guardaDoProprio(false));
+
   await close();
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
