@@ -9,6 +9,7 @@
 const { dbGet, dbAll } = require('./db');
 const { disponivelSql } = require('./availabilitySql');
 const Q = require('./quantidade'); // Etapa 101: a regua da caixa (B524)
+const { loteImpedidoSql } = require('./loteImpedido'); // Etapa 205 (B1368): so quantidade e diaLocal — sem ciclo
 
 // Etapa 73 (T1): abaixo disso o "a caminho" e residuo de ponto flutuante, nao compra vindo.
 const EPS_A_CAMINHO = 1e-9;
@@ -274,7 +275,8 @@ const STATUS_CANCELAVEIS_SEM_CONDICAO = Object.freeze(Object.keys(TRANSICOES)
 async function calcularStatusPosAprovacao(db, requisicaoId) {
   const itens = await dbAll(db, `
     SELECT ir.material_id,
-      ${disponivelSql('ma')} as disponivel
+      -- Etapa 205 (B1368, RN-205.04): sem o saldo de lote impedido — so lote bloqueado/reprovado/vencido nao e "Aprovado"
+      ${Q.qtdSql(`${disponivelSql('ma')} - ${loteImpedidoSql('ma')}`)} as disponivel
     FROM itens_requisicao_almoxarifado ir
     JOIN materiais_almoxarifado ma ON ir.material_id = ma.id
     WHERE ir.requisicao_id = ?`, [requisicaoId]);

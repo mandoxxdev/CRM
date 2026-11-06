@@ -678,8 +678,10 @@ async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}, { rec
       // no meio podia deixar o hold de um item; o /aprovar seguinte reservava o mesmo item de novo
       // (duas reservas de 4 para um item de 4). `disponivel` ja soma o hold do proprio item de volta,
       // entao o livre de verdade e `disponivel - reservado_para_item`.
+      // Etapa 205 (B1368, RN-205.03): a aprovacao le o LIBERADO — o disponivel sem o saldo de lote bloqueado, reprovado ou vencido
+      // (loteImpedido.js); a conversao da OS e o `aReservar` abaixo herdam. A reserva que o item ja tem fica (B1372).
       // eslint-disable-next-line no-await-in-loop
-      let { disponivel, reservado_para_item: jaReservado, caixa_outros_itens: caixaOutros } = await saldoDisponivelParaItem(db, item);
+      let { disponivel_liberado: disponivel, reservado_para_item: jaReservado, caixa_outros_itens: caixaOutros } = await saldoDisponivelParaItem(db, item);
       const falta = pendente - jaReservado;
       if (jaReservado > 0) algumSeguro = true;
       if (falta <= 1e-9) continue; // o item ja esta todo seguro
@@ -697,7 +699,7 @@ async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}, { rec
         if (convertidas.length) {
           try {
             // eslint-disable-next-line no-await-in-loop
-            ({ disponivel, reservado_para_item: jaReservado, caixa_outros_itens: caixaOutros } = await saldoDisponivelParaItem(db, item));
+            ({ disponivel_liberado: disponivel, reservado_para_item: jaReservado, caixa_outros_itens: caixaOutros } = await saldoDisponivelParaItem(db, item));
           } catch (e) {
             // eslint-disable-next-line no-await-in-loop
             await recriarConvertidas(db, user, convertidas, rotuloReq);
