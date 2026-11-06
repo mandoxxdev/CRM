@@ -201,9 +201,12 @@ process.on('exit', (code) => {
   const naoElegivel = async (tornar) => {
     const m = await material();
     await entrar(m, B01.id, 2, 'L1'); await entrar(m, P01.id, 3, 'L2');
-    await tornar(m);
+    // Etapa 205 (RN-205.08): com o lote ja impedido a separacao de 4 recusa (so 2 podem sair). O automatico da entrega so encontra lote
+    // impedido quando o lote fica impedido DEPOIS de separar — o caso que chega a entrega (RN-205.10, item 7). Antes a ordem era
+    // tornar -> separar, e a separacao aceitava os 4 (a recusa: loteImpedidoSeparacao.api.test.js, RN-205.08).
     const { R, ids } = await reqDireta([[m.id, 4]]);
     await separar(R, [{ item_id: ids[0], quantidade_separada: 4 }]);
+    await tornar(m);
     await entregar(R, [{ item_id: ids[0], quantidade_atendida: 4 }]);
     assert.deepStrictEqual(await livro(R, m), [['SAIDA', null, 'L1', 2], ['SAIDA', null, null, 2]]);
     assert.deepStrictEqual(await retrato(m), { linhas: ['ZP-01/-=-2', 'ZP-01/L2=3'], fisico: 1 });
