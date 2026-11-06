@@ -276,8 +276,78 @@ process.on('exit', (code) => {
   });
 
   // ---------------------------------------------------------------- RN-201.09 (T4)
-  // T4_INTEGRACAO
+  // A literal C1 da Etapa 198 (sem mudar nesta etapa): o numero da lista tem de ser o "sobra" dela.
+  const c1 = (m, { saldo, contando = 0, outras, numeros, sobra, qty }) => `${m.nome}: em XB-01, lote L1 há ${saldo}`
+    + `${contando ? ` (já contando ${contando} desta requisição)` : ''} para esta separação, mas ${outras} `
+    + `${numeros.length > 1 ? 'já estão separados dali para outras requisições' : 'já está separado dali para outra requisição'} `
+    + `(${numeros.join(', ')}); sobra ${sobra}, que não cobre a quantidade (${qty}). Escolha outro endereço ou reabra a janela para ver a sugestão atual`;
+  // A sobra que a tela mostra na janela de SEPARACAO (RN-201.06 com a Fase 2): a sobra da rota menos a parte desta requisicao no par.
+  const sobraNaSeparacao = async (rows, R, locId, lid) => {
+    const itens = await dbAll(db, 'SELECT * FROM itens_requisicao_almoxarifado WHERE requisicao_id = ?', [R]);
+    const propria = itens.filter((i) => Number(i.origem_separacao_id) === Number(locId)
+      && (i.lote_separacao_id == null ? null : Number(i.lote_separacao_id)) === lid)
+      .reduce((s, i) => s + requisitionService.parteDaOrigem(i), 0);
+    return Math.max(0, linha(rows, locId, lid).sobra - propria);
+  };
+  const recusa = async (R, linhas) => {
+    const r = await separacao(R, linhas);
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    return r.body.error;
+  };
 
+  await test('[RN-201.09 rota] R1 separou 4; a lista de R2 diz sobra 2; 3 -> C1 "sobra 2"; 2 -> 200; R3 le 6 e sobra 0; R1 nao se conta', async () => {
+    const { m, L1 } = await cenario();
+    const r1 = await req([[m.id, 4]]); const r2 = await req([[m.id, 4]]); const r3 = await req([[m.id, 4]]);
+    await sepOk(r1.R, [doPar(r1.ids[0], 4, L1)]);
+    let rows = await saldos(m, `?requisicao_id=${r2.R}`);
+    assert.deepStrictEqual(par(rows, B01.id, L1), [6, 4, 2]);
+    const sobra = await sobraNaSeparacao(rows, r2.R, B01.id, L1);
+    assert.strictEqual(sobra, 2);
+    assert.strictEqual(await recusa(r2.R, [doPar(r2.ids[0], 3, L1)]),
+      c1(m, { saldo: 6, outras: 4, numeros: [await numero(r1.R)], sobra, qty: 3 }));
+    await sepOk(r2.R, [doPar(r2.ids[0], 2, L1)]);
+    rows = await saldos(m, `?requisicao_id=${r3.R}`);
+    assert.deepStrictEqual(par(rows, B01.id, L1), [6, 6, 0]);
+    await equivalente(m, rows, r3.R);
+    rows = await saldos(m, `?requisicao_id=${r1.R}`);
+    assert.deepStrictEqual(par(rows, B01.id, L1), [6, 2, 4], 'R1 le so o de R2');
+    await equivalente(m, rows, r1.R);
+  });
+
+  await test('[RN-201.09 rota, Fase 2] R2 separou 1 dali: a lista diz sobra 1 (1 desta); 2 -> C1 "sobra 1"; 1 -> 200', async () => {
+    const { m, L1 } = await cenario();
+    const r1 = await req([[m.id, 4]]); const r2 = await req([[m.id, 4]]);
+    await sepOk(r1.R, [doPar(r1.ids[0], 4, L1)]);
+    await sepOk(r2.R, [doPar(r2.ids[0], 1, L1)]);
+    const rows = await saldos(m, `?requisicao_id=${r2.R}`);
+    assert.deepStrictEqual(par(rows, B01.id, L1), [6, 4, 2], 'a rota nao conta a propria');
+    const sobra = await sobraNaSeparacao(rows, r2.R, B01.id, L1);
+    assert.strictEqual(sobra, 1);
+    assert.strictEqual(await recusa(r2.R, [doPar(r2.ids[0], 2, L1)]),
+      c1(m, { saldo: 5, contando: 1, outras: 4, numeros: [await numero(r1.R)], sobra, qty: 2 }));
+    await sepOk(r2.R, [doPar(r2.ids[0], 1, L1)]);
+  });
+
+  await test('[RN-201.09 servico] separarRequisicao + parteGuardadaDeOutrasPorPar: o mesmo numero da recusa', async () => {
+    const { m, L1 } = await cenario();
+    const r1 = await req([[m.id, 4]]); const r2 = await req([[m.id, 4]]); const r3 = await req([[m.id, 4]]);
+    const k = `${B01.id}|${L1}`;
+    await requisitionService.separarRequisicao(db, r1.R, [doPar(r1.ids[0], 4, L1)], ALMOX);
+    const fisico = 6;
+    let mapa = await requisitionService.parteGuardadaDeOutrasPorPar(db, m.id, r2.R);
+    assert.strictEqual(mapa.get(k), 4);
+    assert.strictEqual(fisico - mapa.get(k), 2);
+    let erro = null;
+    try { await requisitionService.separarRequisicao(db, r2.R, [doPar(r2.ids[0], 3, L1)], ALMOX); } catch (e) { erro = e; }
+    assert.ok(erro && erro.status === 400, `tinha de recusar: ${erro && erro.message}`);
+    assert.strictEqual(erro.message, c1(m, { saldo: 6, outras: 4, numeros: [await numero(r1.R)], sobra: fisico - mapa.get(k), qty: 3 }));
+    await requisitionService.separarRequisicao(db, r2.R, [doPar(r2.ids[0], 2, L1)], ALMOX);
+    mapa = await requisitionService.parteGuardadaDeOutrasPorPar(db, m.id, r3.R);
+    assert.strictEqual(mapa.get(k), 6);
+    assert.strictEqual((await requisitionService.parteGuardadaDeOutras(db, m.id, B01.id, L1, r3.R)).q, 6);
+    mapa = await requisitionService.parteGuardadaDeOutrasPorPar(db, m.id, r1.R);
+    assert.strictEqual(mapa.get(k), 2, 'R1 nao se conta');
+  });
   await close();
   terminou = true;
   console.log(`\n${passed} passou, ${failed} falhou`);
