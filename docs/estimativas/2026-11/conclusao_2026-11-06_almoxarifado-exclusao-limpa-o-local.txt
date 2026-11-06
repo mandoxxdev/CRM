@@ -1,0 +1,8 @@
+*Concluído — Almoxarifado: requisição excluída deixa de guardar o local separado*
+_06/11/2026_
+
+4. Requisição excluída deixa de guardar o local separado — estimado 1h15 · realizado 1h15
+
+*Total: estimado 1h15 · realizado 1h15*
+
+Ao excluir uma requisição já separada, a anotação de onde o material tinha sido separado passa a ser apagada junto. Nenhuma conta muda; a anotação antiga só podia confundir quem olhasse os dados depois.
