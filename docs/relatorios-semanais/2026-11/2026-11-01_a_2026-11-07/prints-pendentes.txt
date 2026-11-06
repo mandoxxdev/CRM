@@ -1,0 +1,25 @@
+Prints pendentes (o Chrome respondeu, mas o sistema em http://localhost:3000 estava na tela de login - sem sessao aberta)
+
+Sem print, estes itens foram para "O que mudou - e por que importa". Com os prints, voltam para "O que voce ja pode ver na tela".
+
+1. prints/lote-corrigir-validade.png
+   Tela: Almoxarifado -> Lotes e Series -> um material com lote -> icone de calendario "Corrigir validade"
+   Precisa aparecer: a janela "Corrigir validade" com a validade atual, a nova data e a justificativa preenchidas.
+
+2. prints/nota-aviso-validade.png
+   Tela: Almoxarifado -> Recebimentos -> uma nota com lote ja existente e outra validade -> "Processar Nota"
+   Precisa aparecer: a janela "Processar nota fiscal" com o aviso amarelo embaixo do material
+   ("O lote ... ja tem validade ..., e a nota informa ...").
+
+3. prints/sai-de-mostra-sobra.png
+   Tela: Almoxarifado -> Requisicoes (almox.) -> requisicao aprovada -> Iniciar Separacao -> lista "Sai de" aberta
+   Precisa aparecer: um local com "(sobra 2 de 6; 4 para outras)" - exige outra requisicao com 4 separados do mesmo local e lote.
+
+4. prints/compras-materiais-igual.png
+   Tela: Compras -> Materiais
+   Precisa aparecer: a lista com Foto, Codigo, Material, Familia, Categoria, Quantidade, Localizacao, Status e os filtros
+   (Todas categorias, Todas familias, Todos status, Limpar filtros).
+
+5. (opcional) prints/materiais-clientes-virgula.png
+   Tela: Almoxarifado -> Materiais de clientes
+   Precisa aparecer: uma quantidade com casa decimal mostrada com virgula (ex.: 12,5).

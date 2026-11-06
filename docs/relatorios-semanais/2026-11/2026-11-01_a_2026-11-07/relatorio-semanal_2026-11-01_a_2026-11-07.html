@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relatório da semana — Semana de 01/11 a 07/11/2026</title>
+<style>
+  :root { --tinta:#1f2a37; --suave:#5b6675; --linha:#e3e7ec; --fundo:#ffffff; --cartao:#f6f8fa; --tela:#2f80ed; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--fundo); color:var(--tinta); font:16px/1.6 "Segoe UI", system-ui, sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font-size:28px; margin:0 0 4px; } h2 { font-size:21px; margin:40px 0 12px; border-bottom:2px solid var(--linha); padding-bottom:6px; }
+  h3 { font-size:17px; margin:24px 0 6px; }
+  .sub { color:var(--suave); margin:0 0 24px; }
+  .resumo { background:var(--cartao); border-left:4px solid var(--tela); padding:16px 20px; border-radius:6px; font-size:17px; }
+  .item { border:1px solid var(--linha); border-radius:8px; padding:16px 20px; margin:16px 0; }
+  .item p { margin:6px 0; } .rotulo { font-weight:600; color:var(--suave); }
+  table { border-collapse:collapse; width:100%; font-size:15px; } td, th { border-bottom:1px solid var(--linha); padding:8px; text-align:left; }
+  td:last-child, th:last-child { white-space:nowrap; }
+  @media print { main { padding:0; } h2, h3 { break-after:avoid; } .item { break-inside:avoid; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>O que foi feito no sistema nesta semana</h1>
+  <p class="sub">Semana de 01/11 a 07/11/2026 · CRM GMP Industriais</p>
+
+  <p class="resumo">No Almoxarifado, a data de validade de um lote passou a poder ser corrigida, e a nota fiscal avisa quando a data
+  dela não bate com a do lote. Na separação e na entrega, o material que já está separado para uma requisição não é mais levado por
+  outra, e a tela mostra quanto sobra em cada local; no Compras, a tela Materiais ficou igual à do Almoxarifado. No total,
+  38h45 de trabalho.</p>
+
+  <h2>O que mudou — e por que importa</h2>
+  <p>Cada item abaixo conta o problema, o que foi feito e o que isso evita no dia a dia.</p>
+
+  <div class="item">
+    <h3>Data de validade errada num lote agora tem conserto</h3>
+    <p><span class="rotulo">O problema:</span> alguém digitava 2025 no lugar de 2027. A cola boa ficava como "vencida" e não saía.
+    Ou o contrário: a cola vencida saía para a produção. Depois de gravada, a data não mudava mais. E quando chegava uma nota do mesmo
+    lote com outra data, o sistema ficava com a primeira sem avisar ninguém.</p>
+    <p><span class="rotulo">O que foi feito:</span> em <b>Almoxarifado → Lotes e Séries</b>, cada lote ganhou o botão
+    <b>Corrigir validade</b>. Quem cuida da qualidade informa a data certa e o motivo. O sistema guarda a data antiga, a nova e quem
+    corrigiu. Na nota fiscal, antes de confirmar, aparece um aviso amarelo quando a data da nota é diferente da do lote. Se o lote
+    não tinha data, ele recebe a da nota.</p>
+    <p><span class="rotulo">O que isso evita:</span> material bom parado por engano e material vencido indo para a produção. É como
+    trocar a etiqueta de validade de uma caixa cheia — e anotar no livro por que trocou.</p>
+  </div>
+
+  <div class="item">
+    <h3>O que já está separado para uma requisição não vai para outra</h3>
+    <p><span class="rotulo">O problema:</span> havia 6 peças num local. Uma requisição separava 4 de lá. Outra requisição também
+    conseguia separar 4 do mesmo local, ou escolher esse local na entrega. O erro só aparecia depois, na hora de entregar, com uma
+    mensagem que ninguém entendia. É como dois caixas vendendo o último item da prateleira ao mesmo tempo.</p>
+    <p><span class="rotulo">O que foi feito:</span> a separação e a entrega passaram a contar o que já está separado para as outras
+    requisições. Se não cabe, a recusa vem na hora, dizendo quanto há, quanto já está separado e para qual requisição. E a lista
+    "Sai de" já mostra a conta antes de escolher, por exemplo: "XB-01 — lote L1 (sobra 2 de 6; 4 para outras)".</p>
+    <p><span class="rotulo">O que isso evita:</span> uma requisição levar a peça da outra, e o almoxarife descobrir o problema só no
+    balcão.</p>
+  </div>
+
+  <div class="item">
+    <h3>Separar em duas vezes: cada parte sai do lugar certo</h3>
+    <p><span class="rotulo">O problema:</span> o almoxarife separava 3 peças de um local e, mais tarde, as outras 3 de outro. O
+    sistema esquecia de onde vieram as 3 primeiras e anotava uma troca que ninguém fez. Em material com lote, a saída não baixava do
+    lote e o saldo "sem lote" ficava negativo.</p>
+    <p><span class="rotulo">O que foi feito:</span> o sistema passou a lembrar quanto foi separado de cada lugar. Na entrega, a primeira
+    parte sai de onde foi separada. O resto, em material com lote, sai do lote que vence primeiro, sem pegar lote vencido, bloqueado
+    ou separado para outra requisição.</p>
+    <p><span class="rotulo">O que isso evita:</span> estoque por lote que não bate e trocas falsas no histórico da requisição.</p>
+  </div>
+
+  <div class="item">
+    <h3>Compras → Materiais ficou igual à tela do Almoxarifado</h3>
+    <p><span class="rotulo">O problema:</span> quando o cadastro de materiais passou para o Compras, a tela do Compras ficou diferente
+    da que todos já conheciam: menos colunas e menos filtros.</p>
+    <p><span class="rotulo">O que foi feito:</span> as duas telas passaram a usar a mesma lista, com foto, família, categoria,
+    quantidade, localização e situação, e os mesmos filtros. No Compras ficam os botões de cadastro; os de estoque continuam só no
+    Almoxarifado.</p>
+    <p><span class="rotulo">O que isso evita:</span> o comprador ter de aprender outra tela para a mesma coisa.</p>
+  </div>
+
+  <div class="item">
+    <h3>Saída lançada por outro sistema respeita o lote</h3>
+    <p><span class="rotulo">O problema:</span> quando um sistema de fora lançava uma saída dizendo "tire do lote LV", o lote era
+    ignorado. Saía até de lote vencido, e o relatório de saldo por lote ficava com um "sem lote" negativo.</p>
+    <p><span class="rotulo">O que foi feito:</span> essa saída passou a ter a mesma resposta da tela Movimentações: lote vencido,
+    bloqueado ou sem saldo é recusado, e lote bom tem a peça baixada dele.</p>
+    <p><span class="rotulo">O que isso evita:</span> material vencido saindo sem ninguém ver e saldo por lote que não fecha.</p>
+  </div>
+
+  <p>Também foram feitos: na separação e na entrega, trocar de aba do navegador e voltar não apaga mais as quantidades digitadas; a
+  tela Materiais de clientes mostra os números com vírgula (12,5), igual ao papel entregue ao cliente; e o termo de responsabilidade
+  de ferramenta sai com os recuos e espaços do texto como foi escrito.</p>
+
+  <h2>Tempo gasto</h2>
+  <table>
+    <tr><th>O que foi feito</th><th>Tempo</th></tr>
+    <tr><td>Compras → Materiais com a mesma lista do Almoxarifado</td><td>2h30</td></tr>
+    <tr><td>Corrigir a validade de um lote</td><td>4h30</td></tr>
+    <tr><td>Nota com o mesmo lote e outra validade: o aviso</td><td>3h15</td></tr>
+    <tr><td>Separação: as quantidades digitadas não se perdem</td><td>1h</td></tr>
+    <tr><td>Separar em duas vezes: o local de onde sai</td><td>5h</td></tr>
+    <tr><td>Separar em duas vezes: material com lote</td><td>5h30</td></tr>
+    <tr><td>Separação conta o que outras requisições já separaram</td><td>4h30</td></tr>
+    <tr><td>Materiais de clientes: número com vírgula</td><td>45 min</td></tr>
+    <tr><td>Termo de ferramenta: espaços do texto</td><td>1h15</td></tr>
+    <tr><td>Entrega escolhendo o local à mão respeita o que outra requisição separou</td><td>4h15</td></tr>
+    <tr><td>O local mostra quanto realmente sobra</td><td>2h45</td></tr>
+    <tr><td>Saída lançada por outro sistema respeita o lote</td><td>2h30</td></tr>
+    <tr><td>Relatório da semana de 25/10 a 31/10 e resumo de outubro</td><td>1h</td></tr>
+    <tr><th>Total</th><th>38h45</th></tr>
+  </table>
+  <p>O tempo inclui entender o pedido, fazer, testar e conferir. O do relatório anterior e do resumo de outubro foi medido pelo
+  registro do trabalho e é uma conta por baixo.</p>
+
+  <h2>Quer conferir?</h2>
+  <ol>
+    <li>Abra <b>Almoxarifado → Lotes e Séries</b>, escolha um material com lote e clique no ícone de calendário <b>Corrigir
+    validade</b> de um lote.</li>
+    <li>Abra <b>Almoxarifado → Recebimentos</b>, numa nota com um lote que já existe e outra data de validade, clique em
+    <b>Processar Nota</b>: o aviso amarelo aparece embaixo do material antes de confirmar.</li>
+    <li>Abra <b>Almoxarifado → Requisições (almox.)</b>, uma requisição aprovada, <b>Iniciar Separação</b>: a lista "Sai de" mostra
+    quanto sobra em cada local e quanto está separado para outras requisições.</li>
+    <li>Abra <b>Compras → Materiais</b> e <b>Almoxarifado → Materiais</b> lado a lado: as colunas e os filtros são os mesmos.</li>
+    <li>Abra <b>Almoxarifado → Materiais de clientes</b>: as quantidades aparecem com vírgula.</li>
+  </ol>
+</main>
+</body>
+</html>
