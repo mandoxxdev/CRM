@@ -146,14 +146,23 @@ function memoParteGuardadaDeOutras(db, requisicaoId) {
  * por letra a da 198) ou 'entrega' (E1: "desta entrega", "para esta entrega" e o conselho do automatico). `saldo` = fisico do par
  * menos o ja pedido nesta chamada.
  */
-function mensagemSeparadoDeOutras({ gesto = 'separacao', cod, saldo, jaPedido, outrasQ, numeros = [], qty }) {
+function mensagemSeparadoDeOutras({ gesto = 'separacao', cod, saldo, jaPedido, outrasQ, numeros = [], qty, irmaosQ = 0, irmaosN = 0 }) {
   const r6 = (x) => Math.round(x * 1e6) / 1e6;
   const entrega = gesto === 'entrega';
   const plural = numeros.length > 1;
   const contando = jaPedido > 1e-9 ? ` (já contando ${r6(jaPedido)} ${entrega ? 'desta entrega' : 'desta requisição'})` : '';
-  return `em ${cod} há ${r6(saldo)}${contando} ${entrega ? 'para esta entrega' : 'para esta separação'}, mas ${r6(outrasQ)} `
-    + `${plural ? 'já estão separados dali para outras requisições' : 'já está separado dali para outra requisição'} `
-    + `(${numeros.join(', ')}); sobra ${r6(Math.max(0, saldo - outrasQ))}, que não cobre a quantidade (${qty}). `
+  // Etapa 208 (B1409): a E1 estendida — a guarda dos irmaos desta requisicao (`irmaosQ`, so a entrega passa) como segunda parcela. Sem
+  // irmaos, o texto entre "mas " e "; sobra" e o de antes, byte a byte (a C1 nunca passa irmaos).
+  const out = outrasQ > 1e-9;
+  const irm = irmaosQ > 1e-9;
+  const fraseOutras = `${r6(outrasQ)} ${plural ? 'já estão separados dali para outras requisições' : 'já está separado dali para outra requisição'} `
+    + `(${numeros.join(', ')})`;
+  const fraseIrmaos = out
+    ? `${r6(irmaosQ)} para ${irmaosN > 1 ? 'outras peças' : 'outra peça'} desta requisição`
+    : `${r6(irmaosQ)} ${irmaosN > 1 ? 'já estão separados dali para outras peças desta requisição' : 'já está separado dali para outra peça desta requisição'}`;
+  return `em ${cod} há ${r6(saldo)}${contando} ${entrega ? 'para esta entrega' : 'para esta separação'}, mas `
+    + `${[(out || !irm) && fraseOutras, irm && fraseIrmaos].filter(Boolean).join(' e ')}; `
+    + `sobra ${r6(Math.max(0, saldo - outrasQ - (irm ? irmaosQ : 0)))}, que não cobre a quantidade (${qty}). `
     + (entrega ? 'Escolha outro endereço ou deixe "Qualquer endereço (automático)"'
       : 'Escolha outro endereço ou reabra a janela para ver a sugestão atual');
 }
@@ -1909,6 +1918,25 @@ function guardaQueConta(g, saiuDaOrigemPorItem, parteQueFicaPorItem) {
 }
 
 /**
+ * Etapa 208 (B1407): a guarda que FICA dos irmaos desta requisicao no par (material, endereco, lote exato — B1410), o proprio item fora.
+ * A regua da 206/207 (`guardaQueConta`), nada baixado ainda (`saiu` vazio): o irmao desta entrega vale pelo que fica (`parteQueFicaPorItem`
+ * — o que ele pede da origem ja esta no `ja` da E1), o que nao entrega pela parte do banco. So le; dentro das duas travas da entrega.
+ * -> { q, n } (n = irmaos com guarda > folga, para o plural).
+ */
+async function guardaDosIrmaosNoPar(db, requisicaoId, itemId, materialId, origemId, loteId, parteQueFicaPorItem) {
+  const rows = await dbAll(db, `SELECT ir.id, ${PARTE_ORIGEM_SQL} as q FROM itens_requisicao_almoxarifado ir
+    WHERE ir.requisicao_id = ? AND ir.id <> ? AND ir.material_id = ? AND ir.origem_separacao_id = ? AND ir.lote_separacao_id IS ?`,
+  [requisicaoId, itemId, materialId, origemId, loteId]);
+  const saiu = new Map();
+  let q = 0; let n = 0;
+  for (const g of rows) {
+    const conta = guardaQueConta(g, saiu, parteQueFicaPorItem);
+    if (conta > Q.QTD_FOLGA) { q += conta; n += 1; }
+  }
+  return { q: Q.qtd(q), n };
+}
+
+/**
  * Etapa 197 (RN-197.01/03/11, Fase 2 itens 1 e 2) — os lotes que a parte automatica da entrega pode baixar, em ordem FEFO, com o saldo
  * que sobra para ela. So `elegivel` (a regua do motor: ATIVO e nao vencido, ou vencido com liberacao) — lote retido o motor recusaria e
  * derrubaria a entrega inteira. Do saldo do lote (soma das linhas, qualquer endereco — o mesmo que o claim do lote drena) saem:
@@ -2305,6 +2333,7 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
   // DEPOIS do laco, com o `pedidoPorOrigem` completo (Fase 2, item 1: conferido no laco, um item (c) antes de um irmao do caso (b) no
   // mesmo par passava e o par ia a zero — o C468 voltava conforme a ordem dos ids).
   const casoC = [];
+  const casoCAdiados = []; // Etapa 208 (Fase 2, item 2): os (c) esperam os (a)/(b) sem excesso para a conferencia fisica
   const validarOrigemDaEntrega = async (item, { origemId, loteId, lido }, qtdComOrigem, planejada, contarOutras = false) => {
     try {
       const lidoNorm = stockService.normalizarCodigoLido(lido);
@@ -2398,30 +2427,58 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     if (!origemId && !loteId && semEscolha && !loteSeries) continue;
     // Etapa 136 (RN-03): o "so lote" (lote sem endereco) e conferido DEPOIS de todos os estritos — ele sai na passada 1, depois deles.
     if (!origemId && loteId) { soLotePendentes.push({ item, loteId, lido, qtdComOrigem }); continue; }
-    await validarOrigemDaEntrega(item, { origemId, loteId, lido }, qtdComOrigem, planejada, !!origemId && !saiDaOrigem);
+    // Etapa 208 (B1408): o mesmo par ACIMA da propria parte tambem e do caso (c) — o excesso tira do par o que outra caixa guardou
+    // (conferir so o excesso e a mesma conta da E1 com a quantidade inteira: a parte propria cancela). Sem excesso, nao (o dado
+    // antigo sobrecomprometido, B1338). `parte` e a de antes da baixa (`:parte` acima).
+    const marcaC = !!origemId && (!saiDaOrigem || (!!item.origem_separacao_id && qtdComOrigem - parte > Q.QTD_FOLGA));
+    // Etapa 208 (Fase 2, item 2): o fisico dos itens (c) e conferido DEPOIS dos (a)/(b) sem excesso — com as duas pecas juntas (a tela
+    // pre-seleciona a origem do irmao) a recusa fisica cai em quem escolheu a mao, nao no irmao que ninguem mexeu. Nenhuma literal muda.
+    if (marcaC) { casoCAdiados.push({ item, origemId, loteId, lido, qtdComOrigem, planejada }); continue; }
+    await validarOrigemDaEntrega(item, { origemId, loteId, lido }, qtdComOrigem, planejada, false);
   }
+  for (const d of casoCAdiados) {
+    // eslint-disable-next-line no-await-in-loop
+    await validarOrigemDaEntrega(d.item, { origemId: d.origemId, loteId: d.loteId, lido: d.lido }, d.qtdComOrigem, d.planejada, true);
+  }
+  // 2o fix-round da Fase 5: o item desta entrega que NAO sai da origem guardada — a parte dele so vale pelo que fica depois dela.
+  // Etapa 206 (Fase 5, R2, B1394): e o que SAI dela tambem — a parte de ANTES da baixa menos o que sai da origem (`qtdComOrigem`, o que a
+  // passada 2 ve em `saiuDaOrigemPorItem`). Antes `lotesParaOAutomatico` lia a parte no banco (`PARTE_ORIGEM_SQL`, min(parte, caixa)) e
+  // tirava o que saiu: na conferencia (antes da baixa) dava certo, mas na passada 2 o entregue ja tinha subido e a caixa encolhido — o que
+  // saiu contava duas vezes, a guarda que fica virava 0 e o automatico do irmao a levava (a segunda entrega do item: "nao serve mais").
+  // Agora a conferencia e a baixa leem o MESMO numero, fixado antes de baixar.
+  const parteQueFicaPorItem = () => new Map([...origemGuardada.entries()]
+    .filter(([, og]) => (og.saiDaOrigem ? og.parte !== undefined : og.parteQueFica !== undefined))
+    .map(([id, og]) => [Number(id), og.saiDaOrigem
+      ? Q.qtd(Math.max(0, og.parte - num(origemPorItem.get(id)?.qtdComOrigem)))
+      : og.parteQueFica]));
+  // Etapa 208: sobe para antes da passada do caso (c), sem mudar o corpo — a E1 le a guarda que fica dos irmaos com ele (B1407).
   // Etapa 200 (RN-200.01/06, B1338-B1340): a passada do caso (c). `ja` = o que os OUTROS itens desta entrega pedem do par (todos, antes
   // ou depois na ordem); E1 quando o fisico menos isso menos a parte guardada das outras caixas vivas nao cobre. So le — sob a trava
   // por material da entrega (`comTravaDaRequisicao`), antes da previa e da alcada: a recusa nao grava nada.
   const outrasDoPar = memoParteGuardadaDeOutras(db, requisicaoId);
+  // Etapa 208 (B1407): a guarda que FICA dos irmaos desta requisicao no par e a terceira parcela (fecha o C472/C496). O irmao que sai da
+  // origem nesta entrega esta no `ja` pelo que pede e aqui pelo resto (`ja + fica = parte`, uma vez so); o que nao entrega, pela parte.
+  const ficaDosIrmaos = casoC.length ? parteQueFicaPorItem() : null;
   for (const c of casoC) {
     // eslint-disable-next-line no-await-in-loop
     const outras = await outrasDoPar(c.item.material_id, c.origemId, c.loteId);
     const outrasQ = Number(outras.q) || 0;
-    if (outrasQ <= 1e-9) continue;
+    // eslint-disable-next-line no-await-in-loop
+    const irm = await guardaDosIrmaosNoPar(db, requisicaoId, c.item.id, c.item.material_id, c.origemId, c.loteId, ficaDosIrmaos);
+    if (outrasQ + irm.q <= 1e-9) continue;
     // eslint-disable-next-line no-await-in-loop
     const s = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) as q FROM estoque_saldo_almoxarifado
       WHERE material_id = ? AND lote_id IS ? AND localizacao_id = ?`, [c.item.material_id, c.loteId, c.origemId]);
     const ja = (pedidoPorOrigem.get(`${c.item.material_id}|${c.origemId}|${c.loteId}`) || 0) - c.qtdComOrigem;
     const saldo = (Number(s.q) || 0) - ja;
-    if (saldo - outrasQ + 1e-9 < c.qtdComOrigem) {
+    if (saldo - outrasQ - irm.q + 1e-9 < c.qtdComOrigem) {
       // eslint-disable-next-line no-await-in-loop
       const loc = await dbGet(db, 'SELECT codigo FROM localizacoes_almoxarifado WHERE id = ?', [c.origemId]);
       // eslint-disable-next-line no-await-in-loop
       const lote = c.loteId ? await dbGet(db, 'SELECT codigo FROM lotes_almoxarifado WHERE id = ?', [c.loteId]) : null;
       const cod = lote ? `${loc.codigo}, lote ${lote.codigo}` : loc.codigo;
       const err = new Error(`${c.item.material_nome}: ${mensagemSeparadoDeOutras({ gesto: 'entrega', cod, saldo, jaPedido: ja, outrasQ,
-        numeros: outras.numeros || [], qty: c.qtdComOrigem })}`);
+        numeros: outras.numeros || [], qty: c.qtdComOrigem, irmaosQ: irm.q, irmaosN: irm.n })}`);
       err.status = 400;
       throw err;
     }
@@ -2462,17 +2519,6 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
   // na segunda rodada no mesmo livre passavam aqui e o laco baixava o primeiro e recusava o segundo (400 com metade da entrega feita).
   const efeitoDosIrmaos = new Map(); // material_id -> { disponivel, caixaSemReserva } ja levados nesta previa
   const itensDaEntrega = []; // Etapa 206: os itens desta entrega na ordem do laco, para a conferencia do automatico pelo lote
-  // 2o fix-round da Fase 5: o item desta entrega que NAO sai da origem guardada — a parte dele so vale pelo que fica depois dela.
-  // Etapa 206 (Fase 5, R2, B1394): e o que SAI dela tambem — a parte de ANTES da baixa menos o que sai da origem (`qtdComOrigem`, o que a
-  // passada 2 ve em `saiuDaOrigemPorItem`). Antes `lotesParaOAutomatico` lia a parte no banco (`PARTE_ORIGEM_SQL`, min(parte, caixa)) e
-  // tirava o que saiu: na conferencia (antes da baixa) dava certo, mas na passada 2 o entregue ja tinha subido e a caixa encolhido — o que
-  // saiu contava duas vezes, a guarda que fica virava 0 e o automatico do irmao a levava (a segunda entrega do item: "nao serve mais").
-  // Agora a conferencia e a baixa leem o MESMO numero, fixado antes de baixar.
-  const parteQueFicaPorItem = () => new Map([...origemGuardada.entries()]
-    .filter(([, og]) => (og.saiDaOrigem ? og.parte !== undefined : og.parteQueFica !== undefined))
-    .map(([id, og]) => [Number(id), og.saiDaOrigem
-      ? Q.qtd(Math.max(0, og.parte - num(origemPorItem.get(id)?.qtdComOrigem)))
-      : og.parteQueFica]));
   for (const item of itens) {
     const entrada = itensAtendidos?.find((ia) => Number(ia.item_id) === Number(item.id));
     // Etapa 96 (Fase 2, M4): a quantidade arredondada antes de comparar (a previa nao passa pela porta do motor).
@@ -3318,6 +3364,8 @@ module.exports = {
   parteGuardadaDeOutras, // Etapa 201 (T1): exportada para a prova de equivalencia
   dividirPorLotes, // Etapa 197 (T0)
   guardaQueConta, // Etapa 207 (B1396)
+  guardaDosIrmaosNoPar, // Etapa 208 (B1407)
+  mensagemSeparadoDeOutras, // Etapa 208 (B1409): a prova da literal sem irmaos
   fatiasSemLoteParaOAutomatico, // Etapa 207 (B1396)
   fraseEntregaLoteImpedido, // Etapa 206 (B1388)
   conferirAutomaticoPeloLote, // Etapa 206 (B1383)

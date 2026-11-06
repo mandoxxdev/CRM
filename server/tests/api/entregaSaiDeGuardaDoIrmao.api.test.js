@@ -190,6 +190,22 @@ process.on('exit', (code) => {
     await recusaSemGravar(c3.m, c3.R, [saiDe(c3.ids[0], 2)], e1(c3.m, { saldo: 3.999999, irmaos: { q: 2, n: 1 }, sobra: 1.999999, qty: 2 }));
   });
 
+  await test('[T1 unidade] guardaDosIrmaosNoPar: do item 1 ve 2 (n 1); do item 2 (o proprio) 0; com o fica do item 2 = 0, 0; outro par 0', async () => {
+    const { m, R, ids } = await cenario02();
+    const g = (itemId, fica, onde = A) => requisitionService.guardaDosIrmaosNoPar(db, R, itemId, m.id, onde.id, null, fica);
+    assert.deepStrictEqual(await g(ids[0], new Map()), { q: 2, n: 1 });
+    assert.deepStrictEqual(await g(ids[1], new Map()), { q: 0, n: 0 });
+    assert.deepStrictEqual(await g(ids[0], new Map([[ids[1], 0]])), { q: 0, n: 0 });
+    assert.deepStrictEqual(await g(ids[0], new Map([[ids[1], 0.5]])), { q: 0.5, n: 1 });
+    assert.deepStrictEqual(await g(ids[0], new Map(), B), { q: 0, n: 0 });
+    // sem irmaos, a frase e a de antes (a C1 e a E1 de outras requisicoes, byte a byte)
+    const base = { gesto: 'entrega', cod: 'X', saldo: 4, jaPedido: 0, outrasQ: 2, numeros: ['R-1'], qty: 3 };
+    assert.strictEqual(requisitionService.mensagemSeparadoDeOutras({ ...base, irmaosQ: 0, irmaosN: 0 }),
+      requisitionService.mensagemSeparadoDeOutras(base));
+    assert.strictEqual(requisitionService.mensagemSeparadoDeOutras({ ...base, gesto: 'separacao' }), 'em X há 4 para esta separação, mas 2 já está '
+      + 'separado dali para outra requisição (R-1); sobra 2, que não cobre a quantidade (3). Escolha outro endereço ou reabra a janela para ver a sugestão atual');
+  });
+
   // ── RN-208.03: o irmao que sai nesta entrega nao guarda mais ────────────────────────────────────────────────────────────────────
   await test('[RN-208.03 (a)] A 4: item 1 (sem origem) Sai de A 2 + item 2 (2 de A) num clique na mesma entrega -> 200, A 0', async () => {
     const { m, R, ids } = await cenario02(4);
