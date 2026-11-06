@@ -2296,7 +2296,26 @@ Regras:
     O item da frase é o **primeiro** que passa do que cabe; a falta é a do **material inteiro** — com dois itens de 2, 1 no *L1* e 4 no *L2* bloqueado, a recusa vem no primeiro item com *"… entregar 2 un — faltam 3 un … entregue 3 un a menos."*. Cada lote impedido aparece com o motivo e o saldo (o saldo do lote menos o que está em inspeção nele), na ordem do seletor de lote, separados por vírgula: o motivo é a situação primeiro (*bloqueado*, *reprovado*) e, num lote *Ativo*, *vencido em DD/MM/AAAA* (a data da validade) — *"L2 (vencido em 03/11/2026, 3 un)"*. Quando nada do pedido do material cabe, a frase termina em *"… ou nada sai deste material."*. A permissão de saldo negativo (6.1) não muda nada disso. A recusa de máximo (acima) vem antes desta. Entregando 2, saem 2 do *L1* e o *L2* continua com 3; liberado o *L2* (situação *Ativo*, ou **Liberar vencimento**), a entrega sai dele.
   - **O que ainda sai sem lote**, pela regra automática: o saldo sem lote positivo (depois dos lotes) e a falta quando o material **não** tem saldo em lote impedido — por exemplo, quando o lote que pode sair está em inspeção ou todo separado e guardado para outra requisição. Nesse caso a linha *"Sem lote atribuído"* da tela de Lotes pode ficar negativa (4.5). Item com número de série não entra nesta conta: ele sai do lote das séries escolhidas.
   - Os lotes são lidos na hora de cada baixa: dois itens do mesmo material na mesma entrega dividem os lotes na ordem da requisição. Em material que **permite saldo negativo**, a baixa do lote é contada na posição padrão do material (o total do lote fica certo; a posição de onde o material saiu fisicamente não baixa — acerte pela contagem da posição).
-  - Excluir a requisição devolve cada saída ao lote dela (7.6); a devolução citando a saída herda o lote (12.4). Material **sem** Controle por lote, mesmo com saldo em lote, continua saindo sem lote na parte automática; e a entrega de EPI não escolhe lote.
+  - Excluir a requisição devolve cada saída ao lote dela (7.6); a devolução citando a saída herda o lote (12.4). Material **sem** Controle por lote, mesmo com saldo em lote, continua saindo sem lote na parte automática (com a parte separada sem lote pulada — abaixo); e a entrega de EPI não escolhe lote.
+- **A parte separada sem lote também é pulada pela regra automática.** Num item **sem** número de série, quando a parte automática sai
+  **sem lote** — material **sem** Controle por lote, ou o que vai para o saldo sem lote num material com Controle por lote (acima) —, a
+  entrega confere antes se a regra automática de sempre (o endereço padrão primeiro — num material sem padrão, o saldo sem endereço —,
+  depois o de mais saldo) tiraria de algum endereço mais do que ele tem **livre**. *Livre* é o saldo sem lote do endereço menos o que as
+  requisições em andamento — esta e as outras; entregue, cancelada ou excluída não conta — separaram dali sem lote, num endereço escolhido no
+  **Sai de**, e ainda não entregaram; dos itens desta mesma entrega, conta só o que fica para a próxima entrega deles.
+  - **Não tiraria:** a saída é a de sempre — uma saída, sem endereço no histórico.
+  - **Tiraria, e os endereços com livre cobrem a quantidade inteira** (só endereços que existem e não estão bloqueados; o saldo sem endereço
+    não conta): a saída se divide pelos endereços, na mesma ordem (padrão primeiro, depois o de mais saldo), cada um com no máximo o seu
+    livre, e cada pedaço é **uma saída com o endereço** no histórico. Com *A* 3 e *B* 2, um item separado 3 sem origem e outro separado 2 de
+    *A*, entregar só o primeiro tira 1 de *A* e 2 de *B*; o segundo sai depois de *A*, num clique.
+  - **Tiraria, e os endereços com livre não cobrem:** a saída é a de sempre, numa saída só, e pode levar a parte separada — a próxima entrega
+    daquele item recebe a recusa *"… a origem da separação (A) não serve mais (O saldo em A (0) não cobre a quantidade (2) — a saída tiraria de
+    outros endereços) — entregue escolhendo de onde sai"* (acima).
+  - Excluir a requisição devolve cada pedaço ao endereço de onde saiu (7.6). A devolução cita uma saída de cada vez: com 1 de *A* e 2 de
+    *B*, devolver 3 citando a saída de *A* é recusado com *"Devolução acima do entregue: a saída ⟨n⟩ entregou 1, já foram devolvidos 0 e
+    restam 1"* (12.4).
+  - Item com número de série segue a regra de sempre. A troca para o automático (acima) fica registrada como *"automático"*, sem o endereço
+    dos pedaços — o endereço está no histórico de movimentações.
 - **A ordem das baixas.** Conferido tudo (acima), a entrega baixa primeiro, em todos os itens e na ordem da requisição, o que sai de um **endereço** (a origem da separação ou o endereço escolhido); depois o que sai de um **lote sem endereço**; e por último o que sai pela regra **automática** (endereço padrão, depois os de mais saldo). Assim a parte automática de um item nunca esvazia antes o endereço de onde outro item do mesmo material foi separado: com A-01 com 3 e B-02 com 2, um item separado sem origem e outro separado de A-01, 2 cada, a entrega sai inteira — o segundo leva 2 de A-01 e o automático do primeiro leva os 2 de B-02. Dentro de um item, a parte acima da reserva sai antes da parte que a reserva segura.
 - Se ainda assim uma baixa falhar no meio (um erro do banco, por exemplo), o que já saiu fica contado como entregue — e a troca de origem dos itens que já saíram fica registrada (acima).
 

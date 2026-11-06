@@ -11,7 +11,16 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-06):** **Etapa 206 fechada** (**a entrega recusa lote bloqueado, reprovado ou vencido** — quando
+> **Onde o desenvolvimento está (2026-11-06):** **Etapa 207 fechada** (**a entrega respeita a peça separada sem lote** — numa requisição
+> com duas peças do mesmo material sem lote, a entrega da peça separada sem dizer de onde podia esvaziar justamente a prateleira de onde a
+> outra peça foi separada, e a entrega seguinte dela era recusada com *"a origem da separação … não serve mais"*. Agora, quando a baixa de
+> sempre levaria a peça separada e os outros endereços cobrem a entrega, ela sai em pedaços por endereço, pulando o que está separado — e o
+> histórico de movimentações diz de onde saiu cada pedaço. **C490** resolvido; só servidor (a tela não mudou); nada a rodar antes do deploy;
+> decisões **B1396** a **B1406** (o corte da B1405 não foi preciso); avisos **C492**, **C493**, **C495** e **C496** (C494 sem uso);
+> limitações **D (207)**; verificação **F (207)**). **Próxima: entregar escolhendo de onde sai pode levar a peça que o irmão da mesma
+> requisição separou** (**C496**, anterior, achado na revisão da 207); detalhada no fim do plano da 207. Depois, os itens 8 e 9 do 2º
+> pacote (peça em quarentena com lote — **C466**).
+> *(Antes, 2026-11-06:)* **Etapa 206 fechada** (**a entrega recusa lote bloqueado, reprovado ou vencido** — quando
 > o material só tinha saldo em lote que não pode sair, a entrega passava, a diferença saía como *"Sem lote atribuído"* negativo e o lote ruim
 > continuava cheio. Agora, em material com controle por lote, a entrega **recusa antes de baixar qualquer coisa**, dizendo qual lote está
 > impedido, por quê e quanto, e o que fazer; a janela de entrega e a Fila oferecem só o que a entrega aceita. **C464** resolvido (2ª parte) e
@@ -4488,7 +4497,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1406 (Etapa 207, Fase 5 — as B1396 a B1405 da etapa entram no fechamento); as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -14190,6 +14199,62 @@ automático`, a mesma função `cabeDoAutomaticoPeloLote` da porta): item 2 → 
 **Descartado:** dividir o teto entre os irmãos na tela (é a conferência que confere a soma, sem baixar nada — **C489**); copiar a conta
 para o detalhe (duas réguas voltariam a divergir). **Reversível** (`tetoDaEntregaPeloLote`, anotado pela rota do detalhe e lido pela Fila).
 
+**B1396 (NOVA, da Etapa 207; decisão do agente) — o caminho: a régua da peça separada (B1329) estendida às linhas sem lote.** A parte
+automática **sem lote** da entrega (material sem controle por lote, ou o resto sem lote de material com lote) passa a ler a parte separada
+**sem lote** das requisições em andamento com caixa (o que foi separado de um endereço escolhido e ainda não foi entregue), desconta-a do
+saldo de cada endereço e, quando a baixa de sempre levaria essa parte (**B1406**) e o livre dos endereços cobre a entrega inteira, sai em
+pedaços por endereço — a posição padrão primeiro, depois a de mais saldo —, cada pedaço com o endereço e a exigência da escolha exata (o
+endereço tem de cobrir o pedaço). A conta de cada parte separada (o que fica depois desta entrega, ou a parte menos o que já saiu dela) é
+**a mesma** da régua com lote: foi extraída para uma função que as duas usam (`guardaQueConta`), sem mudar a conta. **Descartados:** (a) uma
+opção nova no motor para a baixa pular endereços — todas as portas de saída usam o motor (já descartado na 136); (b) reordenar itens ou
+passadas — o cenário é em **duas** entregas, a ordem não ajuda; (c) recusar a entrega do item 1 — recusaria o que cabe (2 de *B* + 1 livre de
+*A*). **Reversível** (`fatiasSemLoteParaOAutomatico`). `842567ca`.
+
+**B1397 (NOVA, da Etapa 207, com a correção da Fase 2; decisão do agente) — sem parte separada sem lote que conte: uma baixa só, sem
+endereço, como hoje.** O livro fica idêntico (a mesma saída, a mesma baixa). Quem decide é a conta **da entrega** (o que fica de cada parte
+depois dela), feita **antes** de ler o saldo — não a parte gravada no banco, que só cai no fim da entrega (Fase 2, I3): o item que sai
+inteiro da própria origem na mesma entrega (a V1 da Etapa 136) não conta, e o livro sai como hoje. **Descartado:** fatiar sempre — mudaria o
+livro e o estorno de toda entrega comum. Medido no T1: o mesmo roteiro sorteado contra o serviço de antes, em material sem lote e sem peça
+separada, 300/300 livros iguais. **Reversível.** `842567ca` (testes RN-207.02 a e d).
+
+**B1398 (NOVA, da Etapa 207; decisão do agente) — o livre dos endereços não cobre: uma baixa só, como hoje (nunca recusa nova).** Tudo ou
+como hoje: os pedaços só valem quando cobrem a parte inteira. Conta como livre só o endereço que **existe**, **não** está bloqueado e tem
+livre depois da parte separada (Fase 2, M1: o endereço apagado fica fora; senão o motor recusaria *"Localização de origem não
+encontrada"*); a linha **sem endereço** fica fora (o pedaço precisa de endereço). **Descartados:** (a) recusar com frase nova — recusaria
+entregas que hoje saem (linha antiga sem endereço, endereço bloqueado, saldo negativo permitido); (b) pedaços + o resto sem endereço (a forma
+da B1329) — o resto é baixado do mesmo saldo e leva a peça separada do mesmo jeito, e com a padrão bloqueada recusaria **depois** dos pedaços
+baixados (entrega pela metade). O que fica desprotegido → **C492**. **Reversível.** `842567ca` (testes RN-207.05 a, b e c).
+
+**B1399 (NOVA, da Etapa 207; decisão do agente) — a parte separada sem lote de OUTRAS requisições entra junto.** A mesma leitura (a com lote
+já contava todas, RN-197.11; a separação de outra requisição já recusa separar dela, Etapa 198). Só conta requisição em andamento com caixa:
+a cancelada não (teste RN-207.04 b, da revisão própria). **Descartado:** só a da mesma requisição — duas réguas diferentes para o mesmo
+automático. **Reversível.** `842567ca`, `147dbf6b`.
+
+**B1400 (NOVA, da Etapa 207; decisão do agente) — material COM controle por lote: o resto sem lote passa pela mesma régua.** O que os lotes
+que podem sair não cobrem e vai para o saldo sem lote (o estoque de antes de ligar o controle) respeita a parte separada numa linha sem lote:
+cobre → pedaços sem lote com endereço; não cobre → como hoje (inclusive o negativo do **C485**). **Reversível.** `842567ca` (teste RN-207.03).
+
+**B1401 (NOVA, da Etapa 207; decisão do agente) — a conferência da 206, o detalhe e a Fila não mudam.** A régua nova troca **de onde** sai, não
+**quanto**: a conta do que cabe (**B1384**) continua exata e nenhuma porta passa a recusar o que a tela oferece. A janela de entrega e a Fila
+mostram os mesmos números (teste da integração, `8a99e628`). **Reversível.**
+
+**B1402 (NOVA, da Etapa 207; decisão do agente) — o livro: cada pedaço é uma saída com o endereço de onde saiu.** Uma saída por pedaço (como
+as fatias por lote da B1329), cada uma com a reserva do item (a reserva da aprovação é consumida inteira). É a parte visível da etapa: o
+histórico de movimentações do material mostra a origem de cada saída. A **exclusão** da requisição devolve cada pedaço ao endereço de onde
+saiu (teste RN-207.06); a saída **sem** endereço continua voltando à padrão (**D (51)**) — o plano dizia que a entrada da exclusão iria
+"com destino P"; medido, ela vai **sem** endereço no livro e o motor credita na padrão, e o teste afirma o medido. A devolução citando uma
+saída em pedaços fica limitada ao pedaço (**D (207, Fase 5)**). **Reversível.** `3db19406`, `8a99e628`.
+
+**B1403 (NOVA, da Etapa 207; decisão do agente) — sem trava nova.** A leitura roda dentro das duas travas que a entrega já segura; a separação
+de outra requisição pega as mesmas travas. Nenhum gesto concorrente novo. **Reversível.**
+
+**B1404 (NOVA, da Etapa 207; decisão do agente) — item com número de série: como hoje.** A série decide a peça; a linha que a baixa tira é
+outra conversa → **C493**. **Reversível.** `842567ca` (teste RN-207.02 c).
+
+**B1405 (NOVA, da Etapa 207; decisão do agente) — o corte, se passasse de 4h30 em mais de 30 min, não foi preciso.** O plano previa tirar o
+ramo com controle por lote (a **B1400**) e registrar o corte como **C494**. **Não aconteceu:** o ramo entrou (teste RN-207.03) e o número
+**C494** ficou sem uso.
+
 **B1406 (NOVA, da Etapa 207, Fase 5 S1; decisão do agente) — a parte automática sem lote só sai em fatias quando a baixa de hoje levaria
 a peça separada.** A baixa de hoje (o motor) tira primeiro da linha preferida — a padrão, ou a linha **sem endereço** quando o material não
 tem padrão — e depois da maior. A primeira versão das fatias pulava a linha sem endereço e tirava de outro endereço o que sobrava ali, que
@@ -18204,12 +18269,37 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      separação (A) não serve mais (…) — entregue escolhendo de onde sai"*. **Nenhum erro de estoque** (o total sai certo); o que se perde é o lugar guardado. Igual antes da 206. **O que fazer:**
      entregar primeiro o item separado do endereço, ou escolher no **Sai de** do outro item um endereço que não seja o guardado. Conserto:
      estender a proteção da guarda às linhas sem lote — a **próxima etapa** (detalhada no fim do plano da 206).
+     *(**Resolvido na Etapa 207** — `842567ca`, Fase 5 `730a8a00`: a parte automática sem lote respeita a parte separada sem lote, desta e
+     de outras requisições — quando a baixa de sempre a levaria e os outros endereços cobrem a entrega, ela sai em pedaços por endereço,
+     pulando o separado (**B1396** a **B1400**, **B1406**). No cenário acima: o item 1 sai 1 de *A* e 2 de *B*, e o item 2 sai de *A* num
+     clique. **O "o que fazer" acima deixou de valer** nesses casos. Ficam: os outros endereços não cobrem (**C492**); item com série
+     (**C493**); escolher no **Sai de** o endereço separado pelo irmão (**C496**).)*
 491. **NOVO (da Etapa 206, 3ª revisão da Fase 5; o comportamento é anterior) — MENOR: quando o lote da própria guarda fica impedido, o
      entregável do detalhe ainda conta essa parte.** Item separado de (*A*, *L1*) e depois *L1* bloqueado ou vencido: o detalhe e a Fila
      ainda oferecem a parte guardada (o teto da **B1395** soma a parte sem olhar o lote dela), e a entrega de um clique recusa com a frase
      da origem — *"… a origem da separação (A) não serve mais (Lote L1 esta bloqueado e nao pode ser utilizado) — entregue escolhendo de onde
      sai"* (**B1389**) —, não com a frase da 206. Nada é baixado. **O que fazer:** o que a frase diz — **Entregar escolhendo de onde sai…**
      com outro lote ou automático. Conserto: o teto do detalhe não contar a parte cujo lote está impedido (pequeno; não medido).
+492. **NOVO (da Etapa 207; corte declarado, B1398) — quando os outros endereços não cobrem, a entrega ainda pode levar a peça separada sem
+     lote.** A parte automática só sai em pedaços quando o livre dos endereços (fora da parte separada) cobre a entrega **inteira**. Não
+     cobrindo — o resto do saldo está numa linha **sem endereço** antiga, num endereço **bloqueado**, ou a parte separada é maior que o que
+     sobrou no endereço —, ela sai como antes, numa baixa só, e pode levar a peça separada. Cenário (teste *"[RN-207.05 a]"*): *A* com 3, mais
+     2 sem endereço; item 1 separado 3 sem origem, item 2 separado 2 de *A*; entregar os 3 do item 1 → uma saída sem endereço, *A* fica com 0;
+     o item 2, num clique → *"⟨material⟩: a origem da separação (A) não serve mais (O saldo em A (0) não cobre a quantidade (2) — a saída
+     tiraria de outros endereços) — entregue escolhendo de onde sai"*. O mesmo com *B* 2 bloqueado no lugar da linha sem endereço. Nada fica
+     errado no total. **O que fazer:** entregar primeiro o item separado do endereço, ou o outro item escolhendo no **Sai de** um endereço
+     que não seja o separado. Conserto: não há barato — o resto sem endereço é
+     baixado do mesmo saldo (precisaria de opção nova no motor, descartada na 136).
+493. **NOVO (da Etapa 207; corte declarado, B1404) — item com número de série em material sem lote não respeita a peça separada do irmão.**
+     As séries escolhidas decidem as peças; a linha de saldo que a baixa tira continua sendo escolhida pela regra de sempre (padrão, depois a
+     de mais saldo), sem saber da parte separada. Reproduzido no teste *"[RN-207.02 c]"* (o livro de hoje). **O que fazer:** entregar
+     primeiro o item separado do endereço. Conserto: não medido.
+494. *(Número sem uso: era reservado ao corte da **B1405**, que não aconteceu.)*
+495. **NOVO (da Etapa 207, revisão do plano; o comportamento é anterior) — MENOR: a troca para o automático não diz de onde saiu.** Quando a
+     entrega de um item com origem da separação vai por *"Qualquer endereço (automático)"*, o bloco **Substituições** do detalhe registra
+     *"automático"*, mesmo quando a saída saiu em pedaços com endereço; o endereço de cada pedaço está no histórico de movimentações do
+     material. Não é regressão (antes da 207 a saída nem tinha endereço). **O que fazer:** consultar o histórico de movimentações. Conserto:
+     gravar o endereço na troca quando a saída foi de um endereço só (não medido).
 
 496. **NOVO (da Etapa 207, revisão da Fase 5; o comportamento é anterior à etapa) — IMPORTANTE: entregar escolhendo de onde sai pode levar
      a peça que o irmão da mesma requisição separou.** Dois casos: escolher o **mesmo** endereço da separação do item **além** da parte
@@ -18771,6 +18861,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   endereço **padrão** do material (ou à linha "sem localização atribuída"). Para a entrega de requisição
   (que nunca informa endereço), o endereço original **se perde por inteiro** no estorno. O físico fica
   certo; o endereço, não. Guardar as linhas por movimento é tabela nova, etapa própria.
+  *(**Desde a Etapa 207** — `842567ca`, `3db19406`: quando a parte automática sem lote da entrega sai **em pedaços** para pular a peça
+  separada de outro item (**B1402**), cada pedaço é uma saída com o endereço, e a exclusão e o estorno devolvem cada um ao seu endereço.
+  A saída sem endereço continua como acima.)*
 - **(51) A saída sem endereço pode tirar de endereço BLOQUEADO.** Quando a saída drena os endereços com
   saldo, ela não confere se cada um está bloqueado — a mesma regra que já valia para o lote desde a Etapa 6.
   Só o endereço **informado** passa pela guarda de bloqueio.
@@ -19571,6 +19664,15 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(207) A entrega que respeita a peça separada sem lote, o que ficou de fora.** (1) **Tudo ou como antes:** quando os outros endereços não
+  cobrem a parte automática (linha sem endereço antiga, endereço bloqueado, parte separada maior que o endereço), a entrega sai numa baixa só
+  e pode levar a peça separada (**B1398**, **C492**). (2) **Série:** item com número de série fica como antes (**B1404**, **C493**). (3) O
+  **D (51)** melhora só onde há pedaço: a saída em pedaços tem endereço e a exclusão devolve cada um ao seu; a saída sem endereço continua
+  voltando à padrão. (4) **No sentido contrário:** com a padrão **bloqueada** e uma peça separada do irmão, a entrega automática, que antes
+  era recusada (*"Localização ⟨padrão⟩ está bloqueada"*), passa a sair pelos pedaços de outros endereços — uma recusa a menos, não uma a mais;
+  **sem teste explícito** (verificação manual em **F (207)**). (5) A tela não mudou: o detalhe e a Fila mostram os mesmos números (**B1401**),
+  e a troca para o automático continua dizendo *"automático"* (**C495**). (6) **Anterior, registrado e não consertado:** entregar escolhendo no
+  **Sai de** o endereço que o irmão da mesma requisição separou leva a peça dele (**C496**, a próxima etapa).
 - **(207, Fase 5) A saída fatiada é citada fatia por fatia na devolução.** Quando a parte automática sai em fatias (uma saída por endereço,
   **B1402**), a devolução que cita a saída fica limitada à fatia: na RN-207.01 a entrega de 3 vira *A* 1 + *B* 2, e devolver 3 citando a
   primeira recusa *"Devolução acima do entregue: a saída … entregou 1, já foram devolvidos 0 e restam 1"* — devolve-se 1 citando uma e 2
@@ -20942,6 +21044,22 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(207) Nenhum clique foi dado.** A tela **não mudou** (o endereço de cada pedaço aparece no histórico de movimentações, que já mostrava a
+origem da saída) e o Jest da tela **não foi rodado** nesta etapa — nenhum arquivo da tela foi tocado. O que os testes provam, pela rota real
+e pelo serviço: a entrega do item sem origem pula a peça do irmão (*A* 1 + *B* 2) e o irmão sai de *A* num clique; a peça de outra
+requisição (e a da cancelada, que não conta); o resto sem lote de material com lote; a parte que fica desta entrega (a B1394, sem lote);
+sem peça separada, o livro de antes (300/300 iguais ao serviço anterior no sorteio do T1); os outros endereços não cobrindo — linha sem
+endereço, endereço bloqueado, endereço apagado — o livro de antes; a baixa de sempre que não levaria a peça (sem padrão ou padrão vazia com a
+linha sem endereço maior) — o livro de antes (**B1406**); o pedaço leva só o que falta e a padrão vem primeiro; a exclusão devolve cada
+pedaço ao endereço dele; e um sorteio de 400 casos com sete invariantes (semente 207: 243 entregas medidas, 0 violações). Controles
+positivos: os cinco do T1, os três do sorteio, os dois da revisão "passaria quebrado?" e os três do fix-round da Fase 5, cada teste
+derrubando a sua sabotagem. Diferencial antigo × novo da Fase 5: ~**6.200** casos na 1ª revisão, 5 × 200 no conserto, 1.050 + 1.500 na
+revisão do conserto — **nenhuma recusa nova**; o controle positivo achou falhas em cada versão sabotada. **Não verificado à mão:** o roteiro
+da seção da Etapa 207; e o **sentido contrário** do **D (207)** item 4 — material sem lote com a padrão *P* vazia e **bloqueada**, *A* 3 e *B* 2, item 2 separado
+2 de *A*, item 1 (3) sem origem: entregar o item 1 deve sair *A* 1 + *B* 2 (antes da 207, recusava com a padrão bloqueada). Suítes medidas
+sobre `2d668f2c` (o último commit da etapa antes do fechamento): `test:api` **600/600 arquivos**, `test:almoxarifado` **44/0**,
+`test:validation` **4/0**, `test:safealter` **3/0**, `test:sqlite` **16/0**. Jest e build da tela: não rodados (tela intocada).
 
 **(206) Nenhum clique foi dado.** A tela **não mudou** (a frase chega pela recusa de sempre, e o número da janela de entrega e da Fila
 vem do servidor), e o Jest da tela **não foi rodado** nesta etapa — nenhum arquivo da tela foi tocado. O que os testes provam, pela rota
@@ -39574,6 +39692,80 @@ inteiro: com *L1* 1, *L2* *Bloqueado* 4 e dois itens de 2, a recusa vem no prime
 - As telas de saldo, a reserva manual, as portas que distribuem para quem espera e liberar o lote: como na 205 (**C478** a **C481**).
 - **Antes do deploy:** nada.
 
+## Etapa 207 — A entrega respeita a peça separada sem lote (2026-11-06)
+
+Uma requisição com duas peças do mesmo material **sem lote**: a peça 2 foi separada da prateleira *A*; a peça 1 foi separada sem dizer de
+onde. Quando se entregava só a peça 1, o sistema tirava do lugar que achava melhor — a posição padrão, depois a de mais saldo — e podia
+esvaziar justamente a prateleira *A*. Depois a peça 2 não saía mais: *"a origem da separação (A) não serve mais"*. O total do estoque
+ficava certo; o que se perdia era o lugar guardado, e o almoxarife tinha de descobrir sozinho de onde tirar. Agora a entrega da peça 1
+**pula** o que a peça 2 deixou separado em *A* — sai de *B*, e de *A* só o que sobra livre —, e a peça 2 continua saindo de *A* num clique.
+Vale também para a peça separada por **outra** requisição e para o saldo sem lote de material com controle por lote. Cada pedaço vira uma
+saída com o endereço no histórico de movimentações. Quando não há peça separada com endereço — ou a baixa de sempre não a levaria —, nada
+muda. Só servidor; a tela não mudou. Nada a rodar antes do deploy. Decisões do agente: **B1396** a **B1406**. **C490** resolvido; avisos
+**C492**, **C493**, **C495** e **C496** (anterior); **C494** sem uso.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Entregar a peça sem origem podia esvaziar a prateleira de onde o irmão foi separado; a entrega dele era recusada com *"… não serve mais"* | A entrega **pula** a parte separada (sai dos outros endereços) e o irmão sai do lugar dele num clique |
+| A peça separada por **outra** requisição, sem lote, também podia ser levada | Também é pulada |
+| A saída da parte automática sem lote ia **sem** endereço no histórico | Quando sai em pedaços, **uma saída por endereço**, com o endereço |
+| Excluir a requisição devolvia essa saída para a posição padrão | Cada pedaço volta ao **endereço de onde saiu** |
+| Sem peça separada com endereço; ou a baixa de sempre não a levaria | **Igual** — uma saída sem endereço |
+| Os outros endereços não cobrem (saldo sem endereço antigo, endereço bloqueado) | **Igual** — sai como antes (**C492**) |
+| Item com número de série; a janela de entrega e a Fila | **Iguais** (**C493**, **B1401**) |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**. Um material *Parafuso 207* **sem** controle por lote, sem série, não crítico,
+unidade *un*, com uma **localização padrão** *P* vazia. **Movimentações → Entrada** de 3 em *A* e de 2 em *B*. Nova requisição com **dois
+itens** de *Parafuso 207*, 3 e 2, aprovada (*Totalmente Reservada*). **Iniciar Separação**: o item 1 (3) **sem** escolher **Sai de**; o
+item 2 (2) com **Sai de** = *A*.
+
+**1. A entrega do item 1 pula a peça do item 2.** **Entregar escolhendo de onde sai…**, item 1 com 3 e *"Qualquer endereço (automático)"*,
+item 2 com 0 → entrega. Em **Movimentações**, filtrando o material: **duas** saídas — 1 de *A* e 2 de *B*. *A* fica com 2, *B* com 0. Antes:
+uma saída de 3, sem endereço, e *A* com 0.
+
+**2. O item 2 sai num clique.** **Confirmar Entrega e Baixar Estoque** → saem 2 de *A*; a requisição fica **Entregue**. Antes: *"Parafuso
+207: a origem da separação (A) não serve mais (O saldo em A (0) não cobre a quantidade (2) — a saída tiraria de outros endereços) —
+entregue escolhendo de onde sai"*.
+
+**3. A peça de outra requisição também.** O mesmo estoque (*A* 3, *B* 2). Requisição R1 de 2, separada com **Sai de** = *A*; requisição R2
+de 3, separada sem **Sai de**. Entregar R2 → 1 de *A* + 2 de *B*; entregar R1 → 2 de *A*. Requisição **cancelada** não conta: com R1
+cancelada, a entrega de R2 sai como antes, numa saída só.
+
+**4. Sem peça separada com endereço, nada muda.** *A* 3, *B* 2, uma requisição de 3 separada sem **Sai de** → **uma** saída de 3, sem
+endereço; *A* 0, *B* 2.
+
+**5. A baixa de sempre que não levaria a peça: nada muda.** Material **sem** localização padrão, com 2 **sem endereço** (estoque antigo —
+no teste, essa linha é posta direto no banco) e **Entrada** de 3 em *A*. R1 separa 2 de *A*. R2 entrega 1 no automático → **uma** saída sem endereço (a baixa de sempre começa pela linha
+sem endereço quando não há padrão); R3 entrega 1 escolhendo *A* → aceita. (Na primeira versão desta etapa R2 saía de *A* e R3 tomava
+*"… em A há 2 … sobra 0 …"* — consertado antes do fechamento, **B1406**.)
+
+**6. O pedaço leva só o que falta, e a padrão vem primeiro.** *P* 3 (R1 separou 2 de *P*) e *B* 5; R2 de 3 sem **Sai de** → 1 de *P* e 2 de
+*B*. Com *P* 2, *A* 5 (R1 separou 4 de *A*) e *B* 3, R2 de 4 → 2 de *P*, 1 de *A* e 1 de *B* — a padrão, mesmo menor, primeiro.
+
+**7. Os outros endereços não cobrem: como antes.** *A* 3 (item 2 separou 2 de *A*) e *B* 2 **bloqueado** (em **Localizações**); entregar os
+3 do item 1 → uma saída sem endereço, *A* 0; o item 2, num clique, toma a recusa do cenário 2 (**C492**).
+
+**8. Excluir a requisição devolve cada pedaço ao seu endereço.** Depois do cenário 1 (só a entrega do item 1), **Excluir** a requisição
+(administrador, com justificativa) → *A* volta a 3, *B* a 2; *P* continua vazia.
+
+**9. A devolução cita um pedaço.** Depois do cenário 1, **Devoluções** citando a saída de 1 de *A* e devolvendo 3 → *"Devolução acima do
+entregue: a saída ⟨n⟩ entregou 1, já foram devolvidos 0 e restam 1"*. Devolve-se 1 citando uma saída e 2 citando a outra (**D (207, Fase 5)**).
+
+### O que esta etapa NÃO cobre
+
+- Quando os outros endereços não cobrem a entrega inteira, ela sai como antes e pode levar a peça separada (**C492**).
+- Item com número de série fica como antes (**C493**).
+- A troca para o automático, no bloco **Substituições**, continua dizendo *"automático"* — o endereço de cada pedaço está no histórico
+  (**C495**).
+- **Anterior, achado na revisão, não consertado:** entregar escolhendo no **Sai de** o mesmo endereço da separação **além** da parte
+  separada, ou um item sem separação escolhendo o endereço do irmão, leva a peça do irmão da **mesma** requisição (**C496** — a próxima).
+- Com a padrão bloqueada, a entrega que antes era recusada pode passar pelos pedaços — uma recusa a menos, sem teste próprio (**D (207)**).
+- **Antes do deploy:** nada.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
@@ -39581,6 +39773,17 @@ inteiro: com *L1* 1, *L2* *Bloqueado* 4 e dois itens de 2, a recusa vem no prime
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
 
+- **Etapa 207 entregue (2026-11-06):** **a entrega respeita a peça separada sem lote** (**C490** resolvido). A régua da peça separada
+  estendida às linhas sem lote (**B1396**); sem peça separada que conte, como hoje (**B1397**); os outros endereços não cobrem, como hoje
+  (**B1398**, **C492**); a peça de outras requisições entra (**B1399**); o resto sem lote de material com lote (**B1400**); conferência,
+  detalhe e Fila sem mudança (**B1401**); uma saída por pedaço, com o endereço (**B1402**); sem trava nova (**B1403**); série como hoje
+  (**B1404**, **C493**); o corte da **B1405** não foi preciso (**C494** sem uso); só fatia quando a baixa de sempre levaria a peça (**B1406**,
+  regressão achada e consertada na Fase 5). Commits `4d8fb611` (plano), `7e2708d7` (Fase 2), `08e1070c` (T0), `842567ca` (T1), `3db19406`
+  (T2), `8a99e628` (T3), `fddeb5ee`, `147dbf6b` (T4), `4431a83d` (execução); Fase 5 `730a8a00`, `12ca0500`, `2d668f2c`; e o fechamento.
+  **O que é seu:** as decisões **B1396** a **B1406** (reversíveis); os avisos **C492**, **C493**, **C495** e o anterior **C496**
+  (importante); as limitações **(207)** e **(207, Fase 5)** em D e a verificação **(207)** em F. **Próxima:** *entregar escolhendo de onde
+  sai leva a peça do irmão da mesma requisição* (**C496**) — detalhada no fim do plano da 207; depois os itens 8 e 9 do 2º pacote (peça em
+  quarentena com lote, **C466**).
 - **Etapa 206 entregue (2026-11-06):** **a entrega recusa lote bloqueado, reprovado ou vencido** (**C464** resolvido na 2ª parte; a causa do
   **C484** fechada). A conferência nova antes de qualquer baixa e da alçada (**B1383**), com a régua do próprio automático (**B1384**); o sem
   lote positivo sai (**B1385**, a B1323 revisada); só recusa com saldo em lote impedido (**B1386**); recusa a entrega inteira (**B1387**); a

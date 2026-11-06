@@ -1,7 +1,7 @@
 # Etapa 207 — a entrega respeita a guarda sem lote (almoxarifado)
 
-> **PLANO (Fase 0 + Fase 1), 2026-11-06.** F2 e T0–T4 executados (ver **Execução**). Próximo passo: Fase 5 (revisão adversarial), depois T5
-> (fechamento).
+> **ETAPA FECHADA, 2026-11-06.** F2, T0–T4, Fase 5 (S1 consertado, S2–S4 testes, S5 em D, S6 → C496) e T5 (fechamento) executados —
+> ver **Execução**. **Próxima:** o C496 (fim deste arquivo). *(Antes: PLANO (Fase 0 + Fase 1), 2026-11-06.)*
 
 > partida: "Próxima tarefa detalhada" de `docs/superpowers/plans/2026-11-06-almoxarifado-etapa206-entrega-recusa-lote-impedido.md`
 > (`:397` em diante), conferida contra o código em `bb6a0c5e` — bate, com **três achados a mais** (abaixo). Aviso **C490** da 206. Estimativa
@@ -338,22 +338,90 @@ pelas fatias — registrar no D (207).
   **RN-207.04 b** (guarda de requisição cancelada não conta). Arquivo: 14/14.
 - [x] Suítes, uma vez cada, serial (sobre `147dbf6b`): `test:api` **600/600 arquivos OK**; `test:almoxarifado` 44/0; `test:validation` 4/0;
   `test:safealter` 3/0; `test:sqlite` 16/0. Fechamento de documentação (T5) **não** feito: vem depois da Fase 5.
-- [ ] Fase 5 — revisão adversarial
-- [ ] T5 — fechamento (`fechar-etapa`) e as cinco suítes, serial
+- [x] Fase 5 — revisão adversarial: **duas** revisões em paralelo (sobre `4431a83d`) e uma do conserto (sobre `730a8a00`/`12ca0500`).
+  Achados reais:
+  - **S1 — regressão da T1, consertada** (`730a8a00`, **B1406**): a fatia ignorava a linha sem endereço que o claim de hoje
+    (`claimSaldoSemLote`) baixa primeiro — sem padrão (a preferida é a sem endereço) ou com a padrão vazia e a sem endereço maior. Sem
+    padrão, sem endereço 2 e A 3, R1 guarda 2 em A: a entrega de 1 de R2 no automático, que hoje sai da linha sem endereço, passava a sair
+    de A, e R3 escolhendo A tomava 400 *"… em A há 2 … sobra 0 …"*. O comentário "na ordem do claim" era falso nesses casos. Conserto:
+    `fatiasSemLoteParaOAutomatico` simula o claim de hoje sobre **todas** as linhas sem lote com saldo (sem endereço e bloqueada inclusive)
+    e só fatia quando alguma retirada passaria do livre do endereço. RN-207.09 a/b (vermelhos em `4431a83d`, verdes com o conserto;
+    controle: sem o `return null` do claim caem os dois). O sorteio deixa de isentar G e N em todo bloco que baixa como hoje: só isenta (o
+    C492) quando o livre usável, com a parte guardada inteira, não cobria (`claimSemGuarda` 65 na semente 207; N 53 → 99 testes).
+    **Descartados:** pôr a linha sem endereço nas fatias (sem endereço não há origem estrita, e o claim começa pela padrão — não dá para
+    mirar); mudar o claim do motor.
+  - **S2 — lacuna CRÍTICA de teste** (`12ca0500`): trocar `Math.min(falta, x.livre)` por `x.livre` (a fatia leva mais do que falta: entrega
+    de 3 baixava 4+) deixava **tudo verde** — em todos os cenários fixos cada fatia cabia exata. RN-207.10 (P 3 com 2 guardados + B 5, R2
+    entrega 3 → P 1 + B 2; livro, item e queda do físico = 3) e o invariante **S** no sorteio (pedido = Σ SAIDAs = o que os itens
+    receberam = queda do físico).
+  - **S3 — lacuna** (`12ca0500`): a padrão primeiro não tinha teste. RN-207.11 (P 2 + A 5 (R1 guarda 4) + B 3, R2 4 → P 2, A 1, B 1).
+  - **S4 — lacuna** (`12ca0500`): o sorteio contava toda recusa como legítima. Invariante **R**: só a do *Máximo*, a que cita o endereço
+    escolhido no payload, ou "não serve mais" com a guarda já levada; qualquer outra recusa do motor é regressão.
+  - **S5 — texto (D)** (`2d668f2c`): a devolução que cita uma SAIDA fatiada fica limitada à fatia (A 1 + B 2: devolver 3 citando a 1ª → 400
+    *"… entregou 1, já foram devolvidos 0 e restam 1"*; antes da 207, uma SAIDA de 3 → 201) — **D (207, Fase 5)**, como na 197.
+  - **S6 — anterior, não consertado** (`2d668f2c`, **C496**): entregar com o "Sai de" no mesmo par da separação **além** da parte, ou um item
+    sem origem escolhendo o endereço do irmão, leva a guarda do irmão da **mesma** requisição. Igual no serviço de antes da 207. 2 h a 3 h.
+  - **Ruído:** 0.
+  Controles do fix-round (sabotagem de produção, `perl` sobre base LF, âncora = 1, restauro por cópia com md5): `Math.min` → `x.livre`:
+  RN-207.10 e .11 vermelhos, sorteio S 11; padrão fora do sort: .10, .11 e sorteio G 8 + N 6; sem o pulo da linha bloqueada: RN-207.05 b e o
+  sorteio pelo R (1 recusa *"Localização GZ-X está bloqueada"*). Semente 207: recusas 22 = Máximo 18 + escolhida 4, R 0, S 0; sementes 1,
+  2 e 3 sem violação (a 1 só não fecha a premissa T ≥ 10: 9). **Fuzz diferencial antigo × novo:** ~**6.200** casos na 1ª revisão, 5 × 200
+  no fix-round, 1.050 + 1.500 (simulação × claim real) na revisão do conserto — **0 recusas novas**; o controle positivo achou falhas em
+  cada versão sabotada.
+- [x] T5 — fechamento (`fechar-etapa`) — o commit "Etapa 207: fechamento - novidades, specs, mapa, guia, manual e planos": novidades
+  (cabeçalho, seção da 207 com 9 cenários e as literais lidas de `requisitionService` (`validarOrigemDaEntrega`), `stockService` (origem
+  estrita) e `returnService`; **B1396** a **B1405** reescritas pelo que o código faz, antes da **B1406** que a Fase 5 já tinha escrito;
+  **C490** anotado como resolvido; **C492**, **C493**, **C495** novos, **C494** sem uso, antes do **C496** da Fase 5; **D (207)** antes do
+  **D (207, Fase 5)**; o **D (51)** anotado; **F (207)**), specs 05 e 10, mapa, guia, manual (7.5) e este plano. Estimado × gasto e
+  controle de horas: com o André. Suítes (serial, sobre `2d668f2c`): `test:api` **600/600**, `test:almoxarifado` **44/0**,
+  `test:validation` **4/0**, `test:safealter` **3/0**, `test:sqlite` **16/0**. Jest e build da tela: não rodados (tela intocada).
+
+## Divergências do plano (registradas)
+
+- O controle da RN-207.06: a ENTRADA da exclusão de uma SAIDA sem endereço vai **sem** endereço no livro (o motor credita na padrão), não
+  "com destino P" — o teste afirma o medido (T2).
+- Restauro das sabotagens por **cópia** com md5, não por `git checkout` (o conserto não estava commitado — T1).
+- O sorteio com **400** casos, não 120 (a premissa T ≥ 10 da Fase 2 não fechava — T4).
+- A régua do contrato ("fatias gulosas na ordem do claim sem as linhas que ficam de fora") **estava incompleta**: sem simular o claim de
+  hoje, fatiava casos em que a baixa de hoje não levava guarda e mudava de onde saía o livre que outra requisição ia escolher (S1). O contrato
+  ganhou a simulação (B1406) — a função continua com a mesma assinatura e o mesmo `null | fatias`.
+- O corte da B1405 não foi preciso; **C494** sem uso.
+
+## Retro (4 números)
+
+- **Rodadas de correção até verde:** 1 (o fix-round da Fase 5).
+- **Achados reais:** 1 regressão (S1) + 3 lacunas de teste (S2 crítica, S3, S4) + 1 texto (S5, D) + 1 anterior (S6, C496). **Ruído:** 0.
+- **Paralelismo:** 2 revisores em paralelo na Fase 5 (e um terceiro, do conserto, depois).
+- **Defeito que escapou da 206:** nenhum conhecido.
 
 ## Próxima tarefa detalhada
 
-**A T0 desta etapa** (e, ao fechar, o que vem depois dela, abaixo). Medido sobre `bb6a0c5e`:
+**O C496 — entregar escolhendo de onde sai leva a guarda do irmão da mesma requisição** (anterior à 207; achado S6 da Fase 5; ainda sem
+estimativa — faça a da `estimativa-de-tarefas` antes do plano; o revisor estimou 2 h a 3 h). Medido sobre `2d668f2c`:
 
-- **Comece pelo F2**: o revisor recebe este plano + `requisitionService.js:1872-1973` (`dividirPorLotes`, `lotesParaOAutomatico`), `:2396-2400`,
-  `:2571-2667` (`baixar`, passadas) e `stockService.js:467-505` (`claimSaldoSemLote`), `:1511-1521` (origem estrita). Pergunta extra: a B1398
-  ("tudo ou como hoje") deixa algum caso **comum** desprotegido que a forma da B1329 protegeria sem o problema do Achado 2?
-- **T0:** o arquivo novo segue o molde de `entregaAutomaticaPeloLote.api.test.js` (helpers `material`, `entrar`, `req`, `sep`, `livro`,
-  `linhas`) — copie os helpers, não importe. O cenário da RN-207.01 é o `cenSL.tmp.js` (scratchpad do revisor da 206,
-  `…/rev206b/server/tests/cenSL.tmp.js`), o gerador do sorteio é o `fuzz206g.tmp.js` da mesma pasta (modo G, sem o modo E).
-- **Contrato que a T1 consome:** `guardaQueConta(g, saiu, fica)` e `fatiasSemLoteParaOAutomatico(db, materialId, quantidade, saiu, fica) →
-  null | [{ localizacao_id, quantidade }]`; `baixar(plano, baixa, q, null, endereco)` já existe (`:2571`).
-- **Depois desta etapa:** os itens **8** e **9** do 2º pacote (`docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas-2.txt`,
-  já estimados: *"Peça em quarentena — 1ª parte: o bloqueio passa a saber o lote"*, 4h30 a 5h30; *"2ª parte: a entrega não tira a peça
-  bloqueada"*, 4h a 5h) — **C466**. Vizinhos baratos: **C491** (o teto que conta a parte da própria origem cujo lote ficou impedido), **C478**,
-  **C486**.
+- **Cenário** (o do revisor `rev207b`, igual no serviço de antes da 207): material sem lote, *A* 3, *B* 5; item 1 separado 1 de *A* + 1 sem
+  origem; item 2 separado 2 de *A*; entregar 2 do item 1 escolhendo *A* → 200 e *A* fica com 1; o item 2, num clique → 400 *"⟨material⟩: a
+  origem da separação (A) não serve mais (O saldo em A (1) não cobre a quantidade (2) — a saída tiraria de outros endereços) — entregue
+  escolhendo de onde sai"*. Segunda forma: um item **sem** separação com origem escolhendo no **Sai de** o endereço que o irmão separou.
+- **Onde** (`server/services/almoxarifado/requisitionService.js`, `entregarSemTrava`):
+  - o laço da origem (`:2377-2401`): `saiDaOrigem` (`:2377`, `:2387`) fica `true` quando o par escolhido é o da origem guardada — e aí
+    `validarOrigemDaEntrega(..., contarOutras = !!origemId && !saiDaOrigem)` (`:2401`) **não** põe o item no caso (c). É a 1ª forma: o mesmo
+    par acima da parte nem entra no caso (c).
+  - a passada do caso (c) (`:2403-2420`): `memoParteGuardadaDeOutras(db, requisicaoId)` (`:2406`, definida em `:135`) lê
+    `parteGuardadaDeOutras` (`:96-107`), que filtra `ir.requisicao_id <> ?` — a guarda dos **irmãos** da mesma requisição nunca conta. É a
+    2ª forma.
+- **Conserto provável:** a conferência do caso (c) descontar também a parte guardada dos irmãos **desta** requisição no par (menos o que a
+  própria entrega tira deles da origem — o `pedidoPorOrigem` já soma os itens desta entrega no par), e o item que sai do próprio par **acima**
+  da parte entrar no caso (c) pelo que passa da parte. Cuidado com a precedência das literais (a C1/E1 da 198/200 e o "Máximo"): o caso (c)
+  roda depois do laço, antes da prévia e da alçada, e não grava nada (B1338). Decidir na Fase 0 se a recusa reusa `mensagemSeparadoDeOutras`
+  (`gesto: 'entrega'`, que hoje diz *"para outra requisição"*) ou ganha frase para o irmão — letra B.
+- **Pontos de atenção:** a 136 (passadas 0/1/2 — o irmão da mesma entrega que sai inteiro da origem não deve contar, a V1); a B1394 (a
+  guarda do próprio item conta uma vez — `parteQueFicaPorItem`); a 201 (o "Sai de" mostra `sobra` = físico − outras: se a guarda do irmão
+  passar a contar na porta, a janela tem de descontá-la também, senão oferece o que a porta recusa — `parteGuardadaDeOutrasPorPar` com
+  `requisicaoId`); sem trava nova (dentro das duas da entrega).
+- **Moldes de teste:** `entregaGuardaSemLote.api.test.js` (helpers `material`, `entrar`, `reqDireta`, `separar`, `entregar`, `livro`,
+  `retrato`) e o sorteio RN-207.08 — o caso que ele exclui de G/N ("origem ESCOLHIDA além da parte do item", achado com a semente 1) é
+  justamente este; ao consertar, tirar a exclusão e ver o G/N cobri-lo.
+- **Depois:** o 2º pacote ainda tem os itens **8** e **9** (`docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas-2.txt`, já
+  estimados: *"Peça em quarentena — 1ª parte: o bloqueio passa a saber o lote"*, 4h30 a 5h30; *"2ª parte: a entrega não tira a peça
+  bloqueada"*, 4h a 5h) — **C466**. Vizinhos baratos: **C491**, **C478**, **C486**, **C495**.

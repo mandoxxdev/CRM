@@ -1,5 +1,7 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 207 (2026-11-06, T1 `842567ca`, T2 `3db19406`, Fase 5 `730a8a00`): a parte automática sem lote da entrega pula a guarda numa linha sem lote (C490, anterior) — fatias sem lote com `localizacao_origem_id`, uma SAIDA por fatia, quando o claim de hoje levaria a guarda e o livre usável cobre; senão como hoje (C492); a linha "Entrega de requisição" e a "Exclusão administrativa" da tabela de alcance anotadas** — ver a seção "Etapa 207", no fim. O status não muda.
+
 > **+ Etapa 206 (2026-11-06, T1 `ccbce184`, T2 `62c3dc79`, Fase 5 `31aca1a3`, `00d9e24a`): a entrega de requisição de material com `controle_lote` deixa de mandar para "sem lote" (negativo) o que só lote impedido cobriria — recusa antes de baixar (C464 2ª parte resolvida; a causa do C484 fechada); a B1323 revisada (só o sem lote positivo sai); a nota da guarda desligada (Etapa 197, abaixo) anotada** — ver a seção "Etapa 206", no fim. O status não muda.
 
 > **+ Etapa 205 (2026-11-06, T0 `8bebd3ce`, T1 `f736cc71`, T2 `82ae8664`, T2b `18b41f47`, Fase 5 `17fb5202`, `13fe3691`): lote BLOQUEADO, REPROVADO ou vencido sem liberação deixa de contar na aprovação e na separação de material com `controle_lote` (C464, 1ª parte) — a régua `predicadoLoteImpedidoSql` é o contrário de `elegivel`; a entrega não muda (C464 2ª parte, item 7)** — ver a seção "Etapa 205", no fim. O status não muda.
@@ -735,8 +737,8 @@ lote — não existe campo na tela nem parâmetro na chamada:
 
 | Fluxo | Arquivo | Tipo de movimento | O que acontece hoje |
 |---|---|---|---|
-| Entrega de requisição | `requisitionService.entregarRequisicao` | `SAIDA` | ~~baixa sem lote; a linha de saldo debitada é a `(localização resolvida, lote NULL)`~~ — **mudou duas vezes:** desde a **Etapa 58** (B231) a entrega pode escolher o lote no "Sai de" (sai daquele lote); desde a **Etapa 197** (B1320), em material com `controle_lote` e sem série, a parte **automática** sai por lote (FEFO, só lote elegível, uma SAIDA por lote; o que os elegíveis não cobrem, sem lote — B1323; **desde a Etapa 206** só até o saldo sem lote positivo: a parte que iria negativa com lote impedido é recusada antes de baixar, B1385). "Baixa sem lote" vale só para a parte automática de material **sem** `controle_lote` |
-| Exclusão administrativa de requisição | `requisitionService.excluirRequisicao` | `ENTRADA` (estorno) | ~~devolve sem lote — não volta para o lote de onde saiu~~ — **isto estava errado desde a Etapa 58** (B232, `requisitionService.excluirSemTrava`): a exclusão devolve **por saída**, com o `lote_id` de cada uma — volta ao lote de onde saiu (e ao endereço, se ainda recebe; a saída automática, ao endereço padrão — D (51)). Só a requisição antiga cujo livro não fecha com o entregue estorna numa entrada sem lote. Corrigido à vista no fechamento da 197 |
+| Entrega de requisição | `requisitionService.entregarRequisicao` | `SAIDA` | ~~baixa sem lote; a linha de saldo debitada é a `(localização resolvida, lote NULL)`~~ — **mudou duas vezes:** desde a **Etapa 58** (B231) a entrega pode escolher o lote no "Sai de" (sai daquele lote); desde a **Etapa 197** (B1320), em material com `controle_lote` e sem série, a parte **automática** sai por lote (FEFO, só lote elegível, uma SAIDA por lote; o que os elegíveis não cobrem, sem lote — B1323; **desde a Etapa 206** só até o saldo sem lote positivo: a parte que iria negativa com lote impedido é recusada antes de baixar, B1385). "Baixa sem lote" vale só para a parte automática de material **sem** `controle_lote` — e, **desde a Etapa 207** (B1396, B1402), essa baixa sem lote (e o resto sem lote de material com lote) sai em fatias **com endereço**, uma SAIDA por fatia, quando pula a guarda sem lote de outro item |
+| Exclusão administrativa de requisição | `requisitionService.excluirRequisicao` | `ENTRADA` (estorno) | ~~devolve sem lote — não volta para o lote de onde saiu~~ — **isto estava errado desde a Etapa 58** (B232, `requisitionService.excluirSemTrava`): a exclusão devolve **por saída**, com o `lote_id` de cada uma — volta ao lote de onde saiu (e ao endereço, se ainda recebe; a saída automática, ao endereço padrão — D (51); **desde a Etapa 207** a SAIDA fatiada sem lote tem endereço e volta a ele, RN-207.06). Só a requisição antiga cujo livro não fecha com o entregue estorna numa entrada sem lote. Corrigido à vista no fechamento da 197 |
 
 **Conferido contra o código em 2026-08-12:** a seção "Lado 2: os fluxos internos que continuam
 ISENTOS" de `loteControleObrigatorio.api.test.js` tem exatamente estes **dois** testes. O
@@ -1245,5 +1247,19 @@ Plano: `docs/superpowers/plans/2026-11-06-almoxarifado-etapa206-entrega-recusa-l
   (**C487**: regulariza-se por Ajuste com localização, que absorve a linha sem lote negativa).
 - [ ] **Fora:** a série de lote impedido (**C486**); a falta sem lote impedido ainda negativa (**C485**); a guarda numa linha sem lote não é
   protegida do automático (**C490**, anterior).
+
+Continua 🟢.
+
+## Etapa 207 — o livro sem lote com endereço (2026-11-06)
+
+Plano: `docs/superpowers/plans/2026-11-06-almoxarifado-etapa207-entrega-respeita-guarda-sem-lote.md`. O checklist com hashes está na spec 05
+(seção "Etapa 207"). O que toca esta feature:
+
+- [x] **A guarda numa linha sem lote** (o C490, que a seção da 206 acima listava como fora) — a parte automática sem lote da entrega
+  (material sem `controle_lote`, e o `resto` sem lote de material com lote, B1400) pula a parte guardada sem lote das caixas vivas quando o
+  claim de hoje a levaria e o livre usável cobre — `842567ca`, Fase 5 `730a8a00`.
+- [x] **O livro** — a SAIDA fatiada sem lote grava `localizacao_origem_id` (uma por fatia, B1402); a exclusão e o estorno devolvem a cada
+  endereço. A linha "Entrega de requisição" e a "Exclusão administrativa" da tabela de alcance foram anotadas à vista — `3db19406`.
+- [ ] **Fora:** item com série (**C493**); o livre usável que não cobre (**C492**).
 
 Continua 🟢.

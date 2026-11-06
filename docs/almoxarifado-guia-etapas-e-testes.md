@@ -1,24 +1,28 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-11-06 (Etapas 172 a 191, 194 a 206) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-11-06 (Etapas 172 a 191, 194 a 207) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205 e 206) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206 e 207) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-06 (Etapas 172 a 178, 180 a 191, 194 a 206 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-06 (Etapas 172 a 178, 180 a 191, 194 a 207 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
-> **O desenvolvimento parou aqui: Etapa 206 fechada — 2026-11-06.** **A entrega recusa lote bloqueado, reprovado ou vencido.** Quando o
-> material só tinha saldo em lote que não pode sair, a entrega passava e deixava *"Sem lote atribuído"* negativo, com o lote ruim cheio.
-> Agora, em material com controle por lote, ela recusa **antes de baixar**, dizendo qual lote, por quê, quanto e o que fazer; a janela de
-> entrega e a Fila oferecem só o que a entrega aceita. Só servidor (a tela não mudou); nada a rodar antes do deploy. **Nenhum clique foi
-> dado** (testes da rota e do serviço — roteiro na seção da 206 e letra F das novidades).
+> **O desenvolvimento parou aqui: Etapa 207 fechada — 2026-11-06.** **A entrega respeita a peça separada sem lote.** Numa requisição com
+> duas peças do mesmo material sem lote, entregar a peça separada sem dizer de onde podia esvaziar a prateleira de onde a outra foi separada,
+> e a entrega seguinte dela era recusada (*"a origem da separação … não serve mais"*). Agora a entrega pula o que está separado (sai dos
+> outros endereços, em pedaços com o endereço no histórico), e a outra peça sai do lugar dela num clique. Só servidor (a tela não mudou);
+> nada a rodar antes do deploy. **Nenhum clique foi dado** (testes da rota e do serviço — roteiro na seção da 207 e letra F das novidades).
 >
-> **Onde parou, exatamente:** a **206 está fechada** (código, testes e documentos commitados; o estimado × gasto do item 7 fica com o André).
-> A **próxima** é o aviso **C490**, anterior, achado na revisão da 206: **"a parte separada sem lote levada pelo automático de outro item"**
-> (em material sem controle por lote, a entrega automática de um item pode levar o que outro item da mesma requisição separou de um
-> endereço, e a entrega seguinte dele é recusada). Só a tarefa detalhada no fim do plano da 206
-> (`docs/superpowers/plans/2026-11-06-almoxarifado-etapa206-entrega-recusa-lote-impedido.md`) existe — sem estimativa, plano nem código.
+> **Onde parou, exatamente:** a **207 está fechada** (código, testes e documentos commitados; o estimado × gasto fica com o André). A
+> **próxima** é o aviso **C496**, anterior, achado na revisão da 207: **"entregar escolhendo de onde sai leva a peça que o irmão da mesma
+> requisição separou"** (escolher no **Sai de** o mesmo endereço da separação além da parte separada dali, ou um item sem separação escolher
+> o endereço do irmão: a entrega passa, e a entrega seguinte do irmão é recusada). Só a tarefa detalhada no fim do plano da 207
+> (`docs/superpowers/plans/2026-11-06-almoxarifado-etapa207-entrega-respeita-guarda-sem-lote.md`) existe — sem estimativa, plano nem código.
 > Depois: os itens 8 e 9 do 2º pacote da estimativa de 05/11 (peça em quarentena com lote — **C466**), já estimados.
+>
+> *(Antes:)* **Etapa 206, 2026-11-06.** **A entrega recusa lote bloqueado, reprovado ou vencido.** Em material com controle por lote, a
+> entrega que só teria lote impedido de onde tirar recusa antes de baixar, dizendo qual lote, por quê e quanto; a janela de entrega e a Fila
+> oferecem só o que a entrega aceita. Só servidor. **Nenhum clique foi dado** (roteiro na seção da 206 e letra F das novidades).
 >
 > *(Antes:)* **Etapa 205, 2026-11-06.** **Lote bloqueado, reprovado ou vencido não conta na aprovação e na separação.** A aprovação reserva
 > só o que pode sair, a Fila e a janela de separação mostram só isso e a separação acima recusa com a conta. Servidor e uma linha na janela;
@@ -7085,6 +7089,56 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 207 — A entrega respeita a peça separada sem lote (ENTREGUE — 2026-11-06)
+
+**O que mudou, em uma frase:** em material sem lote, a entrega automática de um item deixa de levar a peça que outro item (desta ou de
+outra requisição) separou de um endereço — ela sai dos outros endereços, em pedaços, e cada pedaço aparece no histórico com o endereço.
+
+**O problema que ela resolve.** Uma requisição com duas peças do mesmo material: a peça 2 separada da prateleira *A*, a peça 1 separada sem
+dizer de onde. Entregando só a peça 1, o sistema tirava do lugar que achava melhor e podia esvaziar justamente *A*. Depois a peça 2 não saía
+mais: *"a origem da separação (A) não serve mais"*. O total do estoque ficava certo; o que se perdia era o lugar guardado.
+
+| Antes | Agora |
+|---|---|
+| A entrega da peça sem origem podia esvaziar a prateleira separada do irmão | Pula o separado e sai dos outros endereços |
+| A entrega seguinte do irmão era recusada (*"… não serve mais"*) | Sai do lugar dele num clique |
+| A saída ia **sem** endereço no histórico | Quando sai em pedaços, uma saída por endereço, com o endereço |
+| Excluir a requisição devolvia essa saída para a posição padrão | Cada pedaço volta ao endereço de onde saiu |
+| Sem peça separada com endereço; os outros endereços não cobrem; item com série | **Iguais** |
+
+**Antes de testar (uma vez).** Usuário **Administrador do almoxarifado**. Um material *Parafuso 207* **sem** controle por lote, sem série,
+não crítico, unidade *un*, com uma **localização padrão** *P* vazia. **Movimentações → Entrada** de 3 em *A* e de 2 em *B*.
+**Requisições → Nova requisição** com **dois itens** de *Parafuso 207*, 3 e 2, aprovada (fica *Totalmente Reservada*). **Iniciar
+Separação**: o item 1 (3) **sem** escolher **Sai de**; o item 2 (2) com **Sai de** = *A*.
+
+**Roteiro de teste (10 minutos).**
+
+1. Abra a requisição e clique **Entregar escolhendo de onde sai…**: item 1 com **3** e *"Qualquer endereço (automático)"*, item 2 com **0**
+   → **Confirmar**.
+2. **Movimentações**, filtrando o material: aparecem **duas** saídas da requisição — **1 de *A*** e **2 de *B***. *A* fica com 2, *B* com 0.
+   (Antes: uma saída de 3 sem endereço, e *A* com 0.)
+3. Volte à requisição e clique **Confirmar Entrega e Baixar Estoque** → saem **2 de *A***; a requisição fica **Entregue**. (Antes: *"Parafuso
+   207: a origem da separação (A) não serve mais (O saldo em A (0) não cobre a quantidade (2) — a saída tiraria de outros endereços) —
+   entregue escolhendo de onde sai"*.)
+4. *(Excluir devolve ao endereço.)* Refaça a preparação e faça só o passo 1. **Excluir** a requisição (com justificativa) → *A* volta a 3 e
+   *B* a 2; *P* continua vazia.
+5. *(Outra requisição.)* Com *A* 3 e *B* 2: requisição R1 de 2 separada com **Sai de** = *A*; requisição R2 de 3 separada sem **Sai de**.
+   Entregue R2 → 1 de *A* + 2 de *B*; entregue R1 num clique → 2 de *A*.
+6. *(Nada muda sem peça separada.)* *A* 3, *B* 2, uma requisição de 3 separada sem **Sai de** → **uma** saída de 3, sem endereço.
+7. *(Os outros endereços não cobrem.)* Repita a preparação, mas **bloqueie** *B* em **Localizações** antes do passo 1 → a entrega sai como
+   antes (uma saída sem endereço, *A* 0) e o passo 3 recusa com a frase do "Antes" (**C492**).
+8. *(Devolução.)* Depois do passo 2, **Devoluções** citando a saída de 1 de *A* e devolvendo 3 → *"Devolução acima do entregue: a saída
+   ⟨n⟩ entregou 1, já foram devolvidos 0 e restam 1"*. Cada pedaço se devolve citando a sua saída.
+
+**O que esta etapa não cobre.** Quando os outros endereços não cobrem a entrega inteira, ela sai como antes e pode levar a peça separada
+(**C492**). Item com número de série fica como antes (**C493**). No bloco **Substituições**, a troca para o automático continua dizendo
+*"automático"* — os endereços estão no histórico (**C495**). Um aviso **anterior**, achado agora e **não** consertado: entregar escolhendo no
+**Sai de** o mesmo endereço da separação além da parte separada dali, ou um item sem separação escolhendo o endereço do irmão, leva a peça do
+irmão da mesma requisição, e a entrega seguinte dele recusa (**C496** — é a próxima etapa). **Antes do deploy:** nada.
+
+*Nenhum clique foi dado nesta etapa*: o roteiro acima é o que os testes automáticos provam (pela rota real e pelo serviço; a tela não
+mudou) — escrito para você conferir.
 
 ## Etapa 206 — A entrega recusa lote bloqueado, reprovado ou vencido (ENTREGUE — 2026-11-06)
 

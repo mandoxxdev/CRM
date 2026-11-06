@@ -1,14 +1,22 @@
 # Almoxarifado — pausa de 2026-10-23 e como retomar
 
 > **✅ RETOMADO em 2026-11-05 — este arquivo agora é histórico.** O André retomou o módulo em 05/11 (estimativa
-> `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md`). **Depois: a Etapa 206 fechou** em 06/11 (2º pacote da
+> `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md`). **Depois: a Etapa 207 fechou** em 06/11 (fora do 2º pacote: o aviso
+> C490 da 206, estimativa `bb6a0c5e`; plano `4d8fb611`, Fase 2 `7e2708d7`, T0 `08e1070c`, T1 `842567ca`, T2 `3db19406`, T3 `8a99e628`, T4
+> `fddeb5ee`, `147dbf6b`, execução `4431a83d`, Fase 5 `730a8a00`, `12ca0500`, `2d668f2c`, e o commit "Etapa 207: fechamento") — a entrega
+> respeita a guarda sem lote (C490 resolvido). Letra **B** usada até **B1406** (B1396–B1406 pela 207), letra **C** até **C496**
+> (C492, C493, C495 e C496 pela 207; C494 sem uso), letra **A** até **A111** (a 207 não usou — a próxima é **A112**). **Próxima:** o aviso
+> **C496** (entregar escolhendo de onde sai leva a guarda do irmão da mesma requisição — anterior, achado na Fase 5 da 207), ainda sem
+> estimativa; detalhada no fim de `docs/superpowers/plans/2026-11-06-almoxarifado-etapa207-entrega-respeita-guarda-sem-lote.md`. Depois,
+> os itens 8 e 9 do 2º pacote (C466), já estimados.
+> *(Antes: a **Etapa 206 fechou** em 06/11 (2º pacote da
 > estimativa, item 7; plano `7f210f62`, Fase 2 `7159f344`, T0 `df1de701`, T1 `ccbce184`, T2 `62c3dc79`, T3 `a286ba46`, execução `7d21a13c`,
 > Fase 5 `31aca1a3`, `00d9e24a`, `0996c3c2`, e o commit "Etapa 206: fechamento") — a entrega recusa lote bloqueado, reprovado ou vencido
 > (C464 resolvido na 2ª parte; a causa do C484 fechada). Letra **B** usada até **B1395** (B1383–B1395 pela 206), letra **C** até **C491**
 > (C485–C487 e C489–C491 pela 206; C488 sem uso), letra **A** até **A111** (a 206 não usou — a próxima é **A112**). **Próxima:** o aviso
 > **C490** (a parte guardada sem lote levada pelo automático de outro item — anterior, achado na Fase 5 da 206), ainda sem estimativa;
 > detalhada no fim de `docs/superpowers/plans/2026-11-06-almoxarifado-etapa206-entrega-recusa-lote-impedido.md`. Depois, os itens 8 e 9 do
-> 2º pacote (C466), já estimados.
+> 2º pacote (C466), já estimados.)*
 > *(Antes: a **Etapa 205 fechou** em 06/11 (2º pacote da
 > estimativa, item 6; plano `88f18de5`, Fase 2 `422b8e90`, T0 `8bebd3ce`, T1 `f736cc71`, T2 `82ae8664`, T2b `18b41f47`, T3 `e989ec54`,
 > `33328089`, `9bf6ccd6`, execução `aedfd999`, Fase 5 `689bfa7d`, `65a19db6` (desfeito), `17fb5202`, `52fa9328`, `0516c933`, `13fe3691`, e o
