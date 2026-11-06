@@ -184,6 +184,59 @@ const lista = (app, m, antes) => request(app).get(`${API}/devolucoes/saidas-eleg
       assert.strictEqual(r[0].id, F[64], `antesDeId=${v} nao e ausente`);
     }
   });
+
+  // ── RN-204.05 (T3): a entrega antiga achada devolve com o vinculo e herda o lote ────────────────────────────────────
+  async function cenarioLote(tag) {
+    const m = await novoMaterial(db, { lote: true });
+    const L1 = await lotService.criarOuObterLote(db, ADMIN, { material_id: m, codigo: `DEA204-L1-${tag}` });
+    const L2 = await lotService.criarOuObterLote(db, ADMIN, { material_id: m, codigo: `DEA204-L2-${tag}` });
+    for (const l of [L1, L2]) {
+      await stockService.registrarMovimentacao(db, ADMIN, { material_id: m, tipo: 'ENTRADA', quantidade: 200, lote_id: l.id,
+        motivo: 'setup' });
+    }
+    const S = [await entregar(db, m, 4, { lote_id: L1.id })];
+    for (let i = 0; i < 30; i++) S.push(await entregar(db, m, 4, { lote_id: L2.id }));
+    await datar(db, S);
+    return { m, L1: L1.id, antiga: S[0] };
+  }
+  const saldoLote = async (l) => (await dbGet(db,
+    'SELECT COALESCE(SUM(quantidade),0) q FROM estoque_saldo_almoxarifado WHERE lote_id = ?', [l])).q;
+
+  await test('RN-204.05 (i) pela rota: pagina 1 -> pagina 2 -> POST citando a 31a -> pagina 2 de novo', async () => {
+    const { m, L1, antiga } = await cenarioLote('r');
+    const p1 = (await lista(app, m)).body;
+    assert.strictEqual(p1.length, 30);
+    assert.ok(!p1.some((x) => x.id === antiga), 'a do L1 ja estava na pagina 1');
+    const p2 = (await lista(app, m, p1[29].id)).body;
+    assert.deepStrictEqual(p2.map((x) => x.id), [antiga]);
+    assert.deepStrictEqual([p2[0].lote_id, p2[0].saldo_devolvivel, p2[0].quantidade_devolvida], [L1, 4, 0]);
+    const antesL1 = await saldoLote(L1);
+    const d = await request(app).post(`${API}/devolucoes`).send({ material_id: m, quantidade: 2, motivo: 'SOBRA_PROJETO',
+      destino: 'ESTOQUE', movimentacao_saida_id: antiga });
+    assert.strictEqual(d.status, 201, JSON.stringify(d.body));
+    const row = await dbGet(db, 'SELECT movimentacao_saida_id, lote_id FROM devolucoes_material_almoxarifado WHERE id = ?', [d.body.id]);
+    assert.deepStrictEqual([row.movimentacao_saida_id, row.lote_id], [antiga, L1]);
+    assert.strictEqual(await saldoLote(L1) - antesL1, 2, 'o saldo do L1 nao subiu 2');
+    const p2b = (await lista(app, m, p1[29].id)).body;
+    assert.deepStrictEqual([p2b[0].id, p2b[0].quantidade_devolvida, p2b[0].saldo_devolvivel], [antiga, 2, 2]);
+  });
+
+  await test('RN-204.05 (ii) pelo servico: o mesmo encadeamento, os mesmos numeros', async () => {
+    const { m, L1, antiga } = await cenarioLote('s');
+    const p1 = await returnService.listarSaidasElegiveis(db, m);
+    assert.ok(!p1.some((x) => x.id === antiga));
+    const p2 = await returnService.listarSaidasElegiveis(db, m, { antesDeId: p1[29].id });
+    assert.deepStrictEqual([p2.length, p2[0].id, p2[0].lote_id, p2[0].saldo_devolvivel], [1, antiga, L1, 4]);
+    const antesL1 = await saldoLote(L1);
+    const dv = await returnService.registrarDevolucao(db, ADMIN, { material_id: m, quantidade: 2, motivo: 'SOBRA_PROJETO',
+      destino: 'ESTOQUE', movimentacao_saida_id: antiga });
+    const row = await dbGet(db, 'SELECT movimentacao_saida_id, lote_id FROM devolucoes_material_almoxarifado WHERE id = ?', [dv.id]);
+    assert.deepStrictEqual([row.movimentacao_saida_id, row.lote_id], [antiga, L1]);
+    assert.strictEqual(await saldoLote(L1) - antesL1, 2);
+    const p2b = await returnService.listarSaidasElegiveis(db, m, { antesDeId: String(p1[29].id) });
+    assert.deepStrictEqual([p2b[0].id, p2b[0].quantidade_devolvida, p2b[0].saldo_devolvivel], [antiga, 2, 2]);
+  });
+
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
   await close();
   process.exit(failed ? 1 : 0);
