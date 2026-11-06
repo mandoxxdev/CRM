@@ -11,7 +11,16 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-05):** **Etapa 200 fechada** (**a entrega com "Sai de" escolhido à mão respeita o que outra
+> **Onde o desenvolvimento está (2026-11-05):** **Etapa 201 fechada** (**o "Sai de" mostra o que sobra depois do separado para outras
+> requisições** — há 6 peças em *XB-01* (lote *L1*); R1 separou 4 de lá; quem abria a separação de R2 via *"XB-01 — lote L1 (6)"*, digitava 4
+> e só ao confirmar descobria que não podia. Agora a lista diz *"XB-01 — lote L1 (sobra 2 de 6; 4 para outras)"* — na janela de separação e na
+> de entrega; na separação, o que **esta** requisição já separou dali também entra (*"…, 1 desta)"*), e o número da lista é o número da
+> recusa. Separar a sobra inteira não pede mais o motivo de divergência. **C469** resolvido; tela e uma leitura nova no servidor (só soma);
+> nada a rodar antes do deploy; decisões **B1343** a **B1349**; aviso **C473** (o número é o de quando a janela abriu); limitações **D (201)**;
+> verificação **F (201)**; revisão (Fase 5) com uma correção menor no rótulo (**B1349**) e duas lacunas de teste cobertas). **Próxima:
+> Movimentação por integração respeita o lote informado** (**C458**, item 3 do 2º pacote da estimativa de 05/11); detalhada no fim do plano
+> da 201.
+> *(Também em 2026-11-05: **Etapa 200 fechada** (**a entrega com "Sai de" escolhido à mão respeita o que outra
 > requisição separou dali** — há 6 peças em *XB-01* (lote *L1*) e 9 em *XP-01*; R1 separou 4 de *XB-01*; R2 separou 4 no automático; na
 > **entrega** de R2, escolher à mão **"Sai de: XB-01"** era **aceito** e tirava dali as peças de R1, e quem tomava a recusa era R1 (*"… a
 > origem da separação (XB-01) não serve mais …"*). Agora a entrega de R2 é **recusada na hora**, com a conta à vista: quanto há, quanto está
@@ -20,7 +29,7 @@
 > mensagem aparece com a janela de entrega aberta); nada a rodar antes do deploy; decisões **B1338** a **B1342**; avisos **C470** (o mesmo
 > endereço, acima da parte do item), **C471** (só o lote escolhido) e **C472** (outro item da mesma requisição); limitações **D (200)**;
 > verificação **F (200)**; revisão (Fase 5) com zero defeitos e três lacunas de teste cobertas). **Próxima: Separação — o local mostra quanto
-> realmente sobra** (**C469**, item 2 do 2º pacote da estimativa de 05/11); detalhada no fim do plano da 200.
+> realmente sobra** (**C469**, item 2 do 2º pacote da estimativa de 05/11); detalhada no fim do plano da 200 — a próxima foi a **201**.)*
 > *(Também em 2026-11-05: **Etapa 199 fechada** (**Materiais de clientes com vírgula, e o termo de ferramenta com os
 > espaços do texto** — a tela **Materiais de clientes** passa a mostrar as quantidades como o papel da posição: *12,5*, *1.250,75*, *0,3*;
 > vazio é *0*; e o PDF do **termo de responsabilidade** de ferramenta imprime o texto da versão como foi escrito — o recuo e os espaços
@@ -4421,7 +4430,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -13776,7 +13785,53 @@ as saídas usam (**C471**). **Reversível.** `d7ff9a39`.
 
 **B1342 (NOVA, da Etapa 200; decisão do agente) — sem mudança de tela: a fatia visível é a mensagem.** A recusa aparece no aviso vermelho com a
 janela de entrega **aberta** (as quantidades e as escolhas ficam). **Descartado:** o **Sai de** da entrega mostrar o que sobra — é o mesmo
-campo novo da lista de saldos do **C469**, que é a próxima etapa. **Reversível.** Sem código de tela.
+campo novo da lista de saldos do **C469**, que é a próxima etapa. **Reversível.** Sem código de tela. *(Fechamento da 201: feito na 201 —
+o **Sai de** da entrega mostra a sobra, **B1343**.)*
+
+**B1343 (NOVA, da Etapa 201; decisão do agente) — o separado das outras e a sobra são campos novos da lista de saldos por endereço, não uma
+troca do número de hoje.** Cada linha da lista que as janelas de separação e de entrega leem ganha *quanto outras requisições separaram dali* e
+*quanto sobra* (o físico menos isso, nunca negativo); o número do físico continua igual. A consulta do **extrato** do material, que usa a mesma
+leitura por outra rota, **não** muda. **Descartado:** trocar o número do físico pela sobra (mudaria as opções da lista, as contas da janela e o
+extrato); uma rota nova (duas fontes para a mesma lista). **Reversível:** dois campos a mais na resposta; quem não os lê não muda.
+`1b04ad38`.
+
+**B1344 (NOVA, da Etapa 201; decisão do agente) — a conta da lista é a mesma da recusa, provada por teste.** A soma por endereço e lote usa as
+mesmas peças da recusa da separação e da entrega (a parte separada daquele endereço, só requisição em andamento, a mesma folga), numa consulta
+só para o material inteiro; a recusa continua com a conta dela, intocada, e um teste compara as duas em cada cenário (inclusive dois materiais
+sem lote no mesmo endereço — Fase 5). **Descartado:** fazer a lista chamar a conta da recusa endereço por endereço (uma consulta por linha, à
+toa); reescrever a recusa para usar a nova (mexeria na recusa sem necessidade nesta etapa). **Reversível.** `1b04ad38` (testes `4b62f20c`,
+`b3727231`, Fase 5 `dfffe96b`).
+
+**B1345 (NOVA, da Etapa 201, com a Fase 2; decisão do agente) — a requisição aberta não conta a si mesma; o número dela é opcional.** As
+janelas mandam qual requisição está aberta, e a caixa dela não entra no *"para outras"*. Sem o número, contam todas. Número que não é inteiro
+positivo (vazio, letra, 0, negativo, fração, repetido) → recusa *"requisicao_id inválido"*; número de requisição que não existe → conta todas
+(não há caixa dela para tirar). **Descartado:** recusar requisição inexistente (a lista é de material e nunca recusou por isso; a tela sempre
+manda uma que existe); exigir perfil (a lista é de leitura e não exigia). **Reversível.** `1b04ad38`.
+
+**B1346 (NOVA, da Etapa 201; decisão do agente) — na separação, a conta da tela também usa a sobra.** O aviso de divergência (*"Separando menos
+que o possível — conte o porquê para quem confere."*) e a pré-seleção do **Sai de** passam a contar o que sobra, não o físico: separar a sobra
+inteira não pede mais motivo (o sistema já registrava sem divergência), e o endereço que a sobra não cobre não vem mais escolhido sozinho (abre
+em automático, como quando o físico não cobre). O campo de quantidade **não** muda. **Descartado:** só o rótulo (a tela pediria motivo de
+"menos que o possível" a quem separou tudo o que sobra, e pré-escolheria o endereço que a recusa barra); limitar o campo pela sobra (o campo
+não é por endereço e bloquearia a separação no automático, que o sistema aceita). Servidor antigo, sem os campos: a conta de antes.
+**Reversível:** só tela. `f089c284`.
+
+**B1347 (NOVA, da Etapa 201; decisão do agente) — o endereço com sobra 0 continua na lista.** Ele aparece com *"(sobra 0 de 6; 6 para
+outras)"*. **Descartado:** escondê-lo (a pessoa não saberia por que o endereço onde vê as peças sumiu da lista). **Reversível.** `f089c284`.
+
+**B1348 (NOVA, da Etapa 201, com a Fase 2; decisão do agente) — o rótulo curto, com a sobra primeiro.** *"XB-01 — lote L1 (sobra 2 de 6; 4
+para outras)"*: a sobra primeiro porque a lista é estreita no celular (cerca de 40 letras visíveis) e o que importa é ela; *"outras"* sem
+*"requisições"* e sem os números delas. **Descartado:** *"(6; 4 separados para outras; sobra 2)"*, o texto da primeira redação do plano (a
+sobra ficava cortada no celular); os números das requisições na lista (longo; a recusa já os dá). Sem nada separado por outras: o rótulo de
+sempre, *"XB-01 — lote L1 (6)"*. **Reversível:** só texto. `f089c284`.
+
+**B1349 (NOVA, da Etapa 201, Fase 5; decisão do agente) — na separação, o que esta requisição já separou dali também mostra a sobra, mesmo sem
+outras.** Com só a própria requisição no endereço, o rótulo mostrava o físico (*"XB-01 — lote L1 (6)"*) enquanto a recusa já descontava o
+separado dela (*"O saldo em XB-01 (5) não cobre …"*); e com qualquer fração separada por outra o rótulo pulava de número. Agora:
+*"XB-01 — lote L1 (sobra 5 de 6; 1 desta)"*. Sem outras e sem a própria: o rótulo de sempre. A **entrega** não muda (o separado da própria
+requisição sai junto, não é descontado). **Descartado:** *"(sobra 5 de 6; 0 para outras, 1 desta)"* (um zero que não diz nada, e letras a mais
+no celular); deixar como estava (o número da lista e o da recusa não batiam justo para quem já separou dali). **Reversível:** só texto.
+`ab1d6246` (teste `298a3d72`).
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -17654,6 +17709,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      recusa nova da entrega (**C468**, **B1339**) diz a conta. E a frase "usada também pela Movimentação" **estava errada**: medido no
      fechamento da 200, a lista de saldos por endereço só é lida pelas janelas de separação e de entrega da requisição (o extrato do material
      usa a mesma consulta por outra rota). É a **próxima** etapa; onde consertar está medido no fim do plano da 200.)*
+     **✅ RESOLVIDO NA ETAPA 201** (`1b04ad38`, `f089c284`; testes `4b62f20c`, `b3727231`; Fase 5 `dfffe96b`, `ab1d6246`, `298a3d72`): o **Sai
+     de** das duas janelas mostra a sobra quando outra requisição separou dali — *"XB-01 — lote L1 (sobra 2 de 6; 4 para outras)"* —, e na
+     separação desconta também o que esta requisição já separou (*"(sobra 1 de 6; 4 para outras, 1 desta)"*, *"(sobra 5 de 6; 1 desta)"*); o
+     número é o da recusa (**B1343** a **B1349**). Na separação, separar a sobra inteira não pede motivo e o endereço que a sobra não cobre não
+     vem pré-escolhido (**B1346**). O número é o de quando a janela abriu (**C473**).
 470. **NOVO (da Etapa 200; o comportamento é anterior) — na entrega, o "Sai de" igual à origem da separação do item, com quantidade acima da
      parte dele, tira o excesso do que outra requisição separou ali.** Só escolhendo à mão (a janela não pré-seleciona a origem acima da
      parte — passa ao automático com o aviso *"… o restante, automático"*). **Nenhum erro de estoque**; a entrega da outra requisição é que
@@ -17666,6 +17726,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      Dois itens do mesmo material numa requisição: um separado de *XB-01*; o outro, entregue sozinho com **Sai de** *XB-01*, pode levar as
      peças do primeiro, e a entrega do primeiro depois toma *"… não serve mais …"*. **Nenhum erro de estoque.** **O que fazer:** entregar os
      dois itens juntos (a mesma entrega soma os dois) ou o segundo pelo automático (**B1340**).
+473. **NOVO (da Etapa 201) — o "sobra" do "Sai de" é o de quando a janela abriu.** A lista é lida ao abrir a janela de separação ou de entrega;
+     se outra requisição separa do mesmo endereço enquanto ela está aberta, o rótulo continua com o número antigo (*"sobra 2 de 6"* quando já
+     sobra 0). **Nenhum erro de estoque:** quem decide é a recusa na hora de confirmar (*"… sobra 0, que não cobre a quantidade (2) …"*), que
+     lê o momento. **O que fazer:** se a recusa disser um número diferente do da lista, fechar e reabrir a janela — a lista e a sugestão vêm
+     atualizadas. Conserto (se valer): reler a lista ao receber a recusa — ~30 min, só tela.
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -19019,6 +19084,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(201) O "Sai de" com a sobra, o que ficou de fora.** (1) O número é o de **quando a janela abriu** (**C473**). (2) Na **entrega**, o rótulo
+  não desconta o separado da própria requisição (sai junto) e não há teto por endereço na janela — a recusa da entrega continua decidindo
+  (**B1349**). (3) O campo de **quantidade** da separação não é limitado pela sobra (**B1346**). (4) O **"Saldo:"** do cabeçalho de cada item
+  na janela é o do material inteiro, sem mudança. (5) O **extrato** do material e a **Movimentação** não mostram a sobra (não leem esta
+  lista). (6) Ficam os avisos da entrega **C470**, **C471** e **C472**.
 - **(200) A entrega com "Sai de" que conta as outras requisições, o que ficou de fora.** (1) **O mesmo endereço da origem do item acima da
   parte** dele (**C470**). (2) **O só lote** (**C471**, **B1341**). (3) **A parte de outro item da mesma requisição** que não sai nesta entrega
   (**C472**, **B1340**). (4) **O "Sai de" da janela** continua mostrando o saldo do endereço sem o separado das outras (**C469**, **B1342**) —
@@ -20350,6 +20420,21 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(201) Nenhum clique foi dado no navegador.** A etapa **mudou a tela** (o rótulo do **Sai de** nas janelas de separação e de entrega, o
+aviso de divergência e a pré-seleção da separação), mas só foi vista pela janela montada nos testes (jsdom, servidor de mentira na fronteira
+HTTP). O que os testes provam: pela rota real, a lista de saldos com o separado das outras e a sobra (só caixa viva; a parte e não a caixa; o
+dado antigo; a folga; o lote e o material separando os pares — inclusive dois materiais sem lote no mesmo endereço; a linha sem endereço; a
+requisição aberta fora da conta; o parâmetro inválido; o extrato sem mudança), a conta igual à da recusa em cada cenário, e o número da lista
+igual ao *"sobra …"* da recusa da separação (pela rota e pelo serviço). Na tela: as duas janelas pedem a lista com a requisição aberta; os
+rótulos *"(sobra 2 de 6; 4 para outras)"*, *"(sobra 1 de 6; 4 para outras, 1 desta)"*, *"(sobra 5 de 6; 1 desta)"*, *"(sobra 3 de 10; 4 para
+outras, 3 desta)"* (dois itens do material e um de outro no mesmo endereço) e o de sempre sem nada separado ou com servidor antigo; separar a
+sobra inteira sem motivo; a planejada que a sobra não cobre em automático; a entrega sem *"desta"*. Controles positivos: cada regra com a sua
+sabotagem (no plano). A revisão (Fase 5): uma correção menor (**B1349**, `ab1d6246`) e duas lacunas cobertas (`dfffe96b`, `298a3d72`). **Não
+verificado à mão:** o roteiro da seção da Etapa 201 (o rótulo cabendo na largura do celular, os números na janela aberta e a troca de
+endereço). Vale 5 minutos. Suítes medidas (sobre `298a3d72`): `saldosSobraDeOutras` **15/0**; `RequisicoesSaiDeSobra` **12/0**; `test:api`
+**588/588 arquivos**; Jest da tela **213/213 suítes, 2934/2934 testes**; build **compilou**; `test:validation` **4/0**; `test:safealter`
+**3/0**; `test:sqlite` **16/0**; `test:almoxarifado` **44/0** (sobre `b3727231`).
 
 **(200) Nenhum clique foi dado no navegador.** A etapa **não mudou a tela**: a mensagem nova aparece no aviso vermelho, com a janela de
 entrega aberta (lido no código da janela, não clicado). O que os testes provam, pela rota real (inclusive a rota de separação que a tela
@@ -38515,12 +38600,90 @@ com séries ficando de fora — cobertas em `5bc921e4`.
   (**C469** — a próxima).
 - **Nada a rodar antes do deploy.**
 
+## Etapa 201 — O "Sai de" mostra o que sobra depois do separado para outras requisições (2026-11-05)
+
+Há 6 peças no endereço *XB-01*, lote *L1*. A requisição R1 já separou 4 de lá — estão na caixa dela. Quem abria a separação de R2 via, no
+**Sai de**, *"XB-01 — lote L1 (6)"*, escolhia, digitava 4 e só ao confirmar descobria que não podia (a recusa da 198: *"… sobra 2, que não
+cobre a quantidade (4) …"*). Agora a própria lista diz *"XB-01 — lote L1 (sobra 2 de 6; 4 para outras)"* — na janela de separação e na de
+entrega. É a etiqueta da caixa da prateleira aparecendo **antes** de a pessoa ir buscar. Na separação, o que **esta** requisição já separou
+dali também entra na conta (*"…, 1 desta)"*), porque a recusa também conta: o número da lista é o número da recusa. E quem separa tudo o que
+sobra não é mais perguntado por que separou "menos que o possível". Tela, mais uma leitura nova no servidor (só soma, não grava nada). Nada a
+rodar antes do deploy. Decisões do agente: **B1343** a **B1349**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| O **Sai de** da separação e da entrega mostrava o físico do endereço: *"XB-01 — lote L1 (6)"*, mesmo com 4 separados para outra requisição | *"XB-01 — lote L1 (sobra 2 de 6; 4 para outras)"* (**B1343**, **B1348**) |
+| Na separação, o que esta requisição já tinha separado dali não aparecia no número | *"XB-01 — lote L1 (sobra 1 de 6; 4 para outras, 1 desta)"*; só a própria: *"XB-01 — lote L1 (sobra 5 de 6; 1 desta)"* (**B1349**) |
+| Separar os 2 que sobram pedia *"Motivo da divergência (opcional)"* — *"Separando menos que o possível …"* | Não pede: 2 é tudo o que dava (**B1346**) |
+| Ao reabrir a separação, o endereço da separação anterior vinha escolhido mesmo quando a sobra não cobria (e a recusa barrava) | Abre em *"Qualquer endereço (automático)"* (**B1346**) |
+| Endereço sem nada separado para outras | **Igual:** *"XP-01 — lote L2 (9)"* |
+| Endereço com tudo separado para outras | Continua na lista: *"(sobra 0 de 6; 6 para outras)"* (**B1347**) |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**. Um material *PARAF-201* (nome *Parafuso 201*, unidade *PC*) com **Controle por lote**
+ligado e posição padrão *XP-01*. Em **Movimentações → Entrada**: 6 no lote *L1* em *XB-01*, com **Validade do lote** daqui a 5 dias; 9 no lote
+*L2* em *XP-01*, com validade daqui a 45 dias. Três requisições de 4 *PARAF-201* cada (R1, R2 e R3), aprovadas. Em R1, **Iniciar Separação**,
+**Sai de** *XB-01 — lote L1 (6)*, quantidade *4*, **📦 Confirmar Separação**.
+
+**1. A separação de R2 mostra a sobra.** Em R2, **Iniciar Separação**: no **Sai de**, *"XB-01 — lote L1 (sobra 2 de 6; 4 para outras)"* e
+*"XP-01 — lote L2 (9)"*. (O campo já vem no endereço que a fila sugere — o que cobre os 4.)
+
+**2. Separar a sobra inteira não pede motivo; mais que ela é recusado.** Ainda em R2, escolha *XB-01 — lote L1* e digite *1*: aparece **Motivo
+da divergência (opcional)** com *"Separando menos que o possível — conte o porquê para quem confere."*. Digite *2*: o campo some. Digite *3* e
+confirme → aviso vermelho, janela aberta: *"Parafuso 201: em XB-01, lote L1 há 6 para esta separação, mas 4 já está separado dali para outra
+requisição (⟨número de R1⟩); sobra 2, que não cobre a quantidade (3). Escolha outro endereço ou reabra a janela para ver a sugestão atual"* —
+o *"sobra 2"* é o da lista. Volte para *1* e confirme → passa.
+
+**3. Na separação, o que esta requisição já separou entra no número.** Em R2, **Ajustar Separação**: *"XB-01 — lote L1 (sobra 1 de 6; 4 para
+outras, 1 desta)"*. Escolha *XB-01 — lote L1*, *2*, confirme → *"Parafuso 201: em XB-01, lote L1 há 5 (já contando 1 desta requisição) para
+esta separação, mas 4 já está separado dali para outra requisição (⟨número de R1⟩); sobra 1, que não cobre a quantidade (2). …"*. Com *1* →
+passa.
+
+**4. O endereço tomado continua na lista.** Em R3, **Iniciar Separação**: *"XB-01 — lote L1 (sobra 0 de 6; 6 para outras)"* (4 de R1 e 2 de
+R2).
+
+**5. A entrega mostra a sobra, sem descontar a própria.** Em R1, **Entregar escolhendo de onde sai…**: *"XB-01 — lote L1 (sobra 4 de 6; 2 para
+outras)"* — os 2 de R2; os 4 de R1 saem nesta entrega e não entram na conta.
+
+**6. Só a própria requisição no endereço.** Material novo igual, uma requisição R4 de 8, separada 1 de *XB-01 — lote L1*. Em R4, **Ajustar
+Separação**: *"XB-01 — lote L1 (sobra 5 de 6; 1 desta)"*. Escolhendo *XB-01* com *6* → *"Parafuso 201: O saldo em XB-01 (5) não cobre a
+quantidade (6) — a saída tiraria de outros endereços"* (lido do código, não clicado).
+
+**7. Sem nada separado, o de sempre.** Antes de qualquer separação, o **Sai de** mostra *"XB-01 — lote L1 (6)"* e *"XP-01 — lote L2 (9)"*.
+
+**A revisão (Fase 5)**, um revisor fresco: **uma correção menor** — com só a própria requisição no endereço, o rótulo da separação mostrava o
+físico enquanto a recusa já descontava o separado dela (cenário 6; **B1349**, `ab1d6246`) — e **duas lacunas de teste**, cada uma provada por
+uma sabotagem que passava verde: a conta da lista sem o filtro de material (dois materiais sem lote no mesmo endereço, `dfffe96b`) e a parte
+desta requisição contada como caixa inteira ou somando outro material (`298a3d72`).
+
+### O que esta etapa NÃO cobre
+
+- O número é o de **quando a janela abriu**; uma separação de outra requisição no meio só aparece ao reabrir (**C473**).
+- Na entrega, o rótulo não desconta o separado da própria requisição; o campo de quantidade da separação não é limitado pela sobra; o
+  **"Saldo:"** do cabeçalho do item continua sendo o do material inteiro.
+- O extrato do material e a Movimentação não mostram a sobra.
+- Ficam os avisos da entrega **C470**, **C471** e **C472**.
+- **Nada a rodar antes do deploy.**
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 201 entregue (2026-11-05):** **o "Sai de" mostra o que sobra depois do separado para outras requisições** (**C469** resolvido). A
+  lista de saldos por endereço ganha o separado das outras e a sobra, sem mudar o extrato (**B1343**), com a conta da recusa provada igual
+  (**B1344**); a requisição aberta não conta a si mesma (**B1345**); na separação, o aviso de divergência e a pré-seleção usam a sobra
+  (**B1346**); o endereço tomado continua na lista (**B1347**); rótulo curto com a sobra primeiro (**B1348**); na separação, a própria
+  requisição também mostra a sobra (**B1349**, Fase 5). Revisão: uma correção menor e duas lacunas de teste cobertas. Commits `855e7404`
+  (plano), `1fc07cbf` (Fase 2), `1b04ad38` (T1), `4b62f20c` (T2), `f089c284` (T3), `b3727231` (T4), `65902725` (execução), `dfffe96b`,
+  `ab1d6246`, `298a3d72` (Fase 5) e o fechamento. **O que é seu:** as decisões **B1343** a **B1349** (reversíveis); o aviso **C473**; as
+  limitações **(201)** em D e a verificação **(201)** em F. **Próxima:** *Movimentação por integração respeita o lote informado* (**C458**),
+  item 3 do 2º pacote da estimativa de 05/11 — detalhada no fim do plano da 201.
 
 - **Etapa 200 entregue (2026-11-05):** **a entrega com "Sai de" escolhido à mão respeita o que outra requisição separou dali** (**C468**
   resolvido no "Sai de" de outro endereço). A entrega desconta a parte separada das outras requisições só quando o endereço escolhido não é a

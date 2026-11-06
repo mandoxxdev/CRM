@@ -251,7 +251,7 @@ Executada em série (T1 → T2 → T3 → T4), sobre `1fc07cbf`, com as três co
 
 **Divergências do texto do plano (registradas aqui, reversíveis):**
 - O rótulo L1 só aparece com `separado_outras > 1e-9` (RN-201.06 como escrita): com **só** a própria no par (outras 0) fica o rótulo de hoje,
-  sem "desta". Descartado mostrar "sobra X de Y; 0 para outras, N desta" — não é o C469 e mudaria o rótulo de quem não tem disputa.
+  sem "desta". Descartado mostrar "sobra X de Y; 0 para outras, N desta" — não é o C469 e mudaria o rótulo de quem não tem disputa. *(**Revisto na Fase 5 (B1349, `ab1d6246`):** com só a própria no par o rótulo da separação passou a mostrar a sobra, "XB-01 — lote L1 (sobra 5 de 6; 1 desta)" — sem o "0 para outras", que continua descartado —, porque a recusa física já desconta a própria e o número da lista não batia.)*
 - O Jest foi num arquivo novo (`RequisicoesSaiDeSobra.test.js`, molde de `RequisicoesSeparacaoDivergencia.test.js`), não em
   `RequisicoesList.test.js`: este não tem a janela de separação montada. Os mocks de saldos de **dez** arquivos comparavam a URL exata e foram
   ajustados para `?requisicao_id=55` (só a fronteira HTTP; nenhuma asserção de comportamento mudou).
@@ -259,3 +259,70 @@ Executada em série (T1 → T2 → T3 → T4), sobre `1fc07cbf`, com as três co
 
 **Suítes finais (serial, sobre `b3727231`):** `test:api` **588/588 arquivos**; `test:almoxarifado` **44/0**; Jest da tela inteira **213/213
 suítes, 2931/2931 testes**; `CI=true npx react-scripts build` **compilou** (exit 0).
+
+## Fase 5 — revisão adversarial (um revisor fresco, sobre `65902725`)
+
+**0 críticos; 1 correção menor; 2 lacunas de teste**, cada lacuna provada por uma sabotagem que passava **verde**. Uma rodada de correção.
+
+| # | Achado | Sabotagem / sintoma | Conserto | Controle |
+|---|---|---|---|---|
+| 1 [IMPORTANTE, teste] | o filtro de material da régua agrupada não era testado | `WHERE ir.material_id = ?` → `WHERE (ir.material_id = ? OR 1)` em `parteGuardadaDeOutrasPorPar` (`requisitionService.js:119`; a de `:1858` fica) → `saldosSobraDeOutras` 14/14 | `dfffe96b`: cenário *[RN-201.03 outro material]* — A e B sem controle de lote em XB-01 (o par `(XB-01, NULL)` é o mesmo para os dois); R1 separa 4 de A; a linha de B diz `[5, 0, 5]`, e a equivalência por par compara A e B; o ajudante `material()` ganhou `{ lote }` (padrão 1) | sabotagem (perl na linha 119, md5 `8e80e60d` antes) → cai só o cenário novo (B mostra 7; 14/15); restaurado por `git checkout --` (produção commitada), md5 igual; arquivo **15/15** |
+| 2 [MENOR, correção] | na separação, com só a própria requisição no par (outras = 0), o rótulo mostrava o físico *"XB-01 — lote L1 (6)"* enquanto a recusa física usa físico − `jaPedido` (*"O saldo em XB-01 (5) não cobre …"*); com 0,000001 de outras pulava para *"sobra 4.999999 …"* | — | `ab1d6246` (**B1349**): `rotuloOrigem` mostra a sobra quando `propriaNoPar > 1e-9`, mesmo sem outras — frase congelada *"XB-01 — lote L1 (sobra 5 de 6; 1 desta)"*; com os dois, *"(sobra 1 de 6; 4 para outras, 1 desta)"* (igual a antes); sem outras e sem própria, igual a hoje; a entrega não passa `propriaNoPar` (intocada). Descartado: *"0 para outras, 1 desta"* | dois testes no `RequisicoesSaiDeSobra` (outras 0 → a frase nova; outras 0,000001 → não pula); o `rotuloOrigem` de antes (`git show HEAD:`, md5 `1df2decc`) → cai o primeiro; restaurado por cópia, md5 `f210b4b9`; as 19 suítes `Requisicoes*` **355/355** |
+| 3 [MENOR, teste da tela] | `propriaNoPar` só testado no caso trivial (parte = caixa = 1) | `pendentePlanejado` → `pendenteSeparado` em `propriaNoPar` (`RequisicoesList.js:~285`), ou sem o filtro `Number(i.material_id) === Number(materialId)` → verde | `298a3d72`: XB-01 sem lote, 10 com 4 de outras (sobra 6); item 1 com caixa 5 e parte 1 no par; item 2 do mesmo material com 2; item 3 de **outro** material também planejado em XB-01 → os dois selects do material dizem *"XB-01 (sobra 3 de 10; 4 para outras, 3 desta)"* — a sobra da C1 (6 − 3) | Edit e Edit inverso: `pendenteSeparado` → cai (7 desta); sem o filtro → cai (4 desta), cada um lido pela linha `● … › …`; md5 `f210b4b9` igual no fim; arquivo **12/12** |
+
+Commits: `dfffe96b` (item 1, só teste), `ab1d6246` (item 2, tela + teste), `298a3d72` (item 3, só teste).
+
+## Placar final
+
+- `saldosSobraDeOutras.api.test.js` **15/15** (11 da T2 + 3 da T4 + 1 da Fase 5); `RequisicoesSaiDeSobra.test.js` **12/12** (9 da T3 + 3 da Fase 5).
+- Serial, sobre `298a3d72` (depois da Fase 5): `test:api` **588/588 arquivos**; Jest da tela inteira **213/213 suítes, 2934/2934 testes**;
+  `CI=true npx react-scripts build` **compilou** (exit 0); `test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0**.
+- `test:almoxarifado` **44/0** sobre `b3727231` (Execução; a Fase 5 não mexeu no serviço do almoxarifado — só teste e o rótulo da tela).
+
+## Retro (4 números)
+
+- **Rodadas de correção até verde:** 1 (a Fase 5).
+- **Achados reais da Fase 5:** 1 correção menor (o rótulo com só a própria, B1349) + 2 lacunas de teste; 0 críticos.
+- **Paralelismo:** nenhum (o executor fez T2 e T3 em série, embora o plano permitisse T2 ∥ T3).
+- **Defeito que escapou da 200:** nenhum conhecido.
+
+## Próxima tarefa detalhada
+
+**Item 3 do 2º pacote** (`docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas-2.txt`, **2h30**): **"Movimentação por
+integração respeita o lote informado"** — o **C458** (`docs/almoxarifado-novidades-por-etapa.md`, da revisão adversarial da 191; reproduzido
+no plano da 191, `:495`). Medido no fechamento da 201 (sobre `298a3d72`):
+
+- **A rota antiga:** `POST /api/almoxarifado/movimentacoes` (`server/routes/almoxarifado.js:1387-1416`), só `requirePermission('movimentar')`
+  (o login e o acesso ao módulo vêm do prefixo, `:327-330`). Desestrutura **só** `material_id, tipo, quantidade, motivo, referencia,
+  observacoes` (`:1388`) e chama `stockService.registrarMovimentacao(db, req.user, { …, justificativa: motivo || null }, { exigeLote: true,
+  exigeSerie: true })` (`:1407-1410`). Tipos: `ENTRADA`, `SAIDA`, `AJUSTE`, `DEVOLUCAO` (`:1390`); motivo obrigatório em `SAIDA`/`AJUSTE`
+  (`:1393`). Resposta 201 própria (`id, material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, referencia, observacoes`);
+  erro `res.status(e.status || 500).json({ error })` (não usa `handleError`). **`lote`/`lote_id` do corpo são descartados** — o motor nunca
+  vê o lote: material **com** `controle_lote` é recusado (`exigeLote`: *"O material ⟨cod⟩ exige lote nesta movimentacao (controle por lote
+  ligado)"*, `stockService.js:1352-1357`); material **sem** controle sai **sem lote** mesmo citando um lote vencido (o C458: físico 5 → 4, o
+  lote fica 5, a linha sem lote −1).
+- **O motor já sabe:** `registrarMovimentacao` (`stockService.js:1104`, com a trava por material) aceita `lote_id` (número) ou `lote`
+  (código) (`:1260` em diante; código inexistente numa saída → *"Lote nao encontrado para este material: ⟨L⟩"*, `:1295`); na saída com lote,
+  lote não `ATIVO` → *"Lote ⟨L⟩ esta ⟨status⟩ e nao pode ser utilizado"*, e vencido sem liberação → *"Lote ⟨L⟩ vencido em ⟨data⟩ nao pode sair
+  para consumo. Libere o vencimento do lote (PUT /api/almoxarifado/lotes/:id/liberar-vencimento) com justificativa, ou baixe por SUCATA/PERDA ou
+  corrija por AJUSTE."* (`:1547-1582`; `SUCATA`/`PERDA`/`AJUSTE_NEGATIVO`/… isentos do vencido). Nada a mudar no motor.
+- **A rota nova a imitar:** `POST /movimentacoes/v2` (`server/routes/almoxarifado/extended.js:853-867`): `auth`, `requirePermission('movimentar')`,
+  `validate(MovimentacaoSchema)` (`services/almoxarifado/schemas.js:87`; `lote: z.string().optional()` `:104`, `lote_id:
+  z.number().int().positive().optional()` `:107` — sem declarar, o zod descarta a chave) e repassa `req.body` inteiro com as mesmas opções. As
+  recusas de lote vencido, lote inexistente e "exige lote" vêm todas do motor — a v1 ganha as mesmas só repassando `lote`/`lote_id`.
+- **Quem chama a v1:** no `client/`, **só** `MateriaisAlmoxarifado.js:154` (o modal rápido de Entrada/Saída da tela **Materiais**), com
+  `material_id, tipo, quantidade, motivo, referencia` — **sem lote**: a tela não muda. No servidor nenhum serviço chama a rota; não há chave de
+  API nem porta de integração própria no repositório — "integração" é quem chama com o token de um usuário (o C458: "só quem chama a
+  integração direto"). Testes que usam a v1: **22** arquivos em `server/tests/api/`; só `loteControleObrigatorio.api.test.js:97` fala de lote
+  (a recusa do material com controle e sem lote — tem de continuar).
+- **Contrato a congelar (proposta):** a v1 repassa `lote` (string) e `lote_id` (inteiro positivo) ao motor, com a forma validada como na v2
+  (decidir entre o `MovimentacaoSchema` inteiro — mudaria as recusas de outros campos — ou validar só os dois); resposta 201 igual
+  (acrescentar `lote_id`/`lote_codigo` é opcional — nenhum leitor hoje). Sem lote no corpo: **tudo igual** (o modal da tela).
+- **Pontos de atenção:** (1) entrada com `lote` de código novo **cria** o lote (`criarOuObterLote`) — na v1 isso passaria a valer também;
+  decidir se a v1 cria lote ou só cita lote existente. (2) A validade do lote na entrada (`data_validade`, Etapa 190) — a v1 não carrega; fora
+  ou junto? (3) O material com controle de lote passa a poder movimentar pela v1 citando o lote — o comentário de `:1398-1403` ("o contrato v1
+  nao carrega lote") precisa ser reescrito. (4) Testes: saída pela v1 citando lote vencido em material sem controle → 400 com a literal do
+  motor e nada gravado (físico, lote e linha sem lote iguais); lote válido → sai do lote (a linha sem lote não fica negativa); `lote_id` de
+  outro material → a recusa do motor; sem lote → igual a hoje (os 22 arquivos verdes). Fatia visível: nenhuma na tela (o modal não manda
+  lote) — a mudança aparece como recusa para integrações; avaliar mostrar no relatório *Saldo por lote* / **Lotes e Séries** que a linha
+  *"Sem lote atribuído"* não fica mais negativa por esse caminho.

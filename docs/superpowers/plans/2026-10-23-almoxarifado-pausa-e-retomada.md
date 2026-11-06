@@ -1,13 +1,20 @@
 # Almoxarifado — pausa de 2026-10-23 e como retomar
 
 > **✅ RETOMADO em 2026-11-05 — este arquivo agora é histórico.** O André retomou o módulo em 05/11 (estimativa
-> `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md`). **Depois: a Etapa 200 fechou** em 05/11 (2º pacote da
+> `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md`). **Depois: a Etapa 201 fechou** em 05/11 (2º pacote da
+> estimativa, item 2; plano `855e7404`, Fase 2 `1fc07cbf`, T1 `1b04ad38`, T2 `4b62f20c`, T3 `f089c284`, T4 `b3727231`, execução `65902725`,
+> Fase 5 `dfffe96b`, `ab1d6246`, `298a3d72`, e o commit "Etapa 201: fechamento") — o "Sai de" das janelas de separação e de entrega mostra o
+> que sobra depois do separado para outras requisições (C469 resolvido). Letra **B** usada até **B1349** (B1343–B1349 pela 201), letra **C**
+> até **C473** (C473 pela 201), letra **A** a partir de **A111** (a 201 não usou). **Próxima:** item 3 do 2º pacote — Movimentação por
+> integração respeita o lote informado (C458); detalhada no fim de
+> `docs/superpowers/plans/2026-11-05-almoxarifado-etapa201-sai-de-mostra-o-que-sobra.md`.
+> *(Antes: a **Etapa 200 fechou** em 05/11 (2º pacote da
 > estimativa, `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas-2.txt`, item 1; plano `fd1daad2`, Fase 2 `e22db079`, T1
 > `d7ff9a39`, T2 `943a486e`, T3 `71783dc8`, execução `52ae600e`, Fase 5 `5bc921e4`, e o commit "Etapa 200: fechamento") — a entrega com "Sai
 > de" escolhido à mão desconta o que outras requisições separaram do endereço e recusa com a conta à vista (C468 resolvido no "Sai de" de outro
 > endereço). Letra **B** usada até **B1342** (B1338–B1342 pela 200), letra **C** até **C472** (C470–C472 pela 200), letra **A** a partir de
 > **A111** (a 200 não usou). **Próxima:** item 2 do 2º pacote — Separação: o local mostra quanto realmente sobra (C469); detalhada no fim de
-> `docs/superpowers/plans/2026-11-05-almoxarifado-etapa200-entrega-a-mao-respeita-separado.md`.
+> `docs/superpowers/plans/2026-11-05-almoxarifado-etapa200-entrega-a-mao-respeita-separado.md` — a 201.)*
 > *(Antes: a **Etapa 199 fechou** em 05/11 (plano `3f5b8690`,
 > item 7 `eb3a48c3`, item 8 `0da1e81b`, e o commit "Etapa 199: fechamento") — a tela Materiais de clientes com vírgula (C448) e o PDF do
 > termo de ferramenta com os espaços do texto (C447). Letra **B** usada até **B1337** (B1336–B1337 pela 199), letra **C** até **C469** (a 199
