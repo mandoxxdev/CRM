@@ -1,22 +1,29 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-11-06 (Etapas 172 a 191, 194 a 202) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-11-06 (Etapas 172 a 191, 194 a 203) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201 e 202) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202 e 203) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-06 (Etapas 172 a 178, 180 a 191, 194 a 202 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-06 (Etapas 172 a 178, 180 a 191, 194 a 203 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
-> **O desenvolvimento parou aqui: Etapa 202 fechada — 2026-11-06.** **A movimentação antiga respeita o lote informado.** Um sistema de fora
+> **O desenvolvimento parou aqui: Etapa 203 fechada — 2026-11-06.** **A exclusão da requisição apaga o local separado.** Quem excluía uma
+> requisição com material já separado via o estoque voltar, mas cada item continuava anotado *"separado de XB-01, lote L1"*. Nenhuma conta
+> lia essa anotação; agora ela é apagada junto. Só servidor; a tela não muda; nada a rodar antes do deploy. **Nenhum clique foi dado** (só
+> testes — roteiro na seção da 203 e letra F das novidades).
+>
+> **Onde parou, exatamente:** a **203 está fechada** (código, testes e documentos commitados). A **próxima** é o item 5 do 2º pacote da
+> estimativa de 05/11 (`docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas-2.txt`): **"Devolução: encontrar entregas
+> antigas"** (**C465** — a lista de saídas da tela Devoluções mostra só as 30 mais recentes do material). Só a tarefa detalhada no fim do plano
+> da 203 (`docs/superpowers/plans/2026-11-06-almoxarifado-etapa203-exclusao-limpa-a-origem.md`) e a estimativa existem, nenhum plano nem código.
+>
+> **Etapa 202, 2026-11-06.** **A movimentação antiga respeita o lote informado.** Um sistema de fora
 > que lançava pela movimentação antiga (a mesma do modal rápido da tela Materiais) "tire 1 do lote *LV*", com o *LV* vencido, recebia OK: a
 > peça saía sem lote e o relatório *Saldo por lote* ficava com *"Sem lote atribuído"* negativo. Agora a recusa é a mesma da tela
 > **Movimentações**, e o lote bom sai do lote. Só servidor; a tela não muda; nada a rodar antes do deploy. **Nenhuma chamada à mão foi feita**
 > (só testes — roteiro na seção da 202 e letra F das novidades).
 >
-> **Onde parou, exatamente:** a **202 está fechada** (código, testes e documentos commitados). A **próxima** é o item 4 do 2º pacote da
-> estimativa de 05/11 (`docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas-2.txt`): **"Requisição excluída deixa de guardar o
-> local separado"** (**C467**). Só a tarefa detalhada no fim do plano da 202
-> (`docs/superpowers/plans/2026-11-05-almoxarifado-etapa202-rota-antiga-respeita-o-lote.md`) e a estimativa existem, nenhum plano nem código.
+> *(Depois da 202 veio a 203 — "Requisição excluída deixa de guardar o local separado", **C467** — entregue em 06/11, acima.)*
 >
 > **Etapa 201, 2026-11-05.** **O "Sai de" mostra o que sobra depois do separado para outras
 > requisições.** Na janela de separação e na de entrega, o endereço de onde outra requisição já separou aparecia com o saldo cheio
@@ -7062,6 +7069,42 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 203 — A exclusão da requisição apaga o local separado (ENTREGUE — 2026-11-06)
+
+**O que mudou, em uma frase:** ao excluir uma requisição que tinha material separado, a anotação *"separado de XB-01, lote L1"* dos itens
+dela é apagada junto.
+
+**O problema que ela resolve.** A exclusão devolvia o estoque e tirava a requisição das listas, mas os itens continuavam anotados com o
+endereço e o lote de onde tinham sido separados — como a etiqueta de uma caixa já desmontada que continua colada na prateleira. Nenhuma conta
+lia essa etiqueta (todas olham só requisição em andamento), então nada errado aparecia. Mas era um dado morto que podia enganar uma conta nova.
+
+| Antes | Agora |
+|---|---|
+| Itens da requisição excluída com a anotação *"separado de…"* | A anotação é apagada (pelas duas portas de exclusão) |
+| A quantidade separada e o histórico das rodadas | **Iguais** |
+| O estoque devolvido pela exclusão | **Igual** |
+| Exclusão recusada | **Igual** — e a anotação fica |
+| Requisições excluídas antes desta etapa | **Iguais** (fora de toda conta) |
+
+**Antes de testar (uma vez).** Um usuário **Administrador do almoxarifado**. Um material *PARAF-203* com **Controle por lote**. Em
+**Movimentações → Entrada**: 6 em *XB-01* no lote *L1* e 9 na localização padrão no lote *L2*. Duas requisições de 4, R1 e R2, aprovadas.
+
+**Roteiro de teste (5 minutos).**
+
+1. Na **Separação**, separe os 4 de R1 com **Sai de** *XB-01 — lote L1*. Na lista, R1 mostra *"separado de XB-01 — L1"*.
+2. Exclua R1 (**Requisições → Excluir**, com justificativa) → R1 some das listas; **Saldo por localização**: *XB-01/L1* continua 6.
+3. Separe os 4 de R2 com **Sai de** *XB-01 — lote L1* → aceito (R1 não segura mais nada ali).
+4. *(Exclusão recusada.)* Crie R3 de 4, aprove, separe 4 de *XB-01/L1* e entregue 1. Bloqueie *XB-01* e a localização padrão em
+   **Localizações** e tente excluir R3 → recusa *"⟨nome do material⟩: Localização ⟨padrão⟩ está bloqueada"*; R3 continua na **Separação** com
+   *"separado de XB-01 — L1"*. Desbloqueie as duas e exclua → aceito; o 1 entregue volta para *XB-01/L1*.
+
+A anotação apagada não aparece em tela nenhuma (a requisição excluída some das listas) — quem confere é o teste, direto no banco.
+
+**O que esta etapa não cobre.** As requisições excluídas antes da etapa continuam com a anotação (sem efeito em conta). O cancelamento não
+apaga a anotação — mas ele já não cancela requisição com material na caixa (aviso **C476** das novidades). **Nada a rodar antes do deploy.**
+
+*Nenhum clique foi dado nesta etapa*: o roteiro acima é o que os testes automáticos provam pela rota real — escrito para você conferir.
 
 ## Etapa 202 — A movimentação antiga respeita o lote informado (ENTREGUE — 2026-11-06)
 

@@ -11,7 +11,13 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-06):** **Etapa 202 fechada** (**a movimentação antiga respeita o lote informado** — um sistema de
+> **Onde o desenvolvimento está (2026-11-06):** **Etapa 203 fechada** (**a exclusão da requisição apaga o local separado dos itens** — quem
+> excluía uma requisição com material já separado via o estoque voltar, mas cada item continuava anotado *"separado de XB-01, lote L1"*. Nenhuma
+> conta lia essa anotação (todas olham só requisição em andamento); agora ela é apagada junto. **C467** resolvido; só servidor; nada a rodar
+> antes do deploy; decisões **B1358** a **B1362**; aviso **C476** (o cancelamento não apaga, mas não deixa caixa); limitações **D (203)**;
+> verificação **F (203)**). **Próxima: Devolução encontra entregas antigas** (**C465**, item 5 do 2º pacote da estimativa de 05/11);
+> detalhada no fim do plano da 203.
+> *(Antes, 2026-11-06:)* **Etapa 202 fechada** (**a movimentação antiga respeita o lote informado** — um sistema de
 > fora que pedia "tire 1 do lote *LV*" (vencido) pela movimentação antiga recebia 201, a peça saía sem lote e *"Sem lote atribuído"* ficava
 > negativo. Agora a recusa é a mesma da tela **Movimentações**, e o lote bom sai do lote. **C458** resolvido; só servidor; nada a rodar antes
 > do deploy; decisões **B1350** a **B1357**; **C474** (resolvido na etapa) e **C475** (Ajuste com lote, anterior); limitações **D (202)**;
@@ -4436,7 +4442,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -13879,6 +13885,29 @@ leitor). **Reversível.** `00ec247e`.
 antiga **não** leva o lote no Ajuste: fica igual a antes da etapa. **Descartado:** levar também no Ajuste (abriria o **C475** por aqui);
 recusar o Ajuste com lote (mudaria a resposta de quem já chama). **Reversível:** uma condição da rota. `00ec247e`.
 
+**B1358 (NOVA, da Etapa 203; decisão do agente) — a exclusão apaga o local separado depois de excluir, nunca antes do estorno.** Ao excluir
+uma requisição, o endereço, o lote e a quantidade "separado de" de cada item são apagados **logo depois** de a requisição ser marcada como
+excluída, ainda dentro da fila da requisição e da dos materiais dela. **Descartado:** apagar antes de devolver as entregas ao estoque — se uma
+devolução fosse recusada (endereço bloqueado, séries que não batem), a requisição continuaria em andamento **sem** o plano da caixa, e a
+próxima entrega sairia de qualquer endereço. **Reversível:** um comando no fim da exclusão. `c28f7d37`.
+
+**B1359 (NOVA, da Etapa 203; decisão do agente) — se apagar falhar, a exclusão vale assim mesmo.** O erro vai só para o log do servidor; a
+tela recebe o sucesso de sempre e nada tenta de novo. A requisição já está excluída e o estoque já voltou: refazer devolveria o estoque de novo
+(a regra da exclusão desde a Etapa 93). E nenhuma conta lê o local separado de requisição excluída. **Descartado:** responder erro (o
+usuário clicaria de novo e receberia *"Requisição não encontrada"*, com a exclusão feita). **Reversível.** `c28f7d37`.
+
+**B1360 (NOVA, da Etapa 203; decisão do agente) — só o local separado; a caixa e o histórico ficam.** O que foi separado (a quantidade) e o
+histórico das rodadas de separação — que diz de onde cada rodada tirou — continuam gravados. **Descartado:** zerar também a quantidade
+separada (mudaria o que os relatórios de requisição mostram, sem pedido). **Reversível.** `c28f7d37`.
+
+**B1361 (NOVA, da Etapa 203; decisão do agente) — sem acerto das excluídas antigas.** Requisições excluídas antes desta etapa continuam com o
+local separado gravado; o filtro de "só requisição em andamento" as deixa fora de toda conta (provado por teste). **Descartado:** um acerto
+automático no banco ao subir o servidor (mexe em dado de produção só por arrumação). **Reversível:** o acerto é um comando, se um dia valer.
+
+**B1362 (NOVA, da Etapa 203; decisão do agente) — os testes do filtro passaram a montar a excluída antiga direto no banco.** Quatro testes
+provavam o filtro excluindo pela tela e conferindo que o local separado ficava; agora ele some, e o filtro passou a ser provado pela excluída
+**antiga** (montada direto no banco, com o local gravado). Os testes pela tela conferem que o local foi apagado. `c28f7d37`.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -17734,6 +17763,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      (`separacaoSeparadoDeOutras`, *"[RN-198.03 excluida, C467]"*). E a frase "toda conta … só olha requisições **em andamento**" **estava
      imprecisa**: a régua da divergência da separação filtrava só requisição **ativa** e contava a caixa de requisição **cancelada** antiga.
      Desde a 198 as três contas usam o mesmo filtro (**B1331**).)*
+     *(**Resolvido na Etapa 203** — `c28f7d37`: a exclusão apaga o endereço, o lote e a quantidade "separado de" dos itens logo depois de
+     excluir (**B1358** a **B1360**), pelas duas portas de exclusão. As excluídas de **antes** da 203 continuam com a origem gravada
+     (**B1361**) e o filtro continua provado, agora com elas montadas direto no banco (**B1362**).)*
 468. **NOVO (da Etapa 198; o comportamento é anterior) — a entrega com "Sai de" escolhido à mão ainda não desconta o que outra requisição
      separou dali.** Na janela de entrega, escolher no **Sai de** o endereço e lote de onde **outra** requisição separou leva o material dela:
      a entrega passa, e a entrega da outra requisição é que toma *"⟨material⟩: a origem da separação (⟨endereço⟩) não serve mais (…) —
@@ -17791,6 +17823,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      **Quem alcança:** só a integração — a tela **Movimentações** não mostra o campo de lote no Ajuste. **O que fazer:** ajustar sem citar o
      lote. A movimentação antiga
      **não** leva o lote no Ajuste (**B1357**). Conserto (se valer): o Ajuste com lote limitar a baixa ao saldo do lote — ~1h30, motor.
+476. **NOVO (da Etapa 203, Fase 0; o comportamento é anterior) — o cancelamento não apaga o local separado.** Cancelar uma requisição grava
+     *Cancelado* sem mexer nos itens. **Nenhum efeito:** o cancelamento **recusa** requisição com material na caixa (é preciso devolver à
+     prateleira ou entregar antes), e devolver à prateleira já apaga o local quando a caixa zera; só uma cancelada **antiga** com caixa (de
+     antes dessa recusa) guarda o local — e o filtro por status a deixa fora de toda conta (testes *"cancelada legada"* da 198, 200 e 201).
+     **O que fazer:** nada. O plano da 203 supunha que o cancelamento já apagava — **não apaga**; quem apaga é o devolver à prateleira.
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -19144,6 +19181,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(203) A exclusão que apaga o local separado, o que ficou de fora.** (1) As requisições excluídas **antes** da etapa continuam com o local
+  gravado (**B1361**) — sem efeito em conta. (2) O **cancelamento** não apaga (**C476**) — sem efeito, porque não cancela com caixa. (3) A
+  quantidade separada e o histórico das rodadas da excluída ficam (**B1360**). (4) Se o apagar falhar, só o log do servidor registra
+  (**B1359**).
 - **(202) A movimentação antiga com lote, o que ficou de fora.** (1) **O Ajuste** por essa porta continua sem lote (**B1357**; o defeito do
   Ajuste com lote na movimentação nova é o **C475**). (2) **Endereço, séries, reserva e custo** continuam fora dessa porta; material com
   **Controle por série** continua recusado nela (**B1355**). (3) A resposta 201 não diz de qual lote saiu (**B1356**) — está no livro.
@@ -20485,6 +20526,16 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(203) Nenhum clique foi dado.** A etapa **não mudou a tela**: só a exclusão da requisição no servidor. O que os testes provam, pela rota
+real (as duas portas de exclusão): a requisição separada excluída fica com o endereço, o lote e a quantidade "separado de" apagados, com a
+quantidade separada, o histórico das rodadas e o estoque iguais; a entrega parcial devolvida como antes, e a outra requisição no mesmo endereço
+intocada; a exclusão recusada (sem perfil; endereço de devolução bloqueado, com a literal) não apaga nada; a falha simulada no apagar responde
+OK, uma vez só, e a segunda exclusão é *"Requisição não encontrada"* sem devolver de novo. E que nenhuma conta mudou: a excluída **antiga**
+(montada no banco, com o local gravado) continua fora da separação, da entrega com **Sai de**, da sobra do **Sai de** e da entrega automática.
+Controles positivos: seis sabotagens e duas de revisão (no plano). **Não verificado à mão:** o roteiro da seção da Etapa 203. Suítes medidas:
+`exclusaoLimpaOrigem` **5/0**; `test:api` **591/591 arquivos**; `test:almoxarifado` **44/0**; `test:validation` **4/0**; `test:safealter`
+**3/0**; `test:sqlite` **16/0**. Jest da tela e build não rodados (a etapa não toca `client/`).
 
 **(202) Nenhum clique e nenhuma chamada à mão.** A etapa **não mudou a tela**: só a movimentação antiga no servidor e uma comparação do
 estoque (**C474**). O que os testes provam, pela rota real: a saída citando lote vencido recusada (por número e por código) sem gravar nada; a
@@ -38810,6 +38861,49 @@ de validade (**B1356**); lote só de espaços grava sem lote (**B1352**); e o **
 - O modal rápido da tela de Materiais continua sem campo de lote.
 - **Nada a rodar antes do deploy.**
 
+## Etapa 203 — A exclusão da requisição apaga o local separado (2026-11-06)
+
+O administrador exclui uma requisição que já tinha material separado na caixa: *4 peças separadas de XB-01, lote L1*. O estoque volta (o que já
+tinha sido entregue retorna à prateleira) e a requisição some das listas. Mas cada item dela continuava com a anotação *"separado de XB-01,
+lote L1, 4"* — como a etiqueta de uma caixa que já foi desmontada e continua colada na prateleira. Nenhuma conta lia essa etiqueta (todas
+olham só requisição em andamento), então nada errado aparecia; mas era um dado morto que podia enganar uma conta nova. Agora a exclusão apaga
+a anotação junto. Só servidor; a tela não muda. Nada a rodar antes do deploy. Decisões do agente: **B1358** a **B1362**. **C467** resolvido;
+**C476** registrado.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Requisição excluída: os itens continuavam anotados *"separado de XB-01, lote L1, 4"* | A anotação é apagada junto com a exclusão (pelas duas portas de exclusão) |
+| A quantidade separada e o histórico das rodadas da excluída | **Iguais** — continuam gravados (**B1360**) |
+| O estoque devolvido pela exclusão | **Igual** (mesmas devoluções, mesmos endereços e lotes) |
+| Exclusão recusada (sem perfil; endereço de devolução bloqueado) | **Igual** — e a anotação fica, porque nada foi excluído |
+| Outra requisição separada no mesmo endereço | **Igual** — só os itens da excluída mudam |
+| Requisições excluídas antes desta etapa | **Iguais** — guardam a anotação, fora de toda conta (**B1361**) |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**. Um material *PARAF-203* com **Controle por lote**; em **Movimentações → Entrada**, 6 em
+*XB-01* no lote *L1* e 9 na localização padrão no lote *L2*. Duas requisições, R1 e R2, de 4 cada, aprovadas.
+
+**1. Excluir apaga a anotação.** Em **Separação**, separe os 4 de R1 com **Sai de** *XB-01 — lote L1*. Na lista da **Separação**, R1 mostra
+*"separado de XB-01 — L1"*. Exclua R1 (**Requisições → Excluir**, com justificativa) → a requisição some; o saldo de *XB-01/L1* continua 6
+(nada tinha saído). Separe os 4 de R2 com **Sai de** *XB-01 — lote L1* → aceito. (Na tela não há onde ver a anotação de uma requisição
+excluída — ela some das listas; quem confere é o teste, no banco.)
+
+**2. Entrega parcial.** Repita com R1 separando 4 de *XB-01/L1* e entregando 1. Exclua R1 → o 1 entregue volta para *XB-01/L1* (6 de novo);
+a anotação do item é apagada.
+
+**3. Exclusão recusada não apaga.** Com R1 separada e 1 entregue, bloqueie *XB-01* e a localização padrão do material (**Localizações**) e
+tente excluir → recusa *"⟨nome do material⟩: Localização ⟨padrão⟩ está bloqueada"* (a devolução iria para XB-01; bloqueada, vai para a padrão — também bloqueada); R1 continua em andamento, com a anotação. Desbloqueie
+e exclua → aceito.
+
+### O que esta etapa NÃO cobre
+
+- As requisições excluídas antes da etapa (**B1361**) e o cancelamento (**C476**) — sem efeito em conta.
+- A quantidade separada e o histórico das rodadas da excluída continuam (**B1360**).
+- **Nada a rodar antes do deploy.**
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
@@ -38817,6 +38911,13 @@ de validade (**B1356**); lote só de espaços grava sem lote (**B1352**); e o **
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
 
+- **Etapa 203 entregue (2026-11-06):** **a exclusão da requisição apaga o local separado dos itens** (**C467** resolvido). Logo depois de
+  excluir, dentro das filas da requisição e dos materiais (**B1358**); falha só vai ao log, sem nova tentativa (**B1359**); a quantidade
+  separada e o histórico das rodadas ficam (**B1360**); sem acerto das excluídas antigas (**B1361**); os testes do filtro montam a excluída
+  antiga direto no banco (**B1362**). O **C476** (o cancelamento não apaga, mas não cancela com caixa) registrado. Commits `b0a4a46b`
+  (plano), `c28f7d37` (T1/T2), `23c292c3` (a literal da recusa no teste) e o fechamento. **O que é seu:** as decisões **B1358** a **B1362** (reversíveis); o aviso **C476**; as
+  limitações **(203)** em D e a verificação **(203)** em F. **Próxima:** *Devolução encontra entregas antigas* (**C465**), item 5 do 2º
+  pacote da estimativa de 05/11 — detalhada no fim do plano da 203.
 - **Etapa 202 entregue (2026-11-06):** **a movimentação antiga respeita o lote informado** (**C458** resolvido). Ela repassa lote, lote_id e
   validade ao estoque, com as mesmas recusas da tela Movimentações (**B1350**); forma do lote pela régua da movimentação nova, depois de tipo
   e motivo (**B1351**); vazio é sem lote (**B1352**); entrada com lote novo cria o lote com a validade (**B1353**, **B1354**); endereço,

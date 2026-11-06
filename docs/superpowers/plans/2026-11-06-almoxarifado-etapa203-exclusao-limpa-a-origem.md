@@ -125,8 +125,81 @@ estado gravado dos itens da excluída.
 
 ## Execução
 
-(preenchido no fechamento)
+- [x] Plano — `b0a4a46b` (antes do código). Sem agente de Fase 2 (escala reduzida; etapa de um comando).
+- [x] T1 — tronco: `exclusaoLimpaOrigem.api.test.js` + a limpeza em `excluirSemTrava` — `c28f7d37`. TDD: antes do código **0/5** (4 pela
+  origem gravada, o RN-203.05 por *"a limpeza rodou 0 vez(es)"*; o RN-203.04 caía também por defeito do próprio teste — endereço **inativo**
+  não é recusado pelo motor, a devolução vai para a padrão inativa; trocado por **bloqueada**, que recusa). Depois **5/5**. `23c292c3`: o
+  RN-203.04 passou a conferir a literal (*"⟨material⟩: Localização YXP-01 está bloqueada"* — a origem bloqueada cai na padrão, também bloqueada).
+- [x] T2 — tronco: os quatro testes da tabela da Fase 0 — `c28f7d37`. Com o código, caíram 3 na premissa (198, 200, 197 M3; o 201 ficava
+  verde provando nada). Cada um: a versão pela rota asserta a origem limpa; a versão por SQL (`ativo = 0, status = 'CANCELADO'`, origem
+  gravada) prova o filtro; mais dois controles "só `ativo = 0`" (198 e 200). Isolados: `exclusaoLimpaOrigem` 5/0, `separacaoSeparadoDeOutras`
+  25/0, `entregaSaiDeRespeitaSeparado` 26/0, `saldosSobraDeOutras` 16/0, `entregaAutomaticaPeloLote` verde (o arquivo não imprime placar).
+- [x] T3 — controles positivos, revisão, suítes (abaixo) e o fechamento.
+
+### Controles positivos (perl `-0pi` sobre base LF, âncora `grep -cF` = 1, md5 antes `41d5798d…`/sabotado/restaurado por cópia no scratchpad — todos voltaram a `41d5798d…`, CR = 0; nenhuma suíte de outro agente rodando)
+
+| # | Sabotagem | O que caiu |
+|---|---|---|
+| (a) | sem a limpeza (`if (0)`) | 5/5 do arquivo novo + as 4 versões pela rota (198, 200, 201, 197 M3) — é também o vermelho do TDD |
+| (b) | `WHERE (requisicao_id = ? OR 1)` | RN-203.03 (*"a outra requisicao no mesmo par nao e tocada"*); o RN-203.05 caiu junto porque o gancho casa o SQL literal (efeito colateral, não prova) |
+| (c) | limpar **antes** do estorno (logo depois de `const partes = []`) | RN-203.04 (*"400 nao limpa (tudo ou nada)"*); RN-203.05 (o gancho casou a limpeza antecipada → 500) |
+| (d) | sem o best-effort (`.catch` relança) | RN-203.05 (500 ≠ 200) |
+| (e1) | `caixaVivaSql` sem `ativo` | os dois controles "só ativo 0" (198 e 200); o 201 e o 197 ficam verdes (o status `CANCELADO` também filtra — sem controle "só ativo" neles, declarado) |
+| (e2) | `caixaVivaSql` = `1 = 1` | todas as versões por SQL: 198 (4, com as legadas canceladas), 200 (3), 201 (2), 197 M3 legada |
+
+### Revisão "este teste passaria com a feature quebrada?" — duas sabotagens plausíveis a mais
+
+- **(f) limpar só `origem_separacao_id`** (quem lê "a origem" e esquece lote e parte): caem RN-203.01 a .04 (a asserção das três colunas).
+- **(g) limpar também a caixa** (`quantidade_separada = entregue` — "excluída não tem caixa"): caem RN-203.01 a .04 (*"caixa 4"*, B1360).
+
+Nenhuma passou verde; nenhuma asserção acrescentada.
+
+### Divergências do plano
+
+1. **"No mesmo UPDATE da exclusão"** (brief): não dá — é outra tabela. Um `UPDATE` próprio logo depois do vencedor (B1358).
+2. **O cancelamento "já limpa ao devolver"** (brief): **não limpa** — quem limpa ao devolver é o devolver-separado (`:2854`); o cancelamento
+   recusa caixa (C476).
+3. **RN-203.04:** o plano dizia "série desligada → 400"; o teste usa **endereço bloqueado** (mais simples, mesma garantia de tudo ou nada).
+4. **Controle "só ativo 0"** acrescentado no 198 e no 200 (não estava no plano) — sem ele a sabotagem (e1) só cairia pelo status.
+
+### Retro
+
+- O que funcionou: medir os leitores antes (oito, todos com filtro) deixou a etapa num comando só, e a tabela dos testes que dependiam da
+  origem gravada antecipou exatamente os 3 vermelhos (e o 4º, o 201, que ficaria verde provando nada).
+- O que custou: o primeiro cenário de recusa (endereço inativo) não recusava — o motor manda para a padrão inativa. Medir a recusa antes de
+  escrevê-la no teste teria poupado uma volta.
+- Para a próxima: quando uma etapa muda o dado que um teste usava como **premissa** de outro filtro, o teste vira dois (pela rota e por
+  SQL) — é o molde B1362.
+
+### Suítes (serial, sobre `23c292c3` + o commit `4fdc8a1f` de outro agente, que só toca o plano da 202)
+
+`test:api` **591/591 arquivos** (inclui `exclusaoLimpaOrigem`); `test:almoxarifado` **44/0**; `test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0**. Jest da tela e build não rodados (a etapa não toca `client/`).
 
 ## Próxima tarefa detalhada
 
-(preenchida no fechamento)
+**Item 5 do 2º pacote** (`docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas-2.txt`, **2h30**): **"Devolução: encontrar
+entregas antigas"** — o **C465**, só a parte da lista (a parte "EPI e material sem controle de lote saem sem lote", B204/B1321, fica **fora**:
+é produto). Medido em 2026-11-06 sobre `23c292c3`, sem consertar:
+
+- **A leitura:** `GET /api/almoxarifado/devolucoes/saidas-elegiveis?material_id=N` (`server/routes/almoxarifado/extended.js:1466-1472`, só
+  `auth` — leitura; `material_id` ausente/0 → 400 *"material_id é obrigatório"*; não repassa nenhum outro parâmetro) →
+  `returnService.listarSaidasElegiveis(db, materialId, { limite = 30 })` (`server/services/almoxarifado/returnService.js:498-538`). SQL: saídas
+  do material de `TIPOS_SAIDA_DEVOLVIVEL` (`:26`: `SAIDA`, `SAIDA_PRODUCAO`, `SAIDA_MONTAGEM`, `SAIDA_ASSISTENCIA`), não canceladas, fora de
+  requisição excluída (`requisicaoNaoExcluidaSql`, `:105`) e fora de entrega de EPI; `ORDER BY mv.created_at DESC, mv.id DESC LIMIT ?` (`:517-518`).
+  Por linha: `quantidade_devolvida` (devoluções vivas, `DEVOLUCAO_VIVA_SQL`), `quantidade_reentrada` (`seriesQueVoltaramSql`), e no JS
+  `saldo_devolvivel = max(0, quantidade − devolvida − reentrada)` (`:533`) e `series` (as `ENTREGUE` da saída).
+- **O defeito:** o `LIMIT 30` corta **antes** do saldo — saídas já devolvidas por inteiro ocupam vagas; a 31ª saída mais antiga, ainda com
+  saldo, **não aparece**. Na tela não há busca nem "carregar mais": quem procura uma entrega antiga cai na **"Devolução avulsa"**, que não tem
+  limite de quantidade nem herda o lote (o texto da própria tela diz isso) — é aí que a devolução de entrega antiga perde o vínculo.
+- **A escrita não tem o limite:** `POST /api/almoxarifado/devolucoes` com `movimentacao_saida_id` de qualquer idade passa por
+  `validarSaidaOriginal` (`:37-…`, recusas literais: *"Movimentação de saída N não encontrada"*, *"… foi cancelada (estornada) …"*, EPI, outro
+  material, tipo não devolvível, *"… é de uma requisição excluída …"*) — só a **lista** esconde. A conta do `saldo_devolvivel` tem de
+  continuar igual à da validação (Etapa 121, C253) — não mexer nela.
+- **A tela:** `client/src/components/almoxarifado/DevolucoesAlmoxarifado.js:105-112` busca a lista ao trocar o material (guarda `cancelado`);
+  o `<select id="dev-saida">` (*"Entrega de origem"*, `:299-312`) lista todas, desabilitando `saldo_devolvivel <= 0`; rótulo `rotuloSaida`
+  (`:188-200`: data, tipo, quantidade, número da requisição ou OS, usuário, lote, *"devolvível N"* / *"já devolvido por inteiro"*).
+- **Caminhos a escolher na Fase 0 da 204 (reversível, letra B):** (a) filtrar no SQL só as com saldo (`quantidade − devolvida − reentrada >
+  folga`) antes do `LIMIT` — muda o que a tela mostra (some o *"já devolvido por inteiro"* — conferir os testes que asseveram esse rótulo);
+  (b) um filtro opcional (`?requisicao=`, `?desde=`/`?ate=`, ou número da requisição/OS) + "carregar mais" (`?antes_de_id=`); (c) os dois.
+  Cuidado: 9 arquivos de teste da API chamam `saidas-elegiveis` (`grep -l saidas-elegiveis server/tests/api/*.js`), e o rótulo *"já devolvido por inteiro"* é asseverado em `DevolucoesAlmoxarifado.test.js` — contrato aditivo, sem mudar a
+  resposta sem parâmetro além do decidido. Tem fatia visível (a tela Devoluções) — Jest da tela e build entram nas suítes.
