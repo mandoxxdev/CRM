@@ -331,12 +331,30 @@ galho de verdade; T0 → T1 → T3/T4.
 
 ## Execução
 
-- [ ] **F2** — revisor fresco sobre o commit deste plano.
-- [ ] **T0** — vermelho de partida + RN-200.06 (i) reescrito.
-- [ ] **T1** — a conta, controles (i)–(v), `test:api` e `test:almoxarifado` inteiros.
-- [ ] **T2** — a tela (galho), teste e build do cliente.
-- [ ] **T3** — integração rota e serviço.
-- [ ] **T4** — sorteio sem a exclusão.
+- [x] **F2** — revisor fresco sobre o commit deste plano (`4301c74b`, 7 achados aplicados).
+- [x] **T0** (`575174c0`) — vermelho de partida + RN-200.06 (i) reescrito. `entregaSaiDeGuardaDoIrmao` 13/21 no código de hoje (8 vermelhos:
+  .01, .02, fronteira, .05, .06 b/c, .07, .12 b com o item à mão antes); RN-200.06 (i) vermelho de propósito (25/26).
+  **Divergências do plano:** (1) a RN-208.03 (a, b) é **verde** hoje (hoje o irmão nunca conta — ela é o controle do `fica`, não um
+  vermelho); (2) a RN-208.12 (b) recusa no item à mão com a literal **física** (*"O saldo em A (1) não cobre a quantidade (3)"*), não com
+  a E1: com as duas peças pedindo mais que o físico a precedência física manda (RN-208.08) e a E1 nem é avaliada. O item à mão pede 3 (e não
+  2) para a recusa dizer **de quem** é — com 2 + 2 em A 3 as duas literais seriam iguais, letra por letra.
+- [x] **T1** (`227334f1`) — a conta + o adiamento da Fase 2 item 2 (**feito**: nenhuma recusa existente mudou, `test:api` 601/601 com ele).
+  Controles (perl, âncora 1, md5 restaurado por cópia): (i) sem o excesso → .01, .05; (ii) `irm` = 0 → .01, .02, fronteira, .06 b/c, .07,
+  RN-200.06 (i); (iii) `fica` indefinido → .03 a/a′/b, .12 a ×2, RN-200.06 (iii) ×2; (iv) marca `!!origemId` → .04 b, .12 b, RN-200.04
+  a/b/b′; (v) `fraseIrmaos` só-irmão → RN-200.06 (i); (vi) sem o adiamento → .12 b (item à mão antes). `entregaSaiDeGuardaDoIrmao` 22/22,
+  `entregaSaiDeRespeitaSeparado` 26/26, `separacaoSeparadoDeOutras` 25/25, `entregaGuardaSemLote` 18/18, `test:almoxarifado` 44/44.
+- [x] **T2** (`5c60c868`) — `irmaosNoPar` e RN-208.09 (três casos, Fase 2 item 6); o teste da entrega da 201 renomeado "(item único)".
+  `RequisicoesSaiDeSobra` 15/15; controle sem o filtro do próprio item → 4 vermelhos, md5 restaurado.
+- [x] **T3** (`f170693f`) — `entregaSaiDeGuardaDoIrmaoIntegracao` 3/3 (rota, rota com A explícito no item 2 — Fase 2 item 7 —, serviço:
+  mesmos números e mesma literal). Controle `irm` = 0 → 0/3.
+- [x] **T4** (`53fd0fae`) — sorteio sem a exclusão, com a 2ª forma no gerador. Com 400 casos a premissa T caía a 9 e os modos novos davam
+  3/6 casos → **CASOS 2000** (~25 s). Semente 207: 1798 casos, 997 aceitos, G/N/L/T/F/R/S 0, além da parte 18, par do irmão 24, T 58.
+  Controles: (i) G 3, N 1; (ii) G 21, N 16.
+- [x] **Revisão "passaria com a feature quebrada?"** — (a) sem o `ir.id <> ?` → só a prova de unidade cai (na entrega o próprio item
+  sempre contribui 0: no caso (b) com excesso o `fica` é 0, e fora dele a guarda dele está em outro par — a guarda está **na prova de
+  unidade**, não na conta); (b) o lote não exato (`IS ? OR 1`) → .07 e o "outro par" vermelhos.
+- [x] **Suítes finais (serial):** `test:api` 602/602, `test:almoxarifado` 44/44, `test:validation` 4/4, `test:safealter` 3/3,
+  `test:sqlite` 16/16, cliente 214 suítes / 2948 testes, `build` "Compiled successfully".
 - [ ] **Fase 5** — revisão adversarial.
 - [ ] **T5** — fechamento (`fechar-etapa`), estimado × gasto.
 
