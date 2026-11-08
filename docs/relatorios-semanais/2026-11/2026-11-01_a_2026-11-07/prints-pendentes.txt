@@ -1,37 +1,8 @@
-Prints pendentes (de manha o sistema em http://localhost:3000 estava na tela de login; na atualizacao, havia dois navegadores ligados e nenhum escolhido para esta sessao - os prints nao foram tirados)
+Prints pendentes
 
-Sem print, estes itens foram para "O que mudou - e por que importa". Com os prints, voltam para "O que voce ja pode ver na tela".
+Os sete prints principais foram tirados e estao no relatorio. Ficou de fora so o opcional:
 
-1. prints/lote-corrigir-validade.png
-   Tela: Almoxarifado -> Lotes e Series -> um material com lote -> icone de calendario "Corrigir validade"
-   Precisa aparecer: a janela "Corrigir validade" com a validade atual, a nova data e a justificativa preenchidas.
-
-2. prints/nota-aviso-validade.png
-   Tela: Almoxarifado -> Recebimentos -> uma nota com lote ja existente e outra validade -> "Processar Nota"
-   Precisa aparecer: a janela "Processar nota fiscal" com o aviso amarelo embaixo do material
-   ("O lote ... ja tem validade ..., e a nota informa ...").
-
-3. prints/sai-de-mostra-sobra.png
-   Tela: Almoxarifado -> Requisicoes (almox.) -> requisicao aprovada -> Iniciar Separacao -> lista "Sai de" aberta
-   Precisa aparecer: um local com "(sobra 2 de 6; 4 para outras)" - exige outra requisicao com 4 separados do mesmo local e lote.
-
-4. prints/compras-materiais-igual.png
-   Tela: Compras -> Materiais
-   Precisa aparecer: a lista com Foto, Codigo, Material, Familia, Categoria, Quantidade, Localizacao, Status e os filtros
-   (Todas categorias, Todas familias, Todos status, Limpar filtros).
-
-5. (opcional) prints/materiais-clientes-virgula.png
+1. (opcional) prints/materiais-clientes-virgula.png
    Tela: Almoxarifado -> Materiais de clientes
    Precisa aparecer: uma quantidade com casa decimal mostrada com virgula (ex.: 12,5).
-
-6. prints/separacao-lote-impedido.png
-   Tela: Almoxarifado -> Requisicoes (almox.) -> requisicao aprovada de material com controle por lote e um lote bloqueado -> Iniciar Separacao
-   Precisa aparecer: a linha do item com "Saldo: ... · Em lote bloqueado/reprovado/vencido: 6 un".
-
-7. prints/entrega-sobra-desta.png
-   Tela: Almoxarifado -> Requisicoes (almox.) -> requisicao com duas pecas do mesmo material separadas de locais diferentes -> entrega
-   Precisa aparecer: a lista "Sai de" com um local como "A (sobra 1 de 3; 2 desta)".
-
-8. prints/devolucao-entregas-antigas.png
-   Tela: Almoxarifado -> Devolucoes -> Nova Devolucao -> material com mais de 30 entregas
-   Precisa aparecer: o campo "Entrega de origem" e, embaixo, o botao "Carregar entregas mais antigas".
+   Nao ha material de cliente com quantidade quebrada no banco local; o item segue so no texto ("Tambem foram feitos").
