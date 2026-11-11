@@ -17,8 +17,8 @@ quais campos ficam fora (e-mail, senha, site, editor da proposta; a conferir: ch
 
 | # | Tarefa | Execução estimada | Fator | Informado | Etapa/plano | Régua usada | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | Tudo em maiúsculo ao digitar e ao colar | 1h | análise 30 min + 30 min (decisão das exceções); teste 1h30 + 30 min (celular) | 4h | — | Etapa 192 F1 (maiúsculas do fornecedor, ~20-30 min, um formulário) × mecanismo global + varredura das exceções | — | — | — |
-| 2 | Buscas continuam achando os cadastros antigos | 45 min | pequena com regra: 15 min + 30 min | 1h30 | — | o ajuste de busca da 192 F1 | — | — | — |
+| 1 | Tudo em maiúsculo ao digitar e ao colar | 1h | análise 30 min + 30 min (decisão das exceções); teste 1h30 + 30 min (celular) | 4h | 210 (plano `6660594d`) | Etapa 192 F1 (maiúsculas do fornecedor, ~20-30 min, um formulário) × mecanismo global + varredura das exceções | 1,2 h do pacote (horas.js --grupos "Maiusculo=maiuscul|Etapa 210", 11/11), rateado pela execução estimada → 45 min | 3h45 (45 min + análise 1 h + teste 2 h, da tabela — não informado pelo André) | 7d819264, aa545678, af226b25 |
+| 2 | Buscas continuam achando os cadastros antigos | 45 min | pequena com regra: 15 min + 30 min | 1h30 | 210 (plano `6660594d`) | o ajuste de busca da 192 F1 | rateio do pacote → 30 min (o commit foi cherry-pick de um agente em paralelo; o tempo dele não aparece no horas.js) | 1h15 (30 min + 15 min + 30 min, da tabela) | fca14c27 |
 
 Total: 5h30.
 
