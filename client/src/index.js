@@ -21,6 +21,7 @@ import { markChunkRecoveryReady } from './utils/chunkLoadRecovery';
 import { iniciarContrasteNoCelular } from './utils/contrasteNoCelular';
 import { iniciarGradesNoCelular } from './utils/gradesNoCelular';
 import { iniciarTabelasComoCartoes } from './utils/tabelasComoCartoes';
+import { iniciarMaiusculasNosFormularios } from './utils/maiusculasNosFormularios';
 import { registerServiceWorker } from './utils/pushNotifications';
 
 if (process.env.NODE_ENV === 'development' && 'serviceWorker' in navigator) {
@@ -52,6 +53,10 @@ markChunkRecoveryReady();
 iniciarTabelasComoCartoes();
 iniciarGradesNoCelular();
 iniciarContrasteNoCelular();
+
+// Etapa 210: o que se digita ou cola nos formularios fica em MAIUSCULAS (fora e-mail, senha, site,
+// busca e o chat). Vale para tela que ainda nem existe.
+iniciarMaiusculasNosFormularios();
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

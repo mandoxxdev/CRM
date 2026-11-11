@@ -494,7 +494,7 @@ const Chat = ({ isOpen, onClose }) => {
                 </div>
               )}
 
-              <form className="chat-input-form" onSubmit={enviarMensagem}>
+              <form className="chat-input-form" onSubmit={enviarMensagem} data-sem-maiusculas>
                 <input
                   ref={fileInputRef}
                   type="file"

@@ -587,3 +587,9 @@ a.btn-danger:hover svg {
   }
 }
 
+
+/* Etapa 210 (RN-210.03): o campo de texto em foco mostra em maiusculas enquanto o teclado do celular
+   ainda monta a palavra; o valor sobe de verdade no utilitario maiusculasNosFormularios. O exemplo
+   (placeholder) continua como foi escrito. */
+.maiusculas-ao-digitar { text-transform: uppercase; }
+.maiusculas-ao-digitar::placeholder { text-transform: none; }

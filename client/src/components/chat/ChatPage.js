@@ -695,7 +695,7 @@ const ChatPage = () => {
               </div>
             )}
 
-            <footer className="chat-composer">
+            <footer className="chat-composer" data-sem-maiusculas>
               <input
                 ref={fileInputRef}
                 type="file"
