@@ -7,7 +7,15 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 
 > ## Onde o desenvolvimento está — 2026-11-06 (Etapas 172 a 178, 180 a 191, 194 a 208 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
-> **O desenvolvimento parou aqui: Etapa 208 fechada — 2026-11-06.** **O "Sai de" da entrega respeita a peça que o irmão separou.** Numa
+> **Atualização de 2026-11-11 — Etapa 210 fechada (núcleo, pedido da empresa): os textos dos formulários em maiúsculo.** O que se digita
+> ou cola em qualquer campo de texto do sistema aparece e é gravado em MAIÚSCULO, com acento; ficam de fora e-mail, senha, site, busca, chat,
+> lote, corrida, série e a configuração da proposta. Os cadastros antigos não mudam, e as buscas do servidor que ainda comparavam o texto
+> cru acham nas duas caixas. **Roteiro:** Almoxarifado → Requisições → Nova requisição → digite e cole em *Observações gerais* (sobe, cursor
+> no lugar); login com e-mail minúsculo; Financeiro → Bancos → buscar *são* acha *"SÃO JOÃO"* e o antigo *"são josé"*. **Não cobre:** cadastros
+> antigos (B1432), planilha/integração (C510), Ctrl+Z (C511). **Depois da 210 o almoxarifado volta à Etapa 209, que parou na T6** (plano
+> `docs/superpowers/plans/2026-11-07-almoxarifado-etapa209-bloqueio-sabe-o-lote.md`).
+>
+> *(Antes:)* **O desenvolvimento parou aqui: Etapa 208 fechada — 2026-11-06.** **O "Sai de" da entrega respeita a peça que o irmão separou.** Numa
 > requisição com duas peças do mesmo material, entregar uma escolhendo à mão o endereço de onde a outra foi separada (ou o mesmo endereço da
 > própria separação acima da parte) levava a peça da outra, e a entrega dela depois era recusada (*"… não serve mais"*). Agora a entrega é
 > recusada na hora, com a conta, e o **Sai de** da janela de entrega mostra *"A (sobra 1 de 3; 2 desta)"*. Servidor e uma linha na janela;

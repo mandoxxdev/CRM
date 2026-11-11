@@ -4505,7 +4505,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1430 a B1433; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -14340,6 +14340,31 @@ Em nenhum caso uma entrega que passava passa a ser recusada (o diferencial da Fa
 dizer de quem é o excesso (C497 — anterior e pequeno). Comentário do código corrigido no commit da Fase 5. **Reversível** (a fila
 `casoCAdiados` em `entregarSemTrava`).
 
+**B1430 (NOVA, da Etapa 210; decisão do agente) — o maiúsculo mora num lugar só, na tela, para todos os formulários.** Um ouvinte único
+sobe o que é digitado ou colado em qualquer campo de texto, inclusive em tela que ainda nem existe. **Descartado:** mexer nos 141 arquivos de
+tela um a um (caro, e a tela nova nasceria minúscula); só mudar a aparência com CSS, como o fornecedor da Compras 192 (o gravado ficaria
+minúsculo); subir no servidor, rota por rota (cada rota precisaria da lista do que não sobe — e-mail, códigos, senhas). **Consequência:** o
+que entra **sem passar por uma tela** — planilha importada, integração — grava como veio (**C510**). **Reversível** (uma linha no `index.js`).
+
+**B1431 (NOVA, da Etapa 210; decisão do agente) — o que fica fora do maiúsculo.** E-mail, senha, endereço de site, token e servidor de e-mail
+(pelo tipo, nome ou exemplo do campo); caixas de **busca e filtro** (não são gravadas, e o servidor já ignora a caixa); o editor do documento
+da proposta; a mensagem do **chat**; os campos de **lote, corrida e número de série** (o sistema acha o lote e a série pelo texto exato: um lote
+antigo *"lt-5a"* recebido de novo em maiúsculo viraria um lote **novo** — achado da revisão); e as telas **Variáveis técnicas** e **Modelo da
+proposta** (a lista condicional é guardada pelo texto da primeira escolha, e subir *"Motor"* para *"MOTOR"* apagava as opções dela ao salvar;
+o cabeçalho aceita HTML com caminho de imagem; unidades como *kW*). **Descartado:** subir a busca também; mudar a comparação de lote/série do
+servidor para sem caixa (é o motor de lote e série — fica para quando pedirem). **Reversível:** cada exceção é um atributo
+`data-sem-maiusculas` ou uma regra no utilitário.
+
+**B1432 (NOVA, da Etapa 210; decisão do agente) — os cadastros que já existem não são convertidos.** Um campo antigo em minúsculo só sobe
+se for editado (a regra age no que se digita). **Descartado:** converter tudo de uma vez — não tem volta e mexeria em chaves como lote e série
+(B1431). Se quiserem, é uma tarefa à parte (estimada em cerca de 1h30, com cópia de segurança antes).
+
+**B1433 (NOVA, da Etapa 210; decisão do agente) — as buscas do servidor que ainda comparavam o texto cru passam pela régua da 159.** Clientes
+(logos), variáveis técnicas, solicitações de compra, financeiro (contas a pagar, a receber, bancos), departamento das requisições, materiais
+da requisição e do pedido de compra, usuários (filtro e chat), as nove listas da Frota e o quadro de tarefas. **Ficam como estão:** buscas por
+código ou prefixo (*VIS-*, OP, tipo de movimento, família), e a lista de preços (já compara em minúsculas pelo JavaScript). Só acha **mais**,
+nunca menos (a forma como veio continua no `OR`).
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -18397,6 +18422,15 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      …"*. **Nenhum erro de estoque.** **O que fazer:** entregar primeiro o item separado, ou escolher outro endereço. Conserto: contar a parte
      sem lote em todo lote do endereço (precisa decidir quanto de cada lote ela ocupa; não medido).
 499. *(Número sem uso: era reservado ao corte da **B1414**, que não aconteceu.)*
+
+510. **(NOVA, da Etapa 210) O que entra sem passar por uma tela não sobe para maiúsculo.** Planilha importada, integração e o que outro
+     sistema mandar gravam como vieram. **Nenhum erro:** as buscas acham nas duas caixas (B1433). **O que fazer:** nada; se incomodar, subir
+     na importação é uma tarefa à parte.
+511. **(NOVA, da Etapa 210) Nos campos que sobem para maiúsculo, o Ctrl+Z não desfaz o que foi digitado.** Trocar o texto a cada tecla apaga o
+     histórico de desfazer do navegador. **O que fazer:** apagar e digitar de novo. Conserto possível: trocar o texto só ao sair do campo
+     (o colar deixaria de subir na hora).
+512. **(NOVA, da Etapa 210) Campo com limite de letras e "ß" pode passar do limite** ("ß" vira "SS"). Raro em português; o servidor recusa se
+     a coluna tiver limite.
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -39944,12 +39978,58 @@ recusa (há 4, 2, sobra 2); com **Sai de** (*A*, *L2*) → aceita.
   nunca mais (**B1411**).
 - **Antes do deploy:** nada.
 
+## Etapa 210 — Os textos dos formulários em maiúsculo (2026-11-11)
+
+Pedido da empresa: tudo o que se escreve nos formulários fica em **MAIÚSCULO**, ao digitar e ao colar, com acento (*"são joão"* →
+*"SÃO JOÃO"*). Vale para todas as telas do sistema, inclusive as que ainda vão ser feitas. Ficam de fora os campos em que maiúsculo atrapalha
+(**B1431**). Os cadastros antigos não são convertidos (**B1432**); para a busca continuar achando o antigo em minúsculo e o novo em maiúsculo,
+as buscas do servidor que ainda comparavam o texto cru passaram a ignorar a caixa também nas letras com acento (**B1433**). Nada a rodar antes
+do deploy. Decisões do agente: **B1430** a **B1433**; avisos **C510** a **C512**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Cada um digitava do seu jeito: *"Rolamento 6205"*, *"ROLAMENTO 6205"*, *"rolamento 6205"* | Tudo o que se digita ou cola num campo de texto aparece e é gravado em maiúsculo, com acento |
+| Colar um texto copiado de um e-mail mantinha as minúsculas | O texto colado sobe inteiro na hora |
+| — | Corrigir uma letra no meio do texto não pula o cursor para o fim |
+| E-mail, senha, endereço de site, busca, chat, lote, série, configuração da proposta | **Iguais** — continuam como forem digitados |
+| Buscar *"são"* não achava *"SÃO"* gravado (letra com acento), em parte das telas | Acha nas duas caixas (Financeiro, Frota, usuários, tarefas, materiais da requisição e do pedido, solicitações de compra, variáveis) |
+
+### As regras, com o cenário exato
+
+**1. Digitar e colar.** **Almoxarifado → Requisições → Nova requisição**, no campo **Observações gerais**, digite *entregar na portaria do
+galpão* → aparece *ENTREGAR NA PORTARIA DO GALPÃO*. Cole no meio do texto um trecho copiado em minúsculo → o trecho sobe, e o cursor fica logo
+depois dele.
+
+**2. O que fica fora.** Na tela de login, o e-mail continua minúsculo. Em qualquer caixa **Buscar…**, o termo fica como digitado. No
+**Recebimento**, o **Lote** e a **Corrida** ficam como digitados; na **Movimentação**, o lote e os números de série também.
+
+**3. A busca acha nas duas caixas.** **Financeiro → Bancos**: um banco *"são josé"* cadastrado antes e um *"SÃO JOÃO"* cadastrado agora; buscar
+*são* acha os dois, e buscar *SÃO* também.
+
+**4. O antigo não muda sozinho.** Abra um cadastro antigo em minúsculo: o texto continua como estava. Só o campo que for editado sobe.
+
+### O que esta etapa NÃO cobre
+
+- Os cadastros já gravados (**B1432**).
+- O que vem de planilha ou integração (**C510**).
+- O Ctrl+Z nos campos que sobem (**C511**).
+- **Antes do deploy:** nada.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 210 entregue (2026-11-11, núcleo, pedido da empresa):** **os textos dos formulários em maiúsculo**, ao digitar e ao colar. Um
+  utilitário só na tela (**B1430**), com as exceções da **B1431** (inclusive lote, série e configuração da proposta, achados da revisão),
+  sem converter o que já existe (**B1432**), e as buscas do servidor que ainda comparavam o texto cru acham nas duas caixas (**B1433**).
+  Commits `99e780ba` (estimativa), `6660594d` (plano), `7d819264` (tela), `fca14c27` (buscas), `aa545678` (Fase 5) e o fechamento.
+  **O que é seu:** as decisões **B1430** a **B1433** (reversíveis) e os avisos **C510** a **C512**. **Próxima:** a Etapa 209 (almoxarifado),
+  retomada pela T6.
 
 - **Etapa 207 entregue (2026-11-06):** **a entrega respeita a peça separada sem lote** (**C490** resolvido). A régua da peça separada
   estendida às linhas sem lote (**B1396**); sem peça separada que conte, como hoje (**B1397**); os outros endereços não cobrem, como hoje

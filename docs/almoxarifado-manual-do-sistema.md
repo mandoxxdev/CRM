@@ -107,6 +107,20 @@ exemplo, `REM-MTHK5F35ABC12345`. A primeira metade vem do relógio, a segunda é
 operador** (ou vem da etiqueta do fornecedor) e identifica a peça física, não o documento — ver
 seção 4.
 
+### Textos em maiúsculo
+
+Em todas as telas do sistema, o que se digita ou cola num campo de texto aparece e é gravado em **MAIÚSCULO**, com acento (*"são joão"*
+vira *"SÃO JOÃO"*), no mesmo instante. Corrigir uma letra no meio do texto mantém o cursor no lugar. No celular, a palavra sobe quando o
+teclado a fecha; enquanto isso o campo já a mostra em maiúsculo.
+
+Ficam **como foram digitados**: e-mail, senha, endereço de site, caixas de busca e filtro, a mensagem do chat, os campos de **lote**,
+**corrida** e **número de série** (o sistema acha o lote e a série pelo texto exato), as telas de configuração da proposta e campos de
+número e data. Cadastros gravados antes desta regra não mudam sozinhos: um campo só sobe quando for editado. O que entra por planilha
+ou integração grava como veio.
+
+A busca acha o texto em qualquer caixa, também nas letras com acento: *"são"* acha *"SÃO JOÃO"*, e *"SÃO"* acha um cadastro antigo
+*"são josé"*. O acento não é ignorado: *"sao"* não acha *"SÃO"*.
+
 ---
 
 ## 2. Cadastro de materiais
