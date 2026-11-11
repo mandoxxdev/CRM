@@ -4,6 +4,8 @@
 
 const { dbRun, dbGet, dbAll } = require('./db');
 const { STATUS_COLUNAS, PRIORIDADES } = require('./schema');
+// Etapa 210 (RN-210.05): a busca do quadro acha a letra acentuada em qualquer caixa
+const { condicaoDeBusca } = require('../buscaSemCaixa');
 
 const STATUS_SET = new Set(STATUS_COLUNAS);
 const PRIORIDADE_SET = new Set(PRIORIDADES);
@@ -55,14 +57,12 @@ async function listUsuariosAtivos(db) {
 async function getBoard(db, { busca } = {}) {
   const params = [];
   let where = '';
-  if (busca && String(busca).trim()) {
-    where = `WHERE (
-      LOWER(t.titulo) LIKE ? OR
-      LOWER(COALESCE(t.descricao, '')) LIKE ? OR
-      LOWER(COALESCE(u.nome, '')) LIKE ?
-    )`;
-    const q = `%${String(busca).trim().toLowerCase()}%`;
-    params.push(q, q, q);
+  // Etapa 210 (RN-210.05): o LOWER do SQLite nao baixa a letra acentuada (LOWER('SÃO') = 'sÃo'); a regua sem caixa acha o titulo
+  // novo em maiusculas com acento por "são" e o legado em minusculas por "SÃO"
+  const cond = busca ? condicaoDeBusca(['t.titulo', 't.descricao', 'u.nome'], String(busca)) : { sql: '' };
+  if (cond.sql) {
+    where = `WHERE ${cond.sql}`;
+    params.push(...cond.params);
   }
 
   const tarefas = await dbAll(db, `

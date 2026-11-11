@@ -3926,7 +3926,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     if (status) { sql += ` AND r.status = ?`; params.push(status); }
     if (req.query.aprovacoes_valor === '1') { sql += ` AND r.status = 'AGUARDANDO_APROVACAO_VALOR'`; }
     if (urgencia) { sql += ` AND r.urgencia = ?`; params.push(urgencia); }
-    if (departamento) { sql += ` AND r.departamento LIKE ?`; params.push(`%${departamento}%`); }
+    // Etapa 210 (RN-210.05): o departamento pela regua sem caixa (o novo vem em maiusculas com acento)
+    if (departamento) {
+      const buscaDep = condicaoDeBusca(['r.departamento'], String(departamento));
+      if (buscaDep.sql) { sql += ` AND ${buscaDep.sql}`; params.push(...buscaDep.params); }
+    }
 
     sql += ` ORDER BY CASE UPPER(r.urgencia) WHEN 'CRITICO' THEN 1 WHEN 'URGENTE' THEN 2 ELSE 3 END, r.created_at DESC`;
 

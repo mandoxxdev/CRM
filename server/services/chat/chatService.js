@@ -1,6 +1,8 @@
 const { dbRun, dbGet, dbAll } = require('./db');
 const path = require('path');
 const { sanitizeMessageContent } = require('./sanitize');
+// Etapa 210 (RN-210.05): a busca de usuario acha a letra acentuada em qualquer caixa
+const { condicaoDeBusca } = require('../buscaSemCaixa');
 
 // Etapa 82 (RN-82.03): assinador de modulo das imagens do chat, configurado no `registerChatRoutes`.
 // O banco continua guardando `/api/uploads/chat/<arquivo>`; a assinatura e feita NA SAIDA, em
@@ -371,15 +373,16 @@ async function markAsRead(db, conversaId, userId) {
 }
 
 async function listChatUsers(db, userId, search = '') {
-  const term = `%${search || ''}%`;
+  // Etapa 210 (RN-210.05): pela regua sem caixa — o nome novo vem em maiusculas com acento, o legado em minusculas
+  const busca = condicaoDeBusca(['nome', 'email'], search == null ? '' : String(search));
   let rows;
-  if (search) {
+  if (busca.sql) {
     rows = await dbAll(
       db,
       `SELECT id, nome, email, cargo FROM usuarios
-       WHERE id != ? AND ativo = 1 AND (nome LIKE ? OR email LIKE ?)
+       WHERE id != ? AND ativo = 1 AND ${busca.sql}
        ORDER BY nome COLLATE NOCASE LIMIT 30`,
-      [userId, term, term]
+      [userId, ...busca.params]
     );
   } else {
     rows = await dbAll(

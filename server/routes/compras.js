@@ -113,10 +113,11 @@ app.get('/api/compras/fornecedores', authenticateToken, checkModulePermission('c
   let query = 'SELECT * FROM fornecedores WHERE 1=1';
   const params = [];
 
-  if (search) {
-    query += ' AND (razao_social LIKE ? OR nome_fantasia LIKE ? OR cnpj LIKE ?)';
-    const searchTerm = `%${search}%`;
-    params.push(searchTerm, searchTerm, searchTerm);
+  // Etapa 210 (RN-210.05): pela regua sem caixa, como a lista de pedidos abaixo — o "AÇOS" novo acha por "aços" e o legado ao contrario
+  const buscaFornecedor = condicaoDeBusca(['razao_social', 'nome_fantasia', 'cnpj'], search);
+  if (buscaFornecedor.sql) {
+    query += ` AND ${buscaFornecedor.sql}`;
+    params.push(...buscaFornecedor.params);
   }
   if (status) {
     query += ' AND status = ?';

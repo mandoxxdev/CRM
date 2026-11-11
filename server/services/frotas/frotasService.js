@@ -5,6 +5,8 @@
 const { dbRun, dbGet, dbAll } = require('./db');
 const { hojeLocalISO, modificadorDoFuso } = require('../diaLocal');
 const { naFilaDeViagens } = require('./filaDeViagens');
+// Etapa 210 (RN-210.05): as buscas das listas acham a letra acentuada em qualquer caixa
+const { condicaoDeBusca } = require('../buscaSemCaixa');
 
 const VEICULO_JOIN = `SELECT v.*, t.nome as tipo_nome, t.categoria as tipo_categoria,
   mot.nome as motorista_nome
@@ -41,11 +43,15 @@ function diasAte(dateStr, hoje = hojeLocalISO()) {
   return Math.ceil((d - today) / (1000 * 60 * 60 * 24));
 }
 
+/**
+ * Etapa 210 (RN-210.05): pela regua sem caixa da 159 — o texto novo e gravado em maiusculas com acento ("SÃO JOÃO") e o `LIKE` do
+ * SQLite so ignora a caixa da letra sem acento; o termo vai como veio, em MAIUSCULAS e em minusculas. Sem termo (ou so espacos), nada.
+ */
 function buildSearchWhere(fields, search) {
   if (!search) return { clause: '', params: [] };
-  const term = `%${search}%`;
-  const parts = fields.map((f) => `${f} LIKE ?`);
-  return { clause: ` AND (${parts.join(' OR ')})`, params: fields.map(() => term) };
+  const busca = condicaoDeBusca(fields, String(search));
+  if (!busca.sql) return { clause: '', params: [] };
+  return { clause: ` AND ${busca.sql}`, params: busca.params };
 }
 
 /**

@@ -4433,10 +4433,11 @@ app.get('/api/clientes/logos', authenticateToken, exigirComercialNasPropostas, (
   let query = 'SELECT id, razao_social, nome_fantasia, logo_url FROM clientes WHERE logo_url IS NOT NULL AND logo_url != ""';
   const params = [];
   
-  if (search) {
-    query += ' AND (razao_social LIKE ? OR nome_fantasia LIKE ?)';
-    const searchTerm = `%${search}%`;
-    params.push(searchTerm, searchTerm);
+  // Etapa 210 (RN-210.05): pela regua sem caixa — o "SÃO" novo acha por "são" e o "são" antigo por "SÃO"
+  const buscaLogos = condicaoDeBusca(['razao_social', 'nome_fantasia'], search);
+  if (buscaLogos.sql) {
+    query += ` AND ${buscaLogos.sql}`;
+    params.push(...buscaLogos.params);
   }
   
   // Primeiro, contar total
@@ -5164,10 +5165,11 @@ app.get('/api/variaveis-tecnicas', authenticateToken, exigirComercialNasVariavei
     sql += ' AND categoria = ?';
     params.push(categoria);
   }
-  if (search) {
-    sql += ' AND (nome LIKE ? OR chave LIKE ?)';
-    var term = '%' + search + '%';
-    params.push(term, term);
+  // Etapa 210 (RN-210.05): pela regua sem caixa (o nome novo vem em maiusculas com acento)
+  var buscaVariaveis = condicaoDeBusca(['nome', 'chave'], search);
+  if (buscaVariaveis.sql) {
+    sql += ' AND ' + buscaVariaveis.sql;
+    params.push.apply(params, buscaVariaveis.params);
   }
   sql += ' ORDER BY categoria ASC, ordem ASC, nome ASC';
   db.all(sql, params, function(err, rows) {
@@ -18492,7 +18494,11 @@ app.get('/api/compras/solicitacoes-compra', authenticateToken, checkModulePermis
   const params = [];
   if (setor) { where.push('sc.setor = ?'); params.push(String(setor)); }
   if (status) { where.push('sc.status = ?'); params.push(String(status)); }
-  if (q) { where.push('(LOWER(sc.titulo) LIKE ? OR LOWER(sc.observacoes) LIKE ?)'); params.push(`%${String(q).toLowerCase()}%`, `%${String(q).toLowerCase()}%`); }
+  // Etapa 210 (RN-210.05): o LOWER do SQLite nao baixa a letra acentuada (LOWER('SÃO') = 'sÃo'); a regua sem caixa acha nas duas caixas
+  if (q) {
+    const buscaSc = condicaoDeBusca(['sc.titulo', 'sc.observacoes'], String(q));
+    if (buscaSc.sql) { where.push(buscaSc.sql); params.push(...buscaSc.params); }
+  }
   if (from) { where.push("date(sc.created_at) >= date(?)"); params.push(String(from)); }
   if (to) { where.push("date(sc.created_at) <= date(?)"); params.push(String(to)); }
   const whereSql = where.length ? ('WHERE ' + where.join(' AND ')) : '';
@@ -19820,10 +19826,11 @@ app.get('/api/financeiro/contas-pagar', authenticateToken, checkModulePermission
   let query = 'SELECT * FROM contas_pagar WHERE 1=1';
   const params = [];
 
-  if (search) {
-    query += ' AND (descricao LIKE ? OR fornecedor LIKE ?)';
-    const searchTerm = `%${search}%`;
-    params.push(searchTerm, searchTerm);
+  // Etapa 210 (RN-210.05): pela regua sem caixa
+  const buscaPagar = condicaoDeBusca(['descricao', 'fornecedor'], search);
+  if (buscaPagar.sql) {
+    query += ` AND ${buscaPagar.sql}`;
+    params.push(...buscaPagar.params);
   }
   if (status) {
     query += ' AND status = ?';
@@ -19854,10 +19861,11 @@ app.get('/api/financeiro/contas-receber', authenticateToken, checkModulePermissi
   let query = 'SELECT * FROM contas_receber WHERE 1=1';
   const params = [];
 
-  if (search) {
-    query += ' AND (descricao LIKE ? OR cliente LIKE ?)';
-    const searchTerm = `%${search}%`;
-    params.push(searchTerm, searchTerm);
+  // Etapa 210 (RN-210.05): pela regua sem caixa
+  const buscaReceber = condicaoDeBusca(['descricao', 'cliente'], search);
+  if (buscaReceber.sql) {
+    query += ` AND ${buscaReceber.sql}`;
+    params.push(...buscaReceber.params);
   }
   if (status) {
     query += ' AND status = ?';
@@ -19913,10 +19921,11 @@ app.get('/api/financeiro/bancos', authenticateToken, checkModulePermission('fina
   let query = 'SELECT * FROM bancos WHERE 1=1';
   const params = [];
 
-  if (search) {
-    query += ' AND (nome LIKE ? OR banco LIKE ?)';
-    const searchTerm = `%${search}%`;
-    params.push(searchTerm, searchTerm);
+  // Etapa 210 (RN-210.05): pela regua sem caixa
+  const buscaBancos = condicaoDeBusca(['nome', 'banco'], search);
+  if (buscaBancos.sql) {
+    query += ` AND ${buscaBancos.sql}`;
+    params.push(...buscaBancos.params);
   }
 
   query += ' ORDER BY nome ASC';
@@ -20922,13 +20931,15 @@ app.post('/api/operacional/ordens-servico/:id/gerar-pdf', authenticateToken, exi
           if (!produto && item.descricao) {
             try {
               // Buscar produto que tenha nome ou descrição similar à descrição do item
-              produto = await new Promise((res, rej) => {
+              // Etapa 210 (RN-210.05): pela regua sem caixa (a descricao nova vem em maiusculas com acento, o produto legado nao)
+              const buscaProduto = condicaoDeBusca(['nome', 'descricao'], String(item.descricao));
+              produto = !buscaProduto.sql ? null : await new Promise((res, rej) => {
                 db.get(`
-                  SELECT nome, descricao, especificacoes_tecnicas, imagem 
-                  FROM produtos 
-                  WHERE nome LIKE ? OR descricao LIKE ?
+                  SELECT nome, descricao, especificacoes_tecnicas, imagem
+                  FROM produtos
+                  WHERE ${buscaProduto.sql}
                   LIMIT 1
-                `, [`%${item.descricao}%`, `%${item.descricao}%`], (err, row) => {
+                `, buscaProduto.params, (err, row) => {
                   if (err) rej(err);
                   else res(row);
                 });

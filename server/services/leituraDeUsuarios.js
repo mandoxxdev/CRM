@@ -19,6 +19,8 @@
 const { canManageUsers, parseAdminModulos, isTruthyFlag } = require('./systemPermissions');
 const { isSqliteBusy, respondDbError } = require('./sqliteConcurrency');
 const { buildSetorCondition, fetchComercialResponsaveis } = require('./comercialResponsaveisCache');
+// Etapa 210 (RN-210.05): a busca de usuario acha a letra acentuada em qualquer caixa
+const { condicaoDeBusca } = require('./buscaSemCaixa');
 
 const LITERAL_LEITURA_USUARIO = 'Acesso negado — apenas o próprio usuário ou administradores do sistema';
 
@@ -223,12 +225,11 @@ function registrarListasDosSeletores(app, { getDb, authenticateToken }) {
         }
 
         // Busca textual (nome/email/cargo)
-        if (q) {
-          where.push(`(
-            u.nome LIKE ? OR u.email LIKE ? OR COALESCE(u.cargo, '') LIKE ?
-          )`);
-          const like = `%${q}%`;
-          params.push(like, like, like);
+        // Etapa 210 (RN-210.05): pela regua sem caixa — o nome novo vem em maiusculas com acento, o legado em minusculas
+        const buscaUsuario = condicaoDeBusca(['u.nome', 'u.email', 'u.cargo'], q);
+        if (buscaUsuario.sql) {
+          where.push(buscaUsuario.sql);
+          params.push(...buscaUsuario.params);
         }
 
         const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';

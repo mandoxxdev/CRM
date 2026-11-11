@@ -118,6 +118,8 @@ const { registrarAuditoria } = require('../almoxarifado/audit');
 const { calcularTotaisPedido } = require('./pedidoTotais');
 // Etapa 171 (I6): a MESMA literal e a MESMA normalizacao da porta HTTP, para quem chama o servico direto.
 const { OS_INVALIDA, normalizarOsIdBruto } = require('./schemas');
+// Etapa 210 (RN-210.05): a busca de material acha a letra acentuada em qualquer caixa
+const { condicaoDeBusca } = require('../buscaSemCaixa');
 
 /** Molde de erro traduzido (mesmo `erro()` dos servicos do almoxarifado: a rota le `.status`). */
 const erro = (msg, status = 400) => Object.assign(new Error(msg), { status });
@@ -1011,16 +1013,17 @@ async function excluirPedido(db, pedidoId) {
  * (abaixo) aplica a MESMA regra, senao a planilha compraria o que a tela nao oferece.
  */
 async function buscarMateriais(db, search) {
-  const termo = search == null ? '' : String(search).trim();
-  const like = `%${termo}%`;
+  const termo = search == null ? '' : String(search);
+  // Etapa 210 (RN-210.05): pela regua sem caixa (o nome novo vem em maiusculas com acento, o legado em minusculas). Sem termo,
+  // nenhuma condicao: os 50 primeiros, como antes.
+  const busca = condicaoDeBusca(['codigo', 'nome', 'descricao'], termo);
   // Etapa 192 (RN-192.09): `ncm` e `peso_unitario` para o item novo do pedido nascer com eles (antes nasciam vazios e
   // so o servidor completava ao salvar — a tela mostrava o placeholder "o do cadastro do material").
   return dbAll(db, `SELECT id, codigo, COALESCE(nome, descricao) as descricao, unidade, ncm, peso_unitario
     FROM materiais_almoxarifado
-    WHERE COALESCE(ativo, 1) = 1
-      AND (? = '' OR codigo LIKE ? OR COALESCE(nome, '') LIKE ? OR COALESCE(descricao, '') LIKE ?)
+    WHERE COALESCE(ativo, 1) = 1${busca.sql ? ` AND ${busca.sql}` : ''}
     ORDER BY codigo
-    LIMIT 50`, [termo, like, like, like]);
+    LIMIT 50`, busca.params);
 }
 
 /**

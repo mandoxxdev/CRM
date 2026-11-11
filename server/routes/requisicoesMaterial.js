@@ -17,6 +17,8 @@ const {
 } = require('../services/almoxarifado/stockAvailabilityService');
 
 const { enrichMaterialRow } = require('../services/almoxarifado/materialPhoto');
+// Etapa 210 (RN-210.05): a busca de texto acha a letra acentuada em qualquer caixa
+const { condicaoDeBusca } = require('../services/buscaSemCaixa');
 const requisitionService = require('../services/almoxarifado/requisitionService');
 // Etapa 91 (T5, C141): o cancelamento por aqui solta as reservas e grava a trilha, como o do almoxarifado.
 const reservationService = require('../services/almoxarifado/reservationService');
@@ -169,13 +171,14 @@ module.exports = function registerRequisicoesMaterialRoutes(app, db, authenticat
 
       if (filterClause) sql += ` AND ${filterClause}`;
 
-      if (search) {
+      // Etapa 210 (RN-210.05): pela regua sem caixa (o nome novo vem em maiusculas com acento, o legado em minusculas)
+      const buscaMaterial = condicaoDeBusca(['m.nome', 'm.codigo', 'm.descricao'], search);
 
-        sql += ` AND (m.nome LIKE ? OR m.codigo LIKE ? OR m.descricao LIKE ?)`;
+      if (buscaMaterial.sql) {
 
-        const s = `%${search}%`;
+        sql += ` AND ${buscaMaterial.sql}`;
 
-        params.push(s, s, s);
+        params.push(...buscaMaterial.params);
 
       }
 
