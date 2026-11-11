@@ -1,0 +1,13 @@
+*Planejamento — textos dos formulários em maiúsculo*
+_11/11/2026_
+
+*1. Tudo em maiúsculo ao digitar e ao colar*
+Em todas as telas do sistema, o que for digitado ou colado em qualquer campo de texto passa a aparecer e a ser gravado em maiúsculo, com acento (ex.: "São João" vira "SÃO JOÃO"). Ficam de fora só os campos em que maiúsculo atrapalha: e-mail, senha, endereço de site e o texto livre editado dentro da proposta. Os cadastros já existentes não são alterados; passam a maiúsculo quando forem salvos de novo.
+Tempo estimado: *4h*
+
+*2. Buscas continuam achando os cadastros antigos*
+Com o texto novo em maiúsculo, uma busca por "SÃO" poderia deixar de achar um cadastro antigo gravado como "são". As buscas e importações passam a ignorar maiúsculo e minúsculo também nas letras com acento.
+Tempo estimado: *1h30*
+
+*Total estimado: 5h30*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
