@@ -1173,7 +1173,7 @@ const MovimentacoesAlmoxarifado = () => {
                           })}
                         </select>
                       ) : (
-                        <input id="mov-lote" className="almox-input" value={form.lote}
+                        <input data-sem-maiusculas id="mov-lote" className="almox-input" value={form.lote}
                           onChange={e => {
                             // Etapa 190 (RN-190.10): lote apagado zera a validade (ela é do lote — sem lote, não vai)
                             const v = e.target.value;
@@ -1195,13 +1195,13 @@ const MovimentacoesAlmoxarifado = () => {
                   {selectedMaterial?.controle_serie === 1 && form.tipo === 'ENTRADA' && (
                     <div className="almox-field almox-form-full">
                       <label>Números de série (um por linha) *</label>
-                      <textarea className="almox-textarea" rows={3} value={form.series}
+                      <textarea data-sem-maiusculas className="almox-textarea" rows={3} value={form.series}
                         onChange={(e) => setForm({ ...form, series: e.target.value })} />
                       <small style={{ color: linhasSerie(form.series).length === Number(form.quantidade) ? 'var(--gmp-text-light)' : 'var(--gmp-error)' }}>
                         {linhasSerie(form.series).length}/{form.quantidade || 0} série(s)
                       </small>
                       <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-                        <input className="almox-input" placeholder="Prefixo (ex.: GMP-)" value={seriePrefixo}
+                        <input data-sem-maiusculas className="almox-input" placeholder="Prefixo (ex.: GMP-)" value={seriePrefixo}
                           onChange={(e) => setSeriePrefixo(e.target.value)} style={{ maxWidth: 140 }} />
                         <input className="almox-input" type="number" placeholder="Nº inicial" value={serieInicio}
                           onChange={(e) => setSerieInicio(e.target.value)} style={{ maxWidth: 110 }} />
@@ -1274,7 +1274,7 @@ const MovimentacoesAlmoxarifado = () => {
                       {seriesAjusteCarregadas && ajusteSerieInfo.inteiro && ajusteSerieInfo.diferenca > 0 && (
                         <>
                           <label htmlFor="ajuste-serie-novas" style={{ marginTop: 6 }}>Números das novas séries (um por linha) *</label>
-                          <textarea id="ajuste-serie-novas" className="almox-textarea" rows={3} value={form.series}
+                          <textarea data-sem-maiusculas id="ajuste-serie-novas" className="almox-textarea" rows={3} value={form.series}
                             onChange={(e) => setForm((f) => ({ ...f, series: e.target.value }))} />
                           <small data-testid="ajuste-serie-contador"
                             style={{ color: ajusteSerieInfo.ok ? 'var(--gmp-text-light)' : 'var(--gmp-error)' }}>

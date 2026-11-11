@@ -1066,7 +1066,7 @@ const FerramentasAlmoxarifado = () => {
                 </div>
                 <div className="almox-field">
                   <label className="almox-label">Número de série</label>
-                  <input className="almox-input" value={form.numero_serie}
+                  <input data-sem-maiusculas className="almox-input" value={form.numero_serie}
                     onChange={(e) => setForm((f) => ({ ...f, numero_serie: e.target.value }))} />
                 </div>
                 <div className="almox-field">

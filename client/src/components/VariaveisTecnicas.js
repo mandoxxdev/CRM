@@ -198,7 +198,7 @@ const VariaveisTecnicas = () => {
   };
 
   return (
-    <div className="config-section variaveis-tecnicas-section">
+    <div data-sem-maiusculas className="config-section variaveis-tecnicas-section">
       <div className="vt-header">
         <h2>Variáveis técnicas</h2>
         <p className="vt-desc">Cadastre as variáveis usadas nos marcadores técnicos da vista frontal e no cadastro de produtos (motor, disco, potência, etc.).</p>

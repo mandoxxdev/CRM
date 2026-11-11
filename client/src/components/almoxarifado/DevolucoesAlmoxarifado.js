@@ -459,7 +459,7 @@ const DevolucoesAlmoxarifado = () => {
                   {aceitaSerie && !saidaSelecionada && (
                     <div className="almox-field almox-form-full">
                       <label className="almox-label" htmlFor="dev-series-texto">Números de série (um por linha)<span className="required">*</span></label>
-                      <textarea id="dev-series-texto" className="almox-textarea" rows={3} value={form.seriesTexto}
+                      <textarea data-sem-maiusculas id="dev-series-texto" className="almox-textarea" rows={3} value={form.seriesTexto}
                         onChange={(e) => setForm((f) => ({ ...f, seriesTexto: e.target.value }))} />
                     </div>
                   )}

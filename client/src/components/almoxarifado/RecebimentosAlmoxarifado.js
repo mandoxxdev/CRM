@@ -1290,7 +1290,7 @@ const RecebimentosAlmoxarifado = () => {
                             data_fabricacao` existia desde a Task 1 sem NENHUM escritor — este
                             campo é o escritor, e a tela de Lotes é o leitor. */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6, marginTop: 6 }}>
-                          <input className="almox-input" placeholder="Lote" disabled={jaEntrou}
+                          <input data-sem-maiusculas className="almox-input" placeholder="Lote" disabled={jaEntrou}
                             value={item.lote ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
                             onChange={(e) => atualizarItemDetalhe(item.id, 'lote', e.target.value)} />
                           <input className="almox-input" type="date" placeholder="Validade" title="Validade do lote"
@@ -1301,7 +1301,7 @@ const RecebimentosAlmoxarifado = () => {
                             disabled={jaEntrou}
                             value={item.data_fabricacao_lote ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
                             onChange={(e) => atualizarItemDetalhe(item.id, 'data_fabricacao_lote', e.target.value)} />
-                          <input className="almox-input" placeholder="Corrida" disabled={jaEntrou}
+                          <input data-sem-maiusculas className="almox-input" placeholder="Corrida" disabled={jaEntrou}
                             value={item.corrida_lote ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
                             onChange={(e) => atualizarItemDetalhe(item.id, 'corrida_lote', e.target.value)} />
                         </div>
@@ -1311,7 +1311,7 @@ const RecebimentosAlmoxarifado = () => {
                           return (
                             <div className="almox-field" style={{ gridColumn: '1 / -1', marginTop: 6 }}>
                               <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Séries (uma por linha) — <span style={{ color: seriesPreenchidas === quantidadeEsperada ? 'var(--gmp-text-light)' : 'var(--gmp-error)' }}>{seriesPreenchidas}/{quantidadeEsperada}</span></label>
-                              <textarea className="almox-textarea" rows={2} value={item.series || ''} disabled={jaEntrou}
+                              <textarea data-sem-maiusculas className="almox-textarea" rows={2} value={item.series || ''} disabled={jaEntrou}
                                 style={{ fontSize: '0.75rem', padding: '4px 6px' }}
                                 onChange={(e) => atualizarItemDetalhe(item.id, 'series', e.target.value)} />
                             </div>

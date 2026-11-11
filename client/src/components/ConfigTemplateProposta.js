@@ -359,7 +359,7 @@ A ordem atual desta família será substituída.`;
   }
 
   return (
-    <div className={`config-template-container ${embedded ? 'config-template-embedded' : ''}`}>
+    <div data-sem-maiusculas className={`config-template-container ${embedded ? 'config-template-embedded' : ''}`}>
       {!embedded && (
         <div className="config-template-header">
           <h1><FiSettings /> Configurar Template de Proposta</h1>
