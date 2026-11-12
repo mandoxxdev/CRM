@@ -44,6 +44,30 @@ dono, dentro de uma etapa) e escrever a tela de Compras como feature do almoxari
 (mentira estrutural — o erro que o `CLAUDE.md` nomeia como o mais caro). **Reversível:** quando
 Compras ganhar spec própria, a fatia migra para cá e este arquivo vira o índice dela.
 
+## A fazer — pedidos já estimados, esperando a vez (atualizado em 12/11/2026)
+
+> Ordem de execução combinada com o André: um item por vez, de cima para baixo. Ao fechar um item, marque aqui (hash e data) e
+> comece o próximo. Pedidos e imagens: `specs/modulo-almoxarifado/01-cadastros-materiais/pedido-2026-11-12/`. Toda linha segue a
+> regra "cadastro é do Compras; o Almoxarifado só movimenta" (`CLAUDE.md`).
+
+| # | O que | Estimativa (arquivo, item) | Tempo | Estado |
+|---|---|---|---|---|
+| 1 | Famílias e subfamílias cadastradas no Compras (Almoxarifado só consulta) | `estimativa_2026-11-12_cadastros-so-no-compras`, 1 | 4h | **em desenvolvimento — Etapa 211** |
+| 2 | Categorias e Tipos de Material cadastrados no Compras | `estimativa_2026-11-12_cadastros-so-no-compras`, 2 | 3h | a fazer |
+| 3 | Tipo de Material escolhido de uma lista (no formulário de material) | `estimativa_2026-11-12_cadastro-de-material-fornecedores`, 1 | 1h30 | a fazer — depois do 2 (a lista passa a morar no Compras) |
+| 4 | Vários fornecedores por material, cada um com código e descrição comercial | idem, 2 | 3h30 | a fazer |
+| 5 | Código do fornecedor na cotação e no pedido de compra (tela e impresso) | idem, 3 | 3h | a fazer — depende do 4 |
+| 6 | Histórico de preços por fornecedor no material | idem, 4 | 2h30 | a fazer — depende do 4 |
+| 7 | Tirar o campo Aplicação | idem, 5 | 45 min | **esperando** o Matheus confirmar |
+
+**Esperando resposta da compradora (sem estimativa):**
+- Número de série do equipamento + número de controle (etiqueta) obrigatórios — a imagem 4 não foi salva; não se sabe de qual tela.
+- Juntar Especificações Técnicas e Observações Gerais "no campo Identificação" — pedido ambíguo.
+- Sobra e remessa a terceiros ainda criam material pelo Almoxarifado (contraria a regra) — rever com ela.
+
+**Em pausa no Almoxarifado:** Etapa 209 (o bloqueio sabe o lote), parada na T6 —
+`docs/superpowers/plans/2026-11-07-almoxarifado-etapa209-bloqueio-sabe-o-lote.md`.
+
 ## Unificação de 2026-10-07 — a linha `main` (Etapas 32–38) e o que ficou de cada lado
 
 Até 2026-10-07 havia **duas linhas**: esta branch (Etapas 38–41 de Compras, acima) e a `main`,
