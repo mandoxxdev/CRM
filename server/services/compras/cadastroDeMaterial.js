@@ -82,6 +82,20 @@ function recusarCadastroNoAlmoxarifado(req, res, next) {
 }
 
 /**
+ * Etapa 211 (RN-211.02): as gravacoes de FAMILIA do almoxarifado (POST, PUT e DELETE de `/api/almoxarifado/familias`) recusam para
+ * TODOS, superadmin inclusive, antes do portao do almoxarifado — o cadastro de familias e feito em Compras -> Familias (regra
+ * "cadastro e do Compras; o Almoxarifado so movimenta", CLAUDE.md, 12/11/2026). A MESMA chave de reversao do material
+ * (`ALMOX_CADASTRO_MATERIAL=liberado`) devolve as tres rotas ao que eram (o `denyUnlessAlmoxAdmin` decide). Descartado uma chave
+ * so das familias: e a mesma decisao (o cadastro saiu do almoxarifado), e duas chaves deixariam material e familia em lados
+ * diferentes no dia da reversao.
+ */
+const MSG_FAMILIAS_NO_COMPRAS = 'O cadastro de famílias é feito em Compras → Famílias.';
+function recusarFamiliasNoAlmoxarifado(req, res, next) {
+  if (cadastroNoAlmoxarifadoLiberado()) return next();
+  return res.status(403).json({ error: MSG_FAMILIAS_NO_COMPRAS });
+}
+
+/**
  * Etapa 193 Fase 5 (R3b): o `POST /api/almoxarifado/materiais` ficou porque a sobra (retalho) e a remessa criam material na
  * operacao — mas aceitava o cadastro inteiro (NCM, custo, fornecedor, controles, saldo inicial) de Almoxarife e Engenharia, por
  * fora do Compras. Agora so o formato da operacao, medido nos dois chamadores do client (SobrasAlmoxarifado
@@ -159,6 +173,9 @@ function criarPortaCompras({ authenticateToken, checkModulePermission }) {
   return {
     base,
     leitura: [...base, exigir(ACOES_DO_CADASTRO)],
+    // Etapa 211 (RN-211.01): a porta do cadastro que nao e material (familias) — grava quem cadastra material
+    // (ACOES_DO_CADASTRO: admin do Compras ou do sistema), e o handler roda como COMPRAS (so a auditoria le o usuario).
+    cadastro: [...base, exigir(ACOES_DO_CADASTRO), comoCompras],
     escrita: (acao) => [...base, exigir(acao), ...(acao === 'criar_material' ? [recusarSaldoInicial] : []), comoCompras],
     responderMinhasPermissoes: (req, res) => res.json(minhasPermissoes(req.user)),
   };
@@ -166,7 +183,7 @@ function criarPortaCompras({ authenticateToken, checkModulePermission }) {
 
 module.exports = {
   ACOES_DO_CADASTRO, pode, exigir, minhasPermissoes, criarPortaCompras,
-  recusarCadastroNoAlmoxarifado, MSG_CADASTRO_NO_COMPRAS, cadastroNoAlmoxarifadoLiberado,
+  recusarCadastroNoAlmoxarifado, MSG_CADASTRO_NO_COMPRAS, recusarFamiliasNoAlmoxarifado, MSG_FAMILIAS_NO_COMPRAS, cadastroNoAlmoxarifadoLiberado,
   restringirCriacaoNoAlmoxarifado, CAMPOS_DO_MATERIAL_DA_OPERACAO,
   recusarSaldoInicial, MSG_SALDO_INICIAL_NO_COMPRAS, usuarioDoCompras, comoCompras,
 };

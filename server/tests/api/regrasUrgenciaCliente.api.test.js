@@ -12,6 +12,9 @@
 const assert = require('assert');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
+// Etapa 211 (RN-211.02): a familia so se grava pelo Compras; este arquivo prepara/prova familias pela rota do almoxarifado (o MESMO
+// handler), com a chave de reversao ligada. A recusa e a porta do Compras: familiasNoCompras.api.test.js.
+process.env.ALMOX_CADASTRO_MATERIAL = 'liberado';
 const { dbRun, dbAll } = require('../../services/almoxarifado/db');
 
 let passed = 0; let failed = 0;

@@ -70,7 +70,7 @@ async function test(id, fn) {
     await dbRun(db, 'UPDATE familias_material_almoxarifado SET ativo = NULL WHERE id = ?', [Sx]);
     const r = await aprovar(r0.id);
     assert.strictEqual(r.status, 400, JSON.stringify(r.body));
-    assert.ok(r.body.error.includes(`Reative a subfamília de ${m.codigo} em Configurações`), r.body.error);
+    assert.ok(r.body.error.includes(`Reative a subfamília de ${m.codigo} em Compras → Famílias`), r.body.error);
   });
   await test('P6', async () => { // G7: o mesmo material em dois itens, o primeiro entregue, o segundo pendente, familia inativa
     const R = await fam();
@@ -84,7 +84,7 @@ async function test(id, fn) {
     await dbRun(db, 'UPDATE familias_material_almoxarifado SET ativo = 0 WHERE id = ?', [R]);
     const r = await aprovar(r0.id);
     assert.strictEqual(r.status, 400, JSON.stringify(r.body));
-    assert.ok(r.body.error.includes(`Reative a família de ${m.codigo} em Configurações`), r.body.error);
+    assert.ok(r.body.error.includes(`Reative a família de ${m.codigo} em Compras → Famílias`), r.body.error);
   });
   await close();
   console.log(`

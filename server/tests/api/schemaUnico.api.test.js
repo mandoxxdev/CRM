@@ -4,6 +4,9 @@ const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
+// Etapa 211 (RN-211.02): a familia so se grava pelo Compras; este arquivo prepara/prova familias pela rota do almoxarifado (o MESMO
+// handler), com a chave de reversao ligada. A recusa e a porta do Compras: familiasNoCompras.api.test.js.
+process.env.ALMOX_CADASTRO_MATERIAL = 'liberado';
 const { initSchema } = require('../../services/almoxarifado/schema');
 
 // Etapa 37 Task 6 — as 21 colunas que o registrador de rotas tentava criar por conta própria,
