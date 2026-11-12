@@ -987,7 +987,10 @@ app.post('/api/compras/fornecedores/:id/foto-base64', authenticateToken, checkMo
 // Itens padrão / lista de preços do fornecedor
 app.get('/api/compras/fornecedores/:fornecedorId/itens', authenticateToken, checkModulePermission('compras'), (req, res) => {
   const fornecedorId = req.params.fornecedorId;
-  db.all('SELECT * FROM itens_fornecedor WHERE fornecedor_id = ? ORDER BY descricao', [fornecedorId], (err, rows) => {
+  // Etapa 212 (RN-212.05): a linha que e de um material da GMP traz o codigo dele (`material_codigo`).
+  db.all(`SELECT i.*, m.codigo AS material_codigo FROM itens_fornecedor i
+    LEFT JOIN materiais_almoxarifado m ON m.id = i.material_id
+    WHERE i.fornecedor_id = ? ORDER BY i.descricao`, [fornecedorId], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows || []);
   });
@@ -1007,7 +1010,10 @@ app.post('/api/compras/fornecedores/:fornecedorId/itens', authenticateToken, che
     res.status(201).json({ id: this.lastID, fornecedor_id: parseInt(fornecedorId, 10), codigo, descricao, unidade, preco: isNaN(preco) ? 0 : preco, observacoes: observacoes || null });
   });
 });
-app.put('/api/compras/fornecedores/:fornecedorId/itens/:id', authenticateToken, checkModulePermission('compras'), (req, res) => {
+// Etapa 212 (Fase 2, achado 3): a linha vinculada a um material so muda/sai por quem cadastra material.
+const guardaLinhaDoMaterial = require('../services/compras/fornecedoresDoMaterial')
+  .guardarLinhaDoMaterial(db, require('../services/compras/cadastroDeMaterial').pode);
+app.put('/api/compras/fornecedores/:fornecedorId/itens/:id', authenticateToken, checkModulePermission('compras'), guardaLinhaDoMaterial, (req, res) => {
   const { fornecedorId, id } = req.params;
   const body = req.body || {};
   const codigo = (body.codigo || '').trim();
@@ -1023,7 +1029,7 @@ app.put('/api/compras/fornecedores/:fornecedorId/itens/:id', authenticateToken, 
     res.json({ message: 'Item atualizado' });
   });
 });
-app.delete('/api/compras/fornecedores/:fornecedorId/itens/:id', authenticateToken, checkModulePermission('compras'), (req, res) => {
+app.delete('/api/compras/fornecedores/:fornecedorId/itens/:id', authenticateToken, checkModulePermission('compras'), guardaLinhaDoMaterial, (req, res) => {
   const { fornecedorId, id } = req.params;
   db.run('DELETE FROM itens_fornecedor WHERE id = ? AND fornecedor_id = ?', [id, fornecedorId], function(err) {
     if (err) return res.status(500).json({ error: err.message });

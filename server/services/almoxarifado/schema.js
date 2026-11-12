@@ -3170,6 +3170,8 @@ async function initSchemaUmaExecucao(db) {
 
   await ensureEntregaEpi(db);
   await ensureTermoFerramenta(db);
+  // Etapa 212 (RN-212.01/04): o catalogo do fornecedor ganha o vinculo com o material (e a migracao do Fornecedor Principal antigo).
+  await require('../compras/fornecedoresDoMaterial').garantirSchema(db);
 
   console.log('✅ Schema almoxarifado v3 inicializado');
 }

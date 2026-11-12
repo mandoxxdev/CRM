@@ -1166,6 +1166,14 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     requirePermission('editar_material'), inativarMaterial);
   app.delete('/api/compras/materiais/cadastro/:id', ...portaCompras.escrita('editar_material'), inativarMaterial);
 
+  // Etapa 212 (RN-212.01..05): os fornecedores do material — linhas do catalogo do fornecedor (`itens_fornecedor.material_id`).
+  // Le quem cadastra; grava quem edita material. Regras e mensagens: `services/compras/fornecedoresDoMaterial.js`.
+  const fornecedoresDoMaterial = require('../services/compras/fornecedoresDoMaterial').criarHandlers(db);
+  app.get('/api/compras/materiais/cadastro/:id/fornecedores', ...portaCompras.leitura, fornecedoresDoMaterial.listar);
+  app.post('/api/compras/materiais/cadastro/:id/fornecedores', ...portaCompras.escrita('editar_material'), fornecedoresDoMaterial.vincular);
+  app.put('/api/compras/materiais/cadastro/:id/fornecedores/:linhaId', ...portaCompras.escrita('editar_material'), fornecedoresDoMaterial.editar);
+  app.delete('/api/compras/materiais/cadastro/:id/fornecedores/:linhaId', ...portaCompras.escrita('editar_material'), fornecedoresDoMaterial.remover);
+
   // POST /api/almoxarifado/materiais/:id/foto — upload de foto
   // ORDEM IMPORTA: requirePermission ANTES do multer. Invertido, o multer já teria
   // gravado o arquivo em disco quando o 403 fosse emitido — upload não autorizado + lixo
