@@ -124,6 +124,21 @@ describe('FornecedoresDoMaterial — Etapa 212', () => {
     expect($('[data-testid="fornecedor-do-material-11"]')).not.toBeNull();
   });
 
+  test('[Fase 5] dentro do <form> do material: Enter num campo da seção salva o fornecedor e NÃO envia o material', async () => {
+    const enviar = jest.fn((e) => e.preventDefault());
+    await act(async () => { root.render(<form onSubmit={enviar}><FornecedoresDoMaterial materialId={7} /></form>); });
+    await tick();
+    await clicar($('[data-testid="vincular-fornecedor"]'));
+    await digitar($('#fdm-fornecedor'), '3');
+    await digitar($('#fdm-codigo'), 'G-1');
+    const ev = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    await act(async () => { $('#fdm-codigo').dispatchEvent(ev); });
+    await tick();
+    expect(ev.defaultPrevented).toBe(true); // o navegador nao faz o envio implicito do formulario do material
+    expect(api.post).toHaveBeenCalledWith('/compras/materiais/cadastro/7/fornecedores', expect.objectContaining({ fornecedor_id: 3, codigo: 'G-1' }));
+    expect(enviar).not.toHaveBeenCalled();
+  });
+
   test('somente leitura: sem Vincular, Editar e Remover (a lista continua)', async () => {
     await render({ somenteLeitura: true });
     expect($('[data-testid="fornecedor-do-material-11"]')).not.toBeNull();

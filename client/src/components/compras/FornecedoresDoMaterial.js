@@ -134,7 +134,10 @@ const FornecedoresDoMaterial = ({ materialId, somenteLeitura = false, textoAntig
       )}
 
       {form && (
-        <div style={{ border: '1px solid rgba(79,172,254,0.25)', borderRadius: 10, padding: 14 }} data-testid="form-fornecedor-do-material">
+        // Fase 5 da 212: a secao mora DENTRO do <form> do material — Enter num campo daqui enviava o material (PUT e volta para a
+        // lista) e o fornecedor digitado se perdia. Enter aqui salva o fornecedor.
+        <div style={{ border: '1px solid rgba(79,172,254,0.25)', borderRadius: 10, padding: 14 }} data-testid="form-fornecedor-do-material"
+          onKeyDown={(e) => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); salvar(); } }}>
           <div className="almox-form-grid">
             <div className="almox-field">
               <label className="almox-label" htmlFor="fdm-fornecedor">Fornecedor<span className="required">*</span></label>

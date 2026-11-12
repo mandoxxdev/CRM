@@ -120,7 +120,9 @@ function erro(status, mensagem) { const e = new Error(mensagem); e.status = stat
 
 function lerPreco(valor) {
   if (valor === undefined || valor === null || valor === '') return 0;
-  const n = Number(String(valor).replace(',', '.'));
+  // Fase 5 da 212: "1.234,56" (milhar com ponto) era 400 — com virgula, o ponto e milhar
+  const t = String(valor).trim();
+  const n = Number(t.includes(',') ? t.split('.').join('').replace(',', '.') : t);
   if (!Number.isFinite(n) || n < 0) throw erro(400, MSG.PRECO_INVALIDO);
   return n;
 }

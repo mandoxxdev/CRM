@@ -89,6 +89,14 @@ const ALMOXARIFE = { id: 4, nome: 'Almoxarife', role: 'usuario', perfil_almoxari
     assert.strictEqual(r.status, 201, JSON.stringify(r.body));
   });
 
+  await test('[Fase 5] preco com milhar e virgula ("1.234,56") grava 1234.56; com ponto decimal ("12.5") grava 12.5', async () => {
+    const M = await material();
+    let r = await as(ADMIN_COMPRAS, () => request(app).post(url(M)).send({ fornecedor_id: FA, preco: '1.234,56' }));
+    assert.deepStrictEqual([r.status, r.body.preco], [201, 1234.56], JSON.stringify(r.body));
+    r = await as(ADMIN_COMPRAS, () => request(app).put(url(M, r.body.id)).send({ preco: '12.5' }));
+    assert.strictEqual(r.body.preco, 12.5);
+  });
+
   await test('[RN-212.03] descricao comercial vazia grava o nome do material', async () => {
     const M = await material({ nome: 'Barra redonda 1020' });
     const r = await as(ADMIN_COMPRAS, () => request(app).post(url(M)).send({ fornecedor_id: FC, descricao: '  ' }));
