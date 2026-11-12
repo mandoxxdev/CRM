@@ -46,16 +46,17 @@ Compras ganhar spec própria, a fatia migra para cá e este arquivo vira o índi
 
 ## A fazer — pedidos já estimados, esperando a vez (atualizado em 12/11/2026)
 
-> Ordem de execução combinada com o André: um item por vez, de cima para baixo. Ao fechar um item, marque aqui (hash e data) e
+> **12/11/2026: o cliente quer a parte de fornecedores primeiro** — ordem agora: 4 → 5 → 6, depois 1 (retomar o branch), 2, 3, 7.
+> Ordem de execução combinada com o André: um item por vez, na ordem acima. Ao fechar um item, marque aqui (hash e data) e
 > comece o próximo. Pedidos e imagens: `specs/modulo-almoxarifado/01-cadastros-materiais/pedido-2026-11-12/`. Toda linha segue a
 > regra "cadastro é do Compras; o Almoxarifado só movimenta" (`CLAUDE.md`).
 
 | # | O que | Estimativa (arquivo, item) | Tempo | Estado |
 |---|---|---|---|---|
-| 1 | Famílias e subfamílias cadastradas no Compras (Almoxarifado só consulta) | `estimativa_2026-11-12_cadastros-so-no-compras`, 1 | 4h | **em desenvolvimento — Etapa 211** |
+| 1 | Famílias e subfamílias cadastradas no Compras (Almoxarifado só consulta) | `estimativa_2026-11-12_cadastros-so-no-compras`, 1 | 4h | **em pausa — Etapa 211**, no branch `etapa-211-familias-no-compras-wip` (`00c3db6c`): servidor pronto e testado; falta ajustar 32 testes da tela, suítes, revisão e fechamento |
 | 2 | Categorias e Tipos de Material cadastrados no Compras | `estimativa_2026-11-12_cadastros-so-no-compras`, 2 | 3h | a fazer |
 | 3 | Tipo de Material escolhido de uma lista (no formulário de material) | `estimativa_2026-11-12_cadastro-de-material-fornecedores`, 1 | 1h30 | a fazer — depois do 2 (a lista passa a morar no Compras) |
-| 4 | Vários fornecedores por material, cada um com código e descrição comercial | idem, 2 | 3h30 | a fazer |
+| 4 | Vários fornecedores por material, cada um com código e descrição comercial | idem, 2 | 3h30 | **próximo** — medir antes: já existe `itens_fornecedor` (catálogo do fornecedor: código, descrição, unidade, preço; tela `ItensFornecedor`), sem ligação com o material |
 | 5 | Código do fornecedor na cotação e no pedido de compra (tela e impresso) | idem, 3 | 3h | a fazer — depende do 4 |
 | 6 | Histórico de preços por fornecedor no material | idem, 4 | 2h30 | a fazer — depende do 4 |
 | 7 | Tirar o campo Aplicação | idem, 5 | 45 min | **esperando** o Matheus confirmar |
