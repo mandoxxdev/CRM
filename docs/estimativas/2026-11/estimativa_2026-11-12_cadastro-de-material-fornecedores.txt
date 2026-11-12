@@ -1,0 +1,25 @@
+*Planejamento — cadastro de material: tipo de material e fornecedores*
+_12/11/2026_
+
+*1. Tipo de Material escolhido de uma lista*
+O campo Tipo de Material deixa de ser digitado e passa a ser escolhido da lista cadastrada em Almoxarifado > Configurações > Tipos de Material, como já acontece com a Categoria. Assim todos escrevem do mesmo jeito. Os materiais que já têm um tipo digitado continuam mostrando o que estava.
+Tempo estimado: *1h30*
+
+*2. Vários fornecedores para o mesmo material*
+No cadastro do material entra a lista de fornecedores daquele item: fornecedor (do cadastro de fornecedores), o código que ele usa e a descrição comercial dele, quando for diferente da nossa. O código interno da GMP continua sendo o principal e nunca é trocado pelo do fornecedor. Os campos Fornecedor Principal e Código no Fornecedor saem, e o que já estava preenchido neles vira a primeira linha da lista.
+Tempo estimado: *3h30*
+
+*3. Código do fornecedor na cotação e no pedido de compra*
+Ao escolher o fornecedor na cotação e no pedido de compra, cada item passa a mostrar o código e a descrição que aquele fornecedor usa, também no documento impresso enviado a ele.
+Tempo estimado: *3h*
+
+*4. Histórico de preços por fornecedor*
+No cadastro do material, a lista de fornecedores passa a mostrar os últimos preços cotados e comprados de cada um, a partir das cotações e pedidos já feitos, para comparar antes de comprar.
+Tempo estimado: *2h30*
+
+*5. Tirar o campo Aplicação*
+O campo Aplicação sai do cadastro do material, se confirmado que não será usado.
+Tempo estimado: *45 min*
+
+*Total estimado: 11h15*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
