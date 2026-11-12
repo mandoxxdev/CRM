@@ -33,7 +33,7 @@ const ALMOX = { id: 3, nome: 'Almox Teste', role: 'user', email: 'almox@test.com
 
 const QUEM = '(administrador do módulo Compras)';
 const REATIVE = `Reative o material em Compras → Materiais, filtro Inativos ${QUEM}`;
-const REATIVE_F = (quais) => `Reative ${quais} em Configurações → Famílias (Administrador do almoxarifado) e depois o material `
+const REATIVE_F = (quais) => `Reative ${quais} em Compras → Famílias (administrador do módulo Compras) e depois o material `
   + `em Compras → Materiais, filtro Inativos ${QUEM}`;
 const E1 = (numero, codigos, reative) => `A requisição ${numero} tem material inativo: ${codigos}. ${reative} ou rejeite a requisição.`;
 const E1V = (numero, codigos, reative) => `A requisição ${numero} tem material inativo: ${codigos}. ${reative} `
@@ -42,6 +42,10 @@ const E2 = (numero, codigos, reative) => `O rascunho ${numero} tem material inat
   + 'ou cancele o rascunho e faça outro sem ele.';
 const E3 = (nome, reative) => `${nome}: material inativo não pode ser separado. ${reative} ou separe os outros itens com 0 neste.`;
 const PORTAO = 'Acesso restrito — administrador do Almoxarifado ou Super Administrador';
+// Etapa 211 (RN-211.05): a frase manda reativar a familia em Compras -> Familias, do administrador do modulo Compras. O RN-15
+// segue a frase pela porta do Compras (a do almoxarifado so grava aqui porque a chave de reversao esta ligada no arquivo).
+const ADMIN_COMPRAS = { id: 9, nome: 'Chefe de Compras', role: 'usuario', admin_modulos: ['compras'], email: 'chefe@test.com' };
+const PORTA_COMPRAS_403 = 'Sem permissão para esta operação';
 
 (async () => {
   const { app, db, setUser, close } = await createTestApp({ user: SUPER });
@@ -307,7 +311,7 @@ const PORTAO = 'Acesso restrito — administrador do Almoxarifado ou Super Admin
 
   console.log('\nRN-15 — seguir a frase ate o fim funciona, com os corpos que a tela manda');
 
-  await test('[RN-15] familia e subfamilia inativas: Almoxarife 403 na familia; Adm reativa R, S; Almoxarife reativa; aprova', async () => {
+  await test('[RN-15] familia e subfamilia inativas: Almoxarife 403 na familia (Compras); admin do Compras reativa R, S e o material; aprova', async () => {
     const p = await par();
     const m = await material(p.R, p.S);
     const r0 = await pendenteCom([[m, 1]]);
@@ -318,18 +322,18 @@ const PORTAO = 'Acesso restrito — administrador do Almoxarifado ou Super Admin
     r = await as(ALMOX, () => request(app).put(`/api/almoxarifado/materiais/${m.id}`).send({ ativo: 1 }));
     assert.strictEqual(r.status, 400, JSON.stringify(r.body));
     assert.strictEqual(r.body.error, 'Família inativa — não é possível vincular novos itens');
-    // quem: o Almoxarife nao reativa familia
-    r = await as(ALMOX, () => request(app).put(`/api/almoxarifado/familias/${p.R.id}`).send({ nome: p.R.nome, ativo: 1 }));
+    // quem: o Almoxarife nao reativa familia (Etapa 211: o lugar e Compras -> Familias, porta do cadastro)
+    r = await as(ALMOX, () => request(app).put(`/api/compras/materiais/familias/${p.R.id}`).send({ ativo: 1 }));
     assert.strictEqual(r.status, 403, JSON.stringify(r.body));
-    assert.strictEqual(r.body.error, PORTAO);
-    // o Administrador do almoxarifado reativa, com o corpo do Reativar da aba (Fase 2, I1)
+    assert.strictEqual(r.body.error, PORTA_COMPRAS_403);
+    // o administrador do Compras reativa, com o corpo do Reativar da tela (Etapa 125: sem o nome)
     for (const f of [p.R, p.S]) {
       // eslint-disable-next-line no-await-in-loop
-      r = await as(ADM, () => request(app).put(`/api/almoxarifado/familias/${f.id}`).send({ nome: f.nome, ativo: 1 }));
+      r = await as(ADMIN_COMPRAS, () => request(app).put(`/api/compras/materiais/familias/${f.id}`).send({ ativo: 1 }));
       assert.strictEqual(r.status, 200, JSON.stringify(r.body));
     }
-    // o corpo do Reativar da tela de Materiais (Fase 2, I3)
-    r = await as(ALMOX, () => request(app).put(`/api/almoxarifado/materiais/${m.id}`).send({ ativo: 1 }));
+    // e reativa o material em Compras -> Materiais (o corpo do Reativar da lista)
+    r = await as(ADMIN_COMPRAS, () => request(app).put(`/api/compras/materiais/cadastro/${m.id}`).send({ ativo: 1 }));
     assert.strictEqual(r.status, 200, JSON.stringify(r.body));
     r = await aprovar(r0.id);
     assert.strictEqual(r.status, 200, JSON.stringify(r.body));

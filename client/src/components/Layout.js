@@ -274,6 +274,8 @@ const Layout = () => {
     { path: '/compras/cotacoes', icon: FiFileText2, label: 'Cotações' },
     // Etapa 192 (RN-192.10): cadastro de material pelo Compras (lista, incluir, editar) — portas `/api/compras/materiais/...`.
     { path: '/compras/materiais', icon: FiLayers, label: 'Materiais' },
+    // Etapa 211 (RN-211.01): familias e subfamilias de material, cadastradas so no Compras.
+    { path: '/compras/familias', icon: FiGrid, label: 'Famílias' },
     { path: '/compras/requisicoes-material/nova', icon: FiClipboard, label: 'Solicitar Material' },
     { path: '/compras/requisicoes-material', icon: FiList, label: 'Minhas Requisições' },
     { path: '/almoxarifado/recebimentos', icon: FiPackage, label: 'Recebimento NF/Material' },

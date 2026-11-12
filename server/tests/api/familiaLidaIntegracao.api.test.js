@@ -32,7 +32,7 @@ const ALMOX = { id: 3, nome: 'Almox Teste', role: 'user', email: 'almox@test.com
 const CAUDA = ' foi mudada por outra pessoa depois que você abriu o cadastro — salvar desfaria essa mudança, e nada foi '
   + 'gravado. Recarregue o material e salve de novo.';
 const QUEM = '(administrador do módulo Compras)';
-const REATIVE_F = (quais) => `Reative ${quais} em Configurações → Famílias (Administrador do almoxarifado) e depois o material `
+const REATIVE_F = (quais) => `Reative ${quais} em Compras → Famílias (administrador do módulo Compras) e depois o material `
   + `em Compras → Materiais, filtro Inativos ${QUEM}`;
 
 (async () => {

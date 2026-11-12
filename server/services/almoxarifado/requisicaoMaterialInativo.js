@@ -109,15 +109,15 @@ const numeroDe = (numero, id) => (numero == null || numero === '' ? String(id) :
 const ONDE_REATIVAR_MATERIAL = 'Compras → Materiais, filtro Inativos (administrador do módulo Compras)';
 /**
  * Etapa 124 (C231): `familias` — os grupos de `gruposFamiliaInativa` (ou, na separacao, `[[rotulo, null]]` para "do
- * material"). Com algum, a frase manda reativar a familia ANTES — e diz onde e quem (a aba Familias das Configuracoes, do
- * Administrador do almoxarifado: o portao `denyUnlessAlmoxAdmin` da rota de familia). Sem nenhum, a literal da 114.
+ * material"). Com algum, a frase manda reativar a familia ANTES — e diz onde e quem. Desde a Etapa 211 (RN-211.05): Compras ->
+ * Familias, do administrador do modulo Compras (`portaCompras.cadastro`); ate a 211 era a aba Familias das Configuracoes do almoxarifado. Sem nenhum, a literal da 114.
  */
 const reativar = (familias = []) => {
   const doMaterial = `o material em ${ONDE_REATIVAR_MATERIAL}`;
   if (!familias || familias.length === 0) return `Reative ${doMaterial}`;
   const quais = familias.map(([rotulo, codigos]) => (codigos ? `${rotulo} de ${codigos.join(', ')}` : `${rotulo} do material`))
     .join(' e ');
-  return `Reative ${quais} em Configurações → Famílias (Administrador do almoxarifado) e depois ${doMaterial}`;
+  return `Reative ${quais} em Compras → Famílias (administrador do módulo Compras) e depois ${doMaterial}`;
 };
 
 /**

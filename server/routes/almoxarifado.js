@@ -181,6 +181,13 @@ function denyUnlessAlmoxAdmin(req, res) {
   return false;
 }
 
+// Etapa 211: o portao de antes das rotas de familia do almoxarifado, como middleware (os handlers sao compartilhados com o Compras).
+function exigirAdminAlmox(req, res, next) {
+  if (denyUnlessAlmoxAdmin(req, res)) return;
+  next();
+}
+const { recusarFamiliasNoAlmoxarifado } = cadastroDeMaterialCompras;
+
 // Etapa 10 (RN-01): tolerancia de inventario, EFETIVA. `configuracoes_almoxarifado.valor` e
 // TEXT — getConfig devolve string ou undefined, nunca numero — e `0` e um valor VALIDO de
 // tolerancia, diferente de "ausente". `parseFloat(x) || 2` devolveria 2 para '0' (achado da
@@ -336,7 +343,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   const portaCompras = cadastroDeMaterialCompras.criarPortaCompras({ authenticateToken, checkModulePermission });
   if (cadastroDeMaterialCompras.cadastroNoAlmoxarifadoLiberado()) {
     console.warn('⚠️ ALMOX_CADASTRO_MATERIAL=liberado: o Almoxarifado volta a editar, inativar e trocar a foto de material pelas rotas '
-      + 'dele (PUT/DELETE/foto de /api/almoxarifado/materiais), como antes da Etapa 193; o cadastro deveria ser só do Compras.');
+      + 'dele (PUT/DELETE/foto de /api/almoxarifado/materiais) e a gravar famílias (/api/almoxarifado/familias), como antes das Etapas 193 e 211; o cadastro deveria ser só do Compras.');
   }
   app.get('/api/compras/materiais/aux/minhas-permissoes', ...portaCompras.base, portaCompras.responderMinhasPermissoes);
   // Etapa 193 (RN-193.05): o dono do material so se define no cadastro (a sobra e a remessa copiam o da origem), e o cadastro
@@ -2993,7 +3000,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     });
   });
 
-  app.get('/api/almoxarifado/familias/:id/itens',(req, res) => {
+  const listarItensDaFamilia = (req, res) => {
     db.all(`SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo,
                    a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome
             FROM materiais_almoxarifado m
@@ -3008,10 +3015,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
       });
-  });
+  };
+  app.get('/api/almoxarifado/familias/:id/itens', listarItensDaFamilia);
+  app.get('/api/compras/materiais/aux/familias/:id/itens', ...portaCompras.leitura, listarItensDaFamilia);
 
-  app.post('/api/almoxarifado/familias',(req, res) => {
-    if (denyUnlessAlmoxAdmin(req, res)) return;
+  const criarFamilia = (req, res) => {
     const { nome, descricao, categoria_id, codigo, tipo_uso, parent_id } = req.body;
     if (!nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
     const tipoUsoVal = ['administrativo', 'industrial', 'ambos'].includes(tipo_uso) ? tipo_uso : 'ambos';
@@ -3081,10 +3089,14 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     } else {
       proceed();
     }
-  });
+  };
+  // Etapa 211 (RN-211.01/02): o cadastro de familia e do Compras. Os tres handlers (criar, editar/reativar, inativar) sao os de
+  // sempre, registrados duas vezes: pelo almoxarifado com a recusa (403 para todos; a chave ALMOX_CADASTRO_MATERIAL=liberado
+  // devolve o portao de antes, denyUnlessAlmoxAdmin) e pelo Compras com a porta do cadastro (admin do Compras ou do sistema).
+  app.post('/api/almoxarifado/familias', recusarFamiliasNoAlmoxarifado, exigirAdminAlmox, criarFamilia);
+  app.post('/api/compras/materiais/familias', ...portaCompras.cadastro, criarFamilia);
 
-  app.put('/api/almoxarifado/familias/:id',(req, res) => {
-    if (denyUnlessAlmoxAdmin(req, res)) return;
+  const editarFamilia = (req, res) => {
     const { nome, descricao, categoria_id, ativo, tipo_uso, parent_id, campos_lidos: camposLidos } = req.body;
     // Etapa 125 (D (124) item 2, RN-10/RN-11; B807): `nome` OMITIDO preserva o gravado (no proprio comando, abaixo — o molde da
     // descricao e do tipo de uso, B803). O Reativar da aba Familias manda so `{ativo: 1}`: antes mandava o nome da lista, e um
@@ -3378,10 +3390,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         applyUpdate();
       });
     });
-  });
+  };
+  app.put('/api/almoxarifado/familias/:id', recusarFamiliasNoAlmoxarifado, exigirAdminAlmox, editarFamilia);
+  app.put('/api/compras/materiais/familias/:id', ...portaCompras.cadastro, editarFamilia);
 
-  app.delete('/api/almoxarifado/familias/:id',(req, res) => {
-    if (denyUnlessAlmoxAdmin(req, res)) return;
+  const inativarFamilia = (req, res) => {
     // Etapa 37 (RN-37.04): a contagem so por familia_id deixava inativar uma SUBFAMILIA com
     // itens (eles tem familia_id = raiz) — a sub sumia da arvore e todo material dela ficava
     // ineditavel (validateSubfamilia exige sub ativa → 400 "Subfamilia invalida" no PUT).
@@ -3435,7 +3448,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         });
       });
     });
-  });
+  };
+  app.delete('/api/almoxarifado/familias/:id', recusarFamiliasNoAlmoxarifado, exigirAdminAlmox, inativarFamilia);
+  app.delete('/api/compras/materiais/familias/:id', ...portaCompras.cadastro, inativarFamilia);
 
 
   // ════════════════════════════════════════════════════════════════════════════

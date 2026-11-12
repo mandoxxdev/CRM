@@ -77,6 +77,8 @@ export const ROTAS_COMPRAS = {
     lista: '/compras/materiais',
     novo: '/compras/materiais/novo',
     editar: (id) => `/compras/materiais/editar/${id}`,
+    // Etapa 211 (RN-211.01): onde se cadastra familia (o formulario aponta para la quando nao ha nenhuma).
+    familias: '/compras/familias',
   },
   // Etapa 193 (RN-193.04/05): foto e Proprietário também no Compras. Saldo inicial não (B72: pelo Compras não se mexe em estoque).
   foto: true,

@@ -53,6 +53,7 @@ import {
   FornecedoresDoGrupo,
   CotacaoForm,
   MateriaisCompras,
+  FamiliasCompras,
   ItensFornecedor,
   Financeiro,
   Fabrica,
@@ -404,6 +405,8 @@ export function AppRoutes() {
         <Route path="materiais" element={<MateriaisCompras />} />
         <Route path="materiais/novo" element={<MaterialAlmoxarifadoForm rotas={ROTAS_COMPRAS} />} />
         <Route path="materiais/editar/:id" element={<MaterialAlmoxarifadoForm rotas={ROTAS_COMPRAS} />} />
+        {/* Etapa 211 (RN-211.01): o cadastro de familias saiu do Almoxarifado. */}
+        <Route path="familias" element={<FamiliasCompras />} />
         <Route path="requisicoes-material" element={<RequisicoesMaterialListaPage moduloKey="compras" />} />
         <Route path="requisicoes-material/nova" element={<RequisicoesMaterialNovaPage moduloKey="compras" />} />
       </Route>

@@ -717,7 +717,12 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
                   ) : familiasRaiz.length === 0 ? (
                     <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', padding: '8px 12px', background: 'var(--gmp-bg)', border: '1px solid var(--gmp-border)', borderRadius: 8 }}>
                       Nenhuma família cadastrada
-                      {isAdmin && rotas.linksConfiguracao ? (
+                      {/* Etapa 211 (RN-211.01): no Compras, o lugar de cadastrar familia e Compras -> Familias. */}
+                      {rotas.tela?.familias ? (
+                        <> — cadastre em{' '}
+                          <Link to={rotas.tela.familias} style={{ color: '#4facfe' }}>Compras → Famílias</Link>
+                        </>
+                      ) : isAdmin && rotas.linksConfiguracao ? (
                         <> — cadastre em{' '}
                           <Link to="/almoxarifado/configuracoes?tab=familias" style={{ color: '#4facfe' }}>Configurações → Famílias</Link>
                         </>
