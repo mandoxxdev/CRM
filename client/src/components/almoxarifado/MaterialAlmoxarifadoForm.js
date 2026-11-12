@@ -5,6 +5,7 @@ import { getEffectiveUser } from '../../services/permissionsCache';
 import { podeGravarConfigAlmox } from '../../utils/systemPermissions';
 import api from '../../services/api';
 import { useCategoriasMaterial } from '../../hooks/useCategoriasMaterial';
+import FornecedoresDoMaterial from '../compras/FornecedoresDoMaterial';
 import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
 import { formatLocalizacaoLabel } from '../../utils/localizacaoLabel';
 import { toast } from 'react-toastify';
@@ -1115,18 +1116,28 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
                     </>
                   )}
                 </div>
-                <div className="almox-field">
-                  <label className="almox-label">Fornecedor Principal</label>
-                  <input className="almox-input" value={form.fornecedor_principal} onChange={e => set('fornecedor_principal', e.target.value)}
-                    placeholder="Nome do fornecedor" />
-                </div>
-                <div className="almox-field">
-                  <label className="almox-label">Código no Fornecedor</label>
-                  <input className="almox-input" value={form.codigo_fornecedor} onChange={e => set('codigo_fornecedor', e.target.value)}
-                    placeholder="Cód. do item no fornecedor" />
-                </div>
+                {/* Etapa 212 (RN-212.04): "Fornecedor Principal" e "Código no Fornecedor" sairam da tela — viraram a secao
+                    "Fornecedores deste material" (abaixo, no Compras). O ESTADO continua com os dois (e a lista CAMPOS_LIDOS, que
+                    tem de bater com a do servidor): o PUT segue mandando o valor lido, e nada gravado e apagado (Fase 2, achado 7). */}
               </div>
             </div>
+
+            {/* Etapa 212 (RN-212.01): os fornecedores do material — so no Compras, e so com o material ja gravado. */}
+            {rotas.modulo === 'compras' && (
+              <div style={sectionCardStyle}>
+                {isEdit ? (
+                  <FornecedoresDoMaterial materialId={id} somenteLeitura={somenteLeitura}
+                    textoAntigo={{ fornecedor: form.fornecedor_principal, codigo: form.codigo_fornecedor }} />
+                ) : (
+                  <>
+                    <div className="almox-section-title">Fornecedores deste material</div>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--gmp-text-light)', margin: 0 }} data-testid="fornecedores-depois-de-salvar">
+                      Salve o material para vincular os fornecedores (cada um com o seu código).
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Coluna lateral — foto + ações */}
