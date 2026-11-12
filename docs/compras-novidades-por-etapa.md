@@ -574,6 +574,20 @@
   almoxarifado, falam com rotas que o comprador pode não alcançar, e o perfil do Compras não movimenta estoque. **Descartado:** trazer
   os botões para o Compras (o servidor recusaria a maior parte deles para o comprador). Se o Compras precisar dos anexos (ficha
   técnica), abrir uma porta de anexos no Compras.
+- **B83 — 12/11/2026 (Etapa 212): o fornecedor do material é uma linha do catálogo do fornecedor.** "Vários fornecedores por material"
+  virou a coluna `itens_fornecedor.material_id`: a linha da lista de itens do fornecedor (código, descrição, unidade, preço) que é
+  aquele material da GMP. **Descartado:** uma tabela nova só do vínculo — duplicaria código, descrição e preço do catálogo, e as duas
+  listas iam divergir. Consequência: remover o fornecedor pelo material **apaga** a linha do catálogo dele (é a mesma linha).
+- **B84 — 12/11/2026 (Etapa 212): o "Fornecedor Principal" antigo vira linha só quando o nome bate com UM fornecedor, e uma vez só.**
+  No primeiro boot, o texto (sem caixa, sem acento, espaços aparados) é comparado com a razão social e o nome fantasia; batendo com um
+  só, vira a primeira linha (com o "Código no Fornecedor"). Ambíguo ou sem par fica como está, e a ficha mostra o texto para vincular à
+  mão. Roda uma vez (marca `migracao_fornecedor_principal_212` em `configuracoes_almoxarifado`): sem a marca, o vínculo que a
+  compradora removesse voltava a cada reinício. **Nada é apagado:** os dois campos continuam gravados, só saíram da tela.
+  **Descartado:** criar fornecedor novo a partir do texto (cadastro sem CNPJ, duplicado com grafia diferente).
+- **B85 — 12/11/2026 (Etapa 212): pela lista de itens do fornecedor, a linha que é de um material só muda ou sai por quem cadastra
+  material.** As rotas do catálogo aceitam todo o módulo Compras; sem a guarda, quem não pode cadastrar material mudaria o preço ou
+  apagaria o vínculo por lá. Recusa: *"Este item está vinculado a um material da GMP; só quem cadastra material o altera ou exclui
+  (Compras → Materiais)."* A linha solta (sem material) continua como sempre.
 
 ### D. Dúvidas para você (ou para o P.O.)
 - **D-35** — O que A, B e C significam **para a GMP**? A legenda atual é a definição genérica.
@@ -753,6 +767,61 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 212 — Vários fornecedores para o mesmo material (2026-11-12)
+
+**Em uma frase.** A compradora mostrou que o mesmo material vem de vários fornecedores — o inox, de uns cinco —, cada um com o seu
+código, e que um campo único de "fornecedor principal" não serve. Agora o material tem a lista dos seus fornecedores, cada um com o
+código, a descrição e o preço dele, e o código da GMP continua sendo o principal.
+
+### O que há de novo (visível para o usuário)
+
+- **Compras → Materiais → editar um material**: nova seção **Fornecedores deste material**, com **Vincular fornecedor**, editar e
+  remover. Cada linha: fornecedor, código no fornecedor, descrição do fornecedor, unidade e preço. Grava na hora.
+- Material novo: a seção diz *"Salve o material para vincular os fornecedores (cada um com o seu código)."*
+- Os campos **Fornecedor Principal** e **Código no Fornecedor** saíram do formulário. Se o material tinha um fornecedor digitado que
+  não virou linha, a seção mostra *"Fornecedor informado antes (texto livre): …"* para vincular à mão.
+
+### Por baixo do capô
+
+- O vínculo é a linha da lista de itens do fornecedor (B83). Um fornecedor uma vez por material.
+- O fornecedor digitado antes virou linha quando o nome bateu com um só fornecedor cadastrado (B84).
+- Pela lista de itens do fornecedor, a linha de um material só muda por quem cadastra material (B85).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Um "Fornecedor Principal" e um "Código no Fornecedor", texto livre | Lista de fornecedores do material, cada um escolhido do cadastro, com código, descrição e preço dele |
+| Mesmo material de outro fornecedor = código perdido ou material duplicado | Um material, N fornecedores, o código GMP como principal |
+| A lista de itens do fornecedor não sabia qual material da GMP era cada item | A linha vinculada guarda o material (e o servidor devolve o código GMP dela) |
+
+### As regras, com o cenário exato
+
+1. Vincular o mesmo fornecedor duas vezes no mesmo material → *"Este fornecedor já está vinculado a este material."*
+2. Salvar sem escolher o fornecedor → *"Escolha o fornecedor."* (na própria tela).
+3. Fornecedor inativo → *"Fornecedor inativo."* (a lista de escolha já não o mostra).
+4. Preço negativo ou não numérico → *"Preço inválido."*
+5. Descrição do fornecedor em branco → grava o nome do material.
+6. Quem não é administrador do módulo Compras (nem do sistema) não vê a seção: o cadastro de material inteiro é dele.
+
+### Roteiro de teste manual (clicável)
+
+1. Entre como administrador do módulo Compras → **Compras → Materiais** → lápis de um material.
+2. Desça até **Fornecedores deste material** → **Vincular fornecedor** → escolha um fornecedor, código *INX-001*, preço *45,90* →
+   **Salvar fornecedor**. A linha aparece com R$ 45,90.
+3. **Vincular fornecedor** de novo: o fornecedor já vinculado não aparece na lista de escolha. Escolha outro, código *CH-304*.
+4. Lápis da primeira linha → preço *50* → salvar. Lixeira da segunda → confirmar: a linha some.
+5. Abra **Compras → Materiais → Novo Material**: a seção mostra só a frase de salvar antes.
+
+### O que a etapa NÃO cobre
+
+- O código do fornecedor na cotação e no pedido de compra — próximo item da fila (estimativa de 12/11, item 3).
+- O histórico de preços por fornecedor — item 4 da mesma estimativa.
+- A busca da lista de Materiais continua procurando no "Fornecedor Principal" antigo, não nos fornecedores vinculados.
+- A tela da lista de itens do fornecedor (Fornecedores homologados → fornecedor) mostra a planilha, não a lista de itens; a coluna
+  "Material GMP" prevista no plano não tem onde aparecer. O servidor já devolve o código (`material_codigo`).
+- A ficha de consulta do Almoxarifado não mostra os fornecedores (o cadastro é do Compras).
 
 ## Depois da Etapa 193 — Compras → Materiais com a mesma lista do Almoxarifado (2026-11-04)
 

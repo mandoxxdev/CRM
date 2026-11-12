@@ -332,6 +332,35 @@ A regra é condicional e vale em ambos os sentidos, criação e edição:
 
 > **Unidade de Consumo saiu da tela (Etapa 35).** Até a Etapa 35 havia um terceiro campo, *Unidade de Consumo*, com o seu próprio fator. O sistema nunca usou os dois para nada além de gravar e mostrar, e a dupla de fatores dava a impressão de que havia conversão em curso. As colunas continuam no banco: material que já tinha unidade de consumo gravada não perde o valor ao ser editado (a tela simplesmente não manda mais o campo, e o servidor preserva o que estava).
 
+### 2.3b Fornecedores do material
+
+O mesmo material pode ser comprado de vários fornecedores, e cada um usa o seu próprio código para ele. O cadastro guarda um
+material só — com o código da GMP, que é sempre o identificador principal — e, dentro dele, a lista dos fornecedores.
+
+A lista fica em **Compras → Materiais → editar o material**, na seção **Fornecedores deste material** (só aparece depois que o
+material foi salvo; antes, a seção diz *"Salve o material para vincular os fornecedores (cada um com o seu código)."*). Cada linha tem:
+
+| Campo | O que é |
+|---|---|
+| Fornecedor | escolhido do cadastro de fornecedores; os inativos e os que já estão na lista não aparecem para escolha |
+| Código no fornecedor | a referência que aquele fornecedor usa para o item |
+| Descrição do fornecedor | o nome que o fornecedor dá ao item, quando é diferente do nosso; em branco, vale o nome do material |
+| Unidade e Preço | como o fornecedor vende e quanto cobra |
+
+Cada gesto (vincular, editar, remover) grava na hora, sem depender do botão de salvar o material. Remover um fornecedor da lista
+também o tira da lista de itens daquele fornecedor, porque é a mesma informação. Recusas:
+
+- o mesmo fornecedor duas vezes: *"Este fornecedor já está vinculado a este material."*;
+- sem fornecedor: *"Escolha o fornecedor."*; fornecedor inativo: *"Fornecedor inativo."*; preço negativo ou inválido: *"Preço inválido."*
+
+Quem mexe na lista é quem cadastra material: o administrador do módulo Compras e os administradores do sistema. Pela lista de itens
+do fornecedor, uma linha que é de um material também só muda ou sai por eles: *"Este item está vinculado a um material da GMP; só
+quem cadastra material o altera ou exclui (Compras → Materiais)."*
+
+Os antigos campos *Fornecedor Principal* e *Código no Fornecedor* não aparecem mais. Quando o fornecedor que estava digitado neles
+bateu com um fornecedor cadastrado, ele já está na lista; quando não bateu, a seção mostra *"Fornecedor informado antes (texto
+livre): …"*, para a pessoa vincular o fornecedor certo.
+
 ### 2.4 Campos técnicos
 
 O bloco **Dados Técnicos** é o que transforma o cadastro em ficha de material, e é ele que sustenta rastreabilidade e requalificação de fornecedor:
