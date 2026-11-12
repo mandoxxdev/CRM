@@ -1,0 +1,13 @@
+*Planejamento — cadastros só no Compras*
+_12/11/2026_
+
+*1. Famílias e subfamílias cadastradas no Compras*
+O cadastro de famílias e subfamílias passa para Compras > Materiais, com os mesmos botões de hoje: nova família, nova subfamília, editar, inativar e reativar. No Almoxarifado a aba Famílias fica só para consulta. Assim todo o cadastro de material, da família ao item, fica com o setor de Compras.
+Tempo estimado: *4h*
+
+*2. Categorias e Tipos de Material também no Compras*
+Pelo mesmo motivo, as listas de Categorias e de Tipos de Material passam a ser cadastradas no Compras, e no Almoxarifado ficam só para consulta. O Almoxarifado continua apenas consultando os pedidos e registrando entradas, liberações e saídas.
+Tempo estimado: *3h*
+
+*Total estimado: 7h*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._

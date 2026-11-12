@@ -188,6 +188,22 @@ Os almoxarifados são áreas de alocação dentro do **mesmo site** — o client
 Saldo global por material é **correto e intencional**. Não proponha segregar saldo por
 almoxarifado nem seletor de almoxarifado em movimentação/requisição como se fosse pendência.
 
+## Regra de negócio: cadastro é do Compras; o Almoxarifado só movimenta
+
+Pedido do setor de Compras (12/11/2026), **vale para toda alteração nova**: o Almoxarifado **não faz nenhum cadastro** no
+sistema. Ele só (1) **consulta** os pedidos de compra emitidos pelo Compras, (2) registra a **entrada**, dando baixa nas
+quantidades recebidas dos pedidos, (3) **libera** os materiais disponíveis e autorizados para retirada e (4) registra a
+**saída** do estoque na retirada. Todo cadastro e controle ligado a compras — material, família e subfamília, categoria,
+tipo de material, fornecedor, fornecedores do material e seus códigos — é do **Compras**, com as portas `/api/compras/...`
+e o portão do Compras (`portaCompras`); no Almoxarifado a mesma informação aparece **só para consulta**.
+
+- Feature nova de cadastro **nasce no Compras**. Não crie aba, botão ou rota de gravação de cadastro no Almoxarifado.
+- O que ainda contraria a regra (12/11/2026): famílias/subfamílias, categorias e tipos de material gravam por
+  `/api/almoxarifado/...` em Almoxarifado → Configurações (estimativa `docs/estimativas/2026-11/estimativa_2026-11-12_cadastros-so-no-compras.md`);
+  e a sobra e a remessa a terceiros ainda criam material pelo Almoxarifado (Etapa 193, formato restrito) — a rever.
+- Configurações **físicas** do almoxarifado (localizações, setores e áreas, perfis, regras de aprovação, motivos de
+  movimentação) **não** são cadastro de compras e ficam no Almoxarifado.
+
 ## Commits
 
 Mensagem em português, sem acento no corpo (o histórico é assim). Explique **por que**, não só o

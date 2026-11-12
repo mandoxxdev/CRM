@@ -1,5 +1,12 @@
 # Pedido de 12/11/2026 — revisão do cadastro de material (Compras + Almoxarifado)
 
+> **⚠️ Regra permanente (12/11/2026, pedido do setor de Compras): cadastro é do Compras; o Almoxarifado só movimenta.**
+> O Almoxarifado só consulta os pedidos de compra, registra a entrada (dando baixa no pedido), libera para retirada e registra a
+> saída. Material, família/subfamília, categoria, tipo de material, fornecedor e fornecedores do material são cadastrados **no
+> Compras**; no Almoxarifado aparecem só para consulta. Feature nova de cadastro nasce no Compras. Texto completo e o que ainda
+> contraria a regra: `CLAUDE.md`, seção "Regra de negócio: cadastro é do Compras; o Almoxarifado só movimenta".
+> Por isso a lista de fornecedores do material, o código do fornecedor e a lista de Tipos de Material deste pedido ficam no **Compras**.
+
 > Mensagens da compradora (WhatsApp, 09 a 12/11/2026), repassadas pelo André. As imagens são as telas que ela comentou.
 > Estimativa: `docs/estimativas/2026-11/estimativa_2026-11-12_cadastro-de-material-fornecedores.md`.
 

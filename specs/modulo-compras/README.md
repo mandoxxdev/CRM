@@ -1,5 +1,11 @@
 # Módulo Compras (core) — índice mínimo
 
+> **⚠️ Regra permanente (12/11/2026, pedido do setor de Compras): cadastro é do Compras; o Almoxarifado só movimenta.**
+> O Almoxarifado só consulta os pedidos de compra, registra a entrada (dando baixa no pedido), libera para retirada e registra a
+> saída. Material, família/subfamília, categoria, tipo de material, fornecedor e fornecedores do material são cadastrados **no
+> Compras**; no Almoxarifado aparecem só para consulta. Feature nova de cadastro nasce no Compras. Texto completo e o que ainda
+> contraria a regra: `CLAUDE.md`, seção "Regra de negócio: cadastro é do Compras; o Almoxarifado só movimenta".
+
 > **Status:** este módulo **não tem spec própria**, e a ausência é decisão, não esquecimento
 > (decisão 11 do design da Etapa 38 / **B105**, reversível). A fatia dele que foi especificada e
 > entregue — **a criação do pedido de compra** — vive em

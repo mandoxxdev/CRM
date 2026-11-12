@@ -1,5 +1,12 @@
 # Módulo Almoxarifado — Planejamento Mestre
 
+> **⚠️ Regra permanente (12/11/2026, pedido do setor de Compras): cadastro é do Compras; o Almoxarifado só movimenta.**
+> O Almoxarifado só consulta os pedidos de compra, registra a entrada (dando baixa no pedido), libera para retirada e registra a
+> saída. Material, família/subfamília, categoria, tipo de material, fornecedor e fornecedores do material são cadastrados **no
+> Compras**; no Almoxarifado aparecem só para consulta. Feature nova de cadastro nasce no Compras. Texto completo e o que ainda
+> contraria a regra: `CLAUDE.md`, seção "Regra de negócio: cadastro é do Compras; o Almoxarifado só movimenta".
+> Configurações físicas (localizações, setores, perfis, regras de aprovação, motivos) continuam aqui.
+
 > **Spec original:** [2026-08-02-requisitos-modulo-almoxarifado.md](2026-08-02-requisitos-modulo-almoxarifado.md) (34 seções)
 > **Última atualização:** 2026-11-05 (**Etapa 191 fechada — corrigir a validade de um lote que já tem saldo** (feature 10, C455): `PUT /lotes/:id/validade` com `inspecionar`, justificativa, `validade_vista` (409 `MUDOU`), auditoria `VALIDADE_CORRIGIDA`, sob a trava do material, zera a liberação de vencimento, avisos, e-mail pendente da data antiga retirado da fila; botão "Corrigir validade" em Lotes e Séries só com `pode('inspecionar')`; commits `018f8a35`, `4fcf13b4`, `140dbb77`, `3b43a0a1`, `d5f3376a`, Fase 5 `699e87c3` e `c64fb881`; B1289–B1299, C458; módulo retomado em 05/11 depois da pausa de 23/10).
 > Antes: 2026-10-23 (**Etapa 190 fechada — a Entrada manual grava a validade do lote** (feature 10, C450): `data_validade` declarada sem tipo no `MovimentacaoSchema` e julgada no motor (`FORMATO`, `ANO` 2000–2100, `SO_ENTRADA`, `SEM_LOTE` — B1270, B1280); lote novo nasce com ela, lote sem validade é preenchido (`AVISO_PREENCHIDA`, B1273), outra validade num lote vivo → 400 `CONFLITO` (B1272), num lote vazio → redefinida (`AVISO_REDEFINIDA`), vencida aceita com aviso (B1271, B1281); gravação depois do livro, não-fatal (B1274); campo "Validade do lote" na tela. Commits `bfb7d9a1`, `a4358a4d` (Fase 2), `ed1e6566` (T1), `267d668e`, `1136652b` (T2), `e1a24cc3` (T3), `9555ed29` (T4), `fa14e949`, Fase 5 `4fcdcb27`, `dbbdb8de` e o fechamento. A110 opcional; C455–C457; próxima: Etapa 191, corrigir a validade de um lote que já tem saldo — só o plano commitado (`c0cce170`), Fase 2 NÃO feita, sem código. **Desenvolvimento PAUSADO em 2026-10-23** — para retomar, `docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md`.)
