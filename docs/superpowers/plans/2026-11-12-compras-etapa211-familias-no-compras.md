@@ -75,7 +75,10 @@ Rotas do almoxarifado: `[recusarFamiliasNoAlmoxarifado, exigirAdminAlmox, handle
   Tela — a aba do Almoxarifado gravando, o Compras gravando para todos e o aviso da órfã (sem o lugar / sempre com o lugar): vermelhos.
 - **Fase 5 (revisor fresco, 4 lentes):** sem achado grave. Aplicados: o aviso da subfamília órfã na aba de consulta diz onde reativar
   (`e03538fc`); a RN-211.04 do plano estava errada (acima); o teste não provava a camada do módulo (cenário novo, `e03538fc`).
-- **Verificação:** ver o commit de fechamento.
+- **Verificação (medida):** servidor — `test:api` 607/608 (o que caiu, `listasNotificacoesPortao`, prepara família pela rota do
+  almoxarifado: ganhou a chave e passa sozinho, 10/0), `test:almoxarifado` 44/0, validation 4/0, safealter 3/0, sqlite 16/0. Tela — a
+  **suíte inteira rodou** (com `--maxWorkers=2`): 2974/2975; o que caiu (`Configuracoes.almoxEmbutido`, usava o botão *Nova Família* como
+  marcador da aba) foi ajustado e passa sozinho (2/2). Build OK. As duas suítes inteiras **não** foram repetidas depois dos dois ajustes.
 
 ## Retro (4 números)
 

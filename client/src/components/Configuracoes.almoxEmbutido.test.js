@@ -64,13 +64,14 @@ const botao = (rotulo) => [...container.querySelectorAll('button')].find((b) => 
 test('T8 a tela real do almoxarifado embutida: aba interna troca o conteudo e grava ?tab= sem perder ?modulo=', async () => {
   await render('/configuracoes?modulo=almoxarifado&tab=familias');
   expect(botao('Tipos de Material')).toBeTruthy(); // a barra interna REAL esta na pagina
-  expect(botao('Nova Família')).toBeTruthy();
+  // Etapa 211 (RN-211.03): a aba Familias so consulta (o cadastro e do Compras) — o marcador do conteudo e a frase dela, nao o botao.
+  expect(container.textContent).toContain('O cadastro de famílias é feito em Compras → Famílias.');
   await act(async () => { botao('Categorias').click(); });
   for (let i = 0; i < 3; i++) await act(async () => {});
   expect(search().get('modulo')).toBe('almoxarifado');
   expect(search().get('tab')).toBe('categorias');
   expect(botao('Nova Categoria')).toBeTruthy();
-  expect(botao('Nova Família')).toBeUndefined();
+  expect(container.textContent).not.toContain('O cadastro de famílias é feito em Compras → Famílias.');
 });
 
 test('T8 nenhum id ui-tab-* repetido na pagina; o painel de Configuracoes e rotulado por uma aba que existe', async () => {
