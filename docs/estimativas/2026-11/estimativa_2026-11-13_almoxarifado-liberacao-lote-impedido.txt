@@ -1,0 +1,9 @@
+*Planejamento — almoxarifado: a inspeção que aprova peça de lote bloqueado não entrega outro material no lugar*
+_13/11/2026_
+
+*1. A inspeção e a não conformidade olham o lote das peças que liberaram*
+Hoje, quando a inspeção aprova peças de um lote que continua bloqueado (por exemplo, sem o certificado do fornecedor) e o material tem outra quantidade livre em estoque, o sistema reserva essa outra quantidade para quem espera, como se fosse a que foi aprovada. Depois desta alteração, a aprovação de peças de um lote bloqueado, reprovado ou vencido não reserva nada no lugar: as peças vão para quem espera quando o lote for liberado. A tela da inspeção avisa que o lote continua bloqueado.
+Tempo estimado: *4h*
+
+*Total estimado: 4h*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
