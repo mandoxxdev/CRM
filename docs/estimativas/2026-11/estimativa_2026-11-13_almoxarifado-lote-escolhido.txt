@@ -1,0 +1,9 @@
+*Planejamento — almoxarifado: lote escolhido à mão*
+_13/11/2026_
+
+*1. Lote escolhido à mão deixa de fora a peça bloqueada*
+Na separação e na entrega, quando a pessoa escolhe de qual lote o material sai, o sistema passa a descontar as peças daquele lote que estão bloqueadas (em quarentena, reprovadas na inspeção ou com terceiros), como a escolha automática já faz. Se o lote não tiver o suficiente, a tela diz quantas peças podem sair e quantas estão bloqueadas nele.
+Tempo estimado: *4h30*
+
+*Total estimado: 4h30*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
