@@ -1,7 +1,12 @@
 # Almoxarifado — pausa de 2026-10-23 e como retomar
 
 > **✅ RETOMADO em 2026-11-05 — este arquivo agora é histórico.** O André retomou o módulo em 05/11 (estimativa
-> `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md`). **EM ANDAMENTO: a Etapa 209** (item 8 do 2º pacote, o bloqueio
+> `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas.md`). **2026-11-13: a Etapa 209 FECHOU** (o bloqueio sabe o
+> lote — C466 1ª parte; `5708b830`..`fa50fae9` + o commit "Etapa 209: fechamento"). Letra **B** usada até **B1422** (B1416–B1422 pela 209;
+> B1430–B1433 pela 210), **C** até **C504** (C500–C504 pela 209; C510–C512 pela 210), **A** até **A112** (pela 209 — a próxima é **A113**).
+> **Próxima:** o item 9 do 2º pacote — a entrega e o automático não tiram a peça bloqueada do lote (**C503**), detalhada no fim de
+> `docs/superpowers/plans/2026-11-07-almoxarifado-etapa209-bloqueio-sabe-o-lote.md`. *(O texto abaixo é de antes do fechamento:)*
+> **EM ANDAMENTO: a Etapa 209** (item 8 do 2º pacote, o bloqueio
 > passa a saber o lote — C466 1ª parte). Plano `5708b830`, Fase 2 `c2b66af0`, T0–T5 feitas e verdes (test:api 603/603) — parou na semana de
 > 01–07/11 pelo teto de horas, numa divisa limpa. **Retome pela T6 (a tela)**: o "Onde parou" da seção Execução de
 > `docs/superpowers/plans/2026-11-07-almoxarifado-etapa209-bloqueio-sabe-o-lote.md` diz o primeiro passo. **Antes: a Etapa 208 fechou** em 06/11 (fora do 2º pacote: o

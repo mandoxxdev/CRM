@@ -2131,6 +2131,12 @@ Movimentação errada **não é excluída**. O botão de estornar (seta curva) n
 - **Estorno de saída** devolve a quantidade **a uma posição só**: a origem informada na saída ou, sem ela, a posição padrão do material (ou a conta "sem localização atribuída"). A saída não guarda de quais posições tirou; o físico volta certo, a posição pode não ser a original.
 - **Estorno de uma contagem com localização** que deixaria o material com saldo negativo (porque o material já saiu depois da contagem) é recusado: *"Não é possível estornar: o saldo já foi consumido (o estorno deixaria o material negativo)"*.
 - **Estorno que falha no meio** (erro do banco em qualquer passo — o registro no livro, um endereço, uma série), em qualquer tipo de movimento — entrada, saída, ajuste, transferência, bloqueio, desbloqueio: tudo o que ele já tinha feito (estoque, endereços, bloqueado, séries) é desfeito **antes** de outra operação do mesmo material poder agir; a resposta é o erro, e o movimento continua de pé, pronto para estornar de novo. O estorno roda inteiro numa espera própria do material: a saída, a entrada, a devolução, a reserva e o bloqueio de série daquele material que chegarem no mesmo instante esperam ele terminar. Por isso a conferência das séries (entrada cujas séries já saíram, saída cujas séries já voltaram) vale também para o que acontece no mesmo instante do estorno: a recusa é a mesma. Se o estorno já concluiu (livro, estoque e séries) e só o registro de auditoria do cancelamento falhar, o estorno vale e responde sucesso: o que vem depois — o desconto e a reabertura do pedido de compra, o recálculo das requisições, o alerta de mínimo, a supressão do aviso por e-mail — roda normalmente, e o log do servidor registra a falha.
+- **Estorno de um bloqueio** (o **Bloqueio** da devolução para Quarentena ou o do **Bloquear Material**) tira do bloqueado e por isso só passa
+  se o bloqueado ainda tem o que aquele bloqueio pôs. Se o total bloqueado do material não cobre: *"Não é possível estornar: o bloqueio já
+  foi desfeito (quantidade bloqueada: ⟨n⟩)"*. Se o total cobre mas o lote não (o bloqueio era do lote *L1* e o *L1* já foi liberado): *"Não é
+  possível estornar: o bloqueio do lote L1 já foi desfeito (bloqueado no lote: 0 UN)"*. Se o bloqueio era sem lote e o que sobra bloqueado é de
+  lotes: *"Não é possível estornar: o bloqueio sem lote já foi desfeito (bloqueado sem lote: 0 UN)"* — o estorno nunca leva para o disponível
+  uma peça que está na quarentena de um lote (15.3). Nos três casos o bloqueio continua no livro.
 - **Duas pessoas estornando ao mesmo tempo:** só a primeira passa; a segunda recebe *"Movimentação já cancelada"*. Estornar de novo uma linha **já estornada** recebe a mesma mensagem, antes de qualquer alteração.
 
 **Estornar a entrada de uma nota de compra mexe no pedido de compra.** Quando a linha estornada é a **ENTRADA_COMPRA**
@@ -3579,7 +3585,7 @@ Devolver ao **Estoque** ou à **Quarentena** faz cada peça serializada voltar d
 | Destino | O que acontece no saldo | O que aparece no livro |
 |---|---|---|
 | **Estoque** | Volta ao **físico** e ao **disponível** | Entrada de devolução |
-| **Quarentena** | Volta ao **físico**, mas **não ao disponível** — fica bloqueado até a inspeção decidir | Entrada de devolução **+** Bloqueio |
+| **Quarentena** | Volta ao **físico**, mas **não ao disponível** — fica bloqueado até a inspeção decidir, **no lote da peça** (15.3) | Entrada de devolução **+** Bloqueio, as duas com o mesmo lote |
 | **Sucata** | **O saldo não muda**: entra e sai | Entrada de devolução **+** Sucata |
 | **Retrabalho** | **Não altera saldo nenhum** | Apenas a linha de retrabalho |
 
@@ -5273,6 +5279,44 @@ Os dois exigem **material**, **quantidade** e **justificativa**, e nenhum dos tr
 | Desbloquear mais do que está bloqueado | *"Quantidade bloqueada insuficiente: 30"* |
 
 O desbloqueio **nunca satura em silêncio**: pedir para desbloquear 50 quando há 30 bloqueados é recusado, e não devolve 30 fingindo que devolveu 50.
+
+**O bloqueado de cada lote.** O bloqueio que nasce de uma **devolução para Quarentena** (12.6) fica registrado com o **lote** da peça
+devolvida — o lote da entrega citada, ou o informado na devolução. O bloqueio feito por **Bloquear Material** não tem lote: conta como
+*"Sem lote"*, mesmo num material com controle por lote. O sistema guarda, para cada material:
+
+```
+bloqueado do lote L = bloqueios com o lote L − desbloqueios do lote L   (os estornados não contam)
+sem lote            = bloqueado total do material − soma dos lotes        (nunca abaixo de zero)
+```
+
+Ao escolher o material no **Desbloquear Material**, a janela consulta essa conta. Se o material tem bloqueado em algum lote — com ou sem
+controle por lote: uma peça de material sem controle que saiu de um lote e voltou para a Quarentena também conta —, aparece o campo
+**Lote**, obrigatório, com uma opção por lote (*"L1 — 2 bloqueado(s)"*) e, se houver, *"Sem lote — 3"*. Sem escolher, o botão
+**Confirmar** responde *"Selecione o lote"*. Sem bloqueado em lote nenhum, a janela não tem o campo e o desbloqueio tira do *"Sem lote"*.
+Trocar de material na janela limpa o lote escolhido.
+
+As recusas do desbloqueio, nesta ordem (só a primeira que se aplica aparece):
+
+| Situação | Mensagem |
+|---|---|
+| Lote que não existe, ou que é de outro material | *"Lote nao encontrado"* / *"O lote informado pertence a outro material"* |
+| Pedir mais que o bloqueado total do material | *"Quantidade bloqueada insuficiente: 5"* |
+| Escolher um lote e pedir mais que o bloqueado dele | *"Quantidade bloqueada insuficiente no lote L1: 2 UN"* |
+| Escolher *"Sem lote"* (ou não ter o campo) e pedir mais que o *"Sem lote"* | *"Informe o lote: só 3 UN bloqueado(s) sem lote — o resto está em lote (L1: 2)"* |
+| Pela integração, um lote que não é número inteiro positivo | *"lote_id deve ser um número inteiro positivo"* |
+
+Liberar sem dizer o lote **nunca** tira de um lote: o sistema não adivinha qual peça saiu da quarentena. Dois desbloqueios do mesmo lote no
+mesmo instante não liberam mais do que o lote tem — o segundo recebe a mensagem do lote.
+
+**Descartar a peça que está na quarentena.** Uma baixa que precisaria do bloqueado é recusada (*"Material bloqueado não pode ser
+utilizado"*). O caminho é
+liberar **do lote da peça** no **Desbloquear Material** e, em seguida, lançar a **Perda** (ou a sucata, pelo processo próprio — seção 20)
+**do mesmo lote**. Assim o livro mostra a entrada da devolução, o bloqueio, o desbloqueio e a baixa, todos com o mesmo lote.
+
+**O que o bloqueado por lote ainda não muda.** As contas de disponível — aprovação, separação, entrega e a escolha automática do lote na
+entrega — continuam descontando o bloqueado **do material**, não do lote. Em material com lote e peça em quarentena, escolha o lote no
+**Sai de** da entrega (7.5). A peça reprovada na inspeção e o material em terceiros têm o lote no próprio documento (a inspeção e a
+remessa) e não aparecem no campo **Lote**: a parte reprovada que ainda está bloqueada entra no *"Sem lote"*.
 
 **O bloqueio não passa do que existe e não está retido.** A quantidade a bloquear tem de caber em:
 

@@ -1,5 +1,7 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 209 (2026-11-13, T1 `9a3dcad9`+`8ff95f59`, T2 `e10f8c04`, T3 `7b8e8f7b`, T4 `cc4da040`, T5 `4bdf0a09`, T6 `b073fb93`, Fase 5 `fa50fae9`): o bloqueio sabe o lote (C466, 1ª parte)** — o `BLOQUEIO` da devolução para Quarentena grava `lote_id`; o bloqueado por lote é derivado do livro (`bloqueioPorLote.js`: Σ `BLOQUEIO` − Σ `DESBLOQUEIO` com o lote e `cancelado = 0`; sem tabela, sem migration); o `DESBLOQUEIO` confere o lote no claim (M2) e, sem lote, só tira do "sem lote" (M1); o estorno do `BLOQUEIO` confere o lote (M3) e, sem lote, o "sem lote" (Fase 5); `GET /materiais/:id/bloqueado-por-lote`; campo **Lote** na janela Desbloquear. Nenhum leitor de disponível muda (a 2ª parte, C503). A frase "bloqueio e terceiros não têm lote" da seção da 197 ficou velha em parte — anotada lá. Ver a seção "Etapa 209", no fim. O status não muda.
+
 > **+ Etapa 207 (2026-11-06, T1 `842567ca`, T2 `3db19406`, Fase 5 `730a8a00`): a parte automática sem lote da entrega pula a guarda numa linha sem lote (C490, anterior) — fatias sem lote com `localizacao_origem_id`, uma SAIDA por fatia, quando o claim de hoje levaria a guarda e o livre usável cobre; senão como hoje (C492); a linha "Entrega de requisição" e a "Exclusão administrativa" da tabela de alcance anotadas** — ver a seção "Etapa 207", no fim. O status não muda.
 
 > **+ Etapa 206 (2026-11-06, T1 `ccbce184`, T2 `62c3dc79`, Fase 5 `31aca1a3`, `00d9e24a`): a entrega de requisição de material com `controle_lote` deixa de mandar para "sem lote" (negativo) o que só lote impedido cobriria — recusa antes de baixar (C464 2ª parte resolvida; a causa do C484 fechada); a B1323 revisada (só o sem lote positivo sai); a nota da guarda desligada (Etapa 197, abaixo) anotada** — ver a seção "Etapa 206", no fim. O status não muda.
@@ -1178,6 +1180,9 @@ está na spec 05 (`05-separacao-picking/README.md`, seção "Etapa 197") — a m
 - [ ] **Fora (declarado):** a guarda `exigeLote` continua desligada na entrega (o resto sem lote, C464); material sem `controle_lote`, EPI
   e internos sem lote (C465); bloqueio e terceiros não têm lote — o automático pode tirar a peça que voltou para a quarentena (C466); as
   linhas sem lote negativas antigas ficam (B1327).
+  *(**Ficou velho em parte na Etapa 209:** "bloqueio … não têm lote" — desde a 209 o `BLOQUEIO` da devolução para Quarentena e o
+  `DESBLOQUEIO` avulso gravam `lote_id`, e terceiros/reprovação já sabiam o lote pelo documento (B1418). O que continua valendo: o
+  automático ainda **não lê** esse dado e pode tirar a peça da quarentena (C466 2ª parte = C503). Ver a seção "Etapa 209", no fim.)*
 
 **Correção à vista:** a tabela da pendência (g) dizia que a exclusão da requisição "devolve sem lote — não volta para o lote de onde saiu" —
 **estava errada desde a Etapa 58** (B232: a exclusão devolve por saída, com o lote dela). A linha da entrega ("baixa sem lote") passou a
@@ -1263,3 +1268,37 @@ Plano: `docs/superpowers/plans/2026-11-06-almoxarifado-etapa207-entrega-respeita
 - [ ] **Fora:** item com série (**C493**); o livre usável que não cobre (**C492**).
 
 Continua 🟢.
+
+## Etapa 209 — o bloqueio sabe o lote (2026-11-13)
+
+Plano: `docs/superpowers/plans/2026-11-07-almoxarifado-etapa209-bloqueio-sabe-o-lote.md` (RN-209.01 a .12, contrato congelado, Fase 2 e
+Fase 5). **C466 resolvido na 1ª parte** (gravar o lote); a 2ª parte (o automático e a entrega lerem o lote) é o item 9 do 2º pacote (C503).
+
+- [x] **Testes de partida** (`bloqueioSabeOLote.api.test.js`, vermelhos reais por RN) — `0999f06f`.
+- [x] **`services/almoxarifado/bloqueioPorLote.js`** — `bloqueadoDoLoteSql(m, l)`, `bloqueadoComLoteSql(m)`, `bloqueadoPorLote(db, id)` →
+  `{ material_id, total, sem_lote, lotes: [{ lote_id, codigo, quantidade }] }`; derivado do livro (`BLOQUEIO` + / `DESBLOQUEIO` −, com
+  `lote_id`, `cancelado = 0`); `sem_lote = MAX(0, total − Σ)`, sem corte dos lotes (B1421) — `9a3dcad9`; fix `8ff95f59` (a expressão do
+  material sem apelido lia o `id` do próprio livro: **`materialExpr` sempre qualificada**).
+- [x] **A devolução para Quarentena passa o lote ao `BLOQUEIO`** (`lote_id: loteFinalId`, o herdado da saída ou o informado; também em
+  material sem `controle_lote` que saiu de um lote — RN-209.02b) — `e10f8c04`.
+- [x] **Motor: `DESBLOQUEIO` confere o lote no `WHERE` do claim** — com lote, `bloqueadoDoLote ≥ q` (M2); sem lote, `total − Σ lotes ≥ q`
+  (M1); ordem das recusas: lote inválido → total (a literal de sempre) → M2/M1 (B1420). **Estorno do `BLOQUEIO` com lote** confere o lote
+  antes do claim do material (M3; o claim `cancelado = 1` já roda antes, então a soma exclui o próprio bloqueio — Achado 3, conferido) —
+  `7b8e8f7b`.
+- [x] **`inspectionService.desbloquearMaterial` aceita `lote_id`** (vazio/nulo = sem lote; não inteiro positivo → 400 *"lote_id deve ser um
+  número inteiro positivo"*, B1422) — `cc4da040`.
+- [x] **`GET /api/almoxarifado/materiais/:id/bloqueado-por-lote`** (`visualizar`; inexistente → 404 *"Material não encontrado"*) —
+  `4bdf0a09`.
+- [x] **Tela: campo Lote na janela Desbloquear** (Inspeções) — consulta para todo material escolhido, campo quando `lotes.length > 0`,
+  *"Sem lote — N"* sem `lote_id`, *"Selecione o lote"* — `b073fb93`.
+- [x] **Integração RN-209.07** (descarte da peça em quarentena no lote: devolução → desbloquear L1 → baixa de L1) pela rota (`PERDA` na v2 —
+  **o plano estava errado**: a v2 recusa `SUCATA`, que é tipo dedicado) e pelo serviço (`SUCATA` no motor) — `cc4da040`, `4bdf0a09`.
+- [x] **Fase 5** — o estorno de um `BLOQUEIO` **sem** lote só tira do "sem lote" (a guarda M1 no claim; literal *"Não é possível estornar:
+  o bloqueio sem lote já foi desfeito (bloqueado sem lote: N UN)"*); e o teste da resposta atrasada do GET na troca de material —
+  `fa50fae9`.
+- [ ] **Fora (declarado):** o **Bloquear** avulso sem lote (B1419, C500); reprovação e terceiros sem lote no livro — já sabem pelo documento
+  (B1418); a liberação por NC passa pela M1 (C501); devolução ao fornecedor/descarte do reprovado não olham os lotes da quarentena (C502);
+  nenhum leitor de disponível muda (C503, a 2ª parte); o lote pode ficar com bloqueado maior que o saldo depois do estorno da
+  `ENTRADA_DEVOLUCAO` ou do `DESBLOQUEIO` (C504). Antes do deploy: **A112** (nenhum `BLOQUEIO`/`DESBLOQUEIO` antigo com lote).
+
+Continua 🟢. Testes: `bloqueioSabeOLote.api.test.js` (25), `InspecoesAlmoxarifado.test.js` (10 novos, 43 no total).

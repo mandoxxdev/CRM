@@ -389,12 +389,59 @@ lote: igual; bloqueio antigo: cai em "Sem lote"), salvo o caso da trava abaixo; 
   controles: GET só com `controle_lote` → (2)(5)(7) vermelhos; POST sem `lote_id` → (1)(2); exigir o campo sem lotes → (5)(5b)(6) + o teste
   antigo do desbloquear; restauro por cópia, `cmp` ok. Build `CI=true` ok.
 - [x] T7 — integração pela rota e pelo serviço (RN-209.07) — já verde: pelo serviço em `cc4da040` (registrarDevolucao → desbloquearMaterial(L1) → SUCATA L1), pela rota em `4bdf0a09` (devolução → GET → desbloquear L1 → PERDA L1 na v2), no `bloqueioSabeOLote.api.test.js`
-- [ ] Controles positivos 1-6 — (1), (5), (6) na T2; (2), (3), (4) na T3/T4; falta só refazer no fim, depois da T5-T7 integradas
-- [ ] Suítes: `test:api`, `test:almoxarifado`, `test:validation && test:safealter && test:sqlite`, cliente, `build` com `CI=true`
-- [ ] Fase 5 — revisores frescos (correção da RN; "este teste passaria com a feature quebrada?"; trava/estorno)
-- [ ] Fechamento (`fechar-etapa`): novidades (B1416-B1422, C500-C503, A112), spec 10 e 12, mapa, guia, manual, este plano; estimado × gasto
+- [x] Controles positivos 1-6 — (1), (5), (6) na T2 (`e10f8c04`); (3) na T3 (`7b8e8f7b`); (2), (4) na T4 (`cc4da040`); os da rota na T5
+  (`4bdf0a09`) e os da tela na T6 (`b073fb93`); os dois da Fase 5 em `fa50fae9` (abaixo). **Não refeitos em bloco no fim:** cada um rodou
+  sobre o código da sua task e nenhum arquivo de produção sabotado mudou depois, salvo o `stockService.js` na Fase 5 — e ali a sabotagem nova
+  (guarda do sem lote desligada) derrubou o cenário novo.
+- [ ] Suítes: `test:api`, `test:almoxarifado`, `test:validation && test:safealter && test:sqlite`, cliente, `build` com `CI=true` — **rodando
+  no fechamento** (fora deste commit de documentação); os números entram na linha "Verificação final", abaixo.
+- [x] Fase 5 — revisão fresca, 4 lentes (correção da RN; "este teste passaria com a feature quebrada?"; trava/estorno; cliente) — `fa50fae9`.
+  **2 achados reais, os dois corrigidos:**
+  1. **[MÉDIO, defeito]** o estorno de um `BLOQUEIO` **sem** lote só conferia o total. L1 2 (quarentena) + sem lote 2, desbloquear "sem
+     lote" 2 e estornar o bloqueio avulso passava: as 2 peças de L1 voltavam ao disponível sem ninguém liberar, e o livro seguia dizendo L1 2
+     bloqueado. Agora o claim tem a guarda M1 (`total − Σ lotes ≥ q`, no `WHERE`); recusa *"Não é possível estornar: o bloqueio sem lote já foi
+     desfeito (bloqueado sem lote: N UN)"* (só quando o total cobre — senão a literal de sempre). Cenário **RN-209.06 d** com a metade positiva
+     (sem desbloquear o sem lote, o estorno passa); controle: guarda desligada → o cenário cai. Registrado como ampliação da **B1417**.
+  2. **[BAIXO, teste]** nenhum teste provava que a resposta atrasada do GET do material anterior é ignorada na troca de material. Cenário
+     **(7b)** em `InspecoesAlmoxarifado.test.js`; controle: sem o `if (!ehUltimo())` → vermelho.
+  Concorrência e cliente sem outro achado. `bloqueioSabeOLote` **25/25**; `InspecoesAlmoxarifado` **43/43**.
+- [x] Fechamento (`fechar-etapa`): novidades (seção da 209, B1416–B1422, C500–C504, A112, D (209), F (209), C466 anotado), spec 10 e 12,
+  mapa (e o cabeçalho dele, que tinha parado na 191), guia, manual (15.3, 12.6, 6.10), este plano e o de pausa — commit "Etapa 209:
+  fechamento". **O estimado × gasto não foi feito aqui** (fica com o André, como na 207 e na 208).
+- Verificação final: (preenchida no commit seguinte)
+
+### Divergências do plano (registradas no fechamento)
+
+- **C504** não estava na lista original (C500–C503); nasceu na Fase 2 (itens 2 e 3: o estorno da `ENTRADA_DEVOLUCAO` e o do `DESBLOQUEIO`)
+  — **usado**. O corte pré-decidido da M3 (que também se chamaria C504) **não foi preciso**: a M3 entrou na T3.
+- **T7:** o plano mandava `SUCATA` pela `POST /movimentacoes/v2` — **estava errado** (a v2 recusa `SUCATA`, tipo dedicado); pela rota foi
+  `PERDA`, pelo serviço `SUCATA` direto no motor (T0).
+- **RN-209.06 c:** o teste do T0 esperava *"bloqueado no lote: 2"*; o contrato da M3 (`MAX(0, noLote + q)`) dá **0** ali — o teste estava
+  errado, corrigido na T4.
+- **T1:** `bloqueadoComLoteSql('id')` sem apelido lia o `id` do livro (fix `8ff95f59`).
+- **Fase 5:** a regra "liberar sem lote só do sem lote" (B1417) não cobria o **estorno** do bloqueio sem lote — o plano só previa a guarda
+  do lote (M3) no estorno. Ampliada em `fa50fae9`.
+- **T5:** id em texto → o mesmo 404 (descartado um 400 à parte).
+
+### Retro (4 números)
+
+- **Rodadas até verde na Fase 5:** 1.
+- **Achados reais:** 2 (1 defeito médio no estorno do bloqueio sem lote + 1 lacuna de teste na tela); **0 regressões**.
+- **Paralelismo:** nenhum na execução (T5 e T6 eram galhos, rodaram em sequência na mesma árvore; a sessão foi cortada em três fatias
+  pelo teto de horas).
+- **Defeito que escapou da 208:** nenhum conhecido.
 
 ## Próxima tarefa detalhada
+
+*(Conferida no fechamento, sobre `fa50fae9`. Escolhida pela ordem do CLAUDE.md: é a "próxima" que este plano já trazia e o item seguinte da
+fila estimada de 05/11 (`estimativa_2026-11-05_almoxarifado-proximas-2.txt`, item 9 — o último do 2º pacote). Números de linha a remedir
+na Fase 0: a 209 mexeu em `stockService.js` (ramos `DESBLOQUEIO` ~`:1700` e estorno do `BLOQUEIO` ~`:3540-3580`), mas **não** em
+`loteImpedido.js` nem em `requisitionService.js`.)*
+
+**O que já está pronto e não precisa reabrir:** `services/almoxarifado/bloqueioPorLote.js` — `bloqueadoDoLoteSql(materialExpr, loteExpr)`
+(a parcela quarentena/avulso do lote, já sem os estornados), `bloqueadoComLoteSql(materialExpr)` e `bloqueadoPorLote(db, id)`. **A
+`materialExpr` tem de vir qualificada** (`materiais_almoxarifado.id`, nunca `id` solto — o fix `8ff95f59`). Os parâmetros podem ser `'?'`.
+O helper não importa `stockService` (o motor o importa). As guardas M1/M2/M3 e a do estorno sem lote ficam como estão.
 
 **O item 9 do 2º pacote — a entrega e o automático não tiram a peça bloqueada do lote (C466, 2ª parte; C503)**, estimado em
 `docs/estimativas/2026-11/estimativa_2026-11-05_almoxarifado-proximas-2.txt` (`:36-38`, **4h a 5h**).
@@ -409,7 +456,14 @@ lote: igual; bloqueio antigo: cai em "Sem lote"), salvo o caso da trava abaixo; 
   3. em terceiros — Σ `itens_remessa_terceiro_almoxarifado (quantidade − quantidade_retornada)` com `lote_id = L` e `enviado_em IS NOT NULL`
      (conferir se `quantidade_retornada` já cobre `PERDA_TERCEIRO`/`CONSUMO_TERCEIRO` — `thirdPartyService.js:394-420`).
   O que sobrar do total do material sem lote (bloqueio avulso C500, linhas antigas) continua descontado do material como hoje.
-- **Clamp (B1421):** o bloqueado do lote nunca maior que o saldo do lote nem, somado, maior que o total do material (C501/C502).
+- **Clamp (B1421):** o bloqueado do lote nunca maior que o saldo do lote nem, somado, maior que o total do material (C501/C502, e o
+  **C504**: depois do estorno da `ENTRADA_DEVOLUCAO` da Quarentena ou do `DESBLOQUEIO` de um lote, o livro pode dizer L1 2 bloqueado com o
+  L1 já vazio). O que o clamp tira de um lote **volta para o desconto do material**, junto com o "sem lote" — nunca some. Cenário pronto em
+  `bloqueioSabeOLote.api.test.js` ("[RN-209.09, Fase 2 item 2, C504]").
+- **Regressão a manter:** a RN-209.09 de hoje afirma que `loteImpedidoSql`, `saldoDisponivelParaItem` e os lotes do automático **não mudam**
+  com o lote no `BLOQUEIO` — a 2ª parte muda isso **de propósito**: reescrever esse teste como mudança de regra (registrada), não apagar.
+- **Estimativa:** 4h a 5h (item 9). Fatia visível: a janela de entrega/Fila mostrar *"⟨n⟩ em quarentena no lote L1"* (a medir na Fase 0 se
+  cabe no teto).
 - **Pontos de atenção:** a 205 e a 197 têm suítes próprias que vão mudar de número de propósito (registrar como reversão do D (206), não em
   silêncio); a régua tem de ser a mesma na separação, na aprovação e no automático (RN-205.xx); roda sob as travas que já existem (só leitura).
   Vizinhos baratos que seguem abertos: **C491**, **C478**, **C486**, **C495**, **C497**, **C498**, **C500**.

@@ -18,6 +18,10 @@
 > escondeu por sete semanas (2026-08-12 a 2026-09-29) um item de que outra feature dependia. O verde agora vale para os dois
 > destinos; o que ficou de fora está no item 187 e nas limitações desta spec, não na cor.)*
 >
+> **Etapa 209 (2026-11-13, `e10f8c04`, Fase 5 `fa50fae9`):** a devolução para **Quarentena** grava o lote também no `BLOQUEIO` (o mesmo
+> da `ENTRADA_DEVOLUCAO`); a liberação (Inspeções → Desbloquear) pergunta o lote. Ver a seção "Etapa 209", no fim, e a spec 10. O status
+> não muda.
+>
 > **Etapa 117 (2026-10-16, `00bfee8b`):** a devolução desfeita pelo livro (a entrada estornada) deixa de contar no "restante" —
 > nas cinco contas; com série, as séries voltam a *Entregue* na entrega; a entrada da devolução para SUCATA não se estorna com a
 > sucata de pé (C237). A seção da 116 dizia o que era "viva" de forma incompleta — corrigido na seção da 117, no fim.
@@ -477,3 +481,19 @@ descartado: não resolve a entrega nunca devolvida, que tem saldo cheio para sem
 - [ ] **Fora: a tela não foi clicada no navegador** — só Jest (letra F (204) das novidades).
 
 Continua 🟢. Testes: `devolucaoEntregasAntigas.api.test.js` (7), `DevolucoesAlmoxarifado.test.js` (8 novos, 24 no total).
+
+## Etapa 209 — a quarentena grava o lote (2026-11-13)
+
+Plano: `docs/superpowers/plans/2026-11-07-almoxarifado-etapa209-bloqueio-sabe-o-lote.md`. O checklist completo com hashes está na spec 10
+(seção "Etapa 209"). O que toca esta feature:
+
+- [x] **O destino `QUARENTENA` grava o lote no `BLOQUEIO`** — a descrição de `:104` (*"quarentena emite também `BLOQUEIO`"*) continua certa,
+  e agora o `BLOQUEIO` leva o mesmo `lote_id` da `ENTRADA_DEVOLUCAO` (o herdado da saída citada ou o informado no corpo, que vence o
+  herdado); material sem `controle_lote` que saiu de um lote também (RN-209.02b). As duas pernas continuam sob uma trava do material
+  (Etapa 97) — `e10f8c04`.
+- [x] **Liberar a peça da quarentena diz o lote** (Inspeções → Desbloquear, campo Lote) e o descarte dela fica no lote — `cc4da040`,
+  `b073fb93`, `4bdf0a09`.
+- [ ] **Fora:** estornar só a `ENTRADA_DEVOLUCAO` da Quarentena continua deixando o `BLOQUEIO` de pé (C239, anterior) — e agora o lote do
+  bloqueio pode ficar maior que o saldo do lote (C504). Destinos `ESTOQUE`, `SUCATA`, `RETRABALHO`: nada muda.
+
+Continua 🟢. Testes: `bloqueioSabeOLote.api.test.js` (RN-209.01 a .03, .07, .09).

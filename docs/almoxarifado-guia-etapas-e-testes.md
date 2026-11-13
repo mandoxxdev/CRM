@@ -1,13 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-11-06 (Etapas 172 a 191, 194 a 207) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-11-13 (Etapas 172 a 191, 194 a 209) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206 e 207) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-06 (Etapas 172 a 178, 180 a 191, 194 a 208 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-13 (Etapas 172 a 178, 180 a 191, 194 a 209 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
-> **Atualização de 2026-11-11 — Etapa 210 fechada (núcleo, pedido da empresa): os textos dos formulários em maiúsculo.** O que se digita
+> **O desenvolvimento parou aqui: Etapa 209 fechada — 2026-11-13.** **O bloqueio sabe o lote.** A peça devolvida para a **Quarentena**
+> fica bloqueada no lote dela, e a janela **Desbloquear material** (Inspeções) pergunta de qual lote se libera (*"L1 — 2 bloqueado(s)"*,
+> *"Sem lote — 3"*); liberar sem lote só tira do que foi bloqueado sem lote, e o estorno de um bloqueio não leva peça de outro lote.
+> Nenhuma conta de disponível muda ainda. Antes do deploy: a **A112** (consulta). **Nenhum clique foi dado** (testes da rota, do serviço e
+> da tela — roteiro na seção da 209 e letra F das novidades).
+>
+> **Onde parou, exatamente:** a **209 está fechada** (código, testes e documentos commitados; os números da verificação final entram no
+> commit seguinte ao do fechamento; o estimado × gasto fica com o André). A **próxima** é o item 9 do 2º pacote — **a entrega e o automático
+> não tiram a peça bloqueada do lote** (**C503**, 4h a 5h), detalhada no fim do plano da 209
+> (`docs/superpowers/plans/2026-11-07-almoxarifado-etapa209-bloqueio-sabe-o-lote.md`). Sem plano nem código.
+>
+> *(Antes:)* **Atualização de 2026-11-11 — Etapa 210 fechada (núcleo, pedido da empresa): os textos dos formulários em maiúsculo.** O que se digita
 > ou cola em qualquer campo de texto do sistema aparece e é gravado em MAIÚSCULO, com acento; ficam de fora e-mail, senha, site, busca, chat,
 > lote, corrida, série e a configuração da proposta. Os cadastros antigos não mudam, e as buscas do servidor que ainda comparavam o texto
 > cru acham nas duas caixas. **Roteiro:** Almoxarifado → Requisições → Nova requisição → digite e cole em *Observações gerais* (sobe, cursor
@@ -7109,6 +7120,54 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 209 — O bloqueio sabe o lote (ENTREGUE — 2026-11-13)
+
+**O que mudou, em uma frase:** a peça devolvida para a **Quarentena** fica bloqueada no lote dela, e a janela **Desbloquear material**
+pergunta de qual lote se está liberando.
+
+**O problema que ela resolve.** Uma peça volta de uma obra com suspeita e vai para a Quarentena. O sistema sabia que o material tinha
+"2 bloqueados", mas não de qual lote. Na liberação ninguém dizia de qual lote a peça saía, e no descarte não dava para rastrear. É a
+1ª parte: o dado passa a existir. A 2ª parte (a entrega e o automático não tirarem a peça bloqueada do lote) vem na próxima etapa.
+
+| Antes | Agora |
+|---|---|
+| A Quarentena bloqueava só no total do material | O bloqueio fica com o lote da peça |
+| **Desbloquear material**: material, quantidade, justificativa | Com bloqueio em lote, ganha o campo **Lote** (*"L1 — 2 bloqueado(s)"*, *"Sem lote — 3"*) |
+| Liberar sem lote tirava de qualquer bloqueio | Só do *"Sem lote"*; se não cobre, a mensagem diz quais lotes têm o resto |
+| Estornar um bloqueio podia levar peça já liberada, ou a de outro lote | Recusado, com a mensagem do lote ou do sem lote |
+| Material sem bloqueio em lote; **Bloquear Material**; a entrega e o automático | **Iguais** |
+
+**Antes de testar (uma vez).** Usuário **Administrador do almoxarifado**. Um material *ROL-209* com **controle por lote**, sem série,
+unidade *UN*. **Movimentações → Entrada**: 10 no lote *L1*. **Movimentações → Saída**: 3 do lote *L1*. **Devoluções → Nova Devolução**:
+material *ROL-209*, *Entrega de origem* = a saída de 3, quantidade 2, destino **Quarentena** → **Registrar devolução**. **Inspeções →
+Bloquear Material**: *ROL-209*, 3, justificativa *avaria* → *"Material bloqueado!"*. O material fica com 5 bloqueados: 2 no *L1* e 3 sem lote.
+
+**Roteiro de teste (10 minutos).**
+
+1. **Inspeções → Desbloquear Material**, escolha *ROL-209* → aparece o campo **Lote** com *"Selecione o lote"*, *"L1 — 2 bloqueado(s)"* e
+   *"Sem lote — 3"*.
+2. Quantidade 1, justificativa, **sem** escolher o lote → **Confirmar** → *"Selecione o lote"*.
+3. Lote *L1*, quantidade **3** → *"Quantidade bloqueada insuficiente no lote L1: 2 UN"*. Nada muda.
+4. *"Sem lote — 3"*, quantidade **4** → *"Informe o lote: só 3 UN bloqueado(s) sem lote — o resto está em lote (L1: 2)"*.
+5. Qualquer opção, quantidade **6** → *"Quantidade bloqueada insuficiente: 5"* (a mensagem de sempre).
+6. Lote *L1*, quantidade **2** → *"Material desbloqueado!"*. Em **Movimentações**, ache o **Bloqueio** de 2 da devolução (lote *L1*) e clique
+   no estorno → *"Não é possível estornar: o bloqueio do lote L1 já foi desfeito (bloqueado no lote: 0 UN)"*.
+7. *(O estorno do avulso.)* Refaça a preparação com outro material e o **Bloquear** de **2** (não 3). **Desbloquear** → *"Sem lote — 2"*,
+   quantidade 2. Em **Movimentações**, estorne o **Bloqueio** avulso de 2 → *"Não é possível estornar: o bloqueio sem lote já foi desfeito
+   (bloqueado sem lote: 0 UN)"*. Reabra o **Desbloquear** desse material: *"L1 — 2 bloqueado(s)"* continua lá.
+8. *(O descarte.)* Outro material, preparado sem o **Bloquear** avulso. **Desbloquear** → *L1*, 2. **Movimentações → Perda**, lote *L1*, 2.
+   No livro, a entrada da devolução, o bloqueio, o desbloqueio e a perda aparecem com o lote *L1*; em **Lotes e Séries**, o *L1* desceu 2.
+   Reabra o **Desbloquear** desse material: o campo **Lote** não aparece (não há mais bloqueio em lote).
+
+**O que esta etapa não cobre.** A entrega e o automático ainda podem tirar do lote a peça que está na quarentena (**C503** — a próxima etapa;
+até lá, escolha o lote no **Sai de** da entrega). O **Bloquear Material** não tem lote: o que ele bloqueia conta como *"Sem lote"*
+(**C500**). A liberação pela não conformidade, num caso de borda, recebe *"Informe o lote…"* (**C501**). Depois de estornar só a entrada de
+uma devolução para Quarentena, o lote pode mostrar mais bloqueado do que tem (**C504**). **Antes do deploy:** a **A112** (consulta, somente
+leitura — esperado zero linhas).
+
+*Nenhum clique foi dado nesta etapa*: o roteiro acima é o que os testes automáticos provam (pela rota real, pelo serviço e pelo teste da
+tela) — escrito para você conferir, em especial o campo **Lote** do passo 1 e as mensagens dos passos 2 a 7.
 
 ## Etapa 208 — O "Sai de" da entrega respeita a peça que o irmão separou (ENTREGUE — 2026-11-06)
 
