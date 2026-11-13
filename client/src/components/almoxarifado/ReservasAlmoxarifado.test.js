@@ -537,3 +537,46 @@ describe('[RN-156.02, C366] a lista recusada diz o motivo sob o seletor', () => 
     });
   });
 });
+
+// Etapa 221 (C479): o servidor nao deixa a reserva manual contar peca de lote impedido; a tela avisa e mostra a recusa.
+describe('[RN-221.10 / .11] Nova Reserva e o lote impedido', () => {
+  const AVISO = 'Peças em lote bloqueado, reprovado ou vencido não entram na reserva.';
+  const RECUSA_221 = 'Saldo disponível insuficiente: 4. Não entram 6 PC em lote bloqueado, reprovado ou vencido.';
+  const comEstoque = (controleLote) => {
+    const anterior = api.get.getMockImplementation();
+    api.get.mockImplementation((url) => (url === '/almoxarifado/estoque'
+      ? Promise.resolve({ data: [{ id: 10, codigo: 'MAT-1', nome: 'Chapa 3mm', unidade: 'PC', quantidade_disponivel: 10,
+        controle_lote: controleLote }] })
+      : anterior(url)));
+  };
+  async function abrirEEscolher() {
+    await renderizar();
+    const botao = [...container.querySelectorAll('button')].find((b) => b.textContent.includes('Nova Reserva'));
+    await act(async () => { botao.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    preencher(campoPorLabel('Material'), '10');
+  }
+
+  test('[RN-221.10] material com controle de lote: o aviso aparece sob o Disponível (literal); sem controle de lote, não', async () => {
+    comEstoque(1);
+    await abrirEEscolher();
+    expect(container.textContent).toContain(AVISO);
+    act(() => root.unmount());
+    root = createRoot(container);
+    comEstoque(0);
+    await abrirEEscolher();
+    expect(container.textContent).toContain('Disponível: 10 PC');
+    expect(container.textContent).not.toContain(AVISO);
+  });
+
+  test('[RN-221.11] a recusa do servidor vai literal para o toast', async () => {
+    comEstoque(1);
+    api.post.mockRejectedValueOnce({ response: { status: 400, data: { error: RECUSA_221 } } });
+    await abrirEEscolher();
+    preencher(campoPorLabel('Quantidade'), '5');
+    const form = container.querySelector('.almox-modal form');
+    await act(async () => { form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/reservas', { material_id: 10, quantidade: 5 });
+    expect(toast.error).toHaveBeenCalledWith(RECUSA_221);
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+});

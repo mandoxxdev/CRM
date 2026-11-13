@@ -42,6 +42,9 @@ const STATUS = [
 
 const statusInfo = (s) => STATUS.find((x) => x.value === s) || { label: s || '—', cls: 'ajuste' };
 
+// Etapa 221 (RN-221.10, B1472): o aviso sob o "Disponivel" do material com controle de lote.
+export const AVISO_LOTE_IMPEDIDO_RESERVA = 'Peças em lote bloqueado, reprovado ou vencido não entram na reserva.';
+
 const FORM_VAZIO = {
   material_id: '', quantidade: '', projeto_id: '', os_id: '', os_referencia: '',
   cliente_id: '', equipamento: '', submontagem: '', data_necessidade: '', expira_em: '',
@@ -508,6 +511,13 @@ const ReservasAlmoxarifado = () => {
                     {materialSelecionado && (
                       <small style={{ color: 'var(--gmp-text-light)' }}>
                         Disponível: {materialSelecionado.quantidade_disponivel} {materialSelecionado.unidade}
+                      </small>
+                    )}
+                    {/* Etapa 221 (RN-221.10, B1472): o servidor nao deixa reservar peca de lote impedido; o "Disponivel" acima ainda a
+                        conta (C481), entao a tela avisa — so para material com controle de lote. */}
+                    {materialSelecionado && Number(materialSelecionado.controle_lote) === 1 && (
+                      <small className="almox-reserva-aviso-lote" style={{ display: 'block', color: 'var(--gmp-text-light)' }}>
+                        {AVISO_LOTE_IMPEDIDO_RESERVA}
                       </small>
                     )}
                   </div>
