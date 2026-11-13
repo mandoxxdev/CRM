@@ -207,6 +207,9 @@ describe('[RN-224.08] ExtratoMaterialModal — qual lote está impedido', () => 
       linha(5, 'L5', { lote_status: 'BLOQUEADO', lote_validade: '2026-11-12 00:00:00', lote_esta_impedido: true, lote_vencido_sem_liberacao: true }),
       linha(6, 'L6', { lote_status: 'ATIVO', lote_validade: '31/03/2027', lote_esta_impedido: true, lote_vencido_sem_liberacao: true }),
       linha(7, 'L7', { lote_status: 'X', lote_esta_impedido: true, lote_vencido_sem_liberacao: false }),
+      // Fase 5: bloqueado com validade FUTURA nao e "vencido" (quem decide e o servidor); validade em branco que a regua da por vencida
+      linha(8, 'L8', { lote_status: 'BLOQUEADO', lote_validade: '2027-03-31', lote_esta_impedido: true, lote_vencido_sem_liberacao: false }),
+      linha(9, 'L9', { lote_status: 'ATIVO', lote_validade: '   ', lote_esta_impedido: true, lote_vencido_sem_liberacao: true }),
     ]);
     expect(selo(doLote('L1'))).toBeNull();
     expect(selo(doLote('L2')).textContent).toBe('Bloqueado');
@@ -215,6 +218,8 @@ describe('[RN-224.08] ExtratoMaterialModal — qual lote está impedido', () => 
     expect(selo(doLote('L5')).textContent).toBe('Bloqueado · Vencido em 12/11/2026');
     expect(selo(doLote('L6')).textContent).toBe('Validade a corrigir: 31/03/2027');
     expect(selo(doLote('L7')).textContent).toBe('Impedido');
+    expect(selo(doLote('L8')).textContent).toBe('Bloqueado');
+    expect(selo(doLote('L9')).textContent).toBe('Validade a corrigir: —');
     expect(selo(doLote('L2')).getAttribute('title')).toBe(DICA);
     expect(doLote('L2').children[1].textContent.startsWith('L2')).toBe(true);
     expect(doLote('L2').children[2].textContent).toBe('6 PC');

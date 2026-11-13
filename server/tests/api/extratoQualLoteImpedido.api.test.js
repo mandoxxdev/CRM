@@ -144,6 +144,22 @@ process.on('exit', (code) => {
     assert.strictEqual(l2.lote_vencido_sem_liberacao, true);
   });
 
+  await test('[RN-224.02 f] (Fase 5) o "hoje" e o de diaLocal (Brasilia): com o dia seguinte, o que vence hoje ja vence', async () => {
+    const m = await l1l2(); await validade(m, 'L2', dia(0)); vistos.push(m);
+    const stockService = require('../../services/almoxarifado/stockService');
+    const original = diaLocal.hojeLocalISO;
+    const amanha = dia(1);
+    let l2;
+    try {
+      diaLocal.hojeLocalISO = () => amanha;
+      l2 = doLote(await stockService.consultarSaldosPorLocalizacao(db, m), 'L2');
+    } finally { diaLocal.hojeLocalISO = original; }
+    assert.strictEqual(l2.lote_vencido_sem_liberacao, true, 'nao leu o hoje de diaLocal');
+    assert.strictEqual(l2.lote_esta_impedido, true);
+    assert.strictEqual(doLote(await stockService.consultarSaldosPorLocalizacao(db, m), 'L2').lote_esta_impedido, false,
+      'premissa: com o hoje de verdade, ainda nao venceu');
+  });
+
   // ── RN-224.03 / .04 ───────────────────────────────────────────────────────────────────────────────────────────────
   await test('[RN-224.03] linha sem lote num material com controle de lote: tudo nulo e falso', async () => {
     const m = await material({ lote: 0 }); await entrar(m, 3, null); vistos.push(m);
@@ -159,6 +175,18 @@ process.on('exit', (code) => {
       assert.strictEqual(l.lote_esta_impedido, false);
       assert.strictEqual(l.lote_vencido_sem_liberacao, false);
     }
+  });
+  await test('[RN-224.03 b] (Fase 5) linha com lote_id de um lote que nao existe: nada impedido', async () => {
+    const m = await material(); await entrar(m, 4, 'L1'); vistos.push(m);
+    await dbRun(db, 'INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, lote_id, quantidade) VALUES (?, NULL, 987654, 0)', [m]);
+    const ls = await linhas(m);
+    const orfa = ls.filter((l) => l.lote_id === 987654);
+    assert.strictEqual(orfa.length, 1, 'premissa: a linha orfa existe');
+    assert.strictEqual(orfa[0].lote, null);
+    assert.strictEqual(orfa[0].lote_esta_impedido, false);
+    assert.strictEqual(orfa[0].lote_vencido_sem_liberacao, false);
+    assert.strictEqual(doLote(ls, 'L1').lote_status, 'ATIVO', 'metade positiva: a linha do L1 com a situacao');
+    await dbRun(db, 'DELETE FROM estoque_saldo_almoxarifado WHERE material_id = ? AND lote_id = 987654', [m]);
   });
   await test('[RN-224.04] sem controle de lote, lote BLOQUEADO e vencido: a linha ainda diz (o motor recusa a saida dele), o cartao 0', async () => {
     const m = await material(); await entrar(m, 6, 'L2'); vistos.push(m);
