@@ -327,6 +327,25 @@ process.on('exit', (code) => {
     assert.strictEqual(linha, `- ${m.codigo} — ${m.nome}: 4 PC — disponível`);
   });
 
+  // ── RN-219.14 (Fase 5, B1460 — fixa a decisao): a reserva da OS sobre o lote bloqueado conta como a aprovacao conta ────────────
+  await test('[RN-219.14] OS guardou 4 de L1 BLOQUEADO; nota comum de 4 em L2 ATIVO; R1 (sem OS) esperando 4 -> nada, como a aprovacao de R3 (C522)', async () => {
+    const os = (await dbRun(db, "INSERT INTO ordens_servico (numero_os, status) VALUES ('OS-E219-D', 'em_andamento')")).lastID;
+    const m = await material();
+    const R1 = await esperando(m, 4);
+    await receber([[m, 4, 'L1']], { os_id: os });
+    const daOs = await dbAll(db, `SELECT quantidade FROM reservas_material_almoxarifado WHERE material_id = ? AND os_id = ?
+      AND requisicao_id IS NULL AND status = 'ATIVA'`, [m.id, os]);
+    assert.deepStrictEqual(daOs.map((x) => Number(x.quantidade)), [4], 'premissa: a sobra virou reserva da OS (B1455)');
+    assert.deepStrictEqual(await reservas(R1), [], 'premissa: a fila geral nao leva nada da nota da OS');
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET controle_certificado = 0 WHERE id = ?', [m.id]);
+    await receber([[m, 4, 'L2']]);
+    assert.strictEqual(await statusLoteDe(m, 'L2'), 'ATIVO');
+    assert.deepStrictEqual(await reservas(R1), [], 'B1460: a nota usa a regua da aprovacao (a reserva da OS nao abate o impedido)');
+    const R3 = await criar(m, 4);
+    const a3 = await aprovar(R3);
+    assert.ok(EM_ESPERA.includes(a3.body.status), `a aprovacao tambem nao reserva (${a3.body.status}) — a mesma regua`);
+  });
+
   // ── a funcao pura do aviso ─────────────────────────────────────────────────────────────────────────────────────────────────────
   await test('[RN-219.08 a, pura] montarAvisoNota: item em lote impedido ganha a frase; retido continua "retido para inspeção"', async () => {
     const a = receiptNotificationService.montarAvisoNota({
