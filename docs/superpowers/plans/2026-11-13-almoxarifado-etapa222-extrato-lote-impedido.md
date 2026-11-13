@@ -48,16 +48,26 @@ a quantidade e uma frase explicando, e o formulário **Nova Reserva** troca o av
 - **B1476 — o extrato devolve `material.lote_impedido`** = `loteImpedidoSql('m')` com o "hoje" de Brasília (o padrão da régua), no mesmo
   `SELECT` do material; 0 em material sem controle de lote. Aditivo: nenhum campo some nem muda. Descartado: calcular no cliente (segunda
   fonte de verdade).
-- **B1477 — o modal mostra um cartão *"Em lote impedido"* e uma frase, só quando `lote_impedido > 0`**: o cartão (ícone de cadeado,
-  cor de perigo) com o número; abaixo dos cartões, a frase *"⟨n⟩ ⟨un⟩ em lote bloqueado, reprovado ou vencido: o Disponível ainda conta
-  essas peças, mas elas não saem do estoque até o lote ser liberado."*. Com 0 (ou campo ausente — servidor antigo), nada muda na tela.
-  Descartado: a frase "⟨n⟩ do disponível" — o impedido pode passar do disponível (reserva da OS sobre o lote bloqueado, B1381; reserva de
-  antes do bloqueio, B1471), e "6 do disponível 2" confunde.
+- **B1477 — o modal mostra um cartão *"Em lote impedido"* e uma frase, só quando `lote_impedido > 0`**: o cartão (ícone de alerta,
+  cor de atenção — **não** o cadeado vermelho do *Bloqueado*, Fase 2 I3) com o número; abaixo dos cartões, a frase *"⟨n⟩ ⟨un⟩ em lote
+  bloqueado, reprovado ou vencido, fora o que já aparece em Bloqueado: essas peças não saem para uso até o lote ser liberado na tela Lotes e
+  Séries."*. Com 0 (ou campo ausente — servidor antigo), nada muda na tela. Descartado: *"o Disponível ainda conta essas peças"* (a 1ª
+  versão do plano) e *"⟨n⟩ do disponível"* — o impedido pode passar do disponível (reserva da OS sobre o lote bloqueado, B1381; reserva de
+  antes do bloqueio, B1471), e a frase ficaria falsa (Fase 2 I1); *"não saem do estoque"* — o vencido ainda sai como sucata ou perda (Fase
+  2 M3). "Fora o Bloqueado": a régua já tira a quantidade bloqueada, os dois cartões não se somam.
 - **B1478 — o formulário Nova Reserva troca o aviso fixo pelo número**: escolhido um material com controle de lote, a tela busca o extrato
   dele; com `lote_impedido > 0` mostra *"⟨n⟩ ⟨un⟩ deste material estão em lote bloqueado, reprovado ou vencido e não entram na reserva."*;
   com 0, nada; enquanto busca ou se a busca falhar (ou não trouxer o campo), o aviso fixo da 221 (B1472) — nunca menos do que hoje. A
   resposta de um material que deixou de ser o escolhido é ignorada. Descartado: só o aviso fixo (a próxima tarefa da 221 pedia o número);
-  `/estoque?material_id=` (o campo não está no `/estoque`).
+  `/estoque?material_id=` (o campo não está no `/estoque`). Custo (Fase 2): a escolha do material busca o extrato inteiro (até 100
+  movimentos, reservas e saldos por endereço) — aceitável para um material; a régua mediu 0,6 a 1,5 ms por material no banco de
+  desenvolvimento.
+- **C527 (aviso, Fase 2 I2) — o número do formulário e o da recusa podem diferir.** Com reserva do sistema (a da OS, B1381) sobre o lote
+  bloqueado, o impedido passa do livre: L1 5 + L2 BLOQUEADO 10 + reserva da OS de 8 → o extrato e o formulário dizem 10; a reserva manual
+  recusa com *"Saldo disponível insuficiente: 0. Não entram 7 un …"* (o corte, B1470). Os dois são verdadeiros (10 estão no lote; o lote
+  cortou 7 do que a reserva podia levar). Fixado pela RN-222.06 b.
+- **C528 (aviso, Fase 2 M4) — a tela não diz qual lote está impedido.** A frase aponta para *Lotes e Séries*; listar os lotes no extrato
+  (status e validade na tabela *Saldos por localização*) fica para a 2ª parte do C481.
 - **B1479 — sem migration, sem trava, sem perfil novo, sem rota nova.** O extrato continua aberto a quem abre o módulo (`auth` + portão do
   prefixo); o número não é dado sensível (é saldo, que o extrato já mostra).
 
@@ -70,9 +80,11 @@ a quantidade e uma frase explicando, e o formulário **Nova Reserva** troca o av
 | RN-222.03 | Material sem controle de lote → 0 | lote BLOQUEADO 6 com `controle_lote = 0` → `lote_impedido === 0` |
 | RN-222.04 | Sem lote impedido → 0 | só L1 ATIVO 4 → 0; material sem nenhum lote nem saldo → 0 |
 | RN-222.05 | O número é a régua da aprovação (`loteImpedidoSql`), não outra conta | para cada material dos cenários acima e um com parte bloqueada no material sem lote conhecido (`quantidade_bloqueada = 2` → a régua supõe dentro do lote impedido: 4), `lote_impedido` == `SELECT loteImpedidoSql('m') FROM materiais_almoxarifado m WHERE id = ?` |
-| RN-222.06 | Integração: o extrato e a recusa da reserva manual dizem o mesmo número; liberar o lote zera | L1 ATIVO 4 + L2 BLOQUEADO 6: extrato 6; `POST /reservas` de 5 → 400 `Saldo disponível insuficiente: 4. Não entram 6 un em lote bloqueado, reprovado ou vencido.`; `PUT /lotes/L2/status ATIVO` → extrato 0; reserva de 5 → 201 |
+| RN-222.06 | Integração: quando o livre cobre o impedido, o extrato e a recusa da reserva manual dizem o mesmo número; liberar o lote zera | L1 ATIVO 4 + L2 BLOQUEADO 6: extrato 6; `POST /reservas` de 5 → 400 `Saldo disponível insuficiente: 4. Não entram 6 un em lote bloqueado, reprovado ou vencido.`; `PUT /lotes/L2/status ATIVO` → extrato 0; reserva de 5 → 201 |
+| RN-222.06 b | (Fase 2, C527) Com reserva do sistema sobre o lote bloqueado a recusa diz o corte, menor que o extrato | L1 5 + L2 BLOQUEADO 10 + reserva do sistema de 8: extrato 10, disponível 7; reserva manual de 1 → `Saldo disponível insuficiente: 0. Não entram 7 un em lote bloqueado, reprovado ou vencido.` |
+| RN-222.11 | (Fase 2, I1) Impedido maior que o Disponível: os dois números, a frase não diz que o Disponível o contém | servidor: o cenário da .06 b → `lote_impedido 10` = a régua; tela: `quantidade_disponivel 2`, `lote_impedido 10` → cartões 2 e 10, a frase sem "o Disponível ainda conta" |
 | RN-222.07 | Material de cliente: o campo vem | material com `proprietario_cliente_id` e L2 BLOQUEADO 6 → `lote_impedido === 6` (o extrato não filtra o dono) |
-| RN-222.08 | O modal mostra o cartão e a frase só com número | `lote_impedido: 6`, `unidade: 'PC'` → cartão `Em lote impedido` com `6` e a frase literal `6 PC em lote bloqueado, reprovado ou vencido: o Disponível ainda conta essas peças, mas elas não saem do estoque até o lote ser liberado.`; o cartão Disponível continua com o `quantidade_disponivel`; `lote_impedido: 0` ou ausente → nem cartão nem frase |
+| RN-222.08 | O modal mostra o cartão e a frase só com número | `lote_impedido: 6`, `unidade: 'PC'` → cartão `Em lote impedido` (ícone `warning`, não o `danger` do Bloqueado) com `6` e a frase literal `6 PC em lote bloqueado, reprovado ou vencido, fora o que já aparece em Bloqueado: essas peças não saem para uso até o lote ser liberado na tela Lotes e Séries.`; o cartão Disponível continua com o `quantidade_disponivel`; `lote_impedido: 0` ou ausente → nem cartão nem frase |
 | RN-222.09 | O formulário mostra o número do material escolhido | `controle_lote: 1`, extrato `lote_impedido: 6` → `6 PC deste material estão em lote bloqueado, reprovado ou vencido e não entram na reserva.` e não o aviso fixo; `lote_impedido: 0` → nem número nem aviso fixo; extrato com erro → o aviso fixo da 221; `controle_lote: 0` → não busca o extrato, nada aparece |
 | RN-222.10 | O formulário ignora a resposta de um material que deixou de ser o escolhido | escolher A (extrato lento, 6), depois B (extrato 2); A responde depois de B → aparece o número de B (2), não o de A |
 
@@ -84,22 +96,22 @@ pelo `handleError`. Sem mudança de autorização.
 
 **Tela — literais novos**:
 - cartão do extrato: rótulo `Em lote impedido` (classe `almox-extrato-lote-impedido` no cartão);
-- frase do extrato: `${n} ${unidade} em lote bloqueado, reprovado ou vencido: o Disponível ainda conta essas peças, mas elas não saem do
-  estoque até o lote ser liberado.` (sem unidade: sem o espaço);
+- frase do extrato: `${n} ${unidade} em lote bloqueado, reprovado ou vencido, fora o que já aparece em Bloqueado: essas peças não saem para
+  uso até o lote ser liberado na tela Lotes e Séries.` (sem unidade: sem o espaço);
 - formulário: `${n} ${unidade} deste material estão em lote bloqueado, reprovado ou vencido e não entram na reserva.` (classe
-  `almox-reserva-aviso-lote`, a mesma da 221);
+  `almox-reserva-aviso-lote`, a mesma da 221; sem unidade: sem o espaço);
 - o aviso fixo da 221 (`Peças em lote bloqueado, reprovado ou vencido não entram na reserva.`) continua como fallback.
 
-O número aparece como o servidor mandou (`Number(n)`, sem formatação local — o extrato já mostra os outros cartões assim).
+Campo ausente, nulo ou não numérico (`Number.isFinite` falso) = desconhecido → o aviso fixo (Fase 2 M2). O número aparece como o servidor mandou (`Number(n)`, sem formatação local — o extrato já mostra os outros cartões assim).
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 (tronco)** — rota do extrato com `loteImpedidoSql('m') as lote_impedido`. Testes RN-222.01 a .07 em
-  `server/tests/api/extratoLoteImpedido.api.test.js`.
-- [ ] **T2 (galho, consome o contrato)** — `ExtratoMaterialModal`: o cartão e a frase (RN-222.08), testes em `ExtratoMaterialModal.test.js`.
-- [ ] **T3 (galho, consome o contrato)** — `ReservasAlmoxarifado`: o número no formulário (RN-222.09, .10), testes em
+- [x] **T1 (tronco)** — rota do extrato com `loteImpedidoSql('m') as lote_impedido`. Testes RN-222.01 a .07 em
+  `server/tests/api/extratoLoteImpedido.api.test.js` — `6224f8d1` (RN-222.11/.06 b da Fase 2 no commit da Fase 2).
+- [x] **T2 (galho, consome o contrato)** — `ExtratoMaterialModal`: o cartão e a frase (RN-222.08), testes em `ExtratoMaterialModal.test.js`.
+- [x] **T3 (galho, consome o contrato)** — `ReservasAlmoxarifado`: o número no formulário (RN-222.09, .10), testes em
   `ReservasAlmoxarifado.test.js` (RN-221.10/.10 b continuam verdes: o mock delas não traz o extrato → fallback).
-- [ ] **T4 (integração)** — RN-222.06 pela rota (extrato → reserva recusada com o mesmo número → liberar o lote → extrato 0 → reserva), no
+- [x] **T4 (integração)** — RN-222.06 pela rota (extrato → reserva recusada com o mesmo número → liberar o lote → extrato 0 → reserva), no
   arquivo da T1.
 
 T2 e T3 são pequenas e no mesmo diretório do cliente: feitas em sequência pelo mesmo executor, não em paralelo.
@@ -110,3 +122,37 @@ T2 e T3 são pequenas e no mesmo diretório do cliente: feitas em sequência pel
 status ≠ ATIVO, sem o vencido) → RN-222.02 b, .05; 4. sem o `CASE controle_lote` (conta sempre) → RN-222.03; 5. Disponível descontado
 (`disponivel − impedido`) → RN-222.01; 6. modal sem a guarda `> 0` → RN-222.08 (o "nem cartão"); 7. formulário sem o fallback → RN-222.09
 (o erro); 8. formulário sem a guarda de material escolhido → RN-222.10; 9. formulário mostra o aviso fixo também com número → RN-222.09.
+
+## Fase 2 — revisão do plano (1 revisor fresco)
+
+Sem trava. **3 importantes, todos aceitos:** (I1) a frase *"o Disponível ainda conta essas peças"* fica falsa quando o impedido passa do
+disponível (reserva da OS sobre o lote bloqueado) → frase nova + **RN-222.11**; (I2) a recusa da reserva diz o **corte** (`min(impedido,
+base)`), não o número do extrato → RN-222.06 restrita a "quando o livre cobre", **RN-222.06 b** e **C527**; (I3) o cartão novo com o mesmo
+cadeado vermelho do *Bloqueado* parece uma cópia dele → ícone de alerta, cor de atenção, "fora o que já aparece em Bloqueado" na frase.
+**4 menores, aceitos:** a regra "sem unidade, sem espaço" também no formulário; campo não numérico = desconhecido (aviso fixo); *"não saem
+do estoque"* → *"não saem para uso"* (o vencido sai como sucata/perda); a tela não diz qual lote → a frase aponta *Lotes e Séries* e
+**C528**. Confirmado por sonda: a régua custa 0,6–1,5 ms por material no banco de desenvolvimento; nenhum teste do servidor compara o
+conjunto de chaves do `material` do extrato; os mocks do cliente sem `controle_lote` não disparam a busca nova.
+
+## Execução e controles (medidos)
+
+`extratoLoteImpedido.api.test.js`: vermelho antes da T1 **1 passou, 11 falhou** (o verde é o 404 de contrato); **12/12** em `6224f8d1`;
+**13/13** com a RN-222.11/.06 b. Tela: `ExtratoMaterialModal.test.js` vermelho **2 falhou, 5 passou** (o verde é o "nem cartão" com 0) →
+**9/9**; `ReservasAlmoxarifado.test.js` vermelho **3 falhou, 37 passou** (os verdes novos são os do aviso fixo, que é o comportamento da 221)
+→ **40/40**.
+
+| # | Sabotagem | Caiu |
+|---|---|---|
+| 2 | "hoje" + 1 dia no extrato | RN-222.02 d, .05 b |
+| 3 | outra conta (só status ≠ ATIVO, sem vencido) | RN-222.02 b, .05, .05 b |
+| 4 | sem o `CASE controle_lote` | RN-222.03 |
+| 5 | Disponível descontado | RN-222.01 |
+| 6 | modal sem a guarda `> 0` | RN-222.08 (4 testes, inclusive o "nem cartão") |
+| 7 | formulário sem o fallback | RN-222.09 (falhou, sem campo, buscando) e RN-221.10/.10 b |
+| 8 | formulário sem o `vivo` (resposta velha grava) | RN-222.10 |
+| 9 | aviso fixo também com número | RN-222.09 (número e zero), .10 |
+| 10 | a frase antiga ("o Disponível ainda conta") | RN-222.08, .11 |
+| 11 | o cartão com o cadeado do Bloqueado | RN-222.08 (o ícone) |
+| 8b | ler o valor sem conferir o material (`impedidoDoForm.valor`) | **sobrevive — equivalente**: o efeito zera o valor antes de qualquer leitura observável; o único efeito é um quadro pintado antes do efeito rodar. A guarda fica. |
+
+Restauro conferido por igualdade de conteúdo depois de cada rodada.

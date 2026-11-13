@@ -144,6 +144,23 @@ process.on('exit', (code) => {
     assert.strictEqual(Number(mat.quantidade_disponivel), 5);
   });
 
+  // ── RN-222.06 b / RN-222.11 (Fase 2) ─────────────────────────────────────────────────────────────────────────────
+  // A reserva do sistema (a da OS, B1381) fica SOBRE o lote bloqueado: o impedido passa do disponivel, e a recusa da reserva manual diz o
+  // que o lote CORTOU (min(impedido, base), B1470) — menor que o numero do extrato (C527, declarado).
+  await test('[RN-222.11] impedido maior que o Disponivel: L1 5 + L2 BLOQUEADO 10 + reserva do sistema de 8 -> impedido 10, disponivel 7', async () => {
+    const m = await material(); await entrar(m, 5, 'L1'); await entrar(m, 10, 'L2'); await status(m, 'L2', 'BLOQUEADO');
+    const stockService = require('../../services/almoxarifado/stockService');
+    await stockService.criarReserva(db, ADMIN, { material_id: m, quantidade: 8, os_referencia: 'OS-SIS-222' }, { sistema: true });
+    const mat = await extrato(m);
+    assert.strictEqual(mat.lote_impedido, 10);
+    assert.strictEqual(Number(mat.quantidade_disponivel), 7);
+    assert.strictEqual(mat.lote_impedido, await regua(m));
+    // RN-222.06 b: a recusa diz o corte (7), nao o numero do extrato (10) — C527
+    const r = await post(`${API}/reservas`, { material_id: m, quantidade: 1, os_referencia: 'OS-222', observacoes: 'e222' });
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, 'Saldo disponível insuficiente: 0. Não entram 7 un em lote bloqueado, reprovado ou vencido.');
+  });
+
   // ── RN-222.07 ─────────────────────────────────────────────────────────────────────────────────────────────────────
   await test('[RN-222.07] material de cliente: o campo vem (o extrato nao filtra o dono)', async () => {
     await dbRun(db, `CREATE TABLE IF NOT EXISTS clientes (id INTEGER PRIMARY KEY, razao_social TEXT)`);
