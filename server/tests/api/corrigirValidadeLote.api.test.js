@@ -490,6 +490,8 @@ const CORPO = (extra = {}) => ({ data_validade: '2027-03-10', validade_vista: '2
     const original = trava.naTravaDoMaterial;
     let viu = false;
     trava.naTravaDoMaterial = async (m, fn) => {
+      // Etapa 220 (B1461): `liberarVencimento` tambem passa por aqui agora — so a 1a chamada (a da correcao) dispara a liberacao
+      if (viu) return original.call(trava, m, fn);
       viu = true;
       await lotService.liberarVencimento(db, QUALIDADE, lote.id, 'laudo antes da secao');
       return original.call(trava, m, fn);

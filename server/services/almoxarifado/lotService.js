@@ -266,6 +266,7 @@ async function redefinirValidadeDoLoteVazio(db, user, loteId, antigaISO, novaISO
   // Fase 5 (F2): a guarda tambem contra a liberacao lida — `liberarVencimento` nao pega a trava, e uma liberacao gravada entre a
   // releitura e o UPDATE seria zerada sem constar na auditoria (`liberacao_anulada: false`) nem no aviso. Nao casar = 409 `MUDOU`.
   // Descartado: `liberarVencimento` sob a trava (porta antiga, fora do escopo desta etapa; a guarda basta para nao apagar calado).
+  // Etapa 220 (B1461): `liberarVencimento` PEGA a trava desde entao — a guarda fica (defesa; quem chama de fora da secao do motor).
   const claim = await dbGet(db, `UPDATE lotes_almoxarifado SET data_validade = ?, vencimento_liberado_em = NULL,
       vencimento_liberado_por = NULL, vencimento_liberado_motivo = NULL, updated_at = CURRENT_TIMESTAMP
     WHERE id = ? AND data_validade = ? RETURNING id`, [novaISO, loteId, antigaISO]);
@@ -475,13 +476,15 @@ function validarPayloadCorrecao({ data_validade, validade_vista, justificativa }
  * contra a lida (`IS ?` — casa `NULL`) e audita. Mudar a data SEMPRE zera a liberacao de vencimento (RN-191.08, B1292): ela era
  * uma assinatura sobre a data antiga — se nao havia, zerar nulo e inocuo.
  */
-async function corrigirValidadeDoLoteSemTrava(db, user, loteFora, { nova, vista, motivo }) {
+async function corrigirValidadeDoLoteSemTrava(db, user, loteFora, { nova, vista, motivo }, pend = null) {
   const loteId = loteFora.id;
   const antes = await getLote(db, loteId); // releitura dentro da secao: o lido fora pode ter mudado na fila da trava
   if (!antes) throw erro('Lote nao encontrado', 404);
   const gravada = validadeNormalizada(antes.data_validade);
   if (gravada !== vista) throw erro(MSG_VALIDADE.MUDOU(antes.codigo, antes.data_validade), 409);
   if (gravada === nova) throw erro(MSG_VALIDADE.MESMA(antes.codigo, antes.data_validade));
+  // Etapa 220 (Fase 5, B1468): corrigir a validade de um lote vencido para o futuro tambem o libera — e a 4a porta da C480
+  const antesImpedido = pend ? await rcs().loteImpedidoAgora(db, loteId) : false;
 
   const claim = await dbGet(db, `UPDATE lotes_almoxarifado SET data_validade = ?, vencimento_liberado_em = NULL,
       vencimento_liberado_por = NULL, vencimento_liberado_motivo = NULL, updated_at = CURRENT_TIMESTAMP
@@ -506,7 +509,8 @@ async function corrigirValidadeDoLoteSemTrava(db, user, loteFora, { nova, vista,
     dados_novos: { data_validade: nova, liberacao_anulada: liberacaoAnulada, desvencido },
     justificativa: motivo,
   });
-  return { antes, liberacaoAnulada };
+  const reservou = antesImpedido ? await rcs().reservarLoteLiberadoSobTrava(db, user, antes, pend) : null;
+  return { antes, liberacaoAnulada, reservou };
 }
 
 /**
@@ -547,8 +551,16 @@ async function corrigirValidadeDoLote(db, user, loteId, payload) {
   const id = Number(loteId);
   const lote = Number.isInteger(id) && id > 0 ? await getLote(db, id) : undefined;
   if (!lote) throw erro('Lote nao encontrado', 404);
-  const { antes, liberacaoAnulada } = await trava.naTravaDoMaterial(lote.material_id,
-    () => corrigirValidadeDoLoteSemTrava(db, user, lote, dados));
+  // Etapa 220 (Fase 5, B1468): o lote vencido corrigido para o futuro reserva para quem esperava, na mesma secao; o recalculo e o
+  // aviso depois de soltar. A resposta ganha `reservado_para_quem_esperava` (aditivo).
+  const pend = rcs().novaPendencia();
+  let r;
+  try {
+    r = await trava.naTravaDoMaterial(lote.material_id, () => corrigirValidadeDoLoteSemTrava(db, user, lote, dados, pend));
+  } finally {
+    await rcs().concluirPendencia(db, user, pend);
+  }
+  const { antes, liberacaoAnulada, reservou } = r;
 
   if (validadeNormalizada(antes.data_validade) != null) await retirarLoteVencendoPendente(db, id, antes.data_validade);
 
@@ -560,7 +572,10 @@ async function corrigirValidadeDoLote(db, user, loteId, payload) {
     if (n > 0) avisos.push(MSG_VALIDADE.AVISO_SEPARACAO(antes.codigo, n));
   }
   if (validadeNormalizada(antes.data_validade) != null) avisos.push(MSG_VALIDADE.AVISO_ETIQUETA(antes.codigo, antes.data_validade));
-  return { lote: await getLote(db, id), avisos };
+  return {
+    lote: await getLote(db, id), avisos,
+    reservado_para_quem_esperava: await rcs().resumoDaReservaDoLote(db, lote.material_id, reservou),
+  };
 }
 
 /**

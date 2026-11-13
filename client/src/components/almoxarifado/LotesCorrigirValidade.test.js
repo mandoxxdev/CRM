@@ -203,6 +203,17 @@ describe('Etapa 191 — corrigir validade do lote (tela)', () => {
     expect(getsDepois).toBe(getsAntes + 1);
   });
 
+  test('[RN-220.15] corrigir a validade que reservou para quem esperava mostra o reservado', async () => {
+    api.put.mockResolvedValueOnce({
+      data: { lote: { ...LOTE_ERRADO, data_validade: '2028-01-31' }, avisos: [],
+        reservado_para_quem_esperava: { quantidade: 4, unidade: 'PC', requisicoes: 1 } },
+    });
+    await renderizarComMaterial();
+    await corrigir(0, '2028-01-31', 'NF diz 2028');
+    expect(toast.success).toHaveBeenCalledWith('Validade do lote corrigida!');
+    expect(toast.info).toHaveBeenCalledWith('4 PC reservado(s) para quem esperava este material (1 requisição(ões)).');
+  });
+
   test('[RN-191.13] 409 mantem o modal', async () => {
     api.put.mockRejectedValueOnce({ response: { status: 409, data: { error: MSG_MUDOU } } });
     await renderizarComMaterial();

@@ -352,6 +352,7 @@ const LotesAlmoxarifado = () => {
         justificativa: validadeJustificativa.trim(),
       });
       toast.success('Validade do lote corrigida!');
+      avisarReservaDaLiberacao(r?.data);
       (r.data?.avisos || []).forEach((a) => toast.warn(a, { autoClose: false }));
       setValidadeTarget(null);
       loadLotes();

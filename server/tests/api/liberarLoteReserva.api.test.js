@@ -155,6 +155,31 @@ process.on('exit', (code) => {
     assert.strictEqual(e.corpo_texto.split('\n')[0], 'O lote L1 do material que a sua requisição aguardava foi liberado e está no estoque.');
     assert.ok(e.corpo_texto.includes('reservado para a sua requisição: 4 PC'), e.corpo_texto);
     assert.strictEqual(JSON.parse(e.payload).origem, 'LOTE_LIBERADO');
+    // Fase 5 (testes, gap 3): o lote veio de uma nota so (B1467) -> o aviso cita o recebimento
+    const numero = (await dbGet(db, 'SELECT numero FROM recebimentos_material_almoxarifado WHERE id = ?', [c01.rec])).numero;
+    assert.ok(e.corpo_texto.split('\n').includes(`Recebimento: ${numero}`), e.corpo_texto);
+    assert.strictEqual(JSON.parse(e.payload).recebimento_id, c01.rec);
+  });
+  await test('[RN-220.08 c] (Fase 5) certificado num lote que nao estava bloqueado por certificado: 200, nada reservado, resposta com zeros', async () => {
+    const m = await material({ certificado: 0 });
+    await entrar(m, 4, 'L1');
+    const R1 = await reqDireta(m, 4);
+    const r = await ok(anexar(m, 'L1'));
+    assert.strictEqual(r.body.status, 'ATIVO');
+    assert.deepStrictEqual(r.body.reservado_para_quem_esperava, RES(0, 0));
+    assert.deepStrictEqual(await reservas(R1), []);
+  });
+  await test('[RN-220.01 b] (Fase 5) duas requisicoes dividem o lote: a resposta soma (4) e conta as requisicoes (2)', async () => {
+    const m = await material({ certificado: 0 });
+    await entrar(m, 4, 'L1');
+    await statusLote(m, 'L1', 'BLOQUEADO');
+    const R1 = await reqDireta(m, 1);
+    // R1 com DOIS itens do mesmo material: tres reservas, duas requisicoes (a conta e de requisicoes, nao de reservas)
+    await dbRun(db, 'INSERT INTO itens_requisicao_almoxarifado (requisicao_id, material_id, quantidade_solicitada) VALUES (?,?,?)', [R1, m.id, 1]);
+    const R2 = await reqDireta(m, 2);
+    const r = await ok(putStatus(m, 'L1', 'ATIVO'));
+    assert.deepStrictEqual(r.body.reservado_para_quem_esperava, RES(4, 2));
+    assert.deepStrictEqual([...(await reservas(R1)), ...(await reservas(R2))], [1, 1, 2]);
   });
   await test('[RN-220.08 b] o mesmo lote bloqueado e liberado de novo com R1 ainda esperando gera um 2o aviso (a chave nao engole)', async () => {
     const { m, R1 } = await bloqueadoComEspera(8);
@@ -405,6 +430,25 @@ process.on('exit', (code) => {
     await statusLote(m, 'L1', 'ATIVO');
     const rs = await dbAll(db, "SELECT recebimento_id FROM reservas_material_almoxarifado WHERE requisicao_id = ? AND status = 'ATIVA'", [R1]);
     assert.deepStrictEqual(rs.map((x) => x.recebimento_id), [null]);
+  });
+
+  // ── RN-220.15 (Fase 5, B1468): corrigir a validade de um lote vencido para o futuro tambem o libera ─────────────────────────────
+  await test('[RN-220.15] L1 ATIVO vencido com 4, R1 espera 4 -> corrigir a validade para o ano que vem reserva 4; corrigir para outro dia vencido nao', async () => {
+    const m = await material({ certificado: 0 });
+    await entrar(m, 4, 'L1');
+    await vencer(m, 'L1');
+    const R1 = await esperando(m, 4);
+    const L1 = await loteId(m, 'L1');
+    const anteontem = diaLocal.somarDiasISO(diaLocal.hojeLocalISO(), -2);
+    const ainda = await ok(request(app).put(`${API}/lotes/${L1}/validade`).send({ data_validade: anteontem, validade_vista: ontem, justificativa: 'e220' }));
+    assert.deepStrictEqual(ainda.body.reservado_para_quem_esperava, RES(0, 0), 'continua vencido: nada a reservar');
+    assert.deepStrictEqual(await reservas(R1), []);
+    const futuro = diaLocal.somarDiasISO(diaLocal.hojeLocalISO(), 365);
+    const r = await ok(request(app).put(`${API}/lotes/${L1}/validade`).send({ data_validade: futuro, validade_vista: anteontem, justificativa: 'e220' }));
+    assert.ok(r.body.lote && Array.isArray(r.body.avisos), 'o resto da resposta ({ lote, avisos }) mudou');
+    assert.deepStrictEqual(r.body.reservado_para_quem_esperava, RES(4, 1));
+    assert.deepStrictEqual(await reservas(R1), [4], 'o lote desvencido nao reservou para quem esperava');
+    assert.strictEqual(await st(R1), 'TOTALMENTE_RESERVADA');
   });
 
   // ── RN-220.13 (integracao): nota bloqueada -> espera -> certificado -> separar -> entregar ───────────────────────────────────────
