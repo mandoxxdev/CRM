@@ -1,0 +1,9 @@
+*Planejamento — almoxarifado: as listas de materiais mostram o estoque em lote bloqueado*
+_13/11/2026_
+
+*1. A lista de materiais e a escolha do material na reserva mostram quanto está em lote bloqueado, reprovado ou vencido*
+Hoje só o extrato de um material diz quanto do estoque está num lote bloqueado (sem certificado), reprovado ou vencido, que não pode sair para uso. Depois desta alteração, a lista da tela Materiais mostra, embaixo da quantidade, quanto está nesses lotes, e a lista de materiais do formulário de nova reserva mostra o mesmo número ao lado do Disponível. O Disponível continua o mesmo número de sempre, e a tela não fica mais lenta (o cálculo foi medido antes numa lista de 3 mil materiais).
+Tempo estimado: *2h30*
+
+*Total estimado: 2h30*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
