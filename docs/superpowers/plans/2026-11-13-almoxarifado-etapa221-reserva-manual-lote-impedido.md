@@ -217,6 +217,14 @@ material do material enviado, e a rota da transformação não está em seção 
   `e386d335`); a verificação final foi refeita depois de `8395f440`.
 - **Defeito que escapou da 220:** nenhum achado nesta etapa.
 
+### Verificação (medida, serial, sobre `ec61b505`)
+
+`test:api` **616/616 arquivos OK** (os 615 da 220 + `reservaManualLoteImpedido`); `test:almoxarifado` **44 passou, 0 falhou**;
+`test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0**; cliente (`CI=true npx react-scripts test --watchAll=false
+--maxWorkers=2`) **224/224 suítes, 3013/3013 testes** (3010 + 3 novos); `build` **Compiled successfully**. `reservaManualLoteImpedido` **20/20**;
+as suítes do terceiro (transformação 12 + 48 + 17, remessa 53 + 31 + 38 + 18, saldo em terceiros 33, conferência 7) verdes depois da B1475.
+Uma 1ª rodada do `test:api` (sobre `e386d335`, antes da Fase 5) foi interrompida de propósito para refazer sobre o código final.
+
 ## Próxima tarefa detalhada
 
 *(Escolhida pela ordem do CLAUDE.md: a 221 fecha o C479 — a última porta que reservava peça de lote impedido. A spec 07 continua 🟢; o
