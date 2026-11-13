@@ -530,7 +530,7 @@ async function relerPedido(db, pedidoId) {
   if (!pedido) return null;
   const linhas = await dbAll(db, `SELECT id, material_id, codigo, descricao, quantidade,
       valor_unitario, unidade, quantidade_recebida,
-      item_numero, ncm, peso_unitario, ipi_percentual, observacao, os_texto
+      item_numero, ncm, peso_unitario, ipi_percentual, observacao, os_texto, codigo_fornecedor
     FROM itens_pedido_compra WHERE pedido_id = ? ORDER BY item_numero, id`, [pedidoId]);
   const { itens, totais } = calcularTotaisPedido(linhas, encargosDoPayload({}, pedido));
   return {
@@ -597,8 +597,15 @@ async function lerPedidoParaRecebimento(db, pedidoId) {
  * coluna `NOT NULL`), com fallback para `descricao` — nunca o contrario: `descricao` e quase sempre
  * nula no cadastro e a linha do pedido sairia em branco.
  */
-async function resolverItens(db, itens) {
+async function resolverItens(db, itens, fornecedorId = null) {
   const resolvidos = [];
+  // Etapa 213 (RN-213.01): o codigo do fornecedor do cabecalho, pelo vinculo material x fornecedor da Etapa 212. Foto no
+  // salvar: o pedido impresso diz o codigo com que foi emitido; editar e salvar refaz. Sem vinculo (ou sem codigo), NULL.
+  const codigoDoFornecedor = async (materialId) => {
+    if (fornecedorId == null) return null;
+    const v = await dbGet(db, 'SELECT codigo FROM itens_fornecedor WHERE material_id = ? AND fornecedor_id = ?', [materialId, fornecedorId]);
+    return v && v.codigo != null && String(v.codigo).trim() !== '' ? String(v.codigo).trim() : null;
+  };
   for (const item of itens) {
     const material = await dbGet(db,
       'SELECT id, codigo, nome, descricao, unidade, ncm, peso_unitario FROM materiais_almoxarifado WHERE id = ?', [item.material_id]);
@@ -625,6 +632,7 @@ async function resolverItens(db, itens) {
       // Etapa 193 (RN-193.07): a OS do item. A cotacao reusa esta funcao, mas o INSERT dela (`gravarItens`) lista colunas
       // explicitas e nao a leva; o pedido gerado da cotacao monta os itens sem a chave (nasce sem OS).
       os_texto: normalizarOsDoItem(item.os_texto),
+      codigo_fornecedor: await codigoDoFornecedor(material.id),
     });
   }
   return resolvidos;
@@ -643,10 +651,10 @@ async function inserirLinhasDoPedido(db, pedidoId, itensResolvidos) {
     const item = itensResolvidos[i];
     await dbRun(db, `INSERT INTO itens_pedido_compra
       (pedido_id, material_id, codigo, descricao, quantidade, valor_unitario, unidade,
-       item_numero, ncm, peso_unitario, ipi_percentual, observacao, os_texto)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       item_numero, ncm, peso_unitario, ipi_percentual, observacao, os_texto, codigo_fornecedor)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [pedidoId, item.material_id, item.codigo, item.descricao, item.quantidade, item.valor_unitario, item.unidade,
-      i + 1, item.ncm, item.peso_unitario, item.ipi_percentual, item.observacao, item.os_texto == null ? null : item.os_texto]);
+      i + 1, item.ncm, item.peso_unitario, item.ipi_percentual, item.observacao, item.os_texto == null ? null : item.os_texto, item.codigo_fornecedor == null ? null : item.codigo_fornecedor]);
   }
 }
 
@@ -692,7 +700,7 @@ async function criarPedido(db, dados, user) {
   assertOsExclusiva(osId, osTexto);
   await assertOsAceitaCompra(db, osId);
 
-  const itensResolvidos = await resolverItens(db, dados.itens);
+  const itensResolvidos = await resolverItens(db, dados.itens, dados.fornecedor_id);
 
   // `status` so entra na lista de colunas quando VEIO: bindar `null` sobrescreveria o
   // `DEFAULT 'pendente'` do DDL com NULL, e a tela de Compras filtra por essa coluna.
@@ -905,7 +913,7 @@ async function atualizarPedido(db, pedidoId, dados) {
   const osTexto = normalizarOsTexto(dados.os_texto);
   assertOsExclusiva(osId === undefined ? pedido.os_id : osId, osTexto === undefined ? pedido.os_texto : osTexto);
   await assertOsAceitaCompra(db, osId, pedido.os_id);
-  const itensResolvidos = await resolverItens(db, dados.itens);
+  const itensResolvidos = await resolverItens(db, dados.itens, dados.fornecedor_id);
 
   const sets = ['fornecedor_id = ?'];
   const valores = [dados.fornecedor_id];

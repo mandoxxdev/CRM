@@ -253,6 +253,10 @@ function blocoComplementares(p, descontoImpresso) {
 // Etapa 193 (RN-193.09): a OS do item (texto livre). A coluna so existe quando ALGUM item tem OS; sem nenhuma, a tabela e a
 // de antes (10 colunas) — pedido de estoque nao ganha coluna vazia.
 const osDoItem = (item) => (item.os_texto == null ? '' : String(item.os_texto).trim());
+// Etapa 213 (RN-213.03): o codigo do fornecedor, abaixo do codigo GMP (que continua o principal). Sem codigo, nada.
+const codigoDoFornecedor = (item) => (item.codigo_fornecedor == null || String(item.codigo_fornecedor).trim() === ''
+  ? ''
+  : `<div class="cod-fornecedor">Cód. fornecedor: ${texto(String(item.codigo_fornecedor).trim())}</div>`);
 
 function linhaItem(item, indice, comOs = false) {
   const numero = numeroOuNulo(item.item_numero);
@@ -263,7 +267,7 @@ function linhaItem(item, indice, comOs = false) {
   return `
         <tr>
           <td class="c">${numero === null ? indice + 1 : ptBR(numero, 0)}</td>
-          <td>${texto(item.codigo)}</td>
+          <td>${texto(item.codigo)}${codigoDoFornecedor(item)}</td>
           <td class="descricao">${descricao}${obs}</td>${comOs ? `
           <td class="c">${texto(osDoItem(item))}</td>` : ''}
           <td class="c">${texto(item.ncm)}</td>
@@ -365,6 +369,7 @@ const CSS = `
     table.itens th { background: #e8e8e8; font-size: 8pt; white-space: nowrap; }
     table.itens td.descricao { width: 32%; }
     .obs-item { font-size: 7.5pt; color: #444; margin-top: 1px; }
+    .cod-fornecedor { font-size: 7pt; color: #444; margin-top: 1px; white-space: nowrap; }
     .c { text-align: center; }
     .r { text-align: right; white-space: nowrap; }
     thead { display: table-header-group; }

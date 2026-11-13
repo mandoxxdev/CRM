@@ -2133,6 +2133,8 @@ async function initSchemaUmaExecucao(db) {
     // Etapa 193 (RN-193.07): a OS do ITEM, texto livre ate 60 (so justificativa da compra: nao reserva, nao entra no
     // recebimento nem no encerramento/exclusao da OS, que leem `pedidos_compra.os_id`). NULL = item sem OS.
     'os_texto TEXT',
+    // Etapa 213 (RN-213.01): o codigo do fornecedor do cabecalho para este material, FOTO do vinculo (Etapa 212) no salvar.
+    'codigo_fornecedor TEXT',
   ];
   for (const col of itensPedidoCols) await safeAlter(db, `ALTER TABLE itens_pedido_compra ADD COLUMN ${col}`);
   // Indice em `pedido_id`: a tabela nao tinha NENHUM indice, e a partir desta etapa toda leitura
@@ -2160,6 +2162,8 @@ async function initSchemaUmaExecucao(db) {
     FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
   )`);
   await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_itens_cotacao_cotacao ON itens_cotacao(cotacao_id)');
+  // Etapa 213 (RN-213.01): o codigo do fornecedor da cotacao para este material, foto do vinculo no salvar.
+  await safeAlter(db, 'ALTER TABLE itens_cotacao ADD COLUMN codigo_fornecedor TEXT');
 
   // ── Devoluções ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS devolucoes_material_almoxarifado (

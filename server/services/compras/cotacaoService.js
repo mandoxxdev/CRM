@@ -55,7 +55,7 @@ const SELECT_LINHA = `SELECT c.id, c.numero, c.fornecedor_id, f.razao_social AS 
 
 /** As linhas na ordem de lancamento (`ORDER BY id`), com o que a tela de edicao precisa por linha. */
 async function lerItens(db, cotacaoId) {
-  return dbAll(db, `SELECT id, material_id, codigo, descricao, unidade, quantidade, valor_unitario
+  return dbAll(db, `SELECT id, material_id, codigo, descricao, unidade, quantidade, valor_unitario, codigo_fornecedor
     FROM itens_cotacao WHERE cotacao_id = ? ORDER BY id`, [cotacaoId]);
 }
 
@@ -103,8 +103,9 @@ const somaItens = (itens) => calcularTotaisPedido(itens).totais.total_produtos;
 async function gravarItens(db, cotacaoId, resolvidos) {
   await dbRun(db, 'DELETE FROM itens_cotacao WHERE cotacao_id = ?', [cotacaoId]);
   for (const it of resolvidos) {
-    await dbRun(db, `INSERT INTO itens_cotacao (cotacao_id, material_id, codigo, descricao, quantidade, valor_unitario, unidade)
-      VALUES (?, ?, ?, ?, ?, ?, ?)`, [cotacaoId, it.material_id, it.codigo, it.descricao, it.quantidade, it.valor_unitario, it.unidade]);
+    await dbRun(db, `INSERT INTO itens_cotacao (cotacao_id, material_id, codigo, descricao, quantidade, valor_unitario, unidade, codigo_fornecedor)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [cotacaoId, it.material_id, it.codigo, it.descricao, it.quantidade, it.valor_unitario, it.unidade,
+      it.codigo_fornecedor == null ? null : it.codigo_fornecedor]);
   }
 }
 
@@ -114,7 +115,7 @@ async function criarCotacao(db, dados) {
   await assertFornecedor(db, c.fornecedor_id);
   // RN-F01: TODOS os materiais antes de qualquer escrita — sem transacao, descobrir na segunda
   // linha que o material nao existe deixaria o cabecalho gravado; o cenario (4) conta `cotacoes`.
-  const resolvidos = await resolverItens(db, itens);
+  const resolvidos = await resolverItens(db, itens, c.fornecedor_id);
   await assertNumeroLivre(db, c.numero, null);
   if (resolvidos.length) c.valor_total = somaItens(resolvidos);   // RN-F03: o payload e ignorado
   let r;
@@ -134,7 +135,7 @@ async function atualizarCotacao(db, id, dados) {
   const c = colunas(dados);
   const itens = Array.isArray(dados.itens) ? dados.itens : [];   // RN-F05: sem itens = apaga as linhas
   await assertFornecedor(db, c.fornecedor_id);
-  const resolvidos = await resolverItens(db, itens);
+  const resolvidos = await resolverItens(db, itens, c.fornecedor_id);
   await assertNumeroLivre(db, c.numero, id);
   if (resolvidos.length) c.valor_total = somaItens(resolvidos);
   try {

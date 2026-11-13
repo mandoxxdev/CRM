@@ -97,6 +97,10 @@ const fkCheck = (db) => dbAll(db, 'PRAGMA foreign_key_check');
   // `quantidade_recebida` (Etapa 37) + as 5 colunas de linha da 39, do MESMO array do `safeAlter`.
   await aplicarAlters(db, 'itens_pedido_compra', altersDe('services/almoxarifado/schema.js', 'itensPedidoCols'));
   await dbRun(db, ddlDe('services/almoxarifado/schema.js', 'itens_cotacao'));
+  // Etapa 213: o mesmo safeAlter de `schema.js` (`codigo_fornecedor` na linha da cotacao) e o catalogo do fornecedor com o vinculo
+  // da Etapa 212, que `resolverItens` le para a foto do codigo — em producao as duas existem (index.js + initSchema).
+  await dbRun(db, 'ALTER TABLE itens_cotacao ADD COLUMN codigo_fornecedor TEXT');
+  await require('../../services/compras/fornecedoresDoMaterial').garantirSchema(db);
   await dbRun(db, 'PRAGMA foreign_keys = ON');
   assert.strictEqual((await dbGet(db, 'PRAGMA foreign_keys')).foreign_keys, 1, 'PRAGMA foreign_keys nao ligou');
   const fkCotacao = await dbAll(db, 'PRAGMA foreign_key_list(cotacoes)');
