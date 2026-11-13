@@ -27,6 +27,7 @@ const { enrichMaterialRows } = require('../../services/almoxarifado/materialPhot
 // nome que o cliente mandou — ver o cabecalho de urlUpload.js.
 const { extensaoSegura } = require('../../services/almoxarifado/urlUpload');
 const { disponivelSql } = require('../../services/almoxarifado/availabilitySql');
+const { loteImpedidoSql } = require('../../services/almoxarifado/loteImpedido'); // Etapa 222 (B1476): o extrato diz o impedido
 // Etapa 27, Task 2: a MESMA conversao numerica que a regua da tolerancia aplica a medida, reusada
 // no CRUD do plano de proposito. Ela existe porque `Number(null)`, `Number('')` e `Number([])` sao
 // 0 — todos passariam por `Number.isFinite` como "nominal zero" — e porque `Number('12,4')` (a
@@ -1047,10 +1048,13 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
   });
 
   // ── Extrato do item ──
+  // Etapa 222 (B1476, RN-222.01): `lote_impedido` e a regua da aprovacao e da reserva manual (`loteImpedidoSql`, "hoje" de Brasilia),
+  // aditivo — o `quantidade_disponivel` continua o de sempre. So leitura, sem trava (quem reserva/sai rele sob a trava).
   app.get('/api/almoxarifado/materiais/:id/extrato', auth, async (req, res) => {
     try {
       const material = await dbGet(db, `SELECT m.*,
         ${disponivelSql('m')} as quantidade_disponivel,
+        ${loteImpedidoSql('m')} as lote_impedido,
         a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome,
         cli.razao_social as proprietario_cliente_nome
         FROM materiais_almoxarifado m
