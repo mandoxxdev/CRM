@@ -20,6 +20,7 @@ import { toast } from 'react-toastify';
 import { formatarErroPermissao } from '../../utils/permissaoErro';
 import FornecedorModal, { colocarNoTopo, juntarListaCarregada } from './FornecedorModal';
 import useAtalhoF2 from './useAtalhoF2';
+import { useCodigosDoFornecedor, CelulaCodigo } from './codigosDoFornecedor';
 import '../Compras.css';
 
 // O vocabulario de `STATUS_COTACAO` do servidor, na mesma ordem; rotulos iguais aos do filtro da aba.
@@ -61,6 +62,8 @@ const CotacaoForm = () => {
   const [fornecedores, setFornecedores] = useState([]);
   const [numero, setNumero] = useState('');
   const [fornecedorId, setFornecedorId] = useState('');
+  // Etapa 213 (RN-213.04): o codigo que o fornecedor escolhido usa para cada material (abaixo do codigo GMP).
+  const codigosDoFornecedor = useCodigosDoFornecedor(fornecedorId);
   const [dataCotacao, setDataCotacao] = useState(hojeISO());
   const [validade, setValidade] = useState('');
   const [valorTotal, setValorTotal] = useState('');
@@ -118,6 +121,7 @@ const CotacaoForm = () => {
           unidade: it.unidade || 'UN',
           quantidade: String(it.quantidade ?? ''),
           valor_unitario: String(it.valor_unitario ?? ''),
+          codigo_fornecedor: it.codigo_fornecedor || '',
         })));
       })
       .catch((e) => { if (vivo) setErro(mensagemDeErro(e, 'Não foi possível carregar a cotação.')); })
@@ -366,7 +370,7 @@ const CotacaoForm = () => {
                   <tr><td colSpan="7" className="no-data">Nenhum item adicionado</td></tr>
                 ) : itens.map((it) => (
                   <tr key={it.chave}>
-                    <td>{it.codigo || '-'}</td>
+                    <CelulaCodigo item={it} codigos={codigosDoFornecedor} />
                     <td>{it.descricao || '-'}</td>
                     <td>{it.unidade}</td>
                     {/* Sem `min="0"` nas linhas (F4 da 40): o servidor decide e a literal do 400

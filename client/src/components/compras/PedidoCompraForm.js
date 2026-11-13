@@ -79,6 +79,7 @@ import '../Compras.css';
 import './PedidoCompraForm.css';
 import FornecedorModal, { colocarNoTopo, juntarListaCarregada } from './FornecedorModal';
 import useAtalhoF2 from './useAtalhoF2';
+import { useCodigosDoFornecedor, CelulaCodigo } from './codigosDoFornecedor';
 
 // Os 7 status do contrato (`STATUS_PEDIDO_COMPRA` do servidor). A ordem é a do schema; os rótulos
 // são os mesmos do filtro de `Compras.js`, para a mesma coisa não ter dois nomes no módulo.
@@ -387,6 +388,8 @@ const PedidoCompraForm = () => {
 
   const [fornecedores, setFornecedores] = useState([]);
   const [fornecedorId, setFornecedorId] = useState('');
+  // Etapa 213 (RN-213.04): o codigo que o fornecedor escolhido usa para cada material (abaixo do codigo GMP).
+  const codigosDoFornecedor = useCodigosDoFornecedor(fornecedorId);
   // Etapa 173 (RN-173.01): a janela do F2 — cadastra o fornecedor sem sair do pedido.
   const [novoFornecedorAberto, setNovoFornecedorAberto] = useState(false);
   // Etapa 171 (RN-171.01): a OS do cabecalho. `''` = compra para estoque.
@@ -565,6 +568,7 @@ const PedidoCompraForm = () => {
           peso_unitario: item.peso_unitario == null ? '' : String(item.peso_unitario),
           observacao: item.observacao || '',
           os_texto: item.os_texto == null ? '' : String(item.os_texto),
+          codigo_fornecedor: item.codigo_fornecedor || '',
         })));
         // O IPI padrão do pedido aberto é o que a maioria dos itens usa.
         if (itensDoServidor.length) {
@@ -1144,7 +1148,7 @@ const PedidoCompraForm = () => {
                     return (
                       <React.Fragment key={it.chave}>
                         <tr>
-                          <td>{it.codigo || '-'}</td>
+                          <CelulaCodigo item={it} codigos={codigosDoFornecedor} />
                           <td>{it.descricao || '-'}</td>
                           <td>{it.unidade}</td>
                           <td>
