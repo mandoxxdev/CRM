@@ -1,0 +1,9 @@
+*Planejamento — almoxarifado: a entrega não deixa marcar série de lote bloqueado*
+_13/11/2026_
+
+*1. Na entrega, as séries de lote bloqueado, reprovado ou vencido vêm apagadas*
+Hoje, na entrega de material com número de série, quando o endereço de saída fica em "Escolha de onde sai" ou em "Qualquer endereço", a lista "Séries que saem" mostra também as séries de um lote bloqueado, reprovado ou vencido. O almoxarife pode marcá-las e só descobre pela recusa, ao confirmar. Depois desta alteração, essas séries continuam na lista, mas apagadas (não dá para marcar), com o lote e a situação ao lado (por exemplo "lote L2: Bloqueado"), e uma frase embaixo explica que elas só saem depois que o lote for liberado na tela Lotes e Séries. A confirmação só libera com a quantidade certa de séries que podem sair.
+Tempo estimado: *2h30*
+
+*Total estimado: 2h30*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
