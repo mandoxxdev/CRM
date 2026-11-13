@@ -291,6 +291,41 @@ function situacaoDoCliente() {
     assert.strictEqual(sc.lote_impedido, 0);
   });
 
+  // ── Fase 5 (revisao da forca dos testes): as mutacoes que sobreviviam ───────────────────────────────────────────────
+  await test('[RN-227.09 b] Fase 5 (M13/M09): a reserva do proprio item nao tira do impedido (6, nao 2); fracionado 2,5 sai 2,5', async () => {
+    const m = await material(); await entrar(m, 4, 'L1'); await entrar(m, 6, 'L2'); await status(m, 'L2', 'BLOQUEADO');
+    const R = await reqDireta(m, 5);
+    const item = (await dbGet(db, 'SELECT id FROM itens_requisicao_almoxarifado WHERE requisicao_id = ?', [R])).id;
+    await dbRun(db, `INSERT INTO reservas_material_almoxarifado (material_id, requisicao_id, item_requisicao_id, quantidade, quantidade_utilizada,
+      status, origem) VALUES (?, ?, ?, 4, 0, 'ATIVA', 'REQUISICAO')`, [m.id, R, item]);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_reservada = 4 WHERE id = ?', [m.id]);
+    const it = await daFila(R);
+    assert.strictEqual(Number(it.disponivel), 10, `premissa: o disponivel da linha soma a reserva do item ${JSON.stringify(it)}`);
+    assert.strictEqual(it.lote_impedido, 6, JSON.stringify(it));
+    const f = await material(); await entrar(f, 4, 'L1'); await entrar(f, 2.5, 'L2'); await status(f, 'L2', 'BLOQUEADO');
+    assert.strictEqual((await daFila(await reqDireta(f, 1))).lote_impedido, 2.5);
+  });
+  await test('[RN-227.01 b] Fase 5 (M12): lote BLOQUEADO negativo (material que permite saldo negativo) diz "Bloqueado"', async () => {
+    const m = await material(); await entrar(m, 4, 'L1'); await entrar(m, 2, 'L2');
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET permite_saldo_negativo = 1 WHERE id = ?', [m.id]);
+    await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = -2 WHERE material_id = ? AND lote_id = ?', [m.id, await loteId(m, 'L2')]);
+    await dbRun(db, "UPDATE lotes_almoxarifado SET status = 'BLOQUEADO' WHERE id = ?", [await loteId(m, 'L2')]);
+    const l2 = (await linhas(m)).find((x) => x.lote === 'L2');
+    assert.ok(l2, 'o lote negativo sumiu do relatorio');
+    assert.ok(Number(l2.quantidade) < 0, `premissa: L2 negativo ${JSON.stringify(l2)}`);
+    assert.strictEqual(l2.situacao_lote, 'Bloqueado');
+  });
+  await test('[RN-227.05 b] Fase 5 (M04): validade com espaco na frente — servidor e cliente iguais', async () => {
+    const { situacaoDoLote } = require('../../services/almoxarifado/situacaoDoLote');
+    const doCliente = situacaoDoCliente();
+    for (const v of [' 2026-11-10', '2026-11-10 ', '\t2026-11-10', '2026-1-10', '20261110']) {
+      const c = { lote_esta_impedido: true, lote_status: 'ATIVO', lote_vencido_sem_liberacao: true, lote_validade: v };
+      assert.strictEqual(situacaoDoLote(c), doCliente(c), `divergiu em ${JSON.stringify(c)}`);
+    }
+    assert.strictEqual(situacaoDoLote({ lote_esta_impedido: true, lote_status: 'ATIVO', lote_vencido_sem_liberacao: true,
+      lote_validade: ' 2026-11-10' }), 'Validade a corrigir: 2026-11-10', 'controle: a palavra do espaco na frente');
+  });
+
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
   await close();
