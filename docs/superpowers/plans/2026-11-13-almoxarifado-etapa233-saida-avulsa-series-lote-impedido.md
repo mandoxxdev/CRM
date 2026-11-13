@@ -97,9 +97,9 @@ Cenário-base: material com série **sem** controle de lote, `A1`, `A2` em L1 (A
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 (tronco, servidor)** — `server/tests/api/saidaAvulsaSeriesLoteImpedido.api.test.js` (RN-233.01 a .04) vermelho → guarda extraída
+- [x] **T1 (tronco, servidor)** — `b3fc7a0a`, Fase 5 `308ef6b6` — — `server/tests/api/saidaAvulsaSeriesLoteImpedido.api.test.js` (RN-233.01 a .04) vermelho → guarda extraída
   (`checarLoteNaSaida(lote, tipo)`, a mesma do lote escolhido) + `lotePelasSeries` em `stockService.js` + a v2 declara → verde.
-- [ ] **T2 (galho, tela, contra o contrato acima)** — `client/src/components/almoxarifado/MovimentacoesSaidaSeriesImpedidas.test.js`
+- [x] **T2 (galho, tela, contra o contrato acima)** — `3ec94b9f`, Fase 5 `308ef6b6` — — `client/src/components/almoxarifado/MovimentacoesSaidaSeriesImpedidas.test.js`
   (RN-233.05 a .09) vermelho → `MovimentacoesAlmoxarifado.js` → verde.
 - Integração: a RN-233.01/.02 entram pela rota real (o que a tela apaga é o que a porta recusa, por tipo); a RN-233.04 entra pelo serviço
   (sem a opção, como antes).
@@ -113,15 +113,39 @@ Cenário-base: material com série **sem** controle de lote, `A1`, `A2` em L1 (A
 
 ## Fase 2 — revisão do plano (1 revisor fresco)
 
-*(preencher)*
+Rodou enquanto os testes eram escritos. **0 Critical.** **Confirmado:** as literais da porta são as do lote escolhido; a régua da tela é a
+do servidor em todas as bordas (status não ATIVO, liberação vazia, validade vazia ou torta, bloqueado e vencido, série sem lote); a guarda
+roda antes de qualquer efeito e dentro da trava; T1 e T2 independentes. **2 importantes:** (I1) a RN-233.07 podia passar com o efeito sem
+`form.tipo` se o FEFO trocasse o lote ao trocar o tipo — o teste da tela já monta **sem** lote elegível (lotes `[]`), e a sabotagem C3 cai;
+(I2) a régua por tipo não pode tirar do ajuste a série marcada — guarda `!TIPOS_SAIDA_LOTE.includes(tipo)` e cenário do ajuste marcando
+(a sabotagem dela, C6, não cai: ver Execução). **4 menores:** (M3) a leitura do lote pela `s.lote_id`, sem conferir o material do lote, a
+mesma da listagem — congelado; (M4) só séries `EM_ESTOQUE` do material — a já entregue ou de outro material mantém a recusa do claim (filtro
+e cenário); (M5) material com controle de lote e "Sem lote": já era recusado por *exige lote* — em D (233) 4; (M6) a v2 aceita outros tipos
+de saída (`SAIDA_PRODUCAO`…) — cenário.
 
 ## Execução e controles (medidos)
 
-*(preencher)*
+- **Vermelho antes do código:** servidor 4/8 (os 4 controles de "não muda" passavam, como devem); tela 6/7 (o do ajuste passava).
+- **Divergência do plano:** a guarda virou `checarLoteNaSaida` (função de módulo, `require` tardio do `lotService` como no motor);
+  `String(status || '')` no lugar de `status.toLowerCase()` — inócuo (`status` é `NOT NULL DEFAULT 'ATIVO'`, revisor da Fase 5).
+- **Sabotagens** (script `e233-sabotagem.js` no scratchpad: troca por `split/join` com âncora contada (=1), roda o arquivo de teste,
+  restaura e confere o `md5`): rodada 1 — S1–S5 servidor e C1–C5, C7 tela caem; **C6** (tirar a guarda do ajuste) **não cai** e é
+  **inalcançável hoje**: no ajuste o efeito de sincronia só reroda quando tipo, lote ou lista mudam, e cada um desses caminhos zera
+  `serie_ids` antes (troca de tipo para Ajuste, recarga que esvazia a lista) — confirmado pelo revisor de testes da Fase 5; a guarda
+  fica, declarada sem teste que a derrube. Rodada final (sobre `308ef6b6`, com S6, S7, C8, C9 da Fase 5): **15/16 caem** (S1–S7 servidor; C1–C5, C7–C9 tela); C6 continua inalcançável. Restauro conferido por `md5` em cada uma; `git status` sem sobra depois.
 
-## Fase 5 — revisão adversarial do código
+## Fase 5 — revisão adversarial do código (2 revisores frescos)
 
-*(preencher)*
+- **Regra e fluxo (0 Critical/Important; 2 Minor):** (1) **reproduzido** (sonda do revisor): `AJUSTE_NEGATIVO` pela API (sem tela) com o
+  lote em branco passa a recusar lote bloqueado — é a régua do lote escolhido (descarte: status barra, vencido não); faltava dizer e testar
+  → cenário e letra B (B1527); (2) **reproduzido** (teste vermelho antes do conserto): na Perda, lote bloqueado **e** vencido dizia
+  *"Bloqueado · Vencido em …: não sai"* — o vencido não barra a Perda → o rótulo da Perda só com o status. Confirmado: a tela e a porta dão
+  a mesma resposta em todas as bordas; nada muda para quem não declara a opção; a série apagada não chega ao `POST`; o caminho do lote
+  escolhido ficou idêntico.
+- **Testes (4 achados, todos fechados):** a série de outro material (o filtro de material sobrevivia) → cenário; dois lotes impedidos (a
+  ordem sobrevivia) → cenário; a frase com lote escolhido (a lista do lote nunca era exercida: lotes `[]`) → cenário com o FEFO; a asserção
+  do envio da RN-233.07 era vazia (com 0 de 1 o envio para antes) → `toHaveLength(0)` e o `toast` de quantidade. C6 inalcançável:
+  confirmado. — `308ef6b6`.
 
 ## Limitações (D (233))
 
@@ -129,7 +153,44 @@ Cenário-base: material com série **sem** controle de lote, `A1`, `A2` em L1 (A
 2. **Com o lote em branco a saída não grava o lote das séries** (material sem controle de lote): o livro diz "sem lote" e a linha baixada é a
    de sempre — derivar o lote das séries é mudança de saldo, fora desta etapa.
 3. **A devolução ao cliente** (`extended.js:984`) e os chamadores internos não ganham a guarda (não foram medidos).
+4. **Material com controle de lote e "Sem lote"** (já era assim): a lista mostra as séries acesas e a porta recusa por *exige lote*.
+5. **`AJUSTE_NEGATIVO` pela API** com o lote em branco passa a recusar lote bloqueado/reprovado (a régua do lote escolhido; sem tela).
+
+## Retro
+
+- Rodadas de correção até verde: 2 (Fase 2: filtro `EM_ESTOQUE`, cenários M4/M6 e o do ajuste; Fase 5: o rótulo da Perda e 5 cenários).
+- Achados: Fase 2 — 2 importantes (fechados: 1 já coberto pela montagem, 1 virou guarda declarada inalcançável), 4 menores (3 fechados, 1
+  declarado); Fase 5 — 2 de produção reproduzidos (1 corrigido, 1 documentado e testado), 4 lacunas de teste reais (fechadas), 0 ruídos.
+- Paralelismo: T1 e T2 sequenciais (pequenas); revisores da Fase 2 em paralelo com a escrita dos testes e os da Fase 5 com o `test:api`.
+- Defeito que escapou: — (preencher na etapa seguinte). Da 232: a premissa "o motor recusa" da próxima tarefa (corrigida aqui, à vista).
+
+## Verificação (medida, serial)
+
+- Servidor: `test:api` **627/627 arquivos OK** (sobre o código de produção do servidor final — `b3fc7a0a`; a Fase 5 `308ef6b6` só mexeu
+  no teste do servidor e na tela: o arquivo da etapa rodado sozinho depois, **13/13**); `test:almoxarifado` **44/0**; `test:validation`
+  **4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0** (sobre `308ef6b6`).
+- Tela (sobre `308ef6b6`): `react-scripts test --maxWorkers=2` **228/228 suítes, 3098/3098 testes**; `react-scripts build` (CI=true)
+  **Compiled successfully**.
+- Arquivos da etapa: `saidaAvulsaSeriesLoteImpedido` **13/13**, `MovimentacoesSaidaSeriesImpedidas` **9/9**.
 
 ## Próxima tarefa detalhada
 
-*(preencher no fechamento)*
+*(Escolhida pela ordem do CLAUDE.md: a 233 fecha a D (232) 1; a feature 10 continua 🟢. O que esta etapa declarou de fora e que pega o
+mesmo gesto é a **D (233) 2** — a saída avulsa de série com o lote em branco não grava o lote das séries. **Sem estimativa** — começa pela
+Fase 0.5.)*
+
+**A saída avulsa com série grava o lote das séries (D (233) 2).**
+
+- **O problema:** em material **sem** controle por lote com séries em lotes (entrada com o campo Lote preenchido), a Saída/Perda de
+  **Movimentações** com o lote em branco baixa a série certa, mas o livro grava `lote_id` NULL e a linha de saldo baixada é a "sem lote"
+  (ou outra) — não a do lote da série. O *Saldo por lote* e o extrato do lote ficam com a peça que já saiu. A entrega de requisição já faz
+  certo (deriva o lote das séries: `requisitionService.js` `loteSeries`, ~`:2410-2446`).
+- **Medir antes (Fase 0):** com a sonda da 233 (material `controle_lote = 0`, A1/A2 em L1, B1/B2 em L2), a SAIDA de `[B1]` sem `lote_id`:
+  qual linha de `estoque_saldo_almoxarifado` baixa, o `lote_id` do livro, e o que `GET /lotes/resumo` diz depois. Séries de dois lotes
+  numa saída só: a entrega recusa (*"escolha series de um lote so"*) — decidir se a avulsa recusa ou fatia.
+- **Contrato que ela consome:** `registrarMovimentacao(..., { lotePelasSeries: true })` (B1527, esta etapa) já lê os lotes das séries
+  dentro da trava; o passo natural é, com **um** lote só, usá-lo como `loteResolvido` (o claim confere que as séries são dele). É mudança
+  de saldo/livro: tem de ir com o estorno (o estorno de uma SAIDA com `lote_id` devolve ao lote — conferir) e com o `test:almoxarifado`.
+- **O que já está pronto:** a tela apaga a série impedida (B1528); a guarda (`checarLoteNaSaida`); a régua `lotePelasSeries`.
+- Outros abertos: C522 e C526 (a reserva saber o lote, grande), C524, C525, C527, C529–C531, C533, C534, C536–C538, C514–C518, C486,
+  C491, C495, C497, C498.

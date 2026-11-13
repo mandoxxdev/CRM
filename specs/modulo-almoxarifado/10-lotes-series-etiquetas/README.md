@@ -1,5 +1,10 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 233 (2026-11-13, `b3fc7a0a`, tela `3ec94b9f`, Fase 5 `308ef6b6`): a saída avulsa não deixa marcar série de lote impedido (D (232) 1;
+> B1527–B1530, C538)** — a Saída e a Perda de **Movimentações** apagam a série que o tipo não pode baixar (Saída: `lote_esta_impedido`;
+> Perda: só o status), com o rótulo e a frase; e a v2 (`lotePelasSeries`) recusa, com o lote em branco, a série de lote impedido — antes
+> **aceitava** (sonda da Fase 0). Ver a seção "Etapa 233", no fim. Continua 🟢.
+
 > **+ Etapa 224 (2026-11-13, `f09e8ec7`, tela `c7399966`): o extrato diz qual lote está impedido (C528; B1484–B1487)** — as linhas de
 > `consultarSaldosPorLocalizacao` (extrato e `/estoque/:id/saldos`) trazem `lote_status`, `lote_validade`, `lote_vencimento_liberado_em`,
 > `lote_esta_impedido` e `lote_vencido_sem_liberacao` (a régua da aprovação; `predicadoLoteVencidoSql` extraída, texto idêntico); a tabela
@@ -580,6 +585,9 @@ rota fazia isso. Era uma parede com placa de porta.
   > `MovimentacoesAlmoxarifado.js:738-760`: o seletor só tem checkboxes das séries `EM_ESTOQUE` e o
   > filtro automático pelo lote — não há campo de busca por texto. Registrado como não-entregue na
   > pendência (h), abaixo.
+
+  > **+ Etapa 233 (`3ec94b9f`):** com o lote em branco, a série que o tipo não pode baixar vem apagada (Saída: lote impedido; Perda: só
+  > bloqueado/reprovado), com o rótulo e a frase. Ver a seção "Etapa 233", no fim.
 - [x] **Recebimentos** (Task 9, `597ec82`): textarea "Séries (uma por linha)" por item, ao lado dos campos de lote, com contador contra a quantidade recebida; aviso estático de "salve antes de processar" — ver pendência (i)
 - [x] **Aba "Séries" em "Lotes e Séries"** (Task 10, `b46d820`): `LotesAlmoxarifado.js` ganhou a aba (tabela: número, status com badge, lote, localização) e a ação Bloquear/Desbloquear com justificativa obrigatória (gate `inspecionar`); label do menu virou "Lotes e Séries"
 
@@ -1425,3 +1433,27 @@ linha — trocado por `lote_esta_impedido` (o outro é o **número** do material
   *Saldos comprometidos* com a coluna *Em lote impedido*; ver a spec 21; o *Saldo por lote* com a coluna *Situação* desde a Etapa 227, `2460585f`).
 
 Testes: `extratoQualLoteImpedido.api.test.js` (15, com RN-224.02 f e .03 b da Fase 5, `e1c6cf6d`); `ExtratoMaterialModal.test.js` (+2, com as linhas da validade futura e em branco da Fase 5). Continua 🟢.
+
+## Etapa 233 — a saída avulsa não deixa marcar série de lote impedido (2026-11-13)
+
+Plano: `docs/superpowers/plans/2026-11-13-almoxarifado-etapa233-saida-avulsa-series-lote-impedido.md`. Fecha a **D (232) 1**. Nenhuma
+coluna, nenhuma rota nova; a guarda nova roda dentro da trava do material que o motor já pega.
+
+> ⚠️ **O plano da Etapa 232 estava errado** ao dizer, na próxima tarefa, que a série de lote impedido marcada na saída avulsa "o motor
+> recusa (`stockService.js:~1571`)". Isso só valia com o lote **escolhido**: com o lote em branco o motor não olhava o lote das séries, e em
+> material sem controle por lote a Saída e a Perda baixavam a série de lote bloqueado, reprovado ou vencido (sonda da Fase 0: 201 nos quatro
+> casos). Corrigido aqui, à vista; a frase do plano da 232 ganhou a nota.
+
+- [x] **RN-233.01 a .03 (B1527)** — `registrarMovimentacao` com `opcoes.lotePelasSeries` (só a v2 declara): sem lote informado, os lotes
+  das séries `EM_ESTOQUE` do material passam por `checarLoteNaSaida` (a guarda do lote escolhido, extraída — mensagens idênticas), em ordem
+  de código, antes de qualquer efeito; bloqueado/reprovado recusa em toda saída, vencido sem liberação fora dos `tiposDescarte` — `b3fc7a0a`.
+- [x] **RN-233.04** — não muda: série sem lote; AJUSTE; o motor sem a opção; material com controle de lote e lote em branco (*exige lote*);
+  série já entregue ou de outro material (a recusa do claim) — `b3fc7a0a`, Fase 5 `308ef6b6`.
+- [x] **RN-233.05 a .09 (B1528–B1530)** — a tela apaga por tipo (`serieImpedidaParaTipo`), rótulo e frase por tipo, a apagada sai de
+  `serie_ids` (o efeito com `form.tipo`), resposta antiga como antes, o ajuste não apaga — `3ec94b9f`; o rótulo da Perda só com o status e
+  a frase com lote escolhido (Fase 5) — `308ef6b6`.
+- [ ] **Fora (declarado, D (233)):** a situação é a da leitura (**C538**); com o lote em branco a saída não grava o lote das séries (mudança
+  de saldo/livro); a devolução ao cliente e os fluxos internos sem a conferência nova; `AJUSTE_NEGATIVO` pela API passa a recusar lote
+  bloqueado com o lote em branco (a régua do lote escolhido; sem tela).
+
+Testes: `saidaAvulsaSeriesLoteImpedido.api.test.js` (13); `MovimentacoesSaidaSeriesImpedidas.test.js` (9). Continua 🟢.

@@ -179,7 +179,8 @@ Fase 0.5.)*
 - **O problema:** **Movimentações → Saída** (e as outras saídas com série: `TIPOS_SAIDA_LOTE`) de material com série lista as séries em
   estoque (`seriesDisponiveis`, `MovimentacoesAlmoxarifado.js:1221`), filtradas só pelo lote escolhido no formulário (`form.lote_id`). Com o
   lote em branco aparecem as do lote bloqueado; marcadas, o motor recusa (`stockService.js:~1571`, *"Lote L2 esta bloqueado e nao pode ser
-  utilizado"*).
+  utilizado"*). *(**Estava errado** — medido na Fase 0 da Etapa 233: o motor só recusava com o lote **escolhido**; com o lote em branco,
+  em material sem controle por lote, a Saída e a Perda baixavam a série de lote impedido (201). A 233 fecha isso, `b3fc7a0a`.)*
 - **O contrato que ela consome:** `GET /materiais/:id/series?status=EM_ESTOQUE` com `lote_status`, `lote_validade`, `lote_esta_impedido`,
   `lote_vencido_sem_liberacao` (B1523, esta etapa). Sem mexer no servidor.
 - **Ponto de atenção — o vencido não é igual em todo tipo de saída:** o motor recusa **BLOQUEADO/REPROVADO** em qualquer saída, mas o

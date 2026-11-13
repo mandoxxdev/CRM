@@ -1,20 +1,25 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-11-13 (Etapas 172 a 191, 194 a 210, 217 a 232) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-11-13 (Etapas 172 a 191, 194 a 210, 217 a 233) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
 > ## Onde o desenvolvimento está — 2026-11-13 (Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
-> **O desenvolvimento parou aqui: Etapa 232 fechada — 2026-11-13.** **A entrega não deixa marcar série de lote bloqueado.** Na entrega
-> de material com número de série, as séries de um lote bloqueado, reprovado ou vencido vêm apagadas, com o lote e a situação ao lado e uma
-> frase embaixo, e não contam para o **Confirmar Entrega**. Sem consulta antes do deploy. **Nenhum clique foi dado** (testes da tela e das
-> rotas — roteiro na seção da 232 e letra F das novidades).
+> **O desenvolvimento parou aqui: Etapa 233 fechada — 2026-11-13.** **A saída avulsa não deixa marcar série de lote bloqueado.** Em
+> **Movimentações**, na **Saída** e na **Perda** de material com número de série, a série que aquele tipo não pode baixar vem apagada, com o
+> lote e a situação ao lado e uma frase embaixo (na Perda, o lote vencido continua marcável); e o sistema recusa a saída dela com o lote em
+> branco, o que antes passava. Sem consulta antes do deploy. **Nenhum clique foi dado** (testes da tela e das rotas — roteiro na seção da
+> 233 e letra F das novidades).
 >
-> **Onde parou, exatamente:** a **232 está fechada** (código, testes, documentos e o estimado × realizado commitados). A **próxima** é
-> **a saída avulsa não deixa marcar série de lote impedido** (**D (232)** 1) — detalhada no fim do plano da 232
-> (`docs/superpowers/plans/2026-11-13-almoxarifado-etapa232-entrega-series-lote-impedido.md`). Sem estimativa nem plano.
+> **Onde parou, exatamente:** a **233 está fechada** (código, testes, documentos e o estimado × realizado commitados). A **próxima** é
+> **a saída avulsa com série grava o lote das séries** (**D (233)** 2), detalhada no fim do plano da 233 (`docs/superpowers/plans/2026-11-13-almoxarifado-etapa233-saida-avulsa-series-lote-impedido.md`). Sem
+> estimativa nem plano.
+>
+> *(Antes:)* **Etapa 232 fechada — 2026-11-13.** **A entrega não deixa marcar série de lote bloqueado.** Na entrega
+> de material com número de série, as séries de um lote bloqueado, reprovado ou vencido vêm apagadas, com o lote e a situação ao lado e uma
+> frase embaixo, e não contam para o **Confirmar Entrega**.
 >
 > *(Antes:)* **Etapa 231 fechada — 2026-11-13.** **A entrega não começa pelo lote que ficou bloqueado, e a Não
 > Conformidade avisa o lote.** Quando o lote de onde a peça foi separada fica bloqueado, reprovado ou vencido, a janela de entrega abre em
@@ -7254,6 +7259,47 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 233 — A saída avulsa não deixa marcar série de lote bloqueado (ENTREGUE — 2026-11-13)
+
+**O que mudou, em uma frase:** em **Movimentações**, na **Saída** e na **Perda** de material com número de série, a série que aquele tipo
+não pode baixar vem apagada, com o lote e a situação ao lado e uma frase embaixo — e o sistema passa a recusar a saída dela com o lote em
+branco.
+
+**O problema que ela resolve.** Com o **Lote** em *"Sem lote"*, a lista **Séries a entregar/baixar** mostrava as séries de todos os lotes,
+inclusive as de um lote bloqueado, reprovado ou vencido. Em material **sem** controle por lote, marcá-las e salvar **dava certo**: a série
+de lote bloqueado saía do estoque sem aviso nenhum. (Em material **com** controle por lote, o lote em branco já era recusado por outro motivo:
+*"O material SERIE-233 exige lote nesta movimentacao (controle por lote ligado)"*.)
+
+| Antes | Agora |
+|---|---|
+| Na **Saída**, séries do lote bloqueado, reprovado ou vencido marcáveis, e a saída aceita | Apagadas, com *" · lote L2 — Bloqueado: não sai"* (ou *Reprovado*, ou *Vencido em …*); salvar mesmo assim é recusado |
+| Na **Perda**, idem | Apagadas só as de lote bloqueado ou reprovado; a de lote **vencido** continua marcável (a Perda é como o vencido sai) |
+| Nada explica | Embaixo da lista, a frase do tipo (Saída: *"Séries de lote bloqueado, reprovado ou vencido vêm apagadas: só saem depois que o lote for liberado na tela Lotes e Séries."*; Perda: *"Séries de lote bloqueado ou reprovado vêm apagadas: só saem depois que o lote for liberado na tela Lotes e Séries."*) |
+| Trocar de Perda para Saída mantinha marcada a série vencida | A série vencida fica apagada e desmarcada |
+| Lote escolhido no seletor; ajuste de estoque com séries; material com controle por lote e lote em branco | **Iguais** |
+
+**Roteiro de teste manual (≈10 min):**
+
+1. Entre como **Administrador do almoxarifado**. No cadastro do material (Compras), *SERIE-233* com **Controle de série** e **sem**
+   Controle por lote, unidade *un*.
+2. **Movimentações → Entrada** de 2 com lote *L1* (séries *A1*, *A2*) e de 2 com lote *L2* (séries *B1*, *B2*).
+3. **Lotes e Séries** → *L2* → **Mudar status** → *Bloqueado*.
+4. **Movimentações → Nova Movimentação**, material *SERIE-233*, tipo **Saída**, quantidade 1, **Lote** *"Sem lote"*. **Confira:** *B1* e *B2*
+   apagadas, cada uma com *" · lote L2 — Bloqueado: não sai"*; *A1* e *A2* marcáveis, com *" · lote L1"*; embaixo, a frase da Saída.
+5. Marque *A1*, informe a justificativa e salve: a saída passa. 
+6. Troque o tipo para **Perda**: *B1* e *B2* continuam apagadas, com a frase da Perda.
+7. Controle do vencido: **Lotes e Séries** → *L2* → **Mudar status** → *Ativo*, e ponha a validade do *L2* no passado (**Corrigir
+   validade**). Na **Saída**: *B1* apagada com *" · lote L2 — Vencido em …: não sai"*. Na **Perda**: *B1* marcável, sem rótulo nem frase —
+   marque-a e troque para **Saída**: ela fica apagada e desmarcada (*"0/1 série(s) selecionada(s)"*).
+8. Controle do ajuste: tipo **Ajuste**, novo total 1 a menos que as séries presentes: as séries do lote bloqueado continuam marcáveis.
+
+**O que esta etapa não cobre:** a situação é a da hora em que a lista foi carregada — um lote bloqueado com o formulário aberto aparece pela
+recusa do sistema ao salvar (**C538**); com o lote em branco a saída continua sem gravar o lote das séries no histórico (**D (233)**); a
+devolução ao cliente e os fluxos internos não ganharam a conferência (**D (233)**).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (tela e rotas) provam, escrito para você
+conferir à mão.
 
 ## Etapa 232 — A entrega não deixa marcar série de lote bloqueado (ENTREGUE — 2026-11-13)
 
