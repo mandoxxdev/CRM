@@ -20,7 +20,7 @@ motor erra para os dois lados, ±1h); tela 195 30 min → 30 min, 199 15+15 → 
 | 6 | Lote que não pode sair — aprovação e separação (C464, 1ª) | motor (disponível) | 1h | 1h30 a 2h | 2h | 4h30 a 5h | 205 (plano `88f18de5`) | 2,5 h (horas.js --grupos "E205=Etapa 205", 06/11) → 2h30 | 5h30 (2h30 + análise 1 h + teste 2 h, da tabela — não informado pelo André). Estouro de 30 min: Fase 2 (terceiros, inspeção sem recebimento, linha da tela) e dois fix-rounds da Fase 5 (desempenho; o abatimento do negativo sem lote, desfeito por inseguro) | 88f18de5 … 13fe3691, 4965c6f4 |
 | 7 | Lote que não pode sair — entrega (C464, 2ª) | motor | 1h | 1h a 1h30 | 2h | 4h a 4h30 | 206 (plano `7f210f62`) | 1,8 h (horas.js --grupos "E206=Etapa 206", 06/11) → 2h | 5h (2h + análise 1 h + teste 2 h, da tabela — não informado pelo André). Estouro de 30 min: a trava da Fase 2 (a conta contava o só lote em dobro) e o fix-round (o desconto em dobro da guarda própria, anterior, B1394) | 7f210f62 … 0996c3c2, f4949dcf |
  (plano `5708b830`) | 2,4 h (horas.js --grupos "E209=Etapa 209", 06 a 13/11) → 2h30 | 5h30 (2h30 + análise 1 h + teste 2 h, da tabela — não informado pelo André) | 5708b830 … fa50fae9, 0a41b039 |
-| 9 | Quarentena — a entrega não tira a peça bloqueada (C466, 2ª) | motor | 1h | 1h a 2h | 2h | 4h a 5h | — | — | — | — |
+| 9 | Quarentena — a entrega não tira a peça bloqueada (C466, 2ª) | motor | 1h | 1h a 2h | 2h | 4h a 5h | 217 (plano `cf346c35`) | 1,1 h (horas.js --grupos "E217=Etapa 217", 13/11) → 1h | 4h (1h + análise 1 h + teste 2 h, da tabela — não informado pelo André). Dentro do estimado; a fatia visível prevista ficou de fora (B1440, C514) | cf346c35 … e2a43f20, dc23e756 |
 
 Total: 30h15 a 33h15 (itens 1 a 5: 13h15; itens 6 a 9: 17h a 20h).
 
