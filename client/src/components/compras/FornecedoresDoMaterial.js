@@ -9,6 +9,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { toast } from 'react-toastify';
 import { FiPlus, FiEdit2, FiTrash2, FiSave, FiX, FiTruck } from 'react-icons/fi';
 import api from '../../services/api';
+import HistoricoDePrecos from './HistoricoDePrecos';
 
 export const urlFornecedoresDoMaterial = (materialId, linhaId) =>
   `/compras/materiais/cadastro/${materialId}/fornecedores${linhaId ? `/${linhaId}` : ''}`;
@@ -182,6 +183,8 @@ const FornecedoresDoMaterial = ({ materialId, somenteLeitura = false, textoAntig
           </div>
         </div>
       )}
+      {/* Etapa 214 (RN-214.03): o preco cotado e comprado por fornecedor */}
+      <HistoricoDePrecos materialId={materialId} />
     </div>
   );
 };
