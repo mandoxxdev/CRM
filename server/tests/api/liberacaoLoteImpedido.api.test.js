@@ -266,6 +266,27 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(await reservas(R1), [4]);
   });
 
+  await test('[RN-229.07b Fase 5] servico: lote_id de um lote BLOQUEADO de OUTRO material -> ignorado, reserva 4 (D (229) 3)', async () => {
+    const m = await material({ critico: 0, certificado: 0 });
+    await entrar(m, 4, 'L1');
+    const outro = await material({ critico: 0, certificado: 0 });
+    await entrar(outro, 1, 'LX');
+    await statusLote(outro, 'LX', 'BLOQUEADO');
+    const R1 = await reqDireta(m, 4);
+    const r = await liberarServico(m, { lote_id: await loteId(outro, 'LX') });
+    assert.strictEqual(r.lote_impedido, undefined);
+    assert.deepStrictEqual(await reservas(R1), [4]);
+  });
+
+  // ── RN-229.04b (Fase 5): REPROVADO tambem impede ─────────────────────────────────────────────────────────────────────────────
+  await test('[RN-229.04b Fase 5] L1 ATIVO posto em REPROVADO antes da inspecao -> nada, lote_impedido L1', async () => {
+    const c = await montar({ certificado: 0 });
+    await statusLote(c.m, 'L1', 'REPROVADO');
+    const r = await ok(inspecionar(c.it.id, 4, 0), 201);
+    assert.deepStrictEqual(await reservas(c.R1), []);
+    assert.strictEqual(r.body.lote_impedido, 'L1');
+  });
+
   // ── RN-229.08 (integracao) ────────────────────────────────────────────────────────────────────────────────────────────────────
   await test('[RN-229.08] depois da RN-229.01, liberar L1 reserva 4 para R1 (Etapa 220) -> TOTALMENTE_RESERVADA -> separar 4 -> 200', async () => {
     assert.ok(cenario01, 'premissa: RN-229.01 montou o cenario');
