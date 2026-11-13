@@ -1117,6 +1117,52 @@ function guardaSaidaPelaCaixaSql() {
 }
 
 /**
+ * A guarda do LOTE numa saida (status e vencimento). Ate a Etapa 233 era o corpo do ramo `tiposSaida` de registrarMovimentacao e so
+ * valia para o lote informado; a 233 (B1527) a extraiu para valer tambem para o lote das series quando a saida manual vem com o lote em
+ * branco. As mensagens sao as de sempre (as telas e os testes as citam).
+ */
+function checarLoteNaSaida(lote, tipo) {
+  const lotService = require('./lotService'); // tardio, como em registrarMovimentacaoSemTrava (ciclo de require)
+  if (lote.status !== 'ATIVO') {
+    throw Object.assign(
+      new Error(`Lote ${lote.codigo} esta ${String(lote.status || '').toLowerCase()} e nao pode ser utilizado`),
+      { status: 400 });
+  }
+  // Vencimento bloqueia consumo normal, mas NAO pode bloquear o proprio descarte do lote
+  // vencido — SUCATA/PERDA/AJUSTE_NEGATIVO sao como o vencido SAI do sistema. Sem esta
+  // isencao, um lote vencido ficava PRESO para sempre: nao pode sair como consumo (correto),
+  // mas tambem nao podia ser baixado como perda nem corrigido (bug, achado do review round 1).
+  // A guarda de STATUS acima continua valendo para descarte tambem, de proposito: um lote
+  // BLOQUEADO/REPROVADO ainda precisa passar pelo fluxo de mudanca de status (com
+  // justificativa) antes de qualquer saida, inclusive descarte.
+  //
+  // Task 3b (achado do review): a guarda tambem respeita lotService.vencimentoLiberado — o
+  // cliente decidiu no design que vencido usa via liberacao com justificativa, reaproveitando
+  // o fluxo de bloqueio/desbloqueio (lotService.liberarVencimento). A liberacao NAO desvence o
+  // lote (isVencido continua true); so destrava a saida de consumo. Por isso a checagem de
+  // STATUS roda ANTES desta: um lote bloqueado E vencido, mesmo com vencimento liberado,
+  // precisa falhar por bloqueio (mensagem certa), nao por vencimento (mensagem que mandaria o
+  // operador liberar de novo algo que ja esta liberado).
+  // Etapa 8b: PERDA_TERCEIRO/CONSUMO_TERCEIRO tambem sao descarte — lote vencido perdido no
+  // galvanizador tem de poder ser baixado, pelo mesmo motivo do resto da lista (senao o lote
+  // fica PRESO: nao pode sair como consumo, e tambem nao pode ser encerrado).
+  // Etapa 45: DEVOLUCAO_FORNECEDOR entra pelo MESMO motivo, e o caso e mais comum que os
+  // outros — lote vencido e uma das razoes tipicas de devolver ao fornecedor. Sem ele o lote
+  // ficaria PRESO: nao sai para consumo por estar vencido, e nao pode voltar para quem o
+  // entregou. ⚠️ A guarda de STATUS do lote continua valendo (ela roda antes desta): lote
+  // REPROVADO nao sai nem por aqui, e isso e deliberado — reabilitar o lote e outro gesto.
+  const tiposDescarte = ['SUCATA', 'PERDA', 'AJUSTE_NEGATIVO', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO',
+    'DEVOLUCAO_FORNECEDOR'];
+  if (!tiposDescarte.includes(tipo) && lotService.isVencido(lote) && !lotService.vencimentoLiberado(lote)) {
+    throw Object.assign(
+      new Error(`Lote ${lote.codigo} vencido em ${lote.data_validade} nao pode sair para consumo. `
+        + 'Libere o vencimento do lote (PUT /api/almoxarifado/lotes/:id/liberar-vencimento) com justificativa, '
+        + 'ou baixe por SUCATA/PERDA ou corrija por AJUSTE.'),
+      { status: 400 });
+  }
+}
+
+/**
  * Etapa 97 (T1, B494; forma da Fase 2, B-1) — o motor sob a trava por material. Chamado FORA de uma secao que segura o
  * material (a porta avulsa: v2, v1, retalho, devolucao, remessa, inventario...), pega a trava e espera a separacao, a
  * entrega e a aprovacao do mesmo material (s4b da Fase 0: solto 10/10 ERRADO, sob a trava 0/10). Dentro de uma secao
@@ -1567,45 +1613,22 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
   if (tiposEntrada.includes(tipo)) {
     saldoPosterior = saldoAnterior + parseFloat(quantidade);
   } else if (tiposSaida.includes(tipo)) {
-    if (loteResolvido) {
-      if (loteResolvido.status !== 'ATIVO') {
-        throw Object.assign(
-          new Error(`Lote ${loteResolvido.codigo} esta ${loteResolvido.status.toLowerCase()} e nao pode ser utilizado`),
-          { status: 400 });
-      }
-      // Vencimento bloqueia consumo normal, mas NAO pode bloquear o proprio descarte do lote
-      // vencido — SUCATA/PERDA/AJUSTE_NEGATIVO sao como o vencido SAI do sistema. Sem esta
-      // isencao, um lote vencido ficava PRESO para sempre: nao pode sair como consumo (correto),
-      // mas tambem nao podia ser baixado como perda nem corrigido (bug, achado do review round 1).
-      // A guarda de STATUS acima continua valendo para descarte tambem, de proposito: um lote
-      // BLOQUEADO/REPROVADO ainda precisa passar pelo fluxo de mudanca de status (com
-      // justificativa) antes de qualquer saida, inclusive descarte.
-      //
-      // Task 3b (achado do review): a guarda tambem respeita lotService.vencimentoLiberado — o
-      // cliente decidiu no design que vencido usa via liberacao com justificativa, reaproveitando
-      // o fluxo de bloqueio/desbloqueio (lotService.liberarVencimento). A liberacao NAO desvence o
-      // lote (isVencido continua true); so destrava a saida de consumo. Por isso a checagem de
-      // STATUS roda ANTES desta: um lote bloqueado E vencido, mesmo com vencimento liberado,
-      // precisa falhar por bloqueio (mensagem certa), nao por vencimento (mensagem que mandaria o
-      // operador liberar de novo algo que ja esta liberado).
-      // Etapa 8b: PERDA_TERCEIRO/CONSUMO_TERCEIRO tambem sao descarte — lote vencido perdido no
-      // galvanizador tem de poder ser baixado, pelo mesmo motivo do resto da lista (senao o lote
-      // fica PRESO: nao pode sair como consumo, e tambem nao pode ser encerrado).
-      // Etapa 45: DEVOLUCAO_FORNECEDOR entra pelo MESMO motivo, e o caso e mais comum que os
-      // outros — lote vencido e uma das razoes tipicas de devolver ao fornecedor. Sem ele o lote
-      // ficaria PRESO: nao sai para consumo por estar vencido, e nao pode voltar para quem o
-      // entregou. ⚠️ A guarda de STATUS do lote continua valendo (ela roda antes desta): lote
-      // REPROVADO nao sai nem por aqui, e isso e deliberado — reabilitar o lote e outro gesto.
-      const tiposDescarte = ['SUCATA', 'PERDA', 'AJUSTE_NEGATIVO', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO',
-        'DEVOLUCAO_FORNECEDOR'];
-      if (!tiposDescarte.includes(tipo) && lotService.isVencido(loteResolvido) && !lotService.vencimentoLiberado(loteResolvido)) {
-        throw Object.assign(
-          new Error(`Lote ${loteResolvido.codigo} vencido em ${loteResolvido.data_validade} nao pode sair para consumo. `
-            + 'Libere o vencimento do lote (PUT /api/almoxarifado/lotes/:id/liberar-vencimento) com justificativa, '
-            + 'ou baixe por SUCATA/PERDA ou corrija por AJUSTE.'),
-          { status: 400 });
-      }
-    }
+    // Etapa 233 (D (232) 1, B1527): a guarda abaixo virou funcao para valer tambem para o lote DAS SERIES quando a saida vem com o
+    // lote em branco. Sem isto, na Saida avulsa de material sem controle de lote, a serie de lote bloqueado, reprovado ou vencido saia
+    // (sonda da Fase 0: 201). So quem declara `lotePelasSeries` (a rota manual v2) — os chamadores internos (entrega, devolucao,
+    // sucateamento, NC) ficam como estavam: nao foram medidos com serie sem lote (D (233) 3). Os lotes em ordem de codigo, a recusa e a do primeiro
+    // impedido; a mesma mensagem do lote escolhido. Roda antes de qualquer efeito e dentro da trava do material (o status do lote
+    // muda sob a mesma trava, Etapa 220). So as series EM_ESTOQUE do material (Fase 2 M4: a serie ja entregue ou de outro material
+    // continua com a recusa do claim, nao a do lote), e o lote pelo `s.lote_id` sem conferir o material do lote — a mesma leitura
+    // da listagem `/series` que a tela usa (Fase 2 M3; lote apagado: sem lote, sem guarda, nos dois lados).
+    const lotesAChecar = loteResolvido ? [loteResolvido]
+      : (opcoes.lotePelasSeries === true && serieIdsSaida.length
+        ? await dbAll(db, `SELECT DISTINCT l.* FROM series_almoxarifado s JOIN lotes_almoxarifado l ON l.id = s.lote_id
+            WHERE s.material_id = ? AND s.status = 'EM_ESTOQUE' AND s.id IN (${serieIdsSaida.map(() => '?').join(',')})
+            ORDER BY l.codigo, l.id`,
+          [material_id, ...serieIdsSaida])
+        : []);
+    for (const loteDaSaida of lotesAChecar) checarLoteNaSaida(loteDaSaida, tipo);
     // Saída citando uma reserva consome o que JÁ estava separado para ela, então não pode ser
     // barrada pelo disponível — o disponível justamente exclui o reservado. Sem esta exceção,
     // reservar material o tornava inutilizável até para quem reservou (ver o design da Etapa 4).

@@ -887,7 +887,10 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       // `exigeSerie` (Etapa 6b): mesmo raciocinio — o body pode trazer `series`/`serie_ids`
       // (declarados em MovimentacaoSchema), entao a exigencia de `controle_serie` tambem vale
       // aqui, e tambem so no 4o argumento (nunca lida de `exigeSerie` no body).
-      const result = await stockService.registrarMovimentacao(db, req.user, req.body, { exigeLote: true, exigeSerie: true });
+      // `lotePelasSeries` (Etapa 233, B1527): com o lote em branco, a saida confere o lote DAS SERIES (bloqueado, reprovado, vencido
+      // para consumo) — a tela de Movimentacoes so lista a serie; o lote dela nao ia no corpo e o motor nao o olhava.
+      const result = await stockService.registrarMovimentacao(db, req.user, req.body,
+        { exigeLote: true, exigeSerie: true, lotePelasSeries: true });
       res.status(201).json(result);
     } catch (e) { handleError(res, e); }
   });
