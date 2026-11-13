@@ -770,8 +770,16 @@ async function reservarLoteLiberadoSobTrava(db, user, lote, pendencia) {
     const rotulos = rotulosDoLoteLiberado(lote, recebimentoId);
     const acc = { tocadas: new Set(), resultado };
     if (pendencia) pendencia.distribuicoes.push({ acc, rotulos });
-    // Etapa 230 (C520, B1514): a reserva da OS da nota do lote vai primeiro para a requisicao da OS que espera.
-    const convertido = await converterReservaDaOsNoLoteLiberado(db, user, lote, recebimentoId, livre, rotulos, acc);
+    // Etapa 230 (C520, B1514): a reserva da OS de cada nota do lote vai primeiro para a requisicao da OS que espera — nota a nota, mesmo
+    // com o lote de varias notas (Fase 5, achado 1: so com nota unica, o lote de duas notas deixava a requisicao da OS sem as pecas, pior
+    // que antes da 230). A reserva criada leva a marca da nota de onde veio a reserva da OS (o estorno dela a acha).
+    let convertido = 0;
+    for (const r of recs) {
+      const recId = Number(r.recebimento_id);
+      const rot = recId === recebimentoId ? rotulos : rotulosDoLoteLiberado(lote, recId);
+      // eslint-disable-next-line no-await-in-loop
+      convertido = Q.qtd(convertido + await converterReservaDaOsNoLoteLiberado(db, user, lote, recId, Q.qtd(livre - convertido), rot, acc));
+    }
     await distribuirSemLock(db, user, lote.material_id, Q.qtd(livre - convertido), rotulos, acc);
     if (pendencia) {
       pendencia.avisos.push({

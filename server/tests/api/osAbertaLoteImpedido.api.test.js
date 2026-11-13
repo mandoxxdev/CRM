@@ -310,6 +310,8 @@ process.on('exit', (code) => {
     assert.deepStrictEqual([await reservas(R1), await daOs(os, m)], [[], 8], 'premissa');
     await statusLote(m, 'L1', 'ATIVO');
     assert.strictEqual((await reservas(R1)).reduce((s, x) => s + x, 0), 4, 'a reserva da OS sobre L3 contou duas vezes e R1 nao recebeu L1');
+    assert.deepStrictEqual((await linhasDaOs(os, m)).map((l) => [l.status, Number(l.quantidade)]), [['ATIVA', 4]],
+      'a conversao soltou alem do livre do lote e recriou a sobra (a reserva da OS deveria so diminuir)');
     await statusLote(m, 'L3', 'ATIVO');
     assert.strictEqual((await reservas(R1)).reduce((s, x) => s + x, 0), 8);
     assert.strictEqual(await daOs(os, m), 0);
@@ -325,6 +327,51 @@ process.on('exit', (code) => {
     await receber([[m, 3, 'L2']], { os_id: os.id });
     assert.deepStrictEqual(await reservas(R1), [3], 'as pecas boas da nota B foram para a reserva da OS e nao para R1');
     assert.strictEqual(await daOs(os, m), 4);
+  });
+
+  // ── RN-230.18 / .19 / .20 (Fase 5: o lote de varias notas; a fila da OS que pula; a conversao so para a OS) ──────────────────────
+  const reservaDe = (R) => dbGet(db, "SELECT recebimento_id FROM reservas_material_almoxarifado WHERE requisicao_id = ? AND status = 'ATIVA'", [R]);
+  await test('[RN-230.18] L1 de duas notas (A da OS, B sem OS), R2 sem OS (mais antiga) e R1 da OS esperam 4: liberar L1 -> R1 4 (marca da nota A), R2 4', async () => {
+    const os = await novaOs();
+    const m = await material();
+    const R2 = await reqDireta(m, 4);
+    const R1 = await reqDireta(m, 4, os);
+    const recA = await receber([[m, 4, 'L1']], { os_id: os.id });
+    await receber([[m, 4, 'L1']]);
+    assert.deepStrictEqual([await reservas(R1), await reservas(R2), await daOs(os, m)], [[], [], 4], 'premissa');
+    await statusLote(m, 'L1', 'ATIVO');
+    assert.deepStrictEqual(await reservas(R1), [4], 'o lote de duas notas deixou a requisicao da OS sem as pecas da OS');
+    assert.deepStrictEqual(await reservas(R2), [4]);
+    assert.strictEqual(await daOs(os, m), 0);
+    assert.strictEqual(Number((await reservaDe(R1)).recebimento_id), recA, 'a reserva de R1 nao veio da conversao da nota A');
+    assert.strictEqual((await reservaDe(R2)).recebimento_id, null, 'a reserva de R2 veio da reserva da OS');
+  });
+  await test('[RN-230.19] L1 de duas notas da MESMA OS (4 + 4), R1 da OS espera 8: liberar L1 -> R1 8, reserva da OS 0', async () => {
+    const os = await novaOs();
+    const m = await material();
+    const R1 = await reqDireta(m, 8, os);
+    await receber([[m, 4, 'L1']], { os_id: os.id });
+    await receber([[m, 4, 'L1']], { os_id: os.id });
+    assert.strictEqual(await daOs(os, m), 8, 'premissa');
+    await statusLote(m, 'L1', 'ATIVO');
+    assert.strictEqual((await reservas(R1)).reduce((s, x) => s + x, 0), 8);
+    assert.strictEqual(await daOs(os, m), 0);
+  });
+  await test('[RN-230.20] a requisicao da OS pulada pelo valor na liberacao do lote: a reserva da OS volta (4), ninguem leva', async () => {
+    const valueApprovalService = require('../../services/almoxarifado/requisitionValueApprovalService');
+    const os = await novaOs();
+    const m = await material();
+    const R1 = await reqDireta(m, 4, os);
+    const R2 = await reqDireta(m, 4);
+    await receber([[m, 4, 'L1']], { os_id: os.id });
+    const original = valueApprovalService.avaliarRequisicaoValor;
+    valueApprovalService.avaliarRequisicaoValor = async (db2, id) => (Number(id) === R1 ? { requer_aprovacao_valor: true } : original(db2, id));
+    try {
+      await statusLote(m, 'L1', 'ATIVO');
+    } finally { valueApprovalService.avaliarRequisicaoValor = original; }
+    assert.deepStrictEqual(await reservas(R1), [], 'premissa: a fila pulou R1 pelo valor');
+    assert.strictEqual(await daOs(os, m), 4, 'a reserva da OS foi solta e nao voltou');
+    assert.deepStrictEqual(await reservas(R2), [], 'a peca da OS foi para outra requisicao');
   });
 
   // ── RN-230.09 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
