@@ -131,6 +131,17 @@ process.on('exit', (code) => {
     assert.strictEqual(r.status, 400, JSON.stringify(r.body));
     assert.ok(!/^Lote L2/.test(r.body.error), r.body.error);
   });
+  await test('[RN-233.02] AJUSTE_NEGATIVO pela API (descarte): L2 BLOQUEADO -> 400; L2 vencido -> 201 (Fase 5, a regua do lote escolhido)', async () => {
+    const m = await montar();
+    await statusLote(m, 'L2', 'BLOQUEADO');
+    const r = await sair(m, 'AJUSTE_NEGATIVO', ['B1']);
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, 'Lote L2 esta bloqueado e nao pode ser utilizado');
+    await nadaSaiu(m);
+    const m2 = await montar();
+    await vencerOntem(m2, 'L2');
+    await ok(sair(m2, 'AJUSTE_NEGATIVO', ['B1']), 201);
+  });
   await test('[RN-233.02] vencido com o vencimento liberado -> SAIDA 201', async () => {
     const m = await montar();
     await dbRun(db, 'UPDATE lotes_almoxarifado SET data_validade = ?, vencimento_liberado_em = CURRENT_TIMESTAMP WHERE id = ?',
@@ -149,7 +160,27 @@ process.on('exit', (code) => {
     await nadaSaiu(m);
   });
 
+  await test('[RN-233.03] dois lotes impedidos -> a recusa e a do primeiro em ordem de codigo (Fase 5)', async () => {
+    const m = await montar();
+    await statusLote(m, 'L1', 'REPROVADO');
+    await statusLote(m, 'L2', 'BLOQUEADO');
+    const r = await sair(m, 'SAIDA', ['B1', 'A1']);
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, 'Lote L1 esta reprovado e nao pode ser utilizado');
+  });
+
   // ── RN-233.04 ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  await test('[RN-233.04] serie de OUTRO material com lote bloqueado -> a recusa do claim, nao a do lote (Fase 5)', async () => {
+    const m = await montar();
+    const outro = await montar();
+    await statusLote(outro, 'L2', 'BLOQUEADO');
+    const r = await request(app).post(`${API}/movimentacoes/v2`).send({ material_id: m.id, tipo: 'SAIDA', quantidade: 1, motivo: 'e233',
+      justificativa: 'teste 233', serie_ids: [await sid(outro, 'B1')] });
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.ok(!/^Lote L2/.test(r.body.error), r.body.error);
+    assert.strictEqual(await statusSerie(outro, 'B1'), 'EM_ESTOQUE');
+    await nadaSaiu(m);
+  });
   await test('[RN-233.04] serie sem lote -> 201; AJUSTE -1 com a serie de L2 BLOQUEADO -> 201 (nao muda)', async () => {
     const m = await material();
     await entrar(m, ['N1', 'N2']);

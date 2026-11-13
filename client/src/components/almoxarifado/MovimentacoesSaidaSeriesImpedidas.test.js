@@ -43,17 +43,20 @@ let container;
 let root;
 let seriesEmEstoque;
 let seriesBloqueadas;
+let lotes;
 
 beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
   seriesEmEstoque = [];
   seriesBloqueadas = [];
+  lotes = [];
   api.get.mockImplementation((url) => {
     if (url === '/almoxarifado/materiais') return Promise.resolve({ data: MATERIAIS });
     if (url === '/almoxarifado/localizacoes') return Promise.resolve({ data: [{ id: 1, codigo: 'COR-A-03' }] });
     if (url === '/almoxarifado/materiais/10/series?status=EM_ESTOQUE') return Promise.resolve({ data: seriesEmEstoque });
     if (url === '/almoxarifado/materiais/10/series?status=BLOQUEADA') return Promise.resolve({ data: seriesBloqueadas });
-    return Promise.resolve({ data: [] }); // lotes: nenhum -> o lote fica em branco ("Sem lote")
+    if (url === '/almoxarifado/materiais/10/lotes?com_saldo=1') return Promise.resolve({ data: lotes });
+    return Promise.resolve({ data: [] }); // lotes: nenhum por padrão -> o lote fica em branco ("Sem lote")
   });
   api.post.mockResolvedValue({ data: { success: true } });
   container = document.createElement('div');
@@ -140,6 +143,21 @@ describe('Saída avulsa: a série de lote impedido vem apagada (RN-233.05)', () 
   });
 });
 
+describe('Com um lote escolhido (Fase 5)', () => {
+  test('o FEFO escolhe L1: só A1 e A2 na lista, sem frase; controle: com o lote em branco a frase aparece', async () => {
+    seriesEmEstoque = [serie(101, 'A1', 7, 'L1', ok), serie(201, 'B1', 12, 'L2', BLOQUEADO)];
+    lotes = [{ id: 7, codigo: 'L1', status: 'ATIVO', elegivel: true, saldo: 1 }, { id: 12, codigo: 'L2', status: 'BLOQUEADO', elegivel: false, saldo: 1 }];
+    await abrir('SAIDA');
+    expect(container.querySelector('#mov-lote').value).toBe('7');
+    expect(caixa(101)).toBeTruthy();
+    expect(caixa(201)).toBeNull();
+    expect(frase()).toBeNull();
+    preencher(container.querySelector('#mov-lote'), '');
+    expect(caixa(201).disabled).toBe(true);
+    expect(frase().textContent).toBe(FRASE_SAIDA);
+  });
+});
+
 describe('Por tipo: a Perda só apaga bloqueado/reprovado (RN-233.06)', () => {
   test('L2 vencido: na Saída apagada com "Vencido em 12/11/2026"; na Perda habilitada, sem rótulo nem frase', async () => {
     seriesEmEstoque = [serie(101, 'A1', 7, 'L1', ok), serie(201, 'B1', 12, 'L2', VENCIDO)];
@@ -150,6 +168,14 @@ describe('Por tipo: a Perda só apaga bloqueado/reprovado (RN-233.06)', () => {
     expect(caixa(201).disabled).toBe(false);
     expect(rotulo(201)).toBeNull();
     expect(frase()).toBeNull();
+  });
+  test('L2 bloqueado E vencido: na Perda o rótulo só diz "Bloqueado"; na Saída diz os dois (Fase 5)', async () => {
+    seriesEmEstoque = [serie(201, 'B1', 12, 'L2', { ...VENCIDO, lote_status: 'BLOQUEADO' })];
+    await abrir('PERDA');
+    expect(caixa(201).disabled).toBe(true);
+    expect(rotulo(201).textContent).toBe(' · lote L2 — Bloqueado: não sai');
+    await trocarTipo('SAIDA');
+    expect(rotulo(201).textContent).toBe(' · lote L2 — Bloqueado · Vencido em 12/11/2026: não sai');
   });
   test('L2 reprovado na Perda: apagada, "Reprovado", a frase da Perda', async () => {
     seriesEmEstoque = [serie(101, 'A1', 7, 'L1', ok), serie(201, 'B1', 12, 'L2', REPROVADO)];
@@ -177,8 +203,9 @@ describe('A série apagada sai da marcação (RN-233.07)', () => {
     const form = container.querySelector('.almox-modal form');
     await act(async () => { form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
     await esperar();
-    const enviados = api.post.mock.calls.filter(([url]) => url === '/almoxarifado/movimentacoes/v2');
-    enviados.forEach(([, body]) => expect(body.serie_ids || []).not.toContain(201));
+    // Fase 5: com 0 de 1 marcada o envio para antes do servidor (a dica de quantidade) — nada vai, e B1 não vai
+    expect(api.post.mock.calls.filter(([url]) => url === '/almoxarifado/movimentacoes/v2')).toHaveLength(0);
+    expect(toast.error).toHaveBeenCalledWith('Selecione exatamente a quantidade de séries informada');
   });
 });
 
@@ -216,5 +243,3 @@ describe('O ajuste negativo não apaga (RN-233.09)', () => {
   });
 });
 
-// eslint-disable-next-line no-unused-vars
-const _naoUsado = toast;

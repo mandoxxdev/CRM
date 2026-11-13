@@ -1255,7 +1255,9 @@ const MovimentacoesAlmoxarifado = () => {
                                 {s.numero}
                                 {impedida ? (
                                   <span data-serie-situacao={s.id} style={{ color: 'var(--gmp-error)', fontSize: '0.75rem' }}>
-                                    {` · lote ${s.lote_codigo} — ${situacaoDoLote(s)}: não sai`}
+                                    {/* Fase 5: na Perda o vencido não barra — o rótulo diz só o status (bloqueado e vencido: "Bloqueado") */}
+                                    {` · lote ${s.lote_codigo} — ${situacaoDoLote(TIPOS_DESCARTE_LOTE.includes(form.tipo)
+                                      ? { ...s, lote_vencido_sem_liberacao: false } : s)}: não sai`}
                                   </span>
                                 ) : (s.lote_codigo ? ` · lote ${s.lote_codigo}` : '')}
                               </label>
