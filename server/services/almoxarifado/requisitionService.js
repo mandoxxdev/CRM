@@ -1183,6 +1183,8 @@ async function listarFilaSeparacao(db, user, opcoes = {}) {
           num(i.saldo_disponivel) - num(i.reservado_para_item), i.reservado_para_item, Number(i.motor_permite_negativo) === 1)
           - num(i.lote_impedido)), tetosLote.has(i.id) ? tetosLote.get(i.id) : Infinity)),
         disponivel: Q.qtd(num(i.saldo_disponivel)), origem_separacao_codigo: i.origem_separacao_codigo || null,
+        // Etapa 227 (B1502, RN-227.09): o impedido do material (o numero do extrato) — a tela diz "disponivel 10 (6 em lote impedido)".
+        lote_impedido: Q.qtd(Math.max(0, num(i.lote_impedido))),
         lote_separacao_codigo: i.lote_separacao_codigo || null, material_critico: Number(i.material_critico) === 1,
         // Etapa 197 (T1, RN-197.12, B1328): o CADASTRO do material (nao o saldo em lote) — com controle, o automatico da entrega
         // baixa do lote que vence primeiro (RN-197.01); sem, nao escolhe lote (B204). A dica da fila (coletaTexto) muda a frase por ele.

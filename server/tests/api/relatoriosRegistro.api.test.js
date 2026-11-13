@@ -319,6 +319,7 @@ function getBinary(req) {
       'nome errado do parametro deveria ser ignorado (periodo inteiro), nao filtrar');
   });
 
+  const COLUNAS_MONTADAS_EM_JS = { 'saldo-por-lote': ['situacao_lote'] }; // Etapa 227 (B1503)
   await test('[revisao I1] VARREDURA: toda `chave` de colunas existe no SQL real; todo `nome` de param e CONSUMIDO; `limite` bate com o LIMIT', async () => {
     // A revisao da Task 1 provou com duas sabotagens verdes que chave/nome errados numa
     // entrada NAO-testada passam em silencio (coluna vazia no XLSX; filtro ignorado que
@@ -355,7 +356,19 @@ function getBinary(req) {
           cols.forEach((c) => colunasReais.add(c.name));
           await dbRun(db, `DROP VIEW IF EXISTS _varredura_${i}`).catch(() => {});
         }
+        // Etapa 227 (B1503): coluna MONTADA EM JS depois do SELECT (a palavra da situacao do lote, `situacaoDoLote` — B1499) fica fora
+        // da varredura do SQL, com prova propria: NAO pode estar no SQL (a lista nao apodrece) e sai em toda linha da fn (e na planilha:
+        // relatorioSaldoPorLoteSituacao RN-227.06).
+        const montadas = COLUNAS_MONTADAS_EM_JS[tipo] || [];
+        for (const k of montadas) {
+          assert.ok(!colunasReais.has(k), `${tipo}: "${k}" esta na lista das montadas em JS mas existe no SQL — tire da lista`);
+          assert.ok(entrada.colunas.some((c) => c.chave === k), `${tipo}: "${k}" montada em JS sem coluna no registro`);
+          for (const linha of await entrada.fn(db, qFull)) {
+            assert.ok(Object.prototype.hasOwnProperty.call(linha, k), `${tipo}: linha sem a coluna montada "${k}"`);
+          }
+        }
         for (const c of entrada.colunas) {
+          if (montadas.includes(c.chave)) continue;
           assert.ok(colunasReais.has(c.chave),
             `${tipo}: coluna declarada "${c.chave}" NAO existe no SQL real (colunas: ${[...colunasReais].join(',')})`);
         }

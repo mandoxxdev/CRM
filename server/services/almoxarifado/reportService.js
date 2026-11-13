@@ -10,7 +10,8 @@ const { consumoJanelaSql, consumoJanelaParams } = require('./consumoSql');
 const { TIPOS_SAIDA, TIPOS_DEVOLUCAO } = require('./movementTypes');
 const { residualSemLote } = require('./lotService');
 const { QTD_DO_ITEM_SQL } = require('./receiptNotificationService');
-const { loteImpedidoSql } = require('./loteImpedido'); // Etapa 225 (B1488)
+const { loteImpedidoSql, predicadoLoteImpedidoSql, predicadoLoteVencidoSql } = require('./loteImpedido'); // Etapa 225 (B1488); 227
+const { situacaoDoLote } = require('./situacaoDoLote'); // Etapa 227 (B1499)
 
 async function relatorioEstoqueAtual(db) {
   // Etapa 8, Task 1 (classe A): relatorio de posicao do estoque PROPRIO. valor_total somando
@@ -42,9 +43,15 @@ const EPS_SALDO = 1e-9;
  * (`quantidade_atual − Σ lotes`, PODE ser negativa) e a coluna do físico total.
  */
 async function relatorioSaldoPorLote(db) {
+  // Etapa 227 (B1498, B1500; RN-227.01/.07): a situacao do lote pela regua do extrato (224) — os dois booleanos da aprovacao, com o "hoje"
+  // de Brasilia lido uma vez; as palavras sao as do cliente (`situacaoDoLote`, B1499). Sem filtro de `controle_lote` (como o extrato,
+  // B1485). Os campos auxiliares nao saem na linha (a saida e montada campo a campo abaixo).
+  const hoje = diaLocal.hojeLocalISO();
   const lotes = await dbAll(db, `SELECT m.id as material_id, m.codigo as material_codigo, m.nome as material_nome,
       ${CLIENTE_SQL} as cliente, m.quantidade_atual as fisico_material,
       l.id as lote_id, l.codigo as lote, l.data_validade as validade, l.status as status_lote,
+      CASE WHEN ${predicadoLoteImpedidoSql('l', hoje)} THEN 1 ELSE 0 END as lote_esta_impedido,
+      CASE WHEN ${predicadoLoteVencidoSql('l', hoje)} THEN 1 ELSE 0 END as lote_vencido_sem_liberacao,
       SUM(s.quantidade) as quantidade
     FROM estoque_saldo_almoxarifado s
     JOIN lotes_almoxarifado l ON l.id = s.lote_id
@@ -88,13 +95,17 @@ async function relatorioSaldoPorLote(db) {
       saida.push({
         material_codigo: l.material_codigo, material_nome: l.material_nome, cliente: l.cliente,
         lote: l.lote, validade: l.validade, status_lote: l.status_lote,
+        situacao_lote: situacaoDoLote({
+          lote_esta_impedido: l.lote_esta_impedido === 1, lote_vencido_sem_liberacao: l.lote_vencido_sem_liberacao === 1,
+          lote_status: l.status_lote, lote_validade: l.validade,
+        }),
         quantidade: l.quantidade, fisico_material: l.fisico_material,
       });
     }
     if (semLote !== 0) {
       saida.push({
         material_codigo: base.material_codigo, material_nome: base.material_nome, cliente: base.cliente,
-        lote: 'Sem lote atribuído', validade: null, status_lote: null,
+        lote: 'Sem lote atribuído', validade: null, status_lote: null, situacao_lote: null,
         quantidade: semLote, fisico_material: base.fisico_material,
       });
     }

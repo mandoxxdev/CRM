@@ -104,8 +104,8 @@ let seq = 0;
     const R = await req([[m, 2]]);
     const f = await daFila(R.id);
     assert.deepStrictEqual(Object.keys(f.itens[0]).sort(), ['a_entregar', 'a_separar', 'controle_lote', 'disponivel', 'entregavel', 'item_id',
-      'lote_separacao_codigo', 'material_codigo', 'material_critico', 'material_id', 'material_nome', 'origem_separacao_codigo',
-      'pegar_em', 'pegar_em_alerta', 'pegar_em_aviso', 'separavel', 'unidade']);
+      'lote_impedido', 'lote_separacao_codigo', 'material_codigo', 'material_critico', 'material_id', 'material_nome', 'origem_separacao_codigo',
+      'pegar_em', 'pegar_em_alerta', 'pegar_em_aviso', 'separavel', 'unidade']); // Etapa 227 (B1502): + lote_impedido
     assert.ok(Array.isArray(f.ordem_coleta));
     assert.strictEqual(f.ordem_coleta.length, 1);
   });

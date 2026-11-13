@@ -670,7 +670,10 @@ const RELATORIOS = {
       + 'o automático baixa do lote que vence primeiro; o que os lotes que podem sair (não bloqueados, reprovados ou vencidos '
       + 'sem liberação) não cobrem também sai sem lote. Lote + Sem lote atribuído = físico total. '
       + 'Lote negativo aparece (material que permite saldo negativo). Material com controle de lote que '
-      + 'nunca teve lote aparece só com a linha "Sem lote atribuído". Materiais inativos ficam fora.',
+      + 'nunca teve lote aparece só com a linha "Sem lote atribuído". Materiais inativos ficam fora.'
+      // Etapa 227 (B1501, RN-227.06): o que e a coluna Situacao (B1498).
+      + ' Situação = por que o lote não sai para uso (Bloqueado, Reprovado, Vencido em dd/mm/aaaa ou Validade a corrigir, as palavras do extrato do '
+      + 'material); vazia quando o lote pode sair (inclusive o vencido com o vencimento liberado).',
     limite: null,
     params: [],
     colunas: [
@@ -680,6 +683,7 @@ const RELATORIOS = {
       { chave: 'lote', rotulo: 'Lote' },
       { chave: 'validade', rotulo: 'Validade' },
       { chave: 'status_lote', rotulo: 'Status do lote' },
+      { chave: 'situacao_lote', rotulo: 'Situação' }, // Etapa 227 (B1498): as palavras do extrato
       { chave: 'quantidade', rotulo: 'Saldo atribuído' },
       { chave: 'fisico_material', rotulo: 'Físico total do material' },
     ],
