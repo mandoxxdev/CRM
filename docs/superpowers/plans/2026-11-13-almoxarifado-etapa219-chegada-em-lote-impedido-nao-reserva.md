@@ -150,3 +150,32 @@ Sem galhos: tudo no mesmo serviço, em série na árvore principal.
 - O `livre − ja` da OS na retomada (I3 da 171) continua sobre o `livre` inteiro.
 - O teto da liberação (`:556`) continua `min(quantidade, disponivel)`: o desconto mora no miolo (que a OS aberta pula).
 - Teste de corrida: nenhuma porta nova (leitura sob a trava que já existe).
+
+## Fase 2 — correções do revisor fresco (2026-11-13) — **MANDAM sobre o texto acima onde divergem**
+
+Revisor fresco sobre `b069fc5d` (só leitura): **1 trava, 5 importantes, 3 menores**; os números das RN-219.01/.02/.03/.04/.05/.10 conferidos à
+mão e certos; sem desconto duplo (o físico livre do lote já tira a inspeção do lote; a reserva sobre peça impedida conta contra o bom, como na
+aprovação — B1456 coerente).
+
+1. **[TRAVA] O desvio do `distribuirParaOs` era ambíguo.** Ele chama o miolo duas vezes: a fila da OS (`:465`) e a fila geral quando a OS
+   fechou no meio (`solta_os_fechada`, `:473`). **O `semDescontoDoLote: true` vai só no `:465`**; o `:473` é fila geral e desconta. Teste
+   novo **RN-219.11** (a OS que fecha no meio, por monkeypatch de `reservaDaOs.reservarParaOsSobTrava` devolvendo `solta_os_fechada`).
+   O teto do `:473` (`r.quantidade`) pode incluir a peça bloqueada; com o B1453 ele nunca passa do liberado, mas, com saldo de ajuste livre,
+   distribui o ajuste no lugar (o caso do B1454 nesta borda) — **D (219)**.
+2. **[IMP] B1454 e a frase do aviso só com `controle_lote = 1`.** A nota cria lote BLOQUEADO para qualquer item com código de lote
+   (`receiptService.js:1754`), mas a aprovação e a separação ignoram lote em material sem controle (B1371). Sem a condição, o filtro deixaria
+   de reservar o que a próxima aprovação reserva. Teste novo **RN-219.12** (sem controle de lote: reserva como hoje e o aviso diz
+   *"disponível"*).
+3. **[IMP] Precedência do aviso.** Item retido para inspeção diz *"retido para inspeção"* mesmo em lote impedido (retido vem primeiro); a frase
+   nova só para o item livre em lote impedido. Asserção nova na RN-219.04 (a linha do aviso da nota).
+4. **[IMP] O apelido `ma`** também nos dois avisos (`:366`, `:444`), não só no miolo.
+5. **[IMP] O estorno da entrada boa deixa a reserva coberta só por lote impedido** (anterior à 219; `liberarParaEstorno` `:635-637` olha o
+   disponível sem o desconto): na RN-219.02, estornar a nota boa (3 em L2) não solta a reserva de 3 (disponível 4 ≥ 3) e R1 fica
+   *Parcialmente Reservada* com nada que saia; a entrega recusa (RN-206.06). **Fora — C521.**
+6. **[IMP] "A conta da aprovação" era exagero.** A aprovação também tira a caixa sem reserva dos outros itens (`requisitionService.js:765`); o
+   miolo nunca tirou (C173, Etapa 95). O B1453 iguala só a parte do **lote impedido**.
+7. **[MENOR]** A RN-219.04 precisa de `inspecao_material_critico = 1` (o teste liga). A RN-219.02 fica: 1 PC entra em L1 e L1 é bloqueado pelo
+   `PUT` **antes** de R1 ser aprovada (R1 espera: liberado 0), depois a nota (3 em L2 + 4 em L1) → liberado 3. O "entrou 7" do aviso ao
+   solicitante com 3 reservados é o número que entrou (B1457).
+
+C novo: **C521** (acima). O **C520** continua (OS aberta). Os testes da Fase 2 entram no T0.
