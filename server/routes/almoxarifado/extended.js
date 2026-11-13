@@ -10,6 +10,8 @@ const multer = multerComLimiteNoErro(require('multer'));
 // Etapa 86 (RN-86.02): recusa do fileFilter com `status = 400` e `mensagemUsuario` — o handler
 // global (services/errosApi.js) responde 400 com ESTE texto (sem isso, 500 generico).
 const { erroComMensagemUsuario } = require('../../services/errosApi');
+// Etapa 215 (RN-215.02): as gravacoes de categoria saem do Almoxarifado (o cadastro e do Compras).
+const { recusarCategoriasNoAlmoxarifado } = require('../../services/compras/cadastroDeMaterial');
 const XLSX = require('xlsx');
 // Etapa 162 (RN-162.03/.09): o dia e a hora de Brasilia no export
 const diaLocal = require('../../services/diaLocal');
@@ -236,7 +238,9 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
   // para o usuario como dois problemas diferentes.
   const CATEGORIA_DUPLICADA = 'Já existe uma categoria com este nome';
 
-  app.post('/api/almoxarifado/categorias', auth, requirePermission('configurar'), async (req, res) => {
+  // Etapa 215 (RN-215.01/02): os tres handlers ganham nome para servir as duas portas — a do Almoxarifado (recusa antes do perfil,
+  // salvo a chave de reversao) e a do Compras (`portaCompras.cadastro`, registrada logo depois de cada uma).
+  const criarCategoria = async (req, res) => {
     try {
       const nome = String(req.body?.nome ?? '').trim();
       if (!nome) return res.status(400).json({ error: 'Nome é obrigatório' });
@@ -254,9 +258,11 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       if (/UNIQUE constraint/i.test(e.message)) return res.status(400).json({ error: CATEGORIA_DUPLICADA });
       handleError(res, e);
     }
-  });
+  };
+  app.post('/api/almoxarifado/categorias', auth, recusarCategoriasNoAlmoxarifado, requirePermission('configurar'), criarCategoria);
+  if (portaCompras) app.post('/api/compras/materiais/categorias', ...portaCompras.cadastro, criarCategoria);
 
-  app.put('/api/almoxarifado/categorias/:id', auth, requirePermission('configurar'), async (req, res) => {
+  const editarCategoria = async (req, res) => {
     try {
       const atual = await dbGet(db, 'SELECT * FROM categorias_material_almoxarifado WHERE id = ?', [req.params.id]);
       if (!atual) return res.status(404).json({ error: 'Categoria não encontrada' });
@@ -283,9 +289,11 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       if (/UNIQUE constraint/i.test(e.message)) return res.status(400).json({ error: CATEGORIA_DUPLICADA });
       handleError(res, e);
     }
-  });
+  };
+  app.put('/api/almoxarifado/categorias/:id', auth, recusarCategoriasNoAlmoxarifado, requirePermission('configurar'), editarCategoria);
+  if (portaCompras) app.put('/api/compras/materiais/categorias/:id', ...portaCompras.cadastro, editarCategoria);
 
-  app.delete('/api/almoxarifado/categorias/:id', auth, requirePermission('configurar'), async (req, res) => {
+  const inativarCategoria = async (req, res) => {
     try {
       const anterior = await dbGet(db, 'SELECT * FROM categorias_material_almoxarifado WHERE id = ?', [req.params.id]);
       // SOFT delete: a linha fica. Material ja classificado continua com o nome dela em
@@ -306,7 +314,9 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       }, 'exclusao de categoria');
       res.json({ success: true });
     } catch (e) { handleError(res, e); }
-  });
+  };
+  app.delete('/api/almoxarifado/categorias/:id', auth, recusarCategoriasNoAlmoxarifado, requirePermission('configurar'), inativarCategoria);
+  if (portaCompras) app.delete('/api/compras/materiais/categorias/:id', ...portaCompras.cadastro, inativarCategoria);
 
   // ── Motivos de movimentação (Etapa 66, T1) ─────────────────────────────────────────────────
   //

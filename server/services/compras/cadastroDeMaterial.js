@@ -95,6 +95,14 @@ function recusarFamiliasNoAlmoxarifado(req, res, next) {
   return res.status(403).json({ error: MSG_FAMILIAS_NO_COMPRAS });
 }
 
+// Etapa 215 (RN-215.02): o mesmo para as gravacoes de CATEGORIA e de TIPO DE MATERIAL do almoxarifado, com a mesma chave de reversao.
+const MSG_CATEGORIAS_NO_COMPRAS = 'O cadastro de categorias é feito em Compras → Categorias.';
+const MSG_TIPOS_NO_COMPRAS = 'O cadastro de tipos de material é feito em Compras → Tipos de Material.';
+const recusarNoAlmoxarifado = (mensagem) => (req, res, next) => (cadastroNoAlmoxarifadoLiberado()
+  ? next() : res.status(403).json({ error: mensagem }));
+const recusarCategoriasNoAlmoxarifado = recusarNoAlmoxarifado(MSG_CATEGORIAS_NO_COMPRAS);
+const recusarTiposNoAlmoxarifado = recusarNoAlmoxarifado(MSG_TIPOS_NO_COMPRAS);
+
 /**
  * Etapa 193 Fase 5 (R3b): o `POST /api/almoxarifado/materiais` ficou porque a sobra (retalho) e a remessa criam material na
  * operacao — mas aceitava o cadastro inteiro (NCM, custo, fornecedor, controles, saldo inicial) de Almoxarife e Engenharia, por
@@ -184,6 +192,7 @@ function criarPortaCompras({ authenticateToken, checkModulePermission }) {
 module.exports = {
   ACOES_DO_CADASTRO, pode, exigir, minhasPermissoes, criarPortaCompras,
   recusarCadastroNoAlmoxarifado, MSG_CADASTRO_NO_COMPRAS, recusarFamiliasNoAlmoxarifado, MSG_FAMILIAS_NO_COMPRAS, cadastroNoAlmoxarifadoLiberado,
+  recusarCategoriasNoAlmoxarifado, MSG_CATEGORIAS_NO_COMPRAS, recusarTiposNoAlmoxarifado, MSG_TIPOS_NO_COMPRAS,
   restringirCriacaoNoAlmoxarifado, CAMPOS_DO_MATERIAL_DA_OPERACAO,
   recusarSaldoInicial, MSG_SALDO_INICIAL_NO_COMPRAS, usuarioDoCompras, comoCompras,
 };

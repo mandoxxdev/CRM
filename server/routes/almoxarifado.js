@@ -187,6 +187,8 @@ function exigirAdminAlmox(req, res, next) {
   next();
 }
 const { recusarFamiliasNoAlmoxarifado } = cadastroDeMaterialCompras;
+// Etapa 215 (RN-215.02): as gravacoes de tipo de material saem do Almoxarifado (o cadastro e do Compras).
+const { recusarTiposNoAlmoxarifado } = cadastroDeMaterialCompras;
 
 // Etapa 10 (RN-01): tolerancia de inventario, EFETIVA. `configuracoes_almoxarifado.valor` e
 // TEXT — getConfig devolve string ou undefined, nunca numero — e `0` e um valor VALIDO de
@@ -2314,15 +2316,18 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // TIPOS DE MATERIAL
   // ════════════════════════════════════════════════════════════════════════════
 
-  app.get('/api/almoxarifado/tipos-material',(req, res) => {
+  // Etapa 215 (RN-215.01/02): handlers nomeados para as duas portas. O `denyUnlessAlmoxAdmin` que abria cada gravacao saiu para o
+  // middleware `exigirAdminAlmox` da rota do Almoxarifado (que antes recusa, salvo a chave); pelo Compras decide `portaCompras.cadastro`.
+  const listarTiposMaterial = (req, res) => {
     db.all(`SELECT * FROM tipos_material_almoxarifado WHERE ativo = 1 ORDER BY nome`, [], (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
       res.json(rows);
     });
-  });
+  };
+  app.get('/api/almoxarifado/tipos-material', listarTiposMaterial);
+  app.get('/api/compras/materiais/aux/tipos-material', ...portaCompras.leitura, listarTiposMaterial);
 
-  app.post('/api/almoxarifado/tipos-material',(req, res) => {
-    if (denyUnlessAlmoxAdmin(req, res)) return;
+  const criarTipoMaterial = (req, res) => {
     const { nome, descricao, icone, cor, requer_assinatura, requer_termo, is_epi, is_controlado } = req.body;
     if (!nome) return res.status(400).json({ error: 'Nome obrigatório' });
     db.run(`INSERT INTO tipos_material_almoxarifado (nome, descricao, icone, cor, requer_assinatura, requer_termo, is_epi, is_controlado)
@@ -2342,10 +2347,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           }).finally(() => res.status(201).json(r));
         });
       });
-  });
+  };
+  app.post('/api/almoxarifado/tipos-material', recusarTiposNoAlmoxarifado, exigirAdminAlmox, criarTipoMaterial);
+  app.post('/api/compras/materiais/tipos-material', ...portaCompras.cadastro, criarTipoMaterial);
 
-  app.put('/api/almoxarifado/tipos-material/:id',(req, res) => {
-    if (denyUnlessAlmoxAdmin(req, res)) return;
+  const editarTipoMaterial = (req, res) => {
     const { nome, descricao, icone, cor, requer_assinatura, requer_termo, is_epi, is_controlado, ativo } = req.body;
     // Etapa 19 (RN-01): leitura previa so para o "de" do log — a rota nao a tinha porque nao
     // precisava dela para gravar.
@@ -2370,10 +2376,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           });
         });
     });
-  });
+  };
+  app.put('/api/almoxarifado/tipos-material/:id', recusarTiposNoAlmoxarifado, exigirAdminAlmox, editarTipoMaterial);
+  app.put('/api/compras/materiais/tipos-material/:id', ...portaCompras.cadastro, editarTipoMaterial);
 
-  app.delete('/api/almoxarifado/tipos-material/:id',(req, res) => {
-    if (denyUnlessAlmoxAdmin(req, res)) return;
+  const inativarTipoMaterial = (req, res) => {
     db.get(`SELECT * FROM tipos_material_almoxarifado WHERE id = ?`, [req.params.id], (selErr, anterior) => {
       if (selErr) return res.status(500).json({ error: selErr.message });
       // Etapa 23 (RN-04): o `AND ativo = 1` nao e otimizacao, e o que da SENTIDO ao `changes`.
@@ -2393,7 +2400,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         }).finally(() => res.json({ success: true }));
       });
     });
-  });
+  };
+  app.delete('/api/almoxarifado/tipos-material/:id', recusarTiposNoAlmoxarifado, exigirAdminAlmox, inativarTipoMaterial);
+  app.delete('/api/compras/materiais/tipos-material/:id', ...portaCompras.cadastro, inativarTipoMaterial);
 
 
   // ════════════════════════════════════════════════════════════════════════════
