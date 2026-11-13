@@ -4028,14 +4028,32 @@ async function consultarSaldosPorLocalizacao(db, materialId) {
   // undefined, sem erro de SQL) e a coluna "Lote" do extrato ficaria em "—" para sempre assim
   // que a Task 3 passasse a gravar o vínculo — silenciosamente morta. Devolvendo `lote` (o
   // código, via lotes_almoxarifado) ao lado de `lote_id`, o cliente volta a funcionar sozinho.
-  return dbAll(db, `SELECT s.*, l.codigo as localizacao_codigo, l.descricao as localizacao_descricao, l.tipo as localizacao_tipo,
+  //
+  // Etapa 224 (C528; B1484, B1485): a situacao do lote em cada linha — crua (`lote_status`, `lote_validade`,
+  // `lote_vencimento_liberado_em`) e os dois booleanos da regua da aprovacao (`predicadoLoteImpedidoSql`/`predicadoLoteVencidoSql`, o
+  // "hoje" de Brasilia). Falsos sem lote (o LEFT JOIN nulo daria verdadeiro no `COALESCE(status,'') <> 'ATIVO'`). COM o controle de lote
+  // desligado a linha ainda diz (Fase 2 I1, B1485): o motor recusa a saida que cita o lote bloqueado/vencido sem olhar `controle_lote`
+  // (`registrarMovimentacao`, guarda do status e do vencido), e o "Sai de" da entrega ainda o oferece — o cartao (0, B1371) e a linha nao
+  // sao o mesmo numero (C530). Nome `lote_esta_impedido`, nao `lote_impedido` (que e o NUMERO do material). Sem trava.
+  // Os nomes crus seguem os de `requisitionService` (`lote_validade`, Fase 2 M5).
+  const hoje = diaLocal.hojeLocalISO();
+  const comLote = 'lt.id IS NOT NULL';
+  const rows = await dbAll(db, `SELECT s.*, l.codigo as localizacao_codigo, l.descricao as localizacao_descricao, l.tipo as localizacao_tipo,
            a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome,
-           lt.codigo as lote
+           lt.codigo as lote,
+           lt.status as lote_status, lt.data_validade as lote_validade, lt.vencimento_liberado_em as lote_vencimento_liberado_em,
+           CASE WHEN ${comLote} AND ${loteImpedido.predicadoLoteImpedidoSql('lt', hoje)} THEN 1 ELSE 0 END as lote_esta_impedido,
+           CASE WHEN ${comLote} AND ${loteImpedido.predicadoLoteVencidoSql('lt', hoje)} THEN 1 ELSE 0 END as lote_vencido_sem_liberacao
     FROM estoque_saldo_almoxarifado s
     LEFT JOIN localizacoes_almoxarifado l ON s.localizacao_id = l.id
     LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
     LEFT JOIN lotes_almoxarifado lt ON s.lote_id = lt.id
     WHERE s.material_id = ?`, [materialId]);
+  for (const r of rows) {
+    r.lote_esta_impedido = r.lote_esta_impedido === 1;
+    r.lote_vencido_sem_liberacao = r.lote_vencido_sem_liberacao === 1;
+  }
+  return rows;
 }
 
 module.exports = {

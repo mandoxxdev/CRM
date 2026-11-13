@@ -41,11 +41,16 @@ function hojeValidado(hojeISO) {
   return hojeISO;
 }
 
-/** O lote (apelido `l`) nao pode sair: o contrario de `elegivel`. */
-function predicadoLoteImpedidoSql(l, hojeISO = diaLocal.hojeLocalISO()) {
+/** Etapa 224 (B1484): a parte "vencido sem a liberacao" da regua, extraida para a linha de saldo dizer POR QUE o lote esta impedido. */
+function predicadoLoteVencidoSql(l, hojeISO = diaLocal.hojeLocalISO()) {
   const hoje = hojeValidado(hojeISO);
-  return `(COALESCE(${l}.status,'') <> 'ATIVO' OR (COALESCE(${l}.data_validade,'') <> ''`
-    + ` AND substr(${l}.data_validade,1,10) < '${hoje}' AND COALESCE(${l}.vencimento_liberado_em,'') = ''))`;
+  return `(COALESCE(${l}.data_validade,'') <> ''`
+    + ` AND substr(${l}.data_validade,1,10) < '${hoje}' AND COALESCE(${l}.vencimento_liberado_em,'') = '')`;
+}
+
+/** O lote (apelido `l`) nao pode sair: o contrario de `elegivel`. Texto identico ao de antes da 224 (RN-224.00). */
+function predicadoLoteImpedidoSql(l, hojeISO = diaLocal.hojeLocalISO()) {
+  return `(COALESCE(${l}.status,'') <> 'ATIVO' OR ${predicadoLoteVencidoSql(l, hojeISO)})`;
 }
 
 /** O desconto do material (apelido `m`), ja entre parenteses. */
@@ -70,4 +75,4 @@ function fraseLoteImpedido(n, unidade) {
   return `Não entram ${Q.qtd(Number(n))}${unidade ? ` ${unidade}` : ''} em lote bloqueado, reprovado ou vencido.`;
 }
 
-module.exports = { predicadoLoteImpedidoSql, loteImpedidoSql, fraseLoteImpedido, MSG_HOJE_INVALIDO };
+module.exports = { predicadoLoteImpedidoSql, predicadoLoteVencidoSql, loteImpedidoSql, fraseLoteImpedido, MSG_HOJE_INVALIDO };
