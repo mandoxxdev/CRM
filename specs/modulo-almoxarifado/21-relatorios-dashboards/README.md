@@ -1,5 +1,7 @@
 # 21 — Relatórios, Dashboards e Indicadores
 
+> **+ Etapa 225 (2026-11-13, `18084c49`, Fase 5 `70941fd2`): *Estoque atual* e *Saldos comprometidos* com a coluna *Em lote impedido* (o número do extrato, `loteImpedidoSql`), logo depois do *Disponível*, na tela e na planilha; o comprometido lista o material só com lote impedido; notas novas (D (223); B1488–B1491; C531)** — ver a seção "Etapa 225", no fim; o status não muda (falta para 🟢 continua só previsto × realizado).
+
 > **+ Etapa 181 (2026-10-22, T1 `3ce1d3a2`, Fase 5 `0e6d5b37`, `e104df3c`): o *EPI por colaborador* lê as entregas de EPI (feature 25) e ele e o *Ferramentas emprestadas* ficam restritos (`entregar_epi` / `gerenciar_ferramentas` — o GESTOR passa de 26 para 24 relatórios, a PRODUCAO de 22 para 20); o dispatcher e a exportação mascaram a justificativa antiga da entrega de EPI para quem não tem `entregar_epi`** — ver a seção "Etapa 181", no fim; o status não muda (falta para 🟢 continua só previsto × realizado).
 
 > **+ Etapa 174 (2026-10-22, `97d3012f`, Fase 5 `9d1fcd1d`, `aa053fa8`): o *Consumo por OS* ganha Devolvido e Líquido e passa a contar as entregas de requisição; o quadro do painel ignora linhas só de devolução** — ver a seção "Etapa 174", no fim; o status não muda.
@@ -272,3 +274,22 @@ Uma query, `cancelado = 0`, agrupada por `material_id, os_id`:
   `RelatoriosAlmoxarifado.test.js` (nota, select, consulta, data). Plano:
   `docs/superpowers/plans/2026-10-22-almoxarifado-etapa181-relatorio-epi-por-colaborador.md`. Novidades: seção "Etapa 181", **B1180** a
   **B1188**, **C440** a **C442**, **D (181)**, **F (181)**.
+
+## Etapa 225 (2026-11-13) — os relatórios de saldo dizem quanto está em lote impedido
+
+- [x] **RN-225.01/.02** — `estoque-atual` traz `lote_impedido` (`loteImpedido.loteImpedidoSql('m')`, a régua do extrato e da aprovação; 0 sem
+  controle de lote); o `disponivel` e o `valor_total` não mudam — `18084c49` (**B1488**).
+- [x] **RN-225.03/.04** — `saldos-comprometidos` traz `lote_impedido` e lista também quem só tem `lote_impedido > 0` (consulta envolvida,
+  `SELECT … FROM (…) x WHERE retenção > 0 OR x.lote_impedido > 0 ORDER BY x.material_nome`) — `18084c49` (**B1489**); fracionado e ordem
+  por nome provados na Fase 5 — `70941fd2`.
+- [x] **RN-225.05/.06** — toda linha = a régua = o extrato; bloqueada/terceiros sem lote conhecido saem do número, o reservado não (**C531**) —
+  `18084c49`.
+- [x] **RN-225.07** — material de cliente: no comprometido (com o cliente), fora do *Estoque atual* — `18084c49`.
+- [x] **RN-225.08** — registro: `{ lote_impedido, 'Em lote impedido' }` logo depois de `disponivel` nos dois, notas literais (**B1490**); a
+  planilha com a coluna e o valor — `18084c49`. O registro continua com **26** chaves.
+- [x] **RN-225.09** — integração: liberar o lote zera a coluna e tira o material do comprometido — `18084c49`.
+- [ ] **Fora (declarado):** o vencido como situação no *Saldo por lote* (**D (225)**); a rota legada `/relatorio/posicao-estoque` (sem
+  tela, **B1491**); a coluna *disponível* da Fila (**D (223)**).
+- Custo medido antes (cópia do banco com 3.022 materiais): *Estoque atual* 85 → 98 ms; *Saldos comprometidos* 3 → 31 ms.
+- Testes: `relatoriosLoteImpedido.api.test.js` (16). Plano: `docs/superpowers/plans/2026-11-13-almoxarifado-etapa225-relatorios-lote-impedido.md`.
+  Novidades: seção "Etapa 225", **B1488** a **B1491**, **C531**, **D (225)**, **F (225)**.

@@ -104,8 +104,8 @@ as cópias do cliente têm as próprias colunas); a tela formata 2.5 como "2,5" 
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 (tronco)** — teste `server/tests/api/relatoriosLoteImpedido.api.test.js` (RN-225.01 a .09) vermelho → `reportService` (os dois
-  `SELECT`, o filtro) + `reportRegistry` (colunas e notas) → verde. Controles positivos pelas sabotagens abaixo.
+- [x] **T1 (tronco)** — teste `server/tests/api/relatoriosLoteImpedido.api.test.js` (RN-225.01 a .09) vermelho → `reportService` (os dois
+  `SELECT`, o filtro) + `reportRegistry` (colunas e notas) → verde. Controles positivos pelas sabotagens abaixo. `18084c49`.
 - Sem galho: a tela é genérica (Fase 0, item 3). A RN-225.09 é a integração (lote → relatório pela rota).
 
 ## Sabotagens previstas (controle positivo)
@@ -118,28 +118,86 @@ as cópias do cliente têm as próprias colunas); a tela formata 2.5 como "2,5" 
 
 ## Execução e controles (medidos)
 
-*(a preencher)*
+- **Vermelho antes do código:** 0/12 (todas pela falta do campo/da coluna/do material no comprometido).
+- **Verde:** 12/12; depois da Fase 2 (notas e RN-225.06 b/c) 14/14; depois da Fase 5 (RN-225.03 b/c) **16/16**.
+- **Sabotagens** (script `e225-sabotagem.js` no scratchpad, troca por `split/join` com âncora contada = 1, restaura a cópia; `md5sum` igual
+  antes e depois; `git diff --stat server/services` vazio): (1) sem a coluna no *Estoque atual* → 9 caem (.01, .02 a/b/d, .04, .06, .05,
+  .08 planilha, .09); (2) filtro antigo → 7 caem (.02 a, b/c, .03, .04, .07, .08 planilha, .09); (3) soma bruta → 3 caem (.02 b/c, .06,
+  .05); (4) coluna antes do *Disponível* → as duas .08; (4b) sem a coluna no comprometido → as duas .08; (5) filtro `>= 0` → 5 caem (.02 b/c,
+  .02 d, .03, .04, .09). Fase 5: (M1) ordem por código → .03 c; (M9) filtro `>= 1` → .03 b.
+- **Vizinhos rodados à mão antes do commit:** `relatoriosSaldos` 17, `relatoriosRegistro` 20, `relatoriosJornada` 6, `integracaoRelatoriosSaldos`
+  6, `custoUnitarioFonteUnica` 12, `saldoEmTerceiros` 33, `materialClienteSegregacao` 14 — todos verdes, nenhum mudou.
 
-## Fase 5 — revisão adversarial
+## Fase 5 — revisão adversarial (2 revisores frescos em paralelo, junto com o `test:api`)
 
-*(a preencher)*
+- **Regras e consumidores:** **nenhum achado reproduzido.** Comparou a consulta nova com a de antes (`7dfcd4a4`) sobre o mesmo banco: as
+  linhas que já apareciam saem **idênticas** (valores, ordem das chaves e das linhas, inclusive dois materiais de mesmo nome); retenções
+  `NULL`, negativa e resíduo 1e-12 filtram como antes; só os materiais com lote impedido entram (inativo fora); toda linha dos dois relatórios
+  igual ao `lote_impedido` do extrato (0 divergências); a planilha com o cabeçalho e os valores certos.
+- **Força dos testes:** 10 mutações. **2 sobreviviam a todas as suítes de relatório** — (M9) filtro `lote_impedido >= 1` (0,5 kg num lote
+  bloqueado sumiria do comprometido) e (M1) ordem por código (o helper dava o mesmo texto a código e nome) → **RN-225.03 b e c**, `70941fd2`,
+  cada um derrubado pela sua sabotagem. 5 sobreviviam só ao arquivo novo e caem em `relatoriosSaldos`/`integracaoRelatoriosSaldos` (ativo,
+  retenções isoladas, físico). 3 (hoje em UTC, hoje congelado, nome do cliente) já caíam. **Ruído:** "hoje" fixado literalmente passaria no
+  dia em que é escrito — vale para toda a régua (é `loteImpedido.js`, não desta etapa).
+- **Contaminação:** as duas sabotagens da Fase 5 rodaram com o `test:api` no meio (arquivos com "c"); os de relatório ("r") ainda não tinham
+  rodado — conferido no log antes de seguir.
+
+## Divergências do plano
+
+- A próxima tarefa da 224 dizia "*Posição do estoque*" em alguns documentos; o relatório se chama **Estoque atual** (a gêmea legada
+  `/relatorio/posicao-estoque` não tem tela e ficou fora, B1491).
+- As notas literais mudaram na Fase 2 (I1, M1, M4) — o contrato acima já está na versão final.
 
 ## Tasks feitas
 
-*(a preencher)*
+- [x] Estimativa `6518f251` · plano `4d6e493d` · T1 `18084c49` · Fase 5 `70941fd2` · fechamento (este e o seguinte).
 
 ## Verificação (medida, serial)
 
-*(a preencher)*
+Sobre `70941fd2` (código final; o `test:api` rodou sobre `18084c49` + o teste da Fase 5, que entrou antes de o runner chegar aos "r" —
+o arquivo novo rodou com 16/16 no log):
+
+- `npm run test:api` — **620/620 arquivos OK** (`relatoriosLoteImpedido` 16/16).
+- `npm run test:almoxarifado` — **44 passou, 0 falhou**.
+- `npm run test:validation` — **4/4**; `npm run test:safealter` — **3/3**; `npm run test:sqlite` — **16/16**.
+- Cliente: `CI=true npx react-scripts test --watchAll=false --maxWorkers=2` — **224/224 suítes, 3038/3038 testes**; `CI=true npx react-scripts
+  build` — **Compiled successfully**.
+- Sem mudança de código no cliente (a tela e a planilha seguem o registro) — o Jest e o build foram rodados como conferência.
 
 ## Retro (4 números)
 
-*(a preencher)*
+- **Rodadas até verde:** 1 (a implementação passou na primeira; a Fase 2 mudou texto e acrescentou cenários, a Fase 5 só cenários).
+- **Achados reais:** Fase 2: 1 importante + 3 menores (aceitos) + 1 já atendido. Fase 5: 0 de regra; 2 lacunas de teste (fechadas); 1 ruído.
+- **Paralelismo:** sem galhos (tela genérica); a Fase 2 rodou junto com a escrita do teste; os 2 revisores da Fase 5 junto com o `test:api`
+  (o de testes numa worktree própria).
+- **Defeito que escapou da 224:** nenhum achado.
 
 ## Fechamento
 
-*(a preencher)*
+- [x] Fechamento (`fechar-etapa`, sem o Passo 7½ e o 8, por pedido do André) — novidades (B1488–B1491, C531, D (225), F (225), seção, topo e
+  "onde estamos"; D (223) e D (224) apontando para a 225), spec 21 (topo e seção 225) e spec 10 (o "Fora" dos relatórios), mapa (linhas 10 e
+  21 e última atualização), guia (seção e cabeçalho), manual (21d) e a estimativa.
 
 ## Próxima tarefa detalhada
 
-*(a preencher)*
+*(Escolhida pela ordem do CLAUDE.md: a 225 fecha o D (223) dos relatórios; o vizinho aberto de maior valor visível é o **D (224)** — o "Sai
+de" da entrega oferece o lote bloqueado sem dizer, e a entrega o recusa ao confirmar. A spec 10 continua 🟢. **Sem estimativa** — começa pela
+Fase 0.5.)*
+
+**O "Sai de" da entrega (e da separação) diz qual lote está impedido (D (224)).**
+
+- **Onde:** `RequisicoesList.js` — `rotuloOrigem(s, propriaNoPar)` (`:177`) monta o texto de cada opção do "Sai de" a partir das linhas de
+  `GET /estoque/:materialId/saldos?requisicao_id=` (`:601`); a entrega usa em `:2668`, a separação em `:2529`. Desde a 224 cada linha já traz
+  `lote_status`, `lote_validade`, `lote_vencimento_liberado_em`, `lote_esta_impedido` e `lote_vencido_sem_liberacao` (B1484, contrato no plano
+  da 224) — **não precisa de servidor**.
+- **O que fazer:** acrescentar ao rótulo, quando `lote_esta_impedido === true`, as mesmas palavras do extrato (B1486: *Bloqueado*,
+  *Reprovado*, *Vencido em dd/mm/aaaa*, *Validade a corrigir: …*, *Impedido*) — por exemplo *"Z-01 — lote L2 (6) — Bloqueado: não sai"*.
+  Reaproveitar a função das palavras do `ExtratoMaterialModal.js` (extrair para um util comum em vez de copiar). Decidir (B): mostrar e deixar
+  escolher (a entrega recusa com a mensagem de hoje) ou desabilitar a opção (`disabled`) — desabilitar é mais claro, mas a opção planejada da
+  separação pode apontar para um lote que ficou impedido depois: medir esse caminho (`temPlanejada`, `valorPlanejada`) antes de decidir.
+- **Pontos de atenção:** o rótulo já tem o sufixo da 218 (`sufixoDoLote`, "— do lote podem sair 3 (1 bloqueada)") e a sobra da 201 — testar
+  as combinações; `<option>` não aceita estilo nem `title` confiáveis (texto puro); Jest em `RequisicoesList` com mock na fronteira HTTP (as
+  linhas com os cinco campos); servidor antigo sem os campos → rótulo de hoje, letra por letra. Pronto e que não reabre: os campos da 224, a
+  recusa da entrega (206), a régua.
+- Outros abertos: o vencido como situação no *Saldo por lote* (**D (225)**), C519, C521, C524–C527, C529–C531, C514–C518, C486, C491, C495,
+  C497, C498.

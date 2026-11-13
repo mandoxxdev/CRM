@@ -1,21 +1,28 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-11-13 (Etapas 172 a 191, 194 a 210, 217 a 224) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-11-13 (Etapas 172 a 191, 194 a 210, 217 a 225) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-13 (Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 224 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-13 (Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 225 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
-> **O desenvolvimento parou aqui: Etapa 224 fechada — 2026-11-13.** **O extrato diz qual lote está impedido.** Na tabela *Saldos por
+> **O desenvolvimento parou aqui: Etapa 225 fechada — 2026-11-13.** **Os relatórios de saldo mostram quanto está em lote impedido.** Os
+> relatórios **Estoque atual** e **Saldos comprometidos** ganham a coluna *Em lote impedido*, logo depois do *Disponível*, na tela e na
+> planilha; o material que só tem estoque em lote bloqueado, reprovado ou vencido passa a aparecer em *Saldos comprometidos*. O *Disponível*
+> não muda. Sem consulta antes do deploy. **Nenhum clique foi dado** (testes da rota e da planilha — roteiro na seção da 225 e letra F das
+> novidades).
+>
+> **Onde parou, exatamente:** a **225 está fechada** (código, testes, documentos e o estimado × realizado commitados). A **próxima** é
+> **o "Sai de" da entrega diz qual lote está impedido** (**D (224)**) — detalhada no fim do plano da 225
+> (`docs/superpowers/plans/2026-11-13-almoxarifado-etapa225-relatorios-lote-impedido.md`). Sem estimativa nem plano.
+>
+> *(Antes:)* **Etapa 224 fechada — 2026-11-13.** **O extrato diz qual lote está impedido.** Na tabela *Saldos por
 > localização* do extrato, ao lado do código do lote que não pode sair para uso, aparece em amarelo *Bloqueado*, *Reprovado* ou *Vencido em
 > 12/11/2026* (ou *Validade a corrigir: …*, quando a validade gravada não é uma data). Os outros lotes, como antes. Sem consulta antes do
 > deploy. **Nenhum clique foi dado** (testes da rota e da tela — roteiro na seção da 224 e letra F das novidades).
 >
-> **Onde parou, exatamente:** a **224 está fechada** (código, testes, documentos e o estimado × realizado commitados). A **próxima** é
-> **os relatórios de saldo dizem quanto está em lote impedido** (**D (223)** — *Posição do estoque* e *Saldos comprometidos* com a coluna)
-> — detalhada no fim do plano da 224 (`docs/superpowers/plans/2026-11-13-almoxarifado-etapa224-extrato-qual-lote-impedido.md`). Sem
-> estimativa nem plano.
+> A próxima era **os relatórios de saldo dizem quanto está em lote impedido** (**D (223)**) — feita na **Etapa 225**.
 >
 > *(Antes:)* **Etapa 223 fechada — 2026-11-13.** **As listas de saldo mostram quanto está em lote impedido.** A
 > lista da tela **Materiais** mostra, embaixo da *Quantidade*, *"6 un em lote impedido"* (só quando há), e a lista de materiais da **Nova
@@ -7191,6 +7198,42 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 225 — Os relatórios de saldo mostram quanto está em lote impedido (ENTREGUE — 2026-11-13)
+
+**O que mudou, em uma frase:** os relatórios **Estoque atual** e **Saldos comprometidos** ganham a coluna *Em lote impedido* — quanto do
+estoque está em lote **bloqueado**, **reprovado** ou **vencido** —, na tela e na planilha exportada.
+
+**O problema que ela resolve.** O extrato e a lista de Materiais já diziam esse número, mas quem tirava a planilha via o *Disponível* inteiro
+como se tudo pudesse sair. E um material com estoque só num lote bloqueado, sem outra retenção, nem aparecia em *Saldos comprometidos* — o
+relatório do que está preso.
+
+| Antes | Agora |
+|---|---|
+| **Estoque atual**: *… Disponível 10 · Valor total …* | *… Disponível 10 · Em lote impedido 6 · Valor total …* |
+| **Saldos comprometidos**: material com 6 num lote bloqueado e nenhuma retenção — **não aparece** | Aparece: retenções 0, *Disponível 10*, *Em lote impedido 6* |
+| A planilha dos dois relatórios | A mesma coluna, logo depois de *Disponível* |
+| O *Disponível* | **Igual** |
+
+**Roteiro de teste manual (≈5 min):**
+
+1. Entre como **Administrador do almoxarifado**. No cadastro do material (Compras), um material *LOTE-225* com **Controle por lote**,
+   unidade *UN*, sem saldo.
+2. **Movimentações → Entrada** de 4 no lote *L1* e de 6 no lote *L2*. Em **Lotes e Séries**, *L2* → **Mudar status** → *Bloqueado*.
+3. **Relatórios → Estoque → Estoque atual** → **Consultar**. **Confira:** a linha de *LOTE-225* com *Disponível 10* e *Em lote impedido 6*;
+   a nota no rodapé começa com *"Disponível = físico menos o reservado, o bloqueado, o em inspeção e o em terceiros. Em lote impedido = …"*.
+4. **Exportar XLSX**: a planilha tem a coluna *Em lote impedido* logo depois de *Disponível*, com 6.
+5. **Relatórios → Estoque → Saldos comprometidos** → **Consultar**. **Confira:** *LOTE-225* aparece, com *Reservado*, *Bloqueado*, *Em
+   inspeção* e *Em terceiros* em 0, *Disponível 10* e *Em lote impedido 6* (última coluna). Exporte: a mesma coluna.
+6. Em **Lotes e Séries**, *L2* → **Mudar status** → *Ativo*. Consulte de novo: no **Estoque atual**, *Em lote impedido 0*; em **Saldos
+   comprometidos**, *LOTE-225* sumiu.
+
+**O que esta etapa não cobre:** *Em lote impedido* não se soma com *Bloqueado* — o que já está bloqueado, em terceiros ou em inspeção sem
+lote conhecido sai do número (**C531**); o *Saldo por lote* continua mostrando o status do lote mas não o *vencido* (**D (225)**); a coluna
+*disponível* da Fila de separação e o "Sai de" da entrega continuam sem a situação do lote (**D (223)**, **D (224)**).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (rota e planilha) provam, escrito para você
+conferir à mão.
 
 ## Etapa 224 — O extrato diz qual lote está impedido (ENTREGUE — 2026-11-13)
 

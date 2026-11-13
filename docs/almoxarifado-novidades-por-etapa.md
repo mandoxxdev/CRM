@@ -11,12 +11,17 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-13):** **Etapa 224 fechada** (**o extrato diz qual lote está impedido** — na tabela *Saldos por
+> **Onde o desenvolvimento está (2026-11-13):** **Etapa 225 fechada** (**os relatórios de saldo dizem quanto está em lote impedido** — os
+> relatórios *Estoque atual* e *Saldos comprometidos* ganham a coluna *Em lote impedido*, logo depois do *Disponível*, na tela e na planilha;
+> o material que só tem estoque em lote bloqueado, reprovado ou vencido passa a aparecer em *Saldos comprometidos*; o *Disponível* não muda.
+> **D (223)** resolvida nos relatórios; sem consulta antes do deploy; decisões **B1488** a **B1491**; aviso **C531**; limitação **D (225)**;
+> verificação **F (225)**). **Próxima:** **o "Sai de" da entrega diz qual lote está impedido** (**D (224)**) — detalhada no fim do plano da
+> 225.
+> *(Antes, 2026-11-13:)* **Etapa 224 fechada** (**o extrato diz qual lote está impedido** — na tabela *Saldos por
 > localização* do extrato, ao lado do código do lote que não pode sair para uso, *Bloqueado*, *Reprovado* ou *Vencido em 12/11/2026* (ou
 > *Validade a corrigir*, quando a validade gravada não é uma data); os outros lotes como antes. **C528** resolvido; sem consulta antes do
 > deploy; decisões **B1484** a **B1487**; aviso **C530**; limitação **D (224)**; verificação **F (224)**). **Próxima:** **os relatórios de
-> saldo dizem quanto está em lote impedido** (**D (223)** — *Estoque atual* e *Saldos comprometidos* com a coluna) — detalhada no fim do plano
-> da 224.
+> saldo dizem quanto está em lote impedido** (**D (223)**) — feita na **Etapa 225**.
 > *(Antes, 2026-11-13:)* **Etapa 223 fechada** (**as listas de saldo dizem quanto está em lote impedido** — a lista da
 > tela **Materiais** mostra, embaixo da *Quantidade*, *"6 un em lote impedido"*, e a lista de materiais da **Nova Reserva** mostra *"(Disponível:
 > 10 un) · 6 em lote impedido"*; o *Disponível* não muda; o cálculo na lista inteira foi medido antes (+35 ms numa lista de 3 mil materiais).
@@ -4655,7 +4660,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -14828,6 +14833,29 @@ nova *Situação* (a maioria das linhas ficaria vazia); *Ativo* em todas as outr
 **B1487 (NOVA, da Etapa 224; decisão do agente) — sem mudança no banco, sem trava, sem rota nova, sem perfil novo.** Quem abre o extrato já
 via o código do lote; a situação já estava em **Lotes e Séries**, aberta a quem abre o módulo. **Reversível.**
 
+**B1488 (NOVA, da Etapa 225; decisão do agente) — os relatórios *Estoque atual* e *Saldos comprometidos* dizem quanto está em lote
+impedido.** Os dois ganham a coluna *Em lote impedido*, logo depois do *Disponível*, na tela e na planilha exportada. O número é o mesmo do
+extrato e da lista de Materiais (a conta da aprovação): o que está em lote bloqueado, reprovado ou vencido, fora o que já está em *Bloqueado*,
+em terceiros ou em inspeção sem lote conhecido; 0 em material sem controle por lote. Descartado: um número próprio do relatório (a soma bruta
+dos lotes impedidos), que daria outro valor que o extrato do mesmo material; a coluna antes do *Disponível*. **Reversível.**
+
+**B1489 (NOVA, da Etapa 225; decisão do agente) — *Saldos comprometidos* passa a listar o material só com lote impedido.** Antes o relatório
+só listava quem tinha reserva, bloqueio, inspeção ou terceiros: um material com 6 peças num lote bloqueado e nenhuma outra retenção não
+aparecia justamente no relatório do que está preso. Agora entra (e sai quando o lote é liberado). Custo medido antes, numa cópia do banco com
+3 mil materiais: a consulta passou de 3 para 31 ms. Descartado: manter o filtro de antes (a coluna só apareceria em quem já tinha
+retenção). **Reversível** — é uma linha do filtro.
+
+**B1490 (NOVA, da Etapa 225; decisão do agente, texto trocado na revisão do plano) — as notas dos dois relatórios dizem o que é a coluna.**
+O *Estoque atual* ganha nota (não tinha); a do *Saldos comprometidos* passa a citar o lote impedido. A 1ª versão dizia "fora o que já é
+bloqueado" e "continua contado no Disponível" — a revisão do plano mostrou que a conta tira também terceiros e inspeção, e que o número pode
+passar do *Disponível* quando há reserva: o texto final diz *"fora o que já é contado como bloqueado, em terceiros ou em inspeção: não é
+descontado do Disponível"*. A frase *"mesma régua de Materiais bloqueados"* virou *"como em Materiais bloqueados"*: os dois relatórios agora
+listam materiais diferentes de propósito (só o inativo fica fora nos dois). **Reversível.**
+
+**B1491 (NOVA, da Etapa 225; decisão do agente) — o que ficou fora.** A rota antiga de posição do estoque (sem *Disponível* e sem tela);
+o vencido como situação no *Saldo por lote* (**D (225)**); a coluna *disponível* da Fila de separação. Sem mudança no banco, sem trava,
+sem rota nova, sem perfil novo, sem mudança de código na tela (ela e a planilha seguem a lista de colunas do relatório). **Reversível.**
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -18805,6 +18833,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      *(**2ª parte na Etapa 223** — `cc9e7374`, `ab2443c1`, `068129a6`: a lista de **Materiais** e a lista de materiais da **Nova Reserva**
      mostram o número. Não existe tela "Estoque" — a lista de Materiais mostra o físico, e esta linha a citava por engano; os relatórios e a
      coluna *disponível* da Fila continuam sem o número, **D (223)**.)*
+     *(**Relatórios na Etapa 225** — `18084c49`: *Estoque atual* e *Saldos comprometidos* com a coluna *Em lote impedido*; a coluna
+     *disponível* da Fila continua sem o número.)*
 482–483. *(Números sem uso: o 482 era reservado ao corte da **B1378**, que não aconteceu; o 483 não foi usado — o aviso do 2º fix-round
      da Fase 5 entrou como 484.)*
 484. **NOVO (da Etapa 205, 2º fix-round da Fase 5; o comportamento é anterior, desde a Etapa 205) — material com "Sem lote atribuído"
@@ -19017,6 +19047,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      em terceiros ou em inspeção (com 2 peças em quarentena e o *L2* bloqueado com 6, a linha diz *Bloqueado* com 6 e o cartão 4). E com o
      **Controle por lote** desligado a linha diz *Bloqueado* e o cartão não aparece. **Os dois estão certos:** a linha diz qual lote não sai, o
      cartão quanto do material não sai para uso. **O que fazer:** nada.
+531. **NOVO (da Etapa 225; decisão B1488) — *Em lote impedido* não se soma com *Bloqueado* nos relatórios.** Em *Saldos comprometidos*, um
+     material com 6 num lote bloqueado e 2 peças bloqueadas sem lote conhecido mostra *Bloqueado 2* e *Em lote impedido 4* — não 6 (a conta
+     supõe que as 2 estão dentro do lote bloqueado). Com a quarentena registrada num lote **bom**, o impedido continua 6. E o impedido não
+     desconta o reservado: com 8 reservadas, *Disponível 2* e *Em lote impedido 6*. **Os números estão certos** — são os do extrato. **O que
+     fazer:** qual lote está impedido, o extrato do material mostra.
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -20373,12 +20408,18 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(225) Os relatórios e o lote impedido, o que ficou de fora.** (1) O *Saldo por lote* mostra o *Status do lote* (*BLOQUEADO*,
+  *REPROVADO*) mas não diz que um lote *ATIVO* está **vencido** — a validade está na coluna ao lado. (2) A rota antiga de posição do estoque,
+  sem tela, continua sem a coluna (**B1491**). (3) A coluna *disponível* da Fila de separação continua sem o número (a Fila mostra o
+  *separável*, que já desconta). (4) O número é o da hora em que o relatório foi consultado.
 - **(224) Qual lote está impedido, o que ficou de fora.** (1) O seletor "Sai de" da entrega recebe a situação do lote mas continua oferecendo
   o lote bloqueado ou vencido, sem dizer — a entrega o recusa ao confirmar, como antes (*"Lote L2 esta bloqueado e nao pode ser
   utilizado"*). (2) A linha diz a situação, não a quantidade impedida do lote (**C530**). (3) Os relatórios (*Saldo por lote*, *Posição do
-  estoque*) continuam como estavam (**D (223)**). (4) A situação é a da hora em que o extrato foi aberto.
+  estoque*) continuam como estavam (**D (223)**). *(**Etapa 225** — `18084c49`: *Estoque atual* e *Saldos comprometidos* com a coluna *Em lote
+  impedido*; o *Saldo por lote* continua, **D (225)**.)* (4) A situação é a da hora em que o extrato foi aberto.
 - **(223) As listas e o lote impedido, o que ficou de fora.** (1) Os **relatórios** (posição do estoque, saldos comprometidos) e a coluna
-  *disponível* da Fila de separação continuam sem o número (os relatórios têm colunas fixas; a Fila já mostra o *separável*). (2) A lista do
+  *disponível* da Fila de separação continuam sem o número (os relatórios têm colunas fixas; a Fila já mostra o *separável*). *(Os relatórios:
+  **feito na Etapa 225**, `18084c49`; a Fila continua.)* (2) A lista do
   **Compras** não mostra o selo (**B1482**). (3) Os 18 seletores de material de outras telas não trazem o número (**B1481**). (4) A tela ainda
   não diz **qual** lote está impedido (**C528**). (5) O número da lista não se atualiza sozinho (**C529**). (6) O **C527** vale também para a
   lista: com a reserva da OS sobre o lote bloqueado, *"(Disponível: 4 un) · 6 em lote impedido"* e a recusa da reserva de 1 diz *"… 0. Não
@@ -21820,6 +21861,14 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(225) Nenhum clique foi dado.** A tela **mudou** — a coluna *Em lote impedido* e as notas dos relatórios *Estoque atual* e *Saldos
+comprometidos* —, mas sem mudança de código nela (segue a lista de colunas do relatório, coberta pelos testes de paridade da tela e da
+planilha). O servidor, pela rota real, em `relatoriosLoteImpedido` (16 cenários): bloqueado, reprovado, vencido, vencido liberado, que vence
+hoje; o material só com lote impedido no comprometido (inclusive 0,5 kg); sem controle de lote; o que já está em *Bloqueado* ou em terceiros
+sai do número, o reservado não; material de cliente; toda linha igual à conta e ao extrato; as colunas, as notas e a **planilha** dos dois;
+liberar o lote. 8 controles positivos caem. Na revisão, as linhas que já apareciam foram comparadas com a versão de antes sobre o mesmo
+banco: idênticas. **Para clicar (5 minutos):** o roteiro da seção da Etapa 225 no guia.
 
 **(224) Nenhum clique foi dado.** A tela **mudou** — *Bloqueado*, *Reprovado*, *Vencido em …* ou *Validade a corrigir* ao lado do código do
 lote na tabela *Saldos por localização* do extrato —, mas foi provada só pelo Jest (`ExtratoMaterialModal` RN-224.08), não clicada no
@@ -41294,6 +41343,59 @@ saída que cita o lote continua recusada: *"Lote L2 esta bloqueado e nao pode se
 - Os relatórios e a coluna *disponível* da Fila continuam sem o número (**D (223)**); o seletor "Sai de" da entrega continua oferecendo o lote
   bloqueado e a entrega o recusa (**D (224)**).
 
+## Etapa 225 — Os relatórios de saldo mostram quanto está em lote impedido (2026-11-13)
+
+Desde as Etapas 222 e 223 o **extrato** de um material e a lista de **Materiais** dizem quanto do estoque está em lote **bloqueado** (sem o
+certificado do fornecedor), **reprovado** ou **vencido** — peças que estão na prateleira mas não podem sair para uso. Os **relatórios** não
+diziam: quem tirava a planilha do *Estoque atual* via o *Disponível* inteiro como se tudo pudesse sair, e um material com estoque só num lote
+bloqueado nem aparecia em *Saldos comprometidos*, o relatório do que está preso. Agora os dois relatórios têm a coluna *Em lote impedido*, logo
+depois do *Disponível*, na tela e na planilha. Sem consulta antes do deploy (nada muda no banco). Decisões do agente: **B1488** a **B1491**.
+**D (223)** resolvida nos relatórios; aviso **C531**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Estoque atual**: *… Disponível 10 · Valor total …* | *… Disponível 10 · **Em lote impedido 6** · Valor total …*, e uma nota no rodapé |
+| **Saldos comprometidos**: material com 6 num lote bloqueado e nenhuma retenção — **não aparecia** | **Aparece**: retenções 0, *Disponível 10*, *Em lote impedido 6* |
+| A planilha exportada dos dois | A mesma coluna, logo depois de *Disponível* |
+| O *Disponível*; o *Saldo por lote*; os outros relatórios | **Iguais** |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**. No cadastro do material (Compras), *LOTE-225* com **Controle por lote**, unidade
+*un*, sem saldo. **Movimentações → Entrada** de 4 no lote *L1* e de 6 no lote *L2*. **Lotes e Séries** → *L2* → **Mudar status** →
+*Bloqueado*.
+
+**1. O Estoque atual diz quanto.** **Relatórios → Estoque → Estoque atual** → **Consultar**. A linha de *LOTE-225*: *Disponível 10*, *Em lote
+impedido 6*. O rodapé: *"Disponível = físico menos o reservado, o bloqueado, o em inspeção e o em terceiros. Em lote impedido = o que está em
+lote bloqueado, reprovado ou vencido, fora o que já é contado como bloqueado, em terceiros ou em inspeção: não é descontado do Disponível, mas
+não sai para uso até o lote ser liberado na tela Lotes e Séries."*.
+
+**2. O comprometido lista o material só com lote impedido.** **Saldos comprometidos** → **Consultar**. *LOTE-225* aparece com *Reservado*,
+*Bloqueado*, *Em inspeção* e *Em terceiros* em 0, *Disponível 10* e *Em lote impedido 6* (a última coluna). O rodapé: *"Materiais ativos com
+saldo reservado, bloqueado, em inspeção, em terceiros ou em lote impedido. Disponível = físico menos essas quatro retenções. Em lote impedido =
+o que está em lote bloqueado, reprovado ou vencido, fora o que já aparece em Bloqueado, Em terceiros ou Em inspeção: não é descontado do
+Disponível, mas não sai para uso até o lote ser liberado na tela Lotes e Séries. Material inativado não aparece aqui (como em "Materiais
+bloqueados")."*. Um material só com lote *Ativo* e sem retenção continua fora.
+
+**3. A planilha.** **Exportar XLSX** nos dois: a coluna *Em lote impedido* logo depois de *Disponível*, com 6.
+
+**4. Reprovado e vencido também; vencido liberado e o que vence hoje, não.** Com o *L2* **Reprovado**: 6. Com o *L2* *Ativo* e a validade de
+ontem (**Corrigir validade**): 6. Depois de **Liberar vencimento**, ou com a validade **de hoje**: 0 no *Estoque atual* e *LOTE-225* some do
+comprometido.
+
+**5. Liberar o lote apaga.** **Mudar status** do *L2* → *Ativo* e consultar de novo: *Em lote impedido 0* no *Estoque atual*; *LOTE-225* some
+do *Saldos comprometidos*.
+
+**6. Não soma com Bloqueado.** Com 2 peças do *LOTE-225* em **Bloquear Material** (bloqueio sem lote): *Bloqueado 2* e *Em lote impedido 4*
+(**C531**). Com o **Controle por lote** desligado no material: 0, e ele sai do comprometido (se não tiver outra retenção).
+
+### O que esta etapa NÃO cobre
+
+- O *Saldo por lote* continua sem dizer que um lote *Ativo* está vencido (**D (225)**).
+- A coluna *disponível* da Fila de separação e o "Sai de" da entrega continuam sem a situação do lote (**D (223)**, **D (224)**).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
@@ -41301,13 +41403,21 @@ saída que cita o lote continua recusada: *"Lote L2 esta bloqueado e nao pode se
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
 
+- **Etapa 225 entregue (2026-11-13):** **os relatórios de saldo dizem quanto está em lote impedido** (**D (223)**, nos relatórios). A coluna
+  *Em lote impedido* no *Estoque atual* e no *Saldos comprometidos*, com o número do extrato (**B1488**); o comprometido lista o material só com
+  lote impedido (**B1489**, medido: +28 ms a 3 mil materiais); as notas dizem o que é a coluna (**B1490**, texto trocado na revisão do plano);
+  sem banco, trava, rota, perfil ou código de tela novo (**B1491**). Commits `6518f251` (estimativa), `4d6e493d` (plano), `18084c49`
+  (servidor, registro e testes, com a Fase 2), `70941fd2` (Fase 5) e o fechamento. **O que é seu:** as decisões **B1488** a **B1491**
+  (reversíveis); o aviso **C531**; a limitação **(225)** em D e a verificação **(225)** em F. Sem consulta antes do deploy. **Próxima:** **o
+  "Sai de" da entrega diz qual lote está impedido** (**D (224)**) — detalhada no fim do plano da 225.
+
 - **Etapa 224 entregue (2026-11-13):** **o extrato diz qual lote está impedido** (**C528** resolvido). As linhas de saldo trazem a situação
   do lote pela conta da aprovação (**B1484**); com o controle de lote desligado a linha ainda diz, porque a saída do lote continua recusada
   (**B1485**, trocada na revisão do plano); as palavras ao lado do código, com *Validade a corrigir* para validade que não é data (**B1486**);
   sem banco, trava, rota ou perfil novo (**B1487**). Commits `98b90f22` (estimativa), `c3658f89` (plano e Fase 2), `f09e8ec7` (servidor e
   testes), `c7399966` (extrato), `e1c6cf6d` (Fase 5) e o fechamento. **O que é seu:** as decisões **B1484** a **B1487** (reversíveis); o aviso **C530**; a
   limitação **(224)** em D e a verificação **(224)** em F. Sem consulta antes do deploy. **Próxima:** **os relatórios de saldo dizem quanto está
-  em lote impedido** (**D (223)**) — detalhada no fim do plano da 224.
+  em lote impedido** (**D (223)**) — feita na **Etapa 225**.
 
 - **Etapa 223 entregue (2026-11-13):** **as listas de saldo dizem quanto está em lote impedido** (**C481**, 2ª parte). A lista do Estoque traz
   o número sempre (**B1480**, medido: +35 ms a 3 mil materiais); a de Materiais só quando a tela pede (**B1481**); o selo na lista de Materiais

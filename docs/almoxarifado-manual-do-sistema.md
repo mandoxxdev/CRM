@@ -7845,13 +7845,34 @@ No grupo **Estoque**, visíveis para todo perfil com acesso ao módulo:
 - **Séries em estoque** — uma linha por número de série **em estoque** ou **bloqueado** (os presentes
   no almoxarifado), com material, número, status e lote. Séries entregues, sucateadas ou estornadas
   não aparecem.
-- **Saldos comprometidos** — os materiais **ativos** com **alguma** retenção, com **Físico, Reservado,
-  Bloqueado, Em inspeção, Em terceiros** e **Disponível** (físico menos as quatro retenções — o mesmo
-  número do relatório Estoque atual). Material sem retenção não aparece; material inativado com
-  retenção também não (mesma régua de Materiais bloqueados).
+- **Saldos comprometidos** — os materiais **ativos** com **alguma** retenção **ou** com saldo em lote
+  impedido, com **Físico, Reservado, Bloqueado, Em inspeção, Em terceiros**, **Disponível** (físico menos
+  as quatro retenções — o mesmo número do relatório Estoque atual) e **Em lote impedido** (abaixo).
+  Material sem retenção e sem saldo em lote impedido não aparece; material inativado também não (como
+  em Materiais bloqueados). Com 4 peças no lote *L1* Ativo e 6 no *L2* Bloqueado, sem nenhuma retenção,
+  o material aparece com as quatro retenções em 0, *Disponível 10* e *Em lote impedido 6*; liberado o
+  *L2* (situação *Ativo*), ele sai do relatório.
 
 Os três incluem **material de cliente**, com o nome do dono na coluna **Cliente** — ao contrário do
 Estoque atual, que só lista o estoque próprio porque soma valor.
+
+**Em lote impedido**, nos relatórios **Estoque atual** e **Saldos comprometidos** (logo depois do
+**Disponível**, na tela e na planilha), é o mesmo número do cartão **Em lote impedido** do extrato
+(6.9) e da lista de Materiais: em material com **controle por lote**, o saldo dos lotes *Bloqueado*,
+*Reprovado* ou vencidos sem a liberação de vencimento, menos o que já está em **Bloqueado**, em
+terceiros ou em inspeção sem lote conhecido (a conta está em 9.3). Com o *L2* Bloqueado com 6 e 2 peças
+bloqueadas sem lote conhecido, o relatório mostra *Bloqueado 2* e *Em lote impedido 4* — os dois não
+se somam. O **Disponível** não desconta esse número, e ele também não desconta o reservado: com 8
+reservadas, *Disponível 2* e *Em lote impedido 6*. Material sem controle por lote mostra 0. A nota do
+Estoque atual diz: *"Disponível = físico menos o reservado, o bloqueado, o em inspeção e o em terceiros.
+Em lote impedido = o que está em lote bloqueado, reprovado ou vencido, fora o que já é contado como
+bloqueado, em terceiros ou em inspeção: não é descontado do Disponível, mas não sai para uso até o lote
+ser liberado na tela Lotes e Séries."*; a do Saldos comprometidos: *"Materiais ativos com saldo
+reservado, bloqueado, em inspeção, em terceiros ou em lote impedido. Disponível = físico menos essas
+quatro retenções. Em lote impedido = o que está em lote bloqueado, reprovado ou vencido, fora o que já
+aparece em Bloqueado, Em terceiros ou Em inspeção: não é descontado do Disponível, mas não sai para uso
+até o lote ser liberado na tela Lotes e Séries. Material inativado não aparece aqui (como em "Materiais
+bloqueados")."*. Qual lote está impedido, o extrato do material mostra (6.9).
 
 ### Histórico de movimentações — filtros por grupo, usuário e centro de custo
 
