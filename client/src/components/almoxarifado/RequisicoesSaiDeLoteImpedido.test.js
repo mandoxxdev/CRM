@@ -376,6 +376,51 @@ describe('Etapa 226: o "Sai de" diz qual lote está impedido', () => {
     expect(container.querySelector('#separacao-sugestao-1').textContent).toContain('não veio escolhida');
   });
 
+  test('[RN-226.07/.08, Fase 5 K] reprovado e vencido também não são pré-selecionados (planejada e sugestão), não só o bloqueado', async () => {
+    const item = { ...ITEM_BASE, quantidade_separada: 0, quantidade_entregue: 0 };
+    const sugestao = { pegar_em: { localizacao_id: 4, lote_id: 12, cobre: true }, pegar_em_aviso: null };
+    const reprovado = Z02({ lote_status: 'REPROVADO' });
+    const vencido = Z02({ lote_status: 'ATIVO', lote_validade: '2026-11-10', lote_vencido_sem_liberacao: true });
+    expect(valorSugeridoNaSeparacao(item, sugestao, [reprovado], 3, 0, 0, [item])).toBe('');
+    expect(valorSugeridoNaSeparacao(item, sugestao, [vencido], 3, 0, 0, [item])).toBe('');
+    for (const z of [reprovado, vencido]) {
+      act(() => root.unmount());
+      root = createRoot(container);
+      requisicao = EM_SEPARACAO;
+      saldos = [A01, XB01, z];
+      // eslint-disable-next-line no-await-in-loop
+      await renderizar();
+      // eslint-disable-next-line no-await-in-loop
+      await clicar('Ajustar Separação');
+      expect(selectSeparacao().value).toBe('');
+      expect(container.querySelector('#separacao-dica-lote-impedido-1')).toBeTruthy();
+    }
+  });
+
+  test('[RN-226.12, Fase 5 C] origem já toda entregue: nenhuma frase de "já separado"; com parte pendente, a frase (controle)', async () => {
+    requisicao = { ...REQ_BASE, status: 'EM_SEPARACAO',
+      itens: [{ ...ITEM_BASE, origem_separacao_id: 4, lote_separacao_id: 12, origem_separacao_codigo: 'Z-02', lote_separacao_codigo: 'L2',
+        quantidade_origem_separacao: 2, quantidade_separada: 2, quantidade_entregue: 2, quantidade_atendida: 2 }] };
+    await renderizar();
+    await clicar('Ajustar Separação');
+    expect(selectSeparacao()).toBeTruthy();
+    expect(container.querySelector('#separacao-dica-lote-impedido-1')).toBeNull();
+    act(() => root.unmount());
+    root = createRoot(container);
+    requisicao = EM_SEPARACAO;
+    await renderizar();
+    await clicar('Ajustar Separação');
+    expect(container.querySelector('#separacao-dica-lote-impedido-1').textContent).toBe(FRASE_PLANEJADA_L2);
+  });
+
+  test('[RN-226.06, Fase 5 A] entrega: a exceção é só do lote da planejada — outro lote impedido no mesmo endereço vem desabilitado', async () => {
+    requisicao = PARCIAL_PLANEJADA;
+    saldos = [A01, Z02(), Z02({ id: 20, lote_id: 99, lote: 'L9' })];
+    await renderizar();
+    await clicar('Completar Entrega');
+    expect(desabilitadas(selectEntrega())).toEqual(['4:99']);
+  });
+
   test('[RN-226.11] o util e o extrato são a mesma função', () => {
     expect(doUtil).toBe(doExtrato);
     expect(doUtil({ lote_status: 'BLOQUEADO', lote_esta_impedido: true })).toBe('Bloqueado');
