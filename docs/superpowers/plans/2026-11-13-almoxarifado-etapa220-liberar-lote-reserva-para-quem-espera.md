@@ -207,6 +207,10 @@ reservadas de novo (sonda: o teto do que pode sair dá 0).
   D (220), F (220), seção, topo e "onde estamos"; sem A — nada no banco), specs 07, 10 e 05, mapa, guia (seção, cabeçalho, a 219 anotada),
   manual (4.2, 4.3c, 9.3c-bis nova, 21c.1), este plano e a estimativa.
 
+- [x] **A suíte inteira achou mais dois testes que fixavam o C480** — `loteImpedidoAprovacao` RN-205.05 e `loteImpedidoIntegracao` T3 rota
+  esperavam que a requisição aprovada **depois** da liberação levasse as peças. Agora afirmam que quem esperava leva (a RN-205.05 continua
+  provando que o vencido liberado conta, com uma entrada nova) — `52148fd0`. 1ª rodada: `test:api` 613/615 (estes dois).
+
 ### Divergências do plano
 
 - **A porta da 75 não foi usada direto**: a função própria (`reservarLoteLiberadoSobTrava`) chama o miolo, porque com o recebimento da
@@ -244,3 +248,11 @@ de lote impedido. **Sem estimativa** — começa pela Fase 0.5.)*
 - **Pontos de atenção:** `criarReserva` é chamada de dentro de seções (miolo, aprovação, reserva da OS) — a régua nova no `hold` vale para
   todas se não for condicionada a `!opcoes.requisicao_id`/`!opcoes.sistema`. A fatia visível: a recusa na tela **Reservas** dizendo quanto
   está em lote impedido. Vizinhos baratos que seguem abertos: C519, C521, C524, C525, C514–C518, C486, C491, C495, C497, C498.
+
+### Verificação (medida, serial, sobre `52148fd0`)
+
+`test:api` **615/615 arquivos OK** (os 614 da 219 + `liberarLoteReserva`; a 1ª rodada,
+antes de `52148fd0`, deu 613/615); `test:almoxarifado` **44 passou, 0 falhou**; `test:validation` **4/0**; `test:safealter` **3/0**;
+`test:sqlite` **16/0**; cliente (`CI=true npx react-scripts test --watchAll=false --maxWorkers=2`) **224/224 suítes, 3010/3010 testes**
+(3007 + 3 novos); `build` **Compiled successfully**. `liberarLoteReserva` **25/25**; `chegadaLoteImpedido` **18/18**; `corrigirValidadeLote`
+**23/23**; `loteImpedidoAprovacao` **12/12**; `loteImpedidoIntegracao` **6/6**.
