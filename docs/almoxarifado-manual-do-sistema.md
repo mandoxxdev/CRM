@@ -855,6 +855,8 @@ As recusas dizem qual é o problema:
 
 Mudar a situação é feito em **Almoxarifado → Lotes e Séries**, botão **Mudar status** da linha. A **justificativa é obrigatória** — sem ela o botão Confirmar não habilita, e o servidor recusa com *"justificativa obrigatoria para mudar o status do lote"*. Toda mudança fica na auditoria, com o valor anterior, o novo e o motivo.
 
+**Liberar o lote reserva para quem esperava.** Voltar para *Ativo* um lote *Bloqueado* ou *Reprovado* — ou anexar o certificado que o bloqueava, liberar o vencimento ou corrigir a validade de um lote vencido para uma data futura — reserva as peças dele para as requisições que esperavam o material, e a tela diz quanto: *"⟨q⟩ ⟨un⟩ reservado(s) para quem esperava este material (⟨n⟩ requisição(ões))."* As regras estão em 9.3c-bis. Mudar a situação espera as outras operações do mesmo material terminarem.
+
 Repare que **"Vencido" não é uma situação**. Vencimento é calculado na hora da leitura, comparando a data de validade com a data de hoje — o dia do horário de Brasília: o lote fica vencido a partir do dia **seguinte** ao da validade, então o lote que vence hoje ainda sai até a meia-noite — e é um eixo independente da situação. Um lote pode estar Ativo e vencido, ou Bloqueado e vencido, ao mesmo tempo.
 
 **O lote que não pode sair não conta para aprovar, separar nem entregar.** Em material com **controle por lote**, o saldo de um lote **impedido** — Bloqueado, Reprovado, ou vencido sem a liberação de vencimento — continua no físico e no disponível de todas as telas de saldo (Materiais, Estoque, relatórios), mas a **aprovação** não o reserva (9.3) e a **separação** não o oferece (10.2). O vencido **com** liberação e o que vence hoje contam normalmente. Material **sem** controle por lote não tem esse desconto. A **entrega** também não tira dele: a parte automática que só lote impedido cobriria é recusada antes de qualquer baixa (7.5).
@@ -939,6 +941,8 @@ Quando a validade gravada num lote está errada — um *2025* digitado no lugar 
 - **Justificativa** — por que a gravada está errada (ex.: *a NF diz 03/2027*). Vai para a auditoria.
 
 Embaixo: *"A validade vale para todo o saldo do lote. Se ele tinha o vencimento liberado, a liberação cai."* O botão **Corrigir** só fica ativo com a data e com uma justificativa que não seja só espaços. Deu certo: *"Validade do lote corrigida!"*, a janela fecha e a lista recarrega. Deu errado: a mensagem aparece e a janela **continua aberta** com o que foi digitado.
+
+**O lote vencido corrigido para uma data futura volta a poder sair — e as peças dele são reservadas para quem esperava o material**, como na liberação de vencimento (9.3c-bis). Depois de *"Validade do lote corrigida!"* a tela mostra *"⟨q⟩ ⟨un⟩ reservado(s) para quem esperava este material (⟨n⟩ requisição(ões))."* quando reservou algo. Corrigir para outra data também vencida, ou corrigir um lote que já não estava vencido, não reserva nada.
 
 **O efeito é imediato em todas as regras de validade**, sem que nenhuma delas mude: a saída de consumo de lote vencido (4.3), a ordem da lista de lotes (4.4), a dica de onde pegar da Fila de separação, a separação e a entrega, e o aviso *Lote vencendo*. Corrigir para o futuro tira o lote do vencido; corrigir para antes de hoje (horário de Brasília) o torna vencido — a validade de hoje não é vencida. **Data no passado é aceita.** **Não é possível apagar a validade**: a correção sempre exige uma data.
 
@@ -2789,6 +2793,49 @@ esperando e não recebe o aviso de liberação.
 **O que NÃO reserva:** **Desbloquear Material** (o desbloqueio avulso da tela **Inspeções**) e o estorno de um bloqueio avulso — são ajustes de prateleira, sem documento; o material volta ao disponível para quem chegar primeiro.
 
 **Aprovação no mesmo instante.** Uma requisição aprovada enquanto a inspeção (ou a não conformidade) do material está sendo decidida espera a decisão terminar e leva só o que sobrou depois de quem esperava (9.3d).
+
+### 9.3c-bis Reserva na liberação do lote
+
+Em material com **controle por lote**, a peça de um lote **impedido** — *Bloqueado* (por exemplo, sem o certificado do fornecedor),
+*Reprovado*, ou vencido sem a liberação de vencimento — não é reservada na chegada nem na aprovação (9.3, 9.3b). Quando o lote é
+**liberado**, as peças dele são reservadas para quem esperava o material, pelas mesmas regras de 9.3b (quem esperava, a ordem da Fila de
+separação — a urgente primeiro —, quem é pulado, o status que acompanha). Três gestos liberam, todos em **Lotes e Séries**:
+
+- **Anexar certificado** num lote bloqueado por falta dele;
+- **Mudar status** de *Bloqueado* ou *Reprovado* para *Ativo*;
+- **Liberar vencimento** de um lote vencido;
+- **Corrigir validade** de um lote vencido para uma data que não está vencida (4.3c).
+
+Só reserva se o lote **estava** impedido e, depois do gesto, **não está mais**. Voltar para *Ativo* um lote que continua vencido, liberar o
+vencimento de um lote que continua *Bloqueado*, trocar *Bloqueado* por *Reprovado* ou confirmar *Ativo* num lote que já estava ativo não
+reservam nada. Material **sem** controle por lote também não: nele o lote nunca prendeu peça nenhuma.
+
+**Quanto, no máximo.**
+
+```
+a distribuir = mínimo(o livre do lote, o que pode sair do material naquele momento)
+o livre do lote = saldo do lote − o que está em inspeção nele − o que está retido nele (quarentena, reprovação, terceiros)
+```
+
+*O que pode sair* é a conta de 9.3b. Uma reserva feita **antes** de o lote ser bloqueado continua valendo e entra na conta: se ela já cobre
+as peças do lote, liberar o lote não reserva nada para mais ninguém.
+
+**A reserva criada.** Na tela **Reservas**, no nome de quem liberou, com a observação *"Reserva na liberação do lote ⟨L⟩ — requisição ⟨REQ⟩"*.
+Quando todas as peças do lote vieram de **uma** nota, a reserva leva a marca dessa nota: estornar a entrada da nota depois solta a reserva
+como solta a da chegada (6.10). Lote abastecido por mais de uma nota: a reserva vai sem a marca, e o estorno de uma dessas notas pede que a
+reserva seja liberada à mão antes.
+
+**A tela diz quanto reservou.** Depois da mensagem de sucesso, quando a liberação reservou algo, aparece *"⟨q⟩ ⟨un⟩ reservado(s) para quem
+esperava este material (⟨n⟩ requisição(ões))."* O solicitante recebe o e-mail *"Material liberado para a sua requisição"* com a primeira
+linha do lote (21c.1).
+
+**Nunca derruba a liberação.** Se a reserva falhar, o lote fica liberado, só um aviso vai ao log e a resposta mostra o que de fato foi
+reservado.
+
+**Mudar a situação do lote espera a vez.** Mudar a situação, anexar o certificado, liberar o vencimento e corrigir a validade esperam as outras operações do
+mesmo material terminarem (a reserva da chegada, a aprovação, a separação, a entrega). Um lote bloqueado no exato instante em que uma nota ou
+uma aprovação reserva fica com a reserva feita — como quando é bloqueado logo depois (a reserva de antes do bloqueio continua, e a entrega
+dela recusa enquanto o lote estiver impedido, 7.5); e uma reserva que começa depois do bloqueio já não o conta.
 
 ### 9.3d A aprovação espera quem está liberando o mesmo material — a fila não se inverte
 
@@ -7538,7 +7585,10 @@ falha do servidor de e-mail nunca trava uma movimentação, uma devolução ou u
   cliente e do e-mail do usuário que o aviso da chegada; governado pela mesma chave *"Avisar o Solicitante quando o
   Material Chega"*. Assunto *"[Almoxarifado] Material liberado para a sua requisição REQ-…"*. A primeira linha diz a
   porta: *"O material que a sua requisição aguardava foi aprovado na inspeção e está no estoque."* ou *"O material que
-  a sua requisição aguardava foi liberado pela não conformidade NC-… e está no estoque."* Depois: a requisição, a
+  a sua requisição aguardava foi liberado pela não conformidade NC-… e está no estoque."* — ou, quando quem liberou foi o
+  **lote** (o certificado anexado, a situação de volta a *Ativo* ou o vencimento liberado — 9.3c-bis), *"O lote ⟨L⟩ do
+  material que a sua requisição aguardava foi liberado e está no estoque."*; cada liberação do lote avisa de novo, mesmo
+  que o mesmo lote já tenha sido liberado antes. Depois: a requisição, a
   situação dela (já com a reserva), o recebimento e a linha do material — *"⟨cód⟩ — ⟨nome⟩: liberado ⟨q⟩ ⟨un⟩
   (pendente na requisição: ⟨p⟩ ⟨un⟩; reservado para a sua requisição: ⟨r⟩ ⟨un⟩)"* (sem a parte do reservado quando não
   houve reserva) — e a frase final: *"O material indicado como reservado fica guardado para a sua requisição — outra

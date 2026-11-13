@@ -1,5 +1,11 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 220 (2026-11-13, `7a428526`, `a04b43e8`, Fase 5 `6c80f908`): liberar o lote reserva para quem esperava (C480) e os escritores do
+> status do lote pegam a trava do material (C523)** — `mudarStatusLote`, `liberarBloqueioPorCertificado`, `liberarVencimento` e
+> `corrigirValidadeDoLote` rodam sob `naTravaDoMaterial` e, quando o lote estava impedido e deixou de estar, reservam o livre dele
+> (`reservaChegadaService.reservarLoteLiberadoSobTrava`); as respostas ganham `reservado_para_quem_esperava` e a tela **Lotes e Séries**
+> mostra o aviso. Checklist na spec 07, bloco "Etapa 220".
+
 > **+ Etapa 218 (2026-11-13, `97ba728c`, Fase 5 `e4490a2f`): o lote escolhido à mão (Sai de) deixa de fora a peça presa (C513)** —
 > `retidoDoLote.situacaoDosLotes` (saldo, inspeção, retido e livre por lote, a mesma tabela derivada da 217) alimenta a separação, a entrega e
 > a janela; detalhe na spec 05, bloco "Etapa 218". A Fase 5 pôs sob a trava do material os escritores do retido que gravavam fora dela
@@ -1240,7 +1246,7 @@ spec 05 (separação) e na 07 (aprovação). O que toca esta feature:
   valia até ela.)* A 1ª parte (aprovação e separação) está feita; a **2ª parte (a entrega)** continua: o resto que os
   lotes elegíveis não cobrem sai sem lote (B1323), deixando *"Sem lote atribuído"* negativo — e esse negativo, anônimo, deixa o material
   com menos livre que o real até um ajuste (**C484**; o abatimento que o resolvia foi desfeito por ser inseguro, B1379). É o item 7.
-- [ ] **Fora:** liberar o lote (`mudarStatusLote`, `liberarVencimento`, certificado) não recalcula nem distribui (**C480**); as telas de saldo
+- [ ] **Fora:** liberar o lote (`mudarStatusLote`, `liberarVencimento`, certificado) não recalcula nem distribui (**C480** — *resolvido na Etapa 220*, `7a428526`: reservam o livre do lote para quem esperava, sob a trava do material); as telas de saldo
   continuam contando o lote impedido (**C481**).
 
 Continua 🟢.

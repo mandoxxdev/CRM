@@ -1401,7 +1401,7 @@ aprovação está na spec 07 (seção "Etapa 205"). Nenhuma rota nova, nenhum c�
   `df1de701` (o RN-205.10 virou a recusa, RN-206.06), `ccbce184`; ver o bloco "Etapa 206".)*
 
 **Fica de fora (D (205)):** a entrega (C464 2ª parte); as telas de saldo (C481); a reserva manual (C479); as três portas que distribuem
-(C478); liberar o lote não distribui (C480); o negativo sem lote (C484).
+(C478); liberar o lote não distribui (C480 — *resolvido na Etapa 220*, `7a428526`, spec 07); o negativo sem lote (C484).
 
 **O que falta para 🟢:** o mesmo de produto e de integridade da 203 (C198, C470, C471, C472) e, desta, a entrega que recusa lote impedido
 (item 7).

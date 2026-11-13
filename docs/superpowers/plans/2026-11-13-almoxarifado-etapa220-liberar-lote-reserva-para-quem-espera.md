@@ -147,7 +147,7 @@ derruba RN-220.10/.11 sozinha).
 
 ## Execução e controles (medidos)
 
-`liberarLoteReserva.api.test.js` **22/22**; `chegadaLoteImpedido` **18/18** (RN-219.06 reescrita). Vermelho antes: 0/19 (as rotas não
+`liberarLoteReserva.api.test.js` **22/22** em `7a428526`, **25/25** depois da Fase 5 (`6c80f908`); `chegadaLoteImpedido` **18/18** (RN-219.06 reescrita). Vermelho antes: 0/19 (as rotas não
 devolviam o campo; a trava não era pega; o gancho da RN-220.11 não era atingido até o `Promise.resolve` do supertest).
 
 | # | Sabotagem | Caiu |
@@ -161,9 +161,86 @@ devolviam o campo; a trava não era pega; o gancho da RN-220.11 não era atingid
 | 7 | "antes impedido" sempre verdadeiro | RN-220.04 d |
 | 8 | reserva sempre sem recebimento | RN-220.07, .14 |
 | 9 | aviso sem a frase do lote | RN-220.08, .08 b |
+| 10 | a correção de validade sem a distribuição (Fase 5) | RN-220.15 |
+| 11 | o certificado que não libera sem os zeros (Fase 5) | RN-220.08 c |
+| 12 | `requisicoes` = número de reservas (Fase 5) | RN-220.01 b |
+| 13 | aviso sem o recebimento (Fase 5) | RN-220.08 |
+
+Tela: sem a chamada do aviso, as 2 RN-220.12 caem (`LotesAlmoxarifado`) e a RN-220.15 cai (`LotesCorrigirValidade`).
 
 ## Sabotagens previstas (controle positivo — o resultado medido está em "Execução e controles")
 
 1. sem a distribuição na liberação → RN-220.01/.02/.03/.08/.09/.13; 2. sem a guarda "agora não está impedido" → RN-220.04; 3. teto pelo
 disponível (sem o livre do lote) → RN-220.05 a; 4. sem a guarda de `controle_lote` → RN-220.06; 5. sem a trava em `mudarStatusLote` →
 RN-220.10/.11; 6. sem a trava no certificado e no vencimento → RN-220.10; 7. dedupe por documento → RN-220.08 (2º aviso).
+
+## Fase 5 — revisão adversarial (3 revisores frescos em paralelo: regra, travas/concorrência, "o teste passaria com a feature quebrada?")
+
+Proibidos de editar o repositório; sondas `e220-rev-*.js` no scratchpad; o de testes mutou uma worktree própria (25 mutações, cópia + md5).
+
+1. **[REGRA, real, reproduzido] Corrigir a validade é a 4ª porta.** Lote ATIVO vencido com 4, R1 esperando: `PUT /lotes/:id/validade` para
+   o ano que vem → 200, lote livre, R1 sem reserva (a mesma corrida do C480). **B1468**: `corrigirValidadeDoLote` (que já pegava a trava)
+   mede o "antes impedido" e reserva na mesma seção; a resposta `{ lote, avisos }` ganha `reservado_para_quem_esperava` (aditivo) e a tela
+   mostra o aviso. **RN-220.15** — `6c80f908`.
+2. **[TESTE, real] 3 lacunas**: o certificado que não libera (rota sem os zeros sobrevivia) → RN-220.08 c; a conta da resposta (soma e
+   número de requisições — todo cenário tinha 1 reserva) → RN-220.01 b, com dois itens na mesma requisição; o recebimento no aviso → RN-220.08.
+   7 mutações sobreviventes equivalentes ou inalcançáveis (os 409 sob a trava, o 404 relido, `concluirPendencia` fora do `finally`, a guarda
+   L1, o `livre > EPS`, o contador da chave no mesmo milissegundo) — `6c80f908`.
+3. **[TRAVAS, reproduzido, ANTERIOR] Estorno no mesmo instante da liberação.** `liberarParaEstorno` roda fora da trava (B441: soltar não
+   distribui); lido no meio da liberação, não solta nada e o estorno recusa (400, *"… reservado para requisições …"*). Nenhum erro de
+   estoque; tentar de novo passa. **C525**, sem conserto (mexe no motor do estorno).
+4. **[SUÍTE, achado ao rodar] O teste da 191 "[Fase 5 F2] liberação gravada depois da leitura de fora"** patcheava `naTravaDoMaterial`
+   chamando `liberarVencimento` de dentro: como ela agora passa pela mesma função, recursão infinita (a suíte pendurava). Guarda de uma vez só
+   no gancho; o cenário é o mesmo — `6c80f908`. Comentário de `redefinirValidadeDoLoteVazio` que dizia que `liberarVencimento` não pega a
+   trava atualizado.
+
+Sem achado: sem auto-espera nem deadlock (as rotas são as únicas chamadoras; dentro da seção tudo passa por `naTravaDoMaterial`); a ordem
+requisição → material respeitada; a distribuição relê `loteImpedidoAgora`, e todo escritor de status/validade pega a mesma trava (sonda: um
+bloqueio e uma saída avulsa disparados no meio da liberação esperaram; o final bate). Peças já separadas por outra requisição não são
+reservadas de novo (sonda: o teto do que pode sair dá 0).
+
+## Fechamento
+
+- [x] Fase 5 — 3 revisores; **1 achado de regra** (a 4ª porta) corrigido, **3 lacunas de teste** fechadas, **1 corrida anterior** registrada
+  (C525), 1 travamento de teste antigo achado ao rodar a suíte; 0 ruído — `6c80f908`.
+- [x] Fechamento (`fechar-etapa`, sem o Passo 7½ e o 8, por pedido do André) — novidades (B1461–B1468, C480/C523 resolvidos, C524 e C525,
+  D (220), F (220), seção, topo e "onde estamos"; sem A — nada no banco), specs 07, 10 e 05, mapa, guia (seção, cabeçalho, a 219 anotada),
+  manual (4.2, 4.3c, 9.3c-bis nova, 21c.1), este plano e a estimativa.
+
+### Divergências do plano
+
+- **A porta da 75 não foi usada direto**: a função própria (`reservarLoteLiberadoSobTrava`) chama o miolo, porque com o recebimento da
+  B1467 a porta seguiria o ramo da OS aberta.
+- **A RN-220.07 mudou na Fase 2** (o plano dizia `recebimento_id IS NULL`; agora é o da nota do lote). **B1467**, **B1468**, **C524**,
+  **C525**, **RN-220.05 c, .08 c, .01 b, .13, .14, .15** não existiam no plano.
+- **Quatro escritores, não três**: a correção de validade entrou na Fase 5.
+
+### Retro (4 números)
+
+- **Rodadas até verde na Fase 5:** 1 (os testes novos passaram na primeira, cada um com controle positivo).
+- **Achados reais:** Fase 2: 2 importantes + 4 menores (todos aceitos). Fase 5: 1 regra (corrigida), 3 lacunas de teste (fechadas), 1 corrida
+  anterior (registrada); 0 ruído. Mais 1 teste antigo que pendurava com a trava nova (achado pela suíte, não pela revisão).
+- **Paralelismo:** sem galhos de código em paralelo (T2 depois de T1, no mesmo fluxo); 3 revisores em paralelo (o de testes numa worktree
+  própria) — sem contaminação. Uma rodada da suíte inteira foi interrompida por eu ter mudado código com ela rodando; refeita do zero.
+- **Defeito que escapou da 219:** nenhum.
+
+## Próxima tarefa detalhada
+
+*(Escolhida pela ordem do CLAUDE.md: a 220 fecha o C480 e o C523; o vizinho imediato é o **C479** — a última porta que ainda reserva peça
+de lote impedido. **Sem estimativa** — começa pela Fase 0.5.)*
+
+**A reserva manual não conta o lote impedido (C479).**
+
+- **Onde:** `stockService.criarReservaSemTrava` (`:3813`), `POST /api/almoxarifado/reservas` (`routes/almoxarifado/extended.js:995`). O
+  `hold` compara com `caixaSql.livreDeCaixaSql()` para a manual (`:3829`) e com `disponivelSql()` para a de requisição — nenhum dos dois tira
+  `loteImpedido.loteImpedidoSql`. A recusa é *"Saldo disponível insuficiente: ⟨n⟩"* (com o sufixo da caixa quando há caixa).
+- **O que está pronto e não reabre:** a régua `loteImpedidoSql('ma')` (205 + 217); o molde da aprovação (`disponivel_liberado`,
+  `requisitionService.reservarItensAprovacao`) e do miolo da chegada (B1453). A reserva já roda sob `naTravaDoMaterial` (Etapa 97) e o
+  status do lote agora também (B1461), então a leitura é consistente.
+- **A decisão a tomar (letra B, reversível):** (1) só a manual desconta, ou também a de requisição feita por este caminho (cuidado: o miolo
+  da chegada e a aprovação já descontam antes de chamar — descontar de novo dentro do `hold` pode recusar a reserva da reserva da OS, B1381,
+  que converte **sobre** o impedido de propósito; medir `osNoImpedido`); (2) a frase da recusa (molde: `loteImpedido.fraseLoteImpedido`,
+  *"Não entram ⟨n⟩ ⟨un⟩ em lote bloqueado, reprovado ou vencido."*) somada à de hoje.
+- **Pontos de atenção:** `criarReserva` é chamada de dentro de seções (miolo, aprovação, reserva da OS) — a régua nova no `hold` vale para
+  todas se não for condicionada a `!opcoes.requisicao_id`/`!opcoes.sistema`. A fatia visível: a recusa na tela **Reservas** dizendo quanto
+  está em lote impedido. Vizinhos baratos que seguem abertos: C519, C521, C524, C525, C514–C518, C486, C491, C495, C497, C498.

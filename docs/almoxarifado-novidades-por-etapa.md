@@ -11,7 +11,13 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-13):** **Etapa 219 fechada** (**o que chega em lote bloqueado não fica reservado para quem espera** —
+> **Onde o desenvolvimento está (2026-11-13):** **Etapa 220 fechada** (**liberar o lote reserva para quem esperava** — anexar o certificado,
+> voltar o lote para *Ativo*, liberar o vencimento ou corrigir a validade de um lote vencido para o futuro reserva as peças do lote para as
+> requisições que esperavam o material, avisa o solicitante e a tela **Lotes e Séries** diz *"4 PC reservado(s) para quem esperava este
+> material (1 requisição(ões))."*; mudar a situação do lote espera as outras operações do material. **C480** e **C523** resolvidos; servidor e
+> um aviso na tela; sem consulta antes do deploy; decisões **B1461** a **B1468**; avisos **C524** e **C525**; limitações **D (220)**;
+> verificação **F (220)**). **Próxima:** **a reserva manual não conta o lote impedido** (**C479**) — detalhada no fim do plano da 220.
+> *(Antes, 2026-11-13:)* **Etapa 219 fechada** (**o que chega em lote bloqueado não fica reservado para quem espera** —
 > a nota que entra num lote **bloqueado** (sem certificado), **reprovado** ou **vencido**, a inspeção que aprova peça desse lote e a OS
 > encerrada que solta a compra dela não reservam mais essas peças: a requisição continua *Aguard. Estoque*, o solicitante não recebe *"Chegou
 > material"* do que não pode sair, e o aviso da entrada diz *"em lote bloqueado, reprovado ou vencido (não sai até o lote ser liberado)"*.
@@ -4627,7 +4633,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -14660,6 +14666,45 @@ sobre ele). A aprovação de uma requisição nova faz a mesma conta e também e
 Descartado: abater a reserva da OS do saldo impedido — com a reserva da OS em lote **bom**, a peça bloqueada voltaria a ser reservada (o
 próprio C478). Saída: anexar o certificado do lote. Fica o **C522**. **Reversível.**
 
+**B1461 (NOVA, da Etapa 220; decisão do agente) — quem muda o status do lote pega a trava do material (C523).** **Mudar status**, o anexo do
+certificado e **Liberar vencimento** rodam a releitura do lote, a gravação, a auditoria e (na liberação) a reserva dentro da seção da trava
+do material do lote — como a correção de validade já fazia (Etapa 191). O **bloqueio** também (é o mesmo gesto). Efeito: um bloqueio no
+meio de uma reserva (nota, aprovação) espera ela terminar — a reserva fica, como quando o lote é bloqueado logo depois (**B1372**).
+Descartado: só a liberação pegar a trava (o bloqueio no meio da reserva continuaria passando — a corrida reproduzida na Etapa 219).
+**Reversível.**
+
+**B1462 (NOVA, da Etapa 220; decisão do agente) — liberar o lote reserva o livre dele para quem espera (C480).** Na mesma seção da trava
+que liberou, o livre do lote (saldo − em inspeção − retido nele) vai para a fila (a mesma ordem e as mesmas regras da chegada da nota), com
+teto no que pode sair do material (B1453). A reserva antiga feita antes do bloqueio conta (**B1372**/**B1456**): ela pode absorver as peças
+do lote. Correção feita na Fase 2: o plano dizia que o livre de outro lote nunca é distribuído no lugar; como a reserva não sabe o lote, a
+conta é a agregada da aprovação (cenário 6 da seção). Descartados: só recalcular o status sem reservar (a aprovação seguinte levaria as
+peças) e distribuir numa seção nova depois de soltar (a corrida voltava). **Reversível.**
+
+**B1463 (NOVA, da Etapa 220; decisão do agente) — só reserva quem deixou o lote liberado.** O gesto tem de ter gravado, o lote **antes**
+estava impedido e **agora** (relido na seção) não está, e o material tem controle por lote. Voltar a *Ativo* um lote ainda vencido, liberar
+o vencimento de um lote ainda bloqueado, *Bloqueado* → *Reprovado*, *Ativo* → *Ativo*: nada. **Reversível.**
+
+**B1464 (NOVA, da Etapa 220; decisão do agente) — o aviso da liberação do lote.** O *"Material liberado para a sua requisição"* da Etapa 75
+com a 1ª linha *"O lote ⟨L⟩ do material que a sua requisição aguardava foi liberado e está no estoque."*; uma chave por liberação (o mesmo
+lote liberado de novo avisa de novo). Descartado: sem aviso (mais barato; o solicitante não saberia que a requisição andou). **Reversível.**
+
+**B1465 (NOVA, da Etapa 220; decisão do agente) — a tela diz quanto reservou.** As respostas de mudar status, liberar vencimento, anexar
+certificado e corrigir validade ganham `reservado_para_quem_esperava` (`quantidade`, `unidade`, `requisicoes`; zeros quando nada); a tela
+**Lotes e Séries** mostra *"⟨q⟩ ⟨un⟩ reservado(s) para quem esperava este material (⟨n⟩ requisição(ões))."* Contrato aditivo. **Reversível.**
+
+**B1466 (NOVA, da Etapa 220; decisão do agente) — sem migration, sem trava nova.** A trava por material de sempre; a ordem requisição →
+material não muda (as rotas do lote não pegam a trava por requisição). **Reversível.**
+
+**B1467 (NOVA, da Etapa 220, Fase 2; decisão do agente) — a reserva da liberação leva a nota do lote quando ele veio de uma só.** Sem isso, a
+nota que entrou em lote bloqueado, depois de liberada, ficava **inestornável**: o estorno só solta a reserva que tem a marca da própria nota
+(Etapa 74), e antes da 219 a reserva da chegada a tinha. Lote com peças de mais de uma nota: a reserva vai sem a marca (**C524**). A marca
+**não** faz a liberação seguir a regra da OS aberta (a peça da OS já ficou com ela na chegada, B1455). Descartado: sempre sem a marca (o
+estorno travava — regressão da Etapa 74). **Reversível.**
+
+**B1468 (NOVA, da Etapa 220, Fase 5; decisão do agente) — corrigir a validade é a 4ª porta.** Achado da revisão, reproduzido: corrigir a
+validade de um lote vencido para o futuro (Etapa 191) o libera, mas não reservava — a mesma corrida do C480. Agora reserva pela mesma
+regra, dentro da seção que a correção já segurava, e a resposta diz quanto. **Reversível.**
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -18624,6 +18669,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      **Liberar vencimento** não recalcula a requisição que ficou *Aguard. Estoque* por causa do lote impedido nem reserva para ela. **O que
      fazer:** separar normalmente — a separação aceita *Aguard. Estoque* e já enxerga o lote liberado (não é preciso aprovar de novo).
      Conserto: a liberação do lote distribuir para quem espera, sob a trava do material — etapa própria.
+     *(**Resolvido na Etapa 220** — `7a428526` (**B1462** a **B1465**, **B1467**, **B1468**): anexar o certificado, voltar a *Ativo*, liberar o
+     vencimento ou corrigir a validade reservam o livre do lote para quem esperava, avisam e a tela diz quanto.)*
 481. **NOVO (da Etapa 205; corte declarado) — as telas de saldo continuam mostrando o lote impedido como disponível.** Materiais, Estoque,
      os relatórios e a coluna *disponível* da Fila de separação contam o saldo do lote bloqueado, reprovado ou vencido. Só a aprovação e a
      separação (e o *separável* que a fila e a janela mostram) descontam. **O que fazer:** para saber o que pode sair, olhar **Lotes e
@@ -18804,6 +18851,17 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      que já acontece sem corrida (a reserva de antes do bloqueio fica, **B1372**). Reproduzido na revisão pela nota e pela aprovação.
      **Nenhum erro de estoque**; a entrega dessa reserva recusa enquanto o lote estiver impedido. **O que fazer:** nada. Conserto: quem muda
      o status do lote pegar a trava do material — junto com a próxima etapa (**C480**).
+     *(**Resolvido na Etapa 220** — `7a428526` (**B1461**): mudar o status, anexar o certificado, liberar o vencimento e corrigir a validade
+     esperam as outras operações do material; um bloqueio no meio de uma reserva espera ela terminar.)*
+524. **NOVO (da Etapa 220; decisão B1467) — o lote com peças de mais de uma nota: a reserva da liberação vai sem a marca da nota.** Liberar
+     um lote abastecido por duas notas reserva para quem esperava, mas a reserva não leva nenhuma das notas; estornar uma delas depois é
+     recusado com *"Não é possível estornar: o material está reservado para requisições (REQ-…) — libere as reservas antes de estornar"*.
+     **Nenhum erro de estoque.** **O que fazer:** liberar a reserva à mão (tela **Reservas**) e estornar. Conserto: repartir a reserva por nota
+     (pequeno, mas mexe no estorno).
+525. **NOVO (da Etapa 220, Fase 5; o comportamento é anterior) — estornar a nota no mesmo instante em que o lote dela é liberado pode ser
+     recusado uma vez.** A conta do estorno que solta a reserva da nota roda fora da trava do material (como desde a Etapa 92 — soltar não
+     distribui); se ela ler o material no meio da liberação, não solta nada e o estorno recusa com a frase do C524. Reproduzido na revisão
+     com gancho. **Nenhum erro de estoque.** **O que fazer:** tentar o estorno de novo (passa). Conserto: a conta do estorno sob a trava.
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -20160,12 +20218,16 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(220) Liberar o lote, o que ficou de fora.** (1) Lote com peças de **mais de uma nota**: a reserva vai sem a marca da nota (**B1467**,
+  **C524**). (2) A conta do estorno que solta a reserva da nota continua fora da trava (**C525**). (3) A reserva manual ainda conta o lote
+  impedido (**C479**). (4) A liberação reserva pela conta agregada do material: a reserva antiga feita antes do bloqueio pode absorver as
+  peças do lote liberado (**B1462**, cenário 6). (5) As telas de saldo continuam mostrando o lote impedido como disponível (**C481**).
 - **(219) O que chega em lote impedido, o que ficou de fora.** (1) A nota de pedido com **OS aberta** não muda (**B1455**, **C520**). (2) A
   inspeção e a NC não olham o lote do item liberado (**B1458**, **C519**); nem o desvio da OS que fecha no meio da nota (a fila comum
   recebe no máximo o que pode sair, mas pode receber o livre de uma entrada manual no lugar do que a OS soltou). (3) Mudar o **status** do
-  lote não pega a trava do material: um bloqueio no meio da distribuição pode chegar depois da leitura — o mesmo da aprovação (**B1459**,
+  lote não pegava a trava do material: um bloqueio no meio da distribuição podia chegar depois da leitura — o mesmo da aprovação (**B1459**,
   **C523**).
-  (4) O estorno da entrada boa (**C521**) e a reserva da OS sobre o bloqueado (**C522**). (5) **Liberar o lote** não reserva (**C480**).
+  (4) O estorno da entrada boa (**C521**) e a reserva da OS sobre o bloqueado (**C522**). (5) **Liberar o lote** não reservava (**C480**). *(3 e 5 resolvidos na Etapa 220.)*
   (6) A conta das portas não tira o separado sem reserva de outros itens, como a aprovação tira (**C173**, Etapa 95).
 - **(218) O lote escolhido à mão, o que ficou de fora.** (1) **Série** não entra (**B1445**). (2) **A sugestão da fila** não desconta
   (**C517**). (3) **A janela de separação** desconta o que esta requisição já separou do lote, mas não o que **outra peça da mesma janela**
@@ -21580,6 +21642,14 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(220) Nenhum clique foi dado.** A tela **mudou** — o aviso *"⟨q⟩ ⟨un⟩ reservado(s) para quem esperava este material (⟨n⟩ requisição(ões))."*
+em **Lotes e Séries** depois de mudar status, liberar vencimento, anexar certificado e corrigir validade —, mas foi provada só pelo Jest
+(`LotesAlmoxarifado` RN-220.12, `LotesCorrigirValidade` RN-220.15), não clicada no navegador. O servidor, pela rota real, em
+`liberarLoteReserva` (25 cenários): certificado, status (de *Bloqueado* e de *Reprovado*), vencimento e validade reservando; os casos que não
+reservam; o teto do lote; a reserva antiga; a fila; o aviso e a 2ª liberação; a marca da nota e o estorno; a trava dos escritores (espião) e o
+bloqueio no meio da reserva da nota e da aprovação (gancho); separar e entregar depois. 13 controles positivos (12 caem; 1 equivalente).
+**Para clicar (10 minutos):** o roteiro da seção da Etapa 220 no guia (cenários 1 a 4 e 8 das novidades).
 
 **(219) Nenhum clique foi dado.** A tela não mudou (muda o status da requisição e o texto dos e-mails). O servidor, pela rota real (a nota por
 **Processar Nota**, a inspeção, o lote pela troca de status, a separação) e pelo serviço (a OS encerrada), em `chegadaLoteImpedido` (18
@@ -40692,7 +40762,7 @@ do item, *"- CERT-219 — ⟨nome⟩: 4 PC — em lote bloqueado, reprovado ou v
 inspeção** continua dizendo *"retido para inspeção"*, mesmo num lote bloqueado.
 
 **3. Liberar o lote: a separação enxerga.** Anexe o certificado do *L1* (ou mude o lote para *Ativo*). A requisição continua *Aguard.
-Estoque* — liberar o lote não reserva sozinho (**C480**) —, mas **Iniciar Separação** de 4 passa.
+Estoque* — liberar o lote não reserva sozinho (**C480**) —, mas **Iniciar Separação** de 4 passa. *(Desde a Etapa 220 a liberação reserva os 4 para a requisição — ver a seção da 220.)*
 
 **4. Nota mista.** Um material com controle por lote **sem** *Requer certificado*, com o lote *L1* já bloqueado à mão (1 PC dentro). Requisição
 de 6 aprovada (espera). Nota com 3 no lote *L2* (nasce ativo) e 4 no *L1* → reserva **3**, *Parcialmente Reservada*; o aviso da nota tem uma
@@ -40722,8 +40792,81 @@ OS** que segura peças de um lote bloqueado (**C522**).
 - A nota de pedido com **OS aberta** continua reservando para a OS peça de lote bloqueado (**B1455**, **C520**).
 - A inspeção e a não conformidade não olham o lote **do item** que liberaram — só o que pode sair do material (**C519**).
 - Estornar a entrada boa pode deixar uma reserva coberta só por lote bloqueado (**C521**, anterior).
-- **Liberar o lote** não reserva para quem ficou esperando (**C480**, a próxima).
+- **Liberar o lote** não reserva para quem ficou esperando (**C480** — *resolvido na Etapa 220*).
 - **Antes do deploy:** a **A116** (consulta, somente leitura).
+
+## Etapa 220 — Liberar o lote reserva para quem esperava (2026-11-13)
+
+Desde a Etapa 219, o que entra num lote **bloqueado** (sem o certificado do fornecedor), **reprovado** ou **vencido** não fica reservado para
+a requisição que esperava o material: ela continua *Aguard. Estoque*. Faltava a outra metade: quando o lote era liberado — anexando o
+certificado, voltando a situação para *Ativo*, liberando o vencimento ou corrigindo uma validade digitada errada —, nada acontecia. A
+requisição continuava esperando, e a primeira requisição aprovada depois levava as peças, passando na frente de quem esperava. Agora a
+liberação do lote reserva as peças dele para quem esperava, na ordem da Fila de separação, avisa o solicitante por e-mail e mostra na tela
+**Lotes e Séries** quanto reservou. Junto, mudar a situação do lote passa a esperar as outras operações do mesmo material: um lote bloqueado
+no exato instante em que uma nota ou uma aprovação reserva não fica mais com a reserva "pela metade" da regra. Sem consulta antes do deploy
+(nada muda no banco). Decisões do agente: **B1461** a **B1468**. **C480** e **C523** resolvidos; avisos **C524** e **C525**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Anexar o certificado do lote: a requisição que esperava continuava *Aguard. Estoque* | As peças do lote são reservadas para ela (*Totalmente* ou *Parcialmente Reservada*) |
+| **Mudar status** de *Bloqueado* ou *Reprovado* para *Ativo*: nada era reservado | Igual ao certificado |
+| **Liberar vencimento**: nada era reservado | Igual ao certificado |
+| **Corrigir validade** de um lote vencido para uma data futura: nada era reservado | Igual ao certificado |
+| A tela dizia só *"Status do lote atualizado!"* (ou *"Certificado anexado!"*…) | Também *"4 PC reservado(s) para quem esperava este material (1 requisição(ões))."* quando reservou |
+| O solicitante não sabia que o lote foi liberado | Recebe *"Material liberado para a sua requisição"* com a 1ª linha *"O lote L1 do material que a sua requisição aguardava foi liberado e está no estoque."* |
+| A primeira aprovação depois da liberação levava as peças | Quem esperava leva primeiro, pela ordem da fila (a urgente antes) |
+| Mudar a situação do lote não esperava a reserva em curso do mesmo material | Espera |
+| Estornar a nota depois de liberar o lote | Passa e solta a reserva da liberação (quando o lote veio só dessa nota) |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**. No cadastro do material (Compras), *CERT-220* com **Controle por lote** e **Requer
+certificado**, **não** crítico, unidade *PC*, sem saldo. Para o e-mail, ligue *"Avisar o Solicitante quando o Material Chega"* (21c.6 do
+manual).
+
+**1. O certificado reserva.** **Requisições → Nova requisição** de 4 *CERT-220* → aprovar (fica *Aguard. Estoque*). Nota de 4 *CERT-220* no
+lote *L1* até **Processar Nota** — *L1* nasce *Bloqueado* e nada é reservado (Etapa 219). Em **Lotes e Séries**, *L1* → **Anexar
+certificado** → **Anexar**: *"Certificado anexado!"* e *"4 PC reservado(s) para quem esperava este material (1 requisição(ões))."*. A
+requisição fica *Totalmente Reservada*; em **Reservas**, 4 com a observação *"Reserva na liberação do lote L1 — requisição REQ-…"*.
+
+**2. O e-mail.** Em **Notificações**, *"[Almoxarifado] Material liberado para a sua requisição REQ-…"*, primeira linha *"O lote L1 do
+material que a sua requisição aguardava foi liberado e está no estoque."* e *"reservado para a sua requisição: 4 PC"*. Bloquear e liberar o
+mesmo lote de novo com a requisição ainda esperando gera **outro** e-mail.
+
+**3. Mudar status e liberar vencimento fazem o mesmo.** O cenário 1 com **Mudar status** → *Ativo* (de *Bloqueado* ou de *Reprovado*): 4
+reservados. Um lote *Ativo* com a validade de ontem, requisição esperando 4 → **Liberar vencimento**: 4 reservados. **Corrigir validade**
+desse lote para o ano que vem: 4 reservados (para outra data também vencida: nada).
+
+**4. Quando nada é reservado.** Lote vencido e *Bloqueado* → *Ativo* sem liberar o vencimento (continua vencido); **Liberar vencimento** de
+um lote que continua *Bloqueado*; *Bloqueado* → *Reprovado*; *Ativo* → *Ativo*; material **sem** controle por lote. Em todos: só a mensagem
+de sucesso de sempre.
+
+**5. Só as peças do lote.** Material com 4 livres no lote *L0* (de uma entrada manual) e 4 no *L1* bloqueado, requisição esperando 8:
+liberar *L1* reserva **4**, não 8 — as 4 de *L0* continuam livres para quem for aprovado ou separar.
+
+**6. A reserva antiga conta.** *L1* com 4 reservados para R0 **antes** de ser bloqueado, R1 esperando 4: liberar *L1* não reserva nada para
+R1 (as 4 já são de R0). Se houver ainda 4 livres de entrada manual em *L0*, R1 recebe 4 (8 físicos, 8 reservados — a conta é a do material,
+como na aprovação).
+
+**7. A fila.** R1 (normal) e R2 (urgente) esperando 4 cada, *L1* com 4: liberar → R2 fica com os 4.
+
+**8. Estornar a nota.** Depois do cenário 1 (sem separar), estornar a entrada da nota → passa, e a reserva da liberação é solta (a requisição
+volta a esperar). Se o lote recebeu peças de **duas** notas, a reserva vai sem a marca da nota e o estorno pede *"… o material está reservado
+para requisições (REQ-…) — libere as reservas antes de estornar"* (**C524**).
+
+**9. Bloquear espera a reserva.** Uma nota (ou uma aprovação) reservando 4 de *L1* e, no mesmo instante, **Mudar status** → *Bloqueado*: o
+bloqueio espera a reserva terminar; a reserva fica (a de antes do bloqueio fica, como sempre) e o lote termina *Bloqueado*. Só provado pelo
+teste com gancho (não há como reproduzir o "mesmo instante" clicando).
+
+### O que esta etapa NÃO cobre
+
+- Lote abastecido por **mais de uma nota**: a reserva da liberação vai sem a marca da nota (**C524**).
+- Estornar a nota **no mesmo instante** em que o lote é liberado pode ser recusado uma vez (**C525** — tentar de novo passa).
+- A **reserva manual** (tela **Reservas**) ainda conta o lote impedido (**C479**, a próxima).
+- A inspeção não olha o lote do item que liberou (**C519**); a nota com OS aberta (**C520**); o estorno da entrada boa (**C521**); a reserva
+  da OS sobre o bloqueado (**C522**).
 
 ## Onde estamos e o que vem a seguir
 
@@ -40731,6 +40874,15 @@ OS** que segura peças de um lote bloqueado (**C522**).
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 220 entregue (2026-11-13):** **liberar o lote reserva para quem esperava** (**C480** e **C523** resolvidos). Os escritores do status
+  do lote sob a trava do material (**B1461**); a liberação reserva o livre do lote (**B1462**) só quando o lote estava impedido e deixou de
+  estar (**B1463**); o aviso com origem própria (**B1464**); a tela diz quanto reservou (**B1465**); sem migration nem trava nova
+  (**B1466**); a reserva leva a nota do lote quando ele veio de uma só (**B1467**, Fase 2); e a correção de validade é a 4ª porta
+  (**B1468**, Fase 5). Commits `0c07e6d4` (estimativa), `b33a6960` (plano), `f03abccf` (Fase 2), `7a428526` (código e testes),
+  `a04b43e8` (tela), `6c80f908` (Fase 5) e o fechamento. **O que é seu:** as decisões **B1461** a **B1468** (reversíveis); os avisos
+  **C524** e **C525**; a limitação **(220)** em D e a verificação **(220)** em F. Sem consulta antes do deploy. **Próxima:** **a reserva
+  manual não conta o lote impedido** (**C479**) — detalhada no fim do plano da 220.
 
 - **Etapa 219 entregue (2026-11-13):** **o que chega em lote bloqueado não fica reservado para quem espera** (**C478** resolvido). O que as
   três portas distribuem é o que pode sair (**B1453**); a nota não distribui o que pôs em lote impedido (**B1454**); a OS aberta não muda

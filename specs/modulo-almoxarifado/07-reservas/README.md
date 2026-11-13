@@ -1,5 +1,7 @@
 # 07 — Reservas de Estoque
 
+> **+ Etapa 220 (2026-11-13, `7a428526`, tela `a04b43e8`, Fase 5 `6c80f908`): liberar o lote reserva para quem esperava (C480) e quem muda o status do lote pega a trava do material (C523), B1461–B1468** — certificado, status → ATIVO, liberar vencimento e corrigir validade reservam o livre do lote para a fila. Ver a seção "Etapa 220", no fim. O status não muda.
+
 > **+ Etapa 219 (2026-11-13, `2ec31628`, Fase 5 `a6323899`): o que chega em lote bloqueado, reprovado ou vencido não fica reservado para quem espera (C478, B1453–B1460)** — a nota, a inspeção/NC e a OS encerrada reservam só o que pode sair; a OS aberta não muda. Ver a seção "Etapa 219", no fim. O status não muda.
 
 > **+ Etapa 206 (2026-11-06, T0 `df1de701`, T1 `ccbce184`): a reserva de antes do bloqueio continua e a entrega dela recusa enquanto o lote estiver impedido (RN-206.06, B1372 mantida)** — ver a seção "Etapa 206", no fim. O status não muda.
@@ -655,7 +657,7 @@ lote impedido (`loteImpedido.js`, `8bebd3ce`) e a parte da separação estão na
   não muda; sem lote impedido a regra da 171 fica byte a byte — `52fa9328`. Testes `loteImpedidoAprovacao.api.test.js` (a, b, c); suítes da
   OS (171/172/176) verdes.
 - [ ] **Fora:** a reserva manual (`criarReserva`) conta lote impedido (**C479**); as três portas que distribuem para quem espera (nota,
-  inspeção/NC, OS encerrada) também (**C478** — *resolvido na Etapa 219*, `2ec31628`); liberar o lote não distribui (**C480**).
+  inspeção/NC, OS encerrada) também (**C478** — *resolvido na Etapa 219*, `2ec31628`); liberar o lote não distribui (**C480** — *resolvido na Etapa 220*, `7a428526`).
 
 ## Etapa 206 — a reserva de antes do bloqueio na entrega (2026-11-06)
 
@@ -689,7 +691,34 @@ que as portas já seguram).
 - [x] **RN-219.13 / .14 (Fase 5, B1460)** — lote vencido (com e sem a liberação do vencimento); a reserva da OS sobre o bloqueado conta como
   na aprovação (**C522**) — `a6323899`.
 - [ ] **Fora (declarado):** a OS aberta (**C520**); a liberação não olha o lote do item (**C519**); o estorno da entrada boa (**C521**, anterior);
-  liberar o lote não distribui (**C480**, a próxima); bloquear o lote no instante de uma reserva não a impede (**C523**, anterior — quem muda
+  liberar o lote não distribui (**C480** — *resolvido na Etapa 220*); bloquear o lote no instante de uma reserva não a impede (**C523** — *resolvido na Etapa 220*; anterior — quem muda
   o status do lote não pega a trava do material). Antes do deploy: **A116**.
 
 Testes: `chegadaLoteImpedido.api.test.js` (18). Continua 🟢.
+
+## Etapa 220 — liberar o lote reserva para quem esperava (2026-11-13)
+
+Plano: `docs/superpowers/plans/2026-11-13-almoxarifado-etapa220-liberar-lote-reserva-para-quem-espera.md` (Fase 2 `f03abccf`). Resolve o
+**C480** e o **C523**, que esta spec listava como "Fora" nas seções das Etapas 205 e 219. Nenhuma coluna nova, nenhuma trava nova (a trava
+por material de sempre, agora também nos escritores do status do lote).
+
+- [x] **RN-220.01 / .02 / .03 (B1462)** — anexar o certificado, `PUT /lotes/:id/status` → ATIVO (de BLOQUEADO ou REPROVADO) e liberar o
+  vencimento reservam o livre do lote (`situacaoDosLotes`) para a fila, pelo miolo da 74 (`reservarLoteLiberadoSobTrava`), dentro da seção
+  que mudou o lote; recálculo e aviso depois de soltar — `7a428526`.
+- [x] **RN-220.04 / .06 (B1463)** — só reserva quem deixou o lote liberado (antes impedido, agora não, com controle de lote) — `7a428526`.
+- [x] **RN-220.05 (B1462)** — o teto é o livre do lote limitado pelo que pode sair do material; a reserva antiga conta (a/b/c) — `7a428526`.
+- [x] **RN-220.07 / .14 (B1467, Fase 2)** — a reserva leva o recebimento quando o lote veio de uma nota só; o estorno dessa nota a solta
+  (com duas notas, vai sem — **C524**) — `7a428526`.
+- [x] **RN-220.08 (B1464)** — o aviso *"O lote ⟨L⟩ do material que a sua requisição aguardava foi liberado e está no estoque."*, chave por
+  liberação, com o recebimento — `7a428526`, `6c80f908`.
+- [x] **RN-220.09** — a fila (a urgente primeiro) — `7a428526`.
+- [x] **RN-220.10 / .11 (B1461, C523)** — os escritores do status do lote sob a trava; bloquear no meio de uma reserva (nota ou aprovação)
+  espera ela terminar — `7a428526`.
+- [x] **RN-220.12 (B1465)** — a tela diz quanto reservou — `a04b43e8`.
+- [x] **RN-220.13** — separar e entregar depois da liberação — `7a428526`.
+- [x] **RN-220.15 (B1468, Fase 5)** — corrigir a validade de um lote vencido para o futuro também reserva — `6c80f908`.
+- [ ] **Fora (declarado):** lote com peças de mais de uma nota (**C524**); o estorno no mesmo instante da liberação (**C525**, anterior); a
+  reserva manual conta o lote impedido (**C479**, a próxima).
+
+Testes: `liberarLoteReserva.api.test.js` (25); `chegadaLoteImpedido` RN-219.06 reescrita (dizia que liberar o lote não distribuía — o
+comportamento mudou, não estava errado). Continua 🟢.
