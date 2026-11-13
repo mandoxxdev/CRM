@@ -52,6 +52,7 @@ const caixaSql = require('./caixaSql'); // Etapa 97 (T2, B491)
 // Etapa 96 (C176): a regra unica de quantidade (namespace — Fase 2, I3).
 const Q = require('./quantidade');
 const stockService = require('./stockService');
+const { naTravaDoMaterial } = require('./travaPorMaterial'); // Etapa 218 (Fase 5, F2)
 const ownerRules = require('./ownerRules');
 const lotService = require('./lotService');
 const sm = require('./scrapDisposalStateMachine');
@@ -445,7 +446,14 @@ const CLAIM_INSPECAO_PERDIDO = {
  * O que vem DEPOIS do motor (movimentacao no sucateamento e a execucao na NC) NAO compensa: a baixa
  * valeu, e desfazer a assinatura a deixaria orfa — a mesma inversao deliberada da 45.
  */
-async function baixarReprovado(db, user, atual, perna) {
+// Etapa 218 (Fase 5, revisao das travas, F2): o carimbo `sucateamento_em`, o motor e o desfazer do carimbo numa secao so, sob a trava do
+// material — o mesmo motivo da devolucao ao fornecedor (`nonConformityService.executarDevolucao`): o carimbo solta a reprovacao do retido
+// do lote antes de o motor baixar.
+function baixarReprovado(db, user, atual, perna) {
+  return naTravaDoMaterial(atual.material_id, () => baixarReprovadoNaTrava(db, user, atual, perna));
+}
+
+async function baixarReprovadoNaTrava(db, user, atual, perna) {
   const ncs = require('./nonConformityService');
   let inspId = null;
   let carimbou = false;

@@ -1609,7 +1609,16 @@ async function registrarExecucao(db, user, ncId, dados = {}) {
  * O rollback desfaz os DOIS claims, e nessa ordem: primeiro o da inspecao (senao uma execucao
  * concorrente veria a NC reaberta com a inspecao ainda travada) e depois o da NC.
  */
-async function executarDevolucao(db, user, nc, insp, previsto, observacoes, id) {
+// Etapa 218 (Fase 5, revisao das travas, F2): o carimbo `devolucao_fornecedor_em`, o motor e o desfazer do carimbo numa secao so, sob a
+// trava do material (o motor ja roda sob ela: aninha; dentro de outra secao ativa, `naTravaDoMaterial` so executa). O carimbo tira a
+// reprovacao do retido do lote (`retidoDoLote.js`, 217) e o motor so baixa o lote depois: fora da trava, uma separacao/entrega com lote
+// escolhido (218) que ja segurava a trava via as pecas reprovadas como livres e as levava. O mesmo molde da liberacao (Etapa 91).
+function executarDevolucao(db, user, nc, insp, previsto, observacoes, id) {
+  return trava.naTravaDoMaterial(previsto.material_id,
+    () => executarDevolucaoNaTrava(db, user, nc, insp, previsto, observacoes, id));
+}
+
+async function executarDevolucaoNaTrava(db, user, nc, insp, previsto, observacoes, id) {
   // Passo 3 — o claim da INSPECAO (RN-05). E por INSPECAO e nao por NC de proposito: duas NCs de
   // TIPOS diferentes da mesma inspecao baixariam a reprovada duas vezes, e o motor nao salva
   // porque o pool e agregado. Ver o comentario da coluna em schema.js.

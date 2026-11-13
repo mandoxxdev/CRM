@@ -477,6 +477,11 @@ async function registrarRetorno(db, user, remessaId, data) {
     // Etapa 96 (C176): a quantidade arredondada ANTES do claim (servico sem a porta do motor — Fase 2, M4) e o claim
     // com folga; a coluna grava arredondado.
     const qtd = Q.qtd(linha.quantidade);
+    // Etapa 218 (Fase 5, revisao das travas, F3): o claim do retorno, o motor e o desfazer do claim numa secao so, sob a trava do material
+    // (o motor ja roda sob ela: aninha). O item ENVIADO retem no lote (`retidoDoLote.js`, 217) e a separacao/entrega com lote escolhido
+    // le esse retido sob a trava (218): o desfazer fora dela devolvia o retido depois que uma separacao ja tinha levado as pecas.
+    // eslint-disable-next-line no-await-in-loop
+    await naTravaDoMaterial(item.material_id, async () => {
     const claim = await dbGet(db, `UPDATE itens_remessa_terceiro_almoxarifado
       SET quantidade_retornada = ${Q.qtdSql('COALESCE(quantidade_retornada,0) + ?')}
       WHERE id = ? AND (quantidade - COALESCE(quantidade_retornada,0)) >= ? ${Q.FOLGA_SQL}
@@ -516,6 +521,7 @@ async function registrarRetorno(db, user, remessaId, data) {
         SET quantidade_retornada = ${Q.qtdSql('MAX(0, COALESCE(quantidade_retornada,0) - ?)')} WHERE id = ?`, [qtd, item.id]);
       throw e;
     }
+    });
   }
 
   // ── 3. Status ──
@@ -631,6 +637,12 @@ async function encerrarRemessa(db, user, remessaId, data = {}) {
       // declarado, e o comportamento certo: o material realmente sumiu, e reencerrar so baixa o que
       // ainda estiver pendente (pendentesDaRemessa releria menos itens). O que nao pode acontecer e
       // a remessa fechar com saldo preso, e isso o `throw` garante.
+      // Etapa 218 (Fase 5, revisao das travas, F1 reproduzido): o motor e a liquidacao do item numa secao so, sob a trava do material.
+      // Entre os dois, `quantidade_em_terceiros` ja tinha caido e o item ainda contava: a soma por lote passava do total, a familia
+      // "terceiros" deixava de caber (B1436) e TODO lote do material soltava o retido — uma separacao com lote escolhido levava a peca
+      // que estava em outro terceiro.
+      // eslint-disable-next-line no-await-in-loop
+      await naTravaDoMaterial(p.material_id, async () => {
       await stockService.registrarMovimentacao(db, user, {
         material_id: p.material_id,
         tipo,
@@ -647,6 +659,7 @@ async function encerrarRemessa(db, user, remessaId, data = {}) {
       // cabecalho antes de rotular esta coluna como "retornado".
       await dbRun(db, `UPDATE itens_remessa_terceiro_almoxarifado
         SET quantidade_retornada = quantidade WHERE id = ?`, [p.id]);
+      });
     }
   }
 
@@ -690,6 +703,9 @@ async function cancelarRemessa(db, user, remessaId, data = {}) {
   const pendentes = await pendentesDaRemessa(db, remessaId);
   let estornado = 0;
   for (const p of pendentes) {
+    // Etapa 218 (Fase 5, F1): o motor e a liquidacao do item numa secao so (a mesma janela do encerramento).
+    // eslint-disable-next-line no-await-in-loop
+    await naTravaDoMaterial(p.material_id, async () => {
     await stockService.registrarMovimentacao(db, user, {
       material_id: p.material_id,
       tipo: 'RETORNO_TERCEIRO',
@@ -699,6 +715,7 @@ async function cancelarRemessa(db, user, remessaId, data = {}) {
       justificativa: `Cancelamento da remessa ${remessa.numero}: ${String(motivo).trim()}`,
     });
     await dbRun(db, 'UPDATE itens_remessa_terceiro_almoxarifado SET quantidade_retornada = quantidade WHERE id = ?', [p.id]);
+    });
     estornado += Number(p.pendente);
   }
 
