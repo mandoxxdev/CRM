@@ -1,0 +1,6 @@
+*Concluído — almoxarifado: os relatórios de estoque mostram o que está em lote bloqueado*
+_13/11/2026_
+
+1. Os relatórios Estoque atual e Saldos comprometidos mostram quanto está em lote bloqueado, reprovado ou vencido — estimado 3h · realizado 3h
+
+*Total: estimado 3h · realizado 3h*
