@@ -1,0 +1,7 @@
+*Concluído — Tipo de Material escolhido de uma lista*
+_13/11/2026_
+
+1. Tipo de Material escolhido de uma lista — estimado 2h30 · realizado 2h
+
+*Total: estimado 2h30 · realizado 2h*
+_Com isto, os pedidos de cadastro de material que já tinham estimativa estão prontos; o campo Aplicação aguarda confirmação._

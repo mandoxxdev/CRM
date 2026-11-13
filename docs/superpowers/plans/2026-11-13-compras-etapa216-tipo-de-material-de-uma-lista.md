@@ -33,6 +33,25 @@ etapa própria, se pedirem) e gravar a chave em vez do nome (a tela mostraria `c
 
 | # | Task | Tipo | Estado |
 |---|---|---|---|
-| T1 | `motivoRecusaEndereco` normalizado; teste `tipoMaterialNormalizado.api.test.js` (função + entrada pela rota) com controle positivo | tronco | — |
-| T2 | Formulário: `<select>` pela rota do módulo (`rotas.api.tiposMaterial`), valor fora da lista; teste | galho | — |
-| T3 | Fechamento | — | — |
+| T1 | `motivoRecusaEndereco` normalizado; teste `tipoMaterialNormalizado.api.test.js` (função + entrada pela rota) com controle positivo | tronco | feita `6bd2f1ed` (3/3; igualdade exata de volta derruba os dois cenários) |
+| T2 | Formulário: `<select>` pela rota do módulo (`rotas.api.tiposMaterial`), valor fora da lista; teste | galho | feita `a61ac325` (3/3; 3 sabotagens vermelhas) |
+| T3 | Fechamento | — | feito |
+
+## Execução (2026-11-13)
+
+- Fase 2 e Fase 5 não despachadas (etapa pequena); a Fase 0 achou o ponto que a estimativa não previa (a restrição de endereço) e a
+  estimativa foi revisada antes do código (`08503223`).
+- Achado de passagem: desde a Etapa 210 os tipos digitados subiam para maiúsculo e a restrição de endereço, por igualdade exata, já
+  recusava *CONSUMÍVEL* numa posição que aceita *consumivel*. A normalização corrige isso também (B90).
+- **Verificação (medida, em `a61ac325`):** `test:api` 610/610, `test:almoxarifado` 44/0, validation 4/0, safealter 3/0, sqlite 16/0; tela
+  inteira 223/223 suítes (2989 testes); build OK.
+
+## Retro (4 números)
+
+- Rodadas de correção até verde: 0. Achados: sem revisão. Paralelismo: nenhum. Defeito que escapou da 215: nenhum até aqui.
+
+## Próxima tarefa detalhada
+
+A fila do cadastro de material com estimativa acabou; a linha 7 (tirar o campo Aplicação) espera o Matheus, e img4, Especificações/
+Observações e a sobra/remessa esperam a compradora. Pelo pedido do André (13/11), o tempo que sobra da semana vai para as pendências do
+almoxarifado: retomar a **Etapa 209 T6**, pausada.

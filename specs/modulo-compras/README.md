@@ -55,7 +55,7 @@ Compras ganhar spec própria, a fatia migra para cá e este arquivo vira o índi
 |---|---|---|---|---|
 | 1 | Famílias e subfamílias cadastradas no Compras (Almoxarifado só consulta) | `estimativa_2026-11-12_cadastros-so-no-compras`, 1 | 4h | **feito — Etapa 211** (servidor e tela, testes da tela, Fase 5 — hashes no plano): Compras → Famílias; o Almoxarifado consulta (B88) |
 | 2 | Categorias e Tipos de Material cadastrados no Compras | `estimativa_2026-11-12_cadastros-so-no-compras`, 2 | 3h | **feito — Etapa 215** (`79a24f48`, `1cec6bc2`): Compras → Categorias e → Tipos de Material; o Almoxarifado consulta (B89) |
-| 3 | Tipo de Material escolhido de uma lista (no formulário de material) | `estimativa_2026-11-12_cadastro-de-material-fornecedores`, 1 | 1h30 | **próximo** — a lista vem de `GET /api/compras/materiais/aux/tipos-material` (Etapa 215) |
+| 3 | Tipo de Material escolhido de uma lista (no formulário de material) | `estimativa_2026-11-12_cadastro-de-material-fornecedores`, 1 |  2h30 (revisada) | **feito — Etapa 216** (`6bd2f1ed`, `a61ac325`): lista do cadastro; a restrição de endereço compara sem acento e sem caixa (B90) |
 | 4 | Vários fornecedores por material, cada um com código e descrição comercial | idem, 2 | 3h30 | **feito — Etapa 212** (`f59c0551`, `db55113a`, `e74bcb05`): vínculo = `itens_fornecedor.material_id` (B83–B85) |
 | 5 | Código do fornecedor na cotação e no pedido de compra (tela e impresso) | idem, 3 | 3h | **feito — Etapa 213** (`86ab0eb4`, `7a8e6f5b`): `codigo_fornecedor` gravado na linha ao salvar (foto, B86); tela e impresso |
 | 6 | Histórico de preços por fornecedor no material | idem, 4 | 2h30 | **feito — Etapa 214** (`8ec674b0`, `bd9209c4`): leitura das cotações e pedidos do material (B87) |

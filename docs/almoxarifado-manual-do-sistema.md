@@ -289,7 +289,7 @@ Além da família existe o campo **Categoria**, uma classificação de apoio esc
 
 **Material classificado com uma categoria que não está mais no catálogo continua válido, e a tela mostra isso.** Ao abrir esse material para edição, o campo exibe o valor gravado seguido de **`(fora de catálogo)`** — por exemplo `CONSUMÍVEL (fora de catálogo)`. Salvar sem tocar no campo **mantém** o valor: o sistema não reclassifica material por conta própria, e não impede a edição do resto do cadastro por causa de uma categoria antiga.
 
-Existe também o campo **Tipo de Material**, texto que descreve a natureza física do item (chapa, tubo, perfil, barra, motor, rolamento, válvula, ferramenta, EPI, consumível etc.). O Tipo de Material não é decorativo: é ele que a restrição de endereço consulta (ver 3.4). Categoria e Tipo de Material são coisas diferentes e não se substituem. O cadastro dos tipos (nome, ícone, cor, se exige assinatura ou termo, se é EPI ou controlado) fica em **Compras → Tipos de Material**, de quem cadastra material; em **Almoxarifado → Configurações → aba "Tipos de Material"** a lista aparece só para consulta, com a frase *"O cadastro de tipos de material é feito em Compras → Tipos de Material."*
+Existe também o campo **Tipo de Material**, escolhido de uma lista — a mesma cadastrada em **Compras → Tipos de Material** — que descreve a natureza do item (chapa, tubo, perfil, barra, motor, rolamento, válvula, ferramenta, EPI, consumível etc.). O Tipo de Material não é decorativo: é ele que a restrição de endereço consulta (ver 3.4). Categoria e Tipo de Material são coisas diferentes e não se substituem. Um material com um tipo antigo que não está na lista mostra *"⟨tipo⟩ (fora da lista)"*; salvar sem mexer mantém o que estava. O cadastro dos tipos (nome, ícone, cor, se exige assinatura ou termo, se é EPI ou controlado) fica em **Compras → Tipos de Material**, de quem cadastra material; em **Almoxarifado → Configurações → aba "Tipos de Material"** a lista aparece só para consulta, com a frase *"O cadastro de tipos de material é feito em Compras → Tipos de Material."*
 
 #### O catálogo de categorias
 
@@ -689,7 +689,7 @@ Atenção a um detalhe que economiza tempo: a validação vale também quando vo
 
 Uma exceção deliberada: o **estorno** de uma movimentação **não** valida bloqueio. Reverter um lançamento precisa sempre ser possível, mesmo que a posição tenha sido bloqueada depois do movimento original.
 
-**Tipos de material permitidos** — lista de seleção múltipla, rotulada na tela como *"Tipos de material permitidos (nenhum selecionado = qualquer tipo)"*. A comparação é feita contra o campo **Tipo de Material** do cadastro do material. A regra tem uma direção:
+**Tipos de material permitidos** — lista de seleção múltipla, rotulada na tela como *"Tipos de material permitidos (nenhum selecionado = qualquer tipo)"*. A comparação é feita contra o campo **Tipo de Material** do cadastro do material, **sem diferença de acento nem de maiúscula**, e com espaço ou hífen valendo como "_" — o tipo *Consumível* (ou *CONSUMÍVEL*) do material casa com o permitido *consumivel*; *Componente pneumático* casa com *componente_pneumatico*. A regra tem uma direção:
 
 > A restrição é avaliada **apenas no destino** — ela responde "o que pode entrar aqui", não "o que pode sair daqui". Numa saída, a única trava da origem é o bloqueio.
 

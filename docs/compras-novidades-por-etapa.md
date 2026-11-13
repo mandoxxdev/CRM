@@ -611,6 +611,12 @@
   Tipos de Material."* para todos. **Reversível** pela mesma chave `ALMOX_CADASTRO_MATERIAL=liberado`. **Descartado:** uma tela só com
   as duas listas em abas (duas entradas no menu deixam as mensagens apontarem um lugar exato). Consequência: o perfil Administrador
   do almoxarifado, que gravava as duas abas, passou a só consultar.
+- **B90 — 13/11/2026 (Etapa 216): o Tipo de Material vem da lista do cadastro, e a restrição de endereço compara sem acento e sem
+  caixa.** A localização guarda os tipos permitidos como chaves (`consumivel`, `componente_pneumatico`) e o material passa a guardar o
+  nome do cadastro (`Consumível`, em maiúsculo desde a 210). Comparar por igualdade exata faria a restrição recusar o tipo certo — e já
+  recusava os tipos digitados em maiúsculo depois da 210. Agora os dois lados são comparados normalizados. **Descartado:** trocar a lista
+  da localização pela do cadastro (mexe na tela de localizações e nos dados gravados — etapa própria se pedirem). Consequência: as duas
+  listas continuam diferentes (a da localização tem *chapa*, *tubo*…; a do cadastro *EPI*, *Consumível*…); só os nomes iguais casam.
 
 ### D. Dúvidas para você (ou para o P.O.)
 - **D-35** — O que A, B e C significam **para a GMP**? A legenda atual é a definição genérica.
@@ -790,6 +796,45 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 216 — Tipo de Material escolhido de uma lista (2026-11-13)
+
+**Em uma frase.** O campo Tipo de Material do cadastro de material era digitado, e cada um escrevia de um jeito. Agora ele é escolhido
+da lista cadastrada em **Compras → Tipos de Material**, como a Categoria.
+
+### O que há de novo (visível para o usuário)
+
+- **Compras → Materiais → novo ou editar**: o **Tipo de Material** é uma lista para escolher.
+- Material com um tipo digitado que não está na lista mostra *"⟨tipo⟩ (fora da lista)"*; salvar sem mexer mantém o que estava.
+
+### Por baixo do capô
+
+- A regra de qual prateleira aceita qual tipo passa a reconhecer o tipo sem diferença de acento ou de maiúscula (B90).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Tipo de Material digitado à mão | Escolhido da lista do cadastro |
+| *CONSUMÍVEL* não entrava na prateleira que aceita *consumivel* | Entra: a comparação ignora acento e maiúscula |
+
+### As regras, com o cenário exato
+
+1. Material novo → Tipo de Material → a lista com os tipos ativos do cadastro (*Consumível*, *EPI*…).
+2. Material que tinha *CONSUMÍVEL* digitado → a lista mostra *Consumível* selecionado.
+3. Material com *Chapa grossa* digitado → *"Chapa grossa (fora da lista)"* selecionado.
+4. Entrada de um material *Consumível* numa posição que só aceita *consumivel* → aceita; de um material *Chapa* → *"Localização ⟨código⟩ não
+   aceita o tipo de material 'CHAPA'"*.
+
+### Roteiro de teste manual (clicável)
+
+1. **Compras → Materiais** → lápis de um material → **Tipo de Material** → escolha *EPI* → salvar → abra de novo: *EPI*.
+2. **Almoxarifado → Configurações → Localizações** → numa posição, *Tipos de material permitidos* = *consumivel*.
+3. Dê entrada de um material de tipo *Consumível* nessa posição: aceita.
+
+### O que a etapa NÃO cobre
+
+- A lista de tipos permitidos da localização continua sendo outra lista (B90).
 
 ## Etapa 215 — Categorias e Tipos de Material cadastrados no Compras (2026-11-13)
 
