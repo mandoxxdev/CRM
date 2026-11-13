@@ -293,3 +293,9 @@ fim natural do C478, e junta o conserto da corrida **C523**. **Sem estimativa** 
   concorrente do contexto do teste) — a sonda `e219-rev-trava-1.js` da revisão da 219 é o vermelho pronto. A tela **Lotes e Séries** pode
   mostrar *"⟨n⟩ reservado(s) para quem esperava"* na resposta (a fatia visível).
 - **Vizinhos baratos que seguem abertos:** C479 (reserva manual conta lote impedido), C519, C521, C514–C518, C486, C491, C495, C497, C498.
+
+### Verificação (medida, serial, sobre a árvore de `f15ed607` — o código é o de `a6323899`)
+
+`test:api` **614/614 arquivos OK** (613 de antes + `chegadaLoteImpedido`); `test:almoxarifado` **44 passou, 0 falhou**; `test:validation`
+**4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0**; cliente (`CI=true npx react-scripts test --watchAll=false --maxWorkers=2`, a tela
+não mudou) **224/224 suítes, 3007/3007 testes**; `build` **Compiled successfully**. `chegadaLoteImpedido` **18/18**.
