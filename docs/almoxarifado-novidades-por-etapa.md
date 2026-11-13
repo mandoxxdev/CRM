@@ -11,12 +11,17 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-13):** **Etapa 226 fechada** (**o "Sai de" da separação e da entrega diz qual lote está impedido**
+> **Onde o desenvolvimento está (2026-11-13):** **Etapa 227 fechada** (**o *Saldo por lote* diz quando o lote está vencido, e a Fila diz o que
+> está em lote impedido** — o relatório *Saldo por lote* ganha a coluna *Situação* (*Vencido em 10/11/2026*, *Bloqueado*, *Reprovado* — as
+> palavras do extrato), na tela e na planilha; a **Fila de separação** diz *"disponível 10 · 6 em lote impedido"*. **D (225)** e **D (223)**
+> resolvidas; sem consulta antes do deploy; decisões **B1498** a **B1503**; aviso **C533**; limitação **D (227)**; verificação **F (227)**).
+> **Próxima:** **estornar a entrada boa não deixa a reserva coberta só por lote impedido** (**C521**) — detalhada no fim do plano da 227.
+> *(Antes, 2026-11-13:)* **Etapa 226 fechada** (**o "Sai de" da separação e da entrega diz qual lote está impedido**
 > — a opção do lote bloqueado, reprovado ou vencido diz *"— Bloqueado: não sai"* (as palavras do extrato), vem desabilitada (na entrega, menos
 > a origem da separação do item), a separação não abre mais num lote impedido e uma frase em amarelo avisa quando a escolhida ou a origem da
 > separação está num lote assim. **D (224)** resolvida; só tela, sem consulta antes do deploy; decisões **B1492** a **B1497**; aviso **C532**;
 > limitação **D (226)**; verificação **F (226)**). **Próxima:** **o *Saldo por lote* diz que o lote ativo está vencido** (**D (225)**) —
-> detalhada no fim do plano da 226.
+> feita na **Etapa 227**.
 > *(Antes, 2026-11-13:)* **Etapa 225 fechada** (**os relatórios de saldo dizem quanto está em lote impedido** — os
 > relatórios *Estoque atual* e *Saldos comprometidos* ganham a coluna *Em lote impedido*, logo depois do *Disponível*, na tela e na planilha;
 > o material que só tem estoque em lote bloqueado, reprovado ou vencido passa a aparecer em *Saldos comprometidos*; o *Disponível* não muda.
@@ -4665,7 +4670,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -14893,6 +14898,35 @@ ser liberado na tela Lotes e Séries — na entrega, escolha outro endereço."*.
 prometia uma saída que a entrega recusa. Na separação, a frase *"Sugerido pela fila…"* some quando a sugerida voltou num lote impedido.
 **Reversível.**
 
+**B1498 (NOVA, da Etapa 227; decisão do agente) — o *Saldo por lote* ganha a coluna *Situação*.** Logo depois de *Status do lote*, na tela e
+na planilha: *Bloqueado*, *Reprovado*, *Vencido em 10/11/2026* (as duas juntas, *Bloqueado · Vencido em …*), *Validade a corrigir: …* ou
+*Impedido* — as palavras do extrato. Vazia no lote que pode sair e na linha *Sem lote atribuído*. Descartado: trocar o *Status do lote* pela
+situação (sumiria o *ATIVO* que se lê hoje); mandar só os "sim/não" e montar a palavra na tela (a planilha ficaria sem ela). **Reversível.**
+
+**B1499 (NOVA, da Etapa 227; decisão do agente) — as palavras existem em dois lugares, presos por um teste.** A planilha é montada no
+servidor, que não roda a tela: a função que escreve a situação foi copiada para o servidor, e um teste lê a da tela e roda as duas sobre a
+mesma lista de casos — quem mudar uma sem a outra derruba o teste. Descartado: a tela importar a do servidor (a tela não importa arquivos
+de fora da pasta dela). **Reversível.**
+
+**B1500 (NOVA, da Etapa 227; decisão do agente) — a régua é a do extrato.** "Vencido" é a validade antes de hoje no horário de Brasília,
+sem a liberação de vencimento — a mesma conta da aprovação e do extrato. Com o controle por lote desligado, a linha ainda diz (como o
+extrato, **B1485**: a saída que cita o lote continua recusada). **Reversível.**
+
+**B1501 (NOVA, da Etapa 227; decisão do agente, texto acertado na revisão do plano) — a nota do *Saldo por lote* diz o que é a coluna.**
+Termina com *"Situação = por que o lote não sai para uso (Bloqueado, Reprovado, Vencido em dd/mm/aaaa ou Validade a corrigir, as palavras
+do extrato do material); vazia quando o lote pode sair (inclusive o vencido com o vencimento liberado)."*. **Reversível.**
+
+**B1502 (NOVA, da Etapa 227; decisão do agente, mudada na revisão do plano) — a Fila de separação diz o impedido num pedaço à parte.** Cada
+item diz *"… · disponível 10 · 6 em lote impedido"* quando há; sem lote impedido, o texto de antes. A 1ª versão do plano escrevia
+*"disponível 10 (6 em lote impedido)"*; a revisão mostrou que o número pode passar do disponível (o impedido não desconta o reservado —
+**C531**: *"disponível 2 (6 …)"* se leria "6 dos 2") — ficou o pedaço à parte, como na **Nova Reserva**. O *disponível* não muda.
+**Reversível.**
+
+**B1503 (NOVA, da Etapa 227; decisão do agente) — a conferência automática das colunas dos relatórios ganhou uma exceção.** Ela exigia que
+toda coluna declarada de um relatório viesse da consulta ao banco; a *Situação* é escrita depois da consulta. Ela entrou numa lista
+explícita, com duas provas próprias: não pode vir da consulta (a lista não apodrece) e tem de estar em toda linha. Descartado: fingir a
+coluna na consulta (um campo vazio só para passar). Sem banco, trava, rota nova ou perfil. **Reversível.**
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -18872,6 +18906,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      coluna *disponível* da Fila continuam sem o número, **D (223)**.)*
      *(**Relatórios na Etapa 225** — `18084c49`: *Estoque atual* e *Saldos comprometidos* com a coluna *Em lote impedido*; a coluna
      *disponível* da Fila continua sem o número.)*
+     *(**A Fila na Etapa 227** — `2460585f`, `3ba4fd58`: *"disponível 10 · 6 em lote impedido"*. Com isto todas as telas de saldo citadas aqui
+     dizem o número.)*
 482–483. *(Números sem uso: o 482 era reservado ao corte da **B1378**, que não aconteceu; o 483 não foi usado — o aviso do 2º fix-round
      da Fase 5 entrou como 484.)*
 484. **NOVO (da Etapa 205, 2º fix-round da Fase 5; o comportamento é anterior, desde a Etapa 205) — material com "Sem lote atribuído"
@@ -19094,6 +19130,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      ou vencido (as peças da caixa saíram de lá) — com a frase *"Lote L2: Bloqueado. Nada sai dele …"* embaixo. Confirmar assim dá a recusa
      de sempre; o botão **Confirmar Entrega e Baixar Estoque** (um clique, sem janela) também, com *"a origem da separação (Z-02) não serve
      mais (…)"*. **O que fazer:** liberar o lote em **Lotes e Séries**, ou **Entregar escolhendo de onde sai…** e escolher outro endereço.
+533. **NOVO (da Etapa 227; decisões B1498 e B1500) — no *Saldo por lote*, o lote vencido com o vencimento liberado fica com a *Situação*
+     vazia.** A *Validade* mostra a data passada, mas o lote pode sair (o vencimento foi liberado em **Lotes e Séries**); o que vence hoje
+     também fica vazio. A situação é a da hora em que o relatório foi consultado. **O que fazer:** nada — vazio quer dizer "pode sair".
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -20450,12 +20489,16 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(227) O *Saldo por lote* e a Fila, o que ficou de fora.** (1) Na tela, a *Validade* sai com o ano de dois dígitos e a *Situação* com
+  quatro (são as palavras do extrato). (2) O vencido com o vencimento liberado fica com a *Situação* vazia (**C533**). (3) A lista de coleta
+  impressa não mostra o disponível (nada a mudar). (4) A situação e o número são os da hora da consulta.
 - **(226) O "Sai de" e o lote impedido, o que ficou de fora.** (1) A opção *"Planejada da separação (Z-02)"* — que aparece quando a lista de
   endereços não carrega — não diz a situação do lote (não há dado). (2) A entrega de um clique não abre janela: nada a mostrar; a recusa de
   sempre (**C532**). (3) A situação é a da hora em que a janela abriu. (4) O *Saldo por lote* (**D (225)**) e a coluna *disponível* da Fila
-  de separação (**D (223)**) continuam.
+  de separação (**D (223)**) continuam. *(**Feitos na Etapa 227** — `2460585f`, `3ba4fd58`.)*
 - **(225) Os relatórios e o lote impedido, o que ficou de fora.** (1) O *Saldo por lote* mostra o *Status do lote* (*BLOQUEADO*,
-  *REPROVADO*) mas não diz que um lote *ATIVO* está **vencido** — a validade está na coluna ao lado. (2) A rota antiga de posição do estoque,
+  *REPROVADO*) mas não diz que um lote *ATIVO* está **vencido** — a validade está na coluna ao lado. *(**Feito na Etapa 227** — `2460585f`:
+  a coluna *Situação*.)* (2) A rota antiga de posição do estoque,
   sem tela, continua sem a coluna (**B1491**). (3) A coluna *disponível* da Fila de separação continua sem o número (a Fila mostra o
   *separável*, que já desconta). (4) O número é o da hora em que o relatório foi consultado.
 - **(224) Qual lote está impedido, o que ficou de fora.** (1) O seletor "Sai de" da entrega recebe a situação do lote mas continua oferecendo
@@ -20465,7 +20508,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   impedido*; o *Saldo por lote* continua, **D (225)**.)* (4) A situação é a da hora em que o extrato foi aberto.
 - **(223) As listas e o lote impedido, o que ficou de fora.** (1) Os **relatórios** (posição do estoque, saldos comprometidos) e a coluna
   *disponível* da Fila de separação continuam sem o número (os relatórios têm colunas fixas; a Fila já mostra o *separável*). *(Os relatórios:
-  **feito na Etapa 225**, `18084c49`; a Fila continua.)* (2) A lista do
+  **feito na Etapa 225**, `18084c49`; a Fila na **Etapa 227**, `3ba4fd58`.)* (2) A lista do
   **Compras** não mostra o selo (**B1482**). (3) Os 18 seletores de material de outras telas não trazem o número (**B1481**). (4) A tela ainda
   não diz **qual** lote está impedido (**C528**). (5) O número da lista não se atualiza sozinho (**C529**). (6) O **C527** vale também para a
   lista: com a reserva da OS sobre o lote bloqueado, *"(Disponível: 4 un) · 6 em lote impedido"* e a recusa da reserva de 1 diz *"… 0. Não
@@ -21907,6 +21950,14 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(227) Nenhum clique foi dado.** A tela **mudou** — a coluna *Situação* do *Saldo por lote* (sem mudança de código na tela: ela segue a
+lista de colunas do relatório) e o pedaço *"6 em lote impedido"* na Fila de separação (provado pelo Jest, `FilaSeparacao` RN-227.10, com a
+fila simulada na fronteira). O servidor, pela rota real, em `relatorioSaldoPorLoteSituacao` (16 cenários): bloqueado, reprovado, vencido,
+vencido liberado, que vence hoje e amanhã, bloqueado e vencido, validade em texto, situação desconhecida, a linha sem lote, o controle por
+lote desligado, lote negativo, as palavras iguais às da tela, a coluna, a nota e a **planilha**, o "hoje" de Brasília, bloquear e liberar
+pela rota; na Fila, o número do extrato, com reserva do material e do próprio item, e fracionado. 18 controles positivos caem. **Para clicar
+(5 minutos):** o roteiro da seção da Etapa 227 no guia.
 
 **(226) Nenhum clique foi dado.** A tela **mudou** — o rótulo *"— Bloqueado: não sai"*, a opção desabilitada e as duas frases em amarelo no
 **Sai de** da separação e da entrega —, provada só pelo Jest (`RequisicoesSaiDeLoteImpedido`, 21 cenários, com a lista de saldos simulada na
@@ -41503,7 +41554,54 @@ bloqueada)"*.
   (*"a origem da separação (Z-02) não serve mais (…)"*) — **C532**.
 - A opção *"Planejada da separação (Z-02)"*, que aparece quando a lista de endereços não carrega, não tem a situação (não há dado).
 - O *Saldo por lote* continua sem dizer que um lote *Ativo* está vencido (**D (225)**); a coluna *disponível* da Fila de separação continua
-  sem o número (**D (223)**).
+  sem o número (**D (223)**). *(**Feitos na Etapa 227**.)*
+
+## Etapa 227 — O *Saldo por lote* diz quando o lote está vencido, e a Fila diz o que está em lote impedido (2026-11-13)
+
+O relatório **Saldo por lote** mostrava a validade e o status de cada lote, mas um lote *Ativo* que já venceu aparecia igual aos outros: quem
+lia o relatório (ou a planilha) não sabia que aquelas peças não saem para uso até o vencimento ser liberado. E a **Fila de separação** dizia
+*"disponível 10"* contando as peças de lote bloqueado, sem explicar por que o *separável agora* era menor. Agora o *Saldo por lote* tem a
+coluna *Situação*, com as mesmas palavras do extrato do material, e a Fila diz quanto do disponível está em lote impedido. Sem consulta antes
+do deploy (nada muda no banco). Decisões do agente: **B1498** a **B1503**. **D (225)** e **D (223)** resolvidas; aviso **C533**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Saldo por lote**: lote *L4* *ATIVO* com validade de ontem — nada dizia que venceu | *Situação*: *"Vencido em ⟨ontem⟩"* |
+| Lote *Bloqueado* / *Reprovado* (só o *Status do lote*) | *Situação*: *Bloqueado* / *Reprovado*; os dois com vencido: *"Bloqueado · Vencido em …"* |
+| Lote que pode sair, vencido liberado, *Sem lote atribuído* | *Situação* vazia (*—*) |
+| A planilha do *Saldo por lote* | A coluna *Situação* logo depois de *Status do lote* |
+| **Fila de separação**: *"a separar 5 UN (separável agora 4) · disponível 10"* | *"… · disponível 10 · 6 em lote impedido"* |
+| Os outros relatórios; o *disponível* e o *separável* da Fila | **Iguais** |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**. No cadastro do material (Compras), *LOTE-227* com **Controle por lote**, unidade *un*,
+sem saldo. **Movimentações → Entrada** de 4 no lote *L1*, de 6 no lote *L2* e de 3 no lote *L4*. **Lotes e Séries** → *L2* → **Mudar status**
+→ *Bloqueado*; *L4* → **Corrigir validade** → a data de ontem.
+
+**1. A coluna diz a situação.** **Relatórios → Estoque → Saldo por lote** → **Consultar**. As linhas de *LOTE-227*: *L1* com *Situação* *—*;
+*L2* com *Bloqueado*; *L4* com *Status do lote ATIVO* e *Situação* *"Vencido em ⟨ontem⟩"*. O rodapé termina com *"Situação = por que o lote não
+sai para uso (Bloqueado, Reprovado, Vencido em dd/mm/aaaa ou Validade a corrigir, as palavras do extrato do material); vazia quando o lote
+pode sair (inclusive o vencido com o vencimento liberado)."*.
+
+**2. As palavras são as do extrato.** Abra o extrato de *LOTE-227*: a tabela *Saldos por localização* mostra as mesmas palavras ao lado de
+*L2* e *L4*. Com o *L2* **Reprovado**: *Reprovado*. Com o *L2* bloqueado e a validade de ontem: *"Bloqueado · Vencido em ⟨ontem⟩"*.
+
+**3. Vencido liberado, que vence hoje: vazio.** *L4* → **Liberar vencimento** → consultar de novo: *Situação* *—* (**C533**). Com a validade
+de hoje, também *—*.
+
+**4. A planilha.** **Exportar XLSX**: a coluna *Situação* logo depois de *Status do lote*, com as mesmas palavras; as vazias em branco.
+
+**5. A Fila diz o impedido.** Uma requisição de 5 *LOTE-227*, aprovada. **Fila de separação**: o item diz *"a separar 5 UN (separável agora
+…) · disponível 13 · 6 em lote impedido"*. Com o *L2* *Ativo* de novo, recarregar: o pedaço *"6 em lote impedido"* some. Um material sem lote
+impedido, ou sem controle por lote: o texto de antes, sem o pedaço.
+
+### O que esta etapa NÃO cobre
+
+- Na tela do *Saldo por lote*, a *Validade* sai com o ano de dois dígitos e a *Situação* com quatro.
+- A lista de coleta impressa não mostra o disponível (nada a mudar). A situação e o número são os da hora da consulta.
 
 ## Onde estamos e o que vem a seguir
 
@@ -41512,6 +41610,15 @@ bloqueada)"*.
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
 
+- **Etapa 227 entregue (2026-11-13):** **o *Saldo por lote* diz quando o lote está vencido, e a Fila diz o que está em lote impedido**
+  (**D (225)** e **D (223)** resolvidas). A coluna *Situação* com as palavras do extrato (**B1498**), escritas também no servidor e presas à
+  da tela por um teste (**B1499**), pela régua do extrato (**B1500**), com a nota (**B1501**); a Fila com *"· 6 em lote impedido"*
+  (**B1502**, mudada na revisão do plano); a conferência das colunas dos relatórios com a exceção da coluna escrita depois da consulta
+  (**B1503**). Commits `4f559e67` (estimativa), `3932ec90` (plano e Fase 2), `2460585f` (servidor e testes), `3ba4fd58` (Fila), `6caa31a5`
+  (Fase 5: três cenários que faltavam) e o fechamento. **O que é seu:** as decisões **B1498** a **B1503** (reversíveis); o aviso **C533**; a
+  limitação **(227)** em D e a verificação **(227)** em F. Sem consulta antes do deploy. **Próxima:** **estornar a entrada boa não deixa a
+  reserva coberta só por lote impedido** (**C521**) — detalhada no fim do plano da 227.
+
 - **Etapa 226 entregue (2026-11-13):** **o "Sai de" da separação e da entrega diz qual lote está impedido** (**D (224)** resolvida). A opção
   do lote bloqueado, reprovado ou vencido diz a situação no lugar do *"do lote podem sair"* (**B1492**); vem desabilitada — na entrega, menos
   a origem da separação do item (**B1493**, mudada na revisão do plano); a separação não pré-escolhe lote impedido, a entrega mantém a origem
@@ -41519,8 +41626,8 @@ bloqueada)"*.
   **Sai de** (**B1496**). Só tela. Commits `d96da251` (estimativa), `f9b92d34` (plano e Fase 2), `868887e1` (tela e testes), `aba3f081` e `04308f3f` (Fase 5: três avisos
   antigos que contradiziam a frase nova calam; três cenários que faltavam) e o fechamento.
   **O que é seu:** as decisões **B1492** a **B1497** (reversíveis); o aviso **C532**; a limitação **(226)** em D e a verificação **(226)** em
-  F. Sem consulta antes do deploy. **Próxima:** **o *Saldo por lote* diz que o lote ativo está vencido** (**D (225)**) — detalhada no fim do
-  plano da 226.
+  F. Sem consulta antes do deploy. **Próxima:** **o *Saldo por lote* diz que o lote ativo está vencido** (**D (225)**) — feita na **Etapa
+  227**.
 
 - **Etapa 225 entregue (2026-11-13):** **os relatórios de saldo dizem quanto está em lote impedido** (**D (223)**, nos relatórios). A coluna
   *Em lote impedido* no *Estoque atual* e no *Saldos comprometidos*, com o número do extrato (**B1488**); o comprometido lista o material só com

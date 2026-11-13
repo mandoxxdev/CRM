@@ -1,5 +1,7 @@
 # 21 — Relatórios, Dashboards e Indicadores
 
+> **+ Etapa 227 (2026-11-13, `2460585f`): o *Saldo por lote* ganha a coluna *Situação* — as palavras do extrato (*Bloqueado*, *Reprovado*, *Vencido em dd/mm/aaaa*) pela régua da aprovação, na tela e na planilha (D (225); B1498–B1503; C533)** — ver a seção "Etapa 227", no fim; o status não muda (falta para 🟢 continua só previsto × realizado).
+
 > **+ Etapa 225 (2026-11-13, `18084c49`, Fase 5 `70941fd2`): *Estoque atual* e *Saldos comprometidos* com a coluna *Em lote impedido* (o número do extrato, `loteImpedidoSql`), logo depois do *Disponível*, na tela e na planilha; o comprometido lista o material só com lote impedido; notas novas (D (223); B1488–B1491; C531)** — ver a seção "Etapa 225", no fim; o status não muda (falta para 🟢 continua só previsto × realizado).
 
 > **+ Etapa 181 (2026-10-22, T1 `3ce1d3a2`, Fase 5 `0e6d5b37`, `e104df3c`): o *EPI por colaborador* lê as entregas de EPI (feature 25) e ele e o *Ferramentas emprestadas* ficam restritos (`entregar_epi` / `gerenciar_ferramentas` — o GESTOR passa de 26 para 24 relatórios, a PRODUCAO de 22 para 20); o dispatcher e a exportação mascaram a justificativa antiga da entrega de EPI para quem não tem `entregar_epi`** — ver a seção "Etapa 181", no fim; o status não muda (falta para 🟢 continua só previsto × realizado).
@@ -288,8 +290,33 @@ Uma query, `cancelado = 0`, agrupada por `material_id, os_id`:
 - [x] **RN-225.08** — registro: `{ lote_impedido, 'Em lote impedido' }` logo depois de `disponivel` nos dois, notas literais (**B1490**); a
   planilha com a coluna e o valor — `18084c49`. O registro continua com **26** chaves.
 - [x] **RN-225.09** — integração: liberar o lote zera a coluna e tira o material do comprometido — `18084c49`.
-- [ ] **Fora (declarado):** o vencido como situação no *Saldo por lote* (**D (225)**); a rota legada `/relatorio/posicao-estoque` (sem
-  tela, **B1491**); a coluna *disponível* da Fila (**D (223)**).
+- [ ] **Fora (declarado):** o vencido como situação no *Saldo por lote* (**D (225)** — *feito na Etapa 227*, `2460585f`: a coluna *Situação*); a rota legada `/relatorio/posicao-estoque` (sem
+  tela, **B1491**); a coluna *disponível* da Fila (**D (223)** — *feito na Etapa 227*, `2460585f`, `3ba4fd58`; ver a spec 05).
 - Custo medido antes (cópia do banco com 3.022 materiais): *Estoque atual* 85 → 98 ms; *Saldos comprometidos* 3 → 31 ms.
 - Testes: `relatoriosLoteImpedido.api.test.js` (16). Plano: `docs/superpowers/plans/2026-11-13-almoxarifado-etapa225-relatorios-lote-impedido.md`.
   Novidades: seção "Etapa 225", **B1488** a **B1491**, **C531**, **D (225)**, **F (225)**.
+
+## Etapa 227 (2026-11-13) — o *Saldo por lote* diz a situação do lote
+
+Plano: `docs/superpowers/plans/2026-11-13-almoxarifado-etapa227-saldo-por-lote-vencido.md` (RN-227.01 a .10, B1498–B1503, C533; Fase 2 e
+Fase 5). Fecha o **D (225)**. Só leitura: nenhuma rota, banco, trava ou perfil novo.
+
+- [x] **RN-227.01 / .02 (B1498, B1500)** — `saldo-por-lote` traz `situacao_lote` em toda linha: as palavras do extrato (`Bloqueado`,
+  `Reprovado`, `Vencido em dd/mm/aaaa`, juntas por ` · `; `Validade a corrigir: …`; `Impedido`) pelos dois booleanos da régua
+  (`predicadoLoteImpedidoSql`/`predicadoLoteVencidoSql`, o "hoje" de Brasília lido uma vez); `null` no lote que pode sair (vencido liberado,
+  vence hoje, validade futura) — `2460585f`.
+- [x] **RN-227.03** — a linha "Sem lote atribuído" (residual e nunca-teve-lote) com `null` — `2460585f`.
+- [x] **RN-227.04** — com o controle de lote desligado a linha ainda diz (como o extrato, B1485; o relatório não filtra `controle_lote`) —
+  `2460585f`.
+- [x] **RN-227.05 (B1499)** — as palavras no servidor (`services/almoxarifado/situacaoDoLote.js`) são uma cópia da função do cliente; o teste
+  lê `client/src/utils/situacaoDoLote.js` e roda as duas sobre 18 casos — `2460585f`.
+- [x] **RN-227.06 (B1501, B1503)** — registro: `{ situacao_lote, 'Situação' }` logo depois de `status_lote`; a nota ganha a frase da coluna;
+  a planilha com a coluna e o valor; a linha não traz os campos auxiliares. A varredura do registro (`relatoriosRegistro [revisao I1]`) exige
+  toda coluna no SQL: a situação é montada em JS e entrou numa lista explícita (`COLUNAS_MONTADAS_EM_JS`) que não pode estar no SQL e tem de
+  sair na linha — `2460585f`.
+- [x] **RN-227.07 / .08** — o "hoje" é o de `diaLocal` (provado trocando o dia no teste); bloquear e liberar pela rota muda a coluna —
+  `2460585f`.
+- [ ] **Fora (declarado):** a coluna *Validade* da tela sai `dd/mm/aa` e a *Situação* `dd/mm/aaaa` (cosmético, Fase 2 M6); o vencido com o
+  vencimento liberado fica com a *Situação* vazia (**C533**); a situação é a da hora da consulta.
+- Testes: `relatorioSaldoPorLoteSituacao.api.test.js` (16, com os 3 cenários da Fase 5, `6caa31a5`). Novidades: seção "Etapa 227", **B1498** a **B1503**, **C533**, **D (227)**,
+  **F (227)**.

@@ -3409,7 +3409,7 @@ fazer, assim:
 > *"a separar 5 UN (separável agora 3) · a entregar 2 UN (entregável agora 2) · disponível 3 · separado de A-01 — L-7"*
 
 Cada parte só aparece quando se aplica (*a separar* só se falta separar; *a entregar* só se há separado não entregue;
-*separado de* só se o item tem endereço de separação — 10.2). O *separável agora* é o mesmo número que a separação aceita (10.2): dois itens do mesmo material na mesma requisição dividem o livre na ordem do pedido — o primeiro leva o que dá, o segundo o que sobra (a requisição pode mostrar *Separar* e *Aguardando saldo* ao mesmo tempo). O *disponível* da linha é o disponível do material somado ao que a reserva do item ainda segura: ele não desconta a caixa, então uma linha pode dizer *"a separar 4 PC (separável agora 0) · disponível 4"*.
+*separado de* só se o item tem endereço de separação — 10.2). O *separável agora* é o mesmo número que a separação aceita (10.2): dois itens do mesmo material na mesma requisição dividem o livre na ordem do pedido — o primeiro leva o que dá, o segundo o que sobra (a requisição pode mostrar *Separar* e *Aguardando saldo* ao mesmo tempo). O *disponível* da linha é o disponível do material somado ao que a reserva do item ainda segura: ele não desconta a caixa, então uma linha pode dizer *"a separar 4 PC (separável agora 0) · disponível 4"*. Em material com controle por lote, quando há saldo em lote *Bloqueado*, *Reprovado* ou vencido sem a liberação de vencimento, logo depois do *disponível* vem quanto está nesses lotes — o mesmo número do cartão **Em lote impedido** do extrato (6.9): *"a separar 5 UN (separável agora 4) · disponível 10 · 6 em lote impedido"*. O *disponível* continua com essas peças dentro (o *separável agora* já não as conta, 10.2), e o número pode passar do disponível quando há reserva sobre o material: com 8 reservadas, *"disponível 2 · 6 em lote impedido"*. Sem saldo em lote impedido, ou em material sem controle por lote, a parte não aparece.
 
 #### Onde pegar cada item, e a ordem de coleta
 
@@ -7822,8 +7822,8 @@ No grupo **Estoque**, visíveis para todo perfil com acesso ao módulo:
 
 - **Localizações vazias** — as posições ativas sem material, pela mesma regra do Mapa de Áreas, com endereço,
   almoxarifado, tipo, **Bloqueada** e **Filhas ocupadas**. A regra e as três leituras da nota estão em 3.7.
-- **Saldo por lote** — uma linha por lote com saldo, com **Validade**, **Status do lote**, **Saldo
-  atribuído** e **Físico total do material**. O saldo de um lote é o **atribuído** a ele: as saídas
+- **Saldo por lote** — uma linha por lote com saldo, com **Validade**, **Status do lote**, **Situação**,
+  **Saldo atribuído** e **Físico total do material**. O saldo de um lote é o **atribuído** a ele: as saídas
   que não informam lote (a entrega de EPI, a entrega de requisição de material sem controle de lote) e
   o ajuste de saldo total não baixam de lote nenhum. Na entrega de requisição de material **com**
   controle de lote, a parte automática baixa do lote que vence primeiro, e só o que os lotes que podem
@@ -7838,7 +7838,20 @@ No grupo **Estoque**, visíveis para todo perfil com acesso ao módulo:
   bloqueados, reprovados ou vencidos sem liberação) não cobrem também sai sem lote. Lote + Sem lote
   atribuído = físico total. Lote negativo aparece (material que permite saldo negativo). Material com
   controle de lote que nunca teve lote aparece só com a linha "Sem lote atribuído". Materiais inativos
-  ficam fora."*
+  ficam fora. Situação = por que o lote não sai para uso (Bloqueado, Reprovado, Vencido em dd/mm/aaaa ou
+  Validade a corrigir, as palavras do extrato do material); vazia quando o lote pode sair (inclusive o
+  vencido com o vencimento liberado)."*
+  A **Situação** usa as mesmas palavras e a mesma régua da tabela **Saldos por localização** do extrato
+  (6.9): *Bloqueado*, *Reprovado*, *Vencido em DD/MM/AAAA* (validade antes de hoje, no horário de Brasília,
+  sem a liberação de vencimento), as duas juntas separadas por ponto (*Bloqueado · Vencido em 12/11/2026*),
+  *Validade a corrigir: ⟨texto⟩* quando a validade gravada não está no formato de data, e *Impedido* para
+  outra situação que não seja *Ativo*. O lote *Ativo* sem vencimento, o que vence hoje, o de validade futura
+  e o vencido **com** a liberação de vencimento ficam com a *Situação* vazia (*—* na tela, célula em branco
+  na planilha), e a linha **"Sem lote atribuído"** também. A situação aparece mesmo com o controle por lote
+  desligado no material (a saída que cita o lote continua recusada, 4.2 e 4.3). Com 4 no lote *L1* Ativo,
+  6 no *L2* Bloqueado e 3 no *L4* Ativo vencido ontem: *L1* —, *L2* *Bloqueado*, *L4* *Vencido em ⟨ontem⟩*;
+  depois de **Liberar vencimento** do *L4*, —. A planilha exportada tem a coluna logo depois de *Status do
+  lote*.
   Regras de quem aparece: lote com saldo **zero** não aparece; lote **negativo** aparece (material
   que permite saldo negativo); material com controle de lote que **nunca teve lote** aparece só com a
   linha "Sem lote atribuído"; material **inativo** fica fora.

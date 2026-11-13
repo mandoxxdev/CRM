@@ -115,9 +115,11 @@ e o `coletaTexto` não mostram o disponível (nada a jusante contradiz); T2 só 
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 (tronco)** — teste `server/tests/api/relatorioSaldoPorLoteSituacao.api.test.js` (RN-227.01 a .09) vermelho → `situacaoDoLote.js`
-  do servidor, `reportService.relatorioSaldoPorLote`, `reportRegistry` (coluna e nota), a linha da fila → verde.
-- [ ] **T2 (galho do contrato da fila)** — `FilaSeparacao.test.js` (RN-227.10) vermelho → `descricaoItem` → verde. Pequena: feita na
+- [x] **T1 (tronco)** — `2460585f` — teste `server/tests/api/relatorioSaldoPorLoteSituacao.api.test.js` (RN-227.01 a .09) vermelho → `situacaoDoLote.js`
+  do servidor, `reportService.relatorioSaldoPorLote`, `reportRegistry` (coluna e nota), a linha da fila → verde. Entraram também
+  `filaSugestaoColeta [RN-188.01]` (Fase 2 I3) e a exceção da varredura do registro (`relatoriosRegistro [revisao I1]`, B1503 — divergência
+  abaixo).
+- [x] **T2 (galho do contrato da fila)** — `3ba4fd58` — — `FilaSeparacao.test.js` (RN-227.10) vermelho → `descricaoItem` → verde. Pequena: feita na
   sequência pelo mesmo executor (um arquivo de tela).
 - A RN-227.08 é a integração (lote pela rota → relatório pela rota); a .06 cruza o registro com a planilha.
 
@@ -131,3 +133,96 @@ e o `coletaTexto` não mostram o disponível (nada a jusante contradiz); T2 só 
 6. coluna antes de *Status do lote* ou fora do registro → .06 cai;
 7. linha "Sem lote atribuído" herdando a situação do último lote → .03 cai;
 8. fila sem `lote_impedido` → .09 e (cliente) .10 cai; parêntese com `>= 0` → .10 (zero) cai.
+
+## Execução e controles (medidos)
+
+- **Vermelho antes do código:** 13/13 no arquivo novo (cada um pela falta do campo, da coluna ou do módulo); o Jest da fila caiu no cenário novo.
+- **Verde:** 13/13; depois da Fase 5, **16/16**. `FilaSeparacao.test.js` 27/27.
+- **Vizinhos rodados à mão antes do commit:** `relatoriosSaldos` 17, `relatoriosRegistro` 20 (caiu 1 antes da B1503 — divergência abaixo),
+  `relatoriosJornada` 6, `integracaoRelatoriosSaldos` 6, `lotesResumo` 13, `loteImpedidoSeparacao` 10, `relatoriosLoteImpedido` 16,
+  `entregaAutomaticaPeloLoteIntegracao` 8, `movimentacaoV1LoteIntegracao` 14, `filaSugestaoColeta` 13 — verdes.
+- **Sabotagens** (scripts `e227-sabotagem.js`, `e227-sab-varredura.js` e `e227-sabotagem-f5.js` no scratchpad, troca por `split/join` com
+  âncora contada = 1, restaura a cópia; `md5sum` igual antes e depois): (1) situação sempre `null` → 9 caem; (2) vencido em JS sem a
+  liberação → .02 a; (3) "hoje" em UTC → .07; (4) filtro `controle_lote` → .04; (5) palavra trocada só no servidor → 6 caem, inclusive .05;
+  (6) coluna fora do registro / (6b) antes do status → as duas .06; (7) "Sem lote" herdando → .03; (8a) fila sem o campo → .09; (8c/8d/8e)
+  tela sem o pedaço, com `>= 0`, entre parênteses → .10. Varredura do registro: (V1) chave errada → cai; (V3) a coluna também no SQL → cai.
+  Fase 5: (F1) fila menos a reserva do item, (F2) arredondada, (F3) situação só com saldo positivo, (F4) cliente sozinho com `trim` → cada
+  uma derruba o seu cenário. **18 derrubadas.** **Equivalentes (não caem, e não deveriam):** (8b) a fila sem o `max(0)` — `loteImpedidoSql`
+  já é ≥ 0 (o `MAX(0, …)` de fora); (V2) a linha sem a coluna na varredura do registro — o banco daquele teste não tem lote (a .01 e a .06
+  deste arquivo derrubam).
+
+## Divergências do plano
+
+- A **varredura do registro** (`relatoriosRegistro [revisao I1]`) exige que toda coluna declarada venha do SQL; a *Situação* é montada em JS e
+  o plano não previa — a Fase 2 não a viu. Saída: a lista `COLUNAS_MONTADAS_EM_JS` com duas provas (não pode estar no SQL; tem de estar na
+  linha) — **B1503**. Descartado: `NULL as situacao_lote` no `SELECT` só para passar.
+- O texto da Fila (B1502) e o literal da validade em texto (RN-227.02) mudaram na Fase 2 (I1, I2), antes do código.
+
+## Fase 5 — revisão adversarial (2 revisores frescos em paralelo, junto com o `test:api`)
+
+- **Regras e gestos:** **nenhum achado reproduzido** (sonda no scratchpad, app em memória): o relatório × `situacaoDoLote` das linhas de
+  `/estoque/:id/saldos` lote a lote — um lote em dois endereços, validade com hora, lote negativo, status `ativo` minúsculo (*Impedido* nos
+  dois), controle desligado; a planilha (*Situação* depois de *Status do lote*; vazia em branco); a Fila com fração, dois itens do mesmo
+  material e `PRONTA_PARA_RETIRADA`; nenhuma outra tela lê o `disponivel` do item da fila; cliente velho × servidor novo e o inverso.
+  **Ruído:** (1) a planilha passa toda célula por `instanteDoBancoNoFuso` — uma validade gravada com hora (só por SQL direto) sai com 3 h a
+  menos na coluna *Validade* (anterior à etapa); (2) com o controle desligado o relatório diz *Bloqueado* e a Fila 0 — declarado (RN-227.04,
+  C530); (3) "disponível 2 · 6 em lote impedido" — a Fase 2 I1 já escolheu o pedaço à parte.
+- **Força dos testes:** 16 mutações novas numa cópia fora da árvore (junction de `node_modules`). 12 mortas; **4 sobreviviam** — (M13) a fila
+  tirando a reserva do próprio item (*"2 em lote impedido"* com 6 bloqueadas), (M09) a fila arredondando (2,5 → 3), (M12) a situação calada no
+  lote negativo, (M04) o cliente sozinho com `trim` na validade. O código estava certo; faltava a asserção → três cenários, `6caa31a5`, cada
+  mutação derrubada (F1 a F4 acima).
+
+## Tasks feitas
+
+- [x] Estimativa `4f559e67` · plano e Fase 2 `3932ec90` · T1 `2460585f` · T2 `3ba4fd58` · Fase 5 `6caa31a5` · fechamento (este e o seguinte).
+
+## Verificação (medida, serial)
+
+Sobre `6caa31a5` (código final; o `test:api` começou sobre `3ba4fd58` e o cenário da Fase 5 entrou antes de o runner chegar aos "r" — o
+arquivo novo rodou com 16/16 no log):
+
+- `npm run test:api` — **621/621 arquivos OK** (`relatorioSaldoPorLoteSituacao` 16/16).
+- `npm run test:almoxarifado` — **44 passou, 0 falhou**.
+- `npm run test:validation` — **4/4**; `npm run test:safealter` — **3/3**; `npm run test:sqlite` — **16/16**.
+- Cliente: `CI=true npx react-scripts test --watchAll=false --maxWorkers=2` — **225/225 suítes, 3060/3060 testes**; `CI=true npx react-scripts
+  build` — **Compiled successfully**.
+
+## Retro (4 números)
+
+- **Rodadas até verde:** 1 por task; a varredura do registro caiu nos vizinhos antes do commit (B1503) e foi resolvida na mesma rodada.
+- **Achados reais:** Fase 2: 3 importantes + 3 menores (aceitos; 1 cosmético declarado). Fase 5: 0 de regra; 4 lacunas de teste (fechadas);
+  3 ruídos.
+- **Paralelismo:** sem galhos de verdade (T2 é uma linha de tela, feita na sequência); a Fase 2 rodou junto com a escrita do teste; os 2
+  revisores da Fase 5 junto com o `test:api` (o de testes numa cópia fora da árvore, com junction).
+- **Defeito que escapou da 226:** nenhum achado.
+
+## Fechamento
+
+- [x] Fechamento (`fechar-etapa`, sem o Passo 7½ e o 8, por pedido do André) — novidades (B1498–B1503, C533, D (227), F (227), seção, topo e
+  "onde estamos"; D (225), D (226) e D (223) e o C481 apontando para a 227), spec 21 (topo e seção 227), spec 05 (última atualização e bloco
+  227), spec 10 (os "Fora"), mapa (linhas 05, 10 e 21 e última atualização), guia (seção e cabeçalho), manual (21d e 10.6) e a estimativa.
+
+## Próxima tarefa detalhada
+
+*(Escolhida pela ordem do CLAUDE.md: a 227 fecha os dois vizinhos visíveis do lote impedido (D (225), D (223)) e a C481 inteira; o mapa
+continua com a 10 e a 21 como estavam. Dos abertos do mesmo assunto, o de maior valor é o que deixa uma requisição presa sem nada que saia —
+**C521**, um conserto pequeno no motor. **Sem estimativa** — começa pela Fase 0.5.)*
+
+**Estornar a entrada boa não deixa a reserva coberta só por lote impedido (C521).**
+
+- **O problema (C521, Etapa 219):** nota com 3 num lote bom (reservadas para R1) e 4 num lote bloqueado. Estornar a entrada boa **não** solta a
+  reserva de R1: o `disponivel` do material (4, todo no lote bloqueado) cobre o estorno de 3. R1 fica *Parcialmente/Totalmente Reservada* com
+  nada que saia, e a entrega recusa (Etapa 206).
+- **Onde:** `reservaChegadaService.liberarParaEstorno` (`server/services/almoxarifado/reservaChegadaService.js:757`): `disp` vem de
+  `SELECT ${disponivelSql()} …` (`:763`) e `if (disp >= qtd - EPS) return liberadasOs;` (`:765`) — sem descontar `loteImpedidoSql('m')`
+  (`loteImpedido.js`). Chamada pelo estorno em `stockService.cancelarMovimentacao` (`stockService.js:3064`), **fora** da trava do material
+  (soltar sem distribuir não pega — B441; ler o disponível e soltar é o mesmo caso do C525).
+- **O que fazer:** a conta "o que sobra para cobrir as reservas depois do estorno" usar o que **pode sair** — `disponivel − lote_impedido` —,
+  cuidando do lote **da própria entrada estornada**: se ele estiver impedido, as peças dele já estão no `lote_impedido` e saem com o estorno
+  (descontar duas vezes soltaria reserva de mais). Medir com cenários: entrada boa estornada com o resto em lote bloqueado (solta); entrada
+  boa estornada com o resto em lote bom (não solta, como hoje); entrada do lote bloqueado estornada (a régua de hoje).
+- **Pontos de atenção:** a reserva da OS (`liberarReservaDaOsParaEstorno`, sempre `min(reserva, estornado)`) não muda; o "hoje" de Brasília
+  da régua; a recusa do estorno pelo disponível (o motor) não muda — só o que se solta antes; `recriarAposEstornoRecusado` recria o que foi
+  solto se o estorno falhar. Testes de molde: `chegadaLoteImpedido.api.test.js` (219) e `estorno*` da 74/171.
+- Outros abertos: C519 (a inspeção não olha o lote do item que liberou, pequeno), C524–C527, C529–C533, C514–C518, C486, C491, C495, C497,
+  C498.

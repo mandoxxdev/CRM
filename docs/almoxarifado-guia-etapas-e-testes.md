@@ -1,20 +1,27 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-11-13 (Etapas 172 a 191, 194 a 210, 217 a 226) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-11-13 (Etapas 172 a 191, 194 a 210, 217 a 227) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-13 (Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 226 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-13 (Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
-> **O desenvolvimento parou aqui: Etapa 226 fechada — 2026-11-13.** **O "Sai de" da separação e da entrega diz qual lote está impedido.**
+> **O desenvolvimento parou aqui: Etapa 227 fechada — 2026-11-13.** **O *Saldo por lote* diz quando o lote está vencido, e a Fila diz o que
+> está em lote impedido.** O relatório **Saldo por lote** ganha a coluna *Situação* (*Vencido em 10/11/2026*, *Bloqueado*, *Reprovado* — as
+> palavras do extrato), na tela e na planilha; a **Fila de separação** diz *"disponível 10 · 6 em lote impedido"*. Sem consulta antes do
+> deploy. **Nenhum clique foi dado** (testes da rota, da planilha e da tela da fila — roteiro na seção da 227 e letra F das novidades).
+>
+> **Onde parou, exatamente:** a **227 está fechada** (código, testes, documentos e o estimado × realizado commitados). A **próxima** é
+> **estornar a entrada boa não deixa a reserva coberta só por lote impedido** (**C521**) — detalhada no fim do plano da 227
+> (`docs/superpowers/plans/2026-11-13-almoxarifado-etapa227-saldo-por-lote-vencido.md`). Sem estimativa nem plano.
+>
+> *(Antes:)* **Etapa 226 fechada — 2026-11-13.** **O "Sai de" da separação e da entrega diz qual lote está impedido.**
 > A opção do lote bloqueado, reprovado ou vencido diz *"— Bloqueado: não sai"* e não pode ser escolhida (na entrega, o lugar de onde o
 > próprio item foi separado continua escolhível); o **Ajustar Separação** não abre mais num lote impedido; uma frase em amarelo avisa embaixo
 > do **Sai de**. Sem consulta antes do deploy. **Nenhum clique foi dado** (testes da tela — roteiro na seção da 226 e letra F das novidades).
 >
-> **Onde parou, exatamente:** a **226 está fechada** (código, testes, documentos e o estimado × realizado commitados). A **próxima** é
-> **o *Saldo por lote* diz que o lote ativo está vencido** (**D (225)**) — detalhada no fim do plano da 226
-> (`docs/superpowers/plans/2026-11-13-almoxarifado-etapa226-sai-de-lote-impedido.md`). Sem estimativa nem plano.
+> A próxima era **o *Saldo por lote* diz que o lote ativo está vencido** (**D (225)**) — feita na **Etapa 227**.
 >
 > *(Antes:)* **Etapa 225 fechada — 2026-11-13.** **Os relatórios de saldo mostram quanto está em lote impedido.** Os
 > relatórios **Estoque atual** e **Saldos comprometidos** ganham a coluna *Em lote impedido*, logo depois do *Disponível*, na tela e na
@@ -7205,6 +7212,46 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 227 — O *Saldo por lote* diz quando o lote está vencido, e a Fila diz o que está em lote impedido (ENTREGUE — 2026-11-13)
+
+**O que mudou, em uma frase:** o relatório **Saldo por lote** ganha a coluna *Situação* — *Vencido em 10/11/2026*, *Bloqueado* ou
+*Reprovado*, as mesmas palavras do extrato —, na tela e na planilha; e a **Fila de separação** diz, ao lado do disponível de cada item,
+quanto está em lote impedido.
+
+**O problema que ela resolve.** O *Saldo por lote* mostrava a validade e o status de cada lote, mas um lote *Ativo* que já venceu aparecia
+como qualquer outro: quem lia o relatório não sabia que aquelas peças não saem para uso. E a Fila dizia *"disponível 10"* contando as peças de
+lote bloqueado, sem explicar por que o *separável* era menor.
+
+| Antes | Agora |
+|---|---|
+| **Saldo por lote**: *… Validade 10/11/26 · Status do lote ATIVO · Saldo atribuído 3 …* (vencido, sem dizer) | *… Status do lote ATIVO · **Situação: Vencido em 10/11/2026** · Saldo atribuído 3 …* |
+| Lote bloqueado / reprovado | *Situação: Bloqueado* / *Reprovado* (e *Bloqueado · Vencido em …* quando são os dois) |
+| Lote que pode sair; vencido com o vencimento liberado; a linha *Sem lote atribuído* | *Situação* vazia (*—*) |
+| **Fila de separação**: *"… · disponível 10"* | *"… · disponível 10 · 6 em lote impedido"* (só quando há) |
+| A planilha do *Saldo por lote* | A mesma coluna, logo depois de *Status do lote* |
+
+**Roteiro de teste manual (≈5 min):**
+
+1. Entre como **Administrador do almoxarifado**. No cadastro do material (Compras), um material *LOTE-227* com **Controle por lote**,
+   unidade *UN*, sem saldo. **Movimentações → Entrada** de 4 no lote *L1*, de 6 no lote *L2* e de 3 no lote *L4*.
+2. Em **Lotes e Séries**: *L2* → **Mudar status** → *Bloqueado*; *L4* → **Corrigir validade** → a data de ontem.
+3. **Relatórios → Estoque → Saldo por lote** → **Consultar**. **Confira** as linhas de *LOTE-227*: *L1* com *Situação* "—"; *L2* com
+   *Bloqueado*; *L4* com *Status do lote ATIVO* e *Situação* *"Vencido em ⟨ontem⟩"*. O rodapé termina com *"Situação = por que o lote não sai
+   para uso (Bloqueado, Reprovado, Vencido em dd/mm/aaaa ou Validade a corrigir, as palavras do extrato do material); vazia quando o lote pode
+   sair (inclusive o vencido com o vencimento liberado)."*.
+4. **Exportar XLSX**: a coluna *Situação* logo depois de *Status do lote*, com as mesmas palavras.
+5. Em **Lotes e Séries**, *L4* → **Liberar vencimento**. Consulte de novo: a *Situação* do *L4* fica "—".
+6. Crie e aprove uma requisição de 5 *LOTE-227*. Abra a **Fila de separação**. **Confira:** o item diz *"… · disponível 13 · 6 em lote
+   impedido"* (o *separável agora* já não contava essas 6). Em **Lotes e Séries**, *L2* → *Ativo*, e recarregue a fila: o pedaço *"6 em lote
+   impedido"* some.
+
+**O que esta etapa não cobre:** na tela, a coluna *Validade* sai com o ano de dois dígitos e a *Situação* com quatro (são as palavras do
+extrato); o lote vencido com o vencimento liberado fica com a *Situação* vazia — pode sair (**C533**); a situação e o número são os da hora
+da consulta.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (rota, planilha e tela da fila) provam,
+escrito para você conferir à mão.
 
 ## Etapa 226 — O "Sai de" da separação e da entrega diz qual lote está impedido (ENTREGUE — 2026-11-13)
 

@@ -1398,7 +1398,7 @@ físico. Medido: a régua na lista inteira custa +35 ms a 3 mil materiais (90 �
 - [x] **RN-223.08 / .09 (B1482)** — a lista de **Materiais** pede o campo e mostra o selo *"⟨n⟩ ⟨un⟩ em lote impedido"* (só > 0, com a dica
   *"… fora o que já está bloqueado no material …"*); a do Compras não pede — `ab2443c1`.
 - [x] **RN-223.10 (B1483)** — a lista de materiais da **Nova Reserva**: *"(Disponível: 10 un) · 6 em lote impedido"*, fora do parêntese — `068129a6`.
-- [ ] **Fora (declarado):** os relatórios (*feito na Etapa 225*, `18084c49`, spec 21) e a coluna *disponível* da Fila (**D (223)**); qual lote está impedido (**C528** — *feito na Etapa 224*); o número da lista
+- [ ] **Fora (declarado):** os relatórios (*feito na Etapa 225*, `18084c49`, spec 21) e a coluna *disponível* da Fila (**D (223)** — *feito na Etapa 227*, `2460585f`, `3ba4fd58`, spec 05); qual lote está impedido (**C528** — *feito na Etapa 224*); o número da lista
   pode estar um instante velho (**C529**).
 
 Testes: `listasLoteImpedido.api.test.js` (14, com RN-223.01 b e .11 da Fase 5); `MateriaisAlmoxarifado.test.js` (+4, e 5 asserções de parâmetros com a chave nova);
@@ -1422,6 +1422,6 @@ linha — trocado por `lote_esta_impedido` (o outro é o **número** do material
 - [ ] **Fora (declarado):** o "Sai de" da entrega continua oferecendo o lote impedido sem dizer (a entrega recusa ao confirmar — **D (224)**
   — *feito na Etapa 226*, `868887e1`, `aba3f081`: a opção diz a situação e vem desabilitada, na separação e na entrega; ver a spec 05);
   a linha diz a situação, não a quantidade (**C530**); os relatórios (**D (223)** — *feito na Etapa 225*, `18084c49`: *Estoque atual* e
-  *Saldos comprometidos* com a coluna *Em lote impedido*; ver a spec 21).
+  *Saldos comprometidos* com a coluna *Em lote impedido*; ver a spec 21; o *Saldo por lote* com a coluna *Situação* desde a Etapa 227, `2460585f`).
 
 Testes: `extratoQualLoteImpedido.api.test.js` (15, com RN-224.02 f e .03 b da Fase 5, `e1c6cf6d`); `ExtratoMaterialModal.test.js` (+2, com as linhas da validade futura e em branco da Fase 5). Continua 🟢.
