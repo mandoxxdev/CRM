@@ -1,0 +1,9 @@
+*Planejamento — almoxarifado: a requisição da OS só fica reservada com o que pode sair*
+_13/11/2026_
+
+*1. A requisição da OS aberta recebe só peça que pode sair*
+Hoje, quando chega a compra de uma OS aberta com peças num lote bloqueado (por exemplo, sem o certificado do fornecedor), a requisição dessa OS fica reservada com essas peças, mas a separação e a entrega recusam até o lote ser liberado. Depois desta alteração, a requisição da OS só fica reservada com o que pode sair; as peças do lote bloqueado continuam guardadas para a OS e passam para a requisição dela quando o lote for liberado.
+Tempo estimado: *4h*
+
+*Total estimado: 4h*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
