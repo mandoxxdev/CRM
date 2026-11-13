@@ -28,6 +28,7 @@ import useUltimoPedido from '../../hooks/useUltimoPedido';
 import { formatarInstanteDoBanco } from './instanteDoBanco';
 // Etapa 189: a frase do alerta de retenção da 188 e a quantidade, as mesmas da fila (B1268: utils/coletaTexto.js, sem importar a tela).
 import { textoAlertaPegarEm, fmtQtd } from '../../utils/coletaTexto';
+import { situacaoDoLote } from '../../utils/situacaoDoLote';
 import './Almoxarifado.css';
 
 const STATUS_INFO = {
@@ -169,16 +170,27 @@ const sufixoDoLote = (s) => {
     insp > 1e-9 ? `${r6(insp)} em inspeção` : null].filter(Boolean);
   return ` — do lote ${umaPeca(livre) ? 'pode' : 'podem'} sair ${r6(livre)}${partes.length ? ` (${partes.join(', ')})` : ''}`;
 };
+// Etapa 226 (B1492): a linha de lote impedido (bloqueado, reprovado ou vencido — `lote_esta_impedido === true`, da 224) diz a situação com
+// as palavras do extrato, no lugar do sufixo da 218 (de um lote impedido nada sai: "podem sair 3" seria falso). Sem o campo: como antes.
+const opcaoImpedida = (s) => situacaoDoLote(s) !== null;
+const sufixoDaOpcao = (s) => (opcaoImpedida(s) ? ` — ${situacaoDoLote(s)}: não sai` : sufixoDoLote(s));
 const rotuloOrigem = (s, propriaNoPar = 0) => {
   const base = `${s.localizacao_codigo}${s.lote ? ` — lote ${s.lote}` : ''}`;
   const outras = outrasDaOpcao(s);
   const propria = Number(propriaNoPar) || 0;
   const temOutras = outras > 1e-9;
   const temPropria = propria > 1e-9;
-  if (!temOutras && !temPropria) return `${base} (${s.quantidade})${sufixoDoLote(s)}`;
+  if (!temOutras && !temPropria) return `${base} (${s.quantidade})${sufixoDaOpcao(s)}`;
   const sobra = Math.max(0, sobraDaOpcao(s) - propria);
   const partes = [temOutras ? `${r6(outras)} para outras` : null, temPropria ? `${r6(propria)} desta` : null].filter(Boolean);
-  return `${base} (sobra ${r6(sobra)} de ${s.quantidade}; ${partes.join(', ')})${sufixoDoLote(s)}`;
+  return `${base} (sobra ${r6(sobra)} de ${s.quantidade}; ${partes.join(', ')})${sufixoDaOpcao(s)}`;
+};
+// Etapa 226 (B1495): a frase sob o "Sai de" quando a opção escolhida está impedida (null fora disso).
+const fraseOpcaoImpedida = (rows, valor) => {
+  if (!valor) return null;
+  const s = (rows || []).find((r) => valorOrigem(r) === valor);
+  if (!s || !opcaoImpedida(s)) return null;
+  return `Lote ${s.lote}: ${situacaoDoLote(s)}. Nada sai dele até o lote ser liberado na tela Lotes e Séries — escolha outro endereço.`;
 };
 const opcoesOrigem = (rows) => (Array.isArray(rows) ? rows : [])
   .filter((s) => s.localizacao_id != null && Number(s.quantidade) > 0);
@@ -193,6 +205,20 @@ const lerValorOrigem = (valor) => {
 // Etapa 59: a origem planejada na separação só vale enquanto há separado ainda não entregue.
 const temPlanejada = (item) => !!item.origem_separacao_id && getSeparado(item) > getEntregue(item);
 const valorPlanejada = (item) => `${item.origem_separacao_id}:${item.lote_separacao_id ?? ''}`;
+// Etapa 226 (B1493): a opção impedida vem desabilitada (a porta recusa o lote impedido escolhido, `checarOrigemItem`) — na ENTREGA, menos a
+// planejada do próprio item, que ela pré-seleciona (B1494) e que, trocada por engano, tem de poder voltar. Na separação, todas (Fase 2 I1:
+// escolher de volta a planejada impedida faria a rodada inteira ser recusada).
+const opcaoDesabilitada = (s, item, naEntrega) => opcaoImpedida(s)
+  && !(naEntrega && temPlanejada(item) && valorOrigem(s) === valorPlanejada(item));
+// Etapa 226 (B1497, Fase 2 I1/I2): a planejada do item está num lote impedido e o "Sai de" não a escolheu (separação em automático; entrega
+// em '' sem `automatico`, quando o servidor aplica a planejada) — a parte já separada de lá não sai. null fora disso.
+const frasePlanejadaImpedida = (item, rows) => {
+  if (!temPlanejada(item)) return null;
+  const s = (rows || []).find((r) => valorOrigem(r) === valorPlanejada(item));
+  if (!s || !opcaoImpedida(s)) return null;
+  return `Já separado de ${s.localizacao_codigo}${s.lote ? ` — lote ${s.lote}` : ''}: ${situacaoDoLote(s)}. Essa parte não sai até o lote `
+    + 'ser liberado na tela Lotes e Séries — na entrega, escolha outro endereço.';
+};
 // O servidor só aplica a planejada até o separado ainda não entregue; acima disso é automático.
 const pendenteSeparado = (item) => Math.max(0, getSeparado(item) - getEntregue(item));
 // Etapa 196 (RN-196.11, Fase 2 item 5): o que da caixa saiu da origem guardada — a PARTE (`quantidade_origem_separacao`). null com
@@ -259,7 +285,10 @@ const trocaNaSeparacao = (item, valor) => {
 // aviso de troca aparece, honesto).
 const valorPlanejadaNaSeparacao = (item, rows, qtdSugerida = 0, outrosMesmoMaterial = 0, itensDaReq = null) => {
   const valor = valorPlanejada(item);
-  if (!(rows || []).some((s) => valorOrigem(s) === valor)) return '';
+  const opcao = (rows || []).find((s) => valorOrigem(s) === valor);
+  if (!opcao) return '';
+  // Etapa 226 (B1494): a planejada num lote impedido não é pré-selecionada — a porta recusaria a rodada inteira.
+  if (opcaoImpedida(opcao)) return '';
   const cobre = maxSeparavelNaTela(item, valor, rows, outrosMesmoMaterial, itensDaReq) + 1e-9 >= (Number(qtdSugerida) || 0);
   return cobre ? valor : '';
 };
@@ -278,6 +307,8 @@ export const valorSugeridoNaSeparacao = (item, sugestao, rows, qtdSugerida = 0, 
   const valor = `${p.localizacao_id}:${p.lote_id ?? ''}`;
   const opcao = (rows || []).find((s) => valorOrigem(s) === valor);
   if (!opcao) return '';
+  // Etapa 226 (B1494): nem a sugestão num lote impedido (o servidor da sugestão já pula; a tela confere).
+  if (opcaoImpedida(opcao)) return '';
   const qtd = Number(qtdSugerida) || 0;
   if (maxSeparavelNaTela(item, valor, rows, outrosMesmoMaterial, itensDaReq) + 1e-9 < qtd) return '';
   // Etapa 201 (RN-201.08): a sobra (o físico menos o separado das outras), não o físico — a C1 recusaria o resto.
@@ -2535,11 +2566,21 @@ const RequisicoesList = () => {
                         }}>
                         <option value="">Qualquer endereço (automático)</option>
                         {(saldosEntrega[item.material_id] || []).map(s => (
-                          <option key={valorOrigem(s)} value={valorOrigem(s)}>
+                          <option key={valorOrigem(s)} value={valorOrigem(s)} disabled={opcaoDesabilitada(s, item, false)}>
                             {rotuloOrigem(s, propriaNoPar(detalhe.itens, item.material_id, valorOrigem(s)))}
                           </option>
                         ))}
                       </select>
+                      {/* Etapa 226 (B1495/B1497): a escolhida num lote impedido; senão, a planejada num lote impedido. */}
+                      {(() => {
+                        const rows = saldosEntrega[item.material_id];
+                        const frase = fraseOpcaoImpedida(rows, origensSeparacao[item.id]) || frasePlanejadaImpedida(item, rows);
+                        return frase && (
+                          <div id={`separacao-dica-lote-impedido-${item.id}`} style={{ fontSize: '0.75rem', marginTop: 4, color: 'var(--gmp-warning, #b45309)' }}>
+                            {frase}
+                          </div>
+                        );
+                      })()}
                     </div>
                     {/* Etapa 189 (RN-189.09 com I1, M3 e I3): o que a pré-seleção fez com a sugestão da fila. */}
                     {(() => {
@@ -2548,6 +2589,8 @@ const RequisicoesList = () => {
                       let frase;
                       if (ps.valor) {
                         if (origensSeparacao[item.id] !== ps.valor) return null;
+                        // Etapa 226 (Fase 2 M2): a sugerida que voltou impedida (detalhe relido) não é mais "sugerida" — a frase do lote fala.
+                        if (fraseOpcaoImpedida(saldosEntrega[item.material_id], ps.valor)) return null;
                         const pendente = Math.max(0, Number(item.quantidade_solicitada) - getSeparado(item));
                         frase = FRASE_SUGERIDO
                           + ((parseFloat(quantidadesSeparacao[item.id]) || 0) + 1e-9 < pendente ? FRASE_PARCIAL : '');
@@ -2680,9 +2723,22 @@ const RequisicoesList = () => {
                         )}
                         <option value="">Qualquer endereço (automático)</option>
                         {(saldosEntrega[item.material_id] || []).map(s => (
-                          <option key={valorOrigem(s)} value={valorOrigem(s)}>{rotuloOrigem(s, irmaosNoPar(detalhe.itens, item, valorOrigem(s)))}</option>
+                          <option key={valorOrigem(s)} value={valorOrigem(s)} disabled={opcaoDesabilitada(s, item, true)}>{rotuloOrigem(s, irmaosNoPar(detalhe.itens, item, valorOrigem(s)))}</option>
                         ))}
                       </select>
+                      {/* Etapa 226 (B1495/B1497): a escolhida num lote impedido; ou, sem escolha nem automático (o servidor aplica a
+                          planejada), a planejada num lote impedido. */}
+                      {(() => {
+                        const rows = saldosEntrega[item.material_id];
+                        const esc = origensEntrega[item.id];
+                        const frase = fraseOpcaoImpedida(rows, esc?.valor)
+                          || (!esc?.valor && !esc?.automatico ? frasePlanejadaImpedida(item, rows) : null);
+                        return frase && (
+                          <div id={`entrega-dica-lote-impedido-${item.id}`} style={{ fontSize: '0.75rem', marginTop: 4, color: 'var(--gmp-warning, #b45309)' }}>
+                            {frase}
+                          </div>
+                        );
+                      })()}
                       <CampoCodigoLido
                         id={`entrega-codigo-lido-${item.id}`}
                         value={origensEntrega[item.id]?.codigo || ''}
