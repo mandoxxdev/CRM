@@ -178,3 +178,57 @@ describe('[RN-222.08] ExtratoMaterialModal — o lote impedido', () => {
     expect(valorDoCartao('Disponível')).toBe('40');
   });
 });
+
+/**
+ * Etapa 224 (C528; RN-224.08, B1486) — a tabela "Saldos por localizacao" diz QUAL lote esta impedido: ao lado do codigo, so nas linhas
+ * com `lote_esta_impedido === true`, as partes que valem (Bloqueado, Reprovado, Vencido em dd/mm/aaaa ou Validade a corrigir), por " · ".
+ */
+describe('[RN-224.08] ExtratoMaterialModal — qual lote está impedido', () => {
+  const DICA = 'Este lote não sai para uso até ser liberado na tela Lotes e Séries.';
+  const linha = (id, lote, extra = {}) => ({ id, material_id: 5, localizacao_id: 1, localizacao_codigo: 'Z-01', quantidade: 6,
+    lote_id: lote ? id : null, lote, ...extra });
+  async function renderizarSaldos(saldos) {
+    const material = { ...MATERIAL_BASE, controle_lote: 1 };
+    api.get.mockImplementation((url) => (url === `/almoxarifado/materiais/${material.id}/extrato`
+      ? Promise.resolve({ data: { material, saldos_localizacao: saldos, movimentacoes: [], reservas: [] } })
+      : Promise.resolve({ data: [] })));
+    await act(async () => { root.render(<ExtratoMaterialModal materialId={material.id} onClose={fechar} />); });
+  }
+  const linhas = () => [...container.querySelectorAll('tr')].filter((tr) => tr.querySelector('td'));
+  const doLote = (codigo) => linhas().find((tr) => tr.children[1]?.textContent.startsWith(codigo));
+  const selo = (tr) => tr.querySelector('.almox-extrato-lote-situacao');
+
+  test('[RN-224.08] as palavras de cada situação, ao lado do código, com a dica', async () => {
+    await renderizarSaldos([
+      linha(1, 'L1', { lote_status: 'ATIVO', lote_esta_impedido: false, lote_vencido_sem_liberacao: false }),
+      linha(2, 'L2', { lote_status: 'BLOQUEADO', lote_esta_impedido: true, lote_vencido_sem_liberacao: false }),
+      linha(3, 'L3', { lote_status: 'REPROVADO', lote_esta_impedido: true, lote_vencido_sem_liberacao: false }),
+      linha(4, 'L4', { lote_status: 'ATIVO', lote_validade: '2026-11-12', lote_esta_impedido: true, lote_vencido_sem_liberacao: true }),
+      linha(5, 'L5', { lote_status: 'BLOQUEADO', lote_validade: '2026-11-12 00:00:00', lote_esta_impedido: true, lote_vencido_sem_liberacao: true }),
+      linha(6, 'L6', { lote_status: 'ATIVO', lote_validade: '31/03/2027', lote_esta_impedido: true, lote_vencido_sem_liberacao: true }),
+      linha(7, 'L7', { lote_status: 'X', lote_esta_impedido: true, lote_vencido_sem_liberacao: false }),
+    ]);
+    expect(selo(doLote('L1'))).toBeNull();
+    expect(selo(doLote('L2')).textContent).toBe('Bloqueado');
+    expect(selo(doLote('L3')).textContent).toBe('Reprovado');
+    expect(selo(doLote('L4')).textContent).toBe('Vencido em 12/11/2026');
+    expect(selo(doLote('L5')).textContent).toBe('Bloqueado · Vencido em 12/11/2026');
+    expect(selo(doLote('L6')).textContent).toBe('Validade a corrigir: 31/03/2027');
+    expect(selo(doLote('L7')).textContent).toBe('Impedido');
+    expect(selo(doLote('L2')).getAttribute('title')).toBe(DICA);
+    expect(doLote('L2').children[1].textContent.startsWith('L2')).toBe(true);
+    expect(doLote('L2').children[2].textContent).toBe('6 PC');
+  });
+
+  test('[RN-224.08] [controle positivo] sem lote_esta_impedido === true, nenhum selo; sem lote, o traço de sempre', async () => {
+    await renderizarSaldos([
+      linha(1, 'L1', { lote_status: 'BLOQUEADO' }),
+      linha(2, 'L2', { lote_status: 'BLOQUEADO', lote_esta_impedido: 1, lote_vencido_sem_liberacao: false }),
+      linha(3, 'L3', { lote_status: 'ATIVO', lote_validade: '2026-11-12', lote_esta_impedido: false, lote_vencido_sem_liberacao: false }),
+      linha(4, null, { lote_status: null, lote_esta_impedido: false, lote_vencido_sem_liberacao: false }),
+    ]);
+    expect(container.querySelectorAll('.almox-extrato-lote-situacao').length).toBe(0);
+    expect(linhas().find((tr) => tr.children[1]?.textContent === '—')).toBeTruthy();
+    expect(container.textContent).not.toContain('Vencido em');
+  });
+});

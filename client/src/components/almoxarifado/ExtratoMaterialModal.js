@@ -55,6 +55,23 @@ const formatDateOnly = (d) => (d
 export const fraseLoteImpedidoExtrato = (n, unidade) => `${n}${unidade ? ` ${unidade}` : ''} em lote bloqueado, reprovado ou vencido, `
   + 'fora o que já aparece em Bloqueado: essas peças não saem para uso até o lote ser liberado na tela Lotes e Séries.';
 
+// Etapa 224 (C528; RN-224.08, B1486): QUAL lote esta impedido, na linha de saldo. O servidor decide (a regua da aprovacao, o "hoje" de
+// Brasilia: `lote_esta_impedido`, `lote_vencido_sem_liberacao`); aqui so as palavras. A data sai do texto (sem `new Date`, sem fuso); a
+// validade fora de AAAA-MM-DD (lixo antigo que a regua da por vencida, Fase 2 M2) diz "Validade a corrigir". So com `=== true`.
+export const DICA_LOTE_IMPEDIDO = 'Este lote não sai para uso até ser liberado na tela Lotes e Séries.';
+export const situacaoDoLote = (s) => {
+  if (!s || s.lote_esta_impedido !== true) return null;
+  const partes = [];
+  if (s.lote_status === 'BLOQUEADO') partes.push('Bloqueado');
+  if (s.lote_status === 'REPROVADO') partes.push('Reprovado');
+  if (s.lote_vencido_sem_liberacao === true) {
+    const d = String(s.lote_validade || '').slice(0, 10);
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d);
+    partes.push(m ? `Vencido em ${m[3]}/${m[2]}/${m[1]}` : `Validade a corrigir: ${String(s.lote_validade || '').trim() || '—'}`);
+  }
+  return partes.length ? partes.join(' · ') : 'Impedido';
+};
+
 const formatMoney = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 // Mesma prioridade OS > projeto > centro de custo usada no livro principal.
@@ -240,7 +257,15 @@ const ExtratoMaterialModal = ({ materialId, onClose }) => {
                               <span style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}> — {s.localizacao_descricao}</span>
                             )}
                           </td>
-                          <td>{s.lote || '—'}</td>
+                          <td>
+                            {s.lote || '—'}
+                            {s.lote && situacaoDoLote(s) && (
+                              <span className="almox-extrato-lote-situacao" title={DICA_LOTE_IMPEDIDO}
+                                style={{ color: 'var(--gmp-warning)', fontSize: '0.75rem', fontWeight: 600, marginLeft: 6 }}>
+                                {situacaoDoLote(s)}
+                              </span>
+                            )}
+                          </td>
                           <td style={{ fontWeight: 600 }}>{s.quantidade} {material.unidade}</td>
                         </tr>
                       ))}
