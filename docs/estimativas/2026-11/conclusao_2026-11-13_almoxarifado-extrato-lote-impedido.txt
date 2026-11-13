@@ -1,0 +1,7 @@
+*Concluído — almoxarifado: o extrato mostra o estoque em lote bloqueado*
+_13/11/2026_
+
+1. O extrato do material e a reserva mostram quanto está em lote bloqueado, reprovado ou vencido — estimado 3h · realizado 2h30
+
+*Total: estimado 3h · realizado 2h30*
+_Próximo: as listas de estoque também mostrarem quanto está em lote bloqueado, reprovado ou vencido (ainda sem estimativa)._
