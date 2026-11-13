@@ -2914,7 +2914,7 @@ const RequisicoesList = () => {
                               })}
                             </div>
                           )}
-                          {!s.falhou && s.visiveis.some(serieImpedida) && (
+                          {s.visiveis.some(serieImpedida) && (
                             <div id={`entrega-series-impedidas-${item.id}`} style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)', marginTop: 4 }}>
                               {FRASE_SERIES_IMPEDIDAS}
                             </div>

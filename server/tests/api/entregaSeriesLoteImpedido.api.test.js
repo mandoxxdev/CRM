@@ -142,6 +142,19 @@ process.on('exit', (code) => {
     assert.strictEqual(await entregue(item), 2);
     assert.deepStrictEqual(await statusSeries(m), [['S1', 'ENTREGUE'], ['S2', 'ENTREGUE'], ['S3', 'EM_ESTOQUE'], ['S4', 'EM_ESTOQUE']]);
   });
+  await test('[RN-232.02, Fase 5] L2 REPROVADO: a listagem diz impedido para a mesma serie que a porta recusa', async () => {
+    const m = await montar();
+    const { R, item } = await req(m, 1);
+    await statusLote(m, 'L2', 'REPROVADO');
+    const s3 = porNumero(await listar(m), 'S3');
+    assert.strictEqual(s3.lote_esta_impedido, true, 'a listagem apaga S3');
+    assert.strictEqual(porNumero(await listar(m), 'S1').lote_esta_impedido, false, 'e deixa S1');
+    const r = await entregar(R, [{ item_id: item, quantidade_atendida: 1, origem_automatica: true, serie_ids: [s3.id] }]);
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, `${m.nome}: Lote L2 esta reprovado e nao pode ser utilizado`);
+    await ok(entregar(R, [{ item_id: item, quantidade_atendida: 1, origem_automatica: true,
+      serie_ids: [porNumero(await listar(m), 'S1').id] }]));
+  });
   await test('[RN-232.02] L2 vencido ontem: series de L2 -> 400 (o vencido tambem nao sai); com o vencimento liberado -> 200', async () => {
     const m = await montar();
     const { R, item } = await req(m, 1);

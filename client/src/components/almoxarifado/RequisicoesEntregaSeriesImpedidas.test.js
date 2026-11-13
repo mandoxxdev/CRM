@@ -200,6 +200,7 @@ describe('Etapa 232: a entrega não deixa marcar série de lote impedido', () =>
     expect(desabilitadas()).toEqual([101, 102, 103, 104, 105]);
     expect([101, 102, 103].map((id) => caixa(id).checked)).toEqual([false, false, false]);
     expect(rotulo(101).textContent).toBe(' · lote L1 — Bloqueado: não sai');
+    expect(rotulo(104).textContent).toBe(' · lote L2 — Bloqueado: não sai'); // Fase 5: cada série com o próprio lote
     expect(contador()).toBe('0 de 3');
     expect(confirmarJanela().disabled).toBe(true);
   });
@@ -246,6 +247,18 @@ describe('Etapa 232: a entrega não deixa marcar série de lote impedido', () =>
     expect(desabilitadas()).toEqual([]);
     expect(rotulo(104)).toBeNull();
     expect(frase()).toBeNull();
+  });
+
+  test('[RN-232.07, Fase 5] também ao reler: a marcada com lote_esta_impedido 1 (não `true`) continua marcada', async () => {
+    requisicao = PARCIAL();
+    await abrirJanela();
+    escolher(selectEntrega(), '');
+    marcar(101); marcar(102); marcar(103);
+    api.put.mockRejectedValueOnce({ response: { status: 400, data: { error: 'outra recusa' } } });
+    series = SERIES(SIT_L2, { ...SIT_L1, lote_status: 'BLOQUEADO', lote_esta_impedido: 1 });
+    await act(async () => { confirmarJanela().click(); });
+    expect([101, 102, 103].map((id) => caixa(id).checked)).toEqual([true, true, true]);
+    expect(contador()).toBe('3 de 3');
   });
 
   test('[RN-232.07, Fase 2] só `=== true` conta: lote_esta_impedido 1 ou "true" não apaga', async () => {
