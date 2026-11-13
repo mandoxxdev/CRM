@@ -1,5 +1,6 @@
 # 07 — Reservas de Estoque
 
+> **+ Etapa 230 (2026-11-13, `59a5ae94`, Fase 5 `de2bd342`): a fila da OS aberta recebe só o que pode sair (C520, B1513–B1516)** — `distribuirParaOs` com `tetoFila` (o que a entrada trouxe fora de lote impedido) e o desconto do lote (sai o `semDescontoDoLote`); o resto vai para a reserva da OS; liberar o lote converte a reserva da OS da nota do lote para a fila da OS (`converterReservaDaOsNoLoteLiberado`); a fila da OS ganha o abono da aprovação (B1381); o estorno perde a exceção B1508. Ver a seção "Etapa 230", no fim. Continua 🟢.
 > **+ Etapa 229 (2026-11-13, `f6e9230b`, tela `046612a0`, Fase 5 `a989fb6e`): a inspeção e a NC olham o lote do item que liberaram (C519, B1509–B1512)** — o `ctx` da liberação ganha `lote_id`; sem OS aberta, com o lote do item impedido agora (lido sob a trava), nada é distribuído, o aviso não sai e a resposta da inspeção traz `lote_impedido`. Ver a seção "Etapa 229", no fim. Continua 🟢.
 
 > **+ Etapa 228 (2026-11-13, `ad7c1d7c`, Fase 5 `ad91ae20`): o estorno da entrada boa não deixa a reserva coberta só por lote impedido (C521, B1504–B1508)** — `liberarParaEstorno` compara com `disponível − loteImpedidoSql` (a régua de hoje quando o lote da própria entrada está impedido ou a nota tem OS); além do estornado, só o déficit dos outros lotes impedidos da mesma nota. Ver a seção "Etapa 228", no fim. Continua 🟢.
@@ -690,13 +691,14 @@ que as portas já seguram).
 - [x] **RN-219.04 / .05** — a inspeção que aprova peça de lote que continua bloqueado e a OS encerrada sobre lote bloqueado não reservam
   (com o lote ativo, reservam) — `2ec31628`.
 - [x] **RN-219.07 / .11 (B1455)** — a fila da OS aberta não desconta; o desvio da OS que fecha no meio (fila comum) desconta — `2ec31628`.
+  *(A primeira metade **deixou de valer na Etapa 230** (`59a5ae94`, B1513): a fila da OS aberta desconta; a RN-219.07 foi editada de propósito.)*
 - [x] **RN-219.08 (B1457)** — os avisos: a frase do item em lote impedido, o solicitante sem *"Chegou material"* do que não sai, a liberação
   sem *"Material liberado"* sem livre que saia — `2ec31628`.
 - [x] **RN-219.10 (B1456)** — a reserva antiga em lote impedido conta contra o que pode sair — `2ec31628`.
 - [x] **RN-219.12** — material sem controle de lote: como antes — `2ec31628`.
 - [x] **RN-219.13 / .14 (Fase 5, B1460)** — lote vencido (com e sem a liberação do vencimento); a reserva da OS sobre o bloqueado conta como
   na aprovação (**C522**) — `a6323899`.
-- [ ] **Fora (declarado):** a OS aberta (**C520**); a liberação não olha o lote do item (**C519** — *resolvido na Etapa 229*, `f6e9230b`); o estorno da entrada boa (**C521**, anterior — *resolvido na Etapa 228*, `ad7c1d7c`);
+- [ ] **Fora (declarado):** a OS aberta (**C520** — *resolvido na Etapa 230*, `59a5ae94`); a liberação não olha o lote do item (**C519** — *resolvido na Etapa 229*, `f6e9230b`); o estorno da entrada boa (**C521**, anterior — *resolvido na Etapa 228*, `ad7c1d7c`);
   liberar o lote não distribui (**C480** — *resolvido na Etapa 220*); bloquear o lote no instante de uma reserva não a impede (**C523** — *resolvido na Etapa 220*; anterior — quem muda
   o status do lote não pega a trava do material). Antes do deploy: **A116**.
 
@@ -767,6 +769,7 @@ fora da trava, B441).
   outra requisição não é pago pela nota — `ad7c1d7c`, `ad91ae20`.
 - [x] **RN-228.08 / .09** — o estorno que falha recria; liberar o lote depois atende de novo (Etapa 220) — `ad7c1d7c`.
 - [x] **RN-228.11 / .16 (B1508)** — nota com OS (da nota ou do pedido): a régua de antes — `ad7c1d7c`, `ad91ae20`.
+  *(**Deixou de valer na Etapa 230** (`59a5ae94`, B1515): a nota com OS segue a conta nova; os dois testes foram editados de propósito.)*
 - [x] **RN-228.12** — entrada sem lote (legada) conta como lote que sai — `ad7c1d7c`.
 - [x] **RN-228.14 / .17 (Fase 5)** — o portão do motor continua o disponível; a ordem da liberação — `ad91ae20`.
 - [x] **B1507** — o motivo da liberação diz quando o lote impedido pesou (a tela **Reservas** já mostra o motivo) — `ad7c1d7c`.
@@ -787,10 +790,36 @@ da seção que a inspeção e a NC já seguram desde a 91; a mudança de status 
 - [x] **RN-229.02 / .05 / .07 / .07b** — lote ativo, vencido com liberação, sem controle de lote, sem `lote_id` no `ctx` (a OS encerrada) e
   lote de outro material: como antes — `f6e9230b`, `a989fb6e`.
 - [x] **RN-229.06 (B1510)** — OS aberta como antes (congela o **C520**) — `f6e9230b`.
+  *(**Deixou de valer na Etapa 230** (`59a5ae94`, B1513): com o lote do item impedido, a fila da OS não recebe nada; o teste foi editado de propósito.)*
 - [x] **B1511** — o aviso *"Material liberado"* não sai quando o lote zerou a liberação — `f6e9230b`.
 - [x] **B1512** — a resposta da inspeção ganha `lote_impedido` só nesse caso; a tela **Inspeções** avisa — `f6e9230b`, `046612a0`.
 - [x] **RN-229.08 / .09 / .09b** — liberar o lote depois atende (Etapa 220); a leitura é dentro da seção (duas corridas) — `f6e9230b`.
 - [ ] **Fora (declarado):** a tela da NC sem a frase (**C535**); o lote que nunca é liberado, o item só com o código do lote (**D (229)**);
-  a OS aberta (**C520**).
+  a OS aberta (**C520** — *resolvido na Etapa 230*, `59a5ae94`).
 
 Testes: `liberacaoLoteImpedido.api.test.js` (15); `InspecoesAlmoxarifado.test.js` (+1). Continua 🟢.
+
+## Etapa 230 — a fila da OS aberta recebe só o que pode sair (2026-11-13)
+
+Plano: `docs/superpowers/plans/2026-11-13-almoxarifado-etapa230-os-aberta-lote-impedido.md` (`92fe4b45`, com a Fase 2). Resolve o
+**C520**, que esta spec listava como "Fora" nas seções da 219 e da 229. Nenhuma coluna nova, nenhuma trava nova (tudo roda nas seções da
+trava do material que a nota, a inspeção/NC e os escritores do status do lote já seguram).
+
+- [x] **RN-230.01 / .02 / .03 (B1513)** — a nota com OS: a fila da OS só com o que a nota trouxe fora de lote impedido e o desconto do lote;
+  o resto na reserva da OS; o avulso de outra entrada não entra no lugar — `59a5ae94`.
+- [x] **RN-230.04** — lote ativo e material sem controle de lote: como antes — `59a5ae94`.
+- [x] **RN-230.05 (B1513)** — a inspeção com OS e o lote do item impedido: fila da OS 0, tudo para a reserva da OS, `lote_impedido` na
+  resposta — `59a5ae94`.
+- [x] **RN-230.06 / .07 / .08 / .08 b / .11 / .17 (B1514)** — liberar o lote converte a reserva da OS **daquela nota** até a falta da fila da
+  OS (nada se ninguém da OS espera; a de outra nota não), a fila comum leva só o resto do livre do lote; separar depois passa — `59a5ae94`.
+- [x] **RN-230.09 (B1515)** — o estorno sem a exceção B1508 — `59a5ae94`.
+- [x] **RN-230.14 / .15 (B1516, da Fase 2)** — o abono da OS: dois lotes bloqueados da mesma nota; a nota boa seguinte da mesma OS — `59a5ae94`.
+- [x] **RN-230.10 / .16** — o C522 para a requisição comum não muda; a reserva antiga (B1456) vale para a OS — `59a5ae94`.
+- [x] **RN-230.18 / .19 / .20 (Fase 5)** — o lote de várias notas converte nota a nota (a revisão do código reproduziu que, só com nota
+  única, a requisição da OS ficava sem as peças); a fila da OS que pula pelo valor devolve à reserva da OS — `de2bd342`.
+- [ ] **Fora (declarado, D (230)):** a reserva da OS não sabe o lote; reservas de antes não migram; a requisição da OS barrada pelo dono ou
+  pelo valor faz a reserva da OS ser solta e recriada a cada liberação; o abono supõe a reserva da OS no lote impedido; a retomada da nota
+  erra para menos. O **C522** para a requisição comum continua.
+
+Testes: `osAbertaLoteImpedido.api.test.js` (21); editados de propósito `chegadaLoteImpedido` RN-219.07, `liberacaoLoteImpedido` RN-229.06 e
+`estornoLoteImpedido` RN-228.11/.16. Continua 🟢.

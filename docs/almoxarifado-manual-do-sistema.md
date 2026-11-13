@@ -2207,10 +2207,9 @@ a requisição que perdeu a reserva volta ao status de espera (normalmente *Agua
 "Pode sair" é o disponível **menos** as peças em lote bloqueado, reprovado ou vencido sem a liberação do vencimento (a
 mesma conta da aprovação; em material sem controle por lote, o disponível inteiro). Exemplo: a nota trouxe 3 peças no
 lote *L2* (reservadas para a requisição) e 4 no lote *L1*, bloqueado; estornar a entrada do *L2* solta a reserva de 3,
-porque depois dele nada do material pode sair — a requisição volta a esperar. Três exceções usam o disponível inteiro:
+porque depois dele nada do material pode sair — a requisição volta a esperar. Duas exceções usam o disponível inteiro:
 (1) quando a entrada estornada é **do próprio lote** bloqueado, reprovado ou vencido (aquelas peças já não contavam);
-(2) quando a nota é de uma **OS** (do pedido ou da própria nota) — a requisição da OS fica com a reserva; (3) o material
-sem controle por lote. A nota solta, além da quantidade estornada, só o que os **outros lotes dela mesma** que ficaram
+(2) o material sem controle por lote. A nota de uma **OS** segue a mesma conta, depois de soltar a reserva da OS (9.3e). A nota solta, além da quantidade estornada, só o que os **outros lotes dela mesma** que ficaram
 bloqueados explicam: o lote de outra nota, bloqueado ou vencido depois, não tira reserva desta. Quando o lote impedido
 pesou na conta, o motivo da reserva solta, na tela **Reservas**, é *"Estorno da entrada do recebimento ⟨REC⟩ — o que
 sobra do material está em lote bloqueado, reprovado ou vencido"*; senão, *"Estorno da entrada do recebimento ⟨REC⟩"*.
@@ -2722,7 +2721,7 @@ quarentena, e lote L2 Bloqueado com 6 → disponível 8, saldo em lote impedido 
 
 **A reserva que já existe fica.** Bloquear um lote não solta a reserva de ninguém: a requisição aprovada antes do bloqueio continua com a reserva, aprovar de novo não mexe nela, e a separação aceita a parte dela (10.2). A próxima requisição do material é que não reserva nada do lote bloqueado. **Liberar o lote** (anexar o certificado, voltar a *Ativo*, liberar o vencimento, corrigir a validade para uma data futura) reserva as peças dele para as requisições que esperavam (9.3c-bis).
 
-**A reserva manual** (tela **Reservas**, 9.1) e a reserva para quem espera **na chegada** da nota, da inspeção ou da não conformidade e na liberação do lote (9.3b, 9.3c, 9.3c-bis) têm o mesmo desconto. A reserva da compra para uma OS (9.3e) não tem: o material comprado para a OS fica com ela mesmo num lote bloqueado.
+**A reserva manual** (tela **Reservas**, 9.1) e a reserva para quem espera **na chegada** da nota, da inspeção ou da não conformidade e na liberação do lote (9.3b, 9.3c, 9.3c-bis) têm o mesmo desconto. A reserva da compra para uma OS (9.3e) não tem: ela guarda para a OS o material comprado para ela mesmo num lote bloqueado — mas a **requisição** da OS, como qualquer requisição, só recebe o que pode sair.
 
 As reservas são criadas **uma a uma**, relendo o disponível a cada uma — dois itens do mesmo material não reservam o mesmo saldo duas vezes.
 
@@ -2811,8 +2810,9 @@ nem as peças aprovadas, que não podem sair, nem outro saldo livre do material 
 lote). A requisição continua esperando e não recebe o aviso de liberação. As peças vão para quem espera quando o lote for liberado (9.3c-bis).
 Na tela **Inspeções**, depois de *"Inspeção registrada!"*, aparece em amarelo *"O lote ⟨código⟩ continua bloqueado, reprovado ou vencido: as
 peças aprovadas vão para quem espera quando o lote for liberado."*. A não conformidade aceita segue a mesma regra, sem a frase na tela. Com o
-lote *Ativo* (ou vencido **com** a liberação de vencimento), em material sem controle por lote, e na nota de pedido com **OS aberta** (a
-fila da OS, 9.3e), a decisão reserva como descrito acima.
+lote *Ativo* (ou vencido **com** a liberação de vencimento) e em material sem controle por lote, a decisão reserva como descrito acima. Na
+nota de pedido com **OS aberta**, o aprovado de um lote impedido vai inteiro para a **reserva da OS** — a requisição da OS não recebe nada
+até o lote ser liberado (9.3e) —, e a tela **Inspeções** mostra a mesma frase amarela.
 
 **A reserva criada.** Na tela **Reservas**, no nome de **quem decidiu** — inclusive quem tem só o perfil **Qualidade**, que não reserva à mão: a reserva é feita pelo sistema em nome dele. A observação diz a porta: *"Reserva na liberação da inspeção — recebimento ⟨REC⟩ — requisição ⟨REQ⟩"* ou *"Reserva na liberação da não conformidade ⟨NC⟩ — requisição ⟨REQ⟩"*. Ela leva a marca da nota: estornar a entrada da nota depois solta essa reserva como solta a da chegada (só o necessário, só de quem ainda não separou — 6.10).
 
@@ -2829,7 +2829,7 @@ fila da OS, 9.3e), a decisão reserva como descrito acima.
 Em material com **controle por lote**, a peça de um lote **impedido** — *Bloqueado* (por exemplo, sem o certificado do fornecedor),
 *Reprovado*, ou vencido sem a liberação de vencimento — não é reservada na chegada nem na aprovação (9.3, 9.3b). Quando o lote é
 **liberado**, as peças dele são reservadas para quem esperava o material, pelas mesmas regras de 9.3b (quem esperava, a ordem da Fila de
-separação — a urgente primeiro —, quem é pulado, o status que acompanha). Três gestos liberam, todos em **Lotes e Séries**:
+separação — a urgente primeiro —, quem é pulado, o status que acompanha). Quatro gestos liberam, todos em **Lotes e Séries**:
 
 - **Anexar certificado** num lote bloqueado por falta dele;
 - **Mudar status** de *Bloqueado* ou *Reprovado* para *Ativo*;
@@ -2849,6 +2849,22 @@ o livre do lote = saldo do lote − o que está em inspeção nele − o que est
 
 *O que pode sair* é a conta de 9.3b. Uma reserva feita **antes** de o lote ser bloqueado continua valendo e entra na conta: se ela já cobre
 as peças do lote, liberar o lote não reserva nada para mais ninguém.
+
+**O lote comprado para uma OS vai primeiro para a requisição da OS.** Para cada nota que pôs peças no lote e cujo pedido é de uma OS
+**aberta**, a reserva da OS que essa nota criou (9.3e) passa para as requisições **da OS** que esperavam o material, antes de qualquer
+outra — também quando o lote recebeu peças de mais de uma nota:
+
+```
+passa para a requisição da OS = mínimo(o livre do lote que ainda não passou, o que as requisições da OS ainda esperam, o saldo da reserva da OS dessa nota)
+```
+
+A reserva da OS fica **Liberada** (ou diminui, se passou só uma parte) com o motivo *"Reserva da OS ⟨número⟩ passada à requisição da OS na
+liberação do lote ⟨L⟩"*, e a requisição da OS ganha a reserva com a observação *"Reserva na liberação do lote ⟨L⟩ — requisição ⟨REQ⟩"* e a
+marca da nota (o estorno dessa nota a solta, 6.10). O
+que a requisição da OS não puder levar (a regra do dono do material ou a liberação por valor a pulam) volta a ser reserva da OS, com a
+observação *"Compra para a OS ⟨número⟩ — não coube na requisição da OS na liberação do lote ⟨L⟩"*. Sem requisição da OS esperando, a reserva
+da OS não é tocada. Depois, o resto do livre do lote — já sem o que passou para a requisição da OS — vai para as outras requisições, pela
+conta acima; as peças que continuam na reserva da OS não vão para elas.
 
 **A reserva criada.** Na tela **Reservas**, no nome de quem liberou, com a observação *"Reserva na liberação do lote ⟨L⟩ — requisição ⟨REQ⟩"*.
 Quando todas as peças do lote vieram de **uma** nota, a reserva leva a marca dessa nota: estornar a entrada da nota depois solta a reserva
@@ -2904,7 +2920,7 @@ jeito é tratada como de outro trabalho.
 **Na chegada da nota** (e na decisão da inspeção que aprova, e na não conformidade aceita — 9.3b, 9.3c), se o pedido tem OS e a OS está
 **aberta** naquele momento:
 
-1. as requisições **da OS** que esperavam aquele material são servidas primeiro, na ordem da fila (9.3b), com a reserva comum de requisição;
+1. as requisições **da OS** que esperavam aquele material são servidas primeiro, na ordem da fila (9.3b), com a reserva comum de requisição — só com o que pode sair (abaixo);
 2. o que sobrar vira a **reserva da OS**:
 
    ```
@@ -2913,9 +2929,15 @@ jeito é tratada como de outro trabalho.
 
 3. as requisições de **outros** trabalhos que esperavam o mesmo material **não** recebem nada daquele material daquela nota.
 
-Aqui o **lote impedido não é descontado**: o material comprado para a OS fica com ela mesmo num lote **Bloqueado** (sem o certificado) — a
-requisição da OS que esperava pode ficar reservada com peças que só saem depois de o lote ser liberado, e o que sobra vira a reserva da OS.
-Se a OS fechar no exato momento (abaixo), o que vai para a fila comum segue a conta de 9.3b.
+**Com lote impedido** (material com controle por lote): a requisição da OS recebe só o que **esta** nota trouxe fora de lote *Bloqueado*,
+*Reprovado* ou vencido sem a liberação — e só o que pode sair do material (9.3b), como qualquer requisição; o resto do que a nota trouxe,
+inclusive as peças do lote impedido, vira a reserva da OS. Exemplo: a nota da OS traz 3 num lote bom e 4 num lote bloqueado, e a requisição
+da OS espera 4 — ela fica com 3 e a reserva da OS com 4. Com as 4 todas no lote bloqueado, ela fica **Aguard. Estoque** e a reserva da OS
+com 4; quando o lote for liberado, a reserva da OS passa para ela (9.3c-bis). Saldo livre de **outra** entrada (uma entrada manual, um ajuste)
+não entra no lugar das peças bloqueadas. Na conta do que pode sair, para a requisição da própria OS, a reserva da OS é contada **primeiro**
+sobre o saldo em lote impedido (como na conversão, abaixo): assim uma segunda nota da mesma OS, com peças boas, atende a requisição da OS
+mesmo com a reserva da primeira nota sobre um lote ainda bloqueado. Se a OS fechar no exato momento (abaixo), o que vai para a fila comum
+segue a conta de 9.3b.
 
 A reserva da OS aparece na tela **Reservas** com origem *MANUAL*, destino a OS, **sem validade** (ela não vence, mesmo com a validade padrão
 ligada — 9.7), no nome de quem processou a nota (ou decidiu a inspeção); no extrato do material, com o motivo *"Compra para a OS ⟨número⟩"*. A
@@ -2929,8 +2951,9 @@ a nota está sendo processada, a reserva da OS nasce já **Liberada** (com o mot
 reservar do disponível comum, o sistema **converte** a reserva da OS na reserva da requisição: solta da reserva da OS (a mais antiga primeiro)
 até o que falta para o item e reserva para a requisição como sempre. No livro, a conversão aparece como *"Reserva da OS ⟨número⟩ convertida
 na requisição ⟨REQ⟩"*. O que a requisição não usou continua reservado para a OS. Se a aprovação não se confirmar (a requisição foi cancelada no
-mesmo instante, por exemplo), a reserva da OS é refeita com o que tinha sido convertido. A conversão acontece **só na aprovação**: a requisição
-da OS que já estava aprovada e sem reserva quando chega à separação ou à entrega não converte — ela usa só o disponível comum.
+mesmo instante, por exemplo), a reserva da OS é refeita com o que tinha sido convertido. A conversão acontece **na aprovação** e na **liberação
+do lote** que a nota da OS trouxe (9.3c-bis): a requisição da OS que já estava aprovada e sem reserva quando chega à separação ou à entrega não
+converte — ela usa só o disponível comum.
 
 **Com lote impedido** (9.3), a conversão olha só o que pode sair. Como a reserva da OS e a requisição da OS são da mesma dona, o que a
 reserva da OS segura é contado **primeiro** sobre o saldo em lote impedido: com L1 Ativo 4, L2 Bloqueado 6 e uma reserva da OS de 8, a
@@ -2962,7 +2985,8 @@ cancelado ou concluído. A OS sem pedido de compra se exclui como sempre.
 
 **Estorno da entrada de uma nota com OS** (6.10). O estorno solta **primeiro** a reserva da OS que aquela nota criou — até a quantidade
 estornada, mesmo que haja disponível sobrando —, com o motivo *"Estorno da entrada do recebimento ⟨REC⟩"*, e só depois, se ainda faltar, as
-reservas de requisição. Se o estorno for recusado (*"Não é possível estornar: saldo disponível insuficiente (material já consumido)"*), a
+reservas de requisição — pela mesma conta das outras notas (6.10): a reserva da requisição da OS que ficaria coberta só por lote impedido é
+solta. Se o estorno for recusado (*"Não é possível estornar: saldo disponível insuficiente (material já consumido)"*), a
 reserva da OS é refeita, com a observação *"Compra para a OS ⟨número⟩ — recriada após estorno recusado — recebimento ⟨REC⟩"* (e solta na hora,
 se a OS tiver sido fechada nesse meio-tempo).
 

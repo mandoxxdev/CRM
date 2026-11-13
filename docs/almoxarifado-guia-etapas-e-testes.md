@@ -1,20 +1,28 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-11-13 (Etapas 172 a 191, 194 a 210, 217 a 229) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-11-13 (Etapas 172 a 191, 194 a 210, 217 a 230) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
 > ## Onde o desenvolvimento está — 2026-11-13 (Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
-> **O desenvolvimento parou aqui: Etapa 229 fechada — 2026-11-13.** **A inspeção que aprova peça de lote bloqueado não entrega outro
+> **O desenvolvimento parou aqui: Etapa 230 fechada — 2026-11-13.** **A requisição da OS só fica reservada com o que pode sair.** A nota
+> de pedido com OS aberta (e a inspeção dessa nota) não reserva mais para a requisição da OS peça de lote bloqueado, reprovado ou vencido:
+> as peças ficam guardadas na reserva da OS e passam para a requisição da OS quando o lote for liberado. Sem consulta antes do deploy.
+> **Nenhum clique foi dado** (testes pelas rotas — roteiro na seção da 230 e letra F das novidades).
+>
+> **Onde parou, exatamente:** a **230 está fechada** (código, testes, documentos e o estimado × realizado commitados). A **próxima** é
+> **a entrega não pré-escolhe a origem da separação que ficou em lote impedido** (**C532**) — detalhada no fim do plano da 230 (`docs/superpowers/plans/2026-11-13-almoxarifado-etapa230-os-aberta-lote-impedido.md`). Sem estimativa
+> nem plano.
+>
+> *(Antes:)* **Etapa 229 fechada — 2026-11-13.** **A inspeção que aprova peça de lote bloqueado não entrega outro
 > material no lugar.** A inspeção e a não conformidade olham o lote das peças que liberaram: com o lote bloqueado, reprovado ou vencido, nada
 > é reservado no lugar, o aviso de liberação não sai, e a tela **Inspeções** avisa que o lote continua impedido. Sem consulta antes do deploy.
 > **Nenhum clique foi dado** (testes pelas rotas — roteiro na seção da 229 e letra F das novidades).
 >
 > **Onde parou, exatamente:** a **229 está fechada** (código, testes, documentos e o estimado × realizado commitados). A **próxima** é
-> **a fila da OS aberta recebe só o que pode sair** (**C520**) — detalhada no fim do plano da 229
-> (`docs/superpowers/plans/2026-11-13-almoxarifado-etapa229-liberacao-lote-impedido.md`). Sem estimativa nem plano.
+> **a fila da OS aberta recebe só o que pode sair** (**C520**) — feita na **Etapa 230**.
 >
 > *(Antes:)* **Etapa 228 fechada — 2026-11-13.** **Estornar a entrada boa não deixa a requisição presa a lote
 > bloqueado.** O estorno da entrada de uma nota passa a contar só o que pode sair: a reserva que ficaria coberta só por lote bloqueado,
@@ -7230,6 +7238,44 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 230 — A requisição da OS só fica reservada com o que pode sair (ENTREGUE — 2026-11-13)
+
+**O que mudou, em uma frase:** a compra de uma OS que chega num lote bloqueado, reprovado ou vencido não deixa mais a requisição da OS
+reservada com peças que não podem sair; elas ficam guardadas para a OS e vão para a requisição dela quando o lote for liberado.
+
+**O problema que ela resolve.** A OS comprou 4 peças; a nota chegou com elas num lote bloqueado (sem o certificado). A requisição da OS ficava
+*Totalmente Reservada* com as 4 — e o almoxarife só descobria na separação que nada podia sair.
+
+| Antes | Agora |
+|---|---|
+| Nota da OS com 4 em lote bloqueado: requisição da OS *Totalmente Reservada* | Requisição da OS *Aguard. Estoque*; as 4 na reserva da OS (tela **Reservas**) |
+| Liberar o lote: nada a fazer | Liberar o lote passa as 4 para a requisição da OS: *"4 un reservado(s) para quem esperava este material (1 requisição(ões))."* |
+| Nota da OS com 3 boas e 4 bloqueadas: requisição da OS com 4 | Com 3; as 4 bloqueadas na reserva da OS |
+| Inspeção da nota da OS aprova peças de lote bloqueado: requisição da OS reservada | Nada para ela; o aviso amarelo de lote impedido aparece |
+| Lote ativo; sem controle por lote; nota sem OS | **Iguais** |
+
+**Roteiro de teste manual (≈10 min):**
+
+1. Entre como **Administrador do almoxarifado**. Tenha uma OS aberta *OS-500*. No cadastro do material (Compras), *LOTE-230* com **Controle
+   por lote** e **controle de certificado**, unidade *un*, sem saldo.
+2. Crie e aprove uma requisição *R1* de 4 *LOTE-230* com a **OS-500** (fica *Aguard. Estoque*).
+3. Um pedido de compra da *OS-500* com 4 *LOTE-230*; receba-o com o lote *L1* e processe a nota. **Confira:** em **Lotes e Séries**, *L1*
+   *Bloqueado*; *R1* continua *Aguard. Estoque*, sem reserva; em **Reservas**, uma reserva de 4 para a *OS-500* (*"Compra para a OS OS-500"*).
+4. **Lotes e Séries** → *L1* → anexe o certificado (ou **Mudar status** → *Ativo*). **Confira:** a mensagem *"4 un reservado(s) para quem
+   esperava este material (1 requisição(ões))."*; *R1* *Totalmente Reservada* com 4; em **Reservas**, a reserva da OS *Liberada* com o motivo
+   *"Reserva da OS OS-500 passada à requisição da OS na liberação do lote L1"*.
+5. Separe 4 de *R1*: passa.
+6. Controle: repita os passos 2 e 3 com um material **sem** controle de certificado (o *L1* nasce *Ativo*) — *R1* fica *Totalmente
+   Reservada* já na nota e não há reserva da OS.
+7. Controle: repita o passo 3 **sem** a *R1* — no passo 4, a reserva da OS continua *Ativa* com 4 e nenhuma outra requisição recebe as peças.
+
+**O que esta etapa não cobre:** as
+requisições da OS reservadas sobre lote bloqueado antes desta etapa continuam como estão; a reserva da OS sobre um lote bloqueado ainda segura
+a nota boa seguinte para uma requisição comum (**C522**) — veja **D (230)**.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (pelas rotas) provam, escrito para você
+conferir à mão.
+
 ## Etapa 229 — A inspeção que aprova peça de lote bloqueado não entrega outro material no lugar (ENTREGUE — 2026-11-13)
 
 **O que mudou, em uma frase:** quando a inspeção (ou a não conformidade) libera peças de um lote que continua bloqueado, reprovado ou
@@ -7262,7 +7308,7 @@ se fossem as aprovadas.
    aparece.
 
 **O que esta etapa não cobre:** a tela **Não Conformidades** não mostra a frase (**C535**); se o lote nunca for liberado, quem espera não
-recebe o saldo avulso nem o e-mail (**D (229)**); a nota de pedido com OS aberta continua como antes (**C520**).
+recebe o saldo avulso nem o e-mail (**D (229)**); a nota de pedido com OS aberta continua como antes (**C520** — *resolvido na Etapa 230*).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (pelas rotas) provam, escrito para você
 conferir à mão.
