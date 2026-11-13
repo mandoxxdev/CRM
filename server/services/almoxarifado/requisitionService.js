@@ -20,7 +20,7 @@ const reservaDaOs = require('./reservaDaOs');
 const { DEVOLUCAO_VIVA_SQL } = require('./devolucaoViva');
 // Etapa 205 (B1368): o saldo de lote impedido (modulo so com quantidade e diaLocal — sem ciclo).
 const { loteImpedidoSql, fraseLoteImpedido } = require('./loteImpedido');
-const { retidoPorLote } = require('./retidoDoLote'); // Etapa 217 (B1439): o bloqueado do lote no automatico
+const { retidoPorLote, situacaoDosLotes } = require('./retidoDoLote'); // Etapa 217 (B1439) / 218 (B1444): o bloqueado do lote
 // Etapa 93 (T0, B443): a trava POR REQUISICAO das portas do almoxarife (outra trava; ordem requisicao -> material).
 const travaPorRequisicao = require('./travaPorRequisicao');
 // Etapa 114 (C229): a requisicao com item pendente de material inativo (modulo sem require de servico — sem ciclo).
@@ -1402,6 +1402,75 @@ async function checarOrigemItem(db, item, { origemId, loteId, lidoNorm }, qty, p
   return codigoOrigem;
 }
 
+/**
+ * Etapa 218 (B1451, C513) — a frase do lote escolhido a mao que nao cobre: o lote, quanto ha, quanto pode sair e cada parcela que tira
+ * (so as > folga, nesta ordem). Singular quando 0 < x < 2. `propria` (so a separacao) = a guarda desta requisicao no lote, de rodadas
+ * anteriores; `jaPedido` = o desta chamada. Sem o prefixo do material nem o conselho (quem chama poe).
+ */
+function fraseLivreDoLote({ gesto = 'separacao', lote, saldo, podeSair, retido = 0, inspecao = 0, guardado = 0, propria = 0, jaPedido = 0,
+  qty, unidade }) {
+  const r6 = (x) => Math.round(x * 1e6) / 1e6;
+  const un = unidade ? ` ${unidade}` : '';
+  const um = (x) => x > Q.QTD_FOLGA && x < 2 - Q.QTD_FOLGA;
+  const tem = (x) => num(x) > Q.QTD_FOLGA;
+  const entrega = gesto === 'entrega';
+  const nesta = entrega ? 'nesta entrega' : 'nesta separação';
+  const parcelas = [
+    tem(retido) && `${r6(retido)}${un} ${um(retido) ? 'está bloqueada' : 'estão bloqueadas'} nele (quarentena, reprovação na inspeção ou com terceiro)`,
+    tem(inspecao) && `${r6(inspecao)}${un} em inspeção`,
+    tem(guardado) && `${r6(guardado)}${un} já ${um(guardado) ? 'separada' : 'separadas'} dele para `
+      + `${entrega ? 'outras requisições ou outras peças desta' : 'outras requisições'}`,
+    tem(propria) && `${r6(propria)}${un} já ${um(propria) ? 'separada' : 'separadas'} dele por esta requisição`,
+    tem(jaPedido) && `${r6(jaPedido)}${un} já ${um(jaPedido) ? 'pedida' : 'pedidas'} ${nesta}`,
+  ].filter(Boolean);
+  return `no lote ${lote} há ${r6(saldo)}${un}, mas só ${r6(podeSair)} ${um(podeSair) ? 'pode' : 'podem'} sair ${nesta}: `
+    + `${parcelas.join('; ')}; não cobre a quantidade (${qty})`;
+}
+
+/**
+ * Etapa 218 (B1444): a parte guardada (`PARTE_ORIGEM_SQL`) das caixas vivas de OUTRAS requisicoes no LOTE, em qualquer endereco (a
+ * `parteGuardadaDeOutras` e por par). `requisicaoId` null = todas. Mesma folga por requisicao da 198.
+ */
+async function guardadoNoLoteDeOutras(db, materialId, loteId, requisicaoId = null) {
+  const viva = caixaVivaSql('r');
+  const rid = requisicaoId === null || requisicaoId === undefined ? null : Number(requisicaoId);
+  const rows = await dbAll(db, `SELECT r.id, SUM(${PARTE_ORIGEM_SQL}) as q
+    FROM itens_requisicao_almoxarifado ir JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
+    WHERE ir.material_id = ? AND ir.origem_separacao_id IS NOT NULL AND ir.lote_separacao_id = ?
+      AND (? IS NULL OR ir.requisicao_id <> ?) AND ${viva.sql}
+    GROUP BY r.id HAVING SUM(${PARTE_ORIGEM_SQL}) > ?`, [materialId, loteId, rid, rid, ...viva.params, Q.QTD_FOLGA]);
+  return Q.qtd(rows.reduce((acc, x) => acc + (Number(x.q) || 0), 0));
+}
+
+/**
+ * Etapa 218 (B1443/B1445): por chamada, a situacao dos lotes de cada material (`retidoDoLote.situacaoDosLotes`) — vazia para material
+ * sem controle de lote ou com serie. `presa(materialId, loteId)` devolve a situacao do lote so quando ele tem peca presa (retido +
+ * inspecao > folga, o gatilho); senao null e nada muda.
+ */
+function memoLotesComPecaPresa(db) {
+  const porMaterial = new Map();
+  return async (materialId, loteId) => {
+    const k = String(materialId);
+    if (!porMaterial.has(k)) {
+      const mat = await dbGet(db, 'SELECT controle_lote, controle_serie FROM materiais_almoxarifado WHERE id = ?', [materialId]);
+      porMaterial.set(k, mat && Number(mat.controle_lote) === 1 && Number(mat.controle_serie) !== 1
+        ? await situacaoDosLotes(db, materialId) : new Map());
+    }
+    const sit = loteId ? porMaterial.get(k).get(Number(loteId)) : null;
+    return sit && sit.retido + sit.inspecao > Q.QTD_FOLGA ? sit : null;
+  };
+}
+
+/** Etapa 218: Σ do `pedidoPorOrigem` da SEPARACAO nas chaves do lote (`m|qualquer endereco|L`, o "so lote" incluido). */
+function pedidoNoLote(pedido, materialId, loteId) {
+  let s = 0;
+  for (const [k, q] of pedido) {
+    const [m, , l] = k.split('|');
+    if (m === String(materialId) && l === String(loteId)) s += num(q);
+  }
+  return Q.qtd(s);
+}
+
 /** Etapa 92 (T0): o 400 da separacao fora de PODE_SEPARAR — na leitura e na reivindicacao (S1). */
 const MSG_STATUS_SEPARAR = 'Requisição deve estar aprovada, aguardando estoque/compra, em separação ou parcialmente atendida para separar';
 
@@ -1537,6 +1606,16 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
   // Etapa 95 (T0, B468): o separado de ANTES da rodada (retrato; o `planejadaAntes` da 65 saiu na 196) — a regua da 60 usa o
   // teto do inicio da rodada, porque ela ja subtrai o que os outros itens da rodada tiram do livre (`tiraDoLivre`, Etapa 127); com o teto em
   // memoria subtrairia duas vezes. E a caixa sem reserva de um item da propria requisicao, com um separado dado.
+  // Etapa 218 (B1444, Fase 2 item 2): o retrato da semeadura (a guarda desta requisicao de rodadas anteriores) — a parcela "por esta
+  // requisicao" da literal; o resto do `pedidoNoLote` e o desta chamada. E a situacao dos lotes com peca presa, lida uma vez por material.
+  const semeado = new Map(pedidoSeparacao);
+  const lotePreso = memoLotesComPecaPresa(db);
+  const guardadoDoLote = new Map(); // `m|L` -> guardado das outras requisicoes no lote (memo da chamada)
+  const guardadoNoLote = async (m, l) => {
+    const k = `${m}|${l}`;
+    if (!guardadoDoLote.has(k)) guardadoDoLote.set(k, await guardadoNoLoteDeOutras(db, m, l, requisicaoId));
+    return guardadoDoLote.get(k);
+  };
   const separadoAntes = new Map(itens.map((i) => [i.id, getSeparado(i)]));
   const caixaSemReservaDe = (i, separado) => Math.max(0, separado - getEntregue(i) - num(i.reservado_para_item));
   for (const entrada of itensSeparados) {
@@ -1624,6 +1703,15 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
       const outras = origemId ? await outrasDoPar(item.material_id, origemId, loteId) : { q: 0 };
       regua.saldoOrigem = (Number(so.q) || 0) - (Number(outras.q) || 0)
         - (pedidoSeparacao.get(`${item.material_id}|${origemId}|${loteId}`) || 0);
+      // Etapa 218 (B1448): com peca presa no lote escolhido, o maximo da regua tambem e o que pode sair do lote — senao separar o
+      // maximo aceito sairia "divergente". Lido antes de `checarOrigemItem` somar esta entrada (a mesma ordem do par acima).
+      // eslint-disable-next-line no-await-in-loop
+      const sitR = loteId ? await lotePreso(item.material_id, loteId) : null;
+      if (sitR) {
+        // eslint-disable-next-line no-await-in-loop
+        const doLote = sitR.livre - (await guardadoNoLote(item.material_id, loteId)) - pedidoNoLote(pedidoSeparacao, item.material_id, loteId);
+        regua.saldoOrigem = Math.min(regua.saldoOrigem, doLote);
+      }
     }
     if (origemId || loteId) {
       try {
@@ -1637,6 +1725,26 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
         const err = new Error(`${item.material_nome}: ${e.message}`);
         err.status = e.status || 400;
         throw err;
+      }
+      // Etapa 218 (B1443/B1444/B1447, C513): com lote escolhido e peca presa nele (quarentena, reprovacao, terceiro, inspecao), o LOTE
+      // inteiro tem de cobrir — depois das recusas de hoje (o fisico do par e a C1). `checarOrigemItem` ja somou esta entrada.
+      // eslint-disable-next-line no-await-in-loop
+      const sit = loteId ? await lotePreso(item.material_id, loteId) : null;
+      if (sit) {
+        // eslint-disable-next-line no-await-in-loop
+        const guardado = await guardadoNoLote(item.material_id, loteId);
+        const propria = pedidoNoLote(semeado, item.material_id, loteId);
+        const jaPedido = Q.qtd(pedidoNoLote(pedidoSeparacao, item.material_id, loteId) - propria - qty);
+        const podeSair = Q.qtd(Math.max(0, sit.livre - guardado - propria - jaPedido));
+        if (podeSair + Q.QTD_FOLGA < qty) {
+          // eslint-disable-next-line no-await-in-loop
+          const lote = await dbGet(db, 'SELECT codigo FROM lotes_almoxarifado WHERE id = ?', [loteId]);
+          const err = new Error(`${item.material_nome}: ${fraseLivreDoLote({ gesto: 'separacao', lote: lote.codigo, saldo: sit.saldo, podeSair,
+            retido: sit.retido, inspecao: sit.inspecao, guardado, propria, jaPedido, qty, unidade: item.unidade })}. `
+            + 'Escolha outro lote ou separe menos');
+          err.status = 400;
+          throw err;
+        }
       }
     }
     // Etapa 196 (RN-196.01/02/03/05/10): o item guarda UM par e QUANTO da caixa saiu dele. Revoga o "mista -> nula" da Etapa 59:
@@ -2339,12 +2447,14 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
   // mesmo par passava e o par ia a zero — o C468 voltava conforme a ordem dos ids).
   const casoC = [];
   const casoCAdiados = []; // Etapa 208 (Fase 2, item 2): os (c) esperam os (a)/(b) sem excesso para a conferencia fisica
+  const conferidasNoLote = []; // Etapa 218 (B1447): as origens com lote, na ordem em que foram conferidas
   const validarOrigemDaEntrega = async (item, { origemId, loteId, lido }, qtdComOrigem, planejada, contarOutras = false) => {
     try {
       const lidoNorm = stockService.normalizarCodigoLido(lido);
       await checarOrigemItem(db, item, { origemId, loteId, lidoNorm }, qtdComOrigem, pedidoPorOrigem);
       if (contarOutras) casoC.push({ item, origemId, loteId, qtdComOrigem });
       origemPorItem.set(item.id, { origemId, loteId, lido: lidoNorm, qtdComOrigem });
+      if (loteId) conferidasNoLote.push({ item, origemId, loteId, qtdComOrigem, planejada }); // Etapa 218: a passada do lote
     } catch (e) {
       let msg = `${item.material_nome}: ${e.message}`;
       if (planejada) {
@@ -2513,6 +2623,48 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     }
     // eslint-disable-next-line no-await-in-loop
     await validarOrigemDaEntrega(p.item, { origemId: null, loteId: p.loteId, lido: p.lido }, p.qtdComOrigem, false);
+  }
+  // Etapa 218 (B1443/B1444/B1446/B1447, C513): o LOTE escolhido (a mao, o mesmo par ou a planejada) com peca presa tem de cobrir o que
+  // esta entrega pede dele, depois de todas as recusas de hoje. Na ordem das origens conferidas (planejada/mesmo par -> a mao -> so lote,
+  // a ordem da 208). `ja` sai desta lista, nao do `pedidoPorOrigem` (a semeadura do so lote contaria em dobro). Guardado = o das outras
+  // requisicoes no lote + a guarda que FICA das pecas desta requisicao no lote, lida do banco por `guardaQueConta` (Fase 2 item 6: a peca
+  // fora desta entrega conta a parte inteira; a desta entrega, o que fica). So le, sob as duas travas.
+  if (conferidasNoLote.length) {
+    const lotePreso = memoLotesComPecaPresa(db);
+    const fica = parteQueFicaPorItem();
+    const jaNoLote = new Map();
+    for (const c of conferidasNoLote) {
+      const k = `${c.item.material_id}|${c.loteId}`;
+      const jaPedido = Q.qtd(jaNoLote.get(k) || 0);
+      jaNoLote.set(k, jaPedido + num(c.qtdComOrigem));
+      // eslint-disable-next-line no-await-in-loop
+      const sit = await lotePreso(c.item.material_id, c.loteId);
+      if (!sit) continue;
+      // eslint-disable-next-line no-await-in-loop
+      const proprias = await dbAll(db, `SELECT ir.id, ${PARTE_ORIGEM_SQL} as q FROM itens_requisicao_almoxarifado ir
+        WHERE ir.requisicao_id = ? AND ir.material_id = ? AND ir.origem_separacao_id IS NOT NULL AND ir.lote_separacao_id = ?
+          AND ir.id <> ?`, [requisicaoId, c.item.material_id, c.loteId, c.item.id]);
+      // Fase 5 (revisao da regra, reproduzido): a guarda que fica do PROPRIO item nao entra — e a caixa dele mesmo; a proxima entrega
+      // dele confere o lote de novo (B1446). Com ela, entregar 1 de uma caixa de 3 com 2 livres no lote era recusado ("so 0").
+      const ficaPropria = proprias.reduce((acc, g) => acc + guardaQueConta(g, new Map(), fica), 0);
+      // eslint-disable-next-line no-await-in-loop
+      const guardado = Q.qtd((await guardadoNoLoteDeOutras(db, c.item.material_id, c.loteId, requisicaoId)) + ficaPropria);
+      const podeSair = Q.qtd(Math.max(0, sit.livre - guardado - jaPedido));
+      if (podeSair + Q.QTD_FOLGA >= num(c.qtdComOrigem)) continue;
+      // eslint-disable-next-line no-await-in-loop
+      const lote = await dbGet(db, 'SELECT codigo FROM lotes_almoxarifado WHERE id = ?', [c.loteId]);
+      const frase = fraseLivreDoLote({ gesto: 'entrega', lote: lote.codigo, saldo: sit.saldo, podeSair, retido: sit.retido,
+        inspecao: sit.inspecao, guardado, jaPedido, qty: c.qtdComOrigem, unidade: c.item.unidade });
+      let msg = `${c.item.material_nome}: ${frase}. Escolha outro lote ou deixe "Qualquer endereço (automático)"`;
+      if (c.planejada) { // B1446: o envelope de hoje da planejada que nao serve mais (o caminho da B1389)
+        // eslint-disable-next-line no-await-in-loop
+        const loc = await dbGet(db, 'SELECT codigo FROM localizacoes_almoxarifado WHERE id = ?', [c.origemId]);
+        msg = `${c.item.material_nome}: a origem da separação (${loc ? loc.codigo : c.origemId}) não serve mais (${frase}) — entregue escolhendo de onde sai`;
+      }
+      const err = new Error(msg);
+      err.status = 400;
+      throw err;
+    }
   }
 
   // Etapa 94 Fase 5 (B464): a alcada de valor DEPOIS das recusas da propria entrega. Com a sexta seta (B462) a
@@ -3372,6 +3524,7 @@ module.exports = {
   parteGuardadaDeOutras, // Etapa 201 (T1): exportada para a prova de equivalencia
   dividirPorLotes, // Etapa 197 (T0)
   lotesParaOAutomatico, // Etapa 217 (B1439): exportada para o teste da regua
+  fraseLivreDoLote, guardadoNoLoteDeOutras, // Etapa 218 (B1444/B1451): a literal e o guardado no lote (teste e rota da janela)
   guardaQueConta, // Etapa 207 (B1396)
   guardaDosIrmaosNoPar, // Etapa 208 (B1407)
   mensagemSeparadoDeOutras, // Etapa 208 (B1409): a prova da literal sem irmaos

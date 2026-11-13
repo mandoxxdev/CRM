@@ -58,6 +58,7 @@ const audit = require('../../services/almoxarifado/audit');
 const auditLabels = require('../../services/almoxarifado/auditLabels');
 const auditFiltros = require('../../services/almoxarifado/auditFiltros');
 const stockService = require('../../services/almoxarifado/stockService');
+const retidoDoLote = require('../../services/almoxarifado/retidoDoLote'); // Etapa 218 (B1449): o livre do lote na janela
 // Etapa 201 (T1): a regua do separado de outras (parteGuardadaDeOutrasPorPar) para o "Sai de". Sem ciclo: o servico nao importa rotas
 // (e ja foi carregado por routes/almoxarifado.js antes desta extensao).
 const requisitionService = require('../../services/almoxarifado/requisitionService');
@@ -854,9 +855,23 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       // Etapa 201 (T1, RN-201.01/02, B1343): por linha, a parte guardada das caixas vivas de OUTRAS requisicoes no par da linha e o que
       // sobra do fisico. Montado AQUI, nao na funcao (o extrato tambem a usa, RN-201.05); `quantidade` continua o fisico cru.
       const porPar = await requisitionService.parteGuardadaDeOutrasPorPar(db, req.params.materialId, rq === undefined ? null : Number(rq));
+      // Etapa 218 (B1449, C513): por linha de lote com peca presa (retido + inspecao > folga; material com controle de lote, sem serie),
+      // o que pode sair do LOTE (`lote_livre` = livre do lote − o guardado das OUTRAS requisicoes no lote), o retido e a inspecao. A
+      // mesma regua da separacao e da entrega (`situacaoDosLotes`, `guardadoNoLoteDeOutras`); `null` nas outras linhas. Sem trava.
+      const mat = await dbGet(db, 'SELECT controle_lote, controle_serie FROM materiais_almoxarifado WHERE id = ?', [req.params.materialId]);
+      const sitLotes = mat && Number(mat.controle_lote) === 1 && Number(mat.controle_serie) !== 1
+        ? await retidoDoLote.situacaoDosLotes(db, req.params.materialId) : new Map();
+      const doLote = new Map();
+      for (const [loteId, sit] of sitLotes) {
+        if (sit.retido + sit.inspecao <= Q.QTD_FOLGA) continue;
+        const guardado = await requisitionService.guardadoNoLoteDeOutras(db, req.params.materialId, loteId, rq === undefined ? null : Number(rq));
+        doLote.set(loteId, { lote_livre: Q.qtd(Math.max(0, sit.livre - guardado)), lote_bloqueado: sit.retido, lote_inspecao: sit.inspecao });
+      }
+      const semLote = { lote_livre: null, lote_bloqueado: null, lote_inspecao: null };
       res.json(rows.map((s) => {
         const outras = s.localizacao_id == null ? 0 : (porPar.get(`${Number(s.localizacao_id)}|${s.lote_id == null ? '' : Number(s.lote_id)}`) || 0);
-        return { ...s, separado_outras: outras, sobra: Q.qtd(Math.max(0, (Number(s.quantidade) || 0) - outras)) };
+        return { ...s, separado_outras: outras, sobra: Q.qtd(Math.max(0, (Number(s.quantidade) || 0) - outras)),
+          ...((s.lote_id != null && doLote.get(Number(s.lote_id))) || semLote) };
       }));
     } catch (e) { handleError(res, e); }
   });

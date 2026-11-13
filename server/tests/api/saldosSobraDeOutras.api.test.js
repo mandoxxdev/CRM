@@ -300,10 +300,15 @@ process.on('exit', (code) => {
     }
     const crus = await require('../../services/almoxarifado/stockService').consultarSaldosPorLocalizacao(db, m.id);
     for (const s of crus) assert.ok(!('separado_outras' in s) && !('sobra' in s), 'funcao do extrato mudou');
-    // A rota devolve os mesmos campos da funcao, mais os dois.
+    // A rota devolve os mesmos campos da funcao, mais os dois — e, desde a Etapa 218 (B1449, mudanca de contrato aditiva e declarada),
+    // mais os tres do lote com peca presa (`lote_livre`, `lote_bloqueado`, `lote_inspecao`; null sem peca presa). Esta asserção dizia
+    // "mais os dois" e foi ampliada, nao apagada: a funcao do extrato continua sem nenhum deles (acima).
+    const DA_ROTA = ['separado_outras', 'sobra', 'lote_livre', 'lote_bloqueado', 'lote_inspecao'];
     const rows = await saldos(m);
-    assert.deepStrictEqual(rows.map((s) => Object.keys(s).filter((k) => k !== 'separado_outras' && k !== 'sobra').sort()),
+    assert.deepStrictEqual(rows.map((s) => Object.keys(s).filter((k) => !DA_ROTA.includes(k)).sort()),
       crus.map((s) => Object.keys(s).sort()));
+    for (const s of rows) assert.ok(DA_ROTA.every((k) => k in s), `rota sem um dos campos: ${JSON.stringify(s)}`);
+    for (const s of [...crus, ...ex.body.saldos_localizacao]) assert.ok(!('lote_livre' in s), 'extrato com lote_livre');
   });
 
   // ---------------------------------------------------------------- RN-201.09 (T4)

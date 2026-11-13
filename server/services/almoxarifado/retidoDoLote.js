@@ -87,6 +87,28 @@ async function retidoPorLote(db, materialId) {
   return mapa;
 }
 
+/**
+ * Etapa 218 (B1444, C513): a situacao de cada lote do material para o lote escolhido a mao ("Sai de") — Map<lote_id, { saldo, inspecao,
+ * retido, livre }>. A MESMA tabela derivada (`lotesComRetidoSql`) do automatico e da 205, com o saldo e a inspecao crus do lote (para a
+ * literal). `livre = MAX(0, fis − ret)` = `MAX(0, saldo − inspecao − retido)`. Uma consulta; so le.
+ */
+async function situacaoDosLotes(db, materialId) {
+  const extras = (l) => `COALESCE((SELECT SUM(rdl_s2.quantidade) FROM estoque_saldo_almoxarifado rdl_s2
+        WHERE rdl_s2.material_id = rdl_mp.id AND rdl_s2.lote_id = ${l}.id), 0) AS saldo,
+      COALESCE((SELECT SUM(rdl_ri4.quantidade_em_inspecao) FROM recebimentos_material_itens_almoxarifado rdl_ri4
+        WHERE rdl_ri4.lote_id = ${l}.id AND COALESCE(rdl_ri4.quantidade_em_inspecao, 0) > 0), 0) AS insp`;
+  const row = await dbGet(db, `SELECT (SELECT json_group_array(json_array(rdl_r.lote_id, rdl_r.saldo, rdl_r.insp, rdl_r.ret, rdl_r.fis))
+      FROM ${lotesComRetidoSql('rdl_mp', extras)} rdl_r) AS j FROM materiais_almoxarifado rdl_mp WHERE rdl_mp.id = ?`, [materialId]);
+  const mapa = new Map();
+  for (const [id, saldo, insp, ret, fis] of (row && row.j ? JSON.parse(row.j) : [])) {
+    const retido = Q.qtd(Number(ret) || 0);
+    mapa.set(Number(id), { saldo: Q.qtd(Number(saldo) || 0), inspecao: Q.qtd(Number(insp) || 0), retido,
+      livre: Q.qtd(Math.max(0, (Number(fis) || 0) - retido)) });
+  }
+  return mapa;
+}
+
 module.exports = {
   quarentenaDoLoteSql, reprovadoDoLoteSql, terceirosDoLoteSql, fisicoLivreDoLoteSql, lotesComRetidoSql, retidoPorLote,
+  situacaoDosLotes,
 };

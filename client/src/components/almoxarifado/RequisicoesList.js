@@ -155,16 +155,30 @@ const r6 = (x) => Math.round(x * 1e6) / 1e6;
 // esta requisição já guardou no par (a C1 desconta, `jaPedido`); na entrega, desde a Etapa 208, só o dos OUTROS itens (`irmaosNoPar`).
 // Fase 5 (B1349): só a própria no par (outras 0) também mostra a sobra — "XB-01 — lote L1 (sobra 5 de 6; 1 desta)" —, o mesmo número da
 // recusa física do servidor (físico − jaPedido); antes ficava o físico "(6)" e com 0,000001 de outras o rótulo pulava para "sobra 4…".
+// Etapa 218 (B1449, C513): o lote com peça presa (quarentena, reprovação, terceiro, inspeção) traz `lote_livre` — o que pode sair do
+// LOTE inteiro, menos o separado de outras requisições nele. O rótulo acrescenta "— do lote podem sair 3 (1 bloqueada)". Sem o campo
+// (`null`, ou servidor antigo): o rótulo de antes, letra por letra.
+const umaPeca = (x) => x > 1e-9 && x < 2 - 1e-9;
+const loteLivreDaOpcao = (s) => numeroDoServidor(s && s.lote_livre);
+const sufixoDoLote = (s) => {
+  const livre = loteLivreDaOpcao(s);
+  if (livre === null) return '';
+  const bloq = numeroDoServidor(s.lote_bloqueado) ?? 0;
+  const insp = numeroDoServidor(s.lote_inspecao) ?? 0;
+  const partes = [bloq > 1e-9 ? `${r6(bloq)} ${umaPeca(bloq) ? 'bloqueada' : 'bloqueadas'}` : null,
+    insp > 1e-9 ? `${r6(insp)} em inspeção` : null].filter(Boolean);
+  return ` — do lote ${umaPeca(livre) ? 'pode' : 'podem'} sair ${r6(livre)}${partes.length ? ` (${partes.join(', ')})` : ''}`;
+};
 const rotuloOrigem = (s, propriaNoPar = 0) => {
   const base = `${s.localizacao_codigo}${s.lote ? ` — lote ${s.lote}` : ''}`;
   const outras = outrasDaOpcao(s);
   const propria = Number(propriaNoPar) || 0;
   const temOutras = outras > 1e-9;
   const temPropria = propria > 1e-9;
-  if (!temOutras && !temPropria) return `${base} (${s.quantidade})`;
+  if (!temOutras && !temPropria) return `${base} (${s.quantidade})${sufixoDoLote(s)}`;
   const sobra = Math.max(0, sobraDaOpcao(s) - propria);
   const partes = [temOutras ? `${r6(outras)} para outras` : null, temPropria ? `${r6(propria)} desta` : null].filter(Boolean);
-  return `${base} (sobra ${r6(sobra)} de ${s.quantidade}; ${partes.join(', ')})`;
+  return `${base} (sobra ${r6(sobra)} de ${s.quantidade}; ${partes.join(', ')})${sufixoDoLote(s)}`;
 };
 const opcoesOrigem = (rows) => (Array.isArray(rows) ? rows : [])
   .filter((s) => s.localizacao_id != null && Number(s.quantidade) > 0);
@@ -243,10 +257,10 @@ const trocaNaSeparacao = (item, valor) => {
 // pendente continua no saldo da origem (separar não move estoque), e o servidor recusa "O saldo em A
 // (0) não cobre a quantidade (5)" quando A só tem o que já está na caixa. Não cobre = automático (o
 // aviso de troca aparece, honesto).
-const valorPlanejadaNaSeparacao = (item, rows, qtdSugerida = 0, outrosMesmoMaterial = 0) => {
+const valorPlanejadaNaSeparacao = (item, rows, qtdSugerida = 0, outrosMesmoMaterial = 0, itensDaReq = null) => {
   const valor = valorPlanejada(item);
   if (!(rows || []).some((s) => valorOrigem(s) === valor)) return '';
-  const cobre = maxSeparavelNaTela(item, valor, rows, outrosMesmoMaterial) + 1e-9 >= (Number(qtdSugerida) || 0);
+  const cobre = maxSeparavelNaTela(item, valor, rows, outrosMesmoMaterial, itensDaReq) + 1e-9 >= (Number(qtdSugerida) || 0);
   return cobre ? valor : '';
 };
 
@@ -256,7 +270,7 @@ const valorPlanejadaNaSeparacao = (item, rows, qtdSugerida = 0, outrosMesmoMater
 // (`cobre: true`, sem aviso), o par está nas opções e cobre a quantidade pré-preenchida somada ao que já está no mesmo par
 // (`jaNoPar`: a régua `pedidoPorOrigem` do servidor — irmãos com o par no select e o separado pendente dos irmãos planejados nele).
 // O alerta de retenção (I-a da 188) NÃO impede: o livro fica certo qualquer que seja a peça boa pega dali; a janela mostra o alerta.
-export const valorSugeridoNaSeparacao = (item, sugestao, rows, qtdSugerida = 0, outrosMesmoMaterial = 0, jaNoPar = 0) => {
+export const valorSugeridoNaSeparacao = (item, sugestao, rows, qtdSugerida = 0, outrosMesmoMaterial = 0, jaNoPar = 0, itensDaReq = null) => {
   // RN-189.03 (B1263): `temPlanejada` implica separado pendente > 0, então esta guarda (a do M2) também é a da planejada.
   if (!sugestao || pendenteSeparado(item) > 1e-9) return '';
   const p = sugestao.pegar_em;
@@ -265,7 +279,7 @@ export const valorSugeridoNaSeparacao = (item, sugestao, rows, qtdSugerida = 0, 
   const opcao = (rows || []).find((s) => valorOrigem(s) === valor);
   if (!opcao) return '';
   const qtd = Number(qtdSugerida) || 0;
-  if (maxSeparavelNaTela(item, valor, rows, outrosMesmoMaterial) + 1e-9 < qtd) return '';
+  if (maxSeparavelNaTela(item, valor, rows, outrosMesmoMaterial, itensDaReq) + 1e-9 < qtd) return '';
   // Etapa 201 (RN-201.08): a sobra (o físico menos o separado das outras), não o físico — a C1 recusaria o resto.
   if (sobraDaOpcao(opcao) + 1e-9 < (Number(jaNoPar) || 0) + qtd) return '';
   return valor;
@@ -307,7 +321,23 @@ const seriesDoLote = (info, loteId) => (info?.series || [])
 // O servidor recalcula na hora (é ele quem grava `maximo`/`divergente`); aqui só decide quando
 // pedir o motivo, que é opcional.
 const MOTIVO_DIVERGENCIA_MAX = 500;
-const maxSeparavelNaTela = (item, valorOrigemEscolhida, saldos, outrosMesmoMaterial = 0) => {
+// Etapa 218 (B1449, Fase 2 item 8): o que ESTA requisição já guardou no LOTE (qualquer endereço) — a semeadura do servidor na régua do lote.
+const propriaNoLote = (itens, materialId, loteId) => (itens || [])
+  .filter((i) => Number(i.material_id) === Number(materialId) && temPlanejada(i) && Number(i.lote_separacao_id) === Number(loteId))
+  .reduce((s, i) => s + pendentePlanejado(i), 0);
+// Etapa 218 (B1449): com `lote_livre` na opção (lote com peça presa), o máximo também é o que pode sair do lote menos o que esta
+// requisição já guardou nele (`itensDaReq`; sem eles, só o do próprio item). Os irmãos escolhendo o mesmo lote neste modal não entram:
+// a tela pode prometer mais, nunca menos — a porta recusa com a literal (D (218)).
+const maxSeparavelNaTela = (item, valorOrigemEscolhida, saldos, outrosMesmoMaterial = 0, itensDaReq = null) => {
+  const semLote = maxSeparavelNoPar(item, valorOrigemEscolhida, saldos, outrosMesmoMaterial);
+  const opcao = valorOrigemEscolhida ? (saldos || []).find((s) => valorOrigem(s) === valorOrigemEscolhida) : null;
+  const livreDoLote = loteLivreDaOpcao(opcao);
+  if (livreDoLote === null) return semLote;
+  const propriaLote = itensDaReq ? propriaNoLote(itensDaReq, item.material_id, opcao.lote_id)
+    : (temPlanejada(item) && Number(item.lote_separacao_id) === Number(opcao.lote_id) ? pendentePlanejado(item) : 0);
+  return Math.min(semLote, Math.max(0, livreDoLote - propriaLote));
+};
+const maxSeparavelNoPar = (item, valorOrigemEscolhida, saldos, outrosMesmoMaterial = 0) => {
   const pendenteSeparacao = Math.max(0, Number(item.quantidade_solicitada) - getSeparado(item));
   // Etapa 127 (RN-17): `outrosMesmoMaterial` é o que os irmãos tiram do livre (`tiraDoLivre`); a reserva própria fica.
   const propria = reservaPropriaSeparavel(item);
@@ -597,7 +627,7 @@ const RequisicoesList = () => {
       const rows = saldosEntrega[item.material_id];
       if (!rows) return;
       novas[item.id] = valorPlanejadaNaSeparacao(item, rows, quantidadesSeparacao[item.id],
-        separandoOutrosDoMaterial(detalhe.itens, item, quantidadesSeparacao));
+        separandoOutrosDoMaterial(detalhe.itens, item, quantidadesSeparacao), detalhe.itens);
     });
     if (Object.keys(novas).length) setOrigensSeparacao((prev) => ({ ...novas, ...prev }));
   }, [showSeparar, detalhe, saldosEntrega, origensSeparacao, quantidadesSeparacao]);
@@ -658,7 +688,7 @@ const RequisicoesList = () => {
       const valorDoPar = p ? `${p.localizacao_id}:${p.lote_id ?? ''}` : '';
       const valor = valorSugeridoNaSeparacao(item, sug, rows, quantidadesSeparacao[item.id],
         separandoOutrosDoMaterial(itens, item, quantidadesSeparacao),
-        jaNoParDosIrmaos(itens, item, valorDoPar, atuais, quantidadesSeparacao));
+        jaNoParDosIrmaos(itens, item, valorDoPar, atuais, quantidadesSeparacao), itens);
       if (valor) {
         novas[item.id] = valor;
         atuais[item.id] = valor;
@@ -975,7 +1005,7 @@ const RequisicoesList = () => {
           // Etapa 60 (RN-01): motivo só quando preenchido e só para item abaixo do máximo separável.
           ...(() => {
             const maximo = maxSeparavelNaTela(i, origensSeparacao[i.id], saldosEntrega[i.material_id],
-              separandoOutrosDoMaterial(detalhe.itens, i, quantidadesSeparacao));
+              separandoOutrosDoMaterial(detalhe.itens, i, quantidadesSeparacao), detalhe.itens);
             if (!separacaoDivergente(quantidadesSeparacao[i.id], maximo)) return {};
             const motivo = String(motivosSeparacao[i.id] || '').trim().slice(0, MOTIVO_DIVERGENCIA_MAX);
             return motivo ? { motivo_divergencia: motivo } : {};
@@ -2552,7 +2582,7 @@ const RequisicoesList = () => {
                     {separacaoDivergente(
                       quantidadesSeparacao[item.id],
                       maxSeparavelNaTela(item, origensSeparacao[item.id], saldosEntrega[item.material_id],
-                        separandoOutrosDoMaterial(detalhe.itens, item, quantidadesSeparacao))
+                        separandoOutrosDoMaterial(detalhe.itens, item, quantidadesSeparacao), detalhe.itens)
                     ) && (
                       <div style={{ marginTop: 8 }}>
                         <label className="almox-label" htmlFor={`separacao-motivo-${item.id}`} style={{ fontSize: '0.8rem' }}>
