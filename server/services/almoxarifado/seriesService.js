@@ -8,6 +8,8 @@ const { dbGet, dbAll, dbRun } = require('./db');
 const { registrarAuditoria, registrarAuditoriaDoAto } = require('./audit');
 // Etapa 115 (Fase 2, R2): o unico require da trava e do proprio Node — sem ciclo.
 const trava = require('./travaPorMaterial');
+const diaLocal = require('../diaLocal');
+const { predicadoLoteImpedidoSql, predicadoLoteVencidoSql } = require('./loteImpedido'); // Etapa 232 (B1523)
 
 // Etapa 61: BAIXADA = serie dada como ausente na regularizacao (nao presente; ver regularizarSeries).
 const STATUS_SERIE = ['EM_ESTOQUE', 'BLOQUEADA', 'ENTREGUE', 'SUCATEADA', 'ESTORNADA', 'BAIXADA'];
@@ -32,13 +34,25 @@ async function listarSeriesDoMaterial(db, materialId, { status } = {}) {
   const where = ['s.material_id = ?'];
   const params = [materialId];
   if (status) { where.push('s.status = ?'); params.push(status); }
-  return dbAll(db, `
-    SELECT s.*, lt.codigo AS lote_codigo, loc.descricao AS localizacao_descricao
+  // Etapa 232 (D (231) 1, B1523): a situacao do lote de cada serie, aditiva — a regua da 224 (`predicadoLoteImpedidoSql`, o "hoje" de
+  // Brasilia), com os mesmos nomes das linhas de saldo. A janela de entrega apaga a serie de lote impedido antes do clique (a porta a
+  // recusaria pelo lote das series). Sem lote: falsos e status null.
+  const hoje = diaLocal.hojeLocalISO();
+  const rows = await dbAll(db, `
+    SELECT s.*, lt.codigo AS lote_codigo, loc.descricao AS localizacao_descricao,
+           lt.status AS lote_status, lt.data_validade AS lote_validade,
+           CASE WHEN lt.id IS NOT NULL AND ${predicadoLoteImpedidoSql('lt', hoje)} THEN 1 ELSE 0 END AS lote_esta_impedido,
+           CASE WHEN lt.id IS NOT NULL AND ${predicadoLoteVencidoSql('lt', hoje)} THEN 1 ELSE 0 END AS lote_vencido_sem_liberacao
       FROM series_almoxarifado s
       LEFT JOIN lotes_almoxarifado lt ON lt.id = s.lote_id
       LEFT JOIN localizacoes_almoxarifado loc ON loc.id = s.localizacao_id
      WHERE ${where.join(' AND ')}
      ORDER BY s.numero`, params);
+  return rows.map((r) => ({
+    ...r,
+    lote_esta_impedido: Number(r.lote_esta_impedido) === 1,
+    lote_vencido_sem_liberacao: Number(r.lote_vencido_sem_liberacao) === 1,
+  }));
 }
 
 /**
