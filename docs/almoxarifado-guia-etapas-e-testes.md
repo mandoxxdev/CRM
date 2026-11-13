@@ -1,21 +1,29 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-11-13 (Etapas 172 a 191, 194 a 210, 217 a 231) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-11-13 (Etapas 172 a 191, 194 a 210, 217 a 232) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
 > ## Onde o desenvolvimento está — 2026-11-13 (Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
-> **O desenvolvimento parou aqui: Etapa 231 fechada — 2026-11-13.** **A entrega não começa pelo lote que ficou bloqueado, e a Não
+> **O desenvolvimento parou aqui: Etapa 232 fechada — 2026-11-13.** **A entrega não deixa marcar série de lote bloqueado.** Na entrega
+> de material com número de série, as séries de um lote bloqueado, reprovado ou vencido vêm apagadas, com o lote e a situação ao lado e uma
+> frase embaixo, e não contam para o **Confirmar Entrega**. Sem consulta antes do deploy. **Nenhum clique foi dado** (testes da tela e das
+> rotas — roteiro na seção da 232 e letra F das novidades).
+>
+> **Onde parou, exatamente:** a **232 está fechada** (código, testes, documentos e o estimado × realizado commitados). A **próxima** é
+> **a saída avulsa não deixa marcar série de lote impedido** (**D (232)** 1) — detalhada no fim do plano da 232
+> (`docs/superpowers/plans/2026-11-13-almoxarifado-etapa232-entrega-series-lote-impedido.md`). Sem estimativa nem plano.
+>
+> *(Antes:)* **Etapa 231 fechada — 2026-11-13.** **A entrega não começa pelo lote que ficou bloqueado, e a Não
 > Conformidade avisa o lote.** Quando o lote de onde a peça foi separada fica bloqueado, reprovado ou vencido, a janela de entrega abre em
 > *"Escolha de onde sai"* e o **Confirmar Entrega** espera a escolha; o botão **Confirmar Entrega e Baixar Estoque** vem apagado com a frase do
 > item; a tela **Não Conformidades** avisa que o lote continua impedido. Sem consulta antes do deploy. **Nenhum clique foi dado** (testes
 > da tela e das rotas — roteiro na seção da 231 e letra F das novidades).
 >
 > **Onde parou, exatamente:** a **231 está fechada** (código, testes, documentos e o estimado × realizado commitados). A **próxima** é
-> **a entrega não deixa marcar série do lote impedido** (**D (231)** 1) — detalhada no fim do plano da 231
-> (`docs/superpowers/plans/2026-11-13-almoxarifado-etapa231-entrega-origem-lote-impedido.md`). Sem estimativa nem plano.
+> **a entrega não deixa marcar série do lote impedido** (**D (231)** 1) — feita na **Etapa 232**.
 >
 > *(Antes:)* **Etapa 230 fechada — 2026-11-13.** **A requisição da OS só fica reservada com o que pode sair.** A nota
 > de pedido com OS aberta (e a inspeção dessa nota) não reserva mais para a requisição da OS peça de lote bloqueado, reprovado ou vencido:
@@ -7246,6 +7254,43 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 232 — A entrega não deixa marcar série de lote bloqueado (ENTREGUE — 2026-11-13)
+
+**O que mudou, em uma frase:** na entrega de material com número de série, as séries de um lote bloqueado, reprovado ou vencido continuam
+na lista, mas apagadas — não dá para marcá-las —, com o lote e a situação ao lado e uma frase embaixo.
+
+**O problema que ela resolve.** Com o **Sai de** em *"Escolha de onde sai"* ou em *"Qualquer endereço (automático)"*, a lista **Séries que
+saem** mostrava as séries de todos os lotes, inclusive as do lote bloqueado (justamente as que estavam na caixa da separação). O almoxarife
+marcava, clicava em **Confirmar Entrega** e só então recebia *"SERIE-232: Lote L2 esta bloqueado e nao pode ser utilizado"*.
+
+| Antes | Agora |
+|---|---|
+| Séries do lote bloqueado marcáveis, como as outras | Apagadas, com *" · lote L2 — Bloqueado: não sai"* ao lado do número |
+| Nada explica | Embaixo da lista: *"Séries de lote bloqueado, reprovado ou vencido vêm apagadas: só saem depois que o lote for liberado na tela Lotes e Séries."* |
+| A série marcada cujo lote foi bloqueado com a janela aberta continuava marcada depois da recusa | Depois da recusa a lista é recarregada: ela fica apagada e desmarcada (o contador volta) |
+| Lote ativo; lote vencido com o vencimento liberado; **Sai de** com um lote escolhido; separação | **Iguais** |
+
+**Roteiro de teste manual (≈10 min):**
+
+1. Entre como **Administrador do almoxarifado**. No cadastro do material (Compras), *SERIE-232* com **Controle por lote** e **Controle de
+   série**, unidade *un*.
+2. **Movimentações → Entrada** de 2 no lote *L1* (séries *S1*, *S2*) e de 2 no lote *L2* (séries *S3*, *S4*).
+3. Crie e aprove uma requisição de 2 *SERIE-232*; **Iniciar Separação** → **Confirmar Separação** (2).
+4. **Lotes e Séries** → *L2* → **Mudar status** → *Bloqueado*.
+5. Abra a requisição → **Entregar escolhendo de onde sai…**, **Sai de** *"Qualquer endereço (automático)"*. **Confira:** em **Séries que
+   saem**, *S3* e *S4* apagadas, cada uma com *" · lote L2 — Bloqueado: não sai"*; *S1* e *S2* marcáveis; embaixo: *"Séries de lote
+   bloqueado, reprovado ou vencido vêm apagadas: só saem depois que o lote for liberado na tela Lotes e Séries."*.
+6. Marque *S1* e *S2*: o contador *"2 de 2"* e o **Confirmar Entrega** acende. Confirme: as duas passam a *Entregue*.
+7. Controle: com o *L2* **Ativo** (ou **Reprovado** — o rótulo diz *"Reprovado: não sai"*), refaça a partir do passo 3: sem rótulo nem frase
+   no ativo; com o reprovado, apagadas.
+
+**O que esta etapa não cobre:** a saída avulsa (**Movimentações → Saída**) com série ainda lista as séries do lote bloqueado (**D (232)**);
+a situação é a da hora em que a lista foi carregada — um lote bloqueado com a janela aberta só aparece depois da recusa (que recarrega) ou ao
+reabrir (**C537**).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (tela e rotas) provam, escrito para você
+conferir à mão.
 
 ## Etapa 231 — A entrega não começa pelo lote que ficou bloqueado, e a Não Conformidade avisa o lote (ENTREGUE — 2026-11-13)
 
