@@ -17,7 +17,7 @@ Medido no código antes de estimar (sobre `a0c5a30d`):
 
 | # | Tarefa | Execução estimada | Fator | Informado | Etapa/plano | Régua usada | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | Na entrega, as séries de lote impedido vêm apagadas com a situação, e não contam para o Confirmar (D (231) 1) | 45 min | média (análise 30 min + teste 1 h) | 2h15 → 2h30 (arredondado na unidade de 30 min) | 232 | 231 (mesma janela, servidor aditivo + tela) mediu 0,7 h | — | — | — |
+| 1 | Na entrega, as séries de lote impedido vêm apagadas com a situação, e não contam para o Confirmar (D (231) 1) | 45 min | média (análise 30 min + teste 1 h) | 2h15 → 2h30 (arredondado na unidade de 30 min) | 232 | 231 (mesma janela, servidor aditivo + tela) mediu 0,7 h | 0,8 h (~48 min) | 2h30 (48 min + análise 30 min + teste 1 h = 2h18, arredondado; a parte do André é a da tabela — não informada por ele) | 46900440, a78a80ec, 533349da, 7aa1f239, 29201ab2, d7e9074d e o de estimado x realizado |
 
 Incerteza: baixa — o risco é a série marcada antes de o lote ser bloqueado (o reler das séries precisa desmarcar a que ficou impedida).
 
@@ -25,3 +25,7 @@ Medição no fechamento:
 ```
 --grupos "E232=Etapa 232|Estimativa: almoxarifado - entrega nao deixa marcar serie"
 ```
+
+No fechamento: execução medida 0,8 h (horas.js --grupos "E232=…", 13/11). O estimado de execução (45 min) ficou próximo do medido (~48
+min); a maior parte foi a Fase 5 (cenários de teste que faltavam, ~29 min). Realizado 2h30 contra 2h30 estimado. Conclusão:
+`conclusao_2026-11-13_almoxarifado-entrega-series-lote-impedido.txt`.
