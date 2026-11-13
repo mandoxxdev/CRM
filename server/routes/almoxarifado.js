@@ -29,7 +29,7 @@ const requisicaoMaterialInativo = require('../services/almoxarifado/requisicaoMa
 const { proximoCodigoLocalizacao } = require('../services/almoxarifado/localizacaoCodigo');
 const deliverySignatureService = require('../services/almoxarifado/deliverySignatureService');
 const { disponivelSql } = require('../services/almoxarifado/availabilitySql');
-const { loteImpedidoSql } = require('../services/almoxarifado/loteImpedido'); // Etapa 205: o separavel do detalhe
+const { loteImpedidoSql, predicadoLoteImpedidoSql, predicadoLoteVencidoSql } = require('../services/almoxarifado/loteImpedido'); // Etapa 205: o separavel do detalhe; Etapa 231: o lote da separacao
 const { valorEstoqueSql, custoUnitarioSql } = require('../services/almoxarifado/custoSql');
 const requisitionCreateService = require('../services/almoxarifado/requisitionCreateService');
 const requisitionStateMachine = require('../services/almoxarifado/requisitionStateMachine');
@@ -4038,7 +4038,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                      a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome,
                      tm.nome as tipo_nome, tm.icone as tipo_icone, tm.is_epi, tm.requer_assinatura,
                      -- Etapa 59: a origem planejada na separação, para a tela mostrar "separado de X".
-                     lsep.codigo as origem_separacao_codigo, ltsep.codigo as lote_separacao_codigo
+                     lsep.codigo as origem_separacao_codigo, ltsep.codigo as lote_separacao_codigo,
+                     -- Etapa 231 (C532, B1517): a situacao do lote da separacao, aditiva — a tela nao pre-escolhe a origem impedida e apaga o
+                     -- botao de um clique antes do clique. A regua da 224 (o 'hoje' de Brasilia); falsos sem lote (normalizarItem converte).
+                     ltsep.status as lote_separacao_status, ltsep.data_validade as lote_separacao_validade,
+                     CASE WHEN ltsep.id IS NOT NULL AND ${predicadoLoteImpedidoSql('ltsep', diaLocal.hojeLocalISO())} THEN 1 ELSE 0 END as lote_separacao_esta_impedido,
+                     CASE WHEN ltsep.id IS NOT NULL AND ${predicadoLoteVencidoSql('ltsep', diaLocal.hojeLocalISO())} THEN 1 ELSE 0 END as lote_separacao_vencido_sem_liberacao
               FROM itens_requisicao_almoxarifado ir
               JOIN materiais_almoxarifado ma ON ir.material_id = ma.id
               LEFT JOIN tipos_material_almoxarifado tm ON ma.tipo_material_id = tm.id

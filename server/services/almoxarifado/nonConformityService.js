@@ -1007,12 +1007,17 @@ async function decidirEExecutar(db, user, id, atual, insp, previsto, dados, just
       const reservaChegadaService = require('./reservaChegadaService');
       reserva.rcs = reservaChegadaService;
       reserva.pendencia = reservaChegadaService.novaPendencia();
-      await reservaChegadaService.aposLiberacaoSemFalhar(db, user, {
+      // Etapa 231 (C535, B1521): o retorno diz se nada foi para quem espera por causa do lote — a tela avisa, como a da inspecao (B1512).
+      const distribuicao = await reservaChegadaService.aposLiberacaoSemFalhar(db, user, {
         origem: 'NAO_CONFORMIDADE', documento_id: id, documento_numero: atual.numero,
         material_id: liberacao.material_id, quantidade: liberacao.quantidade,
         recebimento_id: atual.recebimento_id || insp?.recebimento_id || null,
         lote_id: insp?.lote_id || null, // Etapa 229 (C519, B1509): o lote do item que a NC liberou
       }, { sobTrava: true, pendencia: reserva.pendencia });
+      // Aditivo e SO no caso impedido: as chaves de `liberacao` continuam as de hoje nos outros.
+      if (distribuicao && distribuicao.lote_impedido && distribuicao.lote_impedido.codigo) {
+        liberacao = { ...liberacao, lote_impedido: distribuicao.lote_impedido.codigo };
+      }
     } catch (e) {
       console.warn(`[almoxarifado-reservas] reserva na liberacao falhou (NAO_CONFORMIDADE ${id}): ${e.message}`);
     }

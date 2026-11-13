@@ -353,6 +353,11 @@ function normalizarItem(item) {
     ...camposEntregavel,
     ...(temCaixa ? { saldo_separavel: tetoSeparavel, quantidade_separavel: maxSeparar(item, tetoSeparavel),
       saldo_separavel_reserva: inativo ? 0 : reservaPropriaSeparavel(reservaItem, separado - entregue) } : {}),
+    // Etapa 231 (C532, B1517): a situacao do lote da separacao vira booleano so quando a rota do detalhe a trouxe (aditivo).
+    ...(Object.prototype.hasOwnProperty.call(item, 'lote_separacao_esta_impedido') ? {
+      lote_separacao_esta_impedido: Number(item.lote_separacao_esta_impedido) === 1,
+      lote_separacao_vencido_sem_liberacao: Number(item.lote_separacao_vencido_sem_liberacao) === 1,
+    } : {}),
   };
 }
 

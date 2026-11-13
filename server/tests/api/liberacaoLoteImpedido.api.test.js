@@ -200,6 +200,18 @@ process.on('exit', (code) => {
     assert.strictEqual((await avisosLib(R1, 'NAO_CONFORMIDADE')).length, 1);
   });
 
+  // ── RN-231.10 (Etapa 231, C535, B1521) ─────────────────────────────────────────────────────────────────────────────────────────
+  await test('[RN-231.10] a NC aceita as 4 de L1 BLOQUEADO -> liberacao.lote_impedido L1 (a tela avisa)', async () => {
+    const { d } = await cenarioNc(1);
+    assert.strictEqual(d.body.liberacao.efeito, 'LIBERADA');
+    assert.strictEqual(d.body.liberacao.lote_impedido, 'L1');
+  });
+  await test('[RN-231.10 controle] a NC com L1 ATIVO -> sem lote_impedido, as chaves de liberacao as de hoje', async () => {
+    const { d } = await cenarioNc(0);
+    assert.strictEqual(d.body.liberacao.efeito, 'LIBERADA');
+    assert.deepStrictEqual(Object.keys(d.body.liberacao).sort(), ['efeito', 'material_id', 'mensagem', 'quantidade']);
+  });
+
   // ── RN-229.04 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   await test('[RN-229.04] L1 ATIVO mas vencido ontem -> nada, lote_impedido L1', async () => {
     const c = await montar({ certificado: 0 });
