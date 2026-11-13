@@ -587,3 +587,102 @@ describe('[RN-221.10 / .11] Nova Reserva e o lote impedido', () => {
     expect(toast.success).not.toHaveBeenCalled();
   });
 });
+
+// Etapa 222 (C481, 1a parte; RN-222.09, .10, B1478): o formulario troca o aviso fixo da 221 pelo numero do material escolhido, lido do
+// extrato dele (`material.lote_impedido`). Enquanto busca, se falhar ou se o campo nao vier: o aviso fixo (nunca menos que a 221).
+describe('[RN-222.09 / .10] Nova Reserva diz quanto do material esta em lote impedido', () => {
+  const AVISO = 'Peças em lote bloqueado, reprovado ou vencido não entram na reserva.';
+  const NUMERO = (n, un) => `${n} ${un} deste material estão em lote bloqueado, reprovado ou vencido e não entram na reserva.`;
+  const MATS = [
+    { id: 10, codigo: 'MAT-1', nome: 'Chapa 3mm', unidade: 'PC', quantidade_disponivel: 10, controle_lote: 1, controle_serie: 0 },
+    { id: 11, codigo: 'MAT-2', nome: 'Tubo 2pol', unidade: 'M', quantidade_disponivel: 8, controle_lote: 1, controle_serie: 0 },
+    { id: 12, codigo: 'MAT-3', nome: 'Parafuso', unidade: 'UN', quantidade_disponivel: 50, controle_lote: 0, controle_serie: 0 },
+  ];
+  const urlExtrato = (id) => `/almoxarifado/materiais/${id}/extrato`;
+  // extratos: { id: numero | Error | Promise }
+  const comExtratos = (extratos) => {
+    const anterior = api.get.getMockImplementation();
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/estoque') return Promise.resolve({ data: MATS });
+      const id = Object.keys(extratos).find((k) => url === urlExtrato(k));
+      if (id !== undefined) {
+        const v = extratos[id];
+        if (v instanceof Error) return Promise.reject(v);
+        if (v && typeof v.then === 'function') return v;
+        return Promise.resolve({ data: { material: { id: Number(id), lote_impedido: v }, saldos_localizacao: [], movimentacoes: [], reservas: [] } });
+      }
+      return anterior(url);
+    });
+  };
+  const aviso = () => container.querySelector('.almox-reserva-aviso-lote');
+  async function abrir() {
+    await renderizar();
+    const botao = [...container.querySelectorAll('button')].find((b) => b.textContent.includes('Nova Reserva'));
+    await act(async () => { botao.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+  }
+  async function escolher(id) {
+    preencher(campoPorLabel('Material'), String(id));
+    await act(async () => { await Promise.resolve(); });
+  }
+
+  test('[RN-222.09] lote_impedido 6: o número no lugar do aviso fixo; o Disponível igual', async () => {
+    comExtratos({ 10: 6 });
+    await abrir(); await escolher(10);
+    expect(api.get).toHaveBeenCalledWith(urlExtrato(10));
+    expect(aviso().textContent).toBe(NUMERO(6, 'PC'));
+    expect(container.textContent).not.toContain(AVISO);
+    expect(container.textContent).toContain('Disponível: 10 PC');
+  });
+
+  test('[RN-222.09] [controle positivo] lote_impedido 0: nem número nem aviso fixo', async () => {
+    comExtratos({ 10: 0 });
+    await abrir(); await escolher(10);
+    expect(aviso()).toBeNull();
+    expect(container.textContent).not.toContain('em lote bloqueado, reprovado ou vencido');
+  });
+
+  test('[RN-222.09] o extrato falhou: o aviso fixo da 221', async () => {
+    comExtratos({ 10: Object.assign(new Error('x'), { response: { status: 500 } }) });
+    await abrir(); await escolher(10);
+    expect(aviso().textContent).toBe(AVISO);
+  });
+
+  test('[RN-222.09] o extrato veio sem o campo (servidor antigo): o aviso fixo da 221', async () => {
+    comExtratos({ 10: undefined });
+    await abrir(); await escolher(10);
+    expect(aviso().textContent).toBe(AVISO);
+  });
+
+  test('[RN-222.09] enquanto busca: o aviso fixo', async () => {
+    comExtratos({ 10: new Promise(() => {}) });
+    await abrir(); await escolher(10);
+    expect(aviso().textContent).toBe(AVISO);
+  });
+
+  test('[RN-222.09] sem controle de lote: não busca o extrato e nada aparece', async () => {
+    comExtratos({ 12: 6 });
+    await abrir(); await escolher(12);
+    expect(api.get).not.toHaveBeenCalledWith(urlExtrato(12));
+    expect(aviso()).toBeNull();
+    expect(container.textContent).toContain('Disponível: 50 UN');
+  });
+
+  test('[RN-222.10] a resposta do material que deixou de ser o escolhido é ignorada', async () => {
+    let soltarA;
+    const lentoA = new Promise((res) => { soltarA = res; });
+    comExtratos({ 10: lentoA, 11: 2 });
+    await abrir();
+    await escolher(10);
+    await escolher(11);
+    expect(aviso().textContent).toBe(NUMERO(2, 'M'));
+    await act(async () => {
+      soltarA({ data: { material: { id: 10, lote_impedido: 6 }, saldos_localizacao: [], movimentacoes: [], reservas: [] } });
+      await Promise.resolve();
+    });
+    expect(aviso().textContent).toBe(NUMERO(2, 'M'));
+    // e voltar ao A busca de novo e mostra o dele
+    comExtratos({ 10: 6, 11: 2 });
+    await escolher(10);
+    expect(aviso().textContent).toBe(NUMERO(6, 'PC'));
+  });
+});

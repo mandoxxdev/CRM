@@ -44,6 +44,9 @@ const statusInfo = (s) => STATUS.find((x) => x.value === s) || { label: s || '�
 
 // Etapa 221 (RN-221.10, B1472): o aviso sob o "Disponivel" do material com controle de lote.
 export const AVISO_LOTE_IMPEDIDO_RESERVA = 'Peças em lote bloqueado, reprovado ou vencido não entram na reserva.';
+// Etapa 222 (RN-222.09, B1478): o mesmo aviso com o numero do material escolhido (lido do extrato).
+export const avisoLoteImpedidoComNumero = (n, unidade) =>
+  `${n}${unidade ? ` ${unidade}` : ''} deste material estão em lote bloqueado, reprovado ou vencido e não entram na reserva.`;
 
 const FORM_VAZIO = {
   material_id: '', quantidade: '', projeto_id: '', os_id: '', os_referencia: '',
@@ -315,6 +318,23 @@ const ReservasAlmoxarifado = () => {
   };
 
   const materialSelecionado = materiais.find((m) => m.id === parseInt(form.material_id, 10));
+
+  // Etapa 222 (RN-222.09, .10, B1478): o numero em lote impedido do material escolhido, lido do extrato dele (`lote_impedido`, o
+  // `/estoque` nao o traz). `{ materialId, valor }`: so vale para o material que ainda e o escolhido (RN-222.10); `valor` null =
+  // buscando, falhou ou o campo nao veio -> o aviso fixo da 221 (B1472).
+  const idComLote = showForm && materialSelecionado && Number(materialSelecionado.controle_lote) === 1 ? materialSelecionado.id : null;
+  const [impedidoDoForm, setImpedidoDoForm] = useState({ materialId: null, valor: null });
+  useEffect(() => {
+    if (idComLote == null) return undefined;
+    let vivo = true;
+    setImpedidoDoForm({ materialId: idComLote, valor: null });
+    api.get(`/almoxarifado/materiais/${idComLote}/extrato`).then((res) => {
+      const n = res?.data?.material?.lote_impedido;
+      if (vivo && n != null && Number.isFinite(Number(n))) setImpedidoDoForm({ materialId: idComLote, valor: Number(n) });
+    }, () => {});
+    return () => { vivo = false; };
+  }, [idComLote]);
+  const impedidoConhecido = impedidoDoForm.materialId === idComLote ? impedidoDoForm.valor : null;
   const filtroAtivo = statusFilter !== 'ATIVA' || materialFilter || projetoFilter;
 
   return (
@@ -515,9 +535,15 @@ const ReservasAlmoxarifado = () => {
                     )}
                     {/* Etapa 221 (RN-221.10, B1472): o servidor nao deixa reservar peca de lote impedido; o "Disponivel" acima ainda a
                         conta (C481), entao a tela avisa — so para material com controle de lote. */}
-                    {materialSelecionado && Number(materialSelecionado.controle_lote) === 1 && (
+                    {/* Etapa 222 (RN-222.09, B1478): com o numero do extrato, ele no lugar do aviso fixo; com 0, nada. */}
+                    {idComLote != null && impedidoConhecido == null && (
                       <small className="almox-reserva-aviso-lote" style={{ display: 'block', color: 'var(--gmp-text-light)' }}>
                         {AVISO_LOTE_IMPEDIDO_RESERVA}
+                      </small>
+                    )}
+                    {idComLote != null && impedidoConhecido > 0 && (
+                      <small className="almox-reserva-aviso-lote" style={{ display: 'block', color: 'var(--gmp-error)' }}>
+                        {avisoLoteImpedidoComNumero(impedidoConhecido, materialSelecionado.unidade)}
                       </small>
                     )}
                   </div>
