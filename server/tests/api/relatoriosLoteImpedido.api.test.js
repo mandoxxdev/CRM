@@ -62,11 +62,11 @@ function binaryParser(res, cb) {
   await post(`${API}/localizacoes`, { codigo: 'Z225-01', descricao: 'Z225-01', almoxarifado_id: alm.body.id, tipo: 'Prateleira' });
   const P01 = await dbGet(db, "SELECT id FROM localizacoes_almoxarifado WHERE codigo = 'Z225-01'");
 
-  const material = async ({ lote = 1, cliente = null } = {}) => {
+  const material = async ({ lote = 1, cliente = null, nome = null, unidade = 'un' } = {}) => {
     const c = `E225-${++seq}`;
     return (await dbRun(db, `INSERT INTO materiais_almoxarifado (codigo, nome, unidade, quantidade_atual, quantidade_minima, ativo,
         material_critico, custo_unitario, controle_lote, controle_serie, localizacao_padrao_id, proprietario_cliente_id)
-        VALUES (?, ?, 'un', 0, 0, 1, 0, 0.1, ?, 0, ?, ?)`, [c, c, lote, P01.id, cliente])).lastID;
+        VALUES (?, ?, ?, 0, 0, 1, 0, 0.1, ?, 0, ?, ?)`, [c, nome || c, unidade, lote, P01.id, cliente])).lastID;
   };
   const codigo = async (m) => (await dbGet(db, 'SELECT codigo FROM materiais_almoxarifado WHERE id = ?', [m])).codigo;
   const entrar = (m, q, lote) => ok(post(`${API}/movimentacoes/v2`, { material_id: m, tipo: 'ENTRADA', quantidade: q,
@@ -148,6 +148,23 @@ function binaryParser(res, cb) {
     assert.ok(lr, 'material com retencao sumiu do comprometido');
     assert.strictEqual(lr.lote_impedido, 0);
     assert.strictEqual(lr.quantidade_reservada, 1);
+  });
+
+  await test('[RN-225.03 b] comprometido: impedido fracionado (0,5 kg num lote bloqueado) tambem entra (Fase 5, M9)', async () => {
+    const m = await material({ unidade: 'kg' }); await entrar(m, 0.5, 'L2'); await status(m, 'L2', 'BLOQUEADO');
+    const l = await comprometido(m);
+    assert.ok(l, 'material so com 0,5 em lote impedido ficou fora do comprometido');
+    assert.strictEqual(l.lote_impedido, 0.5);
+  });
+  await test('[RN-225.03 c] comprometido continua em ordem de nome, nao de codigo (Fase 5, M1)', async () => {
+    const z = await material({ nome: 'AAA 225 ULTIMO CODIGO' }); await entrar(z, 6, 'L2'); await status(z, 'L2', 'BLOQUEADO');
+    const a = await material({ nome: 'ZZZ 225 PRIMEIRO NOME' });
+    await dbRun(db, "UPDATE materiais_almoxarifado SET codigo = 'E225-0000' WHERE id = ?", [a]);
+    await entrar(a, 6, 'L2'); await status(a, 'L2', 'BLOQUEADO');
+    const cods = (await rel('saldos-comprometidos')).map((x) => x.material_codigo);
+    const iz = cods.indexOf(await codigo(z)); const ia = cods.indexOf('E225-0000');
+    assert.ok(iz >= 0 && ia >= 0, `fora do relatorio: ${iz} ${ia}`);
+    assert.ok(iz < ia, `ordem por codigo, nao por nome: ${JSON.stringify(cods)}`);
   });
 
   // ── RN-225.04 ─────────────────────────────────────────────────────────────────────────────────────────────────────
