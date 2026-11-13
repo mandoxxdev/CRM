@@ -705,6 +705,8 @@ describe('[RN-223.10] Nova Reserva: a lista de materiais diz quanto esta em lote
     { id: 22, codigo: 'E-3', nome: 'Ausente', unidade: 'un', quantidade_disponivel: 10, controle_lote: 0, controle_serie: 0 },
     { id: 23, codigo: 'E-4', nome: 'Maior', unidade: 'un', quantidade_disponivel: 0, controle_lote: 1, controle_serie: 0, lote_impedido: 6 },
     { id: 24, codigo: 'E-5', nome: 'Texto', unidade: 'un', quantidade_disponivel: 10, controle_lote: 1, controle_serie: 0, lote_impedido: 'x' },
+    { id: 25, codigo: 'E-6', nome: 'Kg', unidade: 'KG', quantidade_disponivel: 3, controle_lote: 1, controle_serie: 0, lote_impedido: 2.5 },
+    { id: 26, codigo: 'E-7', nome: 'Meio', unidade: 'KG', quantidade_disponivel: 3, controle_lote: 1, controle_serie: 0, lote_impedido: 0.5 },
   ];
   beforeEach(() => {
     const anterior = api.get.getMockImplementation();
@@ -725,6 +727,12 @@ describe('[RN-223.10] Nova Reserva: a lista de materiais diz quanto esta em lote
   test('[RN-223.10] impedido maior que o Disponível: fora do parêntese', async () => {
     await abrir();
     expect(opcao(23).textContent).toBe('E-4 — Maior (Disponível: 0 un) · 6 em lote impedido');
+  });
+
+  test('[RN-223.10 b] (Fase 5) fracionado e menor que 1: o número como veio, sem arredondar', async () => {
+    await abrir();
+    expect(opcao(25).textContent).toBe('E-6 — Kg (Disponível: 3 KG) · 2.5 em lote impedido');
+    expect(opcao(26).textContent).toBe('E-7 — Meio (Disponível: 3 KG) · 0.5 em lote impedido');
   });
 
   test('[RN-223.10] 0, ausente ou texto: o texto de sempre — e a opção com número está lá', async () => {

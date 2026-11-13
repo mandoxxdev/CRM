@@ -581,6 +581,8 @@ describe('MateriaisAlmoxarifado — o selo de lote impedido (Etapa 223)', () => 
     { ...base, id: 35, codigo: 'IMP-005', nome: 'Nulo', unidade: 'PC', lote_impedido: null },
     { ...base, id: 36, codigo: 'IMP-006', nome: 'Texto', unidade: 'PC', lote_impedido: 'abc' },
     { ...base, id: 37, codigo: 'IMP-007', nome: 'Fracionado', unidade: 'KG', lote_impedido: 2.5 },
+    { ...base, id: 38, codigo: 'IMP-008', nome: 'Meio', unidade: 'KG', lote_impedido: 0.5 },
+    { ...base, id: 39, codigo: 'IMP-009', nome: 'Inativo', unidade: 'PC', lote_impedido: 6, ativo: 0 },
   ];
   beforeEach(() => {
     api.get.mockImplementation((url) => {
@@ -605,6 +607,9 @@ describe('MateriaisAlmoxarifado — o selo de lote impedido (Etapa 223)', () => 
     expect(selo('IMP-001').getAttribute('title')).toBe(DICA);
     expect(linhaDe('IMP-001').textContent).toContain('10');
     expect(selo('IMP-007').textContent.trim()).toBe('2.5 KG em lote impedido');
+    // Fase 5 (mutacoes C1, C2): menos de 1 e material inativo tambem mostram
+    expect(selo('IMP-008').textContent.trim()).toBe('0.5 KG em lote impedido');
+    expect(selo('IMP-009').textContent.trim()).toBe('6 PC em lote impedido');
   });
 
   test('[RN-223.08 b] sem unidade: "6 em lote impedido", sem espaço sobrando nem "null"', async () => {

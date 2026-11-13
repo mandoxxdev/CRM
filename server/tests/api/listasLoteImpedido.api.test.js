@@ -186,7 +186,27 @@ process.on('exit', (code) => {
     }
   });
 
-  // ── RN-223.07 (T4, integracao) ────────────────────────────────────────────────────────────────────────────────────
+  // ── Fase 5 (lacunas de teste, mutacoes S1, S2, S7) ───────────────────────────────────────────────────────────────
+  await test('[RN-223.01 b] (Fase 5) fracionado: L1 0,5 + L2 BLOQUEADO 2,5 -> 2.5 nas duas listas, sem arredondar', async () => {
+    const m = await material(); await entrar(m, 0.5, 'L1'); await entrar(m, 2.5, 'L2'); await status(m, 'L2', 'BLOQUEADO');
+    assert.strictEqual(await impEstoque(m), 2.5);
+    assert.strictEqual(await impMateriais(m), 2.5);
+    const m2 = await material(); await entrar(m2, 1, 'L1'); await entrar(m2, 0.5, 'L2'); await status(m2, 'L2', 'BLOQUEADO');
+    assert.strictEqual(await impEstoque(m2), 0.5);
+    assert.strictEqual(await impMateriais(m2), 0.5);
+  });
+  await test('[RN-223.11] (Fase 5) impedido maior que o Disponivel: L1 5 + L2 BLOQUEADO 10 + reserva do sistema de 8 -> 10, disponivel 7', async () => {
+    const m = await material(); await entrar(m, 5, 'L1'); await entrar(m, 10, 'L2'); await status(m, 'L2', 'BLOQUEADO');
+    const stockService = require('../../services/almoxarifado/stockService');
+    await stockService.criarReserva(db, ADMIN, { material_id: m, quantidade: 8, os_referencia: 'OS-SIS-223' }, { sistema: true });
+    const l = await estoque(m);
+    assert.strictEqual(l.lote_impedido, 10);
+    assert.strictEqual(Number(l.quantidade_disponivel), 7);
+    assert.strictEqual(await impMateriais(m), 10);
+    assert.strictEqual(l.lote_impedido, await regua(m));
+  });
+
+  // ── RN-223.07 (T4, integracao)────────────────────────────────────────────────────────────────────────────────────
   await test('[RN-223.07] lista, extrato e reserva dizem 6 -> liberar o lote -> as tres leituras 0 -> a reserva passa', async () => {
     const m = await l1l2(); await status(m, 'L2', 'BLOQUEADO');
     assert.strictEqual(await impEstoque(m), 6);
