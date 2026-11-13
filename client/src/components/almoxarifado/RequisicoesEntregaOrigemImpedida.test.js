@@ -284,6 +284,78 @@ describe('Etapa 231: a entrega não pré-escolhe a origem num lote impedido', ()
     expect(confirmarJanela().disabled).toBe(false);
   });
 
+  // Fase 5 (revisão de testes, achados 3 a 5): dois itens, item sem quantidade e as linhas de saldo discordando do detalhe.
+  const ITEM2_BOM = { id: 2, material_id: 11, material_codigo: 'MAT-2', material_nome: 'Parafuso M8', origem_separacao_id: null,
+    lote_separacao_id: null, origem_separacao_codigo: null, lote_separacao_codigo: null, quantidade_origem_separacao: null,
+    ...SIT_BOA, lote_separacao_status: null, lote_separacao_esta_impedido: false };
+  test('[RN-231.06, Fase 5] dois itens, um impedido e um bom: o um clique apagado só com a frase do impedido; a janela espera', async () => {
+    const r = SEPARANDO('EM_SEPARACAO');
+    requisicao = { ...r, itens: [r.itens[0], { ...r.itens[0], ...ITEM2_BOM }] };
+    await renderizar();
+    expect(umClique().disabled).toBe(true);
+    expect(fraseUmClique().textContent).toBe(FRASE_UM_CLIQUE('Bloqueado'));
+    const p = PARCIAL();
+    requisicao = { ...p, itens: [{ ...p.itens[0], ...ITEM2_BOM }, p.itens[0]] };
+    await remontar();
+    await clicar('Completar Entrega');
+    expect(selectEntrega().value).toBe('__escolher__');
+    expect(confirmarJanela().disabled).toBe(true);
+  });
+  test('[RN-231.06, Fase 5] o item impedido sem quantidade a entregar não apaga o um clique dos outros', async () => {
+    const r = SEPARANDO('EM_SEPARACAO');
+    requisicao = { ...r, itens: [{ ...r.itens[0], quantidade_entregavel: 0, saldo_entregavel: 0 }, { ...r.itens[0], ...ITEM2_BOM }] };
+    await renderizar();
+    expect(umClique()).toBeTruthy();
+    expect(umClique().disabled).toBe(false);
+    expect(fraseUmClique()).toBeNull();
+  });
+  test('[RN-231.02, Fase 5] detalhe e linhas discordando: qualquer um dos dois impedido segura ("Escolha de onde sai", a frase, o Confirmar)', async () => {
+    requisicao = PARCIAL();
+    saldos = [A01, XB01, Z02_BOM()];
+    await renderizar();
+    await clicar('Completar Entrega');
+    expect(selectEntrega().value).toBe('__escolher__');
+    expect(fraseItem().textContent).toBe(FRASE_PLANEJADA_L2);
+    expect(confirmarJanela().disabled).toBe(true);
+    requisicao = PARCIAL(SIT_BOA);
+    saldos = [A01, XB01, Z02()];
+    await remontar();
+    await clicar('Completar Entrega');
+    expect(selectEntrega().value).toBe('__escolher__');
+    expect(confirmarJanela().disabled).toBe(true);
+  });
+
+  // Fase 5 (revisão do fluxo, reproduzido): o lote bloqueado com a janela aberta — o detalhe é relido ao voltar para a aba, as linhas não.
+  const voltarParaAba = async () => { await act(async () => { window.dispatchEvent(new Event('focus')); }); };
+  test('[RN-231.03, Fase 5] janela aberta na planejada boa; o lote é bloqueado e o detalhe relido -> o Confirmar espera e a frase aparece', async () => {
+    requisicao = PARCIAL(SIT_BOA);
+    saldos = [A01, XB01, Z02_BOM()];
+    await renderizar();
+    await clicar('Completar Entrega');
+    expect(selectEntrega().value).toBe('4:12');
+    expect(confirmarJanela().disabled).toBe(false);
+    requisicao = PARCIAL();
+    await voltarParaAba();
+    expect(confirmarJanela().disabled).toBe(true);
+    expect(fraseItem().textContent).toBe(FRASE_PLANEJADA_L2);
+    escolher(selectEntrega(), '2:7');
+    expect(confirmarJanela().disabled).toBe(false);
+  });
+  test('[RN-231.04, Fase 5] acima da parte (em branco, sem automático); o lote é bloqueado e o detalhe relido -> o Confirmar espera', async () => {
+    requisicao = PARCIAL({ quantidade_origem_separacao: 1, ...SIT_BOA });
+    saldos = [A01, XB01, Z02_BOM()];
+    await renderizar();
+    await clicar('Completar Entrega');
+    expect(selectEntrega().value).toBe('');
+    expect(confirmarJanela().disabled).toBe(false);
+    requisicao = PARCIAL({ quantidade_origem_separacao: 1 });
+    await voltarParaAba();
+    expect(confirmarJanela().disabled).toBe(true);
+    expect(fraseItem().textContent).toBe(FRASE_PLANEJADA_L2);
+    escolher(selectEntrega(), '');
+    expect(confirmarJanela().disabled).toBe(false);
+  });
+
   test('[RN-231.08] as palavras são as do extrato (reprovado, vencido)', async () => {
     requisicao = SEPARANDO('EM_SEPARACAO', { lote_separacao_status: 'REPROVADO' });
     await renderizar();

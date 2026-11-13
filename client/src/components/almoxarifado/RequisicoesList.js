@@ -223,8 +223,9 @@ const VALOR_ESCOLHER_ORIGEM = '__escolher__';
 const frasePlanejadaImpedida = (item, rows, saldosFalharam = false) => {
   // Etapa 231 (Fase 2 M4): só com a parte planejada ainda pendente — com ela toda entregue, "essa parte não sai" seria falso.
   if (!temPlanejada(item) || !(pendentePlanejado(item) > 1e-9)) return null;
-  // Etapa 231 (B1518): sem as linhas (a busca falhou), o campo do detalhe (B1517).
-  const s = saldosFalharam ? linhaDoLoteDaSeparacao(item) : (rows || []).find((r) => valorOrigem(r) === valorPlanejada(item));
+  // Etapa 231 (B1518; Fase 5): a linha de saldo impedida; senão (busca falha, ou o detalhe relido diz impedido com a janela aberta) o detalhe.
+  const linha = saldosFalharam ? null : (rows || []).find((r) => valorOrigem(r) === valorPlanejada(item));
+  const s = linha && opcaoImpedida(linha) ? linha : linhaDoLoteDaSeparacao(item);
   if (!s || !opcaoImpedida(s)) return null;
   return `Já separado de ${s.localizacao_codigo}${s.lote ? ` — lote ${s.lote}` : ''}: ${situacaoDoLote(s)}. Essa parte não sai até o lote `
     + 'ser liberado na tela Lotes e Séries — na entrega, escolha outro endereço.';
@@ -240,11 +241,13 @@ const pendentePlanejado = (item) => {
   const n = Number(parte);
   return Number.isFinite(n) ? Math.max(0, Math.min(n, caixa)) : caixa;
 };
-// Etapa 231 (C532, B1518): a parte planejada AINDA PENDENTE do item está num lote impedido — pela linha de saldo da janela; sem as linhas
-// (a busca falhou), pelo detalhe (B1517). Linhas carregadas sem o par: null (o de hoje — o par sumiu, automático).
+// Etapa 231 (C532, B1518): a parte planejada AINDA PENDENTE do item está num lote impedido — pelo detalhe (B1517) OU pela linha de saldo da
+// janela (Fase 5: as duas leituras são de horas diferentes — o detalhe é relido ao voltar para a aba, as linhas só ao abrir a janela; na
+// dúvida, segura: a porta recusaria). `rows` null/`saldosFalharam`: só o detalhe.
 const planejadaPendenteImpedida = (item, rows, saldosFalharam = false) => {
   if (!temPlanejada(item) || !(pendentePlanejado(item) > 1e-9)) return false;
-  if (saldosFalharam) return !!linhaDoLoteDaSeparacao(item);
+  if (linhaDoLoteDaSeparacao(item)) return true;
+  if (saldosFalharam) return false;
   const s = (rows || []).find((r) => valorOrigem(r) === valorPlanejada(item));
   return !!(s && opcaoImpedida(s));
 };
@@ -1267,9 +1270,12 @@ const RequisicoesList = () => {
     if (!((parseFloat(quantidadesEntrega[i.id]) || 0) > 0)) return false;
     const esc = origensEntrega[i.id];
     if (esc?.valor === VALOR_ESCOLHER_ORIGEM) return true;
-    // Fase 2 (M3): antes das linhas de saldo chegarem a pre-selecao ainda nao rodou — o detalhe (B1517) segura o clique.
-    if (!esc && planejadaPendenteImpedida(i, null, true)) return true;
-    return !!fraseOpcaoImpedida(saldosEntrega[i.material_id], esc?.valor);
+    if (fraseOpcaoImpedida(saldosEntrega[i.material_id], esc?.valor)) return true;
+    // Fase 2 (M3) e Fase 5: quando a entrega aplicaria a planejada — nada escolhido ainda (as linhas não chegaram), a própria planejada, em
+    // branco sem automático, ou a "Planejada da separação" — e o detalhe (relido) diz que o lote dela está impedido, segura o clique.
+    const aplicaPlanejada = !esc || esc.valor === valorPlanejada(i) || (!esc.valor && !esc.automatico)
+      || esc.valor === VALOR_PLANEJADA_SEM_SALDOS;
+    return aplicaPlanejada && planejadaPendenteImpedida(i, null, true);
   });
   // Etapa 231 (C532, B1520): os itens que apagam o botão de um clique.
   const entregaDiretaImpedida = detalhe ? itensEntregaDiretaImpedida(detalhe.itens) : [];
@@ -2803,7 +2809,8 @@ const RequisicoesList = () => {
                         const esc = origensEntrega[item.id];
                         // Etapa 231 (B1518): com "Escolha de onde sai", a frase da planejada (pelo detalhe se a busca falhou).
                         const frase = fraseOpcaoImpedida(rows, esc?.valor)
-                          || ((!esc?.valor && !esc?.automatico) || esc?.valor === VALOR_ESCOLHER_ORIGEM
+                          || ((!esc?.valor && !esc?.automatico) || esc?.valor === VALOR_ESCOLHER_ORIGEM || esc?.valor === valorPlanejada(item)
+                            || esc?.valor === VALOR_PLANEJADA_SEM_SALDOS
                             ? frasePlanejadaImpedida(item, rows, !!saldosEntregaFalhos[item.material_id]) : null);
                         return frase && (
                           <div id={`entrega-dica-lote-impedido-${item.id}`} style={{ fontSize: '0.75rem', marginTop: 4, color: 'var(--gmp-warning, #b45309)' }}>

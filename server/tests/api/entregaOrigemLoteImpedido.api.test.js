@@ -117,6 +117,15 @@ process.on('exit', (code) => {
     await dbRun(db, 'UPDATE lotes_almoxarifado SET data_validade = ? WHERE id = ?', [dia(0), await loteId(m, 'L2')]);
     assert.deepStrictEqual(situacao(await detalhe(R)), { status: 'ATIVO', impedido: false, vencido: false }, 'vence hoje: ainda sai');
   });
+  await test('[RN-231.01, Fase 5] L2 REPROVADO -> impedido true; vencido ontem COM o vencimento liberado -> false (a regua da 224)', async () => {
+    const { m, R } = await montar();
+    await statusLote(m, 'L2', 'REPROVADO');
+    assert.deepStrictEqual(situacao(await detalhe(R)), { status: 'REPROVADO', impedido: true, vencido: false });
+    await statusLote(m, 'L2', 'ATIVO');
+    await dbRun(db, 'UPDATE lotes_almoxarifado SET data_validade = ?, vencimento_liberado_em = CURRENT_TIMESTAMP WHERE id = ?',
+      [dia(-1), await loteId(m, 'L2')]);
+    assert.deepStrictEqual(situacao(await detalhe(R)), { status: 'ATIVO', impedido: false, vencido: false }, 'vencimento liberado: sai');
+  });
   await test('[RN-231.01] item sem lote da separacao (separado no automatico) -> false, false, status null', async () => {
     const m = await material();
     await entrar(m, XB.id, 4, 'L1');
