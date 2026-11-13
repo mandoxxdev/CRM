@@ -1,0 +1,9 @@
+*Planejamento — almoxarifado: estornar a entrada de uma nota não deixa a requisição presa a peça de lote bloqueado*
+_13/11/2026_
+
+*1. Estornar a entrada boa solta a reserva que só o lote bloqueado cobriria*
+Hoje, quando uma nota traz peças num lote bom (reservadas para uma requisição) e outras num lote bloqueado, estornar a entrada do lote bom não solta a reserva: o sistema conta as peças do lote bloqueado como se pudessem cobrir a requisição. Ela fica reservada sem nada que possa sair, e a entrega recusa. Depois desta alteração, o estorno conta só o que pode sair para uso: a reserva que ficaria sem cobertura é solta, e a requisição volta a esperar o material.
+Tempo estimado: *4h*
+
+*Total estimado: 4h*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
