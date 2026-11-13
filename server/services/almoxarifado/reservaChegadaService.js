@@ -577,7 +577,8 @@ function rotulosDaLiberacao(ctx, recNumero) {
  * da inspeção a solta pela B374. O dono é quem decidiu, com `sistema: true` (D6/B388 — a QUALIDADE não
  * tem `reservar`).
  * @param {object} ctx { origem: 'INSPECAO'|'NAO_CONFORMIDADE', documento_id, documento_numero, material_id,
- *   quantidade, recebimento_id }
+ *   quantidade, recebimento_id, lote_id? } — Etapa 229 (B1509): `lote_id` = o lote do item liberado; impedido agora e sem
+ *   OS aberta, nada e distribuido e o resultado ganha `lote_impedido: { id, codigo }`.
  * @param {object} [resultado] acumulador preenchido no lugar (Fase 2: quem chama vê o parcial se lançar).
  * @param {object} [opcoes] Etapa 91 (T0, D7/B425): `{ sobTrava, pendencia }`.
  *   - sem `sobTrava`: pega a trava do material e le o teto (`min(quantidade, disponivel)`) DENTRO dela —
@@ -612,6 +613,15 @@ async function reservarLiberacaoParaQuemEspera(db, user, ctx, resultado = { rese
       await distribuirParaOs(db, user, material.id, teto, rotulos, acc, os);
       return;
     }
+    // Etapa 229 (C519, B1509): o que foi liberado esta no lote do item (`ctx.lote_id`). Com esse lote impedido AGORA (bloqueado,
+    // reprovado ou vencido sem liberacao; so com controle de lote — B1371), lido aqui, sob a trava (mudar o status do lote pega a
+    // mesma trava desde a 220), a liberacao nao distribui nada: o livre que o miolo veria e de OUTRA entrada (D4 da 74). As pecas vao
+    // para quem espera quando o lote for liberado (Etapa 220). A OS aberta fica como antes (B1510, acima). Sem `lote_id`: como hoje.
+    const impedido = ctx.lote_id ? await loteDoItemImpedidoAgora(db, ctx.lote_id, material.id) : null;
+    if (impedido) {
+      resultado.lote_impedido = impedido;
+      return;
+    }
     await distribuirSemLock(db, user, material.id, teto, rotulos, acc);
   };
   if (sobTrava) {
@@ -634,6 +644,17 @@ async function loteImpedidoAgora(db, loteId) {
     FROM lotes_almoxarifado lt JOIN materiais_almoxarifado m ON m.id = lt.material_id AND COALESCE(m.controle_lote, 0) = 1
     WHERE lt.id = ?`, [loteId]);
   return !!(r && Number(r.imp) === 1);
+}
+
+/**
+ * Etapa 229 (B1509) — o lote do item liberado pela inspecao/NC, se esta impedido AGORA num material com controle de lote e e deste
+ * material: `{ id, codigo }`; senao `null`. A mesma regua da `loteImpedidoAgora`. Le sob a trava de quem chama.
+ */
+async function loteDoItemImpedidoAgora(db, loteId, materialId) {
+  const r = await dbGet(db, `SELECT lt.id, lt.codigo FROM lotes_almoxarifado lt
+    JOIN materiais_almoxarifado m ON m.id = lt.material_id AND COALESCE(m.controle_lote, 0) = 1
+    WHERE lt.id = ? AND lt.material_id = ? AND ${predicadoLoteImpedidoSql('lt')}`, [loteId, materialId]);
+  return r ? { id: Number(r.id), codigo: r.codigo } : null;
 }
 
 function rotulosDoLoteLiberado(lote, recebimentoId) {
@@ -959,5 +980,6 @@ module.exports = {
   STATUS_RECALCULAVEIS,
   reservarLoteLiberadoSobTrava, // Etapa 220 (C480)
   loteImpedidoAgora, // Etapa 220 (B1463)
+  loteDoItemImpedidoAgora, // Etapa 229 (B1509)
   resumoDaReservaDoLote, // Etapa 220 (B1465)
 };

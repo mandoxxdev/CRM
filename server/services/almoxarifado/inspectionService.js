@@ -433,15 +433,20 @@ async function decidirInspecaoSobTrava(db, user, itemId, item, calc, reserva) {
   // chamada — o serviço também devolve vazio com quantidade 0).
   // Etapa 91 (T2, D7/B425): o MESMO nome pelo objeto do modulo, agora com `{ sobTrava, pendencia }` — a
   // distribuicao roda aqui, sob a trava que esta secao ja segura; o recalculo e o aviso ficam na pendencia.
+  let loteImpedido = null;
   if (aprovada > 1e-9) {
     try {
       const reservaChegadaService = require('./reservaChegadaService');
       reserva.rcs = reservaChegadaService;
       reserva.pendencia = reservaChegadaService.novaPendencia();
-      await reservaChegadaService.aposLiberacaoSemFalhar(db, user, {
+      // Etapa 229 (C519, B1509): o lote do item vai junto — com ele impedido agora, a liberacao nao distribui o livre de outra
+      // entrada no lugar do aprovado; o codigo volta na resposta (B1512).
+      const r = await reservaChegadaService.aposLiberacaoSemFalhar(db, user, {
         origem: 'INSPECAO', documento_id: ins.lastID, documento_numero: null,
         material_id: item.material_id, quantidade: aprovada, recebimento_id: item.recebimento_id,
+        lote_id: item.lote_id || null,
       }, { sobTrava: true, pendencia: reserva.pendencia });
+      if (r && r.lote_impedido) loteImpedido = r.lote_impedido.codigo;
     } catch (e) {
       console.warn(`[almoxarifado-reservas] reserva na liberacao falhou (INSPECAO ${ins.lastID}): ${e.message}`);
     }
@@ -462,6 +467,9 @@ async function decidirInspecaoSobTrava(db, user, itemId, item, calc, reserva) {
     // `InspecoesAlmoxarifado.js:237` le.
     divergencia_quantidade: divergenciaQuantidade,
     medidas_registradas: medidasResolvidas ? medidasResolvidas.length : 0,
+    // Etapa 229 (B1512, aditivo): SO quando a parte aprovada caiu num lote impedido e nada foi distribuido — a chave ausente nos
+    // outros casos mantem as chaves da D5 da 75. A tela avisa que o lote continua impedido.
+    ...(loteImpedido ? { lote_impedido: loteImpedido } : {}),
   };
 }
 

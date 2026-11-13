@@ -1011,6 +1011,7 @@ async function decidirEExecutar(db, user, id, atual, insp, previsto, dados, just
         origem: 'NAO_CONFORMIDADE', documento_id: id, documento_numero: atual.numero,
         material_id: liberacao.material_id, quantidade: liberacao.quantidade,
         recebimento_id: atual.recebimento_id || insp?.recebimento_id || null,
+        lote_id: insp?.lote_id || null, // Etapa 229 (C519, B1509): o lote do item que a NC liberou
       }, { sobTrava: true, pendencia: reserva.pendencia });
     } catch (e) {
       console.warn(`[almoxarifado-reservas] reserva na liberacao falhou (NAO_CONFORMIDADE ${id}): ${e.message}`);

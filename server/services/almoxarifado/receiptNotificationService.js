@@ -462,6 +462,9 @@ async function avisarLiberacao(db, user, ctx, resultadoReserva) {
   const resultado = { requisitantes: [] };
   const liberado = Number(ctx && ctx.quantidade) || 0;
   if (!(liberado > EPS) || !ctx.material_id) return resultado;
+  // Etapa 229 (B1511): a liberacao cujo lote continua impedido nao liberou nada que possa sair — sem "Material liberado", mesmo com
+  // livre de outra entrada no material. Quem espera e avisado quando o lote for liberado (Etapa 220, LOTE_LIBERADO).
+  if (resultadoReserva && resultadoReserva.lote_impedido) return resultado;
   // Etapa 219 (B1457 c): `disponivel` aqui e o livre que PODE SAIR (sem o lote impedido) — so ele faz `haLivre`
   const mat = await dbGet(db, `SELECT ma.id, ma.codigo, ma.nome, ma.unidade, ma.proprietario_cliente_id,
       ${disponivelSql('ma')} - ${loteImpedidoSql('ma')} AS disponivel
