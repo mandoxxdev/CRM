@@ -388,7 +388,7 @@ lote: igual; bloqueio antigo: cai em "Sem lote"), salvo o caso da trava abaixo; 
   `controle_lote`/RN-209.02b, "Sem lote" sem `lote_id`, `lotes: []` não exige, GET falhou → M1 literal, troca de material, Bloquear sem GET);
   controles: GET só com `controle_lote` → (2)(5)(7) vermelhos; POST sem `lote_id` → (1)(2); exigir o campo sem lotes → (5)(5b)(6) + o teste
   antigo do desbloquear; restauro por cópia, `cmp` ok. Build `CI=true` ok.
-- [ ] T7 — integração pela rota e pelo serviço (RN-209.07)
+- [x] T7 — integração pela rota e pelo serviço (RN-209.07) — já verde: pelo serviço em `cc4da040` (registrarDevolucao → desbloquearMaterial(L1) → SUCATA L1), pela rota em `4bdf0a09` (devolução → GET → desbloquear L1 → PERDA L1 na v2), no `bloqueioSabeOLote.api.test.js`
 - [ ] Controles positivos 1-6 — (1), (5), (6) na T2; (2), (3), (4) na T3/T4; falta só refazer no fim, depois da T5-T7 integradas
 - [ ] Suítes: `test:api`, `test:almoxarifado`, `test:validation && test:safealter && test:sqlite`, cliente, `build` com `CI=true`
 - [ ] Fase 5 — revisores frescos (correção da RN; "este teste passaria com a feature quebrada?"; trava/estorno)
