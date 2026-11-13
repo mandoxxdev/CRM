@@ -1552,4 +1552,12 @@ Fase 2 e Fase 5). **C513 resolvido.** Rota nova: nenhuma; `GET /estoque/:materia
   material sem controle de lote com lotes (D (218)). Antes do deploy: **A115**.
 
 Continua 🟡 (o que falta para 🟢: C478, C486, C491, C495, C497, C498, e agora C517/C518).
+
+## Etapa 219 — o que chega em lote impedido não é reservado (2026-11-13)
+
+O **C478** (as portas que distribuem para quem espera reservavam lote impedido), que esta spec listava no "falta para 🟢", foi resolvido
+na Etapa 219 (`2ec31628`, Fase 5 `a6323899`) — o checklist está na spec 07, seção "Etapa 219". O que toca a separação: a requisição que
+não recebeu reserva continua *Aguard. Estoque* e separa quando o lote é liberado (RN-219.06, a separação aceita *Aguard. Estoque*).
+
+Continua 🟡 (o que falta para 🟢: C486, C491, C495, C497, C498, C517 e C518).
 Testes: `loteEscolhidoPecaPresa.api.test.js` (26), `loteEscolhidoTravas.api.test.js` (2), `RequisicoesLoteLivre.test.js` (8).

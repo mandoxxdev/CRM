@@ -2235,7 +2235,7 @@ Os status e as passagens permitidas entre eles são fixos; qualquer tentativa fo
 **Os três status que muita gente estranha:**
 
 - **Aguard. Estoque** e **Aguard. Compra** — a requisição cai automaticamente num deles quando, na aprovação, **nenhum item** tem saldo disponível — qualquer que seja a forma de aprovar (**Só Aprovar**, **Aprovar Liberação** ou a aprovação automática). Fica em *Aguard. Compra* quando algum dos materiais tem **compra a caminho**: uma solicitação de compra ainda não pedida, ou já pedida ao fornecedor (vinculada a um pedido) com material que ainda falta chegar, aberta há no máximo 60 dias. É a mesma conta do "a caminho" da sugestão de reposição: pedido cancelado ou rejeitado, e material que já chegou todo pelo pedido, **não** contam; pedido lançado direto no Compras, sem solicitação de compra, também não. Caso contrário, *Aguard. Estoque*. Se ao menos um item tem disponível, ela segue o caminho normal (a reserva decide o status, 9.3).
-- **A chegada do material pela nota de compra reserva para quem esperava, e o status acompanha.** Quando a nota do material entra, o que chegou livre é reservado para as requisições que esperavam, na ordem da fila de separação, e a que ficou com reserva passa a *Parcialmente Reservada* ou *Totalmente Reservada* (9.3b). Uma requisição aprovada depois só leva o que sobrou. Quando o material chega por **outra porta** (ajuste, devolução, inspeção liberada) ou a reserva não acontece, a requisição continua *Aguard. Compra* ou *Aguard. Estoque*; a separação já pode começar (ela trabalha pelo saldo, não pelo status), o detalhe diz que o material chegou (10.1) — e esse material não fica reservado para ela.
+- **A chegada do material pela nota de compra reserva para quem esperava, e o status acompanha.** Quando a nota do material entra, o que chegou livre e pode sair (fora de lote bloqueado, reprovado ou vencido — 9.3b) é reservado para as requisições que esperavam, na ordem da fila de separação, e a que ficou com reserva passa a *Parcialmente Reservada* ou *Totalmente Reservada* (9.3b). Uma requisição aprovada depois só leva o que sobrou. Quando o material chega por **outra porta** (ajuste, devolução, inspeção liberada) ou a reserva não acontece, a requisição continua *Aguard. Compra* ou *Aguard. Estoque*; a separação já pode começar (ela trabalha pelo saldo, não pelo status), o detalhe diz que o material chegou (10.1) — e esse material não fica reservado para ela.
 - **Totalmente Reservada** / **Parcialmente Reservada** — é o estado **normal** de uma requisição recém-aprovada que encontrou saldo (seção 9).
 
 ### 7.2 Criação — o que o sistema valida
@@ -2734,11 +2734,19 @@ falta do item = quantidade ainda pendente de entrega − o que o item já tem re
 **Quanto, no máximo.** Para cada material da nota:
 
 ```
-a distribuir = mínimo(o que ENTROU LIVRE desta nota, disponível do material naquele momento)
+a distribuir = mínimo(o que ENTROU LIVRE desta nota fora de lote impedido, o que pode sair do material naquele momento)
+o que pode sair = disponível do material − saldo em lote impedido (a mesma conta da aprovação, 9.3)
 ```
 
 - O que entrou **retido para inspeção** (14.6) não entra na conta — não está disponível.
 - A nota distribui só o que **ela** trouxe: saldo que já estava no estoque (de ajuste, devolução, outra entrada) não é distribuído por ela.
+- **Lote impedido.** Em material com **controle por lote**, o que entrou num lote **Bloqueado** (o material com **Requer certificado** entra
+  no lote bloqueado até o certificado ser anexado), **Reprovado** ou **vencido** sem a liberação do vencimento **não** é reservado: a
+  requisição continua *Aguard. Estoque* (ou *Aguard. Compra*) em vez de ficar reservada com peça que não pode sair. Quando o lote é
+  liberado (certificado anexado, lote de volta a *Ativo*, vencimento liberado), nada é reservado sozinho — a separação já enxerga o lote e
+  pode começar. Uma reserva feita **antes** de o lote ser bloqueado continua e conta contra o que pode sair: a nota boa que chega depois
+  pode não sobrar para quem espera, como a aprovação (9.3). O mesmo vale para a reserva de uma OS que segura peças de um lote bloqueado
+  (9.3e). Material **sem** controle por lote: o lote não conta (como na aprovação).
 
 **Quem é pulado.**
 - A requisição cuja **liberação por valor** (8.3) bloquearia a separação naquele momento — a reserva ficaria presa atrás da alçada. O material vai para a próxima da fila; quando a liberação vier, ela leva só o que sobrou. Como a alçada só vale até o começo da separação, a requisição com material já separado ou entregue não é pulada por valor: recebe a reserva mesmo com o valor acima do limite.
@@ -2751,7 +2759,7 @@ a distribuir = mínimo(o que ENTROU LIVRE desta nota, disponível do material na
 
 **Nunca derruba a nota.** Se a reserva falhar por qualquer motivo, a nota fica **Processado** do mesmo jeito; quem esperava pode separar o que estiver disponível. Duas notas do mesmo material processadas ao mesmo tempo — ou uma nota e uma decisão de inspeção do mesmo material — não disputam: a distribuição de um material espera a anterior do mesmo material terminar, e cada requisição fica com o que lhe cabe. Uma aprovação de requisição do mesmo material, no mesmo instante, também espera a nota terminar (9.3d). Como defesa, o que falta é relido antes de cada reserva, e o que passar do pendente é desfeito (*"Reserva na chegada acima do pendente — excesso desfeito"*).
 
-**O e-mail.** O aviso ao solicitante (21c) diz, em cada material, *"reservado para a sua requisição: N"* quando houve reserva, e termina com uma de três frases (21c.1). Quem esperava e não ficou com nada — nem há saldo livre do material — **não** recebe o aviso daquela nota.
+**O e-mail.** O aviso ao solicitante (21c) diz, em cada material, *"reservado para a sua requisição: N"* quando houve reserva, e termina com uma de três frases (21c.1). Quem esperava e não ficou com nada — nem a nota trouxe daquele material algo fora de lote impedido, com saldo que pode sair — **não** recebe o aviso daquela nota.
 
 **O que NÃO reserva na chegada:** o material que entrou **retido para inspeção** — ele é reservado depois, quando a inspeção o aprova (9.3c) —, e as entradas que não são nota (entrada manual, devolução, transferência, ajuste, retorno de terceiro): o material fica disponível para quem chegar primeiro. Se uma nota que falhou no meio for processada de novo depois de o item crítico já ter sido inspecionado, a nota **não** conta esse item como livre — o que a inspeção liberou já foi distribuído por ela.
 
@@ -2765,10 +2773,12 @@ O material crítico entra **retido para inspeção** (14.6) e não é reservado 
 **Quanto, no máximo.**
 
 ```
-a distribuir = mínimo(o que ESTA decisão liberou, disponível do material naquele momento)
+a distribuir = mínimo(o que ESTA decisão liberou, o que pode sair do material naquele momento)
 ```
 
-Saldo que já estava no estoque (de ajuste, de outra nota, de uma entrada manual) não é distribuído pela decisão.
+Saldo que já estava no estoque (de ajuste, de outra nota, de uma entrada manual) não é distribuído pela decisão. *O que pode sair* é a conta
+de 9.3b: a inspeção que aprova peças de um lote que continua **Bloqueado** (sem o certificado) não as reserva — a requisição continua
+esperando e não recebe o aviso de liberação.
 
 **A reserva criada.** Na tela **Reservas**, no nome de **quem decidiu** — inclusive quem tem só o perfil **Qualidade**, que não reserva à mão: a reserva é feita pelo sistema em nome dele. A observação diz a porta: *"Reserva na liberação da inspeção — recebimento ⟨REC⟩ — requisição ⟨REQ⟩"* ou *"Reserva na liberação da não conformidade ⟨NC⟩ — requisição ⟨REQ⟩"*. Ela leva a marca da nota: estornar a entrada da nota depois solta essa reserva como solta a da chegada (só o necessário, só de quem ainda não separou — 6.10).
 
@@ -2825,6 +2835,10 @@ jeito é tratada como de outro trabalho.
    ```
 
 3. as requisições de **outros** trabalhos que esperavam o mesmo material **não** recebem nada daquele material daquela nota.
+
+Aqui o **lote impedido não é descontado**: o material comprado para a OS fica com ela mesmo num lote **Bloqueado** (sem o certificado) — a
+requisição da OS que esperava pode ficar reservada com peças que só saem depois de o lote ser liberado, e o que sobra vira a reserva da OS.
+Se a OS fechar no exato momento (abaixo), o que vai para a fila comum segue a conta de 9.3b.
 
 A reserva da OS aparece na tela **Reservas** com origem *MANUAL*, destino a OS, **sem validade** (ela não vence, mesmo com a validade padrão
 ligada — 9.7), no nome de quem processou a nota (ou decidiu a inspeção); no extrato do material, com o motivo *"Compra para a OS ⟨número⟩"*. A
@@ -7510,9 +7524,10 @@ falha do servidor de e-mail nunca trava uma movimentação, uma devolução ou u
     ainda não está reservado — a separação é feita pelo almoxarifado."*;
   - nenhum ganhou — *"O material ainda não está reservado para a sua requisição — a separação é feita pelo
     almoxarifado."*
-  O e-mail só lista os materiais que ganharam reserva para esta requisição ou que ainda têm saldo livre; quem esperava
-  e não ganhou nada — com o saldo todo reservado a outras requisições — **não** recebe o aviso daquela nota (será
-  avisado na próxima). O link abre a lista **Minhas Requisições** do módulo de onde a requisição saiu (Comercial,
+  O e-mail só lista os materiais que ganharam reserva para esta requisição ou que a nota trouxe **fora de lote impedido**
+  e ainda têm saldo livre que pode sair (o disponível menos o saldo em lote bloqueado, reprovado ou vencido, 9.3b); quem
+  esperava e não ganhou nada — com o saldo todo reservado a outras requisições, ou com o que chegou todo num lote
+  bloqueado — **não** recebe o aviso daquela nota (será avisado na próxima). O link abre a lista **Minhas Requisições** do módulo de onde a requisição saiu (Comercial,
   Compras, Fábrica, …); sem módulo de origem, a lista de requisições do almoxarifado. Material que entrou **retido
   para inspeção** não gera este aviso — ele ainda pode ser reprovado; o aviso dele vem quando a inspeção o libera (o
   próximo item). Uma requisição que continua esperando recebe um aviso **a cada nota** daquele material.
@@ -7528,12 +7543,15 @@ falha do servidor de e-mail nunca trava uma movimentação, uma devolução ou u
   (pendente na requisição: ⟨p⟩ ⟨un⟩; reservado para a sua requisição: ⟨r⟩ ⟨un⟩)"* (sem a parte do reservado quando não
   houve reserva) — e a frase final: *"O material indicado como reservado fica guardado para a sua requisição — outra
   requisição não pode levá-lo. A separação é feita pelo almoxarifado."* com reserva, ou *"O material ainda não está
-  reservado para a sua requisição — a separação é feita pelo almoxarifado."* sem. Duas inspeções da mesma nota (dois
+  reservado para a sua requisição — a separação é feita pelo almoxarifado."* sem. Sem reserva, o aviso só sai se há saldo
+  livre do material que pode sair (o disponível menos o saldo em lote impedido). Duas inspeções da mesma nota (dois
   itens) avisam duas vezes; a mesma decisão nunca avisa duas vezes. Na tela **Notificações**, aparece no filtro
   *Aviso ao requisitante*. A requisição **Em separação** ganha a reserva, mas não recebe este aviso.
 - **Entrada de recebimento** (aviso da nota) — um e-mail **por nota** que deu entrada no estoque, com o recebimento, a
   nota fiscal, o fornecedor, o pedido de compra (quando há), data/hora, quem processou, cada item que entrou com a
-  quantidade, o endereço e *"disponível"* ou *"retido para inspeção"*, e as requisições que aguardavam aqueles
+  quantidade, o endereço e *"disponível"*, *"retido para inspeção"* ou, para o item livre que entrou num lote bloqueado,
+  reprovado ou vencido de material com controle por lote, *"em lote bloqueado, reprovado ou vencido (não sai até o lote
+  ser liberado)"* (o retido diz *"retido para inspeção"* mesmo nesse lote), e as requisições que aguardavam aqueles
   materiais (com o nome de quem pediu). Item que chegou **zero** não aparece; nota em que nada entrou não gera aviso.
   **Desligado de fábrica**, pela chave *"Avisar Entrada de Recebimento por E-mail"* (21c.6). Assunto *"[Almoxarifado]
   Entrada confirmada — REC-…"*, seguido de *" — NF …"* quando a nota tem número. O link abre a lista de Recebimentos.

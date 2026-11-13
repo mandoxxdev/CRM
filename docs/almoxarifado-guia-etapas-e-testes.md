@@ -1,21 +1,32 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-11-13 (Etapas 172 a 191, 194 a 210, 217, 218) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-11-13 (Etapas 172 a 191, 194 a 210, 217 a 219) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-13 (Etapas 172 a 178, 180 a 191, 194 a 210, 217 e 218 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-13 (Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 219 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
-> **O desenvolvimento parou aqui: Etapa 218 fechada — 2026-11-13.** **O lote escolhido à mão deixa de fora a peça presa.** No
+> **O desenvolvimento parou aqui: Etapa 219 fechada — 2026-11-13.** **O que chega em lote bloqueado não fica reservado para quem espera.**
+> A nota que entra num lote **bloqueado** (sem certificado), **reprovado** ou **vencido** — e a inspeção que aprova peça desse lote, e a OS
+> encerrada que solta a compra dela — não reserva mais essas peças: a requisição continua *Aguard. Estoque*, o solicitante não recebe
+> *"Chegou material"* do que não pode sair e o aviso da entrada diz *"em lote bloqueado, reprovado ou vencido (não sai até o lote ser
+> liberado)"*. A nota com **OS aberta** não muda. Antes do deploy: a **A116** (consulta). **Nenhum clique foi dado** (testes da rota e do
+> serviço — roteiro na seção da 219 e letra F das novidades).
+>
+> **Onde parou, exatamente:** a **219 está fechada** (código, testes, documentos e o estimado × realizado commitados). A **próxima** é
+> **liberar o lote reserva para quem ficou esperando** (**C480**) — detalhada no fim do plano da 219
+> (`docs/superpowers/plans/2026-11-13-almoxarifado-etapa219-chegada-em-lote-impedido-nao-reserva.md`). Sem estimativa nem plano.
+>
+> *(Antes:)* **Etapa 218 fechada — 2026-11-13.** **O lote escolhido à mão deixa de fora a peça presa.** No
 > **Sai de** da separação e da entrega, escolher um lote que tem peça em **Quarentena**, **reprovada**, **num terceiro** ou **em inspeção** só
 > deixa sair o que pode sair dele; a recusa diz quanto e por quê, e o **Sai de** mostra *"— do lote podem sair 3 (1 bloqueada)"*. Antes do
 > deploy: a **A115** (consulta). **Nenhum clique foi dado** (testes da rota, do serviço e do Jest — roteiro na seção da 218 e letra F das
 > novidades).
 >
 > **Onde parou, exatamente:** a **218 está fechada** (código, testes, documentos e o estimado × realizado commitados). A **próxima** é
-> **as três portas que distribuem para quem espera não reservam saldo de lote impedido** (**C478**) — detalhada no fim do plano da 218, detalhada no fim do plano da 218 (`docs/superpowers/plans/2026-11-13-almoxarifado-etapa218-lote-escolhido-desconta-peca-presa.md`).
-> Sem estimativa nem plano.
+> **as três portas que distribuem para quem espera não reservam saldo de lote impedido** (**C478**) — detalhada no fim do plano da 218
+> (`docs/superpowers/plans/2026-11-13-almoxarifado-etapa218-lote-escolhido-desconta-peca-presa.md`). *(Feita na 219.)*
 >
 > *(Antes:)* **Etapa 217 fechada — 2026-11-13.** **A entrega não tira a peça bloqueada do lote.** A peça em
 > **Quarentena**, a **reprovada na inspeção** e a que está **num terceiro** ficam contadas no lote dela: a entrega automática tira do lote
@@ -7141,6 +7152,46 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 219 — O que chega em lote bloqueado não fica reservado para quem espera (ENTREGUE — 2026-11-13)
+
+**O que mudou, em uma frase:** a nota que entra num lote **bloqueado** (sem certificado), **reprovado** ou **vencido** não reserva mais
+essas peças para a requisição que esperava — ela continua *Aguard. Estoque*, ninguém recebe *"Chegou material"* do que não pode sair, e o
+aviso da entrada diz que o item entrou em lote bloqueado.
+
+**O problema que ela resolve.** Material com **Requer certificado** entra num lote *Bloqueado* até o certificado ser anexado. A nota
+reservava essas peças para quem esperava: a requisição ficava *Totalmente Reservada* e o solicitante recebia o e-mail de que o material
+tinha chegado — mas a separação e a entrega não podiam tirar nada do lote. O mesmo com a inspeção que aprova peça de lote bloqueado e com a
+OS encerrada que solta a compra dela.
+
+| Antes | Agora |
+|---|---|
+| Nota de 4 num lote bloqueado, requisição esperando 4: *Totalmente Reservada* | Nenhuma reserva; continua *Aguard. Estoque* |
+| O solicitante recebia *"Chegou material da sua requisição"* | Não recebe (nada pode sair) |
+| Aviso da entrada: *"— disponível"* | *"— em lote bloqueado, reprovado ou vencido (não sai até o lote ser liberado)"* |
+| Nota com 3 num lote bom e 4 no bloqueado, requisição de 6 | Reserva 3, *Parcialmente Reservada* |
+| Inspeção aprova peça de lote que continua bloqueado | Não reserva, nem avisa |
+| Nota de pedido com OS aberta | **Igual** — o material fica com a OS |
+| Lote ativo; material sem controle por lote | **Igual** |
+
+**Roteiro de teste manual (≈10 min):**
+
+1. Entre como **Administrador do almoxarifado**. No cadastro do material (Compras), um material *CERT-219* com **Controle por lote** e
+   **Requer certificado** marcados, **não** crítico, sem saldo.
+2. **Requisições → Nova requisição** de 4 *CERT-219* → aprovar. Ela fica *Aguard. Estoque* (ou *Aguard. Compra*).
+3. Dê entrada numa nota de 4 *CERT-219* com o lote *L1* (pelo fluxo do recebimento até **Processar Nota**).
+4. **Confira:** em **Lotes e Séries**, o *L1* está *Bloqueado* (*"Certificado do fornecedor nao anexado"*). A requisição continua *Aguard.
+   Estoque* e a tela **Reservas** não tem reserva dela. Em **Notificações**, nenhum *"Chegou material da sua requisição"* para ela; o aviso
+   da nota (se a chave *"Avisar Entrada de Recebimento por E-mail"* estiver ligada) diz *"4 PC — em lote bloqueado, reprovado ou vencido (não
+   sai até o lote ser liberado)"*.
+5. Anexe o certificado no *L1* (ou mude o lote para *Ativo*). A requisição **continua** *Aguard. Estoque* (liberar o lote não reserva
+   sozinho), mas **Iniciar Separação** de 4 → passa.
+6. Os outros cenários (nota mista, inspeção, OS) estão na seção da Etapa 219 das novidades, com os números.
+
+**O que esta etapa não cobre:** a nota de pedido com **OS aberta** (o material fica com a OS mesmo em lote bloqueado — **C520**); a
+liberação da inspeção ou da não conformidade não olha o lote do item que liberou (**C519**); estornar a entrada boa pode deixar a reserva
+coberta só por lote bloqueado (**C521**); a reserva da OS sobre o lote bloqueado segura também a nota boa seguinte (**C522**); liberar o lote
+não reserva para quem esperava (**C480**, segue aberto); bloquear o lote no exato instante de uma reserva não a impede (**C523**, anterior).
+
 ## Etapa 218 — O lote escolhido à mão deixa de fora a peça presa (ENTREGUE — 2026-11-13)
 
 **O que mudou, em uma frase:** escolher o lote à mão no **Sai de** (separação ou entrega) não leva mais a peça que está em quarentena,
@@ -7177,6 +7228,9 @@ via quantas peças havia no endereço: com 4 no L1 e 1 em quarentena, separava a
 **O que esta etapa não cobre:** material com número de série; a sugestão da Fila de separação (**C517**); o entregável do detalhe quando a
 origem da separação deixou de servir (**C518**); o aviso na entrega automática (**C514**).
 
+## Etapa 217 — A entrega não tira a peça bloqueada do lote (ENTREGUE — 2026-11-13)
+
+*(Este título tinha sumido no fechamento da Etapa 218 — o texto abaixo ficou colado na seção dela; restaurado no fechamento da 219.)*
 
 **O que mudou, em uma frase:** a entrega automática deixa no lote a peça que está em quarentena, reprovada ou num terceiro, e a separação
 mostra o número certo.

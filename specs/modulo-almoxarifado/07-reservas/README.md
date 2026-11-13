@@ -1,5 +1,7 @@
 # 07 — Reservas de Estoque
 
+> **+ Etapa 219 (2026-11-13, `2ec31628`, Fase 5 `a6323899`): o que chega em lote bloqueado, reprovado ou vencido não fica reservado para quem espera (C478, B1453–B1460)** — a nota, a inspeção/NC e a OS encerrada reservam só o que pode sair; a OS aberta não muda. Ver a seção "Etapa 219", no fim. O status não muda.
+
 > **+ Etapa 206 (2026-11-06, T0 `df1de701`, T1 `ccbce184`): a reserva de antes do bloqueio continua e a entrega dela recusa enquanto o lote estiver impedido (RN-206.06, B1372 mantida)** — ver a seção "Etapa 206", no fim. O status não muda.
 
 > **+ Etapa 205 (2026-11-06, T1 `f736cc71`, Fase 5 `52fa9328`): a aprovação reserva só o que está em lote que pode sair (C464, 1ª parte, B1368–B1372, B1381)** — as três portas leem `disponivel_liberado` e `calcularStatusPosAprovacao` desconta `loteImpedidoSql`; a requisição da OS converte a reserva da OS acima do liberado. Ver a seção "Etapa 205", no fim. O status não muda.
@@ -653,7 +655,7 @@ lote impedido (`loteImpedido.js`, `8bebd3ce`) e a parte da separação estão na
   não muda; sem lote impedido a regra da 171 fica byte a byte — `52fa9328`. Testes `loteImpedidoAprovacao.api.test.js` (a, b, c); suítes da
   OS (171/172/176) verdes.
 - [ ] **Fora:** a reserva manual (`criarReserva`) conta lote impedido (**C479**); as três portas que distribuem para quem espera (nota,
-  inspeção/NC, OS encerrada) também (**C478**); liberar o lote não distribui (**C480**).
+  inspeção/NC, OS encerrada) também (**C478** — *resolvido na Etapa 219*, `2ec31628`); liberar o lote não distribui (**C480**).
 
 ## Etapa 206 — a reserva de antes do bloqueio na entrega (2026-11-06)
 
@@ -666,3 +668,28 @@ Plano: `docs/superpowers/plans/2026-11-06-almoxarifado-etapa206-entrega-recusa-l
 - [x] **A alçada não é chamada** quando a recusa vem (RN-206.10 b, por espião) — `ccbce184`.
 
 Nenhuma coluna nova, nenhuma trava nova. Continua 🟢.
+
+## Etapa 219 — o que chega em lote impedido não fica reservado para quem espera (2026-11-13)
+
+Plano: `docs/superpowers/plans/2026-11-13-almoxarifado-etapa219-chegada-em-lote-impedido-nao-reserva.md` (Fase 2 `3ac80e47`). Resolve o
+**C478**, que esta spec listava como "Fora" na seção da Etapa 205. Nenhuma coluna nova, nenhuma trava nova (leitura sob a trava do material
+que as portas já seguram).
+
+- [x] **RN-219.01 / .02 (B1453, B1454)** — `distribuirSemLock` limita por `disponivel − loteImpedidoSql` e a nota deixa de fora o item cujo
+  lote está impedido (só com `controle_lote`): nota toda em lote BLOQUEADO → nenhuma reserva, a requisição continua esperando; nota mista 3
+  bom + 4 bloqueado, requisição de 6 → reserva 3, `PARCIALMENTE_RESERVADA` — `2ec31628`.
+- [x] **RN-219.03** — a nota não troca o bloqueado pelo livre de uma entrada manual (a D4 da 74) — `2ec31628`.
+- [x] **RN-219.04 / .05** — a inspeção que aprova peça de lote que continua bloqueado e a OS encerrada sobre lote bloqueado não reservam
+  (com o lote ativo, reservam) — `2ec31628`.
+- [x] **RN-219.07 / .11 (B1455)** — a fila da OS aberta não desconta; o desvio da OS que fecha no meio (fila comum) desconta — `2ec31628`.
+- [x] **RN-219.08 (B1457)** — os avisos: a frase do item em lote impedido, o solicitante sem *"Chegou material"* do que não sai, a liberação
+  sem *"Material liberado"* sem livre que saia — `2ec31628`.
+- [x] **RN-219.10 (B1456)** — a reserva antiga em lote impedido conta contra o que pode sair — `2ec31628`.
+- [x] **RN-219.12** — material sem controle de lote: como antes — `2ec31628`.
+- [x] **RN-219.13 / .14 (Fase 5, B1460)** — lote vencido (com e sem a liberação do vencimento); a reserva da OS sobre o bloqueado conta como
+  na aprovação (**C522**) — `a6323899`.
+- [ ] **Fora (declarado):** a OS aberta (**C520**); a liberação não olha o lote do item (**C519**); o estorno da entrada boa (**C521**, anterior);
+  liberar o lote não distribui (**C480**, a próxima); bloquear o lote no instante de uma reserva não a impede (**C523**, anterior — quem muda
+  o status do lote não pega a trava do material). Antes do deploy: **A116**.
+
+Testes: `chegadaLoteImpedido.api.test.js` (18). Continua 🟢.

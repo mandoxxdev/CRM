@@ -179,3 +179,117 @@ aprovação — B1456 coerente).
    solicitante com 3 reservados é o número que entrou (B1457).
 
 C novo: **C521** (acima). O **C520** continua (OS aberta). Os testes da Fase 2 entram no T0.
+
+## Execução
+
+- [x] Passo 0 (pedido do André) — `test:api` sobre `5b3ae457`, antes de qualquer código: **613/613 arquivos OK** (a 218 fechou com 612/613
+  e a asserção ampliada da RN-201.05 nunca tinha sido rodada na suíte inteira — agora rodada, verde).
+- [x] Fase 0.5 — estimativa `d365771e` (**4h**).
+- [x] Fase 1 — este plano — `b069fc5d`. Fase 2 — `3ac80e47` (bloco acima).
+- [x] T0 — `server/tests/api/chegadaLoteImpedido.api.test.js`: 10/15 vermelhos por número/literal antes do código (os 5 verdes são as
+  guardas: os controles com lote ativo, a OS aberta e o material sem controle de lote).
+- [x] T1 — o teto do miolo (B1453), o filtro da nota (`livreForaDeLoteImpedido`, B1454), a fila da OS aberta sem desconto (B1455) —
+  `2ec31628`.
+- [x] T2 — os avisos (B1457) — `2ec31628`.
+- [x] T3 — integração pela rota (nota → aviso → lote liberado → separar) e pelo serviço (OS encerrada) no mesmo arquivo; as 29 suítes de
+  chegada/liberação/OS/lote impedido verdes **sem edição** (rodadas numa worktree com o código antes de copiá-lo para a árvore principal,
+  para não mexer em produção enquanto o passo 0 rodava) — `2ec31628`.
+
+### Controles positivos (script `e219-sabotagem.js` no scratchpad: cópia, âncora = 1, restauro por cópia, md5 igual)
+
+| # | Sabotagem | Caiu |
+|---|---|---|
+| 1 | miolo sem o desconto | RN-219.04, .05, .10, .11, .14 (as .01/.02 são guardadas também pelo filtro — ver 12) |
+| 2 | nota sem o filtro do item | RN-219.03 |
+| 3 | fila da OS aberta com desconto | RN-219.07 |
+| 4 | desvio da OS fechada sem desconto | RN-219.11 |
+| 5 | filtro sem a condição de controle de lote | RN-219.12 |
+| 6 | aviso sem a frase | RN-219.08 a/b, .02 |
+| 7 | frase sem a condição de controle de lote | RN-219.12 |
+| 8 | solicitante sem o "livre que sai" da nota | RN-219.03 |
+| 9 | solicitante pelo disponível de hoje | RN-219.10 |
+| 10 | o aviso de antes (8 + 9) | RN-219.08 b, .03, .10 |
+| 11 | `haLivre` da liberação de hoje | RN-219.04 |
+| 12 | 1 + 2 (as duas guardas) | RN-219.01, .02, .03, .04, .05, .06, .08 b, .10, .11 |
+| 13 | filtro da nota só por status (sem o vencido) | RN-219.13 |
+| 14 | frase só por status (sem o vencido) | RN-219.13 |
+
+## Fase 5 — revisão adversarial (3 revisores frescos em paralelo: regra, travas/concorrência, "o teste passaria com a feature quebrada?")
+
+Rodaram sobre a worktree com o código ainda não copiado, proibidos de editar o repositório (sondas `e219-rev-*.js` no scratchpad; o de
+testes mutou a worktree uma mutação por vez, com cópia e md5).
+
+1. **[TESTE, real] Lote vencido sem teste.** Trocar a régua por `status <> 'ATIVO'` (sem o vencido) no filtro e na frase sobrevivia — todo
+   cenário usava BLOQUEADO. **RN-219.13** (vencido sem e com a liberação do vencimento); controles 13 e 14 — `a6323899`. As outras 5
+   mutações sobreviventes eram equivalentes (`Number(null)`, `Math.max` antes de `<= EPS`, `Q.qtd` sobre dois termos já arredondados) ou
+   inalcançáveis sem gancho de corrida (a leitura do lote fora da seção — ver item 3).
+2. **[REGRA, médio, reproduzido] A reserva da OS sobre o lote bloqueado conta duas vezes.** A B1455 guarda na reserva da OS peças de lote
+   bloqueado; a nota comum seguinte num lote bom não reserva para a requisição comum que esperava (antes da 219 reservava). A aprovação faz a
+   mesma conta (R3 também espera). **Mantido (B1460)**, registrado como **C522**; **RN-219.14** fixa a decisão — `a6323899`. Descartado:
+   abater a reserva da OS do impedido (com a reserva da OS em lote bom, a peça bloqueada voltaria a ser reservada).
+3. **[TESTE/TRAVAS, lido] O comentário prometia mais que a seção.** "O lote é lido agora, dentro da seção" — certo, mas mudar o **status** do
+   lote (`lotService.mudarStatusLote`, o anexo do certificado, a liberação do vencimento) não pega a trava do material; a seção serializa só
+   com a correção de validade. Comentário corrigido (`2ec31628`) e **D (219)** item 3; o mesmo vale para a aprovação desde a 205.
+4. **[TRAVAS, reproduzido, ANTERIOR] Bloquear o lote no meio da reserva não a impede.** Sonda `e219-rev-trava-1.js` (gancho em
+   `criarReserva` que só sinaliza; o `PUT /lotes/:id/status BLOQUEADO` disparado do contexto do teste): com a trava do material segura, o
+   bloqueio passa (200) e a reserva sai — pela nota **e** pela aprovação (`/aprovar`), igual. O resultado é o mesmo de bloquear logo depois de
+   reservar (B1372), que já acontece sem corrida. Nenhum escritor do status do lote pega a trava (`mudarStatusLote`,
+   `liberarBloqueioPorCertificado`, `liberarVencimento`; só `corrigirValidadeDoLote`). **Não é da 219** (não abre nem alarga) — **C523**,
+   e o conserto vai junto com a próxima etapa.
+
+Sem achado: as leituras novas estão dentro da seção que já existe (o gancho viu `travado: true`); sem aninhamento novo (só `SELECT`); as duas
+leituras do lote (filtro e teto) só podem baixar o teto entre si; o `lote_id` do item da nota é lido antes da trava, mas não muda depois da
+entrada. Os avisos leem depois de soltar, como já liam o disponível.
+
+## Fechamento
+
+- [x] Fase 5 — 3 revisores; **1 lacuna de teste real** (vencido) corrigida, **1 achado de regra** reproduzido e mantido por decisão (B1460,
+  C522, teste que a fixa), **1 corrida anterior** reproduzida e registrada (C523); 0 ruído — `a6323899`.
+- [x] Fechamento (`fechar-etapa`, sem o Passo 7½ e o 8, por pedido do André) — novidades (A116, B1453–B1460, C519–C523, D (219), F (219),
+  seção, topo e "onde estamos"; o C478 marcado resolvido), specs 07 e 05, mapa, guia (seção, cabeçalho e o título da Etapa 217 que tinha
+  sumido no fechamento da 218), manual (9.3b, 9.3c, 9.3e, 21c.1), este plano e a estimativa.
+- **Verificação final (medida, serial):** ver o bloco "Verificação" abaixo.
+
+### Divergências do plano
+
+- **A OS que fecha no meio** (Fase 2, trava): o contrato dizia só "`distribuirParaOs` passa `true`"; o desvio para a fila comum desconta.
+- **O filtro e a frase só com controle de lote** (Fase 2): o plano não tinha a condição.
+- **"A conta da aprovação"** era exagero: o B1453 iguala só a parte do lote impedido (a aprovação tira também a caixa, C173).
+- **RN-219.11 a .14** não existiam no plano (Fase 2 e Fase 5). **B1460**, **C521** (Fase 2), **C522** e **C523** (Fase 5) também não.
+- **A fatia visível** ficou nos avisos (e-mail) e no status da requisição — nenhuma tela mudou.
+
+### Retro (4 números)
+
+- **Rodadas até verde na Fase 5:** 1 (os testes novos passaram na primeira, com controle positivo cada um).
+- **Achados reais:** Fase 2: 1 trava + 5 importantes + 3 menores (todos aceitos). Fase 5: 1 lacuna de teste real (vencido), 1 regra
+  reproduzida (mantida por decisão), 1 corrida anterior reproduzida; 0 ruído.
+- **Paralelismo:** sem galhos de código; o código foi verificado numa worktree enquanto o passo 0 (suíte inteira) rodava na árvore
+  principal, e os 3 revisores rodaram em paralelo na worktree — nenhuma contaminação (md5 conferido depois de cada mutação).
+- **Defeito que escapou da 218:** nenhum achado nesta etapa. O título da Etapa 217 no guia tinha sumido no fechamento da 218 (restaurado).
+
+## Próxima tarefa detalhada
+
+*(Escolhida pela ordem do CLAUDE.md: a 219 fecha o C478; a vizinha imediata é o **C480** — com a 219, a requisição que esperava fica
+*Aguard. Estoque* quando a nota entra em lote bloqueado, e anexar o certificado não a reserva: quem chegar primeiro na aprovação leva. É o
+fim natural do C478, e junta o conserto da corrida **C523**. **Sem estimativa** — começa pela Fase 0.5.)*
+
+**Liberar o lote reserva para quem ficou esperando (C480), e quem muda o status do lote pega a trava do material (C523).**
+
+- **Onde liberam:** `lotService.liberarBloqueioPorCertificado` (`lotService.js:331`, chamado no anexo do certificado,
+  `routes/almoxarifado.js:1331`), `lotService.mudarStatusLote` (`:289`, `PUT /api/almoxarifado/lotes/:id/status` em
+  `routes/almoxarifado/extended.js:1366`) quando vai para `ATIVO`, e `lotService.liberarVencimento` (`:367`, `PUT /lotes/:id/liberar-vencimento`,
+  `extended.js:1315`). Nenhum pega a trava hoje; só `corrigirValidadeDoLote` (`:491`) pega.
+- **O que está pronto e não reabre:** o miolo `reservaChegadaService.distribuirSemLock` com o teto que pode sair (B1453) e a porta
+  `reservarLiberacaoParaQuemEspera` (com `opcoes.sobTrava` + `pendencia`, o recálculo da 76 e o aviso da 75 depois de soltar —
+  `concluirPendencia`). A liberação do lote pode entrar como uma 4ª origem (`ctx.origem = 'LOTE_LIBERADO'`), com `quantidade` = o físico
+  livre do lote (`retidoDoLote.situacaoDosLotes` dá `livre` por lote) e rótulos próprios (a observação da reserva e o motivo).
+- **A decisão a tomar (letra B, reversível):** (1) os três escritores do status pegam `naTravaDoMaterial` do material do lote (C523) — e o
+  bloqueio também (não só a liberação), para a corrida sumir; (2) depois de soltar, a liberação distribui pela porta da 75 (sem nota: a
+  reserva **sem** `recebimento_id`, então o estorno de nota não a solta — conferir `liberarParaEstorno`); (3) o aviso de liberação ganha a
+  origem nova (frase *"O lote ⟨L⟩ do material que a sua requisição aguardava foi liberado …"*) ou fica sem aviso (mais barato).
+- **Pontos de atenção:** a trava **não é reentrante** — `mudarStatusLote` chamado de dentro de outra seção do mesmo material (procure quem o
+  chama além da rota) não pode pegar de novo; use o molde de `naTravaDoMaterial` (aninha no motor, só executa dentro de seção ativa). O
+  recálculo e o aviso vão para depois de soltar (`concluirPendencia`). Teste de corrida pelo molde do CLAUDE.md (gancho só sinaliza; o gesto
+  concorrente do contexto do teste) — a sonda `e219-rev-trava-1.js` da revisão da 219 é o vermelho pronto. A tela **Lotes e Séries** pode
+  mostrar *"⟨n⟩ reservado(s) para quem esperava"* na resposta (a fatia visível).
+- **Vizinhos baratos que seguem abertos:** C479 (reserva manual conta lote impedido), C519, C521, C514–C518, C486, C491, C495, C497, C498.
