@@ -205,16 +205,26 @@ const lerValorOrigem = (valor) => {
 // Etapa 59: a origem planejada na separação só vale enquanto há separado ainda não entregue.
 const temPlanejada = (item) => !!item.origem_separacao_id && getSeparado(item) > getEntregue(item);
 const valorPlanejada = (item) => `${item.origem_separacao_id}:${item.lote_separacao_id ?? ''}`;
-// Etapa 226 (B1493): a opção impedida vem desabilitada (a porta recusa o lote impedido escolhido, `checarOrigemItem`) — na ENTREGA, menos a
-// planejada do próprio item, que ela pré-seleciona (B1494) e que, trocada por engano, tem de poder voltar. Na separação, todas (Fase 2 I1:
-// escolher de volta a planejada impedida faria a rodada inteira ser recusada).
-const opcaoDesabilitada = (s, item, naEntrega) => opcaoImpedida(s)
-  && !(naEntrega && temPlanejada(item) && valorOrigem(s) === valorPlanejada(item));
+// Etapa 226 (B1493): a opção impedida vem desabilitada (a porta recusa o lote impedido escolhido, `checarOrigemItem`). Na separação, todas
+// (Fase 2 I1). Etapa 231 (C532, B1518): na entrega também a planejada do próprio item — a janela não a pré-seleciona mais (abre em
+// "Escolha de onde sai"), então não há escolha a "voltar"; a exceção da 226 deixava escolher uma recusa certa.
+const opcaoDesabilitada = (s) => opcaoImpedida(s);
+// Etapa 231 (C532, B1517): o lote da separação como linha de saldo, pelos campos do detalhe — para o botão de um clique (que não abre janela)
+// e para a janela quando a busca de saldos falhou. null quando o lote não está impedido (só `=== true` conta).
+const linhaDoLoteDaSeparacao = (item) => (item && item.lote_separacao_esta_impedido === true ? {
+  localizacao_codigo: item.origem_separacao_codigo, lote: item.lote_separacao_codigo, lote_esta_impedido: true,
+  lote_status: item.lote_separacao_status, lote_validade: item.lote_separacao_validade,
+  lote_vencido_sem_liberacao: item.lote_separacao_vencido_sem_liberacao,
+} : null);
+// Etapa 231 (C532, B1518): a opção da janela de entrega quando a parte planejada pendente está num lote impedido — nada pré-escolhido.
+const VALOR_ESCOLHER_ORIGEM = '__escolher__';
 // Etapa 226 (B1497, Fase 2 I1/I2): a planejada do item está num lote impedido e o "Sai de" não a escolheu (separação em automático; entrega
 // em '' sem `automatico`, quando o servidor aplica a planejada) — a parte já separada de lá não sai. null fora disso.
-const frasePlanejadaImpedida = (item, rows) => {
-  if (!temPlanejada(item)) return null;
-  const s = (rows || []).find((r) => valorOrigem(r) === valorPlanejada(item));
+const frasePlanejadaImpedida = (item, rows, saldosFalharam = false) => {
+  // Etapa 231 (Fase 2 M4): só com a parte planejada ainda pendente — com ela toda entregue, "essa parte não sai" seria falso.
+  if (!temPlanejada(item) || !(pendentePlanejado(item) > 1e-9)) return null;
+  // Etapa 231 (B1518): sem as linhas (a busca falhou), o campo do detalhe (B1517).
+  const s = saldosFalharam ? linhaDoLoteDaSeparacao(item) : (rows || []).find((r) => valorOrigem(r) === valorPlanejada(item));
   if (!s || !opcaoImpedida(s)) return null;
   return `Já separado de ${s.localizacao_codigo}${s.lote ? ` — lote ${s.lote}` : ''}: ${situacaoDoLote(s)}. Essa parte não sai até o lote `
     + 'ser liberado na tela Lotes e Séries — na entrega, escolha outro endereço.';
@@ -230,6 +240,23 @@ const pendentePlanejado = (item) => {
   const n = Number(parte);
   return Number.isFinite(n) ? Math.max(0, Math.min(n, caixa)) : caixa;
 };
+// Etapa 231 (C532, B1518): a parte planejada AINDA PENDENTE do item está num lote impedido — pela linha de saldo da janela; sem as linhas
+// (a busca falhou), pelo detalhe (B1517). Linhas carregadas sem o par: null (o de hoje — o par sumiu, automático).
+const planejadaPendenteImpedida = (item, rows, saldosFalharam = false) => {
+  if (!temPlanejada(item) || !(pendentePlanejado(item) > 1e-9)) return false;
+  if (saldosFalharam) return !!linhaDoLoteDaSeparacao(item);
+  const s = (rows || []).find((r) => valorOrigem(r) === valorPlanejada(item));
+  return !!(s && opcaoImpedida(s));
+};
+// Etapa 231 (C532, B1520): os itens que a entrega de um clique mandaria com a parte planejada num lote impedido (a porta aplica a planejada e
+// recusa a entrega inteira). Pelo detalhe: o botão não abre janela nem busca saldos.
+const itensEntregaDiretaImpedida = (itens) => {
+  const qtds = quantidadesIniciaisEntrega(itens);
+  return (itens || []).filter((i) => (parseFloat(qtds[i.id]) || 0) > 0 && temPlanejada(i) && pendentePlanejado(i) > 1e-9
+    && i.lote_separacao_esta_impedido === true);
+};
+const fraseEntregaDiretaImpedida = (i) => `${i.material_nome}: separado de ${i.origem_separacao_codigo} — lote ${i.lote_separacao_codigo} `
+  + `(${situacaoDoLote(linhaDoLoteDaSeparacao(i))}). A entrega direta sairia de lá e seria recusada — use "Entregar escolhendo de onde sai…".`;
 // Etapa 98 (T4): a caixa do item na régua do servidor (`Q.qtd`, 6 casas) — o que o "Devolver à prateleira" pode tirar.
 const caixaDoItem = (item) => Math.round(pendenteSeparado(item) * 1e6) / 1e6;
 const MOTIVO_DEVOLUCAO_MAX = 500;
@@ -789,6 +816,12 @@ const RequisicoesList = () => {
       if (origensEntrega[item.id]) return;
       const rows = saldosEntrega[item.material_id];
       if (!rows) return;
+      // Etapa 231 (C532, B1518): a parte planejada num lote impedido — nada pré-escolhido (a porta recusaria a planejada; o automático
+      // seria uma troca que o almoxarife não pediu). Vale também acima da parte e com a busca de saldos falha (pelo detalhe).
+      if (planejadaPendenteImpedida(item, rows, !!saldosEntregaFalhos[item.material_id])) {
+        novas[item.id] = { valor: VALOR_ESCOLHER_ORIGEM, codigo: '', automatico: false };
+        return;
+      }
       const qtd = parseFloat(quantidadesEntrega[item.id] ?? maxQtdEntrega(item)) || 0;
       // Etapa 196 (RN-196.11): o servidor aplica a planejada só até a PARTE da origem (o resto da caixa sai no automático);
       // pré-selecionar acima dela mandaria estrito o que lá não está separado e o servidor recusaria.
@@ -1228,6 +1261,18 @@ const RequisicoesList = () => {
   // Etapa 195 (C452, B1312): o botão "Completar Entrega" só aparece com algo entregável (`temPendenteComEstoque` = `temEntregavel`),
   // então o ramo "separar e depois entregar" que morava aqui nunca rodava — saiu, com o estado `entregaAposSeparar`.
   const handleCompletarEntrega = () => abrirModalEntrega();
+
+  // Etapa 231 (C532, B1519): o Confirmar Entrega espera a escolha — item com quantidade em "Escolha de onde sai" ou numa opção impedida.
+  const entregaEsperaEscolha = () => (detalhe?.itens || []).some((i) => {
+    if (!((parseFloat(quantidadesEntrega[i.id]) || 0) > 0)) return false;
+    const esc = origensEntrega[i.id];
+    if (esc?.valor === VALOR_ESCOLHER_ORIGEM) return true;
+    // Fase 2 (M3): antes das linhas de saldo chegarem a pre-selecao ainda nao rodou — o detalhe (B1517) segura o clique.
+    if (!esc && planejadaPendenteImpedida(i, null, true)) return true;
+    return !!fraseOpcaoImpedida(saldosEntrega[i.material_id], esc?.valor);
+  });
+  // Etapa 231 (C532, B1520): os itens que apagam o botão de um clique.
+  const entregaDiretaImpedida = detalhe ? itensEntregaDiretaImpedida(detalhe.itens) : [];
 
   // Etapa 61 (RN-04): as séries que valem para o item — só as do lote escolhido no "Sai de" (trocar
   // o lote não apaga a escolha, mas as de outro lote deixam de contar e de ir no PUT).
@@ -2165,8 +2210,10 @@ const RequisicoesList = () => {
                       <>
                       <button className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
                         onClick={(e) => { if (!bloquearSeNaoPode('separar_emitir', e)) return; handleConfirmarEntrega({ direto: true }); }}
-                        disabled={saving || conferenciaPendente}
-                        title={conferenciaPendente ? TITLE_CONFERENCIA_PENDENTE : 'Entrega os itens separados e dá baixa no estoque — a movimentação fica registrada no livro'}>
+                        disabled={saving || conferenciaPendente || entregaDiretaImpedida.length > 0}
+                        title={conferenciaPendente ? TITLE_CONFERENCIA_PENDENTE : (entregaDiretaImpedida.length > 0
+                          ? 'O lote de onde a peça foi separada não sai — use "Entregar escolhendo de onde sai…"'
+                          : 'Entrega os itens separados e dá baixa no estoque — a movimentação fica registrada no livro')}>
                         <FiTruck size={14} /> {saving ? 'Confirmando...' : 'Confirmar Entrega e Baixar Estoque'}
                       </button>
                       {/* Etapa 58: a entrega direta (um clique) nao escolhe de onde sai; esta abre o modal com
@@ -2178,6 +2225,12 @@ const RequisicoesList = () => {
                         title="Abre a entrega item a item para escolher o endereço (e o lote) de onde cada material sai">
                         Entregar escolhendo de onde sai…
                       </button>
+                      {/* Etapa 231 (C532, B1520): por que o botão de um clique está apagado. */}
+                      {entregaDiretaImpedida.length > 0 && (
+                        <div id="entrega-direta-lote-impedido" style={{ fontSize: '0.75rem', color: 'var(--gmp-warning, #b45309)' }}>
+                          {entregaDiretaImpedida.map((i) => <div key={i.id}>{fraseEntregaDiretaImpedida(i)}</div>)}
+                        </div>
+                      )}
                       </>
                     ) : (
                       <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', textAlign: 'center', padding: '8px 0' }}>
@@ -2195,8 +2248,10 @@ const RequisicoesList = () => {
                       <>
                       <button className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
                         onClick={(e) => { if (!bloquearSeNaoPode('separar_emitir', e)) return; handleConfirmarEntrega({ direto: true }); }}
-                        disabled={saving || conferenciaPendente}
-                        title={conferenciaPendente ? TITLE_CONFERENCIA_PENDENTE : 'Entrega os itens separados e dá baixa no estoque — a movimentação fica registrada no livro'}>
+                        disabled={saving || conferenciaPendente || entregaDiretaImpedida.length > 0}
+                        title={conferenciaPendente ? TITLE_CONFERENCIA_PENDENTE : (entregaDiretaImpedida.length > 0
+                          ? 'O lote de onde a peça foi separada não sai — use "Entregar escolhendo de onde sai…"'
+                          : 'Entrega os itens separados e dá baixa no estoque — a movimentação fica registrada no livro')}>
                         <FiTruck size={14} /> {saving ? 'Confirmando...' : 'Confirmar Entrega e Baixar Estoque'}
                       </button>
                       {/* Etapa 58: a entrega direta (um clique) nao escolhe de onde sai; esta abre o modal com
@@ -2208,6 +2263,12 @@ const RequisicoesList = () => {
                         title="Abre a entrega item a item para escolher o endereço (e o lote) de onde cada material sai">
                         Entregar escolhendo de onde sai…
                       </button>
+                      {/* Etapa 231 (C532, B1520): por que o botão de um clique está apagado. */}
+                      {entregaDiretaImpedida.length > 0 && (
+                        <div id="entrega-direta-lote-impedido" style={{ fontSize: '0.75rem', color: 'var(--gmp-warning, #b45309)' }}>
+                          {entregaDiretaImpedida.map((i) => <div key={i.id}>{fraseEntregaDiretaImpedida(i)}</div>)}
+                        </div>
+                      )}
                       </>
                     ) : (
                       <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', textAlign: 'center', padding: '8px 0' }}>
@@ -2566,7 +2627,7 @@ const RequisicoesList = () => {
                         }}>
                         <option value="">Qualquer endereço (automático)</option>
                         {(saldosEntrega[item.material_id] || []).map(s => (
-                          <option key={valorOrigem(s)} value={valorOrigem(s)} disabled={opcaoDesabilitada(s, item, false)}>
+                          <option key={valorOrigem(s)} value={valorOrigem(s)} disabled={opcaoDesabilitada(s)}>
                             {rotuloOrigem(s, propriaNoPar(detalhe.itens, item.material_id, valorOrigem(s)))}
                           </option>
                         ))}
@@ -2722,12 +2783,17 @@ const RequisicoesList = () => {
                             [item.id]: { valor, codigo: valor ? (o[item.id]?.codigo || '') : '', automatico: !valor },
                           }));
                         }}>
-                        {saldosEntregaFalhos[item.material_id] && temPlanejada(item) && (
+                        {/* Etapa 231 (B1518): só enquanto está escolhida — escolhido outro endereço, ela sai. */}
+                        {origensEntrega[item.id]?.valor === VALOR_ESCOLHER_ORIGEM && (
+                          <option value={VALOR_ESCOLHER_ORIGEM}>Escolha de onde sai (o lote da separação não sai)</option>
+                        )}
+                        {saldosEntregaFalhos[item.material_id] && temPlanejada(item)
+                          && !planejadaPendenteImpedida(item, null, true) && (
                           <option value={VALOR_PLANEJADA_SEM_SALDOS}>Planejada da separação ({item.origem_separacao_codigo})</option>
                         )}
                         <option value="">Qualquer endereço (automático)</option>
                         {(saldosEntrega[item.material_id] || []).map(s => (
-                          <option key={valorOrigem(s)} value={valorOrigem(s)} disabled={opcaoDesabilitada(s, item, true)}>{rotuloOrigem(s, irmaosNoPar(detalhe.itens, item, valorOrigem(s)))}</option>
+                          <option key={valorOrigem(s)} value={valorOrigem(s)} disabled={opcaoDesabilitada(s)}>{rotuloOrigem(s, irmaosNoPar(detalhe.itens, item, valorOrigem(s)))}</option>
                         ))}
                       </select>
                       {/* Etapa 226 (B1495/B1497): a escolhida num lote impedido; ou, sem escolha nem automático (o servidor aplica a
@@ -2735,8 +2801,10 @@ const RequisicoesList = () => {
                       {(() => {
                         const rows = saldosEntrega[item.material_id];
                         const esc = origensEntrega[item.id];
+                        // Etapa 231 (B1518): com "Escolha de onde sai", a frase da planejada (pelo detalhe se a busca falhou).
                         const frase = fraseOpcaoImpedida(rows, esc?.valor)
-                          || (!esc?.valor && !esc?.automatico ? frasePlanejadaImpedida(item, rows) : null);
+                          || ((!esc?.valor && !esc?.automatico) || esc?.valor === VALOR_ESCOLHER_ORIGEM
+                            ? frasePlanejadaImpedida(item, rows, !!saldosEntregaFalhos[item.material_id]) : null);
                         return frase && (
                           <div id={`entrega-dica-lote-impedido-${item.id}`} style={{ fontSize: '0.75rem', marginTop: 4, color: 'var(--gmp-warning, #b45309)' }}>
                             {frase}
@@ -2851,7 +2919,9 @@ const RequisicoesList = () => {
             </div>
             <div className="almox-modal-footer">
               <button className="btn-almox-secondary" onClick={() => setShowEntregar(false)}>Cancelar</button>
-              <button className="btn-almox-primary" onClick={handleEntregar} disabled={saving || detalhe.itens.every(i => maxQtdEntrega(i) <= 0) || entregaSeriesPendente()}>
+              <button className="btn-almox-primary" onClick={handleEntregar}
+                disabled={saving || detalhe.itens.every(i => maxQtdEntrega(i) <= 0) || entregaSeriesPendente() || entregaEsperaEscolha()}
+                title={entregaEsperaEscolha() ? 'Escolha de onde sai cada item com o lote da separação impedido' : undefined}>
                 {saving ? 'Confirmando...' : '✅ Confirmar Entrega'}
               </button>
             </div>

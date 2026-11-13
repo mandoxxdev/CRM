@@ -594,6 +594,20 @@ describe('NaoConformidadesAlmoxarifado — o efeito da decisão no saldo', () =>
     const dito = toast.success.mock.calls.map(([m]) => m).join(' | ');
     expect(dito).not.toContain('undefined');
   });
+
+  // Etapa 231 (C535, B1521): a aceitação liberou peças de um lote bloqueado, reprovado ou vencido — nada foi para quem espera e a tela diz
+  // por quê, como a Inspeções (B1512). O código do lote vem do servidor só nesse caso.
+  test('[RN-231.11] liberacao.lote_impedido: o toast de sempre e o aviso do lote', async () => {
+    await decidirCom({ efeito: 'LIBERADA', quantidade: 4, material_id: 12, mensagem: '4 liberado(s) do bloqueio', lote_impedido: 'L1' });
+    expect(toast.success).toHaveBeenCalledWith('Não conformidade NC-2026-0007 decidida! 4 liberado(s) do bloqueio');
+    expect(toast.warn).toHaveBeenCalledWith('O lote L1 continua bloqueado, reprovado ou vencido: as peças aceitas vão para quem espera '
+      + 'quando o lote for liberado.');
+  });
+  test('[RN-231.11 controle] sem lote_impedido: nenhum aviso de lote', async () => {
+    await decidirCom({ efeito: 'LIBERADA', quantidade: 4, material_id: 12, mensagem: '4 liberado(s) do bloqueio' });
+    expect(toast.success).toHaveBeenCalled();
+    expect(toast.warn).not.toHaveBeenCalled();
+  });
 });
 
 /**

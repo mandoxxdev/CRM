@@ -213,13 +213,14 @@ describe('Etapa 226: o "Sai de" diz qual lote está impedido', () => {
     expect(desabilitadas(selectEntrega())).toEqual(['4:12']);
   });
 
-  test('[RN-226.06] entrega: a planejada impedida do próprio item fica habilitada; outra impedida não', async () => {
+  // Etapa 231 (C532, B1518): a exceção da B1493 saiu — a janela não pré-seleciona mais a planejada impedida, então ela vem apagada também.
+  test('[RN-226.06, revisto na 231 (B1518)] entrega: a planejada impedida do próprio item também vem desabilitada', async () => {
     requisicao = PARCIAL_PLANEJADA;
     saldos = [A01, Z02(), Z03];
     await renderizar();
     await clicar('Completar Entrega');
     expect(textos(selectEntrega())).toContain('Z-02 — lote L2 (6) — Bloqueado: não sai');
-    expect(desabilitadas(selectEntrega())).toEqual(['5:13']);
+    expect(desabilitadas(selectEntrega())).toEqual(['4:12', '5:13']);
   });
 
   test('[RN-226.06, Fase 2 I1] separação: a planejada impedida também vem desabilitada', async () => {
@@ -230,11 +231,12 @@ describe('Etapa 226: o "Sai de" diz qual lote está impedido', () => {
     expect(desabilitadas(selectSeparacao())).toEqual(['4:12', '5:13']);
   });
 
-  test('[RN-226.12, Fase 2 I2] entrega acima da parte planejada (sem escolha nem automático): a frase da planejada impedida', async () => {
+  // Etapa 231 (B1518): acima da parte a janela abre em "Escolha de onde sai" (antes `''` sem automático); a frase é a mesma.
+  test('[RN-226.12, Fase 2 I2; revisto na 231 (B1518)] entrega acima da parte planejada: "Escolha de onde sai" e a frase da planejada impedida', async () => {
     requisicao = { ...PARCIAL_PLANEJADA, itens: [{ ...PARCIAL_PLANEJADA.itens[0], quantidade_origem_separacao: 1 }] };
     await renderizar();
     await clicar('Completar Entrega');
-    expect(selectEntrega().value).toBe('');
+    expect(selectEntrega().value).toBe('__escolher__');
     expect(container.querySelector('#entrega-dica-lote-impedido-1').textContent).toBe(FRASE_PLANEJADA_L2);
     escolher(selectEntrega(), '1:');
     expect(container.querySelector('#entrega-dica-lote-impedido-1')).toBeNull();
@@ -263,12 +265,13 @@ describe('Etapa 226: o "Sai de" diz qual lote está impedido', () => {
       .toBe('4:12');
   });
 
-  test('[RN-226.09] entrega pré-seleciona a planejada impedida e avisa; outra escolha tira o aviso', async () => {
+  // Etapa 231 (C532, B1518): a B1494 na entrega foi revogada — a janela não pré-seleciona a planejada impedida.
+  test('[RN-226.09, revisto na 231 (B1518)] entrega não pré-seleciona a planejada impedida e avisa; outra escolha tira o aviso', async () => {
     requisicao = PARCIAL_PLANEJADA;
     await renderizar();
     await clicar('Completar Entrega');
-    expect(selectEntrega().value).toBe('4:12');
-    expect(container.querySelector('#entrega-dica-lote-impedido-1').textContent).toBe(FRASE_L2);
+    expect(selectEntrega().value).toBe('__escolher__');
+    expect(container.querySelector('#entrega-dica-lote-impedido-1').textContent).toBe(FRASE_PLANEJADA_L2);
     escolher(selectEntrega(), '1:');
     expect(container.querySelector('#entrega-dica-lote-impedido-1')).toBeNull();
   });
@@ -413,12 +416,12 @@ describe('Etapa 226: o "Sai de" diz qual lote está impedido', () => {
     expect(container.querySelector('#separacao-dica-lote-impedido-1').textContent).toBe(FRASE_PLANEJADA_L2);
   });
 
-  test('[RN-226.06, Fase 5 A] entrega: a exceção é só do lote da planejada — outro lote impedido no mesmo endereço vem desabilitado', async () => {
+  test('[RN-226.06, Fase 5 A; revisto na 231 (B1518)] entrega: todo lote impedido vem desabilitado, a planejada e o outro do mesmo endereço', async () => {
     requisicao = PARCIAL_PLANEJADA;
     saldos = [A01, Z02(), Z02({ id: 20, lote_id: 99, lote: 'L9' })];
     await renderizar();
     await clicar('Completar Entrega');
-    expect(desabilitadas(selectEntrega())).toEqual(['4:99']);
+    expect(desabilitadas(selectEntrega())).toEqual(['4:12', '4:99']);
   });
 
   test('[RN-226.11] o util e o extrato são a mesma função', () => {

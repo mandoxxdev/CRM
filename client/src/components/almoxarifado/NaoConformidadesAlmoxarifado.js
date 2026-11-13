@@ -366,6 +366,13 @@ const NaoConformidadesAlmoxarifado = () => {
       // concatenar `undefined` mostraria "decidida! undefined" no lugar do aviso.
       const mensagemSaldo = resp?.data?.liberacao?.mensagem;
       toast.success(`Não conformidade ${decisaoTarget.numero} decidida!${mensagemSaldo ? ` ${mensagemSaldo}` : ''}`);
+      // Etapa 231 (C535, B1521): as peças aceitas caíram num lote impedido — nada foi para quem espera; o servidor manda o código do lote
+      // só nesse caso (como a Inspeções, B1512).
+      const loteImpedido = resp?.data?.liberacao?.lote_impedido;
+      if (loteImpedido) {
+        toast.warn(`O lote ${loteImpedido} continua bloqueado, reprovado ou vencido: as peças aceitas vão para quem espera `
+          + 'quando o lote for liberado.');
+      }
       setDecisaoTarget(null);
       // ⚠️ Achado 11 da revisão adversarial: com o filtro em "Abertas" (o padrão), a NC recém
       // decidida deixa de casar o filtro e a linha SOME junto com o toast — a pessoa decide e a
