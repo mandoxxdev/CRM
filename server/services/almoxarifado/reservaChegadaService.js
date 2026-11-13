@@ -31,6 +31,7 @@ const { disponivelSql } = require('./availabilitySql');
 // sem ciclo (o requisitionStateMachine, que este arquivo ja requer, a importa no topo).
 const { loteImpedidoSql, predicadoLoteImpedidoSql } = require('./loteImpedido');
 const Q = require('./quantidade');
+const diaLocal = require('../diaLocal'); // Etapa 228 (B1504): o mesmo "hoje" de Brasilia no impedido e no lote da entrada
 const stockService = require('./stockService');
 const requisitionStateMachine = require('./requisitionStateMachine');
 const requisitionService = require('./requisitionService');
@@ -748,7 +749,8 @@ async function aposLiberacaoSemFalhar(db, user, ctx, opcoes = {}) {
  * Regras: só reservas ATIVAS com `recebimento_id` desta movimentação e do material dela, de requisições
  * que ainda ESPERAM (`STATUS_QUE_ESPERAM` da 70) e não têm NADA separado na caixa (Fase 2: quem já separou
  * não perde a reserva no estorno); da última na ordem de prioridade para a primeira; só o que falta para
- * o estorno caber no disponível. Se nem liberando tudo o que pode o estorno caberia, não toca em nada (a
+ * o estorno caber no disponível — desde a Etapa 228 (C521), no que PODE SAIR (o disponível menos o lote impedido, B1504/B1508), para a
+ * reserva não ficar coberta só por lote bloqueado. Se nem liberando tudo o que pode o estorno caberia, não toca em nada (a
  * recusa da 71 acontece no ramo de entrada, intacta). Reservas da aprovação ou manuais nunca são tocadas.
  * @returns {Promise<Array<{reserva_id, requisicao_id, item_id, material_id, quantidade, recebimento_id, ...}>>} o que
  *   foi liberado, uma entrada por liberação. Fase 5: o motor recalcula o status das requisições a partir disto e,
@@ -760,9 +762,35 @@ async function liberarParaEstorno(db, user, mov) {
   // mesmo com disponivel sobrando (o estorno tira da OS o que a nota deu a ela). Entra na lista com `requisicao_id:
   // null` e `reserva_da_os: true`; `recriarAposEstornoRecusado` a recria com a OS se o estorno nao acontecer.
   const liberadasOs = await liberarReservaDaOsParaEstorno(db, user, mov, qtd);
-  const mat = await dbGet(db, `SELECT ${disponivelSql()} AS disponivel FROM materiais_almoxarifado WHERE id = ?`, [mov.material_id]);
+  // Etapa 228 (C521, B1504): o que sobra para cobrir as reservas depois do estorno e o que PODE SAIR — o disponivel menos o saldo de
+  // lote impedido (bloqueado, reprovado, vencido sem liberacao; 0 sem controle de lote) —, salvo quando o lote DA PROPRIA entrada esta
+  // impedido: as pecas dela ja estao no impedido e saem com o estorno (o que pode sair nao muda), e descontar de novo soltaria a reserva
+  // coberta pelo lote bom (RN-228.04) — ai fica a regua de hoje (`disp`), que so garante que o motor aceite o estorno. Sem teto no
+  // estornado (B1505): outro lote desta nota bloqueado depois deixa o livre abaixo de zero, e soltar ate ele voltar a 0 nunca solta de
+  // mais. Lido fora da trava, como o resto daqui (soltar sem distribuir nao pega — B441; o lote mudando no meio: C534, B1506).
+  const hoje = diaLocal.hojeLocalISO();
+  const mat = await dbGet(db, `SELECT ${disponivelSql('lim_me')} AS disponivel, ${loteImpedidoSql('lim_me', hoje)} AS impedido,
+      CASE WHEN COALESCE(lim_me.controle_lote,0) = 1 AND lim_le.id IS NOT NULL AND ${predicadoLoteImpedidoSql('lim_le', hoje)}
+        THEN 1 ELSE 0 END AS lote_da_entrada_impedido
+    FROM materiais_almoxarifado lim_me LEFT JOIN lotes_almoxarifado lim_le ON lim_le.id = ?
+    WHERE lim_me.id = ?`, [mov.lote_id || null, mov.material_id]);
   const disp = num(mat && mat.disponivel);
-  if (disp >= qtd - EPS) return liberadasOs;
+  let livre = mat && !Number(mat.lote_da_entrada_impedido) ? disp - num(mat.impedido) : disp;
+  // Fase 2 (B1508): nota com OS (do pedido ou da propria nota, aberta ou ja fechada) — a fila da OS reservou SEM o desconto, de
+  // proposito (B1455), e a reserva da OS ja foi solta acima por `min(reserva, estornado)`: descontar aqui tiraria da requisicao da OS e
+  // deixaria a reserva generica da OS sobre o lote bloqueado (prioridade invertida). Fica a regua de hoje.
+  if (livre < disp - EPS && livre < qtd - EPS) {
+    let temOs = false;
+    try {
+      const recOs = await dbGet(db, 'SELECT * FROM recebimentos_material_almoxarifado WHERE id = ?', [mov.recebimento_id]);
+      temOs = !!(await reservaDaOs.osDoRecebimento(db, recOs));
+    } catch (e) {
+      console.warn(`[almoxarifado-reservas] leitura da OS do recebimento ${mov.recebimento_id} no estorno falhou: ${e.message}`);
+    }
+    if (temOs) livre = disp;
+  }
+  const faltaHoje = Math.max(0, qtd - disp);
+  if (livre >= qtd - EPS) return liberadasOs;
 
   const marcasSt = STATUS_QUE_ESPERAM.map(() => '?').join(',');
   const reservas = await dbAll(db, `SELECT rs.id AS reserva_id, rs.item_requisicao_id AS item_id,
@@ -783,7 +811,10 @@ async function liberarParaEstorno(db, user, mov) {
   if (disp + total < qtd - EPS) return liberadasOs;
 
   const rec = await dbGet(db, 'SELECT numero FROM recebimentos_material_almoxarifado WHERE id = ?', [mov.recebimento_id]);
-  let falta = qtd - disp;
+  let falta = qtd - livre;
+  // Etapa 228 (B1507): quando o lote impedido pesou (soltar mais do que a regua de hoje), o motivo — que a tela Reservas mostra — diz por que.
+  const motivo = `Estorno da entrada do recebimento ${rec ? rec.numero : mov.recebimento_id}${falta > faltaHoje + EPS
+    ? ' — o que sobra do material está em lote bloqueado, reprovado ou vencido' : ''}`;
   const liberadas = [...liberadasOs];
   for (const r of liberaveis) {
     if (falta <= EPS) break;
@@ -792,7 +823,7 @@ async function liberarParaEstorno(db, user, mov) {
       // eslint-disable-next-line no-await-in-loop
       await stockService.liberarReserva(db, user, r.reserva_id, q >= num(r.saldo) - EPS ? null : q, {
         statusFinal: 'LIBERADA',
-        motivo: `Estorno da entrada do recebimento ${rec ? rec.numero : mov.recebimento_id}`,
+        motivo,
         motivoMovimentacao: 'Liberação por estorno da entrada',
       });
       falta -= q;

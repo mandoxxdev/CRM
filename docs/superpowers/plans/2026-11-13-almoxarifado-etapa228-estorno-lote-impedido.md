@@ -142,3 +142,52 @@ Sem galhos: um serviço só, em série na árvore principal. A tela não muda (o
   próprio (o `loteImpedidoSql` usa subconsultas com apelidos `lim_*`; conferir que não colide).
 - `mov.lote_id` nulo → o lote não está impedido (o sem-lote sai).
 - A ordem das travas não muda: nada novo é pego aqui.
+
+## Fase 2 — correções do revisor fresco (2026-11-13) — **MANDAM sobre o texto acima onde divergem**
+
+Revisor fresco sobre `297c5bc5` (só leitura): **0 trava, 2 importantes, 4 menores**; números das RN-228.01/.02/.04/.07 conferidos à mão e
+certos; a chegada faz **uma reserva por item da requisição** (o teto somado por material); a nota grava uma `ENTRADA_COMPRA` por item, com o
+lote; a recriação por `criarReserva(sistema)` continua cabendo; nenhuma trava nova, nenhuma ordem violada.
+
+1. **[IMP] A OS aberta (B1455).** A fila da OS reserva **sem** o desconto, de propósito, e essas reservas têm `recebimento_id`: nota com OS,
+   3 em L2 + 4 em L1 bloqueado, requisição da OS com 2 e a reserva da OS com 5 → estornar L2 solta 3 da reserva da OS (`min`) e a conta nova
+   tiraria os 2 da requisição da OS, deixando a reserva genérica da OS no bloqueado (prioridade invertida). **Decisão B1508:** nota com OS
+   (do pedido ou da própria nota, aberta ou já fechada — `reservaDaOs.osDoRecebimento`) fica na régua de hoje. Teste **RN-228.11**.
+2. **[IMP] RN-228.03, .05 b e .06 não montavam** (o 1 PC em L1 bom antes da aprovação fazia a aprovação reservar 1). A montagem passou a
+   aprovar R1 **antes** do 1 PC manual (a entrada manual não distribui). Os números da .06 ficam "como hoje" (não solta).
+3. **[MENOR] O `LEFT JOIN` do lote sem `IS NOT NULL`** daria a entrada sem lote como impedida — o código já tem `lim_le.id IS NOT NULL`.
+   Teste novo **RN-228.12** (entrada sem lote: a nota exige o lote em material com controle, então a sem lote é a legada — o controle ligado
+   depois da nota).
+4. **[MENOR] RN-228.09: R1 fica com 5 de 6** (L1 tem 1 manual + 4 da nota), não 4. O teste já dizia 5.
+5. **[MENOR] A conta é exata só sem os `max(0, …)` do `loteImpedidoSql` ativos.** Com peça em quarentena no lote bom estornado, ou o resto
+   do material (bloqueada + terceiros − retido) cortando, o impedido cai menos (ou mais) do que `qtd` e o estorno solta um pouco de mais ou de
+   menos. Raro; **D (228)**, ao lado do C534.
+6. **[MENOR] B1505 e B1507.** Sem teto solta só reserva **desta nota** de quem espera: a reserva antiga da aprovação sobre o lote bloqueado
+   depois continua (C522/B1456, anterior). O motivo é **por estorno**, não por reserva: quando o lote impedido pesou, até a parte que a régua
+   de hoje também soltaria leva o texto novo. Registrado na B1507.
+
+Literal da recusa do lote (contrato, não muda): `mensagemLoteNaoComportaEstorno(mov, saldo)` em `stockService.js`.
+
+- **B1508 — nota com OS: a régua de hoje.** Acima. Descartado: descontar também na OS (inverte a prioridade); olhar só a OS **aberta**
+  (`osAbertaDoRecebimento`): a OS fechada depois da chegada deixaria a requisição da OS perder a reserva no estorno.
+
+## Execução
+
+- [x] Fase 0.5 — estimativa `ffe7b233` (**4h**).
+- [x] Fase 1 — este plano — `297c5bc5`. Fase 2 — bloco acima.
+- [x] T0 — `server/tests/api/estornoLoteImpedido.api.test.js`: 6/11 vermelhos por número antes do código (os 5 verdes são as guardas: lote
+  bom, o próprio lote impedido, vencimento liberado, sem controle de lote, o controle da .07). Com os testes da Fase 2: 13 cenários.
+- [x] T1 — a conta (B1504/B1505), a OS (B1508) e o motivo (B1507) em `liberarParaEstorno`.
+- [x] T2 — integração pela rota no mesmo arquivo (.01 → .09: estorno → liberar o lote → reserva de novo; .08: estorno que falha → recria).
+
+### Controles positivos (script `e228-sabotagem.js` no scratchpad: cópia, âncora = 1, restauro por cópia, md5 igual)
+
+| # | Sabotagem | Caiu |
+|---|---|---|
+| 1 | `livre = disp` (sem o desconto) | .01, .09, .02, .05 a, .07, .08, .12 |
+| 2 | desconto sempre (sem olhar o lote da entrada) | .04 |
+| 3 | teto no estornado | .07 |
+| 4 | motivo de hoje sempre | .01, .09, .02, .05 a, .07, .12 |
+| 5 | sem `lim_le.id IS NOT NULL` | .12 |
+| 6 | sem a regra da OS | .11 |
+| 7 | "hoje" errado | .05 a |
