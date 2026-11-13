@@ -1,0 +1,9 @@
+*Planejamento — almoxarifado: o extrato do material diz qual lote está bloqueado ou vencido*
+_13/11/2026_
+
+*1. A tabela de saldos do extrato mostra a situação e a validade de cada lote*
+Hoje o extrato de um material diz quanto do estoque está em lote bloqueado (sem certificado), reprovado ou vencido, mas não diz qual lote é. Para saber, é preciso abrir a tela Lotes e Séries. Depois desta alteração, a tabela Saldos por localização do extrato mostra, ao lado do código do lote, "Bloqueado", "Reprovado" ou "Vencido em 10/11/2026" em cada lote que não pode sair para uso. Os lotes liberados continuam como hoje.
+Tempo estimado: *2h15*
+
+*Total estimado: 2h15*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
