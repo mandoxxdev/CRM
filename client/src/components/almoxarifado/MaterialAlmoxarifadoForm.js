@@ -122,6 +122,9 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
   // Etapa 26 (RN-01): o catálogo do cliente, ponto único de busca compartilhado com as duas
   // telas de listagem.
   const { categorias, erro: erroCategorias } = useCategoriasMaterial(rotas.api.categorias);
+  // Etapa 216 (RN-216.01): o Tipo de Material vem do cadastro de tipos (Compras -> Tipos de Material), pela porta do modulo. O hook
+  // das categorias serve: o GET devolve linhas com `nome`.
+  const { categorias: tiposMaterial } = useCategoriasMaterial(rotas.api.tiposMaterial);
 
   const [form, setForm] = useState({
     codigo: '',
@@ -314,6 +317,19 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
     }
     return opcoes;
   }, [categorias, form.categoria]);
+
+  // Etapa 216 (RN-216.01/02): as opcoes do Tipo de Material. O valor gravado casa com a lista sem acento e sem caixa (desde a 210 os
+  // textos subiram para maiusculo: 'CONSUMÍVEL' e o 'Consumível' da lista); casando, o select mostra o item da lista e o salvar sem
+  // mexer mantem o gravado. Nao casando, o gravado entra ROTULADO '(fora da lista)', como a categoria fora de catalogo.
+  const tipoMaterialSelect = useMemo(() => {
+    const norm = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+    const opcoes = tiposMaterial.map((nome) => ({ valor: nome, rotulo: nome }));
+    const atual = form.tipo_material;
+    if (!atual) return { opcoes, valor: '' };
+    const igual = tiposMaterial.find((nome) => norm(nome) === norm(atual));
+    if (igual) return { opcoes, valor: igual };
+    return { opcoes: [...opcoes, { valor: atual, rotulo: `${atual} (fora da lista)` }], valor: atual };
+  }, [tiposMaterial, form.tipo_material]);
 
   // Sem categoria o cadastro não conclui (RN-07), então a falha de carga precisa ser dita — ao
   // contrário dos filtros das listagens, onde o catálogo é conveniência.
@@ -798,9 +814,12 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
                   </select>
                 </div>
                 <div className="almox-field">
-                  <label className="almox-label">Tipo de Material</label>
-                  <input className="almox-input" value={form.tipo_material} onChange={e => set('tipo_material', e.target.value)}
-                    placeholder="Ex.: Ferramenta, Consumível..." />
+                  <label className="almox-label" htmlFor="material-tipo-material">Tipo de Material</label>
+                  <select id="material-tipo-material" className="almox-form-select" value={tipoMaterialSelect.valor}
+                    onChange={e => set('tipo_material', e.target.value)}>
+                    <option value="">Selecione…</option>
+                    {tipoMaterialSelect.opcoes.map(t => <option key={t.valor} value={t.valor}>{t.rotulo}</option>)}
+                  </select>
                 </div>
                 <div className="almox-field almox-form-full">
                   <label className="almox-checkbox-field">

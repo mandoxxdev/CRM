@@ -27,6 +27,8 @@ export const ROTAS_ALMOXARIFADO = {
     localizacoes: '/almoxarifado/localizacoes',
     proximoCodigo: '/almoxarifado/proximo-codigo',
     categorias: '/almoxarifado/categorias',
+    // Etapa 216 (RN-216.01): a lista do Tipo de Material.
+    tiposMaterial: '/almoxarifado/tipos-material',
     permissoes: '/almoxarifado/minhas-permissoes',
     clientes: '/clientes',
   },
@@ -70,6 +72,7 @@ export const ROTAS_COMPRAS = {
     localizacoes: '/compras/materiais/aux/localizacoes',
     proximoCodigo: '/compras/materiais/aux/proximo-codigo',
     categorias: '/compras/materiais/aux/categorias',
+    tiposMaterial: '/compras/materiais/aux/tipos-material',
     permissoes: '/compras/materiais/aux/minhas-permissoes',
     clientes: '/compras/materiais/aux/clientes',
   },
