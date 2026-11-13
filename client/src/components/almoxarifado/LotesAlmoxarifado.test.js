@@ -214,6 +214,42 @@ describe('LotesAlmoxarifado', () => {
     });
   });
 
+  // Etapa 220 (RN-220.12): a liberacao que reservou para quem esperava diz quanto, nas tres acoes
+  test('[RN-220.12] mudar status que reservou mostra "4 PC reservado(s) para quem esperava…"; com 0, nenhum aviso extra', async () => {
+    api.put.mockResolvedValueOnce({ data: { id: 200, status: 'ATIVO', reservado_para_quem_esperava: { quantidade: 4, unidade: 'PC', requisicoes: 1 } } });
+    await renderizar();
+    await selecionarMaterial();
+    await clicarAcao(1, 'Mudar status');
+    preencher(campoPorLabel('Justificativa'), 'Liberado');
+    await clicarBotaoModal('Confirmar');
+    expect(toast.info).toHaveBeenCalledWith('4 PC reservado(s) para quem esperava este material (1 requisição(ões)).');
+
+    toast.info.mockClear();
+    api.put.mockResolvedValueOnce({ data: { id: 200, status: 'BLOQUEADO', reservado_para_quem_esperava: { quantidade: 0, unidade: 'PC', requisicoes: 0 } } });
+    await clicarAcao(1, 'Mudar status');
+    preencher(campoPorLabel('Justificativa'), 'Avaria');
+    await clicarBotaoModal('Confirmar');
+    expect(toast.success).toHaveBeenCalledWith('Status do lote atualizado!');
+    expect(toast.info).not.toHaveBeenCalled();
+  });
+
+  test('[RN-220.12] liberar vencimento e anexar certificado tambem mostram o reservado', async () => {
+    const reservou = { data: { reservado_para_quem_esperava: { quantidade: 2.5, unidade: 'KG', requisicoes: 2 } } };
+    api.put.mockResolvedValueOnce(reservou);
+    api.post.mockResolvedValueOnce(reservou);
+    await renderizar();
+    await selecionarMaterial();
+    await clicarAcao(2, 'Liberar vencimento');
+    preencher(campoPorLabel('Justificativa'), 'Uso autorizado');
+    await clicarBotaoModal('Confirmar');
+    await clicarAcao(1, 'Anexar certificado');
+    selecionarArquivo(campoPorLabel('Arquivo (PDF ou imagem)'), new File(['x'], 'c.pdf', { type: 'application/pdf' }));
+    await clicarBotaoModal('Anexar');
+    const texto = '2.5 KG reservado(s) para quem esperava este material (2 requisição(ões)).';
+    expect(toast.info).toHaveBeenNthCalledWith(1, texto);
+    expect(toast.info).toHaveBeenNthCalledWith(2, texto);
+  });
+
   test('"liberar vencimento" não é oferecido para lote não vencido', async () => {
     await renderizar();
     await selecionarMaterial();

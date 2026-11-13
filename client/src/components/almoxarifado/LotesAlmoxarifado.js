@@ -73,6 +73,20 @@ const proximoStatusSugerido = (atual) => (atual === 'ATIVO' ? 'BLOQUEADO' : 'ATI
 // ('Certificado do fornecedor nao anexado') — é o único sinal que a tela tem de que ESTE
 // bloqueio é por falta de certificado (ver lotService.liberarBloqueioPorCertificado no servidor,
 // que casa a mesma substring no WHERE).
+/**
+ * Etapa 220 (RN-220.12, B1465): liberar o lote (status, vencimento, certificado) reserva as pecas dele para quem esperava o
+ * material; a resposta diz quanto (`reservado_para_quem_esperava`). Nada reservado (ou resposta antiga) -> nenhum aviso.
+ */
+export const textoReservaDaLiberacao = (data) => {
+  const r = data && data.reservado_para_quem_esperava;
+  if (!r || !(Number(r.quantidade) > 0)) return null;
+  return `${r.quantidade}${r.unidade ? ` ${r.unidade}` : ''} reservado(s) para quem esperava este material (${r.requisicoes} requisição(ões)).`;
+};
+const avisarReservaDaLiberacao = (data) => {
+  const t = textoReservaDaLiberacao(data);
+  if (t) toast.info(t);
+};
+
 const bloqueadoPorCertificado = (l) => l.status === 'BLOQUEADO' && /certificado/i.test(l.status_motivo || '');
 
 // Etapa 191 (Fase 5, F5): data que nao parseia (lixo do recebimento, ex.: '31/03/2027') aparece como foi gravada — e justamente
@@ -282,11 +296,12 @@ const LotesAlmoxarifado = () => {
   const confirmarStatus = async () => {
     setStatusSaving(true);
     try {
-      await api.put(`/almoxarifado/lotes/${statusTarget.id}/status`, {
+      const r = await api.put(`/almoxarifado/lotes/${statusTarget.id}/status`, {
         status: statusForm.status,
         justificativa: statusForm.justificativa.trim(),
       });
       toast.success('Status do lote atualizado!');
+      avisarReservaDaLiberacao(r?.data);
       setStatusTarget(null);
       loadLotes();
     } catch (err) {
@@ -304,10 +319,11 @@ const LotesAlmoxarifado = () => {
   const confirmarVencimento = async () => {
     setVencimentoSaving(true);
     try {
-      await api.put(`/almoxarifado/lotes/${vencimentoTarget.id}/liberar-vencimento`, {
+      const r = await api.put(`/almoxarifado/lotes/${vencimentoTarget.id}/liberar-vencimento`, {
         justificativa: vencimentoJustificativa.trim(),
       });
       toast.success('Vencimento liberado para consumo!');
+      avisarReservaDaLiberacao(r?.data);
       setVencimentoTarget(null);
       loadLotes();
     } catch (err) {
@@ -357,10 +373,11 @@ const LotesAlmoxarifado = () => {
     try {
       const fd = new FormData();
       fd.append('certificado', certificadoArquivo);
-      await api.post(`/almoxarifado/lotes/${certificadoTarget.id}/certificado`, fd, {
+      const r = await api.post(`/almoxarifado/lotes/${certificadoTarget.id}/certificado`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       toast.success('Certificado anexado!');
+      avisarReservaDaLiberacao(r?.data);
       setCertificadoTarget(null);
       loadLotes();
     } catch (err) {
