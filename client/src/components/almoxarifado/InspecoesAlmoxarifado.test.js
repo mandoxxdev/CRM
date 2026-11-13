@@ -645,6 +645,18 @@ describe('InspecoesAlmoxarifado — medidas do plano de inspeção (Etapa 29)', 
     // Mock padrão: `{ success: true }`, sem `medidas_registradas` (achado 6).
     await clicarBotaoModal('Salvar');
     expect(toast.success).toHaveBeenCalledWith('Inspeção registrada!');
+    expect(toast.warn).not.toHaveBeenCalled();
+  });
+
+  test('(7c) Etapa 229 (B1512): com lote_impedido na resposta, além do sucesso, avisa que o lote continua impedido', async () => {
+    planoDoBanco = [PLANO_DIAMETRO];
+    api.post.mockResolvedValue({ data: { id: 9, medidas_registradas: 0, lote_impedido: 'L-77' } });
+    await renderizar();
+    await abrirDecisao(0);
+    await clicarBotaoModal('Salvar');
+    expect(toast.success).toHaveBeenCalledWith('Inspeção registrada!');
+    expect(toast.warn).toHaveBeenCalledWith('O lote L-77 continua bloqueado, reprovado ou vencido: as peças aprovadas vão para quem '
+      + 'espera quando o lote for liberado.');
   });
 
   /*

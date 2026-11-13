@@ -291,6 +291,11 @@ const InspecoesAlmoxarifado = () => {
       } else {
         toast.success('Inspeção registrada!');
       }
+      // Etapa 229 (B1512): a parte aprovada caiu num lote impedido — nada foi reservado no lugar; o servidor manda o código do lote.
+      if (res.data?.lote_impedido) {
+        toast.warn(`O lote ${res.data.lote_impedido} continua bloqueado, reprovado ou vencido: as peças aprovadas vão para quem `
+          + 'espera quando o lote for liberado.');
+      }
       setDecisaoTarget(null);
       loadPendentes();
     } catch (err) {
