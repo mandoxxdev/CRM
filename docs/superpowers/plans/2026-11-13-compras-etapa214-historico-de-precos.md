@@ -33,11 +33,24 @@ cotado nem comprado, e não traria o que já existe). Cotação rejeitada **entr
 
 | # | Task | Tipo | Estado |
 |---|---|---|---|
-| T1 | Serviço `historicoDePrecos` + rota; teste `historicoDePrecos.api.test.js` com controle positivo | tronco | — |
-| T2 | Tela: quadro no `FornecedoresDoMaterial`; teste | galho | — |
-| T3 | Integração: cotar → gerar pedido → o histórico tem as duas linhas (no teste da T1) | integração | — |
-| T4 | Fechamento | — | — |
+| T1 | Serviço `historicoDePrecos` + rota; teste `historicoDePrecos.api.test.js` com controle positivo | tronco | feita `8ec674b0` (4/4; 5 sabotagens vermelhas: filtros de status, ordem, material, porta) |
+| T2 | Tela: quadro no `FornecedoresDoMaterial`; teste | galho | feita `bd9209c4` (3/3; 3 sabotagens vermelhas) |
+| T3 | Integração: cotar → gerar pedido → o histórico tem as duas linhas (no teste da T1) | integração | feita em `8ec674b0` (cenário [RN-214.01 integracao]) |
+| T4 | Fechamento | — | feito |
+
+## Execução (2026-11-13)
+
+- Fase 2 e Fase 5 não despachadas (etapa pequena, só leitura, porta já revisada na 212); registrado como divergência do processo.
+- **Verificação (medida, em `bd9209c4`):** `test:api` 607/607 arquivos, `test:almoxarifado` 44/0, validation 4/0, safealter 3/0, sqlite
+  16/0, build OK. Da tela, as suítes tocadas (`HistoricoDePrecos`, `FornecedoresDoMaterial`, `MaterialFormFornecedores`: 14/14); a
+  suíte inteira da tela continua pendente (memória).
+
+## Retro (4 números)
+
+- Rodadas de correção até verde: 0. Achados: sem revisão. Paralelismo: nenhum. Defeito que escapou da 213: nenhum até aqui.
 
 ## Próxima tarefa detalhada
 
-Retomar a Etapa 211 (famílias no Compras) do branch `etapa-211-familias-no-compras-wip`.
+Retomar a Etapa 211 (famílias no Compras) do branch `etapa-211-familias-no-compras-wip` (`00c3db6c`): rebasear na `main`, ajustar
+os 32 testes da tela (Familias, FamiliasEditarLidos, FamiliasSomenteLeitura, AuthContextPerfilRetirado, ConfiguracoesSomenteLeitura),
+controle positivo, suítes, revisão e fechamento — plano `2026-11-12-compras-etapa211-familias-no-compras.md`.

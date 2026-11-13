@@ -593,6 +593,10 @@
   o código com que foi emitido, mesmo que o vínculo mude depois; editar e salvar o pedido refaz. **Descartado:** ler o vínculo ao vivo
   na leitura (um pedido antigo mudaria de código sozinho) e um campo digitável por linha (o código já é cadastrado no material;
   digitar de novo abriria divergência — fica para quando a compradora pedir).
+- **B87 — 13/11/2026 (Etapa 214): o histórico de preços é a leitura das cotações e dos pedidos do material.** Mostra o preço que
+  de fato foi cotado e comprado, com o número do documento, sem cadastro novo — e já traz o que existia antes da etapa. Fora:
+  cotação cancelada; pedido cancelado ou rejeitado. A cotação rejeitada entra, marcada "(rejeitada)": foi preço cotado.
+  **Descartado:** guardar cada mudança do preço digitado no vínculo do fornecedor (preço digitado não é cotado nem comprado).
 
 ### D. Dúvidas para você (ou para o P.O.)
 - **D-35** — O que A, B e C significam **para a GMP**? A legenda atual é a definição genérica.
@@ -772,6 +776,44 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 214 — Histórico de preços por fornecedor no material (2026-11-13)
+
+**Em uma frase.** A compradora pediu para ver, no próprio material, por quanto cada fornecedor já cotou e vendeu — para negociar e
+escolher o fornecedor sem abrir pedido por pedido.
+
+### O que há de novo (visível para o usuário)
+
+- **Compras → Materiais → editar um material → Fornecedores deste material**: abaixo da lista, o quadro **Histórico de preços**,
+  com Data, Fornecedor, Origem (Cotação ou Pedido, com o número), Quantidade e Preço unitário, do mais recente para o mais antigo, e
+  o filtro **Todos os fornecedores** quando há mais de um.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| O preço ficava espalhado pelas cotações e pedidos | O material mostra todos os preços cotados e comprados, por fornecedor |
+| O cadastro do fornecedor guardava só o último preço digitado | O histórico vem das cotações e dos pedidos reais, com o número |
+
+### As regras, com o cenário exato
+
+1. Cotar o material com o fornecedor *A* a R$ 45,90 e gerar o pedido → duas linhas: *Pedido PC-…* e *Cotação COT-…*, as duas a R$ 45,90.
+2. Cotação rejeitada → aparece como *"Cotação COT-… (rejeitada)"*.
+3. Cotação excluída, pedido cancelado ou rejeitado → não aparecem.
+4. Material sem cotação nem pedido → *"Nenhum preço cotado ou comprado para este material ainda."*
+5. Mostra no máximo os 100 preços mais recentes.
+
+### Roteiro de teste manual (clicável)
+
+1. **Compras → Cotações → Nova** → fornecedor *A* → o material → preço *45,90* → salvar → **Gerar pedido**.
+2. Outra cotação com o fornecedor *B*, preço *50* → salvar.
+3. **Compras → Materiais** → lápis do material → **Histórico de preços**: as três linhas, a mais recente em cima.
+4. No filtro, escolha *B*: só a cotação dele.
+
+### O que a etapa NÃO cobre
+
+- Gráfico de evolução do preço e média por fornecedor.
+- O histórico na ficha de consulta do Almoxarifado (o cadastro é do Compras).
 
 ## Etapa 213 — O código do fornecedor na cotação e no pedido de compra (2026-11-12)
 

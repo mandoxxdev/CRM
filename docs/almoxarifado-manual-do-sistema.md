@@ -366,6 +366,11 @@ material (*Forn.: …* na tela; *"Cód. fornecedor: …"* no pedido impresso). S
 código da GMP aparece. O código fica gravado no item quando a cotação ou o pedido é salvo: mudar o código no material depois não
 altera um pedido já emitido, até ele ser editado e salvo de novo. O pedido gerado de uma cotação leva o mesmo código.
 
+Abaixo da lista, o quadro **Histórico de preços** mostra o que cada fornecedor já cotou e vendeu daquele material: data, fornecedor,
+cotação ou pedido (com o número), quantidade e preço unitário, do mais recente para o mais antigo (no máximo os 100 últimos), com
+filtro por fornecedor. Não entram cotações excluídas nem pedidos cancelados ou rejeitados; a cotação rejeitada aparece marcada
+*"(rejeitada)"*. Sem nenhum preço: *"Nenhum preço cotado ou comprado para este material ainda."*
+
 ### 2.4 Campos técnicos
 
 O bloco **Dados Técnicos** é o que transforma o cadastro em ficha de material, e é ele que sustenta rastreabilidade e requalificação de fornecedor:

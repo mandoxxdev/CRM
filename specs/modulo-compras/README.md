@@ -58,7 +58,7 @@ Compras ganhar spec própria, a fatia migra para cá e este arquivo vira o índi
 | 3 | Tipo de Material escolhido de uma lista (no formulário de material) | `estimativa_2026-11-12_cadastro-de-material-fornecedores`, 1 | 1h30 | a fazer — depois do 2 (a lista passa a morar no Compras) |
 | 4 | Vários fornecedores por material, cada um com código e descrição comercial | idem, 2 | 3h30 | **feito — Etapa 212** (`f59c0551`, `db55113a`, `e74bcb05`): vínculo = `itens_fornecedor.material_id` (B83–B85) |
 | 5 | Código do fornecedor na cotação e no pedido de compra (tela e impresso) | idem, 3 | 3h | **feito — Etapa 213** (`86ab0eb4`, `7a8e6f5b`): `codigo_fornecedor` gravado na linha ao salvar (foto, B86); tela e impresso |
-| 6 | Histórico de preços por fornecedor no material | idem, 4 | 2h30 | **próximo** — o preço mora na linha do vínculo (`itens_fornecedor.preco`); falta guardar cada mudança |
+| 6 | Histórico de preços por fornecedor no material | idem, 4 | 2h30 | **feito — Etapa 214** (`8ec674b0`, `bd9209c4`): leitura das cotações e pedidos do material (B87) |
 | 7 | Tirar o campo Aplicação | idem, 5 | 45 min | **esperando** o Matheus confirmar |
 
 **Esperando resposta da compradora (sem estimativa):**
