@@ -811,15 +811,19 @@ async function compensarTransformacao(db, user, { creditos, custosAnteriores, mo
       SET custo_medio = ?, custo_unitario = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?`, [c.custo_medio, c.custo_unitario, materialId]).catch(() => {});
   }
-  if (movConsumo && movConsumo.id) {
-    await stockService.cancelarMovimentacao(db, user, movConsumo.id, motivo).catch(() => {});
-    await dbRun(db, `UPDATE materiais_almoxarifado
-      SET quantidade_em_terceiros = ${Q.qtdSql('COALESCE(quantidade_em_terceiros,0) + ?')}, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?`, [consumida, item.material_id]).catch(() => {});
-  }
-  await dbRun(db, `UPDATE itens_remessa_terceiro_almoxarifado
-    SET quantidade_retornada = ${Q.qtdSql('MAX(0, COALESCE(quantidade_retornada,0) - ?)')} WHERE id = ?`,
-  [consumida, item.id]);
+  // Etapa 221 (Fase 5, B1475): o desfazer do consumo, do em-terceiros e do claim do material ENVIADO numa secao so, sob a trava dele (os
+  // creditos acima sao de OUTROS materiais e ficam fora). Fora dela, o retido do lote e o `loteImpedidoSql` ficavam errados no meio.
+  await naTravaDoMaterial(item.material_id, async () => {
+    if (movConsumo && movConsumo.id) {
+      await stockService.cancelarMovimentacao(db, user, movConsumo.id, motivo).catch(() => {});
+      await dbRun(db, `UPDATE materiais_almoxarifado
+        SET quantidade_em_terceiros = ${Q.qtdSql('COALESCE(quantidade_em_terceiros,0) + ?')}, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?`, [consumida, item.material_id]).catch(() => {});
+    }
+    await dbRun(db, `UPDATE itens_remessa_terceiro_almoxarifado
+      SET quantidade_retornada = ${Q.qtdSql('MAX(0, COALESCE(quantidade_retornada,0) - ?)')} WHERE id = ?`,
+    [consumida, item.id]);
+  });
 }
 
 /**
@@ -945,6 +949,16 @@ async function registrarTransformacao(db, user, remessaId, data) {
   for (const v of validados) {
     const { item, linha, consumida, materialOrigem, rateio } = v;
 
+    const creditos = [];
+    const custosAnteriores = new Map();
+    let movConsumo = null;
+    // Etapa 221 (Fase 5, revisao das travas, B1475): o claim do item, o CONSUMO_TERCEIRO e o desfazer do claim numa secao so, sob a trava
+    // do material ENVIADO (o molde do retorno, Etapa 218; o motor ja roda sob ela: aninha). Entre o claim e o motor, o retido do lote
+    // (`retidoDoLote.js`) perdia a parte em terceiros do lote bom e o `loteImpedidoSql` caia: a reserva manual (221), a aprovacao e a
+    // separacao liam o impedido menor e reservavam peca que so existia em lote bloqueado (reproduzido: reserva de 2 com L1 em terceiro e
+    // L2 BLOQUEADO 6). Os creditos dos resultados (OUTROS materiais) ficam fora: `naTravaDoMaterial` nao aninha outro material.
+    // eslint-disable-next-line no-await-in-loop
+    await naTravaDoMaterial(item.material_id, async () => {
     // Etapa 96 (C176): `consumida` ja chega arredondada da pre-checagem; o claim com folga e a coluna arredondada.
     const claim = await dbGet(db, `UPDATE itens_remessa_terceiro_almoxarifado
       SET quantidade_retornada = ${Q.qtdSql('COALESCE(quantidade_retornada,0) + ?')}
@@ -955,10 +969,6 @@ async function registrarTransformacao(db, user, remessaId, data) {
       throw erro(`Transformacao acima do enviado no item ${item.material_codigo}: outro documento `
         + 'foi registrado ao mesmo tempo. Recarregue a remessa e tente de novo.');
     }
-
-    const creditos = [];
-    const custosAnteriores = new Map();
-    let movConsumo = null;
     try {
       // 2a. BAIXA A CHAPA PRIMEIRO (decisao 9). CONSUMO_TERCEIRO ja existe desde a 8b e faz
       // exatamente o que a chapa precisa: baixa quantidade_atual E quantidade_em_terceiros no MESMO
@@ -986,7 +996,15 @@ async function registrarTransformacao(db, user, remessaId, data) {
           + `${rateio.linhas.length} resultado(s)`
           + (extras.length ? ` — ${extras.join('; ')}` : ''),
       });
+    } catch (e) {
+      // O consumo falhou: nada foi creditado; devolve o claim DENTRO da secao (Etapa 221, B1475).
+      await dbRun(db, `UPDATE itens_remessa_terceiro_almoxarifado
+        SET quantidade_retornada = ${Q.qtdSql('MAX(0, COALESCE(quantidade_retornada,0) - ?)')} WHERE id = ?`, [consumida, item.id]);
+      throw e;
+    }
+    });
 
+    try {
       // 2b. CREDITA OS RESULTADOS.
       for (const l of rateio.linhas) {
         const mid = Number(l.material_id);

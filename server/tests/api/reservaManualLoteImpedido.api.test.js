@@ -231,6 +231,68 @@ process.on('exit', (code) => {
     await ok(reservar(m, 4), 201);
   });
 
+  // ── Fase 5 (revisao dos testes): unidade, a base certa com caixa, o "hoje" exato ──────────────────────────────────────────────────
+  await test('[RN-221.03 b] a unidade do material na frase (PC, nao un)', async () => {
+    const m = await material(); await dbRun(db, "UPDATE materiais_almoxarifado SET unidade = 'PC' WHERE id = ?", [m]);
+    await entrar(m, 6, 'L2'); await status(m, 'L2', 'BLOQUEADO');
+    recusou(await reservar(m, 1), 'Saldo disponível insuficiente: 0. Não entram 6 PC em lote bloqueado, reprovado ou vencido.');
+  });
+  await test('[RN-221.12 b] caixa maior que o livre: o corte e contra o livre de caixa (4), nao contra o disponivel (10) -> "0<sufixo>. Nao entram 4"', async () => {
+    const m = await material();
+    const cr = await como('SOL').post(`${API}/requisicoes`, { os_referencia: 'OS-221', itens: [{ material_id: m, quantidade: 6 }] });
+    assert.strictEqual(cr.status, 201, JSON.stringify(cr.body));
+    await ok(como('ADMIN').put(`${API}/requisicoes/${cr.body.id}/aprovar`, {}));
+    await entrar(m, 4, 'L1'); await entrar(m, 6, 'L2');
+    const item = await dbGet(db, 'SELECT id FROM itens_requisicao_almoxarifado WHERE requisicao_id = ?', [cr.body.id]);
+    await ok(como('ADMIN').put(`${API}/requisicoes/${cr.body.id}/separar`, { itens_separados: [{ item_id: item.id, quantidade_separada: 6 }] }));
+    await status(m, 'L2', 'BLOQUEADO'); // depois de separar: a caixa de 6 fica, o livre fora dela e 4 (D (221) item 3)
+    const sufixo = caixaSql.sufixoCaixa(await caixaSql.lerCaixa(db, m), 'un');
+    assert.ok(sufixo.startsWith(' — 6 un estão separados para'), `premissa: caixa 6, veio "${sufixo}"`);
+    recusou(await reservar(m, 1), `Saldo disponível insuficiente: 0${sufixo}. ${FRASE(4)}`);
+  });
+  await test('[RN-221.05 d] lote que vence HOJE ainda nao venceu: reserva de 5 sobre 4 -> a recusa de hoje; de 4 -> 201', async () => {
+    const m = await material(); await entrar(m, 4, 'L1'); await validade(m, 'L1', dia(0));
+    recusou(await reservar(m, 5), 'Saldo disponível insuficiente: 4');
+    await ok(reservar(m, 4), 201);
+  });
+
+  // ── Fase 5 (revisao das travas, B1475): o claim da transformacao no terceiro sob a trava do material ─────────────────────────────
+  // Sem gancho em producao: o teste segura a trava do material (S), enfileira a reserva, dispara a transformacao e solta S. Antes, o claim
+  // do item rodava fora da trava (o retido do lote perdia a parte em terceiros do L1 e o impedido caia de 6 para 4): a reserva passava (201).
+  const trava = require('../../services/almoxarifado/travaPorMaterial');
+  const terceiro = require('../../services/almoxarifado/thirdPartyService');
+  const espera = (ms) => new Promise((r) => { setTimeout(r, ms); });
+  await test('[RN-221.14] (B1475) transformacao no terceiro em voo: a reserva manual na fila nao le o impedido pela metade -> 400; o final bate', async () => {
+    const m = await material(); await entrar(m, 2, 'L1'); await entrar(m, 6, 'L2');
+    const l1 = await loteId(m, 'L1');
+    await status(m, 'L2', 'BLOQUEADO');
+    const rem = await terceiro.criarRemessa(db, { ...USERS.ADMIN }, { fornecedor_nome: 'Corte 221', tipo_servico: 'Corte',
+      prazo_previsto: dia(30), itens: [{ material_id: m, quantidade: 2, lote_id: l1 }] });
+    await terceiro.enviarRemessa(db, { ...USERS.ADMIN }, rem.id);
+    const item = await dbGet(db, 'SELECT id FROM itens_remessa_terceiro_almoxarifado WHERE remessa_id = ?', [rem.id]);
+    const peca = (await dbRun(db, `INSERT INTO materiais_almoxarifado (codigo, nome, unidade, quantidade_atual, ativo, custo_unitario)
+      VALUES (?, ?, 'un', 0, 1, 0)`, [`E221P-${++seq}`, `E221P-${seq}`])).lastID;
+    recusou(await reservar(m, 2), RECUSA(0, 6)); // controle: sem corrida, recusa
+    let soltar; const portao = new Promise((r) => { soltar = r; });
+    let entrou; const dentro = new Promise((r) => { entrou = r; });
+    const segura = trava.comLockDoMaterial(m, async () => { entrou(); await portao; });
+    await dentro;
+    const pReserva = reservar(m, 2).then((x) => x);
+    await espera(200);
+    assert.strictEqual(trava.travado(m), true, 'premissa: a trava do material presa pelo teste');
+    const pTransf = terceiro.registrarTransformacao(db, { ...USERS.ADMIN }, rem.id, { nota_fiscal: 'NF-221', itens: [{ item_remessa_id: item.id,
+      quantidade_consumida: 2, resultados: [{ material_id: peca, quantidade: 1, tipo_resultado: 'PECA' }] }] })
+      .then(() => 'ok', (e) => `erro: ${e.message}`);
+    await espera(300); // tempo para o claim acontecer, se ele estivesse fora da trava
+    soltar(); await segura;
+    const r = await pReserva;
+    assert.strictEqual(await pTransf, 'ok');
+    recusou(r, RECUSA(0, 6));
+    const fim = await dbGet(db, `SELECT quantidade_atual q, COALESCE(quantidade_reservada,0) r, COALESCE(quantidade_em_terceiros,0) t
+      FROM materiais_almoxarifado WHERE id = ?`, [m]);
+    assert.deepStrictEqual([Number(fim.q), Number(fim.r), Number(fim.t)], [6, 0, 0]);
+  });
+
   terminou = true;
   console.log(`\n  ${passed} passou, ${failed} falhou\n`);
   await close();

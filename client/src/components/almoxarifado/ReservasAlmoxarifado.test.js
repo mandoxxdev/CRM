@@ -542,11 +542,11 @@ describe('[RN-156.02, C366] a lista recusada diz o motivo sob o seletor', () => 
 describe('[RN-221.10 / .11] Nova Reserva e o lote impedido', () => {
   const AVISO = 'Peças em lote bloqueado, reprovado ou vencido não entram na reserva.';
   const RECUSA_221 = 'Saldo disponível insuficiente: 4. Não entram 6 PC em lote bloqueado, reprovado ou vencido.';
-  const comEstoque = (controleLote) => {
+  const comEstoque = (controleLote, controleSerie = 0) => {
     const anterior = api.get.getMockImplementation();
     api.get.mockImplementation((url) => (url === '/almoxarifado/estoque'
       ? Promise.resolve({ data: [{ id: 10, codigo: 'MAT-1', nome: 'Chapa 3mm', unidade: 'PC', quantidade_disponivel: 10,
-        controle_lote: controleLote }] })
+        controle_lote: controleLote, controle_serie: controleSerie }] })
       : anterior(url)));
   };
   async function abrirEEscolher() {
@@ -566,6 +566,13 @@ describe('[RN-221.10 / .11] Nova Reserva e o lote impedido', () => {
     await abrirEEscolher();
     expect(container.textContent).toContain('Disponível: 10 PC');
     expect(container.textContent).not.toContain(AVISO);
+  });
+
+  test('[RN-221.10 b] (Fase 5) material com lote E serie: o aviso tambem aparece', async () => {
+    comEstoque(1, 1);
+    await abrirEEscolher();
+    expect(container.textContent).toContain('Disponível: 10 PC');
+    expect(container.textContent).toContain(AVISO);
   });
 
   test('[RN-221.11] a recusa do servidor vai literal para o toast', async () => {
