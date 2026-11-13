@@ -115,7 +115,7 @@ clique não abre janela, logo nada a mostrar; o texto `Validade a corrigir: 31/0
 
 ## Tasks (sort topológico)
 
-- [x] **T1 (tronco)** — `utils/situacaoDoLote.js` (extraído, re-export no extrato) + teste `RequisicoesSaiDeLoteImpedido.test.js`
+- [x] **T1 (tronco)** — `868887e1` — `utils/situacaoDoLote.js` (extraído, re-export no extrato) + teste `RequisicoesSaiDeLoteImpedido.test.js`
   (RN-226.01 a .11) vermelho → `rotuloOrigem`, `disabled`, as duas pré-seleções da separação, a frase → verde. Sem galho (um arquivo de tela).
 - A RN-226.10 é a integração (pré-seleção → payload da rodada, mock só na fronteira HTTP).
 
@@ -141,3 +141,81 @@ clique não abre janela, logo nada a mostrar; o texto `Validade a corrigir: 31/0
   `=== true` → .04; (6) sem a frase da escolhida → .09 e .12 separação; (7) sem a frase da planejada → as duas .12; (8) a entrega ignorar o
   `automatico` → .12 entrega. **10/10 sabotagens derrubadas.**
 - **Vizinhos:** `RequisicoesList*`, `Requisicoes*` e `Extrato*` — 23 suítes, 396 testes, verdes.
+
+## Tasks feitas
+
+- [x] Estimativa `d96da251` · plano e Fase 2 `f9b92d34` · T1 `868887e1` · Fase 5 `aba3f081` e `04308f3f` · fechamento (este e o seguinte).
+
+## Divergências do plano
+
+- A RN-226.10 dizia `PUT …/separar`; a rodada é `PUT /requisicoes/:id/separacao` (Fase 2 M1) — corrigida antes do teste.
+- A B1493 do plano isentava a planejada nas duas janelas; ficou só na entrega (Fase 2 I1). A B1497 e a RN-226.12 nasceram na Fase 2; a
+  RN-226.13 na Fase 5.
+
+## Próxima tarefa detalhada
+
+*(Escolhida pela ordem do CLAUDE.md: a 226 fecha o D (224); o vizinho aberto de maior valor visível é o **D (225)** — o *Saldo por lote*
+mostra o status do lote mas não diz que um lote *Ativo* está vencido. A spec 21 e a 10 continuam 🟢. **Sem estimativa** — começa pela Fase
+0.5.)*
+
+**O *Saldo por lote* diz que o lote ativo está vencido (D (225)).**
+
+- **Onde:** `reportService.relatorioSaldoPorLote` (`server/services/almoxarifado/reportService.js:44`) — `SELECT … l.data_validade as
+  validade, l.status as status_lote … GROUP BY s.material_id, l.id`, e a linha "Sem lote atribuído" montada em JS depois; o registro
+  `'saldo-por-lote'` (`reportRegistry.js:659`, colunas estáticas, nota que já cita "vencidos sem liberação"); a tela e o xlsx seguem o
+  registro (genéricos, como na 225).
+- **O que fazer:** uma coluna *Situação* (ou trocar o *Status do lote* pela situação) com as palavras do extrato — calculada no servidor com
+  a régua (`predicadoLoteImpedidoSql('l')`, `predicadoLoteVencidoSql('l')` de `loteImpedido.js:45-53`, o "hoje" de Brasília), como os
+  booleanos da 224 (`stockService.js:4037-4053`). O texto pode ser montado em JS no servidor com a mesma regra de `client/src/utils/
+  situacaoDoLote.js` (que é do cliente; o xlsx não roda o cliente) — decidir (B) entre duplicar a função no servidor ou devolver os
+  booleanos e deixar a palavra só na tela (a planilha ficaria sem ela).
+- **Pontos de atenção:** a linha "Sem lote atribuído" não tem lote (situação vazia); paridade do cabeçalho do xlsx com o registro
+  (`relatoriosRegistro [5]`, `relatoriosJornada [3]`); a validade gravada como texto (`31/03/2027`) é "Validade a corrigir" (B1486, Fase 2 M2
+  da 224); vencido liberado e que vence hoje → não vencido. Pronto e que não reabre: a régua, os campos da 224, as colunas da 225.
+- Outros abertos: a coluna *disponível* da Fila de separação (**D (223)**), C519, C521, C524–C527, C529–C532, C514–C518, C486, C491, C495,
+  C497, C498.
+
+## Fase 5 — revisão adversarial (2 revisores frescos em paralelo, junto com o `test:api`)
+
+- **Regras e gestos:** **3 achados reproduzidos** (Jest temporário, apagado), todos de texto — nada mudava o que vai ao servidor: (R1) na
+  separação com a origem num lote impedido, a frase nova (*"Essa parte não sai"*) aparecia **junto** do aviso da 196 (*"…que continuam saindo
+  de lá"*); (R2) na entrega acima da parte, junto da dica da 63 (*"1 PC sai de Z-02 — lote L2 …"*); (R3) a frase *"Sugestão da fila … não veio
+  escolhida; confira o saldo no 'Sai de' antes de escolher"* convidava a escolher a opção desabilitada (só com dado inconsistente: o servidor
+  da sugestão já pula lote impedido). Os três avisos calam quando contradiriam → **RN-226.13**, `aba3f081`, cada guarda derrubada pela sua
+  sabotagem. **Resistiu:** irmão do mesmo material (a exceção é por item); linhas sem lote impedido idênticas a antes (`disabled={false}` não
+  vira atributo); lote sem código (impossível: `lote_esta_impedido` exige o lote); a opção sem saldos; o vencido (o servidor decide);
+  detalhe relido (os saldos só voltam com a chave; a escolha velha desabilitada mostra a frase da B1495).
+- **Força dos testes:** 10 mutações novas (numa cópia do `client/` fora da worktree — dentro de `.claude/worktrees` o Jest ignora pastas com
+  ponto e acharia **zero** testes; o revisor percebeu). 4 mortas; **3 sobreviviam com comportamento errado de verdade** — (A) a exceção da
+  planejada comparando só o endereço; (C) a frase da planejada sem `temPlanejada` (frase falsa com a origem toda entregue); (K) a guarda da
+  pré-seleção só para `BLOQUEADO` (reprovado/vencido pré-selecionados e a rodada recusada). O código já estava certo; faltava a asserção →
+  três cenários, `04308f3f`, as quatro mutações (A, C, K na planejada, K na sugestão) caem. **Lacuna aceita:** a guarda que tira o
+  *"Sugerido pela fila"* quando a sugerida volta impedida num detalhe relido (Fase 2 M2) não tem teste (montagem cara: os saldos só são
+  buscados de novo quando a chave muda). **Ruído:** (B) tirar `temPlanejada` da exceção — com algo a entregar há sempre separado > entregue;
+  (H) `lote_vencido_sem_liberacao` por verdade — o servidor já converte para booleano (224).
+
+## Verificação (medida, serial)
+
+Servidor sem mudança nesta etapa (o `test:api` rodou com `868887e1` e terminou depois de `04308f3f`; os commits da Fase 5 só tocam o
+cliente). Cliente sobre `04308f3f` (código final):
+
+- `npm run test:api` — **620/620 arquivos OK**.
+- `npm run test:almoxarifado` — **44 passou, 0 falhou**.
+- `npm run test:validation` — **4/4**; `npm run test:safealter` — **3/3**; `npm run test:sqlite` — **16/16**.
+- Cliente: `CI=true npx react-scripts test --watchAll=false --maxWorkers=2` — **225/225 suítes, 3059/3059 testes**
+  (`RequisicoesSaiDeLoteImpedido` 21/21); `CI=true npx react-scripts build` — **Compiled successfully**.
+
+## Retro (4 números)
+
+- **Rodadas até verde:** 1 na T1; a Fase 2 mudou a regra antes do código (B1493, B1497) e a Fase 5 acrescentou guardas e cenários.
+- **Achados reais:** Fase 2: 2 importantes + 4 menores (aceitos; 2 declarados fora). Fase 5: 3 de regra (texto contraditório, corrigidos),
+  3 lacunas de teste (fechadas), 1 lacuna aceita, 2 ruídos.
+- **Paralelismo:** sem galhos (um arquivo de tela); a Fase 2 rodou junto com a escrita do teste; os 2 revisores da Fase 5 junto com as
+  suítes do servidor (o de testes numa worktree — onde o Jest acha zero testes, por causa do `.claude` no caminho; ele copiou o `client/`).
+- **Defeito que escapou da 225:** nenhum achado.
+
+## Fechamento
+
+- [x] Fechamento (`fechar-etapa`, sem o Passo 7½ e o 8, por pedido do André) — novidades (B1492–B1497, C532, D (226), F (226), D (224)
+  resolvida, seção, topo e "onde estamos"), spec 05 (topo e bloco 226), spec 10 (o "Fora" da 224), mapa (linhas 05 e 10 e última
+  atualização), guia (seção e cabeçalho), manual (7.5 e 10.2) e a estimativa.

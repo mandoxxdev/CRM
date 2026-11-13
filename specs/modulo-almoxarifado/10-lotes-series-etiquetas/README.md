@@ -1419,7 +1419,8 @@ linha — trocado por `lote_esta_impedido` (o outro é o **número** do material
 - [x] **RN-224.07** — integração pela rota: liberar o lote (status ou vencimento) apaga a situação da linha e zera o cartão — `f09e8ec7`.
 - [x] **RN-224.08 (B1486)** — a tabela *Saldos por localização* mostra as palavras ao lado do código, só com `lote_esta_impedido === true`;
   *Validade a corrigir* para validade fora de `AAAA-MM-DD` — `c7399966`.
-- [ ] **Fora (declarado):** o "Sai de" da entrega continua oferecendo o lote impedido sem dizer (a entrega recusa ao confirmar — **D (224)**);
+- [ ] **Fora (declarado):** o "Sai de" da entrega continua oferecendo o lote impedido sem dizer (a entrega recusa ao confirmar — **D (224)**
+  — *feito na Etapa 226*, `868887e1`, `aba3f081`: a opção diz a situação e vem desabilitada, na separação e na entrega; ver a spec 05);
   a linha diz a situação, não a quantidade (**C530**); os relatórios (**D (223)** — *feito na Etapa 225*, `18084c49`: *Estoque atual* e
   *Saldos comprometidos* com a coluna *Em lote impedido*; ver a spec 21).
 

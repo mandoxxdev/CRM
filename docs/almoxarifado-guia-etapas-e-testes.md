@@ -1,21 +1,28 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-11-13 (Etapas 172 a 191, 194 a 210, 217 a 225) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-11-13 (Etapas 172 a 191, 194 a 210, 217 a 226) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-13 (Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 225 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-13 (Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 226 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
-> **O desenvolvimento parou aqui: Etapa 225 fechada — 2026-11-13.** **Os relatórios de saldo mostram quanto está em lote impedido.** Os
+> **O desenvolvimento parou aqui: Etapa 226 fechada — 2026-11-13.** **O "Sai de" da separação e da entrega diz qual lote está impedido.**
+> A opção do lote bloqueado, reprovado ou vencido diz *"— Bloqueado: não sai"* e não pode ser escolhida (na entrega, o lugar de onde o
+> próprio item foi separado continua escolhível); o **Ajustar Separação** não abre mais num lote impedido; uma frase em amarelo avisa embaixo
+> do **Sai de**. Sem consulta antes do deploy. **Nenhum clique foi dado** (testes da tela — roteiro na seção da 226 e letra F das novidades).
+>
+> **Onde parou, exatamente:** a **226 está fechada** (código, testes, documentos e o estimado × realizado commitados). A **próxima** é
+> **o *Saldo por lote* diz que o lote ativo está vencido** (**D (225)**) — detalhada no fim do plano da 226
+> (`docs/superpowers/plans/2026-11-13-almoxarifado-etapa226-sai-de-lote-impedido.md`). Sem estimativa nem plano.
+>
+> *(Antes:)* **Etapa 225 fechada — 2026-11-13.** **Os relatórios de saldo mostram quanto está em lote impedido.** Os
 > relatórios **Estoque atual** e **Saldos comprometidos** ganham a coluna *Em lote impedido*, logo depois do *Disponível*, na tela e na
 > planilha; o material que só tem estoque em lote bloqueado, reprovado ou vencido passa a aparecer em *Saldos comprometidos*. O *Disponível*
 > não muda. Sem consulta antes do deploy. **Nenhum clique foi dado** (testes da rota e da planilha — roteiro na seção da 225 e letra F das
 > novidades).
 >
-> **Onde parou, exatamente:** a **225 está fechada** (código, testes, documentos e o estimado × realizado commitados). A **próxima** é
-> **o "Sai de" da entrega diz qual lote está impedido** (**D (224)**) — detalhada no fim do plano da 225
-> (`docs/superpowers/plans/2026-11-13-almoxarifado-etapa225-relatorios-lote-impedido.md`). Sem estimativa nem plano.
+> A próxima era **o "Sai de" da entrega diz qual lote está impedido** (**D (224)**) — feita na **Etapa 226**.
 >
 > *(Antes:)* **Etapa 224 fechada — 2026-11-13.** **O extrato diz qual lote está impedido.** Na tabela *Saldos por
 > localização* do extrato, ao lado do código do lote que não pode sair para uso, aparece em amarelo *Bloqueado*, *Reprovado* ou *Vencido em
@@ -7198,6 +7205,46 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 226 — O "Sai de" da separação e da entrega diz qual lote está impedido (ENTREGUE — 2026-11-13)
+
+**O que mudou, em uma frase:** no campo **Sai de** da separação e da entrega, o lote **bloqueado**, **reprovado** ou **vencido** aparece com
+a situação (*"Z-02 — lote L2 (6) — Bloqueado: não sai"*) e não pode ser escolhido; uma frase em amarelo avisa quando a escolha (ou o lugar de
+onde a peça foi separada) está num lote assim.
+
+**O problema que ela resolve.** O extrato já dizia qual lote está impedido, mas o **Sai de** oferecia esse lote como qualquer outro: o
+almoxarife escolhia e só ao confirmar vinha a recusa. E o **Ajustar Separação** abria no lote da separação anterior mesmo depois de ele ser
+bloqueado — a rodada inteira era recusada.
+
+| Antes | Agora |
+|---|---|
+| **Sai de**: *"Z-02 — lote L2 (6)"* (o L2 bloqueado) | *"Z-02 — lote L2 (6) — Bloqueado: não sai"*, apagada |
+| Escolher o lote bloqueado; a recusa ao confirmar | Não dá para escolher (na entrega, o lugar de onde o próprio item foi separado continua escolhível, com aviso) |
+| **Ajustar Separação** abria no lote bloqueado e a rodada era recusada | Abre em *"Qualquer endereço (automático)"*, com o aviso *"Já separado de Z-02 — lote L2: Bloqueado. Essa parte não sai …"* |
+| Lotes bons; endereço sem lote | **Iguais** |
+
+**Roteiro de teste manual (≈5 min):**
+
+1. Entre como **Administrador do almoxarifado**. No cadastro do material (Compras), um material *LOTE-226* com **Controle por lote**,
+   unidade *UN*. **Movimentações → Entrada** de 4 no lote *L1* (endereço *XB-01*) e de 6 no lote *L2* (endereço *Z-02*).
+2. Crie e aprove uma requisição de 5 *LOTE-226*. **Iniciar Separação**, **Sai de** = *"Z-02 — lote L2 (6)"*, quantidade 1, **Confirmar
+   Separação**.
+3. Em **Lotes e Séries**, *L2* → **Mudar status** → *Bloqueado*.
+4. Na requisição, **Ajustar Separação**. **Confira:** o **Sai de** abre em *"Qualquer endereço (automático)"*; a lista mostra *"Z-02 — lote
+   L2 (6) — Bloqueado: não sai"* apagada (não dá para clicar); embaixo, em amarelo: *"Já separado de Z-02 — lote L2: Bloqueado. Essa parte
+   não sai até o lote ser liberado na tela Lotes e Séries — na entrega, escolha outro endereço."*. Feche sem confirmar.
+5. **Entregar escolhendo de onde sai…**. **Confira:** o **Sai de** vem em *"Z-02 — lote L2 (6) — Bloqueado: não sai"* (essa ainda dá para
+   escolher, porque é de onde a peça foi separada) e embaixo: *"Lote L2: Bloqueado. Nada sai dele até o lote ser liberado na tela Lotes e
+   Séries — escolha outro endereço."*. Escolha *"XB-01 — lote L1 (4)"*: a frase some.
+6. Em **Lotes e Séries**, *L2* → **Mudar status** → *Reprovado*, e reabra a janela: *"— Reprovado: não sai"*. *Ativo* de novo: *"Z-02 —
+   lote L2 (6)"*, escolhível, sem frase.
+
+**O que esta etapa não cobre:** o botão **Confirmar Entrega e Baixar Estoque** (um clique) não abre janela: com a origem num lote impedido,
+continua a recusa de sempre (**C532**); a opção *"Planejada da separação"* (quando a lista não carrega) não diz a situação; o *Saldo por lote*
+continua sem dizer que um lote *Ativo* está vencido (**D (225)**).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos da tela provam, escrito para você conferir à
+mão.
 
 ## Etapa 225 — Os relatórios de saldo mostram quanto está em lote impedido (ENTREGUE — 2026-11-13)
 
