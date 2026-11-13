@@ -1,0 +1,13 @@
+*Planejamento — almoxarifado: o relatório Saldo por lote e a Fila de separação dizem o que está em lote bloqueado ou vencido*
+_13/11/2026_
+
+*1. O relatório Saldo por lote diz quando o lote está vencido*
+Hoje o relatório mostra a validade e o status de cada lote, mas um lote Ativo que já venceu aparece como qualquer outro. Depois desta alteração, o relatório ganha a coluna Situação, com as mesmas palavras do extrato do material: Vencido em 10/11/2026, Bloqueado ou Reprovado. A coluna também sai na planilha exportada.
+Tempo estimado: *2h45*
+
+*2. A Fila de separação diz quanto do disponível está em lote bloqueado ou vencido*
+Na Fila de separação, cada item mostra o disponível do material, contando também as peças de lote que não pode sair para uso. Depois desta alteração, ao lado do disponível aparece, por exemplo, "6 em lote impedido", como já acontece na lista de Materiais e na Nova Reserva.
+Tempo estimado: *1h15*
+
+*Total estimado: 4h*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
