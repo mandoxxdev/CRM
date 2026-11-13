@@ -1,5 +1,10 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 222 (2026-11-13, `6224f8d1`, tela `7ee7530a` e `52cc0035`): o extrato do material diz quanto está em lote impedido (C481,
+> 1ª parte; B1476–B1479)** — `GET /materiais/:id/extrato` devolve `material.lote_impedido` (a régua `loteImpedidoSql` da aprovação); o modal
+> mostra o cartão *Em lote impedido* e a frase; a **Nova Reserva** troca o aviso fixo da 221 pelo número. O *Disponível* não muda. Ver a seção
+> "Etapa 222", no fim. Continua 🟢.
+
 > **+ Etapa 220 (2026-11-13, `7a428526`, `a04b43e8`, Fase 5 `6c80f908`): liberar o lote reserva para quem esperava (C480) e os escritores do
 > status do lote pegam a trava do material (C523)** — `mudarStatusLote`, `liberarBloqueioPorCertificado`, `liberarVencimento` e
 > `corrigirValidadeDoLote` rodam sob `naTravaDoMaterial` e, quando o lote estava impedido e deixou de estar, reservam o livre dele
@@ -1247,7 +1252,8 @@ spec 05 (separação) e na 07 (aprovação). O que toca esta feature:
   lotes elegíveis não cobrem sai sem lote (B1323), deixando *"Sem lote atribuído"* negativo — e esse negativo, anônimo, deixa o material
   com menos livre que o real até um ajuste (**C484**; o abatimento que o resolvia foi desfeito por ser inseguro, B1379). É o item 7.
 - [ ] **Fora:** liberar o lote (`mudarStatusLote`, `liberarVencimento`, certificado) não recalcula nem distribui (**C480** — *resolvido na Etapa 220*, `7a428526`: reservam o livre do lote para quem esperava, sob a trava do material); as telas de saldo
-  continuam contando o lote impedido (**C481**).
+  continuam contando o lote impedido (**C481** — *1ª parte na Etapa 222*, `6224f8d1`: o extrato e a Nova Reserva mostram o número; as listas
+  de saldo continuam sem ele).
 
 Continua 🟢.
 
@@ -1344,3 +1350,23 @@ Fase 2 e Fase 5). **C466 resolvido inteiro; C503 resolvido.** A 2ª parte usa o 
   reprovação liberada pelo Desbloquear sem lote volta a contar (C516). Antes do deploy: **A114**.
 
 Continua 🟢. Testes: `bloqueadoDoLote.api.test.js` (23), `bloqueioSabeOLote` (RN-217.05/.10), `entregaAutomaticaPeloLote` (RN-217.01 a).
+
+## Etapa 222 — o extrato do material diz quanto está em lote impedido (2026-11-13)
+
+Plano: `docs/superpowers/plans/2026-11-13-almoxarifado-etapa222-extrato-lote-impedido.md` (Fase 2 `559cb459`). 1ª parte do **C481** (que
+esta spec lista como "Fora" na seção da Etapa 205). Nenhuma coluna nova, nenhuma trava (só leitura), nenhuma rota nova.
+
+- [x] **RN-222.01 a .05 b (B1476)** — o extrato devolve `material.lote_impedido` = `loteImpedidoSql('m')` (BLOQUEADO, REPROVADO e vencido
+  sem liberação; o vencido liberado e o que vence hoje não; 0 sem controle de lote ou sem lote impedido; a parte bloqueada sem lote conhecido
+  sai do número); o `quantidade_disponivel` continua o de sempre — `6224f8d1`.
+- [x] **RN-222.06 / .06 b / .07 / .11** — integração: o extrato e a recusa da reserva manual dizem o mesmo número quando o livre cobre o
+  impedido; com a reserva do sistema sobre o lote bloqueado, a recusa diz o corte (menor — **C527**); material de cliente; impedido maior que
+  o disponível — `6224f8d1`, `559cb459`.
+- [x] **RN-222.08 / .11 (B1477)** — o modal mostra o cartão *Em lote impedido* (ícone de alerta, não o cadeado do *Bloqueado*) e a frase, só
+  com número > 0 — `7ee7530a`.
+- [x] **RN-222.09 / .10 (B1478)** — a **Nova Reserva** busca o extrato do material escolhido e mostra o número; 0 = nada; buscando, erro ou
+  sem o campo = o aviso fixo da 221; a resposta de um material que deixou de ser o escolhido é ignorada — `52cc0035`.
+- [ ] **Fora (declarado):** as listas de saldo (**Materiais**, **Estoque**, relatórios, a Fila) — **C481**, 2ª parte (o custo da régua na
+  lista inteira não foi medido); qual lote está impedido (**C528**); a recusa diz o corte, não o número do extrato (**C527**, decisão B1470 da 221).
+
+Testes: `extratoLoteImpedido.api.test.js` (13); `ExtratoMaterialModal.test.js` (+6); `ReservasAlmoxarifado.test.js` (+8, com RN-222.08 b e .09 b da Fase 5, `7cd9920e`). Continua 🟢.

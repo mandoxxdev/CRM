@@ -1,21 +1,29 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-11-13 (Etapas 172 a 191, 194 a 210, 217 a 221) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-11-13 (Etapas 172 a 191, 194 a 210, 217 a 222) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-13 (Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 221 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-13 (Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 222 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
-> **O desenvolvimento parou aqui: Etapa 221 fechada — 2026-11-13.** **A reserva manual não conta peça de lote impedido.** Na tela
+> **O desenvolvimento parou aqui: Etapa 222 fechada — 2026-11-13.** **O extrato mostra quanto está em lote impedido.** O extrato do
+> material ganha o cartão **Em lote impedido** (com 4 peças boas e 6 num lote bloqueado: *Disponível 10*, **Em lote impedido 6** e a frase
+> *"6 un em lote bloqueado, reprovado ou vencido, fora o que já aparece em Bloqueado: essas peças não saem para uso até o lote ser liberado na
+> tela Lotes e Séries."*); a **Nova Reserva** diz *"6 un deste material estão em lote bloqueado, reprovado ou vencido e não entram na
+> reserva."*. O *Disponível* não muda. Sem consulta antes do deploy. **Nenhum clique foi dado** (testes da rota e da tela — roteiro na seção
+> da 222 e letra F das novidades).
+>
+> **Onde parou, exatamente:** a **222 está fechada** (código, testes, documentos e o estimado × realizado commitados). A **próxima** é
+> **as telas de saldo dizem quanto está em lote impedido** (**C481**, 2ª parte — medir o custo na lista do **Estoque** antes de levar o número
+> a ela) — detalhada no fim do plano da 222 (`docs/superpowers/plans/2026-11-13-almoxarifado-etapa222-extrato-lote-impedido.md`). Sem
+> estimativa nem plano.
+>
+> *(Antes:)* **Etapa 221 fechada — 2026-11-13.** **A reserva manual não conta peça de lote impedido.** Na tela
 > **Reservas**, a reserva manual só conta o que pode sair: com 4 peças boas e 6 num lote bloqueado, reserva até 4, e acima a recusa diz
 > *"Saldo disponível insuficiente: 4. Não entram 6 un em lote bloqueado, reprovado ou vencido."*. O formulário avisa, para material com
 > controle por lote, *"Peças em lote bloqueado, reprovado ou vencido não entram na reserva."*. Sem consulta antes do deploy. **Nenhum clique
 > foi dado** (testes da rota e da tela — roteiro na seção da 221 e letra F das novidades).
->
-> **Onde parou, exatamente:** a **221 está fechada** (código, testes, documentos e o estimado × realizado commitados). A **próxima** é
-> **o extrato do material diz quanto está em lote impedido** (**C481**, 1ª parte) — detalhada no fim do plano da 221
-> (`docs/superpowers/plans/2026-11-13-almoxarifado-etapa221-reserva-manual-lote-impedido.md`). Sem estimativa nem plano.
 >
 > *(Antes:)* **Etapa 220 fechada — 2026-11-13.** **Liberar o lote reserva para quem esperava.** Anexar o certificado,
 > voltar o lote para *Ativo*, liberar o vencimento ou corrigir a validade de um lote vencido para o futuro reserva as peças do lote para as
@@ -7171,6 +7179,46 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 222 — O extrato mostra quanto está em lote impedido (ENTREGUE — 2026-11-13)
+
+**O que mudou, em uma frase:** o **extrato do material** ganha o cartão **Em lote impedido**, com quanto está em lote **bloqueado** (sem
+certificado), **reprovado** ou **vencido**, e o formulário **Nova Reserva** diz esse número do material escolhido.
+
+**O problema que ela resolve.** Desde as Etapas 205 a 221 a aprovação, a separação, a entrega e a reserva manual não deixam sair peça de
+lote impedido. Mas o extrato mostrava essas peças dentro do *Disponível* sem dizer nada: o almoxarife via 10, tentava reservar 5 e a reserva
+era recusada porque 6 estavam num lote bloqueado. Agora o extrato mostra a parte presa ao lado, e o formulário da reserva diz o número antes
+de a pessoa tentar.
+
+| Antes | Agora |
+|---|---|
+| Extrato de um material com 4 peças boas e 6 num lote bloqueado: *Disponível 10*, sem mais nada | *Disponível 10* (o mesmo número) **e** o cartão **Em lote impedido 6**, com a frase *"6 un em lote bloqueado, reprovado ou vencido, fora o que já aparece em Bloqueado: essas peças não saem para uso até o lote ser liberado na tela Lotes e Séries."* |
+| **Nova Reserva** com material de controle por lote: *"Peças em lote bloqueado, reprovado ou vencido não entram na reserva."* | *"6 un deste material estão em lote bloqueado, reprovado ou vencido e não entram na reserva."*; sem nada em lote impedido, a linha some |
+| Material sem lote impedido, ou sem controle por lote | **Igual** (sem cartão, sem linha) |
+| O número do *Disponível* em todas as telas | **Igual** |
+
+**Roteiro de teste manual (≈5 min):**
+
+1. Entre como **Administrador do almoxarifado**. No cadastro do material (Compras), um material *LOTE-222* com **Controle por lote**,
+   unidade *UN*, sem saldo e **sem** requisição esperando por ele.
+2. **Movimentações → Entrada** de 4 no lote *L1* e de 6 no lote *L2*. Em **Lotes e Séries**, *L2* → **Mudar status** → *Bloqueado*.
+3. **Materiais** → o ícone **Extrato** de *LOTE-222*. **Confira:** *Disponível* **10**, o cartão **Em lote impedido** com **6** (ícone de
+   alerta, amarelo — diferente do cadeado vermelho do *Bloqueado*) e, abaixo dos cartões, *"6 UN em lote bloqueado, reprovado ou vencido,
+   fora o que já aparece em Bloqueado: essas peças não saem para uso até o lote ser liberado na tela Lotes e Séries."*.
+4. **Reservas → Nova Reserva**, escolha *LOTE-222*. **Confira:** sob *"Disponível: 10 UN"*, a linha *"6 UN deste material estão em lote
+   bloqueado, reprovado ou vencido e não entram na reserva."*. Quantidade 5 → **Criar Reserva** → *"Saldo disponível insuficiente: 4. Não
+   entram 6 UN em lote bloqueado, reprovado ou vencido."* (o mesmo 6).
+5. Em **Lotes e Séries**, *L2* → **Mudar status** → *Ativo*. Abra de novo o extrato: o cartão **Em lote impedido** e a frase **sumiram**; na
+   **Nova Reserva**, a linha sumiu e a reserva de 5 passa.
+6. Um material **sem** controle por lote: nem cartão no extrato nem linha no formulário.
+
+**O que esta etapa não cobre:** as outras telas de saldo (**Materiais**, **Estoque**, relatórios, a coluna *disponível* da Fila) continuam
+sem o número (**C481**, 2ª parte — o cálculo na lista inteira ainda não foi medido); a tela não diz **qual** lote está impedido (**C528** — olhe
+em **Lotes e Séries**); com a reserva de uma OS sobre o lote bloqueado, o número do extrato pode ser maior que o da recusa da reserva (o
+extrato diz quanto está no lote; a recusa, quanto o lote cortou — **C527**).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor e tela) provam, escrito para
+você conferir à mão.
 
 ## Etapa 221 — A reserva manual não conta peça de lote impedido (ENTREGUE — 2026-11-13)
 

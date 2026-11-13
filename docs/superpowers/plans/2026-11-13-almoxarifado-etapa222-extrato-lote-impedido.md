@@ -108,11 +108,12 @@ Campo ausente, nulo ou não numérico (`Number.isFinite` falso) = desconhecido �
 
 - [x] **T1 (tronco)** — rota do extrato com `loteImpedidoSql('m') as lote_impedido`. Testes RN-222.01 a .07 em
   `server/tests/api/extratoLoteImpedido.api.test.js` — `6224f8d1` (RN-222.11/.06 b da Fase 2 no commit da Fase 2).
-- [x] **T2 (galho, consome o contrato)** — `ExtratoMaterialModal`: o cartão e a frase (RN-222.08), testes em `ExtratoMaterialModal.test.js`.
+- [x] **T2 (galho, consome o contrato)** — `ExtratoMaterialModal`: o cartão e a frase (RN-222.08), testes em `ExtratoMaterialModal.test.js` — `7ee7530a`.
 - [x] **T3 (galho, consome o contrato)** — `ReservasAlmoxarifado`: o número no formulário (RN-222.09, .10), testes em
-  `ReservasAlmoxarifado.test.js` (RN-221.10/.10 b continuam verdes: o mock delas não traz o extrato → fallback).
+  `ReservasAlmoxarifado.test.js` (RN-221.10/.10 b continuam verdes: o mock delas não traz o extrato → fallback) — `52cc0035`.
 - [x] **T4 (integração)** — RN-222.06 pela rota (extrato → reserva recusada com o mesmo número → liberar o lote → extrato 0 → reserva), no
-  arquivo da T1.
+  arquivo da T1 — `6224f8d1`.
+- [x] **T5 (Fase 5, não estava no plano)** — as 2 lacunas de unidade (RN-222.08 b, RN-222.09 b) — `7cd9920e`.
 
 T2 e T3 são pequenas e no mesmo diretório do cliente: feitas em sequência pelo mesmo executor, não em paralelo.
 
@@ -153,6 +154,75 @@ conjunto de chaves do `material` do extrato; os mocks do cliente sem `controle_l
 | 9 | aviso fixo também com número | RN-222.09 (número e zero), .10 |
 | 10 | a frase antiga ("o Disponível ainda conta") | RN-222.08, .11 |
 | 11 | o cartão com o cadeado do Bloqueado | RN-222.08 (o ícone) |
+| 12 | a frase do extrato com a unidade fixa (Fase 5) | RN-222.08 b |
+| 13 | a frase do formulário com a unidade fixa (Fase 5) | RN-222.09 b |
 | 8b | ler o valor sem conferir o material (`impedidoDoForm.valor`) | **sobrevive — equivalente**: o efeito zera o valor antes de qualquer leitura observável; o único efeito é um quadro pintado antes do efeito rodar. A guarda fica. |
 
 Restauro conferido por igualdade de conteúdo depois de cada rodada.
+
+## Fase 5 — revisão adversarial (2 revisores frescos em paralelo: regra/tela/autorização e "o teste passaria com a feature quebrada?")
+
+Proibidos de editar o repositório; sondas `e222-rev-regra-*.js` no scratchpad; o de testes mutou uma worktree própria (11 mutações, junções de
+`node_modules` removidas com `rmdir`, worktree removida).
+
+1. **[REGRA/TELA/AUTORIZAÇÃO] nada reproduzido como defeito.** A sonda leu o extrato e tentou reservar `disponível − lote_impedido` e
+   `+ 0,01` em 5 estados (fracionado 3,3/2,2; vencido ontem/hoje; vencido liberado; material inativo; reserva da OS sobre o bloqueado): a
+   fronteira bate com a reserva em todos. Usuário sem perfil (cai em PRODUCAO) lê o extrato com o campo (200) — o mesmo portão de `GET
+   /reservas`; o número é soma de lotes que **Lotes e Séries** já mostra. Notas (não achados): com a reserva da OS sobre o bloqueado e o
+   impedido ≥ disponível, o formulário não diz com todas as letras "nada pode ser reservado" (a recusa diz) → **D (222)** (4); com o formulário
+   aberto o número não se atualiza → **D (222)** (5); a frase fala em *peças* também para KG → **D (222)** (6).
+2. **[TESTE, real, menor] 2 lacunas de unidade** (mutações sobreviventes R4, M1): a frase do formulário e a do extrato com `${n} ${unidade}`
+   fixo passariam — material com `unidade` nula (a coluna aceita) leria *"6 null …"*. → **RN-222.08 b** e **RN-222.09 b**; sabotagens 12 e 13
+   caem. Equivalentes (o servidor sempre manda número; o reset do efeito esconde a diferença): sem `showForm` em `idComLote`, sem `n != null`,
+   sem `Number.isFinite`, dependência `[materialSelecionado?.id]`, sem o reset `{ valor: null }`, sem a conferência do material (8b), sem
+   `Number()` no modal. Mortos: sem o `catch` da busca, `Math.round` no modal.
+
+Sem trava nova nem ordem de trava: tudo é leitura.
+
+## Divergências do plano
+
+- **RN-222.06 b, .08 b, .09 b, .11** e as frases novas da B1477 (Fase 2) não existiam na 1ª versão do plano.
+- A T2 e a T3 foram feitas em sequência pelo mesmo executor (pequenas), não em paralelo.
+
+## Retro (4 números)
+
+- **Rodadas até verde na Fase 5:** 1 (os 2 testes novos passaram na primeira, cada um com controle positivo).
+- **Achados reais:** Fase 2: 3 importantes + 4 menores (todos aceitos). Fase 5: 0 de regra, 2 lacunas de teste (fechadas); 0 ruído.
+- **Paralelismo:** sem galhos em paralelo; a revisão da Fase 2 rodou junto com a T1; 2 revisores da Fase 5 em paralelo (o de testes numa
+  worktree própria) junto com o `test:api` — sem contaminação.
+- **Defeito que escapou da 221:** nenhum achado nesta etapa.
+
+## Verificação (medida, serial)
+
+`test:api` **617/617 arquivos OK** (os 616 da 221 + `extratoLoteImpedido`; rodada sobre `52cc0035` — a Fase 5 `7cd9920e` só acrescentou testes do cliente); `test:almoxarifado` **44 passou, 0 falhou**; `test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0**; cliente (`CI=true npx react-scripts test --watchAll=false --maxWorkers=2`) **224/224 suítes, 3027/3027 testes** (3013 + 14 novos); `build` **Compiled successfully**. `extratoLoteImpedido` **13/13**.
+
+## Fechamento
+
+- [x] Fase 5 — 2 revisores; 0 achado de regra, 2 lacunas de teste fechadas, 0 ruído — `7cd9920e`.
+- [x] Fechamento (`fechar-etapa`, sem o Passo 7½ e o 8, por pedido do André) — novidades (B1476–B1479, C527, C528, a nota no C481, D (222), F (222), seção, topo e "onde estamos"), spec 10 (topo, nota no C481 da 205 e a seção 222), mapa, guia (seção e cabeçalho), manual (6.9 e 9.1), este plano e a estimativa.
+
+## Próxima tarefa detalhada
+
+*(Escolhida pela ordem do CLAUDE.md: a 222 fecha a 1ª parte do C481 e nomeia a 2ª como o que falta; a spec 10 continua 🟢. Visível — a semana
+pede algo na tela. **Sem estimativa** — começa pela Fase 0.5.)*
+
+**As listas de saldo dizem quanto está em lote impedido (C481, 2ª parte).**
+
+- **Onde:** `GET /api/almoxarifado/estoque` (`stockService.consultarEstoque`, `:3988` — `m.*` + `disponivelSql('m')`, todos os materiais
+  ativos), consumido por **Materiais**/**Estoque** (a coluna *Disponível*), pela lista de materiais da **Nova Reserva** (`(Disponível: n un)`
+  no `<option>`) e pelos relatórios que somam o disponível. A coluna *disponível* da Fila de separação já mostra o *separável* ao lado.
+- **Medir antes de prometer (Fase 0):** a régua `loteImpedidoSql('m')` é uma subconsulta correlacionada por material (uma passada pelos lotes
+  dele, com subconsultas por lote: saldo, inspeção, livro, reprovação, terceiros) e só calcula com `controle_lote = 1` (o `CASE`). A Fase 2 da
+  222 mediu 0,6–1,5 ms por material no banco de desenvolvimento — numa lista de N materiais com lote, N vezes isso a cada abertura. Medir no
+  banco de desenvolvimento (cópia, só leitura) o `/estoque` com e sem a coluna; se passar de ~200 ms, a alternativa é o campo só com
+  `?com_lote_impedido=1` (opt-in) ou só para `controle_lote = 1`.
+- **O que está pronto e não reabre:** a régua (205 + 217), o campo do extrato e o cartão (222), a frase da reserva (221/222). O *Disponível*
+  **não muda** (B1476) — mostrar a parte impedida ao lado, como no extrato.
+- **A decisão a tomar (letra B, reversível):** (1) o campo `lote_impedido` no `/estoque` (aditivo; opt-in se a medida pedir); (2) na lista
+  de **Materiais/Estoque**, um selo ao lado do *Disponível* (*"6 em lote impedido"*) só quando > 0; (3) se a **Nova Reserva** passa a ler o
+  número da lista (e deixa de buscar o extrato — B1478).
+- **Pontos de atenção:** leitura sem trava; o "hoje" de Brasília (`diaLocal`); material sem controle de lote → 0 e nada na tela; os testes
+  que comparam o conjunto de chaves do `/estoque` (procurar `deepStrictEqual` sobre as linhas de `/estoque` antes de mudar); o **C527** vale
+  também para a lista. Vizinho barato que segue aberto: **C528** (a tabela *Saldos por localização* do extrato mostrar a situação e a
+  validade de cada lote — o `consultarSaldosPorLocalizacao` já faz `JOIN` no lote). Outros: C519, C521, C524, C525, C526, C514–C518, C486,
+  C491, C495, C497, C498.
