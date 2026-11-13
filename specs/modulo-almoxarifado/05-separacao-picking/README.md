@@ -1541,7 +1541,7 @@ Fase 2 e Fase 5). **C513 resolvido.** Rota nova: nenhuma; `GET /estoque/:materia
   `pode sair = MAX(0, saldo_L − inspeção_L − retido_L) − guardado das outras − própria (rodadas anteriores) − já pedido`; recusa com a
   literal da B1451 depois das de antes; a régua da divergência limitada pelo mesmo número (B1448) — `97ba728c`.
 - [x] **A entrega** (`entregarSemTrava`): uma passada depois do "só lote", na ordem das origens conferidas (B1447); guardado = outras
-  requisições + a guarda que fica dos outros itens desta (`guardaQueConta`; o próprio item fora — Fase 5); a planejada que não cabe recusa
+  requisições + a guarda que fica dos outros itens desta (`guardaQueConta`; o próprio item fora — **o plano dizia "a guarda que fica das peças desta requisição", com o próprio item dentro; estava errado**: dava falsa recusa "só 0" numa caixa de 3 com 2 livres no lote; Fase 5); a planejada que não cabe recusa
   pelo "não serve mais" (B1446) — `97ba728c`.
 - [x] **A janela** (`/saldos` + `RequisicoesList.js`): o sufixo *"— do lote podem sair N (…)"* e o teto da separação por `lote_livre` menos a
   guarda desta requisição no lote (B1449) — `97ba728c`.
