@@ -126,3 +126,88 @@ T2 e T3 são pequenas e no mesmo diretório do cliente: em sequência pelo mesmo
 4. `/materiais` sempre com a coluna → RN-223.05; 5. opt-in por verdade (`if (com_lote_impedido)`) → RN-223.05 (`=0`, `=true`); 6. opt-in
 fora do caminho dos filtros (coluna só sem `search`) → RN-223.06; 7. selo sem a guarda `> 0` → RN-223.08; 8. selo com unidade fixa →
 RN-223.08 (sem unidade); 9. tela Materiais sem o parâmetro → RN-223.08 (a busca); 10. `<option>` sem a guarda → RN-223.10.
+11. sufixo dentro do parêntese → RN-223.10; 12. a dica sem "fora o que já está bloqueado" → RN-223.08.
+
+## Execução e controles (medidos)
+
+`listasLoteImpedido.api.test.js`: vermelho antes da T1 **0 passou, 12 falhou** (a RN-223.05 caiu pela régua de "poucas linhas", calibrada
+para ≥ 8; a metade positiva dela também cai sem a T1); **12/12** em `cc9e7374`; **14/14** com a Fase 5. Tela: `MateriaisAlmoxarifado.test.js`
+vermelho **8 falhou** (os 4 novos e 4 testes cujas asserções de parâmetros exatos ganharam a chave nova) → verde; `MateriaisCompras.test.js`
+RN-223.09 **verde de primeira** (afirma ausência — o controle é a sabotagem 9b); `ReservasAlmoxarifado.test.js` vermelho **3 falhou** → **44/44**,
+**45** com a Fase 5.
+
+| # | Sabotagem | Caiu |
+|---|---|---|
+| 1 | sem a coluna no `/estoque` | RN-223.01 a .04, .07 (10) |
+| 2 | outra conta (só status ≠ ATIVO) | RN-223.02 b, c, d, .03 |
+| 3 | "hoje" + 1 dia | RN-223.02 d, .03 |
+| 4 | `/materiais` sempre com a coluna | RN-223.05 |
+| 5 | opt-in por verdade (`!!`) | RN-223.05 |
+| 6 | opt-in só sem busca | RN-223.06 |
+| 7 | o *Disponível* descontado no `/estoque` | RN-223.01 |
+| 8 | selo sem a guarda `> 0` | RN-223.08 (o "nenhum selo") |
+| 9 | selo com a unidade fixa | RN-223.08 b |
+| 10 | tela Materiais sem o parâmetro | RN-223.08 (a busca) e as 4 asserções de parâmetros |
+| 11 | o parâmetro no `paramsDaBusca` (Compras) | RN-223.09 e 3 testes do Compras |
+| 12 | `<option>` sem a guarda | RN-223.10 |
+| 13 | sufixo dentro do parêntese | RN-223.10 (2) |
+| 14 | a dica sem "fora o que já está bloqueado" | RN-223.08 (a dica literal) |
+| 15–20 | Fase 5: `CAST … AS INTEGER`, `MIN(impedido, disponível)`, selo só do ativo, selo `>= 1`, `Math.round` e `>= 1` no `<option>` | RN-223.01 b, .11, .08, .10 b (S1/S2 rodadas depois da suíte — ver Verificação) |
+
+Restauro conferido por md5 depois de cada rodada.
+
+## Fase 5 — revisão adversarial (2 revisores frescos em paralelo, junto com o `test:api`)
+
+1. **[REGRA/TELA/AUTORIZAÇÃO] nada reproduzido como defeito.** A sonda (`e223-rev-regra-1.js`) conferiu `/estoque`, `/materiais?com_lote_impedido=1`
+   e o extrato com o mesmo número e a reserva manual recusando exatamente o disponível menos ele, em fracionado (0,3 KG sem cauda), vence
+   hoje/ontem (inclusive validade com hora), cliente, série e inativo; 384 combinações de filtro em `/materiais` e no cadastro do Compras e 64
+   em `/estoque`, todas 200 com a chave e iguais à régua (a coluna não acrescenta `?`). Usuário sem perfil: o mesmo acesso de antes. Notas (não
+   achados): o C527 vale para a lista (reserva da OS sobre o bloqueado: *"(Disponível: 4 un) · 6"* e a recusa *"… 0. Não entram 4 …"*) →
+   **D (223)** (6); o *Disponível* da lista não desconta a caixa (anterior) → **D (223)** (7); o Compras pode pedir o parâmetro na rota dele
+   (não é sensível); virada do dia com a tela aberta (= **C529**).
+2. **[TESTE] 13 mutações: 5 mortas, 8 sobreviventes, 6 lacunas reais** — nenhum cenário com quantidade fracionada (S1 `CAST` inteiro, S7
+   `Math.round` na resposta, C3 `Math.round` no `<option>`), nenhum do servidor com o impedido maior que o disponível (S2 `MIN`), nenhum selo
+   com menos de 1 (C2, C5 `>= 1`) nem em material inativo (C1). → **RN-223.01 b**, **RN-223.11**, **RN-223.10 b** e as linhas 0,5 e inativa do
+   selo — `c6836a53`. Equivalentes: S3 (`== 1` aceitaria `01`/`1.0` — a tela não muda); C4 (`'1'` texto: o axios manda o mesmo). S7 é a mesma
+   lacuna do S1 (fechada pela RN-223.01 b na lista de Materiais).
+
+## Divergências do plano
+
+- **A premissa da 222 estava errada** (Fase 0, item 1): não há tela "Estoque"; a lista de Materiais lê `/materiais`. Daí o opt-in (B1481).
+- **RN-223.01 b, .10 b, .11** não existiam na 1ª versão (Fase 5). A T4 já estava dentro da T1.
+- A régua de "poucas linhas" da RN-223.05 era ≥ 10 e o banco do teste tinha 9 materiais nesse ponto (ajustada para ≥ 8 antes da T1).
+
+## Retro (4 números)
+
+- **Rodadas até verde na Fase 5:** 1 (os testes novos passaram na primeira — o código estava certo; as 6 mutações que sobreviviam agora caem).
+- **Achados reais:** Fase 2: 1 importante + 3 menores (todos aceitos). Fase 5: 0 de regra, 6 lacunas de teste (fechadas); 0 ruído.
+- **Paralelismo:** sem galhos em paralelo (T2 e T3 pequenas, em sequência); a Fase 2 rodou junto com a T1; os 2 revisores da Fase 5 junto com o
+  `test:api` (o de testes numa worktree própria) — sem contaminação; as sabotagens do servidor da Fase 5 esperaram a suíte terminar.
+- **Defeito que escapou da 222:** a premissa errada da próxima tarefa (documento, não código).
+
+## Próxima tarefa detalhada
+
+*(Escolhida pela ordem do CLAUDE.md: a 223 fecha o C481 nas listas e nomeia como vizinho barato o **C528**; a spec 10 continua 🟢. Visível. **Sem
+estimativa** — começa pela Fase 0.5.)*
+
+**O extrato diz qual lote está impedido (C528).**
+
+- **Onde:** a tabela *Saldos por localização* do `ExtratoMaterialModal.js` (`:223-250` — colunas *Localização*, *Lote*, *Quantidade*), alimentada
+  por `material.saldos_localizacao` do `GET /materiais/:id/extrato` (`routes/almoxarifado/extended.js:1067`, `stockService.consultarSaldosPorLocalizacao`,
+  que já faz `LEFT JOIN lotes_almoxarifado lt` e devolve `lote` = `lt.codigo`). A mesma função alimenta `GET /estoque/:id/saldos` (`:855`).
+- **O que fazer:** devolver também `lt.status`, `lt.data_validade`, `lt.vencimento_liberado_em` (aditivo, nas duas rotas) e um booleano
+  `lote_impedido` por linha pelo `predicadoLoteImpedidoSql('lt')` (o "hoje" de Brasília) — **não** reescrever a régua; na tela, a situação do
+  lote ao lado do código (*Bloqueado*, *Reprovado*, *Vencido em dd/mm/aaaa*) só nas linhas impedidas.
+- **Pontos de atenção:** o JOIN é `LEFT` (linha sem lote = `null`, nada na tela); `predicadoLoteImpedidoSql` com `l` nulo dá verdadeiro em
+  `COALESCE(status,'') <> 'ATIVO'` — guardar com `lt.id IS NOT NULL`; procurar asserções de chaves exatas sobre `saldos` (`deepStrictEqual`) antes de
+  mudar (a 201 e a 218 acrescentaram campos a `/estoque/:id/saldos`); leitura sem trava. Pronto e que não reabre: a régua, os campos da 222/223.
+- Outros abertos: C519, C521, C524, C525, C526, C527, C529, C514–C518, C486, C491, C495, C497, C498; os relatórios sem o número (**D (223)**).
+
+## Verificação (medida, serial)
+
+`test:api` **618/618 arquivos OK** (os 617 da 222 + `listasLoteImpedido`, 14/14 dentro da suíte; rodada sobre `068129a6` + a Fase 5 dos testes); `test:almoxarifado` **44 passou, 0 falhou**; `test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0**; cliente (`CI=true npx react-scripts test --watchAll=false --maxWorkers=2`) **224/224 suítes, 3036/3036 testes** (3027 + 9 novos); `build` **Compiled successfully**. As sabotagens S1 e S2 da Fase 5 (servidor) rodaram depois da suíte: caem a RN-223.01 b e a RN-223.11.
+
+## Fechamento
+
+- [x] Fase 5 — 2 revisores; 0 achado de regra, 6 lacunas de teste fechadas, 0 ruído — `c6836a53`.
+- [x] Fechamento (`fechar-etapa`, sem o Passo 7½ e o 8, por pedido do André) — novidades (B1480–B1483, C529, a nota no C481, D (223), F (223), seção, topo e "onde estamos"), spec 10 (topo, nota no C481 da 205, o "Fora" da 222 com "estava errado" e a seção 223), mapa (linha e última atualização), guia (seção e cabeçalho), manual (2.12 e 9.1), o plano da 222 (a premissa errada) e a estimativa.

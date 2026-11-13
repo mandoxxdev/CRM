@@ -1,5 +1,9 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 223 (2026-11-13, `cc9e7374`, tela `ab2443c1` e `068129a6`): as listas de saldo dizem quanto está em lote impedido (C481,
+> 2ª parte; B1480–B1483)** — `GET /estoque` devolve `lote_impedido` em toda linha; `GET /materiais` só com `com_lote_impedido=1`; a lista de
+> **Materiais** mostra o selo e a da **Nova Reserva** o número. O *Disponível* não muda. Ver a seção "Etapa 223", no fim. Continua 🟢.
+
 > **+ Etapa 222 (2026-11-13, `6224f8d1`, tela `7ee7530a` e `52cc0035`): o extrato do material diz quanto está em lote impedido (C481,
 > 1ª parte; B1476–B1479)** — `GET /materiais/:id/extrato` devolve `material.lote_impedido` (a régua `loteImpedidoSql` da aprovação); o modal
 > mostra o cartão *Em lote impedido* e a frase; a **Nova Reserva** troca o aviso fixo da 221 pelo número. O *Disponível* não muda. Ver a seção
@@ -1252,8 +1256,8 @@ spec 05 (separação) e na 07 (aprovação). O que toca esta feature:
   lotes elegíveis não cobrem sai sem lote (B1323), deixando *"Sem lote atribuído"* negativo — e esse negativo, anônimo, deixa o material
   com menos livre que o real até um ajuste (**C484**; o abatimento que o resolvia foi desfeito por ser inseguro, B1379). É o item 7.
 - [ ] **Fora:** liberar o lote (`mudarStatusLote`, `liberarVencimento`, certificado) não recalcula nem distribui (**C480** — *resolvido na Etapa 220*, `7a428526`: reservam o livre do lote para quem esperava, sob a trava do material); as telas de saldo
-  continuam contando o lote impedido (**C481** — *1ª parte na Etapa 222*, `6224f8d1`: o extrato e a Nova Reserva mostram o número; as listas
-  de saldo continuam sem ele).
+  continuam contando o lote impedido (**C481** — *1ª parte na Etapa 222*, `6224f8d1`: o extrato e a Nova Reserva mostram o número; *2ª parte
+  na Etapa 223*, `cc9e7374`: a lista de Materiais e a da Nova Reserva mostram o número; os relatórios e a Fila continuam sem ele).
 
 Continua 🟢.
 
@@ -1367,6 +1371,29 @@ esta spec lista como "Fora" na seção da Etapa 205). Nenhuma coluna nova, nenhu
 - [x] **RN-222.09 / .10 (B1478)** — a **Nova Reserva** busca o extrato do material escolhido e mostra o número; 0 = nada; buscando, erro ou
   sem o campo = o aviso fixo da 221; a resposta de um material que deixou de ser o escolhido é ignorada — `52cc0035`.
 - [ ] **Fora (declarado):** as listas de saldo (**Materiais**, **Estoque**, relatórios, a Fila) — **C481**, 2ª parte (o custo da régua na
-  lista inteira não foi medido); qual lote está impedido (**C528**); a recusa diz o corte, não o número do extrato (**C527**, decisão B1470 da 221).
+  lista inteira não foi medido) — *feita na Etapa 223 para a lista de Materiais e a da Nova Reserva; "Estoque" **estava errado**: não existe
+  essa tela (a lista de Materiais lê `/materiais` e mostra o físico)*; qual lote está impedido (**C528**); a recusa diz o corte, não o número do extrato (**C527**, decisão B1470 da 221).
 
 Testes: `extratoLoteImpedido.api.test.js` (13); `ExtratoMaterialModal.test.js` (+6); `ReservasAlmoxarifado.test.js` (+8, com RN-222.08 b e .09 b da Fase 5, `7cd9920e`). Continua 🟢.
+
+## Etapa 223 — as listas de saldo dizem quanto está em lote impedido (2026-11-13)
+
+Plano: `docs/superpowers/plans/2026-11-13-almoxarifado-etapa223-listas-lote-impedido.md` (Fase 2 no commit `dd2f8703`). 2ª parte do **C481**.
+Nenhuma coluna nova, nenhuma trava (só leitura), nenhuma rota nova. **A premissa da próxima tarefa da 222 estava errada:** ela dizia que a
+lista de **Materiais** lê `/estoque` e mostra o *Disponível*; lê `/materiais` (`listarMateriais`, compartilhada com o Compras) e mostra o
+físico. Medido: a régua na lista inteira custa +35 ms a 3 mil materiais (90 → 125 ms).
+
+- [x] **RN-223.01 a .04 (B1480)** — `GET /estoque` devolve `lote_impedido` em toda linha (a régua `loteImpedidoSql`; 0 sem controle de lote),
+  inclusive material de cliente; o `quantidade_disponivel` continua o de sempre — `cc9e7374`.
+- [x] **RN-223.05 / .06 (B1481)** — `GET /materiais` (e `/api/compras/materiais/cadastro`) só com `com_lote_impedido=1` (texto exato); sem
+  ele, a resposta de antes, sem a chave; com busca e com `status=inativo` — `cc9e7374`.
+- [x] **RN-223.07** — integração: `/estoque`, `/materiais`, o extrato e a recusa da reserva manual com o mesmo número; liberar o lote zera as
+  três leituras — `cc9e7374`.
+- [x] **RN-223.08 / .09 (B1482)** — a lista de **Materiais** pede o campo e mostra o selo *"⟨n⟩ ⟨un⟩ em lote impedido"* (só > 0, com a dica
+  *"… fora o que já está bloqueado no material …"*); a do Compras não pede — `ab2443c1`.
+- [x] **RN-223.10 (B1483)** — a lista de materiais da **Nova Reserva**: *"(Disponível: 10 un) · 6 em lote impedido"*, fora do parêntese — `068129a6`.
+- [ ] **Fora (declarado):** os relatórios e a coluna *disponível* da Fila (**D (223)**); qual lote está impedido (**C528**); o número da lista
+  pode estar um instante velho (**C529**).
+
+Testes: `listasLoteImpedido.api.test.js` (14, com RN-223.01 b e .11 da Fase 5); `MateriaisAlmoxarifado.test.js` (+4, e 5 asserções de parâmetros com a chave nova);
+`MateriaisCompras.test.js` (+1); `ReservasAlmoxarifado.test.js` (+4). A Fase 5 acrescentou os casos fracionado, menor que 1, inativo e impedido maior que o disponível. Continua 🟢.
