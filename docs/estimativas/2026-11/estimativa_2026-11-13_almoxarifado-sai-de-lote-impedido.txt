@@ -1,0 +1,9 @@
+*Planejamento — almoxarifado: a escolha de onde a peça sai avisa quando o lote está bloqueado*
+_13/11/2026_
+
+*1. Na separação e na entrega, a lista "Sai de" diz qual lote está bloqueado, reprovado ou vencido*
+Hoje a lista de onde a peça sai, na separação e na entrega da requisição, mostra o lote bloqueado como qualquer outro, e o sistema só recusa ao confirmar. Depois desta alteração, a opção desse lote passa a dizer a situação dele, com as mesmas palavras do extrato do material (por exemplo "Bloqueado" ou "Vencido em 10/11/2026"), e não pode mais ser escolhida.
+Tempo estimado: *2h30*
+
+*Total estimado: 2h30*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
