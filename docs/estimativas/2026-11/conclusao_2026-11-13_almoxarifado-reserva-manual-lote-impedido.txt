@@ -1,0 +1,7 @@
+*Concluído — almoxarifado: a reserva manual não usa peça de lote bloqueado*
+_13/11/2026_
+
+1. A reserva manual deixa de contar peças em lote bloqueado, reprovado ou vencido — estimado 4h · realizado 4h
+
+*Total: estimado 4h · realizado 4h*
+_A conferência final achou também um momento em que o registro do serviço feito por terceiros deixava a conta do lote bloqueado errada por um instante; isso foi corrigido junto, dentro do tempo estimado._

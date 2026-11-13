@@ -14,7 +14,7 @@ consistente. A frase de recusa já existe (`loteImpedido.fraseLoteImpedido`). Se
 
 | # | Tarefa | Execução estimada | Fator | Informado | Etapa/plano | Régua usada | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | A reserva manual não conta peça de lote bloqueado, reprovado ou vencido (C479) | 1h | estoque/saldo (análise 1h + teste 2h) | 4h | 221 | Etapa 220 mediu 1,4 h (com 4ª porta achada na revisão); 219 ~1 h; 217 ~1,1 h. Esta é uma porta só, com a régua e a frase prontas | — | — | — |
+| 1 | A reserva manual não conta peça de lote bloqueado, reprovado ou vencido (C479) | 1h | estoque/saldo (análise 1h + teste 2h) | 4h | 221 | Etapa 220 mediu 1,4 h (com 4ª porta achada na revisão); 219 ~1 h; 217 ~1,1 h. Esta é uma porta só, com a régua e a frase prontas | 0,8 h (horas.js --grupos "E221=…", 13/11) → 1h | 4h (1h + análise 1 h + teste 2 h, da tabela — não informado pelo André). No estimado: a Fase 5 achou uma corrida anterior na transformação no terceiro (B1475), corrigida dentro da mesma execução | c3e49396, 62b62580, 156adb41, e386d335, 8395f440, ec61b505, 87b39d7e e este |
 
 Incerteza: a execução pode subir se a revisão achar outra porta "manual" que não passe pela rota (hoje nenhuma: todas as outras levam
 `sistema: true`). Não foi quebrada: é uma alteração só, e 4h não passa do teto da skill.
@@ -23,3 +23,6 @@ Medição no fechamento:
 ```
 --grupos "E221=Etapa 221|Estimativa: almoxarifado - reserva manual"
 ```
+
+A régua do passo 2: execução estimada 1h, medida 0,8 h (dos quais ~30 min são a verificação final serial). Para etapa de uma porta só no motor,
+com revisão em paralelo, 1h de execução continua a medida honesta.
