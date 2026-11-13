@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import {
-  FiPackage, FiLock, FiEye, FiCheckCircle, FiDollarSign, FiMapPin, FiArrowUp, FiArrowDown
+  FiPackage, FiLock, FiEye, FiAlertTriangle, FiCheckCircle, FiDollarSign, FiMapPin, FiArrowUp, FiArrowDown
 } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
 import { prefixarAlmoxarifado } from '../../utils/localizacaoLabel';
@@ -48,6 +48,12 @@ const formatDate = (d) => formatarInstanteDoBanco(d, {
 const formatDateOnly = (d) => (d
   ? new Date(`${String(d).slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR')
   : '—');
+
+// Etapa 222 (RN-222.08, B1477): a frase sob os cartoes quando ha saldo em lote impedido. Sem dizer que o Disponivel o contem (Fase 2):
+// o impedido pode passar do disponivel (reserva da OS sobre o lote bloqueado, B1381; reserva de antes do bloqueio, B1471). "Fora o
+// Bloqueado": a regua ja tira a quantidade bloqueada (os dois cartoes nao se somam). "Para uso": o vencido ainda sai como sucata/perda.
+export const fraseLoteImpedidoExtrato = (n, unidade) => `${n}${unidade ? ` ${unidade}` : ''} em lote bloqueado, reprovado ou vencido, `
+  + 'fora o que já aparece em Bloqueado: essas peças não saem para uso até o lote ser liberado na tela Lotes e Séries.';
 
 const formatMoney = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -106,6 +112,8 @@ const ExtratoMaterialModal = ({ materialId, onClose }) => {
   if (!materialId) return null;
 
   const material = data?.material;
+  // Etapa 222 (B1476): campo aditivo do extrato; ausente (servidor antigo) ou 0 = nada na tela.
+  const loteImpedido = Number(material?.lote_impedido) || 0;
 
   return (
     <div className="almox-modal-overlay" onClick={onClose}>
@@ -173,6 +181,15 @@ const ExtratoMaterialModal = ({ materialId, onClose }) => {
                     <div className="almox-kpi-label">Custo médio</div>
                   </div>
                 </div>
+                {loteImpedido > 0 && (
+                  <div className="almox-kpi-card almox-extrato-lote-impedido">
+                    <div className="almox-kpi-icon warning"><FiAlertTriangle /></div>
+                    <div className="almox-kpi-info">
+                      <div className="almox-kpi-value" style={{ color: 'var(--gmp-warning)' }}>{loteImpedido}</div>
+                      <div className="almox-kpi-label">Em lote impedido</div>
+                    </div>
+                  </div>
+                )}
                 {material.controle_serie === 1 && (
                   <div className="almox-kpi-card">
                     <div className="almox-kpi-icon primary"><FiPackage /></div>
@@ -183,6 +200,13 @@ const ExtratoMaterialModal = ({ materialId, onClose }) => {
                   </div>
                 )}
               </div>
+              {/* Etapa 222 (RN-222.08, B1477): o Disponivel acima continua o do servidor; a frase diz o que nao sai para uso e onde liberar. */}
+              {loteImpedido > 0 && (
+                <p className="almox-extrato-lote-impedido-frase"
+                  style={{ color: 'var(--gmp-warning)', fontSize: '0.85rem', marginTop: -12, marginBottom: 24 }}>
+                  {fraseLoteImpedidoExtrato(loteImpedido, material.unidade)}
+                </p>
+              )}
 
               <div className="almox-section-title">Saldos por localização</div>
               {/* Achado de review (fix round 1, Task 9): esta tabela tinha colunas "Reservada" e

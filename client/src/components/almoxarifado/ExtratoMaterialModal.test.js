@@ -117,3 +117,58 @@ describe('ExtratoMaterialModal — justificativa no histórico (Etapa 66, RN-08)
     expect(contar('contagem')).toBe(1);
   });
 });
+
+/**
+ * Etapa 222 (C481, 1a parte; RN-222.08, B1477) — o extrato diz quanto esta em lote bloqueado, reprovado ou vencido: um cartao
+ * "Em lote impedido" e uma frase, so quando `lote_impedido > 0`. O cartao Disponivel continua com o numero do servidor.
+ */
+describe('[RN-222.08] ExtratoMaterialModal — o lote impedido', () => {
+  const FRASE_6_PC = '6 PC em lote bloqueado, reprovado ou vencido, fora o que já aparece em Bloqueado: essas peças não saem para uso até o lote ser liberado na tela Lotes e Séries.';
+  const cartaoImpedido = () => container.querySelector('.almox-extrato-lote-impedido');
+  const valorDoCartao = (rotulo) => {
+    const card = [...container.querySelectorAll('.almox-kpi-card')]
+      .find((c) => c.querySelector('.almox-kpi-label')?.textContent === rotulo);
+    return card ? card.querySelector('.almox-kpi-value').textContent : null;
+  };
+
+  test('[RN-222.08] lote_impedido 6: o cartão com 6, a frase literal, e o Disponível igual ao do servidor', async () => {
+    await renderizar({ ...MATERIAL_BASE, controle_lote: 1, quantidade_disponivel: 10, lote_impedido: 6 });
+    expect(cartaoImpedido()).not.toBeNull();
+    expect(valorDoCartao('Em lote impedido')).toBe('6');
+    expect(container.textContent).toContain(FRASE_6_PC);
+    expect(valorDoCartao('Disponível')).toBe('10');
+  });
+
+  test('[RN-222.11] (Fase 2) impedido maior que o Disponível: os dois números, e a frase não diz que o Disponível o contém', async () => {
+    await renderizar({ ...MATERIAL_BASE, controle_lote: 1, quantidade_reservada: 8, quantidade_disponivel: 2, lote_impedido: 10 });
+    expect(valorDoCartao('Disponível')).toBe('2');
+    expect(valorDoCartao('Em lote impedido')).toBe('10');
+    expect(container.textContent).toContain('10 PC em lote bloqueado, reprovado ou vencido, fora o que já aparece em Bloqueado:');
+    expect(container.textContent).not.toContain('o Disponível ainda conta');
+  });
+
+  test('[RN-222.08] (Fase 2) o cartão novo não usa o ícone de perigo do Bloqueado', async () => {
+    await renderizar({ ...MATERIAL_BASE, controle_lote: 1, lote_impedido: 6 });
+    expect(cartaoImpedido().querySelector('.almox-kpi-icon.danger')).toBeNull();
+    expect(cartaoImpedido().querySelector('.almox-kpi-icon.warning')).not.toBeNull();
+  });
+
+  test('[RN-222.08] fracionado: o número como o servidor mandou', async () => {
+    await renderizar({ ...MATERIAL_BASE, controle_lote: 1, unidade: 'KG', lote_impedido: 2.5 });
+    expect(valorDoCartao('Em lote impedido')).toBe('2.5');
+    expect(container.textContent).toContain('2.5 KG em lote bloqueado, reprovado ou vencido,');
+  });
+
+  test('[RN-222.08] [controle positivo] lote_impedido 0 ou ausente: nem cartão nem frase', async () => {
+    await renderizar({ ...MATERIAL_BASE, controle_lote: 1, lote_impedido: 0 });
+    expect(cartaoImpedido()).toBeNull();
+    expect(valorDoCartao('Em lote impedido')).toBeNull();
+    expect(container.textContent).not.toContain('em lote bloqueado, reprovado ou vencido');
+    act(() => root.unmount());
+    root = createRoot(container);
+    await renderizar({ ...MATERIAL_BASE });
+    expect(cartaoImpedido()).toBeNull();
+    expect(container.textContent).not.toContain('em lote bloqueado, reprovado ou vencido');
+    expect(valorDoCartao('Disponível')).toBe('40');
+  });
+});
