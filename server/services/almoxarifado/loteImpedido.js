@@ -20,12 +20,18 @@
  * O que ja esta retido no material (bloqueada, terceiros, a inspecao que nenhum recebimento explica) ja sai do `disponivelSql` e nao sabe
  * o lote: a conta assume que esta DENTRO do lote impedido — nunca desconta duas vezes (Achado 2); no pior caso desconta menos do que o
  * certo (igual a hoje). Arredondado a 1e-6 (`Q.qtdSql`).
+ * Etapa 217 (B1438) — a parte da bloqueada e dos terceiros que SABE o lote (quarentena pelo livro, reprovacao pela inspecao, terceiros
+ * pelo item da remessa: `retidoDoLote.js`) sai do lote dela; so o RESTO fica suposto dentro do lote impedido:
+ *   max(0, SOMA_{lotes impedidos} max(0, fisico livre do lote - retido do lote)
+ *          - max(0, bloqueada + em terceiros - SOMA_{todos os lotes} retido) - em inspecao sem recebimento)
+ * Sem retido por lote e a conta acima; com a peca bloqueada num lote bom, o desconto sobe ate o certo.
  *
  * "Hoje" e embutido como literal VALIDADA (B1376): as quatro consultas tem arrays de `?` diferentes. Sem `require` do app alem de
  * `quantidade` e `diaLocal` (requisitionStateMachine o importa: sem ciclo).
  */
 const Q = require('./quantidade');
 const diaLocal = require('../diaLocal');
+const { lotesComRetidoSql } = require('./retidoDoLote'); // Etapa 217 (B1438): sem ciclo
 
 const MSG_HOJE_INVALIDO = 'loteImpedidoSql: hoje inválido';
 const RE_HOJE = /^\d{4}-\d{2}-\d{2}$/;
@@ -44,18 +50,18 @@ function predicadoLoteImpedidoSql(l, hojeISO = diaLocal.hojeLocalISO()) {
 
 /** O desconto do material (apelido `m`), ja entre parenteses. */
 function loteImpedidoSql(m, hojeISO = diaLocal.hojeLocalISO()) {
-  const pred = predicadoLoteImpedidoSql('lim_l', hojeValidado(hojeISO));
-  const soma = `COALESCE((SELECT SUM(MAX(0,
-      COALESCE((SELECT SUM(lim_s.quantidade) FROM estoque_saldo_almoxarifado lim_s
-                WHERE lim_s.material_id = ${m}.id AND lim_s.lote_id = lim_l.id), 0)
-      - COALESCE((SELECT SUM(lim_ri.quantidade_em_inspecao) FROM recebimentos_material_itens_almoxarifado lim_ri
-                  WHERE lim_ri.lote_id = lim_l.id AND COALESCE(lim_ri.quantidade_em_inspecao,0) > 0), 0)))
-    FROM lotes_almoxarifado lim_l WHERE lim_l.material_id = ${m}.id AND ${pred}), 0)`;
+  const hoje = hojeValidado(hojeISO);
+  // Etapa 217 (B1438): de cada lote impedido sai tambem o retido NELE (quarentena, reprovacao, terceiros — `retidoDoLote.js`); do
+  // material sai so o RESTO (bloqueada + em terceiros − Σ retido de todos os lotes), o que nao se sabe em que lote esta. Sem retido por
+  // lote e a conta da 205 (com bloqueada + terceiros >= 0); com a peca bloqueada num lote BOM, o desconto sobe ate o certo (fim do
+  // preco da B1370, D (206)). Uma passada so pelos lotes (`lotesComRetidoSql`, com a coluna `imp`).
+  const lotes = lotesComRetidoSql(m, (l) => `(${predicadoLoteImpedidoSql(l, hoje)}) AS imp`);
   const inspecaoSemRecebimento = `MAX(0, COALESCE(${m}.quantidade_em_inspecao,0) - COALESCE((SELECT SUM(lim_ri2.quantidade_em_inspecao)
       FROM recebimentos_material_itens_almoxarifado lim_ri2 JOIN lotes_almoxarifado lim_l2 ON lim_l2.id = lim_ri2.lote_id
       WHERE lim_l2.material_id = ${m}.id AND COALESCE(lim_ri2.quantidade_em_inspecao,0) > 0), 0))`;
-  const conta = `MAX(0, ${soma} - COALESCE(${m}.quantidade_bloqueada,0) - COALESCE(${m}.quantidade_em_terceiros,0)`
-    + ` - ${inspecaoSemRecebimento})`;
+  const conta = `COALESCE((SELECT MAX(0, COALESCE(SUM(CASE WHEN lim_r.imp THEN MAX(0, lim_r.fis - lim_r.ret) ELSE 0 END), 0)
+      - MAX(0, COALESCE(${m}.quantidade_bloqueada,0) + COALESCE(${m}.quantidade_em_terceiros,0) - COALESCE(SUM(lim_r.ret), 0))
+      - ${inspecaoSemRecebimento}) FROM ${lotes} lim_r), 0)`;
   return `(CASE WHEN COALESCE(${m}.controle_lote,0) = 1 THEN ${Q.qtdSql(conta)} ELSE 0 END)`;
 }
 

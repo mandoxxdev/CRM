@@ -211,10 +211,11 @@ process.on('exit', (code) => {
     assert.deepStrictEqual([Number(f.no_lote), Number(f.com_lote)], [0, 0], 'o fragmento le cancelado = 0');
   });
 
-  // ── RN-209.09: quem le nao muda (regressao explicita) ────────────────────────────────────────────────────────────────────────
-  // Os leitores do item 9 (`loteImpedidoSql`, a 205; `listarLotesDoMaterial`, de onde `lotesParaOAutomatico` da 197 tira o livre
-  // por lote — a funcao nao e exportada, entao a regressao fica na entrada dela) dao o MESMO numero com o BLOQUEIO com L1 e com o
-  // mesmo BLOQUEIO sem lote (UPDATE so da linha do livro — o material nao muda).
+  // ── RN-209.09 -> RN-217.10 (Etapa 217, MUDANCA DE REGRA registrada): os leitores passam a saber o lote do bloqueio ─────────────
+  // Ate a 216 a RN-209.09 afirmava que `loteImpedidoSql` (a 205) e o livre por lote do automatico (a 197) davam o MESMO numero com o
+  // BLOQUEIO com L1 e sem lote. Desde a Etapa 217 (C466 2a parte, C503; B1434-B1439) eles descontam o bloqueado DO LOTE: com a peca
+  // num lote bom, o impedido sobe ate o certo e o automatico deixa a peca no lote. O cenario C504 (o lote vazio) continua igual com e
+  // sem lote — e o limite por lote (B1435, RN-217.05). `lotesParaOAutomatico` e exportada desde a 217 (B1439).
   const leitores = async (m) => {
     const imp = await dbGet(db, `SELECT ${loteImpedidoSql('m')} AS q FROM materiais_almoxarifado m WHERE m.id = ?`, [m.id]);
     const R = (await dbRun(db, `INSERT INTO requisicoes_almoxarifado (numero, solicitante_id, solicitante_nome, status)
@@ -224,8 +225,11 @@ process.on('exit', (code) => {
     const sd = await requisitionService.saldoDisponivelParaItem(db, await dbGet(db, 'SELECT * FROM itens_requisicao_almoxarifado WHERE id = ?', [itId]));
     const lotes = (await lotService.listarLotesDoMaterial(db, m.id, { apenasComSaldo: true }))
       .map((l) => [l.codigo, Number(l.saldo), !!l.elegivel]);
+    const cods = new Map((await dbAll(db, 'SELECT id, codigo FROM lotes_almoxarifado WHERE material_id = ?', [m.id])).map((x) => [x.id, x.codigo]));
+    const automatico = (await requisitionService.lotesParaOAutomatico(db, m.id, new Map(), new Map()))
+      .map((l) => [cods.get(l.lote_id), Number(l.saldo)]);
     return { lote_impedido_sql: Number(imp.q), disponivel: sd.disponivel, lote_impedido: sd.lote_impedido,
-      disponivel_liberado: sd.disponivel_liberado, lotes };
+      disponivel_liberado: sd.disponivel_liberado, lotes, automatico };
   };
   const comESemLote = async (m, L) => {
     const bl = await dbGet(db, "SELECT id, lote_id FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'BLOQUEIO' AND cancelado = 0", [m.id]);
@@ -236,17 +240,18 @@ process.on('exit', (code) => {
     await dbRun(db, 'UPDATE movimentacoes_almoxarifado SET lote_id = ? WHERE id = ?', [L, bl.id]);
     return { com, sem };
   };
-  await test('[RN-209.09] L1 2 bloqueado por quarentena: loteImpedidoSql, saldoDisponivelParaItem e os lotes do automatico iguais com e sem lote no BLOQUEIO', async () => {
+  await test('[RN-217.10, era RN-209.09] L1 2 bloqueado por quarentena num lote bom, L2 BLOQUEADO 4: com o lote no BLOQUEIO o impedido e 4 e o automatico ve L1 2; sem o lote, os numeros de antes (2 e L1 4)', async () => {
     const m = await material();
     await entrar(m, 5, 'L1'); await entrar(m, 4, 'L2');
     await lotService.mudarStatusLote(db, ADMIN, await loteId(m, 'L2'), 'BLOQUEADO', 'teste 209');
     const s = await sair(m, 3, 'L1');
     await devolverRota(m, 2, s);
     const { com, sem } = await comESemLote(m, await loteId(m, 'L1'));
-    assert.deepStrictEqual(com, sem);
-    assert.ok(com.lote_impedido_sql > 0, `premissa: ha lote impedido para a conta ler (${JSON.stringify(com)})`);
+    const lotes = [['L1', 4, true], ['L2', 4, false]];
+    assert.deepStrictEqual(com, { lote_impedido_sql: 4, disponivel: 6, lote_impedido: 4, disponivel_liberado: 2, lotes, automatico: [['L1', 2]] });
+    assert.deepStrictEqual(sem, { lote_impedido_sql: 2, disponivel: 6, lote_impedido: 2, disponivel_liberado: 4, lotes, automatico: [['L1', 4]] });
   });
-  await test('[RN-209.09, Fase 2 item 2, C504] L1 0 e L2 5; voltam 2 de L1 para Quarentena; estorno da ENTRADA_DEVOLUCAO: fisico 5 todo em L2, o BLOQUEIO vivo, a soma diz L1 2 — e os leitores nao mudam', async () => {
+  await test('[RN-217.05, era RN-209.09 Fase 2 item 2, C504] L1 0 e L2 5; voltam 2 de L1 para Quarentena; estorno da ENTRADA_DEVOLUCAO: fisico 5 todo em L2, o BLOQUEIO vivo, a soma diz L1 2 — o limite por lote devolve as 2 ao material: os leitores iguais com e sem lote', async () => {
     const m = await material();
     await entrar(m, 2, 'L1'); await entrar(m, 5, 'L2');
     const s = await sair(m, 2, 'L1');
@@ -261,8 +266,13 @@ process.on('exit', (code) => {
     assert.strictEqual(await bloqueada(m), 2, 'o BLOQUEIO continua vivo (o estorno da entrada nao o estorna)');
     assert.deepStrictEqual(await porLote(m), { material_id: m.id, total: 2, sem_lote: 0, lotes: [{ lote_id: L1, codigo: 'L1', quantidade: 2 }] },
       'C504: L1 com bloqueado maior que o saldo dele (o limite e do item 9)');
+    // Etapa 217: um lote impedido (L3 BLOQUEADO 4) para o limite por lote ter efeito no numero — sem o limite, o L1 vazio "reteria" 2 e
+    // o resto do material cairia a 0 (impedido 4, liberado 3); com ele, as 2 voltam para o material (impedido 2, liberado 5 = sem lote).
+    await entrar(m, 4, 'L3');
+    await lotService.mudarStatusLote(db, ADMIN, await loteId(m, 'L3'), 'BLOQUEADO', 'teste 217');
     const { com, sem } = await comESemLote(m, L1);
     assert.deepStrictEqual(com, sem);
+    assert.deepStrictEqual([com.disponivel, com.lote_impedido, com.disponivel_liberado, com.automatico], [7, 2, 5, [['L2', 5]]]);
   });
 
   // ── T3 (o motor confere o lote no DESBLOQUEIO e no estorno do BLOQUEIO) — vindos do bloqueioSabeOLote.pendente-t3.js ─────────

@@ -20,6 +20,7 @@ const reservaDaOs = require('./reservaDaOs');
 const { DEVOLUCAO_VIVA_SQL } = require('./devolucaoViva');
 // Etapa 205 (B1368): o saldo de lote impedido (modulo so com quantidade e diaLocal — sem ciclo).
 const { loteImpedidoSql, fraseLoteImpedido } = require('./loteImpedido');
+const { retidoPorLote } = require('./retidoDoLote'); // Etapa 217 (B1439): o bloqueado do lote no automatico
 // Etapa 93 (T0, B443): a trava POR REQUISICAO das portas do almoxarife (outra trava; ordem requisicao -> material).
 const travaPorRequisicao = require('./travaPorRequisicao');
 // Etapa 114 (C229): a requisicao com item pendente de material inativo (modulo sem require de servico — sem ciclo).
@@ -1966,6 +1967,10 @@ async function lotesParaOAutomatico(db, materialId, saiuDaOrigemPorItem, parteQu
       AND ${viva.sql}`, [materialId, ...ids, ...viva.params]);
   const inspecao = new Map();
   for (const x of emInspecao) inspecao.set(Number(x.lote_id), (inspecao.get(Number(x.lote_id)) || 0) + (Number(x.q) || 0));
+  // Etapa 217 (B1439, C503): o retido NO LOTE (quarentena, reprovacao, terceiros — a mesma regua de `loteImpedidoSql`, `retidoDoLote.js`)
+  // sai do livre do lote, no nivel do lote como a inspecao (nao se sabe em que endereco a peca esta). Sem isto o FEFO tirava do lote
+  // justamente a peca da quarentena e o lote ficava "vazio" com a peca bloqueada nele.
+  const retido = await retidoPorLote(db, materialId);
   // a parte guardada por (lote, endereco) — Fase 5 M1 (B1329): o claim do lote drena a padrao e depois a maior linha, entao descontar
   // so no total do lote deixava o automatico tirar justo do endereco guardado (R1 tomava 400 "nao serve mais")
   const guardadoPar = new Map();
@@ -1990,7 +1995,7 @@ async function lotesParaOAutomatico(db, materialId, saiuDaOrigemPorItem, parteQu
   }
   return lotes.map((l) => {
     const loteId = Number(l.id);
-    const insp = inspecao.get(loteId) || 0;
+    const insp = (inspecao.get(loteId) || 0) + (retido.get(loteId) || 0); // Etapa 217: o retido desconta junto da inspecao
     // Sem parte guardada no lote: como na T0 — uma fatia pelo lote, o claim escolhe a linha (o livro sem endereco, D (51)).
     if (!lotesComGuarda.has(loteId)) return { lote_id: loteId, saldo: Q.qtd(Number(l.saldo) - insp) };
     // Com parte guardada: o livre de cada linha = saldo da linha - a parte guardada NAQUELE (lote, endereco); a inspecao desconta no
@@ -3366,6 +3371,7 @@ module.exports = {
   parteGuardadaDeOutrasPorPar, // Etapa 201 (T1)
   parteGuardadaDeOutras, // Etapa 201 (T1): exportada para a prova de equivalencia
   dividirPorLotes, // Etapa 197 (T0)
+  lotesParaOAutomatico, // Etapa 217 (B1439): exportada para o teste da regua
   guardaQueConta, // Etapa 207 (B1396)
   guardaDosIrmaosNoPar, // Etapa 208 (B1407)
   mensagemSeparadoDeOutras, // Etapa 208 (B1409): a prova da literal sem irmaos

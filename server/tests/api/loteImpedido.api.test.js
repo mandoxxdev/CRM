@@ -242,13 +242,19 @@ process.on('exit', (code) => {
 
   // ── Fase 5 (P2, B1380): o plano de consulta usa indice em todas as tabelas — sem SCAN (antes: SCAN lim_s, lim_ri e lim_ri2, a
   // tabela inteira por item; 200 leituras com 30 mil linhas de saldo e 20 mil itens de recebimento levavam ~1,8 s) ──
-  await test('[Fase 5 P2] EXPLAIN QUERY PLAN do fragmento: nenhum SCAN; os itens de recebimento pelo idx_receb_itens_almox_lote', async () => {
+  // Etapa 217 (B1438): o fragmento passou a ler os lotes numa tabela derivada (`retidoDoLote.lotesComRetidoSql`, apelidos `rdl_*`) — o
+  // SCAN da propria tabela derivada (`subquery-N`, `lim_r`) e a passada pelos lotes do material, nao tabela inteira. Nenhuma TABELA em
+  // SCAN, nem indice automatico; a inspecao e os itens de remessa pelos indices da 217.
+  await test('[Fase 5 P2, Etapa 217] EXPLAIN QUERY PLAN do fragmento: nenhuma tabela em SCAN nem indice automatico; inspecao, saldo, inspecoes e remessas por indice', async () => {
     const plano = (await dbAll(db, `EXPLAIN QUERY PLAN SELECT ${mod.loteImpedidoSql('ma')} FROM materiais_almoxarifado ma WHERE ma.id = ?`, [1]))
       .map((r) => r.detail);
     assert.ok(plano.length > 3, `premissa: o plano veio (${plano.length} linhas)`);
-    assert.deepStrictEqual(plano.filter((d) => /^SCAN\b/.test(d)), [], plano.join(' | '));
-    assert.ok(plano.some((d) => /lim_ri USING (COVERING )?INDEX idx_receb_itens_almox_lote/.test(d)), plano.join(' | '));
-    assert.ok(plano.some((d) => /lim_s USING (COVERING )?INDEX idx_saldo_almox_chave/.test(d)), plano.join(' | '));
+    assert.deepStrictEqual(plano.filter((d) => /^SCAN\b/.test(d) && !/^SCAN (\(subquery-\d+\)|lim_r)$/.test(d)), [], plano.join(' | '));
+    assert.deepStrictEqual(plano.filter((d) => /AUTOMATIC/.test(d)), [], plano.join(' | '));
+    assert.ok(plano.some((d) => /rdl_ri3 USING (COVERING )?INDEX idx_receb_itens_almox_lote/.test(d)), plano.join(' | '));
+    assert.ok(plano.some((d) => /rdl_s USING (COVERING )?INDEX idx_saldo_almox_chave/.test(d)), plano.join(' | '));
+    assert.ok(plano.some((d) => /rdl_i USING (COVERING )?INDEX idx_inspecoes_receb_item_almox/.test(d)), plano.join(' | '));
+    assert.ok(plano.some((d) => /rdl_t USING (COVERING )?INDEX idx_itens_remessa_terceiro_lote/.test(d)), plano.join(' | '));
   });
 
   await close();

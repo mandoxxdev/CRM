@@ -2093,6 +2093,10 @@ async function initSchemaUmaExecucao(db) {
   // e linha da fila; sem indice era a tabela inteira por item. Depois do safeAlter de `lote_id` (banco antigo nao tinha a coluna).
   await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_receb_itens_almox_lote
     ON recebimentos_material_itens_almoxarifado(lote_id)`);
+  // Etapa 217 (Fase 2 I3): o retido do lote (`retidoDoLote.js`) le a reprovacao da inspecao por item de recebimento em toda leitura
+  // do lote impedido e do automatico; sem indice o SQLite montava um indice automatico por consulta.
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_inspecoes_receb_item_almox
+    ON inspecoes_recebimento_almoxarifado(recebimento_item_id)`);
 
   await dbRun(db, `CREATE TABLE IF NOT EXISTS itens_pedido_compra (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2313,6 +2317,8 @@ async function initSchemaUmaExecucao(db) {
   await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_remessa_terceiro_status ON remessas_terceiro_almoxarifado(status)');
   await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_remessa_terceiro_prazo ON remessas_terceiro_almoxarifado(prazo_previsto)');
   await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_itens_remessa_terceiro ON itens_remessa_terceiro_almoxarifado(remessa_id)');
+  // Etapa 217 (Fase 2 I3): o retido do lote le os itens enviados por lote (`retidoDoLote.js`); sem indice era a tabela inteira por lote.
+  await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_itens_remessa_terceiro_lote ON itens_remessa_terceiro_almoxarifado(lote_id)');
   await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_retornos_remessa_item ON retornos_remessa_item_almoxarifado(item_remessa_id)');
   // O agrupador do evento (todas as N linhas de uma transformacao compartilham o mesmo
   // movimentacao_consumo_id): sem indice, "quais linhas sairam desta baixa de chapa" e varredura

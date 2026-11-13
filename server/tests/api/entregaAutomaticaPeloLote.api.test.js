@@ -353,8 +353,10 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(await retrato(m), { linhas: ['ZB-01/L1=2', 'ZP-01/L2=3'], fisico: 5 });
   });
 
-  // ── C466 (Fase 2 item 2, cenario A): limitacao documentada — a quarentena da devolucao nao tem lote retido ────────────────────
-  await test('[C466, limitacao documentada] entrega automatica sai L1 3; devolucao de 1 para QUARENTENA citando a saida volta a L1 (bloqueio so no material); R2 automatico 1 -> o FEFO tira a peca da quarentena (L1 1)', async () => {
+  // ── C466 (Fase 2 item 2, cenario A) -> RN-217.01 a (Etapa 217, MUDANCA DE REGRA registrada) ────────────────────────────────────
+  // Ate a 216 este teste fixava a limitacao documentada: o R2 automatico tirava do L1 a peca da quarentena. Desde a 209 o BLOQUEIO da
+  // devolucao grava o lote, e desde a 217 o automatico desconta o bloqueado do lote (B1439): o R2 sai do L2 e a peca fica no L1.
+  await test('[RN-217.01 a, era C466 limitacao documentada] entrega automatica sai L1 3; devolucao de 1 para QUARENTENA citando a saida volta a L1 (BLOQUEIO com L1); R2 automatico 1 -> sai do L2, a peca da quarentena fica no L1', async () => {
     const m = await material();
     await entrar(m, B01.id, 3, 'L1'); await entrar(m, P01.id, 3, 'L2');
     await validade(m, 'L1', dia(5)); await validade(m, 'L2', dia(45));
@@ -367,11 +369,13 @@ process.on('exit', (code) => {
       movimentacao_saida_id: saida.id, localizacao_id: B01.id }), 201);
     const mat = await dbGet(db, 'SELECT quantidade_bloqueada b FROM materiais_almoxarifado WHERE id = ?', [m.id]);
     assert.strictEqual(Number(mat.b), 1, 'premissa: o bloqueio e do material');
+    const bl = await dbGet(db, "SELECT lote_id FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'BLOQUEIO'", [m.id]);
+    assert.strictEqual(bl.lote_id, await loteId(m, 'L1'), 'premissa: o BLOQUEIO tem o lote (Etapa 209)');
     const r2 = await reqDireta([[m.id, 1]]);
     await separar(r2.R, [{ item_id: r2.ids[0], quantidade_separada: 1 }]);
     await entregar(r2.R, [{ item_id: r2.ids[0], quantidade_atendida: 1 }]);
-    assert.deepStrictEqual(await livro(r2.R, m), [['SAIDA', null, 'L1', 1]], 'C466: o lote da peca em quarentena nao e retido');
-    assert.deepStrictEqual(await retrato(m), { linhas: ['ZP-01/L2=3'], fisico: 3 });
+    assert.deepStrictEqual(await livro(r2.R, m), [['SAIDA', null, 'L2', 1]], 'RN-217.01: o automatico nao tira a peca da quarentena');
+    assert.deepStrictEqual(await retrato(m), { linhas: ['ZB-01/L1=1', 'ZP-01/L2=2'], fisico: 3 });
   });
 
   // ── Fase 2 item 6: negativo permitido ─────────────────────────────────────────────────────────────────────────────────────────
