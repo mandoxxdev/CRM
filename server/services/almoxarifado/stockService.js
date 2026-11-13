@@ -655,6 +655,14 @@ function resolveLocalizacaoSaida(material, origemId) {
  * sugestão nunca propõe um endereço que o motor recusaria. Vale para os DOIS papéis: o bloqueio
  * recusa na origem também (Fase 2 da etapa — um predicado só de destino deixaria uma 2ª cópia).
  */
+// Etapa 216 (RN-216.03): o tipo do material vem do cadastro de tipos pelo NOME (`Consumível`, e desde a 210 os textos sobem para
+// maiusculo) e a restricao da localizacao guarda as CHAVES de `TIPOS_MATERIAL_ENUM` (`consumivel`, `componente_pneumatico`). A
+// comparacao e dos dois lados normalizados: sem acento, sem caixa, espacos e hifens viram `_`. Quem ja casava continua casando.
+function normalizarTipoMaterial(valor) {
+  return String(valor == null ? '' : valor).normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .trim().toLowerCase().replace(/[\s-]+/g, '_');
+}
+
 function motivoRecusaEndereco(loc, material, papel) {
   if (!loc) return null;
   if (loc.bloqueada) return `Localização ${loc.codigo} está bloqueada`;
@@ -668,7 +676,8 @@ function motivoRecusaEndereco(loc, material, papel) {
     // Lista vazia ([]) tem a MESMA semântica de NULL/ausente: "sem restrição" — não "nenhum tipo
     // permitido". A rota já normaliza [] para NULL na gravação, mas o helper trata o caso aqui
     // também (defesa em profundidade: dado escrito por outro caminho, ex. SQL direto/migração).
-    if (Array.isArray(permitidos) && permitidos.length > 0 && !permitidos.includes(material.tipo_material)) {
+    if (Array.isArray(permitidos) && permitidos.length > 0
+      && !permitidos.map(normalizarTipoMaterial).includes(normalizarTipoMaterial(material.tipo_material))) {
       return `Localização ${loc.codigo} não aceita o tipo de material '${material.tipo_material || ''}'`;
     }
   }
@@ -3987,6 +3996,7 @@ async function consultarSaldosPorLocalizacao(db, materialId) {
 
 module.exports = {
   motivoRecusaEndereco,
+  normalizarTipoMaterial,
   areaEspecialDe,
   avisoAreaEspecial,
   resolverAreaEfetiva,
