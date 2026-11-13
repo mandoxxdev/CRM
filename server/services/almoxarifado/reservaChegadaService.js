@@ -27,6 +27,10 @@
  */
 const { dbGet, dbAll, dbRun } = require('./db');
 const { disponivelSql } = require('./availabilitySql');
+// Etapa 219 (C478, B1453/B1454): a regua do lote impedido da aprovacao (205 + 217). So `quantidade`, `diaLocal` e `retidoDoLote`:
+// sem ciclo (o requisitionStateMachine, que este arquivo ja requer, a importa no topo).
+const { loteImpedidoSql, predicadoLoteImpedidoSql } = require('./loteImpedido');
+const Q = require('./quantidade');
 const stockService = require('./stockService');
 const requisitionStateMachine = require('./requisitionStateMachine');
 const requisitionService = require('./requisitionService');
@@ -202,6 +206,28 @@ function erroSemTrava(materialId) {
  * Lança só em erro de banco fora do try por item (quem chama engole) — e, mesmo então, o status das
  * requisições já tocadas é recalculado antes de relançar (sem opcao; com `sobTrava`, pelo concluir).
  */
+/**
+ * Etapa 219 (B1454) — o "entrou livre" por material SEM os itens cujo lote esta impedido agora (bloqueado, reprovado ou vencido sem
+ * liberacao — `predicadoLoteImpedidoSql`), so em material com controle de lote. Lido sob a trava de quem distribui.
+ * @returns {Promise<Map<material_id, number>>}
+ */
+async function livreForaDeLoteImpedido(db, itens) {
+  const lotes = [...new Set(itens.map((it) => it.lote_id).filter((x) => x != null))];
+  let impedidos = new Set();
+  if (lotes.length) {
+    const linhas = await dbAll(db, `SELECT lt.id FROM lotes_almoxarifado lt
+      JOIN materiais_almoxarifado m ON m.id = lt.material_id AND COALESCE(m.controle_lote, 0) = 1
+      WHERE lt.id IN (${lotes.map(() => '?').join(',')}) AND ${predicadoLoteImpedidoSql('lt')}`, lotes);
+    impedidos = new Set(linhas.map((l) => Number(l.id)));
+  }
+  const out = new Map();
+  for (const it of itens) {
+    if (it.lote_id != null && impedidos.has(Number(it.lote_id))) continue;
+    out.set(it.material_id, (out.get(it.material_id) || 0) + num(it.quantidade));
+  }
+  return out;
+}
+
 async function reservarChegadaParaQuemEspera(db, user, recebimentoId, opcoes = {}) {
   const resultado = { reservas: [], status: [] };
   const rec = await dbGet(db, 'SELECT id, numero FROM recebimentos_material_almoxarifado WHERE id = ?', [recebimentoId]);
@@ -211,16 +237,18 @@ async function reservarChegadaParaQuemEspera(db, user, recebimentoId, opcoes = {
   // `quantidade_em_inspecao` dele é 0 e, sem este filtro, a retomada da nota contava o item inteiro como
   // livre (inclusive o reprovado) e completava com saldo alheio (Fase 0, Surpresa 2: aprovou 1, reservou
   // 4). O que a inspeção liberou é distribuído pela porta da inspeção (`reservarLiberacaoParaQuemEspera`).
-  const itensNota = await dbAll(db, `SELECT ri.material_id, ${QTD_DO_ITEM_SQL} AS quantidade,
+  const itensNota = await dbAll(db, `SELECT ri.material_id, ri.lote_id, ${QTD_DO_ITEM_SQL} AS quantidade,
       COALESCE(ri.quantidade_em_inspecao, 0) AS em_inspecao
     FROM recebimentos_material_itens_almoxarifado ri
     WHERE ri.recebimento_id = ? AND ri.entrada_estoque_em IS NOT NULL AND ${QTD_DO_ITEM_SQL} > 0
       AND NOT EXISTS (SELECT 1 FROM inspecoes_recebimento_almoxarifado i WHERE i.recebimento_item_id = ri.id)
     ORDER BY ri.id`, [recebimentoId]);
   const livrePorMaterial = new Map();
+  const itensLivres = [];
   for (const it of itensNota) {
     if (num(it.em_inspecao) > EPS) continue; // retido para inspeção não se reserva (RN-03)
     livrePorMaterial.set(it.material_id, (livrePorMaterial.get(it.material_id) || 0) + num(it.quantidade));
+    itensLivres.push(it);
   }
 
   const rotulos = rotulosDaChegada(rec);
@@ -232,7 +260,15 @@ async function reservarChegadaParaQuemEspera(db, user, recebimentoId, opcoes = {
   // da secao: a OS que fecha no meio vale a partir dai). I3: a nota desconta o que ja reservou para a OS (retomada).
   const distribuir = async () => {
     const os = livrePorMaterial.size ? await reservaDaOs.osAbertaDoRecebimento(db, recebimentoId) : null;
-    for (const [materialId, livre] of livrePorMaterial) {
+    // Etapa 219 (B1454): a fila geral nao recebe o que ESTA nota pos em lote impedido (o "entrou livre" deixa o item de fora) — o molde
+    // da D4 da 74: a nota so distribui o que ela trouxe e pode sair; sem isto, o teto do miolo (B1453) daria o saldo de ajuste no lugar.
+    // O lote e lido dentro da secao (serializa com a correcao de validade, que pega a trava); mudar o STATUS do lote nao pega a trava
+    // do material (`lotService.mudarStatusLote`) — o mesmo da aprovacao, que le esta regua sob a trava (Fase 5, D (219)).
+    // So material com controle de lote (B1371: sem controle a aprovacao ignora o lote — Fase 2).
+    // A OS aberta usa o `livre` inteiro (B1455).
+    const livreForaDeImpedido = os ? null : await livreForaDeLoteImpedido(db, itensLivres);
+    for (const [materialId, livreTotal] of livrePorMaterial) {
+      const livre = os ? livreTotal : (livreForaDeImpedido.get(materialId) || 0);
       if (sobTrava && !trava.travado(materialId)) throw erroSemTrava(materialId);
       if (os) {
         // eslint-disable-next-line no-await-in-loop
@@ -362,9 +398,17 @@ async function recalcularRequisicoesDasReservas(db, reservaIds, rotulo) {
  */
 async function distribuirSemLock(db, user, materialId, teto, rotulos, acc, filaOpcoes = {}) {
   if (!(teto > EPS)) return 0;
-  const material = await dbGet(db, `SELECT *, ${disponivelSql()} AS disponivel FROM materiais_almoxarifado WHERE id = ?`, [materialId]);
+  // Etapa 219 (C478, B1453): o teto e o que PODE SAIR — o disponivel sem o saldo de lote bloqueado, reprovado ou vencido (a parte do
+  // lote impedido da conta da aprovacao, `calcularStatusPosAprovacao`). Antes a nota, a inspecao/NC e a OS encerrada reservavam peca de
+  // lote bloqueado e a requisicao ficava Totalmente Reservada com o que nao sai. Material sem controle de lote: o desconto e 0 (B1371).
+  // `semDescontoDoLote`: so a fila da OS ABERTA (B1455 — a peca comprada para a OS fica com ela, como a reserva da OS).
+  const material = await dbGet(db, `SELECT ma.*, ${disponivelSql('ma')} AS disponivel, ${loteImpedidoSql('ma')} AS lote_impedido
+    FROM materiais_almoxarifado ma WHERE ma.id = ?`, [materialId]);
   if (!material) return 0;
-  let distribuivel = Math.min(teto, Math.max(0, num(material.disponivel)));
+  const podeSair = filaOpcoes.semDescontoDoLote
+    ? num(material.disponivel)
+    : Q.qtd(num(material.disponivel) - num(material.lote_impedido));
+  let distribuivel = Math.min(teto, Math.max(0, podeSair));
   if (distribuivel <= EPS) return 0;
   let usado = 0;
 
@@ -463,7 +507,8 @@ async function distribuirSemLock(db, user, materialId, teto, rotulos, acc, filaO
 async function distribuirParaOs(db, user, materialId, teto, rotulos, acc, os) {
   if (!(teto > EPS)) return;
   const usado = await distribuirSemLock(db, user, materialId, teto, rotulos, acc,
-    { filtro: (c) => reservaDaOs.requisicaoCasaComOs({ osId: c.os_id, osReferencia: c.os_referencia }, os) });
+    // Etapa 219 (B1455): a fila da OS aberta sem o desconto do lote impedido; o desvio da OS fechada (abaixo) e fila geral e desconta.
+    { filtro: (c) => reservaDaOs.requisicaoCasaComOs({ osId: c.os_id, osReferencia: c.os_referencia }, os), semDescontoDoLote: true });
   const r = await reservaDaOs.reservarParaOsSobTrava(db, user, {
     materialId, quantidade: teto - usado, os, recebimentoId: rotulos.recebimento_id,
   });

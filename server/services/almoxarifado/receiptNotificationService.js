@@ -32,6 +32,11 @@ const notificationQueueService = require('./notificationQueueService');
 const { PODE_SEPARAR } = require('./requisitionStateMachine');
 // Etapa 74 (T2): o disponivel atual do material decide se a linha de quem nao ganhou reserva entra no aviso.
 const { disponivelSql } = require('./availabilitySql');
+// Etapa 219 (B1457): o aviso nao promete o que esta em lote bloqueado, reprovado ou vencido (a regua da aprovacao). Sem ciclo.
+const { loteImpedidoSql, predicadoLoteImpedidoSql } = require('./loteImpedido');
+
+/** Etapa 219 (B1457 a): o fim da linha do item livre que entrou em lote impedido, no aviso da entrada da nota. */
+const FRASE_ITEM_EM_LOTE_IMPEDIDO = 'em lote bloqueado, reprovado ou vencido (não sai até o lote ser liberado)';
 
 const EPS = 1e-9;
 
@@ -133,7 +138,8 @@ function montarAvisoNota(dados) {
   for (const it of dados.itens) {
     linhas.push(`- ${it.codigo} — ${it.nome}: ${qtdComUnidade(it.quantidade, it.unidade)}`
       + (it.localizacao ? ` em ${it.localizacao}` : '')
-      + ` — ${it.retido ? 'retido para inspeção' : 'disponível'}`);
+      // Etapa 219 (B1457 a; Fase 2 item 3): o retido vem primeiro; o livre em lote impedido nao e "disponível"
+      + ` — ${it.retido ? 'retido para inspeção' : (it.em_lote_impedido ? FRASE_ITEM_EM_LOTE_IMPEDIDO : 'disponível')}`);
   }
   if (dados.requisicoes && dados.requisicoes.length) {
     linhas.push('Requisições que aguardavam estes materiais: '
@@ -259,10 +265,14 @@ async function avisarEntradaConfirmada(db, user, recebimentoId) {
   const itens = await dbAll(db, `SELECT ri.id, ri.material_id,
       ${QTD_DO_ITEM_SQL} AS quantidade,
       COALESCE(ri.quantidade_em_inspecao, 0) AS em_inspecao,
-      m.codigo, m.nome, m.unidade, m.proprietario_cliente_id, l.codigo AS localizacao
+      m.codigo, m.nome, m.unidade, m.proprietario_cliente_id, l.codigo AS localizacao,
+      -- Etapa 219 (B1457; Fase 2 item 2): lote impedido so conta em material com controle de lote (B1371)
+      CASE WHEN lt.id IS NOT NULL AND COALESCE(m.controle_lote, 0) = 1 AND ${predicadoLoteImpedidoSql('lt')} THEN 1 ELSE 0 END
+        AS em_lote_impedido
     FROM recebimentos_material_itens_almoxarifado ri
     JOIN materiais_almoxarifado m ON m.id = ri.material_id
     LEFT JOIN localizacoes_almoxarifado l ON l.id = ri.localizacao_entrada_id
+    LEFT JOIN lotes_almoxarifado lt ON lt.id = ri.lote_id
     WHERE ri.recebimento_id = ? AND ri.entrada_estoque_em IS NOT NULL
       AND ${QTD_DO_ITEM_SQL} > 0
     ORDER BY ri.id`, [recebimentoId]);
@@ -270,9 +280,14 @@ async function avisarEntradaConfirmada(db, user, recebimentoId) {
 
   // Quanto entrou LIVRE de cada material (somado: o mesmo material em dois itens da nota).
   const livrePorMaterial = new Map();
+  // Etapa 219 (B1457 b): o que entrou livre FORA de lote impedido — so isso pode virar "ha saldo livre para separar".
+  const livreQueSaiPorMaterial = new Map();
   for (const it of itens) {
     if (it.em_inspecao > EPS) continue;
     livrePorMaterial.set(it.material_id, (livrePorMaterial.get(it.material_id) || 0) + Number(it.quantidade));
+    if (Number(it.em_lote_impedido) !== 1) {
+      livreQueSaiPorMaterial.set(it.material_id, (livreQueSaiPorMaterial.get(it.material_id) || 0) + Number(it.quantidade));
+    }
   }
   const materiaisDaNota = [...new Set(itens.map((it) => it.material_id))];
 
@@ -335,7 +350,7 @@ async function avisarEntradaConfirmada(db, user, recebimentoId) {
       usuario: user?.nome || user?.email || `usuário #${user?.id}`,
       itens: itens.map((it) => ({
         codigo: it.codigo, nome: it.nome, quantidade: it.quantidade, unidade: it.unidade,
-        localizacao: it.localizacao, retido: it.em_inspecao > EPS,
+        localizacao: it.localizacao, retido: it.em_inspecao > EPS, em_lote_impedido: Number(it.em_lote_impedido) === 1,
       })),
       requisicoes: requisicoes.map((r) => ({ numero: r.numero, solicitante_nome: r.solicitante_nome })),
       link: `${appBase}/almoxarifado/recebimentos`,
@@ -363,7 +378,9 @@ async function avisarEntradaConfirmada(db, user, recebimentoId) {
     const disponivelPorMaterial = new Map();
     for (const m of livrePorMaterial.keys()) {
       // eslint-disable-next-line no-await-in-loop
-      const row = await dbGet(db, `SELECT ${disponivelSql()} AS d FROM materiais_almoxarifado WHERE id = ?`, [m]);
+      // Etapa 219 (B1457 b): o livre que PODE SAIR (sem o lote impedido), a regua da aprovacao
+      const row = await dbGet(db, `SELECT ${disponivelSql('ma')} - ${loteImpedidoSql('ma')} AS d FROM materiais_almoxarifado ma
+        WHERE ma.id = ?`, [m]);
       disponivelPorMaterial.set(m, Number(row && row.d) || 0);
     }
     // Etapa 75 (Fase 5): nem a linha do material de cliente que a requisicao nao pode retirar (sem o projeto do
@@ -380,7 +397,8 @@ async function avisarEntradaConfirmada(db, user, recebimentoId) {
     }
     const linhaAvisavel = (r, m) => livrePorMaterial.has(m)
       && !donoRecusa.has(`${r.requisicao_id}|${m}`)
-      && ((r.reservadoPorMaterial.get(m) || 0) > EPS || (disponivelPorMaterial.get(m) || 0) > EPS);
+      && ((r.reservadoPorMaterial.get(m) || 0) > EPS
+        || ((livreQueSaiPorMaterial.get(m) || 0) > EPS && (disponivelPorMaterial.get(m) || 0) > EPS));
     const avisaveis = requisicoes.filter((r) => [...r.pendentePorMaterial.keys()].some((m) => linhaAvisavel(r, m)));
     const emails = await emailsDosUsuarios(db, [...new Set(avisaveis.map((r) => r.solicitante_id))]);
     for (const r of avisaveis) {
@@ -441,8 +459,10 @@ async function avisarLiberacao(db, user, ctx, resultadoReserva) {
   const resultado = { requisitantes: [] };
   const liberado = Number(ctx && ctx.quantidade) || 0;
   if (!(liberado > EPS) || !ctx.material_id) return resultado;
-  const mat = await dbGet(db, `SELECT id, codigo, nome, unidade, proprietario_cliente_id, ${disponivelSql()} AS disponivel
-    FROM materiais_almoxarifado WHERE id = ?`, [ctx.material_id]);
+  // Etapa 219 (B1457 c): `disponivel` aqui e o livre que PODE SAIR (sem o lote impedido) — so ele faz `haLivre`
+  const mat = await dbGet(db, `SELECT ma.id, ma.codigo, ma.nome, ma.unidade, ma.proprietario_cliente_id,
+      ${disponivelSql('ma')} - ${loteImpedidoSql('ma')} AS disponivel
+    FROM materiais_almoxarifado ma WHERE ma.id = ?`, [ctx.material_id]);
   if (!mat) return resultado;
   const rec = ctx.recebimento_id
     ? await dbGet(db, 'SELECT numero FROM recebimentos_material_almoxarifado WHERE id = ?', [ctx.recebimento_id])
