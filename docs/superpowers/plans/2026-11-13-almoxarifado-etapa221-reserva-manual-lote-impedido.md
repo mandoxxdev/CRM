@@ -110,11 +110,12 @@ permissão para reservar`, 400 `Quantidade da reserva deve ser maior que zero`, 
 ## Tasks (sort topológico)
 
 - [x] **T1 (tronco)** — `stockService.criarReservaSemTrava`: régua da manual com o impedido; recusa com o corte (B1469/B1470, B1474, o
-  "hoje" único). Testes RN-221.01 a .09, .05 b/c, .12, .13 em `server/tests/api/reservaManualLoteImpedido.api.test.js` — commit da T1.
-- [x] **T2 (galho, consome o contrato)** — `ReservasAlmoxarifado`: a linha do aviso (RN-221.10) e o teste da recusa (RN-221.11) — commit
-  da T2. Feita depois da T1 no mesmo fluxo (não em paralelo: é pequena).
+  "hoje" único). Testes RN-221.01 a .09, .05 b/c, .12, .13 em `server/tests/api/reservaManualLoteImpedido.api.test.js` — `156adb41`.
+- [x] **T2 (galho, consome o contrato)** — `ReservasAlmoxarifado`: a linha do aviso (RN-221.10) e o teste da recusa (RN-221.11) — `e386d335`. Feita depois da T1 no mesmo fluxo (não em paralelo: é pequena).
 - [x] **T3 (integração)** — RN-221.09 pela rota (reserva recusada → `PUT /lotes/:id/status ATIVO` → reserva → saída v2 contra ela, que
-  a consome), no mesmo arquivo da T1 (por isso depois dela, não em paralelo — Fase 2, M3).
+  a consome), no mesmo arquivo da T1 (por isso depois dela, não em paralelo — Fase 2, M3) — `156adb41`.
+- [x] **T4 (Fase 5, não estava no plano)** — a transformação no terceiro faz o claim do item sob a trava do material (**B1475**,
+  RN-221.14) e as 4 lacunas de teste (RN-221.03 b, .12 b, .05 d, RN-221.10 b) — `8395f440`.
 
 ## Sabotagens previstas (controle positivo)
 
@@ -136,8 +137,9 @@ a revisão (o contrato dela — o literal e o `controle_lote` de `/estoque` — 
 
 ## Execução e controles (medidos)
 
-`reservaManualLoteImpedido.api.test.js` **16/16**. Vermelho antes da T1: **5 passou, 7 falhou** (os 5 verdes são as regras "não muda":
-.02 c, .04, .05, .07 a/b). Tela: `ReservasAlmoxarifado.test.js` **32/32** (30 + 2).
+`reservaManualLoteImpedido.api.test.js` **16/16** em `156adb41`, **20/20** depois da Fase 5 (`8395f440`). Vermelho antes da T1: **5 passou,
+7 falhou** (os 5 verdes são as regras "não muda": .02 c, .04, .05, .07 a/b). Tela: `ReservasAlmoxarifado.test.js` **32/32** (30 + 2), **33/33**
+depois da Fase 5.
 
 | # | Sabotagem | Caiu |
 |---|---|---|
@@ -148,17 +150,89 @@ a revisão (o contrato dela — o literal e o `controle_lote` de `/estoque` — 
 | 5 | `cortado` = impedido inteiro (sem o `min`) | RN-221.06, .13, .05 b |
 | 9 | a base sempre o disponível (sem o livre de caixa) | RN-221.12 |
 | 10 | base negativa vira corte (`abs`) | RN-221.05 b |
-| 11 | outro "hoje" na frase | RN-221.05 c (sobreviveu antes dela existir) |
+| 11 | outro "hoje" na frase (+400 dias) | RN-221.05 c, .05 d (sobreviveu antes da .05 c existir) |
+| 12 | unidade fixa `un` (Fase 5) | RN-221.03 b |
+| 13 | o corte contra o disponível, não contra o livre de caixa (Fase 5) | RN-221.12 b |
+| 14 | "hoje" + 1 dia no `hold` (Fase 5) | RN-221.05 d |
+| 15 | "hoje" + 1 dia na frase (Fase 5) | RN-221.05 d |
+| 16 | a transformação sem a trava (o claim fora, Fase 5) | RN-221.14 |
 | 6 (tela) | sem a guarda de `controle_lote` | RN-221.10 |
 | 7 (tela) | sem o aviso | RN-221.10 |
 | 8 (tela) | `toast` genérico | RN-221.11 |
+| 17 (tela) | a guarda também exige `controle_serie !== 1` (Fase 5) | RN-221.10 b |
 
 Restauro conferido por md5/igualdade depois de cada rodada.
 
-## Fase 5 — revisão adversarial
+## Fase 5 — revisão adversarial (3 revisores frescos em paralelo: regra, travas/concorrência, "o teste passaria com a feature quebrada?")
 
-*(a preencher)*
+Proibidos de editar o repositório; sondas `e221-rev-*.js` no scratchpad; o de testes mutou uma worktree própria (22 mutações no servidor, 6 na
+tela, cópia + conferência).
+
+1. **[TRAVAS, real, reproduzido, ANTERIOR] O claim da transformação no terceiro fora da trava.** `thirdPartyService.registrarTransformacao`
+   gravava `quantidade_retornada` do item fora da trava do material e só o `CONSUMO_TERCEIRO` pegava a trava (dentro do motor). Entre os dois,
+   o retido do lote (`retidoDoLote.js`, 217) perdia a parte em terceiros do lote bom, que ia para o "resto" que `loteImpedidoSql` tira do lote
+   impedido: o impedido caía de 6 para 4. Sonda (sem gancho em produção: o teste segura a trava, enfileira a reserva, dispara a transformação e
+   solta): L1 ATIVO 2 enviado ao terceiro, L2 BLOQUEADO 6 → reserva manual de 2 **201** (final: reservado 2 sobre peças que só existem em L2
+   bloqueado). Alcançava também a aprovação e a separação (desde a 217). **B1475**: claim, consumo e o desfazer do claim numa seção só sob
+   `naTravaDoMaterial` do material enviado (o molde do retorno, 218); a compensação desfaz consumo, em-terceiros e claim sob a mesma trava; os
+   créditos dos resultados (outros materiais) ficam fora. **RN-221.14** — `8395f440`. Depois: 400.
+2. **[TESTE, real] 4 lacunas** (mutações sobreviventes): a unidade fixa `un` na frase → **RN-221.03 b** (PC); o corte medido contra o
+   disponível em vez do livre de caixa → **RN-221.12 b** (caixa 6 maior que o livre 4); o "hoje" +1 dia no `hold` ou na frase → **RN-221.05 d**
+   (lote que vence hoje); a tela com a guarda também exigindo "sem série" → **RN-221.10 b** — `8395f440`. Equivalentes: `manual = !sistema`
+   (todo chamador com `requisicao_id` passa `sistema`), o corte sem a guarda `manual` (só muda texto de recusa de reserva do sistema, que vai
+   para log), `>`/`>=` no corte (arredondado, nunca negativo), os `Math.max` internos, a guarda da tela por verdade (`/estoque` manda 0/1).
+   Fora da 221: tirar o `livreMostrado` da base com caixa sobrevive a todas as suítes (a caixa com livre negativo apareceria sem o 0) —
+   **anterior**, registrado em D (221).
+3. **[REGRA] nenhum achado reproduzido.** Sondas: quantidades fracionadas na folga (0,3 − 0,1), unidade nula, lote + série, material de
+   cliente, vencido com `vencimento_liberado_em = ''`, lote que vence hoje — todos com o número e a frase certos; a recusa e a frase não
+   discordam (mesma SQL, mesmo "hoje", mesma seção). Notas (não achados): a base negativa sem caixa aparece negativa (anterior, RN-221.05 b a
+   mantém); a reserva antiga sobre o bloqueado recusa a mais (B1471/B1474, C526).
+
+Sem auto-espera nem ordem nova de trava: a 221 não pega trava nova (o `hold` roda na seção que a reserva já segura); a B1475 usa a trava por
+material do material enviado, e a rota da transformação não está em seção nenhuma.
 
 ## Fechamento
 
-*(a preencher)*
+- [x] Fase 5 — 3 revisores; **1 corrida anterior** corrigida (B1475), **4 lacunas de teste** fechadas, 0 achado de regra, 0 ruído —
+  `8395f440`.
+- [x] Fechamento (`fechar-etapa`, sem o Passo 7½ e o 8, por pedido do André) — novidades (B1469–B1475, C479 resolvido, C526, D (221), F (221),
+  seção, topo e "onde estamos"), spec 07, mapa, guia (seção e cabeçalho), manual (9.1 e 9.3 — duas frases do 9.3 estavam velhas: diziam que
+  a chegada da nota não desconta o lote impedido (errado desde a 219) e que liberar o lote não reserva (errado desde a 220); reescritas), este
+  plano e a estimativa.
+
+### Divergências do plano
+
+- **RN-221.05 b/c/d, .03 b, .12, .12 b, .13, .14, RN-221.10 b** e as decisões **B1474** (Fase 2) e **B1475** (Fase 5) não existiam no plano.
+- **A T4 (a transformação no terceiro)** saiu da 221: é uma porta que alimenta o `loteImpedidoSql` sem a trava — o defeito era anterior,
+  mas a garantia da 221 ("a leitura é consistente sob a trava") dependia dela.
+- A T2 começou em paralelo com a revisão da Fase 2 (o contrato dela não mudou).
+
+### Retro (4 números)
+
+- **Rodadas até verde na Fase 5:** 1 (os testes novos passaram na primeira, cada um com controle positivo).
+- **Achados reais:** Fase 2: 2 importantes + 4 menores (todos aceitos). Fase 5: 1 corrida anterior (corrigida), 4 lacunas de teste
+  (fechadas), 0 de regra; 0 ruído.
+- **Paralelismo:** sem galhos de código em paralelo (T2 pequena, depois da T1); a revisão da Fase 2 rodou junto com a T1/T2; 3 revisores da
+  Fase 5 em paralelo (o de testes numa worktree própria) — sem contaminação. A 1ª rodada do `test:api` rodou durante a Fase 5 (sobre
+  `e386d335`); a verificação final foi refeita depois de `8395f440`.
+- **Defeito que escapou da 220:** nenhum achado nesta etapa.
+
+## Próxima tarefa detalhada
+
+*(Escolhida pela ordem do CLAUDE.md: a 221 fecha o C479 — a última porta que reservava peça de lote impedido. A spec 07 continua 🟢; o
+vizinho de maior valor **visível** é o **C481** (as telas de saldo mostram o lote impedido como disponível) — e a semana pede algo na tela.
+**Sem estimativa** — começa pela Fase 0.5.)*
+
+**O extrato do material diz quanto está em lote impedido (C481, 1ª parte).**
+
+- **Onde:** `GET /api/almoxarifado/materiais/:id/extrato` (o modal `ExtratoMaterialModal.js:75`, KPI *Disponível* em `:165`) e o formulário
+  **Nova Reserva** (`ReservasAlmoxarifado.js`, a linha da B1472). Um material só por chamada — `loteImpedido.loteImpedidoSql('m')` custa uma
+  passada pelos lotes dele (barato), ao contrário da lista `/estoque` (todos os materiais — medir antes de levar a ela).
+- **O que está pronto e não reabre:** a régua `loteImpedidoSql` (205 + 217) e a frase `fraseLoteImpedido`; o *Disponível* continua o de
+  sempre (a aprovação, a separação, a reserva manual e a entrega já descontam por conta própria — **não** mudar o número das telas, só
+  mostrar a parte impedida ao lado).
+- **A decisão a tomar (letra B, reversível):** (1) campo aditivo `lote_impedido` no material do extrato (e, se a medida deixar, no
+  `/estoque`); (2) a tela mostra um KPI *"Em lote impedido"* ou uma linha sob o *Disponível* (*"⟨n⟩ ⟨un⟩ em lote bloqueado, reprovado ou
+  vencido — não sai"*); (3) se o formulário de reserva troca o aviso fixo da B1472 pelo número.
+- **Pontos de atenção:** leitura sem trava (só exibe); o "hoje" de Brasília (`diaLocal`); material sem controle de lote → 0 e nada na
+  tela. Vizinhos baratos que seguem abertos: C519, C521, C524, C525, C526, C514–C518, C486, C491, C495, C497, C498.

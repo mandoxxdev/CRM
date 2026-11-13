@@ -1,5 +1,7 @@
 # 07 — Reservas de Estoque
 
+> **+ Etapa 221 (2026-11-13, `156adb41`, tela `e386d335`, Fase 5 `8395f440`): a reserva manual não conta o lote impedido (C479, B1469–B1474)** — o `hold` da reserva manual compara com `livre de caixa − loteImpedidoSql`; a recusa diz o que o lote cortou; as reservas do sistema não mudam. Ver a seção "Etapa 221", no fim. Continua 🟢.
+
 > **+ Etapa 220 (2026-11-13, `7a428526`, tela `a04b43e8`, Fase 5 `6c80f908`): liberar o lote reserva para quem esperava (C480) e quem muda o status do lote pega a trava do material (C523), B1461–B1468** — certificado, status → ATIVO, liberar vencimento e corrigir validade reservam o livre do lote para a fila. Ver a seção "Etapa 220", no fim. O status não muda.
 
 > **+ Etapa 219 (2026-11-13, `2ec31628`, Fase 5 `a6323899`): o que chega em lote bloqueado, reprovado ou vencido não fica reservado para quem espera (C478, B1453–B1460)** — a nota, a inspeção/NC e a OS encerrada reservam só o que pode sair; a OS aberta não muda. Ver a seção "Etapa 219", no fim. O status não muda.
@@ -656,7 +658,7 @@ lote impedido (`loteImpedido.js`, `8bebd3ce`) e a parte da separação estão na
   primeiro sobre o lote impedido (`osNoImpedido`), a requisição converte só o que vai reservar e só se reservar algo; a soma das reservas
   não muda; sem lote impedido a regra da 171 fica byte a byte — `52fa9328`. Testes `loteImpedidoAprovacao.api.test.js` (a, b, c); suítes da
   OS (171/172/176) verdes.
-- [ ] **Fora:** a reserva manual (`criarReserva`) conta lote impedido (**C479**); as três portas que distribuem para quem espera (nota,
+- [ ] **Fora:** a reserva manual (`criarReserva`) conta lote impedido (**C479** — *resolvido na Etapa 221*, `156adb41`); as três portas que distribuem para quem espera (nota,
   inspeção/NC, OS encerrada) também (**C478** — *resolvido na Etapa 219*, `2ec31628`); liberar o lote não distribui (**C480** — *resolvido na Etapa 220*, `7a428526`).
 
 ## Etapa 206 — a reserva de antes do bloqueio na entrega (2026-11-06)
@@ -718,7 +720,31 @@ por material de sempre, agora também nos escritores do status do lote).
 - [x] **RN-220.13** — separar e entregar depois da liberação — `7a428526`.
 - [x] **RN-220.15 (B1468, Fase 5)** — corrigir a validade de um lote vencido para o futuro também reserva — `6c80f908`.
 - [ ] **Fora (declarado):** lote com peças de mais de uma nota (**C524**); o estorno no mesmo instante da liberação (**C525**, anterior); a
-  reserva manual conta o lote impedido (**C479**, a próxima).
+  reserva manual conta o lote impedido (**C479** — *resolvido na Etapa 221*, `156adb41`).
 
 Testes: `liberarLoteReserva.api.test.js` (25); `chegadaLoteImpedido` RN-219.06 reescrita (dizia que liberar o lote não distribuía — o
 comportamento mudou, não estava errado). Continua 🟢.
+
+## Etapa 221 — a reserva manual não conta o lote impedido (2026-11-13)
+
+Plano: `docs/superpowers/plans/2026-11-13-almoxarifado-etapa221-reserva-manual-lote-impedido.md` (Fase 2 `62b62580`). Resolve o **C479**, que
+esta spec listava como "Fora" nas seções das Etapas 205 e 220. Nenhuma coluna nova, nenhuma trava nova (a reserva manual já roda sob a trava
+do material, Etapa 97; os escritores do status do lote também, B1461).
+
+- [x] **RN-221.01 / .02 / .03 (B1469)** — a reserva manual (`!sistema && !requisicao_id` — a rota `POST /reservas`) compara com
+  `livre de caixa − loteImpedidoSql`: lote BLOQUEADO, REPROVADO e vencido sem liberação não contam; o vencido liberado conta — `156adb41`.
+- [x] **RN-221.04 / .05 / .05 b / .05 c (B1470)** — sem controle de lote, sem lote impedido, com a base já ≤ 0 ou com lote que ainda não
+  venceu: a recusa de antes, byte a byte — `156adb41`.
+- [x] **RN-221.06 / .12 (B1470, B1471)** — a recusa diz só o que o lote cortou (`min(impedido, max(0, base))`), com o sufixo da caixa antes da
+  frase; a manual de antes do bloqueio fica — `156adb41`.
+- [x] **RN-221.07 / .13 (B1469, B1474)** — as reservas do sistema não mudam (a recriação da reserva da OS, a aprovação); a reserva da OS sobre
+  o bloqueado conta contra a manual (**C526**) — `156adb41`.
+- [x] **RN-221.08 / .09** — pela rota e pelo serviço; recusada → liberar o lote → reservar → saída que consome — `156adb41`.
+- [x] **RN-221.10 / .11 (B1472)** — a tela **Reservas** avisa sob o *Disponível* (material com controle de lote) e mostra a recusa literal —
+  `e386d335`.
+- [x] **RN-221.14 (B1475, Fase 5)** — a transformação no terceiro faz o claim do item sob a trava do material (o retido do lote, e com ele o
+  `loteImpedidoSql`, não fica pela metade para quem reserva) — `8395f440`. E as lacunas de teste: RN-221.03 b, .05 d, .12 b, RN-221.10 b — `8395f440`.
+- [ ] **Fora (declarado):** o *Disponível* das telas de saldo (**C481**); a reserva da OS sobre o bloqueado conta contra a manual (**C526**);
+  a caixa separada de lote impedido antes da 205 desconta duas vezes (**D (221)**).
+
+Testes: `reservaManualLoteImpedido.api.test.js` (20); `ReservasAlmoxarifado.test.js` (+2). Continua 🟢.
