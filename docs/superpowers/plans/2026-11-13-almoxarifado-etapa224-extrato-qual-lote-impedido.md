@@ -118,9 +118,9 @@ linhas — `saldosSobraDeOutras:306` compara (continua verde); (M4) o JOIN com o
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 (tronco)** — `predicadoLoteVencidoSql` + `consultarSaldosPorLocalizacao` com os cinco campos (booleanos convertidos em JS).
+- [x] **T1 (tronco)** (`f09e8ec7`) — `predicadoLoteVencidoSql` + `consultarSaldosPorLocalizacao` com os cinco campos (booleanos convertidos em JS).
   Testes RN-224.01 a .07 em `server/tests/api/extratoQualLoteImpedido.api.test.js` (a .07 é a integração pela rota: status → extrato → saldos).
-- [ ] **T2 (galho, consome o contrato)** — `ExtratoMaterialModal`: o selo (RN-224.08), em `ExtratoMaterialModal.test.js`.
+- [x] **T2 (galho, consome o contrato)** (`c7399966`) — `ExtratoMaterialModal`: o selo (RN-224.08), em `ExtratoMaterialModal.test.js`.
 
 T2 é pequena: em sequência pelo mesmo executor.
 
@@ -131,6 +131,97 @@ T2 é pequena: em sequência pelo mesmo executor.
 6. campos só no extrato (o `/saldos` sem) → RN-224.05; 7. `predicadoLoteImpedidoSql` com texto diferente → o teste de igualdade;
 8. selo sem a guarda → RN-224.08 (nenhum selo); 9. data por `new Date` (fuso) → RN-224.08 (`2026-11-12 00:00:00`); 10. só a 1ª parte → RN-224.08 (`Bloqueado · Vencido`).
 
+## Execução e controles (medidos)
+
+`extratoQualLoteImpedido.api.test.js`: vermelho antes da T1 **0 passou, 13 falhou**; **13/13** em `f09e8ec7`; **15/15** com a Fase 5. Tela:
+`ExtratoMaterialModal.test.js` vermelho **1 falhou** (o RN-224.08; o controle negativo afirma ausência — a prova dele é a sabotagem C1/C2) →
+**12/12** em `c7399966` (com 2 linhas a mais na Fase 5).
+
+| # | Sabotagem | Caiu |
+|---|---|---|
+| S1 | sem a guarda `lt.id IS NOT NULL` | RN-224.03, .06 |
+| S2 | a guarda do `controle_lote` de volta (a 1ª versão do plano) | RN-224.04, .06 |
+| S3 | "hoje" + 1 dia | RN-224.02 d, .06 |
+| S4 | vencido sem olhar a liberação | RN-224.00, .02 c, .07 b |
+| S5 | booleano devolvido como 0/1 | 12 dos 13 |
+| S6 | régua com `<=` | RN-224.00, .02 d |
+| C1 | selo por verdade (`!s.lote_esta_impedido`) | RN-224.08 (controle) |
+| C2 | selo sem guarda | RN-224.08 (os dois) |
+| C3 | data por `new Date` | RN-224.08 |
+| C4 | só a 1ª parte | RN-224.08 |
+| C5 | vencido sem olhar o formato | RN-224.08 |
+| C6 | dica diferente | RN-224.08 |
+| F1 | (Fase 5) vencido pela validade, não pelo servidor | RN-224.08 (L8) |
+| F2/F3 | (Fase 5) sem o `trim` / sem o `—` | RN-224.08 (L9) |
+| F4 | (Fase 5) "hoje" em UTC (`toISOString`) | RN-224.02 f |
+| F5 | (Fase 5) guarda `s.lote_id IS NOT NULL` | RN-224.03 b, .06 |
+
+Restauro conferido por md5 depois de cada rodada.
+
+## Fase 5 — revisão adversarial (2 revisores frescos em paralelo, junto com o `test:api`)
+
+1. **[REGRA/TELA/AUTORIZAÇÃO] nada reproduzido.** A sonda (`e224-rev-regra-motor.js`) comparou, para 17 situações de lote × controle de lote
+   ligado e desligado (34 casos), o booleano do extrato, o do `/saldos`, a régua em JS e o motor de verdade (saída v2 de 1 citando o lote):
+   32 batem nas quatro. Bloqueado, reprovado, bloqueado com vencimento liberado, vencido (com hora), `vencimento_liberado_em = ''`, validade
+   `' '`, `'01/01/2030'` e numérica, status minúsculo — o motor recusa e a linha diz; ativo, vencido liberado, vence hoje, validade vazia —
+   passa e a linha cala. A divergência (`vencimento_liberado_em` = inteiro `0`: a régua dá por liberado, o motor recusa) é anterior, declarada
+   no cabeçalho da régua e **inalcançável** (os escritores gravam `NULL` ou `CURRENT_TIMESTAMP`) — ruído. O "Sai de" não muda (o valor da
+   opção continua `localizacao_id`/`lote_id`); autorização igual (só a SQL do serviço mudou).
+2. **[TESTE] 21 mutações: 9 mortas, 12 sobreviventes, 4 lacunas reais** — (C10) bloqueado com validade **futura** diria *"Bloqueado · Vencido
+   em 31/03/2027"* se a tela decidisse o vencido pela validade → linha L8 do RN-224.08; (C3/C4) validade em branco → *"Validade a corrigir: —"*
+   (linha L9); (S3) o "hoje" em UTC só erra das 21h à meia-noite → **RN-224.02 f** (troca o `diaLocal.hojeLocalISO` pelo dia seguinte);
+   (S4) a guarda pela coluna do saldo (`s.lote_id`) marcaria a linha órfã (lote apagado) como impedida → **RN-224.03 b**. As outras 8 são
+   equivalentes (o servidor só manda `true`/`false`, a guarda do lote já tira a linha sem lote, BLOQUEADO e REPROVADO não coexistem, o status
+   não é gravado em minúsculas).
+
+## Divergências do plano
+
+- **B1485 invertida na Fase 2** (I1): a 1ª versão calava a linha com o controle de lote desligado; o motor recusa a saída do lote sem olhar o
+  controle. RN-224.04 virou "a linha ainda diz", com a premissa provada no próprio teste.
+- `lote_data_validade` → `lote_validade` (Fase 2 M5); *Validade a corrigir* (Fase 2 M2) não existia na 1ª versão.
+- A Fase 0 dizia que nenhum teste compara as chaves das linhas — **estava errado** (`saldosSobraDeOutras:306`, continua verde).
+- RN-224.00 (o texto da régua) e RN-224.02 f / .03 b (Fase 5) não estavam na 1ª tabela.
+
+## Tasks feitas
+
+- [x] **T1 (tronco)** — `f09e8ec7` (com a Fase 2 aplicada antes do commit).
+- [x] **T2 (galho)** — `c7399966`.
+- [x] **Fase 5** — 4 lacunas de teste fechadas — `e1c6cf6d`.
+
+## Verificação (medida, serial)
+
+`test:api` **619/619 arquivos OK** (os 618 da 223 + `extratoQualLoteImpedido`, 15/15 dentro da suíte — rodou já com os testes da Fase 5; sobre `c7399966`); `test:almoxarifado` **44 passou, 0 falhou**; `test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0**; cliente (`CI=true npx react-scripts test --watchAll=false --maxWorkers=2`) **224/224 suítes, 3038/3038 testes** (3036 + 2 novos); `build` **Compiled successfully**. As sabotagens F4 e F5 da Fase 5 (servidor) rodaram depois da suíte: caem a RN-224.02 f e a RN-224.03 b. Na 1ª tentativa da F4 a âncora (`const hoje = diaLocal.hojeLocalISO();`) casava 2 vezes no arquivo e a troca caiu na outra função — nada caiu, e foi refeita com a âncora única (a regra do harness: contar a âncora antes).
+
+## Retro (4 números)
+
+- **Rodadas até verde:** 1 (os testes da Fase 5 passaram na primeira — o código estava certo; as mutações que sobreviviam agora caem).
+- **Achados reais:** Fase 2: 1 importante + 4 menores (todos aceitos). Fase 5: 0 de regra, 4 lacunas de teste (fechadas); 1 ruído (o `0`
+  inteiro, inalcançável).
+- **Paralelismo:** sem galhos em paralelo (T2 pequena, em sequência); a Fase 2 rodou junto com a T1; os 2 revisores da Fase 5 junto com o
+  `test:api` (o de testes numa worktree própria) — sem contaminação; as sabotagens do servidor da Fase 5 esperaram a suíte terminar.
+- **Defeito que escapou da 223:** nenhum achado.
+
+## Fechamento
+
+- [x] Fechamento (`fechar-etapa`, sem o Passo 7½ e o 8, por pedido do André) — novidades (B1484–B1487, C528 resolvido, C530, D (224), F (224),
+  seção, topo e "onde estamos"), spec 10 (topo, os "Fora" da 222 e da 223 e a seção 224), mapa (linha e última atualização), guia (seção e
+  cabeçalho), manual (6.9) e a estimativa.
+
 ## Próxima tarefa detalhada
 
-*(a preencher no fechamento)*
+*(Escolhida pela ordem do CLAUDE.md: a 224 fecha o C528; o vizinho aberto de maior valor visível é a **D (223)** — os relatórios. A spec 10
+continua 🟢. **Sem estimativa** — começa pela Fase 0.5.)*
+
+**Os relatórios de saldo dizem quanto está em lote impedido (D (223)).**
+
+- **Onde:** `reportService.relatorioEstoqueAtual` (`reportService.js:14`, o relatório *Estoque atual*) e `relatorioSaldosComprometidos`
+  (`:119`). As colunas são **estáticas** no registro (`reportRegistry.js:56` e `:702`) — coluna nova é entrada no `colunas` e campo no `SELECT`;
+  o teste do registro exige `colunas ⊇ COLUNAS_RETENCAO` no comprometido. Rotas: `extended.js:2561` e `:2602`; tela genérica
+  `RelatoriosAlmoxarifado.js` (cabeçalho pelo registro; o comentário em `:26` lembra o caso das 64 colunas — só as declaradas aparecem).
+- **O que fazer:** `${loteImpedidoSql('m')} as lote_impedido` nos dois `SELECT` e a coluna *Em lote impedido* nos dois registros (depois do
+  *Disponível*). O *Saldo por lote* (`:40`) já tem *status* e *validade* por lote — conferir se a tela os mostra e, se não, se a coluna
+  *Situação* cabe ali (mesmas palavras da B1486). Exportação (CSV/PDF) usa as mesmas colunas — conferir.
+- **Pontos de atenção:** medir o custo antes (como na 223: `e223-escala.js` no scratchpad infla o banco); o *Saldos comprometidos* filtra
+  "alguma retenção > 0" — material só com lote impedido (sem bloqueado) **não** aparece: decidir se entra (mudaria o filtro — é decisão, B);
+  `relatorioEstoqueAtual` exclui material de cliente; leitura sem trava. Pronto e que não reabre: a régua, os campos da 222/223/224.
+- Outros abertos: C519, C521, C524, C525, C526, C527, C529, C530, C514–C518, C486, C491, C495, C497, C498; o "Sai de" sem a situação (**D (224)**).

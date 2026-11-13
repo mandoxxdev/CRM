@@ -1,5 +1,11 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 224 (2026-11-13, `f09e8ec7`, tela `c7399966`): o extrato diz qual lote está impedido (C528; B1484–B1487)** — as linhas de
+> `consultarSaldosPorLocalizacao` (extrato e `/estoque/:id/saldos`) trazem `lote_status`, `lote_validade`, `lote_vencimento_liberado_em`,
+> `lote_esta_impedido` e `lote_vencido_sem_liberacao` (a régua da aprovação; `predicadoLoteVencidoSql` extraída, texto idêntico); a tabela
+> *Saldos por localização* mostra *Bloqueado*, *Reprovado*, *Vencido em …* ou *Validade a corrigir* ao lado do código. Ver a seção "Etapa 224",
+> no fim. Continua 🟢.
+
 > **+ Etapa 223 (2026-11-13, `cc9e7374`, tela `ab2443c1` e `068129a6`): as listas de saldo dizem quanto está em lote impedido (C481,
 > 2ª parte; B1480–B1483)** — `GET /estoque` devolve `lote_impedido` em toda linha; `GET /materiais` só com `com_lote_impedido=1`; a lista de
 > **Materiais** mostra o selo e a da **Nova Reserva** o número. O *Disponível* não muda. Ver a seção "Etapa 223", no fim. Continua 🟢.
@@ -1372,7 +1378,7 @@ esta spec lista como "Fora" na seção da Etapa 205). Nenhuma coluna nova, nenhu
   sem o campo = o aviso fixo da 221; a resposta de um material que deixou de ser o escolhido é ignorada — `52cc0035`.
 - [ ] **Fora (declarado):** as listas de saldo (**Materiais**, **Estoque**, relatórios, a Fila) — **C481**, 2ª parte (o custo da régua na
   lista inteira não foi medido) — *feita na Etapa 223 para a lista de Materiais e a da Nova Reserva; "Estoque" **estava errado**: não existe
-  essa tela (a lista de Materiais lê `/materiais` e mostra o físico)*; qual lote está impedido (**C528**); a recusa diz o corte, não o número do extrato (**C527**, decisão B1470 da 221).
+  essa tela (a lista de Materiais lê `/materiais` e mostra o físico)*; qual lote está impedido (**C528** — *feito na Etapa 224*); a recusa diz o corte, não o número do extrato (**C527**, decisão B1470 da 221).
 
 Testes: `extratoLoteImpedido.api.test.js` (13); `ExtratoMaterialModal.test.js` (+6); `ReservasAlmoxarifado.test.js` (+8, com RN-222.08 b e .09 b da Fase 5, `7cd9920e`). Continua 🟢.
 
@@ -1392,8 +1398,28 @@ físico. Medido: a régua na lista inteira custa +35 ms a 3 mil materiais (90 �
 - [x] **RN-223.08 / .09 (B1482)** — a lista de **Materiais** pede o campo e mostra o selo *"⟨n⟩ ⟨un⟩ em lote impedido"* (só > 0, com a dica
   *"… fora o que já está bloqueado no material …"*); a do Compras não pede — `ab2443c1`.
 - [x] **RN-223.10 (B1483)** — a lista de materiais da **Nova Reserva**: *"(Disponível: 10 un) · 6 em lote impedido"*, fora do parêntese — `068129a6`.
-- [ ] **Fora (declarado):** os relatórios e a coluna *disponível* da Fila (**D (223)**); qual lote está impedido (**C528**); o número da lista
+- [ ] **Fora (declarado):** os relatórios e a coluna *disponível* da Fila (**D (223)**); qual lote está impedido (**C528** — *feito na Etapa 224*); o número da lista
   pode estar um instante velho (**C529**).
 
 Testes: `listasLoteImpedido.api.test.js` (14, com RN-223.01 b e .11 da Fase 5); `MateriaisAlmoxarifado.test.js` (+4, e 5 asserções de parâmetros com a chave nova);
 `MateriaisCompras.test.js` (+1); `ReservasAlmoxarifado.test.js` (+4). A Fase 5 acrescentou os casos fracionado, menor que 1, inativo e impedido maior que o disponível. Continua 🟢.
+
+## Etapa 224 — o extrato diz qual lote está impedido (2026-11-13)
+
+Plano: `docs/superpowers/plans/2026-11-13-almoxarifado-etapa224-extrato-qual-lote-impedido.md` (Fase 2 no commit `c3658f89`). Fecha o
+**C528**. Nenhuma coluna nova, nenhuma trava (só leitura), nenhuma rota nova. A próxima tarefa da 223 sugeria o nome `lote_impedido` por
+linha — trocado por `lote_esta_impedido` (o outro é o **número** do material; B1484).
+
+- [x] **RN-224.00** — `predicadoLoteVencidoSql` extraída de `predicadoLoteImpedidoSql`, que monta o mesmo texto de antes — `f09e8ec7`.
+- [x] **RN-224.01 a .03 (B1484)** — cada linha de saldo traz a situação crua do lote e os dois booleanos da régua (bloqueado, reprovado,
+  vencido, vencido liberado, que vence hoje, bloqueado e vencido, validade com hora); linha sem lote: nulos e falsos — `f09e8ec7`.
+- [x] **RN-224.04 (B1485)** — com o controle de lote desligado a linha ainda diz (o motor recusa a saída do lote; o cartão é 0) — `f09e8ec7`
+  (a 1ª versão do plano calava; trocada na Fase 2).
+- [x] **RN-224.05 / .06** — `/estoque/:id/saldos` com os mesmos campos (com e sem `requisicao_id`); toda linha igual à régua — `f09e8ec7`.
+- [x] **RN-224.07** — integração pela rota: liberar o lote (status ou vencimento) apaga a situação da linha e zera o cartão — `f09e8ec7`.
+- [x] **RN-224.08 (B1486)** — a tabela *Saldos por localização* mostra as palavras ao lado do código, só com `lote_esta_impedido === true`;
+  *Validade a corrigir* para validade fora de `AAAA-MM-DD` — `c7399966`.
+- [ ] **Fora (declarado):** o "Sai de" da entrega continua oferecendo o lote impedido sem dizer (a entrega recusa ao confirmar — **D (224)**);
+  a linha diz a situação, não a quantidade (**C530**); os relatórios (**D (223)**).
+
+Testes: `extratoQualLoteImpedido.api.test.js` (15, com RN-224.02 f e .03 b da Fase 5, `e1c6cf6d`); `ExtratoMaterialModal.test.js` (+2, com as linhas da validade futura e em branco da Fase 5). Continua 🟢.
