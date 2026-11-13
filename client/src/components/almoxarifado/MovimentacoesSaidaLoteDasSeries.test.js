@@ -206,3 +206,29 @@ describe('A tela diz de qual lote as séries saem (RN-234.06)', () => {
     }
   });
 });
+
+describe('Fase 5 (revisor de testes): mesmo lote, ordem e lote apagado', () => {
+  test('duas séries do MESMO lote -> "saem do lote L1", e o envio vai', async () => {
+    seriesEmEstoque = [serie(101, 'A1', 7, 'L1', ok), serie(102, 'A2', 7, 'L1', ok), serie(201, 'B1', 12, 'L2', ok)];
+    await abrir('SAIDA', '2');
+    clicar(caixa(102));
+    clicar(caixa(101));
+    expect(fraseLote().textContent).toBe('As séries marcadas saem do lote L1.');
+    await enviar();
+    expect(postsV2()).toHaveLength(1);
+  });
+  test('a lista vem com o L2 antes do L1 -> a frase em ordem de código "(L1, L2)"', async () => {
+    seriesEmEstoque = [serie(201, 'B1', 7, 'L2', ok), serie(101, 'A1', 12, 'L1', ok)];
+    await abrir('SAIDA', '2');
+    clicar(caixa(201));
+    clicar(caixa(101));
+    expect(fraseLote().textContent).toBe(MISTURA);
+  });
+  test('série com lote_id mas sem lote_codigo (lote apagado) -> "sem lote"', async () => {
+    seriesEmEstoque = [serie(101, 'A1', 7, 'L1', ok), serie(301, 'X1', 99, null, ok)];
+    await abrir('SAIDA', '2');
+    clicar(caixa(301));
+    clicar(caixa(101));
+    expect(fraseLote().textContent).toBe('As séries marcadas são de lotes diferentes (L1, sem lote): faça uma saída para cada lote.');
+  });
+});

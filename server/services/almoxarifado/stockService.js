@@ -1391,7 +1391,13 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
       [material_id, ...ids]);
       if (linhasLote.length === 1 && linhasLote[0].lid != null) {
         const { lid, ...loteDaSerie } = linhasLote[0];
-        loteResolvido = loteDaSerie;
+        // Fase 5 (revisor 1, reproduzido): a serie pode ter o lote sem que a peca esteja na linha dele — a regularizacao de series da
+        // tela Lotes e Series oferece o lote mesmo em material sem controle de lote, e o saldo antigo dela esta no "sem lote". Derivar
+        // ali recusava a saida ("Saldo insuficiente no lote L1. Disponivel: 0") sem saida na tela. So deriva quando as linhas do lote
+        // cobrem a quantidade; senao a saida e a de antes (o "sem lote"). Lido dentro da trava; o claim do lote confere de novo.
+        const doLote = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) AS q FROM estoque_saldo_almoxarifado
+          WHERE material_id = ? AND lote_id = ? AND quantidade > 0`, [material_id, lid]);
+        if (Q.cabe(quantidade, Number(doLote.q))) loteResolvido = loteDaSerie;
       } else if (linhasLote.length > 1) {
         lotesDasSeries = linhasLote;
       }

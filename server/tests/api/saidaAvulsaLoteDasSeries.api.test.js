@@ -175,6 +175,69 @@ const CONSULTA_LETRA_A = `SELECT mv.id AS movimentacao_id, mv.created_at, mv.tip
     await nadaSaiu(m, ['A1', 'B2']);
   });
 
+  // Fase 5 (revisor de testes): os lotes criados em ordem INVERSA a do codigo (L2 com id menor) — a ordem da mensagem e a da guarda tem de
+  // vir do codigo, nao do id nem da ordem das series.
+  const montarInvertido = async () => {
+    const m = await material();
+    await entrar(m, ['B1', 'B2'], 'L2');
+    await entrar(m, ['A1', 'A2'], 'L1');
+    return m;
+  };
+  await test('[RN-234.03] lotes criados em ordem inversa -> "(L1, L2)"; os dois impedidos -> a recusa do L1 (Fase 5)', async () => {
+    const m = await montarInvertido();
+    const r = await sair(m, 'SAIDA', ['B1', 'A1']);
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, 'As series escolhidas sao de lotes diferentes (L1, L2): faca uma saida para cada lote');
+    await statusLote(m, 'L2', 'BLOQUEADO');
+    await statusLote(m, 'L1', 'REPROVADO');
+    const r2 = await sair(m, 'SAIDA', ['B1', 'A1']);
+    assert.strictEqual(r2.body.error, 'Lote L1 esta reprovado e nao pode ser utilizado');
+    await nadaSaiu(m, ['A1', 'B1']);
+  });
+  await test('[RN-234.01] duas series do MESMO lote numa saida -> 201, grava o L1 (Fase 5)', async () => {
+    const m = await montar();
+    await ok(sair(m, 'SAIDA', ['A2', 'A1']), 201);
+    const l1 = await loteId(m, 'L1');
+    assert.strictEqual(Number((await saidas(m))[0].lote_id), l1);
+    assert.strictEqual(await linhaDoLote(m, l1), 0);
+    assert.strictEqual(await linhaDoLote(m, null), 0);
+  });
+  await test('[RN-234.03] serie de lote apagado conta como "sem lote" (Fase 5)', async () => {
+    const m = await montar();
+    await entrar(m, ['X1'], 'LX');
+    await dbRun(db, 'DELETE FROM lotes_almoxarifado WHERE id = ?', [await loteId(m, 'LX')]);
+    const r = await sair(m, 'SAIDA', ['X1', 'A1']);
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, 'As series escolhidas sao de lotes diferentes (L1, sem lote): faca uma saida para cada lote');
+  });
+  await test('[RN-234.01] serie de OUTRO material junto -> nao deriva: a recusa do claim, nao "nao pertence ao lote" (Fase 5)', async () => {
+    const m = await montar();
+    const outro = await montar();
+    const r = await request(app).post(`${API}/movimentacoes/v2`).send({ material_id: m.id, tipo: 'SAIDA', quantidade: 2, motivo: 'e234',
+      justificativa: 'teste 234', serie_ids: [await sid(m, 'B1'), await sid(outro, 'B2')] });
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, 'serie B2 nao pertence a este material');
+    await nadaSaiu(m, ['B1']);
+  });
+
+  await test('[RN-234.04] serie com lote mas a peca no "sem lote" (regularizada) -> nao deriva, sai do "sem lote" como antes (Fase 5)', async () => {
+    const m = await material();
+    await entrar(m, ['S1'], 'L1');
+    const l1 = await loteId(m, 'L1');
+    // o saldo antigo sem serie (linha sem lote) e a serie X1 regularizada com o lote L1 — o que a tela Lotes e Series permite
+    await dbRun(db, `INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, lote_id, quantidade) VALUES (?, NULL, NULL, 1)`,
+      [m.id]);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = quantidade_atual + 1 WHERE id = ?', [m.id]);
+    await dbRun(db, `INSERT INTO series_almoxarifado (material_id, numero, status, lote_id) VALUES (?, 'X1', 'EM_ESTOQUE', ?)`, [m.id, l1]);
+    await ok(sair(m, 'SAIDA', ['S1']), 201);
+    assert.strictEqual(await linhaDoLote(m, l1), 0);
+    const r = await sair(m, 'SAIDA', ['X1']);
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    assert.strictEqual((await saidas(m))[1].lote_id, null, 'sem derivar: o "sem lote" de antes');
+    assert.strictEqual(await linhaDoLote(m, null), 0);
+    assert.strictEqual(await fisico(m), 0);
+  });
+
   // ── RN-234.04 ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   await test('[RN-234.04] series todas sem lote -> 201 com lote NULL, como antes', async () => {
     const m = await material();
