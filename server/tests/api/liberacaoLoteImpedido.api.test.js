@@ -226,14 +226,14 @@ process.on('exit', (code) => {
   });
 
   // ── RN-229.06 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  await test('[RN-229.06] OS aberta, L1 BLOQUEADO, R1 da OS esperando 4 -> a inspecao reserva 4 para a OS como hoje (B1510)', async () => {
+  await test('[RN-229.06] OS aberta, L1 BLOQUEADO, R1 da OS esperando 4 -> a inspecao nao da nada a R1, lote_impedido L1 (Etapa 230, B1513 revoga a B1510)', async () => {
     const numero = `OS-E229-${++seq}`;
     const os = { id: (await dbRun(db, "INSERT INTO ordens_servico (numero_os, status) VALUES (?, 'em_andamento')", [numero])).lastID, numero };
     const c = await montar({ os });
     assert.strictEqual(await statusLoteDe(c.m, 'L1'), 'BLOQUEADO');
     const r = await ok(inspecionar(c.it.id, 4, 0), 201);
-    assert.deepStrictEqual(await reservas(c.R1), [4], 'a fila da OS deixou de receber (B1510: a OS aberta fica como antes)');
-    assert.strictEqual(r.body.lote_impedido, undefined);
+    assert.deepStrictEqual(await reservas(c.R1), [], 'a fila da OS recebeu o que nao pode sair (B1510, revogada na 230)');
+    assert.strictEqual(r.body.lote_impedido, 'L1');
   });
 
   // ── RN-229.07 (servico) ───────────────────────────────────────────────────────────────────────────────────────────────────────

@@ -281,19 +281,19 @@ process.on('exit', (code) => {
   });
 
   // ── RN-228.11 (Fase 2, B1508) ─────────────────────────────────────────────────────────────────────────────────────────────────
-  await test('[RN-228.11] nota com OS ABERTA (3 em L2 + 4 em L1 BLOQUEADO), requisicao da OS com 2: estornar L2 nao tira os 2 dela (B1455)', async () => {
+  await test('[RN-228.11] nota com OS ABERTA (3 em L2 + 4 em L1 BLOQUEADO), requisicao da OS com 2: estornar L2 solta os 2 dela (Etapa 230, B1515 revoga a B1508)', async () => {
     const os = (await dbRun(db, "INSERT INTO ordens_servico (numero_os, status) VALUES ('OS-E228-A', 'em_andamento')")).lastID;
     const m = await material();
     const R1 = await reqDireta(m, 2, { os_id: os, os_referencia: 'OS-E228-A' });
     await entrar(m, 1, 'L1');
     await statusLote(m, 'L1', 'BLOQUEADO');
     const { rec } = await receber([[m, 3, 'L2'], [m, 4, 'L1']], { os_id: os });
-    assert.deepStrictEqual(await reservasAtivas(R1), [2], 'premissa: a fila da OS reservou sem o desconto (B1455)');
+    assert.deepStrictEqual(await reservasAtivas(R1), [2], 'premissa: a fila da OS levou 2 do L2 (o que pode sair, B1513)');
     const daOs = async () => Number((await dbGet(db, `SELECT COALESCE(SUM(quantidade - COALESCE(quantidade_utilizada,0)),0) q
       FROM reservas_material_almoxarifado WHERE status = 'ATIVA' AND origem = 'MANUAL' AND os_id = ? AND material_id = ?`, [os, m.id])).q);
     assert.strictEqual(await daOs(), 5, 'premissa: o resto virou a reserva da OS');
     await ok(estornar(await movDoLote(rec, m, 'L2')));
-    assert.deepStrictEqual(await reservasAtivas(R1), [2], 'tirou da requisicao da OS e deixou a reserva generica da OS no bloqueado');
+    assert.deepStrictEqual(await reservasAtivas(R1), [], 'R1 ficou reservada so com peca de L1 bloqueado (a excecao B1508, revogada na 230)');
     assert.strictEqual(await daOs(), 2, 'a reserva da OS solta min(reserva, estornado), como na 171');
   });
 
@@ -364,7 +364,7 @@ process.on('exit', (code) => {
     await ok(estornar(await movDoLote(rec, m, 'L1')));
     assert.deepStrictEqual(await reservasAtivas(R1), [3], 'soltou reserva coberta pelo lote bom (o vencido da propria entrada nao foi visto)');
   });
-  await test('[RN-228.16] OS vinda do PEDIDO (nota sem os_id): estornar L2 nao tira os 2 da requisicao da OS (B1508)', async () => {
+  await test('[RN-228.16] OS vinda do PEDIDO (nota sem os_id): estornar L2 solta os 2 da requisicao da OS como na nota com os_id (Etapa 230, B1515)', async () => {
     const os = (await dbRun(db, "INSERT INTO ordens_servico (numero_os, status) VALUES ('OS-E228-P', 'em_andamento')")).lastID;
     await dbRun(db, 'CREATE TABLE IF NOT EXISTS pedidos_compra (id INTEGER PRIMARY KEY AUTOINCREMENT, numero TEXT, fornecedor_id INTEGER, os_id INTEGER)');
     try { await dbRun(db, 'ALTER TABLE pedidos_compra ADD COLUMN os_id INTEGER'); } catch (e) { /* ja tem */ }
@@ -378,7 +378,7 @@ process.on('exit', (code) => {
     // A OS passa a vir so do pedido (a nota sem os_id): o estorno tem de acha-la pelo pedido.
     await dbRun(db, 'UPDATE recebimentos_material_almoxarifado SET os_id = NULL, pedido_compra_id = ? WHERE id = ?', [ped, rec]);
     await ok(estornar(await movDoLote(rec, m, 'L2')));
-    assert.deepStrictEqual(await reservasAtivas(R1), [2], 'tirou da requisicao da OS (a OS do pedido foi ignorada)');
+    assert.deepStrictEqual(await reservasAtivas(R1), [], 'R1 ficou reservada so com peca de L1 bloqueado (a excecao B1508, revogada na 230)');
   });
   await test('[RN-228.17] duas requisicoes da nota, solta parcial de 2: a de menor prioridade (R2) primeiro', async () => {
     const m = await material();

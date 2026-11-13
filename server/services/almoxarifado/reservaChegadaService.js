@@ -267,16 +267,17 @@ async function reservarChegadaParaQuemEspera(db, user, recebimentoId, opcoes = {
     // O lote e lido dentro da secao (serializa com a correcao de validade, que pega a trava); mudar o STATUS do lote nao pega a trava
     // do material (`lotService.mudarStatusLote`) — o mesmo da aprovacao, que le esta regua sob a trava (Fase 5, D (219)).
     // So material com controle de lote (B1371: sem controle a aprovacao ignora o lote — Fase 2).
-    // A OS aberta usa o `livre` inteiro (B1455).
-    const livreForaDeImpedido = os ? null : await livreForaDeLoteImpedido(db, itensLivres);
+    // Etapa 230 (C520, B1513): a OS aberta tambem — a fila da OS so com o que saiu fora de lote impedido; o `livreTotal` (B1455) segue
+    // como o teto da reserva da OS.
+    const livreForaDeImpedido = await livreForaDeLoteImpedido(db, itensLivres);
     for (const [materialId, livreTotal] of livrePorMaterial) {
-      const livre = os ? livreTotal : (livreForaDeImpedido.get(materialId) || 0);
+      const livre = livreForaDeImpedido.get(materialId) || 0;
       if (sobTrava && !trava.travado(materialId)) throw erroSemTrava(materialId);
       if (os) {
         // eslint-disable-next-line no-await-in-loop
         const ja = await reservaDaOs.jaReservadoDaNotaParaOs(db, recebimentoId, materialId, os.id);
         // eslint-disable-next-line no-await-in-loop
-        await distribuirParaOs(db, user, materialId, livre - ja, rotulos, acc, os);
+        await distribuirParaOs(db, user, materialId, livreTotal - ja, rotulos, acc, os, livre - ja);
         continue; // eslint-disable-line no-continue
       }
       // eslint-disable-next-line no-await-in-loop
@@ -395,25 +396,10 @@ async function recalcularRequisicoesDasReservas(db, reservaIds, rotulo) {
 }
 
 /**
- * Etapa 171 (T2): `filaOpcoes.filtro(c)` restringe as candidatas (a fila da OS, RN-171.12 a). Devolve o que ficou
- * reservado nesta chamada (antes nao devolvia nada; os chamadores de hoje ignoram).
+ * Os itens que esperam este material, com falta, na ordem de prioridade (`filtro(c)` restringe — a fila da OS). Extraida do miolo na
+ * Etapa 230 (B1514): a liberacao do lote soma a falta da fila da OS antes de soltar a reserva da OS.
  */
-async function distribuirSemLock(db, user, materialId, teto, rotulos, acc, filaOpcoes = {}) {
-  if (!(teto > EPS)) return 0;
-  // Etapa 219 (C478, B1453): o teto e o que PODE SAIR — o disponivel sem o saldo de lote bloqueado, reprovado ou vencido (a parte do
-  // lote impedido da conta da aprovacao, `calcularStatusPosAprovacao`). Antes a nota, a inspecao/NC e a OS encerrada reservavam peca de
-  // lote bloqueado e a requisicao ficava Totalmente Reservada com o que nao sai. Material sem controle de lote: o desconto e 0 (B1371).
-  // `semDescontoDoLote`: so a fila da OS ABERTA (B1455 — a peca comprada para a OS fica com ela, como a reserva da OS).
-  const material = await dbGet(db, `SELECT ma.*, ${disponivelSql('ma')} AS disponivel, ${loteImpedidoSql('ma')} AS lote_impedido
-    FROM materiais_almoxarifado ma WHERE ma.id = ?`, [materialId]);
-  if (!material) return 0;
-  const podeSair = filaOpcoes.semDescontoDoLote
-    ? num(material.disponivel)
-    : Q.qtd(num(material.disponivel) - num(material.lote_impedido));
-  let distribuivel = Math.min(teto, Math.max(0, podeSair));
-  if (distribuivel <= EPS) return 0;
-  let usado = 0;
-
+async function filaDoMaterial(db, materialId, filtroOpcional) {
   const marcasSt = STATUS_CANDIDATOS.map(() => '?').join(',');
   const candidatos = await dbAll(db, `SELECT ir.id AS item_id, ir.requisicao_id, ir.quantidade_solicitada,
       ir.quantidade_entregue, ir.quantidade_atendida, ${HOLD_DO_ITEM_SQL} AS hold,
@@ -423,10 +409,41 @@ async function distribuirSemLock(db, user, materialId, teto, rotulos, acc, filaO
     JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
     WHERE COALESCE(r.ativo, 1) = 1 AND r.status IN (${marcasSt}) AND ir.material_id = ?`,
   [...STATUS_CANDIDATOS, materialId]);
-  const filtro = typeof filaOpcoes.filtro === 'function' ? filaOpcoes.filtro : () => true;
-  const naFila = candidatos
+  const filtro = typeof filtroOpcional === 'function' ? filtroOpcional : () => true;
+  return candidatos
     .filter((c) => faltaDoItem(c, c.hold) > EPS && filtro(c))
     .sort((a, b) => requisitionService.compararPrioridade(a, b) || (a.item_id - b.item_id));
+}
+
+/**
+ * Etapa 171 (T2): `filaOpcoes.filtro(c)` restringe as candidatas (a fila da OS, RN-171.12 a). Devolve o que ficou
+ * reservado nesta chamada (antes nao devolvia nada; os chamadores de hoje ignoram).
+ */
+async function distribuirSemLock(db, user, materialId, teto, rotulos, acc, filaOpcoes = {}) {
+  if (!(teto > EPS)) return 0;
+  // Etapa 219 (C478, B1453): o teto e o que PODE SAIR — o disponivel sem o saldo de lote bloqueado, reprovado ou vencido (a parte do
+  // lote impedido da conta da aprovacao, `calcularStatusPosAprovacao`). Antes a nota, a inspecao/NC e a OS encerrada reservavam peca de
+  // lote bloqueado e a requisicao ficava Totalmente Reservada com o que nao sai. Material sem controle de lote: o desconto e 0 (B1371).
+  // Etapa 230 (C520, B1513): a fila da OS aberta tambem desconta (ate a 229 tinha a opcao `semDescontoDoLote`, B1455 — revogada).
+  const material = await dbGet(db, `SELECT ma.*, ${disponivelSql('ma')} AS disponivel, ${loteImpedidoSql('ma')} AS lote_impedido
+    FROM materiais_almoxarifado ma WHERE ma.id = ?`, [materialId]);
+  if (!material) return 0;
+  // Etapa 230 (B1516): a fila DA OS tem o abono da aprovacao (B1381) — a reserva da OS (do mesmo dono que a requisicao) conta como se
+  // estivesse no lote impedido, ate o impedido. Sem isto a reserva da OS de outra nota, sobre o lote ainda bloqueado, era contada duas
+  // vezes (no reservado e no impedido — a conta da B1460/C522) e a requisicao da OS nao recebia nem o que o lote liberado trouxe (RN-230.08 b).
+  let abono = 0;
+  if (filaOpcoes.abonoDaOs && num(material.lote_impedido) > EPS) {
+    const r = await dbGet(db, `SELECT COALESCE(SUM(quantidade - COALESCE(quantidade_utilizada, 0)), 0) AS q
+      FROM reservas_material_almoxarifado
+      WHERE status = 'ATIVA' AND origem = 'MANUAL' AND os_id = ? AND material_id = ?`, [filaOpcoes.abonoDaOs.id, materialId]);
+    abono = Math.min(num(material.lote_impedido), Math.max(0, num(r && r.q)));
+  }
+  const podeSair = Q.qtd(num(material.disponivel) - num(material.lote_impedido) + abono);
+  let distribuivel = Math.min(teto, Math.max(0, podeSair));
+  if (distribuivel <= EPS) return 0;
+  let usado = 0;
+
+  const naFila = await filaDoMaterial(db, materialId, filaOpcoes.filtro);
 
   for (const c of naFila) {
     if (distribuivel <= EPS) break;
@@ -506,11 +523,13 @@ async function distribuirSemLock(db, user, materialId, teto, rotulos, acc, filaO
  * de caixa, sem expiracao). A fila geral nao leva nada deste material desta nota/liberacao — o que nao coube na reserva
  * da OS (caixa) fica livre.
  */
-async function distribuirParaOs(db, user, materialId, teto, rotulos, acc, os) {
+async function distribuirParaOs(db, user, materialId, teto, rotulos, acc, os, tetoFila = teto) {
   if (!(teto > EPS)) return;
-  const usado = await distribuirSemLock(db, user, materialId, teto, rotulos, acc,
-    // Etapa 219 (B1455): a fila da OS aberta sem o desconto do lote impedido; o desvio da OS fechada (abaixo) e fila geral e desconta.
-    { filtro: (c) => reservaDaOs.requisicaoCasaComOs({ osId: c.os_id, osReferencia: c.os_referencia }, os), semDescontoDoLote: true });
+  // Etapa 230 (C520, B1513): a fila da OS recebe so o que pode sair — `tetoFila` (o que esta entrada trouxe fora de lote impedido) e o
+  // desconto do lote do material, como a fila geral; o resto do teto vira a reserva da OS (a posse da OS sobre o lote bloqueado). Liberar o
+  // lote passa a reserva da OS para a fila da OS (`converterReservaDaOsNoLoteLiberado`). Ate a 229 a fila levava o teto inteiro sem desconto.
+  const usado = await distribuirSemLock(db, user, materialId, Math.min(teto, Math.max(0, tetoFila)), rotulos, acc,
+    { filtro: (c) => reservaDaOs.requisicaoCasaComOs({ osId: c.os_id, osReferencia: c.os_referencia }, os), abonoDaOs: os });
   const r = await reservaDaOs.reservarParaOsSobTrava(db, user, {
     materialId, quantidade: teto - usado, os, recebimentoId: rotulos.recebimento_id,
   });
@@ -609,19 +628,19 @@ async function reservarLiberacaoParaQuemEspera(db, user, ctx, resultado = { rese
     // fila da OS e reservam o resto para ela. Sem desconto da I3: a decisao e reivindicada uma vez (nao ha retomada), e
     // a NC que aceita depois de uma inspecao do mesmo recebimento/material libera quantidade NOVA.
     const os = rotulos.recebimento_id ? await reservaDaOs.osAbertaDoRecebimento(db, rotulos.recebimento_id) : null;
-    if (os) {
-      await distribuirParaOs(db, user, material.id, teto, rotulos, acc, os);
-      return;
-    }
     // Etapa 229 (C519, B1509): o que foi liberado esta no lote do item (`ctx.lote_id`). Com esse lote impedido AGORA (bloqueado,
     // reprovado ou vencido sem liberacao; so com controle de lote — B1371), lido aqui, sob a trava (mudar o status do lote pega a
     // mesma trava desde a 220), a liberacao nao distribui nada: o livre que o miolo veria e de OUTRA entrada (D4 da 74). As pecas vao
-    // para quem espera quando o lote for liberado (Etapa 220). A OS aberta fica como antes (B1510, acima). Sem `lote_id`: como hoje.
+    // para quem espera quando o lote for liberado (Etapa 220). Sem `lote_id`: como hoje.
     const impedido = ctx.lote_id ? await loteDoItemImpedidoAgora(db, ctx.lote_id, material.id) : null;
-    if (impedido) {
-      resultado.lote_impedido = impedido;
+    if (impedido) resultado.lote_impedido = impedido;
+    if (os) {
+      // Etapa 230 (C520, B1513): com o lote do item impedido, a fila da OS nao recebe nada e a liberacao inteira vai para a reserva da OS
+      // (antes, B1510, a fila da OS levava o teto sem o desconto). Liberar o lote a passa para a requisicao da OS (B1514).
+      await distribuirParaOs(db, user, material.id, teto, rotulos, acc, os, impedido ? 0 : teto);
       return;
     }
+    if (impedido) return;
     await distribuirSemLock(db, user, material.id, teto, rotulos, acc);
   };
   if (sobTrava) {
@@ -675,6 +694,57 @@ function rotulosDoLoteLiberado(lote, recebimentoId) {
 let seqLiberacaoDoLote = 0;
 
 /**
+ * Etapa 230 (C520, B1514) — SOB A TRAVA do material (quem chama: `reservarLoteLiberadoSobTrava`). O lote liberado veio de UMA nota
+ * (`recebimentoId`) com OS ABERTA: a reserva da OS dessa nota e deste material (`origem = 'MANUAL'`, `os_id` da OS, `recebimento_id` da
+ * nota — a que a chegada/inspecao deixou sobre o lote bloqueado, B1513) e solta ate `min(livre do lote, saldo dela, falta da fila da OS)`
+ * e o solto vai para a fila da OS pelo miolo (filtro da OS, teto = o solto). O que a fila nao levar (regra do dono, valor, a falta que
+ * mudou) volta a ser reserva da OS (`recriarReservaDaOs`). Sem ninguem da OS esperando, nada e solto (RN-230.07). Liberar e recriar nao
+ * pegam trava (liberar nao pega; `criarReserva` usa `naTravaDoMaterial`, que dentro da secao roda direto). Lanca so em erro de banco
+ * fora dos `try` — quem chama engole (`reservarLoteLiberadoSobTrava` nunca lanca).
+ * @returns {Promise<number>} o que foi para a fila da OS.
+ */
+async function converterReservaDaOsNoLoteLiberado(db, user, lote, recebimentoId, livre, rotulos, acc) {
+  if (!recebimentoId || !(livre > EPS)) return 0;
+  const os = await reservaDaOs.osAbertaDoRecebimento(db, recebimentoId);
+  if (!os) return 0;
+  const filtro = (c) => reservaDaOs.requisicaoCasaComOs({ osId: c.os_id, osReferencia: c.os_referencia }, os);
+  const falta = (await filaDoMaterial(db, lote.material_id, filtro)).reduce((s, c) => s + faltaDoItem(c, c.hold), 0);
+  if (!(falta > EPS)) return 0;
+  const linhas = await dbAll(db, `SELECT id, quantidade - COALESCE(quantidade_utilizada, 0) AS saldo
+    FROM reservas_material_almoxarifado
+    WHERE status = 'ATIVA' AND origem = 'MANUAL' AND os_id = ? AND recebimento_id = ? AND material_id = ?
+    ORDER BY id`, [os.id, recebimentoId, lote.material_id]);
+  const motivo = `Reserva da OS ${os.numero_os} passada à requisição da OS na liberação do lote ${lote.codigo}`;
+  let resta = Q.qtd(Math.min(livre, falta));
+  let solto = 0;
+  for (const l of linhas) {
+    if (resta <= EPS) break;
+    const q = Q.qtd(Math.min(num(l.saldo), resta));
+    if (!(q > EPS)) continue; // eslint-disable-line no-continue
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await stockService.liberarReserva(db, user, l.id, q >= num(l.saldo) - EPS ? null : q, {
+        statusFinal: 'LIBERADA', motivo, motivoMovimentacao: motivo,
+      });
+    } catch (e) {
+      console.warn(`[almoxarifado-reserva-os] Falha ao passar a reserva da OS ${l.id} na liberacao do lote ${lote.codigo}: ${e.message}`);
+      break;
+    }
+    resta = Q.qtd(resta - q);
+    solto = Q.qtd(solto + q);
+  }
+  if (!(solto > EPS)) return 0;
+  const usado = await distribuirSemLock(db, user, lote.material_id, solto, rotulos, acc, { filtro, abonoDaOs: os });
+  const sobra = Q.qtd(solto - usado);
+  if (sobra > EPS) {
+    await reservaDaOs.recriarReservaDaOs(db, user, {
+      material_id: lote.material_id, quantidade: sobra, os_id: os.id, numero_os: os.numero_os, recebimento_id: recebimentoId,
+    }, `não coube na requisição da OS na liberação do lote ${lote.codigo}`);
+  }
+  return usado;
+}
+
+/**
  * Etapa 220 (C480) — SOB A TRAVA do material do lote (L1 se nao), chamada pelos tres escritores do status do lote (`lotService`) logo
  * depois do `UPDATE` que liberou, na mesma secao. Reserva para a fila o LIVRE DO LOTE (`situacaoDosLotes`, B1462); o miolo ainda limita
  * pelo que pode sair do material (B1453 — a reserva antiga feita antes do bloqueio conta, B1372/B1456). So distribui se o lote, relido
@@ -700,7 +770,9 @@ async function reservarLoteLiberadoSobTrava(db, user, lote, pendencia) {
     const rotulos = rotulosDoLoteLiberado(lote, recebimentoId);
     const acc = { tocadas: new Set(), resultado };
     if (pendencia) pendencia.distribuicoes.push({ acc, rotulos });
-    await distribuirSemLock(db, user, lote.material_id, livre, rotulos, acc);
+    // Etapa 230 (C520, B1514): a reserva da OS da nota do lote vai primeiro para a requisicao da OS que espera.
+    const convertido = await converterReservaDaOsNoLoteLiberado(db, user, lote, recebimentoId, livre, rotulos, acc);
+    await distribuirSemLock(db, user, lote.material_id, Q.qtd(livre - convertido), rotulos, acc);
     if (pendencia) {
       pendencia.avisos.push({
         ctx: {
@@ -796,20 +868,11 @@ async function liberarParaEstorno(db, user, mov) {
     FROM materiais_almoxarifado lim_me LEFT JOIN lotes_almoxarifado lim_le ON lim_le.id = ?
     WHERE lim_me.id = ?`, [mov.lote_id || null, mov.material_id]);
   const disp = num(mat && mat.disponivel);
-  let livre = mat && !Number(mat.lote_da_entrada_impedido) ? disp - num(mat.impedido) : disp;
-  // Fase 2 (B1508): nota com OS (do pedido ou da propria nota, aberta ou ja fechada) — a fila da OS reservou SEM o desconto, de
-  // proposito (B1455), e a reserva da OS ja foi solta acima por `min(reserva, estornado)`: descontar aqui tiraria da requisicao da OS e
-  // deixaria a reserva generica da OS sobre o lote bloqueado (prioridade invertida). Fica a regua de hoje.
-  if (livre < disp - EPS && livre < qtd - EPS) {
-    let temOs = false;
-    try {
-      const recOs = await dbGet(db, 'SELECT * FROM recebimentos_material_almoxarifado WHERE id = ?', [mov.recebimento_id]);
-      temOs = !!(await reservaDaOs.osDoRecebimento(db, recOs));
-    } catch (e) {
-      console.warn(`[almoxarifado-reservas] leitura da OS do recebimento ${mov.recebimento_id} no estorno falhou: ${e.message}`);
-    }
-    if (temOs) livre = disp;
-  }
+  const livre = mat && !Number(mat.lote_da_entrada_impedido) ? disp - num(mat.impedido) : disp;
+  // Etapa 230 (C520, B1515): a nota com OS desconta como as outras. Ate a 229 (B1508) ela voltava a regua de antes, porque a fila da OS
+  // reservava SEM o desconto (B1455); com a fila da OS so com o que pode sair (B1513), a excecao deixava a requisicao da OS reservada so
+  // com peca de lote bloqueado depois do estorno do lote bom. A reserva generica da OS — a posse sobre o bloqueado — ja foi solta acima
+  // por `min(reserva, estornado)`.
   const faltaHoje = Math.max(0, qtd - disp);
   if (livre >= qtd - EPS) return liberadasOs;
 

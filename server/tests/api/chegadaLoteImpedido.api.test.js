@@ -242,13 +242,16 @@ process.on('exit', (code) => {
   });
 
   // ── RN-219.07 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  await test('[RN-219.07] NF com OS ABERTA, 4 em L1 BLOQUEADO, requisicao da OS esperando 4 -> reserva 4 para ela como hoje (B1455)', async () => {
+  await test('[RN-219.07] NF com OS ABERTA, 4 em L1 BLOQUEADO, requisicao da OS esperando 4 -> nada para ela, 4 na reserva da OS (Etapa 230, B1513)', async () => {
     const os = (await dbRun(db, "INSERT INTO ordens_servico (numero_os, status) VALUES ('OS-E219-A', 'em_andamento')")).lastID;
     const m = await material();
     const R1 = await reqDireta(m, 4, { os_id: os, os_referencia: 'OS-E219-A' });
     await receber([[m, 4, 'L1']], { os_id: os });
     assert.strictEqual(await statusLoteDe(m, 'L1'), 'BLOQUEADO');
-    assert.deepStrictEqual(await reservas(R1), [4], 'a fila da OS deixou de receber o que foi comprado para ela');
+    assert.deepStrictEqual(await reservas(R1), [], 'a fila da OS recebeu peca de lote bloqueado (B1455, revogada na 230)');
+    const daOs = await dbGet(db, `SELECT COALESCE(SUM(quantidade),0) q FROM reservas_material_almoxarifado
+      WHERE status = 'ATIVA' AND origem = 'MANUAL' AND os_id = ? AND material_id = ?`, [os, m.id]);
+    assert.strictEqual(Number(daOs.q), 4, 'a peca comprada para a OS ficou fora da reserva da OS');
   });
 
   // ── RN-219.10 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
