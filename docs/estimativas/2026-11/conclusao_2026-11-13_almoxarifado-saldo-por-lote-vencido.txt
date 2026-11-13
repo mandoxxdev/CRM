@@ -1,0 +1,7 @@
+*Concluído — almoxarifado: o relatório Saldo por lote e a Fila de separação dizem o que está em lote bloqueado ou vencido*
+_13/11/2026_
+
+1. O relatório Saldo por lote diz quando o lote está vencido — estimado 2h45 · realizado 2h30
+2. A Fila de separação diz quanto do disponível está em lote bloqueado ou vencido — estimado 1h15 · realizado 1h15
+
+*Total: estimado 4h · realizado 3h45*
