@@ -19,8 +19,8 @@ Medido no código antes de estimar (sobre `1b20f920`):
 
 | # | Tarefa | Execução estimada | Fator | Informado | Etapa/plano | Régua usada | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | A entrega não pré-escolhe a origem num lote impedido; o botão de um clique avisa antes (C532) | 45 min | média (análise 30 min + teste 1 h) | 2h30 (2h15 arredondado) | 231 | 226 (mesma janela) mediu 0,7 h | — | — | — |
-| 2 | A tela de Não Conformidades avisa que o lote continua impedido (C535) | 30 min | pequena com regra (análise 15 min + teste 30 min) | 1h15 | 231 | 229 T2 (a frase da Inspeções) ~10 min + chave na resposta | — | — | — |
+| 1 | A entrega não pré-escolhe a origem num lote impedido; o botão de um clique avisa antes (C532) | 45 min | média (análise 30 min + teste 1 h) | 2h30 (2h15 arredondado) | 231 | 226 (mesma janela) mediu 0,7 h | 0,7 h do pacote, rateada 45:30 → ~26 min | 2h (26 min + análise 30 min + teste 1 h = 1h56, arredondado; a parte do André é a da tabela — não informada por ele) | 27e4941b, a28a584a, 1ac166c1, 32703b8d, 473843bb, 6ccc572f e o de estimado x realizado |
+| 2 | A tela de Não Conformidades avisa que o lote continua impedido (C535) | 30 min | pequena com regra (análise 15 min + teste 30 min) | 1h15 | 231 | 229 T2 (a frase da Inspeções) ~10 min + chave na resposta | ~17 min (rateio) | 1h15 (17 min + análise 15 min + teste 30 min = 1h02, arredondado; a parte do André é a da tabela) | os mesmos (1ac166c1, 32703b8d) |
 
 Incerteza: baixa a média — o risco é a pré-seleção automática na entrega mudar o que vai ao servidor (`origem_automatica`) e o motivo da
 troca aparecer.
@@ -29,3 +29,7 @@ Medição no fechamento:
 ```
 --grupos "E231=Etapa 231|Estimativa: almoxarifado - entrega"
 ```
+
+No fechamento: execução medida 0,7 h para o pacote (horas.js --grupos "E231=…", 13/11), rateada pela execução estimada (45:30). O
+estimado de execução (1h15) passou do medido: a Fase 5 achou e corrigiu um caso (o lote bloqueado com a janela aberta) dentro dos ~30 min do
+commit dela. Realizado 3h15 contra 3h45 estimado. Conclusão: `conclusao_2026-11-13_almoxarifado-entrega-origem-lote-impedido.txt`.

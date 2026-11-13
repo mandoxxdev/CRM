@@ -1,0 +1,7 @@
+*Concluído — almoxarifado: a entrega e a não conformidade avisam quando o lote está bloqueado*
+_13/11/2026_
+
+1. A entrega não começa mais pelo endereço de um lote que ficou bloqueado — estimado 2h30 · realizado 2h
+2. A tela de não conformidades avisa que o lote continua bloqueado — estimado 1h15 · realizado 1h15
+
+*Total: estimado 3h45 · realizado 3h15*
