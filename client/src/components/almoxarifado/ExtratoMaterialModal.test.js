@@ -153,6 +153,12 @@ describe('[RN-222.08] ExtratoMaterialModal — o lote impedido', () => {
     expect(cartaoImpedido().querySelector('.almox-kpi-icon.warning')).not.toBeNull();
   });
 
+  test('[RN-222.08 b] (Fase 5) material sem unidade: a frase sem a unidade e sem espaço duplo', async () => {
+    await renderizar({ ...MATERIAL_BASE, controle_lote: 1, unidade: null, lote_impedido: 6 });
+    expect(container.textContent).toContain('6 em lote bloqueado, reprovado ou vencido, fora');
+    expect(container.textContent).not.toContain('null em lote');
+  });
+
   test('[RN-222.08] fracionado: o número como o servidor mandou', async () => {
     await renderizar({ ...MATERIAL_BASE, controle_lote: 1, unidade: 'KG', lote_impedido: 2.5 });
     expect(valorDoCartao('Em lote impedido')).toBe('2.5');

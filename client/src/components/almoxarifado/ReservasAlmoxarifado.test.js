@@ -667,6 +667,15 @@ describe('[RN-222.09 / .10] Nova Reserva diz quanto do material esta em lote imp
     expect(container.textContent).toContain('Disponível: 50 UN');
   });
 
+  test('[RN-222.09 b] (Fase 5) material sem unidade: o número sem a unidade e sem espaço duplo', async () => {
+    MATS.push({ id: 13, codigo: 'MAT-4', nome: 'Sem unidade', unidade: null, quantidade_disponivel: 9, controle_lote: 1, controle_serie: 0 });
+    try {
+      comExtratos({ 13: 6 });
+      await abrir(); await escolher(13);
+      expect(aviso().textContent).toBe('6 deste material estão em lote bloqueado, reprovado ou vencido e não entram na reserva.');
+    } finally { MATS.pop(); }
+  });
+
   test('[RN-222.10] a resposta do material que deixou de ser o escolhido é ignorada', async () => {
     let soltarA;
     const lentoA = new Promise((res) => { soltarA = res; });
