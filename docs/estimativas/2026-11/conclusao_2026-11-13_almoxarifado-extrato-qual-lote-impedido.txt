@@ -1,0 +1,6 @@
+*Concluído — almoxarifado: o extrato do material diz qual lote está bloqueado ou vencido*
+_13/11/2026_
+
+1. A tabela de saldos do extrato mostra a situação e a validade de cada lote — estimado 2h15 · realizado 2h15
+
+*Total: estimado 2h15 · realizado 2h15*

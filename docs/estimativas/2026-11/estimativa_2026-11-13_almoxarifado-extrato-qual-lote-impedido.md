@@ -16,7 +16,7 @@ Medido no código antes de estimar (sobre `e0bca4f1`):
 
 | # | Tarefa | Execução estimada | Fator | Informado | Etapa/plano | Régua usada | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | A tabela de saldos do extrato mostra a situação e a validade de cada lote impedido (C528) | 45 min | média (análise 30 min + teste 1 h) | 2h15 | 224 | Etapas 222 e 223 mediram 0,7 h cada (um campo de leitura + tela pequena); aqui um campo numa função + uma coluna | — | — | — |
+| 1 | A tabela de saldos do extrato mostra a situação e a validade de cada lote impedido (C528) | 45 min | média (análise 30 min + teste 1 h) | 2h15 | 224 | Etapas 222 e 223 mediram 0,7 h cada (um campo de leitura + tela pequena); aqui um campo numa função + uma coluna | 0,7 h (horas.js --grupos "E224=…", 13/11) → 45 min | 2h15 (45 min + análise 30 min + teste 1 h, da tabela — não informado pelo André) | 98b90f22, c3658f89, f09e8ec7, c7399966, e1c6cf6d, 2225b41c e este |
 
 Incerteza: baixa — mesma régua já testada nas 222/223. Não foi quebrada: 2h15 não passa do teto da skill.
 
@@ -24,3 +24,5 @@ Medição no fechamento:
 ```
 --grupos "E224=Etapa 224|Estimativa: almoxarifado - extrato diz qual lote"
 ```
+
+No fechamento: execução estimada 45 min, medida 0,7 h (a Fase 2 rodou junto da T1; as duas revisões da Fase 5 junto com a suíte). Três etapas seguidas de leitura com tela pequena mediram 0,7 h: a régua de 45 min para esse porte se confirma.
