@@ -293,24 +293,61 @@ async function mudarStatusLote(db, user, loteId, novoStatus, justificativa) {
   }
   if (!motivo) throw erro('justificativa obrigatoria para mudar o status do lote');
 
-  const anterior = await getLote(db, loteId);
-  if (!anterior) throw erro('Lote nao encontrado', 404);
+  const fora = await getLote(db, loteId);
+  if (!fora) throw erro('Lote nao encontrado', 404);
 
-  const claim = await dbGet(db, `UPDATE lotes_almoxarifado
-    SET status = ?, status_motivo = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND status = ?
-    RETURNING id`, [novoStatus, motivo, loteId, anterior.status]);
-  if (!claim) throw erro('O status do lote mudou durante a operacao. Recarregue e tente de novo.', 409);
+  // Etapa 220 (C523, B1461): a releitura, o UPDATE, a auditoria e (na liberacao) a distribuicao sob a trava do material do lote —
+  // bloquear no meio de uma reserva (nota, aprovacao) esperava ninguem. O `material_id` lido fora so acha a trava: ele nao muda.
+  return comTravaDoLote(db, user, fora, async (pend) => {
+    const anterior = await getLote(db, loteId);
+    if (!anterior) throw erro('Lote nao encontrado', 404);
+    const antesImpedido = await rcs().loteImpedidoAgora(db, loteId);
 
-  // Etapa 121 (C252, B784): o status ja mudou — a falha da Auditoria vai ao log e nao derruba o ato
-  await registrarAuditoriaDoAto(db, {
-    entidade: 'lote', entidade_id: loteId, acao: 'MUDANCA_STATUS',
-    usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
-    dados_anteriores: { status: anterior.status, status_motivo: anterior.status_motivo },
-    dados_novos: { status: novoStatus, status_motivo: motivo },
-    justificativa: motivo,
+    const claim = await dbGet(db, `UPDATE lotes_almoxarifado
+      SET status = ?, status_motivo = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND status = ?
+      RETURNING id`, [novoStatus, motivo, loteId, anterior.status]);
+    if (!claim) throw erro('O status do lote mudou durante a operacao. Recarregue e tente de novo.', 409);
+
+    // Etapa 121 (C252, B784): o status ja mudou — a falha da Auditoria vai ao log e nao derruba o ato
+    await registrarAuditoriaDoAto(db, {
+      entidade: 'lote', entidade_id: loteId, acao: 'MUDANCA_STATUS',
+      usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
+      dados_anteriores: { status: anterior.status, status_motivo: anterior.status_motivo },
+      dados_novos: { status: novoStatus, status_motivo: motivo },
+      justificativa: motivo,
+    });
+    return antesImpedido ? rcs().reservarLoteLiberadoSobTrava(db, user, anterior, pend) : null;
   });
-  return getLote(db, loteId);
+}
+
+// ── Etapa 220 (C480 + C523) — os tres escritores do status do lote sob a trava do material, com a distribuicao da liberacao ─────────
+/** Require lazy: `reservaChegadaService` puxa o motor, que puxa este arquivo. */
+function rcs() {
+  // eslint-disable-next-line global-require
+  return require('./reservaChegadaService');
+}
+
+/**
+ * Roda `gesto(pendencia)` sob `naTravaDoMaterial(lote.material_id)` (molde `corrigirValidadeDoLote`). O `gesto` devolve o resultado da
+ * distribuicao (`reservarLoteLiberadoSobTrava`) ou `null`; o recalculo da 76 e o aviso da 75 rodam DEPOIS de soltar
+ * (`concluirPendencia`, no `finally` fora da secao). Devolve o lote relido + `reservado_para_quem_esperava` (B1465).
+ */
+async function comTravaDoLote(db, user, lote, gesto) {
+  const pend = rcs().novaPendencia();
+  let resultado = null;
+  try {
+    resultado = await trava.naTravaDoMaterial(lote.material_id, () => gesto(pend));
+  } finally {
+    await rcs().concluirPendencia(db, user, pend);
+  }
+  const atual = await getLote(db, lote.id);
+  return { ...atual, reservado_para_quem_esperava: await rcs().resumoDaReservaDoLote(db, lote.material_id, resultado) };
+}
+
+/** A resposta "nada reservado" (o certificado que nao liberou o lote — B1465). */
+async function reservaVaziaDoLote(db, materialId) {
+  return rcs().resumoDaReservaDoLote(db, materialId, null);
 }
 
 /**
@@ -332,24 +369,33 @@ async function liberarBloqueioPorCertificado(db, user, loteId, justificativa) {
   const motivo = justificativa == null ? '' : String(justificativa).trim();
   if (!motivo) throw erro('justificativa obrigatoria para liberar o lote');
 
-  const anterior = await getLote(db, loteId);
-  if (!anterior) throw erro('Lote nao encontrado', 404);
+  const fora = await getLote(db, loteId);
+  if (!fora) throw erro('Lote nao encontrado', 404);
 
-  const claim = await dbGet(db, `UPDATE lotes_almoxarifado
-    SET status = 'ATIVO', status_motivo = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND status = 'BLOQUEADO' AND status_motivo LIKE '%certificado%'
-    RETURNING id`, [motivo, loteId]);
-  if (!claim) return null;
+  // Etapa 220 (C523 + C480): sob a trava do material do lote; liberou -> reserva para quem esperava, na mesma secao
+  let liberou = false;
+  const r = await comTravaDoLote(db, user, fora, async (pend) => {
+    const anterior = await getLote(db, loteId);
+    if (!anterior) throw erro('Lote nao encontrado', 404);
+    const antesImpedido = await rcs().loteImpedidoAgora(db, loteId);
+    const claim = await dbGet(db, `UPDATE lotes_almoxarifado
+      SET status = 'ATIVO', status_motivo = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND status = 'BLOQUEADO' AND status_motivo LIKE '%certificado%'
+      RETURNING id`, [motivo, loteId]);
+    if (!claim) return null;
+    liberou = true;
 
-  // Etapa 121 (C252, B784): o certificado e a liberacao ja estao gravados — a falha da Auditoria nao derruba a rota
-  await registrarAuditoriaDoAto(db, {
-    entidade: 'lote', entidade_id: loteId, acao: 'MUDANCA_STATUS',
-    usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
-    dados_anteriores: { status: anterior.status, status_motivo: anterior.status_motivo },
-    dados_novos: { status: 'ATIVO', status_motivo: motivo },
-    justificativa: motivo,
+    // Etapa 121 (C252, B784): o certificado e a liberacao ja estao gravados — a falha da Auditoria nao derruba a rota
+    await registrarAuditoriaDoAto(db, {
+      entidade: 'lote', entidade_id: loteId, acao: 'MUDANCA_STATUS',
+      usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
+      dados_anteriores: { status: anterior.status, status_motivo: anterior.status_motivo },
+      dados_novos: { status: 'ATIVO', status_motivo: motivo },
+      justificativa: motivo,
+    });
+    return antesImpedido ? rcs().reservarLoteLiberadoSobTrava(db, user, anterior, pend) : null;
   });
-  return getLote(db, loteId);
+  return liberou ? r : null;
 }
 
 /** Vencimento liberado e um fato datado e assinado — NAO desvence o lote (isVencido nao olha isto). */
@@ -368,30 +414,38 @@ async function liberarVencimento(db, user, loteId, justificativa) {
   const motivo = justificativa == null ? '' : String(justificativa).trim();
   if (!motivo) throw erro('justificativa obrigatoria para liberar o vencimento do lote');
 
-  const anterior = await getLote(db, loteId);
-  if (!anterior) throw erro('Lote nao encontrado', 404);
-  if (!isVencido(anterior)) throw erro('Lote nao esta vencido; nao ha vencimento para liberar');
+  const fora = await getLote(db, loteId);
+  if (!fora) throw erro('Lote nao encontrado', 404);
 
-  // Guarda no WHERE contra data_validade (a mesma fonte que isVencido leu acima), nao read-then-
-  // write: se o lote mudou entre a leitura e a escrita, o UPDATE nao casa e falha em vez de
-  // reportar sucesso sobre um estado que ja nao e o que foi checado.
-  const claim = await dbGet(db, `UPDATE lotes_almoxarifado
-    SET vencimento_liberado_em = CURRENT_TIMESTAMP, vencimento_liberado_por = ?,
-        vencimento_liberado_motivo = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND data_validade = ?
-    RETURNING id`, [user?.id || null, motivo, loteId, anterior.data_validade]);
-  if (!claim) throw erro('O lote mudou durante a operacao. Recarregue e tente de novo.', 409);
+  // Etapa 220 (C523 + C480): sob a trava do material do lote (antes so a correcao de validade pegava — a guarda dela contra a liberacao
+  // lida, Fase 5 F2 da 191, continua); liberou o que prendia -> reserva para quem esperava, na mesma secao.
+  return comTravaDoLote(db, user, fora, async (pend) => {
+    const anterior = await getLote(db, loteId);
+    if (!anterior) throw erro('Lote nao encontrado', 404);
+    if (!isVencido(anterior)) throw erro('Lote nao esta vencido; nao ha vencimento para liberar');
+    const antesImpedido = await rcs().loteImpedidoAgora(db, loteId);
 
-  const atualizado = await getLote(db, loteId);
-  // Etapa 121 (C252, B784): a liberacao ja esta gravada — a falha da Auditoria vai ao log e nao derruba o ato
-  await registrarAuditoriaDoAto(db, {
-    entidade: 'lote', entidade_id: loteId, acao: 'LIBERACAO_VENCIMENTO',
-    usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
-    dados_anteriores: { vencimento_liberado_em: anterior.vencimento_liberado_em },
-    dados_novos: { vencimento_liberado_em: atualizado.vencimento_liberado_em, vencimento_liberado_motivo: motivo },
-    justificativa: motivo,
+    // Guarda no WHERE contra data_validade (a mesma fonte que isVencido leu acima), nao read-then-
+    // write: se o lote mudou entre a leitura e a escrita, o UPDATE nao casa e falha em vez de
+    // reportar sucesso sobre um estado que ja nao e o que foi checado.
+    const claim = await dbGet(db, `UPDATE lotes_almoxarifado
+      SET vencimento_liberado_em = CURRENT_TIMESTAMP, vencimento_liberado_por = ?,
+          vencimento_liberado_motivo = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND data_validade = ?
+      RETURNING id`, [user?.id || null, motivo, loteId, anterior.data_validade]);
+    if (!claim) throw erro('O lote mudou durante a operacao. Recarregue e tente de novo.', 409);
+
+    const atualizado = await getLote(db, loteId);
+    // Etapa 121 (C252, B784): a liberacao ja esta gravada — a falha da Auditoria vai ao log e nao derruba o ato
+    await registrarAuditoriaDoAto(db, {
+      entidade: 'lote', entidade_id: loteId, acao: 'LIBERACAO_VENCIMENTO',
+      usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
+      dados_anteriores: { vencimento_liberado_em: anterior.vencimento_liberado_em },
+      dados_novos: { vencimento_liberado_em: atualizado.vencimento_liberado_em, vencimento_liberado_motivo: motivo },
+      justificativa: motivo,
+    });
+    return antesImpedido ? rcs().reservarLoteLiberadoSobTrava(db, user, anterior, pend) : null;
   });
-  return atualizado;
 }
 
 // ── Etapa 191 — corrigir a validade de um lote (com saldo ou nao) ────────────────────────────────────────────────────────────
@@ -601,6 +655,7 @@ async function resumoLotesDoMaterial(db, materialId) {
 module.exports = {
   STATUS_LOTE, isVencido, getLote, getLotePorCodigo, criarOuObterLote, mudarStatusLote,
   vencimentoLiberado, liberarVencimento, liberarBloqueioPorCertificado, listarLotesDoMaterial,
+  reservaVaziaDoLote, // Etapa 220 (B1465)
   EPS_SALDO, residualSemLote, resumoLotesDoMaterial,
   MSG_VALIDADE, dataValidadeBR, validarDataValidade, preencherValidadeSeVazia, loteEstaVazio, redefinirValidadeDoLoteVazio,
   corrigirValidadeDoLote, corrigirValidadeDoLoteSemTrava, // Etapa 191

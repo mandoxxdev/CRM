@@ -150,11 +150,11 @@ process.on('exit', (code) => {
   });
 
   // ── RN-219.06 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  await test('[RN-219.06] depois da RN-219.01, o lote volta a ATIVO -> separar 4 de R1 -> 200 (nada foi reservado sozinho, C480)', async () => {
+  await test('[RN-219.06] depois da RN-219.01, o lote volta a ATIVO -> reserva os 4 para R1 (Etapa 220, C480 resolvido) -> separar 4 de R1 -> 200', async () => {
     assert.ok(cenario01, 'premissa: RN-219.01 montou o cenario');
     const { m, R1 } = cenario01;
     await statusLote(m, 'L1', 'ATIVO');
-    assert.deepStrictEqual(await reservas(R1), [], 'C480: liberar o lote nao distribui');
+    assert.deepStrictEqual(await reservas(R1), [4], 'Etapa 220 (C480): liberar o lote reserva para quem esperava (ate a 219 nao distribuia)');
     const it = (await dbGet(db, 'SELECT id FROM itens_requisicao_almoxarifado WHERE requisicao_id = ?', [R1])).id;
     await ok(request(app).put(`${API}/requisicoes/${R1}/separar`).send({ itens_separados: [{ item_id: it, quantidade_separada: 4 }] }));
     assert.strictEqual(Number((await dbGet(db, 'SELECT quantidade_separada q FROM itens_requisicao_almoxarifado WHERE id = ?', [it])).q), 4);

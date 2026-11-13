@@ -1328,9 +1328,14 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         // que liberou um lote REPROVADO por engano (achado do review, Task 5 fix round 1) — entre
         // esta leitura e a chamada ha um `await` (a gravacao do arquivo acima), tempo de sobra para
         // o lote mudar de status por outro caminho.
-        await lotService.liberarBloqueioPorCertificado(db, req.user, lote.id, 'Certificado do fornecedor anexado');
+        // Etapa 220 (C480, B1465): liberou -> reservou para quem esperava (sob a trava do material); a resposta diz quanto
+        const liberado = await lotService.liberarBloqueioPorCertificado(db, req.user, lote.id, 'Certificado do fornecedor anexado');
         const atualizado = await dbGet(db, 'SELECT * FROM lotes_almoxarifado WHERE id = ?', [lote.id]);
-        res.json({ id: atualizado.id, certificado_arquivo: atualizado.certificado_arquivo, status: atualizado.status });
+        res.json({
+          id: atualizado.id, certificado_arquivo: atualizado.certificado_arquivo, status: atualizado.status,
+          reservado_para_quem_esperava: liberado ? liberado.reservado_para_quem_esperava
+            : await lotService.reservaVaziaDoLote(db, lote.material_id),
+        });
       } catch (e) {
         res.status(e.status || 500).json({ error: e.message });
       }

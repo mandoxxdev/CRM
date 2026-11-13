@@ -197,9 +197,12 @@ function montarAvisoLiberacao(dados) {
   const m = dados.material;
   const reservado = Number(m.reservado) > EPS;
   const linhas = [
-    dados.origem === 'NAO_CONFORMIDADE'
-      ? `O material que a sua requisição aguardava foi liberado pela não conformidade ${dados.documento_numero} e está no estoque.`
-      : 'O material que a sua requisição aguardava foi aprovado na inspeção e está no estoque.',
+    // Etapa 220 (B1464): a liberacao do lote (certificado, status ATIVO, vencimento liberado) tem a frase dela
+    dados.origem === 'LOTE_LIBERADO'
+      ? `O lote ${dados.documento_numero} do material que a sua requisição aguardava foi liberado e está no estoque.`
+      : dados.origem === 'NAO_CONFORMIDADE'
+        ? `O material que a sua requisição aguardava foi liberado pela não conformidade ${dados.documento_numero} e está no estoque.`
+        : 'O material que a sua requisição aguardava foi aprovado na inspeção e está no estoque.',
     `Requisição: ${dados.numero_requisicao}`,
     `Situação da requisição: ${SITUACAO_REQUISICAO[dados.status] || dados.status}`,
   ];
@@ -512,7 +515,10 @@ async function avisarLiberacao(db, user, ctx, resultadoReserva) {
 
   const emails = await emailsDosUsuarios(db, [...new Set(avisaveis.map((r) => r.solicitante_id))]);
   const appBase = alertService.resolveAppBaseUrl(await alertService.getConfigValue(db, alertService.APP_URL_CONFIG_KEY));
-  const prefixo = ctx.origem === 'NAO_CONFORMIDADE' ? 'nc-liberada' : 'inspecao-liberada';
+  // Etapa 220 (B1464): o lote pode ser bloqueado e liberado de novo — a chave e por LIBERACAO (`ctx.liberacao`), nao por documento
+  const prefixo = ctx.origem === 'LOTE_LIBERADO' ? `lote-liberado-${ctx.documento_id}-${ctx.liberacao}`
+    : (ctx.origem === 'NAO_CONFORMIDADE' ? 'nc-liberada' : 'inspecao-liberada');
+  const chaveDoc = ctx.origem === 'LOTE_LIBERADO' ? prefixo : `${prefixo}-${ctx.documento_id}`;
   for (const r of avisaveis) {
     const aviso = montarAvisoLiberacao({
       origem: ctx.origem,
@@ -526,7 +532,7 @@ async function avisarLiberacao(db, user, ctx, resultadoReserva) {
     // eslint-disable-next-line no-await-in-loop
     const fila = await notificationQueueService.enfileirar(db, {
       evento: EVENTO_REQUISITANTE,
-      dedupe_chave: `${prefixo}-${ctx.documento_id}-req-${r.requisicao_id}`,
+      dedupe_chave: `${chaveDoc}-req-${r.requisicao_id}`,
       destinatarios: emails.has(r.solicitante_id) ? [emails.get(r.solicitante_id)] : [],
       assunto: aviso.assunto,
       corpo_texto: aviso.corpo_texto,

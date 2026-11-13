@@ -42,6 +42,7 @@ const receiptNotificationService = require('./receiptNotificationService');
 const trava = require('./travaPorMaterial');
 // Etapa 171 (T2): a reserva da OS (pedido de compra com OS). Pelo objeto do modulo.
 const reservaDaOs = require('./reservaDaOs');
+const retidoDoLote = require('./retidoDoLote'); // Etapa 220 (B1462): o livre do lote liberado
 
 const { QTD_DO_ITEM_SQL, faltaDoItem } = receiptNotificationService;
 
@@ -624,6 +625,86 @@ async function reservarLiberacaoParaQuemEspera(db, user, ctx, resultado = { rese
   return resultado;
 }
 
+// ── Etapa 220 (C480, B1462-B1464, B1467) — liberar o lote reserva para quem esperava ─────────────────────────────────────────────
+
+/** O lote esta impedido AGORA (bloqueado, reprovado ou vencido sem liberacao) num material com controle de lote? Le sob a trava. */
+async function loteImpedidoAgora(db, loteId) {
+  const r = await dbGet(db, `SELECT CASE WHEN ${predicadoLoteImpedidoSql('lt')} THEN 1 ELSE 0 END AS imp
+    FROM lotes_almoxarifado lt JOIN materiais_almoxarifado m ON m.id = lt.material_id AND COALESCE(m.controle_lote, 0) = 1
+    WHERE lt.id = ?`, [loteId]);
+  return !!(r && Number(r.imp) === 1);
+}
+
+function rotulosDoLoteLiberado(lote, recebimentoId) {
+  const onde = `na liberação do lote ${lote.codigo}`;
+  return {
+    recebimento_id: recebimentoId,
+    observacao: (c) => `Reserva ${onde} — requisição ${c.numero}`,
+    motivo: `Reserva ${onde}`,
+    falhaReserva: (c, e) => `[almoxarifado-reservas] Falha ao reservar ${onde} o item ${c.item_id} da requisição ${c.requisicao_id}: ${e.message}`,
+    motivoDesfazer: `Liberação de reserva ${onde} desfeita`,
+    falhaDesfazer: (reservaId, e) => `[almoxarifado-reservas] Falha ao desfazer a reserva ${reservaId} ${onde}: ${e.message}`,
+    saiuDaEspera: `Requisição saiu da espera durante a reserva ${onde}`,
+    excessoDesfeito: `Reserva ${onde} acima do pendente — excesso desfeito`,
+    falhaRecalculo: (id, e) => `[almoxarifado-reservas] recalculo do status apos a reserva ${onde} falhou (requisicao ${id}): ${e.message}`,
+  };
+}
+
+let seqLiberacaoDoLote = 0;
+
+/**
+ * Etapa 220 (C480) — SOB A TRAVA do material do lote (L1 se nao), chamada pelos tres escritores do status do lote (`lotService`) logo
+ * depois do `UPDATE` que liberou, na mesma secao. Reserva para a fila o LIVRE DO LOTE (`situacaoDosLotes`, B1462); o miolo ainda limita
+ * pelo que pode sair do material (B1453 — a reserva antiga feita antes do bloqueio conta, B1372/B1456). So distribui se o lote, relido
+ * agora, nao esta impedido e o material tem controle de lote (B1463 — quem chama garante que ANTES estava impedido). A reserva leva o
+ * recebimento do lote quando ele veio de UMA nota so (B1467: o estorno dessa nota a solta, como a da chegada — D4/B386 da 75); senao vai
+ * sem. Fila geral sempre (sem o ramo da OS aberta: a peca da OS ja ficou com ela na chegada, B1455). Recalculo e aviso vao para a
+ * `pendencia` (`concluirPendencia` depois de soltar). NUNCA lanca (a liberacao ja gravou): na falha, loga e devolve o parcial.
+ * @returns {Promise<{reservas: Array, status: Array}>}
+ */
+async function reservarLoteLiberadoSobTrava(db, user, lote, pendencia) {
+  const resultado = { reservas: [], status: [] };
+  try {
+    if (!trava.travado(lote.material_id)) throw erroSemTrava(lote.material_id);
+    if (await loteImpedidoAgora(db, lote.id)) return resultado;
+    const mat = await dbGet(db, 'SELECT controle_lote FROM materiais_almoxarifado WHERE id = ?', [lote.material_id]);
+    if (!mat || Number(mat.controle_lote) !== 1) return resultado;
+    const sit = (await retidoDoLote.situacaoDosLotes(db, lote.material_id)).get(Number(lote.id));
+    const livre = sit ? num(sit.livre) : 0;
+    if (!(livre > EPS)) return resultado;
+    const recs = await dbAll(db, `SELECT DISTINCT recebimento_id FROM recebimentos_material_itens_almoxarifado
+      WHERE lote_id = ? AND recebimento_id IS NOT NULL`, [lote.id]);
+    const recebimentoId = recs.length === 1 ? Number(recs[0].recebimento_id) : null;
+    const rotulos = rotulosDoLoteLiberado(lote, recebimentoId);
+    const acc = { tocadas: new Set(), resultado };
+    if (pendencia) pendencia.distribuicoes.push({ acc, rotulos });
+    await distribuirSemLock(db, user, lote.material_id, livre, rotulos, acc);
+    if (pendencia) {
+      pendencia.avisos.push({
+        ctx: {
+          origem: 'LOTE_LIBERADO', documento_id: Number(lote.id), documento_numero: lote.codigo, material_id: lote.material_id,
+          quantidade: livre, recebimento_id: recebimentoId, liberacao: `${Date.now()}-${++seqLiberacaoDoLote}`,
+        },
+        resultado,
+      });
+    }
+  } catch (e) {
+    console.warn(`[almoxarifado-reservas] reserva na liberacao do lote ${lote && lote.id} falhou: ${e.message}`);
+  }
+  return resultado;
+}
+
+/** O que a resposta das tres rotas do lote mostra (B1465). */
+async function resumoDaReservaDoLote(db, materialId, resultado) {
+  const rs = (resultado && resultado.reservas) || [];
+  const mat = await dbGet(db, 'SELECT unidade FROM materiais_almoxarifado WHERE id = ?', [materialId]);
+  return {
+    quantidade: Q.qtd(rs.reduce((s, r) => s + num(r.quantidade), 0)),
+    unidade: mat ? mat.unidade || null : null,
+    requisicoes: new Set(rs.map((r) => Number(r.requisicao_id))).size,
+  };
+}
+
 /**
  * Etapa 75 (T1, D5/B387) — o gancho das duas portas (decisão da inspeção, liberação pela NC). NUNCA lança:
  * a decisão da Qualidade já está gravada e o saldo já mudou; a reserva é efeito. Chamada pelo OBJETO do
@@ -833,4 +914,7 @@ module.exports = {
   liberarParaEstorno,
   recriarAposEstornoRecusado,
   STATUS_RECALCULAVEIS,
+  reservarLoteLiberadoSobTrava, // Etapa 220 (C480)
+  loteImpedidoAgora, // Etapa 220 (B1463)
+  resumoDaReservaDoLote, // Etapa 220 (B1465)
 };
