@@ -1,0 +1,6 @@
+*Concluído — almoxarifado: a inspeção que aprova peça de lote bloqueado não entrega outro material no lugar*
+_13/11/2026_
+
+1. A inspeção e a não conformidade olham o lote das peças que liberaram — estimado 4h · realizado 3h45
+
+*Total: estimado 4h · realizado 3h45*
