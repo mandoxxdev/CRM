@@ -191,3 +191,27 @@ Literal da recusa do lote (contrato, não muda): `mensagemLoteNaoComportaEstorno
 | 5 | sem `lim_le.id IS NOT NULL` | .12 |
 | 6 | sem a regra da OS | .11 |
 | 7 | "hoje" errado | .05 a |
+| 8 | o portão do motor lido pelo `livre` (Fase 5) | .13 a, .13 b, .14 |
+| 9 | o vencido da própria entrada com o "hoje" errado (Fase 5) | .15 |
+| 10 | a OS só da nota, sem a do pedido (Fase 5) | .16 |
+| 11 | a ordem da liberação invertida (Fase 5) | .17 |
+| 3b | sem o limite da nota no déficit (Fase 5) | .13 a |
+
+(Depois da Fase 5 a sabotagem 3 passou a ser "tirar o acréscimo do déficit da nota" — cai a .07.)
+
+## Fase 5 — revisão adversarial (2 revisores frescos, em paralelo com a suíte)
+
+- **Revisor de regra (1 achado real, reproduzido):** o **B1505** supunha que o livre abaixo de zero só vinha de outro lote **desta** nota.
+  Vem também da reserva **R0 de outra nota** cujo lote venceu ou foi bloqueado depois (nada a solta, B1372): com R0 com 4 em L1 e R1 com 6
+  da nota (3 em L2 + 3 em L3), L1 bloqueado, estornar L2 soltava as **6** de R1 — as 3 do L3, que a nota de R1 trouxe e que podem sair,
+  iam cobrir R0. **Corrigido (B1505 revista):** `falta = qtd − max(0, livre)` e, com o livre abaixo de zero, mais só o que os **outros lotes
+  impedidos desta nota** explicam (`min(−livre, Σ entradas da nota em lote impedido)`). RN-228.13 a (solta 3) e .13 b (com o L3 de entrada
+  manual e só o L2 na nota: solta as 3 de R1 — a reserva antiga conta primeiro sobre o lote bom, B1456; o revisor esperava 0 pela régua
+  antiga, mas pela régua do "pode sair" R1 fica sem nada que saia depois que o L2 sai — **mantido por decisão**, B1505). Seguraram: a
+  recriação depois de soltar 6, o portão do motor, o lote da própria entrada, a OS, as travas.
+- **Revisor de testes (4 lacunas reproduzidas, 1 declarada):** 5 mutações sobreviviam aos 13 cenários. Cenários novos: **RN-228.14** (reserva
+  da aprovação + lote bloqueado depois: o portão do motor pelo `livre` não soltava), **.15** (a entrada do próprio lote **vencido**), **.16** (a
+  OS vinda do **pedido**), **.17** (a ordem da liberação com duas requisições). **Declarado, sem teste:** a falha ao ler a OS do recebimento
+  cai no desconto (falha "fechada" para a OS — a requisição da OS pode perder a reserva se a leitura falhar); nenhum teste injeta a falha.
+  Mutações equivalentes com quantidades inteiras (sem EPS, guarda trocada) não contam.
+- Placar: 19 cenários; 13 sabotagens, todas caem.

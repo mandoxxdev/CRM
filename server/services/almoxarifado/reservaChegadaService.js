@@ -811,7 +811,19 @@ async function liberarParaEstorno(db, user, mov) {
   if (disp + total < qtd - EPS) return liberadasOs;
 
   const rec = await dbGet(db, 'SELECT numero FROM recebimentos_material_almoxarifado WHERE id = ?', [mov.recebimento_id]);
-  let falta = qtd - livre;
+  // Etapa 228 (Fase 5, B1505 revista): com o livre ja abaixo de zero ANTES do estorno, o deficit pode ser de outra requisicao (a reserva
+  // R0 de outra nota cujo lote venceu ou foi bloqueado depois) — nao e deste estorno. Alem do estornado, so se solta o deficit que os
+  // OUTROS lotes impedidos DESTA nota explicam (RN-228.07); sem isto, a nota de R1 pagava pelo lote de R0 (RN-228.13).
+  let falta = qtd - Math.max(0, livre);
+  if (livre < -EPS) {
+    const ln = await dbGet(db, `SELECT COALESCE(SUM(lim_mv.quantidade), 0) AS q FROM movimentacoes_almoxarifado lim_mv
+        JOIN lotes_almoxarifado lim_ln ON lim_ln.id = lim_mv.lote_id
+        JOIN materiais_almoxarifado lim_mn ON lim_mn.id = lim_mv.material_id
+      WHERE lim_mv.tipo = 'ENTRADA_COMPRA' AND lim_mv.recebimento_id = ? AND lim_mv.material_id = ? AND lim_mv.id <> ?
+        AND COALESCE(lim_mv.cancelado, 0) = 0 AND COALESCE(lim_mn.controle_lote, 0) = 1
+        AND ${predicadoLoteImpedidoSql('lim_ln', hoje)}`, [mov.recebimento_id, mov.material_id, mov.id]);
+    falta += Math.min(-livre, num(ln && ln.q));
+  }
   // Etapa 228 (B1507): quando o lote impedido pesou (soltar mais do que a regua de hoje), o motivo — que a tela Reservas mostra — diz por que.
   const motivo = `Estorno da entrada do recebimento ${rec ? rec.numero : mov.recebimento_id}${falta > faltaHoje + EPS
     ? ' — o que sobra do material está em lote bloqueado, reprovado ou vencido' : ''}`;

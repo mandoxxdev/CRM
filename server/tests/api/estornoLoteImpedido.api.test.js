@@ -315,6 +315,84 @@ process.on('exit', (code) => {
     assert.deepStrictEqual((await liberadas(R1)).map((x) => [Number(x.quantidade), x.motivo_liberacao]), [[3, MOTIVO_IMPEDIDO(numero)]]);
   });
 
+  // ── RN-228.13 (Fase 5, B1505 revista) ─────────────────────────────────────────────────────────────────────────────────────────
+  await test('[RN-228.13 a] R0 com 4 de outra nota em L1, que e BLOQUEADO depois; nota de R1 com 3 em L2 + 3 em L3: estornar L2 solta so 3 (o deficit e de R0)', async () => {
+    const m = await material();
+    const R0 = await esperando(m, 4);
+    await receber([[m, 4, 'L1']]);
+    assert.strictEqual(await somaAtiva(R0), 4, 'premissa: R0 reservou da nota dela');
+    const R1 = await esperando(m, 6);
+    const { rec } = await receber([[m, 3, 'L2'], [m, 3, 'L3']]);
+    assert.strictEqual(await somaAtiva(R1), 6, 'premissa');
+    await statusLote(m, 'L1', 'BLOQUEADO');
+    assert.strictEqual(await somaAtiva(R0), 4, 'premissa: bloquear nao solta a reserva antiga (B1372)');
+    await ok(estornar(await movDoLote(rec, m, 'L2')));
+    assert.strictEqual(await somaAtiva(R1), 3, 'a nota de R1 pagou pelo lote bloqueado de R0');
+    assert.strictEqual(await somaAtiva(R0), 4);
+  });
+  await test('[RN-228.13 b] o mesmo, so com L2 na nota de R1 e 3 livres de entrada manual em L3: solta os 3 de R1 (a reserva antiga conta primeiro, B1456)', async () => {
+    const m = await material();
+    const R0 = await esperando(m, 4);
+    await receber([[m, 4, 'L1']]);
+    const R1 = await esperando(m, 3);
+    const { rec } = await receber([[m, 3, 'L2']]);
+    assert.strictEqual(await somaAtiva(R1), 3, 'premissa');
+    await entrar(m, 3, 'L3');
+    await statusLote(m, 'L1', 'BLOQUEADO');
+    // livre antes = (10 - 7) - 4 = -1: as 3 do L3 cobrem a reserva antiga de R0 (B1456); sem L2, R1 nao tem o que sai.
+    await ok(estornar(await movDoLote(rec, m, 'L2')));
+    assert.strictEqual(await somaAtiva(R1), 0);
+    assert.strictEqual(await somaAtiva(R0), 4);
+  });
+
+  // ── Fase 5 (revisor de testes): cenarios para as mutacoes que sobreviviam ──────────────────────────────────────────────────────
+  await test('[RN-228.14] R2 aprovada (reserva que nao e da nota) e L1 bloqueado depois -> livre -2: estornar L2 solta os 3 de R1, R2 fica com 2', async () => {
+    const { m, R1, rec } = await montar({ modo: 'ATIVO', espera: 3 });
+    assert.deepStrictEqual(await reservasAtivas(R1), [3], 'premissa');
+    const R2 = await criar(m, 2);
+    await ok(request(app).put(`${API}/requisicoes/${R2}/aprovar`).send({}));
+    assert.deepStrictEqual(await reservasAtivas(R2), [2], 'premissa: R2 reservou na aprovacao');
+    await statusLote(m, 'L1', 'BLOQUEADO');
+    await ok(estornar(await movDoLote(rec, m, 'L2')));
+    assert.deepStrictEqual(await reservasAtivas(R1), [], 'R1 ficou reservada sobre o L1 bloqueado (o portao do motor lido pelo livre)');
+    assert.deepStrictEqual(await reservasAtivas(R2), [2], 'reserva da aprovacao nunca e solta pelo estorno');
+    assert.deepStrictEqual(await mat(m), { fisico: 5, reservado: 2 });
+  });
+  await test('[RN-228.15] estornar a entrada do proprio lote VENCIDO (L1): a reserva de 3 (coberta por L2) fica', async () => {
+    const { m, R1, rec } = await montar({ modo: 'VENCIDO' });
+    assert.deepStrictEqual(await reservasAtivas(R1), [3], 'premissa');
+    await ok(estornar(await movDoLote(rec, m, 'L1')));
+    assert.deepStrictEqual(await reservasAtivas(R1), [3], 'soltou reserva coberta pelo lote bom (o vencido da propria entrada nao foi visto)');
+  });
+  await test('[RN-228.16] OS vinda do PEDIDO (nota sem os_id): estornar L2 nao tira os 2 da requisicao da OS (B1508)', async () => {
+    const os = (await dbRun(db, "INSERT INTO ordens_servico (numero_os, status) VALUES ('OS-E228-P', 'em_andamento')")).lastID;
+    await dbRun(db, 'CREATE TABLE IF NOT EXISTS pedidos_compra (id INTEGER PRIMARY KEY AUTOINCREMENT, numero TEXT, fornecedor_id INTEGER, os_id INTEGER)');
+    try { await dbRun(db, 'ALTER TABLE pedidos_compra ADD COLUMN os_id INTEGER'); } catch (e) { /* ja tem */ }
+    const ped = (await dbRun(db, 'INSERT INTO pedidos_compra (numero, fornecedor_id, os_id) VALUES (?, 0, ?)', [`PC-E228-${++seq}`, os])).lastID;
+    const m = await material();
+    const R1 = await reqDireta(m, 2, { os_id: os, os_referencia: 'OS-E228-P' });
+    await entrar(m, 1, 'L1');
+    await statusLote(m, 'L1', 'BLOQUEADO');
+    const { rec } = await receber([[m, 3, 'L2'], [m, 4, 'L1']], { os_id: os });
+    assert.deepStrictEqual(await reservasAtivas(R1), [2], 'premissa');
+    // A OS passa a vir so do pedido (a nota sem os_id): o estorno tem de acha-la pelo pedido.
+    await dbRun(db, 'UPDATE recebimentos_material_almoxarifado SET os_id = NULL, pedido_compra_id = ? WHERE id = ?', [ped, rec]);
+    await ok(estornar(await movDoLote(rec, m, 'L2')));
+    assert.deepStrictEqual(await reservasAtivas(R1), [2], 'tirou da requisicao da OS (a OS do pedido foi ignorada)');
+  });
+  await test('[RN-228.17] duas requisicoes da nota, solta parcial de 2: a de menor prioridade (R2) primeiro', async () => {
+    const m = await material();
+    const R1 = await esperando(m, 2);
+    const R2 = await esperando(m, 2);
+    await entrar(m, 1, 'L1');
+    await statusLote(m, 'L1', 'BLOQUEADO');
+    const { rec } = await receber([[m, 3, 'L2'], [m, 4, 'L1']]);
+    assert.deepStrictEqual([await somaAtiva(R1), await somaAtiva(R2)], [2, 1], 'premissa: a nota deu 2 a R1 e 1 a R2');
+    await entrar(m, 1, 'L0');
+    await ok(estornar(await movDoLote(rec, m, 'L2')));
+    assert.deepStrictEqual([await somaAtiva(R1), await somaAtiva(R2)], [1, 0], 'a ordem da liberacao (da ultima na fila para a primeira)');
+  });
+
   terminou = true;
   await close();
   console.log(`\n  ${passed} passou, ${failed} falhou\n`);
