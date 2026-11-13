@@ -211,6 +211,9 @@ pede algo na tela. **Sem estimativa** — começa pela Fase 0.5.)*
 - **Onde:** `GET /api/almoxarifado/estoque` (`stockService.consultarEstoque`, `:3988` — `m.*` + `disponivelSql('m')`, todos os materiais
   ativos), consumido por **Materiais**/**Estoque** (a coluna *Disponível*), pela lista de materiais da **Nova Reserva** (`(Disponível: n un)`
   no `<option>`) e pelos relatórios que somam o disponível. A coluna *disponível* da Fila de separação já mostra o *separável* ao lado.
+  *(**Estava errado** — medido na Fase 0 da Etapa 223: não existe tela "Estoque"; a tela **Materiais** lê `GET /materiais` (`listarMateriais`,
+  compartilhada com o Compras) e mostra a *Quantidade* (o físico), sem *Disponível*; `/estoque` só é lido pela **Nova Reserva** e pelas
+  **Inspeções**; os relatórios usam a SQL do `reportService`.)*
 - **Medir antes de prometer (Fase 0):** a régua `loteImpedidoSql('m')` é uma subconsulta correlacionada por material (uma passada pelos lotes
   dele, com subconsultas por lote: saldo, inspeção, livro, reprovação, terceiros) e só calcula com `controle_lote = 1` (o `CASE`). A Fase 2 da
   222 mediu 0,6–1,5 ms por material no banco de desenvolvimento — numa lista de N materiais com lote, N vezes isso a cada abertura. Medir no
