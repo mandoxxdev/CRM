@@ -1,0 +1,6 @@
+*Concluído — almoxarifado: estornar a entrada de uma nota não deixa a requisição presa a peça de lote bloqueado*
+_13/11/2026_
+
+1. Estornar a entrada boa solta a reserva que só o lote bloqueado cobriria — estimado 4h · realizado 3h45
+
+*Total: estimado 4h · realizado 3h45*

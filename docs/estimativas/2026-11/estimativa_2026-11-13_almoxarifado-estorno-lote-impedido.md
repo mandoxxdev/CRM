@@ -17,7 +17,7 @@ Medido no código antes de estimar (sobre `7aacca26`):
 
 | # | Tarefa | Execução estimada | Fator | Informado | Etapa/plano | Régua usada | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | Estornar a entrada boa solta a reserva que só o lote impedido cobriria (C521) | 1h | estoque/saldo, estorno (análise 1h + teste 2h) | 4h | 228 | Etapa 221 (uma porta do motor, régua pronta) mediu 0,8 h; 219 ~1 h; 220 1,4 h | — | — | — |
+| 1 | Estornar a entrada boa solta a reserva que só o lote impedido cobriria (C521) | 1h | estoque/saldo, estorno (análise 1h + teste 2h) | 4h | 228 | Etapa 221 (uma porta do motor, régua pronta) mediu 0,8 h; 219 ~1 h; 220 1,4 h | 0,7 h (horas.js --grupos "E228=…", 13/11) → 45 min | 3h45 (45 min + análise 1 h + teste 2 h, da tabela — não informado pelo André). No estimado: a revisão do código achou e corrigiu um caso de mais (o déficit de outra requisição) dentro da mesma execução | ffe7b233, 297c5bc5, ad7c1d7c, ad91ae20, 4ca38a77 e este |
 
 Incerteza: baixa — a régua e os testes de molde (`chegadaLoteImpedido`, `recebimentoReservaChegadaEstorno`) existem.
 
@@ -25,3 +25,5 @@ Medição no fechamento:
 ```
 --grupos "E228=Etapa 228|Estimativa: almoxarifado - estorno"
 ```
+
+No fechamento: execução estimada 1h, medida 0,7 h — a régua das etapas do motor com régua pronta (221: 0,8 h; 228: 0,7 h) continua honesta. Conclusão: `conclusao_2026-11-13_almoxarifado-estorno-lote-impedido.txt`.
