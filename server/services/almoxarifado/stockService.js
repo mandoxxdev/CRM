@@ -3558,11 +3558,24 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
               { status: 400 });
             }
           }
+          // Etapa 209 (Fase 5, achado 1): o BLOQUEIO SEM lote so pode tirar do "sem lote" (total - Σ dos lotes), a mesma guarda M1
+          // do desbloqueio. Sem ela, L1 2 + sem lote 2, desbloqueio "sem lote" 2 e o estorno deste BLOQUEIO passava no total e
+          // levava as 2 pecas de L1 em quarentena para o disponivel, com o livro ainda dizendo L1 2 bloqueado.
+          const guardaSemLote = mov.lote_id
+            ? ''
+            : `AND COALESCE(quantidade_bloqueada,0) - ${bloqueioPorLote.bloqueadoComLoteSql('materiais_almoxarifado.id')} >= ? ${Q.FOLGA_SQL}`;
           const claim = await dbGet(db, `UPDATE materiais_almoxarifado
             SET quantidade_bloqueada = ${Q.qtdSql('COALESCE(quantidade_bloqueada,0) - ?')}, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ? AND COALESCE(quantidade_bloqueada,0) >= ? ${Q.FOLGA_SQL}
-            RETURNING id`, [mov.quantidade, mov.material_id, mov.quantidade]);
+            WHERE id = ? AND COALESCE(quantidade_bloqueada,0) >= ? ${Q.FOLGA_SQL} ${guardaSemLote}
+            RETURNING id`, [mov.quantidade, mov.material_id, mov.quantidade, ...(mov.lote_id ? [] : [mov.quantidade])]);
           if (!claim) {
+            if (!mov.lote_id && Q.cabe(mov.quantidade, Number(material.quantidade_bloqueada || 0))) {
+              const porLote = await bloqueioPorLote.bloqueadoPorLote(db, mov.material_id);
+              if (porLote && Q.cabe(mov.quantidade, porLote.total)) {
+                throw Object.assign(new Error(`Não é possível estornar: o bloqueio sem lote já foi desfeito `
+                  + `(bloqueado sem lote: ${Q.qtd(porLote.sem_lote)} ${material.unidade})`), { status: 400 });
+              }
+            }
             throw Object.assign(new Error(
               `Não é possível estornar: o bloqueio já foi desfeito (quantidade bloqueada: ${Q.qtd(material.quantidade_bloqueada || 0)})`),
               { status: 400 });

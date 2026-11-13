@@ -432,6 +432,24 @@ describe('InspecoesAlmoxarifado — Lote no Desbloquear (Etapa 209)', () => {
     expect(opcoesLote().map(([v]) => v)).toEqual(['', '9']);
   });
 
+  // Fase 5 (achado 4): a resposta ATRASADA do material anterior não pode trocar as opções do material escolhido agora.
+  test('(7b) a resposta do GET do material anterior que chega depois é ignorada: as opções ficam as do último', async () => {
+    let soltar10;
+    porMaterial[10] = new Promise((resolve) => { soltar10 = resolve; });
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url) => (url === '/almoxarifado/materiais/10/bloqueado-por-lote'
+      ? porMaterial[10].then((data) => ({ data }))
+      : base(url)));
+    await renderizar();
+    await abrirAjuste('Desbloquear');
+    await escolherMaterial('10');
+    await escolherMaterial('11');
+    expect(opcoesLote().map(([v]) => v)).toEqual(['', '9']); // metade positiva: as do 11
+    await act(async () => { soltar10({ material_id: 10, total: 5, sem_lote: 3, lotes: [{ lote_id: 7, codigo: 'L1', quantidade: 2 }] }); });
+    await act(async () => { await Promise.resolve(); });
+    expect(opcoesLote().map(([v]) => v)).toEqual(['', '9']);
+  });
+
   test('(8) Bloquear não busca o bloqueado por lote nem mostra o campo (B1419)', async () => {
     await renderizar();
     await abrirAjuste('Bloquear');

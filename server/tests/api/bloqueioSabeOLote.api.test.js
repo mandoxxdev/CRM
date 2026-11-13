@@ -352,6 +352,26 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(await bloqueadoPorLote(db, m.id), { material_id: m.id, total: 2, sem_lote: 2, lotes: [] });
   });
 
+  // Fase 5 (achado 1): o estorno do BLOQUEIO SEM lote so tira do "sem lote" (a guarda M1 do desbloqueio). Sem ela, a quarentena de
+  // L1 voltava ao disponivel sem ninguem liberar, e o livro continuava dizendo L1 2 bloqueado.
+  await test('[RN-209.06 d, Fase 5] L1 2 + sem lote 2, desbloqueia sem lote 2, estorna o BLOQUEIO avulso -> 400; BLOQUEIO vivo, L1 continua 2', async () => {
+    const m = await material(); const L1 = await quarentena(m, 2);
+    await inspectionService.bloquearMaterial(db, ADMIN, m.id, { quantidade: 2, justificativa: 'avulso' });
+    assert.strictEqual((await desbloquear(m, { quantidade: 2 })).status, 200);
+    const avulso = await dbGet(db, "SELECT id FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'BLOQUEIO' AND lote_id IS NULL", [m.id]);
+    recusou(await estornar(avulso.id), 'Não é possível estornar: o bloqueio sem lote já foi desfeito (bloqueado sem lote: 0 UN)');
+    assert.strictEqual(Number((await dbGet(db, 'SELECT cancelado FROM movimentacoes_almoxarifado WHERE id = ?', [avulso.id])).cancelado), 0,
+      'o BLOQUEIO avulso continua vivo');
+    assert.strictEqual(await bloqueada(m), 2);
+    assert.deepStrictEqual(await bloqueadoPorLote(db, m.id), { material_id: m.id, total: 2, sem_lote: 0, lotes: [{ lote_id: L1, codigo: 'L1', quantidade: 2 }] });
+    // metade positiva: com o sem lote intacto, o estorno do BLOQUEIO avulso passa
+    const m2 = await material(); await quarentena(m2, 2);
+    await inspectionService.bloquearMaterial(db, ADMIN, m2.id, { quantidade: 2, justificativa: 'avulso' });
+    const av2 = await dbGet(db, "SELECT id FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'BLOQUEIO' AND lote_id IS NULL", [m2.id]);
+    assert.strictEqual((await estornar(av2.id)).status, 200);
+    assert.strictEqual(await bloqueada(m2), 2);
+  });
+
   await test('[RN-209.10] dois desbloqueios simultaneos de L1 2 (total 4) pedindo 2 cada: um 200, um 400 M2; total 2, L1 0', async () => {
     const m = await material(); const L1 = await quarentena(m, 2);
     await inspectionService.bloquearMaterial(db, ADMIN, m.id, { quantidade: 2, justificativa: 'avulso' });
