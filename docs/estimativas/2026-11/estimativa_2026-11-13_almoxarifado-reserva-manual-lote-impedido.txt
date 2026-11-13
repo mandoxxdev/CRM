@@ -1,0 +1,9 @@
+*Planejamento — almoxarifado: a reserva manual não usa peça de lote bloqueado*
+_13/11/2026_
+
+*1. A reserva manual deixa de contar peças em lote bloqueado, reprovado ou vencido*
+Hoje a tela de reservas aceita reservar peças que estão num lote bloqueado (sem certificado), reprovado ou vencido, e essas peças não podem sair do estoque: a reserva fica presa e atrapalha quem precisa do material. Depois desta alteração, a reserva manual só conta o que pode de fato sair, e quando falta saldo a recusa diz quantas peças estão em lote bloqueado, reprovado ou vencido. As reservas automáticas das requisições e das ordens de serviço continuam como estão.
+Tempo estimado: *4h*
+
+*Total estimado: 4h*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
