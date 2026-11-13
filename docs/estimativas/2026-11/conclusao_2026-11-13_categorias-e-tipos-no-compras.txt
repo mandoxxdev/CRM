@@ -1,0 +1,7 @@
+*Concluído — categorias e tipos de material cadastrados no Compras*
+_13/11/2026_
+
+1. Categorias e Tipos de Material no Compras (o Almoxarifado só consulta) — estimado 3h · realizado 2h30
+
+*Total: estimado 3h · realizado 2h30*
+_Próximo da mesma lista: o Tipo de Material escolhido de uma lista no cadastro do material._

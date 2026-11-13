@@ -12,7 +12,7 @@ Tipos de Material (`almoxarifado.js:2307..2358`) idem. A aba Famílias já tem m
 | # | Tarefa | Execução estimada | Fator | Informado | Etapa/plano | Régua usada | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | Famílias e subfamílias no Compras | 1h30 | várias telas (30 + 1h30) + permissão (+30) | 4h | Etapa 211 | Etapa 193 (material só no Compras), mesmo molde | 1 h (horas.js, `Etapa 211`) | 3h30 (1 h + 2h30 da tabela: o André ainda não testou) | `d5f9743b` `079b6fb6` `e03538fc` |
-| 2 | Categorias e Tipos de Material no Compras | 1h | média (30 + 1h) + permissão (+30) | 3h | — | idem, duas listas pequenas | — | — | — |
+| 2 | Categorias e Tipos de Material no Compras | 1h | média (30 + 1h) + permissão (+30) | 3h | Etapa 215 | idem, duas listas pequenas | 0,2 h (horas.js, `Etapa 215`; a tela foi feita em paralelo e o medidor conta por baixo) | 2h30 (0,2 h + 2h da tabela, arred.: o André ainda não testou) | `79a24f48` `1cec6bc2` |
 
 Pontos de atenção para o plano: os Tipos de Material carregam as marcas de EPI (`is_epi`, `requer_assinatura`, `requer_termo`) que a
 entrega de EPI do almoxarifado usa — mudam só de quem cadastra, não de comportamento. A estimativa anterior do mesmo dia

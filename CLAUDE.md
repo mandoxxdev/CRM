@@ -198,9 +198,7 @@ tipo de material, fornecedor, fornecedores do material e seus códigos — é do
 e o portão do Compras (`portaCompras`); no Almoxarifado a mesma informação aparece **só para consulta**.
 
 - Feature nova de cadastro **nasce no Compras**. Não crie aba, botão ou rota de gravação de cadastro no Almoxarifado.
-- O que ainda contraria a regra (13/11/2026): categorias e tipos de material gravam por
-  `/api/almoxarifado/...` em Almoxarifado → Configurações (famílias e subfamílias foram para Compras → Famílias na Etapa 211) (estimativa `docs/estimativas/2026-11/estimativa_2026-11-12_cadastros-so-no-compras.md`);
-  e a sobra e a remessa a terceiros ainda criam material pelo Almoxarifado (Etapa 193, formato restrito) — a rever.
+- O que ainda contraria a regra (13/11/2026): a sobra e a remessa a terceiros ainda criam material pelo Almoxarifado (Etapa 193, formato restrito) — a rever.
 - Configurações **físicas** do almoxarifado (localizações, setores e áreas, perfis, regras de aprovação, motivos de
   movimentação) **não** são cadastro de compras e ficam no Almoxarifado.
 

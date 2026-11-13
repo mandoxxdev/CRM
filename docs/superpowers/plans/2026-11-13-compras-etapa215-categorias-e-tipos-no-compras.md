@@ -50,11 +50,29 @@ dos próprios arquivos. Páginas `components/compras/CategoriasCompras.js` (`/co
 
 | # | Task | Tipo | Estado |
 |---|---|---|---|
-| T1 | Servidor: handlers nomeados; recusa no Almoxarifado; rotas do Compras; teste `categoriasETiposNoCompras.api.test.js` com controle positivo; chave nos testes antigos que gravam pelo almoxarifado | tronco | — |
-| T2 | Tela: extrair as duas abas; Almoxarifado só consulta; duas páginas do Compras, rotas e menu; testes | galho (contrato acima) | — |
-| T3 | Integração pela rota: categoria criada pelo Compras aparece na leitura do Almoxarifado e do Compras; gravação pelo Almoxarifado recusada | integração | — |
-| T4 | Fechamento | — | — |
+| T1 | Servidor: handlers nomeados; recusa no Almoxarifado; rotas do Compras; teste `categoriasETiposNoCompras.api.test.js` com controle positivo; chave nos testes antigos que gravam pelo almoxarifado | tronco | feita `79a24f48` (7/7; sabotagens: sem a recusa no POST de categoria e no DELETE de tipo, sem a porta no POST de tipo e na leitura de tipos — vermelhos; trocar a porta de cadastro pela de leitura não derruba nada, as duas aceitam as mesmas pessoas) |
+| T2 | Tela: extrair as duas abas; Almoxarifado só consulta; duas páginas do Compras, rotas e menu; testes | galho (contrato acima) | feita `1cec6bc2`, em paralelo por agente (Compras 4/4 + 4/4; 5 sabotagens vermelhas) |
+| T3 | Integração pela rota: categoria criada pelo Compras aparece na leitura do Almoxarifado e do Compras; gravação pelo Almoxarifado recusada | integração | feita em `79a24f48` (cenário [RN-215.01 integracao]) |
+| T4 | Fechamento | — | feito |
+
+## Execução (2026-11-13)
+
+- Servidor e tela em paralelo (tela por agente, contra o contrato congelado), sem retrabalho. Os testes antigos que gravavam pelo
+  almoxarifado já tinham a chave desde a 211.
+- Fase 2 e Fase 5 não despachadas: mesmo molde da 211, cuja revisão não achou nada grave nas portas; registrado como divergência.
+- **Verificação (medida):** `test:api` 609/609, `test:almoxarifado` 44/0, validation 4/0, safealter 3/0, sqlite 16/0; **tela inteira
+  222/222 suítes, 2986/2986 testes**; build OK.
+
+## Retro (4 números)
+
+- Rodadas de correção até verde: 1 (auditoria lida da tabela errada no teste novo). Achados: sem revisão. Paralelismo: 1 galho (tela)
+  em paralelo ao tronco, sem retrabalho. Defeito que escapou da 211: nenhum até aqui.
 
 ## Próxima tarefa detalhada
 
-Fila do Compras, linha 3: Tipo de Material escolhido de uma lista no formulário de material (lê `GET /api/compras/materiais/aux/tipos-material`).
+Fila do Compras, linha 3: **Tipo de Material escolhido de uma lista** no formulário de material (estimativa revisada para 2h30).
+A lista vem de `GET /api/compras/materiais/aux/tipos-material` (Compras) ou `/almoxarifado/tipos-material`. **Ponto de atenção medido:**
+a restrição de endereço (`stockService.motivoRecusaEndereco`) compara `material.tipo_material` por igualdade exata com as chaves de
+`TIPOS_MATERIAL_ENUM` (`consumivel`, `epi`…), e o cadastro de tipos tem nomes (`Consumível`, `EPI`…): a comparação precisa ser
+normalizada (sem acento, sem caixa, espaço = `_`), senão escolher da lista quebra a restrição. O valor antigo que não está na lista
+aparece como opção, para não sumir.

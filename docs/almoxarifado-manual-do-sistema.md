@@ -289,11 +289,11 @@ Além da família existe o campo **Categoria**, uma classificação de apoio esc
 
 **Material classificado com uma categoria que não está mais no catálogo continua válido, e a tela mostra isso.** Ao abrir esse material para edição, o campo exibe o valor gravado seguido de **`(fora de catálogo)`** — por exemplo `CONSUMÍVEL (fora de catálogo)`. Salvar sem tocar no campo **mantém** o valor: o sistema não reclassifica material por conta própria, e não impede a edição do resto do cadastro por causa de uma categoria antiga.
 
-Existe também o campo **Tipo de Material**, texto que descreve a natureza física do item (chapa, tubo, perfil, barra, motor, rolamento, válvula, ferramenta, EPI, consumível etc.). O Tipo de Material não é decorativo: é ele que a restrição de endereço consulta (ver 3.4). Categoria e Tipo de Material são coisas diferentes e não se substituem.
+Existe também o campo **Tipo de Material**, texto que descreve a natureza física do item (chapa, tubo, perfil, barra, motor, rolamento, válvula, ferramenta, EPI, consumível etc.). O Tipo de Material não é decorativo: é ele que a restrição de endereço consulta (ver 3.4). Categoria e Tipo de Material são coisas diferentes e não se substituem. O cadastro dos tipos (nome, ícone, cor, se exige assinatura ou termo, se é EPI ou controlado) fica em **Compras → Tipos de Material**, de quem cadastra material; em **Almoxarifado → Configurações → aba "Tipos de Material"** a lista aparece só para consulta, com a frase *"O cadastro de tipos de material é feito em Compras → Tipos de Material."*
 
 #### O catálogo de categorias
 
-Em **Almoxarifado → Configurações → aba "Categorias"**, quem tem perfil **Administrador** do módulo pode criar, renomear, desativar e reativar categorias. Ler a lista é liberado a qualquer usuário do módulo — o formulário de material precisa dela para exibir a categoria do item.
+Em **Compras → Categorias**, quem cadastra material (o administrador do módulo Compras e os administradores do sistema) pode criar, renomear, desativar e reativar categorias. Os outros usuários do Compras veem só *"Seu acesso não permite cadastrar categorias e tipos de material. Peça a um administrador do sistema para marcar você como administrador do módulo Compras."* Em **Almoxarifado → Configurações → aba "Categorias"** a lista aparece **só para consulta**, para todos, com a frase *"O cadastro de categorias é feito em Compras → Categorias."*; gravar pelo Almoxarifado responde a mesma frase para qualquer pessoa. Ler a lista é liberado a qualquer usuário do módulo — o formulário de material precisa dela para exibir a categoria do item.
 
 | Ação | Regra |
 |---|---|
@@ -1260,15 +1260,16 @@ A tela **Configurações do Almoxarifado** abre para o Super Administrador, para
 
 | Aba | Super Administrador, administrador do módulo, perfil Administrador | Administrador do sistema sem nenhum dos três |
 |---|---|---|
-| Tipos de material, Estoques mínimos, Setores, Localizações, Liberação por valor | lê e grava | **lê, não grava** |
+| Estoques mínimos, Setores, Localizações, Liberação por valor | lê e grava | **lê, não grava** |
 | Alertas de estoque, Regras de aprovação, Configurações gerais | lê e grava | **nem lê** |
-| Categorias, Motivos de movimentação, Materiais por setor, Perfis de acesso, o bloco Almoxarifados (dentro de Setores) | lê e grava | lê e grava |
+| Motivos de movimentação, Materiais por setor, Perfis de acesso, o bloco Almoxarifados (dentro de Setores) | lê e grava | lê e grava |
+| Famílias, Categorias, Tipos de material (o cadastro é do Compras) | **lê, não grava** | **lê, não grava** |
 
 Para o administrador do sistema, a tela segue essa regra: nas abas que ele só lê, os dados aparecem sem os botões de cadastrar, editar, mover, excluir, inativar, reativar e salvar (em **Estoques mínimos** e **Liberação por valor**, os campos aparecem com os valores gravados e não aceitam digitação; o filtro de materiais e a busca de usuário funcionam), com a frase no topo:
 
 > *"Somente leitura — ⟨o quê⟩ é do Administrador do almoxarifado ou do Super Administrador; peça a um deles."*
 
-em que ⟨o quê⟩ é *"cadastrar, editar e excluir tipos de material"*, *"mudar estoque mínimo, estoque máximo, ponto de pedido e prazo de reposição"*, *"cadastrar, editar e inativar setores e áreas"*, *"cadastrar, editar, mover e excluir localizações"* ou *"mudar a liberação por valor e os aprovadores"*. Em **Localizações**, *Etiqueta*, *Etiquetas* e *Ver Mapa de Áreas* continuam (não gravam nada). Nas três que ele não lê, a aba mostra só:
+em que ⟨o quê⟩ é *"mudar estoque mínimo, estoque máximo, ponto de pedido e prazo de reposição"*, *"cadastrar, editar e inativar setores e áreas"*, *"cadastrar, editar, mover e excluir localizações"* ou *"mudar a liberação por valor e os aprovadores"*. Em **Localizações**, *Etiqueta*, *Etiquetas* e *Ver Mapa de Áreas* continuam (não gravam nada). Nas três que ele não lê, a aba mostra só:
 
 > *"Restrito — ⟨ver e mudar os alertas de estoque | ver e mudar as regras de aprovação | ver e mudar as configurações gerais do almoxarifado⟩ é do Administrador do almoxarifado ou do Super Administrador; peça a um deles."*
 

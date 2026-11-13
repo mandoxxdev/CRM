@@ -605,6 +605,12 @@
   era só de quem cadastra. **Descartado:** abrir a leitura das famílias a todo o módulo Compras (a página mostraria a árvore sem os
   botões); fica para quando a compradora pedir. O perfil Administrador do almoxarifado, que via os botões na aba, passou a só
   consultar.
+- **B89 — 13/11/2026 (Etapa 215): categorias e tipos de material só se cadastram no Compras; o Almoxarifado consulta.** Mesmo molde
+  das famílias (B88): telas **Compras → Categorias** e **Compras → Tipos de Material**, de quem cadastra material; pelo Almoxarifado,
+  gravar responde *"O cadastro de categorias é feito em Compras → Categorias."* / *"O cadastro de tipos de material é feito em Compras →
+  Tipos de Material."* para todos. **Reversível** pela mesma chave `ALMOX_CADASTRO_MATERIAL=liberado`. **Descartado:** uma tela só com
+  as duas listas em abas (duas entradas no menu deixam as mensagens apontarem um lugar exato). Consequência: o perfil Administrador
+  do almoxarifado, que gravava as duas abas, passou a só consultar.
 
 ### D. Dúvidas para você (ou para o P.O.)
 - **D-35** — O que A, B e C significam **para a GMP**? A legenda atual é a definição genérica.
@@ -784,6 +790,47 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 215 — Categorias e Tipos de Material cadastrados no Compras (2026-11-13)
+
+**Em uma frase.** Seguindo o pedido do Compras (o Almoxarifado não cadastra nada), as categorias e os tipos de material saem de
+Almoxarifado → Configurações e passam a ser cadastrados em **Compras → Categorias** e **Compras → Tipos de Material**.
+
+### O que há de novo (visível para o usuário)
+
+- **Compras → Categorias** e **Compras → Tipos de Material** (menu do Compras, depois de Famílias): as mesmas listas e os mesmos botões
+  de antes, para o administrador do módulo Compras e os administradores do sistema.
+- **Almoxarifado → Configurações → Categorias / Tipos de Material**: só consulta, para todos, com a frase do lugar novo.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Categorias e tipos se cadastravam no Almoxarifado | Se cadastram no Compras, por quem cadastra material |
+| As abas do Almoxarifado tinham os botões para o perfil Administrador | As abas só consultam, para todos |
+
+### As regras, com o cenário exato
+
+1. Administrador do Compras → **Compras → Categorias** → *Nova Categoria* → *Aço inox* → salvar: *"Categoria criada!"*; nome repetido →
+   *"Já existe uma categoria com este nome"*.
+2. **Compras → Tipos de Material** → *Novo Tipo de Material* sem nome → *"Nome é obrigatório"*.
+3. Comprador sem ser administrador do Compras → as duas telas mostram *"Seu acesso não permite cadastrar categorias e tipos de material.
+   Peça a um administrador do sistema para marcar você como administrador do módulo Compras."*
+4. Gravar pelo Almoxarifado (pela API) → *"O cadastro de categorias é feito em Compras → Categorias."* ou *"O cadastro de tipos de
+   material é feito em Compras → Tipos de Material."*
+
+### Roteiro de teste manual (clicável)
+
+1. Entre como administrador do módulo Compras → **Compras → Categorias** → crie *Aço inox*; renomeie; desative; reative.
+2. **Compras → Tipos de Material** → crie *Consumível de solda* com um ícone e uma cor.
+3. **Compras → Materiais → Novo Material**: a categoria nova aparece na lista.
+4. Entre como Administrador do almoxarifado → **Almoxarifado → Configurações → Categorias** e **→ Tipos de Material**: as listas, a
+   frase e nenhum botão.
+
+### O que a etapa NÃO cobre
+
+- O campo Tipo de Material do formulário de material continua texto livre — próximo item da fila (escolher de uma lista).
+- A sobra e a remessa a terceiros ainda criam material pelo Almoxarifado (formato restrito) — a rever.
 
 ## Etapa 211 — Famílias e subfamílias cadastradas no Compras (2026-11-13)
 
