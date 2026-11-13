@@ -1,0 +1,9 @@
+*Planejamento — almoxarifado: material que chega em lote bloqueado*
+_13/11/2026_
+
+*1. Material que chega em lote bloqueado não fica reservado para quem espera*
+Quando uma nota dá entrada num lote bloqueado (por exemplo, sem certificado), a liberação da inspeção ou da não conformidade e o encerramento de uma ordem de serviço deixam de guardar essas peças para as requisições que estavam esperando. A requisição continua como aguardando estoque, em vez de aparecer como reservada com peças que não podem sair; quando o lote for liberado, a separação já enxerga as peças. O aviso de entrada passa a dizer que o material entrou em lote bloqueado, e quem espera não recebe o aviso de que o material chegou enquanto ele não pode sair.
+Tempo estimado: *4h*
+
+*Total estimado: 4h*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
