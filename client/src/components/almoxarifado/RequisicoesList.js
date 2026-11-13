@@ -2596,6 +2596,8 @@ const RequisicoesList = () => {
                           + ((parseFloat(quantidadesSeparacao[item.id]) || 0) + 1e-9 < pendente ? FRASE_PARCIAL : '');
                       } else {
                         const p = ps.pegar_em;
+                        // Etapa 226 (Fase 5 R3): a sugestão num lote impedido não convida a escolher a opção desabilitada.
+                        if (fraseOpcaoImpedida(saldosEntrega[item.material_id], `${p.localizacao_id}:${p.lote_id ?? ''}`)) return null;
                         const un = item.unidade || item.material_unidade;
                         frase = `Sugestão da fila: ${p.localizacao_codigo}${p.lote_codigo ? ` — lote ${p.lote_codigo}` : ''}`
                           + ` · ${fmtQtdSugestao(p.quantidade_sugerida)}${un ? ` ${un}` : ''}`
@@ -2611,7 +2613,9 @@ const RequisicoesList = () => {
                     })()}
                     {/* Etapa 196 (RN-196.12): outro par (ou automático) sobre item com origem não é mais troca — a parte já
                         separada continua saindo da origem; só avisa que esta parte sai no automático. Sem motivo. */}
-                    {(parseFloat(quantidadesSeparacao[item.id]) || 0) > 0 && trocaNaSeparacao(item, origensSeparacao[item.id]) && (() => {
+                    {/* Etapa 226 (Fase 5 R1): com a origem num lote impedido, a frase da B1497 fala — esta prometeria "continuam saindo de lá". */}
+                    {(parseFloat(quantidadesSeparacao[item.id]) || 0) > 0 && trocaNaSeparacao(item, origensSeparacao[item.id])
+                      && !frasePlanejadaImpedida(item, saldosEntrega[item.material_id]) && (() => {
                       const un = item.unidade || item.material_unidade;
                       return (
                         <div style={{ marginTop: 8 }}>
@@ -2747,8 +2751,10 @@ const RequisicoesList = () => {
                         dica={lerValorOrigem(origensEntrega[item.id]?.valor) ? null :'Para confirmar a leitura, escolha antes de onde o item sai.'}
                       />
                       {/* Etapa 63: acima do separado pendente, sem escolha, o servidor divide a baixa. */}
+                      {/* Etapa 226 (Fase 5 R2): com a origem num lote impedido, a frase da B1497 fala — esta prometeria "sai de …". */}
                       {temPlanejada(item) && qtdEntregar > pendentePlanejado(item) + 1e-9
-                        && !origensEntrega[item.id]?.valor && !origensEntrega[item.id]?.automatico && (
+                        && !origensEntrega[item.id]?.valor && !origensEntrega[item.id]?.automatico
+                        && !frasePlanejadaImpedida(item, saldosEntrega[item.material_id]) && (
                         <div id={`entrega-dica-pendente-${item.id}`} style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)', marginTop: 4 }}>
                           {/* Etapa 196 (Fase 5, K4): só a PARTE sai de lá, não o separado pendente inteiro. */}
                           {`${fmtQtd(pendentePlanejado(item))}${(item.unidade || item.material_unidade) ? ` ${item.unidade || item.material_unidade}` : ''} sai de ${item.origem_separacao_codigo}${item.lote_separacao_codigo ? ` — lote ${item.lote_separacao_codigo}` : ''} (o que foi separado de lá); o restante, automático. Se lá não houver mais essa quantidade, a entrega é recusada — escolha de onde sai.`}

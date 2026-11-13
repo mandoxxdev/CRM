@@ -321,6 +321,61 @@ describe('Etapa 226: o "Sai de" diz qual lote está impedido', () => {
     expect(bom).toMatchObject({ localizacao_origem_id: 4, lote_id: 12 });
   });
 
+  test('[RN-226.13, Fase 5 R1] separação: com a origem num lote impedido, o aviso "continuam saindo de lá" não aparece; com ela boa, aparece', async () => {
+    requisicao = EM_SEPARACAO;
+    await renderizar();
+    await clicar('Ajustar Separação');
+    expect(selectSeparacao().value).toBe('');
+    expect(container.querySelector('#separacao-dica-lote-impedido-1')).toBeTruthy();
+    expect(container.querySelector('#separacao-aviso-origem-1')).toBeNull();
+    act(() => root.unmount());
+    root = createRoot(container);
+    saldos = [A01, XB01, Z02({ lote_status: 'ATIVO', lote_esta_impedido: false })];
+    await renderizar();
+    await clicar('Ajustar Separação');
+    escolher(selectSeparacao(), '');
+    expect(container.querySelector('#separacao-aviso-origem-1').textContent).toContain('que continuam saindo de lá');
+  });
+
+  test('[RN-226.13, Fase 5 R2] entrega acima da parte: com a origem num lote impedido, a dica "sai de Z-02" não aparece; com ela boa, aparece', async () => {
+    const acima = { ...PARCIAL_PLANEJADA, itens: [{ ...PARCIAL_PLANEJADA.itens[0], quantidade_origem_separacao: 1 }] };
+    requisicao = acima;
+    await renderizar();
+    await clicar('Completar Entrega');
+    expect(container.querySelector('#entrega-dica-lote-impedido-1')).toBeTruthy();
+    expect(container.querySelector('#entrega-dica-pendente-1')).toBeNull();
+    act(() => root.unmount());
+    root = createRoot(container);
+    saldos = [A01, XB01, Z02({ lote_status: 'ATIVO', lote_esta_impedido: false })];
+    await renderizar();
+    await clicar('Completar Entrega');
+    expect(container.querySelector('#entrega-dica-pendente-1').textContent).toContain('sai de Z-02 — lote L2');
+  });
+
+  test('[RN-226.13, Fase 5 R3] a sugestão da fila num lote impedido não diz "não veio escolhida"; num lote bom com aviso, diz', async () => {
+    let pegarEm = { localizacao_id: 4, lote_id: 12, localizacao_codigo: 'Z-02', lote_codigo: 'L2', quantidade_sugerida: 5, cobre: true };
+    let aviso = null;
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/requisicoes/55/sugestao-coleta') {
+        return Promise.resolve({ data: { itens: [{ item_id: 1, pegar_em: pegarEm, pegar_em_aviso: aviso, pegar_em_alerta: null }] } });
+      }
+      return base(url);
+    });
+    requisicao = APROVADA;
+    await renderizar();
+    await clicar('Iniciar Separação');
+    expect(selectSeparacao().value).toBe('');
+    expect(container.querySelector('#separacao-sugestao-1')).toBeNull();
+    act(() => root.unmount());
+    root = createRoot(container);
+    pegarEm = { ...pegarEm, localizacao_id: 2, lote_id: 7, localizacao_codigo: 'XB-01', lote_codigo: 'L1' };
+    aviso = 'Nenhum endereço tem tudo';
+    await renderizar();
+    await clicar('Iniciar Separação');
+    expect(container.querySelector('#separacao-sugestao-1').textContent).toContain('não veio escolhida');
+  });
+
   test('[RN-226.11] o util e o extrato são a mesma função', () => {
     expect(doUtil).toBe(doExtrato);
     expect(doUtil({ lote_status: 'BLOQUEADO', lote_esta_impedido: true })).toBe('Bloqueado');
