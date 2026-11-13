@@ -14,6 +14,7 @@ import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import AvisoDaListaRecusada from './AvisoDaListaRecusada';
 import useUltimoPedido from '../../hooks/useUltimoPedido';
 import { formatarInstanteDoBanco } from './instanteDoBanco';
+import { situacaoDoLote } from '../../utils/situacaoDoLote';
 import './Almoxarifado.css';
 
 // SUCATA e PERDA foram isentos da guarda de vencimento na Task 3 (Etapa 6) justamente para que
@@ -120,6 +121,20 @@ const TIPOS_DESCARTE_LOTE = ['PERDA'];
 const loteDisponivelParaTipo = (lote, tipo) => {
   if (tipo === 'TRANSFERENCIA') return true;
   return TIPOS_DESCARTE_LOTE.includes(tipo) ? lote.status === 'ATIVO' : lote.elegivel;
+};
+
+// Etapa 233 (D (232) 1, B1528): a série que ESTE tipo não pode baixar — a mesma régua do seletor de lote acima, pela situação do lote que a
+// listagem de séries traz (B1523). Saída: o lote impedido (bloqueado, reprovado ou vencido sem liberação). Perda: só o status (o vencido
+// sai por Perda). Só com `=== true` (resposta antiga ou valor torto: como antes). Fora da Saída e da Perda (o ajuste): nunca — o motor baixa
+// série de qualquer lote no ajuste (B1529). Com o lote em branco a porta v2 confere o lote das séries pela mesma régua (B1527).
+const serieImpedidaParaTipo = (serie, tipo) => {
+  if (!serie || serie.lote_esta_impedido !== true || !TIPOS_SAIDA_LOTE.includes(tipo)) return false;
+  return TIPOS_DESCARTE_LOTE.includes(tipo) ? serie.lote_status !== 'ATIVO' : true;
+};
+// B1530: a frase embaixo da lista, por tipo (literais congeladas no plano).
+const FRASE_SERIES_IMPEDIDAS_SAIDA = {
+  SAIDA: 'Séries de lote bloqueado, reprovado ou vencido vêm apagadas: só saem depois que o lote for liberado na tela Lotes e Séries.',
+  PERDA: 'Séries de lote bloqueado ou reprovado vêm apagadas: só saem depois que o lote for liberado na tela Lotes e Séries.',
 };
 
 // Tipos que não podem ser estornados pelo botão do livro (espelha as recusas de
@@ -391,10 +406,13 @@ const MovimentacoesAlmoxarifado = () => {
   // realmente visível sempre que o lote selecionado ou a lista de séries disponíveis mudar. O
   // `every` evita um `setForm` (e portanto um re-render) quando nada precisa ser removido —
   // sem essa guarda o efeito rodaria de novo a cada render mesmo sem mudança real.
+  // Etapa 233 (B1528): também tira a série que o tipo não pode baixar (apagada na lista) — por isso `form.tipo` nas dependências: a
+  // vencida marcada na Perda sai ao trocar para Saída. No ajuste `serieImpedidaParaTipo` é sempre falso (a marcada continua).
   useEffect(() => {
     const visiveisIds = new Set(
       seriesDisponiveis
         .filter((s) => !form.lote_id || Number(s.lote_id) === Number(form.lote_id))
+        .filter((s) => !serieImpedidaParaTipo(s, form.tipo))
         .map((s) => s.id)
     );
     setForm((f) => (
@@ -403,7 +421,7 @@ const MovimentacoesAlmoxarifado = () => {
         : { ...f, serie_ids: f.serie_ids.filter((id) => visiveisIds.has(id)) }
     ));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.lote_id, seriesDisponiveis]);
+  }, [form.lote_id, form.tipo, seriesDisponiveis]);
 
   // Etapa 9, Task 8: hint de retalho na SAÍDA. `GET /materiais/:id/retalhos-disponiveis` (Task 4)
   // já filtra DISPONIVEL + reutilizavel + saldo do material-retalho > 0 — a tela só conta o que
@@ -1217,24 +1235,42 @@ const MovimentacoesAlmoxarifado = () => {
                   {selectedMaterial?.controle_serie === 1 && TIPOS_SAIDA_LOTE.includes(form.tipo) && (
                     <div className="almox-field almox-form-full">
                       <label>Séries a {form.tipo === 'SAIDA' ? 'entregar' : 'baixar'} *</label>
-                      <div style={{ maxHeight: 140, overflowY: 'auto', border: '1px solid var(--gmp-border)', borderRadius: 6, padding: 6 }}>
+                      <div id="mov-series-saida" style={{ maxHeight: 140, overflowY: 'auto', border: '1px solid var(--gmp-border)', borderRadius: 6, padding: 6 }}>
                         {seriesDisponiveis
                           .filter((s) => !form.lote_id || Number(s.lote_id) === Number(form.lote_id))
-                          .map((s) => (
-                            <label key={s.id} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '0.85rem' }}>
-                              <input type="checkbox" checked={form.serie_ids.includes(s.id)}
-                                onChange={(e) => setForm({
-                                  ...form,
-                                  serie_ids: e.target.checked
-                                    ? [...form.serie_ids, s.id]
-                                    : form.serie_ids.filter((id) => id !== s.id),
-                                })} />
-                              {s.numero}{s.lote_codigo ? ` · lote ${s.lote_codigo}` : ''}
-                            </label>
-                          ))}
+                          .map((s) => {
+                            // Etapa 233 (B1528): a série que este tipo não pode baixar vem apagada, com o lote e a situação no lugar do
+                            // " · lote X" (as palavras do extrato, `situacaoDoLote`).
+                            const impedida = serieImpedidaParaTipo(s, form.tipo);
+                            return (
+                              <label key={s.id} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '0.85rem',
+                                ...(impedida ? { opacity: 0.6 } : {}) }}>
+                                <input type="checkbox" data-serie-id={s.id} checked={form.serie_ids.includes(s.id)} disabled={impedida}
+                                  onChange={(e) => setForm({
+                                    ...form,
+                                    serie_ids: e.target.checked
+                                      ? [...form.serie_ids, s.id]
+                                      : form.serie_ids.filter((id) => id !== s.id),
+                                  })} />
+                                {s.numero}
+                                {impedida ? (
+                                  <span data-serie-situacao={s.id} style={{ color: 'var(--gmp-error)', fontSize: '0.75rem' }}>
+                                    {` · lote ${s.lote_codigo} — ${situacaoDoLote(s)}: não sai`}
+                                  </span>
+                                ) : (s.lote_codigo ? ` · lote ${s.lote_codigo}` : '')}
+                              </label>
+                            );
+                          })}
                         {seriesDisponiveis.length === 0 && <small>Nenhuma série disponível em estoque.</small>}
                       </div>
-                      <small>{form.serie_ids.length}/{form.quantidade || 0} série(s) selecionada(s)</small>
+                      {seriesDisponiveis
+                        .filter((s) => !form.lote_id || Number(s.lote_id) === Number(form.lote_id))
+                        .some((s) => serieImpedidaParaTipo(s, form.tipo)) && (
+                        <small id="mov-series-impedidas" style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                          {FRASE_SERIES_IMPEDIDAS_SAIDA[form.tipo]}
+                        </small>
+                      )}
+                      <small id="mov-series-saida-contador">{form.serie_ids.length}/{form.quantidade || 0} série(s) selecionada(s)</small>
                     </div>
                   )}
                   {/* Etapa 62 (RN-03): ajuste de material com série. Sem endereço (o motor recusa por
