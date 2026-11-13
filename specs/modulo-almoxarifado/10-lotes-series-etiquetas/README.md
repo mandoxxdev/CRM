@@ -1,5 +1,10 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 218 (2026-11-13, `97ba728c`, Fase 5 `e4490a2f`): o lote escolhido à mão (Sai de) deixa de fora a peça presa (C513)** —
+> `retidoDoLote.situacaoDosLotes` (saldo, inspeção, retido e livre por lote, a mesma tabela derivada da 217) alimenta a separação, a entrega e
+> a janela; detalhe na spec 05, bloco "Etapa 218". A Fase 5 pôs sob a trava do material os escritores do retido que gravavam fora dela
+> (remessa cancelada/encerrada/retornada, devolução ao fornecedor, sucateamento do reprovado — B1452).
+
 > **+ Etapa 217 (2026-11-13, código `e2a43f20`, Fase 5 `cad6da56` (trava; testes em `e2a43f20`)): a entrega e o automático não tiram a peça bloqueada do lote (C466 2ª parte, C503)** — `retidoDoLote.js` (quarentena pelo livro + reprovação pela inspeção + terceiros pelo item da remessa, limite por lote e por família) lido por `lotesParaOAutomatico` e por `loteImpedidoSql`; o envio de remessa sob a trava do material (B1442). Ver a seção "Etapa 217", no fim.
 
 > **+ Etapa 209 (2026-11-13, T1 `9a3dcad9`+`8ff95f59`, T2 `e10f8c04`, T3 `7b8e8f7b`, T4 `cc4da040`, T5 `4bdf0a09`, T6 `b073fb93`, Fase 5 `fa50fae9`): o bloqueio sabe o lote (C466, 1ª parte)** — o `BLOQUEIO` da devolução para Quarentena grava `lote_id`; o bloqueado por lote é derivado do livro (`bloqueioPorLote.js`: Σ `BLOQUEIO` − Σ `DESBLOQUEIO` com o lote e `cancelado = 0`; sem tabela, sem migration); o `DESBLOQUEIO` confere o lote no claim (M2) e, sem lote, só tira do "sem lote" (M1); o estorno do `BLOQUEIO` confere o lote (M3) e, sem lote, o "sem lote" (Fase 5); `GET /materiais/:id/bloqueado-por-lote`; campo **Lote** na janela Desbloquear. Nenhum leitor de disponível muda (a 2ª parte, C503). A frase "bloqueio e terceiros não têm lote" da seção da 197 ficou velha em parte — anotada lá. Ver a seção "Etapa 209", no fim. O status não muda.

@@ -11,7 +11,13 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-13):** **Etapa 217 fechada** (**a entrega e o automático não tiram a peça bloqueada do
+> **Onde o desenvolvimento está (2026-11-13):** **Etapa 218 fechada** (**o lote escolhido à mão deixa de fora a peça presa** — no **Sai de**
+> da separação e da entrega, quem escolhe o lote só leva o que pode sair dele: a peça em **quarentena**, a **reprovada na inspeção**, a que
+> está **num terceiro**, a que está **em inspeção** e a já separada para outra requisição ficam; a recusa diz quanto pode sair e por quê, e a
+> janela mostra *"— do lote podem sair 3 (1 bloqueada)"*. **C513** resolvido; servidor e um texto na janela; antes do deploy a **A115**
+> (consulta); decisões **B1443** a **B1452**; avisos **C517** e **C518**; limitações **D (218)**; verificação **F (218)**). **Próxima:**
+> **as três portas que distribuem para quem espera não reservam saldo de lote impedido** (**C478**) — detalhada no fim do plano da 218.
+> *(Antes, 2026-11-13:)* **Etapa 217 fechada** (**a entrega e o automático não tiram a peça bloqueada do
 > lote** — a peça em **quarentena**, a **reprovada na inspeção** e a que está **num terceiro** ficam no lote dela: a entrega automática tira
 > do lote seguinte, e a aprovação e a separação descontam o certo quando a peça bloqueada está num lote bom. **C466**/**C503** resolvidos; só
 > servidor (a tela não mudou — o que muda é o número da fila, do separável e de onde a entrega sai); antes do deploy a **A114** (consulta);
@@ -689,7 +695,7 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Cento e treze itens para rodar em produção ANTES do deploy — cento e oito são consulta, três são ação fora do sistema, um é ação na tela antes de liberar o uso, e um é uma limpeza de disco que roda sozinha
+### A. Cento e catorze itens para rodar em produção ANTES do deploy — cento e nove são consulta, três são ação fora do sistema, um é ação na tela antes de liberar o uso, e um é uma limpeza de disco que roda sozinha
 
 *(**Atualizado em 2026-11-13 (Etapa 209) de cento e onze para cento e doze**, com a **A112** — conferir que nenhum bloqueio ou desbloqueio
 antigo do livro tem lote. **Somente leitura**; a etapa não tem migration.)*
@@ -4561,12 +4567,35 @@ WHERE r.status = 'ATIVA' AND m.controle_lote = 1
 Alguma linha — normal: aqueles lotes passam a mostrar menos livre na entrega automática. Na terceira, a requisição listada pode receber, na
 entrega, *"… faltam N un em lote que pode sair …"* (**C515**). *(As consultas não foram rodadas no banco de produção.)*
 
+**A115 (NOVA, da Etapa 218 — somente leitura) — separações em andamento que saem de um lote com peça presa.** Desde a 218 a entrega
+num clique confere o lote inteiro da origem da separação: se a caixa foi separada de um lote que **agora** tem peça em quarentena, reprovada,
+em terceiro ou em inspeção e o lote não cobre, a entrega responde *"… a origem da separação (⟨endereço⟩) não serve mais (no lote ⟨L⟩ há …)
+— entregue escolhendo de onde sai"* (**C518**). Para saber quais caixas estão nesse caso:
+```sql
+SELECT r.numero, ir.id AS item, m.codigo AS material, lt.codigo AS lote,
+       ir.quantidade_separada - COALESCE(ir.quantidade_entregue,0) AS na_caixa
+FROM itens_requisicao_almoxarifado ir
+JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
+JOIN materiais_almoxarifado m ON m.id = ir.material_id
+JOIN lotes_almoxarifado lt ON lt.id = ir.lote_separacao_id
+WHERE ir.origem_separacao_id IS NOT NULL AND ir.lote_separacao_id IS NOT NULL
+  AND ir.quantidade_separada > COALESCE(ir.quantidade_entregue,0)
+  AND m.controle_lote = 1 AND COALESCE(m.controle_serie,0) = 0
+  AND COALESCE(r.ativo,1) = 1 AND r.status IN ('APROVADO','AGUARDANDO_ESTOQUE','AGUARDANDO_COMPRA','PARCIALMENTE_RESERVADA',
+    'TOTALMENTE_RESERVADA','EM_SEPARACAO','PARCIALMENTE_ATENDIDA','PRONTA_PARA_RETIRADA','AGUARDANDO_APROVACAO_VALOR')
+  AND (COALESCE(m.quantidade_bloqueada,0) > 0 OR COALESCE(m.quantidade_em_terceiros,0) > 0 OR COALESCE(m.quantidade_em_inspecao,0) > 0);
+```
+**Como ler o resultado:** nenhuma linha — nada muda no deploy. Alguma linha — abra **Inspeções → Desbloquear** do material e veja se o
+lote listado tem peça bloqueada; se tiver, essa entrega vai pedir **Entregar escolhendo de onde sai…** → **"Qualquer endereço
+(automático)"** (que já não tira a peça presa). *(A consulta não foi rodada no banco de produção; a lista de status é a das requisições com
+caixa viva no código.)*
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -14505,6 +14534,58 @@ reproduzido: um envio de remessa de L1 feito **no meio** de uma entrega fazia a 
 negativo (a conferência tinha contado o L1 inteiro; a baixa já via 2 dele "em terceiro"). Agora o envio de cada item espera a entrega
 terminar. Descartado: a entrega ler o bloqueado uma vez e reusar (deixaria a porta fora da trava). **Reversível.**
 
+**B1443 (NOVA, da Etapa 218; decisão do agente) — o lote escolhido à mão confere o lote inteiro, só quando ele tem peça presa.** Com lote
+escolhido no **Sai de** (separação ou entrega, inclusive "só o lote" e a origem da separação), além do saldo do endereço o sistema confere
+quanto pode sair do **lote**. Só roda em material com **Controle por lote**, sem série, e lote com peça bloqueada nele ou em inspeção —
+lote sem nada preso responde exatamente como antes. Saldo negativo permitido **não** isenta (como a **B1391**). Material **sem** Controle por lote que tenha lotes cadastrados fica de fora, como na conta da aprovação e na entrega automática (**B1371**) — ali o lote é só uma etiqueta (Fase 5: registrado em **D (218)**). Descartados: descontar a peça
+presa no saldo do **endereço** (não se sabe em que endereço ela está — recusaria em todo endereço do lote) e conferir o lote **sempre**
+(mudaria recusas de separações antigas sem peça presa nenhuma). **Reversível.**
+
+**B1444 (NOVA, da Etapa 218; decisão do agente) — a conta do que pode sair do lote.** *pode sair* = saldo do lote − em inspeção no lote −
+bloqueado no lote (quarentena, reprovação aberta, terceiro — a mesma conta da entrega automática, **B1434** a **B1436**) − o que **outras
+requisições** já separaram desse lote (qualquer endereço) − o que **esta** requisição já separou dele em rodadas anteriores (separação) ou o
+que fica guardado das outras peças dela (entrega) − o que esta mesma operação já pediu do lote. **Reversível.**
+
+**B1445 (NOVA, da Etapa 218; decisão do agente) — material com número de série fica fora.** A série escolhida é a peça; a série bloqueada já
+não aparece em estoque. Como a **C486** da 206. **Reversível.**
+
+**B1446 (NOVA, da Etapa 218; decisão do agente) — a origem da separação também é conferida.** Se a caixa foi separada de um lote que depois
+ganhou peça presa (ou foi separada antes do deploy) e o lote não cobre, a entrega num clique responde com o *"não serve mais"* de sempre
+(como o lote bloqueado depois da separação, **B1389**), e o caminho é **"Qualquer endereço (automático)"**. Descartado: deixar a origem da
+separação sair como está — sairia justamente a peça presa. Consequência: duas caixas guardadas no mesmo lote e uma peça dele enviada a
+terceiro → as duas tomam o *"não serve mais"* (**C518**). **Reversível.**
+
+**B1447 (NOVA, da Etapa 218; decisão do agente) — a recusa nova vem por último.** As recusas de antes (saldo do endereço, separado por outras
+requisições ou peças, "só o lote") continuam primeiro; a do lote depois. Na entrega, na ordem: origem da separação → escolhidos à mão → só o
+lote (a recusa cai em quem escolheu à mão). **Reversível.**
+
+**B1448 (NOVA, da Etapa 218; decisão do agente) — a divergência da separação usa o mesmo máximo.** Separar o que pode sair do lote não é
+marcado como divergente. **Reversível.**
+
+**B1449 (NOVA, da Etapa 218; decisão do agente) — a janela mostra quanto pode sair do lote.** No **Sai de** (separação e entrega), a opção de
+um lote com peça presa ganha *"— do lote podem sair 3 (1 bloqueada, 2 em inspeção)"*, e o máximo da janela de separação respeita esse número
+(a sugestão da fila deixa de pré-selecionar o lote que não cobre). O número desconta as outras requisições; na separação, também o que esta
+requisição já separou do lote. Descartado: um aviso separado na tela (**C514** continua aberto para a janela de entrega automática).
+**Reversível.**
+
+**B1450 (NOVA, da Etapa 218; decisão do agente) — sem trava nova.** A separação e a entrega já leem sob as duas travas; a janela é informação
+(como a sobra da 201). **Reversível.**
+
+**B1451 (NOVA, da Etapa 218; decisão do agente) — a frase.** *"⟨material⟩: no lote ⟨L⟩ há ⟨n⟩ ⟨un⟩, mas só ⟨m⟩ podem sair nesta separação:
+⟨parcelas⟩; não cobre a quantidade (⟨q⟩). Escolha outro lote ou separe menos"* — as parcelas, só as maiores que zero, nesta ordem: *"⟨r⟩ ⟨un⟩
+estão bloqueadas nele (quarentena, reprovação na inspeção ou com terceiro)"*, *"⟨i⟩ ⟨un⟩ em inspeção"*, *"⟨g⟩ ⟨un⟩ já separadas dele para
+outras requisições"*, *"⟨p⟩ ⟨un⟩ já separadas dele por esta requisição"*, *"⟨j⟩ ⟨un⟩ já pedidas nesta separação"*; no singular abaixo de 2
+(*"1 un está bloqueada"*, *"só 1 pode sair"*). Na entrega: *"nesta entrega"*, *"… para outras requisições ou outras peças desta"* e o conselho
+*"Escolha outro lote ou deixe "Qualquer endereço (automático)""*. **Reversível.**
+
+**B1452 (NOVA, da Etapa 218, Fase 5; decisão do agente) — quem mexe no bloqueado do lote pega a trava do material.** Achado da revisão,
+reproduzido: **cancelar ou encerrar uma remessa** baixava o "em terceiro" do material e só depois, fora da trava, dava o item por
+liquidado — nesse instante a conta do lote deixava de reter as peças de **todas** as remessas do material, e uma separação com lote
+escolhido levava a peça que estava em outro terceiro; e a **devolução ao fornecedor** (e o **sucateamento**) da peça reprovada marcava a
+inspeção antes de baixar o lote — nesse instante as peças reprovadas pareciam livres. Agora o efeito no estoque e a marcação do documento
+vão juntos, sob a trava (cancelar, encerrar e o retorno da remessa; devolução ao fornecedor; sucateamento do reprovado). Descartado:
+ler o bloqueado uma vez por separação (deixaria as portas fora da trava, contra a regra das travas). **Reversível.**
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -18607,6 +18688,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      entrega, o sistema confere o saldo da prateleira/lote escolhido, sem descontar a peça em quarentena, reprovada ou em terceiro (nem a
      inspeção). Só o automático e a conta da aprovação/separação descontam (**B1439**, **B1438**). **O que fazer:** deixar a entrega escolher
      sozinha, ou conferir na janela **Desbloquear** (Inspeções) o que está bloqueado em cada lote antes de escolher. Conserto: a próxima etapa.
+     *(**Resolvido na Etapa 218** — `97ba728c` (**B1443** a **B1452**): a separação e a entrega com lote escolhido conferem o lote inteiro;
+     a janela mostra quanto pode sair dele. Fica a planejada de antes do deploy (**C518**) e a sugestão da fila (**C517**).)*
 514. **NOVO (da Etapa 217, corte declarado B1440) — a janela de entrega não diz quantas peças do lote estão bloqueadas.** A entrega sai do lote
      seguinte sem avisar por quê. **O que fazer:** nada (o número certo já aparece); para saber, **Inspeções → Desbloquear**.
 515. **NOVO (da Etapa 217) — reserva feita antes do deploy cobrindo a peça bloqueada.** A separação mantém a reserva (como na Etapa 205), mas
@@ -18617,6 +18700,14 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      tela **Desbloquear** o que é da inspeção reprovada não marca a inspeção; se depois houver um **Bloquear** avulso, a soma volta a caber e o
      lote da reprovação volta a reter a peça (desconto a mais — recusa segura, nunca peça bloqueada saindo). **O que fazer:** liberar
      reprovação sempre pela **não conformidade**.
+517. **NOVO (da Etapa 218) — a sugestão da Fila de separação ainda não sabe da peça presa no lote.** A dica *"pegar em XB-01, lote L1"*
+     pode apontar um lote cujo livre não cobre. **Nenhum erro:** a janela de separação não pré-seleciona esse lote (o máximo dela já
+     desconta) e a separação recusaria. **O que fazer:** nada; escolher outro endereço. Conserto: a sugestão ler a mesma conta (pequeno).
+518. **NOVO (da Etapa 218) — a entrega num clique pode responder "não serve mais" quando o lote da separação ganhou peça presa.** Caixa
+     separada de um lote que depois recebeu peça em quarentena (sem a peça voltar ao lote), reprovação ou remessa a terceiro — ou separada
+     antes do deploy — e o lote já não cobre: *"… a origem da separação (XB-01) não serve mais (no lote L1 há 4 un, mas só 3 podem sair nesta
+     entrega: …) — entregue escolhendo de onde sai"*. O detalhe e a fila ainda mostram o entregável de antes. **Nenhum erro de estoque.**
+     **O que fazer:** **Entregar escolhendo de onde sai…** → **"Qualquer endereço (automático)"**; a **A115** lista as caixas candidatas.
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -19973,6 +20064,15 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(218) O lote escolhido à mão, o que ficou de fora.** (1) **Série** não entra (**B1445**). (2) **A sugestão da fila** não desconta
+  (**C517**). (3) **A janela de separação** desconta o que esta requisição já separou do lote, mas não o que **outra peça da mesma janela**
+  está escolhendo do mesmo lote naquele momento: a janela pode prometer mais, nunca menos — a conferência ao confirmar recusa com a frase.
+  (4) **O detalhe e a fila** não sabem que a origem da separação deixou de servir (**C518**). (5) A conta do lote não desconta o endereço
+  **bloqueado** nem a linha sem endereço do lote (a entrega automática desconta): só pode recusar a mais, nunca deixar sair a peça presa.
+  (6) **Material sem Controle por lote que tem lotes** (o lote entrou como etiqueta): a escolha à mão continua levando a peça presa — como
+  em todo o resto do sistema para esse material (**B1443**). (7) O encerramento e o retorno da remessa e o sucateamento do reprovado
+  passaram a pegar a trava pelo mesmo molde do cancelamento e da devolução ao fornecedor (**B1452**), mas só os dois últimos têm teste de
+  corrida.
 - **(217) A entrega que não tira a peça bloqueada, o que ficou de fora.** (1) **A escolha manual do lote** (**Sai de**) não desconta (**C513**).
   (2) **Sem aviso na tela** (**C514**). (3) **Material com saldo negativo permitido** e sem lote impedido: o que o lote retém deixa de sair dele
   e, se os outros lotes não cobrem, vai para *"Sem lote atribuído"* negativo — o mesmo de quando os lotes não cobrem (antes saía a peça da
@@ -21377,6 +21477,14 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(218) Nenhum clique foi dado.** A tela **mudou** — o texto *"— do lote podem sair …"* no **Sai de** e o máximo da janela de separação —,
+mas foi provada só pelo Jest (`RequisicoesLoteLivre`, 8 cenários), não clicada no navegador. O servidor, pela rota real e pelo serviço
+(`loteEscolhidoPecaPresa`, 26 cenários): quarentena, reprovação, terceiro (enviado × não enviado) e inspeção no lote escolhido; o separado
+por outras requisições em outro endereço do lote; só o lote; dois itens no mesmo lote; a rodada anterior da própria requisição; a entrega à
+mão, pela origem da separação que deixou de servir e pela que cabe; o irmão fora da entrega; o lote sem peça presa (inclusive
+sobrecomprometido) e a série sem mudança; a janela; a integração rota e serviço; e as duas corridas da Fase 5 (`loteEscolhidoTravas`, 2 cenários: cancelar remessa e devolver ao fornecedor no meio de uma separação). 27 controles positivos, cada um derrubando o seu
+cenário (no plano). **Não verificado à mão:** o roteiro da seção da Etapa 218.
 
 **(217) Nenhum clique foi dado — e a tela não mudou.** O que mudou é o número que a fila, o separável e a entrega usam. Provado pelos testes, pela
 rota real e pelo serviço (`bloqueadoDoLote`, 23 cenários; mais os reescritos da 197 e da 209): a peça em quarentena, a reprovada (e cada
@@ -40374,12 +40482,78 @@ lote: criada, ainda conta 5; **enviada**, conta 3; ao voltar, 5 de novo.
 - Reservas feitas antes do deploy que cobriam a peça bloqueada (**C515**) e a reprovação liberada pelo Desbloquear "sem lote" (**C516**).
 - **Antes do deploy:** a **A114** (consulta, somente leitura).
 
+## Etapa 218 — O lote escolhido à mão deixa de fora a peça presa (2026-11-13)
+
+Desde a Etapa 217 a entrega que escolhe sozinha de onde tirar não leva a peça que está em **quarentena**, a **reprovada na inspeção** nem a
+que está **num terceiro**. Mas quem escolhia o lote **à mão**, no campo **Sai de** da separação ou da entrega, ainda só via quantas peças
+havia naquele endereço: com 4 peças no lote L1 e 1 delas em quarentena, dava para separar as 4 — e a da quarentena saía junto. Agora a
+separação e a entrega com lote escolhido conferem o **lote inteiro**: só sai o que não está bloqueado, nem em inspeção, nem já separado para
+outra requisição. Se não cobre, a recusa diz quanto pode sair e por quê; e o **Sai de** já mostra, ao lado do lote, quanto pode sair dele.
+Lote sem nenhuma peça presa: tudo igual. Antes do deploy: a **A115** (consulta, somente leitura). Decisões do agente: **B1443** a **B1452**.
+**C513** resolvido; avisos **C517** e **C518**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Sai de** com lote escolhido: conferia só o saldo do endereço | Confere também o lote inteiro, quando ele tem peça presa |
+| Separar 4 de um lote com 4 peças, 1 em quarentena: aceito (a da quarentena ia na caixa) | Recusado: *"… no lote L1 há 4 UN, mas só 3 podem sair nesta separação: 1 UN está bloqueada nele …"* |
+| Idem com peça reprovada na inspeção, enviada a terceiro ou em inspeção | Idem — cada motivo aparece na frase |
+| Peças do lote separadas por outra requisição **em outro endereço** do mesmo lote | Descontadas: *"… 3 UN já separadas dele para outras requisições …"* |
+| Entregar escolhendo à mão o lote com a peça presa | Recusado, com *"Escolha outro lote ou deixe "Qualquer endereço (automático)""* |
+| Entrega num clique de uma caixa separada de um lote que depois ganhou peça presa | *"… a origem da separação (XB-01) não serve mais (…) — entregue escolhendo de onde sai"* |
+| O **Sai de** mostrava *"XB-01 — lote L1 (4)"* | *"XB-01 — lote L1 (4) — do lote podem sair 3 (1 bloqueada)"*, e o máximo da janela é 3 |
+| Lote sem peça presa; material com número de série; separação e entrega no automático | **Iguais** |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**. Um material *ROL-218* com **controle por lote**, sem série, unidade *UN*, e dois
+endereços, *XB-01* e *P-01*. **Movimentações → Entrada** de 4 no lote *L1* em *XB-01* e de 5 no lote *L2* em *P-01*. **Movimentações →
+Saída** de 1 do lote *L1* em *XB-01*. **Devoluções → Nova Devolução**: *ROL-218*, *Entrega de origem* = essa saída, quantidade 1, destino
+**Quarentena**, endereço *XB-01*, **Registrar devolução**. Agora o *L1* tem 4 na prateleira, 1 delas bloqueada.
+
+**1. A janela mostra quanto pode sair do lote.** **Requisições → Nova requisição** de 4 *ROL-218* → aprovar → **Iniciar Separação**. No
+**Sai de**, a opção do L1 aparece como *"XB-01 — lote L1 (4) — do lote podem sair 3 (1 bloqueada)"*; a do L2, *"P-01 — lote L2 (5)"*.
+
+**2. A separação não leva a peça presa.** Escolha *XB-01 — lote L1*, quantidade 4, **Confirmar Separação** →
+*"ROL-218: no lote L1 há 4 UN, mas só 3 podem sair nesta separação: 1 UN está bloqueada nele (quarentena, reprovação na inspeção ou com
+terceiro); não cobre a quantidade (4). Escolha outro lote ou separe menos"*. Nada é gravado. Com 3, a separação passa (e não pede motivo de
+divergência). (Antes: separava as 4.)
+
+**3. A entrega à mão também.** Separe outra requisição de 4 sem escolher de onde (automático). **Entregar escolhendo de onde sai…** → **Sai
+de** *XB-01 — lote L1*, 4 → *"ROL-218: no lote L1 há 4 UN, mas só 3 podem sair nesta entrega: 1 UN está bloqueada nele (quarentena, reprovação
+na inspeção ou com terceiro); não cobre a quantidade (4). Escolha outro lote ou deixe "Qualquer endereço (automático)""*. Nada é baixado.
+
+**4. O que outra requisição separou em outro endereço do lote.** Num material com o L1 em dois endereços (2 em *XB-01*, 3 em *P-01*, 1
+peça em quarentena) e outra requisição com 3 separadas de *P-01 — lote L1*, separar 2 de *XB-01 — lote L1* →
+*"… no lote L1 há 5 UN, mas só 1 pode sair nesta separação: 1 UN está bloqueada nele (…); 3 UN já separadas dele para outras requisições;
+não cobre a quantidade (2). …"*.
+
+**5. Os outros motivos.** Peça reprovada na inspeção de um lote ativo, peça do lote enviada a terceiro (a remessa **enviada** — só criada não
+conta) e peça do lote ainda **em inspeção** entram do mesmo jeito; a inspeção aparece como *"2 UN em inspeção"*.
+
+**6. Sem peça presa, nada muda.** Num lote sem nada bloqueado (mesmo que outro lote do material tenha), o **Sai de** mostra o formato de
+sempre e separa/entrega o saldo inteiro do endereço.
+
+### O que esta etapa NÃO cobre
+
+- Material com número de série (**B1445**).
+- A sugestão da **Fila de separação** (**C517**) e o entregável do detalhe quando a origem da separação deixou de servir (**C518**).
+- Um aviso na janela de **entrega automática** dizendo quantas peças do lote estão bloqueadas (**C514**, segue aberto).
+- **Antes do deploy:** a **A115** (consulta, somente leitura).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 218 entregue (2026-11-13):** **o lote escolhido à mão deixa de fora a peça presa** (**C513** resolvido). A conferência do lote inteiro
+  com gatilho (**B1443**), a conta (**B1444**), série fora (**B1445**), a origem da separação conferida pelo *"não serve mais"* (**B1446**), a
+  ordem das recusas (**B1447**), a divergência (**B1448**), a janela (**B1449**), sem trava nova para ler (**B1450**), a frase (**B1451**) e, na Fase 5, os escritores do bloqueado do lote sob a trava (**B1452**). Commits
+  `8f9affd2` (plano), `97ba728c` (código e testes), `e4490a2f` (Fase 5, travas) e o fechamento. **O que é seu:** a **A115** (consulta antes do deploy); as decisões **B1443** a **B1452**
+  (reversíveis); os avisos **C517** e **C518**; a limitação **(218)** em D e a verificação **(218)** em F. **Próxima:** **as três portas que distribuem para quem espera não reservam saldo de lote impedido** (**C478**) — detalhada no fim do plano da 218.
 
 - **Etapa 217 entregue (2026-11-13):** **a entrega e o automático não tiram a peça bloqueada do lote** (**C466** e **C503** resolvidos). As três
   partes do bloqueado do lote (**B1434**), o limite por lote (**B1435**) e por parte (**B1436**), sem trava nova para ler (**B1437**), a conta da

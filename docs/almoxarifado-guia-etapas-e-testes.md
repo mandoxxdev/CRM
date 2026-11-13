@@ -1,13 +1,23 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-11-13 (Etapas 172 a 191, 194 a 210, 217) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-11-13 (Etapas 172 a 191, 194 a 210, 217, 218) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-13 (Etapas 172 a 178, 180 a 191, 194 a 210 e 217 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-13 (Etapas 172 a 178, 180 a 191, 194 a 210, 217 e 218 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
-> **O desenvolvimento parou aqui: Etapa 217 fechada — 2026-11-13.** **A entrega não tira a peça bloqueada do lote.** A peça em
+> **O desenvolvimento parou aqui: Etapa 218 fechada — 2026-11-13.** **O lote escolhido à mão deixa de fora a peça presa.** No
+> **Sai de** da separação e da entrega, escolher um lote que tem peça em **Quarentena**, **reprovada**, **num terceiro** ou **em inspeção** só
+> deixa sair o que pode sair dele; a recusa diz quanto e por quê, e o **Sai de** mostra *"— do lote podem sair 3 (1 bloqueada)"*. Antes do
+> deploy: a **A115** (consulta). **Nenhum clique foi dado** (testes da rota, do serviço e do Jest — roteiro na seção da 218 e letra F das
+> novidades).
+>
+> **Onde parou, exatamente:** a **218 está fechada** (código, testes, documentos e o estimado × realizado commitados). A **próxima** é
+> **as três portas que distribuem para quem espera não reservam saldo de lote impedido** (**C478**) — detalhada no fim do plano da 218, detalhada no fim do plano da 218 (`docs/superpowers/plans/2026-11-13-almoxarifado-etapa218-lote-escolhido-desconta-peca-presa.md`).
+> Sem estimativa nem plano.
+>
+> *(Antes:)* **Etapa 217 fechada — 2026-11-13.** **A entrega não tira a peça bloqueada do lote.** A peça em
 > **Quarentena**, a **reprovada na inspeção** e a que está **num terceiro** ficam contadas no lote dela: a entrega automática tira do lote
 > seguinte, e a aprovação e a separação passam a mostrar o número certo quando a peça bloqueada está num lote bom. A tela não mudou — mudou o
 > número. Antes do deploy: a **A114** (consulta). **Nenhum clique foi dado** (testes da rota e do serviço — roteiro na seção da 217 e letra F
@@ -7131,7 +7141,42 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
-## Etapa 217 — A entrega não tira a peça bloqueada do lote (ENTREGUE — 2026-11-13)
+## Etapa 218 — O lote escolhido à mão deixa de fora a peça presa (ENTREGUE — 2026-11-13)
+
+**O que mudou, em uma frase:** escolher o lote à mão no **Sai de** (separação ou entrega) não leva mais a peça que está em quarentena,
+reprovada, num terceiro ou em inspeção — e a janela diz quanto pode sair do lote.
+
+**O problema que ela resolve.** A Etapa 217 ensinou a entrega automática a deixar a peça presa no lote. Mas quem escolhia o lote à mão só
+via quantas peças havia no endereço: com 4 no L1 e 1 em quarentena, separava as 4.
+
+| Antes | Agora |
+|---|---|
+| **Sai de** com lote: conferia só o endereço | Confere também o lote inteiro, quando ele tem peça presa |
+| Separar 4 de um lote com 1 em quarentena: aceito | *"… no lote L1 há 4 UN, mas só 3 podem sair nesta separação: 1 UN está bloqueada nele …"* |
+| O **Sai de** mostrava *"XB-01 — lote L1 (4)"* | *"XB-01 — lote L1 (4) — do lote podem sair 3 (1 bloqueada)"* |
+| Entregar escolhendo o lote com a peça presa | Recusado, com *"Escolha outro lote ou deixe "Qualquer endereço (automático)""* |
+| Lote sem peça presa; série; automático | Igual |
+
+**Roteiro de teste manual (≈10 min):**
+
+1. Entre como **Administrador do almoxarifado**. **Materiais → Novo**: *ROL-218*, com **controle por lote**, unidade *UN*. Tenha dois
+   endereços, *XB-01* e *P-01*.
+2. **Movimentações → Entrada**: 4 no lote *L1* em *XB-01* e 5 no lote *L2* em *P-01*.
+3. **Movimentações → Saída**: 1 do lote *L1* em *XB-01*. **Devoluções → Nova Devolução**: *ROL-218*, *Entrega de origem* = essa saída,
+   quantidade 1, destino **Quarentena**, endereço *XB-01* → **Registrar**. (O *L1* volta a ter 4, 1 delas bloqueada.)
+4. **Requisições → Nova requisição** de 4 *ROL-218* → aprovar → **Iniciar Separação**.
+5. **Confira o Sai de:** *"XB-01 — lote L1 (4) — do lote podem sair 3 (1 bloqueada)"* e *"P-01 — lote L2 (5)"*.
+6. Escolha *XB-01 — lote L1*, quantidade **4**, **Confirmar Separação** → *"ROL-218: no lote L1 há 4 UN, mas só 3 podem sair nesta
+   separação: 1 UN está bloqueada nele (quarentena, reprovação na inspeção ou com terceiro); não cobre a quantidade (4). Escolha outro lote
+   ou separe menos"*. Nada gravado.
+7. Quantidade **3** → a separação passa, sem pedir motivo de divergência. **Entregar** → sai do *L1* 3; o *L1* fica com 1 (a peça da
+   quarentena).
+8. A entrega à mão, o separado por outra requisição em outro endereço do lote e os outros motivos estão na seção da Etapa 218 das
+   novidades, com as frases.
+
+**O que esta etapa não cobre:** material com número de série; a sugestão da Fila de separação (**C517**); o entregável do detalhe quando a
+origem da separação deixou de servir (**C518**); o aviso na entrega automática (**C514**).
+
 
 **O que mudou, em uma frase:** a entrega automática deixa no lote a peça que está em quarentena, reprovada ou num terceiro, e a separação
 mostra o número certo.
@@ -7145,7 +7190,7 @@ para um terceiro (galvanização, usinagem).
 | A entrega automática podia levar a peça da quarentena, a reprovada ou a que está no terceiro | Tira do lote seguinte; a peça fica no lote dela |
 | Peça bloqueada num lote bom + outro lote bloqueado: a separação deixava separar a mais | Separável certo na Fila, na janela Separar e na aprovação |
 | Só sobra a peça bloqueada: a entrega a levava | Recusa: *"… faltam 1 un em lote que pode sair. Em lote impedido: L2 (bloqueado, 3 un). …"* |
-| Escolher o lote à mão (**Sai de**) | Igual — ainda não desconta (**C513**, a próxima) |
+| Escolher o lote à mão (**Sai de**) | Igual — ainda não desconta (**C513**; *resolvido na Etapa 218*) |
 
 **Roteiro de teste manual (≈10 min):**
 
