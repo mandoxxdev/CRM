@@ -1,5 +1,7 @@
 # 07 — Reservas de Estoque
 
+> **+ Etapa 229 (2026-11-13, `f6e9230b`, tela `046612a0`, Fase 5 `a989fb6e`): a inspeção e a NC olham o lote do item que liberaram (C519, B1509–B1512)** — o `ctx` da liberação ganha `lote_id`; sem OS aberta, com o lote do item impedido agora (lido sob a trava), nada é distribuído, o aviso não sai e a resposta da inspeção traz `lote_impedido`. Ver a seção "Etapa 229", no fim. Continua 🟢.
+
 > **+ Etapa 228 (2026-11-13, `ad7c1d7c`, Fase 5 `ad91ae20`): o estorno da entrada boa não deixa a reserva coberta só por lote impedido (C521, B1504–B1508)** — `liberarParaEstorno` compara com `disponível − loteImpedidoSql` (a régua de hoje quando o lote da própria entrada está impedido ou a nota tem OS); além do estornado, só o déficit dos outros lotes impedidos da mesma nota. Ver a seção "Etapa 228", no fim. Continua 🟢.
 
 > **+ Etapa 221 (2026-11-13, `156adb41`, tela `e386d335`, Fase 5 `8395f440`): a reserva manual não conta o lote impedido (C479, B1469–B1474)** — o `hold` da reserva manual compara com `livre de caixa − loteImpedidoSql`; a recusa diz o que o lote cortou; as reservas do sistema não mudam. Ver a seção "Etapa 221", no fim. Continua 🟢.
@@ -694,7 +696,7 @@ que as portas já seguram).
 - [x] **RN-219.12** — material sem controle de lote: como antes — `2ec31628`.
 - [x] **RN-219.13 / .14 (Fase 5, B1460)** — lote vencido (com e sem a liberação do vencimento); a reserva da OS sobre o bloqueado conta como
   na aprovação (**C522**) — `a6323899`.
-- [ ] **Fora (declarado):** a OS aberta (**C520**); a liberação não olha o lote do item (**C519**); o estorno da entrada boa (**C521**, anterior — *resolvido na Etapa 228*, `ad7c1d7c`);
+- [ ] **Fora (declarado):** a OS aberta (**C520**); a liberação não olha o lote do item (**C519** — *resolvido na Etapa 229*, `f6e9230b`); o estorno da entrada boa (**C521**, anterior — *resolvido na Etapa 228*, `ad7c1d7c`);
   liberar o lote não distribui (**C480** — *resolvido na Etapa 220*); bloquear o lote no instante de uma reserva não a impede (**C523** — *resolvido na Etapa 220*; anterior — quem muda
   o status do lote não pega a trava do material). Antes do deploy: **A116**.
 
@@ -772,3 +774,23 @@ fora da trava, B441).
   conhecido (**D (228)**); a reserva da aprovação sobre lote bloqueado depois (**C522**, anterior); a falha ao ler a OS (sem teste).
 
 Testes: `estornoLoteImpedido.api.test.js` (19). Continua 🟢.
+
+## Etapa 229 — a inspeção e a não conformidade olham o lote do item que liberaram (2026-11-13)
+
+Plano: `docs/superpowers/plans/2026-11-13-almoxarifado-etapa229-liberacao-lote-impedido.md` (`041d3be6`, com a Fase 2). Resolve o
+**C519**, que esta spec listava como "Fora" na seção da Etapa 219. Nenhuma coluna nova, nenhuma trava nova (a leitura do lote roda dentro
+da seção que a inspeção e a NC já seguram desde a 91; a mudança de status do lote pega a mesma trava desde a 220).
+
+- [x] **RN-229.01 / .04 / .04b (B1509)** — a inspeção com o lote do item bloqueado, vencido sem liberação ou reprovado não reserva nada no
+  lugar (nem o livre de outra entrada) — `f6e9230b`, `a989fb6e`.
+- [x] **RN-229.03 (B1509)** — a NC que aceita, com o lote do item da inspeção impedido: o mesmo — `f6e9230b`.
+- [x] **RN-229.02 / .05 / .07 / .07b** — lote ativo, vencido com liberação, sem controle de lote, sem `lote_id` no `ctx` (a OS encerrada) e
+  lote de outro material: como antes — `f6e9230b`, `a989fb6e`.
+- [x] **RN-229.06 (B1510)** — OS aberta como antes (congela o **C520**) — `f6e9230b`.
+- [x] **B1511** — o aviso *"Material liberado"* não sai quando o lote zerou a liberação — `f6e9230b`.
+- [x] **B1512** — a resposta da inspeção ganha `lote_impedido` só nesse caso; a tela **Inspeções** avisa — `f6e9230b`, `046612a0`.
+- [x] **RN-229.08 / .09 / .09b** — liberar o lote depois atende (Etapa 220); a leitura é dentro da seção (duas corridas) — `f6e9230b`.
+- [ ] **Fora (declarado):** a tela da NC sem a frase (**C535**); o lote que nunca é liberado, o item só com o código do lote (**D (229)**);
+  a OS aberta (**C520**).
+
+Testes: `liberacaoLoteImpedido.api.test.js` (15); `InspecoesAlmoxarifado.test.js` (+1). Continua 🟢.

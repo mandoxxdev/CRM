@@ -2803,14 +2803,22 @@ a distribuir = mínimo(o que ESTA decisão liberou, o que pode sair do material 
 ```
 
 Saldo que já estava no estoque (de ajuste, de outra nota, de uma entrada manual) não é distribuído pela decisão. *O que pode sair* é a conta
-de 9.3b: a inspeção que aprova peças de um lote que continua **Bloqueado** (sem o certificado) não as reserva — a requisição continua
-esperando e não recebe o aviso de liberação.
+de 9.3b.
+
+**O lote do item liberado.** Em material com **controle por lote**, se o lote do item da nota continua **Bloqueado** (por exemplo, sem o
+certificado do fornecedor), **Reprovado** ou vencido sem a liberação de vencimento no momento da decisão, a decisão **não reserva nada** —
+nem as peças aprovadas, que não podem sair, nem outro saldo livre do material no lugar delas (de uma entrada manual, de um ajuste, de outro
+lote). A requisição continua esperando e não recebe o aviso de liberação. As peças vão para quem espera quando o lote for liberado (9.3c-bis).
+Na tela **Inspeções**, depois de *"Inspeção registrada!"*, aparece em amarelo *"O lote ⟨código⟩ continua bloqueado, reprovado ou vencido: as
+peças aprovadas vão para quem espera quando o lote for liberado."*. A não conformidade aceita segue a mesma regra, sem a frase na tela. Com o
+lote *Ativo* (ou vencido **com** a liberação de vencimento), em material sem controle por lote, e na nota de pedido com **OS aberta** (a
+fila da OS, 9.3e), a decisão reserva como descrito acima.
 
 **A reserva criada.** Na tela **Reservas**, no nome de **quem decidiu** — inclusive quem tem só o perfil **Qualidade**, que não reserva à mão: a reserva é feita pelo sistema em nome dele. A observação diz a porta: *"Reserva na liberação da inspeção — recebimento ⟨REC⟩ — requisição ⟨REQ⟩"* ou *"Reserva na liberação da não conformidade ⟨NC⟩ — requisição ⟨REQ⟩"*. Ela leva a marca da nota: estornar a entrada da nota depois solta essa reserva como solta a da chegada (só o necessário, só de quem ainda não separou — 6.10).
 
 **Nunca derruba a decisão.** Se a reserva falhar, a decisão da inspeção (ou da não conformidade) fica gravada, o saldo já mudou, e só um aviso vai ao log; a resposta da tela é a mesma de sempre. Decidir de novo é recusado como sempre (*"Item não possui quantidade em inspeção retida"*, *"Esta não conformidade já foi encerrada"*) — nada é reservado duas vezes.
 
-**O e-mail.** O solicitante de cada requisição que ganhou reserva — ou que ainda tem saldo livre do material para separar — recebe *"Material liberado para a sua requisição"* (21c.1), uma vez por decisão.
+**O e-mail.** O solicitante de cada requisição que ganhou reserva — ou que ainda tem saldo livre do material para separar — recebe *"Material liberado para a sua requisição"* (21c.1), uma vez por decisão. Quando o lote do item continua impedido (acima), ninguém recebe esse e-mail pela decisão — o aviso vem quando o lote for liberado.
 
 **O que NÃO reserva:** **Desbloquear Material** (o desbloqueio avulso da tela **Inspeções**) e o estorno de um bloqueio avulso — são ajustes de prateleira, sem documento; o material volta ao disponível para quem chegar primeiro.
 

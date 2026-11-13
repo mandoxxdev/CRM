@@ -131,10 +131,58 @@ distribui — premissa conferida: R1 continua sem reserva).
 
 Tudo é **tronco** (uma porta do motor + a tela que lê a chave nova). Sem galhos paralelos: a tela é uma linha contra o contrato congelado.
 
-- [ ] **T1 (tronco)** — teste `server/tests/api/liberacaoLoteImpedido.api.test.js` (RN-229.01 a .09) em RED; `ctx.lote_id` nas duas portas;
-  o `if` em `reservarLiberacaoParaQuemEspera`; o `return` cedo em `avisarLiberacao`; a chave na resposta da inspeção. Controle positivo e
-  sabotagens (tirar o `if`; ler o lote fora da seção / sem `controle_lote`; tirar o `return` do aviso; tirar o `lote_id` de cada porta).
-- [ ] **T2 (tela)** — `InspecoesAlmoxarifado.js` + teste em `InspecoesAlmoxarifado.test.js` (com e sem a chave), sabotagem.
-- [ ] **T3** — suítes serial (test:api, test:almoxarifado, test:validation, test:safealter, test:sqlite, cliente, build).
-- [ ] **Fase 5** — revisão adversarial (regra/trava; testes).
-- [ ] **Fechamento** (`fechar-etapa`, sem o Passo 7½ e o 8).
+- [x] **T1 (tronco)** — `liberacaoLoteImpedido.api.test.js` em RED (6 de 12 vermelhos antes do código); `ctx.lote_id` nas duas portas;
+  `loteDoItemImpedidoAgora` (com `lt.material_id`, exportada para a sabotagem da leitura fora da seção) e o `if` em
+  `reservarLiberacaoParaQuemEspera` depois do ramo da OS; o `return` em `avisarLiberacao` depois da chave desligada; a chave na resposta.
+  9 sabotagens, todas caem (md5 restaurado): sem o `if`; sem `controle_lote`; sem o `return` do aviso; sem `lote_id` na inspeção; sem na
+  NC; sem a chave; vencido não conta; o lote antes da OS; o lote lido antes da trava (S9, dois arquivos — só a RN-229.09b cai) —
+  `f6e9230b`. **Divergência do plano:** a RN-229.09 original (o gancho dentro da seção) prova só que o `PUT` do lote espera a trava; a
+  leitura dentro da seção é a 09b (achado 1 da Fase 2), acrescentada antes do commit.
+- [x] **T2 (tela)** — `InspecoesAlmoxarifado.js` + (7c) com a chave e (7b) sem `toast.warn`; sabotagem (`false &&`) cai no (7c) — `046612a0`.
+- [x] **T3** — suítes serial (ver Verificação).
+- [x] **Fase 5** — dois revisores frescos em worktrees próprias. Regra e trava: 6 sondas (dois itens da mesma nota em lotes diferentes, nas
+  duas ordens; aprovação parcial; requisição nova no meio; lote liberado com o retido; a NC e depois a liberação do lote) — nenhum achado.
+  Testes: 16 mutações, 2 sobreviviam (sem `lt.material_id`; predicado sem REPROVADO) → RN-229.07b e .04b, que caem com as duas (S10, S11)
+  — `a989fb6e`.
+- [x] **Fechamento** (`fechar-etapa`, sem o Passo 7½ e o 8, por pedido do André) — novidades (B1509–B1512, C535, D (229), F (229), seção,
+  topo e "onde estamos"; o C519 e a B1458 marcados resolvidos), spec 07 (topo, "Fora" da 219 e seção 229), mapa (linha 07 e última
+  atualização), guia (seção e cabeçalho), manual (9.3c: o lote do item e o e-mail) e a estimativa.
+
+## Retro
+
+- Rodadas de correção até verde: 0 (a Fase 5 só acrescentou cenários; nenhum defeito de código).
+- Achados: Fase 2 — 3 importantes reais (a 09 não provava, o efeito da B1511 não declarado, a ordem do aviso), 4 menores; Fase 5 — 0 de
+  regra, 2 lacunas de teste reais, 0 ruído.
+- Paralelismo: sem galhos; a Fase 2 rodou junto com a escrita do teste; os 2 revisores da Fase 5 em paralelo, em worktrees próprias, com a
+  suíte da tela rodando na árvore principal (sem sabotagem nela).
+- Defeito que escapou da 228: nenhum achado.
+
+## Próxima tarefa detalhada
+
+*(Escolhida pela ordem do CLAUDE.md: a 229 fecha o C519; o mapa continua com a 07 🟢. Do mesmo assunto (lote impedido nas portas que
+distribuem), sobra a porta da OS aberta — **C520**. **Sem estimativa** — começa pela Fase 0.5.)*
+
+**A fila da OS aberta recebe só o que pode sair (C520).**
+
+- **O problema (C520, B1455 da 219):** a nota de pedido com OS aberta (e a liberação da inspeção/NC dessa nota — RN-229.06, B1510) reserva
+  para a requisição da OS peça que está em lote bloqueado. A requisição da OS fica *Reservada* com o que só sai depois do certificado; a
+  separação e a entrega recusam (Etapa 206).
+- **Onde:** `reservaChegadaService.distribuirParaOs` (`:509`): `distribuirSemLock(..., { filtro, semDescontoDoLote: true })` dá à fila da OS
+  sem o desconto; o resto vira a reserva genérica da OS (`reservaDaOs.reservarParaOsSobTrava`). Quem chama: a nota
+  (`reservarChegadaParaQuemEspera`, `livre = os ? livreTotal : …` — a nota com OS não tira o item em lote impedido, `:271-275`) e a
+  liberação (`reservarLiberacaoParaQuemEspera`, ramo `if (os)` antes do lote do item, B1510).
+- **O que fazer (a decidir na Fase 1, reversível):** a fila da OS recebe só o que pode sair (sem `semDescontoDoLote`, e com o
+  `livreForaDeLoteImpedido`/o lote do item); o resto continua indo para a reserva genérica da OS — que **pode** ficar sobre o lote
+  bloqueado (o material é da OS; B1455 dizia isso). Conferir o que a conversão da reserva da OS na aprovação (Etapa 171) faz com a parte
+  impedida, e o estorno (B1508: a nota com OS usa a conta de antes).
+- **Pontos de atenção:** os testes que congelam o comportamento de hoje e vão mudar **de propósito**: `chegadaLoteImpedido` RN-219.07,
+  `liberacaoLoteImpedido` RN-229.06 (e a B1510), `estornoLoteImpedido` RN-228.11/.16. O C522 (a reserva da OS sobre o bloqueado segura a
+  nota boa seguinte) é vizinho — medir se muda.
+- Outros abertos: C522, C524–C527, C529–C535, C514–C518, C486, C491, C495, C497, C498.
+
+## Verificação (medida, serial, sobre `a989fb6e` + os documentos)
+
+- `test:api` **623/623 arquivos OK**; `test:almoxarifado` **44/0**; `test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0**.
+- Tela: `react-scripts test --maxWorkers=2` **225/225 suítes, 3061/3061 testes** (sobre `046612a0`; a Fase 5 não mexeu na tela);
+  `react-scripts build` (CI=true) **Compiled successfully**.
+- `liberacaoLoteImpedido.api.test.js` **15/15**; 11 sabotagens, todas caem (md5 restaurado); a da tela cai no (7c).
