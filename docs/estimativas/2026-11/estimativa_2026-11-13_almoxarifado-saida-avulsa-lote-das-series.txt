@@ -1,0 +1,9 @@
+*Planejamento — almoxarifado: a saída avulsa de peça com número de série baixa do lote certo*
+_13/11/2026_
+
+*1. Na saída avulsa com o lote em branco, a peça sai do lote dela*
+Hoje, em Movimentações, na Saída ou na Perda de material com número de série, quando o lote fica em branco a peça sai do estoque, mas o registro não guarda de qual lote ela era: o saldo por lote continua mostrando a peça que já saiu, e a diferença aparece como "sem lote" negativo. Depois desta alteração, o sistema descobre o lote pelas séries marcadas e registra a saída nesse lote, como se ele tivesse sido escolhido. Se as séries marcadas forem de lotes diferentes, a tela avisa embaixo da lista e o sistema pede uma saída para cada lote. Com todas do mesmo lote, a tela mostra de qual lote elas vão sair. As saídas antigas, feitas antes desta correção, não são mexidas automaticamente: fica uma consulta para conferir quais materiais ficaram com o saldo por lote diferente.
+Tempo estimado: *3h*
+
+*Total estimado: 3h*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
