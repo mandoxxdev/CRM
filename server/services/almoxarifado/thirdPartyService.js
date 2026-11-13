@@ -17,6 +17,7 @@ const { registrarAuditoria } = require('./audit');
 const caixaSql = require('./caixaSql'); // Etapa 97 (T2, B491)
 const { custoUnitarioSql } = require('./custoSql');
 const stockService = require('./stockService');
+const { naTravaDoMaterial } = require('./travaPorMaterial'); // Etapa 217 (Fase 5, B1442)
 const ownerRules = require('./ownerRules');
 const transformCost = require('./transformCost');
 const sm = require('./thirdPartyStateMachine');
@@ -259,11 +260,17 @@ async function enviarRemessa(db, user, remessaId) {
   // ── 2. Efeito item a item, cada um reclamado antes de mover ──
   let enviados = 0;
   for (const item of itens) {
+    // Etapa 217 (Fase 5, B1442): o claim `enviado_em`, o motor e a compensacao numa secao so, sob a trava do material. Desde a 217 o
+    // item ENVIADO retem no lote dele para o automatico da entrega (`retidoDoLote.js`); com o claim fora da trava, ele caia entre a
+    // conferencia e a baixa de uma entrega (que seguram a trava) e o automatico cobria menos do que a conferencia aceitou — o resto saia
+    // sem lote, negativo (reproduzido: "Sem lote atribuido" -2). O motor ja roda sob `naTravaDoMaterial` (Etapa 97): aqui so aninha.
+    // eslint-disable-next-line no-await-in-loop
+    const saiu = await naTravaDoMaterial(item.material_id, async () => {
     const claim = await dbGet(db, `UPDATE itens_remessa_terceiro_almoxarifado
       SET enviado_em = CURRENT_TIMESTAMP
       WHERE id = ? AND enviado_em IS NULL
       RETURNING id`, [item.id]);
-    if (!claim) continue; // este item ja saiu — reenviar nao retem de novo
+    if (!claim) return false; // este item ja saiu — reenviar nao retem de novo
 
     try {
       const mov = await stockService.registrarMovimentacao(db, user, {
@@ -280,13 +287,15 @@ async function enviarRemessa(db, user, remessaId) {
       });
       await dbRun(db, 'UPDATE itens_remessa_terceiro_almoxarifado SET movimentacao_envio_id = ? WHERE id = ?',
         [mov?.id || mov?.movimentacao_id || null, item.id]);
-      enviados += 1;
+      return true;
     } catch (e) {
       // Sem transacao: compensa o claim a mao, senao o item fica marcado como enviado sem a
       // retencao correspondente — e nunca mais seria reenviado.
       await dbRun(db, 'UPDATE itens_remessa_terceiro_almoxarifado SET enviado_em = NULL WHERE id = ?', [item.id]);
       throw e;
     }
+    });
+    if (saiu) enviados += 1;
   }
 
   await dbRun(db, `UPDATE remessas_terceiro_almoxarifado
