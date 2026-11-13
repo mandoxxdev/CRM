@@ -47,6 +47,12 @@ export const AVISO_LOTE_IMPEDIDO_RESERVA = 'Peças em lote bloqueado, reprovado 
 // Etapa 222 (RN-222.09, B1478): o mesmo aviso com o numero do material escolhido (lido do extrato).
 export const avisoLoteImpedidoComNumero = (n, unidade) =>
   `${n}${unidade ? ` ${unidade}` : ''} deste material estão em lote bloqueado, reprovado ou vencido e não entram na reserva.`;
+// Etapa 223 (RN-223.10, B1483): na lista de materiais (linhas do `/estoque`), o numero DEPOIS do parentese do Disponivel — o impedido
+// pode passar do disponivel (B1381/B1471), dentro do parentese pareceria parte dele (Fase 2 M2). So com numero finito > 0.
+export const sufixoLoteImpedido = (m) => {
+  const n = m.lote_impedido;
+  return n != null && Number.isFinite(Number(n)) && Number(n) > 0 ? ` · ${Number(n)} em lote impedido` : '';
+};
 
 const FORM_VAZIO = {
   material_id: '', quantidade: '', projeto_id: '', os_id: '', os_referencia: '',
@@ -518,7 +524,7 @@ const ReservasAlmoxarifado = () => {
                       <option value="">Selecionar material...</option>
                       {materiais.map((m) => (
                         <option key={m.id} value={m.id}>
-                          {m.codigo} — {m.nome} (Disponível: {m.quantidade_disponivel} {m.unidade})
+                          {m.codigo} — {m.nome} (Disponível: {m.quantidade_disponivel} {m.unidade}){sufixoLoteImpedido(m)}
                         </option>
                       ))}
                     </select>

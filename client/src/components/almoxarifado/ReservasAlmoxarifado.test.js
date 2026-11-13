@@ -695,3 +695,43 @@ describe('[RN-222.09 / .10] Nova Reserva diz quanto do material esta em lote imp
     expect(aviso().textContent).toBe(NUMERO(6, 'PC'));
   });
 });
+
+// Etapa 223 (C481, 2a parte; RN-223.10, B1483): a lista de materiais da Nova Reserva (as linhas do `/estoque`, que agora trazem
+// `lote_impedido`) diz o numero ao lado do Disponivel — DEPOIS do parentese (o impedido pode passar do disponivel; Fase 2 M2) e so com > 0.
+describe('[RN-223.10] Nova Reserva: a lista de materiais diz quanto esta em lote impedido', () => {
+  const MATS = [
+    { id: 20, codigo: 'E-1', nome: 'Mat', unidade: 'un', quantidade_disponivel: 10, controle_lote: 1, controle_serie: 0, lote_impedido: 6 },
+    { id: 21, codigo: 'E-2', nome: 'Zero', unidade: 'un', quantidade_disponivel: 10, controle_lote: 1, controle_serie: 0, lote_impedido: 0 },
+    { id: 22, codigo: 'E-3', nome: 'Ausente', unidade: 'un', quantidade_disponivel: 10, controle_lote: 0, controle_serie: 0 },
+    { id: 23, codigo: 'E-4', nome: 'Maior', unidade: 'un', quantidade_disponivel: 0, controle_lote: 1, controle_serie: 0, lote_impedido: 6 },
+    { id: 24, codigo: 'E-5', nome: 'Texto', unidade: 'un', quantidade_disponivel: 10, controle_lote: 1, controle_serie: 0, lote_impedido: 'x' },
+  ];
+  beforeEach(() => {
+    const anterior = api.get.getMockImplementation();
+    api.get.mockImplementation((url) => (url === '/almoxarifado/estoque' ? Promise.resolve({ data: MATS }) : anterior(url)));
+  });
+  async function abrir() {
+    await renderizar();
+    const botao = [...container.querySelectorAll('button')].find((b) => b.textContent.includes('Nova Reserva'));
+    await act(async () => { botao.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+  }
+  const opcao = (id) => [...campoPorLabel('Material').querySelectorAll('option')].find((o) => o.value === String(id));
+
+  test('[RN-223.10] lote_impedido 6: "E-1 — Mat (Disponível: 10 un) · 6 em lote impedido"', async () => {
+    await abrir();
+    expect(opcao(20).textContent).toBe('E-1 — Mat (Disponível: 10 un) · 6 em lote impedido');
+  });
+
+  test('[RN-223.10] impedido maior que o Disponível: fora do parêntese', async () => {
+    await abrir();
+    expect(opcao(23).textContent).toBe('E-4 — Maior (Disponível: 0 un) · 6 em lote impedido');
+  });
+
+  test('[RN-223.10] 0, ausente ou texto: o texto de sempre — e a opção com número está lá', async () => {
+    await abrir();
+    expect(opcao(21).textContent).toBe('E-2 — Zero (Disponível: 10 un)');
+    expect(opcao(22).textContent).toBe('E-3 — Ausente (Disponível: 10 un)');
+    expect(opcao(24).textContent).toBe('E-5 — Texto (Disponível: 10 un)');
+    expect(opcao(20).textContent).toContain('em lote impedido');
+  });
+});
