@@ -145,8 +145,14 @@ const InspecoesAlmoxarifado = () => {
   const aberturaRef = useRef(0);
 
   const [ajusteTarget, setAjusteTarget] = useState(null); // { tipo: 'BLOQUEAR' | 'DESBLOQUEAR' }
-  const [ajusteForm, setAjusteForm] = useState({ material_id: '', quantidade: '', justificativa: '' });
+  const [ajusteForm, setAjusteForm] = useState({ material_id: '', quantidade: '', justificativa: '', lote_id: '' });
   const [ajusteSaving, setAjusteSaving] = useState(false);
+  // Etapa 209 (RN-209.12, Fase 2 itens 1 e 6): o bloqueado por lote do material escolhido no Desbloquear, do
+  // `GET /materiais/:id/bloqueado-por-lote` — `{ total, sem_lote, lotes: [{ lote_id, codigo, quantidade }] }` ou null
+  // (nao carregado, ou o GET falhou: a janela fica como antes e o servidor decide, M1). Buscado para TODO material, com
+  // ou sem `controle_lote`: material sem controle pode sair com lote (Etapa 58) e a quarentena herda o lote (RN-209.02b).
+  const [bloqueioDoMaterial, setBloqueioDoMaterial] = useState(null);
+  const novoPedidoBloqueio = useUltimoPedido();
 
   // Etapa 161 (RN-161.02, C396): trocar o filtro de material com a lista em voo — so a resposta do ultimo pedido mexe na tela
   const novoPedidoLista = useUltimoPedido();
@@ -296,8 +302,34 @@ const InspecoesAlmoxarifado = () => {
 
   const abrirAjuste = (tipo) => {
     setAjusteTarget({ tipo });
-    setAjusteForm({ material_id: '', quantidade: '', justificativa: '' });
+    setAjusteForm({ material_id: '', quantidade: '', justificativa: '', lote_id: '' });
+    novoPedidoBloqueio(); // invalida o GET de uma janela anterior ainda em voo
+    setBloqueioDoMaterial(null);
   };
+
+  // Etapa 209 (RN-209.12): no Desbloquear, trocar o material zera o lote e busca o bloqueado por lote dele. So a resposta
+  // do ultimo material escolhido pousa (trocar A -> B com A em voo nao pode mostrar os lotes de A na janela de B).
+  const escolherMaterialDoAjuste = async (materialId) => {
+    setAjusteForm((f) => ({ ...f, material_id: materialId, lote_id: '' }));
+    const ehUltimo = novoPedidoBloqueio();
+    setBloqueioDoMaterial(null);
+    if (ajusteTarget?.tipo !== 'DESBLOQUEAR' || !materialId) return;
+    try {
+      const res = await api.get(`/almoxarifado/materiais/${materialId}/bloqueado-por-lote`);
+      if (!ehUltimo()) return;
+      setBloqueioDoMaterial(res.data || null);
+    } catch {
+      // Falhou: a janela fica como antes (sem o campo) e o servidor decide (M1 se o "sem lote" nao cobrir).
+      if (!ehUltimo()) return;
+      setBloqueioDoMaterial(null);
+    }
+  };
+
+  // O campo Lote so existe quando ha lote com bloqueado (Fase 2 item 1); com `lotes: []` nao exige nada (item 6).
+  const lotesBloqueados = ajusteTarget?.tipo === 'DESBLOQUEAR' && Array.isArray(bloqueioDoMaterial?.lotes)
+    ? bloqueioDoMaterial.lotes : [];
+  const semLoteBloqueado = Number(bloqueioDoMaterial?.sem_lote) || 0;
+  const exigeLote = lotesBloqueados.length > 0;
 
   const confirmarAjuste = async () => {
     const materialId = ajusteForm.material_id;
@@ -310,12 +342,17 @@ const InspecoesAlmoxarifado = () => {
       toast.error('Justificativa é obrigatória');
       return;
     }
+    if (exigeLote && !ajusteForm.lote_id) {
+      toast.error('Selecione o lote');
+      return;
+    }
     setAjusteSaving(true);
     try {
       const endpoint = ajusteTarget.tipo === 'BLOQUEAR' ? 'bloquear' : 'desbloquear';
-      await api.post(`/almoxarifado/materiais/${materialId}/${endpoint}`, {
-        quantidade, justificativa: ajusteForm.justificativa.trim(),
-      });
+      const corpo = { quantidade, justificativa: ajusteForm.justificativa.trim() };
+      // "Sem lote" (SEM_LOTE) vai sem `lote_id`: o servidor tira so do "sem lote" (RN-209.05).
+      if (exigeLote && ajusteForm.lote_id !== 'SEM_LOTE') corpo.lote_id = Number(ajusteForm.lote_id);
+      await api.post(`/almoxarifado/materiais/${materialId}/${endpoint}`, corpo);
       toast.success(ajusteTarget.tipo === 'BLOQUEAR' ? 'Material bloqueado!' : 'Material desbloqueado!');
       setAjusteTarget(null);
       loadMateriais();
@@ -587,11 +624,24 @@ const InspecoesAlmoxarifado = () => {
               <div className="almox-field">
                 <label className="almox-label">Material<span className="required">*</span></label>
                 <select className="almox-form-select" value={ajusteForm.material_id}
-                  onChange={(e) => setAjusteForm((f) => ({ ...f, material_id: e.target.value }))}>
+                  onChange={(e) => escolherMaterialDoAjuste(e.target.value)}>
                   <option value="">Selecionar material...</option>
                   {materiais.map((m) => <option key={m.id} value={m.id}>{m.codigo} — {m.nome}</option>)}
                 </select>
               </div>
+              {exigeLote && (
+                <div className="almox-field">
+                  <label className="almox-label">Lote<span className="required">*</span></label>
+                  <select className="almox-form-select" value={ajusteForm.lote_id}
+                    onChange={(e) => setAjusteForm((f) => ({ ...f, lote_id: e.target.value }))}>
+                    <option value="">Selecione o lote</option>
+                    {lotesBloqueados.map((l) => (
+                      <option key={l.lote_id} value={l.lote_id}>{`${l.codigo} — ${l.quantidade} bloqueado(s)`}</option>
+                    ))}
+                    {semLoteBloqueado > 0 && <option value="SEM_LOTE">{`Sem lote — ${semLoteBloqueado}`}</option>}
+                  </select>
+                </div>
+              )}
               <div className="almox-field">
                 <label className="almox-label">Quantidade<span className="required">*</span></label>
                 <input className="almox-input" type="number" min="0" step="any"

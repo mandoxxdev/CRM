@@ -281,6 +281,167 @@ describe('InspecoesAlmoxarifado — bloqueio/desbloqueio avulso de material', ()
 });
 
 /*
+ * Etapa 209 (RN-209.12, Fase 2 itens 1 e 6) — o campo Lote na janela Desbloquear.
+ *
+ * Mock só da fronteira HTTP, contra o contrato do `GET /almoxarifado/materiais/:id/bloqueado-por-lote`
+ * (`{ material_id, total, sem_lote, lotes: [{ lote_id, codigo, quantidade }] }`). O GET vale para TODO material
+ * escolhido — o 11 aqui é `controle_lote: 0` e mesmo assim tem lote bloqueado (saída com lote, devolução para
+ * Quarentena, RN-209.02b): com o campo só para `controle_lote`, a peça ficava presa na quarentena.
+ */
+describe('InspecoesAlmoxarifado — Lote no Desbloquear (Etapa 209)', () => {
+  const MATERIAIS = [
+    { id: 10, codigo: 'MAT-1', nome: 'Chapa 3mm', unidade: 'PC', quantidade_bloqueada: 5, controle_lote: 1 },
+    { id: 11, codigo: 'MAT-2', nome: 'Parafuso M8', unidade: 'PC', quantidade_bloqueada: 2, controle_lote: 0 },
+    { id: 12, codigo: 'MAT-3', nome: 'Arruela', unidade: 'PC', quantidade_bloqueada: 4, controle_lote: 0 },
+  ];
+  let porMaterial;
+  const chamadasBloqueio = () => api.get.mock.calls.filter(([u]) => /\/bloqueado-por-lote$/.test(u)).map(([u]) => u);
+  const opcoesLote = () => [...campoPorLabel('Lote').options].map((o) => [o.value, o.textContent]);
+
+  beforeEach(() => {
+    porMaterial = {
+      10: { material_id: 10, total: 5, sem_lote: 3, lotes: [{ lote_id: 7, codigo: 'L1', quantidade: 2 }] },
+      11: { material_id: 11, total: 2, sem_lote: 0, lotes: [{ lote_id: 9, codigo: 'L9', quantidade: 2 }] },
+      12: { material_id: 12, total: 4, sem_lote: 4, lotes: [] },
+    };
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/inspecoes/pendentes') return Promise.resolve({ data: pendentesDoBanco });
+      if (url === '/almoxarifado/estoque') return Promise.resolve({ data: MATERIAIS });
+      const m = url.match(/^\/almoxarifado\/materiais\/(\d+)\/bloqueado-por-lote$/);
+      if (m) {
+        const r = porMaterial[m[1]];
+        return r instanceof Error ? Promise.reject(r) : Promise.resolve({ data: r });
+      }
+      return Promise.resolve({ data: [] });
+    });
+  });
+
+  async function escolherMaterial(id) {
+    await act(async () => {
+      const el = campoPorLabel('Material');
+      Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set.call(el, id);
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  }
+
+  test('(1) material com controle de lote: busca o GET, mostra o campo com os lotes e o "Sem lote", e o POST leva o lote', async () => {
+    await renderizar();
+    await abrirAjuste('Desbloquear');
+    await escolherMaterial('10');
+    expect(chamadasBloqueio()).toEqual(['/almoxarifado/materiais/10/bloqueado-por-lote']);
+    expect(opcoesLote()).toEqual([['', 'Selecione o lote'], ['7', 'L1 — 2 bloqueado(s)'], ['SEM_LOTE', 'Sem lote — 3']]);
+    preencher(campoPorLabel('Lote'), '7');
+    preencher(campoPorLabel('Quantidade'), '2');
+    preencher(campoPorLabel('Justificativa'), 'Liberado da quarentena');
+    await clicarBotaoModal('Confirmar');
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/materiais/10/desbloquear', {
+      quantidade: 2, justificativa: 'Liberado da quarentena', lote_id: 7,
+    });
+  });
+
+  test('(2) RN-209.02b: material SEM controle de lote com lote bloqueado também busca e mostra o campo', async () => {
+    await renderizar();
+    await abrirAjuste('Desbloquear');
+    await escolherMaterial('11');
+    expect(chamadasBloqueio()).toEqual(['/almoxarifado/materiais/11/bloqueado-por-lote']);
+    // sem_lote 0: a opção "Sem lote" não aparece.
+    expect(opcoesLote()).toEqual([['', 'Selecione o lote'], ['9', 'L9 — 2 bloqueado(s)']]);
+    preencher(campoPorLabel('Lote'), '9');
+    preencher(campoPorLabel('Quantidade'), '2');
+    preencher(campoPorLabel('Justificativa'), 'Liberado da quarentena');
+    await clicarBotaoModal('Confirmar');
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/materiais/11/desbloquear', {
+      quantidade: 2, justificativa: 'Liberado da quarentena', lote_id: 9,
+    });
+  });
+
+  test('(3) com o campo à vista, confirmar sem escolher o lote avisa e não chama a API', async () => {
+    await renderizar();
+    await abrirAjuste('Desbloquear');
+    await escolherMaterial('10');
+    preencher(campoPorLabel('Quantidade'), '2');
+    preencher(campoPorLabel('Justificativa'), 'Liberado da quarentena');
+    await clicarBotaoModal('Confirmar');
+    expect(toast.error).toHaveBeenCalledWith('Selecione o lote');
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  test('(4) "Sem lote" vai SEM lote_id (o servidor tira só do sem lote)', async () => {
+    await renderizar();
+    await abrirAjuste('Desbloquear');
+    await escolherMaterial('10');
+    preencher(campoPorLabel('Lote'), 'SEM_LOTE');
+    preencher(campoPorLabel('Quantidade'), '3');
+    preencher(campoPorLabel('Justificativa'), 'Bloqueio antigo');
+    await clicarBotaoModal('Confirmar');
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/materiais/10/desbloquear', {
+      quantidade: 3, justificativa: 'Bloqueio antigo',
+    });
+  });
+
+  test('(5) Fase 2 item 6: `lotes: []` não mostra nem exige o campo — o POST sai como antes', async () => {
+    await renderizar();
+    await abrirAjuste('Desbloquear');
+    await escolherMaterial('12');
+    expect(chamadasBloqueio()).toEqual(['/almoxarifado/materiais/12/bloqueado-por-lote']);
+    expect(campoPorLabelOuNull('Lote')).toBeNull();
+    preencher(campoPorLabel('Quantidade'), '4');
+    preencher(campoPorLabel('Justificativa'), 'Reinspecionado');
+    await clicarBotaoModal('Confirmar');
+    expect(toast.error).not.toHaveBeenCalledWith('Selecione o lote');
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/materiais/12/desbloquear', {
+      quantidade: 4, justificativa: 'Reinspecionado',
+    });
+  });
+
+  test('(5b) `lotes: []` e `sem_lote: 0` também não exige o campo', async () => {
+    porMaterial[12] = { material_id: 12, total: 0, sem_lote: 0, lotes: [] };
+    await renderizar();
+    await abrirAjuste('Desbloquear');
+    await escolherMaterial('12');
+    expect(campoPorLabelOuNull('Lote')).toBeNull();
+    preencher(campoPorLabel('Quantidade'), '1');
+    preencher(campoPorLabel('Justificativa'), 'x');
+    await clicarBotaoModal('Confirmar');
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/materiais/12/desbloquear', { quantidade: 1, justificativa: 'x' });
+  });
+
+  test('(6) GET falhou: sem o campo, o POST sai como antes e a recusa do servidor (M1) vai literal ao toast', async () => {
+    porMaterial[10] = new Error('rede');
+    const M1 = 'Informe o lote: só 3 PC bloqueado(s) sem lote — o resto está em lote (L1: 2)';
+    api.post.mockRejectedValue({ response: { data: { error: M1 } } });
+    await renderizar();
+    await abrirAjuste('Desbloquear');
+    await escolherMaterial('10');
+    expect(chamadasBloqueio()).toEqual(['/almoxarifado/materiais/10/bloqueado-por-lote']);
+    expect(campoPorLabelOuNull('Lote')).toBeNull();
+    preencher(campoPorLabel('Quantidade'), '4');
+    preencher(campoPorLabel('Justificativa'), 'Liberado');
+    await clicarBotaoModal('Confirmar');
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/materiais/10/desbloquear', { quantidade: 4, justificativa: 'Liberado' });
+    expect(toast.error).toHaveBeenCalledWith(M1);
+  });
+
+  test('(7) trocar de material zera o lote escolhido e troca as opções', async () => {
+    await renderizar();
+    await abrirAjuste('Desbloquear');
+    await escolherMaterial('10');
+    preencher(campoPorLabel('Lote'), '7');
+    await escolherMaterial('11');
+    expect(campoPorLabel('Lote').value).toBe('');
+    expect(opcoesLote().map(([v]) => v)).toEqual(['', '9']);
+  });
+
+  test('(8) Bloquear não busca o bloqueado por lote nem mostra o campo (B1419)', async () => {
+    await renderizar();
+    await abrirAjuste('Bloquear');
+    await escolherMaterial('10');
+    expect(chamadasBloqueio()).toEqual([]);
+    expect(campoPorLabelOuNull('Lote')).toBeNull();
+  });
+});
+
+/*
  * Etapa 29 — medidas do plano dentro do modal de decisão (C3, RN-01..04, RN-07, RN-08).
  *
  * O que estes testes protegem, na ordem do plano:
