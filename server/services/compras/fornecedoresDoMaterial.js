@@ -186,6 +186,27 @@ async function remover(db, materialId, linhaId) {
 }
 
 /** Os handlers express (o `db` e o do registrador). */
+/**
+ * Etapa 214 (RN-214.01/02) — o historico de precos do material: as linhas de cotacao (preco cotado) e de pedido (preco comprado),
+ * da mais recente para a mais antiga, no maximo 100. Leitura pura, sem tabela nova (B87). Fora: cotacao cancelada; pedido cancelado
+ * ou rejeitado. Cotacao rejeitada entra (foi preco cotado), com o status.
+ */
+async function historicoDePrecos(db, materialId) {
+  return dbAll(db, `SELECT * FROM (
+      SELECT 'cotacao' AS origem, c.id AS documento_id, c.numero, COALESCE(c.data_cotacao, date(c.created_at)) AS data, c.status,
+        c.fornecedor_id, COALESCE(NULLIF(f.nome_fantasia, ''), f.razao_social) AS fornecedor_nome,
+        i.quantidade, i.unidade, i.valor_unitario, i.id AS linha_id
+      FROM itens_cotacao i JOIN cotacoes c ON c.id = i.cotacao_id LEFT JOIN fornecedores f ON f.id = c.fornecedor_id
+      WHERE i.material_id = ? AND COALESCE(c.status, '') <> 'cancelado'
+      UNION ALL
+      SELECT 'pedido', p.id, p.numero, COALESCE(p.data_pedido, date(p.created_at)), p.status,
+        p.fornecedor_id, COALESCE(NULLIF(f.nome_fantasia, ''), f.razao_social),
+        i.quantidade, i.unidade, i.valor_unitario, i.id
+      FROM itens_pedido_compra i JOIN pedidos_compra p ON p.id = i.pedido_id LEFT JOIN fornecedores f ON f.id = p.fornecedor_id
+      WHERE i.material_id = ? AND COALESCE(p.status, '') NOT IN ('cancelado', 'rejeitado')
+    ) ORDER BY data DESC, origem DESC, documento_id DESC, linha_id DESC LIMIT 100`, [materialId, materialId]);
+}
+
 function criarHandlers(db) {
   const responder = (fn) => async (req, res) => {
     try {
@@ -200,6 +221,7 @@ function criarHandlers(db) {
     vincular: responder((req) => vincular(db, req.params.id, req.body)),
     editar: responder((req) => editar(db, req.params.id, req.params.linhaId, req.body)),
     remover: responder((req) => remover(db, req.params.id, req.params.linhaId)),
+    historico: responder(async (req) => { await exigirMaterial(db, req.params.id); return historicoDePrecos(db, req.params.id); }),
   };
 }
 
@@ -218,4 +240,4 @@ function guardarLinhaDoMaterial(db, pode) {
   };
 }
 
-module.exports = { MSG, MARCA_MIGRACAO, guardarLinhaDoMaterial, garantirSchema, migrarFornecedorPrincipal, normalizarNome, criarHandlers, listar, vincular, editar, remover };
+module.exports = { MSG, MARCA_MIGRACAO, guardarLinhaDoMaterial, garantirSchema, migrarFornecedorPrincipal, normalizarNome, criarHandlers, listar, vincular, editar, remover, historicoDePrecos };

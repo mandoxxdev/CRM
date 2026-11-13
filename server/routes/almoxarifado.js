@@ -1173,6 +1173,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   app.post('/api/compras/materiais/cadastro/:id/fornecedores', ...portaCompras.escrita('editar_material'), fornecedoresDoMaterial.vincular);
   app.put('/api/compras/materiais/cadastro/:id/fornecedores/:linhaId', ...portaCompras.escrita('editar_material'), fornecedoresDoMaterial.editar);
   app.delete('/api/compras/materiais/cadastro/:id/fornecedores/:linhaId', ...portaCompras.escrita('editar_material'), fornecedoresDoMaterial.remover);
+  // Etapa 214 (RN-214.01): o historico de precos cotados e comprados do material, com a mesma porta de leitura da secao.
+  app.get('/api/compras/materiais/cadastro/:id/historico-precos', ...portaCompras.leitura, fornecedoresDoMaterial.historico);
 
   // POST /api/almoxarifado/materiais/:id/foto — upload de foto
   // ORDEM IMPORTA: requirePermission ANTES do multer. Invertido, o multer já teria
