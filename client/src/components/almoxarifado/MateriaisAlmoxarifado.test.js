@@ -224,7 +224,7 @@ describe('MateriaisAlmoxarifado — RN-01: o filtro de categoria vem do catálog
     escolher(filtroCategoria(), 'Chapas');
     await act(async () => { await new Promise((r) => setTimeout(r, 350)); });
     const chamadas = api.get.mock.calls.filter((c) => c[0] === '/almoxarifado/materiais');
-    expect(chamadas[chamadas.length - 1][1]).toEqual({ params: { categoria: 'Chapas' } });
+    expect(chamadas[chamadas.length - 1][1]).toEqual({ params: { categoria: 'Chapas', com_lote_impedido: 1 } });
   });
 });
 
@@ -403,13 +403,13 @@ describe('MateriaisAlmoxarifado — RN-37.06: filtrar por subfamília', () => {
     await renderizar();
     escolher(filtroFamilia(), '3');
     await aguardarDebounce();
-    expect(ultimaBusca()).toEqual({ params: { familia_id: 1, subfamilia_id: 3 } });
+    expect(ultimaBusca()).toEqual({ params: { familia_id: 1, subfamilia_id: 3, com_lote_impedido: 1 } });
 
     const limpar = [...container.querySelectorAll('button')].find((b) => /Limpar filtros/.test(b.textContent));
     expect(limpar).toBeDefined();
     clicar(limpar);
     await aguardarDebounce();
-    expect(ultimaBusca()).toEqual({ params: {} });
+    expect(ultimaBusca()).toEqual({ params: { com_lote_impedido: 1 } });
     expect(ultimaBusca().params).not.toHaveProperty('familia_id');
     expect(ultimaBusca().params).not.toHaveProperty('subfamilia_id');
   });
@@ -467,7 +467,7 @@ describe('MateriaisAlmoxarifado — RN-38.05: ?familia_id=<sub> na URL rebusca q
   test('a última busca leva familia_id da raiz E subfamilia_id da sub, sem mexer no filtro', async () => {
     await renderizarComUrl('?familia_id=3');
     expect(filtroFamilia().value).toBe('3');
-    expect(ultimaBusca()).toEqual({ params: { familia_id: 1, subfamilia_id: 3 } });
+    expect(ultimaBusca()).toEqual({ params: { familia_id: 1, subfamilia_id: 3, com_lote_impedido: 1 } });
   });
 
   test('[controle] ?familia_id=<raiz> continua mandando só familia_id', async () => {
@@ -543,7 +543,7 @@ describe('MateriaisAlmoxarifado — Etapa 193 (RN-193.01): a lista só consulta'
     });
     await act(async () => { await new Promise((r) => setTimeout(r, 350)); });
     const chamadas = api.get.mock.calls.filter(([url]) => url === '/almoxarifado/materiais');
-    expect(chamadas[chamadas.length - 1][1]).toEqual({ params: { status: 'inativo' } });
+    expect(chamadas[chamadas.length - 1][1]).toEqual({ params: { status: 'inativo', com_lote_impedido: 1 } });
   });
 
   test('linha inativa (0 e NULL): selo Inativo, sem Requisitar/Entrada/Saída; a ativa ao contrário; inativo zerado não é "Zerado"', async () => {
@@ -561,5 +561,66 @@ describe('MateriaisAlmoxarifado — Etapa 193 (RN-193.01): a lista só consulta'
     expect(linhaDe('ATV-001').textContent).not.toContain('Inativo');
     expect(linhaDe('INZ-001').textContent).toContain('Inativo');
     expect(linhaDe('INZ-001').textContent).not.toContain('Zerado');
+  });
+});
+
+/**
+ * Etapa 223 (RN-223.08, B1481/B1482; C481, 2a parte) — a lista diz quanto esta em lote impedido. A tela pede o campo
+ * (`com_lote_impedido: 1`, opt-in do servidor) e mostra o selo embaixo da Quantidade so com numero > 0. A dica diz "fora o que ja esta
+ * bloqueado" (Fase 2 I1: a regua tira a quantidade bloqueada).
+ */
+describe('MateriaisAlmoxarifado — o selo de lote impedido (Etapa 223)', () => {
+  const DICA = 'Em lote bloqueado, reprovado ou vencido, fora o que já está bloqueado no material: não sai para uso até o lote ser '
+    + 'liberado na tela Lotes e Séries. O extrato mostra os dois números.';
+  const base = { categoria: 'Chapas', quantidade_atual: 10, quantidade_minima: 0, quantidade_maxima: 0, ativo: 1 };
+  const LINHAS = [
+    { ...base, id: 31, codigo: 'IMP-001', nome: 'Com lote impedido', unidade: 'PC', lote_impedido: 6 },
+    { ...base, id: 32, codigo: 'IMP-002', nome: 'Sem unidade', unidade: null, lote_impedido: 6 },
+    { ...base, id: 33, codigo: 'IMP-003', nome: 'Zero', unidade: 'PC', lote_impedido: 0 },
+    { ...base, id: 34, codigo: 'IMP-004', nome: 'Ausente', unidade: 'PC' },
+    { ...base, id: 35, codigo: 'IMP-005', nome: 'Nulo', unidade: 'PC', lote_impedido: null },
+    { ...base, id: 36, codigo: 'IMP-006', nome: 'Texto', unidade: 'PC', lote_impedido: 'abc' },
+    { ...base, id: 37, codigo: 'IMP-007', nome: 'Fracionado', unidade: 'KG', lote_impedido: 2.5 },
+  ];
+  beforeEach(() => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: LINHAS });
+      if (url === '/almoxarifado/categorias') return Promise.resolve({ data: CATALOGO });
+      return Promise.resolve({ data: [] });
+    });
+  });
+  const selo = (codigo) => linhaDe(codigo).querySelector('.almox-lista-lote-impedido');
+
+  test('[RN-223.08] a busca da lista pede o campo (com_lote_impedido: 1)', async () => {
+    await renderizar();
+    const chamadas = api.get.mock.calls.filter(([url]) => url === '/almoxarifado/materiais');
+    expect(chamadas.length).toBeGreaterThan(0);
+    for (const [, cfg] of chamadas) expect(cfg.params.com_lote_impedido).toBe(1);
+  });
+
+  test('[RN-223.08] com 6: o selo "6 PC em lote impedido" com a dica literal; a quantidade continua a de sempre', async () => {
+    await renderizar();
+    expect(selo('IMP-001')).not.toBeNull();
+    expect(selo('IMP-001').textContent.trim()).toBe('6 PC em lote impedido');
+    expect(selo('IMP-001').getAttribute('title')).toBe(DICA);
+    expect(linhaDe('IMP-001').textContent).toContain('10');
+    expect(selo('IMP-007').textContent.trim()).toBe('2.5 KG em lote impedido');
+  });
+
+  test('[RN-223.08 b] sem unidade: "6 em lote impedido", sem espaço sobrando nem "null"', async () => {
+    await renderizar();
+    expect(selo('IMP-002').textContent.trim()).toBe('6 em lote impedido');
+    expect(linhaDe('IMP-002').textContent).not.toContain('null');
+  });
+
+  test('[RN-223.08] com 0, ausente, nulo ou texto: nenhum selo — e a linha está lá com a quantidade', async () => {
+    await renderizar();
+    for (const codigo of ['IMP-003', 'IMP-004', 'IMP-005', 'IMP-006']) {
+      expect(linhaDe(codigo)).toBeDefined();
+      expect(linhaDe(codigo).textContent).toContain('10');
+      expect(selo(codigo)).toBeNull();
+      expect(linhaDe(codigo).textContent).not.toContain('em lote impedido');
+    }
+    expect(selo('IMP-001')).not.toBeNull();
   });
 });

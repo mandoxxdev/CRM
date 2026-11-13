@@ -406,4 +406,14 @@ describe('Almoxarifado → Materiais: a ficha "Ver" e os caminhos antigos (RN-19
     expect(container.querySelector('form')).toBeNull();
     expect(api.post).not.toHaveBeenCalled();
   });
+
+  // Etapa 223 (RN-223.09, B1482): o selo de lote impedido e do almoxarifado — a lista do Compras (o mesmo `TabelaMateriais`) nao pede o
+  // campo, entao ele nao vem e nada aparece.
+  test('[RN-223.09] a lista do Compras não pede com_lote_impedido', async () => {
+    await renderizar('/compras/materiais');
+    const chamadas = api.get.mock.calls.filter(([u]) => u === '/compras/materiais/cadastro');
+    expect(chamadas.length).toBeGreaterThan(0);
+    for (const [, cfg] of chamadas) expect(cfg.params).not.toHaveProperty('com_lote_impedido');
+    expect(container.textContent).toContain('VLV-001');
+  });
 });

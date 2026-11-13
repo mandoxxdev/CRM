@@ -30,6 +30,14 @@ export const getStatus = (m) => {
   return { label: 'OK', cls: 'ok' };
 };
 
+// Etapa 223 (RN-223.08, B1482; Fase 2 I1): o numero e a regua da aprovacao, que tira o ja bloqueado no material — a dica diz isso e
+// aponta o extrato (que mostra os dois cartoes). Campo ausente, nulo ou nao numerico = nada na tela.
+export const DICA_LOTE_IMPEDIDO = 'Em lote bloqueado, reprovado ou vencido, fora o que já está bloqueado no material: não sai para uso '
+  + 'até o lote ser liberado na tela Lotes e Séries. O extrato mostra os dois números.';
+export const temLoteImpedido = (m) => m.lote_impedido != null && Number.isFinite(Number(m.lote_impedido))
+  && Number(m.lote_impedido) > 0;
+export const seloLoteImpedido = (m) => `${Number(m.lote_impedido)}${m.unidade ? ` ${m.unidade}` : ''} em lote impedido`;
+
 const getPct = (m) => {
   if (!m.quantidade_maxima || m.quantidade_maxima === 0) return 50;
   return Math.min(100, (m.quantidade_atual / m.quantidade_maxima) * 100);
@@ -189,6 +197,14 @@ export function TabelaMateriais({ materiais, loading, renderAcoes }) {
                     <div style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)' }}>
                       Mín: {m.quantidade_minima > 0 ? m.quantidade_minima : '—'} · Máx: {m.quantidade_maxima > 0 ? m.quantidade_maxima : '—'}
                     </div>
+                    {/* Etapa 223 (RN-223.08, B1482): quanto do estoque esta em lote impedido — so com numero > 0 (o campo so vem
+                        quando a tela pede: a do Compras nao pede, RN-223.09). */}
+                    {temLoteImpedido(m) && (
+                      <div className="almox-lista-lote-impedido" title={DICA_LOTE_IMPEDIDO}
+                        style={{ fontSize: '0.7rem', color: 'var(--gmp-warning)', fontWeight: 600 }}>
+                        <FiAlertTriangle size={10} /> {seloLoteImpedido(m)}
+                      </div>
+                    )}
                   </td>
                   <td>
                     <span style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>

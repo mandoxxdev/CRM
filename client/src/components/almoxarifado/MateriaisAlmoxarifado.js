@@ -120,6 +120,9 @@ const MateriaisAlmoxarifado = () => {
         }
       }
       if (statusFilter) params.status = statusFilter;
+      // Etapa 223 (RN-223.08, B1481): o numero em lote impedido de cada linha vem so com este pedido (opt-in do servidor). Aqui, e nao
+      // no `paramsDaBusca` compartilhado: a lista do Compras nao pede (RN-223.09).
+      params.com_lote_impedido = 1;
       const res = await api.get('/almoxarifado/materiais', { params });
       if (meu !== pedidoMateriaisRef.current) return;
       setMateriais(res.data);
