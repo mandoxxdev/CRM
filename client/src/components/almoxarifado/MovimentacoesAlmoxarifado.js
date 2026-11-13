@@ -136,6 +136,24 @@ const FRASE_SERIES_IMPEDIDAS_SAIDA = {
   SAIDA: 'Séries de lote bloqueado, reprovado ou vencido vêm apagadas: só saem depois que o lote for liberado na tela Lotes e Séries.',
   PERDA: 'Séries de lote bloqueado ou reprovado vêm apagadas: só saem depois que o lote for liberado na tela Lotes e Séries.',
 };
+// Etapa 234 (D (233) 2, B1533): com o lote em branco, o servidor grava a saída no lote DAS séries marcadas (B1531) e recusa séries de lotes
+// diferentes (B1532). A tela diz antes de enviar: um lote -> de qual sai; lotes diferentes (ou lote e sem lote) -> a frase de recusa, e o
+// envio para nela. Todas sem lote ou nada marcado -> nada (como antes). Só para material sem controle de lote (com ele, o lote é exigido).
+const fraseDoLoteDasSeries = (series, ids) => {
+  const marcadas = series.filter((s) => ids.includes(s.id));
+  if (!marcadas.length) return null;
+  // Fase 2: a série com `lote_id` mas sem `lote_codigo` (lote apagado) é "sem lote", como no servidor (LEFT JOIN); a ordem é a do `<`
+  // (a do `ORDER BY` do SQLite), não a do `localeCompare`.
+  const temLote = (s) => s.lote_id != null && s.lote_codigo != null;
+  const porLote = new Map();
+  marcadas.filter(temLote).forEach((s) => porLote.set(Number(s.lote_id), String(s.lote_codigo)));
+  const codigos = [...porLote.values()].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  const semLote = marcadas.some((s) => !temLote(s));
+  if (!codigos.length) return null;
+  if (codigos.length === 1 && !semLote) return { mistura: false, texto: `As séries marcadas saem do lote ${codigos[0]}.` };
+  const nomes = semLote ? [...codigos, 'sem lote'] : codigos;
+  return { mistura: true, texto: `As séries marcadas são de lotes diferentes (${nomes.join(', ')}): faça uma saída para cada lote.` };
+};
 
 // Tipos que não podem ser estornados pelo botão do livro (espelha as recusas de
 // stockService.cancelarMovimentacao no servidor — a lista aqui é só para não oferecer um botão
@@ -567,6 +585,13 @@ const MovimentacoesAlmoxarifado = () => {
       }
       if (TIPOS_SAIDA_LOTE.includes(form.tipo) && form.serie_ids.length !== Number(form.quantidade)) {
         toast.error('Selecione exatamente a quantidade de séries informada');
+        return;
+      }
+      // Etapa 234 (B1533): séries de lotes diferentes com o lote em branco — o servidor recusaria (B1532); a tela para antes.
+      const loteDaSaida = TIPOS_SAIDA_LOTE.includes(form.tipo) && !form.lote_id && selectedMaterial?.controle_lote !== 1
+        ? fraseDoLoteDasSeries(seriesDisponiveis, form.serie_ids) : null;
+      if (loteDaSaida?.mistura) {
+        toast.error(loteDaSaida.texto);
         return;
       }
     }
@@ -1272,6 +1297,16 @@ const MovimentacoesAlmoxarifado = () => {
                           {FRASE_SERIES_IMPEDIDAS_SAIDA[form.tipo]}
                         </small>
                       )}
+                      {!form.lote_id && selectedMaterial?.controle_lote !== 1 && (() => {
+                        // Etapa 234 (B1533): de qual lote as séries marcadas saem (o servidor grava a saída nele, B1531)
+                        const f = fraseDoLoteDasSeries(seriesDisponiveis, form.serie_ids);
+                        return f && (
+                          <small id="mov-series-lote-da-saida"
+                            style={{ color: f.mistura ? 'var(--gmp-error)' : 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                            {f.texto}
+                          </small>
+                        );
+                      })()}
                       <small id="mov-series-saida-contador">{form.serie_ids.length}/{form.quantidade || 0} série(s) selecionada(s)</small>
                     </div>
                   )}
