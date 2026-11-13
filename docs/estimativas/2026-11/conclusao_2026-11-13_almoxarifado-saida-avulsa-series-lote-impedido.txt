@@ -1,0 +1,6 @@
+*Concluído — almoxarifado: a saída avulsa não deixa marcar série de lote bloqueado*
+_13/11/2026_
+
+1. Na saída avulsa, as séries que não podem sair vêm apagadas, e o sistema passa a recusá-las — estimado 3h · realizado 3h
+
+*Total: estimado 3h · realizado 3h*

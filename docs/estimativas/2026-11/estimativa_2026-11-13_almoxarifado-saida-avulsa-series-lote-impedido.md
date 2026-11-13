@@ -21,7 +21,7 @@ Medido no código antes de estimar (sobre `8926323c`):
 
 | # | Tarefa | Execução estimada | Fator | Informado | Etapa/plano | Régua usada | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | Na saída avulsa, as séries que o tipo não pode baixar vêm apagadas, e a porta manual recusa a série de lote impedido com o lote em branco (D (232) 1) | 1 h | média (análise 30 min + 30 min de decisão de regra por tipo + teste 1 h) | 3h | 233 | 232 (mesmo molde, servidor aditivo + tela) mediu 0,8 h; aqui há guarda nova no motor | — | — | — |
+| 1 | Na saída avulsa, as séries que o tipo não pode baixar vêm apagadas, e a porta manual recusa a série de lote impedido com o lote em branco (D (232) 1) | 1 h | média (análise 30 min + 30 min de decisão de regra por tipo + teste 1 h) | 3h | 233 | 232 (mesmo molde, servidor aditivo + tela) mediu 0,8 h; aqui há guarda nova no motor | 0,7 h (~43 min, sem o fechamento) | 3h (43 min + análise 30 min + decisão de regra 30 min + teste 1 h = 2h43, arredondado na unidade de 30 min; a parte do André é a da tabela — não informada por ele) | 1111ea13, b3fc7a0a, 3ec94b9f, 308ef6b6 e os de fechamento |
 
 Incerteza: baixa a média — o risco é algum chamador interno mandar série de lote impedido sem lote (por isso a guarda vale só para quem
 declara a opção: as rotas manuais).
@@ -30,3 +30,5 @@ Medição no fechamento:
 ```
 --grupos "E233=Etapa 233|Estimativa: almoxarifado - saida avulsa"
 ```
+
+No fechamento: execução medida 0,7 h (horas.js --grupos "E233=…", 13/11), quase toda na Fase 5 (~32 min: o rótulo da Perda e cinco cenários de teste). A estimativa de execução (1 h) ficou acima do medido; o realizado bate com o estimado (3h) porque a parte de análise e teste é a da tabela. Conclusão: `conclusao_2026-11-13_almoxarifado-saida-avulsa-series-lote-impedido.txt`.
