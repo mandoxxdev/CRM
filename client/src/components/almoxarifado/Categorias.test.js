@@ -1,6 +1,10 @@
 /**
- * Aba "Categorias" (`TabCategorias` em ConfiguracoesAlmoxarifado.js) — o cadastro de categorias
- * de material, entregue pela Etapa 26.
+ * Aba "Categorias" (`CategoriasDeMaterial.js`; ate a Etapa 214, `TabCategorias` em ConfiguracoesAlmoxarifado.js) — o cadastro de
+ * categorias de material, entregue pela Etapa 26.
+ *
+ * Etapa 215 (RN-215.01): os gestos de categoria moram em Compras -> Categorias; a aba e a MESMA, pelas portas do Compras
+ * (`ROTAS_CATEGORIAS_COMPRAS`: lista `/compras/materiais/aux/categorias?todos=1`, grava `/compras/materiais/categorias[/:id]`) e
+ * com quem grava (`podeGravar`). A aba do Almoxarifado so consulta (RN-215.03, ConfiguracoesSomenteLeitura.test.js).
  *
  * Um arquivo de teste por aba e a convencao deste diretorio (foi o que a Etapa 24 estabeleceu ao
  * criar `PerfisAcesso.test.js`): `ConfiguracoesAlmoxarifado.test.js` nao existe, e nao deve
@@ -33,7 +37,8 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
-import ConfiguracoesAlmoxarifado from './ConfiguracoesAlmoxarifado';
+// Etapa 215 (RN-215.01): monta a aba pelas portas do Compras, com quem grava — o Almoxarifado nao grava mais categoria.
+import CategoriasDeMaterial, { ROTAS_CATEGORIAS_COMPRAS } from './CategoriasDeMaterial';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 
@@ -54,7 +59,7 @@ jest.mock('../../services/permissionsCache', () => ({
   getEffectiveUser: (u) => u,
 }));
 
-// FORMA REAL de GET /api/almoxarifado/categorias?todos=1 (routes/almoxarifado/extended.js):
+// FORMA REAL de GET /api/compras/materiais/aux/categorias?todos=1 (a mesma do almoxarifado, routes/almoxarifado/extended.js):
 // linhas cruas de `categorias_material_almoxarifado`, `ORDER BY nome`, ATIVAS E INATIVAS
 // juntas. A coluna `parent_id` vem no SELECT * e e sempre null — esta aqui de proposito, para
 // documentar que a aba a IGNORA: a taxonomia e plana (a coluna e heranca da modelagem original,
@@ -72,7 +77,7 @@ let root;
 let confirmOriginal;
 
 const respostaPorUrl = (url) => {
-  if (String(url).startsWith('/almoxarifado/categorias')) {
+  if (String(url).startsWith('/compras/materiais/aux/categorias')) {
     return Promise.resolve({ data: CATEGORIAS_DO_SERVIDOR });
   }
   return Promise.resolve({ data: [] });
@@ -100,8 +105,8 @@ afterEach(() => {
 async function renderAbaCategorias() {
   await act(async () => {
     root.render(
-      <MemoryRouter initialEntries={['/almoxarifado/configuracoes?tab=categorias']}>
-        <ConfiguracoesAlmoxarifado />
+      <MemoryRouter initialEntries={['/compras/categorias']}>
+        <CategoriasDeMaterial rotas={ROTAS_CATEGORIAS_COMPRAS} podeGravar />
       </MemoryRouter>
     );
   });
@@ -138,7 +143,7 @@ test('a aba lista ativas e inativas juntas, distinguiveis, pedindo ?todos=1', as
 
   // A METADE que faz o cenario valer: sem `?todos=1` a inativa nem chega, e o resto do arquivo
   // (reativar) seria intestavel.
-  expect(api.get).toHaveBeenCalledWith('/almoxarifado/categorias?todos=1');
+  expect(api.get).toHaveBeenCalledWith('/compras/materiais/aux/categorias?todos=1');
 
   expect(linhaDa('Aço carbono')).not.toBeUndefined();
   expect(linhaDa('Consumível')).not.toBeUndefined();
@@ -163,11 +168,11 @@ test('criar manda POST { nome } e recarrega a lista', async () => {
 
   expect(api.post).toHaveBeenCalledTimes(1);
   const [rota, corpo] = api.post.mock.calls[0];
-  expect(rota).toBe('/almoxarifado/categorias');
+  expect(rota).toBe('/compras/materiais/categorias');
   expect(corpo.nome).toBe('Elétrico');
   // Recarrega SEMPRE com `?todos=1` — recarregar sem o parametro apagaria as inativas da tela
   // depois da primeira escrita, e o bug so apareceria no segundo uso da aba.
-  expect(api.get).toHaveBeenCalledWith('/almoxarifado/categorias?todos=1');
+  expect(api.get).toHaveBeenCalledWith('/compras/materiais/aux/categorias?todos=1');
 });
 
 test('criar com nome vazio nem chega a chamar o POST', async () => {
@@ -197,7 +202,7 @@ test('renomear manda PUT SEM `ativo` — omitir preserva, mandar 1 ressuscitaria
 
   expect(api.put).toHaveBeenCalledTimes(1);
   const [rota, corpo] = api.put.mock.calls[0];
-  expect(rota).toBe('/almoxarifado/categorias/3');
+  expect(rota).toBe('/compras/materiais/categorias/3');
   expect(corpo.nome).toBe('Consumíveis');
   expect(corpo.ativo).toBeUndefined();
   expect(api.post).not.toHaveBeenCalled();
@@ -233,8 +238,8 @@ test('desativar manda DELETE, pede confirmacao e recarrega com ?todos=1', async 
   await act(async () => { botaoDaLinha('Consumível', 'Desativar').click(); });
 
   expect(window.confirm).toHaveBeenCalledTimes(1);
-  expect(api.delete).toHaveBeenCalledWith('/almoxarifado/categorias/3');
-  expect(api.get).toHaveBeenCalledWith('/almoxarifado/categorias?todos=1');
+  expect(api.delete).toHaveBeenCalledWith('/compras/materiais/categorias/3');
+  expect(api.get).toHaveBeenCalledWith('/compras/materiais/aux/categorias?todos=1');
 });
 
 test('a inativa nao oferece desativar de novo — oferece Reativar', async () => {
@@ -256,12 +261,12 @@ test('reativar manda PUT { nome, ativo: 1 } — sem `ativo` seria no-op silencio
 
   expect(api.put).toHaveBeenCalledTimes(1);
   const [rota, corpo] = api.put.mock.calls[0];
-  expect(rota).toBe('/almoxarifado/categorias/9');
+  expect(rota).toBe('/compras/materiais/categorias/9');
   expect(corpo.ativo).toBe(1);
   // `nome` vai junto porque a rota exige nome nao-vazio; mandar so `{ ativo: 1 }` funcionaria
   // (a rota preserva o nome), mas o corpo explicito e o que o contrato descreve.
   expect(corpo.nome).toBe('Obsoleta');
-  expect(api.get).toHaveBeenCalledWith('/almoxarifado/categorias?todos=1');
+  expect(api.get).toHaveBeenCalledWith('/compras/materiais/aux/categorias?todos=1');
 });
 
 /* ── Erro do servidor ── */

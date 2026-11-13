@@ -70,6 +70,9 @@ export const CotacaoForm = page(() => import('../components/compras/CotacaoForm'
 export const MateriaisCompras = page(() => import('../components/compras/MateriaisCompras'));
 // Etapa 211 (RN-211.01): Compras -> Familias.
 export const FamiliasCompras = page(() => import('../components/compras/FamiliasCompras'));
+// Etapa 215 (RN-215.01): Compras -> Tipos de Material e Compras -> Categorias.
+export const TiposMaterialCompras = page(() => import('../components/compras/TiposMaterialCompras'));
+export const CategoriasCompras = page(() => import('../components/compras/CategoriasCompras'));
 export const ItensFornecedor = page(() => import('../components/ItensFornecedor'));
 export const Financeiro = page(() => import('../components/Financeiro'));
 export const Fabrica = shell(() => import('../components/Fabrica'), 'operacional');

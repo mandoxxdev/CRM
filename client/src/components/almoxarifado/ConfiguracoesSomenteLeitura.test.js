@@ -38,7 +38,10 @@ const SUPER = { id: 1, nome: 'Super', role: 'admin', is_superadmin: 1 };
 const DE_QUEM = ' é do Administrador do almoxarifado ou do Super Administrador; peça a um deles.';
 const F = (oQue) => `Somente leitura — ${oQue}${DE_QUEM}`;
 const R = (oQue) => `Restrito — ${oQue}${DE_QUEM}`;
-const F_TIPOS = F('cadastrar, editar e excluir tipos de material');
+// Etapa 215 (RN-215.03): Tipos de Material e Categorias so consultam, para todos — o cadastro e do Compras. A frase de Tipos era a da
+// 126 ('Somente leitura — cadastrar, editar e excluir tipos de material ...'); Categorias nao tinha frase (gravava para todos, RN-09).
+const F_TIPOS = 'O cadastro de tipos de material é feito em Compras → Tipos de Material.';
+const F_CATEGORIAS = 'O cadastro de categorias é feito em Compras → Categorias.';
 const F_ESTOQUES = F('mudar estoque mínimo, estoque máximo, ponto de pedido e prazo de reposição');
 const F_SETORES = F('cadastrar, editar e inativar setores e áreas');
 const F_LOCALIZACOES = F('cadastrar, editar, mover e excluir localizações');
@@ -48,7 +51,7 @@ const R_REGRAS = R('ver e mudar as regras de aprovação');
 const R_GERAL = R('ver e mudar as configurações gerais do almoxarifado');
 // Etapa 211 (RN-211.03): a frase da aba Familias mudou — o cadastro e do Compras. Era a frase da 125 ('Somente leitura — cadastrar, ...').
 const F_FAMILIAS_125 = 'O cadastro de famílias é feito em Compras → Famílias.';
-const TODAS = [F_TIPOS, F_ESTOQUES, F_SETORES, F_LOCALIZACOES, F_LIBERACAO, R_ALERTAS, R_REGRAS, R_GERAL, F_FAMILIAS_125];
+const TODAS = [F_TIPOS, F_CATEGORIAS,F_ESTOQUES, F_SETORES, F_LOCALIZACOES, F_LIBERACAO, R_ALERTAS, R_REGRAS, R_GERAL, F_FAMILIAS_125];
 
 const DADOS = {
   '/almoxarifado/tipos-material': [{ id: 1, nome: 'EPI Teste', descricao: 'proteção', icone: '🛡️', cor: '#e74c3c', is_epi: 1 }],
@@ -64,7 +67,7 @@ const DADOS = {
   '/almoxarifado/configuracoes/alertas-estoque': { notificarEmail: true, emails: ['alerta@x.com'], smtpHost: 'smtp.x.com' },
   '/almoxarifado/regras-aprovacao': [],
   '/almoxarifado/configuracoes': { prazo_padrao: { valor: '5', descricao: 'Prazo' } },
-  '/almoxarifado/categorias?todos=1': [{ id: 1, nome: 'Categoria Um', ativo: 1 }],
+  '/almoxarifado/categorias?todos=1': [{ id: 1, nome: 'Categoria Um', ativo: 1 }, { id: 2, nome: 'Categoria Velha', ativo: 0 }],
   '/almoxarifado/mapa/localizacoes': [{ id: 3, codigo: 'PRT-01', setor: 'Corredor', tipo: 'Prateleira', almoxarifado_id: 1,
     quantidade_total: 0, itens_criticos: 0, itens_baixo_minimo: 0, parent_id: null }],
   '/almoxarifado/meta/tipos-material': { localizacoes_tipos: ['Prateleira'], tipos: [], areas_especiais: [] },
@@ -103,22 +106,23 @@ const botoesTitulo = (titulo, escopo = container) => escopo.querySelectorAll(`bu
 const chamou = (url) => api.get.mock.calls.some(([u]) => u === url);
 const frasesNaTela = () => TODAS.filter((f) => container.textContent.includes(f));
 
-describe('C261 (Etapa 126) — RN-01: Tipos de material', () => {
-  test('[RN-01] administrador do sistema: os cartões sem Novo/Editar/Excluir, com a frase', async () => {
-    await renderAba(ADMIN_SISTEMA, 'tipos');
-    expect(container.textContent).toContain('EPI Teste');
-    expect(frasesNaTela()).toEqual([F_TIPOS]);
-    expect(botoesTexto(/Novo Tipo de Material/)).toHaveLength(0);
-    expect(botoesTitulo('Editar')).toHaveLength(0);
-    expect(botoesTitulo('Excluir')).toHaveLength(0);
-  });
-  test('[RN-08] perfil Administrador: Novo, Editar e Excluir, sem frase', async () => {
-    await renderAba(ADM_PERFIL, 'tipos');
-    expect(frasesNaTela()).toEqual([]);
-    expect(botoesTexto(/Novo Tipo de Material/)).toHaveLength(1);
-    expect(botoesTitulo('Editar')).toHaveLength(1);
-    expect(botoesTitulo('Excluir')).toHaveLength(1);
-  });
+describe('Etapa 215 — RN-215.03: Tipos de material só consulta no Almoxarifado (era RN-01/RN-08 da 126)', () => {
+  // Etapa 215 (RN-215.03): ninguem grava tipo de material pelo Almoxarifado — nem o perfil Administrador, o administrador do modulo
+  // e o Super Administrador, que na 126 viam Novo/Editar/Excluir. O cadastro e em Compras -> Tipos de Material.
+  const QUEM = [['administrador do sistema', ADMIN_SISTEMA], ['perfil Administrador', ADM_PERFIL],
+    ['administrador do módulo', ADM_MODULO], ['Super Administrador', SUPER]];
+  for (const [quem, u] of QUEM) {
+    test(`[RN-215.03] ${quem}: os cartões pela rota do Almoxarifado, sem Novo/Editar/Excluir, com a frase do Compras`, async () => {
+      await renderAba(u, 'tipos');
+      expect(chamou('/almoxarifado/tipos-material')).toBe(true);
+      expect(container.textContent).toContain('EPI Teste');
+      expect(container.querySelector('.almox-selo-epi')).not.toBeNull(); // o selo do cartao fica
+      expect(frasesNaTela()).toEqual([F_TIPOS]);
+      expect(botoesTexto(/Novo Tipo de Material/)).toHaveLength(0);
+      expect(botoesTitulo('Editar')).toHaveLength(0);
+      expect(botoesTitulo('Excluir')).toHaveLength(0);
+    });
+  }
 });
 
 describe('C261 (Etapa 126) — RN-02: Estoques mínimos', () => {
@@ -283,25 +287,29 @@ describe('C261 (Etapa 126) — RN-07: Mapa de Áreas', () => {
 });
 
 describe('C261 (Etapa 126) — RN-09/RN-10', () => {
-  test('[RN-09] Categorias para o administrador do sistema: Nova Categoria lá, sem frase', async () => {
-    await renderAba(ADMIN_SISTEMA, 'categorias');
-    expect(container.textContent).toContain('Categoria Um');
-    expect(botoesTexto(/Nova Categoria/)).toHaveLength(1);
-    expect(frasesNaTela()).toEqual([]);
-  });
-  test('[RN-08] administrador do módulo e Super Administrador gravam (Tipos)', async () => {
-    for (const u of [ADM_MODULO, SUPER]) {
-      act(() => root.unmount());
-      root = createRoot(container);
-      await renderAba(u, 'tipos');
-      expect(botoesTexto(/Novo Tipo de Material/)).toHaveLength(1);
-      expect(frasesNaTela()).toEqual([]);
-    }
-  });
+  // Etapa 215 (RN-215.03): Categorias deixou de gravar no Almoxarifado. Eram '[RN-09] Categorias para o administrador do sistema:
+  // Nova Categoria lá, sem frase' e '[RN-08] administrador do módulo e Super Administrador gravam (Tipos)' — os dois viraram consulta
+  // (Tipos no describe de cima; Categorias aqui, com uma inativa para provar que Reativar tambem sumiu).
+  for (const [quem, u] of [['administrador do sistema', ADMIN_SISTEMA], ['perfil Administrador', ADM_PERFIL], ['Super Administrador', SUPER]]) {
+    test(`[RN-215.03] Categorias, ${quem}: ativas e inativas listadas, sem Nova/Renomear/Desativar/Reativar, com a frase do Compras`, async () => {
+      await renderAba(u, 'categorias');
+      expect(chamou('/almoxarifado/categorias?todos=1')).toBe(true);
+      const linhas = [...container.querySelectorAll('tbody tr')];
+      expect(linhas.map((tr) => tr.querySelector('td').textContent.trim())).toEqual(['Categoria Um', 'Categoria Velha']);
+      expect(linhas[1].textContent).toContain('Inativa');
+      expect(frasesNaTela()).toEqual([F_CATEGORIAS]);
+      expect(botoesTexto(/Nova Categoria/)).toHaveLength(0);
+      expect(botoesTitulo('Renomear')).toHaveLength(0);
+      expect(botoesTitulo('Desativar')).toHaveLength(0);
+      expect(botoesTitulo('Reativar')).toHaveLength(0);
+      expect(container.querySelectorAll('thead th')).toHaveLength(2); // Nome e Situação, sem a coluna Ações
+    });
+  }
   test('[RN-10] o usuário EFETIVO decide: logado Administrador, efetivo administrador do sistema -> somente leitura e restrita', async () => {
     mockEfetivo = ADMIN_SISTEMA;
-    await renderAba(ADM_PERFIL, 'tipos');
-    expect(frasesNaTela()).toEqual([F_TIPOS]);
+    // Etapa 215: a aba-sonda era Tipos de material, que agora so consulta para todos (nao depende do usuario); foi para Setores e areas.
+    await renderAba(ADM_PERFIL, 'setores');
+    expect(frasesNaTela()).toEqual([F_SETORES]);
     act(() => root.unmount());
     root = createRoot(container);
     await renderAba(ADM_PERFIL, 'alertas');

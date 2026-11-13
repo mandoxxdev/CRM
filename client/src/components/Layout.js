@@ -17,7 +17,7 @@ import {
   FiCalendar, FiLogOut, FiMenu, FiX, FiUserPlus, FiPackage, FiBarChart2, FiMap, FiDollarSign, FiSettings, FiShield, FiMoon, FiSun, FiGrid,
   FiShoppingCart, FiTrendingDown, FiTrendingUp, FiCreditCard, FiTruck, FiFileText as FiFileText2, FiTool, FiCheckCircle,   FiSliders, FiCircle, FiDroplet, FiZap, FiLayers, FiClipboard,
   FiArchive, FiActivity, FiList, FiMessageCircle, FiAlertTriangle, FiCheckSquare, FiLock, FiCornerUpLeft,
-  FiScissors, FiBell, FiMail, FiCamera, FiAlertOctagon, FiInbox, FiUserCheck
+  FiScissors, FiBell, FiMail, FiCamera, FiAlertOctagon, FiInbox, FiUserCheck, FiTag
 } from 'react-icons/fi';
 import Notificacoes from './Notificacoes';
 import BuscaGlobal from './BuscaGlobal';
@@ -276,6 +276,9 @@ const Layout = () => {
     { path: '/compras/materiais', icon: FiLayers, label: 'Materiais' },
     // Etapa 211 (RN-211.01): familias e subfamilias de material, cadastradas so no Compras.
     { path: '/compras/familias', icon: FiGrid, label: 'Famílias' },
+    // Etapa 215 (RN-215.01): tipos de material e categorias, cadastrados so no Compras.
+    { path: '/compras/tipos-material', icon: FiPackage, label: 'Tipos de Material' },
+    { path: '/compras/categorias', icon: FiTag, label: 'Categorias' },
     { path: '/compras/requisicoes-material/nova', icon: FiClipboard, label: 'Solicitar Material' },
     { path: '/compras/requisicoes-material', icon: FiList, label: 'Minhas Requisições' },
     { path: '/almoxarifado/recebimentos', icon: FiPackage, label: 'Recebimento NF/Material' },

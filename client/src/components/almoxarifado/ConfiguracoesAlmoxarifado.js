@@ -11,12 +11,14 @@ import {
   FiPackage, FiSliders, FiMapPin, FiSettings,
   FiShield, FiRefreshCw, FiArrowLeft, FiArrowRight, FiMove,
   FiLayers, FiGrid, FiBell, FiSend, FiMail, FiMessageCircle, FiUsers, FiClipboard, FiShoppingCart, FiDollarSign,
-  FiTag, FiAlertTriangle, FiRotateCcw, FiCheckSquare
+  FiTag, FiRotateCcw, FiCheckSquare
 } from 'react-icons/fi';
 import { ROTAS_ALMOXARIFADO_CONSULTA } from './rotasCadastroMaterial';
 import TabRegrasAprovacao from './TabRegrasAprovacao';
 import AvisoSomenteLeitura from './AvisoSomenteLeitura';
 import FamiliasDeMaterial, { ROTAS_FAMILIAS_ALMOXARIFADO, AVISO_FAMILIAS_NO_COMPRAS } from './FamiliasDeMaterial';
+import TiposDeMaterial, { ROTAS_TIPOS_ALMOXARIFADO, AVISO_TIPOS_NO_COMPRAS } from './TiposDeMaterial';
+import CategoriasDeMaterial, { ROTAS_CATEGORIAS_ALMOXARIFADO, AVISO_CATEGORIAS_NO_COMPRAS } from './CategoriasDeMaterial';
 import Tabs from '../ui/Tabs';
 import { useSearchParams } from 'react-router-dom';
 import { buildLocalizacaoPath } from '../../utils/localizacaoLabel';
@@ -25,8 +27,6 @@ import EtiquetasPdfModal from './EtiquetasPdfModal';
 import { montarEtiquetaLocalizacao } from '../../utils/etiquetasPdf';
 import './Almoxarifado.css';
 
-const ICONES = ['📦', '🔧', '🪛', '⚙️', '🛡️', '🧰', '🪝', '💡', '🔩', '🪜', '🧪', '🏗️', '🔌', '🧲', '📋'];
-const CORES = ['#4facfe', '#00f2fe', '#43e97b', '#f9a825', '#ef5350', '#ab47bc', '#26c6da', '#ff7043', '#78909c', '#5c6bc0'];
 
 // Deliberadamente SEM o almoxarifado: esta tela já tem uma coluna dedicada
 // ("Almoxarifado", com loc.almoxarifado_codigo) ao lado da coluna "Caminho" — prefixar
@@ -285,12 +285,15 @@ const ConfiguracoesAlmoxarifado = ({ embedded = false }) => {
         tamanho={embedded ? 'sm' : 'md'}
       />
 
-      {tab === 'tipos' && <TabTiposMaterial podeGravar={podeGravar} />}
+      {/* Etapa 215 (RN-215.03): Tipos de Material e Categorias so consultam aqui, para todos — o cadastro e do Compras. */}
+      {tab === 'tipos' && <TiposDeMaterial rotas={ROTAS_TIPOS_ALMOXARIFADO} podeGravar={false} aviso={AVISO_TIPOS_NO_COMPRAS} />}
       {tab === 'familias' && (
         <FamiliasDeMaterial rotas={ROTAS_FAMILIAS_ALMOXARIFADO} podeGravar={false} aviso={AVISO_FAMILIAS_NO_COMPRAS}
           linkDoItem={ROTAS_ALMOXARIFADO_CONSULTA.tela.ver} />
       )}
-      {tab === 'categorias' && <TabCategorias />}
+      {tab === 'categorias' && (
+        <CategoriasDeMaterial rotas={ROTAS_CATEGORIAS_ALMOXARIFADO} podeGravar={false} aviso={AVISO_CATEGORIAS_NO_COMPRAS} />
+      )}
       {tab === 'motivos-movimentacao' && <TabMotivosMovimentacao />}
       {tab === 'materiais-setor' && <TabMateriaisPorSetor />}
       {tab === 'estoques' && <TabEstoquesMinimos podeGravar={podeGravar} />}
@@ -314,7 +317,6 @@ const DE_QUEM_GRAVA = ' é do Administrador do almoxarifado ou do Super Administ
 export const fraseSomenteLeitura = (oQue) => `Somente leitura — ${oQue}${DE_QUEM_GRAVA}`;
 export const fraseRestrita = (oQue) => `Restrito — ${oQue}${DE_QUEM_GRAVA}`;
 export const FRASES_CONFIG = {
-  tipos: fraseSomenteLeitura('cadastrar, editar e excluir tipos de material'),
   estoques: fraseSomenteLeitura('mudar estoque mínimo, estoque máximo, ponto de pedido e prazo de reposição'),
   setores: fraseSomenteLeitura('cadastrar, editar e inativar setores e áreas'),
   localizacoes: fraseSomenteLeitura('cadastrar, editar, mover e excluir localizações'),
@@ -325,385 +327,13 @@ export const FRASES_CONFIG = {
 };
 
 
-/* ===================== TAB TIPOS DE MATERIAL ===================== */
-const TabTiposMaterial = ({ podeGravar = true }) => {
-  const [tipos, setTipos] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [editando, setEditando] = useState(null);
-  const [form, setForm] = useState({ nome: '', descricao: '', icone: '📦', cor: '#4facfe', requer_assinatura: false, requer_termo: false, is_epi: false, is_controlado: false });
-  const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => { loadTipos(); }, []);
-
-  const loadTipos = async () => {
-    setLoading(true);
-    try {
-      const res = await api.get('/almoxarifado/tipos-material');
-      setTipos(res.data);
-    } catch { toast.error('Erro ao carregar tipos'); } finally { setLoading(false); }
-  };
-
-  const resetForm = () => {
-    setForm({ nome: '', descricao: '', icone: '📦', cor: '#4facfe', requer_assinatura: false, requer_termo: false, is_epi: false, is_controlado: false });
-    setEditando(null);
-    setShowForm(false);
-  };
-
-  const handleEditar = (tipo) => {
-    setForm({ ...tipo, requer_assinatura: !!tipo.requer_assinatura, requer_termo: !!tipo.requer_termo, is_epi: !!tipo.is_epi, is_controlado: !!tipo.is_controlado });
-    setEditando(tipo.id);
-    setShowForm(true);
-  };
-
-  const handleSalvar = async () => {
-    if (!form.nome.trim()) { toast.error('Nome é obrigatório'); return; }
-    setSaving(true);
-    try {
-      if (editando) {
-        await api.put(`/almoxarifado/tipos-material/${editando}`, form);
-        toast.success('Tipo atualizado!');
-      } else {
-        await api.post('/almoxarifado/tipos-material', form);
-        toast.success('Tipo criado!');
-      }
-      resetForm();
-      loadTipos();
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Erro ao salvar');
-    } finally { setSaving(false); }
-  };
-
-  const handleDeletar = async (id) => {
-    if (!window.confirm('Deletar este tipo? Materiais vinculados perderão o tipo.')) return;
-    try {
-      await api.delete(`/almoxarifado/tipos-material/${id}`);
-      toast.success('Tipo removido');
-      loadTipos();
-    } catch (err) { toast.error(err.response?.data?.error || 'Erro ao deletar'); }
-  };
-
-  const CheckToggle = ({ label, field, value, onChange }) => (
-    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.875rem', padding: '4px 0' }}>
-      <div onClick={onChange} style={{
-        width: 20, height: 20, borderRadius: 4, border: `2px solid ${value ? '#4facfe' : 'var(--gmp-border)'}`,
-        background: value ? '#4facfe' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        transition: 'all 0.15s', cursor: 'pointer', flexShrink: 0,
-      }}>
-        {value && <FiCheck size={11} color="white" strokeWidth={3} />}
-      </div>
-      {label}
-    </label>
-  );
-
-  return (
-    <div>
-      {!podeGravar && <AvisoSomenteLeitura frase={FRASES_CONFIG.tipos} />}
-      {!showForm && podeGravar && (
-        <button className="btn-almox-primary" style={{ marginBottom: 20 }} onClick={() => setShowForm(true)}>
-          <FiPlus size={14} /> Novo Tipo de Material
-        </button>
-      )}
-
-      {showForm && (
-        <div style={{ background: 'var(--gmp-surface)', border: '1px solid rgba(79,172,254,0.25)', borderRadius: 12, padding: 24, marginBottom: 24 }}>
-          <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 18, color: 'var(--gmp-text)' }}>
-            {editando ? '✏️ Editar Tipo' : '➕ Novo Tipo de Material'}
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-            <div className="almox-field">
-              <label className="almox-label">Nome<span className="required">*</span></label>
-              <input className="almox-input" value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} placeholder="Ex: EPI, Ferramenta, Consumível..." />
-            </div>
-            <div className="almox-field">
-              <label className="almox-label">Descrição</label>
-              <input className="almox-input" value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} placeholder="Descrição breve" />
-            </div>
-          </div>
-
-          <div style={{ marginBottom: 16 }}>
-            <label className="almox-label">Ícone</label>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
-              {ICONES.map(ic => (
-                <button key={ic} type="button" onClick={() => setForm(f => ({ ...f, icone: ic }))}
-                  style={{ fontSize: 20, padding: 6, borderRadius: 8, border: `2px solid ${form.icone === ic ? '#4facfe' : 'var(--gmp-border)'}`, background: form.icone === ic ? 'rgba(79,172,254,0.1)' : 'var(--gmp-bg)', cursor: 'pointer' }}>
-                  {ic}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ marginBottom: 16 }}>
-            <label className="almox-label">Cor</label>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
-              {CORES.map(cor => (
-                <button key={cor} type="button" onClick={() => setForm(f => ({ ...f, cor }))}
-                  style={{ width: 28, height: 28, borderRadius: 50, background: cor, border: `3px solid ${form.cor === cor ? 'var(--gmp-text)' : 'transparent'}`, cursor: 'pointer' }} />
-              ))}
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 20 }}>
-            <CheckToggle label="🛡️ É um EPI" value={form.is_epi} onChange={() => setForm(f => ({ ...f, is_epi: !f.is_epi }))} />
-            <CheckToggle label="🔒 Controlado" value={form.is_controlado} onChange={() => setForm(f => ({ ...f, is_controlado: !f.is_controlado }))} />
-            <CheckToggle label="✍️ Requer Assinatura" value={form.requer_assinatura} onChange={() => setForm(f => ({ ...f, requer_assinatura: !f.requer_assinatura }))} />
-            <CheckToggle label="📄 Requer Termo" value={form.requer_termo} onChange={() => setForm(f => ({ ...f, requer_termo: !f.requer_termo }))} />
-          </div>
-
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button className="btn-almox-primary" onClick={handleSalvar} disabled={saving}>
-              <FiSave size={14} /> {saving ? 'Salvando...' : 'Salvar Tipo'}
-            </button>
-            <button className="btn-almox-secondary" onClick={resetForm}>Cancelar</button>
-          </div>
-        </div>
-      )}
-
-      {loading ? (
-        <div className="almox-loading"><FiRefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> Carregando...</div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
-          {tipos.map(tipo => (
-            <div key={tipo.id} style={{ background: 'var(--gmp-surface)', border: `1px solid var(--gmp-border)`, borderLeft: `4px solid ${tipo.cor}`, borderRadius: 12, padding: 18 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 22 }}>{tipo.icone}</span>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{tipo.nome}</div>
-                    {tipo.descricao && <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>{tipo.descricao}</div>}
-                  </div>
-                </div>
-                {podeGravar && (
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button className="almox-btn-icon" onClick={() => handleEditar(tipo)} title="Editar"><FiEdit2 size={13} /></button>
-                    <button className="almox-btn-icon danger" onClick={() => handleDeletar(tipo.id)} title="Excluir"><FiTrash2 size={13} /></button>
-                  </div>
-                )}
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {tipo.is_epi && <span className="almox-selo almox-selo-epi">EPI</span>}
-                {tipo.is_controlado && <span className="almox-selo almox-selo-controlado">Controlado</span>}
-                {tipo.requer_assinatura && <span className="almox-selo almox-selo-assinatura">Assinatura</span>}
-                {tipo.requer_termo && <span className="almox-selo almox-selo-termo">Termo</span>}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-/* ===================== TAB FAMÍLIAS DE MATERIAL =====================
- * Etapa 211: mora em `FamiliasDeMaterial.js` (serve tambem Compras -> Familias). Aqui, so consulta (RN-211.03). */
-
-/* ===================== TAB CATEGORIAS DE MATERIAL ===================== */
-/**
- * Etapa 26, Task 3 — o cadastro de categorias de material.
- *
- * FAMÍLIAS É O MOLDE DA UI (estados de carregamento/erro, formulário embutido, botões), mas NÃO
- * do modelo: família tem `parent_id`, código automático e hierarquia; categoria é uma lista
- * PLANA de nomes. A tabela `categorias_material_almoxarifado` tem uma coluna `parent_id` herdada
- * da modelagem original e sem nenhum uso — esta aba a ignora de propósito, e tratá-la como
- * árvore inventaria uma hierarquia que o servidor não valida.
- *
- * Três decisões que o servidor (Task 1) impõe e que a tela precisa respeitar:
- *
- *  1. o GET vai SEMPRE com `?todos=1`. Sem ele a resposta traz só `ativo = 1`, e a categoria que
- *     acabou de ser desativada some da única tela capaz de reativá-la — "desativar não apaga"
- *     ficaria verdadeiro no banco e falso para o usuário;
- *  2. renomear manda `PUT` SEM `ativo`. A rota preserva o valor atual quando o campo é omitido;
- *     mandar `ativo: 1` no rename ressuscitaria em silêncio uma categoria aposentada;
- *  3. reativar manda `PUT { nome, ativo: 1 }` — pela mesma regra, um PUT sem `ativo` aqui seria
- *     um no-op com toast de sucesso.
- *
- * RN-05: renomear NÃO reescreve `materiais.categoria` (a coluna é texto livre, não chave
- * estrangeira). O aviso abaixo é a única vez em que o usuário fica sabendo disso ANTES de agir —
- * sem ele, renomeia achando que reclassificou o acervo. Propagar o rename (ou promover a coluna
- * a chave estrangeira) é decisão de outra etapa, registrada na letra B.
- */
-const TabCategorias = () => {
-  const [categorias, setCategorias] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [showForm, setShowForm] = useState(false);
-  const [editando, setEditando] = useState(null);
-  const [form, setForm] = useState({ nome: '' });
-
-  useEffect(() => { loadCategorias(); }, []);
-
-  const loadCategorias = async () => {
-    setLoading(true);
-    try {
-      const res = await api.get('/almoxarifado/categorias?todos=1');
-      setCategorias(res.data);
-    } catch { toast.error('Erro ao carregar categorias'); }
-    finally { setLoading(false); }
-  };
-
-  const resetForm = () => {
-    setForm({ nome: '' });
-    setEditando(null);
-    setShowForm(false);
-  };
-
-  const handleEditar = (cat) => {
-    setForm({ nome: cat.nome });
-    setEditando(cat.id);
-    setShowForm(true);
-  };
-
-  const handleSalvar = async () => {
-    if (!form.nome.trim()) { toast.error('Nome é obrigatório'); return; }
-    setSaving(true);
-    try {
-      if (editando) {
-        // SEM `ativo`: a rota preserva o valor atual quando o campo é omitido.
-        await api.put(`/almoxarifado/categorias/${editando}`, { nome: form.nome });
-        toast.success('Categoria renomeada! Os materiais já classificados mantêm o nome antigo.');
-      } else {
-        await api.post('/almoxarifado/categorias', { nome: form.nome });
-        toast.success('Categoria criada!');
-      }
-      resetForm();
-      loadCategorias();
-    } catch (err) {
-      // A mensagem do servidor CRUA: ele já diz o que houve ("Já existe uma categoria com este
-      // nome"). Trocar por "Erro ao salvar" faria o usuário tentar o mesmo nome de novo.
-      toast.error(err.response?.data?.error || 'Erro ao salvar');
-    } finally { setSaving(false); }
-  };
-
-  const handleDesativar = async (cat) => {
-    if (!window.confirm(
-      `Desativar a categoria "${cat.nome}"? Ela sai das listas de novos materiais, mas os que já a usam continuam com ela.`
-    )) return;
-    try {
-      await api.delete(`/almoxarifado/categorias/${cat.id}`);
-      toast.success('Categoria desativada');
-      loadCategorias();
-    } catch (err) { toast.error(err.response?.data?.error || 'Erro ao desativar'); }
-  };
-
-  const handleReativar = async (cat) => {
-    try {
-      // `ativo: 1` EXPLÍCITO — omitir preservaria o 0 e o clique não faria nada.
-      await api.put(`/almoxarifado/categorias/${cat.id}`, { nome: cat.nome, ativo: 1 });
-      toast.success('Categoria reativada');
-      loadCategorias();
-    } catch (err) { toast.error(err.response?.data?.error || 'Erro ao reativar'); }
-  };
-
-  return (
-    <div>
-      <p style={{ fontSize: '0.85rem', color: 'var(--gmp-text-light)', marginBottom: 20 }}>
-        Classificação livre dos materiais (ex.: Consumível, Aço carbono). Desativar não apaga:
-        a categoria sai das listas de novos materiais e continua valendo nos que já a usam.
-      </p>
-
-      {!showForm && (
-        <button className="btn-almox-primary" style={{ marginBottom: 20 }} onClick={() => setShowForm(true)}>
-          <FiPlus size={14} /> Nova Categoria
-        </button>
-      )}
-
-      {showForm && (
-        <div style={{ background: 'var(--gmp-surface)', border: '1px solid rgba(79,172,254,0.25)', borderRadius: 12, padding: 24, marginBottom: 24 }}>
-          <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 18 }}>
-            {editando ? '✏️ Renomear Categoria' : '➕ Nova Categoria'}
-          </div>
-          <div className="almox-field" style={{ marginBottom: 16, maxWidth: 420 }}>
-            <label className="almox-label">Nome<span className="required">*</span></label>
-            <input className="almox-input" value={form.nome}
-              onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
-              placeholder="Ex: Consumível, Aço carbono..." />
-          </div>
-
-          {/* RN-05 — só no renomear: criar não tem este efeito colateral, e aviso permanente
-              vira ruído que o usuário para de ler. */}
-          {editando && (
-            <div style={{
-              display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 20,
-              background: 'rgba(249,168,37,0.08)', border: '1px solid rgba(249,168,37,0.3)',
-              borderRadius: 8, padding: '12px 14px', fontSize: '0.82rem', color: 'var(--gmp-text)',
-            }}>
-              <FiAlertTriangle size={16} style={{ color: '#f9a825', flexShrink: 0, marginTop: 1 }} />
-              <span>
-                Renomear <strong>não reclassifica</strong> os materiais: os que já usam esta
-                categoria continuam gravados com o <strong>nome antigo</strong>. Para movê-los,
-                edite cada material.
-              </span>
-            </div>
-          )}
-
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button className="btn-almox-primary" onClick={handleSalvar} disabled={saving}>
-              <FiSave size={14} /> {saving ? 'Salvando...' : 'Salvar Categoria'}
-            </button>
-            <button className="btn-almox-secondary" onClick={resetForm}>Cancelar</button>
-          </div>
-        </div>
-      )}
-
-      {loading ? (
-        <div className="almox-loading"><FiRefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> Carregando...</div>
-      ) : categorias.length === 0 ? (
-        <div className="almox-empty" style={{ padding: 40 }}>
-          <FiTag size={40} style={{ opacity: 0.3, display: 'block', margin: '0 auto 12px' }} />
-          <p>Nenhuma categoria cadastrada</p>
-        </div>
-      ) : (
-        <table className="almox-table">
-          <thead>
-            <tr>
-              <th>Nome</th>
-              <th style={{ width: 120 }}>Situação</th>
-              <th style={{ width: 140 }}>Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {categorias.map(cat => (
-              <tr key={cat.id} style={{ opacity: cat.ativo ? 1 : 0.6 }}>
-                <td style={{ fontWeight: 600 }}>{cat.nome}</td>
-                <td>
-                  {cat.ativo ? (
-                    <span style={{ fontSize: '0.7rem', background: 'rgba(67,233,123,0.12)', color: '#27ae60', padding: '2px 10px', borderRadius: 20, fontWeight: 600 }}>Ativa</span>
-                  ) : (
-                    <span style={{ fontSize: '0.7rem', background: 'rgba(120,144,156,0.15)', color: 'var(--gmp-text-light)', padding: '2px 10px', borderRadius: 20, fontWeight: 600 }}>Inativa</span>
-                  )}
-                </td>
-                <td>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    {cat.ativo ? (
-                      <>
-                        <button className="almox-btn-icon" title="Renomear" onClick={() => handleEditar(cat)}>
-                          <FiEdit2 size={13} />
-                        </button>
-                        <button className="almox-btn-icon danger" title="Desativar" onClick={() => handleDesativar(cat)}>
-                          <FiTrash2 size={13} />
-                        </button>
-                      </>
-                    ) : (
-                      <button className="btn-almox-secondary" title="Reativar"
-                        style={{ fontSize: '0.75rem', padding: '4px 12px' }}
-                        onClick={() => handleReativar(cat)}>
-                        <FiRotateCcw size={12} /> Reativar
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </div>
-  );
-};
+/* ===================== TABS TIPOS DE MATERIAL, FAMILIAS E CATEGORIAS =====================
+ * Etapa 211: Familias mora em `FamiliasDeMaterial.js`; Etapa 215: Tipos em `TiposDeMaterial.js` e Categorias em
+ * `CategoriasDeMaterial.js` (servem tambem Compras -> Tipos de Material e -> Categorias). Aqui, so consulta (RN-211.03, RN-215.03). */
 
 /* ===================== TAB MOTIVOS DE MOVIMENTAÇÃO (Etapa 66, T4) ===================== */
 /*
- * Molde: TabCategorias logo acima. Diferenças que importam:
+ * Molde: TabCategorias (desde a Etapa 215 em `CategoriasDeMaterial.js`). Diferenças que importam:
  *  - os checkboxes de tipo vêm de GET /motivos-movimentacao/tipos — a lista dos tipos já existe
  *    no servidor (TIPOS_MOVIMENTO_ROTA); uma terceira cópia aqui divergiria na primeira mudança;
  *  - os tipos vão no payload na ORDEM DO SERVIDOR (não na dos cliques), para o mesmo conjunto

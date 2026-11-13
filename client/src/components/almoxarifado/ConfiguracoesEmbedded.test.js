@@ -90,6 +90,12 @@ const urlAtual = () => container.querySelector('[data-testid="espiao-url"]').tex
 
 const wrapper = () => container.querySelector('[data-testid="espiao-url"]').nextElementSibling;
 
+// Etapa 215 (RN-215.03): Tipos de Material e Categorias so consultam no Almoxarifado — o marcador do conteudo de cada aba deixou de ser
+// o botao 'Novo Tipo de Material' / 'Nova Categoria' (que nao existe mais aqui) e passou a ser a frase dela, a mesma literal do 403.
+const FRASE_TIPOS = 'O cadastro de tipos de material é feito em Compras → Tipos de Material.';
+const FRASE_CATEGORIAS = 'O cadastro de categorias é feito em Compras → Categorias.';
+const naTela = (frase) => container.textContent.includes(frase);
+
 const botaoDaAba = (rotulo) => [...container.querySelectorAll('button')]
   .find(b => b.textContent.trim() === rotulo);
 
@@ -106,7 +112,7 @@ test('sem a prop, a tela e a de hoje: h1 proprio, selo e wrapper .almox-page', a
   expect(wrapper().classList.contains('almox-page')).toBe(true);
   expect(container.querySelector('.almox-embedded')).toBeNull();
   // Sem ?tab= cai na primeira aba.
-  expect(botaoDaAba('Novo Tipo de Material')).not.toBeUndefined();
+  expect(naTela(FRASE_TIPOS)).toBe(true);
 });
 
 test('com embedded, some o cabecalho e o wrapper vira .almox-embedded — mas a barra de abas fica', async () => {
@@ -128,7 +134,7 @@ test('embedded com ?tab=geral abre a aba Configuracoes Gerais', async () => {
   await render({ url: '/configuracoes?modulo=almoxarifado&tab=geral', embedded: true });
 
   expect(api.get).toHaveBeenCalledWith('/almoxarifado/configuracoes');
-  expect(botaoDaAba('Novo Tipo de Material')).toBeUndefined();
+  expect(naTela(FRASE_TIPOS)).toBe(false);
   expect([...container.querySelectorAll('button')].some(b => /Salvar Configurações/.test(b.textContent))).toBe(true);
 });
 
@@ -143,8 +149,8 @@ test('clicar numa aba interna escreve ?tab=<id> na URL (modo embedded) e troca o
   // Os outros parametros sobrevivem — e o `?modulo=` que mantem a aba de modulo aberta.
   expect(params.get('modulo')).toBe('almoxarifado');
   expect(api.get).toHaveBeenCalledWith('/almoxarifado/categorias?todos=1');
-  expect(botaoDaAba('Nova Categoria')).not.toBeUndefined();
-  expect(botaoDaAba('Novo Tipo de Material')).toBeUndefined();
+  expect(naTela(FRASE_CATEGORIAS)).toBe(true);
+  expect(naTela(FRASE_TIPOS)).toBe(false);
 });
 
 test('clicar numa aba interna escreve ?tab=<id> na URL tambem na rota antiga (sem embedded)', async () => {
@@ -156,13 +162,13 @@ test('clicar numa aba interna escreve ?tab=<id> na URL tambem na rota antiga (se
 
   await act(async () => { botaoDaAba('Categorias').click(); });
   expect(new URLSearchParams(urlAtual()).get('tab')).toBe('categorias');
-  expect(botaoDaAba('Nova Categoria')).not.toBeUndefined();
+  expect(naTela(FRASE_CATEGORIAS)).toBe(true);
 });
 
 test('?tab= invalido cai em Tipos de Material', async () => {
   await render({ url: '/almoxarifado/configuracoes?tab=nao-existe' });
 
-  expect(botaoDaAba('Novo Tipo de Material')).not.toBeUndefined();
+  expect(naTela(FRASE_TIPOS)).toBe(true);
   expect(api.get).toHaveBeenCalledWith('/almoxarifado/tipos-material');
 });
 

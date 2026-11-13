@@ -70,7 +70,8 @@ test('T8 a tela real do almoxarifado embutida: aba interna troca o conteudo e gr
   for (let i = 0; i < 3; i++) await act(async () => {});
   expect(search().get('modulo')).toBe('almoxarifado');
   expect(search().get('tab')).toBe('categorias');
-  expect(botao('Nova Categoria')).toBeTruthy();
+  // Etapa 215 (RN-215.03): a aba Categorias tambem so consulta — o marcador e a frase do Compras, nao o botao 'Nova Categoria'.
+  expect(container.textContent).toContain('O cadastro de categorias é feito em Compras → Categorias.');
   expect(container.textContent).not.toContain('O cadastro de famílias é feito em Compras → Famílias.');
 });
 
