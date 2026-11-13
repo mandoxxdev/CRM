@@ -1,0 +1,8 @@
+*Concluído — almoxarifado: material que chega em lote bloqueado*
+_13/11/2026_
+
+1. Material que chega em lote bloqueado não fica reservado para quem espera — estimado 4h · realizado 4h
+
+*Total: estimado 4h · realizado 4h*
+
+Quando a nota dá entrada num lote bloqueado, reprovado ou vencido, a liberação da inspeção ou da não conformidade e o encerramento de uma ordem de serviço deixam de guardar essas peças para quem estava esperando: a requisição continua aguardando estoque, quem pediu não recebe o aviso de que o material chegou, e o aviso de entrada diz que o item entrou em lote bloqueado. A nota de pedido feita para uma ordem de serviço aberta continua guardando o material para ela.
