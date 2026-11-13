@@ -597,6 +597,14 @@
   de fato foi cotado e comprado, com o número do documento, sem cadastro novo — e já traz o que existia antes da etapa. Fora:
   cotação cancelada; pedido cancelado ou rejeitado. A cotação rejeitada entra, marcada "(rejeitada)": foi preço cotado.
   **Descartado:** guardar cada mudança do preço digitado no vínculo do fornecedor (preço digitado não é cotado nem comprado).
+- **B88 — 13/11/2026 (Etapa 211): famílias e subfamílias só se cadastram em Compras → Famílias; o Almoxarifado consulta.** Pedido do
+  Compras (o cadastro é dele). As gravações pelo Almoxarifado respondem *"O cadastro de famílias é feito em Compras → Famílias."* para
+  todos, inclusive o Super Administrador. **Reversível:** a variável `ALMOX_CADASTRO_MATERIAL=liberado` devolve as três gravações ao
+  administrador do almoxarifado, como era. **Escolhido também:** quem tem o módulo Compras mas não o administra vê em Compras →
+  Famílias só o aviso de quem pode, **sem a árvore** — a leitura das famílias pelo Compras é a mesma de Compras → Materiais, que já
+  era só de quem cadastra. **Descartado:** abrir a leitura das famílias a todo o módulo Compras (a página mostraria a árvore sem os
+  botões); fica para quando a compradora pedir. O perfil Administrador do almoxarifado, que via os botões na aba, passou a só
+  consultar.
 
 ### D. Dúvidas para você (ou para o P.O.)
 - **D-35** — O que A, B e C significam **para a GMP**? A legenda atual é a definição genérica.
@@ -776,6 +784,51 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 211 — Famílias e subfamílias cadastradas no Compras (2026-11-13)
+
+**Em uma frase.** O Compras pediu que o Almoxarifado não faça nenhum cadastro — só consulte, receba, libere e dê saída. As famílias e
+subfamílias de material, que se cadastravam em Almoxarifado → Configurações, agora se cadastram em **Compras → Famílias**.
+
+### O que há de novo (visível para o usuário)
+
+- **Compras → Famílias** (menu novo do Compras): a mesma árvore de famílias e subfamílias, com *Nova Família*, *Nova subfamília*,
+  *Editar*, *Inativar* e *Reativar*, para o administrador do módulo Compras e os administradores do sistema. O *Ver* de cada item abre
+  o material em Compras → Materiais.
+- **Almoxarifado → Configurações → Famílias**: só consulta, para todos, com a frase *"O cadastro de famílias é feito em Compras → Famílias."*
+- No formulário de material do Compras, sem família cadastrada, a dica aponta *Compras → Famílias*.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Família se cadastrava no Almoxarifado, pelo administrador do almoxarifado | Família se cadastra no Compras, por quem cadastra material |
+| A aba Famílias do Almoxarifado tinha os botões para o perfil Administrador | A aba só consulta, para todos |
+| As mensagens mandavam reativar a família no Almoxarifado | Mandam reativar em *Compras → Famílias (administrador do módulo Compras)* |
+
+### As regras, com o cenário exato
+
+1. Administrador do módulo Compras → **Compras → Famílias** → *Nova Família* → nome *Parafusos* → salvar: *"Família criada!"*.
+2. Comprador sem ser administrador do Compras → **Compras → Famílias**: *"Seu acesso não permite cadastrar famílias. Peça a um
+   administrador do sistema para marcar você como administrador do módulo Compras."*
+3. Qualquer pessoa, gravando família pelo Almoxarifado (pela API) → *"O cadastro de famílias é feito em Compras → Famílias."*
+4. Na aba de consulta do Almoxarifado, uma subfamília ativa sob família inativa → *"Reative a família ou inative a subfamília em
+   Compras → Famílias."*
+5. As regras de sempre continuam iguais no Compras (dois níveis, código gerado, inativar com itens ou subfamílias ativas recusado,
+   aviso de edição simultânea).
+
+### Roteiro de teste manual (clicável)
+
+1. Entre como administrador do módulo Compras → **Compras → Famílias** → *Nova Família* → *Parafusos* → salvar.
+2. No cartão de *Parafusos* → *Nova subfamília* → *Sextavados* → salvar.
+3. **Compras → Materiais → Novo Material**: a família e a subfamília aparecem para escolher.
+4. Entre como Administrador do almoxarifado → **Almoxarifado → Configurações → Famílias**: a árvore aparece, com a frase e sem botões.
+
+### O que a etapa NÃO cobre
+
+- Categorias e Tipos de Material continuam no Almoxarifado — próximo item da fila.
+- A sobra e a remessa a terceiros ainda criam material pelo Almoxarifado (formato restrito) — a rever.
+- Famílias do Comercial (produtos da proposta) são outra coisa e não mudam.
 
 ## Etapa 214 — Histórico de preços por fornecedor no material (2026-11-13)
 

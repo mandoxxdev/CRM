@@ -15,6 +15,9 @@
  * docs/superpowers/plans/2026-10-19-almoxarifado-etapa154-listas-de-clientes-e-projetos-e-notificacoes-pelo-modulo.md
  * Executar: cd server && node tests/api/listasNotificacoesPortao.api.test.js
  */
+// Etapa 211 (RN-211.02): o preparo cria familia pela rota do almoxarifado (o MESMO handler), com a chave de reversao ligada. A recusa
+// e a porta do Compras: familiasNoCompras.api.test.js.
+process.env.ALMOX_CADASTRO_MATERIAL = 'liberado';
 const assert = require('assert');
 const fs = require('fs');
 const net = require('net');
