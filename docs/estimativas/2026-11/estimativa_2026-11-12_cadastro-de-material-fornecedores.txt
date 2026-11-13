@@ -2,8 +2,9 @@
 _12/11/2026_
 
 *1. Tipo de Material escolhido de uma lista*
-O campo Tipo de Material deixa de ser digitado e passa a ser escolhido da lista cadastrada em Almoxarifado > Configurações > Tipos de Material, como já acontece com a Categoria. Assim todos escrevem do mesmo jeito. Os materiais que já têm um tipo digitado continuam mostrando o que estava.
-Tempo estimado: *1h30*
+O campo Tipo de Material deixa de ser digitado e passa a ser escolhido da lista cadastrada em Compras > Tipos de Material, como já acontece com a Categoria. Assim todos escrevem do mesmo jeito. Os materiais que já têm um tipo digitado continuam mostrando o que estava. A conferência de qual prateleira aceita qual tipo passa a reconhecer o tipo escolhido da lista, sem diferença de acento ou de maiúscula.
+Tempo estimado: *2h30*
+_Revisado: a escolha da lista precisa continuar valendo na conferência de qual prateleira aceita o material (era 1h30)._
 
 *2. Vários fornecedores para o mesmo material*
 No cadastro do material entra a lista de fornecedores daquele item: fornecedor (do cadastro de fornecedores), o código que ele usa e a descrição comercial dele, quando for diferente da nossa. O código interno da GMP continua sendo o principal e nunca é trocado pelo do fornecedor. Os campos Fornecedor Principal e Código no Fornecedor saem, e o que já estava preenchido neles vira a primeira linha da lista.
@@ -21,5 +22,5 @@ Tempo estimado: *2h30*
 O campo Aplicação sai do cadastro do material, se confirmado que não será usado.
 Tempo estimado: *45 min*
 
-*Total estimado: 11h15*
+*Total estimado: 12h15* _(revisado: era 11h15)_
 _O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
