@@ -1,0 +1,6 @@
+*Concluído — almoxarifado: a escolha de onde a peça sai avisa quando o lote está bloqueado*
+_13/11/2026_
+
+1. Na separação e na entrega, a lista "Sai de" diz qual lote está bloqueado, reprovado ou vencido — estimado 2h30 · realizado 2h30
+
+*Total: estimado 2h30 · realizado 2h30*

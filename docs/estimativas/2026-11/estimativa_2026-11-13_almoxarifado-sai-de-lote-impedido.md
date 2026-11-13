@@ -15,7 +15,7 @@ Medido no código antes de estimar (sobre `af6fd736`):
 
 | # | Tarefa | Execução estimada | Fator | Informado | Etapa/plano | Régua usada | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | Na separação e na entrega, o "Sai de" diz qual lote está bloqueado, reprovado ou vencido (D (224)) | 45 min | média (análise 30 min + teste 1 h; duas telas da mesma janela) | 2h30 (2h15 arredondado) | 226 | 222–225 mediram 0,6 a 0,7 h de execução cada (campo de leitura + tela pequena) | — | — | — |
+| 1 | Na separação e na entrega, o "Sai de" diz qual lote está bloqueado, reprovado ou vencido (D (224)) | 45 min | média (análise 30 min + teste 1 h; duas telas da mesma janela) | 2h30 (2h15 arredondado) | 226 | 222–225 mediram 0,6 a 0,7 h de execução cada (campo de leitura + tela pequena) | 0,7 h (horas.js --grupos "E226=…", 13/11) → 45 min | 2h30 (45 min + análise 30 min + teste 1 h = 2h15, arredondado; a parte do André é a da tabela — não informada por ele) | d96da251, f9b92d34, 868887e1, aba3f081, 04308f3f, 38655de2 e este |
 
 Incerteza: baixa a média — o rótulo é texto; o risco é a pré-seleção (planejada/sugestão) cair num lote impedido desabilitado.
 
@@ -23,3 +23,7 @@ Medição no fechamento:
 ```
 --grupos "E226=Etapa 226|Estimativa: almoxarifado - sai de"
 ```
+
+No fechamento: execução estimada 45 min, medida 0,7 h (a Fase 2 rodou junto com a escrita do teste; as duas revisões da Fase 5 junto com as
+suítes do servidor). Quatro etapas seguidas de leitura/tela (222, 223, 225, 226) mediram 0,6 a 0,7 h: para esse porte, 45 min de execução
+continua a medida honesta. Conclusão: `conclusao_2026-11-13_almoxarifado-sai-de-lote-impedido.txt`.
