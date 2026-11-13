@@ -361,6 +361,11 @@ Os antigos campos *Fornecedor Principal* e *Código no Fornecedor* não aparecem
 bateu com um fornecedor cadastrado, ele já está na lista; quando não bateu, a seção mostra *"Fornecedor informado antes (texto
 livre): …"*, para a pessoa vincular o fornecedor certo.
 
+Na cotação e no pedido de compra, cada item mostra, abaixo do código da GMP, o código que o fornecedor escolhido usa para aquele
+material (*Forn.: …* na tela; *"Cód. fornecedor: …"* no pedido impresso). Sem vínculo com aquele fornecedor, ou sem código, só o
+código da GMP aparece. O código fica gravado no item quando a cotação ou o pedido é salvo: mudar o código no material depois não
+altera um pedido já emitido, até ele ser editado e salvo de novo. O pedido gerado de uma cotação leva o mesmo código.
+
 ### 2.4 Campos técnicos
 
 O bloco **Dados Técnicos** é o que transforma o cadastro em ficha de material, e é ele que sustenta rastreabilidade e requalificação de fornecedor:

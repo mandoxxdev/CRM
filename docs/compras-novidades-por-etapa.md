@@ -588,6 +588,11 @@
   material.** As rotas do catálogo aceitam todo o módulo Compras; sem a guarda, quem não pode cadastrar material mudaria o preço ou
   apagaria o vínculo por lá. Recusa: *"Este item está vinculado a um material da GMP; só quem cadastra material o altera ou exclui
   (Compras → Materiais)."* A linha solta (sem material) continua como sempre.
+- **B86 — 12/11/2026 (Etapa 213): o código do fornecedor no pedido é foto do momento em que a linha foi salva.** Cada linha de
+  cotação e de pedido grava o código do vínculo material × fornecedor (Etapa 212) do fornecedor do cabeçalho. O pedido impresso diz
+  o código com que foi emitido, mesmo que o vínculo mude depois; editar e salvar o pedido refaz. **Descartado:** ler o vínculo ao vivo
+  na leitura (um pedido antigo mudaria de código sozinho) e um campo digitável por linha (o código já é cadastrado no material;
+  digitar de novo abriria divergência — fica para quando a compradora pedir).
 
 ### D. Dúvidas para você (ou para o P.O.)
 - **D-35** — O que A, B e C significam **para a GMP**? A legenda atual é a definição genérica.
@@ -767,6 +772,50 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 213 — O código do fornecedor na cotação e no pedido de compra (2026-11-12)
+
+**Em uma frase.** Com os fornecedores de cada material cadastrados (Etapa 212), a compradora pediu que o código que o fornecedor
+usa apareça na cotação e no pedido de compra — inclusive no impresso que vai para ele —, para o fornecedor reconhecer o item sem
+traduzir o código da GMP.
+
+### O que há de novo (visível para o usuário)
+
+- **Compras → Cotações / Pedidos de compra → novo ou editar**: na coluna **Código** dos itens, abaixo do código GMP, aparece
+  **Forn.: ⟨código⟩** do fornecedor escolhido. Trocar o fornecedor troca o código.
+- **Pedido impresso (PDF)**: na coluna **Material**, abaixo do código GMP, *"Cód. fornecedor: ⟨código⟩"*.
+
+### Por baixo do capô
+
+- Cada linha de cotação e de pedido guarda o código do fornecedor ao salvar (B86). O pedido gerado de uma cotação leva o mesmo.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A linha do pedido só tinha o código da GMP | Tem também o código que o fornecedor usa, na tela e no impresso |
+| O fornecedor precisava traduzir o código da GMP | O impresso mostra os dois códigos, o da GMP como principal |
+
+### As regras, com o cenário exato
+
+1. Material com o fornecedor do pedido vinculado e código *45879* → a linha mostra *Forn.: 45879* e o impresso *"Cód. fornecedor: 45879"*.
+2. Material sem vínculo com aquele fornecedor (ou vínculo sem código) → só o código GMP, sem a linha de baixo.
+3. Trocar o fornecedor do pedido → o código de baixo muda para o do novo fornecedor (ou some).
+4. Mudar o código no material depois de emitir o pedido → o pedido continua com o código antigo até ser editado e salvo de novo.
+
+### Roteiro de teste manual (clicável)
+
+1. **Compras → Materiais** → lápis de um material → **Fornecedores deste material** → vincule o fornecedor *A* com código *45879*.
+2. **Compras → Pedidos de compra → Novo** → fornecedor *A* → adicione o material: a coluna Código mostra *Forn.: 45879*.
+3. Troque o fornecedor para *B* (sem vínculo): a linha *Forn.:* some. Volte para *A* e salve.
+4. Abra o PDF do pedido: na coluna Material, *"Cód. fornecedor: 45879"* abaixo do código GMP.
+5. Repita em **Cotações → Nova** e gere o pedido: o pedido gerado traz o mesmo código.
+
+### O que a etapa NÃO cobre
+
+- Digitar o código do fornecedor direto na linha do pedido (B86).
+- A cotação não tem impresso próprio; o código aparece na tela dela e no pedido gerado.
+- O histórico de preços por fornecedor — próximo item da fila.
 
 ## Etapa 212 — Vários fornecedores para o mesmo material (2026-11-12)
 

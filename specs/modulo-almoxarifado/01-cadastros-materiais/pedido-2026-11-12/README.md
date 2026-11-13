@@ -21,12 +21,13 @@
 
 ## Recursos pedidos para o relacionamento (img2, texto)
 
-1. Vários fornecedores por material, sem duplicar o cadastro.
-2. Código individual por fornecedor.
-3. Descrição comercial do fornecedor (quando difere da nossa).
-4. Histórico de preços cotados e comprados por fornecedor.
-5. Seleção automática: na cotação/pedido, escolher o fornecedor apresenta o código dele.
-6. **Regra:** o código interno da GMP continua o identificador principal; o do fornecedor nunca o substitui.
+1. Vários fornecedores por material, sem duplicar o cadastro. — **feito, Etapa 212** (`f59c0551`, `db55113a`, `e74bcb05`)
+2. Código individual por fornecedor. — **feito, Etapa 212** (idem)
+3. Descrição comercial do fornecedor (quando difere da nossa). — **feito, Etapa 212** (idem)
+4. Histórico de preços cotados e comprados por fornecedor. — a fazer (fila do Compras, linha 6)
+5. Seleção automática: na cotação/pedido, escolher o fornecedor apresenta o código dele. — **feito, Etapa 213** (`86ab0eb4`, `7a8e6f5b`)
+6. **Regra:** o código interno da GMP continua o identificador principal; o do fornecedor nunca o substitui. — respeitada nas duas
+   etapas: o código GMP não muda pela seção de fornecedores e vem primeiro na tela e no impresso.
 
 ## Medido no código (12/11/2026)
 

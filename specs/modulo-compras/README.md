@@ -56,9 +56,9 @@ Compras ganhar spec própria, a fatia migra para cá e este arquivo vira o índi
 | 1 | Famílias e subfamílias cadastradas no Compras (Almoxarifado só consulta) | `estimativa_2026-11-12_cadastros-so-no-compras`, 1 | 4h | **em pausa — Etapa 211**, no branch `etapa-211-familias-no-compras-wip` (`00c3db6c`): servidor pronto e testado; falta ajustar 32 testes da tela, suítes, revisão e fechamento |
 | 2 | Categorias e Tipos de Material cadastrados no Compras | `estimativa_2026-11-12_cadastros-so-no-compras`, 2 | 3h | a fazer |
 | 3 | Tipo de Material escolhido de uma lista (no formulário de material) | `estimativa_2026-11-12_cadastro-de-material-fornecedores`, 1 | 1h30 | a fazer — depois do 2 (a lista passa a morar no Compras) |
-| 4 | Vários fornecedores por material, cada um com código e descrição comercial | idem, 2 | 3h30 | **feito — Etapa 212** (`f59c0551`, `db55113a`): vínculo = `itens_fornecedor.material_id` (B83–B85) |
-| 5 | Código do fornecedor na cotação e no pedido de compra (tela e impresso) | idem, 3 | 3h | **próximo** — lê `GET /api/compras/materiais/cadastro/:id/fornecedores` ou a linha `itens_fornecedor` (material_id, fornecedor_id) |
-| 6 | Histórico de preços por fornecedor no material | idem, 4 | 2h30 | a fazer — depende do 4 |
+| 4 | Vários fornecedores por material, cada um com código e descrição comercial | idem, 2 | 3h30 | **feito — Etapa 212** (`f59c0551`, `db55113a`, `e74bcb05`): vínculo = `itens_fornecedor.material_id` (B83–B85) |
+| 5 | Código do fornecedor na cotação e no pedido de compra (tela e impresso) | idem, 3 | 3h | **feito — Etapa 213** (`86ab0eb4`, `7a8e6f5b`): `codigo_fornecedor` gravado na linha ao salvar (foto, B86); tela e impresso |
+| 6 | Histórico de preços por fornecedor no material | idem, 4 | 2h30 | **próximo** — o preço mora na linha do vínculo (`itens_fornecedor.preco`); falta guardar cada mudança |
 | 7 | Tirar o campo Aplicação | idem, 5 | 45 min | **esperando** o Matheus confirmar |
 
 **Esperando resposta da compradora (sem estimativa):**
