@@ -42,6 +42,7 @@ const notificationQueueService = require('./notificationQueueService');
 // Etapa 91 (Fase 5, F3): a trava nao requer nada do app — sem ciclo. Pelo objeto (os testes a espiam).
 const trava = require('./travaPorMaterial');
 const diaLocal = require('../diaLocal');
+const loteImpedido = require('./loteImpedido'); // Etapa 221 (B1469): sem ciclo (quantidade, diaLocal, retidoDoLote)
 
 async function getConfig(db, chave) {
   const row = await dbGet(db, 'SELECT valor FROM configuracoes_almoxarifado WHERE chave = ?', [chave]);
@@ -1090,6 +1091,17 @@ function livreParaSaida(regua, permiteNegativo) {
 }
 /** O numero que a recusa mostra: nunca negativo (legado com caixa maior que o disponivel). */
 const livreMostrado = (n) => Q.qtd(Math.max(0, Number(n) || 0));
+/**
+ * Etapa 221 (B1470) — o que o saldo de lote impedido cortou do numero `base` que a recusa da reserva manual mostra:
+ * min(impedido, max(0, base)). 0 sem controle de lote ou sem lote impedido. `hojeISO` e o MESMO do `hold` (Fase 2: a meia-noite
+ * entre os dois, o lote vencido contaria num e nao no outro, e a frase desmentiria a recusa).
+ */
+async function impedidoCortado(db, materialId, base, hojeISO) {
+  const r = await dbGet(db, `SELECT ${loteImpedido.loteImpedidoSql('lim_mc', hojeISO)} AS imp FROM materiais_almoxarifado lim_mc WHERE lim_mc.id = ?`,
+    [materialId]);
+  const imp = Math.max(0, Number(r && r.imp) || 0);
+  return Q.qtd(Math.min(imp, Math.max(0, Number(base) || 0)));
+}
 async function sufixoDaCaixa(db, materialId, unidade) {
   return caixaSql.sufixoCaixa(await caixaSql.lerCaixa(db, materialId), unidade);
 }
@@ -3824,20 +3836,35 @@ async function criarReservaSemTrava(db, user, data, opcoes = {}) {
   // padrão do resto do motor). Uma leitura + INSERT deixaria duas reservas concorrentes
   // passarem e `quantidade_reservada` ficaria acima do físico — e reserva acima do físico é
   // reserva IMPOSSÍVEL de consumir, porque a baixa contra reserva também exige saldo físico.
+  // Etapa 221 (B1469, C479): a reserva MANUAL (a rota; nem `sistema` nem `requisicao_id`) tambem tira o saldo de lote impedido
+  // (bloqueado, reprovado, vencido sem liberacao — `loteImpedidoSql`, 0 sem controle de lote), como a aprovacao (205) e a chegada
+  // (219) ja tiram antes de chamar. As de `sistema` ficam: a reserva da OS converte SOBRE o impedido de proposito (B1381). Lido por
+  // subconsulta com apelido proprio (o UPDATE e de tabela unica), sob a trava do material, como todo escritor do status do lote (B1461).
+  const manual = !sistema && !opcoes.requisicao_id;
+  const hoje = diaLocal.hojeLocalISO();
+  const impedidoNoHold = manual
+    ? ` - (SELECT ${loteImpedido.loteImpedidoSql('lim_mr', hoje)} FROM materiais_almoxarifado lim_mr WHERE lim_mr.id = materiais_almoxarifado.id)`
+    : '';
   const hold = await dbGet(db, `UPDATE materiais_almoxarifado
     SET quantidade_reservada = ${Q.qtdSql('COALESCE(quantidade_reservada,0) + ?')}, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND ${opcoes.requisicao_id ? disponivelSql() : caixaSql.livreDeCaixaSql()} >= ? ${Q.FOLGA_SQL}
+    WHERE id = ? AND ${opcoes.requisicao_id ? disponivelSql() : caixaSql.livreDeCaixaSql()}${impedidoNoHold} >= ? ${Q.FOLGA_SQL}
     RETURNING id`, [qtd, material_id, qtd]);
   // Etapa 97 (T1, B492): a reserva MANUAL compara com o livre de caixa (antes tomava a caixa — a reserva de requisicao
   // ja faz isso pela conta da 95, iguala a B469); a de requisicao (`opcoes.requisicao_id`, so do 4o argumento) fica.
   if (!hold) {
     const atual = await getMaterial(db, material_id);
     const regua = opcoes.requisicao_id ? null : await lerReguaDaCaixa(db, material_id);
-    if (temCaixa(regua)) {
-      throw Object.assign(new Error(`Saldo disponível insuficiente: ${livreMostrado(regua.livre)}`
-        + `${await sufixoDaCaixa(db, material_id, atual && atual.unidade)}`), { status: 400 });
+    const comCaixa = temCaixa(regua);
+    const base = comCaixa ? livreMostrado(regua.livre) : await getSaldoDisponivel(atual, db);
+    const sufixo = comCaixa ? await sufixoDaCaixa(db, material_id, atual && atual.unidade) : '';
+    // Etapa 221 (B1470): a 2a frase diz so o que o lote impedido CORTOU do numero que a recusa ja mostra (min(impedido, base)), e so
+    // quando cortou algo — sem lote impedido, ou com a base ja <= 0, a recusa de hoje byte a byte.
+    const cortado = manual ? await impedidoCortado(db, material_id, Number(base), hoje) : 0;
+    if (cortado > Q.QTD_FOLGA) {
+      throw Object.assign(new Error(`Saldo disponível insuficiente: ${Q.qtd(Number(base) - cortado)}${sufixo}. `
+        + `${loteImpedido.fraseLoteImpedido(cortado, atual && atual.unidade)}`), { status: 400 });
     }
-    throw Object.assign(new Error(`Saldo disponível insuficiente: ${await getSaldoDisponivel(atual, db)}`), { status: 400 });
+    throw Object.assign(new Error(`Saldo disponível insuficiente: ${base}${sufixo}`), { status: 400 });
   }
 
   // Vencimento da reserva. `expira_em` explícito manda; senão, é calculado a partir da config
