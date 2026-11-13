@@ -1,0 +1,7 @@
+*Concluído — almoxarifado: liberar o lote reserva para quem esperava*
+_13/11/2026_
+
+1. Liberar o lote reserva as peças para quem estava esperando — estimado 4h · realizado 4h30
+
+*Total: estimado 4h · realizado 4h30*
+_A conferência final achou mais uma forma de liberar o lote (corrigir a validade de um lote vencido), que passou a reservar também, e dois testes antigos que precisaram ser ajustados ao novo comportamento._
