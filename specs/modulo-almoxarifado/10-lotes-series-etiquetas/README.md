@@ -1,5 +1,7 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 217 (2026-11-13, código `e2a43f20`, Fase 5 `cad6da56` (trava; testes em `e2a43f20`)): a entrega e o automático não tiram a peça bloqueada do lote (C466 2ª parte, C503)** — `retidoDoLote.js` (quarentena pelo livro + reprovação pela inspeção + terceiros pelo item da remessa, limite por lote e por família) lido por `lotesParaOAutomatico` e por `loteImpedidoSql`; o envio de remessa sob a trava do material (B1442). Ver a seção "Etapa 217", no fim.
+
 > **+ Etapa 209 (2026-11-13, T1 `9a3dcad9`+`8ff95f59`, T2 `e10f8c04`, T3 `7b8e8f7b`, T4 `cc4da040`, T5 `4bdf0a09`, T6 `b073fb93`, Fase 5 `fa50fae9`): o bloqueio sabe o lote (C466, 1ª parte)** — o `BLOQUEIO` da devolução para Quarentena grava `lote_id`; o bloqueado por lote é derivado do livro (`bloqueioPorLote.js`: Σ `BLOQUEIO` − Σ `DESBLOQUEIO` com o lote e `cancelado = 0`; sem tabela, sem migration); o `DESBLOQUEIO` confere o lote no claim (M2) e, sem lote, só tira do "sem lote" (M1); o estorno do `BLOQUEIO` confere o lote (M3) e, sem lote, o "sem lote" (Fase 5); `GET /materiais/:id/bloqueado-por-lote`; campo **Lote** na janela Desbloquear. Nenhum leitor de disponível muda (a 2ª parte, C503). A frase "bloqueio e terceiros não têm lote" da seção da 197 ficou velha em parte — anotada lá. Ver a seção "Etapa 209", no fim. O status não muda.
 
 > **+ Etapa 207 (2026-11-06, T1 `842567ca`, T2 `3db19406`, Fase 5 `730a8a00`): a parte automática sem lote da entrega pula a guarda numa linha sem lote (C490, anterior) — fatias sem lote com `localizacao_origem_id`, uma SAIDA por fatia, quando o claim de hoje levaria a guarda e o livre usável cobre; senão como hoje (C492); a linha "Entrega de requisição" e a "Exclusão administrativa" da tabela de alcance anotadas** — ver a seção "Etapa 207", no fim. O status não muda.
@@ -1183,6 +1185,8 @@ está na spec 05 (`05-separacao-picking/README.md`, seção "Etapa 197") — a m
   *(**Ficou velho em parte na Etapa 209:** "bloqueio … não têm lote" — desde a 209 o `BLOQUEIO` da devolução para Quarentena e o
   `DESBLOQUEIO` avulso gravam `lote_id`, e terceiros/reprovação já sabiam o lote pelo documento (B1418). O que continua valendo: o
   automático ainda **não lê** esse dado e pode tirar a peça da quarentena (C466 2ª parte = C503). Ver a seção "Etapa 209", no fim.)*
+  *(**Deixou de valer na Etapa 217:** o automático lê o bloqueado do lote — quarentena, reprovação e terceiros (`e2a43f20`). Fica a escolha
+  manual do lote, C513. Ver a seção "Etapa 217".)*
 
 **Correção à vista:** a tabela da pendência (g) dizia que a exclusão da requisição "devolve sem lote — não volta para o lote de onde saiu" —
 **estava errada desde a Etapa 58** (B232: a exclusão devolve por saída, com o lote dela). A linha da entrega ("baixa sem lote") passou a
@@ -1298,7 +1302,34 @@ Fase 5). **C466 resolvido na 1ª parte** (gravar o lote); a 2ª parte (o automá
   `fa50fae9`.
 - [ ] **Fora (declarado):** o **Bloquear** avulso sem lote (B1419, C500); reprovação e terceiros sem lote no livro — já sabem pelo documento
   (B1418); a liberação por NC passa pela M1 (C501); devolução ao fornecedor/descarte do reprovado não olham os lotes da quarentena (C502);
-  nenhum leitor de disponível muda (C503, a 2ª parte); o lote pode ficar com bloqueado maior que o saldo depois do estorno da
+  nenhum leitor de disponível muda (C503, a 2ª parte); *(— **deixou de valer na Etapa 217**: o automático e a conta do lote
+  impedido leem o bloqueado do lote, `e2a43f20`)* o lote pode ficar com bloqueado maior que o saldo depois do estorno da
   `ENTRADA_DEVOLUCAO` ou do `DESBLOQUEIO` (C504). Antes do deploy: **A112** (nenhum `BLOQUEIO`/`DESBLOQUEIO` antigo com lote).
 
 Continua 🟢. Testes: `bloqueioSabeOLote.api.test.js` (25), `InspecoesAlmoxarifado.test.js` (10 novos, 43 no total).
+
+## Etapa 217 — a entrega e o automático não tiram a peça bloqueada do lote (2026-11-13)
+
+Plano: `docs/superpowers/plans/2026-11-13-almoxarifado-etapa217-entrega-nao-tira-peca-bloqueada.md` (RN-217.01 a .14, B1434–B1442,
+Fase 2 e Fase 5). **C466 resolvido inteiro; C503 resolvido.** A 2ª parte usa o dado que a 209 passou a gravar.
+
+- [x] **`services/almoxarifado/retidoDoLote.js`** — o retido do lote = quarentena/avulso (`bloqueioPorLote.bloqueadoDoLoteSql`, `MAX(0, …)`)
+  + reprovação da inspeção (`quantidade_reprovada` do item de recebimento do lote, sem `liberacao_nc_em`/`devolucao_fornecedor_em`/
+  `sucateamento_em`) + terceiros (`quantidade − quantidade_retornada` dos itens **enviados**); família só vale se couber no total do material
+  (quarentena; quarentena + reprovação em `quantidade_bloqueada`; terceiros em `quantidade_em_terceiros`; B1436); limite `MIN(retido, saldo −
+  inspeção do lote)` (B1435). Contrato: `lotesComRetidoSql(m, colunas)` (tabela derivada, uma linha por lote, famílias por `SUM() OVER ()`) e
+  `retidoPorLote(db, id)` — `e2a43f20`. **O contrato do plano estava errado:** `retidoDoLoteSql`/`retidoComLoteSql` aninhados estouravam a pilha
+  do analisador do SQLite (*parser stack overflow*) na fila, no detalhe e na entrega; virou tabela derivada (a régua é a mesma).
+- [x] **`lotesParaOAutomatico`** desconta o retido no nível do lote (com parte guardada: do livre do lote, não do livre por endereço — Fase 2
+  I1, RN-217.13); exportada — `e2a43f20`.
+- [x] **`loteImpedidoSql`** (aprovação e separação da 205): do lote impedido sai o retido nele; do material, só o resto (B1438) — `e2a43f20`.
+- [x] **Índices** `idx_inspecoes_receb_item_almox` e `idx_itens_remessa_terceiro_lote` (`CREATE INDEX IF NOT EXISTS`, Fase 2 I3) — `e2a43f20`.
+- [x] **Mudanças de regra registradas nos testes antigos:** a RN-209.09 virou RN-217.10 (com lote no `BLOQUEIO` o número muda); o
+  "[C466, limitação documentada]" da 197 virou RN-217.01 a (sai do L2); o EXPLAIN da 205 aceita o SCAN da tabela derivada — `e2a43f20`.
+- [x] **Fase 5:** o envio de remessa a terceiro pega a trava do material (`enviarRemessa`, claim `enviado_em` + motor + compensação numa
+  seção — B1442; sem isso a entrega mandava 2 para "Sem lote atribuído" negativo, reproduzido); quatro cenários determinísticos para regras
+  que só o sorteio cobria — `cad6da56` (trava; testes em `e2a43f20`).
+- [ ] **Fora (declarado):** a escolha manual do lote (`Sai de`, C513); aviso na tela (C514); reservas de antes do deploy (C515);
+  reprovação liberada pelo Desbloquear sem lote volta a contar (C516). Antes do deploy: **A114**.
+
+Continua 🟢. Testes: `bloqueadoDoLote.api.test.js` (23), `bloqueioSabeOLote` (RN-217.05/.10), `entregaAutomaticaPeloLote` (RN-217.01 a).

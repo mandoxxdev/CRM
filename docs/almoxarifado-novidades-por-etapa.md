@@ -11,7 +11,14 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-13):** **Etapa 209 fechada** (**o bloqueio sabe o lote** — a peça devolvida para a
+> **Onde o desenvolvimento está (2026-11-13):** **Etapa 217 fechada** (**a entrega e o automático não tiram a peça bloqueada do
+> lote** — a peça em **quarentena**, a **reprovada na inspeção** e a que está **num terceiro** ficam no lote dela: a entrega automática tira
+> do lote seguinte, e a aprovação e a separação descontam o certo quando a peça bloqueada está num lote bom. **C466**/**C503** resolvidos; só
+> servidor (a tela não mudou — o que muda é o número da fila, do separável e de onde a entrega sai); antes do deploy a **A114** (consulta);
+> decisões **B1434** a **B1442**; avisos **C513** a **C516**; limitações **D (217)**; verificação **F (217)**). **Próxima:** a escolha manual
+> do lote ("Sai de") também descontar a peça bloqueada (**C513**); detalhada no fim do plano da 217.
+> *(Entre a 210 e a 217 as Etapas 211 a 216 foram do Compras — `docs/compras-novidades-por-etapa.md`.)*
+> *(Antes, 2026-11-13:)* > **Onde o desenvolvimento está (2026-11-13):** **Etapa 209 fechada** (**o bloqueio sabe o lote** — a peça devolvida para a
 > **Quarentena** fica bloqueada **no lote dela**, e a janela **Desbloquear material** (tela Inspeções) pergunta de qual lote se libera:
 > *"L1 — 2 bloqueado(s)"*, *"Sem lote — 3"*. Liberar sem dizer o lote só tira do que foi bloqueado sem lote; o estorno de um bloqueio
 > respeita o lote. Nenhuma conta de disponível muda ainda: a entrega e o automático continuam olhando o total do material (**C503**, a
@@ -682,7 +689,7 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Cento e doze itens para rodar em produção ANTES do deploy — cento e sete são consulta, três são ação fora do sistema, um é ação na tela antes de liberar o uso, e um é uma limpeza de disco que roda sozinha
+### A. Cento e treze itens para rodar em produção ANTES do deploy — cento e oito são consulta, três são ação fora do sistema, um é ação na tela antes de liberar o uso, e um é uma limpeza de disco que roda sozinha
 
 *(**Atualizado em 2026-11-13 (Etapa 209) de cento e onze para cento e doze**, com a **A112** — conferir que nenhum bloqueio ou desbloqueio
 antigo do livro tem lote. **Somente leitura**; a etapa não tem migration.)*
@@ -4530,12 +4537,36 @@ dessas linhas (`UPDATE movimentacoes_almoxarifado SET lote_id = NULL WHERE id IN
 contar como *"Sem lote"*, como sempre contaram. *(A consulta não foi rodada no banco de produção; no código, a varredura da Fase 0 da 209
 achou zero caminhos que gravavam.)*
 
+**A114 (NOVA, da Etapa 217 — somente leitura) — quantos lotes mudam de número no deploy.** Desde a 217 o que está bloqueado **num
+lote** (quarentena com lote, peça reprovada na inspeção ainda sem destino, peça enviada a terceiro e não devolvida) deixa de sair desse lote
+na entrega automática e entra na conta da aprovação/separação. Para saber se alguma tela vai mudar de número no dia do deploy:
+```sql
+-- reprovações abertas com lote (a peça ainda está no lote, ATIVO)
+SELECT COUNT(DISTINCT ri.lote_id) AS lotes FROM inspecoes_recebimento_almoxarifado i
+JOIN recebimentos_material_itens_almoxarifado ri ON ri.id = i.recebimento_item_id
+WHERE COALESCE(i.quantidade_reprovada,0) > 0 AND ri.lote_id IS NOT NULL
+  AND i.liberacao_nc_em IS NULL AND i.devolucao_fornecedor_em IS NULL AND i.sucateamento_em IS NULL;
+
+-- itens de remessa a terceiro com lote ainda fora
+SELECT COUNT(*) AS itens FROM itens_remessa_terceiro_almoxarifado
+WHERE lote_id IS NOT NULL AND enviado_em IS NOT NULL AND quantidade - COALESCE(quantidade_retornada,0) > 0;
+
+-- reservas ativas de material com lote bloqueado por lote (podem ficar maiores que o que o automático cobre — C515)
+SELECT r.requisicao_id, r.material_id, r.quantidade - COALESCE(r.quantidade_utilizada,0) AS reservado
+FROM reservas_material_almoxarifado r JOIN materiais_almoxarifado m ON m.id = r.material_id
+WHERE r.status = 'ATIVA' AND m.controle_lote = 1
+  AND (COALESCE(m.quantidade_bloqueada,0) > 0 OR COALESCE(m.quantidade_em_terceiros,0) > 0);
+```
+**Como ler o resultado:** zero nas duas primeiras — nada muda no deploy (a quarentena por lote só existe desde a 209; a **A112** confere).
+Alguma linha — normal: aqueles lotes passam a mostrar menos livre na entrega automática. Na terceira, a requisição listada pode receber, na
+entrega, *"… faltam N un em lote que pode sair …"* (**C515**). *(As consultas não foram rodadas no banco de produção.)*
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -14436,6 +14467,44 @@ da requisição e do pedido de compra, usuários (filtro e chat), as nove listas
 código ou prefixo (*VIS-*, OP, tipo de movimento, família), e a lista de preços (já compara em minúsculas pelo JavaScript). Só acha **mais**,
 nunca menos (a forma como veio continua no `OR`).
 
+**B1434 (NOVA, da Etapa 217; decisão do agente) — o que conta como "bloqueado no lote".** Três partes: a **quarentena** com lote (o livro,
+desde a 209), a peça **reprovada na inspeção** ainda sem destino (o documento da inspeção: reprovada e sem liberação por não conformidade,
+sem devolução ao fornecedor, sem sucateamento) e a peça **em terceiro** (o item da remessa enviado e não devolvido). Cada uma nunca negativa
+num lote. Descartado: gravar o bloqueio por lote numa tabela nova (dois lugares guardando o mesmo número — B1416/B1418). **Reversível.**
+
+**B1435 (NOVA, da Etapa 217; decisão do agente) — o lote nunca retém mais do que tem livre.** Se o registro disser que o L1 tem 2 bloqueadas
+e o L1 só tiver 1 na prateleira (fora a inspeção), conta 1; a outra volta para o desconto do material, como era antes da 217. É o corte que
+a **B1421** deixou para esta etapa (o caso do **C504**). **Reversível.**
+
+**B1436 (NOVA, da Etapa 217; decisão do agente) — se a soma por lote passar do total do material, aquela parte inteira volta para o
+material.** Quarentena só vale se a soma dela couber no bloqueado do material; a reprovação só se quarentena + reprovação couberem (a
+quarentena primeiro: o livro é conferido a cada liberação desde a 209; a reprovação pode estar velha — **C501**/**C516**); terceiros só se
+a soma couber no "em terceiros". Não cabendo, a conta é a de antes da 217 para aquele material (nunca pior que antes). Descartado: repartir
+o excesso entre os lotes (escolheria um lote ao acaso). **Reversível.**
+
+**B1437 (NOVA, da Etapa 217; decisão do agente) — sem trava nova para ler.** A leitura roda dentro das travas que a aprovação, a separação
+e a entrega já seguram. **Ampliada na Fase 5 pela B1442** (o envio de remessa passou a pegar a trava que já existia). **Reversível.**
+
+**B1438 (NOVA, da Etapa 217; decisão do agente) — a conta do lote impedido (aprovação e separação) desconta o bloqueado do lote certo.** Do
+lote impedido sai também o que está bloqueado nele; do material sai só o resto (o que não se sabe em que lote está). Com a peça bloqueada
+**num lote bom**, o desconto sobe até o certo — **fim do "desconto menor que o real" declarado na Etapa 205 (B1370) e na D (206)**. Sem
+nenhum bloqueio por lote, a conta é a de antes. **Reversível.**
+
+**B1439 (NOVA, da Etapa 217; decisão do agente) — o automático desconta o bloqueado no nível do lote**, como já descontava a inspeção (não se
+sabe em que prateleira está a peça). Num lote com peça separada para outra requisição, sai do livre do lote, não do livre por prateleira
+(senão descontava duas vezes quando a peça bloqueada está numa prateleira que o automático já não usa). **Reversível.**
+
+**B1440 (NOVA, da Etapa 217; decisão do agente) — sem tela.** O que se vê é o número (fila, separável, de onde a entrega sai). Descartado
+nesta etapa: o aviso *"⟨n⟩ em quarentena no lote L1"* na janela de entrega — vira o **C514**. **Reversível.**
+
+**B1441 (NOVA, da Etapa 217; decisão do agente) — a frase da entrega recusada não muda.** *"Em lote impedido: L2 (bloqueado, 3 un)"* continua
+mostrando o saldo do lote impedido (menos a inspeção) — inclusive a peça bloqueada nele, que também não pode sair. **Reversível.**
+
+**B1442 (NOVA, da Etapa 217, Fase 5; decisão do agente) — o envio de remessa a terceiro pega a trava do material.** Achado da revisão,
+reproduzido: um envio de remessa de L1 feito **no meio** de uma entrega fazia a entrega mandar 2 peças para *"Sem lote atribuído"*
+negativo (a conferência tinha contado o L1 inteiro; a baixa já via 2 dele "em terceiro"). Agora o envio de cada item espera a entrega
+terminar. Descartado: a entrega ler o bloqueado uma vez e reusar (deixaria a porta fora da trava). **Reversível.**
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -18302,6 +18371,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      *(**1ª parte resolvida na Etapa 209** — `e10f8c04`, `7b8e8f7b`, `cc4da040`, `4bdf0a09`, `b073fb93`, Fase 5 `fa50fae9`: o bloqueio da
      Quarentena grava o lote, o **Desbloquear** pergunta o lote e o estorno o respeita. **O "o motor não sabe" acima deixou de valer**; o
      automático e a entrega ainda **não usam** o dado — continua valendo o "o que fazer" acima, até a 2ª parte (**C503**).)*
+     *(**2ª parte resolvida na Etapa 217** — `e2a43f20`, Fase 5 `cad6da56` (trava; testes em `e2a43f20`): o automático da entrega desconta de cada lote a peça em quarentena,
+     a reprovada e a que está em terceiro; o "o que fazer" acima deixou de ser preciso, salvo na escolha manual do lote (**C513**).)*
 467. **NOVO (da Etapa 197, Fase 5; o comportamento é anterior) — excluir uma requisição separada não apaga o endereço de origem guardado nos
      itens dela.** O item da requisição excluída fica com a origem e a quantidade da origem gravadas. **Nenhum efeito hoje:** toda conta que lê
      a parte guardada (a Fila, a régua da divergência, o automático da entrega) só olha requisições **em andamento** — é esse filtro que
@@ -18514,12 +18585,15 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 503. **NOVO (da Etapa 209; já previsto na estimativa) — a entrega e o automático ainda podem tirar do lote a peça que está na quarentena.**
      A 209 só passou a **gravar** o lote do bloqueio; quem decide de qual lote sai a entrega continua olhando o total do material. É o
      **C466** na 2ª parte (item 9 do 2º pacote, 4h a 5h). **O que fazer:** o mesmo do C466 — escolher o lote no **Sai de** da entrega.
+     *(**Resolvido na Etapa 217** — `e2a43f20`, Fase 5 `cad6da56` (trava; testes em `e2a43f20`) (**B1434** a **B1442**). Fica a escolha manual do lote (**C513**).)*
 504. **NOVO (da Etapa 209, revisão do plano; o comportamento é anterior) — o lote pode ficar com mais bloqueado que saldo.** Dois casos:
      (a) estornar a **entrada da devolução** para Quarentena não estorna o bloqueio dela (é assim desde antes — **C239**): o físico volta,
      o lote do bloqueio continua dizendo *"L1 2 bloqueado(s)"*; (b) estornar um **Desbloquear** de um lote devolve o bloqueado àquele lote
      mesmo que ele já tenha saído. **Nenhum erro de estoque** (o total do material bate); o número por lote fica maior que o saldo do lote.
      **O que fazer:** estornar também o bloqueio da devolução. Conserto: a 2ª parte nunca desconta de um lote mais do que o saldo dele (o que
      sobra volta para o desconto do material, junto com o *"Sem lote"* — nunca some).
+     *(**O conserto entrou na Etapa 217** (**B1435**): a entrega e a aprovação nunca descontam de um lote mais do que ele tem livre; o
+     número por lote na consulta continua o do livro.)*
 
 510. **(NOVA, da Etapa 210) O que entra sem passar por uma tela não sobe para maiúsculo.** Planilha importada, integração e o que outro
      sistema mandar gravam como vieram. **Nenhum erro:** as buscas acham nas duas caixas (B1433). **O que fazer:** nada; se incomodar, subir
@@ -18529,6 +18603,20 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      (o colar deixaria de subir na hora).
 512. **(NOVA, da Etapa 210) Campo com limite de letras e "ß" pode passar do limite** ("ß" vira "SS"). Raro em português; o servidor recusa se
      a coluna tiver limite.
+513. **NOVO (da Etapa 217; fora do escopo) — escolher o lote à mão ainda pode levar a peça bloqueada.** No **Sai de** da separação e da
+     entrega, o sistema confere o saldo da prateleira/lote escolhido, sem descontar a peça em quarentena, reprovada ou em terceiro (nem a
+     inspeção). Só o automático e a conta da aprovação/separação descontam (**B1439**, **B1438**). **O que fazer:** deixar a entrega escolher
+     sozinha, ou conferir na janela **Desbloquear** (Inspeções) o que está bloqueado em cada lote antes de escolher. Conserto: a próxima etapa.
+514. **NOVO (da Etapa 217, corte declarado B1440) — a janela de entrega não diz quantas peças do lote estão bloqueadas.** A entrega sai do lote
+     seguinte sem avisar por quê. **O que fazer:** nada (o número certo já aparece); para saber, **Inspeções → Desbloquear**.
+515. **NOVO (da Etapa 217) — reserva feita antes do deploy cobrindo a peça bloqueada.** A separação mantém a reserva (como na Etapa 205), mas
+     a entrega de material com lote impedido pode ser recusada com *"… faltam N un em lote que pode sair. Em lote impedido: …"*, como quando um
+     lote é bloqueado depois da aprovação (Etapa 206). **Nenhum erro de estoque.** **O que fazer:** liberar o lote impedido ou entregar a menos;
+     a **A114** lista as reservas candidatas.
+516. **NOVO (da Etapa 217, revisão; borda do C501) — uma reprovação liberada pelo Desbloquear "sem lote" pode voltar a contar.** Liberar pela
+     tela **Desbloquear** o que é da inspeção reprovada não marca a inspeção; se depois houver um **Bloquear** avulso, a soma volta a caber e o
+     lote da reprovação volta a reter a peça (desconto a mais — recusa segura, nunca peça bloqueada saindo). **O que fazer:** liberar
+     reprovação sempre pela **não conformidade**.
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -19885,8 +19973,17 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(217) A entrega que não tira a peça bloqueada, o que ficou de fora.** (1) **A escolha manual do lote** (**Sai de**) não desconta (**C513**).
+  (2) **Sem aviso na tela** (**C514**). (3) **Material com saldo negativo permitido** e sem lote impedido: o que o lote retém deixa de sair dele
+  e, se os outros lotes não cobrem, vai para *"Sem lote atribuído"* negativo — o mesmo de quando os lotes não cobrem (antes saía a peça da
+  quarentena do lote). (4) **Janelas curtas:** a devolução ao fornecedor e o sucateamento marcam a inspeção antes de baixar; nesse instante a
+  peça reprovada pode sair pela entrega automática (como antes da 217); encerrar/cancelar uma remessa baixa antes de marcar o item, e nesse
+  instante o lote retém a mais (recusa segura). (5) **Custo:** a conta lê cada lote do material; com 50 lotes ativos num material a fila
+  demora ~5 ms por material (medido: 100 materiais × 50 lotes em 0,5 s). (6) A frase da entrega recusada não desconta a peça bloqueada do lote
+  impedido (**B1441**).
 - **(209) O bloqueio que sabe o lote, o que ficou de fora.** (1) **Nenhuma conta de disponível muda:** a entrega, o automático, a aprovação
-  e a separação continuam descontando o bloqueado do **material**, não do lote — é a 2ª parte (**C503**). (2) **Só a Quarentena e o
+  e a separação continuam descontando o bloqueado do **material**, não do lote — é a 2ª parte (**C503**). *(**Deixou de valer na Etapa 217**:
+  desde então a entrega automática, a aprovação e a separação descontam o bloqueado do lote — **B1438**, **B1439**.)* (2) **Só a Quarentena e o
   Desbloquear gravam lote:** o **Bloquear** avulso fica sem lote (**B1419**, **C500**); a reprovação da inspeção e o material em terceiros
   já sabem o lote pelo documento e não foram mexidos (**B1418**). (3) **O lote pode ficar com mais bloqueado que saldo** depois de certos
   estornos (**C504**). (4) **A liberação pela não conformidade** pode receber a frase da tela de Inspeções (**C501**). (5) **O que já está
@@ -21280,6 +21377,14 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(217) Nenhum clique foi dado — e a tela não mudou.** O que mudou é o número que a fila, o separável e a entrega usam. Provado pelos testes, pela
+rota real e pelo serviço (`bloqueadoDoLote`, 23 cenários; mais os reescritos da 197 e da 209): a peça em quarentena, a reprovada (e cada
+um dos três destinos que a tiram) e a que está em terceiro (enviada × não enviada × devolvida) ficam no lote; a aprovação reserva o certo, a
+fila e o detalhe mostram o separável certo, a separação recusa com o número novo; a entrega recusa quando só sobra a peça bloqueada e há lote
+impedido; os limites por lote e por parte (frações inclusive); o lote com peça separada para outra requisição; o envio de remessa no meio de
+uma entrega (Fase 5); e um sorteio de 120 materiais contra o modelo da regra. 14 controles positivos, cada um derrubando o seu cenário (no
+plano). **Não verificado à mão:** o roteiro da seção da Etapa 217.
 
 **(209) Nenhum clique foi dado.** A tela **mudou** — o campo **Lote** na janela **Desbloquear material** (Inspeções) —, mas foi provada só
 pelo Jest, não clicada no navegador. O que os testes provam, pela rota real e pelo serviço (`bloqueioSabeOLote`, 25 cenários): a devolução
@@ -27546,7 +27651,7 @@ A tela manda qual linha do pedido cada item está abatendo, mas **o servidor con
 de pertencer ao pedido **e** ser do **mesmo material** do item. Mandar a linha do material `Y` para
 um item do material `X` é recusado com **400**:
 
-> **"Item do pedido #⟨id⟩ não é do material ⟨COD⟩"**
+> **"Item do pedido #⟨id⟩ não é do material e2a43f20"**
 
 **Este cenário é um achado da revisão final, e o dano era real:** antes dele, o pedido passava a
 dizer que chegaram 5 de **Y**, o estoque creditava 5 de **X**, e **Y ficava em zero**. Nenhuma outra
@@ -40209,12 +40314,80 @@ depois dele.
 - O Ctrl+Z nos campos que sobem (**C511**).
 - **Antes do deploy:** nada.
 
+## Etapa 217 — A entrega não tira a peça bloqueada do lote (2026-11-13)
+
+Uma peça volta de uma obra com suspeita e vai para a **Quarentena**. Desde a Etapa 209 o sistema sabe de qual lote ela é — mas a entrega,
+quando escolhe sozinha de onde tirar (pelo lote que vence primeiro), ainda olhava só quanto o lote tinha na prateleira: se o lote L1 tinha 1
+peça, tirava do L1 justamente a peça da quarentena, e o L1 ficava "vazio" com 1 bloqueada nele. O mesmo acontecia com a peça **reprovada na
+inspeção** (o lote dela continua ativo) e com a peça que está **num terceiro** (galvanização, usinagem — o lote não baixa quando ela sai).
+Agora a entrega desconta de cada lote o que está bloqueado nele e tira do lote seguinte. E a **aprovação** e a **separação**, que já não
+contavam lote bloqueado, reprovado ou vencido (Etapa 205), passam a saber em que lote está a peça bloqueada: quando ela está num lote bom, o
+número que pode ser separado fica certo (antes ficava maior). Só servidor — a tela não mudou; mudou o número. Antes do deploy: a **A114**
+(consulta, somente leitura). Decisões do agente: **B1434** a **B1442**. **C466** e **C503** resolvidos; avisos **C513** a **C516**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A entrega automática podia tirar do lote a peça que estava na **Quarentena** | Tira do lote seguinte; a peça fica no lote dela |
+| Idem com a peça **reprovada na inspeção** (o lote continua ativo) | Fica no lote até a não conformidade decidir (liberar, devolver ao fornecedor ou sucatear) |
+| Idem com a peça **enviada a terceiro** (o lote não baixa no envio) | Fica contada no lote até voltar (ou ser dada como perdida/consumida) |
+| Aprovação e separação com peça bloqueada num lote bom e outro lote bloqueado: separável **maior** que o real | Separável certo — a **Fila**, a janela **Separar** e a aprovação mostram o mesmo número |
+| Só sobra a peça bloqueada e há lote impedido: a entrega passava levando a peça da quarentena | A entrega recusa com a frase de sempre: *"… faltam 1 un em lote que pode sair. Em lote impedido: L2 (bloqueado, 3 un). …"* |
+| Enviar remessa a terceiro no mesmo instante de uma entrega do mesmo material | O envio espera a entrega terminar |
+| Material sem controle de lote; material sem nada bloqueado num lote | **Iguais** |
+| Escolher o lote à mão (**Sai de**) | **Igual** — ainda não desconta (**C513**) |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**. Um material *ROL-217* com **controle por lote**, sem série, unidade *UN*.
+**Movimentações → Entrada** de 3 no lote *L1* com validade daqui a 5 dias, e de 3 no lote *L2* com validade daqui a 45 dias.
+**Movimentações → Saída** de 3 do lote *L1*. **Devoluções → Nova Devolução**: *ROL-217*, *Entrega de origem* = a saída de 3, quantidade 1,
+destino **Quarentena**, **Registrar devolução**. Agora o *L1* tem 1 na prateleira — a peça bloqueada — e o *L2* tem 3.
+
+**1. A entrega não tira a peça da quarentena.** **Requisições → Nova requisição** de 2 *ROL-217* → aprovar → **Separar** 2 (sem escolher
+de onde) → **Entregar** 2. Em **Movimentações**, a saída da entrega é **do lote L2** (2). O *L1* continua com 1 (a peça bloqueada). (Antes:
+saía 1 do *L1* e 1 do *L2*.)
+
+**2. O que está bloqueado em cada lote.** **Inspeções → Desbloquear Material**, *ROL-217* → o campo **Lote** mostra *"L1 — 1 bloqueado(s)"*.
+É esse número que a entrega desconta do *L1*.
+
+**3. A separação desconta o certo.** Outro material, *ROL-217B*, com controle por lote: **Entrada** de 4 no *L1*; **Saída** de 2 do *L1*;
+devolução das 2 para **Quarentena** citando a saída (o *L1* fica com 4, 2 bloqueadas nele). **Entrada** de 6 no *L2* e, em **Lotes**, mude o
+*L2* para **Bloqueado**. **Requisições → Nova requisição** de 4 → aprovar → status **Parcialmente reservada** (reserva 2). Na **Fila de
+separação**, o item mostra **2** para separar. Tente **Separar** 3 → *"ROL-217B: não é possível separar 3 un. Máximo: 2 (pendente: 4, disponível: 2). Não entram
+6 un em lote bloqueado, reprovado ou vencido."* (Antes: separava 4 — contava as 2 peças da quarentena como livres.)
+
+**4. Só sobra a peça bloqueada.** Material *ROL-217C* com controle por lote: **Entrada** de 2 no *L1*, **Saída** de 2, devolução das 2 para
+**Quarentena**; **Entrada** de 3 no *L2* e *L2* **Bloqueado**. Uma requisição que já estava separada com 1 desse material → **Entregar** 1 →
+*"ROL-217C: não é possível entregar 1 un — faltam 1 un em lote que pode sair. Em lote impedido: L2 (bloqueado, 3 un). Libere o lote (mude o
+status ou libere o vencimento) ou nada sai deste material."* Nada é baixado. (Antes: entregava a peça da quarentena.)
+
+**5. A peça reprovada e a peça no terceiro.** Num lote ativo com 5, uma inspeção que reprova 2 deixa a entrega automática ver 3 nesse lote; ao
+decidir a não conformidade (liberar, devolver ao fornecedor ou sucatear), o lote volta a contar inteiro. Uma remessa a terceiro de 2 desse
+lote: criada, ainda conta 5; **enviada**, conta 3; ao voltar, 5 de novo.
+
+### O que esta etapa NÃO cobre
+
+- Escolher o lote à mão no **Sai de** (**C513** — a próxima).
+- Um aviso na tela dizendo quantas peças do lote estão bloqueadas (**C514**).
+- Reservas feitas antes do deploy que cobriam a peça bloqueada (**C515**) e a reprovação liberada pelo Desbloquear "sem lote" (**C516**).
+- **Antes do deploy:** a **A114** (consulta, somente leitura).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 217 entregue (2026-11-13):** **a entrega e o automático não tiram a peça bloqueada do lote** (**C466** e **C503** resolvidos). As três
+  partes do bloqueado do lote (**B1434**), o limite por lote (**B1435**) e por parte (**B1436**), sem trava nova para ler (**B1437**), a conta da
+  aprovação/separação (**B1438**), o automático (**B1439**), sem tela (**B1440**), a frase da entrega igual (**B1441**) e o envio de remessa sob
+  a trava (**B1442**, Fase 5). Commits `cf346c35` (plano), `e2a43f20` (código e testes), `cad6da56` (trava; testes em `e2a43f20`) (Fase 5) e o fechamento. **O que é seu:** a
+  **A114** (consulta antes do deploy); as decisões **B1434** a **B1442** (reversíveis); os avisos **C513** a **C516**; a limitação **(217)** em D
+  e a verificação **(217)** em F. **Próxima:** o **Sai de** (escolha manual do lote) também descontar a peça bloqueada (**C513**) — detalhada no
+  fim do plano da 217.
 
 - **Etapa 209 entregue (2026-11-13):** **o bloqueio sabe o lote** (**C466** resolvido na 1ª parte). O lote no próprio lançamento do livro
   (**B1416**); liberar sem lote só do *"Sem lote"*, inclusive no estorno do bloqueio sem lote (**B1417**, ampliada na Fase 5); reprovação e

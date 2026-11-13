@@ -252,3 +252,153 @@ automático. **Cabe**, sem folga para tela (B1440). Corte pré-decidido se a T0 
 - O fragmento roda por linha nas leituras da fila/detalhe: subconsultas aninhadas, mas só para materiais com `controle_lote = 1` (o `CASE`).
 - Os testes da 205 escrevem `quantidade_bloqueada` direto — sem livro: retido 0, conta de hoje (o sorteio da 205 continua valendo).
 - Teste de corrida: não há porta nova; nenhum.
+
+## Fase 2 — correções do revisor fresco (2026-11-13) — **MANDAM sobre o texto acima onde divergem**
+
+Revisor fresco sobre `cf346c35`: **0 trava, 3 importantes, 5 menores**. Confirmado contra o código: a remessa não baixa o lote
+(`stockService.js:1780-1798`); `quantidade_retornada` cobre retorno, encerramento, cancelamento e a reversão (`thirdPartyService.js:472`,
+`:640`, `:692`, `:795`); a reprovação não muda o status do lote; os três carimbos. **Provado:** sem retido, a B1438 é a conta de hoje
+(com bloqueada + terceiros ≥ 0); com as famílias cabendo, `novo = hoje + Σ_{lotes bons} retido ≥ hoje`; e `disponível − o que o
+automático cobre = lote_impedido` novo — aprovação, separação e entrega leem a mesma régua (nenhum gesto posterior recusa o que o
+anterior aceitou, salvo o I1 abaixo).
+
+1. **[IMPORTANTE] B1439 com parte guardada:** o retido sai do livre do **lote** (`Σ livre das linhas − insp − retido`), **não** do livre
+   usável por endereço — senão, com a peça da quarentena numa linha que o automático já não usa (endereço bloqueado), descontava duas
+   vezes (L1 0 em vez de 1) e, com lote impedido, a conferência da 206 recusava o que a aprovação reservou. **RN-217.13** (a: guarda no
+   mesmo endereço; b: a peça numa linha bloqueada). O código já fazia assim (o retido soma à inspeção, que só entra no livre do lote).
+2. **[IMPORTANTE] Reserva feita antes do deploy cobrindo a peça bloqueada.** A separação mantém a parte própria (B1372 da 205), mas a
+   entrega recusa (a 206) quando o automático não cobre e há lote impedido — o mesmo caminho da RN-205.10 → RN-206.06 (lote bloqueado
+   depois da aprovação). Registrado como **C515** com o que fazer (liberar o lote, ou entregar a menos); a **A114** ganha a consulta das
+   reservas ativas de material com retido por lote.
+3. **[IMPORTANTE] Custo da consulta.** Sem índice em `inspecoes_recebimento_almoxarifado(recebimento_item_id)` e em
+   `itens_remessa_terceiro_almoxarifado(lote_id)`, o fragmento varria a tabela (ou montava índice automático) por lote. **Dois
+   `CREATE INDEX IF NOT EXISTS`** em `schema.js` (precedente: o `idx_receb_itens_almox_lote` da 205, B1380) — não é migração de dado.
+   Medido (100 materiais): 20 lotes por material → 80 ms; 50 lotes → 500 ms (a leitura cresce com lotes²; 50 lotes ativos num material
+   é raro) — **D (217)**.
+4. **[MENOR] "byte a byte"** só com bloqueada + terceiros ≥ 0 (B1438 corrigida no código e aqui).
+5. **[MENOR] Material com saldo negativo permitido** e sem lote impedido: o que o lote retém deixa de ser tirado dele e vai para a linha
+   "Sem lote atribuído" negativa (antes saía a peça da quarentena do L1). É o comportamento da 197 para o que os lotes não cobrem;
+   registrado em **D (217)**.
+6. **[MENOR] Achado 3 tem mais uma janela:** encerrar/cancelar a remessa rodam o motor antes de gravar `quantidade_retornada`; no meio,
+   o item ainda retém no lote o que já não está lá (desconto a mais por um instante — recusa segura, nunca peça bloqueada saindo).
+7. **[MENOR] A soma da família é das PARCELAS** (`Σ MAX(0, livro do lote)`), nunca a líquida `bloqueadoComLoteSql` — **o sorteio
+   RN-217.09 pegou isso de verdade** (lote com livro −1 abatia o de outro; o retido total passava do total e o impedido caía abaixo do
+   de hoje). Corrigido.
+8. **[MENOR]** RN-217.10: `listarLotesDoMaterial` **não** muda (alimenta o "Sai de", C513); o número do automático vem de
+   `lotesParaOAutomatico` — o teste reescrito confere os dois.
+
+### Divergência do contrato (registrada): o fragmento virou tabela derivada
+
+A 1ª versão (`retidoDoLoteSql(m, l)` por lote + `retidoComLoteSql(m)` = Σ dela, com as somas das famílias por subconsulta dentro de cada
+lote) **estourou a pilha do analisador do SQLite** (`SQLITE_ERROR: parser stack overflow`) nas leituras da fila, do detalhe e da entrega
+(20 testes da 197 em 500). Contrato novo de `retidoDoLote.js`: **`lotesComRetidoSql(m, colunas)`** — uma tabela derivada com uma linha
+por lote do material (`lote_id`, `fis`, `quar`, `repr`, `terc`, `ret` e as colunas extras pedidas), as famílias por `SUM(...) OVER ()`
+sobre as mesmas linhas; `retidoPorLote(db, id)` lê a mesma tabela (`json_group_array`); as parcelas (`quarentenaDoLoteSql`,
+`reprovadoDoLoteSql`, `terceirosDoLoteSql`, `fisicoLivreDoLoteSql`) continuam exportadas. `loteImpedidoSql` agrega a tabela com a coluna
+`imp` (o predicado da 205) numa passada só. A régua é a mesma; o texto SQL é que mudou.
+
+## Fase 5 — revisão adversarial (3 revisores frescos: regra, travas/fluxos, "o teste passaria com a feature quebrada?")
+
+1. **[ALTO, defeito real, reproduzido] O envio da remessa caía no meio da entrega.** `enviarRemessa` gravava o `enviado_em` do item
+   **fora** da trava do material e só depois chamava o motor. Desde a 217 o item enviado retém no lote dele; com folga na família (uma
+   remessa sem lote já fora), o claim entrava entre a conferência da 206 e a baixa da entrega: a conferência aceitou 10 (L1 5 + L2 5), a
+   baixa viu L1 3 e mandou 2 **sem lote** — *"Sem lote atribuído"* **−2** (script do revisor; regressão da 217: antes o automático
+   ignorava terceiros). **Conserto (B1442):** o claim, o motor e a compensação do item numa seção só, `naTravaDoMaterial(item.material_id)`
+   (o motor já roda sob ela — aninha; molde Etapas 97/121; regra do CLAUDE.md: porta que muda o que outra lê para entregar pega a trava).
+   Descartado: ler o retido uma vez por entrega e reusar na baixa (fechava este caso mas deixava a porta fora da trava, contra a regra).
+   Teste **RN-217.14** (gancho só sinaliza; o envio disparado do contexto do teste): o claim espera; a entrega sai L1 5 + L2 5; nenhuma
+   linha negativa. Controle: sem a trava → vermelho pela asserção do claim (`enviado_em` gravado no meio).
+2. **[BAIXO, registrado] Reprovação velha volta a reter** (C501 ampliado → **C516**): liberar pelo **Desbloquear** "sem lote" o que é da
+   reprovação não carimba a inspeção; um bloqueio avulso **depois** faz a família caber de novo e o lote volta a reter — desconto a mais
+   (recusa segura). O caminho certo é a não conformidade.
+3. **[BAIXO, registrado em D (217)]** os carimbos de devolução ao fornecedor e sucateamento são gravados antes do motor, fora da trava:
+   na janela a parcela some e o automático pode tirar a peça reprovada — **não** é regressão (antes da 217 sempre podia).
+4. **[Teste] Regras cobertas só pelo sorteio** (o modelo reescreve a regra em JS): ordem das famílias, limite pelo físico **livre**,
+   `MAX(0, …)` do lote com livro negativo e a **folga** (sobrevivia: todos os cenários eram inteiros). Quatro cenários determinísticos
+   novos — **RN-217.06 b**, **RN-217.05 b**, **[B1434]** (com um lote impedido, para o número aparecer) e **[B1436] frações**
+   (0,1 + 0,2 = 0.30000000000000004). Controles (10)-(13) abaixo, cada um derrubando o seu.
+5. **[Teste] O detalhe** (RN-217.11 b): `lote_impedido` 3 e entregável 0. O teto pelo automático (`tetoDaEntregaPeloLote`) dá o mesmo
+   número **por construção** (disponível − o que o automático cobre = `lote_impedido`, provado na Fase 2) — não é observável à parte.
+
+Sem achado: deadlock/reentrância (só leitura; o envio aninha), duplo desconto (a reprovação não grava `BLOQUEIO`), material sem lotes,
+lote com saldo negativo, frações (`MAX(0, fis − ret)` absorve o arredondamento).
+
+### Controles positivos executados (script `e217-sabotagem.js` no scratchpad: cópia, âncora = 1, restauro por cópia, md5 igual)
+
+| # | Sabotagem | Caiu |
+|---|---|---|
+| 1 | reprovação zerada | RN-217.02, .02 b, .06, sorteio |
+| 2 | terceiros zerado | RN-217.03, .07, sorteio |
+| 3 | sem o filtro `enviado_em` | RN-217.03 (o 2º item não enviado — asserção acrescentada; antes só o sorteio), sorteio |
+| 4 | sem os carimbos | RN-217.02 b (`devolucao_fornecedor_em`), sorteio |
+| 5 | sem o limite por lote | RN-217.05 (C504 com L3), sorteio |
+| 6 | famílias sempre cabem | RN-217.06, .07, sorteio |
+| 7 | `loteImpedidoSql` sem descontar o atribuído do resto | RN-217.04, .04 a-c, .04 d, .10, [B1434], .11 b, sorteio |
+| 8 | automático sem o retido | 15 do arquivo novo + RN-217.01 a (197) |
+| 9 | retido também no livre por endereço | RN-217.13 b |
+| 10 | reprovação conferida sem a quarentena | RN-217.06 b, sorteio |
+| 11 | limite pelo saldo cru (sem a inspeção) | RN-217.05 b, sorteio |
+| 12 | sem `MAX(0, …)` da quarentena | [B1434], sorteio |
+| 13 | sem a folga | [B1436] frações |
+| 14 | envio sem a trava | RN-217.14 |
+
+## Execução
+
+- [x] Fase 0 + Fase 1 — este plano — `cf346c35`.
+- [x] Fase 2 — revisor fresco: 0 trava, 3 importantes, 5 menores, todos aceitos (bloco "Fase 2 — correções").
+- [x] T0 — testes vermelhos (`bloqueadoDoLote.api.test.js` 12/15 vermelhos por número; RN-209.09 → RN-217.10 e o "[C466, limitação
+  documentada]" da 197 → RN-217.01 a, vermelhos pelo número) — no commit do código `e2a43f20` (sem commit de teste vermelho: o `test:api` não
+  fica vermelho na `main`).
+- [x] T1 — `retidoDoLote.js` — `e2a43f20` (**divergência:** o contrato virou tabela derivada — *parser stack overflow*, ver acima).
+- [x] T2 — `loteImpedidoSql` (B1438) — `e2a43f20`. O EXPLAIN da 205 reescrito (aceita o SCAN da tabela derivada; índices novos).
+- [x] T3 — `lotesParaOAutomatico` + export (B1439) — `e2a43f20`.
+- [x] T4 — integração RN-217.12 pela rota e pelo serviço — `e2a43f20`; regressão 197/205/206/207/208/209 verde (vizinhas rodadas uma a uma e
+  depois na suíte inteira).
+- [x] Fase 5 — 3 revisores; 1 defeito real (o envio de remessa no meio da entrega, B1442) e 5 lacunas de teste, todos corrigidos — `cad6da56` (trava; testes em `e2a43f20`).
+- [x] Fechamento (`fechar-etapa`) — novidades, specs 10 e 05, mapa, guia, manual, este plano, a estimativa.
+- Verificação final (medida, sobre a árvore de `e2a43f20`, serial): `test:api` **611/611 arquivos OK**; `test:almoxarifado` **44 passou, 0
+  falhou**; validation **4/0**, safealter **3/0**, sqlite **16/0**; cliente **223/223 suítes, 2999/2999 testes**; `build` **Compiled
+  successfully**. `bloqueadoDoLote` **23/23**. (Uma 1ª rodada do `test:api` foi interrompida: as sabotagens da Fase 5 rodaram por cima dela —
+  a memória "sabotagem concorrente contamina a suíte"; refeita do zero depois do último conserto.)
+
+### Divergências do plano
+
+- **Contrato de `retidoDoLote.js`:** `retidoDoLoteSql`/`retidoComLoteSql` → `lotesComRetidoSql` (tabela derivada) — *parser stack overflow*.
+- **A soma da família:** o plano dizia "a soma crua do livro" (`bloqueadoComLoteSql`); estava errado — o sorteio pegou (Fase 2 M7).
+- **Índices novos** (o plano dizia "nenhuma coluna, nenhuma migração"): dois `CREATE INDEX IF NOT EXISTS`, sem dado novo.
+- **`thirdPartyService.enviarRemessa`** ganhou a trava (Fase 5, B1442) — o plano afirmava "nenhuma trava nova" (B1437): continua sem trava
+  **nova**, mas uma porta que não pegava passou a pegar a que existe.
+- **RN-217.13 e .14** não existiam no plano (Fase 2 I1 e Fase 5).
+- **A estimativa:** a fatia visível prevista ("⟨n⟩ em quarentena no lote L1") não entrou (B1440, C514).
+
+### Retro (4 números)
+
+- **Rodadas até verde na Fase 5:** 1.
+- **Achados reais:** Fase 2: 3 importantes + 5 menores (1 deles — a soma da família — confirmado pelo sorteio). Fase 5: **1 defeito real**
+  (ALTO, o envio de remessa no meio da entrega, reproduzido) + 5 lacunas de teste (folga sobrevivia, três regras só no sorteio, o detalhe);
+  2 BAIXOS registrados sem código (C516, D (217)). **0 ruído.**
+- **Paralelismo:** nenhum galho (tudo tronco); 3 revisores em paralelo na Fase 5.
+- **Defeito que escapou da 209:** nenhum conhecido.
+
+## Próxima tarefa detalhada
+
+*(Escolhida pela ordem do CLAUDE.md: o 2º pacote da estimativa de 05/11 acabou com esta etapa; o que esta etapa nomeou como "falta" é o
+**C513**. Ainda **sem estimativa** — começa pela Fase 0.5.)*
+
+**O "Sai de" (escolha manual do lote) também deixa de fora a peça bloqueada (C513).**
+
+- **Onde:** `requisitionService.checarOrigemItem` (`server/services/almoxarifado/requisitionService.js` ~`:1354-1400`, a separação e a
+  entrega com origem/lote escolhidos) confere `SUM(estoque_saldo)` do par (lote, endereço) menos o já pedido e a parte guardada de outras
+  (`mensagemSeparadoDeOutras`); a aceitação da separação (~`:1595-1625`, `regua.saldoOrigem`) idem. Nenhuma das duas desconta a inspeção do lote
+  nem o retido.
+- **O que está pronto e não reabre:** `retidoDoLote.retidoPorLote(db, materialId)` → `Map<lote_id, retido>` (o retido já limitado ao físico
+  livre do lote e com as regras de família); a mesma régua do automático e da 205 (`lotesComRetidoSql`).
+- **A decisão a tomar (letra B):** o retido é do **lote**, não do endereço. Proposta reversível: com lote escolhido, além do par, conferir o
+  lote inteiro — `saldo do lote − inspeção do lote − retido do lote − o já pedido nesse lote ≥ q` — e recusar com literal nova que nomeie a
+  peça bloqueada (ex.: *"Lote L1: só ⟨n⟩ un podem sair — ⟨r⟩ estão bloqueadas nele (quarentena, reprovação ou terceiro)"*). Sem lote
+  escolhido (só endereço), nada muda.
+- **Pontos de atenção:** a separação e a entrega rodam sob as duas travas (requisição → material) — a leitura entra nelas, sem trava nova;
+  a entrega com origem planejada (`origemGuardada`/`saiDaOrigem`) não pode passar a recusar a origem que a separação aceitou antes do deploy
+  (o "gesto posterior que recusa o anterior" — decidir se a planejada vale como está ou recusa com "não serve mais"); o `GET` do detalhe e a
+  janela de entrega leem o mesmo saldo do par (`consultarSaldosPorLocalizacao`, C469) — mostrar o livre do lote ali é a fatia visível.
+- **Vizinhos baratos que seguem abertos:** C514 (o aviso na tela), C515, C516, C491, C478, C486, C495, C497, C498, C500.
