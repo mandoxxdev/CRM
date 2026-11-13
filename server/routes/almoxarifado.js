@@ -453,10 +453,15 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // fallback sem o JOIN aqui esconderia um ambiente quebrado em vez de resolve-lo.
       // Etapa 178 (RN-178.01): `is_epi` calculado pelas tres marcas (tipo com is_epi, tipo_material 'epi', categoria EPIs) —
       // a tela de entrega filtra a lista por ele. A regua mora em epiService.ehEpiSql (a mesma da entrega).
+      // Etapa 223 (B1481, RN-223.05/.06; C481, 2a parte): `lote_impedido` (a regua `loteImpedidoSql`) SO com `com_lote_impedido=1`
+      // (texto exato): sem ele a resposta e a de sempre, sem a chave. Opt-in porque esta lista alimenta 18 chamadas do cliente (seletores)
+      // e a tela do Compras; so a tela Materiais do almoxarifado pede (+35 ms a 3 mil materiais, medido).
+      const comLoteImpedido = req.query.com_lote_impedido === '1';
       let sql = `SELECT m.*, f.nome as familia_nome, f.codigo as familia_codigo,
                         a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome,
                         cli.razao_social as proprietario_cliente_nome,
-                        ${epiService.ehEpiSql('m', 'tmepi')} as is_epi
+                        ${epiService.ehEpiSql('m', 'tmepi')} as is_epi${comLoteImpedido ? `,
+                        ${loteImpedidoSql('m')} as lote_impedido` : ''}
                  FROM materiais_almoxarifado m
                  LEFT JOIN tipos_material_almoxarifado tmepi ON tmepi.id = m.tipo_material_id
                  LEFT JOIN familias_material_almoxarifado f ON m.familia_id = f.id

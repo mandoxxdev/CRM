@@ -3985,10 +3985,14 @@ async function liberarReserva(db, user, reservaId, quantidade = null, options = 
   return { success: true, reserva_id: Number(reservaId), quantidade_liberada: qtd, status: total ? statusFinal : 'ATIVA' };
 }
 
+// Etapa 223 (B1480, RN-223.01 a .04; C481, 2a parte): `lote_impedido` em toda linha — a regua da aprovacao, da reserva manual e do
+// extrato (`loteImpedidoSql`, "hoje" de Brasilia; 0 sem controle de lote). Aditivo: o `quantidade_disponivel` nao muda (B1476). Medido:
+// +35 ms numa lista de 3 mil materiais (904 com lote) — sem opt-in. So leitura, sem trava.
 async function consultarEstoque(db, filters = {}) {
   let sql = `SELECT m.*, c.nome as categoria_nome, cli.razao_social as proprietario_cliente_nome,
     ${disponivelSql('m')} as quantidade_disponivel,
-    ${valorEstoqueSql('m')} as valor_estoque
+    ${valorEstoqueSql('m')} as valor_estoque,
+    ${loteImpedido.loteImpedidoSql('m')} as lote_impedido
     FROM materiais_almoxarifado m
     LEFT JOIN categorias_material_almoxarifado c ON m.categoria_id = c.id
     LEFT JOIN clientes cli ON m.proprietario_cliente_id = cli.id
