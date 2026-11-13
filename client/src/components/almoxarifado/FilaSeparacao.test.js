@@ -462,3 +462,30 @@ describe('[RN-189.10/11/13] Imprimir lista de coleta', () => {
     expect(mockGerar).toHaveLength(0);
   });
 });
+
+// Etapa 227 (B1502, RN-227.10): o que está em lote bloqueado, reprovado ou vencido vem num pedaço à parte depois do disponível — o
+// impedido pode passar do disponível (C531; Fase 2 I1). Sem o campo, 0 ou negativo: o texto de antes, letra por letra.
+test('[RN-227.10] o item diz quanto está em lote impedido, depois do disponível', async () => {
+  const comImpedido = (id, over) => req({ id, numero: `REQ-${id}`, itens: [item({ item_id: id, a_separar: 5, separavel: 4, disponivel: 10,
+    ...over })] });
+  api.get.mockResolvedValue({
+    data: [
+      comImpedido(501, { lote_impedido: 6 }),
+      comImpedido(502, { lote_impedido: 2.5 }),
+      comImpedido(503, { lote_impedido: 0 }),
+      comImpedido(504, {}),
+      comImpedido(505, { lote_impedido: -1 }),
+      comImpedido(506, { lote_impedido: 6, disponivel: 2, origem_separacao_codigo: 'A-01', lote_separacao_codigo: 'L-77' }),
+    ],
+  });
+  await montar();
+  const base = 'MAT-1 — Chapa 3mm: a separar 5 PC (separável agora 4) · disponível 10';
+  expect(q('[data-testid="fila-item-501"]').textContent).toBe(`${base} · 6 em lote impedido`);
+  expect(q('[data-testid="fila-item-502"]').textContent).toBe(`${base} · 2,5 em lote impedido`);
+  expect(q('[data-testid="fila-item-503"]').textContent).toBe(base);
+  expect(q('[data-testid="fila-item-504"]').textContent).toBe(base);
+  expect(q('[data-testid="fila-item-505"]').textContent).toBe(base);
+  expect(q('[data-testid="fila-item-506"]').textContent).toBe(
+    'MAT-1 — Chapa 3mm: a separar 5 PC (separável agora 4) · disponível 2 · 6 em lote impedido · separado de A-01 — L-77'
+  );
+});

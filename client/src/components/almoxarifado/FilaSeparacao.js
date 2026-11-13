@@ -76,6 +76,9 @@ const descricaoItem = (it) => {
     partes.push(`a entregar ${fmtQtd(it.a_entregar)}${un} (entregável agora ${fmtQtd(it.entregavel)})`);
   }
   partes.push(`disponível ${fmtQtd(it.disponivel)}`);
+  // Etapa 227 (B1502, RN-227.10): o que está em lote bloqueado, reprovado ou vencido — um pedaço à parte, não "disponível 2 (6 …)": o
+  // impedido não desconta o reservado e pode passar do disponível (C531; Fase 2 I1). Sem o campo, 0 ou negativo: o texto de antes.
+  if (Number(it.lote_impedido) > 0) partes.push(`${fmtQtd(it.lote_impedido)} em lote impedido`);
   if (it.origem_separacao_codigo) {
     partes.push(`separado de ${it.origem_separacao_codigo}${it.lote_separacao_codigo ? ` — ${it.lote_separacao_codigo}` : ''}`);
   }
