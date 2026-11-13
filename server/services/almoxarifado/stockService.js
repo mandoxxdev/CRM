@@ -1367,6 +1367,36 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
       }
     }
   }
+  // Etapa 234 (D (233) 2, B1531/B1532): a saida MANUAL (so quem declara `lotePelasSeries`, a v2) de material com serie e SEM controle
+  // de lote, com o lote em branco, usa o lote DAS SERIES. Antes a saida baixava a linha "sem lote" e gravava lote NULL: o lote ficava com
+  // a peca que ja saiu e o "sem lote atribuido" ia a negativo (sonda da Fase 0: -1). Um lote so -> vira o lote resolvido (a saida fica a
+  // de lote escolhido: guarda, claim do lote, claim das series, livro e o estorno que devolve ao lote). Lotes diferentes (ou lote e sem
+  // lote) -> guardados em `lotesDasSeries` e recusados no ramo de saida, DEPOIS da guarda do lote (a serie de lote impedido diz o lote,
+  // como na 233). Material com controle de lote fica fora: o lote em branco ali continua recusado por "exige lote" (D (233) 4). So as
+  // series EM_ESTOQUE do material entram na conta (as outras caem no claim de sempre); lote apagado = sem lote (LEFT JOIN, como a 233).
+  // Roda dentro da trava do material, como o resto do motor.
+  let lotesDasSeries = null;
+  if (!loteResolvido && opcoes.lotePelasSeries === true && tiposSaida.includes(tipo) && Number(material.controle_serie) === 1
+      && !(opcoes.exigeLote && material.controle_lote) && Array.isArray(params.serie_ids) && params.serie_ids.length) {
+    const ids = [...new Set(params.serie_ids.map(Number).filter((n) => Number.isInteger(n) && n > 0))];
+    // Fase 2 (achado 1): so deriva quando TODAS as series informadas estao EM_ESTOQUE deste material. Com uma ja entregue (ou de outro
+    // material) no meio, derivar fazia o claim responder "serie X nao pertence ao lote informado" (o claim confere o lote antes do status)
+    // a quem nem escolheu lote — sem derivar, a recusa e a de sempre ("nao esta disponivel").
+    const emEstoque = ids.length ? await dbGet(db, `SELECT COUNT(*) AS n FROM series_almoxarifado
+      WHERE material_id = ? AND status = 'EM_ESTOQUE' AND id IN (${ids.map(() => '?').join(',')})`, [material_id, ...ids]) : null;
+    if (ids.length && Number(emEstoque.n) === ids.length) {
+      const linhasLote = await dbAll(db, `SELECT DISTINCT l.id AS lid, l.* FROM series_almoxarifado s
+          LEFT JOIN lotes_almoxarifado l ON l.id = s.lote_id
+        WHERE s.material_id = ? AND s.status = 'EM_ESTOQUE' AND s.id IN (${ids.map(() => '?').join(',')})`,
+      [material_id, ...ids]);
+      if (linhasLote.length === 1 && linhasLote[0].lid != null) {
+        const { lid, ...loteDaSerie } = linhasLote[0];
+        loteResolvido = loteDaSerie;
+      } else if (linhasLote.length > 1) {
+        lotesDasSeries = linhasLote;
+      }
+    }
+  }
   const loteIdFinal = loteResolvido ? loteResolvido.id : null;
   const loteCodigoFinal = loteResolvido ? loteResolvido.codigo : (lote || null);
 
@@ -1621,14 +1651,25 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
     // muda sob a mesma trava, Etapa 220). So as series EM_ESTOQUE do material (Fase 2 M4: a serie ja entregue ou de outro material
     // continua com a recusa do claim, nao a do lote), e o lote pelo `s.lote_id` sem conferir o material do lote — a mesma leitura
     // da listagem `/series` que a tela usa (Fase 2 M3; lote apagado: sem lote, sem guarda, nos dois lados).
+    // Etapa 234 (B1531): o lote unico das series ja virou o `loteResolvido` (la em cima); aqui sobram os lotes DIFERENTES — a guarda
+    // primeiro (cada lote, em ordem de codigo), depois a recusa de lotes diferentes (B1532). Material com controle de lote nao deriva
+    // (D (233) 4) e mantem a leitura da 233, por isso ela continua aqui para ele.
+    const porCodigo = (a, b) => (String(a.codigo) < String(b.codigo) ? -1 : String(a.codigo) > String(b.codigo) ? 1 : a.id - b.id);
     const lotesAChecar = loteResolvido ? [loteResolvido]
-      : (opcoes.lotePelasSeries === true && serieIdsSaida.length
-        ? await dbAll(db, `SELECT DISTINCT l.* FROM series_almoxarifado s JOIN lotes_almoxarifado l ON l.id = s.lote_id
-            WHERE s.material_id = ? AND s.status = 'EM_ESTOQUE' AND s.id IN (${serieIdsSaida.map(() => '?').join(',')})
-            ORDER BY l.codigo, l.id`,
-          [material_id, ...serieIdsSaida])
-        : []);
+      : lotesDasSeries ? lotesDasSeries.filter((l) => l.lid != null).sort(porCodigo)
+        : (opcoes.lotePelasSeries === true && serieIdsSaida.length
+          ? await dbAll(db, `SELECT DISTINCT l.* FROM series_almoxarifado s JOIN lotes_almoxarifado l ON l.id = s.lote_id
+              WHERE s.material_id = ? AND s.status = 'EM_ESTOQUE' AND s.id IN (${serieIdsSaida.map(() => '?').join(',')})
+              ORDER BY l.codigo, l.id`,
+            [material_id, ...serieIdsSaida])
+          : []);
     for (const loteDaSaida of lotesAChecar) checarLoteNaSaida(loteDaSaida, tipo);
+    if (lotesDasSeries) {
+      const comLote = lotesDasSeries.filter((l) => l.lid != null).sort(porCodigo).map((l) => l.codigo);
+      const nomes = lotesDasSeries.some((l) => l.lid == null) ? [...comLote, 'sem lote'] : comLote;
+      throw Object.assign(new Error(`As series escolhidas sao de lotes diferentes (${nomes.join(', ')}): faca uma saida para cada lote`),
+        { status: 400 });
+    }
     // Saída citando uma reserva consome o que JÁ estava separado para ela, então não pode ser
     // barrada pelo disponível — o disponível justamente exclui o reservado. Sem esta exceção,
     // reservar material o tornava inutilizável até para quem reservou (ver o design da Etapa 4).
