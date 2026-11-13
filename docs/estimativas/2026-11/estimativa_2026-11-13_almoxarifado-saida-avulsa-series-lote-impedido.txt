@@ -1,0 +1,9 @@
+*Planejamento — almoxarifado: a saída avulsa não deixa marcar série de lote bloqueado*
+_13/11/2026_
+
+*1. Na saída avulsa, as séries que não podem sair vêm apagadas, e o sistema passa a recusá-las*
+Hoje, em Movimentações, na Saída ou na Perda de material com número de série, com o lote em branco a lista de séries mostra também as de um lote bloqueado, reprovado ou vencido, e o sistema aceita a baixa delas sem avisar. Depois desta alteração, essas séries continuam na lista, mas apagadas (não dá para marcar), com o lote e a situação ao lado, e uma frase embaixo explica. Só fica apagado o que aquele tipo de saída não pode baixar: na Saída, lote bloqueado, reprovado ou vencido; na Perda, só bloqueado ou reprovado, porque o vencido sai do estoque justamente por ela. O ajuste de estoque não muda. Se alguém insistir (por exemplo com a tela aberta antes de o lote ser bloqueado), o sistema recusa a saída com a mesma mensagem de quando o lote é escolhido.
+Tempo estimado: *3h*
+
+*Total estimado: 3h*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
