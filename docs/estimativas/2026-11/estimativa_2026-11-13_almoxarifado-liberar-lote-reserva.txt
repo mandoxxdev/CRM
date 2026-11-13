@@ -1,0 +1,9 @@
+*Planejamento — almoxarifado: liberar o lote reserva para quem esperava*
+_13/11/2026_
+
+*1. Liberar o lote reserva as peças para quem estava esperando*
+Quando um lote bloqueado é liberado (anexando o certificado, voltando a situação para ativo ou liberando o vencimento), as peças dele passam a ser reservadas para as requisições que estavam aguardando o material, na ordem de prioridade, e quem pediu recebe o aviso de que o material foi liberado. Hoje a requisição continua aguardando estoque e quem chegar primeiro na aprovação leva. A tela de lotes passa a dizer quantas peças foram reservadas na liberação. Junto, mudar a situação de um lote passa a esperar a vez das outras operações do mesmo material, para que um lote bloqueado no exato instante de uma reserva não fique com a reserva feita.
+Tempo estimado: *4h*
+
+*Total estimado: 4h*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
