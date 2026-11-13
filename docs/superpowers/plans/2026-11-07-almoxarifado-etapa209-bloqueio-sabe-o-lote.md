@@ -393,7 +393,7 @@ lote: igual; bloqueio antigo: cai em "Sem lote"), salvo o caso da trava abaixo; 
   (`4bdf0a09`) e os da tela na T6 (`b073fb93`); os dois da Fase 5 em `fa50fae9` (abaixo). **Não refeitos em bloco no fim:** cada um rodou
   sobre o código da sua task e nenhum arquivo de produção sabotado mudou depois, salvo o `stockService.js` na Fase 5 — e ali a sabotagem nova
   (guarda do sem lote desligada) derrubou o cenário novo.
-- [ ] Suítes: `test:api`, `test:almoxarifado`, `test:validation && test:safealter && test:sqlite`, cliente, `build` com `CI=true` — **rodando
+- [x] Suítes: `test:api` 610/610, `test:almoxarifado` 44/0, validation 4/0, safealter 3/0, sqlite 16/0, cliente 223/223 (2999), `build` OK (em `fa50fae9`)
   no fechamento** (fora deste commit de documentação); os números entram na linha "Verificação final", abaixo.
 - [x] Fase 5 — revisão fresca, 4 lentes (correção da RN; "este teste passaria com a feature quebrada?"; trava/estorno; cliente) — `fa50fae9`.
   **2 achados reais, os dois corrigidos:**
@@ -408,7 +408,7 @@ lote: igual; bloqueio antigo: cai em "Sem lote"), salvo o caso da trava abaixo; 
 - [x] Fechamento (`fechar-etapa`): novidades (seção da 209, B1416–B1422, C500–C504, A112, D (209), F (209), C466 anotado), spec 10 e 12,
   mapa (e o cabeçalho dele, que tinha parado na 191), guia, manual (15.3, 12.6, 6.10), este plano e o de pausa — commit "Etapa 209:
   fechamento". **O estimado × gasto não foi feito aqui** (fica com o André, como na 207 e na 208).
-- Verificação final: (preenchida no commit seguinte)
+- Verificação final (medida, em `fa50fae9`): `test:api` 610/610, `test:almoxarifado` 44/0, validation 4/0, safealter 3/0, sqlite 16/0; tela inteira 223/223 suítes (2999 testes); build OK
 
 ### Divergências do plano (registradas no fechamento)
 
