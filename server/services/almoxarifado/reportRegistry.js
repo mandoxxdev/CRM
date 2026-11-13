@@ -58,7 +58,10 @@ const RELATORIOS = {
     categoria: 'Estoque',
     acao: null,
     exportavel: true,
-    nota: null,
+    // Etapa 225 (B1488, B1490): a coluna Em lote impedido (o numero do extrato) logo depois do Disponivel, que nao muda.
+    nota: 'Disponível = físico menos o reservado, o bloqueado, o em inspeção e o em terceiros. Em lote impedido = o que está em '
+      + 'lote bloqueado, reprovado ou vencido, fora o que já é contado como bloqueado, em terceiros ou em inspeção: não é descontado '
+      + 'do Disponível, mas não sai para uso até o lote ser liberado na tela Lotes e Séries.',
     limite: null,
     params: [],
     colunas: [
@@ -68,6 +71,7 @@ const RELATORIOS = {
       { chave: 'unidade', rotulo: 'Unidade' },
       { chave: 'quantidade_atual', rotulo: 'Quantidade atual' },
       { chave: 'disponivel', rotulo: 'Disponível' },
+      { chave: 'lote_impedido', rotulo: 'Em lote impedido' },
       { chave: 'valor_total', rotulo: 'Valor total' },
     ],
     fn: null,
@@ -704,9 +708,11 @@ const RELATORIOS = {
     categoria: 'Estoque',
     acao: null,
     exportavel: true,
-    nota: 'Materiais ativos com saldo reservado, bloqueado, em inspeção ou em terceiros. Disponível = físico '
-      + 'menos essas quatro retenções. Material inativado com retenção não aparece aqui (mesma régua de '
-      + '"Materiais bloqueados").',
+    // Etapa 225 (B1489, B1490): entra tambem o material so com lote impedido; a coluna Em lote impedido e a ultima.
+    nota: 'Materiais ativos com saldo reservado, bloqueado, em inspeção, em terceiros ou em lote impedido. Disponível = físico '
+      + 'menos essas quatro retenções. Em lote impedido = o que está em lote bloqueado, reprovado ou vencido, fora o que já aparece '
+      + 'em Bloqueado, Em terceiros ou Em inspeção: não é descontado do Disponível, mas não sai para uso até o lote ser liberado na '
+      + 'tela Lotes e Séries. Material inativado não aparece aqui (como em "Materiais bloqueados").',
     limite: null,
     params: [],
     // As quatro colunas de retenção TEM de ser as de availabilitySql.COLUNAS_RETENCAO — o teste do
@@ -721,6 +727,7 @@ const RELATORIOS = {
       { chave: 'quantidade_em_inspecao', rotulo: 'Em inspeção' },
       { chave: 'quantidade_em_terceiros', rotulo: 'Em terceiros' },
       { chave: 'disponivel', rotulo: 'Disponível' },
+      { chave: 'lote_impedido', rotulo: 'Em lote impedido' },
     ],
     fn: null,
   },

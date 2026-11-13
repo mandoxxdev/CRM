@@ -56,7 +56,10 @@ Desde a 222/223 o extrato e a lista de materiais dizem quanto do estoque está e
   (D (225)); a coluna *disponível* da Fila de separação (D (223), continua). Sem mudança no banco, sem trava, sem rota nova, sem perfil novo.
 - **C531 (aviso) — *Em lote impedido* não soma com *Bloqueado*.** A coluna é o número do extrato: o que está em lote impedido **fora** o
   que já aparece em *Bloqueado*, em terceiros ou em inspeção sem recebimento (a régua da 205/217). Um material com 6 em lote bloqueado e 2
-  em quarentena sem lote conhecido mostra *Bloqueado* 2 e *Em lote impedido* 4 — não 6. E o *Disponível* ainda conta o impedido.
+  em quarentena sem lote conhecido mostra *Bloqueado* 2 e *Em lote impedido* 4 — não 6; com a quarentena registrada num lote **bom** (L1,
+  `retidoDoLote`, 217), o impedido continua 6. E o impedido não desconta o **reservado** (nem o "Sem lote atribuído" negativo, 205): com
+  reservado 8, *Disponível* 2 e *Em lote impedido* 6 — por isso a nota diz "não é descontado do Disponível", não "está contado nele"
+  (Fase 2 M1).
 
 ## Regras de negócio (RN-225.xx)
 
@@ -67,7 +70,7 @@ Desde a 222/223 o extrato e a lista de materiais dizem quanto do estoque está e
 | RN-225.03 | *Saldos comprometidos* lista o material só com lote impedido | L1 4 + L2 BLOQUEADO 6, sem retenção: aparece com as quatro retenções 0, `disponivel 10`, `lote_impedido 6`; material só com L1 ATIVO e sem retenção → **não** aparece; material com retenção e sem lote → aparece com `lote_impedido 0` |
 | RN-225.04 | Sem controle de lote, 0 e fora do comprometido por isso | `controle_lote = 0` com L2 BLOQUEADO 6 → *Estoque atual* `lote_impedido 0`; não aparece em *Saldos comprometidos* |
 | RN-225.05 | A régua é uma só | para todo material de cada relatório, `lote_impedido` = `SELECT loteImpedidoSql('m')` dele = `lote_impedido` do extrato |
-| RN-225.06 | O que já está em *Bloqueado* sai do impedido (C531) | L1 4 + L2 BLOQUEADO 6 e `quantidade_bloqueada = 2` → comprometido `quantidade_bloqueada 2`, `lote_impedido 4` |
+| RN-225.06 | O que já está em *Bloqueado* ou *Em terceiros* sem lote conhecido sai do impedido; o reservado não (C531) | L1 4 + L2 BLOQUEADO 6 e (a) `quantidade_bloqueada = 2` gravada direto (sem lote conhecido) → comprometido `quantidade_bloqueada 2`, `lote_impedido 4`; (b) `quantidade_em_terceiros = 2` → `[0, 2, 4]`; (c) `quantidade_reservada = 8` → `disponivel 2`, `lote_impedido 6` |
 | RN-225.07 | Material de cliente: no comprometido sim, no *Estoque atual* não (como hoje) | material de cliente com L2 BLOQUEADO 6 → aparece em *Saldos comprometidos* com o cliente e `lote_impedido 6`; fora do *Estoque atual* |
 | RN-225.08 | O registro e a planilha têm a coluna, depois do *Disponível* | `GET /relatorios`: nos dois, a coluna `lote_impedido`/`Em lote impedido` vem logo depois de `disponivel`, e a nota é a literal; o xlsx dos dois tem *Em lote impedido* logo depois de *Disponível*, e a célula do material da .01 vale 6 |
 | RN-225.09 | Integração: liberar o lote zera a coluna e tira o material do comprometido | L1 4 + L2 BLOQUEADO 6 → nos dois relatórios 6 e no comprometido; `PUT /lotes/L2/status ATIVO` → *Estoque atual* 0 e fora do comprometido |
@@ -81,15 +84,23 @@ O *Saldos comprometidos* muda o **filtro** (B1489).
 **`GET /api/almoxarifado/relatorios`** (lista do registro):
 
 - `estoque-atual.colunas`: `… { disponivel, 'Disponível' }, { lote_impedido, 'Em lote impedido' }, { valor_total, 'Valor total' }`.
-- `estoque-atual.nota` (literal): `'Disponível = físico menos o reservado, o bloqueado, o em inspeção e o em terceiros. Em lote impedido = o que está em lote bloqueado, reprovado ou vencido, fora o que já é bloqueado: continua contado no Disponível, mas não sai para uso até o lote ser liberado na tela Lotes e Séries.'`
+- `estoque-atual.nota` (literal): `'Disponível = físico menos o reservado, o bloqueado, o em inspeção e o em terceiros. Em lote impedido = o que está em lote bloqueado, reprovado ou vencido, fora o que já é contado como bloqueado, em terceiros ou em inspeção: não é descontado do Disponível, mas não sai para uso até o lote ser liberado na tela Lotes e Séries.'`
 - `saldos-comprometidos.colunas`: `… { disponivel, 'Disponível' }, { lote_impedido, 'Em lote impedido' }` (última).
-- `saldos-comprometidos.nota` (literal): `'Materiais ativos com saldo reservado, bloqueado, em inspeção, em terceiros ou em lote impedido. Disponível = físico menos essas quatro retenções. Em lote impedido = o que está em lote bloqueado, reprovado ou vencido, fora o que já aparece em Bloqueado: continua contado no Disponível, mas não sai para uso até o lote ser liberado na tela Lotes e Séries. Material inativado com retenção não aparece aqui (mesma régua de "Materiais bloqueados").'`
+- `saldos-comprometidos.nota` (literal): `'Materiais ativos com saldo reservado, bloqueado, em inspeção, em terceiros ou em lote impedido. Disponível = físico menos essas quatro retenções. Em lote impedido = o que está em lote bloqueado, reprovado ou vencido, fora o que já aparece em Bloqueado, Em terceiros ou Em inspeção: não é descontado do Disponível, mas não sai para uso até o lote ser liberado na tela Lotes e Séries. Material inativado não aparece aqui (como em "Materiais bloqueados").'`
 
 **Tela:** nenhuma mudança de código — a tabela e a nota seguem o registro.
 
 ## Fase 2 — revisão do plano (1 revisor fresco)
 
-*(a preencher)*
+Rodou junto com a escrita do teste da T1. **1 importante, aceito:** (I1) as duas notas diziam "fora o que já é bloqueado", mas a régua tira
+também o em terceiros e a inspeção sem recebimento (`loteImpedido.js:64-69`) — com terceiros 2 sem lote, o relatório mostraria 4 e a nota
+faria esperar 6 → as notas citam *Bloqueado, Em terceiros ou Em inspeção*; RN-225.06 (b). **3 menores, aceitos:** (M1) "continua contado no
+Disponível" é falso com reservado (o impedido não desconta o reservado: *Disponível* 2, impedido 6) → "não é descontado do Disponível";
+RN-225.06 (c) e C531; (M2) a RN-225.06 não dizia como a bloqueada nasce (gravada direto = sem lote conhecido → 4; quarentena num lote bom → 6)
+→ dito na RN e no C531; (M4) a nota dizia "mesma régua de Materiais bloqueados", mas os dois filtros agora divergem de propósito (o
+comprometido lista material só com lote impedido, o *Materiais bloqueados* não) → "Material inativado não aparece aqui (como em …)".
+**Já atendido:** (M3) o `ORDER BY` está na consulta de fora. **Confirmado:** nenhum teste existente quebra (os de paridade leem o registro;
+as cópias do cliente têm as próprias colunas); a tela formata 2.5 como "2,5" (`RelatoriosAlmoxarifado.js:94`); o export projeta pelo registro.
 
 ## Tasks (sort topológico)
 

@@ -10,13 +10,17 @@ const { consumoJanelaSql, consumoJanelaParams } = require('./consumoSql');
 const { TIPOS_SAIDA, TIPOS_DEVOLUCAO } = require('./movementTypes');
 const { residualSemLote } = require('./lotService');
 const { QTD_DO_ITEM_SQL } = require('./receiptNotificationService');
+const { loteImpedidoSql } = require('./loteImpedido'); // Etapa 225 (B1488)
 
 async function relatorioEstoqueAtual(db) {
   // Etapa 8, Task 1 (classe A): relatorio de posicao do estoque PROPRIO. valor_total somando
   // material de cliente contabilizaria patrimonio de terceiro como nosso. A posicao POR CLIENTE
   // tem tela e rota proprias (clienteEstoqueService, Task 8).
+  // Etapa 225 (B1488, RN-225.01): `lote_impedido` e o numero do extrato e das listas (loteImpedidoSql, a regua da aprovacao) — o que
+  // esta em lote bloqueado, reprovado ou vencido, fora o ja retido. O `disponivel` NAO muda (B1476).
   return dbAll(db, `SELECT m.*,
     ${disponivelSql('m')} as disponivel,
+    ${loteImpedidoSql('m')} as lote_impedido,
     ${valorEstoqueSql('m')} as valor_total
     FROM materiais_almoxarifado m
     WHERE m.ativo = 1 AND m.proprietario_cliente_id IS NULL
@@ -118,13 +122,18 @@ async function relatorioSeriesEmEstoque(db) {
  */
 async function relatorioSaldosComprometidos(db) {
   const retidas = COLUNAS_RETENCAO.map((c) => `COALESCE(m.${c},0) as ${c}`).join(', ');
-  const algumaRetida = COLUNAS_RETENCAO.map((c) => `COALESCE(m.${c},0) > 0`).join(' OR ');
-  return dbAll(db, `SELECT m.codigo as material_codigo, m.nome as material_nome, ${CLIENTE_SQL} as cliente,
-      m.quantidade_atual as fisico, ${retidas}, ${disponivelSql('m')} as disponivel
-    FROM materiais_almoxarifado m
-    LEFT JOIN clientes cl ON cl.id = m.proprietario_cliente_id
-    WHERE m.ativo = 1 AND (${algumaRetida})
-    ORDER BY m.nome`);
+  // Etapa 225 (B1489, RN-225.03): entra tambem o material so com lote impedido — o relatorio e o "o que nao esta livre". A consulta e
+  // envolvida para a regua (loteImpedidoSql) rodar uma vez por material, nao no SELECT e de novo no WHERE.
+  const algumaRetida = COLUNAS_RETENCAO.map((c) => `x.${c} > 0`).join(' OR ');
+  return dbAll(db, `SELECT x.material_codigo, x.material_nome, x.cliente, x.fisico,
+      ${COLUNAS_RETENCAO.map((c) => `x.${c}`).join(', ')}, x.disponivel, x.lote_impedido
+    FROM (SELECT m.codigo as material_codigo, m.nome as material_nome, ${CLIENTE_SQL} as cliente,
+        m.quantidade_atual as fisico, ${retidas}, ${disponivelSql('m')} as disponivel, ${loteImpedidoSql('m')} as lote_impedido
+      FROM materiais_almoxarifado m
+      LEFT JOIN clientes cl ON cl.id = m.proprietario_cliente_id
+      WHERE m.ativo = 1) x
+    WHERE (${algumaRetida} OR x.lote_impedido > 0)
+    ORDER BY x.material_nome`);
 }
 
 async function relatorioAbaixoMinimo(db) {
