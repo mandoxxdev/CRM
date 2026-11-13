@@ -319,6 +319,8 @@ describe('TabFamilias — revisão da Etapa 37 (F3): subfamília cujo pai não e
     });
     await renderAbaFamilias();
     const bloco = container.querySelector('.almox-familia-orfas');
+    // Etapa 211 (Fase 5): no Compras (que grava) o aviso da orfa nao manda para outra tela.
+    expect(bloco.textContent).toContain('Reative a família ou inative a subfamília.');
     expect(bloco).not.toBeNull();
     expect(bloco.textContent).toMatch(/Subfamílias sem família ativa \(1\)/);
     expect(bloco.textContent).toMatch(/RAO-SUB/);

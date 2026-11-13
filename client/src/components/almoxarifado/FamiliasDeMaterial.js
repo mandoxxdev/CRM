@@ -375,7 +375,8 @@ const FamiliasDeMaterial = ({ rotas, podeGravar = false, aviso = null, linkDoIte
                 <FiAlertTriangle size={16} color="#f9a825" /> Subfamílias sem família ativa ({orfas.length})
               </div>
               <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', marginBottom: 8 }}>
-                A família destas subfamílias está inativa. Reative a família ou inative a subfamília.
+                {/* Etapa 211 (Fase 5): na aba que so consulta, o aviso diz ONDE se reativa (o Almoxarifado nao tem o botao). */}
+                A família destas subfamílias está inativa. Reative a família ou inative a subfamília{podeGravar ? '' : ' em Compras → Famílias'}.
               </div>
               {orfas.map(sub => (
                 <div key={sub.id} className="almox-subfamilia-row" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '4px 0' }}>

@@ -72,13 +72,15 @@ async function abrir() {
     root.render(
       <AuthProvider>
         <Sonda />
-        <MemoryRouter initialEntries={['/almoxarifado/configuracoes?tab=familias']}><ConfiguracoesAlmoxarifado /></MemoryRouter>
+        <MemoryRouter initialEntries={['/almoxarifado/configuracoes?tab=setores']}><ConfiguracoesAlmoxarifado /></MemoryRouter>
       </AuthProvider>
     );
   });
   for (let i = 0; i < 4; i += 1) await act(async () => { await Promise.resolve(); });
 }
-const novaFamilia = () => [...container.querySelectorAll('button')].filter((b) => /Nova Família/.test(b.textContent));
+// Etapa 211 (RN-211.03): a aba Familias so consulta para TODOS (o cadastro e do Compras) e nao mostra mais o perfil; a sonda usa a
+// aba Setores e areas (configuracao fisica, fica no Almoxarifado e decide pelo perfil). O nome `novaFamilia` ficou pela leitura.
+const novaFamilia = () => [...container.querySelectorAll('button')].filter((b) => /Novo Setor ou Área/.test(b.textContent));
 const assentar = async () => { for (let i = 0; i < 4; i += 1) await act(async () => { await Promise.resolve(); }); };
 
 describe('D (127) r2 (Etapa 128) — o perfil retirado nao volta quando o cache de permissoes vence', () => {
@@ -112,7 +114,7 @@ describe('D (127) r2 (Etapa 128) — o perfil retirado nao volta quando o cache 
     localStorage.setItem('token', 't');
     localStorage.setItem('user', JSON.stringify(payload({ perfil_almoxarifado: null })));
     await act(async () => {
-      root.render(<AuthProvider><Sonda /><MemoryRouter initialEntries={['/almoxarifado/configuracoes?tab=familias']}><ConfiguracoesAlmoxarifado /></MemoryRouter></AuthProvider>);
+      root.render(<AuthProvider><Sonda /><MemoryRouter initialEntries={['/almoxarifado/configuracoes?tab=setores']}><ConfiguracoesAlmoxarifado /></MemoryRouter></AuthProvider>);
     });
     await assentar();
     expect(container.textContent).toContain(RESTRITO); // metade positiva: sem perfil

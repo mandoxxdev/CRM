@@ -152,6 +152,23 @@ const ADMIN_MODULO_ALMOX = { id: 7, nome: 'Adm Modulo Almox', role: 'usuario', a
     assert.strictEqual(nao.status, 403, 'a leitura da tela do cadastro e de quem cadastra (porta leitura)');
   });
 
+  // Fase 5 (achado 4): o harness libera a camada do modulo; aqui ela confere `user.modulos`, como o G1 da 192. As portas de familia do
+  // Compras exigem o modulo COMPRAS — o admin do Compras sem o modulo nao grava nem le.
+  await test('[RN-211.01, Fase 5] as portas de familia do Compras exigem o modulo Compras (camada 1)', async () => {
+    const checkModulo = (modulo) => (req, res, next) => (((req.user && req.user.modulos) || []).includes(modulo)
+      ? next() : res.status(403).json({ error: 'MODULO', modulo }));
+    const h = await createTestApp({ user: { ...ADMIN_COMPRAS, modulos: ['almoxarifado'] }, checkModulePermission: checkModulo });
+    try {
+      let r = await request(h.app).post('/api/compras/materiais/familias').send({ nome: 'Sem Modulo', codigo: 'SMD' });
+      assert.deepStrictEqual([r.status, r.body.modulo], [403, 'compras'], JSON.stringify(r.body));
+      r = await request(h.app).get('/api/compras/materiais/aux/familias');
+      assert.deepStrictEqual([r.status, r.body.modulo], [403, 'compras'], JSON.stringify(r.body));
+      h.setUser({ ...ADMIN_COMPRAS, modulos: ['compras'] });
+      r = await request(h.app).post('/api/compras/materiais/familias').send({ nome: 'Com Modulo', codigo: 'CMD' });
+      assert.strictEqual(r.status, 201, JSON.stringify(r.body)); // metade positiva: com o modulo, grava
+    } finally { await h.close(); }
+  });
+
   await close();
   console.log(`\n${passed} passaram, ${failed} falharam`);
   process.exit(failed ? 1 : 0);

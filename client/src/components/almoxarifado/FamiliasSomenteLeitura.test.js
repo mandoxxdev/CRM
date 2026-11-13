@@ -91,6 +91,8 @@ describe('C259 (Etapa 125) — RN-16/RN-17: a aba Famílias', () => {
     await renderAba(ADMIN_SISTEMA);
     // metade positiva: a árvore está lá (ativas, inativas, a órfã)
     for (const nome of ['Rolamentos', 'Esferas', 'Vedações', 'Agulhas', 'Planas']) expect(container.textContent).toContain(nome);
+    // Etapa 211 (Fase 5): o aviso da orfa diz onde reativar (aqui nao ha o botao).
+    expect(container.querySelector('.almox-familia-orfas').textContent).toContain('Reative a família ou inative a subfamília em Compras → Famílias.');
     expect(container.textContent).toContain(FRASE);
     expect(porTexto('button', /Nova Família/)).toHaveLength(0);
     expect(porTexto('button', /Nova subfamília/)).toHaveLength(0);
