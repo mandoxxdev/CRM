@@ -102,7 +102,7 @@ const MSG_5 = (nome) => `${nome}: não é possível separar 5 un. Máximo: 4 (pe
   };
 
   // ── pela ROTA ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  await test('[T3 rota] Entrada -> bloquear L2 -> requisicao 10 -> aprovar 4 -> fila 4 -> detalhe 4 -> separar 5 (400) / 4 -> entregar 4 de L1 -> L2 ATIVO -> R2 reserva 6', async () => {
+  await test('[T3 rota] Entrada -> bloquear L2 -> requisicao 10 -> aprovar 4 -> fila 4 -> detalhe 4 -> separar 5 (400) / 4 -> entregar 4 de L1 -> L2 ATIVO -> R reserva os 6 que esperava (Etapa 220), R2 espera', async () => {
     const m = await montar();
     await statusRota(m, 'L2', 'BLOQUEADO');
     const { R, item } = await criar(m, 10);
@@ -122,9 +122,12 @@ const MSG_5 = (nome) => `${nome}: não é possível separar 5 un. Máximo: 4 (pe
     assert.deepStrictEqual(await livro(R, m), [['SAIDA', 'L1', 4]], 'saiu de L1 (o automatico da 197 nao toca L2)');
     assert.deepStrictEqual(await linhas(m), ['L2=6']);
     await statusRota(m, 'L2', 'ATIVO');
+    // Etapa 220 (C480): liberar L2 reserva os 6 para R, que ainda esperava 6 (ate a 219 nada era reservado e a R2 aprovada depois levava
+    // os 6). A R2 agora espera: o liberado ja e de quem esperava.
+    assert.deepStrictEqual((await reservas(R)).slice(-1), [[6, 'ATIVA']], 'liberar L2 nao reservou para R, que esperava');
     const r2 = await criar(m, 6);
-    assert.strictEqual((await ok(como('ADMIN').put(`${API}/requisicoes/${r2.R}/aprovar`, {}))).body.status, 'TOTALMENTE_RESERVADA');
-    assert.deepStrictEqual(await reservas(r2.R), [[6, 'ATIVA']]);
+    assert.ok(['AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA'].includes((await ok(como('ADMIN').put(`${API}/requisicoes/${r2.R}/aprovar`, {}))).body.status));
+    assert.deepStrictEqual(await reservas(r2.R), []);
   });
 
   // ── pelo SERVICO ───────────────────────────────────────────────────────────────────────────────────────────────────────────────

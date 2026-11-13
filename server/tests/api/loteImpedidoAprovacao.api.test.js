@@ -145,12 +145,16 @@ process.on('exit', (code) => {
   });
 
   // ── RN-205.05: vencido; liberado volta a contar ────────────────────────────────────────────────────────────────────────────────
-  await test('[RN-205.05] so L1 ATIVO 5 vencido ontem -> aprovacao de 5 sem reserva, AGUARDANDO_ESTOQUE; liberado o vencimento, R2 de 5 reserva 5', async () => {
+  await test('[RN-205.05] so L1 ATIVO 5 vencido ontem -> aprovacao de 5 sem reserva, AGUARDANDO_ESTOQUE; liberado o vencimento, R1 reserva 5 (Etapa 220) e R2 de 5 reserva 5 de uma entrada nova no mesmo lote', async () => {
     const m = await material(); await entrar(m, 5, 'L1'); await validade(m, 'L1', dia(-1));
     const R1 = (await criar(m, 5)).id;
     assert.strictEqual((await aprovar(R1)).body.status, 'AGUARDANDO_ESTOQUE');
     assert.deepStrictEqual(await reservas(R1), []);
     await ok(como('ADMIN').put(`${API}/lotes/${await loteId(m, 'L1')}/liberar-vencimento`, { justificativa: 'teste 205' }));
+    // Etapa 220 (C480): a liberacao do vencimento reserva os 5 para R1, que esperava (ate a 219 ficava esperando e R2 levava). Para
+    // continuar provando a RN-205.05 (o vencido LIBERADO conta na aprovacao), entram mais 5 no mesmo L1 e R2 aprova sobre eles.
+    assert.deepStrictEqual(await reservas(R1), [[5, 'ATIVA']]);
+    await entrar(m, 5, 'L1');
     const R2 = (await criar(m, 5)).id;
     assert.strictEqual((await aprovar(R2)).body.status, 'TOTALMENTE_RESERVADA');
     assert.deepStrictEqual(await reservas(R2), [[5, 'ATIVA']]);
