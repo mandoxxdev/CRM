@@ -215,3 +215,57 @@ Literal da recusa do lote (contrato, não muda): `mensagemLoteNaoComportaEstorno
   cai no desconto (falha "fechada" para a OS — a requisição da OS pode perder a reserva se a leitura falhar); nenhum teste injeta a falha.
   Mutações equivalentes com quantidades inteiras (sem EPS, guarda trocada) não contam.
 - Placar: 19 cenários; 13 sabotagens, todas caem.
+
+## Divergências do plano
+
+- **B1505 mudou na Fase 5:** o plano dizia "sem teto no estornado"; o código final solta `qtd − max(0, livre)` mais o déficit que os outros
+  lotes impedidos **desta nota** explicam. A régua do plano soltava a reserva de R1 para cobrir a de outra requisição (RN-228.13).
+- **B1508 nasceu na Fase 2** (nota com OS); **RN-228.11 a .17** não existiam no plano.
+- **A RN-228.09** dizia "4"; são 5 (L1 tem 1 manual + 4 da nota) — o teste já dizia 5.
+- **Tela:** nenhuma mudança de código — o motivo da reserva *Liberada* já era mostrado em **Reservas** (`ReservasAlmoxarifado.js:472`).
+
+## Fechamento
+
+- [x] Fase 5 — 2 revisores; **1 achado de regra** reproduzido e corrigido (o déficit de outra requisição, B1505 revista), **4 lacunas de
+  teste** reproduzidas e cobertas (RN-228.14 a .17), 1 declarada (a falha ao ler a OS) — `ad91ae20`.
+- [x] Fechamento (`fechar-etapa`, sem o Passo 7½ e o 8, por pedido do André) — novidades (B1504–B1508, C534, D (228), F (228), seção, topo e
+  "onde estamos"; o C521 marcado resolvido e a D (219) apontando para a 228), spec 07 (topo e seção 228), mapa (linha 07 e última
+  atualização), guia (seção e cabeçalho), manual (o estorno da entrada que reservou, 6.10) e a estimativa.
+
+## Retro
+
+- Rodadas de correção até verde: 1 (a Fase 5 de regra).
+- Achados: Fase 2 — 2 importantes reais (OS, montagem dos cenários), 4 menores; Fase 5 — 1 de regra real, 4 lacunas reais, 0 ruído.
+- Paralelismo: sem galhos; a Fase 2 rodou junto com a escrita do teste; os 2 revisores da Fase 5 em paralelo (o de testes numa worktree
+  própria no scratchpad, com junction). A 1ª rodada do `test:api` correu junto com a sabotagem e foi descartada e refeita (ver Verificação).
+- Defeito que escapou da 227: nenhum achado.
+
+## Próxima tarefa detalhada
+
+*(Escolhida pela ordem do CLAUDE.md: a 228 fecha o C521; o mapa continua com a 07 🟢. Dos abertos do mesmo assunto (lote impedido nas portas
+que distribuem), o mais barato e de maior valor é o vizinho que a 219 deixou de fora — **C519**. **Sem estimativa** — começa pela Fase 0.5.)*
+
+**A inspeção e a não conformidade olham o lote do item que liberaram (C519).**
+
+- **O problema (C519, B1458 da 219):** a inspeção aprova peças de um lote que **continua** bloqueado (certificado não anexado), e o material
+  tem saldo livre de outra entrada (um ajuste, uma devolução): a liberação distribui esse saldo para quem espera no lugar do que foi liberado
+  — o que a nota já não faz desde a 219 (B1454: a nota não distribui o que pôs em lote impedido; D4 da 74: a porta só distribui o que ela
+  trouxe).
+- **Onde:** `reservaChegadaService.reservarLiberacaoParaQuemEspera` (`reservaChegadaService.js:591`): `teto = min(quantidade, disponivel)`
+  (`:603`), e o miolo desconta o impedido do material (B1453), mas não sabe o lote do item liberado. Quem chama: `inspectionService.js:441`
+  (`ctx`: `material_id`, `quantidade`, `recebimento_id` — **sem** o item nem o lote; o item está em `item`, com `item.lote_id`) e
+  `nonConformityService.js:1010` (a NC sabe o recebimento e a inspeção; o lote vem do item da inspeção). A OS encerrada
+  (`osEncerradaService.js:92`) não tem lote (fila geral). Tudo **sob a trava do material** (`sobTrava`, Etapa 91).
+- **O que fazer:** o `ctx` ganhar `lote_id` (o do item do recebimento) e, com o lote impedido **agora** (lido dentro da seção,
+  `predicadoLoteImpedidoSql`, só com `controle_lote = 1`), o teto ser 0 — molde do `livreForaDeLoteImpedido` da 219. Sem lote no `ctx`: como
+  hoje. A OS aberta (`distribuirParaOs`) fica como está (B1455).
+- **Pontos de atenção:** o aviso de liberação (`avisarLiberacao`, B1457 c) já usa o liberado do material; conferir se ele promete o que não
+  sai quando o teto zera. Testes de molde: `chegadaLoteImpedido.api.test.js` RN-219.04 (inspeção) e `ncReservaLiberacao*`.
+- Outros abertos: C520, C522, C524–C527, C529–C534, C514–C518, C486, C491, C495, C497, C498.
+
+## Verificação (medida, serial, sobre `ad91ae20` + os documentos)
+
+- `test:api` **622/622 arquivos OK** (a 1ª rodada correu junto com as sabotagens da Fase 5 — o arquivo de produção mudava durante a suíte —,
+  foi interrompida e descartada); `test:almoxarifado` **44/0**; `test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0**.
+- Tela: `react-scripts test --maxWorkers=2` **225/225 suítes, 3060/3060 testes**; `react-scripts build` (CI=true) **Compiled successfully**.
+- `estornoLoteImpedido.api.test.js` **19/19**; 13 sabotagens, todas caem (md5 restaurado).

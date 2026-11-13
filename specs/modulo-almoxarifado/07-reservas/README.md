@@ -1,5 +1,7 @@
 # 07 — Reservas de Estoque
 
+> **+ Etapa 228 (2026-11-13, `ad7c1d7c`, Fase 5 `ad91ae20`): o estorno da entrada boa não deixa a reserva coberta só por lote impedido (C521, B1504–B1508)** — `liberarParaEstorno` compara com `disponível − loteImpedidoSql` (a régua de hoje quando o lote da própria entrada está impedido ou a nota tem OS); além do estornado, só o déficit dos outros lotes impedidos da mesma nota. Ver a seção "Etapa 228", no fim. Continua 🟢.
+
 > **+ Etapa 221 (2026-11-13, `156adb41`, tela `e386d335`, Fase 5 `8395f440`): a reserva manual não conta o lote impedido (C479, B1469–B1474)** — o `hold` da reserva manual compara com `livre de caixa − loteImpedidoSql`; a recusa diz o que o lote cortou; as reservas do sistema não mudam. Ver a seção "Etapa 221", no fim. Continua 🟢.
 
 > **+ Etapa 220 (2026-11-13, `7a428526`, tela `a04b43e8`, Fase 5 `6c80f908`): liberar o lote reserva para quem esperava (C480) e quem muda o status do lote pega a trava do material (C523), B1461–B1468** — certificado, status → ATIVO, liberar vencimento e corrigir validade reservam o livre do lote para a fila. Ver a seção "Etapa 220", no fim. O status não muda.
@@ -692,7 +694,7 @@ que as portas já seguram).
 - [x] **RN-219.12** — material sem controle de lote: como antes — `2ec31628`.
 - [x] **RN-219.13 / .14 (Fase 5, B1460)** — lote vencido (com e sem a liberação do vencimento); a reserva da OS sobre o bloqueado conta como
   na aprovação (**C522**) — `a6323899`.
-- [ ] **Fora (declarado):** a OS aberta (**C520**); a liberação não olha o lote do item (**C519**); o estorno da entrada boa (**C521**, anterior);
+- [ ] **Fora (declarado):** a OS aberta (**C520**); a liberação não olha o lote do item (**C519**); o estorno da entrada boa (**C521**, anterior — *resolvido na Etapa 228*, `ad7c1d7c`);
   liberar o lote não distribui (**C480** — *resolvido na Etapa 220*); bloquear o lote no instante de uma reserva não a impede (**C523** — *resolvido na Etapa 220*; anterior — quem muda
   o status do lote não pega a trava do material). Antes do deploy: **A116**.
 
@@ -748,3 +750,25 @@ do material, Etapa 97; os escritores do status do lote também, B1461).
   a caixa separada de lote impedido antes da 205 desconta duas vezes (**D (221)**).
 
 Testes: `reservaManualLoteImpedido.api.test.js` (20); `ReservasAlmoxarifado.test.js` (+2). Continua 🟢.
+
+## Etapa 228 — o estorno da entrada boa não deixa a reserva coberta só por lote impedido (2026-11-13)
+
+Plano: `docs/superpowers/plans/2026-11-13-almoxarifado-etapa228-estorno-lote-impedido.md` (`297c5bc5`, Fase 2 no `ad7c1d7c`). Resolve o
+**C521**, que esta spec listava como "Fora" na seção da Etapa 219. Nenhuma coluna nova, nenhuma trava nova (soltar sem distribuir continua
+fora da trava, B441).
+
+- [x] **RN-228.01 / .02 / .05 (B1504)** — `liberarParaEstorno` solta até o `disponível − loteImpedidoSql` cobrir o estornado (só o que falta;
+  vencido sem liberação conta, com liberação não) — `ad7c1d7c`.
+- [x] **RN-228.03 / .06** — o resto em lote bom e o material sem controle de lote: como antes — `ad7c1d7c`.
+- [x] **RN-228.04 / .15** — a entrada do próprio lote bloqueado ou vencido: a régua de antes (sem descontar duas vezes) — `ad7c1d7c`, `ad91ae20`.
+- [x] **RN-228.07 / .13 (B1505, revista na Fase 5)** — sem teto no estornado só para o déficit dos outros lotes impedidos da mesma nota; o de
+  outra requisição não é pago pela nota — `ad7c1d7c`, `ad91ae20`.
+- [x] **RN-228.08 / .09** — o estorno que falha recria; liberar o lote depois atende de novo (Etapa 220) — `ad7c1d7c`.
+- [x] **RN-228.11 / .16 (B1508)** — nota com OS (da nota ou do pedido): a régua de antes — `ad7c1d7c`, `ad91ae20`.
+- [x] **RN-228.12** — entrada sem lote (legada) conta como lote que sai — `ad7c1d7c`.
+- [x] **RN-228.14 / .17 (Fase 5)** — o portão do motor continua o disponível; a ordem da liberação — `ad91ae20`.
+- [x] **B1507** — o motivo da liberação diz quando o lote impedido pesou (a tela **Reservas** já mostra o motivo) — `ad7c1d7c`.
+- [ ] **Fora (declarado):** o lote mudando no instante do estorno (**C534**); a conta com quarentena dentro do lote ou bloqueado sem lote
+  conhecido (**D (228)**); a reserva da aprovação sobre lote bloqueado depois (**C522**, anterior); a falha ao ler a OS (sem teste).
+
+Testes: `estornoLoteImpedido.api.test.js` (19). Continua 🟢.

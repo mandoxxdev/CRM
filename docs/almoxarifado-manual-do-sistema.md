@@ -2200,10 +2200,20 @@ Inspeção decidida só com aprovado não impede o estorno.
 
 **Estornar a entrada de uma nota que reservou material para requisições (9.3b, 9.3c).** Vale igual para as reservas
 que a **inspeção** ou a **não conformidade** daquela nota criaram ao liberar o material (elas levam a marca da nota).
-Se o disponível não cobre o estorno porque aquela nota reservou o que trouxe para quem esperava, o estorno **solta**
-dessas reservas só o que falta — da
+Se o que **pode sair** do material não cobre o estorno porque aquela nota reservou o que trouxe para quem esperava, o
+estorno **solta** dessas reservas só o que falta — da
 **última** requisição na ordem da fila para a primeira, e só de requisições que ainda **esperam sem nada separado** — e
 a requisição que perdeu a reserva volta ao status de espera (normalmente *Aguard. Compra*, já que o pedido reabre).
+"Pode sair" é o disponível **menos** as peças em lote bloqueado, reprovado ou vencido sem a liberação do vencimento (a
+mesma conta da aprovação; em material sem controle por lote, o disponível inteiro). Exemplo: a nota trouxe 3 peças no
+lote *L2* (reservadas para a requisição) e 4 no lote *L1*, bloqueado; estornar a entrada do *L2* solta a reserva de 3,
+porque depois dele nada do material pode sair — a requisição volta a esperar. Três exceções usam o disponível inteiro:
+(1) quando a entrada estornada é **do próprio lote** bloqueado, reprovado ou vencido (aquelas peças já não contavam);
+(2) quando a nota é de uma **OS** (do pedido ou da própria nota) — a requisição da OS fica com a reserva; (3) o material
+sem controle por lote. A nota solta, além da quantidade estornada, só o que os **outros lotes dela mesma** que ficaram
+bloqueados explicam: o lote de outra nota, bloqueado ou vencido depois, não tira reserva desta. Quando o lote impedido
+pesou na conta, o motivo da reserva solta, na tela **Reservas**, é *"Estorno da entrada do recebimento ⟨REC⟩ — o que
+sobra do material está em lote bloqueado, reprovado ou vencido"*; senão, *"Estorno da entrada do recebimento ⟨REC⟩"*.
 Reservas feitas na aprovação ou à mão **nunca** são soltas pelo estorno. Se nem assim cobre (alguém já separou ou
 entregou), o estorno é recusado com a mensagem do material reservado (acima) e nada é solto. Se o estorno for recusado
 **depois** de soltar (por exemplo, pela conferência do lote — *"Não é possível estornar: o lote ⟨L⟩ tem ⟨q⟩ ⟨un⟩ nesta

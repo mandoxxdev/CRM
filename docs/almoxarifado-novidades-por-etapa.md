@@ -11,11 +11,16 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-13):** **Etapa 227 fechada** (**o *Saldo por lote* diz quando o lote está vencido, e a Fila diz o que
+> **Onde o desenvolvimento está (2026-11-13):** **Etapa 228 fechada** (**estornar a entrada boa não deixa a requisição presa a lote bloqueado** —
+> o estorno da entrada de uma nota passa a contar só o que pode sair: a reserva que ficaria coberta só por lote bloqueado, reprovado ou
+> vencido é solta, e a tela **Reservas** diz por quê no motivo. **C521** resolvido; sem consulta antes do deploy; decisões **B1504** a
+> **B1508**; aviso **C534**; limitação **D (228)**; verificação **F (228)**).
+> **Próxima:** **a inspeção e a não conformidade olham o lote do item que liberaram** (**C519**) — detalhada no fim do plano da 228.
+> *(Antes, 2026-11-13:)* **Etapa 227 fechada** (**o *Saldo por lote* diz quando o lote está vencido, e a Fila diz o que
 > está em lote impedido** — o relatório *Saldo por lote* ganha a coluna *Situação* (*Vencido em 10/11/2026*, *Bloqueado*, *Reprovado* — as
 > palavras do extrato), na tela e na planilha; a **Fila de separação** diz *"disponível 10 · 6 em lote impedido"*. **D (225)** e **D (223)**
 > resolvidas; sem consulta antes do deploy; decisões **B1498** a **B1503**; aviso **C533**; limitação **D (227)**; verificação **F (227)**).
-> **Próxima:** **estornar a entrada boa não deixa a reserva coberta só por lote impedido** (**C521**) — detalhada no fim do plano da 227.
+> **Próxima:** **estornar a entrada boa não deixa a reserva coberta só por lote impedido** (**C521**) — feita na **Etapa 228**.
 > *(Antes, 2026-11-13:)* **Etapa 226 fechada** (**o "Sai de" da separação e da entrega diz qual lote está impedido**
 > — a opção do lote bloqueado, reprovado ou vencido diz *"— Bloqueado: não sai"* (as palavras do extrato), vem desabilitada (na entrega, menos
 > a origem da separação do item), a separação não abre mais num lote impedido e uma frase em amarelo avisa quando a escolhida ou a origem da
@@ -4670,7 +4675,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -14927,6 +14932,42 @@ toda coluna declarada de um relatório viesse da consulta ao banco; a *Situaçã
 explícita, com duas provas próprias: não pode vir da consulta (a lista não apodrece) e tem de estar em toda linha. Descartado: fingir a
 coluna na consulta (um campo vazio só para passar). Sem banco, trava, rota nova ou perfil. **Reversível.**
 
+**B1504 (NOVA, da Etapa 228; decisão do agente) — o estorno da entrada conta o que pode sair.** Ao estornar a entrada de uma nota que
+reservou para quem esperava, o estorno conferia se o *disponível* do material cobria o que saía — com o saldo de lote bloqueado, reprovado ou
+vencido dentro. Agora a conta é o disponível **menos** o saldo de lote impedido (a régua da aprovação desde a Etapa 205), e o que faltar é
+solto das reservas daquela nota, da última requisição da fila para a primeira, só de quem espera sem nada separado (como antes). Quando a
+entrada estornada é **do próprio lote impedido**, a conta é a de antes: aquelas peças já não contavam como "pode sair", e descontá-las de novo
+soltaria a reserva coberta pelo lote bom. Descartado: descontar sempre (soltaria de mais); refazer a conta do impedido "depois do estorno"
+(duplicaria a régua para o mesmo resultado no caso comum). **Reversível.**
+
+**B1505 (NOVA, da Etapa 228; decisão do agente, revista na revisão do código) — além do estornado, só o que a própria nota explica.** Se
+outro lote **da mesma nota** foi bloqueado depois da chegada, o estorno solta também a reserva que só ele cobriria (nota com 3 em *L2* e 3 em
+*L3*, as 6 para *R1*, *L3* bloqueado: estornar o *L2* solta as 6). Mas um déficit que **outra** requisição deixou (a reserva *R0*, de outra
+nota, sobre um lote que venceu ou foi bloqueado depois) não é pago pela nota de *R1*: o estorno solta no máximo o estornado. A 1ª versão não
+tinha limite e soltava as 6 de *R1* nesse caso — as 3 do *L3*, que podem sair, iam cobrir *R0*. Dentro do estornado vale a régua da
+**B1456** (a reserva antiga conta primeiro sobre o lote bom): com só o *L2* na nota de *R1* e 3 livres de entrada manual, estornar o *L2* solta
+as 3 de *R1*. Descartado: limitar sempre ao estornado (deixaria *R1* reservada sobre o *L3* bloqueado da própria nota); não limitar (a nota
+pagava o lote dos outros). **Reversível.**
+
+**B1506 (NOVA, da Etapa 228; decisão do agente) — fora da trava, como antes.** Soltar reserva sem distribuir não pega a trava do material
+(**B441**); a conta nova é lida no mesmo lugar, antes do estorno pegar a seção dele. Um lote bloqueado ou liberado no exato instante pode
+fazer o estorno soltar de menos (a requisição fica como antes, até alguém liberar à mão) ou de mais (ela volta a esperar e a liberação do lote
+ou a próxima nota a atende). Nenhum erro de estoque. Descartado: pegar a trava aqui (a trava não é reentrante e o estorno a pega depois).
+**C534.** **Reversível.**
+
+**B1507 (NOVA, da Etapa 228; decisão do agente) — o motivo da liberação diz por quê.** Quando o lote impedido pesou (o estorno soltou mais do
+que a conta de antes soltaria), a reserva solta leva o motivo *"Estorno da entrada do recebimento ⟨REC⟩ — o que sobra do material está em
+lote bloqueado, reprovado ou vencido"*, que a tela **Reservas** mostra na reserva *Liberada*. Sem o lote impedido, o motivo de antes. O motivo
+é **por estorno**: quando o lote pesou, até a parte que a conta de antes também soltaria leva o texto novo. A reserva solta **em parte** fica
+*Ativa* e a tela não mostra o motivo dela. Descartado: frase nova na resposta do estorno (as chaves da resposta são contrato, testadas).
+**Reversível.**
+
+**B1508 (NOVA, da Etapa 228, revisão do plano; decisão do agente) — nota com OS: a conta de antes.** Na nota com OS (do pedido ou da própria
+nota, aberta ou já fechada), a fila da OS reserva **sem** o desconto do lote, de propósito (**B1455**), e a reserva da OS já é solta primeiro
+pelo estorno (*mín(reserva, estornado)*). Com o desconto, o estorno tiraria a reserva da requisição da OS e deixaria a reserva genérica da
+OS no lote bloqueado. Se a leitura da OS falhar, a conta nova vale (não há teste dessa falha). Descartado: descontar também na OS; olhar só a
+OS **aberta** (a OS fechada depois da chegada faria a requisição da OS perder a reserva). **Reversível.**
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -19074,6 +19115,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      bloqueado.** Nota com 3 num lote bom (reservadas para R1) e 4 num lote bloqueado: estornar a entrada boa não solta a reserva (o
      disponível de 4 cobre o estorno) e R1 fica *Parcialmente Reservada* com nada que saia; a entrega recusa (Etapa 206). **O que fazer:**
      liberar a reserva à mão, ou anexar o certificado do lote. Conserto: o estorno olhar o que pode sair (pequeno, motor).
+     *(**Resolvido na Etapa 228** — `ad7c1d7c`, Fase 5 `ad91ae20` (**B1504** a **B1508**): o estorno conta o disponível menos o lote
+     impedido e solta a reserva que só ele cobriria; o motivo da liberação diz por quê.)*
 522. **NOVO (da Etapa 219, Fase 5; decisão B1460) — a reserva da OS sobre um lote bloqueado segura também a nota boa seguinte.** A nota de
      OS aberta guarda na reserva da OS peças de um lote bloqueado; a nota comum seguinte, num lote bom, não reserva para a requisição comum
      que esperava (antes reservava) — e a aprovação de uma requisição nova também espera. **Nenhum erro de estoque.** **O que fazer:**
@@ -19133,6 +19176,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 533. **NOVO (da Etapa 227; decisões B1498 e B1500) — no *Saldo por lote*, o lote vencido com o vencimento liberado fica com a *Situação*
      vazia.** A *Validade* mostra a data passada, mas o lote pode sair (o vencimento foi liberado em **Lotes e Séries**); o que vence hoje
      também fica vazio. A situação é a da hora em que o relatório foi consultado. **O que fazer:** nada — vazio quer dizer "pode sair".
+534. **NOVO (da Etapa 228; decisão B1506) — o lote bloqueado ou liberado no exato instante do estorno.** O estorno da entrada lê a situação
+     dos lotes antes de soltar as reservas, sem a trava do material (como sempre soltou). Bloquear ou liberar um lote desse material no mesmo
+     instante pode fazer o estorno soltar de menos (a requisição fica reservada como antes) ou de mais (ela volta a esperar). **Nenhum erro
+     de estoque.** **O que fazer:** se a requisição ficou reservada sem nada que saia, liberar a reserva à mão em **Reservas**; se voltou a
+     esperar, a liberação do lote ou a próxima nota a atende.
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -20489,6 +20537,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(228) O estorno da entrada boa, o que ficou de fora.** (1) A conta é exata no caso comum; com peças em **quarentena** dentro do lote
+  estornado, ou peças bloqueadas sem lote conhecido, o saldo de lote impedido cai mais ou menos do que o estornado e o estorno pode soltar um
+  pouco de mais ou de menos (revisão do plano). (2) A reserva antiga feita na **aprovação** sobre um lote bloqueado depois não é solta pelo
+  estorno (só as reservas da nota — **C522**/**B1456**, anteriores). (3) O lote mudando no instante do estorno (**C534**). (4) A falha ao
+  ler a OS da nota cai na conta nova (**B1508**, sem teste).
 - **(227) O *Saldo por lote* e a Fila, o que ficou de fora.** (1) Na tela, a *Validade* sai com o ano de dois dígitos e a *Situação* com
   quatro (são as palavras do extrato). (2) O vencido com o vencimento liberado fica com a *Situação* vazia (**C533**). (3) A lista de coleta
   impressa não mostra o disponível (nada a mudar). (4) A situação e o número são os da hora da consulta.
@@ -20535,7 +20588,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   recebe no máximo o que pode sair, mas pode receber o livre de uma entrada manual no lugar do que a OS soltou). (3) Mudar o **status** do
   lote não pegava a trava do material: um bloqueio no meio da distribuição podia chegar depois da leitura — o mesmo da aprovação (**B1459**,
   **C523**).
-  (4) O estorno da entrada boa (**C521**) e a reserva da OS sobre o bloqueado (**C522**). (5) **Liberar o lote** não reservava (**C480**). *(3 e 5 resolvidos na Etapa 220.)*
+  (4) O estorno da entrada boa (**C521**) e a reserva da OS sobre o bloqueado (**C522**). (5) **Liberar o lote** não reservava (**C480**). *(3 e 5 resolvidos na Etapa 220; o estorno do 4, na Etapa 228.)*
   (6) A conta das portas não tira o separado sem reserva de outros itens, como a aprovação tira (**C173**, Etapa 95).
 - **(218) O lote escolhido à mão, o que ficou de fora.** (1) **Série** não entra (**B1445**). (2) **A sugestão da fila** não desconta
   (**C517**). (3) **A janela de separação** desconta o que esta requisição já separou do lote, mas não o que **outra peça da mesma janela**
@@ -21951,6 +22004,12 @@ Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Previ
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
 
+**(228) Nenhum clique foi dado.** A tela **não mudou** de código — o motivo novo aparece na coluna de motivo da reserva *Liberada* em
+**Reservas**, que já existia. O servidor, pela rota real do estorno, em `estornoLoteImpedido` (19 cenários): lote bom com o resto bloqueado,
+só o que falta, resto bom, o próprio lote bloqueado e vencido, vencido com e sem liberação, sem controle de lote, entrada sem lote, outro lote
+da nota bloqueado depois, o déficit de outra requisição, reserva da aprovação, nota com OS (da nota e do pedido), a ordem com duas
+requisições, o estorno que falha e recria, e liberar o lote depois. 13 controles positivos caem. **Para clicar (5 minutos):** o roteiro da
+seção da Etapa 228 no guia.
 **(227) Nenhum clique foi dado.** A tela **mudou** — a coluna *Situação* do *Saldo por lote* (sem mudança de código na tela: ela segue a
 lista de colunas do relatório) e o pedaço *"6 em lote impedido"* na Fila de separação (provado pelo Jest, `FilaSeparacao` RN-227.10, com a
 fila simulada na fronteira). O servidor, pela rota real, em `relatorioSaldoPorLoteSituacao` (16 cenários): bloqueado, reprovado, vencido,
@@ -41603,12 +41662,80 @@ impedido, ou sem controle por lote: o texto de antes, sem o pedaço.
 - Na tela do *Saldo por lote*, a *Validade* sai com o ano de dois dígitos e a *Situação* com quatro.
 - A lista de coleta impressa não mostra o disponível (nada a mudar). A situação e o número são os da hora da consulta.
 
+## Etapa 228 — Estornar a entrada boa não deixa a requisição presa a lote bloqueado (2026-11-13)
+
+Uma nota trouxe 3 peças num lote bom, reservadas para a requisição que esperava, e 4 num lote **bloqueado** (sem o certificado do
+fornecedor). Se alguém estornava a entrada do lote bom, a reserva continuava: o estorno conferia se o *disponível* do material cobria as 3
+que saíam — e cobria, com as 4 do lote bloqueado. A requisição ficava *Parcialmente Reservada* com nada que pudesse sair, e a entrega
+recusava. Agora o estorno conta só o que **pode sair** para uso: a reserva que ficaria coberta só por lote bloqueado, reprovado ou vencido é
+solta, a requisição volta a esperar o material, e a tela **Reservas** diz por quê no motivo da liberação. Sem consulta antes do deploy (nada
+muda no banco). Decisões do agente: **B1504** a **B1508**. **C521** resolvido; aviso **C534**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Nota com 3 em lote bom (reservadas para *R1*) e 4 em lote bloqueado; estornar a entrada boa: a reserva de 3 fica, *R1* *Parcialmente Reservada*, a entrega recusa | A reserva de 3 é solta; *R1* volta a *Aguard. Estoque* (ou *Aguard. Compra*) |
+| O motivo da reserva solta: *"Estorno da entrada do recebimento REC-…"* | Quando o lote impedido pesou: *"Estorno da entrada do recebimento REC-… — o que sobra do material está em lote bloqueado, reprovado ou vencido"* |
+| Estornar a entrada do lote bom com o resto em lote bom; estornar a entrada do próprio lote bloqueado; material sem controle por lote; nota com OS | **Iguais** |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**. No cadastro do material (Compras), *LOTE-228* com **Controle por lote**, **sem**
+controle de certificado, unidade *un*, sem saldo. Uma requisição *R1* de 6 *LOTE-228*, aprovada (fica *Aguard. Estoque*). **Movimentações →
+Entrada** de 1 no lote *L1*; **Lotes e Séries** → *L1* → **Mudar status** → *Bloqueado*. Uma nota com 3 *LOTE-228* no lote *L2* e 4 no lote
+*L1*, processada: *R1* fica *Parcialmente Reservada* com 3 (só o lote bom reserva — Etapa 219).
+
+**1. Estornar a entrada boa solta a reserva.** **Movimentações** → a linha *Entrada de compra* de 3 no *L2* → o ícone de estorno (↩) → **Estornar Movimentação**: o estorno passa.
+*R1* volta a *Aguard. Estoque*. Em **Reservas** (filtro *Liberada*), a reserva de 3 de *R1* diz *"Motivo: Estorno da entrada do recebimento
+⟨REC⟩ — o que sobra do material está em lote bloqueado, reprovado ou vencido"*. O estoque fica 5, todo no *L1* bloqueado.
+
+**2. Só o que falta.** Como o 1, mas antes do estorno dê **Entrada** manual de 1 no lote *L0*: o estorno solta 2 das 3 (fica 1, coberta pelo
+*L0*); *R1* continua *Parcialmente Reservada* com 1. (A reserva solta em parte continua *Ativa* com 1, e a tela só mostra o motivo das
+reservas *Liberadas* — o motivo fica gravado, mas não aparece.)
+
+**3. O resto em lote bom: nada muda.** Sem bloquear o *L1* e com *R1* de 3: estornar a entrada do *L2* não solta nada (*R1* *Totalmente
+Reservada*, coberta pelo *L1*).
+
+**4. A entrada do próprio lote bloqueado: nada muda.** No cenário do 1, estornar a linha de 4 no *L1*: a reserva de 3 de *R1* fica (está
+coberta pelo *L2*, que continua).
+
+**5. Vencido conta como bloqueado.** No lugar do bloqueio, o *L1* com a validade de ontem: como o 1. Com **Liberar vencimento**: como o 3.
+
+**6. Depois do estorno, liberar o lote atende de novo.** Depois do 1, **Lotes e Séries** → *L1* → *Ativo*: *R1* recebe a reserva das 5 do
+*L1* (Etapa 220) e fica *Parcialmente Reservada* com 5.
+
+**7. O que não muda.** Nota com **OS** (do pedido ou da própria nota): o estorno faz a conta de antes — a requisição da OS não perde a reserva
+para a reserva da OS ficar no lote bloqueado. Material **sem** controle por lote: como antes. O estorno que é recusado depois de soltar
+recria a reserva igual, como antes.
+
+**8. A nota não paga o lote de outra requisição.** Uma requisição *R0* reservou 4 de outra nota, no lote *L1*, que depois foi bloqueado (ou
+venceu). A nota de *R1* trouxe 3 em *L2* e 3 em *L3*, todas reservadas para *R1*. Estornar a entrada do *L2* solta só **3** de *R1* — as 3 do
+*L3*, que a nota de *R1* trouxe e podem sair, continuam dela. Se o *L3* da **mesma nota** é que tivesse sido bloqueado, o estorno soltaria
+as 6 (nada de *R1* sairia).
+
+### O que esta etapa NÃO cobre
+
+- O lote bloqueado ou liberado no exato instante do estorno pode fazer o estorno soltar de menos ou de mais (**C534**).
+- A conta é exata no caso comum; com peças em quarentena dentro do lote estornado, ou peças bloqueadas sem lote conhecido, ela pode soltar um
+  pouco de mais ou de menos (**D (228)**).
+- A reserva antiga feita na aprovação, sobre um lote bloqueado depois, não é solta pelo estorno de uma nota (**C522**, anterior).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 228 entregue (2026-11-13):** **estornar a entrada boa não deixa a requisição presa a lote bloqueado** (**C521** resolvido). O
+  estorno conta o disponível menos o lote impedido (**B1504**), salvo o próprio lote impedido; além do estornado, só o que os outros lotes
+  impedidos da mesma nota explicam (**B1505**, revista na revisão do código); fora da trava, como antes (**B1506**, **C534**); o motivo da
+  liberação diz por quê (**B1507**); nota com OS na conta de antes (**B1508**, da revisão do plano). Commits `ffe7b233` (estimativa),
+  `297c5bc5` (plano), `ad7c1d7c` (motor e testes, com a Fase 2), `ad91ae20` (Fase 5: o déficit de outra requisição e quatro cenários) e o
+  fechamento. **O que é seu:** as decisões **B1504** a **B1508** (reversíveis); o aviso **C534**; a limitação **(228)** em D e a
+  verificação **(228)** em F. Sem consulta antes do deploy. **Próxima:** **a inspeção e a não conformidade olham o lote do item que
+  liberaram** (**C519**) — detalhada no fim do plano da 228.
 
 - **Etapa 227 entregue (2026-11-13):** **o *Saldo por lote* diz quando o lote está vencido, e a Fila diz o que está em lote impedido**
   (**D (225)** e **D (223)** resolvidas). A coluna *Situação* com as palavras do extrato (**B1498**), escritas também no servidor e presas à
