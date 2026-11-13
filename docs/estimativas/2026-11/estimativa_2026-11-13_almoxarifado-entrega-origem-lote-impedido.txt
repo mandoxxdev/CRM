@@ -1,0 +1,13 @@
+*Planejamento — almoxarifado: a entrega e a não conformidade avisam quando o lote está bloqueado*
+_13/11/2026_
+
+*1. A entrega não começa mais pelo endereço de um lote que ficou bloqueado*
+Hoje, quando o lote de onde a peça foi separada fica bloqueado, reprovado ou vencido depois da separação, a janela de entrega continua abrindo nesse endereço e o botão de entrega direta tenta tirar de lá — o almoxarife só descobre pela recusa, ao confirmar. Depois desta alteração, a janela abre em "qualquer endereço" com o aviso do lote, e o botão de entrega direta diz antes do clique que é preciso escolher de onde a peça sai.
+Tempo estimado: *2h30*
+
+*2. A tela de não conformidades avisa que o lote continua bloqueado*
+Ao aceitar uma não conformidade de peças de um lote bloqueado, reprovado ou vencido, nada é reservado para quem espera, mas a tela não diz por quê. Depois desta alteração, ela mostra o mesmo aviso que a tela de inspeções já mostra: as peças vão para quem espera quando o lote for liberado.
+Tempo estimado: *1h15*
+
+*Total estimado: 3h45*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
