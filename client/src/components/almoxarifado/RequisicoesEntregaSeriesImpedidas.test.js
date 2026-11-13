@@ -204,6 +204,28 @@ describe('Etapa 232: a entrega não deixa marcar série de lote impedido', () =>
     expect(confirmarJanela().disabled).toBe(true);
   });
 
+  test('[RN-232.05, Fase 2] o estado também é limpo: liberado o lote e relidas as séries, a de antes não volta marcada', async () => {
+    const L3 = [serie(106, 'S6', 9, 'L3', SIT_L1), serie(107, 'S7', 9, 'L3', SIT_L1), serie(108, 'S8', 9, 'L3', SIT_L1)];
+    series = [...SERIES(), ...L3];
+    requisicao = PARCIAL();
+    await abrirJanela();
+    escolher(selectEntrega(), '');
+    marcar(101); marcar(102); marcar(103);
+    api.put.mockRejectedValueOnce({ response: { status: 400, data: { error: 'Chapa 3mm: Lote L1 esta bloqueado e nao pode ser utilizado' } } });
+    series = [...SERIES(SIT_L2, { ...SIT_L1, lote_status: 'BLOQUEADO', lote_esta_impedido: true }), ...L3];
+    await act(async () => { confirmarJanela().click(); });
+    expect(contador()).toBe('0 de 3');
+    marcar(106); marcar(107); marcar(108);
+    expect(contador()).toBe('3 de 3');
+    // outra recusa; na releitura o L1 já foi liberado — S1–S3 voltam livres, mas não marcadas (só S6–S8 contam)
+    api.put.mockRejectedValueOnce({ response: { status: 400, data: { error: 'outra recusa' } } });
+    series = [...SERIES(), ...L3];
+    await act(async () => { confirmarJanela().click(); });
+    expect([101, 102, 103].map((id) => caixa(id).checked)).toEqual([false, false, false]);
+    expect(contador()).toBe('3 de 3');
+    expect(confirmarJanela().disabled).toBe(false);
+  });
+
   test('[RN-232.06] as palavras do extrato: Reprovado; Vencido em 10/11/2026', async () => {
     series = SERIES({ ...SIT_L2, lote_status: 'REPROVADO' });
     requisicao = PARCIAL();
@@ -219,6 +241,15 @@ describe('Etapa 232: a entrega não deixa marcar série de lote impedido', () =>
 
   test('[RN-232.07] sem o campo (resposta antiga): todas livres, sem rótulo nem frase', async () => {
     series = SERIES().map(({ lote_status, lote_validade, lote_esta_impedido, lote_vencido_sem_liberacao, ...s }) => s);
+    requisicao = PARCIAL();
+    await abrirJanela();
+    expect(desabilitadas()).toEqual([]);
+    expect(rotulo(104)).toBeNull();
+    expect(frase()).toBeNull();
+  });
+
+  test('[RN-232.07, Fase 2] só `=== true` conta: lote_esta_impedido 1 ou "true" não apaga', async () => {
+    series = SERIES().map((s) => (s.id === 104 ? { ...s, lote_esta_impedido: 1 } : s.id === 105 ? { ...s, lote_esta_impedido: 'true' } : s));
     requisicao = PARCIAL();
     await abrirJanela();
     expect(desabilitadas()).toEqual([]);

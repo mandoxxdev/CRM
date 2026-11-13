@@ -1295,9 +1295,9 @@ const RequisicoesList = () => {
     if (!info.serializado) return null;
     const loteId = lerValorOrigem(origensEntrega[item.id]?.valor)?.lote_id || null;
     const visiveis = seriesDoLote(info, loteId);
-    // Etapa 232 (B1525): a série de lote impedido não conta — nem no contador, nem no Confirmar, nem no PUT (a marcada que ficou impedida
-    // ao reler depois de uma recusa sai das escolhidas).
-    const idsVisiveis = new Set(visiveis.filter((s) => !serieImpedida(s)).map((s) => Number(s.id)));
+    // Etapa 232 (B1525): a série de lote impedido nunca está nas escolhidas — o checkbox dela vem apagado e o reler (a única porta por onde
+    // uma marcada vira impedida, `recarregarSeriesEntrega`) a tira do estado. Um filtro aqui também seria código que nenhum teste derruba.
+    const idsVisiveis = new Set(visiveis.map((s) => Number(s.id)));
     const escolhidas = (seriesEscolhidas[item.id] || []).filter((id) => idsVisiveis.has(id));
     // Fase 5 (review da Etapa 61): com "Sai de" automático a lista mistura lotes, e o servidor recusa
     // séries de lotes diferentes (sem lote conta como um lote à parte, como lá).
@@ -1341,7 +1341,9 @@ const RequisicoesList = () => {
         novo = { serializado: true, series: [], falhou: true };
       }
       if (seriesEntregaSeqRef.current !== seq) return;
-      const ids = new Set(novo.series.map((s) => Number(s.id)));
+      // Etapa 232 (B1525, Fase 2): a marcada que ficou num lote impedido sai do estado — não só da conta. Senão, liberado o lote e relidas
+      // as séries de novo, ela voltava marcada ao lado da que o almoxarife marcou no lugar dela (contador "4 de 3").
+      const ids = new Set(novo.series.filter((s) => !serieImpedida(s)).map((s) => Number(s.id)));
       const itensDoMaterial = new Set((detalhe?.itens || [])
         .filter((i) => String(i.material_id) === String(materialId)).map((i) => String(i.id)));
       setSeriesEntrega((prev) => ({ ...prev, [materialId]: novo }));
