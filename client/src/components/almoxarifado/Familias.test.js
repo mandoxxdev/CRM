@@ -1,7 +1,7 @@
 /**
  * Aba "Famílias" — subfamílias cadastráveis na própria aba (Etapa 37, T2).
  *
- * Até a Etapa 36 a aba era uma lista PLANA: `GET /almoxarifado/familias` já devolvia `parent_id`,
+ * Até a Etapa 36 a aba era uma lista PLANA: `GET /compras/materiais/familias` já devolvia `parent_id`,
  * mas a tela desenhava raiz e subfamília como cartões irmãos, sem indicação nenhuma — e criar uma
  * subfamília "ainda não tinha tela própria — só via API" (guia do almoxarifado). Este arquivo
  * prende a árvore de dois níveis desenhada na aba (RN-37.01 a RN-37.04 e RN-37.08):
@@ -23,7 +23,9 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
-import ConfiguracoesAlmoxarifado from './ConfiguracoesAlmoxarifado';
+// Etapa 211 (RN-211.01): os gestos de familia moram em Compras -> Familias; a aba e a MESMA (`FamiliasDeMaterial`), pelas portas do
+// Compras e com quem grava (`podeGravar`). A aba do Almoxarifado so consulta (FamiliasSomenteLeitura.test.js).
+import FamiliasDeMaterial, { ROTAS_FAMILIAS_COMPRAS } from './FamiliasDeMaterial';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 
@@ -44,7 +46,7 @@ jest.mock('../../services/permissionsCache', () => ({
   getEffectiveUser: (u) => u,
 }));
 
-// FORMA REAL de GET /api/almoxarifado/familias: `f.*` + `parent_nome` + `qtd_itens`.
+// FORMA REAL de GET /api/compras/materiais/familias: `f.*` + `parent_nome` + `qtd_itens`.
 const ROLAMENTOS = { id: 1, codigo: 'ROL', nome: 'Rolamentos', descricao: 'Rolamentos em geral', parent_id: null, parent_nome: null, tipo_uso: 'industrial', ativo: 1, qtd_itens: 3 };
 const PARAFUSOS = { id: 2, codigo: 'PAR', nome: 'Parafusos', descricao: '', parent_id: null, parent_nome: null, tipo_uso: 'ambos', ativo: 1, qtd_itens: 0 };
 const ESFERAS = { id: 3, codigo: 'ROL-ESF', nome: 'Esferas', descricao: 'Rolamentos de esferas', parent_id: 1, parent_nome: 'Rolamentos', tipo_uso: 'industrial', ativo: 1, qtd_itens: 2 };
@@ -64,8 +66,8 @@ beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
   jest.clearAllMocks();
   api.get.mockImplementation((url) => {
-    if (url === '/almoxarifado/familias?ativo=all') return Promise.resolve({ data: FAMILIAS });
-    if (url === '/almoxarifado/familias/3/itens') return Promise.resolve({ data: ITENS_ESFERAS });
+    if (url === '/compras/materiais/aux/familias?ativo=all') return Promise.resolve({ data: FAMILIAS });
+    if (url === '/compras/materiais/aux/familias/3/itens') return Promise.resolve({ data: ITENS_ESFERAS });
     return Promise.resolve({ data: [] });
   });
   api.post.mockResolvedValue({ data: { id: 50 } });
@@ -85,8 +87,8 @@ afterEach(() => {
 async function renderAbaFamilias() {
   await act(async () => {
     root.render(
-      <MemoryRouter initialEntries={['/almoxarifado/configuracoes?tab=familias']}>
-        <ConfiguracoesAlmoxarifado />
+      <MemoryRouter initialEntries={['/compras/familias']}>
+        <FamiliasDeMaterial rotas={ROTAS_FAMILIAS_COMPRAS} podeGravar linkDoItem={(id) => `/compras/materiais/editar/${id}`} />
       </MemoryRouter>
     );
   });
@@ -112,7 +114,7 @@ const botaoSalvar = () => botaoPorTexto(container, /^\s*Salvar/);
 describe('TabFamilias — RN-37.01: a árvore é desenhada na própria aba', () => {
   test('(a) só raízes viram cartões; as subs aparecem dentro da raiz certa com a contagem da fixture', async () => {
     await renderAbaFamilias();
-    expect(api.get).toHaveBeenCalledWith('/almoxarifado/familias?ativo=all');
+    expect(api.get).toHaveBeenCalledWith('/compras/materiais/aux/familias?ativo=all');
 
     // Quatro famílias na fixture, DOIS cartões: subfamília não é cartão irmão.
     expect(cartoes()).toHaveLength(2);
@@ -165,11 +167,11 @@ describe('TabFamilias — RN-37.02: "Nova subfamília" no cartão da raiz', () =
 
     expect(api.post).toHaveBeenCalledTimes(1);
     const [rota, corpo] = api.post.mock.calls[0];
-    expect(rota).toBe('/almoxarifado/familias');
+    expect(rota).toBe('/compras/materiais/familias');
     expect(corpo).toEqual({ nome: 'Agulhas', descricao: '', codigo: '', tipo_uso: 'ambos', parent_id: 1 });
     expect(toast.success).toHaveBeenCalledWith('Subfamília criada!');
     // A lista recarrega (o GET inicial + o de depois do POST).
-    expect(api.get.mock.calls.filter((c) => c[0] === '/almoxarifado/familias?ativo=all')).toHaveLength(2);
+    expect(api.get.mock.calls.filter((c) => c[0] === '/compras/materiais/aux/familias?ativo=all')).toHaveLength(2);
   });
 
   test('(b2) "Nova subfamília" na OUTRA raiz trava o pai dela — não é a primeira da lista', async () => {
@@ -203,7 +205,7 @@ describe('TabFamilias — RN-37.03: editar subfamília', () => {
 
     expect(api.put).toHaveBeenCalledTimes(1);
     const [rota, corpo] = api.put.mock.calls[0];
-    expect(rota).toBe('/almoxarifado/familias/3');
+    expect(rota).toBe('/compras/materiais/familias/3');
     // Etapa 126 (RN-29): o Editar leva também o que LEU (campos_lidos) — o corpo da 37 mais a chave nova.
     expect(corpo).toEqual({
       nome: 'Esferas de aço', descricao: 'Rolamentos de esferas', tipo_uso: 'industrial',
@@ -225,7 +227,7 @@ describe('TabFamilias — RN-37.04: inativar subfamília', () => {
 
     expect(confirmSpy).toHaveBeenCalledTimes(1);
     expect(confirmSpy.mock.calls[0][0]).toContain('Esferas');
-    expect(api.delete).toHaveBeenCalledWith('/almoxarifado/familias/3');
+    expect(api.delete).toHaveBeenCalledWith('/compras/materiais/familias/3');
     expect(toast.error).toHaveBeenCalledWith(LITERAL_400);
     expect(toast.success).not.toHaveBeenCalled();
   });
@@ -234,9 +236,9 @@ describe('TabFamilias — RN-37.04: inativar subfamília', () => {
     jest.spyOn(window, 'confirm').mockReturnValue(true);
     await renderAbaFamilias();
     await clicar(subDe(cartaoDe('ROL'), 'ROL-ROL').querySelector('button[title="Inativar"]'));
-    expect(api.delete).toHaveBeenCalledWith('/almoxarifado/familias/4');
+    expect(api.delete).toHaveBeenCalledWith('/compras/materiais/familias/4');
     expect(toast.success).toHaveBeenCalledWith('Subfamília inativada');
-    expect(api.get.mock.calls.filter((c) => c[0] === '/almoxarifado/familias?ativo=all')).toHaveLength(2);
+    expect(api.get.mock.calls.filter((c) => c[0] === '/compras/materiais/aux/familias?ativo=all')).toHaveLength(2);
   });
 
   test('(d3) [controle] cancelar no confirm NÃO chama o DELETE', async () => {
@@ -251,13 +253,13 @@ describe('TabFamilias — RN-37.08: expandir subfamília', () => {
   test('(e) expandir a sub pede /familias/<sub>/itens e mostra os itens dela', async () => {
     await renderAbaFamilias();
     const rol = cartaoDe('ROL');
-    expect(api.get).not.toHaveBeenCalledWith('/almoxarifado/familias/3/itens');
+    expect(api.get).not.toHaveBeenCalledWith('/compras/materiais/aux/familias/3/itens');
 
     await clicar(subDe(rol, 'ROL-ESF').querySelector('button[title="Itens da subfamília"]'));
 
-    expect(api.get).toHaveBeenCalledWith('/almoxarifado/familias/3/itens');
+    expect(api.get).toHaveBeenCalledWith('/compras/materiais/aux/familias/3/itens');
     // E NÃO o da raiz: expandir a sub não é expandir o cartão (o cabeçalho da raiz é clicável).
-    expect(api.get).not.toHaveBeenCalledWith('/almoxarifado/familias/1/itens');
+    expect(api.get).not.toHaveBeenCalledWith('/compras/materiais/aux/familias/1/itens');
     expect(rol.textContent).toContain('ROL-001');
     expect(rol.textContent).toContain('Rolamento 6205 ZZ');
   });
@@ -266,7 +268,7 @@ describe('TabFamilias — RN-37.08: expandir subfamília', () => {
     await renderAbaFamilias();
     const rol = cartaoDe('ROL');
     await clicar(subDe(rol, 'ROL-ESF').querySelector('button[title="Editar"]'));
-    expect(api.get).not.toHaveBeenCalledWith('/almoxarifado/familias/1/itens');
+    expect(api.get).not.toHaveBeenCalledWith('/compras/materiais/aux/familias/1/itens');
   });
 });
 
@@ -282,7 +284,7 @@ describe('TabFamilias — Etapa 193 (RN-193.01): o cadastro de material saiu da 
     await clicar(subDe(rol, 'ROL-ESF').querySelector('button[title="Itens da subfamília"]'));
     const ver = container.querySelector('[data-testid="ver-item-10"]');
     expect(ver).not.toBeNull();
-    expect(ver.getAttribute('href')).toBe('/almoxarifado/materiais/ver/10');
+    expect(ver.getAttribute('href')).toBe('/compras/materiais/editar/10'); // Etapa 211: no Compras o Ver abre o material no Compras
     expect(ver.getAttribute('title')).toBe('Ver');
     expect(container.querySelector('a[href^="/almoxarifado/materiais/editar"]')).toBeNull();
     // Fase 5 (T5): a sub EXPANDIDA (itens carregados) tambem nao oferece cadastro — a checagem acima rodava so antes de expandir.
@@ -312,7 +314,7 @@ describe('TabFamilias — revisão da Etapa 37 (F3): subfamília cujo pai não e
   test('aparece no bloco "Subfamílias sem família ativa", não como cartão nem dentro de uma raiz', async () => {
     const ORFA = { id: 9, codigo: 'RAO-SUB', nome: 'Sub Orfa', descricao: '', parent_id: 13, parent_nome: 'Raiz Orfa', tipo_uso: 'ambos', ativo: 1, qtd_itens: 0 };
     api.get.mockImplementation((url) => {
-      if (url === '/almoxarifado/familias?ativo=all') return Promise.resolve({ data: [...FAMILIAS, ORFA] });
+      if (url === '/compras/materiais/aux/familias?ativo=all') return Promise.resolve({ data: [...FAMILIAS, ORFA] });
       return Promise.resolve({ data: [] });
     });
     await renderAbaFamilias();
@@ -343,7 +345,7 @@ describe('TabFamilias — Etapa 124: as inativas aparecem e se reativam', () => 
   const AGULHAS = { id: 22, codigo: 'ROL-AGU', nome: 'Agulhas', descricao: '', parent_id: 1, parent_nome: 'Rolamentos', tipo_uso: 'ambos', ativo: 0, qtd_itens: 0 };
   const COM_INATIVAS = [...FAMILIAS, VEDACOES, ORINGS, AGULHAS];
   const mock = (lista = COM_INATIVAS) => api.get.mockImplementation((url) => {
-    if (url === '/almoxarifado/familias?ativo=all') return Promise.resolve({ data: lista });
+    if (url === '/compras/materiais/aux/familias?ativo=all') return Promise.resolve({ data: lista });
     return Promise.resolve({ data: [] });
   });
   const selo = (el) => [...el.querySelectorAll('.almox-selo-inativa')];
@@ -352,8 +354,8 @@ describe('TabFamilias — Etapa 124: as inativas aparecem e se reativam', () => 
   test('[RN-16] pede ?ativo=all e mostra a raiz inativa como cartão e a sub inativa dentro da raiz certa, com o selo "Inativa"', async () => {
     mock();
     await renderAbaFamilias();
-    expect(api.get).toHaveBeenCalledWith('/almoxarifado/familias?ativo=all');
-    expect(api.get.mock.calls.some((c) => c[0] === '/almoxarifado/familias')).toBe(false);
+    expect(api.get).toHaveBeenCalledWith('/compras/materiais/aux/familias?ativo=all');
+    expect(api.get.mock.calls.some((c) => c[0] === '/compras/materiais/aux/familias')).toBe(false);
     const ved = cartaoDe('VED');
     expect(ved).toBeTruthy();
     expect(selo(ved.querySelector('.almox-familia-cabecalho')).map((s) => s.textContent)).toEqual(['Inativa']);
@@ -369,16 +371,16 @@ describe('TabFamilias — Etapa 124: as inativas aparecem e se reativam', () => 
     mock();
     await renderAbaFamilias();
     await clicar(cartaoDe('VED').querySelector('.almox-familia-cabecalho button[title="Reativar"]'));
-    expect(api.put).toHaveBeenCalledWith('/almoxarifado/familias/20', { ativo: 1 });
+    expect(api.put).toHaveBeenCalledWith('/compras/materiais/familias/20', { ativo: 1 });
     expect(toast.success).toHaveBeenCalledWith('Família reativada');
-    expect(api.get.mock.calls.filter((c) => c[0] === '/almoxarifado/familias?ativo=all')).toHaveLength(2);
+    expect(api.get.mock.calls.filter((c) => c[0] === '/compras/materiais/aux/familias?ativo=all')).toHaveLength(2);
   });
 
   test('[RN-17] Reativar a sub: "Subfamília reativada"; a recusa do servidor vai para o toast com a literal', async () => {
     mock();
     await renderAbaFamilias();
     await clicar(subDe(cartaoDe('ROL'), 'ROL-AGU').querySelector('button[title="Reativar"]'));
-    expect(api.put).toHaveBeenCalledWith('/almoxarifado/familias/22', { ativo: 1 });
+    expect(api.put).toHaveBeenCalledWith('/compras/materiais/familias/22', { ativo: 1 });
     expect(toast.success).toHaveBeenCalledWith('Subfamília reativada');
     const LIT = 'Não é possível reativar: a família principal desta subfamília está inativa — reative a família principal antes';
     api.put.mockRejectedValueOnce({ response: { status: 400, data: { error: LIT } } });
@@ -408,7 +410,7 @@ describe('TabFamilias — Etapa 124: as inativas aparecem e se reativam', () => 
     preencher(inputNome(), 'Vedações e juntas');
     await clicar(botaoSalvar());
     const [rota, corpo] = api.put.mock.calls[0];
-    expect(rota).toBe('/almoxarifado/familias/20');
+    expect(rota).toBe('/compras/materiais/familias/20');
     expect(corpo).not.toHaveProperty('ativo');
   });
 
@@ -443,7 +445,7 @@ describe('TabFamilias — Etapa 124 (Fase 5): a inativa expandida não oferece o
   // Etapa 193 (RN-193.01): "Cadastrar primeiro item" saiu tambem da ativa — a metade positiva virou "nenhuma oferece".
   test('[RN-18] expandir a raiz sem itens: "Nenhum item nesta família." sem "Cadastrar primeiro item" — inativa e, desde a 193, ativa', async () => {
     api.get.mockImplementation((url) => {
-      if (url === '/almoxarifado/familias?ativo=all') return Promise.resolve({ data: [...FAMILIAS, VEDACOES] });
+      if (url === '/compras/materiais/aux/familias?ativo=all') return Promise.resolve({ data: [...FAMILIAS, VEDACOES] });
       return Promise.resolve({ data: [] });
     });
     await renderAbaFamilias();
@@ -460,7 +462,7 @@ describe('TabFamilias — Etapa 124 (Fase 5): a inativa expandida não oferece o
 
 describe('TabFamilias — Etapa 124 (Fase 5, sabotagem): NULL, a ordem e a órfã inativa', () => {
   const mock = (lista) => api.get.mockImplementation((url) => {
-    if (url === '/almoxarifado/familias?ativo=all') return Promise.resolve({ data: lista });
+    if (url === '/compras/materiais/aux/familias?ativo=all') return Promise.resolve({ data: lista });
     return Promise.resolve({ data: [] });
   });
   const codigosDosCartoes = () => cartoes().map((c) => c.querySelector('.almox-familia-cabecalho span').textContent);

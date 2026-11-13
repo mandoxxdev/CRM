@@ -12,7 +12,7 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { AuthProvider, useAuth } from './AuthContext';
-import ConfiguracoesAlmoxarifado from '../components/almoxarifado/ConfiguracoesAlmoxarifado';
+import ConfiguracoesAlmoxarifado, { FRASES_CONFIG } from '../components/almoxarifado/ConfiguracoesAlmoxarifado';
 import api from '../services/api';
 import { fetchUserPermissions, getEffectiveUser, invalidatePermissionsCache } from '../services/permissionsCache';
 
@@ -25,9 +25,10 @@ jest.mock('react-toastify', () => ({
   toast: { success: jest.fn(), error: jest.fn(), info: jest.fn(), warn: jest.fn() },
 }));
 
-const FRASE = 'Somente leitura — cadastrar, editar, inativar e reativar famílias é do Administrador do almoxarifado ou do '
-  + 'Super Administrador; peça a um deles.';
-const ROL = { id: 1, codigo: 'ROL', nome: 'Rolamentos', descricao: '', parent_id: null, tipo_uso: 'ambos', ativo: 1, qtd_itens: 0 };
+// Etapa 211 (RN-211.03): a aba Familias passou a so consultar para TODOS (o cadastro e do Compras), entao nao mostra mais o perfil.
+// A sonda da fiacao usa a aba Setores e areas — configuracao FISICA, que fica no Almoxarifado e continua decidindo pelo perfil.
+const FRASE = FRASES_CONFIG.setores;
+const TEXTO_DA_ABA = 'Defina os corredores, bancadas e áreas';
 
 // o que o servidor manda: as duas chaves SEMPRE presentes (null sem perfil) — buildAuthUserPayload em server/index.js
 const payload = (over) => ({
@@ -46,7 +47,6 @@ beforeEach(() => {
   localStorage.clear();
   api.get.mockImplementation((url) => {
     if (url === '/auth/me') return Promise.resolve({ data: { user: meAtual } });
-    if (url === '/almoxarifado/familias?ativo=all') return Promise.resolve({ data: [ROL] });
     return Promise.resolve({ data: [] });
   });
   container = document.createElement('div');
@@ -62,20 +62,20 @@ async function abrirComSessao(usuarioGuardado) {
     root.render(
       <AuthProvider>
         <Sonda />
-        <MemoryRouter initialEntries={['/almoxarifado/configuracoes?tab=familias']}><ConfiguracoesAlmoxarifado /></MemoryRouter>
+        <MemoryRouter initialEntries={['/almoxarifado/configuracoes?tab=setores']}><ConfiguracoesAlmoxarifado /></MemoryRouter>
       </AuthProvider>
     );
   });
   for (let i = 0; i < 4; i += 1) await act(async () => { await Promise.resolve(); });
 }
-const novaFamilia = () => [...container.querySelectorAll('button')].filter((b) => /Nova Família/.test(b.textContent));
+const novaFamilia = () => [...container.querySelectorAll('button')].filter((b) => /Novo Setor ou Área/.test(b.textContent));
 
 describe('C264 (Etapa 127) — a sessao aberta com o perfil retirado', () => {
-  test('[RN-06] administrador do sistema que tinha o perfil Administrador: ao recarregar, a aba Familias fica somente leitura', async () => {
+  test('[RN-06] administrador do sistema que tinha o perfil Administrador: ao recarregar, a aba Setores fica somente leitura', async () => {
     meAtual = payload({ perfil_almoxarifado: null });
     await abrirComSessao(payload({ perfil_almoxarifado: 'ADMINISTRADOR' }));
     expect(api.get).toHaveBeenCalledWith('/auth/me', expect.anything()); // o boot perguntou ao servidor
-    expect(container.textContent).toContain('Rolamentos'); // metade positiva: a arvore esta la
+    expect(container.textContent).toContain(TEXTO_DA_ABA); // metade positiva: a arvore esta la
     expect(container.textContent).toContain(FRASE);
     expect(novaFamilia()).toHaveLength(0);
     expect(JSON.parse(localStorage.getItem('user')).perfil_almoxarifado).toBeNull(); // e o guardado nao volta no proximo boot
@@ -84,7 +84,7 @@ describe('C264 (Etapa 127) — a sessao aberta com o perfil retirado', () => {
   test('[RN-07] controle: o servidor ainda manda ADMINISTRADOR -> os botoes continuam', async () => {
     meAtual = payload({ perfil_almoxarifado: 'ADMINISTRADOR' });
     await abrirComSessao(payload({ perfil_almoxarifado: 'ADMINISTRADOR' }));
-    expect(container.textContent).toContain('Rolamentos');
+    expect(container.textContent).toContain(TEXTO_DA_ABA);
     expect(novaFamilia()).toHaveLength(1);
     expect(container.textContent).not.toContain(FRASE);
   });
@@ -94,7 +94,7 @@ describe('C264 (Etapa 127) — a sessao aberta com o perfil retirado', () => {
     await abrirComSessao(payload({ role: 'user', perfil_almoxarifado: 'ADMINISTRADOR' }));
     expect(container.textContent).toContain('Acesso restrito — administrador do Almoxarifado');
     expect(novaFamilia()).toHaveLength(0);
-    expect(container.textContent).not.toContain('Rolamentos');
+    expect(container.textContent).not.toContain(TEXTO_DA_ABA);
   });
 
   test('[RN-08] refreshUser na sessao aberta (Minha Conta, cadastro de usuario) tambem tira o perfil', async () => {

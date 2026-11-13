@@ -11,7 +11,9 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
-import ConfiguracoesAlmoxarifado from './ConfiguracoesAlmoxarifado';
+// Etapa 211 (RN-211.01): os gestos de familia moram em Compras -> Familias; a aba e a MESMA (`FamiliasDeMaterial`), pelas portas do
+// Compras e com quem grava (`podeGravar`). A aba do Almoxarifado so consulta (FamiliasSomenteLeitura.test.js).
+import FamiliasDeMaterial, { ROTAS_FAMILIAS_COMPRAS } from './FamiliasDeMaterial';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 
@@ -27,7 +29,7 @@ jest.mock('../../context/AuthContext', () => ({
 }));
 jest.mock('../../services/permissionsCache', () => ({ getEffectiveUser: (u) => u }));
 
-// FORMA REAL de GET /api/almoxarifado/familias (f.* cru): a descricao e o tipo de uso podem vir NULL (legado).
+// FORMA REAL de GET /api/compras/materiais/familias (f.* cru): a descricao e o tipo de uso podem vir NULL (legado).
 const ROL = { id: 1, codigo: 'ROL', nome: 'Rolamentos', descricao: 'Rolamentos em geral', parent_id: null, tipo_uso: 'industrial', ativo: 1, qtd_itens: 0 };
 const LEG = { id: 2, codigo: 'LEG', nome: 'Legado', descricao: null, parent_id: null, tipo_uso: null, ativo: 1, qtd_itens: 0 };
 const ESF = { id: 3, codigo: 'ROL-ESF', nome: 'Esferas', descricao: '', parent_id: 1, tipo_uso: 'ambos', ativo: 1, qtd_itens: 0 };
@@ -41,7 +43,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   lista = [ROL, LEG, ESF, VED];
   api.get.mockImplementation((url) => {
-    if (url === '/almoxarifado/familias?ativo=all') return Promise.resolve({ data: lista });
+    if (url === '/compras/materiais/aux/familias?ativo=all') return Promise.resolve({ data: lista });
     return Promise.resolve({ data: [] });
   });
   api.put.mockResolvedValue({ data: {} });
@@ -54,7 +56,7 @@ afterEach(() => { act(() => root.unmount()); container.remove(); });
 
 async function renderAba() {
   await act(async () => {
-    root.render(<MemoryRouter initialEntries={['/almoxarifado/configuracoes?tab=familias']}><ConfiguracoesAlmoxarifado /></MemoryRouter>);
+    root.render(<MemoryRouter initialEntries={['/compras/familias']}><FamiliasDeMaterial rotas={ROTAS_FAMILIAS_COMPRAS} podeGravar linkDoItem={(id) => `/compras/materiais/editar/${id}`} /></MemoryRouter>);
   });
   await act(async () => { await Promise.resolve(); });
 }
@@ -80,7 +82,7 @@ describe('D (125) (Etapa 126) — RN-29: o Editar manda o que leu', () => {
     await salvar();
     expect(api.put).toHaveBeenCalledTimes(1);
     const [rota, corpo] = api.put.mock.calls[0];
-    expect(rota).toBe('/almoxarifado/familias/1');
+    expect(rota).toBe('/compras/materiais/familias/1');
     expect(corpo).toEqual({
       nome: 'Rolamentos e mancais', descricao: 'outra', tipo_uso: 'industrial',
       campos_lidos: { nome: 'Rolamentos', tipo_uso: 'industrial', descricao: 'Rolamentos em geral' },
@@ -112,7 +114,7 @@ describe('D (125) (Etapa 126) — RN-29: o Editar manda o que leu', () => {
     await clicar(sub.querySelector('button[title="Editar"]'));
     await salvar();
     const [rota, corpo] = api.put.mock.calls[0];
-    expect(rota).toBe('/almoxarifado/familias/3');
+    expect(rota).toBe('/compras/materiais/familias/3');
     expect(corpo.campos_lidos).toEqual({ nome: 'Esferas', tipo_uso: 'ambos', descricao: '' });
     expect(corpo).not.toHaveProperty('parent_id');
   });
@@ -129,7 +131,7 @@ describe('D (125) (Etapa 126) — RN-29: o Editar manda o que leu', () => {
     expect(api.post.mock.calls[1][1]).not.toHaveProperty('campos_lidos');
     await clicar(cartaoDe('VED').querySelector('button[title="Reativar"]'));
     await act(async () => { await Promise.resolve(); });
-    expect(api.put).toHaveBeenCalledWith('/almoxarifado/familias/20', { ativo: 1 });
+    expect(api.put).toHaveBeenCalledWith('/compras/materiais/familias/20', { ativo: 1 });
   });
 
   test('editar outra família depois de cancelar leva os lidos da NOVA', async () => {
@@ -138,7 +140,7 @@ describe('D (125) (Etapa 126) — RN-29: o Editar manda o que leu', () => {
     await clicar(botaoPorTexto(/^\s*Cancelar/));
     await editar('LEG');
     await salvar();
-    expect(api.put.mock.calls[0][0]).toBe('/almoxarifado/familias/2');
+    expect(api.put.mock.calls[0][0]).toBe('/compras/materiais/familias/2');
     expect(api.put.mock.calls[0][1].campos_lidos.nome).toBe('Legado');
   });
 });
@@ -147,7 +149,7 @@ describe('D (125) (Etapa 126) — RN-29: o 409', () => {
   test('o 409: toast com a literal, o formulário FICA com o digitado e a lista recarrega', async () => {
     api.put.mockRejectedValueOnce({ response: { status: 409, data: { error: L409 } } });
     await renderAba();
-    const chamadasLista = () => api.get.mock.calls.filter(([u]) => u === '/almoxarifado/familias?ativo=all').length;
+    const chamadasLista = () => api.get.mock.calls.filter(([u]) => u === '/compras/materiais/aux/familias?ativo=all').length;
     const antes = chamadasLista();
     await editar('ROL');
     preencher(inputNome(), 'Meu nome novo');
@@ -181,7 +183,7 @@ describe('D (125) (Etapa 126) — RN-29: o 409', () => {
   test('[controle] o 400 (outra recusa) continua: toast com a literal, sem recarregar a lista', async () => {
     api.put.mockRejectedValueOnce({ response: { status: 400, data: { error: 'Nome é obrigatório' } } });
     await renderAba();
-    const chamadasLista = () => api.get.mock.calls.filter(([u]) => u === '/almoxarifado/familias?ativo=all').length;
+    const chamadasLista = () => api.get.mock.calls.filter(([u]) => u === '/compras/materiais/aux/familias?ativo=all').length;
     const antes = chamadasLista();
     await editar('ROL');
     await salvar();

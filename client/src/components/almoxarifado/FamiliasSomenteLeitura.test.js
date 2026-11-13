@@ -34,8 +34,9 @@ const ADMIN_SISTEMA = { id: 5, nome: 'Admin do sistema', role: 'admin' };
 const ADM_PERFIL = { id: 4, nome: 'Adm', role: 'user', perfil_almoxarifado: 'ADMINISTRADOR' };
 const ADM_MODULO = { id: 6, nome: 'Adm do modulo', role: 'user', admin_modulos: '["almoxarifado"]' };
 const SUPER = { id: 1, nome: 'Super', role: 'admin', is_superadmin: 1 };
-const FRASE = 'Somente leitura — cadastrar, editar, inativar e reativar famílias é do Administrador do almoxarifado ou do '
-  + 'Super Administrador; peça a um deles.';
+// Etapa 211 (RN-211.03): a aba do Almoxarifado so consulta, para TODOS; a frase aponta o lugar novo (a mesma literal do 403 do servidor).
+// Dizia 'Somente leitura — cadastrar, editar, inativar e reativar famílias é do Administrador do almoxarifado ou do Super Administrador'.
+const FRASE = 'O cadastro de famílias é feito em Compras → Famílias.';
 
 const ROL = { id: 1, codigo: 'ROL', nome: 'Rolamentos', descricao: '', parent_id: null, tipo_uso: 'ambos', ativo: 1, qtd_itens: 0 };
 const ESF = { id: 3, codigo: 'ROL-ESF', nome: 'Esferas', descricao: '', parent_id: 1, tipo_uso: 'ambos', ativo: 1, qtd_itens: 1 };
@@ -120,13 +121,16 @@ describe('C259 (Etapa 125) — RN-16/RN-17: a aba Famílias', () => {
     expect(botoes('Editar')).toHaveLength(0);
   });
 
-  test('[RN-17] perfil Administrador: a aba como antes (os botões, sem a frase)', async () => {
+  // Etapa 211 (RN-211.03): ate a 210 o perfil Administrador via os botoes aqui; desde a 211 o cadastro e do Compras e a aba so consulta
+  // para TODOS — os botoes estao em Compras -> Familias (Familias.test.js).
+  test('[RN-211.03; era RN-17] perfil Administrador tambem so consulta: a arvore e a frase, sem os gestos de familia', async () => {
     await renderAba(ADM_PERFIL);
-    expect(container.textContent).not.toContain(FRASE);
-    expect(porTexto('button', /Nova Família/)).toHaveLength(1);
-    expect(porTexto('button', /Nova subfamília/).length).toBeGreaterThan(0);
-    expect(botoes('Editar').length).toBeGreaterThan(0);
-    expect(botoes('Inativar').length).toBeGreaterThan(0);
-    expect(botoes('Reativar').length).toBeGreaterThan(0);
+    expect(container.textContent).toContain('Rolamentos');
+    expect(container.textContent).toContain(FRASE);
+    expect(porTexto('button', /Nova Família/)).toHaveLength(0);
+    expect(porTexto('button', /Nova subfamília/)).toHaveLength(0);
+    expect(botoes('Editar')).toHaveLength(0);
+    expect(botoes('Inativar')).toHaveLength(0);
+    expect(botoes('Reativar')).toHaveLength(0);
   });
 });

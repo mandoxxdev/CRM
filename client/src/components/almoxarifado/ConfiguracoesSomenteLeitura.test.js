@@ -46,8 +46,8 @@ const F_LIBERACAO = F('mudar a liberação por valor e os aprovadores');
 const R_ALERTAS = R('ver e mudar os alertas de estoque');
 const R_REGRAS = R('ver e mudar as regras de aprovação');
 const R_GERAL = R('ver e mudar as configurações gerais do almoxarifado');
-const F_FAMILIAS_125 = 'Somente leitura — cadastrar, editar, inativar e reativar famílias é do Administrador do almoxarifado ou do '
-  + 'Super Administrador; peça a um deles.';
+// Etapa 211 (RN-211.03): a frase da aba Familias mudou — o cadastro e do Compras. Era a frase da 125 ('Somente leitura — cadastrar, ...').
+const F_FAMILIAS_125 = 'O cadastro de famílias é feito em Compras → Famílias.';
 const TODAS = [F_TIPOS, F_ESTOQUES, F_SETORES, F_LOCALIZACOES, F_LIBERACAO, R_ALERTAS, R_REGRAS, R_GERAL, F_FAMILIAS_125];
 
 const DADOS = {
@@ -308,7 +308,7 @@ describe('C261 (Etapa 126) — RN-09/RN-10', () => {
     expect(frasesNaTela()).toEqual([R_ALERTAS]);
     expect(chamou('/almoxarifado/configuracoes/alertas-estoque')).toBe(false);
   });
-  test('[RN-09] a aba Famílias continua com a frase da 125, literal igual', async () => {
+  test('[RN-09; RN-211.03] a aba Famílias mostra a frase do Compras, literal igual', async () => {
     dados['/almoxarifado/familias?ativo=all'] = [{ id: 1, codigo: 'ROL', nome: 'Rolamentos', parent_id: null, tipo_uso: 'ambos', ativo: 1, qtd_itens: 0 }];
     await renderAba(ADMIN_SISTEMA, 'familias');
     expect(frasesNaTela()).toEqual([F_FAMILIAS_125]);
