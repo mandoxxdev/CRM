@@ -794,7 +794,8 @@ da seção que a inspeção e a NC já seguram desde a 91; a mudança de status 
 - [x] **B1511** — o aviso *"Material liberado"* não sai quando o lote zerou a liberação — `f6e9230b`.
 - [x] **B1512** — a resposta da inspeção ganha `lote_impedido` só nesse caso; a tela **Inspeções** avisa — `f6e9230b`, `046612a0`.
 - [x] **RN-229.08 / .09 / .09b** — liberar o lote depois atende (Etapa 220); a leitura é dentro da seção (duas corridas) — `f6e9230b`.
-- [ ] **Fora (declarado):** a tela da NC sem a frase (**C535**); o lote que nunca é liberado, o item só com o código do lote (**D (229)**);
+- [ ] **Fora (declarado):** a tela da NC sem a frase (**C535** — *resolvido na Etapa 231*, `1ac166c1` (`liberacao.lote_impedido`) e
+  `32703b8d` (o aviso amarelo), B1521; ver a spec 05, seção "Etapa 231"); o lote que nunca é liberado, o item só com o código do lote (**D (229)**);
   a OS aberta (**C520** — *resolvido na Etapa 230*, `59a5ae94`).
 
 Testes: `liberacaoLoteImpedido.api.test.js` (15); `InspecoesAlmoxarifado.test.js` (+1). Continua 🟢.

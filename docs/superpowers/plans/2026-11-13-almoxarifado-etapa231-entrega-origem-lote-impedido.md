@@ -135,10 +135,10 @@ automático não tem `localizacao_origem_id`).
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 (tronco, servidor)** — `server/tests/api/entregaOrigemLoteImpedido.api.test.js` (RN-231.01, .09, .10) vermelho → as quatro colunas no
+- [x] **T1 (tronco, servidor)** — `1ac166c1` — — `server/tests/api/entregaOrigemLoteImpedido.api.test.js` (RN-231.01, .09, .10) vermelho → as quatro colunas no
   detalhe (`routes/almoxarifado.js`, os booleanos em `normalizarItem` só se a coluna veio) e `liberacao.lote_impedido` em
   `decidirEExecutar` → verde.
-- [ ] **T2 (galho, tela, contra o contrato acima)** — `client/src/components/almoxarifado/RequisicoesEntregaOrigemImpedida.test.js`
+- [x] **T2 (galho, tela, contra o contrato acima)** — `32703b8d` — — `client/src/components/almoxarifado/RequisicoesEntregaOrigemImpedida.test.js`
   (RN-231.02 a .08) e `NaoConformidadesLoteImpedido.test.js` (RN-231.11) vermelhos → `RequisicoesList.js`, `NaoConformidadesAlmoxarifado.js`
   → verdes. Os testes da 226 que fixavam a B1493/B1494 na entrega (RN-226.06 entrega, .09, .12 entrega) mudam junto, citando a B1518.
 - Integração: a RN-231.09 (servidor, rota real) prova que o botão apagado corresponde à recusa e que o caminho que a tela oferece passa; a
@@ -152,3 +152,63 @@ automático não tem `localizacao_origem_id`).
 4. tela: a opção da planejada impedida habilitada (B1493 de volta) → .02 cai;
 5. tela: o Confirmar sem a guarda → .03 cai; o botão de um clique sem a guarda → .06 cai; sem `pendentePlanejado > 0` → .07 cai;
 6. tela NC: sem o `warn` → .11 cai.
+
+## Execução e controles (medidos)
+
+- **Vermelho antes do código:** servidor 3/6 (as .01; as .09 passavam — documentam a porta, que não muda); tela 9 vermelhos entre o arquivo
+  novo e a NC (o controle .02 passava, como deve). Depois do código, os 4 testes da 226 que fixavam a B1493/B1494 na entrega caíram — os
+  esperados — e foram revistos citando a B1518.
+- **Sabotagens** (scripts `e231-sabotagem.js` e `e231-sabotagem2.js` no scratchpad: troca por `split/join` com âncora contada, roda o teste
+  do arquivo, restaura; `md5sum` conferido depois): rodada 1 — 14/14 caem (S1–S4 servidor, C1–C10 tela); rodada 2 (Fase 5) — 7/7 caem
+  (F1–F5 tela, S5–S6 servidor). **21/21.**
+
+## Fase 5 — revisão adversarial do código (2 revisores frescos)
+
+- **Fluxo (1 Minor reproduzido, corrigido):** com a janela aberta na planejada boa, bloquear o lote e voltar para a aba relia o detalhe mas
+  não as linhas de saldo — o Confirmar seguia aceso e a porta recusava (na planejada escolhida e acima da parte, em branco). Agora a planejada
+  conta como impedida se o detalhe **ou** a linha disserem; o Confirmar espera sempre que a entrega aplicaria a planejada; a frase vem do
+  detalhe quando a linha está velha — `473843bb` (RN-231.03/.04 Fase 5). Descartado: reler as linhas a cada foco. Um caso só de tela
+  (a parte planejada entregue em outro lugar com a janela em "Escolha de onde sai": o botão segue apagado, sem frase; escolher qualquer
+  opção resolve) — ruído, fica.
+- **Testes (5 Minor argumentados, todos fechados):** REPROVADO e vencido com o vencimento liberado no detalhe (S5, S6); dois itens com um
+  impedido (F4); o item impedido sem quantidade (F3); detalhe × linhas discordando (F5) — `473843bb`. Nenhum defeito de servidor.
+
+## Retro
+
+- Rodadas de correção até verde: 1 (a Fase 5 do fluxo).
+- Achados: Fase 2 — 2 importantes (1 corrigido, 1 declarado em D (231)), 4 menores; Fase 5 — 1 reproduzido (Minor, corrigido), 5 lacunas
+  de teste reais (fechadas), 1 ruído.
+- Paralelismo: T1 e T2 sequenciais no mesmo agente (pequenas); revisores em paralelo com as suítes do servidor, sem retrabalho.
+- Defeito que escapou: — (preencher na etapa seguinte).
+
+## Verificação (medida, serial)
+
+- Servidor (sobre `32703b8d`; a Fase 5 não mexeu no código do servidor, só no teste — rodado sozinho, 7/7): `test:api` **625/625 arquivos OK**;
+  `test:almoxarifado` **44/0**; `test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0**.
+- Tela (sobre `473843bb`): `react-scripts test --maxWorkers=2` **226/226 suítes, 3079/3079 testes**; `react-scripts build` (CI=true)
+  **Compiled successfully**.
+- Arquivos da etapa: `entregaOrigemLoteImpedido` **7/7**, `liberacaoLoteImpedido` **17/17**, `RequisicoesEntregaOrigemImpedida` **16/16**,
+  `RequisicoesSaiDeLoteImpedido` **21/21**, `NaoConformidadesAlmoxarifado` verde.
+
+## Próxima tarefa detalhada
+
+*(Escolhida pela ordem do CLAUDE.md: a 231 fecha o C532 e o C535; a feature 05 continua 🟡. O que esta etapa declarou de fora e que pega o
+mesmo gesto é a **D (231) 1** — pequena, com fatia visível. **Sem estimativa** — começa pela Fase 0.5.)*
+
+**A entrega não deixa marcar série do lote impedido (D (231) 1).**
+
+- **O problema:** material com **controle de série** e lote. Com a janela de entrega em *"Escolha de onde sai"* ou em *"Qualquer endereço
+  (automático)"*, a lista **Séries que saem** mostra as séries em estoque de todos os lotes (`seriesDoLote(info, null)`,
+  `RequisicoesList.js:374`), inclusive as do lote bloqueado — justamente as da caixa. Marcadas, a porta pega o lote das séries
+  (`requisitionService`, o lote das séries escolhidas) e recusa com *"Lote L2 esta bloqueado e nao pode ser utilizado"* — o almoxarife
+  descobre no clique, que é o que a 226 e a 231 vêm tirando.
+- **Onde:** só tela, provavelmente. As séries vêm de `GET /api/almoxarifado/materiais/:id/series?status=EM_ESTOQUE`
+  (`routes/almoxarifado/extended.js:1387`) com `lote_id`; a situação do lote está nas linhas de saldo da janela
+  (`saldosEntrega[material]`, `lote_esta_impedido` por `lote_id`, contrato da 224) — cruzar por `lote_id` sem mexer no servidor. Medir se
+  a linha de saldo cobre todo lote que tem série (série num lote sem saldo positivo no endereço?).
+- **O que decidir na Fase 1 (reversível):** apagar (`disabled`) a série de lote impedido com o rótulo da situação (as palavras do
+  extrato), ou escondê-la; o Confirmar já espera por `entregaSeriesPendente` — conferir que a série apagada não conta.
+- **Pontos de atenção:** a separação tem lista de séries? (medir); o teste de molde é `RequisicoesEntregaOrigemImpedida.test.js` (fixture com
+  `seriesEntrega` mockado em `/materiais/10/series?status=EM_ESTOQUE`); Jest com `--maxWorkers=2`.
+- Outros abertos: C522 e C526 (a reserva saber o lote, grande), C524, C525, C527, C529–C531, C533, C534, C536, C514–C518, C486, C491, C495,
+  C497, C498.

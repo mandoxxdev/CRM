@@ -11,11 +11,18 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-13):** **Etapa 230 fechada** (**a requisição da OS só fica reservada com o que pode sair** — a nota
+> **Onde o desenvolvimento está (2026-11-13):** **Etapa 231 fechada** (**a entrega não começa pelo lote que ficou bloqueado, e a Não
+> Conformidade avisa o lote** — quando o lote de onde a peça foi separada fica bloqueado, reprovado ou vencido, a janela de entrega abre em
+> *"Escolha de onde sai"* (o lote apagado; o **Confirmar Entrega** espera a escolha) e o botão **Confirmar Entrega e Baixar Estoque** vem
+> apagado com a frase do item; a tela **Não Conformidades** avisa que o lote continua impedido. **C532** e **C535** resolvidos; sem consulta
+> antes do deploy; decisões **B1517** a **B1521** (a **B1518** revoga, na entrega, a **B1494** e a exceção da **B1493**); aviso **C536**;
+> limitação **D (231)**; verificação **F (231)**).
+> **Próxima:** **a entrega não deixa marcar série do lote impedido** (**D (231)** 1) — detalhada no fim do plano da 231.
+> *(Antes, 2026-11-13:)* **Etapa 230 fechada** (**a requisição da OS só fica reservada com o que pode sair** — a nota
 > de pedido com OS aberta (e a inspeção dessa nota) não reserva mais para a requisição da OS peça de lote bloqueado, reprovado ou vencido:
 > as peças ficam guardadas na reserva da OS e passam para a requisição dela quando o lote for liberado. **C520** resolvido; sem consulta
 > antes do deploy; decisões **B1513** a **B1516** (revogam **B1455**, **B1508** e **B1510**); limitação **D (230)**; verificação **F (230)**).
-> **Próxima:** **a entrega não pré-escolhe a origem da separação que ficou em lote impedido** (**C532**) — detalhada no fim do plano da 230.
+> **Próxima:** **a entrega não pré-escolhe a origem da separação que ficou em lote impedido** (**C532**) — feita na **Etapa 231**.
 > *(Antes, 2026-11-13:)* **Etapa 229 fechada** (**a inspeção que aprova peça de lote bloqueado não entrega outro material no lugar** — a inspeção e a
 > não conformidade olham o lote das peças que liberaram: com o lote bloqueado, reprovado ou vencido, nada é reservado no lugar (nem o saldo
 > avulso de outra entrada), o aviso de liberação não sai, e a tela **Inspeções** avisa que o lote continua impedido. **C519** resolvido; sem
@@ -4685,7 +4692,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15029,6 +15036,32 @@ liberado (dois lotes bloqueados da mesma nota) nem a nota boa seguinte da **mesm
 sem a fila (pularia a regra do dono e a do valor). Consequência: resolve em parte o **C522** (a mesma OS); a requisição comum continua
 esperando. **Reversível.**
 
+**B1517 (NOVA, da Etapa 231; decisão do agente) — o detalhe da requisição diz a situação do lote da separação.** Cada item do detalhe ganha
+(aditivo) o status, a validade e os dois sinais da régua da 224 (impedido; vencido sem liberação) do lote de onde foi separado — falsos sem
+lote. É o que deixa o botão de um clique (que não abre janela nem busca saldos) saber antes do clique. Descartado: buscar os saldos no clique
+(o aviso só viria depois de clicar, que é o que o **C532** pedia para acabar). **Reversível.**
+
+**B1518 (NOVA, da Etapa 231; decisão do agente) — a janela de entrega não pré-escolhe a origem num lote impedido.** Com a parte planejada
+ainda pendente num lote bloqueado, reprovado ou vencido, o **Sai de** abre em *"Escolha de onde sai (o lote da separação não sai)"* — também
+acima da parte e com a lista de endereços falha (pelo detalhe, B1517; *"Planejada da separação"* some) —, e a opção do lote vem apagada.
+**Revoga, na entrega, a pré-seleção da B1494 e a exceção da B1493** (a planejada impedida escolhível): elas só existiam porque a janela a
+pré-selecionava. Descartado: pré-escolher *"Qualquer endereço (automático)"* (troca que o almoxarife não pediu; as peças da caixa saíram do
+lote impedido — a 226 já descartou) e pré-escolher em branco (o rótulo diria "automático" e o servidor aplicaria a planejada). **Reversível.**
+
+**B1519 (NOVA, da Etapa 231; decisão do agente) — o Confirmar Entrega espera a escolha.** Apagado enquanto um item com quantidade está em
+*"Escolha de onde sai"*, numa opção impedida ou — antes de a lista de endereços chegar — com a planejada impedida pelo detalhe. Zerar a
+quantidade do item libera (entrega os outros). Descartado: deixar clicar e recusar (o **C532**). **Reversível.**
+
+**B1520 (NOVA, da Etapa 231; decisão do agente) — o botão de um clique vem apagado e diz por quê.** Quando algum item que ele entregaria tem
+a parte planejada pendente num lote impedido (pelo detalhe), **Confirmar Entrega e Baixar Estoque** fica apagado com uma frase por item;
+**Entregar escolhendo de onde sai…** continua. Descartado: o clique abrir a janela no lugar (mudaria o que o botão faz sem aviso).
+**Reversível.**
+
+**B1521 (NOVA, da Etapa 231; decisão do agente) — a Não Conformidade avisa o lote (C535).** A resposta da decisão ganha o código do lote em
+`liberacao` **só** quando a aceitação liberou e nada foi para quem espera por causa do lote (as chaves de antes continuam as mesmas nos
+outros casos); a tela mostra o aviso amarelo, com *"peças aceitas"* no lugar de *"peças aprovadas"*. Descartado: a chave sempre presente.
+**Reversível.**
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -19240,6 +19273,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      ou vencido (as peças da caixa saíram de lá) — com a frase *"Lote L2: Bloqueado. Nada sai dele …"* embaixo. Confirmar assim dá a recusa
      de sempre; o botão **Confirmar Entrega e Baixar Estoque** (um clique, sem janela) também, com *"a origem da separação (Z-02) não serve
      mais (…)"*. **O que fazer:** liberar o lote em **Lotes e Séries**, ou **Entregar escolhendo de onde sai…** e escolher outro endereço.
+     *(**Resolvido na Etapa 231** — `1ac166c1`, tela `32703b8d` (**B1517** a **B1520**): a janela não pré-escolhe a origem num lote
+     impedido e o Confirmar espera a escolha; o botão de um clique vem apagado com a frase; Fase 5 `473843bb`: o lote bloqueado com a janela
+     aberta também segura.)*
 533. **NOVO (da Etapa 227; decisões B1498 e B1500) — no *Saldo por lote*, o lote vencido com o vencimento liberado fica com a *Situação*
      vazia.** A *Validade* mostra a data passada, mas o lote pode sair (o vencimento foi liberado em **Lotes e Séries**); o que vence hoje
      também fica vazio. A situação é a da hora em que o relatório foi consultado. **O que fazer:** nada — vazio quer dizer "pode sair".
@@ -19252,6 +19288,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      que continua bloqueado não reserva nada para quem espera (como a inspeção), mas a tela **Não Conformidades** não avisa — só a tela
      **Inspeções** tem a frase. **Nenhum erro de estoque.** **O que fazer:** olhar o lote em **Lotes e Séries**; liberar o lote reserva para
      quem espera.
+     *(**Resolvido na Etapa 231** — `1ac166c1`, tela `32703b8d` (**B1521**): a tela **Não Conformidades** mostra o aviso amarelo do lote.)*
+536. **NOVO (da Etapa 231; decisões B1517 a B1520) — a situação do lote é a da última leitura.** O botão de um clique segue a situação lida
+     com a requisição (relida ao voltar para a aba); a janela de entrega segura se essa leitura **ou** a lista de endereços (lida ao abrir a
+     janela) disser que o lote está impedido. Um lote **liberado** com a janela aberta pode continuar segurando até reabrir; um lote
+     **bloqueado** com ela aberta só aparece depois de voltar para a aba. **Nenhum erro de estoque** (a entrega confere na hora e recusa o lote
+     impedido). **O que fazer:** reabrir a requisição.
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -20608,6 +20650,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(231) A entrega e o lote impedido da separação, o que ficou de fora.** (1) Material com **número de série**: em *"Escolha de onde
+  sai"* ou automático, a lista de séries mostra as do lote impedido (as da caixa); marcadas, a entrega recusa ao confirmar (*"Lote L2 esta
+  bloqueado e nao pode ser utilizado"*) — a lista de séries é outra régua (Etapa 61). (2) A situação é a da leitura (**C536**). (3) A NC só
+  conhece o lote pela inspeção: NC aberta à mão não avisa (nem libera).
 - **(230) A requisição da OS e o lote bloqueado, o que ficou de fora.** (1) A reserva da OS não sabe o lote: liberar um lote pode passar
   para a requisição da OS uma reserva da OS que a nota fez sobre **outro** lote dela (as peças entregues saem do lote liberado, que é bom). (2) A
   requisição da OS reservada sobre lote bloqueado **antes** desta etapa continua como está (não há migração). (3) Requisição da OS barrada
@@ -22085,6 +22131,11 @@ Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Previ
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
 
+**(231) Nenhum clique foi dado.** A tela **mudou** — a janela de entrega, o botão de um clique e o aviso da **Não Conformidades**, provados
+pelo Jest (`RequisicoesEntregaOrigemImpedida`, 16 cenários; `NaoConformidadesAlmoxarifado`, +2; os 4 da 226 revistos) contra o contrato do
+detalhe. O servidor, pelas rotas reais, em `entregaOrigemLoteImpedido` (7: a situação no detalhe, a recusa do um clique e a troca que passa)
+e `liberacaoLoteImpedido` (+2: a chave da NC); 21 controles positivos caem. **Para clicar (10 minutos):** o roteiro da seção da Etapa 231
+no guia.
 **(230) Nenhum clique foi dado.** A tela **não mudou** de código — o aviso amarelo da **Inspeções** (229) e o aviso azul de **Lotes e
 Séries** (220) passam a aparecer também na OS. O servidor, pelas rotas reais (a nota, a inspeção, o lote, o estorno, a separação), em
 `osAbertaLoteImpedido` (21 cenários): lote bloqueado, lote bom + bloqueado, o avulso de outra entrada, lote ativo e sem controle, a
@@ -41924,12 +41975,78 @@ bloqueado) e a reserva da OS cai para 1.
 - A reserva da OS sobre um lote bloqueado ainda segura a nota boa seguinte para uma requisição **comum** (**C522**, em parte).
 - Requisições da OS reservadas sobre lote bloqueado antes desta etapa continuam como estão.
 
+## Etapa 231 — A entrega não começa pelo lote que ficou bloqueado, e a Não Conformidade avisa o lote (2026-11-13)
+
+O almoxarife separou 3 peças do lote *L2*; antes de entregar, o *L2* foi bloqueado (ou reprovado, ou venceu). Até aqui, a janela de entrega
+abria com o **Sai de** justamente no *L2* e o botão **Confirmar Entrega e Baixar Estoque** tentava tirar de lá — os dois só descobriam na
+recusa, depois do clique. Agora a janela não escolhe nada sozinha (*"Escolha de onde sai"*), o lote bloqueado vem apagado e o **Confirmar
+Entrega** espera a escolha; o botão de um clique vem apagado e diz qual item e qual lote. E a tela **Não Conformidades** passa a avisar,
+como a **Inspeções** já avisava, quando as peças aceitas estão num lote que continua impedido. Sem consulta antes do deploy (nada muda no
+banco nem nas recusas). Decisões do agente: **B1517** a **B1521**. **C532** e **C535** resolvidos; aviso **C536**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A janela de entrega abre com o **Sai de** em *"Z-02 — lote L2 (6) — Bloqueado: não sai"* (a origem da separação) e a frase amarela | Abre em *"Escolha de onde sai (o lote da separação não sai)"*; a opção do *L2* vem apagada; a frase *"Já separado de Z-02 — lote L2: Bloqueado. …"* |
+| **Confirmar Entrega** clicável — e recusado | Apagado até escolher de onde sai (ou zerar a quantidade do item); dica *"Escolha de onde sai cada item com o lote da separação impedido"* |
+| **Confirmar Entrega e Baixar Estoque** (um clique) clicável — e recusado com *"… a origem da separação (Z-02) não serve mais (…)"* | Apagado; embaixo, *"Chapa 3mm: separado de Z-02 — lote L2 (Bloqueado). A entrega direta sairia de lá e seria recusada — use "Entregar escolhendo de onde sai…"."* |
+| Lista de endereços que não carregou: *"Planejada da separação (Z-02)"* mesmo com o lote bloqueado | *"Escolha de onde sai …"* (a situação vem com a requisição) |
+| **Não Conformidades** aceita peças de lote bloqueado: só *"Não conformidade NC-… decidida! …"* | Também, em amarelo: *"O lote L1 continua bloqueado, reprovado ou vencido: as peças aceitas vão para quem espera quando o lote for liberado."* |
+| Lote ativo; item separado no automático; a parte da origem já entregue; a separação | **Iguais** |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**. No cadastro do material (Compras), *LOTE-231* com **Controle por lote**, unidade *un*.
+**Movimentações → Entrada** de 4 no lote *L1* (endereço *XB-01*) e de 6 no lote *L2* (endereço *Z-02*). Uma requisição de 3 *LOTE-231*,
+aprovada; **Iniciar Separação** → **Sai de** *"Z-02 — lote L2 (6)"* → **Confirmar Separação**. Depois, **Lotes e Séries** → *L2* → **Mudar
+status** → *Bloqueado*.
+
+**1. O botão de um clique avisa antes.** Abra a requisição: **Confirmar Entrega e Baixar Estoque** apagado; embaixo de **Entregar
+escolhendo de onde sai…** (que continua aceso), em amarelo: *"LOTE-231: separado de Z-02 — lote L2 (Bloqueado). A entrega direta sairia de
+lá e seria recusada — use "Entregar escolhendo de onde sai…"."*. Com o *L2* **Reprovado**: *"(Reprovado)"*; vencido: *"(Vencido em
+10/11/2026)"*. Em **Pronta para retirada**, o mesmo.
+
+**2. A janela não escolhe o lote bloqueado.** **Entregar escolhendo de onde sai…**: o **Sai de** em *"Escolha de onde sai (o lote da
+separação não sai)"*; a opção *"Z-02 — lote L2 (6) — Bloqueado: não sai"* apagada; embaixo: *"Já separado de Z-02 — lote L2: Bloqueado. Essa
+parte não sai até o lote ser liberado na tela Lotes e Séries — na entrega, escolha outro endereço."*; **Confirmar Entrega** apagado.
+
+**3. Escolher libera.** *"XB-01 — lote L1 (4)"*: a frase some, a opção *"Escolha de onde sai…"* sai da lista, aparece **Motivo da troca
+(opcional)** e o **Confirmar Entrega** acende — entrega 3 do *L1*. *"Qualquer endereço (automático)"* também acende (a troca é registrada).
+Zerar a quantidade do item também (entrega os outros itens).
+
+**4. Lote liberado: como antes.** **Mudar status** do *L2* → *Ativo* e abra a requisição de novo: o botão de um clique aceso, sem frase; a
+janela abre em *"Z-02 — lote L2 (6)"*.
+
+**5. A parte de lá já foi entregue: nada muda.** Se o que foi separado do *L2* já saiu numa entrega anterior, o botão fica aceso e a janela
+não traz *"Escolha de onde sai"*.
+
+**6. A Não Conformidade avisa.** Material **crítico**, inspeção ligada, **controle de certificado**: a nota entra no lote *L1* *Bloqueado*;
+em **Inspeções**, reprove as 4 (abre a NC). **Não Conformidades** → **Decidir** → *Aceitar* → **Registrar decisão**: *"Não conformidade NC-…
+decidida! 4 liberado(s) do bloqueio"* e, em amarelo, *"O lote L1 continua bloqueado, reprovado ou vencido: as peças aceitas vão para quem
+espera quando o lote for liberado."*. Com o lote *Ativo*: só o primeiro.
+
+### O que esta etapa NÃO cobre
+
+- Material com **número de série**: em *"Escolha de onde sai"* ou automático, a lista de séries mostra as do lote bloqueado; marcadas, a
+  recusa vem ao confirmar (**D (231)**).
+- A situação do lote é a da última leitura: um lote liberado com a janela aberta pode continuar segurando até reabrir (**C536**).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 231 entregue (2026-11-13):** **a entrega não começa pelo lote que ficou bloqueado, e a Não Conformidade avisa o lote** (**C532**
+  e **C535** resolvidos). O detalhe da requisição diz a situação do lote da separação (**B1517**); a janela não pré-escolhe a origem impedida
+  (**B1518**, revoga na entrega a **B1494** e a exceção da **B1493**); o Confirmar espera a escolha (**B1519**); o botão de um clique vem
+  apagado com a frase (**B1520**); a NC devolve e mostra o lote (**B1521**). Commits `27e4941b` (estimativa), `a28a584a` (plano e Fase
+  2), `1ac166c1` (servidor e testes), `32703b8d` (tela e testes), `473843bb` (Fase 5: o lote bloqueado com a janela aberta) e o
+  fechamento. **O que é seu:** as decisões **B1517** a **B1521** (reversíveis); o aviso **C536**; a limitação **(231)** em D e a verificação
+  **(231)** em F. Sem consulta antes do deploy. **Próxima:** **a entrega não deixa marcar série do lote impedido** (**D (231)** 1) —
+  detalhada no fim do plano da 231.
 
 - **Etapa 230 entregue (2026-11-13):** **a requisição da OS só fica reservada com o que pode sair** (**C520** resolvido, **C522** em parte).
   A fila da OS recebe só o que a entrada trouxe fora de lote impedido (**B1513**); liberar o lote passa a reserva da OS para a requisição da
@@ -41938,7 +42055,7 @@ bloqueado) e a reserva da OS cai para 1.
   (motor e testes), `de2bd342` (Fase 5: o lote de várias notas) e o fechamento. **O que é seu:**
   as decisões **B1513** a **B1516** (reversíveis; revogam **B1455**, **B1508** e **B1510**); a limitação **(230)** em D e a verificação
   **(230)** em F. Sem consulta antes do deploy. **Próxima:**
-  **a entrega não pré-escolhe a origem da separação que ficou em lote impedido** (**C532**) — detalhada no fim do plano da 230.
+  **a entrega não pré-escolhe a origem da separação que ficou em lote impedido** (**C532**) — feita na **Etapa 231**.
 
 - **Etapa 229 entregue (2026-11-13):** **a inspeção que aprova peça de lote bloqueado não entrega outro material no lugar** (**C519**
   resolvido). A inspeção e a NC passam o lote do item; impedido agora, nada é distribuído (**B1509**); OS aberta como antes (**B1510**); sem
