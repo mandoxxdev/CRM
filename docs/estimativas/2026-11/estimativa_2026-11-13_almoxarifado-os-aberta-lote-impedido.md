@@ -18,7 +18,7 @@ Medido no código antes de estimar (sobre `60393569`):
 
 | # | Tarefa | Execução estimada | Fator | Informado | Etapa/plano | Régua usada | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | A fila da OS aberta recebe só o que pode sair; liberar o lote passa a reserva da OS para a requisição dela (C520) | 1h | estoque/saldo, travas (análise 1h + teste 2h) | 4h | 230 | 228: 0,7 h; 229: 0,7 h (portas do motor com régua pronta); esta tem duas pontas (a chegada e a liberação do lote) | — | — | — |
+| 1 | A fila da OS aberta recebe só o que pode sair; liberar o lote passa a reserva da OS para a requisição dela (C520) | 1h | estoque/saldo, travas (análise 1h + teste 2h) | 4h | 230 | 228: 0,7 h; 229: 0,7 h (portas do motor com régua pronta); esta tem duas pontas (a chegada e a liberação do lote) | 0,9 h (horas.js --grupos "E230=…", 13/11) → 1h | 4h (1h + análise 1 h + teste 2 h, da tabela — não informado pelo André) | 240eb83b, 92fe4b45, 59a5ae94, de2bd342, 7068adad e este |
 
 Incerteza: média — a conversão na liberação do lote é peça nova (reaproveita `distribuirParaOs` e a liberação de reserva); se a Fase 2
 mostrar que o estorno (B1508) também muda, reestimar.
@@ -27,3 +27,5 @@ Medição no fechamento:
 ```
 --grupos "E230=Etapa 230|Estimativa: almoxarifado - a requisicao da OS"
 ```
+
+No fechamento: execução estimada 1h, medida 0,9 h — a régua das etapas do motor com régua pronta continua honesta (a Fase 5 desta, com uma correção, ficou dentro). Conclusão: `conclusao_2026-11-13_almoxarifado-os-aberta-lote-impedido.txt`.
