@@ -373,6 +373,12 @@ const FRASE_PARCIAL = ' Se o resto vier de outro endereço, esta parte continua 
 // não move a série, então ele não filtra.
 const seriesDoLote = (info, loteId) => (info?.series || [])
   .filter((s) => !loteId || Number(s.lote_id) === Number(loteId));
+// Etapa 232 (D (231) 1, B1523/B1524): a série cujo lote está impedido (bloqueado, reprovado ou vencido — `lote_esta_impedido === true` na
+// listagem de séries, a régua da 224) vem apagada: a porta pega o lote das séries e recusaria. Sem o campo (resposta antiga): como antes.
+const serieImpedida = (s) => situacaoDoLote(s) !== null;
+const rotuloSerieImpedida = (s) => ` · lote ${s.lote_codigo} — ${situacaoDoLote(s)}: não sai`;
+const FRASE_SERIES_IMPEDIDAS = 'Séries de lote bloqueado, reprovado ou vencido vêm apagadas: só saem depois que o lote for liberado na tela '
+  + 'Lotes e Séries.';
 
 // Etapa 60 (RN-01/04): o máximo separável que a tela conhece, na mesma régua do servidor:
 // base = min(pendente de separação, saldo − o que OUTROS itens do mesmo material separam nesta
@@ -1289,7 +1295,9 @@ const RequisicoesList = () => {
     if (!info.serializado) return null;
     const loteId = lerValorOrigem(origensEntrega[item.id]?.valor)?.lote_id || null;
     const visiveis = seriesDoLote(info, loteId);
-    const idsVisiveis = new Set(visiveis.map((s) => Number(s.id)));
+    // Etapa 232 (B1525): a série de lote impedido não conta — nem no contador, nem no Confirmar, nem no PUT (a marcada que ficou impedida
+    // ao reler depois de uma recusa sai das escolhidas).
+    const idsVisiveis = new Set(visiveis.filter((s) => !serieImpedida(s)).map((s) => Number(s.id)));
     const escolhidas = (seriesEscolhidas[item.id] || []).filter((id) => idsVisiveis.has(id));
     // Fase 5 (review da Etapa 61): com "Sai de" automático a lista mistura lotes, e o servidor recusa
     // séries de lotes diferentes (sem lote conta como um lote à parte, como lá).
@@ -2882,9 +2890,11 @@ const RequisicoesList = () => {
                               {s.visiveis.map((serie) => {
                                 const id = Number(serie.id);
                                 const marcada = s.escolhidas.includes(id);
-                                const bloqueada = !marcada && (escolhidasOutros.has(id) || s.escolhidas.length >= qtdEntregar);
+                                const impedida = serieImpedida(serie); // Etapa 232 (B1524)
+                                const bloqueada = impedida || (!marcada && (escolhidasOutros.has(id) || s.escolhidas.length >= qtdEntregar));
                                 return (
-                                  <label key={serie.id} style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                  <label key={serie.id} style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: 4,
+                                    ...(impedida ? { opacity: 0.6 } : {}) }}
                                     title={escolhidasOutros.has(id) ? 'Já escolhida em outro item' : undefined}>
                                     <input type="checkbox" data-serie-id={id} checked={marcada} disabled={bloqueada}
                                       onChange={() => alternarSerie(item.id, id)} />
@@ -2892,9 +2902,19 @@ const RequisicoesList = () => {
                                     {serie.localizacao_descricao && (
                                       <span style={{ color: 'var(--gmp-text-light)', fontSize: '0.7rem' }}> · {serie.localizacao_descricao}</span>
                                     )}
+                                    {impedida && (
+                                      <span data-serie-situacao={id} style={{ color: 'var(--gmp-error)', fontSize: '0.7rem' }}>
+                                        {rotuloSerieImpedida(serie)}
+                                      </span>
+                                    )}
                                   </label>
                                 );
                               })}
+                            </div>
+                          )}
+                          {!s.falhou && s.visiveis.some(serieImpedida) && (
+                            <div id={`entrega-series-impedidas-${item.id}`} style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)', marginTop: 4 }}>
+                              {FRASE_SERIES_IMPEDIDAS}
                             </div>
                           )}
                           {s.lotesMisturados && (
