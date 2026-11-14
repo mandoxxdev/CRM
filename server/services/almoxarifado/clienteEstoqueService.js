@@ -87,6 +87,8 @@ async function posicaoPorCliente(db, { cliente_id } = {}) {
 
   const itens = await dbAll(db, `
     SELECT m.id AS material_id, m.codigo, m.nome, m.unidade,
+           -- Etapa 235 (B1536): a janela de devolucao precisa saber se o item pede serie (lista as series) e lote
+           COALESCE(m.controle_serie, 0) AS controle_serie, COALESCE(m.controle_lote, 0) AS controle_lote,
            m.quantidade_atual AS saldo,
            ${disponivelSql('m')} AS saldo_disponivel,
            COALESCE((SELECT SUM(mv.quantidade) FROM movimentacoes_almoxarifado mv

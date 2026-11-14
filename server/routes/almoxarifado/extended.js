@@ -982,9 +982,14 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
           serie_ids: serie_ids || [],
           localizacao_origem_id: localizacao_origem_id || null,
           observacoes: observacoes || null,
-        // exigeLote/exigeSerie: esta rota tem como informar os dois (a tela da Task 8 oferece
-        // seletor de lote e de serie), entao declara a exigencia igual as rotas v1/v2.
-        }, { exigeLote: true, exigeSerie: true });
+        // exigeLote/exigeSerie: o corpo desta rota aceita `lote_id` e `serie_ids`, entao declara a exigencia igual as rotas v1/v2.
+        // Etapa 235 (C540): este comentario dizia "a tela da Task 8 oferece seletor de lote e de serie" — estava errado desde a
+        // Etapa 8: a janela de Materiais de Clientes mandava so quantidade e documento (material com serie nao era devolvivel por
+        // ela). Desde a 235 ela lista as series (B1538); seletor de lote ainda nao tem (D (235) 1).
+        // `lotePelasSeries` (Etapa 235, B1535 — a mesma regua da v2, Etapas 233/234): com o lote em branco, a serie de lote
+        // bloqueado, reprovado ou vencido nao sai; series de um lote so gravam esse lote (livro e linha baixada); lotes
+        // diferentes sao recusados. Antes (sonda da Fase 0) a serie de lote BLOQUEADO saia com 201 e a devolucao gravava "sem lote".
+        }, { exigeLote: true, exigeSerie: true, lotePelasSeries: true });
         res.status(201).json(resultado);
       } catch (e) { handleError(res, e); }
     });
