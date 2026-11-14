@@ -7,7 +7,13 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 
 > ## Onde o desenvolvimento está — 2026-11-13 (Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
-> **O desenvolvimento parou aqui: Etapa 236 fechada — 2026-11-13.** **A devolução ao cliente de material com controle por lote.** Em
+> **O desenvolvimento parou aqui: Etapa 237 fechada — 2026-11-13.** **A devolução ao cliente avisa que a localização padrão está
+> bloqueada.** Em **Materiais de Clientes → Devolver**, com a localização padrão do material bloqueada, a janela avisa ao abrir que a
+> devolução será recusada e apaga o **Confirmar devolução**. **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção
+> da 237). **Onde parou, exatamente:** a **237 está fechada**; a **próxima** continua a detalhada no fim do plano da 236
+> (`docs/superpowers/plans/2026-11-13-almoxarifado-etapa236-devolucao-cliente-seletor-de-lote.md`), sem estimativa nem plano.
+>
+> *(Antes:)* **Etapa 236 fechada — 2026-11-13.** **A devolução ao cliente de material com controle por lote.** Em
 > **Materiais de Clientes → Devolver**, a janela passa a ter o campo **Lote** com os lotes que têm saldo (o que não sai vem apagado, com o
 > motivo; um lote só que pode sair já vem escolhido); antes esse material não era devolvível pela tela. Com lote e série, só as séries do lote
 > escolhido. **Sem consulta antes do deploy.** **Nenhum clique foi dado** (testes da tela e das rotas — roteiro na seção da 236 e letra F das
@@ -7285,6 +7291,33 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 237 — A devolução ao cliente avisa que a localização padrão está bloqueada (ENTREGUE — 2026-11-13)
+
+**O que mudou, em uma frase:** em **Materiais de Clientes → Devolver**, se a localização padrão do material estiver bloqueada, a janela
+avisa ao abrir e o botão **Confirmar devolução** fica apagado.
+
+**O problema que ela resolve.** Com a localização padrão bloqueada o sistema recusa a devolução, mas o usuário só descobria depois de
+preencher tudo e confirmar (*"Localização R5L-3 está bloqueada"*).
+
+| Antes | Agora |
+|---|---|
+| Recusa só ao confirmar | Aviso ao abrir: *"A localização padrão deste material (R5L-3) está bloqueada: a devolução será recusada. Desbloqueie a localização antes de devolver."*, e o botão apagado |
+| Localização padrão livre | **Igual** |
+
+**Roteiro de teste manual (≈5 min):**
+
+1. Entre como **Administrador do almoxarifado**. Um material de cliente *CLI-237* (Compras), sem lote nem série, com **Localização padrão**
+   *R5L-3*; **Movimentações → Entrada** de 3.
+2. Em **Localizações**, bloqueie a *R5L-3*.
+3. **Materiais de Clientes**, escolha o cliente, **Devolver** na linha de *CLI-237*. **Confira:** o aviso acima, em vermelho; preencha
+   quantidade 1 e documento *DEV-1* — **Confirmar devolução** continua apagado.
+4. Desbloqueie a *R5L-3*, **Atualizar**, **Devolver** de novo. **Confira:** sem aviso; **Confirmar** → *"Devolução ao cliente registrada!"*.
+
+**O que esta etapa não cobre:** o sistema continua recusando com a localização padrão bloqueada (escolher a origem é a **D (236)** 1); o
+aviso é o da hora em que a posição carregou (**D (237)** 2).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro é o que os testes automáticos (tela e rotas) provam.
 
 ## Etapa 236 — A devolução ao cliente de material com controle por lote (ENTREGUE — 2026-11-13)
 

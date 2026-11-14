@@ -38,9 +38,32 @@ Candidatos (sobre `da1b8d19`):
 
 ## Tasks
 
-- [x] T1 — servidor: os dois campos na posição + o teste de contrato e integração (`materialClientePosicaoLocalizacaoBloqueada.api.test.js`).
-- [x] T2 — tela: aviso e botão (`MateriaisClienteDevolucaoLocalBloqueado.test.js`).
+- [x] T1 — servidor: os dois campos na posição + o teste de contrato e integração (`materialClientePosicaoLocalizacaoBloqueada.api.test.js`) — `ac98e771`; a fixture da posição do client — `a44d7e1c`.
+- [x] T2 — tela: aviso e botão (`MateriaisClienteDevolucaoLocalBloqueado.test.js`) — `e50a98ec`.
 - [x] Fechamento.
 
 Fase 2 (revisão do plano por agente) e Fase 5 (revisão por agentes) **puladas**: fatia de um campo de leitura e um aviso, sem estoque,
 trava ou permissão; pedido do André por tempo. Os controles positivos (sabotagem) ficam no lugar delas.
+
+## Divergência do plano
+
+- A primeira rodada do `test:api` deu **630/631**: `pdfsRemessaPosicaoFixture` confere que a fixture versionada do client
+  (`client/src/utils/__fixtures__/posicaoCliente.rota.json`) tem as mesmas chaves da resposta real, e a T1 acrescentou duas. Regravada com
+  `CRM_GRAVAR_FIXTURE=1` (`a44d7e1c`); a `remessa.rota.json`, regravada junto, só mudava número e datas e foi descartada. O plano não
+  previa a fixture.
+
+## Verificação (medida, serial)
+
+- Servidor (sobre `a44d7e1c`, o código final — o fechamento só muda documentos): `test:api` **631/631 arquivos OK** (630 da 236 + o
+  `materialClientePosicaoLocalizacaoBloqueada`); `test:almoxarifado` **44/0**, `test:validation` **4/0**, `test:safealter` **3/0**,
+  `test:sqlite` **16/0** (rodados sobre `e50a98ec`; a `a44d7e1c` só muda a fixture JSON do client).
+- Tela (sobre `e50a98ec`): `react-scripts test --maxWorkers=2` **232/232 suítes, 3137/3137 testes** (3134 da 236 + 3); `react-scripts build`
+  (CI=true) **Compiled successfully**.
+- Controles positivos: servidor — o booleano sempre `false` derruba 1/4; tela — tirar o `disabled` derruba 1/3, tirar o aviso derruba 1/3.
+
+## Próxima tarefa detalhada
+
+Continua a da 236 (sem mudança): **os fluxos internos de saída de peça com série gravam o lote das séries (resto da D (233) 3)** — ver o fim de
+`docs/superpowers/plans/2026-11-13-almoxarifado-etapa236-devolucao-cliente-seletor-de-lote.md` (contrato `registrarMovimentacao(...,
+{ lotePelasSeries: true })`, sondas por serviço, travas e estorno). Porte de motor (3 h ou mais): não cabia na janela de 1 h desta etapa.
+Também em aberto: a **C543** no motor (validar só o endereço de onde a peça sai, junto com a **D (236)** 1); a **C542**.

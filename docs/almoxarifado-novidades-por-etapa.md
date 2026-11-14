@@ -11,12 +11,16 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-13):** **Etapa 236 fechada** (**a devolução ao cliente de material com controle por lote** — em
+> **Onde o desenvolvimento está (2026-11-13):** **Etapa 237 fechada** (**a devolução ao cliente avisa a localização padrão bloqueada** —
+> em **Materiais de Clientes → Devolver**, com a localização padrão do material bloqueada, a janela avisa ao abrir que a devolução será
+> recusada e apaga o **Confirmar devolução** (antes o usuário preenchia tudo e a recusa vinha ao confirmar). Fatia visível da **C543**; decisão
+> **B1542**; limitação **D (237)**; verificação **F (237)**; sem consulta antes do deploy; o motor não mudou).
+> **Próxima:** **os fluxos internos descobrem o lote das séries** (o resto da **D (233)** 3) — detalhada no fim do plano da 236 (o da 237 aponta para ela).
+> *(Antes, 2026-11-13:)* **Etapa 236 fechada** (**a devolução ao cliente de material com controle por lote** — em
 > **Materiais de Clientes → Devolver**, a janela passa a ter o campo **Lote** com os lotes que têm saldo (o que não sai vem apagado, com a
 > situação); antes esse material **não era devolvível pela tela**. Com lote e série, a lista de séries mostra só as do lote escolhido.
 > **D (235)** 1 resolvida; decisões **B1539** a **B1541**; avisos **C542** e **C543**; limitação **D (236)**; verificação **F (236)**; sem consulta antes
 > do deploy; o servidor não mudou).
-> **Próxima:** **os fluxos internos descobrem o lote das séries** (o resto da **D (233)** 3) — detalhada no fim do plano da 236.
 > *(Antes, 2026-11-13:)* **Etapa 235 fechada** (**a devolução ao cliente de peça com número de série, pelo lote
 > certo** — em **Materiais de Clientes → Devolver**, material com série: a janela lista as séries em estoque (antes não listava, e esse
 > material **não era devolvível pela tela**), apaga a de lote impedido, diz de qual lote elas saem e barra lotes diferentes; a devolução é
@@ -15225,6 +15229,12 @@ passa a apagar só bloqueado e reprovado (como a **Perda** em Movimentações). 
 O sistema escolhe de qual endereço do lote a peça sai, como já fazia. Trocar de lote desmarca todas as séries (uma série nunca está em dois
 lotes; descartado manter as marcadas). **Reversível.**
 
+**B1542 (NOVA, da Etapa 237; decisão do agente) — com a localização padrão bloqueada, a janela de devolução ao cliente avisa e apaga o
+Confirmar; o sistema continua recusando.** Escolhido: a posição do cliente diz, por material, o código da localização padrão e se ela está
+bloqueada, e a janela mostra o aviso e desabilita o botão. Descartados: (a) mudar a regra de saída para olhar só o endereço de onde a peça
+sai — vale para toda saída sem origem (Movimentações também) e não cabia na fatia (é a **D (236)** 1 com a **C543**); (b) só avisar e deixar
+confirmar — o sistema recusaria sempre. **Reversível** (o botão volta a habilitar tirando uma condição).
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -19491,7 +19501,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      janela não escolhe o endereço de origem, e o sistema recusa *"Localização R5L-3 está bloqueada"* mesmo com o lote guardado em outro
      endereço (sonda da Fase 5). Por **Movimentações** a saída escolhe a origem; a devolução ao cliente só existe nesta janela. **O que
      fazer:** desbloquear a localização padrão do material (ou trocar a localização padrão no cadastro) antes de devolver. A escolha da origem
-     na janela é a **D (236)** 1.
+     na janela é a **D (236)** 1. **Desde a Etapa 237 (B1542)** a janela avisa ao abrir — *"A localização padrão deste material (R5L-3) está bloqueada: a devolução será recusada. Desbloqueie a localização antes de devolver."* — e
+     apaga o **Confirmar devolução**; a recusa do sistema continua igual (a regra vale para toda saída sem origem escolhida).
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -20848,6 +20859,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(237) O aviso da localização padrão bloqueada na devolução ao cliente, o que ficou de fora.** (1) O sistema continua recusando: a
+  devolução só sai desbloqueando a localização ou trocando a padrão no cadastro (escolher a origem é a **D (236)** 1). (2) O aviso é o da hora
+  em que a posição carregou: a localização bloqueada com a tela aberta só aparece ao confirmar (ou depois de **Atualizar**). (3) Material sem
+  localização padrão: sem aviso (não há o que bloquear, e a devolução não é recusada por isso).
 - **(236) O seletor de lote da devolução ao cliente, o que ficou de fora.** (1) A localização de origem (**B1541**; com a localização padrão bloqueada a devolução é recusada — **C543**). (2) Material com controle
   por lote cujas séries ficaram **sem lote** não é devolvível pela tela (a lista mostra só as séries do lote escolhido, e o sistema recusa
   sem lote e com lote). (3) O vencido continua barrando (**B1537**/**B1540**). (4) A lista de lotes é a da hora em que a janela abriu (a
@@ -22360,6 +22375,12 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(237) Nenhum clique foi dado.** A tela **mudou** — o aviso da localização padrão bloqueada na janela **Devolver ao cliente** e o
+**Confirmar devolução** apagado —, provado pelo Jest (`MateriaisClienteDevolucaoLocalBloqueado`, 3 cenários; tirar o `disabled` e tirar o aviso
+derrubam 1 cada). O servidor ganhou dois campos de leitura na posição, provados pelas rotas reais em
+`materialClientePosicaoLocalizacaoBloqueada` (4: os campos, sem localização padrão, os antigos intactos, e a integração — o campo diz
+bloqueada exatamente quando a devolução é recusada com *"Localização ⟨código⟩ está bloqueada"*; desbloqueada, sai). Suítes: `test:api` 631/631, almoxarifado 44, validation 4, safealter 3, sqlite 16, Jest 232 suítes e 3137 testes, build ok.
 
 **(236) Nenhum clique foi dado.** A tela **mudou** — o campo **Lote** da janela **Devolver ao cliente** (os lotes com saldo, o apagado com a
 situação, a escolha sozinha com um lote só, a parada sem lote, as séries do lote escolhido), provado pelo Jest (`MateriaisClienteDevolucaoLote`,
@@ -42543,12 +42564,52 @@ para *M2*: a lista mostra *B1*, e nada marcado (*"0/1 série(s) selecionada(s)"*
 - O saldo do seletor é o do lote, não o livre: com reserva, a recusa vem ao confirmar (**C542**).
 - Os fluxos internos (devolução ao estoque, sucata, Não Conformidade) não descobrem o lote das séries (resto da **D (233)** 3).
 
+## Etapa 237 — A devolução ao cliente avisa que a localização padrão está bloqueada (2026-11-13)
+
+Quando a **localização padrão** de um material de cliente está **bloqueada**, o sistema recusa a devolução ao cliente — mesmo com a peça
+guardada em outro endereço (**C543**). Até aqui o usuário só descobria isso depois de preencher quantidade, lote, séries e documento e
+clicar **Confirmar**. Agora a janela **Devolver ao cliente** avisa ao abrir e apaga o botão. A regra do sistema não mudou. Decisão do
+agente: **B1542**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Localização padrão bloqueada: o usuário preenchia tudo e, ao confirmar, *"Localização R5L-3 está bloqueada"* | Ao abrir a janela, em vermelho: *"A localização padrão deste material (R5L-3) está bloqueada: a devolução será recusada. Desbloqueie a localização antes de devolver."*, e **Confirmar devolução** apagado |
+| Localização padrão livre (ou sem localização padrão) | **Igual** |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**; um cliente (ex.: *Cliente Alfa*); um material dele, *CLI-237*, sem controle de lote
+nem de série, com **Localização padrão** *R5L-3* e saldo 3 (uma **Entrada**). Em **Localizações**, bloqueie a *R5L-3*.
+
+**1. O aviso.** **Materiais de Clientes**, escolha *Cliente Alfa*, na linha de *CLI-237* clique **Devolver**. **Confira:** *"A localização padrão deste material (R5L-3) está bloqueada: a devolução será recusada. Desbloqueie a localização antes de devolver."*;
+preencha quantidade 1 e documento *DEV-1*: **Confirmar devolução** continua apagado.
+
+**2. Desbloqueado, devolve.** Desbloqueie a *R5L-3*, clique **Atualizar** e abra **Devolver** de novo: sem aviso; quantidade 1, documento
+*DEV-1*, **Confirmar devolução** → *"Devolução ao cliente registrada!"*.
+
+**3. O que não muda.** Material sem localização padrão, ou com ela livre: a janela é a de sempre.
+
+### O que esta etapa NÃO cobre
+
+- O sistema continua recusando com a localização padrão bloqueada; escolher o endereço de origem na janela é a **D (236)** 1.
+- O aviso é o da hora em que a posição carregou (**D (237)** 2).
+- Os fluxos internos não descobrem o lote das séries (resto da **D (233)** 3) — a próxima.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 237 entregue (2026-11-13):** **a devolução ao cliente avisa que a localização padrão está bloqueada** (fatia visível da **C543**).
+  A posição do cliente passa a dizer o código e o bloqueio da localização padrão de cada material; a janela **Devolver ao cliente** avisa e
+  apaga o **Confirmar** (**B1542**). O motor não mudou. Commits `7434cd7e` (estimativa), `ac98e771` (posição e teste), `e50a98ec` (tela e
+  teste) e o fechamento. **O que é seu:** a **B1542** (reversível); a **C543** atualizada; a limitação **(237)** em D e a verificação
+  **(237)** em F. Sem consulta antes do deploy. **Próxima:** **os fluxos internos descobrem o lote das séries** (o resto da **D (233)** 3) —
+  detalhada no fim do plano da 236.
 
 - **Etapa 236 entregue (2026-11-13):** **a devolução ao cliente de material com controle por lote** (**D (235)** 1 resolvida). A janela
   **Devolver ao cliente** ganha o campo **Lote** (os lotes com saldo; o que não sai apagado com a situação; um lote só elegível já vem
