@@ -1,0 +1,9 @@
+*Planejamento — almoxarifado: devolver ao cliente peça com número de série, pelo lote certo*
+_13/11/2026_
+
+*1. A devolução ao cliente escolhe as séries e registra o lote delas*
+Hoje, em Materiais de Clientes, a janela de devolver ao cliente pede só a quantidade e o documento: material com número de série não consegue ser devolvido por ali, porque o sistema exige as séries e a tela não as oferece. Depois desta alteração, para material com número de série a janela mostra as séries em estoque para marcar, e o registro da devolução guarda o lote das séries marcadas, como a saída avulsa já faz. Série de lote bloqueado ou reprovado não sai, com o aviso de qual lote está impedido. Séries de lotes diferentes pedem uma devolução para cada lote, e a janela avisa antes de enviar. Com todas do mesmo lote, a janela mostra de qual lote elas saem.
+Tempo estimado: *2h30*
+
+*Total estimado: 2h30*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
