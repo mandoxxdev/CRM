@@ -179,7 +179,7 @@ de saída (`SAIDA_PRODUCAO`…) — cenário.
 mesmo gesto é a **D (233) 2** — a saída avulsa de série com o lote em branco não grava o lote das séries. **Sem estimativa** — começa pela
 Fase 0.5.)*
 
-**A saída avulsa com série grava o lote das séries (D (233) 2).**
+**A saída avulsa com série grava o lote das séries (D (233) 2).** *(Feita na Etapa 234 — `ff467bd7`, `113b07e3`, `8897c09e`; plano `2026-11-13-almoxarifado-etapa234-saida-avulsa-lote-das-series.md`.)*
 
 - **O problema:** em material **sem** controle por lote com séries em lotes (entrada com o campo Lote preenchido), a Saída/Perda de
   **Movimentações** com o lote em branco baixa a série certa, mas o livro grava `lote_id` NULL e a linha de saldo baixada é a "sem lote"

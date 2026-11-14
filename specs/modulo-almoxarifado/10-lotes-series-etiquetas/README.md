@@ -1,5 +1,12 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 234 (2026-11-13, `ff467bd7`, tela `113b07e3`, Fase 5 `8897c09e`): a saída avulsa com série grava o lote das séries (D (233) 2;
+> B1531–B1534, C539, A117)** — na v2 (`lotePelasSeries`), material com série e sem controle de lote, lote em branco: séries todas
+> `EM_ESTOQUE` de **um** lote cujo saldo cobre a quantidade → esse lote vira o lote da saída (livro, claim do lote, claim das séries,
+> estorno); lotes diferentes → 400 *"As series escolhidas sao de lotes diferentes (…): faca uma saida para cada lote"*; a tela diz de qual
+> lote saem e barra a mistura. Antes gravava "sem lote" e o lote continuava com a peça (sonda: *sem lote atribuído* −1). Ver a seção
+> "Etapa 234", no fim. Continua 🟢.
+
 > **+ Etapa 233 (2026-11-13, `b3fc7a0a`, tela `3ec94b9f`, Fase 5 `308ef6b6`): a saída avulsa não deixa marcar série de lote impedido (D (232) 1;
 > B1527–B1530, C538)** — a Saída e a Perda de **Movimentações** apagam a série que o tipo não pode baixar (Saída: `lote_esta_impedido`;
 > Perda: só o status), com o rótulo e a frase; e a v2 (`lotePelasSeries`) recusa, com o lote em branco, a série de lote impedido — antes
@@ -588,6 +595,9 @@ rota fazia isso. Era uma parede com placa de porta.
 
   > **+ Etapa 233 (`3ec94b9f`):** com o lote em branco, a série que o tipo não pode baixar vem apagada (Saída: lote impedido; Perda: só
   > bloqueado/reprovado), com o rótulo e a frase. Ver a seção "Etapa 233", no fim.
+
+  > **+ Etapa 234 (`113b07e3`):** com o lote em branco e série marcada, a frase *"As séries marcadas saem do lote L."* (ou a de lotes
+  > diferentes, que barra o envio). Ver a seção "Etapa 234", no fim.
 - [x] **Recebimentos** (Task 9, `597ec82`): textarea "Séries (uma por linha)" por item, ao lado dos campos de lote, com contador contra a quantidade recebida; aviso estático de "salve antes de processar" — ver pendência (i)
 - [x] **Aba "Séries" em "Lotes e Séries"** (Task 10, `b46d820`): `LotesAlmoxarifado.js` ganhou a aba (tabela: número, status com badge, lote, localização) e a ação Bloquear/Desbloquear com justificativa obrigatória (gate `inspecionar`); label do menu virou "Lotes e Séries"
 
@@ -1453,7 +1463,33 @@ coluna, nenhuma rota nova; a guarda nova roda dentro da trava do material que o 
   `serie_ids` (o efeito com `form.tipo`), resposta antiga como antes, o ajuste não apaga — `3ec94b9f`; o rótulo da Perda só com o status e
   a frase com lote escolhido (Fase 5) — `308ef6b6`.
 - [ ] **Fora (declarado, D (233)):** a situação é a da leitura (**C538**); com o lote em branco a saída não grava o lote das séries (mudança
-  de saldo/livro); a devolução ao cliente e os fluxos internos sem a conferência nova; `AJUSTE_NEGATIVO` pela API passa a recusar lote
+  de saldo/livro — *feito na Etapa 234*, `ff467bd7`); a devolução ao cliente e os fluxos internos sem a conferência nova; `AJUSTE_NEGATIVO` pela API passa a recusar lote
   bloqueado com o lote em branco (a régua do lote escolhido; sem tela).
 
 Testes: `saidaAvulsaSeriesLoteImpedido.api.test.js` (13); `MovimentacoesSaidaSeriesImpedidas.test.js` (9). Continua 🟢.
+
+## Etapa 234 — a saída avulsa com série grava o lote das séries (2026-11-13)
+
+Plano: `docs/superpowers/plans/2026-11-13-almoxarifado-etapa234-saida-avulsa-lote-das-series.md`. Fecha a **D (233) 2**. Nenhuma coluna,
+nenhuma rota nova; a leitura nova roda dentro da trava do material que o motor já pega. Sonda da Fase 0: a SAIDA de `[B1]` (lote L2) com o
+lote em branco gravava `lote_id` NULL e baixava a linha "sem lote" (−1); o L2 continuava com 2 (`/lotes/resumo`: `soma_lotes` 4, físico 3).
+
+- [x] **RN-234.01 (B1531)** — `registrarMovimentacao` com `opcoes.lotePelasSeries` (só a v2), tipo de saída, sem `lote_id`/`lote`, material
+  com série e **sem** (`exigeLote` e `controle_lote`): todas as séries `EM_ESTOQUE` do material, de um lote só, e as linhas do lote cobrindo a
+  quantidade → esse lote é o `loteResolvido` — `ff467bd7`; a contagem "todas em estoque" (Fase 2) e a cobertura (Fase 5) — `8897c09e`.
+- [x] **RN-234.02** — o estorno da saída derivada devolve ao lote (o ESTORNO grava o lote) — `ff467bd7`.
+- [x] **RN-234.03 (B1532)** — lotes diferentes (ou lote e sem lote; lote apagado = sem lote) → 400 com os códigos em ordem e "sem lote" por
+  último, depois da guarda da 233 — `ff467bd7`, cenários de ordem e lote apagado `8897c09e`.
+- [x] **RN-234.04** — não muda: séries sem lote; lote escolhido; o motor sem a opção; material com controle de lote (*exige lote*); AJUSTE; a
+  série cujo lote não tem a peça (sai do "sem lote") — `ff467bd7`, `8897c09e`.
+- [x] **RN-234.05 (B1534, A117)** — o dado antigo não é corrigido; a consulta da letra A acha a saída antiga e não a nova — `ff467bd7`.
+- [x] **RN-234.06 (B1533)** — a tela: `#mov-series-lote-da-saida` (um lote / lotes diferentes, que barra o envio) — `113b07e3`, cenários `8897c09e`.
+- [ ] **Fora (declarado, D (234)):** as saídas antigas (A117, decisão B1534); dividir a saída por lote; material com controle de lote e "Sem
+  lote" (D (233) 4); a devolução ao cliente e os internos (D (233) 3 — a próxima tarefa do plano); a série cujo lote não tem a peça
+  (**C539**); o filtro de material da contagem sem teste que o derrube (inofensivo: o claim confere o material antes do lote).
+
+> ⚠️ **O plano desta etapa estava errado** ao dizer, na **C539**, que a linha de lote sem a peça "só travaria uma linha mexida à mão": a
+> **Regularizar séries** dá o lote à série sem a peça estar na linha dele, por tela normal, e a saída travava (Fase 5, reproduzido).
+> Corrigido no código (a derivação exige a cobertura) e no plano, à vista.
+
+Testes: `saidaAvulsaLoteDasSeries.api.test.js` (19); `MovimentacoesSaidaLoteDasSeries.test.js` (10). Continua 🟢.
