@@ -106,3 +106,47 @@ T1 e T2 não dependem uma da outra (nenhuma muda regra compartilhada). A integra
 3. **O vencido barra** (**B1537** em aberto, **B1540**).
 4. **O saldo do seletor é o do lote**, não o livre (reserva, ajuste — **C542**); a recusa vem ao confirmar.
 5. **Os fluxos internos** não descobrem o lote das séries (resto da **D (233)** 3).
+
+## Retro
+
+- Rodadas de correção até verde: 1 (Fase 5: 5 cenários; nenhum código de produção mudou depois da T2).
+- Achados: Fase 2 — 1 bloqueante e 2 importantes tratados antes do código (zerar o lote na troca de material; `pedeSerie` com lote; a
+  montagem do "acima do lote"), 2 importantes declarados (C542; séries sem lote), 1 menor; Fase 5 — 0 de produção, 5 lacunas de teste reais
+  (fechadas), 2 ruídos; 2 casos do servidor reproduzidos e anteriores à etapa (C542, C543).
+- Paralelismo: T1 e T2 sequenciais (pequenas, sem servidor mudando); o revisor da Fase 2 em paralelo com a T1; os dois da Fase 5 em
+  paralelo (um mutava só a tela, o outro sondava só o servidor), antes do `test:api`.
+- Defeito que escapou: — (preencher na etapa seguinte). Da 235: nenhum medido.
+
+## Verificação (medida, serial)
+
+- Servidor (sobre `9028e544`, o código final — o fechamento só muda documentos): `test:api` **630/630 arquivos OK** (629 da 235 + o
+  `devolucaoClienteSeletorDeLote`); depois, em série, `test:almoxarifado` **44/0**; `test:validation` **4/0**; `test:safealter` **3/0**;
+  `test:sqlite` **16/0**.
+- Tela (sobre `9028e544`): `react-scripts test --maxWorkers=2` **231/231 suítes, 3134/3134 testes** (3120 da 235 − 1 tirado + 15 novos);
+  `react-scripts build` (CI=true) **Compiled successfully**.
+- Arquivos da etapa: `devolucaoClienteSeletorDeLote` **7/7**, `MateriaisClienteDevolucaoLote` **15/15**, `MateriaisClienteDevolucaoSeries`
+  **11/11**; controles positivos: 1/1 do servidor (`elegivel` sem o vencimento), 14/14 da tela.
+
+## Próxima tarefa detalhada
+
+*(Escolhida pela ordem do CLAUDE.md: a 236 fecha a **D (235)** 1; a feature 13 continua 🟢. O que sobra da mesma linha é o resto da
+**D (233) 3** — os fluxos internos de saída de peça com série não descobrem o lote das séries. **Sem estimativa** — começa pela Fase 0.5.)*
+
+**Os fluxos internos de saída de peça com série gravam o lote das séries (resto da D (233) 3).**
+
+- **O problema (a medir):** a régua `lotePelasSeries` (Etapas 233 a 235: com o lote em branco, a série de lote impedido não sai; séries de
+  um lote só gravam esse lote; lotes diferentes são recusados) só vale para quem a **declara** — a v2 manual (`extended.js:893`) e a
+  devolução ao cliente (`extended.js:992`). Os chamadores internos do motor não declaram (`stockService.js:1654`, comentário): a devolução
+  ao estoque com destino Quarentena/Sucata (`returnService.js:326-375`), o sucateamento (`scrapService.js:342,362`) e a Não Conformidade
+  (`nonConformityService.js:1060,1664`).
+- **Medir antes (Fase 0, por sonda executada — `createTestApp`):** para cada um, com material com série **sem** controle de lote e séries
+  em dois lotes: o livro grava `lote_id` NULL? a linha "sem lote" fica negativa (`/materiais/:id/lotes/resumo`)? a série de lote BLOQUEADO
+  passa? Alguns destes **devem** aceitar lote impedido (a NC e a sucata existem para tirar o reprovado — `tiposDescarte`): a régua não é a
+  mesma em todos, e a sonda decide qual entra.
+- **Contrato:** `registrarMovimentacao(db, user, mov, { lotePelasSeries: true })` (o ramo de `stockService.js:1379` deriva o lote só quando
+  a linha do lote cobre a saída — B1531); a guarda de impedido do ramo de `:1654`. Nenhuma rota nova.
+- **Pontos de atenção:** as travas (o CLAUDE.md, seção "Trava por material": a devolução para Estoque relê dentro da seção; Quarentena e
+  Sucata rodam as pernas sob `naTravaDoMaterial`); o estorno de cada uma deve voltar ao lote (molde `[RN-235.02]`); a régua "viva" da
+  devolução (`devolucaoViva.js`).
+- Outros abertos: **D (236)** 1 (localização de origem na devolução ao cliente — e a **C543**); **B1537** (o vencido na devolução ao
+  cliente, decisão sua); **B1534** (as saídas antigas); C522 e C526, C524, C525, C527, C529–C531, C533, C534, C536–C539, C541–C543.

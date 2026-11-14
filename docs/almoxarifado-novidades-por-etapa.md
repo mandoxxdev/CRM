@@ -11,7 +11,13 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-13):** **Etapa 235 fechada** (**a devolução ao cliente de peça com número de série, pelo lote
+> **Onde o desenvolvimento está (2026-11-13):** **Etapa 236 fechada** (**a devolução ao cliente de material com controle por lote** — em
+> **Materiais de Clientes → Devolver**, a janela passa a ter o campo **Lote** com os lotes que têm saldo (o que não sai vem apagado, com a
+> situação); antes esse material **não era devolvível pela tela**. Com lote e série, a lista de séries mostra só as do lote escolhido.
+> **D (235)** 1 resolvida; decisões **B1539** a **B1541**; avisos **C542** e **C543**; limitação **D (236)**; verificação **F (236)**; sem consulta antes
+> do deploy; o servidor não mudou).
+> **Próxima:** **os fluxos internos descobrem o lote das séries** (o resto da **D (233)** 3) — detalhada no fim do plano da 236.
+> *(Antes, 2026-11-13:)* **Etapa 235 fechada** (**a devolução ao cliente de peça com número de série, pelo lote
 > certo** — em **Materiais de Clientes → Devolver**, material com série: a janela lista as séries em estoque (antes não listava, e esse
 > material **não era devolvível pela tela**), apaga a de lote impedido, diz de qual lote elas saem e barra lotes diferentes; a devolução é
 > registrada no lote das séries (antes ficava "sem lote", e a série de lote bloqueado saía). Parte da **D (233)** 3 resolvida; decisões
@@ -15202,7 +15208,22 @@ ao dono sem liberação), ou manter. **Reversível.**
 **B1538 (NOVA, da Etapa 235; decisão do agente) — a janela de devolução lista as séries.** Para material com série: as séries em estoque,
 a de lote impedido apagada com a situação, o contador, a frase do lote e a parada antes de enviar (lotes diferentes; marcadas diferente da
 quantidade). Material **com** controle por lote: a janela diz que pede o lote e não envia (sem seletor ainda — **D (235)** 1); descartado
-mostrar a lista, que nunca sairia. Material sem série: a janela e o que ela envia ficam iguais. **Reversível.**
+mostrar a lista, que nunca sairia. Material sem série: a janela e o que ela envia ficam iguais. **Reversível.** *(Etapa 236: a parte do
+controle por lote mudou — a janela tem o seletor de lote, **D (235)** 1 resolvida.)*
+
+**B1539 (NOVA, da Etapa 236; decisão do agente) — o seletor de lote da devolução ao cliente só escolhe sozinho quando há um lote que pode
+sair.** Com um lote elegível, ele já vem escolhido; com dois ou mais (ou nenhum), a janela começa em *"Escolha o lote"* e **Confirmar** para em
+*"Escolha o lote da devolução"*. Descartado: escolher pelo vencimento mais próximo, como **Movimentações** — a devolução ao dono sai do lote
+que o documento dele diz, e escolher sozinho entre dois esconde a escolha. Descartado também nunca escolher (com um lote só, é clique à toa).
+**Reversível.**
+
+**B1540 (NOVA, da Etapa 236; decisão do agente) — no seletor, o lote vencido sem liberação vem apagado.** Segue a **B1537** (em aberto): a
+devolução ao cliente não é descarte, e o servidor recusaria. Se a B1537 virar "isentar a devolução ao cliente do vencimento", o seletor
+passa a apagar só bloqueado e reprovado (como a **Perda** em Movimentações). **Reversível.**
+
+**B1541 (NOVA, da Etapa 236; decisão do agente) — a localização de origem continua fora da janela, e trocar de lote desmarca as séries.**
+O sistema escolhe de qual endereço do lote a peça sai, como já fazia. Trocar de lote desmarca todas as séries (uma série nunca está em dois
+lotes; descartado manter as marcadas). **Reversível.**
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -19460,6 +19481,17 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 541. **NOVO (da Etapa 235) — material de cliente que entrou com OS fica reservado para ela, e a devolução dele é recusada pelo disponível.**
      A janela lista as séries mesmo assim; **Confirmar devolução** responde *"Saldo insuficiente. Disponível: 0 UN"*. Já era assim antes desta
      etapa (a reserva é por quantidade, não por série). **O que fazer:** liberar a reserva da OS em **Reservas** antes de devolver.
+542. **NOVO (da Etapa 236) — o saldo que o seletor de lote da devolução ao cliente mostra é o que está no lote, não o livre.** A reserva
+     (a da OS, **C541**) não desconta: *"L1 — saldo 3"* com 3 reservados; **Confirmar devolução** responde *"Saldo insuficiente. Disponível: 0
+     UN"*. Acima do que está no lote, a recusa é *"Saldo insuficiente no lote L1. Disponível: 3 UN"*. É o mesmo saldo do seletor de
+     **Movimentações**. Também depois de um **ajuste** de saldo: o ajuste grava a diferença "sem lote", e o lote continua mostrando o que
+     tinha (sonda da Fase 5: *"L1 — saldo 3"* com o físico em 1; devolver 3 → *"Saldo insuficiente. Disponível: 1 UN"*; nada sai). Já era
+     assim antes desta etapa. **O que fazer:** nada; liberar a reserva antes de devolver, como na **C541**.
+543. **NOVO (da Etapa 236, já era assim antes) — com a localização padrão do material bloqueada, a devolução ao cliente é recusada.** A
+     janela não escolhe o endereço de origem, e o sistema recusa *"Localização R5L-3 está bloqueada"* mesmo com o lote guardado em outro
+     endereço (sonda da Fase 5). Por **Movimentações** a saída escolhe a origem; a devolução ao cliente só existe nesta janela. **O que
+     fazer:** desbloquear a localização padrão do material (ou trocar a localização padrão no cadastro) antes de devolver. A escolha da origem
+     na janela é a **D (236)** 1.
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -20816,7 +20848,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
-- **(235) A devolução ao cliente pelo lote das séries, o que ficou de fora.** (1) Material de cliente **com** controle por lote continua
+- **(236) O seletor de lote da devolução ao cliente, o que ficou de fora.** (1) A localização de origem (**B1541**; com a localização padrão bloqueada a devolução é recusada — **C543**). (2) Material com controle
+  por lote cujas séries ficaram **sem lote** não é devolvível pela tela (a lista mostra só as séries do lote escolhido, e o sistema recusa
+  sem lote e com lote). (3) O vencido continua barrando (**B1537**/**B1540**). (4) A lista de lotes é a da hora em que a janela abriu (a
+  recusa vem do servidor). (5) Os fluxos internos não descobrem o lote das séries (resto da **D (233)** 3).
+- **(235) A devolução ao cliente pelo lote das séries, o que ficou de fora.** *(O (1) — o seletor de lote — foi resolvido na **Etapa 236**.)* (1) Material de cliente **com** controle por lote continua
   sem devolução pela tela: a janela não tem seletor de lote (nem de localização de origem) e diz isso. (2) O vencido barra (**B1537**). (3) Os
   fluxos internos (devolução ao estoque, sucata, Não Conformidade) não descobrem o lote das séries — o resto da **D (233)** 3. (4) A lista de
   séries é a da hora em que a janela abriu (outra pessoa pode ter levado uma série; a recusa vem do servidor). (5) Dois controles positivos
@@ -22325,6 +22361,12 @@ Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Previ
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
 
+**(236) Nenhum clique foi dado.** A tela **mudou** — o campo **Lote** da janela **Devolver ao cliente** (os lotes com saldo, o apagado com a
+situação, a escolha sozinha com um lote só, a parada sem lote, as séries do lote escolhido), provado pelo Jest (`MateriaisClienteDevolucaoLote`,
+15 cenários) contra o contrato; 14 de 14 controles positivos da tela caem (5 deles acrescentados na revisão). O servidor não mudou: o contrato que a janela usa, pelas rotas reais, em
+`devolucaoClienteSeletorDeLote` (7: o lote escolhido sai dele; bloqueado, reprovado, vencido e acima do lote recusados; vencido liberado
+sai; e a rota aceita exatamente os lotes que a lista marca como podendo sair — o controle positivo derruba esse). Suítes: `test:api` 630/630, almoxarifado 44, validation 4, safealter 3, sqlite 16, Jest 231 suítes e 3134 testes, build ok.
+**Para clicar (10 minutos):** o roteiro da seção da Etapa 236 no guia.
 **(235) Nenhum clique foi dado.** A tela **mudou** — a janela **Devolver ao cliente** de **Materiais de Clientes** (a lista de séries, a frase
 do lote, o contador, a parada antes de enviar e o aviso do controle por lote), provada pelo Jest (`MateriaisClienteDevolucaoSeries`, 12
 cenários) contra o contrato. O servidor, pelas rotas reais (devolução, estorno e posição), em `devolucaoClienteLoteDasSeries` (12: o lote
@@ -42453,12 +42495,68 @@ quantidade 2: *"Selecione exatamente a quantidade de séries informada"*.
 - Os fluxos internos (devolução ao estoque, sucata, Não Conformidade) não descobrem o lote das séries (resto da **D (233)** 3).
 - Material de cliente que entrou com OS fica reservado para ela: a janela lista as séries, mas a devolução é recusada pelo disponível (**C541**).
 
+## Etapa 236 — A devolução ao cliente de material com controle por lote (2026-11-13)
+
+Material **de cliente** com **controle por lote** (chapa, tinta, resina — o que o cliente manda em lotes). Em **Materiais de Clientes →
+Devolver**, a janela não tinha onde escolher o lote, e o sistema exige o lote para esse material: ele **não era devolvível pela tela** — a
+janela dizia *"Este material tem controle por lote: a devolução pede o lote, e esta janela ainda não o oferece."* e não enviava. Agora ela tem
+o campo **Lote** com os lotes que têm saldo; o lote que não pode sair vem apagado, com o motivo. Com lote **e** número de série, a lista de
+séries mostra só as do lote escolhido. O servidor não mudou. Decisões do agente: **B1539** a **B1541**; avisos **C542** e **C543**; **D (235)** 1 resolvida.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Material de cliente com controle por lote: *"Este material tem controle por lote: a devolução pede o lote, e esta janela ainda não o oferece."* e não devolvia | Campo **Lote** com os lotes que têm saldo (*"L1 — saldo 3 — vence 31/01/2027"*); a devolução sai do lote escolhido |
+| — | Lote bloqueado, reprovado ou vencido apagado: *"LB — saldo 4 — Bloqueado: não sai"*, e a frase embaixo |
+| — | Um lote só que pode sair: já vem escolhido; dois ou mais: *"Escolha o lote"*, e sem escolher, *"Escolha o lote da devolução"* |
+| Material com lote e série: sem devolução pela tela | Escolhido o lote, a lista mostra só as séries dele; antes, *"Escolha o lote para ver as séries dele."* |
+| Material sem controle por lote | **Igual** |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**; um cliente (ex.: *Cliente Alfa*). No cadastro do material (Compras), *CLI-236* com
+**Proprietário** *Cliente Alfa*, **Controle por lote** ligado e **sem** controle de série, unidade *UN*. **Movimentações → Entrada** de 3 com
+lote *L1* (validade 31/01/2027) e de 2 com lote *L2*. Abra **Materiais de Clientes** e escolha *Cliente Alfa*.
+
+**1. A janela pede o lote.** Na linha de *CLI-236*, **Devolver**: o campo **Lote** mostra *"Escolha o lote"*, *"L1 — saldo 3 — vence
+31/01/2027"* e *"L2 — saldo 2"*. Quantidade 2, documento *DEV-1*, **Confirmar devolução** sem escolher → *"Escolha o lote da devolução"*.
+Escolha *L2* e quantidade 3 → *"Saldo insuficiente no lote L2. Disponível: 2 UN"* (nada sai). Quantidade 2 → **Confirmar devolução** →
+*"Devolução ao cliente registrada!"*. Em **Lotes e Séries** → *CLI-236*: *L2* sem saldo, *L1* com 3.
+
+**2. O lote que não sai vem apagado.** Bloqueie o *L1* em **Lotes e Séries** (com justificativa) e faça outra Entrada de 1 no *L2*.
+**Devolver**: *"L1 — saldo 3 — Bloqueado: não sai"* apagado e, embaixo, *"Lotes bloqueados, reprovados ou vencidos vêm apagados: só saem
+depois que o lote for liberado na tela Lotes e Séries."* Como só o *L2* pode sair, ele **já vem escolhido**. O lote **vencido** sem liberação
+também vem apagado (*"— Vencido: não sai"*); o vencido **liberado** aparece com *"(vencido, liberado)"* e sai.
+
+**3. Lote e série.** Um material de cliente com **Controle por lote** e **Controle de série**, séries *A1*, *A2* no lote *M1* e *B1* no *M2*.
+**Devolver**: no lugar da lista, *"Escolha o lote para ver as séries dele."*; escolha *M1*: a lista mostra *A1* e *A2*. Marque *A1*, troque
+para *M2*: a lista mostra *B1*, e nada marcado (*"0/1 série(s) selecionada(s)"*).
+
+**4. O que não muda.** Material de cliente **sem** controle por lote: a janela é a de sempre (sem o campo **Lote**).
+
+### O que esta etapa NÃO cobre
+
+- A localização de origem (o sistema escolhe o endereço do lote — **B1541**; com a localização padrão bloqueada, a devolução é recusada — **C543**).
+- Material com controle por lote cujas séries ficaram sem lote não é devolvível pela tela (**D (236)** 2).
+- O lote vencido continua barrando a devolução ao cliente (**B1537**, em aberto; **B1540**).
+- O saldo do seletor é o do lote, não o livre: com reserva, a recusa vem ao confirmar (**C542**).
+- Os fluxos internos (devolução ao estoque, sucata, Não Conformidade) não descobrem o lote das séries (resto da **D (233)** 3).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 236 entregue (2026-11-13):** **a devolução ao cliente de material com controle por lote** (**D (235)** 1 resolvida). A janela
+  **Devolver ao cliente** ganha o campo **Lote** (os lotes com saldo; o que não sai apagado com a situação; um lote só elegível já vem
+  escolhido — **B1539**; o vencido apagado — **B1540**); com lote e série, só as séries do lote escolhido (**B1541**). O servidor não mudou.
+  Commits `76df58b0` (estimativa), `c31d2472` (o contrato provado pelas rotas), `5f5c1af4` (tela e teste, com o plano), `9028e544` (Fase 5: cenários) e o
+  fechamento. **O que é seu:** as **B1539** a **B1541** (reversíveis; a **B1537** continua em aberto); os avisos **C542** e **C543**; a limitação **(236)**
+  em D e a verificação **(236)** em F. Sem consulta antes do deploy. **Próxima:** **os fluxos internos descobrem o lote das séries** (o resto
+  da **D (233)** 3) — detalhada no fim do plano da 236.
 
 - **Etapa 235 entregue (2026-11-13):** **a devolução ao cliente de peça com número de série, pelo lote certo** (parte da **D (233)** 3
   resolvida). A janela **Devolver ao cliente** lista as séries (antes não listava, e material de cliente com série não era devolvível pela

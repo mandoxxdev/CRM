@@ -186,7 +186,7 @@ a isenção do dono conferidos.
 fora no mesmo gesto é a **D (235) 1** — o material de cliente com controle por lote não é devolvível pela tela. **Sem estimativa** — começa
 pela Fase 0.5.)*
 
-**A janela de devolução ao cliente ganha o seletor de lote (D (235) 1).**
+**A janela de devolução ao cliente ganha o seletor de lote (D (235) 1).** *(Feita na Etapa 236 — `c31d2472`, `5f5c1af4`, `9028e544`; plano `2026-11-13-almoxarifado-etapa236-devolucao-cliente-seletor-de-lote.md`.)*
 
 - **O problema:** em **Materiais de Clientes → Devolver**, material de cliente **com** controle por lote mostra *"Este material tem controle
   por lote: a devolução pede o lote, e esta janela ainda não o oferece."* (`#dev-exige-lote`, `MateriaisClienteAlmoxarifado.js`) e não envia;

@@ -6244,6 +6244,7 @@ Na tela **Almoxarifado → Materiais de Clientes**, cada linha com saldo tem o b
 |---|---|
 | Quantidade | sim |
 | **Número do documento de devolução** | **sim** |
+| **Lote** (só material com controle por lote) | sim |
 | **Séries a devolver** (só material com número de série) | sim — marcar exatamente a quantidade |
 
 Sem documento, a operação é recusada com *"informe o numero do documento de devolucao"*. O botão fica desabilitado quando o item está com saldo zero, com o aviso *"Sem saldo para devolver"*.
@@ -6256,7 +6257,13 @@ Sem documento, a operação é recusada com *"informe o numero do documento de d
 - Marcar um número de séries diferente da quantidade para em *"Selecione exatamente a quantidade de séries informada"*.
 - Séries todas sem lote: a devolução sai sem lote, sem frase.
 
-**Material com controle por lote.** A janela ainda não oferece o lote: ela mostra *"Este material tem controle por lote: a devolução pede o lote, e esta janela ainda não o oferece."* e **Confirmar devolução** para nessa frase (o sistema exigiria o lote: *"O material … exige lote nesta movimentacao (controle por lote ligado)"*).
+**Material com controle por lote.** A janela mostra o campo **Lote** com os lotes do material que têm saldo, cada um com o saldo e a validade (*"L1 — saldo 3 — vence 31/01/2027"*); a devolução sai do lote escolhido e o histórico guarda o lote. As regras:
+
+- O lote que não pode sair — **bloqueado**, **reprovado** ou **vencido** sem a liberação do vencimento — vem apagado, sem poder ser escolhido, com o motivo (*"LB — saldo 4 — Bloqueado: não sai"*, *"LX — saldo 1 — vence 15/09/2026 — Vencido: não sai"*), e embaixo: *"Lotes bloqueados, reprovados ou vencidos vêm apagados: só saem depois que o lote for liberado na tela Lotes e Séries."* O vencido **com** a liberação aparece com *"(vencido, liberado)"* e sai.
+- Quando só um lote pode sair, ele já vem escolhido; com dois ou mais, a janela começa em *"Escolha o lote"*, e **Confirmar devolução** sem escolher para em *"Escolha o lote da devolução"*. Sem lote com saldo: *"Nenhum lote com saldo para este material."*
+- O saldo mostrado é o que está no lote. Acima dele a recusa é *"Saldo insuficiente no lote L2. Disponível: 2 UN"*; se parte do material estiver reservada, a recusa pode vir pelo disponível do material (*"Saldo insuficiente. Disponível: … UN"*).
+- Material com controle por lote **e** número de série: antes de escolher o lote, no lugar da lista, *"Escolha o lote para ver as séries dele."*; escolhido o lote, a lista mostra só as séries dele, e trocar de lote desmarca as séries. Série que ficou sem lote nesse material não aparece e não é devolvível por esta janela.
+- O endereço de onde a peça sai não é escolhido na janela: o sistema baixa do endereço do lote. Se a localização padrão do material estiver bloqueada, a devolução é recusada com *"Localização R5L-3 está bloqueada"* (com o código da localização), mesmo com o lote guardado em outro endereço: desbloqueie a localização (ou troque a localização padrão no cadastro) antes de devolver.
 
 A devolução ao cliente **é uma saída**: o material sai do prédio de volta para quem é dele, e o saldo baixa. Ela é isenta da regra de OS/projeto pelo motivo óbvio — o destino **é** o próprio dono. Como toda saída, compara com o **disponível**: o material de cliente que entrou com OS fica reservado para ela, e a devolução dele é recusada com *"Saldo insuficiente. Disponível: 0 UN"* até a reserva ser liberada.
 

@@ -17,7 +17,7 @@
 
 > **Status:** 🟢 — **Etapa 8 entregue em 2026-08-12** (`f26b635..5b5eb55`) **+ Etapa 123 (2026-10-16, `c97fe07f`): o dono do material tem de
 > estar em Clientes — `POST`/`PUT /materiais` com dono inexistente → 400 (C216 resolvido; a regra mora na spec 01, seção "Etapa 123")** **+ Etapa 106 (2026-10-15, `d6493a7e..0c8ec372`): o estorno do ajuste exige a mesma permissão do ajuste (C211 resolvido)** **+ Etapa 108 (2026-10-15, `cd7d5118..bc415eb6`): trocar o dono de material com histórico exige a mesma permissão (C213 resolvido)** · **Spec original:** seção 17 (fundamental para industrialização GMP)
-> **Última atualização:** 2026-10-19 (**Etapa 156** — o seletor **Proprietário** do cadastro diz o motivo quando a lista de clientes volta recusada, e o dono que não está na lista aparece como *"Cliente #7 — fora da lista"* (C366, `75e772cf`). Ver a seção no fim.) Antes: 2026-10-15 (Etapa 108)
+> **Última atualização:** 2026-11-13 (**Etapa 236** — a janela de devolução ao cliente ganha o seletor de lote: material de cliente com controle por lote passa a ser devolvível pela tela (`5f5c1af4`). Ver a seção no fim.) Antes: 2026-10-19 (**Etapa 156** — o seletor **Proprietário** do cadastro diz o motivo quando a lista de clientes volta recusada, e o dono que não está na lista aparece como *"Cliente #7 — fora da lista"* (C366, `75e772cf`). Ver a seção no fim.) Antes: 2026-10-15 (Etapa 108)
 >
 > Material de cliente deixou de ser ilha e virou **material normal com dono**
 > (`materiais_almoxarifado.proprietario_cliente_id`, `NULL` = material nosso): ganha lote, série,
@@ -453,8 +453,27 @@ de lotes diferentes → 201; e a janela, que mandava só quantidade e documento,
   (`#dev-series-impedidas`), `#dev-series-lote-da-devolucao`, `#dev-series-contador`, a parada antes de enviar (lotes diferentes; marcadas ≠
   quantidade) e `serie_ids` no corpo; material com controle de lote → `#dev-exige-lote` e não envia — `94a094ef`; troca de material,
   resposta atrasada, contador — `69ce32d3`.
-- [ ] **Fora (declarado, D (235)):** seletor de lote e de localização de origem (material de cliente com controle de lote continua sem
-  devolução pela tela); o vencido barra (**B1537**, em aberto); o material reservado para OS é recusado pelo disponível (**C541**, já era); os
+- [ ] **Fora (declarado, D (235)):** ~~seletor de lote~~ (**feito na Etapa 236**, abaixo) e localização de origem; o vencido barra (**B1537**, em aberto); o material reservado para OS é recusado pelo disponível (**C541**, já era); os
   fluxos internos (resto da D (233) 3).
 
-Testes: `devolucaoClienteLoteDasSeries.api.test.js` (12); `MateriaisClienteDevolucaoSeries.test.js` (12). Continua 🟢.
+Testes: `devolucaoClienteLoteDasSeries.api.test.js` (12); `MateriaisClienteDevolucaoSeries.test.js` (12; o da `#dev-exige-lote` saiu na 236). Continua 🟢.
+
+## Etapa 236 — o seletor de lote da devolução ao cliente (2026-11-13)
+
+Plano: `docs/superpowers/plans/2026-11-13-almoxarifado-etapa236-devolucao-cliente-seletor-de-lote.md`. **D (235)** 1. Só tela: a rota já aceitava
+`lote_id` e a lista `GET /materiais/:id/lotes?com_saldo=1` já trazia `elegivel` (a régua da rota — provado pela integração da T1).
+
+- [x] **RN-236.01 a .04** — material com `controle_lote`: `#dev-lote` com os lotes com saldo (`<codigo> — saldo <n>`, ` — vence DD/MM/AAAA`,
+  ` (vencido, liberado)`); o não elegível desabilitado com ` — <situação>: não sai` e `#dev-lotes-impedidos`; um único elegível já vem
+  escolhido (**B1539**); lista vazia `#dev-lote-vazio`; falha da busca → toast; resposta atrasada não pinta outro material — `5f5c1af4`.
+- [x] **RN-236.05** — sem lote → *"Escolha o lote da devolução"*, sem POST; com lote → `lote_id` numérico no corpo; trocar de material zera o
+  lote — `5f5c1af4`.
+- [x] **RN-236.06** — lote e série: `#dev-series-escolha-lote` sem lote; com lote, só as séries dele; trocar de lote desmarca (**B1541**) —
+  `5f5c1af4`.
+- [x] **RN-236.07** — a `#dev-exige-lote` saiu — `5f5c1af4`.
+- [x] **RN-236.08** (servidor sem mudança) — lote ATIVO sai dele; bloqueado, reprovado, vencido sem liberação e acima do lote recusados;
+  vencido liberado sai; a rota aceita exatamente os `elegivel` da lista — `c31d2472`.
+- [ ] **Fora (declarado, D (236)):** localização de origem (**B1541**; com a padrão bloqueada a devolução é recusada — **C543**, já era); material com controle de lote e séries **sem lote** (não devolvível pela
+  tela); o vencido barra (**B1537**/**B1540**); o saldo do seletor é o do lote, não o livre (**C542**); os fluxos internos (resto da D (233) 3).
+
+Testes: `devolucaoClienteSeletorDeLote.api.test.js` (7); `MateriaisClienteDevolucaoLote.test.js` (15). Continua 🟢.
