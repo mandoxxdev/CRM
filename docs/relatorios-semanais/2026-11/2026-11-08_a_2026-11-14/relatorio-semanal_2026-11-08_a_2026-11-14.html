@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relatório da semana — Semana de 08/11 a 14/11/2026</title>
+<style>
+  :root { --tinta:#1f2a37; --suave:#5b6675; --linha:#e3e7ec; --fundo:#ffffff; --cartao:#f6f8fa; --tela:#2f80ed; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--fundo); color:var(--tinta); font:16px/1.6 "Segoe UI", system-ui, sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font-size:28px; margin:0 0 4px; } h2 { font-size:21px; margin:40px 0 12px; border-bottom:2px solid var(--linha); padding-bottom:6px; }
+  h3 { font-size:17px; margin:24px 0 6px; }
+  .sub { color:var(--suave); margin:0 0 24px; }
+  .resumo { background:var(--cartao); border-left:4px solid var(--tela); padding:16px 20px; border-radius:6px; font-size:17px; }
+  .item { border:1px solid var(--linha); border-radius:8px; padding:16px 20px; margin:16px 0; }
+  .item p { margin:6px 0; } .rotulo { font-weight:600; color:var(--suave); }
+  table { border-collapse:collapse; width:100%; font-size:15px; } td, th { border-bottom:1px solid var(--linha); padding:8px; text-align:left; }
+  td:last-child, th:last-child { white-space:nowrap; }
+  @media print { main { padding:0; } h2, h3 { break-after:avoid; } .item { break-inside:avoid; } tr { break-inside:avoid; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>O que foi feito no sistema nesta semana</h1>
+  <p class="sub">Semana de 08/11 a 14/11/2026 · CRM GMP Industriais</p>
+
+  <p class="resumo">No Compras, cada material passou a ter a lista dos seus fornecedores, com o código de cada um no pedido de compra e o
+  histórico de preços, e as famílias, categorias e tipos de material passaram a ser cadastrados lá. No Almoxarifado, peça de lote
+  bloqueado, reprovado ou vencido deixou de sair por engano e de ficar guardada para quem espera, e as telas e relatórios passaram a
+  mostrar quanto do estoque está nessa situação. No total, 91h45 de trabalho, a maior parte no Almoxarifado, no cuidado com os lotes
+  que não podem sair.</p>
+
+  <h2>O que mudou — e por que importa</h2>
+  <p>Cada item abaixo conta o problema, o que foi feito e o que isso evita no dia a dia.</p>
+
+  <div class="item">
+    <h3>Um material, vários fornecedores — cada um com o seu código e o seu preço</h3>
+    <p><span class="rotulo">O problema:</span> o mesmo material vem de vários fornecedores (o inox, de uns cinco), e cada um usa um
+    código diferente. O cadastro tinha um campo só de "fornecedor principal", digitado à mão. O pedido de compra saía só com o código da
+    GMP, e o fornecedor tinha de descobrir qual era o item dele. Para saber por quanto cada um já tinha vendido, era preciso abrir pedido
+    por pedido.</p>
+    <p><span class="rotulo">O que foi feito:</span> em <b>Compras → Materiais</b>, ao editar um material, a parte <b>Fornecedores deste
+    material</b> lista cada fornecedor com o código, a descrição e o preço dele. Na cotação e no pedido de compra, embaixo do código da
+    GMP, aparece o código do fornecedor escolhido — também no pedido impresso que vai para ele. E o material mostra o <b>Histórico de
+    preços</b>: data, fornecedor, cotação ou pedido de onde veio, quantidade e preço, do mais recente para o mais antigo.</p>
+    <p><span class="rotulo">O que isso evita:</span> material duplicado só porque veio de outro fornecedor, pedido que o fornecedor não
+    reconhece, e negociação feita sem saber o preço que já foi pago.</p>
+  </div>
+
+  <div class="item">
+    <h3>Os cadastros ligados a compras passaram para o Compras</h3>
+    <p><span class="rotulo">O problema:</span> o Compras pediu que o Almoxarifado não faça nenhum cadastro: ele só recebe, libera e dá
+    saída. Mas as famílias, as categorias e os tipos de material ainda eram cadastrados no Almoxarifado. E o tipo de material era digitado
+    à mão, cada um de um jeito ("Consumível", "CONSUMIVEL", "consumivel").</p>
+    <p><span class="rotulo">O que foi feito:</span> o menu do Compras ganhou <b>Famílias</b>, <b>Categorias</b> e <b>Tipos de
+    Material</b>, com os mesmos botões de antes, para quem cadastra material. No Almoxarifado as mesmas listas continuam aparecendo, só para
+    consulta, com a frase dizendo onde se cadastra. No cadastro do material, o <b>Tipo de Material</b> passou a ser escolhido de uma lista,
+    como a categoria.</p>
+    <p><span class="rotulo">O que isso evita:</span> dois setores mexendo no mesmo cadastro, e o mesmo tipo escrito de três jeitos. A
+    prateleira que só aceita material consumível passou a reconhecer o tipo mesmo com acento ou letra maiúscula diferente.</p>
+  </div>
+
+  <div class="item">
+    <h3>As telas mostram quanto do estoque está em lote que não pode sair</h3>
+    <p><span class="rotulo">O problema:</span> um material tinha 10 peças: 4 num lote bom e 6 num lote bloqueado (o certificado do
+    fornecedor ainda não chegou). A tela mostrava "Disponível 10". O almoxarife tentava reservar 5 e o sistema recusava, sem que nenhuma
+    tela tivesse avisado. Para saber qual lote estava preso, era preciso sair e procurar em outra tela.</p>
+    <p><span class="rotulo">O que foi feito:</span> a lista de <b>Materiais</b> mostra, embaixo da quantidade, "6 un em lote impedido".
+    A ficha do material mostra o mesmo número ao lado do Disponível e, na tabela de saldos, ao lado de cada lote, "Bloqueado",
+    "Reprovado" ou "Vencido em 12/11/2026". Os relatórios <b>Estoque atual</b> e <b>Saldos comprometidos</b> ganharam a coluna "Em lote
+    impedido", o <b>Saldo por lote</b> ganhou a coluna "Situação", e a <b>Fila de separação</b> diz quanto do disponível está nessa
+    situação. Na separação e na entrega, a lista "Sai de" mostra o lote bloqueado apagado, com o motivo, e não deixa escolher.</p>
+    <p><span class="rotulo">O que isso evita:</span> descobrir só no balcão que a peça não pode sair. É como uma etiqueta "não usar" na
+    caixa, visível de longe, em vez de só no papel guardado na gaveta.</p>
+  </div>
+
+  <div class="item">
+    <h3>Quem espera o material só recebe o que pode sair — e recebe assim que o lote é liberado</h3>
+    <p><span class="rotulo">O problema:</span> chegava uma nota com 4 peças num lote bloqueado. O sistema guardava essas 4 para a
+    requisição que esperava, ela ficava "Totalmente Reservada" e o solicitante recebia "Chegou material da sua requisição". Na hora de
+    separar, nada podia sair. O mesmo acontecia na reserva feita à mão, na inspeção, na ordem de serviço e ao desfazer a entrada de uma
+    nota. E quando o lote era liberado, nada acontecia: a primeira requisição aprovada depois levava as peças, passando na frente de quem
+    esperava.</p>
+    <p><span class="rotulo">O que foi feito:</span> a nota, a inspeção, a não conformidade, a ordem de serviço e a reserva manual passaram
+    a guardar só o que pode sair. Quando o lote é liberado (certificado anexado, situação de volta para Ativo, vencimento liberado ou
+    validade corrigida), as peças vão para quem esperava, na ordem da fila, o solicitante recebe o aviso e a tela <b>Lotes e Séries</b> diz
+    quanto foi reservado. As telas <b>Inspeções</b> e <b>Não Conformidades</b> avisam quando as peças aprovadas continuam num lote
+    impedido.</p>
+    <p><span class="rotulo">O que isso evita:</span> requisição que parece pronta e não está, aviso falso de "chegou", e a fila invertida
+    na hora em que o lote é liberado.</p>
+  </div>
+
+  <div class="item">
+    <h3>Peça bloqueada não sai por engano, e cada saída fica no lote certo</h3>
+    <p><span class="rotulo">O problema:</span> uma peça voltava de uma obra com suspeita e era mandada para a quarentena, mas o sistema só sabia
+    que havia "1 bloqueada" no material, sem saber de qual lote. A entrega podia levar justamente essa peça, e quem escolhia o lote à mão
+    conseguia separar as 4 peças de um lote que tinha 1 em quarentena. Nas listas de números de série, as séries de lote bloqueado
+    podiam ser marcadas, e a saída avulsa com o lote em branco baixava a peça sem dizer de qual lote era — o saldo por lote ficava
+    negativo.</p>
+    <p><span class="rotulo">O que foi feito:</span> o bloqueio passou a guardar o lote, e a janela <b>Desbloquear material</b> pergunta de
+    qual lote se libera. A entrega e a separação deixam de fora a peça em quarentena, reprovada, em inspeção ou com terceiros, e dizem
+    quantas podem sair. A janela de entrega não começa mais por um lote que ficou bloqueado depois da separação. Na entrega, na saída
+    avulsa e na devolução ao cliente, as séries de lote impedido vêm apagadas, e a saída guarda o lote das séries marcadas.</p>
+    <p><span class="rotulo">O que isso evita:</span> peça suspeita indo para a produção, e saldo por lote que não fecha com o que está na
+    prateleira.</p>
+  </div>
+
+  <p>Também foram feitos: tudo o que se digita ou cola em qualquer formulário passou a aparecer e ser gravado em MAIÚSCULO, com acento (ficam
+  de fora e-mail, senha, site, lote e número de série), e as buscas continuam achando os cadastros antigos em minúsculo; e a janela
+  <b>Devolver ao cliente</b>, em Materiais de clientes, passou a devolver material com número de série ou com lote (antes ela recusava
+  esses materiais) e avisa, ao abrir, quando a localização do material está bloqueada.</p>
+
+  <h2>Tempo gasto</h2>
+  <table>
+    <tr><th>O que foi feito</th><th>Tempo</th></tr>
+    <tr><td>Textos dos formulários em maiúsculo</td><td>5h</td></tr>
+    <tr><td>Vários fornecedores para o mesmo material</td><td>2h30</td></tr>
+    <tr><td>Código do fornecedor na cotação e no pedido de compra</td><td>3h</td></tr>
+    <tr><td>Histórico de preços por fornecedor no material</td><td>3h</td></tr>
+    <tr><td>Famílias e subfamílias cadastradas no Compras</td><td>3h30</td></tr>
+    <tr><td>Categorias e tipos de material cadastrados no Compras</td><td>2h30</td></tr>
+    <tr><td>Tipo de material escolhido de uma lista</td><td>2h</td></tr>
+    <tr><td>Material bloqueado passa a saber de qual lote é (parte final)</td><td>3h45</td></tr>
+    <tr><td>A entrega não tira a peça bloqueada do lote</td><td>4h</td></tr>
+    <tr><td>Lote escolhido à mão deixa de fora a peça bloqueada</td><td>4h15</td></tr>
+    <tr><td>Material que chega em lote bloqueado não fica guardado para quem espera</td><td>4h</td></tr>
+    <tr><td>Liberar o lote guarda as peças para quem esperava</td><td>4h30</td></tr>
+    <tr><td>A reserva manual não conta peça de lote bloqueado</td><td>4h</td></tr>
+    <tr><td>A ficha do material mostra quanto está em lote bloqueado</td><td>2h30</td></tr>
+    <tr><td>As listas de materiais mostram quanto está em lote bloqueado</td><td>2h15</td></tr>
+    <tr><td>A ficha do material diz qual lote está bloqueado ou vencido</td><td>2h15</td></tr>
+    <tr><td>Os relatórios de estoque mostram o que está em lote bloqueado</td><td>3h</td></tr>
+    <tr><td>A lista "Sai de" avisa quando o lote está bloqueado</td><td>2h30</td></tr>
+    <tr><td>O relatório Saldo por lote e a Fila de separação dizem o que está bloqueado ou vencido</td><td>3h45</td></tr>
+    <tr><td>Desfazer a entrada de uma nota não deixa a requisição presa a lote bloqueado</td><td>3h45</td></tr>
+    <tr><td>A inspeção que aprova peça de lote bloqueado não entrega outro material no lugar</td><td>3h45</td></tr>
+    <tr><td>A requisição da ordem de serviço só fica guardada com o que pode sair</td><td>4h</td></tr>
+    <tr><td>A entrega e a não conformidade avisam quando o lote está bloqueado</td><td>3h15</td></tr>
+    <tr><td>A entrega não deixa marcar série de lote bloqueado</td><td>2h30</td></tr>
+    <tr><td>A saída avulsa não deixa marcar série de lote bloqueado</td><td>3h</td></tr>
+    <tr><td>A saída avulsa de peça com número de série baixa do lote certo</td><td>3h</td></tr>
+    <tr><td>Devolver ao cliente peça com número de série, pelo lote certo</td><td>2h30</td></tr>
+    <tr><td>Devolver ao cliente material controlado por lote</td><td>2h30</td></tr>
+    <tr><td>A devolução ao cliente avisa quando a localização está bloqueada</td><td>1h15</td></tr>
+    <tr><th>Total</th><th>91h45</th></tr>
+  </table>
+  <p>O tempo inclui entender o pedido, fazer, testar e conferir.</p>
+
+  <h2>Quer conferir?</h2>
+  <ol>
+    <li>Abra <b>Compras → Materiais</b>, clique no lápis de um material e desça até <b>Fornecedores deste material</b>: clique em
+    <b>Vincular fornecedor</b>, escolha um fornecedor, informe o código dele e o preço e salve. Logo abaixo aparece o <b>Histórico de
+    preços</b>.</li>
+    <li>Abra <b>Compras → Pedidos de compra → Novo</b>, escolha esse fornecedor e adicione o material: na coluna Código aparece
+    "Forn.:" com o código dele. Abra o PDF do pedido: o código do fornecedor aparece embaixo do código da GMP.</li>
+    <li>Abra <b>Compras → Famílias</b>, <b>Compras → Categorias</b> e <b>Compras → Tipos de Material</b>. Depois abra
+    <b>Almoxarifado → Configurações → Famílias</b>: a mesma lista, só para consulta.</li>
+    <li>Abra <b>Almoxarifado → Materiais</b> e procure um material com um lote bloqueado: embaixo da quantidade aparece "em lote
+    impedido". Clique no material para abrir a ficha: o número aparece ao lado do Disponível, e a tabela de saldos diz qual lote está
+    bloqueado.</li>
+    <li>Abra <b>Almoxarifado → Relatórios → Estoque atual</b>: a coluna "Em lote impedido" vem logo depois do Disponível.</li>
+    <li>Abra <b>Almoxarifado → Lotes e Séries</b>, escolha um lote bloqueado de um material que alguém está esperando e mude a situação
+    para Ativo: a tela diz quantas peças foram guardadas para quem esperava.</li>
+    <li>Abra <b>Almoxarifado → Materiais de clientes</b> e clique em <b>Devolver</b> num material com número de série: a janela lista as
+    séries para marcar e diz de qual lote elas saem.</li>
+    <li>Em qualquer formulário, digite ou cole um texto em minúsculo: ele aparece em maiúsculo.</li>
+  </ol>
+</main>
+</body>
+</html>

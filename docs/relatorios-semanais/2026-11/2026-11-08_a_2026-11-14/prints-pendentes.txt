@@ -1,0 +1,39 @@
+Prints pendentes
+
+Nenhum print foi tirado nesta semana: o app respondia em http://localhost:3000, mas a aba do
+navegador abriu na tela de login (a sessao nao estava ativa) e a senha nao e digitada pela
+automacao. Por isso os itens visiveis foram para o bloco do texto, sem figura. Depois de entrar
+no sistema, tirar os prints abaixo, salvar em prints/ e voltar os itens para o bloco com figura.
+
+1. prints/compras-fornecedores-do-material.png
+   Tela: Compras -> Materiais -> lapis de um material -> Fornecedores deste material
+   Precisa aparecer: dois fornecedores vinculados, cada um com codigo e preco, e logo abaixo o
+   quadro Historico de precos com pelo menos uma cotacao e um pedido.
+
+2. prints/pedido-codigo-do-fornecedor.png
+   Tela: Compras -> Pedidos de compra -> editar um pedido (e o PDF do pedido)
+   Precisa aparecer: na coluna Codigo, o codigo GMP e embaixo "Forn.: <codigo>"; no PDF,
+   "Cod. fornecedor: <codigo>" na coluna Material.
+
+3. prints/compras-familias.png
+   Tela: Compras -> Familias (e Compras -> Tipos de Material)
+   Precisa aparecer: a arvore de familias com os botoes Nova Familia / Nova subfamilia.
+   Opcional: Almoxarifado -> Configuracoes -> Familias, so consulta, com a frase do lugar novo.
+
+4. prints/materiais-lote-impedido.png
+   Tela: Almoxarifado -> Materiais (lista) e a ficha do material
+   Precisa aparecer: embaixo da quantidade, em amarelo, "6 un em lote impedido"; na ficha, o
+   cartao "Em lote impedido" e, na tabela Saldos por localizacao, o lote com "Bloqueado".
+
+5. prints/relatorio-estoque-atual.png (opcional)
+   Tela: Almoxarifado -> Relatorios -> Estoque atual
+   Precisa aparecer: a coluna "Em lote impedido" depois do Disponivel.
+
+6. prints/devolver-ao-cliente-series.png
+   Tela: Almoxarifado -> Materiais de clientes -> Devolver (material com numero de serie)
+   Precisa aparecer: a lista de series para marcar, uma serie de lote bloqueado apagada e a
+   frase "As series marcadas saem do lote ...".
+
+7. prints/lotes-reservado-para-quem-esperava.png (opcional)
+   Tela: Almoxarifado -> Lotes e Series -> mudar status de um lote bloqueado para Ativo
+   Precisa aparecer: a mensagem "... reservado(s) para quem esperava este material ...".
