@@ -20,7 +20,7 @@ Medido no código antes de estimar (sobre `96db190f`):
 
 | # | Tarefa | Execução estimada | Fator | Informado | Etapa/plano | Régua usada | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | Na saída avulsa com o lote em branco, a peça sai do lote dela (o motor deriva o lote das séries; lotes diferentes recusados; frase na tela; consulta das saídas antigas na letra A) (D (233) 2) | 1 h | média (análise 30 min + 30 min de decisão de regra: lotes diferentes + teste 1 h) | 3h | 234 | 233 (mesma régua, servidor + tela) mediu 0,7 h; aqui o lote muda a linha de saldo baixada | — | — | — |
+| 1 | Na saída avulsa com o lote em branco, a peça sai do lote dela (o motor deriva o lote das séries; lotes diferentes recusados; frase na tela; consulta das saídas antigas na letra A) (D (233) 2) | 1 h | média (análise 30 min + 30 min de decisão de regra: lotes diferentes + teste 1 h) | 3h | 234 | 233 (mesma régua, servidor + tela) mediu 0,7 h; aqui o lote muda a linha de saldo baixada | 0,8 h (~51 min, com o fechamento) | 3h (51 min + análise 30 min + decisão de regra 30 min + teste 1 h = 2h51, arredondado na unidade de 30 min; a parte do André é a da tabela — não informada por ele) | fc5ed3be, ff467bd7, 113b07e3, 8897c09e, 17b8d71d e o do estimado × realizado |
 
 Incerteza: média — é mudança na linha de saldo baixada; o risco é a linha do lote não cobrir a quantidade (dado antigo), o que o claim do
 lote já recusa com a mensagem de saldo do lote.
@@ -29,3 +29,5 @@ Medição no fechamento:
 ```
 --grupos "E234=Etapa 234|Estimativa: almoxarifado - saida avulsa grava o lote"
 ```
+
+No fechamento: execução medida 0,8 h (horas.js --grupos "E234=…", 13/11), quase toda no fechamento da documentação (~36 min); a Fase 5 achou um caso real (a série regularizada com lote sem a peça no saldo dele) e cinco lacunas de teste. A estimativa de execução (1 h) ficou perto do medido; o realizado bate com o estimado (3h). Conclusão: `conclusao_2026-11-13_almoxarifado-saida-avulsa-lote-das-series.txt`.

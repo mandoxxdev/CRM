@@ -1,0 +1,6 @@
+*Concluído — almoxarifado: a saída avulsa de peça com número de série baixa do lote certo*
+_13/11/2026_
+
+1. Na saída avulsa com o lote em branco, a peça sai do lote dela — estimado 3h · realizado 3h
+
+*Total: estimado 3h · realizado 3h*
