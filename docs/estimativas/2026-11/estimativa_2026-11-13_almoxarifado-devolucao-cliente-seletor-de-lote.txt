@@ -1,0 +1,9 @@
+*Planejamento — almoxarifado: devolver ao cliente material controlado por lote*
+_13/11/2026_
+
+*1. A devolução ao cliente passa a pedir o lote*
+Hoje, em Materiais de Clientes, a janela de devolver ao cliente não deixa devolver material com controle por lote: ela avisa que o lote é obrigatório e que a janela ainda não o oferece. Depois desta alteração, a janela mostra a lista dos lotes do material que têm saldo, com o saldo e a validade de cada um, para escolher de qual lote a devolução sai. Lote bloqueado, reprovado ou vencido sem liberação aparece apagado, com a situação ao lado, e não pode ser escolhido. Quando o material também tem número de série, a lista de séries passa a mostrar só as do lote escolhido. A localização de origem continua fora desta janela.
+Tempo estimado: *2h*
+
+*Total estimado: 2h*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
