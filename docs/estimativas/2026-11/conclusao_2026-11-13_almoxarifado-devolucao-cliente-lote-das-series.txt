@@ -1,0 +1,6 @@
+*Concluído — almoxarifado: devolver ao cliente peça com número de série, pelo lote certo*
+_13/11/2026_
+
+1. A devolução ao cliente escolhe as séries e registra o lote delas — estimado 2h30 · realizado 2h30
+
+*Total: estimado 2h30 · realizado 2h30*

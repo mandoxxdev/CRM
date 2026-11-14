@@ -21,7 +21,7 @@ Medido no código antes de estimar (sobre `c6e50dca`):
 
 | # | Tarefa | Execução estimada | Fator | Informado | Etapa/plano | Régua usada | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | A devolução ao cliente escolhe as séries e grava o lote delas (rota declara `lotePelasSeries`; modal com séries + frase do lote) (D (233) 3) | 1 h | média (análise 30 min + teste 1 h) | 2h30 | 235 | 234 (servidor + tela, mesma régua) mediu 0,8 h; aqui o servidor é uma opção e a tela ganha um seletor | — | — | — |
+| 1 | A devolução ao cliente escolhe as séries e grava o lote delas (rota declara `lotePelasSeries`; modal com séries + frase do lote) (D (233) 3) | 1 h | média (análise 30 min + teste 1 h) | 2h30 | 235 | 234 (servidor + tela, mesma régua) mediu 0,8 h; aqui o servidor é uma opção e a tela ganha um seletor | 0,8 h (~47 min, com o fechamento) | 2h30 (47 min + análise 30 min + teste 1 h = 2h17, arredondado na unidade de 30 min; a parte do André é a da tabela — não informada por ele) | 873c51d9, ec512062, 94a094ef, 69ce32d3, 78d3f1cc e o do estimado × realizado |
 
 Incerteza: baixa no servidor (a régua já existe no motor); média na tela (seletor novo no modal).
 
@@ -29,3 +29,5 @@ Medição no fechamento:
 ```
 --grupos "E235=Etapa 235|Estimativa: almoxarifado - devolucao ao cliente"
 ```
+
+No fechamento: execução medida 0,8 h (horas.js --grupos "E235=…", 13/11), boa parte na documentação (~34 min). A Fase 2 achou a fixture da posição e a janela que oferecia séries a material com controle de lote; a Fase 5 não achou defeito de produção e fechou nove lacunas de teste. O realizado bate com o estimado (2h30). Conclusão: `conclusao_2026-11-13_almoxarifado-devolucao-cliente-lote-das-series.txt`.
