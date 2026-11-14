@@ -183,8 +183,59 @@ describe('Etapa 235 — a janela de devolução ao cliente lista as séries e di
     expect(api.post).not.toHaveBeenCalled();
   });
 
+  test('[RN-235.07] trocar de material zera as séries marcadas (Fase 5): o outro material não leva serie_ids', async () => {
+    await abrir('COM-SERIE');
+    await marcar(2);
+    expect(caixa(2).checked).toBe(true);
+    await clicar([...container.querySelectorAll('.almox-modal button')].find((b) => b.textContent.trim() === 'Cancelar'));
+    const linha = (c) => [...container.querySelectorAll('.almox-table tbody tr')].find((tr) => tr.textContent.includes(c));
+    await clicar([...linha('SEM-SERIE').querySelectorAll('button')].find((b) => b.textContent.includes('Devolver')));
+    await preencherTudo(1);
+    await confirmar();
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/materiais-cliente/devolucoes', {
+      material_id: 32, quantidade: 1, documento_devolucao: 'DEV-1',
+    });
+    await clicar([...linha('COM-SERIE').querySelectorAll('button')].find((b) => b.textContent.includes('Devolver')));
+    expect(api.get.mock.calls.filter(([u]) => u === '/almoxarifado/materiais/31/series?status=EM_ESTOQUE')).toHaveLength(2);
+    expect(caixa(2).checked).toBe(false);
+    expect(texto('#dev-series-contador')).toBe('0/0 série(s) selecionada(s)');
+  });
+
+  test('[RN-235.07] a lista de um material que chega atrasada não pinta a janela de outro (Fase 5)', async () => {
+    let soltar;
+    const original = api.get.getMockImplementation();
+    const POS2 = { ...POSICAO, itens: [...POSICAO.itens, item(34, 'OUTRA-SERIE', { controle_serie: 1 })] };
+    api.get.mockImplementation((url) => {
+      if (url.includes('/materiais-cliente/posicao?cliente_id=1')) return Promise.resolve({ data: POS2 });
+      if (url === '/almoxarifado/materiais/31/series?status=EM_ESTOQUE') return new Promise((r) => { soltar = () => r({ data: SERIES }); });
+      if (url === '/almoxarifado/materiais/34/series?status=EM_ESTOQUE') {
+        return Promise.resolve({ data: [{ id: 9, numero: 'Z9', lote_id: 90, lote_codigo: 'L9', ...livre }] });
+      }
+      return original(url);
+    });
+    await abrir('COM-SERIE');
+    await clicar([...container.querySelectorAll('.almox-modal button')].find((b) => b.textContent.trim() === 'Cancelar'));
+    const linha = [...container.querySelectorAll('.almox-table tbody tr')].find((tr) => tr.textContent.includes('OUTRA-SERIE'));
+    await clicar([...linha.querySelectorAll('button')].find((b) => b.textContent.includes('Devolver')));
+    await act(async () => { soltar(); });
+    await esperar();
+    expect(container.querySelectorAll('#dev-series input[type="checkbox"]')).toHaveLength(1);
+    expect(texto('#dev-series')).toContain('Z9 · lote L9');
+  });
+
+  test('[RN-235.07] o contador diz marcadas / quantidade', async () => {
+    await abrir('COM-SERIE');
+    await preencherTudo(2);
+    await marcar(2);
+    expect(texto('#dev-series-contador')).toBe('1/2 série(s) selecionada(s)');
+    await marcar(2);
+    expect(caixa(2).checked).toBe(false);
+    expect(texto('#dev-series-contador')).toBe('0/2 série(s) selecionada(s)');
+  });
+
   test('[RN-235.09] material com controle de lote: diz que pede o lote, sem lista e sem POST', async () => {
     await abrir('COM-LOTE');
+    expect(api.get).not.toHaveBeenCalledWith(expect.stringContaining('/materiais/33/series'));
     const frase = 'Este material tem controle por lote: a devolução pede o lote, e esta janela ainda não o oferece.';
     expect(texto('#dev-exige-lote')).toBe(frase);
     expect(container.querySelector('#dev-series')).toBeNull();

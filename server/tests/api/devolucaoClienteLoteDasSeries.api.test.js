@@ -146,6 +146,8 @@ process.on('exit', (code) => {
     assert.strictEqual(r.body.error, 'As series escolhidas sao de lotes diferentes (L1, sem lote): faca uma saida para cada lote');
     assert.strictEqual((await serie(m, 'S1')).status, 'EM_ESTOQUE');
     assert.strictEqual((await serie(m, 'A1')).status, 'EM_ESTOQUE');
+    assert.strictEqual(await fisico(m), 4, 'fisico igual (Fase 5)');
+    assert.strictEqual((await devolucoes(m)).length, 0, 'nenhuma devolucao no livro (Fase 5)');
   });
 
   // ── RN-235.05 ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -153,6 +155,13 @@ process.on('exit', (code) => {
     const m = await montar();
     await ok(devolver(m, ['B2'], { lote_id: await loteId(m, 'L2') }), 201);
     assert.strictEqual(Number((await devolucoes(m))[0].lote_id), await loteId(m, 'L2'));
+  });
+  await test('[RN-235.05] lote escolhido L1 com a serie B1 do L2 -> 400, nada sai (Fase 5: o lote escolhido nao vence o da serie)', async () => {
+    const m = await montar();
+    const r = await devolver(m, ['B1'], { lote_id: await loteId(m, 'L1') });
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.ok(/B1/.test(r.body.error) && /lote/.test(r.body.error), r.body.error);
+    await nadaSaiu(m, ['B1']);
   });
   await test('[RN-235.05] series todas sem lote -> 201 com lote NULL, como antes', async () => {
     const m = await material();
@@ -178,6 +187,9 @@ process.on('exit', (code) => {
       projeto_id INTEGER, status TEXT)`);
     const comSerie = await material();
     const comLote = await material({ lote: 1, serie: 0 });
+    // Fase 5: banco antigo com a coluna NULL -> 0 (o COALESCE da posicao)
+    const nulo = await material();
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET controle_serie = NULL, controle_lote = NULL WHERE id = ?', [nulo.id]);
     const r = await ok(request(app).get(`${API}/materiais-cliente/posicao?cliente_id=${cli}`));
     const item = (id) => r.body.itens.find((i) => i.material_id === id);
     assert.ok(item(comSerie.id), JSON.stringify(r.body.itens.map((i) => i.material_id)));
@@ -185,6 +197,8 @@ process.on('exit', (code) => {
     assert.strictEqual(item(comSerie.id).controle_lote, 0);
     assert.strictEqual(item(comLote.id).controle_serie, 0);
     assert.strictEqual(item(comLote.id).controle_lote, 1);
+    assert.strictEqual(item(nulo.id).controle_serie, 0);
+    assert.strictEqual(item(nulo.id).controle_lote, 0);
   });
 
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
