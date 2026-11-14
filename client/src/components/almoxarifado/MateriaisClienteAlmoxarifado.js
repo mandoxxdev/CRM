@@ -8,6 +8,8 @@ import { gerarPosicaoClientePDF } from '../../utils/posicaoClientePdf';
 // Etapa 199 (RN-199.01, C448): a quantidade no formato do papel da posicao (pt-BR, ate 4 casas, vazio -> 0). Nao os formatNum locais de
 // outras telas: mostram um travessao para vazio, e o papel mostra 0.
 import { formatarQuantidade } from '../../utils/pdfTexto';
+import { situacaoDoLote } from '../../utils/situacaoDoLote';
+import { fraseDoLoteDasSeries } from '../../utils/loteDasSeries';
 import './Almoxarifado.css';
 
 /**
@@ -34,6 +36,9 @@ import './Almoxarifado.css';
  * `/almoxarifado/devolucoes` (Etapa 7), onde o material VOLTA para o estoque — aqui ele SAI do
  * prédio de volta para quem é dele.
  */
+// Etapa 235 (Fase 2, achado 3): literal congelada no plano.
+const FRASE_EXIGE_LOTE = 'Este material tem controle por lote: a devolução pede o lote, e esta janela ainda não o oferece.';
+
 const MateriaisClienteAlmoxarifado = () => {
   const { bloquearSeNaoPode } = useAlmoxPermissoes();
   const [clientes, setClientes] = useState([]);
@@ -48,6 +53,24 @@ const MateriaisClienteAlmoxarifado = () => {
   const [devQtd, setDevQtd] = useState('');
   const [devDoc, setDevDoc] = useState('');
   const [devSaving, setDevSaving] = useState(false);
+  // Etapa 235 (B1538): material com série — as séries em estoque para marcar. Até a 235 a janela não as oferecia e o servidor recusava
+  // a devolução ("informe 1 serie(s)"): material de cliente com série não era devolvível por aqui.
+  const [devSeries, setDevSeries] = useState([]);
+  const [devSerieIds, setDevSerieIds] = useState([]);
+  // Fase 2 (235, achado 3): material com controle de lote — a devolução pede o lote e esta janela ainda não tem seletor (D (235) 1); o
+  // servidor recusaria sempre ("exige lote"). A janela diz antes, em vez de oferecer séries que nunca saem.
+  const exigeLoteSemSeletor = devTarget?.controle_lote === 1;
+  const pedeSerie = devTarget?.controle_serie === 1 && !exigeLoteSemSeletor;
+
+  useEffect(() => {
+    setDevSeries([]); setDevSerieIds([]);
+    if (!devTarget || devTarget.controle_serie !== 1 || devTarget.controle_lote === 1) return undefined;
+    let cancelado = false;
+    api.get(`/almoxarifado/materiais/${devTarget.material_id}/series?status=EM_ESTOQUE`)
+      .then((r) => { if (!cancelado) setDevSeries(Array.isArray(r.data) ? r.data : []); })
+      .catch(() => { if (!cancelado) { setDevSeries([]); toast.error('Não foi possível carregar as séries do material'); } });
+    return () => { cancelado = true; };
+  }, [devTarget]);
 
   useEffect(() => {
     let cancelado = false;
@@ -79,10 +102,19 @@ const MateriaisClienteAlmoxarifado = () => {
     const qtd = Number(devQtd);
     if (!(qtd > 0)) { toast.error('Informe a quantidade a devolver'); return; }
     if (!devDoc.trim()) { toast.error('Informe o número do documento de devolução'); return; }
+    if (exigeLoteSemSeletor) { toast.error(FRASE_EXIGE_LOTE); return; }
+    if (pedeSerie) {
+      if (devSerieIds.length !== qtd) { toast.error('Selecione exatamente a quantidade de séries informada'); return; }
+      // RN-235.09: séries de lotes diferentes com o lote em branco — o servidor recusaria (B1535); a janela para antes.
+      const lote = fraseDoLoteDasSeries(devSeries, devSerieIds, 'devolução');
+      if (lote?.mistura) { toast.error(lote.texto); return; }
+    }
     setDevSaving(true);
     try {
+      // Material sem série: o corpo é o de sempre (sem a chave `serie_ids`).
       await api.post('/almoxarifado/materiais-cliente/devolucoes', {
         material_id: devTarget.material_id, quantidade: qtd, documento_devolucao: devDoc.trim(),
+        ...(pedeSerie ? { serie_ids: devSerieIds } : {}),
       });
       toast.success('Devolução ao cliente registrada!');
       setDevTarget(null);
@@ -229,6 +261,56 @@ const MateriaisClienteAlmoxarifado = () => {
                 <input className="almox-input" type="number" min="0" value={devQtd}
                   onChange={(e) => setDevQtd(e.target.value)} />
               </div>
+              {exigeLoteSemSeletor && (
+                <small id="dev-exige-lote" style={{ display: 'block', color: 'var(--gmp-error)', fontSize: '0.75rem', marginBottom: 8 }}>
+                  {FRASE_EXIGE_LOTE}
+                </small>
+              )}
+              {pedeSerie && (
+                <div className="almox-field">
+                  <label className="almox-label">Séries a devolver<span className="required">*</span></label>
+                  <div id="dev-series" style={{ maxHeight: 140, overflowY: 'auto', border: '1px solid var(--gmp-border)', borderRadius: 6, padding: 6 }}>
+                    {devSeries.map((s) => {
+                      // RN-235.08: a série de lote impedido (bloqueado, reprovado, vencido — a devolução ao cliente não é descarte, B1537)
+                      // vem apagada, com o lote e a situação (as palavras do extrato).
+                      const impedida = s.lote_esta_impedido === true;
+                      return (
+                        <label key={s.id} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '0.85rem',
+                          ...(impedida ? { opacity: 0.6 } : {}) }}>
+                          <input type="checkbox" data-serie-id={s.id} checked={devSerieIds.includes(s.id)} disabled={impedida}
+                            onChange={(e) => setDevSerieIds((ids) => (e.target.checked
+                              ? [...ids, s.id] : ids.filter((id) => id !== s.id)))} />
+                          {s.numero}
+                          {impedida ? (
+                            <span data-serie-situacao={s.id} style={{ color: 'var(--gmp-error)', fontSize: '0.75rem' }}>
+                              {` · lote ${s.lote_codigo} — ${situacaoDoLote(s)}: não sai`}
+                            </span>
+                          ) : (s.lote_codigo ? ` · lote ${s.lote_codigo}` : '')}
+                        </label>
+                      );
+                    })}
+                    {devSeries.length === 0 && <small>Nenhuma série disponível em estoque.</small>}
+                  </div>
+                  {devSeries.some((s) => s.lote_esta_impedido === true) && (
+                    <small id="dev-series-impedidas" style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                      Séries de lote bloqueado, reprovado ou vencido vêm apagadas: só saem depois que o lote for liberado na tela Lotes e Séries.
+                    </small>
+                  )}
+                  {(() => {
+                    // RN-235.09: de qual lote as séries marcadas saem (o servidor grava a devolução nele, B1535)
+                    const f = fraseDoLoteDasSeries(devSeries, devSerieIds, 'devolução');
+                    return f && (
+                      <small id="dev-series-lote-da-devolucao"
+                        style={{ display: 'block', color: f.mistura ? 'var(--gmp-error)' : 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                        {f.texto}
+                      </small>
+                    );
+                  })()}
+                  <small id="dev-series-contador" style={{ display: 'block' }}>
+                    {devSerieIds.length}/{devQtd || 0} série(s) selecionada(s)
+                  </small>
+                </div>
+              )}
               <div className="almox-field">
                 <label className="almox-label">Número do documento de devolução<span className="required">*</span></label>
                 <input className="almox-input" value={devDoc} onChange={(e) => setDevDoc(e.target.value)} />
