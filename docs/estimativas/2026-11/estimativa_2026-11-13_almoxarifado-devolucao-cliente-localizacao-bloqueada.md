@@ -13,9 +13,13 @@ Origem: pedido do André (pouco tempo; teto de 45 min a 1 h). Candidatos medidos
 
 | # | Tarefa | Execução estimada | Fator | Informado | Etapa/plano | Régua usada | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | A janela de devolução ao cliente avisa que a localização padrão está bloqueada (C543) | 30 min | ajuste pontual de tela (análise 15 min + teste 15 min) | 1h | 237 | 222–227 mediram 0,6 a 0,7 h com fechamento; aqui um campo de leitura + um aviso | — | — | — |
+| 1 | A janela de devolução ao cliente avisa que a localização padrão está bloqueada (C543) | 30 min | ajuste pontual de tela (análise 15 min + teste 15 min) | 1h | 237 | 222–227 mediram 0,6 a 0,7 h com fechamento; aqui um campo de leitura + um aviso | 0,6 h (horas.js, 13/11, antes do commit de fechamento) → 45 min | 1h15 (45 min + análise 15 min + teste 15 min; a parte do André é a da tabela — não informada por ele) | 7434cd7e, ac98e771, e50a98ec, a44d7e1c e o fechamento |
 
 Incerteza: baixa. Medição no fechamento:
 ```
 --grupos "E237=Etapa 237|Estimativa: almoxarifado - devolucao ao cliente avisa"
 ```
+
+No fechamento: 15 min acima do estimado. O que pesou: a suíte inteira pegou a fixture versionada da posição (pdfsRemessaPosicaoFixture),
+que confere as chaves contra a resposta real — um commit a mais (a44d7e1c) e uma segunda rodada do test:api. Conclusão:
+`conclusao_2026-11-13_almoxarifado-devolucao-cliente-localizacao-bloqueada.txt`.

@@ -1,0 +1,6 @@
+*Concluído — almoxarifado: a devolução ao cliente avisa quando a localização do material está bloqueada*
+_13/11/2026_
+
+1. A janela de devolução ao cliente avisa que a localização padrão está bloqueada — estimado 1h · realizado 1h15
+
+*Total: estimado 1h · realizado 1h15*
