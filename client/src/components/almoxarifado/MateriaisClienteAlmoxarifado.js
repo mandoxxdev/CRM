@@ -141,6 +141,8 @@ const MateriaisClienteAlmoxarifado = () => {
     setDevTarget(item); setDevQtd(''); setDevDoc('');
   }, [bloquearSeNaoPode]);
 
+  // RN-237.03/.04: so o booleano true do servidor apaga o Confirmar; campo ausente (servidor antigo) e a janela de antes.
+  const padraoBloqueada = devTarget?.localizacao_padrao_bloqueada === true;
   const confirmarDevolucao = async () => {
     const qtd = Number(devQtd);
     if (!(qtd > 0)) { toast.error('Informe a quantidade a devolver'); return; }
@@ -299,6 +301,13 @@ const MateriaisClienteAlmoxarifado = () => {
                 <strong>{devTarget.codigo}</strong> — {devTarget.nome}
                 {clienteNome ? <> · devolvendo para <strong>{clienteNome}</strong></> : null}
               </p>
+              {/* RN-237.03 (C543, B1542): com a localizacao padrao bloqueada o servidor recusa a devolucao mesmo com a peca em outro
+                  endereco (a regra e do motor e vale para toda saida sem origem). A janela avisa ao abrir e apaga o Confirmar. */}
+              {padraoBloqueada && (
+                <p id="dev-loc-bloqueada" style={{ color: 'var(--gmp-error)', fontSize: '0.85rem', marginTop: 0 }}>
+                  {`A localização padrão deste material (${devTarget.localizacao_padrao_codigo}) está bloqueada: a devolução será recusada. Desbloqueie a localização antes de devolver.`}
+                </p>
+              )}
               <div className="almox-field">
                 <label className="almox-label">
                   Quantidade (saldo: {formatarQuantidade(devTarget.saldo)} {devTarget.unidade})<span className="required">*</span>
@@ -391,7 +400,7 @@ const MateriaisClienteAlmoxarifado = () => {
               <button className="btn-almox-secondary" onClick={() => setDevTarget(null)} disabled={devSaving}>
                 Cancelar
               </button>
-              <button className="btn-almox-primary" onClick={confirmarDevolucao} disabled={devSaving}>
+              <button className="btn-almox-primary" onClick={confirmarDevolucao} disabled={devSaving || padraoBloqueada}>
                 {devSaving ? 'Registrando...' : 'Confirmar devolução'}
               </button>
             </div>
