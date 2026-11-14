@@ -90,6 +90,8 @@ async function posicaoPorCliente(db, { cliente_id } = {}) {
            -- Etapa 235 (B1536): a janela de devolucao precisa saber se o item pede serie (lista as series) e lote
            COALESCE(m.controle_serie, 0) AS controle_serie, COALESCE(m.controle_lote, 0) AS controle_lote,
            m.quantidade_atual AS saldo,
+           -- Etapa 237 (C543, B1542): a janela de devolucao avisa antes de confirmar que a padrao bloqueada faz o motor recusar
+           loc.codigo AS localizacao_padrao_codigo, COALESCE(loc.bloqueada, 0) AS localizacao_padrao_bloqueada,
            ${disponivelSql('m')} AS saldo_disponivel,
            COALESCE((SELECT SUM(mv.quantidade) FROM movimentacoes_almoxarifado mv
                       WHERE mv.material_id = m.id AND COALESCE(mv.cancelado, 0) = 0
@@ -101,6 +103,7 @@ async function posicaoPorCliente(db, { cliente_id } = {}) {
                       WHERE mv.material_id = m.id AND COALESCE(mv.cancelado, 0) = 0
                         AND mv.tipo = 'DEVOLUCAO_CLIENTE'), 0) AS devolvido
       FROM materiais_almoxarifado m
+      LEFT JOIN localizacoes_almoxarifado loc ON loc.id = m.localizacao_padrao_id
      WHERE m.proprietario_cliente_id = ? AND m.ativo = 1
      ORDER BY m.codigo`,
   [...TIPOS_ENTRADA, ...TIPOS_CONSUMO, cliente_id]);
@@ -123,6 +126,7 @@ async function posicaoPorCliente(db, { cliente_id } = {}) {
      ORDER BY m.codigo, os.numero_os, p.nome`,
   [cliente_id, ...TIPOS_CONSUMO]);
 
+  for (const i of itens) i.localizacao_padrao_bloqueada = Number(i.localizacao_padrao_bloqueada) === 1;
   return { cliente, itens, aplicacoes };
 }
 
