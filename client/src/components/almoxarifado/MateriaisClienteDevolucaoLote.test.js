@@ -138,6 +138,16 @@ describe('Etapa 236 — a janela de devolução ao cliente pede o lote', () => {
       'LR — saldo 1 — Reprovado · Vencido: não sai',
     ]);
     expect(container.querySelector('#dev-exige-lote')).toBeNull();
+    expect(container.querySelector('#dev-lote-vazio')).toBeNull(); // Fase 5 (M2): com lotes, sem a frase da lista vazia
+  });
+
+  test('[RN-236.02] lote não elegível sem motivo conhecido diz "Impedido" (Fase 5, M5)', async () => {
+    rotas['/almoxarifado/materiais/41/lotes?com_saldo=1'] = [lote(10, 'L1', 3), lote(16, 'LZ', 1, { elegivel: false })];
+    try {
+      await abrir('SO-LOTE');
+      expect(opcao('16').textContent).toBe('LZ — saldo 1 — Impedido: não sai');
+      expect(opcao('16').disabled).toBe(true);
+    } finally { rotas['/almoxarifado/materiais/41/lotes?com_saldo=1'] = LOTES_41; }
   });
 
   test('[RN-236.01] material sem controle de lote: sem campo Lote e sem busca de lotes; o corpo de sempre', async () => {
@@ -231,6 +241,55 @@ describe('Etapa 236 — a janela de devolução ao cliente pede o lote', () => {
     await confirmar();
     expect(toast.error).toHaveBeenCalledWith('Escolha o lote da devolução');
     expect(api.post).not.toHaveBeenCalled();
+  });
+
+  test('[RN-236.05] trocar de material zera o lote NA HORA (Fase 5, M1): com a lista do outro ainda carregando, não manda o lote do anterior', async () => {
+    const original = api.get.getMockImplementation();
+    api.get.mockImplementation((url) => (url === '/almoxarifado/materiais/43/lotes?com_saldo=1' ? new Promise(() => {}) : original(url)));
+    await abrir('SO-LOTE');
+    await escolherLote(10);
+    expect(container.querySelector('#dev-lote').value).toBe('10');
+    await cancelar();
+    await clicar(botaoDevolver('UM-LOTE'));
+    expect(container.querySelector('#dev-lote').value).toBe('');
+    await preencherTudo(1);
+    await confirmar();
+    expect(toast.error).toHaveBeenCalledWith('Escolha o lote da devolução');
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  test('[RN-236.05] a parada do lote vem depois da quantidade e do documento (Fase 5, M6)', async () => {
+    await abrir('SO-LOTE');
+    await confirmar();
+    expect(toast.error).toHaveBeenLastCalledWith('Informe a quantidade a devolver');
+    preencher(campo('Quantidade'), '1');
+    await esperar();
+    await confirmar();
+    expect(toast.error).toHaveBeenLastCalledWith('Informe o número do documento de devolução');
+    preencher(campo('documento'), 'DEV-9');
+    await esperar();
+    await confirmar();
+    expect(toast.error).toHaveBeenLastCalledWith('Escolha o lote da devolução');
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  test('[RN-236.06] o "nenhuma série" e a frase das impedidas olham só as séries do lote escolhido (Fase 5, M3 e M4)', async () => {
+    rotas['/almoxarifado/materiais/42/lotes?com_saldo=1'] = [...LOTES_42, lote(22, 'M3', 1)];
+    rotas['/almoxarifado/materiais/42/series?status=EM_ESTOQUE'] = [...SERIES_42,
+      { id: 9, numero: 'X9', lote_id: 23, lote_codigo: 'MB', lote_status: 'BLOQUEADO', lote_esta_impedido: true, lote_vencido_sem_liberacao: false }];
+    try {
+      await abrir('LOTE-SERIE');
+      await escolherLote(20);
+      expect(container.querySelectorAll('#dev-series input[type="checkbox"]')).toHaveLength(2);
+      expect(texto('#dev-series')).not.toContain('Nenhuma série disponível em estoque.');
+      expect(container.querySelector('#dev-series-impedidas')).toBeNull();
+      await escolherLote(22);
+      expect(container.querySelectorAll('#dev-series input[type="checkbox"]')).toHaveLength(0);
+      expect(texto('#dev-series')).toContain('Nenhuma série disponível em estoque.');
+    } finally {
+      rotas['/almoxarifado/materiais/42/lotes?com_saldo=1'] = LOTES_42;
+      rotas['/almoxarifado/materiais/42/series?status=EM_ESTOQUE'] = SERIES_42;
+    }
   });
 
   test('[RN-236.06] lote e série: sem lote, a frase no lugar da lista; com lote, só as séries dele; manda lote_id e serie_ids', async () => {

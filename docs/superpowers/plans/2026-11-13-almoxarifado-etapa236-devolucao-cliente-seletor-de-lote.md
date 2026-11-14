@@ -84,3 +84,25 @@ T1 e T2 não dependem uma da outra (nenhuma muda regra compartilhada). A integra
   esconde, e o servidor recusaria sem lote e com lote).
 - **Menor:** as mensagens literais conferem; a data do vencido é a ISO (`AAAA-MM-DD`) — o teste usa `dia(-1)` ISO.
 - Independência T1 × T2 confirmada; o arquivo da 235 que tinha a `#dev-exige-lote` ficou nomeado na T2.
+
+## Fase 5 — revisão adversarial (dois revisores frescos, em paralelo: um mutava só a tela, o outro sondava só o servidor)
+
+- **Tela — 0 defeitos de produção; 5 lacunas de teste reais (mutantes que sobreviviam), fechadas:** M1 (tirar o zerar do lote ao trocar de
+  material: com a lista do outro ainda carregando, o POST levava o `lote_id` do material anterior — cenário com a lista que não volta); M6 (a
+  parada do lote antes da quantidade e do documento); M2 (`#dev-lote-vazio` sempre); M3 e M4 ("nenhuma série" e a frase das impedidas sobre
+  todas as séries, não as do lote); M5 (o "Impedido" sem motivo conhecido). 2 mutantes sem efeito (ruído: o zerar no começo do efeito os
+  torna iguais). Agora 14 mutantes, 14 mortos; o arquivo tem 15 cenários.
+- **Servidor (sondas executadas, scripts no scratchpad) — 0 novos; 2 reproduzidos, anteriores à etapa (acontecem por Movimentações
+  também), declarados:** (a) depois de um **ajuste** o lote mostra mais do que o físico (o ajuste grava no "sem lote", −2; a lista diz
+  `L1 saldo=3`; a devolução de 3 → *"Saldo insuficiente. Disponível: 1 UN"*) — entra na **C542**; (b) com a localização padrão do material
+  **bloqueada**, a devolução sem origem é recusada (*"Localização R5L-3 está bloqueada"*) mesmo com o lote em outro endereço — **C543**, e é a
+  razão de a localização de origem ser a **D (236)** 1. Seguraram: as séries que a janela oferece para o lote saem todas; o vencido liberado e
+  depois com a validade trocada (lista e rota concordam); a posição e o estorno voltam ao lote.
+
+## Limitações (D (236))
+
+1. **Localização de origem** fora da janela (**B1541**); com a localização padrão bloqueada a devolução é recusada (**C543**).
+2. **Material com controle de lote e séries sem lote** não é devolvível pela tela.
+3. **O vencido barra** (**B1537** em aberto, **B1540**).
+4. **O saldo do seletor é o do lote**, não o livre (reserva, ajuste — **C542**); a recusa vem ao confirmar.
+5. **Os fluxos internos** não descobrem o lote das séries (resto da **D (233)** 3).
