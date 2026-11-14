@@ -2,7 +2,8 @@
  * Etapa 235 (D (233) 3, parte da devolução ao cliente; B1538) — a janela "Devolver ao cliente" de material com série lista as séries em
  * estoque, apaga a de lote impedido, diz de qual lote as marcadas saem, para antes de enviar com lotes diferentes ou com a quantidade de
  * séries errada, e manda `serie_ids`. Até a 235 ela pedia só quantidade e documento: material de cliente com série não era devolvível.
- * Material com controle de lote: a janela diz que pede o lote (sem seletor ainda) e não envia. Material sem série: o corpo de sempre.
+ * Material sem série: o corpo de sempre. (Material com controle de lote: até a 236 a janela dizia que pedia o lote e não enviava; desde a
+ * 236 ela tem o seletor — MateriaisClienteDevolucaoLote.test.js.)
  *
  * Plano: docs/superpowers/plans/2026-11-13-almoxarifado-etapa235-devolucao-cliente-lote-das-series.md (RN-235.07 a .09).
  * Executar: cd client && CI=true npx react-scripts test src/components/almoxarifado/MateriaisClienteDevolucaoSeries --watchAll=false
@@ -232,16 +233,6 @@ describe('Etapa 235 — a janela de devolução ao cliente lista as séries e di
     expect(caixa(2).checked).toBe(false);
     expect(texto('#dev-series-contador')).toBe('0/2 série(s) selecionada(s)');
   });
-
-  test('[RN-235.09] material com controle de lote: diz que pede o lote, sem lista e sem POST', async () => {
-    await abrir('COM-LOTE');
-    expect(api.get).not.toHaveBeenCalledWith(expect.stringContaining('/materiais/33/series'));
-    const frase = 'Este material tem controle por lote: a devolução pede o lote, e esta janela ainda não o oferece.';
-    expect(texto('#dev-exige-lote')).toBe(frase);
-    expect(container.querySelector('#dev-series')).toBeNull();
-    await preencherTudo(1);
-    await confirmar();
-    expect(toast.error).toHaveBeenCalledWith(frase);
-    expect(api.post).not.toHaveBeenCalled();
-  });
+  // O teste "[RN-235.09] material com controle de lote: diz que pede o lote, sem lista e sem POST" saiu na Etapa 236 (RN-236.07): a janela
+  // ganhou o seletor de lote — os cenários dele moram em MateriaisClienteDevolucaoLote.test.js.
 });
