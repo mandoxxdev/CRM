@@ -1,0 +1,6 @@
+*Concluído — almoxarifado: devolver ao cliente material controlado por lote*
+_13/11/2026_
+
+1. A devolução ao cliente passa a pedir o lote — estimado 2h · realizado 2h30
+
+*Total: estimado 2h · realizado 2h30*

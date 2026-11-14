@@ -19,7 +19,7 @@ Medido no código antes de estimar (sobre `cb81f004`):
 
 | # | Tarefa | Execução estimada | Fator | Informado | Etapa/plano | Régua usada | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | A janela de devolução ao cliente pede o lote (seletor com saldo/validade/situação; séries filtradas pelo lote) (D (235) 1) | 45 min | análise 15 min (a tarefa já vem detalhada no plano da 235, sem decisão com quem pediu) + teste 1 h (média: lote com e sem série) | 2h | 236 | 235 (servidor + tela) mediu 0,8 h com o fechamento; aqui só a tela | — | — | — |
+| 1 | A janela de devolução ao cliente pede o lote (seletor com saldo/validade/situação; séries filtradas pelo lote) (D (235) 1) | 45 min | análise 15 min (a tarefa já vem detalhada no plano da 235, sem decisão com quem pediu) + teste 1 h (média: lote com e sem série) | 2h | 236 | 235 (servidor + tela) mediu 0,8 h com o fechamento; aqui só a tela | 0,9 h (~51 min, com o fechamento ~38 min) | 2h30 (51 min + análise 15 min + teste 1 h = 2h06, arredondado na unidade de 30 min; a parte do André é a da tabela — não informada por ele) | 76df58b0, c31d2472, 5f5c1af4, 9028e544, 759fe445 e o do estimado × realizado |
 
 Incerteza: baixa (servidor e lista de lotes prontos; molde do seletor em Movimentações).
 
@@ -27,3 +27,5 @@ Medição no fechamento:
 ```
 --grupos "E236=Etapa 236|Estimativa: almoxarifado - devolucao ao cliente de material com lote"
 ```
+
+No fechamento: execução medida 0,9 h (horas.js --grupos "E236=…", 13/11), quase metade na documentação (~38 min). A Fase 2 achou o lote do material anterior indo junto ao trocar de material e o pedido de séries que sumia com o controle de lote; a Fase 5 não achou defeito de produção e fechou cinco lacunas de teste. O realizado passou 30 min do estimado pelo arredondamento (2h06 → 2h30). Conclusão: `conclusao_2026-11-13_almoxarifado-devolucao-cliente-seletor-de-lote.txt`.
