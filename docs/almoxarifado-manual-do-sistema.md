@@ -6244,11 +6244,21 @@ Na tela **Almoxarifado → Materiais de Clientes**, cada linha com saldo tem o b
 |---|---|
 | Quantidade | sim |
 | **Número do documento de devolução** | **sim** |
-| Lote / série / localização de origem | conforme o controle do material |
+| **Séries a devolver** (só material com número de série) | sim — marcar exatamente a quantidade |
 
 Sem documento, a operação é recusada com *"informe o numero do documento de devolucao"*. O botão fica desabilitado quando o item está com saldo zero, com o aviso *"Sem saldo para devolver"*.
 
-A devolução ao cliente **é uma saída**: o material sai do prédio de volta para quem é dele, e o saldo baixa. Ela é isenta da regra de OS/projeto pelo motivo óbvio — o destino **é** o próprio dono.
+**Material com número de série.** A janela lista as séries que estão em estoque, cada uma com o lote dela (*"B1 · lote L2"*), e um contador *"1/1 série(s) selecionada(s)"*. As regras:
+
+- A série de lote **bloqueado**, **reprovado** ou **vencido** (sem a liberação do vencimento) vem apagada, sem poder ser marcada, com a situação ao lado (*"· lote L3 — Bloqueado: não sai"*), e embaixo da lista: *"Séries de lote bloqueado, reprovado ou vencido vêm apagadas: só saem depois que o lote for liberado na tela Lotes e Séries."* A devolução ao cliente não é descarte: o lote vencido também barra. Quem envia mesmo assim recebe *"Lote L3 esta bloqueado e nao pode ser utilizado"* (ou *"… reprovado …"*), e para o vencido *"Lote L3 vencido em AAAA-MM-DD nao pode sair para consumo. …"*.
+- Com as séries marcadas de **um** lote, a janela diz *"As séries marcadas saem do lote L2."*, e a devolução é registrada nesse lote: o saldo do lote baixa, o histórico diz o lote e o estorno devolve ao lote. Se o saldo do lote não cobre a quantidade (uma série que ganhou o lote pela regularização, sem a peça estar no saldo do lote), a devolução sai do "sem lote", como uma série sem lote.
+- Séries de **lotes diferentes** (ou de um lote e sem lote) não saem numa devolução só: a janela mostra, em vermelho, *"As séries marcadas são de lotes diferentes (L1, L2): faça uma devolução para cada lote."* e **Confirmar devolução** para nessa mesma frase. Pela API a recusa é *"As series escolhidas sao de lotes diferentes (L1, L2): faca uma saida para cada lote"*.
+- Marcar um número de séries diferente da quantidade para em *"Selecione exatamente a quantidade de séries informada"*.
+- Séries todas sem lote: a devolução sai sem lote, sem frase.
+
+**Material com controle por lote.** A janela ainda não oferece o lote: ela mostra *"Este material tem controle por lote: a devolução pede o lote, e esta janela ainda não o oferece."* e **Confirmar devolução** para nessa frase (o sistema exigiria o lote: *"O material … exige lote nesta movimentacao (controle por lote ligado)"*).
+
+A devolução ao cliente **é uma saída**: o material sai do prédio de volta para quem é dele, e o saldo baixa. Ela é isenta da regra de OS/projeto pelo motivo óbvio — o destino **é** o próprio dono. Como toda saída, compara com o **disponível**: o material de cliente que entrou com OS fica reservado para ela, e a devolução dele é recusada com *"Saldo insuficiente. Disponível: 0 UN"* até a reserva ser liberada.
 
 ### 16.8 Ajuste de material de cliente e a autorização especial
 

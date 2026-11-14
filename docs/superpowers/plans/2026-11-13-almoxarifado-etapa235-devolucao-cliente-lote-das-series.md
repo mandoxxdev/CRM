@@ -93,15 +93,17 @@ Cenário-base: material **de cliente**, com série, **sem** controle de lote; A1
   - `#dev-series-lote-da-devolucao` (só com `controle_lote !== 1`): `As séries marcadas saem do lote <L>.` /
     `As séries marcadas são de lotes diferentes (<L1>, <L2>[, sem lote]): faça uma devolução para cada lote.`;
   - `#dev-series-contador`: `<n>/<qtd> série(s) selecionada(s)`.
+  - **(Fase 2, achado 3)** com `controle_lote === 1`: sem lista; `#dev-exige-lote` `Este material tem controle por lote: a devolução pede o
+    lote, e esta janela ainda não o oferece.` e o confirmar para no `toast.error` com ela, sem `POST`.
 - `client/src/utils/loteDasSeries.js` — `fraseDoLoteDasSeries(series, ids, gesto = 'saída')` extraída de Movimentações (as literais da 234
   não mudam).
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 (tronco, servidor)** — `server/tests/api/devolucaoClienteLoteDasSeries.api.test.js` (RN-235.01 a .06) vermelho → rota declara
+- [x] **T1 (tronco, servidor)** — `ec512062` — `server/tests/api/devolucaoClienteLoteDasSeries.api.test.js` (RN-235.01 a .06) vermelho → rota declara
   `lotePelasSeries` + comentário corrigido; posição com as duas colunas → verde; `materialClienteDevolucao`, `materialClientePosicao`,
   `saidaAvulsaLoteDasSeries` continuam verdes.
-- [ ] **T2 (galho, tela, contra o contrato acima)** — `client/src/components/almoxarifado/MateriaisClienteDevolucaoSeries.test.js` (RN-235.07
+- [x] **T2 (galho, tela, contra o contrato acima)** — `94a094ef` — `client/src/components/almoxarifado/MateriaisClienteDevolucaoSeries.test.js` (RN-235.07
   a .09) vermelho → `utils/loteDasSeries.js` + `MateriaisClienteAlmoxarifado.js` → verde; `MovimentacoesSaidaLoteDasSeries` e
   `MateriaisClienteAlmoxarifado.test.js` verdes.
 - Integração: .01/.02 entram pela rota real (devolução e `/cancelar`); a posição pela rota real.
@@ -112,6 +114,93 @@ Cenário-base: material **de cliente**, com série, **sem** controle de lote; A1
 2. tela: sem a lista → .07 cai; sem `disabled` na impedida → .08 cai; sem a parada de lotes diferentes → .09 cai; sem a conferência da
    quantidade → .09 cai; mandar `serie_ids` para material sem série → .07 cai.
 
+## Fase 2 — revisão do plano (1 revisor fresco)
+
+Rodou enquanto os testes eram escritos (só leitura). **0 Critical.** **1 importante (reproduzido):** a posição com as duas colunas novas
+derruba `pdfsRemessaPosicaoFixture.api.test.js` (compara as chaves da fixture `client/src/utils/__fixtures__/posicaoCliente.rota.json` com a
+resposta real) — a T1 dona da fixture, regravada com `CRM_GRAVAR_FIXTURE=1` (só a da posição; a da remessa saiu com hora e número novos e
+foi desfeita, ruído). **3 menores:** (2) o material de cliente reservado para OS é listado e recusado pelo disponível — já era assim
+(a reserva é por quantidade); declarado (**C541**, mensagem medida por sonda: *"Saldo insuficiente. Disponível: 0 UN"*); (3) material com
+controle de lote ganhava uma lista que nunca sairia → a janela diz *"Este material tem controle por lote: a devolução pede o lote, e esta
+janela ainda não o oferece."* e não envia (contrato da tela acrescido: `#dev-exige-lote`); (4) a mensagem do vencido sugere SUCATA/PERDA, que
+para material de cliente pede OS/projeto — anotado na **B1537**. Literais, schema (`DevolucaoClienteSchema` aceita `lote_id`/`serie_ids`) e
+a isenção do dono conferidos.
+
+## Execução e controles (medidos)
+
+- **Vermelho antes do código:** servidor 3/11 passavam (os de "não muda"); o da posição tomava 500 (*no such table: ordens_servico* — a
+  tabela é do núcleo; criada no próprio teste, como em `materialClientePosicao`). Tela: o arquivo novo contra a tela de antes (cópia de
+  `HEAD`) — 8/9 caem (o de material sem série passa: é o "não muda").
+- **Divergências do plano:** a `#dev-exige-lote` (Fase 2, achado 3); a fixture da posição na T1 (achado 1); as decisões ficaram B1535–B1538,
+  e os avisos C540 (o comentário da rota e o manual estavam errados) e C541 (reserva).
+- **Sabotagens** (script `e235-sabotagem.js` no scratchpad: `split/join` com âncora contada (=1), roda o arquivo de teste, restaura e confere
+  o `md5`): rodada 1 — **10/10 caem** (S1 rota sem `lotePelasSeries`, S2 posição sem as colunas, C1–C8 tela). Rodada da Fase 5 — **5/7 caem**
+  (M1 sem zerar a lista, M2 sem o `cancelado`, M4 contador, M5 lista buscada com controle de lote, S3 sem o `COALESCE`); **M3** (dependência do
+  efeito por `controle_serie`) e **M6** (checkbox sem `checked`) **não caem e são inalcançáveis pela tela**: a janela só troca de material
+  passando por fechar (`devTarget` = null, o efeito roda de novo) e desmonta ao fechar (o DOM nunca diverge do estado). Ficam no código, sem
+  teste que os derrube — declarado. Restauro conferido por `md5` em cada uma; `git status` sem sobra.
+
+## Fase 5 — revisão adversarial do código (2 revisores frescos, em paralelo)
+
+- **Regra e fluxo (0 achados de produção):** sondas executadas — séries repetidas (400 de sempre), estorno com o lote bloqueado depois (volta
+  ao lote, como a saída avulsa da 234), a queda da cobertura (série com lote e a peça no "sem lote": sai do "sem lote" e o estorno volta lá),
+  a posição depois da devolução, usuário sem perfil (403). Pré-existentes, iguais à 234: o estorno num lote bloqueado; a série regularizada
+  com lote sem a peça na linha dele. Ruído: o contador com quantidade fracionada (*"0/0.5"*); a lista não recarrega depois de um envio
+  recusado.
+- **Testes (6 mutantes da tela e 3 lacunas do servidor):** fechados com cenário — trocar de material zera as marcadas (o outro material não
+  leva `serie_ids`), a resposta atrasada da lista, o contador `1/2`, sem busca de séries com controle de lote, o lote escolhido diferente do da
+  série (400, nada sai), a coluna NULL na posição (→ 0), o "nada saiu" completo no `(L1, sem lote)`. M3 e M6 inalcançáveis (acima). —
+  `69ce32d3`.
+
+## Limitações (D (235))
+
+1. **Material de cliente com controle por lote** continua sem devolução pela tela: a janela não tem seletor de lote (nem de localização de
+   origem) e diz isso.
+2. **O vencido barra a devolução ao cliente** (**B1537**, em aberto).
+3. **Os fluxos internos** (devolução ao estoque, sucata, Não Conformidade) não descobrem o lote das séries — o resto da **D (233) 3**.
+4. **A lista de séries é a da abertura da janela** (outra pessoa pode ter levado uma; a recusa vem do servidor).
+5. **M3 e M6** sem teste que os derrube (inalcançáveis pela tela).
+
+## Retro
+
+- Rodadas de correção até verde: 2 (Fase 2: a fixture e a `#dev-exige-lote`; Fase 5: 9 cenários).
+- Achados: Fase 2 — 1 importante (reproduzido, corrigido), 3 menores (1 corrigido, 2 declarados); Fase 5 — 0 de produção, 9 lacunas de teste
+  reais (7 fechadas, 2 inalcançáveis e declaradas), 2 ruídos.
+- Paralelismo: T1 e T2 sequenciais (pequenas); o revisor da Fase 2 em paralelo com a escrita dos testes; os dois da Fase 5 em paralelo entre
+  si (um mutava só a tela, o outro sondava só o servidor), antes do `test:api`.
+- Defeito que escapou: — (preencher na etapa seguinte). Da 234: nenhum medido.
+
+## Verificação (medida, serial)
+
+- Servidor (sobre `69ce32d3`, o código final): `test:api` **629/629 arquivos OK**; depois, em série, `test:almoxarifado` **44/0**;
+  `test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **16/0**.
+- Tela (sobre `69ce32d3`): `react-scripts test --maxWorkers=2` **230/230 suítes, 3120/3120 testes**; `react-scripts build` (CI=true) **Compiled
+  successfully**.
+- Arquivos da etapa: `devolucaoClienteLoteDasSeries` **12/12**, `MateriaisClienteDevolucaoSeries` **12/12**; os da 234 seguem **19/19** e
+  `MovimentacoesSaidaLoteDasSeries` verde (na suíte completa); `materialClienteDevolucao` 8/8, `materialClientePosicao` 8/8,
+  `pdfsRemessaPosicaoFixture` 3/3.
+
 ## Próxima tarefa detalhada
 
-*(preencher no fechamento)*
+*(Escolhida pela ordem do CLAUDE.md: a 235 fecha a parte da devolução ao cliente da D (233) 3; a feature 13 continua 🟢. O que ela deixou de
+fora no mesmo gesto é a **D (235) 1** — o material de cliente com controle por lote não é devolvível pela tela. **Sem estimativa** — começa
+pela Fase 0.5.)*
+
+**A janela de devolução ao cliente ganha o seletor de lote (D (235) 1).**
+
+- **O problema:** em **Materiais de Clientes → Devolver**, material de cliente **com** controle por lote mostra *"Este material tem controle
+  por lote: a devolução pede o lote, e esta janela ainda não o oferece."* (`#dev-exige-lote`, `MateriaisClienteAlmoxarifado.js`) e não envia;
+  a rota exige o lote (`exigeLote: true` → *"O material … exige lote nesta movimentacao (controle por lote ligado)"*). Não há outra porta:
+  a v2 recusa `DEVOLUCAO_CLIENTE` (rota dedicada).
+- **Medir antes (Fase 0):** a lista de lotes com saldo que Movimentações usa (`GET /almoxarifado/materiais/:id/lotes?com_saldo=1`,
+  `MovimentacoesAlmoxarifado.js:275`) — traz a situação do lote (impedido/vencido)? Com controle de lote **e** série, a lista de séries tem
+  de filtrar pelo lote escolhido (como Movimentações, `:1263`). Material com lote e **sem** série: só o seletor.
+- **Contrato que ela consome:** `POST /materiais-cliente/devolucoes` já aceita `lote_id` (`DevolucaoClienteSchema`); o motor confere o status
+  e a validade do lote escolhido (`checarLoteNaSaida`) e o saldo da linha do lote (`claimSaldoDoLote`, *"Saldo insuficiente no lote <c>.
+  Disponível: <n> <un>"*); séries de outro lote → *"serie X nao pertence ao lote informado"*. Nada muda no servidor (a menos que a lista de
+  lotes não diga a situação).
+- **O que já está pronto:** a lista de séries, a frase do lote, o contador e as paradas da janela (B1538); `situacaoDoLote` em `utils`.
+- **Pontos de atenção:** tirar a `#dev-exige-lote` (e o teste dela) quando o seletor existir; a decisão **B1537** (vencido) decide se o
+  lote vencido aparece no seletor; localização de origem continua fora (decidir se entra junto).
+- Outros abertos: a **B1534** (acertar as saídas antigas); o resto da D (233) 3 (fluxos internos); C522 e C526 (a reserva saber o lote),
+  C524, C525, C527, C529–C531, C533, C534, C536–C539, C541, C514–C518, C486, C491, C495, C497, C498.

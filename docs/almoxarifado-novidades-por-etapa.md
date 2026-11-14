@@ -11,7 +11,15 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-13):** **Etapa 234 fechada** (**a saída avulsa de peça com série baixa do lote certo** — em
+> **Onde o desenvolvimento está (2026-11-13):** **Etapa 235 fechada** (**a devolução ao cliente de peça com número de série, pelo lote
+> certo** — em **Materiais de Clientes → Devolver**, material com série: a janela lista as séries em estoque (antes não listava, e esse
+> material **não era devolvível pela tela**), apaga a de lote impedido, diz de qual lote elas saem e barra lotes diferentes; a devolução é
+> registrada no lote das séries (antes ficava "sem lote", e a série de lote bloqueado saía). Parte da **D (233)** 3 resolvida; decisões
+> **B1535** a **B1538** (a **B1537** — o vencido barra a devolução ao cliente — está em aberto para você); avisos **C540** e **C541**;
+> limitação **D (235)**; verificação **F (235)**; sem consulta antes do deploy).
+> **Próxima:** **a devolução ao cliente de material com controle por lote ganha o seletor de lote** (**D (235)** 1) — detalhada no fim do
+> plano da 235.
+> *(Antes, 2026-11-13:)* **Etapa 234 fechada** (**a saída avulsa de peça com série baixa do lote certo** — em
 > **Movimentações**, na Saída e na Perda de material com número de série e sem controle por lote, com o lote em branco, a saída é registrada
 > no lote das séries marcadas — **antes ficava "sem lote"** e o lote continuava contando a peça (medido: *"Sem lote atribuído"* −1 por peça);
 > a tela diz de qual lote as séries saem e barra séries de lotes diferentes. **D (233)** 2 resolvida; **uma consulta antes do deploy, A117**
@@ -4735,7 +4743,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15175,6 +15183,27 @@ deploy.** Ficam "sem lote", e o lote continua contando a peça; a **A117** lista
 transfira a quantidade do lote para o "sem lote" com registro no histórico — o físico não muda) ou deixar como está (o **Saldo por lote**
 desses materiais segue contando a mais no lote). **Reversível.**
 
+**B1535 (NOVA, da Etapa 235; decisão do agente) — a devolução ao cliente confere e grava o lote das séries.** Medido antes: a devolução
+de *B1* (lote *L2* **bloqueado**) com o lote em branco saía, gravava o lote vazio e baixava o "sem lote" (−1); *A1* (*L1*) e *B1* (*L2*) juntas
+também saíam. Escolhido: a devolução ao cliente usa a mesma régua da saída avulsa — a série de lote bloqueado, reprovado ou vencido não sai;
+com as séries de **um** lote (e o saldo dele cobrindo), a devolução é registrada nesse lote; lotes diferentes são recusados com a mensagem da
+saída avulsa (*"… faca uma saida para cada lote"* — o motor é um só; descartado ter uma palavra por tipo). **Reversível.**
+
+**B1536 (NOVA, da Etapa 235; decisão do agente) — a posição do cliente diz se cada item tem controle de série e de lote.** A janela de
+devolução precisa saber se pede as séries. Escolhido: dois campos a mais em cada item da posição (não aparecem em tela nem no PDF).
+Descartado: a janela buscar o cadastro do material a cada clique em **Devolver**. **Reversível.**
+
+**B1537 (NOVA, da Etapa 235; decisão do agente — em aberto para você) — o lote vencido continua barrando a devolução ao cliente.** Já barrava
+com o lote escolhido; agora barra também pelo lote das séries. Devolver o vencido ao dono pede **liberar o vencimento** do lote em **Lotes e
+Séries** (com justificativa). A mensagem do vencido sugere ainda *"ou baixe por SUCATA/PERDA"* — para material de cliente isso pede OS ou
+projeto do dono. **Em aberto para você:** isentar a devolução ao cliente do vencimento, como a devolução ao fornecedor (o vencido voltaria
+ao dono sem liberação), ou manter. **Reversível.**
+
+**B1538 (NOVA, da Etapa 235; decisão do agente) — a janela de devolução lista as séries.** Para material com série: as séries em estoque,
+a de lote impedido apagada com a situação, o contador, a frase do lote e a parada antes de enviar (lotes diferentes; marcadas diferente da
+quantidade). Material **com** controle por lote: a janela diz que pede o lote e não envia (sem seletor ainda — **D (235)** 1); descartado
+mostrar a lista, que nunca sairia. Material sem série: a janela e o que ela envia ficam iguais. **Reversível.**
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -19424,6 +19453,14 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      lote" batem); o **Saldo por lote** desse material segue como estava. **O que fazer:** nada; se quiser o lote certo, a série tem de ter
      entrado com ele.
 
+540. **NOVO (da Etapa 235) — o comentário da rota de devolução ao cliente dizia que a janela tinha seletor de lote e de série.** Não tinha,
+     desde a entrega da tela de Materiais de Clientes: material de cliente com série **não era devolvível pela tela**, e o manual dizia
+     *"Lote / série / localização de origem — conforme o controle do material"*. **Estava errado**; corrigido no código e no manual (a janela
+     lista as séries desde esta etapa; lote e localização de origem ela ainda não oferece). **O que fazer:** nada.
+541. **NOVO (da Etapa 235) — material de cliente que entrou com OS fica reservado para ela, e a devolução dele é recusada pelo disponível.**
+     A janela lista as séries mesmo assim; **Confirmar devolução** responde *"Saldo insuficiente. Disponível: 0 UN"*. Já era assim antes desta
+     etapa (a reserva é por quantidade, não por série). **O que fazer:** liberar a reserva da OS em **Reservas** antes de devolver.
+
 ### D. Limitações declaradas— são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -20779,6 +20816,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(235) A devolução ao cliente pelo lote das séries, o que ficou de fora.** (1) Material de cliente **com** controle por lote continua
+  sem devolução pela tela: a janela não tem seletor de lote (nem de localização de origem) e diz isso. (2) O vencido barra (**B1537**). (3) Os
+  fluxos internos (devolução ao estoque, sucata, Não Conformidade) não descobrem o lote das séries — o resto da **D (233)** 3. (4) A lista de
+  séries é a da hora em que a janela abriu (outra pessoa pode ter levado uma série; a recusa vem do servidor). (5) Dois controles positivos
+  da tela não caem e são inalcançáveis pela tela (a janela desmonta ao fechar) — declarado no plano.
 - **(234) A saída avulsa grava o lote das séries, o que ficou de fora.** (1) As saídas antigas continuam "sem lote" (**B1534**; a **A117**
   as lista; o acerto é decisão sua). (2) Séries de lotes diferentes numa saída só são **recusadas**, não divididas (**B1532**). (3) Material
   **com** controle por lote e *"Sem lote"*: continua *"exige lote"* (**D (233)** 4). (4) A devolução ao cliente e os fluxos internos não
@@ -22283,6 +22325,12 @@ Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Previ
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
 
+**(235) Nenhum clique foi dado.** A tela **mudou** — a janela **Devolver ao cliente** de **Materiais de Clientes** (a lista de séries, a frase
+do lote, o contador, a parada antes de enviar e o aviso do controle por lote), provada pelo Jest (`MateriaisClienteDevolucaoSeries`, 12
+cenários) contra o contrato. O servidor, pelas rotas reais (devolução, estorno e posição), em `devolucaoClienteLoteDasSeries` (12: o lote
+gravado, a linha baixada e o resumo; o estorno; bloqueado, reprovado e vencido; lotes diferentes; o que não muda; a posição); 15 de 17
+controles positivos caem (os 2 restantes são inalcançáveis pela tela, declarados); suítes: `test:api` 629/629, almoxarifado 44, validation 4,
+safealter 3, sqlite 16, Jest 230 suítes e 3120 testes, build ok. **Para clicar (10 minutos):** o roteiro da seção da Etapa 235 no guia.
 **(234) Nenhum clique foi dado.** A tela **mudou** — a frase *"As séries marcadas saem do lote …"* / *"… de lotes diferentes …"* embaixo da
 lista de séries da **Saída** e da **Perda** de **Movimentações**, provada pelo Jest (`MovimentacoesSaidaLoteDasSeries`, 10 cenários) contra o
 contrato. O servidor, pelas rotas reais (v2 e estorno), em `saidaAvulsaLoteDasSeries` (19: o lote gravado, a linha baixada e o resumo; o
@@ -42353,12 +42401,73 @@ lista essas saídas (o acerto, se houver, é decisão sua — **B1534**).
 - A devolução ao cliente e os fluxos internos não descobrem o lote (a entrega já descobria por conta própria) (**D (233)** 3).
 - A série cujo lote não tem a peça no saldo (a regularização de séries pode dar o lote) sai do "sem lote", como antes (**C539**).
 
+## Etapa 235 — A devolução ao cliente de peça com número de série, pelo lote certo (2026-11-13)
+
+Material **de cliente** com número de série, **sem** controle por lote, com séries em dois lotes. Em **Materiais de Clientes → Devolver**, a
+janela pedia só a quantidade e o documento: esse material **não era devolvível pela tela** (o sistema exige as séries e a janela não as
+oferecia — *"material com controle de serie: informe 1 serie(s) para 1 unidade(s) — recebidas 0"*). E por quem mandasse as séries direto, a
+série de lote **bloqueado** saía, e a devolução ficava registrada *"sem lote"* (o lote continuava contando a peça, *"Sem lote atribuído"* −1).
+Agora a janela lista as séries em estoque para marcar (as de lote impedido apagadas), diz de qual lote elas saem, e o sistema confere e
+registra o lote das séries — a mesma régua da saída avulsa (Etapas 233 e 234). Decisões do agente: **B1535** a **B1538**; avisos **C540** e **C541**;
+parte da **D (233)** 3 resolvida.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Janela **Devolver ao cliente** de material com série: só quantidade e documento; **Confirmar** → *"material com controle de serie: informe 1 serie(s) …"* | A janela lista as séries em estoque (*"B1 · lote L2"*), com o contador *"1/1 série(s) selecionada(s)"*; a devolução sai |
+| Devolução de *B1* (lote *L2*) sem lote escolhido: histórico *sem lote*, *L2* continua com a peça, *"Sem lote atribuído"* −1 | O registro guarda o lote *L2*; *L2* baixa; *"Sem lote atribuído"* 0; a janela diz *"As séries marcadas saem do lote L2."* |
+| Série de lote **bloqueado** saía na devolução | Vem apagada na janela (*"· lote L2 — Bloqueado: não sai"*); pela API, *"Lote L2 esta bloqueado e nao pode ser utilizado"* |
+| *A1* (lote *L1*) e *B1* (lote *L2*) na mesma devolução → saía, *"Sem lote atribuído"* −2 | *"As séries marcadas são de lotes diferentes (L1, L2): faça uma devolução para cada lote."* e não envia |
+| Material de cliente **com** controle por lote: **Confirmar** → *"… exige lote nesta movimentacao …"* | A janela diz antes: *"Este material tem controle por lote: a devolução pede o lote, e esta janela ainda não o oferece."* (ainda não devolve — **D (235)** 1) |
+| Material sem série | **Igual** |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**; um cliente cadastrado (ex.: *Cliente Alfa*). No cadastro do material (Compras),
+*CLI-235* com **Proprietário** *Cliente Alfa*, **Controle de série** ligado e **sem** Controle por lote, unidade *un*. **Movimentações →
+Entrada** de 1 com lote *L1* (série *A1*) e de 2 com lote *L2* (séries *B1*, *B2*). Abra **Materiais de Clientes** e escolha *Cliente Alfa*.
+
+**1. A devolução registra o lote das séries.** Na linha de *CLI-235*, **Devolver**: a janela lista *A1 · lote L1*, *B1 · lote L2*, *B2 · lote
+L2*. Quantidade 1, documento *DEV-1*, marque *B1*: embaixo, *"As séries marcadas saem do lote L2."* e *"1/1 série(s) selecionada(s)"*.
+**Confirmar devolução** → *"Devolução ao cliente registrada!"*. Em **Lotes e Séries** → *CLI-235*: *L2* com **1**, *L1* com **1**, *"Sem
+lote atribuído"* **0**.
+
+**2. O estorno devolve ao lote.** Em **Movimentações**, estorne a devolução do passo 1: *L2* volta a **2**, *B1* volta a *Em estoque* no *L2*.
+
+**3. Série de lote impedido não sai.** Em **Lotes e Séries**, bloqueie o *L2* (com justificativa). **Devolver** de novo: *B1* e *B2* vêm
+apagadas, com *"· lote L2 — Bloqueado: não sai"*, e embaixo *"Séries de lote bloqueado, reprovado ou vencido vêm apagadas: só saem depois que
+o lote for liberado na tela Lotes e Séries."* O lote **vencido** também barra (a devolução ao cliente não é descarte — **B1537**).
+Desbloqueie o *L2* para seguir.
+
+**4. Lotes diferentes: uma devolução para cada lote.** Quantidade 2, marque *A1* e *B1*: em vermelho, *"As séries marcadas são de lotes
+diferentes (L1, L2): faça uma devolução para cada lote."*; **Confirmar devolução** mostra a mesma frase e não envia. Marque só *B1* com
+quantidade 2: *"Selecione exatamente a quantidade de séries informada"*.
+
+**5. O que não muda.** Material de cliente **sem** série: a janela é a de sempre. Séries que entraram sem lote: saem sem lote, sem frase.
+
+### O que esta etapa NÃO cobre
+
+- Material de cliente **com** controle por lote continua sem devolução pela tela: a janela não tem seletor de lote, e diz isso (**D (235)** 1).
+- A devolução ao cliente de lote **vencido** continua barrada, como já era com o lote escolhido (**B1537** — em aberto para você).
+- Os fluxos internos (devolução ao estoque, sucata, Não Conformidade) não descobrem o lote das séries (resto da **D (233)** 3).
+- Material de cliente que entrou com OS fica reservado para ela: a janela lista as séries, mas a devolução é recusada pelo disponível (**C541**).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 235 entregue (2026-11-13):** **a devolução ao cliente de peça com número de série, pelo lote certo** (parte da **D (233)** 3
+  resolvida). A janela **Devolver ao cliente** lista as séries (antes não listava, e material de cliente com série não era devolvível pela
+  tela — **B1538**); a gravação confere e grava o lote das séries (**B1535** — antes a série de lote bloqueado saía e ficava "sem lote"); a
+  posição diz o controle de série e lote (**B1536**). Commits `873c51d9` (estimativa), `ec512062` (servidor e teste, com o plano),
+  `94a094ef` (tela e teste), `69ce32d3` (Fase 5: cenários) e o fechamento. **O que é seu:** a decisão **B1537** (o vencido barra a
+  devolução ao cliente) e as **B1535**, **B1536**, **B1538** (reversíveis); os avisos **C540** (o comentário e o manual estavam errados) e
+  **C541**; a limitação **(235)** em D e a verificação **(235)** em F. Sem consulta antes do deploy. **Próxima:** **a devolução ao cliente de
+  material com controle por lote ganha o seletor de lote** (**D (235)** 1) — detalhada no fim do plano da 235.
 
 - **Etapa 234 entregue (2026-11-13):** **a saída avulsa de peça com série baixa do lote certo** (**D (233)** 2 resolvida). Com o lote em
   branco, a gravação manual usa o lote das séries quando todas estão em estoque, são de um lote e o saldo dele cobre (**B1531** — antes

@@ -1,5 +1,10 @@
 # 13 — Materiais Pertencentes a Clientes
 
+> **+ Etapa 235 (2026-11-13, `ec512062`, tela `94a094ef`, Fase 5 `69ce32d3`): a devolução ao cliente de material com série confere e grava o
+> lote das séries, e a janela lista as séries (B1535–B1538, C540, C541)** — ver a seção "Etapa 235", no fim. **Esta spec (e o manual) dizia
+> que a devolução tinha lote, série e localização de origem "conforme o controle do material": estava errado na tela** — ver a seção. O status
+> não muda.
+
 > **+ Etapa 199 (2026-11-05, `eb3a48c3`): a tela Materiais de clientes mostra as quantidades no formato do papel (*12,5*, *1.250,75*, *0,3*; vazio *0*) — C448 resolvido, B1336** — ver a seção "Etapa 199", no fim. O status não muda.
 
 > **+ Etapa 186 (2026-10-22, T1 `225ee70b`, T3 `bc1ca22f`, T5 `9ea04c28`, Fase 5 `f541130a`): o PDF de posição do cliente cabe na folha — cada célula quebra em linhas, nada é cortado; o título com a razão social quebra; a unidade (até *TAMBOR*) sai inteira; quantidades em formato brasileiro e o número nunca quebra (B1230, B1232–B1234, B1236, B1238; resolve a B1220 da 185)** — ver a seção "Etapa 186", no fim. O status não muda.
@@ -426,3 +431,30 @@ Só tela — nenhuma rota, consulta ou valor gravado mudou. Plano:
 - Testes `[RN-199.01]` em `MateriaisClienteAlmoxarifado.test.js` (3), com controle positivo; a lacuna "vazio vira travessão" achada na
   revisão e coberta.
 - **C448** resolvido. Fora: as outras telas do módulo com o formato delas — **D (199)**. Novidades: seção "Etapa 199", **B1336**.
+
+## Etapa 235 — a devolução ao cliente pelo lote das séries (2026-11-13)
+
+Plano: `docs/superpowers/plans/2026-11-13-almoxarifado-etapa235-devolucao-cliente-lote-das-series.md`. Parte da **D (233) 3** (spec 10).
+Sonda da Fase 0: a devolução de `[B1]` (lote L2 **BLOQUEADO**) com o lote em branco → 201, livro `lote_id` NULL, "sem lote" −1; `[A1, B1]`
+de lotes diferentes → 201; e a janela, que mandava só quantidade e documento, recebia *"material com controle de serie: informe 1 serie(s)…"*.
+
+> ⚠️ **Estava errado:** o comentário da rota (`extended.js`, desde a Etapa 8) dizia *"a tela da Task 8 oferece seletor de lote e de serie"*,
+> e o manual dizia *"Lote / série / localização de origem — conforme o controle do material"*. A janela nunca ofereceu nenhum dos três:
+> material de cliente com série ou com controle de lote **não era devolvível pela tela**. Corrigidos (**C540**); a janela lista as séries desde
+> esta etapa; lote e localização de origem continuam fora (**D (235)**).
+
+- [x] **RN-235.01 a .04 (B1535)** — `POST /materiais-cliente/devolucoes` declara `lotePelasSeries`: a série de lote bloqueado, reprovado ou
+  vencido não sai; séries de um lote só (com o saldo do lote cobrindo) gravam esse lote e o estorno volta a ele; lotes diferentes → 400 da
+  saída avulsa — `ec512062`; lote escolhido diferente do da série, "nada saiu" completo — `69ce32d3`.
+- [x] **RN-235.05** — não muda: lote escolhido; séries sem lote; material com controle de lote (*exige lote*); material sem série — `ec512062`.
+- [x] **RN-235.06 (B1536)** — `GET /materiais-cliente/posicao`: cada item com `controle_serie` e `controle_lote` (0/1, NULL → 0); fixture da
+  posição do client regravada — `ec512062`, NULL `69ce32d3`.
+- [x] **RN-235.07 a .09 (B1538)** — a janela **Devolver ao cliente**: `#dev-series` (séries `EM_ESTOQUE`, `· lote X`), a de lote impedido apagada
+  (`#dev-series-impedidas`), `#dev-series-lote-da-devolucao`, `#dev-series-contador`, a parada antes de enviar (lotes diferentes; marcadas ≠
+  quantidade) e `serie_ids` no corpo; material com controle de lote → `#dev-exige-lote` e não envia — `94a094ef`; troca de material,
+  resposta atrasada, contador — `69ce32d3`.
+- [ ] **Fora (declarado, D (235)):** seletor de lote e de localização de origem (material de cliente com controle de lote continua sem
+  devolução pela tela); o vencido barra (**B1537**, em aberto); o material reservado para OS é recusado pelo disponível (**C541**, já era); os
+  fluxos internos (resto da D (233) 3).
+
+Testes: `devolucaoClienteLoteDasSeries.api.test.js` (12); `MateriaisClienteDevolucaoSeries.test.js` (12). Continua 🟢.

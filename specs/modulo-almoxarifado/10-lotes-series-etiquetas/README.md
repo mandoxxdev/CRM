@@ -1,5 +1,8 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 235 (2026-11-13, `ec512062`, `94a094ef`, `69ce32d3`): a devolução ao cliente também confere e grava o lote das séries
+> (`lotePelasSeries` na rota `/materiais-cliente/devolucoes`) — parte da D (233) 3; a regra mora na spec 13, seção "Etapa 235".**
+
 > **+ Etapa 234 (2026-11-13, `ff467bd7`, tela `113b07e3`, Fase 5 `8897c09e`): a saída avulsa com série grava o lote das séries (D (233) 2;
 > B1531–B1534, C539, A117)** — na v2 (`lotePelasSeries`), material com série e sem controle de lote, lote em branco: séries todas
 > `EM_ESTOQUE` de **um** lote cujo saldo cobre a quantidade → esse lote vira o lote da saída (livro, claim do lote, claim das séries,
@@ -1485,7 +1488,7 @@ lote em branco gravava `lote_id` NULL e baixava a linha "sem lote" (−1); o L2 
 - [x] **RN-234.05 (B1534, A117)** — o dado antigo não é corrigido; a consulta da letra A acha a saída antiga e não a nova — `ff467bd7`.
 - [x] **RN-234.06 (B1533)** — a tela: `#mov-series-lote-da-saida` (um lote / lotes diferentes, que barra o envio) — `113b07e3`, cenários `8897c09e`.
 - [ ] **Fora (declarado, D (234)):** as saídas antigas (A117, decisão B1534); dividir a saída por lote; material com controle de lote e "Sem
-  lote" (D (233) 4); a devolução ao cliente e os internos (D (233) 3 — a próxima tarefa do plano); a série cujo lote não tem a peça
+  lote" (D (233) 4); a devolução ao cliente e os internos (D (233) 3 — a próxima tarefa do plano; **a devolução ao cliente foi feita na Etapa 235**, spec 13); a série cujo lote não tem a peça
   (**C539**); o filtro de material da contagem sem teste que o derrube (inofensivo: o claim confere o material antes do lote).
 
 > ⚠️ **O plano desta etapa estava errado** ao dizer, na **C539**, que a linha de lote sem a peça "só travaria uma linha mexida à mão": a

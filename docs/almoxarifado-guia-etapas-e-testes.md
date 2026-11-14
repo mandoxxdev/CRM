@@ -1,21 +1,28 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-11-13 (Etapas 172 a 191, 194 a 210, 217 a 234) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-11-13 (Etapas 172 a 191, 194 a 210, 217 a 235) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
 > ## Onde o desenvolvimento está — 2026-11-13 (Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
-> **O desenvolvimento parou aqui: Etapa 234 fechada — 2026-11-13.** **A saída avulsa de peça com série baixa do lote certo.** Em
+> **O desenvolvimento parou aqui: Etapa 235 fechada — 2026-11-13.** **A devolução ao cliente de peça com número de série, pelo lote
+> certo.** Em **Materiais de Clientes → Devolver**, material com série: a janela lista as séries em estoque (antes não listava, e esse
+> material não era devolvível pela tela), apaga a de lote impedido, diz de qual lote elas saem e barra lotes diferentes; a devolução é
+> registrada no lote das séries. Material com controle por lote: a janela diz que pede o lote (ainda sem seletor). **Sem consulta antes do
+> deploy.** **Nenhum clique foi dado** (testes da tela e das rotas — roteiro na seção da 235 e letra F das novidades).
+>
+> **Onde parou, exatamente:** a **235 está fechada** (código, testes, documentos e o estimado × realizado commitados). A **próxima** está
+> detalhada no fim do plano da 235 (`docs/superpowers/plans/2026-11-13-almoxarifado-etapa235-devolucao-cliente-lote-das-series.md`). Sem
+> estimativa nem plano.
+>
+> *(Antes:)* **Etapa 234 fechada — 2026-11-13.** **A saída avulsa de peça com série baixa do lote certo.** Em
 > **Movimentações**, na **Saída** e na **Perda** de material com número de série e sem controle por lote, com o lote em branco, a saída é
 > registrada no lote das séries marcadas (antes ficava "sem lote" e o lote continuava contando a peça); a tela diz de qual lote elas saem e
 > barra séries de lotes diferentes. **Uma consulta antes do deploy (A117)**, só de leitura: as saídas antigas que ficaram "sem lote". **Nenhum
 > clique foi dado** (testes da tela e das rotas — roteiro na seção da 234 e letra F das novidades).
 >
-> **Onde parou, exatamente:** a **234 está fechada** (código, testes, documentos e o estimado × realizado commitados). A **próxima** está
-> detalhada no fim do plano da 234 (`docs/superpowers/plans/2026-11-13-almoxarifado-etapa234-saida-avulsa-lote-das-series.md`). Sem
-> estimativa nem plano.
 >
 > *(Antes:)* **Etapa 233 fechada — 2026-11-13.** **A saída avulsa não deixa marcar série de lote bloqueado.** Em
 > **Movimentações**, na **Saída** e na **Perda** de material com número de série, a série que aquele tipo não pode baixar vem apagada, com o
@@ -7268,6 +7275,47 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 235 — A devolução ao cliente de peça com número de série, pelo lote certo (ENTREGUE — 2026-11-13)
+
+**O que mudou, em uma frase:** em **Materiais de Clientes → Devolver**, material com número de série passa a ter a lista de séries para
+marcar, e a devolução é registrada no lote das séries marcadas.
+
+**O problema que ela resolve.** A janela pedia só a quantidade e o documento: material de cliente com série **não era devolvível pela tela**
+(*"material com controle de serie: informe 1 serie(s) para 1 unidade(s) — recebidas 0"*). E quem mandava as séries direto conseguia devolver
+série de lote **bloqueado**, e a devolução ficava "sem lote" (o lote continuava contando a peça).
+
+| Antes | Agora |
+|---|---|
+| Material com série: **Confirmar devolução** → *"material com controle de serie: informe 1 serie(s) …"* | A janela lista as séries (*"B1 · lote L2"*) e a devolução sai |
+| Devolução de *B1* (lote *L2*): registro "sem lote", *L2* continua com a peça | O registro guarda *L2*; *L2* baixa; *"As séries marcadas saem do lote L2."* |
+| Série de lote bloqueado saía | Vem apagada: *"· lote L2 — Bloqueado: não sai"* |
+| *A1* (*L1*) e *B1* (*L2*) juntas saíam | *"As séries marcadas são de lotes diferentes (L1, L2): faça uma devolução para cada lote."* e não envia |
+| Material com controle por lote: recusa *"… exige lote …"* depois de confirmar | A janela avisa antes: *"Este material tem controle por lote: a devolução pede o lote, e esta janela ainda não o oferece."* |
+| Material sem série | **Igual** |
+
+**Roteiro de teste manual (≈10 min):**
+
+1. Entre como **Administrador do almoxarifado**. No cadastro do material (Compras), *CLI-235* com **Proprietário** um cliente (ex.: *Cliente
+   Alfa*), **Controle de série** ligado e **sem** Controle por lote, unidade *un*.
+2. **Movimentações → Entrada** de 1 com lote *L1* (série *A1*) e de 2 com lote *L2* (séries *B1*, *B2*).
+3. **Materiais de Clientes**, escolha *Cliente Alfa*, na linha de *CLI-235* clique **Devolver**. **Confira:** a lista *A1 · lote L1*, *B1 ·
+   lote L2*, *B2 · lote L2*.
+4. Quantidade 1, documento *DEV-1*, marque *B1*. **Confira:** *"As séries marcadas saem do lote L2."* e *"1/1 série(s) selecionada(s)"*.
+   **Confirmar devolução** → *"Devolução ao cliente registrada!"*.
+5. **Lotes e Séries** → *CLI-235*. **Confira:** *L2* com 1, *L1* com 1, *"Sem lote atribuído"* 0.
+6. **Devolver** de novo, quantidade 2, marque *A1* e *B2*. **Confira:** em vermelho *"As séries marcadas são de lotes diferentes (L1, L2):
+   faça uma devolução para cada lote."*; **Confirmar devolução** mostra a mesma frase e não grava.
+7. Bloqueie o *L2* em **Lotes e Séries** (com justificativa) e abra **Devolver**. **Confira:** *B2* apagada, *"· lote L2 — Bloqueado: não
+   sai"*, e a frase *"Séries de lote bloqueado, reprovado ou vencido vêm apagadas: …"*. Desbloqueie depois.
+8. Controle: um material de cliente **sem** série — a janela é a de sempre e a devolução sai.
+
+**O que esta etapa não cobre:** material de cliente **com** controle por lote continua sem devolução pela tela — a janela diz que pede o lote
+(**D (235)** 1); o lote vencido barra a devolução ao cliente (**B1537**, em aberto); material reservado para uma OS é recusado pelo disponível
+(*"Saldo insuficiente. Disponível: 0 UN"*, **C541** — já era); os fluxos internos não descobrem o lote das séries (resto da **D (233)** 3).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (tela e rotas) provam, escrito para você
+conferir à mão.
 
 ## Etapa 234 — A saída avulsa de peça com série baixa do lote certo (ENTREGUE — 2026-11-13)
 
