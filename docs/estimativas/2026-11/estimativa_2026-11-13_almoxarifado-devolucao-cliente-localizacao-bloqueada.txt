@@ -1,0 +1,9 @@
+*Planejamento — almoxarifado: a devolução ao cliente avisa quando a localização do material está bloqueada*
+_13/11/2026_
+
+*1. A janela de devolução ao cliente avisa que a localização padrão está bloqueada*
+Hoje, em Materiais de Clientes, quando a localização padrão do material está bloqueada, a devolução é recusada só ao confirmar, mesmo com a peça guardada em outro endereço. Depois desta alteração, a janela Devolver mostra logo ao abrir o aviso "A localização padrão deste material (código) está bloqueada: a devolução será recusada. Desbloqueie a localização antes de devolver." e o botão Confirmar fica apagado.
+Tempo estimado: *1h*
+
+*Total estimado: 1h*
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes, conferência e atualização dos manuais._
