@@ -17,7 +17,9 @@
   .item p { margin:6px 0; } .rotulo { font-weight:600; color:var(--suave); }
   table { border-collapse:collapse; width:100%; font-size:15px; } td, th { border-bottom:1px solid var(--linha); padding:8px; text-align:left; }
   td:last-child, th:last-child { white-space:nowrap; }
-  @media print { main { padding:0; } h2, h3 { break-after:avoid; } .item { break-inside:avoid; } tr { break-inside:avoid; } }
+  figure { margin:12px 0; } figure img { width:100%; border:1px solid var(--linha); border-radius:6px; }
+  figcaption { color:var(--suave); font-size:14px; }
+  @media print { main { padding:0; } h2, h3 { break-after:avoid; } tr { break-inside:avoid; } figure { break-inside:avoid; } figure img { width:auto; max-width:100%; max-height:90mm; } }
 </style>
 </head>
 <body>
@@ -31,49 +33,70 @@
   mostrar quanto do estoque está nessa situação. No total, 29h de trabalho, a maior parte no Almoxarifado, no cuidado com os lotes
   que não podem sair.</p>
 
-  <h2>O que mudou — e por que importa</h2>
-  <p>Cada item abaixo conta o problema, o que foi feito e o que isso evita no dia a dia.</p>
+  <h2>O que você já pode ver na tela</h2>
 
   <div class="item">
     <h3>Um material, vários fornecedores — cada um com o seu código e o seu preço</h3>
-    <p><span class="rotulo">O problema:</span> o mesmo material vem de vários fornecedores (o inox, de uns cinco), e cada um usa um
-    código diferente. O cadastro tinha um campo só de "fornecedor principal", digitado à mão. O pedido de compra saía só com o código da
-    GMP, e o fornecedor tinha de descobrir qual era o item dele. Para saber por quanto cada um já tinha vendido, era preciso abrir pedido
-    por pedido.</p>
-    <p><span class="rotulo">O que foi feito:</span> em <b>Compras → Materiais</b>, ao editar um material, a parte <b>Fornecedores deste
-    material</b> lista cada fornecedor com o código, a descrição e o preço dele. Na cotação e no pedido de compra, embaixo do código da
-    GMP, aparece o código do fornecedor escolhido — também no pedido impresso que vai para ele. E o material mostra o <b>Histórico de
-    preços</b>: data, fornecedor, cotação ou pedido de onde veio, quantidade e preço, do mais recente para o mais antigo.</p>
-    <p><span class="rotulo">O que isso evita:</span> material duplicado só porque veio de outro fornecedor, pedido que o fornecedor não
-    reconhece, e negociação feita sem saber o preço que já foi pago.</p>
+    <p><span class="rotulo">Onde:</span> <b>Compras → Materiais</b>, lápis de um material, parte <b>Fornecedores deste material</b>; e
+    <b>Compras → Pedidos de Compra</b>, ao editar um pedido.</p>
+    <p><span class="rotulo">Antes:</span> o mesmo material vem de vários fornecedores (o inox, de uns cinco), e cada um usa um código
+    diferente. O cadastro tinha um campo só de "fornecedor principal", digitado à mão. O pedido de compra saía só com o código da GMP, e o
+    fornecedor tinha de descobrir qual era o item dele. Para saber por quanto cada um já tinha vendido, era preciso abrir pedido por
+    pedido.</p>
+    <p><span class="rotulo">Agora:</span> o material lista cada fornecedor com o código, a descrição e o preço dele, e logo abaixo o
+    <b>Histórico de preços</b>: data, fornecedor, cotação ou pedido de onde veio, quantidade e preço, do mais recente para o mais antigo.
+    Na cotação e no pedido de compra, embaixo do código da GMP, aparece o código do fornecedor escolhido — também no pedido impresso que vai
+    para ele. Isso evita material duplicado só porque veio de outro fornecedor, pedido que o fornecedor não reconhece, e negociação feita
+    sem saber o preço que já foi pago.</p>
+    <figure><img src="prints/compras-fornecedores-do-material.png" alt="Fornecedores deste material, com código e preço de cada um, e o histórico de preços"><figcaption>O rolamento 6205 com dois fornecedores, cada um com o seu código e preço, e o histórico de cotações e pedidos.</figcaption></figure>
+    <figure><img src="prints/pedido-codigo-do-fornecedor.png" alt="Itens do pedido de compra com o código do fornecedor embaixo do código da GMP"><figcaption>No pedido de compra, embaixo do código da GMP, o código que o fornecedor usa ("Forn.:").</figcaption></figure>
   </div>
 
   <div class="item">
     <h3>Os cadastros ligados a compras passaram para o Compras</h3>
-    <p><span class="rotulo">O problema:</span> o Compras pediu que o Almoxarifado não faça nenhum cadastro: ele só recebe, libera e dá
-    saída. Mas as famílias, as categorias e os tipos de material ainda eram cadastrados no Almoxarifado. E o tipo de material era digitado
-    à mão, cada um de um jeito ("Consumível", "CONSUMIVEL", "consumivel").</p>
-    <p><span class="rotulo">O que foi feito:</span> o menu do Compras ganhou <b>Famílias</b>, <b>Categorias</b> e <b>Tipos de
-    Material</b>, com os mesmos botões de antes, para quem cadastra material. No Almoxarifado as mesmas listas continuam aparecendo, só para
-    consulta, com a frase dizendo onde se cadastra. No cadastro do material, o <b>Tipo de Material</b> passou a ser escolhido de uma lista,
-    como a categoria.</p>
-    <p><span class="rotulo">O que isso evita:</span> dois setores mexendo no mesmo cadastro, e o mesmo tipo escrito de três jeitos. A
-    prateleira que só aceita material consumível passou a reconhecer o tipo mesmo com acento ou letra maiúscula diferente.</p>
+    <p><span class="rotulo">Onde:</span> menu do Compras, <b>Famílias</b>, <b>Categorias</b> e <b>Tipos de Material</b>.</p>
+    <p><span class="rotulo">Antes:</span> o Compras pediu que o Almoxarifado não faça nenhum cadastro: ele só recebe, libera e dá saída.
+    Mas as famílias, as categorias e os tipos de material ainda eram cadastrados no Almoxarifado. E o tipo de material era digitado à mão,
+    cada um de um jeito ("Consumível", "CONSUMIVEL", "consumivel").</p>
+    <p><span class="rotulo">Agora:</span> o menu do Compras tem as três telas, com os mesmos botões de antes, para quem cadastra
+    material. No Almoxarifado as mesmas listas continuam aparecendo, só para consulta, com a frase dizendo onde se cadastra. No cadastro do
+    material, o <b>Tipo de Material</b> passou a ser escolhido de uma lista, como a categoria. A prateleira que só aceita material
+    consumível passou a reconhecer o tipo mesmo com acento ou letra maiúscula diferente.</p>
+    <figure><img src="prints/compras-familias.png" alt="Tela Famílias no Compras, com as famílias, subfamílias e os botões Nova Família e Nova subfamília"><figcaption>Compras → Famílias: as famílias e subfamílias, com os botões para cadastrar.</figcaption></figure>
   </div>
 
   <div class="item">
     <h3>As telas mostram quanto do estoque está em lote que não pode sair</h3>
-    <p><span class="rotulo">O problema:</span> um material tinha 10 peças: 4 num lote bom e 6 num lote bloqueado (o certificado do
-    fornecedor ainda não chegou). A tela mostrava "Disponível 10". O almoxarife tentava reservar 5 e o sistema recusava, sem que nenhuma
-    tela tivesse avisado. Para saber qual lote estava preso, era preciso sair e procurar em outra tela.</p>
-    <p><span class="rotulo">O que foi feito:</span> a lista de <b>Materiais</b> mostra, embaixo da quantidade, "6 un em lote impedido".
-    A ficha do material mostra o mesmo número ao lado do Disponível e, na tabela de saldos, ao lado de cada lote, "Bloqueado",
-    "Reprovado" ou "Vencido em 12/11/2026". Os relatórios <b>Estoque atual</b> e <b>Saldos comprometidos</b> ganharam a coluna "Em lote
-    impedido", o <b>Saldo por lote</b> ganhou a coluna "Situação", e a <b>Fila de separação</b> diz quanto do disponível está nessa
-    situação. Na separação e na entrega, a lista "Sai de" mostra o lote bloqueado apagado, com o motivo, e não deixa escolher.</p>
-    <p><span class="rotulo">O que isso evita:</span> descobrir só no balcão que a peça não pode sair. É como uma etiqueta "não usar" na
-    caixa, visível de longe, em vez de só no papel guardado na gaveta.</p>
+    <p><span class="rotulo">Onde:</span> <b>Almoxarifado → Materiais</b> (a lista e o extrato do material) e <b>Almoxarifado →
+    Relatórios</b>.</p>
+    <p><span class="rotulo">Antes:</span> um material tinha 16 peças: 10 num lote bom e 6 num lote bloqueado (o certificado do fornecedor
+    ainda não chegou). A tela mostrava só o Disponível. O almoxarife tentava reservar e o sistema recusava, sem que nenhuma tela tivesse
+    avisado. Para saber qual lote estava preso, era preciso sair e procurar em outra tela.</p>
+    <p><span class="rotulo">Agora:</span> a lista de <b>Materiais</b> mostra, embaixo da quantidade, "6 PC em lote impedido". O extrato
+    do material mostra o cartão <b>Em lote impedido</b> e, na tabela de saldos, ao lado de cada lote, "Bloqueado", "Reprovado" ou "Vencido
+    em 12/11/2026". Os relatórios <b>Estoque atual</b> e <b>Saldos comprometidos</b> ganharam a coluna "Em lote impedido", o <b>Saldo por
+    lote</b> ganhou a coluna "Situação", e a <b>Fila de separação</b> diz quanto do disponível está nessa situação. Na separação e na
+    entrega, a lista "Sai de" mostra o lote bloqueado apagado, com o motivo, e não deixa escolher. É como uma etiqueta "não usar" na caixa,
+    visível de longe, em vez de só no papel guardado na gaveta.</p>
+    <figure><img src="prints/materiais-lote-impedido.png" alt="Lista de materiais com o aviso 6 PC em lote impedido embaixo da quantidade"><figcaption>Na lista de materiais, o aviso em amarelo embaixo da quantidade.</figcaption></figure>
+    <figure><img src="prints/material-ficha-lote-impedido.png" alt="Extrato do material com o cartão Em lote impedido e o lote marcado como Bloqueado"><figcaption>No extrato do material, o cartão "Em lote impedido" e o lote L-2610-02 marcado como Bloqueado.</figcaption></figure>
+    <figure><img src="prints/relatorio-estoque-atual.png" alt="Relatório Estoque atual com a coluna Em lote impedido"><figcaption>Relatórios → Estoque atual: a coluna "Em lote impedido" logo depois do Disponível.</figcaption></figure>
   </div>
+
+  <div class="item">
+    <h3>Devolver ao cliente material com número de série</h3>
+    <p><span class="rotulo">Onde:</span> <b>Almoxarifado → Materiais de clientes</b>, botão <b>Devolver ao cliente</b>.</p>
+    <p><span class="rotulo">Antes:</span> a janela recusava material de cliente com número de série ou com lote: não havia como devolver
+    pelo sistema.</p>
+    <p><span class="rotulo">Agora:</span> a janela lista as séries em estoque para marcar, diz de qual lote as marcadas saem, e a série
+    de lote bloqueado vem apagada, com o motivo, sem poder ser marcada. Material com lote ganhou a escolha do lote. Ao abrir, a janela
+    também avisa quando a localização do material está bloqueada.</p>
+    <figure><img src="prints/devolver-ao-cliente-series.png" alt="Janela Devolver ao cliente com a lista de séries, uma série de lote bloqueado apagada"><figcaption>Duas séries marcadas saem do lote L-2611-07; a do lote bloqueado vem apagada.</figcaption></figure>
+  </div>
+
+  <h2>O que foi feito por baixo — e por que importa</h2>
+  <p>Parte do trabalho não muda a aparência das telas: é o “motor” que faz as contas e guarda as informações. Quando ele erra, o erro
+  aparece depois, em forma de estoque que não bate ou de material que some. Esta semana, no motor:</p>
 
   <div class="item">
     <h3>Quem espera o material só recebe o que pode sair — e recebe assim que o lote é liberado</h3>
@@ -107,9 +130,7 @@
   </div>
 
   <p>Também foram feitos: tudo o que se digita ou cola em qualquer formulário passou a aparecer e ser gravado em MAIÚSCULO, com acento (ficam
-  de fora e-mail, senha, site, lote e número de série), e as buscas continuam achando os cadastros antigos em minúsculo; e a janela
-  <b>Devolver ao cliente</b>, em Materiais de clientes, passou a devolver material com número de série ou com lote (antes ela recusava
-  esses materiais) e avisa, ao abrir, quando a localização do material está bloqueada.</p>
+  de fora e-mail, senha, site, lote e número de série), e as buscas continuam achando os cadastros antigos em minúsculo.</p>
 
   <h2>Tempo gasto</h2>
   <table>
@@ -131,7 +152,7 @@
     <li>Abra <b>Compras → Famílias</b>, <b>Compras → Categorias</b> e <b>Compras → Tipos de Material</b>. Depois abra
     <b>Almoxarifado → Configurações → Famílias</b>: a mesma lista, só para consulta.</li>
     <li>Abra <b>Almoxarifado → Materiais</b> e procure um material com um lote bloqueado: embaixo da quantidade aparece "em lote
-    impedido". Clique no material para abrir a ficha: o número aparece ao lado do Disponível, e a tabela de saldos diz qual lote está
+    impedido". Clique em <b>Extrato</b> (o primeiro ícone da linha): o número aparece ao lado do Disponível, e a tabela de saldos diz qual lote está
     bloqueado.</li>
     <li>Abra <b>Almoxarifado → Relatórios → Estoque atual</b>: a coluna "Em lote impedido" vem logo depois do Disponível.</li>
     <li>Abra <b>Almoxarifado → Lotes e Séries</b>, escolha um lote bloqueado de um material que alguém está esperando e mude a situação
