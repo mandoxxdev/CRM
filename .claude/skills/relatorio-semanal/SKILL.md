@@ -104,8 +104,11 @@ como "pedi 30h e entregou 90" (15/11/2026). Isto dizia "use o realizado"; **esta
      fica negativo quando duas pessoas dão baixa ao mesmo tempo"), nunca por etapa. Dez etapas
      sobre o mesmo assunto viram **um** item. Máximo de 5 itens por baixo; o resto vira uma frase.
 
-4. **Tirar os prints** de cada item visível. Use a skill `claude-in-chrome` (o navegador do
-   André já está logado; o app roda em `http://localhost:3000` com `npm run dev`; as rotas estão
+4. **Tirar os prints** de cada item visível. Use a skill `claude-in-chrome`. **Tela de login não é motivo para
+   entregar sem print** (aconteceu em 08-14/11 e o André cobrou): entre em `http://localhost:3000` com o usuário local de
+   prints, cujo e-mail e senha estão em `.env.local` na raiz (`PRINTS_EMAIL`, `PRINTS_SENHA`; arquivo fora do git, nunca
+   copie a senha para chat, commit ou relatório). Se a linha não existir, crie o usuário no banco **local** (admin, oculto)
+   e grave as duas linhas lá. O app roda em `http://localhost:3000` com `npm run dev`; as rotas estão
    em `client/src/App.js` e os nomes do menu em `client/src/components/Layout.js`). Um print
    por tela — item agrupado pode ter mais de uma `<figure>`. Se o app não estiver no ar ou o
    navegador não responder, entregue com `prints-pendentes.txt` na pasta (arquivo, tela, o que
