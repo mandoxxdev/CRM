@@ -56,11 +56,14 @@ pessoas, e quem recebe não tem as pastas: um `relatorio.pdf` solto não diz de 
   - Mesmas regras de linguagem (impessoal, sem dias, sem promessa) e `conferir-linguagem.js` com saída 0.
 
 **Tempo gasto: UMA tabela só, e nada mais (pedido do André, 03/11/2026).** Quem lê o relatório precisa de tudo muito simples.
-A seção de tempo se chama "Tempo gasto" e tem **uma** tabela: "O que foi feito | Tempo", uma linha por alteração com o
-**realizado** do `.md` de fechamento da estimativa (`docs/estimativas/AAAA-MM/`, nunca recalculado de cabeça), e o Total. Embaixo,
-uma frase: "O tempo inclui entender o pedido, fazer, testar e conferir." **Sem** coluna de estimado, **sem** barra por área, **sem**
-tabela de atividades, **sem** as horas do `horas.js` e sem notas. O resumo do topo cita só esse total. O `horas.js` continua
-sendo o medidor interno (estimativas, controle-horas), mas o número dele não vai para o relatório semanal.
+A seção de tempo se chama "Tempo gasto" e tem **uma** tabela: "O que foi feito | Tempo", uma linha por **assunto** (3 a 6
+linhas) com as horas **medidas** pelo `horas.js --semana ... --grupos`, arredondadas a 15 min, e o Total (= o total do
+`horas.js`). Embaixo, uma frase: "Tempo medido pelo registro do trabalho feito na semana." **Sem** coluna de estimado, **sem**
+barra por área e sem notas. O resumo do topo cita só esse total.
+
+**Nunca some o "realizado" das estimativas.** Ele acrescenta a cada alteração uma parte fixa de análise e teste do André, pela
+tabela, mesmo quando ele não gastou esse tempo. Na semana de 08 a 14/11/2026 a soma deu 91h45 para 29h medidas, e o André leu
+como "pedi 30h e entregou 90" (15/11/2026). Isto dizia "use o realizado"; **estava errado**.
 
 ## Passo a passo
 
