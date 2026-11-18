@@ -663,7 +663,11 @@ const MovimentacoesAlmoxarifado = () => {
       toast.error(err.response?.data?.error || 'Erro ao registrar movimentação');
       // Review da Etapa 62: a recusa pode ser "as séries do material mudaram durante o ajuste" —
       // a lista na tela está velha; recarrega as presentes para o operador escolher de novo.
-      if (ajusteSerieInfo) setRecargaSeriesAjuste((n) => n + 1);
+      // Etapa 246 (C538, RN-246.03): a Saída/Perda com série também relê a lista — a recusa pode ser o lote bloqueado no meio ou a
+      // série levada por outra pessoa; a série de lote impedido volta apagada e o efeito da 233 a desmarca, a levada some. Só a lista
+      // de séries: reler os lotes refaria a sugestão FEFO e trocaria o lote escolhido.
+      const saidaComSerie = selectedMaterial?.controle_serie === 1 && TIPOS_SAIDA_LOTE.includes(form.tipo);
+      if (ajusteSerieInfo || saidaComSerie) setRecargaSeriesAjuste((n) => n + 1);
     } finally {
       setSaving(false);
     }

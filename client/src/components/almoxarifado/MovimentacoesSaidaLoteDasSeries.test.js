@@ -4,6 +4,8 @@
  * (o servidor recusa — uma saída por lote). Todas sem lote, lote escolhido ou material com controle de lote: nada muda.
  *
  * Plano: docs/superpowers/plans/2026-11-13-almoxarifado-etapa234-saida-avulsa-lote-das-series.md (RN-234.06).
+ * Etapa 246 (plano 2026-11-18-almoxarifado-etapa246-saida-avulsa-frase-e-recarga-das-series.md): a frase de um lote só quando o lote tem a
+ * peça (RN-246.02) e a lista de séries relida depois de uma recusa (RN-246.03).
  * Executar: cd client && CI=true npx react-scripts test src/components/almoxarifado/MovimentacoesSaidaLoteDasSeries --watchAll=false
  */
 import React, { act } from 'react';
@@ -236,7 +238,7 @@ describe('Fase 5 (revisor de testes): mesmo lote, ordem e lote apagado', () => {
   });
 });
 
-describe('Etapa 246 — a frase só quando o lote tem a peça (RN-246.02)', () => {
+describe('Etapa 246 — a frase só quando o lote tem a peça (RN-246.02) e a lista relida depois da recusa (RN-246.03)', () => {
   test('[RN-246.02] lote sem a peça no saldo (série regularizada) -> sem frase; o lote que cobre -> a frase', async () => {
     // X1 diz L1 mas o saldo positivo do L1 é 0 (a peça está no "sem lote"): o servidor grava a saída sem lote (C539)
     seriesEmEstoque = [serie(101, 'X1', 7, 'L1', ok, 0), serie(201, 'B1', 12, 'L2', ok, 2)];
@@ -266,4 +268,46 @@ describe('Etapa 246 — a frase só quando o lote tem a peça (RN-246.02)', () =
     expect(fraseLote().textContent).toBe(MISTURA);
   });
 
+  const getsDasSeries = () => api.get.mock.calls.filter(([url]) => url === '/almoxarifado/materiais/10/series?status=EM_ESTOQUE').length;
+  test('[RN-246.03] Saída recusada (lote bloqueado no meio) -> a lista é relida, a série volta apagada e desmarcada', async () => {
+    seriesEmEstoque = [serie(201, 'B1', 12, 'L2', ok, 2)];
+    await abrir('SAIDA');
+    clicar(caixa(201));
+    expect(caixa(201).checked).toBe(true);
+    const antes = getsDasSeries();
+    // outra pessoa bloqueou o L2 com o formulário aberto
+    seriesEmEstoque = [serie(201, 'B1', 12, 'L2', BLOQUEADO, 2)];
+    api.post.mockRejectedValueOnce({ response: { status: 400, data: { error: 'Lote L2 esta bloqueado e nao pode ser utilizado' } } });
+    await enviar();
+    await esperar();
+    expect(toast.error).toHaveBeenCalledWith('Lote L2 esta bloqueado e nao pode ser utilizado');
+    expect(getsDasSeries()).toBe(antes + 1);
+    expect(caixa(201).disabled).toBe(true);
+    expect(caixa(201).checked).toBe(false);
+    expect(rotulo(201).textContent).toContain('lote L2');
+    expect(contadorSaida()).toBe('0/1 série(s) selecionada(s)');
+  });
+  test('[RN-246.03] Perda recusada (série levada por outra pessoa) -> a série some da lista', async () => {
+    seriesEmEstoque = [serie(201, 'B1', 12, 'L2', ok, 2), serie(202, 'B2', 12, 'L2', ok, 2)];
+    await abrir('PERDA');
+    clicar(caixa(201));
+    seriesEmEstoque = [serie(202, 'B2', 12, 'L2', ok, 1)];
+    api.post.mockRejectedValueOnce({ response: { status: 400, data: { error: 'serie B1 nao esta disponivel' } } });
+    await enviar();
+    await esperar();
+    expect(caixa(201)).toBeNull();
+    expect(caixa(202)).not.toBeNull();
+    expect(contadorSaida()).toBe('0/1 série(s) selecionada(s)');
+  });
+  test('[RN-246.03] metade positiva: Saída aceita não relê a lista (o formulário fecha)', async () => {
+    seriesEmEstoque = [serie(201, 'B1', 12, 'L2', ok, 2)];
+    await abrir('SAIDA');
+    clicar(caixa(201));
+    const antes = getsDasSeries();
+    await enviar();
+    await esperar();
+    expect(postsV2()).toHaveLength(1);
+    expect(getsDasSeries()).toBe(antes);
+    expect(container.querySelector('.almox-modal form')).toBeNull();
+  });
 });
