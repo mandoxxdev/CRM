@@ -833,3 +833,94 @@ describe('[RN-156.02, C366] os projetos das sobras com a lista de projetos recus
     expect(opcoes('Projeto de origem')).toEqual(['—', 'Projeto Alfa']);
   });
 });
+
+// Etapa 244 (RN-244.03, .04): a geracao de retalho recusa a baixa de origem com controle de serie (o servidor, desde a Etapa 9 — a
+// mensagem chega so ao confirmar). A janela avisa ANTES: com origem de serie, a caixa de baixar fica desligada e desmarcada e o aviso diz
+// o caminho (Movimentacoes -> Saida, depois o retalho sem baixa).
+describe('[RN-244.03, RN-244.04] gerar retalho de material com numero de serie', () => {
+  const AVISO = 'Este material tem controle por número de série: a peça não é baixada aqui. Baixe a peça em Movimentações → Saída '
+    + '(lá se escolhe o número de série) e gere o retalho com a opção de baixar desmarcada.';
+  const COM_SERIE = { id: 104, codigo: 'EQP-SER', nome: 'Equipamento com série', unidade: 'UN', controle_lote: 0, controle_serie: 1,
+    proprietario_cliente_id: null };
+  const comMaterialDeSerie = () => {
+    const original = api.get.getMockImplementation();
+    api.get.mockImplementation((url, ...resto) => (url === '/almoxarifado/materiais'
+      ? Promise.resolve({ data: [...MATERIAIS, COM_SERIE] }) : original(url, ...resto)));
+  };
+  const aviso = () => container.querySelector('#retalho-aviso-serie');
+  async function abrir() {
+    comMaterialDeSerie();
+    await renderizar();
+    await clicar(botao('Gerar retalho'));
+  }
+
+  test('[RN-244.03] origem com serie: caixa desligada e desmarcada, com o aviso literal; origem sem serie: caixa ligada, sem aviso', async () => {
+    await abrir();
+    preencher(campo('Material de origem'), '101');
+    await esperarEfeitos();
+    expect(campo('Baixar o material de origem').disabled).toBe(false);
+    expect(aviso()).toBeNull();
+    preencher(campo('Material de origem'), '104');
+    await esperarEfeitos();
+    expect(campo('Baixar o material de origem').disabled).toBe(true);
+    expect(campo('Baixar o material de origem').checked).toBe(false);
+    expect(aviso()?.textContent).toBe(AVISO);
+  });
+
+  test('[RN-244.04] caixa marcada e a origem trocada para uma com serie: desmarca, os campos da baixa somem e gera sem baixa', async () => {
+    await abrir();
+    preencher(campo('Material de origem'), '101');
+    await esperarEfeitos();
+    preencher(campo('Material do retalho'), '201');
+    marcar(campo('Baixar o material de origem'), true);
+    preencher(campo('Quantidade baixada'), '3');
+    expect(campo('Quantidade baixada')).toBeTruthy();
+    preencher(campo('Material de origem'), '104');
+    await esperarEfeitos();
+    expect(campo('Baixar o material de origem').checked).toBe(false);
+    expect(campo('Quantidade baixada')).toBeFalsy();
+    await clicar(botao('Gerar retalho', container.querySelector('.almox-modal-footer')));
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/sobras/gerar-retalho', expect.objectContaining({
+      material_origem_id: 104, material_retalho_id: 201, baixar_original: false,
+    }));
+    expect(api.post.mock.calls[0][1]).not.toHaveProperty('quantidade_baixa');
+    // De volta a uma origem sem serie: a caixa religa (desmarcada) e o aviso some.
+    await clicar(botao('Gerar retalho'));
+    preencher(campo('Material de origem'), '101');
+    await esperarEfeitos();
+    expect(campo('Baixar o material de origem').disabled).toBe(false);
+    expect(campo('Baixar o material de origem').checked).toBe(false);
+    expect(aviso()).toBeNull();
+  });
+
+  test('[RN-244.04] (Fase 2, achado 3) caixa marcada ANTES de escolher a origem e depois a origem com serie: gera sem baixa', async () => {
+    await abrir();
+    marcar(campo('Baixar o material de origem'), true);
+    preencher(campo('Quantidade baixada'), '1');
+    preencher(campo('Material do retalho'), '201');
+    preencher(campo('Material de origem'), '104');
+    await esperarEfeitos();
+    expect(campo('Baixar o material de origem').checked).toBe(false);
+    expect(campo('Quantidade baixada')).toBeFalsy();
+    expect(aviso()).not.toBeNull();
+    await clicar(botao('Gerar retalho', container.querySelector('.almox-modal-footer')));
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/sobras/gerar-retalho', expect.objectContaining({
+      material_origem_id: 104, baixar_original: false,
+    }));
+    expect(api.post.mock.calls[0][1]).not.toHaveProperty('quantidade_baixa');
+  });
+
+  test('[RN-244.04] marcada, origem com serie e de volta a origem sem serie na MESMA janela: a caixa religa desmarcada', async () => {
+    await abrir();
+    preencher(campo('Material de origem'), '101');
+    await esperarEfeitos();
+    marcar(campo('Baixar o material de origem'), true);
+    preencher(campo('Material de origem'), '104');
+    await esperarEfeitos();
+    preencher(campo('Material de origem'), '101');
+    await esperarEfeitos();
+    expect(campo('Baixar o material de origem').disabled).toBe(false);
+    expect(campo('Baixar o material de origem').checked).toBe(false);
+    expect(campo('Quantidade baixada')).toBeFalsy();
+  });
+});

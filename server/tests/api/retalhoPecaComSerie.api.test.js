@@ -89,6 +89,16 @@ const recusa = (codigo) => `O material ${codigo} tem controle de serie e a gerac
     });
   }
 
+  await test('[RN-244.01] (Fase 2, achado 2) origem com serie E retalho com serie -> a recusa e a da origem (vem antes)', async () => {
+    const { m } = await montar();
+    const retSerie = await material();
+    const r = await gerar({ material_origem_id: m.id, material_retalho_id: retSerie.id, baixar_original: true, quantidade_baixa: 1,
+      justificativa: 'corte 244' });
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, recusa(m.codigo));
+    assert.strictEqual(await fisico(m), 4);
+  });
+
   // ── RN-244.02 (integracao, pela rota) ─────────────────────────────────────────────────────────────────────────────────────────────
   await test('[RN-244.02] Saida avulsa de B1 (o livro diz L2) -> retalho SEM baixa -> 201, nada baixado, B1 no L2, resumo fecha', async () => {
     const { m, ret } = await montar();

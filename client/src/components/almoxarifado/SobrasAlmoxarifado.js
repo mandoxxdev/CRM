@@ -184,6 +184,10 @@ const SobrasAlmoxarifado = () => {
 
   const materiaisPorId = useMemo(() => new Map((materiais || []).map((m) => [m.id, m])), [materiais]);
   const origemSelecionada = materiaisPorId.get(Number(form.material_origem_id));
+  // Etapa 244 (RN-244.03): origem com controle de serie nao baixa pela geracao de retalho.
+  const origemComSerie = Number(origemSelecionada?.controle_serie) === 1;
+  // Fase 2 (achado 3): o payload e a tela leem o efetivo, nao so o estado — a caixa marcada nao baixa origem com serie.
+  const baixarEfetivo = !!form.baixar_original && !origemComSerie;
   const materialSucSelecionado = materiaisPorId.get(Number(formSuc.material_id));
 
   useEffect(() => {
@@ -338,10 +342,10 @@ const SobrasAlmoxarifado = () => {
   const confirmarGerar = async () => {
     if (!form.material_origem_id) { toast.error('Selecione o material de origem'); return; }
     if (!form.material_retalho_id) { toast.error('Selecione o material do retalho'); return; }
-    if (form.baixar_original && !(Number(form.quantidade_baixa) > 0)) {
+    if (baixarEfetivo && !(Number(form.quantidade_baixa) > 0)) {
       toast.error('Informe a quantidade baixada do material de origem'); return;
     }
-    if (form.baixar_original && origemSelecionada?.controle_lote === 1 && !form.lote_origem_id) {
+    if (baixarEfetivo && origemSelecionada?.controle_lote === 1 && !form.lote_origem_id) {
       toast.error('Este material controla lote: selecione o lote de origem'); return;
     }
 
@@ -350,10 +354,10 @@ const SobrasAlmoxarifado = () => {
     const payload = {
       material_origem_id: Number(form.material_origem_id),
       material_retalho_id: Number(form.material_retalho_id),
-      baixar_original: !!form.baixar_original,
+      baixar_original: baixarEfetivo,
     };
     if (form.quantidade_retalho !== '') payload.quantidade_retalho = Number(form.quantidade_retalho);
-    if (form.baixar_original) {
+    if (baixarEfetivo) {
       payload.quantidade_baixa = Number(form.quantidade_baixa);
       if (form.lote_origem_id) payload.lote_origem_id = Number(form.lote_origem_id);
       if (form.os_id) payload.os_id = Number(form.os_id);
@@ -378,7 +382,7 @@ const SobrasAlmoxarifado = () => {
     setSalvando(true);
     try {
       const res = await api.post('/almoxarifado/sobras/gerar-retalho', payload);
-      toast.success(form.baixar_original
+      toast.success(baixarEfetivo
         ? 'Retalho gerado — o material de origem foi baixado'
         : 'Retalho gerado — nada foi baixado (a peça já tinha saído do estoque)');
       // Task 9: oferece a etiqueta do retalho recem-criado (nao forca — o EtiquetasPdfModal so
@@ -811,7 +815,13 @@ const SobrasAlmoxarifado = () => {
                 <div className="almox-field">
                   <label className="almox-label">Material de origem<span className="required">*</span></label>
                   <select className="almox-form-select" value={form.material_origem_id}
-                    onChange={(e) => setForm((f) => ({ ...f, material_origem_id: e.target.value, lote_origem_id: '' }))}>
+                    onChange={(e) => {
+                      // Etapa 244 (RN-244.04): origem com serie nao baixa aqui (o servidor recusa) — a troca desmarca a caixa.
+                      const nova = materiaisPorId.get(Number(e.target.value));
+                      const serie = Number(nova?.controle_serie) === 1;
+                      setForm((f) => ({ ...f, material_origem_id: e.target.value, lote_origem_id: '',
+                        baixar_original: serie ? false : f.baixar_original }));
+                    }}>
                     <option value="">Selecionar material...</option>
                     {materiais.map((m) => (
                       <option key={m.id} value={m.id}>{rotuloMaterialComDono(m, `${m.codigo} — ${m.nome}`)}</option>
@@ -887,7 +897,7 @@ const SobrasAlmoxarifado = () => {
 
               <div className="almox-field almox-form-full">
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.875rem', color: 'var(--gmp-text)' }}>
-                  <input type="checkbox" checked={form.baixar_original}
+                  <input type="checkbox" checked={baixarEfetivo} disabled={origemComSerie}
                     onChange={(e) => setForm((f) => ({ ...f, baixar_original: e.target.checked }))} />
                   Baixar o material de origem agora (a peça está saindo do estoque neste momento)
                 </label>
@@ -895,9 +905,17 @@ const SobrasAlmoxarifado = () => {
                   Desmarcado: use quando a sobra já saiu antes (retorno do chão de fábrica) — nada é
                   baixado agora, só o retalho é creditado.
                 </small>
+                {origemComSerie && (
+                  // Etapa 244 (RN-244.03): a geracao de retalho recusa a baixa de origem com serie (nao ha como dizer QUAL serie
+                  // sai). O aviso vem antes do formulario inteiro, com o caminho que grava a serie e o lote.
+                  <p id="retalho-aviso-serie" style={{ color: 'var(--gmp-warning, #b45309)', fontSize: '0.8rem', margin: '6px 0 0' }}>
+                    Este material tem controle por número de série: a peça não é baixada aqui. Baixe a peça em Movimentações → Saída
+                    (lá se escolhe o número de série) e gere o retalho com a opção de baixar desmarcada.
+                  </p>
+                )}
               </div>
 
-              {form.baixar_original && (
+              {baixarEfetivo && (
                 <>
                   <div className="almox-section-title">Baixa do material de origem</div>
                   <div className="almox-form-grid">
