@@ -5,14 +5,21 @@
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-18 (Etapa 239 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-18 (Etapa 240 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
 > **Depois disto, 18/11/2026: Etapa 238 (Compras) fechada** — no cadastro de material, *Nº do CA* e *Validade do CA* só aparecem para
 > material EPI, com a frase do que é o CA (seção e roteiro em `docs/compras-novidades-por-etapa.md`, Etapa 238; decisão B91 de lá). A
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 239 fechada — 2026-11-18.** **A saída de lote que está em outra prateleira.** A saída com lote e
+> **O desenvolvimento parou aqui: Etapa 240 fechada — 2026-11-18.** **A devolução ao cliente escolhe de onde sai.** Em **Materiais de
+> Clientes → Devolver**, o campo **Sai de**: o automático de antes ou uma prateleira com saldo (a bloqueada apagada); escolhida, a devolução
+> sai só dela (se não cobre, a janela avisa e o sistema recusa). Com a localização padrão bloqueada, o material sem lote passa a ser
+> devolvível pela tela. **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção da 240). **Onde parou, exatamente:** a
+> **240 está fechada**; a **próxima** é o item 7 da estimativa de 18/11 — **o seletor de lote mostra reservado e livre** (C542) —, detalhada no
+> fim do plano (`docs/superpowers/plans/2026-11-18-almoxarifado-etapa240-origem-devolucao-cliente.md`).
+>
+> *(Antes:)* **Etapa 239 fechada — 2026-11-18.** **A saída de lote que está em outra prateleira.** A saída com lote e
 > sem origem escolhida confere a prateleira do lote, não a localização padrão: a devolução ao cliente de material com lote deixa de ser
 > recusada só porque a padrão está bloqueada; o lote guardado só em prateleira bloqueada deixa de sair sem aviso. **Sem consulta antes do
 > deploy.** **Nenhum clique foi dado** (roteiro na seção da 239). **Onde parou, exatamente:** a **239 está fechada**; a **próxima** é o item 6
@@ -7304,6 +7311,42 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 240 — A devolução ao cliente escolhe de onde sai (ENTREGUE — 2026-11-18)
+
+**O que mudou, em uma frase:** a janela **Devolver ao cliente** tem o campo **Sai de**, para escolher de qual prateleira o material sai.
+
+**O problema que ela resolve.** Com a localização padrão bloqueada, o material sem lote não era devolvível pela tela: o aviso vermelho
+apagava o botão e só restava desbloquear a prateleira. E quem mandava a origem pela integração recebia "saiu de A" no registro mesmo quando
+A não tinha o bastante e o resto saía de outra prateleira.
+
+| Antes | Agora |
+|---|---|
+| Sem campo de origem | **Sai de**: *"Qualquer endereço (automático)"* ou uma prateleira com saldo, ex. *"A-01 (2)"*, *"A-01 — lote L1 (3)"* |
+| Padrão bloqueada, sem lote: aviso e botão apagado, sem saída | Escolhida uma prateleira livre, o aviso some e a devolução sai dela |
+| — | Prateleira bloqueada apagada, *" — bloqueada"* |
+| Origem que não cobre: completava com outra prateleira | A janela avisa *"Em A-01 há só 2: devolva até 2 ou escolha outro endereço."*; o sistema recusa |
+| Sem prateleira escolhida | **Igual** |
+
+**Roteiro de teste manual (≈8 min):**
+
+1. Entre como **Administrador do almoxarifado**. Localizações *P-240*, *A-240*, *B-240*. Material de cliente *CLI-240* sem lote, com
+   **Localização no estoque** *P-240*. **Movimentações → Entrada** de 2 em *A-240* e de 3 em *B-240*. Bloqueie *P-240*.
+2. **Materiais de Clientes**, escolha o cliente, **Devolver** em *CLI-240*. **Confira:** *"A localização padrão deste material (P-240) está
+   bloqueada: sem escolher de onde sai, a devolução será recusada. Escolha em "Sai de" um endereço livre ou desbloqueie a localização."* e o
+   botão apagado.
+3. **Sai de** → *"B-240 (3)"*. **Confira:** o aviso some. Quantidade 3, documento *DEV-240*, **Confirmar devolução** → *"Devolução ao
+   cliente registrada!"*; no extrato, *B-240* com 0, *A-240* com 2.
+4. **Devolver** de novo, **Sai de** *"A-240 (2)"*, quantidade 3. **Confira:** *"Em A-240 há só 2: devolva até 2 ou escolha outro
+   endereço."* e o botão apagado; quantidade 2 → o botão habilita.
+5. Bloqueie *A-240*, **Atualizar**, **Devolver**. **Confira:** *"A-240 (2) — bloqueada"* apagada e *"Endereços bloqueados vêm apagados:
+   desbloqueie o endereço para devolver de lá."*.
+6. Material de cliente com lote: o **Sai de** só aparece depois de escolher o lote, com as prateleiras daquele lote.
+
+**O que esta etapa não cobre:** a peça com série não é conferida na prateleira escolhida (**C545**); a lista é a da hora em que a janela
+abriu; o saldo da prateleira não desconta a reserva para OS; em Movimentações a origem continua só preferida.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro é o que os testes automáticos (tela e rotas) provam.
 
 ## Etapa 239 — A saída de lote que está em outra prateleira (ENTREGUE — 2026-11-18)
 

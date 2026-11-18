@@ -11,7 +11,12 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-18):** **Etapa 239 fechada** (**a saída de lote que está em outra prateleira** — a saída com lote e
+> **Onde o desenvolvimento está (2026-11-18):** **Etapa 240 fechada** (**a devolução ao cliente escolhe de onde sai** — a janela **Devolver ao
+> cliente** ganha o campo **Sai de** (automático, ou uma prateleira com saldo do lote da devolução; a bloqueada apagada); escolhida, a
+> devolução sai só dela (se não cobre, a janela avisa e o sistema recusa). Com a padrão bloqueada, o material sem lote passa a ser devolvível
+> pela tela (**D (236)** 1 resolvida). Decisões **B1545** e **B1546**; limitação **D (240)**; verificação **F (240)**; sem consulta antes do deploy).
+> **Próxima:** **o seletor de lote mostra reservado e livre** (item 7 da estimativa de 18/11, a **C542**) — detalhada no fim do plano da 240.
+> *(Antes, 2026-11-18:)* **Etapa 239 fechada** (**a saída de lote que está em outra prateleira** — a saída com lote e
 > sem origem escolhida passa a conferir o bloqueio na prateleira onde o lote está, não na localização padrão: a devolução ao cliente de
 > material com lote deixa de ser recusada só porque a padrão está bloqueada (a **C543**, no motor), e o lote guardado só em prateleira
 > bloqueada deixa de sair sem aviso. Vale para Movimentações, a entrega automática por lote, sucata, retalho e terceiros. Decisões **B1543**
@@ -4760,7 +4765,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1546; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15256,6 +15261,22 @@ Material com controle de lote: sem aviso. Com série (sem controle de lote): avi
 negativo (no cadastro ou para todos): aviso como antes — nele o sistema continua conferindo a padrão (a posição do cliente passa a dizer
 isso, campo de leitura novo). Descartado: tirar o aviso de todo material com série — a série sem lote continua recusada. **Reversível.**
 
+**B1545 (NOVA, da Etapa 240; decisão do agente) — na devolução ao cliente, a prateleira escolhida em "Sai de" é estrita.** Escolhido: com
+a prateleira escolhida, o sistema tira só dela; se ela não cobre a quantidade (no lote da devolução), recusa *"O saldo em A-01 (2) não cobre
+a quantidade (3) — a saída tiraria de outros endereços"* (a mesma regra e a mesma frase da entrega com origem, desde a Etapa 58), e a janela
+avisa antes e apaga o botão. Descartados: (a) a regra de antes (a escolhida só preferida, completando com outras prateleiras) — o registro
+diria "saiu de A" para o que saiu de B, e o resto podia sair da padrão **bloqueada**, justamente o que a escolha veio evitar; (b) limitar só
+na tela — a corrida com outra saída e o registro errado continuariam. Movimentações **não** mudou (lá a origem continua só preferida). Mudança
+de contrato da rota da devolução: quem a chama com origem e quantidade maior que a da origem passa a receber 400 — a tela era o único
+chamador e não mandava origem. **Reversível** (tirar uma opção na rota).
+
+**B1546 (NOVA, da Etapa 240; decisão do agente) — quais prateleiras o "Sai de" da devolução mostra, e o aviso novo.** Escolhido: as
+prateleiras com saldo **do lote da devolução** (o escolhido; com série sem controle de lote, o das séries marcadas se forem de um lote só;
+senão as sem lote) — a mesma conta da recusa (B1545); a bloqueada apagada; trocar o lote volta ao automático. O aviso da padrão bloqueada
+(B1542) muda o texto para apontar o **Sai de** e some com uma prateleira escolhida. Descartados: (a) mostrar todas as prateleiras do material
+(a de outro lote seria recusada ao confirmar); (b) esconder a bloqueada (o usuário não saberia por que a peça que ele vê lá não está na
+lista); (c) somar por prateleira os lotes diferentes (o sistema confere um lote só). **Reversível.**
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -19527,6 +19548,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      **Desde a Etapa 239 (B1543, B1544):** com **lote**, a devolução (e toda saída com lote sem origem) confere a prateleira do lote, não a
      padrão — a devolução de material com lote sai mesmo com a padrão bloqueada, e a janela não avisa mais. Continua recusada a devolução
      **sem lote** (material sem controle de lote; série sem as marcadas de um lote; material que aceita saldo negativo) — a janela continua avisando.
+     **Desde a Etapa 240 (B1545, B1546):** a janela tem o campo **Sai de** — escolhida uma prateleira livre, a devolução sem lote sai dela
+     com a padrão bloqueada, e o aviso (agora *"…sem escolher de onde sai, a devolução será recusada. Escolha em "Sai de" um endereço livre ou
+     desbloqueie a localização."*) some. **O que fazer:** escolher a prateleira em **Sai de**.
 544. **NOVO (da Etapa 239, já era assim antes) — o estorno de uma saída com lote sem origem devolve o lote na localização padrão, mesmo
      bloqueada.** Com a padrão *P* bloqueada e o lote em *A*, a saída de 2 sai de *A* (Etapa 239); o estorno devolve os 2 em *P* (medido: *A* 3,
      *P* 2). O total do lote volta certo; o endereço não. Uma próxima saída desse lote tira primeiro de *A* (livre); se só restar o que está
@@ -20893,17 +20917,22 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(240) O "Sai de" da devolução ao cliente, o que ficou de fora.** (1) Peça com número de série: o sistema não confere se as séries
+  marcadas estão na prateleira escolhida (**C545**). (2) A lista de prateleiras é a da hora em que a janela abriu (a recusa vem do
+  servidor). (3) O saldo de cada prateleira é o que está nela, não o livre (a reserva para OS não desconta — **C542**). (4) Movimentações
+  continua com a origem só preferida (**B1545**).
 - **(239) A saída de lote que está em outra prateleira, o que ficou de fora.** (1) Se as prateleiras livres do lote não cobrem a quantidade,
   o resto sai das bloqueadas — basta um resto mínimo numa livre (0,001) para o lote sair quase todo da bloqueada (sonda da Fase 5; a regra da
   Etapa 6, mantida — **B1543**). (2) A janela da devolução ao cliente não sabe se o lote está só em prateleira bloqueada: a recusa vem ao
   confirmar. (3) Material que aceita saldo negativo: com lote, continua conferindo a padrão. (4) Saída sem lote: continua conferindo a padrão
-  (escolher a origem na devolução ao cliente é a próxima, **D (236)** 1). (5) A entrega automática que só cobre com um lote guardado em
+  (escolher a origem na devolução ao cliente é a próxima, **D (236)** 1 — *resolvida na **Etapa 240**: o campo **Sai de**, B1545*). (5) A entrega automática que só cobre com um lote guardado em
   prateleira bloqueada é recusada no meio: o que os itens anteriores já baixaram fica entregue (a regra de sempre da entrega).
 - **(237) O aviso da localização padrão bloqueada na devolução ao cliente, o que ficou de fora.** (1) O sistema continua recusando: a
-  devolução só sai desbloqueando a localização ou trocando a padrão no cadastro (escolher a origem é a **D (236)** 1). (2) O aviso é o da hora
+  devolução só sai desbloqueando a localização ou trocando a padrão no cadastro (escolher a origem é a **D (236)** 1). *(Resolvido na
+  **Etapa 240** — o campo **Sai de**.)* (2) O aviso é o da hora
   em que a posição carregou: a localização bloqueada com a tela aberta só aparece ao confirmar (ou depois de **Atualizar**). (3) Material sem
   localização padrão: sem aviso (não há o que bloquear, e a devolução não é recusada por isso).
-- **(236) O seletor de lote da devolução ao cliente, o que ficou de fora.** (1) A localização de origem (**B1541**; com a localização padrão bloqueada a devolução é recusada — **C543**). (2) Material com controle
+- **(236) O seletor de lote da devolução ao cliente, o que ficou de fora.** (1) A localização de origem (**B1541**; com a localização padrão bloqueada a devolução é recusada — **C543**). *(Resolvido na **Etapa 240** — o campo **Sai de**, **B1545**/**B1546**.)* (2) Material com controle
   por lote cujas séries ficaram **sem lote** não é devolvível pela tela (a lista mostra só as séries do lote escolhido, e o sistema recusa
   sem lote e com lote). (3) O vencido continua barrando (**B1537**/**B1540**). (4) A lista de lotes é a da hora em que a janela abriu (a
   recusa vem do servidor). (5) Os fluxos internos não descobrem o lote das séries (resto da **D (233)** 3).
@@ -22415,6 +22444,14 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(240) Nenhum clique foi dado.** A rota da devolução ao cliente mudou — a origem escolhida é estrita — e a leitura de saldos ganhou o
+bloqueio do endereço, provados pelas rotas reais em `devolucaoClienteOrigem` (6). A janela ganhou o **Sai de**, provado pelo Jest
+(`MateriaisClienteDevolucaoOrigem`, 7; `MateriaisClienteDevolucaoLocalBloqueado`, 6, com o literal novo do aviso). Controles positivos: a
+rota sem repassar a origem derruba 4 de 6; na tela, 7 sabotagens (aviso que ignora a origem, lista que ignora o lote, "não cobre" desligado,
+bloqueada habilitada, POST sem origem, série que não deriva o lote, série que deriva sempre), cada uma vermelha no cenário certo. Suítes:
+`test:api` 633/633 arquivos, almoxarifado 44, validation 4, safealter 3, sqlite 16, Jest 234 suítes e 3154 testes, build ok. Roteiro na
+seção da 240 (4 cenários, ~8 minutos).
 
 **(239) Nenhum clique foi dado.** O motor mudou — a saída com lote sem origem confere a prateleira do lote —, provado pelas rotas reais em
 `saidaLotePrateleiraDoLote` (14: a padrão bloqueada com o lote livre sai; o lote só em prateleira bloqueada é recusado; a ordem livre
@@ -42703,12 +42740,71 @@ prateleira bloqueada. Sem o *L2* (só o *L1*, em *X-239* bloqueada): *"MAT-239: 
 - Peça com número de série: a baixa não segue a prateleira da série (**C545**).
 - Material que aceita saldo negativo (ou com o saldo negativo ligado para todos): com lote, continua conferindo a padrão (**D (239)** 3).
 
+## Etapa 240 — A devolução ao cliente escolhe de onde sai (2026-11-18)
+
+A janela **Devolver ao cliente** não deixava escolher de qual prateleira o material sai. Com a localização padrão do material bloqueada,
+o material **sem lote** não era devolvível pela tela — o aviso vermelho apagava o botão, e o único caminho era desbloquear a prateleira ou
+trocar a padrão no cadastro (a **D (236)** 1). Agora a janela tem o campo **Sai de**: *"Qualquer endereço (automático)"*, como antes, ou uma
+prateleira com saldo, escolhida da lista. Escolhida a prateleira, o sistema tira **só dela** — se ela não tem o bastante, a devolução é
+recusada em vez de completar com outra prateleira (antes, um pedido "de A" que A não cobria tirava o resto de B e o registro dizia "saiu de
+A"). Decisões do agente: **B1545** e **B1546**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A janela não tinha onde dizer de qual prateleira sai | Campo **Sai de**: *"Qualquer endereço (automático)"* ou uma prateleira com saldo — *"A-01 (2)"*, *"A-01 — lote L1 (3)"* |
+| Padrão bloqueada, material sem lote: aviso vermelho, **Confirmar** apagado, sem saída pela tela | Escolhida uma prateleira livre em **Sai de**, o aviso some e a devolução sai dela |
+| Aviso: *"…está bloqueada: a devolução será recusada. Desbloqueie a localização antes de devolver."* | *"…está bloqueada: sem escolher de onde sai, a devolução será recusada. Escolha em "Sai de" um endereço livre ou desbloqueie a localização."* |
+| Prateleira bloqueada | Aparece apagada, com *" — bloqueada"*, e a frase *"Endereços bloqueados vêm apagados: desbloqueie o endereço para devolver de lá."* |
+| Quantidade maior que a da prateleira (só pela integração — a tela não escolhia) | A janela avisa *"Em A-01 há só 2: devolva até 2 ou escolha outro endereço."* e apaga o **Confirmar**; o sistema recusa *"O saldo em A-01 (2) não cobre a quantidade (3) — a saída tiraria de outros endereços"* |
+| Sem prateleira escolhida | **Igual** (o automático, como antes) |
+| Peça com série cujo lote veio da regularização, sem saldo no lote, padrão bloqueada: a janela tirava o aviso ao marcar a série e o sistema recusava ao confirmar | O aviso fica (a devolução sai "sem lote" e confere a padrão) e o **Sai de** lista as prateleiras sem lote, onde a peça está (achado da revisão, sonda) |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**; localizações *P-240*, *A-240* e *B-240*. Um material de cliente *CLI-240* **sem**
+controle de lote, com **Localização no estoque** *P-240*. Em **Movimentações**, **Entrada** de 2 com destino *A-240* e de 3 com destino
+*B-240*. Em **Configurações → Localizações**, bloqueie *P-240*.
+
+**1. Escolher a prateleira resolve a padrão bloqueada (RN-240.01/.07).** **Materiais de Clientes**, escolha o cliente, na linha de
+*CLI-240* clique **Devolver**. **Confira:** *"A localização padrão deste material (P-240) está bloqueada: sem escolher de onde sai, a
+devolução será recusada. Escolha em "Sai de" um endereço livre ou desbloqueie a localização."* e o **Confirmar devolução** apagado. Em
+**Sai de**, escolha *"B-240 (3)"*: o aviso some. Quantidade 3, documento *DEV-240*, **Confirmar devolução** → *"Devolução ao cliente
+registrada!"*; no extrato, *B-240* fica com 0 e *A-240* com 2.
+
+**2. A prateleira escolhida tem de cobrir (RN-240.02).** **Devolver** de novo, **Sai de** *"A-240 (2)"*, quantidade 3. **Confira:** *"Em
+A-240 há só 2: devolva até 2 ou escolha outro endereço."* e o botão apagado. Quantidade 2 → a frase some e o botão habilita.
+
+**3. A prateleira bloqueada vem apagada (RN-240.04).** Bloqueie *A-240* e **Atualize**. No **Sai de**, *"A-240 (2) — bloqueada"* aparece
+apagada, com *"Endereços bloqueados vêm apagados: desbloqueie o endereço para devolver de lá."*.
+
+**4. Com lote, só as prateleiras do lote escolhido (RN-240.06).** Material de cliente com **Controle por lote**, lote *L1* em *A-240* e
+*L2* em *B-240*: o **Sai de** só aparece depois de escolher o lote, e mostra só as prateleiras dele (*"A-240 — lote L1 (…)"*). Trocar o lote
+volta o **Sai de** para o automático. Material com **série** (sem controle de lote): sem séries marcadas, as prateleiras sem lote; marcadas
+as de um lote, as prateleiras desse lote.
+
+### O que esta etapa NÃO cobre
+
+- A peça com número de série: o sistema não confere se as séries marcadas estão na prateleira escolhida (**C545**, **D (240)** 1).
+- A lista de prateleiras é a da hora em que a janela abriu: mudança feita em outra tela aparece na recusa ao confirmar (**D (240)** 2).
+- O saldo mostrado em cada prateleira é o que está lá, não o livre: a reserva para OS não desconta (como no seletor de lote, **C542**).
+- A saída por **Movimentações** já escolhia a origem e continua só **preferindo** a escolhida (completa com outras prateleiras) — a mudança
+  para "só dela" vale para a devolução ao cliente (**B1545**).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 240 entregue (2026-11-18):** **a devolução ao cliente escolhe de onde sai** (**D (236)** 1 resolvida). Campo **Sai de** na janela
+  **Devolver ao cliente** (**B1546**); a origem escolhida é estrita na rota (**B1545** — antes só preferida, completava com outras
+  prateleiras e o registro dizia a escolhida); a leitura de saldos diz o endereço bloqueado. Commits `81c9ed15` (rota, leitura e teste),
+  `077ca21f` (tela e teste), `fb01d574` (Fase 5: o lote das séries só quando o lote cobre) e o fechamento. **O que é seu:** as **B1545** e
+  **B1546** (reversíveis); a **C543** atualizada; a limitação **(240)** em D e a verificação **(240)** em F. Sem consulta antes do deploy.
+  **Próxima:** **o seletor de lote mostra reservado e livre** (item 7 da estimativa de 18/11) — detalhada no fim do plano da 240.
 
 - **Etapa 239 entregue (2026-11-18):** **a saída de lote que está em outra prateleira** (a **C543** no motor). A saída com lote e sem origem
   confere a prateleira do lote, não a padrão (**B1543**); a janela da devolução ao cliente avisa só a devolução sem lote (**B1544**); a
