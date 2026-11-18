@@ -191,12 +191,27 @@ const MateriaisClienteAlmoxarifado = () => {
   // insuficiente. Disponível: n UN"); a janela avisa antes e apaga o Confirmar.
   const loteEscolhido = pedeLote && devLoteId !== '' ? devLotes.find((l) => String(l.id) === devLoteId) || null : null;
   const loteLivreNaoCobre = livreAbaixoDoSaldo(loteEscolhido) && qtdDigitada > 0 && qtdDigitada > Number(loteEscolhido.livre) + 1e-9;
+  // Etapa 242 (C541, RN-242.02 a .04): o livre do MATERIAL (a régua do motor, do servidor) e para qual OS está reservado. `livre` null
+  // (saldo negativo permitido — o motor não confere a reserva) ou ausente (servidor antigo): a janela de antes.
+  const livreMat = devTarget && devTarget.livre != null ? Number(devTarget.livre) : null;
+  const livreAbaixo = livreMat != null && livreMat + 1e-9 < Number(devTarget.saldo);
+  // Com saldo negativo e caixa separada o livre não é nulo (físico − caixa), mas a reserva não prende: a frase da reserva fica de fora.
+  const reservasDoMat = livreMat != null && devTarget.permite_saldo_negativo !== true && Array.isArray(devTarget?.reservas) ? devTarget.reservas.filter((r) => Number(r.quantidade) > 0) : [];
+  const fraseReservado = (() => {
+    if (!reservasDoMat.length) return null;
+    const un = devTarget.unidade;
+    const partes = reservasDoMat.map((r) => `${formatarQuantidade(r.quantidade)} ${un} ${r.os == null ? 'sem OS' : `para a OS ${r.os}`}`);
+    const lista = partes.length > 1 ? `${partes.slice(0, -1).join(', ')} e ${partes[partes.length - 1]}` : partes[0];
+    return `Reservado: ${lista}. Livre para devolver: ${formatarQuantidade(livreMat)} ${un}.`;
+  })();
+  // Um aviso só: com o do lote (241) na tela, o do material não repete.
+  const livreNaoCobre = livreMat != null && !loteLivreNaoCobre && qtdDigitada > 0 && qtdDigitada > livreMat + 1e-9;
   // RN-240.07: com um endereço escolhido o servidor confere ele, não a padrão — o aviso e o botão apagado somem.
   const padraoBloqueada = devTarget?.localizacao_padrao_bloqueada === true && !saiComLote && !origemEscolhida;
   const confirmarDevolucao = async () => {
     const qtd = Number(devQtd);
     if (!(qtd > 0)) { toast.error('Informe a quantidade a devolver'); return; }
-    if (origemNaoCobre || loteLivreNaoCobre) return;
+    if (origemNaoCobre || loteLivreNaoCobre || livreNaoCobre) return;
     if (!devDoc.trim()) { toast.error('Informe o número do documento de devolução'); return; }
     // RN-236.05: material com controle de lote pede o lote antes de enviar.
     if (pedeLote && devLoteId === '') { toast.error('Escolha o lote da devolução'); return; }
@@ -363,10 +378,19 @@ const MateriaisClienteAlmoxarifado = () => {
               )}
               <div className="almox-field">
                 <label className="almox-label">
-                  Quantidade (saldo: {formatarQuantidade(devTarget.saldo)} {devTarget.unidade})<span className="required">*</span>
+                  {`Quantidade (saldo: ${formatarQuantidade(devTarget.saldo)} ${devTarget.unidade}${livreAbaixo ? ` — livre ${formatarQuantidade(livreMat)} ${devTarget.unidade}` : ''})`}<span className="required">*</span>
                 </label>
                 <input className="almox-input" type="number" min="0" value={devQtd}
                   onChange={(e) => setDevQtd(e.target.value)} />
+                {/* Etapa 242 (RN-242.03, .04): para qual OS está reservado; acima do livre, o servidor recusaria ("Saldo insuficiente"). */}
+                {fraseReservado && (
+                  <small id="dev-reservado" style={{ display: 'block', color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>{fraseReservado}</small>
+                )}
+                {livreNaoCobre && (
+                  <small id="dev-livre-nao-cobre" style={{ display: 'block', color: 'var(--gmp-error)', fontSize: '0.75rem' }}>
+                    {`Estão livres só ${formatarQuantidade(livreMat)} ${devTarget.unidade} deste material: devolva até ${formatarQuantidade(livreMat)}${reservasDoMat.length ? ' ou libere a reserva em Reservas' : ''}.`}
+                  </small>
+                )}
               </div>
               {pedeLote && (
                 <div className="almox-field">
@@ -492,7 +516,7 @@ const MateriaisClienteAlmoxarifado = () => {
               <button className="btn-almox-secondary" onClick={() => setDevTarget(null)} disabled={devSaving}>
                 Cancelar
               </button>
-              <button className="btn-almox-primary" onClick={confirmarDevolucao} disabled={devSaving || padraoBloqueada || origemNaoCobre || loteLivreNaoCobre}>
+              <button className="btn-almox-primary" onClick={confirmarDevolucao} disabled={devSaving || padraoBloqueada || origemNaoCobre || loteLivreNaoCobre || livreNaoCobre}>
                 {devSaving ? 'Registrando...' : 'Confirmar devolução'}
               </button>
             </div>
