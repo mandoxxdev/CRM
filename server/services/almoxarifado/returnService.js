@@ -138,7 +138,7 @@ async function registrarDevolucao(db, user, data) {
   // Fase 5: so para os destinos que ENTRAM (estoque/quarentena) — no RETRABALHO a devolucao e uma
   // saida, e herdar um lote vencido/curto passaria a recusar o que antes passava.
   const herdaLote = saidaOriginal && (material.controle_lote || ['ESTOQUE', 'QUARENTENA'].includes(destinoFinal));
-  const loteFinalId = lote_id || (herdaLote ? saidaOriginal.lote_id : null) || null;
+  let loteFinalId = lote_id || (herdaLote ? saidaOriginal.lote_id : null) || null;
 
   // Heranca de projeto_id/os_id (Etapa 14, Task 3 — RN-05, emenda I2, MESMO MOLDE da heranca de
   // lote acima): o valor informado a mao pelo chamador GANHA; sem informar, herda da saida
@@ -195,6 +195,46 @@ async function registrarDevolucao(db, user, data) {
           + '(a lista mostra as que estão fora) ou registre a devolução sem citar a entrega.');
       }
     }
+  }
+
+  // Etapa 243 (resto da D (233) 3; RN-243.01 a .03): com o lote em branco e sem lote herdado, a devolucao para Estoque ou Quarentena
+  // de material com serie e SEM controle de lote usa o lote DAS SERIES (o da saida que levou cada uma — Fase 2, abaixo). Antes a ENTRADA_DEVOLUCAO (e o BLOQUEIO da quarentena) gravava
+  // lote NULL e a reativacao da serie apagava o lote dela (`entradaSeries` grava o lote da entrada): a peca ia para o "sem lote
+  // atribuido" e a de lote bloqueado voltava livre da guarda do lote (sonda da Fase 0). Lotes diferentes (ou lote e sem lote) -> recusa,
+  // como a saida avulsa (Etapa 234). So deriva quando TODAS as series informadas existem no material e estao FORA do estoque (as que a
+  // entrada reativa): serie nova ou ja presente no meio -> a devolucao de antes (molde: Etapa 234, Fase 2 achado 1). Sucata fica fora (a
+  // serie nao se move nela) e material com controle de lote tambem ("exige lote", D (233) 4). Relido dentro da trava (RN-243.07).
+  const derivaPelasSeries = !loteFinalId && destinoAceitaSerie && Number(material.controle_serie) === 1
+    && !Number(material.controle_lote) && seriesInformadas.length > 0;
+  const lerLoteDasSeries = async () => {
+    const numeros = [...new Set(seriesInformadas)];
+    const marcas = numeros.map(() => '?').join(',');
+    const fora = await dbGet(db, `SELECT COUNT(*) AS n FROM series_almoxarifado
+      WHERE material_id = ? AND numero IN (${marcas}) AND status NOT IN ('EM_ESTOQUE', 'BLOQUEADA')`, [material_id, ...numeros]);
+    if (Number(fora.n) !== numeros.length) return { lote: null, lotes: null };
+    // Fase 2 (achado 1a): o lote e o da SAIDA que levou a serie (`movimentacao_saida_id`), nao o `lote_id` da serie. A entrega sem lote,
+    // a v1 e as saidas de antes da 234 tiraram da linha "sem lote" com a serie ainda marcada no lote: devolver ao lote da serie creditava
+    // a linha do lote (3 com 2 series) e deixava o "sem lote" em -1 — o resumo, que hoje fecha, ia a -1. Saida sem lote (ou serie sem
+    // saida gravada) -> "sem lote" -> a devolucao de antes. Lote apagado ou de outro material -> "sem lote" (LEFT JOIN, como a 234).
+    const lotes = await dbAll(db, `SELECT DISTINCT l.id AS lid, l.codigo FROM series_almoxarifado s
+        LEFT JOIN movimentacoes_almoxarifado sm ON sm.id = s.movimentacao_saida_id
+        LEFT JOIN lotes_almoxarifado l ON l.id = sm.lote_id AND l.material_id = s.material_id
+      WHERE s.material_id = ? AND s.numero IN (${marcas})`, [material_id, ...numeros]);
+    if (lotes.length === 1) return { lote: lotes[0].lid == null ? null : { id: lotes[0].lid, codigo: lotes[0].codigo }, lotes: null };
+    return { lote: null, lotes };
+  };
+  let loteDasSeries = null;
+  if (derivaPelasSeries) {
+    const lido = await lerLoteDasSeries();
+    if (lido.lotes) {
+      const comLote = lido.lotes.filter((l) => l.lid != null)
+        .sort((a, b) => (String(a.codigo) < String(b.codigo) ? -1 : String(a.codigo) > String(b.codigo) ? 1 : a.lid - b.lid))
+        .map((l) => l.codigo);
+      const nomes = lido.lotes.some((l) => l.lid == null) ? [...comLote, 'sem lote'] : comLote;
+      throw erro400(`As séries informadas são de lotes diferentes (${nomes.join(', ')}): registre uma devolução para cada lote.`);
+    }
+    loteDasSeries = lido.lote;
+    if (loteDasSeries) loteFinalId = loteDasSeries.id;
   }
 
   // ARMADILHA do destino SUCATA: ele faz ENTRADA_DEVOLUCAO e DEPOIS SUCATA (correcao do bug de
@@ -302,6 +342,15 @@ async function registrarDevolucao(db, user, data) {
   // baixo (emitidas 0) apaga a linha. Descartado: a devolucao inteira (validacao e INSERT) sob a trava — a conferencia
   // devolucao x estorno vai no proprio comando, e uma devolucao no meio de um estorno espera hoje so o que precisa.
   const reconferirNaTrava = async () => {
+    // Etapa 243 (RN-243.07): o lote das series relido dentro da secao — mudou desde a leitura de cima (a regularizacao de series troca
+    // o lote) -> recusa antes de qualquer perna (o catch de baixo, emitidas 0, apaga a linha). Sem isto a entrada gravaria o lote velho.
+    if (derivaPelasSeries) {
+      const agora = await lerLoteDasSeries();
+      const idAgora = agora.lotes ? -1 : (agora.lote ? Number(agora.lote.id) : null);
+      if (idAgora !== (loteDasSeries ? Number(loteDasSeries.id) : null)) {
+        throw erro400('O lote das séries mudou enquanto a devolução era gravada — nada foi gravado. Registre a devolução de novo.');
+      }
+    }
     if (seriesInformadas.length > 0) {
       const agora = await dbGet(db, 'SELECT controle_serie FROM materiais_almoxarifado WHERE id = ?', [material_id]);
       if (!agora || Number(agora.controle_serie) !== 1) {
