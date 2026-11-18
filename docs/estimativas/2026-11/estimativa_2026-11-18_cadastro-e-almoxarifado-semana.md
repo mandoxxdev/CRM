@@ -21,7 +21,7 @@ Partes: **Cadastro de material 1h15 · Almoxarifado 23h15 · Dependem de respost
 | 3 | Retalho de peça com série: baixa do original grava o lote | 1h15 | motor | 1h15 | idem | `scrapService.js:342` (SAIDA do original), `:362` | — | — | — |
 | 4 | Devolução ao fornecedor (NC) de peça com série grava o lote | 1h15 | motor | 1h15 | idem | `nonConformityService.js:1664` (DEVOLUCAO_FORNECEDOR, `lote_id` da inspeção quando há); `:1060` é DESBLOQUEIO (não é saída) | — | — | — |
 | 5 | Saída com lote valida a prateleira do lote, não a padrão (C543 no motor) | 1h30 | motor, toda saída sem origem | 1h30 | C543 + D (236) 1; o aviso da Etapa 237 (B1542) muda junto | `stockService.js:1565` `validarLocalizacaoParaMovimento(resolveLocalizacaoSaida(...))`; `claimSaldoDoLote` baixa onde o lote está | 0,9 h (horas.js 18/11, grupo C543) | 1h | `e21132d1`, `9e33f948`, `d9171d1d` |
-| 6 | Escolher a origem na devolução ao cliente | 1h | fatia de tela (E236 0,8 h) | 1h | D (236) 1, B1541 | `MateriaisClienteAlmoxarifado.js` (janela); a rota já aceita `localizacao_origem_id` pelo motor | — | — | — |
+| 6 | Escolher a origem na devolução ao cliente | 1h | fatia de tela (E236 0,8 h) | 1h | D (236) 1, B1541 | `MateriaisClienteAlmoxarifado.js` (janela); a rota já aceita `localizacao_origem_id` pelo motor (só preferida: a Etapa 240 a fez estrita) | 0,6 h (horas.js 18/11, grupo Origem devolucao cliente) | 45 min | `81c9ed15`, `077ca21f`, `fb01d574`, `db9096cb` |
 | 7 | Seletor de lote mostra reservado e livre | 1h | fatia de tela + leitura | 1h | C542 | `lotService.listarLotesDoMaterial:593` (`saldo` = físico do lote); seletores da devolução ao cliente e de Movimentações | — | — | — |
 | 8 | Aviso de material de cliente reservado para OS | 45 min | fatia de tela (E237 1,1 h com fixture; esta sem campo novo de servidor se a posição já trouxer a reserva) | 45 min | C541 | molde do aviso `#dev-loc-bloqueada` da Etapa 237 | — | — | — |
 | 9 | Frase do lote das séries só quando o lote tem a peça | 45 min | fatia de tela | 45 min | C539, B1531 | frase de Movimentações lê só a série; o servidor deriva o lote só quando a linha cobre (`stockService.js:1379`) | — | — | — |
@@ -49,6 +49,9 @@ Partes: **Cadastro de material 1h15 · Almoxarifado 23h15 · Dependem de respost
 
 **Etapa 239 (item 5, 18/11):** entregue no tamanho estimado; além da validação, a entrega automática por lote passou a deixar por último o lote
 guardado só em prateleira bloqueada e a posição do cliente ganhou um campo de leitura (Fases 2 e 5). Medido 0,9 h → 1h.
+
+**Etapa 240 (item 6, 18/11):** entregue no tamanho estimado; além do campo, a origem escolhida passou a ser estrita na devolução (a rota só a
+preferia) e a leitura de saldos diz o endereço bloqueado. Medido 0,6 h → 45 min.
 
 ## Os que dependem de resposta — caminho reversível se a resposta não vier
 
