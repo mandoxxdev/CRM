@@ -1559,3 +1559,44 @@ describe('NaoConformidadesAlmoxarifado — solicitar o sucateamento do reprovado
     expect(texto).not.toContain('continua bloqueado');
   });
 });
+
+/**
+ * Etapa 245 (RN-245.05) — a devolução ao fornecedor de peça com número de série. A execução recusa (nível 6, RN-13) e a recusa só
+ * aparecia ao confirmar, ensinando um caminho incompleto. O servidor diz na leitura (`execucao_recusada_por_serie`, RN-245.04) e a
+ * janela avisa ANTES, com o caminho inteiro, e desliga o botão. A tela não recalcula a régua: só lê o campo.
+ */
+describe('NaoConformidadesAlmoxarifado — devolução de peça com número de série (Etapa 245)', () => {
+  const AVISO_SERIE = 'Este material tem controle por número de série: a devolução não é registrada aqui. Para devolver: (1) em '
+    + 'Inspeções → Desbloquear Material, desbloqueie a quantidade reprovada; (2) em Movimentações → Saída, dê baixa das peças '
+    + 'escolhendo os números de série; (3) a Qualidade cancela este documento, informando a baixa no motivo.';
+
+  test('(53) RN-245.05 com execucao_recusada_por_serie: o aviso literal, o botão desligado e sem a frase da baixa — e o clique não manda nada', async () => {
+    ncDoBanco = [{ ...NC_A_EXECUTAR, execucao_recusada_por_serie: 1 }];
+    await renderizar();
+    await clicar(botaoExecutar(linhas()[0]));
+    const modal = container.querySelector('.almox-modal');
+    expect(modal.textContent).toContain('Registrar execução de NC-2026-0021');
+    const aviso = container.querySelector('[data-testid="nc-exec-aviso-serie"]');
+    expect(aviso).not.toBeNull();
+    expect(aviso.textContent.replace(/\s+/g, ' ').trim()).toBe(AVISO_SERIE);
+    expect(modal.textContent).not.toContain('dá a baixa no estoque');
+    const botao = botaoModal('Registrar execução');
+    expect(botao).toBeDefined();
+    expect(botao.disabled).toBe(true);
+    await clicar(botao);
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  test('(54) RN-245.05 metade positiva: DEVOLVER sem série (campo 0) mostra a frase da baixa, sem o aviso, e o botão registra', async () => {
+    ncDoBanco = [{ ...NC_A_EXECUTAR, execucao_recusada_por_serie: 0 }];
+    await renderizar();
+    await clicar(botaoExecutar(linhas()[0]));
+    const modal = container.querySelector('.almox-modal');
+    expect(container.querySelector('[data-testid="nc-exec-aviso-serie"]')).toBeNull();
+    expect(modal.textContent).toContain('dá a baixa no estoque');
+    const botao = botaoModal('Registrar execução');
+    expect(botao.disabled).toBe(false);
+    await clicar(botao);
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/nao-conformidades/21/executar', {});
+  });
+});

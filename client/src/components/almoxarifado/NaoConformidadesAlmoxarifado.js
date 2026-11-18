@@ -428,6 +428,9 @@ const NaoConformidadesAlmoxarifado = () => {
     setExecucaoMotivoSemBaixa('');
   };
 
+  // Etapa 245 (RN-245.05): o servidor diz, na leitura, que a execução desta NC vai ser recusada pela série (nível 6, RN-13).
+  const serieRecusaExecucao = Number(execucaoTarget?.execucao_recusada_por_serie) === 1;
+
   /**
    * O SEGUNDO GESTO. Não há campo obrigatório aqui de propósito: quem clica está declarando um
    * FATO do mundo físico ("mandei de volta"), e exigir justificativa para registrar um fato
@@ -1058,8 +1061,22 @@ const NaoConformidadesAlmoxarifado = () => {
                 registro só serve quando o sucateamento não é possível (o servidor recusa com 409
                 o caso viável, e diz por quê). O cenário (33) prende as duas metades.
               */}
+              {/*
+                Etapa 245 (RN-245.05): peça com número de série não é devolvida por aqui (o servidor recusa — nível 6, RN-13).
+                Quem diz é o servidor, na leitura (`execucao_recusada_por_serie`); a tela não recalcula a régua. O aviso vem
+                ANTES do clique e diz o caminho inteiro: sem o desbloqueio, a Saída é recusada (tudo reprovado) ou deixa peça
+                boa presa no bloqueio (parte reprovada).
+              */}
+              {serieRecusaExecucao && (
+                <p data-testid="nc-exec-aviso-serie" style={{ fontSize: '0.82rem', color: 'var(--gmp-warning)', marginTop: 0 }}>
+                  Este material tem controle por número de série: a devolução não é registrada aqui. Para devolver:
+                  (1) em Inspeções → Desbloquear Material, desbloqueie a quantidade reprovada; (2) em Movimentações →
+                  Saída, dê baixa das peças escolhendo os números de série; (3) a Qualidade cancela este documento,
+                  informando a baixa no motivo.
+                </p>
+              )}
               <p style={{ fontSize: '0.78rem', color: 'var(--gmp-text-light)', marginTop: 0 }}>
-                {execucaoTarget.decisao === 'DEVOLVER' ? (
+                {serieRecusaExecucao ? null : execucaoTarget.decisao === 'DEVOLVER' ? (
                   <>
                     Confirme que o material <strong>saiu de fato</strong> para o fornecedor. É este
                     registro que dá a baixa no estoque — antes dele o material segue retido. O
@@ -1113,7 +1130,7 @@ const NaoConformidadesAlmoxarifado = () => {
             </div>
             <div className="almox-modal-footer">
               <button className="btn-almox-secondary" onClick={() => setExecucaoTarget(null)}>Cancelar</button>
-              <button className="btn-almox-primary" disabled={salvando} onClick={submeterExecucao}>
+              <button className="btn-almox-primary" disabled={salvando || serieRecusaExecucao} onClick={submeterExecucao}>
                 {salvando ? 'Salvando...' : 'Registrar execução'}
               </button>
             </div>
