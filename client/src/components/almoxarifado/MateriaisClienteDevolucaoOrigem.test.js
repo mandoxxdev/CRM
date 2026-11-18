@@ -37,6 +37,7 @@ const POSICAO = {
     item(62, 'COMLOTE', { controle_lote: 1 }),
     item(63, 'SERIE', { controle_serie: 1 }),
     item(64, 'FALHA'),
+    item(65, 'SERIEREG', { controle_serie: 1, localizacao_padrao_codigo: 'R5L-3', localizacao_padrao_bloqueada: true }),
   ],
   aplicacoes: [],
 };
@@ -48,6 +49,7 @@ const SALDOS = {
     saldo(4, 'C-03', 0), saldo(5, 'D-04', 6, { lote_id: 9, lote: 'LX' })],
   62: [saldo(2, 'A-01', 3, { lote_id: 7, lote: 'L1' }), saldo(3, 'B-02', 4, { lote_id: 8, lote: 'L2' })],
   63: [saldo(2, 'A-01', 1), saldo(3, 'B-02', 2, { lote_id: 7, lote: 'L1' })],
+  65: [saldo(1, 'R5L-3', 1, { localizacao_bloqueada: true }), saldo(2, 'A-01', 2)],
 };
 
 let container; let root;
@@ -61,6 +63,9 @@ beforeEach(() => {
     }
     if (url === '/almoxarifado/materiais/63/series?status=EM_ESTOQUE') {
       return Promise.resolve({ data: [{ id: 91, numero: 'S1', lote_id: 7, lote_codigo: 'L1' }, { id: 92, numero: 'S2', lote_id: null, lote_codigo: null }] });
+    }
+    if (url === '/almoxarifado/materiais/65/series?status=EM_ESTOQUE') {
+      return Promise.resolve({ data: [{ id: 95, numero: 'S5', lote_id: 7, lote_codigo: 'L1' }] });
     }
     if (url === '/almoxarifado/estoque/64/saldos') return Promise.reject(new Error('falhou'));
     const m = url.match(/^\/almoxarifado\/estoque\/(\d+)\/saldos$/);
@@ -171,6 +176,21 @@ describe('Etapa 240 — "Sai de" na devolução ao cliente', () => {
     expect(opcoes()).toEqual([['Qualquer endereço (automático)', false], ['A-01 (1)', false]]);
     await clicar(container.querySelector('input[data-serie-id="91"]'));
     expect(opcoes()).toEqual([['Qualquer endereço (automático)', false], ['B-02 — lote L1 (2)', false]]);
+  });
+
+  test('[Fase 5, achado 1] série com lote L1 sem saldo no lote (regularizada): o servidor sai "sem lote" — a janela lista as sem lote e o aviso fica', async () => {
+    await abrir('SERIEREG');
+    await clicar(container.querySelector('input[data-serie-id="95"]'));
+    expect(container.querySelector('#dev-series-lote-da-devolucao').textContent).toBe('As séries marcadas saem do lote L1.');
+    expect(opcoes()).toEqual([['Qualquer endereço (automático)', false], ['R5L-3 (1) — bloqueada', true], ['A-01 (2)', false]]);
+    expect(aviso().textContent).toBe(AVISO);
+    preencher(campo('Quantidade'), '1');
+    preencher(campo('documento'), 'DEV-244');
+    await esperar();
+    expect(botaoConfirmar().disabled).toBe(true);
+    await escolher(origem(), '2');
+    expect(aviso()).toBeNull();
+    expect(botaoConfirmar().disabled).toBe(false);
   });
 
   test('[RN-240.01] saldos não carregaram: só o automático, a mensagem de erro, e o POST sem origem (o de antes)', async () => {

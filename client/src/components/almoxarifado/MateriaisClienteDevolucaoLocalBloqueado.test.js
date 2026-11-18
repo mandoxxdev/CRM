@@ -52,6 +52,8 @@ beforeEach(() => {
     if (url === '/almoxarifado/materiais/55/series?status=EM_ESTOQUE') {
       return Promise.resolve({ data: [{ id: 91, numero: 'S1', lote_id: 7, lote_codigo: 'L1' }, { id: 92, numero: 'S2', lote_id: null, lote_codigo: null }] });
     }
+    // Etapa 240 (Fase 5, achado 1): a janela so deriva o lote das series quando o lote tem saldo que cobre (a regra do servidor).
+    if (url === '/almoxarifado/estoque/55/saldos') return Promise.resolve({ data: [{ localizacao_id: 2, localizacao_codigo: 'A-01', quantidade: 1, lote_id: 7, lote: 'L1' }] });
     return Promise.resolve({ data: [] });
   });
   api.post.mockResolvedValue({ data: { id: 1 } });

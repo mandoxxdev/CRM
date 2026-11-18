@@ -160,16 +160,22 @@ const MateriaisClienteAlmoxarifado = () => {
   // devolucao que sai SEM lote: sem controle de lote e, com serie, sem as marcadas de um lote so (o servidor grava o lote delas, B1535).
   const loteDasMarcadas = pedeSerie && !pedeLote ? fraseDoLoteDasSeries(devSeries, devSerieIds, 'devolução') : null;
   // Fase 5 (achado 2): com saldo negativo permitido (o do material ou o global) o servidor confere a padrao mesmo com lote — o aviso fica.
-  const saiComLote = devTarget?.permite_saldo_negativo !== true && (pedeLote || (!!loteDasMarcadas && !loteDasMarcadas.mistura));
-  // Etapa 240 (RN-240.06): os endereços do "Sai de" são os do LOTE DA SAÍDA — a mesma conta da recusa estrita do servidor (`lote_id IS ?`):
-  // com controle de lote, o escolhido (sem ele, `undefined`: o campo não aparece); série sem controle de lote, o das marcadas se forem de um
-  // lote só (o servidor grava a saída nele, B1535); senão as linhas sem lote.
-  const loteDaSaida = (() => {
-    if (pedeLote) return devLoteId === '' ? undefined : Number(devLoteId);
+  // Etapa 240 (Fase 5, achado 1): o servidor só grava a saída no lote das séries quando as linhas DO LOTE cobrem a quantidade (a série pode
+  // ter ganho o lote na regularização com a peça ainda no "sem lote" — Fase 5 da 234); senão a saída é "sem lote" e confere a padrão. A
+  // janela usa a mesma conta, com os saldos do "Sai de" (sem eles, não deriva: o aviso fica, como o servidor no pior caso).
+  const loteDerivadoDasSeries = (() => {
     if (!loteDasMarcadas || loteDasMarcadas.mistura) return null;
     const marcada = devSeries.find((s) => devSerieIds.includes(s.id) && s.lote_id != null && s.lote_codigo != null);
-    return marcada ? Number(marcada.lote_id) : null;
+    if (!marcada) return null;
+    const noLote = devSaldos.filter((s) => s.lote_id != null && Number(s.lote_id) === Number(marcada.lote_id) && Number(s.quantidade) > 0)
+      .reduce((t, s) => t + Number(s.quantidade), 0);
+    return noLote + 1e-9 >= devSerieIds.length ? Number(marcada.lote_id) : null;
   })();
+  const saiComLote = devTarget?.permite_saldo_negativo !== true && (pedeLote || loteDerivadoDasSeries !== null);
+  // Etapa 240 (RN-240.06): os endereços do "Sai de" são os do LOTE DA SAÍDA — a mesma conta da recusa estrita do servidor (`lote_id IS ?`):
+  // com controle de lote, o escolhido (sem ele, `undefined`: o campo não aparece); série sem controle de lote, o das marcadas se forem de um
+  // lote só e o lote cobrir (o servidor grava a saída nele, B1535); senão as linhas sem lote.
+  const loteDaSaida = pedeLote ? (devLoteId === '' ? undefined : Number(devLoteId)) : loteDerivadoDasSeries;
   const opcoesOrigem = loteDaSaida === undefined ? [] : devSaldos.filter((s) => s.localizacao_id != null && Number(s.quantidade) > 0
     && (s.lote_id == null ? null : Number(s.lote_id)) === loteDaSaida);
   // O endereço escolhido que saiu da lista (trocou o lote ou as séries) volta ao automático.
