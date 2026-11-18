@@ -23,7 +23,7 @@ Partes: **Cadastro de material 1h15 · Almoxarifado 23h15 · Dependem de respost
 | 5 | Saída com lote valida a prateleira do lote, não a padrão (C543 no motor) | 1h30 | motor, toda saída sem origem | 1h30 | C543 + D (236) 1; o aviso da Etapa 237 (B1542) muda junto | `stockService.js:1565` `validarLocalizacaoParaMovimento(resolveLocalizacaoSaida(...))`; `claimSaldoDoLote` baixa onde o lote está | 0,9 h (horas.js 18/11, grupo C543) | 1h | `e21132d1`, `9e33f948`, `d9171d1d` |
 | 6 | Escolher a origem na devolução ao cliente | 1h | fatia de tela (E236 0,8 h) | 1h | D (236) 1, B1541 | `MateriaisClienteAlmoxarifado.js` (janela); a rota já aceita `localizacao_origem_id` pelo motor (só preferida: a Etapa 240 a fez estrita) | 0,6 h (horas.js 18/11, grupo Origem devolucao cliente) | 45 min | `81c9ed15`, `077ca21f`, `fb01d574`, `db9096cb` |
 | 7 | Seletor de lote mostra reservado e livre | 1h | fatia de tela + leitura | 1h | C542 | `lotService.listarLotesDoMaterial:593` (`saldo` = físico do lote); seletores da devolução ao cliente e de Movimentações | 0,5 h (horas.js 18/11, grupo C542 com "Etapa 241" — dois commits da tela e da Fase 5 não citavam a C542 no assunto) | 30 min | `6e3a496a`, `0cc2141d`, `0989e7e3`, `5719afb7` |
-| 8 | Aviso de material de cliente reservado para OS | 45 min | fatia de tela (E237 1,1 h com fixture; esta sem campo novo de servidor se a posição já trouxer a reserva) | 45 min | C541 | molde do aviso `#dev-loc-bloqueada` da Etapa 237 | — | — | — |
+| 8 | Aviso de material de cliente reservado para OS | 45 min | fatia de tela (E237 1,1 h com fixture; esta sem campo novo de servidor se a posição já trouxer a reserva) | 45 min | C541 (Etapa 242, `2026-11-18-almoxarifado-etapa242-aviso-reservado-para-os.md`) | molde do aviso `#dev-loc-bloqueada` da Etapa 237 | 0,9 h (horas.js 18/11, grupo C541) | 1h | `d4edb6bc`, `423613d7`, `3f42ece3`, `8e84fea8`, `03185e2f` |
 | 9 | Frase do lote das séries só quando o lote tem a peça | 45 min | fatia de tela | 45 min | C539, B1531 | frase de Movimentações lê só a série; o servidor deriva o lote só quando a linha cobre (`stockService.js:1379`) | — | — | — |
 | 10 | Lista de séries da saída avulsa recarrega após recusa | 45 min | fatia de tela | 45 min | C538 (molde: entrega, C537) | Movimentações → Saída/Perda | — | — | — |
 | 11 | Reserva da liberação repartida por nota | 1h15 | motor/estorno | 1h15 | C524, B1467 | liberação de lote (Etapa 220) + conta do estorno da nota | — | — | — |
@@ -56,6 +56,10 @@ preferia) e a leitura de saldos diz o endereço bloqueado. Medido 0,6 h → 45 m
 **Etapa 241 (item 7, 18/11):** entregue no tamanho estimado; o "reservado" virou o **livre** do lote (a reserva não tem lote — C526), e a revisão
 achou três casos em que o número divergia do sistema (saldo negativo global, separado com negativo, linha negativa antiga), corrigidos. Medido
 0,5 h → 30 min.
+
+**Etapa 242 (item 8, 18/11):** 15 min acima do estimado. A posição **não** trazia a reserva (a régua previa "sem campo novo de servidor se a
+posição já trouxer"): ganhou o livre e as reservas por OS, a revisão pediu o projeto da reserva e a fixture da posição usada pelos testes da
+tela foi regravada. Medido 0,9 h → 1h.
 
 ## Os que dependem de resposta — caminho reversível se a resposta não vier
 
