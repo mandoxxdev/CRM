@@ -14,7 +14,14 @@ export const fraseDoLoteDasSeries = (series, ids, gesto = 'saída') => {
   const codigos = [...porLote.values()].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   const semLote = marcadas.some((s) => !temLote(s));
   if (!codigos.length) return null;
-  if (codigos.length === 1 && !semLote) return { mistura: false, texto: `As séries marcadas saem do lote ${codigos[0]}.` };
+  // Etapa 246 (C539, RN-246.02): o servidor só grava a saída no lote das séries quando o saldo do lote (as linhas positivas,
+  // `lote_saldo_positivo` da lista de séries) cobre as marcadas; senão ela sai do "sem lote" — e a tela não diz lote nenhum. A mistura
+  // abaixo não olha o saldo (o servidor a recusa sempre).
+  if (codigos.length === 1 && !semLote) {
+    const saldoDoLote = Number(marcadas[0].lote_saldo_positivo);
+    const cobre = marcadas[0].lote_saldo_positivo != null && Number.isFinite(saldoDoLote) && marcadas.length <= saldoDoLote + 1e-9;
+    return cobre ? { mistura: false, texto: `As séries marcadas saem do lote ${codigos[0]}.` } : null;
+  }
   const nomes = semLote ? [...codigos, 'sem lote'] : codigos;
   return { mistura: true, texto: `As séries marcadas são de lotes diferentes (${nomes.join(', ')}): faça uma ${gesto} para cada lote.` };
 };

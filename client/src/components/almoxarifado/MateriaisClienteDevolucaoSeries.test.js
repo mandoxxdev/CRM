@@ -44,11 +44,11 @@ const POSICAO = {
 };
 const livre = { lote_status: 'ATIVO', lote_esta_impedido: false, lote_vencido_sem_liberacao: false };
 const SERIES = [
-  { id: 1, numero: 'A1', lote_id: 10, lote_codigo: 'L1', ...livre },
-  { id: 2, numero: 'B1', lote_id: 20, lote_codigo: 'L2', ...livre },
-  { id: 3, numero: 'B2', lote_id: 20, lote_codigo: 'L2', ...livre },
-  { id: 4, numero: 'C1', lote_id: 30, lote_codigo: 'L3', lote_status: 'BLOQUEADO', lote_esta_impedido: true, lote_vencido_sem_liberacao: false },
-  { id: 5, numero: 'S1', lote_id: null, lote_codigo: null, lote_status: null, lote_esta_impedido: false, lote_vencido_sem_liberacao: false },
+  { id: 1, numero: 'A1', lote_id: 10, lote_codigo: 'L1', lote_saldo_positivo: 1, ...livre },
+  { id: 2, numero: 'B1', lote_id: 20, lote_codigo: 'L2', lote_saldo_positivo: 2, ...livre },
+  { id: 3, numero: 'B2', lote_id: 20, lote_codigo: 'L2', lote_saldo_positivo: 2, ...livre },
+  { id: 4, numero: 'C1', lote_id: 30, lote_codigo: 'L3', lote_saldo_positivo: 1, lote_status: 'BLOQUEADO', lote_esta_impedido: true, lote_vencido_sem_liberacao: false },
+  { id: 5, numero: 'S1', lote_id: null, lote_codigo: null, lote_saldo_positivo: null, lote_status: null, lote_esta_impedido: false, lote_vencido_sem_liberacao: false },
 ];
 
 let container; let root;
@@ -210,7 +210,7 @@ describe('Etapa 235 — a janela de devolução ao cliente lista as séries e di
       if (url.includes('/materiais-cliente/posicao?cliente_id=1')) return Promise.resolve({ data: POS2 });
       if (url === '/almoxarifado/materiais/31/series?status=EM_ESTOQUE') return new Promise((r) => { soltar = () => r({ data: SERIES }); });
       if (url === '/almoxarifado/materiais/34/series?status=EM_ESTOQUE') {
-        return Promise.resolve({ data: [{ id: 9, numero: 'Z9', lote_id: 90, lote_codigo: 'L9', ...livre }] });
+        return Promise.resolve({ data: [{ id: 9, numero: 'Z9', lote_id: 90, lote_codigo: 'L9', lote_saldo_positivo: 1, ...livre }] });
       }
       return original(url);
     });
@@ -235,4 +235,23 @@ describe('Etapa 235 — a janela de devolução ao cliente lista as séries e di
   });
   // O teste "[RN-235.09] material com controle de lote: diz que pede o lote, sem lista e sem POST" saiu na Etapa 236 (RN-236.07): a janela
   // ganhou o seletor de lote — os cenários dele moram em MateriaisClienteDevolucaoLote.test.js.
+});
+
+describe('Etapa 246 (RN-246.02) — a frase só quando o lote tem a peça', () => {
+  test('[RN-246.02] A1 com o L1 sem a peça no saldo -> sem frase; B1 (L2 com 2) -> a frase', async () => {
+    const original = api.get.getMockImplementation();
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/materiais/31/series?status=EM_ESTOQUE') {
+        return Promise.resolve({ data: SERIES.map((s) => (s.id === 1 ? { ...s, lote_saldo_positivo: 0 } : s)) });
+      }
+      return original(url);
+    });
+    await abrir('COM-SERIE');
+    await marcar(1);
+    expect(caixa(1).checked).toBe(true);
+    expect(container.querySelector('#dev-series-lote-da-devolucao')).toBeNull();
+    await marcar(1);
+    await marcar(2);
+    expect(texto('#dev-series-lote-da-devolucao')).toBe('As séries marcadas saem do lote L2.');
+  });
 });

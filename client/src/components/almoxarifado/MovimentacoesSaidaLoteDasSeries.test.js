@@ -34,7 +34,10 @@ const MATERIAIS = [
   { id: 10, codigo: 'MED-1', nome: 'Medidor serializado', unidade: 'UN', quantidade_atual: 4, controle_serie: 1, controle_lote: 0 },
 ];
 const ok = { lote_status: 'ATIVO', lote_validade: null, lote_esta_impedido: false, lote_vencido_sem_liberacao: false };
-const serie = (id, numero, loteId, lote, situacao) => ({ id, numero, status: 'EM_ESTOQUE', lote_id: loteId, lote_codigo: lote, ...situacao });
+// Etapa 246 (RN-246.01): `lote_saldo_positivo` como o servidor manda — o saldo do lote da série na régua do motor; null sem lote.
+const serie = (id, numero, loteId, lote, situacao, saldoLote = 4) => ({
+  id, numero, status: 'EM_ESTOQUE', lote_id: loteId, lote_codigo: lote, lote_saldo_positivo: lote != null ? saldoLote : null, ...situacao,
+});
 const BLOQUEADO = { lote_status: 'BLOQUEADO', lote_validade: null, lote_esta_impedido: true, lote_vencido_sem_liberacao: false };
 const REPROVADO = { lote_status: 'REPROVADO', lote_validade: null, lote_esta_impedido: true, lote_vencido_sem_liberacao: false };
 const VENCIDO = { lote_status: 'ATIVO', lote_validade: '2026-11-12', lote_esta_impedido: true, lote_vencido_sem_liberacao: true };
@@ -231,4 +234,36 @@ describe('Fase 5 (revisor de testes): mesmo lote, ordem e lote apagado', () => {
     clicar(caixa(101));
     expect(fraseLote().textContent).toBe('As séries marcadas são de lotes diferentes (L1, sem lote): faça uma saída para cada lote.');
   });
+});
+
+describe('Etapa 246 — a frase só quando o lote tem a peça (RN-246.02)', () => {
+  test('[RN-246.02] lote sem a peça no saldo (série regularizada) -> sem frase; o lote que cobre -> a frase', async () => {
+    // X1 diz L1 mas o saldo positivo do L1 é 0 (a peça está no "sem lote"): o servidor grava a saída sem lote (C539)
+    seriesEmEstoque = [serie(101, 'X1', 7, 'L1', ok, 0), serie(201, 'B1', 12, 'L2', ok, 2)];
+    await abrir('SAIDA');
+    clicar(caixa(101));
+    expect(caixa(101).checked).toBe(true);
+    expect(fraseLote()).toBeNull();
+    // metade positiva: trocando para B1 (L2 com 2), a frase aparece
+    clicar(caixa(101));
+    clicar(caixa(201));
+    expect(fraseLote().textContent).toBe('As séries marcadas saem do lote L2.');
+  });
+  test('[RN-246.02] duas séries do L1 com 1 peça no lote -> sem frase; uma só -> a frase', async () => {
+    seriesEmEstoque = [serie(101, 'A1', 7, 'L1', ok, 1), serie(102, 'X1', 7, 'L1', ok, 1)];
+    await abrir('SAIDA', '2');
+    clicar(caixa(101));
+    expect(fraseLote().textContent).toBe('As séries marcadas saem do lote L1.');
+    clicar(caixa(102));
+    expect(caixa(102).checked).toBe(true);
+    expect(fraseLote()).toBeNull();
+  });
+  test('[RN-246.02] a mistura não olha o saldo: a frase de lotes diferentes continua', async () => {
+    seriesEmEstoque = [serie(101, 'A1', 7, 'L1', ok, 0), serie(201, 'B1', 12, 'L2', ok, 0)];
+    await abrir('SAIDA', '2');
+    clicar(caixa(101));
+    clicar(caixa(201));
+    expect(fraseLote().textContent).toBe(MISTURA);
+  });
+
 });

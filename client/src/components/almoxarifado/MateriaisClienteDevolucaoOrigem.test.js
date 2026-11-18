@@ -62,10 +62,10 @@ beforeEach(() => {
       return Promise.resolve({ data: [{ id: 7, codigo: 'L1', saldo: 3, elegivel: true }, { id: 8, codigo: 'L2', saldo: 4, elegivel: true }] });
     }
     if (url === '/almoxarifado/materiais/63/series?status=EM_ESTOQUE') {
-      return Promise.resolve({ data: [{ id: 91, numero: 'S1', lote_id: 7, lote_codigo: 'L1' }, { id: 92, numero: 'S2', lote_id: null, lote_codigo: null }] });
+      return Promise.resolve({ data: [{ id: 91, numero: 'S1', lote_id: 7, lote_codigo: 'L1', lote_saldo_positivo: 1 }, { id: 92, numero: 'S2', lote_id: null, lote_codigo: null, lote_saldo_positivo: null }] });
     }
     if (url === '/almoxarifado/materiais/65/series?status=EM_ESTOQUE') {
-      return Promise.resolve({ data: [{ id: 95, numero: 'S5', lote_id: 7, lote_codigo: 'L1' }] });
+      return Promise.resolve({ data: [{ id: 95, numero: 'S5', lote_id: 7, lote_codigo: 'L1', lote_saldo_positivo: 1 }] });
     }
     if (url === '/almoxarifado/estoque/64/saldos') return Promise.reject(new Error('falhou'));
     const m = url.match(/^\/almoxarifado\/estoque\/(\d+)\/saldos$/);
