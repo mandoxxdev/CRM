@@ -16,7 +16,7 @@ Partes: **Cadastro de material 1h15 · Almoxarifado 23h15 · Dependem de respost
 
 | # | Tarefa | Execução estimada | Régua horas.js | Informado | Etapa/plano | Medido no código (18/11) | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | Explicação do CA; Nº/Validade do CA só para tipo EPI | 1h15 | cadastro no Compras (E216 0,6 h; a lista de tipos hoje traz só nomes — falta trazer `is_epi`) | 1h15 | — | `MaterialAlmoxarifadoForm.js:925-934` (`ca_numero`, `ca_validade`); `useCategoriasMaterial(rotas.api.tiposMaterial)` `:127` devolve só nomes; `tipos_material_almoxarifado.is_epi` (`schema.js:592`). Caminho: legenda + campos só com tipo EPI; valor gravado continua (campo escondido, não apagado) | — | — | — |
+| 1 | Explicação do CA; Nº/Validade do CA só para tipo EPI | 1h15 | cadastro no Compras (E216 0,6 h; a lista de tipos hoje traz só nomes — falta trazer `is_epi`) | 1h15 | Etapa 238 (`2026-11-18-compras-etapa238-ca-so-para-epi.md`) | `MaterialAlmoxarifadoForm.js:925-934` (`ca_numero`, `ca_validade`); `useCategoriasMaterial(rotas.api.tiposMaterial)` `:127` devolve só nomes; `tipos_material_almoxarifado.is_epi` (`schema.js:592`). Caminho: legenda + campos só com tipo EPI; valor gravado continua (campo escondido, não apagado) | 0,7 h (horas.js 18/11, grupo CA) | 45 min | `2827bf94`, `44a3d6ae`, `5f206303` |
 | 2 | Devolução Quarentena/Sucata de peça com série grava o lote | 1h15 | motor (E233/E234 0,7 h + Fase 0 por sonda) | 1h15 | resto da D (233) 3 — plano 236 "Próxima tarefa detalhada" | `returnService.js:326-375` (ENTRADA_DEVOLUCAO, BLOQUEIO, SUCATA sem `lotePelasSeries`); `returnService.js:162` (série nesses destinos é limitação declarada) — a sonda da Fase 0 decide se há buraco; sem buraco, fecha com o teste | — | — | — |
 | 3 | Retalho de peça com série: baixa do original grava o lote | 1h15 | motor | 1h15 | idem | `scrapService.js:342` (SAIDA do original), `:362` | — | — | — |
 | 4 | Devolução ao fornecedor (NC) de peça com série grava o lote | 1h15 | motor | 1h15 | idem | `nonConformityService.js:1664` (DEVOLUCAO_FORNECEDOR, `lote_id` da inspeção quando há); `:1060` é DESBLOQUEIO (não é saída) | — | — | — |
@@ -43,6 +43,9 @@ Partes: **Cadastro de material 1h15 · Almoxarifado 23h15 · Dependem de respost
 | 25 | Nº de série + nº de controle (etiqueta) obrigatórios — **depende de resposta** | 1h30 | cadastro + regra de obrigatório (legado editável) | 1h30 | pedido 12/11, img4 (não salva) | `FerramentasAlmoxarifado.js:296,306,1048` (`codigo_patrimonio` já obrigatório; `numero_serie` opcional) | — | — | — |
 | 26 | Especificações/Observações — **depende de resposta** | 1h | cadastro | 1h | pedido 12/11, img6 | `MaterialAlmoxarifadoForm.js:939-948`; colunas `especificacoes`, `observacoes` ficam | — | — | — |
 | 27 | Material da sobra/remessa: aviso "cadastro a completar" no Compras — **depende de resposta** | 1h30 | cadastro no Compras + marca na criação | 1h30 | B74 (Compras), Etapa 193 | `SobrasAlmoxarifado.js:320`, `RemessasTerceirosAlmoxarifado.js:314` (POST `/almoxarifado/materiais`, formato restrito) | — | — | — |
+
+**Correção (18/11, Etapa 238):** a linha 1 dizia "falta trazer `is_epi`" — **estava errado**: a lista de tipos já trazia `is_epi` (`SELECT *`); só o hook
+`useCategoriasMaterial` o descartava. Nenhuma mudança de servidor.
 
 ## Os que dependem de resposta — caminho reversível se a resposta não vier
 
