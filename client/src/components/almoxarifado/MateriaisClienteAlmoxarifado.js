@@ -200,7 +200,12 @@ const MateriaisClienteAlmoxarifado = () => {
   const fraseReservado = (() => {
     if (!reservasDoMat.length) return null;
     const un = devTarget.unidade;
-    const partes = reservasDoMat.map((r) => `${formatarQuantidade(r.quantidade)} ${un} ${r.os == null ? 'sem OS' : `para a OS ${r.os}`}`);
+    // Fase 5 (achado 2): a reserva de projeto sem OS diz o projeto; sem nenhum dos dois, "sem OS".
+    const destino = (r) => {
+      if (r.os != null) return `para a OS ${r.os}`;
+      return r.projeto != null ? `para o projeto ${r.projeto}` : 'sem OS';
+    };
+    const partes = reservasDoMat.map((r) => `${formatarQuantidade(r.quantidade)} ${un} ${destino(r)}`);
     const lista = partes.length > 1 ? `${partes.slice(0, -1).join(', ')} e ${partes[partes.length - 1]}` : partes[0];
     return `Reservado: ${lista}. Livre para devolver: ${formatarQuantidade(livreMat)} ${un}.`;
   })();

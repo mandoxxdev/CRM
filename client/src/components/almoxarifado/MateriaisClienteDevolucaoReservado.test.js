@@ -36,6 +36,10 @@ const POSICAO = {
     // 5 no material: 2 para a OS 1234, 1 sem OS -> livre 2
     item(51, 'RESERVADO', { saldo_disponivel: 2, livre: 2, reservas: [{ os: '1234', quantidade: 2 }, { os: null, quantidade: 1 }] }),
     item(52, 'LIVRE'),
+    // Fase 5 (achado 2): reserva de projeto, sem OS — 1 para a OS 1234, 2 para o projeto Ponte, 1 sem OS -> livre 1
+    item(59, 'PROJETO', { saldo_disponivel: 1, livre: 1, reservas: [
+      { os: '1234', projeto: null, quantidade: 1 }, { os: null, projeto: 'Ponte', quantidade: 2 }, { os: null, projeto: null, quantidade: 1 },
+    ] }),
     // retido por bloqueio (sem reserva): livre 3
     item(53, 'BLOQUEADO', { saldo_disponivel: 3, livre: 3 }),
     // saldo negativo permitido: livre null — nada avisa, mesmo com reserva
@@ -136,6 +140,11 @@ describe('Etapa 242 — o aviso de material reservado na devolução ao cliente'
   test('[RN-242.03] com reservas: diz para qual OS e o livre (vírgula e " e ")', async () => {
     await abrir('RESERVADO');
     expect(texto('#dev-reservado')).toBe('Reservado: 2 UN para a OS 1234 e 1 UN sem OS. Livre para devolver: 2 UN.');
+  });
+
+  test('[RN-242.03] reserva de projeto sem OS: "para o projeto", não "sem OS" (Fase 5, achado 2)', async () => {
+    await abrir('PROJETO');
+    expect(texto('#dev-reservado')).toBe('Reservado: 1 UN para a OS 1234, 2 UN para o projeto Ponte e 1 UN sem OS. Livre para devolver: 1 UN.');
   });
 
   test('[RN-242.03] uma OS só', async () => {

@@ -137,20 +137,25 @@ async function posicaoPorCliente(db, { cliente_id } = {}) {
   // Etapa 242 (C541, RN-242.01): a janela "Devolver ao cliente" avisa antes de o motor recusar. `livre` e o mesmo numero que a lista de
   // lotes chama de `livre_do_material` (a regua do motor: livreDeCaixaSql, negativo efetivo — os achados da Fase 5 da 241 valem aqui);
   // `reservas` diz PARA QUAL OS esta preso: as ATIVAS somadas pelo numero da OS cadastrada, senao pelo texto digitado, senao null.
+  // Fase 5 (achado 2): a reserva de PROJETO sem OS sai com o nome do projeto (`projeto`), nao somada ao "sem OS"; com OS, a OS vence.
+  const osDaReserva = "COALESCE(os.numero_os, NULLIF(TRIM(rs.os_referencia), ''))";
+  const projetoDaReserva = `CASE WHEN ${osDaReserva} IS NULL THEN pj.nome END`;
   const reservas = itens.length ? await dbAll(db, `
-    SELECT rs.material_id, COALESCE(os.numero_os, NULLIF(TRIM(rs.os_referencia), '')) AS os,
+    SELECT rs.material_id, ${osDaReserva} AS os, ${projetoDaReserva} AS projeto,
            ROUND(SUM(rs.quantidade - COALESCE(rs.quantidade_utilizada, 0)), 6) AS quantidade
       FROM reservas_material_almoxarifado rs
       JOIN materiais_almoxarifado m ON m.id = rs.material_id
       LEFT JOIN ordens_servico os ON os.id = rs.os_id
+      LEFT JOIN projetos pj ON pj.id = rs.projeto_id
      WHERE m.proprietario_cliente_id = ? AND m.ativo = 1 AND rs.status = 'ATIVA'
-     GROUP BY rs.material_id, COALESCE(os.numero_os, NULLIF(TRIM(rs.os_referencia), ''))
+     GROUP BY rs.material_id, ${osDaReserva}, ${projetoDaReserva}
     HAVING SUM(rs.quantidade - COALESCE(rs.quantidade_utilizada, 0)) > 1e-6
-     ORDER BY (COALESCE(os.numero_os, NULLIF(TRIM(rs.os_referencia), '')) IS NULL), os`, [cliente_id]) : [];
+     ORDER BY (${osDaReserva} IS NULL), os, (${projetoDaReserva} IS NULL), projeto`, [cliente_id]) : [];
   for (const i of itens) {
     i.livre = (await lotService.livreDoMaterialParaSaida(db, i.material_id)).livreDoMaterial;
-    i.reservas = reservas.filter((r) => r.material_id === i.material_id)
-      .map((r) => ({ os: r.os == null ? null : String(r.os), quantidade: Number(r.quantidade) }));
+    i.reservas = reservas.filter((r) => r.material_id === i.material_id).map((r) => ({
+      os: r.os == null ? null : String(r.os), projeto: r.projeto == null ? null : String(r.projeto), quantidade: Number(r.quantidade),
+    }));
   }
   return { cliente, itens, aplicacoes };
 }

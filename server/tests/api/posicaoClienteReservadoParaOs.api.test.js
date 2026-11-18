@@ -82,8 +82,26 @@ process.on('exit', (code) => {
     const i = await itemDa(m);
     assert.strictEqual(i.livre, 3);
     assert.deepStrictEqual(i.reservas, [
-      { os: 'OS-242-CAD', quantidade: 3 }, { os: 'OS-DIGITADA', quantidade: 3 }, { os: null, quantidade: 1 },
-    ].sort((a, b) => (a.os == null) - (b.os == null) || String(a.os).localeCompare(String(b.os))));
+      { os: 'OS-242-CAD', projeto: null, quantidade: 3 }, { os: 'OS-DIGITADA', projeto: null, quantidade: 3 },
+      { os: null, projeto: null, quantidade: 1 },
+    ]);
+  });
+
+  await test('[RN-242.01] reserva de projeto (sem OS): sai com o nome do projeto, nao somada ao "sem OS" (Fase 5, achado 2)', async () => {
+    const m = await material();
+    await entrar(m, 10);
+    const prj = (await dbRun(db, "INSERT INTO projetos (cliente_id, nome, status) VALUES (?, 'Projeto 242', 'ativo')", [cli])).lastID;
+    await reservar(m, 2, null);
+    await dbRun(db, 'UPDATE reservas_material_almoxarifado SET projeto_id = ? WHERE id = ?', [prj, (await ultimaReserva(m)).id]);
+    await reservar(m, 1, null);
+    await reservar(m, 4, 'OS-COM-PROJETO');
+    await dbRun(db, 'UPDATE reservas_material_almoxarifado SET projeto_id = ? WHERE id = ?', [prj, (await ultimaReserva(m)).id]);
+    const i = await itemDa(m);
+    assert.deepStrictEqual(i.reservas, [
+      { os: 'OS-COM-PROJETO', projeto: null, quantidade: 4 },
+      { os: null, projeto: 'Projeto 242', quantidade: 2 },
+      { os: null, projeto: null, quantidade: 1 },
+    ]);
   });
 
   await test('[RN-242.01] so as ATIVAS e so o resto (quantidade - utilizada)', async () => {
@@ -96,7 +114,7 @@ process.on('exit', (code) => {
     await reservar(m, 2, 'OS-GASTA');
     await dbRun(db, 'UPDATE reservas_material_almoxarifado SET quantidade_utilizada = 2 WHERE id = ?', [(await ultimaReserva(m)).id]);
     const i = await itemDa(m);
-    assert.deepStrictEqual(i.reservas, [{ os: 'OS-RESTO', quantidade: 3 }]);
+    assert.deepStrictEqual(i.reservas, [{ os: 'OS-RESTO', projeto: null, quantidade: 3 }]);
   });
 
   await test('[RN-242.01] o livre e o mesmo livre_do_material da lista de lotes (inclusive com caixa separada sem reserva)', async () => {
@@ -126,7 +144,7 @@ process.on('exit', (code) => {
     await reservar(m, 3, 'OS-NEG');
     const i = await itemDa(m);
     assert.strictEqual(i.livre, null);
-    assert.deepStrictEqual(i.reservas, [{ os: 'OS-NEG', quantidade: 3 }]);
+    assert.deepStrictEqual(i.reservas, [{ os: 'OS-NEG', projeto: null, quantidade: 3 }]);
     const g = await material();
     await entrar(g, 3);
     await reservar(g, 3, 'OS-GLOBAL');
