@@ -989,7 +989,11 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
         // `lotePelasSeries` (Etapa 235, B1535 — a mesma regua da v2, Etapas 233/234): com o lote em branco, a serie de lote
         // bloqueado, reprovado ou vencido nao sai; series de um lote so gravam esse lote (livro e linha baixada); lotes
         // diferentes sao recusados. Antes (sonda da Fase 0) a serie de lote BLOQUEADO saia com 201 e a devolucao gravava "sem lote".
-        }, { exigeLote: true, exigeSerie: true, lotePelasSeries: true });
+        // `origemEstrita` (Etapa 240, RN-240.02, D (236) 1): a janela passou a escolher de onde sai ("Sai de"). Sem a opcao a origem so era
+        // PREFERIDA: a que nao cobria deixava o motor drenar os outros enderecos (inclusive a padrao bloqueada) e o livro gravar "saiu de A"
+        // para o que saiu de B — o crítico 1 da Etapa 58 na entrega. Com a opcao: o saldo da origem (no lote da saida) tem de cobrir, senao
+        // 400 "O saldo em A (2) nao cobre a quantidade (3) — a saida tiraria de outros enderecos". Sem origem a opcao nao faz nada (automatico).
+        }, { exigeLote: true, exigeSerie: true, lotePelasSeries: true, origemEstrita: true });
         res.status(201).json(resultado);
       } catch (e) { handleError(res, e); }
     });

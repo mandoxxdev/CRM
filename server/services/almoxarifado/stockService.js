@@ -4146,7 +4146,7 @@ async function consultarSaldosPorLocalizacao(db, materialId) {
   // Os nomes crus seguem os de `requisitionService` (`lote_validade`, Fase 2 M5).
   const hoje = diaLocal.hojeLocalISO();
   const comLote = 'lt.id IS NOT NULL';
-  const rows = await dbAll(db, `SELECT s.*, l.codigo as localizacao_codigo, l.descricao as localizacao_descricao, l.tipo as localizacao_tipo,
+  const rows = await dbAll(db, `SELECT s.*, l.codigo as localizacao_codigo, l.descricao as localizacao_descricao, l.tipo as localizacao_tipo, l.bloqueada as localizacao_bloqueada,
            a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome,
            lt.codigo as lote,
            lt.status as lote_status, lt.data_validade as lote_validade, lt.vencimento_liberado_em as lote_vencimento_liberado_em,
@@ -4160,6 +4160,9 @@ async function consultarSaldosPorLocalizacao(db, materialId) {
   for (const r of rows) {
     r.lote_esta_impedido = r.lote_esta_impedido === 1;
     r.lote_vencido_sem_liberacao = r.lote_vencido_sem_liberacao === 1;
+    // Etapa 240 (RN-240.05): o endereco bloqueado (a saida com origem nele e recusada, "Localizacao X esta bloqueada") — booleano; a linha
+    // sem endereco e false. So leitura: quem sai confere sob a trava.
+    r.localizacao_bloqueada = Number(r.localizacao_bloqueada) === 1;
   }
   return rows;
 }
