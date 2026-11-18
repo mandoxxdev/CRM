@@ -1,0 +1,120 @@
+*Planejamento — cadastro de material e almoxarifado*
+_18/11/2026_
+
+*Cadastro de material*
+
+*1. Explicação do CA no cadastro do material*
+O campo Validade do CA ganha uma explicação na tela: CA é o Certificado de Aprovação do equipamento de proteção (EPI), com número e data de validade. O número e a validade do CA passam a aparecer só quando o Tipo de Material escolhido é de EPI; para os outros materiais, deixam de ocupar espaço. O que já estava preenchido continua guardado.
+Tempo estimado: *1h15*
+
+*Almoxarifado*
+
+*2. Devolução para Quarentena ou Sucata de peça com número de série*
+A devolução de peça com número de série para Quarentena ou para Sucata passa a registrar de qual lote a peça é, como já acontece na saída avulsa e na devolução ao cliente. O desfazer da devolução volta a peça para o mesmo lote.
+Tempo estimado: *1h15*
+
+*3. Retalho de peça com número de série*
+Ao gerar retalho ou sobra a partir de uma peça com número de série, a baixa da peça original registra o lote dela, e a peça de um lote bloqueado não é usada sem aviso.
+Tempo estimado: *1h15*
+
+*4. Devolução ao fornecedor de peça com número de série*
+A devolução ao fornecedor decidida na não conformidade passa a registrar o lote das peças com número de série que saem, para o saldo de cada lote continuar certo.
+Tempo estimado: *1h15*
+
+*5. Saída de lote que está em outra prateleira*
+Quando a saída indica o lote, a conferência de prateleira bloqueada passa a olhar a prateleira onde o lote está guardado, e não a prateleira padrão do material. Hoje a devolução ao cliente é recusada só porque a prateleira padrão está bloqueada, mesmo com o lote guardado em outro lugar.
+Tempo estimado: *1h30*
+
+*6. Escolher de onde sai a devolução ao cliente*
+A janela Devolver ao cliente ganha o campo de onde a peça sai (prateleira), como já existe em Movimentações. Sem escolha, o sistema continua escolhendo sozinho.
+Tempo estimado: *1h*
+
+*7. Saldo livre na lista de lotes*
+Na lista de lotes da devolução ao cliente e de Movimentações, cada lote passa a mostrar também quanto dele está reservado e quanto está livre para sair, para o usuário não escolher um lote que vai ser recusado ao confirmar.
+Tempo estimado: *1h*
+
+*8. Aviso de material de cliente reservado para uma OS*
+Ao abrir a devolução ao cliente de um material reservado para uma OS, a janela avisa qual OS segura o material e que a reserva precisa ser liberada antes, em vez de recusar só ao confirmar.
+Tempo estimado: *45 min*
+
+*9. Frase do lote das séries na saída avulsa*
+Em Movimentações, a frase que diz de qual lote saem as séries marcadas passa a aparecer só quando o lote tem a peça no saldo. Hoje ela pode citar um lote de onde a peça não vai sair.
+Tempo estimado: *45 min*
+
+*10. Lista de séries atualizada depois de uma recusa*
+Em Movimentações, quando uma saída com séries é recusada porque o lote foi bloqueado, a lista de séries se atualiza sozinha e a série bloqueada aparece apagada, como já acontece na entrega.
+Tempo estimado: *45 min*
+
+*11. Liberar lote que veio de mais de uma nota*
+Quando um lote com peças de duas notas é liberado, a reserva feita para quem esperava passa a guardar de qual nota veio cada parte. Assim o estorno de uma das notas deixa de ser recusado e não é preciso liberar a reserva à mão antes.
+Tempo estimado: *1h15*
+
+*12. Estorno de nota no mesmo instante da liberação do lote*
+O estorno da nota passa a esperar a liberação ou o bloqueio do lote que está acontecendo ao mesmo tempo no mesmo material. Deixa de ser recusado uma vez sem motivo e de soltar reserva a mais ou a menos.
+Tempo estimado: *1h30*
+
+*13. Busca de entrega na tela Devoluções*
+A tela Devoluções ganha um campo de busca por número da requisição, OS ou data, para achar uma entrega antiga sem clicar várias vezes em Carregar entregas mais antigas.
+Tempo estimado: *1h15*
+
+*14. Bloquear material indicando o lote*
+Em Inspeções, Bloquear Material passa a aceitar a indicação do lote, em material com controle por lote. Hoje todo bloqueio avulso fica como Sem lote, e para liberar é preciso escolher Sem lote.
+Tempo estimado: *1h30*
+
+*15. Mensagem própria na liberação pela não conformidade*
+Quando a liberação pela não conformidade não acha a peça bloqueada sem lote, a mensagem passa a explicar o motivo com as palavras da não conformidade, e não com a frase da tela de Inspeções.
+Tempo estimado: *30 min*
+
+*16. Entrega diz quantas peças do lote estão bloqueadas*
+A janela de entrega passa a dizer quantas peças de cada lote estão bloqueadas e por isso não saem, em vez de passar ao lote seguinte sem explicar.
+Tempo estimado: *45 min*
+
+*17. Sugestão da fila de separação*
+A dica de onde pegar a peça na Fila de separação passa a considerar as peças presas no lote (quarentena, reprovação ou remessa a terceiro), e deixa de sugerir um lote que não cobre a quantidade.
+Tempo estimado: *45 min*
+
+*18. Ajuste de saldo com lote*
+O ajuste de saldo que indica o lote passa a baixar no máximo o que o lote tem. Hoje ele pode deixar o lote com saldo negativo no relatório Saldo por lote, embora o total do material fique certo.
+Tempo estimado: *1h15*
+
+*19. Mensagem quando dois itens disputam a mesma prateleira*
+Na entrega, quando dois itens da mesma requisição tiram da mesma prateleira e o saldo não cobre os dois, a mensagem passa a dizer que o resto da prateleira está separado para o outro item.
+Tempo estimado: *30 min*
+
+*20. Quanto cada item pode entregar quando dividem o mesmo lote*
+No detalhe da requisição e na Fila, dois itens do mesmo material que disputam o mesmo lote passam a mostrar o quanto cada um pode entregar dividido entre eles, como a separação já faz, em vez de cada um mostrar o máximo.
+Tempo estimado: *1h*
+
+*21. Quanto pode ser entregue quando o lote da separação ficou bloqueado*
+No detalhe da requisição e na Fila, o que pode ser entregue num clique deixa de contar a parte separada de um lote que depois ficou bloqueado ou ganhou peça presa. O número mostrado passa a ser o que a entrega aceita.
+Tempo estimado: *1h15*
+
+*22. Endereço na troca para o automático*
+Quando a entrega troca a origem da separação por Qualquer endereço (automático), o bloco Substituições do detalhe passa a dizer de qual prateleira a peça saiu, quando saiu de uma só.
+Tempo estimado: *45 min*
+
+*23. Peça com número de série respeita a separação do outro item*
+Na entrega de item com número de série em material sem lote, a baixa deixa de levar o saldo que outro item da mesma requisição separou da mesma prateleira.
+Tempo estimado: *1h30*
+
+*Dependem de resposta*
+
+*24. Tirar o campo Aplicação*
+O campo Aplicação sai do cadastro do material. O que já estava preenchido continua guardado. Depende da confirmação de que o campo não será usado.
+Tempo estimado: *30 min*
+
+*25. Número de série e número de controle (etiqueta) obrigatórios*
+No cadastro de ferramentas e equipamentos, o número de série passa a ser obrigatório e o código de patrimônio passa a se chamar número de controle (etiqueta), também obrigatório. Depende de confirmar em qual tela isso foi pedido.
+Tempo estimado: *1h30*
+
+*26. Especificações Técnicas e Observações Gerais*
+Os campos Especificações Técnicas e Observações Gerais saem do cadastro, e a descrição técnica fica na parte de Identificação. Os materiais que já têm texto nesses campos continuam mostrando o que estava, para nada se perder. Depende de confirmar como os campos devem ser juntados.
+Tempo estimado: *1h*
+
+*27. Material criado pela sobra e pela remessa a terceiros*
+O material novo criado no registro de uma sobra ou de uma remessa a terceiros passa a aparecer no Compras com o aviso de cadastro a completar, para o Compras revisar e completar os dados. Depende de confirmar se o Almoxarifado deve continuar criando esse material.
+Tempo estimado: *1h30*
+
+*Total estimado: 29h*
+_Cadastro de material: 1h15 · Almoxarifado: 23h15 · Dependem de resposta: 4h30_
+_O tempo de cada item inclui análise, planejamento, desenvolvimento, testes e atualização dos manuais._

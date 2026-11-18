@@ -44,9 +44,12 @@ dono, dentro de uma etapa) e escrever a tela de Compras como feature do almoxari
 (mentira estrutural — o erro que o `CLAUDE.md` nomeia como o mais caro). **Reversível:** quando
 Compras ganhar spec própria, a fatia migra para cá e este arquivo vira o índice dela.
 
-## A fazer — pedidos já estimados, esperando a vez (atualizado em 12/11/2026)
+## A fazer — pedidos já estimados, esperando a vez (atualizado em 18/11/2026)
 
-> **12/11/2026: o cliente quer a parte de fornecedores primeiro** — ordem agora: 4 → 5 → 6, depois 1 (retomar o branch), 2, 3, 7.
+> **18/11/2026: nova estimativa** — `docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md` (régua nova do
+> `horas.js`, sem a parte fixa de análise + teste). Ordem: 8, depois o almoxarifado da mesma estimativa; 7, 9, 10 e 11 entram quando a
+> resposta chegar (ou, sem ela, pelo caminho reversível escrito no `.md`).
+> Até 12/11/2026 o cliente quis a parte de fornecedores primeiro (4 → 5 → 6, depois 1, 2, 3) — feito.
 > Ordem de execução combinada com o André: um item por vez, na ordem acima. Ao fechar um item, marque aqui (hash e data) e
 > comece o próximo. Pedidos e imagens: `specs/modulo-almoxarifado/01-cadastros-materiais/pedido-2026-11-12/`. Toda linha segue a
 > regra "cadastro é do Compras; o Almoxarifado só movimenta" (`CLAUDE.md`).
@@ -59,15 +62,14 @@ Compras ganhar spec própria, a fatia migra para cá e este arquivo vira o índi
 | 4 | Vários fornecedores por material, cada um com código e descrição comercial | idem, 2 | 3h30 | **feito — Etapa 212** (`f59c0551`, `db55113a`, `e74bcb05`): vínculo = `itens_fornecedor.material_id` (B83–B85) |
 | 5 | Código do fornecedor na cotação e no pedido de compra (tela e impresso) | idem, 3 | 3h | **feito — Etapa 213** (`86ab0eb4`, `7a8e6f5b`): `codigo_fornecedor` gravado na linha ao salvar (foto, B86); tela e impresso |
 | 6 | Histórico de preços por fornecedor no material | idem, 4 | 2h30 | **feito — Etapa 214** (`8ec674b0`, `bd9209c4`): leitura das cotações e pedidos do material (B87) |
-| 7 | Tirar o campo Aplicação | idem, 5 | 45 min | **esperando** o Matheus confirmar |
+| 7 | Tirar o campo Aplicação | `estimativa_2026-11-18_cadastro-e-almoxarifado-semana`, 24 (era o 5 da de 12/11, 45 min na régua antiga) | 30 min | **esperando** o Matheus confirmar |
+| 8 | Explicação do CA; Nº e Validade do CA só para tipo de material EPI (a pergunta da img6) | idem, 1 | 1h15 | **próximo** |
+| 9 | Nº de série + nº de controle (etiqueta) obrigatórios — sem resposta, pela tela de Ferramentas | idem, 25 | 1h30 | **esperando** a compradora dizer a tela (img4 não foi salva) |
+| 10 | Especificações Técnicas e Observações Gerais saem; Identificação fica com Descrição e Descrição Técnica (texto antigo continua visível) | idem, 26 | 1h | **esperando** a compradora (pedido ambíguo) |
+| 11 | Material criado pela sobra e pela remessa a terceiros aparece no Compras como "cadastro a completar" | idem, 27 | 1h30 | **esperando** a compradora (contraria a regra; B74) |
 
-**Esperando resposta da compradora (sem estimativa):**
-- Número de série do equipamento + número de controle (etiqueta) obrigatórios — a imagem 4 não foi salva; não se sabe de qual tela.
-- Juntar Especificações Técnicas e Observações Gerais "no campo Identificação" — pedido ambíguo.
-- Sobra e remessa a terceiros ainda criam material pelo Almoxarifado (contraria a regra) — rever com ela.
-
-**Em pausa no Almoxarifado:** Etapa 209 (o bloqueio sabe o lote), parada na T6 —
-`docs/superpowers/plans/2026-11-07-almoxarifado-etapa209-bloqueio-sabe-o-lote.md`.
+**Almoxarifado:** a Etapa 209 (o bloqueio sabe o lote) **foi concluída em 13/11/2026** (`e10f8c04`, Fase 5 `fa50fae9`) — esta linha dizia
+"em pausa, parada na T6" e **estava errada** desde então (corrigida em 18/11/2026). A fila do almoxarifado está na estimativa de 18/11 acima.
 
 ## Unificação de 2026-10-07 — a linha `main` (Etapas 32–38) e o que ficou de cada lado
 
