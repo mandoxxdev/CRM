@@ -11,11 +11,16 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-18):** **Etapa 241 fechada** (**o seletor de lote mostra o livre** — na janela **Devolver ao
+> **Onde o desenvolvimento está (2026-11-18):** **Etapa 242 fechada** (**o aviso de material reservado para uma OS** — a janela **Devolver
+> ao cliente** diz para qual OS o material está reservado e quanto está livre (*"Reservado: 3 UN para a OS 1234. Livre para devolver: 2
+> UN."*), o rótulo da quantidade mostra o livre e, acima dele, a janela avisa e apaga o **Confirmar** — antes a recusa vinha ao confirmar (a
+> **C541**). Decisões **B1549** e **B1550**; limitação **D (242)**; verificação **F (242)**; sem consulta antes do deploy).
+> **Próxima:** **a devolução para Quarentena ou Sucata de peça com número de série registra o lote** (item 2 da estimativa de 18/11, resto da
+> **D (233)** 3) — detalhada no fim do plano da 242.
+> *(Antes, 2026-11-18:)* **Etapa 241 fechada** (**o seletor de lote mostra o livre** — na janela **Devolver ao
 > cliente** e em **Movimentações** (Saída e Perda), o lote diz quanto está livre quando o livre é menor que o saldo (*"L1 — saldo 3 — livre
 > 0"*); na devolução, acima do livre, a janela avisa e apaga o **Confirmar** — antes a recusa vinha ao confirmar (a **C542**). Decisões
 > **B1547** e **B1548**; limitação **D (241)**; verificação **F (241)**; sem consulta antes do deploy).
-> **Próxima:** **o aviso de material de cliente reservado para uma OS** (item 8 da estimativa de 18/11, a **C541**) — detalhada no fim do plano da 241.
 > *(Antes, 2026-11-18:)* **Etapa 240 fechada** (**a devolução ao cliente escolhe de onde sai** — a janela **Devolver ao
 > cliente** ganha o campo **Sai de** (automático, ou uma prateleira com saldo do lote da devolução; a bloqueada apagada); escolhida, a
 > devolução sai só dela (se não cobre, a janela avisa e o sistema recusa). Com a padrão bloqueada, o material sem lote passa a ser devolvível
@@ -4770,7 +4775,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15299,6 +15304,25 @@ ao saldo — poluiria o rótulo de quem não tem reserva; (c) só avisar, sem ap
 não há livre a conferir) e os de **Sobras e Retalhos** (gerar retalho e solicitar sucateamento — o retalho baixa o original, então o livre
 valeria; ninguém pediu e o rótulo de lá é outro, **D (241)** 2). **Reversível.**
 
+**B1549 (NOVA, da Etapa 242; decisão do agente) — o aviso diz PARA QUAL OS o material está reservado.** A janela **Devolver ao cliente**
+mostra *"Reservado: 2 UN para a OS 1234 e 1 UN sem OS. Livre para devolver: 2 UN."* — as reservas ativas do material somadas por OS (o
+número da OS cadastrada; sem ela, a OS digitada na reserva; sem OS, o projeto da reserva — *"2 UN para o projeto Ponte"*; sem nenhum,
+*"sem OS"*; o projeto veio da revisão adversarial, que reproduziu a reserva de projeto somada ao "sem OS"). Para isso a posição do cliente ganhou dois campos de
+leitura: o **livre** (o mesmo número que o seletor de lote chama de livre do material, na conta do sistema) e as **reservas por OS**.
+Descartados: (a) só comparar o disponível com o saldo, sem campo novo — o aviso não diria de quem é a reserva (o almoxarife teria de abrir
+**Reservas**) e o disponível da posição não desconta o que foi separado para requisição sem reserva nem olha o saldo negativo ligado para
+todos os materiais (daria aviso errado); (b) listar cada reserva (com data e quem fez) — a janela é pequena; **Reservas** já mostra o
+detalhe. **Reversível** (campos de leitura novos; a janela volta a ler só o saldo).
+
+**B1550 (NOVA, da Etapa 242; decisão do agente) — quando o aviso aparece e quando apaga o Confirmar.** Escolhido: o rótulo da quantidade
+mostra o livre só quando ele é menor que o saldo (*"Quantidade (saldo: 5 UN — livre 2 UN)"*); a frase da reserva aparece sempre que há
+reserva ativa; com a quantidade acima do livre, a janela avisa em vermelho e apaga o **Confirmar** (a recusa do sistema é certa, como no
+"Sai de" e no livre do lote — B1545, B1547). O aviso diz *"ou libere a reserva em Reservas"* só quando há reserva (sem reserva, o que prende
+é bloqueio, inspeção, terceiro ou separação). Com o aviso do lote (Etapa 241) na tela, o do material não repete. Material que aceita saldo
+negativo (no cadastro ou para todos): sem rótulo, sem frase e sem aviso, porque o sistema não limita pela reserva — salvo com material
+separado sem reserva, em que o rótulo e o aviso dizem o livre (físico menos separado) e a frase da reserva não aparece. Descartado: só
+avisar, sem apagar o botão. **Reversível.**
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -19555,6 +19579,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 541. **NOVO (da Etapa 235) — material de cliente que entrou com OS fica reservado para ela, e a devolução dele é recusada pelo disponível.**
      A janela lista as séries mesmo assim; **Confirmar devolução** responde *"Saldo insuficiente. Disponível: 0 UN"*. Já era assim antes desta
      etapa (a reserva é por quantidade, não por série). **O que fazer:** liberar a reserva da OS em **Reservas** antes de devolver.
+     **Desde a Etapa 242 (B1549, B1550):** a janela avisa antes — *"Reservado: 3 UN para a OS 1234. Livre para devolver: 0 UN."*, o rótulo
+     *"Quantidade (saldo: 3 UN — livre 0 UN)"* e, acima do livre, *"Estão livres só 0 UN deste material: devolva até 0 ou libere a reserva
+     em Reservas."* com o **Confirmar devolução** apagado. A recusa do sistema continua a mesma. **O que fazer:** o mesmo — liberar a reserva.
 542. **NOVO (da Etapa 236) — o saldo que o seletor de lote da devolução ao cliente mostra é o que está no lote, não o livre.** A reserva
      (a da OS, **C541**) não desconta: *"L1 — saldo 3"* com 3 reservados; **Confirmar devolução** responde *"Saldo insuficiente. Disponível: 0
      UN"*. Acima do que está no lote, a recusa é *"Saldo insuficiente no lote L1. Disponível: 3 UN"*. É o mesmo saldo do seletor de
@@ -20943,6 +20970,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(242) O aviso de material reservado, o que ficou de fora.** (1) A janela não libera a reserva: o aviso manda para **Reservas** (liberar é
+  outro gesto, com permissão própria). (2) O aviso é o da hora em que a tela carregou: reserva feita com a janela aberta aparece na recusa ao
+  confirmar. (3) Só a janela **Devolver ao cliente** mostra as reservas por OS; a tabela da posição e o PDF continuam como antes. (4) A OS é
+  dita como está gravada na reserva (o número da OS cadastrada, senão o texto digitado), sem conferir se a OS ainda está aberta. (5) Reserva
+  de uma OS que foi **excluída** (só se exclui OS sem pedido de compra) aparece como *"sem OS"*: o número some com a OS (revisão adversarial).
 - **(241) O livre no seletor de lote, o que ficou de fora.** (1) O livre não é "do lote" — a reserva não tem lote (**C526**): cada lote
   mostra o máximo que sai dele, e com dois lotes de livre 2 saem 2 no total, não 4. (2) Os seletores de **Devoluções** e de **Sobras e
   Retalhos** continuam com o saldo de antes (**B1548**). (3) O **Sai de** continua mostrando o que está na prateleira, não o livre (a
@@ -22474,6 +22506,13 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(242) Nenhum clique foi dado.** A posição do cliente ganhou `livre` e `reservas`, provados pelas rotas reais em
+`posicaoClienteReservadoParaOs` (8: sem reserva, reservas por OS cadastrada/digitada/sem OS, reserva de projeto, só ativas e só o resto, o livre igual ao do
+seletor de lote com material separado, legado com reservado acima do físico, saldo negativo no material e na configuração global, e a
+integração posição × devolução). A janela, pelo Jest (`MateriaisClienteDevolucaoReservado`, 12). Controles positivos: 7 sabotagens no
+servidor e 10 na tela, cada uma vermelha no cenário certo. Suítes: test:api 635/635 arquivos, almoxarifado 44, validation 4, safealter 3,
+sqlite 16, Jest 236 suítes e 3174 testes, build ok. Roteiro na seção da 242 (3 cenários, ~5 minutos).
 
 **(241) Nenhum clique foi dado.** A lista de lotes ganhou `livre` e `livre_do_material`, provados pelas rotas reais em `loteLivreNoSeletor`
 (12: reserva, tudo reservado, legado com reservado acima do físico, lote acima do material, saldo negativo no material e na configuração
@@ -42876,12 +42915,60 @@ livre do lote → 201; o livre + 1 → *"Saldo insuficiente. Disponível: 2 UN"*
 - O **Sai de** (Etapa 240) continua mostrando o que está em cada prateleira, não o livre (**D (240)** 3, **D (241)** 3).
 - A lista é a da hora em que a janela abriu: reserva feita com a janela aberta aparece na recusa ao confirmar.
 
+## Etapa 242 — O aviso de material reservado para uma OS (2026-11-18)
+
+O material de cliente que entra com uma OS fica reservado para ela. Na janela **Devolver ao cliente** de um material sem lote, nada dizia
+isso: o rótulo era *"Quantidade (saldo: 5 UN)"*, o usuário digitava 5 e só ao confirmar vinha *"Saldo insuficiente. Disponível: 0 UN"* (a
+**C541**). Agora a janela diz **para qual OS** o material está reservado e quanto está livre, o rótulo da quantidade mostra o livre e, com a
+quantidade acima dele, avisa e apaga o **Confirmar** antes. Decisões do agente: **B1549** e **B1550**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| *"Quantidade (saldo: 5 UN)"* com 3 reservados | *"Quantidade (saldo: 5 UN — livre 2 UN)"* |
+| Nada dizia de quem é a reserva | Embaixo da quantidade: *"Reservado: 3 UN para a OS 1234. Livre para devolver: 2 UN."* |
+| Quantidade acima do livre: a recusa vinha ao confirmar | *"Estão livres só 2 UN deste material: devolva até 2 ou libere a reserva em Reservas."* e o **Confirmar devolução** apagado |
+| Sem reserva e sem retenção; material que aceita saldo negativo | **Igual** |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**. Um material de cliente *CLI-242* **sem** controle por lote nem série. Em
+**Movimentações**, **Entrada** de 5. Em **Reservas**, **Nova reserva** de 2 do *CLI-242* com a OS de referência *1234*, e outra de 1 sem OS.
+
+**1. A frase e o rótulo (RN-242.02, .03).** **Materiais de Clientes**, escolha o cliente, na linha de *CLI-242* clique **Devolver**.
+**Confira:** *"Quantidade (saldo: 5 UN — livre 2 UN)"* e, embaixo, *"Reservado: 2 UN para a OS 1234 e 1 UN sem OS. Livre para devolver: 2
+UN."*
+
+**2. Acima do livre, o aviso (RN-242.04).** Quantidade 3, documento *DEV-242*. **Confira:** *"Estão livres só 2 UN deste material: devolva
+até 2 ou libere a reserva em Reservas."* e o **Confirmar devolução** apagado. Quantidade 2 → o aviso some; **Confirmar** → *"Devolução ao
+cliente registrada!"*.
+
+**3. Sem reserva (RN-242.04).** Em **Reservas**, cancele as duas reservas; **Atualizar** na tela e abra de novo. **Confira:** o rótulo
+*"Quantidade (saldo: 3 UN)"*, sem frase e sem aviso.
+
+**O servidor (RN-242.01, .05).** `GET /api/almoxarifado/materiais-cliente/posicao?cliente_id=` traz, em cada item, `livre` e `reservas`
+(`[{ os, projeto, quantidade }]`). Devolver o livre → 201; o livre + 1 → *"Saldo insuficiente. Disponível: 2 UN"* (com o livre 2).
+
+### O que esta etapa NÃO cobre
+
+- A janela não libera a reserva: o aviso manda para **Reservas** (**D (242)** 1).
+- O aviso é o da hora em que a tela carregou (**D (242)** 2).
+- A tabela da posição e o PDF continuam como antes (**D (242)** 3).
+- A OS dita é a gravada na reserva, sem conferir se ainda está aberta; a de uma OS excluída aparece como *"sem OS"* (**D (242)** 4 e 5).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 242 entregue (2026-11-18):** **o aviso de material reservado para uma OS** (a **C541**). A posição do cliente diz o livre e as
+  reservas por OS (**B1549**); a janela **Devolver ao cliente** mostra a frase, o livre no rótulo e, acima dele, avisa e apaga o
+  **Confirmar** (**B1550**). Commits `d4edb6bc` (posição e teste), `423613d7` (janela e teste), `3f42ece3` (Fase 5: a reserva de projeto), `8e84fea8` (a fixture da posição usada pelos testes da tela) e o fechamento. **O que é seu:** as **B1549** e **B1550** (reversíveis); a **C541** atualizada; a
+  limitação **(242)** em D e a verificação **(242)** em F. Sem consulta antes do deploy. **Próxima:** **a devolução para Quarentena ou
+  Sucata de peça com número de série registra o lote** (item 2 da estimativa de 18/11) — detalhada no fim do plano da 242.
 
 - **Etapa 241 entregue (2026-11-18):** **o seletor de lote mostra o livre** (a **C542**). A lista de lotes diz o livre de cada lote (o
   saldo do lote limitado ao livre do material, na conta do sistema — **B1547**); a janela **Devolver ao cliente** mostra, explica e avisa

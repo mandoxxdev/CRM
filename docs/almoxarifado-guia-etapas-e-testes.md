@@ -12,12 +12,16 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 241 fechada — 2026-11-18.** **O seletor de lote mostra o livre.** Na janela **Devolver ao
+> **O desenvolvimento parou aqui: Etapa 242 fechada — 2026-11-18.** **O aviso de material reservado para uma OS.** Na janela **Devolver
+> ao cliente**, a frase *"Reservado: 3 UN para a OS 1234. Livre para devolver: 2 UN."*, o livre no rótulo da quantidade e, acima dele, o
+> aviso com o **Confirmar** apagado. **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção da 242). **Onde parou,
+> exatamente:** a **242 está fechada**; a **próxima** é o item 2 da estimativa de 18/11 — **a devolução para Quarentena ou Sucata de peça
+> com número de série registra o lote** (resto da D (233) 3) —, detalhada no fim do plano
+> (`docs/superpowers/plans/2026-11-18-almoxarifado-etapa242-aviso-reservado-para-os.md`).
+>
+> *(Antes:)* **Etapa 241 fechada — 2026-11-18.** **O seletor de lote mostra o livre.** Na janela **Devolver ao
 > cliente** e em **Movimentações** (Saída e Perda), o lote diz quanto está livre quando parte do material está reservada (*"L1 — saldo 3 —
-> livre 0"*); na devolução, acima do livre, a janela avisa e apaga o **Confirmar**. **Sem consulta antes do deploy.** **Nenhum clique foi
-> dado** (roteiro na seção da 241). **Onde parou, exatamente:** a **241 está fechada**; a **próxima** é o item 8 da estimativa de 18/11 —
-> **o aviso de material de cliente reservado para uma OS** (C541) —, detalhada no fim do plano
-> (`docs/superpowers/plans/2026-11-18-almoxarifado-etapa241-livre-no-seletor-de-lote.md`).
+> livre 0"*); na devolução, acima do livre, a janela avisa e apaga o **Confirmar**.
 >
 > *(Antes:)* **Etapa 240 fechada — 2026-11-18.** **A devolução ao cliente escolhe de onde sai.** Em **Materiais de
 > Clientes → Devolver**, o campo **Sai de**: o automático de antes ou uma prateleira com saldo (a bloqueada apagada); escolhida, a devolução
@@ -7318,6 +7322,39 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 242 — O aviso de material reservado para uma OS (ENTREGUE — 2026-11-18)
+
+**O que mudou, em uma frase:** a janela **Devolver ao cliente** diz para qual OS o material está reservado e quanto está livre, e avisa
+antes de confirmar uma quantidade que não sai.
+
+**O problema que ela resolve.** O material de cliente que entra com uma OS fica reservado para ela. Num material sem lote, a janela
+mostrava *"Quantidade (saldo: 5 UN)"*; o usuário digitava 5 e só ao confirmar vinha *"Saldo insuficiente. Disponível: 0 UN"*, sem saber
+por quê.
+
+| Antes | Agora |
+|---|---|
+| *"Quantidade (saldo: 5 UN)"* com 3 reservados | *"Quantidade (saldo: 5 UN — livre 2 UN)"* |
+| Nada dizia de quem é a reserva | *"Reservado: 3 UN para a OS 1234. Livre para devolver: 2 UN."* (reserva de projeto: *"para o projeto Ponte"*) |
+| Acima do livre: recusa ao confirmar | *"Estão livres só 2 UN deste material: devolva até 2 ou libere a reserva em Reservas."* e o **Confirmar devolução** apagado |
+| Sem reserva; material que aceita saldo negativo | **Igual** |
+
+**Roteiro de teste manual (≈5 min):**
+
+1. Entre como **Administrador do almoxarifado**. Material de cliente *CLI-242* sem lote nem série. **Movimentações → Entrada** de 5.
+   **Reservas → Nova reserva** de 2 do *CLI-242* com a OS de referência *1234*, e outra de 1 sem OS.
+2. **Materiais de Clientes**, escolha o cliente, **Devolver** em *CLI-242*. **Confira:** *"Quantidade (saldo: 5 UN — livre 2 UN)"* e
+   *"Reservado: 2 UN para a OS 1234 e 1 UN sem OS. Livre para devolver: 2 UN."*.
+3. Quantidade 3, documento *DEV-242*. **Confira:** *"Estão livres só 2 UN deste material: devolva até 2 ou libere a reserva em Reservas."*
+   e o botão apagado. Quantidade 2 → o aviso some; **Confirmar devolução** → *"Devolução ao cliente registrada!"*.
+4. **Reservas**: cancele as duas reservas; volte, **Atualizar**, **Devolver** de novo. **Confira:** *"Quantidade (saldo: 3 UN)"*, sem frase
+   e sem aviso.
+
+**O que esta etapa não cobre:** a janela não libera a reserva (o aviso manda para **Reservas**); a tabela e o PDF da posição ficam como
+antes; a OS é a gravada na reserva, sem conferir se ainda está aberta (a de uma OS excluída aparece como "sem OS"); o aviso é o da hora em
+que a janela abriu.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro é o que os testes automáticos (tela e rotas) provam.
 
 ## Etapa 241 — O seletor de lote mostra o livre (ENTREGUE — 2026-11-18)
 

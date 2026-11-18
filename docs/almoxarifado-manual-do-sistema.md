@@ -6256,6 +6256,24 @@ Na tela **Almoxarifado → Materiais de Clientes**, cada linha com saldo tem o b
 
 Sem documento, a operação é recusada com *"informe o numero do documento de devolucao"*. O botão fica desabilitado quando o item está com saldo zero, com o aviso *"Sem saldo para devolver"*.
 
+**Material reservado e o livre.** O material de cliente que entra com uma OS fica reservado para ela, e a reserva prende o material: a
+devolução só leva o **livre** — o físico menos o reservado, o bloqueado, o que está em inspeção, o que está com terceiros e o que já foi
+separado para uma requisição sem reserva (a mesma conta que o sistema confere ao gravar). A janela mostra:
+
+- no rótulo da quantidade, o livre quando ele é menor que o saldo: *"Quantidade (saldo: 5 UN — livre 2 UN)"*;
+- com reserva ativa, embaixo da quantidade, para quem está reservado: *"Reservado: 2 UN para a OS 1234 e 1 UN sem OS. Livre para devolver: 2
+  UN."* — as reservas somadas pela OS (o número da OS cadastrada; sem ela, a OS digitada na reserva); sem OS, pelo projeto da reserva
+  (*"2 UN para o projeto Ponte"*); sem nenhum dos dois, *"sem OS"*;
+- com a quantidade acima do livre, em vermelho, *"Estão livres só 2 UN deste material: devolva até 2 ou libere a reserva em Reservas."* (sem
+  reserva, o que prende é bloqueio, inspeção, terceiro ou separação, e a frase termina em *"devolva até 2."*), e o **Confirmar devolução**
+  fica desabilitado; quem envia mesmo assim recebe *"Saldo insuficiente. Disponível: 2 UN"*. Num material com lote, quando o aviso do lote
+  escolhido (abaixo) já está na tela, este não aparece.
+
+Para devolver o que está reservado, libere a reserva na tela **Reservas** e abra a janela de novo. Material que aceita saldo negativo (no
+cadastro ou para todos os materiais) não tem rótulo, frase nem aviso — o sistema não limita a saída pela reserva —, salvo quando há material
+separado para requisição sem reserva: aí o rótulo e o aviso dizem o livre (o físico menos o separado), sem a frase da reserva. Tudo isso é
+o da hora em que a tela carregou.
+
 **Material com número de série.** A janela lista as séries que estão em estoque, cada uma com o lote dela (*"B1 · lote L2"*), e um contador *"1/1 série(s) selecionada(s)"*. As regras:
 
 - A série de lote **bloqueado**, **reprovado** ou **vencido** (sem a liberação do vencimento) vem apagada, sem poder ser marcada, com a situação ao lado (*"· lote L3 — Bloqueado: não sai"*), e embaixo da lista: *"Séries de lote bloqueado, reprovado ou vencido vêm apagadas: só saem depois que o lote for liberado na tela Lotes e Séries."* A devolução ao cliente não é descarte: o lote vencido também barra. Quem envia mesmo assim recebe *"Lote L3 esta bloqueado e nao pode ser utilizado"* (ou *"… reprovado …"*), e para o vencido *"Lote L3 vencido em AAAA-MM-DD nao pode sair para consumo. …"*.
@@ -6300,7 +6318,7 @@ cobre as séries; nos outros casos, as prateleiras do saldo sem lote. As regras:
 
 **Localização padrão bloqueada, na devolução sem lote.** A devolução que sai **sem lote** — material sem controle por lote e, num material com série, enquanto as séries marcadas não forem de um lote só — sai pela localização padrão; com ela bloqueada, o sistema recusa com *"Localização R5L-3 está bloqueada"* (com o código da localização), mesmo com a peça guardada em outro endereço. Por isso a janela avisa, em vermelho — *"A localização padrão deste material (R5L-3) está bloqueada: sem escolher de onde sai, a devolução será recusada. Escolha em "Sai de" um endereço livre ou desbloqueie a localização."* — e o botão **Confirmar devolução** fica desabilitado enquanto nenhuma prateleira estiver escolhida em **Sai de**. Escolhida uma prateleira livre, o aviso some e a devolução sai dela (a localização padrão não é conferida). Num material com série, marcar séries de um lote só cujo saldo do lote cubra as séries tira o aviso e habilita o botão (a devolução sai do lote delas); desmarcar, marcar uma série sem lote, ou marcar séries de um lote sem saldo que as cubra (a devolução sai sem lote) mantém o aviso. Material com controle por lote não tem o aviso — salvo o que aceita saldo negativo (no cadastro, ou com o saldo negativo ligado para todos os materiais): nele a saída com lote também confere a localização padrão, e o aviso continua. Sem prateleira livre para escolher: desbloqueie a localização (ou troque a localização padrão no cadastro), clique **Atualizar** e abra a janela de novo. O aviso é o da hora em que a tela carregou: se a localização for bloqueada com a janela aberta, a recusa vem ao confirmar.
 
-A devolução ao cliente **é uma saída**: o material sai do prédio de volta para quem é dele, e o saldo baixa. Ela é isenta da regra de OS/projeto pelo motivo óbvio — o destino **é** o próprio dono. Como toda saída, compara com o **disponível**: o material de cliente que entrou com OS fica reservado para ela, e a devolução dele é recusada com *"Saldo insuficiente. Disponível: 0 UN"* até a reserva ser liberada.
+A devolução ao cliente **é uma saída**: o material sai do prédio de volta para quem é dele, e o saldo baixa. Ela é isenta da regra de OS/projeto pelo motivo óbvio — o destino **é** o próprio dono. Como toda saída, compara com o **disponível**: o material de cliente que entrou com OS fica reservado para ela, e a devolução dele é recusada com *"Saldo insuficiente. Disponível: 0 UN"* até a reserva ser liberada — a janela avisa antes (*"Material reservado e o livre"*, acima).
 
 ### 16.8 Ajuste de material de cliente e a autorização especial
 
