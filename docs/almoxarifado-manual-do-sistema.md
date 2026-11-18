@@ -5851,13 +5851,21 @@ que já tinha sido cumprido. **A recusa continua valendo para falha inesperada d
 o documento **volta a Pendente** de execução — decidido, documentado, esperando nova tentativa. A
 decisão **não** é desfeita, porque foi tomada em outro dia, por outra pessoa, e continua valendo.
 
-**4. Material com número de série não é devolvido por esta tela.** A tentativa é recusada com
-*"Material com controle de série não pode ser devolvido por aqui — dê baixa pela tela de
-Movimentações"*. Escolher **quais** peças voltam é gesto de tela, e baixar a quantidade sem baixar as
-séries deixaria a peça já devolvida ainda entregável pelo sistema. **Este documento não fica preso
-por causa disso:** depois de dar a baixa das séries em Movimentações, a Qualidade **cancela** o
-documento dizendo isso no motivo (15b.4-quater). O mesmo vale para o caso em que o sistema não
-consegue identificar o lote do material devolvido.
+**4. Material com número de série não é devolvido por esta tela.** Escolher **quais** peças voltam é
+gesto de tela, e baixar a quantidade sem baixar as séries deixaria a peça já devolvida ainda
+entregável pelo sistema. Quando o documento é **decidido**, **sem execução**, com a decisão *Devolver ao
+fornecedor*, de material com número de série, aberto pela reprovação da inspeção, a janela **Registrar
+execução** já avisa ao abrir — *"Este material tem controle por número de série: a devolução não é registrada aqui. Para devolver: (1) o Gestor, em Inspeções → Desbloquear Material, desbloqueia a quantidade reprovada; (2) o Almoxarife, em Movimentações → Saída, dá baixa das peças escolhendo os números de série; (3) a Qualidade cancela este documento, informando a baixa no motivo."* — e o botão **Registrar execução** fica apagado. Se a execução
+chegar mesmo assim (a lista foi aberta antes de ligarem o controle de série), ela é recusada com
+*"Material com controle de série não pode ser devolvido por aqui — o Gestor desbloqueia a quantidade reprovada em Inspeções, o Almoxarife dá baixa das peças em Movimentações → Saída escolhendo os números de série, e a Qualidade cancela este documento informando a baixa"*, sem gravar nada.
+
+O caminho tem os três passos **nessa ordem** porque a peça reprovada está **bloqueada**: sem o
+desbloqueio, a Saída de Movimentações é recusada quando tudo foi reprovado (*"Saldo insuficiente.
+Disponível: 0 UN"*) e, quando só parte foi reprovada, tira do estoque livre e deixa uma peça boa presa
+no bloqueio. No desbloqueio, a linha é **Sem lote** — o bloqueio da reprovação não guarda o lote, mesmo
+em material com controle por lote. **Este documento não fica preso:** a Qualidade **cancela** o
+documento dizendo a baixa no motivo (15b.4-quater). O cancelamento vale também para o caso em que o
+sistema não consegue identificar o lote do material devolvido.
 
 #### As recusas
 
@@ -5867,7 +5875,7 @@ consegue identificar o lote do material devolvido.
 | O documento ainda está **Aberto** | *"Só é possível registrar a execução de uma não conformidade decidida"* |
 | O documento foi **cancelado** | *"Esta não conformidade foi cancelada — não há execução a registrar"* |
 | A execução já foi registrada | *"A execução desta não conformidade já foi registrada"* |
-| Material com controle de número de série | *"Material com controle de série não pode ser devolvido por aqui — dê baixa pela tela de Movimentações"* |
+| Material com controle de número de série | *"Material com controle de série não pode ser devolvido por aqui — o Gestor desbloqueia a quantidade reprovada em Inspeções, o Almoxarife dá baixa das peças em Movimentações → Saída escolhendo os números de série, e a Qualidade cancela este documento informando a baixa"* |
 | Material com controle por lote, e nenhum lote identificável no item recebido | *"Não foi possível identificar o lote do material devolvido"* |
 | Perfil sem a permissão | *"Sem permissão para registrar a execução do encaminhamento — seu perfil é Almoxarife. Solicite acesso a um administrador."* |
 

@@ -5,14 +5,22 @@
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-18 (Etapa 244 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-18 (Etapa 245 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
 > **Depois disto, 18/11/2026: Etapa 238 (Compras) fechada** — no cadastro de material, *Nº do CA* e *Validade do CA* só aparecem para
 > material EPI, com a frase do que é o CA (seção e roteiro em `docs/compras-novidades-por-etapa.md`, Etapa 238; decisão B91 de lá). A
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 244 fechada — 2026-11-18.** **O retalho de peça com número de série avisa antes.** Medido: a
+> **O desenvolvimento parou aqui: Etapa 245 fechada — 2026-11-18.** **A devolução ao fornecedor de peça com número de série ensina o
+> caminho.** Medido: a execução da não conformidade não baixa peça com série (recusa desde a Etapa 45), então não havia lote a corrigir; mas a
+> recusa ensinava um caminho que não fechava. Em **Não Conformidades → Registrar execução**, o material com série mostra os três passos
+> (Gestor desbloqueia em Inspeções, Almoxarife dá a Saída com as séries, Qualidade cancela o documento) e apaga o botão. **Sem consulta antes
+> do deploy.** **Nenhum clique foi dado** (roteiro na seção da 245). **Onde parou, exatamente:** a **245 está fechada**; a **próxima** é o
+> item 9 da estimativa de 18/11 — **a frase do lote das séries na saída avulsa (Movimentações)** —, detalhada no fim do plano
+> (`docs/superpowers/plans/2026-11-18-almoxarifado-etapa245-devolucao-fornecedor-peca-com-serie.md`).
+>
+> *(Antes:)* **Etapa 244 fechada — 2026-11-18.** **O retalho de peça com número de série avisa antes.** Medido: a
 > geração de retalho não baixa peça com série (a recusa existe desde o começo), então não havia lote a corrigir; em **Sobras e Retalhos →
 > Gerar retalho**, a origem com série apaga a caixa *"Baixar o material de origem agora"* e mostra o caminho (Movimentações → Saída, depois
 > o retalho sem baixa). **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção da 244). **Onde parou, exatamente:** a
@@ -7336,6 +7344,38 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 245 — A devolução ao fornecedor de peça com número de série ensina o caminho (ENTREGUE — 2026-11-18)
+
+**O que mudou, em uma frase:** em **Não Conformidades**, a janela **Registrar execução** de um material com número de série diz, ao abrir,
+como devolver a peça (três passos e quem faz cada um) e apaga o botão.
+
+**O problema que ela resolve.** A execução de *Devolver ao fornecedor* recusa material com série (o sistema não sabe quais séries voltam), mas
+só ao confirmar, e ensinava só *"dê baixa pela tela de Movimentações"*. A peça reprovada fica bloqueada: seguir isso era recusado (tudo
+reprovado) ou deixava uma peça boa presa no bloqueio (parte reprovada).
+
+| Antes | Agora |
+|---|---|
+| Botão **Registrar execução** funcionando; recusa ao confirmar | Aviso com os três passos ao abrir; botão apagado |
+| Recusa: *"…dê baixa pela tela de Movimentações"* | Recusa com os três passos e quem faz cada um |
+| Seguir a recusa: Saída recusada ou peça boa presa no bloqueio | Desbloquear antes: a Saída passa e nada fica preso |
+| Material sem série; documento à mão; outras decisões | **Igual** |
+
+**Roteiro de teste manual (≈10 min):**
+
+1. Entre como **Administrador do almoxarifado**. Material *SER-245* **crítico**, com número de série, **sem** controle por lote.
+2. **Recebimentos**: nota com 4 de *SER-245*, séries *A1* a *A4*; aprove. **Inspeções**: decida o item com 3 aprovadas e 1 reprovada.
+3. **Não Conformidades**: no documento aberto pela reprovação, **Decidir → Devolver ao fornecedor**. Depois **Registrar execução**. **Confira:**
+   o aviso *"Este material tem controle por número de série: a devolução não é registrada aqui. Para devolver: (1) o Gestor, em Inspeções → Desbloquear Material, desbloqueia a quantidade reprovada; (2) o Almoxarife, em Movimentações → Saída, dá baixa das peças escolhendo os números de série; (3) a Qualidade cancela este documento, informando a baixa no motivo."* e o botão **Registrar execução** apagado.
+4. **Inspeções → Desbloquear Material**: *SER-245*, *Sem lote*, 1. **Movimentações → Saída**: 1 de *SER-245*, marcando *A4*. **Não
+   Conformidades → Cancelar** o documento com o motivo *"A4 devolvida, baixa em Movimentações"*. **Confira:** físico 3, bloqueado 0, *A4*
+   *Entregue*.
+5. Metade positiva: o mesmo com material **sem** série — a janela mostra *"…É este registro que dá a baixa no estoque…"* e o botão registra.
+
+**O que esta etapa não cobre:** a execução continua sem baixar peça com série (o caminho são os três passos); o sucateamento pela não
+conformidade de material com série não foi medido; o desbloqueio da reprovada é sempre "Sem lote".
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro é o que os testes automáticos (rota real e tela) provam.
 
 ## Etapa 244 — O retalho de peça com número de série avisa antes (ENTREGUE — 2026-11-18)
 

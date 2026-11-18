@@ -11,7 +11,14 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-18):** **Etapa 244 fechada** (**o retalho de peça com número de série** — medido: a geração de
+> **Onde o desenvolvimento está (2026-11-18):** **Etapa 245 fechada** (**a devolução ao fornecedor de peça com número de série** — medido: a
+> execução da não conformidade **já não baixa** peça com série (recusa ao confirmar, desde a Etapa 45), então não havia lote a corrigir; mas o
+> caminho que a recusa ensinava (*"dê baixa pela tela de Movimentações"*) **não fechava**: com tudo reprovado a Saída é recusada e, com parte
+> reprovada, uma peça boa fica presa no bloqueio. Agora a janela **Registrar execução** avisa antes, com os três passos e quem faz cada um, e
+> apaga o botão; a recusa diz o mesmo. Item 4 da estimativa de 18/11 **revisado** de 1h15 para 45 min; decisões **B1555** a **B1557**;
+> limitação **D (245)**; verificação **F (245)**; sem consulta antes do deploy).
+> **Próxima:** **a frase do lote das séries na saída avulsa** (item 9 da estimativa de 18/11, Movimentações) — detalhada no fim do plano da 245.
+> *(Antes, 2026-11-18:)* **Etapa 244 fechada** (**o retalho de peça com número de série** — medido: a geração de
 > retalho **já não baixa** peça com série (recusa ao confirmar, desde o começo), então não havia lote errado a corrigir; a janela **Gerar
 > retalho** passa a avisar logo ao escolher o material e desliga *"Baixar o material de origem agora"*. Item 3 da estimativa de 18/11
 > **revisado** de 1h15 para 45 min; decisões **B1553** e **B1554**; limitação **D (244)**; verificação **F (244)**; sem consulta antes do deploy).
@@ -4787,7 +4794,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15365,6 +15372,26 @@ desligada, não só avisada.** Escolhido: desligada e desmarcada (trocar a orige
 **e** a origem — marcar antes de escolher o material não manda a baixa. Descartado: só o aviso, com a caixa marcável (o usuário preencheria
 a baixa para ser recusado ao confirmar, que é o que a etapa tira). **Reversível.**
 
+**B1555 (NOVA, da Etapa 245; decisão do agente) — a devolução ao fornecedor pela não conformidade continua sem baixar peça com número de
+série; o caminho fica ensinado inteiro.** O item 4 da estimativa de 18/11 pedia que *"a devolução registre o lote das peças com série"*.
+Medido: a execução **recusa** material com série antes de mover qualquer coisa (desde a Etapa 45) — não há lote a corrigir. Mas a recusa
+ensinava só *"dê baixa pela tela de Movimentações"*, e o reprovado está **bloqueado**: com tudo reprovado a Saída é recusada (*"Saldo
+insuficiente. Disponível: 0 UN"*) e, com parte reprovada, ela sai do disponível e deixa uma peça **boa** presa no bloqueio, sem documento que a
+solte. Escolhido: **manter a recusa** e ensinar os três passos (desbloquear, Saída com as séries, cancelar o documento) na janela, antes, e na
+recusa. Descartado: aceitar série na execução (seletor de série na janela, a baixa pelas séries, o desbloqueio junto) — muda a decisão da
+Etapa 45, mexe no motor, passa de 2 h. A estimativa foi **revisada** (1h15 → 45 min), não refeita. **Reversível.**
+
+**B1556 (NOVA, da Etapa 245; decisão do agente) — a mensagem de recusa do servidor mudou.** De *"Material com controle de série não pode ser
+devolvido por aqui — dê baixa pela tela de Movimentações"* para *"Material com controle de série não pode ser devolvido por aqui — o Gestor desbloqueia a quantidade reprovada em Inspeções, o Almoxarife dá baixa das peças em Movimentações → Saída escolhendo os números de série, e a Qualidade cancela este documento informando a baixa"*. Escolhido: trocar a frase (o começo é o mesmo), porque a antiga
+manda para um caminho que falha — e ela ainda aparece quando a lista foi aberta antes de alguém ligar a série. Descartado: mudar só a tela.
+Quem integra pela API e compara a frase inteira precisa da nova. **Reversível.**
+
+**B1557 (NOVA, da Etapa 245; decisão do agente) — quem decide que a execução vai ser recusada é o servidor.** A lista de não conformidades
+passa a dizer, por documento, se a execução vai ser recusada pela série (só documento **decidido**, **sem execução**, decisão **Devolver ao
+fornecedor**, material com série, aberto sozinho pela reprovação da inspeção); a tela só lê. Descartado: a tela recalcular a regra (duas
+cópias da mesma régua divergem). O aviso diz **quem** faz cada passo (Gestor, Almoxarife, Qualidade) porque quem registra a execução (Compras)
+não pode desbloquear nem dar a Saída — achado da revisão final. **Reversível.**
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -21012,6 +21039,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(245) A devolução ao fornecedor de peça com número de série, o que ficou de fora.** (1) A execução **não** baixa peça com série
+  (**B1555**): o caminho são três gestos de três perfis (Gestor desbloqueia, Almoxarife dá a Saída, Qualidade cancela o documento), e nada
+  amarra a Saída ao documento — o motivo do cancelamento é o registro. (2) O **sucateamento** pela não conformidade de material com série tem
+  a recusa irmã (*"Material com controle de série não pode ser sucateado por aqui — dê baixa pela tela de Movimentações"*), **não medida**
+  nesta etapa — provavelmente o mesmo caminho incompleto. (3) O desbloqueio da reprovada é **"Sem lote"** mesmo em material com controle por
+  lote (a reprovação não grava o lote no bloqueio): a janela Desbloquear só oferece essa linha, e escolher o lote seria recusado. (4) A lista
+  é a da hora em que a tela abriu: série ligada com a página aberta → a recusa do servidor ao confirmar (agora com o caminho inteiro).
 - **(244) O retalho de peça com número de série, o que ficou de fora.** (1) O retalho **não** baixa peça com série (**B1553**): a baixa é
   pela **Saída** de Movimentações e o retalho, com a baixa desmarcada. (2) No modo **sem baixa** a janela não oferece o lote de origem (nem
   para material com controle por lote): a ficha da sobra fica sem o lote de onde a peça saiu — o lote está na saída, em **Movimentações**.
@@ -21071,7 +21105,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   (**C538**). (2) Com o lote em branco, a saída de material **sem** controle por lote continua **sem gravar o lote** das séries: o histórico
   diz "sem lote" e a linha de saldo baixada é a de sempre — gravar o lote das séries muda o histórico e o saldo por lote, e não coube nesta
   etapa. (3) A **devolução ao cliente** (material de cliente) e os fluxos internos (entrega, devolução, sucata, Não Conformidade) não ganharam
-  a conferência nova (não foram medidos com série sem lote; a entrega já confere pelo lote das séries). *(A **devolução** para **Estoque** e **Quarentena** de material sem controle por lote: resolvida na **Etapa 243** — volta ao lote da saída que levou a peça, **B1552**; Sucata não muda, **B1551**. Seguem o retalho e a devolução ao fornecedor.)* *(O **retalho**: medido na **Etapa 244** — não baixa peça com série (recusa desde a Etapa 9); a janela avisa antes, **B1553**. Segue a devolução ao fornecedor.)* (4) Material **com** controle por
+  a conferência nova (não foram medidos com série sem lote; a entrega já confere pelo lote das séries). *(A **devolução** para **Estoque** e **Quarentena** de material sem controle por lote: resolvida na **Etapa 243** — volta ao lote da saída que levou a peça, **B1552**; Sucata não muda, **B1551**. Seguem o retalho e a devolução ao fornecedor.)* *(O **retalho**: medido na **Etapa 244** — não baixa peça com série (recusa desde a Etapa 9); a janela avisa antes, **B1553**. Segue a devolução ao fornecedor.)* *(A **devolução ao fornecedor** pela não conformidade: medida na **Etapa 245** — não baixa peça com série (recusa desde a Etapa 45); a janela avisa antes com o caminho inteiro, **B1555**. A D (233) 3 fica sem pendência de lote nesses fluxos.)* (4) Material **com** controle por
   lote e o lote em *"Sem lote"*: a lista mostra as séries acesas (as não impedidas) e salvar é recusado por *"… exige lote nesta
   movimentacao (controle por lote ligado)"* — já era assim.
 - **(232) A série de lote impedido na entrega, o que ficou de fora.** (1) A **saída avulsa** (**Movimentações → Saída**) de material com
@@ -22563,6 +22597,12 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(245) Nenhum clique foi dado.** A devolução ao fornecedor de peça com série, provada pela rota real em `devolucaoFornecedorPecaComSerie`
+(10: a recusa com e sem controle de lote sem gravar nada, o caminho dos três passos com tudo reprovado e com parte reprovada, e o campo de
+leitura amarrado à execução — inspeção, sem série, documento à mão, Substituição, divergência do recebimento, cancelado e executado) e pela
+tela em `NaoConformidadesAlmoxarifado` (2 cenários novos: o aviso com o botão apagado e a metade sem série). Controles positivos: 7 do
+servidor e 3 da tela, cada um vermelho no cenário certo. Roteiro na seção da 245 (~10 minutos). Suítes: test:api 637/638 arquivos — caiu `permissoesNoServidor` [RN-06] (portão do módulo financeiro, sem relação com a etapa; passou na primeira rodada inteira da etapa e 3 vezes em 3 sozinho: **intermitente, não investigado**), almoxarifado 44, validation 4, safealter 3, sqlite 16, Jest 236 suítes e 3180 testes, build ok.
 
 **(244) Nenhum clique foi dado.** O retalho de peça com série, provado pela rota real em `retalhoPecaComSerie` (7: a recusa com e sem lote,
 origem e retalho com série, origem com lote e série, a série ligada no meio da geração, a saída avulsa seguida do retalho sem baixa com o resumo de lotes fechando, e o controle sem série) e pela tela
@@ -43124,6 +43164,52 @@ peca pela tela de Movimentacoes (que tem seletor de serie) e depois registre o r
 - O retalho **não** passa a baixar peça com série (**D (244)** 1, **B1553**).
 - O modo sem baixa não guarda o lote de origem na ficha da sobra (**D (244)** 2).
 - O material **do retalho** com série continua recusado só ao confirmar (**D (244)** 3).
+
+## Etapa 245 — A devolução ao fornecedor de peça com número de série ensina o caminho (2026-11-18)
+
+Na tela **Não Conformidades**, o documento decidido como **Devolver ao fornecedor** de um material com número de série não pode ter a
+execução registrada: o sistema não tem como saber **quais** séries voltam. A recusa aparecia só depois do clique e mandava *"dar baixa pela
+tela de Movimentações"* — o que não bastava: a peça reprovada fica **bloqueada**, então a Saída era recusada (tudo reprovado) ou tirava do
+estoque livre e deixava uma peça boa presa no bloqueio (parte reprovada). Agora a janela **Registrar execução** diz, assim que abre, os três
+passos e quem faz cada um, e o botão fica apagado; a recusa diz o mesmo. A medição mostrou que nenhuma peça com série é baixada por ali (então
+não havia lote errado a corrigir, como a estimativa supunha). Decisões do agente: **B1555** a **B1557**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Janela **Registrar execução** de material com série: o botão funcionava e a recusa vinha ao confirmar | O aviso com os três passos aparece ao abrir, e **Registrar execução** fica apagado |
+| A recusa ensinava *"dê baixa pela tela de Movimentações"* | A recusa ensina os três passos, com quem faz cada um |
+| Seguir a recusa com tudo reprovado: a Saída era recusada (*"Saldo insuficiente. Disponível: 0 UN"*) | O primeiro passo (desbloquear) faz a Saída passar |
+| Seguir a recusa com parte reprovada: uma peça boa ficava presa no bloqueio | Desbloqueada a reprovada antes, nada fica preso |
+| Material sem série; documento aberto à mão; outras decisões | **Igual** |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado** (faz os três passos; na vida real são Gestor, Almoxarife e Qualidade). Um material
+*SER-245* **crítico** (exige inspeção), com **número de série** e **sem** controle por lote. Em **Recebimentos**, uma nota com 4 de *SER-245*,
+séries *A1*, *A2*, *A3*, *A4*, aprovada. Em **Inspeções**, decida o item: **3 aprovadas, 1 reprovada**. Em **Não Conformidades**, o documento
+aberto pela reprovação: **Decidir → Devolver ao fornecedor**.
+
+**1. O aviso (RN-245.05).** Na linha decidida, **Registrar execução** (ícone do caminhão). **Confira:** a janela mostra *"Este material tem controle por número de série: a devolução não é registrada aqui. Para devolver: (1) o Gestor, em Inspeções → Desbloquear Material, desbloqueia a quantidade reprovada; (2) o Almoxarife, em Movimentações → Saída, dá baixa das peças escolhendo os números de série; (3) a Qualidade cancela este documento, informando a baixa no motivo."*, não mostra
+*"É este registro que dá a baixa no estoque"*, e o botão **Registrar execução** fica apagado.
+
+**2. A recusa (RN-245.01/.02).** Se a execução chegar ao servidor (integração, ou a lista aberta antes de ligarem a série): *"Material com controle de série não pode ser devolvido por aqui — o Gestor desbloqueia a quantidade reprovada em Inspeções, o Almoxarife dá baixa das peças em Movimentações → Saída escolhendo os números de série, e a Qualidade cancela este documento informando a baixa"* —
+nada é gravado (físico, bloqueado, séries e o documento, que continua pendente).
+
+**3. O caminho (RN-245.03).** **Inspeções → Desbloquear Material**, *SER-245*, lote *Sem lote*, quantidade 1, justificativa. Depois
+**Movimentações → Saída** de 1 de *SER-245*, marcando *A4*. Depois, em **Não Conformidades**, **Cancelar** o documento com o motivo *"A4 devolvida,
+baixa em Movimentações"*. **Confira:** físico 3, bloqueado 0, *A4* *Entregue*; o documento *Cancelado*, a decisão continua legível. (Com
+**todas** reprovadas, a Saída antes do desbloqueio é recusada: *"Saldo insuficiente. Disponível: 0 UN"*.)
+
+**Metade positiva.** O mesmo com um material **sem** série: a janela mostra *"…É este registro que dá a baixa no estoque…"*, sem o aviso, e o
+botão registra.
+
+### O que esta etapa NÃO cobre
+
+- A execução **não** passa a baixar peça com série (**D (245)** 1, **B1555**).
+- O sucateamento pela não conformidade de material com série não foi medido (**D (245)** 2).
+- O desbloqueio da reprovada é sempre "Sem lote" (**D (245)** 3).
 
 ## Onde estamos e o que vem a seguir
 

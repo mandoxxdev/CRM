@@ -716,3 +716,24 @@ Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa162-o-dia-de-brasili
 
 - [x] **RN-162.08 (C405, B1036)** — os *dias em espera* das Inspeções pendentes pelo `lerInstanteDoBanco` (o `created_at` lido como UTC), em blocos
   de 24 h (descartado: dias de calendário — mudança de régua, não de fuso) — `d5c430b4`.
+
+## Etapa 245 — a devolução ao fornecedor de peça com número de série ensina o caminho (2026-11-18)
+
+Plano: `docs/superpowers/plans/2026-11-18-almoxarifado-etapa245-devolucao-fornecedor-peca-com-serie.md`. O status da feature não muda (🟢).
+
+**Correção (a estimativa estava errada, não esta spec):** o item 4 da estimativa de 18/11 supunha que a execução de *Devolver ao
+fornecedor* baixava peça com série sem registrar o lote. **Não baixa**: a execução recusa material com série desde a Etapa 45 (RN-13, nível
+6). O que estava errado era a **recusa**, que ensinava um caminho incompleto (*"dê baixa pela tela de Movimentações"*): sem o desbloqueio, a
+Saída é recusada (tudo reprovado) ou deixa peça boa presa no bloqueio (parte reprovada). A frase *"depois de dar a baixa das séries em
+Movimentações, a Qualidade cancela"* do manual tinha o mesmo furo — corrigida lá.
+
+- [x] **RN-245.01/.02** — a recusa pelo fluxo real (com e sem controle de lote), nada gravado, com a literal nova dos três passos e de quem
+  faz cada um — `4f52e829`, `c3ea407d` (Fase 5: quem faz cada passo).
+- [x] **RN-245.03** — o caminho fecha pela rota: tudo reprovado (a Saída direta recusada; desbloquear → Saída com o lote → cancelar) e parte
+  reprovada (bloqueado 0) — `4f52e829`.
+- [x] **RN-245.04** — `execucao_recusada_por_serie` na lista e no `GET /:id`, amarrado ao `/executar` — `4f52e829`; Fase 5 (só DECIDIDA
+  sem execução; a NC automática do recebimento fica 0, presa por teste) — `c3ea407d`.
+- [x] **RN-245.05** — a janela **Registrar execução** avisa antes e apaga o botão — `f1235e25`, `c3ea407d`.
+- [ ] **Aceitar série na execução** (escolher as séries na janela e baixar pelo lote delas) — **fora de propósito** (B1555): muda a decisão da
+  Etapa 45 e mexe no motor; o caminho de três passos fecha.
+- [ ] **O sucateamento pela NC de material com série** — não medido (D (245) 2).
