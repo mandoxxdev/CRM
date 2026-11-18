@@ -19,7 +19,9 @@
       "saldo_disponivel": 15,
       "recebido": 20,
       "consumido": 5,
-      "devolvido": 0
+      "devolvido": 0,
+      "livre": 15,
+      "reservas": []
     },
     {
       "material_id": 2,
@@ -35,7 +37,9 @@
       "saldo_disponivel": 10,
       "recebido": 10,
       "consumido": 0,
-      "devolvido": 0
+      "devolvido": 0,
+      "livre": 10,
+      "reservas": []
     }
   ],
   "aplicacoes": [
