@@ -119,6 +119,87 @@ process.on('exit', (code) => {
     assert.strictEqual(l1.saldo, 3);
   });
 
+  // Fase 5 (achados 1 a 3, reproduzidos por sonda): a regua do motor, nao uma aproximacao.
+  const separarSemReserva = async (m, qtd) => {
+    const rq = (await dbRun(db, `INSERT INTO requisicoes_almoxarifado (numero, solicitante_id, solicitante_nome, status)
+      VALUES (?, 1, 'x', 'EM_SEPARACAO')`, [`RQ-241-${++seq}`])).lastID;
+    await dbRun(db, `INSERT INTO itens_requisicao_almoxarifado (requisicao_id, material_id, quantidade_solicitada, quantidade_separada)
+      VALUES (?, ?, ?, ?)`, [rq, m.id, qtd, qtd]);
+  };
+
+  await test('[RN-241.01] saldo negativo pela configuracao GLOBAL: livre null, e a devolucao que a lista nao barra sai (Fase 5, achado 1)', async () => {
+    const m = await material();
+    await entrar(m, 3, 'L1');
+    await reservar(m, 3);
+    await dbRun(db, "UPDATE configuracoes_almoxarifado SET valor = '1' WHERE chave = 'permite_saldo_negativo_global'");
+    try {
+      const l1 = doLote(await lotes(m), 'L1');
+      assert.strictEqual(l1.livre, null);
+      assert.strictEqual(l1.livre_do_material, null);
+      await ok(devolver(m, 2, l1.id), 201);
+    } finally {
+      await dbRun(db, "UPDATE configuracoes_almoxarifado SET valor = '0' WHERE chave = 'permite_saldo_negativo_global'");
+    }
+    assert.strictEqual(doLote(await lotes(m), 'L1').livre, 0, 'sem a global: tudo reservado, livre 0');
+  });
+
+  await test('[RN-241.01] saldo negativo COM caixa separada: o livre e fisico - caixa (o motor limita), sem o teto do lote (Fase 5, achado 2)', async () => {
+    const m = await material({ negativo: 1, cliente: false });
+    await entrar(m, 3, 'L1');
+    await separarSemReserva(m, 2);
+    const l1 = doLote(await lotes(m), 'L1');
+    assert.strictEqual(l1.livre_do_material, 1);
+    assert.strictEqual(l1.livre, 1);
+    const r = await request(app).post(`${API}/movimentacoes/v2`).send({
+      material_id: m.id, tipo: 'PERDA', quantidade: 2, motivo: 'e241', justificativa: 'e241', lote_id: l1.id,
+    });
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.ok(r.body.error.startsWith('Saldo insuficiente. Disponível: 1 UN'), r.body.error);
+  });
+
+  await test('[RN-241.01] saldo negativo com caixa: o lote menor que o livre nao e limitado pelo proprio saldo (o motor nao confere a linha)', async () => {
+    const m = await material({ negativo: 1, cliente: false });
+    await entrar(m, 3, 'L1');
+    await entrar(m, 1, 'L2');
+    await separarSemReserva(m, 1);
+    const l2 = doLote(await lotes(m), 'L2');
+    assert.strictEqual(l2.saldo, 1);
+    assert.strictEqual(l2.livre, 3, 'fisico 4 - caixa 1');
+    await ok(request(app).post(`${API}/movimentacoes/v2`).send({
+      material_id: m.id, tipo: 'PERDA', quantidade: 2, motivo: 'e241', justificativa: 'e241', lote_id: l2.id,
+    }), 201);
+  });
+
+  await test('[RN-241.01] caixa separada sem negativo: o livre desconta a caixa e bate com a recusa', async () => {
+    const m = await material();
+    await entrar(m, 3, 'L1');
+    await separarSemReserva(m, 2);
+    const l1 = doLote(await lotes(m), 'L1');
+    assert.strictEqual(l1.livre, 1);
+    const r = await devolver(m, 2, l1.id);
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.ok(r.body.error.startsWith('Saldo insuficiente. Disponível: 1 UN'), r.body.error);
+    await ok(devolver(m, 1, l1.id), 201);
+  });
+
+  await test('[RN-241.01] linha negativa de legado no lote: o livre e o das linhas positivas, como o claim (Fase 5, achado 3)', async () => {
+    const m = await material();
+    await entrar(m, 3, 'L1');
+    const ln = await dbGet(db, 'SELECT * FROM estoque_saldo_almoxarifado WHERE material_id = ? AND lote_id IS NOT NULL', [m.id]);
+    const loc2 = (await dbRun(db, "INSERT INTO localizacoes_almoxarifado (codigo, descricao, ativo) VALUES (?, 'e241', 1)",
+      [`LOC-241-${seq}`])).lastID;
+    await dbRun(db, 'INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, lote_id, quantidade) VALUES (?, ?, ?, -1)',
+      [m.id, loc2, ln.lote_id]);
+    await dbRun(db, 'INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, lote_id, quantidade) VALUES (?, ?, NULL, 3)',
+      [m.id, ln.localizacao_id]);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 5 WHERE id = ?', [m.id]);
+    const l1 = doLote(await lotes(m), 'L1');
+    assert.strictEqual(l1.saldo, 2, 'o saldo soma a linha negativa');
+    assert.strictEqual(l1.livre, 3, 'o livre e o das positivas');
+    assert.strictEqual(l1.saldo_positivo_241, undefined, 'a coluna interna nao vai para o contrato');
+    await ok(devolver(m, 3, l1.id), 201);
+  });
+
   await test('[RN-241.06] integracao lista x rota: devolver o livre do lote -> 201; livre + 1 -> 400 com o disponivel', async () => {
     const m = await material();
     await entrar(m, 3, 'L1');

@@ -13,7 +13,7 @@ const { dbRun, dbGet, dbAll } = require('./db');
 const diaLocal = require('../diaLocal');
 // Etapa 33: a URL do certificado passa a ser MINADA pelo servidor, no ponto unico do modulo.
 const { materialPhotoUrl } = require('./materialPhoto');
-const { livreDeCaixaSql } = require('./caixaSql'); // Etapa 241 (RN-241.01)
+const { livreDeCaixaSql, caixaSemReservaSql } = require('./caixaSql'); // Etapa 241 (RN-241.01)
 const Q = require('./quantidade');
 const { registrarAuditoria, registrarAuditoriaDoAto } = require('./audit');
 const { validarData } = require('./auditFiltros');
@@ -596,21 +596,40 @@ async function listarLotesDoMaterial(db, materialId, { apenasComSaldo = false } 
   const linhas = await dbAll(db, `
     SELECT l.*, COALESCE((
       SELECT SUM(s.quantidade) FROM estoque_saldo_almoxarifado s WHERE s.lote_id = l.id
-    ), 0) as saldo
+    ), 0) as saldo,
+    -- Etapa 241 (Fase 5, achado 3): o claim do lote le so as linhas POSITIVAS do lote (claimSaldoDoLote); o saldo soma tambem a
+    -- linha negativa de legado. O teto do livre e o do claim.
+    COALESCE((
+      SELECT SUM(s.quantidade) FROM estoque_saldo_almoxarifado s WHERE s.lote_id = l.id AND s.quantidade > 0
+    ), 0) as saldo_positivo_241
     FROM lotes_almoxarifado l
     WHERE l.material_id = ?`, [materialId]);
 
   // Etapa 241 (C542, RN-241.01): o livre de cada lote numa saida avulsa. A reserva nao tem lote (C526), entao o servidor nao sabe o
   // "livre do lote" — sabe o maximo que sai dele: min(saldo do lote, livre do material), com o livre na MESMA regua que o motor confere
-  // antes do claim do lote (`livreDeCaixaSql`: disponivel menos a caixa separada sem reserva). Com saldo negativo permitido o motor nao
-  // limita pelo livre: null. Aditivo — os seletores continuam lendo `saldo`.
-  const mat = await dbGet(db, `SELECT COALESCE(permite_saldo_negativo, 0) AS neg, ${livreDeCaixaSql()} AS livre
+  // antes do claim do lote (`livreDeCaixaSql`: disponivel menos a caixa separada sem reserva). Aditivo — os seletores continuam lendo
+  // `saldo`. Com saldo negativo permitido — o EFETIVO, o do material ou a configuracao global, como o motor (Fase 5, achado 1: so o do
+  // material apagava o Confirmar de uma devolucao que o motor aceitava) — o motor nao confere a reserva nem a linha do lote
+  // (`livreParaSaida`): sem caixa, nao limita (null); com caixa, limita a fisico - caixa, sem o teto do lote (Fase 5, achado 2).
+  const mat = await dbGet(db, `SELECT COALESCE(permite_saldo_negativo, 0) AS neg, ${livreDeCaixaSql()} AS livre,
+      ${caixaSemReservaSql('materiais_almoxarifado.id')} AS caixa, quantidade_atual AS fisico
     FROM materiais_almoxarifado WHERE id = ?`, [materialId]);
-  const livreDoMaterial = !mat || Number(mat.neg) === 1 ? null : Q.qtd(Math.max(0, Number(mat.livre) || 0));
+  const negativoGlobal = ((await dbGet(db,
+    "SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'permite_saldo_negativo_global'")) || {}).valor === '1';
+  const permiteNegativo = !!mat && (Number(mat.neg) === 1 || negativoGlobal);
+  const caixa = mat ? Q.qtd(Number(mat.caixa) || 0) : 0;
+  let livreDoMaterial = null;
+  if (mat && !permiteNegativo) livreDoMaterial = Q.qtd(Math.max(0, Number(mat.livre) || 0));
+  else if (mat && caixa > Q.QTD_FOLGA) livreDoMaterial = Q.qtd(Math.max(0, (Number(mat.fisico) || 0) - caixa));
+  const livreDoLote = (saldoPositivo) => {
+    if (livreDoMaterial == null) return null;
+    if (permiteNegativo) return livreDoMaterial; // o motor nao confere a linha do lote com negativo
+    return Q.qtd(Math.max(0, Math.min(Number(saldoPositivo) || 0, livreDoMaterial)));
+  };
 
   const hoje = diaLocal.hojeLocalISO(); // Etapa 163 (RN-163.06): a mesma regua do isVencido, lida uma vez para a lista toda
   const comFlags = linhas
-    .map((l) => {
+    .map(({ saldo_positivo_241: saldoPositivo, ...l }) => {
       const vencido = isVencido(l, hoje);
       const liberado = vencimentoLiberado(l);
       return {
@@ -618,7 +637,7 @@ async function listarLotesDoMaterial(db, materialId, { apenasComSaldo = false } 
         vencido,
         vencimento_liberado: liberado,
         elegivel: l.status === 'ATIVO' && (!vencido || liberado),
-        livre: livreDoMaterial == null ? null : Q.qtd(Math.max(0, Math.min(Number(l.saldo) || 0, livreDoMaterial))),
+        livre: livreDoLote(saldoPositivo),
         livre_do_material: livreDoMaterial,
         // Etapa 33 (C42): a tela montava esta URL a partir de `certificado_arquivo` CRU, e URL
         // montada no client nao tem assinatura — o link do certificado daria 404. Quem mina a URL
