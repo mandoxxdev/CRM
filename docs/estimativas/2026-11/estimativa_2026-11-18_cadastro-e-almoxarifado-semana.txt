@@ -14,8 +14,9 @@ A devolução de peça com número de série para Quarentena ou para Sucata pass
 Tempo estimado: *1h15*
 
 *3. Retalho de peça com número de série*
-Ao gerar retalho ou sobra a partir de uma peça com número de série, a baixa da peça original registra o lote dela, e a peça de um lote bloqueado não é usada sem aviso.
-Tempo estimado: *1h15*
+Ao gerar retalho a partir de um material com número de série, a janela passa a avisar logo ao escolher o material que a peça é baixada em Movimentações (onde se escolhe o número de série e o lote fica registrado), e a opção de baixar a peça na própria janela fica desligada. Hoje o aviso só aparece ao confirmar, depois de o formulário inteiro ser preenchido.
+_Revisado: a geração de retalho já não baixa peça com número de série (recusa ao confirmar), então não há lote errado a corrigir; o item passa a ser o aviso antecipado na tela._
+Tempo estimado: *45 min*
 
 *4. Devolução ao fornecedor de peça com número de série*
 A devolução ao fornecedor decidida na não conformidade passa a registrar o lote das peças com número de série que saem, para o saldo de cada lote continuar certo.
@@ -115,6 +116,6 @@ Tempo estimado: *1h*
 O material novo criado no registro de uma sobra ou de uma remessa a terceiros passa a aparecer no Compras com o aviso de cadastro a completar, para o Compras revisar e completar os dados. Depende de confirmar se o Almoxarifado deve continuar criando esse material.
 Tempo estimado: *1h30*
 
-*Total estimado: 29h*
-_Cadastro de material: 1h15 · Almoxarifado: 23h15 · Dependem de resposta: 4h30_
+*Total estimado: 28h30*
+_Cadastro de material: 1h15 · Almoxarifado: 22h45 · Dependem de resposta: 4h30_
 _O tempo de cada item inclui análise, planejamento, desenvolvimento, testes e atualização dos manuais._
