@@ -5,14 +5,21 @@
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-18 (Etapa 243 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-18 (Etapa 244 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
 > **Depois disto, 18/11/2026: Etapa 238 (Compras) fechada** — no cadastro de material, *Nº do CA* e *Validade do CA* só aparecem para
 > material EPI, com a frase do que é o CA (seção e roteiro em `docs/compras-novidades-por-etapa.md`, Etapa 238; decisão B91 de lá). A
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 243 fechada — 2026-11-18.** **A devolução para Quarentena de peça com série volta ao lote
+> **O desenvolvimento parou aqui: Etapa 244 fechada — 2026-11-18.** **O retalho de peça com número de série avisa antes.** Medido: a
+> geração de retalho não baixa peça com série (a recusa existe desde o começo), então não havia lote a corrigir; em **Sobras e Retalhos →
+> Gerar retalho**, a origem com série apaga a caixa *"Baixar o material de origem agora"* e mostra o caminho (Movimentações → Saída, depois
+> o retalho sem baixa). **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção da 244). **Onde parou, exatamente:** a
+> **244 está fechada**; a **próxima** é o item 4 da estimativa de 18/11 — **a devolução ao fornecedor de peça com número de série, pela não
+> conformidade** —, detalhada no fim do plano (`docs/superpowers/plans/2026-11-18-almoxarifado-etapa244-retalho-peca-com-serie.md`).
+>
+> *(Antes:)* **Etapa 243 fechada — 2026-11-18.** **A devolução para Quarentena de peça com série volta ao lote
 > certo.** Em **Devoluções**, sem citar a entrega e com o lote em branco, a peça com série de material sem controle por lote volta ao lote da
 > saída que a levou (Quarentena e Estoque; séries de lotes diferentes recusadas; Sucata não muda). **Sem consulta antes do deploy.** **Nenhum
 > clique foi dado** (roteiro na seção da 243). **Onde parou, exatamente:** a **243 está fechada**; a **próxima** é o item 3 da estimativa de
@@ -7329,6 +7336,39 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 244 — O retalho de peça com número de série avisa antes (ENTREGUE — 2026-11-18)
+
+**O que mudou, em uma frase:** em **Sobras e Retalhos → Gerar retalho**, escolher um material com número de série como origem apaga a caixa
+de baixar e diz, na hora, que a peça é baixada em Movimentações.
+
+**O problema que ela resolve.** A janela deixava marcar *"Baixar o material de origem agora"* para material com série e só recusava ao
+confirmar, depois de tudo preenchido. A medição mostrou que o retalho nunca baixa peça com série (não há como dizer qual série foi cortada) —
+o lote dela é registrado pela **Saída** de Movimentações.
+
+| Antes | Agora |
+|---|---|
+| Origem com série: a caixa de baixar marcável; recusa ao confirmar | Caixa apagada e desmarcada, com o aviso logo abaixo |
+| Caixa marcada e a origem trocada para uma com série: os campos da baixa ficavam | A caixa desmarca e os campos somem; gera sem baixa |
+| Série ligada no material no mesmo instante da geração: a baixa passava sem série | Recusada, nada gravado |
+| Origem sem série; modo sem baixa | **Igual** |
+
+**Roteiro de teste manual (≈5 min):**
+
+1. Entre como **Administrador do almoxarifado**. Material *SER-244* com número de série e **sem** controle por lote, com **Entrada** de 2 no
+   lote *L1* (*A1*, *A2*) e 2 no *L2* (*B1*, *B2*); *RET-244* sem série (o retalho); *CHP-244* sem série com saldo.
+2. **Sobras e Retalhos → Gerar retalho**, origem *SER-244*. **Confira:** a caixa *"Baixar o material de origem agora"* apagada e desmarcada e
+   o aviso *"Este material tem controle por número de série: a peça não é baixada aqui. Baixe a peça em Movimentações → Saída (lá se escolhe o
+   número de série) e gere o retalho com a opção de baixar desmarcada."* Troque para *CHP-244*: a caixa volta e o aviso some.
+3. Com *CHP-244*, marque a caixa e digite **Quantidade baixada** 3; troque a origem para *SER-244*. **Confira:** a caixa desmarca e a
+   quantidade some. Retalho *RET-244*, **Gerar retalho**: *"Retalho gerado — nada foi baixado (a peça já tinha saído do estoque)"*.
+4. **Movimentações → Saída** de 1 de *SER-244*, lote em branco, marcando *B1*; depois gere o retalho de *SER-244* para *RET-244*. **Confira:**
+   a saída diz lote *L2*; em **Lotes e Séries**, *B1* *Entregue* no *L2* e **Sem lote atribuído** 0.
+
+**O que esta etapa não cobre:** o retalho continua sem baixar peça com série (a baixa é pela Saída); o modo sem baixa não guarda o lote de
+origem na ficha da sobra; o material **do retalho** com série continua recusado só ao confirmar.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro é o que os testes automáticos (rota real e tela) provam.
 
 ## Etapa 243 — A devolução para Quarentena de peça com série volta ao lote certo (ENTREGUE — 2026-11-18)
 

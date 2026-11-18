@@ -1,5 +1,7 @@
 # 15 — Retalhos, Sobras e Sucatas
 
+> **+ Etapa 244 (2026-11-18, `40c6e9f5`, `c73db29d`): o retalho de peça com número de série — medido que não há baixa (a recusa da Etapa 9); a janela avisa antes e desliga a baixa (B1553, B1554); Fase 5: a baixa confere a série sob a trava (`7bcb8f5c`)** — ver a seção "Etapa 244", no fim.
+
 > **+ Etapa 160 (2026-10-19, `eaf682e9`): a busca `q` da lista de retalhos acha a letra acentuada em qualquer caixa e aparada (C393, B1019)** — ver a seção "Etapa 160", no fim.
 
 > **Última atualização:** 2026-10-19 (**Etapa 156** — os três seletores de projeto da tela de sobras dizem o motivo quando a lista de projetos volta recusada (C366, `75e772cf`). Ver a seção no fim.) Antes: 2026-10-09 (**Etapa 97** — o sucateamento **comum** não leva mais o material separado na caixa sem reserva de uma requisição: a recusa vem **na solicitação** (antes das duas assinaturas), pelo livre de caixa, com a frase do disponível acrescida de *"e o separado na caixa de requisições"* e o sufixo da caixa (M7, `9dbf11c0`); `disponivel_na_solicitacao` passa a gravar o livre de caixa (só auditoria); a compensação do retalho estorna com `compensacao: true` (régua de hoje, `65dc74b2`). O sucateamento ligado à NC (`doBloqueado`) não muda. Range `eb7cd9d8..3fc39310`. Continua 🟢. Ver a seção "Etapa 97" no fim.) Antes: 2026-10-01 (Etapa 69 — o status abaixo).
@@ -247,3 +249,32 @@ Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa160-filtros-da-fabri
 Almoxarifado (nenhuma rota ignora uma chave que a tela manda; o defeito estava na comparação).
 
 - [x] **RN-160.04 (C393, B1019)** — `listarSobras` pela `condicaoDeBusca` (norma, dimensões originais e restantes, descrição — as colunas de antes) — `eaf682e9`.
+
+## Etapa 244 — o retalho de peça com número de série (2026-11-18)
+
+Plano: `docs/superpowers/plans/2026-11-18-almoxarifado-etapa244-retalho-peca-com-serie.md` (RN-244.01 a .04). Item 3 da estimativa de 18/11,
+**revisado** de 1h15 para 45 min (`a4409686`).
+
+**O que a estimativa supunha e estava errado:** *"ao gerar retalho a partir de uma peça com número de série, a baixa da peça original
+registra o lote dela"* — supunha que a baixa existisse. A sonda da Fase 0 mediu que `gerarRetalho` **recusa** `baixar_original: true` com
+origem `controle_serie` antes de mover qualquer coisa (guarda da Etapa 9, fix round 1 — a compensação não estornaria uma SAIDA sem série);
+sem a guarda, o motor baixaria a peça sem série (201, sobra criada — medido na sabotagem). O caminho que a recusa ensina (Saída avulsa v2 +
+retalho sem baixa) já grava o lote das séries desde a Etapa 234. Não havia lote a corrigir; o item virou o aviso antecipado na tela.
+
+**Entregue:**
+
+- [x] **RN-244.01 e .02 fixados pela rota** — `40c6e9f5` (+ o caso origem e retalho com série, `c73db29d`).
+  `retalhoPecaComSerie.api.test.js` (5 na T1; 7 com a Fase 5): a recusa literal com e sem `lote_origem_id`, nada gravado (movimentos, sobra, físico, séries,
+  resumo); origem e retalho com série → vence a recusa da origem; Saída avulsa de B1 (L2) → retalho sem baixa → 201, B1 *Entregue* no L2,
+  resumo fecha; o controle sem série passa. Nenhum código de servidor mudou.
+- [x] **RN-244.03 e .04 na janela Gerar retalho** — `c73db29d`. Origem com série: a caixa *"Baixar o material de origem agora"* desligada
+  e desmarcada, o aviso `#retalho-aviso-serie`; a troca de origem desmarca; o payload lê `baixarEfetivo` (caixa **e** origem sem série).
+  `SobrasAlmoxarifado.test.js` (64, 4 novos).
+- [x] **RN-244.05 (Fase 5, achado 1): a baixa declara `exigeSerie`** — `7bcb8f5c`. A guarda de série lê o material sem a trava; ligar a
+  série entre ela e a baixa fazia a SAIDA passar sem série (reproduzido: 201, físico 3, estorno da baixa recusado). Agora o motor relê sob a
+  trava e recusa *"material com controle de serie: informe 1 serie(s) para 1 unidade(s) — recebidas 0"*. Teste com gancho (vermelho antes) +
+  o caso origem com lote e série (achado 10). `retalhoPecaComSerie` 7.
+
+**Fica de fora (declarado — D (244) das novidades):** aceitar série no retalho (B1553); o lote de origem no modo sem baixa (a tela não o
+manda; a rota aceita um lote sem conferir se a peça saiu dele — só rastreio); aviso antecipado para o material **do retalho** com série; a
+corrida de ligar a série no meio da geração foi **resolvida** na Fase 5 (`7bcb8f5c`). Continua 🟢.

@@ -6710,7 +6710,18 @@ Regras que o sistema aplica ao gerar:
   material).
 - **Material com número de série não gera retalho com baixa** — não há campo para dizer qual série
   está sendo cortada. A recusa aponta a saída: baixar a peça pela tela de Movimentações (que tem
-  seletor de série) e registrar o retalho no modo sem baixa. Pelo mesmo motivo, o material **do
+  seletor de série) e registrar o retalho no modo sem baixa. A janela avisa assim que o material de origem
+  é escolhido: a caixa **"Baixar o material de origem agora"** fica apagada e desmarcada (trocar a origem
+  para uma com série desmarca a caixa e esconde os campos da baixa), e abaixo dela aparece *"Este material
+  tem controle por número de série: a peça não é baixada aqui. Baixe a peça em Movimentações → Saída (lá
+  se escolhe o número de série) e gere o retalho com a opção de baixar desmarcada."* A saída de
+  Movimentações registra a série e o lote dela; o retalho, depois, entra sem baixar nada. Se a baixa
+  chegar ao sistema por outro caminho, a recusa é *"O material ⟨código⟩ tem controle de serie e a geracao
+  de retalho nao tem campo para dizer QUAL numero de serie esta sendo cortado. Baixe a peca pela tela de
+  Movimentacoes (que tem seletor de serie) e depois registre o retalho aqui no modo "peca ja baixada do
+  estoque"."* e nada é gravado. Se o controle de série for ligado no material enquanto o retalho
+  é gerado, a baixa confere de novo e recusa: *"material com controle de serie: informe 1 serie(s) para 1
+  unidade(s) — recebidas 0"*, sem gravar nada. Pelo mesmo motivo, o material **do
   retalho** não pode ter controle de série.
 - **O retalho entra sempre sem custo.** O projeto já pagou a peça inteira na saída; creditar o
   retalho com valor contaria o mesmo aço duas vezes no patrimônio. A entrada a custo zero **não

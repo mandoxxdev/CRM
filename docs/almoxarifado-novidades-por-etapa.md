@@ -11,7 +11,13 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-18):** **Etapa 243 fechada** (**a devolução para Quarentena de peça com número de série volta ao
+> **Onde o desenvolvimento está (2026-11-18):** **Etapa 244 fechada** (**o retalho de peça com número de série** — medido: a geração de
+> retalho **já não baixa** peça com série (recusa ao confirmar, desde o começo), então não havia lote errado a corrigir; a janela **Gerar
+> retalho** passa a avisar logo ao escolher o material e desliga *"Baixar o material de origem agora"*. Item 3 da estimativa de 18/11
+> **revisado** de 1h15 para 45 min; decisões **B1553** e **B1554**; limitação **D (244)**; verificação **F (244)**; sem consulta antes do deploy).
+> **Próxima:** **a devolução ao fornecedor de peça com número de série, pela não conformidade** (item 4 da estimativa de 18/11) — detalhada no
+> fim do plano da 244.
+> *(Antes, 2026-11-18:)* **Etapa 243 fechada** (**a devolução para Quarentena de peça com número de série volta ao
 > lote certo** — em **Devoluções**, sem citar a entrega e com o lote em branco, a peça com série de material sem controle por lote volta ao
 > lote da saída que a levou (antes voltava "sem lote", e a de lote bloqueado saía de novo sem a trava do lote); vale para **Quarentena** e
 > **Estoque**; séries de lotes diferentes são recusadas; **Sucata** não muda. Parte da **D (233)** 3 resolvida; decisões **B1551** e **B1552**;
@@ -4781,7 +4787,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15346,6 +15352,19 @@ mais e o **Sem lote atribuído** em −1 (hoje fecha). Série nova ou já em est
 Descartados: dividir a devolução por lote sozinho; derivar também em material com controle por lote (continua exigindo o lote, como a
 saída avulsa). **Reversível.**
 
+**B1553 (NOVA, da Etapa 244; decisão do agente) — o retalho continua sem baixar peça com número de série; a janela avisa antes.** O item 3 da
+estimativa de 18/11 pedia que *"a baixa da peça original registre o lote"*. Medido: a geração de retalho **recusa** a baixa de material com
+série antes de mover qualquer coisa (não há campo para dizer qual série é cortada), e o caminho que a recusa ensina — **Movimentações →
+Saída** marcando a série, depois o retalho com a baixa desmarcada — já grava o lote (a saída avulsa, Etapa 234). Escolhido: **manter a
+recusa** e avisar na janela, antes do formulário inteiro. Descartado: aceitar série no retalho (seletor de série na janela e a baixa pelo lote
+das séries) — muda a decisão da Etapa 9 (o desfazer automático do retalho não consegue estornar uma saída sem série), passa de 2 h e
+duplica o que a Saída já faz. A estimativa foi **revisada** (1h15 → 45 min), não refeita. **Reversível.**
+
+**B1554 (NOVA, da Etapa 244; decisão do agente) — com material de série na origem, a caixa *"Baixar o material de origem agora"* fica
+desligada, não só avisada.** Escolhido: desligada e desmarcada (trocar a origem para uma com série desmarca), e o envio ao servidor lê a caixa
+**e** a origem — marcar antes de escolher o material não manda a baixa. Descartado: só o aviso, com a caixa marcável (o usuário preencheria
+a baixa para ser recusado ao confirmar, que é o que a etapa tira). **Reversível.**
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -20993,6 +21012,15 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(244) O retalho de peça com número de série, o que ficou de fora.** (1) O retalho **não** baixa peça com série (**B1553**): a baixa é
+  pela **Saída** de Movimentações e o retalho, com a baixa desmarcada. (2) No modo **sem baixa** a janela não oferece o lote de origem (nem
+  para material com controle por lote): a ficha da sobra fica sem o lote de onde a peça saiu — o lote está na saída, em **Movimentações**.
+  Pela integração, um lote informado nesse modo é aceito sem conferir se a peça saiu dele (só rastreio; o saldo não muda). (3) O material **do
+  retalho** com série continua recusado ao confirmar, sem aviso antecipado. (4) *(Material que ganha controle de série **no mesmo instante** da geração do retalho: a revisão final reproduziu a baixa passando sem
+  série — **corrigido na própria etapa**: o sistema confere de novo na hora da baixa e recusa com *"material com controle de serie: informe 1
+  serie(s) para 1 unidade(s) — recebidas 0"*, sem gravar nada.)* (5)
+  A saída sem lote de material **sem** série e sem controle por lote, com o saldo todo em lotes, continua deixando o *Sem lote atribuído*
+  negativo (a **B204** de sempre; medido no retalho também).
 - **(243) A devolução de peça com série pelo lote da saída, o que ficou de fora.** (1) **Sucata** e **Retrabalho** continuam recusando série
   (**B1551**). (2) Material **com** controle por lote e o lote em branco: continua *"… exige lote nesta movimentacao (controle por lote
   ligado)"*. (3) A tela **Devoluções** não diz o lote antes de confirmar — o lote aparece depois, em **Movimentações** e **Lotes e Séries**.
@@ -21043,7 +21071,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   (**C538**). (2) Com o lote em branco, a saída de material **sem** controle por lote continua **sem gravar o lote** das séries: o histórico
   diz "sem lote" e a linha de saldo baixada é a de sempre — gravar o lote das séries muda o histórico e o saldo por lote, e não coube nesta
   etapa. (3) A **devolução ao cliente** (material de cliente) e os fluxos internos (entrega, devolução, sucata, Não Conformidade) não ganharam
-  a conferência nova (não foram medidos com série sem lote; a entrega já confere pelo lote das séries). *(A **devolução** para **Estoque** e **Quarentena** de material sem controle por lote: resolvida na **Etapa 243** — volta ao lote da saída que levou a peça, **B1552**; Sucata não muda, **B1551**. Seguem o retalho e a devolução ao fornecedor.)* (4) Material **com** controle por
+  a conferência nova (não foram medidos com série sem lote; a entrega já confere pelo lote das séries). *(A **devolução** para **Estoque** e **Quarentena** de material sem controle por lote: resolvida na **Etapa 243** — volta ao lote da saída que levou a peça, **B1552**; Sucata não muda, **B1551**. Seguem o retalho e a devolução ao fornecedor.)* *(O **retalho**: medido na **Etapa 244** — não baixa peça com série (recusa desde a Etapa 9); a janela avisa antes, **B1553**. Segue a devolução ao fornecedor.)* (4) Material **com** controle por
   lote e o lote em *"Sem lote"*: a lista mostra as séries acesas (as não impedidas) e salvar é recusado por *"… exige lote nesta
   movimentacao (controle por lote ligado)"* — já era assim.
 - **(232) A série de lote impedido na entrega, o que ficou de fora.** (1) A **saída avulsa** (**Movimentações → Saída**) de material com
@@ -22535,6 +22563,13 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(244) Nenhum clique foi dado.** O retalho de peça com série, provado pela rota real em `retalhoPecaComSerie` (7: a recusa com e sem lote,
+origem e retalho com série, origem com lote e série, a série ligada no meio da geração, a saída avulsa seguida do retalho sem baixa com o resumo de lotes fechando, e o controle sem série) e pela tela
+em `SobrasAlmoxarifado` (4 cenários novos: o aviso e a caixa desligada, a troca de origem com a caixa marcada, marcar antes de escolher a
+origem e a volta à origem sem série na mesma janela). Controles positivos: 3 do servidor (mais o vermelho do teste da série ligada no meio, antes do conserto) e 3 da tela, cada um vermelho no cenário certo; tirar a série
+do cálculo do que vai ao servidor não derruba nada (defesa em profundidade, inalcançável pela tela — declarado). Roteiro na seção da 244 (3
+cenários, ~5 minutos). Suítes: test:api 637/637 arquivos, almoxarifado 44, validation 4, safealter 3, sqlite 16, Jest 236 suítes e 3178 testes, build ok.
 
 **(243) Nenhum clique foi dado.** A devolução pelo lote da saída, provada pelas rotas reais em `devolucaoLoteDasSeries` (21: Quarentena e
 Estoque avulsos, duas séries do mesmo lote, lotes diferentes, lote e sem lote, lote informado, saída citada, série nova, série em estoque,
@@ -43044,12 +43079,65 @@ suportada no destino SUCATA. Devolva ao estoque e, em seguida, registre a baixa 
 - A tela não diz o lote antes de confirmar (**D (243)** 3).
 - A peça que saiu sem lote volta sem lote, e a série dela perde a marca do lote, como antes (**D (243)** 4).
 
+## Etapa 244 — O retalho de peça com número de série avisa antes (2026-11-18)
+
+Na tela **Sobras e Retalhos**, **Gerar retalho** de um material com número de série com *"Baixar o material de origem agora"* marcado era
+recusado só ao confirmar, depois de preenchida a janela inteira — o sistema não tem como saber **qual** série está sendo cortada. A medição
+mostrou que por isso **nenhuma** peça com série é baixada pelo retalho (então não havia lote errado a corrigir, como a estimativa supunha): a
+peça sai por **Movimentações → Saída**, que já registra a série e o lote dela, e o retalho entra com a baixa desmarcada. Agora a janela diz
+isso assim que o material é escolhido, e a caixa de baixar fica desligada. Decisões do agente: **B1553** e **B1554**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Origem com número de série: a caixa *"Baixar o material de origem agora"* marcável; a recusa vinha ao confirmar | A caixa fica **desligada e desmarcada**, com o aviso logo abaixo |
+| Caixa marcada e depois a origem trocada para uma com série: os campos da baixa continuavam na tela | A caixa desmarca e os campos da baixa somem; gerar registra o retalho sem baixa |
+| O controle de série ligado no material no mesmo instante da geração: a baixa passava sem série (achado da revisão final) | Recusada sem gravar nada: *"material com controle de serie: informe 1 serie(s) para 1 unidade(s) — recebidas 0"* |
+| Origem sem série; o modo sem baixa; o servidor (a mesma recusa, se a baixa chegar por outro caminho) | **Igual** |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**. Um material *SER-244* com **número de série** e **sem** controle por lote; em
+**Movimentações → Entrada**, 2 no lote *L1* (séries *A1*, *A2*) e 2 no *L2* (*B1*, *B2*). Um material *RET-244* sem série (o do retalho) e
+um material *CHP-244* sem série com saldo.
+
+**1. O aviso (RN-244.03).** **Sobras e Retalhos → Gerar retalho**, **Material de origem** *SER-244*. **Confira:** a caixa *"Baixar o material
+de origem agora (a peça está saindo do estoque neste momento)"* fica apagada e desmarcada e, abaixo dela: *"Este material tem controle por
+número de série: a peça não é baixada aqui. Baixe a peça em Movimentações → Saída (lá se escolhe o número de série) e gere o retalho com a
+opção de baixar desmarcada."* Troque a origem para *CHP-244*: a caixa volta a funcionar e o aviso some.
+
+**2. A troca com a caixa marcada (RN-244.04).** Com a origem *CHP-244*, marque a caixa e digite **Quantidade baixada** 3. Troque a origem para
+*SER-244*. **Confira:** a caixa desmarca e a **Quantidade baixada** some. Escolha *RET-244* como retalho e gere: *"Retalho gerado — nada foi
+baixado (a peça já tinha saído do estoque)"*.
+
+**3. O caminho ensinado (RN-244.02).** **Movimentações → Saída** de 1 de *SER-244*, lote em branco, marcando *B1*. Depois **Gerar retalho**
+de *SER-244* para *RET-244* (a caixa desligada). **Confira:** em **Movimentações**, a saída diz lote *L2*; em **Lotes e Séries**, *B1* está
+*Entregue* no *L2* e **Sem lote atribuído** é 0; o retalho entrou 1 em *RET-244*.
+
+**O servidor (RN-244.01).** Se a baixa de origem com série chegar por outro caminho (integração), a recusa é a de sempre, sem gravar nada:
+*"O material SER-244 tem controle de serie e a geracao de retalho nao tem campo para dizer QUAL numero de serie esta sendo cortado. Baixe a
+peca pela tela de Movimentacoes (que tem seletor de serie) e depois registre o retalho aqui no modo "peca ja baixada do estoque"."*
+
+### O que esta etapa NÃO cobre
+
+- O retalho **não** passa a baixar peça com série (**D (244)** 1, **B1553**).
+- O modo sem baixa não guarda o lote de origem na ficha da sobra (**D (244)** 2).
+- O material **do retalho** com série continua recusado só ao confirmar (**D (244)** 3).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 244 entregue (2026-11-18):** **o retalho de peça com número de série** (item 3 da estimativa de 18/11, **revisado** para 45 min).
+  Medido: o retalho não baixa peça com série (a recusa existe desde a Etapa 9) — sem lote a corrigir; a janela **Gerar retalho** avisa ao
+  escolher o material e desliga a caixa de baixar (**B1553**, **B1554**). Commits `40c6e9f5` (teste de rota), `c73db29d` (janela), `7bcb8f5c` (Fase 5: a baixa confere a série
+  na hora) e o fechamento. **O que é seu:** as **B1553** e **B1554** (reversíveis); a limitação **(244)** em D e a verificação **(244)** em F. Sem consulta
+  antes do deploy. **Próxima:** **a devolução ao fornecedor de peça com número de série, pela não conformidade** (item 4 da estimativa de
+  18/11) — detalhada no fim do plano da 244.
 
 - **Etapa 243 entregue (2026-11-18):** **a devolução para Quarentena de peça com série volta ao lote certo** (parte da **D (233)** 3). Sem
   lote informado nem herdado, a devolução para Quarentena ou Estoque usa o lote da saída que levou as séries (**B1551**, **B1552**). Commits
