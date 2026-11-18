@@ -29,6 +29,8 @@ import api from '../services/api';
 // Etapa 192 (RN-192.10): `url` — a tela de cadastro do Compras le a mesma lista pela porta dela.
 export function useCategoriasMaterial(url = '/almoxarifado/categorias') {
   const [categorias, setCategorias] = useState([]);
+  // Etapa 238 (RN-238.02): as linhas inteiras, para quem precisa de mais que o nome (a marca `is_epi` do tipo de material).
+  const [linhas, setLinhas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState(false);
 
@@ -45,18 +47,20 @@ export function useCategoriasMaterial(url = '/almoxarifado/categorias') {
           .map((c) => (typeof c === 'string' ? c : c && c.nome))
           .filter(Boolean);
         setCategorias(nomes);
+        setLinhas((Array.isArray(res.data) ? res.data : []).filter((c) => c && typeof c === 'object' && c.nome));
         setErro(false);
       })
       .catch(() => {
         if (!vivo) return;
         setCategorias([]);
+        setLinhas([]);
         setErro(true);
       })
       .finally(() => { if (vivo) setLoading(false); });
     return () => { vivo = false; };
   }, [url]);
 
-  return { categorias, loading, erro };
+  return { categorias, linhas, loading, erro };
 }
 
 export default useCategoriasMaterial;

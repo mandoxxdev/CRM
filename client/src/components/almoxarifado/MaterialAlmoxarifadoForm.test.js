@@ -1299,10 +1299,17 @@ describe('[RN-156.02] o Proprietario com a lista de clientes recusada', () => {
 describe('MaterialAlmoxarifadoForm — Etapa 178: Nº do CA e Validade do CA', () => {
   const caNumero = () => container.querySelector('#material-ca-numero');
   const caValidade = () => container.querySelector('#material-ca-validade');
+  // Etapa 238 (RN-238.02): os campos do CA so aparecem para material EPI — estes cenarios escolhem o tipo EPI do cadastro.
+  beforeEach(() => {
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url) => (url === '/almoxarifado/tipos-material'
+      ? Promise.resolve({ data: [{ id: 2, nome: 'EPI', ativo: 1, is_epi: 1 }] }) : base(url)));
+  });
 
   test('cadastro novo: os dois campos existem, o de validade e date, e o POST leva o que foi digitado', async () => {
     await renderizarNovo();
     await preencherObrigatorios();
+    preencher(container.querySelector('#material-tipo-material'), 'EPI');
     expect(caValidade().type).toBe('date');
     preencher(caNumero(), ' 12345 ');
     preencher(caValidade(), '2027-03-31');
@@ -1324,7 +1331,7 @@ describe('MaterialAlmoxarifadoForm — Etapa 178: Nº do CA e Validade do CA', (
       if (url === '/almoxarifado/familias') return Promise.resolve({ data: FAMILIAS });
       if (url === '/almoxarifado/categorias') return Promise.resolve({ data: CATALOGO });
       if (url.startsWith('/almoxarifado/materiais/')) {
-        return Promise.resolve({ data: { ...MATERIAL_DO_CLIENTE, ca_numero: '998877', ca_validade: '2026-12-31' } });
+        return Promise.resolve({ data: { ...MATERIAL_DO_CLIENTE, tipo_material: 'EPI', ca_numero: '998877', ca_validade: '2026-12-31' } });
       }
       return Promise.resolve({ data: [] });
     });

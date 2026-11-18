@@ -124,7 +124,9 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
   const { categorias, erro: erroCategorias } = useCategoriasMaterial(rotas.api.categorias);
   // Etapa 216 (RN-216.01): o Tipo de Material vem do cadastro de tipos (Compras -> Tipos de Material), pela porta do modulo. O hook
   // das categorias serve: o GET devolve linhas com `nome`.
-  const { categorias: tiposMaterial } = useCategoriasMaterial(rotas.api.tiposMaterial);
+  const { categorias: tiposMaterial, linhas: tiposMaterialLinhas } = useCategoriasMaterial(rotas.api.tiposMaterial);
+  // Etapa 238 (RN-238.02): o tipo ligado por `tipo_material_id` (o formulario nao o edita) — uma das marcas de EPI do servidor.
+  const [tipoMaterialIdGravado, setTipoMaterialIdGravado] = useState(null);
 
   const [form, setForm] = useState({
     codigo: '',
@@ -331,6 +333,17 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
     return { opcoes: [...opcoes, { valor: atual, rotulo: `${atual} (fora da lista)` }], valor: atual };
   }, [tiposMaterial, form.tipo_material]);
 
+  // Etapa 238 (RN-238.02): Nº e Validade do CA so para EPI, pelas mesmas marcas do servidor (RN-178.01, `epiService.ehEpiSql`), lidas
+  // do formulario como esta: o tipo escolhido com a marca `is_epi` no cadastro, o tipo escrito 'EPI', a categoria 'EPIs', ou o tipo
+  // ligado por `tipo_material_id`. Fora disso os campos somem — e o valor continua no `form` e vai no salvar (RN-238.03).
+  const ehEpi = useMemo(() => {
+    const norm = (v) => String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+    const marcado = (t) => t && Number(t.is_epi) === 1;
+    if (norm(form.tipo_material) === 'epi' || norm(form.categoria) === 'epis') return true;
+    if (form.tipo_material && marcado(tiposMaterialLinhas.find((t) => norm(t.nome) === norm(form.tipo_material)))) return true;
+    return !!tipoMaterialIdGravado && marcado(tiposMaterialLinhas.find((t) => Number(t.id) === tipoMaterialIdGravado));
+  }, [form.tipo_material, form.categoria, tiposMaterialLinhas, tipoMaterialIdGravado]);
+
   // Sem categoria o cadastro não conclui (RN-07), então a falha de carga precisa ser dita — ao
   // contrário dos filtros das listagens, onde o catálogo é conveniência.
   useEffect(() => {
@@ -382,6 +395,7 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
       const res = await api.get(rotas.api.material(id));
       const m = res.data;
       setFamiliaGravadaId(m.familia_id ? String(m.familia_id) : '');
+      setTipoMaterialIdGravado(m.tipo_material_id ? Number(m.tipo_material_id) : null);
       setDonoNome(m.proprietario_cliente_nome || null);
       controlesLidosRef.current = { controle_lote: !!m.controle_lote, controle_serie: !!m.controle_serie };
       familiaLidaRef.current = {
@@ -921,16 +935,24 @@ const MaterialAlmoxarifadoForm = ({ rotas = ROTAS_ALMOXARIFADO }) => {
                   <input className="almox-input" value={form.ncm} onChange={e => set('ncm', e.target.value)}
                     placeholder="0000.00.00" maxLength={10} />
                 </div>
-                <div className="almox-field">
-                  <label className="almox-label" htmlFor="material-ca-numero">Nº do CA</label>
-                  <input id="material-ca-numero" className="almox-input" value={form.ca_numero}
-                    onChange={e => set('ca_numero', e.target.value)} placeholder="Só EPI — Certificado de Aprovação" />
-                </div>
-                <div className="almox-field">
-                  <label className="almox-label" htmlFor="material-ca-validade">Validade do CA</label>
-                  <input id="material-ca-validade" className="almox-input" type="date" value={form.ca_validade}
-                    onChange={e => set('ca_validade', e.target.value)} />
-                </div>
+                {ehEpi && (<>
+                  <div className="almox-field">
+                    <label className="almox-label" htmlFor="material-ca-numero">Nº do CA</label>
+                    <input id="material-ca-numero" className="almox-input" value={form.ca_numero}
+                      onChange={e => set('ca_numero', e.target.value)} placeholder="Número do Certificado de Aprovação"
+                      aria-describedby="material-ca-explicacao" />
+                  </div>
+                  <div className="almox-field">
+                    <label className="almox-label" htmlFor="material-ca-validade">Validade do CA</label>
+                    <input id="material-ca-validade" className="almox-input" type="date" value={form.ca_validade}
+                      onChange={e => set('ca_validade', e.target.value)} aria-describedby="material-ca-explicacao" />
+                  </div>
+                  <p id="material-ca-explicacao" className="almox-form-full"
+                    style={{ margin: '-4px 0 4px', fontSize: 12, color: 'var(--text-secondary, #64748b)' }}>
+                    CA é o Certificado de Aprovação do EPI (equipamento de proteção individual): o número e a data de validade que constam
+                    no certificado. Só vale para material do tipo EPI.
+                  </p>
+                </>)}
                 <div className="almox-field almox-form-full">
                   <label className="almox-label">Aplicação</label>
                   <textarea className="almox-textarea" value={form.aplicacao} onChange={e => set('aplicacao', e.target.value)}
