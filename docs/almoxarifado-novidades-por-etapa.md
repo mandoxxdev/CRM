@@ -11,7 +11,14 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-13):** **Etapa 237 fechada** (**a devolução ao cliente avisa a localização padrão bloqueada** —
+> **Onde o desenvolvimento está (2026-11-18):** **Etapa 239 fechada** (**a saída de lote que está em outra prateleira** — a saída com lote e
+> sem origem escolhida passa a conferir o bloqueio na prateleira onde o lote está, não na localização padrão: a devolução ao cliente de
+> material com lote deixa de ser recusada só porque a padrão está bloqueada (a **C543**, no motor), e o lote guardado só em prateleira
+> bloqueada deixa de sair sem aviso. Vale para Movimentações, a entrega automática por lote, sucata, retalho e terceiros. Decisões **B1543**
+> e **B1544**; avisos **C544** e **C545**; limitação **D (239)**; verificação **F (239)**; sem consulta antes do deploy).
+> **Próxima:** **escolher de onde sai a devolução ao cliente** (item 6 da estimativa de 18/11, a **D (236)** 1) — detalhada no fim do plano da 239.
+> *(Antes, 2026-11-13:)* **Etapa 237 fechada**
+ (**a devolução ao cliente avisa a localização padrão bloqueada** —
 > em **Materiais de Clientes → Devolver**, com a localização padrão do material bloqueada, a janela avisa ao abrir que a devolução será
 > recusada e apaga o **Confirmar devolução** (antes o usuário preenchia tudo e a recusa vinha ao confirmar). Fatia visível da **C543**; decisão
 > **B1542**; limitação **D (237)**; verificação **F (237)**; sem consulta antes do deploy; o motor não mudou).
@@ -15235,6 +15242,20 @@ bloqueada, e a janela mostra o aviso e desabilita o botão. Descartados: (a) mud
 sai — vale para toda saída sem origem (Movimentações também) e não cabia na fatia (é a **D (236)** 1 com a **C543**); (b) só avisar e deixar
 confirmar — o sistema recusaria sempre. **Reversível** (o botão volta a habilitar tirando uma condição).
 
+**B1543 (NOVA, da Etapa 239; decisão do agente) — a saída com lote sem origem confere a prateleira do lote; se as prateleiras livres do
+lote não cobrem, o resto sai das bloqueadas.** Escolhido: o sistema tira primeiro das prateleiras livres do lote (a padrão antes, se livre e
+com o lote) e só recusa — com o código da prateleira do lote — quando o lote **todo** está em prateleira bloqueada. Descartados: (a) recusar
+sempre que faltasse saldo livre — mudaria a regra da Etapa 6 ("uma saída consome o saldo do lote, qualquer que seja a área") e recusaria
+saídas que hoje passam; (b) só parar de olhar a padrão, sem olhar a prateleira do lote — deixaria o lote guardado só em prateleira
+bloqueada saindo sem aviso. Na **entrega automática**, o lote guardado só em prateleira bloqueada vai para o **fim** da fila (os outros lotes
+saem antes); descartado tirar a parte bloqueada da conta do lote (sonda da Fase 5: o que faltava saía "sem lote", a linha sem lote ia a −3 e
+o lote ficava com 3 e o físico em 0). **Reversível.**
+
+**B1544 (NOVA, da Etapa 239; decisão do agente) — o aviso da janela Devolver ao cliente (B1542) fica só para a devolução que sai sem lote.**
+Material com controle de lote: sem aviso. Com série (sem controle de lote): aviso até marcar séries de um lote só. Material que aceita saldo
+negativo (no cadastro ou para todos): aviso como antes — nele o sistema continua conferindo a padrão (a posição do cliente passa a dizer
+isso, campo de leitura novo). Descartado: tirar o aviso de todo material com série — a série sem lote continua recusada. **Reversível.**
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -19503,6 +19524,19 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      fazer:** desbloquear a localização padrão do material (ou trocar a localização padrão no cadastro) antes de devolver. A escolha da origem
      na janela é a **D (236)** 1. **Desde a Etapa 237 (B1542)** a janela avisa ao abrir — *"A localização padrão deste material (R5L-3) está bloqueada: a devolução será recusada. Desbloqueie a localização antes de devolver."* — e
      apaga o **Confirmar devolução**; a recusa do sistema continua igual (a regra vale para toda saída sem origem escolhida).
+     **Desde a Etapa 239 (B1543, B1544):** com **lote**, a devolução (e toda saída com lote sem origem) confere a prateleira do lote, não a
+     padrão — a devolução de material com lote sai mesmo com a padrão bloqueada, e a janela não avisa mais. Continua recusada a devolução
+     **sem lote** (material sem controle de lote; série sem as marcadas de um lote; material que aceita saldo negativo) — a janela continua avisando.
+544. **NOVO (da Etapa 239, já era assim antes) — o estorno de uma saída com lote sem origem devolve o lote na localização padrão, mesmo
+     bloqueada.** Com a padrão *P* bloqueada e o lote em *A*, a saída de 2 sai de *A* (Etapa 239); o estorno devolve os 2 em *P* (medido: *A* 3,
+     *P* 2). O total do lote volta certo; o endereço não. Uma próxima saída desse lote tira primeiro de *A* (livre); se só restar o que está
+     em *P*, é recusada (*"Localização P está bloqueada"*). **O que fazer:** depois de estornar, transferir de *P* para o endereço certo
+     (ou desbloquear *P*). Era assim com a padrão livre também (a pendência antiga do estorno: "o endereçamento pode consolidar").
+545. **NOVO (da Etapa 239, já era assim antes) — na saída de peça com número de série e lote, a baixa não segue a prateleira da série.**
+     Lote *L1* com a série *S1* em *X* (bloqueada) e *S2* em *A* (livre); saída de *S1* sem origem: passa (o lote tem prateleira livre) e
+     baixa a linha de *A* — fica *X* com 1 sem série e *A* com 0 enquanto *S2* diz estar em *A* (sonda da Fase 5). A série sai certa; o
+     endereço do saldo fica trocado. Antes da 239 a ordem da baixa também não olhava a série (dava certo ou errado conforme a quantidade de
+     cada linha). **O que fazer:** na saída de peça com série, escolher a origem (a prateleira da série).
 
 ### D. Limitações declaradas— são decisão, não esquecimento
 
@@ -20859,6 +20893,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(239) A saída de lote que está em outra prateleira, o que ficou de fora.** (1) Se as prateleiras livres do lote não cobrem a quantidade,
+  o resto sai das bloqueadas — basta um resto mínimo numa livre (0,001) para o lote sair quase todo da bloqueada (sonda da Fase 5; a regra da
+  Etapa 6, mantida — **B1543**). (2) A janela da devolução ao cliente não sabe se o lote está só em prateleira bloqueada: a recusa vem ao
+  confirmar. (3) Material que aceita saldo negativo: com lote, continua conferindo a padrão. (4) Saída sem lote: continua conferindo a padrão
+  (escolher a origem na devolução ao cliente é a próxima, **D (236)** 1). (5) A entrega automática que só cobre com um lote guardado em
+  prateleira bloqueada é recusada no meio: o que os itens anteriores já baixaram fica entregue (a regra de sempre da entrega).
 - **(237) O aviso da localização padrão bloqueada na devolução ao cliente, o que ficou de fora.** (1) O sistema continua recusando: a
   devolução só sai desbloqueando a localização ou trocando a padrão no cadastro (escolher a origem é a **D (236)** 1). (2) O aviso é o da hora
   em que a posição carregou: a localização bloqueada com a tela aberta só aparece ao confirmar (ou depois de **Atualizar**). (3) Material sem
@@ -22375,6 +22415,13 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(239) Nenhum clique foi dado.** O motor mudou — a saída com lote sem origem confere a prateleira do lote —, provado pelas rotas reais em
+`saidaLotePrateleiraDoLote` (14: a padrão bloqueada com o lote livre sai; o lote só em prateleira bloqueada é recusado; a ordem livre
+primeiro; o resto nas bloqueadas; com origem, com negativo e o estorno como antes; a devolução ao cliente e a entrega automática por
+integração). A tela mudou — o aviso da devolução só sem lote —, provado pelo Jest (`MateriaisClienteDevolucaoLocalBloqueado`, 6). Controles
+positivos: a validação de volta para a padrão derruba 5; a ordem da baixa, 2; a ordem da validação, 2; a fila da entrega sem o fim para o
+lote bloqueado, 2; a tela sem a condição de lote, 2; sem a de negativo, 1. Suítes: `test:api` 632/632 arquivos, almoxarifado 44, validation 4, safealter 3, sqlite 16, Jest 233 suítes e 3147 testes, build ok. Roteiro na seção da 239 (5 cenários, ~10 minutos).
 
 **(237) Nenhum clique foi dado.** A tela **mudou** — o aviso da localização padrão bloqueada na janela **Devolver ao cliente** e o
 **Confirmar devolução** apagado —, provado pelo Jest (`MateriaisClienteDevolucaoLocalBloqueado`, 3 cenários; tirar o `disabled` e tirar o aviso
@@ -42597,12 +42644,78 @@ preencha quantidade 1 e documento *DEV-1*: **Confirmar devolução** continua ap
 - O aviso é o da hora em que a posição carregou (**D (237)** 2).
 - Os fluxos internos não descobrem o lote das séries (resto da **D (233)** 3) — a próxima.
 
+## Etapa 239 — A saída de lote que está em outra prateleira (2026-11-18)
+
+Quando a saída diz o **lote** e não diz de onde sai, o sistema conferia se a **localização padrão** do material estava bloqueada — e
+recusava a saída mesmo com o lote guardado em outra prateleira, livre (**C543**: a devolução ao cliente, recusada com *"Localização R5L-3
+está bloqueada"*). E, ao contrário, com a padrão livre, tirava o lote de uma prateleira **bloqueada** sem dizer nada. Agora a conferência
+olha a prateleira onde o lote está: o sistema tira primeiro das prateleiras livres e só recusa quando o lote está **todo** em prateleira
+bloqueada — dizendo qual. Vale para toda saída com lote sem origem escolhida: **Movimentações**, devolução ao cliente, a parte automática
+da entrega de requisição, sucata, retalho e terceiros. Decisões do agente: **B1543** e **B1544**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Padrão bloqueada, lote guardado em outra prateleira livre: *"Localização R5L-3 está bloqueada"* (devolução ao cliente, saída em Movimentações) | **Sai**, da prateleira do lote |
+| Padrão livre, lote guardado só numa prateleira bloqueada: saía de lá, sem aviso | Recusa *"Localização X-09 está bloqueada"* (o código da prateleira do lote); nada sai |
+| Lote em duas prateleiras, a padrão bloqueada: a saída tirava da padrão primeiro | Tira da prateleira livre primeiro; a bloqueada só se a livre não cobrir |
+| Janela **Devolver ao cliente** de material **com lote** e padrão bloqueada: aviso vermelho e **Confirmar** apagado | Sem aviso, **Confirmar** habilitado |
+| Janela de material **com série** (sem lote) e padrão bloqueada: aviso sempre | Aviso até marcar séries de **um** lote; marcadas, some |
+| Entrega automática por lote: escolhia o lote que vence primeiro mesmo guardado só em prateleira bloqueada (e tirava de lá) | O lote guardado só em prateleira bloqueada vai para o fim da fila: sai dos outros lotes; se só ele cobre, a entrega é recusada com *"⟨material⟩: Localização X-239 está bloqueada"* |
+| Material de cliente com lote **e** saldo negativo permitido, padrão bloqueada | **Igual** (recusa; a janela continua avisando) |
+| Saída sem lote (material sem controle de lote) com a padrão bloqueada | **Igual** (recusa; a janela da devolução continua avisando) |
+| Saída com a prateleira de origem escolhida | **Igual** |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**; duas localizações livres, *P-239* e *A-239*, e uma terceira, *X-239*. Um material
+*MAT-239* com **Controle por lote** e **Localização no estoque** *P-239*. Em **Movimentações**, uma **Entrada** de 5 no lote *L1* com
+destino *A-239*. Em **Configurações → Localizações**, marque *P-239* como **bloqueada**.
+
+**1. O lote sai da prateleira dele (RN-239.01/.02).** **Movimentações → Saída**, *MAT-239*, lote *L1*, quantidade 2, sem origem, com a
+justificativa. **Antes:** *"Localização P-239 está bloqueada"*. **Agora:** registrada; no extrato do material, *A-239 / L1* fica com 3.
+
+**2. O lote todo em prateleira bloqueada é recusado (RN-239.01).** Desbloqueie *P-239*. **Transferência** de 3 do lote *L1* de *A-239* para
+*X-239*; bloqueie *X-239*. **Saída** de 1 do *L1* sem origem → *"Localização X-239 está bloqueada"*; nada sai. **Antes:** a saída passava e
+*X-239* caía para 2.
+
+**3. Com a origem escolhida, nada muda (RN-239.04).** Na mesma saída, escolha a origem *X-239* → a mesma recusa, como sempre.
+
+**4. Devolução ao cliente (RN-239.05/.06).** Um material de cliente com **Controle por lote**, padrão *P-239* bloqueada, lote *L1* com 3 em
+*A-239*. **Materiais de Clientes → Devolver**: a janela **não** mostra o aviso vermelho; lote *L1*, quantidade 1, documento *DEV-239*,
+**Confirmar devolução** → *"Devolução ao cliente registrada!"*. Material de cliente **sem** lote com a padrão bloqueada: o aviso de sempre —
+*"A localização padrão deste material (P-239) está bloqueada: a devolução será recusada. Desbloqueie a localização antes de devolver."* — e o
+botão apagado. Material com **série** (sem controle de lote): o aviso aparece até marcar séries de um lote só (*"As séries marcadas saem do
+lote L1."*); marcar uma série sem lote o traz de volta.
+
+**5. A entrega automática passa ao próximo lote (RN-239.07).** Material com lote: *L1* (vence antes) com 3 em *X-239* bloqueada, *L2* com 5
+em *A-239*. Requisição de 3, separada sem origem; **Confirmar Entrega** → sai de *L2* em *A-239*; *L1* fica. **Antes:** saía de *L1*, da
+prateleira bloqueada. Sem o *L2* (só o *L1*, em *X-239* bloqueada): *"MAT-239: Localização X-239 está bloqueada"*, nada sai.
+
+### O que esta etapa NÃO cobre
+
+- A saída **sem lote** continua conferindo a padrão: com ela bloqueada, a devolução ao cliente de material sem lote continua recusada
+  (escolher a origem na janela é o item seguinte — **D (236)** 1).
+- O **estorno** da saída sem origem devolve o lote na **padrão**, mesmo bloqueada (**C544**).
+- Quando as prateleiras livres do lote não cobrem a quantidade, o resto sai da bloqueada (a regra de sempre — **D (239)** 1).
+- A janela da devolução ao cliente não sabe se o lote está só em prateleira bloqueada: a recusa vem ao confirmar (**D (239)** 2).
+- Peça com número de série: a baixa não segue a prateleira da série (**C545**).
+- Material que aceita saldo negativo (ou com o saldo negativo ligado para todos): com lote, continua conferindo a padrão (**D (239)** 3).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 239 entregue (2026-11-18):** **a saída de lote que está em outra prateleira** (a **C543** no motor). A saída com lote e sem origem
+  confere a prateleira do lote, não a padrão (**B1543**); a janela da devolução ao cliente avisa só a devolução sem lote (**B1544**); a
+  entrega automática deixa por último o lote guardado só em prateleira bloqueada. Commits `e21132d1` (motor, entrega e posição, com o teste), `9e33f948` (tela e teste) e o fechamento. **O que é seu:** as **B1543** e
+  **B1544** (reversíveis); os avisos **C544** e **C545**; a **C543** atualizada; a limitação **(239)** em D e a verificação **(239)** em F. Sem
+  consulta antes do deploy. **Próxima:** **escolher de onde sai a devolução ao cliente** (item 6 da estimativa de 18/11) — detalhada no fim do
+  plano da 239.
 
 - **Etapa 237 entregue (2026-11-13):** **a devolução ao cliente avisa que a localização padrão está bloqueada** (fatia visível da **C543**).
   A posição do cliente passa a dizer o código e o bloqueio da localização padrão de cada material; a janela **Devolver ao cliente** avisa e

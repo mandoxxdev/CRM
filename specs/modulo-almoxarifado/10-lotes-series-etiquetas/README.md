@@ -1,5 +1,9 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 239 (2026-11-18, `e21132d1`, tela `9e33f948`): a saída com lote e sem origem confere a prateleira do lote, não a padrão (C543;
+> B1543, B1544, C544, C545)** — a seção "O saldo do lote é agregado nas DUAS pontas" **estava errada** para esse caso (corrigida à vista);
+> a entrega automática deixa por último o lote guardado só em endereço bloqueado. Ver a seção "Etapa 239", no fim. Continua 🟢.
+
 > **+ Etapa 235 (2026-11-13, `ec512062`, `94a094ef`, `69ce32d3`): a devolução ao cliente também confere e grava o lote das séries
 > (`lotePelasSeries` na rota `/materiais-cliente/devolucoes`) — parte da D (233) 3; a regra mora na spec 13, seção "Etapa 235".**
 
@@ -338,6 +342,14 @@ saldo**: o total do material e a soma das linhas continuam batendo. O que se per
 que "bloqueada" protege a linha inteira contra qualquer saída — ela só protege contra saída que a
 declare como origem. Não é bug a corrigir (parked com ruling no review final da Etapa 6); é
 comportamento que não estava escrito em lugar nenhum até agora.
+
+> **Etapa 239 (2026-11-18, C543) — esta seção estava errada para a saída com lote SEM origem.** Ela dizia que a validação olha "a
+> declarada pelo operador, ou a padrão do material na ausência dela". Para a saída **com lote**, **sem origem**, em material sem negativo,
+> **não é mais assim**: a validação olha o endereço da primeira linha do lote com saldo na ordem do claim **com as bloqueadas por último**
+> (`validarEnderecoDoLoteNaSaida`) e o claim drena nessa ordem (`bloqueadasPorUltimo`). Recusa *"Localização X está bloqueada"* só quando o
+> lote só tem saldo em endereço bloqueado; com livres que não cobrem, segue nas bloqueadas (o efeito colateral acima, mantido). Com origem
+> informada, sem lote ou com negativo: como descrito acima. A entrega automática por lote (`lotesParaOAutomatico`) não conta o lote em
+> endereço bloqueado. Ver a seção "Etapa 239", no fim.
 
 ### A entrada do recebimento não é mais re-executável
 
@@ -1496,3 +1508,22 @@ lote em branco gravava `lote_id` NULL e baixava a linha "sem lote" (−1); o L2 
 > Corrigido no código (a derivação exige a cobertura) e no plano, à vista.
 
 Testes: `saidaAvulsaLoteDasSeries.api.test.js` (19); `MovimentacoesSaidaLoteDasSeries.test.js` (10). Continua 🟢.
+
+## Etapa 239 — a saída com lote confere a prateleira do lote, não a padrão (2026-11-18)
+
+Plano: `docs/superpowers/plans/2026-11-18-almoxarifado-etapa239-saida-lote-prateleira-do-lote.md` (RN-239.01 a .07; B1543, B1544; C544,
+C545). A **C543** no motor. Material sem negativo, saída **com lote** e **sem origem**:
+
+- [x] **RN-239.01** — a validação (`validarEnderecoDoLoteNaSaida`) olha a primeira linha do lote com saldo (> folga) na ordem do claim com
+  as bloqueadas por último; recusa *"Localização X está bloqueada"* (o código do endereço do lote) só quando o lote só tem saldo em
+  endereço bloqueado — `e21132d1`.
+- [x] **RN-239.02/.03** — `claimSaldoDoLote(..., { bloqueadasPorUltimo })`: livres primeiro (a padrão antes, se livre); se não cobrem,
+  segue nas bloqueadas (a regra da Etapa 6, acima, mantida) — `e21132d1`.
+- [x] **RN-239.04** — com origem, sem lote, com negativo, estorno: sem mudança — `e21132d1`.
+- [x] **RN-239.07** — `requisitionService.lotesParaOAutomatico`: o lote sem guarda guardado só em endereço bloqueado vai para o fim da fila
+  (o saldo inteiro). **O plano dizia "descontar a parte bloqueada" (Fase 2) — estava errado** (Fase 5, reproduzido: o que faltava saía
+  "sem lote", linha sem lote −3 e o lote inflado); corrigido antes do commit — `e21132d1`.
+- [ ] **Fora (D (239)):** resto nas bloqueadas quando as livres não cobrem; a baixa não segue a prateleira da série (C545); o estorno
+  devolve na padrão (C544, pendência antiga desta spec: "o endereçamento pode consolidar").
+
+Teste: `saidaLotePrateleiraDoLote.api.test.js` (14). Continua 🟢.

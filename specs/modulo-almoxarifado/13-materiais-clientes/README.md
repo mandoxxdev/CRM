@@ -17,7 +17,7 @@
 
 > **Status:** 🟢 — **Etapa 8 entregue em 2026-08-12** (`f26b635..5b5eb55`) **+ Etapa 123 (2026-10-16, `c97fe07f`): o dono do material tem de
 > estar em Clientes — `POST`/`PUT /materiais` com dono inexistente → 400 (C216 resolvido; a regra mora na spec 01, seção "Etapa 123")** **+ Etapa 106 (2026-10-15, `d6493a7e..0c8ec372`): o estorno do ajuste exige a mesma permissão do ajuste (C211 resolvido)** **+ Etapa 108 (2026-10-15, `cd7d5118..bc415eb6`): trocar o dono de material com histórico exige a mesma permissão (C213 resolvido)** · **Spec original:** seção 17 (fundamental para industrialização GMP)
-> **Última atualização:** 2026-11-13 (**Etapa 237** — com a localização padrão bloqueada, a janela de devolução ao cliente avisa e apaga o Confirmar; a posição ganha `localizacao_padrao_codigo` e `localizacao_padrao_bloqueada` (`ac98e771`, `e50a98ec`). Ver a seção no fim.) Antes: 2026-11-13 (**Etapa 236** — a janela de devolução ao cliente ganha o seletor de lote: material de cliente com controle por lote passa a ser devolvível pela tela (`5f5c1af4`). Ver a seção no fim.) Antes: 2026-10-19 (**Etapa 156** — o seletor **Proprietário** do cadastro diz o motivo quando a lista de clientes volta recusada, e o dono que não está na lista aparece como *"Cliente #7 — fora da lista"* (C366, `75e772cf`). Ver a seção no fim.) Antes: 2026-10-15 (Etapa 108)
+> **Última atualização:** 2026-11-18 (**Etapa 239** — com lote, a padrão bloqueada não barra a devolução ao cliente; a posição ganha `permite_saldo_negativo`; o aviso da 237 fica só para a devolução sem lote (`e21132d1`, `9e33f948`). Ver a seção no fim.) Antes: 2026-11-13 (**Etapa 237** — com a localização padrão bloqueada, a janela de devolução ao cliente avisa e apaga o Confirmar; a posição ganha `localizacao_padrao_codigo` e `localizacao_padrao_bloqueada` (`ac98e771`, `e50a98ec`). Ver a seção no fim.) Antes: 2026-11-13 (**Etapa 236** — a janela de devolução ao cliente ganha o seletor de lote: material de cliente com controle por lote passa a ser devolvível pela tela (`5f5c1af4`). Ver a seção no fim.) Antes: 2026-10-19 (**Etapa 156** — o seletor **Proprietário** do cadastro diz o motivo quando a lista de clientes volta recusada, e o dono que não está na lista aparece como *"Cliente #7 — fora da lista"* (C366, `75e772cf`). Ver a seção no fim.) Antes: 2026-10-15 (Etapa 108)
 >
 > Material de cliente deixou de ser ilha e virou **material normal com dono**
 > (`materiais_almoxarifado.proprietario_cliente_id`, `NULL` = material nosso): ganha lote, série,
@@ -492,3 +492,19 @@ Plano: `docs/superpowers/plans/2026-11-13-almoxarifado-etapa237-devolucao-client
 - [ ] **Fora (declarado, D (237)):** a recusa do motor continua (origem na janela é a **D (236)** 1); o aviso é o da hora da carga da posição.
 
 Testes: `materialClientePosicaoLocalizacaoBloqueada.api.test.js` (4); `MateriaisClienteDevolucaoLocalBloqueado.test.js` (3). Continua 🟢.
+
+## Etapa 239 — com lote, a padrão bloqueada não barra a devolução ao cliente (2026-11-18)
+
+Plano: `docs/superpowers/plans/2026-11-18-almoxarifado-etapa239-saida-lote-prateleira-do-lote.md`. A **C543** no motor (regra na spec 10,
+seção "Etapa 239").
+
+- **A Etapa 237 dizia "o motor recusa a saída sem origem com a padrão bloqueada — e isso não muda"; deixou de valer para a saída com lote**
+  (e a **RN-237.02**, "`localizacao_padrao_bloqueada` é `true` exatamente quando a devolução é recusada", vale só para a devolução sem lote —
+  o teste dela usa material sem lote e continua verde).
+- [x] **RN-239.05** — integração pela rota: material de cliente com lote, padrão bloqueada, lote em A → 201 e baixa A; o lote só em X
+  bloqueada → 400 *"Localização X está bloqueada"* — `e21132d1`.
+- [x] **RN-239.06** — a posição ganha `permite_saldo_negativo` (o efetivo: o do material ou o global); a janela avisa e apaga o Confirmar só
+  na devolução sem lote (sem controle de lote; com série, sem as marcadas de um lote só; ou com saldo negativo permitido) — **B1544** —
+  `e21132d1` (posição), `9e33f948` (tela).
+
+Testes: `saidaLotePrateleiraDoLote.api.test.js` (14, inclusive a posição); `MateriaisClienteDevolucaoLocalBloqueado.test.js` (6). Continua 🟢.
