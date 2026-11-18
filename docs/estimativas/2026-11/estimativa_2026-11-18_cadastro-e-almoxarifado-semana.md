@@ -20,7 +20,7 @@ Partes: **Cadastro de material 1h15 · Almoxarifado 23h15 · Dependem de respost
 | 2 | Devolução Quarentena/Sucata de peça com série grava o lote | 1h15 | motor (E233/E234 0,7 h + Fase 0 por sonda) | 1h15 | resto da D (233) 3 — plano 236 "Próxima tarefa detalhada" | `returnService.js:326-375` (ENTRADA_DEVOLUCAO, BLOQUEIO, SUCATA sem `lotePelasSeries`); `returnService.js:162` (série nesses destinos é limitação declarada) — a sonda da Fase 0 decide se há buraco; sem buraco, fecha com o teste | — | — | — |
 | 3 | Retalho de peça com série: baixa do original grava o lote | 1h15 | motor | 1h15 | idem | `scrapService.js:342` (SAIDA do original), `:362` | — | — | — |
 | 4 | Devolução ao fornecedor (NC) de peça com série grava o lote | 1h15 | motor | 1h15 | idem | `nonConformityService.js:1664` (DEVOLUCAO_FORNECEDOR, `lote_id` da inspeção quando há); `:1060` é DESBLOQUEIO (não é saída) | — | — | — |
-| 5 | Saída com lote valida a prateleira do lote, não a padrão (C543 no motor) | 1h30 | motor, toda saída sem origem | 1h30 | C543 + D (236) 1; o aviso da Etapa 237 (B1542) muda junto | `stockService.js:1565` `validarLocalizacaoParaMovimento(resolveLocalizacaoSaida(...))`; `claimSaldoDoLote` baixa onde o lote está | — | — | — |
+| 5 | Saída com lote valida a prateleira do lote, não a padrão (C543 no motor) | 1h30 | motor, toda saída sem origem | 1h30 | C543 + D (236) 1; o aviso da Etapa 237 (B1542) muda junto | `stockService.js:1565` `validarLocalizacaoParaMovimento(resolveLocalizacaoSaida(...))`; `claimSaldoDoLote` baixa onde o lote está | 0,9 h (horas.js 18/11, grupo C543) | 1h | `e21132d1`, `9e33f948`, `d9171d1d` |
 | 6 | Escolher a origem na devolução ao cliente | 1h | fatia de tela (E236 0,8 h) | 1h | D (236) 1, B1541 | `MateriaisClienteAlmoxarifado.js` (janela); a rota já aceita `localizacao_origem_id` pelo motor | — | — | — |
 | 7 | Seletor de lote mostra reservado e livre | 1h | fatia de tela + leitura | 1h | C542 | `lotService.listarLotesDoMaterial:593` (`saldo` = físico do lote); seletores da devolução ao cliente e de Movimentações | — | — | — |
 | 8 | Aviso de material de cliente reservado para OS | 45 min | fatia de tela (E237 1,1 h com fixture; esta sem campo novo de servidor se a posição já trouxer a reserva) | 45 min | C541 | molde do aviso `#dev-loc-bloqueada` da Etapa 237 | — | — | — |
@@ -46,6 +46,9 @@ Partes: **Cadastro de material 1h15 · Almoxarifado 23h15 · Dependem de respost
 
 **Correção (18/11, Etapa 238):** a linha 1 dizia "falta trazer `is_epi`" — **estava errado**: a lista de tipos já trazia `is_epi` (`SELECT *`); só o hook
 `useCategoriasMaterial` o descartava. Nenhuma mudança de servidor.
+
+**Etapa 239 (item 5, 18/11):** entregue no tamanho estimado; além da validação, a entrega automática por lote passou a deixar por último o lote
+guardado só em prateleira bloqueada e a posição do cliente ganhou um campo de leitura (Fases 2 e 5). Medido 0,9 h → 1h.
 
 ## Os que dependem de resposta — caminho reversível se a resposta não vier
 
