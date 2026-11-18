@@ -617,6 +617,13 @@
   recusava os tipos digitados em maiúsculo depois da 210. Agora os dois lados são comparados normalizados. **Descartado:** trocar a lista
   da localização pela do cadastro (mexe na tela de localizações e nos dados gravados — etapa própria se pedirem). Consequência: as duas
   listas continuam diferentes (a da localização tem *chapa*, *tubo*…; a do cadastro *EPI*, *Consumível*…); só os nomes iguais casam.
+- **B91 — 18/11/2026 (Etapa 238): Nº e Validade do CA só aparecem para material EPI, e esconder não apaga.** O formulário de material
+  decide "é EPI" pelas mesmas marcas da Entrega de EPI: o tipo escolhido marcado como EPI em Compras → Tipos de Material, o tipo *EPI*,
+  a categoria *EPIs* ou o material já ligado a um tipo de EPI. Fora disso os dois campos somem, **mas o CA gravado continua no material e
+  vai no salvar como estava**. **Descartado:** apagar o CA ao trocar o tipo para um que não é EPI (altera dado sem pedir — um EPI mal
+  classificado perderia o CA); mostrar os campos sempre que já houver CA gravado (o pedido é que não ocupem espaço). Consequência: um
+  EPI cadastrado com o tipo errado não mostra o CA; corrigido o tipo, o campo volta com o valor. **Reversível:** mostrar sempre é tirar
+  uma condição da tela.
 
 ### D. Dúvidas para você (ou para o P.O.)
 - **D-35** — O que A, B e C significam **para a GMP**? A legenda atual é a definição genérica.
@@ -796,6 +803,45 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 238 — Explicação do CA; Nº e Validade do CA só para EPI (2026-11-18)
+
+**Em uma frase.** A compradora perguntou o que era a "Validade do CA": os campos do CA apareciam em todo material, sem explicação.
+Agora eles aparecem só quando o material é EPI, com uma frase dizendo o que é o CA.
+
+### O que há de novo (visível para o usuário)
+
+- **Compras → Materiais → novo ou editar** (e a consulta em Almoxarifado → Materiais): **Nº do CA** e **Validade do CA** aparecem só
+  quando o Tipo de Material escolhido é de EPI (ou a categoria é *EPIs*), com a frase: *"CA é o Certificado de Aprovação do EPI
+  (equipamento de proteção individual): o número e a data de validade que constam no certificado. Só vale para material do tipo EPI."*
+- Para os outros materiais os dois campos não aparecem. O CA que já estava gravado continua guardado (B91).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Nº do CA e Validade do CA em todo material | Só em material EPI |
+| Sem explicação do que é o CA | Frase explicando o Certificado de Aprovação |
+| — | Trocar o tipo na tela faz os campos aparecerem ou sumirem na hora; o CA gravado não se perde |
+
+### As regras, com o cenário exato
+
+1. Material com Tipo de Material *Consumível* → os campos do CA não aparecem.
+2. Troque o tipo para *EPI* → aparecem **Nº do CA**, **Validade do CA** e a frase *"CA é o Certificado de Aprovação do EPI…"*.
+3. Um tipo de outro nome marcado como EPI em **Compras → Tipos de Material** (ex.: *Luvas e mangotes*) → os campos aparecem também.
+4. Categoria *EPIs*, com qualquer tipo → os campos aparecem.
+5. Material com CA gravado e tipo *Consumível* → os campos não aparecem; salvar não apaga o CA (volte o tipo para *EPI*: o número está lá).
+
+### Roteiro de teste manual (clicável)
+
+1. **Compras → Materiais** → lápis de um material de tipo *Consumível*: na seção técnica, sem *Nº do CA* nem *Validade do CA*.
+2. **Tipo de Material** → *EPI*: os dois campos e a frase do CA aparecem logo abaixo do NCM. Preencha *Nº do CA* = *12345* e salve.
+3. Abra de novo, troque o tipo para *Consumível*: os campos somem. Salve. Abra de novo e volte para *EPI*: *12345* continua lá.
+
+### O que a etapa NÃO cobre
+
+- O CA não é obrigatório para EPI no cadastro (a Entrega de EPI é que recusa EPI sem CA ou vencido, como já fazia).
+- Um EPI cadastrado com o tipo errado não mostra o CA até o tipo ser corrigido (B91).
 
 ## Etapa 216 — Tipo de Material escolhido de uma lista (2026-11-13)
 

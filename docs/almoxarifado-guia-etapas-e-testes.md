@@ -7,6 +7,11 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 
 > ## Onde o desenvolvimento está — 2026-11-13 (Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
+> **Depois disto, 18/11/2026: Etapa 238 (Compras) fechada** — no cadastro de material, *Nº do CA* e *Validade do CA* só aparecem para
+> material EPI, com a frase do que é o CA (seção e roteiro em `docs/compras-novidades-por-etapa.md`, Etapa 238; decisão B91 de lá). A
+> fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
+> próximo é o item 5 (saída com lote valida a prateleira do lote, C543).
+>
 > **O desenvolvimento parou aqui: Etapa 237 fechada — 2026-11-13.** **A devolução ao cliente avisa que a localização padrão está
 > bloqueada.** Em **Materiais de Clientes → Devolver**, com a localização padrão do material bloqueada, a janela avisa ao abrir que a
 > devolução será recusada e apaga o **Confirmar devolução**. **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção

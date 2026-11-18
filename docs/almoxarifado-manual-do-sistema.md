@@ -384,7 +384,7 @@ O bloco **Dados Técnicos** é o que transforma o cadastro em ficha de material,
 | Peso Unitário (kg) | peso de uma unidade — também é o que permite calcular rendimento quando um material sai para corte e volta transformado (ver 21.4) |
 | Dimensões | medidas do item, em texto livre |
 | NCM | classificação fiscal |
-| Nº do CA / Validade do CA | só EPI — o Certificado de Aprovação e a data até quando vale; sem CA, ou com a validade anterior a hoje, o EPI não é entregue pela tela de Entrega de EPI (21-bis) |
+| Nº do CA / Validade do CA | só EPI — o Certificado de Aprovação e a data até quando vale; sem CA, ou com a validade anterior a hoje, o EPI não é entregue pela tela de Entrega de EPI (21-bis). Os dois campos só aparecem quando o material é EPI pelas mesmas marcas da Entrega de EPI (21-bis.2): o Tipo de Material escolhido marcado como EPI no cadastro de tipos, o tipo *EPI*, a categoria *EPIs* ou o material já ligado a um tipo de EPI; trocar o tipo ou a categoria na tela os mostra ou esconde na hora. Junto deles aparece a frase *"CA é o Certificado de Aprovação do EPI (equipamento de proteção individual): o número e a data de validade que constam no certificado. Só vale para material do tipo EPI."* Escondidos, o CA que já estava gravado não se perde: o salvar o mantém como estava |
 | Aplicação | onde esse item é usado |
 | Especificações Técnicas / Observações Gerais | texto longo, para o que não cabe nos campos acima |
 

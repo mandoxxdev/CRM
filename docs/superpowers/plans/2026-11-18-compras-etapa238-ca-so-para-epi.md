@@ -42,9 +42,43 @@ Contrato de API: nenhum novo; consome `GET <tiposMaterial>` (linhas com `id`, `n
 
 | # | Task | Tipo | Estado |
 |---|---|---|---|
-| T1 | Hook `useCategoriasMaterial` devolve também as linhas; formulário calcula "é EPI" e esconde/mostra os campos com a explicação; teste `MaterialFormCaSoEpi.test.js` com controle positivo | tronco | — |
-| T2 | Fechamento (novidades, fila, manual, guia, plano, estimado × realizado) | — | — |
+| T1 | Hook `useCategoriasMaterial` devolve também as linhas; formulário calcula "é EPI" e esconde/mostra os campos com a explicação; teste `MaterialFormCaSoEpi.test.js` com controle positivo | tronco | feita `44a3d6ae` (7/7; 6 sabotagens, cada uma derrubando o cenário dela — abaixo) |
+| T2 | Fechamento (novidades B91, fila do Compras, manual, cabeçalho do guia, plano, estimado × realizado) | — | feito |
 
 Fase 2 (revisão do plano por agente) e Fase 5 (revisão adversarial por agentes) **puladas**: etapa de uma tela só, sem servidor, sem
 motor, sem permissão e sem contrato novo — o risco que as duas pegam (contrato errado entre galhos, RN que um gesto posterior recusa)
 não existe aqui; o único gesto posterior é o salvar, coberto pela RN-238.03. Sem integração entre galhos (não há galhos).
+
+## Execução (2026-11-18)
+
+- **Divergência do previsto:** a estimativa dizia que a lista de tipos "traz só nomes — falta trazer `is_epi`". A rota é `SELECT *` e já
+  traz; quem descartava era o hook. Nenhuma mudança de servidor (a estimativa não mudou de tamanho por isso).
+- **Teste vizinho ajustado:** os cenários da Etapa 178 em `MaterialAlmoxarifadoForm.test.js` (CA no POST e no PUT) achavam os campos sempre
+  na tela; passam a escolher o tipo *EPI* (novo) ou a carregar o material com tipo *EPI* (edição). O cenário "sem CA vai null" não mudou.
+- **Controle positivo** (`perl` + cópia de segurança, md5 conferido ao fim de cada uma): S1 "sempre EPI" derruba os 5 cenários de esconder;
+  S2 sem a marca `is_epi` do tipo escolhido derruba "a marca vale com outro nome"; S3 sem a categoria derruba "categoria EPIs"; S4 sem o
+  `tipo_material_id` derruba o cenário dele; S5 "escondido apaga no salvar" derruba os dois da RN-238.03; S6 frase trocada derruba a
+  RN-238.01. Nenhuma sabotagem passou verde.
+- **Specs:** o Compras não tem spec por feature (B105); a fila em `specs/modulo-compras/README.md` (linha 8) é o checklist desta etapa. A
+  feature 01 do almoxarifado não muda (o campo já era documentado lá como da Etapa 178).
+- **Verificação (medida, em `44a3d6ae`):** `test:api` 631/631 arquivos, `test:almoxarifado` 44/0, validation 4/0, safealter 3/0, sqlite 16/0;
+  tela inteira 233/233 suítes (3144 testes); build `Compiled successfully`.
+
+## Retro (4 números)
+
+- Rodadas de correção até verde: 1 (os dois cenários da Etapa 178 que achavam o CA sempre na tela). Achados: sem revisão (Fase 5 pulada).
+  Paralelismo: nenhum. Defeito que escapou da 216: nenhum até aqui.
+
+## Próxima tarefa detalhada
+
+Item 5 da estimativa de 18/11 (a ordem de execução dela: 1 → 5, 6 → …): **saída com lote valida a prateleira do lote, não a padrão (C543
+no motor)**, 1h30, módulo Almoxarifado.
+
+- Onde: `server/services/almoxarifado/stockService.js:1565` — `validarLocalizacaoParaMovimento(db, resolveLocalizacaoSaida(material,
+  localizacao_origem_id), material, 'origem')` valida a localização **padrão** quando a saída não diz a origem; mas, com lote, quem baixa é
+  `claimSaldoDoLote` (`:406`), que tira de onde o lote está. Uma padrão bloqueada recusa a saída de um lote que está numa prateleira livre
+  (e o inverso: a do lote bloqueada passa).
+- O aviso da Etapa 237 (B1542, `#dev-loc-bloqueada` na devolução ao cliente) lê a padrão: muda junto com a regra (e o item 6, origem na
+  devolução ao cliente, vem logo depois).
+- É motor: toda saída sem origem (Movimentações também) — leia a seção das travas do `CLAUDE.md`; a validação roda dentro da trava do
+  material? confira antes de mexer. Fase 0 por sonda (`almoxarifado-review-por-execucao`).
