@@ -348,7 +348,10 @@ async function gerarRetalho(db, user, payload = {}) {
       os_id: osId || undefined,
       centro_custo_id: centroCustoId || undefined,
       justificativa: justificativaEvento,
-    }, { exigeLote: true });
+      // Etapa 244 (Fase 5, achado 1, RN-244.05): `exigeSerie` fecha a corrida da serie ligada entre a guarda acima (lida sem trava) e
+      // esta baixa — o motor rele o material sob a trava e recusa a saida sem serie (sem ele: 201, fisico 3, serie ligada e o estorno
+      // da baixa recusado). Sem efeito em material sem serie; como e a perna 1, nao ha o que compensar.
+    }, { exigeLote: true, exigeSerie: true });
   }
 
   const justificativaEntrada = `Retalho gerado de ${origem.codigo}`

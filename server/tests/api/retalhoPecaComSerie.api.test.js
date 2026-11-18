@@ -11,6 +11,7 @@ const assert = require('assert');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
+const stockService = require('../../services/almoxarifado/stockService');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -97,6 +98,43 @@ const recusa = (codigo) => `O material ${codigo} tem controle de serie e a gerac
     assert.strictEqual(r.status, 400, JSON.stringify(r.body));
     assert.strictEqual(r.body.error, recusa(m.codigo));
     assert.strictEqual(await fisico(m), 4);
+  });
+
+  await test('[RN-244.01] (Fase 5, achado 10) origem com LOTE e serie, sem lote_origem_id -> a recusa e a da serie (vem antes da do lote)', async () => {
+    const { m, ret } = await montar();
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET controle_lote = 1 WHERE id = ?', [m.id]);
+    const r = await gerar({ material_origem_id: m.id, material_retalho_id: ret.id, baixar_original: true, quantidade_baixa: 1,
+      justificativa: 'corte 244' });
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, recusa(m.codigo));
+  });
+
+  await test('[RN-244.05] (Fase 5, achado 1) a serie ligada entre a conferencia e a baixa -> o motor recusa a baixa sem serie, nada gravado', async () => {
+    const m = await material({ serie: 0 });
+    await ok(request(app).post(`${API}/movimentacoes/v2`).send({ material_id: m.id, tipo: 'ENTRADA', quantidade: 4, motivo: 'e244' }), 201);
+    const ret = await material({ serie: 0 });
+    // O gancho so liga a serie e segue: o gesto concorrente e um UPDATE direto, sem trava (nao herda contexto de secao nenhuma).
+    const original = stockService.registrarMovimentacao;
+    let ligou = false;
+    stockService.registrarMovimentacao = async (...args) => {
+      if (!ligou && args[2] && args[2].tipo === 'SAIDA' && Number(args[2].material_id) === m.id) {
+        ligou = true;
+        await dbRun(db, 'UPDATE materiais_almoxarifado SET controle_serie = 1 WHERE id = ?', [m.id]);
+      }
+      return original(...args);
+    };
+    let r;
+    try {
+      r = await gerar({ material_origem_id: m.id, material_retalho_id: ret.id, baixar_original: true, quantidade_baixa: 1,
+        justificativa: 'corte 244' });
+    } finally { stockService.registrarMovimentacao = original; }
+    assert.ok(ligou, 'o gancho rodou (sem ele o teste prova nada)');
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, 'material com controle de serie: informe 1 serie(s) para 1 unidade(s) — recebidas 0');
+    assert.strictEqual(await fisico(m), 4, 'nada baixado');
+    assert.deepStrictEqual((await movs(m)).map((x) => x.tipo), ['ENTRADA']);
+    assert.strictEqual((await movs(ret)).length, 0);
+    assert.strictEqual((await sobras(m)).length, 0);
   });
 
   // ── RN-244.02 (integracao, pela rota) ─────────────────────────────────────────────────────────────────────────────────────────────
