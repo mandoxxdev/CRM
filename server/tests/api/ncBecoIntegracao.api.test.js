@@ -111,7 +111,9 @@ const ROTA = '/api/almoxarifado/nao-conformidades';
     const exec = await request(app).post(`${ROTA}/${doc.id}/executar`).send({ observacoes: 'coleta 51' });
     assert.strictEqual(exec.status, 400, `executar deu ${exec.status}: ${JSON.stringify(exec.body)}`);
     assert.strictEqual(exec.body.error,
-      'Material com controle de série não pode ser devolvido por aqui — dê baixa pela tela de Movimentações');
+      'Material com controle de série não pode ser devolvido por aqui — desbloqueie a quantidade reprovada em Inspeções, '
+      + 'dê baixa das peças em Movimentações → Saída escolhendo os números de série, e a Qualidade cancela este documento '
+      + 'informando a baixa' /* Etapa 245: a literal ensina o caminho inteiro */);
 
     // METADE POSITIVA, e ela vem ANTES: o documento preso esta nas DUAS superficies.
     assert.strictEqual(await naFila(doc.id), true, 'o documento preso nao apareceu na fila de execucao');
