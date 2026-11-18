@@ -13,7 +13,7 @@ num texto que o André copia e cola direto no WhatsApp.
 **Isto é obrigatório.** Nenhuma alteração começa sem a estimativa dela escrita e mostrada ao
 André. Vale para tarefa pedida por ele, etapa do plano, correção pequena e a etapa que você
 escolheu sozinho no Passo 8 da `fechar-etapa`. "É só uma correçãozinha" não é exceção: estime
-(mínimo 45 min) e registre.
+(mínimo 30 min) e registre.
 
 **Anuncie ao começar:** "Usando a skill `estimativa-de-tarefas` para estimar antes de fazer."
 
@@ -71,41 +71,38 @@ a, b, c (pode subdividir uma só se ela for claramente duas mudanças diferentes
 
 ### 3. Estimar — regras
 
-- **O tempo informado é o do André, não só o da execução.** A régua do passo 2 mede só as sessões
-  de desenvolvimento. O André também gasta tempo, que o git não vê, para entender o pedido,
-  planejar, testar na tela, conferir e pedir ajustes. A conta é:
+- **O tempo informado é o tempo de trabalho previsto, na MESMA régua do `horas.js`** (a que o relatório
+  semanal mede). Nada de parte fixa somada por cima. A conta é só:
 
-  **tempo informado = execução estimada + análise + teste e conferência**, com a parte do André
-  **fixa pelo porte** (não é multiplicação da execução — testar não fica mais rápido porque a
-  execução ficou):
+  **tempo informado = execução estimada pela régua do passo 2** (tarefas parecidas, medidas pelo `horas.js`).
 
-  | Porte | Análise | Teste e conferência |
+  Régua medida (semana 08-14/11/2026, `horas.js --semana 2026-11-10 --grupos ...`), conferida em 18/11/2026:
+
+  | Porte | Exemplo real | Medido |
   |---|---|---|
-  | Ajuste pontual de tela | 15 min | 15 min |
-  | Mudança pequena com regra | 15 min | 30 min |
-  | Média | 30 min | 1 h |
-  | Etapa com várias telas | 30 min | 1h30 |
-  | Estoque/saldo, travas, estorno | 1 h | 2 h ou mais |
+  | Tirar um campo, uma frase, um aviso simples | — | 30 min |
+  | Alteração de cadastro no Compras (campo, lista, tela) | Etapas 211-216: famílias 1,8 h; fornecedores 0,9 h; histórico de preços 1,8 h; tipo de material de lista 0,6 h | ~1h a 1h30 |
+  | Fatia do almoxarifado (tela ou regra, com teste e documentação) | Etapas 230, 233, 236, 237: 0,7 a 1,1 h | ~45 min a 1h |
+  | Fatia do almoxarifado no motor, trava ou estorno | Etapas 217-234 de motor | ~1h15 a 1h30 |
 
-  - **+30 min no teste** quando ele é mais trabalhoso: permissão por perfil (testar com mais de um
-    usuário), tela de celular, impressão/PDF ou relatório.
-  - **+30 min na análise** quando a tarefa pede decisão de regra com quem pediu ("como deve
-    funcionar quando…").
-  - Exemplo: CPF no fornecedor (média, imprime no documento) → 30 min + 30 min + (1 h + 30 min) =
-    **2h30**. Voltar no topo (ajuste, celular) → 15 + 15 + (15 + 30) min = **1h15**.
+  Fatia que passar de 2 h: quebre (veja abaixo).
 
-  **Por que não é mais "execução × 2" (até 30/10):** a fórmula multiplicava o erro da execução. No
-  pacote de 30/10 a execução estimada foi 8 h e a medida 2,6 h; o ×2 transformou esse excesso em
-  21h30 informadas para um trabalho que, por esta tabela, dava ~13 h.
-- **Unidade:** múltiplos de 15 min abaixo de 2 h (45 min, 1h, 1h15…) e de 30 min a partir de 2 h,
-  sempre arredondando **para cima**. Mínimo 45 min por tarefa.
-- **Tudo incluído:** entender, planejar, fazer, conferências automáticas, testar na tela,
-  conferir, ajustar, documentação e manual. Não existe "mais o tempo de teste" à parte.
-- **Acima de 4 h, quebre** em tarefas menores que a empresa reconheça ("1ª parte: …"). Estimativa
-  grande é chute grande.
+  **Por que a regra anterior estava errada (corrigida em 18/11/2026):** até aqui o tempo informado era
+  "execução + análise + teste e conferência", com a parte do André **fixa pelo porte** (até 1 h + 2 h por
+  tarefa). Na semana de 08 a 14/11/2026 a soma das estimativas deu **91h45** e o trabalho medido pelo
+  `horas.js` foi **29 h** (apontado em 15/11/2026). A parte fixa não existe na prática: o trabalho roda
+  sozinho, o André não gasta essas horas por tarefa, e o relatório e o contrato medem só o `horas.js`. Somar
+  a parte fixa triplicava o informado. Antes disso (até 30/10) a regra era "execução × 2", que também inflava
+  — no pacote de 30/10, 21h30 informadas para 2,6 h medidas.
+- **Unidade:** múltiplos de 15 min, sempre arredondando **para cima**. Mínimo **30 min** por tarefa.
+- **Tudo incluído:** entender, planejar, fazer, conferências automáticas, documentação e manual — é o que o
+  `horas.js` mede. Não existe "mais o tempo de teste" à parte.
+- **Acima de 2 h, quebre** em tarefas menores que a empresa reconheça ("1ª parte: …"). Estimativa grande
+  é chute grande.
 - **Incerteza declarada, não escondida:** se depende de algo que só se descobre fazendo (ex.:
-  integração com sistema de fora), dê a faixa ("2h a 3h") e diga em uma frase do que depende.
-- **Nem para agradar, nem para inflar.** Aplique a tabela e informe o resultado. Estimativa
+  integração com sistema de fora) ou de uma resposta de quem pediu, dê o tempo do caminho que será seguido
+  e diga em uma frase do que depende.
+- **Nem para agradar, nem para inflar.** Aplique a régua e informe o resultado. Estimativa
   sempre baixa destrói a confiança; estimativa sempre muito alta também, quando o estimado ×
   realizado aparece.
 
@@ -118,7 +115,7 @@ docs/estimativas/AAAA-MM/
 ```
 
 O `.txt` é o bloco abaixo, sem mais nada. O `.md` tem uma tabela
-`| # | Tarefa | Execução estimada | Fator | Informado | Etapa/plano | Régua usada | Execução medida | Realizado | Commits |`
+`| # | Tarefa | Execução estimada | Régua horas.js | Informado | Etapa/plano | Régua usada | Execução medida | Realizado | Commits |`
 (as quatro últimas ficam "—" até o fechamento) e a linha de `--grupos` que vai medir cada tarefa no fim.
 
 ### 5. O formato do WhatsApp (copiar e colar)
@@ -177,11 +174,14 @@ honesta antes de fazer é melhor que estouro descoberto depois.
 1. Meça a **execução** de cada tarefa com `horas.js --grupos` (a linha gravada no `.md`; os
    assuntos dos commits da tarefa precisam casar com a regex — por isso, nos commits, cite o
    assunto da tarefa).
-2. **Realizado = execução medida + a parte do André.** A parte dele (análise, teste, conferência)
-   o git não mede: se ele informou quanto gastou, use o que ele disse; senão, use a da tabela do
-   passo 3 pelo porte **que a tarefa mostrou ter** e anote no `.md` que foi a da tabela. Pacote em
-   paralelo: rateie a execução medida do pacote pela execução estimada. Arredonde para cima, na
-   unidade do passo 3. Preencha Execução medida, Realizado e Commits no `.md`.
+2. **Realizado = execução medida pelo `horas.js`**, e nada mais. Pacote em paralelo: rateie a
+   execução medida do pacote pela execução estimada. Arredonde para cima, na unidade do passo 3.
+   Preencha Execução medida, Realizado e Commits no `.md`.
+   **A regra anterior estava errada:** "Realizado = execução medida + a parte do André (pela tabela do
+   passo 3)" somava a cada tarefa a mesma parte fixa da estimativa e escondia o erro — na semana de 08 a
+   14/11/2026 as estimativas somaram 91h45 e o `horas.js` mediu 29 h (15/11/2026). Estimado e realizado
+   saem agora na mesma régua, a do relatório. Os `.md` antigos com "+ parte da tabela" ficam como
+   histórico; não refaça.
 3. Grave `docs/estimativas/AAAA-MM/conclusao_AAAA-MM-DD_<tema>.txt`, rode o
    `conferir-linguagem.js` nele, e mostre ao André em bloco de código:
 
@@ -196,14 +196,15 @@ _<DD/MM/AAAA>_
 ```
 
    Se uma tarefa estourou mais de 30 min, uma frase curta em linguagem de usuário dizendo por quê.
-4. Se a **execução** errou por muito, corrija a tabela de régua do passo 2; se o André disser
-   que a parte dele foi bem diferente da tabela, corrija a tabela do passo 3 — é assim que a próxima
-   estimativa melhora.
+4. Se a **execução** errou por muito, corrija a régua do passo 3 (diga de quando é a medida) — é
+   assim que a próxima estimativa melhora.
 
 ## Red flags
 
-- "É pequeno, nem precisa estimar" → precisa. Mínimo 45 min, registrado.
-- "Informei só o tempo que a execução leva" → falta a parte do André (análise + teste, pela tabela do passo 3).
+- "É pequeno, nem precisa estimar" → precisa. Mínimo 30 min, registrado.
+- "Somei análise + teste do André por tarefa" → não; o informado é o da régua do `horas.js` (passo 3).
+  Essa parte fixa fez a semana de 08 a 14/11/2026 somar 91h45 estimadas para 29 h medidas.
+- "A soma das estimativas passou muito do que a semana mede" → a régua está errada; reveja antes de mandar.
 - "Vou estimar depois do plano, quando souber melhor" → a estimativa vem antes; o plano pode
   **revisar** ela.
 - "Coloquei 'servidor' e 'tela' como itens separados" → bastidor; junte na alteração que o
