@@ -1193,6 +1193,10 @@ const MovimentacoesAlmoxarifado = () => {
                             return (
                               <option key={l.id} value={l.id} disabled={!loteDisponivelParaTipo(l, form.tipo)}>
                                 {l.codigo} — saldo {l.saldo}
+                                {/* Etapa 241 (C542, RN-241.05): o livre do lote (a reserva é do material) quando é menor que o saldo — só na
+                                    Saída e na Perda: a Transferência não confere o livre no motor. */}
+                                {TIPOS_SAIDA_LOTE.includes(form.tipo) && l.livre != null && Number(l.livre) + 1e-9 < Number(l.saldo)
+                                  ? ` — livre ${l.livre}` : ''}
                                 {l.data_validade ? ` — vence ${l.data_validade}` : ''}
                                 {vencidoLiberado ? ' (vencido, liberado)' : l.vencido ? ' (vencido)' : ''}
                                 {l.status !== 'ATIVO' ? ` (${l.status.toLowerCase()})` : ''}

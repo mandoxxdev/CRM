@@ -230,3 +230,26 @@ describe('elegibilidade sensivel ao tipo do movimento (fix round 1 da Task 9: de
     expect(opcao.disabled).toBe(true);
   });
 });
+
+// Etapa 241 (C542, RN-241.05): o livre do lote (min(saldo, livre do material), do servidor) aparece quando é menor que o saldo — só na
+// Saída e na Perda; na Transferência o motor não confere o livre. Livre igual ao saldo ou null: o rótulo de antes.
+describe('Etapa 241 — o livre do lote no seletor de Movimentações', () => {
+  const LOTES_LIVRE = [
+    { id: 40, codigo: 'RES', data_validade: null, status: 'ATIVO', saldo: 3, livre: 0, livre_do_material: 0, vencido: false, elegivel: true },
+    { id: 41, codigo: 'INTEIRO', data_validade: null, status: 'ATIVO', saldo: 2, livre: 2, livre_do_material: 4, vencido: false, elegivel: true },
+    { id: 42, codigo: 'NEG', data_validade: null, status: 'ATIVO', saldo: 5, livre: null, livre_do_material: null, vencido: false, elegivel: true },
+  ];
+  beforeEach(() => { lotesDoBanco = LOTES_LIVRE; });
+
+  test.each(['SAIDA', 'PERDA'])('[RN-241.05] em %s, o lote com livre menor que o saldo diz o livre; os outros, o rótulo de antes', async (tipo) => {
+    await abrirComMaterialETipo(tipo);
+    expect(opcaoPorTexto(/^RES/).textContent).toBe('RES — saldo 3 — livre 0');
+    expect(opcaoPorTexto(/^INTEIRO/).textContent).toBe('INTEIRO — saldo 2');
+    expect(opcaoPorTexto(/^NEG/).textContent).toBe('NEG — saldo 5');
+  });
+
+  test('[RN-241.05] na Transferência, sem o livre (o motor não confere o livre nela)', async () => {
+    await abrirComMaterialETipo('TRANSFERENCIA');
+    expect(opcaoPorTexto(/^RES/).textContent).toBe('RES — saldo 3');
+  });
+});

@@ -51,8 +51,12 @@ const situacaoDoLoteDaLista = (l) => {
   if (l.vencido && !l.vencimento_liberado) partes.push('Vencido');
   return partes.length ? partes.join(' · ') : 'Impedido';
 };
+// Etapa 241 (C542, RN-241.02): o livre do lote (`min(saldo, livre do material)`, do servidor) só aparece quando é menor que o saldo — a
+// reserva é do material, não do lote, e de nenhum lote sai mais que o livre. `null` (saldo negativo permitido) ou ausente: o rótulo de antes.
+const livreAbaixoDoSaldo = (l) => l && l.livre != null && Number(l.livre) + 1e-9 < Number(l.saldo);
 const rotuloDoLote = (l) => {
   let t = `${l.codigo} — saldo ${formatarQuantidade(l.saldo)}`;
+  if (livreAbaixoDoSaldo(l)) t += ` — livre ${formatarQuantidade(l.livre)}`;
   if (l.data_validade) t += ` — vence ${dataBR(l.data_validade)}`;
   if (l.elegivel !== true) return `${t} — ${situacaoDoLoteDaLista(l)}: não sai`;
   if (l.vencido && l.vencimento_liberado) t += ' (vencido, liberado)';
@@ -183,12 +187,16 @@ const MateriaisClienteAlmoxarifado = () => {
   const qtdDigitada = Number(devQtd);
   // RN-240.02: a origem é estrita no servidor; a janela avisa antes e apaga o Confirmar.
   const origemNaoCobre = !!origemEscolhida && qtdDigitada > 0 && qtdDigitada > Number(origemEscolhida.quantidade) + 1e-9;
+  // Etapa 241 (RN-241.04): o lote escolhido com livre menor que o saldo e a quantidade acima do livre — o servidor recusaria ("Saldo
+  // insuficiente. Disponível: n UN"); a janela avisa antes e apaga o Confirmar.
+  const loteEscolhido = pedeLote && devLoteId !== '' ? devLotes.find((l) => String(l.id) === devLoteId) || null : null;
+  const loteLivreNaoCobre = livreAbaixoDoSaldo(loteEscolhido) && qtdDigitada > 0 && qtdDigitada > Number(loteEscolhido.livre) + 1e-9;
   // RN-240.07: com um endereço escolhido o servidor confere ele, não a padrão — o aviso e o botão apagado somem.
   const padraoBloqueada = devTarget?.localizacao_padrao_bloqueada === true && !saiComLote && !origemEscolhida;
   const confirmarDevolucao = async () => {
     const qtd = Number(devQtd);
     if (!(qtd > 0)) { toast.error('Informe a quantidade a devolver'); return; }
-    if (origemNaoCobre) return;
+    if (origemNaoCobre || loteLivreNaoCobre) return;
     if (!devDoc.trim()) { toast.error('Informe o número do documento de devolução'); return; }
     // RN-236.05: material com controle de lote pede o lote antes de enviar.
     if (pedeLote && devLoteId === '') { toast.error('Escolha o lote da devolução'); return; }
@@ -380,6 +388,17 @@ const MateriaisClienteAlmoxarifado = () => {
                       Lotes bloqueados, reprovados ou vencidos vêm apagados: só saem depois que o lote for liberado na tela Lotes e Séries.
                     </small>
                   )}
+                  {/* Etapa 241 (RN-241.03, .04): o livre do lote — a reserva é do material, não do lote. */}
+                  {devLotes.some(livreAbaixoDoSaldo) && (
+                    <small id="dev-lote-livre" style={{ display: 'block', color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                      Livre é o que não está reservado nem retido no material (a reserva é do material, não do lote): de nenhum lote sai mais que o livre.
+                    </small>
+                  )}
+                  {loteLivreNaoCobre && (
+                    <small id="dev-lote-livre-nao-cobre" style={{ display: 'block', color: 'var(--gmp-error)', fontSize: '0.75rem' }}>
+                      {`Do lote ${loteEscolhido.codigo} estão livres só ${formatarQuantidade(loteEscolhido.livre)}: devolva até ${formatarQuantidade(loteEscolhido.livre)} ou libere a reserva do material.`}
+                    </small>
+                  )}
                 </div>
               )}
               {pedeSerie && pedeLote && devLoteId === '' && (
@@ -473,7 +492,7 @@ const MateriaisClienteAlmoxarifado = () => {
               <button className="btn-almox-secondary" onClick={() => setDevTarget(null)} disabled={devSaving}>
                 Cancelar
               </button>
-              <button className="btn-almox-primary" onClick={confirmarDevolucao} disabled={devSaving || padraoBloqueada || origemNaoCobre}>
+              <button className="btn-almox-primary" onClick={confirmarDevolucao} disabled={devSaving || padraoBloqueada || origemNaoCobre || loteLivreNaoCobre}>
                 {devSaving ? 'Registrando...' : 'Confirmar devolução'}
               </button>
             </div>
