@@ -342,6 +342,8 @@ const MovimentacoesAlmoxarifado = () => {
   // "as séries do material mudaram durante o ajuste").
   const [seriesAjusteErro, setSeriesAjusteErro] = useState(false);
   const [recargaSeriesAjuste, setRecargaSeriesAjuste] = useState(0);
+  // Etapa 246 (Fase 5, achado 1): o material e o tipo da Saída/Perda cuja recusa pediu a releitura das séries (null fora disso).
+  const releituraAposRecusa = useRef(null);
   const ajusteComSerie = selectedMaterial?.controle_serie === 1 && form.tipo === 'AJUSTE';
   useEffect(() => {
     setSeriesBloqueadasAjuste([]);
@@ -378,7 +380,15 @@ const MovimentacoesAlmoxarifado = () => {
         if (cancelado) return;
         setSeriesDisponiveis(res.data || []);
       })
-      .catch(() => { if (!cancelado) setSeriesDisponiveis([]); });
+      // Etapa 246 (Fase 5, achado 1): a releitura pedida por uma recusa (do mesmo material e tipo) que falha mantém a lista que estava
+      // na tela — limpar dizia "Nenhuma série disponível em estoque." e apagava a marcação depois de uma queda de rede. Fora disso, a
+      // regra de antes: a busca que falha limpa a lista.
+      .catch(() => {
+        if (cancelado) return;
+        if (releituraAposRecusa.current === `${form.material_id}|${form.tipo}`) return;
+        setSeriesDisponiveis([]);
+      })
+      .finally(() => { if (!cancelado) releituraAposRecusa.current = null; });
     return () => { cancelado = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.material_id, form.tipo, selectedMaterial?.controle_serie, recargaSeriesAjuste]);
@@ -667,6 +677,7 @@ const MovimentacoesAlmoxarifado = () => {
       // série levada por outra pessoa; a série de lote impedido volta apagada e o efeito da 233 a desmarca, a levada some. Só a lista
       // de séries: reler os lotes refaria a sugestão FEFO e trocaria o lote escolhido.
       const saidaComSerie = selectedMaterial?.controle_serie === 1 && TIPOS_SAIDA_LOTE.includes(form.tipo);
+      if (saidaComSerie) releituraAposRecusa.current = `${form.material_id}|${form.tipo}`;
       if (ajusteSerieInfo || saidaComSerie) setRecargaSeriesAjuste((n) => n + 1);
     } finally {
       setSaving(false);

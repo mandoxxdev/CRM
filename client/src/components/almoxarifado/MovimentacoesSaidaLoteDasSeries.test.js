@@ -311,3 +311,58 @@ describe('Etapa 246 — a frase só quando o lote tem a peça (RN-246.02) e a li
     expect(container.querySelector('.almox-modal form')).toBeNull();
   });
 });
+
+describe('Etapa 246 (Fase 5, achado 1) — a releitura depois da recusa que falha não apaga a lista', () => {
+  test('[RN-246.03] POST sem resposta e a releitura das séries falha -> a lista e a marcação continuam (sem "Nenhuma série disponível")', async () => {
+    seriesEmEstoque = [serie(201, 'B1', 12, 'L2', ok, 2)];
+    await abrir('SAIDA');
+    clicar(caixa(201));
+    const original = api.get.getMockImplementation();
+    api.get.mockImplementation((url) => (url === '/almoxarifado/materiais/10/series?status=EM_ESTOQUE'
+      ? Promise.reject(new Error('Network Error')) : original(url)));
+    api.post.mockRejectedValueOnce(new Error('Network Error'));
+    await enviar();
+    await esperar();
+    expect(toast.error).toHaveBeenCalledWith('Erro ao registrar movimentação');
+    expect(api.get.mock.calls.filter(([u]) => u === '/almoxarifado/materiais/10/series?status=EM_ESTOQUE').length).toBeGreaterThan(1);
+    expect(caixa(201)).not.toBeNull();
+    expect(caixa(201).checked).toBe(true);
+    expect(container.querySelector('#mov-series-saida').textContent).not.toContain('Nenhuma série disponível');
+    expect(contadorSaida()).toBe('1/1 série(s) selecionada(s)');
+  });
+  test('[RN-246.03] metade positiva: depois disso, trocar o tipo com a busca falhando limpa a lista (a regra de antes)', async () => {
+    seriesEmEstoque = [serie(201, 'B1', 12, 'L2', ok, 2)];
+    await abrir('SAIDA');
+    clicar(caixa(201));
+    const original = api.get.getMockImplementation();
+    api.get.mockImplementation((url) => (url === '/almoxarifado/materiais/10/series?status=EM_ESTOQUE'
+      ? Promise.reject(new Error('Network Error')) : original(url)));
+    api.post.mockRejectedValueOnce(new Error('Network Error'));
+    await enviar();
+    await esperar();
+    expect(caixa(201)).not.toBeNull();
+    await trocarTipo('PERDA');
+    expect(caixa(201)).toBeNull();
+    expect(container.querySelector('#mov-series-saida').textContent).toContain('Nenhuma série disponível');
+  });
+  test('[RN-246.03] a releitura que ainda não voltou e a troca do tipo: a busca do tipo novo que falha limpa a lista (a chave é material e tipo)', async () => {
+    seriesEmEstoque = [serie(201, 'B1', 12, 'L2', ok, 2)];
+    await abrir('SAIDA');
+    clicar(caixa(201));
+    const original = api.get.getMockImplementation();
+    // a releitura da recusa fica pendurada; a busca seguinte (o tipo novo) falha
+    let chamadas = 0;
+    api.get.mockImplementation((url) => {
+      if (url !== '/almoxarifado/materiais/10/series?status=EM_ESTOQUE') return original(url);
+      chamadas += 1;
+      return chamadas === 1 ? new Promise(() => {}) : Promise.reject(new Error('Network Error'));
+    });
+    api.post.mockRejectedValueOnce(new Error('Network Error'));
+    await enviar();
+    expect(chamadas).toBe(1);
+    await trocarTipo('PERDA');
+    expect(chamadas).toBe(2);
+    expect(caixa(201)).toBeNull();
+    expect(container.querySelector('#mov-series-saida').textContent).toContain('Nenhuma série disponível');
+  });
+});

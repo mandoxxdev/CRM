@@ -467,7 +467,8 @@ const MateriaisClienteAlmoxarifado = () => {
                   )}
                   {(() => {
                     // RN-235.09: de qual lote as séries marcadas saem (o servidor grava a devolução nele, B1535)
-                    const f = fraseDoLoteDasSeries(devSeries, devSerieIds, 'devolução');
+                    // Etapa 246 (Fase 5, achado 2): com o lote escolhido (controle de lote), a frase não confere o saldo do lote das séries
+                    const f = fraseDoLoteDasSeries(devSeries, devSerieIds, 'devolução', { conferirSaldo: !pedeLote });
                     return f && (
                       <small id="dev-series-lote-da-devolucao"
                         style={{ display: 'block', color: f.mistura ? 'var(--gmp-error)' : 'var(--gmp-text-light)', fontSize: '0.75rem' }}>

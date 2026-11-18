@@ -3,7 +3,9 @@
 // envio para nela. Todas sem lote ou nada marcado -> nada (como antes). Só para material sem controle de lote (com ele, o lote é exigido).
 // Etapa 235 (B1538): extraída de MovimentacoesAlmoxarifado para a janela de devolução ao cliente (Materiais de Clientes) usar a mesma
 // régua; `gesto` é a palavra do fim da frase de recusa ("faça uma saída/devolução para cada lote"). As literais da 234 não mudam.
-export const fraseDoLoteDasSeries = (series, ids, gesto = 'saída') => {
+// Etapa 246 (Fase 5, achado 2): `conferirSaldo` false quando o lote foi ESCOLHIDO no seletor (devolução ao cliente de material com controle
+// de lote): o servidor grava o lote escolhido, não deriva pelas séries — a régua do saldo do lote das séries não vale ali.
+export const fraseDoLoteDasSeries = (series, ids, gesto = 'saída', { conferirSaldo = true } = {}) => {
   const marcadas = series.filter((s) => ids.includes(s.id));
   if (!marcadas.length) return null;
   // Fase 2 (234): a série com `lote_id` mas sem `lote_codigo` (lote apagado) é "sem lote", como no servidor (LEFT JOIN); a ordem é a do
@@ -20,7 +22,7 @@ export const fraseDoLoteDasSeries = (series, ids, gesto = 'saída') => {
   if (codigos.length === 1 && !semLote) {
     const saldoDoLote = Number(marcadas[0].lote_saldo_positivo);
     const cobre = marcadas[0].lote_saldo_positivo != null && Number.isFinite(saldoDoLote) && marcadas.length <= saldoDoLote + 1e-9;
-    return cobre ? { mistura: false, texto: `As séries marcadas saem do lote ${codigos[0]}.` } : null;
+    return cobre || !conferirSaldo ? { mistura: false, texto: `As séries marcadas saem do lote ${codigos[0]}.` } : null;
   }
   const nomes = semLote ? [...codigos, 'sem lote'] : codigos;
   return { mistura: true, texto: `As séries marcadas são de lotes diferentes (${nomes.join(', ')}): faça uma ${gesto} para cada lote.` };

@@ -56,9 +56,9 @@ const LOTES_42 = [lote(20, 'M1', 2), lote(21, 'M2', 1)];
 const LOTES_43 = [lote(30, 'U1', 2), lote(31, 'UB', 1, { status: 'BLOQUEADO', elegivel: false })];
 const livre = { lote_status: 'ATIVO', lote_esta_impedido: false, lote_vencido_sem_liberacao: false };
 const SERIES_42 = [
-  { id: 1, numero: 'A1', lote_id: 20, lote_codigo: 'M1', ...livre },
-  { id: 2, numero: 'A2', lote_id: 20, lote_codigo: 'M1', ...livre },
-  { id: 3, numero: 'B1', lote_id: 21, lote_codigo: 'M2', ...livre },
+  { id: 1, numero: 'A1', lote_id: 20, lote_codigo: 'M1', lote_saldo_positivo: 2, ...livre },
+  { id: 2, numero: 'A2', lote_id: 20, lote_codigo: 'M1', lote_saldo_positivo: 2, ...livre },
+  { id: 3, numero: 'B1', lote_id: 21, lote_codigo: 'M2', lote_saldo_positivo: 1, ...livre },
 ];
 const rotas = {
   '/almoxarifado/materiais/41/lotes?com_saldo=1': LOTES_41,
@@ -324,5 +324,20 @@ describe('Etapa 236 — a janela de devolução ao cliente pede o lote', () => {
     expect(api.post).not.toHaveBeenCalled();
     await escolherLote(20);
     expect(caixa(1).checked).toBe(false);
+  });
+});
+
+describe('Etapa 246 (Fase 5, achado 2) — com o lote escolhido, a frase não confere o saldo do lote', () => {
+  test('[RN-246.02] lote M1 escolhido e as séries dele com saldo do lote 0 -> a frase continua "saem do lote M1"; o mesmo sem lote escolhido não cabe aqui', async () => {
+    // O motor grava o lote ESCOLHIDO (não deriva pelas séries), então a régua do saldo do lote das séries não vale: a frase diz o lote.
+    const semSaldo = SERIES_42.map((s) => ({ ...s, lote_saldo_positivo: 0 }));
+    const original = api.get.getMockImplementation();
+    api.get.mockImplementation((url) => (url === '/almoxarifado/materiais/42/series?status=EM_ESTOQUE'
+      ? Promise.resolve({ data: semSaldo }) : original(url)));
+    await abrir('LOTE-SERIE');
+    await escolherLote(20);
+    await clicar(caixa(1));
+    expect(caixa(1).checked).toBe(true);
+    expect(texto('#dev-series-lote-da-devolucao')).toBe('As séries marcadas saem do lote M1.');
   });
 });
