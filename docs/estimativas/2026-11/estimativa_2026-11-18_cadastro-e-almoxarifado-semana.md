@@ -17,7 +17,7 @@ Partes: **Cadastro de material 1h15 · Almoxarifado 23h15 · Dependem de respost
 | # | Tarefa | Execução estimada | Régua horas.js | Informado | Etapa/plano | Medido no código (18/11) | Execução medida | Realizado | Commits |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | Explicação do CA; Nº/Validade do CA só para tipo EPI | 1h15 | cadastro no Compras (E216 0,6 h; a lista de tipos hoje traz só nomes — falta trazer `is_epi`) | 1h15 | Etapa 238 (`2026-11-18-compras-etapa238-ca-so-para-epi.md`) | `MaterialAlmoxarifadoForm.js:925-934` (`ca_numero`, `ca_validade`); `useCategoriasMaterial(rotas.api.tiposMaterial)` `:127` devolve só nomes; `tipos_material_almoxarifado.is_epi` (`schema.js:592`). Caminho: legenda + campos só com tipo EPI; valor gravado continua (campo escondido, não apagado) | 0,7 h (horas.js 18/11, grupo CA) | 45 min | `2827bf94`, `44a3d6ae`, `5f206303` |
-| 2 | Devolução Quarentena/Sucata de peça com série grava o lote | 1h15 | motor (E233/E234 0,7 h + Fase 0 por sonda) | 1h15 | resto da D (233) 3 — plano 236 "Próxima tarefa detalhada" | `returnService.js:326-375` (ENTRADA_DEVOLUCAO, BLOQUEIO, SUCATA sem `lotePelasSeries`); `returnService.js:162` (série nesses destinos é limitação declarada) — a sonda da Fase 0 decide se há buraco; sem buraco, fecha com o teste | — | — | — |
+| 2 | Devolução Quarentena/Sucata de peça com série grava o lote | 1h15 | motor (E233/E234 0,7 h + Fase 0 por sonda) | 1h15 | resto da D (233) 3 — plano 236 "Próxima tarefa detalhada" | `returnService.js:326-375` (ENTRADA_DEVOLUCAO, BLOQUEIO, SUCATA sem `lotePelasSeries`); `returnService.js:162` (série nesses destinos é limitação declarada) — a sonda da Fase 0 decide se há buraco; sem buraco, fecha com o teste | 0,8 h (horas.js 18/11, grupo Quarentena series) | 1h | `ca5da1d6`, `d3a59a77`, `e17aa7b1` |
 | 3 | Retalho de peça com série: baixa do original grava o lote | 1h15 | motor | 1h15 | idem | `scrapService.js:342` (SAIDA do original), `:362` | — | — | — |
 | 4 | Devolução ao fornecedor (NC) de peça com série grava o lote | 1h15 | motor | 1h15 | idem | `nonConformityService.js:1664` (DEVOLUCAO_FORNECEDOR, `lote_id` da inspeção quando há); `:1060` é DESBLOQUEIO (não é saída) | — | — | — |
 | 5 | Saída com lote valida a prateleira do lote, não a padrão (C543 no motor) | 1h30 | motor, toda saída sem origem | 1h30 | C543 + D (236) 1; o aviso da Etapa 237 (B1542) muda junto | `stockService.js:1565` `validarLocalizacaoParaMovimento(resolveLocalizacaoSaida(...))`; `claimSaldoDoLote` baixa onde o lote está | 0,9 h (horas.js 18/11, grupo C543) | 1h | `e21132d1`, `9e33f948`, `d9171d1d` |
@@ -60,6 +60,10 @@ achou três casos em que o número divergia do sistema (saldo negativo global, s
 **Etapa 242 (item 8, 18/11):** 15 min acima do estimado. A posição **não** trazia a reserva (a régua previa "sem campo novo de servidor se a
 posição já trouxer"): ganhou o livre e as reservas por OS, a revisão pediu o projeto da reserva e a fixture da posição usada pelos testes da
 tela foi regravada. Medido 0,9 h → 1h.
+
+**Etapa 243 (item 2, 18/11):** 15 min abaixo do estimado. Havia buraco (sonda da Fase 0): a devolução avulsa para Quarentena **e para
+Estoque** deixava a peça "sem lote" — as duas foram corrigidas (a mesma entrada). A **Sucata não mudou** (a série não se move nela; B1551):
+o texto "Quarentena ou Sucata" do item vale como Quarentena e Estoque. Medido 0,8 h → 1h.
 
 ## Os que dependem de resposta — caminho reversível se a resposta não vier
 
