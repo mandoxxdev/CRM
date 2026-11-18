@@ -25,9 +25,11 @@ function test(name, fn) {
 }
 const ADMIN = { id: 1, nome: 'Adm 245', role: 'admin', is_superadmin: 1, email: 'a245@t.com' };
 const API = '/api/almoxarifado';
-const RECUSA_SERIE = 'Material com controle de série não pode ser devolvido por aqui — desbloqueie a quantidade reprovada em '
-  + 'Inspeções, dê baixa das peças em Movimentações → Saída escolhendo os números de série, e a Qualidade cancela este documento '
-  + 'informando a baixa';
+// Fase 5 (achado 1): quem registra a execucao (Compras/Qualidade) nao desbloqueia (ajustar_estoque: Gestor) nem da a Saida
+// (movimentar: Almoxarife) — a literal diz quem faz cada passo.
+const RECUSA_SERIE = 'Material com controle de série não pode ser devolvido por aqui — o Gestor desbloqueia a quantidade reprovada '
+  + 'em Inspeções, o Almoxarife dá baixa das peças em Movimentações → Saída escolhendo os números de série, e a Qualidade cancela '
+  + 'este documento informando a baixa';
 let seq = 0;
 let terminou = false;
 process.on('exit', (code) => {
@@ -177,6 +179,40 @@ process.on('exit', (code) => {
     assert.strictEqual(await flag(ctx.ncId), 0);
     const r = await executar(ctx.ncId);
     assert.strictEqual(r.status, 200, `executar: ${JSON.stringify(r.body)}`);
+  });
+
+  // ── Fase 5 (achados 2 e 3) — o campo fora da inspecao e fora de DECIDIDA pendente ──────────────────────────────────────────
+  await test('[RN-245.04 Fase 5] NC automatica de RECEBIMENTO (divergencia de quantidade) de material com serie, DEVOLVER: campo 0 e /executar 200', async () => {
+    const c = `S245R-${++seq}`;
+    const mid = (await dbRun(db, `INSERT INTO materiais_almoxarifado (codigo, nome, unidade, quantidade_atual, quantidade_minima, ativo,
+      material_critico, custo_unitario, controle_lote, controle_serie, localizacao_padrao_id) VALUES (?, ?, 'UN', 0, 0, 1, 0, 1, 0, 1, ?)`,
+      [c, c, P01.id])).lastID;
+    const rec = await post(`${API}/recebimentos`, { tipo_recebimento: 'NOTA_FISCAL', nota_fiscal: `NF${c}`,
+      itens: [{ material_id: mid, quantidade: 3, quantidade_recebida: 3, series: ['E1', 'E2', 'E3'].join('\n') }] });
+    assert.strictEqual(rec.status, 201, JSON.stringify(rec.body));
+    const it = await dbGet(db, 'SELECT id FROM recebimentos_material_itens_almoxarifado WHERE recebimento_id = ?', [rec.body.id]);
+    const conf = await request(app).put(`${API}/recebimentos/${rec.body.id}/conferir`).send({ itens: [{ id: it.id, quantidade_recebida: 2 }] });
+    assert.strictEqual(conf.status, 200, `conferir: ${JSON.stringify(conf.body)}`);
+    const doc = await dbGet(db, `SELECT id, origem, aberto_automaticamente FROM nao_conformidades_almoxarifado
+      WHERE material_id = ? ORDER BY id DESC`, [mid]);
+    assert.ok(doc, 'a divergencia nao abriu NC');
+    assert.deepStrictEqual([doc.origem, doc.aberto_automaticamente], ['RECEBIMENTO', 1], 'premissa: NC automatica do recebimento');
+    await decidir(doc.id);
+    assert.strictEqual(await flag(doc.id), 0);
+    const r = await executar(doc.id);
+    assert.strictEqual(r.status, 200, `executar: ${JSON.stringify(r.body)}`);
+  });
+  await test('[RN-245.04 Fase 5] fora de DECIDIDA pendente o campo e 0: cancelada pelo passo 3; executada antes de a serie ser ligada', async () => {
+    const ctx = await reprovada({ aprovada: 3, reprovadaQtd: 1 });
+    await decidir(ctx.ncId);
+    assert.strictEqual(await flag(ctx.ncId), 1, 'metade positiva: decidida e pendente');
+    assert.strictEqual((await post(`${API}/nao-conformidades/${ctx.ncId}/cancelar`, { motivo: 'baixa dada em Movimentacoes' })).status, 200);
+    assert.strictEqual(await flag(ctx.ncId), 0, 'a cancelada continua dizendo que a execucao vai recusar pela serie');
+    const sem = await reprovada({ aprovada: 3, reprovadaQtd: 1, serie: 0 });
+    await decidir(sem.ncId);
+    assert.strictEqual((await executar(sem.ncId)).status, 200);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET controle_serie = 1 WHERE id = ?', [sem.mid]);
+    assert.strictEqual(await flag(sem.ncId), 0, 'a executada diz que a execucao vai recusar pela serie');
   });
 
   terminou = true;

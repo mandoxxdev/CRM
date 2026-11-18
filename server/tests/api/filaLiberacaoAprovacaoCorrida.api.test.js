@@ -645,7 +645,7 @@ function ateOu(p, ms) {
 var CHAVES_NC = ['aberto_automaticamente', 'aberto_por_id', 'aberto_por_nome', 'cancelado_em', 'cancelado_por_id',
   'cancelado_por_nome', 'created_at', 'decidido_em', 'decidido_por_id', 'decidido_por_nome', 'decisao', 'descricao',
   'divergencia', 'execucao_em', 'execucao_estado', 'execucao_movimentacao_id', 'execucao_observacoes', 'execucao_por_id',
-  'execucao_por_nome', 'id', 'justificativa', 'liberacao', 'material_codigo', 'material_id', 'material_nome',
+  'execucao_por_nome', 'execucao_recusada_por_serie' /* Etapa 245, RN-245.04 */, 'id', 'justificativa', 'liberacao', 'material_codigo', 'material_id', 'material_nome',
   'material_unidade', 'motivo_cancelamento', 'nota_fiscal', 'numero', 'origem', 'quantidade_esperada',
   'quantidade_recebida', 'recebimento_id', 'recebimento_numero', 'referencia_id', 'referencia_tipo', 'status', 'tipo',
   'updated_at'];

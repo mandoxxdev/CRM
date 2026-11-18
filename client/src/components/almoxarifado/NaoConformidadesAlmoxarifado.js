@@ -1070,9 +1070,9 @@ const NaoConformidadesAlmoxarifado = () => {
               {serieRecusaExecucao && (
                 <p data-testid="nc-exec-aviso-serie" style={{ fontSize: '0.82rem', color: 'var(--gmp-warning)', marginTop: 0 }}>
                   Este material tem controle por número de série: a devolução não é registrada aqui. Para devolver:
-                  (1) em Inspeções → Desbloquear Material, desbloqueie a quantidade reprovada; (2) em Movimentações →
-                  Saída, dê baixa das peças escolhendo os números de série; (3) a Qualidade cancela este documento,
-                  informando a baixa no motivo.
+                  (1) o Gestor, em Inspeções → Desbloquear Material, desbloqueia a quantidade reprovada; (2) o
+                  Almoxarife, em Movimentações → Saída, dá baixa das peças escolhendo os números de série; (3) a
+                  Qualidade cancela este documento, informando a baixa no motivo.
                 </p>
               )}
               <p style={{ fontSize: '0.78rem', color: 'var(--gmp-text-light)', marginTop: 0 }}>

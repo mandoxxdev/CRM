@@ -172,8 +172,9 @@ const EXEC_RECUSA = {
   JA_REGISTRADA: { status: 409, mensagem: 'A execução desta não conformidade já foi registrada' },
   // Etapa 245 (RN-245.02): a literal ensinava so "de baixa pela tela de Movimentacoes" — e o reprovado esta BLOQUEADO: com tudo
   // reprovado a Saida e recusada ("Saldo insuficiente"), com parte reprovada ela sai do disponivel e deixa uma peca BOA presa no
-  // bloqueio (sonda da Fase 0). O caminho que fecha tem tres passos, e a literal diz os tres.
-  SERIE: { status: 400, mensagem: 'Material com controle de série não pode ser devolvido por aqui — desbloqueie a quantidade reprovada em Inspeções, dê baixa das peças em Movimentações → Saída escolhendo os números de série, e a Qualidade cancela este documento informando a baixa' },
+  // bloqueio (sonda da Fase 0). O caminho que fecha tem tres passos, e a literal diz os tres — e QUEM faz cada um (Fase 5: quem
+  // registra a execucao, Compras/Qualidade, nao desbloqueia — ajustar_estoque — nem da a Saida — movimentar).
+  SERIE: { status: 400, mensagem: 'Material com controle de série não pode ser devolvido por aqui — o Gestor desbloqueia a quantidade reprovada em Inspeções, o Almoxarife dá baixa das peças em Movimentações → Saída escolhendo os números de série, e a Qualidade cancela este documento informando a baixa' },
   SEM_LOTE: { status: 400, mensagem: 'Não foi possível identificar o lote do material devolvido' },
   // Etapa 46 — o documento pode ser CANCELADO entre a leitura e o claim, ou antes dele. Sem esta
   // literal o caso caia em JA_REGISTRADA, que afirma uma execucao que nao houve.
@@ -310,10 +311,11 @@ const CAMPOS_LISTA = `nc.id, nc.numero, nc.origem, nc.referencia_tipo, nc.refere
   nc.cancelado_em, nc.cancelado_por_id, nc.cancelado_por_nome, nc.created_at, nc.updated_at,
   nc.execucao_estado, nc.execucao_em, nc.execucao_por_id, nc.execucao_por_nome,
   nc.execucao_observacoes, nc.execucao_movimentacao_id,
-  CASE WHEN nc.decisao = 'DEVOLVER' AND COALESCE(m.controle_serie, 0) = 1 AND nc.aberto_automaticamente = 1
+  CASE WHEN nc.status = 'DECIDIDA' AND nc.execucao_em IS NULL
+    AND nc.decisao = 'DEVOLVER' AND COALESCE(m.controle_serie, 0) = 1 AND nc.aberto_automaticamente = 1
     AND nc.origem = 'INSPECAO' AND nc.referencia_tipo = 'INSPECAO' THEN 1 ELSE 0 END AS execucao_recusada_por_serie`;
 // ⚠️ Etapa 245 (RN-245.04): `execucao_recusada_por_serie` e o nivel 6 (RN-13) de `efeitoExecucaoPrevisto` dito na leitura, para a
-// janela de execucao avisar ANTES (a tela nao recalcula a regua — cabecalho de NaoConformidadesAlmoxarifado.js). Os niveis 4 e 5
+// janela de execucao avisar ANTES (Fase 5: so em DECIDIDA sem execucao — os niveis 2 e 3 vem antes do 6) (a tela nao recalcula a regua — cabecalho de NaoConformidadesAlmoxarifado.js). Os niveis 4 e 5
 // (so DEVOLVER; so a NC automatica da inspecao) entram na condicao porque vem antes do 6. Mudou a precedencia? Mude aqui junto — o
 // `devolucaoFornecedorPecaComSerie.api.test.js` amarra o campo ao `/executar` nos quatro casos.
 

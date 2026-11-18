@@ -472,9 +472,9 @@ async function erroDe(fn) {
     assert.ok(e, 'devolveu material com controle de serie');
     assert.strictEqual(e.status, 400);
     assert.strictEqual(e.message,
-      'Material com controle de série não pode ser devolvido por aqui — desbloqueie a quantidade reprovada em Inspeções, '
-      + 'dê baixa das peças em Movimentações → Saída escolhendo os números de série, e a Qualidade cancela este documento '
-      + 'informando a baixa' /* Etapa 245: a literal ensina o caminho inteiro */);
+      'Material com controle de série não pode ser devolvido por aqui — o Gestor desbloqueia a quantidade reprovada em Inspeções, '
+      + 'o Almoxarife dá baixa das peças em Movimentações → Saída escolhendo os números de série, e a Qualidade cancela este '
+      + 'documento informando a baixa' /* Etapa 245: a literal ensina o caminho inteiro */);
     const doc = await nc.obterNaoConformidade(db, ctx.ncId);
     assert.strictEqual(doc.execucao_estado, nc.EXECUCAO_PENDENTE,
       'a recusa por serie fechou o documento — ele tem de continuar na fila');

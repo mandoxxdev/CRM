@@ -1566,9 +1566,10 @@ describe('NaoConformidadesAlmoxarifado — solicitar o sucateamento do reprovado
  * janela avisa ANTES, com o caminho inteiro, e desliga o botão. A tela não recalcula a régua: só lê o campo.
  */
 describe('NaoConformidadesAlmoxarifado — devolução de peça com número de série (Etapa 245)', () => {
-  const AVISO_SERIE = 'Este material tem controle por número de série: a devolução não é registrada aqui. Para devolver: (1) em '
-    + 'Inspeções → Desbloquear Material, desbloqueie a quantidade reprovada; (2) em Movimentações → Saída, dê baixa das peças '
-    + 'escolhendo os números de série; (3) a Qualidade cancela este documento, informando a baixa no motivo.';
+  // Fase 5 (achado 1): quem registra a execucao (Compras/Qualidade) nao desbloqueia nem da a Saida — o aviso diz quem faz cada passo.
+  const AVISO_SERIE = 'Este material tem controle por número de série: a devolução não é registrada aqui. Para devolver: (1) o '
+    + 'Gestor, em Inspeções → Desbloquear Material, desbloqueia a quantidade reprovada; (2) o Almoxarife, em Movimentações → Saída, '
+    + 'dá baixa das peças escolhendo os números de série; (3) a Qualidade cancela este documento, informando a baixa no motivo.';
 
   test('(53) RN-245.05 com execucao_recusada_por_serie: o aviso literal, o botão desligado e sem a frase da baixa — e o clique não manda nada', async () => {
     ncDoBanco = [{ ...NC_A_EXECUTAR, execucao_recusada_por_serie: 1 }];
