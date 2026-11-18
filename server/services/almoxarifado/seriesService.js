@@ -42,7 +42,12 @@ async function listarSeriesDoMaterial(db, materialId, { status } = {}) {
     SELECT s.*, lt.codigo AS lote_codigo, loc.descricao AS localizacao_descricao,
            lt.status AS lote_status, lt.data_validade AS lote_validade,
            CASE WHEN lt.id IS NOT NULL AND ${predicadoLoteImpedidoSql('lt', hoje)} THEN 1 ELSE 0 END AS lote_esta_impedido,
-           CASE WHEN lt.id IS NOT NULL AND ${predicadoLoteVencidoSql('lt', hoje)} THEN 1 ELSE 0 END AS lote_vencido_sem_liberacao
+           CASE WHEN lt.id IS NOT NULL AND ${predicadoLoteVencidoSql('lt', hoje)} THEN 1 ELSE 0 END AS lote_vencido_sem_liberacao,
+           -- Etapa 246 (C539, RN-246.01): o saldo do lote da serie na regua do motor — a soma das linhas POSITIVAS do lote, do material
+           -- da serie (stockService, lotePelasSeries: so usa o lote das series quando isto cobre a quantidade). A tela so diz "saem do
+           -- lote L1" quando cobre. Sem lote (ou lote apagado): null.
+           CASE WHEN lt.id IS NULL THEN NULL ELSE (SELECT COALESCE(SUM(es.quantidade), 0) FROM estoque_saldo_almoxarifado es
+             WHERE es.material_id = s.material_id AND es.lote_id = lt.id AND es.quantidade > 0) END AS lote_saldo_positivo
       FROM series_almoxarifado s
       LEFT JOIN lotes_almoxarifado lt ON lt.id = s.lote_id
       LEFT JOIN localizacoes_almoxarifado loc ON loc.id = s.localizacao_id
