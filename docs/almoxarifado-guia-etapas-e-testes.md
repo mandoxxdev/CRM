@@ -12,7 +12,14 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 240 fechada — 2026-11-18.** **A devolução ao cliente escolhe de onde sai.** Em **Materiais de
+> **O desenvolvimento parou aqui: Etapa 241 fechada — 2026-11-18.** **O seletor de lote mostra o livre.** Na janela **Devolver ao
+> cliente** e em **Movimentações** (Saída e Perda), o lote diz quanto está livre quando parte do material está reservada (*"L1 — saldo 3 —
+> livre 0"*); na devolução, acima do livre, a janela avisa e apaga o **Confirmar**. **Sem consulta antes do deploy.** **Nenhum clique foi
+> dado** (roteiro na seção da 241). **Onde parou, exatamente:** a **241 está fechada**; a **próxima** é o item 8 da estimativa de 18/11 —
+> **o aviso de material de cliente reservado para uma OS** (C541) —, detalhada no fim do plano
+> (`docs/superpowers/plans/2026-11-18-almoxarifado-etapa241-livre-no-seletor-de-lote.md`).
+>
+> *(Antes:)* **Etapa 240 fechada — 2026-11-18.** **A devolução ao cliente escolhe de onde sai.** Em **Materiais de
 > Clientes → Devolver**, o campo **Sai de**: o automático de antes ou uma prateleira com saldo (a bloqueada apagada); escolhida, a devolução
 > sai só dela (se não cobre, a janela avisa e o sistema recusa). Com a localização padrão bloqueada, o material sem lote passa a ser
 > devolvível pela tela. **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção da 240). **Onde parou, exatamente:** a
@@ -7311,6 +7318,41 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 241 — O seletor de lote mostra o livre (ENTREGUE — 2026-11-18)
+
+**O que mudou, em uma frase:** o seletor de lote (na devolução ao cliente e em Movimentações) diz quanto do lote está livre quando parte do
+material está reservada.
+
+**O problema que ela resolve.** O material de cliente que entra com uma OS fica reservado para ela. A janela **Devolver ao cliente** mostrava
+*"L1 — saldo 3"*, o usuário escolhia o lote, digitava 3 e só ao confirmar vinha *"Saldo insuficiente. Disponível: 0 UN"*. A reserva é do
+material, não de um lote: o que pode sair de cada lote é o saldo dele, limitado ao livre do material.
+
+| Antes | Agora |
+|---|---|
+| *"L1 — saldo 3"* com tudo reservado | *"L1 — saldo 3 — livre 0"* |
+| Nenhuma explicação | *"Livre é o que não está reservado nem retido no material (a reserva é do material, não do lote): de nenhum lote sai mais que o livre."* |
+| Acima do livre: recusa ao confirmar | *"Do lote L1 estão livres só 2: devolva até 2 ou libere a reserva do material."* e o **Confirmar devolução** apagado |
+| Movimentações (Saída, Perda): *"L1 — saldo 3"* | *"L1 — saldo 3 — livre 0"* |
+| Sem reserva; Transferência; material que aceita saldo negativo | **Igual** |
+
+**Roteiro de teste manual (≈6 min):**
+
+1. Entre como **Administrador do almoxarifado**. Material de cliente *CLI-241* com **Controle por lote**. **Movimentações → Entrada** de 3
+   no lote *L1* e de 2 no lote *L2*. **Reservas → Nova reserva** de 3 do *CLI-241* (com uma OS de referência).
+2. **Materiais de Clientes**, escolha o cliente, **Devolver** em *CLI-241*. **Confira:** *"L1 — saldo 3 — livre 2"*, *"L2 — saldo 2"* e a
+   frase *"Livre é o que não está reservado nem retido no material (a reserva é do material, não do lote): de nenhum lote sai mais que o
+   livre."*.
+3. Escolha *L1*, quantidade 3, documento *DEV-241*. **Confira:** *"Do lote L1 estão livres só 2: devolva até 2 ou libere a reserva do
+   material."* e o botão apagado. Quantidade 2 → o aviso some; **Confirmar devolução** → *"Devolução ao cliente registrada!"*.
+4. **Movimentações → Nova Movimentação**, *CLI-241*, tipo **Saída**. **Confira:** *"L1 — saldo 1 — livre 0"*. Tipo **Transferência**:
+   *"L1 — saldo 1"*.
+
+**O que esta etapa não cobre:** o livre não é "do lote" (a reserva não tem lote): com dois lotes de livre 2, saem 2 no total; os seletores
+de Devoluções e de Sobras e Retalhos ficam como antes; o **Sai de** continua com o que está em cada prateleira; a lista é a da hora em que a
+janela abriu.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro é o que os testes automáticos (tela e rotas) provam.
 
 ## Etapa 240 — A devolução ao cliente escolhe de onde sai (ENTREGUE — 2026-11-18)
 

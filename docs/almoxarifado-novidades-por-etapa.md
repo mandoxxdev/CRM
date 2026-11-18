@@ -11,7 +11,12 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-18):** **Etapa 240 fechada** (**a devolução ao cliente escolhe de onde sai** — a janela **Devolver ao
+> **Onde o desenvolvimento está (2026-11-18):** **Etapa 241 fechada** (**o seletor de lote mostra o livre** — na janela **Devolver ao
+> cliente** e em **Movimentações** (Saída e Perda), o lote diz quanto está livre quando o livre é menor que o saldo (*"L1 — saldo 3 — livre
+> 0"*); na devolução, acima do livre, a janela avisa e apaga o **Confirmar** — antes a recusa vinha ao confirmar (a **C542**). Decisões
+> **B1547** e **B1548**; limitação **D (241)**; verificação **F (241)**; sem consulta antes do deploy).
+> **Próxima:** **o aviso de material de cliente reservado para uma OS** (item 8 da estimativa de 18/11, a **C541**) — detalhada no fim do plano da 241.
+> *(Antes, 2026-11-18:)* **Etapa 240 fechada** (**a devolução ao cliente escolhe de onde sai** — a janela **Devolver ao
 > cliente** ganha o campo **Sai de** (automático, ou uma prateleira com saldo do lote da devolução; a bloqueada apagada); escolhida, a
 > devolução sai só dela (se não cobre, a janela avisa e o sistema recusa). Com a padrão bloqueada, o material sem lote passa a ser devolvível
 > pela tela (**D (236)** 1 resolvida). Decisões **B1545** e **B1546**; limitação **D (240)**; verificação **F (240)**; sem consulta antes do deploy).
@@ -4765,7 +4770,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1546; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15277,6 +15282,23 @@ senão as sem lote) — a mesma conta da recusa (B1545); a bloqueada apagada; tr
 (a de outro lote seria recusada ao confirmar); (b) esconder a bloqueada (o usuário não saberia por que a peça que ele vê lá não está na
 lista); (c) somar por prateleira os lotes diferentes (o sistema confere um lote só). **Reversível.**
 
+**B1547 (NOVA, da Etapa 241; decisão do agente) — o "livre" do seletor de lote é o saldo do lote limitado ao livre do material.** A
+reserva não tem lote (**C526**), então o sistema não sabe qual parte da reserva é de qual lote. Escolhido: cada lote mostra `livre` =
+o menor entre o saldo do lote e o livre do material (o disponível menos o separado sem reserva — a mesma conta que o sistema confere antes
+de baixar o lote), nunca negativo; só aparece no rótulo quando é **menor** que o saldo (*"L1 — saldo 3 — livre 0"*); com a quantidade
+acima do livre do lote escolhido, a janela da devolução ao cliente avisa e apaga o **Confirmar**. Material que aceita saldo negativo (no
+cadastro **ou** para todos os materiais, na configuração): sem livre, porque o sistema não limita — salvo quando há material separado sem
+reserva, que o sistema desconta mesmo assim: aí o livre é o físico menos o separado. O teto de cada lote é o que está **guardado** nele
+(sem descontar uma linha negativa antiga do lote, como o sistema faz ao baixar). Esses três pontos vieram da revisão adversarial, por sonda. Na **Transferência** de Movimentações, sem livre (o sistema não confere o livre nela). Descartados: (a) um
+"livre do lote" de verdade — exigiria a reserva saber o lote (**C526**, grande); (b) mostrar o livre em todo lote, também quando é igual
+ao saldo — poluiria o rótulo de quem não tem reserva; (c) só avisar, sem apagar o **Confirmar** — a recusa é certa, como no "Sai de"
+(B1545). **Reversível** (campo de leitura novo; a tela volta a ler só o saldo).
+
+**B1548 (NOVA, da Etapa 241; decisão do agente) — onde o livre aparece.** Escolhido: na devolução ao cliente e em **Movimentações**
+(Saída e Perda), os dois seletores que a C542 nomeava. Descartados por agora: o seletor de **Devoluções** (a peça **volta** ao estoque —
+não há livre a conferir) e os de **Sobras e Retalhos** (gerar retalho e solicitar sucateamento — o retalho baixa o original, então o livre
+valeria; ninguém pediu e o rótulo de lá é outro, **D (241)** 2). **Reversível.**
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -19539,6 +19561,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      **Movimentações**. Também depois de um **ajuste** de saldo: o ajuste grava a diferença "sem lote", e o lote continua mostrando o que
      tinha (sonda da Fase 5: *"L1 — saldo 3"* com o físico em 1; devolver 3 → *"Saldo insuficiente. Disponível: 1 UN"*; nada sai). Já era
      assim antes desta etapa. **O que fazer:** nada; liberar a reserva antes de devolver, como na **C541**.
+     **Desde a Etapa 241 (B1547, B1548):** o seletor mostra também o **livre** do lote quando ele é menor que o saldo (*"L1 — saldo 3 —
+     livre 0"*), na devolução ao cliente e em **Movimentações** (Saída e Perda); na devolução, com a quantidade acima do livre, a janela
+     avisa *"Do lote L1 estão livres só 0: devolva até 0 ou libere a reserva do material."* e apaga o **Confirmar devolução**. O livre é o
+     saldo do lote limitado ao livre do material (a reserva não tem lote). **O que fazer:** liberar a reserva em **Reservas** antes de devolver.
 543. **NOVO (da Etapa 236, já era assim antes) — com a localização padrão do material bloqueada, a devolução ao cliente é recusada.** A
      janela não escolhe o endereço de origem, e o sistema recusa *"Localização R5L-3 está bloqueada"* mesmo com o lote guardado em outro
      endereço (sonda da Fase 5). Por **Movimentações** a saída escolhe a origem; a devolução ao cliente só existe nesta janela. **O que
@@ -20917,6 +20943,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(241) O livre no seletor de lote, o que ficou de fora.** (1) O livre não é "do lote" — a reserva não tem lote (**C526**): cada lote
+  mostra o máximo que sai dele, e com dois lotes de livre 2 saem 2 no total, não 4. (2) Os seletores de **Devoluções** e de **Sobras e
+  Retalhos** continuam com o saldo de antes (**B1548**). (3) O **Sai de** continua mostrando o que está na prateleira, não o livre (a
+  **(240)** 3 continua). (4) A lista é a da hora em que a janela abriu.
 - **(240) O "Sai de" da devolução ao cliente, o que ficou de fora.** (1) Peça com número de série: o sistema não confere se as séries
   marcadas estão na prateleira escolhida (**C545**). (2) A lista de prateleiras é a da hora em que a janela abriu (a recusa vem do
   servidor). (3) O saldo de cada prateleira é o que está nela, não o livre (a reserva para OS não desconta — **C542**). (4) Movimentações
@@ -22444,6 +22474,13 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(241) Nenhum clique foi dado.** A lista de lotes ganhou `livre` e `livre_do_material`, provados pelas rotas reais em `loteLivreNoSeletor`
+(12: reserva, tudo reservado, legado com reservado acima do físico, lote acima do material, saldo negativo no material e na configuração
+global, negativo com caixa, caixa sem negativo, linha negativa antiga no lote, e a integração lista × devolução). As telas, pelo Jest
+(`MateriaisClienteDevolucaoLoteLivre`, 5; bloco da 241 em `LoteSeletor`, 3). Controles positivos: 7 sabotagens no servidor e 7 na tela, cada
+uma vermelha no cenário certo. Suítes: `test:api` 634/634 arquivos, almoxarifado 44, validation 4, safealter 3, sqlite 16, Jest 235 suítes e
+3162 testes, build ok. Roteiro na seção da 241 (4 cenários, ~6 minutos).
 
 **(240) Nenhum clique foi dado.** A rota da devolução ao cliente mudou — a origem escolhida é estrita — e a leitura de saldos ganhou o
 bloqueio do endereço, provados pelas rotas reais em `devolucaoClienteOrigem` (6). A janela ganhou o **Sai de**, provado pelo Jest
@@ -42792,12 +42829,66 @@ as de um lote, as prateleiras desse lote.
 - A saída por **Movimentações** já escolhia a origem e continua só **preferindo** a escolhida (completa com outras prateleiras) — a mudança
   para "só dela" vale para a devolução ao cliente (**B1545**).
 
+## Etapa 241 — O seletor de lote mostra o livre (2026-11-18)
+
+O seletor de lote mostrava só o que está guardado no lote. Com o material reservado — o caso real é o material de cliente que entrou com
+uma OS e ficou reservado para ela —, a janela **Devolver ao cliente** mostrava *"L1 — saldo 3"*, o usuário escolhia, digitava 3 e só ao
+confirmar vinha *"Saldo insuficiente. Disponível: 0 UN"* (a **C542**). Agora o lote diz também quanto está **livre** quando o livre é
+menor que o saldo (*"L1 — saldo 3 — livre 0"*), a janela explica por quê e, com a quantidade acima do livre, avisa e apaga o
+**Confirmar** antes. A reserva continua sendo do material, não de um lote: o livre de cada lote é o que pode sair dele — o saldo do lote,
+limitado ao livre do material. O mesmo rótulo aparece em **Movimentações**, na Saída e na Perda. Decisões do agente: **B1547** e **B1548**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Lote com tudo reservado: *"L1 — saldo 3"* | *"L1 — saldo 3 — livre 0"* |
+| Nenhuma explicação | Embaixo do campo **Lote**: *"Livre é o que não está reservado nem retido no material (a reserva é do material, não do lote): de nenhum lote sai mais que o livre."* |
+| Quantidade acima do livre: a recusa vinha ao confirmar | A janela avisa *"Do lote L1 estão livres só 2: devolva até 2 ou libere a reserva do material."* e apaga o **Confirmar devolução** |
+| **Movimentações**, Saída e Perda: *"L1 — saldo 3"* | *"L1 — saldo 3 — livre 0"* |
+| Sem reserva (livre = saldo); material que aceita saldo negativo; **Transferência** | **Igual** |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**. Um material de cliente *CLI-241* com **Controle por lote**. Em **Movimentações**,
+**Entrada** de 3 no lote *L1* e de 2 no lote *L2*. Em **Reservas**, **Nova reserva** de 3 do *CLI-241* (com uma OS de referência). O livre do
+material fica em 2.
+
+**1. O rótulo diz o livre (RN-241.02, .03).** **Materiais de Clientes**, escolha o cliente, na linha de *CLI-241* clique **Devolver**.
+**Confira:** no **Lote**, *"L1 — saldo 3 — livre 2"* e *"L2 — saldo 2"* (o L2 cabe inteiro no livre) e, embaixo, *"Livre é o que não está
+reservado nem retido no material (a reserva é do material, não do lote): de nenhum lote sai mais que o livre."*
+
+**2. Acima do livre, o aviso (RN-241.04).** Escolha *L1*, quantidade 3, documento *DEV-241*. **Confira:** *"Do lote L1 estão livres só 2:
+devolva até 2 ou libere a reserva do material."* e o **Confirmar devolução** apagado. Quantidade 2 → o aviso some; **Confirmar** →
+*"Devolução ao cliente registrada!"*.
+
+**3. Movimentações (RN-241.05).** **Nova Movimentação**, material *CLI-241*, tipo **Saída**: o **Lote** mostra *"L1 — saldo 1 — livre 0"*
+(depois do cenário 2, o livre do material é 0). Tipo **Transferência**: *"L1 — saldo 1"* (a transferência não mexe no livre).
+
+**4. O servidor (RN-241.01, .06).** `GET /api/almoxarifado/materiais/:id/lotes` traz, em cada lote, `livre` e `livre_do_material`. Devolver o
+livre do lote → 201; o livre + 1 → *"Saldo insuficiente. Disponível: 2 UN"* (com o livre 2).
+
+### O que esta etapa NÃO cobre
+
+- O livre não é "do lote": a reserva não tem lote (**C526**). O número é o máximo que sai do lote — com dois lotes de livre 2 cada, saem 2
+  no total, não 4 (**D (241)** 1).
+- Os seletores de **Devoluções** (a peça volta ao estoque) e de **Sobras e Retalhos** continuam com o saldo de antes (**B1548**, **D (241)** 2).
+- O **Sai de** (Etapa 240) continua mostrando o que está em cada prateleira, não o livre (**D (240)** 3, **D (241)** 3).
+- A lista é a da hora em que a janela abriu: reserva feita com a janela aberta aparece na recusa ao confirmar.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 241 entregue (2026-11-18):** **o seletor de lote mostra o livre** (a **C542**). A lista de lotes diz o livre de cada lote (o
+  saldo do lote limitado ao livre do material, na conta do sistema — **B1547**); a janela **Devolver ao cliente** mostra, explica e avisa
+  antes de confirmar; **Movimentações** mostra na Saída e na Perda (**B1548**). Commits `6e3a496a` (lista e teste), `0cc2141d` (telas e
+  testes), `0989e7e3` (Fase 5: saldo negativo global, caixa com negativo, linha negativa de legado) e o fechamento. **O que é seu:** as
+  **B1547** e **B1548** (reversíveis); a **C542** atualizada; a limitação **(241)** em D e a verificação **(241)** em F. Sem consulta antes do
+  deploy. **Próxima:** **o aviso de material de cliente reservado para uma OS** (item 8 da estimativa de 18/11) — detalhada no fim do plano da 241.
 
 - **Etapa 240 entregue (2026-11-18):** **a devolução ao cliente escolhe de onde sai** (**D (236)** 1 resolvida). Campo **Sai de** na janela
   **Devolver ao cliente** (**B1546**); a origem escolhida é estrita na rota (**B1545** — antes só preferida, completava com outras

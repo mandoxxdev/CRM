@@ -1046,6 +1046,12 @@ FEFO significa *first expired, first out* — **o que vence primeiro sai primeir
 
 Onde aparece: na tela de **Movimentações**, ao escolher uma Saída, Perda ou Transferência, a lista de lotes vem ordenada assim — **primeiro os elegíveis, depois por validade crescente** (lote sem validade vai para o fim), e o **primeiro lote elegível já vem pré-selecionado**. A mesma ordem é usada no seletor de lote da tela de Devoluções e nos seletores da tela de Sobras e Retalhos (gerar retalho e solicitar sucateamento).
 
+Cada lote aparece com o saldo guardado nele (*"L1 — saldo 3"*). Na **Saída** e na **Perda**, quando parte do material está reservada ou
+retida, o lote mostra também o **livre** — o menor entre o saldo do lote e o livre do material (a reserva é do material, não do lote; a
+conta está em 16.7): *"L1 — saldo 3 — livre 0"*. Acima do livre, a saída é recusada com *"Saldo insuficiente. Disponível: … UN"*. Na
+**Transferência** o livre não aparece: ela muda o material de prateleira e não mexe no reservado. Os seletores de Devoluções e de Sobras e
+Retalhos mostram só o saldo.
+
 **É sugestão, não imposição.** O operador pode trocar por qualquer outro lote elegível — há motivos legítimos para pegar outro, e travar isso no sistema atrapalharia mais do que ajudaria. O motor não verifica FEFO: ele valida situação, validade e saldo do lote **que foi escolhido**.
 
 Um cuidado de leitura: lotes não elegíveis **não somem da lista** — aparecem no fim, desabilitados, com o motivo no rótulo (`L-001 — saldo 25 — vence 31/01/2026 (vencido, liberado) (bloqueado)`). Esconder faria o operador procurar material que o sistema decidiu não mostrar.
@@ -6262,7 +6268,17 @@ Sem documento, a operação é recusada com *"informe o numero do documento de d
 
 - O lote que não pode sair — **bloqueado**, **reprovado** ou **vencido** sem a liberação do vencimento — vem apagado, sem poder ser escolhido, com o motivo (*"LB — saldo 4 — Bloqueado: não sai"*, *"LX — saldo 1 — vence 15/09/2026 — Vencido: não sai"*), e embaixo: *"Lotes bloqueados, reprovados ou vencidos vêm apagados: só saem depois que o lote for liberado na tela Lotes e Séries."* O vencido **com** a liberação aparece com *"(vencido, liberado)"* e sai.
 - Quando só um lote pode sair, ele já vem escolhido; com dois ou mais, a janela começa em *"Escolha o lote"*, e **Confirmar devolução** sem escolher para em *"Escolha o lote da devolução"*. Sem lote com saldo: *"Nenhum lote com saldo para este material."*
-- O saldo mostrado é o que está no lote. Acima dele a recusa é *"Saldo insuficiente no lote L2. Disponível: 2 UN"*; se parte do material estiver reservada, a recusa pode vir pelo disponível do material (*"Saldo insuficiente. Disponível: … UN"*).
+- O saldo mostrado é o que está no lote. Acima dele a recusa é *"Saldo insuficiente no lote L2. Disponível: 2 UN"*.
+- **O livre do lote.** A reserva (por exemplo, a do material de cliente que entrou com uma OS) é do **material**, não de um lote. Por isso
+  de nenhum lote sai mais que o **livre do material** — o físico menos o reservado, o bloqueado, o que está em inspeção, o que está com
+  terceiros e o que já foi separado para uma requisição sem reserva. O livre de cada lote é o menor entre o que está guardado no lote e o
+  livre do material. Quando ele é menor que o saldo, o rótulo o mostra (*"L1 — saldo 3 — livre 0"*) e, embaixo do campo, aparece *"Livre é o
+  que não está reservado nem retido no material (a reserva é do material, não do lote): de nenhum lote sai mais que o livre."*. Com dois
+  lotes de livre 2 cada, saem 2 no total, não 4. Com o lote escolhido e a quantidade acima do livre dele, a janela avisa, em vermelho, *"Do
+  lote L1 estão livres só 2: devolva até 2 ou libere a reserva do material."* e o **Confirmar devolução** fica desabilitado; quem envia
+  mesmo assim recebe *"Saldo insuficiente. Disponível: 2 UN"*. Material que aceita saldo negativo (no cadastro ou para todos os materiais)
+  não tem livre no rótulo — o sistema não limita a saída pelo reservado —, salvo quando há material separado para requisição sem reserva:
+  aí o livre é o físico menos o separado, e vale para qualquer lote. O livre é o da hora em que a janela abriu.
 - Material com controle por lote **e** número de série: antes de escolher o lote, no lugar da lista, *"Escolha o lote para ver as séries dele."*; escolhido o lote, a lista mostra só as séries dele, e trocar de lote desmarca as séries. Série que ficou sem lote nesse material não aparece e não é devolvível por esta janela.
 - Sem prateleira escolhida em **Sai de**, o sistema baixa do endereço do lote (6.7, item 6). A localização padrão do material não conta aqui: com ela bloqueada, a devolução sai do endereço livre onde o lote está guardado, sem aviso. Se o lote só tem saldo em endereço bloqueado, a recusa ao confirmar é *"Localização X-09 está bloqueada"*, com o código do endereço do lote — desbloqueie o endereço (ou transfira o lote para um endereço livre) e devolva de novo.
 

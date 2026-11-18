@@ -17,7 +17,7 @@
 
 > **Status:** 🟢 — **Etapa 8 entregue em 2026-08-12** (`f26b635..5b5eb55`) **+ Etapa 123 (2026-10-16, `c97fe07f`): o dono do material tem de
 > estar em Clientes — `POST`/`PUT /materiais` com dono inexistente → 400 (C216 resolvido; a regra mora na spec 01, seção "Etapa 123")** **+ Etapa 106 (2026-10-15, `d6493a7e..0c8ec372`): o estorno do ajuste exige a mesma permissão do ajuste (C211 resolvido)** **+ Etapa 108 (2026-10-15, `cd7d5118..bc415eb6`): trocar o dono de material com histórico exige a mesma permissão (C213 resolvido)** · **Spec original:** seção 17 (fundamental para industrialização GMP)
-> **Última atualização:** 2026-11-18 (**Etapa 240** — a janela de devolução ao cliente escolhe de onde sai ("Sai de"); a origem escolhida é estrita na rota (`81c9ed15`, `077ca21f`). Ver a seção no fim.) Antes: 2026-11-18 (**Etapa 239** — com lote, a padrão bloqueada não barra a devolução ao cliente; a posição ganha `permite_saldo_negativo`; o aviso da 237 fica só para a devolução sem lote (`e21132d1`, `9e33f948`). Ver a seção no fim.) Antes: 2026-11-13 (**Etapa 237** — com a localização padrão bloqueada, a janela de devolução ao cliente avisa e apaga o Confirmar; a posição ganha `localizacao_padrao_codigo` e `localizacao_padrao_bloqueada` (`ac98e771`, `e50a98ec`). Ver a seção no fim.) Antes: 2026-11-13 (**Etapa 236** — a janela de devolução ao cliente ganha o seletor de lote: material de cliente com controle por lote passa a ser devolvível pela tela (`5f5c1af4`). Ver a seção no fim.) Antes: 2026-10-19 (**Etapa 156** — o seletor **Proprietário** do cadastro diz o motivo quando a lista de clientes volta recusada, e o dono que não está na lista aparece como *"Cliente #7 — fora da lista"* (C366, `75e772cf`). Ver a seção no fim.) Antes: 2026-10-15 (Etapa 108)
+> **Última atualização:** 2026-11-18 (**Etapa 241** — o seletor de lote da devolução ao cliente (e o de Movimentações) mostra o livre do lote; a lista de lotes ganha `livre` e `livre_do_material` (`6e3a496a`, `0cc2141d`). Ver a seção no fim.) Antes: 2026-11-18 (**Etapa 240** — a janela de devolução ao cliente escolhe de onde sai ("Sai de"); a origem escolhida é estrita na rota (`81c9ed15`, `077ca21f`). Ver a seção no fim.) Antes: 2026-11-18 (**Etapa 239** — com lote, a padrão bloqueada não barra a devolução ao cliente; a posição ganha `permite_saldo_negativo`; o aviso da 237 fica só para a devolução sem lote (`e21132d1`, `9e33f948`). Ver a seção no fim.) Antes: 2026-11-13 (**Etapa 237** — com a localização padrão bloqueada, a janela de devolução ao cliente avisa e apaga o Confirmar; a posição ganha `localizacao_padrao_codigo` e `localizacao_padrao_bloqueada` (`ac98e771`, `e50a98ec`). Ver a seção no fim.) Antes: 2026-11-13 (**Etapa 236** — a janela de devolução ao cliente ganha o seletor de lote: material de cliente com controle por lote passa a ser devolvível pela tela (`5f5c1af4`). Ver a seção no fim.) Antes: 2026-10-19 (**Etapa 156** — o seletor **Proprietário** do cadastro diz o motivo quando a lista de clientes volta recusada, e o dono que não está na lista aparece como *"Cliente #7 — fora da lista"* (C366, `75e772cf`). Ver a seção no fim.) Antes: 2026-10-15 (Etapa 108)
 >
 > Material de cliente deixou de ser ilha e virou **material normal com dono**
 > (`materiais_almoxarifado.proprietario_cliente_id`, `NULL` = material nosso): ganha lote, série,
@@ -532,3 +532,25 @@ Plano: `docs/superpowers/plans/2026-11-18-almoxarifado-etapa240-origem-devolucao
 
 Testes: `devolucaoClienteOrigem.api.test.js` (6); `MateriaisClienteDevolucaoOrigem.test.js` (6); `MateriaisClienteDevolucaoLocalBloqueado.test.js`
 (6, o literal novo do aviso). Continua 🟢.
+
+## Etapa 241 — o seletor de lote mostra o livre (2026-11-18)
+
+Plano: `docs/superpowers/plans/2026-11-18-almoxarifado-etapa241-livre-no-seletor-de-lote.md`. Resolve a **C542** (o seletor mostrava só o
+saldo do lote; com o material reservado para a OS, a recusa vinha ao confirmar).
+
+- [x] **RN-241.01** — `GET /materiais/:id/lotes` com `livre` = max(0, min(saldo do lote, livre do material)) e `livre_do_material`, o livre
+  na régua do motor (`livreDeCaixaSql`); saldo negativo permitido → `null` — `6e3a496a`. **Fase 5 (`0989e7e3`):** o plano dizia "saldo
+  negativo permitido → null (o motor não limita)" — **estava incompleto**: o negativo é o efetivo (material **ou** global), e com caixa
+  separada sem reserva o motor limita a físico − caixa (sem o teto do lote); o teto do lote é o das linhas **positivas** (as do claim).
+- [x] **RN-241.02** — na janela de devolução, o rótulo *"L1 — saldo 3 — livre 2"* quando o livre é menor que o saldo — `0cc2141d`.
+- [x] **RN-241.03** — a frase *"Livre é o que não está reservado nem retido no material (a reserva é do material, não do lote): de nenhum lote
+  sai mais que o livre."* — `0cc2141d`.
+- [x] **RN-241.04** — quantidade acima do livre do lote escolhido: *"Do lote L1 estão livres só 2: devolva até 2 ou libere a reserva do
+  material."* e o Confirmar apagado (**B1547**) — `0cc2141d`.
+- [x] **RN-241.05** — Movimentações, Saída e Perda: o mesmo rótulo; Transferência não — `0cc2141d`.
+- [x] **RN-241.06** — integração lista × rota: o livre sai (201), o livre + 1 é recusado pelo disponível — `6e3a496a`.
+- [ ] **Fora (declarado, D (241)):** o livre não é "do lote" (**C526**); Devoluções e Sobras com o rótulo de antes (**B1548**); o **Sai de**
+  continua com o físico da prateleira.
+
+Testes: `loteLivreNoSeletor.api.test.js` (12); `MateriaisClienteDevolucaoLoteLivre.test.js` (5); `LoteSeletor.test.js` (bloco da 241, 3).
+Continua 🟢.
