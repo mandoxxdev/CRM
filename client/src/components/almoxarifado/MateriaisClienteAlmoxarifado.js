@@ -115,6 +115,20 @@ const MateriaisClienteAlmoxarifado = () => {
     return () => { cancelado = true; };
   }, [devTarget]);
 
+  // Etapa 240 (RN-240.01, D (236) 1): o "Sai de" — os saldos por endereço do material (`/estoque/:id/saldos`, com `localizacao_bloqueada`).
+  // Falhou a busca: só o automático (a janela de antes).
+  const [devSaldos, setDevSaldos] = useState([]);
+  const [devOrigemId, setDevOrigemId] = useState('');
+  useEffect(() => {
+    setDevSaldos([]); setDevOrigemId('');
+    if (!devTarget) return undefined;
+    let cancelado = false;
+    api.get(`/almoxarifado/estoque/${devTarget.material_id}/saldos`)
+      .then((r) => { if (!cancelado) setDevSaldos(Array.isArray(r.data) ? r.data : []); })
+      .catch(() => { if (!cancelado) { setDevSaldos([]); toast.error('Não foi possível carregar os endereços do material'); } });
+    return () => { cancelado = true; };
+  }, [devTarget]);
+
   useEffect(() => {
     let cancelado = false;
     api.get('/almoxarifado/materiais-cliente/clientes')
@@ -147,10 +161,28 @@ const MateriaisClienteAlmoxarifado = () => {
   const loteDasMarcadas = pedeSerie && !pedeLote ? fraseDoLoteDasSeries(devSeries, devSerieIds, 'devolução') : null;
   // Fase 5 (achado 2): com saldo negativo permitido (o do material ou o global) o servidor confere a padrao mesmo com lote — o aviso fica.
   const saiComLote = devTarget?.permite_saldo_negativo !== true && (pedeLote || (!!loteDasMarcadas && !loteDasMarcadas.mistura));
-  const padraoBloqueada = devTarget?.localizacao_padrao_bloqueada === true && !saiComLote;
+  // Etapa 240 (RN-240.06): os endereços do "Sai de" são os do LOTE DA SAÍDA — a mesma conta da recusa estrita do servidor (`lote_id IS ?`):
+  // com controle de lote, o escolhido (sem ele, `undefined`: o campo não aparece); série sem controle de lote, o das marcadas se forem de um
+  // lote só (o servidor grava a saída nele, B1535); senão as linhas sem lote.
+  const loteDaSaida = (() => {
+    if (pedeLote) return devLoteId === '' ? undefined : Number(devLoteId);
+    if (!loteDasMarcadas || loteDasMarcadas.mistura) return null;
+    const marcada = devSeries.find((s) => devSerieIds.includes(s.id) && s.lote_id != null && s.lote_codigo != null);
+    return marcada ? Number(marcada.lote_id) : null;
+  })();
+  const opcoesOrigem = loteDaSaida === undefined ? [] : devSaldos.filter((s) => s.localizacao_id != null && Number(s.quantidade) > 0
+    && (s.lote_id == null ? null : Number(s.lote_id)) === loteDaSaida);
+  // O endereço escolhido que saiu da lista (trocou o lote ou as séries) volta ao automático.
+  const origemEscolhida = opcoesOrigem.find((s) => String(s.localizacao_id) === devOrigemId && s.localizacao_bloqueada !== true) || null;
+  const qtdDigitada = Number(devQtd);
+  // RN-240.02: a origem é estrita no servidor; a janela avisa antes e apaga o Confirmar.
+  const origemNaoCobre = !!origemEscolhida && qtdDigitada > 0 && qtdDigitada > Number(origemEscolhida.quantidade) + 1e-9;
+  // RN-240.07: com um endereço escolhido o servidor confere ele, não a padrão — o aviso e o botão apagado somem.
+  const padraoBloqueada = devTarget?.localizacao_padrao_bloqueada === true && !saiComLote && !origemEscolhida;
   const confirmarDevolucao = async () => {
     const qtd = Number(devQtd);
     if (!(qtd > 0)) { toast.error('Informe a quantidade a devolver'); return; }
+    if (origemNaoCobre) return;
     if (!devDoc.trim()) { toast.error('Informe o número do documento de devolução'); return; }
     // RN-236.05: material com controle de lote pede o lote antes de enviar.
     if (pedeLote && devLoteId === '') { toast.error('Escolha o lote da devolução'); return; }
@@ -167,6 +199,7 @@ const MateriaisClienteAlmoxarifado = () => {
         material_id: devTarget.material_id, quantidade: qtd, documento_devolucao: devDoc.trim(),
         ...(pedeLote ? { lote_id: Number(devLoteId) } : {}),
         ...(pedeSerie ? { serie_ids: devSerieIds } : {}),
+        ...(origemEscolhida ? { localizacao_origem_id: Number(origemEscolhida.localizacao_id) } : {}),
       });
       toast.success('Devolução ao cliente registrada!');
       setDevTarget(null);
@@ -311,7 +344,7 @@ const MateriaisClienteAlmoxarifado = () => {
                   confere o endereco do lote — RN-239.06). A janela avisa ao abrir e apaga o Confirmar. */}
               {padraoBloqueada && (
                 <p id="dev-loc-bloqueada" style={{ color: 'var(--gmp-error)', fontSize: '0.85rem', marginTop: 0 }}>
-                  {`A localização padrão deste material (${devTarget.localizacao_padrao_codigo}) está bloqueada: a devolução será recusada. Desbloqueie a localização antes de devolver.`}
+                  {`A localização padrão deste material (${devTarget.localizacao_padrao_codigo}) está bloqueada: sem escolher de onde sai, a devolução será recusada. Escolha em "Sai de" um endereço livre ou desbloqueie a localização.`}
                 </p>
               )}
               <div className="almox-field">
@@ -327,7 +360,7 @@ const MateriaisClienteAlmoxarifado = () => {
                   {/* RN-236.01 a .04: os lotes com saldo; o que não sai vem desabilitado com a situação. Trocar de lote desmarca as séries
                       (RN-236.06, B1541: nenhuma série está em dois lotes). */}
                   <select id="dev-lote" className="almox-input" value={devLoteId}
-                    onChange={(e) => { setDevLoteId(e.target.value); setDevSerieIds([]); }}>
+                    onChange={(e) => { setDevLoteId(e.target.value); setDevSerieIds([]); setDevOrigemId(''); }}>
                     <option value="">Escolha o lote</option>
                     {devLotes.map((l) => (
                       <option key={l.id} value={String(l.id)} disabled={l.elegivel !== true}>{rotuloDoLote(l)}</option>
@@ -393,6 +426,34 @@ const MateriaisClienteAlmoxarifado = () => {
                   </small>
                 </div>
               )}
+              {/* Etapa 240 (RN-240.01/.02/.04/.06): de onde sai. Automático = sem origem (o de antes); o endereço escolhido é estrito no
+                  servidor. Com controle de lote, só depois de escolher o lote. */}
+              {loteDaSaida !== undefined && (
+                <div className="almox-field">
+                  <label className="almox-label" htmlFor="dev-origem">Sai de</label>
+                  <select id="dev-origem" className="almox-input" value={origemEscolhida ? devOrigemId : ''}
+                    onChange={(e) => setDevOrigemId(e.target.value)}>
+                    <option value="">Qualquer endereço (automático)</option>
+                    {opcoesOrigem.map((s) => (
+                      <option key={`${s.localizacao_id}:${s.lote_id ?? ''}`} value={String(s.localizacao_id)}
+                        disabled={s.localizacao_bloqueada === true}>
+                        {`${s.localizacao_codigo}${s.lote ? ` — lote ${s.lote}` : ''} (${formatarQuantidade(s.quantidade)})`
+                          + (s.localizacao_bloqueada === true ? ' — bloqueada' : '')}
+                      </option>
+                    ))}
+                  </select>
+                  {opcoesOrigem.some((s) => s.localizacao_bloqueada === true) && (
+                    <small id="dev-origem-bloqueadas" style={{ display: 'block', color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                      Endereços bloqueados vêm apagados: desbloqueie o endereço para devolver de lá.
+                    </small>
+                  )}
+                  {origemNaoCobre && (
+                    <small id="dev-origem-nao-cobre" style={{ display: 'block', color: 'var(--gmp-error)', fontSize: '0.75rem' }}>
+                      {`Em ${origemEscolhida.localizacao_codigo} há só ${formatarQuantidade(origemEscolhida.quantidade)}: devolva até ${formatarQuantidade(origemEscolhida.quantidade)} ou escolha outro endereço.`}
+                    </small>
+                  )}
+                </div>
+              )}
               <div className="almox-field">
                 <label className="almox-label">Número do documento de devolução<span className="required">*</span></label>
                 <input className="almox-input" value={devDoc} onChange={(e) => setDevDoc(e.target.value)} />
@@ -406,7 +467,7 @@ const MateriaisClienteAlmoxarifado = () => {
               <button className="btn-almox-secondary" onClick={() => setDevTarget(null)} disabled={devSaving}>
                 Cancelar
               </button>
-              <button className="btn-almox-primary" onClick={confirmarDevolucao} disabled={devSaving || padraoBloqueada}>
+              <button className="btn-almox-primary" onClick={confirmarDevolucao} disabled={devSaving || padraoBloqueada || origemNaoCobre}>
                 {devSaving ? 'Registrando...' : 'Confirmar devolução'}
               </button>
             </div>

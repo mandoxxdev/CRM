@@ -90,7 +90,8 @@ describe('Etapa 237 — a devolução ao cliente avisa a localização padrão b
   test('[RN-237.03] padrão bloqueada: o aviso com o código e o Confirmar apagado, nenhum POST', async () => {
     await abrir('BLOQ');
     expect(aviso().textContent).toBe(
-      'A localização padrão deste material (R5L-3) está bloqueada: a devolução será recusada. Desbloqueie a localização antes de devolver.');
+      'A localização padrão deste material (R5L-3) está bloqueada: sem escolher de onde sai, a devolução será recusada. '
+      + 'Escolha em "Sai de" um endereço livre ou desbloqueie a localização.');
     preencher(campo('Quantidade'), '1');
     preencher(campo('documento'), 'DEV-1');
     await esperar();
