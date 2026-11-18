@@ -13,6 +13,8 @@ const { dbRun, dbGet, dbAll } = require('./db');
 const diaLocal = require('../diaLocal');
 // Etapa 33: a URL do certificado passa a ser MINADA pelo servidor, no ponto unico do modulo.
 const { materialPhotoUrl } = require('./materialPhoto');
+const { livreDeCaixaSql } = require('./caixaSql'); // Etapa 241 (RN-241.01)
+const Q = require('./quantidade');
 const { registrarAuditoria, registrarAuditoriaDoAto } = require('./audit');
 const { validarData } = require('./auditFiltros');
 // Etapa 191 (RN-191.12): pelo OBJETO, como seriesService — os testes espiam `naTravaDoMaterial`
@@ -598,6 +600,14 @@ async function listarLotesDoMaterial(db, materialId, { apenasComSaldo = false } 
     FROM lotes_almoxarifado l
     WHERE l.material_id = ?`, [materialId]);
 
+  // Etapa 241 (C542, RN-241.01): o livre de cada lote numa saida avulsa. A reserva nao tem lote (C526), entao o servidor nao sabe o
+  // "livre do lote" — sabe o maximo que sai dele: min(saldo do lote, livre do material), com o livre na MESMA regua que o motor confere
+  // antes do claim do lote (`livreDeCaixaSql`: disponivel menos a caixa separada sem reserva). Com saldo negativo permitido o motor nao
+  // limita pelo livre: null. Aditivo — os seletores continuam lendo `saldo`.
+  const mat = await dbGet(db, `SELECT COALESCE(permite_saldo_negativo, 0) AS neg, ${livreDeCaixaSql()} AS livre
+    FROM materiais_almoxarifado WHERE id = ?`, [materialId]);
+  const livreDoMaterial = !mat || Number(mat.neg) === 1 ? null : Q.qtd(Math.max(0, Number(mat.livre) || 0));
+
   const hoje = diaLocal.hojeLocalISO(); // Etapa 163 (RN-163.06): a mesma regua do isVencido, lida uma vez para a lista toda
   const comFlags = linhas
     .map((l) => {
@@ -608,6 +618,8 @@ async function listarLotesDoMaterial(db, materialId, { apenasComSaldo = false } 
         vencido,
         vencimento_liberado: liberado,
         elegivel: l.status === 'ATIVO' && (!vencido || liberado),
+        livre: livreDoMaterial == null ? null : Q.qtd(Math.max(0, Math.min(Number(l.saldo) || 0, livreDoMaterial))),
+        livre_do_material: livreDoMaterial,
         // Etapa 33 (C42): a tela montava esta URL a partir de `certificado_arquivo` CRU, e URL
         // montada no client nao tem assinatura — o link do certificado daria 404. Quem mina a URL
         // e o servidor, sempre. `null` quando nao ha certificado: a tela ja testa a existencia
