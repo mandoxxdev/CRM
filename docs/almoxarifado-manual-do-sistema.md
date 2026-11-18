@@ -3714,6 +3714,15 @@ Em material com "Controle por lote":
 - **Sem entrega citada** (avulsa), o lote é escolhido no seletor. Sem escolher, a tela barra: *"Material com controle por lote: informe de qual lote é a devolução"*.
 - Um lote informado à mão **ganha** do herdado.
 - Em material **sem** controle de lote, o lote é herdado **só** quando a entrega citada saiu de um lote (escolhido em **"Sai de"**, 7.5) e a devolução vai para **Estoque** ou **Quarentena** — o material volta ao lote de onde saiu. Na devolução para **Retrabalho**, que é uma saída, nada é herdado. Entrega sem lote não tem o que herdar.
+- Em material **sem** controle de lote e **com número de série**, devolvido para **Estoque** ou **Quarentena** com o lote em branco e sem
+  lote a herdar (devolução avulsa, ou a entrega citada não tinha lote), o lote é o da **saída que levou as peças**: a entrada, o bloqueio da
+  quarentena e as séries ficam nesse lote. A conta vale só quando **todas** as séries marcadas já existem no material, estão fora do estoque e
+  saíram **do mesmo lote** (a peça cuja devolução anterior foi desfeita conta pelo lote em que ficou). Séries que saíram de lotes diferentes (ou umas de um lote e outras sem lote) são recusadas: *"As séries informadas
+  são de lotes diferentes (L1, L2): registre uma devolução para cada lote."* (os lotes em ordem de código, *"sem lote"* por último). A peça
+  que saiu **sem lote** volta sem lote; série nova ou já em estoque no meio, também sem lote (e a recusa de sempre, para a que já está em
+  estoque). Assim a peça de um lote bloqueado volta ao lote bloqueado e não sai de novo pela Saída. Se uma das séries passar a constar de
+  outra saída enquanto a devolução é gravada: *"O lote das séries mudou enquanto a devolução era gravada — nada foi gravado. Registre a
+  devolução de novo."* Na **Sucata** e no **Retrabalho** nada disso vale (não se informa série neles — 12.5).
 
 O **projeto e a OS** seguem a mesma lógica: com entrega citada, a devolução **herda o projeto
 e a OS da saída original** — é o que faz o relatório de custo por projeto (seção 21d) abater a

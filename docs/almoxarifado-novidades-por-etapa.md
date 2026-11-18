@@ -11,7 +11,13 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-18):** **Etapa 242 fechada** (**o aviso de material reservado para uma OS** — a janela **Devolver
+> **Onde o desenvolvimento está (2026-11-18):** **Etapa 243 fechada** (**a devolução para Quarentena de peça com número de série volta ao
+> lote certo** — em **Devoluções**, sem citar a entrega e com o lote em branco, a peça com série de material sem controle por lote volta ao
+> lote da saída que a levou (antes voltava "sem lote", e a de lote bloqueado saía de novo sem a trava do lote); vale para **Quarentena** e
+> **Estoque**; séries de lotes diferentes são recusadas; **Sucata** não muda. Parte da **D (233)** 3 resolvida; decisões **B1551** e **B1552**;
+> limitação **D (243)**; verificação **F (243)**; sem consulta antes do deploy).
+> **Próxima:** **o retalho de peça com número de série registra o lote** (item 3 da estimativa de 18/11) — detalhada no fim do plano da 243.
+> *(Antes, 2026-11-18:)* **Etapa 242 fechada** (**o aviso de material reservado para uma OS** — a janela **Devolver
 > ao cliente** diz para qual OS o material está reservado e quanto está livre (*"Reservado: 3 UN para a OS 1234. Livre para devolver: 2
 > UN."*), o rótulo da quantidade mostra o livre e, acima dele, a janela avisa e apaga o **Confirmar** — antes a recusa vinha ao confirmar (a
 > **C541**). Decisões **B1549** e **B1550**; limitação **D (242)**; verificação **F (242)**; sem consulta antes do deploy).
@@ -4775,7 +4781,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15323,6 +15329,23 @@ negativo (no cadastro ou para todos): sem rótulo, sem frase e sem aviso, porque
 separado sem reserva, em que o rótulo e o aviso dizem o livre (físico menos separado) e a frase da reserva não aparece. Descartado: só
 avisar, sem apagar o botão. **Reversível.**
 
+**B1551 (NOVA, da Etapa 243; decisão do agente) — a devolução de peça com série volta ao lote nos destinos Estoque e Quarentena; a
+Sucata não muda.** O pedido era *"Quarentena ou Sucata"*. Escolhido: **Quarentena e Estoque** — os dois destinos que recebem a série são a
+mesma entrada, e o Estoque tinha o mesmo defeito (medido: a peça de lote bloqueado voltava sem lote e saía de novo). **Sucata fica como
+está:** a série não se move nela (continua *Entregue*, no lote dela) e o saldo do lote não muda (entra e sai "sem lote", soma zero).
+Descartados: (a) aceitar série na Sucata — encadear a volta da série e a baixa dela sem transação deixa a série num estado que ninguém desfaz
+se a segunda parte falhar (o motivo de a Sucata recusar série desde o começo); (b) gravar na Sucata o lote da entrega citada — passaria a
+recusar a sucata de lote bloqueado (*"Lote … está bloqueado e não pode ser sucateado por devolução"*), que hoje passa e é justamente o caso
+de uso. **Reversível.**
+
+**B1552 (NOVA, da Etapa 243; decisão do agente) — de qual lote a peça é: o da saída que a levou.** Escolhido: o lote gravado na **saída**
+que levou cada série (todas existentes no material, fora do estoque, de um lote só); séries de lotes diferentes são recusadas (uma devolução
+por lote, como a saída avulsa — B1532). A revisão do plano achou que usar a marca de lote **da série** desequilibrava o caso mais comum: a
+entrega de requisição sem lote tira do "sem lote" com a série ainda marcada no lote, e devolver ao lote dela deixava o lote com uma peça a
+mais e o **Sem lote atribuído** em −1 (hoje fecha). Série nova ou já em estoque no meio, ou peça que saiu sem lote → a devolução de antes.
+Descartados: dividir a devolução por lote sozinho; derivar também em material com controle por lote (continua exigindo o lote, como a
+saída avulsa). **Reversível.**
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -20970,6 +20993,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(243) A devolução de peça com série pelo lote da saída, o que ficou de fora.** (1) **Sucata** e **Retrabalho** continuam recusando série
+  (**B1551**). (2) Material **com** controle por lote e o lote em branco: continua *"… exige lote nesta movimentacao (controle por lote
+  ligado)"*. (3) A tela **Devoluções** não diz o lote antes de confirmar — o lote aparece depois, em **Movimentações** e **Lotes e Séries**.
+  (4) A peça que saiu **sem lote** (entrega de requisição sem lote, saídas de antes da Etapa 234) volta sem lote, e a série dela perde a marca
+  do lote, como antes (a **A117** acha essas saídas). (5) A **entrega** por requisição continua sem conferir o lote da série na saída (o resto da
+  **D (233)** 3 da entrega); os itens 3 e 4 da estimativa de 18/11 (retalho e devolução ao fornecedor) seguem.
 - **(242) O aviso de material reservado, o que ficou de fora.** (1) A janela não libera a reserva: o aviso manda para **Reservas** (liberar é
   outro gesto, com permissão própria). (2) O aviso é o da hora em que a tela carregou: reserva feita com a janela aberta aparece na recusa ao
   confirmar. (3) Só a janela **Devolver ao cliente** mostra as reservas por OS; a tabela da posição e o PDF continuam como antes. (4) A OS é
@@ -21014,7 +21043,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   (**C538**). (2) Com o lote em branco, a saída de material **sem** controle por lote continua **sem gravar o lote** das séries: o histórico
   diz "sem lote" e a linha de saldo baixada é a de sempre — gravar o lote das séries muda o histórico e o saldo por lote, e não coube nesta
   etapa. (3) A **devolução ao cliente** (material de cliente) e os fluxos internos (entrega, devolução, sucata, Não Conformidade) não ganharam
-  a conferência nova (não foram medidos com série sem lote; a entrega já confere pelo lote das séries). (4) Material **com** controle por
+  a conferência nova (não foram medidos com série sem lote; a entrega já confere pelo lote das séries). *(A **devolução** para **Estoque** e **Quarentena** de material sem controle por lote: resolvida na **Etapa 243** — volta ao lote da saída que levou a peça, **B1552**; Sucata não muda, **B1551**. Seguem o retalho e a devolução ao fornecedor.)* (4) Material **com** controle por
   lote e o lote em *"Sem lote"*: a lista mostra as séries acesas (as não impedidas) e salvar é recusado por *"… exige lote nesta
   movimentacao (controle por lote ligado)"* — já era assim.
 - **(232) A série de lote impedido na entrega, o que ficou de fora.** (1) A **saída avulsa** (**Movimentações → Saída**) de material com
@@ -22506,6 +22535,12 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(243) Nenhum clique foi dado.** A devolução pelo lote da saída, provada pelas rotas reais em `devolucaoLoteDasSeries` (21: Quarentena e
+Estoque avulsos, duas séries do mesmo lote, lotes diferentes, lote e sem lote, lote informado, saída citada, série nova, série em estoque,
+peça que saiu sem lote, séries repetidas, lote apagado, todas sem lote, estorno, devolução de novo depois do estorno, lote bloqueado em Estoque e Quarentena, Sucata, material com lote, a releitura na
+trava e a integração saída → devolução → resumo → estorno). Controles positivos: 7 sabotagens, cada uma vermelha no cenário certo. Roteiro na
+seção da 243 (5 cenários, ~8 minutos). Suítes: test:api 636/636 arquivos, almoxarifado 44, validation 4, safealter 3, sqlite 16, Jest 236 suítes e 3174 testes, build ok.
 
 **(242) Nenhum clique foi dado.** A posição do cliente ganhou `livre` e `reservas`, provados pelas rotas reais em
 `posicaoClienteReservadoParaOs` (8: sem reserva, reservas por OS cadastrada/digitada/sem OS, reserva de projeto, só ativas e só o resto, o livre igual ao do
@@ -42957,12 +42992,70 @@ cliente registrada!"*.
 - A tabela da posição e o PDF continuam como antes (**D (242)** 3).
 - A OS dita é a gravada na reserva, sem conferir se ainda está aberta; a de uma OS excluída aparece como *"sem OS"* (**D (242)** 4 e 5).
 
+## Etapa 243 — A devolução para Quarentena de peça com número de série volta ao lote certo (2026-11-18)
+
+Na tela **Devoluções**, a peça com número de série devolvida **sem citar a entrega** e com o **Lote** em branco voltava "sem lote": a peça
+saía do lote de onde tinha saído, o lote ficava com uma peça a menos para sempre e o **Sem lote atribuído** de **Lotes e Séries** ganhava uma
+peça que não era dele. Pior: a peça de um lote **bloqueado**, devolvida assim ao **Estoque**, voltava sem lote — e saía de novo sem a trava do
+lote. Agora, em material com série e **sem** controle por lote, a devolução para **Quarentena** ou **Estoque** volta a peça ao lote da saída
+que a levou: a entrada, o bloqueio da quarentena e a série ficam nesse lote. Decisões do agente: **B1551** e **B1552**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Devolução avulsa para **Quarentena** da série *B1* (saiu do lote *L2*), lote em branco: a entrada e o bloqueio "sem lote"; *B1* perdia o lote | A entrada, o bloqueio e a série *B1* no **L2**; **Inspeções → Desbloquear** oferece o *L2* |
+| O mesmo para **Estoque**: a peça de lote bloqueado voltava sem lote e saía de novo | Volta ao lote bloqueado; a **Saída** dela (Movimentações) é recusada: *"Lote L2 esta bloqueado e nao pode ser utilizado"* |
+| Séries de lotes diferentes numa devolução: as duas voltavam "sem lote" | Recusa: *"As séries informadas são de lotes diferentes (L1, L2): registre uma devolução para cada lote."* |
+| Desfazer a devolução (estorno do bloqueio e da entrada) | Desfaz no **L2**; a série continua do *L2* |
+| Lote informado, devolução citando a entrega, peça que saiu sem lote, série nova, **Sucata**, **Retrabalho**, material **com** controle por lote | **Igual** |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**. Um material *SER-243* com **número de série** e **sem** controle por lote. Em
+**Movimentações**, **Entrada** de 2 no lote *L1* com as séries *A1*, *A2*, e de 2 no lote *L2* com *B1*, *B2*. **Saída** de 1 marcando *B1*
+(o lote em branco — a saída grava o *L2*), outra marcando *A1* e outra marcando *B2*.
+
+**1. A peça volta ao lote (RN-243.01).** **Devoluções → Nova devolução**, *SER-243*, **sem** citar entrega, quantidade 1, série *B1*, destino
+**Quarentena**, lote em branco. **Confira:** a devolução é registrada; em **Movimentações**, a *Entrada de devolução* e o *Bloqueio* dizem lote
+*L2*; em **Lotes e Séries**, *B1* está no *L2* e **Sem lote atribuído** é 0; em **Inspeções → Desbloquear**, o *L2* aparece com 1 bloqueada.
+
+**2. Lotes diferentes (RN-243.02).** **Nova devolução**, sem citar entrega, quantidade 2, séries *A1* e *B2*, destino **Estoque**. **Confira:** *"As séries informadas são de lotes diferentes (L1, L2): registre uma
+devolução para cada lote."* e nada é registrado. Uma devolução para cada uma passa.
+
+**3. A peça de lote bloqueado não escapa (RN-243.05).** Em **Lotes e Séries**, bloqueie o *L2*. Devolva *B2* (que saiu no passo 2) ao **Estoque**,
+sem citar a entrega. **Confira:** *B2* volta ao *L2*. Em **Movimentações → Saída** marcando *B2*: *"Lote L2 esta bloqueado e nao pode ser
+utilizado"*.
+
+**4. Desfazer (RN-243.04).** Em **Movimentações**, estorne o *Bloqueio* e depois a *Entrada de devolução* do passo 1. **Confira:** o *L2*
+volta a 1 e *B1* continua do *L2*.
+
+**5. O que não muda (RN-243.03, .06).** A peça que saiu **sem lote** (a entrega de requisição sem lote escolhido, ou uma saída de antes da
+Etapa 234) volta "sem lote", como antes — é de lá que ela saiu. **Sucata** com série continua recusada: *"Devolução com número de série não é
+suportada no destino SUCATA. Devolva ao estoque e, em seguida, registre a baixa na tela Movimentações, que tem seletor de série."*
+
+**O servidor (RN-243.07).** Se a série passar a constar de outra saída enquanto a devolução é gravada, a devolução é recusada sem gravar nada:
+*"O lote das séries mudou enquanto a devolução era gravada — nada foi gravado. Registre a devolução de novo."*
+
+### O que esta etapa NÃO cobre
+
+- **Sucata** e **Retrabalho** continuam sem aceitar série (**D (243)** 1).
+- Material **com** controle por lote continua exigindo o lote (**D (243)** 2).
+- A tela não diz o lote antes de confirmar (**D (243)** 3).
+- A peça que saiu sem lote volta sem lote, e a série dela perde a marca do lote, como antes (**D (243)** 4).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 243 entregue (2026-11-18):** **a devolução para Quarentena de peça com série volta ao lote certo** (parte da **D (233)** 3). Sem
+  lote informado nem herdado, a devolução para Quarentena ou Estoque usa o lote da saída que levou as séries (**B1551**, **B1552**). Commits
+  `ca5da1d6`, `d3a59a77` (Fase 5) e o fechamento. **O que é seu:** as **B1551** e **B1552** (reversíveis); a limitação **(243)** em D e a verificação
+  **(243)** em F. Sem consulta antes do deploy. **Próxima:** **o retalho de peça com número de série registra o lote** (item 3 da estimativa
+  de 18/11) — detalhada no fim do plano da 243.
 
 - **Etapa 242 entregue (2026-11-18):** **o aviso de material reservado para uma OS** (a **C541**). A posição do cliente diz o livre e as
   reservas por OS (**B1549**); a janela **Devolver ao cliente** mostra a frase, o livre no rótulo e, acima dele, avisa e apaga o

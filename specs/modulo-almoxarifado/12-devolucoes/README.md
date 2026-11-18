@@ -497,3 +497,22 @@ Plano: `docs/superpowers/plans/2026-11-07-almoxarifado-etapa209-bloqueio-sabe-o-
   bloqueio pode ficar maior que o saldo do lote (C504). Destinos `ESTOQUE`, `SUCATA`, `RETRABALHO`: nada muda.
 
 Continua 🟢. Testes: `bloqueioSabeOLote.api.test.js` (RN-209.01 a .03, .07, .09).
+
+## Etapa 243 — a devolução de peça com série volta ao lote da saída (2026-11-18)
+
+Plano: `docs/superpowers/plans/2026-11-18-almoxarifado-etapa243-devolucao-quarentena-lote-das-series.md` (RN-243.01 a .08).
+
+- [x] **Quarentena e Estoque, lote em branco e sem lote herdado, material com série e sem controle de lote: o lote é o da saída que levou as
+  séries** — a linha da devolução, a `ENTRADA_DEVOLUCAO`/`BLOQUEIO` e a série gravam o lote; séries de lotes diferentes → 400; relido dentro
+  da trava do material (`reconferirNaTrava`) — `ca5da1d6`, `d3a59a77` (Fase 5).
+- [x] **Estorno das pernas volta ao lote** (BLOQUEIO, depois a entrada; a série avulsa fica ESTORNADA no lote) — provado no mesmo teste,
+  sem mudança de código no estorno — `ca5da1d6`, `d3a59a77` (Fase 5).
+- [ ] **Sucata/Retrabalho com série:** continuam recusados (B1551 — a série não se move na Sucata; aceitar exigiria encadear volta e baixa
+  da série sem transação). **Material com controle de lote:** continua "exige lote" (D (243) 2).
+
+**Correção desta spec:** a seção "Etapa 209" acima diz *"Destinos `ESTOQUE`, `SUCATA`, `RETRABALHO`: nada muda"* — continua certa para
+a 209; desde a 243 o `ESTOQUE` avulso de peça com série também grava o lote (o da saída). E a "herança de lote" desta spec descrevia só a
+saída **citada**: a devolução **avulsa** sem lote de material sem controle de lote **gravava "sem lote" e apagava o lote da série** (medido na
+Fase 0 da 243) — não estava escrito em lugar nenhum.
+
+Continua 🟢. Teste: `devolucaoLoteDasSeries.api.test.js` (19).

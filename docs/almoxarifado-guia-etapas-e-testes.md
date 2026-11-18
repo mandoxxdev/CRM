@@ -5,14 +5,21 @@
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-18 (Etapa 240 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-18 (Etapa 243 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
 > **Depois disto, 18/11/2026: Etapa 238 (Compras) fechada** — no cadastro de material, *Nº do CA* e *Validade do CA* só aparecem para
 > material EPI, com a frase do que é o CA (seção e roteiro em `docs/compras-novidades-por-etapa.md`, Etapa 238; decisão B91 de lá). A
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 242 fechada — 2026-11-18.** **O aviso de material reservado para uma OS.** Na janela **Devolver
+> **O desenvolvimento parou aqui: Etapa 243 fechada — 2026-11-18.** **A devolução para Quarentena de peça com série volta ao lote
+> certo.** Em **Devoluções**, sem citar a entrega e com o lote em branco, a peça com série de material sem controle por lote volta ao lote da
+> saída que a levou (Quarentena e Estoque; séries de lotes diferentes recusadas; Sucata não muda). **Sem consulta antes do deploy.** **Nenhum
+> clique foi dado** (roteiro na seção da 243). **Onde parou, exatamente:** a **243 está fechada**; a **próxima** é o item 3 da estimativa de
+> 18/11 — **o retalho de peça com número de série registra o lote** —, detalhada no fim do plano
+> (`docs/superpowers/plans/2026-11-18-almoxarifado-etapa243-devolucao-quarentena-lote-das-series.md`).
+>
+> *(Antes:)* **Etapa 242 fechada — 2026-11-18.** **O aviso de material reservado para uma OS.** Na janela **Devolver
 > ao cliente**, a frase *"Reservado: 3 UN para a OS 1234. Livre para devolver: 2 UN."*, o livre no rótulo da quantidade e, acima dele, o
 > aviso com o **Confirmar** apagado. **Sem consulta antes do deploy.** **Nenhum clique foi dado** (roteiro na seção da 242). **Onde parou,
 > exatamente:** a **242 está fechada**; a **próxima** é o item 2 da estimativa de 18/11 — **a devolução para Quarentena ou Sucata de peça
@@ -7322,6 +7329,42 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 243 — A devolução para Quarentena de peça com série volta ao lote certo (ENTREGUE — 2026-11-18)
+
+**O que mudou, em uma frase:** em **Devoluções**, a peça com número de série devolvida sem citar a entrega e com o lote em branco volta ao
+lote da saída que a levou, e não mais "sem lote".
+
+**O problema que ela resolve.** Num material com série e **sem** controle por lote, a devolução avulsa para **Quarentena** ou **Estoque**
+registrava a peça "sem lote": o lote de onde ela saiu ficava com uma a menos e o **Sem lote atribuído** de **Lotes e Séries** com uma a mais. A
+peça de um lote bloqueado voltava sem lote e podia sair de novo.
+
+| Antes | Agora |
+|---|---|
+| Quarentena sem citar a entrega, lote em branco: entrada e bloqueio "sem lote" | Entrada, bloqueio e série no lote da saída (*L2*) |
+| Estoque: a peça de lote bloqueado voltava sem lote e saía de novo | Volta ao lote bloqueado; a Saída dela é recusada |
+| Séries de lotes diferentes: voltavam "sem lote" | *"As séries informadas são de lotes diferentes (L1, L2): registre uma devolução para cada lote."* |
+| Lote informado; citando a entrega; peça que saiu sem lote; Sucata; material com controle por lote | **Igual** |
+
+**Roteiro de teste manual (≈8 min):**
+
+1. Entre como **Administrador do almoxarifado**. Material *SER-243* com número de série e **sem** controle por lote. **Movimentações →
+   Entrada** de 2 no lote *L1* (séries *A1*, *A2*) e de 2 no lote *L2* (*B1*, *B2*). Três **Saídas** de 1, lote em branco, marcando *B1*,
+   *A1* e *B2*.
+2. **Devoluções → Nova devolução**, *SER-243*, sem citar entrega, quantidade 1, série *B1*, destino **Quarentena**, lote em branco. Salve.
+   **Confira:** em **Movimentações**, *Entrada de devolução* e *Bloqueio* com lote *L2*; em **Lotes e Séries**, *B1* no *L2* e **Sem lote
+   atribuído** 0; em **Inspeções → Desbloquear**, o *L2* com 1.
+3. **Nova devolução**, quantidade 2, séries *A1* e *B2*, destino **Estoque**. **Confira:** *"As séries informadas são de lotes diferentes (L1,
+   L2): registre uma devolução para cada lote."*.
+4. **Lotes e Séries**: bloqueie o *L2*. Devolva só *B2* ao **Estoque**. **Confira:** *B2* no *L2*; em **Movimentações → Saída** marcando *B2*:
+   *"Lote L2 esta bloqueado e nao pode ser utilizado"*.
+5. **Movimentações**: estorne o *Bloqueio* e depois a *Entrada de devolução* do passo 2. **Confira:** *B1* continua do *L2*; **Sem lote
+   atribuído** 0.
+
+**O que esta etapa não cobre:** **Sucata** e **Retrabalho** continuam sem aceitar série; material **com** controle por lote continua
+exigindo o lote; a tela não mostra o lote antes de salvar; a peça que saiu sem lote volta sem lote, como antes.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro é o que os testes automáticos (rotas reais) provam.
 
 ## Etapa 242 — O aviso de material reservado para uma OS (ENTREGUE — 2026-11-18)
 
