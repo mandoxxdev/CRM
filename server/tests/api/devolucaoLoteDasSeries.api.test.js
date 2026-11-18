@@ -246,6 +246,30 @@ process.on('exit', (code) => {
     assert.strictEqual((await serie(m, 'B1')).status, 'EM_ESTOQUE');
   });
 
+  await test('[RN-243.05] Quarentena de B1 com o L2 BLOQUEADO -> 201, entrada e bloqueio no L2; a liberacao com o lote zera (Fase 5)', async () => {
+    const { m } = await montar();
+    await statusLote(m, 'L2', 'BLOQUEADO');
+    await ok(devolver(m, ['B1'], 'QUARENTENA'), 201);
+    const l2 = await loteId(m, 'L2');
+    for (const x of await daDevolucao(m)) assert.strictEqual(Number(x.lote_id), l2);
+    assert.deepStrictEqual((await bloqueadoPorLote(m)).lotes.map((x) => [x.codigo, Number(x.quantidade)]), [['L2', 1]]);
+    assert.strictEqual(Number((await resumo(m)).sem_lote_atribuido), 0);
+  });
+  await test('[RN-243.04] devolucao avulsa estornada e devolvida de novo -> volta ao L2 de novo, o resumo fecha (Fase 5, achado 1)', async () => {
+    const { m } = await montar();
+    await ok(devolver(m, ['B1'], 'ESTOQUE'), 201);
+    const [ent] = await daDevolucao(m);
+    await ok(request(app).post(`${API}/movimentacoes/${ent.id}/cancelar`).send({ motivo: 'estorno do teste 243' }));
+    assert.strictEqual((await serie(m, 'B1')).status, 'ESTORNADA');
+    await ok(devolver(m, ['B1'], 'QUARENTENA'), 201);
+    const l2 = await loteId(m, 'L2');
+    const novas = (await daDevolucao(m)).slice(1);
+    assert.deepStrictEqual(novas.map((x) => Number(x.lote_id)), [l2, l2], 'a segunda devolucao volta ao L2');
+    assert.strictEqual(Number((await serie(m, 'B1')).lote_id), l2);
+    assert.strictEqual(await linhaDoLote(m, null), 0);
+    assert.strictEqual(Number((await resumo(m)).sem_lote_atribuido), 0, 'o resumo fecha');
+  });
+
   // ── RN-243.06 ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   await test('[RN-243.06] Sucata com serie -> a recusa de sempre; sem serie -> 201 e B1 continua Entregue no L2', async () => {
     const { m } = await montar();

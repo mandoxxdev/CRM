@@ -211,17 +211,21 @@ async function registrarDevolucao(db, user, data) {
     const marcas = numeros.map(() => '?').join(',');
     const fora = await dbGet(db, `SELECT COUNT(*) AS n FROM series_almoxarifado
       WHERE material_id = ? AND numero IN (${marcas}) AND status NOT IN ('EM_ESTOQUE', 'BLOQUEADA')`, [material_id, ...numeros]);
-    if (Number(fora.n) !== numeros.length) return { lote: null, lotes: null };
+    if (Number(fora.n) !== numeros.length) return { elegivel: false, lote: null, lotes: null };
     // Fase 2 (achado 1a): o lote e o da SAIDA que levou a serie (`movimentacao_saida_id`), nao o `lote_id` da serie. A entrega sem lote,
     // a v1 e as saidas de antes da 234 tiraram da linha "sem lote" com a serie ainda marcada no lote: devolver ao lote da serie creditava
     // a linha do lote (3 com 2 series) e deixava o "sem lote" em -1 — o resumo, que hoje fecha, ia a -1. Saida sem lote (ou serie sem
-    // saida gravada) -> "sem lote" -> a devolucao de antes. Lote apagado ou de outro material -> "sem lote" (LEFT JOIN, como a 234).
+    // saida gravada) -> "sem lote" -> a devolucao de antes.
+    // Fase 5 (achado 1, reproduzido): a serie ESTORNADA sem saida gravada (o estorno de uma entrada — a devolucao avulsa estornada, que
+    // debitou o lote da entrada e deixou a serie nele) usa o lote da propria serie: lendo so a saida, a segunda devolucao voltava ao "sem
+    // lote" com o lote ja debitado pelo estorno (resumo 1). Lote apagado ou de outro material -> "sem lote" (LEFT JOIN, como a 234).
     const lotes = await dbAll(db, `SELECT DISTINCT l.id AS lid, l.codigo FROM series_almoxarifado s
         LEFT JOIN movimentacoes_almoxarifado sm ON sm.id = s.movimentacao_saida_id
-        LEFT JOIN lotes_almoxarifado l ON l.id = sm.lote_id AND l.material_id = s.material_id
+        LEFT JOIN lotes_almoxarifado l ON l.material_id = s.material_id AND l.id = (CASE
+          WHEN s.movimentacao_saida_id IS NULL AND s.status = 'ESTORNADA' THEN s.lote_id ELSE sm.lote_id END)
       WHERE s.material_id = ? AND s.numero IN (${marcas})`, [material_id, ...numeros]);
-    if (lotes.length === 1) return { lote: lotes[0].lid == null ? null : { id: lotes[0].lid, codigo: lotes[0].codigo }, lotes: null };
-    return { lote: null, lotes };
+    if (lotes.length === 1) return { elegivel: true, lote: lotes[0].lid == null ? null : { id: lotes[0].lid, codigo: lotes[0].codigo }, lotes: null };
+    return { elegivel: true, lote: null, lotes };
   };
   let loteDasSeries = null;
   if (derivaPelasSeries) {
@@ -346,7 +350,8 @@ async function registrarDevolucao(db, user, data) {
     // o lote) -> recusa antes de qualquer perna (o catch de baixo, emitidas 0, apaga a linha). Sem isto a entrada gravaria o lote velho.
     if (derivaPelasSeries) {
       const agora = await lerLoteDasSeries();
-      const idAgora = agora.lotes ? -1 : (agora.lote ? Number(agora.lote.id) : null);
+      // Fase 5 (achado 3): serie que voltou ao estoque no meio nao e "lote mudou" — o motor recusa com a mensagem dela ("ja esta em estoque").
+      const idAgora = !agora.elegivel ? (loteDasSeries ? Number(loteDasSeries.id) : null) : agora.lotes ? -1 : (agora.lote ? Number(agora.lote.id) : null);
       if (idAgora !== (loteDasSeries ? Number(loteDasSeries.id) : null)) {
         throw erro400('O lote das séries mudou enquanto a devolução era gravada — nada foi gravado. Registre a devolução de novo.');
       }
