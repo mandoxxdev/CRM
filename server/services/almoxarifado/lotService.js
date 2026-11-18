@@ -592,6 +592,26 @@ async function corrigirValidadeDoLote(db, user, loteId, payload) {
  * lote — por isso `vencido` continua true na linha mesmo depois de liberado; `vencimento_liberado`
  * e o campo que diz que a saida de consumo esta credenciada apesar do vencimento.
  */
+/**
+ * Etapa 241 (RN-241.01), extraida na Etapa 242 (RN-242.01): o maximo que sai do MATERIAL numa saida avulsa, na regua do motor.
+ * Sem saldo negativo efetivo (o do material ou o global): max(0, livreDeCaixaSql). Com negativo e caixa separada sem reserva:
+ * max(0, fisico - caixa). Com negativo e sem caixa: null (o motor nao limita). Material inexistente: null.
+ * Le a lista de lotes (`livre_do_material`) e a posicao do cliente (`livre`).
+ */
+async function livreDoMaterialParaSaida(db, materialId) {
+  const mat = await dbGet(db, `SELECT COALESCE(permite_saldo_negativo, 0) AS neg, ${livreDeCaixaSql()} AS livre,
+      ${caixaSemReservaSql('materiais_almoxarifado.id')} AS caixa, quantidade_atual AS fisico
+    FROM materiais_almoxarifado WHERE id = ?`, [materialId]);
+  const negativoGlobal = ((await dbGet(db,
+    "SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'permite_saldo_negativo_global'")) || {}).valor === '1';
+  const permiteNegativo = !!mat && (Number(mat.neg) === 1 || negativoGlobal);
+  const caixa = mat ? Q.qtd(Number(mat.caixa) || 0) : 0;
+  let livreDoMaterial = null;
+  if (mat && !permiteNegativo) livreDoMaterial = Q.qtd(Math.max(0, Number(mat.livre) || 0));
+  else if (mat && caixa > Q.QTD_FOLGA) livreDoMaterial = Q.qtd(Math.max(0, (Number(mat.fisico) || 0) - caixa));
+  return { livreDoMaterial, permiteNegativo };
+}
+
 async function listarLotesDoMaterial(db, materialId, { apenasComSaldo = false } = {}) {
   const linhas = await dbAll(db, `
     SELECT l.*, COALESCE((
@@ -611,16 +631,8 @@ async function listarLotesDoMaterial(db, materialId, { apenasComSaldo = false } 
   // `saldo`. Com saldo negativo permitido — o EFETIVO, o do material ou a configuracao global, como o motor (Fase 5, achado 1: so o do
   // material apagava o Confirmar de uma devolucao que o motor aceitava) — o motor nao confere a reserva nem a linha do lote
   // (`livreParaSaida`): sem caixa, nao limita (null); com caixa, limita a fisico - caixa, sem o teto do lote (Fase 5, achado 2).
-  const mat = await dbGet(db, `SELECT COALESCE(permite_saldo_negativo, 0) AS neg, ${livreDeCaixaSql()} AS livre,
-      ${caixaSemReservaSql('materiais_almoxarifado.id')} AS caixa, quantidade_atual AS fisico
-    FROM materiais_almoxarifado WHERE id = ?`, [materialId]);
-  const negativoGlobal = ((await dbGet(db,
-    "SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'permite_saldo_negativo_global'")) || {}).valor === '1';
-  const permiteNegativo = !!mat && (Number(mat.neg) === 1 || negativoGlobal);
-  const caixa = mat ? Q.qtd(Number(mat.caixa) || 0) : 0;
-  let livreDoMaterial = null;
-  if (mat && !permiteNegativo) livreDoMaterial = Q.qtd(Math.max(0, Number(mat.livre) || 0));
-  else if (mat && caixa > Q.QTD_FOLGA) livreDoMaterial = Q.qtd(Math.max(0, (Number(mat.fisico) || 0) - caixa));
+  // Etapa 242 (RN-242.01): a conta foi para `livreDoMaterialParaSaida`, que a posicao do cliente tambem le (o mesmo numero nas duas).
+  const { livreDoMaterial, permiteNegativo } = await livreDoMaterialParaSaida(db, materialId);
   const livreDoLote = (saldoPositivo) => {
     if (livreDoMaterial == null) return null;
     if (permiteNegativo) return livreDoMaterial; // o motor nao confere a linha do lote com negativo
@@ -701,6 +713,7 @@ async function resumoLotesDoMaterial(db, materialId) {
 module.exports = {
   STATUS_LOTE, isVencido, getLote, getLotePorCodigo, criarOuObterLote, mudarStatusLote,
   vencimentoLiberado, liberarVencimento, liberarBloqueioPorCertificado, listarLotesDoMaterial,
+  livreDoMaterialParaSaida, // Etapa 242 (RN-242.01)
   reservaVaziaDoLote, // Etapa 220 (B1465)
   EPS_SALDO, residualSemLote, resumoLotesDoMaterial,
   MSG_VALIDADE, dataValidadeBR, validarDataValidade, preencherValidadeSeVazia, loteEstaVazio, redefinirValidadeDoLoteVazio,
