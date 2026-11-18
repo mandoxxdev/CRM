@@ -2108,7 +2108,23 @@ async function lotesParaOAutomatico(db, materialId, saiuDaOrigemPorItem, parteQu
       FROM estoque_saldo_almoxarifado s LEFT JOIN localizacoes_almoxarifado lc ON lc.id = s.localizacao_id
       WHERE s.material_id = ? AND s.lote_id IN (${idsG.map(() => '?').join(',')}) AND s.quantidade > 0`, [materialId, ...idsG]);
   }
-  return lotes.map((l) => {
+  // Etapa 239 (C543, RN-239.07; Fase 2 B/C, Fase 5 achado 1): o lote SEM guarda que so tem saldo em endereco BLOQUEADO vai para o FIM
+  // da fila (FEFO mantido entre os outros). A fatia vai ao motor sem origem, e o motor recusa o lote todo em endereco bloqueado
+  // (RN-239.01): no comeco da fila ele derrubava a entrega mesmo com outro lote cobrindo. Descartado (Fase 5, reproduzido): descontar a
+  // parte bloqueada do saldo — o que o lote nao cobria ia para o resto SEM lote (linha sem lote -3 e o lote inflado com o fisico em 0).
+  // Assim, so quando nenhum outro lote cobre o motor recusa com o codigo do endereco ("X esta bloqueada"), sem baixar nada desse lote.
+  const comLivre = new Set();
+  const semGuarda = lotes.map((l) => Number(l.id)).filter((id) => !lotesComGuarda.has(id));
+  if (semGuarda.length) {
+    const rows = await dbAll(db, `SELECT DISTINCT s.lote_id
+      FROM estoque_saldo_almoxarifado s LEFT JOIN localizacoes_almoxarifado lc ON lc.id = s.localizacao_id
+      WHERE s.material_id = ? AND s.lote_id IN (${semGuarda.map(() => '?').join(',')}) AND s.quantidade > ${Q.QTD_FOLGA}
+        AND COALESCE(lc.bloqueada, 0) = 0`, [materialId, ...semGuarda]);
+    for (const r of rows) comLivre.add(Number(r.lote_id));
+  }
+  const soBloqueado = (id) => !lotesComGuarda.has(id) && !comLivre.has(id);
+  const ordenados = [...lotes.filter((l) => !soBloqueado(Number(l.id))), ...lotes.filter((l) => soBloqueado(Number(l.id)))];
+  return ordenados.map((l) => {
     const loteId = Number(l.id);
     const insp = (inspecao.get(loteId) || 0) + (retido.get(loteId) || 0); // Etapa 217: o retido desconta junto da inspecao
     // Sem parte guardada no lote: como na T0 — uma fatia pelo lote, o claim escolhe a linha (o livro sem endereco, D (51)).

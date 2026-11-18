@@ -92,6 +92,8 @@ async function posicaoPorCliente(db, { cliente_id } = {}) {
            m.quantidade_atual AS saldo,
            -- Etapa 237 (C543, B1542): a janela de devolucao avisa antes de confirmar que a padrao bloqueada faz o motor recusar
            loc.codigo AS localizacao_padrao_codigo, COALESCE(loc.bloqueada, 0) AS localizacao_padrao_bloqueada,
+           -- Etapa 239 (RN-239.06, Fase 5 achado 2): com saldo negativo permitido o motor continua conferindo a padrao mesmo com lote
+           COALESCE(m.permite_saldo_negativo, 0) AS permite_saldo_negativo,
            ${disponivelSql('m')} AS saldo_disponivel,
            COALESCE((SELECT SUM(mv.quantidade) FROM movimentacoes_almoxarifado mv
                       WHERE mv.material_id = m.id AND COALESCE(mv.cancelado, 0) = 0
@@ -127,6 +129,9 @@ async function posicaoPorCliente(db, { cliente_id } = {}) {
   [cliente_id, ...TIPOS_CONSUMO]);
 
   for (const i of itens) i.localizacao_padrao_bloqueada = Number(i.localizacao_padrao_bloqueada) === 1;
+  // Etapa 239: o efetivo, a mesma regua do motor (o do material ou a configuracao global `permite_saldo_negativo_global`)
+  const negativoGlobal = ((await dbGet(db, "SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'permite_saldo_negativo_global'")) || {}).valor === '1';
+  for (const i of itens) i.permite_saldo_negativo = negativoGlobal || Number(i.permite_saldo_negativo) === 1;
   return { cliente, itens, aplicacoes };
 }
 

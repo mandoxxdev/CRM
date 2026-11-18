@@ -356,6 +356,10 @@ async function ajustarSaldoExistente(db, materialId, localizacaoId, loteId, delt
  * (`reconciliarEstornoSemLinha` conta linhas, inclusive as zeradas), tirando do no-op um material
  * que era legado até a tentativa fracassada.
  *
+ * **Etapa 239 (C543) — o paragrafo abaixo estava errado para a saida com lote SEM origem:** ali a validacao nao olha mais a padrao,
+ * olha o endereco da primeira linha do lote na ordem com as bloqueadas por ultimo (`validarEnderecoDoLoteNaSaida`), e o claim drena
+ * nessa ordem (`bloqueadasPorUltimo`). Com origem informada, o paragrafo continua valendo.
+ *
  * **Só a localização DECLARADA passa pela validação de endereço — as demais linhas que este claim
  * decide drenar, não** (achado do review final da Etapa 6, parked com ruling). `validarLocalizacaoParaMovimento`
  * roda ANTES deste claim e valida só a localização resolvida da saída (`locPreferida`, o parâmetro
@@ -403,11 +407,18 @@ const RESERVADA_MENOS_SQL = Q.qtdSql(`CASE WHEN COALESCE(quantidade_reservada,0)
 // 1a: lote em A 3 e B 3, saida de 5 com o 2o debito falhando -> 500, fisico 6, A 0 e B 3 (medido; a forma da C245/I-3). No
 // `ok: false` o desfazer CONSOME o rastreador (a linha sai dele logo depois do credito de volta): sem falha ele volta vazio e o
 // catch amplo nao credita em dobro; com falha no meio, o catch amplo credita so o que falta.
-async function claimSaldoDoLote(db, materialId, loteId, locPreferida, quantidade, { aplicados = [] } = {}) {
+// Etapa 239 (C543, RN-239.02/.03): `bloqueadasPorUltimo` (a saida com lote SEM origem) poe as linhas de endereco bloqueado no fim da
+// fila — o lote sai do endereco livre mesmo com a padrao bloqueada e com saldo do lote nela. Se as livres nao cobrem, segue nas bloqueadas
+// (o efeito colateral da Etapa 6, mantido). Com origem informada a ordem e a de sempre. `ORDEM_LINHAS_DO_LOTE_SQL` e a mesma ordem que a
+// validacao do motor le para achar o endereco de onde o lote comeca a sair (`enderecoDeOndeOLoteSai`).
+const ORDEM_LINHAS_DO_LOTE_SQL = (bloqueadasPorUltimo) => `ORDER BY ${bloqueadasPorUltimo ? 'COALESCE(lc.bloqueada, 0) ASC, ' : ''}`
+  + '(s.localizacao_id IS ?) DESC, s.quantidade DESC, s.id';
+async function claimSaldoDoLote(db, materialId, loteId, locPreferida, quantidade, { aplicados = [], bloqueadasPorUltimo = false } = {}) {
   const linhas = await dbAll(db, `
-    SELECT id, quantidade FROM estoque_saldo_almoxarifado
-    WHERE material_id = ? AND lote_id IS ? AND quantidade > 0
-    ORDER BY (localizacao_id IS ?) DESC, quantidade DESC, id`,
+    SELECT s.id, s.quantidade FROM estoque_saldo_almoxarifado s
+    LEFT JOIN localizacoes_almoxarifado lc ON lc.id = s.localizacao_id
+    WHERE s.material_id = ? AND s.lote_id IS ? AND s.quantidade > 0
+    ${ORDEM_LINHAS_DO_LOTE_SQL(bloqueadasPorUltimo)}`,
     [materialId, loteId, locPreferida || null]);
 
   let restante = quantidade;
@@ -823,6 +834,24 @@ async function validarLocalizacaoParaMovimento(db, localizacaoId, material, pape
   if (!loc) return; // localização inexistente: não é responsabilidade deste helper (FK/lookup trata em outro lugar)
   const recusa = motivoRecusaEndereco(loc, material, papel);
   if (recusa) throw Object.assign(new Error(recusa), { status: 400 });
+}
+
+/**
+ * Etapa 239 (C543, RN-239.01) — a saida COM LOTE e SEM ORIGEM (material sem negativo) confere o bloqueio no endereco de onde o lote
+ * comeca a sair, nao na localizacao padrao: a primeira linha do lote com saldo na ordem do claim com as bloqueadas por ultimo. Se ela esta
+ * em endereco bloqueado, o lote so tem saldo em endereco bloqueado -> a recusa de sempre ("Localizacao X esta bloqueada") com o codigo do
+ * endereco do lote. Lote sem saldo: nada a conferir (a recusa e a do saldo, mais adiante). Antes a validacao olhava a padrao: com ela
+ * bloqueada, o lote guardado em outro endereco livre era recusado; com ela livre, o lote guardado so num endereco bloqueado saia dele.
+ * Le dentro da trava do material (o motor inteiro roda nela); o `bloqueada` da localizacao nao e protegido pela trava (como a origem).
+ */
+async function validarEnderecoDoLoteNaSaida(db, materialId, loteId, locPreferida) {
+  const primeira = await dbGet(db, `SELECT lc.codigo, COALESCE(lc.bloqueada, 0) as bloqueada FROM estoque_saldo_almoxarifado s
+    LEFT JOIN localizacoes_almoxarifado lc ON lc.id = s.localizacao_id
+    WHERE s.material_id = ? AND s.lote_id = ? AND s.quantidade > ${EPS}
+    ${ORDEM_LINHAS_DO_LOTE_SQL(true)} LIMIT 1`, [materialId, loteId, locPreferida || null]);
+  if (primeira && Number(primeira.bloqueada) === 1) {
+    throw Object.assign(new Error(`Localização ${primeira.codigo} está bloqueada`), { status: 400 });
+  }
 }
 
 /**
@@ -1553,6 +1582,9 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
   // AJUSTE sem justificativa, e a auditoria gravada aqui embute essa justificativa.
   await ownerRules.assertAjustePermitido(db, material, tipo, { quantidade, justificativa }, user);
 
+  // Etapa 239 (C543): a saida que baixa pelo claim do lote sem origem declarada — a validacao (abaixo) e a ordem do claim olham o
+  // endereco do lote, nao a padrao. A mesma condicao do ramo `claimSaldoDoLote` do efeito de saldo (lote e sem negativo).
+  const saidaDoLoteSemOrigem = tiposSaida.includes(tipo) && !!loteIdFinal && !permiteNegativo && !localizacao_origem_id;
   // Restrições de endereço (Etapa 2, Task 2): validadas ANTES de qualquer efeito de saldo —
   // inclusive antes das UPDATEs da própria TRANSFERENCIA logo abaixo, que grava direto em
   // estoque_saldo_almoxarifado. Usa a MESMA resolução de localização (fallback para
@@ -1562,7 +1594,13 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
     await validarLocalizacaoParaMovimento(db, resolveLocalizacaoEntrada(material, localizacao_destino_id), material, 'destino');
   } else if (tiposSaida.includes(tipo)) {
     await validarEnderecoExplicito(db, localizacao_origem_id, 'origem');
-    await validarLocalizacaoParaMovimento(db, resolveLocalizacaoSaida(material, localizacao_origem_id), material, 'origem');
+    if (saidaDoLoteSemOrigem) {
+      // Etapa 239 (C543, RN-239.01): com lote e sem origem, o endereco de onde o lote sai — nao a padrao (o claim nao sai da padrao
+      // quando o lote nao esta nela). Com origem, sem lote ou com negativo (a linha e criada na padrao): a validacao de sempre (RN-239.04).
+      await validarEnderecoDoLoteNaSaida(db, material_id, loteIdFinal, resolveLocalizacaoSaida(material, null));
+    } else {
+      await validarLocalizacaoParaMovimento(db, resolveLocalizacaoSaida(material, localizacao_origem_id), material, 'origem');
+    }
   } else if (tipo === 'TRANSFERENCIA') {
     await validarEnderecoExplicito(db, localizacao_origem_id, 'origem');
     await validarEnderecoExplicito(db, localizacao_destino_id, 'destino');
@@ -2338,7 +2376,7 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
         // Etapa 119 (C249): o rastreador da compensacao vai como acumulador (a linha ja debitada entra nele).
         saldoLinhasSaidaParaReverter = [];
         const claim = await claimSaldoDoLote(db, material_id, loteIdFinal, locSaida, quantidade,
-          { aplicados: saldoLinhasSaidaParaReverter });
+          { aplicados: saldoLinhasSaidaParaReverter, bloqueadasPorUltimo: saidaDoLoteSemOrigem });
         if (!claim.ok) {
           // O físico do material já foi debitado acima (linha ~439-452/rowRes quando a saída
           // consumia reserva, ou ~460-468 no caminho simples) antes deste claim rodar — não há
