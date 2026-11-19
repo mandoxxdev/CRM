@@ -286,6 +286,87 @@ process.on('exit', (code) => {
     assert.strictEqual(await fisico(m), 0);
   });
 
+  // ── RN-248.07 (Fase 5, achado 1): a reserva cancelada por outra porta no meio da conta conta como solta ────────────────────────
+  await test('[RN-248.07] R1 e R2 com 2 de A cada, 2 livres; cancelar R2 no meio da conta do estorno de A -> R1 fica reservada (2)', async () => {
+    // material sem lote: 2 avulsos livres; A (4) reserva 2 para R1 e 2 para R2. O estorno precisa soltar 2 (a de R2, a ultima na ordem).
+    const c = `E248-${++seq}`;
+    const m = { id: (await dbRun(db, `INSERT INTO materiais_almoxarifado (codigo, nome, unidade, quantidade_atual, quantidade_minima, ativo,
+        material_critico, custo_unitario, controle_lote, controle_serie, controle_certificado)
+        VALUES (?, ?, 'PC', 0, 0, 1, 0, 0.1, 0, 0, 0)`, [c, `Mat ${c}`])).lastID };
+    await ok(request(app).post(`${API}/movimentacoes/v2`).send({ material_id: m.id, tipo: 'ENTRADA', quantidade: 2, motivo: 'e248' }), 201);
+    const R1 = await reqDireta(m, 2);
+    const R2 = await reqDireta(m, 2);
+    const r = (await dbRun(db, `INSERT INTO recebimentos_material_almoxarifado
+      (numero, status, nota_fiscal, fornecedor_nome, data_emissao_nf, data_entrada_nf, valor_total_nota)
+      VALUES (?, 'EM_ENTRADA_NF', ?, 'F248', '2026-11-01', '2026-11-02', 10)`, [`REC-E248-${++seq}`, `NF-E248-${seq}`])).lastID;
+    await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado (recebimento_id, material_id, quantidade_esperada, quantidade_recebida)
+      VALUES (?,?,4,4)`, [r, m.id]);
+    await ok(request(app).post(`${API}/recebimentos/${r}/processar`).send({}));
+    assert.deepStrictEqual([await reservas(R1), await reservas(R2)], [[[2, r]], [[2, r]]], 'premissa: A reservou 2 para cada');
+    const origAll = db.all; let segurou = false; let sinal; const pegou = new Promise((res) => { sinal = res; });
+    let soltar; const liberado = new Promise((res) => { soltar = res; });
+    db.all = function all(sql, params, cb) {
+      if (typeof params === 'function') { cb = params; params = []; }
+      if (!segurou && typeof sql === 'string' && sql.includes('AS rs_data_necessidade')) {
+        segurou = true;
+        return origAll.call(db, sql, params, function depois(err, rows) {
+          const ctx = this; sinal();
+          Promise.race([liberado, espera(3000)]).then(() => cb.call(ctx, err, rows));
+        });
+      }
+      return origAll.call(db, sql, params, cb);
+    };
+    let re; let rc;
+    try {
+      const est = estornar(m, r).then((x) => x);
+      await pegou;
+      rc = await request(app).put(`${API}/requisicoes/${R2}/cancelar`).send({ motivo: 'e248 cancela R2' }); // do contexto do TESTE
+      soltar();
+      re = await est;
+    } finally { db.all = origAll; }
+    assert.ok(segurou, 'o gancho da leitura das reservas do estorno nao disparou');
+    assert.strictEqual(rc.status, 200, JSON.stringify(rc.body));
+    assert.strictEqual(re.status, 200, JSON.stringify(re.body));
+    assert.strictEqual(await fisico(m), 2);
+    assert.strictEqual(await somaReservas(R1), 2, 'a conta soltou a reserva de R1 porque a de R2 ja tinha sido cancelada (soltar de mais)');
+    assert.strictEqual(await st(R1), 'TOTALMENTE_RESERVADA');
+  });
+
+  // ── RN-248.08 (Fase 5, achado 2): a resposta e o aviso seguem a reserva recriada ────────────────────────────────────────────────
+  await test('[RN-248.08] RN-248.01 com o livro do estorno falhando: a reserva e recriada; a liberacao responde 4 e avisa R1', async () => {
+    const m = await material();
+    const R1 = await reqDireta(m, 4);
+    const A = await nota(m, 4);
+    const g = gancho();
+    const origRun = db.run; // o do gancho
+    let falhou = false;
+    db.run = function run(sql, params, cb) {
+      if (typeof params === 'function') { cb = params; params = []; }
+      if (!falhou && typeof sql === 'string' && sql.includes('INSERT INTO movimentacoes_almoxarifado') && Array.isArray(params)
+        && params[1] === 'ESTORNO') {
+        falhou = true;
+        return setImmediate(() => cb.call({}, new Error('falha forcada do livro 248')));
+      }
+      return origRun.call(db, sql, params, cb);
+    };
+    let rl; let re;
+    try {
+      const pegou = g.segurar(TRECHO_UPDATE_LOTE, () => Promise.race([g.viu(TRECHO_CLAIM).then(() => espera(20)), espera(2000)]));
+      const lib = putStatusReq(m, 'ATIVO').then((x) => x);
+      await pegou;
+      re = await estornar(m, A);
+      rl = await lib;
+    } finally { db.run = origRun; g.restaurar(); }
+    assert.ok(g.usada() && falhou, 'os ganchos nao dispararam');
+    assert.notStrictEqual(re.status, 200, JSON.stringify(re.body));
+    assert.deepStrictEqual(await reservas(R1), [[4, A]], 'premissa: a reserva foi recriada com a marca de A');
+    assert.deepStrictEqual(rl.body.reservado_para_quem_esperava, { quantidade: 4, unidade: 'PC', requisicoes: 1 },
+      'a resposta da liberacao perdeu a reserva recriada');
+    const av = await dbAll(db, `SELECT 1 FROM fila_notificacoes_almoxarifado WHERE evento = 'RECEBIMENTO_ENTRADA_REQUISITANTE'
+      AND json_extract(payload, '$.requisicao_id') = ? AND json_extract(payload, '$.origem') = 'LOTE_LIBERADO'`, [R1]);
+    assert.strictEqual(av.length, 1, 'R1 nao foi avisada da reserva (recriada) da liberacao');
+  });
+
   terminou = true;
   await close();
   console.log(`\n  ${passed} passou, ${failed} falhou\n`);

@@ -857,15 +857,31 @@ async function resultadoDePe(db, resultado) {
   const rs = (resultado && resultado.reservas) || [];
   const ids = [...new Set(rs.map((r) => Number(r.reserva_id)).filter((x) => Number.isFinite(x) && x > 0))];
   if (!ids.length) return resultado;
-  const linhas = await dbAll(db, `SELECT id, status, quantidade FROM reservas_material_almoxarifado WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
+  const linhas = await dbAll(db, `SELECT id, status, quantidade, item_requisicao_id, recebimento_id, material_id
+    FROM reservas_material_almoxarifado WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
   const agora = new Map(linhas.map((l) => [Number(l.id), l]));
   const reservas = [];
+  const recriadasUsadas = new Set();
   for (const r of rs) {
     const l = agora.get(Number(r.reserva_id));
     if (!r.reserva_id) { reservas.push(r); continue; } // eslint-disable-line no-continue
-    if (!l || !['ATIVA', 'CONSUMIDA'].includes(l.status)) continue; // eslint-disable-line no-continue
-    const q = Q.qtd(Math.min(num(r.quantidade), num(l.quantidade)));
-    if (q > EPS) reservas.push({ ...r, quantidade: q });
+    if (l && ['ATIVA', 'CONSUMIDA'].includes(l.status)) {
+      const q = Q.qtd(Math.min(num(r.quantidade), num(l.quantidade)));
+      if (q > EPS) reservas.push({ ...r, quantidade: q });
+      continue; // eslint-disable-line no-continue
+    }
+    // Fase 5 (achado 2; RN-248.08): o estorno que soltou esta reserva falhou e a RECRIOU (outro id, `recriarAposEstornoRecusado`:
+    // mesmo item, mesma nota, observacao "Reserva recriada após estorno recusado") — a reserva continua de pe e conta.
+    if (!l || l.status !== 'LIBERADA' || l.item_requisicao_id == null) continue; // eslint-disable-line no-continue
+    // eslint-disable-next-line no-await-in-loop
+    const nova = await dbGet(db, `SELECT id, quantidade FROM reservas_material_almoxarifado
+      WHERE status = 'ATIVA' AND item_requisicao_id = ? AND material_id = ? AND id > ? AND recebimento_id IS ?
+        AND observacoes LIKE 'Reserva recriada após estorno recusado%' ORDER BY id LIMIT 1`,
+    [l.item_requisicao_id, l.material_id, l.id, l.recebimento_id == null ? null : l.recebimento_id]);
+    if (!nova || recriadasUsadas.has(Number(nova.id))) continue; // eslint-disable-line no-continue
+    recriadasUsadas.add(Number(nova.id));
+    const q = Q.qtd(Math.min(num(r.quantidade), num(nova.quantidade)));
+    if (q > EPS) reservas.push({ ...r, reserva_id: Number(nova.id), quantidade: q });
   }
   return { ...resultado, reservas };
 }
@@ -1017,6 +1033,16 @@ async function liberarParaEstorno(db, user, mov) {
       });
     } catch (e) {
       console.warn(`[almoxarifado-reservas] Falha ao liberar a reserva ${r.reserva_id} no estorno da entrada: ${e.message}`);
+      // Etapa 248 (Fase 5, achado 1; RN-248.07): a reserva que outra porta soltou depois da leitura (cancelar a requisicao, liberar a
+      // mao, expirar — soltam sem a trava, B441) ja devolveu o saldo dela ao livre: conta como solta. Sem isto a conta seguia e soltava
+      // a reserva da requisicao seguinte (a que podia ficar), e ela voltava a esperar com o material livre.
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        const agora = await dbGet(db, 'SELECT status FROM reservas_material_almoxarifado WHERE id = ?', [r.reserva_id]);
+        if (agora && ['LIBERADA', 'CANCELADA', 'EXPIRADA'].includes(agora.status)) falta -= Math.min(num(r.saldo), falta);
+      } catch (e2) {
+        console.warn(`[almoxarifado-reservas] releitura da reserva ${r.reserva_id} no estorno falhou: ${e2.message}`);
+      }
     }
   }
   return liberadas;
