@@ -11,7 +11,15 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-11-18):** **Etapa 245 fechada** (**a devolução ao fornecedor de peça com número de série** — medido: a
+> **Onde o desenvolvimento está (2026-11-18):** **Etapa 246 fechada** (**a saída avulsa de peça com número de série: a frase do lote e a
+> lista relida** — em **Movimentações → Saída/Perda**, a frase *"As séries marcadas saem do lote L1."* só aparece quando o sistema vai mesmo
+> registrar a saída naquele lote (antes aparecia também quando a saída ia "sem lote" — **C539**), e uma recusa ao salvar relê a lista de séries
+> (antes ficava a lista velha, com a série de lote bloqueado ainda marcada — **C538**). A janela **Devolver** de Materiais de Clientes ganhou a
+> mesma frase corrigida. Itens 9 e 10 da estimativa de 18/11; decisões **B1558** a **B1560**; limitação **D (246)**; verificação **F (246)**; sem
+> consulta antes do deploy).
+> **Próxima:** **liberar lote que veio de mais de uma nota** (item 11 da estimativa de 18/11, a reserva da liberação repartida por nota —
+> **C524**, **B1467**) — detalhada no fim do plano da 246.
+> *(Antes, 2026-11-18:)* **Etapa 245 fechada** (**a devolução ao fornecedor de peça com número de série** — medido: a
 > execução da não conformidade **já não baixa** peça com série (recusa ao confirmar, desde a Etapa 45), então não havia lote a corrigir; mas o
 > caminho que a recusa ensinava (*"dê baixa pela tela de Movimentações"*) **não fechava**: com tudo reprovado a Saída é recusada e, com parte
 > reprovada, uma peça boa fica presa no bloqueio. Agora a janela **Registrar execução** avisa antes, com os três passos e quem faz cada um, e
@@ -4794,7 +4802,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530, B700 a B1124, B1130 a B1131, B1140 a B1146, B1150 a B1157, B1160 a B1169, B1170 a B1179, B1180 a B1188, B1189 a B1196, B1200 a B1209 e B1210 a B1214, B1215 a B1222, B1223 a B1224, B1230 a B1239, B1240 a B1248, B1250 a B1259, B1260 a B1269, B1270 a B1282, B1289 a B1299, B1300 a B1308, B1309 a B1312, B1313 a B1319, B1320 a B1329, B1330 a B1335, B1336 a B1337, B1338 a B1342, B1343 a B1349, B1350 a B1357, B1358 a B1362, B1363 a B1367, B1368 a B1382, B1383 a B1395, B1396 a B1406, B1407 a B1415, B1416 a B1422, B1430 a B1433, B1434 a B1442, B1443 a B1452, B1453 a B1460, B1461 a B1468, B1469 a B1475, B1476 a B1479, B1480 a B1483, B1484 a B1487, B1488 a B1491, B1492 a B1497, B1498 a B1503, B1504 a B1508, B1509 a B1512, B1513 a B1516, B1517 a B1521, B1523 a B1526, B1527 a B1530, B1531 a B1534, B1535 a B1538, B1539 a B1548, B1549 a B1550, B1551 a B1552, B1553 a B1554, B1555 a B1557, B1558 a B1560; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -15392,6 +15400,21 @@ fornecedor**, material com série, aberto sozinho pela reprovação da inspeçã
 cópias da mesma régua divergem). O aviso diz **quem** faz cada passo (Gestor, Almoxarife, Qualidade) porque quem registra a execução (Compras)
 não pode desbloquear nem dar a Saída — achado da revisão final. **Reversível.**
 
+**B1558 (NOVA, da Etapa 246; decisão do agente) — o saldo do lote da série vem do servidor, na lista de séries.** A frase *"As séries
+marcadas saem do lote L1."* (Movimentações e a janela Devolver de Materiais de Clientes) lia só o lote da série; o sistema só usa esse lote
+quando o saldo dele (as quantidades positivas) cobre a saída (**C539**). Escolhido: a lista de séries traz, por série, o saldo do lote na
+mesma régua, e a tela compara com as séries marcadas. Descartado: usar a lista de lotes que a tela já tem (o saldo dela soma a linha negativa
+antiga e esconde lote com soma zero — divergiria do sistema nos dois sentidos) e a tela recalcular a régua. **Reversível** (campo de leitura,
+aditivo).
+
+**B1559 (NOVA, da Etapa 246; decisão do agente) — lote que não cobre: nenhuma frase.** A saída sai "sem lote", como antes, e a tela não diz
+lote — igual às séries sem lote. Descartado: uma frase explicando (*"saem sem lote: o lote L1 não tem a peça"*) — quem opera não tem o que
+fazer com ela. A frase de lotes diferentes não muda (o sistema recusa a mistura sem olhar o saldo). **Reversível.**
+
+**B1560 (NOVA, da Etapa 246; decisão do agente) — a recusa da Saída/Perda com série relê só a lista de séries.** É o molde da entrega (**C537**):
+a série de lote que ficou impedido volta apagada e desmarcada, a levada por outra pessoa some. Descartado: reler também a lista de lotes —
+refaria a sugestão do lote que vence primeiro e trocaria o lote escolhido pela pessoa. **Reversível.**
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -19634,12 +19657,17 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      formulário aberto: a série continua marcável e salvar é recusado (*"Lote L2 esta bloqueado e nao pode ser utilizado"*) — nada baixa;
      a lista não recarrega sozinha. Um lote **liberado** com o formulário aberto: a série continua apagada. **Nenhum erro de estoque** (a
      gravação confere na hora). **O que fazer:** trocar o tipo ou o material e voltar, ou reabrir o formulário.
+     **Desde a Etapa 246 (B1560):** a recusa ao salvar relê a lista de séries — a série cujo lote ficou bloqueado volta apagada e desmarcada,
+     a levada por outra pessoa some (se a releitura falhar, a lista que estava fica). Continua valendo para o lote **liberado** com o
+     formulário aberto (sem recusa, nada relê): a série segue apagada. **O que fazer:** nesse caso, trocar o tipo ou o material e voltar.
 539. **NOVO (da Etapa 234; decisões B1531 a B1534) — a saída avulsa só grava o lote da série quando o lote tem a peça.** A série pode dizer
      um lote sem que a peça esteja no saldo dele — a **Regularizar séries** de **Lotes e Séries** oferece o lote mesmo em material sem
      controle por lote, e o saldo antigo continua no "sem lote". Nesse caso a Saída/Perda com o lote em branco sai do "sem lote", como antes
      (a frase da tela ainda diz *"As séries marcadas saem do lote L1."* — ela lê só a série). **Nenhum erro de estoque** (o físico e o "sem
      lote" batem); o **Saldo por lote** desse material segue como estava. **O que fazer:** nada; se quiser o lote certo, a série tem de ter
      entrado com ele.
+     **Desde a Etapa 246 (B1558, B1559):** a frase só aparece quando o saldo do lote cobre as séries marcadas — nesse caso, nenhuma frase (o
+     mesmo na janela **Devolver** de Materiais de Clientes). A saída continua indo para o "sem lote", como antes.
 
 540. **NOVO (da Etapa 235) — o comentário da rota de devolução ao cliente dizia que a janela tinha seletor de lote e de série.** Não tinha,
      desde a entrega da tela de Materiais de Clientes: material de cliente com série **não era devolvível pela tela**, e o manual dizia
@@ -21039,6 +21067,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   aviso no **Emprestar**, sem bloquear) — **B1244** a **B1247**.)*
   (6) Na inspeção, instrumento *Perdido*, *Avariado*, *Em manutenção* ou *Bloqueado* com calibração vigente **ainda mede** — só o *Baixado*
   é recusado (**B1146**).
+- **(246) A frase do lote das séries e a lista relida, o que ficou de fora.** (1) A recusa relê só a lista de **séries**; a de **lotes** fica
+  como estava (**B1560**). (2) Sem recusa, a lista é a da hora em que foi carregada: o lote **liberado** com o formulário aberto deixa a série
+  apagada até trocar o tipo ou o material (**C538**). (3) A frase compara com as séries **marcadas**; o sistema, com a quantidade — as duas
+  são iguais ao salvar (a tela barra antes se não forem). (4) O saldo do lote da série soma só as linhas do **mesmo material**; nenhum teste
+  derruba esse filtro (não há caminho de tela que dê a uma série o lote de outro material).
 - **(245) A devolução ao fornecedor de peça com número de série, o que ficou de fora.** (1) A execução **não** baixa peça com série
   (**B1555**): o caminho são três gestos de três perfis (Gestor desbloqueia, Almoxarife dá a Saída, Qualidade cancela o documento), e nada
   amarra a Saída ao documento — o motivo do cancelamento é o registro. (2) O **sucateamento** pela não conformidade de material com série tem
@@ -22597,6 +22630,13 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(246) Nenhum clique foi dado.** A frase do lote das séries e a lista relida, provadas pela rota real em `saidaAvulsaFraseDoLote` (4: o saldo
+do lote da série amarrado ao que a Saída grava — lote com a peça, série regularizada, lote que não cobre duas séries, linha negativa antiga)
+e pela tela em `MovimentacoesSaidaLoteDasSeries` (9 cenários novos: a frase que não vale, a mistura, a recusa que relê com lote bloqueado e
+com série levada, a saída aceita que não relê, a releitura que falha e a troca de tipo), `MateriaisClienteDevolucaoSeries` (1) e
+`MateriaisClienteDevolucaoLote` (1). Controles positivos: 2 do servidor e 7 da tela, cada um vermelho no cenário certo. Roteiro na seção da
+246 (~10 minutos). Suítes: test:api 639/639 arquivos (o `permissoesNoServidor` [RN-06], intermitente na 245, passou nesta rodada), almoxarifado 44, validation 4, safealter 3, sqlite 16, Jest 236 suítes e 3191 testes, build ok.
 
 **(245) Nenhum clique foi dado.** A devolução ao fornecedor de peça com série, provada pela rota real em `devolucaoFornecedorPecaComSerie`
 (10: a recusa com e sem controle de lote sem gravar nada, o caminho dos três passos com tudo reprovado e com parte reprovada, e o campo de
@@ -43211,12 +43251,62 @@ botão registra.
 - O sucateamento pela não conformidade de material com série não foi medido (**D (245)** 2).
 - O desbloqueio da reprovada é sempre "Sem lote" (**D (245)** 3).
 
+## Etapa 246 — Saída avulsa com série: a frase do lote só quando vale, e a lista relida depois da recusa (2026-11-18)
+
+Na tela **Movimentações**, a **Saída** e a **Perda** de material com número de série e sem controle por lote, com o lote em branco, dizem de
+qual lote as séries marcadas saem. A frase lia só o lote escrito na série; quando a série ganhou o lote pela **Regularizar séries** sem a peça
+estar no saldo daquele lote, o sistema registrava a saída "sem lote" e a tela tinha dito o lote (**C539**). E uma recusa ao salvar (o lote
+bloqueado por outra pessoa com o formulário aberto, a série levada) deixava a lista como estava: a série seguia marcada e salvar de novo dava
+a mesma recusa (**C538**). Agora a frase só aparece quando o lote cobre as séries marcadas, e a recusa relê a lista (se a releitura falhar — sem rede —, a lista que estava fica). A janela **Devolver** de
+**Materiais de Clientes** usa a mesma frase e ganhou a mesma correção. Itens 9 e 10 da estimativa de 18/11. Decisões do agente: **B1558** a
+**B1560**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| *"As séries marcadas saem do lote L1."* mesmo quando a saída ia "sem lote" (série regularizada; lote com menos peças que as marcadas) | A frase só quando o saldo do lote cobre as marcadas; senão, nenhuma frase — como as séries sem lote |
+| Saída/Perda com série recusada ao salvar: a lista de séries continuava a mesma | A lista é lida de novo: a série de lote bloqueado volta apagada e desmarcada; a levada por outra pessoa some |
+| **Devolver** (Materiais de Clientes): a mesma frase, a mesma falha | A mesma correção |
+| Lotes diferentes; séries sem lote; lote escolhido no seletor (inclusive na devolução ao cliente de material com controle por lote, que continua dizendo o lote escolhido); Ajuste | **Igual** |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador do almoxarifado**. Material *SER-246* com número de série e **sem** controle por lote. **Movimentações →
+Nova Movimentação → Entrada** de 2, lote *L2*, séries *B1* e *B2*.
+
+**1. A frase quando vale (RN-246.02, metade positiva).** **Saída** de 1, lote em branco, marque *B1*. **Confira:** *"As séries marcadas saem
+do lote L2."* — o L2 tem 2 peças.
+
+**2. A recusa relê a lista (RN-246.03).** Com o formulário aberto, em outra aba, **Lotes e Séries → L2 → Bloquear**. Volte e **Salvar**.
+**Confira:** *"Lote L2 esta bloqueado e nao pode ser utilizado"*; na lista, *B1* apagada e desmarcada, com *"· lote L2 — Bloqueado: não sai"*;
+o contador *"0/1 série(s) selecionada(s)"*. Nada foi baixado. (Antes: *B1* continuava marcada e salvar de novo dava a mesma recusa.) A
+**Perda** faz o mesmo; e a série que outra pessoa levou some da lista.
+
+**3. A frase quando não vale (RN-246.01/.02).** A série com lote cuja peça está no saldo "sem lote" (o que a **Regularizar séries** de **Lotes
+e Séries** produz quando há saldo sem série e o lote é escolhido ali). Na **Saída** com lote em branco, marque essa série. **Confira:** nenhuma
+frase de lote; salvar registra a saída **sem lote** (o histórico não diz lote). Duas séries do mesmo lote com 1 peça no saldo dele: com uma
+marcada a frase aparece; com as duas, some — e a saída das duas vai "sem lote".
+
+### O que esta etapa NÃO cobre
+
+- A lista de **lotes** não é relida depois da recusa (o lote escolhido continua) — **B1560**, **D (246)** 1.
+- Sem recusa, a lista é a da hora em que foi carregada: o lote **liberado** com o formulário aberto deixa a série apagada até trocar o tipo ou
+  o material (**C538**, que continua para esse caso).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
 
 - **Desenvolvimento RETOMADO em 2026-11-05** (pausado de 2026-10-23 a 2026-11-05; o histórico está em
   docs/superpowers/plans/2026-10-23-almoxarifado-pausa-e-retomada.md).
+
+- **Etapa 246 entregue (2026-11-18):** **a saída avulsa de peça com série: a frase do lote e a lista relida** (itens 9 e 10 da estimativa de
+  18/11; **C539** e **C538**). A lista de séries diz o saldo do lote de cada série (**B1558**); a frase só com o lote que cobre (**B1559**); a
+  recusa relê a lista de séries (**B1560**). Commits `4bf9fe15` (servidor), `522ded97` (frase), `fcc7b076` (lista relida), `509d6902` (Fase 5:
+  a releitura que falha mantém a lista; o lote escolhido na devolução ao cliente não confere o saldo) e o fechamento. **O que é seu:** as
+  **B1558** a **B1560** (reversíveis); as **C538** e **C539** atualizadas; a limitação **(246)** em D e a verificação **(246)** em F. Sem consulta
+  antes do deploy. **Próxima:** **liberar lote que veio de mais de uma nota** (item 11 da estimativa de 18/11) — detalhada no fim do plano da 246.
 
 - **Etapa 244 entregue (2026-11-18):** **o retalho de peça com número de série** (item 3 da estimativa de 18/11, **revisado** para 45 min).
   Medido: o retalho não baixa peça com série (a recusa existe desde a Etapa 9) — sem lote a corrigir; a janela **Gerar retalho** avisa ao

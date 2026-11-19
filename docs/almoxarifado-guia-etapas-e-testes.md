@@ -5,14 +5,22 @@
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208 e 209) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-11-18 (Etapa 245 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
+> ## Onde o desenvolvimento está — 2026-11-18 (Etapa 246 · Etapas 172 a 178, 180 a 191, 194 a 210, 217 a 227 ENTREGUES · RETOMADO em 05/11 · 2º pacote da estimativa de 05/11 em andamento)
 >
 > **Depois disto, 18/11/2026: Etapa 238 (Compras) fechada** — no cadastro de material, *Nº do CA* e *Validade do CA* só aparecem para
 > material EPI, com a frase do que é o CA (seção e roteiro em `docs/compras-novidades-por-etapa.md`, Etapa 238; decisão B91 de lá). A
 > fila da semana é a estimativa de 18/11 (`docs/estimativas/2026-11/estimativa_2026-11-18_cadastro-e-almoxarifado-semana.md`); o
 > próximo era o item 5 (saída com lote valida a prateleira do lote, C543) — **feito na Etapa 239**, abaixo.
 >
-> **O desenvolvimento parou aqui: Etapa 245 fechada — 2026-11-18.** **A devolução ao fornecedor de peça com número de série ensina o
+> **O desenvolvimento parou aqui: Etapa 246 fechada — 2026-11-18.** **Saída avulsa com série: a frase do lote só quando vale, e a lista
+> relida depois da recusa.** Em **Movimentações → Saída/Perda**, *"As séries marcadas saem do lote L1."* só aparece quando o saldo do lote cobre
+> as séries marcadas (antes aparecia também quando a saída ia "sem lote"); uma recusa ao salvar relê a lista de séries (a série de lote
+> bloqueado volta apagada e desmarcada). A janela **Devolver** de Materiais de Clientes ganhou a mesma frase corrigida. **Sem consulta antes
+> do deploy.** **Nenhum clique foi dado** (roteiro na seção da 246). **Onde parou, exatamente:** a **246 está fechada**; a **próxima** é o
+> item 11 da estimativa de 18/11 — **liberar lote que veio de mais de uma nota** (a reserva da liberação repartida por nota) —, detalhada no
+> fim do plano (`docs/superpowers/plans/2026-11-18-almoxarifado-etapa246-saida-avulsa-frase-e-recarga-das-series.md`).
+>
+> *(Antes:)* **Etapa 245 fechada — 2026-11-18.** **A devolução ao fornecedor de peça com número de série ensina o
 > caminho.** Medido: a execução da não conformidade não baixa peça com série (recusa desde a Etapa 45), então não havia lote a corrigir; mas a
 > recusa ensinava um caminho que não fechava. Em **Não Conformidades → Registrar execução**, o material com série mostra os três passos
 > (Gestor desbloqueia em Inspeções, Almoxarife dá a Saída com as séries, Qualidade cancela o documento) e apaga o botão. **Sem consulta antes
@@ -7344,6 +7352,42 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 246 — Saída avulsa com série: a frase do lote só quando vale, e a lista relida depois da recusa (ENTREGUE — 2026-11-18)
+
+**O que mudou, em uma frase:** em **Movimentações → Nova Movimentação** (Saída/Perda de material com número de série), a frase *"As séries
+marcadas saem do lote L1."* só aparece quando a saída vai mesmo sair daquele lote, e uma recusa ao salvar relê a lista de séries.
+
+**O problema que ela resolve.** (1) A frase lia só o lote escrito na série. Quando a série ganhou o lote pela **Regularizar séries** sem a
+peça estar no saldo daquele lote, o sistema registra a saída "sem lote" — e a tela tinha dito L1. (2) Se outra pessoa bloqueava o lote (ou
+levava a série) com o formulário aberto, salvar era recusado e a lista continuava igual: a série seguia marcada e salvar de novo dava a
+mesma recusa.
+
+| Antes | Agora |
+|---|---|
+| *"As séries marcadas saem do lote L1."* mesmo quando a saída ia "sem lote" | A frase só quando o saldo do lote cobre as séries marcadas; senão, nenhuma frase |
+| Recusa ao salvar a Saída/Perda: a lista de séries ficava como estava | A lista é lida de novo: a série de lote bloqueado volta apagada e desmarcada; a levada some |
+| A janela **Devolver** de Materiais de Clientes: a mesma frase, a mesma falha | A mesma correção |
+| Lotes diferentes; série sem lote; Ajuste | **Igual** |
+
+**Roteiro de teste manual (≈10 min):**
+
+1. Entre como **Administrador do almoxarifado**. Material *SER-246* com número de série, **sem** controle por lote.
+2. **Movimentações → Nova Movimentação → Entrada** de 2 de *SER-246*, lote *L2*, séries *B1* e *B2*.
+3. **Saída** de 1 de *SER-246*, lote em branco, marque *B1*. **Confira:** *"As séries marcadas saem do lote L2."* (a metade positiva).
+4. Sem salvar, em outra aba: **Lotes e Séries → L2 → Bloquear** (com justificativa). Volte e **Salvar**. **Confira:** a mensagem *"Lote L2
+   esta bloqueado e nao pode ser utilizado"*, e na lista *B1* apagada, desmarcada, com *"· lote L2 — Bloqueado: não sai"*; o contador
+   *"0/1 série(s) selecionada(s)"*. Libere o L2 depois.
+5. A frase que não vale (precisa de saldo sem lote e de uma série regularizada com lote — o caso da regularização): num material com série e
+   saldo sem série, **Lotes e Séries → Regularizar séries** cadastra a série *X1* com o lote *L1* (de outra série do mesmo material, já
+   saída). Na **Saída** com lote em branco, marque *X1*. **Confira:** nenhuma frase de lote; salvar registra a saída **sem lote**.
+
+6. (A releitura que falha) Sem conexão, salvar e a releitura falhando: a lista e a marcação continuam (sem *"Nenhuma série disponível em estoque."*).
+
+**O que esta etapa não cobre:** a lista de **lotes** não é relida depois da recusa (o lote escolhido continua); sem recusa, a lista continua
+a da hora em que foi carregada (lote liberado com o formulário aberto: a série segue apagada até trocar o tipo ou o material).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro é o que os testes automáticos (servidor e tela) provam.
 
 ## Etapa 245 — A devolução ao fornecedor de peça com número de série ensina o caminho (ENTREGUE — 2026-11-18)
 

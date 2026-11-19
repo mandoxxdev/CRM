@@ -1,5 +1,9 @@
 # 10 — Lotes, Números de Série e Etiquetas
 
+> **+ Etapa 246 (2026-11-18, `4bf9fe15`, tela `522ded97`, `fcc7b076`, Fase 5 `509d6902`): a frase do lote das séries só quando o lote cobre
+> as marcadas (C539) e a lista de séries relida depois de uma recusa na Saída/Perda (C538); B1558–B1560.** A lista de séries ganha
+> `lote_saldo_positivo`. Ver a seção "Etapa 246", no fim. Continua 🟢.
+
 > **+ Etapa 239 (2026-11-18, `e21132d1`, tela `9e33f948`): a saída com lote e sem origem confere a prateleira do lote, não a padrão (C543;
 > B1543, B1544, C544, C545)** — a seção "O saldo do lote é agregado nas DUAS pontas" **estava errada** para esse caso (corrigida à vista);
 > a entrega automática deixa por último o lote guardado só em endereço bloqueado. Ver a seção "Etapa 239", no fim. Continua 🟢.
@@ -613,6 +617,9 @@ rota fazia isso. Era uma parede com placa de porta.
 
   > **+ Etapa 234 (`113b07e3`):** com o lote em branco e série marcada, a frase *"As séries marcadas saem do lote L."* (ou a de lotes
   > diferentes, que barra o envio). Ver a seção "Etapa 234", no fim.
+
+  > **+ Etapa 246 (`522ded97`, `fcc7b076`):** a frase de um lote só quando o saldo do lote cobre as marcadas; a recusa ao salvar relê a lista.
+  > Ver a seção "Etapa 246", no fim.
 - [x] **Recebimentos** (Task 9, `597ec82`): textarea "Séries (uma por linha)" por item, ao lado dos campos de lote, com contador contra a quantidade recebida; aviso estático de "salve antes de processar" — ver pendência (i)
 - [x] **Aba "Séries" em "Lotes e Séries"** (Task 10, `b46d820`): `LotesAlmoxarifado.js` ganhou a aba (tabela: número, status com badge, lote, localização) e a ação Bloquear/Desbloquear com justificativa obrigatória (gate `inspecionar`); label do menu virou "Lotes e Séries"
 
@@ -1527,3 +1534,23 @@ C545). A **C543** no motor. Material sem negativo, saída **com lote** e **sem o
   devolve na padrão (C544, pendência antiga desta spec: "o endereçamento pode consolidar").
 
 Teste: `saidaLotePrateleiraDoLote.api.test.js` (14). Continua 🟢.
+
+## Etapa 246 — a frase do lote das séries e a lista relida depois da recusa (2026-11-18)
+
+Plano: `docs/superpowers/plans/2026-11-18-almoxarifado-etapa246-saida-avulsa-frase-e-recarga-das-series.md` (RN-246.01 a .03; B1558–B1560;
+C538 e C539 atualizadas). Itens 9 e 10 da estimativa de 18/11.
+
+- [x] **RN-246.01** — `GET /materiais/:id/series` traz `lote_saldo_positivo` (a soma das linhas positivas do lote da série, do material da
+  série; `null` sem lote) — a régua com que o motor decide usar o lote das séries (Etapa 234, Fase 5) — `4bf9fe15`.
+- [x] **RN-246.02** — `fraseDoLoteDasSeries` só diz o lote quando as marcadas cabem no saldo dele (Movimentações e Devolver ao cliente) —
+  `522ded97`; com o lote **escolhido** (devolução ao cliente com controle de lote) não confere o saldo (Fase 5, achado 2) — `509d6902`.
+- [x] **RN-246.03** — a recusa da Saída/Perda com série relê a lista de séries — `fcc7b076`; a releitura que falha mantém a lista (Fase 5,
+  achado 1) — `509d6902`.
+- [ ] **Fora (D (246)):** reler também a lista de lotes (B1560); o lote liberado com o formulário aberto sem recusa (C538); o filtro de material
+  do saldo sem teste que o derrube (sem caminho de tela).
+
+> ⚠️ **A C539 dizia "O que fazer: nada" e que a frase "lê só a série"** — era a descrição certa do defeito; ela continua valendo para a
+> gravação (a saída vai "sem lote"), mas a frase foi corrigida. Atualizada à vista na C539.
+
+Testes: `saidaAvulsaFraseDoLote.api.test.js` (4); `MovimentacoesSaidaLoteDasSeries.test.js` (+9), `MateriaisClienteDevolucaoSeries.test.js`
+(+1), `MateriaisClienteDevolucaoLote.test.js` (+1). Continua 🟢.
