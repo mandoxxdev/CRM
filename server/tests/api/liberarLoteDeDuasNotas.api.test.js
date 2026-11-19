@@ -277,6 +277,73 @@ process.on('exit', (code) => {
       await cfg('inspecao_material_critico', '0');
     }
   });
+  // Fase 5 (achado 1): o reprovado trava o estorno por ENTRADA, nao pela nota inteira
+  await test('[RN-247.12] (Fase 5, 1) B com dois itens em L1 (b1 4 aprovados; b2 2 aprovados e 2 reprovados), A 4, R1 espera 10 -> b1 tem a parte de B; estornar b1 -> 200', async () => {
+    await cfg('inspecao_material_critico', '1');
+    try {
+      const m = await material({ critico: 1 });
+      const A = await nota(m, 4);
+      const itA = await dbGet(db, 'SELECT id FROM recebimentos_material_itens_almoxarifado WHERE recebimento_id = ?', [A]);
+      await ok(request(app).post(`${API}/recebimentos/itens/${itA.id}/inspecionar`).send({ quantidade_aprovada: 4, quantidade_reprovada: 0 }), 201);
+      const B = (await dbRun(db, `INSERT INTO recebimentos_material_almoxarifado
+        (numero, status, nota_fiscal, fornecedor_nome, data_emissao_nf, data_entrada_nf, valor_total_nota)
+        VALUES (?, 'EM_ENTRADA_NF', ?, 'F247', '2026-11-01', '2026-11-02', 10)`, [`REC-E247-${++seq}`, `NF-E247-${seq}`])).lastID;
+      for (const q of [4, 4]) {
+        // eslint-disable-next-line no-await-in-loop
+        await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado
+          (recebimento_id, material_id, quantidade_esperada, quantidade_recebida, lote) VALUES (?,?,?,?,'L1')`, [B, m.id, q, q]);
+      }
+      await ok(request(app).post(`${API}/recebimentos/${B}/processar`).send({}));
+      const its = await dbAll(db, 'SELECT id, movimentacao_entrada_id FROM recebimentos_material_itens_almoxarifado WHERE recebimento_id = ? ORDER BY id', [B]);
+      assert.strictEqual(its.length, 2);
+      assert.ok(its[0].movimentacao_entrada_id && its[1].movimentacao_entrada_id
+        && its[0].movimentacao_entrada_id !== its[1].movimentacao_entrada_id, `premissa: uma ENTRADA_COMPRA por item (${JSON.stringify(its)})`);
+      await ok(request(app).post(`${API}/recebimentos/itens/${its[0].id}/inspecionar`).send({ quantidade_aprovada: 4, quantidade_reprovada: 0 }), 201);
+      await ok(request(app).post(`${API}/recebimentos/itens/${its[1].id}/inspecionar`)
+        .send({ quantidade_aprovada: 2, quantidade_reprovada: 2, encaminhamento: 'DEVOLVER' }), 201);
+      const R1 = await reqDireta(m, 10);
+      await anexar(m);
+      assert.deepStrictEqual(await reservas(R1), [[4, B], [6, A]], 'a entrada com reprovado tirou a cota da outra entrada da mesma nota');
+      const c1 = await request(app).post(`${API}/movimentacoes/${its[0].movimentacao_entrada_id}/cancelar`).send({ motivo: 'e247' });
+      assert.strictEqual(c1.status, 200, `o estorno da entrada sem reprovado recusou: ${JSON.stringify(c1.body)}`);
+      assert.deepStrictEqual(await reservas(R1), [[6, A]]);
+      const c2 = await request(app).post(`${API}/movimentacoes/${its[1].movimentacao_entrada_id}/cancelar`).send({ motivo: 'e247' });
+      assert.strictEqual(c2.status, 400, 'controle: a entrada com reprovado continua inestornavel');
+      assert.ok(/reprovado\(s\) na inspeção/.test(c2.body.error), c2.body.error);
+    } finally {
+      await cfg('inspecao_material_critico', '0');
+    }
+  });
+  // Fase 5 (achado 2): a marca e da nota, nao do lote
+  await test('[RN-247.13] (Fase 5, 2) B com 4 em L1 (bloqueado) e 4 em L2 reservados para R1 na chegada; A 4 em L1; R2 espera 8 -> liberar L1: 4 de B e 4 de A; os tres estornos passam', async () => {
+    const m = await material({ certificado: 0 });
+    const A = await nota(m, 4);
+    await putStatus(m, 'BLOQUEADO');
+    const R1 = await reqDireta(m, 4);
+    const B = (await dbRun(db, `INSERT INTO recebimentos_material_almoxarifado
+      (numero, status, nota_fiscal, fornecedor_nome, data_emissao_nf, data_entrada_nf, valor_total_nota)
+      VALUES (?, 'EM_ENTRADA_NF', ?, 'F247', '2026-11-01', '2026-11-02', 10)`, [`REC-E247-${++seq}`, `NF-E247-${seq}`])).lastID;
+    for (const lote of ['L1', 'L2']) {
+      // eslint-disable-next-line no-await-in-loop
+      await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado
+        (recebimento_id, material_id, quantidade_esperada, quantidade_recebida, lote) VALUES (?,?,4,4,?)`, [B, m.id, lote]);
+    }
+    await ok(request(app).post(`${API}/recebimentos/${B}/processar`).send({}));
+    assert.deepStrictEqual(await reservas(R1), [[4, B]], 'premissa: a chegada reservou as 4 de L2 para R1 com a marca de B');
+    const R2 = await reqDireta(m, 8);
+    await putStatus(m, 'ATIVO');
+    assert.deepStrictEqual(await reservas(R2), [[4, B], [4, A]], 'a reserva de B do L2 tirou a parte de B do L1');
+    const movs = await dbAll(db, `SELECT id FROM movimentacoes_almoxarifado WHERE tipo = 'ENTRADA_COMPRA' AND material_id = ?
+      AND recebimento_id = ? ORDER BY id`, [m.id, B]);
+    for (const mv of movs) {
+      // eslint-disable-next-line no-await-in-loop
+      const c = await request(app).post(`${API}/movimentacoes/${mv.id}/cancelar`).send({ motivo: 'e247' });
+      assert.strictEqual(c.status, 200, `estorno da entrada ${mv.id} de B: ${JSON.stringify(c.body)}`);
+    }
+    const ca = await estornar(m, A);
+    assert.strictEqual(ca.status, 200, JSON.stringify(ca.body));
+    assert.deepStrictEqual([...(await reservas(R1)), ...(await reservas(R2))], []);
+  });
   await test('[RN-247.11] (Fase 2, 3) o estorno de A com o claim gravado e ainda nao concluido: A conta como viva (a reserva reparte A e B)', async () => {
     const { m, R1, A, B } = await duasNotas();
     const movA = await movDaNota(m, A);

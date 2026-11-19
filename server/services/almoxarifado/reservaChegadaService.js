@@ -770,16 +770,21 @@ async function reservarLoteLiberadoSobTrava(db, user, lote, pendencia) {
     // quanto entrou por cada uma, o que ainda esta em inspecao e o que foi reprovado, a que entrou por ultimo primeiro (o maior id da
     // ENTRADA_COMPRA; o id do recebimento e a ordem do cadastro, nao da entrada — Fase 2, achado 6). Ate a 246 a lista vinha dos itens do
     // recebimento (que nao sabem do estorno) e, com mais de uma nota, a reserva ia sem marca: o estorno de qualquer uma era recusado.
-    const notas = (await dbAll(db, `SELECT mv.recebimento_id, SUM(mv.quantidade) AS q, MAX(mv.id) AS ultima,
-        SUM((SELECT COALESCE(SUM(COALESCE(ri.quantidade_em_inspecao, 0)), 0) FROM recebimentos_material_itens_almoxarifado ri
-          WHERE ri.movimentacao_entrada_id = mv.id)) AS em_inspecao,
-        SUM((SELECT COALESCE(SUM(COALESCE(i.quantidade_reprovada, 0)), 0) FROM inspecoes_recebimento_almoxarifado i
-          JOIN recebimentos_material_itens_almoxarifado ri ON ri.id = i.recebimento_item_id WHERE ri.movimentacao_entrada_id = mv.id)) AS reprovado
-      FROM movimentacoes_almoxarifado mv
-      WHERE mv.tipo = 'ENTRADA_COMPRA' AND mv.lote_id = ? AND mv.material_id = ? AND mv.recebimento_id IS NOT NULL
-        AND NOT ${estornoConcluidoSql('mv')}
-      GROUP BY mv.recebimento_id ORDER BY ultima DESC`, [lote.id, lote.material_id]))
-      .map((x) => ({ id: Number(x.recebimento_id), q: num(x.q), emInspecao: num(x.em_inspecao), reprovado: num(x.reprovado) }));
+    // Fase 5 (achado 1): o reprovado trava o estorno POR ENTRADA (Etapa 71, `movimentacao_entrada_id`), nao pela nota inteira — a entrada
+    // com reprovado nao entra na cota, a outra entrada da mesma nota sim. `q` = o que as entradas estornaveis da nota puseram neste lote,
+    // menos o que delas ainda esta em inspecao.
+    const notas = (await dbAll(db, `SELECT recebimento_id, MAX(id) AS ultima,
+        SUM(CASE WHEN reprovado > ${EPS} THEN 0 ELSE quantidade - em_inspecao END) AS q
+      FROM (SELECT mv.id, mv.recebimento_id, mv.quantidade,
+          (SELECT COALESCE(SUM(COALESCE(ri.quantidade_em_inspecao, 0)), 0) FROM recebimentos_material_itens_almoxarifado ri
+            WHERE ri.movimentacao_entrada_id = mv.id) AS em_inspecao,
+          (SELECT COALESCE(SUM(COALESCE(i.quantidade_reprovada, 0)), 0) FROM inspecoes_recebimento_almoxarifado i
+            JOIN recebimentos_material_itens_almoxarifado ri ON ri.id = i.recebimento_item_id WHERE ri.movimentacao_entrada_id = mv.id) AS reprovado
+        FROM movimentacoes_almoxarifado mv
+        WHERE mv.tipo = 'ENTRADA_COMPRA' AND mv.lote_id = ? AND mv.material_id = ? AND mv.recebimento_id IS NOT NULL
+          AND NOT ${estornoConcluidoSql('mv')})
+      GROUP BY recebimento_id ORDER BY ultima DESC`, [lote.id, lote.material_id]))
+      .map((x) => ({ id: Number(x.recebimento_id), q: Math.max(0, num(x.q)) }));
     const recebimentoId = notas.length === 1 ? notas[0].id : null;
     const rotulos = rotulosDoLoteLiberado(lote, recebimentoId);
     const acc = { tocadas: new Set(), resultado };
@@ -798,12 +803,18 @@ async function reservarLoteLiberadoSobTrava(db, user, lote, pendencia) {
     // lote), a mais nova primeiro (a recem-chegada e a que mais se estorna), e a mais antiga leva a sobra (a parte que nao e de nota
     // nenhuma — uma entrada avulsa no lote — fica com ela, como a 220 fazia com o lote de uma nota so). Marcar a mais nao solta de mais: o
     // estorno solta so o que falta para caber (Etapa 74). Sem nota viva: uma reserva sem marca, como antes. Fase 2 (achado 2): a parte
-    // ainda em inspecao nao esta no livre e nao conta na cota; a nota com reprovado nunca se estorna (Etapa 71) e fica sem cota.
+    // ainda em inspecao nao esta no livre e nao conta na cota; a entrada com reprovado nunca se estorna (Etapa 71) e fica fora da cota.
+    // Fase 5 (achado 2): a marca e da nota, nao do lote — a reserva com a marca da nota conta primeiro contra o que a nota pos FORA deste
+    // lote (outro lote, ou sem lote); so o que passa disso ja cobre a parte deste lote.
     for (const n of notas) {
       // eslint-disable-next-line no-await-in-loop
       const ja = await dbGet(db, `SELECT COALESCE(SUM(quantidade - COALESCE(quantidade_utilizada, 0)), 0) AS q
         FROM reservas_material_almoxarifado WHERE status = 'ATIVA' AND recebimento_id = ? AND material_id = ?`, [n.id, lote.material_id]);
-      n.cota = n.reprovado > EPS ? 0 : Q.qtd(Math.max(0, n.q - n.emInspecao - num(ja && ja.q)));
+      // eslint-disable-next-line no-await-in-loop
+      const fora = await dbGet(db, `SELECT COALESCE(SUM(mv.quantidade), 0) AS q FROM movimentacoes_almoxarifado mv
+        WHERE mv.tipo = 'ENTRADA_COMPRA' AND mv.recebimento_id = ? AND mv.material_id = ? AND (mv.lote_id IS NULL OR mv.lote_id <> ?)
+          AND NOT ${estornoConcluidoSql('mv')}`, [n.id, lote.material_id, lote.id]);
+      n.cota = Q.qtd(Math.max(0, n.q - Math.max(0, num(ja && ja.q) - num(fora && fora.q))));
     }
     let resta = Q.qtd(livre - convertido);
     if (!notas.length) {
