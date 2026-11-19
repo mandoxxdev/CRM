@@ -20,6 +20,8 @@ import CLIENTE_DO_SERVIDOR from './__fixtures__/clienteDoServidor.json';
 import OS_DO_AUX_DO_SERVIDOR from './__fixtures__/osDoAuxDoServidor.json';
 // Etapa 156 (RN-156.02): o corpo REAL do 403 das listas (o portao das listas) — conferido pelo listasNotificacoesPortao.
 import RECUSA from './__fixtures__/recusaDaListaDoServidor.json';
+// Etapa 247 (RN-247.07): uma linha REAL de GET /almoxarifado/reservas com a marca da nota (liberarLoteDeDuasNotas.api.test.js a confere).
+import RESERVA_DA_NOTA from './__fixtures__/reservaDaNotaDoServidor.json';
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
@@ -741,5 +743,33 @@ describe('[RN-223.10] Nova Reserva: a lista de materiais diz quanto esta em lote
     expect(opcao(22).textContent).toBe('E-3 — Ausente (Disponível: 10 un)');
     expect(opcao(24).textContent).toBe('E-5 — Texto (Disponível: 10 un)');
     expect(opcao(20).textContent).toContain('em lote impedido');
+  });
+});
+
+// Etapa 247 (RN-247.07, C524): a reserva com a marca de uma nota diz qual, na coluna Origem / Destino — montada com o corpo REAL de
+// GET /almoxarifado/reservas (a fixture, conferida pelo liberarLoteDeDuasNotas.api.test.js do servidor).
+describe('[RN-247.07] a reserva da nota', () => {
+  test('a reserva com a marca da nota mostra "Recebimento <numero> · NF <nota>"', async () => {
+    reservasDoBanco = [RESERVA_DA_NOTA];
+    await renderizar();
+    const linha = linhas()[0];
+    expect(linha.textContent).toContain(RESERVA_DA_NOTA.requisicao_numero);
+    expect(linha.querySelector('.reserva-da-nota').textContent)
+      .toBe(`Recebimento ${RESERVA_DA_NOTA.recebimento_numero} · NF ${RESERVA_DA_NOTA.recebimento_nota_fiscal}`);
+  });
+
+  test('sem NF no recebimento: só o número do recebimento', async () => {
+    reservasDoBanco = [{ ...RESERVA_DA_NOTA, recebimento_nota_fiscal: null }];
+    await renderizar();
+    expect(linhas()[0].querySelector('.reserva-da-nota').textContent).toBe(`Recebimento ${RESERVA_DA_NOTA.recebimento_numero}`);
+  });
+
+  test('a reserva sem nota não mostra a linha — e a reserva está na tela', async () => {
+    reservasDoBanco = [{ ...RESERVA_DA_NOTA, recebimento_id: null, recebimento_numero: null, recebimento_nota_fiscal: null }];
+    await renderizar();
+    expect(linhas()).toHaveLength(1);
+    expect(linhas()[0].textContent).toContain(RESERVA_DA_NOTA.material_nome);
+    expect(linhas()[0].querySelector('.reserva-da-nota')).toBeNull();
+    expect(linhas()[0].textContent).not.toContain('Recebimento');
   });
 });

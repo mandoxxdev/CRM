@@ -457,6 +457,13 @@ const ReservasAlmoxarifado = () => {
                       <div style={{ fontSize: '0.8rem', marginTop: 4 }}>
                         {destino || <span style={{ color: 'var(--gmp-text-light)' }}>—</span>}
                       </div>
+                      {/* Etapa 247 (RN-247.07): a reserva com a marca de uma nota (a chegada, a inspeção, a liberação do lote) diz
+                          qual — é o estorno dessa nota que a solta. Sem nota, nada. */}
+                      {r.recebimento_numero && (
+                        <div className="reserva-da-nota" style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>
+                          {`Recebimento ${r.recebimento_numero}${r.recebimento_nota_fiscal ? ` · NF ${r.recebimento_nota_fiscal}` : ''}`}
+                        </div>
+                      )}
                       {(r.equipamento || r.submontagem) && (
                         <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>
                           {[r.equipamento, r.submontagem].filter(Boolean).join(' · ')}
